@@ -35,7 +35,7 @@
 *.i*86
 *.x86_64
 *.hex
-src/rtr_server
+rtr_server
 
 # Debug files
 *.dSYM/
@@ -61,9 +61,7 @@ dkms.conf
 .settings/
 Debug/
 
-# Autoconf
-# autoconf files
-######################
+# Autotools
 *.in
 *.m4
 .deps
@@ -76,3 +74,22 @@ configure
 depcomp
 install-sh
 missing
+
+# Packaging
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Temporal files
+*~
+
+# Unwanted manure shat by imbecile OSs
+.DS_Store*
+ehthumbs.db
+Icon?
+Thumbs.db

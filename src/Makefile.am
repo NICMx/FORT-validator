@@ -4,7 +4,12 @@ AM_LDFLAGS =
 bin_PROGRAMS = rtr_server
 
 rtr_server_SOURCES = main.c
+rtr_server_SOURCES += common.h
 rtr_server_SOURCES += rtr/pdu.c
+rtr_server_SOURCES += rtr/pdu.h
 rtr_server_SOURCES += rtr/pdu_handler.c
+rtr_server_SOURCES += rtr/pdu_handler.h
 rtr_server_SOURCES += rtr/primitive_reader.c
+rtr_server_SOURCES += rtr/primitive_reader.h
 rtr_server_SOURCES += rtr/rtr.c
+rtr_server_SOURCES += rtr/rtr.h
