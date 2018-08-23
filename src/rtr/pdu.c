@@ -7,7 +7,6 @@
 
 #include "../common.h"
 #include "pdu_handler.h"
-#include "primitive_reader.h"
 
 static int	pdu_header_from_stream(int, struct pdu_header *);
 static int	serial_notify_from_stream(struct pdu_header *, int, void *);
@@ -54,6 +53,7 @@ pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata)
 static int
 pdu_header_from_stream(int fd, struct pdu_header *header)
 {
+	/* TODO if the first read yields no bytes, the connection was terminated. */
 	return read_int8(fd, &header->protocol_version)
 	    || read_int8(fd, &header->pdu_type)
 	    || read_int16(fd, &header->session_id)

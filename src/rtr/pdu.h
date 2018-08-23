@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 
 #include "../common.h"
+#include "primitive_reader.h"
 
 struct pdu_header {
 	u_int8_t	protocol_version;
@@ -66,7 +67,7 @@ struct cache_reset_pdu {
 struct error_report_pdu {
 	struct	pdu_header header;
 	void	*erroneous_pdu;
-	char	*error_message;
+	rtr_char	*error_message;
 };
 
 struct pdu_metadata {
