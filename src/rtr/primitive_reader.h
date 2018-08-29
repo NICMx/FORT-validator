@@ -5,7 +5,7 @@
 
 #include "../common.h"
 
-typedef unsigned char rtr_char;
+typedef char rtr_char;
 
 __BEGIN_DECLS
 int read_int8(int, u_int8_t *);

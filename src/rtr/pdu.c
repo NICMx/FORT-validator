@@ -35,13 +35,13 @@ pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata)
 	if (!meta)
 		return -ENOENT; /* TODO try to skip it anyway? */
 
-	pdu = malloc(meta->length);
-	if (!pdu)
+	*pdu = malloc(meta->length);
+	if (*pdu == NULL)
 		return -ENOMEM;
 
-	err = meta->from_stream(&header, fd, pdu);
+	err = meta->from_stream(&header, fd, *pdu);
 	if (err) {
-		free(pdu);
+		free(*pdu);
 		return err;
 	}
 

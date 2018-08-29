@@ -25,5 +25,9 @@ AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memset socket])
 AC_SEARCH_LIBS([pthread_create], [pthread])
 
+# Uhhh... this one starts with "PKG_" so it's probably different.
+# No idea.
+PKG_CHECK_MODULES([CHECK], [check])
+
 # Spit out the makefiles.
-AC_OUTPUT(Makefile src/Makefile man/Makefile)
+AC_OUTPUT(Makefile src/Makefile man/Makefile test/Makefile)

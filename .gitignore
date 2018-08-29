@@ -85,6 +85,11 @@ missing
 *.tar
 *.zip
 
+# Check Framework
+*.test
+*.trs
+test-driver
+
 # Temporal files
 *~
 

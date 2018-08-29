@@ -7,8 +7,8 @@
 #include <netinet/in.h>
 
 static int read_exact(int, unsigned char *, size_t);
-static int read_and_waste(int, unsigned char *, size_t, u_int64_t);
-static int get_octets(rtr_char);
+static int read_and_waste(int, unsigned char *, size_t, u_int32_t);
+static int get_octets(unsigned char);
 static void place_null_character(rtr_char *, size_t);
 
 static int
@@ -26,7 +26,7 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len)
 			return err;
 		}
 		if (read_result == 0) {
-			warn("Stream ended mid-PDU");
+			warnx("Stream ended mid-PDU.");
 			return -EPIPE;
 		}
 	}
@@ -95,7 +95,7 @@ read_in6_addr(int fd, struct in6_addr *result)
  * It is required that @str_len <= @total_len.
  */
 static int
-read_and_waste(int fd, unsigned char *str, size_t str_len, u_int64_t total_len)
+read_and_waste(int fd, unsigned char *str, size_t str_len, u_int32_t total_len)
 {
 #define TLEN 1024 /* "Trash length" */
 	unsigned char trash[TLEN];
@@ -123,9 +123,9 @@ read_and_waste(int fd, unsigned char *str, size_t str_len, u_int64_t total_len)
  * @first_octet.
  */
 static int
-get_octets(rtr_char first_octet)
+get_octets(unsigned char first_octet)
 {
-	if ((first_octet & 0xC0) == 0)
+	if ((first_octet & 0x80) == 0)
 		return 1;
 	if ((first_octet >> 5) == 6) /* 0b110 */
 		return 2;
@@ -136,12 +136,13 @@ get_octets(rtr_char first_octet)
 	return EINVALID_UTF8;
 }
 
+/* This is just a cast. The barebones version is too cluttered. */
+#define UCHAR(c) ((unsigned char *)c)
+
 /*
  * This also sanitizes the string, BTW.
- * (Because it places the null chara in the first invalid character.
+ * (Because it overrides the first invalid character with the null chara.
  * The rest is silently ignored.)
- *
- * TODO test the hell out of this.
  */
 static void
 place_null_character(rtr_char *str, size_t len)
@@ -162,22 +163,39 @@ place_null_character(rtr_char *str, size_t len)
 	null_chara_pos = str;
 	cursor = str;
 
-	while (cursor < str + len) {
-		octets = get_octets(*cursor);
+	while (cursor < str + len - 1) {
+		octets = get_octets(*UCHAR(cursor));
 		if (octets == EINVALID_UTF8)
 			break;
+		cursor++;
+
 		for (octet = 1; octet < octets; octet++) {
-			if (cursor >= str + len - 1 || cursor[1] >> 6 != 0x10)
-				break;
+			/* Memory ends in the middle of this code point? */
+			if (cursor >= str + len - 1)
+				goto end;
+			/* All continuation octets must begin with 0b10. */
+			if ((*(UCHAR(cursor)) >> 6) != 2 /* 0b10 */)
+				goto end;
 			cursor++;
 		}
 
 		null_chara_pos = cursor;
 	}
 
+end:
 	*null_chara_pos = '\0';
 }
 
+/*
+ * Reads an RTR string from the file descriptor @fd. Returns the string as a
+ * normal UTF-8 C string (NULL-terminated).
+ *
+ * Will consume the entire string from the stream, but @result can be truncated.
+ * This is because RTR strings are technically allowed to be 4 GBs long.
+ *
+ * The result is allocated in the heap. It will length 4096 characters at most.
+ * (Including the NULL chara.)
+ */
 int
 read_string(int fd, rtr_char **result)
 {
@@ -200,6 +218,7 @@ read_string(int fd, rtr_char **result)
 	err = read_int32(fd, &full_length32);
 	if (err)
 		return err;
+
 	full_length64 = ((u_int64_t) full_length32) + 1;
 
 	alloc_length = (full_length64 > 4096) ? 4096 : full_length64;
@@ -207,7 +226,7 @@ read_string(int fd, rtr_char **result)
 	if (!str)
 		return -ENOMEM;
 
-	err = read_and_waste(fd, str, alloc_length - 1, full_length64);
+	err = read_and_waste(fd, UCHAR(str), alloc_length - 1, full_length32);
 	if (err) {
 		free(str);
 		return err;
