@@ -119,7 +119,7 @@ lfile_read(struct line_file *lfile, char **result)
 	 */
 	for (i = 0; i < len; i++) {
 		if (string[i] == '\0') {
-			warnx("File %s has an illegal null character in its body. Please remove it.",
+			warnx("File '%s' has an illegal null character in its body. Please remove it.",
 					lfile_name(lfile));
 			free(string);
 			return -EINVAL;

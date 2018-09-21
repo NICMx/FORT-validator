@@ -23,11 +23,16 @@ AC_CHECK_HEADER_STDBOOL
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([memset socket])
-AC_SEARCH_LIBS([pthread_create], [pthread])
+AC_SEARCH_LIBS([pthread_create], [pthread], [],
+	[AC_MSG_ERROR([unable to find the pthread() function])]
+)
+AC_SEARCH_LIBS([ber_decode], [cmscodec], [],
+	[AC_MSG_ERROR([unable to find the ber_decode() function])]
+)
 
 # Check dependencies.
+#PKG_CHECK_MODULES([OPENSSL], [openssl])
 PKG_CHECK_MODULES([CHECK], [check])
-PKG_CHECK_MODULES([GLIB], [glib-2.0])
 
 # Spit out the makefiles.
 AC_OUTPUT(Makefile src/Makefile test/Makefile)
