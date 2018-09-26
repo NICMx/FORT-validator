@@ -1,17 +1,24 @@
-#include "content_info.h"
-#include "signed_data.h"
+#include <errno.h>
 
-const char *FILE_NAME = "/home/ydahhrk/rpki-cache/repository/"
-		"ca.rg.net/rpki/RGnet/IZt-j9P0XqJjzM2Xi4RZKS60gOc.roa";
+#include "common.h"
+#include "asn1/content_info.h"
+#include "asn1/roa.h"
+#include "asn1/signed_data.h"
 
 int
-main(void)
+main(int argc, char **argv)
 {
 	struct ContentInfo *cinfo;
 	struct SignedData *sdata;
+	struct RouteOriginAttestation *roa;
 	int error;
 
-	error = content_info_load(FILE_NAME, &cinfo);
+	if (argc < 2) {
+		pr_debug0("argc < 2");
+		return -EINVAL;
+	}
+
+	error = content_info_load(argv[1], &cinfo);
 	if (error)
 		return error;
 
@@ -21,10 +28,16 @@ main(void)
 		return error;
 	}
 
-//	asn_fprint(stdout, &asn_DEF_ContentInfo, cinfo);
-//	printf("---------------------------------------------\n");
-//	asn_fprint(stdout, &asn_DEF_SignedData, sdata);
+	error = roa_decode(sdata, &roa);
+	if (error) {
+		signed_data_free(sdata);
+		content_info_free(cinfo);
+		return error;
+	}
 
+	asn_fprint(stdout, &asn_DEF_RouteOriginAttestation, roa);
+
+	roa_free(roa);
 	signed_data_free(sdata);
 	content_info_free(cinfo);
 	return 0;

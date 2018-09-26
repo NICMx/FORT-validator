@@ -51,8 +51,8 @@ START_TEST(tal_load_normal)
 	uri = SLIST_NEXT(uri, next);
 	ck_assert(uri == NULL);
 
-	ck_assert_uint_eq(ARRAY_SIZE(decoded), tal->spki_size);
-	for (i = 0; i < ARRAY_SIZE(decoded); i++)
+	ck_assert_uint_eq(ARRAY_LEN(decoded), tal->spki_size);
+	for (i = 0; i < ARRAY_LEN(decoded); i++)
 		ck_assert_uint_eq(tal->spki[i], decoded[i]);
 
 	tal_destroy(tal);

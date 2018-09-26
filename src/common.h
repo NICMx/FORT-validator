@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#define ARRAY_SIZE(array) (sizeof(array) / sizeof(array[0]))
+#define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
 #define warnxerror0(error, msg) \
 	warnx(msg ": %s", strerror(error))
@@ -14,6 +14,7 @@
 #define warnxerrno(msg, ...) \
 	warnxerror(errno, msg, ##__VA_ARGS__)
 
+#define pr_debug0(msg) printf("Debug: " msg "\n");
 #define pr_debug(msg, ...) printf("Debug: " msg "\n", ##__VA_ARGS__);
 
 #endif /* SRC_RTR_COMMON_H_ */
