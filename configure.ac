@@ -31,7 +31,6 @@ AC_SEARCH_LIBS([ber_decode], [cmscodec], [],
 )
 
 # Check dependencies.
-#PKG_CHECK_MODULES([OPENSSL], [openssl])
 PKG_CHECK_MODULES([CHECK], [check])
 
 # Spit out the makefiles.

@@ -34,6 +34,7 @@ file_load(const char *file_name, struct file_contents *fc)
 		return errno;
 	}
 
+	/* TODO if @file is a directory, this returns a very large integer. */
 	error = get_file_size(file, &file_size);
 	if (error) {
 		warnxerror0(error, "Could not compute file size");

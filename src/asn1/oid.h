@@ -15,14 +15,22 @@ void free_arcs(struct oid_arcs *);
 
 typedef asn_oid_arc_t OID[];
 
-/* Please update MAX_ARCS if you add an OID that has more arcs. */
+/*
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ * ! Please update MAX_ARCS if you add an OID that has more arcs. !
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ */
+
 static const OID SIGNED_DATA_OID = { 1, 2, 840, 113549, 1, 7, 2 };
 static const OID CONTENT_TYPE_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 3 };
 static const OID MESSAGE_DIGEST_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 4 };
 static const OID SIGNING_TIME_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 5 };
 static const OID BINARY_SIGNING_TIME_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 16,
     2, 46 };
+
 static const OID ROA_OID = { 1, 2, 840, 113549, 1, 9, 16, 1, 24 };
+static const OID MANIFEST_OID = { 1, 2, 840, 113549, 1, 9, 16, 1, 26 };
+
 static const OID OID_SHA224 = { 2, 16, 840, 1, 101, 3, 4, 2, 4 };
 static const OID OID_SHA256 = { 2, 16, 840, 1, 101, 3, 4, 2, 1 };
 static const OID OID_SHA384 = { 2, 16, 840, 1, 101, 3, 4, 2, 2 };
