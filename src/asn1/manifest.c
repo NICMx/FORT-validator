@@ -150,7 +150,8 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
-int manifest_decode(struct SignedData *sdata, struct Manifest **result)
+int
+manifest_decode(struct SignedData *sdata, struct Manifest **result)
 {
 	struct Manifest *manifest;
 	int error;
@@ -181,7 +182,8 @@ int manifest_decode(struct SignedData *sdata, struct Manifest **result)
 	return 0;
 }
 
-void manifest_free(struct Manifest *manifest)
+void
+manifest_free(struct Manifest *manifest)
 {
 	ASN_STRUCT_FREE(asn_DEF_Manifest, manifest);
 }

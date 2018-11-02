@@ -29,6 +29,9 @@ AC_SEARCH_LIBS([pthread_create], [pthread], [],
 AC_SEARCH_LIBS([ber_decode], [cmscodec], [],
 	[AC_MSG_ERROR([unable to find the ber_decode() function])]
 )
+AC_SEARCH_LIBS([d2i_X509_bio], [crypto], [],
+	[AC_MSG_ERROR([unable to find the d2i_X509_bio() function])]
+)
 
 # Check dependencies.
 PKG_CHECK_MODULES([CHECK], [check])

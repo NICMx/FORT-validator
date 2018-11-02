@@ -1,6 +1,8 @@
 #include <errno.h>
 
 #include "common.h"
+#include "manifest.h"
+#include "asn1/certificate.h"
 #include "asn1/content_info.h"
 #include "asn1/manifest.h"
 #include "asn1/roa.h"
@@ -73,20 +75,41 @@ try_manifest(char *file_name)
 }
 
 int
+try_certificate(char *file_name)
+{
+	struct Certificate *cert;
+	int error;
+
+	error = certificate_load(file_name, &cert);
+	if (error)
+		return error;
+
+	asn_fprint(stdout, &asn_DEF_Certificate, cert);
+
+	certificate_free(cert);
+	return 0;
+}
+
+int
 main(int argc, char **argv)
 {
 	int error;
 
-	if (argc < 3) {
-		pr_debug0("argc < 3");
+	if (argc < 5) {
+		pr_debug0("argc < 5");
 		return -EINVAL;
 	}
 
-//	error = try_roa(argv[1]);
-//	if (error)
-//		return error;
-
+	error = try_roa(argv[1]);
+	if (error)
+		return error;
 	error = try_manifest(argv[2]);
+	if (error)
+		return error;
+	error = try_manifest(argv[3]);
+	if (error)
+		return error;
+	error = try_certificate(argv[4]);
 	if (error)
 		return error;
 

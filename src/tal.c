@@ -7,8 +7,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <glib.h>
-#include <glib/gi18n.h>
 
 #include <stdio.h>
 
@@ -25,7 +23,7 @@ SLIST_HEAD(uri_list, uri);
 struct tal {
 	struct uri_list uris;
 	/* Decoded; not base64. */
-	guchar *spki;
+	void *spki;
 	size_t spki_size;
 };
 
@@ -106,56 +104,6 @@ read_uris(struct line_file *lfile, struct uri_list *uris)
 	} while (true);
 }
 
-/*
- * Will usually allocate slightly more because of the newlines, but I'm fine
- * with it.
- */
-static size_t
-get_spki_alloc_size(struct line_file *lfile)
-{
-	struct stat st;
-	size_t result;
-
-	stat(lfile_name(lfile), &st);
-	result = st.st_size - lfile_offset(lfile);
-
-	/*
-	 * See the documentation for g_base64_decode_step().
-	 * I added `+ 1`. It's because `result / 4` truncates, and I'm not sure
-	 * if the original equation meant to round up.
-	 */
-	return (result / 4 + 1) * 3 + 3;
-}
-
-static int
-read_spki(struct line_file *lfile, struct tal *tal)
-{
-	char *line;
-	gint state = 0;
-	guint save = 0;
-	int err;
-
-	tal->spki = malloc(get_spki_alloc_size(lfile));
-	if (tal->spki == NULL)
-		return -ENOMEM;
-	tal->spki_size = 0;
-
-	do {
-		err = lfile_read(lfile, &line);
-		if (err) {
-			free(tal->spki);
-			return err;
-		}
-
-		if (line == NULL)
-			return 0;
-
-		tal->spki_size += g_base64_decode_step(line, strlen(line),
-		    tal->spki + tal->spki_size, &state, &save);
-		free(line);
-	} while (true);
-}
-
 int
 tal_load(const char *file_name, struct tal **result)
 {
@@ -180,13 +128,9 @@ tal_load(const char *file_name, struct tal **result)
 		return err;
 	}
 
-	err = read_spki(lfile, tal);
-	if (err) {
-		uris_destroy(&tal->uris);
-		free(tal);
-		lfile_close(lfile);
-		return err;
-	}
+	/* TODO */
+	tal->spki = NULL;
+	tal->spki_size = 0;
 
 	lfile_close(lfile);
 	*result = tal;
@@ -201,4 +145,19 @@ void tal_destroy(struct tal *tal)
 	uris_destroy(&tal->uris);
 	free(tal->spki);
 	free(tal);
+}
+
+int
+foreach_uri(struct tal *tal, foreach_uri_cb cb)
+{
+	struct uri *cursor;
+	int error;
+
+	SLIST_FOREACH(cursor, &tal->uris, next) {
+		error = cb(cursor->string);
+		if (error)
+			return error;
+	}
+
+	return 0;
 }
