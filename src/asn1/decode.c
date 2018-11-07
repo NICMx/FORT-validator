@@ -5,7 +5,7 @@
 #include "common.h"
 
 static int
-validate(asn_TYPE_descriptor_t *descriptor, void *result)
+validate(asn_TYPE_descriptor_t const *descriptor, void *result)
 {
 	char error_msg[256];
 	size_t error_msg_size;
@@ -25,7 +25,7 @@ validate(asn_TYPE_descriptor_t *descriptor, void *result)
 
 int
 asn1_decode(const void *buffer, size_t buffer_size,
-    asn_TYPE_descriptor_t *descriptor, void **result)
+    asn_TYPE_descriptor_t const *descriptor, void **result)
 {
 	asn_dec_rval_t rval;
 	int error;
@@ -34,6 +34,7 @@ asn1_decode(const void *buffer, size_t buffer_size,
 
 	rval = ber_decode(0, descriptor, result, buffer, buffer_size);
 	if (rval.code != RC_OK) {
+		/* TODO if rval.code == RC_WMORE (1), more work is needed */
 		warnx("Error decoding ASN.1 object: %d", rval.code);
 		/* Must free partial object according to API contracts. */
 		ASN_STRUCT_FREE(*descriptor, *result);
@@ -50,20 +51,24 @@ asn1_decode(const void *buffer, size_t buffer_size,
 }
 
 int
-asn1_decode_any(ANY_t *any, asn_TYPE_descriptor_t *descriptor, void **result)
+asn1_decode_any(ANY_t *any,
+    asn_TYPE_descriptor_t const *descriptor,
+    void **result)
 {
 	return asn1_decode(any->buf, any->size, descriptor, result);
 }
 
 int
 asn1_decode_octet_string(OCTET_STRING_t *string,
-    asn_TYPE_descriptor_t *descriptor, void **result)
+    asn_TYPE_descriptor_t const *descriptor,
+    void **result)
 {
 	return asn1_decode(string->buf, string->size, descriptor, result);
 }
 
 int
-asn1_decode_fc(struct file_contents *fc, asn_TYPE_descriptor_t *descriptor,
+asn1_decode_fc(struct file_contents *fc,
+    asn_TYPE_descriptor_t const *descriptor,
     void **result)
 {
 	return asn1_decode(fc->buffer, fc->buffer_size, descriptor, result);

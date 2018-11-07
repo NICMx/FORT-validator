@@ -1,54 +1,18 @@
-#include "asn1/manifest.h"
+#include "manifest.h"
 
-#include <err.h>
 #include <errno.h>
-#include "asn1/decode.h"
+#include <libcmscodec/Manifest.h>
+
+#include "common.h"
 #include "asn1/oid.h"
-#include "asn1/signed_data.h"
+#include "object/certificate.h"
+#include "object/roa.h"
+#include "object/signed_object.h"
 
-static int
-validate_eContentType(struct SignedData *sdata)
+bool
+is_manifest(char const *file_name)
 {
-	struct oid_arcs arcs;
-	bool equals;
-	int error;
-
-	error = oid2arcs(&sdata->encapContentInfo.eContentType, &arcs);
-	if (error)
-		return error;
-	equals = ARCS_EQUAL_OIDS(&arcs, MANIFEST_OID);
-	free_arcs(&arcs);
-	if (!equals) {
-		warnx("SignedObject lacks the OID of a Manifest.");
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int
-validate_content_type(struct SignedData *sdata)
-{
-	OBJECT_IDENTIFIER_t *ctype;
-	struct oid_arcs arcs;
-	bool equals;
-	int error;
-
-	error = get_content_type_attr(sdata, &ctype);
-	if (error)
-		return error;
-	error = oid2arcs(ctype, &arcs);
-	ASN_STRUCT_FREE(asn_DEF_OBJECT_IDENTIFIER, ctype);
-	if (error)
-		return error;
-	equals = ARCS_EQUAL_OIDS(&arcs, MANIFEST_OID);
-	free_arcs(&arcs);
-	if (!equals) {
-		warnx("SignedObject's content type doesn't match its encapContentInfo's eContent.");
-		return -EINVAL;
-	}
-
-	return 0;
+	return file_has_extension(file_name, "mft");
 }
 
 static int
@@ -61,6 +25,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 static int
 is_hash_algorithm(OBJECT_IDENTIFIER_t *aid, bool *result)
 {
+	static const OID sha_oid = OID_SHA256;
 	struct oid_arcs arcs;
 	int error;
 
@@ -68,13 +33,13 @@ is_hash_algorithm(OBJECT_IDENTIFIER_t *aid, bool *result)
 	if (error)
 		return error;
 
-	*result = ARCS_EQUAL_OIDS(&arcs, OID_SHA256);
+	*result = ARCS_EQUAL_OIDS(&arcs, sha_oid);
 
 	free_arcs(&arcs);
 	return 0;
 }
 
-int
+static int
 validate_manifest(struct Manifest *manifest)
 {
 	int error;
@@ -150,40 +115,102 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
-int
-manifest_decode(struct SignedData *sdata, struct Manifest **result)
+/**
+ * Given manifest path @mft and its referenced file @file, returns a path
+ * @file can be accessed with.
+ *
+ * ie. if @mft is "a/b/c.mft" and @file is "d/e/f.cer", returns "a/b/d/e/f.cer".
+ *
+ * The result needs to be freed in the end.
+ */
+static int
+get_relative_file(char const *mft, char const *file, char **result)
 {
-	struct Manifest *manifest;
-	int error;
+	char *joined;
+	char *slash_pos;
+	int dir_len;
 
-	/* rfc6486#section-4.1 */
-	/* rfc6486#section-4.4.1 */
-	error = validate_eContentType(sdata);
-	if (error)
-		return error;
-
-	/* rfc6486#section-4.3 */
-	error = validate_content_type(sdata);
-	if (error)
-		return error;
-
-	error = asn1_decode_octet_string(sdata->encapContentInfo.eContent,
-	    &asn_DEF_Manifest, (void **) &manifest);
-	if (error)
-		return -EINVAL;
-
-	error = validate_manifest(manifest);
-	if (error) {
-		ASN_STRUCT_FREE(asn_DEF_Manifest, manifest);
-		return error;
+	slash_pos = strrchr(mft, '/');
+	if (slash_pos == NULL) {
+		joined = malloc(strlen(file) + 1);
+		if (!joined)
+			return -ENOMEM;
+		strcpy(joined, file);
+		goto succeed;
 	}
 
-	*result = manifest;
+	dir_len = (slash_pos + 1) - mft;
+	joined = malloc(dir_len + strlen(file) + 1);
+	if (!joined)
+		return -ENOMEM;
+
+	strncpy(joined, mft, dir_len);
+	strcpy(joined + dir_len, file);
+
+succeed:
+	*result = joined;
 	return 0;
 }
 
-void
-manifest_free(struct Manifest *manifest)
+static int
+handle_file(char const *mft, IA5String_t *string)
 {
+	char *luri;
+	int error;
+
+	/* TODO Treating string->buf as a C string is probably not correct. */
+	pr_debug_add("File %s {", string->buf);
+
+	error = get_relative_file(mft, (char const *) string->buf, &luri);
+	if (error)
+		goto end;
+
+	if (is_certificate(luri))
+		error = handle_certificate(luri);
+	else if (is_roa(luri))
+		error = handle_roa(luri);
+	else
+		pr_debug0("Unhandled file type.");
+
+	free(luri);
+end:
+	pr_debug0_rm("}");
+	return error;
+}
+
+static int
+__handle_manifest(char const *mft, struct Manifest *manifest)
+{
+	int i;
+	int error;
+
+	for (i = 0; i < manifest->fileList.list.count; i++) {
+		error = handle_file(mft,
+		    &manifest->fileList.list.array[i]->file);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+int
+handle_manifest(char const *file_path)
+{
+	static OID oid = OID_MANIFEST;
+	struct oid_arcs arcs = OID2ARCS(oid);
+	struct Manifest *manifest;
+	int error;
+
+	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
+	    (void **) &manifest);
+	if (error)
+		return error;
+
+	error = validate_manifest(manifest);
+	if (!error)
+		error = __handle_manifest(file_path, manifest);
+
 	ASN_STRUCT_FREE(asn_DEF_Manifest, manifest);
+	return error;
 }

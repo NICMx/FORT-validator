@@ -26,6 +26,8 @@ extern int NID_rpkiNotify;
 #define warnxerrno(msg, ...) \
 	warnxerror(errno, msg, ##__VA_ARGS__)
 
+#ifdef DEBUG
+
 #define pr_debug(msg, ...) {			\
 	printf("DBG: ");			\
 	pr_indent();				\
@@ -53,6 +55,17 @@ extern int NID_rpkiNotify;
 	pr_rm_indent();				\
 	pr_debug0(msg);				\
 }
+
+#else /* #ifdef DEBUG */
+
+#define pr_debug(msg, ...)
+#define pr_debug_add(msg, ...)
+#define pr_debug_rm(msg, ...)
+#define pr_debug0(msg)
+#define pr_debug0_add(msg)
+#define pr_debug0_rm(msg)
+
+#endif /* #ifdef DEBUG */
 
 void pr_indent(void);
 void pr_add_indent(void);

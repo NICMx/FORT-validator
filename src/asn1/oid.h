@@ -11,6 +11,8 @@ struct oid_arcs {
 	size_t count;
 };
 
+#define OID2ARCS(oid) { .arcs = oid, .count = ARRAY_LEN(oid) }
+
 void free_arcs(struct oid_arcs *);
 
 typedef asn_oid_arc_t OID[];
@@ -21,25 +23,24 @@ typedef asn_oid_arc_t OID[];
  * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  */
 
-static const OID SIGNED_DATA_OID = { 1, 2, 840, 113549, 1, 7, 2 };
-static const OID CONTENT_TYPE_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 3 };
-static const OID MESSAGE_DIGEST_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 4 };
-static const OID SIGNING_TIME_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 5 };
-static const OID BINARY_SIGNING_TIME_ATTR_OID = { 1, 2, 840, 113549, 1, 9, 16,
-    2, 46 };
+#define OID_SIGNED_DATA              { 1, 2, 840, 113549, 1, 7, 2 }
+#define OID_CONTENT_TYPE_ATTR        { 1, 2, 840, 113549, 1, 9, 3 }
+#define OID_MESSAGE_DIGEST_ATTR      { 1, 2, 840, 113549, 1, 9, 4 }
+#define OID_SIGNING_TIME_ATTR        { 1, 2, 840, 113549, 1, 9, 5 }
+#define OID_BINARY_SIGNING_TIME_ATTR { 1, 2, 840, 113549, 1, 9, 16, 2, 46 }
 
-static const OID ROA_OID = { 1, 2, 840, 113549, 1, 9, 16, 1, 24 };
-static const OID MANIFEST_OID = { 1, 2, 840, 113549, 1, 9, 16, 1, 26 };
+#define OID_ROA                      { 1, 2, 840, 113549, 1, 9, 16, 1, 24 }
+#define OID_MANIFEST                 { 1, 2, 840, 113549, 1, 9, 16, 1, 26 }
 
-static const OID OID_SHA224 = { 2, 16, 840, 1, 101, 3, 4, 2, 4 };
-static const OID OID_SHA256 = { 2, 16, 840, 1, 101, 3, 4, 2, 1 };
-static const OID OID_SHA384 = { 2, 16, 840, 1, 101, 3, 4, 2, 2 };
-static const OID OID_SHA512 = { 2, 16, 840, 1, 101, 3, 4, 2, 3 };
+#define OID_SHA224                   { 2, 16, 840, 1, 101, 3, 4, 2, 4 }
+#define OID_SHA256                   { 2, 16, 840, 1, 101, 3, 4, 2, 1 }
+#define OID_SHA384                   { 2, 16, 840, 1, 101, 3, 4, 2, 2 }
+#define OID_SHA512                   { 2, 16, 840, 1, 101, 3, 4, 2, 3 }
 
 int oid2arcs(OBJECT_IDENTIFIER_t *, struct oid_arcs *);
 int any2arcs(ANY_t *, struct oid_arcs *);
 
-bool arcs_equal(struct oid_arcs *, struct oid_arcs *);
+bool arcs_equal(struct oid_arcs const *, struct oid_arcs const *);
 /* Use ARCS_EQUAL_OID() instead. */
 bool arcs_equal_oids(struct oid_arcs *, asn_oid_arc_t const *, size_t);
 
@@ -48,7 +49,5 @@ bool arcs_equal_oids(struct oid_arcs *, asn_oid_arc_t const *, size_t);
  * b is supposed to be an OID.
  */
 #define ARCS_EQUAL_OIDS(a, b) arcs_equal_oids(a, b, ARRAY_LEN(b))
-
-void oid_print(OBJECT_IDENTIFIER_t *oid);
 
 #endif /* SRC_OID_H_ */

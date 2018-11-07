@@ -1,5 +1,5 @@
-#ifndef TAL_H_
-#define TAL_H_
+#ifndef TAL_OBJECT_H_
+#define TAL_OBJECT_H_
 
 /* This is RFC 7730. */
 
@@ -11,4 +11,4 @@ void tal_destroy(struct tal *);
 typedef int (*foreach_uri_cb)(char const *);
 int foreach_uri(struct tal *, foreach_uri_cb);
 
-#endif /* TAL_H_ */
+#endif /* TAL_OBJECT_H_ */

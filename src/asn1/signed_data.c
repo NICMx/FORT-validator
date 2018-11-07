@@ -8,6 +8,15 @@
 
 /* TODO more consistent and informative error/warning messages.*/
 
+static const OID oid_sha224 = OID_SHA224;
+static const OID oid_sha256 = OID_SHA256;
+static const OID oid_sha384 = OID_SHA384;
+static const OID oid_sha512 = OID_SHA512;
+static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
+static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
+static const OID oid_sta = OID_SIGNING_TIME_ATTR;
+static const OID oid_bst = OID_BINARY_SIGNING_TIME_ATTR;
+
 /*
  * The correctness of this function depends on @MAX_ARCS being faithful to all
  * the known OIDs declared *in the project*.
@@ -22,10 +31,10 @@ is_digest_algorithm(AlgorithmIdentifier_t *aid, bool *result)
 	if (error)
 		return error;
 
-	*result = ARCS_EQUAL_OIDS(&arcs, OID_SHA224)
-	       || ARCS_EQUAL_OIDS(&arcs, OID_SHA256)
-	       || ARCS_EQUAL_OIDS(&arcs, OID_SHA384)
-	       || ARCS_EQUAL_OIDS(&arcs, OID_SHA512);
+	*result = ARCS_EQUAL_OIDS(&arcs, oid_sha224)
+	       || ARCS_EQUAL_OIDS(&arcs, oid_sha256)
+	       || ARCS_EQUAL_OIDS(&arcs, oid_sha384)
+	       || ARCS_EQUAL_OIDS(&arcs, oid_sha512);
 
 	free_arcs(&arcs);
 	return 0;
@@ -107,7 +116,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 		if (error)
 			return error;
 
-		if (ARCS_EQUAL_OIDS(&attrType, CONTENT_TYPE_ATTR_OID)) {
+		if (ARCS_EQUAL_OIDS(&attrType, oid_cta)) {
 			if (content_type_found) {
 				warnx("Multiple ContentTypes found.");
 				goto illegal_attrType;
@@ -115,7 +124,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			error = validate_content_type_attribute(attr->attrValues.list.array[0], eci);
 			content_type_found = true;
 
-		} else if (ARCS_EQUAL_OIDS(&attrType, MESSAGE_DIGEST_ATTR_OID)) {
+		} else if (ARCS_EQUAL_OIDS(&attrType, oid_mda)) {
 			if (message_digest_found) {
 				warnx("Multiple MessageDigests found.");
 				goto illegal_attrType;
@@ -123,7 +132,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			error = validate_message_digest_attribute(attr->attrValues.list.array[0]);
 			message_digest_found = true;
 
-		} else if (ARCS_EQUAL_OIDS(&attrType, SIGNING_TIME_ATTR_OID)) {
+		} else if (ARCS_EQUAL_OIDS(&attrType, oid_sta)) {
 			if (signing_time_found) {
 				warnx("Multiple SigningTimes found.");
 				goto illegal_attrType;
@@ -131,7 +140,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			error = 0; /* No validations needed for now. */
 			signing_time_found = true;
 
-		} else if (ARCS_EQUAL_OIDS(&attrType, BINARY_SIGNING_TIME_ATTR_OID)) {
+		} else if (ARCS_EQUAL_OIDS(&attrType, oid_bst)) {
 			if (binary_signing_time_found) {
 				warnx("Multiple BinarySigningTimes found.");
 				goto illegal_attrType;
@@ -298,8 +307,9 @@ validate(struct SignedData *sdata)
 		return -EINVAL;
 	}
 
-	/* rfc6488#section-3.2 TODO */
-	/* rfc6488#section-3.3 TODO */
+	/* rfc6488#section-3.2 */
+	/* rfc6488#section-3.3 */
+	/* TODO */
 
 	return 0;
 }
@@ -360,7 +370,7 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 		error = oid2arcs(&attr->attrType, &arcs);
 		if (error)
 			return -EINVAL;
-		equal = ARCS_EQUAL_OIDS(&arcs, CONTENT_TYPE_ATTR_OID);
+		equal = ARCS_EQUAL_OIDS(&arcs, oid_cta);
 		free_arcs(&arcs);
 		if (equal) {
 			if (attr->attrValues.list.array == NULL)

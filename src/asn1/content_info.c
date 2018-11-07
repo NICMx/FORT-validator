@@ -10,6 +10,7 @@
 static int
 validate(struct ContentInfo *info)
 {
+	static const OID oid_sdata = OID_SIGNED_DATA;
 	struct oid_arcs arcs;
 	int error;
 
@@ -19,7 +20,7 @@ validate(struct ContentInfo *info)
 	if (error)
 		return error;
 
-	if (!ARCS_EQUAL_OIDS(&arcs, SIGNED_DATA_OID)) {
+	if (!ARCS_EQUAL_OIDS(&arcs, oid_sdata)) {
 		fprintf(stderr, "Incorrect content-type.");
 		return -EINVAL;
 	}

@@ -99,7 +99,7 @@ handle_extensions(X509 *cert)
 
 		} else if (nid == NID_rpkiNotify) {
 			/* TODO Another fucking RFC... */
-			pr_debug0("rpkiNotify");
+			pr_debug0("Unimplemented thingy: rpkiNotify");
 
 		} else if (nid == NID_caRepository) {
 			error = gn2uri(ad->location, &uri);

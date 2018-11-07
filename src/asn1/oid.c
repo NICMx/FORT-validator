@@ -83,7 +83,7 @@ static bool __arcs_equal(asn_oid_arc_t const *a, size_t a_count,
 	return true;
 }
 
-bool arcs_equal(struct oid_arcs *a, struct oid_arcs *b)
+bool arcs_equal(struct oid_arcs const *a, struct oid_arcs const *b)
 {
 	return __arcs_equal(a->arcs, a->count, b->arcs, b->count);
 }
@@ -92,10 +92,4 @@ bool arcs_equal_oids(struct oid_arcs *arcs, asn_oid_arc_t const *oids,
     size_t oids_len)
 {
 	return __arcs_equal(arcs->arcs, arcs->count, oids, oids_len);
-}
-
-void
-oid_print(OBJECT_IDENTIFIER_t *oid)
-{
-	asn_fprint(stdout, &asn_DEF_OBJECT_IDENTIFIER, oid);
 }

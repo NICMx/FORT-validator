@@ -3,11 +3,11 @@
 #include <stdlib.h>
 #include <openssl/objects.h>
 
-#include "certificate.h"
 #include "common.h"
 #include "debug.h"
-#include "manifest.h"
-#include "tal.h"
+#include "object/certificate.h"
+#include "object/manifest.h"
+#include "object/tal.h"
 
 /**
  * Registers the RPKI-specific OIDs in the SSL library.
