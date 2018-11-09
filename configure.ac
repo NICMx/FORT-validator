@@ -28,6 +28,7 @@ AC_SEARCH_LIBS([pthread_create], [pthread])
 # Uhhh... this one starts with "PKG_" so it's probably different.
 # No idea.
 PKG_CHECK_MODULES([CHECK], [check])
+PKG_CHECK_MODULES([JANSSON], [jansson])
 
 # Spit out the makefiles.
 AC_OUTPUT(Makefile src/Makefile man/Makefile test/Makefile)

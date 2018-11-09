@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "../common.h"
+#include "../types.h"
 #include "pdu.h"
 
 /*
@@ -16,7 +17,7 @@
  * from the clients.
  */
 static int
-create_server_socket(void)
+create_server_socket(struct in_addr *server_addr, __u16 port)
 {
 	int fd; /* "file descriptor" */
 	struct sockaddr_in address;
@@ -31,8 +32,8 @@ create_server_socket(void)
 
 	memset(&address, 0, sizeof(address));
 	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = INADDR_ANY;
-	address.sin_port = htons(5001);
+	address.sin_addr.s_addr = server_addr->s_addr;
+	address.sin_port = htons(port);
 	if (bind(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
 		err = errno;
 		warn("Could not bind the address");
@@ -189,11 +190,11 @@ handle_client_connections(int server_fd)
  * This function blocks.
  */
 int
-rtr_listen(void)
+rtr_listen(struct in_addr *server_addr, __u16 port)
 {
 	int server_fd; /* "file descriptor" */
 
-	server_fd = create_server_socket();
+	server_fd = create_server_socket(server_addr, port);
 	if (server_fd < 0)
 		return server_fd;
 
