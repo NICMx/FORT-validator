@@ -1,11 +1,11 @@
 #include "object/roa.h"
 
-#include <err.h>
 #include <errno.h>
 #include <arpa/inet.h>
 #include <libcmscodec/RouteOriginAttestation.h>
 
 #include "common.h"
+#include "log.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
 
@@ -15,11 +15,11 @@ bool is_roa(char const *file_name)
 }
 
 static int
-validate_roa(struct RouteOriginAttestation *roa)
+validate_roa(struct validation *state, struct RouteOriginAttestation *roa)
 {
 	/* rfc6482#section-3.1 */
 	if (roa->version != 0) {
-		warnx("ROA's version (%ld) is not zero.", roa->version);
+		pr_err(state, "ROA's version (%ld) is nonzero.", roa->version);
 		return -EINVAL;
 	}
 
@@ -31,7 +31,8 @@ validate_roa(struct RouteOriginAttestation *roa)
 }
 
 static int
-print_addr(long asn, uint8_t family, struct ROAIPAddress *roa_addr)
+print_addr(struct validation *state, long asn, uint8_t family,
+    struct ROAIPAddress *roa_addr)
 {
 	union {
 		struct in6_addr ip6;
@@ -43,7 +44,6 @@ print_addr(long asn, uint8_t family, struct ROAIPAddress *roa_addr)
 	} str;
 	int prefix_len;
 	const char *str2;
-	int error;
 
 	switch (family) {
 	case 1:
@@ -53,7 +53,7 @@ print_addr(long asn, uint8_t family, struct ROAIPAddress *roa_addr)
 		family = AF_INET6;
 		break;
 	default:
-		warnx("Unknown family value: %u", family);
+		pr_err(state, "Unknown family value: %u", family);
 		return -EINVAL;
 	}
 
@@ -68,11 +68,8 @@ print_addr(long asn, uint8_t family, struct ROAIPAddress *roa_addr)
 	memset(&addr, 0, sizeof(addr));
 	memcpy(&addr, roa_addr->address.buf, roa_addr->address.size);
 	str2 = inet_ntop(family, &addr, str.ip6, sizeof(str));
-	if (str2 == NULL) {
-		error = errno;
-		warnxerrno0("Could not parse IP address");
-		return error;
-	}
+	if (str2 == NULL)
+		return pr_errno(state, errno, "Cannot parse IP address");
 
 	prefix_len = 8 * roa_addr->address.size - roa_addr->address.bits_unused;
 
@@ -88,7 +85,7 @@ print_addr(long asn, uint8_t family, struct ROAIPAddress *roa_addr)
 }
 
 static int
-__handle_roa(struct RouteOriginAttestation *roa)
+__handle_roa(struct validation *state, struct RouteOriginAttestation *roa)
 {
 	struct ROAIPAddressFamily *block;
 	int b;
@@ -111,7 +108,7 @@ __handle_roa(struct RouteOriginAttestation *roa)
 		if (block->addresses.list.array == NULL)
 			return -EINVAL;
 		for (a = 0; a < block->addresses.list.count; a++) {
-			error = print_addr(roa->asID,
+			error = print_addr(state, roa->asID,
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
 			if (error)
@@ -122,21 +119,21 @@ __handle_roa(struct RouteOriginAttestation *roa)
 	return 0;
 }
 
-int handle_roa(char const *file)
+int handle_roa(struct validation *state, char const *file)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS(oid);
 	struct RouteOriginAttestation *roa;
 	int error;
 
-	error = signed_object_decode(file, &asn_DEF_RouteOriginAttestation,
-	    &arcs, (void **) &roa);
+	error = signed_object_decode(state, file,
+	    &asn_DEF_RouteOriginAttestation, &arcs, (void **) &roa);
 	if (error)
 		return error;
 
-	error = validate_roa(roa);
+	error = validate_roa(state, roa);
 	if (!error)
-		error = __handle_roa(roa);
+		error = __handle_roa(state, roa);
 
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
 	return error;

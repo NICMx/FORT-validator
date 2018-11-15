@@ -51,12 +51,12 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 
 /* Callers must free @result. */
 int
-any2arcs(ANY_t *any, struct oid_arcs *result)
+any2arcs(struct validation *state, ANY_t *any, struct oid_arcs *result)
 {
 	OBJECT_IDENTIFIER_t *oid;
 	int error;
 
-	error = asn1_decode_any(any, &asn_DEF_OBJECT_IDENTIFIER,
+	error = asn1_decode_any(state, any, &asn_DEF_OBJECT_IDENTIFIER,
 	    (void **) &oid);
 	if (error)
 		return error;

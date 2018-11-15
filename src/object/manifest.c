@@ -4,11 +4,14 @@
 #include <libcmscodec/Manifest.h>
 
 #include "common.h"
+#include "log.h"
 #include "asn1/oid.h"
 #include "object/certificate.h"
+#include "object/crl.h"
 #include "object/roa.h"
 #include "object/signed_object.h"
 
+/* TODO not being called right now. */
 bool
 is_manifest(char const *file_name)
 {
@@ -153,39 +156,44 @@ succeed:
 }
 
 static int
-handle_file(char const *mft, IA5String_t *string)
+handle_file(struct validation *state, char const *mft, IA5String_t *string)
 {
 	char *luri;
 	int error;
 
 	/* TODO Treating string->buf as a C string is probably not correct. */
-	pr_debug_add("File %s {", string->buf);
+//	pr_debug_add(state, "File %s {", string->buf);
 
 	error = get_relative_file(mft, (char const *) string->buf, &luri);
 	if (error)
 		goto end;
 
+	pr_debug_add(state, "File %s {", luri);
+
 	if (is_certificate(luri))
-		error = handle_certificate(luri);
+		error = certificate_handle(state, luri);
+	else if (is_crl(luri))
+		error = handle_crl(state, luri);
 	else if (is_roa(luri))
-		error = handle_roa(luri);
+		error = handle_roa(state, luri);
 	else
-		pr_debug0("Unhandled file type.");
+		pr_debug(state, "Unhandled file type.");
 
 	free(luri);
 end:
-	pr_debug0_rm("}");
+	pr_debug_rm(state, "}");
 	return error;
 }
 
 static int
-__handle_manifest(char const *mft, struct Manifest *manifest)
+__handle_manifest(struct validation *state, char const *mft,
+    struct Manifest *manifest)
 {
 	int i;
 	int error;
 
 	for (i = 0; i < manifest->fileList.list.count; i++) {
-		error = handle_file(mft,
+		error = handle_file(state, mft,
 		    &manifest->fileList.list.array[i]->file);
 		if (error)
 			return error;
@@ -195,21 +203,21 @@ __handle_manifest(char const *mft, struct Manifest *manifest)
 }
 
 int
-handle_manifest(char const *file_path)
+handle_manifest(struct validation *state, char const *file_path)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS(oid);
 	struct Manifest *manifest;
 	int error;
 
-	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
+	error = signed_object_decode(state, file_path, &asn_DEF_Manifest, &arcs,
 	    (void **) &manifest);
 	if (error)
 		return error;
 
 	error = validate_manifest(manifest);
 	if (!error)
-		error = __handle_manifest(file_path, manifest);
+		error = __handle_manifest(state, file_path, manifest);
 
 	ASN_STRUCT_FREE(asn_DEF_Manifest, manifest);
 	return error;

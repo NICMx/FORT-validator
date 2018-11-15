@@ -106,7 +106,7 @@ lfile_read(struct line_file *lfile, char **result)
 		if (feof(lfile->file))
 			return 0;
 		warnx("Supposedly unreachable code reached. ferror:%d feof:%d",
-				ferror(lfile->file), feof(lfile->file));
+		    ferror(lfile->file), feof(lfile->file));
 		return -EINVAL;
 	}
 
@@ -120,7 +120,7 @@ lfile_read(struct line_file *lfile, char **result)
 	for (i = 0; i < len; i++) {
 		if (string[i] == '\0') {
 			warnx("File '%s' has an illegal null character in its body. Please remove it.",
-					lfile_name(lfile));
+			    lfile_name(lfile));
 			free(string);
 			return -EINVAL;
 		}

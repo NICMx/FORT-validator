@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "debug.h"
+#include "log.h"
 #include "object/certificate.h"
 #include "object/manifest.h"
 #include "object/tal.h"
@@ -19,12 +20,12 @@ add_rpki_oids(void)
 	NID_rpkiManifest = OBJ_create("1.3.6.1.5.5.7.48.10",
 	    "id-ad-rpkiManifest (RFC 6487)",
 	    "Resource Public Key Infrastructure (RPKI) manifest access method");
-	pr_debug("rpkiManifest registered. Its nid is %d.", NID_rpkiManifest);
+	printf("rpkiManifest registered. Its nid is %d.\n", NID_rpkiManifest);
 
 	NID_rpkiNotify = OBJ_create("1.3.6.1.5.5.7.48.13",
 	    "id-ad-rpkiNotify (RFC 8182)",
 	    /* TODO */ "Blah blah");
-	pr_debug("rpkiNotify registered. Its nid is %d.", NID_rpkiNotify);
+	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
 }
 
 /**
@@ -34,27 +35,35 @@ add_rpki_oids(void)
 static int
 handle_tal_uri(char const *uri)
 {
+	struct validation *state;
 	char *cert_file;
 	int error;
 
-	pr_debug_add("TAL URI %s {", uri);
+	error = uri_g2l(NULL, uri, &cert_file);
+	if (error)
+		return error;
+
+	error = validation_create(&state, cert_file);
+	if (error)
+		goto end1;
+
+	pr_debug_add(state, "TAL URI %s {", uri);
 
 	if (!is_certificate(uri)) {
-		warnx("TAL file does not seem to point to a certificate.");
-		warnx("(Expected .cer file, got '%s')", uri);
+		pr_err(state,
+		    "TAL file does not point to a certificate. (Expected .cer, got '%s')",
+		    uri);
 		error = -ENOTSUPPORTED;
-		goto end;
+		goto end2;
 	}
 
-	error = uri_g2l(uri, &cert_file);
-	if (error)
-		goto end;
+	error = certificate_handle_extensions(state, validation_peek(state));
 
-	error = handle_certificate(cert_file);
+end2:
+	pr_debug_rm(state, "}");
+	validation_destroy(state);
+end1:
 	free(cert_file);
-
-end:
-	pr_debug0_rm("}");
 	return error;
 }
 
@@ -63,6 +72,8 @@ main(int argc, char **argv)
 {
 	struct tal *tal;
 	int error;
+
+	print_stack_trace_on_segfault();
 
 	if (argc < 3) {
 		warnx("Repository path as first argument and TAL file as second argument, please.");

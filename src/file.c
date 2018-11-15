@@ -1,10 +1,10 @@
 #include "file.h"
 
-#include <err.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "common.h"
+#include "log.h"
 
 /*
  * Will also rewind the file as a side effect.
@@ -21,7 +21,8 @@ get_file_size(FILE *file, long int *size)
 }
 
 int
-file_load(const char *file_name, struct file_contents *fc)
+file_load(struct validation *state, const char *file_name,
+    struct file_contents *fc)
 {
 	FILE *file;
 	long int file_size;
@@ -30,14 +31,15 @@ file_load(const char *file_name, struct file_contents *fc)
 
 	file = fopen(file_name, "rb");
 	if (file == NULL) {
-		warnxerrno("Could not open file '%s'", file_name);
-		return errno;
+		return pr_errno(state, errno, "Could not open file '%s'",
+		    file_name);
 	}
 
 	/* TODO if @file is a directory, this returns a very large integer. */
 	error = get_file_size(file, &file_size);
 	if (error) {
-		warnxerror0(error, "Could not compute file size");
+		pr_errno(state, error, "Could not compute the file size of %s",
+		    file_name);
 		fclose(file);
 		return error;
 	}
@@ -45,7 +47,7 @@ file_load(const char *file_name, struct file_contents *fc)
 	fc->buffer_size = file_size;
 	fc->buffer = malloc(fc->buffer_size);
 	if (fc->buffer == NULL) {
-		warnx("Out of memory.");
+		pr_err(state, "Out of memory.");
 		fclose(file);
 		return -ENOMEM;
 	}
@@ -59,8 +61,9 @@ file_load(const char *file_name, struct file_contents *fc)
 			 * code. It literally doesn't say how to obtain the
 			 * error code.
 			 */
-			warnx("File read error. The errcode is presumably %d. (%s)",
-			    error, strerror(error));
+			pr_errno(state, error,
+			    "File reading error. Error message (apparently)",
+			    file_name);
 			free(fc->buffer);
 			fclose(file);
 			return error;
@@ -70,9 +73,9 @@ file_load(const char *file_name, struct file_contents *fc)
 		 * As far as I can tell from the man page, feof() cannot return
 		 * less bytes that requested like read() does.
 		 */
-		warnx("Likely programming error: fread() < file size");
-		warnx("fr:%zu bs:%zu EOF:%d", fread_result, fc->buffer_size,
-				feof(file));
+		pr_err(state, "Likely programming error: fread() < file size");
+		pr_err(state, "fr:%zu bs:%zu EOF:%d", fread_result,
+		    fc->buffer_size, feof(file));
 		free(fc->buffer);
 		fclose(file);
 		return -EINVAL;
