@@ -2,8 +2,8 @@
 
 #include <errno.h>
 #include <openssl/err.h>
-#include <openssl/x509.h>
 #include <openssl/x509v3.h>
+#include <sys/queue.h>
 #include "common.h"
 #include "log.h"
 #include "object/certificate.h"
@@ -32,6 +32,19 @@ struct validation {
 
 	/** Certificates we've already validated. */
 	STACK_OF(X509) *trusted;
+	/**
+	 * The resources owned by the certificates from @trusted.
+	 *
+	 * (One for each certificate; these two stacks should practically always
+	 * have the same size. The reason why I don't combine them is because
+	 * libcrypto's validation function wants the stack of X509 and I'm not
+	 * creating it over and over again.)
+	 *
+	 * (This is a SLIST and not a STACK_OF because the OpenSSL stack
+	 * implementation is different than the LibreSSL one, and the latter is
+	 * seemingly not intended to be used outside of its library.)
+	 */
+	struct restack *rsrcs;
 };
 
 /*
@@ -76,9 +89,9 @@ init_trusted(struct validation *result, char *root)
 	int ok;
 	int error;
 
-	cert = certificate_load(result, root);
-	if (cert == NULL)
-		return -EINVAL;
+	error = certificate_load(result, root, &cert);
+	if (error)
+		return error;
 
 	result->trusted = sk_X509_new_null();
 	if (result->trusted == NULL) {
@@ -106,6 +119,7 @@ int
 validation_create(struct validation **out, char *root)
 {
 	struct validation *result;
+	struct resources *resources;
 	int error = -ENOMEM;
 
 	result = malloc(sizeof(struct validation));
@@ -135,9 +149,29 @@ validation_create(struct validation **out, char *root)
 	if (error)
 		goto abort4;
 
+	result->rsrcs = restack_create();
+	if (!result->rsrcs)
+		goto abort5;
+
+	resources = resources_create();
+	if (resources == NULL)
+		goto abort6;
+
+	error = certificate_get_resources(result, validation_peek_cert(result),
+	    resources);
+	if (error)
+		goto abort7;
+
+	restack_push(result->rsrcs, resources);
 	*out = result;
 	return 0;
 
+abort7:
+	resources_destroy(resources);
+abort6:
+	restack_destroy(result->rsrcs);
+abort5:
+	sk_X509_pop_free(result->trusted, X509_free);
 abort4:
 	X509_STORE_free(result->store);
 abort3:
@@ -160,86 +194,16 @@ validation_destroy(struct validation *state)
 	 */
 	cert_num = sk_X509_num(state->trusted);
 	if (cert_num != 1) {
-		pr_err(state, "Error: validation state has %d certificates. (1 expected)",
+		pr_err("Error: validation state has %d certificates. (1 expected)",
 		    cert_num);
 	}
 
+	restack_destroy(state->rsrcs);
 	sk_X509_pop_free(state->trusted, X509_free);
 	X509_STORE_free(state->store);
 	BIO_free_all(state->err);
 	BIO_free_all(state->out);
 	free(state);
-}
-
-/**
- * "Swallows" @cert; do not delete it.
- */
-int
-validation_push(struct validation *state, X509 *cert)
-{
-	/*
-	 * TODO
-	 * The only difference between -CAfile and -trusted, as it seems, is
-	 * that -CAfile consults the default file location, while -trusted does
-	 * not. As far as I can tell, this means that we absolutely need to use
-	 * -trusted.
-	 * So, just in case, enable -no-CAfile and -no-CApath.
-	 */
-
-	X509_STORE_CTX *ctx;
-	int ok;
-
-	ctx = X509_STORE_CTX_new();
-	if (ctx == NULL) {
-		crypto_err(state, "X509_STORE_CTX_new() returned NULL");
-		goto end1;
-	}
-
-	/* Returns 0 or 1 , all callers test ! only. */
-	ok = X509_STORE_CTX_init(ctx, state->store, cert, NULL);
-	if (!ok) {
-		crypto_err(state, "X509_STORE_CTX_init() returned %d", ok);
-		goto end2;
-	}
-
-	X509_STORE_CTX_trusted_stack(ctx, state->trusted);
-
-	/* Can return negative codes, all callers do <= 0. */
-	ok = X509_verify_cert(ctx);
-	if (ok <= 0) {
-		crypto_err(state, "Certificate validation failed: %d", ok);
-		goto end2;
-	}
-
-	/* Returns number of stack elements or 0 */
-	ok = sk_X509_push(state->trusted, cert);
-	if (ok <= 0) {
-		crypto_err(state,
-		    "Could not add certificate to trusted stack: %d", ok);
-		goto end2;
-	}
-
-	X509_STORE_CTX_free(ctx);
-	return 0;
-
-end2:
-	X509_STORE_CTX_free(ctx);
-end1:
-	X509_free(cert);
-	return -EINVAL;
-}
-
-void
-validation_pop(struct validation *state)
-{
-	X509 *cert = sk_X509_pop(state->trusted);
-	X509_free(cert);
-}
-
-X509 *
-validation_peek(struct validation *state)
-{
-	return sk_X509_value(state->trusted, sk_X509_num(state->trusted) - 1);
 }
 
 BIO *
@@ -252,4 +216,67 @@ BIO *
 validation_stderr(struct validation *state)
 {
 	return state->err;
+}
+
+X509_STORE *
+validation_store(struct validation *state)
+{
+	return state->store;
+}
+
+STACK_OF(X509) *
+validation_certs(struct validation *state)
+{
+	return state->trusted;
+}
+
+struct restack *
+validation_resources(struct validation *state)
+{
+	return state->rsrcs;
+}
+
+int
+validation_push_cert(struct validation *state, X509 *cert,
+    struct resources *resources)
+{
+	int ok;
+
+	ok = sk_X509_push(state->trusted, cert);
+	if (ok <= 0) {
+		crypto_err(state,
+		    "Could not add certificate to trusted stack: %d", ok);
+		return -ENOMEM; /* Presumably */
+	}
+
+	restack_push(state->rsrcs, resources);
+
+	return 0;
+}
+
+int
+validation_pop_cert(struct validation *state)
+{
+	if (sk_X509_pop(state->trusted) == NULL) {
+		return crypto_err(state,
+		    "Programming error: Attempted to pop empty cert stack");
+	}
+	if (restack_pop(state->rsrcs) == NULL) {
+		pr_err("Programming error: Attempted to pop empty resource stack");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+X509 *
+validation_peek_cert(struct validation *state)
+{
+	return sk_X509_value(state->trusted, sk_X509_num(state->trusted) - 1);
+}
+
+struct resources *
+validation_peek_resource(struct validation *state)
+{
+	return restack_peek(state->rsrcs);
 }

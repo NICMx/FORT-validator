@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <libcmscodec/AlgorithmIdentifier.h>
 #include "common.h"
-#include "state.h"
 
 /* These objects are expected to live on the stack. */
 struct oid_arcs {
@@ -39,7 +38,7 @@ typedef asn_oid_arc_t OID[];
 #define OID_SHA512                   { 2, 16, 840, 1, 101, 3, 4, 2, 3 }
 
 int oid2arcs(OBJECT_IDENTIFIER_t *, struct oid_arcs *);
-int any2arcs(struct validation *, ANY_t *, struct oid_arcs *);
+int any2arcs(ANY_t *, struct oid_arcs *);
 
 bool arcs_equal(struct oid_arcs const *, struct oid_arcs const *);
 /* Use ARCS_EQUAL_OID() instead. */

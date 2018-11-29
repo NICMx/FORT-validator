@@ -21,8 +21,7 @@ get_file_size(FILE *file, long int *size)
 }
 
 int
-file_load(struct validation *state, const char *file_name,
-    struct file_contents *fc)
+file_load(const char *file_name, struct file_contents *fc)
 {
 	FILE *file;
 	long int file_size;
@@ -30,15 +29,13 @@ file_load(struct validation *state, const char *file_name,
 	int error;
 
 	file = fopen(file_name, "rb");
-	if (file == NULL) {
-		return pr_errno(state, errno, "Could not open file '%s'",
-		    file_name);
-	}
+	if (file == NULL)
+		return pr_errno(errno, "Could not open file '%s'", file_name);
 
 	/* TODO if @file is a directory, this returns a very large integer. */
 	error = get_file_size(file, &file_size);
 	if (error) {
-		pr_errno(state, error, "Could not compute the file size of %s",
+		pr_errno(error, "Could not compute the file size of %s",
 		    file_name);
 		fclose(file);
 		return error;
@@ -47,7 +44,7 @@ file_load(struct validation *state, const char *file_name,
 	fc->buffer_size = file_size;
 	fc->buffer = malloc(fc->buffer_size);
 	if (fc->buffer == NULL) {
-		pr_err(state, "Out of memory.");
+		pr_err("Out of memory.");
 		fclose(file);
 		return -ENOMEM;
 	}
@@ -61,7 +58,7 @@ file_load(struct validation *state, const char *file_name,
 			 * code. It literally doesn't say how to obtain the
 			 * error code.
 			 */
-			pr_errno(state, error,
+			pr_errno(error,
 			    "File reading error. Error message (apparently)",
 			    file_name);
 			free(fc->buffer);
@@ -73,9 +70,9 @@ file_load(struct validation *state, const char *file_name,
 		 * As far as I can tell from the man page, feof() cannot return
 		 * less bytes that requested like read() does.
 		 */
-		pr_err(state, "Likely programming error: fread() < file size");
-		pr_err(state, "fr:%zu bs:%zu EOF:%d", fread_result,
-		    fc->buffer_size, feof(file));
+		pr_err("Likely programming error: fread() < file size");
+		pr_err("fr:%zu bs:%zu EOF:%d", fread_result, fc->buffer_size,
+		    feof(file));
 		free(fc->buffer);
 		fclose(file);
 		return -EINVAL;

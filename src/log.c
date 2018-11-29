@@ -10,7 +10,7 @@
 static unsigned int indent;
 
 static void
-pr_indent(BIO *stream)
+pr_indent(void)
 {
 	unsigned int __indent = indent;
 	unsigned int i;
@@ -19,7 +19,7 @@ pr_indent(BIO *stream)
 //		__indent = INDENT_MAX;
 
 	for (i = 0; i < __indent; i++)
-		BIO_printf(stream, "  ");
+		printf("  ");
 }
 
 static void
@@ -38,63 +38,60 @@ pr_rm_indent(void)
 }
 
 static void
-print_debug_prefix(BIO *bio)
+print_debug_prefix(void)
 {
-	BIO_printf(bio, "DBG: ");
-	pr_indent(bio);
+	printf("DBG: ");
+	pr_indent();
 }
 
 #endif
 
 void
-pr_debug(struct validation *state, const char *format, ...)
+pr_debug(const char *format, ...)
 {
 #ifdef DEBUG
-	BIO *bio = validation_stdout(state);
 	va_list args;
 
-	print_debug_prefix(bio);
+	print_debug_prefix();
 
 	va_start(args, format);
-	BIO_vprintf(bio, format, args);
+	vprintf(format, args);
 	va_end(args);
-	BIO_printf(bio, "\n");
+	printf("\n");
 #endif
 }
 
 void
-pr_debug_add(struct validation *state, const char *format, ...)
+pr_debug_add(const char *format, ...)
 {
 #ifdef DEBUG
-	BIO *bio = validation_stdout(state);
 	va_list args;
 
-	print_debug_prefix(bio);
+	print_debug_prefix();
 
 	va_start(args, format);
-	BIO_vprintf(bio, format, args);
+	vprintf(format, args);
 	va_end(args);
-	BIO_printf(bio, "\n");
+	printf("\n");
 
 	pr_add_indent();
 #endif
 }
 
 void
-pr_debug_rm(struct validation *state, const char *format, ...)
+pr_debug_rm(const char *format, ...)
 {
 #ifdef DEBUG
-	BIO *bio = validation_stdout(state);
 	va_list args;
 
 	pr_rm_indent();
 
-	print_debug_prefix(bio);
+	print_debug_prefix();
 
 	va_start(args, format);
-	BIO_vprintf(bio, format, args);
+	vprintf(format, args);
 	va_end(args);
-	BIO_printf(bio, "\n");
+	printf("\n");
 #endif
 }
 
@@ -102,15 +99,14 @@ pr_debug_rm(struct validation *state, const char *format, ...)
  * Always appends a newline at the end.
  */
 void
-pr_err(struct validation *state, const char *format, ...)
+pr_err(const char *format, ...)
 {
-	BIO *bio = validation_stderr(state);
 	va_list args;
 
 	va_start(args, format);
-	BIO_vprintf(bio, format, args);
+	vfprintf(stderr, format, args);
 	va_end(args);
-	BIO_printf(bio, "\n");
+	fprintf(stderr, "\n");
 }
 
 /**
@@ -128,23 +124,22 @@ pr_err(struct validation *state, const char *format, ...)
  * Always appends a newline at the end.
  */
 int
-pr_errno(struct validation *state, int error, const char *format, ...)
+pr_errno(int error, const char *format, ...)
 {
-	BIO *bio = validation_stderr(state);
 	va_list args;
 
 	va_start(args, format);
-	BIO_vprintf(bio, format, args);
+	vfprintf(stderr, format, args);
 	va_end(args);
 
 	if (error) {
-		BIO_printf(bio, ": %s", strerror(error));
+		fprintf(stderr, ": %s", strerror(error));
 	} else {
 		/* We should assume that there WAS an error; go generic. */
 		error = -EINVAL;
 	}
 
-	BIO_printf(bio, "\n");
+	fprintf(stderr, "\n");
 
 	return error;
 }
@@ -174,9 +169,9 @@ crypto_err(struct validation *state, const char *format, ...)
 	va_start(args, format);
 	BIO_vprintf(bio, format, args);
 	va_end(args);
+	BIO_printf(bio, ": ");
 
 	if (error) {
-		BIO_printf(bio, ": ");
 		/*
 		 * Reminder: This clears the error queue.
 		 * BTW: The string format is pretty ugly. Maybe override this.
@@ -184,6 +179,7 @@ crypto_err(struct validation *state, const char *format, ...)
 		ERR_print_errors(bio);
 	} else {
 		/* We should assume that there WAS an error; go generic. */
+		BIO_printf(bio, "(There are no error messages in the stack.)");
 		error = -EINVAL;
 	}
 

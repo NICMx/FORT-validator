@@ -28,13 +28,12 @@ validate(struct ContentInfo *info)
 }
 
 static int
-decode(struct validation *state, struct file_contents *fc,
-    struct ContentInfo **result)
+decode(struct file_contents *fc, struct ContentInfo **result)
 {
 	struct ContentInfo *cinfo;
 	int error;
 
-	error = asn1_decode_fc(state, fc, &asn_DEF_ContentInfo, (void **) &cinfo);
+	error = asn1_decode_fc(fc, &asn_DEF_ContentInfo, (void **) &cinfo);
 	if (error)
 		return error;
 
@@ -49,17 +48,16 @@ decode(struct validation *state, struct file_contents *fc,
 }
 
 int
-content_info_load(struct validation *state, const char *file_name,
-    struct ContentInfo **result)
+content_info_load(const char *file_name, struct ContentInfo **result)
 {
 	struct file_contents fc;
 	int error;
 
-	error = file_load(state, file_name, &fc);
+	error = file_load(file_name, &fc);
 	if (error)
 		return error;
 
-	error = decode(state, &fc, result);
+	error = decode(&fc, result);
 
 	file_free(&fc);
 	return error;

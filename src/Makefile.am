@@ -6,11 +6,14 @@ bin_PROGRAMS = rpki_validator
 
 rpki_validator_SOURCES  = main.c
 
+rpki_validator_SOURCES += address.h address.c
 rpki_validator_SOURCES += common.h common.c
 rpki_validator_SOURCES += debug.h debug.c
 rpki_validator_SOURCES += file.h file.c
 rpki_validator_SOURCES += line_file.h line_file.c
 rpki_validator_SOURCES += log.h log.c
+rpki_validator_SOURCES += resource.h resource.c
+rpki_validator_SOURCES += sorted_array.h sorted_array.c
 rpki_validator_SOURCES += state.h state.c
 
 rpki_validator_SOURCES += asn1/content_info.h asn1/content_info.c

@@ -39,7 +39,7 @@ handle_tal_uri(char const *uri)
 	char *cert_file;
 	int error;
 
-	error = uri_g2l(NULL, uri, &cert_file);
+	error = uri_g2l(uri, &cert_file);
 	if (error)
 		return error;
 
@@ -47,20 +47,19 @@ handle_tal_uri(char const *uri)
 	if (error)
 		goto end1;
 
-	pr_debug_add(state, "TAL URI %s {", uri);
+	pr_debug_add("TAL URI %s {", uri);
 
 	if (!is_certificate(uri)) {
-		pr_err(state,
-		    "TAL file does not point to a certificate. (Expected .cer, got '%s')",
+		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
 		    uri);
 		error = -ENOTSUPPORTED;
 		goto end2;
 	}
 
-	error = certificate_handle_extensions(state, validation_peek(state));
+	error = certificate_traverse(state, validation_peek_cert(state));
 
 end2:
-	pr_debug_rm(state, "}");
+	pr_debug_rm("}");
 	validation_destroy(state);
 end1:
 	free(cert_file);

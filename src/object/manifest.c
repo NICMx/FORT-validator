@@ -5,18 +5,17 @@
 
 #include "common.h"
 #include "log.h"
+#include "resource.h"
 #include "asn1/oid.h"
 #include "object/certificate.h"
 #include "object/crl.h"
 #include "object/roa.h"
 #include "object/signed_object.h"
 
-/* TODO not being called right now. */
-bool
-is_manifest(char const *file_name)
-{
-	return file_has_extension(file_name, "mft");
-}
+struct manifest {
+	struct Manifest *obj;
+	char const *file_path;
+};
 
 static int
 validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
@@ -155,51 +154,162 @@ succeed:
 	return 0;
 }
 
+typedef int (*foreach_cb)(struct validation *, char *, void *);
+
+struct foreach_args {
+	STACK_OF(X509_CRL) *crls;
+	struct resources *resources;
+};
+
 static int
-handle_file(struct validation *state, char const *mft, IA5String_t *string)
+foreach_file(struct validation *state, struct manifest *mft, char *extension,
+    foreach_cb cb, void *arg)
 {
-	char *luri;
+	char *uri;
+	char *luri; /* "Local URI". As in "URI that we can easily reference." */
+	int i;
 	int error;
 
-	/* TODO Treating string->buf as a C string is probably not correct. */
-//	pr_debug_add(state, "File %s {", string->buf);
+	for (i = 0; i < mft->obj->fileList.list.count; i++) {
+		/* TODO This cast is probably not correct. */
+		uri = (char *) mft->obj->fileList.list.array[i]->file.buf;
 
-	error = get_relative_file(mft, (char const *) string->buf, &luri);
+		if (file_has_extension(uri, extension)) {
+			error = get_relative_file(mft->file_path, uri, &luri);
+			if (error)
+				return error;
+			error = cb(state, luri, arg);
+			free(luri);
+			if (error)
+				return error;
+		}
+	}
+
+	return 0;
+}
+
+static int
+pile_crls(struct validation *state, char *file, void *crls)
+{
+	X509_CRL *crl;
+	int error;
+	int idx;
+
+	error = crl_load(state, file, &crl);
 	if (error)
-		goto end;
+		return error;
 
-	pr_debug_add(state, "File %s {", luri);
+	idx = sk_X509_CRL_push(crls, crl);
+	if (idx <= 0) {
+		error = crypto_err(state, "Could not add CRL to a CRL stack");
+		X509_CRL_free(crl);
+		return error;
+	}
 
-	if (is_certificate(luri))
-		error = certificate_handle(state, luri);
-	else if (is_crl(luri))
-		error = handle_crl(state, luri);
-	else if (is_roa(luri))
-		error = handle_roa(state, luri);
-	else
-		pr_debug(state, "Unhandled file type.");
+	return 0;
+}
 
-	free(luri);
+static int
+pile_addr_ranges(struct validation *state, char *file, void *__args)
+{
+	struct foreach_args *args = __args;
+	struct resources *resources;
+	X509 *cert;
+	int error = 0;
+
+	pr_debug_add("Certificate {");
+
+	/*
+	 * Errors on some of these functions should not interrupt the tree
+	 * traversal, so ignore them.
+	 * (Error messages should have been printed in stderr.)
+	 */
+
+	if (certificate_load(state, file, &cert))
+		goto end; /* Fine */
+
+	if (certificate_validate(state, cert, args->crls))
+		goto revert; /* Fine */
+
+	resources = resources_create();
+	if (resources == NULL) {
+		error = -ENOMEM; /* Not fine */
+		goto revert;
+	}
+
+	if (certificate_get_resources(state, cert, resources))
+		goto revert2; /* Fine */
+
+	if (validation_push_cert(state, cert, resources)) {
+		/*
+		 * Validation_push_cert() only fails on OPENSSL_sk_push().
+		 * The latter really only fails on memory allocation fault.
+		 * That's grounds to interrupt tree traversal.
+		 */
+		error = -EINVAL; /* Not fine */
+		goto revert2;
+	}
+	certificate_traverse(state, cert); /* Error code is useless. */
+	validation_pop_cert(state); /* Error code is useless. */
+
+	error = resources_join(args->resources, resources); /* Not fine */
+
+revert2:
+	resources_destroy(resources);
+revert:
+	X509_free(cert);
 end:
-	pr_debug_rm(state, "}");
+	pr_debug_rm("}");
 	return error;
 }
 
 static int
-__handle_manifest(struct validation *state, char const *mft,
-    struct Manifest *manifest)
+print_roa(struct validation *state, char *file, void *arg)
 {
-	int i;
+	/* TODO */
+	handle_roa(file);
+	return 0;
+}
+
+static int
+__handle_manifest(struct validation *state, struct manifest *mft)
+{
+	struct foreach_args args;
 	int error;
 
-	for (i = 0; i < manifest->fileList.list.count; i++) {
-		error = handle_file(state, mft,
-		    &manifest->fileList.list.array[i]->file);
-		if (error)
-			return error;
+	/* Init */
+	args.crls = sk_X509_CRL_new_null();
+	if (args.crls == NULL) {
+		pr_err("Out of memory.");
+		return -ENOMEM;
 	}
 
-	return 0;
+	args.resources = resources_create();
+	if (args.resources == NULL) {
+		sk_X509_CRL_free(args.crls);
+		return -ENOMEM;
+	}
+
+	/* Get CRLs as a stack. There will usually only be one. */
+	error = foreach_file(state, mft, "crl", pile_crls, args.crls);
+	if (error)
+		goto end;
+
+	/*
+	 * Use CRL stack to validate certificates.
+	 * Pile up valid address ranges from the valid certificates.
+	 */
+	error = foreach_file(state, mft, "cer", pile_addr_ranges, &args);
+	if (error)
+		goto end;
+
+	/* Use valid address ranges to print ROAs that match them. */
+	error = foreach_file(state, mft, "roa", print_roa, &args);
+
+end:
+	resources_destroy(args.resources);
+	sk_X509_CRL_pop_free(args.crls, X509_CRL_free);
+	return error;
 }
 
 int
@@ -207,18 +317,20 @@ handle_manifest(struct validation *state, char const *file_path)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS(oid);
-	struct Manifest *manifest;
+	struct manifest mft;
 	int error;
 
-	error = signed_object_decode(state, file_path, &asn_DEF_Manifest, &arcs,
-	    (void **) &manifest);
+	mft.file_path = file_path;
+
+	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
+	    (void **) &mft.obj);
 	if (error)
 		return error;
 
-	error = validate_manifest(manifest);
+	error = validate_manifest(mft.obj);
 	if (!error)
-		error = __handle_manifest(state, file_path, manifest);
+		error = __handle_manifest(state, &mft);
 
-	ASN_STRUCT_FREE(asn_DEF_Manifest, manifest);
+	ASN_STRUCT_FREE(asn_DEF_Manifest, mft.obj);
 	return error;
 }

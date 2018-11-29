@@ -2,7 +2,6 @@
 #define SRC_FILE_H_
 
 #include <stddef.h>
-#include "state.h"
 
 /*
  * The entire contents of the file, loaded into a buffer.
@@ -14,7 +13,7 @@ struct file_contents {
 	size_t buffer_size;
 };
 
-int file_load(struct validation *, const char *, struct file_contents *);
+int file_load(const char *, struct file_contents *);
 void file_free(struct file_contents *);
 
 #endif /* SRC_FILE_H_ */

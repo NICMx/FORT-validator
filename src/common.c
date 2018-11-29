@@ -27,7 +27,7 @@ file_has_extension(char const *file_name, char const *extension)
  * You need to free the result once you're done.
  */
 int
-uri_g2l(struct validation *state, char const *guri, char **result)
+uri_g2l(char const *guri, char **result)
 {
 	char const *const PREFIX = "rsync://";
 	char *luri;
@@ -38,13 +38,8 @@ uri_g2l(struct validation *state, char const *guri, char **result)
 	prefix_len = strlen(PREFIX);
 
 	if (strncmp(PREFIX, guri, prefix_len) != 0) {
-		if (state == NULL) {
-			warnx("Global URI %s does not begin with '%s'.", guri,
-			    PREFIX);
-		} else {
-			pr_err(state, "Global URI %s does not begin with '%s'.",
-			    guri, PREFIX);
-		}
+		pr_err("Global URI %s does not begin with '%s'.", guri,
+		    PREFIX);
 		return -EINVAL;
 	}
 
@@ -69,14 +64,14 @@ uri_g2l(struct validation *state, char const *guri, char **result)
 }
 
 int
-gn2uri(struct validation *state, GENERAL_NAME *gn, char const **uri)
+gn2uri(GENERAL_NAME *gn, char const **uri)
 {
 	ASN1_STRING *asn_string;
 	int type;
 
 	asn_string = GENERAL_NAME_get0_value(gn, &type);
 	if (type != GEN_URI) {
-		pr_debug(state, "Unknown GENERAL_NAME type: %d", type);
+		pr_err("Unknown GENERAL_NAME type: %d", type);
 		return -ENOTSUPPORTED;
 	}
 
