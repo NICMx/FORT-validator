@@ -4,8 +4,11 @@
 /* Some wrappers for libcmscodec's SignedData. */
 
 #include <libcmscodec/SignedData.h>
+#include "resource.h"
+#include "state.h"
 
-int signed_data_decode(ANY_t *, struct SignedData **);
+int signed_data_decode(struct validation *, ANY_t *, struct SignedData **,
+    struct resources *);
 void signed_data_free(struct SignedData *);
 
 int get_content_type_attr(struct SignedData *, OBJECT_IDENTIFIER_t **);

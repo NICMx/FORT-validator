@@ -1,10 +1,6 @@
 #include "state.h"
 
 #include <errno.h>
-#include <openssl/err.h>
-#include <openssl/x509v3.h>
-#include <sys/queue.h>
-#include "common.h"
 #include "log.h"
 #include "object/certificate.h"
 

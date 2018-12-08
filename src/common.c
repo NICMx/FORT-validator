@@ -1,9 +1,6 @@
 #include "common.h"
 
-#include <err.h>
 #include <errno.h>
-#include <string.h>
-#include <openssl/err.h>
 #include "log.h"
 
 char const *repository;

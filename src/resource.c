@@ -1,31 +1,21 @@
 #include "resource.h"
 
 #include <errno.h>
-#include <stdlib.h>
 #include <arpa/inet.h>
+#include <sys/queue.h>
 
 #include "address.h"
 #include "log.h"
 #include "sorted_array.h"
-
-struct resource4 {
-	struct ipv4_prefix prefix;
-};
-
-struct resource6 {
-	struct ipv6_prefix prefix;
-};
-
-struct resource_asn {
-	ASId_t min;
-	ASId_t max;
-};
+#include "resource/ip4.h"
+#include "resource/ip6.h"
+#include "resource/asn.h"
 
 /* The resources we extracted from one certificate. */
 struct resources {
-	struct sorted_array *ip4s;
-	struct sorted_array *ip6s;
-	struct sorted_array *asns;
+	struct resources_ipv4 *ip4s;
+	struct resources_ipv6 *ip6s;
+	struct resources_asn *asns;
 
 	/*
 	 * Used by restack. Points to the resources of the parent certificate.
@@ -38,87 +28,6 @@ struct resources {
  * certificates.
  */
 SLIST_HEAD(restack, resources);
-
-static enum sarray_comparison
-ip4_cmp(void *arg1, void *arg2)
-{
-	struct ipv4_prefix *p1 = &((struct resource4 *) arg1)->prefix;
-	struct ipv4_prefix *p2 = &((struct resource4 *) arg2)->prefix;
-	uint32_t a1;
-	uint32_t a2;
-
-	if (p1->addr.s_addr == p2->addr.s_addr && p1->len == p2->len)
-		return SACMP_EQUAL;
-	if (prefix4_contains(p1, p2))
-		return SACMP_CHILD;
-	if (prefix4_contains(p2, p1))
-		return SACMP_PARENT;
-
-	a1 = ntohl(p1->addr.s_addr);
-	a2 = ntohl(p2->addr.s_addr);
-	if (a1 < a2)
-		return SACMP_RIGHT;
-	if (a2 < a1)
-		return SACMP_LEFT;
-
-	/* TODO Actually an error. Do something about it? */
-	return SACMP_INTERSECTION;
-}
-
-static enum sarray_comparison
-ip6_cmp(void *arg1, void *arg2)
-{
-	struct ipv6_prefix *p1 = &((struct resource6 *) arg1)->prefix;
-	struct ipv6_prefix *p2 = &((struct resource6 *) arg2)->prefix;
-	struct in6_addr *a1 = &p1->addr;
-	struct in6_addr *a2 = &p2->addr;
-	uint32_t q1;
-	uint32_t q2;
-	unsigned int q;
-
-	if (memcmp(a1, a2, sizeof(*a1)) == 0 && p1->len == p2->len)
-		return SACMP_EQUAL;
-	if (prefix6_contains(p1, p2))
-		return SACMP_CHILD;
-	if (prefix6_contains(p2, p1))
-		return SACMP_PARENT;
-
-	for (q = 0; q < 4; q++) {
-		q1 = ntohl(p1->addr.s6_addr32[q]);
-		q2 = ntohl(p2->addr.s6_addr32[q]);
-		if (q1 < q2)
-			return SACMP_RIGHT;
-		if (q2 < q1)
-			return SACMP_LEFT;
-	}
-
-	/* TODO Actually an error. Do something about it? */
-	return SACMP_INTERSECTION;
-}
-
-static enum sarray_comparison
-asn_cmp(void *arg1, void *arg2)
-{
-	struct resource_asn *asn1 = arg1;
-	struct resource_asn *asn2 = arg2;
-
-	if (asn1->min == asn2->min && asn1->max == asn2->max)
-		return SACMP_EQUAL;
-	if (asn1->min <= asn2->min && asn2->max <= asn1->max)
-		return SACMP_CHILD;
-	if (asn2->min <= asn1->min && asn1->max <= asn2->max)
-		return SACMP_PARENT;
-	if (asn1->max < asn2->min)
-		return SACMP_RIGHT;
-	if (asn2->max < asn1->min)
-		return SACMP_LEFT;
-
-	return SACMP_INTERSECTION;
-}
-
-SARRAY_API(r4array, resource4, ip4_cmp)
-SARRAY_API(r6array, resource6, ip6_cmp)
-SARRAY_API(asnarray, resource_asn, asn_cmp)
 
 struct resources *
 resources_create(void)
@@ -142,11 +51,11 @@ void
 resources_destroy(struct resources *resources)
 {
 	if (resources->ip4s != NULL)
-		r4array_put(resources->ip4s);
+		res4_put(resources->ip4s);
 	if (resources->ip6s != NULL)
-		r6array_put(resources->ip6s);
+		res6_put(resources->ip6s);
 	if (resources->asns != NULL)
-		asnarray_put(resources->asns);
+		rasn_put(resources->asns);
 	free(resources);
 }
 
@@ -175,7 +84,7 @@ unknown:
 }
 
 static void
-pr_debug_prefix(int family, void *addr, int length)
+pr_debug_prefix(int family, void *addr, unsigned int length)
 {
 #ifdef DEBUG
 	char buffer[INET6_ADDRSTRLEN];
@@ -191,13 +100,38 @@ pr_debug_prefix(int family, void *addr, int length)
 #endif
 }
 
+static void
+pr_debug_range(int family, void *min, void *max)
+{
+#ifdef DEBUG
+	char buffer_min[INET6_ADDRSTRLEN];
+	char buffer_max[INET6_ADDRSTRLEN];
+	char const *string_min;
+	char const *string_max;
+
+	string_min = inet_ntop(family, min, buffer_min, sizeof(buffer_min));
+	if (string_min == NULL)
+		goto fail;
+
+	string_max = inet_ntop(family, max, buffer_max, sizeof(buffer_max));
+	if (string_max == NULL)
+		goto fail;
+
+	pr_debug("Range: %s-%s", string_min, string_max);
+	return;
+
+fail:
+	pr_debug("Range: (Cannot convert to string. Errcode %d)", errno);
+#endif
+}
+
 static int
 inherit_aors(struct resources *resources, int family, struct resources *parent)
 {
 	switch (family) {
 	case AF_INET:
 		if (resources->ip4s != NULL) {
-			pr_err("Oh noes4"); /* TODO */
+			pr_err("Certificate inherits IPv4 resources while also defining others of its own.");
 			return -EINVAL;
 		}
 		if (parent->ip4s == NULL) {
@@ -205,12 +139,12 @@ inherit_aors(struct resources *resources, int family, struct resources *parent)
 			return -EINVAL;
 		}
 		resources->ip4s = parent->ip4s;
-		r4array_get(resources->ip4s);
+		res4_get(resources->ip4s);
 		return 0;
 
 	case AF_INET6:
 		if (resources->ip6s != NULL) {
-			pr_err("Oh noes6"); /* TODO */
+			pr_err("Certificate inherits IPv6 resources while also defining others of its own.");
 			return -EINVAL;
 		}
 		if (parent->ip6s == NULL) {
@@ -218,72 +152,51 @@ inherit_aors(struct resources *resources, int family, struct resources *parent)
 			return -EINVAL;
 		}
 		resources->ip6s = parent->ip6s;
-		r6array_get(resources->ip6s);
+		res6_get(resources->ip6s);
 		return 0;
 	}
 
-	pr_err("Programming error: Unknown IP family: %d", family);
+	pr_err("Programming error: Unknown address family '%d'", family);
 	return -EINVAL;
-}
-
-static int
-decode_prefix4(BIT_STRING_t *str, struct ipv4_prefix *result)
-{
-	/* TODO validate bits unused and stuff */
-	if (str->size > 4) {
-		pr_err("IPv4 address has too many octets. (%u)", str->size);
-		return -EINVAL;
-	}
-
-	memset(&result->addr, 0, sizeof(result->addr));
-	memcpy(&result->addr, str->buf, str->size);
-	result->len = 8 * str->size - str->bits_unused;
-	return 0;
-}
-
-static int
-decode_prefix6(BIT_STRING_t *str, struct ipv6_prefix *result)
-{
-	if (str->size > 16) {
-		pr_err("IPv6 address has too many octets. (%u)", str->size);
-		return -EINVAL;
-	}
-
-	memset(&result->addr, 0, sizeof(result->addr));
-	memcpy(&result->addr, str->buf, str->size);
-	result->len = 8 * str->size - str->bits_unused;
-	return 0;
 }
 
 static int
 add_prefix4(struct resources *resources, IPAddress2_t *addr,
     struct resources *parent)
 {
-	struct resource4 r4;
+	struct ipv4_prefix prefix;
 	int error;
 
-	error = decode_prefix4(addr, &r4.prefix);
+	if ((parent != NULL) && (resources->ip4s == parent->ip4s)) {
+		pr_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
+		return -EINVAL;
+	}
+
+	error = prefix4_decode(addr, &prefix);
 	if (error)
 		return error;
 
-	if (parent && !r4array_contains(parent->ip4s, &r4)) {
+	if (parent && !res4_contains_prefix(parent->ip4s, &prefix)) {
 		pr_err("Parent certificate doesn't own child's IPv4 resource.");
 		return -EINVAL;
 	}
 
 	if (resources->ip4s == NULL) {
-		resources->ip4s = r4array_create();
+		resources->ip4s = res4_create();
 		if (resources->ip4s == NULL) {
 			pr_err("Out of memory.");
 			return -ENOMEM;
 		}
 	}
 
-	error = r4array_add(resources->ip4s, &r4);
-	if (error)
-		return error; /* TODO error message */
+	error = res4_add_prefix(resources->ip4s, &prefix);
+	if (error) {
+		pr_err("Error adding IPv4 prefix to certificate resources: %s",
+		    sarray_err2str(error));
+		return error;
+	}
 
-	pr_debug_prefix(AF_INET, &r4.prefix.addr, r4.prefix.len);
+	pr_debug_prefix(AF_INET, &prefix.addr, prefix.len);
 	return 0;
 }
 
@@ -291,31 +204,39 @@ static int
 add_prefix6(struct resources *resources, IPAddress2_t *addr,
     struct resources *parent)
 {
-	struct resource6 r6;
+	struct ipv6_prefix prefix;
 	int error;
 
-	error = decode_prefix6(addr, &r6.prefix);
+	if ((parent != NULL) && (resources->ip6s == parent->ip6s)) {
+		pr_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
+		return -EINVAL;
+	}
+
+	error = prefix6_decode(addr, &prefix);
 	if (error)
 		return error;
 
-	if (parent && !r6array_contains(parent->ip6s, &r6)) {
+	if (parent && !res6_contains_prefix(parent->ip6s, &prefix)) {
 		pr_err("Parent certificate doesn't own child's IPv6 resource.");
 		return -EINVAL;
 	}
 
 	if (resources->ip6s == NULL) {
-		resources->ip6s = r6array_create();
+		resources->ip6s = res6_create();
 		if (resources->ip6s == NULL) {
 			pr_err("Out of memory.");
 			return -ENOMEM;
 		}
 	}
 
-	error = r6array_add(resources->ip6s, &r6);
-	if (error)
-		return error; /* TODO error message */
+	error = res6_add_prefix(resources->ip6s, &prefix);
+	if (error) {
+		pr_err("Error adding IPv6 prefix to certificate resources: %s",
+		    sarray_err2str(error));
+		return error;
+	}
 
-	pr_debug_prefix(AF_INET6, &r6.prefix.addr, r6.prefix.len);
+	pr_debug_prefix(AF_INET6, &prefix.addr, prefix.len);
 	return 0;
 }
 
@@ -330,8 +251,103 @@ add_prefix(struct resources *resources, int family, IPAddress2_t *addr,
 		return add_prefix6(resources, addr, parent);
 	}
 
-	pr_err("Unknown address family: %d", family);
+	pr_err("Programming error: Unknown address family '%d'", family);
+	return -EINVAL;
+}
+
+static int
+add_range4(struct resources *resources, IPAddressRange_t *input,
+    struct resources *parent)
+{
+	struct ipv4_range range;
+	int error;
+
+	if ((parent != NULL) && (resources->ip4s == parent->ip4s)) {
+		pr_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
+		return -EINVAL;
+	}
+
+	error = range4_decode(input, &range);
+	if (error)
+		return error;
+
+	if (parent && !res4_contains_range(parent->ip4s, &range)) {
+		pr_err("Parent certificate doesn't own child's IPv4 resource.");
+		return -EINVAL;
+	}
+
+	if (resources->ip4s == NULL) {
+		resources->ip4s = res4_create();
+		if (resources->ip4s == NULL) {
+			pr_err("Out of memory.");
+			return -ENOMEM;
+		}
+	}
+
+	error = res4_add_range(resources->ip4s, &range);
+	if (error) {
+		pr_err("Error adding IPv4 range to certificate resources: %s",
+		    sarray_err2str(error));
+		return error;
+	}
+
+	pr_debug_range(AF_INET, &range.min, &range.max);
 	return 0;
+}
+
+static int
+add_range6(struct resources *resources, IPAddressRange_t *input,
+    struct resources *parent)
+{
+	struct ipv6_range range;
+	int error;
+
+	if ((parent != NULL) && (resources->ip6s == parent->ip6s)) {
+		pr_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
+		return -EINVAL;
+	}
+
+	error = range6_decode(input, &range);
+	if (error)
+		return error;
+
+	if (parent && !res6_contains_range(parent->ip6s, &range)) {
+		pr_err("Parent certificate doesn't own child's IPv6 resource.");
+		return -EINVAL;
+	}
+
+	if (resources->ip6s == NULL) {
+		resources->ip6s = res6_create();
+		if (resources->ip6s == NULL) {
+			pr_err("Out of memory.");
+			return -ENOMEM;
+		}
+	}
+
+	error = res6_add_range(resources->ip6s, &range);
+	if (error) {
+		pr_err("Error adding IPv6 range to certificate resources: %s",
+		    sarray_err2str(error));
+		return error;
+	}
+
+	pr_debug_range(AF_INET6, &range.min, &range.max);
+	return 0;
+}
+
+static int
+add_range(struct resources *resources, int family, IPAddressRange_t *range,
+    struct resources *parent)
+{
+	switch (family) {
+	case AF_INET:
+		return add_range4(resources, range, parent);
+	case AF_INET6:
+		return add_range6(resources, range, parent);
+	}
+
+	pr_err("Programming error: Unknown address family '%d'", family);
+	return -EINVAL;
 }
 
 static int
@@ -341,13 +357,6 @@ add_aors(struct resources *resources, int family,
 	struct IPAddressOrRange *aor;
 	int i;
 	int error = 0;
-
-	/*
-	 * TODO The addressPrefix and addressRange elements MUST be sorted
-	 * using the binary representation of (...)
-	 * TODO Any pair of IPAddressOrRange choices in
-	 * an extension MUST NOT overlap each other.
-	 */
 
 	for (i = 0; i < aors->list.count; i++) {
 		aor = aors->list.array[i];
@@ -359,24 +368,11 @@ add_aors(struct resources *resources, int family,
 				return error;
 			break;
 		case IPAddressOrRange_PR_addressRange:
-			/*
-			 * We're definitely not supposed to support this.
-			 *
-			 * rfc3779#section-2.2.3.7 says "This specification
-			 * requires that any range of addresses that can be
-			 * encoded as a prefix MUST be encoded using an
-			 * IPAddress element (...), and any range that cannot be
-			 * encoded as a prefix MUST be encoded using an
-			 * IPAddressRange (...).
-			 *
-			 * rfc6482#section-3.3 says "Note that the syntax here
-			 * is more restrictive than that used in the IP address
-			 * delegation extension defined in RFC 3779. That
-			 * extension can represent arbitrary address ranges,
-			 * whereas ROAs need to represent only prefixes."
-			 */
-			pr_err("IPAddressOrRange is a range. This is unsupported.");
-			return -EINVAL;
+			error = add_range(resources, family,
+			    &aor->choice.addressRange, parent);
+			if (error)
+				return error;
+			break;
 		case IPAddressOrRange_PR_NOTHING:
 			/* rfc3779#section-2.2.3.7 */
 			pr_err("Unknown IPAddressOrRange type: %d",
@@ -418,7 +414,7 @@ static int
 inherit_asiors(struct resources *resources, struct resources *parent)
 {
 	if (resources->asns != NULL) {
-		pr_err("Oh noesa"); /* TODO */
+		pr_err("Certificate inherits ASN resources while also defining others of its own.");
 		return -EINVAL;
 	}
 	if (parent->asns == NULL) {
@@ -426,7 +422,7 @@ inherit_asiors(struct resources *resources, struct resources *parent)
 		return -EINVAL;
 	}
 	resources->asns = parent->asns;
-	asnarray_get(resources->asns);
+	rasn_get(resources->asns);
 	return 0;
 }
 
@@ -434,22 +430,27 @@ static int
 add_asn(struct resources *resources, ASId_t min, ASId_t max,
     struct resources *parent)
 {
-	struct resource_asn ra;
 	int error;
 
+	if (parent && !rasn_contains(parent->asns, min, max)) {
+		pr_err("Parent certificate doesn't own child's ASN resource.");
+		return -EINVAL;
+	}
+
 	if (resources->asns == NULL) {
-		resources->asns = asnarray_create();
+		resources->asns = rasn_create();
 		if (resources->asns == NULL) {
 			pr_err("Out of memory.");
 			return -ENOMEM;
 		}
 	}
 
-	ra.min = min;
-	ra.max = max;
-	error = asnarray_add(resources->asns, &ra);
-	if (error)
-		return error; /* TODO error msg */
+	error = rasn_add(resources->asns, min, max);
+	if (error){
+		pr_err("Error adding ASN range to certificate resources: %s",
+		    sarray_err2str(error));
+		return error;
+	}
 
 	if (min == max)
 		pr_debug("ASN: %ld", min);
@@ -462,6 +463,11 @@ static int
 add_asior(struct resources *resources, struct ASIdOrRange *obj,
     struct resources *parent)
 {
+	if ((parent != NULL) && (resources->asns == parent->asns)) {
+		pr_err("Certificate defines ASN resources while also inheriting his parent's.");
+		return -EINVAL;
+	}
+
 	switch (obj->present) {
 	case ASIdOrRange_PR_NOTHING:
 		break;
@@ -498,14 +504,6 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
 	case ASIdentifierChoice_PR_inherit:
 		return inherit_asiors(resources, parent);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
-		/*
-		 * TODO
-		 * Any pair of items in the asIdsOrRanges SEQUENCE MUST NOT
-		 * overlap. Any contiguous series of AS identifiers MUST be
-		 * combined into a single range whenever possible. The AS
-		 * identifiers in the asIdsOrRanges element MUST be sorted by
-		 * increasing numeric value.
-		 */
 		iors = &ids->asnum->choice.asIdsOrRanges;
 		for (i = 0; i < iors->list.count; i++) {
 			error = add_asior(resources, iors->list.array[i],
@@ -523,23 +521,41 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
 	return -EINVAL;
 }
 
+bool
+resources_contains_asn(struct resources *res, ASId_t asn)
+{
+	return rasn_contains(res->asns, asn, asn);
+}
+
+bool
+resources_contains_ipv4(struct resources *res, struct ipv4_prefix *prefix)
+{
+	return res4_contains_prefix(res->ip4s, prefix);
+}
+
+bool
+resources_contains_ipv6(struct resources *res, struct ipv6_prefix *prefix)
+{
+	return res6_contains_prefix(res->ip6s, prefix);
+}
+
 int
 resources_join(struct resources *r1, struct resources *r2)
 {
 	int error;
 
 	if (r1->ip4s != NULL) {
-		error = r4array_join(r1->ip4s, r2->ip4s);
+		error = res4_join(r1->ip4s, r2->ip4s);
 		if (error)
 			return error;
 	}
 	if (r1->ip6s != NULL) {
-		error = r6array_join(r1->ip6s, r2->ip6s);
+		error = res6_join(r1->ip6s, r2->ip6s);
 		if (error)
 			return error;
 	}
 	if (r1->asns != NULL) {
-		error = asnarray_join(r1->asns, r2->asns);
+		error = rasn_join(r1->asns, r2->asns);
 		if (error)
 			return error;
 	}

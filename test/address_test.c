@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 static bool
-p4test(uint32_t a1, int l1, uint32_t a2, int l2)
+p4test(uint32_t a1, unsigned int l1, uint32_t a2, unsigned int l2)
 {
 	struct ipv4_prefix a, b;
 
@@ -54,7 +54,7 @@ END_TEST
 
 static void
 p6init(struct ipv6_prefix *p, uint32_t q1, uint32_t q2, uint32_t q3,
-    uint32_t q4, int len)
+    uint32_t q4, unsigned int len)
 {
 	p->addr.s6_addr32[0] = htonl(q1);
 	p->addr.s6_addr32[1] = htonl(q2);

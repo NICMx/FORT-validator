@@ -1,11 +1,10 @@
 #include "manifest.h"
 
 #include <errno.h>
+#include <libcmscodec/GeneralizedTime.h>
 #include <libcmscodec/Manifest.h>
 
-#include "common.h"
 #include "log.h"
-#include "resource.h"
 #include "asn1/oid.h"
 #include "object/certificate.h"
 #include "object/crl.h"
@@ -266,8 +265,11 @@ end:
 static int
 print_roa(struct validation *state, char *file, void *arg)
 {
-	/* TODO */
-	handle_roa(file);
+	/*
+	 * TODO to validate the ROA's cert, the parent cert must not have been
+	 * popped at this point.
+	 */
+	handle_roa(state, file);
 	return 0;
 }
 
@@ -320,17 +322,25 @@ handle_manifest(struct validation *state, char const *file_path)
 	struct manifest mft;
 	int error;
 
+	pr_debug_add("Manifest %s {", file_path);
+
 	mft.file_path = file_path;
 
-	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
-	    (void **) &mft.obj);
+	/*
+	 * TODO about those NULL resources: Maybe print a warning if the
+	 * certificate contains some.
+	 */
+	error = signed_object_decode(state, file_path, &asn_DEF_Manifest, &arcs,
+	    (void **) &mft.obj, NULL);
 	if (error)
-		return error;
+		goto end;
 
 	error = validate_manifest(mft.obj);
 	if (!error)
 		error = __handle_manifest(state, &mft);
 
 	ASN_STRUCT_FREE(asn_DEF_Manifest, mft.obj);
+end:
+	pr_debug_rm("}");
 	return error;
 }

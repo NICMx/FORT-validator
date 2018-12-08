@@ -84,13 +84,17 @@ compare(struct sorted_array *sarray, void *new)
 	case SACMP_EQUAL:
 		return -EEQUAL;
 	case SACMP_CHILD:
-		return -ECHILD;
+		return -ECHILD2;
 	case SACMP_PARENT:
 		return -EPARENT;
 	case SACMP_LEFT:
 		return -ELEFT;
 	case SACMP_RIGHT:
 		return 0;
+	case SACMP_ADJACENT_LEFT:
+		return -EADJLEFT;
+	case SACMP_ADJACENT_RIGHT:
+		return -EADJRIGHT;
 	case SACMP_INTERSECTION:
 		return -EINTERSECTION;
 	}
@@ -186,9 +190,11 @@ sarray_contains(struct sorted_array *sarray, void *elem)
 		cmp = sarray->cmp(get_nth_element(sarray, mid), elem);
 		switch (cmp) {
 		case SACMP_LEFT:
+		case SACMP_ADJACENT_LEFT:
 			right = mid - 1;
 			continue;
 		case SACMP_RIGHT:
+		case SACMP_ADJACENT_RIGHT:
 			left = mid + 1;
 			continue;
 		case SACMP_EQUAL:
@@ -206,4 +212,25 @@ sarray_contains(struct sorted_array *sarray, void *elem)
 	}
 
 	return false;
+}
+
+char const *sarray_err2str(int error)
+{
+	switch (abs(error)) {
+	case EEQUAL:
+		return "Resource equals an already existing resource";
+	case ECHILD2:
+		return "Resource is a subset of an already existing resource";
+	case EPARENT:
+		return "Resource is a superset of an already existing resource";
+	case ELEFT:
+		return "Resource sequence is not properly sorted";
+	case EADJLEFT:
+	case EADJRIGHT:
+		return "Resource is adjacent to an existing resource (they are supposed to be aggregated)";
+	case EINTERSECTION:
+		return "Resource intersects with an already existing resource";
+	}
+
+	return strerror(error);
 }

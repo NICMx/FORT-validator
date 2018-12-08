@@ -10,7 +10,8 @@
  * function names. See rpki_validator_LDFLAGS in Makefile.am.
  * Also: Only non-static functions will be labeled.
  *
- * I think that the first three printed entries are usually not meaningful.
+ * During a segfault, the first three printed entries are usually not
+ * meaningful. Outside of a segfault, the first entry is not meaningful.
  */
 void print_stack_trace(void)
 {

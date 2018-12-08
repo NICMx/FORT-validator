@@ -2,7 +2,8 @@
 #define SRC_OID_H_
 
 #include <stdbool.h>
-#include <libcmscodec/AlgorithmIdentifier.h>
+#include <libcmscodec/ANY.h>
+#include <libcmscodec/OBJECT_IDENTIFIER.h>
 #include "common.h"
 
 /* These objects are expected to live on the stack. */

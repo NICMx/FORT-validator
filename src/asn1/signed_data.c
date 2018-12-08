@@ -5,6 +5,7 @@
 #include "log.h"
 #include "oid.h"
 #include "asn1/decode.h"
+#include "object/certificate.h"
 
 /* TODO more consistent and informative error/warning messages.*/
 
@@ -15,7 +16,7 @@ static const OID oid_sha512 = OID_SHA512;
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
-static const OID oid_bst = OID_BINARY_SIGNING_TIME_ATTR;
+static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 /*
  * The correctness of this function depends on @MAX_ARCS being faithful to all
@@ -41,6 +42,50 @@ is_digest_algorithm(AlgorithmIdentifier_t *aid, bool *result)
 }
 
 static int
+handle_sdata_certificate(struct validation *state, ANY_t *any,
+    struct resources *res)
+{
+	const unsigned char *tmp;
+	X509 *cert;
+	int error;
+
+	pr_debug_add("Certificate (embedded) {");
+
+	/*
+	 * "If the call is successful *in is incremented to the byte following
+	 * the parsed data."
+	 * (https://www.openssl.org/docs/man1.0.2/crypto/d2i_X509_fp.html)
+	 * We definitely don't want @any->buf to be modified, so use a dummy
+	 * pointer.
+	 */
+	tmp = (const unsigned char *) any->buf;
+
+	cert = d2i_X509(NULL, &tmp, any->size);
+	if (cert == NULL) {
+		error = crypto_err(state, "Signed object's 'certificate' element does not decode into a Certificate");
+		goto end1;
+	}
+
+	error = certificate_validate(state, cert, NULL); /* TODO crls */
+	if (error)
+		goto end2;
+
+	if (res != NULL) {
+		error = certificate_get_resources(state, cert, res);
+		if (error)
+			goto end2;
+	}
+
+	/* TODO maybe spill a warning if the certificate has children? */
+
+end2:
+	X509_free(cert);
+end1:
+	pr_debug_rm("}");
+	return error;
+}
+
+static int
 validate_content_type_attribute(CMSAttributeValue_t *value,
     EncapsulatedContentInfo_t *eci)
 {
@@ -49,6 +94,7 @@ validate_content_type_attribute(CMSAttributeValue_t *value,
 	int error;
 
 	/* rfc6488#section-3.1.h */
+	/* TODO (performance) Can't we just do a memcmp? */
 
 	error = any2arcs(value, &attrValue_arcs);
 	if (error)
@@ -143,7 +189,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			error = 0; /* No validations needed for now. */
 			signing_time_found = true;
 
-		} else if (ARCS_EQUAL_OIDS(&attrType, oid_bst)) {
+		} else if (ARCS_EQUAL_OIDS(&attrType, oid_bsta)) {
 			if (binary_signing_time_found) {
 				pr_err("Multiple BinarySigningTimes found.");
 				goto illegal_attrType;
@@ -181,7 +227,8 @@ illegal_attrType:
 }
 
 static int
-validate(struct SignedData *sdata)
+validate(struct validation *state, struct SignedData *sdata,
+    struct resources *res)
 {
 	struct SignerInfo *sinfo;
 	bool is_digest;
@@ -216,7 +263,8 @@ validate(struct SignedData *sdata)
 	 * AlgorithmIdentifier instead. There's no API.
 	 * This seems to work fine.
 	 */
-	error = is_digest_algorithm((AlgorithmIdentifier_t *) sdata->digestAlgorithms.list.array[0],
+	error = is_digest_algorithm(
+	    (AlgorithmIdentifier_t *) sdata->digestAlgorithms.list.array[0],
 	    &is_digest);
 	if (error)
 		return error;
@@ -229,7 +277,7 @@ validate(struct SignedData *sdata)
 	/* Specific sub-validations will be performed later by calling code. */
 
 	/* rfc6488#section-2.1.4 */
-	/* rfc6488#section-3.1.c TODO missing half of the requirement. */
+	/* rfc6488#section-3.1.c 1/2 */
 	if (sdata->certificates == NULL) {
 		pr_err("The SignedData does not contain certificates.");
 		return -EINVAL;
@@ -240,6 +288,11 @@ validate(struct SignedData *sdata)
 		    sdata->certificates->list.count);
 		return -EINVAL;
 	}
+
+	error = handle_sdata_certificate(state,
+	    sdata->certificates->list.array[0], res);
+	if (error)
+		return error;
 
 	/* rfc6488#section-2.1.5 */
 	/* rfc6488#section-3.1.d */
@@ -262,14 +315,15 @@ validate(struct SignedData *sdata)
 	}
 
 	/* rfc6488#section-2.1.6.2 */
+	/* rfc6488#section-3.1.c 2/2 */
 	/*
 	 * TODO need the "EE certificate carried in the CMS certificates field."
 	 */
 
 	/* rfc6488#section-2.1.6.3 */
 	/* rfc6488#section-3.1.j 2/2 */
-	error = is_digest_algorithm((AlgorithmIdentifier_t *) &sinfo->digestAlgorithm,
-	    &is_digest);
+	error = is_digest_algorithm(
+	    (AlgorithmIdentifier_t *) &sinfo->digestAlgorithm, &is_digest);
 	if (error)
 		return error;
 	if (!is_digest) {
@@ -318,7 +372,8 @@ validate(struct SignedData *sdata)
 }
 
 int
-signed_data_decode(ANY_t *coded, struct SignedData **result)
+signed_data_decode(struct validation *state, ANY_t *coded,
+    struct SignedData **result, struct resources *res)
 {
 	struct SignedData *sdata;
 	int error;
@@ -328,7 +383,7 @@ signed_data_decode(ANY_t *coded, struct SignedData **result)
 	if (error)
 		return error;
 
-	error = validate(sdata);
+	error = validate(state, sdata, res);
 	if (error) {
 		signed_data_free(sdata);
 		return error;

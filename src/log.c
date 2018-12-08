@@ -1,6 +1,5 @@
 #include "log.h"
 
-#include <string.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 

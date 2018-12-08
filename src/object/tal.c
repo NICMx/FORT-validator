@@ -1,17 +1,13 @@
 #include "tal.h"
 
 #include <sys/queue.h>
-#include <sys/stat.h>
-#include <err.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <stdio.h>
-
-#include "common.h"
 #include "line_file.h"
+#include "log.h"
 
 struct uri {
 	char *string;
@@ -54,7 +50,7 @@ read_uri(struct line_file *lfile, struct uri **result)
 
 	uri = malloc(sizeof(struct uri));
 	if (uri == NULL) {
-		warnx("Out of memory");
+		pr_err("Out of memory.");
 		return -ENOMEM;
 	}
 
@@ -81,7 +77,7 @@ read_uris(struct line_file *lfile, struct uri_list *uris)
 
 	if (strcmp(uri->string, "") == 0) {
 		uri_destroy(uri);
-		warnx("TAL file %s contains no URIs", lfile_name(lfile));
+		pr_err("TAL file %s contains no URIs", lfile_name(lfile));
 		return -EINVAL;
 	}
 

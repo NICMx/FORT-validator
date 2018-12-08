@@ -1,9 +1,7 @@
 #include "certificate.h"
 
+#include <errno.h>
 #include <libcmscodec/SubjectInfoAccessSyntax.h>
-#include <openssl/err.h>
-#include <openssl/x509v3.h>
-#include <libcmscodec/ASIdentifiers.h>
 #include <libcmscodec/IPAddrBlocks.h>
 
 #include "common.h"
@@ -23,6 +21,150 @@ bool is_certificate(char const *file_name)
 	return file_has_extension(file_name, "cer");
 }
 
+static int
+validate_signature_algorithm(X509 *cert)
+{
+	int nid;
+
+	nid = OBJ_obj2nid(X509_get0_tbs_sigalg(cert)->algorithm);
+	if (nid != NID_sha256WithRSAEncryption) {
+		pr_err("Certificate's Signature Algorithm is not RSASSA-PKCS1-v1_5.");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int
+validate_name(X509_NAME *name, char *what)
+{
+	X509_NAME_ENTRY *entry;
+	int nid;
+	int i;
+
+	for (i = 0; i < X509_NAME_entry_count(name); i++) {
+		entry = X509_NAME_get_entry(name, i);
+		nid = OBJ_obj2nid(X509_NAME_ENTRY_get_object(entry));
+		if (nid == NID_commonName)
+			return 0;
+	}
+
+	pr_err("Certificate's %s lacks the CommonName atribute.", what);
+	return -ESRCH;
+}
+
+static int
+validate_public_key(struct validation *state, X509 *cert)
+{
+	X509_PUBKEY *pubkey;
+	ASN1_OBJECT *algorithm;
+	int nid;
+	int ok;
+
+	pubkey = X509_get_X509_PUBKEY(cert);
+	if (pubkey == NULL) {
+		crypto_err(state, "X509_get_X509_PUBKEY() returned NULL.");
+		return -EINVAL;
+	}
+
+	ok = X509_PUBKEY_get0_param(&algorithm, NULL, NULL, NULL, pubkey);
+	if (!ok) {
+		crypto_err(state, "X509_PUBKEY_get0_param() returned %d.", ok);
+		return -EINVAL;
+	}
+
+	nid = OBJ_obj2nid(algorithm);
+	/*
+	 * TODO Everyone uses this algorithm, but at a quick glance, it doesn't
+	 * seem to match RFC 7935's public key algorithm. Wtf?
+	 */
+	if (nid != NID_rsaEncryption) {
+		pr_err("Certificate's public key format is %d, not RSA PKCS#1 v1.5 with SHA-256.",
+		    nid);
+		return -EINVAL;
+	}
+
+	/*
+	 * BTW: WTF.
+	 *
+	 * RFC 6485: "The value for the associated parameters from that clause
+	 * [RFC4055] MUST also be used for the parameters field."
+	 * RFC 4055: "Implementations MUST accept the parameters being absent as
+	 * well as present."
+	 *
+	 * Either the RFCs found a convoluted way of saying nothing, or I'm not
+	 * getting the message.
+	 */
+
+	return 0;
+}
+
+static int
+validate_extensions(X509 *cert)
+{
+	/* TODO */
+	return 0;
+}
+
+static int
+rfc6487_validate(struct validation *state, X509 *cert)
+{
+	int error;
+
+	/*
+	 * I'm simply assuming that libcrypto implements RFC 5280. (I mean, it's
+	 * not really stated anywhere AFAIK, but since OpenSSL is supposedly the
+	 * quintessential crypto lib implementation, and RFC 5280 is supposedly
+	 * the generic certificate RFC, it's fair to say it does a well enough
+	 * job for all practical purposes.)
+	 *
+	 * But it's obvious that we can't assume that LibreSSL implements RFC
+	 * 6487. It clearly doesn't.
+	 *
+	 * So here we go.
+	 */
+
+	/* rfc6487#section-4.1 */
+	if (X509_get_version(cert) != 2) {
+		pr_err("Certificate version is not v3.");
+		return -EINVAL;
+	}
+
+	/* TODO rfc6487#section-4.2 */
+
+	/* rfc6487#section-4.3 */
+	error = validate_signature_algorithm(cert);
+	if (error)
+		return error;
+
+	/* rfc6487#section-4.4 */
+	error = validate_name(X509_get_issuer_name(cert), "issuer");
+	if (error)
+		return error;
+
+	/*
+	 * rfc6487#section-4.5
+	 *
+	 * TODO "Each distinct subordinate CA and
+	 * EE certified by the issuer MUST be identified using a subject name
+	 * that is unique per issuer.  In this context, "distinct" is defined as
+	 * an entity and a given public key."
+	 */
+	error = validate_name(X509_get_subject_name(cert), "subject");
+	if (error)
+		return error;
+
+	/* rfc6487#section-4.6 */
+	/* libcrypto already does this. */
+
+	/* rfc6487#section-4.7 */
+	error = validate_public_key(state, cert);
+	if (error)
+		return error;
+
+	return validate_extensions(cert);
+}
+
 int
 certificate_load(struct validation *state, const char *file, X509 **result)
 {
@@ -35,19 +177,26 @@ certificate_load(struct validation *state, const char *file, X509 **result)
 		return crypto_err(state, "BIO_new(BIO_s_file()) returned NULL");
 	if (BIO_read_filename(bio, file) <= 0) {
 		error = crypto_err(state, "Error reading certificate '%s'", file);
-		goto end;
+		goto abort1;
 	}
 
 	cert = d2i_X509_bio(bio, NULL);
 	if (cert == NULL) {
 		error = crypto_err(state, "Error parsing certificate '%s'", file);
-		goto end;
+		goto abort1;
 	}
 
-	*result = cert;
-	error = 0;
+	error = rfc6487_validate(state, cert);
+	if (error)
+		goto abort2;
 
-end:
+	*result = cert;
+	BIO_free(bio);
+	return 0;
+
+abort2:
+	X509_free(cert);
+abort1:
 	BIO_free(bio);
 	return error;
 }
@@ -202,7 +351,13 @@ certificate_get_resources(struct validation *state, X509 *cert,
 	int error = 0;
 
 	/* Reference: X509_get_ext_d2i */
-	/* TODO ensure that each extension can only be found once. */
+	/*
+	 * TODO ensure that each extension can only be found once.
+	 * TODO rfc6487#section-2 also ensure that at least one IP or ASN
+	 * extension is found.
+	 * TODO rfc6487#section-2 ensure that the IP/ASN extensions are
+	 * critical.
+	 */
 
 	for (i = 0; i < X509_get_ext_count(cert); i++) {
 		ext = X509_get_ext(cert, i);

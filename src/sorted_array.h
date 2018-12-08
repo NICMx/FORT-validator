@@ -19,6 +19,8 @@ enum sarray_comparison {
 	SACMP_PARENT,
 	SACMP_LEFT,
 	SACMP_RIGHT,
+	SACMP_ADJACENT_LEFT,
+	SACMP_ADJACENT_RIGHT,
 	SACMP_INTERSECTION,
 };
 
@@ -32,45 +34,14 @@ void sarray_put(struct sorted_array *);
 #define ECHILD2		7895
 #define EPARENT		7896
 #define ELEFT		7897
-#define EINTERSECTION	7898
+#define EADJLEFT	7898
+#define EADJRIGHT	7899
+#define EINTERSECTION	7900
 
 int sarray_add(struct sorted_array *, void *);
 int sarray_join(struct sorted_array *, struct sorted_array *);
-
 bool sarray_contains(struct sorted_array *, void *);
 
-
-#define SARRAY_API(name, type, cmp)					\
-static struct sorted_array *						\
-name##_create(void)							\
-{									\
-	return sarray_create(sizeof(struct type), cmp);			\
-}									\
-static void								\
-name##_get(struct sorted_array *sarray)					\
-{									\
-	sarray_get(sarray);						\
-}									\
-static void								\
-name##_put(struct sorted_array *sarray)					\
-{									\
-	sarray_put(sarray);						\
-}									\
-static int								\
-name##_add(struct sorted_array *sarray, struct type *element)		\
-{									\
-	return sarray_add(sarray, element);				\
-}									\
-static int								\
-name##_join(struct sorted_array *sarray, struct sorted_array *addend)	\
-{									\
-	return sarray_join(sarray, addend);				\
-}									\
-static bool								\
-name##_contains(struct sorted_array *sarray, struct type *element)	\
-{									\
-	return sarray_contains(sarray, element);			\
-}
-
+char const *sarray_err2str(int);
 
 #endif /* SRC_SORTED_ARRAY_H_ */

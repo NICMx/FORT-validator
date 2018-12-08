@@ -1,13 +1,6 @@
 #include "crl.h"
 
-#include <libcmscodec/SubjectInfoAccessSyntax.h>
-#include <openssl/err.h>
-#include <openssl/x509v3.h>
-
-#include "common.h"
 #include "log.h"
-#include "manifest.h"
-#include "asn1/decode.h"
 
 static int
 __crl_load(struct validation *state, const char *file, X509_CRL **result)

@@ -4,14 +4,97 @@
 #include <arpa/inet.h>
 #include <libcmscodec/RouteOriginAttestation.h>
 
-#include "common.h"
 #include "log.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
 
 static int
-validate_roa(struct RouteOriginAttestation *roa)
+print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 {
+	struct ipv4_prefix prefix;
+	char str[INET_ADDRSTRLEN];
+	const char *str2;
+	int error;
+
+	error = prefix4_decode(&roa_addr->address, &prefix);
+	if (error)
+		return error;
+
+	str2 = inet_ntop(AF_INET, &prefix.addr, str, sizeof(str));
+	if (str2 == NULL) {
+		pr_err("inet_ntop() returned NULL.");
+		return -EINVAL;
+	}
+
+	if (roa_addr->maxLength != NULL)
+		if (prefix.len > *roa_addr->maxLength)
+			goto unallowed;
+	if (!resources_contains_ipv4(parent, &prefix))
+		goto unallowed;
+
+	printf("%ld,%s/%u\n", asn, str2, prefix.len);
+	return 0;
+
+unallowed:
+	pr_err("ROA is not allowed to advertise %s/%u.", str2, prefix.len);
+	return -EINVAL;
+}
+
+static int
+print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
+{
+	struct ipv6_prefix prefix;
+	char str[INET6_ADDRSTRLEN];
+	const char *str2;
+	int error;
+
+	error = prefix6_decode(&roa_addr->address, &prefix);
+	if (error)
+		return error;
+
+	str2 = inet_ntop(AF_INET6, &prefix.addr, str, sizeof(str));
+	if (str2 == NULL) {
+		pr_err("inet_ntop() returned NULL.");
+		return -EINVAL;
+	}
+
+	if (roa_addr->maxLength != NULL)
+		if (prefix.len > *roa_addr->maxLength)
+			goto unallowed;
+	if (!resources_contains_ipv6(parent, &prefix))
+		goto unallowed;
+
+	printf("%ld,%s/%u\n", asn, str2, prefix.len);
+	return 0;
+
+unallowed:
+	pr_err("ROA is not allowed to advertise %s/%u.", str2, prefix.len);
+	return -EINVAL;
+}
+
+static int
+print_addr(struct resources *parent, long asn, uint8_t family,
+    struct ROAIPAddress *roa_addr)
+{
+	switch (family) {
+	case 1: /* IPv4 */
+		return print_addr4(parent, asn, roa_addr);
+	case 2: /* IPv6 */
+		return print_addr6(parent, asn, roa_addr);
+	}
+
+	pr_err("Unknown family value: %u", family);
+	return -EINVAL;
+}
+
+static int
+__handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
+{
+	struct ROAIPAddressFamily *block;
+	int b;
+	int a;
+	int error;
+
 	/* rfc6482#section-3.1 */
 	if (roa->version != 0) {
 		pr_err("ROA's version (%ld) is nonzero.", roa->version);
@@ -22,87 +105,33 @@ validate_roa(struct RouteOriginAttestation *roa)
 	if (roa->ipAddrBlocks.list.array == NULL)
 		return -EINVAL;
 
-	return 0;
-}
-
-static int
-print_addr(long asn, uint8_t family, struct ROAIPAddress *roa_addr)
-{
-	union {
-		struct in6_addr ip6;
-		struct in_addr ip4;
-	} addr;
-	union {
-		char ip6[INET6_ADDRSTRLEN];
-		char ip4[INET_ADDRSTRLEN];
-	} str;
-	int prefix_len;
-	const char *str2;
-
-	switch (family) {
-	case 1:
-		family = AF_INET;
-		break;
-	case 2:
-		family = AF_INET6;
-		break;
-	default:
-		pr_err("Unknown family value: %u", family);
+	/* rfc6482#section-3.3 */
+	if (!resources_contains_asn(parent, roa->asID)) {
+		pr_err("ROA is not allowed to attest for AS %d", roa->asID);
 		return -EINVAL;
 	}
 
-	/*
-	 * TODO maybe validate roa_addr->address.size > 0,
-	 * roa_addr->address.size <= actual address max size,
-	 * roa_addr->address.bits_unused < 8,
-	 * and roa_addr->address.buf lacks nonzero unused bits.
-	 * Also test 0/0.
-	 */
-
-	memset(&addr, 0, sizeof(addr));
-	memcpy(&addr, roa_addr->address.buf, roa_addr->address.size);
-	str2 = inet_ntop(family, &addr, str.ip6, sizeof(str));
-	if (str2 == NULL)
-		return pr_errno(errno, "Cannot parse IP address");
-
-	prefix_len = 8 * roa_addr->address.size - roa_addr->address.bits_unused;
-
-	printf("%ld,%s/%d,", asn, str2, prefix_len);
-
-	if (roa_addr->maxLength != NULL)
-		printf("%ld", *roa_addr->maxLength);
-	else
-		printf("%d", prefix_len);
-
-	printf("\n");
-	return 0;
-}
-
-static int
-__handle_roa(struct RouteOriginAttestation *roa)
-{
-	struct ROAIPAddressFamily *block;
-	int b;
-	int a;
-	int error;
-
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
 		block = roa->ipAddrBlocks.list.array[0];
-		if (block == NULL)
+		if (block == NULL) {
+			pr_err("Address block array element is NULL.");
 			return -EINVAL;
+		}
 
 		if (block->addressFamily.size != 2)
-			return -EINVAL;
+			goto family_error;
 		if (block->addressFamily.buf[0] != 0)
-			return -EINVAL;
+			goto family_error;
 		if (block->addressFamily.buf[1] != 1
 		    && block->addressFamily.buf[1] != 2)
-			return -EINVAL;
+			goto family_error;
 
-		if (block->addresses.list.array == NULL)
+		if (block->addresses.list.array == NULL) {
+			pr_err("ROA's address list array is NULL.");
 			return -EINVAL;
+		}
 		for (a = 0; a < block->addresses.list.count; a++) {
-			error = print_addr(roa->asID,
+			error = print_addr(parent, roa->asID,
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
 			if (error)
@@ -111,28 +140,41 @@ __handle_roa(struct RouteOriginAttestation *roa)
 	}
 
 	return 0;
+
+family_error:
+	pr_err("ROA's IP family is not v4 or v6.");
+	return -EINVAL;
 }
 
-int handle_roa(char const *file)
+int handle_roa(struct validation *state, char const *file)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS(oid);
 	struct RouteOriginAttestation *roa;
+	/* Resources contained in the ROA certificate, not in the ROA itself. */
+	struct resources *cert_resources;
 	int error;
 
 	pr_debug_add("ROA {");
 
-	error = signed_object_decode(file, &asn_DEF_RouteOriginAttestation,
-	    &arcs, (void **) &roa);
+	cert_resources = resources_create();
+	if (cert_resources == NULL) {
+		pr_err("Out of memory");
+		error = -ENOMEM;
+		goto end1;
+	}
+
+	error = signed_object_decode(state, file,
+	    &asn_DEF_RouteOriginAttestation, &arcs, (void **) &roa,
+	    cert_resources);
 	if (error)
-		goto end;
-
-	error = validate_roa(roa);
-	if (!error)
-		error = __handle_roa(roa);
-
+		goto end2;
+	error = __handle_roa(roa, cert_resources);
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
-end:
+
+end2:
+	resources_destroy(cert_resources);
+end1:
 	pr_debug_rm("}");
 	return error;
 }

@@ -28,5 +28,9 @@ rpki_validator_SOURCES += object/roa.h object/roa.c
 rpki_validator_SOURCES += object/signed_object.h object/signed_object.c
 rpki_validator_SOURCES += object/tal.h object/tal.c
 
+rpki_validator_SOURCES += resource/ip4.h resource/ip4.c
+rpki_validator_SOURCES += resource/ip6.h resource/ip6.c
+rpki_validator_SOURCES += resource/asn.h resource/asn.c
+
 rpki_validator_CFLAGS  = -pedantic -Wall -std=gnu11 -O0 -g $(CFLAGS_DEBUG)
 rpki_validator_LDFLAGS = $(LDFLAGS_DEBUG)

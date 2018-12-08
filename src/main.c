@@ -1,13 +1,11 @@
 #include <err.h>
 #include <errno.h>
-#include <stdlib.h>
 #include <openssl/objects.h>
 
 #include "common.h"
 #include "debug.h"
 #include "log.h"
 #include "object/certificate.h"
-#include "object/manifest.h"
 #include "object/tal.h"
 
 /**
@@ -75,7 +73,7 @@ main(int argc, char **argv)
 	print_stack_trace_on_segfault();
 
 	if (argc < 3) {
-		warnx("Repository path as first argument and TAL file as second argument, please.");
+		pr_err("Repository path as first argument and TAL file as second argument, please.");
 		return -EINVAL;
 	}
 
