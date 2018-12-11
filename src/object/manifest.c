@@ -4,9 +4,9 @@
 #include <libcmscodec/GeneralizedTime.h>
 #include <libcmscodec/Manifest.h>
 
-#include "filename_stack.h"
 #include "log.h"
 #include "asn1/oid.h"
+#include "thread_var.h"
 #include "object/certificate.h"
 #include "object/crl.h"
 #include "object/roa.h"
@@ -154,7 +154,7 @@ succeed:
 	return 0;
 }
 
-typedef int (*foreach_cb)(struct validation *, char *, void *);
+typedef int (*foreach_cb)(char *, void *);
 
 struct foreach_args {
 	STACK_OF(X509_CRL) *crls;
@@ -162,8 +162,7 @@ struct foreach_args {
 };
 
 static int
-foreach_file(struct validation *state, struct manifest *mft, char *extension,
-    foreach_cb cb, void *arg)
+foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 {
 	char *uri;
 	char *luri; /* "Local URI". As in "URI that we can easily reference." */
@@ -178,7 +177,7 @@ foreach_file(struct validation *state, struct manifest *mft, char *extension,
 			error = get_relative_file(mft->file_path, uri, &luri);
 			if (error)
 				return error;
-			error = cb(state, luri, arg);
+			error = cb(luri, arg);
 			free(luri);
 			if (error)
 				return error;
@@ -189,7 +188,7 @@ foreach_file(struct validation *state, struct manifest *mft, char *extension,
 }
 
 static int
-pile_crls(struct validation *state, char *file, void *crls)
+pile_crls(char *file, void *crls)
 {
 	X509_CRL *crl;
 	int error;
@@ -197,13 +196,13 @@ pile_crls(struct validation *state, char *file, void *crls)
 
 	fnstack_push(file);
 
-	error = crl_load(state, file, &crl);
+	error = crl_load(file, &crl);
 	if (error)
 		goto end;
 
 	idx = sk_X509_CRL_push(crls, crl);
 	if (idx <= 0) {
-		error = crypto_err(state, "Could not add CRL to a CRL stack");
+		error = crypto_err("Could not add CRL to a CRL stack");
 		X509_CRL_free(crl);
 		goto end;
 	}
@@ -214,7 +213,7 @@ end:
 }
 
 static int
-pile_addr_ranges(struct validation *state, char *file, void *__args)
+pile_addr_ranges(char *file, void *__args)
 {
 	struct foreach_args *args = __args;
 	struct resources *resources;
@@ -230,10 +229,10 @@ pile_addr_ranges(struct validation *state, char *file, void *__args)
 	 * (Error messages should have been printed in stderr.)
 	 */
 
-	if (certificate_load(state, file, &cert))
+	if (certificate_load(file, &cert))
 		goto end; /* Fine */
 
-	if (certificate_validate(state, cert, args->crls))
+	if (certificate_validate(cert, args->crls))
 		goto revert; /* Fine */
 
 	resources = resources_create();
@@ -242,10 +241,10 @@ pile_addr_ranges(struct validation *state, char *file, void *__args)
 		goto revert;
 	}
 
-	if (certificate_get_resources(state, cert, resources))
+	if (certificate_get_resources(cert, resources))
 		goto revert2; /* Fine */
 
-	if (validation_push_cert(state, cert, resources)) {
+	if (validation_push_cert(cert, resources)) {
 		/*
 		 * Validation_push_cert() only fails on OPENSSL_sk_push().
 		 * The latter really only fails on memory allocation fault.
@@ -254,8 +253,8 @@ pile_addr_ranges(struct validation *state, char *file, void *__args)
 		error = -EINVAL; /* Not fine */
 		goto revert2;
 	}
-	certificate_traverse(state, cert); /* Error code is useless. */
-	validation_pop_cert(state); /* Error code is useless. */
+	certificate_traverse(cert); /* Error code is useless. */
+	validation_pop_cert(); /* Error code is useless. */
 
 	error = resources_join(args->resources, resources); /* Not fine */
 
@@ -270,18 +269,18 @@ end:
 }
 
 static int
-print_roa(struct validation *state, char *file, void *arg)
+print_roa(char *file, void *arg)
 {
 	/*
 	 * TODO to validate the ROA's cert, the parent cert must not have been
 	 * popped at this point.
 	 */
-	handle_roa(state, file);
+	handle_roa(file);
 	return 0;
 }
 
 static int
-__handle_manifest(struct validation *state, struct manifest *mft)
+__handle_manifest(struct manifest *mft)
 {
 	struct foreach_args args;
 	int error;
@@ -300,7 +299,7 @@ __handle_manifest(struct validation *state, struct manifest *mft)
 	}
 
 	/* Get CRLs as a stack. There will usually only be one. */
-	error = foreach_file(state, mft, "crl", pile_crls, args.crls);
+	error = foreach_file(mft, "crl", pile_crls, args.crls);
 	if (error)
 		goto end;
 
@@ -308,12 +307,12 @@ __handle_manifest(struct validation *state, struct manifest *mft)
 	 * Use CRL stack to validate certificates.
 	 * Pile up valid address ranges from the valid certificates.
 	 */
-	error = foreach_file(state, mft, "cer", pile_addr_ranges, &args);
+	error = foreach_file(mft, "cer", pile_addr_ranges, &args);
 	if (error)
 		goto end;
 
 	/* Use valid address ranges to print ROAs that match them. */
-	error = foreach_file(state, mft, "roa", print_roa, &args);
+	error = foreach_file(mft, "roa", print_roa, &args);
 
 end:
 	resources_destroy(args.resources);
@@ -322,7 +321,7 @@ end:
 }
 
 int
-handle_manifest(struct validation *state, char const *file_path)
+handle_manifest(char const *file_path)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS(oid);
@@ -338,14 +337,14 @@ handle_manifest(struct validation *state, char const *file_path)
 	 * TODO about those NULL resources: Maybe print a warning if the
 	 * certificate contains some.
 	 */
-	error = signed_object_decode(state, file_path, &asn_DEF_Manifest, &arcs,
+	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
 	    (void **) &mft.obj, NULL);
 	if (error)
 		goto end;
 
 	error = validate_manifest(mft.obj);
 	if (!error)
-		error = __handle_manifest(state, &mft);
+		error = __handle_manifest(&mft);
 
 	ASN_STRUCT_FREE(asn_DEF_Manifest, mft.obj);
 end:

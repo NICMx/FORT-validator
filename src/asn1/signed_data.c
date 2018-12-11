@@ -42,8 +42,7 @@ is_digest_algorithm(AlgorithmIdentifier_t *aid, bool *result)
 }
 
 static int
-handle_sdata_certificate(struct validation *state, ANY_t *any,
-    struct resources *res)
+handle_sdata_certificate(ANY_t *any, struct resources *res)
 {
 	const unsigned char *tmp;
 	X509 *cert;
@@ -62,16 +61,16 @@ handle_sdata_certificate(struct validation *state, ANY_t *any,
 
 	cert = d2i_X509(NULL, &tmp, any->size);
 	if (cert == NULL) {
-		error = crypto_err(state, "Signed object's 'certificate' element does not decode into a Certificate");
+		error = crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
 		goto end1;
 	}
 
-	error = certificate_validate(state, cert, NULL); /* TODO crls */
+	error = certificate_validate(cert, NULL); /* TODO crls */
 	if (error)
 		goto end2;
 
 	if (res != NULL) {
-		error = certificate_get_resources(state, cert, res);
+		error = certificate_get_resources(cert, res);
 		if (error)
 			goto end2;
 	}
@@ -227,8 +226,7 @@ illegal_attrType:
 }
 
 static int
-validate(struct validation *state, struct SignedData *sdata,
-    struct resources *res)
+validate(struct SignedData *sdata, struct resources *res)
 {
 	struct SignerInfo *sinfo;
 	bool is_digest;
@@ -289,8 +287,8 @@ validate(struct validation *state, struct SignedData *sdata,
 		return -EINVAL;
 	}
 
-	error = handle_sdata_certificate(state,
-	    sdata->certificates->list.array[0], res);
+	error = handle_sdata_certificate(sdata->certificates->list.array[0],
+	    res);
 	if (error)
 		return error;
 
@@ -372,8 +370,8 @@ validate(struct validation *state, struct SignedData *sdata,
 }
 
 int
-signed_data_decode(struct validation *state, ANY_t *coded,
-    struct SignedData **result, struct resources *res)
+signed_data_decode(ANY_t *coded, struct SignedData **result,
+    struct resources *res)
 {
 	struct SignedData *sdata;
 	int error;
@@ -383,7 +381,7 @@ signed_data_decode(struct validation *state, ANY_t *coded,
 	if (error)
 		return error;
 
-	error = validate(state, sdata, res);
+	error = validate(sdata, res);
 	if (error) {
 		signed_data_free(sdata);
 		return error;

@@ -4,8 +4,8 @@
 #include <arpa/inet.h>
 #include <libcmscodec/RouteOriginAttestation.h>
 
-#include "filename_stack.h"
 #include "log.h"
+#include "thread_var.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
 
@@ -151,7 +151,7 @@ family_error:
 	return -EINVAL;
 }
 
-int handle_roa(struct validation *state, char const *file)
+int handle_roa(char const *file)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS(oid);
@@ -170,9 +170,8 @@ int handle_roa(struct validation *state, char const *file)
 		goto end1;
 	}
 
-	error = signed_object_decode(state, file,
-	    &asn_DEF_RouteOriginAttestation, &arcs, (void **) &roa,
-	    cert_resources);
+	error = signed_object_decode(file, &asn_DEF_RouteOriginAttestation,
+	    &arcs, (void **) &roa, cert_resources);
 	if (error)
 		goto end2;
 	error = __handle_roa(roa, cert_resources);

@@ -11,10 +11,8 @@ struct resources;
 struct resources *resources_create(void);
 void resources_destroy(struct resources *);
 
-int resources_add_ip(struct resources *, struct IPAddressFamily *,
-    struct resources *);
-int resources_add_asn(struct resources *, struct ASIdentifiers *,
-    struct resources *);
+int resources_add_ip(struct resources *, struct IPAddressFamily *);
+int resources_add_asn(struct resources *, struct ASIdentifiers *);
 
 bool resources_contains_asn(struct resources *, ASId_t);
 bool resources_contains_ipv4(struct resources *, struct ipv4_prefix *);

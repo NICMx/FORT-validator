@@ -7,6 +7,7 @@
 #include "common.h"
 #include "log.h"
 #include "manifest.h"
+#include "thread_var.h"
 #include "asn1/decode.h"
 
 /*
@@ -54,7 +55,7 @@ validate_name(X509_NAME *name, char *what)
 }
 
 static int
-validate_public_key(struct validation *state, X509 *cert)
+validate_public_key(X509 *cert)
 {
 	X509_PUBKEY *pubkey;
 	ASN1_OBJECT *algorithm;
@@ -63,13 +64,13 @@ validate_public_key(struct validation *state, X509 *cert)
 
 	pubkey = X509_get_X509_PUBKEY(cert);
 	if (pubkey == NULL) {
-		crypto_err(state, "X509_get_X509_PUBKEY() returned NULL.");
+		crypto_err("X509_get_X509_PUBKEY() returned NULL.");
 		return -EINVAL;
 	}
 
 	ok = X509_PUBKEY_get0_param(&algorithm, NULL, NULL, NULL, pubkey);
 	if (!ok) {
-		crypto_err(state, "X509_PUBKEY_get0_param() returned %d.", ok);
+		crypto_err("X509_PUBKEY_get0_param() returned %d.", ok);
 		return -EINVAL;
 	}
 
@@ -107,7 +108,7 @@ validate_extensions(X509 *cert)
 }
 
 static int
-rfc6487_validate(struct validation *state, X509 *cert)
+rfc6487_validate(X509 *cert)
 {
 	int error;
 
@@ -158,7 +159,7 @@ rfc6487_validate(struct validation *state, X509 *cert)
 	/* libcrypto already does this. */
 
 	/* rfc6487#section-4.7 */
-	error = validate_public_key(state, cert);
+	error = validate_public_key(cert);
 	if (error)
 		return error;
 
@@ -166,7 +167,7 @@ rfc6487_validate(struct validation *state, X509 *cert)
 }
 
 int
-certificate_load(struct validation *state, const char *file, X509 **result)
+certificate_load(const char *file, X509 **result)
 {
 	X509 *cert = NULL;
 	BIO *bio;
@@ -174,19 +175,19 @@ certificate_load(struct validation *state, const char *file, X509 **result)
 
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
-		return crypto_err(state, "BIO_new(BIO_s_file()) returned NULL");
+		return crypto_err("BIO_new(BIO_s_file()) returned NULL");
 	if (BIO_read_filename(bio, file) <= 0) {
-		error = crypto_err(state, "Error reading certificate");
+		error = crypto_err("Error reading certificate");
 		goto abort1;
 	}
 
 	cert = d2i_X509_bio(bio, NULL);
 	if (cert == NULL) {
-		error = crypto_err(state, "Error parsing certificate");
+		error = crypto_err("Error parsing certificate");
 		goto abort1;
 	}
 
-	error = rfc6487_validate(state, cert);
+	error = rfc6487_validate(cert);
 	if (error)
 		goto abort2;
 
@@ -202,8 +203,7 @@ abort1:
 }
 
 int
-certificate_validate(struct validation *state, X509 *cert,
-    STACK_OF(X509_CRL) *crls)
+certificate_validate(X509 *cert, STACK_OF(X509_CRL) *crls)
 {
 	/*
 	 * TODO
@@ -214,20 +214,25 @@ certificate_validate(struct validation *state, X509 *cert,
 	 * So, just in case, enable -no-CAfile and -no-CApath.
 	 */
 
+	struct validation *state;
 	X509_STORE_CTX *ctx;
 	int ok;
 	int error;
 
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+
 	ctx = X509_STORE_CTX_new();
 	if (ctx == NULL) {
-		crypto_err(state, "X509_STORE_CTX_new() returned NULL");
+		crypto_err("X509_STORE_CTX_new() returned NULL");
 		return -EINVAL;
 	}
 
 	/* Returns 0 or 1 , all callers test ! only. */
 	ok = X509_STORE_CTX_init(ctx, validation_store(state), cert, NULL);
 	if (!ok) {
-		crypto_err(state, "X509_STORE_CTX_init() returned %d", ok);
+		crypto_err("X509_STORE_CTX_init() returned %d", ok);
 		goto abort;
 	}
 
@@ -259,8 +264,7 @@ certificate_validate(struct validation *state, X509 *cert,
 			 * That said, there's not much to do about !error,
 			 * so hope for the best.
 			 */
-			crypto_err(state, "Certificate validation failed: %d",
-			    ok);
+			crypto_err("Certificate validation failed: %d", ok);
 		}
 
 		goto abort;
@@ -292,8 +296,7 @@ gn_g2l(GENERAL_NAME *name, char **luri)
 }
 
 static int
-handle_ip_extension(struct validation *state, X509_EXTENSION *ext,
-    struct resources *resources)
+handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
 {
 	ASN1_OCTET_STRING *string;
 	struct IPAddrBlocks *blocks;
@@ -311,8 +314,7 @@ handle_ip_extension(struct validation *state, X509_EXTENSION *ext,
 	 * Each SEQUENCE MUST be ordered by ascending addressFamily values.
 	 */
 	for (i = 0; i < blocks->list.count; i++) {
-		error = resources_add_ip(resources, blocks->list.array[i],
-		    validation_peek_resource(state));
+		error = resources_add_ip(resources, blocks->list.array[i]);
 		if (error)
 			break;
 	}
@@ -322,8 +324,7 @@ handle_ip_extension(struct validation *state, X509_EXTENSION *ext,
 }
 
 static int
-handle_asn_extension(struct validation *state, X509_EXTENSION *ext,
-    struct resources *resources)
+handle_asn_extension(X509_EXTENSION *ext, struct resources *resources)
 {
 	ASN1_OCTET_STRING *string;
 	struct ASIdentifiers *ids;
@@ -335,16 +336,14 @@ handle_asn_extension(struct validation *state, X509_EXTENSION *ext,
 	if (error)
 		return error;
 
-	error = resources_add_asn(resources, ids,
-	    validation_peek_resource(state));
+	error = resources_add_asn(resources, ids);
 
 	ASN_STRUCT_FREE(asn_DEF_ASIdentifiers, ids);
 	return error;
 }
 
 int
-certificate_get_resources(struct validation *state, X509 *cert,
-    struct resources *resources)
+certificate_get_resources(X509 *cert, struct resources *resources)
 {
 	X509_EXTENSION *ext;
 	int i;
@@ -365,12 +364,12 @@ certificate_get_resources(struct validation *state, X509 *cert,
 		switch (OBJ_obj2nid(X509_EXTENSION_get_object(ext))) {
 		case NID_sbgp_ipAddrBlock:
 			pr_debug_add("IP {");
-			error = handle_ip_extension(state, ext, resources);
+			error = handle_ip_extension(ext, resources);
 			pr_debug_rm("}");
 			break;
 		case NID_sbgp_autonomousSysNum:
 			pr_debug_add("ASN {");
-			error = handle_asn_extension(state, ext, resources);
+			error = handle_asn_extension(ext, resources);
 			pr_debug_rm("}");
 			break;
 		}
@@ -382,7 +381,7 @@ certificate_get_resources(struct validation *state, X509 *cert,
 	return error;
 }
 
-int certificate_traverse(struct validation *state, X509 *cert)
+int certificate_traverse(X509 *cert)
 {
 	SIGNATURE_INFO_ACCESS *sia;
 	ACCESS_DESCRIPTION *ad;
@@ -404,7 +403,7 @@ int certificate_traverse(struct validation *state, X509 *cert)
 			error = gn_g2l(ad->location, &uri);
 			if (error)
 				goto end;
-			error = handle_manifest(state, uri);
+			error = handle_manifest(uri);
 			free(uri);
 			if (error)
 				goto end;

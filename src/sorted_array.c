@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 #include "log.h"
 
 struct sorted_array {

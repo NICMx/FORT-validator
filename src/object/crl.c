@@ -3,7 +3,7 @@
 #include "log.h"
 
 static int
-__crl_load(struct validation *state, const char *file, X509_CRL **result)
+__crl_load(const char *file, X509_CRL **result)
 {
 	X509_CRL *crl = NULL;
 	BIO *bio;
@@ -11,15 +11,15 @@ __crl_load(struct validation *state, const char *file, X509_CRL **result)
 
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
-		return crypto_err(state, "BIO_new(BIO_s_file()) returned NULL");
+		return crypto_err("BIO_new(BIO_s_file()) returned NULL");
 	if (BIO_read_filename(bio, file) <= 0) {
-		error = crypto_err(state, "Error reading CRL '%s'", file);
+		error = crypto_err("Error reading CRL '%s'", file);
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
-		error = crypto_err(state, "Error parsing CRL '%s'", file);
+		error = crypto_err("Error parsing CRL '%s'", file);
 		goto end;
 	}
 
@@ -32,12 +32,12 @@ end:
 }
 
 int
-crl_load(struct validation *state, char const *file, X509_CRL **result)
+crl_load(char const *file, X509_CRL **result)
 {
 	int error;
 
 	pr_debug_add("CRL {");
-	error = __crl_load(state, file, result);
+	error = __crl_load(file, result);
 	pr_debug_rm("}");
 
 	return error;

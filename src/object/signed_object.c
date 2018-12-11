@@ -58,8 +58,7 @@ validate_content_type(struct SignedData *sdata,
 }
 
 int
-signed_object_decode(struct validation *state,
-    char const *file,
+signed_object_decode(char const *file,
     asn_TYPE_descriptor_t const *descriptor,
     struct oid_arcs const *oid,
     void **result,
@@ -73,7 +72,7 @@ signed_object_decode(struct validation *state,
 	if (error)
 		goto end1;
 
-	error = signed_data_decode(state, &cinfo->content, &sdata, res);
+	error = signed_data_decode(&cinfo->content, &sdata, res);
 	if (error)
 		goto end2;
 

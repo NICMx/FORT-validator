@@ -1,4 +1,4 @@
-#include "filename_stack.h"
+#include "thread_var.h"
 
 #include <errno.h>
 #include <pthread.h>
@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+static pthread_key_t state_key;
 static pthread_key_t filenames_key;
 
 struct filename_stack {
@@ -23,19 +24,53 @@ fnstack_discard(void *arg)
 	free(files);
 }
 
-/** Initializes this module. Call once per runtime lifetime. */
+/** Initializes this entire module. Call once per runtime lifetime. */
 void
-fnstack_init(void)
+thvar_init(void)
 {
 	int error;
+
+	error = pthread_key_create(&state_key, NULL);
+	if (error) {
+		fprintf(stderr,
+		    "Fatal: Errcode %d while initializing the validation state thread variable.\n",
+		    error);
+		exit(error);
+	}
 
 	error = pthread_key_create(&filenames_key, fnstack_discard);
 	if (error) {
 		fprintf(stderr,
-		    "Fatal: Errcode %d while attempting to initialize thread variable.\n",
+		    "Fatal: Errcode %d while initializing the file name stack thread variable.\n",
 		    error);
 		exit(error);
 	}
+}
+
+/* Puts @state in the current thread's variable pool. Call once per thread. */
+int
+state_store(struct validation *state)
+{
+	int error;
+
+	error = pthread_setspecific(state_key, state);
+	if (error)
+		fprintf(stderr, "pthread_setspecific() returned %d.", error);
+
+	return error;
+}
+
+/* Returns the current thread's validation state. */
+struct validation *
+state_retrieve(void)
+{
+	struct validation *state;
+
+	state = pthread_getspecific(state_key);
+	if (state == NULL)
+		fprintf(stderr, "This thread lacks a validation state.\n");
+
+	return state;
 }
 
 /** Initializes the current thread's fnstack. Call once per thread. */
@@ -113,6 +148,7 @@ fnstack_push(char const *file_path)
 	files->filenames[files->len++] = get_filename(file_path);
 }
 
+/* Returns the file name on the top of the file name stack. */
 char const *
 fnstack_peek(void)
 {
@@ -125,6 +161,7 @@ fnstack_peek(void)
 	return files->filenames[files->len - 1];
 }
 
+/* Reverts the last fnstack_push(). */
 void
 fnstack_pop(void)
 {

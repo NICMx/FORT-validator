@@ -3,7 +3,7 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
-#include "filename_stack.h"
+#include "thread_var.h"
 
 #define STDOUT stdout
 #define STDERR stderr
@@ -113,6 +113,16 @@ pr_err_prefix(void)
 	pr_indent(STDERR);
 }
 
+#define PR_ERR(args) do {			\
+	pr_err_prefix();			\
+	pr_file_name(STDERR);			\
+						\
+	va_start(args, format);			\
+	vfprintf(STDERR, format, args);		\
+	va_end(args);				\
+	fprintf(STDERR, "\n");			\
+} while (0)
+
 /**
  * Always appends a newline at the end.
  */
@@ -120,14 +130,7 @@ void
 pr_err(const char *format, ...)
 {
 	va_list args;
-
-	pr_err_prefix();
-	pr_file_name(STDERR);
-
-	va_start(args, format);
-	vfprintf(STDERR, format, args);
-	va_end(args);
-	fprintf(STDERR, "\n");
+	PR_ERR(args);
 }
 
 /**
@@ -182,19 +185,31 @@ pr_errno(int error, const char *format, ...)
  * Always appends a newline at the end.
  */
 int
-crypto_err(struct validation *state, const char *format, ...)
+crypto_err(const char *format, ...)
 {
+	struct validation *state;
 	BIO *bio;
+	bool bio_needs_free;
 	char const *file;
 	va_list args;
 	int error;
 
-	bio = validation_stderr(state);
+	error = ERR_GET_REASON(ERR_peek_last_error());
+	bio = NULL;
+	bio_needs_free = false;
+
+	state = state_retrieve();
+	if (state != NULL)
+		bio = validation_stderr(state);
+	if (bio == NULL) {
+		bio = BIO_new_fp(stderr, BIO_NOCLOSE);
+		if (bio == NULL)
+			goto trainwreck;
+		bio_needs_free = true;
+	}
 
 	file = fnstack_peek();
 	BIO_printf(bio, "%s: ", (file != NULL) ? file : "(Unknown file)");
-
-	error = ERR_GET_REASON(ERR_peek_last_error());
 
 	va_start(args, format);
 	BIO_vprintf(bio, format, args);
@@ -214,5 +229,17 @@ crypto_err(struct validation *state, const char *format, ...)
 	}
 
 	BIO_printf(bio, "\n");
+	if (bio_needs_free)
+		BIO_free_all(bio);
 	return error;
+
+trainwreck:
+	/* Fall back to behave just like pr_err(). */
+	PR_ERR(args);
+
+	pr_err_prefix();
+	pr_file_name(STDERR);
+	fprintf(STDERR, "(Cannot print libcrypto error: Failed to initialise standard error's BIO.)\n");
+
+	return error ? error : -EINVAL;
 }

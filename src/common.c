@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include <errno.h>
+#include <string.h>
 #include "log.h"
 
 char const *repository;

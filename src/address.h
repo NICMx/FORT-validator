@@ -34,7 +34,4 @@ int prefix6_decode(IPAddress2_t *, struct ipv6_prefix *);
 int range4_decode(IPAddressRange_t *, struct ipv4_range *);
 int range6_decode(IPAddressRange_t *, struct ipv6_range *);
 
-bool prefix4_contains(const struct ipv4_prefix *, const struct ipv4_prefix *);
-bool prefix6_contains(const struct ipv6_prefix *, const struct ipv6_prefix *);
-
 #endif /* SRC_ADDRESS_H_ */

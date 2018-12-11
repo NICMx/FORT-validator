@@ -5,7 +5,7 @@
 #include "common.h"
 #include "debug.h"
 #include "log.h"
-#include "filename_stack.h"
+#include "thread_var.h"
 #include "object/certificate.h"
 #include "object/tal.h"
 
@@ -56,7 +56,7 @@ handle_tal_uri(char const *uri)
 	}
 
 	fnstack_push(uri);
-	error = certificate_traverse(state, validation_peek_cert(state));
+	error = certificate_traverse(validation_peek_cert(state));
 	fnstack_pop();
 
 end2:
@@ -81,7 +81,7 @@ main(int argc, char **argv)
 	}
 
 	add_rpki_oids();
-	fnstack_init();
+	thvar_init();
 	fnstack_store();
 	fnstack_push(argv[2]);
 

@@ -7,6 +7,7 @@
 #include "address.h"
 #include "log.h"
 #include "sorted_array.h"
+#include "thread_var.h"
 #include "resource/ip4.h"
 #include "resource/ip6.h"
 #include "resource/asn.h"
@@ -83,6 +84,13 @@ unknown:
 	return -1;
 }
 
+static struct resources *
+get_parent_resources(void)
+{
+	struct validation *state = state_retrieve();
+	return (state != NULL) ? validation_peek_resource(state) : NULL;
+}
+
 static void
 pr_debug_prefix(int family, void *addr, unsigned int length)
 {
@@ -126,8 +134,16 @@ fail:
 }
 
 static int
-inherit_aors(struct resources *resources, int family, struct resources *parent)
+inherit_aors(struct resources *resources, int family)
 {
+	struct resources *parent;
+
+	parent = get_parent_resources();
+	if (!parent) {
+		pr_err("Certificate inherits IP resources, but parent does not define any resources.");
+		return -EINVAL;
+	}
+
 	switch (family) {
 	case AF_INET:
 		if (resources->ip4s != NULL) {
@@ -161,11 +177,13 @@ inherit_aors(struct resources *resources, int family, struct resources *parent)
 }
 
 static int
-add_prefix4(struct resources *resources, IPAddress2_t *addr,
-    struct resources *parent)
+add_prefix4(struct resources *resources, IPAddress2_t *addr)
 {
+	struct resources *parent;
 	struct ipv4_prefix prefix;
 	int error;
+
+	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->ip4s == parent->ip4s)) {
 		pr_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
@@ -201,11 +219,13 @@ add_prefix4(struct resources *resources, IPAddress2_t *addr,
 }
 
 static int
-add_prefix6(struct resources *resources, IPAddress2_t *addr,
-    struct resources *parent)
+add_prefix6(struct resources *resources, IPAddress2_t *addr)
 {
+	struct resources *parent;
 	struct ipv6_prefix prefix;
 	int error;
+
+	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->ip6s == parent->ip6s)) {
 		pr_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
@@ -241,14 +261,13 @@ add_prefix6(struct resources *resources, IPAddress2_t *addr,
 }
 
 static int
-add_prefix(struct resources *resources, int family, IPAddress2_t *addr,
-    struct resources *parent)
+add_prefix(struct resources *resources, int family, IPAddress2_t *addr)
 {
 	switch (family) {
 	case AF_INET:
-		return add_prefix4(resources, addr, parent);
+		return add_prefix4(resources, addr);
 	case AF_INET6:
-		return add_prefix6(resources, addr, parent);
+		return add_prefix6(resources, addr);
 	}
 
 	pr_err("Programming error: Unknown address family '%d'", family);
@@ -256,11 +275,13 @@ add_prefix(struct resources *resources, int family, IPAddress2_t *addr,
 }
 
 static int
-add_range4(struct resources *resources, IPAddressRange_t *input,
-    struct resources *parent)
+add_range4(struct resources *resources, IPAddressRange_t *input)
 {
+	struct resources *parent;
 	struct ipv4_range range;
 	int error;
+
+	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->ip4s == parent->ip4s)) {
 		pr_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
@@ -296,11 +317,13 @@ add_range4(struct resources *resources, IPAddressRange_t *input,
 }
 
 static int
-add_range6(struct resources *resources, IPAddressRange_t *input,
-    struct resources *parent)
+add_range6(struct resources *resources, IPAddressRange_t *input)
 {
+	struct resources *parent;
 	struct ipv6_range range;
 	int error;
+
+	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->ip6s == parent->ip6s)) {
 		pr_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
@@ -336,14 +359,13 @@ add_range6(struct resources *resources, IPAddressRange_t *input,
 }
 
 static int
-add_range(struct resources *resources, int family, IPAddressRange_t *range,
-    struct resources *parent)
+add_range(struct resources *resources, int family, IPAddressRange_t *range)
 {
 	switch (family) {
 	case AF_INET:
-		return add_range4(resources, range, parent);
+		return add_range4(resources, range);
 	case AF_INET6:
-		return add_range6(resources, range, parent);
+		return add_range6(resources, range);
 	}
 
 	pr_err("Programming error: Unknown address family '%d'", family);
@@ -352,7 +374,7 @@ add_range(struct resources *resources, int family, IPAddressRange_t *range,
 
 static int
 add_aors(struct resources *resources, int family,
-    struct IPAddressChoice__addressesOrRanges *aors, struct resources *parent)
+    struct IPAddressChoice__addressesOrRanges *aors)
 {
 	struct IPAddressOrRange *aor;
 	int i;
@@ -363,13 +385,13 @@ add_aors(struct resources *resources, int family,
 		switch (aor->present) {
 		case IPAddressOrRange_PR_addressPrefix:
 			error = add_prefix(resources, family,
-			    &aor->choice.addressPrefix, parent);
+			    &aor->choice.addressPrefix);
 			if (error)
 				return error;
 			break;
 		case IPAddressOrRange_PR_addressRange:
 			error = add_range(resources, family,
-			    &aor->choice.addressRange, parent);
+			    &aor->choice.addressRange);
 			if (error)
 				return error;
 			break;
@@ -385,8 +407,7 @@ add_aors(struct resources *resources, int family,
 }
 
 int
-resources_add_ip(struct resources *resources, struct IPAddressFamily *obj,
-    struct resources *parent)
+resources_add_ip(struct resources *resources, struct IPAddressFamily *obj)
 {
 	int family;
 
@@ -398,10 +419,10 @@ resources_add_ip(struct resources *resources, struct IPAddressFamily *obj,
 	case IPAddressChoice_PR_NOTHING:
 		break;
 	case IPAddressChoice_PR_inherit:
-		return inherit_aors(resources, family, parent);
+		return inherit_aors(resources, family);
 	case IPAddressChoice_PR_addressesOrRanges:
 		return add_aors(resources, family,
-		    &obj->ipAddressChoice.choice.addressesOrRanges, parent);
+		    &obj->ipAddressChoice.choice.addressesOrRanges);
 	}
 
 	/* rfc3779#section-2.2.3.4 */
@@ -411,8 +432,16 @@ resources_add_ip(struct resources *resources, struct IPAddressFamily *obj,
 }
 
 static int
-inherit_asiors(struct resources *resources, struct resources *parent)
+inherit_asiors(struct resources *resources)
 {
+	struct resources *parent;
+
+	parent = get_parent_resources();
+	if (!parent) {
+		pr_err("Certificate inherits ASN resources, but parent does not define any resources.");
+		return -EINVAL;
+	}
+
 	if (resources->asns != NULL) {
 		pr_err("Certificate inherits ASN resources while also defining others of its own.");
 		return -EINVAL;
@@ -460,9 +489,12 @@ add_asn(struct resources *resources, ASId_t min, ASId_t max,
 }
 
 static int
-add_asior(struct resources *resources, struct ASIdOrRange *obj,
-    struct resources *parent)
+add_asior(struct resources *resources, struct ASIdOrRange *obj)
 {
+	struct resources *parent;
+
+	parent = get_parent_resources();
+
 	if ((parent != NULL) && (resources->asns == parent->asns)) {
 		pr_err("Certificate defines ASN resources while also inheriting his parent's.");
 		return -EINVAL;
@@ -484,8 +516,7 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj,
 }
 
 int
-resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
-    struct resources *parent)
+resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 {
 	struct ASIdentifierChoice__asIdsOrRanges *iors;
 	int i;
@@ -502,12 +533,11 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
 
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
-		return inherit_asiors(resources, parent);
+		return inherit_asiors(resources);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
 		iors = &ids->asnum->choice.asIdsOrRanges;
 		for (i = 0; i < iors->list.count; i++) {
-			error = add_asior(resources, iors->list.array[i],
-			    parent);
+			error = add_asior(resources, iors->list.array[i]);
 			if (error)
 				return error;
 		}

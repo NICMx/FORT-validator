@@ -2,7 +2,7 @@
 
 #include <errno.h>
 #include "log.h"
-#include "filename_stack.h"
+#include "thread_var.h"
 #include "object/certificate.h"
 
 /**
@@ -13,11 +13,6 @@
  * uses it to traverse the tree and keep track of validated data.
  */
 struct validation {
-	/**
-	 * Encapsulated standard output.
-	 * Needed because the crypto library won't write to stdout directly.
-	 */
-	BIO *out;
 	/**
 	 * Encapsulated standard error.
 	 * Needed because the crypto library won't write to stderr directly.
@@ -90,7 +85,7 @@ init_trusted(struct validation *result, char *root)
 
 	fnstack_push(root);
 
-	error = certificate_load(result, root, &cert);
+	error = certificate_load(root, &cert);
 	if (error)
 		goto abort1;
 
@@ -102,7 +97,7 @@ init_trusted(struct validation *result, char *root)
 
 	ok = sk_X509_push(result->trusted, cert);
 	if (ok <= 0) {
-		error = crypto_err(result,
+		error = crypto_err(
 		    "Could not add certificate to trusted stack: %d", ok);
 		goto abort3;
 	}
@@ -124,66 +119,64 @@ validation_create(struct validation **out, char *root)
 {
 	struct validation *result;
 	struct resources *resources;
-	int error = -ENOMEM;
+	int error;
 
 	result = malloc(sizeof(struct validation));
 	if (!result)
 		return -ENOMEM;
 
-	result->out = BIO_new_fp(stdout, BIO_NOCLOSE);
-	if (result->out == NULL) {
-		fprintf(stderr, "Failed to initialise standard output's BIO.\n");
+	error = state_store(result);
+	if (error)
 		goto abort1;
-	}
+
 	result->err = BIO_new_fp(stderr, BIO_NOCLOSE);
-	if (result->out == NULL) {
+	if (result->err == NULL) {
 		fprintf(stderr, "Failed to initialise standard error's BIO.\n");
-		goto abort2;
+		error = -ENOMEM;
+		goto abort1;
 	}
 
 	result->store = X509_STORE_new();
 	if (!result->store) {
-		error = crypto_err(result, "X509_STORE_new() returned NULL");
-		goto abort3;
+		error = crypto_err("X509_STORE_new() returned NULL");
+		goto abort2;
 	}
 
 	X509_STORE_set_verify_cb(result->store, cb);
 
 	error = init_trusted(result, root);
 	if (error)
-		goto abort4;
+		goto abort3;
 
 	result->rsrcs = restack_create();
 	if (!result->rsrcs)
-		goto abort5;
+		goto abort4;
 
 	resources = resources_create();
 	if (resources == NULL)
-		goto abort6;
+		goto abort5;
 
 	fnstack_push(root);
-	error = certificate_get_resources(result, validation_peek_cert(result),
+	error = certificate_get_resources(validation_peek_cert(result),
 	    resources);
 	fnstack_pop();
 	if (error)
-		goto abort7;
+		goto abort6;
 
 	restack_push(result->rsrcs, resources);
 	*out = result;
 	return 0;
 
-abort7:
-	resources_destroy(resources);
 abort6:
-	restack_destroy(result->rsrcs);
+	resources_destroy(resources);
 abort5:
-	sk_X509_pop_free(result->trusted, X509_free);
+	restack_destroy(result->rsrcs);
 abort4:
-	X509_STORE_free(result->store);
+	sk_X509_pop_free(result->trusted, X509_free);
 abort3:
-	BIO_free_all(result->err);
+	X509_STORE_free(result->store);
 abort2:
-	BIO_free_all(result->out);
+	BIO_free_all(result->err);
 abort1:
 	free(result);
 	return error;
@@ -208,14 +201,7 @@ validation_destroy(struct validation *state)
 	sk_X509_pop_free(state->trusted, X509_free);
 	X509_STORE_free(state->store);
 	BIO_free_all(state->err);
-	BIO_free_all(state->out);
 	free(state);
-}
-
-BIO *
-validation_stdout(struct validation *state)
-{
-	return state->out;
 }
 
 BIO *
@@ -243,15 +229,18 @@ validation_resources(struct validation *state)
 }
 
 int
-validation_push_cert(struct validation *state, X509 *cert,
-    struct resources *resources)
+validation_push_cert(X509 *cert, struct resources *resources)
 {
+	struct validation *state;
 	int ok;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
 
 	ok = sk_X509_push(state->trusted, cert);
 	if (ok <= 0) {
-		crypto_err(state,
-		    "Could not add certificate to trusted stack: %d", ok);
+		crypto_err("Couldn't add certificate to trusted stack: %d", ok);
 		return -ENOMEM; /* Presumably */
 	}
 
@@ -261,10 +250,16 @@ validation_push_cert(struct validation *state, X509 *cert,
 }
 
 int
-validation_pop_cert(struct validation *state)
+validation_pop_cert(void)
 {
+	struct validation *state;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+
 	if (sk_X509_pop(state->trusted) == NULL) {
-		return crypto_err(state,
+		return crypto_err(
 		    "Programming error: Attempted to pop empty cert stack");
 	}
 	if (restack_pop(state->rsrcs) == NULL) {
