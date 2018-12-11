@@ -12,5 +12,7 @@ int pr_errno(int, const char *, ...);
 int crypto_err(struct validation *, const char *, ...);
 
 #define PR_DEBUG printf("%s:%d (%s())\n", __FILE__, __LINE__, __func__)
+#define PR_DEBUG_MSG(msg, ...) printf("%s:%d (%s()): " msg "\n", \
+    __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
 #endif /* SRC_LOG_H_ */

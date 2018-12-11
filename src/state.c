@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include "log.h"
+#include "filename_stack.h"
 #include "object/certificate.h"
 
 /**
@@ -41,6 +42,8 @@ struct validation {
 	 * seemingly not intended to be used outside of its library.)
 	 */
 	struct restack *rsrcs;
+
+	struct filename_stack *files;
 };
 
 /*
@@ -85,29 +88,34 @@ init_trusted(struct validation *result, char *root)
 	int ok;
 	int error;
 
+	fnstack_push(root);
+
 	error = certificate_load(result, root, &cert);
 	if (error)
-		return error;
+		goto abort1;
 
 	result->trusted = sk_X509_new_null();
 	if (result->trusted == NULL) {
 		error = -EINVAL;
-		goto abort1;
+		goto abort2;
 	}
 
 	ok = sk_X509_push(result->trusted, cert);
 	if (ok <= 0) {
 		error = crypto_err(result,
 		    "Could not add certificate to trusted stack: %d", ok);
-		goto abort2;
+		goto abort3;
 	}
 
+	fnstack_pop();
 	return 0;
 
-abort2:
+abort3:
 	sk_X509_free(result->trusted);
-abort1:
+abort2:
 	X509_free(cert);
+abort1:
+	fnstack_pop();
 	return error;
 }
 
@@ -153,8 +161,10 @@ validation_create(struct validation **out, char *root)
 	if (resources == NULL)
 		goto abort6;
 
+	fnstack_push(root);
 	error = certificate_get_resources(result, validation_peek_cert(result),
 	    resources);
+	fnstack_pop();
 	if (error)
 		goto abort7;
 

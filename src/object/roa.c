@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <libcmscodec/RouteOriginAttestation.h>
 
+#include "filename_stack.h"
 #include "log.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
@@ -101,13 +102,17 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		return -EINVAL;
 	}
 
-	/* rfc6482#section-3.2 */
-	if (roa->ipAddrBlocks.list.array == NULL)
+	/* rfc6482#section-3.2 (more or less.) */
+	if (!resources_contains_asn(parent, roa->asID)) {
+		pr_err("ROA is not allowed to attest for AS %d",
+		    roa->asID);
 		return -EINVAL;
+	}
 
 	/* rfc6482#section-3.3 */
-	if (!resources_contains_asn(parent, roa->asID)) {
-		pr_err("ROA is not allowed to attest for AS %d", roa->asID);
+
+	if (roa->ipAddrBlocks.list.array == NULL) {
+		pr_err("Programming error: ipAddrBlocks array is NULL.");
 		return -EINVAL;
 	}
 
@@ -155,7 +160,8 @@ int handle_roa(struct validation *state, char const *file)
 	struct resources *cert_resources;
 	int error;
 
-	pr_debug_add("ROA {");
+	pr_debug_add("ROA %s {", file);
+	fnstack_push(file);
 
 	cert_resources = resources_create();
 	if (cert_resources == NULL) {
@@ -176,5 +182,6 @@ end2:
 	resources_destroy(cert_resources);
 end1:
 	pr_debug_rm("}");
+	fnstack_pop();
 	return error;
 }

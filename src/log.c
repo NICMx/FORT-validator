@@ -3,13 +3,16 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
-#ifdef DEBUG
+#include "filename_stack.h"
+
+#define STDOUT stdout
+#define STDERR stderr
 
 #define INDENT_MAX 10
 static unsigned int indent;
 
 static void
-pr_indent(void)
+pr_indent(FILE *stream)
 {
 	unsigned int __indent = indent;
 	unsigned int i;
@@ -18,8 +21,17 @@ pr_indent(void)
 //		__indent = INDENT_MAX;
 
 	for (i = 0; i < __indent; i++)
-		printf("  ");
+		fprintf(stream, "  ");
 }
+
+static void
+pr_file_name(FILE *stream)
+{
+	char const *file = fnstack_peek();
+	fprintf(stream, "%s: ", (file != NULL) ? file : "(Unknown file)");
+}
+
+#ifdef DEBUG
 
 static void
 pr_add_indent(void)
@@ -33,14 +45,14 @@ pr_rm_indent(void)
 	if (indent > 0)
 		indent--;
 	else
-		fprintf(stderr, "Programming error: Too many pr_rm_indent()s.\n");
+		fprintf(STDERR, "Programming error: Too many pr_rm_indent()s.\n");
 }
 
 static void
-print_debug_prefix(void)
+pr_debug_prefix(void)
 {
-	printf("DBG: ");
-	pr_indent();
+	fprintf(STDOUT, "DBG: ");
+	pr_indent(STDOUT);
 }
 
 #endif
@@ -51,12 +63,12 @@ pr_debug(const char *format, ...)
 #ifdef DEBUG
 	va_list args;
 
-	print_debug_prefix();
+	pr_debug_prefix();
 
 	va_start(args, format);
-	vprintf(format, args);
+	vfprintf(STDOUT, format, args);
 	va_end(args);
-	printf("\n");
+	fprintf(STDOUT, "\n");
 #endif
 }
 
@@ -66,12 +78,12 @@ pr_debug_add(const char *format, ...)
 #ifdef DEBUG
 	va_list args;
 
-	print_debug_prefix();
+	pr_debug_prefix();
 
 	va_start(args, format);
-	vprintf(format, args);
+	vfprintf(STDOUT, format, args);
 	va_end(args);
-	printf("\n");
+	fprintf(STDOUT, "\n");
 
 	pr_add_indent();
 #endif
@@ -85,13 +97,20 @@ pr_debug_rm(const char *format, ...)
 
 	pr_rm_indent();
 
-	print_debug_prefix();
+	pr_debug_prefix();
 
 	va_start(args, format);
-	vprintf(format, args);
+	vfprintf(STDOUT, format, args);
 	va_end(args);
-	printf("\n");
+	fprintf(STDOUT, "\n");
 #endif
+}
+
+static void
+pr_err_prefix(void)
+{
+	fprintf(STDERR, "ERR: ");
+	pr_indent(STDERR);
 }
 
 /**
@@ -102,10 +121,13 @@ pr_err(const char *format, ...)
 {
 	va_list args;
 
+	pr_err_prefix();
+	pr_file_name(STDERR);
+
 	va_start(args, format);
-	vfprintf(stderr, format, args);
+	vfprintf(STDERR, format, args);
 	va_end(args);
-	fprintf(stderr, "\n");
+	fprintf(STDERR, "\n");
 }
 
 /**
@@ -127,18 +149,21 @@ pr_errno(int error, const char *format, ...)
 {
 	va_list args;
 
+	pr_err_prefix();
+	pr_file_name(STDERR);
+
 	va_start(args, format);
-	vfprintf(stderr, format, args);
+	vfprintf(STDERR, format, args);
 	va_end(args);
 
 	if (error) {
-		fprintf(stderr, ": %s", strerror(error));
+		fprintf(STDERR, ": %s", strerror(error));
 	} else {
 		/* We should assume that there WAS an error; go generic. */
 		error = -EINVAL;
 	}
 
-	fprintf(stderr, "\n");
+	fprintf(STDERR, "\n");
 
 	return error;
 }
@@ -159,9 +184,15 @@ pr_errno(int error, const char *format, ...)
 int
 crypto_err(struct validation *state, const char *format, ...)
 {
-	BIO *bio = validation_stderr(state);
+	BIO *bio;
+	char const *file;
 	va_list args;
 	int error;
+
+	bio = validation_stderr(state);
+
+	file = fnstack_peek();
+	BIO_printf(bio, "%s: ", (file != NULL) ? file : "(Unknown file)");
 
 	error = ERR_GET_REASON(ERR_peek_last_error());
 

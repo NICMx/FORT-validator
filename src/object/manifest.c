@@ -4,6 +4,7 @@
 #include <libcmscodec/GeneralizedTime.h>
 #include <libcmscodec/Manifest.h>
 
+#include "filename_stack.h"
 #include "log.h"
 #include "asn1/oid.h"
 #include "object/certificate.h"
@@ -194,18 +195,22 @@ pile_crls(struct validation *state, char *file, void *crls)
 	int error;
 	int idx;
 
+	fnstack_push(file);
+
 	error = crl_load(state, file, &crl);
 	if (error)
-		return error;
+		goto end;
 
 	idx = sk_X509_CRL_push(crls, crl);
 	if (idx <= 0) {
 		error = crypto_err(state, "Could not add CRL to a CRL stack");
 		X509_CRL_free(crl);
-		return error;
+		goto end;
 	}
 
-	return 0;
+end:
+	fnstack_pop();
+	return error;
 }
 
 static int
@@ -217,6 +222,7 @@ pile_addr_ranges(struct validation *state, char *file, void *__args)
 	int error = 0;
 
 	pr_debug_add("Certificate {");
+	fnstack_push(file);
 
 	/*
 	 * Errors on some of these functions should not interrupt the tree
@@ -259,6 +265,7 @@ revert:
 	X509_free(cert);
 end:
 	pr_debug_rm("}");
+	fnstack_pop();
 	return error;
 }
 
@@ -323,6 +330,7 @@ handle_manifest(struct validation *state, char const *file_path)
 	int error;
 
 	pr_debug_add("Manifest %s {", file_path);
+	fnstack_push(file_path);
 
 	mft.file_path = file_path;
 
@@ -342,5 +350,6 @@ handle_manifest(struct validation *state, char const *file_path)
 	ASN_STRUCT_FREE(asn_DEF_Manifest, mft.obj);
 end:
 	pr_debug_rm("}");
+	fnstack_pop();
 	return error;
 }

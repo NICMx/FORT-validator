@@ -176,13 +176,13 @@ certificate_load(struct validation *state, const char *file, X509 **result)
 	if (bio == NULL)
 		return crypto_err(state, "BIO_new(BIO_s_file()) returned NULL");
 	if (BIO_read_filename(bio, file) <= 0) {
-		error = crypto_err(state, "Error reading certificate '%s'", file);
+		error = crypto_err(state, "Error reading certificate");
 		goto abort1;
 	}
 
 	cert = d2i_X509_bio(bio, NULL);
 	if (cert == NULL) {
-		error = crypto_err(state, "Error parsing certificate '%s'", file);
+		error = crypto_err(state, "Error parsing certificate");
 		goto abort1;
 	}
 
