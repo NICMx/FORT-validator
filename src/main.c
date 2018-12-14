@@ -8,6 +8,7 @@
 #include "thread_var.h"
 #include "object/certificate.h"
 #include "object/tal.h"
+#include "rsync/rsync.h"
 
 /**
  * Registers the RPKI-specific OIDs in the SSL library.
@@ -42,6 +43,10 @@ handle_tal_uri(char const *uri)
 	if (error)
 		return error;
 
+	error = download_files(uri);
+	if (error)
+		return error;
+
 	error = validation_create(&state, cert_file);
 	if (error)
 		goto end1;
@@ -72,6 +77,7 @@ main(int argc, char **argv)
 {
 	struct tal *tal;
 	int error;
+	bool is_rsync_active = true;
 
 	print_stack_trace_on_segfault();
 
@@ -79,6 +85,13 @@ main(int argc, char **argv)
 		pr_err("Repository path as first argument and TAL file as second argument, please.");
 		return -EINVAL;
 	}
+
+	if (argc >= 4)
+		is_rsync_active = false;
+
+	error = rsync_init(is_rsync_active);
+	if (error)
+		return error;
 
 	add_rpki_oids();
 	thvar_init();
@@ -94,5 +107,6 @@ main(int argc, char **argv)
 	error = foreach_uri(tal, handle_tal_uri);
 
 	tal_destroy(tal);
+	rsync_destroy();
 	return error;
 }

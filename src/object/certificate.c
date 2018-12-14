@@ -9,6 +9,7 @@
 #include "manifest.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
+#include "../rsync/rsync.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -381,24 +382,33 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 	return error;
 }
 
-int certificate_traverse(X509 *cert)
+static int
+_certificate_traverse(X509 *cert, SIGNATURE_INFO_ACCESS *sia, int sia_len)
 {
-	SIGNATURE_INFO_ACCESS *sia;
 	ACCESS_DESCRIPTION *ad;
+	ACCESS_DESCRIPTION *list[sia_len];
 	char *uri;
-	int i;
 	int error;
+	int i;
+	int count;
 
-	sia = X509_get_ext_d2i(cert, NID_sinfo_access, NULL, NULL);
-	if (sia == NULL) {
-		pr_err("Certificate lacks a Subject Information Access extension.");
-		return -ESRCH;
+	for (i = 0, count = 0; i < sia_len; i++) {
+		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
+		if (OBJ_obj2nid(ad->method) == NID_caRepository) {
+			error = gn2uri(ad->location, (char const **)&uri);
+			if (error)
+				goto end;
+			error = download_files(uri);
+			if (error)
+				goto end;
+		} else {
+			list[count] = ad;
+			count++;
+		}
 	}
 
-	error = 0;
-	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
-		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
-
+	for (i = 0; i < count; i++) {
+		ad = list[i];
 		if (OBJ_obj2nid(ad->method) == NID_rpkiManifest) {
 			error = gn_g2l(ad->location, &uri);
 			if (error)
@@ -411,6 +421,24 @@ int certificate_traverse(X509 *cert)
 	}
 
 end:
+	return error;
+}
+
+int certificate_traverse(X509 *cert)
+{
+	SIGNATURE_INFO_ACCESS *sia;
+	int error;
+
+
+	sia = X509_get_ext_d2i(cert, NID_sinfo_access, NULL, NULL);
+	if (sia == NULL) {
+		pr_err("Certificate lacks a Subject Information Access extension.");
+		return -ESRCH;
+	}
+
+	error = _certificate_traverse(cert, sia, sk_ACCESS_DESCRIPTION_num(sia));
+
 	AUTHORITY_INFO_ACCESS_free(sia);
 	return error;
 }
+
