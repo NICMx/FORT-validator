@@ -48,10 +48,9 @@ main(int argc, char *argv[])
 	if (err)
 		return err;
 
-	err = rtr_listen(&config->ipv4_server_addr.l3,
-			config->ipv4_server_addr.l4);
+	err = rtr_listen(config->host_address, config->host_port);
 	if (config)
-		free(config);
+		free_rtr_config(config);
 
 	if (err)
 		return err;

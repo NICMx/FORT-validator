@@ -1,23 +1,52 @@
 #include "configuration.h"
 
-#include <string.h>
+#include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <stdio.h>
 #include <regex.h>
+
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
 #include <jansson.h>
 
 #include "common.h"
 #include "file.h"
-#include "str_utils.h"
 
 #define OPTNAME_LISTEN			"listen"
-#define OPTNAME_LISTEN_IPV4		"ipv4_server_addr"
+#define OPTNAME_LISTEN_SERVER	"server_name"
+#define OPTNAME_LISTEN_PORT		"server_port"
 
 static int json_to_config(json_t *, struct rtr_config *);
-static int handle_listen_config(json_t *, struct ipv4_transport_addr *);
+static int handle_listen_config(json_t *, struct rtr_config *);
 static json_t *load_json(const char *);
 
+void
+free_rtr_config(struct rtr_config *config)
+{
+	if (!config)
+		return;
+
+	if (config->host_address)
+		freeaddrinfo(config->host_address);
+
+	free(config);
+}
+
+static bool
+endsWith(char *string, char *suffix)
+{
+	size_t strilen;
+	size_t suflen;
+	if (!string || !suffix)
+		return false;
+
+	strilen = strlen(string);
+	suflen = strlen(suffix);
+
+	return ((strilen >= suflen) && (0 == strcmp(string + strilen - suflen, suffix)));
+}
 
 int
 read_config_from_file(char *json_file_path, struct rtr_config **result)
@@ -44,12 +73,12 @@ read_config_from_file(char *json_file_path, struct rtr_config **result)
 	if (!root_json)
 		return -ENOENT;
 
-	config = malloc(sizeof(*config));
+	config = malloc(sizeof(struct rtr_config));
 	if (!config)
 		return -ENOMEM;
 
 	error = json_to_config(root_json, config);
-	if (error != 0)
+	if (error)
 		free(config);
 
 	*result = config;
@@ -61,7 +90,7 @@ static void
 check_duplicates(bool *found, char *section)
 {
 	if (*found)
-		log_info("Note: I found multiple '%s' sections.", section);
+		log_err("Note: I found multiple '%s' sections.", section);
 	*found = true;
 }
 
@@ -81,18 +110,41 @@ json_to_config(json_t *json, struct rtr_config *config)
 	json_object_foreach(json, key, value) {
 		if(strcasecmp(OPTNAME_LISTEN, key) == 0) {
 			check_duplicates(&listen_found, OPTNAME_LISTEN);
-			error = handle_listen_config(value, &config->ipv4_server_addr);
+			error = handle_listen_config(value, config);
 		}
 	}
 
 	return error;
 }
 
+static int
+hostname_to_ip(const char *hostname, struct addrinfo **result)
+{
+	int rv;
+	struct addrinfo hints, *servinfo;
+
+	memset(&hints, 0 , sizeof hints);
+	hints.ai_family = AF_UNSPEC;
+//	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags |= AI_CANONNAME;
+
+
+	if ((rv = getaddrinfo(hostname, NULL, &hints, &servinfo)) != 0){
+		printf("getaddrinfo: [%d] - %s\n", rv, gai_strerror(rv)); // TODO change to print error or something like that
+		return -EINVAL;
+	}
+
+	*result = servinfo;
+
+	return 0;
+}
 
 static int
-handle_listen_config(json_t *json, struct ipv4_transport_addr *ipv4_server_addr)
+handle_listen_config(json_t *json, struct rtr_config *config)
 {
-	bool listen_ipv4_found = false;
+	int error;
+	bool listen_servername_found = false;
+	bool listen_port_found = false;
 	const char *key;
 	json_t *value;
 
@@ -102,14 +154,25 @@ handle_listen_config(json_t *json, struct ipv4_transport_addr *ipv4_server_addr)
 	}
 
 	json_object_foreach(json, key, value) {
-		if (strcasecmp(OPTNAME_LISTEN_IPV4, key) == 0) {
-			check_duplicates(&listen_ipv4_found, OPTNAME_LISTEN_IPV4);
+		if (strcasecmp(OPTNAME_LISTEN_SERVER, key) == 0) {
+			check_duplicates(&listen_servername_found, OPTNAME_LISTEN_SERVER);
 			if (json_typeof(value) != JSON_STRING) {
 				log_err("Invalid value for key '%s'", key);
 				return -EINVAL;
 			}
 
-			str_to_addr4_port(json_string_value(value), ipv4_server_addr);
+			error = hostname_to_ip(json_string_value(value), &config->host_address);
+			if (error)
+				return error;
+
+		} else if (strcasecmp(OPTNAME_LISTEN_PORT, key) == 0) {
+			check_duplicates(&listen_port_found, OPTNAME_LISTEN_PORT);
+			if (json_typeof(value) != JSON_INTEGER) {
+				log_err("Invalid value for key '%s'", key);
+				return -EINVAL;
+			}
+
+			config->host_port = (__u16) json_integer_value(value);
 		}
 	}
 

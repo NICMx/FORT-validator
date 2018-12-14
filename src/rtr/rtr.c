@@ -2,44 +2,132 @@
 
 #include <err.h>
 #include <errno.h>
+#include <netdb.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include "../common.h"
-#include "../types.h"
 #include "pdu.h"
+
+static int
+bind_server_socket6(int socket, struct sockaddr_in6 *host_addr, __u16 port)
+{
+	int err;
+	struct sockaddr_in6 address;
+
+	memset(&address, 0, sizeof(address));
+	address.sin6_family = AF_INET6;
+	address.sin6_addr.__in6_u = host_addr->sin6_addr.__in6_u;
+	address.sin6_port = htons(port);
+
+	if (bind(socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
+		err = errno;
+		warn("Could not bind the address. errno : %d", -abs(err));
+		return -abs(err);
+	}
+
+	return 0;
+}
+
+static int
+bind_server_socket4(int socket, struct sockaddr_in *host_addr, __u16 port)
+{
+	int err;
+	struct sockaddr_in address;
+
+	memset(&address, 0, sizeof(address));
+	address.sin_family = AF_INET;
+	address.sin_addr.s_addr = host_addr->sin_addr.s_addr;
+	address.sin_port = htons(port);
+
+	if (bind(socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
+		err = errno;
+		warn("Could not bind the address. errno : %d", -abs(err));
+		return -abs(err);
+	}
+
+	return 0;
+}
+
+static void
+log_binded_server_socket(struct addrinfo *host, __u16 port)
+{
+	char hostaddr[INET6_ADDRSTRLEN];
+	struct sockaddr_in *h4;
+	struct sockaddr_in6 *h6;
+
+	memset(&hostaddr, 0, INET6_ADDRSTRLEN);
+	switch(host->ai_family) {
+		case AF_INET:
+			h4 = (struct sockaddr_in *) host->ai_addr;
+			inet_ntop(host->ai_family, &h4->sin_addr, (char * restrict) &hostaddr, sizeof(hostaddr));
+			pr_debug("Listening %s#%d", hostaddr, port);
+			break;
+		case AF_INET6:
+			h6 = (struct sockaddr_in6 *) host->ai_addr;
+			inet_ntop(host->ai_family, &h6->sin6_addr, (char * restrict) &hostaddr, sizeof(hostaddr));
+			pr_debug("Listening [%s]#%d", hostaddr, port);
+			break;
+		default:
+			warn("Unknown AI_FAMILY type: %d", host->ai_family);
+	}
+}
 
 /*
  * Creates the socket that will stay put and wait for new connections started
  * from the clients.
  */
 static int
-create_server_socket(struct in_addr *server_addr, __u16 port)
+create_server_socket(struct addrinfo *server_addr, __u16 port)
 {
 	int fd; /* "file descriptor" */
-	struct sockaddr_in address;
+	struct addrinfo *tmp;
 	int err;
 
-	fd = socket(AF_INET, SOCK_STREAM, 0);
-	if (fd < 0) {
-		err = errno;
-		warn("Error opening socket");
-		return -abs(err);
+	if (server_addr == NULL){
+		warn("A server address must be present to bind a socket");
+		return -EINVAL;
 	}
 
-	memset(&address, 0, sizeof(address));
-	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = server_addr->s_addr;
-	address.sin_port = htons(port);
-	if (bind(fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-		err = errno;
-		warn("Could not bind the address");
-		close(fd);
-		return -abs(err);
+	for (tmp = server_addr; tmp != NULL; tmp = tmp->ai_next) {
+		err = 0;
+		fd = socket(tmp->ai_family, SOCK_STREAM, 0);
+		if (fd < 0) {
+			err = errno;
+			err = -abs(err);
+			warn("Error opening socket. errno : %d", err);
+			continue;
+		}
+
+		switch(tmp->ai_family) {
+		case AF_INET:
+			err = bind_server_socket4(fd, (struct sockaddr_in *) tmp->ai_addr, port);
+			if (err)
+				close(fd);
+			break;
+		case AF_INET6:
+			err = bind_server_socket6(fd, (struct sockaddr_in6 *) tmp->ai_addr, port);
+			if (err)
+				close(fd);
+			break;
+		default:
+			close(fd);
+			warn("Can't handle ai_family type: %d", tmp->ai_family);
+			err = -EINVAL;
+		}
+
+		if (!err) {
+			log_binded_server_socket(tmp, port);
+			break;
+		}
 	}
+
+	if (err)
+		return err;
 
 	return fd;
 }
@@ -190,7 +278,7 @@ handle_client_connections(int server_fd)
  * This function blocks.
  */
 int
-rtr_listen(struct in_addr *server_addr, __u16 port)
+rtr_listen(struct addrinfo *server_addr, __u16 port)
 {
 	int server_fd; /* "file descriptor" */
 

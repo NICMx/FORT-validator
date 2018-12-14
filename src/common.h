@@ -1,6 +1,7 @@
 #ifndef _SRC_COMMON_H_
 #define _SRC_COMMON_H_
 
+#include <stdio.h>
 #include <string.h>
 
 /* __BEGIN_DECLS should be used at the beginning of your declarations,
@@ -31,5 +32,8 @@
 
 #define pr_debug0(msg) printf("Debug: " msg "\n");
 #define pr_debug(msg, ...) printf("Debug: " msg "\n", ##__VA_ARGS__);
+
+#define log_err(text, ...) fprintf(stderr, text "\n", ##__VA_ARGS__)
+#define log_err0(text) fprintf(stderr, text "\n")
 
 #endif /* _SRC_COMMON_H_ */
