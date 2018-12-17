@@ -151,7 +151,7 @@ family_error:
 	return -EINVAL;
 }
 
-int handle_roa(char const *file)
+int handle_roa(char const *file, STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS(oid);
@@ -171,7 +171,7 @@ int handle_roa(char const *file)
 	}
 
 	error = signed_object_decode(file, &asn_DEF_RouteOriginAttestation,
-	    &arcs, (void **) &roa, cert_resources);
+	    &arcs, (void **) &roa, crls, cert_resources);
 	if (error)
 		goto end2;
 	error = __handle_roa(roa, cert_resources);

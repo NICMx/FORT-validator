@@ -48,14 +48,17 @@ pr_rm_indent(void)
 		fprintf(STDERR, "Programming error: Too many pr_rm_indent()s.\n");
 }
 
-static void
-pr_debug_prefix(void)
-{
-	fprintf(STDOUT, "DBG: ");
-	pr_indent(STDOUT);
-}
 
 #endif
+
+void
+pr_debug_prefix(void)
+{
+#ifdef DEBUG
+	fprintf(STDOUT, "DBG: ");
+	pr_indent(STDOUT);
+#endif
+}
 
 void
 pr_debug(const char *format, ...)
@@ -120,7 +123,6 @@ pr_err_prefix(void)
 	va_start(args, format);			\
 	vfprintf(STDERR, format, args);		\
 	va_end(args);				\
-	fprintf(STDERR, "\n");			\
 } while (0)
 
 /**
@@ -131,6 +133,7 @@ pr_err(const char *format, ...)
 {
 	va_list args;
 	PR_ERR(args);
+	fprintf(STDERR, "\n");
 }
 
 /**
@@ -152,22 +155,19 @@ pr_errno(int error, const char *format, ...)
 {
 	va_list args;
 
-	pr_err_prefix();
-	pr_file_name(STDERR);
-
-	va_start(args, format);
-	vfprintf(STDERR, format, args);
-	va_end(args);
+	PR_ERR(args);
 
 	if (error) {
 		fprintf(STDERR, ": %s", strerror(error));
 	} else {
-		/* We should assume that there WAS an error; go generic. */
+		/*
+		 * If this function was called, then we need to assume that
+		 * there WAS an error; go generic.
+		 */
 		error = -EINVAL;
 	}
 
 	fprintf(STDERR, "\n");
-
 	return error;
 }
 
@@ -187,59 +187,27 @@ pr_errno(int error, const char *format, ...)
 int
 crypto_err(const char *format, ...)
 {
-	struct validation *state;
-	BIO *bio;
-	bool bio_needs_free;
-	char const *file;
 	va_list args;
 	int error;
 
+	PR_ERR(args);
+
 	error = ERR_GET_REASON(ERR_peek_last_error());
-	bio = NULL;
-	bio_needs_free = false;
-
-	state = state_retrieve();
-	if (state != NULL)
-		bio = validation_stderr(state);
-	if (bio == NULL) {
-		bio = BIO_new_fp(stderr, BIO_NOCLOSE);
-		if (bio == NULL)
-			goto trainwreck;
-		bio_needs_free = true;
-	}
-
-	file = fnstack_peek();
-	BIO_printf(bio, "%s: ", (file != NULL) ? file : "(Unknown file)");
-
-	va_start(args, format);
-	BIO_vprintf(bio, format, args);
-	va_end(args);
-	BIO_printf(bio, ": ");
-
 	if (error) {
 		/*
 		 * Reminder: This clears the error queue.
 		 * BTW: The string format is pretty ugly. Maybe override this.
 		 */
-		ERR_print_errors(bio);
+		ERR_print_errors_fp(STDERR);
 	} else {
-		/* We should assume that there WAS an error; go generic. */
-		BIO_printf(bio, "(There are no error messages in the stack.)");
+		/*
+		 * If this function was called, then we need to assume that
+		 * there WAS an error; go generic.
+		 */
+		fprintf(STDERR, "(There are no error messages in the stack.)");
 		error = -EINVAL;
 	}
 
-	BIO_printf(bio, "\n");
-	if (bio_needs_free)
-		BIO_free_all(bio);
+	fprintf(STDERR, "\n");
 	return error;
-
-trainwreck:
-	/* Fall back to behave just like pr_err(). */
-	PR_ERR(args);
-
-	pr_err_prefix();
-	pr_file_name(STDERR);
-	fprintf(STDERR, "(Cannot print libcrypto error: Failed to initialise standard error's BIO.)\n");
-
-	return error ? error : -EINVAL;
 }

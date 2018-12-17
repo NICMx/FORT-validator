@@ -68,7 +68,7 @@ state_retrieve(void)
 
 	state = pthread_getspecific(state_key);
 	if (state == NULL)
-		fprintf(stderr, "This thread lacks a validation state.\n");
+		fprintf(stderr, "Programming error: This thread lacks a validation state.\n");
 
 	return state;
 }

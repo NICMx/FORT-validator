@@ -12,6 +12,5 @@ void rasn_put(struct resources_asn *);
 
 int rasn_add(struct resources_asn *, ASId_t, ASId_t);
 bool rasn_contains(struct resources_asn *, ASId_t, ASId_t);
-int rasn_join(struct resources_asn *, struct resources_asn *);
 
 #endif /* SRC_RESOURCE_ASN_H_ */

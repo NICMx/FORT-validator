@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include "common.h"
+#include "log.h"
 #include "asn1/decode.h"
 
 #define MAX_ARCS 9
@@ -23,11 +24,14 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 	ssize_t count, count2;
 
 	result->arcs = malloc(MAX_ARCS * sizeof(asn_oid_arc_t));
-	if (result->arcs == NULL)
+	if (result->arcs == NULL) {
+		pr_err("Out of memory.");
 		return -ENOMEM;
+	}
 
 	count = OBJECT_IDENTIFIER_get_arcs(oid, result->arcs, MAX_ARCS);
 	if (count < 0) {
+		pr_err("OBJECT_IDENTIFIER_get_arcs() returned %zd.", count);
 		free(result->arcs);
 		return count;
 	}
@@ -37,10 +41,14 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 	/* If necessary, reallocate arcs array and try again. */
 	if (count > MAX_ARCS) {
 		result->arcs = realloc(result->arcs, count * sizeof(asn_oid_arc_t));
-		if (!result->arcs)
+		if (!result->arcs) {
+			pr_err("Out of memory.");
 			return -ENOMEM;
+		}
 		count2 = OBJECT_IDENTIFIER_get_arcs(oid, result->arcs, count);
 		if (count != count2) {
+			pr_err("OBJECT_IDENTIFIER_get_arcs() returned %zd. (expected %zd)",
+			    count2, count);
 			free(result->arcs);
 			return -EINVAL;
 		}

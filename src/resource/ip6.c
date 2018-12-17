@@ -106,10 +106,3 @@ res6_contains_range(struct resources_ipv6 *ips, struct ipv6_range *range)
 {
 	return sarray_contains((struct sorted_array *) ips, range);
 }
-
-int
-res6_join(struct resources_ipv6 *r1, struct resources_ipv6 *r2)
-{
-	return sarray_join((struct sorted_array *) r1,
-	    (struct sorted_array *) r2);
-}

@@ -39,7 +39,6 @@ void sarray_put(struct sorted_array *);
 #define EINTERSECTION	7900
 
 int sarray_add(struct sorted_array *, void *);
-int sarray_join(struct sorted_array *, struct sorted_array *);
 bool sarray_contains(struct sorted_array *, void *);
 
 char const *sarray_err2str(int);

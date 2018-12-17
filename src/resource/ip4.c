@@ -96,10 +96,3 @@ res4_contains_range(struct resources_ipv4 *ips, struct ipv4_range *range)
 	rton(range, &n);
 	return sarray_contains((struct sorted_array *) ips, &n);
 }
-
-int
-res4_join(struct resources_ipv4 *r1, struct resources_ipv4 *r2)
-{
-	return sarray_join((struct sorted_array *) r1,
-	    (struct sorted_array *) r2);
-}

@@ -14,6 +14,5 @@ int res4_add_prefix(struct resources_ipv4 *, struct ipv4_prefix *);
 int res4_add_range(struct resources_ipv4 *, struct ipv4_range *);
 bool res4_contains_prefix(struct resources_ipv4 *, struct ipv4_prefix *);
 bool res4_contains_range(struct resources_ipv4 *, struct ipv4_range *);
-int res4_join(struct resources_ipv4 *, struct resources_ipv4 *);
 
 #endif /* SRC_RESOURCE_IP4_H_ */

@@ -65,10 +65,3 @@ rasn_contains(struct resources_asn *asns, ASId_t min, ASId_t max)
 	struct asn_node n = { min, max };
 	return sarray_contains((struct sorted_array *) asns, &n);
 }
-
-int
-rasn_join(struct resources_asn *r1, struct resources_asn *r2)
-{
-	return sarray_join((struct sorted_array *) r1,
-	    (struct sorted_array *) r2);
-}

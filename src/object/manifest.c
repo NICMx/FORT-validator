@@ -112,7 +112,7 @@ validate_manifest(struct Manifest *manifest)
 	if (!is_hash)
 		return -EINVAL;
 
-	/* fileList needs no validations for now.*/
+	/* TODO (critical) validate the file hashes */
 
 	return 0;
 }
@@ -126,7 +126,8 @@ validate_manifest(struct Manifest *manifest)
  * The result needs to be freed in the end.
  */
 static int
-get_relative_file(char const *mft, char const *file, char **result)
+get_relative_file(char const *mft, char const *file, size_t file_len,
+    char **result)
 {
 	char *joined;
 	char *slash_pos;
@@ -134,20 +135,22 @@ get_relative_file(char const *mft, char const *file, char **result)
 
 	slash_pos = strrchr(mft, '/');
 	if (slash_pos == NULL) {
-		joined = malloc(strlen(file) + 1);
+		joined = malloc(file_len + 1);
 		if (!joined)
 			return -ENOMEM;
-		strcpy(joined, file);
+		strncpy(joined, file, file_len);
+		joined[file_len] = '\0';
 		goto succeed;
 	}
 
 	dir_len = (slash_pos + 1) - mft;
-	joined = malloc(dir_len + strlen(file) + 1);
+	joined = malloc(dir_len + file_len + 1);
 	if (!joined)
 		return -ENOMEM;
 
 	strncpy(joined, mft, dir_len);
-	strcpy(joined + dir_len, file);
+	strncpy(joined + dir_len, file, file_len);
+	joined[dir_len + file_len] = '\0';
 
 succeed:
 	*result = joined;
@@ -156,25 +159,27 @@ succeed:
 
 typedef int (*foreach_cb)(char *, void *);
 
-struct foreach_args {
-	STACK_OF(X509_CRL) *crls;
-	struct resources *resources;
-};
-
 static int
 foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 {
 	char *uri;
+	size_t uri_len;
 	char *luri; /* "Local URI". As in "URI that we can easily reference." */
 	int i;
 	int error;
 
 	for (i = 0; i < mft->obj->fileList.list.count; i++) {
-		/* TODO This cast is probably not correct. */
+		/*
+		 * IA5String is just a subset of ASCII, so this cast is fine.
+		 * I don't see any guarantees that the string will be
+		 * zero-terminated though, so we'll handle that the hard way.
+		 */
 		uri = (char *) mft->obj->fileList.list.array[i]->file.buf;
+		uri_len = mft->obj->fileList.list.array[i]->file.size;
 
-		if (file_has_extension(uri, extension)) {
-			error = get_relative_file(mft->file_path, uri, &luri);
+		if (file_has_extension(uri, uri_len, extension)) {
+			error = get_relative_file(mft->file_path, uri, uri_len,
+			    &luri);
 			if (error)
 				return error;
 			error = cb(luri, arg);
@@ -212,116 +217,90 @@ end:
 	return error;
 }
 
+/*
+ * Speaking of CA certs: I still don't get the CA/EE cert duality at the
+ * implementation level.
+ *
+ * Right now, I'm assuming that file certs are CA certs, and CMS-embedded certs
+ * are EE certs. None of the RFCs seem to mandate this, but I can't think of any
+ * other way to interpret it.
+ *
+ * It's really weird because the RFCs actually define requirements like "other
+ * AccessMethods MUST NOT be used for an EE certificates's SIA," (RFC6481) which
+ * seems to imply that there's some contextual way to already know whether a
+ * certificate is CA or EE. But it just doesn't exist.
+ */
 static int
-pile_addr_ranges(char *file, void *__args)
+traverse_ca_certs(char *file, void *crls)
 {
-	struct foreach_args *args = __args;
-	struct resources *resources;
 	X509 *cert;
-	int error = 0;
 
-	pr_debug_add("Certificate {");
+	pr_debug_add("(CA?) Certificate {");
 	fnstack_push(file);
 
 	/*
-	 * Errors on some of these functions should not interrupt the tree
-	 * traversal, so ignore them.
+	 * Errors on at least some of these functions should not interrupt the
+	 * traversal of sibling nodes, so ignore them.
 	 * (Error messages should have been printed in stderr.)
 	 */
 
 	if (certificate_load(file, &cert))
-		goto end; /* Fine */
+		goto revert1; /* Fine */
 
-	if (certificate_validate(cert, args->crls))
-		goto revert; /* Fine */
-
-	resources = resources_create();
-	if (resources == NULL) {
-		error = -ENOMEM; /* Not fine */
-		goto revert;
-	}
-
-	if (certificate_get_resources(cert, resources))
+	if (certificate_validate_chain(cert, crls))
 		goto revert2; /* Fine */
-
-	if (validation_push_cert(cert, resources)) {
-		/*
-		 * Validation_push_cert() only fails on OPENSSL_sk_push().
-		 * The latter really only fails on memory allocation fault.
-		 * That's grounds to interrupt tree traversal.
-		 */
-		error = -EINVAL; /* Not fine */
-		goto revert2;
-	}
-	certificate_traverse(cert); /* Error code is useless. */
-	validation_pop_cert(); /* Error code is useless. */
-
-	error = resources_join(args->resources, resources); /* Not fine */
+	if (certificate_validate_rfc6487(cert, false))
+		goto revert2; /* Fine */
+	certificate_traverse_ca(cert, crls); /* Error code is useless. */
 
 revert2:
-	resources_destroy(resources);
-revert:
 	X509_free(cert);
-end:
+revert1:
 	pr_debug_rm("}");
 	fnstack_pop();
-	return error;
+	return 0;
 }
 
 static int
 print_roa(char *file, void *arg)
 {
-	/*
-	 * TODO to validate the ROA's cert, the parent cert must not have been
-	 * popped at this point.
-	 */
-	handle_roa(file);
+	handle_roa(file, arg);
 	return 0;
 }
 
 static int
 __handle_manifest(struct manifest *mft)
 {
-	struct foreach_args args;
+	STACK_OF(X509_CRL) *crls;
 	int error;
 
 	/* Init */
-	args.crls = sk_X509_CRL_new_null();
-	if (args.crls == NULL) {
+	crls = sk_X509_CRL_new_null();
+	if (crls == NULL) {
 		pr_err("Out of memory.");
 		return -ENOMEM;
 	}
 
-	args.resources = resources_create();
-	if (args.resources == NULL) {
-		sk_X509_CRL_free(args.crls);
-		return -ENOMEM;
-	}
-
 	/* Get CRLs as a stack. There will usually only be one. */
-	error = foreach_file(mft, "crl", pile_crls, args.crls);
+	error = foreach_file(mft, ".crl", pile_crls, crls);
 	if (error)
 		goto end;
 
-	/*
-	 * Use CRL stack to validate certificates.
-	 * Pile up valid address ranges from the valid certificates.
-	 */
-	error = foreach_file(mft, "cer", pile_addr_ranges, &args);
+	/* Use CRL stack to validate certificates, and also traverse them. */
+	error = foreach_file(mft, ".cer", traverse_ca_certs, crls);
 	if (error)
 		goto end;
 
 	/* Use valid address ranges to print ROAs that match them. */
-	error = foreach_file(mft, "roa", print_roa, &args);
+	error = foreach_file(mft, ".roa", print_roa, crls);
 
 end:
-	resources_destroy(args.resources);
-	sk_X509_CRL_pop_free(args.crls, X509_CRL_free);
+	sk_X509_CRL_pop_free(crls, X509_CRL_free);
 	return error;
 }
 
 int
-handle_manifest(char const *file_path)
+handle_manifest(char const *file_path, STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS(oid);
@@ -338,7 +317,7 @@ handle_manifest(char const *file_path)
 	 * certificate contains some.
 	 */
 	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
-	    (void **) &mft.obj, NULL);
+	    (void **) &mft.obj, crls, NULL);
 	if (error)
 		goto end;
 

@@ -6,6 +6,8 @@
 #include <libcmscodec/IPAddressFamily.h>
 #include "address.h"
 
+int get_addr_family(OCTET_STRING_t *);
+
 struct resources;
 
 struct resources *resources_create(void);
@@ -18,8 +20,7 @@ bool resources_contains_asn(struct resources *, ASId_t);
 bool resources_contains_ipv4(struct resources *, struct ipv4_prefix *);
 bool resources_contains_ipv6(struct resources *, struct ipv6_prefix *);
 
-int resources_join(struct resources *, struct resources *);
-
+/* "Resource stack." Stack of struct resources. */
 struct restack;
 
 struct restack *restack_create(void);

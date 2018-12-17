@@ -4,6 +4,7 @@
 void pr_debug(const char *, ...);
 void pr_debug_add(const char *, ...);
 void pr_debug_rm(const char *, ...);
+void pr_debug_prefix(void);
 
 void pr_err(const char *, ...);
 int pr_errno(int, const char *, ...);

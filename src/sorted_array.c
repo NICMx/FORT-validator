@@ -127,53 +127,6 @@ sarray_add(struct sorted_array *sarray, void *element)
 	return 0;
 }
 
-/* https://stackoverflow.com/questions/364985 */
-static int
-pow2roundup(unsigned int x)
-{
-	--x;
-	x |= x >> 1;
-	x |= x >> 2;
-	x |= x >> 4;
-	x |= x >> 8;
-	x |= x >> 16;
-	return x + 1;
-}
-
-/*
- * Appends the elements from @addend to @sarray's tail.
- */
-int
-sarray_join(struct sorted_array *sarray, struct sorted_array *addend)
-{
-	int error;
-	unsigned int new_count;
-	size_t new_len;
-	void *tmp;
-
-	if (addend == NULL || addend->count == 0)
-		return 0;
-
-	error = compare(sarray, addend->array);
-	if (error)
-		return error;
-
-	new_count = sarray->count + addend->count;
-	if (new_count > sarray->len) {
-		new_len = pow2roundup(new_count);
-		tmp = realloc(sarray->array, new_len * sarray->size);
-		if (tmp == NULL)
-			return -ENOMEM;
-		sarray->array = tmp;
-		sarray->len = new_len;
-	}
-
-	memcpy(get_nth_element(sarray, sarray->count), addend->array,
-	    new_count * sarray->size);
-	sarray->count += addend->count;
-	return 0;
-}
-
 bool
 sarray_contains(struct sorted_array *sarray, void *elem)
 {

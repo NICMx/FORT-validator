@@ -10,13 +10,13 @@
 #define ENOTIMPLEMENTED 3173
 
 extern char const *repository;
+extern size_t repository_len;
 extern int NID_rpkiManifest;
-extern int NID_rpkiNotify;
+extern int NID_signedObject;
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
-bool file_has_extension(char const *, char const *);
-int uri_g2l(char const *, char **);
-int gn2uri(GENERAL_NAME *, char const **);
+bool file_has_extension(char const *, size_t, char const *);
+int uri_g2l(char const *, size_t, char **);
 
 #endif /* SRC_RTR_COMMON_H_ */

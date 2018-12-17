@@ -8,11 +8,8 @@ START_TEST(tal_load_normal)
 {
 	struct tal *tal;
 	struct uri *uri;
-	/*
 	unsigned int i;
-	*/
 	/* Got this by feeding the subjectPublicKeyInfo to `base64 -d`. */
-	/*
 	unsigned char decoded[] = {
 	    0x30, 0x82, 0x01, 0x22, 0x30, 0x0D, 0x06, 0x09, 0x2A, 0x86, 0x48,
 	    0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x01,
@@ -42,7 +39,6 @@ START_TEST(tal_load_normal)
 	    0xD4, 0x32, 0xB7, 0x11, 0x38, 0x71, 0xCF, 0xF3, 0xA4, 0x0F, 0x64,
 	    0x83, 0x63, 0x0D, 0x02, 0x03, 0x01, 0x00, 0x01
 	};
-	*/
 
 	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
 
@@ -55,11 +51,9 @@ START_TEST(tal_load_normal)
 	uri = SLIST_NEXT(uri, next);
 	ck_assert(uri == NULL);
 
-	/*
-	ck_assert_uint_eq(ARRAY_LEN(decoded), tal->spki_size);
+	ck_assert_uint_eq(ARRAY_LEN(decoded), tal->spki_len);
 	for (i = 0; i < ARRAY_LEN(decoded); i++)
 		ck_assert_uint_eq(tal->spki[i], decoded[i]);
-	*/
 
 	tal_destroy(tal);
 }

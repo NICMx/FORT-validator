@@ -5,15 +5,21 @@
 #include "log.h"
 
 char const *repository;
+size_t repository_len;
 int NID_rpkiManifest;
-int NID_rpkiNotify;
+int NID_signedObject;
 
+/* @extension must include the period. */
 bool
-file_has_extension(char const *file_name, char const *extension)
+file_has_extension(char const *filename, size_t filename_len, char const *ext)
 {
-	char *dot;
-	dot = strrchr(file_name, '.');
-	return dot ? (!strcmp(dot + 1, extension)) : false;
+	size_t ext_len;
+
+	ext_len = strlen(ext);
+	if (filename_len < ext_len)
+		return false;
+
+	return strncmp(filename + filename_len - ext_len, ext, ext_len) == 0;
 }
 
 /**
@@ -23,57 +29,41 @@ file_has_extension(char const *file_name, char const *extension)
  * "/tmp/rpki/rpki.ripe.net/repo/manifest.mft".
  *
  * You need to free the result once you're done.
+ * This function does not assume that @guri is null-terminated.
  */
 int
-uri_g2l(char const *guri, char **result)
+uri_g2l(char const *guri, size_t guri_len, char **result)
 {
-	char const *const PREFIX = "rsync://";
+	static char const *const PREFIX = "rsync://";
 	char *luri;
-	size_t repository_len;
 	size_t prefix_len;
-	unsigned int offset;
+	size_t extra_slash;
+	size_t offset;
 
 	prefix_len = strlen(PREFIX);
 
-	if (strncmp(PREFIX, guri, prefix_len) != 0) {
-		pr_err("Global URI %s does not begin with '%s'.", guri,
-		    PREFIX);
+	if (guri_len < prefix_len || strncmp(PREFIX, guri, prefix_len) != 0) {
+		pr_err("Global URI does not begin with '%s'.", PREFIX);
 		return -EINVAL;
 	}
 
-	repository_len = strlen(repository);
+	guri += prefix_len;
+	guri_len -= prefix_len;
+	extra_slash = (repository[repository_len - 1] == '/') ? 0 : 1;
 
-	luri = malloc(repository_len
-	    + 1 /* slash */
-	    + strlen(guri) - prefix_len
-	    + 1); /* null chara */
+	luri = malloc(repository_len + extra_slash + guri_len + 1);
 	if (!luri)
 		return -ENOMEM;
 
 	offset = 0;
 	strcpy(luri + offset, repository);
 	offset += repository_len;
-	strcpy(luri + offset, "/");
-	offset += 1;
-	strcpy(luri + offset, &guri[prefix_len]);
+	strncpy(luri + offset, "/", extra_slash);
+	offset += extra_slash;
+	strncpy(luri + offset, guri, guri_len);
+	offset += guri_len;
+	luri[offset] = '\0';
 
 	*result = luri;
-	return 0;
-}
-
-int
-gn2uri(GENERAL_NAME *gn, char const **uri)
-{
-	ASN1_STRING *asn_string;
-	int type;
-
-	asn_string = GENERAL_NAME_get0_value(gn, &type);
-	if (type != GEN_URI) {
-		pr_err("Unknown GENERAL_NAME type: %d", type);
-		return -ENOTSUPPORTED;
-	}
-
-	/* TODO is this cast safe? */
-	*uri = (char const *) ASN1_STRING_get0_data(asn_string);
 	return 0;
 }

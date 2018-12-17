@@ -7,6 +7,7 @@ bin_PROGRAMS = rpki_validator
 rpki_validator_SOURCES  = main.c
 
 rpki_validator_SOURCES += address.h address.c
+rpki_validator_SOURCES += base64.h base64.c
 rpki_validator_SOURCES += common.h common.c
 rpki_validator_SOURCES += debug.h debug.c
 rpki_validator_SOURCES += file.h file.c

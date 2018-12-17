@@ -8,15 +8,31 @@
 bool is_certificate(char const *);
 int certificate_load(const char *, X509 **);
 
-/*
- * Note: You actually need all three of these functions for a full validation;
- * certificate_validate() checks the certificate's relationship with its
- * parents, certificate_get_resources() covers the IP and ASN extensions, and
- * you will need certificate_traverse() to walk through the children.
+/**
+ * Performs the basic (RFC 5280, presumably) chain validation.
+ * (Ignores the IP, AS and SIA extensions.)
  */
+int certificate_validate_chain(X509 *, STACK_OF(X509_CRL) *);
+/**
+ * Validates RFC 6487 compliance.
+ * (Except IP, AS and SIA extensions.)
+ */
+int certificate_validate_rfc6487(X509 *, bool);
 
-int certificate_validate(X509 *, STACK_OF(X509_CRL) *);
+/**
+ * Returns the IP and AS resources declared in the respective extensions.
+ */
 int certificate_get_resources(X509 *, struct resources *);
-int certificate_traverse(X509 *);
+/**
+ * Handles the SIA extension, CA style.
+ * (ie. Recursively walks through the certificate's children.)
+ */
+int certificate_traverse_ca(X509 *, STACK_OF(X509_CRL) *);
+/**
+ * Handles the SIA extension, EE style.
+ * (Doesn't actually "traverse" anything. The name is just for the sake of
+ * mirroring.)
+ */
+int certificate_traverse_ee(X509 *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

@@ -42,13 +42,14 @@ is_digest_algorithm(AlgorithmIdentifier_t *aid, bool *result)
 }
 
 static int
-handle_sdata_certificate(ANY_t *any, struct resources *res)
+handle_sdata_certificate(ANY_t *any, STACK_OF(X509_CRL) *crls,
+    struct resources *res)
 {
 	const unsigned char *tmp;
 	X509 *cert;
 	int error;
 
-	pr_debug_add("Certificate (embedded) {");
+	pr_debug_add("(EE?) Certificate (embedded) {");
 
 	/*
 	 * "If the call is successful *in is incremented to the byte following
@@ -65,7 +66,10 @@ handle_sdata_certificate(ANY_t *any, struct resources *res)
 		goto end1;
 	}
 
-	error = certificate_validate(cert, NULL); /* TODO crls */
+	error = certificate_validate_chain(cert, crls);
+	if (error)
+		goto end2;
+	error = certificate_validate_rfc6487(cert, false);
 	if (error)
 		goto end2;
 
@@ -75,7 +79,7 @@ handle_sdata_certificate(ANY_t *any, struct resources *res)
 			goto end2;
 	}
 
-	/* TODO maybe spill a warning if the certificate has children? */
+	error = certificate_traverse_ee(cert);
 
 end2:
 	X509_free(cert);
@@ -226,7 +230,8 @@ illegal_attrType:
 }
 
 static int
-validate(struct SignedData *sdata, struct resources *res)
+validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
+    struct resources *res)
 {
 	struct SignerInfo *sinfo;
 	bool is_digest;
@@ -288,7 +293,7 @@ validate(struct SignedData *sdata, struct resources *res)
 	}
 
 	error = handle_sdata_certificate(sdata->certificates->list.array[0],
-	    res);
+	    crls, res);
 	if (error)
 		return error;
 
@@ -371,7 +376,7 @@ validate(struct SignedData *sdata, struct resources *res)
 
 int
 signed_data_decode(ANY_t *coded, struct SignedData **result,
-    struct resources *res)
+    STACK_OF(X509_CRL) *crls, struct resources *res)
 {
 	struct SignedData *sdata;
 	int error;
@@ -381,7 +386,7 @@ signed_data_decode(ANY_t *coded, struct SignedData **result,
 	if (error)
 		return error;
 
-	error = validate(sdata, res);
+	error = validate(sdata, crls, res);
 	if (error) {
 		signed_data_free(sdata);
 		return error;

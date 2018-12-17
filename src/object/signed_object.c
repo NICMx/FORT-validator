@@ -62,6 +62,7 @@ signed_object_decode(char const *file,
     asn_TYPE_descriptor_t const *descriptor,
     struct oid_arcs const *oid,
     void **result,
+    STACK_OF(X509_CRL) *crls,
     struct resources *res)
 {
 	struct ContentInfo *cinfo;
@@ -72,7 +73,7 @@ signed_object_decode(char const *file,
 	if (error)
 		goto end1;
 
-	error = signed_data_decode(&cinfo->content, &sdata, res);
+	error = signed_data_decode(&cinfo->content, &sdata, crls, res);
 	if (error)
 		goto end2;
 

@@ -60,7 +60,7 @@ resources_destroy(struct resources *resources)
 	free(resources);
 }
 
-static int
+int
 get_addr_family(OCTET_STRING_t *octets)
 {
 	if (octets->size != 2) {
@@ -92,7 +92,7 @@ get_parent_resources(void)
 }
 
 static void
-pr_debug_prefix(int family, void *addr, unsigned int length)
+pr_debug_ip_prefix(int family, void *addr, unsigned int length)
 {
 #ifdef DEBUG
 	char buffer[INET6_ADDRSTRLEN];
@@ -156,6 +156,7 @@ inherit_aors(struct resources *resources, int family)
 		}
 		resources->ip4s = parent->ip4s;
 		res4_get(resources->ip4s);
+		pr_debug("<Inherit IPv4>");
 		return 0;
 
 	case AF_INET6:
@@ -169,6 +170,7 @@ inherit_aors(struct resources *resources, int family)
 		}
 		resources->ip6s = parent->ip6s;
 		res6_get(resources->ip6s);
+		pr_debug("<Inherit IPv6>");
 		return 0;
 	}
 
@@ -214,7 +216,7 @@ add_prefix4(struct resources *resources, IPAddress2_t *addr)
 		return error;
 	}
 
-	pr_debug_prefix(AF_INET, &prefix.addr, prefix.len);
+	pr_debug_ip_prefix(AF_INET, &prefix.addr, prefix.len);
 	return 0;
 }
 
@@ -256,7 +258,7 @@ add_prefix6(struct resources *resources, IPAddress2_t *addr)
 		return error;
 	}
 
-	pr_debug_prefix(AF_INET6, &prefix.addr, prefix.len);
+	pr_debug_ip_prefix(AF_INET6, &prefix.addr, prefix.len);
 	return 0;
 }
 
@@ -452,6 +454,7 @@ inherit_asiors(struct resources *resources)
 	}
 	resources->asns = parent->asns;
 	rasn_get(resources->asns);
+	pr_debug("<Inherit ASN>");
 	return 0;
 }
 
@@ -567,30 +570,6 @@ bool
 resources_contains_ipv6(struct resources *res, struct ipv6_prefix *prefix)
 {
 	return res6_contains_prefix(res->ip6s, prefix);
-}
-
-int
-resources_join(struct resources *r1, struct resources *r2)
-{
-	int error;
-
-	if (r1->ip4s != NULL) {
-		error = res4_join(r1->ip4s, r2->ip4s);
-		if (error)
-			return error;
-	}
-	if (r1->ip6s != NULL) {
-		error = res6_join(r1->ip6s, r2->ip6s);
-		if (error)
-			return error;
-	}
-	if (r1->asns != NULL) {
-		error = rasn_join(r1->asns, r2->asns);
-		if (error)
-			return error;
-	}
-
-	return 0;
 }
 
 struct restack *

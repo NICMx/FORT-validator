@@ -21,10 +21,33 @@ add_rpki_oids(void)
 	    "Resource Public Key Infrastructure (RPKI) manifest access method");
 	printf("rpkiManifest registered. Its nid is %d.\n", NID_rpkiManifest);
 
-	NID_rpkiNotify = OBJ_create("1.3.6.1.5.5.7.48.13",
-	    "id-ad-rpkiNotify (RFC 8182)",
-	    /* TODO */ "Blah blah");
-	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
+	NID_signedObject = OBJ_create("1.3.6.1.5.5.7.48.11",
+	    "id-ad-signedObject (RFC 6487)",
+	    /* TODO */ "");
+	printf("signedObject registered. Its nid is %d.\n", NID_signedObject);
+}
+
+static int
+handle_tal_certificate(char *uri)
+{
+	X509 *cert;
+	int error;
+
+	fnstack_push(uri);
+	error = certificate_load(uri, &cert);
+	if (error)
+		goto end;
+
+	error = certificate_validate_rfc6487(cert, true);
+	if (error)
+		goto revert;
+	error = certificate_traverse_ca(cert, NULL);
+
+revert:
+	X509_free(cert);
+end:
+	fnstack_pop();
+	return error;
 }
 
 /**
@@ -32,38 +55,35 @@ add_rpki_oids(void)
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(char const *uri)
+handle_tal_uri(struct tal *tal, char const *guri)
 {
 	struct validation *state;
-	char *cert_file;
+	char *luri;
 	int error;
 
-	error = uri_g2l(uri, &cert_file);
+	error = validation_prepare(&state, tal);
 	if (error)
 		return error;
 
-	error = validation_create(&state, cert_file);
-	if (error)
-		goto end1;
+	pr_debug_add("TAL URI %s {", guri);
 
-	pr_debug_add("TAL URI %s {", uri);
-
-	if (!is_certificate(uri)) {
+	if (!is_certificate(guri)) {
 		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
-		    uri);
+		    guri);
 		error = -ENOTSUPPORTED;
-		goto end2;
+		goto end;
 	}
 
-	fnstack_push(uri);
-	error = certificate_traverse(validation_peek_cert(state));
-	fnstack_pop();
+	error = uri_g2l(guri, strlen(guri), &luri);
+	if (error)
+		return error;
 
-end2:
-	pr_debug_rm("}");
+	error = handle_tal_certificate(luri);
+	free(luri);
+
+end:
 	validation_destroy(state);
-end1:
-	free(cert_file);
+	pr_debug_rm("}");
 	return error;
 }
 
@@ -86,6 +106,7 @@ main(int argc, char **argv)
 	fnstack_push(argv[2]);
 
 	repository = argv[1];
+	repository_len = strlen(repository);
 
 	error = tal_load(argv[2], &tal);
 	if (error)

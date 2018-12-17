@@ -33,6 +33,8 @@ typedef asn_oid_arc_t OID[];
 #define OID_ROA                      { 1, 2, 840, 113549, 1, 9, 16, 1, 24 }
 #define OID_MANIFEST                 { 1, 2, 840, 113549, 1, 9, 16, 1, 26 }
 
+#define OID_RSA                      { 1, 2, 840, 113549, 1, 1, 1 }
+
 #define OID_SHA224                   { 2, 16, 840, 1, 101, 3, 4, 2, 4 }
 #define OID_SHA256                   { 2, 16, 840, 1, 101, 3, 4, 2, 1 }
 #define OID_SHA384                   { 2, 16, 840, 1, 101, 3, 4, 2, 2 }
