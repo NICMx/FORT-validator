@@ -191,6 +191,7 @@ crypto_err(const char *format, ...)
 	int error;
 
 	PR_ERR(args);
+	fprintf(STDERR, ": ");
 
 	error = ERR_GET_REASON(ERR_peek_last_error());
 	if (error) {

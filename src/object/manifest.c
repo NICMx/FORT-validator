@@ -4,9 +4,10 @@
 #include <libcmscodec/GeneralizedTime.h>
 #include <libcmscodec/Manifest.h>
 
+#include "hash.h"
 #include "log.h"
-#include "asn1/oid.h"
 #include "thread_var.h"
+#include "asn1/oid.h"
 #include "object/certificate.h"
 #include "object/crl.h"
 #include "object/roa.h"
@@ -44,8 +45,8 @@ is_hash_algorithm(OBJECT_IDENTIFIER_t *aid, bool *result)
 static int
 validate_manifest(struct Manifest *manifest)
 {
-	int error;
 	bool is_hash;
+	int error;
 
 	/* rfc6486#section-4.2.1 */
 
@@ -106,13 +107,16 @@ validate_manifest(struct Manifest *manifest)
 	if (error)
 		return error;
 
+	/* rfc6486#section-6.6 (I guess) */
 	error = is_hash_algorithm(&manifest->fileHashAlg, &is_hash);
 	if (error)
 		return error;
-	if (!is_hash)
+	if (!is_hash) {
+		pr_err("The hash algorithm is not SHA256.");
 		return -EINVAL;
+	}
 
-	/* TODO (critical) validate the file hashes */
+	/* The file hashes will be validated during the traversal. */
 
 	return 0;
 }
@@ -162,6 +166,7 @@ typedef int (*foreach_cb)(char *, void *);
 static int
 foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 {
+	struct FileAndHash *fah;
 	char *uri;
 	size_t uri_len;
 	char *luri; /* "Local URI". As in "URI that we can easily reference." */
@@ -169,20 +174,30 @@ foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 	int error;
 
 	for (i = 0; i < mft->obj->fileList.list.count; i++) {
+		fah = mft->obj->fileList.list.array[i];
+
 		/*
 		 * IA5String is just a subset of ASCII, so this cast is fine.
 		 * I don't see any guarantees that the string will be
 		 * zero-terminated though, so we'll handle that the hard way.
 		 */
-		uri = (char *) mft->obj->fileList.list.array[i]->file.buf;
-		uri_len = mft->obj->fileList.list.array[i]->file.size;
+		uri = (char *) fah->file.buf;
+		uri_len = fah->file.size;
 
 		if (file_has_extension(uri, uri_len, extension)) {
 			error = get_relative_file(mft->file_path, uri, uri_len,
 			    &luri);
 			if (error)
 				return error;
+
+			error = hash_validate(luri, &fah->hash);
+			if (error) {
+				free(luri);
+				continue;
+			}
+
 			error = cb(luri, arg);
+
 			free(luri);
 			if (error)
 				return error;

@@ -58,16 +58,16 @@ file_load(const char *file_name, struct file_contents *fc)
 			 * error code.
 			 */
 			pr_errno(error,
-			    "File reading error. Error message (apparently)",
-			    file_name);
+			    "File reading error. Error message (apparently)");
 			free(fc->buffer);
 			fclose(file);
 			return error;
 		}
 
 		/*
-		 * As far as I can tell from the man page, feof() cannot return
-		 * less bytes that requested like read() does.
+		 * As far as I can tell from the man page, fread() cannot return
+		 * less bytes than requested like read() does. It's either
+		 * "consumed everything", "EOF reached" or error.
 		 */
 		pr_err("Likely programming error: fread() < file size");
 		pr_err("fr:%zu bs:%zu EOF:%d", fread_result, fc->buffer_size,

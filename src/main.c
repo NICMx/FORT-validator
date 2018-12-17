@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "debug.h"
+#include "hash.h"
 #include "log.h"
 #include "thread_var.h"
 #include "object/certificate.h"
@@ -99,6 +100,10 @@ main(int argc, char **argv)
 		pr_err("Repository path as first argument and TAL file as second argument, please.");
 		return -EINVAL;
 	}
+
+	error = hash_init();
+	if (error)
+		return error;
 
 	add_rpki_oids();
 	thvar_init();
