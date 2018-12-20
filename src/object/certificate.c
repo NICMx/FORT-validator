@@ -11,6 +11,7 @@
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
+#include "rsync/rsync.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -583,6 +584,7 @@ handle_caRepository(ACCESS_DESCRIPTION *ad)
 		return error;
 
 	pr_debug("caRepository: %s", uri);
+	error = download_files(uri);
 
 	free(uri);
 	return error;
@@ -611,7 +613,6 @@ certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
 	SIGNATURE_INFO_ACCESS *sia;
 	ACCESS_DESCRIPTION *ad;
 	bool manifest_found = false;
-	int nid;
 	int i;
 	int error;
 
@@ -630,20 +631,24 @@ certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
 	if (error)
 		goto end2;
 
+	/* rsync */
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
-		nid = OBJ_obj2nid(ad->method);
+		if (OBJ_obj2nid(ad->method) == NID_caRepository) {
+			error = handle_caRepository(ad);
+			if (error)
+				goto end1;
+		}
+	}
 
-		if (nid == NID_rpkiManifest) {
+	/* validate */
+	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
+		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
+		if (OBJ_obj2nid(ad->method) == NID_rpkiManifest) {
 			error = handle_rpkiManifest(ad, crls);
 			if (error)
 				goto end1;
 			manifest_found = true;
-
-		} else if (nid == NID_caRepository) {
-			error = handle_caRepository(ad);
-			if (error)
-				goto end1;
 		}
 	}
 
