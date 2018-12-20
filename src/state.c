@@ -195,16 +195,12 @@ validation_pop_cert(struct validation *state)
 {
 	struct resources *resources;
 
-	if (sk_X509_pop(state->trusted) == NULL) {
-		return crypto_err(
-		    "Programming error: Attempted to pop empty cert stack");
-	}
+	if (sk_X509_pop(state->trusted) == NULL)
+		return pr_crit("Attempted to pop empty certificate stack");
 
 	resources = restack_pop(state->rsrcs);
-	if (resources == NULL) {
-		pr_err("Programming error: Attempted to pop empty resource stack");
-		return -EINVAL;
-	}
+	if (resources == NULL)
+		return pr_crit("Attempted to pop empty resource stack");
 	resources_destroy(resources);
 
 	return 0;

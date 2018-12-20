@@ -2,8 +2,9 @@
 
 #include <err.h>
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
+
+#include "file.h"
 #include "log.h"
 
 struct line_file {
@@ -19,7 +20,7 @@ int
 lfile_open(const char *file_name, struct line_file **result)
 {
 	struct line_file *lfile;
-	int err;
+	int error;
 
 	lfile = malloc(sizeof(struct line_file));
 	if (lfile == NULL)
@@ -27,9 +28,9 @@ lfile_open(const char *file_name, struct line_file **result)
 
 	lfile->file = fopen(file_name, "r");
 	if (lfile->file == NULL) {
-		err = errno;
+		error = errno;
 		free(lfile);
-		return err;
+		return error;
 	}
 	lfile->file_name = file_name;
 	lfile->offset = 0;
@@ -41,7 +42,7 @@ lfile_open(const char *file_name, struct line_file **result)
 void
 lfile_close(struct line_file *lf)
 {
-	fclose(lf->file);
+	file_close(lf->file);
 	free(lf);
 }
 
@@ -59,7 +60,7 @@ lfile_read(struct line_file *lfile, char **result)
 	size_t alloc_len;
 	ssize_t len;
 	ssize_t i;
-	int err;
+	int error;
 
 	/*
 	 * Note to myself:
@@ -99,16 +100,15 @@ lfile_read(struct line_file *lfile, char **result)
 	len = getline(&string, &alloc_len, lfile->file);
 
 	if (len == -1) {
-		err = errno;
+		error = errno;
 		free(string);
 		*result = NULL;
 		if (ferror(lfile->file))
-			return err;
+			return pr_errno(error, "Error while reading file");
 		if (feof(lfile->file))
 			return 0;
-		pr_err("Supposedly unreachable code reached. ferror:%d feof:%d",
+		return pr_crit("Supposedly unreachable code reached. ferror:%d feof:%d",
 		    ferror(lfile->file), feof(lfile->file));
-		return -EINVAL;
 	}
 
 	lfile->offset += len;
@@ -138,6 +138,12 @@ lfile_read(struct line_file *lfile, char **result)
 
 	*result = string;
 	return 0;
+}
+
+FILE *
+lfile_fd(struct line_file *lfile)
+{
+	return lfile->file;
 }
 
 const char *

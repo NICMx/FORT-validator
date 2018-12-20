@@ -19,9 +19,9 @@ void free_arcs(struct oid_arcs *);
 typedef asn_oid_arc_t OID[];
 
 /*
- * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- * ! Please update MAX_ARCS if you add an OID that has more arcs. !
- * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ * ! Please update oid2arcs().MAX_ARCS if you add an OID that has more arcs. !
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  */
 
 #define OID_SIGNED_DATA              { 1, 2, 840, 113549, 1, 7, 2 }
@@ -34,15 +34,12 @@ typedef asn_oid_arc_t OID[];
 #define OID_MANIFEST                 { 1, 2, 840, 113549, 1, 9, 16, 1, 26 }
 
 #define OID_RSA                      { 1, 2, 840, 113549, 1, 1, 1 }
-
-#define OID_SHA224                   { 2, 16, 840, 1, 101, 3, 4, 2, 4 }
 #define OID_SHA256                   { 2, 16, 840, 1, 101, 3, 4, 2, 1 }
-#define OID_SHA384                   { 2, 16, 840, 1, 101, 3, 4, 2, 2 }
-#define OID_SHA512                   { 2, 16, 840, 1, 101, 3, 4, 2, 3 }
 
 int oid2arcs(OBJECT_IDENTIFIER_t *, struct oid_arcs *);
 int any2arcs(ANY_t *, struct oid_arcs *);
 
+bool oid_equal(OBJECT_IDENTIFIER_t *, OBJECT_IDENTIFIER_t *);
 bool arcs_equal(struct oid_arcs const *, struct oid_arcs const *);
 /* Use ARCS_EQUAL_OID() instead. */
 bool arcs_equal_oids(struct oid_arcs *, asn_oid_arc_t const *, size_t);

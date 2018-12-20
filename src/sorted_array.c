@@ -100,8 +100,7 @@ compare(struct sorted_array *sarray, void *new)
 		return -EINTERSECTION;
 	}
 
-	pr_err("Programming error: Unknown comparison value: %d", cmp);
-	return -EINVAL;
+	return pr_crit("Unknown comparison value: %d", cmp);
 }
 
 int
@@ -161,7 +160,7 @@ sarray_contains(struct sorted_array *sarray, void *elem)
 			break;
 		}
 
-		pr_err("Programming error: Unknown comparison value: %d", cmp);
+		pr_crit("Unknown comparison value: %d", cmp);
 		return false;
 	}
 

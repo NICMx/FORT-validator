@@ -8,9 +8,9 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
-#include "base64.h"
 #include "line_file.h"
 #include "log.h"
+#include "crypto/base64.h"
 
 struct uri {
 	char *string;
@@ -51,14 +51,11 @@ read_uri(struct line_file *lfile, struct uri **result)
 	int err;
 
 	uri = malloc(sizeof(struct uri));
-	if (uri == NULL) {
-		pr_err("Out of memory.");
-		return -ENOMEM;
-	}
+	if (uri == NULL)
+		return pr_enomem();
 
 	err = lfile_read(lfile, &uri->string);
 	if (err) {
-		/* TODO have lfile_read print error msg */
 		free(uri);
 		return err;
 	}
@@ -79,8 +76,8 @@ read_uris(struct line_file *lfile, struct uri_list *uris)
 
 	if (strcmp(uri->string, "") == 0) {
 		uri_destroy(uri);
-		pr_err("TAL file %s contains no URIs", lfile_name(lfile));
-		return -EINVAL;
+		return pr_err("TAL file %s contains no URIs",
+		    lfile_name(lfile));
 	}
 
 	SLIST_INIT(uris);
@@ -119,53 +116,6 @@ get_spki_alloc_size(struct line_file *lfile)
 }
 
 static int
-lf2bio(struct line_file *lfile, BIO **result)
-{
-	BIO *bio;
-	char *line;
-	size_t line_len;
-	size_t written;
-	int error;
-
-	bio = BIO_new(BIO_s_mem());
-	if (bio == NULL) {
-		pr_err("Out of memory.");
-		return -ENOMEM;
-	}
-
-	*result = NULL;
-	do {
-		line = NULL;
-		error = lfile_read(lfile, &line);
-		if (error) {
-			BIO_free(bio);
-			return error;
-		}
-		if (line == NULL) {
-			*result = bio;
-			return 0;
-		}
-
-		line_len = strlen(line);
-		if (line_len == 0) {
-			free(line);
-			/* TODO maybe we're supposed to abort instead */
-			continue;
-		}
-
-		/* TODO error out if written != line_len? */
-
-		written = BIO_write(bio, line, line_len);
-		free(line);
-		if (written <= 0) {
-			BIO_free(bio);
-			return crypto_err("Could not write into memory BIO");
-		}
-
-	} while (true);
-}
-
-static int
 read_spki(struct line_file *lfile, struct tal *tal)
 {
 	BIO *encoded; /* base64 encoded. */
@@ -177,10 +127,10 @@ read_spki(struct line_file *lfile, struct tal *tal)
 	if (tal->spki == NULL)
 		return -ENOMEM;
 
-	error = lf2bio(lfile, &encoded);
-	if (error) {
+	encoded = BIO_new_fp(lfile_fd(lfile), BIO_NOCLOSE);
+	if (encoded == NULL) {
 		free(tal->spki);
-		return error;
+		return crypto_err("BIO_new_fp() returned NULL");
 	}
 
 	error = base64_decode(encoded, tal->spki, alloc_size, &tal->spki_len);

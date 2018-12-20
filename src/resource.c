@@ -37,7 +37,7 @@ resources_create(void)
 
 	result = malloc(sizeof(struct resources));
 	if (result == NULL) {
-		pr_err("Out of memory.");
+		pr_enomem();
 		return NULL;
 	}
 
@@ -139,43 +139,32 @@ inherit_aors(struct resources *resources, int family)
 	struct resources *parent;
 
 	parent = get_parent_resources();
-	if (!parent) {
-		pr_err("Certificate inherits IP resources, but parent does not define any resources.");
-		return -EINVAL;
-	}
+	if (!parent)
+		return pr_err("Certificate inherits IP resources, but parent does not define any resources.");
 
 	switch (family) {
 	case AF_INET:
-		if (resources->ip4s != NULL) {
-			pr_err("Certificate inherits IPv4 resources while also defining others of its own.");
-			return -EINVAL;
-		}
-		if (parent->ip4s == NULL) {
-			pr_err("Certificate inherits IPv4 resources from parent, but parent lacks IPv4 resources.");
-			return -EINVAL;
-		}
+		if (resources->ip4s != NULL)
+			return pr_err("Certificate inherits IPv4 resources while also defining others of its own.");
+		if (parent->ip4s == NULL)
+			return pr_err("Certificate inherits IPv4 resources from parent, but parent lacks IPv4 resources.");
 		resources->ip4s = parent->ip4s;
 		res4_get(resources->ip4s);
 		pr_debug("<Inherit IPv4>");
 		return 0;
 
 	case AF_INET6:
-		if (resources->ip6s != NULL) {
-			pr_err("Certificate inherits IPv6 resources while also defining others of its own.");
-			return -EINVAL;
-		}
-		if (parent->ip6s == NULL) {
-			pr_err("Certificate inherits IPv6 resources from parent, but parent lacks IPv6 resources.");
-			return -EINVAL;
-		}
+		if (resources->ip6s != NULL)
+			return pr_err("Certificate inherits IPv6 resources while also defining others of its own.");
+		if (parent->ip6s == NULL)
+			return pr_err("Certificate inherits IPv6 resources from parent, but parent lacks IPv6 resources.");
 		resources->ip6s = parent->ip6s;
 		res6_get(resources->ip6s);
 		pr_debug("<Inherit IPv6>");
 		return 0;
 	}
 
-	pr_err("Programming error: Unknown address family '%d'", family);
-	return -EINVAL;
+	return pr_crit("Unknown address family '%d'", family);
 }
 
 static int
@@ -187,26 +176,20 @@ add_prefix4(struct resources *resources, IPAddress2_t *addr)
 
 	parent = get_parent_resources();
 
-	if ((parent != NULL) && (resources->ip4s == parent->ip4s)) {
-		pr_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
-		return -EINVAL;
-	}
+	if ((parent != NULL) && (resources->ip4s == parent->ip4s))
+		return pr_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
 
 	error = prefix4_decode(addr, &prefix);
 	if (error)
 		return error;
 
-	if (parent && !res4_contains_prefix(parent->ip4s, &prefix)) {
-		pr_err("Parent certificate doesn't own child's IPv4 resource.");
-		return -EINVAL;
-	}
+	if (parent && !res4_contains_prefix(parent->ip4s, &prefix))
+		return pr_err("Parent certificate doesn't own child's IPv4 resource.");
 
 	if (resources->ip4s == NULL) {
 		resources->ip4s = res4_create();
-		if (resources->ip4s == NULL) {
-			pr_err("Out of memory.");
-			return -ENOMEM;
-		}
+		if (resources->ip4s == NULL)
+			return pr_enomem();
 	}
 
 	error = res4_add_prefix(resources->ip4s, &prefix);
@@ -229,26 +212,20 @@ add_prefix6(struct resources *resources, IPAddress2_t *addr)
 
 	parent = get_parent_resources();
 
-	if ((parent != NULL) && (resources->ip6s == parent->ip6s)) {
-		pr_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
-		return -EINVAL;
-	}
+	if ((parent != NULL) && (resources->ip6s == parent->ip6s))
+		return pr_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
 
 	error = prefix6_decode(addr, &prefix);
 	if (error)
 		return error;
 
-	if (parent && !res6_contains_prefix(parent->ip6s, &prefix)) {
-		pr_err("Parent certificate doesn't own child's IPv6 resource.");
-		return -EINVAL;
-	}
+	if (parent && !res6_contains_prefix(parent->ip6s, &prefix))
+		return pr_err("Parent certificate doesn't own child's IPv6 resource.");
 
 	if (resources->ip6s == NULL) {
 		resources->ip6s = res6_create();
-		if (resources->ip6s == NULL) {
-			pr_err("Out of memory.");
-			return -ENOMEM;
-		}
+		if (resources->ip6s == NULL)
+			return pr_enomem();
 	}
 
 	error = res6_add_prefix(resources->ip6s, &prefix);
@@ -272,8 +249,7 @@ add_prefix(struct resources *resources, int family, IPAddress2_t *addr)
 		return add_prefix6(resources, addr);
 	}
 
-	pr_err("Programming error: Unknown address family '%d'", family);
-	return -EINVAL;
+	return pr_crit("Unknown address family '%d'", family);
 }
 
 static int
@@ -285,26 +261,20 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 
 	parent = get_parent_resources();
 
-	if ((parent != NULL) && (resources->ip4s == parent->ip4s)) {
-		pr_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
-		return -EINVAL;
-	}
+	if ((parent != NULL) && (resources->ip4s == parent->ip4s))
+		return pr_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
 
 	error = range4_decode(input, &range);
 	if (error)
 		return error;
 
-	if (parent && !res4_contains_range(parent->ip4s, &range)) {
-		pr_err("Parent certificate doesn't own child's IPv4 resource.");
-		return -EINVAL;
-	}
+	if (parent && !res4_contains_range(parent->ip4s, &range))
+		return pr_err("Parent certificate doesn't own child's IPv4 resource.");
 
 	if (resources->ip4s == NULL) {
 		resources->ip4s = res4_create();
-		if (resources->ip4s == NULL) {
-			pr_err("Out of memory.");
-			return -ENOMEM;
-		}
+		if (resources->ip4s == NULL)
+			return pr_enomem();
 	}
 
 	error = res4_add_range(resources->ip4s, &range);
@@ -327,26 +297,20 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 
 	parent = get_parent_resources();
 
-	if ((parent != NULL) && (resources->ip6s == parent->ip6s)) {
-		pr_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
-		return -EINVAL;
-	}
+	if ((parent != NULL) && (resources->ip6s == parent->ip6s))
+		return pr_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
 
 	error = range6_decode(input, &range);
 	if (error)
 		return error;
 
-	if (parent && !res6_contains_range(parent->ip6s, &range)) {
-		pr_err("Parent certificate doesn't own child's IPv6 resource.");
-		return -EINVAL;
-	}
+	if (parent && !res6_contains_range(parent->ip6s, &range))
+		return pr_err("Parent certificate doesn't own child's IPv6 resource.");
 
 	if (resources->ip6s == NULL) {
 		resources->ip6s = res6_create();
-		if (resources->ip6s == NULL) {
-			pr_err("Out of memory.");
-			return -ENOMEM;
-		}
+		if (resources->ip6s == NULL)
+			return pr_enomem();
 	}
 
 	error = res6_add_range(resources->ip6s, &range);
@@ -370,8 +334,7 @@ add_range(struct resources *resources, int family, IPAddressRange_t *range)
 		return add_range6(resources, range);
 	}
 
-	pr_err("Programming error: Unknown address family '%d'", family);
-	return -EINVAL;
+	return pr_crit("Unknown address family '%d'", family);
 }
 
 static int
@@ -399,9 +362,8 @@ add_aors(struct resources *resources, int family,
 			break;
 		case IPAddressOrRange_PR_NOTHING:
 			/* rfc3779#section-2.2.3.7 */
-			pr_err("Unknown IPAddressOrRange type: %d",
+			return pr_err("Unknown IPAddressOrRange type: %d",
 			    aor->present);
-			break;
 		}
 	}
 
@@ -428,9 +390,8 @@ resources_add_ip(struct resources *resources, struct IPAddressFamily *obj)
 	}
 
 	/* rfc3779#section-2.2.3.4 */
-	pr_err("Unknown ipAddressChoice type: %d",
+	return pr_err("Unknown ipAddressChoice type: %d",
 	    obj->ipAddressChoice.present);
-	return -EINVAL;
 }
 
 static int
@@ -439,19 +400,14 @@ inherit_asiors(struct resources *resources)
 	struct resources *parent;
 
 	parent = get_parent_resources();
-	if (!parent) {
-		pr_err("Certificate inherits ASN resources, but parent does not define any resources.");
-		return -EINVAL;
-	}
+	if (!parent)
+		return pr_err("Certificate inherits ASN resources, but parent does not define any resources.");
 
-	if (resources->asns != NULL) {
-		pr_err("Certificate inherits ASN resources while also defining others of its own.");
-		return -EINVAL;
-	}
-	if (parent->asns == NULL) {
-		pr_err("Certificate inherits ASN resources from parent, but parent lacks ASN resources.");
-		return -EINVAL;
-	}
+	if (resources->asns != NULL)
+		return pr_err("Certificate inherits ASN resources while also defining others of its own.");
+	if (parent->asns == NULL)
+		return pr_err("Certificate inherits ASN resources from parent, but parent lacks ASN resources.");
+
 	resources->asns = parent->asns;
 	rasn_get(resources->asns);
 	pr_debug("<Inherit ASN>");
@@ -464,17 +420,13 @@ add_asn(struct resources *resources, ASId_t min, ASId_t max,
 {
 	int error;
 
-	if (parent && !rasn_contains(parent->asns, min, max)) {
-		pr_err("Parent certificate doesn't own child's ASN resource.");
-		return -EINVAL;
-	}
+	if (parent && !rasn_contains(parent->asns, min, max))
+		return pr_err("Parent certificate doesn't own child's ASN resource.");
 
 	if (resources->asns == NULL) {
 		resources->asns = rasn_create();
-		if (resources->asns == NULL) {
-			pr_err("Out of memory.");
-			return -ENOMEM;
-		}
+		if (resources->asns == NULL)
+			return pr_enomem();
 	}
 
 	error = rasn_add(resources->asns, min, max);
@@ -498,10 +450,8 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 
 	parent = get_parent_resources();
 
-	if ((parent != NULL) && (resources->asns == parent->asns)) {
-		pr_err("Certificate defines ASN resources while also inheriting his parent's.");
-		return -EINVAL;
-	}
+	if ((parent != NULL) && (resources->asns == parent->asns))
+		return pr_err("Certificate defines ASN resources while also inheriting his parent's.");
 
 	switch (obj->present) {
 	case ASIdOrRange_PR_NOTHING:
@@ -514,8 +464,7 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 		    obj->choice.range.max, parent);
 	}
 
-	pr_err("Unknown ASIdOrRange type: %d", obj->present);
-	return -EINVAL;
+	return pr_err("Unknown ASIdOrRange type: %d", obj->present);
 }
 
 int
@@ -525,14 +474,10 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 	int i;
 	int error;
 
-	if (ids->asnum == NULL) {
-		pr_err("ASN extension lacks 'asnum' element.");
-		return -EINVAL;
-	}
-	if (ids->rdi != NULL) {
-		pr_err("ASN extension has 'rdi' element. (Prohibited by RFC6487)");
-		return -EINVAL;
-	}
+	if (ids->asnum == NULL)
+		return pr_err("ASN extension lacks 'asnum' element.");
+	if (ids->rdi != NULL)
+		return pr_err("ASN extension has 'rdi' element. (Prohibited by RFC6487)");
 
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
@@ -550,8 +495,7 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 		break;
 	}
 
-	pr_err("Unknown ASIdentifierChoice: %d", ids->asnum->present);
-	return -EINVAL;
+	return pr_err("Unknown ASIdentifierChoice: %d", ids->asnum->present);
 }
 
 bool
@@ -579,7 +523,7 @@ restack_create(void)
 
 	result = malloc(sizeof(struct restack));
 	if (result == NULL) {
-		pr_err("Out of memory.");
+		pr_enomem();
 		return NULL;
 	}
 

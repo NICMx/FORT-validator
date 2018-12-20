@@ -2,42 +2,34 @@
 
 #include <errno.h>
 #include <libcmscodec/ContentType.h>
+#include <libcmscodec/MessageDigest.h>
+
 #include "log.h"
 #include "oid.h"
 #include "asn1/decode.h"
+#include "crypto/hash.h"
 #include "object/certificate.h"
 
-/* TODO more consistent and informative error/warning messages.*/
-
-static const OID oid_sha224 = OID_SHA224;
-static const OID oid_sha256 = OID_SHA256;
-static const OID oid_sha384 = OID_SHA384;
-static const OID oid_sha512 = OID_SHA512;
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
-/*
- * The correctness of this function depends on @MAX_ARCS being faithful to all
- * the known OIDs declared *in the project*.
- */
 static int
-is_digest_algorithm(AlgorithmIdentifier_t *aid, bool *result)
+is_digest_algorithm(AlgorithmIdentifier_t *id, char *what)
 {
-	struct oid_arcs arcs;
+	bool is_hash;
 	int error;
 
-	error = oid2arcs(&aid->algorithm, &arcs);
+	if (id == NULL)
+		return pr_err("The %s algorithm is NULL.", what);
+
+	error = hash_is_valid_algorithm(&id->algorithm, &is_hash);
 	if (error)
 		return error;
+	if (!is_hash)
+		return pr_err("The %s algorithm is not SHA256.", what);
 
-	*result = ARCS_EQUAL_OIDS(&arcs, oid_sha224)
-	       || ARCS_EQUAL_OIDS(&arcs, oid_sha256)
-	       || ARCS_EQUAL_OIDS(&arcs, oid_sha384)
-	       || ARCS_EQUAL_OIDS(&arcs, oid_sha512);
-
-	free_arcs(&arcs);
 	return 0;
 }
 
@@ -88,41 +80,49 @@ end1:
 	return error;
 }
 
+/* rfc6488#section-2.1.6.4.1 */
 static int
 validate_content_type_attribute(CMSAttributeValue_t *value,
     EncapsulatedContentInfo_t *eci)
 {
-	struct oid_arcs attrValue_arcs;
-	struct oid_arcs EncapContentInfo_arcs;
+	OBJECT_IDENTIFIER_t *attrValues;
+	OBJECT_IDENTIFIER_t *eContentType;
 	int error;
 
-	/* rfc6488#section-3.1.h */
-	/* TODO (performance) Can't we just do a memcmp? */
-
-	error = any2arcs(value, &attrValue_arcs);
+	error = asn1_decode_any(value, &asn_DEF_OBJECT_IDENTIFIER,
+	    (void **) &attrValues);
 	if (error)
 		return error;
+	eContentType = &eci->eContentType;
 
-	error = oid2arcs(&eci->eContentType, &EncapContentInfo_arcs);
-	if (error) {
-		free_arcs(&attrValue_arcs);
-		return error;
-	}
+	if (!oid_equal(attrValues, eContentType))
+		error = pr_err("The attrValues for the content-type attribute does not match the eContentType in the EncapsulatedContentInfo.");
 
-	if (!arcs_equal(&attrValue_arcs, &EncapContentInfo_arcs)) {
-		pr_err("The eContentType in the EncapsulatedContentInfo does not match the attrValues in the content-type attribute.");
-		error = -EINVAL;
-	}
-
-	free_arcs(&EncapContentInfo_arcs);
-	free_arcs(&attrValue_arcs);
+	ASN_STRUCT_FREE(asn_DEF_OBJECT_IDENTIFIER, attrValues);
 	return error;
 }
 
 static int
-validate_message_digest_attribute(CMSAttributeValue_t *value)
+validate_message_digest_attribute(CMSAttributeValue_t *value,
+    EncapsulatedContentInfo_t *eci)
 {
-	return 0; /* TODO need the content being signed */
+	MessageDigest_t *digest;
+	int error;
+
+	if (eci->eContent == NULL) {
+		pr_err("There's no content being signed.");
+		return -EINVAL;
+	}
+
+	error = asn1_decode_any(value, &asn_DEF_MessageDigest,
+	    (void **) &digest);
+	if (error)
+		return error;
+
+	error = hash_validate_octet_string(eci->eContent, digest);
+
+	free(digest);
+	return error;
 }
 
 static int
@@ -138,10 +138,8 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 	bool binary_signing_time_found = false;
 	int error;
 
-	if (sinfo->signedAttrs == NULL) {
-		pr_err("The SignerInfo's signedAttrs field is NULL.");
-		return -EINVAL;
-	}
+	if (sinfo->signedAttrs == NULL)
+		return pr_err("The SignerInfo's signedAttrs field is NULL.");
 
 	for (i = 0; i < sinfo->signedAttrs->list.count; i++) {
 		attr = sinfo->signedAttrs->list.array[i];
@@ -152,15 +150,12 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 		attrs = &attr->attrValues;
 
 		if (attrs->list.count != 1) {
-			pr_err(0,
+			return pr_err(0,
 			    "signedAttrs's attribute set size (%d) is different than 1.",
 			    attr->attrValues.list.count);
-			return -EINVAL;
 		}
-		if (attrs->list.array == NULL || attrs->list.array[0] == NULL) {
-			pr_err("Programming error: Array size is 1 but array itself is NULL.");
-			return -EINVAL;
-		}
+		if (attrs->list.array == NULL || attrs->list.array[0] == NULL)
+			return pr_crit("Array size is 1 but array is NULL.");
 
 		error = oid2arcs(&attr->attrType, &attrType);
 		if (error)
@@ -181,7 +176,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 				goto illegal_attrType;
 			}
 			error = validate_message_digest_attribute(
-			    attr->attrValues.list.array[0]);
+			    attr->attrValues.list.array[0], eci);
 			message_digest_found = true;
 
 		} else if (ARCS_EQUAL_OIDS(&attrType, oid_sta)) {
@@ -213,14 +208,10 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 	}
 
 	/* rfc6488#section-3.1.f */
-	if (!content_type_found) {
-		pr_err("SignerInfo lacks a ContentType attribute.");
-		return -EINVAL;
-	}
-	if (!message_digest_found) {
-		pr_err("SignerInfo lacks a MessageDigest attribute.");
-		return -EINVAL;
-	}
+	if (!content_type_found)
+		return pr_err("SignerInfo lacks a ContentType attribute.");
+	if (!message_digest_found)
+		return pr_err("SignerInfo lacks a MessageDigest attribute.");
 
 	return 0;
 
@@ -234,30 +225,26 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
     struct resources *res)
 {
 	struct SignerInfo *sinfo;
-	bool is_digest;
 	int error;
 
 	/* rfc6488#section-2.1 */
 	if (sdata->signerInfos.list.count != 1) {
-		pr_err("The SignedData's SignerInfo set is supposed to have only one element. (%d given.)",
+		return pr_err("The SignedData's SignerInfo set is supposed to have only one element. (%d given.)",
 		    sdata->signerInfos.list.count);
-		return -EINVAL;
 	}
 
 	/* rfc6488#section-2.1.1 */
 	/* rfc6488#section-3.1.b */
 	if (sdata->version != 3) {
-		pr_err("The SignedData version is only allowed to be 3. (Was %ld.)",
+		return pr_err("The SignedData version is only allowed to be 3. (Was %ld.)",
 		    sdata->version);
-		return -EINVAL;
 	}
 
 	/* rfc6488#section-2.1.2 */
 	/* rfc6488#section-3.1.j 1/2 */
 	if (sdata->digestAlgorithms.list.count != 1) {
-		pr_err("The SignedData's digestAlgorithms set is supposed to have only one element. (%d given.)",
+		return pr_err("The SignedData's digestAlgorithms set is supposed to have only one element. (%d given.)",
 		    sdata->digestAlgorithms.list.count);
-		return -EINVAL;
 	}
 
 	/*
@@ -268,28 +255,21 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 	 */
 	error = is_digest_algorithm(
 	    (AlgorithmIdentifier_t *) sdata->digestAlgorithms.list.array[0],
-	    &is_digest);
+	    "SignedData");
 	if (error)
 		return error;
-	if (!is_digest) {
-		pr_err("The SignedData's digestAlgorithm OID is not listed in RFC 5754.");
-		return -EINVAL;
-	}
 
 	/* section-2.1.3 */
 	/* Specific sub-validations will be performed later by calling code. */
 
 	/* rfc6488#section-2.1.4 */
 	/* rfc6488#section-3.1.c 1/2 */
-	if (sdata->certificates == NULL) {
-		pr_err("The SignedData does not contain certificates.");
-		return -EINVAL;
-	}
+	if (sdata->certificates == NULL)
+		return pr_err("The SignedData does not contain certificates.");
 
 	if (sdata->certificates->list.count != 1) {
-		pr_err("The SignedData contains %d certificates, one expected.",
+		return pr_err("The SignedData contains %d certificates, one expected.",
 		    sdata->certificates->list.count);
-		return -EINVAL;
 	}
 
 	error = handle_sdata_certificate(sdata->certificates->list.array[0],
@@ -299,22 +279,17 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 
 	/* rfc6488#section-2.1.5 */
 	/* rfc6488#section-3.1.d */
-	if (sdata->crls != NULL && sdata->crls->list.count > 0) {
-		pr_err("The SignedData contains at least one crls.");
-		return -EINVAL;
-	}
+	if (sdata->crls != NULL && sdata->crls->list.count > 0)
+		return pr_err("The SignedData contains at least one CRL.");
 
 	/* rfc6488#section-2.1.6.1 */
 	/* rfc6488#section-3.1.e */
 	sinfo = sdata->signerInfos.list.array[0];
-	if (sinfo == NULL) {
-		pr_err("The SignerInfo object is NULL.");
-		return -EINVAL;
-	}
+	if (sinfo == NULL)
+		return pr_err("The SignerInfo object is NULL.");
 	if (sinfo->version != 3) {
-		pr_err("The SignerInfo version is only allowed to be 3. (Was %ld.)",
+		return pr_err("The SignerInfo version is only allowed to be 3. (Was %ld.)",
 		    sinfo->version);
-		return -EINVAL;
 	}
 
 	/* rfc6488#section-2.1.6.2 */
@@ -325,14 +300,9 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 
 	/* rfc6488#section-2.1.6.3 */
 	/* rfc6488#section-3.1.j 2/2 */
-	error = is_digest_algorithm(
-	    (AlgorithmIdentifier_t *) &sinfo->digestAlgorithm, &is_digest);
+	error = is_digest_algorithm(&sinfo->digestAlgorithm, "SignerInfo");
 	if (error)
 		return error;
-	if (!is_digest) {
-		pr_err("The SignerInfo digestAlgorithm OID is not listed in RFC 5754.");
-		return -EINVAL;
-	}
 
 	/* rfc6488#section-2.1.6.4 */
 	error = validate_signed_attrs(sinfo, &sdata->encapContentInfo);
@@ -362,10 +332,8 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 
 	/* rfc6488#section-2.1.6.7 */
 	/* rfc6488#section-3.1.i */
-	if (sinfo->unsignedAttrs != NULL && sinfo->unsignedAttrs->list.count > 0) {
-		pr_err("SignerInfo has at least one unsignedAttr.");
-		return -EINVAL;
-	}
+	if (sinfo->unsignedAttrs != NULL && sinfo->unsignedAttrs->list.count > 0)
+		return pr_err("SignerInfo has at least one unsignedAttr.");
 
 	/* rfc6488#section-3.2 */
 	/* rfc6488#section-3.3 */

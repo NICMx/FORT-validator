@@ -10,6 +10,7 @@
  */
 
 #include <stddef.h>
+#include <stdio.h>
 
 struct line_file;
 
@@ -18,6 +19,7 @@ void lfile_close();
 
 int lfile_read(struct line_file *, char **);
 
+FILE *lfile_fd(struct line_file *);
 const char *lfile_name(struct line_file *);
 size_t lfile_offset(struct line_file *);
 

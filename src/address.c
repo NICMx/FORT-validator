@@ -42,13 +42,12 @@ prefix4_decode(IPAddress2_t *str, struct ipv4_prefix *result)
 	int len;
 
 	if (str->size > 4) {
-		pr_err("IPv4 address has too many octets. (%u)", str->size);
-		return -EINVAL;
+		return pr_err("IPv4 address has too many octets. (%u)",
+		    str->size);
 	}
 	if (str->bits_unused < 0 || 7 < str->bits_unused) {
-		pr_err("Bit string IPv4 address's unused bits count (%d) is out of range (0-7).",
+		return pr_err("Bit string IPv4 address's unused bits count (%d) is out of range (0-7).",
 		    str->bits_unused);
-		return -EINVAL;
 	}
 
 	memset(&result->addr, 0, sizeof(result->addr));
@@ -56,16 +55,14 @@ prefix4_decode(IPAddress2_t *str, struct ipv4_prefix *result)
 	len = 8 * str->size - str->bits_unused;
 
 	if (len < 0 || 32 < len) {
-		pr_err("IPv4 prefix length (%d) is out of bounds (0-32).", len);
-		return -EINVAL;
+		return pr_err("IPv4 prefix length (%d) is out of bounds (0-32).",
+		    len);
 	}
 
 	result->len = len;
 
-	if ((result->addr.s_addr & ipv4_suffix_mask(result->len)) != 0) {
-		pr_err("IPv4 prefix has enabled suffix bits.");
-		return -EINVAL;
-	}
+	if ((result->addr.s_addr & ipv4_suffix_mask(result->len)) != 0)
+		return pr_err("IPv4 prefix has enabled suffix bits.");
 
 	return 0;
 }
@@ -77,13 +74,12 @@ prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 	int len;
 
 	if (str->size > 16) {
-		pr_err("IPv6 address has too many octets. (%u)", str->size);
-		return -EINVAL;
+		return pr_err("IPv6 address has too many octets. (%u)",
+		    str->size);
 	}
 	if (str->bits_unused < 0 || 7 < str->bits_unused) {
-		pr_err("Bit string IPv6 address's unused bits count (%d) is out of range (0-7).",
+		return pr_err("Bit string IPv6 address's unused bits count (%d) is out of range (0-7).",
 		    str->bits_unused);
-		return -EINVAL;
 	}
 
 	memset(&result->addr, 0, sizeof(result->addr));
@@ -91,9 +87,8 @@ prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 	len = 8 * str->size - str->bits_unused;
 
 	if (len < 0 || 128 < len) {
-		pr_err("IPv6 prefix length (%u) is out of bounds (0-128).",
+		return pr_err("IPv6 prefix length (%u) is out of bounds (0-128).",
 		    len);
-		return -EINVAL;
 	}
 
 	result->len = len;
@@ -103,10 +98,8 @@ prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 	if (   (result->addr.s6_addr32[0] & suffix.s6_addr32[0])
 	    || (result->addr.s6_addr32[1] & suffix.s6_addr32[1])
 	    || (result->addr.s6_addr32[2] & suffix.s6_addr32[2])
-	    || (result->addr.s6_addr32[3] & suffix.s6_addr32[3])) {
-		pr_err("IPv6 prefix has enabled suffix bits.");
-		return -EINVAL;
-	}
+	    || (result->addr.s6_addr32[3] & suffix.s6_addr32[3]))
+		return pr_err("IPv6 prefix has enabled suffix bits.");
 
 	return 0;
 }

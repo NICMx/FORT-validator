@@ -5,8 +5,6 @@
 #include "log.h"
 #include "asn1/decode.h"
 
-#define MAX_ARCS 9
-
 void
 free_arcs(struct oid_arcs *arcs)
 {
@@ -21,13 +19,13 @@ free_arcs(struct oid_arcs *arcs)
 int
 oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 {
-	ssize_t count, count2;
+	static const size_t MAX_ARCS = 9;
+	ssize_t count;
+	ssize_t count2;
 
 	result->arcs = malloc(MAX_ARCS * sizeof(asn_oid_arc_t));
-	if (result->arcs == NULL) {
-		pr_err("Out of memory.");
-		return -ENOMEM;
-	}
+	if (result->arcs == NULL)
+		return pr_enomem();
 
 	count = OBJECT_IDENTIFIER_get_arcs(oid, result->arcs, MAX_ARCS);
 	if (count < 0) {
@@ -41,10 +39,9 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 	/* If necessary, reallocate arcs array and try again. */
 	if (count > MAX_ARCS) {
 		result->arcs = realloc(result->arcs, count * sizeof(asn_oid_arc_t));
-		if (!result->arcs) {
-			pr_err("Out of memory.");
-			return -ENOMEM;
-		}
+		if (!result->arcs)
+			return pr_enomem();
+
 		count2 = OBJECT_IDENTIFIER_get_arcs(oid, result->arcs, count);
 		if (count != count2) {
 			pr_err("OBJECT_IDENTIFIER_get_arcs() returned %zd. (expected %zd)",
@@ -72,6 +69,11 @@ any2arcs(ANY_t *any, struct oid_arcs *result)
 	error = oid2arcs(oid, result);
 	ASN_STRUCT_FREE(asn_DEF_OBJECT_IDENTIFIER, oid);
 	return error;
+}
+
+bool oid_equal(OBJECT_IDENTIFIER_t *a, OBJECT_IDENTIFIER_t *b)
+{
+	return (a->size == b->size) && (memcmp(a->buf, b->buf, a->size) == 0);
 }
 
 static bool __arcs_equal(asn_oid_arc_t const *a, size_t a_count,

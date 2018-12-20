@@ -126,14 +126,15 @@ pr_err_prefix(void)
 } while (0)
 
 /**
- * Always appends a newline at the end.
+ * Always appends a newline at the end. Always returs -EINVAL.
  */
-void
+int
 pr_err(const char *format, ...)
 {
 	va_list args;
 	PR_ERR(args);
 	fprintf(STDERR, "\n");
+	return -EINVAL;
 }
 
 /**
@@ -164,6 +165,7 @@ pr_errno(int error, const char *format, ...)
 		 * If this function was called, then we need to assume that
 		 * there WAS an error; go generic.
 		 */
+		fprintf(STDERR, ": (Unknown)");
 		error = -EINVAL;
 	}
 
@@ -211,4 +213,28 @@ crypto_err(const char *format, ...)
 
 	fprintf(STDERR, "\n");
 	return error;
+}
+
+int
+pr_enomem(void)
+{
+	pr_err("Out of memory.");
+	return -ENOMEM;
+}
+
+int
+pr_crit(const char *format, ...)
+{
+	va_list args;
+
+	pr_err_prefix();
+	pr_file_name(STDERR);
+
+	fprintf(STDERR, "Programming error: ");
+	va_start(args, format);
+	vfprintf(STDERR, format, args);
+	va_end(args);
+	fprintf(STDERR, "\n");
+
+	return -EINVAL;
 }

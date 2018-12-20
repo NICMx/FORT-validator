@@ -22,10 +22,8 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		return error;
 
 	str2 = inet_ntop(AF_INET, &prefix.addr, str, sizeof(str));
-	if (str2 == NULL) {
-		pr_err("inet_ntop() returned NULL.");
-		return -EINVAL;
-	}
+	if (str2 == NULL)
+		return pr_err("inet_ntop() returned NULL.");
 
 	if (roa_addr->maxLength != NULL)
 		if (prefix.len > *roa_addr->maxLength)
@@ -37,8 +35,8 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 	return 0;
 
 unallowed:
-	pr_err("ROA is not allowed to advertise %s/%u.", str2, prefix.len);
-	return -EINVAL;
+	return pr_err("ROA is not allowed to advertise %s/%u.", str2,
+	    prefix.len);
 }
 
 static int
@@ -54,10 +52,8 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		return error;
 
 	str2 = inet_ntop(AF_INET6, &prefix.addr, str, sizeof(str));
-	if (str2 == NULL) {
-		pr_err("inet_ntop() returned NULL.");
-		return -EINVAL;
-	}
+	if (str2 == NULL)
+		return pr_err("inet_ntop() returned NULL.");
 
 	if (roa_addr->maxLength != NULL)
 		if (prefix.len > *roa_addr->maxLength)
@@ -69,8 +65,8 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 	return 0;
 
 unallowed:
-	pr_err("ROA is not allowed to advertise %s/%u.", str2, prefix.len);
-	return -EINVAL;
+	return pr_err("ROA is not allowed to advertise %s/%u.", str2,
+	    prefix.len);
 }
 
 static int
@@ -84,8 +80,7 @@ print_addr(struct resources *parent, long asn, uint8_t family,
 		return print_addr6(parent, asn, roa_addr);
 	}
 
-	pr_err("Unknown family value: %u", family);
-	return -EINVAL;
+	return pr_err("Unknown family value: %u", family);
 }
 
 static int
@@ -97,31 +92,24 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	int error;
 
 	/* rfc6482#section-3.1 */
-	if (roa->version != 0) {
-		pr_err("ROA's version (%ld) is nonzero.", roa->version);
-		return -EINVAL;
-	}
+	if (roa->version != 0)
+		return pr_err("ROA's version (%ld) is nonzero.", roa->version);
 
 	/* rfc6482#section-3.2 (more or less.) */
 	if (!resources_contains_asn(parent, roa->asID)) {
-		pr_err("ROA is not allowed to attest for AS %d",
+		return pr_err("ROA is not allowed to attest for AS %d",
 		    roa->asID);
-		return -EINVAL;
 	}
 
 	/* rfc6482#section-3.3 */
 
-	if (roa->ipAddrBlocks.list.array == NULL) {
-		pr_err("Programming error: ipAddrBlocks array is NULL.");
-		return -EINVAL;
-	}
+	if (roa->ipAddrBlocks.list.array == NULL)
+		return pr_crit("ipAddrBlocks array is NULL.");
 
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
 		block = roa->ipAddrBlocks.list.array[0];
-		if (block == NULL) {
-			pr_err("Address block array element is NULL.");
-			return -EINVAL;
-		}
+		if (block == NULL)
+			return pr_err("Address block array element is NULL.");
 
 		if (block->addressFamily.size != 2)
 			goto family_error;
@@ -131,10 +119,8 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		    && block->addressFamily.buf[1] != 2)
 			goto family_error;
 
-		if (block->addresses.list.array == NULL) {
-			pr_err("ROA's address list array is NULL.");
-			return -EINVAL;
-		}
+		if (block->addresses.list.array == NULL)
+			return pr_err("ROA's address list array is NULL.");
 		for (a = 0; a < block->addresses.list.count; a++) {
 			error = print_addr(parent, roa->asID,
 			    block->addressFamily.buf[1],
@@ -147,8 +133,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	return 0;
 
 family_error:
-	pr_err("ROA's IP family is not v4 or v6.");
-	return -EINVAL;
+	return pr_err("ROA's IP family is not v4 or v6.");
 }
 
 int handle_roa(char const *file, STACK_OF(X509_CRL) *crls)
@@ -165,8 +150,7 @@ int handle_roa(char const *file, STACK_OF(X509_CRL) *crls)
 
 	cert_resources = resources_create();
 	if (cert_resources == NULL) {
-		pr_err("Out of memory");
-		error = -ENOMEM;
+		error = pr_enomem();
 		goto end1;
 	}
 

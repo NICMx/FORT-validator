@@ -4,9 +4,9 @@
 
 #include "common.h"
 #include "debug.h"
-#include "hash.h"
 #include "log.h"
 #include "thread_var.h"
+#include "crypto/hash.h"
 #include "object/certificate.h"
 #include "object/tal.h"
 
@@ -96,10 +96,8 @@ main(int argc, char **argv)
 
 	print_stack_trace_on_segfault();
 
-	if (argc < 3) {
-		pr_err("Repository path as first argument and TAL file as second argument, please.");
-		return -EINVAL;
-	}
+	if (argc < 3)
+		return pr_err("Repository path as first argument and TAL file as second argument, please.");
 
 	error = hash_init();
 	if (error)

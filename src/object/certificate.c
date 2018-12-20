@@ -27,7 +27,7 @@ bool is_certificate(char const *file_name)
 static int
 validate_serial_number(X509 *cert)
 {
-	/* TODO implement this properly. */
+	/* TODO (field) implement this properly. */
 
 	BIGNUM *number;
 
@@ -52,10 +52,8 @@ validate_signature_algorithm(X509 *cert)
 	int nid;
 
 	nid = OBJ_obj2nid(X509_get0_tbs_sigalg(cert)->algorithm);
-	if (nid != NID_sha256WithRSAEncryption) {
-		pr_err("Certificate's Signature Algorithm is not RSASSA-PKCS1-v1_5.");
-		return -EINVAL;
-	}
+	if (nid != NID_sha256WithRSAEncryption)
+		return pr_err("Certificate's Signature Algorithm is not RSASSA-PKCS1-v1_5.");
 
 	return 0;
 }
@@ -110,10 +108,8 @@ validate_spki(const unsigned char *cert_spk, int cert_spk_len)
 		return -EINVAL;
 
 	tal = validation_tal(state);
-	if (tal == NULL) {
-		pr_err("Programming error: Validation state has no TAL.");
-		return -EINVAL;
-	}
+	if (tal == NULL)
+		return pr_crit("Validation state has no TAL.");
 
 	/*
 	 * We have a problem at this point:
@@ -143,8 +139,7 @@ validate_spki(const unsigned char *cert_spk, int cert_spk_len)
 		goto fail;
 
 	if (!ARCS_EQUAL_OIDS(&tal_alg_arcs, oid_rsa)) {
-		pr_err("TAL's public key format is not RSA PKCS#1 v1.5 with SHA-256.");
-		error = -EINVAL;
+		error = pr_err("TAL's public key format is not RSA PKCS#1 v1.5 with SHA-256.");
 		goto fail;
 	}
 
@@ -158,8 +153,7 @@ validate_spki(const unsigned char *cert_spk, int cert_spk_len)
 	return 0;
 
 not_equal:
-	pr_err("TAL's public key is different than the root certificate's public key.");
-	error = -EINVAL;
+	error = pr_err("TAL's public key is different than the root certificate's public key.");
 fail:
 	ASN_STRUCT_FREE(asn_DEF_SubjectPublicKeyInfo, tal_spki);
 	return error;
@@ -178,13 +172,13 @@ validate_public_key(X509 *cert, bool is_root)
 
 	pubkey = X509_get_X509_PUBKEY(cert);
 	if (pubkey == NULL) {
-		crypto_err("X509_get_X509_PUBKEY() returned NULL.");
+		crypto_err("X509_get_X509_PUBKEY() returned NULL");
 		return -EINVAL;
 	}
 
 	ok = X509_PUBKEY_get0_param(&alg, &bytes, &bytes_len, NULL, pubkey);
 	if (!ok) {
-		crypto_err("X509_PUBKEY_get0_param() returned %d.", ok);
+		crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 		return -EINVAL;
 	}
 
@@ -194,9 +188,8 @@ validate_public_key(X509 *cert, bool is_root)
 	 * seem to match RFC 7935's public key algorithm. Wtf?
 	 */
 	if (alg_nid != NID_rsaEncryption) {
-		pr_err("Certificate's public key format is %d, not RSA PKCS#1 v1.5 with SHA-256.",
+		return pr_err("Certificate's public key format is %d, not RSA PKCS#1 v1.5 with SHA-256.",
 		    alg_nid);
-		return -EINVAL;
 	}
 
 	/*
@@ -223,7 +216,7 @@ validate_public_key(X509 *cert, bool is_root)
 static int
 validate_extensions(X509 *cert)
 {
-	/* TODO */
+	/* TODO (field) */
 	return 0;
 }
 
@@ -246,10 +239,8 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 	 */
 
 	/* rfc6487#section-4.1 */
-	if (X509_get_version(cert) != 2) {
-		pr_err("Certificate version is not v3.");
-		return -EINVAL;
-	}
+	if (X509_get_version(cert) != 2)
+		return pr_err("Certificate version is not v3.");
 
 	/* rfc6487#section-4.2 */
 	error = validate_serial_number(cert);
@@ -269,7 +260,7 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 	/*
 	 * rfc6487#section-4.5
 	 *
-	 * TODO "Each distinct subordinate CA and
+	 * TODO (field) "Each distinct subordinate CA and
 	 * EE certified by the issuer MUST be identified using a subject name
 	 * that is unique per issuer.  In this context, "distinct" is defined as
 	 * an entity and a given public key."
@@ -321,15 +312,7 @@ end:
 int
 certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 {
-	/* Reference: libcrypto/.../verify.c */
-	/*
-	 * TODO
-	 * The only difference between -CAfile and -trusted, as it seems, is
-	 * that -CAfile consults the default file location, while -trusted does
-	 * not. As far as I can tell, this means that we absolutely need to use
-	 * -trusted.
-	 * So, just in case, enable -no-CAfile and -no-CApath.
-	 */
+	/* Reference: openbsd/src/usr.bin/openssl/verify.c */
 
 	struct validation *state;
 	X509_STORE_CTX *ctx;
@@ -477,30 +460,27 @@ handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
 	case 2:
 		family = &blocks->list.array[0]->addressFamily;
 		if (get_addr_family(family) != AF_INET) {
-			pr_err("First IP address block listed is not v4.");
-			goto einval;
+			error = pr_err("First IP address block listed is not v4.");
+			goto end;
 		}
 		family = &blocks->list.array[1]->addressFamily;
 		if (get_addr_family(family) != AF_INET6) {
-			pr_err("Second IP address block listed is not v6.");
-			goto einval;
+			error = pr_err("Second IP address block listed is not v6.");
+			goto end;
 		}
 		break;
 	default:
-		pr_err("Got %d IP address blocks Expected; 1 or 2 expected.",
+		error = pr_err("Got %d IP address blocks Expected; 1 or 2 expected.",
 		    blocks->list.count);
-		goto einval;
+		goto end;
 	}
 
 	for (i = 0; i < blocks->list.count && !error; i++)
 		error = resources_add_ip(resources, blocks->list.array[i]);
 
+end:
 	ASN_STRUCT_FREE(asn_DEF_IPAddrBlocks, blocks);
 	return error;
-
-einval:
-	ASN_STRUCT_FREE(asn_DEF_IPAddrBlocks, blocks);
-	return -EINVAL;
 }
 
 static int
@@ -539,14 +519,10 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 
 		switch (OBJ_obj2nid(X509_EXTENSION_get_object(ext))) {
 		case NID_sbgp_ipAddrBlock:
-			if (ip_ext_found) {
-				pr_err("Multiple IP extensions found.");
-				return -EINVAL;
-			}
-			if (!X509_EXTENSION_get_critical(ext)) {
-				pr_err("The IP extension is not marked as critical.");
-				return -EINVAL;
-			}
+			if (ip_ext_found)
+				return pr_err("Multiple IP extensions found.");
+			if (!X509_EXTENSION_get_critical(ext))
+				return pr_err("The IP extension is not marked as critical.");
 
 			pr_debug_add("IP {");
 			error = handle_ip_extension(ext, resources);
@@ -558,14 +534,10 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 			break;
 
 		case NID_sbgp_autonomousSysNum:
-			if (asn_ext_found) {
-				pr_err("Multiple AS extensions found.");
-				return -EINVAL;
-			}
-			if (!X509_EXTENSION_get_critical(ext)) {
-				pr_err("The AS extension is not marked as critical.");
-				return -EINVAL;
-			}
+			if (asn_ext_found)
+				return pr_err("Multiple AS extensions found.");
+			if (!X509_EXTENSION_get_critical(ext))
+				return pr_err("The AS extension is not marked as critical.");
 
 			pr_debug_add("ASN {");
 			error = handle_asn_extension(ext, resources);
@@ -578,10 +550,8 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 		}
 	}
 
-	if (!ip_ext_found && !asn_ext_found) {
-		pr_err("Certificate lacks both IP and AS extension.");
-		return -EINVAL;
-	}
+	if (!ip_ext_found && !asn_ext_found)
+		return pr_err("Certificate lacks both IP and AS extension.");
 
 	return 0;
 }
@@ -713,8 +683,7 @@ certificate_traverse_ee(X509 *cert)
 
 		} else {
 			/* rfc6487#section-4.8.8.2 */
-			pr_err("EE Certificate has an non-signedObject access description.");
-			error = -EINVAL;
+			error = pr_err("EE Certificate has an non-signedObject access description.");
 			goto end;
 		}
 	}

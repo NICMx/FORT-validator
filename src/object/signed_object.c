@@ -21,9 +21,8 @@ validate_eContentType(struct SignedData *sdata,
 	equals = arcs_equal(&arcs, oid);
 	free_arcs(&arcs);
 	if (!equals) {
-		pr_err("SignedObject's encapContentInfo lacks the OID of a %s.",
+		return pr_err("SignedObject's encapContentInfo lacks the OID of a %s.",
 		    descriptor->name);
-		return -EINVAL;
 	}
 
 	return 0;
@@ -49,9 +48,8 @@ validate_content_type(struct SignedData *sdata,
 	equals = arcs_equal(&arcs, oid);
 	free_arcs(&arcs);
 	if (!equals) {
-		pr_err("SignedObject's content type attribute lacks the OID of a %s.",
+		return pr_err("SignedObject's content type attribute lacks the OID of a %s.",
 		    descriptor->name);
-		return -EINVAL;
 	}
 
 	return 0;

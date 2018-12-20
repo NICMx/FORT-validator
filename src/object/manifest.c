@@ -4,10 +4,10 @@
 #include <libcmscodec/GeneralizedTime.h>
 #include <libcmscodec/Manifest.h>
 
-#include "hash.h"
 #include "log.h"
 #include "thread_var.h"
 #include "asn1/oid.h"
+#include "crypto/hash.h"
 #include "object/certificate.h"
 #include "object/crl.h"
 #include "object/roa.h"
@@ -26,23 +26,6 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 }
 
 static int
-is_hash_algorithm(OBJECT_IDENTIFIER_t *aid, bool *result)
-{
-	static const OID sha_oid = OID_SHA256;
-	struct oid_arcs arcs;
-	int error;
-
-	error = oid2arcs(aid, &arcs);
-	if (error)
-		return error;
-
-	*result = ARCS_EQUAL_OIDS(&arcs, sha_oid);
-
-	free_arcs(&arcs);
-	return 0;
-}
-
-static int
 validate_manifest(struct Manifest *manifest)
 {
 	bool is_hash;
@@ -51,7 +34,7 @@ validate_manifest(struct Manifest *manifest)
 	/* rfc6486#section-4.2.1 */
 
 	/*
-	 * TODO
+	 * TODO (field)
 	 *
 	 * If a "one-time-use" EE certificate is employed to verify a manifest,
 	 * the EE certificate MUST have a validity period that coincides with
@@ -76,7 +59,7 @@ validate_manifest(struct Manifest *manifest)
 	/* manifest->manifestNumber; */
 
 	/*
-	 * TODO
+	 * TODO (field)
 	 *
 	 * "CRL issuers conforming to this profile MUST encode thisUpdate as
 	 * UTCTime for dates through the year 2049.  CRL issuers conforming to
@@ -92,7 +75,7 @@ validate_manifest(struct Manifest *manifest)
 	/* manifest->thisUpdate */
 
 	/*
-	 * TODO again, same bullshit:
+	 * TODO (field) again, same bullshit:
 	 *
 	 * "CRL issuers conforming to this profile MUST encode nextUpdate as
 	 * UTCTime for dates through the year 2049.  CRL issuers conforming to
@@ -108,13 +91,11 @@ validate_manifest(struct Manifest *manifest)
 		return error;
 
 	/* rfc6486#section-6.6 (I guess) */
-	error = is_hash_algorithm(&manifest->fileHashAlg, &is_hash);
+	error = hash_is_valid_algorithm(&manifest->fileHashAlg, &is_hash);
 	if (error)
 		return error;
-	if (!is_hash) {
-		pr_err("The hash algorithm is not SHA256.");
-		return -EINVAL;
-	}
+	if (!is_hash)
+		return pr_err("The hash algorithm is not SHA256.");
 
 	/* The file hashes will be validated during the traversal. */
 
@@ -190,7 +171,7 @@ foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 			if (error)
 				return error;
 
-			error = hash_validate(luri, &fah->hash);
+			error = hash_validate_file(luri, &fah->hash);
 			if (error) {
 				free(luri);
 				continue;
@@ -291,10 +272,8 @@ __handle_manifest(struct manifest *mft)
 
 	/* Init */
 	crls = sk_X509_CRL_new_null();
-	if (crls == NULL) {
-		pr_err("Out of memory.");
-		return -ENOMEM;
-	}
+	if (crls == NULL)
+		return pr_enomem();
 
 	/* Get CRLs as a stack. There will usually only be one. */
 	error = foreach_file(mft, ".crl", pile_crls, crls);
@@ -327,10 +306,6 @@ handle_manifest(char const *file_path, STACK_OF(X509_CRL) *crls)
 
 	mft.file_path = file_path;
 
-	/*
-	 * TODO about those NULL resources: Maybe print a warning if the
-	 * certificate contains some.
-	 */
 	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
 	    (void **) &mft.obj, crls, NULL);
 	if (error)

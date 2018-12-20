@@ -42,10 +42,8 @@ uri_g2l(char const *guri, size_t guri_len, char **result)
 
 	prefix_len = strlen(PREFIX);
 
-	if (guri_len < prefix_len || strncmp(PREFIX, guri, prefix_len) != 0) {
-		pr_err("Global URI does not begin with '%s'.", PREFIX);
-		return -EINVAL;
-	}
+	if (guri_len < prefix_len || strncmp(PREFIX, guri, prefix_len) != 0)
+		return pr_err("Global URI does not begin with '%s'.", PREFIX);
 
 	guri += prefix_len;
 	guri_len -= prefix_len;

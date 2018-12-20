@@ -7,11 +7,9 @@ bin_PROGRAMS = rpki_validator
 rpki_validator_SOURCES  = main.c
 
 rpki_validator_SOURCES += address.h address.c
-rpki_validator_SOURCES += base64.h base64.c
 rpki_validator_SOURCES += common.h common.c
 rpki_validator_SOURCES += debug.h debug.c
 rpki_validator_SOURCES += file.h file.c
-rpki_validator_SOURCES += hash.h hash.c
 rpki_validator_SOURCES += line_file.h line_file.c
 rpki_validator_SOURCES += log.h log.c
 rpki_validator_SOURCES += resource.h resource.c
@@ -23,6 +21,9 @@ rpki_validator_SOURCES += asn1/content_info.h asn1/content_info.c
 rpki_validator_SOURCES += asn1/decode.h asn1/decode.c
 rpki_validator_SOURCES += asn1/oid.h asn1/oid.c
 rpki_validator_SOURCES += asn1/signed_data.h asn1/signed_data.c
+
+rpki_validator_SOURCES += crypto/base64.h crypto/base64.c
+rpki_validator_SOURCES += crypto/hash.h crypto/hash.c
 
 rpki_validator_SOURCES += object/certificate.h object/certificate.c
 rpki_validator_SOURCES += object/crl.h object/crl.c

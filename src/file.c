@@ -1,51 +1,60 @@
 #include "file.h"
 
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include "log.h"
 
-/*
- * Will also rewind the file as a side effect.
- * This is currently perfect for calling users.
- */
-static int
-get_file_size(FILE *file, long int *size)
+int
+file_open(const char *filename, FILE **result, struct stat *stat)
 {
-	if (fseek(file, 0L, SEEK_END) == -1)
-		return errno ? errno : -EINVAL;
-	*size = ftell(file);
-	rewind(file);
+	FILE *file;
+	int error;
+
+	file = fopen(filename, "rb");
+	if (file == NULL)
+		return pr_errno(errno, "Could not open file '%s'", filename);
+
+	if (fstat(fileno(file), stat) == -1) {
+		error = pr_errno(errno, "fstat(%s) failed", filename);
+		goto fail;
+	}
+	if (!S_ISREG(stat->st_mode)) {
+		error = pr_err("%s does not seem to be a file", filename);
+		goto fail;
+	}
+
+	*result = file;
 	return 0;
+
+fail:
+	file_close(file);
+	return error;
+}
+
+void
+file_close(FILE *file)
+{
+	if (fclose(file) == -1)
+		pr_errno(errno, "fclose() failed");
 }
 
 int
-file_load(const char *file_name, struct file_contents *fc)
+file_load(const char *filename, struct file_contents *fc)
 {
 	FILE *file;
-	long int file_size;
+	struct stat stat;
 	size_t fread_result;
 	int error;
 
-	file = fopen(file_name, "rb");
-	if (file == NULL)
-		return pr_errno(errno, "Could not open file '%s'", file_name);
-
-	/* TODO if @file is a directory, this returns a very large integer. */
-	error = get_file_size(file, &file_size);
-	if (error) {
-		pr_errno(error, "Could not compute the file size of %s",
-		    file_name);
-		fclose(file);
+	error = file_open(filename, &file, &stat);
+	if (error)
 		return error;
-	}
 
-	fc->buffer_size = file_size;
+	fc->buffer_size = stat.st_size;
 	fc->buffer = malloc(fc->buffer_size);
 	if (fc->buffer == NULL) {
-		pr_err("Out of memory.");
-		fclose(file);
-		return -ENOMEM;
+		error = pr_enomem();
+		goto end;
 	}
 
 	fread_result = fread(fc->buffer, 1, fc->buffer_size, file);
@@ -54,14 +63,13 @@ file_load(const char *file_name, struct file_contents *fc)
 		if (error) {
 			/*
 			 * The manpage doesn't say that the result is an error
-			 * code. It literally doesn't say how to obtain the
-			 * error code.
+			 * code. It literally doesn't say how to get an error
+			 * code.
 			 */
 			pr_errno(error,
 			    "File reading error. Error message (apparently)");
 			free(fc->buffer);
-			fclose(file);
-			return error;
+			goto end;
 		}
 
 		/*
@@ -73,12 +81,15 @@ file_load(const char *file_name, struct file_contents *fc)
 		pr_err("fr:%zu bs:%zu EOF:%d", fread_result, fc->buffer_size,
 		    feof(file));
 		free(fc->buffer);
-		fclose(file);
-		return -EINVAL;
+		error = -EINVAL;
+		goto end;
 	}
 
-	fclose(file);
-	return 0;
+	error = 0;
+
+end:
+	file_close(file);
+	return error;
 }
 
 void

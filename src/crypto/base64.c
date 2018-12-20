@@ -62,9 +62,6 @@ base64_decode(BIO *in, unsigned char *out, size_t out_len, size_t *out_written)
 		return error ? error_ul2i(error) : -ENOMEM;
 	}
 
-	/* TODO would changing this flag simplify file reading? */
-	/* BIO_set_flags() cannot fail; it's dead-simple by definition. */
-	BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
 	/*
 	 * BIO_push() can technically fail through BIO_ctrl(), but it ignores
 	 * the error. This will not cause it to revert the push, so we have to
