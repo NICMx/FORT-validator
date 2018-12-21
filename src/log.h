@@ -1,6 +1,15 @@
 #ifndef SRC_LOG_H_
 #define SRC_LOG_H_
 
+/*
+ * I know that the OpenBSD style guide says that we shouldn't declare our own
+ * error printing functions, but we kind of need to do it:
+ *
+ * - It's convoluted to use err() and warn() on libcrypto errors.
+ * - If debug is enabled, we want the error messages to be printed as a tree
+ *   to ease debugging.
+ */
+
 void pr_debug(const char *, ...);
 void pr_debug_add(const char *, ...);
 void pr_debug_rm(const char *, ...);

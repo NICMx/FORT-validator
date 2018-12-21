@@ -105,17 +105,15 @@ main(int argc, char **argv)
 
 	if (argc < 3)
 		return pr_err("Repository path as first argument and TAL file as second argument, please.");
-
 	if (argc >= 4)
 		is_rsync_active = false;
 
+	error = hash_init();
+	if (error)
+		return error;
 	error = rsync_init(is_rsync_active);
 	if (error)
 		return error;
-
-	error = hash_init();
-	if (error)
-		return error; /* TODO revert rsync? */
 
 	add_rpki_oids();
 	thvar_init();
@@ -126,12 +124,11 @@ main(int argc, char **argv)
 	repository_len = strlen(repository);
 
 	error = tal_load(argv[2], &tal);
-	if (error)
-		return error;
+	if (!error) {
+		error = foreach_uri(tal, handle_tal_uri);
+		tal_destroy(tal);
+	}
 
-	error = foreach_uri(tal, handle_tal_uri);
-
-	tal_destroy(tal);
 	rsync_destroy();
 	return error;
 }
