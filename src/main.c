@@ -43,7 +43,7 @@ handle_tal_certificate(char *uri)
 	error = certificate_validate_rfc6487(cert, true);
 	if (error)
 		goto revert;
-	error = certificate_traverse_ca(cert, NULL);
+	error = certificate_traverse_ta(cert, NULL);
 
 revert:
 	X509_free(cert);
@@ -59,6 +59,22 @@ end:
 static int
 handle_tal_uri(struct tal *tal, char const *guri)
 {
+	/*
+	 * Because of the way the foreach iterates, this function must return
+	 *
+	 * - 0 on soft errors.
+	 * - `> 0` on URI handled successfully.
+	 * - `< 0` on hard errors.
+	 *
+	 * A "soft error" is "the connection to the preferred URI fails, or the
+	 * retrieved CA certificate public key does not match the TAL public
+	 * key." (RFC 7730)
+	 *
+	 * A "hard error" is any other error.
+	 *
+	 * TODO this will probably need an update after the merge.
+	 */
+
 	struct validation *state;
 	char *luri;
 	int error;
@@ -66,26 +82,42 @@ handle_tal_uri(struct tal *tal, char const *guri)
 	/* TODO this probably needs the state... */
 	error = download_files(guri);
 	if (error)
-		return error;
+		return 0;
 
 	error = validation_prepare(&state, tal);
 	if (error)
-		return error;
+		return -abs(error);
 
 	pr_debug_add("TAL URI %s {", guri);
 
 	if (!is_certificate(guri)) {
 		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
 		    guri);
-		error = -ENOTSUPPORTED;
+		error = -EINVAL;
 		goto end;
 	}
 
 	error = uri_g2l(guri, strlen(guri), &luri);
-	if (error)
-		return error;
+	if (error) {
+		error = -abs(error);
+		goto end;
+	}
 
 	error = handle_tal_certificate(luri);
+	if (error) {
+		switch (validation_pubkey_state(state)) {
+		case PKS_INVALID:
+			error = 0;
+			break;
+		case PKS_VALID:
+		case PKS_UNTESTED:
+			error = -abs(error);
+			break;
+		}
+	} else {
+		error = 1;
+	}
+
 	free(luri);
 
 end:
@@ -100,6 +132,7 @@ main(int argc, char **argv)
 	struct tal *tal;
 	int error;
 	bool is_rsync_active = true;
+	bool shuffle_uris = false;
 
 	print_stack_trace_on_segfault();
 
@@ -107,6 +140,8 @@ main(int argc, char **argv)
 		return pr_err("Repository path as first argument and TAL file as second argument, please.");
 	if (argc >= 4)
 		is_rsync_active = false;
+	if (argc >= 5)
+		shuffle_uris = true; /* TODO lol fix this */
 
 	error = hash_init();
 	if (error)
@@ -125,7 +160,10 @@ main(int argc, char **argv)
 
 	error = tal_load(argv[2], &tal);
 	if (!error) {
+		if (shuffle_uris)
+			tal_shuffle_uris(tal);
 		error = foreach_uri(tal, handle_tal_uri);
+		error = (error >= 0) ? 0 : error;
 		tal_destroy(tal);
 	}
 

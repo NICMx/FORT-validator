@@ -23,8 +23,14 @@ int certificate_validate_rfc6487(X509 *, bool);
  * Returns the IP and AS resources declared in the respective extensions.
  */
 int certificate_get_resources(X509 *, struct resources *);
+
 /**
- * Handles the SIA extension, CA style.
+ * Handles the SIA extension, Trust Anchor style.
+ * (ie. Recursively walks through the certificate's children.)
+ */
+int certificate_traverse_ta(X509 *, STACK_OF(X509_CRL) *);
+/**
+ * Handles the SIA extension, (intermediate) CA style.
  * (ie. Recursively walks through the certificate's children.)
  */
 int certificate_traverse_ca(X509 *, STACK_OF(X509_CRL) *);
@@ -33,6 +39,6 @@ int certificate_traverse_ca(X509 *, STACK_OF(X509_CRL) *);
  * (Doesn't actually "traverse" anything. The name is just for the sake of
  * mirroring.)
  */
-int certificate_traverse_ee(X509 *);
+int certificate_traverse_ee(X509 *, OCTET_STRING_t *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

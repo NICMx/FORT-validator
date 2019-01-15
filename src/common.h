@@ -8,6 +8,13 @@
 #define ENOTSUPPORTED 3172
 /* "I haven't implemented this yet." */
 #define ENOTIMPLEMENTED 3173
+/*
+ * "URI was not RSYNC; ignore it."
+ * Not really an error. The RFCs usually declare URI lists; usually only one of
+ * them is required to be RSYNC and the others should be skipped (until we
+ * start supporting them.)
+ */
+#define ENOTRSYNC 3174
 
 extern char const *repository;
 extern size_t repository_len;

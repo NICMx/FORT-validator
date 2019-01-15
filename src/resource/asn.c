@@ -60,6 +60,12 @@ rasn_add(struct resources_asn *asns, ASId_t min, ASId_t max)
 }
 
 bool
+rasn_empty(struct resources_asn *asns)
+{
+	return sarray_empty((struct sorted_array *) asns);
+}
+
+bool
 rasn_contains(struct resources_asn *asns, ASId_t min, ASId_t max)
 {
 	struct asn_node n = { min, max };

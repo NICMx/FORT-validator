@@ -12,6 +12,7 @@ void res4_put(struct resources_ipv4 *);
 
 int res4_add_prefix(struct resources_ipv4 *, struct ipv4_prefix *);
 int res4_add_range(struct resources_ipv4 *, struct ipv4_range *);
+bool res4_empty(struct resources_ipv4 *);
 bool res4_contains_prefix(struct resources_ipv4 *, struct ipv4_prefix *);
 bool res4_contains_range(struct resources_ipv4 *, struct ipv4_range *);
 

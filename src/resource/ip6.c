@@ -94,6 +94,12 @@ res6_add_range(struct resources_ipv6 *ips, struct ipv6_range *range)
 }
 
 bool
+res6_empty(struct resources_ipv6 *ips)
+{
+	return sarray_empty((struct sorted_array *) ips);
+}
+
+bool
 res6_contains_prefix(struct resources_ipv6 *ips, struct ipv6_prefix *prefix)
 {
 	struct ipv6_range r;

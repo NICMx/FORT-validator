@@ -34,8 +34,24 @@ is_digest_algorithm(AlgorithmIdentifier_t *id, char *what)
 }
 
 static int
+get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
+{
+	switch (sinfo->sid.present) {
+	case SignerIdentifier_PR_subjectKeyIdentifier:
+		*result = &sinfo->sid.choice.subjectKeyIdentifier;
+		return 0;
+	case SignerIdentifier_PR_issuerAndSerialNumber:
+		return pr_err("Signer Info's sid is an IssuerAndSerialNumber, not a SubjectKeyIdentifier.");
+	case SignerIdentifier_PR_NOTHING:
+		break;
+	}
+
+	return pr_err("Signer Info's sid is not a SubjectKeyIdentifier.");
+}
+
+static int
 handle_sdata_certificate(ANY_t *any, STACK_OF(X509_CRL) *crls,
-    struct resources *res)
+    struct resources *res, OCTET_STRING_t *sid)
 {
 	const unsigned char *tmp;
 	X509 *cert;
@@ -71,7 +87,7 @@ handle_sdata_certificate(ANY_t *any, STACK_OF(X509_CRL) *crls,
 			goto end2;
 	}
 
-	error = certificate_traverse_ee(cert);
+	error = certificate_traverse_ee(cert, sid);
 
 end2:
 	X509_free(cert);
@@ -225,6 +241,7 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
     struct resources *res)
 {
 	struct SignerInfo *sinfo;
+	OCTET_STRING_t *sid = NULL;
 	int error;
 
 	/* rfc6488#section-2.1 */
@@ -259,23 +276,13 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 	if (error)
 		return error;
 
-	/* section-2.1.3 */
+	/* rfc6488#section-2.1.3 */
 	/* Specific sub-validations will be performed later by calling code. */
 
-	/* rfc6488#section-2.1.4 */
-	/* rfc6488#section-3.1.c 1/2 */
-	if (sdata->certificates == NULL)
-		return pr_err("The SignedData does not contain certificates.");
-
-	if (sdata->certificates->list.count != 1) {
-		return pr_err("The SignedData contains %d certificates, one expected.",
-		    sdata->certificates->list.count);
-	}
-
-	error = handle_sdata_certificate(sdata->certificates->list.array[0],
-	    crls, res);
-	if (error)
-		return error;
+	/*
+	 * We will validate the certificate later, because we need the sid
+	 * first.
+	 */
 
 	/* rfc6488#section-2.1.5 */
 	/* rfc6488#section-3.1.d */
@@ -294,9 +301,25 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 
 	/* rfc6488#section-2.1.6.2 */
 	/* rfc6488#section-3.1.c 2/2 */
-	/*
-	 * TODO need the "EE certificate carried in the CMS certificates field."
-	 */
+	/* (Most of this requirement is in handle_ski_ee().) */
+	error = get_sid(sinfo, &sid);
+	if (error)
+		return error;
+
+	/* rfc6488#section-2.1.4 */
+	/* rfc6488#section-3.1.c 1/2 */
+	if (sdata->certificates == NULL)
+		return pr_err("The SignedData does not contain certificates.");
+
+	if (sdata->certificates->list.count != 1) {
+		return pr_err("The SignedData contains %d certificates, one expected.",
+		    sdata->certificates->list.count);
+	}
+
+	error = handle_sdata_certificate(sdata->certificates->list.array[0],
+	    crls, res, sid);
+	if (error)
+		return error;
 
 	/* rfc6488#section-2.1.6.3 */
 	/* rfc6488#section-3.1.j 2/2 */

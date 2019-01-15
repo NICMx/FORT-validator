@@ -139,7 +139,7 @@ inherit_aors(struct resources *resources, int family)
 	struct resources *parent;
 
 	parent = get_parent_resources();
-	if (!parent)
+	if (parent == NULL)
 		return pr_err("Certificate inherits IP resources, but parent does not define any resources.");
 
 	switch (family) {
@@ -400,7 +400,7 @@ inherit_asiors(struct resources *resources)
 	struct resources *parent;
 
 	parent = get_parent_resources();
-	if (!parent)
+	if (parent == NULL)
 		return pr_err("Certificate inherits ASN resources, but parent does not define any resources.");
 
 	if (resources->asns != NULL)
@@ -496,6 +496,14 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 	}
 
 	return pr_err("Unknown ASIdentifierChoice: %d", ids->asnum->present);
+}
+
+bool
+resources_empty(struct resources *res)
+{
+	return rasn_empty(res->asns)
+	    && res4_empty(res->ip4s)
+	    && res6_empty(res->ip6s);
 }
 
 bool

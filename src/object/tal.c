@@ -1,101 +1,98 @@
+#define _GNU_SOURCE
+
 #include "tal.h"
 
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/queue.h>
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
 #include "line_file.h"
 #include "log.h"
+#include "random.h"
 #include "crypto/base64.h"
 
-struct uri {
-	char *string;
-	SLIST_ENTRY(uri) next;
+struct uris {
+	char **array; /* This is an array of string pointers. */
+	unsigned int count;
+	unsigned int size;
 };
 
-SLIST_HEAD(uri_list, uri);
-
 struct tal {
-	struct uri_list uris;
+	struct uris uris;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
 };
 
-static void
-uri_destroy(struct uri *uri)
+static int
+uris_init(struct uris *uris)
 {
-	free(uri->string);
-	free(uri);
+	uris->count = 0;
+	uris->size = 4; /* Most TALs only define one. */
+	uris->array = malloc(uris->size * sizeof(char *));
+	return (uris->array != NULL) ? 0 : -ENOMEM;
 }
 
 static void
-uris_destroy(struct uri_list *uris)
+uris_destroy(struct uris *uris)
 {
-	struct uri *uri;
-
-	while (!SLIST_EMPTY(uris)) {
-		uri = SLIST_FIRST(uris);
-		SLIST_REMOVE_HEAD(uris, next);
-		uri_destroy(uri);
-	}
+	unsigned int i;
+	for (i = 0; i < uris->count; i++)
+		free(uris->array[i]);
+	free(uris->array);
 }
 
 static int
-read_uri(struct line_file *lfile, struct uri **result)
+uris_add(struct uris *uris, char *uri)
 {
-	struct uri *uri;
-	int err;
+	char **tmp;
 
-	uri = malloc(sizeof(struct uri));
-	if (uri == NULL)
-		return pr_enomem();
-
-	err = lfile_read(lfile, &uri->string);
-	if (err) {
-		free(uri);
-		return err;
+	if (uris->count + 1 >= uris->size) {
+		uris->size *= 2;
+		tmp = realloc(uris->array, uris->size * sizeof(char *));
+		if (tmp == NULL)
+			return pr_enomem();
+		uris->array = tmp;
 	}
 
-	*result = uri;
+	uris->array[uris->count++] = uri;
 	return 0;
 }
 
 static int
-read_uris(struct line_file *lfile, struct uri_list *uris)
+read_uris(struct line_file *lfile, struct uris *uris)
 {
-	struct uri *previous, *uri;
-	int err;
+	char *uri;
+	int error;
 
-	err = read_uri(lfile, &uri);
-	if (err)
-		return err;
+	error = lfile_read(lfile, &uri);
+	if (error)
+		return error;
 
-	if (strcmp(uri->string, "") == 0) {
-		uri_destroy(uri);
-		return pr_err("TAL file %s contains no URIs",
-		    lfile_name(lfile));
+	if (strcmp(uri, "") == 0) {
+		free(uri);
+		return pr_err("TAL file contains no URIs");
 	}
 
-	SLIST_INIT(uris);
-	SLIST_INSERT_HEAD(uris, uri, next);
+	error = uris_add(uris, uri);
+	if (error)
+		return error;
 
 	do {
-		previous = uri;
+		error = lfile_read(lfile, &uri);
+		if (error)
+			return error;
 
-		err = read_uri(lfile, &uri);
-		if (err)
-			return err;
-
-		if (strcmp(uri->string, "") == 0) {
-			uri_destroy(uri);
+		if (strcmp(uri, "") == 0) {
+			free(uri);
 			return 0; /* Happy path */
 		}
 
-		SLIST_INSERT_AFTER(previous, uri, next);
+		error = uris_add(uris, uri);
+		if (error)
+			return error;
 	} while (true);
 }
 
@@ -146,36 +143,42 @@ tal_load(const char *file_name, struct tal **result)
 {
 	struct line_file *lfile;
 	struct tal *tal;
-	int err;
+	int error;
 
-	err = lfile_open(file_name, &lfile);
-	if (err)
-		return err;
+	error = lfile_open(file_name, &lfile);
+	if (error)
+		goto fail4;
 
 	tal = malloc(sizeof(struct tal));
 	if (tal == NULL) {
-		lfile_close(lfile);
-		return -ENOMEM;
+		error = -ENOMEM;
+		goto fail3;
 	}
 
-	err = read_uris(lfile, &tal->uris);
-	if (err) {
-		free(tal);
-		lfile_close(lfile);
-		return err;
-	}
+	error = uris_init(&tal->uris);
+	if (error)
+		goto fail2;
 
-	err = read_spki(lfile, tal);
-	if (err) {
-		uris_destroy(&tal->uris);
-		free(tal);
-		lfile_close(lfile);
-		return err;
-	}
+	error = read_uris(lfile, &tal->uris);
+	if (error)
+		goto fail1;
+
+	error = read_spki(lfile, tal);
+	if (error)
+		goto fail1;
 
 	lfile_close(lfile);
 	*result = tal;
 	return 0;
+
+fail1:
+	uris_destroy(&tal->uris);
+fail2:
+	free(tal);
+fail3:
+	lfile_close(lfile);
+fail4:
+	return error;
 }
 
 void tal_destroy(struct tal *tal)
@@ -191,16 +194,35 @@ void tal_destroy(struct tal *tal)
 int
 foreach_uri(struct tal *tal, foreach_uri_cb cb)
 {
-	struct uri *cursor;
+	unsigned int i;
 	int error;
 
-	SLIST_FOREACH(cursor, &tal->uris, next) {
-		error = cb(tal, cursor->string);
+	for (i = 0; i < tal->uris.count; i++) {
+		error = cb(tal, tal->uris.array[i]);
 		if (error)
 			return error;
 	}
 
 	return 0;
+}
+
+void
+tal_shuffle_uris(struct tal *tal)
+{
+	char **array = tal->uris.array;
+	unsigned int count = tal->uris.count;
+	char *tmp;
+	long random_index;
+	unsigned int i;
+
+	random_init();
+
+	for (i = 0; i < count; i++) {
+		tmp = array[i];
+		random_index = random_at_most(count - 1 - i) + i;
+		array[i] = array[random_index];
+		array[random_index] = tmp;
+	}
 }
 
 void

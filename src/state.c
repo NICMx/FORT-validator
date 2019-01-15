@@ -33,6 +33,9 @@ struct validation {
 	 * seemingly not intended to be used outside of its library.)
 	 */
 	struct restack *rsrcs;
+
+	/* Did the TAL's public key match the root certificate's public key? */
+	enum pubkey_state pubkey_state;
 };
 
 /*
@@ -107,6 +110,8 @@ validation_prepare(struct validation **out, struct tal *tal)
 		goto abort3;
 	}
 
+	result->pubkey_state = PKS_UNTESTED;
+
 	*out = result;
 	return 0;
 
@@ -160,8 +165,23 @@ validation_resources(struct validation *state)
 	return state->rsrcs;
 }
 
+void validation_pubkey_valid(struct validation *state)
+{
+	state->pubkey_state = PKS_VALID;
+}
+
+void validation_pubkey_invalid(struct validation *state)
+{
+	state->pubkey_state = PKS_INVALID;
+}
+
+enum pubkey_state validation_pubkey_state(struct validation *state)
+{
+	return state->pubkey_state;
+}
+
 int
-validation_push_cert(struct validation *state, X509 *cert)
+validation_push_cert(struct validation *state, X509 *cert, bool is_ta)
 {
 	struct resources *resources;
 	int ok;
@@ -174,6 +194,16 @@ validation_push_cert(struct validation *state, X509 *cert)
 	error = certificate_get_resources(cert, resources);
 	if (error)
 		goto fail;
+
+	/*
+	 * rfc7730#section-2.2
+	 * "The INR extension(s) of this trust anchor MUST contain a non-empty
+	 * set of number resources."
+	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
+	 * part is already handled in certificate_get_resources().
+	 */
+	if (is_ta && resources_empty(resources))
+		return pr_err("Trust Anchor certificate does not define any number resources.");
 
 	ok = sk_X509_push(state->trusted, cert);
 	if (ok <= 0) {

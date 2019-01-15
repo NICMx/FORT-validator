@@ -127,6 +127,12 @@ sarray_add(struct sorted_array *sarray, void *element)
 }
 
 bool
+sarray_empty(struct sorted_array *sarray)
+{
+	return (sarray == NULL) || (sarray->count == 0);
+}
+
+bool
 sarray_contains(struct sorted_array *sarray, void *elem)
 {
 	unsigned int left, mid, right;

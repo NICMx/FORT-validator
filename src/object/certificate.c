@@ -20,6 +20,80 @@
  */
 typedef AUTHORITY_INFO_ACCESS SIGNATURE_INFO_ACCESS;
 
+struct extension_metadata {
+	char *name;
+	int nid;
+	bool critical;
+};
+
+static const struct extension_metadata BC = {
+	"Basic Constraints",
+	NID_basic_constraints,
+	true,
+};
+static const struct extension_metadata SKI = {
+	"Subject Key Identifier",
+	NID_subject_key_identifier,
+	false,
+};
+static const struct extension_metadata AKI = {
+	"Authority Key Identifier",
+	NID_authority_key_identifier,
+	false,
+};
+static const struct extension_metadata KU = {
+	"Key Usage",
+	NID_key_usage,
+	true,
+};
+static const struct extension_metadata CDP = {
+	"CRL Distribution Points",
+	NID_crl_distribution_points,
+	false,
+};
+static const struct extension_metadata AIA = {
+	"Authority Information Access",
+	NID_info_access,
+	false,
+};
+static const struct extension_metadata SIA = {
+	"Subject Information Access",
+	NID_sinfo_access ,
+	false,
+};
+static const struct extension_metadata CP = {
+	"Certificate Policies",
+	NID_certificate_policies,
+	true,
+};
+static const struct extension_metadata IR = {
+	"IP Resources",
+	NID_sbgp_ipAddrBlock,
+	true,
+};
+static const struct extension_metadata AR = {
+	"AS Resources",
+	NID_sbgp_autonomousSysNum,
+	true,
+};
+
+struct extension_handler {
+	struct extension_metadata const *meta;
+	bool mandatory;
+	int (*cb)(X509_EXTENSION *, void *);
+	void *arg;
+
+	void (*free)(void *);
+
+	/* For internal use */
+	bool found;
+};
+
+struct sia_arguments {
+	X509 *cert;
+	STACK_OF(X509_CRL) *crls;
+};
+
 bool is_certificate(char const *file_name)
 {
 	return file_has_extension(file_name, strlen(file_name), ".cer");
@@ -132,31 +206,37 @@ validate_spki(const unsigned char *cert_spk, int cert_spk_len)
 	error = asn1_decode(_tal_spki, _tal_spki_len,
 	    &asn_DEF_SubjectPublicKeyInfo, (void **) &tal_spki);
 	if (error)
-		return error;
+		goto fail1;
 
 	/* Algorithm Identifier */
 	error = oid2arcs(&tal_spki->algorithm.algorithm, &tal_alg_arcs);
 	if (error)
-		goto fail;
+		goto fail2;
 
 	if (!ARCS_EQUAL_OIDS(&tal_alg_arcs, oid_rsa)) {
 		error = pr_err("TAL's public key format is not RSA PKCS#1 v1.5 with SHA-256.");
-		goto fail;
+		goto fail3;
 	}
 
 	/* SPK */
 	if (tal_spki->subjectPublicKey.size != cert_spk_len)
-		goto not_equal;
+		goto fail4;
 	if (memcmp(tal_spki->subjectPublicKey.buf, cert_spk, cert_spk_len) != 0)
-		goto not_equal;
+		goto fail4;
 
+	free_arcs(&tal_alg_arcs);
 	ASN_STRUCT_FREE(asn_DEF_SubjectPublicKeyInfo, tal_spki);
+	validation_pubkey_valid(state);
 	return 0;
 
-not_equal:
+fail4:
 	error = pr_err("TAL's public key is different than the root certificate's public key.");
-fail:
+fail3:
+	free_arcs(&tal_alg_arcs);
+fail2:
 	ASN_STRUCT_FREE(asn_DEF_SubjectPublicKeyInfo, tal_spki);
+fail1:
+	validation_pubkey_invalid(state);
 	return error;
 }
 
@@ -211,13 +291,6 @@ validate_public_key(X509 *cert, bool is_root)
 			return error;
 	}
 
-	return 0;
-}
-
-static int
-validate_extensions(X509 *cert)
-{
-	/* TODO (field) */
 	return 0;
 }
 
@@ -279,7 +352,8 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 	if (error)
 		return error;
 
-	return validate_extensions(cert);
+	/* We'll validate extensions later. */
+	return 0;
 }
 
 int
@@ -383,6 +457,10 @@ abort:
 /*
  * "GENERAL_NAME, global to local"
  * Result has to be freed.
+ *
+ * If this function returns ENOTRSYNC, it means that @name was not an RSYNC URI.
+ * This often should not be treated as an error; please handle gracefully.
+ * TODO open call hierarchy.
  */
 static int
 gn_g2l(GENERAL_NAME *name, char **luri)
@@ -404,15 +482,11 @@ gn_g2l(GENERAL_NAME *name, char **luri)
 	 * Does it imply that the GeneralName CHOICE is constrained to type
 	 * "uniformResourceIdentifier"? I guess so, though I don't see anything
 	 * stopping a few of the other types from also being capable of storing
-	 * URIs. Then again, DER is all about unique serialized representation.
+	 * URIs.
 	 *
 	 * Also, nobody seems to be using the other types, and handling them
 	 * would be a titanic pain in the ass. So this is what I'm committing
 	 * to.
-	 *
-	 * I know that this is the logical conclusion; it's just that I know
-	 * that at some point in the future I'm going find myself bewilderingly
-	 * staring at this if again.
 	 */
 	if (type != GEN_URI) {
 		pr_err("Unknown GENERAL_NAME type: %d", type);
@@ -558,6 +632,24 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 }
 
 static int
+cannot_decode(struct extension_metadata const *meta)
+{
+	return pr_err("Extension '%s' seems to be malformed. Cannot decode.",
+	    meta->name);
+}
+
+static bool
+is_rsync(ASN1_IA5STRING *uri)
+{
+	static char const *const PREFIX = "rsync://";
+	size_t prefix_len = strlen(PREFIX);
+
+	return (uri->length >= prefix_len)
+	    ? (strncmp((char *) uri->data, PREFIX, strlen(PREFIX)) == 0)
+	    : false;
+}
+
+static int
 handle_rpkiManifest(ACCESS_DESCRIPTION *ad, STACK_OF(X509_CRL) *crls)
 {
 	char *uri;
@@ -606,28 +698,299 @@ handle_signedObject(ACCESS_DESCRIPTION *ad)
 	return error;
 }
 
-int
-certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
+static int
+handle_bc(X509_EXTENSION *ext, void *arg)
 {
+	BASIC_CONSTRAINTS *bc;
+	int error;
+
+	bc = X509V3_EXT_d2i(ext);
+	if (bc == NULL)
+		return cannot_decode(&BC);
+
+	/*
+	 * 'The issuer determines whether the "cA" boolean is set.'
+	 * ................................. Uh-huh. So nothing then.
+	 * Well, libcrypto should do the RFC 5280 thing with it anyway.
+	 */
+
+	error = (bc->pathlen == NULL)
+	    ? 0
+	    : pr_err("%s extension contains a Path Length Constraint.", BC.name);
+
+	BASIC_CONSTRAINTS_free(bc);
+	return error;
+}
+
+static int
+handle_ski(X509_EXTENSION *ext, void *arg)
+{
+	X509_PUBKEY *pubkey;
+	const unsigned char *spk;
+	int spk_len;
+	int ok;
+
+	/*
+	 * "Applications are not required to verify that key identifiers match
+	 * when performing certification path validation."
+	 * (rfc5280#section-4.2.1.2)
+	 * I think "match" refers to the "parent's SKI must match the
+	 * children's AKI" requirement, not "The SKI must match the SHA-1 of the
+	 * SPK" requirement.
+	 * So I guess we're only supposed to check the SHA-1.
+	 */
+
+	pubkey = X509_get_X509_PUBKEY((X509 *) arg);
+	if (pubkey == NULL) {
+		crypto_err("X509_get_X509_PUBKEY() returned NULL");
+		return -EINVAL;
+	}
+
+	ok = X509_PUBKEY_get0_param(NULL, &spk, &spk_len, NULL, pubkey);
+	if (!ok) {
+		crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+		return -EINVAL;
+	}
+
+	/* Get the SHA-1 of spk */
+	/* TODO (certext) ... */
+
+	/* Decode ext */
+
+	/* Compare the SHA and the decoded ext */
+
+	/* Free the decoded ext */
+
+	return 0;
+}
+
+static int
+handle_ski_ee(X509_EXTENSION *ext, void *arg)
+{
+	ASN1_OCTET_STRING *ski;
+	OCTET_STRING_t *sid = arg;
+	int error = 0;
+
+	ski = X509V3_EXT_d2i(ext);
+	if (ski == NULL)
+		return cannot_decode(&SKI);
+
+	/* rfc6488#section-2.1.6.2 */
+	/* rfc6488#section-3.1.c 2/2 */
+	if (ski->length != sid->size
+	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
+		error = pr_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
+	}
+
+	ASN1_OCTET_STRING_free(ski);
+	return error;
+}
+
+static int
+handle_aki_ta(X509_EXTENSION *ext, void *arg)
+{
+	return 0; /* TODO (certext) implement. */
+}
+
+static int
+handle_aki(X509_EXTENSION *ext, void *arg)
+{
+	AUTHORITY_KEYID *aki;
+	int error = 0;
+
+	aki = X509V3_EXT_d2i(ext);
+	if (aki == NULL)
+		return cannot_decode(&AKI);
+
+	if (aki->issuer != NULL) {
+		error = pr_err("%s extension contains an authorityCertIssuer.",
+		    AKI.name);
+		goto end;
+	}
+	if (aki->serial != NULL) {
+		error = pr_err("%s extension contains an authorityCertSerialNumber.",
+		    AKI.name);
+		goto end;
+	}
+
+	/* TODO (certext) stuff */
+
+end:
+	AUTHORITY_KEYID_free(aki);
+	return error;
+}
+
+static int
+handle_ku(X509_EXTENSION *ext, unsigned char byte1)
+{
+	/*
+	 * About the key usage string: At time of writing, it's 9 bits long.
+	 * But zeroized rightmost bits can be omitted.
+	 * This implementation assumes that the ninth bit should always be zero.
+	 */
+
+	ASN1_BIT_STRING *ku;
+	unsigned char data[2];
+	int error = 0;
+
+	ku = X509V3_EXT_d2i(ext);
+	if (ku == NULL)
+		return cannot_decode(&KU);
+
+	if (ku->length == 0) {
+		error = pr_err("%s bit string has no enabled bits.", KU.name);
+		goto end;
+	}
+
+	memset(data, 0, sizeof(data));
+	memcpy(data, ku->data, ku->length);
+
+	if (ku->data[0] != byte1) {
+		error = pr_err("Illegal key usage flag string: %u%u%u%u%u%u%u%u%u",
+		    !!(ku->data[0] & 0x80), !!(ku->data[0] & 0x40),
+		    !!(ku->data[0] & 0x20), !!(ku->data[0] & 0x10),
+		    !!(ku->data[0] & 0x08), !!(ku->data[0] & 0x04),
+		    !!(ku->data[0] & 0x02), !!(ku->data[0] & 0x01),
+		    !!(ku->data[1] & 0x80));
+		goto end;
+	}
+
+end:
+	ASN1_BIT_STRING_free(ku);
+	return error;
+}
+
+static int
+handle_ku_ca(X509_EXTENSION *ext, void *arg)
+{
+	return handle_ku(ext, 0x06);
+}
+
+static int
+handle_ku_ee(X509_EXTENSION *ext, void *arg)
+{
+	return handle_ku(ext, 0x80);
+}
+
+static int
+handle_cdp(X509_EXTENSION *ext, void *arg)
+{
+	STACK_OF(DIST_POINT) *crldp = X509V3_EXT_d2i(ext);
+	DIST_POINT *dp;
+	GENERAL_NAMES *names;
+	GENERAL_NAME *name;
+	int i;
+	int error = 0;
+	char *error_msg;
+
+	crldp = X509V3_EXT_d2i(ext);
+	if (crldp == NULL)
+		return cannot_decode(&CDP);
+
+	if (sk_DIST_POINT_num(crldp) != 1) {
+		error = pr_err("The %s extension has %u distribution points. (1 expected)",
+		    CDP.name, sk_DIST_POINT_num(crldp));
+		goto end;
+	}
+
+	dp = sk_DIST_POINT_value(crldp, 0);
+
+	if (dp->CRLissuer != NULL) {
+		error_msg = "has a CRLIssuer field";
+		goto dist_point_error;
+	}
+	if (dp->reasons != NULL) {
+		error_msg = "has a Reasons field";
+		goto dist_point_error;
+	}
+
+	if (dp->distpoint == NULL) {
+		error_msg = "lacks a distributionPoint field";
+		goto dist_point_error;
+	}
+
+	/* Bleargh. There's no enum. 0 is fullname, 1 is relativename. */
+	switch (dp->distpoint->type) {
+	case 0:
+		break;
+	case 1:
+		error_msg = "has a relative name";
+		goto dist_point_error;
+	default:
+		error_msg = "has an unknown type of name";
+		goto dist_point_error;
+	}
+
+	names = dp->distpoint->name.fullname;
+	for (i = 0; i < sk_GENERAL_NAME_num(names); i++) {
+		name = sk_GENERAL_NAME_value(names, i);
+		if (name->type == GEN_URI && is_rsync(name->d.uniformResourceIdentifier)) {
+			/*
+			 * TODO (certext) check the URI matches what we rsync'd.
+			 * Also indent properly.
+			 */
+			error = 0;
+			goto end;
+		}
+	}
+
+	error_msg = "lacks an RSYNC URI";
+
+dist_point_error:
+	error = pr_err("The %s extension's distribution point %s.", CDP.name,
+	    error_msg);
+
+end:
+	sk_DIST_POINT_pop_free(crldp, DIST_POINT_free);
+	return error;
+}
+
+static int
+handle_aia(X509_EXTENSION *ext, void *arg)
+{
+	AUTHORITY_INFO_ACCESS *aia;
+	ACCESS_DESCRIPTION *ad;
+	int i;
+
+	aia = X509V3_EXT_d2i(ext);
+	if (aia == NULL)
+		return cannot_decode(&AIA);
+
+	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(aia); i++) {
+		ad = sk_ACCESS_DESCRIPTION_value(aia, i);
+		if (OBJ_obj2nid(ad->method) == NID_ad_ca_issuers) {
+			/*
+			 * TODO (certext) check the URI matches what we rsync'd.
+			 */
+		}
+	}
+
+	AUTHORITY_INFO_ACCESS_free(aia);
+	return 0;
+}
+
+static int
+handle_sia_ca(X509_EXTENSION *ext, void *arg)
+{
+	struct sia_arguments *args = arg;
 	struct validation *state;
 	SIGNATURE_INFO_ACCESS *sia;
 	ACCESS_DESCRIPTION *ad;
+	bool rsync_found = false;
 	bool manifest_found = false;
 	int i;
 	int error;
 
-	sia = X509_get_ext_d2i(cert, NID_sinfo_access, NULL, NULL);
-	if (sia == NULL) {
-		pr_err("Certificate lacks a Subject Information Access extension.");
-		return -ESRCH;
-	}
+	sia = X509V3_EXT_d2i(ext);
+	if (sia == NULL)
+		return cannot_decode(&SIA);
 
 	state = state_retrieve();
 	if (state == NULL) {
 		error = -EINVAL;
 		goto end2;
 	}
-	error = validation_push_cert(state, cert);
+	error = validation_push_cert(state, args->cert, false);
 	if (error)
 		goto end2;
 
@@ -636,16 +999,26 @@ certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
 		if (OBJ_obj2nid(ad->method) == NID_caRepository) {
 			error = handle_caRepository(ad);
+			if (error == ENOTRSYNC)
+				continue;
 			if (error)
 				goto end1;
+			rsync_found = true;
+			break;
 		}
+	}
+
+	if (!rsync_found) {
+		pr_err("SIA extension lacks an RSYNC URI caRepository.");
+		error = -ESRCH;
+		goto end1;
 	}
 
 	/* validate */
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
 		if (OBJ_obj2nid(ad->method) == NID_rpkiManifest) {
-			error = handle_rpkiManifest(ad, crls);
+			error = handle_rpkiManifest(ad, args->crls);
 			if (error)
 				goto end1;
 			manifest_found = true;
@@ -654,7 +1027,7 @@ certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
 
 	/* rfc6481#section-2 */
 	if (!manifest_found) {
-		pr_err("Repository publication point seems to have no manifest.");
+		pr_err("SIA extension lacks an rpkiManifest access description.");
 		error = -ESRCH;
 	}
 
@@ -665,19 +1038,17 @@ end2:
 	return error;
 }
 
-int
-certificate_traverse_ee(X509 *cert)
+static int
+handle_sia_ee(X509_EXTENSION *ext, void *arg)
 {
 	SIGNATURE_INFO_ACCESS *sia;
 	ACCESS_DESCRIPTION *ad;
 	int i;
-	int error;
+	int error = 0;
 
-	sia = X509_get_ext_d2i(cert, NID_sinfo_access, NULL, NULL);
-	if (sia == NULL) {
-		pr_err("Certificate lacks a Subject Information Access extension.");
-		return -ESRCH;
-	}
+	sia = X509V3_EXT_d2i(ext);
+	if (sia == NULL)
+		return cannot_decode(&SIA);
 
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
@@ -696,4 +1067,154 @@ certificate_traverse_ee(X509 *cert)
 end:
 	AUTHORITY_INFO_ACCESS_free(sia);
 	return error;
+}
+
+static int
+handle_cp(X509_EXTENSION *ext, void *arg)
+{
+	return 0; /* TODO (certext) Implement */
+}
+
+static int
+handle_ir(X509_EXTENSION *ext, void *arg)
+{
+	return 0; /* Handled in certificate_get_resources(). */
+}
+
+static int
+handle_ar(X509_EXTENSION *ext, void *arg)
+{
+	return 0; /* Handled in certificate_get_resources(). */
+}
+
+static int
+handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
+{
+	struct extension_handler *handler;
+	int nid;
+
+	nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
+
+	for (handler = handlers; handler->meta != NULL; handler++) {
+		if (handler->meta->nid == nid) {
+			if (handler->found)
+				goto dupe;
+			handler->found = true;
+
+			if (handler->meta->critical) {
+				if (!X509_EXTENSION_get_critical(ext))
+					goto not_critical;
+			} else {
+				if (X509_EXTENSION_get_critical(ext))
+					goto critical;
+			}
+
+			return handler->cb(ext, handler->arg);
+		}
+	}
+
+	if (!X509_EXTENSION_get_critical(ext))
+		return 0; /* Unknown and not critical; ignore it. */
+
+	return pr_err("Certificate has unknown extension. (Extension NID: %d)",
+	    nid);
+dupe:
+	return pr_err("Certificate has more than one '%s' extension.",
+	    handler->meta->name);
+not_critical:
+	return pr_err("Extension '%s' is supposed to be marked critical.",
+	    handler->meta->name);
+critical:
+	return pr_err("Extension '%s' is not supposed to be marked critical.",
+	    handler->meta->name);
+}
+
+static int
+handle_cert_extensions(struct extension_handler *handlers, X509 *cert)
+{
+	struct extension_handler *handler;
+	int e;
+	int error;
+
+	for (e = 0; e < X509_get_ext_count(cert); e++) {
+		error = handle_extension(handlers, X509_get_ext(cert, e));
+		if (error)
+			return error;
+	}
+
+	for (handler = handlers; handler->meta != NULL; handler++) {
+		if (handler->mandatory && !handler->found)
+			return pr_err("Certificate is missing the '%s' extension.",
+			    handler->meta->name);
+	}
+
+	return 0;
+}
+
+int
+certificate_traverse_ta(X509 *cert, STACK_OF(X509_CRL) *crls)
+{
+	struct sia_arguments sia_args;
+	struct extension_handler handlers[] = {
+	   /* ext   reqd   handler        arg       */
+	    { &BC,  true,  handle_bc,               },
+	    { &SKI, true,  handle_ski,    &cert     },
+	    { &AKI, false, handle_aki_ta,           },
+	    { &KU,  true,  handle_ku_ca,            },
+	    { &SIA, true,  handle_sia_ca, &sia_args },
+	    { &CP,  true,  handle_cp,               },
+	    { &IR,  false, handle_ir,               },
+	    { &AR,  false, handle_ar,               },
+	    { NULL },
+	};
+
+	sia_args.cert = cert;
+	sia_args.crls = crls;
+
+	return handle_cert_extensions(handlers, cert);
+}
+
+int
+certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
+{
+	struct sia_arguments sia_args;
+	struct extension_handler handlers[] = {
+	   /* ext   reqd   handler        arg       */
+	    { &BC,  true,  handle_bc,            },
+	    { &SKI, true,  handle_ski,    &cert     },
+	    { &AKI, true,  handle_aki,              },
+	    { &KU,  true,  handle_ku_ca,            },
+	    { &CDP, true,  handle_cdp,              },
+	    { &AIA, true,  handle_aia,              },
+	    { &SIA, true,  handle_sia_ca, &sia_args },
+	    { &CP,  true,  handle_cp,               },
+	    { &IR,  false, handle_ir,               },
+	    { &AR,  false, handle_ar,               },
+	    { NULL },
+	};
+
+	sia_args.cert = cert;
+	sia_args.crls = crls;
+
+	return handle_cert_extensions(handlers, cert);
+}
+
+int
+certificate_traverse_ee(X509 *cert, OCTET_STRING_t *sid)
+{
+	struct extension_handler handlers[] = {
+	   /* ext   reqd   handler        arg */
+	    { &SKI, true,  handle_ski_ee, sid },
+	    { &AKI, true,  handle_aki,        },
+	    { &KU,  true,  handle_ku_ee,      },
+	    { &CDP, true,  handle_cdp,        },
+	    { &AIA, true,  handle_aia,        },
+	    { &SIA, true,  handle_sia_ee,     },
+	    { &CP,  true,  handle_cp,         },
+	    { &IR,  false, handle_ir,         },
+	    { &AR,  false, handle_ar,         },
+	    { NULL },
+	};
+
+	return handle_cert_extensions(handlers, cert);
 }

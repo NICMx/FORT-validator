@@ -12,6 +12,7 @@ void tal_destroy(struct tal *);
 
 typedef int (*foreach_uri_cb)(struct tal *, char const *);
 int foreach_uri(struct tal *, foreach_uri_cb);
+void tal_shuffle_uris(struct tal *);
 
 void tal_get_spki(struct tal *, unsigned char const **, size_t *);
 

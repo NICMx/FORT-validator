@@ -30,6 +30,10 @@ file_has_extension(char const *filename, size_t filename_len, char const *ext)
  *
  * You need to free the result once you're done.
  * This function does not assume that @guri is null-terminated.
+ *
+ * By contract, if @guri is not RSYNC, this will return ENOTRSYNC.
+ * This often should not be treated as an error; please handle gracefully.
+ * TODO open call hirarchy.
  */
 int
 uri_g2l(char const *guri, size_t guri_len, char **result)
@@ -42,8 +46,10 @@ uri_g2l(char const *guri, size_t guri_len, char **result)
 
 	prefix_len = strlen(PREFIX);
 
-	if (guri_len < prefix_len || strncmp(PREFIX, guri, prefix_len) != 0)
-		return pr_err("Global URI does not begin with '%s'.", PREFIX);
+	if (guri_len < prefix_len || strncmp(PREFIX, guri, prefix_len) != 0) {
+		pr_err("Global URI does not begin with '%s'.", PREFIX);
+		return ENOTRSYNC; /* Not really an error, so not negative */
+	}
 
 	guri += prefix_len;
 	guri_len -= prefix_len;
