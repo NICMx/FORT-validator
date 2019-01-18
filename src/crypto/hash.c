@@ -8,23 +8,8 @@
 #include "log.h"
 #include "asn1/oid.h"
 
-#define ALGORITHM "sha256"
-static EVP_MD const *md;
-
 int
-hash_init(void)
-{
-	md = EVP_get_digestbyname(ALGORITHM);
-	if (md == NULL) {
-		printf("Unknown message digest %s\n", ALGORITHM);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-int
-hash_is_valid_algorithm(OBJECT_IDENTIFIER_t *oid, bool *result)
+hash_is_sha256(OBJECT_IDENTIFIER_t *oid, bool *result)
 {
 	static const OID sha_oid = OID_SHA256;
 	struct oid_arcs arcs;
@@ -40,17 +25,34 @@ hash_is_valid_algorithm(OBJECT_IDENTIFIER_t *oid, bool *result)
 	return 0;
 }
 
+static int
+get_md(char const *algorithm, EVP_MD const **result)
+{
+	EVP_MD const *md;
+
+	md = EVP_get_digestbyname(algorithm);
+	if (md == NULL) {
+		printf("Unknown message digest %s\n", algorithm);
+		return -EINVAL;
+	}
+
+	*result = md;
+	return 0;
+}
+
 static bool
-hash_matches(unsigned char *expected, size_t expected_len,
-    unsigned char *actual, unsigned int actual_len)
+hash_matches(unsigned char const *expected, size_t expected_len,
+    unsigned char const *actual, unsigned int actual_len)
 {
 	return (expected_len == actual_len)
 	    && (memcmp(expected, actual, expected_len) == 0);
 }
 
 static int
-hash_file(char *filename, unsigned char *result, unsigned int *result_len)
+hash_file(char const *algorithm, char const *filename, unsigned char *result,
+    unsigned int *result_len)
 {
+	EVP_MD const *md;
 	FILE *file;
 	struct stat stat;
 	unsigned char *buffer;
@@ -58,6 +60,10 @@ hash_file(char *filename, unsigned char *result, unsigned int *result_len)
 	size_t consumed;
 	EVP_MD_CTX *ctx;
 	int error;
+
+	error = get_md(algorithm, &md);
+	if (error)
+		return error;
 
 	error = file_open(filename, &file, &stat);
 	if (error)
@@ -115,7 +121,8 @@ end1:
  * hashes match.
  */
 int
-hash_validate_file(char *filename, BIT_STRING_t *expected)
+hash_validate_file(char const *algorithm, char const *filename,
+    BIT_STRING_t const *expected)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];
 	unsigned int actual_len;
@@ -124,7 +131,7 @@ hash_validate_file(char *filename, BIT_STRING_t *expected)
 	if (expected->bits_unused != 0)
 		return pr_err("Hash string has unused bits.");
 
-	error = hash_file(filename, actual, &actual_len);
+	error = hash_file(algorithm, filename, actual, &actual_len);
 	if (error)
 		return error;
 
@@ -135,11 +142,17 @@ hash_validate_file(char *filename, BIT_STRING_t *expected)
 }
 
 static int
-hash_buffer(unsigned char *content, size_t content_len, unsigned char *hash,
-    unsigned int *hash_len)
+hash_buffer(char const *algorithm,
+    unsigned char const *content, size_t content_len,
+    unsigned char *hash, unsigned int *hash_len)
 {
+	EVP_MD const *md;
 	EVP_MD_CTX *ctx;
 	int error = 0;
+
+	error = get_md(algorithm, &md);
+	if (error)
+		return error;
 
 	ctx = EVP_MD_CTX_new();
 	if (ctx == NULL)
@@ -155,19 +168,32 @@ hash_buffer(unsigned char *content, size_t content_len, unsigned char *hash,
 	return error;
 }
 
+/*
+ * Returns 0 if @data's hash is @expected. Returns error code otherwise.
+ */
 int
-hash_validate_octet_string(OCTET_STRING_t *content, OCTET_STRING_t *expected)
+hash_validate(char const *algorithm,
+    unsigned char const *expected, size_t expected_len,
+    unsigned char const *data, size_t data_len)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];
 	unsigned int actual_len;
 	int error;
 
-	error = hash_buffer(content->buf, content->size, actual, &actual_len);
+	error = hash_buffer(algorithm, data, data_len, actual, &actual_len);
 	if (error)
 		return error;
 
-	if (!hash_matches(expected->buf, expected->size, actual, actual_len))
-		return pr_err("File does not match its hash.");
+	return hash_matches(expected, expected_len, actual, actual_len)
+	    ? 0
+	    : -EINVAL;
+}
 
-	return 0;
+int
+hash_validate_octet_string(char const *algorithm,
+    OCTET_STRING_t const *expected,
+    OCTET_STRING_t const *data)
+{
+	return hash_validate(algorithm, expected->buf, expected->size,
+	    data->buf, data->size);
 }

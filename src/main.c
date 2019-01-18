@@ -6,7 +6,6 @@
 #include "debug.h"
 #include "log.h"
 #include "thread_var.h"
-#include "crypto/hash.h"
 #include "object/certificate.h"
 #include "object/tal.h"
 #include "rsync/rsync.h"
@@ -143,9 +142,6 @@ main(int argc, char **argv)
 	if (argc >= 5)
 		shuffle_uris = true; /* TODO lol fix this */
 
-	error = hash_init();
-	if (error)
-		return error;
 	error = rsync_init(is_rsync_active);
 	if (error)
 		return error;

@@ -24,7 +24,7 @@ is_digest_algorithm(AlgorithmIdentifier_t *id, char *what)
 	if (id == NULL)
 		return pr_err("The %s algorithm is NULL.", what);
 
-	error = hash_is_valid_algorithm(&id->algorithm, &is_hash);
+	error = hash_is_sha256(&id->algorithm, &is_hash);
 	if (error)
 		return error;
 	if (!is_hash)
@@ -135,7 +135,9 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 	if (error)
 		return error;
 
-	error = hash_validate_octet_string(eci->eContent, digest);
+	error = hash_validate_octet_string("sha256", digest, eci->eContent);
+	if (error)
+		pr_err("The content's hash does not match the Message-Digest Attribute.");
 
 	free(digest);
 	return error;

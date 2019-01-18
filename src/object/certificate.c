@@ -1,6 +1,7 @@
 #include "certificate.h"
 
 #include <errno.h>
+#include <stdint.h> /* SIZE_MAX */
 #include <libcmscodec/SubjectInfoAccessSyntax.h>
 #include <libcmscodec/SubjectPublicKeyInfo.h>
 #include <libcmscodec/IPAddrBlocks.h>
@@ -11,6 +12,7 @@
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
+#include "crypto/hash.h"
 #include "rsync/rsync.h"
 
 /*
@@ -87,6 +89,11 @@ struct extension_handler {
 
 	/* For internal use */
 	bool found;
+};
+
+struct ski_arguments {
+	X509 *cert;
+	OCTET_STRING_t *sid;
 };
 
 struct sia_arguments {
@@ -252,16 +259,12 @@ validate_public_key(X509 *cert, bool is_root)
 	int error;
 
 	pubkey = X509_get_X509_PUBKEY(cert);
-	if (pubkey == NULL) {
-		crypto_err("X509_get_X509_PUBKEY() returned NULL");
-		return -EINVAL;
-	}
+	if (pubkey == NULL)
+		return crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
 	ok = X509_PUBKEY_get0_param(&alg, &bytes, &bytes_len, NULL, pubkey);
-	if (!ok) {
-		crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
-		return -EINVAL;
-	}
+	if (!ok)
+		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
 	alg_nid = OBJ_obj2nid(alg);
 	/*
@@ -722,81 +725,180 @@ handle_bc(X509_EXTENSION *ext, void *arg)
 	return error;
 }
 
+/**
+ * Returns 0 if the identifier (ie. SHA-1 hash) of @cert's public key is @hash.
+ * Otherwise returns error code.
+ */
 static int
-handle_ski(X509_EXTENSION *ext, void *arg)
+validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 {
 	X509_PUBKEY *pubkey;
 	const unsigned char *spk;
 	int spk_len;
 	int ok;
+	int error;
 
 	/*
+	 * I really can't tell if this validation needs to be performed.
+	 * Probably not.
+	 *
 	 * "Applications are not required to verify that key identifiers match
 	 * when performing certification path validation."
 	 * (rfc5280#section-4.2.1.2)
-	 * I think "match" refers to the "parent's SKI must match the
-	 * children's AKI" requirement, not "The SKI must match the SHA-1 of the
-	 * SPK" requirement.
-	 * So I guess we're only supposed to check the SHA-1.
+	 *
+	 * From its context, my reading is that the quote refers to the
+	 * "parent's SKI must equal the children's AKI" requirement, not the
+	 * "child's SKI must equal the SHA-1 of its own's SPK" requirement. So
+	 * I think that we're only supposed to check the SHA-1. Or nothing at
+	 * all, because we only care about the keys, not their identifiers.
+	 *
+	 * But the two requirements actually have a lot in common:
+	 *
+	 * The quote is from 5280, not 6487. 6487 chooses to enforce the SKI's
+	 * "SHA-1 as identifier" option, even for the AKI. And if I'm validating
+	 * the AKI's SHA-1, then I'm also indirectly checking the children vs
+	 * parent relationship.
+	 *
+	 * Also, what's with using a hash as identifier? That's an accident
+	 * waiting to happen...
+	 *
+	 * Bottom line, I don't know. But better be safe than sorry, so here's
+	 * the validation.
+	 *
+	 * Shit. I feel like I'm losing so much performance because the RFCs
+	 * are so wishy-washy about what is our realm and what is not.
 	 */
 
-	pubkey = X509_get_X509_PUBKEY((X509 *) arg);
-	if (pubkey == NULL) {
-		crypto_err("X509_get_X509_PUBKEY() returned NULL");
-		return -EINVAL;
-	}
+	/* Get the SPK (ask libcrypto) */
+	pubkey = X509_get_X509_PUBKEY(cert);
+	if (pubkey == NULL)
+		return crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
 	ok = X509_PUBKEY_get0_param(NULL, &spk, &spk_len, NULL, pubkey);
-	if (!ok) {
-		crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
-		return -EINVAL;
+	if (!ok)
+		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+
+	/* Hash the SPK, compare SPK hash with the SKI */
+	if (hash->length < 0 || SIZE_MAX < hash->length) {
+		return pr_err("%s length (%d) is out of bounds. (0-%zu)",
+		    SKI.name, hash->length, SIZE_MAX);
+	}
+	if (spk_len < 0 || SIZE_MAX < spk_len) {
+		return pr_err("Subject Public Key length (%d) is out of bounds. (0-%zu)",
+		    spk_len, SIZE_MAX);
 	}
 
-	/* Get the SHA-1 of spk */
-	/* TODO (certext) ... */
+	error = hash_validate("sha1", hash->data, hash->length, spk, spk_len);
+	if (error) {
+		pr_err("The Subject Public Key's hash does not match the %s.",
+		    SKI.name);
+	}
 
-	/* Decode ext */
-
-	/* Compare the SHA and the decoded ext */
-
-	/* Free the decoded ext */
-
-	return 0;
+	return error;
 }
 
 static int
-handle_ski_ee(X509_EXTENSION *ext, void *arg)
+handle_ski_ca(X509_EXTENSION *ext, void *arg)
 {
 	ASN1_OCTET_STRING *ski;
-	OCTET_STRING_t *sid = arg;
-	int error = 0;
+	int error;
 
 	ski = X509V3_EXT_d2i(ext);
 	if (ski == NULL)
 		return cannot_decode(&SKI);
 
-	/* rfc6488#section-2.1.6.2 */
-	/* rfc6488#section-3.1.c 2/2 */
-	if (ski->length != sid->size
-	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
-		error = pr_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
-	}
+	error = validate_public_key_hash(arg, ski);
 
 	ASN1_OCTET_STRING_free(ski);
 	return error;
 }
 
 static int
-handle_aki_ta(X509_EXTENSION *ext, void *arg)
+handle_ski_ee(X509_EXTENSION *ext, void *arg)
 {
-	return 0; /* TODO (certext) implement. */
+	struct ski_arguments *args;
+	ASN1_OCTET_STRING *ski;
+	OCTET_STRING_t *sid;
+	int error;
+
+	ski = X509V3_EXT_d2i(ext);
+	if (ski == NULL)
+		return cannot_decode(&SKI);
+
+	args = arg;
+	error = validate_public_key_hash(args->cert, ski);
+	if (error)
+		goto end;
+
+	/* rfc6488#section-2.1.6.2 */
+	/* rfc6488#section-3.1.c 2/2 */
+	sid = args->sid;
+	if (ski->length != sid->size
+	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
+		error = pr_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
+	}
+
+end:
+	ASN1_OCTET_STRING_free(ski);
+	return error;
+}
+
+static bool
+extension_equals(X509_EXTENSION *ext1, X509_EXTENSION *ext2)
+{
+	int crit1;
+	int crit2;
+	ASN1_OCTET_STRING *data1;
+	ASN1_OCTET_STRING *data2;
+
+	crit1 = X509_EXTENSION_get_critical(ext1);
+	crit2 = X509_EXTENSION_get_critical(ext2);
+	if (crit1 != crit2)
+		return false;
+
+	data1 = X509_EXTENSION_get_data(ext1);
+	data2 = X509_EXTENSION_get_data(ext2);
+	if (data1->length != data2->length)
+		return false;
+	if (data1->type != data2->type)
+		return false;
+	if (data1->flags != data2->flags)
+		return false;
+	if (memcmp(data1->data, data2->data, data1->length) != 0)
+		return false;
+
+	return true;
+}
+
+static int
+handle_aki_ta(X509_EXTENSION *aki, void *arg)
+{
+	X509 *cert = arg;
+	X509_EXTENSION *other;
+	int i;
+
+	for (i = 0; i < X509_get_ext_count(cert); i++) {
+		other = X509_get_ext(cert, i);
+		if (OBJ_obj2nid(X509_EXTENSION_get_object(other)) == SKI.nid) {
+			if (extension_equals(aki, other))
+				return 0;
+
+			return pr_err("The %s is not equal to the %s.",
+			    AKI.name, SKI.name);
+		}
+	}
+
+	pr_err("Certificate lacks the '%s' extension.", SKI.name);
+	return -ESRCH;
 }
 
 static int
 handle_aki(X509_EXTENSION *ext, void *arg)
 {
 	AUTHORITY_KEYID *aki;
-	int error = 0;
+	struct validation *state;
+	X509 *parent;
+	int error;
 
 	aki = X509V3_EXT_d2i(ext);
 	if (aki == NULL)
@@ -813,7 +915,19 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 		goto end;
 	}
 
-	/* TODO (certext) stuff */
+	state = state_retrieve();
+	if (state == NULL) {
+		error = -EINVAL;
+		goto end;
+	}
+
+	parent = validation_peek_cert(state);
+	if (parent == NULL) {
+		error = pr_err("Certificate has no parent.");
+		goto end;
+	}
+
+	error = validate_public_key_hash(parent, aki->keyid);
 
 end:
 	AUTHORITY_KEYID_free(aki);
@@ -1009,7 +1123,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	}
 
 	if (!rsync_found) {
-		pr_err("SIA extension lacks an RSYNC URI caRepository.");
+		pr_err("SIA extension lacks a caRepository RSYNC URI.");
 		error = -ESRCH;
 		goto end1;
 	}
@@ -1018,6 +1132,19 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
 		if (OBJ_obj2nid(ad->method) == NID_rpkiManifest) {
+			/*
+			 * rfc6481#section-2.2
+			 * This validation is naive.
+			 * The fact that only one manifest is listed in the SIA
+			 * does not mean that there aren't more or them in the
+			 * publication point.
+			 * But it's all we can do methinks.
+			 */
+			if (manifest_found) {
+				error = pr_err("SIA defines more than one manifest.");
+				goto end1;
+			}
+
 			error = handle_rpkiManifest(ad, args->crls);
 			if (error)
 				goto end1;
@@ -1043,8 +1170,12 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 {
 	SIGNATURE_INFO_ACCESS *sia;
 	ACCESS_DESCRIPTION *ad;
+	bool signedObject_found = false;
+	int nid;
 	int i;
 	int error = 0;
+
+	/* TODO this is getting convoluted. Make a generic AD foreach. */
 
 	sia = X509V3_EXT_d2i(ext);
 	if (sia == NULL)
@@ -1052,17 +1183,25 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
-		if (OBJ_obj2nid(ad->method) == NID_signedObject) {
+		nid = OBJ_obj2nid(ad->method);
+
+		if (nid == NID_signedObject) {
 			error = handle_signedObject(ad);
+			/* TODO Unknown signedObjects are allowed. */
 			if (error)
 				goto end;
+			signedObject_found = true;
 
 		} else {
 			/* rfc6487#section-4.8.8.2 */
-			error = pr_err("EE Certificate has an non-signedObject access description.");
+			error = pr_err("EE Certificate has an non-signedObject access description. (NID: %d)",
+			    nid);
 			goto end;
 		}
 	}
+
+	if (!signedObject_found)
+		error = pr_err("EE Certificate's SIA lacks a signedObject access description.");
 
 end:
 	AUTHORITY_INFO_ACCESS_free(sia);
@@ -1158,8 +1297,8 @@ certificate_traverse_ta(X509 *cert, STACK_OF(X509_CRL) *crls)
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg       */
 	    { &BC,  true,  handle_bc,               },
-	    { &SKI, true,  handle_ski,    &cert     },
-	    { &AKI, false, handle_aki_ta,           },
+	    { &SKI, true,  handle_ski_ca, cert      },
+	    { &AKI, false, handle_aki_ta, cert      },
 	    { &KU,  true,  handle_ku_ca,            },
 	    { &SIA, true,  handle_sia_ca, &sia_args },
 	    { &CP,  true,  handle_cp,               },
@@ -1180,8 +1319,8 @@ certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
 	struct sia_arguments sia_args;
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg       */
-	    { &BC,  true,  handle_bc,            },
-	    { &SKI, true,  handle_ski,    &cert     },
+	    { &BC,  true,  handle_bc,               },
+	    { &SKI, true,  handle_ski_ca, cert      },
 	    { &AKI, true,  handle_aki,              },
 	    { &KU,  true,  handle_ku_ca,            },
 	    { &CDP, true,  handle_cdp,              },
@@ -1202,19 +1341,23 @@ certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
 int
 certificate_traverse_ee(X509 *cert, OCTET_STRING_t *sid)
 {
+	struct ski_arguments ski_args;
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg */
-	    { &SKI, true,  handle_ski_ee, sid },
-	    { &AKI, true,  handle_aki,        },
-	    { &KU,  true,  handle_ku_ee,      },
-	    { &CDP, true,  handle_cdp,        },
-	    { &AIA, true,  handle_aia,        },
-	    { &SIA, true,  handle_sia_ee,     },
-	    { &CP,  true,  handle_cp,         },
-	    { &IR,  false, handle_ir,         },
-	    { &AR,  false, handle_ar,         },
+	    { &SKI, true,  handle_ski_ee, &ski_args },
+	    { &AKI, true,  handle_aki,              },
+	    { &KU,  true,  handle_ku_ee,            },
+	    { &CDP, true,  handle_cdp,              },
+	    { &AIA, true,  handle_aia,              },
+	    { &SIA, true,  handle_sia_ee,           },
+	    { &CP,  true,  handle_cp,               },
+	    { &IR,  false, handle_ir,               },
+	    { &AR,  false, handle_ar,               },
 	    { NULL },
 	};
+
+	ski_args.cert = cert;
+	ski_args.sid = sid;
 
 	return handle_cert_extensions(handlers, cert);
 }

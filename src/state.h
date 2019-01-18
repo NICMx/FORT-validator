@@ -27,6 +27,7 @@ enum pubkey_state validation_pubkey_state(struct validation *);
 
 int validation_push_cert(struct validation *, X509 *, bool);
 int validation_pop_cert(struct validation *);
+X509 *validation_peek_cert(struct validation *);
 
 struct resources *validation_peek_resource(struct validation *);
 

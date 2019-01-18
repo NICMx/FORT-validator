@@ -28,7 +28,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 static int
 validate_manifest(struct Manifest *manifest)
 {
-	bool is_hash;
+	bool is_sha256;
 	int error;
 
 	/* rfc6486#section-4.2.1 */
@@ -91,10 +91,10 @@ validate_manifest(struct Manifest *manifest)
 		return error;
 
 	/* rfc6486#section-6.6 (I guess) */
-	error = hash_is_valid_algorithm(&manifest->fileHashAlg, &is_hash);
+	error = hash_is_sha256(&manifest->fileHashAlg, &is_sha256);
 	if (error)
 		return error;
-	if (!is_hash)
+	if (!is_sha256)
 		return pr_err("The hash algorithm is not SHA256.");
 
 	/* The file hashes will be validated during the traversal. */
@@ -171,7 +171,7 @@ foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 			if (error)
 				return error;
 
-			error = hash_validate_file(luri, &fah->hash);
+			error = hash_validate_file("sha256", luri, &fah->hash);
 			if (error) {
 				free(luri);
 				continue;
@@ -194,6 +194,10 @@ pile_crls(char *file, void *crls)
 	X509_CRL *crl;
 	int error;
 	int idx;
+
+	/* rfc6481#section-2.2 */
+	if (sk_X509_CRL_num(crls) != 0)
+		return pr_err("The Manifest defines more than one CRL.");
 
 	fnstack_push(file);
 
@@ -275,7 +279,7 @@ __handle_manifest(struct manifest *mft)
 	if (crls == NULL)
 		return pr_enomem();
 
-	/* Get CRLs as a stack. There will usually only be one. */
+	/* Get the one CRL as a stack. */
 	error = foreach_file(mft, ".crl", pile_crls, crls);
 	if (error)
 		goto end;

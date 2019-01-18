@@ -13,6 +13,7 @@ static int
 print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 {
 	struct ipv4_prefix prefix;
+	long max_length;
 	char str[INET_ADDRSTRLEN];
 	const char *str2;
 	int error;
@@ -21,28 +22,44 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 	if (error)
 		return error;
 
+	if (roa_addr->maxLength != NULL) {
+		max_length = *roa_addr->maxLength;
+
+		if (max_length < 0 || 32 < max_length) {
+			return pr_err("maxLength (%ld) is out of bounds (0-32).",
+			    max_length);
+		}
+
+		if (prefix.len > max_length) {
+			return pr_err("Prefix length (%u) > maxLength (%ld)",
+			    prefix.len, max_length);
+		}
+	}
+
 	str2 = inet_ntop(AF_INET, &prefix.addr, str, sizeof(str));
 	if (str2 == NULL)
 		return pr_err("inet_ntop() returned NULL.");
 
+	if (!resources_contains_ipv4(parent, &prefix)) {
+		return pr_err("ROA is not allowed to advertise %s/%u.", str2,
+		    prefix.len);
+	}
+
+	printf("%ld,%s/%u", asn, str2, prefix.len);
 	if (roa_addr->maxLength != NULL)
-		if (prefix.len > *roa_addr->maxLength)
-			goto unallowed;
-	if (!resources_contains_ipv4(parent, &prefix))
-		goto unallowed;
+		printf("-%ld", max_length);
+	else
+		printf("-%u", prefix.len);
+	printf("\n");
 
-	printf("%ld,%s/%u\n", asn, str2, prefix.len);
 	return 0;
-
-unallowed:
-	return pr_err("ROA is not allowed to advertise %s/%u.", str2,
-	    prefix.len);
 }
 
 static int
 print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 {
 	struct ipv6_prefix prefix;
+	long max_length;
 	char str[INET6_ADDRSTRLEN];
 	const char *str2;
 	int error;
@@ -51,22 +68,37 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 	if (error)
 		return error;
 
+	if (roa_addr->maxLength != NULL) {
+		max_length = *roa_addr->maxLength;
+
+		if (max_length < 0 || 128 < max_length) {
+			return pr_err("maxLength (%ld) is out of bounds (0-128).",
+			    max_length);
+		}
+
+		if (prefix.len > max_length) {
+			return pr_err("Prefix length (%u) > maxLength (%ld)",
+			    prefix.len, max_length);
+		}
+	}
+
 	str2 = inet_ntop(AF_INET6, &prefix.addr, str, sizeof(str));
 	if (str2 == NULL)
 		return pr_err("inet_ntop() returned NULL.");
 
+	if (!resources_contains_ipv6(parent, &prefix)) {
+		return pr_err("ROA is not allowed to advertise %s/%u.", str2,
+		    prefix.len);
+	}
+
+	printf("%ld,%s/%u", asn, str2, prefix.len);
 	if (roa_addr->maxLength != NULL)
-		if (prefix.len > *roa_addr->maxLength)
-			goto unallowed;
-	if (!resources_contains_ipv6(parent, &prefix))
-		goto unallowed;
+		printf("-%ld", max_length);
+	else
+		printf("-%u", prefix.len);
+	printf("\n");
 
-	printf("%ld,%s/%u\n", asn, str2, prefix.len);
 	return 0;
-
-unallowed:
-	return pr_err("ROA is not allowed to advertise %s/%u.", str2,
-	    prefix.len);
 }
 
 static int

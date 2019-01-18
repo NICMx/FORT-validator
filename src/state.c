@@ -236,6 +236,12 @@ validation_pop_cert(struct validation *state)
 	return 0;
 }
 
+X509 *
+validation_peek_cert(struct validation *state)
+{
+	return sk_X509_value(state->trusted, sk_X509_num(state->trusted) - 1);
+}
+
 struct resources *
 validation_peek_resource(struct validation *state)
 {
