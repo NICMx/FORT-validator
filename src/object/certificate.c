@@ -454,16 +454,11 @@ abort:
 	return -EINVAL;
 }
 
-/*
- * "GENERAL_NAME, global to local"
- * Result has to be freed.
- *
- * If this function returns ENOTRSYNC, it means that @name was not an RSYNC URI.
- * This often should not be treated as an error; please handle gracefully.
- * TODO open call hierarchy.
+/**
+ * Get GENERAL_NAME data.
  */
 static int
-gn_g2l(GENERAL_NAME *name, char **luri)
+get_gn(GENERAL_NAME *name, char **guri)
 {
 	ASN1_STRING *asn1_string;
 	int type;
@@ -505,8 +500,37 @@ gn_g2l(GENERAL_NAME *name, char **luri)
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	return uri_g2l((char const *) ASN1_STRING_get0_data(asn1_string),
-	    ASN1_STRING_length(asn1_string), luri);
+	*guri = (char *) ASN1_STRING_get0_data(asn1_string);
+	return 0;
+}
+
+/*
+ * "GENERAL_NAME, global to local"
+ * Result has to be freed.
+ *
+ * If this function returns ENOTRSYNC, it means that @name was not an RSYNC URI.
+ * This often should not be treated as an error; please handle gracefully.
+ * TODO open call hierarchy.
+ */
+static int
+gn_g2l(GENERAL_NAME *name, char **luri)
+{
+	char *guri;
+	int error;
+
+	error = get_gn(name, &guri);
+	if (error)
+		return error; /* message already printed. */
+
+	/*
+	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
+	 * somehow converted into URI form. I don't think that's an issue
+	 * because the RSYNC clone operation should not have performed the
+	 * conversion, so we should be looking at precisely the IA5String
+	 * directory our g2l version of @asn1_string should contain.
+	 * But ask the testers to keep an eye on it anyway.
+	 */
+	return uri_g2l((char const *) guri, strlen(guri), luri);
 }
 
 static int
@@ -671,14 +695,13 @@ handle_caRepository(ACCESS_DESCRIPTION *ad)
 	char *uri;
 	int error;
 
-	error = gn_g2l(ad->location, &uri);
+	error = get_gn(ad->location, &uri);
 	if (error)
 		return error;
 
 	pr_debug("caRepository: %s", uri);
 	error = download_files(uri);
 
-	free(uri);
 	return error;
 }
 
@@ -1158,7 +1181,7 @@ certificate_traverse_ta(X509 *cert, STACK_OF(X509_CRL) *crls)
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg       */
 	    { &BC,  true,  handle_bc,               },
-	    { &SKI, true,  handle_ski,    &cert     },
+	    { &SKI, true,  handle_ski,     cert     },
 	    { &AKI, false, handle_aki_ta,           },
 	    { &KU,  true,  handle_ku_ca,            },
 	    { &SIA, true,  handle_sia_ca, &sia_args },
@@ -1181,7 +1204,7 @@ certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg       */
 	    { &BC,  true,  handle_bc,            },
-	    { &SKI, true,  handle_ski,    &cert     },
+	    { &SKI, true,  handle_ski,     cert     },
 	    { &AKI, true,  handle_aki,              },
 	    { &KU,  true,  handle_ku_ca,            },
 	    { &CDP, true,  handle_cdp,              },
