@@ -22,24 +22,14 @@ SLIST_HEAD(uri_list, uri);
 
 static struct uri_list *rsync_uris;
 static bool execute_rsync = true;
+static char const *const RSYNC_PREFIX = "rsync://";
 
 //static const char *rsync_command[] = {"rsync", "--recursive", "--delete", "--times", NULL};
-
-static int create_dir_recursive(char *);
-static int create_dir(char *);
-static int do_rsync(char const *);
-static int get_dest_path(char const *, char **);
-static bool is_file(char const *);
-static bool dir_exist(char *);
 
 int
 rsync_init(bool is_rsync_active)
 {
-	// TODO remove the next 2 lines
-	/*
-	 * TODO (rsync) No, don't. Disabling rsync will forever be a useful
-	 * debugging feature.
-	 */
+	/* Disabling rsync will forever be a useful debugging feature. */
 	if (!is_rsync_active) {
 		execute_rsync = is_rsync_active;
 		return 0;
@@ -71,35 +61,35 @@ rsync_destroy(void)
 	free(rsync_uris);
 }
 
+/*
+ * Executes the rsync command. 'rsync_uri' as SRC and 'localuri' as DEST.
+ */
 static int
-do_rsync(char const *rsync_uri)
+do_rsync(char const *rsync_uri, char const *localuri)
 {
 	int error;
 	char *command;
-	char *dest;
-	/* TODO (rsync) comment is invisible in narrow editors */
-	char const *rsync_command = "rsync --recursive --delete --times --contimeout=20 "; /* space char at end*/
+	char const *rsync_command = "rsync --recursive --delete --times "
+			"--contimeout=20 "; /* space char at end*/
 
-	/* TODO (rsync) dest is leaking */
-	error = get_dest_path(rsync_uri, &dest);
-	if (error)
-		return error;
-
-	/* TODO (rsync) It seems that rsync_command does not need a `+ 1` */
-	/* TODO (rsync) line exceeds 80 column limit */
-	command = malloc(strlen(rsync_command) + 1 + strlen(rsync_uri) + 1 + strlen(dest) + 1);
+	command = malloc(strlen(rsync_command)
+			+ strlen(rsync_uri)
+			+ 1 /* space char */
+			+ strlen(localuri) + 1); /* null char at end*/
 	if (command == NULL)
-		return -ENOMEM;
+		return pr_enomem();
 
 	strcpy(command, rsync_command);
 	strcat(command, rsync_uri);
 	strcat(command, " ");
-	strcat(command, dest);
-
-	free(dest);
+	strcat(command, localuri);
 
 	pr_debug("(%s) command = %s", __func__, command);
 
+	/*
+	 * TODO Improve the execution of the command, maybe using another function
+	 * instead of system().
+	 */
 	error = system(command);
 	if (error) {
 		int error2 = errno;
@@ -119,86 +109,36 @@ do_rsync(char const *rsync_uri)
 }
 
 /*
- * If @rsync_uri is a certificate, ghostbuster or manifest file, this returns
- * its local location's parent.
- * If @rsync_uri is anything else (including other file types), returns
- * @rsync_uri's local location.
- *
- * TODO (rsync) Why are you doing this? is rsync incapable of synchronizing
- * individual files?
- * TODO (rsync) Also: That's wrong anyway. certificates, ghostbusters and
- * manifests are not the only files RPKI has to handle. There's nothing in the
- * RFCs requiring that only known file types be present, or even that all files
- * must have extensions.
- * If you REALLY need to tell the difference between files and directories,
- * use stat(2) instead.
- */
-static int
-get_dest_path(char const *rsync_uri, char **result)
-{
-	char *local_uri, *temp_str;
-	unsigned int result_size;
-	int error;
-
-	/* TODO (rsync) local_uri is leaking */
-	error = uri_g2l(rsync_uri, strlen(rsync_uri), &local_uri);
-	if (error)
-		return error;
-
-	if (!is_file(local_uri)) {
-		*result = local_uri;
-		return 0;
-	}
-
-	temp_str = strrchr(local_uri, '/');
-	if (temp_str == NULL) {
-		return pr_err("URI '%s' has no slash.", local_uri);
-	}
-	result_size = temp_str - local_uri + 1; /* add slash (+1) */
-
-	temp_str = malloc(result_size + 1); /* null char (+1) */
-	if (temp_str == NULL) {
-		return pr_enomem();
-	}
-	temp_str[result_size] = '\0'; /*Set null char*/
-	strncpy(temp_str, local_uri, result_size);
-	free(local_uri);
-
-	*result = temp_str;
-	return 0;
-}
-
-/*
  * Returns whether new_uri's prefix is rsync_uri.
- * TODO (rsync) why does this not care about nodes? It will return true if
+ * TODO (rsync)SOLVED why does this not care about nodes? It will return true if
  * `rsync_uri = proto://a/b/c` and `new_uri = proto://a/b/cc`.
  */
 static bool
 rsync_uri_prefix_equals(struct uri *rsync_uri, char const *new_uri)
 {
 	size_t uri_len;
-	uri_len = strlen(new_uri);
 
+	uri_len = strlen(new_uri);
 	if (rsync_uri->len > uri_len)
 		return false;
 
-	/*
-	 * TODO (rsync) Don't use '!' for tests unless it's a boolean.
-	 * (OpenBSD style)
-	 */
-	return !strncasecmp(rsync_uri->string, new_uri, rsync_uri->len);
+	if (rsync_uri->string[rsync_uri->len - 1] != '/'
+			&& uri_len > rsync_uri->len && new_uri[rsync_uri->len] != '/') {
+		return false;
+	}
+
+	return strncasecmp(rsync_uri->string, new_uri, rsync_uri->len) == 0;
 }
 
+/*
+ * Checks if the 'rsync_uri' match equal or as a child of an existing URI in
+ * the list.
+ */
 static bool
 is_uri_in_list(char const *rsync_uri)
 {
 	struct uri *cursor;
 	bool found;
-
-	/* TODO (rsync) this if doesn't seem to be doing anything */
-	if (SLIST_EMPTY(rsync_uris)) {
-		return false;
-	}
 
 	found = false;
 	SLIST_FOREACH(cursor, rsync_uris, next) {
@@ -212,104 +152,214 @@ is_uri_in_list(char const *rsync_uri)
 }
 
 static int
-add_uri_to_list(char const *rsync_uri_path)
+add_uri_to_list(char *rsync_uri_path)
 {
 	struct uri *rsync_uri;
-	size_t urilen;
 
 	rsync_uri = malloc(sizeof(struct uri));
 	if (rsync_uri == NULL)
 		return pr_enomem();
-	urilen = strlen(rsync_uri_path);
 
-	rsync_uri->string = malloc(urilen + 1);
-	if (!rsync_uri->string) {
-		free(rsync_uri);
-		return pr_enomem();
-	}
+	rsync_uri->string = rsync_uri_path;
+	rsync_uri->len = strlen(rsync_uri_path);
 
-	/*
-	 * TODO (rsync) caller frees rsync_uri_path right after calling this.
-	 * Transfer ownership instead so you don't need the extra allocate, copy
-	 * and free.
-	 */
-	strcpy(rsync_uri->string, rsync_uri_path);
-	rsync_uri->len = urilen;
 	SLIST_INSERT_HEAD(rsync_uris, rsync_uri, next);
 
 	return 0;
 }
 
 /*
- * Returns rsync_uri, truncated to the second significant slash.
- * I have no idea why.
- *
- * Examples:
- *
- * 	rsync_uri: rsync://aa/bb/cc/dd/ee/ff/gg/hh/ii
- * 	result:    rsync://aa/bb/
- *
- * 	rsync_uri: rsync://aa/bb/
- * 	result:    rsync://aa/bb/
- *
- * 	rsync_uri: rsync://aa/
- * 	result:    rsync://aa//
- *
- * 	rsync_uri: rsync://aa
- * 	result:    rsync://aa
+ * Compares two URIs to obtain the common path if exist.
+ * Return NULL if URIs does not match or only match in its domain name.
+ * E.g. uri1=proto://a/b/c/d uri2=proto://a/b/c/f, will return proto://a/b/c/
  */
 static int
-short_uri(char const *rsync_uri, char **result)
+find_prefix_path(char const *uri1, char const *uri2, char **result)
 {
-	char const *const PREFIX = "rsync://";
-	char const *tmp;
-	char *short_uri;
-	size_t result_len;
-	size_t prefix_len;
+	int i, error;
+	char const *tmp, *last_equal;
 
-	prefix_len = strlen(PREFIX);
-
-	if (strncmp(PREFIX, rsync_uri, prefix_len) != 0) {
-		/* TODO (rsync) why is this commented out? */
-//		pr_err("Global URI %s does not begin with '%s'.", rsync_uri,
-//		    PREFIX);
-		return -EINVAL;
-	}
+	*result = NULL;
+	last_equal = NULL;
+	error = 0;
 
 	/*
-	 * TODO (rsync) It took me a while to notice that this loop does not
-	 * actually iterate. Why did you add it? It's misleading. If it's
-	 * because you wanted to break instead of goto in the `tmp == NULL` if,
-	 * then this should be a separate function instead.
+	 * This code looks for 3 slashes to start compare path section.
 	 */
-	do {
-		tmp = rsync_uri + prefix_len;
+	tmp = uri1;
+	for (i = 0; i < 3; i++) {
 		tmp = strchr(tmp, '/');
-
 		if (tmp == NULL) {
-			result_len = strlen(rsync_uri);
+			goto end;
+		}
+		tmp++;
+	}
+
+	/* Compare protocol and domain. */
+	if (strncmp(uri1, uri2, tmp - uri1) != 0)
+		goto end;
+
+	while((tmp = strchr(tmp, '/')) != NULL) {
+		if (strncmp(uri1, uri2, tmp - uri1) != 0) {
 			break;
 		}
+		last_equal = tmp;
+		tmp++;
+	}
 
-		tmp = tmp + 1;
-		tmp = strchr(tmp, '/');
+	if (last_equal != NULL) {
+		*result = malloc(last_equal - uri1 + 1 + 1); /*+ 1 slash + 1 null char*/
+		if (*result == NULL) {
+			error = pr_enomem();
+			goto end;
+		}
+		strncpy(*result, uri1, last_equal - uri1 + 1);
+		(*result)[last_equal - uri1 + 1] = '\0';
+	}
 
-		if (tmp != NULL)
-			result_len = strlen(rsync_uri) - strlen(tmp);
-		else
-			result_len = strlen(rsync_uri);
+end:
+	return error;
+}
 
-	} while (0);
+/*
+ * Compares rsync_uri against the uri_list and checks if can obtain a common
+ * short path.
+ * Returns NULL if URIs does not match any URI in the List.
+ * @see find_prefix_path
+ */
+static int
+compare_uris_and_short(char const *rsync_uri, char **result)
+{
+	struct uri *cursor;
+	int error;
 
-	short_uri = malloc(result_len + 1 + 1); /* slash + null chara */
-	if (!short_uri)
-		return -ENOMEM;
+	*result = NULL;
+	SLIST_FOREACH(cursor, rsync_uris, next) {
+		error = find_prefix_path(rsync_uri, cursor->string, result);
 
-	strncpy(short_uri, rsync_uri, result_len);
-	short_uri[result_len] = '/';
-	short_uri[result_len + 1] = '\0';
+		if (error)
+			return error;
 
-	*result = short_uri;
+		if (*result != NULL)
+			break;
+	}
+
+	return 0;
+}
+
+/*
+ * Removes filename or last path if not end with an slash char.
+ */
+static int
+get_path_only(char const *uri, size_t uri_len, size_t rsync_prefix_len,
+		char **result)
+{
+	int error, i;
+	char tmp_uri[uri_len + 1];
+	char *slash_search = NULL;
+	bool is_domain_only = false;
+
+	error = 0;
+
+	for (i = 0; i < uri_len + 1; i++) {
+		tmp_uri[i] = uri[i];
+	}
+
+	if (tmp_uri[uri_len - 1] != '/') {
+		slash_search = strrchr(tmp_uri, '/');
+	}
+
+	if (slash_search != NULL) {
+		if ((slash_search - tmp_uri) > rsync_prefix_len) {
+			tmp_uri[slash_search - tmp_uri + 1] = '\0';
+			uri_len = strlen(tmp_uri);
+		} else {
+			is_domain_only = true;
+			slash_search = NULL;
+		}
+	}
+
+	if (is_domain_only)
+		uri_len++; /* Add slash */
+
+	*result = malloc(uri_len + 1); /* +1 null char */
+	if (*result == NULL) {
+		error = pr_enomem();
+		goto end;
+	}
+
+	strcpy(*result, tmp_uri);
+
+	if (is_domain_only) {
+		(*result)[uri_len - 1] = '/';
+		(*result)[uri_len] = '\0';
+	}
+
+end:
+	return error;
+}
+
+static int
+dir_exist(char *path, bool *result)
+{
+	int error;
+	struct stat _stat;
+	error = stat(path, &_stat);
+	if (error != 0) {
+		if (errno == ENOENT) {
+			*result = false;
+			goto end;
+		} else {
+			return pr_errno(errno, "stat() failed");
+		}
+	}
+
+	if (!S_ISDIR(_stat.st_mode))
+		return pr_err("Path '%s' exist but is not a directory", path);
+
+	*result = true;
+end:
+	return 0;
+}
+
+static int
+create_dir(char *path)
+{
+	int error;
+
+	error = mkdir(path, 0777);
+
+	if (error && errno != EEXIST)
+		return pr_errno(errno, "Error while making directory '%s'", path);
+
+	return 0;
+}
+
+static int
+create_dir_recursive(char *localuri)
+{
+	int i, error;
+	bool exist = false;
+
+	error = dir_exist(localuri, &exist);
+	if (error)
+		return error;
+
+	if (exist)
+		return 0;
+
+	for (i = 1 + repository_len; localuri[i] != '\0'; i++) {
+		if (localuri[i] == '/') {
+			localuri[i] = '\0';
+			error = create_dir(localuri);
+			localuri[i] = '/';
+			if (error) {
+				/* error msg already printed */
+				return error;
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -317,10 +367,18 @@ int
 download_files(char const *rsync_uri)
 {
 	int error;
-	char *rsync_uri_path, *localuri;
+	char *rsync_uri_path, *localuri, *tmp;
+	size_t prefix_len;
+
+	prefix_len = strlen(RSYNC_PREFIX);
 
 	if (!execute_rsync)
 		return 0;
+
+	if (strlen(rsync_uri) < prefix_len ||
+			strncmp(RSYNC_PREFIX, rsync_uri, prefix_len) != 0)
+		return pr_err("Global URI '%s' does not begin with '%s'.",
+				rsync_uri, RSYNC_PREFIX);
 
 	if (is_uri_in_list(rsync_uri)){
 		pr_debug("(%s) ON LIST: %s", __func__, rsync_uri);
@@ -330,211 +388,43 @@ download_files(char const *rsync_uri)
 		pr_debug("(%s) DOWNLOAD: %s", __func__, rsync_uri);
 	}
 
-	/*
-	 * TODO (rsync) I don't understand why you need to do this.
-	 * Please comment.
-	 */
-	error = short_uri(rsync_uri, &rsync_uri_path);
+	error = get_path_only(rsync_uri, strlen(rsync_uri), prefix_len,
+			&rsync_uri_path);
 	if (error)
 		return error;
+
+	error = compare_uris_and_short(rsync_uri_path, &tmp);
+	if (error) {
+		goto free_uri_path;
+	}
+
+	if (tmp != NULL) {
+		free(rsync_uri_path);
+		rsync_uri_path = tmp;
+	}
 
 	error = uri_g2l(rsync_uri_path, strlen(rsync_uri_path), &localuri);
 	if (error)
 		goto free_uri_path;
 
 	error = create_dir_recursive(localuri);
+	if (error)
+		goto free_uri_path;
+
+	error = do_rsync(rsync_uri_path, localuri);
 	free(localuri);
 	if (error)
 		goto free_uri_path;
 
-	error = do_rsync(rsync_uri_path);
+	error = add_uri_to_list(rsync_uri_path);
 	if (error)
 		goto free_uri_path;
 
-	/*
-	 * TODO (rsync) This doesn't look right to me.
-	 * The one you queried was rsync_uri. The one you're adding is
-	 * rsync_uri_path. It looks like is_uri_in_list() will only match when
-	 * short_uri() doesn't do anything.
-	 */
-	error = add_uri_to_list(rsync_uri_path);
+	return 0;
 
 free_uri_path:
 	free(rsync_uri_path);
 end:
 	return error;
 
-}
-
-static int
-create_dir_recursive(char *localuri)
-{
-	char *temp_luri;
-	char path[PATH_MAX];
-	char *slash;
-	size_t localuri_len;
-	size_t repository_len;
-	unsigned int offset;
-
-	if (dir_exist(localuri))
-		return 0;
-
-	localuri_len = strlen(localuri);
-	repository_len = strlen(repository);
-	temp_luri = localuri + repository_len;
-
-	strcpy(path, repository);
-	offset = repository_len;
-
-	/*
-	 * TODO (rsync) You might have gone a little overboard with this.
-	 * Are you just trying to mkdir -p localuri?
-	 * If so, wouldn't this be enough?
-	 *
-	 * for (i = 1; localuri[i] != '\0'; i++) {
-	 * 	if (localuri[i] == '/') {
-	 * 		localuri[i] = '\0';
-	 * 		create_dir(localuri); // handle error etc etc
-	 * 		localuri[i] = '/';
-	 * 	}
-	 * }
-	 *
-	 * We're not in Java; our strings are mutable.
-	 */
-
-	slash = strchr(temp_luri, '/');
-	while (slash != NULL) {
-		if (slash == temp_luri) {
-			temp_luri++;
-			localuri_len--;
-			slash = strchr(temp_luri, '/');
-			continue;
-		}
-		strcpy(path + offset, "/");
-		offset += 1;
-		strncpy(path + offset, temp_luri, slash - temp_luri);
-		offset += slash - temp_luri;
-		if (offset > localuri_len) {
-			break;
-		}
-		path[offset] = '\0';
-		if (create_dir(path) == -1) {
-			perror("Error while creating Dir");
-			return -1;
-		}
-		temp_luri += slash - temp_luri + 1;
-		slash = strchr(temp_luri, '/');
-	}
-
-	if (offset < localuri_len) {
-		strcpy(path + offset, "/");
-		offset += 1;
-		strcpy(path + offset, temp_luri);
-		offset = localuri + localuri_len - temp_luri + offset + 1;
-		path[offset] = '\0';
-	}
-
-	if (create_dir(path) == -1) {
-		perror("Error while creating Dir");
-		return -1;
-	}
-	return 0;
-
-}
-
-static bool
-is_file(char const *path)
-{
-	size_t path_len = strlen(path);
-
-	if (file_has_extension(path, path_len, ".cer"))
-		return true;
-	if (file_has_extension(path, path_len, ".gbr"))
-		return true;
-	if (file_has_extension(path, path_len, ".mft"))
-		return true;
-
-	return false;
-}
-
-static bool
-dir_exist(char *path)
-{
-	int error;
-	struct stat _stat;
-	/*
-	 * TODO (rsync) I don't know if you're aware of this, but you can
-	 * usually run `man 2 [core c function]` or `man 3 [core c function]`
-	 * and get a lot of info.
-	 * `man 2 stat`, for example, contains a lot of stuff you clearly need
-	 * to read.
-	 */
-	error = stat(path, &_stat);
-	if (error == -1) {
-		/*
-		 * TODO (rsync) Never do this. stat() can return -1 for a large
-		 * number of reasons, and only one of them is "file not found."
-		 * Return the error code and send the boolean as an out
-		 * parameter.
-		 */
-		return false; /* a dir or file not exist*/
-	}
-
-	/*
-	 * TODO (rsync) Don't do this either. The function is called "dir_exist"
-	 * but you're returning true even if the node happens to be a file,
-	 * a socket, a named pipe, a door, etc etc. What's going to happen if
-	 * each of these files interact with calling code?
-	 */
-	return true;
-}
-
-static int
-create_dir(char *path)
-{
-	struct stat _stat;
-	int error;
-	/*
-	 * TODO (rsync) Does this really need to be a variable?
-	 * You only use it once.
-	 */
-	mode_t mode = 0777;
-
-	/*
-	 * TODO (rsync) Again. The function is called "create_dir" but you're
-	 * returning success on regular file found. And it's really weird that
-	 * only .cer, .gbr and .mft files count as directories according to this
-	 * if.
-	 *
-	 * Alternatively: As implemented, this if is redundant because the
-	 * return 0 on successful stat below already succeeds on files. Not that
-	 * I agree with the stat below either.
-	 */
-	if (is_file(path))
-		return 0;
-
-	error = stat(path, &_stat);
-	if (error != -1) {
-		/* a dir or file exist*/ /* TODO (rsync) STOP IT. */
-		return 0;
-	}
-
-	if (errno != ENOENT) {
-		/*
-		 * TODO (rsync) Error message is unfriendly because the user
-		 * has no context on what "stat" is.
-		 * Something like "stat() failed" would be a little better.
-		 * Use pr_errno() for the automatic errno string. (See `man 3
-		 * perror`)
-		 */
-		perror("stat");
-		/*
-		 * TODO (rsync) No reason to lose the error code. Return errno
-		 * (or better yet: the result of pr_errno(errno)) instead of -1.
-		 */
-		return -1; /* another error occurs*/
-	}
-
-	error = mkdir(path, mode);
-	return error; /* TODO (rsync) No message on error */
 }
