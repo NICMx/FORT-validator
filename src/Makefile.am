@@ -17,6 +17,7 @@ rpki_validator_SOURCES += resource.h resource.c
 rpki_validator_SOURCES += sorted_array.h sorted_array.c
 rpki_validator_SOURCES += state.h state.c
 rpki_validator_SOURCES += thread_var.h thread_var.c
+rpki_validator_SOURCES += uri.h uri.c
 
 rpki_validator_SOURCES += rsync/rsync.h rsync/rsync.c
 

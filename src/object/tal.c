@@ -194,11 +194,17 @@ void tal_destroy(struct tal *tal)
 int
 foreach_uri(struct tal *tal, foreach_uri_cb cb)
 {
+	struct rpki_uri uri;
 	unsigned int i;
 	int error;
 
 	for (i = 0; i < tal->uris.count; i++) {
-		error = cb(tal, tal->uris.array[i]);
+		error = uri_init(&uri, tal->uris.array[i]);
+		if (error)
+			return error;
+
+		error = cb(tal, &uri);
+		uri_cleanup(&uri);
 		if (error)
 			return error;
 	}

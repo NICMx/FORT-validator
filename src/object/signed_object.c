@@ -56,7 +56,7 @@ validate_content_type(struct SignedData *sdata,
 }
 
 int
-signed_object_decode(char const *file,
+signed_object_decode(struct rpki_uri const *uri,
     asn_TYPE_descriptor_t const *descriptor,
     struct oid_arcs const *oid,
     void **result,
@@ -67,7 +67,7 @@ signed_object_decode(char const *file,
 	struct SignedData *sdata;
 	int error;
 
-	error = content_info_load(file, &cinfo);
+	error = content_info_load(uri, &cinfo);
 	if (error)
 		goto end1;
 

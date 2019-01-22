@@ -26,15 +26,20 @@ add_rpki_oids(void)
 	    "id-ad-signedObject (RFC 6487)",
 	    /* TODO */ "");
 	printf("signedObject registered. Its nid is %d.\n", NID_signedObject);
+
+	NID_rpkiNotify = OBJ_create("1.3.6.1.5.5.7.48.13",
+		    "id-ad-rpkiNotify (RFC 8182)",
+		    /* TODO */ "Blah blah");
+	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
 }
 
 static int
-handle_tal_certificate(char *uri)
+handle_tal_certificate(struct rpki_uri const *uri)
 {
 	X509 *cert;
 	int error;
 
-	fnstack_push(uri);
+	fnstack_push(uri->global);
 	error = certificate_load(uri, &cert);
 	if (error)
 		goto end;
@@ -56,7 +61,7 @@ end:
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(struct tal *tal, char const *guri)
+handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
 {
 	/*
 	 * Because of the way the foreach iterates, this function must return
@@ -75,11 +80,10 @@ handle_tal_uri(struct tal *tal, char const *guri)
 	 */
 
 	struct validation *state;
-	char *luri;
 	int error;
 
 	/* TODO this probably needs the state... */
-	error = download_files(guri);
+	error = download_files(uri);
 	if (error)
 		return 0;
 
@@ -87,22 +91,16 @@ handle_tal_uri(struct tal *tal, char const *guri)
 	if (error)
 		return -abs(error);
 
-	pr_debug_add("TAL URI %s {", guri);
+	pr_debug_add("TAL URI %s {", uri->global);
 
-	if (!is_certificate(guri)) {
+	if (!uri_is_certificate(uri)) {
 		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
-		    guri);
+		    uri->global);
 		error = -EINVAL;
 		goto end;
 	}
 
-	error = uri_g2l(guri, strlen(guri), &luri);
-	if (error) {
-		error = -abs(error);
-		goto end;
-	}
-
-	error = handle_tal_certificate(luri);
+	error = handle_tal_certificate(uri);
 	if (error) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:
@@ -116,8 +114,6 @@ handle_tal_uri(struct tal *tal, char const *guri)
 	} else {
 		error = 1;
 	}
-
-	free(luri);
 
 end:
 	validation_destroy(state);

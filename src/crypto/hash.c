@@ -49,8 +49,8 @@ hash_matches(unsigned char const *expected, size_t expected_len,
 }
 
 static int
-hash_file(char const *algorithm, char const *filename, unsigned char *result,
-    unsigned int *result_len)
+hash_file(char const *algorithm, struct rpki_uri const *uri,
+    unsigned char *result, unsigned int *result_len)
 {
 	EVP_MD const *md;
 	FILE *file;
@@ -65,7 +65,7 @@ hash_file(char const *algorithm, char const *filename, unsigned char *result,
 	if (error)
 		return error;
 
-	error = file_open(filename, &file, &stat);
+	error = file_open(uri, &file, &stat);
 	if (error)
 		return error;
 
@@ -116,12 +116,11 @@ end1:
 }
 
 /**
- * Computes the hash of the file whose name is @filename, and compares it to
- * @expected (The "expected" hash). Returns 0 if no errors happened and the
- * hashes match.
+ * Computes the hash of the file @uri, and compares it to @expected (The
+ * "expected" hash). Returns 0 if no errors happened and the hashes match.
  */
 int
-hash_validate_file(char const *algorithm, char const *filename,
+hash_validate_file(char const *algorithm, struct rpki_uri const *uri,
     BIT_STRING_t const *expected)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];
@@ -131,7 +130,7 @@ hash_validate_file(char const *algorithm, char const *filename,
 	if (expected->bits_unused != 0)
 		return pr_err("Hash string has unused bits.");
 
-	error = hash_file(algorithm, filename, actual, &actual_len);
+	error = hash_file(algorithm, uri, actual, &actual_len);
 	if (error)
 		return error;
 

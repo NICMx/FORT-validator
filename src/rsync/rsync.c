@@ -364,7 +364,7 @@ create_dir_recursive(char *localuri)
 }
 
 int
-download_files(char const *rsync_uri)
+download_files(struct rpki_uri const *uri)
 {
 	int error;
 	char *rsync_uri_path, *localuri, *tmp;
@@ -375,20 +375,20 @@ download_files(char const *rsync_uri)
 	if (!execute_rsync)
 		return 0;
 
-	if (strlen(rsync_uri) < prefix_len ||
-			strncmp(RSYNC_PREFIX, rsync_uri, prefix_len) != 0)
+	if (strlen(uri->global) < prefix_len ||
+			strncmp(RSYNC_PREFIX, uri->global, prefix_len) != 0)
 		return pr_err("Global URI '%s' does not begin with '%s'.",
-				rsync_uri, RSYNC_PREFIX);
+				uri->global, RSYNC_PREFIX);
 
-	if (is_uri_in_list(rsync_uri)){
-		pr_debug("(%s) ON LIST: %s", __func__, rsync_uri);
+	if (is_uri_in_list(uri->global)){
+		pr_debug("(%s) ON LIST: %s", __func__, uri->global);
 		error = 0;
 		goto end;
 	} else {
-		pr_debug("(%s) DOWNLOAD: %s", __func__, rsync_uri);
+		pr_debug("(%s) DOWNLOAD: %s", __func__, uri->global);
 	}
 
-	error = get_path_only(rsync_uri, strlen(rsync_uri), prefix_len,
+	error = get_path_only(uri->global, uri->global_len, prefix_len,
 			&rsync_uri_path);
 	if (error)
 		return error;
@@ -403,7 +403,7 @@ download_files(char const *rsync_uri)
 		rsync_uri_path = tmp;
 	}
 
-	error = uri_g2l(rsync_uri_path, strlen(rsync_uri_path), &localuri);
+	error = uri_g2l(rsync_uri_path, &localuri);
 	if (error)
 		goto free_uri_path;
 

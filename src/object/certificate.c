@@ -101,11 +101,6 @@ struct sia_arguments {
 	STACK_OF(X509_CRL) *crls;
 };
 
-bool is_certificate(char const *file_name)
-{
-	return file_has_extension(file_name, strlen(file_name), ".cer");
-}
-
 static int
 validate_serial_number(X509 *cert)
 {
@@ -360,7 +355,7 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 }
 
 int
-certificate_load(const char *file, X509 **result)
+certificate_load(struct rpki_uri const *uri, X509 **result)
 {
 	X509 *cert = NULL;
 	BIO *bio;
@@ -369,7 +364,7 @@ certificate_load(const char *file, X509 **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, file) <= 0) {
+	if (BIO_read_filename(bio, uri->local) <= 0) {
 		error = crypto_err("Error reading certificate");
 		goto end;
 	}
@@ -455,85 +450,6 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 abort:
 	X509_STORE_CTX_free(ctx);
 	return -EINVAL;
-}
-
-/**
- * Get GENERAL_NAME data.
- */
-static int
-get_gn(GENERAL_NAME *name, char **guri)
-{
-	ASN1_STRING *asn1_string;
-	int type;
-
-	asn1_string = GENERAL_NAME_get0_value(name, &type);
-
-	/*
-	 * RFC 6487: "This extension MUST have an instance of an
-	 * AccessDescription with an accessMethod of id-ad-rpkiManifest, (...)
-	 * with an rsync URI [RFC5781] form of accessLocation."
-	 *
-	 * Ehhhhhh. It's a little annoying in that it seems to be stucking more
-	 * than one requirement in a single sentence, which I think is rather
-	 * rare for an RFC. Normally they tend to hammer things more.
-	 *
-	 * Does it imply that the GeneralName CHOICE is constrained to type
-	 * "uniformResourceIdentifier"? I guess so, though I don't see anything
-	 * stopping a few of the other types from also being capable of storing
-	 * URIs.
-	 *
-	 * Also, nobody seems to be using the other types, and handling them
-	 * would be a titanic pain in the ass. So this is what I'm committing
-	 * to.
-	 */
-	if (type != GEN_URI) {
-		pr_err("Unknown GENERAL_NAME type: %d", type);
-		return -ENOTSUPPORTED;
-	}
-
-	/*
-	 * GEN_URI signals an IA5String.
-	 * IA5String is a subset of ASCII, so this cast is safe.
-	 * No guarantees of a NULL chara, though.
-	 *
-	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
-	 * somehow converted into URI form. I don't think that's an issue
-	 * because the RSYNC clone operation should not have performed the
-	 * conversion, so we should be looking at precisely the IA5String
-	 * directory our g2l version of @asn1_string should contain.
-	 * But ask the testers to keep an eye on it anyway.
-	 */
-	*guri = (char *) ASN1_STRING_get0_data(asn1_string);
-	return 0;
-}
-
-/*
- * "GENERAL_NAME, global to local"
- * Result has to be freed.
- *
- * If this function returns ENOTRSYNC, it means that @name was not an RSYNC URI.
- * This often should not be treated as an error; please handle gracefully.
- * TODO open call hierarchy.
- */
-static int
-gn_g2l(GENERAL_NAME *name, char **luri)
-{
-	char *guri;
-	int error;
-
-	error = get_gn(name, &guri);
-	if (error)
-		return error; /* message already printed. */
-
-	/*
-	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
-	 * somehow converted into URI form. I don't think that's an issue
-	 * because the RSYNC clone operation should not have performed the
-	 * conversion, so we should be looking at precisely the IA5String
-	 * directory our g2l version of @asn1_string should contain.
-	 * But ask the testers to keep an eye on it anyway.
-	 */
-	return uri_g2l((char const *) guri, strlen(guri), luri);
 }
 
 static int
@@ -679,48 +595,49 @@ is_rsync(ASN1_IA5STRING *uri)
 static int
 handle_rpkiManifest(ACCESS_DESCRIPTION *ad, STACK_OF(X509_CRL) *crls)
 {
-	char *uri;
+	struct rpki_uri uri;
 	int error;
 
-	error = gn_g2l(ad->location, &uri);
+	error = uri_init_ad(&uri, ad);
 	if (error)
 		return error;
 
-	error = handle_manifest(uri, crls);
+	error = handle_manifest(&uri, crls);
 
-	free(uri);
+	uri_cleanup(&uri);
 	return error;
 }
 
 static int
 handle_caRepository(ACCESS_DESCRIPTION *ad)
 {
-	char *uri;
+	struct rpki_uri uri;
 	int error;
 
-	error = get_gn(ad->location, &uri);
+	error = uri_init_ad(&uri, ad);
 	if (error)
 		return error;
 
-	pr_debug("caRepository: %s", uri);
-	error = download_files(uri);
+	pr_debug("caRepository: %s", uri.global);
+	error = download_files(&uri);
 
+	uri_cleanup(&uri);
 	return error;
 }
 
 static int
 handle_signedObject(ACCESS_DESCRIPTION *ad)
 {
-	char *uri;
+	struct rpki_uri uri;
 	int error;
 
-	error = gn_g2l(ad->location, &uri);
+	error = uri_init_ad(&uri, ad);
 	if (error)
 		return error;
 
-	pr_debug("signedObject: %s", uri);
+	pr_debug("signedObject: %s", uri.global);
 
-	free(uri);
+	uri_cleanup(&uri);
 	return error;
 }
 
@@ -1216,10 +1133,19 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 			signedObject_found = true;
 
 		} else {
-			/* rfc6487#section-4.8.8.2 */
-			error = pr_err("EE Certificate has an non-signedObject access description. (NID: %d)",
+			/*
+			 * rfc6487#section-4.8.8.2 says that non-signedObject
+			 * ADs are prohibited, but then 8182 contradicts this.
+			 * And so there's nothing stopping future RFCs from
+			 * defining even more ADs. So shrug them off.
+			 *
+			 * rpkiNotify is known to fall through here, but we
+			 * don't support it yet.
+			 *
+			 * This should be level INFO.
+			 */
+			pr_debug("EE Certificate has an non-signedObject access description. (NID: %d)",
 			    nid);
-			goto end;
 		}
 	}
 

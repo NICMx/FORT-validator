@@ -4,9 +4,9 @@
 #include <stdbool.h>
 #include <openssl/x509.h>
 #include "resource.h"
+#include "uri.h"
 
-bool is_certificate(char const *);
-int certificate_load(const char *, X509 **);
+int certificate_load(struct rpki_uri const *, X509 **);
 
 /**
  * Performs the basic (RFC 5280, presumably) chain validation.

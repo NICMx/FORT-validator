@@ -36,10 +36,8 @@ resources_create(void)
 	struct resources *result;
 
 	result = malloc(sizeof(struct resources));
-	if (result == NULL) {
-		pr_enomem();
+	if (result == NULL)
 		return NULL;
-	}
 
 	result->ip4s = NULL;
 	result->ip6s = NULL;

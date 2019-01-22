@@ -45,11 +45,11 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		    prefix.len);
 	}
 
-	printf("%ld,%s/%u", asn, str2, prefix.len);
+	printf("AS%ld,%s/%u", asn, str2, prefix.len);
 	if (roa_addr->maxLength != NULL)
-		printf("-%ld", max_length);
+		printf(",%ld", max_length);
 	else
-		printf("-%u", prefix.len);
+		printf(",%u", prefix.len);
 	printf("\n");
 
 	return 0;
@@ -91,11 +91,11 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		    prefix.len);
 	}
 
-	printf("%ld,%s/%u", asn, str2, prefix.len);
+	printf("AS%ld,%s/%u", asn, str2, prefix.len);
 	if (roa_addr->maxLength != NULL)
-		printf("-%ld", max_length);
+		printf(",%ld", max_length);
 	else
-		printf("-%u", prefix.len);
+		printf(",%u", prefix.len);
 	printf("\n");
 
 	return 0;
@@ -168,7 +168,7 @@ family_error:
 	return pr_err("ROA's IP family is not v4 or v6.");
 }
 
-int handle_roa(char const *file, STACK_OF(X509_CRL) *crls)
+int handle_roa(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS(oid);
@@ -177,8 +177,8 @@ int handle_roa(char const *file, STACK_OF(X509_CRL) *crls)
 	struct resources *cert_resources;
 	int error;
 
-	pr_debug_add("ROA %s {", file);
-	fnstack_push(file);
+	pr_debug_add("ROA %s {", uri->global);
+	fnstack_push(uri->global);
 
 	cert_resources = resources_create();
 	if (cert_resources == NULL) {
@@ -186,7 +186,7 @@ int handle_roa(char const *file, STACK_OF(X509_CRL) *crls)
 		goto end1;
 	}
 
-	error = signed_object_decode(file, &asn_DEF_RouteOriginAttestation,
+	error = signed_object_decode(uri, &asn_DEF_RouteOriginAttestation,
 	    &arcs, (void **) &roa, crls, cert_resources);
 	if (error)
 		goto end2;

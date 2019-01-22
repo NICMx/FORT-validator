@@ -43,7 +43,7 @@ print_serials(X509_CRL *crl)
 }
 
 static int
-__crl_load(const char *file, X509_CRL **result)
+__crl_load(struct rpki_uri const *uri, X509_CRL **result)
 {
 	X509_CRL *crl = NULL;
 	BIO *bio;
@@ -52,14 +52,14 @@ __crl_load(const char *file, X509_CRL **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, file) <= 0) {
-		error = crypto_err("Error reading CRL '%s'", file);
+	if (BIO_read_filename(bio, uri->local) <= 0) {
+		error = crypto_err("Error reading CRL '%s'", uri->local);
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
-		error = crypto_err("Error parsing CRL '%s'", file);
+		error = crypto_err("Error parsing CRL '%s'", uri->local);
 		goto end;
 	}
 
@@ -74,12 +74,12 @@ end:
 }
 
 int
-crl_load(char const *file, X509_CRL **result)
+crl_load(struct rpki_uri const *uri, X509_CRL **result)
 {
 	int error;
 
-	pr_debug_add("CRL %s {", file);
-	error = __crl_load(file, result);
+	pr_debug_add("CRL %s {", uri->global);
+	error = __crl_load(uri, result);
 	pr_debug_rm("}");
 
 	return error;

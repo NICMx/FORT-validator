@@ -38,6 +38,7 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 
 	/* If necessary, reallocate arcs array and try again. */
 	if (count > MAX_ARCS) {
+		/* TODO realloc tmp */
 		result->arcs = realloc(result->arcs, count * sizeof(asn_oid_arc_t));
 		if (!result->arcs)
 			return pr_enomem();

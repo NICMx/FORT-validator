@@ -102,94 +102,45 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
-/**
- * Given manifest path @mft and its referenced file @file, returns a path
- * @file can be accessed with.
- *
- * ie. if @mft is "a/b/c.mft" and @file is "d/e/f.cer", returns "a/b/d/e/f.cer".
- *
- * The result needs to be freed in the end.
- */
-static int
-get_relative_file(char const *mft, char const *file, size_t file_len,
-    char **result)
-{
-	char *joined;
-	char *slash_pos;
-	int dir_len;
-
-	slash_pos = strrchr(mft, '/');
-	if (slash_pos == NULL) {
-		joined = malloc(file_len + 1);
-		if (!joined)
-			return -ENOMEM;
-		strncpy(joined, file, file_len);
-		joined[file_len] = '\0';
-		goto succeed;
-	}
-
-	dir_len = (slash_pos + 1) - mft;
-	joined = malloc(dir_len + file_len + 1);
-	if (!joined)
-		return -ENOMEM;
-
-	strncpy(joined, mft, dir_len);
-	strncpy(joined + dir_len, file, file_len);
-	joined[dir_len + file_len] = '\0';
-
-succeed:
-	*result = joined;
-	return 0;
-}
-
-typedef int (*foreach_cb)(char *, void *);
+typedef int (*foreach_cb)(struct rpki_uri const *, void *);
 
 static int
 foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 {
 	struct FileAndHash *fah;
-	char *uri;
-	size_t uri_len;
-	char *luri; /* "Local URI". As in "URI that we can easily reference." */
+	struct rpki_uri uri;
 	int i;
 	int error;
 
 	for (i = 0; i < mft->obj->fileList.list.count; i++) {
 		fah = mft->obj->fileList.list.array[i];
 
-		/*
-		 * IA5String is just a subset of ASCII, so this cast is fine.
-		 * I don't see any guarantees that the string will be
-		 * zero-terminated though, so we'll handle that the hard way.
-		 */
-		uri = (char *) fah->file.buf;
-		uri_len = fah->file.size;
+		error = uri_init_ia5(&uri, mft->file_path, &fah->file);
+		if (error)
+			return error;
 
-		if (file_has_extension(uri, uri_len, extension)) {
-			error = get_relative_file(mft->file_path, uri, uri_len,
-			    &luri);
-			if (error)
-				return error;
-
-			error = hash_validate_file("sha256", luri, &fah->hash);
-			if (error) {
-				free(luri);
-				continue;
-			}
-
-			error = cb(luri, arg);
-
-			free(luri);
-			if (error)
-				return error;
+		if (!uri_has_extension(&uri, extension)) {
+			uri_cleanup(&uri);
+			continue;
 		}
+
+		error = hash_validate_file("sha256", &uri, &fah->hash);
+		if (error) {
+			uri_cleanup(&uri);
+			continue;
+		}
+
+		error = cb(&uri, arg);
+		uri_cleanup(&uri);
+		if (error)
+			return error;
 	}
 
 	return 0;
 }
 
 static int
-pile_crls(char *file, void *crls)
+pile_crls(struct rpki_uri const *uri, void *crls)
 {
 	X509_CRL *crl;
 	int error;
@@ -199,9 +150,9 @@ pile_crls(char *file, void *crls)
 	if (sk_X509_CRL_num(crls) != 0)
 		return pr_err("The Manifest defines more than one CRL.");
 
-	fnstack_push(file);
+	fnstack_push(uri->global);
 
-	error = crl_load(file, &crl);
+	error = crl_load(uri, &crl);
 	if (error)
 		goto end;
 
@@ -231,12 +182,12 @@ end:
  * certificate is CA or EE. But it just doesn't exist.
  */
 static int
-traverse_ca_certs(char *file, void *crls)
+traverse_ca_certs(struct rpki_uri const *uri, void *crls)
 {
 	X509 *cert;
 
 	pr_debug_add("(CA?) Certificate {");
-	fnstack_push(file);
+	fnstack_push(uri->global);
 
 	/*
 	 * Errors on at least some of these functions should not interrupt the
@@ -244,7 +195,7 @@ traverse_ca_certs(char *file, void *crls)
 	 * (Error messages should have been printed in stderr.)
 	 */
 
-	if (certificate_load(file, &cert))
+	if (certificate_load(uri, &cert))
 		goto revert1; /* Fine */
 
 	if (certificate_validate_chain(cert, crls))
@@ -262,9 +213,9 @@ revert1:
 }
 
 static int
-print_roa(char *file, void *arg)
+print_roa(struct rpki_uri const *uri, void *arg)
 {
-	handle_roa(file, arg);
+	handle_roa(uri, arg);
 	return 0;
 }
 
@@ -298,19 +249,19 @@ end:
 }
 
 int
-handle_manifest(char const *file_path, STACK_OF(X509_CRL) *crls)
+handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS(oid);
 	struct manifest mft;
 	int error;
 
-	pr_debug_add("Manifest %s {", file_path);
-	fnstack_push(file_path);
+	pr_debug_add("Manifest %s {", uri->global);
+	fnstack_push(uri->global);
 
-	mft.file_path = file_path;
+	mft.file_path = uri->global;
 
-	error = signed_object_decode(file_path, &asn_DEF_Manifest, &arcs,
+	error = signed_object_decode(uri, &asn_DEF_Manifest, &arcs,
 	    (void **) &mft.obj, crls, NULL);
 	if (error)
 		goto end;

@@ -189,7 +189,7 @@ validation_push_cert(struct validation *state, X509 *cert, bool is_ta)
 
 	resources = resources_create();
 	if (resources == NULL)
-		return -ENOMEM;
+		return pr_enomem();
 
 	error = certificate_get_resources(cert, resources);
 	if (error)

@@ -4,13 +4,14 @@
 /* This is RFC 7730. */
 
 #include <stddef.h>
+#include "uri.h"
 
 struct tal;
 
 int tal_load(const char *, struct tal **);
 void tal_destroy(struct tal *);
 
-typedef int (*foreach_uri_cb)(struct tal *, char const *);
+typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri const *);
 int foreach_uri(struct tal *, foreach_uri_cb);
 void tal_shuffle_uris(struct tal *);
 

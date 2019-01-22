@@ -5,21 +5,21 @@
 #include "log.h"
 
 int
-file_open(const char *filename, FILE **result, struct stat *stat)
+file_open(struct rpki_uri const *uri, FILE **result, struct stat *stat)
 {
 	FILE *file;
 	int error;
 
-	file = fopen(filename, "rb");
+	file = fopen(uri->local, "rb");
 	if (file == NULL)
-		return pr_errno(errno, "Could not open file '%s'", filename);
+		return pr_errno(errno, "Could not open file '%s'", uri->local);
 
 	if (fstat(fileno(file), stat) == -1) {
-		error = pr_errno(errno, "fstat(%s) failed", filename);
+		error = pr_errno(errno, "fstat(%s) failed", uri->local);
 		goto fail;
 	}
 	if (!S_ISREG(stat->st_mode)) {
-		error = pr_err("%s does not seem to be a file", filename);
+		error = pr_err("%s does not seem to be a file", uri->local);
 		goto fail;
 	}
 
@@ -39,14 +39,14 @@ file_close(FILE *file)
 }
 
 int
-file_load(const char *filename, struct file_contents *fc)
+file_load(struct rpki_uri const *uri, struct file_contents *fc)
 {
 	FILE *file;
 	struct stat stat;
 	size_t fread_result;
 	int error;
 
-	error = file_open(filename, &file, &stat);
+	error = file_open(uri, &file, &stat);
 	if (error)
 		return error;
 
