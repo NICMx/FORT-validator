@@ -70,12 +70,13 @@ do_rsync(char const *rsync_uri, char const *localuri)
 	int error;
 	char *command;
 	char const *rsync_command = "rsync --recursive --delete --times "
-			"--contimeout=20 "; /* space char at end*/
+	    "--contimeout=20 "; /* space char at end*/
 
 	command = malloc(strlen(rsync_command)
-			+ strlen(rsync_uri)
-			+ 1 /* space char */
-			+ strlen(localuri) + 1); /* null char at end*/
+	    + strlen(rsync_uri)
+	    + 1 /* space char */
+	    + strlen(localuri) + 1); /* null char at end*/
+
 	if (command == NULL)
 		return pr_enomem();
 
@@ -87,16 +88,16 @@ do_rsync(char const *rsync_uri, char const *localuri)
 	pr_debug("(%s) command = %s", __func__, command);
 
 	/*
-	 * TODO Improve the execution of the command, maybe using another function
-	 * instead of system().
+	 * TODO Improve the execution of the command, maybe using another
+	 * function instead of system().
 	 */
 	error = system(command);
 	if (error) {
 		int error2 = errno;
 		/*
-		 * The error message needs to be really generic because it seems
-		 * that the Linux system() and the OpenBSD system() return
-		 * different things.
+		 * The error message needs to be really generic because it
+		 * seems that the Linux system() and the OpenBSD system()
+		 * return different things.
 		 */
 		pr_err("rsync returned nonzero. result:%d errno:%d",
 		    error, error2);
@@ -110,8 +111,6 @@ do_rsync(char const *rsync_uri, char const *localuri)
 
 /*
  * Returns whether new_uri's prefix is rsync_uri.
- * TODO (rsync)SOLVED why does this not care about nodes? It will return true if
- * `rsync_uri = proto://a/b/c` and `new_uri = proto://a/b/cc`.
  */
 static bool
 rsync_uri_prefix_equals(struct uri *rsync_uri, char const *new_uri)
@@ -123,7 +122,7 @@ rsync_uri_prefix_equals(struct uri *rsync_uri, char const *new_uri)
 		return false;
 
 	if (rsync_uri->string[rsync_uri->len - 1] != '/'
-			&& uri_len > rsync_uri->len && new_uri[rsync_uri->len] != '/') {
+	    && uri_len > rsync_uri->len && new_uri[rsync_uri->len] != '/') {
 		return false;
 	}
 
@@ -208,7 +207,10 @@ find_prefix_path(char const *uri1, char const *uri2, char **result)
 	}
 
 	if (last_equal != NULL) {
-		*result = malloc(last_equal - uri1 + 1 + 1); /*+ 1 slash + 1 null char*/
+		/*+ 1 slash + 1 null char*/
+		*result = malloc(last_equal - uri1
+		    + 1  /* + slash char */
+		    + 1); /* + null char */
 		if (*result == NULL) {
 			error = pr_enomem();
 			goto end;
@@ -252,13 +254,15 @@ compare_uris_and_short(char const *rsync_uri, char **result)
  */
 static int
 get_path_only(char const *uri, size_t uri_len, size_t rsync_prefix_len,
-		char **result)
+    char **result)
 {
 	int error, i;
 	char tmp_uri[uri_len + 1];
-	char *slash_search = NULL;
-	bool is_domain_only = false;
+	char *slash_search;
+	bool is_domain_only;
 
+	slash_search = NULL;
+	is_domain_only = false;
 	error = 0;
 
 	for (i = 0; i < uri_len + 1; i++) {
@@ -302,8 +306,9 @@ end:
 static int
 dir_exist(char *path, bool *result)
 {
-	int error;
 	struct stat _stat;
+	int error;
+
 	error = stat(path, &_stat);
 	if (error != 0) {
 		if (errno == ENOENT) {
@@ -330,7 +335,8 @@ create_dir(char *path)
 	error = mkdir(path, 0777);
 
 	if (error && errno != EEXIST)
-		return pr_errno(errno, "Error while making directory '%s'", path);
+		return pr_errno(errno, "Error while making directory '%s'",
+		    path);
 
 	return 0;
 }
@@ -366,19 +372,21 @@ create_dir_recursive(char *localuri)
 int
 download_files(struct rpki_uri const *uri)
 {
-	int error;
-	char *rsync_uri_path, *localuri, *tmp;
 	size_t prefix_len;
+	char *rsync_uri_path, *localuri, *tmp;
+	int error;
 
 	prefix_len = strlen(RSYNC_PREFIX);
 
 	if (!execute_rsync)
 		return 0;
 
-	if (strlen(uri->global) < prefix_len ||
-			strncmp(RSYNC_PREFIX, uri->global, prefix_len) != 0)
-		return pr_err("Global URI '%s' does not begin with '%s'.",
-				uri->global, RSYNC_PREFIX);
+	if (uri->global_len < prefix_len ||
+	    strncmp(RSYNC_PREFIX, uri->global, prefix_len) != 0) {
+		pr_err("Global URI '%s' does not begin with '%s'.",
+		    uri->global, RSYNC_PREFIX);
+		return ENOTRSYNC; /* Not really an error, so not negative */
+	}
 
 	if (is_uri_in_list(uri->global)){
 		pr_debug("(%s) ON LIST: %s", __func__, uri->global);
@@ -389,7 +397,7 @@ download_files(struct rpki_uri const *uri)
 	}
 
 	error = get_path_only(uri->global, uri->global_len, prefix_len,
-			&rsync_uri_path);
+	    &rsync_uri_path);
 	if (error)
 		return error;
 

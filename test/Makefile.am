@@ -1,7 +1,7 @@
 AM_CFLAGS = -pedantic -Wall -std=gnu11 -I../src ${CHECK_CFLAGS}
 MY_LDADD = ${CHECK_LIBS}
 
-check_PROGRAMS = line_file.test tal.test rsync.test
+check_PROGRAMS = line_file.test rsync.test
 TESTS = ${check_PROGRAMS}
 
 line_file_test_SOURCES = ../src/file.c ../src/file.h ../src/log.c ../src/log.h
@@ -19,6 +19,7 @@ tal_test_CFLAGS = ${AM_CFLAGS} ${GLIB_CFLAGS}
 tal_test_LDADD = ${MY_LDADD} ${GLIB_LIBS}
 
 rsync_test_SOURCES = ../src/file.c ../src/file.h ../src/log.c ../src/log.h
+rsync_test_SOURCES += ../src/uri.c ../src/uri.h
 rsync_test_SOURCES += ../src/thread_var.c ../src/thread_var.h
 rsync_test_SOURCES += ../src/common.c ../src/common.h
 rsync_test_SOURCES += rsync_test.c
