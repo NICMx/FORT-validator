@@ -50,14 +50,14 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 }
 
 static int
-handle_sdata_certificate(ANY_t *any, STACK_OF(X509_CRL) *crls,
-    struct resources *res, OCTET_STRING_t *sid)
+handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
+    OCTET_STRING_t *sid)
 {
 	const unsigned char *tmp;
 	X509 *cert;
 	int error;
 
-	pr_debug_add("(EE?) Certificate (embedded) {");
+	pr_debug_add("EE Certificate (embedded) {");
 
 	/*
 	 * "If the call is successful *in is incremented to the byte following
@@ -74,20 +74,20 @@ handle_sdata_certificate(ANY_t *any, STACK_OF(X509_CRL) *crls,
 		goto end1;
 	}
 
-	error = certificate_validate_chain(cert, crls);
+	error = certificate_validate_chain(cert, args->crls);
 	if (error)
 		goto end2;
 	error = certificate_validate_rfc6487(cert, false);
 	if (error)
 		goto end2;
 
-	if (res != NULL) {
-		error = certificate_get_resources(cert, res);
+	if (args->res != NULL) {
+		error = certificate_get_resources(cert, args->res);
 		if (error)
 			goto end2;
 	}
 
-	error = certificate_traverse_ee(cert, sid);
+	error = certificate_validate_extensions_ee(cert, sid, &args->refs);
 
 end2:
 	X509_free(cert);
@@ -239,8 +239,7 @@ illegal_attrType:
 }
 
 static int
-validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
-    struct resources *res)
+validate(struct SignedData *sdata, struct signed_object_args *args)
 {
 	struct SignerInfo *sinfo;
 	OCTET_STRING_t *sid = NULL;
@@ -319,7 +318,7 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 	}
 
 	error = handle_sdata_certificate(sdata->certificates->list.array[0],
-	    crls, res, sid);
+	    args, sid);
 	if (error)
 		return error;
 
@@ -368,8 +367,8 @@ validate(struct SignedData *sdata, STACK_OF(X509_CRL) *crls,
 }
 
 int
-signed_data_decode(ANY_t *coded, struct SignedData **result,
-    STACK_OF(X509_CRL) *crls, struct resources *res)
+signed_data_decode(ANY_t *coded, struct signed_object_args *args,
+    struct SignedData **result)
 {
 	struct SignedData *sdata;
 	int error;
@@ -379,7 +378,7 @@ signed_data_decode(ANY_t *coded, struct SignedData **result,
 	if (error)
 		return error;
 
-	error = validate(sdata, crls, res);
+	error = validate(sdata, args);
 	if (error) {
 		signed_data_free(sdata);
 		return error;

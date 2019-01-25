@@ -15,6 +15,9 @@
 #include "crypto/hash.h"
 #include "rsync/rsync.h"
 
+/* Just to prevent some line breaking. */
+#define GN_URI uniformResourceIdentifier
+
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
  * The SIA's d2i function, therefore, returns AIAs.
@@ -94,11 +97,6 @@ struct extension_handler {
 struct ski_arguments {
 	X509 *cert;
 	OCTET_STRING_t *sid;
-};
-
-struct sia_arguments {
-	X509 *cert;
-	STACK_OF(X509_CRL) *crls;
 };
 
 static int
@@ -593,19 +591,9 @@ is_rsync(ASN1_IA5STRING *uri)
 }
 
 static int
-handle_rpkiManifest(ACCESS_DESCRIPTION *ad, STACK_OF(X509_CRL) *crls)
+handle_rpkiManifest(ACCESS_DESCRIPTION *ad, struct rpki_uri *mft)
 {
-	struct rpki_uri uri;
-	int error;
-
-	error = uri_init_ad(&uri, ad);
-	if (error)
-		return error;
-
-	error = handle_manifest(&uri, crls);
-
-	uri_cleanup(&uri);
-	return error;
+	return uri_init_ad(mft, ad);
 }
 
 static int
@@ -626,16 +614,20 @@ handle_caRepository(ACCESS_DESCRIPTION *ad)
 }
 
 static int
-handle_signedObject(ACCESS_DESCRIPTION *ad)
+handle_signedObject(ACCESS_DESCRIPTION *ad, struct certificate_refs *refs)
 {
 	struct rpki_uri uri;
 	int error;
 
+	/* TODO all three of them probably need this treatment. */
 	error = uri_init_ad(&uri, ad);
 	if (error)
 		return error;
 
 	pr_debug("signedObject: %s", uri.global);
+
+	refs->signedObject = uri.global;
+	uri.global = NULL;
 
 	uri_cleanup(&uri);
 	return error;
@@ -929,7 +921,8 @@ handle_ku_ee(X509_EXTENSION *ext, void *arg)
 static int
 handle_cdp(X509_EXTENSION *ext, void *arg)
 {
-	STACK_OF(DIST_POINT) *crldp = X509V3_EXT_d2i(ext);
+	struct certificate_refs *refs = arg;
+	STACK_OF(DIST_POINT) *crldp;
 	DIST_POINT *dp;
 	GENERAL_NAMES *names;
 	GENERAL_NAME *name;
@@ -978,12 +971,23 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	names = dp->distpoint->name.fullname;
 	for (i = 0; i < sk_GENERAL_NAME_num(names); i++) {
 		name = sk_GENERAL_NAME_value(names, i);
-		if (name->type == GEN_URI && is_rsync(name->d.uniformResourceIdentifier)) {
+		if (name->type == GEN_URI && is_rsync(name->d.GN_URI)) {
 			/*
-			 * TODO (certext) check the URI matches what we rsync'd.
-			 * Also indent properly.
+			 * Since we're parsing and validating the manifest's CRL
+			 * at some point, I think that all we need to do now is
+			 * compare this CRL URI to that one's.
+			 *
+			 * But there is a problem:
+			 * The manifest's CRL might not have been parsed at this
+			 * point. In fact, it's guaranteed to not have been
+			 * parsed if the certificate we're validating is the EE
+			 * certificate of the manifest itself.
+			 *
+			 * So we will store the URI in @refs, and validate it
+			 * later.
 			 */
-			error = 0;
+			error = ia5s2string(name->d.GN_URI, &refs->crldp);
+			pr_debug("Certificate CRL: %s", refs->crldp);
 			goto end;
 		}
 	}
@@ -1002,6 +1006,7 @@ end:
 static int
 handle_aia(X509_EXTENSION *ext, void *arg)
 {
+	struct certificate_refs *refs = arg;
 	AUTHORITY_INFO_ACCESS *aia;
 	ACCESS_DESCRIPTION *ad;
 	int i;
@@ -1013,9 +1018,19 @@ handle_aia(X509_EXTENSION *ext, void *arg)
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(aia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(aia, i);
 		if (OBJ_obj2nid(ad->method) == NID_ad_ca_issuers) {
+			if (ad->location->type != GEN_URI) {
+				return pr_err("The AIA caIssuers is not an URI. (type: %d)",
+				    ad->location->type);
+			}
+
 			/*
-			 * TODO (certext) check the URI matches what we rsync'd.
+			 * Bringing the parent certificate's URI all the way
+			 * over here is too much trouble, so do the handle_cdp()
+			 * hack.
 			 */
+
+			return ia5s2string(ad->location->d.GN_URI,
+			    &refs->caIssuers);
 		}
 	}
 
@@ -1026,8 +1041,6 @@ handle_aia(X509_EXTENSION *ext, void *arg)
 static int
 handle_sia_ca(X509_EXTENSION *ext, void *arg)
 {
-	struct sia_arguments *args = arg;
-	struct validation *state;
 	SIGNATURE_INFO_ACCESS *sia;
 	ACCESS_DESCRIPTION *ad;
 	bool rsync_found = false;
@@ -1039,15 +1052,6 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	if (sia == NULL)
 		return cannot_decode(&SIA);
 
-	state = state_retrieve();
-	if (state == NULL) {
-		error = -EINVAL;
-		goto end2;
-	}
-	error = validation_push_cert(state, args->cert, false);
-	if (error)
-		goto end2;
-
 	/* rsync */
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
@@ -1056,7 +1060,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 			if (error == ENOTRSYNC)
 				continue;
 			if (error)
-				goto end1;
+				goto end;
 			rsync_found = true;
 			break;
 		}
@@ -1065,10 +1069,14 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	if (!rsync_found) {
 		pr_err("SIA extension lacks a caRepository RSYNC URI.");
 		error = -ESRCH;
-		goto end1;
+		goto end;
 	}
 
-	/* validate */
+	/*
+	 * Store the manifest URI in @mft.
+	 * (We won't actually touch the manifest until we know the certificate
+	 * is fully valid.)
+	 */
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
 		if (OBJ_obj2nid(ad->method) == NID_rpkiManifest) {
@@ -1082,12 +1090,12 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 			 */
 			if (manifest_found) {
 				error = pr_err("SIA defines more than one manifest.");
-				goto end1;
+				goto end;
 			}
 
-			error = handle_rpkiManifest(ad, args->crls);
+			error = handle_rpkiManifest(ad, arg);
 			if (error)
-				goto end1;
+				goto end;
 			manifest_found = true;
 		}
 	}
@@ -1098,9 +1106,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 		error = -ESRCH;
 	}
 
-end1:
-	validation_pop_cert(state); /* Error code is useless. */
-end2:
+end:
 	AUTHORITY_INFO_ACCESS_free(sia);
 	return error;
 }
@@ -1126,7 +1132,7 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 		nid = OBJ_obj2nid(ad->method);
 
 		if (nid == NID_signedObject) {
-			error = handle_signedObject(ad);
+			error = handle_signedObject(ad, arg);
 			/* TODO Unknown signedObjects are allowed. */
 			if (error)
 				goto end;
@@ -1240,55 +1246,49 @@ handle_cert_extensions(struct extension_handler *handlers, X509 *cert)
 }
 
 int
-certificate_traverse_ta(X509 *cert, STACK_OF(X509_CRL) *crls)
+certificate_validate_extensions_ta(X509 *cert, struct rpki_uri *mft)
 {
-	struct sia_arguments sia_args;
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg       */
 	    { &BC,  true,  handle_bc,               },
 	    { &SKI, true,  handle_ski_ca, cert      },
 	    { &AKI, false, handle_aki_ta, cert      },
 	    { &KU,  true,  handle_ku_ca,            },
-	    { &SIA, true,  handle_sia_ca, &sia_args },
+	    { &SIA, true,  handle_sia_ca, mft       },
 	    { &CP,  true,  handle_cp,               },
 	    { &IR,  false, handle_ir,               },
 	    { &AR,  false, handle_ar,               },
 	    { NULL },
 	};
 
-	sia_args.cert = cert;
-	sia_args.crls = crls;
-
 	return handle_cert_extensions(handlers, cert);
 }
 
 int
-certificate_traverse_ca(X509 *cert, STACK_OF(X509_CRL) *crls)
+certificate_validate_extensions_ca(X509 *cert, struct rpki_uri *mft,
+    struct certificate_refs *refs)
 {
-	struct sia_arguments sia_args;
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg       */
 	    { &BC,  true,  handle_bc,               },
 	    { &SKI, true,  handle_ski_ca, cert      },
 	    { &AKI, true,  handle_aki,              },
 	    { &KU,  true,  handle_ku_ca,            },
-	    { &CDP, true,  handle_cdp,              },
-	    { &AIA, true,  handle_aia,              },
-	    { &SIA, true,  handle_sia_ca, &sia_args },
+	    { &CDP, true,  handle_cdp,    refs      },
+	    { &AIA, true,  handle_aia,    refs      },
+	    { &SIA, true,  handle_sia_ca, mft       },
 	    { &CP,  true,  handle_cp,               },
 	    { &IR,  false, handle_ir,               },
 	    { &AR,  false, handle_ar,               },
 	    { NULL },
 	};
 
-	sia_args.cert = cert;
-	sia_args.crls = crls;
-
 	return handle_cert_extensions(handlers, cert);
 }
 
 int
-certificate_traverse_ee(X509 *cert, OCTET_STRING_t *sid)
+certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
+    struct certificate_refs *refs)
 {
 	struct ski_arguments ski_args;
 	struct extension_handler handlers[] = {
@@ -1296,9 +1296,9 @@ certificate_traverse_ee(X509 *cert, OCTET_STRING_t *sid)
 	    { &SKI, true,  handle_ski_ee, &ski_args },
 	    { &AKI, true,  handle_aki,              },
 	    { &KU,  true,  handle_ku_ee,            },
-	    { &CDP, true,  handle_cdp,              },
-	    { &AIA, true,  handle_aia,              },
-	    { &SIA, true,  handle_sia_ee,           },
+	    { &CDP, true,  handle_cdp,    refs      },
+	    { &AIA, true,  handle_aia,    refs      },
+	    { &SIA, true,  handle_sia_ee, refs      },
 	    { &CP,  true,  handle_cp,               },
 	    { &IR,  false, handle_ir,               },
 	    { &AR,  false, handle_ar,               },
@@ -1309,4 +1309,74 @@ certificate_traverse_ee(X509 *cert, OCTET_STRING_t *sid)
 	ski_args.sid = sid;
 
 	return handle_cert_extensions(handlers, cert);
+}
+
+/* Boilerplate code for CA certificate validation and recursive traversal. */
+int
+certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
+    STACK_OF(X509_CRL) *crls, bool is_ta)
+{
+	struct validation *state;
+	X509 *cert;
+	struct rpki_uri mft;
+	struct certificate_refs refs;
+	struct rpp *pp;
+	int error;
+
+	pr_debug_add("%s Certificate %s {", is_ta ? "TA" : "CA",
+	    cert_uri->global);
+	fnstack_push(cert_uri->global);
+	memset(&refs, 0, sizeof(refs));
+
+	/* -- Validate the certificate (@cert) -- */
+	error = certificate_load(cert_uri, &cert);
+	if (error)
+		goto end1;
+	if (!is_ta) {
+		error = certificate_validate_chain(cert, crls);
+		if (error)
+			goto end2;
+	}
+	error = certificate_validate_rfc6487(cert, is_ta);
+	if (error)
+		goto end2;
+	error = is_ta
+	    ? certificate_validate_extensions_ta(cert, &mft)
+	    : certificate_validate_extensions_ca(cert, &mft, &refs);
+	if (error)
+		goto end2;
+
+	error = refs_validate_ca(&refs, is_ta, rpp_parent);
+	if (error)
+		goto end3;
+
+	/* -- Validate the manifest (@mft) pointed by the certificate -- */
+	state = state_retrieve();
+	if (state == NULL) {
+		error = -EINVAL;
+		goto end3;
+	}
+	error = validation_push_cert(state, cert_uri, cert, is_ta);
+	if (error)
+		goto end3;
+
+	error = handle_manifest(&mft, crls, &pp);
+	if (error)
+		goto end4;
+
+	/* -- Validate & traverse the RPP (@pp) described by the manifest -- */
+	error = rpp_traverse(pp);
+
+	rpp_destroy(pp);
+end4:
+	validation_pop_cert(state); /* Error code is useless. */
+end3:
+	uri_cleanup(&mft);
+	refs_cleanup(&refs);
+end2:
+	X509_free(cert);
+end1:
+	fnstack_pop();
+	pr_debug_rm("}");
+	return error;
 }

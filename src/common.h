@@ -24,4 +24,7 @@ extern int NID_rpkiNotify;
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
+int string_clone(void const *, size_t, char **);
+int ia5s2string(ASN1_IA5STRING *, char **);
+
 #endif /* SRC_RTR_COMMON_H_ */

@@ -5,8 +5,10 @@
 #include "common.h"
 #include "debug.h"
 #include "log.h"
+#include "rpp.h"
 #include "thread_var.h"
 #include "object/certificate.h"
+#include "object/manifest.h"
 #include "object/tal.h"
 #include "rsync/rsync.h"
 
@@ -31,29 +33,6 @@ add_rpki_oids(void)
 		    "id-ad-rpkiNotify (RFC 8182)",
 		    /* TODO */ "Blah blah");
 	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
-}
-
-static int
-handle_tal_certificate(struct rpki_uri const *uri)
-{
-	X509 *cert;
-	int error;
-
-	fnstack_push(uri->global);
-	error = certificate_load(uri, &cert);
-	if (error)
-		goto end;
-
-	error = certificate_validate_rfc6487(cert, true);
-	if (error)
-		goto revert;
-	error = certificate_traverse_ta(cert, NULL);
-
-revert:
-	X509_free(cert);
-end:
-	fnstack_pop();
-	return error;
 }
 
 /**
@@ -100,7 +79,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
 		goto end;
 	}
 
-	error = handle_tal_certificate(uri);
+	error = certificate_traverse(NULL, uri, NULL, true);
 	if (error) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:

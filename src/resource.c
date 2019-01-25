@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
-#include <sys/queue.h>
 
 #include "address.h"
 #include "log.h"
@@ -17,18 +16,7 @@ struct resources {
 	struct resources_ipv4 *ip4s;
 	struct resources_ipv6 *ip6s;
 	struct resources_asn *asns;
-
-	/*
-	 * Used by restack. Points to the resources of the parent certificate.
-	 */
-	SLIST_ENTRY(resources) next;
 };
-
-/*
- * "Resource stack". It's a chain of resources, to complement a chain of
- * certificates.
- */
-SLIST_HEAD(restack, resources);
 
 struct resources *
 resources_create(void)
@@ -522,60 +510,3 @@ resources_contains_ipv6(struct resources *res, struct ipv6_prefix *prefix)
 	return res6_contains_prefix(res->ip6s, prefix);
 }
 
-struct restack *
-restack_create(void)
-{
-	struct restack *result;
-
-	result = malloc(sizeof(struct restack));
-	if (result == NULL) {
-		pr_enomem();
-		return NULL;
-	}
-
-	SLIST_INIT(result);
-	return result;
-}
-
-void
-restack_destroy(struct restack *stack)
-{
-	struct resources *resources;
-	unsigned int r = 0;
-
-	while (!SLIST_EMPTY(stack)) {
-		resources = SLIST_FIRST(stack);
-		SLIST_REMOVE_HEAD(stack, next);
-		resources_destroy(resources);
-		r++;
-	}
-
-	free(stack);
-	pr_debug("Deleted %u resources from the stack.", r);
-}
-
-void
-restack_push(struct restack *stack, struct resources *new)
-{
-	SLIST_INSERT_HEAD(stack, new, next);
-}
-
-struct resources *
-restack_pop(struct restack *stack)
-{
-	struct resources *res;
-
-	res = SLIST_FIRST(stack);
-	if (res != NULL) {
-		SLIST_REMOVE_HEAD(stack, next);
-		SLIST_NEXT(res, next) = NULL;
-	}
-
-	return res;
-}
-
-struct resources *
-restack_peek(struct restack *stack)
-{
-	return SLIST_FIRST(stack);
-}

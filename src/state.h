@@ -13,7 +13,6 @@ void validation_destroy(struct validation *);
 struct tal *validation_tal(struct validation *);
 X509_STORE *validation_store(struct validation *);
 STACK_OF(X509) *validation_certs(struct validation *);
-struct restack *validation_resources(struct validation *);
 
 enum pubkey_state {
 	PKS_VALID,
@@ -25,9 +24,11 @@ void validation_pubkey_valid(struct validation *);
 void validation_pubkey_invalid(struct validation *);
 enum pubkey_state validation_pubkey_state(struct validation *);
 
-int validation_push_cert(struct validation *, X509 *, bool);
+int validation_push_cert(struct validation *, struct rpki_uri const *, X509 *,
+    bool);
 int validation_pop_cert(struct validation *);
 X509 *validation_peek_cert(struct validation *);
+struct rpki_uri const *validation_peek_cert_uri(struct validation *);
 
 struct resources *validation_peek_resource(struct validation *);
 

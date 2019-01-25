@@ -168,33 +168,43 @@ family_error:
 	return pr_err("ROA's IP family is not v4 or v6.");
 }
 
-int handle_roa(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls)
+int handle_roa(struct rpki_uri const *uri, struct rpp *pp,
+    STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS(oid);
+	struct signed_object_args sobj_args;
 	struct RouteOriginAttestation *roa;
-	/* Resources contained in the ROA certificate, not in the ROA itself. */
-	struct resources *cert_resources;
 	int error;
 
 	pr_debug_add("ROA %s {", uri->global);
 	fnstack_push(uri->global);
 
-	cert_resources = resources_create();
-	if (cert_resources == NULL) {
+	sobj_args.uri = uri;
+	sobj_args.crls = crls;
+	sobj_args.res = resources_create();
+	if (sobj_args.res == NULL) {
 		error = pr_enomem();
 		goto end1;
 	}
+	memset(&sobj_args.refs, 0, sizeof(sobj_args.refs));
 
-	error = signed_object_decode(uri, &asn_DEF_RouteOriginAttestation,
-	    &arcs, (void **) &roa, crls, cert_resources);
+	error = signed_object_decode(&sobj_args,
+	    &asn_DEF_RouteOriginAttestation, &arcs, (void **) &roa);
 	if (error)
 		goto end2;
-	error = __handle_roa(roa, cert_resources);
-	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
 
+	error = __handle_roa(roa, sobj_args.res);
+	if (error)
+		goto end3;
+
+	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
+
+end3:
+	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
+	refs_cleanup(&sobj_args.refs);
 end2:
-	resources_destroy(cert_resources);
+	resources_destroy(sobj_args.res);
 end1:
 	pr_debug_rm("}");
 	fnstack_pop();

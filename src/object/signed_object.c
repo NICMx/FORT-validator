@@ -4,7 +4,6 @@
 #include "log.h"
 #include "asn1/content_info.h"
 #include "asn1/decode.h"
-#include "asn1/signed_data.h"
 
 static int
 validate_eContentType(struct SignedData *sdata,
@@ -56,22 +55,20 @@ validate_content_type(struct SignedData *sdata,
 }
 
 int
-signed_object_decode(struct rpki_uri const *uri,
+signed_object_decode(struct signed_object_args *args,
     asn_TYPE_descriptor_t const *descriptor,
     struct oid_arcs const *oid,
-    void **result,
-    STACK_OF(X509_CRL) *crls,
-    struct resources *res)
+    void **result)
 {
 	struct ContentInfo *cinfo;
 	struct SignedData *sdata;
 	int error;
 
-	error = content_info_load(uri, &cinfo);
+	error = content_info_load(args->uri, &cinfo);
 	if (error)
 		goto end1;
 
-	error = signed_data_decode(&cinfo->content, &sdata, crls, res);
+	error = signed_data_decode(&cinfo->content, args, &sdata);
 	if (error)
 		goto end2;
 
