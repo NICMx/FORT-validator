@@ -28,8 +28,9 @@ struct rpki_uri {
 	/* "local_len" is not needed for now. */
 };
 
-int uri_init(struct rpki_uri *, char const *guri);
-int uri_init_ia5(struct rpki_uri *, char const *, IA5String_t *);
+int uri_init(struct rpki_uri *, void const *, size_t);
+int uri_init_str(struct rpki_uri *uri, char const *guri);
+int uri_init_mft(struct rpki_uri *, char const *, IA5String_t *);
 int uri_init_ad(struct rpki_uri *, ACCESS_DESCRIPTION *ad);
 void uri_cleanup(struct rpki_uri *);
 

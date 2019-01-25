@@ -1,9 +1,23 @@
 #include "state.h"
 
 #include <errno.h>
+#include <sys/queue.h>
 #include "log.h"
 #include "thread_var.h"
 #include "object/certificate.h"
+
+/**
+ * Cached certificate data.
+ */
+struct certificate {
+	struct rpki_uri uri;
+	struct resources *resources;
+
+	/** Used by certstack. Points to the next stacked certificate. */
+	SLIST_ENTRY(certificate) next;
+};
+
+SLIST_HEAD(certstack, certificate);
 
 /**
  * The current state of the validation cycle.
@@ -20,19 +34,19 @@ struct validation {
 
 	/** Certificates we've already validated. */
 	STACK_OF(X509) *trusted;
+
 	/**
-	 * The resources owned by the certificates from @trusted.
+	 * Stacked additional data to each @trusted certificate.
 	 *
-	 * (One for each certificate; these two stacks should practically always
-	 * have the same size. The reason why I don't combine them is because
-	 * libcrypto's validation function wants the stack of X509 and I'm not
-	 * creating it over and over again.)
+	 * (These two stacks should always have the same size. The reason why I
+	 * don't combine them is because libcrypto's validation function needs
+	 * the X509 stack, and I'm not creating it over and over again.)
 	 *
 	 * (This is a SLIST and not a STACK_OF because the OpenSSL stack
 	 * implementation is different than the LibreSSL one, and the latter is
 	 * seemingly not intended to be used outside of its library.)
 	 */
-	struct restack *rsrcs;
+	struct certstack certs;
 
 	/* Did the TAL's public key match the root certificate's public key? */
 	enum pubkey_state pubkey_state;
@@ -104,19 +118,12 @@ validation_prepare(struct validation **out, struct tal *tal)
 		goto abort2;
 	}
 
-	result->rsrcs = restack_create();
-	if (!result->rsrcs) {
-		error = -ENOMEM;
-		goto abort3;
-	}
-
+	SLIST_INIT(&result->certs);
 	result->pubkey_state = PKS_UNTESTED;
 
 	*out = result;
 	return 0;
 
-abort3:
-	sk_X509_pop_free(result->trusted, X509_free);
 abort2:
 	X509_STORE_free(result->store);
 abort1:
@@ -128,6 +135,8 @@ void
 validation_destroy(struct validation *state)
 {
 	int cert_num;
+	struct certificate *cert;
+	unsigned int c;
 
 	cert_num = sk_X509_num(state->trusted);
 	if (cert_num != 0) {
@@ -135,7 +144,16 @@ validation_destroy(struct validation *state)
 		    cert_num);
 	}
 
-	restack_destroy(state->rsrcs);
+	c = 0;
+	while (!SLIST_EMPTY(&state->certs)) {
+		cert = SLIST_FIRST(&state->certs);
+		SLIST_REMOVE_HEAD(&state->certs, next);
+		resources_destroy(cert->resources);
+		free(cert);
+		c++;
+	}
+	pr_debug("Deleted %u certificates from the stack.", c);
+
 	sk_X509_pop_free(state->trusted, X509_free);
 	X509_STORE_free(state->store);
 	free(state);
@@ -159,12 +177,6 @@ validation_certs(struct validation *state)
 	return state->trusted;
 }
 
-struct restack *
-validation_resources(struct validation *state)
-{
-	return state->rsrcs;
-}
-
 void validation_pubkey_valid(struct validation *state)
 {
 	state->pubkey_state = PKS_VALID;
@@ -180,20 +192,34 @@ enum pubkey_state validation_pubkey_state(struct validation *state)
 	return state->pubkey_state;
 }
 
+/**
+ * Ownership of @cert_uri's members will NOT be transferred to @state on
+ * success, and they will be expected to outlive @x509.
+ */
 int
-validation_push_cert(struct validation *state, X509 *cert, bool is_ta)
+validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
+    X509 *x509, bool is_ta)
 {
-	struct resources *resources;
+	struct certificate *cert;
 	int ok;
 	int error;
 
-	resources = resources_create();
-	if (resources == NULL)
-		return pr_enomem();
+	cert = malloc(sizeof(struct certificate));
+	if (cert == NULL) {
+		error = pr_enomem();
+		goto end1;
+	}
 
-	error = certificate_get_resources(cert, resources);
+	cert->uri = *cert_uri;
+	cert->resources = resources_create();
+	if (cert->resources == NULL) {
+		error = pr_enomem();
+		goto end2;
+	}
+
+	error = certificate_get_resources(x509, cert->resources);
 	if (error)
-		goto fail;
+		goto end3;
 
 	/*
 	 * rfc7730#section-2.2
@@ -202,36 +228,41 @@ validation_push_cert(struct validation *state, X509 *cert, bool is_ta)
 	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
 	 * part is already handled in certificate_get_resources().
 	 */
-	if (is_ta && resources_empty(resources))
-		return pr_err("Trust Anchor certificate does not define any number resources.");
+	if (is_ta && resources_empty(cert->resources)) {
+		error = pr_err("Trust Anchor certificate does not define any number resources.");
+		goto end3;
+	}
 
-	ok = sk_X509_push(state->trusted, cert);
+	ok = sk_X509_push(state->trusted, x509);
 	if (ok <= 0) {
 		error = crypto_err(
 		    "Couldn't add certificate to trusted stack: %d", ok);
-		goto fail;
+		goto end3;
 	}
 
-	restack_push(state->rsrcs, resources);
+	SLIST_INSERT_HEAD(&state->certs, cert, next);
+
 	return 0;
 
-fail:
-	resources_destroy(resources);
-	return error;
+end3:	resources_destroy(cert->resources);
+end2:	free(cert);
+end1:	return error;
 }
 
 int
 validation_pop_cert(struct validation *state)
 {
-	struct resources *resources;
+	struct certificate *cert;
 
 	if (sk_X509_pop(state->trusted) == NULL)
-		return pr_crit("Attempted to pop empty certificate stack");
+		return pr_crit("Attempted to pop empty certificate stack (1)");
 
-	resources = restack_pop(state->rsrcs);
-	if (resources == NULL)
-		return pr_crit("Attempted to pop empty resource stack");
-	resources_destroy(resources);
+	cert = SLIST_FIRST(&state->certs);
+	if (cert == NULL)
+		return pr_crit("Attempted to pop empty certificate stack (2)");
+	SLIST_REMOVE_HEAD(&state->certs, next);
+	resources_destroy(cert->resources);
+	free(cert);
 
 	return 0;
 }
@@ -242,8 +273,16 @@ validation_peek_cert(struct validation *state)
 	return sk_X509_value(state->trusted, sk_X509_num(state->trusted) - 1);
 }
 
+struct rpki_uri const *
+validation_peek_cert_uri(struct validation *state)
+{
+	struct certificate *cert = SLIST_FIRST(&state->certs);
+	return (cert != NULL) ? &cert->uri : NULL;
+}
+
 struct resources *
 validation_peek_resource(struct validation *state)
 {
-	return restack_peek(state->rsrcs);
+	struct certificate *cert = SLIST_FIRST(&state->certs);
+	return (cert != NULL) ? cert->resources : NULL;
 }

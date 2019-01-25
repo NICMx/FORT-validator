@@ -8,17 +8,10 @@
  * This function does not assume that @str is null-terminated.
  */
 static int
-str2global(char const *str, size_t str_len, struct rpki_uri *uri)
+str2global(void const *str, size_t str_len, struct rpki_uri *uri)
 {
-	uri->global = malloc(str_len + 1);
-	if (uri->global == NULL)
-		return pr_enomem();
-	strncpy(uri->global, str, str_len);
-	uri->global[str_len] = '\0';
-
 	uri->global_len = str_len;
-
-	return 0;
+	return string_clone(str, str_len, &uri->global);
 }
 
 /**
@@ -124,11 +117,11 @@ autocomplete_local(struct rpki_uri *uri)
 }
 
 int
-uri_init(struct rpki_uri *uri, char const *guri)
+uri_init(struct rpki_uri *uri, void const *guri, size_t guri_len)
 {
 	int error;
 
-	error = str2global(guri, strlen(guri), uri);
+	error = str2global(guri, guri_len, uri);
 	if (error)
 		return error;
 
@@ -141,8 +134,19 @@ uri_init(struct rpki_uri *uri, char const *guri)
 	return 0;
 }
 
+/**
+ * Do not call this function unless you're sure that @guri is NULL-terminated.
+ */
+int uri_init_str(struct rpki_uri *uri, char const *guri)
+{
+	return uri_init(uri, guri, strlen(guri));
+}
+
+/*
+ * Manifests URIs are a little special in that they are relative.
+ */
 int
-uri_init_ia5(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
+uri_init_mft(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 {
 	int error;
 
@@ -162,7 +166,6 @@ uri_init_ad(struct rpki_uri *uri, ACCESS_DESCRIPTION *ad)
 {
 	ASN1_STRING *asn1_string;
 	int type;
-	int error;
 
 	asn1_string = GENERAL_NAME_get0_value(ad->location, &type);
 
@@ -201,16 +204,8 @@ uri_init_ad(struct rpki_uri *uri, ACCESS_DESCRIPTION *ad)
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	error = str2global((char *) ASN1_STRING_get0_data(asn1_string),
-	    ASN1_STRING_length(asn1_string), uri);
-	if (error)
-		return error;
-
-	error = autocomplete_local(uri);
-	if (error)
-		free(uri->global);
-
-	return error;
+	return uri_init(uri, ASN1_STRING_get0_data(asn1_string),
+	    ASN1_STRING_length(asn1_string));
 }
 
 void

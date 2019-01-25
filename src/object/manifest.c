@@ -102,27 +102,24 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
-typedef int (*foreach_cb)(struct rpki_uri const *, void *);
-
 static int
-foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
+__handle_manifest(struct manifest *mft, struct rpp **pp)
 {
+	int i;
 	struct FileAndHash *fah;
 	struct rpki_uri uri;
-	int i;
 	int error;
+
+	*pp = rpp_create();
+	if (*pp == NULL)
+		return pr_enomem();
 
 	for (i = 0; i < mft->obj->fileList.list.count; i++) {
 		fah = mft->obj->fileList.list.array[i];
 
-		error = uri_init_ia5(&uri, mft->file_path, &fah->file);
+		error = uri_init_mft(&uri, mft->file_path, &fah->file);
 		if (error)
-			return error;
-
-		if (!uri_has_extension(&uri, extension)) {
-			uri_cleanup(&uri);
-			continue;
-		}
+			goto fail;
 
 		error = hash_validate_file("sha256", &uri, &fah->hash);
 		if (error) {
@@ -130,148 +127,71 @@ foreach_file(struct manifest *mft, char *extension, foreach_cb cb, void *arg)
 			continue;
 		}
 
-		error = cb(&uri, arg);
-		uri_cleanup(&uri);
-		if (error)
-			return error;
+		if (uri_has_extension(&uri, ".cer"))
+			error = rpp_add_cert(*pp, &uri);
+		else if (uri_has_extension(&uri, ".roa"))
+			error = rpp_add_roa(*pp, &uri);
+		else if (uri_has_extension(&uri, ".crl"))
+			error = rpp_add_crl(*pp, &uri);
+		else
+			uri_cleanup(&uri); /* ignore it. */
+
+		if (error) {
+			uri_cleanup(&uri);
+			goto fail;
+		} /* Otherwise ownership was transferred to @pp. */
 	}
 
 	return 0;
-}
 
-static int
-pile_crls(struct rpki_uri const *uri, void *crls)
-{
-	X509_CRL *crl;
-	int error;
-	int idx;
-
-	/* rfc6481#section-2.2 */
-	if (sk_X509_CRL_num(crls) != 0)
-		return pr_err("The Manifest defines more than one CRL.");
-
-	fnstack_push(uri->global);
-
-	error = crl_load(uri, &crl);
-	if (error)
-		goto end;
-
-	idx = sk_X509_CRL_push(crls, crl);
-	if (idx <= 0) {
-		error = crypto_err("Could not add CRL to a CRL stack");
-		X509_CRL_free(crl);
-		goto end;
-	}
-
-end:
-	fnstack_pop();
+fail:
+	rpp_destroy(*pp);
 	return error;
 }
 
-/*
- * Speaking of CA certs: I still don't get the CA/EE cert duality at the
- * implementation level.
- *
- * Right now, I'm assuming that file certs are CA certs, and CMS-embedded certs
- * are EE certs. None of the RFCs seem to mandate this, but I can't think of any
- * other way to interpret it.
- *
- * It's really weird because the RFCs actually define requirements like "other
- * AccessMethods MUST NOT be used for an EE certificates's SIA," (RFC6481) which
- * seems to imply that there's some contextual way to already know whether a
- * certificate is CA or EE. But it just doesn't exist.
+/**
+ * Validates the manifest pointed by @uri, returns the RPP described by it in
+ * @pp.
  */
-static int
-traverse_ca_certs(struct rpki_uri const *uri, void *crls)
-{
-	X509 *cert;
-
-	pr_debug_add("(CA?) Certificate {");
-	fnstack_push(uri->global);
-
-	/*
-	 * Errors on at least some of these functions should not interrupt the
-	 * traversal of sibling nodes, so ignore them.
-	 * (Error messages should have been printed in stderr.)
-	 */
-
-	if (certificate_load(uri, &cert))
-		goto revert1; /* Fine */
-
-	if (certificate_validate_chain(cert, crls))
-		goto revert2; /* Fine */
-	if (certificate_validate_rfc6487(cert, false))
-		goto revert2; /* Fine */
-	certificate_traverse_ca(cert, crls); /* Error code is useless. */
-
-revert2:
-	X509_free(cert);
-revert1:
-	pr_debug_rm("}");
-	fnstack_pop();
-	return 0;
-}
-
-static int
-print_roa(struct rpki_uri const *uri, void *arg)
-{
-	handle_roa(uri, arg);
-	return 0;
-}
-
-static int
-__handle_manifest(struct manifest *mft)
-{
-	STACK_OF(X509_CRL) *crls;
-	int error;
-
-	/* Init */
-	crls = sk_X509_CRL_new_null();
-	if (crls == NULL)
-		return pr_enomem();
-
-	/* Get the one CRL as a stack. */
-	error = foreach_file(mft, ".crl", pile_crls, crls);
-	if (error)
-		goto end;
-
-	/* Use CRL stack to validate certificates, and also traverse them. */
-	error = foreach_file(mft, ".cer", traverse_ca_certs, crls);
-	if (error)
-		goto end;
-
-	/* Use valid address ranges to print ROAs that match them. */
-	error = foreach_file(mft, ".roa", print_roa, crls);
-
-end:
-	sk_X509_CRL_pop_free(crls, X509_CRL_free);
-	return error;
-}
-
 int
-handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls)
+handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
+    struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS(oid);
+	struct signed_object_args sobj_args;
 	struct manifest mft;
 	int error;
 
 	pr_debug_add("Manifest %s {", uri->global);
 	fnstack_push(uri->global);
 
+	sobj_args.uri = uri;
+	sobj_args.crls = crls;
+	sobj_args.res = NULL;
+	memset(&sobj_args.refs, 0, sizeof(sobj_args.refs));
 	mft.file_path = uri->global;
 
-	error = signed_object_decode(uri, &asn_DEF_Manifest, &arcs,
-	    (void **) &mft.obj, crls, NULL);
+	error = signed_object_decode(&sobj_args, &asn_DEF_Manifest, &arcs,
+	    (void **) &mft.obj); /* mft.obj and sobj_args.refs in the heap */
 	if (error)
-		goto end;
+		goto end1;
 
 	error = validate_manifest(mft.obj);
-	if (!error)
-		error = __handle_manifest(&mft);
+	if (error)
+		goto end2;
+	error = __handle_manifest(&mft, pp); /* pp in the heap */
+	if (error)
+		goto end2;
 
+	error = refs_validate_ee(&sobj_args.refs, *pp, uri);
+	if (error)
+		rpp_destroy(*pp);
+
+end2:
 	ASN_STRUCT_FREE(asn_DEF_Manifest, mft.obj);
-end:
+	refs_cleanup(&sobj_args.refs);
+end1:
 	pr_debug_rm("}");
 	fnstack_pop();
 	return error;

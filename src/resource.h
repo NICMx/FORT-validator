@@ -21,14 +21,4 @@ bool resources_contains_asn(struct resources *, ASId_t);
 bool resources_contains_ipv4(struct resources *, struct ipv4_prefix *);
 bool resources_contains_ipv6(struct resources *, struct ipv6_prefix *);
 
-/* "Resource stack." Stack of struct resources. */
-struct restack;
-
-struct restack *restack_create(void);
-void restack_destroy(struct restack *);
-
-void restack_push(struct restack *, struct resources *);
-struct resources *restack_pop(struct restack *);
-struct resources *restack_peek(struct restack *);
-
 #endif /* SRC_RESOURCE_H_ */
