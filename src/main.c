@@ -1,5 +1,6 @@
 #include <err.h>
 #include <errno.h>
+#include <getopt.h>
 #include <openssl/objects.h>
 
 #include "common.h"
@@ -11,6 +12,17 @@
 #include "object/manifest.h"
 #include "object/tal.h"
 #include "rsync/rsync.h"
+
+struct rpki_config {
+	/* tal file path*/
+	char *tal;
+	/* Local repository path */
+	char *local_repository;
+	/* Disable rsync downloads */
+	bool disable_rsync;
+	/* Shuffle uris in tal */
+	bool shuffle_uris;
+};
 
 /**
  * Registers the RPKI-specific OIDs in the SSL library.
@@ -100,38 +112,90 @@ end:
 	return error;
 }
 
+static int
+handle_args(int argc, char **argv, struct rpki_config *config)
+{
+	int opt, error = 0;
+
+	static struct option long_options[] = {
+		{"tal", no_argument, NULL, 't'},
+		{"local_repository", required_argument, NULL, 'l'},
+		{"disable_rsync", no_argument, 0, 'r'},
+		{"shuffle_uris", no_argument, 0, 's'},
+		{0,0,0,}
+	};
+
+	config->disable_rsync = false;
+	config->shuffle_uris = false;
+	config->local_repository = NULL;
+	config->tal = NULL;
+
+	while ((opt = getopt_long(argc, argv, "t:l:rs", long_options, NULL))
+	    != -1) {
+		switch (opt) {
+		case 't' :
+			config->tal = optarg;
+			break;
+		case 'l' :
+			config->local_repository = optarg;
+			break;
+		case 'r':
+			config->disable_rsync = true;
+			break;
+		case 's':
+			config->shuffle_uris = true;
+			break;
+		default:
+			return pr_err("some usage hints.");/* TODO */
+		}
+	}
+
+	if (config->tal == NULL) {
+		fprintf(stderr, "Missing flag --tal <file>\n");
+		error = -EINVAL;
+	}
+	if(config->local_repository == NULL) {
+		fprintf(stderr, "Missing flag --local_repository <dir>\n");
+		error = -EINVAL;
+	}
+
+	pr_debug("TAL file : %s", config->tal);
+	pr_debug("Local repository : %s", config->local_repository);
+	pr_debug("Disable rsync : %s", config->disable_rsync
+	    ? "true" : "false");
+	pr_debug("shuffle uris : %s", config->shuffle_uris
+	    ? "true" : "false");
+
+	return error;
+}
+
 int
 main(int argc, char **argv)
 {
+	struct rpki_config config;
 	struct tal *tal;
 	int error;
-	bool is_rsync_active = true;
-	bool shuffle_uris = false;
 
+	error = handle_args(argc, argv, &config);
+	if (error)
+		return error;
 	print_stack_trace_on_segfault();
 
-	if (argc < 3)
-		return pr_err("Repository path as first argument and TAL file as second argument, please.");
-	if (argc >= 4)
-		is_rsync_active = false;
-	if (argc >= 5)
-		shuffle_uris = true; /* TODO lol fix this */
-
-	error = rsync_init(is_rsync_active);
+	error = rsync_init(!config.disable_rsync);
 	if (error)
 		return error;
 
 	add_rpki_oids();
 	thvar_init();
 	fnstack_store();
-	fnstack_push(argv[2]);
+	fnstack_push(config.tal);
 
-	repository = argv[1];
+	repository = config.local_repository;
 	repository_len = strlen(repository);
 
-	error = tal_load(argv[2], &tal);
+	error = tal_load(config.tal, &tal);
 	if (!error) {
-		if (shuffle_uris)
+		if (config.shuffle_uris)
 			tal_shuffle_uris(tal);
 		error = foreach_uri(tal, handle_tal_uri);
 		error = (error >= 0) ? 0 : error;
