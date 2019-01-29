@@ -71,9 +71,11 @@ read_uris(struct line_file *lfile, struct uris *uris)
 	if (error)
 		return error;
 
+	if (uri == NULL)
+		return pr_err("TAL file is empty.");
 	if (strcmp(uri, "") == 0) {
 		free(uri);
-		return pr_err("TAL file contains no URIs");
+		return pr_err("There's no URI in the first line of the TAL.");
 	}
 
 	error = uris_add(uris, uri);
@@ -85,6 +87,8 @@ read_uris(struct line_file *lfile, struct uris *uris)
 		if (error)
 			return error;
 
+		if (uri == NULL)
+			return pr_err("TAL file ended prematurely. (Expected URI list, blank line and public key.)");
 		if (strcmp(uri, "") == 0) {
 			free(uri);
 			return 0; /* Happy path */
