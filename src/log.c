@@ -27,8 +27,10 @@ pr_indent(FILE *stream)
 static void
 pr_file_name(FILE *stream)
 {
+#ifndef UNIT_TESTING
 	char const *file = fnstack_peek();
 	fprintf(stream, "%s: ", (file != NULL) ? file : "(Unknown file)");
+#endif
 }
 
 #ifdef DEBUG

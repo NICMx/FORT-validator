@@ -590,6 +590,12 @@ is_rsync(ASN1_IA5STRING *uri)
 	    : false;
 }
 
+static bool
+is_rsync_uri(GENERAL_NAME *name)
+{
+	return name->type == GEN_URI && is_rsync(name->d.GN_URI);
+}
+
 static int
 handle_rpkiManifest(ACCESS_DESCRIPTION *ad, struct rpki_uri *mft)
 {
@@ -971,7 +977,7 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	names = dp->distpoint->name.fullname;
 	for (i = 0; i < sk_GENERAL_NAME_num(names); i++) {
 		name = sk_GENERAL_NAME_value(names, i);
-		if (name->type == GEN_URI && is_rsync(name->d.GN_URI)) {
+		if (is_rsync_uri(name)) {
 			/*
 			 * Since we're parsing and validating the manifest's CRL
 			 * at some point, I think that all we need to do now is
@@ -987,7 +993,6 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 			 * later.
 			 */
 			error = ia5s2string(name->d.GN_URI, &refs->crldp);
-			pr_debug("Certificate CRL: %s", refs->crldp);
 			goto end;
 		}
 	}
@@ -1010,32 +1015,50 @@ handle_aia(X509_EXTENSION *ext, void *arg)
 	AUTHORITY_INFO_ACCESS *aia;
 	ACCESS_DESCRIPTION *ad;
 	int i;
+	int error;
 
 	aia = X509V3_EXT_d2i(ext);
 	if (aia == NULL)
 		return cannot_decode(&AIA);
 
+	/*
+	 * RFC 6487:
+	 *     an rsync URI [RFC5781] MUST be specified with an accessMethod
+	 *     value of id-ad-caIssuers. (...) Other accessMethod URIs
+	 *     referencing the same object MAY also be included in the value
+	 *     sequence of this extension.
+	 *
+	 * It doesn't technically say that id-ad-caIssuers is reserved for RSYNC
+	 * URIs, but it sure feels like it's the actual intention.
+	 *
+	 * But let's commit to the literal wording, which I think equals "there
+	 * must be a caIssuers RSYNC URI, which must be correct (ie. equal the
+	 * manifest's), and there can also be anything else."
+	 */
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(aia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(aia, i);
-		if (OBJ_obj2nid(ad->method) == NID_ad_ca_issuers) {
-			if (ad->location->type != GEN_URI) {
-				return pr_err("The AIA caIssuers is not an URI. (type: %d)",
-				    ad->location->type);
-			}
-
+		/*
+		 * TODO open the call hierarchy of location.
+		 * All GEN_URIs should probably be handled the same.
+		 */
+		if (OBJ_obj2nid(ad->method) == NID_ad_ca_issuers
+		    && is_rsync_uri(ad->location)) {
 			/*
 			 * Bringing the parent certificate's URI all the way
 			 * over here is too much trouble, so do the handle_cdp()
 			 * hack.
 			 */
-
-			return ia5s2string(ad->location->d.GN_URI,
+			error = ia5s2string(ad->location->d.GN_URI,
 			    &refs->caIssuers);
+			goto end;
 		}
 	}
 
+	error = pr_err("The certificate lacks a caIssuers RSYNC URI.");
+
+end:
 	AUTHORITY_INFO_ACCESS_free(aia);
-	return 0;
+	return error;
 }
 
 static int

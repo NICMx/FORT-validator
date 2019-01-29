@@ -22,6 +22,7 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 	static const size_t MAX_ARCS = 9;
 	ssize_t count;
 	ssize_t count2;
+	asn_oid_arc_t *tmp;
 
 	result->arcs = malloc(MAX_ARCS * sizeof(asn_oid_arc_t));
 	if (result->arcs == NULL)
@@ -38,10 +39,12 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 
 	/* If necessary, reallocate arcs array and try again. */
 	if (count > MAX_ARCS) {
-		/* TODO realloc tmp */
-		result->arcs = realloc(result->arcs, count * sizeof(asn_oid_arc_t));
-		if (!result->arcs)
+		tmp = realloc(result->arcs, count * sizeof(asn_oid_arc_t));
+		if (tmp == NULL) {
+			free(result->arcs);
 			return pr_enomem();
+		}
+		result->arcs = tmp;
 
 		count2 = OBJECT_IDENTIFIER_get_arcs(oid, result->arcs, count);
 		if (count != count2) {
