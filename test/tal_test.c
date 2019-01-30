@@ -3,11 +3,11 @@
 #include <check.h>
 #include <errno.h>
 #include <stdlib.h>
+#include "common.h"
 
 START_TEST(tal_load_normal)
 {
 	struct tal *tal;
-	struct uri *uri;
 	unsigned int i;
 	/* Got this by feeding the subjectPublicKeyInfo to `base64 -d`. */
 	unsigned char decoded[] = {
@@ -42,14 +42,11 @@ START_TEST(tal_load_normal)
 
 	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
 
-	uri = SLIST_FIRST(&tal->uris);
-	ck_assert_str_eq(uri->string, "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	uri = SLIST_NEXT(uri, next);
-	ck_assert_str_eq(uri->string, "http://potato");
-	uri = SLIST_NEXT(uri, next);
-	ck_assert_str_eq(uri->string, "rsync://potato");
-	uri = SLIST_NEXT(uri, next);
-	ck_assert(uri == NULL);
+	ck_assert_uint_eq(tal->uris.count, 3);
+	ck_assert_str_eq(tal->uris.array[0],
+	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
+	ck_assert_str_eq(tal->uris.array[1], "http://potato");
+	ck_assert_str_eq(tal->uris.array[2], "rsync://potato");
 
 	ck_assert_uint_eq(ARRAY_LEN(decoded), tal->spki_len);
 	for (i = 0; i < ARRAY_LEN(decoded); i++)

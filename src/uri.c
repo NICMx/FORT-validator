@@ -69,7 +69,6 @@ succeed:
  *
  * By contract, if @guri is not RSYNC, this will return ENOTRSYNC.
  * This often should not be treated as an error; please handle gracefully.
- * TODO open call hirarchy.
  */
 static int
 g2l(char const *global, size_t global_len, char **result)

@@ -42,8 +42,8 @@ add_rpki_oids(void)
 	printf("signedObject registered. Its nid is %d.\n", NID_signedObject);
 
 	NID_rpkiNotify = OBJ_create("1.3.6.1.5.5.7.48.13",
-		    "id-ad-rpkiNotify (RFC 8182)",
-		    /* TODO */ "Blah blah");
+	    "id-ad-rpkiNotify (RFC 8182)",
+	    /* TODO */ "Blah blah");
 	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
 }
 

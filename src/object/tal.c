@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
+#include "common.h"
 #include "line_file.h"
 #include "log.h"
 #include "random.h"
@@ -71,9 +72,11 @@ read_uris(struct line_file *lfile, struct uris *uris)
 	if (error)
 		return error;
 
+	if (uri == NULL)
+		return pr_err("TAL file is empty.");
 	if (strcmp(uri, "") == 0) {
 		free(uri);
-		return pr_err("TAL file contains no URIs");
+		return pr_err("There's no URI in the first line of the TAL.");
 	}
 
 	error = uris_add(uris, uri);
@@ -85,6 +88,8 @@ read_uris(struct line_file *lfile, struct uris *uris)
 		if (error)
 			return error;
 
+		if (uri == NULL)
+			return pr_err("TAL file ended prematurely. (Expected URI list, blank line and public key.)");
 		if (strcmp(uri, "") == 0) {
 			free(uri);
 			return 0; /* Happy path */
@@ -200,6 +205,11 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb)
 
 	for (i = 0; i < tal->uris.count; i++) {
 		error = uri_init_str(&uri, tal->uris.array[i]);
+		if (error == ENOTRSYNC) {
+			/* Log level should probably be INFO. */
+			pr_debug("TAL has non-RSYNC URI; ignoring.");
+			continue;
+		}
 		if (error)
 			return error;
 
