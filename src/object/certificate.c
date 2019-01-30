@@ -601,46 +601,30 @@ is_rsync_uri(GENERAL_NAME *name)
 }
 
 static int
-handle_rpkiManifest(ACCESS_DESCRIPTION *ad, struct rpki_uri *mft)
+handle_rpkiManifest(struct rpki_uri *uri, void *arg)
 {
-	return uri_init_ad(mft, ad);
+	struct rpki_uri *mft = arg;
+	*mft = *uri;
+	uri->global = NULL;
+	uri->local = NULL;
+	return 0;
 }
 
 static int
-handle_caRepository(ACCESS_DESCRIPTION *ad)
+handle_caRepository(struct rpki_uri *uri, void *arg)
 {
-	struct rpki_uri uri;
-	int error;
-
-	error = uri_init_ad(&uri, ad);
-	if (error)
-		return error;
-
-	pr_debug("caRepository: %s", uri.global);
-	error = download_files(&uri);
-
-	uri_cleanup(&uri);
-	return error;
+	pr_debug("caRepository: %s", uri->global);
+	return download_files(uri);
 }
 
 static int
-handle_signedObject(ACCESS_DESCRIPTION *ad, struct certificate_refs *refs)
+handle_signedObject(struct rpki_uri *uri, void *arg)
 {
-	struct rpki_uri uri;
-	int error;
-
-	/* TODO all three of them probably need this treatment. */
-	error = uri_init_ad(&uri, ad);
-	if (error)
-		return error;
-
-	pr_debug("signedObject: %s", uri.global);
-
-	refs->signedObject = uri.global;
-	uri.global = NULL;
-
-	uri_cleanup(&uri);
-	return error;
+	struct certificate_refs *refs = arg;
+	pr_debug("signedObject: %s", uri->global);
+	refs->signedObject = uri->global;
+	uri->global = NULL;
+	return 0;
 }
 
 static int
@@ -825,7 +809,7 @@ handle_aki_ta(X509_EXTENSION *aki, void *arg)
 			if (extension_equals(aki, other))
 				return 0;
 
-			return pr_err("The %s is not equal to the %s.",
+			return pr_err("The '%s' does not equal the '%s'.",
 			    AKI.name, SKI.name);
 		}
 	}
@@ -1012,55 +996,99 @@ end:
 	return error;
 }
 
+/**
+ * The RFC does not explain AD validation very well. This is personal
+ * interpretation, influenced by Tim Bruijnzeels's response
+ * (https://mailarchive.ietf.org/arch/msg/sidr/4ycmff9jEU4VU9gGK5RyhZ7JYsQ)
+ * (I'm being a bit more lax than he suggested.)
+ *
+ * 1. Only one NID needs to be searched at a time. (This is currently somewhat
+ *    of a coincidence, and will probably be superseded at some point. But I'm
+ *    not going to complicate this until it's necessary.)
+ * 2. The NID MUST be found, otherwise the certificate is invalid.
+ * 3. The NID can be found more than once.
+ * 4. All access descriptions that match the NID must be URLs.
+ * 5. Precisely one of those matches will be an RSYNC URL, and it's the only one
+ *    we are required to support.
+ *    (I would have gone with "at least one of those matches", but I don't know
+ *    what to do with the other ones.)
+ * 6. Other access descriptions that do not match the NID are allowed and
+ *    supposed to be ignored.
+ * 7. Other access descriptions that match the NID but do not have RSYNC URIs
+ *    are also allowed, and also supposed to be ignored.
+ */
+static int
+handle_ad(char *ia_name, SIGNATURE_INFO_ACCESS *ia, char *ad_name, int ad_nid,
+    int (*cb)(struct rpki_uri *, void *), void *arg)
+{
+	ACCESS_DESCRIPTION *ad;
+	struct rpki_uri uri;
+	bool found = false;
+	int i;
+	int error;
+
+	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
+		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
+		if (OBJ_obj2nid(ad->method) == ad_nid) {
+			error = uri_init_ad(&uri, ad);
+			if (error == ENOTRSYNC)
+				continue;
+			if (error)
+				return error;
+
+			if (found) {
+				uri_cleanup(&uri);
+				return pr_err("Extension '%s' has multiple '%s' RSYNC URIs.",
+				    ia_name, ad_name);
+			}
+
+			error = cb(&uri, arg);
+			if (error) {
+				uri_cleanup(&uri);
+				return error;
+			}
+
+			uri_cleanup(&uri);
+			found = true;
+		}
+	}
+
+	if (!found) {
+		pr_err("Extension '%s' lacks a '%s' RSYNC URI.", ia_name,
+		    ad_name);
+		return -ESRCH;
+	}
+
+	return 0;
+}
+
+static int
+handle_caIssuers(struct rpki_uri *uri, void *arg)
+{
+	struct certificate_refs *refs = arg;
+	/*
+	 * Bringing the parent certificate's URI all the way
+	 * over here is too much trouble, so do the handle_cdp()
+	 * hack.
+	 */
+	refs->caIssuers = uri->global;
+	uri->global = NULL;
+	return 0;
+}
+
 static int
 handle_aia(X509_EXTENSION *ext, void *arg)
 {
-	struct certificate_refs *refs = arg;
 	AUTHORITY_INFO_ACCESS *aia;
-	ACCESS_DESCRIPTION *ad;
-	int i;
 	int error;
 
 	aia = X509V3_EXT_d2i(ext);
 	if (aia == NULL)
 		return cannot_decode(&AIA);
 
-	/*
-	 * RFC 6487:
-	 *     an rsync URI [RFC5781] MUST be specified with an accessMethod
-	 *     value of id-ad-caIssuers. (...) Other accessMethod URIs
-	 *     referencing the same object MAY also be included in the value
-	 *     sequence of this extension.
-	 *
-	 * It doesn't technically say that id-ad-caIssuers is reserved for RSYNC
-	 * URIs, but it sure feels like it's the actual intention.
-	 *
-	 * But let's commit to the literal wording, which I think equals "there
-	 * must be a caIssuers RSYNC URI, which must be correct (ie. equal the
-	 * manifest's), and there can also be anything else."
-	 */
-	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(aia); i++) {
-		ad = sk_ACCESS_DESCRIPTION_value(aia, i);
-		/*
-		 * TODO open the call hierarchy of location.
-		 * All GEN_URIs should probably be handled the same.
-		 */
-		if (OBJ_obj2nid(ad->method) == NID_ad_ca_issuers
-		    && is_rsync_uri(ad->location)) {
-			/*
-			 * Bringing the parent certificate's URI all the way
-			 * over here is too much trouble, so do the handle_cdp()
-			 * hack.
-			 */
-			error = ia5s2string(ad->location->d.GN_URI,
-			    &refs->caIssuers);
-			goto end;
-		}
-	}
+	error = handle_ad("AIA", aia, "caIssuers", NID_ad_ca_issuers,
+	    handle_caIssuers, arg);
 
-	error = pr_err("The certificate lacks a caIssuers RSYNC URI.");
-
-end:
 	AUTHORITY_INFO_ACCESS_free(aia);
 	return error;
 }
@@ -1069,10 +1097,6 @@ static int
 handle_sia_ca(X509_EXTENSION *ext, void *arg)
 {
 	SIGNATURE_INFO_ACCESS *sia;
-	ACCESS_DESCRIPTION *ad;
-	bool rsync_found = false;
-	bool manifest_found = false;
-	int i;
 	int error;
 
 	sia = X509V3_EXT_d2i(ext);
@@ -1080,58 +1104,18 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 		return cannot_decode(&SIA);
 
 	/* rsync */
-	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
-		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
-		if (OBJ_obj2nid(ad->method) == NID_caRepository) {
-			error = handle_caRepository(ad);
-			if (error == ENOTRSYNC)
-				continue;
-			if (error)
-				goto end;
-			rsync_found = true;
-			break;
-		}
-	}
-
-	if (!rsync_found) {
-		pr_err("SIA extension lacks a caRepository RSYNC URI.");
-		error = -ESRCH;
+	error = handle_ad("SIA", sia, "caRepository", NID_caRepository,
+	    handle_caRepository, NULL);
+	if (error)
 		goto end;
-	}
 
 	/*
 	 * Store the manifest URI in @mft.
 	 * (We won't actually touch the manifest until we know the certificate
 	 * is fully valid.)
 	 */
-	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
-		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
-		if (OBJ_obj2nid(ad->method) == NID_rpkiManifest) {
-			/*
-			 * rfc6481#section-2.2
-			 * This validation is naive.
-			 * The fact that only one manifest is listed in the SIA
-			 * does not mean that there aren't more or them in the
-			 * publication point.
-			 * But it's all we can do methinks.
-			 */
-			if (manifest_found) {
-				error = pr_err("SIA defines more than one manifest.");
-				goto end;
-			}
-
-			error = handle_rpkiManifest(ad, arg);
-			if (error)
-				goto end;
-			manifest_found = true;
-		}
-	}
-
-	/* rfc6481#section-2 */
-	if (!manifest_found) {
-		pr_err("SIA extension lacks an rpkiManifest access description.");
-		error = -ESRCH;
-	}
+	error = handle_ad("SIA", sia, "rpkiManifest",NID_rpkiManifest,
+	    handle_rpkiManifest, arg);
 
 end:
 	AUTHORITY_INFO_ACCESS_free(sia);
@@ -1142,50 +1126,15 @@ static int
 handle_sia_ee(X509_EXTENSION *ext, void *arg)
 {
 	SIGNATURE_INFO_ACCESS *sia;
-	ACCESS_DESCRIPTION *ad;
-	bool signedObject_found = false;
-	int nid;
-	int i;
-	int error = 0;
-
-	/* TODO this is getting convoluted. Make a generic AD foreach. */
+	int error;
 
 	sia = X509V3_EXT_d2i(ext);
 	if (sia == NULL)
 		return cannot_decode(&SIA);
 
-	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(sia); i++) {
-		ad = sk_ACCESS_DESCRIPTION_value(sia, i);
-		nid = OBJ_obj2nid(ad->method);
+	error = handle_ad("SIA", sia, "signedObject", NID_signedObject,
+	    handle_signedObject, arg);
 
-		if (nid == NID_signedObject) {
-			error = handle_signedObject(ad, arg);
-			/* TODO Unknown signedObjects are allowed. */
-			if (error)
-				goto end;
-			signedObject_found = true;
-
-		} else {
-			/*
-			 * rfc6487#section-4.8.8.2 says that non-signedObject
-			 * ADs are prohibited, but then 8182 contradicts this.
-			 * And so there's nothing stopping future RFCs from
-			 * defining even more ADs. So shrug them off.
-			 *
-			 * rpkiNotify is known to fall through here, but we
-			 * don't support it yet.
-			 *
-			 * This should be level INFO.
-			 */
-			pr_debug("EE Certificate has an non-signedObject access description. (NID: %d)",
-			    nid);
-		}
-	}
-
-	if (!signedObject_found)
-		error = pr_err("EE Certificate's SIA lacks a signedObject access description.");
-
-end:
 	AUTHORITY_INFO_ACCESS_free(sia);
 	return error;
 }

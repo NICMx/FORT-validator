@@ -7,6 +7,8 @@
 
 /**
  * These are expected to live on the stack, or as part of other objects.
+ *
+ * All rpki_uris are guaranteed to be RSYNC URLs right now.
  */
 struct rpki_uri {
 	/**

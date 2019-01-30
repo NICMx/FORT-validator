@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
+#include "common.h"
 #include "line_file.h"
 #include "log.h"
 #include "random.h"
@@ -204,6 +205,11 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb)
 
 	for (i = 0; i < tal->uris.count; i++) {
 		error = uri_init_str(&uri, tal->uris.array[i]);
+		if (error == ENOTRSYNC) {
+			/* Log level should probably be INFO. */
+			pr_debug("TAL has non-RSYNC URI; ignoring.");
+			continue;
+		}
 		if (error)
 			return error;
 

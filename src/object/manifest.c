@@ -118,6 +118,11 @@ __handle_manifest(struct manifest *mft, struct rpp **pp)
 		fah = mft->obj->fileList.list.array[i];
 
 		error = uri_init_mft(&uri, mft->file_path, &fah->file);
+		/*
+		 * Not handling ENOTRSYNC is fine because the manifest URL
+		 * should have been RSYNC. Something went wrong if an RSYNC URL
+		 * plus a relative path is not RSYNC.
+		 */
 		if (error)
 			goto fail;
 
