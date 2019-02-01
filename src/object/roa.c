@@ -23,7 +23,12 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		return error;
 
 	if (roa_addr->maxLength != NULL) {
-		max_length = *roa_addr->maxLength;
+		error = asn_INTEGER2long(roa_addr->maxLength, &max_length);
+		if (error) {
+			if (errno)
+				pr_errno(errno, "Error casting ROA's IPv4 maxLength: ");
+			return pr_err("The ROA's IPv4 maxLength isn't a valid long");
+		}
 
 		if (max_length < 0 || 32 < max_length) {
 			return pr_err("maxLength (%ld) is out of bounds (0-32).",
@@ -69,7 +74,12 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		return error;
 
 	if (roa_addr->maxLength != NULL) {
-		max_length = *roa_addr->maxLength;
+		error = asn_INTEGER2long(roa_addr->maxLength, &max_length);
+		if (error) {
+			if (errno)
+				pr_errno(errno, "Error casting ROA's IPv6 maxLength: ");
+			return pr_err("The ROA's IPv6 maxLength isn't a valid long");
+		}
 
 		if (max_length < 0 || 128 < max_length) {
 			return pr_err("maxLength (%ld) is out of bounds (0-128).",
@@ -119,18 +129,34 @@ static int
 __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 {
 	struct ROAIPAddressFamily *block;
+	unsigned long as_id;
+	long version;
 	int b;
 	int a;
 	int error;
 
-	/* rfc6482#section-3.1 */
-	if (roa->version != 0)
-		return pr_err("ROA's version (%ld) is nonzero.", roa->version);
+	if (roa->version != NULL) {
+		error = asn_INTEGER2long(roa->version, &version);
+		if (error) {
+			if (errno)
+				pr_errno(errno, "Error casting ROA's version: ");
+			return pr_err("The ROA's version isn't a valid long");
+		}
+		/* rfc6482#section-3.1 */
+		if (version != 0)
+			return pr_err("ROA's version (%ld) is nonzero.", version);
+	}
 
+	error = asn_INTEGER2ulong(&roa->asID, &as_id);
+	if (error) {
+		if (errno)
+			pr_errno(errno, "Error casting ROA's AS ID value: ");
+		return pr_err("ROA's AS ID couldn't be parsed as unsigned long");
+	}
 	/* rfc6482#section-3.2 (more or less.) */
-	if (!resources_contains_asn(parent, roa->asID)) {
+	if (!resources_contains_asn(parent, as_id)) {
 		return pr_err("ROA is not allowed to attest for AS %d",
-		    roa->asID);
+		    as_id);
 	}
 
 	/* rfc6482#section-3.3 */
@@ -154,7 +180,13 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		if (block->addresses.list.array == NULL)
 			return pr_err("ROA's address list array is NULL.");
 		for (a = 0; a < block->addresses.list.count; a++) {
-			error = print_addr(parent, roa->asID,
+			error = asn_INTEGER2ulong(&roa->asID, &as_id);
+			if (error) {
+				if (errno)
+					pr_errno(errno, "Error casting AS ID at address list: ");
+				return error;
+			}
+			error = print_addr(parent, as_id,
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
 			if (error)

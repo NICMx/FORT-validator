@@ -243,6 +243,7 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 {
 	struct SignerInfo *sinfo;
 	OCTET_STRING_t *sid = NULL;
+	unsigned long version;
 	int error;
 
 	/* rfc6488#section-2.1 */
@@ -253,9 +254,15 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 
 	/* rfc6488#section-2.1.1 */
 	/* rfc6488#section-3.1.b */
-	if (sdata->version != 3) {
-		return pr_err("The SignedData version is only allowed to be 3. (Was %ld.)",
-		    sdata->version);
+	error = asn_INTEGER2ulong(&sdata->version, &version);
+	if (error) {
+		if (errno)
+			pr_errno(errno, "Error converting SignedData version: ");
+		return pr_err("The SignedData version isn't a valid unsigned long");
+	}
+	if (version != 3) {
+		return pr_err("The SignedData version is only allowed to be 3. (Was %lu.)",
+		    version);
 	}
 
 	/* rfc6488#section-2.1.2 */
@@ -295,9 +302,16 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 	sinfo = sdata->signerInfos.list.array[0];
 	if (sinfo == NULL)
 		return pr_err("The SignerInfo object is NULL.");
-	if (sinfo->version != 3) {
-		return pr_err("The SignerInfo version is only allowed to be 3. (Was %ld.)",
-		    sinfo->version);
+
+	error = asn_INTEGER2ulong(&sinfo->version, &version);
+	if (error) {
+		if (errno)
+			pr_errno(errno, "Error converting SignerInfo version: ");
+		return pr_err("The SignerInfo version isn't a valid unsigned long");
+	}
+	if (version != 3) {
+		return pr_err("The SignerInfo version is only allowed to be 3. (Was %lu.)",
+		    version);
 	}
 
 	/* rfc6488#section-2.1.6.2 */
