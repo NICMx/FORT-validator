@@ -17,7 +17,7 @@ int resources_add_ip(struct resources *, struct IPAddressFamily *);
 int resources_add_asn(struct resources *, struct ASIdentifiers *);
 
 bool resources_empty(struct resources *);
-bool resources_contains_asn(struct resources *, long);
+bool resources_contains_asn(struct resources *, unsigned long);
 bool resources_contains_ipv4(struct resources *, struct ipv4_prefix *);
 bool resources_contains_ipv6(struct resources *, struct ipv6_prefix *);
 

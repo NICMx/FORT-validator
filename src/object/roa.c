@@ -10,10 +10,11 @@
 #include "object/signed_object.h"
 
 static int
-print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
+print_addr4(struct resources *parent, unsigned long asn,
+    struct ROAIPAddress *roa_addr)
 {
 	struct ipv4_prefix prefix;
-	long max_length;
+	unsigned long max_length;
 	char str[INET_ADDRSTRLEN];
 	const char *str2;
 	int error;
@@ -23,20 +24,20 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		return error;
 
 	if (roa_addr->maxLength != NULL) {
-		error = asn_INTEGER2long(roa_addr->maxLength, &max_length);
+		error = asn_INTEGER2ulong(roa_addr->maxLength, &max_length);
 		if (error) {
 			if (errno)
-				pr_errno(errno, "Error casting ROA's IPv4 maxLength: ");
-			return pr_err("The ROA's IPv4 maxLength isn't a valid long");
+				pr_errno(errno, "Error casting ROA's IPv4 maxLength");
+			return pr_err("The ROA's IPv4 maxLength isn't a valid unsigned long");
 		}
 
 		if (max_length < 0 || 32 < max_length) {
-			return pr_err("maxLength (%ld) is out of bounds (0-32).",
+			return pr_err("maxLength (%lu) is out of bounds (0-32).",
 			    max_length);
 		}
 
 		if (prefix.len > max_length) {
-			return pr_err("Prefix length (%u) > maxLength (%ld)",
+			return pr_err("Prefix length (%u) > maxLength (%lu)",
 			    prefix.len, max_length);
 		}
 	}
@@ -50,9 +51,9 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		    prefix.len);
 	}
 
-	printf("AS%ld,%s/%u", asn, str2, prefix.len);
+	printf("AS%lu,%s/%u", asn, str2, prefix.len);
 	if (roa_addr->maxLength != NULL)
-		printf(",%ld", max_length);
+		printf(",%lu", max_length);
 	else
 		printf(",%u", prefix.len);
 	printf("\n");
@@ -61,10 +62,11 @@ print_addr4(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 }
 
 static int
-print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
+print_addr6(struct resources *parent, unsigned long asn,
+    struct ROAIPAddress *roa_addr)
 {
 	struct ipv6_prefix prefix;
-	long max_length;
+	unsigned long max_length;
 	char str[INET6_ADDRSTRLEN];
 	const char *str2;
 	int error;
@@ -74,20 +76,20 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		return error;
 
 	if (roa_addr->maxLength != NULL) {
-		error = asn_INTEGER2long(roa_addr->maxLength, &max_length);
+		error = asn_INTEGER2ulong(roa_addr->maxLength, &max_length);
 		if (error) {
 			if (errno)
-				pr_errno(errno, "Error casting ROA's IPv6 maxLength: ");
-			return pr_err("The ROA's IPv6 maxLength isn't a valid long");
+				pr_errno(errno, "Error casting ROA's IPv6 maxLength");
+			return pr_err("The ROA's IPv6 maxLength isn't a valid unsigned long");
 		}
 
 		if (max_length < 0 || 128 < max_length) {
-			return pr_err("maxLength (%ld) is out of bounds (0-128).",
+			return pr_err("maxLength (%lu) is out of bounds (0-128).",
 			    max_length);
 		}
 
 		if (prefix.len > max_length) {
-			return pr_err("Prefix length (%u) > maxLength (%ld)",
+			return pr_err("Prefix length (%u) > maxLength (%lu)",
 			    prefix.len, max_length);
 		}
 	}
@@ -101,9 +103,9 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 		    prefix.len);
 	}
 
-	printf("AS%ld,%s/%u", asn, str2, prefix.len);
+	printf("AS%lu,%s/%u", asn, str2, prefix.len);
 	if (roa_addr->maxLength != NULL)
-		printf(",%ld", max_length);
+		printf(",%lu", max_length);
 	else
 		printf(",%u", prefix.len);
 	printf("\n");
@@ -112,7 +114,7 @@ print_addr6(struct resources *parent, long asn, struct ROAIPAddress *roa_addr)
 }
 
 static int
-print_addr(struct resources *parent, long asn, uint8_t family,
+print_addr(struct resources *parent, unsigned long asn, uint8_t family,
     struct ROAIPAddress *roa_addr)
 {
 	switch (family) {
@@ -129,33 +131,32 @@ static int
 __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 {
 	struct ROAIPAddressFamily *block;
-	unsigned long as_id;
-	long version;
+	unsigned long as_id, version;
 	int b;
 	int a;
 	int error;
 
 	if (roa->version != NULL) {
-		error = asn_INTEGER2long(roa->version, &version);
+		error = asn_INTEGER2ulong(roa->version, &version);
 		if (error) {
 			if (errno)
-				pr_errno(errno, "Error casting ROA's version: ");
+				pr_errno(errno, "Error casting ROA's version");
 			return pr_err("The ROA's version isn't a valid long");
 		}
 		/* rfc6482#section-3.1 */
 		if (version != 0)
-			return pr_err("ROA's version (%ld) is nonzero.", version);
+			return pr_err("ROA's version (%lu) is nonzero.", version);
 	}
 
 	error = asn_INTEGER2ulong(&roa->asID, &as_id);
 	if (error) {
 		if (errno)
-			pr_errno(errno, "Error casting ROA's AS ID value: ");
+			pr_errno(errno, "Error casting ROA's AS ID value");
 		return pr_err("ROA's AS ID couldn't be parsed as unsigned long");
 	}
 	/* rfc6482#section-3.2 (more or less.) */
 	if (!resources_contains_asn(parent, as_id)) {
-		return pr_err("ROA is not allowed to attest for AS %d",
+		return pr_err("ROA is not allowed to attest for AS %lu",
 		    as_id);
 	}
 
@@ -183,8 +184,8 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 			error = asn_INTEGER2ulong(&roa->asID, &as_id);
 			if (error) {
 				if (errno)
-					pr_errno(errno, "Error casting AS ID at address list: ");
-				return error;
+					pr_errno(errno, "Error casting AS ID at address list");
+				return pr_err("Address list AS ID couldn't be parsed as unsigned long");
 			}
 			error = print_addr(parent, as_id,
 			    block->addressFamily.buf[1],

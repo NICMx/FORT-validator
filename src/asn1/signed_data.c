@@ -257,7 +257,7 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 	error = asn_INTEGER2ulong(&sdata->version, &version);
 	if (error) {
 		if (errno)
-			pr_errno(errno, "Error converting SignedData version: ");
+			pr_errno(errno, "Error converting SignedData version");
 		return pr_err("The SignedData version isn't a valid unsigned long");
 	}
 	if (version != 3) {
@@ -306,7 +306,7 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 	error = asn_INTEGER2ulong(&sinfo->version, &version);
 	if (error) {
 		if (errno)
-			pr_errno(errno, "Error converting SignerInfo version: ");
+			pr_errno(errno, "Error converting SignerInfo version");
 		return pr_err("The SignerInfo version isn't a valid unsigned long");
 	}
 	if (version != 3) {
