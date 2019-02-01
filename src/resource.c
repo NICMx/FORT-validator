@@ -404,9 +404,22 @@ static int
 add_asn(struct resources *resources, ASId_t min, ASId_t max,
     struct resources *parent)
 {
+	unsigned long asn_min, asn_max;
 	int error;
 
-	if (parent && !rasn_contains(parent->asns, min, max))
+	error = asn_INTEGER2ulong(&min, &asn_min);
+	if (error) {
+		if (errno)
+			pr_errno(errno, "Error converting ASN min value: ");
+		return pr_err("Added ASN min value isn't a valid unsigned long");
+	}
+	error = asn_INTEGER2ulong(&max, &asn_max);
+	if (error) {
+		if (errno)
+			pr_errno(errno, "Error converting ASN max value: ");
+		return pr_err("Added ASN max value isn't a valid unsigned long");
+	}
+	if (parent && !rasn_contains(parent->asns, asn_min, asn_max))
 		return pr_err("Parent certificate doesn't own child's ASN resource.");
 
 	if (resources->asns == NULL) {
@@ -422,10 +435,10 @@ add_asn(struct resources *resources, ASId_t min, ASId_t max,
 		return error;
 	}
 
-	if (min == max)
-		pr_debug("ASN: %ld", min);
+	if (asn_min == asn_max)
+		pr_debug("ASN: %lu", asn_min);
 	else
-		pr_debug("ASN: %ld-%ld", min, max);
+		pr_debug("ASN: %lu-%lu", asn_min, asn_max);
 	return 0;
 }
 
@@ -493,7 +506,7 @@ resources_empty(struct resources *res)
 }
 
 bool
-resources_contains_asn(struct resources *res, ASId_t asn)
+resources_contains_asn(struct resources *res, long asn)
 {
 	return rasn_contains(res->asns, asn, asn);
 }

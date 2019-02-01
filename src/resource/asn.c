@@ -1,19 +1,22 @@
 #include "asn.h"
 
+#include <errno.h>
+
+#include "log.h"
 #include "sorted_array.h"
 
 struct asn_node {
-	ASId_t min;
-	ASId_t max;
+	long min;
+	long max;
 };
 
 static enum sarray_comparison
 asn_cmp(void *arg1, void *arg2)
 {
-	ASId_t n1min = ((struct asn_node *) arg1)->min;
-	ASId_t n2min = ((struct asn_node *) arg2)->min;
-	ASId_t n1max = ((struct asn_node *) arg1)->max;
-	ASId_t n2max = ((struct asn_node *) arg2)->max;
+	long n1min = ((struct asn_node *) arg1)->min;
+	long n1max = ((struct asn_node *) arg1)->max;
+	long n2min = ((struct asn_node *) arg2)->min;
+	long n2max = ((struct asn_node *) arg2)->max;
 
 	if (n1min == n2min && n1max == n2max)
 		return SACMP_EQUAL;
@@ -55,7 +58,23 @@ rasn_put(struct resources_asn *asns)
 int
 rasn_add(struct resources_asn *asns, ASId_t min, ASId_t max)
 {
-	struct asn_node n = { min, max };
+	unsigned long l_min;
+	unsigned long l_max;
+	int error;
+
+	error = asn_INTEGER2ulong(&min, &l_min);
+	if (error) {
+		if (errno)
+			pr_errno(errno, "ASN min value: ");
+		return pr_err("ASN min value isn't a valid unsigned long");
+	}
+	error = asn_INTEGER2ulong(&max, &l_max);
+	if (error) {
+		if (errno)
+			pr_errno(errno, "ASN max value: ");
+		return pr_err("ASN max value isn't a valid unsigned long");
+	}
+	struct asn_node n = { l_min, l_max };
 	return sarray_add((struct sorted_array *) asns, &n);
 }
 
@@ -66,7 +85,7 @@ rasn_empty(struct resources_asn *asns)
 }
 
 bool
-rasn_contains(struct resources_asn *asns, ASId_t min, ASId_t max)
+rasn_contains(struct resources_asn *asns, long min, long max)
 {
 	struct asn_node n = { min, max };
 	return sarray_contains((struct sorted_array *) asns, &n);
