@@ -102,23 +102,30 @@ struct ski_arguments {
 static int
 validate_serial_number(X509 *cert)
 {
-	/* TODO (field) implement this properly. */
-
+	struct validation *state;
 	BIGNUM *number;
+	int error;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
 
 	number = ASN1_INTEGER_to_BN(X509_get0_serialNumber(cert), NULL);
-	if (number == NULL) {
-		crypto_err("Could not parse certificate serial number");
-		return 0;
-	}
+	if (number == NULL)
+		return crypto_err("Could not parse certificate serial number");
 
+#ifdef DEBUG
 	pr_debug_prefix();
 	fprintf(stdout, "serial Number: ");
 	BN_print_fp(stdout, number);
 	fprintf(stdout, "\n");
-	BN_free(number);
+#endif
 
-	return 0;
+	error = validation_store_serial_number(state, number);
+	if (error)
+		BN_free(number);
+
+	return error;
 }
 
 static int

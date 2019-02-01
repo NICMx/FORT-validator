@@ -51,23 +51,12 @@
 									\
 		list->array[list->len - 1] = *elem;			\
 		return 0;						\
-	}								\
-									\
-	static int							\
-	name##_foreach(struct name *list,				\
-	    int (*cb)(elem_type const *, void *),			\
-	    void *arg)							\
-	{								\
-		unsigned int i;						\
-		int error;						\
-									\
-		for (i = 0; i < list->len; i++) {			\
-			error = cb(&list->array[i], arg);		\
-			if (error)					\
-				return error;				\
-		}							\
-									\
-		return 0;						\
 	}
+
+#define ARRAYLIST_FOREACH(list, cursor) for (				\
+	cursor = (list)->array;						\
+	(cursor - ((typeof(cursor)) ((list)->array))) < (list)->len;	\
+	cursor++							\
+)
 
 #endif /* SRC_ARRAY_LIST_H_ */

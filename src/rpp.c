@@ -23,11 +23,6 @@ struct rpp {
 	struct uris roas; /* Route Origin Attestations */
 };
 
-struct foreach_args {
-	struct rpp *pp;
-	STACK_OF(X509_CRL) *crls;
-};
-
 struct rpp *
 rpp_create(void)
 {
@@ -112,21 +107,6 @@ end:
 	return error;
 }
 
-static int
-traverse_ca_certs(struct rpki_uri const *uri, void *arg)
-{
-	struct foreach_args *args = arg;
-	return certificate_traverse(args->pp, uri, args->crls, false);
-}
-
-static int
-print_roa(struct rpki_uri const *uri, void *arg)
-{
-	struct foreach_args *args = arg;
-	handle_roa(uri, args->pp, args->crls);
-	return 0;
-}
-
 struct rpki_uri const *
 rpp_get_crl(struct rpp const *pp)
 {
@@ -140,26 +120,30 @@ rpp_traverse(struct rpp *pp)
 	 * TODO is the stack supposed to have only the CRLs of this layer,
 	 * or all of them?
 	 */
-	struct foreach_args args;
+	STACK_OF(X509_CRL) *crls;
+	struct rpki_uri *uri;
 	int error;
 
-	args.pp = pp;
-	args.crls = sk_X509_CRL_new_null();
-	if (args.crls == NULL)
+	crls = sk_X509_CRL_new_null();
+	if (crls == NULL)
 		return pr_enomem();
-	error = add_crl_to_stack(pp, args.crls);
+	error = add_crl_to_stack(pp, crls);
 	if (error)
 		goto end;
 
 	/* Use CRL stack to validate certificates, and also traverse them. */
-	error = uris_foreach(&pp->certs, traverse_ca_certs, &args);
-	if (error)
-		goto end;
+	ARRAYLIST_FOREACH(&pp->certs, uri) {
+		/* TODO should we really goto end? */
+		error = certificate_traverse(pp, uri, crls, false);
+		if (error)
+			goto end;
+	}
 
 	/* Use valid address ranges to print ROAs that match them. */
-	error = uris_foreach(&pp->roas, print_roa, &args);
+	ARRAYLIST_FOREACH(&pp->roas, uri)
+		handle_roa(uri, pp, crls);
 
 end:
-	sk_X509_CRL_pop_free(args.crls, X509_CRL_free);
+	sk_X509_CRL_pop_free(crls, X509_CRL_free);
 	return error;
 }

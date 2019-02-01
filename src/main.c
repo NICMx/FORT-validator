@@ -32,18 +32,18 @@ static void
 add_rpki_oids(void)
 {
 	NID_rpkiManifest = OBJ_create("1.3.6.1.5.5.7.48.10",
-	    "id-ad-rpkiManifest (RFC 6487)",
-	    "Resource Public Key Infrastructure (RPKI) manifest access method");
+	    "rpkiManifest",
+	    "RPKI Manifest (RFC 6487)");
 	printf("rpkiManifest registered. Its nid is %d.\n", NID_rpkiManifest);
 
 	NID_signedObject = OBJ_create("1.3.6.1.5.5.7.48.11",
-	    "id-ad-signedObject (RFC 6487)",
-	    /* TODO */ "");
+	    "signedObject",
+	    "RPKI Signed Object (RFC 6487)");
 	printf("signedObject registered. Its nid is %d.\n", NID_signedObject);
 
 	NID_rpkiNotify = OBJ_create("1.3.6.1.5.5.7.48.13",
-	    "id-ad-rpkiNotify (RFC 8182)",
-	    /* TODO */ "Blah blah");
+	    "rpkiNotify",
+	    "RPKI Update Notification File (RFC 8182)");
 	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
 }
 
@@ -66,14 +66,11 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
 	 * key." (RFC 7730)
 	 *
 	 * A "hard error" is any other error.
-	 *
-	 * TODO this will probably need an update after the merge.
 	 */
 
 	struct validation *state;
 	int error;
 
-	/* TODO this probably needs the state... */
 	error = download_files(uri);
 	if (error)
 		return 0;

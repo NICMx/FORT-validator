@@ -32,4 +32,6 @@ struct rpki_uri const *validation_peek_cert_uri(struct validation *);
 
 struct resources *validation_peek_resource(struct validation *);
 
+int validation_store_serial_number(struct validation *, BIGNUM *);
+
 #endif /* SRC_STATE_H_ */

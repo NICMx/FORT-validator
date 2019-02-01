@@ -8,19 +8,13 @@
 #define STDOUT stdout
 #define STDERR stderr
 
-#define INDENT_MAX 10
 static unsigned int indent;
 
 static void
 pr_indent(FILE *stream)
 {
-	unsigned int __indent = indent;
 	unsigned int i;
-
-//	if (__indent > INDENT_MAX)
-//		__indent = INDENT_MAX;
-
-	for (i = 0; i < __indent; i++)
+	for (i = 0; i < indent; i++)
 		fprintf(stream, "  ");
 }
 
