@@ -4,6 +4,7 @@
 #include <openssl/objects.h>
 
 #include "common.h"
+#include "config.h"
 #include "debug.h"
 #include "log.h"
 #include "rpp.h"
@@ -12,17 +13,6 @@
 #include "object/manifest.h"
 #include "object/tal.h"
 #include "rsync/rsync.h"
-
-struct rpki_config {
-	/* tal file path*/
-	char *tal;
-	/* Local repository path */
-	char *local_repository;
-	/* Disable rsync downloads */
-	bool disable_rsync;
-	/* Shuffle uris in tal */
-	bool shuffle_uris;
-};
 
 /**
  * Registers the RPKI-specific OIDs in the SSL library.
@@ -109,23 +99,37 @@ end:
 	return error;
 }
 
+static void
+set_default_configuration(struct rpki_config *config)
+{
+	config->enable_rsync = true;
+	config->shuffle_uris = false;
+	config->local_repository = NULL;
+	config->tal = NULL;
+}
+
 static int
-handle_args(int argc, char **argv, struct rpki_config *config)
+handle_file_config(char *config_file, struct rpki_config *config)
+{
+	config->flag_config = false;
+
+	return set_config_from_file(config_file, config);
+}
+
+static int
+handle_flags_config(int argc, char **argv, struct rpki_config *config)
 {
 	int opt, error = 0;
 
+	config->flag_config = true;
+
 	static struct option long_options[] = {
-		{"tal", no_argument, NULL, 't'},
+		{"tal", required_argument, NULL, 't'},
 		{"local_repository", required_argument, NULL, 'l'},
 		{"disable_rsync", no_argument, 0, 'r'},
 		{"shuffle_uris", no_argument, 0, 's'},
 		{0,0,0,}
 	};
-
-	config->disable_rsync = false;
-	config->shuffle_uris = false;
-	config->local_repository = NULL;
-	config->tal = NULL;
 
 	while ((opt = getopt_long(argc, argv, "t:l:rs", long_options, NULL))
 	    != -1) {
@@ -137,7 +141,7 @@ handle_args(int argc, char **argv, struct rpki_config *config)
 			config->local_repository = optarg;
 			break;
 		case 'r':
-			config->disable_rsync = true;
+			config->enable_rsync = false;
 			break;
 		case 's':
 			config->shuffle_uris = true;
@@ -158,13 +162,36 @@ handle_args(int argc, char **argv, struct rpki_config *config)
 
 	pr_debug("TAL file : %s", config->tal);
 	pr_debug("Local repository : %s", config->local_repository);
-	pr_debug("Disable rsync : %s", config->disable_rsync
+	pr_debug("Enable rsync : %s", config->enable_rsync
 	    ? "true" : "false");
 	pr_debug("shuffle uris : %s", config->shuffle_uris
 	    ? "true" : "false");
 
 	return error;
 }
+
+static int
+handle_args(int argc, char **argv, struct rpki_config *config)
+{
+	char *config_file;
+
+	if (argc == 1) {
+		return pr_err("Show usage"); /*TODO*/
+	}
+	if (strcasecmp(argv[1], "--configuration_file") == 0) {
+		if (argc == 2) {
+			return pr_err("--configuration_file requires a string "
+			    "as argument.");
+		}
+		config_file = argv[2];
+		argc -= 2;
+		argv += 2;
+		return handle_file_config(config_file, config);
+	}
+
+	return handle_flags_config(argc, argv, config);
+}
+
 
 int
 main(int argc, char **argv)
@@ -173,12 +200,13 @@ main(int argc, char **argv)
 	struct tal *tal;
 	int error;
 
+	set_default_configuration(&config);
 	error = handle_args(argc, argv, &config);
 	if (error)
 		return error;
 	print_stack_trace_on_segfault();
 
-	error = rsync_init(!config.disable_rsync);
+	error = rsync_init(config.enable_rsync);
 	if (error)
 		return error;
 

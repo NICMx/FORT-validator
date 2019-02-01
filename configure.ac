@@ -33,6 +33,10 @@ AC_SEARCH_LIBS([d2i_X509_bio], [crypto], [],
 	[AC_MSG_ERROR([unable to find the d2i_X509_bio() function])]
 )
 
+AC_SEARCH_LIBS([toml_parse], [toml], [],
+	[AC_MSG_ERROR([unable to find the toml_parse() function])]
+)
+
 # Check dependencies.
 PKG_CHECK_MODULES([CHECK], [check])
 
