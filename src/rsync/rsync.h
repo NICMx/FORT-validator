@@ -5,7 +5,7 @@
 #include "uri.h"
 
 int download_files(struct rpki_uri const *);
-int rsync_init(bool);
+int rsync_init(void);
 void rsync_destroy(void);
 
 

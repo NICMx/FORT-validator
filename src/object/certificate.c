@@ -7,6 +7,7 @@
 #include <libcmscodec/IPAddrBlocks.h>
 
 #include "common.h"
+#include "config.h"
 #include "log.h"
 #include "manifest.h"
 #include "thread_var.h"
@@ -1306,6 +1307,12 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	struct rpp *pp;
 	int error;
 
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+	if (sk_X509_num(validation_certs(state)) >= config_get_max_cert_depth())
+		return pr_err("Certificate chain maximum depth exceeded.");
+
 	pr_debug_add("%s Certificate %s {", is_ta ? "TA" : "CA",
 	    cert_uri->global);
 	fnstack_push(cert_uri->global);
@@ -1334,11 +1341,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 		goto end3;
 
 	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	state = state_retrieve();
-	if (state == NULL) {
-		error = -EINVAL;
-		goto end3;
-	}
 	error = validation_push_cert(state, cert_uri, cert, is_ta);
 	if (error)
 		goto end3;

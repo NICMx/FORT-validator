@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "common.h"
+#include "config.h"
 #include "log.h"
 
 struct uri {
@@ -21,19 +22,16 @@ struct uri {
 SLIST_HEAD(uri_list, uri);
 
 static struct uri_list *rsync_uris;
-static bool execute_rsync = true;
 static char const *const RSYNC_PREFIX = "rsync://";
 
 //static const char *rsync_command[] = {"rsync", "--recursive", "--delete", "--times", NULL};
 
 int
-rsync_init(bool is_rsync_active)
+rsync_init(void)
 {
 	/* Disabling rsync will forever be a useful debugging feature. */
-	if (!is_rsync_active) {
-		execute_rsync = is_rsync_active;
+	if (config_get_disable_rsync())
 		return 0;
-	}
 
 	rsync_uris = malloc(sizeof(struct uri_list));
 	if (rsync_uris == NULL)
@@ -48,7 +46,7 @@ rsync_destroy(void)
 {
 	struct uri *uri;
 
-	if (!execute_rsync)
+	if (config_get_disable_rsync())
 		return;
 
 	while (!SLIST_EMPTY(rsync_uris)) {
@@ -344,6 +342,7 @@ create_dir(char *path)
 static int
 create_dir_recursive(char *localuri)
 {
+	size_t repository_len;
 	int i, error;
 	bool exist = false;
 
@@ -354,6 +353,7 @@ create_dir_recursive(char *localuri)
 	if (exist)
 		return 0;
 
+	repository_len = strlen(config_get_local_repository());
 	for (i = 1 + repository_len; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
 			localuri[i] = '\0';
@@ -378,7 +378,7 @@ download_files(struct rpki_uri const *uri)
 
 	prefix_len = strlen(RSYNC_PREFIX);
 
-	if (!execute_rsync)
+	if (config_get_disable_rsync())
 		return 0;
 
 	if (uri->global_len < prefix_len ||

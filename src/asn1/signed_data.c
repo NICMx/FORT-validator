@@ -4,8 +4,10 @@
 #include <libcmscodec/ContentType.h>
 #include <libcmscodec/MessageDigest.h>
 
+#include "config.h"
 #include "log.h"
 #include "oid.h"
+#include "thread_var.h"
 #include "asn1/decode.h"
 #include "crypto/hash.h"
 #include "object/certificate.h"
@@ -53,9 +55,16 @@ static int
 handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
     OCTET_STRING_t *sid)
 {
+	struct validation *state;
 	const unsigned char *tmp;
 	X509 *cert;
 	int error;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+	if (sk_X509_num(validation_certs(state)) >= config_get_max_cert_depth())
+		return pr_err("Certificate chain maximum depth exceeded.");
 
 	pr_debug_add("EE Certificate (embedded) {");
 

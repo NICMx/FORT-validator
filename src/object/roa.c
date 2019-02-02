@@ -139,7 +139,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		return pr_crit("ipAddrBlocks array is NULL.");
 
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
-		block = roa->ipAddrBlocks.list.array[0];
+		block = roa->ipAddrBlocks.list.array[b];
 		if (block == NULL)
 			return pr_err("Address block array element is NULL.");
 

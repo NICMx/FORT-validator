@@ -16,8 +16,6 @@
  */
 #define ENOTRSYNC 3174
 
-extern char const *repository;
-extern size_t repository_len;
 extern int NID_rpkiManifest;
 extern int NID_signedObject;
 extern int NID_rpkiNotify;

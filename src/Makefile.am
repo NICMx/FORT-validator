@@ -10,6 +10,7 @@ rpki_validator_SOURCES += address.h address.c
 rpki_validator_SOURCES += array_list.h
 rpki_validator_SOURCES += certificate_refs.h certificate_refs.c
 rpki_validator_SOURCES += common.h common.c
+rpki_validator_SOURCES += config.h config.c
 rpki_validator_SOURCES += debug.h debug.c
 rpki_validator_SOURCES += file.h file.c
 rpki_validator_SOURCES += line_file.h line_file.c
