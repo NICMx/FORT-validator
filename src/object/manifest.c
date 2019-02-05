@@ -58,13 +58,13 @@ validate_manifest(struct Manifest *manifest)
 		if (version != 0)
 			return -EINVAL;
 	}
+
 	/*
-	 * TODO "Manifest verifiers MUST be able to handle number values up to
+	 * "Manifest verifiers MUST be able to handle number values up to
 	 * 20 octets."
-	 *
-	 * What the fuck?
 	 */
-	/* manifest->manifestNumber; */
+	if (manifest->manifestNumber.size > 20)
+		return pr_err("Manifest number is larger than 20 octets");
 
 	/*
 	 * TODO (field)
