@@ -1142,7 +1142,51 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 static int
 handle_cp(X509_EXTENSION *ext, void *arg)
 {
-	return 0; /* TODO (certext) Implement */
+	CERTIFICATEPOLICIES *cp;
+	POLICYINFO *pi;
+	POLICYQUALINFO *pqi;
+	int error, nid_cp, nid_qt_cps, pqi_num;
+
+	error = 0;
+	cp = X509V3_EXT_d2i(ext);
+	if (cp == NULL)
+		return cannot_decode(&CP);
+
+	if (sk_POLICYINFO_num(cp) != 1) {
+		error = pr_err("The %s extension has %u policy information's. (1 expected)",
+		    CP.name, sk_POLICYINFO_num(cp));
+		goto end;
+	}
+
+	/* rfc7318#section-2 and consider rfc8360#section-4.2.1 */
+	pi = sk_POLICYINFO_value(cp, 0);
+	nid_cp = OBJ_obj2nid(pi->policyid);
+	if (nid_cp != NID_certPolicyRpki && nid_cp != NID_certPolicyRpkiV2) {
+		error = pr_err("Invalid certificate policy OID, isn't 'id-cp-ipAddr-asNumber' nor 'id-cp-ipAddr-asNumber-v2'");
+		goto end;
+	}
+	/* Exactly one policy qualifier MAY be included (so none is also valid) */
+	if (pi->qualifiers == NULL)
+		goto end;
+
+	pqi_num = sk_POLICYQUALINFO_num(pi->qualifiers);
+	if (pqi_num == 0)
+		goto end;
+	if (pqi_num != 1) {
+		error = pr_err("The %s extension has %d policy qualifiers. (none or only 1 expected)",
+		    CP.name, pqi_num);
+		goto end;
+	}
+
+	pqi = sk_POLICYQUALINFO_value(pi->qualifiers, 0);
+	nid_qt_cps = OBJ_obj2nid(pqi->pqualid);
+	if (nid_qt_cps != NID_id_qt_cps) {
+		error = pr_err("Policy qualifier ID isn't Certification Practice Statement (CPS)");
+		goto end;
+	}
+end:
+	CERTIFICATEPOLICIES_free(cp);
+	return error;
 }
 
 static int

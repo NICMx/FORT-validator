@@ -21,6 +21,8 @@ extern size_t repository_len;
 extern int NID_rpkiManifest;
 extern int NID_signedObject;
 extern int NID_rpkiNotify;
+extern int NID_certPolicyRpki;
+extern int NID_certPolicyRpkiV2;
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
