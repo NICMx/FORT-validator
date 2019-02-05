@@ -35,6 +35,17 @@ add_rpki_oids(void)
 	    "rpkiNotify",
 	    "RPKI Update Notification File (RFC 8182)");
 	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
+
+	NID_certPolicyRpki = OBJ_create("1.3.6.1.5.5.7.14.2",
+	    "id-cp-ipAddr-asNumber (RFC 6484)",
+	    "Certificate Policy (CP) for the Resource PKI (RPKI)");
+	printf("certPolicyRpki registered. Its nid is %d.\n", NID_certPolicyRpki);
+
+	NID_certPolicyRpkiV2 = OBJ_create("1.3.6.1.5.5.7.14.3",
+	    "id-cp-ipAddr-asNumber-v2 (RFC 8360)",
+	    "Certificate Policy for Use with Validation Reconsidered in the RPKI");
+	printf("certPolicyRpkiV2 registered. Its nid is %d.\n",
+	    NID_certPolicyRpkiV2);
 }
 
 /**

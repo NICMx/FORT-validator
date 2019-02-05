@@ -7,6 +7,8 @@
 int NID_rpkiManifest;
 int NID_signedObject;
 int NID_rpkiNotify;
+int NID_certPolicyRpki;
+int NID_certPolicyRpkiV2;
 
 int
 string_clone(void const *string, size_t size, char **clone)
