@@ -172,6 +172,37 @@ validate_name(X509_NAME *name, char *what)
 }
 
 static int
+validate_subject(X509_NAME *name, char *what)
+{
+	struct validation *state;
+	char *subject;
+	int error, sub_len;
+
+	error = validate_name(name, what);
+	if (error)
+		return error;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+
+	sub_len = X509_NAME_get_text_by_NID(name, NID_commonName, NULL, 0);
+	subject = calloc(sub_len + 1, 1);
+	if (subject == NULL) {
+		pr_err("Out of memory.");
+		return -ENOMEM;
+	}
+
+	X509_NAME_get_text_by_NID(name, NID_commonName, subject, sub_len + 1);
+
+	error = validation_store_subject(state, subject);
+	if (error)
+		free(subject);
+
+	return error;
+}
+
+static int
 validate_spki(const unsigned char *cert_spk, int cert_spk_len)
 {
 	struct validation *state;
@@ -342,12 +373,10 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 	/*
 	 * rfc6487#section-4.5
 	 *
-	 * TODO (field) "Each distinct subordinate CA and
-	 * EE certified by the issuer MUST be identified using a subject name
-	 * that is unique per issuer.  In this context, "distinct" is defined as
-	 * an entity and a given public key."
+	 * "An issuer SHOULD use a different subject name if the subject's
+	 * key pair has changed" (it's a SHOULD, so [for now] avoid validation)
 	 */
-	error = validate_name(X509_get_subject_name(cert), "subject");
+	error = validate_subject(X509_get_subject_name(cert), "subject");
 	if (error)
 		return error;
 

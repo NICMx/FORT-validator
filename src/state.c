@@ -1,13 +1,15 @@
 #include "state.h"
 
-#include <errno.h>
 #include <sys/queue.h>
+#include <errno.h>
+#include <string.h>
 #include "array_list.h"
 #include "log.h"
 #include "thread_var.h"
 #include "object/certificate.h"
 
 ARRAY_LIST(serial_numbers, BIGNUM *)
+ARRAY_LIST(subjects, char *)
 
 /**
  * Cached certificate data.
@@ -21,6 +23,7 @@ struct certificate {
 	 * don't have many children, and I'm running out of time.
 	 */
 	struct serial_numbers serials;
+	struct subjects subjects;
 
 	/** Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(certificate) next;
@@ -146,6 +149,12 @@ serial_cleanup(BIGNUM **serial)
 	BN_free(*serial);
 }
 
+static void
+subject_cleanup(char **subject)
+{
+	free(*subject);
+}
+
 void
 validation_destroy(struct validation *state)
 {
@@ -165,6 +174,7 @@ validation_destroy(struct validation *state)
 		SLIST_REMOVE_HEAD(&state->certs, next);
 		resources_destroy(cert->resources);
 		serial_numbers_cleanup(&cert->serials, serial_cleanup);
+		subjects_cleanup(&cert->subjects, subject_cleanup);
 		free(cert);
 		c++;
 	}
@@ -230,15 +240,18 @@ validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
 	error = serial_numbers_init(&cert->serials);
 	if (error)
 		goto end2;
+	error = subjects_init(&cert->subjects);
+	if (error)
+		goto end3;
 	cert->resources = resources_create();
 	if (cert->resources == NULL) {
 		error = pr_enomem();
-		goto end3;
+		goto end4;
 	}
 
 	error = certificate_get_resources(x509, cert->resources);
 	if (error)
-		goto end4;
+		goto end5;
 
 	/*
 	 * rfc7730#section-2.2
@@ -249,21 +262,22 @@ validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
 	 */
 	if (is_ta && resources_empty(cert->resources)) {
 		error = pr_err("Trust Anchor certificate does not define any number resources.");
-		goto end4;
+		goto end5;
 	}
 
 	ok = sk_X509_push(state->trusted, x509);
 	if (ok <= 0) {
 		error = crypto_err(
 		    "Couldn't add certificate to trusted stack: %d", ok);
-		goto end4;
+		goto end5;
 	}
 
 	SLIST_INSERT_HEAD(&state->certs, cert, next);
 
 	return 0;
 
-end4:	resources_destroy(cert->resources);
+end5:	resources_destroy(cert->resources);
+end4:	subjects_cleanup(&cert->subjects, subject_cleanup);
 end3:	serial_numbers_cleanup(&cert->serials, serial_cleanup);
 end2:	free(cert);
 end1:	return error;
@@ -283,6 +297,7 @@ validation_pop_cert(struct validation *state)
 	SLIST_REMOVE_HEAD(&state->certs, next);
 	resources_destroy(cert->resources);
 	serial_numbers_cleanup(&cert->serials, serial_cleanup);
+	subjects_cleanup(&cert->subjects, subject_cleanup);
 	free(cert);
 
 	return 0;
@@ -331,6 +346,33 @@ validation_store_serial_number(struct validation *state, BIGNUM *number)
 	error = serial_numbers_add(&cert->serials, &duplicate);
 	if (error)
 		BN_free(duplicate);
+
+	return error;
+}
+
+int
+validation_store_subject(struct validation *state, char *subject)
+{
+	struct certificate *cert;
+	char **cursor;
+	char *duplicate;
+	int error;
+
+	cert = SLIST_FIRST(&state->certs);
+	if (cert == NULL)
+		return 0; /* The TA lacks siblings, so subject is unique. */
+
+	ARRAYLIST_FOREACH(&cert->subjects, cursor)
+		if (strcmp(*cursor, subject) == 0)
+			return pr_err("Subject name is not unique.");
+
+	duplicate = strdup(subject);
+	if (duplicate == NULL)
+		return pr_err("Could not duplicate a String");
+
+	error = subjects_add(&cert->subjects, &duplicate);
+	if (error)
+		free(duplicate);
 
 	return error;
 }
