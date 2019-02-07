@@ -114,9 +114,17 @@ print_addr6(struct resources *parent, unsigned long asn,
 }
 
 static int
-print_addr(struct resources *parent, unsigned long asn, uint8_t family,
+print_addr(struct resources *parent, ASID_t *as_id, uint8_t family,
     struct ROAIPAddress *roa_addr)
 {
+	unsigned long asn;
+
+	if (asn_INTEGER2ulong(as_id, &asn) != 0) {
+		if (errno)
+			pr_errno(errno, "Error casting ROA's AS ID value");
+		return pr_err("ROA's AS ID couldn't be parsed as unsigned long");
+	}
+
 	switch (family) {
 	case 1: /* IPv4 */
 		return print_addr4(parent, asn, roa_addr);
@@ -131,7 +139,7 @@ static int
 __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 {
 	struct ROAIPAddressFamily *block;
-	unsigned long as_id, version;
+	unsigned long version;
 	int b;
 	int a;
 	int error;
@@ -146,18 +154,6 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		/* rfc6482#section-3.1 */
 		if (version != 0)
 			return pr_err("ROA's version (%lu) is nonzero.", version);
-	}
-
-	error = asn_INTEGER2ulong(&roa->asID, &as_id);
-	if (error) {
-		if (errno)
-			pr_errno(errno, "Error casting ROA's AS ID value");
-		return pr_err("ROA's AS ID couldn't be parsed as unsigned long");
-	}
-	/* rfc6482#section-3.2 (more or less.) */
-	if (!resources_contains_asn(parent, as_id)) {
-		return pr_err("ROA is not allowed to attest for AS %lu",
-		    as_id);
 	}
 
 	/* rfc6482#section-3.3 */
@@ -181,7 +177,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		if (block->addresses.list.array == NULL)
 			return pr_err("ROA's address list array is NULL.");
 		for (a = 0; a < block->addresses.list.count; a++) {
-			error = print_addr(parent, as_id,
+			error = print_addr(parent, &roa->asID,
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
 			if (error)

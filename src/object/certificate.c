@@ -156,7 +156,7 @@ validate_name(X509_NAME *name, char *what)
 	}
 
 #ifdef DEBUG
-	str = calloc(str_len + 1, 1);
+	str = calloc(str_len + 1, sizeof(char));
 	if (str == NULL) {
 		pr_err("Out of memory.");
 		return -ENOMEM;
@@ -187,7 +187,7 @@ validate_subject(X509_NAME *name, char *what)
 		return -EINVAL;
 
 	sub_len = X509_NAME_get_text_by_NID(name, NID_commonName, NULL, 0);
-	subject = calloc(sub_len + 1, 1);
+	subject = calloc(sub_len + 1, sizeof(char));
 	if (subject == NULL) {
 		pr_err("Out of memory.");
 		return -ENOMEM;

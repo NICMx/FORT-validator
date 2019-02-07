@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
+#include <stdint.h> /* UINT32_MAX */
 
 #include "address.h"
 #include "log.h"
@@ -247,7 +248,7 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 
 	parent = get_parent_resources();
 
-	if ((parent != NULL) && (resources->ip4s == parent->ip4s))
+	if (parent && (resources->ip4s == parent->ip4s))
 		return pr_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
 
 	error = range4_decode(input, &range);
@@ -329,7 +330,7 @@ add_aors(struct resources *resources, int family,
 {
 	struct IPAddressOrRange *aor;
 	int i;
-	int error = 0;
+	int error;
 
 	for (i = 0; i < aors->list.count; i++) {
 		aor = aors->list.array[i];
@@ -401,25 +402,36 @@ inherit_asiors(struct resources *resources)
 }
 
 static int
-add_asn(struct resources *resources, ASId_t min, ASId_t max,
-    struct resources *parent)
+ASId2ulong(ASId_t *as_id, unsigned long *result)
 {
-	unsigned long asn_min, asn_max;
+	static const unsigned long ASN_MAX = UINT32_MAX;
 	int error;
 
-	error = asn_INTEGER2ulong(&min, &asn_min);
+	error = asn_INTEGER2ulong(as_id, result);
 	if (error) {
 		if (errno)
-			pr_errno(errno, "Error converting ASN min value");
-		return pr_err("Added ASN min value isn't a valid unsigned long");
+			pr_errno(errno, "Error converting ASN value");
+		return pr_err("ASN value is not a valid unsigned long");
 	}
-	error = asn_INTEGER2ulong(&max, &asn_max);
-	if (error) {
-		if (errno)
-			pr_errno(errno, "Error converting ASN max value");
-		return pr_err("Added ASN max value isn't a valid unsigned long");
+
+	if ((*result) > ASN_MAX) {
+		return pr_err("ASN value '%lu' is out of bounds. (0-%lu)",
+		    *result, ASN_MAX);
 	}
-	if (parent && !rasn_contains(parent->asns, asn_min, asn_max))
+
+	return 0;
+}
+
+static int
+add_asn(struct resources *resources, unsigned long min, unsigned long max,
+    struct resources *parent)
+{
+	int error;
+
+	if (min > max)
+		return pr_err("The ASN range %lu-%lu is inverted.", min, max);
+
+	if (parent && !rasn_contains(parent->asns, min, max))
 		return pr_err("Parent certificate doesn't own child's ASN resource.");
 
 	if (resources->asns == NULL) {
@@ -428,17 +440,17 @@ add_asn(struct resources *resources, ASId_t min, ASId_t max,
 			return pr_enomem();
 	}
 
-	error = rasn_add(resources->asns, asn_min, asn_max);
+	error = rasn_add(resources->asns, min, max);
 	if (error){
 		pr_err("Error adding ASN range to certificate resources: %s",
 		    sarray_err2str(error));
 		return error;
 	}
 
-	if (asn_min == asn_max)
-		pr_debug("ASN: %lu", asn_min);
+	if (min == max)
+		pr_debug("ASN: %lu", min);
 	else
-		pr_debug("ASN: %lu-%lu", asn_min, asn_max);
+		pr_debug("ASN: %lu-%lu", min, max);
 	return 0;
 }
 
@@ -446,6 +458,9 @@ static int
 add_asior(struct resources *resources, struct ASIdOrRange *obj)
 {
 	struct resources *parent;
+	unsigned long asn_min;
+	unsigned long asn_max;
+	int error;
 
 	parent = get_parent_resources();
 
@@ -455,12 +470,21 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 	switch (obj->present) {
 	case ASIdOrRange_PR_NOTHING:
 		break;
+
 	case ASIdOrRange_PR_id:
-		return add_asn(resources, obj->choice.id, obj->choice.id,
-		    parent);
+		error = ASId2ulong(&obj->choice.id, &asn_min);
+		if (error)
+			return error;
+		return add_asn(resources, asn_min, asn_min, parent);
+
 	case ASIdOrRange_PR_range:
-		return add_asn(resources, obj->choice.range.min,
-		    obj->choice.range.max, parent);
+		error = ASId2ulong(&obj->choice.range.min, &asn_min);
+		if (error)
+			return error;
+		error = ASId2ulong(&obj->choice.range.max, &asn_max);
+		if (error)
+			return error;
+		return add_asn(resources, asn_min, asn_max, parent);
 	}
 
 	return pr_err("Unknown ASIdOrRange type: %d", obj->present);
