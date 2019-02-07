@@ -1,9 +1,11 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include "rtr/rtr.h"
 #include "configuration.h"
+
 /*
  * This program is an RTR server.
  *
@@ -15,45 +17,27 @@
 int
 main(int argc, char *argv[])
 {
-	int err = 0;
+	int err;
 	char *json_file = NULL;
-	struct rtr_config *config;
 	int c;
-	int fflag=0;
-	static char usage[] = "usage: %s -f fname \n";
 
-	puts("!!!Hello World!!!");
-
-	while ((c = getopt(argc, argv, "f:")) != -1)
+	while ((c = getopt(argc, argv, "f:")) != -1) {
 		switch (c) {
 		case 'f':
-			fflag = 1;
 			json_file = optarg;
 			break;
 		case '?':
-			err = 1;
-			break;
+			fprintf(stdout, "usage: %s -f <file name>\n", argv[0]);
+			return 0;
 		}
-
-	if (fflag == 0) { /* -f was mandatory */
-		fprintf(stderr, "%s: missing -f option\n", argv[0]);
-		fprintf(stderr, usage, argv[0]);
-		exit(1);
-	} else if (err) {
-		fprintf(stderr, usage, argv[0]);
-		exit(1);
 	}
 
-	err = read_config_from_file(json_file, &config);
+	err = config_init(json_file);
 	if (err)
 		return err;
 
-	err = rtr_listen(config->host_address, config->host_port);
-	if (config)
-		free_rtr_config(config);
+	err = rtr_listen();
 
-	if (err)
-		return err;
-
-	return EXIT_SUCCESS;
+	config_cleanup();
+	return err;
 }

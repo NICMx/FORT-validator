@@ -1,9 +1,6 @@
 #ifndef _SRC_COMMON_H_
 #define _SRC_COMMON_H_
 
-#include <stdio.h>
-#include <string.h>
-
 /* __BEGIN_DECLS should be used at the beginning of your declarations,
    so that C++ compilers don't mangle their names.  Use __END_DECLS at
    the end of C declarations. */
@@ -21,19 +18,12 @@
 
 #define EUNIMPLEMENTED 566456
 
-#define warnxerror0(error, msg) \
-	warnx(msg ": %s", strerror(error))
-#define warnxerrno0(msg) \
-	warnxerror0(errno, msg)
-#define warnxerror(error, msg, ...) \
-	warnx(msg ": %s", ##__VA_ARGS__, strerror(error))
-#define warnxerrno(msg, ...) \
-	warnxerror(errno, msg, ##__VA_ARGS__)
+/*
+ * FYI: The error functions are warn() and warnx().
+ * warn() automatically appends the errno string message (strerror()), warnx()
+ * does not.
+ */
 
-#define pr_debug0(msg) printf("Debug: " msg "\n");
-#define pr_debug(msg, ...) printf("Debug: " msg "\n", ##__VA_ARGS__);
-
-#define log_err(text, ...) fprintf(stderr, text "\n", ##__VA_ARGS__)
-#define log_err0(text) fprintf(stderr, text "\n")
+char *str_clone(char const *);
 
 #endif /* _SRC_COMMON_H_ */

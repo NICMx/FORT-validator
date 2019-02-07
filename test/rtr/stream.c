@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "common.h"
+
 /*
  * Writes exactly @length bytes from @buffer to the file descriptor @fd.
  * All or nothing.

@@ -10,126 +10,42 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#include "../common.h"
+#include "configuration.h"
 #include "pdu.h"
-
-static int
-bind_server_socket6(int socket, struct sockaddr_in6 *host_addr, __u16 port)
-{
-	int err;
-	struct sockaddr_in6 address;
-
-	memset(&address, 0, sizeof(address));
-	address.sin6_family = AF_INET6;
-	address.sin6_addr.__in6_u = host_addr->sin6_addr.__in6_u;
-	address.sin6_port = htons(port);
-
-	if (bind(socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
-		err = errno;
-		warn("Could not bind the address. errno : %d", -abs(err));
-		return -abs(err);
-	}
-
-	return 0;
-}
-
-static int
-bind_server_socket4(int socket, struct sockaddr_in *host_addr, __u16 port)
-{
-	int err;
-	struct sockaddr_in address;
-
-	memset(&address, 0, sizeof(address));
-	address.sin_family = AF_INET;
-	address.sin_addr.s_addr = host_addr->sin_addr.s_addr;
-	address.sin_port = htons(port);
-
-	if (bind(socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
-		err = errno;
-		warn("Could not bind the address. errno : %d", -abs(err));
-		return -abs(err);
-	}
-
-	return 0;
-}
-
-static void
-log_binded_server_socket(struct addrinfo *host, __u16 port)
-{
-	char hostaddr[INET6_ADDRSTRLEN];
-	struct sockaddr_in *h4;
-	struct sockaddr_in6 *h6;
-
-	memset(&hostaddr, 0, INET6_ADDRSTRLEN);
-	switch(host->ai_family) {
-		case AF_INET:
-			h4 = (struct sockaddr_in *) host->ai_addr;
-			inet_ntop(host->ai_family, &h4->sin_addr, (char * restrict) &hostaddr, sizeof(hostaddr));
-			pr_debug("Listening %s#%d", hostaddr, port);
-			break;
-		case AF_INET6:
-			h6 = (struct sockaddr_in6 *) host->ai_addr;
-			inet_ntop(host->ai_family, &h6->sin6_addr, (char * restrict) &hostaddr, sizeof(hostaddr));
-			pr_debug("Listening [%s]#%d", hostaddr, port);
-			break;
-		default:
-			warn("Unknown AI_FAMILY type: %d", host->ai_family);
-	}
-}
 
 /*
  * Creates the socket that will stay put and wait for new connections started
  * from the clients.
  */
 static int
-create_server_socket(struct addrinfo *server_addr, __u16 port)
+create_server_socket(void)
 {
+	struct addrinfo const *addr;
 	int fd; /* "file descriptor" */
-	struct addrinfo *tmp;
-	int err;
 
-	if (server_addr == NULL){
-		warn("A server address must be present to bind a socket");
-		return -EINVAL;
-	}
+	addr = config_get_server_addrinfo();
+	for (; addr != NULL; addr = addr->ai_next) {
+		printf("Attempting to bind socket to address '%s', port '%s'.\n",
+		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
+		    config_get_server_port());
 
-	for (tmp = server_addr; tmp != NULL; tmp = tmp->ai_next) {
-		err = 0;
-		fd = socket(tmp->ai_family, SOCK_STREAM, 0);
+		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
-			err = errno;
-			err = -abs(err);
-			warn("Error opening socket. errno : %d", err);
+			warn("socket() failed");
 			continue;
 		}
 
-		switch(tmp->ai_family) {
-		case AF_INET:
-			err = bind_server_socket4(fd, (struct sockaddr_in *) tmp->ai_addr, port);
-			if (err)
-				close(fd);
-			break;
-		case AF_INET6:
-			err = bind_server_socket6(fd, (struct sockaddr_in6 *) tmp->ai_addr, port);
-			if (err)
-				close(fd);
-			break;
-		default:
-			close(fd);
-			warn("Can't handle ai_family type: %d", tmp->ai_family);
-			err = -EINVAL;
+		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
+			warn("bind() failed");
+			continue;
 		}
 
-		if (!err) {
-			log_binded_server_socket(tmp, port);
-			break;
-		}
+		printf("Success.\n");
+		return fd; /* Happy path */
 	}
 
-	if (err)
-		return err;
-
-	return fd;
+	warnx("None of the addrinfo candidates could be bound.");
+	return -EINVAL;
 }
 
 /*
@@ -197,7 +113,7 @@ client_thread_cb(void *param_void)
 	int err;
 
 	memcpy(&param, param_void, sizeof(param));
-	free(param_void);
+	free(param_void); /* Ha. */
 
 	while (true) { /* For each PDU... */
 		err = pdu_load(param.client_fd, &pdu, &meta);
@@ -278,11 +194,11 @@ handle_client_connections(int server_fd)
  * This function blocks.
  */
 int
-rtr_listen(struct addrinfo *server_addr, __u16 port)
+rtr_listen(void)
 {
 	int server_fd; /* "file descriptor" */
 
-	server_fd = create_server_socket(server_addr, port);
+	server_fd = create_server_socket();
 	if (server_fd < 0)
 		return server_fd;
 

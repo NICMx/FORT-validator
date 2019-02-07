@@ -1,18 +1,12 @@
 #ifndef _SRC_CONFIGURATION_H_
 #define _SRC_CONFIGURATION_H_
 
-#include "netdb.h"
-#include <asm/types.h>
+#include <netdb.h>
 
-struct rtr_config {
-	/** The listener address of the RTR server. */
-	struct addrinfo *host_address;
-	/** The listener port of the RTR server. */
-	__u16 host_port;
-};
+int config_init(char const *);
+void config_cleanup(void);
 
-void free_rtr_config(struct rtr_config *);
-int read_config_from_file(char *, struct rtr_config **);
-
+struct addrinfo const *config_get_server_addrinfo(void);
+char const *config_get_server_port(void);
 
 #endif /* _SRC_CONFIGURATION_H_ */
