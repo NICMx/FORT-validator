@@ -133,10 +133,7 @@ rpp_traverse(struct rpp *pp)
 
 	/* Use CRL stack to validate certificates, and also traverse them. */
 	ARRAYLIST_FOREACH(&pp->certs, uri) {
-		/* TODO should we really goto end? */
-		error = certificate_traverse(pp, uri, crls, false);
-		if (error)
-			goto end;
+		certificate_traverse(pp, uri, crls, false);
 	}
 
 	/* Use valid address ranges to print ROAs that match them. */
