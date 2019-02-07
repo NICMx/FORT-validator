@@ -181,12 +181,6 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		if (block->addresses.list.array == NULL)
 			return pr_err("ROA's address list array is NULL.");
 		for (a = 0; a < block->addresses.list.count; a++) {
-			error = asn_INTEGER2ulong(&roa->asID, &as_id);
-			if (error) {
-				if (errno)
-					pr_errno(errno, "Error casting AS ID at address list");
-				return pr_err("Address list AS ID couldn't be parsed as unsigned long");
-			}
 			error = print_addr(parent, as_id,
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
