@@ -27,4 +27,7 @@ extern int NID_certPolicyRpkiV2;
 int string_clone(void const *, size_t, char **);
 int ia5s2string(ASN1_IA5STRING *, char **);
 
+int x509_name_decode(X509_NAME *, int, char **);
+int validate_issuer_name(char const *, X509_NAME *);
+
 #endif /* SRC_RTR_COMMON_H_ */

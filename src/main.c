@@ -227,6 +227,7 @@ main(int argc, char **argv)
 		if (config_get_shuffle_uris())
 			tal_shuffle_uris(tal);
 		error = foreach_uri(tal, handle_tal_uri);
+		/* TODO error on no uris were valid. */
 		error = (error >= 0) ? 0 : error;
 		tal_destroy(tal);
 	}
