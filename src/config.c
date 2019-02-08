@@ -1,135 +1,341 @@
 #include "config.h"
 
+#include <asm-generic/errno-base.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
+#include <getopt.h>
+#include <strings.h>
 
-#include <toml.h>
-
-#include "file.h"
+#include "common.h"
 #include "log.h"
-#include "thread_var.h"
-#include "uri.h"
 
+#define OPT_FIELD_ARRAY_LEN(array) ARRAY_LEN(array) - 1
+
+static int parse_bool(struct option_field *, char *, void *);
+
+struct args_flag {
+	struct option_field *field;
+	bool is_set;
+};
+
+static struct global_type gt_bool = {
+	.id = GTI_BOOL,
+	.name = "Boolean",
+	.size = sizeof(bool),
+	.parse = parse_bool,
+	.candidates = "true false",
+};
+
+static struct global_type gt_string = {
+	.id = GTI_STRING,
+	.name = "String",
+};
+
+static struct option_field global_fields[] = {
+	{
+		.name = "local-repository",
+		.type = &gt_string,
+		.doc = "Local repository path.",
+		.offset = offsetof(struct rpki_config, local_repository),
+		.has_arg = required_argument,
+		.short_opt = 0,
+		.required = true,
+		.candidates = "path",
+	}, {
+		.name = "enable-rsync",
+		.type = &gt_bool,
+		.doc = "Enable or disable rsync downloads.",
+		.offset = offsetof(struct rpki_config, enable_rsync),
+		.has_arg = optional_argument,
+		.short_opt = 0,
+		.required = false,
+	},
+	{ NULL },
+};
+
+static struct option_field tal_fields[] = {
+	{
+		.name = "tal",
+		.type = &gt_string,
+		.doc = "TAL file path",
+		.offset = offsetof(struct rpki_config, tal),
+		.has_arg = required_argument,
+		.short_opt = 0,
+		.required = true,
+		.candidates = "file",
+	}, {
+		.name = "shuffle-uris",
+		.type = &gt_bool,
+		.doc = "Shuffle URIs in the TAL.",
+		.offset = offsetof(struct rpki_config, shuffle_uris),
+		.has_arg = optional_argument,
+		.short_opt = 0,
+		.required = false,
+	},
+	{ NULL },
+};
+
+static int str_to_bool(const char *str, bool *bool_out)
+{
+	if (strcasecmp(str, "true") == 0 || strcasecmp(str, "1") == 0 ||
+	    strcasecmp(str, "yes") == 0 || strcasecmp(str, "on") == 0) {
+		*bool_out = true;
+		return 0;
+	}
+
+	if (strcasecmp(str, "false") == 0 || strcasecmp(str, "0") == 0 ||
+	    strcasecmp(str, "no") == 0 || strcasecmp(str, "off") == 0) {
+		*bool_out = false;
+		return 0;
+	}
+
+	return pr_err("Cannot parse '%s' as a bool "
+			"(true|false|1|0|yes|no|on|off).", str);
+}
+
+static int parse_bool(struct option_field *field, char *str, void *result)
+{
+	bool *value = result;
+
+	switch (field->has_arg) {
+	case no_argument:
+		*value = true;
+		return 0;
+		break;
+	case required_argument:
+	case optional_argument:
+		if (field->has_arg == optional_argument && str == NULL) {
+			*value = true;
+			return 0;
+		}
+		/**
+		 * XXX: (fine) GETOPT should had ensure that the code did
+		 * not reach here for this particular case.
+		 * */
+		return str_to_bool(str, result);
+		break;
+	}
+
+	if (str == NULL) {
+		*value = true;
+		return 0;
+	}
+
+	return str_to_bool(str, result);
+}
+
+static int
+construct_options(struct args_flag **flags, struct option **long_options,
+    int *flags_len)
+{
+	struct args_flag *result_flags;
+	struct option_field *global, *tal;
+	struct option *result_options;
+	unsigned int global_len, tal_len, total_len, i, result_idx;
+
+	get_global_fields(&global, &global_len);
+	get_tal_fields(&tal, &tal_len);
+
+	total_len = global_len + tal_len;
+
+	result_flags = calloc(total_len, sizeof(struct args_flag));
+	if (result_flags == NULL)
+		return pr_enomem();
+
+	/* Long options must end with zeros (+1) */
+	result_options = calloc(total_len + 1, sizeof(struct option));
+	if (result_options == NULL) {
+		free(result_flags);
+		return pr_enomem();
+	}
+
+	result_idx = 0;
+	for(i = 0; i < global_len; i++) {
+		result_flags[result_idx].field = &(global[i]);
+
+		result_options[result_idx].name = global[i].name;
+		result_options[result_idx].has_arg = global[i].has_arg;
+		result_options[result_idx].val = global[i].short_opt;
+		result_options[result_idx].flag = NULL;
+
+		result_idx++;
+	}
+
+	for(i = 0; i < tal_len; i++) {
+		result_flags[result_idx].field = &(tal[i]);
+
+		result_options[result_idx].name = tal[i].name;
+		result_options[result_idx].has_arg = tal[i].has_arg;
+		result_options[result_idx].val = tal[i].short_opt;
+		result_options[result_idx].flag = NULL;
+
+		result_idx++;
+	}
+
+	*flags = result_flags;
+	*flags_len = total_len;
+	*long_options = result_options;
+
+	return 0;
+}
+
+static void
+set_string(void **field, char *str)
+{
+	*field = str;
+}
+
+static void
+set_config_param_for_string(void **field, void **config_param)
+{
+	*config_param = *field;
+}
+
+int
+handle_option(struct rpki_config *config, struct option_field *field, char *str)
+{
+	void *config_param;
+	int error = 0;
+
+	/**
+	 * TODO Should we use a switch case?
+	 * In order to avoid:
+	 * warning: pointer of type ‘void *’ used in arithmetic
+	 * [-Wpointer-arith]
+	 * https://stackoverflow.com/questions/23357442/
+	 * dynamically-access-member-variable-of-a-structure
+	 */
+	config_param = config;
+	config_param += field->offset;
+
+	if (field->type == &gt_string) {
+		set_string(config_param, str);
+		set_config_param_for_string(config_param, &config_param);
+	} else if (field->type->parse != NULL){
+		error = field->type->parse(field, str, config_param);
+	}
+	if (error)
+		return error;
+
+	if (field->validate != NULL)
+		error = field->validate(field, config_param);
+	else if (field->type->validate != NULL)
+		error = field->type->validate(field, config_param);
+
+	return error;
+}
+
+int
+check_missing_flags(struct args_flag *flag)
+{
+	char *candidate = NULL;
+
+	if (flag->is_set)
+		return 0;
+	if (!flag->field->required)
+		return 0;
+
+	printf("Missing flag --%s", flag->field->name);
+	switch (flag->field->has_arg) {
+	case no_argument:
+		break;
+	case optional_argument:
+		if (flag->field->candidates != NULL)
+			candidate = flag->field->candidates;
+		else if (flag->field->type->candidates != NULL)
+			candidate = flag->field->type->candidates;
+		if (candidate != NULL)
+			printf("[=%s]", candidate);
+		break;
+	case required_argument:
+		if (flag->field->candidates != NULL)
+			candidate = flag->field->candidates;
+		else if (flag->field->type->candidates != NULL)
+			candidate = flag->field->type->candidates;
+		if (candidate != NULL)
+			printf(" <%s>", candidate);
+		break;
+	default:
+		break;
+	}
+
+	printf("\n");
+
+	return -ENOENT;
+}
 
 static void
 print_config(struct rpki_config *config)
 {
 	pr_debug("Program configuration");
 	pr_debug_add("{");
-	pr_debug("%s: %s", "local_repository",
-	    config->local_repository);
-	pr_debug("%s: %s", "tal.file", config->tal);
-	pr_debug("%s: %s", "enable_rsync",
+	pr_debug("%s: %s", "local-repository", config->local_repository);
+	pr_debug("%s: %s", "tal", config->tal);
+	pr_debug("%s: %s", "enable-rsync",
 	    config->enable_rsync ? "true" : "false");
-	pr_debug("%s: %s", "tal.shuffle_uris",
+	pr_debug("%s: %s", "tal.shuffle-uris",
 	    config->shuffle_uris ? "true" : "false");
 	pr_debug_rm("}");
 }
 
-static int
-handle_tal_table(struct toml_table_t *tal, struct rpki_config *config)
-{
-	const char *result;
-	int error, bool_result;
-
-	result = toml_raw_in(tal, "file");
-	if (result != 0) {
-		pr_debug("tal.file raw string %s", result);
-		error = toml_rtos(result, &config->tal);
-		if (error)
-			return pr_err("Bad value in '%s'", "file");
-	}
-
-	result = toml_raw_in(tal, "shuffle_uris");
-	if (result != 0) {
-		pr_debug("Boolean %s", result);
-
-		error = toml_rtob(result, &bool_result);
-		if (error)
-			return pr_err("Bad value in '%s'", "shuffle_uris");
-		config->shuffle_uris = bool_result;
-	}
-
-	return 0;
-}
-
-static int
-toml_to_config(struct toml_table_t *root, struct rpki_config *config)
-{
-	struct toml_table_t *tal;
-	const char *result;
-	int error, bool_result;
-
-	result = toml_raw_in(root, "local_repository");
-	if (result != 0) {
-		error = toml_rtos(result, &config->local_repository);
-		if (error)
-			return pr_err("Bad value in '%s'", "local_repository");
-	}
-
-	result = toml_raw_in(root, "enable_rsync");
-	if (result != 0) {
-		error = toml_rtob(result, &bool_result);
-		if (error)
-			return pr_err("Bad value in '%s'", "enable_rsync");
-		config->enable_rsync = bool_result;
-	}
-
-	tal = toml_table_in(root, "tal");
-	if (tal != 0)
-		error = handle_tal_table(tal, config);
-	else
-		return pr_err("Required table '%s' is missing.", "tal");
-
-	return error;
-}
-
 int
-set_config_from_file(char *config_file, struct rpki_config *config)
+handle_flags_config(int argc, char **argv, struct rpki_config *config)
 {
-	struct file_contents fc;
-	struct toml_table_t *root;
-	struct rpki_uri uri;
-	char errbuf[200];
-	int error;
-	bool is_config_file;
+	struct args_flag *flags;
+	struct option *long_options;
+	int opt, indexptr, flags_len, error = 0;
 
-	/* I think I'm not using this struct correctly but I need it to call
-	 * some functions, so be careful using the struct rpki_uri here.
-	 * Also no needs to be freed. */
-	uri.global = config_file;
-	uri.global_len = strlen(config_file);
-	uri.local = config_file;
+	flags = NULL;
+	long_options = NULL;
+	config->flag_config = true;
 
-	is_config_file = uri_has_extension(&uri, ".ini");
-	is_config_file |= uri_has_extension(&uri, ".toml");
-	if (!is_config_file) {
-		error = pr_err("Invalid Config file extension for file '%s'",
-		    uri.local);
-		goto end;
-	}
-
-	error = file_load(&uri, &fc);
+	error = construct_options(&flags, &long_options, &flags_len);
 	if (error)
-		goto end; /* Error msg already printed. */
+		return error; /* Error msg already printed. */
 
-	root = toml_parse((char *) fc.buffer, errbuf, sizeof(errbuf));
-	file_free(&fc);
+	while ((opt = getopt_long(argc, argv, "", long_options, &indexptr))
+	    != -1) {
+		switch (opt) {
+		case 0:
+			flags[indexptr].is_set = true;
+			error = handle_option(config, flags[indexptr].field,
+			    optarg);
+			break;
+		default:
+			error = pr_err("some usage hints.");/* TODO */
+			break;
+		}
 
-	if (root == NULL) {
-		error = pr_err("Error while parsing configuration file: %s",
-		    errbuf);
-		goto end;
+		if (error)
+			goto end;
 	}
 
-	error = toml_to_config(root, config);
-
-	toml_free(root);
+	for (indexptr = 0; indexptr < flags_len; indexptr++) {
+		error |= check_missing_flags(&flags[indexptr]);
+	}
 
 	print_config(config);
 
 end:
+	free(flags);
+	free(long_options);
 	return error;
+
+}
+
+void
+get_global_fields(struct option_field **fields, unsigned int *len)
+{
+	if (fields)
+		*fields = global_fields;
+	if (len)
+		*len = OPT_FIELD_ARRAY_LEN(global_fields);
+}
+
+void
+get_tal_fields(struct option_field **fields, unsigned int *len)
+{
+	if (fields)
+		*fields = tal_fields;
+	if (len)
+		*len = OPT_FIELD_ARRAY_LEN(tal_fields);
 }

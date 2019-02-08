@@ -9,6 +9,7 @@
 #include "log.h"
 #include "rpp.h"
 #include "thread_var.h"
+#include "toml_handler.h"
 #include "object/certificate.h"
 #include "object/manifest.h"
 #include "object/tal.h"
@@ -114,60 +115,6 @@ handle_file_config(char *config_file, struct rpki_config *config)
 	config->flag_config = false;
 
 	return set_config_from_file(config_file, config);
-}
-
-static int
-handle_flags_config(int argc, char **argv, struct rpki_config *config)
-{
-	int opt, error = 0;
-
-	config->flag_config = true;
-
-	static struct option long_options[] = {
-		{"tal", required_argument, NULL, 't'},
-		{"local_repository", required_argument, NULL, 'l'},
-		{"disable_rsync", no_argument, 0, 'r'},
-		{"shuffle_uris", no_argument, 0, 's'},
-		{0,0,0,}
-	};
-
-	while ((opt = getopt_long(argc, argv, "t:l:rs", long_options, NULL))
-	    != -1) {
-		switch (opt) {
-		case 't' :
-			config->tal = optarg;
-			break;
-		case 'l' :
-			config->local_repository = optarg;
-			break;
-		case 'r':
-			config->enable_rsync = false;
-			break;
-		case 's':
-			config->shuffle_uris = true;
-			break;
-		default:
-			return pr_err("some usage hints.");/* TODO */
-		}
-	}
-
-	if (config->tal == NULL) {
-		fprintf(stderr, "Missing flag --tal <file>\n");
-		error = -EINVAL;
-	}
-	if(config->local_repository == NULL) {
-		fprintf(stderr, "Missing flag --local_repository <dir>\n");
-		error = -EINVAL;
-	}
-
-	pr_debug("TAL file : %s", config->tal);
-	pr_debug("Local repository : %s", config->local_repository);
-	pr_debug("Enable rsync : %s", config->enable_rsync
-	    ? "true" : "false");
-	pr_debug("shuffle uris : %s", config->shuffle_uris
-	    ? "true" : "false");
-
-	return error;
 }
 
 static int
