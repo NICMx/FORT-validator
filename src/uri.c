@@ -1,6 +1,7 @@
 #include "uri.h"
 
 #include "common.h"
+#include "config.h"
 #include "log.h"
 
 /**
@@ -74,11 +75,15 @@ static int
 g2l(char const *global, size_t global_len, char **result)
 {
 	static char const *const PREFIX = "rsync://";
+	char const *repository;
 	char *local;
 	size_t prefix_len;
+	size_t repository_len;
 	size_t extra_slash;
 	size_t offset;
 
+	repository = config_get_local_repository();
+	repository_len = strlen(repository);
 	prefix_len = strlen(PREFIX);
 
 	if (global_len < prefix_len

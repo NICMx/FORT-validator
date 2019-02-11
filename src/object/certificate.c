@@ -7,6 +7,7 @@
 #include <libcmscodec/IPAddrBlocks.h>
 
 #include "common.h"
+#include "config.h"
 #include "log.h"
 #include "manifest.h"
 #include "thread_var.h"
@@ -155,7 +156,7 @@ validate_name(X509_NAME *name, char *what)
 	}
 
 #ifdef DEBUG
-	str = calloc(str_len + 1, 1);
+	str = calloc(str_len + 1, sizeof(char));
 	if (str == NULL) {
 		pr_err("Out of memory.");
 		return -ENOMEM;
@@ -168,6 +169,37 @@ validate_name(X509_NAME *name, char *what)
 #endif
 
 	return 0;
+}
+
+static int
+validate_subject(X509_NAME *name, char *what)
+{
+	struct validation *state;
+	char *subject;
+	int error, sub_len;
+
+	error = validate_name(name, what);
+	if (error)
+		return error;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+
+	sub_len = X509_NAME_get_text_by_NID(name, NID_commonName, NULL, 0);
+	subject = calloc(sub_len + 1, sizeof(char));
+	if (subject == NULL) {
+		pr_err("Out of memory.");
+		return -ENOMEM;
+	}
+
+	X509_NAME_get_text_by_NID(name, NID_commonName, subject, sub_len + 1);
+
+	error = validation_store_subject(state, subject);
+	if (error)
+		free(subject);
+
+	return error;
 }
 
 static int
@@ -341,12 +373,10 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 	/*
 	 * rfc6487#section-4.5
 	 *
-	 * TODO (field) "Each distinct subordinate CA and
-	 * EE certified by the issuer MUST be identified using a subject name
-	 * that is unique per issuer.  In this context, "distinct" is defined as
-	 * an entity and a given public key."
+	 * "An issuer SHOULD use a different subject name if the subject's
+	 * key pair has changed" (it's a SHOULD, so [for now] avoid validation)
 	 */
-	error = validate_name(X509_get_subject_name(cert), "subject");
+	error = validate_subject(X509_get_subject_name(cert), "subject");
 	if (error)
 		return error;
 
@@ -1149,7 +1179,51 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 static int
 handle_cp(X509_EXTENSION *ext, void *arg)
 {
-	return 0; /* TODO (certext) Implement */
+	CERTIFICATEPOLICIES *cp;
+	POLICYINFO *pi;
+	POLICYQUALINFO *pqi;
+	int error, nid_cp, nid_qt_cps, pqi_num;
+
+	error = 0;
+	cp = X509V3_EXT_d2i(ext);
+	if (cp == NULL)
+		return cannot_decode(&CP);
+
+	if (sk_POLICYINFO_num(cp) != 1) {
+		error = pr_err("The %s extension has %u policy information's. (1 expected)",
+		    CP.name, sk_POLICYINFO_num(cp));
+		goto end;
+	}
+
+	/* rfc7318#section-2 and consider rfc8360#section-4.2.1 */
+	pi = sk_POLICYINFO_value(cp, 0);
+	nid_cp = OBJ_obj2nid(pi->policyid);
+	if (nid_cp != NID_certPolicyRpki && nid_cp != NID_certPolicyRpkiV2) {
+		error = pr_err("Invalid certificate policy OID, isn't 'id-cp-ipAddr-asNumber' nor 'id-cp-ipAddr-asNumber-v2'");
+		goto end;
+	}
+	/* Exactly one policy qualifier MAY be included (so none is also valid) */
+	if (pi->qualifiers == NULL)
+		goto end;
+
+	pqi_num = sk_POLICYQUALINFO_num(pi->qualifiers);
+	if (pqi_num == 0)
+		goto end;
+	if (pqi_num != 1) {
+		error = pr_err("The %s extension has %d policy qualifiers. (none or only 1 expected)",
+		    CP.name, pqi_num);
+		goto end;
+	}
+
+	pqi = sk_POLICYQUALINFO_value(pi->qualifiers, 0);
+	nid_qt_cps = OBJ_obj2nid(pqi->pqualid);
+	if (nid_qt_cps != NID_id_qt_cps) {
+		error = pr_err("Policy qualifier ID isn't Certification Practice Statement (CPS)");
+		goto end;
+	}
+end:
+	CERTIFICATEPOLICIES_free(cp);
+	return error;
 }
 
 static int
@@ -1306,6 +1380,12 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	struct rpp *pp;
 	int error;
 
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+	if (sk_X509_num(validation_certs(state)) >= config_get_max_cert_depth())
+		return pr_err("Certificate chain maximum depth exceeded.");
+
 	pr_debug_add("%s Certificate %s {", is_ta ? "TA" : "CA",
 	    cert_uri->global);
 	fnstack_push(cert_uri->global);
@@ -1334,11 +1414,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 		goto end3;
 
 	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	state = state_retrieve();
-	if (state == NULL) {
-		error = -EINVAL;
-		goto end3;
-	}
 	error = validation_push_cert(state, cert_uri, cert, is_ta);
 	if (error)
 		goto end3;

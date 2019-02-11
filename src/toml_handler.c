@@ -24,6 +24,8 @@ print_config(struct rpki_config *config)
 	    config->enable_rsync ? "true" : "false");
 	pr_debug("%s: %s", "tal.shuffle_uris",
 	    config->shuffle_uris ? "true" : "false");
+	pr_debug("%s: %u", "tal.maximum-certificate-depth",
+		    config->maximum_certificate_depth);
 	pr_debug_rm("}");
 }
 

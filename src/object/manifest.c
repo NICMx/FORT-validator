@@ -28,6 +28,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 static int
 validate_manifest(struct Manifest *manifest)
 {
+	unsigned long version;
 	bool is_sha256;
 	int error;
 
@@ -47,16 +48,23 @@ validate_manifest(struct Manifest *manifest)
 	 */
 
 	/* rfc6486#section-4.4.2 */
-	if (manifest->version != 0)
-		return -EINVAL;
+	if (manifest->version != NULL) {
+		error = asn_INTEGER2ulong(manifest->version, &version);
+		if (error) {
+			if (errno)
+				pr_errno(errno, "Error casting manifest version");
+			return pr_err("The manifest version isn't a valid unsigned long");
+		}
+		if (version != 0)
+			return -EINVAL;
+	}
 
 	/*
-	 * TODO "Manifest verifiers MUST be able to handle number values up to
+	 * "Manifest verifiers MUST be able to handle number values up to
 	 * 20 octets."
-	 *
-	 * What the fuck?
 	 */
-	/* manifest->manifestNumber; */
+	if (manifest->manifestNumber.size > 20)
+		return pr_err("Manifest number is larger than 20 octets");
 
 	/*
 	 * TODO (field)

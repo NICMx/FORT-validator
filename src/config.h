@@ -9,17 +9,21 @@ struct rpki_config {
 	char *tal;
 	/* Local repository path */
 	char *local_repository;
-	/* Disable rsync downloads */
+	/* Enable rsync downloads */
 	bool enable_rsync;
 	/* Shuffle uris in tal */
 	bool shuffle_uris;
-	/* Configuration file path */
-	bool flag_config;
+	/*
+	 * rfc6487#section-7.2, last paragraph.
+	 * Prevents arbitrarily long paths and loops.
+	 */
+	unsigned int maximum_certificate_depth;
 };
 
 typedef enum global_type_id {
 	GTI_BOOL,
 	GTI_STRING,
+	GTI_U_INT,
 } global_type_id;
 
 struct option_field;
@@ -60,5 +64,13 @@ int handle_flags_config(int , char **, struct rpki_config *);
 void get_global_fields(struct option_field **, unsigned int *);
 
 void get_tal_fields(struct option_field **, unsigned int *);
+
+void config_set(struct rpki_config *);
+
+char const *config_get_tal(void);
+char const *config_get_local_repository(void);
+bool config_get_enable_rsync(void);
+bool config_get_shuffle_uris(void);
+unsigned int config_get_max_cert_depth(void);
 
 #endif /* SRC_CONFIG_H_ */

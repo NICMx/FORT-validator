@@ -1,21 +1,24 @@
 #include "config.h"
 
-#include <asm-generic/errno-base.h>
 #include <stdio.h>
-#include <getopt.h>
 #include <strings.h>
+#include <errno.h>
+#include <getopt.h>
 
 #include "common.h"
 #include "log.h"
 
 #define OPT_FIELD_ARRAY_LEN(array) ARRAY_LEN(array) - 1
 
-static int parse_bool(struct option_field *, char *, void *);
-
 struct args_flag {
 	struct option_field *field;
 	bool is_set;
 };
+
+static int parse_bool(struct option_field *, char *, void *);
+static int parse_u_int(struct option_field *, char *, void *);
+
+static struct rpki_config config;
 
 static struct global_type gt_bool = {
 	.id = GTI_BOOL,
@@ -28,6 +31,14 @@ static struct global_type gt_bool = {
 static struct global_type gt_string = {
 	.id = GTI_STRING,
 	.name = "String",
+};
+
+static struct global_type gt_u_int = {
+	.id = GTI_U_INT,
+	.name = "Unsigned Int",
+	.size = sizeof(unsigned int),
+	.parse = parse_u_int,
+	.candidates = "Unsigned Int",
 };
 
 static struct option_field global_fields[] = {
@@ -70,11 +81,27 @@ static struct option_field tal_fields[] = {
 		.has_arg = optional_argument,
 		.short_opt = 0,
 		.required = false,
+	}, {
+		.name = "maximum-certificate-depth",
+		.type = &gt_u_int,
+		.doc = "Prevents arbitrarily long paths and loops.",
+		.offset = offsetof(struct rpki_config,
+		    maximum_certificate_depth),
+		.has_arg = required_argument,
+		.short_opt = 0,
+		.min = 1,
+		/**
+		 * It cannot be UINT_MAX, because then the actual number will overflow
+		 * and will never be bigger than this.
+		 */
+		.max = 	UINT_MAX - 1,
+		.required = false,
 	},
 	{ NULL },
 };
 
-static int str_to_bool(const char *str, bool *bool_out)
+static int
+str_to_bool(const char *str, bool *bool_out)
 {
 	if (strcasecmp(str, "true") == 0 || strcasecmp(str, "1") == 0 ||
 	    strcasecmp(str, "yes") == 0 || strcasecmp(str, "on") == 0) {
@@ -92,7 +119,8 @@ static int str_to_bool(const char *str, bool *bool_out)
 			"(true|false|1|0|yes|no|on|off).", str);
 }
 
-static int parse_bool(struct option_field *field, char *str, void *result)
+static int
+parse_bool(struct option_field *field, char *str, void *result)
 {
 	bool *value = result;
 
@@ -121,6 +149,50 @@ static int parse_bool(struct option_field *field, char *str, void *result)
 	}
 
 	return str_to_bool(str, result);
+}
+
+static int str_to_ull(const char *str, char **endptr,
+    const unsigned long long int min,
+    const unsigned long long int max,
+    unsigned long long int *result)
+{
+	unsigned long long int parsed;
+
+	errno = 0;
+	parsed = strtoull(str, endptr, 10);
+	if (errno)
+		return pr_errno(errno, "'%s' is not an unsigned integer", str);
+
+	if (parsed < min || max < parsed)
+		return pr_err("'%s' is out of bounds (%llu-%llu).", str, min,
+		    max);
+
+	*result = parsed;
+	return 0;
+}
+
+static int
+str_to_unsigned_int(const char *str, unsigned int *out, unsigned int min,
+    unsigned int max)
+{
+	unsigned long long int result = 0;
+	int error;
+
+	error = str_to_ull(str, NULL, min, max, &result);
+
+	*out = result;
+	return error;
+}
+
+static int
+parse_u_int(struct option_field *field, char *str, void *result)
+{
+	unsigned int *value = result;
+
+	if (str == NULL)
+		return pr_err("String cannot be NULL");
+
+	return str_to_unsigned_int(str, value, field->min, field->max);
 }
 
 static int
@@ -213,6 +285,7 @@ handle_option(struct rpki_config *config, struct option_field *field, char *str)
 	} else if (field->type->parse != NULL){
 		error = field->type->parse(field, str, config_param);
 	}
+
 	if (error)
 		return error;
 
@@ -274,6 +347,8 @@ print_config(struct rpki_config *config)
 	    config->enable_rsync ? "true" : "false");
 	pr_debug("%s: %s", "tal.shuffle-uris",
 	    config->shuffle_uris ? "true" : "false");
+	pr_debug("%s: %u", "tal.maximum-certificate-depth",
+		    config->maximum_certificate_depth);
 	pr_debug_rm("}");
 }
 
@@ -286,7 +361,6 @@ handle_flags_config(int argc, char **argv, struct rpki_config *config)
 
 	flags = NULL;
 	long_options = NULL;
-	config->flag_config = true;
 
 	error = construct_options(&flags, &long_options, &flags_len);
 	if (error)
@@ -338,4 +412,40 @@ get_tal_fields(struct option_field **fields, unsigned int *len)
 		*fields = tal_fields;
 	if (len)
 		*len = OPT_FIELD_ARRAY_LEN(tal_fields);
+}
+
+void
+config_set(struct rpki_config *new)
+{
+	config = *new;
+}
+
+char const *
+config_get_tal(void)
+{
+	return config.tal;
+}
+
+char const *
+config_get_local_repository(void)
+{
+	return config.local_repository;
+}
+
+bool
+config_get_enable_rsync(void)
+{
+	return config.enable_rsync;
+}
+
+bool
+config_get_shuffle_uris(void)
+{
+	return config.shuffle_uris;
+}
+
+unsigned int
+config_get_max_cert_depth(void)
+{
+	return config.maximum_certificate_depth;
 }

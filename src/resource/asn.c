@@ -1,19 +1,22 @@
 #include "asn.h"
 
+#include <errno.h>
+
+#include "log.h"
 #include "sorted_array.h"
 
 struct asn_node {
-	ASId_t min;
-	ASId_t max;
+	unsigned long min;
+	unsigned long max;
 };
 
 static enum sarray_comparison
 asn_cmp(void *arg1, void *arg2)
 {
-	ASId_t n1min = ((struct asn_node *) arg1)->min;
-	ASId_t n2min = ((struct asn_node *) arg2)->min;
-	ASId_t n1max = ((struct asn_node *) arg1)->max;
-	ASId_t n2max = ((struct asn_node *) arg2)->max;
+	unsigned long n1min = ((struct asn_node *) arg1)->min;
+	unsigned long n1max = ((struct asn_node *) arg1)->max;
+	unsigned long n2min = ((struct asn_node *) arg2)->min;
+	unsigned long n2max = ((struct asn_node *) arg2)->max;
 
 	if (n1min == n2min && n1max == n2max)
 		return SACMP_EQUAL;
@@ -53,7 +56,7 @@ rasn_put(struct resources_asn *asns)
 }
 
 int
-rasn_add(struct resources_asn *asns, ASId_t min, ASId_t max)
+rasn_add(struct resources_asn *asns, unsigned long min, unsigned long max)
 {
 	struct asn_node n = { min, max };
 	return sarray_add((struct sorted_array *) asns, &n);
@@ -66,7 +69,7 @@ rasn_empty(struct resources_asn *asns)
 }
 
 bool
-rasn_contains(struct resources_asn *asns, ASId_t min, ASId_t max)
+rasn_contains(struct resources_asn *asns, unsigned long min, unsigned long max)
 {
 	struct asn_node n = { min, max };
 	return sarray_contains((struct sorted_array *) asns, &n);

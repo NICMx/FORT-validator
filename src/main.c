@@ -36,6 +36,18 @@ add_rpki_oids(void)
 	    "rpkiNotify",
 	    "RPKI Update Notification File (RFC 8182)");
 	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
+
+	NID_certPolicyRpki = OBJ_create("1.3.6.1.5.5.7.14.2",
+	    "id-cp-ipAddr-asNumber (RFC 6484)",
+	    "Certificate Policy (CP) for the Resource PKI (RPKI)");
+	printf("certPolicyRpki registered. Its nid is %d.\n", NID_certPolicyRpki);
+
+	/* TODO implement RFC 8360 */
+	NID_certPolicyRpkiV2 = OBJ_create("1.3.6.1.5.5.7.14.3",
+	    "id-cp-ipAddr-asNumber-v2 (RFC 8360)",
+	    "Certificate Policy for Use with Validation Reconsidered in the RPKI");
+	printf("certPolicyRpkiV2 registered. Its nid is %d.\n",
+	    NID_certPolicyRpkiV2);
 }
 
 /**
@@ -100,27 +112,24 @@ end:
 	return error;
 }
 
-static void
-set_default_configuration(struct rpki_config *config)
-{
-	config->enable_rsync = true;
-	config->shuffle_uris = false;
-	config->local_repository = NULL;
-	config->tal = NULL;
-}
-
 static int
 handle_file_config(char *config_file, struct rpki_config *config)
 {
-	config->flag_config = false;
-
 	return set_config_from_file(config_file, config);
 }
 
 static int
-handle_args(int argc, char **argv, struct rpki_config *config)
+handle_args(int argc, char **argv)
 {
+	struct rpki_config config;
 	char *config_file;
+	int error;
+
+	config.enable_rsync = true;
+	config.local_repository = NULL;
+	config.maximum_certificate_depth = 32;
+	config.shuffle_uris = false;
+	config.tal = NULL;
 
 	if (argc == 1) {
 		return pr_err("Show usage"); /*TODO*/
@@ -133,41 +142,41 @@ handle_args(int argc, char **argv, struct rpki_config *config)
 		config_file = argv[2];
 		argc -= 2;
 		argv += 2;
-		return handle_file_config(config_file, config);
+		error = handle_file_config(config_file, &config);
+	} else {
+		error = handle_flags_config(argc, argv, &config);
 	}
 
-	return handle_flags_config(argc, argv, config);
+	if (!error)
+		config_set(&config);
+
+	return error;
 }
 
 
 int
 main(int argc, char **argv)
 {
-	struct rpki_config config;
 	struct tal *tal;
 	int error;
 
-	set_default_configuration(&config);
-	error = handle_args(argc, argv, &config);
+	error = handle_args(argc, argv);
 	if (error)
 		return error;
 	print_stack_trace_on_segfault();
 
-	error = rsync_init(config.enable_rsync);
+	error = rsync_init();
 	if (error)
 		return error;
 
 	add_rpki_oids();
 	thvar_init();
 	fnstack_store();
-	fnstack_push(config.tal);
+	fnstack_push(config_get_tal());
 
-	repository = config.local_repository;
-	repository_len = strlen(repository);
-
-	error = tal_load(config.tal, &tal);
+	error = tal_load(config_get_tal(), &tal);
 	if (!error) {
-		if (config.shuffle_uris)
+		if (config_get_shuffle_uris())
 			tal_shuffle_uris(tal);
 		error = foreach_uri(tal, handle_tal_uri);
 		error = (error >= 0) ? 0 : error;
