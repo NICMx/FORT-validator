@@ -69,13 +69,15 @@ struct rfc5280_names {
 };
 
 static int
-get_names(X509_NAME *name, char *what, struct rfc5280_names *result)
+get_names(X509_NAME *name, char const *what, struct rfc5280_names *result)
 {
 	int error;
 
 	error = x509_name_decode(name, NID_commonName, &result->commonName);
-	if (error == -ESRCH)
-		return pr_err("The '%s' name lacks a commonName attribute.");
+	if (error == -ESRCH) {
+		return pr_err("The '%s' name lacks a commonName attribute.",
+		    what);
+	}
 	if (error)
 		return error;
 

@@ -15,12 +15,13 @@
  */
 void print_stack_trace(void)
 {
-	void *array[256];
+#define STACK_SIZE 64
+	void *array[STACK_SIZE];
 	size_t size;
 	char **strings;
 	size_t i;
 
-	size = backtrace(array, 256);
+	size = backtrace(array, STACK_SIZE);
 	strings = backtrace_symbols(array, size);
 
 	fprintf(stderr, "Stack trace:\n");

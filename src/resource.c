@@ -52,7 +52,7 @@ int
 get_addr_family(OCTET_STRING_t *octets)
 {
 	if (octets->size != 2) {
-		pr_err("Address family has %d octets. (2 expected.)",
+		pr_err("Address family has %zu octets. (2 expected.)",
 		    octets->size);
 		return -1;
 	}
@@ -349,7 +349,7 @@ add_aors(struct resources *resources, int family,
 			break;
 		case IPAddressOrRange_PR_NOTHING:
 			/* rfc3779#section-2.2.3.7 */
-			return pr_err("Unknown IPAddressOrRange type: %d",
+			return pr_err("Unknown IPAddressOrRange type: %u",
 			    aor->present);
 		}
 	}
@@ -377,7 +377,7 @@ resources_add_ip(struct resources *resources, struct IPAddressFamily *obj)
 	}
 
 	/* rfc3779#section-2.2.3.4 */
-	return pr_err("Unknown ipAddressChoice type: %d",
+	return pr_err("Unknown ipAddressChoice type: %u",
 	    obj->ipAddressChoice.present);
 }
 
@@ -495,7 +495,7 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 		return add_asn(resources, asn_min, asn_max, parent);
 	}
 
-	return pr_err("Unknown ASIdOrRange type: %d", obj->present);
+	return pr_err("Unknown ASIdOrRange type: %u", obj->present);
 }
 
 int
@@ -528,7 +528,7 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 		break;
 	}
 
-	return pr_err("Unknown ASIdentifierChoice: %d", ids->asnum->present);
+	return pr_err("Unknown ASIdentifierChoice: %u", ids->asnum->present);
 }
 
 bool

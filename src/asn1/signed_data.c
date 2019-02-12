@@ -18,7 +18,7 @@ static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 static int
-is_digest_algorithm(AlgorithmIdentifier_t *id, char *what)
+is_digest_algorithm(AlgorithmIdentifier_t *id, char const *what)
 {
 	bool is_hash;
 	int error;
@@ -182,8 +182,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 		attrs = &attr->attrValues;
 
 		if (attrs->list.count != 1) {
-			return pr_err(0,
-			    "signedAttrs's attribute set size (%d) is different than 1.",
+			return pr_err("signedAttrs's attribute set size (%d) is different than 1",
 			    attr->attrValues.list.count);
 		}
 		if (attrs->list.array == NULL || attrs->list.array[0] == NULL)

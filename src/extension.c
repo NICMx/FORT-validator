@@ -9,13 +9,13 @@
 
 static struct extension_metadata IR2 = {
 	"Amended IP Resources",
-	/* TODO NID_ipAddrBlocksv2 */ -1,
+	-1,
 	true,
 };
 
 static struct extension_metadata AR2 = {
 	"Amended AS Resources",
-	/* TODO NID_autonomousSysIdsv2 */ -1,
+	-1,
 	true,
 };
 

@@ -10,11 +10,22 @@
  *   to ease debugging.
  */
 
+#if __GNUC__
+#define CHECK_FORMAT(str, args) __attribute__((format(printf, str, args)))
+#else
+/*
+ * No idea how this looks in other compilers.
+ * It's safe to obviate since we're bound to see the warnings every time we use
+ * GCC anyway.
+ */
+#define CHECK_FORMAT(str, args) /* Nothing */
+#endif
+
 #ifdef DEBUG
 
-void pr_debug(const char *, ...);
-void pr_debug_add(const char *, ...);
-void pr_debug_rm(const char *, ...);
+void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
+void pr_debug_add(const char *, ...) CHECK_FORMAT(1, 2);
+void pr_debug_rm(const char *, ...) CHECK_FORMAT(1, 2);
 void pr_debug_prefix(void);
 
 #else
@@ -26,13 +37,12 @@ void pr_debug_prefix(void);
 
 #endif
 
-int pr_warn(const char *, ...);
-int pr_err(const char *, ...);
-int pr_errno(int, const char *, ...);
-int crypto_err(const char *, ...);
+int pr_warn(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_err(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
+int crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_enomem(void);
-
-int pr_crit(const char *, ...);
+int pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
 
 #define PR_DEBUG printf("%s:%d (%s())\n", __FILE__, __LINE__, __func__)
 #define PR_DEBUG_MSG(msg, ...) printf("%s:%d (%s()): " msg "\n", \

@@ -745,12 +745,12 @@ handle_ku(X509_EXTENSION *ext, unsigned char byte1)
 	memcpy(data, ku->data, ku->length);
 
 	if (ku->data[0] != byte1) {
-		error = pr_err("Illegal key usage flag string: %u%u%u%u%u%u%u%u%u",
-		    !!(ku->data[0] & 0x80), !!(ku->data[0] & 0x40),
-		    !!(ku->data[0] & 0x20), !!(ku->data[0] & 0x10),
-		    !!(ku->data[0] & 0x08), !!(ku->data[0] & 0x04),
-		    !!(ku->data[0] & 0x02), !!(ku->data[0] & 0x01),
-		    !!(ku->data[1] & 0x80));
+		error = pr_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
+		    !!(ku->data[0] & 0x80u), !!(ku->data[0] & 0x40u),
+		    !!(ku->data[0] & 0x20u), !!(ku->data[0] & 0x10u),
+		    !!(ku->data[0] & 0x08u), !!(ku->data[0] & 0x04u),
+		    !!(ku->data[0] & 0x02u), !!(ku->data[0] & 0x01u),
+		    !!(ku->data[1] & 0x80u));
 		goto end;
 	}
 
@@ -781,14 +781,14 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	GENERAL_NAME *name;
 	int i;
 	int error = 0;
-	char *error_msg;
+	char const *error_msg;
 
 	crldp = X509V3_EXT_d2i(ext);
 	if (crldp == NULL)
 		return cannot_decode(ext_cdp());
 
 	if (sk_DIST_POINT_num(crldp) != 1) {
-		error = pr_err("The %s extension has %u distribution points. (1 expected)",
+		error = pr_err("The %s extension has %d distribution points. (1 expected)",
 		    ext_cdp()->name, sk_DIST_POINT_num(crldp));
 		goto end;
 	}
@@ -877,7 +877,8 @@ end:
  *    are also allowed, and also supposed to be ignored.
  */
 static int
-handle_ad(char *ia_name, SIGNATURE_INFO_ACCESS *ia, char *ad_name, int ad_nid,
+handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
+    char const *ad_name, int ad_nid,
     int (*cb)(struct rpki_uri *, void *), void *arg)
 {
 	ACCESS_DESCRIPTION *ad;
@@ -1013,7 +1014,7 @@ handle_cp(X509_EXTENSION *ext, void *arg)
 		return cannot_decode(ext_cp());
 
 	if (sk_POLICYINFO_num(cp) != 1) {
-		error = pr_err("The %s extension has %u policy information's. (1 expected)",
+		error = pr_err("The %s extension has %d policy information's. (1 expected)",
 		    ext_cp()->name, sk_POLICYINFO_num(cp));
 		goto end;
 	}

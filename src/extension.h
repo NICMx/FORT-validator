@@ -5,7 +5,7 @@
 #include <openssl/x509.h>
 
 struct extension_metadata {
-	char *name;
+	char const *name;
 	int nid;
 	bool critical;
 };
@@ -13,10 +13,9 @@ struct extension_metadata {
 struct extension_handler {
 	struct extension_metadata const *meta;
 	bool mandatory;
+
 	int (*cb)(X509_EXTENSION *, void *);
 	void *arg;
-
-	void (*free)(void *);
 
 	/* For internal use */
 	bool found;

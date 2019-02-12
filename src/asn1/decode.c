@@ -35,7 +35,7 @@ asn1_decode(const void *buffer, size_t buffer_size,
 		/* Must free partial object according to API contracts. */
 		ASN_STRUCT_FREE(*descriptor, *result);
 		/* TODO if rval.code == RC_WMORE (1), more work is needed */
-		return pr_err("Error decoding ASN.1 object: %d", rval.code);
+		return pr_err("Error decoding ASN.1 object: %u", rval.code);
 	}
 
 	error = validate(descriptor, *result);

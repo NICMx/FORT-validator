@@ -65,7 +65,7 @@ prefix4_decode(IPAddress2_t *str, struct ipv4_prefix *result)
 	int len;
 
 	if (str->size > 4) {
-		return pr_err("IPv4 address has too many octets. (%u)",
+		return pr_err("IPv4 address has too many octets. (%zu)",
 		    str->size);
 	}
 	if (str->bits_unused < 0 || 7 < str->bits_unused) {
@@ -102,7 +102,7 @@ prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 	int len;
 
 	if (str->size > 16) {
-		return pr_err("IPv6 address has too many octets. (%u)",
+		return pr_err("IPv6 address has too many octets. (%zu)",
 		    str->size);
 	}
 	if (str->bits_unused < 0 || 7 < str->bits_unused) {
@@ -115,7 +115,7 @@ prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 	len = 8 * str->size - str->bits_unused;
 
 	if (len < 0 || 128 < len) {
-		return pr_err("IPv6 prefix length (%u) is out of bounds (0-128).",
+		return pr_err("IPv6 prefix length (%d) is out of bounds (0-128).",
 		    len);
 	}
 
