@@ -24,11 +24,11 @@ validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 	struct rpki_uri const *pp_crl;
 
 	if (refs->crldp == NULL)
-		return pr_err("Programming error: Certificate's CRL Distribution Point was not recorded.");
+		return pr_crit("Certificate's CRL Distribution Point was not recorded.");
 
 	pp_crl = rpp_get_crl(pp);
 	if (pp_crl == NULL)
-		return pr_err("Programming error: Manifest's CRL was not recorded.");
+		return pr_crit("Manifest's CRL was not recorded.");
 
 	if (strcmp(refs->crldp, pp_crl->global) != 0) {
 		return pr_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
@@ -45,14 +45,14 @@ validate_aia(struct certificate_refs *refs)
 	struct rpki_uri const *parent;
 
 	if (refs->caIssuers == NULL)
-		return pr_err("Programming error: Certificate's AIA was not recorded.");
+		return pr_crit("Certificate's AIA was not recorded.");
 
 	state = state_retrieve();
 	if (state == NULL)
 		return -EINVAL;
 	parent = validation_peek_cert_uri(state);
 	if (parent == NULL)
-		return pr_err("Programming error: CA certificate has no parent.");
+		return pr_crit("CA certificate has no parent.");
 
 	if (strcmp(refs->caIssuers, parent->global) != 0) {
 		return pr_err("Certificate's AIA ('%s') does not match parent's URI ('%s').",
@@ -67,7 +67,7 @@ validate_signedObject(struct certificate_refs *refs,
     struct rpki_uri const *signedObject_uri)
 {
 	if (refs->signedObject == NULL)
-		return pr_err("Programming error: Certificate's signedObject was not recorded.");
+		return pr_crit("Certificate's signedObject was not recorded.");
 
 	if (strcmp(refs->signedObject, signedObject_uri->global) != 0) {
 		return pr_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
@@ -95,7 +95,7 @@ refs_validate_ca(struct certificate_refs *refs, bool is_ta,
 		return error;
 
 	if (refs->signedObject != NULL) {
-		return pr_err("Programming error: CA summary has a signedObject ('%s').",
+		return pr_crit("CA summary has a signedObject ('%s').",
 		    refs->signedObject);
 	}
 

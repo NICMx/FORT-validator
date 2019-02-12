@@ -26,7 +26,8 @@ struct ipv6_range {
 	struct in6_addr max;
 };
 
-uint32_t ipv4_suffix_mask(unsigned int);
+uint32_t u32_suffix_mask(unsigned int);
+uint32_t be32_suffix_mask(unsigned int);
 void ipv6_suffix_mask(unsigned int, struct in6_addr *);
 
 int prefix4_decode(IPAddress2_t *, struct ipv4_prefix *);

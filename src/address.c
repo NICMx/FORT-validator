@@ -4,56 +4,65 @@
 #include <errno.h>
 #include <arpa/inet.h> /* inet_ntop */
 #include "log.h"
+#include "thread_var.h"
 
-static char const *
-addr2str4(struct in_addr *addr, char *buffer)
+/*
+ * Returns a mask you can use to extract the suffix bits of a 32-bit unsigned
+ * number whose prefix lengths @prefix_len.
+ * For example: Suppose that your number is 192.0.2.0/24.
+ * u32_suffix_mask(24) returns 0.0.0.255.
+ *
+ * The result is in host byte order.
+ */
+uint32_t
+u32_suffix_mask(unsigned int prefix_len)
 {
-	return inet_ntop(AF_INET, addr, buffer, INET_ADDRSTRLEN);
-}
-
-static char const *
-addr2str6(struct in6_addr *addr, char *buffer)
-{
-	return inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN);
+	/* `a >> 32` is undefined if `a` is 32 bits. */
+	return (prefix_len < 32) ? (0xFFFFFFFFu >> prefix_len) : 0;
 }
 
 /**
- * Returns a mask you can use to extract the suffix bits of an address whose
- * prefix lengths @prefix_len.
- * For example: Suppose that your address is 192.0.2.0/24.
- * addr4_suffix_mask(24) returns 0.0.0.255.
+ * Same as u32_suffix_mask(), except the result is in network byte order
+ * ("be", for "big endian").
  */
 uint32_t
-ipv4_suffix_mask(unsigned int prefix_len)
+be32_suffix_mask(unsigned int prefix_len)
 {
-	return htonl(0xFFFFFFFFu >> prefix_len);
+	return htonl(u32_suffix_mask(prefix_len));
 }
 
+/**
+ * Enables all the suffix bits of @result (assuming its prefix length is
+ * @prefix_len).
+ * @result's prefix bits will not be modified.
+ */
 void
 ipv6_suffix_mask(unsigned int prefix_len, struct in6_addr *result)
 {
 	if (prefix_len < 32) {
-		result->s6_addr32[0] |= htonl(0xFFFFFFFFu >> prefix_len);
+		result->s6_addr32[0] |= be32_suffix_mask(prefix_len);
 		result->s6_addr32[1] = 0xFFFFFFFFu;
 		result->s6_addr32[2] = 0xFFFFFFFFu;
 		result->s6_addr32[3] = 0xFFFFFFFFu;
 	} else if (prefix_len < 64) {
-		result->s6_addr32[1] |= htonl(0xFFFFFFFFu >> (prefix_len - 32));
+		result->s6_addr32[1] |= be32_suffix_mask(prefix_len - 32);
 		result->s6_addr32[2] = 0xFFFFFFFFu;
 		result->s6_addr32[3] = 0xFFFFFFFFu;
 	} else if (prefix_len < 96) {
-		result->s6_addr32[2] |= htonl(0xFFFFFFFFu >> (prefix_len - 64));
+		result->s6_addr32[2] |= be32_suffix_mask(prefix_len - 64);
 		result->s6_addr32[3] = 0xFFFFFFFFu;
 	} else {
-		result->s6_addr32[3] |= htonl(0xFFFFFFFFu >> (prefix_len - 96));
+		result->s6_addr32[3] |= be32_suffix_mask(prefix_len - 96);
 	}
 }
 
+/**
+ * Translates an `IPAddress2_t` to its equivalent `struct ipv4_prefix`.
+ */
 int
 prefix4_decode(IPAddress2_t *str, struct ipv4_prefix *result)
 {
 	int len;
-	char buffer[INET_ADDRSTRLEN];
 
 	if (str->size > 4) {
 		return pr_err("IPv4 address has too many octets. (%u)",
@@ -75,20 +84,22 @@ prefix4_decode(IPAddress2_t *str, struct ipv4_prefix *result)
 
 	result->len = len;
 
-	if ((result->addr.s_addr & ipv4_suffix_mask(result->len)) != 0) {
-		return pr_err("IPv4 prefix %s/%u has enabled suffix bits.",
-		    addr2str4(&result->addr, buffer), result->len);
+	if ((result->addr.s_addr & be32_suffix_mask(result->len)) != 0) {
+		return pr_err("IPv4 prefix '%s/%u' has enabled suffix bits.",
+		    v4addr2str(&result->addr), result->len);
 	}
 
 	return 0;
 }
 
+/**
+ * Translates an `IPAddress2_t` to its equivalent `struct ipv6_prefix`.
+ */
 int
 prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 {
 	struct in6_addr suffix;
 	int len;
-	char buffer[INET6_ADDRSTRLEN];
 
 	if (str->size > 16) {
 		return pr_err("IPv6 address has too many octets. (%u)",
@@ -116,8 +127,8 @@ prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 	    || (result->addr.s6_addr32[1] & suffix.s6_addr32[1])
 	    || (result->addr.s6_addr32[2] & suffix.s6_addr32[2])
 	    || (result->addr.s6_addr32[3] & suffix.s6_addr32[3])) {
-		return pr_err("IPv6 prefix %s/%u has enabled suffix bits.",
-		    addr2str6(&result->addr, buffer), result->len);
+		return pr_err("IPv6 prefix '%s/%u' has enabled suffix bits.",
+		    v6addr2str(&result->addr), result->len);
 	}
 
 	return 0;
@@ -126,13 +137,9 @@ prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
 static int
 check_order4(struct ipv4_range *result)
 {
-	char buffer_min[INET_ADDRSTRLEN];
-	char buffer_max[INET_ADDRSTRLEN];
-
 	if (ntohl(result->min.s_addr) > ntohl(result->max.s_addr)) {
-		return pr_err("The IPv4 range %s-%s is inverted.",
-		    addr2str4(&result->min, buffer_min),
-		    addr2str4(&result->max, buffer_max));
+		return pr_err("The IPv4 range '%s-%s' is inverted.",
+		    v4addr2str(&result->min), v4addr2str2(&result->max));
 	}
 
 	return 0;
@@ -149,8 +156,6 @@ check_encoding4(struct ipv4_range *range)
 	const uint32_t MIN = ntohl(range->min.s_addr);
 	const uint32_t MAX = ntohl(range->max.s_addr);
 	uint32_t mask;
-	char buffer_min[INET_ADDRSTRLEN];
-	char buffer_max[INET_ADDRSTRLEN];
 
 	for (mask = 0x80000000u; mask != 0; mask >>= 1)
 		if ((MIN & mask) != (MAX & mask))
@@ -160,11 +165,13 @@ check_encoding4(struct ipv4_range *range)
 		if (((MIN & mask) != 0) || ((MAX & mask) == 0))
 			return 0;
 
-	return pr_err("IPAddressRange %s-%s is a range, but should have been encoded as a prefix.",
-	    addr2str4(&range->min, buffer_min),
-	    addr2str4(&range->min, buffer_max));
+	return pr_err("IPAddressRange '%s-%s' is a range, but should have been encoded as a prefix.",
+	    v4addr2str(&range->min), v4addr2str2(&range->max));
 }
 
+/**
+ * Translates an `IPAddressRange_t` to its equivalent `struct ipv4_range`.
+ */
 int
 range4_decode(IPAddressRange_t *input, struct ipv4_range *result)
 {
@@ -179,7 +186,7 @@ range4_decode(IPAddressRange_t *input, struct ipv4_range *result)
 	error = prefix4_decode(&input->max, &prefix);
 	if (error)
 		return error;
-	result->max.s_addr = prefix.addr.s_addr | ipv4_suffix_mask(prefix.len);
+	result->max.s_addr = prefix.addr.s_addr | be32_suffix_mask(prefix.len);
 
 	error = check_order4(result);
 	if (error)
@@ -194,16 +201,14 @@ check_order6(struct ipv6_range *result)
 	uint32_t min;
 	uint32_t max;
 	unsigned int quadrant;
-	char buffer_min[INET6_ADDRSTRLEN];
-	char buffer_max[INET6_ADDRSTRLEN];
 
 	for (quadrant = 0; quadrant < 4; quadrant++) {
 		min = ntohl(result->min.s6_addr32[quadrant]);
 		max = ntohl(result->max.s6_addr32[quadrant]);
 		if (min > max) {
-			return pr_err("The IPv6 range %s-%s is inverted.",
-			    addr2str6(&result->min, buffer_min),
-			    addr2str6(&result->max, buffer_max));
+			return pr_err("The IPv6 range '%s-%s' is inverted.",
+			    v6addr2str(&result->min),
+			    v6addr2str2(&result->max));
 		} else if (min < max) {
 			return 0; /* result->min < result->max */
 		}
@@ -215,15 +220,13 @@ check_order6(struct ipv6_range *result)
 static int
 pr_bad_encoding(struct ipv6_range *range)
 {
-	char buffer_min[INET6_ADDRSTRLEN];
-	char buffer_max[INET6_ADDRSTRLEN];
 	return pr_err("IPAddressRange %s-%s is a range, but should have been encoded as a prefix.",
-	    addr2str6(&range->min, buffer_min),
-	    addr2str6(&range->max, buffer_max));
+	    v6addr2str(&range->min), v6addr2str2(&range->max));
 }
 
 static int
-thingy(struct ipv6_range *range, unsigned int quadrant, uint32_t mask)
+__check_encoding6(struct ipv6_range *range, unsigned int quadrant,
+    uint32_t mask)
 {
 	uint32_t min;
 	uint32_t max;
@@ -253,12 +256,15 @@ check_encoding6(struct ipv6_range *range)
 		max = ntohl(range->max.s6_addr32[quadrant]);
 		for (mask = 0x80000000u; mask != 0; mask >>= 1)
 			if ((min & mask) != (max & mask))
-				return thingy(range, quadrant, mask);
+				return __check_encoding6(range, quadrant, mask);
 	}
 
 	return pr_bad_encoding(range);
 }
 
+/**
+ * Translates an `IPAddressRange_t` to its equivalent `struct ipv6_range`.
+ */
 int
 range6_decode(IPAddressRange_t *input, struct ipv6_range *result)
 {

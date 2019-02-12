@@ -10,11 +10,23 @@
  *   to ease debugging.
  */
 
+#ifdef DEBUG
+
 void pr_debug(const char *, ...);
 void pr_debug_add(const char *, ...);
 void pr_debug_rm(const char *, ...);
 void pr_debug_prefix(void);
 
+#else
+
+#define pr_debug(...)
+#define pr_debug_add(...)
+#define pr_debug_rm(...)
+#define pr_debug_prefix
+
+#endif
+
+int pr_warn(const char *, ...);
 int pr_err(const char *, ...);
 int pr_errno(int, const char *, ...);
 int crypto_err(const char *, ...);

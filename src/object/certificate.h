@@ -34,7 +34,8 @@ int certificate_get_resources(X509 *, struct resources *);
  * Also initializes the second argument as the URI of the rpkiManifest Access
  * Description from the SIA extension.
  */
-int certificate_validate_extensions_ta(X509 *, struct rpki_uri *);
+int certificate_validate_extensions_ta(X509 *, struct rpki_uri *,
+    enum rpki_policy *);
 /**
  * Validates the certificate extensions, (intermediate) Certificate Authority
  * style.
@@ -45,7 +46,7 @@ int certificate_validate_extensions_ta(X509 *, struct rpki_uri *);
  * extensions.
  */
 int certificate_validate_extensions_ca(X509 *, struct rpki_uri *,
-    struct certificate_refs *);
+    struct certificate_refs *, enum rpki_policy *);
 /**
  * Validates the certificate extensions, End-Entity style.
  *
@@ -53,7 +54,7 @@ int certificate_validate_extensions_ca(X509 *, struct rpki_uri *,
  * extensions.
  */
 int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
-    struct certificate_refs *);
+    struct certificate_refs *, enum rpki_policy *);
 
 int certificate_traverse(struct rpp *, struct rpki_uri const *,
     STACK_OF(X509_CRL) *, bool);

@@ -12,6 +12,7 @@
 #include "extension.h"
 #include "log.h"
 #include "manifest.h"
+#include "nid.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
@@ -470,9 +471,12 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources)
 }
 
 int
-certificate_get_resources(X509 *cert, struct resources *resources)
+__certificate_get_resources(X509 *cert, struct resources *resources,
+    int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
+    char const *policy_rfc, char const *bad_ext_rfc)
 {
 	X509_EXTENSION *ext;
+	int nid;
 	int i;
 	int error;
 	bool ip_ext_found = false;
@@ -483,9 +487,9 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 
 	for (i = 0; i < X509_get_ext_count(cert); i++) {
 		ext = X509_get_ext(cert, i);
+		nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
 
-		switch (OBJ_obj2nid(X509_EXTENSION_get_object(ext))) {
-		case NID_sbgp_ipAddrBlock:
+		if (nid == addr_nid) {
 			if (ip_ext_found)
 				return pr_err("Multiple IP extensions found.");
 			if (!X509_EXTENSION_get_critical(ext))
@@ -498,9 +502,8 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 
 			if (error)
 				return error;
-			break;
 
-		case NID_sbgp_autonomousSysNum:
+		} else if (nid == asn_nid) {
 			if (asn_ext_found)
 				return pr_err("Multiple AS extensions found.");
 			if (!X509_EXTENSION_get_critical(ext))
@@ -513,7 +516,13 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 
 			if (error)
 				return error;
-			break;
+
+		} else if (nid == bad_addr_nid) {
+			return pr_err("Certificate has an RFC%s policy, but contains an RFC%s IP extension.",
+			    policy_rfc, bad_ext_rfc);
+		} else if (nid == bad_asn_nid) {
+			return pr_err("Certificate has an RFC%s policy, but contains an RFC%s ASN extension.",
+			    policy_rfc, bad_ext_rfc);
 		}
 	}
 
@@ -521,6 +530,28 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 		return pr_err("Certificate lacks both IP and AS extension.");
 
 	return 0;
+}
+
+int
+certificate_get_resources(X509 *cert, struct resources *resources)
+{
+	enum rpki_policy policy;
+
+	policy = resources_get_policy(resources);
+	switch (policy) {
+	case RPKI_POLICY_RFC6484:
+		return __certificate_get_resources(cert, resources,
+		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
+		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
+		    "6484", "8360");
+	case RPKI_POLICY_RFC8360:
+		return __certificate_get_resources(cert, resources,
+		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
+		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
+		    "8360", "6484");
+	}
+
+	return pr_crit("Unknown policy: %u", policy);
 }
 
 static bool
@@ -575,7 +606,7 @@ handle_bc(X509_EXTENSION *ext, void *arg)
 
 	bc = X509V3_EXT_d2i(ext);
 	if (bc == NULL)
-		return cannot_decode(&BC);
+		return cannot_decode(ext_bc());
 
 	/*
 	 * 'The issuer determines whether the "cA" boolean is set.'
@@ -585,7 +616,8 @@ handle_bc(X509_EXTENSION *ext, void *arg)
 
 	error = (bc->pathlen == NULL)
 	    ? 0
-	    : pr_err("%s extension contains a Path Length Constraint.", BC.name);
+	    : pr_err("%s extension contains a Path Length Constraint.",
+	          ext_bc()->name);
 
 	BASIC_CONSTRAINTS_free(bc);
 	return error;
@@ -599,7 +631,7 @@ handle_ski_ca(X509_EXTENSION *ext, void *arg)
 
 	ski = X509V3_EXT_d2i(ext);
 	if (ski == NULL)
-		return cannot_decode(&SKI);
+		return cannot_decode(ext_ski());
 
 	error = validate_public_key_hash(arg, ski);
 
@@ -617,7 +649,7 @@ handle_ski_ee(X509_EXTENSION *ext, void *arg)
 
 	ski = X509V3_EXT_d2i(ext);
 	if (ski == NULL)
-		return cannot_decode(&SKI);
+		return cannot_decode(ext_ski());
 
 	args = arg;
 	error = validate_public_key_hash(args->cert, ski);
@@ -673,16 +705,16 @@ handle_aki_ta(X509_EXTENSION *aki, void *arg)
 
 	for (i = 0; i < X509_get_ext_count(cert); i++) {
 		other = X509_get_ext(cert, i);
-		if (OBJ_obj2nid(X509_EXTENSION_get_object(other)) == SKI.nid) {
+		if (OBJ_obj2nid(X509_EXTENSION_get_object(other)) == ext_ski()->nid) {
 			if (extension_equals(aki, other))
 				return 0;
 
 			return pr_err("The '%s' does not equal the '%s'.",
-			    AKI.name, SKI.name);
+			    ext_aki()->name, ext_ski()->name);
 		}
 	}
 
-	pr_err("Certificate lacks the '%s' extension.", SKI.name);
+	pr_err("Certificate lacks the '%s' extension.", ext_ski()->name);
 	return -ESRCH;
 }
 
@@ -701,10 +733,11 @@ handle_ku(X509_EXTENSION *ext, unsigned char byte1)
 
 	ku = X509V3_EXT_d2i(ext);
 	if (ku == NULL)
-		return cannot_decode(&KU);
+		return cannot_decode(ext_ku());
 
 	if (ku->length == 0) {
-		error = pr_err("%s bit string has no enabled bits.", KU.name);
+		error = pr_err("%s bit string has no enabled bits.",
+		    ext_ku()->name);
 		goto end;
 	}
 
@@ -752,11 +785,11 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 
 	crldp = X509V3_EXT_d2i(ext);
 	if (crldp == NULL)
-		return cannot_decode(&CDP);
+		return cannot_decode(ext_cdp());
 
 	if (sk_DIST_POINT_num(crldp) != 1) {
 		error = pr_err("The %s extension has %u distribution points. (1 expected)",
-		    CDP.name, sk_DIST_POINT_num(crldp));
+		    ext_cdp()->name, sk_DIST_POINT_num(crldp));
 		goto end;
 	}
 
@@ -814,8 +847,8 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	error_msg = "lacks an RSYNC URI";
 
 dist_point_error:
-	error = pr_err("The %s extension's distribution point %s.", CDP.name,
-	    error_msg);
+	error = pr_err("The %s extension's distribution point %s.",
+	    ext_cdp()->name, error_msg);
 
 end:
 	sk_DIST_POINT_pop_free(crldp, DIST_POINT_free);
@@ -910,7 +943,7 @@ handle_aia(X509_EXTENSION *ext, void *arg)
 
 	aia = X509V3_EXT_d2i(ext);
 	if (aia == NULL)
-		return cannot_decode(&AIA);
+		return cannot_decode(ext_aia());
 
 	error = handle_ad("AIA", aia, "caIssuers", NID_ad_ca_issuers,
 	    handle_caIssuers, arg);
@@ -927,7 +960,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 
 	sia = X509V3_EXT_d2i(ext);
 	if (sia == NULL)
-		return cannot_decode(&SIA);
+		return cannot_decode(ext_sia());
 
 	/* rsync */
 	error = handle_ad("SIA", sia, "caRepository", NID_caRepository,
@@ -940,7 +973,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	 * (We won't actually touch the manifest until we know the certificate
 	 * is fully valid.)
 	 */
-	error = handle_ad("SIA", sia, "rpkiManifest",NID_rpkiManifest,
+	error = handle_ad("SIA", sia, "rpkiManifest", nid_rpkiManifest(),
 	    handle_rpkiManifest, arg);
 
 end:
@@ -956,9 +989,9 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 
 	sia = X509V3_EXT_d2i(ext);
 	if (sia == NULL)
-		return cannot_decode(&SIA);
+		return cannot_decode(ext_sia());
 
-	error = handle_ad("SIA", sia, "signedObject", NID_signedObject,
+	error = handle_ad("SIA", sia, "signedObject", nid_signedObject(),
 	    handle_signedObject, arg);
 
 	AUTHORITY_INFO_ACCESS_free(sia);
@@ -968,6 +1001,7 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 static int
 handle_cp(X509_EXTENSION *ext, void *arg)
 {
+	enum rpki_policy *policy = arg;
 	CERTIFICATEPOLICIES *cp;
 	POLICYINFO *pi;
 	POLICYQUALINFO *pqi;
@@ -976,21 +1010,29 @@ handle_cp(X509_EXTENSION *ext, void *arg)
 	error = 0;
 	cp = X509V3_EXT_d2i(ext);
 	if (cp == NULL)
-		return cannot_decode(&CP);
+		return cannot_decode(ext_cp());
 
 	if (sk_POLICYINFO_num(cp) != 1) {
 		error = pr_err("The %s extension has %u policy information's. (1 expected)",
-		    CP.name, sk_POLICYINFO_num(cp));
+		    ext_cp()->name, sk_POLICYINFO_num(cp));
 		goto end;
 	}
 
 	/* rfc7318#section-2 and consider rfc8360#section-4.2.1 */
 	pi = sk_POLICYINFO_value(cp, 0);
 	nid_cp = OBJ_obj2nid(pi->policyid);
-	if (nid_cp != NID_certPolicyRpki && nid_cp != NID_certPolicyRpkiV2) {
+	if (nid_cp == nid_certPolicyRpki()) {
+		if (policy != NULL)
+			*policy = RPKI_POLICY_RFC6484;
+	} else if (nid_cp == nid_certPolicyRpkiV2()) {
+		pr_debug("Found RFC8360 policy!");
+		if (policy != NULL)
+			*policy = RPKI_POLICY_RFC8360;
+	} else {
 		error = pr_err("Invalid certificate policy OID, isn't 'id-cp-ipAddr-asNumber' nor 'id-cp-ipAddr-asNumber-v2'");
 		goto end;
 	}
+
 	/* Exactly one policy qualifier MAY be included (so none is also valid) */
 	if (pi->qualifiers == NULL)
 		goto end;
@@ -1000,7 +1042,7 @@ handle_cp(X509_EXTENSION *ext, void *arg)
 		goto end;
 	if (pqi_num != 1) {
 		error = pr_err("The %s extension has %d policy qualifiers. (none or only 1 expected)",
-		    CP.name, pqi_num);
+		    ext_cp()->name, pqi_num);
 		goto end;
 	}
 
@@ -1028,18 +1070,21 @@ handle_ar(X509_EXTENSION *ext, void *arg)
 }
 
 int
-certificate_validate_extensions_ta(X509 *cert, struct rpki_uri *mft)
+certificate_validate_extensions_ta(X509 *cert, struct rpki_uri *mft,
+    enum rpki_policy *policy)
 {
 	struct extension_handler handlers[] = {
-	   /* ext   reqd   handler        arg       */
-	    { &BC,  true,  handle_bc,               },
-	    { &SKI, true,  handle_ski_ca, cert      },
-	    { &AKI, false, handle_aki_ta, cert      },
-	    { &KU,  true,  handle_ku_ca,            },
-	    { &SIA, true,  handle_sia_ca, mft       },
-	    { &CP,  true,  handle_cp,               },
-	    { &IR,  false, handle_ir,               },
-	    { &AR,  false, handle_ar,               },
+	   /* ext        reqd   handler        arg       */
+	    { ext_bc(),  true,  handle_bc,               },
+	    { ext_ski(), true,  handle_ski_ca, cert      },
+	    { ext_aki(), false, handle_aki_ta, cert      },
+	    { ext_ku(),  true,  handle_ku_ca,            },
+	    { ext_sia(), true,  handle_sia_ca, mft       },
+	    { ext_cp(),  true,  handle_cp,               },
+	    { ext_ir(),  false, handle_ir,               },
+	    { ext_ar(),  false, handle_ar,               },
+	    { ext_ir2(), false, handle_ir,               },
+	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
 
@@ -1048,20 +1093,22 @@ certificate_validate_extensions_ta(X509 *cert, struct rpki_uri *mft)
 
 int
 certificate_validate_extensions_ca(X509 *cert, struct rpki_uri *mft,
-    struct certificate_refs *refs)
+    struct certificate_refs *refs, enum rpki_policy *policy)
 {
 	struct extension_handler handlers[] = {
-	   /* ext   reqd   handler        arg       */
-	    { &BC,  true,  handle_bc,               },
-	    { &SKI, true,  handle_ski_ca, cert      },
-	    { &AKI, true,  handle_aki,              },
-	    { &KU,  true,  handle_ku_ca,            },
-	    { &CDP, true,  handle_cdp,    refs      },
-	    { &AIA, true,  handle_aia,    refs      },
-	    { &SIA, true,  handle_sia_ca, mft       },
-	    { &CP,  true,  handle_cp,               },
-	    { &IR,  false, handle_ir,               },
-	    { &AR,  false, handle_ar,               },
+	   /* ext        reqd   handler        arg       */
+	    { ext_bc(),  true,  handle_bc,               },
+	    { ext_ski(), true,  handle_ski_ca, cert      },
+	    { ext_aki(), true,  handle_aki,              },
+	    { ext_ku(),  true,  handle_ku_ca,            },
+	    { ext_cdp(), true,  handle_cdp,    refs      },
+	    { ext_aia(), true,  handle_aia,    refs      },
+	    { ext_sia(), true,  handle_sia_ca, mft       },
+	    { ext_cp(),  true,  handle_cp,               },
+	    { ext_ir(),  false, handle_ir,               },
+	    { ext_ar(),  false, handle_ar,               },
+	    { ext_ir2(), false, handle_ir,               },
+	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
 
@@ -1070,20 +1117,22 @@ certificate_validate_extensions_ca(X509 *cert, struct rpki_uri *mft,
 
 int
 certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
-    struct certificate_refs *refs)
+    struct certificate_refs *refs, enum rpki_policy *policy)
 {
 	struct ski_arguments ski_args;
 	struct extension_handler handlers[] = {
-	   /* ext   reqd   handler        arg */
-	    { &SKI, true,  handle_ski_ee, &ski_args },
-	    { &AKI, true,  handle_aki,              },
-	    { &KU,  true,  handle_ku_ee,            },
-	    { &CDP, true,  handle_cdp,    refs      },
-	    { &AIA, true,  handle_aia,    refs      },
-	    { &SIA, true,  handle_sia_ee, refs      },
-	    { &CP,  true,  handle_cp,               },
-	    { &IR,  false, handle_ir,               },
-	    { &AR,  false, handle_ar,               },
+	   /* ext        reqd   handler        arg       */
+	    { ext_ski(), true,  handle_ski_ee, &ski_args },
+	    { ext_aki(), true,  handle_aki,              },
+	    { ext_ku(),  true,  handle_ku_ee,            },
+	    { ext_cdp(), true,  handle_cdp,    refs      },
+	    { ext_aia(), true,  handle_aia,    refs      },
+	    { ext_sia(), true,  handle_sia_ee, refs      },
+	    { ext_cp(),  true,  handle_cp,     policy    },
+	    { ext_ir(),  false, handle_ir,               },
+	    { ext_ar(),  false, handle_ar,               },
+	    { ext_ir2(), false, handle_ir,               },
+	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
 
@@ -1102,6 +1151,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	X509 *cert;
 	struct rpki_uri mft;
 	struct certificate_refs refs;
+	enum rpki_policy policy;
 	struct rpp *pp;
 	int error;
 
@@ -1129,8 +1179,8 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	if (error)
 		goto end2;
 	error = is_ta
-	    ? certificate_validate_extensions_ta(cert, &mft)
-	    : certificate_validate_extensions_ca(cert, &mft, &refs);
+	    ? certificate_validate_extensions_ta(cert, &mft, &policy)
+	    : certificate_validate_extensions_ca(cert, &mft, &refs, &policy);
 	if (error)
 		goto end2;
 
@@ -1139,7 +1189,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 		goto end3;
 
 	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	error = validation_push_cert(state, cert_uri, cert, is_ta);
+	error = validation_push_cert(state, cert_uri, cert, policy, is_ta);
 	if (error)
 		goto end3;
 

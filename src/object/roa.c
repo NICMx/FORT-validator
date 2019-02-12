@@ -31,7 +31,7 @@ print_addr4(struct resources *parent, unsigned long asn,
 			return pr_err("The ROA's IPv4 maxLength isn't a valid unsigned long");
 		}
 
-		if (max_length < 0 || 32 < max_length) {
+		if (max_length > 32) {
 			return pr_err("maxLength (%lu) is out of bounds (0-32).",
 			    max_length);
 		}
@@ -83,7 +83,7 @@ print_addr6(struct resources *parent, unsigned long asn,
 			return pr_err("The ROA's IPv6 maxLength isn't a valid unsigned long");
 		}
 
-		if (max_length < 0 || 128 < max_length) {
+		if (max_length > 128) {
 			return pr_err("maxLength (%lu) is out of bounds (0-128).",
 			    max_length);
 		}

@@ -62,6 +62,16 @@ struct validation {
 
 	/* Did the TAL's public key match the root certificate's public key? */
 	enum pubkey_state pubkey_state;
+
+	/**
+	 * Two buffers calling code will store stringified IP addresses in,
+	 * to prevent proliferation of similar buffers on the stack.
+	 *
+	 * They are meant to be large enough to contain both IPv4 and IPv6
+	 * addresses.
+	 */
+	char addr_buffer1[INET6_ADDRSTRLEN];
+	char addr_buffer2[INET6_ADDRSTRLEN];
 };
 
 /*
@@ -224,7 +234,7 @@ enum pubkey_state validation_pubkey_state(struct validation *state)
  */
 int
 validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
-    X509 *x509, bool is_ta)
+    X509 *x509, enum rpki_policy policy, bool is_ta)
 {
 	struct certificate *cert;
 	int ok;
@@ -249,6 +259,7 @@ validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
 		goto end4;
 	}
 
+	resources_set_policy(cert->resources, policy);
 	error = certificate_get_resources(x509, cert->resources);
 	if (error)
 		goto end5;
@@ -375,4 +386,16 @@ validation_store_subject(struct validation *state, char *subject)
 		free(duplicate);
 
 	return error;
+}
+
+char *
+validation_get_ip_buffer1(struct validation *state)
+{
+	return state->addr_buffer1;
+}
+
+char *
+validation_get_ip_buffer2(struct validation *state)
+{
+	return state->addr_buffer2;
 }

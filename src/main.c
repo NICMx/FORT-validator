@@ -1,53 +1,19 @@
 #include <err.h>
 #include <errno.h>
 #include <getopt.h>
-#include <openssl/objects.h>
 
 #include "common.h"
 #include "config.h"
 #include "debug.h"
+#include "extension.h"
 #include "log.h"
+#include "nid.h"
 #include "rpp.h"
 #include "thread_var.h"
 #include "object/certificate.h"
 #include "object/manifest.h"
 #include "object/tal.h"
 #include "rsync/rsync.h"
-
-/**
- * Registers the RPKI-specific OIDs in the SSL library.
- * LibreSSL needs it; not sure about OpenSSL.
- */
-static void
-add_rpki_oids(void)
-{
-	NID_rpkiManifest = OBJ_create("1.3.6.1.5.5.7.48.10",
-	    "rpkiManifest",
-	    "RPKI Manifest (RFC 6487)");
-	printf("rpkiManifest registered. Its nid is %d.\n", NID_rpkiManifest);
-
-	NID_signedObject = OBJ_create("1.3.6.1.5.5.7.48.11",
-	    "signedObject",
-	    "RPKI Signed Object (RFC 6487)");
-	printf("signedObject registered. Its nid is %d.\n", NID_signedObject);
-
-	NID_rpkiNotify = OBJ_create("1.3.6.1.5.5.7.48.13",
-	    "rpkiNotify",
-	    "RPKI Update Notification File (RFC 8182)");
-	printf("rpkiNotify registered. Its nid is %d.\n", NID_rpkiNotify);
-
-	NID_certPolicyRpki = OBJ_create("1.3.6.1.5.5.7.14.2",
-	    "id-cp-ipAddr-asNumber (RFC 6484)",
-	    "Certificate Policy (CP) for the Resource PKI (RPKI)");
-	printf("certPolicyRpki registered. Its nid is %d.\n", NID_certPolicyRpki);
-
-	/* TODO implement RFC 8360 */
-	NID_certPolicyRpkiV2 = OBJ_create("1.3.6.1.5.5.7.14.3",
-	    "id-cp-ipAddr-asNumber-v2 (RFC 8360)",
-	    "Certificate Policy for Use with Validation Reconsidered in the RPKI");
-	printf("certPolicyRpkiV2 registered. Its nid is %d.\n",
-	    NID_certPolicyRpkiV2);
-}
 
 /**
  * Performs the whole validation walkthrough on uri @uri, which is assumed to
@@ -154,7 +120,7 @@ handle_args(int argc, char **argv)
 	config.shuffle_uris = false;
 	config.local_repository = NULL;
 	config.tal = NULL;
-	config.maximum_certificate_depth = 32;
+	config.maximum_certificate_depth = 64;
 
 	while ((opt = getopt_long(argc, argv, "t:l:rsm:", long_options, NULL))
 	    != -1) {
@@ -217,7 +183,12 @@ main(int argc, char **argv)
 	if (error)
 		return error;
 
-	add_rpki_oids();
+	error = nid_init();
+	if (error)
+		goto end;
+	error = extension_init();
+	if (error)
+		goto end;
 	thvar_init();
 	fnstack_store();
 	fnstack_push(config_get_tal());
@@ -232,6 +203,7 @@ main(int argc, char **argv)
 		tal_destroy(tal);
 	}
 
+end:
 	rsync_destroy();
 	return error;
 }

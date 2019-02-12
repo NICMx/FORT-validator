@@ -1,65 +1,150 @@
 #include "extension.h"
 
 #include <errno.h>
+#include "common.h"
 #include "log.h"
+#include "nid.h"
 #include "thread_var.h"
 #include "crypto/hash.h"
 
-const struct extension_metadata BC = {
-	"Basic Constraints",
-	NID_basic_constraints,
+static struct extension_metadata IR2 = {
+	"Amended IP Resources",
+	/* TODO NID_ipAddrBlocksv2 */ -1,
 	true,
 };
-const struct extension_metadata SKI = {
-	"Subject Key Identifier",
-	NID_subject_key_identifier,
-	false,
-};
-const struct extension_metadata AKI = {
-	"Authority Key Identifier",
-	NID_authority_key_identifier,
-	false,
-};
-const struct extension_metadata KU = {
-	"Key Usage",
-	NID_key_usage,
+
+static struct extension_metadata AR2 = {
+	"Amended AS Resources",
+	/* TODO NID_autonomousSysIdsv2 */ -1,
 	true,
 };
-const struct extension_metadata CDP = {
-	"CRL Distribution Points",
-	NID_crl_distribution_points,
-	false,
-};
-const struct extension_metadata AIA = {
-	"Authority Information Access",
-	NID_info_access,
-	false,
-};
-const struct extension_metadata SIA = {
-	"Subject Information Access",
-	NID_sinfo_access ,
-	false,
-};
-const struct extension_metadata CP = {
-	"Certificate Policies",
-	NID_certificate_policies,
-	true,
-};
-const struct extension_metadata IR = {
-	"IP Resources",
-	NID_sbgp_ipAddrBlock,
-	true,
-};
-const struct extension_metadata AR = {
-	"AS Resources",
-	NID_sbgp_autonomousSysNum,
-	true,
-};
-const struct extension_metadata CN = {
-	"CRL Number",
-	NID_crl_number,
-	false,
-};
+
+int extension_init(void)
+{
+	IR2.nid = nid_ipAddrBlocksv2();
+	AR2.nid = nid_autonomousSysIdsv2();
+	return 0;
+}
+
+struct extension_metadata const *ext_bc(void)
+{
+	static const struct extension_metadata BC = {
+		"Basic Constraints",
+		NID_basic_constraints,
+		true,
+	};
+	return &BC;
+}
+
+struct extension_metadata const *ext_ski(void)
+{
+	static const struct extension_metadata SKI = {
+		"Subject Key Identifier",
+		NID_subject_key_identifier,
+		false,
+	};
+	return &SKI;
+}
+
+struct extension_metadata const *ext_aki(void)
+{
+	static const struct extension_metadata AKI = {
+		"Authority Key Identifier",
+		NID_authority_key_identifier,
+		false,
+	};
+	return &AKI;
+}
+
+struct extension_metadata const *ext_ku(void)
+{
+	static const struct extension_metadata KU = {
+		"Key Usage",
+		NID_key_usage,
+		true,
+	};
+	return &KU;
+}
+
+struct extension_metadata const *ext_cdp(void)
+{
+	static const struct extension_metadata CDP = {
+		"CRL Distribution Points",
+		NID_crl_distribution_points,
+		false,
+	};
+	return &CDP;
+}
+
+struct extension_metadata const *ext_aia(void)
+{
+	static const struct extension_metadata AIA = {
+		"Authority Information Access",
+		NID_info_access,
+		false,
+	};
+	return &AIA;
+}
+
+struct extension_metadata const *ext_sia(void)
+{
+	static const struct extension_metadata SIA = {
+		"Subject Information Access",
+		NID_sinfo_access ,
+		false,
+	};
+	return &SIA;
+}
+
+struct extension_metadata const *ext_cp(void)
+{
+	static const struct extension_metadata CP = {
+		"Certificate Policies",
+		NID_certificate_policies,
+		true,
+	};
+	return &CP;
+}
+
+struct extension_metadata const *ext_ir(void)
+{
+	static const struct extension_metadata IR = {
+		"IP Resources",
+		NID_sbgp_ipAddrBlock,
+		true,
+	};
+	return &IR;
+}
+
+struct extension_metadata const *ext_ar(void)
+{
+	static const struct extension_metadata AR = {
+		"AS Resources",
+		NID_sbgp_autonomousSysNum,
+		true,
+	};
+	return &AR;
+}
+
+struct extension_metadata const *ext_ir2(void)
+{
+	return &IR2;
+}
+
+struct extension_metadata const *ext_ar2(void)
+{
+	return &AR2;
+}
+
+struct extension_metadata const *ext_cn(void)
+{
+	static const struct extension_metadata CN = {
+		"CRL Number",
+		NID_crl_number,
+		false,
+	};
+	return &CN;
+}
 
 static int
 handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
@@ -110,8 +195,6 @@ handle_extensions(struct extension_handler *handlers,
 	struct extension_handler *handler;
 	int e;
 	int error;
-
-	/* TODO check that no other extensions are present? */
 
 	for (e = 0; e < sk_X509_EXTENSION_num(extensions); e++) {
 		error = handle_extension(handlers,
@@ -192,7 +275,7 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 	/* Hash the SPK, compare SPK hash with the SKI */
 	if (hash->length < 0 || SIZE_MAX < hash->length) {
 		return pr_err("%s length (%d) is out of bounds. (0-%zu)",
-		    SKI.name, hash->length, SIZE_MAX);
+		    ext_ski()->name, hash->length, SIZE_MAX);
 	}
 	if (spk_len < 0 || SIZE_MAX < spk_len) {
 		return pr_err("Subject Public Key length (%d) is out of bounds. (0-%zu)",
@@ -202,7 +285,7 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 	error = hash_validate("sha1", hash->data, hash->length, spk, spk_len);
 	if (error) {
 		pr_err("The Subject Public Key's hash does not match the %s.",
-		    SKI.name);
+		    ext_ski()->name);
 	}
 
 	return error;
@@ -218,16 +301,16 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 
 	aki = X509V3_EXT_d2i(ext);
 	if (aki == NULL)
-		return cannot_decode(&AKI);
+		return cannot_decode(ext_aki());
 
 	if (aki->issuer != NULL) {
 		error = pr_err("%s extension contains an authorityCertIssuer.",
-		    AKI.name);
+		    ext_aki()->name);
 		goto end;
 	}
 	if (aki->serial != NULL) {
 		error = pr_err("%s extension contains an authorityCertSerialNumber.",
-		    AKI.name);
+		    ext_aki()->name);
 		goto end;
 	}
 

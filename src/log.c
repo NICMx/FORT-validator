@@ -45,21 +45,16 @@ pr_rm_indent(void)
 }
 
 
-#endif
-
 void
 pr_debug_prefix(void)
 {
-#ifdef DEBUG
 	fprintf(STDOUT, "DBG: ");
 	pr_indent(STDOUT);
-#endif
 }
 
 void
 pr_debug(const char *format, ...)
 {
-#ifdef DEBUG
 	va_list args;
 
 	pr_debug_prefix();
@@ -68,13 +63,11 @@ pr_debug(const char *format, ...)
 	vfprintf(STDOUT, format, args);
 	va_end(args);
 	fprintf(STDOUT, "\n");
-#endif
 }
 
 void
 pr_debug_add(const char *format, ...)
 {
-#ifdef DEBUG
 	va_list args;
 
 	pr_debug_prefix();
@@ -85,13 +78,11 @@ pr_debug_add(const char *format, ...)
 	fprintf(STDOUT, "\n");
 
 	pr_add_indent();
-#endif
 }
 
 void
 pr_debug_rm(const char *format, ...)
 {
-#ifdef DEBUG
 	va_list args;
 
 	pr_rm_indent();
@@ -102,18 +93,19 @@ pr_debug_rm(const char *format, ...)
 	vfprintf(STDOUT, format, args);
 	va_end(args);
 	fprintf(STDOUT, "\n");
-#endif
 }
 
+#endif
+
 static void
-pr_err_prefix(void)
+pr_prefix(char const *level)
 {
-	fprintf(STDERR, "ERR: ");
+	fprintf(STDERR, "%s: ", level);
 	pr_indent(STDERR);
 }
 
-#define PR_ERR(args) do {			\
-	pr_err_prefix();			\
+#define PR_PREFIX(level, args) do {		\
+	pr_prefix(level);			\
 	pr_file_name(STDERR);			\
 						\
 	va_start(args, format);			\
@@ -122,13 +114,26 @@ pr_err_prefix(void)
 } while (0)
 
 /**
+ * Always appends a newline at the end. Always returs 0. (So you can interrupt
+ * whatever you're doing without failing validation.)
+ */
+int
+pr_warn(const char *format, ...)
+{
+	va_list args;
+	PR_PREFIX("WRN", args);
+	fprintf(STDERR, "\n");
+	return 0;
+}
+
+/**
  * Always appends a newline at the end. Always returs -EINVAL.
  */
 int
 pr_err(const char *format, ...)
 {
 	va_list args;
-	PR_ERR(args);
+	PR_PREFIX("ERR", args);
 	fprintf(STDERR, "\n");
 	return -EINVAL;
 }
@@ -152,7 +157,7 @@ pr_errno(int error, const char *format, ...)
 {
 	va_list args;
 
-	PR_ERR(args);
+	PR_PREFIX("ERR", args);
 
 	if (error) {
 		fprintf(STDERR, ": %s", strerror(error));
@@ -188,7 +193,7 @@ crypto_err(const char *format, ...)
 	va_list args;
 	int error;
 
-	PR_ERR(args);
+	PR_PREFIX("ERR", args);
 	fprintf(STDERR, ": ");
 
 	error = ERR_GET_REASON(ERR_peek_last_error());
@@ -223,7 +228,7 @@ pr_crit(const char *format, ...)
 {
 	va_list args;
 
-	pr_err_prefix();
+	pr_prefix("CRT");
 	pr_file_name(STDERR);
 
 	fprintf(STDERR, "Programming error: ");

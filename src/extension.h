@@ -22,17 +22,21 @@ struct extension_handler {
 	bool found;
 };
 
-extern const struct extension_metadata BC;
-extern const struct extension_metadata SKI;
-extern const struct extension_metadata AKI;
-extern const struct extension_metadata KU;
-extern const struct extension_metadata CDP;
-extern const struct extension_metadata AIA;
-extern const struct extension_metadata SIA;
-extern const struct extension_metadata CP;
-extern const struct extension_metadata IR;
-extern const struct extension_metadata AR;
-extern const struct extension_metadata CN;
+int extension_init(void);
+
+struct extension_metadata const *ext_bc(void);
+struct extension_metadata const *ext_ski(void);
+struct extension_metadata const *ext_aki(void);
+struct extension_metadata const *ext_ku(void);
+struct extension_metadata const *ext_cdp(void);
+struct extension_metadata const *ext_aia(void);
+struct extension_metadata const *ext_sia(void);
+struct extension_metadata const *ext_cp(void);
+struct extension_metadata const *ext_ir(void);
+struct extension_metadata const *ext_ar(void);
+struct extension_metadata const *ext_ir2(void);
+struct extension_metadata const *ext_ar2(void);
+struct extension_metadata const *ext_cn(void);
 
 int handle_extensions(struct extension_handler *,
     STACK_OF(X509_EXTENSION) const *);

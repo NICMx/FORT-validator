@@ -5,12 +5,6 @@
 #include "log.h"
 #include "thread_var.h"
 
-int NID_rpkiManifest;
-int NID_signedObject;
-int NID_rpkiNotify;
-int NID_certPolicyRpki;
-int NID_certPolicyRpkiV2;
-
 /**
  * Does not assume that @string is NULL-terminated.
  */

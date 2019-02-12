@@ -49,7 +49,7 @@ validate_revoked(X509_CRL *crl)
 
 	revoked_stack = X509_CRL_get_REVOKED(crl);
 	if (revoked_stack == NULL)
-		return pr_err("Likely programming error: CRL revoked stack is NULL.");
+		return 0; /* Guess the RFC doesn't enforce this thing. */
 
 	for (i = 0; i < sk_X509_REVOKED_num(revoked_stack); i++) {
 		revoked = sk_X509_REVOKED_value(revoked_stack, i);
@@ -102,8 +102,8 @@ validate_extensions(X509_CRL *crl)
 {
 	struct extension_handler handlers[] = {
 	   /* ext   reqd   handler        arg */
-	    { &AKI, true,  handle_aki,              },
-	    { &CN,  true,  handle_crlnum,           },
+	    { ext_aki(), true,  handle_aki,              },
+	    { ext_cn(),  true,  handle_crlnum,           },
 	    { NULL },
 	};
 

@@ -1,7 +1,6 @@
 #include "resource.h"
 
 #include <errno.h>
-#include <arpa/inet.h>
 #include <stdint.h> /* UINT32_MAX */
 
 #include "address.h"
@@ -17,6 +16,7 @@ struct resources {
 	struct resources_ipv4 *ip4s;
 	struct resources_ipv6 *ip6s;
 	struct resources_asn *asns;
+	enum rpki_policy policy;
 };
 
 struct resources *
@@ -31,6 +31,7 @@ resources_create(void)
 	result->ip4s = NULL;
 	result->ip6s = NULL;
 	result->asns = NULL;
+	result->policy = RPKI_POLICY_RFC6484;
 
 	return result;
 }
@@ -76,48 +77,6 @@ get_parent_resources(void)
 {
 	struct validation *state = state_retrieve();
 	return (state != NULL) ? validation_peek_resource(state) : NULL;
-}
-
-static void
-pr_debug_ip_prefix(int family, void *addr, unsigned int length)
-{
-#ifdef DEBUG
-	char buffer[INET6_ADDRSTRLEN];
-	char const *string;
-
-	string = inet_ntop(family, addr, buffer, sizeof(buffer));
-	if (string != NULL)
-		pr_debug("Prefix: %s/%u", string, length);
-	else {
-		pr_debug("Prefix: (Cannot convert to string. Errcode %d)",
-		    errno);
-	}
-#endif
-}
-
-static void
-pr_debug_range(int family, void *min, void *max)
-{
-#ifdef DEBUG
-	char buffer_min[INET6_ADDRSTRLEN];
-	char buffer_max[INET6_ADDRSTRLEN];
-	char const *string_min;
-	char const *string_max;
-
-	string_min = inet_ntop(family, min, buffer_min, sizeof(buffer_min));
-	if (string_min == NULL)
-		goto fail;
-
-	string_max = inet_ntop(family, max, buffer_max, sizeof(buffer_max));
-	if (string_max == NULL)
-		goto fail;
-
-	pr_debug("Range: %s-%s", string_min, string_max);
-	return;
-
-fail:
-	pr_debug("Range: (Cannot convert to string. Errcode %d)", errno);
-#endif
 }
 
 static int
@@ -170,8 +129,16 @@ add_prefix4(struct resources *resources, IPAddress2_t *addr)
 	if (error)
 		return error;
 
-	if (parent && !res4_contains_prefix(parent->ip4s, &prefix))
-		return pr_err("Parent certificate doesn't own child's IPv4 resource.");
+	if (parent && !res4_contains_prefix(parent->ip4s, &prefix)) {
+		switch (resources->policy) {
+		case RPKI_POLICY_RFC6484:
+			return pr_err("Parent certificate doesn't own IPv4 prefix '%s/%u'.",
+			    v4addr2str(&prefix.addr), prefix.len);
+		case RPKI_POLICY_RFC8360:
+			return pr_warn("Certificate is overclaiming the IPv4 prefix '%s/%u'.",
+			    v4addr2str(&prefix.addr), prefix.len);
+		}
+	}
 
 	if (resources->ip4s == NULL) {
 		resources->ip4s = res4_create();
@@ -181,12 +148,13 @@ add_prefix4(struct resources *resources, IPAddress2_t *addr)
 
 	error = res4_add_prefix(resources->ip4s, &prefix);
 	if (error) {
-		pr_err("Error adding IPv4 prefix to certificate resources: %s",
+		pr_err("Error adding IPv4 prefix '%s/%u' to certificate resources: %s",
+		    v4addr2str(&prefix.addr), prefix.len,
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug_ip_prefix(AF_INET, &prefix.addr, prefix.len);
+	pr_debug("Prefix: %s/%u", v4addr2str(&prefix.addr), prefix.len);
 	return 0;
 }
 
@@ -206,8 +174,16 @@ add_prefix6(struct resources *resources, IPAddress2_t *addr)
 	if (error)
 		return error;
 
-	if (parent && !res6_contains_prefix(parent->ip6s, &prefix))
-		return pr_err("Parent certificate doesn't own child's IPv6 resource.");
+	if (parent && !res6_contains_prefix(parent->ip6s, &prefix)) {
+		switch (resources->policy) {
+		case RPKI_POLICY_RFC6484:
+			return pr_err("Parent certificate doesn't own IPv6 prefix '%s/%u'.",
+			    v6addr2str(&prefix.addr), prefix.len);
+		case RPKI_POLICY_RFC8360:
+			return pr_warn("Certificate is overclaiming the IPv6 prefix '%s/%u'.",
+			    v6addr2str(&prefix.addr), prefix.len);
+		}
+	}
 
 	if (resources->ip6s == NULL) {
 		resources->ip6s = res6_create();
@@ -217,12 +193,13 @@ add_prefix6(struct resources *resources, IPAddress2_t *addr)
 
 	error = res6_add_prefix(resources->ip6s, &prefix);
 	if (error) {
-		pr_err("Error adding IPv6 prefix to certificate resources: %s",
+		pr_err("Error adding IPv6 prefix '%s/%u' to certificate resources: %s",
+		    v6addr2str(&prefix.addr), prefix.len,
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug_ip_prefix(AF_INET6, &prefix.addr, prefix.len);
+	pr_debug("Prefix: %s/%u", v6addr2str(&prefix.addr), prefix.len);
 	return 0;
 }
 
@@ -255,8 +232,16 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 	if (error)
 		return error;
 
-	if (parent && !res4_contains_range(parent->ip4s, &range))
-		return pr_err("Parent certificate doesn't own child's IPv4 resource.");
+	if (parent && !res4_contains_range(parent->ip4s, &range)) {
+		switch (resources->policy) {
+		case RPKI_POLICY_RFC6484:
+			return pr_err("Parent certificate doesn't own IPv4 range '%s-%s'.",
+			    v4addr2str(&range.min), v4addr2str2(&range.max));
+		case RPKI_POLICY_RFC8360:
+			return pr_warn("Certificate is overclaiming the IPv4 range '%s-%s'.",
+			    v4addr2str(&range.min), v4addr2str2(&range.max));
+		}
+	}
 
 	if (resources->ip4s == NULL) {
 		resources->ip4s = res4_create();
@@ -266,12 +251,14 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 
 	error = res4_add_range(resources->ip4s, &range);
 	if (error) {
-		pr_err("Error adding IPv4 range to certificate resources: %s",
+		pr_err("Error adding IPv4 range '%s-%s' to certificate resources: %s",
+		    v4addr2str(&range.min), v4addr2str2(&range.max),
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug_range(AF_INET, &range.min, &range.max);
+	pr_debug("Range: %s-%s", v4addr2str(&range.min),
+	    v4addr2str2(&range.max));
 	return 0;
 }
 
@@ -291,8 +278,16 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 	if (error)
 		return error;
 
-	if (parent && !res6_contains_range(parent->ip6s, &range))
-		return pr_err("Parent certificate doesn't own child's IPv6 resource.");
+	if (parent && !res6_contains_range(parent->ip6s, &range)) {
+		switch (resources->policy) {
+		case RPKI_POLICY_RFC6484:
+			return pr_err("Parent certificate doesn't own IPv6 range '%s-%s'.",
+			    v6addr2str(&range.min), v6addr2str2(&range.max));
+		case RPKI_POLICY_RFC8360:
+			return pr_warn("Certificate is overclaiming the IPv6 range '%s-%s'.",
+			    v6addr2str(&range.min), v6addr2str2(&range.max));
+		}
+	}
 
 	if (resources->ip6s == NULL) {
 		resources->ip6s = res6_create();
@@ -302,12 +297,14 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 
 	error = res6_add_range(resources->ip6s, &range);
 	if (error) {
-		pr_err("Error adding IPv6 range to certificate resources: %s",
+		pr_err("Error adding IPv6 range '%s-%s' to certificate resources: %s",
+		    v6addr2str(&range.min), v6addr2str2(&range.max),
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug_range(AF_INET6, &range.min, &range.max);
+	pr_debug("Range: %s-%s", v6addr2str(&range.min),
+	    v6addr2str2(&range.max));
 	return 0;
 }
 
@@ -331,6 +328,9 @@ add_aors(struct resources *resources, int family,
 	struct IPAddressOrRange *aor;
 	int i;
 	int error;
+
+	if (aors->list.count == 0)
+		return pr_err("IP extension's set of IP address records is empty.");
 
 	for (i = 0; i < aors->list.count; i++) {
 		aor = aors->list.array[i];
@@ -431,8 +431,16 @@ add_asn(struct resources *resources, unsigned long min, unsigned long max,
 	if (min > max)
 		return pr_err("The ASN range %lu-%lu is inverted.", min, max);
 
-	if (parent && !rasn_contains(parent->asns, min, max))
-		return pr_err("Parent certificate doesn't own child's ASN resource.");
+	if (parent && !rasn_contains(parent->asns, min, max)) {
+		switch (resources->policy) {
+		case RPKI_POLICY_RFC6484:
+			return pr_err("Parent certificate doesn't own ASN range '%lu-%lu'.",
+			    min, max);
+		case RPKI_POLICY_RFC8360:
+			return pr_warn("Certificate is overclaiming the ASN range '%lu-%lu'.",
+			    min, max);
+		}
+	}
 
 	if (resources->asns == NULL) {
 		resources->asns = rasn_create();
@@ -442,8 +450,8 @@ add_asn(struct resources *resources, unsigned long min, unsigned long max,
 
 	error = rasn_add(resources->asns, min, max);
 	if (error){
-		pr_err("Error adding ASN range to certificate resources: %s",
-		    sarray_err2str(error));
+		pr_err("Error adding ASN range '%lu-%lu' to certificate resources: %s",
+		    min, max, sarray_err2str(error));
 		return error;
 	}
 
@@ -507,6 +515,8 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 		return inherit_asiors(resources);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
 		iors = &ids->asnum->choice.asIdsOrRanges;
+		if (iors->list.count == 0)
+			return pr_err("AS extension's set of AS number records is empty.");
 		for (i = 0; i < iors->list.count; i++) {
 			error = add_asior(resources, iors->list.array[i]);
 			if (error)
@@ -547,3 +557,14 @@ resources_contains_ipv6(struct resources *res, struct ipv6_prefix *prefix)
 	return res6_contains_prefix(res->ip6s, prefix);
 }
 
+enum rpki_policy
+resources_get_policy(struct resources *res)
+{
+	return res->policy;
+}
+
+void
+resources_set_policy(struct resources *res, enum rpki_policy policy)
+{
+	res->policy = policy;
+}

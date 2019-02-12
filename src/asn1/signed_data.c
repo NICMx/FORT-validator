@@ -58,6 +58,7 @@ handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
 	struct validation *state;
 	const unsigned char *tmp;
 	X509 *cert;
+	enum rpki_policy policy;
 	int error;
 
 	state = state_retrieve();
@@ -89,14 +90,18 @@ handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
 	error = certificate_validate_rfc6487(cert, false);
 	if (error)
 		goto end2;
+	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
+	    &policy);
+	if (error)
+		goto end2;
 
 	if (args->res != NULL) {
+		/* TODO validate resources even if the SO lacks them */
+		resources_set_policy(args->res, policy);
 		error = certificate_get_resources(cert, args->res);
 		if (error)
 			goto end2;
 	}
-
-	error = certificate_validate_extensions_ee(cert, sid, &args->refs);
 
 end2:
 	X509_free(cert);

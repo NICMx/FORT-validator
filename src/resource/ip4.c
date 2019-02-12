@@ -32,7 +32,7 @@ static void
 pton(struct ipv4_prefix *p, struct r4_node *n)
 {
 	n->min = ntohl(p->addr.s_addr);
-	n->max = n->min | (0xFFFFFFFFu >> p->len);
+	n->max = n->min | u32_suffix_mask(p->len);
 }
 
 static void
