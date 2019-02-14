@@ -4,21 +4,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-struct rpki_config {
-	/* tal file path*/
-	char *tal;
-	/* Local repository path */
-	char *local_repository;
-	/* Enable rsync downloads */
-	bool enable_rsync;
-	/* Shuffle uris in tal */
-	bool shuffle_uris;
-	/*
-	 * rfc6487#section-7.2, last paragraph.
-	 * Prevents arbitrarily long paths and loops.
-	 */
-	unsigned int maximum_certificate_depth;
-};
+struct rpki_config;
+
+struct option_field;
 
 typedef enum global_type_id {
 	GTI_BOOL,
@@ -26,12 +14,15 @@ typedef enum global_type_id {
 	GTI_U_INT,
 } global_type_id;
 
-struct option_field;
-
 typedef void (*print_function)(void *, bool);
 typedef int (*parse_function)(struct option_field *, char *, void *);
 /* This function does not need to validate type->size. */
 typedef int (*validate_function)(struct option_field *, void *);
+
+struct args_flag {
+	struct option_field *field;
+	bool is_set;
+};
 
 struct global_type {
 	global_type_id id;
@@ -58,12 +49,17 @@ struct option_field {
 	bool required;
 };
 
+struct group_fields {
+	char *group_name;
+	struct option_field *options;
+	unsigned int options_len;
+};
+
+void print_usage(char *progname);
 int handle_option(struct rpki_config *, struct option_field *, char *);
-int handle_flags_config(int , char **, struct rpki_config *);
+int handle_flags_config(int , char **);
 
-void get_global_fields(struct option_field **, unsigned int *);
-
-void get_tal_fields(struct option_field **, unsigned int *);
+void get_group_fields(struct group_fields **);
 
 void config_set(struct rpki_config *);
 
@@ -72,5 +68,6 @@ char const *config_get_local_repository(void);
 bool config_get_enable_rsync(void);
 bool config_get_shuffle_uris(void);
 unsigned int config_get_max_cert_depth(void);
+void free_rpki_config(void);
 
 #endif /* SRC_CONFIG_H_ */

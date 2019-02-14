@@ -12,103 +12,117 @@
 #include "thread_var.h"
 #include "uri.h"
 
-
-static void
-print_config(struct rpki_config *config)
+static int
+find_flag(struct args_flag *flags_handled, char *flag_to_find,
+    struct args_flag **result)
 {
-	pr_debug("Program configuration");
-	pr_debug_add("{");
-	pr_debug("%s: %s", "local_repository", config->local_repository);
-	pr_debug("%s: %s", "tal.file", config->tal);
-	pr_debug("%s: %s", "enable_rsync",
-	    config->enable_rsync ? "true" : "false");
-	pr_debug("%s: %s", "tal.shuffle_uris",
-	    config->shuffle_uris ? "true" : "false");
-	pr_debug("%s: %u", "tal.maximum-certificate-depth",
-		    config->maximum_certificate_depth);
-	pr_debug_rm("}");
+	int cmp;
+	*result = NULL;
+
+	while(flags_handled->field != NULL) {
+		cmp = strcmp(flags_handled->field->name, flag_to_find);
+		if (cmp == 0) {
+			*result = flags_handled;
+			break;
+		}
+		flags_handled = flags_handled + 1;
+	}
+
+	if (*result == NULL)
+		return pr_crit("Missing parameter %s.", flag_to_find);
+
+	return 0;
 }
 
 static int
 iterate_fields(struct toml_table_t *table, struct rpki_config *config,
-    struct option_field *fields, unsigned int field_len)
+    struct option_field *fields, struct args_flag *flags_handled)
 {
-	struct option_field *field;
+	struct option_field *tmp_field;
+	struct args_flag *tmp_arg;
 	const char *result;
 	char *str;
-	int i, error, missing_param;
+	int error;
 
-	missing_param = 0;
+	tmp_field = fields;
+	while (tmp_field->name != NULL) {
+		error = find_flag(flags_handled, tmp_field->name, &tmp_arg);
+		if (error)
+			return error; /* Error msg already printed. */
+		if (tmp_arg->is_set) {
+			tmp_field += 1;
+			continue;
+		}
 
-	for (i = 0; i < field_len; i++) {
-		field = &(fields[i]);
-		result = toml_raw_in(table, field->name);
+		result = toml_raw_in(table, tmp_field->name);
 		if (result == 0) {
-			if (field->required) {
-				printf("Required parameter is missing '%s'\n",
-				    field->name);
-				missing_param |= -ENOENT;
-			}
+			tmp_field += 1;
 			continue;
 		}
 
 		str = (char *) result;
-		if (field->type->id == GTI_STRING) {
+		if (tmp_field->type->id == GTI_STRING) {
 			error = toml_rtos(result, &str);
 			if (error)
 				return pr_err("Bad value in '%s'",
-				    field->name);
+				    tmp_field->name);
 		}
 
-		error = handle_option(config, field, str);
+		error = handle_option(config, tmp_field, str);
 		if (error)
 			return error;
 
+		/* Free returned string from toml */
+		if (tmp_field->type->id == GTI_STRING)
+			free(str);
+
+		tmp_arg->is_set = true;
+		tmp_field += 1;
 	}
 
-	if (missing_param)
-		return missing_param;
 	return error;
 }
 
 static int
-handle_tal_table(struct toml_table_t *tal, struct rpki_config *config)
+toml_to_config(struct toml_table_t *root, struct rpki_config *config,
+    struct args_flag *flags_handled)
 {
-	struct option_field *tal_fields;
-	unsigned int tal_len;
-
-	get_tal_fields(&tal_fields, &tal_len);
-
-	return iterate_fields(tal, config, tal_fields, tal_len);
-}
-
-static int
-toml_to_config(struct toml_table_t *root, struct rpki_config *config)
-{
-	struct option_field *globals;
-	struct toml_table_t *tal;
+	struct toml_table_t *toml_table;
+	struct group_fields *group_fields;
 	int error;
-	unsigned int global_len;
 
+	get_group_fields(&group_fields);
+	if (group_fields == NULL)
+		return 0;
 
-	get_global_fields(&globals, &global_len);
-	error = iterate_fields(root, config, globals, global_len);
+	error = iterate_fields(root, config, group_fields->options,
+	    flags_handled);
 	if (error)
 		return error;
+	group_fields += 1;
 
-	tal = toml_table_in(root, "tal");
-	if (tal != 0)
-		error = handle_tal_table(tal, config);
-	else
-		return pr_err("Required table '%s' is missing.", "tal");
+	while (group_fields->group_name != NULL) {
+		toml_table = toml_table_in(root, group_fields->group_name);
+		if (toml_table == 0) {
+			group_fields += 1;
+			continue;
+		}
+		error = iterate_fields(toml_table, config,
+		    group_fields->options, flags_handled);
+		if (error)
+			return error;
+		group_fields += 1;
+	}
 
 	return error;
 }
 
 int
-set_config_from_file(char *config_file, struct rpki_config *config)
+set_config_from_file(char *config_file, struct rpki_config *config,
+    struct args_flag *flags_handled)
 {
-	struct file_contents fc;
+	FILE *file;
+	struct stat stat;
 	struct toml_table_t *root;
 	struct rpki_uri uri;
 	char errbuf[200];
@@ -130,12 +144,12 @@ set_config_from_file(char *config_file, struct rpki_config *config)
 		goto end;
 	}
 
-	error = file_load(&uri, &fc);
+	error = file_open(&uri, &file, &stat);
 	if (error)
 		goto end; /* Error msg already printed. */
 
-	root = toml_parse((char *) fc.buffer, errbuf, sizeof(errbuf));
-	file_free(&fc);
+	root = toml_parse_file(file, errbuf, sizeof(errbuf));
+	file_close(file);
 
 	if (root == NULL) {
 		error = pr_err("Error while parsing configuration file: %s",
@@ -143,11 +157,9 @@ set_config_from_file(char *config_file, struct rpki_config *config)
 		goto end;
 	}
 
-	error = toml_to_config(root, config);
+	error = toml_to_config(root, config, flags_handled);
 
 	toml_free(root);
-
-	print_config(config);
 
 end:
 	return error;

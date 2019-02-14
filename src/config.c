@@ -1,31 +1,44 @@
 #include "config.h"
 
 #include <stdio.h>
-#include <strings.h>
+#include <string.h>
 #include <errno.h>
 #include <getopt.h>
 
 #include "common.h"
 #include "log.h"
+#include "toml_handler.h"
 
 #define OPT_FIELD_ARRAY_LEN(array) ARRAY_LEN(array) - 1
 
-struct args_flag {
-	struct option_field *field;
-	bool is_set;
+struct rpki_config {
+	/* tal file path*/
+	char *tal;
+	/* Local repository path */
+	char *local_repository;
+	/* Enable rsync downloads */
+	bool enable_rsync;
+	/* Shuffle uris in tal */
+	bool shuffle_uris;
+	/*
+	 * rfc6487#section-7.2, last paragraph.
+	 * Prevents arbitrarily long paths and loops.
+	 */
+	unsigned int maximum_certificate_depth;
 };
 
 static int parse_bool(struct option_field *, char *, void *);
 static int parse_u_int(struct option_field *, char *, void *);
+static void _free_rpki_config(struct rpki_config *);
 
-static struct rpki_config config;
+static struct rpki_config rpki_config;
 
 static struct global_type gt_bool = {
 	.id = GTI_BOOL,
 	.name = "Boolean",
 	.size = sizeof(bool),
 	.parse = parse_bool,
-	.candidates = "true false",
+	.candidates = "true|false",
 };
 
 static struct global_type gt_string = {
@@ -38,8 +51,18 @@ static struct global_type gt_u_int = {
 	.name = "Unsigned Int",
 	.size = sizeof(unsigned int),
 	.parse = parse_u_int,
-	.candidates = "Unsigned Int",
+	.candidates = "NUM",
 };
+
+static struct option manual_long_opts[] = {
+	{
+		.name = "configuration-file",
+		.has_arg = required_argument,
+		.flag = NULL,
+		.val = 'f',
+	},
+};
+
 
 static struct option_field global_fields[] = {
 	{
@@ -91,11 +114,27 @@ static struct option_field tal_fields[] = {
 		.short_opt = 0,
 		.min = 1,
 		/**
-		 * It cannot be UINT_MAX, because then the actual number will overflow
-		 * and will never be bigger than this.
+		 * It cannot be UINT_MAX, because then the actual number will
+		 * overflow and will never be bigger than this.
 		 */
 		.max = 	UINT_MAX - 1,
 		.required = false,
+	},
+	{ NULL },
+};
+
+
+
+static struct group_fields fields[] = {
+	{
+		.group_name = "root",
+		.options = global_fields,
+		.options_len = OPT_FIELD_ARRAY_LEN(global_fields),
+	},
+	{
+		.group_name = "tal",
+		.options = tal_fields,
+		.options_len = OPT_FIELD_ARRAY_LEN(tal_fields),
 	},
 	{ NULL },
 };
@@ -129,26 +168,17 @@ parse_bool(struct option_field *field, char *str, void *result)
 		*value = true;
 		return 0;
 		break;
-	case required_argument:
 	case optional_argument:
-		if (field->has_arg == optional_argument && str == NULL) {
+		if (str == NULL) {
 			*value = true;
-			return 0;
+			break;
 		}
-		/**
-		 * XXX: (fine) GETOPT should had ensure that the code did
-		 * not reach here for this particular case.
-		 * */
+		/* FALLTHROUGH */
+	case required_argument:
 		return str_to_bool(str, result);
-		break;
 	}
 
-	if (str == NULL) {
-		*value = true;
-		return 0;
-	}
-
-	return str_to_bool(str, result);
+	return 0;
 }
 
 static int str_to_ull(const char *str, char **endptr,
@@ -199,46 +229,59 @@ static int
 construct_options(struct args_flag **flags, struct option **long_options,
     int *flags_len)
 {
+	struct option_field *tmp;
+	struct group_fields *tmp_all_fields;
 	struct args_flag *result_flags;
-	struct option_field *global, *tal;
 	struct option *result_options;
-	unsigned int global_len, tal_len, total_len, i, result_idx;
+	unsigned int total_len, i, result_idx,
+	    extra_long_options;
 
-	get_global_fields(&global, &global_len);
-	get_tal_fields(&tal, &tal_len);
+	tmp_all_fields = fields;
+	total_len = 0;
+	while (tmp_all_fields->group_name != NULL) {
+		total_len += tmp_all_fields->options_len;
+		tmp_all_fields += 1;
+	}
 
-	total_len = global_len + tal_len;
-
-	result_flags = calloc(total_len, sizeof(struct args_flag));
+	/* +1 NULL end, means end of array. */
+	result_flags = calloc(total_len + 1, sizeof(struct args_flag));
 	if (result_flags == NULL)
 		return pr_enomem();
 
-	/* Long options must end with zeros (+1) */
-	result_options = calloc(total_len + 1, sizeof(struct option));
+	extra_long_options = ARRAY_LEN(manual_long_opts);
+
+	result_options = calloc(total_len
+	    + extra_long_options /* extra options handled manually. */
+	    + 1, /* long options must end with zeros */
+	    sizeof(struct option));
 	if (result_options == NULL) {
 		free(result_flags);
 		return pr_enomem();
 	}
 
 	result_idx = 0;
-	for(i = 0; i < global_len; i++) {
-		result_flags[result_idx].field = &(global[i]);
+	tmp_all_fields = fields;
+	while (tmp_all_fields->group_name != NULL) {
+		tmp = tmp_all_fields->options;
+		while(tmp->name != NULL) {
+			result_flags[result_idx].field = tmp;
 
-		result_options[result_idx].name = global[i].name;
-		result_options[result_idx].has_arg = global[i].has_arg;
-		result_options[result_idx].val = global[i].short_opt;
-		result_options[result_idx].flag = NULL;
+			result_options[result_idx].name = tmp->name;
+			result_options[result_idx].has_arg = tmp->has_arg;
+			result_options[result_idx].val = tmp->short_opt;
+			result_options[result_idx].flag = NULL;
 
-		result_idx++;
+			result_idx++;
+			tmp += 1;
+		}
+		tmp_all_fields += 1;
 	}
 
-	for(i = 0; i < tal_len; i++) {
-		result_flags[result_idx].field = &(tal[i]);
-
-		result_options[result_idx].name = tal[i].name;
-		result_options[result_idx].has_arg = tal[i].has_arg;
-		result_options[result_idx].val = tal[i].short_opt;
-		result_options[result_idx].flag = NULL;
+	for (i = 0; i < extra_long_options; i++) {
+		result_options[result_idx].name = manual_long_opts[i].name;
+		result_options[result_idx].has_arg = manual_long_opts[i].has_arg;
+		result_options[result_idx].val = manual_long_opts[i].val;
+		result_options[result_idx].flag = manual_long_opts[i].flag;
 
 		result_idx++;
 	}
@@ -250,10 +293,21 @@ construct_options(struct args_flag **flags, struct option **long_options,
 	return 0;
 }
 
-static void
+static int
 set_string(void **field, char *str)
 {
-	*field = str;
+	char *result;
+
+	/* malloc the string, because if the string comes from TOML_HANDLER,
+	 * the string is freed later in that function. */
+	result = malloc(strlen(str) + 1);
+	if (result == NULL)
+		return pr_enomem();
+
+	strcpy(result, str);
+	*field = result;
+
+	return 0;
 }
 
 static void
@@ -280,7 +334,9 @@ handle_option(struct rpki_config *config, struct option_field *field, char *str)
 	config_param += field->offset;
 
 	if (field->type == &gt_string) {
-		set_string(config_param, str);
+		error = set_string(config_param, str);
+		if (error)
+			return error;
 		set_config_param_for_string(config_param, &config_param);
 	} else if (field->type->parse != NULL){
 		error = field->type->parse(field, str, config_param);
@@ -307,7 +363,7 @@ check_missing_flags(struct args_flag *flag)
 	if (!flag->field->required)
 		return 0;
 
-	printf("Missing flag --%s", flag->field->name);
+	printf("Missing param: %s", flag->field->name);
 	switch (flag->field->has_arg) {
 	case no_argument:
 		break;
@@ -352,44 +408,151 @@ print_config(struct rpki_config *config)
 	pr_debug_rm("}");
 }
 
+static void
+set_default_values(struct rpki_config *config)
+{
+	config->enable_rsync = true;
+	config->local_repository = NULL;
+	config->maximum_certificate_depth = 32;
+	config->shuffle_uris = false;
+	config->tal = NULL;
+}
+
+static void _print_usage(bool only_required)
+{
+	struct option_field *tmp;
+	struct group_fields *tmp_all_fields;
+	char *candidates;
+	bool required;
+
+	get_group_fields(&tmp_all_fields);
+
+	while (tmp_all_fields->group_name != NULL) {
+		tmp = tmp_all_fields->options;
+		while(tmp->name != NULL) {
+			required = tmp->required;
+
+			if (only_required != required) {
+				tmp += 1;
+				continue;
+			}
+
+			fprintf(stderr, " ");
+
+			if (!required)
+				fprintf(stderr, "[");
+			fprintf(stderr, "--%s", tmp->name);
+
+			if (tmp->candidates != NULL)
+				candidates = tmp->candidates;
+			else if (tmp->type->candidates != NULL)
+				candidates = tmp->type->candidates;
+			else
+				candidates = NULL;
+
+			switch (tmp->has_arg) {
+			case no_argument:
+				break;
+			case optional_argument:
+				if(candidates == NULL)
+					break;
+				fprintf(stderr, "=<%s>", candidates);
+				break;
+			case required_argument:
+				if(candidates == NULL)
+					break;
+				fprintf(stderr, " <%s>", candidates);
+				break;
+			default:
+				break;
+			}
+			if (!required)
+				fprintf(stderr, "]");
+			tmp += 1;
+		}
+		tmp_all_fields += 1;
+	}
+
+}
+
+
+void
+print_usage(char *progname)
+{
+	/*
+	 * TODO openbsd styleguide said use "getprogname" to set the progam
+	 * name.
+	 */
+	fprintf(stderr, "usage: %s", progname);
+
+	fprintf(stderr, " [-f <config_file>] "
+	    "[--configuration-file <config_file>]");
+
+	_print_usage(true);
+	_print_usage(false);
+
+	fprintf(stderr, "\n");
+	exit(1);
+}
+
 int
-handle_flags_config(int argc, char **argv, struct rpki_config *config)
+handle_flags_config(int argc, char **argv)
 {
 	struct args_flag *flags;
 	struct option *long_options;
-	int opt, indexptr, flags_len, error = 0;
+	struct rpki_config config;
+	int opt, indexptr, flags_len, error;
 
-	flags = NULL;
+	set_default_values(&config);
+
 	long_options = NULL;
+	flags = NULL;
+	flags_len = 0;
 
 	error = construct_options(&flags, &long_options, &flags_len);
 	if (error)
 		return error; /* Error msg already printed. */
 
-	while ((opt = getopt_long(argc, argv, "", long_options, &indexptr))
-	    != -1) {
+	while ((opt = getopt_long(argc, argv, "f:", long_options, &indexptr))
+	    != -1)
 		switch (opt) {
 		case 0:
 			flags[indexptr].is_set = true;
-			error = handle_option(config, flags[indexptr].field,
+			error = handle_option(&config, flags[indexptr].field,
 			    optarg);
+			if (error) {
+				print_usage(argv[0]);
+				goto end;
+			}
+			break;
+		case 'f':
+			error = set_config_from_file(optarg, &config, flags);
+			if (error) {
+				print_usage(argv[0]);
+				goto end;
+			}
 			break;
 		default:
-			error = pr_err("some usage hints.");/* TODO */
-			break;
+			print_usage(argv[0]);
+			error = -EINVAL;
+			goto end;
 		}
 
-		if (error)
-			goto end;
-	}
-
-	for (indexptr = 0; indexptr < flags_len; indexptr++) {
+	for (indexptr = 0; indexptr < flags_len; indexptr++)
 		error |= check_missing_flags(&flags[indexptr]);
+
+	if (error) {
+		print_usage(argv[0]);
+		goto end;
 	}
 
-	print_config(config);
+	print_config(&config);
+	config_set(&config);
 
 end:
+	if (error)
+		_free_rpki_config(&config);
+
 	free(flags);
 	free(long_options);
 	return error;
@@ -397,55 +560,60 @@ end:
 }
 
 void
-get_global_fields(struct option_field **fields, unsigned int *len)
+get_group_fields(struct group_fields **group_fields)
 {
-	if (fields)
-		*fields = global_fields;
-	if (len)
-		*len = OPT_FIELD_ARRAY_LEN(global_fields);
-}
-
-void
-get_tal_fields(struct option_field **fields, unsigned int *len)
-{
-	if (fields)
-		*fields = tal_fields;
-	if (len)
-		*len = OPT_FIELD_ARRAY_LEN(tal_fields);
+	if (group_fields)
+		*group_fields = fields;
 }
 
 void
 config_set(struct rpki_config *new)
 {
-	config = *new;
+	rpki_config = *new;
 }
 
 char const *
 config_get_tal(void)
 {
-	return config.tal;
+	return rpki_config.tal;
 }
 
 char const *
 config_get_local_repository(void)
 {
-	return config.local_repository;
+	return rpki_config.local_repository;
 }
 
 bool
 config_get_enable_rsync(void)
 {
-	return config.enable_rsync;
+	return rpki_config.enable_rsync;
 }
 
 bool
 config_get_shuffle_uris(void)
 {
-	return config.shuffle_uris;
+	return rpki_config.shuffle_uris;
 }
 
 unsigned int
 config_get_max_cert_depth(void)
 {
-	return config.maximum_certificate_depth;
+	return rpki_config.maximum_certificate_depth;
+}
+
+static void
+_free_rpki_config(struct rpki_config *config)
+{
+	if (config->local_repository != NULL)
+		free(config->local_repository);
+
+	if (config->tal != NULL)
+		free(config->tal);
+}
+
+void
+free_rpki_config(void)
+{
+	_free_rpki_config(&rpki_config);
 }

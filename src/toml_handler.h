@@ -3,6 +3,6 @@
 
 #include "config.h"
 
-int set_config_from_file(char *, struct rpki_config *);
+int set_config_from_file(char *, struct rpki_config *, struct args_flag *);
 
 #endif /* SRC_TOML_HANDLER_H_ */

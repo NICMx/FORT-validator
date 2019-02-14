@@ -23,14 +23,16 @@ SLIST_HEAD(uri_list, uri);
 
 static struct uri_list *rsync_uris;
 static char const *const RSYNC_PREFIX = "rsync://";
+static bool rsync_enabled;
 
 //static const char *rsync_command[] = {"rsync", "--recursive", "--delete", "--times", NULL};
 
 int
-rsync_init(void)
+rsync_init(bool is_rsync_enable)
 {
 	/* Disabling rsync will forever be a useful debugging feature. */
-	if (!config_get_enable_rsync())
+	rsync_enabled = is_rsync_enable;
+	if (!rsync_enabled)
 		return 0;
 
 	rsync_uris = malloc(sizeof(struct uri_list));
@@ -46,7 +48,7 @@ rsync_destroy(void)
 {
 	struct uri *uri;
 
-	if (!config_get_enable_rsync())
+	if (!rsync_enabled)
 		return;
 
 	while (!SLIST_EMPTY(rsync_uris)) {
@@ -378,7 +380,7 @@ download_files(struct rpki_uri const *uri)
 
 	prefix_len = strlen(RSYNC_PREFIX);
 
-	if (!config_get_enable_rsync())
+	if (!rsync_enabled)
 		return 0;
 
 	if (uri->global_len < prefix_len ||

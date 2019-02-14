@@ -9,7 +9,6 @@
 #include "log.h"
 #include "rpp.h"
 #include "thread_var.h"
-#include "toml_handler.h"
 #include "object/certificate.h"
 #include "object/manifest.h"
 #include "object/tal.h"
@@ -112,62 +111,21 @@ end:
 	return error;
 }
 
-static int
-handle_file_config(char *config_file, struct rpki_config *config)
-{
-	return set_config_from_file(config_file, config);
-}
-
-static int
-handle_args(int argc, char **argv)
-{
-	struct rpki_config config;
-	char *config_file;
-	int error;
-
-	config.enable_rsync = true;
-	config.local_repository = NULL;
-	config.maximum_certificate_depth = 32;
-	config.shuffle_uris = false;
-	config.tal = NULL;
-
-	if (argc == 1) {
-		return pr_err("Show usage"); /*TODO*/
-	}
-	if (strcasecmp(argv[1], "--configuration_file") == 0) {
-		if (argc == 2) {
-			return pr_err("--configuration_file requires a string "
-			    "as argument.");
-		}
-		config_file = argv[2];
-		argc -= 2;
-		argv += 2;
-		error = handle_file_config(config_file, &config);
-	} else {
-		error = handle_flags_config(argc, argv, &config);
-	}
-
-	if (!error)
-		config_set(&config);
-
-	return error;
-}
-
-
 int
 main(int argc, char **argv)
 {
 	struct tal *tal;
 	int error;
 
-	error = handle_args(argc, argv);
+	error = handle_flags_config(argc, argv);
 	if (error)
 		return error;
+
 	print_stack_trace_on_segfault();
 
-	error = rsync_init();
+	error = rsync_init(config_get_enable_rsync());
 	if (error)
-		return error;
+		goto end;
 
 	add_rpki_oids();
 	thvar_init();
@@ -184,5 +142,7 @@ main(int argc, char **argv)
 	}
 
 	rsync_destroy();
+end:
+	free_rpki_config();
 	return error;
 }
