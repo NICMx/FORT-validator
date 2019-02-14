@@ -179,31 +179,31 @@ handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
 	pr_debug_add("Manifest %s {", uri->global);
 	fnstack_push(uri->global);
 
-	sobj_args.uri = uri;
-	sobj_args.crls = crls;
-	sobj_args.res = NULL;
-	memset(&sobj_args.refs, 0, sizeof(sobj_args.refs));
+	error = signed_object_args_init(&sobj_args, uri, crls);
+	if (error)
+		goto end1;
 	mft.file_path = uri->global;
 
 	error = signed_object_decode(&sobj_args, &asn_DEF_Manifest, &arcs,
-	    (void **) &mft.obj); /* mft.obj and sobj_args.refs in the heap */
+	    (void **) &mft.obj);
 	if (error)
-		goto end1;
+		goto end2;
 
 	error = validate_manifest(mft.obj);
 	if (error)
-		goto end2;
-	error = __handle_manifest(&mft, pp); /* pp in the heap */
+		goto end3;
+	error = __handle_manifest(&mft, pp);
 	if (error)
-		goto end2;
+		goto end3;
 
 	error = refs_validate_ee(&sobj_args.refs, *pp, uri);
 	if (error)
 		rpp_destroy(*pp);
 
-end2:
+end3:
 	ASN_STRUCT_FREE(asn_DEF_Manifest, mft.obj);
-	refs_cleanup(&sobj_args.refs);
+end2:
+	signed_object_args_cleanup(&sobj_args);
 end1:
 	pr_debug_rm("}");
 	fnstack_pop();

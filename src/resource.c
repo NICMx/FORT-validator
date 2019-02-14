@@ -86,26 +86,24 @@ inherit_aors(struct resources *resources, int family)
 
 	parent = get_parent_resources();
 	if (parent == NULL)
-		return pr_err("Certificate inherits IP resources, but parent does not define any resources.");
+		return pr_crit("Parent has no resources.");
 
 	switch (family) {
 	case AF_INET:
 		if (resources->ip4s != NULL)
 			return pr_err("Certificate inherits IPv4 resources while also defining others of its own.");
-		if (parent->ip4s == NULL)
-			return pr_err("Certificate inherits IPv4 resources from parent, but parent lacks IPv4 resources.");
 		resources->ip4s = parent->ip4s;
-		res4_get(resources->ip4s);
+		if (resources->ip4s != NULL)
+			res4_get(resources->ip4s);
 		pr_debug("<Inherit IPv4>");
 		return 0;
 
 	case AF_INET6:
 		if (resources->ip6s != NULL)
 			return pr_err("Certificate inherits IPv6 resources while also defining others of its own.");
-		if (parent->ip6s == NULL)
-			return pr_err("Certificate inherits IPv6 resources from parent, but parent lacks IPv6 resources.");
 		resources->ip6s = parent->ip6s;
-		res6_get(resources->ip6s);
+		if (resources->ip6s != NULL)
+			res6_get(resources->ip6s);
 		pr_debug("<Inherit IPv6>");
 		return 0;
 	}
@@ -388,15 +386,14 @@ inherit_asiors(struct resources *resources)
 
 	parent = get_parent_resources();
 	if (parent == NULL)
-		return pr_err("Certificate inherits ASN resources, but parent does not define any resources.");
+		return pr_crit("Parent has no resources.");
 
 	if (resources->asns != NULL)
 		return pr_err("Certificate inherits ASN resources while also defining others of its own.");
-	if (parent->asns == NULL)
-		return pr_err("Certificate inherits ASN resources from parent, but parent lacks ASN resources.");
 
 	resources->asns = parent->asns;
-	rasn_get(resources->asns);
+	if (resources->asns != NULL)
+		rasn_get(resources->asns);
 	pr_debug("<Inherit ASN>");
 	return 0;
 }

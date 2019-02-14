@@ -22,6 +22,7 @@ struct uris {
 };
 
 struct tal {
+	char const *file_name;
 	struct uris uris;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
@@ -143,8 +144,11 @@ read_spki(struct line_file *lfile, struct tal *tal)
 	return error;
 }
 
+/**
+ * @file_name is expected to outlive @result.
+ */
 int
-tal_load(const char *file_name, struct tal **result)
+tal_load(char const *file_name, struct tal **result)
 {
 	struct line_file *lfile;
 	struct tal *tal;
@@ -159,6 +163,8 @@ tal_load(const char *file_name, struct tal **result)
 		error = -ENOMEM;
 		goto fail3;
 	}
+
+	tal->file_name = file_name;
 
 	error = uris_init(&tal->uris);
 	if (error)
@@ -239,6 +245,12 @@ tal_shuffle_uris(struct tal *tal)
 		array[i] = array[random_index];
 		array[random_index] = tmp;
 	}
+}
+
+char const *
+tal_get_file_name(struct tal *tal)
+{
+	return tal->file_name;
 }
 
 void

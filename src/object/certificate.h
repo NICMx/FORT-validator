@@ -24,7 +24,11 @@ int certificate_validate_rfc6487(X509 *, bool);
 /**
  * Returns the IP and AS resources declared in the respective extensions.
  *
- * TODO why is this not part of the certificate_validate*s, again?
+ * Note: One reason why this is separate from the validate_extensions functions
+ * is because it needs to be handled after the policy has been extracted from
+ * the certificate policies extension, and handle_extensions() currently does
+ * not care about order. I don't know if you'll find other reasons if you choose
+ * to migrate it.
  */
 int certificate_get_resources(X509 *, struct resources *);
 

@@ -197,9 +197,13 @@ main(int argc, char **argv)
 	if (!error) {
 		if (config_get_shuffle_uris())
 			tal_shuffle_uris(tal);
+
 		error = foreach_uri(tal, handle_tal_uri);
-		/* TODO error on no uris were valid. */
-		error = (error >= 0) ? 0 : error;
+		if (error > 0)
+			error = 0;
+		else if (error == 0)
+			error = pr_err("None of the URIs of the TAL yielded a successful traversal.");
+
 		tal_destroy(tal);
 	}
 

@@ -375,7 +375,8 @@ validation_store_subject(struct validation *state, char *subject)
 
 	ARRAYLIST_FOREACH(&cert->subjects, cursor)
 		if (strcmp(*cursor, subject) == 0)
-			return pr_err("Subject name is not unique.");
+			return pr_err("Subject name '%s' is not unique.",
+			    subject);
 
 	duplicate = strdup(subject);
 	if (duplicate == NULL)

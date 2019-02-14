@@ -12,8 +12,8 @@ int
 rpki_public_key_algorithm(void)
 {
 	/*
-	 * TODO Everyone uses this algorithm, but at a quick glance, it doesn't
-	 * seem to match RFC 7935's public key algorithm. Wtf?
+	 * TODO Everyone uses this algorithm, but the RFC says that it should
+	 * be NID_sha256WithRSAEncryption. Wtf?
 	 */
 	return NID_rsaEncryption;
 }

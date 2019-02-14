@@ -35,7 +35,4 @@ int prefix6_decode(IPAddress_t *, struct ipv6_prefix *);
 int range4_decode(IPAddressRange_t *, struct ipv4_range *);
 int range6_decode(IPAddressRange_t *, struct ipv6_range *);
 
-int range4_check_encoding(struct ipv4_range *);
-int range6_check_encoding(struct ipv6_range *);
-
 #endif /* SRC_ADDRESS_H_ */

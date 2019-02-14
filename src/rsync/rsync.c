@@ -86,8 +86,10 @@ do_rsync(char const *rsync_uri, char const *localuri)
 	pr_debug("(%s) command = %s", __func__, command);
 
 	/*
-	 * TODO Improve the execution of the command, maybe using another
-	 * function instead of system().
+	 * TODO (next iteration) system(3): "Do not use system() from a
+	 * privileged program"
+	 * I don't think there's a reason to run this program with privileges,
+	 * but consider using exec(3) instead.
 	 */
 	error = system(command);
 	if (error) {

@@ -191,7 +191,8 @@ family_error:
 	return pr_err("ROA's IP family is not v4 or v6.");
 }
 
-int handle_roa(struct rpki_uri const *uri, struct rpp *pp,
+int
+handle_roa(struct rpki_uri const *uri, struct rpp *pp,
     STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_ROA;
@@ -203,14 +204,9 @@ int handle_roa(struct rpki_uri const *uri, struct rpp *pp,
 	pr_debug_add("ROA %s {", uri->global);
 	fnstack_push(uri->global);
 
-	sobj_args.uri = uri;
-	sobj_args.crls = crls;
-	sobj_args.res = resources_create();
-	if (sobj_args.res == NULL) {
-		error = pr_enomem();
+	error = signed_object_args_init(&sobj_args, uri, crls);
+	if (error)
 		goto end1;
-	}
-	memset(&sobj_args.refs, 0, sizeof(sobj_args.refs));
 
 	error = signed_object_decode(&sobj_args,
 	    &asn_DEF_RouteOriginAttestation, &arcs, (void **) &roa);
@@ -225,9 +221,8 @@ int handle_roa(struct rpki_uri const *uri, struct rpp *pp,
 
 end3:
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
-	refs_cleanup(&sobj_args.refs);
 end2:
-	resources_destroy(sobj_args.res);
+	signed_object_args_cleanup(&sobj_args);
 end1:
 	pr_debug_rm("}");
 	fnstack_pop();

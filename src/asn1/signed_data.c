@@ -17,6 +17,27 @@ static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
+int
+signed_object_args_init(struct signed_object_args *args,
+    struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls)
+{
+	args->res = resources_create();
+	if (args->res == NULL)
+		return pr_enomem();
+
+	args->uri = uri;
+	args->crls = crls;
+	memset(&args->refs, 0, sizeof(args->refs));
+	return 0;
+}
+
+void
+signed_object_args_cleanup(struct signed_object_args *args)
+{
+	resources_destroy(args->res);
+	refs_cleanup(&args->refs);
+}
+
 static int
 is_digest_algorithm(AlgorithmIdentifier_t *id, char const *what)
 {
@@ -95,13 +116,10 @@ handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
 	if (error)
 		goto end2;
 
-	if (args->res != NULL) {
-		/* TODO validate resources even if the SO lacks them */
-		resources_set_policy(args->res, policy);
-		error = certificate_get_resources(cert, args->res);
-		if (error)
-			goto end2;
-	}
+	resources_set_policy(args->res, policy);
+	error = certificate_get_resources(cert, args->res);
+	if (error)
+		goto end2;
 
 end2:
 	X509_free(cert);
@@ -392,7 +410,7 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 
 	/* rfc6488#section-3.2 */
 	/* rfc6488#section-3.3 */
-	/* TODO */
+	/* TODO (field) */
 
 	return 0;
 }
@@ -404,7 +422,8 @@ signed_data_decode(ANY_t *coded, struct signed_object_args *args,
 	struct SignedData *sdata;
 	int error;
 
-	/* rfc6488#section-3.1.l TODO this is BER, not guaranteed to be DER. */
+	/* rfc6488#section-3.1.l */
+	/* TODO (next iteration) this is BER, not guaranteed to be DER. */
 	error = asn1_decode_any(coded, &asn_DEF_SignedData, (void **) &sdata);
 	if (error)
 		return error;

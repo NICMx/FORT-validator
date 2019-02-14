@@ -34,8 +34,9 @@ asn1_decode(const void *buffer, size_t buffer_size,
 	if (rval.code != RC_OK) {
 		/* Must free partial object according to API contracts. */
 		ASN_STRUCT_FREE(*descriptor, *result);
-		/* TODO if rval.code == RC_WMORE (1), more work is needed */
-		return pr_err("Error decoding ASN.1 object: %u", rval.code);
+		/* We expect the data to be complete; RC_WMORE is an error. */
+		return pr_err("Error '%u' decoding ASN.1 object around byte %zu",
+		    rval.code, rval.consumed);
 	}
 
 	error = validate(descriptor, *result);
@@ -61,6 +62,11 @@ asn1_decode_octet_string(OCTET_STRING_t *string,
 	return asn1_decode(string->buf, string->size, descriptor, result);
 }
 
+/*
+ * TODO (next iteration) There's no need to load the entire file into memory.
+ * ber_decode() can take an incomplete buffer, in which case it returns
+ * RC_WMORE.
+ */
 int
 asn1_decode_fc(struct file_contents *fc,
     asn_TYPE_descriptor_t const *descriptor, void **result)

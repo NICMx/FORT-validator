@@ -10,14 +10,24 @@
 
 /*
  * This only exists to reduce argument lists.
- * TODO document fields.
  */
 struct signed_object_args {
-	STACK_OF(X509_CRL) *crls;
-	struct resources *res;
+	/** Location of the signed object. */
 	struct rpki_uri const *uri;
+	/** CRL that might or might not revoke the embedded certificate. */
+	STACK_OF(X509_CRL) *crls;
+	/** A copy of the resources carried by the embedded certificate. */
+	struct resources *res;
+	/**
+	 * A bunch of URLs found in the embedded certificate's extensions,
+	 * recorded for future validation.
+	 */
 	struct certificate_refs refs;
 };
+
+int signed_object_args_init(struct signed_object_args *,
+    struct rpki_uri const *, STACK_OF(X509_CRL) *);
+void signed_object_args_cleanup(struct signed_object_args *);
 
 int signed_data_decode(ANY_t *, struct signed_object_args *args,
     struct SignedData **);

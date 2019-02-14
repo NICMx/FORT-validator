@@ -155,13 +155,12 @@ validate_spki(const unsigned char *cert_spk, int cert_spk_len)
 	 * trouble. We'll have to decode the TAL's SPKI though.
 	 */
 
-	/*
-	 * TODO we're decoding the TAL's public key, but the stacked file name
-	 * is the certificate's. It looks weird when it errors.
-	 */
+	fnstack_push(tal_get_file_name(tal));
 	tal_get_spki(tal, &_tal_spki, &_tal_spki_len);
 	error = asn1_decode(_tal_spki, _tal_spki_len,
 	    &asn_DEF_SubjectPublicKeyInfo, (void **) &tal_spki);
+	fnstack_pop();
+
 	if (error)
 		goto fail1;
 
