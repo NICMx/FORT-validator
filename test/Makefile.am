@@ -10,7 +10,7 @@ AM_CFLAGS = -pedantic -Wall -std=gnu11 -I../src @CHECK_CFLAGS@
 # target.
 MY_LDADD = $(CHECK_LIBS)
 
-check_PROGRAMS = rtr/primitive_reader.test rtr/pdu.test
+check_PROGRAMS = rtr/primitive_reader.test rtr/pdu.test address.test
 TESTS = $(check_PROGRAMS)
 
 rtr_primitive_reader_test_SOURCES = \
@@ -24,3 +24,7 @@ rtr_pdu_test_SOURCES = \
 	$(top_builddir)/src/rtr/primitive_reader.c \
 	$(top_builddir)/src/rtr/pdu_handler.c
 rtr_pdu_test_LDADD = $(MY_LDADD)
+
+address_test_SOURCES = ../src/address.h
+address_test_SOURCES += address_test.c
+address_test_LDADD = $(MY_LDADD)

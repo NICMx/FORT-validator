@@ -32,6 +32,12 @@ main(int argc, char *argv[])
 		}
 	}
 
+	/* TODO This will be overriden when reading from config file */
+	if (json_file == NULL) {
+		fprintf(stderr, "Missing flag '-f <file name>'\n");
+		return -EINVAL;
+	}
+
 	err = config_init(json_file);
 	if (err)
 		return err;

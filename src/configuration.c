@@ -4,27 +4,34 @@
 #include <err.h>
 #include <errno.h>
 #include <jansson.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "common.h"
+#include "csv.h"
 
 #define OPTNAME_LISTEN		"listen"
 #define OPTNAME_LISTEN_ADDRESS	"address"
 #define OPTNAME_LISTEN_PORT	"port"
+#define OPTNAME_VRPS	"vrps"
 
 #define DEFAULT_ADDR		NULL
 #define DEFAULT_PORT		"323"
+#define DEFAULT_VRPS		NULL
 
 struct rtr_config {
 	/** The listener address of the RTR server. */
 	struct addrinfo *address;
 	/** Stored aside only for printing purposes. */
 	char *port;
+	/** VRPs (Validated ROA Payload) location */
+	char *vrps;
 } config;
 
 static int handle_json(json_t *);
 static int json_get_string(json_t *, char const *, char *, char const **);
 static int init_addrinfo(char const *, char const *);
+static int init_vrps_db(char const *);
 
 int
 config_init(char const *json_file_path)
@@ -33,6 +40,10 @@ config_init(char const *json_file_path)
 	json_error_t json_error;
 	int error;
 
+	/*
+	 * TODO What's the point of a default start if there's
+	 * no vrps input?
+	 */
 	if (json_file_path == NULL)
 		return init_addrinfo(DEFAULT_ADDR, DEFAULT_PORT);
 
@@ -57,6 +68,8 @@ config_cleanup(void)
 		freeaddrinfo(config.address);
 	if (config.port != NULL)
 		free(config.port);
+	if (config.vrps != NULL)
+		free(config.vrps);
 }
 
 static int
@@ -65,6 +78,7 @@ handle_json(json_t *root)
 	json_t *listen;
 	char const *address;
 	char const *port;
+	char const *vrps;
 	int error;
 
 	if (!json_is_object(root)) {
@@ -95,6 +109,15 @@ handle_json(json_t *root)
 		port = DEFAULT_PORT;
 	}
 
+	error = json_get_string(root, OPTNAME_VRPS,
+			    DEFAULT_VRPS, &vrps);
+	if (error)
+		return error;
+
+	error = init_vrps_db(vrps);
+	if (error)
+		return error;
+
 	return init_addrinfo(address, port);
 }
 
@@ -116,6 +139,24 @@ json_get_string(json_t *parent, char const *name, char *default_value,
 	}
 
 	*result = json_string_value(child);
+	return 0;
+}
+
+static int
+init_vrps_db(char const *vrps_location)
+{
+	/* FIXME Complete me! */
+	int error;
+
+	if (vrps_location == NULL || strlen(vrps_location) < 1) {
+		warnx("VRPs location must be set");
+		return -EINVAL;
+	}
+
+	error = parse_file(vrps_location);
+	if (error)
+		return error; /* Error msg already printed. */
+
 	return 0;
 }
 
@@ -152,4 +193,10 @@ char const *
 config_get_server_port(void)
 {
 	return config.port;
+}
+
+char const *
+config_get_vrps(void)
+{
+	return config.vrps;
 }
