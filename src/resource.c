@@ -114,7 +114,7 @@ inherit_aors(struct resources *resources, int family)
 }
 
 static int
-add_prefix4(struct resources *resources, IPAddress2_t *addr)
+add_prefix4(struct resources *resources, IPAddress_t *addr)
 {
 	struct resources *parent;
 	struct ipv4_prefix prefix;
@@ -159,7 +159,7 @@ add_prefix4(struct resources *resources, IPAddress2_t *addr)
 }
 
 static int
-add_prefix6(struct resources *resources, IPAddress2_t *addr)
+add_prefix6(struct resources *resources, IPAddress_t *addr)
 {
 	struct resources *parent;
 	struct ipv6_prefix prefix;
@@ -204,7 +204,7 @@ add_prefix6(struct resources *resources, IPAddress2_t *addr)
 }
 
 static int
-add_prefix(struct resources *resources, int family, IPAddress2_t *addr)
+add_prefix(struct resources *resources, int family, IPAddress_t *addr)
 {
 	switch (family) {
 	case AF_INET:

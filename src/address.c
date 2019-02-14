@@ -57,10 +57,10 @@ ipv6_suffix_mask(unsigned int prefix_len, struct in6_addr *result)
 }
 
 /**
- * Translates an `IPAddress2_t` to its equivalent `struct ipv4_prefix`.
+ * Translates an `IPAddress_t` to its equivalent `struct ipv4_prefix`.
  */
 int
-prefix4_decode(IPAddress2_t *str, struct ipv4_prefix *result)
+prefix4_decode(IPAddress_t *str, struct ipv4_prefix *result)
 {
 	int len;
 
@@ -93,10 +93,10 @@ prefix4_decode(IPAddress2_t *str, struct ipv4_prefix *result)
 }
 
 /**
- * Translates an `IPAddress2_t` to its equivalent `struct ipv6_prefix`.
+ * Translates an `IPAddress_t` to its equivalent `struct ipv6_prefix`.
  */
 int
-prefix6_decode(IPAddress2_t *str, struct ipv6_prefix *result)
+prefix6_decode(IPAddress_t *str, struct ipv6_prefix *result)
 {
 	struct in6_addr suffix;
 	int len;
