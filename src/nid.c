@@ -22,7 +22,7 @@ register_oid(const char *oid, const char *sn, const char *ln)
 	if (nid == 0)
 		return crypto_err("Unable to register the %s NID.", sn);
 
-	printf("%s registered. Its nid is %d.\n", sn, nid);
+	pr_info("%s registered. Its nid is %d.", sn, nid);
 	return nid;
 }
 

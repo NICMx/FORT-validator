@@ -6,62 +6,106 @@
 
 struct rpki_config;
 
+struct group_fields;
 struct option_field;
 
-typedef enum global_type_id {
-	GTI_BOOL,
-	GTI_STRING,
-	GTI_U_INT,
-} global_type_id;
-
-typedef void (*print_function)(void *, bool);
-typedef int (*parse_function)(struct option_field *, char *, void *);
-/* This function does not need to validate type->size. */
-typedef int (*validate_function)(struct option_field *, void *);
-
-struct args_flag {
-	struct option_field *field;
-	bool is_set;
-};
+typedef void (*print_function)(struct group_fields const *,
+    struct option_field const *, void *);
+typedef int (*parse_function)(struct option_field const *, char const *,
+    void *);
+typedef int (*handler_function)(struct option_field const *, char *);
 
 struct global_type {
-	global_type_id id;
-	const char *name;
+	/** Same as struct option.has_arg. Mandatory. */
+	int has_arg;
+	/**
+	 * Number of bytes this data type uses in the rpki_config structure.
+	 * Optional. Defaults to zero, obviously.
+	 */
 	size_t size;
+
+	/**
+	 * Prints this data type during the print_config() function.
+	 * Optional.
+	 */
 	print_function print;
+	/**
+	 * Convers from string to this data type.
+	 * If the option's handler is not NULL, this is optional.
+	 */
 	parse_function parse;
-	validate_function validate;
-	char *candidates;
+	/**
+	 * Function that will release this data type.
+	 * If the option's handler is not NULL, this is optional.
+	 */
+	void (*free)(void *);
+
+	/**
+	 * Descriptor of this type's payload. Printed in usage documentation.
+	 * For example, in `--tal=<file>`, @arg_doc is "<file>".
+	 * The type might have no payload, so this is optional.
+	 */
+	char const *arg_doc;
 };
 
+/** This option can be set from the command line. */
+#define AVAILABILITY_GETOPT (1 << 0)
+/** This option can be set from the TOML file. */
+#define AVAILABILITY_TOML (1 << 1)
+
 struct option_field {
-	char *name; /* This being NULL means the end of the array. */
-	struct global_type *type;
-	const char *doc;
+	/*
+	 * Must be zero, alphanumeric or >= 1000.
+	 * If zero, signals the end of the array.
+	 * If alphanumeric, it's the short option name character.
+	 * Otherwise it's just a non-printable identifier.
+	 * Mandatory.
+	 */
+	int id;
+	/**
+	 * For example, if the option name is '--potato', then @name is
+	 * "potato".
+	 * Mandatory.
+	 */
+	char const *name;
+
+	/** Data type. Mandatory. */
+	struct global_type const *type;
+	/**
+	 * Number of bytes between the beginning of the struct rpki_config
+	 * and the position where this option is stored.
+	 * Only relevant when @handler == NULL.
+	 */
 	size_t offset;
-	int has_arg;
-	char short_opt;
-	unsigned long min;
-	unsigned long max;
-	print_function print; /* Overrides type->print. */
-	validate_function validate; /* Overrides type->validate. */
-	char *candidates; /* Overrides type->candidates. */
-	bool required;
+	/** Overrides @type->parser and @offset. Optional. */
+	handler_function handler;
+
+	/**
+	 * Explanation of the field, for user consumption.
+	 * Mandatory.
+	 */
+	const char *doc;
+	/** Overrides type->arg_doc. Optional. */
+	char const *arg_doc;
+	/**
+	 * AVAILABILITY_* flags above.
+	 * Default availability is everywhere.
+	 * Optional.
+	 */
+	int availability;
+	unsigned int min;
+	unsigned int max;
 };
 
 struct group_fields {
-	char *group_name;
-	struct option_field *options;
-	unsigned int options_len;
+	char const *name;
+	struct option_field const *options;
 };
 
-void print_usage(char *progname);
-int handle_option(struct rpki_config *, struct option_field *, char *);
+int parse_option(struct option_field const *, char const *);
 int handle_flags_config(int , char **);
 
-void get_group_fields(struct group_fields **);
-
-void config_set(struct rpki_config *);
+void get_group_fields(struct group_fields const **);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);

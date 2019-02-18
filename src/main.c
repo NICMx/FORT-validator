@@ -85,6 +85,9 @@ main(int argc, char **argv)
 
 	print_stack_trace_on_segfault();
 
+	thvar_init();
+	fnstack_store();
+
 	error = handle_flags_config(argc, argv);
 	if (error)
 		return error;
@@ -99,8 +102,6 @@ main(int argc, char **argv)
 	error = extension_init();
 	if (error)
 		goto end2;
-	thvar_init();
-	fnstack_store();
 	fnstack_push(config_get_tal());
 
 	error = tal_load(config_get_tal(), &tal);

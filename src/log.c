@@ -23,20 +23,20 @@ pr_file_name(FILE *stream)
 {
 #ifndef UNIT_TESTING
 	char const *file = fnstack_peek();
-	fprintf(stream, "%s: ", (file != NULL) ? file : "(Unknown file)");
+	if (file == NULL)
+		return;
+	fprintf(stream, "%s: ", file);
 #endif
 }
 
-#ifdef DEBUG
-
-static void
-pr_add_indent(void)
+void
+pr_indent_add(void)
 {
 	indent++;
 }
 
-static void
-pr_rm_indent(void)
+void
+pr_indent_rm(void)
 {
 	if (indent > 0)
 		indent--;
@@ -44,6 +44,7 @@ pr_rm_indent(void)
 		fprintf(STDERR, "Programming error: Too many pr_rm_indent()s.\n");
 }
 
+#ifdef DEBUG
 
 void
 pr_debug_prefix(void)
@@ -77,7 +78,7 @@ pr_debug_add(const char *format, ...)
 	va_end(args);
 	fprintf(STDOUT, "\n");
 
-	pr_add_indent();
+	pr_indent_add();
 }
 
 void
@@ -85,7 +86,7 @@ pr_debug_rm(const char *format, ...)
 {
 	va_list args;
 
-	pr_rm_indent();
+	pr_indent_rm();
 
 	pr_debug_prefix();
 
@@ -112,6 +113,14 @@ pr_prefix(char const *level)
 	vfprintf(STDERR, format, args);		\
 	va_end(args);				\
 } while (0)
+
+void
+pr_info(const char *format, ...)
+{
+	va_list args;
+	PR_PREFIX("INF", args);
+	fprintf(STDOUT, "\n");
+}
 
 /**
  * Always appends a newline at the end. Always returs 0. (So you can interrupt

@@ -21,6 +21,9 @@
 #define CHECK_FORMAT(str, args) /* Nothing */
 #endif
 
+void pr_indent_add(void);
+void pr_indent_rm(void);
+
 #ifdef DEBUG
 
 void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
@@ -37,6 +40,7 @@ void pr_debug_prefix(void);
 
 #endif
 
+void pr_info(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_warn(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_err(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_errno(int, const char *, ...) CHECK_FORMAT(2, 3);

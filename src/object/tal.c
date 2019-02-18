@@ -155,8 +155,10 @@ tal_load(char const *file_name, struct tal **result)
 	int error;
 
 	error = lfile_open(file_name, &lfile);
-	if (error)
+	if (error) {
+		pr_errno(error, "Error opening file '%s'", file_name);
 		goto fail4;
+	}
 
 	tal = malloc(sizeof(struct tal));
 	if (tal == NULL) {
