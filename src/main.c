@@ -77,118 +77,28 @@ end:
 	return error;
 }
 
-static int
-parse_max_depth(struct rpki_config *config, char *str)
-{
-	/*
-	 * It cannot be UINT_MAX, because then the actual number will overflow
-	 * and will never be bigger than this.
-	 */
-	const unsigned int MAX = UINT_MAX - 1;
-	unsigned long max_depth;
-
-	errno = 0;
-	max_depth = strtoul(str, NULL, 10);
-	if (errno) {
-		return pr_errno(errno,
-		    "'%s' is not an unsigned integer, or is too big (max: %u)",
-		    str, MAX);
-	}
-
-	if (max_depth > MAX)
-		return pr_err("The number '%s' is too big (max: %u)", str, MAX);
-
-	config->maximum_certificate_depth = max_depth;
-	return 0;
-}
-
-static int
-handle_args(int argc, char **argv)
-{
-	struct rpki_config config;
-	int opt, error = 0;
-
-	static struct option long_options[] = {
-		{"tal", no_argument, NULL, 't'},
-		{"local_repository", required_argument, NULL, 'l'},
-		{"disable_rsync", no_argument, 0, 'r'},
-		{"shuffle_uris", no_argument, 0, 's'},
-		{0,0,0,}
-	};
-
-	config.disable_rsync = false;
-	config.shuffle_uris = false;
-	config.local_repository = NULL;
-	config.tal = NULL;
-	config.maximum_certificate_depth = 64;
-
-	while ((opt = getopt_long(argc, argv, "t:l:rsm:", long_options, NULL))
-	    != -1) {
-		switch (opt) {
-		case 't' :
-			config.tal = optarg;
-			break;
-		case 'l' :
-			config.local_repository = optarg;
-			break;
-		case 'r':
-			config.disable_rsync = true;
-			break;
-		case 's':
-			config.shuffle_uris = true;
-			break;
-		case 'm':
-			error = parse_max_depth(&config, optarg);
-			break;
-		default:
-			return pr_err("some usage hints.");/* TODO */
-		}
-	}
-
-	if (config.tal == NULL) {
-		fprintf(stderr, "Missing flag --tal <file>\n");
-		error = -EINVAL;
-	}
-	if (config.local_repository == NULL) {
-		fprintf(stderr, "Missing flag --local_repository <dir>\n");
-		error = -EINVAL;
-	}
-
-	pr_debug("TAL file : %s", config.tal);
-	pr_debug("Local repository : %s", config.local_repository);
-	pr_debug("Disable rsync : %s", config.disable_rsync
-	    ? "true" : "false");
-	pr_debug("shuffle uris : %s", config.shuffle_uris
-	    ? "true" : "false");
-	pr_debug("Maximum certificate depth : %u",
-	    config.maximum_certificate_depth);
-
-	if (!error)
-		config_set(&config);
-	return error;
-}
-
 int
 main(int argc, char **argv)
 {
 	struct tal *tal;
 	int error;
 
-	error = handle_args(argc, argv);
-	if (error)
-		return error;
 	print_stack_trace_on_segfault();
 
-	error = rsync_init();
+	error = handle_flags_config(argc, argv);
 	if (error)
 		return error;
+
+	error = rsync_init(config_get_enable_rsync());
+	if (error)
+		goto end1;
 
 	error = nid_init();
 	if (error)
-		goto end;
+		goto end2;
 	error = extension_init();
 	if (error)
-		goto end;
+		goto end2;
 	thvar_init();
 	fnstack_store();
 	fnstack_push(config_get_tal());
@@ -207,7 +117,9 @@ main(int argc, char **argv)
 		tal_destroy(tal);
 	}
 
-end:
+end2:
 	rsync_destroy();
+end1:
+	free_rpki_config();
 	return error;
 }
