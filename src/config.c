@@ -17,19 +17,24 @@
 			    (opt->availability & type))
 
 struct rpki_config {
-	/* tal file path*/
+	/** TAL file name/location. */
 	char const *tal;
-	/* Local repository path */
+	/** Path of our local clone of the repository */
 	char const *local_repository;
-	/* Disable rsync downloads */
+	/** Disable rsync downloads? */
 	bool disable_rsync;
-	/* Shuffle uris in tal */
+	/**
+	 * Shuffle uris in tal?
+	 * (https://tools.ietf.org/html/rfc7730#section-3, last paragraphs)
+	 */
 	bool shuffle_uris;
-	/*
+	/**
 	 * rfc6487#section-7.2, last paragraph.
 	 * Prevents arbitrarily long paths and loops.
 	 */
 	unsigned int maximum_certificate_depth;
+	/** Print ANSI color codes? */
+	bool color_output;
 };
 
 
@@ -129,6 +134,13 @@ static const struct option_field global_fields[] = {
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, disable_rsync),
 		.doc = "Enable or disable rsync downloads.",
+	}, {
+		.id = 'c',
+		.name = "color-output",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, color_output),
+		.doc = "Print ANSI color codes?",
+		.availability = AVAILABILITY_GETOPT,
 	},
 	{ 0 },
 };
@@ -565,6 +577,12 @@ unsigned int
 config_get_max_cert_depth(void)
 {
 	return rpki_config.maximum_certificate_depth;
+}
+
+bool
+config_get_color_output(void)
+{
+	return rpki_config.color_output;
 }
 
 void

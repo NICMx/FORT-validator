@@ -3,7 +3,15 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 
+#include "config.h"
 #include "thread_var.h"
+
+#define COLOR_DEBUG	"\x1B[36m"	/* Cyan */
+#define COLOR_INFO	"\x1B[37m"	/* Gray */
+#define COLOR_WARNING	"\x1B[33m"	/* Yellow */
+#define COLOR_ERROR	"\x1B[31m"	/* Red */
+#define COLOR_CRITICAL	"\x1B[35m"	/* Pink */
+#define COLOR_RESET	"\x1B[0m"	/* Reset */
 
 #define STDOUT stdout
 #define STDERR stderr
@@ -11,9 +19,12 @@
 static unsigned int indent;
 
 static void
-pr_indent(FILE *stream)
+pr_prefix(FILE *stream, char const *color, char const *level)
 {
 	unsigned int i;
+	if (config_get_color_output())
+		fprintf(stream, "%s", color);
+	fprintf(stream, "%s: ", level);
 	for (i = 0; i < indent; i++)
 		fprintf(stream, "  ");
 }
@@ -49,8 +60,13 @@ pr_indent_rm(void)
 void
 pr_debug_prefix(void)
 {
-	fprintf(STDOUT, "DBG: ");
-	pr_indent(STDOUT);
+	pr_prefix(STDOUT, COLOR_DEBUG, "DBG");
+}
+
+void
+pr_debug_suffix(void)
+{
+	fprintf(STDOUT, "%s\n", COLOR_RESET);
 }
 
 void
@@ -63,7 +79,7 @@ pr_debug(const char *format, ...)
 	va_start(args, format);
 	vfprintf(STDOUT, format, args);
 	va_end(args);
-	fprintf(STDOUT, "\n");
+	pr_debug_suffix();
 }
 
 void
@@ -76,7 +92,7 @@ pr_debug_add(const char *format, ...)
 	va_start(args, format);
 	vfprintf(STDOUT, format, args);
 	va_end(args);
-	fprintf(STDOUT, "\n");
+	pr_debug_suffix();
 
 	pr_indent_add();
 }
@@ -93,33 +109,32 @@ pr_debug_rm(const char *format, ...)
 	va_start(args, format);
 	vfprintf(STDOUT, format, args);
 	va_end(args);
-	fprintf(STDOUT, "\n");
+	pr_debug_suffix();
 }
 
 #endif
 
-static void
-pr_prefix(char const *level)
-{
-	fprintf(STDERR, "%s: ", level);
-	pr_indent(STDERR);
-}
+#define PR_PREFIX(stream, color, level, args) do {			\
+	pr_prefix(stream, color, level);				\
+	pr_file_name(stream);						\
+									\
+	va_start(args, format);						\
+	vfprintf(stream, format, args);					\
+	va_end(args);							\
+} while (0)
 
-#define PR_PREFIX(level, args) do {		\
-	pr_prefix(level);			\
-	pr_file_name(STDERR);			\
-						\
-	va_start(args, format);			\
-	vfprintf(STDERR, format, args);		\
-	va_end(args);				\
+#define PR_SUFFIX(stream) do {						\
+	if (config_get_color_output())					\
+		fprintf(stream, "%s", COLOR_RESET);			\
+	fprintf(stream, "\n");						\
 } while (0)
 
 void
 pr_info(const char *format, ...)
 {
 	va_list args;
-	PR_PREFIX("INF", args);
-	fprintf(STDOUT, "\n");
+	PR_PREFIX(STDOUT, COLOR_INFO, "INF", args);
+	PR_SUFFIX(STDOUT);
 }
 
 /**
@@ -130,8 +145,8 @@ int
 pr_warn(const char *format, ...)
 {
 	va_list args;
-	PR_PREFIX("WRN", args);
-	fprintf(STDERR, "\n");
+	PR_PREFIX(STDERR, COLOR_WARNING, "WRN", args);
+	PR_SUFFIX(STDERR);
 	return 0;
 }
 
@@ -142,8 +157,8 @@ int
 pr_err(const char *format, ...)
 {
 	va_list args;
-	PR_PREFIX("ERR", args);
-	fprintf(STDERR, "\n");
+	PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
+	PR_SUFFIX(STDERR);
 	return -EINVAL;
 }
 
@@ -166,7 +181,7 @@ pr_errno(int error, const char *format, ...)
 {
 	va_list args;
 
-	PR_PREFIX("ERR", args);
+	PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
 
 	if (error) {
 		fprintf(STDERR, ": %s", strerror(error));
@@ -179,7 +194,7 @@ pr_errno(int error, const char *format, ...)
 		error = -EINVAL;
 	}
 
-	fprintf(STDERR, "\n");
+	PR_SUFFIX(STDERR);
 	return error;
 }
 
@@ -202,7 +217,7 @@ crypto_err(const char *format, ...)
 	va_list args;
 	int error;
 
-	PR_PREFIX("ERR", args);
+	PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
 	fprintf(STDERR, ": ");
 
 	error = ERR_GET_REASON(ERR_peek_last_error());
@@ -221,7 +236,7 @@ crypto_err(const char *format, ...)
 		error = -EINVAL;
 	}
 
-	fprintf(STDERR, "\n");
+	PR_SUFFIX(STDERR);
 	return error;
 }
 
@@ -237,14 +252,14 @@ pr_crit(const char *format, ...)
 {
 	va_list args;
 
-	pr_prefix("CRT");
+	pr_prefix(STDERR, COLOR_CRITICAL, "CRT");
 	pr_file_name(STDERR);
 
 	fprintf(STDERR, "Programming error: ");
 	va_start(args, format);
 	vfprintf(STDERR, format, args);
 	va_end(args);
-	fprintf(STDERR, "\n");
 
+	PR_SUFFIX(STDERR);
 	return -EINVAL;
 }

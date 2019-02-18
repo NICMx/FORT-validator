@@ -59,6 +59,7 @@ struct option_field {
 	 * If zero, signals the end of the array.
 	 * If alphanumeric, it's the short option name character.
 	 * Otherwise it's just a non-printable identifier.
+	 * Must be unique across all option fields.
 	 * Mandatory.
 	 */
 	int id;
@@ -112,6 +113,7 @@ char const *config_get_local_repository(void);
 bool config_get_enable_rsync(void);
 bool config_get_shuffle_uris(void);
 unsigned int config_get_max_cert_depth(void);
+bool config_get_color_output(void);
 void free_rpki_config(void);
 
 #endif /* SRC_CONFIG_H_ */

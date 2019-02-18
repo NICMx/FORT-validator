@@ -30,13 +30,13 @@ void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
 void pr_debug_add(const char *, ...) CHECK_FORMAT(1, 2);
 void pr_debug_rm(const char *, ...) CHECK_FORMAT(1, 2);
 void pr_debug_prefix(void);
+void pr_debug_suffix(void);
 
 #else
 
 #define pr_debug(...)
 #define pr_debug_add(...)
 #define pr_debug_rm(...)
-#define pr_debug_prefix
 
 #endif
 
