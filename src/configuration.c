@@ -13,7 +13,7 @@
 #define OPTNAME_LISTEN		"listen"
 #define OPTNAME_LISTEN_ADDRESS	"address"
 #define OPTNAME_LISTEN_PORT	"port"
-#define OPTNAME_VRPS	"vrps"
+#define OPTNAME_VRPS_LOCATION	"vrpsLocation"
 
 #define DEFAULT_ADDR		NULL
 #define DEFAULT_PORT		"323"
@@ -25,13 +25,12 @@ struct rtr_config {
 	/** Stored aside only for printing purposes. */
 	char *port;
 	/** VRPs (Validated ROA Payload) location */
-	char *vrps;
+	char *vrps_location;
 } config;
 
 static int handle_json(json_t *);
 static int json_get_string(json_t *, char const *, char *, char const **);
 static int init_addrinfo(char const *, char const *);
-static int init_vrps_db(char const *);
 
 int
 config_init(char const *json_file_path)
@@ -68,8 +67,8 @@ config_cleanup(void)
 		freeaddrinfo(config.address);
 	if (config.port != NULL)
 		free(config.port);
-	if (config.vrps != NULL)
-		free(config.vrps);
+	if (config.vrps_location != NULL)
+		free(config.vrps_location);
 }
 
 static int
@@ -109,14 +108,11 @@ handle_json(json_t *root)
 		port = DEFAULT_PORT;
 	}
 
-	error = json_get_string(root, OPTNAME_VRPS,
+	error = json_get_string(root, OPTNAME_VRPS_LOCATION,
 			    DEFAULT_VRPS, &vrps);
 	if (error)
 		return error;
-
-	error = init_vrps_db(vrps);
-	if (error)
-		return error;
+	config.vrps_location = str_clone(vrps);
 
 	return init_addrinfo(address, port);
 }
@@ -139,24 +135,6 @@ json_get_string(json_t *parent, char const *name, char *default_value,
 	}
 
 	*result = json_string_value(child);
-	return 0;
-}
-
-static int
-init_vrps_db(char const *vrps_location)
-{
-	/* FIXME Complete me! */
-	int error;
-
-	if (vrps_location == NULL || strlen(vrps_location) < 1) {
-		warnx("VRPs location must be set");
-		return -EINVAL;
-	}
-
-	error = parse_file(vrps_location);
-	if (error)
-		return error; /* Error msg already printed. */
-
 	return 0;
 }
 
@@ -196,7 +174,7 @@ config_get_server_port(void)
 }
 
 char const *
-config_get_vrps(void)
+config_get_vrps_location(void)
 {
-	return config.vrps;
+	return config.vrps_location;
 }

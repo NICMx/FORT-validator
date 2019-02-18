@@ -5,6 +5,8 @@
 
 #include "rtr/rtr.h"
 #include "configuration.h"
+#include "csv.h"
+#include "vrps.h"
 
 /*
  * This program is an RTR server.
@@ -42,8 +44,19 @@ main(int argc, char *argv[])
 	if (err)
 		return err;
 
+	err = deltas_db_init();
+	if (err)
+		goto end1;
+
+	err = csv_parse_vrps_file();
+	if (err)
+		goto end2;
+
 	err = rtr_listen();
 
+end2:
+	deltas_db_destroy();
+end1:
 	config_cleanup();
 	return err;
 }
