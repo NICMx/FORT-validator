@@ -14,7 +14,7 @@ struct vrp {
 	u_int8_t	max_prefix_length;
 };
 
-ARRAY_LIST(delta, struct vrp)
+ARRAY_LIST(delta, struct vrp *)
 ARRAY_LIST(deltasdb, struct delta)
 
 struct deltasdb db;
@@ -106,13 +106,13 @@ deltas_db_add_delta(struct delta *delta)
 int
 delta_add_vrp(struct delta *delta, struct vrp *vrp)
 {
-	return delta_add(delta, vrp);
+	return delta_add(delta, &vrp);
 }
 
 void
-vrp_destroy(struct vrp *vrp)
+vrp_destroy(struct vrp **vrp)
 {
-	free(vrp);
+	free(*vrp);
 }
 
 void
