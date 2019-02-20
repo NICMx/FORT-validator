@@ -13,8 +13,10 @@ rtr_server_SOURCES += line_file.c line_file.h
 rtr_server_SOURCES += vrps.c vrps.h
 
 rtr_server_SOURCES += rtr/pdu_handler.c rtr/pdu_handler.h
+rtr_server_SOURCES += rtr/pdu_serializer.c rtr/pdu_serializer.h
 rtr_server_SOURCES += rtr/pdu.c rtr/pdu.h
 rtr_server_SOURCES += rtr/primitive_reader.c rtr/primitive_reader.h
+rtr_server_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 rtr_server_SOURCES += rtr/rtr.c rtr/rtr.h
 
 rtr_server_LDADD = ${JANSSON_LIBS}
