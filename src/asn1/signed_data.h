@@ -26,7 +26,7 @@ struct signed_object_args {
 };
 
 int signed_object_args_init(struct signed_object_args *,
-    struct rpki_uri const *, STACK_OF(X509_CRL) *);
+    struct rpki_uri const *, STACK_OF(X509_CRL) *, bool);
 void signed_object_args_cleanup(struct signed_object_args *);
 
 int signed_data_decode(ANY_t *, struct signed_object_args *args,

@@ -19,9 +19,11 @@ static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 int
 signed_object_args_init(struct signed_object_args *args,
-    struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls)
+    struct rpki_uri const *uri,
+    STACK_OF(X509_CRL) *crls,
+    bool force_inherit)
 {
-	args->res = resources_create();
+	args->res = resources_create(force_inherit);
 	if (args->res == NULL)
 		return pr_enomem();
 

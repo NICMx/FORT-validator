@@ -17,10 +17,19 @@ struct resources {
 	struct resources_ipv6 *ip6s;
 	struct resources_asn *asns;
 	enum rpki_policy policy;
+	/**
+	 * Should we ban the embedded certificate from defining its own
+	 * resources? (Otherwise it's only allowed to inherit them.)
+	 *
+	 * This should not be implemented as a separate policy, because @policy
+	 * still has to decide whether the certificate is allowed to contain
+	 * classic or revised extensions.
+	 */
+	bool force_inherit;
 };
 
 struct resources *
-resources_create(void)
+resources_create(bool force_inherit)
 {
 	struct resources *result;
 
@@ -32,6 +41,7 @@ resources_create(void)
 	result->ip6s = NULL;
 	result->asns = NULL;
 	result->policy = RPKI_POLICY_RFC6484;
+	result->force_inherit = force_inherit;
 
 	return result;
 }
@@ -327,6 +337,8 @@ add_aors(struct resources *resources, int family,
 	int i;
 	int error;
 
+	if (resources->force_inherit)
+		return pr_err("Certificate is only allowed to inherit resources, but defines its own IP addresses or ranges.");
 	if (aors->list.count == 0)
 		return pr_err("IP extension's set of IP address records is empty.");
 
@@ -495,13 +507,32 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 	return pr_err("Unknown ASIdOrRange type: %u", obj->present);
 }
 
-int
-resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
+static int
+add_asiors(struct resources *resources, struct ASIdentifiers *ids)
 {
 	struct ASIdentifierChoice__asIdsOrRanges *iors;
 	int i;
 	int error;
 
+	if (resources->force_inherit)
+		return pr_err("Certificate is only allowed to inherit resources, but defines its own AS numbers.");
+
+	iors = &ids->asnum->choice.asIdsOrRanges;
+	if (iors->list.count == 0)
+		return pr_err("AS extension's set of AS number records is empty.");
+
+	for (i = 0; i < iors->list.count; i++) {
+		error = add_asior(resources, iors->list.array[i]);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+int
+resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
+{
 	if (ids->asnum == NULL)
 		return pr_err("ASN extension lacks 'asnum' element.");
 	if (ids->rdi != NULL)
@@ -511,16 +542,7 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 	case ASIdentifierChoice_PR_inherit:
 		return inherit_asiors(resources);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
-		iors = &ids->asnum->choice.asIdsOrRanges;
-		if (iors->list.count == 0)
-			return pr_err("AS extension's set of AS number records is empty.");
-		for (i = 0; i < iors->list.count; i++) {
-			error = add_asior(resources, iors->list.array[i]);
-			if (error)
-				return error;
-		}
-		return 0;
-
+		return add_asiors(resources, ids);
 	case ASIdentifierChoice_PR_NOTHING:
 		break;
 	}

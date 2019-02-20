@@ -23,7 +23,7 @@ int get_addr_family(OCTET_STRING_t *);
 
 struct resources;
 
-struct resources *resources_create(void);
+struct resources *resources_create(bool);
 void resources_destroy(struct resources *);
 
 int resources_add_ip(struct resources *, struct IPAddressFamily *);

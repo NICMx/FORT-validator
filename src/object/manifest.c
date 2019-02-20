@@ -188,7 +188,7 @@ handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
 	pr_debug_add("Manifest %s {", uri->global);
 	fnstack_push(uri->global);
 
-	error = signed_object_args_init(&sobj_args, uri, crls);
+	error = signed_object_args_init(&sobj_args, uri, crls, false);
 	if (error)
 		goto end1;
 	mft.file_path = uri->global;

@@ -212,7 +212,7 @@ handle_roa(struct rpki_uri const *uri, struct rpp *pp,
 	pr_debug_add("ROA %s {", uri->global);
 	fnstack_push(uri->global);
 
-	error = signed_object_args_init(&sobj_args, uri, crls);
+	error = signed_object_args_init(&sobj_args, uri, crls, false);
 	if (error)
 		goto end1;
 

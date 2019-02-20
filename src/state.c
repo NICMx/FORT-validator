@@ -253,7 +253,7 @@ validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
 	error = subjects_init(&cert->subjects);
 	if (error)
 		goto end3;
-	cert->resources = resources_create();
+	cert->resources = resources_create(false);
 	if (cert->resources == NULL) {
 		error = pr_enomem();
 		goto end4;
