@@ -40,10 +40,13 @@ rpki_validator_SOURCES += crypto/hash.h crypto/hash.c
 
 rpki_validator_SOURCES += object/certificate.h object/certificate.c
 rpki_validator_SOURCES += object/crl.h object/crl.c
+rpki_validator_SOURCES += object/ghostbusters.h object/ghostbusters.c
 rpki_validator_SOURCES += object/manifest.h object/manifest.c
+rpki_validator_SOURCES += object/name.h object/name.c
 rpki_validator_SOURCES += object/roa.h object/roa.c
 rpki_validator_SOURCES += object/signed_object.h object/signed_object.c
 rpki_validator_SOURCES += object/tal.h object/tal.c
+rpki_validator_SOURCES += object/vcard.h object/vcard.c
 
 rpki_validator_SOURCES += resource/ip4.h resource/ip4.c
 rpki_validator_SOURCES += resource/ip6.h resource/ip6.c

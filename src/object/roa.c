@@ -6,8 +6,16 @@
 
 #include "log.h"
 #include "thread_var.h"
+#include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
+
+static int
+roa_decode(OCTET_STRING_t *string, void *arg)
+{
+	return asn1_decode_octet_string(string, &asn_DEF_RouteOriginAttestation,
+	    arg);
+}
 
 static int
 print_addr4(struct resources *parent, unsigned long asn,
@@ -196,7 +204,7 @@ handle_roa(struct rpki_uri const *uri, struct rpp *pp,
     STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_ROA;
-	struct oid_arcs arcs = OID2ARCS(oid);
+	struct oid_arcs arcs = OID2ARCS("roa", oid);
 	struct signed_object_args sobj_args;
 	struct RouteOriginAttestation *roa;
 	int error;
@@ -208,8 +216,7 @@ handle_roa(struct rpki_uri const *uri, struct rpp *pp,
 	if (error)
 		goto end1;
 
-	error = signed_object_decode(&sobj_args,
-	    &asn_DEF_RouteOriginAttestation, &arcs, (void **) &roa);
+	error = signed_object_decode(&sobj_args, &arcs, roa_decode, &roa);
 	if (error)
 		goto end2;
 

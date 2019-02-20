@@ -66,7 +66,9 @@ pr_debug_prefix(void)
 void
 pr_debug_suffix(void)
 {
-	fprintf(STDOUT, "%s\n", COLOR_RESET);
+	if (config_get_color_output())
+		fprintf(STDOUT, "%s", COLOR_RESET);
+	fprintf(STDOUT, "\n");
 }
 
 void

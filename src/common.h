@@ -1,8 +1,8 @@
 #ifndef SRC_RTR_COMMON_H_
 #define SRC_RTR_COMMON_H_
 
-#include <stdbool.h>
-#include <openssl/x509v3.h>
+#include <stddef.h>
+#include <openssl/x509.h>
 
 /* "I think that this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172
@@ -20,8 +20,5 @@
 
 int string_clone(void const *, size_t, char **);
 int ia5s2string(ASN1_IA5STRING *, char **);
-
-int x509_name_decode(X509_NAME *, int, char **);
-int validate_issuer_name(char const *, X509_NAME *);
 
 #endif /* SRC_RTR_COMMON_H_ */

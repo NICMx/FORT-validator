@@ -105,7 +105,7 @@ test_get_path(char *test, char *expected)
 
 	error = get_path_only(string, strlen(string), rsync_prefix_len, &result);
 	if (error) {
-//		free(string);
+		free(string);
 		return;
 	}
 

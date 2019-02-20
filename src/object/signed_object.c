@@ -3,12 +3,9 @@
 #include <errno.h>
 #include "log.h"
 #include "asn1/content_info.h"
-#include "asn1/decode.h"
 
 static int
-validate_eContentType(struct SignedData *sdata,
-    asn_TYPE_descriptor_t const *descriptor,
-    struct oid_arcs const *oid)
+validate_eContentType(struct SignedData *sdata, struct oid_arcs const *oid)
 {
 	struct oid_arcs arcs;
 	bool equals;
@@ -20,17 +17,15 @@ validate_eContentType(struct SignedData *sdata,
 	equals = arcs_equal(&arcs, oid);
 	free_arcs(&arcs);
 	if (!equals) {
-		return pr_err("SignedObject's encapContentInfo lacks the OID of a %s.",
-		    descriptor->name);
+		return pr_err("The OID of the SignedObject's encapContentInfo is not '%s'.",
+		    oid->name);
 	}
 
 	return 0;
 }
 
 static int
-validate_content_type(struct SignedData *sdata,
-    asn_TYPE_descriptor_t const *descriptor,
-    struct oid_arcs const *oid)
+validate_content_type(struct SignedData *sdata, struct oid_arcs const *oid)
 {
 	OBJECT_IDENTIFIER_t *ctype;
 	struct oid_arcs arcs;
@@ -47,8 +42,8 @@ validate_content_type(struct SignedData *sdata,
 	equals = arcs_equal(&arcs, oid);
 	free_arcs(&arcs);
 	if (!equals) {
-		return pr_err("SignedObject's content type attribute lacks the OID of a %s.",
-		    descriptor->name);
+		return pr_err("The OID of the SignedObject's content type attribute is not '%s'.",
+		    oid->name);
 	}
 
 	return 0;
@@ -56,9 +51,9 @@ validate_content_type(struct SignedData *sdata,
 
 int
 signed_object_decode(struct signed_object_args *args,
-    asn_TYPE_descriptor_t const *descriptor,
     struct oid_arcs const *oid,
-    void **result)
+    signed_object_cb cb,
+    void *cb_arg)
 {
 	struct ContentInfo *cinfo;
 	struct SignedData *sdata;
@@ -75,18 +70,17 @@ signed_object_decode(struct signed_object_args *args,
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.1 */
 	/* rfc6486#section-4.4.1 */
-	error = validate_eContentType(sdata, descriptor, oid);
+	error = validate_eContentType(sdata, oid);
 	if (error)
 		goto end3;
 
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.3 */
-	error = validate_content_type(sdata, descriptor, oid);
+	error = validate_content_type(sdata, oid);
 	if (error)
 		goto end3;
 
-	error = asn1_decode_octet_string(sdata->encapContentInfo.eContent,
-	    descriptor, result);
+	error = cb(sdata->encapContentInfo.eContent, cb_arg);
 
 end3:	signed_data_free(sdata);
 end2:	content_info_free(cinfo);

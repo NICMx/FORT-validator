@@ -83,7 +83,7 @@ START_TEST(file_line_null_chara)
 }
 END_TEST
 
-Suite *lfile_read_suite(void)
+Suite *ghostbusters_suite(void)
 {
 	Suite *suite;
 	TCase *core, *limits, *errors;
@@ -110,7 +110,7 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = lfile_read_suite();
+	suite = ghostbusters_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

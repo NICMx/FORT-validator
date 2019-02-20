@@ -25,8 +25,6 @@ static struct uri_list *rsync_uris;
 static char const *const RSYNC_PREFIX = "rsync://";
 static bool rsync_enabled;
 
-//static const char *rsync_command[] = {"rsync", "--recursive", "--delete", "--times", NULL};
-
 int
 rsync_init(bool is_rsync_enable)
 {

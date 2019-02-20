@@ -8,11 +8,16 @@
 
 /* These objects are expected to live on the stack. */
 struct oid_arcs {
+	char const *name;
 	asn_oid_arc_t *arcs;
 	size_t count;
 };
 
-#define OID2ARCS(oid) { .arcs = oid, .count = ARRAY_LEN(oid) }
+#define OID2ARCS(_name, oid) {						\
+	.name = _name,							\
+	.arcs = oid,							\
+	.count = ARRAY_LEN(oid),					\
+}
 
 void free_arcs(struct oid_arcs *);
 
@@ -32,6 +37,7 @@ typedef asn_oid_arc_t OID[];
 
 #define OID_ROA                      { 1, 2, 840, 113549, 1, 9, 16, 1, 24 }
 #define OID_MANIFEST                 { 1, 2, 840, 113549, 1, 9, 16, 1, 26 }
+#define OID_GHOSTBUSTERS             { 1, 2, 840, 113549, 1, 9, 16, 1, 35 }
 
 #define OID_RSA                      { 1, 2, 840, 113549, 1, 1, 1 }
 #define OID_SHA256                   { 2, 16, 840, 1, 101, 3, 4, 2, 1 }

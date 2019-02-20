@@ -373,10 +373,18 @@ validation_store_subject(struct validation *state, char *subject)
 	if (cert == NULL)
 		return 0; /* The TA lacks siblings, so subject is unique. */
 
-	ARRAYLIST_FOREACH(&cert->subjects, cursor)
-		if (strcmp(*cursor, subject) == 0)
-			return pr_err("Subject name '%s' is not unique.",
+	ARRAYLIST_FOREACH(&cert->subjects, cursor) {
+		if (strcmp(*cursor, subject) == 0) {
+			/*
+			 * I had to downgrade this because lots of people are
+			 * breaking this rule.
+			 * TODO (next iteration) make a framework so the user
+			 * can choose the severity of each error.
+			 */
+			return pr_warn("Subject name '%s' is not unique.",
 			    subject);
+		}
+	}
 
 	duplicate = strdup(subject);
 	if (duplicate == NULL)

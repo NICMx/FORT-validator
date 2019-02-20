@@ -6,6 +6,7 @@
 
 #include "log.h"
 #include "thread_var.h"
+#include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "crypto/hash.h"
 #include "object/certificate.h"
@@ -17,6 +18,12 @@ struct manifest {
 	struct Manifest *obj;
 	char const *file_path;
 };
+
+static int
+manifest_decode(OCTET_STRING_t *string, void *arg)
+{
+	return asn1_decode_octet_string(string, &asn_DEF_Manifest, arg);
+}
 
 static int
 validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
@@ -146,6 +153,8 @@ __handle_manifest(struct manifest *mft, struct rpp **pp)
 			error = rpp_add_roa(*pp, &uri);
 		else if (uri_has_extension(&uri, ".crl"))
 			error = rpp_add_crl(*pp, &uri);
+		else if (uri_has_extension(&uri, ".gbr"))
+			error = rpp_add_ghostbusters(*pp, &uri);
 		else
 			uri_cleanup(&uri); /* ignore it. */
 
@@ -171,7 +180,7 @@ handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
     struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
-	struct oid_arcs arcs = OID2ARCS(oid);
+	struct oid_arcs arcs = OID2ARCS("manifest", oid);
 	struct signed_object_args sobj_args;
 	struct manifest mft;
 	int error;
@@ -184,8 +193,8 @@ handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
 		goto end1;
 	mft.file_path = uri->global;
 
-	error = signed_object_decode(&sobj_args, &asn_DEF_Manifest, &arcs,
-	    (void **) &mft.obj);
+	error = signed_object_decode(&sobj_args, &arcs,
+	    manifest_decode, &mft.obj);
 	if (error)
 		goto end2;
 

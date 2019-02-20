@@ -7,6 +7,7 @@
 #include "uri.h"
 #include "object/certificate.h"
 #include "object/crl.h"
+#include "object/ghostbusters.h"
 #include "object/roa.h"
 
 ARRAY_LIST(uris, struct rpki_uri)
@@ -21,6 +22,8 @@ struct rpp {
 	/* The Manifest is not needed for now. */
 
 	struct uris roas; /* Route Origin Attestations */
+
+	struct uris ghostbusters;
 };
 
 struct rpp *
@@ -37,9 +40,13 @@ rpp_create(void)
 	result->crl_set = false;
 	if (uris_init(&result->roas) != 0)
 		goto fail3;
+	if (uris_init(&result->ghostbusters) != 0)
+		goto fail4;
 
 	return result;
 
+fail4:
+	uris_cleanup(&result->roas, uri_cleanup);
 fail3:
 	uris_cleanup(&result->certs, uri_cleanup);
 fail2:
@@ -53,6 +60,7 @@ rpp_destroy(struct rpp *pp)
 {
 	uris_cleanup(&pp->certs, uri_cleanup);
 	uris_cleanup(&pp->roas, uri_cleanup);
+	uris_cleanup(&pp->ghostbusters, uri_cleanup);
 	free(pp);
 }
 
@@ -66,6 +74,12 @@ int
 rpp_add_roa(struct rpp *pp, struct rpki_uri *uri)
 {
 	return uris_add(&pp->roas, uri);
+}
+
+int
+rpp_add_ghostbusters(struct rpp *pp, struct rpki_uri *uri)
+{
+	return uris_add(&pp->ghostbusters, uri);
 }
 
 int
@@ -132,13 +146,15 @@ rpp_traverse(struct rpp *pp)
 		goto end;
 
 	/* Use CRL stack to validate certificates, and also traverse them. */
-	ARRAYLIST_FOREACH(&pp->certs, uri) {
+	ARRAYLIST_FOREACH(&pp->certs, uri)
 		certificate_traverse(pp, uri, crls, false);
-	}
 
 	/* Use valid address ranges to print ROAs that match them. */
 	ARRAYLIST_FOREACH(&pp->roas, uri)
 		handle_roa(uri, pp, crls);
+
+	ARRAYLIST_FOREACH(&pp->ghostbusters, uri)
+		handle_ghostbusters(uri, pp, crls);
 
 end:
 	sk_X509_CRL_pop_free(crls, X509_CRL_free);

@@ -16,6 +16,7 @@
 #include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "crypto/hash.h"
+#include "object/name.h"
 #include "rsync/rsync.h"
 
 /* Just to prevent some line breaking. */

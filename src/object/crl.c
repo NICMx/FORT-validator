@@ -2,10 +2,10 @@
 
 #include <errno.h>
 #include "algorithm.h"
-#include "common.h"
 #include "extension.h"
 #include "log.h"
 #include "thread_var.h"
+#include "object/name.h"
 
 static int
 __crl_load(struct rpki_uri const *uri, X509_CRL **result)
