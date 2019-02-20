@@ -6,6 +6,12 @@
 #include "../common.h"
 #include "primitive_reader.h"
 
+#define RTR_V0	0
+#define RTR_V1	1
+
+#define CACHE_RESPONSE_PDU_TYPE		3
+#define END_OF_DATA_PDU_TYPE		7
+
 struct pdu_header {
 	u_int8_t	protocol_version;
 	u_int8_t	pdu_type;
@@ -58,6 +64,9 @@ struct ipv6_prefix_pdu {
 struct end_of_data_pdu {
 	struct	pdu_header header;
 	u_int32_t	serial_number;
+	u_int32_t	refresh_interval;
+	u_int32_t	retry_interval;
+	u_int32_t	expire_interval;
 };
 
 struct cache_reset_pdu {
@@ -73,7 +82,7 @@ struct error_report_pdu {
 struct pdu_metadata {
 	size_t	length;
 	int	(*from_stream)(struct pdu_header *, int, void *);
-	int	(*handle)(void *);
+	int	(*handle)(int, void *);
 	void	(*destructor)(void *);
 };
 

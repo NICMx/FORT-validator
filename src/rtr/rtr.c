@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -72,7 +73,7 @@ enum verdict {
 static enum verdict
 handle_accept_result(int client_fd, int err)
 {
-	if (client_fd == 0)
+	if (client_fd >= 0)
 		return VERDICT_SUCCESS;
 
 	/*
@@ -120,7 +121,7 @@ client_thread_cb(void *param_void)
 		if (err)
 			return NULL;
 
-		err = meta->handle(&pdu);
+		err = meta->handle(param.client_fd, pdu);
 		meta->destructor(pdu);
 		if (err)
 			return NULL;
@@ -171,6 +172,9 @@ handle_client_connections(int server_fd)
 		}
 		arg->client_fd = client_fd;
 
+		/*
+		 * FIXME Handle session IDs, serial IDs, protocol version
+		 */
 		errno = pthread_create(&thread, NULL, client_thread_cb, arg);
 		if (errno) {
 			warn("Could not spawn the client's thread");
