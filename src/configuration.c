@@ -14,10 +14,17 @@
 #define OPTNAME_LISTEN_ADDRESS	"address"
 #define OPTNAME_LISTEN_PORT	"port"
 #define OPTNAME_VRPS_LOCATION	"vrpsLocation"
+#define OPTNAME_RTR_INTERVAL	"rtrInterval"
+#define OPTNAME_RTR_INTERVAL_REFRESH	"refresh"
+#define OPTNAME_RTR_INTERVAL_RETRY	"retry"
+#define OPTNAME_RTR_INTERVAL_EXPIRE	"expire"
 
 #define DEFAULT_ADDR		NULL
 #define DEFAULT_PORT		"323"
 #define DEFAULT_VRPS		NULL
+#define DEFAULT_REFRESH_INTERVAL		3600
+#define DEFAULT_RETRY_INTERVAL		600
+#define DEFAULT_EXPIRE_INTERVAL		7200
 
 struct rtr_config {
 	/** The listener address of the RTR server. */
@@ -26,10 +33,15 @@ struct rtr_config {
 	char *port;
 	/** VRPs (Validated ROA Payload) location */
 	char *vrps_location;
+	/** Intervals use at RTR v1 End of data PDU **/
+	int refresh_interval;
+	int retry_interval;
+	int expire_interval;
 } config;
 
 static int handle_json(json_t *);
 static int json_get_string(json_t *, char const *, char *, char const **);
+static int json_get_int(json_t *, char const *, int, int *);
 static int init_addrinfo(char const *, char const *);
 
 int
@@ -75,9 +87,13 @@ static int
 handle_json(json_t *root)
 {
 	json_t *listen;
+	json_t *interval;
 	char const *address;
 	char const *port;
 	char const *vrps;
+	int refresh_interval;
+	int retry_interval;
+	int expire_interval;
 	int error;
 
 	if (!json_is_object(root)) {
@@ -114,6 +130,39 @@ handle_json(json_t *root)
 		return error;
 	config.vrps_location = str_clone(vrps);
 
+	interval = json_object_get(root, OPTNAME_RTR_INTERVAL);
+	if (interval != NULL) {
+		if (!json_is_object(interval)) {
+			warnx("The '%s' element is not a JSON object.",
+			    OPTNAME_RTR_INTERVAL);
+			return -EINVAL;
+		}
+
+		error = json_get_int(interval, OPTNAME_RTR_INTERVAL_REFRESH,
+		    DEFAULT_REFRESH_INTERVAL, &refresh_interval);
+		if (error)
+			return error;
+
+		error = json_get_int(interval, OPTNAME_RTR_INTERVAL_RETRY,
+		    DEFAULT_RETRY_INTERVAL, &retry_interval);
+		if (error)
+			return error;
+
+		error = json_get_int(interval, OPTNAME_RTR_INTERVAL_EXPIRE,
+		    DEFAULT_EXPIRE_INTERVAL, &expire_interval);
+		if (error)
+			return error;
+
+		/* TODO Add range validations https://tools.ietf.org/html/rfc8210#section-6 */
+		config.refresh_interval = refresh_interval;
+		config.retry_interval = retry_interval;
+		config.expire_interval = expire_interval;
+	} else {
+		config.refresh_interval = DEFAULT_REFRESH_INTERVAL;
+		config.retry_interval = DEFAULT_RETRY_INTERVAL;
+		config.expire_interval = DEFAULT_EXPIRE_INTERVAL;
+	}
+
 	return init_addrinfo(address, port);
 }
 
@@ -135,6 +184,27 @@ json_get_string(json_t *parent, char const *name, char *default_value,
 	}
 
 	*result = json_string_value(child);
+	return 0;
+}
+
+static int
+json_get_int(json_t *parent, char const *name, int default_value,
+    int *result)
+{
+	json_t *child;
+
+	child = json_object_get(parent, name);
+	if (child == NULL) {
+		*result = default_value;
+		return 0;
+	}
+
+	if (!json_is_integer(child)) {
+		warnx("The '%s' element is not a JSON integer.", name);
+		return -EINVAL;
+	}
+
+	*result = json_integer_value(child);
 	return 0;
 }
 
@@ -177,4 +247,22 @@ char const *
 config_get_vrps_location(void)
 {
 	return config.vrps_location;
+}
+
+int
+config_get_refresh_interval(void)
+{
+	return config.refresh_interval;
+}
+
+int
+config_get_retry_interval(void)
+{
+	return config.retry_interval;
+}
+
+int
+config_get_expire_interval(void)
+{
+	return config.expire_interval;
 }
