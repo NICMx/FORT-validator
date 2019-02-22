@@ -2,6 +2,9 @@
 
 #include "array_list.h"
 
+#define FLAG_WITHDRAWAL		0
+#define FLAG_ANNOUNCEMENT	1
+
 ARRAY_LIST(delta, struct vrp *)
 ARRAY_LIST(deltasdb, struct delta)
 
@@ -51,6 +54,7 @@ create_vrp (u_int32_t asn, u_int8_t prefix_length, u_int8_t max_prefix_length) {
 	result->asn = asn;
 	result->prefix_length = prefix_length;
 	result->max_prefix_length = max_prefix_length;
+	result->flags = FLAG_ANNOUNCEMENT;
 
 	return result;
 }

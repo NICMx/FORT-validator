@@ -11,8 +11,8 @@
 #include "pdu.h"
 #include "pdu_serializer.h"
 
-/* Header without length field is always 32 bits long */
-#define HEADER_LENGTH 4
+/* Header length field is always 64 bits long */
+#define HEADER_LENGTH 8
 /* IPvN PDUs length without header */
 #define IPV4_PREFIX_LENGTH 12
 #define IPV6_PREFIX_LENGTH 24
@@ -30,18 +30,9 @@ set_header_values(struct pdu_header *header, u_int8_t version, u_int8_t type,
 }
 
 static u_int32_t
-length_cache_response_pdu(struct cache_response_pdu *pdu)
-{
-	/* This PDU has no payload, consider 32 bits of the length field */
-	return HEADER_LENGTH + sizeof(u_int32_t);
-}
-
-static u_int32_t
 length_ipvx_prefix_pdu(bool isv4)
 {
-	/* Consider 32 bits of the length field */
-	return HEADER_LENGTH + sizeof(u_int32_t) +
-	    (isv4 ? IPV4_PREFIX_LENGTH : IPV6_PREFIX_LENGTH);
+	return HEADER_LENGTH + (isv4 ? IPV4_PREFIX_LENGTH : IPV6_PREFIX_LENGTH);
 }
 
 static u_int32_t
@@ -49,8 +40,7 @@ length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 {
 	u_int32_t len;
 
-	/* Consider 32 bits of the length field */
-	len = HEADER_LENGTH + sizeof(u_int32_t);
+	len = HEADER_LENGTH;
 	len += sizeof(pdu->serial_number);
 	if (pdu->header.protocol_version == RTR_V1) {
 		len += sizeof(pdu->refresh_interval);
@@ -95,9 +85,10 @@ send_cache_response_pdu(int fd, u_int8_t version, u_int16_t session_id)
 	char data[BUFFER_SIZE];
 	size_t len;
 
+	/* This PDU has only the header */
 	set_header_values(&pdu.header, version,
 	    CACHE_RESPONSE_PDU_TYPE, session_id);
-	pdu.header.length = length_cache_response_pdu(&pdu);
+	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_response_pdu(&pdu, data);
 	/* TODO wait for the ACK? */
@@ -113,8 +104,8 @@ send_ipv4_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
 	size_t len;
 
 	set_header_values(&pdu.header, version, IPV4_PREFIX_PDU_TYPE, 0);
-	/* TODO FLAGS!! Hardcoded 1 to send announcement */
-	pdu.flags = 1;
+
+	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;
 	pdu.max_length = vrp->max_prefix_length;
 	pdu.zero = 0;
@@ -136,8 +127,8 @@ send_ipv6_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
 	size_t len;
 
 	set_header_values(&pdu.header, version, IPV6_PREFIX_PDU_TYPE, 0);
-	/* TODO FLAGS!! Hardcoded 1 to send announcement */
-	pdu.flags = 1;
+
+	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;
 	pdu.max_length = vrp->max_prefix_length;
 	pdu.zero = 0;
