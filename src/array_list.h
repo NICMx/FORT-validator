@@ -3,6 +3,7 @@
 
 #include <err.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #define ARRAY_LIST(name, elem_type)					\
 	struct name {							\
