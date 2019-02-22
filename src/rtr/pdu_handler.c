@@ -25,7 +25,15 @@ handle_serial_notify_pdu(int fd, void *pdu)
 int
 handle_serial_query_pdu(int fd, void *pdu)
 {
-	return -EUNIMPLEMENTED;
+	struct reset_query_pdu *received = pdu;
+	u_int8_t version;
+
+	version = received->header.protocol_version;
+	/*
+	 * TODO The Serial should be read to get updates, so
+	 * more work needs to be done here.
+	 */
+	return send_cache_reset_pdu(fd, version);
 }
 
 int

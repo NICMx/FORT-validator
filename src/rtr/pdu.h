@@ -13,6 +13,7 @@
 #define IPV4_PREFIX_PDU_TYPE		4
 #define IPV6_PREFIX_PDU_TYPE		6
 #define END_OF_DATA_PDU_TYPE		7
+#define CACHE_RESET_PDU_TYPE		8
 
 struct pdu_header {
 	u_int8_t	protocol_version;

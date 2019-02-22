@@ -79,6 +79,21 @@ send_response(int fd, char *data, size_t data_len)
 }
 
 int
+send_cache_reset_pdu(int fd, u_int8_t version)
+{
+	struct cache_reset_pdu pdu;
+	char data[BUFFER_SIZE];
+	size_t len;
+
+	/* This PDU has only the header */
+	set_header_values(&pdu.header, version, CACHE_RESET_PDU_TYPE, 0);
+	pdu.header.length = HEADER_LENGTH;
+
+	len = serialize_cache_reset_pdu(&pdu, data);
+	return send_response(fd, data, len);
+}
+
+int
 send_cache_response_pdu(int fd, u_int8_t version, u_int16_t session_id)
 {
 	struct cache_response_pdu pdu;

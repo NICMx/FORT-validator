@@ -105,8 +105,8 @@ serialize_end_of_data_pdu(struct end_of_data_pdu *pdu, char *buf)
 size_t
 serialize_cache_reset_pdu(struct cache_reset_pdu *pdu, char *buf)
 {
-	// FIXME Complete me!
-	return 0;
+	/* No payload to serialize */
+	return serialize_pdu_header(&pdu->header, pdu->header.reserved, buf);
 }
 
 size_t
