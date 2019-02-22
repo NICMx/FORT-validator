@@ -10,6 +10,8 @@
 #define RTR_V1	1
 
 #define CACHE_RESPONSE_PDU_TYPE		3
+#define IPV4_PREFIX_PDU_TYPE		4
+#define IPV6_PREFIX_PDU_TYPE		6
 #define END_OF_DATA_PDU_TYPE		7
 
 struct pdu_header {

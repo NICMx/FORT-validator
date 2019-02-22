@@ -3,7 +3,18 @@
 
 #include "pdu.h"
 
+#define BUFFER_SIZE 32
+
+struct data_buffer {
+	size_t len;
+	size_t capacity;
+	char *data;
+};
+
 __BEGIN_DECLS
+void init_buffer(struct data_buffer *);
+void free_buffer(struct data_buffer *);
+
 size_t serialize_serial_notify_pdu(struct serial_notify_pdu *, char *);
 size_t serialize_cache_response_pdu(struct cache_response_pdu *, char *);
 size_t serialize_ipv4_prefix_pdu(struct ipv4_prefix_pdu *, char *);
