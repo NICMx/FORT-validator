@@ -1,18 +1,6 @@
 #include "vrps.h"
 
-#include <netinet/in.h>
-#include <stdlib.h>
 #include "array_list.h"
-
-struct vrp {
-	u_int32_t	asn;
-	union {
-		struct	in_addr ipv4_prefix;
-		struct	in6_addr ipv6_prefix;
-	};
-	u_int8_t	prefix_length;
-	u_int8_t	max_prefix_length;
-};
 
 ARRAY_LIST(delta, struct vrp *)
 ARRAY_LIST(deltasdb, struct delta)
@@ -78,6 +66,7 @@ create_vrp4(u_int32_t asn, struct in_addr ipv4_prefix, u_int8_t prefix_length,
 		return NULL;
 
 	result->ipv4_prefix = ipv4_prefix;
+	result->in_addr_len = INET_ADDRSTRLEN;
 
 	return result;
 }
@@ -93,6 +82,7 @@ create_vrp6(u_int32_t asn, struct in6_addr ipv6_prefix, u_int8_t prefix_length,
 		return NULL;
 
 	result->ipv6_prefix = ipv6_prefix;
+	result->in_addr_len = INET6_ADDRSTRLEN;
 
 	return result;
 }
@@ -123,7 +113,26 @@ delta_destroy(struct delta *delta)
 }
 
 void
-deltas_db_destroy()
+deltas_db_destroy(void)
 {
 	deltasdb_cleanup(&db, delta_destroy);
+}
+
+struct vrp **
+get_vrps_delta(u_int32_t serial, unsigned int *len)
+{
+	/*
+	 * TODO Return the VRPs according to delta
+	 */
+	*len = db.array[0].len;
+	return db.array[0].array;
+}
+
+u_int32_t
+last_serial_number(void)
+{
+	/*
+	 * TODO Return the last serial number of the DB
+	 */
+	return 1;
 }

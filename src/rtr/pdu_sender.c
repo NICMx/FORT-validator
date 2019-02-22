@@ -1,36 +1,21 @@
 #include "pdu_sender.h"
 
 #include <err.h>
-#include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
+#include <string.h>
 
-#include "configuration.h"
+#include "../array_list.h"
+#include "../configuration.h"
+#include "../vrps.h"
 #include "pdu.h"
 #include "pdu_serializer.h"
 
 /* Header without length field is always 32 bits long */
 #define HEADER_LENGTH 4
-
-#define BUFFER_SIZE 32
-
-struct buffer {
-	size_t len;
-	size_t capacity;
-	char *data;
-};
-
-static void
-init_buffer(struct buffer *buffer)
-{
-	buffer->capacity = BUFFER_SIZE;
-	buffer->data = malloc(BUFFER_SIZE);
-}
-
-static void
-free_buffer(struct buffer *buffer)
-{
-	free(buffer->data);
-}
+/* IPvN PDUs length without header */
+#define IPV4_PREFIX_LENGTH 12
+#define IPV6_PREFIX_LENGTH 24
 
 /*
  * Set all the header values, EXCEPT length field.
@@ -52,6 +37,14 @@ length_cache_response_pdu(struct cache_response_pdu *pdu)
 }
 
 static u_int32_t
+length_ipvx_prefix_pdu(bool isv4)
+{
+	/* Consider 32 bits of the length field */
+	return HEADER_LENGTH + sizeof(u_int32_t) +
+	    (isv4 ? IPV4_PREFIX_LENGTH : IPV6_PREFIX_LENGTH);
+}
+
+static u_int32_t
 length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 {
 	u_int32_t len;
@@ -69,15 +62,21 @@ length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 }
 
 static int
-send_response(int fd, struct buffer *buffer)
+send_response(int fd, char *data, size_t data_len)
 {
+	struct data_buffer buffer;
 	int error;
+
+	init_buffer(&buffer);
+	memcpy(buffer.data, data, data_len);
+	buffer.len = data_len;
 
 	/*
 	 * FIXME Check for buffer overflow
 	 */
 
-	error = write(fd, buffer->data, buffer->len);
+	error = write(fd, buffer.data, buffer.len);
+	free_buffer(&buffer);
 	if (error < 0) {
 		err(error, "Error sending response");
 		/*
@@ -93,27 +92,84 @@ int
 send_cache_response_pdu(int fd, u_int8_t version, u_int16_t session_id)
 {
 	struct cache_response_pdu pdu;
-	struct buffer buffer;
-	int error;
+	char data[BUFFER_SIZE];
+	size_t len;
 
-	init_buffer(&buffer);
 	set_header_values(&pdu.header, version,
 	    CACHE_RESPONSE_PDU_TYPE, session_id);
 	pdu.header.length = length_cache_response_pdu(&pdu);
 
-	buffer.len = serialize_cache_response_pdu(&pdu, buffer.data);
-	error = send_response(fd, &buffer);
-	free_buffer(&buffer);
-	if (error)
-		return error;
+	len = serialize_cache_response_pdu(&pdu, data);
+	/* TODO wait for the ACK? */
+	return send_response(fd, data, len);
+}
 
-	return 0;
+static int
+send_ipv4_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
+    struct vrp *vrp)
+{
+	struct ipv4_prefix_pdu pdu;
+	char data[BUFFER_SIZE];
+	size_t len;
+
+	set_header_values(&pdu.header, version, IPV4_PREFIX_PDU_TYPE, 0);
+	/* TODO FLAGS!! Hardcoded 1 to send announcement */
+	pdu.flags = 1;
+	pdu.prefix_length = vrp->prefix_length;
+	pdu.max_length = vrp->max_prefix_length;
+	pdu.zero = 0;
+	pdu.ipv4_prefix = vrp->ipv4_prefix;
+	pdu.asn = vrp->asn;
+	pdu.header.length = length_ipvx_prefix_pdu(true);
+
+	len = serialize_ipv4_prefix_pdu(&pdu, data);
+	/* TODO wait for the ACK? */
+	return send_response(fd, data, len);
+}
+
+static int
+send_ipv6_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
+    struct vrp *vrp)
+{
+	struct ipv6_prefix_pdu pdu;
+	char data[BUFFER_SIZE];
+	size_t len;
+
+	set_header_values(&pdu.header, version, IPV6_PREFIX_PDU_TYPE, 0);
+	/* TODO FLAGS!! Hardcoded 1 to send announcement */
+	pdu.flags = 1;
+	pdu.prefix_length = vrp->prefix_length;
+	pdu.max_length = vrp->max_prefix_length;
+	pdu.zero = 0;
+	pdu.ipv6_prefix = vrp->ipv6_prefix;
+	pdu.asn = vrp->asn;
+	pdu.header.length = length_ipvx_prefix_pdu(false);
+
+	len = serialize_ipv6_prefix_pdu(&pdu, data);
+	/* TODO wait for the ACK? */
+	return send_response(fd, data, len);
 }
 
 int
-send_payload_pdus(int fd, u_int8_t version)
+send_payload_pdus(int fd, u_int8_t version, u_int32_t serial)
 {
-	// FIXME Complete me!!
+	struct vrp **vrps, **ptr;
+	unsigned int len, i;
+	int error;
+
+	vrps = get_vrps_delta(serial, &len);
+	ptr = vrps;
+	for (i = 0; i < len; i++) {
+		if ((*ptr)->in_addr_len == INET_ADDRSTRLEN)
+			error = send_ipv4_prefix_pdu(fd, version, serial, *ptr);
+		else
+			error = send_ipv6_prefix_pdu(fd, version, serial, *ptr);
+
+		if (error)
+			return error;
+		ptr++;
+	}
+
 	return 0;
 }
 
@@ -121,12 +177,11 @@ int
 send_end_of_data_pdu(int fd, u_int8_t version, u_int16_t session_id)
 {
 	struct end_of_data_pdu pdu;
-	struct buffer buffer;
-	int error;
+	char data[BUFFER_SIZE];
+	size_t len;
 
-	init_buffer(&buffer);
 	set_header_values(&pdu.header, version, END_OF_DATA_PDU_TYPE, session_id);
-	pdu.serial_number = 16;
+	pdu.serial_number = last_serial_number();
 	if (version == RTR_V1) {
 		pdu.refresh_interval = config_get_refresh_interval();
 		pdu.retry_interval = config_get_retry_interval();
@@ -134,11 +189,7 @@ send_end_of_data_pdu(int fd, u_int8_t version, u_int16_t session_id)
 	}
 	pdu.header.length = length_end_of_data_pdu(&pdu);
 
-	buffer.len = serialize_end_of_data_pdu(&pdu, buffer.data);
-	error = send_response(fd, &buffer);
-	free_buffer(&buffer);
-	if (error)
-		return error;
-
-	return 0;
+	len = serialize_end_of_data_pdu(&pdu, data);
+	/* TODO wait for the ACK? */
+	return send_response(fd, data, len);
 }

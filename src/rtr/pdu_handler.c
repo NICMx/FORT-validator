@@ -55,7 +55,8 @@ handle_reset_query_pdu(int fd, void *pdu)
 		return error;
 
 	// Send Payload PDUs
-	error = send_payload_pdus(fd, version);
+	// TODO ..and handle Serial Number
+	error = send_payload_pdus(fd, version, 1);
 	if (error)
 		return error;
 
