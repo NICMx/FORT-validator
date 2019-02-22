@@ -30,14 +30,14 @@ write_int32(char *buf, u_int32_t value)
 char *
 write_in_addr(char *buf, struct in_addr value)
 {
-	return write_int32(buf, value.s_addr);
+	return write_int32(buf, ntohl(value.s_addr));
 }
 
 char *
 write_in6_addr(char *buf, struct in6_addr value)
 {
-	buf = write_int32(buf, value.s6_addr32[0]);
-	buf = write_int32(buf, value.s6_addr32[1]);
-	buf = write_int32(buf, value.s6_addr32[2]);
-	return write_int32(buf, value.s6_addr32[3]);
+	buf = write_int32(buf, ntohl(value.s6_addr32[3]));
+	buf = write_int32(buf, ntohl(value.s6_addr32[2]));
+	buf = write_int32(buf, ntohl(value.s6_addr32[1]));
+	return write_int32(buf, ntohl(value.s6_addr32[0]));
 }
