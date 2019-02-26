@@ -35,14 +35,14 @@ test_range6(uint32_t a1a, uint32_t a1b, uint32_t a1c, uint32_t a1d,
 {
 	struct ipv6_range range;
 
-	range.min.s6_addr32[0] = htonl(a1a);
-	range.min.s6_addr32[1] = htonl(a1b);
-	range.min.s6_addr32[2] = htonl(a1c);
-	range.min.s6_addr32[3] = htonl(a1d);
-	range.max.s6_addr32[0] = htonl(a2a);
-	range.max.s6_addr32[1] = htonl(a2b);
-	range.max.s6_addr32[2] = htonl(a2c);
-	range.max.s6_addr32[3] = htonl(a2d);
+	addr6_set_quadrant(&range.min, 0, a1a);
+	addr6_set_quadrant(&range.min, 1, a1b);
+	addr6_set_quadrant(&range.min, 2, a1c);
+	addr6_set_quadrant(&range.min, 3, a1d);
+	addr6_set_quadrant(&range.max, 0, a2a);
+	addr6_set_quadrant(&range.max, 1, a2b);
+	addr6_set_quadrant(&range.max, 2, a2c);
+	addr6_set_quadrant(&range.max, 3, a2d);
 
 	ck_assert_int_eq(valid ? 0 : -EINVAL, check_encoding6(&range));
 }

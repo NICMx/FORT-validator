@@ -32,6 +32,62 @@ be32_suffix_mask(unsigned int prefix_len)
 }
 
 /**
+ * This is the same as `ntohl(addr->s6_addr32[quadrant])`.
+ *
+ * So why does it exist? Because s6_addr32 is not portable.
+ *
+ * Never use s6_addr16 nor s6_addr32.
+ */
+static uint32_t
+addr6_get_quadrant(struct in6_addr *addr, unsigned int quadrant)
+{
+	return (((unsigned int) addr->s6_addr[4 * quadrant    ]) << 24)
+	     | (((unsigned int) addr->s6_addr[4 * quadrant + 1]) << 16)
+	     | (((unsigned int) addr->s6_addr[4 * quadrant + 2]) <<  8)
+	     | (((unsigned int) addr->s6_addr[4 * quadrant + 3])      );
+}
+
+#define V6_QUADRANT_EDIT(addr, quadrant, op, value)			\
+	addr->s6_addr[4 * quadrant    ] op (value >> 24)       ;	\
+	addr->s6_addr[4 * quadrant + 1] op (value >> 16) & 0xFF;	\
+	addr->s6_addr[4 * quadrant + 2] op (value >>  8) & 0xFF;	\
+	addr->s6_addr[4 * quadrant + 3] op (value      ) & 0xFF;
+
+/**
+ * Same as `addr->s6_addr32[quadrant] = htonl(value)`.
+ */
+static void
+addr6_set_quadrant(struct in6_addr *addr, unsigned int quadrant, uint32_t value)
+{
+	V6_QUADRANT_EDIT(addr, quadrant, =, value)
+}
+
+/**
+ * Same as `addr->s6_addr32[quadrant] |= htonl(value)`.
+ */
+static void
+addr6_or_quadrant(struct in6_addr *addr, unsigned int quadrant, uint32_t value)
+{
+	V6_QUADRANT_EDIT(addr, quadrant, |=, value)
+}
+
+/**
+ * Returns true if @a1 and @a2 have at least one enabled bit in common,
+ * false otherwise.
+ */
+static bool
+addr6_bitwise_and(struct in6_addr *a1, struct in6_addr *a2)
+{
+	unsigned int i;
+
+	for (i = 0; i < 16; i++)
+		if ((a1->s6_addr[i] & a2->s6_addr[i]) != 0)
+			return true;
+
+	return false;
+}
+
+/**
  * Enables all the suffix bits of @result (assuming its prefix length is
  * @prefix_len).
  * @result's prefix bits will not be modified.
@@ -40,19 +96,19 @@ void
 ipv6_suffix_mask(unsigned int prefix_len, struct in6_addr *result)
 {
 	if (prefix_len < 32) {
-		result->s6_addr32[0] |= be32_suffix_mask(prefix_len);
-		result->s6_addr32[1] = 0xFFFFFFFFu;
-		result->s6_addr32[2] = 0xFFFFFFFFu;
-		result->s6_addr32[3] = 0xFFFFFFFFu;
+		addr6_or_quadrant(result, 0, u32_suffix_mask(prefix_len));
+		addr6_set_quadrant(result, 1, 0xFFFFFFFFu);
+		addr6_set_quadrant(result, 2, 0xFFFFFFFFu);
+		addr6_set_quadrant(result, 3, 0xFFFFFFFFu);
 	} else if (prefix_len < 64) {
-		result->s6_addr32[1] |= be32_suffix_mask(prefix_len - 32);
-		result->s6_addr32[2] = 0xFFFFFFFFu;
-		result->s6_addr32[3] = 0xFFFFFFFFu;
+		addr6_or_quadrant(result, 1, u32_suffix_mask(prefix_len - 32));
+		addr6_set_quadrant(result, 2, 0xFFFFFFFFu);
+		addr6_set_quadrant(result, 3, 0xFFFFFFFFu);
 	} else if (prefix_len < 96) {
-		result->s6_addr32[2] |= be32_suffix_mask(prefix_len - 64);
-		result->s6_addr32[3] = 0xFFFFFFFFu;
+		addr6_or_quadrant(result, 2, u32_suffix_mask(prefix_len - 64));
+		addr6_set_quadrant(result, 3, 0xFFFFFFFFu);
 	} else {
-		result->s6_addr32[3] |= be32_suffix_mask(prefix_len - 96);
+		addr6_or_quadrant(result, 3, u32_suffix_mask(prefix_len - 96));
 	}
 }
 
@@ -123,10 +179,7 @@ prefix6_decode(IPAddress_t *str, struct ipv6_prefix *result)
 
 	memset(&suffix, 0, sizeof(suffix));
 	ipv6_suffix_mask(result->len, &suffix);
-	if (   (result->addr.s6_addr32[0] & suffix.s6_addr32[0])
-	    || (result->addr.s6_addr32[1] & suffix.s6_addr32[1])
-	    || (result->addr.s6_addr32[2] & suffix.s6_addr32[2])
-	    || (result->addr.s6_addr32[3] & suffix.s6_addr32[3])) {
+	if (addr6_bitwise_and(&result->addr, &suffix)) {
 		return pr_err("IPv6 prefix '%s/%u' has enabled suffix bits.",
 		    v6addr2str(&result->addr), result->len);
 	}
@@ -203,8 +256,8 @@ check_order6(struct ipv6_range *result)
 	unsigned int quadrant;
 
 	for (quadrant = 0; quadrant < 4; quadrant++) {
-		min = ntohl(result->min.s6_addr32[quadrant]);
-		max = ntohl(result->max.s6_addr32[quadrant]);
+		min = addr6_get_quadrant(&result->min, quadrant);
+		max = addr6_get_quadrant(&result->max, quadrant);
 		if (min > max) {
 			return pr_err("The IPv6 range '%s-%s' is inverted.",
 			    v6addr2str(&result->min),
@@ -232,8 +285,8 @@ __check_encoding6(struct ipv6_range *range, unsigned int quadrant,
 	uint32_t max;
 
 	for (; quadrant < 4; quadrant++) {
-		min = ntohl(range->min.s6_addr32[quadrant]);
-		max = ntohl(range->max.s6_addr32[quadrant]);
+		min = addr6_get_quadrant(&range->min, quadrant);
+		max = addr6_get_quadrant(&range->max, quadrant);
 		for (; mask != 0; mask >>= 1)
 			if (((min & mask) != 0) || ((max & mask) == 0))
 				return 0;
@@ -252,8 +305,8 @@ check_encoding6(struct ipv6_range *range)
 	uint32_t mask;
 
 	for (quadrant = 0; quadrant < 4; quadrant++) {
-		min = ntohl(range->min.s6_addr32[quadrant]);
-		max = ntohl(range->max.s6_addr32[quadrant]);
+		min = addr6_get_quadrant(&range->min, quadrant);
+		max = addr6_get_quadrant(&range->max, quadrant);
 		for (mask = 0x80000000u; mask != 0; mask >>= 1)
 			if ((min & mask) != (max & mask))
 				return __check_encoding6(range, quadrant, mask);
