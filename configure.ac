@@ -37,6 +37,11 @@ AC_SEARCH_LIBS([toml_parse], [toml], [],
 	[AC_MSG_ERROR([unable to find the toml_parse() function])]
 )
 
+AC_SEARCH_LIBS([backtrace],[execinfo],[],
+	[AC_MSG_ERROR([unable to find backtrace() function])]
+)
+
+
 # Check dependencies.
 PKG_CHECK_MODULES([CHECK], [check])
 

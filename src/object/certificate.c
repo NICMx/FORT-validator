@@ -19,6 +19,8 @@
 #include "object/name.h"
 #include "rsync/rsync.h"
 
+#include <sys/socket.h>
+
 /* Just to prevent some line breaking. */
 #define GN_URI uniformResourceIdentifier
 

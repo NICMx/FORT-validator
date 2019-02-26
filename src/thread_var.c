@@ -7,6 +7,8 @@
 #include <string.h>
 #include <arpa/inet.h>
 
+#include <sys/socket.h>
+
 static pthread_key_t state_key;
 static pthread_key_t filenames_key;
 

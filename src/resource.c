@@ -10,6 +10,8 @@
 #include "resource/ip4.h"
 #include "resource/ip6.h"
 #include "resource/asn.h"
+#include <sys/socket.h>
+
 
 /* The resources we extracted from one certificate. */
 struct resources {

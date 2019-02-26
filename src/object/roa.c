@@ -10,6 +10,8 @@
 #include "asn1/oid.h"
 #include "object/signed_object.h"
 
+#include <sys/socket.h>
+
 static int
 roa_decode(OCTET_STRING_t *string, void *arg)
 {
