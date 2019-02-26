@@ -17,6 +17,16 @@
 #define IPV4_PREFIX_LENGTH 12
 #define IPV6_PREFIX_LENGTH 24
 
+void
+init_sender_common(struct sender_common *common, int fd, u_int8_t version,
+    u_int16_t *session_id, u_int32_t *start_serial, u_int32_t *end_serial)
+{
+	common->fd = fd;
+	common->version = version;
+	common->session_id = session_id == NULL ? 0 : session_id;
+	common->start_serial = start_serial;
+	common->end_serial = end_serial;
+}
 /*
  * Set all the header values, EXCEPT length field.
  */
@@ -79,46 +89,45 @@ send_response(int fd, char *data, size_t data_len)
 }
 
 int
-send_cache_reset_pdu(int fd, u_int8_t version)
+send_cache_reset_pdu(struct sender_common *common)
 {
 	struct cache_reset_pdu pdu;
 	char data[BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
-	set_header_values(&pdu.header, version, CACHE_RESET_PDU_TYPE, 0);
+	set_header_values(&pdu.header, common->version, CACHE_RESET_PDU_TYPE, 0);
 	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_reset_pdu(&pdu, data);
-	return send_response(fd, data, len);
+	return send_response(common->fd, data, len);
 }
 
 int
-send_cache_response_pdu(int fd, u_int8_t version, u_int16_t session_id)
+send_cache_response_pdu(struct sender_common *common)
 {
 	struct cache_response_pdu pdu;
 	char data[BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
-	set_header_values(&pdu.header, version,
-	    CACHE_RESPONSE_PDU_TYPE, session_id);
+	set_header_values(&pdu.header, common->version,
+	    CACHE_RESPONSE_PDU_TYPE, *common->session_id);
 	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_response_pdu(&pdu, data);
-	/* TODO wait for the ACK? */
-	return send_response(fd, data, len);
+
+	return send_response(common->fd, data, len);
 }
 
 static int
-send_ipv4_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
-    struct vrp *vrp)
+send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv4_prefix_pdu pdu;
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, version, IPV4_PREFIX_PDU_TYPE, 0);
+	set_header_values(&pdu.header, common->version, IPV4_PREFIX_PDU_TYPE, 0);
 
 	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;
@@ -129,19 +138,18 @@ send_ipv4_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
 	pdu.header.length = length_ipvx_prefix_pdu(true);
 
 	len = serialize_ipv4_prefix_pdu(&pdu, data);
-	/* TODO wait for the ACK? */
-	return send_response(fd, data, len);
+
+	return send_response(common->fd, data, len);
 }
 
 static int
-send_ipv6_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
-    struct vrp *vrp)
+send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv6_prefix_pdu pdu;
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, version, IPV6_PREFIX_PDU_TYPE, 0);
+	set_header_values(&pdu.header, common->version, IPV6_PREFIX_PDU_TYPE, 0);
 
 	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;
@@ -152,24 +160,27 @@ send_ipv6_prefix_pdu(int fd, u_int8_t version, u_int32_t serial,
 	pdu.header.length = length_ipvx_prefix_pdu(false);
 
 	len = serialize_ipv6_prefix_pdu(&pdu, data);
-	/* TODO wait for the ACK? */
-	return send_response(fd, data, len);
+
+	return send_response(common->fd, data, len);
 }
 
 int
-send_payload_pdus(int fd, u_int8_t version, u_int32_t serial)
+send_payload_pdus(struct sender_common *common)
 {
-	struct vrp **vrps, **ptr;
+	struct vrp *vrps, *ptr;
 	unsigned int len, i;
 	int error;
 
-	vrps = get_vrps_delta(serial, &len);
+	len = get_vrps_delta(common->start_serial, common->end_serial, &vrps);
+	if (len == 0)
+		return 0;
+
 	ptr = vrps;
 	for (i = 0; i < len; i++) {
-		if ((*ptr)->in_addr_len == INET_ADDRSTRLEN)
-			error = send_ipv4_prefix_pdu(fd, version, serial, *ptr);
+		if (ptr->in_addr_len == INET_ADDRSTRLEN)
+			error = send_ipv4_prefix_pdu(common, ptr);
 		else
-			error = send_ipv6_prefix_pdu(fd, version, serial, *ptr);
+			error = send_ipv6_prefix_pdu(common, ptr);
 
 		if (error)
 			return error;
@@ -180,15 +191,15 @@ send_payload_pdus(int fd, u_int8_t version, u_int32_t serial)
 }
 
 int
-send_end_of_data_pdu(int fd, u_int8_t version, u_int16_t session_id)
+send_end_of_data_pdu(struct sender_common *common)
 {
 	struct end_of_data_pdu pdu;
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, version, END_OF_DATA_PDU_TYPE, session_id);
-	pdu.serial_number = last_serial_number();
-	if (version == RTR_V1) {
+	set_header_values(&pdu.header, common->version, END_OF_DATA_PDU_TYPE, *common->session_id);
+	pdu.serial_number = *common->end_serial;
+	if (common->version == RTR_V1) {
 		pdu.refresh_interval = config_get_refresh_interval();
 		pdu.retry_interval = config_get_retry_interval();
 		pdu.expire_interval = config_get_expire_interval();
@@ -196,6 +207,6 @@ send_end_of_data_pdu(int fd, u_int8_t version, u_int16_t session_id)
 	pdu.header.length = length_end_of_data_pdu(&pdu);
 
 	len = serialize_end_of_data_pdu(&pdu, data);
-	/* TODO wait for the ACK? */
-	return send_response(fd, data, len);
+
+	return send_response(common->fd, data, len);
 }

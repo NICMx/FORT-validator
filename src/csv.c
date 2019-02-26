@@ -165,7 +165,7 @@ add_vrp(char *line, struct delta *delta)
 
 	error = delta_add_vrp(delta, vrp);
 	if (error) {
-		vrp_destroy(&vrp);
+		vrp_destroy(vrp);
 		goto error;
 	}
 

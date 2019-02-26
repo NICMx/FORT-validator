@@ -2,9 +2,11 @@
 
 #include <err.h>
 #include <errno.h>
+#include <stddef.h>
 
 #include "pdu.h"
 #include "pdu_sender.h"
+#include "vrps.h"
 
 static int warn_unexpected_pdu(char *);
 
@@ -22,54 +24,93 @@ handle_serial_notify_pdu(int fd, void *pdu)
 	return warn_unexpected_pdu("Serial Notify");
 }
 
+static int
+send_commmon_exchange(struct sender_common *common)
+{
+	int error;
+
+	// Send Cache response PDU
+	error = send_cache_response_pdu(common);
+	if (error)
+		return error;
+
+	// Send Payload PDUs
+	error = send_payload_pdus(common);
+	if (error)
+		return error;
+
+	// Send End of data PDU
+	return send_end_of_data_pdu(common);
+}
+
 int
 handle_serial_query_pdu(int fd, void *pdu)
 {
-	struct reset_query_pdu *received = pdu;
-	u_int8_t version;
+	struct serial_query_pdu *received = pdu;
+	struct sender_common common;
+	int error, updates;
+	u_int32_t current_serial;
 
-	version = received->header.protocol_version;
-	/*
-	 * TODO The Serial should be read to get updates, so
-	 * more work needs to be done here.
-	 */
-	return send_cache_reset_pdu(fd, version);
+	current_serial = last_serial_number();
+	/* TODO Handle sessions and its ID */
+	init_sender_common(&common, fd, received->header.protocol_version,
+	    &received->header.session_id, &received->serial_number,
+	    &current_serial);
+
+	updates = deltas_db_status(common.start_serial);
+	switch (updates) {
+	/* TODO Implement error */
+//	case NO_DATA_AVAILABLE:
+		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
+//		return send_error_pdu;
+	case DIFF_UNDETERMINED:
+		/* https://tools.ietf.org/html/rfc8210#section-8.3 */
+		return send_cache_reset_pdu(&common);
+	case DIFF_AVAILABLE:
+		/* https://tools.ietf.org/html/rfc8210#section-8.2 */
+		return send_commmon_exchange(&common);
+	case NO_DIFF:
+		/* Typical exchange with no Payloads */
+		error = send_cache_response_pdu(&common);
+		if (error)
+			return error;
+		return send_end_of_data_pdu(&common);
+	default:
+		error = -EINVAL;
+		err(error, "Reached 'unreachable' code");
+		return error;
+	}
 }
 
 int
 handle_reset_query_pdu(int fd, void *pdu)
 {
 	struct reset_query_pdu *received = pdu;
+	struct sender_common common;
+	u_int32_t current_serial;
 	u_int16_t session_id;
-	u_int8_t version;
-	int error;
+	int error, updates;
 
-	/*
-	 * FIXME Complete behaviour:
-	 * - Do I have data?
-	 *   + NO: Send error
-	 *         https://tools.ietf.org/html/rfc8210#section-8.4
-	 *   + YES: Send data (cache response -> payloads -> end of data)
-	 *          https://tools.ietf.org/html/rfc8210#section-8.1
-	 */
-
-	/* FIXME Handle sessions and its ID */
+	current_serial = last_serial_number();
+	/* TODO Handle sessions and its ID */
 	session_id = 1;
-	version = received->header.protocol_version;
+	init_sender_common(&common, fd, received->header.protocol_version,
+	    &session_id, NULL, &current_serial);
 
-	// Send Cache response PDU
-	error = send_cache_response_pdu(fd, version, session_id);
-	if (error)
+	updates = deltas_db_status(common.start_serial);
+	switch (updates) {
+	/* TODO Implement error */
+//	case NO_DATA_AVAILABLE:
+		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
+//		return send_error_pdu;
+	case DIFF_AVAILABLE:
+		/* https://tools.ietf.org/html/rfc8210#section-8.1 */
+		return send_commmon_exchange(&common);
+	default:
+		error = -EINVAL;
+		err(error, "Reached 'unreachable' code");
 		return error;
-
-	// Send Payload PDUs
-	// TODO ..and handle Serial Number
-	error = send_payload_pdus(fd, version, 1);
-	if (error)
-		return error;
-
-	// Send End of data PDU
-	return send_end_of_data_pdu(fd, version, session_id);
+	}
 }
 
 int
@@ -105,6 +146,12 @@ handle_cache_reset_pdu(int fd, void *pdu)
 int
 handle_error_report_pdu(int fd, void *pdu)
 {
-	/* TODO */
-	return -EUNIMPLEMENTED;
+	struct error_report_pdu *received = pdu;
+	struct sender_common common;
+
+	init_sender_common(&common, fd, received->header.protocol_version,
+		NULL, NULL, NULL);
+
+	/* TODO complete handler */
+	return 0;
 }
