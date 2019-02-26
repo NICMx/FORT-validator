@@ -139,23 +139,27 @@ error_report_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 {
 	struct error_report_pdu *pdu = pdu_void;
 	u_int32_t sub_pdu_len; /* TODO use this for something */
-	int err;
+	int error;
 
 	memcpy(&pdu->header, header, sizeof(*header));
 
-	err = read_int32(fd, &sub_pdu_len);
-	if (err)
-		return err;
-	err = pdu_load(fd, &pdu->erroneous_pdu, NULL);
-	if (err)
+	error = read_int32(fd, &sub_pdu_len);
+	if (error)
+		return error;
+
+	error = pdu_load(fd, &pdu->erroneous_pdu, NULL);
+	if (error)
 		return -EINVAL;
 
-	err = read_string(fd, &pdu->error_message);
-	if (err) {
+	error = read_string(fd, &pdu->error_message);
+	if (error) {
 		free(pdu->erroneous_pdu);
-		return err;
+		return error;
 	}
 
+	warnx("Error report received from stream. Code %d. Message %s.",
+	    pdu->header.error_code,
+	    strlen(pdu->error_message) == 0 ? "**empty**" : pdu->error_message);
 	return 0;
 }
 
