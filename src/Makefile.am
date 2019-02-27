@@ -55,7 +55,7 @@ rpki_validator_SOURCES += resource/asn.h resource/asn.c
 rpki_validator_CFLAGS  = -Wall
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 rpki_validator_CFLAGS += $(GCC_WARNS)
-rpki_validator_CFLAGS += -std=gnu11 -O0 -g $(CFLAGS_DEBUG)
+rpki_validator_CFLAGS += -std=gnu99 -O0 -g $(CFLAGS_DEBUG)
 rpki_validator_LDFLAGS = $(LDFLAGS_DEBUG)
 
 # I'm tired of scrolling up, but feel free to comment this out.

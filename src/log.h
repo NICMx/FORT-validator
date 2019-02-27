@@ -34,9 +34,20 @@ void pr_debug_suffix(void);
 
 #else
 
-#define pr_debug(...)
-#define pr_debug_add(...)
-#define pr_debug_rm(...)
+/*
+ * I want to define these as empty, but then we get compiler warnings on
+ *
+ * ```
+ * else
+ * 	pr_debug(...);
+ * ```
+ *
+ * Oh well.
+ */
+
+#define pr_debug(...) do {} while (0)
+#define pr_debug_add(...) do {} while (0)
+#define pr_debug_rm(...) do {} while (0)
 
 #endif
 

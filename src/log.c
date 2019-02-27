@@ -6,7 +6,10 @@
 #include "config.h"
 #include "thread_var.h"
 
+#ifdef DEBUG
 #define COLOR_DEBUG	"\x1B[36m"	/* Cyan */
+#endif
+
 #define COLOR_INFO	"\x1B[37m"	/* Gray */
 #define COLOR_WARNING	"\x1B[33m"	/* Yellow */
 #define COLOR_ERROR	"\x1B[31m"	/* Red */
