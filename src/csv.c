@@ -99,6 +99,7 @@ add_vrp(char *line, struct delta *delta)
 	if (line_copy == NULL) {
 		error = -ENOMEM;
 		err(error, "Out of memory allocating CSV line copy");
+		goto error;
 	}
 	strcpy(line_copy, line);
 
@@ -172,6 +173,7 @@ add_vrp(char *line, struct delta *delta)
 	return 0;
 
 error:
+	free(line_copy);
 	return error;
 }
 
