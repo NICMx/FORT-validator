@@ -670,53 +670,43 @@ end:
 	return error;
 }
 
-static bool
-extension_equals(X509_EXTENSION *ext1, X509_EXTENSION *ext2)
-{
-	int crit1;
-	int crit2;
-	ASN1_OCTET_STRING *data1;
-	ASN1_OCTET_STRING *data2;
-
-	crit1 = X509_EXTENSION_get_critical(ext1);
-	crit2 = X509_EXTENSION_get_critical(ext2);
-	if (crit1 != crit2)
-		return false;
-
-	data1 = X509_EXTENSION_get_data(ext1);
-	data2 = X509_EXTENSION_get_data(ext2);
-	if (data1->length != data2->length)
-		return false;
-	if (data1->type != data2->type)
-		return false;
-	if (data1->flags != data2->flags)
-		return false;
-	if (memcmp(data1->data, data2->data, data1->length) != 0)
-		return false;
-
-	return true;
-}
-
 static int
-handle_aki_ta(X509_EXTENSION *aki, void *arg)
+handle_aki_ta(X509_EXTENSION *ext, void *arg)
 {
-	X509 *cert = arg;
-	X509_EXTENSION *other;
-	int i;
+	struct AUTHORITY_KEYID_st *aki;
+	ASN1_OCTET_STRING *ski;
+	int error;
 
-	for (i = 0; i < X509_get_ext_count(cert); i++) {
-		other = X509_get_ext(cert, i);
-		if (OBJ_obj2nid(X509_EXTENSION_get_object(other)) == ext_ski()->nid) {
-			if (extension_equals(aki, other))
-				return 0;
-
-			return pr_err("The '%s' does not equal the '%s'.",
-			    ext_aki()->name, ext_ski()->name);
-		}
+	aki = X509V3_EXT_d2i(ext);
+	if (aki == NULL)
+		return cannot_decode(ext_aki());
+	if (aki->keyid == NULL) {
+		error = pr_err("The '%s' extension lacks a keyIdentifier.",
+		    ext_aki()->name);
+		goto revert_aki;
 	}
 
-	pr_err("Certificate lacks the '%s' extension.", ext_ski()->name);
-	return -ESRCH;
+	ski = X509_get_ext_d2i(arg, NID_subject_key_identifier, NULL, NULL);
+	if (ski == NULL) {
+		pr_err("Certificate lacks the '%s' extension.",
+		    ext_ski()->name);
+		error = -ESRCH;
+		goto revert_aki;
+	}
+
+	if (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0) {
+		error = pr_err("The '%s' does not equal the '%s'.",
+		    ext_aki()->name, ext_ski()->name);
+		goto revert_ski;
+	}
+
+	error = 0;
+
+revert_ski:
+	ASN1_BIT_STRING_free(ski);
+revert_aki:
+	AUTHORITY_KEYID_free(aki);
+	return error;
 }
 
 static int
