@@ -1,5 +1,6 @@
 #include "vrps.h"
 
+#include <time.h>
 #include "array_list.h"
 
 #define FLAG_WITHDRAWAL		0
@@ -16,6 +17,7 @@ ARRAY_LIST(deltasdb, struct delta)
 
 struct deltasdb db;
 u_int32_t current_serial;
+u_int16_t session_id;
 
 int
 deltas_db_init(void)
@@ -28,6 +30,8 @@ deltas_db_init(void)
 		return error;
 	}
 	current_serial = 0;
+	/* The downcast takes the LSBs */
+	session_id = time(NULL);
 
 	return 0;
 }
@@ -229,4 +233,10 @@ u_int32_t
 last_serial_number(void)
 {
 	return current_serial;
+}
+
+u_int16_t
+current_session_id(void)
+{
+	return session_id;
 }

@@ -50,9 +50,20 @@ handle_serial_query_pdu(int fd, void *pdu)
 	struct sender_common common;
 	int error, updates;
 	u_int32_t current_serial;
+	u_int16_t session_id;
+
+	/*
+	 * RFC 6810 and 8210:
+	 * "If [...] either the router or the cache finds that the value of the
+	 * Session ID is not the same as the other's, the party which detects the
+	 * mismatch MUST immediately terminate the session with an Error Report PDU
+	 * with code 0 ("Corrupt Data")"
+	 */
+	session_id = current_session_id();
+	if (received->header.session_id != session_id)
+		return send_error_report_pdu(&common, ERR_CORRUPT_DATA, NULL, NULL);
 
 	current_serial = last_serial_number();
-	/* TODO Handle sessions and its ID */
 	init_sender_common(&common, fd, received->header.protocol_version,
 	    &received->header.session_id, &received->serial_number,
 	    &current_serial);
@@ -91,8 +102,7 @@ handle_reset_query_pdu(int fd, void *pdu)
 	int error, updates;
 
 	current_serial = last_serial_number();
-	/* TODO Handle sessions and its ID */
-	session_id = 1;
+	session_id = current_session_id();
 	init_sender_common(&common, fd, received->header.protocol_version,
 	    &session_id, NULL, &current_serial);
 

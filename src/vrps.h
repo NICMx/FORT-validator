@@ -39,5 +39,6 @@ void delta_destroy(struct delta *);
 void deltas_db_destroy(void);
 
 u_int32_t last_serial_number(void);
+u_int16_t current_session_id(void);
 
 #endif /* SRC_VRPS_H_ */
