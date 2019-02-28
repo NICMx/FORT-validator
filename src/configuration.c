@@ -26,6 +26,14 @@
 #define DEFAULT_RETRY_INTERVAL		600
 #define DEFAULT_EXPIRE_INTERVAL		7200
 
+/* Protocol timing parameters ranges */
+#define MIN_REFRESH_INTERVAL	1
+#define MAX_REFRESH_INTERVAL	86400
+#define MIN_RETRY_INTERVAL		1
+#define MAX_RETRY_INTERVAL		7200
+#define MIN_EXPIRE_INTERVAL		600
+#define MAX_EXPIRE_INTERVAL		172800
+
 struct rtr_config {
 	/** The listener address of the RTR server. */
 	struct addrinfo *address;
@@ -84,6 +92,27 @@ config_cleanup(void)
 }
 
 static int
+load_interval(json_t *parent, char const *name, int default_value,
+    int *result, int min_value, int max_value)
+{
+	int error;
+
+	error = json_get_int(parent, name, default_value, result);
+	if (error) {
+		err(error, "Invalid value for interval '%s'", name);
+		return error;
+	}
+
+	if (*result < min_value || max_value < *result) {
+		err(-EINVAL, "Interval '%s' (%d) out of range, must be from %d to %d",
+		    name, *result, min_value, max_value);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int
 handle_json(json_t *root)
 {
 	json_t *listen;
@@ -138,22 +167,24 @@ handle_json(json_t *root)
 			return -EINVAL;
 		}
 
-		error = json_get_int(interval, OPTNAME_RTR_INTERVAL_REFRESH,
-		    DEFAULT_REFRESH_INTERVAL, &refresh_interval);
+		error = load_interval(interval, OPTNAME_RTR_INTERVAL_REFRESH,
+		    DEFAULT_REFRESH_INTERVAL, &refresh_interval,
+		    MIN_REFRESH_INTERVAL, MAX_REFRESH_INTERVAL);
 		if (error)
 			return error;
 
-		error = json_get_int(interval, OPTNAME_RTR_INTERVAL_RETRY,
-		    DEFAULT_RETRY_INTERVAL, &retry_interval);
+		error = load_interval(interval, OPTNAME_RTR_INTERVAL_RETRY,
+		    DEFAULT_RETRY_INTERVAL, &retry_interval,
+		    MIN_RETRY_INTERVAL, MAX_RETRY_INTERVAL);
 		if (error)
 			return error;
 
-		error = json_get_int(interval, OPTNAME_RTR_INTERVAL_EXPIRE,
-		    DEFAULT_EXPIRE_INTERVAL, &expire_interval);
+		error = load_interval(interval, OPTNAME_RTR_INTERVAL_EXPIRE,
+		    DEFAULT_EXPIRE_INTERVAL, &expire_interval,
+		    MIN_EXPIRE_INTERVAL, MAX_EXPIRE_INTERVAL);
 		if (error)
 			return error;
 
-		/* TODO Add range validations https://tools.ietf.org/html/rfc8210#section-6 */
 		config.refresh_interval = refresh_interval;
 		config.retry_interval = retry_interval;
 		config.expire_interval = expire_interval;
