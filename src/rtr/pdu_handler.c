@@ -51,6 +51,7 @@ handle_serial_query_pdu(int fd, void *pdu)
 	int error, updates;
 	u_int32_t current_serial;
 	u_int16_t session_id;
+	u_int8_t version;
 
 	/*
 	 * RFC 6810 and 8210:
@@ -59,14 +60,14 @@ handle_serial_query_pdu(int fd, void *pdu)
 	 * mismatch MUST immediately terminate the session with an Error Report PDU
 	 * with code 0 ("Corrupt Data")"
 	 */
-	session_id = current_session_id();
+	version = received->header.protocol_version;
+	session_id = current_session_id(version);
 	if (received->header.session_id != session_id)
 		return send_error_report_pdu(&common, ERR_CORRUPT_DATA, NULL, NULL);
 
 	current_serial = last_serial_number();
-	init_sender_common(&common, fd, received->header.protocol_version,
-	    &received->header.session_id, &received->serial_number,
-	    &current_serial);
+	init_sender_common(&common, fd, version, &session_id,
+	    &received->serial_number, &current_serial);
 
 	updates = deltas_db_status(common.start_serial);
 	switch (updates) {
@@ -99,12 +100,14 @@ handle_reset_query_pdu(int fd, void *pdu)
 	struct sender_common common;
 	u_int32_t current_serial;
 	u_int16_t session_id;
+	u_int8_t version;
 	int error, updates;
 
+	version = received->header.protocol_version;
+	session_id = current_session_id(version);
 	current_serial = last_serial_number();
-	session_id = current_session_id();
-	init_sender_common(&common, fd, received->header.protocol_version,
-	    &session_id, NULL, &current_serial);
+	init_sender_common(&common, fd, version, &session_id, NULL,
+	    &current_serial);
 
 	updates = deltas_db_status(common.start_serial);
 	switch (updates) {

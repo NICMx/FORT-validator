@@ -17,7 +17,8 @@ ARRAY_LIST(deltasdb, struct delta)
 
 struct deltasdb db;
 u_int32_t current_serial;
-u_int16_t session_id;
+u_int16_t v0_session_id;
+u_int16_t v1_session_id;
 
 int
 deltas_db_init(void)
@@ -31,7 +32,9 @@ deltas_db_init(void)
 	}
 	current_serial = 0;
 	/* The downcast takes the LSBs */
-	session_id = time(NULL);
+	v0_session_id = time(NULL);
+	/* Minus 1 to prevent same ID */
+	v1_session_id = v0_session_id - 1;
 
 	return 0;
 }
@@ -236,7 +239,9 @@ last_serial_number(void)
 }
 
 u_int16_t
-current_session_id(void)
+current_session_id(u_int8_t rtr_version)
 {
-	return session_id;
+	if (rtr_version == 1)
+		return v1_session_id;
+	return v0_session_id;
 }
