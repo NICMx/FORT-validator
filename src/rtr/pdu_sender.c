@@ -40,6 +40,12 @@ set_header_values(struct pdu_header *header, u_int8_t version, u_int8_t type,
 }
 
 static u_int32_t
+length_serial_notify_pdu(struct serial_notify_pdu *pdu)
+{
+	return HEADER_LENGTH + sizeof(pdu->serial_number);
+}
+
+static u_int32_t
 length_ipvx_prefix_pdu(bool isv4)
 {
 	return HEADER_LENGTH + (isv4 ? IPV4_PREFIX_LENGTH : IPV6_PREFIX_LENGTH);
@@ -96,6 +102,24 @@ send_response(int fd, char *data, size_t data_len)
 	}
 
 	return 0;
+}
+
+int
+send_serial_notify_pdu(struct sender_common *common)
+{
+	struct serial_notify_pdu pdu;
+	char data[BUFFER_SIZE];
+	size_t len;
+
+	set_header_values(&pdu.header, common->version, PDU_TYPE_SERIAL_NOTIFY,
+	    *common->session_id);
+
+	pdu.serial_number = *common->start_serial;
+	pdu.header.length = length_serial_notify_pdu(&pdu);
+
+	len = serialize_serial_notify_pdu(&pdu, data);
+
+	return send_response(common->fd, data, len);
 }
 
 int

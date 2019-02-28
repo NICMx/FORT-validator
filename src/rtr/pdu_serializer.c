@@ -35,8 +35,15 @@ serialize_pdu_header(struct pdu_header *header, u_int16_t union_value,
 size_t
 serialize_serial_notify_pdu(struct serial_notify_pdu *pdu, char *buf)
 {
-	// FIXME Complete me!
-	return 0;
+	size_t head_size;
+	char *ptr;
+
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.session_id, buf);
+
+	ptr = buf + head_size;
+	ptr = write_int32(ptr, pdu->serial_number);
+
+	return ptr - buf;
 }
 
 size_t

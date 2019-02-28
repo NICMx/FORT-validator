@@ -9,6 +9,7 @@
 #define RTR_V0	0
 #define RTR_V1	1
 
+#define PDU_TYPE_SERIAL_NOTIFY		0
 #define PDU_TYPE_CACHE_RESPONSE		3
 #define PDU_TYPE_IPV4_PREFIX		4
 #define PDU_TYPE_IPV6_PREFIX		6
