@@ -1,6 +1,7 @@
 #include "pdu_serializer.h"
 
 #include <stdlib.h>
+#include <string.h>
 #include "primitive_writer.h"
 
 void
@@ -112,6 +113,28 @@ serialize_cache_reset_pdu(struct cache_reset_pdu *pdu, char *buf)
 size_t
 serialize_error_report_pdu(struct error_report_pdu *pdu, char *buf)
 {
-	// FIXME Complete me!
-	return 0;
+	size_t head_size;
+	char *ptr, *tmp_ptr;
+	int i;
+
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.error_code, buf);
+
+	ptr = buf + head_size;
+
+	ptr = write_int32(ptr, pdu->error_pdu_length);
+	if (pdu->error_pdu_length > 0) {
+		tmp_ptr = pdu->erroneous_pdu;
+		/* TODO Set only the header of err PDU */
+		while (*tmp_ptr != '\0') {
+			ptr = write_int8(ptr, *tmp_ptr);
+			tmp_ptr++;
+		}
+	}
+
+	ptr = write_int32(ptr, pdu->error_message_length);
+	tmp_ptr = pdu->error_message;
+	for (i = 0; i < pdu->error_message_length; i++)
+		ptr = write_int8(ptr, tmp_ptr[i]);
+
+	return ptr - buf;
 }

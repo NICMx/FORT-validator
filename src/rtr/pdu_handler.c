@@ -59,10 +59,9 @@ handle_serial_query_pdu(int fd, void *pdu)
 
 	updates = deltas_db_status(common.start_serial);
 	switch (updates) {
-	/* TODO Implement error */
-//	case NO_DATA_AVAILABLE:
+	case NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-//		return send_error_pdu;
+		return send_error_report_pdu(&common, ERR_NO_DATA_AVAILABLE, NULL, NULL);
 	case DIFF_UNDETERMINED:
 		/* https://tools.ietf.org/html/rfc8210#section-8.3 */
 		return send_cache_reset_pdu(&common);
@@ -99,10 +98,9 @@ handle_reset_query_pdu(int fd, void *pdu)
 
 	updates = deltas_db_status(common.start_serial);
 	switch (updates) {
-	/* TODO Implement error */
-//	case NO_DATA_AVAILABLE:
+	case NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-//		return send_error_pdu;
+		return send_error_report_pdu(&common, ERR_NO_DATA_AVAILABLE, NULL, NULL);
 	case DIFF_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.1 */
 		return send_commmon_exchange(&common);

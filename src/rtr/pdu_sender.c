@@ -61,6 +61,14 @@ length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 	return len;
 }
 
+static u_int32_t
+length_error_report_pdu(struct error_report_pdu *pdu)
+{
+	return HEADER_LENGTH +
+	    pdu->error_pdu_length + sizeof(pdu->error_pdu_length) +
+	    pdu->error_message_length + sizeof(pdu->error_message_length);
+}
+
 static int
 send_response(int fd, char *data, size_t data_len)
 {
@@ -96,7 +104,7 @@ send_cache_reset_pdu(struct sender_common *common)
 	size_t len;
 
 	/* This PDU has only the header */
-	set_header_values(&pdu.header, common->version, CACHE_RESET_PDU_TYPE, 0);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_CACHE_RESET, 0);
 	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_reset_pdu(&pdu, data);
@@ -111,8 +119,8 @@ send_cache_response_pdu(struct sender_common *common)
 	size_t len;
 
 	/* This PDU has only the header */
-	set_header_values(&pdu.header, common->version,
-	    CACHE_RESPONSE_PDU_TYPE, *common->session_id);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_CACHE_RESPONSE,
+	    *common->session_id);
 	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_response_pdu(&pdu, data);
@@ -127,7 +135,7 @@ send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, common->version, IPV4_PREFIX_PDU_TYPE, 0);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV4_PREFIX, 0);
 
 	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;
@@ -149,7 +157,7 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, common->version, IPV6_PREFIX_PDU_TYPE, 0);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV6_PREFIX, 0);
 
 	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;
@@ -197,7 +205,8 @@ send_end_of_data_pdu(struct sender_common *common)
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, common->version, END_OF_DATA_PDU_TYPE, *common->session_id);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_END_OF_DATA,
+	    *common->session_id);
 	pdu.serial_number = *common->end_serial;
 	if (common->version == RTR_V1) {
 		pdu.refresh_interval = config_get_refresh_interval();
@@ -208,5 +217,44 @@ send_end_of_data_pdu(struct sender_common *common)
 
 	len = serialize_end_of_data_pdu(&pdu, data);
 
+	return send_response(common->fd, data, len);
+}
+
+int
+send_error_report_pdu(struct sender_common *common, u_int16_t code,
+    void *err_pdu, char *message)
+{
+	struct error_report_pdu pdu;
+	char data[BUFFER_SIZE];
+	size_t len;
+
+	set_header_values(&pdu.header, common->version, PDU_TYPE_ERROR_REPORT,
+	    code);
+	if (err_pdu == NULL) {
+		pdu.error_pdu_length = 0;
+		pdu.erroneous_pdu = NULL;
+	} else {
+		/* TODO Really? Or get the PDU header length field */
+		pdu.error_pdu_length = sizeof(*err_pdu);
+		pdu.erroneous_pdu = err_pdu;
+	}
+	if (message == NULL) {
+		pdu.error_message_length = 0;
+		pdu.error_message = NULL;
+	} else {
+		pdu.error_message = malloc(strlen(message) + 1);
+		if (pdu.error_message == NULL) {
+			warn("Error message couldn't be allocated, removed from PDU");
+			pdu.error_message_length = 0;
+		} else {
+			pdu.error_message_length = strlen(message) + 1;
+			strcpy(pdu.error_message, message);
+		}
+	}
+
+	/* Calculate lengths */
+	pdu.header.length = length_error_report_pdu(&pdu);
+
+	len = serialize_error_report_pdu(&pdu, data);
 	return send_response(common->fd, data, len);
 }
