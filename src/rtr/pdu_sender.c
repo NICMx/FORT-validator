@@ -256,23 +256,21 @@ send_error_report_pdu(struct sender_common *common, u_int16_t code,
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_ERROR_REPORT,
 	    code);
-	if (err_pdu == NULL) {
-		pdu.error_pdu_length = 0;
-		pdu.erroneous_pdu = NULL;
-	} else {
+
+	pdu.error_pdu_length = 0;
+	pdu.erroneous_pdu = err_pdu;
+	if (err_pdu != NULL) {
 		/* TODO Really? Or get the PDU header length field */
 		pdu.error_pdu_length = sizeof(*err_pdu);
-		pdu.erroneous_pdu = err_pdu;
 	}
-	if (message == NULL) {
-		pdu.error_message_length = 0;
-		pdu.error_message = NULL;
-	} else {
+
+	pdu.error_message_length = 0;
+	pdu.error_message = NULL;
+	if (message != NULL) {
 		pdu.error_message = malloc(strlen(message) + 1);
-		if (pdu.error_message == NULL) {
+		if (pdu.error_message == NULL)
 			warn("Error message couldn't be allocated, removed from PDU");
-			pdu.error_message_length = 0;
-		} else {
+		else {
 			pdu.error_message_length = strlen(message) + 1;
 			strcpy(pdu.error_message, message);
 		}
@@ -282,5 +280,6 @@ send_error_report_pdu(struct sender_common *common, u_int16_t code,
 	pdu.header.length = length_error_report_pdu(&pdu);
 
 	len = serialize_error_report_pdu(&pdu, data);
+	free(pdu.error_message);
 	return send_response(common->fd, data, len);
 }
