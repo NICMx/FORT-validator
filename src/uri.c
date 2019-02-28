@@ -3,6 +3,46 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
+#include "str.h"
+
+/*
+ * @character is an integer because we sometimes receive signed chars, and other
+ * times we get unsigned chars.
+ * Casting a negative char into a unsigned char is undefined behavior.
+ */
+static int
+validate_url_character(int character)
+{
+	/*
+	 * RFCs 1738 and 3986 define a very specific range of allowed
+	 * characters, but I don't think we're that concerned about URL
+	 * correctness. Validating the URL properly is more involved than simply
+	 * checking legal characters, anyway.
+	 *
+	 * What I really need this validation for is ensure that we won't get
+	 * any trouble later, when we attempt to convert the global URI to a
+	 * local file.
+	 *
+	 * Sample trouble: Getting UTF-8 characters. Why are they trouble?
+	 * Because we don't have any guarantees that the system's file name
+	 * encoding is UTF-8. URIs are not supposed to contain UTF-8 in the
+	 * first place, so we have no reason to deal with encoding conversion.
+	 *
+	 * To be perfectly fair, we have no guarantees that the system's file
+	 * name encoding is ASCII-compatible either, but I need to hang onto
+	 * SOMETHING.
+	 *
+	 * (Asking users to use UTF-8 is fine, but asking users to use something
+	 * ASCII-compatible is a little better.)
+	 *
+	 * So just make sure that the character is printable ASCII.
+	 *
+	 * TODO (next iteration) Consider exhaustive URL validation.
+	 */
+	return (0x20 <= character && character <= 0x7E)
+	    ? 0
+	    : pr_err("URL has non-printable character code '%d'.", character);
+}
 
 /**
  * Initializes @uri->global* by cloning @str.
@@ -11,8 +51,21 @@
 static int
 str2global(void const *str, size_t str_len, struct rpki_uri *uri)
 {
+	int error;
+	size_t i;
+
+	error = string_clone(str, str_len, &uri->global);
+	if (error)
+		return error;
 	uri->global_len = str_len;
-	return string_clone(str, str_len, &uri->global);
+
+	for (i = 0; i < str_len; i++) {
+		error = validate_url_character(uri->global[i]);
+		if (error)
+			return error;
+	}
+
+	return 0;
 }
 
 /**
@@ -21,10 +74,15 @@ str2global(void const *str, size_t str_len, struct rpki_uri *uri)
  *
  * ie. if @mft is "rsync://a/b/c.mft" and @ia5 is "d/e/f.cer", @uri->global will
  * be "rsync://a/b/d/e/f.cer".
+ *
+ * Assumes that @mft is a "global" URL. (ie. extracted from rpki_uri.global.)
  */
 static int
 ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 {
+	int error;
+	size_t i;
+
 	char *joined;
 	char *slash_pos;
 	int dir_len;
@@ -34,6 +92,12 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	 * be guaranteed to be NULL-terminated.
 	 * `(char *) ia5->buf` is fair, but `strlen(ia5->buf)` is not.
 	 */
+
+	for (i = 0; i < ia5->size; i++) {
+		error = validate_url_character(ia5->buf[i]);
+		if (error)
+			return error;
+	}
 
 	slash_pos = strrchr(mft, '/');
 	if (slash_pos == NULL) {
@@ -138,12 +202,10 @@ uri_init(struct rpki_uri *uri, void const *guri, size_t guri_len)
 	return 0;
 }
 
-/**
- * Do not call this function unless you're sure that @guri is NULL-terminated.
- */
-int uri_init_str(struct rpki_uri *uri, char const *guri)
+int
+uri_init_str(struct rpki_uri *uri, char const *guri, size_t guri_len)
 {
-	return uri_init(uri, guri, strlen(guri));
+	return uri_init(uri, guri, guri_len);
 }
 
 /*
@@ -212,6 +274,23 @@ uri_init_ad(struct rpki_uri *uri, ACCESS_DESCRIPTION *ad)
 	    ASN1_STRING_length(asn1_string));
 }
 
+int
+uri_clone(struct rpki_uri const *old, struct rpki_uri *copy)
+{
+	copy->global = strdup(old->global);
+	if (copy->global == NULL)
+		return pr_enomem();
+	copy->global_len = old->global_len;
+
+	copy->local = strdup(old->local);
+	if (copy->local == NULL) {
+		free(copy->global);
+		return pr_enomem();
+	}
+
+	return 0;
+}
+
 void
 uri_cleanup(struct rpki_uri *uri)
 {
@@ -238,10 +317,4 @@ bool
 uri_is_certificate(struct rpki_uri const *uri)
 {
 	return uri_has_extension(uri, ".cer");
-}
-
-int
-uri_g2l(char const *global, char **local)
-{
-	return g2l(global, strlen(global), local);
 }

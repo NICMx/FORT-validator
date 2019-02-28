@@ -92,6 +92,7 @@ test-driver
 
 # Temporal files
 *~
+tmp/
 
 # Unwanted manure shat by imbecile OSs
 .DS_Store*

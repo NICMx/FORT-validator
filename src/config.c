@@ -7,22 +7,37 @@
 #include <errno.h>
 #include <getopt.h>
 
+#include "common.h"
 #include "log.h"
 #include "toml_handler.h"
 
+/**
+ * Please note that this is actually two `for`s stacked together, so don't use
+ * `break` nor `continue` to get out.
+ */
 #define FOREACH_OPTION(groups, grp, opt, type)			\
 	for (grp = groups; grp->name != NULL; grp++)		\
 		for (opt = grp->options; opt->id != 0; opt++)	\
 			if ((opt->availability == 0) ||		\
 			    (opt->availability & type))
 
+/**
+ * To add a member to this structure,
+ *
+ * 1. Add it.
+ * 2. Add its metadata somewhere in @groups.
+ * 3. Add default value to set_default_values().
+ * 4. Create the getter.
+ *
+ * Assuming you don't need to create a data type, that should be all.
+ */
 struct rpki_config {
 	/** TAL file name/location. */
-	char const *tal;
+	char *tal;
 	/** Path of our local clone of the repository */
-	char const *local_repository;
-	/** Disable rsync downloads? */
-	bool disable_rsync;
+	char *local_repository;
+	/** Synchronization (currently only RSYNC) download strategy. */
+	enum sync_strategy sync_strategy;
 	/**
 	 * Shuffle uris in tal?
 	 * (https://tools.ietf.org/html/rfc7730#section-3, last paragraphs)
@@ -35,25 +50,64 @@ struct rpki_config {
 	unsigned int maximum_certificate_depth;
 	/** Print ANSI color codes? */
 	bool color_output;
+
+	struct {
+		char *program;
+		struct string_array args;
+	} rsync;
 };
 
 
-static void print_usage(FILE *stream);
+static void print_usage(FILE *, bool);
 
-void print_bool(struct group_fields const *, struct option_field const *,
-    void *);
-void print_u_int(struct group_fields const *, struct option_field const *,
-    void *);
-void print_string(struct group_fields const *, struct option_field const *,
-    void *);
-static int parse_bool(struct option_field const *, char const *, void *);
-static int parse_u_int(struct option_field const *, char const *, void *);
-static int parse_string(struct option_field const *, char const *, void *);
-static int handle_help(struct option_field const *, char *);
-static int handle_usage(struct option_field const *, char *);
-static int handle_version(struct option_field const *, char *);
-static int handle_toml(struct option_field const *, char *);
-static void free_string(void *);
+#define DECLARE_PRINT_FN(name)						\
+	void name(							\
+	    struct group_fields const *,				\
+	    struct option_field const *,				\
+	    void *							\
+	)
+DECLARE_PRINT_FN(print_bool);
+DECLARE_PRINT_FN(print_u_int);
+DECLARE_PRINT_FN(print_string);
+DECLARE_PRINT_FN(print_string_array);
+DECLARE_PRINT_FN(print_sync_strategy);
+
+#define DECLARE_PARSE_ARGV_FN(name)					\
+	static int name(						\
+	    struct option_field const *,				\
+	    char const *,						\
+	    void *							\
+	)
+DECLARE_PARSE_ARGV_FN(parse_argv_bool);
+DECLARE_PARSE_ARGV_FN(parse_argv_u_int);
+DECLARE_PARSE_ARGV_FN(parse_argv_string);
+DECLARE_PARSE_ARGV_FN(parse_argv_sync_strategy);
+
+#define DECLARE_PARSE_TOML_FN(name)					\
+	static int name(						\
+	    struct option_field const *,				\
+	    struct toml_table_t *,					\
+	    void *							\
+	)
+DECLARE_PARSE_TOML_FN(parse_toml_bool);
+DECLARE_PARSE_TOML_FN(parse_toml_u_int);
+DECLARE_PARSE_TOML_FN(parse_toml_string);
+DECLARE_PARSE_TOML_FN(parse_toml_sync_strategy);
+DECLARE_PARSE_TOML_FN(parse_toml_string_array);
+
+#define DECLARE_HANDLE_FN(name)						\
+	static int name(						\
+	    struct option_field const *,				\
+	    char *							\
+	)
+DECLARE_HANDLE_FN(handle_help);
+DECLARE_HANDLE_FN(handle_usage);
+DECLARE_HANDLE_FN(handle_version);
+DECLARE_HANDLE_FN(handle_toml);
+
+#define DECLARE_FREE_FN(name) static void name(void *)
+DECLARE_FREE_FN(free_string);
+DECLARE_FREE_FN(free_string_array);
 
 static char const *program_name;
 static struct rpki_config rpki_config;
@@ -62,7 +116,8 @@ static const struct global_type gt_bool = {
 	.has_arg = no_argument,
 	.size = sizeof(bool),
 	.print = print_bool,
-	.parse = parse_bool,
+	.parse.argv = parse_argv_bool,
+	.parse.toml = parse_toml_bool,
 	.arg_doc = "true|false",
 };
 
@@ -70,7 +125,8 @@ static const struct global_type gt_u_int = {
 	.has_arg = required_argument,
 	.size = sizeof(unsigned int),
 	.print = print_u_int,
-	.parse = parse_u_int,
+	.parse.argv = parse_argv_u_int,
+	.parse.toml = parse_toml_u_int,
 	.arg_doc = "<unsigned integer>",
 };
 
@@ -78,9 +134,28 @@ static const struct global_type gt_string = {
 	.has_arg = required_argument,
 	.size = sizeof(char *),
 	.print = print_string,
-	.parse = parse_string,
+	.parse.argv = parse_argv_string,
+	.parse.toml = parse_toml_string,
 	.free = free_string,
 	.arg_doc = "<string>",
+};
+
+static const struct global_type gt_string_array = {
+	.has_arg = required_argument,
+	.size = sizeof(char *const *),
+	.print = print_string_array,
+	.parse.toml = parse_toml_string_array,
+	.free = free_string_array,
+	.arg_doc = "<sequence of strings>",
+};
+
+static const struct global_type gt_sync_strategy = {
+	.has_arg = required_argument,
+	.size = sizeof(enum sync_strategy),
+	.print = print_sync_strategy,
+	.parse.argv = parse_argv_sync_strategy,
+	.parse.toml = parse_toml_sync_strategy,
+	.arg_doc = SYNC_VALUE_OFF "|" SYNC_VALUE_STRICT "|" SYNC_VALUE_ROOT,
 };
 
 /**
@@ -130,10 +205,10 @@ static const struct option_field global_fields[] = {
 		.arg_doc = "<directory>",
 	}, {
 		.id = 1001,
-		.name = "disable-rsync",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, disable_rsync),
-		.doc = "Enable or disable rsync downloads.",
+		.name = "sync-strategy",
+		.type = &gt_sync_strategy,
+		.offset = offsetof(struct rpki_config, sync_strategy),
+		.doc = "RSYNC download strategy.",
 	}, {
 		.id = 'c',
 		.name = "color-output",
@@ -176,6 +251,26 @@ static const struct option_field tal_fields[] = {
 	{ 0 },
 };
 
+static const struct option_field rsync_fields[] = {
+	{
+		.id = 3000,
+		.name = "program",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, rsync.program),
+		.doc = "Name of the program needed to execute an RSYNC.",
+		.arg_doc = "<path to program>",
+		.availability = AVAILABILITY_TOML,
+	}, {
+		.id = 3001,
+		.name = "arguments",
+		.type = &gt_string_array,
+		.offset = offsetof(struct rpki_config, rsync.args),
+		.doc = "Arguments to send to the RSYNC program call.",
+		.availability = AVAILABILITY_TOML,
+	},
+	{ 0 },
+};
+
 static const struct group_fields groups[] = {
 	{
 		.name = "root",
@@ -183,6 +278,9 @@ static const struct group_fields groups[] = {
 	}, {
 		.name = "tal",
 		.options = tal_fields,
+	}, {
+		.name = "rsync",
+		.options = rsync_fields,
 	},
 	{ NULL },
 };
@@ -198,7 +296,7 @@ is_rpki_config_field(struct option_field const *field)
 	return field->handler == NULL;
 }
 
-static void *
+void *
 get_rpki_config_field(struct option_field const *field)
 {
 	return ((unsigned char *) &rpki_config) + field->offset;
@@ -228,8 +326,48 @@ print_string(struct group_fields const *group, struct option_field const *field,
 	pr_info("%s.%s: %s", group->name, field->name, *((char **) value));
 }
 
+void
+print_string_array(struct group_fields const *group,
+    struct option_field const *field, void *_value)
+{
+	struct string_array *value = _value;
+	size_t i;
+
+	pr_info("%s.%s:", group->name, field->name);
+	pr_indent_add();
+
+	if (value->length == 0)
+		pr_info("<Nothing>");
+	else for (i = 0; i < value->length; i++)
+		pr_info("%s", value->array[i]);
+
+	pr_indent_rm();
+}
+
+void
+print_sync_strategy(struct group_fields const *group,
+    struct option_field const *field, void *value)
+{
+	enum sync_strategy *strategy = value;
+	char const *str = "<unknown>";
+
+	switch (*strategy) {
+	case SYNC_OFF:
+		str = SYNC_VALUE_OFF;
+		break;
+	case SYNC_STRICT:
+		str = SYNC_VALUE_STRICT;
+		break;
+	case SYNC_ROOT:
+		str = SYNC_VALUE_ROOT;
+		break;
+	}
+
+	pr_info("%s.%s: %s", group->name, field->name, str);
+}
+
 static int
-parse_bool(struct option_field const *field, char const *str, void *result)
+parse_argv_bool(struct option_field const *field, char const *str, void *result)
 {
 	bool *value = result;
 
@@ -252,7 +390,7 @@ parse_bool(struct option_field const *field, char const *str, void *result)
 }
 
 static int
-parse_u_int(struct option_field const *field, char const *str, void *_result)
+parse_argv_u_int(struct option_field const *field, char const *str, void *_result)
 {
 	unsigned long parsed;
 	int *result;
@@ -278,9 +416,12 @@ parse_u_int(struct option_field const *field, char const *str, void *_result)
 }
 
 static int
-parse_string(struct option_field const *field, char const *str, void *_result)
+parse_argv_string(struct option_field const *field, char const *str, void *_result)
 {
 	char **result = _result;
+
+	/* Remove the previous value (usually the default). */
+	field->type->free(result);
 
 	if (field->type->has_arg != required_argument || str == NULL) {
 		return pr_err("String options ('%s' in this case) require an argument.",
@@ -293,16 +434,160 @@ parse_string(struct option_field const *field, char const *str, void *_result)
 }
 
 static int
+parse_argv_sync_strategy(struct option_field const *field, char const *str,
+    void *_result)
+{
+	enum sync_strategy *result = _result;
+
+	if (strcmp(str, SYNC_VALUE_OFF) == 0)
+		*result = SYNC_OFF;
+	else if (strcmp(str, SYNC_VALUE_STRICT) == 0)
+		*result = SYNC_STRICT;
+	else if (strcmp(str, SYNC_VALUE_ROOT) == 0)
+		*result = SYNC_ROOT;
+	else
+		return pr_err("Unknown synchronization strategy: '%s'", str);
+
+	return 0;
+}
+
+static int
+parse_toml_bool(struct option_field const *opt, struct toml_table_t *toml,
+    void *_result)
+{
+	const char *raw;
+	int value;
+	bool *result;
+
+	raw = toml_raw_in(toml, opt->name);
+	if (raw == NULL)
+		return pr_err("TOML boolean '%s' was not found.", opt->name);
+	if (toml_rtob(raw, &value) == -1)
+		return pr_err("Cannot parse '%s' as a boolean.", raw);
+
+	result = _result;
+	*result = value;
+	return 0;
+}
+
+static int
+parse_toml_u_int(struct option_field const *opt, struct toml_table_t *toml,
+    void *_result)
+{
+	const char *raw;
+	int64_t value;
+	unsigned int *result;
+
+	raw = toml_raw_in(toml, opt->name);
+	if (raw == NULL)
+		return pr_err("TOML integer '%s' was not found.", opt->name);
+	if (toml_rtoi(raw, &value) == -1)
+		return pr_err("Cannot parse '%s' as an integer.", raw);
+
+	if (value < opt->min || opt->max < value) {
+		return pr_err("Integer '%s' is out of range (%u-%u).",
+		    opt->name, opt->min, opt->max);
+	}
+
+	result = _result;
+	*result = value;
+	return 0;
+}
+
+static int
+parse_toml_string(struct option_field const *opt, struct toml_table_t *toml,
+    void *_result)
+{
+	const char *raw;
+	char *value;
+	char **result;
+
+	/* Remove the previous value (usually the default). */
+	opt->type->free(_result);
+
+	raw = toml_raw_in(toml, opt->name);
+	if (raw == NULL)
+		return pr_err("TOML string '%s' was not found.", opt->name);
+	if (toml_rtos(raw, &value) == -1)
+		return pr_err("Cannot parse '%s' as a string.", raw);
+
+	result = _result;
+	*result = value;
+	return 0;
+}
+
+static int
+parse_toml_sync_strategy(struct option_field const *opt,
+    struct toml_table_t *toml, void *_result)
+{
+	int error;
+	char *string;
+
+	error = parse_toml_string(opt, toml, &string);
+	if (error)
+		return error;
+
+	error = parse_argv_sync_strategy(opt, string, _result);
+
+	free(string);
+	return error;
+}
+
+static int
+parse_toml_string_array(struct option_field const *opt,
+    struct toml_table_t *toml, void *_result)
+{
+	toml_array_t *array;
+	int array_len;
+	int i;
+	const char *raw;
+	struct string_array *result = _result;
+	int error;
+
+	/* Remove the previous value (usually the default). */
+	opt->type->free(_result);
+
+	array = toml_array_in(toml, opt->name);
+	if (array == NULL)
+		return pr_err("TOML array '%s' was not found.", opt->name);
+	array_len = toml_array_nelem(array);
+
+	result->array = malloc(array_len * sizeof(char *));
+	if (result->array == NULL)
+		return pr_enomem();
+	result->length = array_len;
+
+	for (i = 0; i < array_len; i++) {
+		raw = toml_raw_at(array, i);
+		if (raw == NULL) {
+			error = pr_crit("Array index %d is NULL.", i);
+			goto fail;
+		}
+		if (toml_rtos(raw, &result->array[i]) == -1) {
+			error = pr_err("Cannot parse '%s' as a string.", raw);
+			goto fail;
+		}
+	}
+
+	return 0;
+
+fail:
+	free(result->array);
+	result->length = 0;
+	return error;
+}
+
+static int
 handle_help(struct option_field const *field, char *arg)
 {
-	print_usage(stdout);
+	print_usage(stdout, true);
 	exit(0);
 }
 
 static int
 handle_usage(struct option_field const *field, char *arg)
 {
-	print_usage(stdout);
+	print_usage(stdout, false);
 	exit(0);
 }
 
@@ -324,6 +609,20 @@ free_string(void *_string)
 {
 	char **string = _string;
 	free(*string);
+	*string = NULL;
+}
+
+static void
+free_string_array(void *_array)
+{
+	struct string_array *array = _array;
+	size_t i;
+
+	for (i = 0; i < array->length; i++)
+		free(array->array[i]);
+
+	array->array = NULL;
+	array->length = 0;
 }
 
 static bool
@@ -393,13 +692,6 @@ construct_getopt_options(struct option **_long_opts, char **_short_opts)
 	return 0;
 }
 
-int
-parse_option(struct option_field const *field, char const *str)
-{
-	return field->type->parse(field, str,
-	    get_rpki_config_field(field));
-}
-
 static void
 print_config(void)
 {
@@ -420,14 +712,60 @@ print_config(void)
 static int
 set_default_values(void)
 {
+	static char const *default_rsync_args[] = {
+		"--recursive",
+		"--delete",
+		"--times",
+		"--contimeout=20",
+		"$REMOTE",
+		"$LOCAL",
+	};
+
+	size_t i;
+
+	/*
+	 * Values that might need to be freed WILL be freed, so use heap
+	 * duplicates.
+	 */
+
 	rpki_config.tal = NULL;
+
 	rpki_config.local_repository = strdup("repository/");
 	if (rpki_config.local_repository == NULL)
 		return pr_enomem();
-	rpki_config.disable_rsync = false;
+
+	rpki_config.sync_strategy = SYNC_STRICT;
 	rpki_config.shuffle_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
+	rpki_config.color_output = false;
+
+	rpki_config.rsync.program = strdup("rsync");
+	if (rpki_config.rsync.program == NULL)
+		goto revert_repository;
+
+	rpki_config.rsync.args.length = ARRAY_LEN(default_rsync_args);
+	rpki_config.rsync.args.array = calloc(rpki_config.rsync.args.length,
+	    sizeof(char *));
+	if (rpki_config.rsync.args.array == NULL)
+		goto revert_rsync_program;
+
+	for (i = 0; i < ARRAY_LEN(default_rsync_args); i++) {
+		rpki_config.rsync.args.array[i] = strdup(default_rsync_args[i]);
+		if (rpki_config.rsync.args.array[i] == NULL)
+			goto revert_rsync_args;
+	}
+
 	return 0;
+
+revert_rsync_args:
+	for (i = 0; i < ARRAY_LEN(default_rsync_args); i++)
+		free(rpki_config.rsync.args.array[i]);
+	free(rpki_config.rsync.args.array);
+revert_rsync_program:
+	free(rpki_config.rsync.program);
+revert_repository:
+	free(rpki_config.local_repository);
+	return pr_enomem();
 }
 
 static int
@@ -439,7 +777,7 @@ validate_config(void)
 }
 
 static void
-print_usage(FILE *stream)
+print_usage(FILE *stream, bool print_doc)
 {
 	struct group_fields const *group;
 	struct option_field const *option;
@@ -463,13 +801,15 @@ print_usage(FILE *stream)
 			break;
 		case optional_argument:
 		case required_argument:
-			if(arg_doc == NULL)
-				break;
-			fprintf(stream, "=%s", arg_doc);
+			if (arg_doc != NULL)
+				fprintf(stream, "=%s", arg_doc);
 			break;
 		}
 
 		fprintf(stream, "]\n");
+
+		if (print_doc)
+			fprintf(stream, "\t    (%s)\n", option->doc);
 	}
 }
 
@@ -483,7 +823,8 @@ handle_opt(int opt)
 	FOREACH_OPTION(groups, group, option, AVAILABILITY_GETOPT) {
 		if (option->id == opt) {
 			return is_rpki_config_field(option)
-			    ? parse_option(option, optarg)
+			    ? option->type->parse.argv(option, optarg,
+			          get_rpki_config_field(option))
 			    : option->handler(option, optarg);
 		}
 	}
@@ -561,10 +902,10 @@ config_get_local_repository(void)
 	return rpki_config.local_repository;
 }
 
-bool
-config_get_enable_rsync(void)
+enum sync_strategy
+config_get_sync_strategy(void)
 {
-	return !rpki_config.disable_rsync;
+	return rpki_config.sync_strategy;
 }
 
 bool
@@ -583,6 +924,19 @@ bool
 config_get_color_output(void)
 {
 	return rpki_config.color_output;
+}
+
+
+char *
+config_get_rsync_program(void)
+{
+	return rpki_config.rsync.program;
+}
+
+struct string_array const *
+config_get_rsync_args(void)
+{
+	return &rpki_config.rsync.args;
 }
 
 void

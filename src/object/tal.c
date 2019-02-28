@@ -212,7 +212,8 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb)
 	int error;
 
 	for (i = 0; i < tal->uris.count; i++) {
-		error = uri_init_str(&uri, tal->uris.array[i]);
+		error = uri_init_str(&uri, tal->uris.array[i],
+		    strlen(tal->uris.array[i]));
 		if (error == ENOTRSYNC) {
 			/* Log level should probably be INFO. */
 			pr_debug("TAL has non-RSYNC URI; ignoring.");

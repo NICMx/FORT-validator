@@ -16,7 +16,6 @@ toml_to_config(struct toml_table_t *root)
 	struct group_fields const *group;
 	struct option_field const *option;
 	struct toml_table_t *table;
-	const char *value;
 	int error;
 
 	get_group_fields(&groups);
@@ -29,10 +28,8 @@ toml_to_config(struct toml_table_t *root)
 		for (option = group->options; option->id != 0; option++) {
 			if (option->availability == 0
 			    || (option->availability & AVAILABILITY_TOML)) {
-				value = toml_raw_in(table, option->name);
-				if (value == NULL)
-					continue;
-				error = parse_option(option, value);
+				error = option->type->parse.toml(option, table,
+				    get_rpki_config_field(option));
 				if (error)
 					return error;
 			}
@@ -48,15 +45,10 @@ set_config_from_file(char *config_file)
 	FILE *file;
 	struct stat stat;
 	struct toml_table_t *root;
-	struct rpki_uri uri;
 	char errbuf[200];
 	int error;
 
-	uri.global = config_file;
-	uri.global_len = strlen(config_file);
-	uri.local = config_file;
-
-	error = file_open(&uri, &file, &stat);
+	error = file_open(config_file, &file, &stat);
 	if (error)
 		return error; /* Error msg already printed. */
 

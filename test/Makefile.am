@@ -8,8 +8,7 @@
 
 AM_CFLAGS = -pedantic -Wall -std=gnu11 -I../src -DUNIT_TESTING ${CHECK_CFLAGS}
 MY_LDADD = ${CHECK_LIBS}
-BASIC_MODULES  = ../src/config.c ../src/config.h
-BASIC_MODULES += ../src/log.c ../src/log.h
+BASIC_MODULES  = ../src/log.c ../src/log.h
 BASIC_MODULES += impersonator.c
 
 check_PROGRAMS  = address.test
@@ -35,16 +34,16 @@ line_file_test_SOURCES += line_file_test.c
 line_file_test_LDADD = ${MY_LDADD}
 
 rsync_test_SOURCES  = ${BASIC_MODULES}
-rsync_test_SOURCES += ../src/common.c ../src/common.h
+rsync_test_SOURCES += ../src/str.c ../src/str.h
 rsync_test_SOURCES += ../src/uri.c ../src/uri.h
 rsync_test_SOURCES += rsync_test.c
 rsync_test_LDADD = ${MY_LDADD}
 
 tal_test_SOURCES  = ${BASIC_MODULES}
 tal_test_SOURCES += ../src/file.c ../src/file.h
-tal_test_SOURCES += ../src/common.c ../src/common.h
 tal_test_SOURCES += ../src/crypto/base64.c ../src/crypto/base64.h
 tal_test_SOURCES += ../src/random.c ../src/random.h
+tal_test_SOURCES += ../src/str.c ../src/str.h
 tal_test_SOURCES += ../src/uri.c ../src/uri.h
 tal_test_SOURCES += ../src/line_file.c ../src/line_file.h
 tal_test_SOURCES += tal_test.c

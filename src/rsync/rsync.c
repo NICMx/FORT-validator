@@ -1,17 +1,17 @@
 #include "rsync.h"
 
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/cdefs.h>
 #include <sys/queue.h>
 #include <sys/stat.h>
-#include <err.h>
-#include <errno.h>
-#include <limits.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
-#include "common.h"
 #include "config.h"
 #include "log.h"
+#include "str.h"
 
 struct uri {
 	char *string;
@@ -19,25 +19,15 @@ struct uri {
 	SLIST_ENTRY(uri) next;
 };
 
-SLIST_HEAD(uri_list, uri);
+/** URIs that we have already downloaded. */
+SLIST_HEAD(uri_list, uri) visited_uris;
 
-static struct uri_list *rsync_uris;
-static char const *const RSYNC_PREFIX = "rsync://";
-static bool rsync_enabled;
+/* static char const *const RSYNC_PREFIX = "rsync://"; */
 
 int
-rsync_init(bool is_rsync_enable)
+rsync_init(void)
 {
-	/* Disabling rsync will forever be a useful debugging feature. */
-	rsync_enabled = is_rsync_enable;
-	if (!rsync_enabled)
-		return 0;
-
-	rsync_uris = malloc(sizeof(struct uri_list));
-	if (rsync_uris == NULL)
-		return pr_enomem();
-
-	SLIST_INIT(rsync_uris);
+	SLIST_INIT(&visited_uris);
 	return 0;
 }
 
@@ -46,284 +36,149 @@ rsync_destroy(void)
 {
 	struct uri *uri;
 
-	if (!rsync_enabled)
-		return;
-
-	while (!SLIST_EMPTY(rsync_uris)) {
-		uri = SLIST_FIRST(rsync_uris);
-		SLIST_REMOVE_HEAD(rsync_uris, next);
+	while (!SLIST_EMPTY(&visited_uris)) {
+		uri = SLIST_FIRST(&visited_uris);
+		SLIST_REMOVE_HEAD(&visited_uris, next);
 		free(uri->string);
 		free(uri);
 	}
-
-	free(rsync_uris);
 }
 
 /*
- * Executes the rsync command. 'rsync_uri' as SRC and 'localuri' as DEST.
- */
-static int
-do_rsync(char const *rsync_uri, char const *localuri)
-{
-	int error;
-	char *command;
-	char const *rsync_command = "rsync --recursive --delete --times "
-	    "--contimeout=20 "; /* space char at end*/
-
-	command = malloc(strlen(rsync_command)
-	    + strlen(rsync_uri)
-	    + 1 /* space char */
-	    + strlen(localuri) + 1); /* null char at end*/
-
-	if (command == NULL)
-		return pr_enomem();
-
-	strcpy(command, rsync_command);
-	strcat(command, rsync_uri);
-	strcat(command, " ");
-	strcat(command, localuri);
-
-	pr_debug("(%s) command = %s", __func__, command);
-
-	/*
-	 * TODO (next iteration) system(3): "Do not use system() from a
-	 * privileged program"
-	 * I don't think there's a reason to run this program with privileges,
-	 * but consider using exec(3) instead.
-	 */
-	error = system(command);
-	if (error) {
-		int error2 = errno;
-		/*
-		 * The error message needs to be really generic because it
-		 * seems that the Linux system() and the OpenBSD system()
-		 * return different things.
-		 */
-		pr_err("rsync returned nonzero. result:%d errno:%d",
-		    error, error2);
-		if (error2)
-			pr_errno(error2, "The error message for errno is");
-	}
-	free(command);
-
-	return error;
-}
-
-/*
- * Returns whether new_uri's prefix is rsync_uri.
+ * Returns true if @ancestor an ancestor of @descendant, or @descendant itself.
+ * Returns false otherwise.
  */
 static bool
-rsync_uri_prefix_equals(struct uri *rsync_uri, char const *new_uri)
+is_descendant(struct uri *ancestor, struct rpki_uri const *descendant)
 {
-	size_t uri_len;
+	struct string_tokenizer ancestor_tokenizer;
+	struct string_tokenizer descendant_tokenizer;
 
-	uri_len = strlen(new_uri);
-	if (rsync_uri->len > uri_len)
-		return false;
+	string_tokenizer_init(&ancestor_tokenizer, ancestor->string,
+	    ancestor->len, '/');
+	string_tokenizer_init(&descendant_tokenizer, descendant->global,
+	    descendant->global_len, '/');
 
-	if (rsync_uri->string[rsync_uri->len - 1] != '/'
-	    && uri_len > rsync_uri->len && new_uri[rsync_uri->len] != '/') {
-		return false;
-	}
-
-	return strncasecmp(rsync_uri->string, new_uri, rsync_uri->len) == 0;
+	do {
+		if (!string_tokenizer_next(&ancestor_tokenizer))
+			return true;
+		if (!string_tokenizer_next(&descendant_tokenizer))
+			return false;
+		if (!token_equals(&ancestor_tokenizer, &descendant_tokenizer))
+			return false;
+	} while (true);
 }
 
 /*
- * Checks if the 'rsync_uri' match equal or as a child of an existing URI in
- * the list.
+ * Returns whether @uri has already been rsync'd during the current validation
+ * run.
  */
 static bool
-is_uri_in_list(char const *rsync_uri)
+is_already_downloaded(struct rpki_uri const *uri)
 {
 	struct uri *cursor;
-	bool found;
 
-	found = false;
-	SLIST_FOREACH(cursor, rsync_uris, next) {
-		if (rsync_uri_prefix_equals(cursor, rsync_uri)) {
-			found = true;
-			break;
-		}
-	}
+	/* TODO (next iteration) this is begging for a radix trie. */
+	SLIST_FOREACH(cursor, &visited_uris, next)
+		if (is_descendant(cursor, uri))
+			return true;
 
-	return found;
+	return false;
 }
 
 static int
-add_uri_to_list(char *rsync_uri_path)
+mark_as_downloaded(struct rpki_uri *uri)
 {
-	struct uri *rsync_uri;
+	struct uri *node;
 
-	rsync_uri = malloc(sizeof(struct uri));
-	if (rsync_uri == NULL)
+	node = malloc(sizeof(struct uri));
+	if (node == NULL)
 		return pr_enomem();
 
-	rsync_uri->string = rsync_uri_path;
-	rsync_uri->len = strlen(rsync_uri_path);
+	node->string = uri->global;
+	node->len = uri->global_len;
+	uri->global = NULL; /* Ownership transferred. */
 
-	SLIST_INSERT_HEAD(rsync_uris, rsync_uri, next);
+	SLIST_INSERT_HEAD(&visited_uris, node, next);
 
 	return 0;
 }
 
-/*
- * Compares two URIs to obtain the common path if exist.
- * Return NULL if URIs does not match or only match in its domain name.
- * E.g. uri1=proto://a/b/c/d uri2=proto://a/b/c/f, will return proto://a/b/c/
- */
 static int
-find_prefix_path(char const *uri1, char const *uri2, char **result)
+handle_strict_strategy(struct rpki_uri const *requested_uri,
+    struct rpki_uri *rsync_uri)
 {
-	int i, error;
-	char const *tmp, *last_equal;
-
-	*result = NULL;
-	last_equal = NULL;
-	error = 0;
-
-	/*
-	 * This code looks for 3 slashes to start compare path section.
-	 */
-	tmp = uri1;
-	for (i = 0; i < 3; i++) {
-		tmp = strchr(tmp, '/');
-		if (tmp == NULL) {
-			goto end;
-		}
-		tmp++;
-	}
-
-	/* Compare protocol and domain. */
-	if (strncmp(uri1, uri2, tmp - uri1) != 0)
-		goto end;
-
-	while((tmp = strchr(tmp, '/')) != NULL) {
-		if (strncmp(uri1, uri2, tmp - uri1) != 0) {
-			break;
-		}
-		last_equal = tmp;
-		tmp++;
-	}
-
-	if (last_equal != NULL) {
-		/*+ 1 slash + 1 null char*/
-		*result = malloc(last_equal - uri1
-		    + 1  /* + slash char */
-		    + 1); /* + null char */
-		if (*result == NULL) {
-			error = pr_enomem();
-			goto end;
-		}
-		strncpy(*result, uri1, last_equal - uri1 + 1);
-		(*result)[last_equal - uri1 + 1] = '\0';
-	}
-
-end:
-	return error;
-}
-
-/*
- * Compares rsync_uri against the uri_list and checks if can obtain a common
- * short path.
- * Returns NULL if URIs does not match any URI in the List.
- * @see find_prefix_path
- */
-static int
-compare_uris_and_short(char const *rsync_uri, char **result)
-{
-	struct uri *cursor;
-	int error;
-
-	*result = NULL;
-	SLIST_FOREACH(cursor, rsync_uris, next) {
-		error = find_prefix_path(rsync_uri, cursor->string, result);
-
-		if (error)
-			return error;
-
-		if (*result != NULL)
-			break;
-	}
-
-	return 0;
-}
-
-/*
- * Removes filename or last path if not end with an slash char.
- */
-static int
-get_path_only(char const *uri, size_t uri_len, size_t rsync_prefix_len,
-    char **result)
-{
-	int error, i;
-	char tmp_uri[uri_len + 1];
-	char *slash_search;
-	bool is_domain_only;
-
-	slash_search = NULL;
-	is_domain_only = false;
-	error = 0;
-
-	for (i = 0; i < uri_len + 1; i++) {
-		tmp_uri[i] = uri[i];
-	}
-
-	if (tmp_uri[uri_len - 1] != '/') {
-		slash_search = strrchr(tmp_uri, '/');
-	}
-
-	if (slash_search != NULL) {
-		if ((slash_search - tmp_uri) > rsync_prefix_len) {
-			tmp_uri[slash_search - tmp_uri + 1] = '\0';
-			uri_len = strlen(tmp_uri);
-		} else {
-			is_domain_only = true;
-			slash_search = NULL;
-		}
-	}
-
-	if (is_domain_only)
-		uri_len++; /* Add slash */
-
-	*result = malloc(uri_len + 1); /* +1 null char */
-	if (*result == NULL) {
-		error = pr_enomem();
-		goto end;
-	}
-
-	strcpy(*result, tmp_uri);
-
-	if (is_domain_only) {
-		(*result)[uri_len - 1] = '/';
-		(*result)[uri_len] = '\0';
-	}
-
-end:
-	return error;
+	return uri_clone(requested_uri, rsync_uri);
 }
 
 static int
-dir_exist(char *path, bool *result)
+handle_root_strategy(struct rpki_uri const *src, struct rpki_uri *dst)
+{
+	unsigned int slashes;
+	size_t i;
+
+	slashes = 0;
+	for (i = 0; i < src->global_len; i++) {
+		if (src->global[i] == '/') {
+			slashes++;
+			if (slashes == 4)
+				return uri_init_str(dst, src->global, i);
+		}
+	}
+
+	return uri_clone(src, dst);
+}
+
+static int
+get_rsync_uri(struct rpki_uri const *requested_uri, struct rpki_uri *rsync_uri)
+{
+	switch (config_get_sync_strategy()) {
+	case SYNC_ROOT:
+		return handle_root_strategy(requested_uri, rsync_uri);
+	case SYNC_STRICT:
+		return handle_strict_strategy(requested_uri, rsync_uri);
+	case SYNC_OFF:
+		return pr_crit("Supposedly unreachable code reached.");
+	}
+
+	return pr_crit("Unknown sync strategy: %u", config_get_sync_strategy());
+}
+
+static int
+dir_exists(char *path, bool *result)
 {
 	struct stat _stat;
-	int error;
+	char *last_slash;
 
-	error = stat(path, &_stat);
-	if (error != 0) {
-		if (errno == ENOENT) {
-			*result = false;
-			goto end;
-		} else {
-			return pr_errno(errno, "stat() failed");
-		}
+	last_slash = strrchr(path, '/');
+	if (last_slash == NULL) {
+		/*
+		 * Simply because create_dir_recursive() has nothing meaningful
+		 * to do when this happens. It's a pretty strange error.
+		 */
+		*result = true;
+		return 0;
 	}
 
-	if (!S_ISDIR(_stat.st_mode))
-		return pr_err("Path '%s' exist but is not a directory", path);
+	*last_slash = '\0';
 
-	*result = true;
-end:
+	switch (stat(path, &_stat)) {
+	case 0:
+		if (!S_ISDIR(_stat.st_mode)) {
+			return pr_err("Path '%s' exists and is not a directory.",
+			    path);
+		}
+
+		*result = true;
+		break;
+	case ENOENT:
+		*result = false;
+		break;
+	default:
+		return pr_errno(errno, "stat() failed");
+	}
+
+	*last_slash = '/';
 	return 0;
 }
 
@@ -341,6 +196,10 @@ create_dir(char *path)
 	return 0;
 }
 
+/**
+ * Apparently, RSYNC does not like to create parent directories.
+ * This function fixes that.
+ */
 static int
 create_dir_recursive(char *localuri)
 {
@@ -348,7 +207,7 @@ create_dir_recursive(char *localuri)
 	int i, error;
 	bool exist = false;
 
-	error = dir_exist(localuri, &exist);
+	error = dir_exists(localuri, &exist);
 	if (error)
 		return error;
 
@@ -371,70 +230,146 @@ create_dir_recursive(char *localuri)
 	return 0;
 }
 
-int
-download_files(struct rpki_uri const *uri)
+static void
+handle_child_thread(struct rpki_uri *uri)
 {
-	size_t prefix_len;
-	char *rsync_uri_path, *localuri, *tmp;
+	/* THIS FUNCTION MUST NEVER RETURN!!! */
+
+	struct string_array const *config_args;
+	char **copy_args;
+	unsigned int i;
 	int error;
 
-	prefix_len = strlen(RSYNC_PREFIX);
+	config_args = config_get_rsync_args();
+	/*
+	 * We need to work on a copy, because the config args are immutable,
+	 * and we need to add the program name (for some reason) and NULL
+	 * elements, and replace $REMOTE and $LOCAL.
+	 */
+	copy_args = calloc(config_args->length + 2, sizeof(char *));
+	if (copy_args == NULL)
+		exit(pr_enomem());
 
-	if (!rsync_enabled)
-		return 0;
+	copy_args[0] = config_get_rsync_program();
+	copy_args[config_args->length + 1] = NULL;
 
-	if (uri->global_len < prefix_len ||
-	    strncmp(RSYNC_PREFIX, uri->global, prefix_len) != 0) {
-		pr_err("Global URI '%s' does not begin with '%s'.",
-		    uri->global, RSYNC_PREFIX);
-		return ENOTRSYNC; /* Not really an error, so not negative */
+	memcpy(copy_args + 1, config_args->array,
+	    config_args->length * sizeof(char *));
+
+	for (i = 1; i < config_args->length + 1; i++) {
+		if (strcmp(copy_args[i], "$REMOTE") == 0)
+			copy_args[i] = uri->global;
+		else if (strcmp(copy_args[i], "$LOCAL") == 0)
+			copy_args[i] = uri->local;
 	}
 
-	if (is_uri_in_list(uri->global)){
-		pr_debug("(%s) ON LIST: %s", __func__, uri->global);
-		error = 0;
-		goto end;
-	} else {
-		pr_debug("(%s) DOWNLOAD: %s", __func__, uri->global);
-	}
+	pr_debug("Executing RSYNC:");
+	for (i = 0; i < config_args->length + 1; i++)
+		pr_debug("    %s", copy_args[i]);
 
-	error = get_path_only(uri->global, uri->global_len, prefix_len,
-	    &rsync_uri_path);
+	execvp(copy_args[0], copy_args);
+	error = errno;
+	pr_err("Could not execute the rsync command: %s",
+	    strerror(error));
+
+	/*
+	 * https://stackoverflow.com/a/14493459/1735458
+	 * Might as well. Prrbrrrlllt.
+	 */
+	free(copy_args);
+
+	exit(error);
+}
+
+/*
+ * Downloads the @uri->global file into the @uri->local path.
+ */
+static int
+do_rsync(struct rpki_uri *uri)
+{
+	pid_t child_pid;
+	int child_status;
+	int error;
+
+	error = create_dir_recursive(uri->local);
 	if (error)
 		return error;
 
-	error = compare_uris_and_short(rsync_uri_path, &tmp);
-	if (error) {
-		goto free_uri_path;
+	/* We need to fork because execvp() magics the thread away. */
+	child_pid = fork();
+	if (child_pid == 0)
+		handle_child_thread(uri); /* This code is run by the child. */
+
+	/* This code is run by us. */
+
+	error = waitpid(child_pid, &child_status, 0);
+	if (error == -1) {
+		error = errno;
+		pr_err("The rsync sub-process returned error %d (%s)",
+		    error, strerror(error));
+		return error;
 	}
 
-	if (tmp != NULL) {
-		free(rsync_uri_path);
-		rsync_uri_path = tmp;
+	if (WIFEXITED(child_status)) {
+		/* Happy path (but also sad path sometimes). */
+		error = WEXITSTATUS(child_status);
+		pr_debug("Child terminated with error code %d.", error);
+		return error;
 	}
 
-	error = uri_g2l(rsync_uri_path, &localuri);
+	if (WIFSIGNALED(child_status)) {
+		switch (WTERMSIG(child_status)) {
+		case SIGINT:
+			pr_err("RSYNC was user-interrupted. Guess I'll interrupt myself too.");
+			break;
+		case SIGQUIT:
+			pr_err("RSYNC received a quit signal. Guess I'll quit as well.");
+			break;
+		case SIGKILL:
+			pr_err("Killed.");
+			break;
+		default:
+			pr_err("The RSYNC was terminated by a signal I don't have a handler for. Dunno; guess I'll just die.");
+			break;
+		}
+		exit(-EINTR); /* Meh? */
+	}
+
+	pr_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
+	exit(-EINVAL);
+}
+
+int
+download_files(struct rpki_uri const *requested_uri)
+{
+	/**
+	 * Note:
+	 * @requested_uri is the URI we were asked to RSYNC.
+	 * @rsync_uri is the URL we're actually going to RSYNC.
+	 * (They can differ, depending on config_get_sync_strategy().)
+	 */
+	struct rpki_uri rsync_uri;
+	int error;
+
+	if (config_get_sync_strategy() == SYNC_OFF)
+		return 0;
+
+	if (is_already_downloaded(requested_uri)) {
+		pr_debug("No need to redownload '%s'.", requested_uri->global);
+		return 0;
+	}
+
+	error = get_rsync_uri(requested_uri, &rsync_uri);
 	if (error)
-		goto free_uri_path;
+		return error;
 
-	error = create_dir_recursive(localuri);
-	if (error)
-		goto free_uri_path;
+	pr_debug("Going to RSYNC '%s' ('%s').", rsync_uri.global,
+	    rsync_uri.local);
 
-	error = do_rsync(rsync_uri_path, localuri);
-	free(localuri);
-	if (error)
-		goto free_uri_path;
+	error = do_rsync(&rsync_uri);
+	if (!error)
+		error = mark_as_downloaded(&rsync_uri);
 
-	error = add_uri_to_list(rsync_uri_path);
-	if (error)
-		goto free_uri_path;
-
-	return 0;
-
-free_uri_path:
-	free(rsync_uri_path);
-end:
+	uri_cleanup(&rsync_uri);
 	return error;
-
 }

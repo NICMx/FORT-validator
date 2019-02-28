@@ -4,7 +4,6 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/stat.h>
-#include "uri.h"
 
 /*
  * The entire contents of the file, loaded into a buffer.
@@ -16,10 +15,10 @@ struct file_contents {
 	size_t buffer_size;
 };
 
-int file_open(struct rpki_uri const *, FILE **, struct stat *);
-void file_close(FILE *file);
+int file_open(char const *, FILE **, struct stat *);
+void file_close(FILE *);
 
-int file_load(struct rpki_uri const *, struct file_contents *);
+int file_load(char const *, struct file_contents *);
 void file_free(struct file_contents *);
 
 #endif /* SRC_FILE_H_ */

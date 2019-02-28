@@ -92,7 +92,7 @@ main(int argc, char **argv)
 	if (error)
 		return error;
 
-	error = rsync_init(config_get_enable_rsync());
+	error = rsync_init();
 	if (error)
 		goto end1;
 

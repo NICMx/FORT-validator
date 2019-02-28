@@ -3,17 +3,85 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <toml.h>
+
+/**
+ * Note: The only repository synchronization protocol implemented so far is
+ * RSYNC. Whenever you see "sync", think "rsync."
+ */
+enum sync_strategy {
+	/**
+	 * Synchronization is turned off.
+	 * The validator will work on an already downloaded repository.
+	 */
+	SYNC_OFF,
+	/**
+	 * Strictly correct download strategy.
+	 *
+	 * The validator will sync each repository publication point separately
+	 * as requested by each caRepository contained in the CA certificates'
+	 * SIA extensions.
+	 *
+	 * No risk of downloading unneeded files, but otherwise slow, as every
+	 * different repository publication point requires a separate sync call.
+	 */
+	SYNC_STRICT,
+	/**
+	 * Always download the likely root of the entire repository.
+	 *
+	 * For example, if we get the following caRepositories:
+	 *
+	 * - `rsync://a.b.c/d/e/f/g/h/i`
+	 * - `rsync://a.b.c/d/e/f/g/h/j`
+	 * - `rsync://a.b.c/d/e/f/k`
+	 *
+	 * This strategy will synchronize `rsync://a.b.c/d` while parsing the
+	 * first caRepository, and then skip synchronization during the second
+	 * and third ones. (Because they are already downloaded.)
+	 *
+	 * This strategy risks downloading unneeded files, and even failing due
+	 * to lack of read permissions on stray subdirectories. On the flip
+	 * side, if the repository holds no unnecessary subdirectories, then
+	 * this strategy is the fastest one, since it generally only requires
+	 * one sync call per domain, which often translates into one sync call
+	 * per validation cycle.
+	 *
+	 * Currently, all of the official repositories are actually specifically
+	 * structured to benefit this strategy.
+	 */
+	SYNC_ROOT,
+};
+
+#define SYNC_VALUE_OFF		"off"
+#define SYNC_VALUE_STRICT	"strict"
+#define SYNC_VALUE_ROOT		"root"
 
 struct rpki_config;
 
 struct group_fields;
 struct option_field;
 
-typedef void (*print_function)(struct group_fields const *,
-    struct option_field const *, void *);
-typedef int (*parse_function)(struct option_field const *, char const *,
-    void *);
-typedef int (*handler_function)(struct option_field const *, char *);
+typedef void (*print_function)(
+    struct group_fields const *,
+    struct option_field const *,
+    void *
+);
+typedef int (*argv_parse_function)(
+    struct option_field const *,
+    char const *,
+    void *
+);
+typedef int (*toml_parse_function)(
+    struct option_field const *,
+    struct toml_table_t *,
+    void *
+);
+typedef int (*handler_function)(
+    struct option_field const *,
+    char *
+);
 
 struct global_type {
 	/** Same as struct option.has_arg. Mandatory. */
@@ -29,14 +97,30 @@ struct global_type {
 	 * Optional.
 	 */
 	print_function print;
-	/**
-	 * Convers from string to this data type.
-	 * If the option's handler is not NULL, this is optional.
-	 */
-	parse_function parse;
+
+	/** If the option's handler is not NULL, this is optional. */
+	struct {
+		/**
+		 * Convers from string to this data type.
+		 * Optional if there are no fields of this type that are read
+		 * from argv.
+		 */
+		argv_parse_function argv;
+		/**
+		 * Converts from a TOML node to this data type.
+		 * Optional if there are no fields of this type that are read
+		 * from TOML files.
+		 */
+		toml_parse_function toml;
+	} parse;
+
 	/**
 	 * Function that will release this data type.
 	 * If the option's handler is not NULL, this is optional.
+	 *
+	 * IMPORTANT: This function might be called twice in succession.
+	 * Therefore, make sure that it nullifies the value, and reacts properly
+	 * when the input is NULL.
 	 */
 	void (*free)(void *);
 
@@ -103,17 +187,25 @@ struct group_fields {
 	struct option_field const *options;
 };
 
-int parse_option(struct option_field const *, char const *);
+struct string_array {
+	char **array;
+	size_t length;
+};
+
+void *get_rpki_config_field(struct option_field const *);
 int handle_flags_config(int , char **);
 
 void get_group_fields(struct group_fields const **);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);
-bool config_get_enable_rsync(void);
+enum sync_strategy config_get_sync_strategy(void);
 bool config_get_shuffle_uris(void);
 unsigned int config_get_max_cert_depth(void);
 bool config_get_color_output(void);
+char *config_get_rsync_program(void);
+struct string_array const *config_get_rsync_args(void);
+
 void free_rpki_config(void);
 
 #endif /* SRC_CONFIG_H_ */

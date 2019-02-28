@@ -6,12 +6,12 @@
 #include <libcmscodec/IPAddrBlocks.h>
 
 #include "algorithm.h"
-#include "common.h"
 #include "config.h"
 #include "extension.h"
 #include "log.h"
 #include "manifest.h"
 #include "nid.h"
+#include "str.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"

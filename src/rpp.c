@@ -102,7 +102,6 @@ add_crl_to_stack(struct rpp *pp, STACK_OF(X509_CRL) *crls)
 	int error;
 	int idx;
 
-	pr_debug("MANIFEST.CRL: %s", pp->crl.global);
 	fnstack_push(pp->crl.global);
 
 	error = crl_load(&pp->crl, &crl);

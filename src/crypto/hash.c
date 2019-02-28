@@ -65,7 +65,7 @@ hash_file(char const *algorithm, struct rpki_uri const *uri,
 	if (error)
 		return error;
 
-	error = file_open(uri, &file, &stat);
+	error = file_open(uri->local, &file, &stat);
 	if (error)
 		return error;
 

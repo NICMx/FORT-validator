@@ -3,4 +3,5 @@ git clean -dfx \
 	-e .project \
 	-e .settings \
 	-e .metadata \
-	-e Debug/
+	-e Debug/ \
+	-e tmp

@@ -12,200 +12,139 @@ START_TEST(rsync_load_normal)
 }
 END_TEST
 
+static void
+assert_descendant(bool expected, char *ancestor, char *descendant)
+{
+	struct uri ancestor_uri;
+	struct rpki_uri descendant_uri;
+
+	ancestor_uri.string = ancestor;
+	ancestor_uri.len = strlen(ancestor);
+	descendant_uri.global = descendant;
+	descendant_uri.global_len = strlen(descendant);
+
+	ck_assert_int_eq(is_descendant(&ancestor_uri, &descendant_uri),
+	    expected);
+}
+
 START_TEST(rsync_test_prefix_equals)
 {
-	struct uri rsync_uri;
-	char *uri = "proto://a/b/c";
+	char *ancestor;
 
-	rsync_uri.len = strlen(uri);
-	rsync_uri.string = uri;
+	ancestor = "proto://a/b/c";
+	assert_descendant(true, ancestor, "proto://a/b/c");
+	assert_descendant(false, ancestor, "proto://a/b/");
+	assert_descendant(true, ancestor, "proto://a/b/c/c");
+	assert_descendant(false, ancestor, "proto://a/b/cc");
+	assert_descendant(false, ancestor, "proto://a/b/cc/");
 
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/c"), true);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/"), false);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/c/c"), true);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/cc"), false);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/cc/"), false);
-
-	uri = "proto://a/b/c/";
-	rsync_uri.len = strlen(uri);
-	rsync_uri.string = uri;
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/c"), false);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/"), false);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/c/c"), true);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/cc"), false);
-	ck_assert_int_eq(rsync_uri_prefix_equals(&rsync_uri, "proto://a/b/cc/"), false);
-
+	ancestor = "proto://a/b/c/";
+	assert_descendant(true, ancestor, "proto://a/b/c");
+	assert_descendant(false, ancestor, "proto://a/b/");
+	assert_descendant(true, ancestor, "proto://a/b/c/c");
+	assert_descendant(false, ancestor, "proto://a/b/cc");
+	assert_descendant(false, ancestor, "proto://a/b/cc/");
 }
 END_TEST
+
+static void
+__mark_as_downloaded(char *uri_str)
+{
+	struct rpki_uri uri;
+
+	uri.global = uri_str;
+	uri.global_len = strlen(uri_str);
+
+	ck_assert_int_eq(mark_as_downloaded(&uri), 0);
+}
+
+static void
+assert_downloaded(char *uri_str, bool expected)
+{
+	struct rpki_uri uri;
+
+	uri.global = uri_str;
+	uri.global_len = strlen(uri_str);
+
+	ck_assert_int_eq(is_already_downloaded(&uri), expected);
+}
 
 START_TEST(rsync_test_list)
 {
 	struct uri *uri;
-	char *string_uri, *test_string;
 
-	rsync_init(true);
+	ck_assert_int_eq(rsync_init(), 0);
 
-	string_uri = "rsync://example.foo/repository/";
-	ck_assert_int_eq(add_uri_to_list(string_uri), 0);
-	string_uri = "rsync://example.foo/member_repository/";
-	ck_assert_int_eq(add_uri_to_list(string_uri), 0);
-	string_uri = "rsync://example.foz/repository/";
-	ck_assert_int_eq(add_uri_to_list(string_uri), 0);
-	string_uri = "rsync://example.boo/repo/";
-	ck_assert_int_eq(add_uri_to_list(string_uri), 0);
-	string_uri = "rsync://example.potato/rpki/";
-	ck_assert_int_eq(add_uri_to_list(string_uri), 0);
+	__mark_as_downloaded("rsync://example.foo/repository/");
+	__mark_as_downloaded("rsync://example.foo/member_repository/");
+	__mark_as_downloaded("rsync://example.foz/repository/");
+	__mark_as_downloaded("rsync://example.boo/repo/");
+	__mark_as_downloaded("rsync://example.potato/rpki/");
 
-	test_string = "rsync://example.foo/repository/";
-	ck_assert_int_eq(is_uri_in_list(test_string), true);
-	test_string = "rsync://example.foo/repository/abc/cdfg";
-	ck_assert_int_eq(is_uri_in_list(test_string), true);
-	test_string = "rsync://example.foo/member_repository/bca";
-	ck_assert_int_eq(is_uri_in_list(test_string), true);
-	test_string = "rsync://example.boo/repository/";
-	ck_assert_int_eq(is_uri_in_list(test_string), false);
-	test_string = "rsync://example.potato/repository/";
-	ck_assert_int_eq(is_uri_in_list(test_string), false);
-	test_string = "rsync://example.potato/rpki/abc/";
-	ck_assert_int_eq(is_uri_in_list(test_string), true);
+	assert_downloaded("rsync://example.foo/repository/", true);
+	assert_downloaded("rsync://example.foo/repository/abc/cdfg", true);
+	assert_downloaded("rsync://example.foo/member_repository/bca", true);
+	assert_downloaded("rsync://example.boo/repository/", false);
+	assert_downloaded("rsync://example.potato/repository/", false);
+	assert_downloaded("rsync://example.potato/rpki/abc/", true);
 
 	/* rsync destroy */
-	while(!SLIST_EMPTY(rsync_uris)) {
-		uri = SLIST_FIRST(rsync_uris);
-		SLIST_REMOVE_HEAD(rsync_uris, next);
+	while (!SLIST_EMPTY(&visited_uris)) {
+		uri = SLIST_FIRST(&visited_uris);
+		SLIST_REMOVE_HEAD(&visited_uris, next);
 		free(uri);
 	}
-
-	free(rsync_uris);
-}
-END_TEST
-
-static int
-malloc_string(char *string, char **result)
-{
-	*result = malloc(strlen(string) + 1);
-	if (*result == NULL) {
-		return pr_enomem();
-	}
-
-	strcpy(*result, string);
-	return 0;
-}
-
-static void
-test_get_path(char *test, char *expected)
-{
-	int error;
-	char *string, *result;
-	size_t rsync_prefix_len = strlen("rsync://");
-
-	error = malloc_string(test, &string);
-	if (error)
-		return;
-
-	error = get_path_only(string, strlen(string), rsync_prefix_len, &result);
-	if (error) {
-		free(string);
-		return;
-	}
-
-	ck_assert_str_eq(expected, result);
-	ck_assert_str_eq(string, test);
-	free(string);
-	free(result);
-
-	return;
-}
-
-START_TEST(rsync_test_get_path)
-{
-	test_get_path("rsync://www.example.com/", "rsync://www.example.com/");
-	test_get_path("rsync://www.example.com", "rsync://www.example.com/");
-	test_get_path("rsync://www.example.com/test", "rsync://www.example.com/");
-	test_get_path("rsync://www.example.com/test/", "rsync://www.example.com/test/");
-	test_get_path("rsync://www.example.com/test/abc", "rsync://www.example.com/test/");
-	test_get_path("rsync://www.example.com/test/abc/", "rsync://www.example.com/test/abc/");
-	test_get_path("rsync://www.example.com/test/abc/abc.file", "rsync://www.example.com/test/abc/");
-	test_get_path("rsync://www.example.com/test/file.txt", "rsync://www.example.com/test/");
 }
 END_TEST
 
 static void
-test_get_prefix_from_URIs(char *expected, char *stored_uri, char *new_uri)
+test_root_strategy(char *test, char *expected)
 {
-	int error;
-	char *result;
-	error = find_prefix_path(new_uri, stored_uri, &result);
+	struct rpki_uri src;
+	struct rpki_uri dst;
 
-	if (error)
-		return;
+	src.global = strdup(test);
+	if (src.global == NULL)
+		ck_abort_msg("Out of memory.");
+	src.global_len = strlen(test);
+	src.local = strdup("foo");
+	if (src.local == NULL)
+		ck_abort_msg("Out of memory.");
 
-	if (expected == NULL) {
-		ck_assert_ptr_eq(expected, result);
-	} else {
-		ck_assert_str_eq(expected, result);
-	}
+	ck_assert_int_eq(handle_root_strategy(&src, &dst), 0);
+	ck_assert_str_eq(dst.global, expected);
 
-	if (result != NULL)
-		free(result);
+	free(src.global);
+	free(src.local);
+	free(dst.global);
+	free(dst.local);
 }
 
 START_TEST(rsync_test_get_prefix)
 {
-	char *expected, *stored_uri, *new_uri;
-
-	new_uri = "rsync://www.example1.com/test/foo/";
-	stored_uri = "rsync://www.example1.com/test/bar/";
-	expected = "rsync://www.example1.com/test/";
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example2.com/test/foo/";
-	stored_uri = "rsync://www.example2.co/test/bar/";
-	expected = NULL;
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example3.com/test/foo/";
-	stored_uri = "rsync://www.example3.com/test/foo/test/";
-	expected = "rsync://www.example3.com/test/foo/";
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example4.com/test/";
-	stored_uri = "rsync://www.example4.com/test/foo/bar";
-	expected = "rsync://www.example4.com/test/";
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example5.com/foo/";
-	stored_uri = "rsync://www.example5.com/bar/";
-	expected = NULL;
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example6.com/bar/foo/";
-	stored_uri = "rsync://www.example6.com/bar/";
-	expected = "rsync://www.example6.com/bar/";
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example7.com/";
-	stored_uri = "rsync://www.example7.com/bar/";
-	expected = NULL;
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example8.com/bar";
-	stored_uri = "rsync://www.example8.com/";
-	expected = NULL;
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
-	new_uri = "rsync://www.example9.com/bar/";
-	stored_uri = "rsync://www.example9.com/bar/";
-	expected = "rsync://www.example9.com/bar/";
-	test_get_prefix_from_URIs(expected, stored_uri, new_uri);
-
+	test_root_strategy("rsync://www.example1.com/test/foo/",
+	    "rsync://www.example1.com/test");
+	test_root_strategy("rsync://www.example1.com/test/foo/bar",
+	    "rsync://www.example1.com/test");
+	test_root_strategy("rsync://www.example1.com/test/",
+	    "rsync://www.example1.com/test");
+	test_root_strategy("rsync://www.example1.com/test",
+	    "rsync://www.example1.com/test");
+	test_root_strategy("rsync://www.example1.com",
+	    "rsync://www.example1.com");
+	test_root_strategy("rsync://w", "rsync://w");
+	test_root_strategy("rsync://", "rsync://");
+	test_root_strategy("rsync:/", "rsync:/");
+	test_root_strategy("rsync:", "rsync:");
+	test_root_strategy("r", "r");
+	test_root_strategy("", "");
 }
 END_TEST
 
 Suite *rsync_load_suite(void)
 {
 	Suite *suite;
-	TCase *core, *prefix_equals, *uri_list, *test_get_path, *test_get_prefix;
+	TCase *core, *prefix_equals, *uri_list, *test_get_prefix;
 
 	core = tcase_create("Core");
 	tcase_add_test(core, rsync_load_normal);
@@ -216,9 +155,6 @@ Suite *rsync_load_suite(void)
 	uri_list = tcase_create("uriList");
 	tcase_add_test(uri_list, rsync_test_list);
 
-	test_get_path = tcase_create("test_static_get_path");
-	tcase_add_test(test_get_path, rsync_test_get_path);
-
 	test_get_prefix = tcase_create("test_get_prefix");
 	tcase_add_test(test_get_prefix, rsync_test_get_prefix);
 
@@ -226,7 +162,6 @@ Suite *rsync_load_suite(void)
 	suite_add_tcase(suite, core);
 	suite_add_tcase(suite, prefix_equals);
 	suite_add_tcase(suite, uri_list);
-	suite_add_tcase(suite, test_get_path);
 	suite_add_tcase(suite, test_get_prefix);
 
 	return suite;

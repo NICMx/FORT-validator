@@ -1,9 +1,6 @@
 #ifndef SRC_RTR_COMMON_H_
 #define SRC_RTR_COMMON_H_
 
-#include <stddef.h>
-#include <openssl/x509.h>
-
 /* "I think that this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172
 /* "I haven't implemented this yet." */
@@ -17,8 +14,5 @@
 #define ENOTRSYNC 3174
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
-
-int string_clone(void const *, size_t, char **);
-int ia5s2string(ASN1_IA5STRING *, char **);
 
 #endif /* SRC_RTR_COMMON_H_ */
