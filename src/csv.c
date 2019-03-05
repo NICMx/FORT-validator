@@ -263,7 +263,7 @@ load_vrps_file(bool check_update)
 		goto end2;
 	}
 
-	last_update = attr.st_mtim.tv_nsec;
+	last_update = attr.st_mtim.tv_sec;
 	if (check_update && last_update <= get_vrps_last_modified_date())
 		goto end2;
 

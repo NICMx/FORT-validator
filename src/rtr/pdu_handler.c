@@ -79,7 +79,14 @@ handle_serial_query_pdu(int fd, void *pdu)
 		return send_cache_reset_pdu(&common);
 	case DIFF_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.2 */
-		return send_commmon_exchange(&common);
+		/*
+		 * TODO The diff calculation between serials isn't quite ready yet,
+		 * so always respond with a cache reset. When the implementation is
+		 * ready use:
+		 *
+		 * return send_commmon_exchange(&common);
+		 */
+		return send_cache_reset_pdu(&common);
 	case NO_DIFF:
 		/* Typical exchange with no Payloads */
 		error = send_cache_response_pdu(&common);
