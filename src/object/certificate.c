@@ -584,7 +584,7 @@ handle_rpkiManifest(struct rpki_uri *uri, void *arg)
 static int
 handle_caRepository(struct rpki_uri *uri, void *arg)
 {
-	pr_debug("caRepository: %s", uri->global);
+	pr_debug("caRepository: %s", uri_get_printable(uri));
 	return download_files(uri);
 }
 
@@ -592,7 +592,7 @@ static int
 handle_signedObject(struct rpki_uri *uri, void *arg)
 {
 	struct certificate_refs *refs = arg;
-	pr_debug("signedObject: %s", uri->global);
+	pr_debug("signedObject: %s", uri_get_printable(uri));
 	refs->signedObject = uri->global;
 	uri->global = NULL;
 	return 0;
@@ -1152,9 +1152,9 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	if (sk_X509_num(validation_certs(state)) >= config_get_max_cert_depth())
 		return pr_err("Certificate chain maximum depth exceeded.");
 
-	pr_debug_add("%s Certificate %s {", is_ta ? "TA" : "CA",
-	    cert_uri->global);
-	fnstack_push(cert_uri->global);
+	pr_debug_add("%s Certificate '%s' {", is_ta ? "TA" : "CA",
+	    uri_get_printable(cert_uri));
+	fnstack_push_uri(cert_uri);
 	memset(&refs, 0, sizeof(refs));
 
 	/* -- Validate the certificate (@cert) -- */

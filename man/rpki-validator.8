@@ -1,0 +1,150 @@
+.TH rpki-validator 8 2019-03-5 v0.0.1-beta "RPKI certificate path validator"
+
+.SH NAME
+rpki-validator - Actually still unnamed officially.
+
+.SH OPTIONS
+
+--help
+.RS 4
+Print long usage message.
+.RE
+.P
+
+--usage
+.RS 4
+Print short usage message.
+.RE
+.P
+
+--version
+.RS 4
+Print program version.
+.RE
+.P
+
+--configuration-file=<file>
+.RS 4
+Path to a TOML file from which additional configuration will be read.
+.RE
+.P
+
+--local-repository=<directory>
+.RS 4
+Path to a directory where the local cache of the repository will be stored
+and/or read.
+.RE
+.P
+
+--sync-strategy=(off|strict|root)
+.RS 4
+RSYNC download strategy.
+.P
+off
+.RS 4
+Skip all RSYNCs. (Validate the existing cache repository pointed by --local-repository.)
+.RE
+.P
+strict
+.RS 4
+RSYNC every repository publication point separately. Only skip publication
+points that have already been downloaded during the current validation cycle.
+(Assuming each synchronization is recursive.)
+.P
+For example, suppose the validator gets certificates whose caRepository access
+methods (in their Subject Information Access extensions) point to the following
+publication points:
+.P
+1. rsync://rpki.example.com/foo/bar/
+.br
+2. rsync://rpki.example.com/foo/qux/
+.br
+3. rsync://rpki.example.com/foo/bar/
+.br
+4. rsync://rpki.example.com/foo/corge/grault/
+.br
+5. rsync://rpki.example.com/foo/corge/
+.br
+6. rsync://rpki.example.com/foo/corge/waldo/
+.P
+A validator following the `strict` strategy would download `bar`, download
+`qux`, skip `bar`, download `corge/grault`, download `corge` and skip
+`corge/waldo`.
+.P
+This is the slowest, but also the strictly correct sync strategy.
+.RE
+.P
+root
+.RS 4
+For each publication point found, guess the root of its repository and RSYNC
+that instead. Then skip any subsequent children of said root.
+.P
+(To guess the root of a repository, the validator counts four slashes, and
+prunes the rest of the URL.)
+.P
+Reusing the caRepository URLs from the `strict` strategy (above) as example, a
+validator following the `root` strategy would download
+`rsync://rpki.example.com/foo`, and then skip everything else.
+.P
+Assuming that the repository is specifically structured to be found within as
+few roots as possible, and they contain minimal RPKI-unrelated noise files, this
+is the fastest synchronization strategy. At time of writing, this is true for
+all the current official repositories.
+.RE
+.RE
+.P
+
+--maximum-certificate-depth=<unsigned integer>
+.RS 4
+Maximum allowable certificate chain length.
+.P
+(Required to prevent loops and "other degenerate forms of the logical RPKI
+hierarchy." (RFC 6481))
+.RE
+.P
+
+--tal=<file>
+.RS 4
+Path to the TAL file the validation will sprawl from.
+.P
+The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
+be used to access the "Trust Anchor" (the root of a particular RPKI tree) and
+its public key. (See RFC 7730.)
+.RE
+.P
+
+--shuffle-uris
+.RS 4
+Shuffle URIs in the TAL before accessing them.
+.RE
+.P
+
+--color-output
+.RS 4
+Print ANSI color codes?
+.RE
+.P
+
+--output-file-name-format=(global-url|local-path|file-name)
+.RS 4
+Decides which version of file names should be printed during most debug/error
+messages.
+.P
+Suppose a certificate was downloaded from `rsync://rpki.example.com/foo/bar/baz.cer` into the local cache `repository/`:
+.P
+global-url
+.RS 4
+will print the certificate's name as `rsync://rpki.example.com/foo/bar/baz.cer`.
+.RE
+.P
+local-path
+.RS 4
+will print the certificate's name as `repository/rpki.example.com/foo/bar/baz.cer`.
+.RE
+.P
+file-name
+.RS 4
+will print the certificate's name as `baz.cer`.
+.RE
+.P
+.RE

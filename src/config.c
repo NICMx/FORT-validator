@@ -48,15 +48,19 @@ struct rpki_config {
 	 * Prevents arbitrarily long paths and loops.
 	 */
 	unsigned int maximum_certificate_depth;
-	/** Print ANSI color codes? */
-	bool color_output;
 
 	struct {
 		char *program;
 		struct string_array args;
 	} rsync;
-};
 
+	struct {
+		/** Print ANSI color codes? */
+		bool color;
+		/** Format in which file names will be printed. */
+		enum filename_format filename_format;
+	} output;
+};
 
 static void print_usage(FILE *, bool);
 
@@ -71,6 +75,7 @@ DECLARE_PRINT_FN(print_u_int);
 DECLARE_PRINT_FN(print_string);
 DECLARE_PRINT_FN(print_string_array);
 DECLARE_PRINT_FN(print_sync_strategy);
+DECLARE_PRINT_FN(print_filename_format);
 
 #define DECLARE_PARSE_ARGV_FN(name)					\
 	static int name(						\
@@ -82,6 +87,7 @@ DECLARE_PARSE_ARGV_FN(parse_argv_bool);
 DECLARE_PARSE_ARGV_FN(parse_argv_u_int);
 DECLARE_PARSE_ARGV_FN(parse_argv_string);
 DECLARE_PARSE_ARGV_FN(parse_argv_sync_strategy);
+DECLARE_PARSE_ARGV_FN(parse_argv_filename_format);
 
 #define DECLARE_PARSE_TOML_FN(name)					\
 	static int name(						\
@@ -94,6 +100,7 @@ DECLARE_PARSE_TOML_FN(parse_toml_u_int);
 DECLARE_PARSE_TOML_FN(parse_toml_string);
 DECLARE_PARSE_TOML_FN(parse_toml_sync_strategy);
 DECLARE_PARSE_TOML_FN(parse_toml_string_array);
+DECLARE_PARSE_TOML_FN(parse_toml_filename_format);
 
 #define DECLARE_HANDLE_FN(name)						\
 	static int name(						\
@@ -158,6 +165,15 @@ static const struct global_type gt_sync_strategy = {
 	.arg_doc = SYNC_VALUE_OFF "|" SYNC_VALUE_STRICT "|" SYNC_VALUE_ROOT,
 };
 
+static const struct global_type gt_filename_format = {
+	.has_arg = required_argument,
+	.size = sizeof(enum filename_format),
+	.print = print_filename_format,
+	.parse.argv = parse_argv_filename_format,
+	.parse.toml = parse_toml_filename_format,
+	.arg_doc = FNF_VALUE_GLOBAL "|" FNF_VALUE_LOCAL "|" FNF_VALUE_NAME,
+};
+
 /**
  * An option that takes no arguments, is not correlated to any rpki_config
  * fields, and is entirely managed by its handler function.
@@ -193,7 +209,7 @@ static const struct option_field global_fields[] = {
 		.name = "configuration-file",
 		.type = &gt_string,
 		.handler = handle_toml,
-		.doc = "TOML file the configuration will be read from.",
+		.doc = "TOML file additional configuration will be read from",
 		.arg_doc = "<file>",
 		.availability = AVAILABILITY_GETOPT,
 	}, {
@@ -201,46 +217,21 @@ static const struct option_field global_fields[] = {
 		.name = "local-repository",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, local_repository),
-		.doc = "Local repository path.",
+		.doc = "Directory where the repository local cache will be stored/read",
 		.arg_doc = "<directory>",
 	}, {
 		.id = 1001,
 		.name = "sync-strategy",
 		.type = &gt_sync_strategy,
 		.offset = offsetof(struct rpki_config, sync_strategy),
-		.doc = "RSYNC download strategy.",
+		.doc = "RSYNC download strategy",
 	}, {
-		.id = 'c',
-		.name = "color-output",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, color_output),
-		.doc = "Print ANSI color codes?",
-		.availability = AVAILABILITY_GETOPT,
-	},
-	{ 0 },
-};
-
-static const struct option_field tal_fields[] = {
-	{
-		.id = 't',
-		.name = "tal",
-		.type = &gt_string,
-		.offset = offsetof(struct rpki_config, tal),
-		.doc = "TAL file path",
-		.arg_doc = "<file name>",
-	}, {
-		.id = 2000,
-		.name = "shuffle-uris",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, shuffle_uris),
-		.doc = "Shuffle URIs in the TAL.",
-	}, {
-		.id = 2001,
+		.id = 1002,
 		.name = "maximum-certificate-depth",
 		.type = &gt_u_int,
 		.offset = offsetof(struct rpki_config,
 		    maximum_certificate_depth),
-		.doc = "Prevents arbitrarily long paths and loops.",
+		.doc = "Maximum allowable certificate chain length",
 		.min = 1,
 		/**
 		 * It cannot be UINT_MAX, because then the actual number will
@@ -251,13 +242,31 @@ static const struct option_field tal_fields[] = {
 	{ 0 },
 };
 
+static const struct option_field tal_fields[] = {
+	{
+		.id = 't',
+		.name = "tal",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, tal),
+		.doc = "Path to the TAL file",
+		.arg_doc = "<file>",
+	}, {
+		.id = 2000,
+		.name = "shuffle-uris",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, shuffle_uris),
+		.doc = "Shuffle URIs in the TAL before accessing them",
+	},
+	{ 0 },
+};
+
 static const struct option_field rsync_fields[] = {
 	{
 		.id = 3000,
 		.name = "program",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, rsync.program),
-		.doc = "Name of the program needed to execute an RSYNC.",
+		.doc = "Name of the program needed to execute an RSYNC",
 		.arg_doc = "<path to program>",
 		.availability = AVAILABILITY_TOML,
 	}, {
@@ -265,8 +274,25 @@ static const struct option_field rsync_fields[] = {
 		.name = "arguments",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args),
-		.doc = "Arguments to send to the RSYNC program call.",
+		.doc = "Arguments to send to the RSYNC program call",
 		.availability = AVAILABILITY_TOML,
+	},
+	{ 0 },
+};
+
+static const struct option_field output_fields[] = {
+	{
+		.id = 'c',
+		.name = "color-output",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, output.color),
+		.doc = "Print ANSI color codes?",
+	}, {
+		.id = 4000,
+		.name = "output-file-name-format",
+		.type = &gt_filename_format,
+		.offset = offsetof(struct rpki_config, output.filename_format),
+		.doc = "File name variant to print during debug/error messages",
 	},
 	{ 0 },
 };
@@ -281,6 +307,9 @@ static const struct group_fields groups[] = {
 	}, {
 		.name = "rsync",
 		.options = rsync_fields,
+	}, {
+		.name = "output",
+		.options = output_fields,
 	},
 	{ NULL },
 };
@@ -360,6 +389,28 @@ print_sync_strategy(struct group_fields const *group,
 		break;
 	case SYNC_ROOT:
 		str = SYNC_VALUE_ROOT;
+		break;
+	}
+
+	pr_info("%s.%s: %s", group->name, field->name, str);
+}
+
+void
+print_filename_format(struct group_fields const *group,
+    struct option_field const *field, void *value)
+{
+	enum filename_format *format = value;
+	char const *str = "<unknown>";
+
+	switch (*format) {
+	case FNF_GLOBAL:
+		str = FNF_VALUE_GLOBAL;
+		break;
+	case FNF_LOCAL:
+		str = FNF_VALUE_LOCAL;
+		break;
+	case FNF_NAME:
+		str = FNF_VALUE_NAME;
 		break;
 	}
 
@@ -447,6 +498,24 @@ parse_argv_sync_strategy(struct option_field const *field, char const *str,
 		*result = SYNC_ROOT;
 	else
 		return pr_err("Unknown synchronization strategy: '%s'", str);
+
+	return 0;
+}
+
+static int
+parse_argv_filename_format(struct option_field const *field, char const *str,
+    void *_result)
+{
+	enum filename_format *result = _result;
+
+	if (strcmp(str, FNF_VALUE_GLOBAL) == 0)
+		*result = FNF_GLOBAL;
+	else if (strcmp(str, FNF_VALUE_LOCAL) == 0)
+		*result = FNF_LOCAL;
+	else if (strcmp(str, FNF_VALUE_NAME) == 0)
+		*result = FNF_NAME;
+	else
+		return pr_err("Unknown file name format: '%s'", str);
 
 	return 0;
 }
@@ -574,6 +643,23 @@ parse_toml_string_array(struct option_field const *opt,
 fail:
 	free(result->array);
 	result->length = 0;
+	return error;
+}
+
+static int
+parse_toml_filename_format(struct option_field const *opt,
+    struct toml_table_t *toml, void *_result)
+{
+	int error;
+	char *string;
+
+	error = parse_toml_string(opt, toml, &string);
+	if (error)
+		return error;
+
+	error = parse_argv_filename_format(opt, string, _result);
+
+	free(string);
 	return error;
 }
 
@@ -737,7 +823,6 @@ set_default_values(void)
 	rpki_config.sync_strategy = SYNC_STRICT;
 	rpki_config.shuffle_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
-	rpki_config.color_output = false;
 
 	rpki_config.rsync.program = strdup("rsync");
 	if (rpki_config.rsync.program == NULL)
@@ -754,6 +839,9 @@ set_default_values(void)
 		if (rpki_config.rsync.args.array[i] == NULL)
 			goto revert_rsync_args;
 	}
+
+	rpki_config.output.color = false;
+	rpki_config.output.filename_format = FNF_GLOBAL;
 
 	return 0;
 
@@ -784,7 +872,6 @@ print_usage(FILE *stream, bool print_doc)
 	char const *arg_doc;
 
 	fprintf(stream, "Usage: %s\n", program_name);
-
 	FOREACH_OPTION(groups, group, option, AVAILABILITY_GETOPT) {
 		fprintf(stream, "\t[");
 		fprintf(stream, "--%s", option->name);
@@ -923,9 +1010,14 @@ config_get_max_cert_depth(void)
 bool
 config_get_color_output(void)
 {
-	return rpki_config.color_output;
+	return rpki_config.output.color;
 }
 
+enum filename_format
+config_get_filename_format(void)
+{
+	return rpki_config.output.filename_format;
+}
 
 char *
 config_get_rsync_program(void)

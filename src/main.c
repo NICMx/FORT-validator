@@ -47,11 +47,11 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
 	if (error)
 		return -abs(error);
 
-	pr_debug_add("TAL URI %s {", uri->global);
+	pr_debug_add("TAL URI '%s' {", uri_get_printable(uri));
 
 	if (!uri_is_certificate(uri)) {
 		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
-		    uri->global);
+		    uri_get_printable(uri));
 		error = -EINVAL;
 		goto end;
 	}

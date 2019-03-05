@@ -138,7 +138,7 @@ int
 crl_load(struct rpki_uri const *uri, X509_CRL **result)
 {
 	int error;
-	pr_debug_add("CRL %s {", uri->global);
+	pr_debug_add("CRL '%s' {", uri_get_printable(uri));
 
 	error = __crl_load(uri, result);
 	if (!error)

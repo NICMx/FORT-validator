@@ -6,8 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
-
 #include <sys/socket.h>
+
+#include "config.h"
 
 static pthread_key_t state_key;
 static pthread_key_t filenames_key;
@@ -113,20 +114,14 @@ get_file_stack(void)
 	return files;
 }
 
-static char const *
-get_filename(char const *file_path)
-{
-	/* char *slash = strrchr(file_path, '/'); */
-	return /* (slash != NULL) ? (slash + 1) : */ file_path;
-}
-
 /**
  * Call this function every time you're about to start processing a new file.
  * Any pr_err()s and friends will now include the new file name.
  * Use fnstack_pop() to revert back to the previously stacked file name.
+ * @file is not cloned; it's expected to outlive the push/pop operation.
  */
 void
-fnstack_push(char const *file_path)
+fnstack_push(char const *file)
 {
 	struct filename_stack *files;
 	char const **tmp;
@@ -148,7 +143,14 @@ fnstack_push(char const *file_path)
 		files->size *= 2;
 	}
 
-	files->filenames[files->len++] = get_filename(file_path);
+	files->filenames[files->len++] = file;
+}
+
+/** See fnstack_push(). */
+void
+fnstack_push_uri(struct rpki_uri const *uri)
+{
+	fnstack_push(uri_get_printable(uri));
 }
 
 /* Returns the file name on the top of the file name stack. */

@@ -22,8 +22,8 @@ handle_ghostbusters(struct rpki_uri const *uri, struct rpp *pp,
 	struct signed_object_args sobj_args;
 	int error;
 
-	pr_debug_add("Ghostbusters %s {", uri->global);
-	fnstack_push(uri->global);
+	pr_debug_add("Ghostbusters '%s' {", uri->global);
+	fnstack_push_uri(uri);
 
 	error = signed_object_args_init(&sobj_args, uri, crls, true);
 	if (error)

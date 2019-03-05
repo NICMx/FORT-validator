@@ -397,8 +397,8 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 	 *
 	 * So, nothing to do for now.
 	 *
-	 * TODO "In the certificate, the OID appears in the signature and
-	 * signatureAlgorithm fields [RFC4055]." So it has to be the same as
+	 * TODO (field) "In the certificate, the OID appears in the signature
+	 * and signatureAlgorithm fields [RFC4055]." So it has to be the same as
 	 * some other field?
 	 */
 

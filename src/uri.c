@@ -49,21 +49,21 @@ validate_url_character(int character)
  * This function does not assume that @str is null-terminated.
  */
 static int
-str2global(void const *str, size_t str_len, struct rpki_uri *uri)
+str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 {
 	int error;
 	size_t i;
 
-	error = string_clone(str, str_len, &uri->global);
-	if (error)
-		return error;
-	uri->global_len = str_len;
-
 	for (i = 0; i < str_len; i++) {
-		error = validate_url_character(uri->global[i]);
+		error = validate_url_character(str[i]);
 		if (error)
 			return error;
 	}
+
+	uri->global = strdup(str);
+	if (uri->global == NULL)
+		return pr_enomem();
+	uri->global_len = str_len;
 
 	return 0;
 }
@@ -317,4 +317,30 @@ bool
 uri_is_certificate(struct rpki_uri const *uri)
 {
 	return uri_has_extension(uri, ".cer");
+}
+
+static char const *
+get_filename(char const *file_path)
+{
+	char *slash = strrchr(file_path, '/');
+	return (slash != NULL) ? (slash + 1) : file_path;
+}
+
+char const *
+uri_get_printable(struct rpki_uri const *uri)
+{
+	enum filename_format format;
+
+	format = config_get_filename_format();
+	switch (format) {
+	case FNF_GLOBAL:
+		return uri->global;
+	case FNF_LOCAL:
+		return uri->local;
+	case FNF_NAME:
+		return get_filename(uri->global);
+	}
+
+	pr_crit("Unknown file name format: %u", format);
+	return uri->global;
 }

@@ -91,7 +91,6 @@ rpp_add_crl(struct rpp *pp, struct rpki_uri *uri)
 
 	pp->crl = *uri;
 	pp->crl_set = true;
-	pr_debug("Manifest CRL: %s", uri->global);
 	return 0;
 }
 
@@ -102,7 +101,7 @@ add_crl_to_stack(struct rpp *pp, STACK_OF(X509_CRL) *crls)
 	int error;
 	int idx;
 
-	fnstack_push(pp->crl.global);
+	fnstack_push_uri(&pp->crl);
 
 	error = crl_load(&pp->crl, &crl);
 	if (error)

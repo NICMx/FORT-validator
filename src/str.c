@@ -7,7 +7,7 @@
 /**
  * Does not assume that @string is NULL-terminated.
  */
-int
+static int
 string_clone(void const *string, size_t size, char **clone)
 {
 	char *result;

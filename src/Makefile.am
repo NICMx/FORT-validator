@@ -122,7 +122,7 @@ GCC_WARNS += -Whsa
 
 # I don't mind too much increasing these.
 # Just make sure that you know what you're doing.
-GCC_WARNS += -Wlarger-than=1024 -Walloc-size-larger-than=4096
+GCC_WARNS += -Wlarger-than=2048 -Walloc-size-larger-than=4096
 GCC_WARNS += -Wframe-larger-than=1024 -Wstack-usage=1024
 
 # Can't use because of dependencies: -Waggregate-return

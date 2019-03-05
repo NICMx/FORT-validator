@@ -58,6 +58,19 @@ enum sync_strategy {
 #define SYNC_VALUE_STRICT	"strict"
 #define SYNC_VALUE_ROOT		"root"
 
+enum filename_format {
+	/** Example: "rsync://repository.lacnic.net/rpki/foo/bar/baz.cer" */
+	FNF_GLOBAL,
+	/** Example: "/tmp/repo/repository.lacnic.net/rpki/foo/bar/baz.cer" */
+	FNF_LOCAL,
+	/** Example: "baz.cer" */
+	FNF_NAME,
+};
+
+#define FNF_VALUE_GLOBAL "global-url"
+#define FNF_VALUE_LOCAL "local-path"
+#define FNF_VALUE_NAME "file-name"
+
 struct rpki_config;
 
 struct group_fields;
@@ -166,7 +179,9 @@ struct option_field {
 	handler_function handler;
 
 	/**
-	 * Explanation of the field, for user consumption.
+	 * Explanation of the field, for user consumption during --help.
+	 * Meant to be short; the bulk of it should be found in the manpage.
+	 * Probably should not include punctuation at the end.
 	 * Mandatory.
 	 */
 	const char *doc;
@@ -203,6 +218,7 @@ enum sync_strategy config_get_sync_strategy(void);
 bool config_get_shuffle_uris(void);
 unsigned int config_get_max_cert_depth(void);
 bool config_get_color_output(void);
+enum filename_format config_get_filename_format(void);
 char *config_get_rsync_program(void);
 struct string_array const *config_get_rsync_args(void);
 

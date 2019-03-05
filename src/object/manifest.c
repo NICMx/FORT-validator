@@ -185,8 +185,8 @@ handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
 	struct manifest mft;
 	int error;
 
-	pr_debug_add("Manifest %s {", uri->global);
-	fnstack_push(uri->global);
+	pr_debug_add("Manifest '%s' {", uri_get_printable(uri));
+	fnstack_push_uri(uri);
 
 	error = signed_object_args_init(&sobj_args, uri, crls, false);
 	if (error)

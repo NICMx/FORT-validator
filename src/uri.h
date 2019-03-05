@@ -15,7 +15,7 @@
  * Because we need to generate @local from @global, @global's allowed character
  * set must be a subset of @local. Because this is Unix, @local must never
  * contain NULL (except as a terminating character). Therefore, even though IA5
- * allows NULL, @global won't. TODO (NOW) validate this on constructors.
+ * allows NULL, @global won't.
  *
  * Because we will simply embed @global (minus "rsync://") into @local, @local's
  * encoding must be IA5-compatible. In other words, UTF-16 and UTF-32 are out of
@@ -64,5 +64,6 @@ void uri_cleanup(struct rpki_uri *);
 
 bool uri_has_extension(struct rpki_uri const *, char const *);
 bool uri_is_certificate(struct rpki_uri const *);
+char const *uri_get_printable(struct rpki_uri const *);
 
 #endif /* SRC_URI_H_ */
