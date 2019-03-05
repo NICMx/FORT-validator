@@ -1,6 +1,7 @@
 #ifndef SRC_VRPS_H_
 #define SRC_VRPS_H_
 
+#include <time.h>
 #include <netinet/ip.h>
 
 #define NO_DATA_AVAILABLE	-2
@@ -37,8 +38,10 @@ unsigned int get_vrps_delta(u_int32_t *, u_int32_t *, struct vrp **);
 void vrp_destroy(struct vrp *);
 void delta_destroy(struct delta *);
 void deltas_db_destroy(void);
+void set_vrps_last_modified_date(time_t);
 
 u_int32_t last_serial_number(void);
 u_int16_t current_session_id(u_int8_t);
+time_t get_vrps_last_modified_date(void);
 
 #endif /* SRC_VRPS_H_ */

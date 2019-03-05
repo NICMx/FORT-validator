@@ -6,6 +6,7 @@
 #include "rtr/rtr.h"
 #include "configuration.h"
 #include "csv.h"
+#include "updates_daemon.h"
 #include "vrps.h"
 
 /*
@@ -49,6 +50,10 @@ main(int argc, char *argv[])
 		goto end1;
 
 	err = csv_parse_vrps_file();
+	if (err)
+		goto end2;
+
+	err = updates_daemon_init();
 	if (err)
 		goto end2;
 

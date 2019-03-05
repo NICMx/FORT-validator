@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/stat.h>
 
 #include "configuration.h"
 #include "address.h"
@@ -232,10 +234,13 @@ end:
 	return error;
 }
 
-int
-csv_parse_vrps_file()
+static int
+load_vrps_file(bool check_update)
 {
+
 	struct line_file *lfile;
+	struct stat attr;
+	time_t last_update;
 	char const *location;
 	int error;
 
@@ -250,12 +255,38 @@ csv_parse_vrps_file()
 	if (error)
 		goto end1; /* Error msg already printed. */
 
+	// Look for the last update date
+	error = stat(location, &attr);
+	if (error) {
+		warn("Couldn't get last modified date of %s, skip update",
+			location);
+		goto end2;
+	}
+
+	last_update = attr.st_mtim.tv_nsec;
+	if (check_update && last_update <= get_vrps_last_modified_date())
+		goto end2;
+
 	error = load_vrps(lfile);
 	if (error)
 		goto end2;
+	set_vrps_last_modified_date(last_update);
+	// TODO Double check of date
 
 end2:
 	lfile_close(lfile);
 end1:
 	return error;
+}
+
+int
+csv_parse_vrps_file()
+{
+	return load_vrps_file(false);
+}
+
+int
+csv_check_vrps_file()
+{
+	return load_vrps_file(true);
 }

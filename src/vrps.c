@@ -1,6 +1,5 @@
 #include "vrps.h"
 
-#include <time.h>
 #include "array_list.h"
 
 #define FLAG_WITHDRAWAL		0
@@ -19,6 +18,7 @@ struct deltasdb db;
 u_int32_t current_serial;
 u_int16_t v0_session_id;
 u_int16_t v1_session_id;
+time_t last_modified_date;
 
 int
 deltas_db_init(void)
@@ -232,6 +232,12 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 	return get_delta_diff(delta0, delta1, result);
 }
 
+void
+set_vrps_last_modified_date(time_t new_date)
+{
+	last_modified_date = new_date;
+}
+
 u_int32_t
 last_serial_number(void)
 {
@@ -244,4 +250,10 @@ current_session_id(u_int8_t rtr_version)
 	if (rtr_version == 1)
 		return v1_session_id;
 	return v0_session_id;
+}
+
+time_t
+get_vrps_last_modified_date(void)
+{
+	return last_modified_date;
 }

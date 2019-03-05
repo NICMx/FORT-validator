@@ -13,7 +13,9 @@
 #define OPTNAME_LISTEN		"listen"
 #define OPTNAME_LISTEN_ADDRESS	"address"
 #define OPTNAME_LISTEN_PORT	"port"
-#define OPTNAME_VRPS_LOCATION	"vrpsLocation"
+#define OPTNAME_VRPS	"vrps"
+#define OPTNAME_VRPS_LOCATION	"location"
+#define OPTNAME_VRPS_CHECK_INTERVAL	"checkInterval"
 #define OPTNAME_RTR_INTERVAL	"rtrInterval"
 #define OPTNAME_RTR_INTERVAL_REFRESH	"refresh"
 #define OPTNAME_RTR_INTERVAL_RETRY	"retry"
@@ -21,12 +23,15 @@
 
 #define DEFAULT_ADDR		NULL
 #define DEFAULT_PORT		"323"
-#define DEFAULT_VRPS		NULL
+#define DEFAULT_VRPS_LOCATION		NULL
+#define DEFAULT_VRPS_CHECK_INTERVAL	60
 #define DEFAULT_REFRESH_INTERVAL		3600
 #define DEFAULT_RETRY_INTERVAL		600
 #define DEFAULT_EXPIRE_INTERVAL		7200
 
 /* Protocol timing parameters ranges */
+#define MIN_VRPS_CHECK_INTERVAL	1
+#define MAX_VRPS_CHECK_INTERVAL	7200
 #define MIN_REFRESH_INTERVAL	1
 #define MAX_REFRESH_INTERVAL	86400
 #define MIN_RETRY_INTERVAL		1
@@ -41,6 +46,8 @@ struct rtr_config {
 	char *port;
 	/** VRPs (Validated ROA Payload) location */
 	char *vrps_location;
+	/** Interval used to look for updates at VRPs location */
+	int vrps_check_interval;
 	/** Intervals use at RTR v1 End of data PDU **/
 	int refresh_interval;
 	int retry_interval;
@@ -116,10 +123,12 @@ static int
 handle_json(json_t *root)
 {
 	json_t *listen;
+	json_t *vrps;
 	json_t *interval;
 	char const *address;
 	char const *port;
-	char const *vrps;
+	char const *vrps_location;
+	int vrps_check_interval;
 	int refresh_interval;
 	int retry_interval;
 	int expire_interval;
@@ -153,11 +162,30 @@ handle_json(json_t *root)
 		port = DEFAULT_PORT;
 	}
 
-	error = json_get_string(root, OPTNAME_VRPS_LOCATION,
-			    DEFAULT_VRPS, &vrps);
-	if (error)
-		return error;
-	config.vrps_location = str_clone(vrps);
+	vrps = json_object_get(root, OPTNAME_VRPS);
+	if (vrps != NULL) {
+		if (!json_is_object(vrps)) {
+			warnx("The '%s' element is not a JSON object.",
+			    OPTNAME_VRPS);
+			return -EINVAL;
+		}
+
+		error = json_get_string(vrps, OPTNAME_VRPS_LOCATION,
+			    DEFAULT_VRPS_LOCATION, &vrps_location);
+		if (error)
+			return error;
+		config.vrps_location = str_clone(vrps_location);
+
+		error = load_interval(vrps, OPTNAME_VRPS_CHECK_INTERVAL,
+		    DEFAULT_VRPS_CHECK_INTERVAL, &vrps_check_interval,
+		    MIN_VRPS_CHECK_INTERVAL, MAX_VRPS_CHECK_INTERVAL);
+		if (error)
+			return error;
+		config.vrps_check_interval = vrps_check_interval;
+	} else {
+		config.vrps_location = DEFAULT_VRPS_LOCATION;
+		config.vrps_check_interval = DEFAULT_VRPS_CHECK_INTERVAL;
+	}
 
 	interval = json_object_get(root, OPTNAME_RTR_INTERVAL);
 	if (interval != NULL) {
@@ -278,6 +306,12 @@ char const *
 config_get_vrps_location(void)
 {
 	return config.vrps_location;
+}
+
+int
+config_get_vrps_check_interval(void)
+{
+	return config.vrps_check_interval;
 }
 
 int
