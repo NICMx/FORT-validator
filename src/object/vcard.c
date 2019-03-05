@@ -5,10 +5,16 @@
 
 #include "log.h"
 
+/*
+ * TODO (next iteration) Implement RFC 6350.
+ * (The current code implements RFC 6493 *only*.)
+ */
+
 /**
  * Reminder: UTF-8 strings are **not** C strings.
  * They can contain null characters, which do not terminate them.
- * DO NOT use standard string operations on them. (Except for the `n` ones).
+ * DO NOT use standard string operations on them. (Unless you know what you're
+ * doing).
  */
 struct utf8_string {
 	uint8_t *val;

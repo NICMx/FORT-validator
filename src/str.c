@@ -1,5 +1,6 @@
 #include "str.h"
 
+#include <errno.h>
 #include <string.h>
 #include "log.h"
 
@@ -28,6 +29,40 @@ ia5s2string(ASN1_IA5STRING *ia5, char **result)
 	return (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT)
 	    ? pr_err("CRL URI IA5String has unused bits.")
 	    : string_clone(ia5->data, ia5->length, result);
+}
+
+int
+BN2string(BIGNUM *bn, char **_result)
+{
+	BIO *bio;
+	uint64_t written;
+	char *result;
+
+	/* Callers can call free() whether this function fails or not. */
+	*_result = NULL;
+
+	bio = BIO_new(BIO_s_mem());
+	if (bio == NULL)
+		return -ENOMEM;
+
+	if (BN_print(bio, bn) == 0) {
+		BIO_free(bio);
+		return crypto_err("Unable to print the BIGNUM into a BIO");
+	}
+
+	written = BIO_number_written(bio);
+	result = malloc(written + 1);
+	if (result == NULL) {
+		BIO_free(bio);
+		return pr_enomem();
+	}
+
+	BIO_read(bio, result, written);
+	result[written] = '\0';
+
+	BIO_free(bio);
+	*_result = result;
+	return 0;
 }
 
 void

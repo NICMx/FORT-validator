@@ -5,11 +5,22 @@
 #include <string.h>
 #include "array_list.h"
 #include "log.h"
+#include "str.h"
 #include "thread_var.h"
 #include "object/certificate.h"
 
-ARRAY_LIST(serial_numbers, BIGNUM *)
-ARRAY_LIST(subjects, char *)
+struct serial_number {
+	BIGNUM *number;
+	char *file; /* File where this serial number was found. */
+};
+
+struct subject_name {
+	struct rfc5280_name name;
+	char *file; /* File where this subject name was found. */
+};
+
+ARRAY_LIST(serial_numbers, struct serial_number)
+ARRAY_LIST(subjects, struct subject_name)
 
 /**
  * Cached certificate data.
@@ -154,15 +165,17 @@ abort1:
 }
 
 static void
-serial_cleanup(BIGNUM **serial)
+serial_cleanup(struct serial_number *serial)
 {
-	BN_free(*serial);
+	BN_free(serial->number);
+	free(serial->file);
 }
 
 static void
-subject_cleanup(char **subject)
+subject_cleanup(struct subject_name *subject)
 {
-	free(*subject);
+	x509_name_cleanup(&subject->name);
+	free(subject->file);
 }
 
 void
@@ -334,65 +347,171 @@ validation_peek_resource(struct validation *state)
 	return (cert != NULL) ? cert->resources : NULL;
 }
 
+static int
+get_current_file_name(char **_result)
+{
+	char const *tmp;
+	char *result;
+
+	tmp = fnstack_peek();
+	if (tmp == NULL)
+		return pr_crit("The file name stack is empty.");
+
+	result = strdup(tmp);
+	if (result == NULL)
+		return pr_enomem();
+
+	*_result = result;
+	return 0;
+}
+
+/**
+ * This function will steal ownership of @number on success.
+ */
 int
 validation_store_serial_number(struct validation *state, BIGNUM *number)
 {
 	struct certificate *cert;
-	BIGNUM **cursor;
-	BIGNUM *duplicate;
+	struct serial_number *cursor;
+	struct serial_number duplicate;
+	char *string;
 	int error;
 
+	/* Remember to free @number if you return 0 but don't store it. */
+
 	cert = SLIST_FIRST(&state->certs);
-	if (cert == NULL)
+	if (cert == NULL) {
+		BN_free(number);
 		return 0; /* The TA lacks siblings, so serial is unique. */
+	}
 
-	ARRAYLIST_FOREACH(&cert->serials, cursor)
-		if (BN_cmp(*cursor, number) == 0)
-			return pr_err("Serial number is not unique.");
+	/*
+	 * Note: This is is reported as a warning, even though duplicate serial
+	 * numbers are clearly a violation of the RFC and common sense.
+	 *
+	 * But it cannot be simply upgraded into an error because we are
+	 * realizing the problem too late; our traversal is depth-first, so we
+	 * already approved the other bogus certificate and its children.
+	 * (I don't think changing to a breath-first traversal would be a good
+	 * idea; the RAM usage would skyrocket because, since we need the entire
+	 * certificate path to the root to validate any certificate, we would
+	 * end up having the entire tree loaded in memory by the time we're done
+	 * traversing.)
+	 *
+	 * So instead of arbitrarily approving one certificate but not the
+	 * other, we will accept both but report a warning.
+	 *
+	 * Also: It's pretty odd; a significant amount of certificates seem to
+	 * be breaking this rule. Maybe we're the only ones catching it?
+	 */
+	ARRAYLIST_FOREACH(&cert->serials, cursor) {
+		if (BN_cmp(cursor->number, number) == 0) {
+			BN2string(number, &string);
+			pr_warn("Serial number '%s' is not unique. (Also found in '%s'.)",
+			    string, cursor->file);
+			BN_free(number);
+			free(string);
+			return 0;
+		}
+	}
 
-	duplicate = BN_dup(number);
-	if (duplicate == NULL)
-		return crypto_err("Could not duplicate a BIGNUM");
+	duplicate.number = number;
+	error = get_current_file_name(&duplicate.file);
+	if (error)
+		return error;
 
 	error = serial_numbers_add(&cert->serials, &duplicate);
 	if (error)
-		BN_free(duplicate);
+		free(duplicate.file);
 
 	return error;
 }
 
+/**
+ * This function will steal ownership of @subject on success.
+ */
 int
-validation_store_subject(struct validation *state, char *subject)
+validation_store_subject(struct validation *state, struct rfc5280_name *subject)
 {
 	struct certificate *cert;
-	char **cursor;
-	char *duplicate;
+	struct subject_name *cursor;
+	struct subject_name duplicate;
 	int error;
 
-	cert = SLIST_FIRST(&state->certs);
-	if (cert == NULL)
-		return 0; /* The TA lacks siblings, so subject is unique. */
+	/*
+	 * There's something that's not clicking with me:
+	 *
+	 * "Each distinct subordinate CA and
+	 * EE certified by the issuer MUST be identified using a subject name
+	 * that is unique per issuer.  In this context, 'distinct' is defined as
+	 * an entity and a given public key."
+	 *
+	 * Does the last sentence have any significance to us? I don't even
+	 * understand why the requirement exists. 5280 and 6487 don't even
+	 * define "entity." I guess it's the same meaning from "End-Entity",
+	 * and in this case it's supposed to function as a synonym for "subject
+	 * name."
+	 *
+	 * "An issuer SHOULD use a different
+	 * subject name if the subject's key pair has changed (i.e., when the CA
+	 * issues a certificate as part of re-keying the subject.)"
+	 *
+	 * It's really weird that it seems to be rewording the same requirement
+	 * except the first version is defined as MUST and the second one is
+	 * defined as SHOULD.
+	 *
+	 * Ugh. Okay. Let's use some common sense. There are four possible
+	 * situations:
+	 *
+	 * - Certificates do not share name nor public key. We should accept
+	 *   this.
+	 * - Certificates share name, but not public key. We should reject this.
+	 * - Certificates share public key, but not name. This is basically
+	 *   impossible, but fine nonetheless. Accept.
+	 *   (But maybe issue a warning. It sounds like the two children can
+	 *   impersonate each other.)
+	 * - Certificates share name and public key. This likely means that we
+	 *   are looking at two different versions of the same certificate, but
+	 *   we can't tell for sure right now, and so we should accept it.
+	 *
+	 * This is all conjecture. We should probably mail the IETF.
+	 *
+	 * TODO (next iteration) The code below complains when certificates
+	 * share names, and ignores public keys. I've decided to defer the
+	 * fixing.
+	 */
 
+	/* Remember to free @subject if you return 0 but don't store it. */
+
+	cert = SLIST_FIRST(&state->certs);
+	if (cert == NULL) {
+		x509_name_cleanup(subject);
+		return 0; /* The TA lacks siblings, so subject is unique. */
+	}
+
+	/* See the large comment in validation_store_serial_number(). */
 	ARRAYLIST_FOREACH(&cert->subjects, cursor) {
-		if (strcmp(*cursor, subject) == 0) {
-			/*
-			 * I had to downgrade this because lots of people are
-			 * breaking this rule.
-			 * TODO (next iteration) make a framework so the user
-			 * can choose the severity of each error.
-			 */
-			return pr_warn("Subject name '%s' is not unique.",
-			    subject);
+		if (x509_name_equals(&cursor->name, subject)) {
+			pr_warn("Subject name '%s%s%s' is not unique. (Also found in '%s'.)",
+			    subject->commonName,
+			    (subject->serialNumber != NULL) ? "/" : "",
+			    (subject->serialNumber != NULL)
+			        ? subject->serialNumber
+			        : "",
+			    cursor->file);
+			x509_name_cleanup(subject);
+			return 0;
 		}
 	}
 
-	duplicate = strdup(subject);
-	if (duplicate == NULL)
-		return pr_err("Could not duplicate a String");
+	duplicate.name = *subject;
+	error = get_current_file_name(&duplicate.file);
+	if (error)
+		return error;
 
 	error = subjects_add(&cert->subjects, &duplicate);
 	if (error)
-		free(duplicate);
+		free(duplicate.file);
 
 	return error;
 }

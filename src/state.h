@@ -3,6 +3,7 @@
 
 #include <openssl/x509.h>
 #include "resource.h"
+#include "object/name.h"
 #include "object/tal.h"
 
 struct validation;
@@ -33,7 +34,7 @@ struct rpki_uri const *validation_peek_cert_uri(struct validation *);
 struct resources *validation_peek_resource(struct validation *);
 
 int validation_store_serial_number(struct validation *, BIGNUM *);
-int validation_store_subject(struct validation *, char *);
+int validation_store_subject(struct validation *, struct rfc5280_name *);
 
 char *validation_get_ip_buffer1(struct validation *);
 char *validation_get_ip_buffer2(struct validation *);

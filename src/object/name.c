@@ -7,66 +7,77 @@
 #include "log.h"
 #include "thread_var.h"
 
-/**
- * Only prints error message if the result is not 0 nor -ESRCH.
- */
-int
-x509_name_decode(X509_NAME *name, int nid, char **_result)
+static int
+name2string(X509_NAME_ENTRY *name, char **_result)
 {
+	const ASN1_STRING *data;
 	char *result;
-	int len1, len2;
 
-	len1 = X509_NAME_get_text_by_NID(name, nid, NULL, 0);
-	if (len1 < 0)
-		return -ESRCH;
+	data = X509_NAME_ENTRY_get_data(name);
+	if (data == NULL)
+		return crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
-	if (_result == NULL)
-		return 0;
-
-	result = calloc(len1 + 1, sizeof(char));
+	result = malloc(data->length + 1);
 	if (result == NULL)
 		return pr_enomem();
 
-	len2 = X509_NAME_get_text_by_NID(name, nid, result, len1 + 1);
-	if (len1 != len2) {
-		free(result);
-		return pr_err("Likely programming error: X509_NAME_get_text_by_NID() returned inconsistent lengths: %d,%d",
-		    len1, len2);
-	}
+	memcpy(result, data->data, data->length);
+	result[data->length] = '\0';
 
 	*_result = result;
 	return 0;
 }
 
-struct rfc5280_names {
-	char *commonName;
-	char *serialNumber;
-};
-
-static int
-get_names(X509_NAME *name, char const *what, struct rfc5280_names *result)
+int
+x509_name_decode(X509_NAME *name, char const *what,
+    struct rfc5280_name *result)
 {
+	int i;
+	X509_NAME_ENTRY *entry;
+	int nid;
 	int error;
 
-	error = x509_name_decode(name, NID_commonName, &result->commonName);
-	if (error == -ESRCH) {
-		return pr_err("The '%s' name lacks a commonName attribute.",
-		    what);
-	}
-	if (error)
-		return error;
+	result->commonName = NULL;
+	result->serialNumber = NULL;
 
-	error = x509_name_decode(name, NID_serialNumber, &result->serialNumber);
-	if (error == -ESRCH) {
-		result->serialNumber = NULL;
-		return 0;
+	for (i = 0; i < X509_NAME_entry_count(name); i++) {
+		entry = X509_NAME_get_entry(name, i);
+		nid = OBJ_obj2nid(X509_NAME_ENTRY_get_object(entry));
+		switch (nid) {
+		case NID_commonName:
+			error = name2string(entry, &result->commonName);
+			break;
+		case NID_serialNumber:
+			error = name2string(entry, &result->serialNumber);
+			break;
+		default:
+			error = pr_err("The '%s' name has an unknown attribute. (NID: %d)",
+			    what, nid);
+			break;
+		}
+
+		if (error)
+			goto fail;
 	}
-	if (error) {
-		free(result->commonName);
-		return error;
+
+	if (result->commonName == NULL) {
+		error = pr_err("The '%s' name lacks a commonName attribute.",
+		    what);
+		goto fail;
 	}
 
 	return 0;
+
+fail:
+	x509_name_cleanup(result);
+	return error;
+}
+
+void
+x509_name_cleanup(struct rfc5280_name *name)
+{
+	free(name->commonName);
+	free(name->serialNumber);
 }
 
 /**
@@ -83,13 +94,20 @@ static bool str_equals(char const *str1, char const *str2)
 	return strcmp(str1, str2) == 0;
 }
 
+bool
+x509_name_equals(struct rfc5280_name *a, struct rfc5280_name *b)
+{
+	return (strcmp(a->commonName, b->commonName) == 0)
+	    && str_equals(a->serialNumber, b->serialNumber);
+}
+
 int
 validate_issuer_name(char const *container, X509_NAME *issuer)
 {
 	struct validation *state;
 	X509 *parent;
-	struct rfc5280_names parent_subject = { 0 };
-	struct rfc5280_names child_issuer = { 0 };
+	struct rfc5280_name parent_subject;
+	struct rfc5280_name child_issuer;
 	int error;
 
 	/*
@@ -108,34 +126,30 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 		    container);
 	}
 
-	error = get_names(X509_get_subject_name(parent), "subject",
+	error = x509_name_decode(X509_get_subject_name(parent), "subject",
 	    &parent_subject);
 	if (error)
 		return error;
-	error = get_names(issuer, "issuer", &child_issuer);
+	error = x509_name_decode(issuer, "issuer", &child_issuer);
 	if (error)
-		goto end2;
+		goto end;
 
-	if (strcmp(parent_subject.commonName, child_issuer.commonName) != 0) {
-		error = pr_err("%s's issuer commonName ('%s') does not equal issuer certificate's commonName ('%s').",
-		    container, parent_subject.commonName,
-		    child_issuer.commonName);
-		goto end1;
+	if (!x509_name_equals(&parent_subject, &child_issuer)) {
+		error = pr_err("%s's issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
+		    container,
+		    parent_subject.commonName,
+		    (parent_subject.serialNumber != NULL) ? "/" : "",
+		    (parent_subject.serialNumber != NULL)
+		        ? parent_subject.serialNumber
+		        : "",
+		    child_issuer.commonName,
+		    (child_issuer.serialNumber != NULL) ? "/" : "",
+		    (child_issuer.serialNumber != NULL)
+		        ? child_issuer.serialNumber
+		        : "");
 	}
 
-	if (!str_equals(parent_subject.serialNumber,
-	    child_issuer.serialNumber)) {
-		error = pr_err("%s's issuer serialNumber ('%s') does not equal issuer certificate's serialNumber ('%s').",
-		    container, parent_subject.serialNumber,
-		    child_issuer.serialNumber);
-		goto end1;
-	}
-
-end1:
-	free(child_issuer.commonName);
-	free(child_issuer.serialNumber);
-end2:
-	free(parent_subject.commonName);
-	free(parent_subject.serialNumber);
+	x509_name_cleanup(&child_issuer);
+end:	x509_name_cleanup(&parent_subject);
 	return error;
 }

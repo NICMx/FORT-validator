@@ -116,8 +116,8 @@ get_file_stack(void)
 static char const *
 get_filename(char const *file_path)
 {
-	char *slash = strrchr(file_path, '/');
-	return (slash != NULL) ? (slash + 1) : file_path;
+	/* char *slash = strrchr(file_path, '/'); */
+	return /* (slash != NULL) ? (slash + 1) : */ file_path;
 }
 
 /**

@@ -8,6 +8,7 @@
 
 int string_clone(void const *, size_t, char **);
 int ia5s2string(ASN1_IA5STRING *, char **);
+int BN2string(BIGNUM *, char **);
 
 /* This file is named "str.h" because "string.h" collides with <string.h>. */
 

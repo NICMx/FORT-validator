@@ -81,6 +81,7 @@ static int
 validate_issuer(X509 *cert, bool is_ta)
 {
 	X509_NAME *issuer;
+	struct rfc5280_name name;
 	int error;
 
 	issuer = X509_get_issuer_name(cert);
@@ -88,9 +89,9 @@ validate_issuer(X509 *cert, bool is_ta)
 	if (!is_ta)
 		return validate_issuer_name("Certificate", issuer);
 
-	error = x509_name_decode(issuer, NID_commonName, NULL);
-	if (error == -ESRCH)
-		pr_err("The 'issuer' name lacks a commonName attribute.");
+	error = x509_name_decode(issuer, "issuer", &name);
+	if (!error)
+		x509_name_cleanup(&name);
 
 	return error;
 }
@@ -99,23 +100,21 @@ static int
 validate_subject(X509 *cert)
 {
 	struct validation *state;
-	char *subject;
+	struct rfc5280_name name;
 	int error;
 
 	state = state_retrieve();
 	if (state == NULL)
 		return -EINVAL;
 
-	error = x509_name_decode(X509_get_subject_name(cert), NID_commonName,
-	    &subject);
-	if (error == -ESRCH)
-		pr_err("Certificate's subject lacks the CommonName atribute.");
+	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
 		return error;
 
-	error = validation_store_subject(state, subject);
+	error = validation_store_subject(state, &name);
+	if (error)
+		x509_name_cleanup(&name);
 
-	free(subject);
 	return error;
 }
 
