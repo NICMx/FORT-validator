@@ -218,6 +218,7 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 		return 0;
 
 	/* Get the delta corresponding to the serials */
+	delta0 = NULL;
 	ARRAYLIST_FOREACH(&db, delta1) {
 		if (delta1->serial == *start_serial)
 			delta0 = delta1;
@@ -241,7 +242,7 @@ set_vrps_last_modified_date(time_t new_date)
 u_int32_t
 last_serial_number(void)
 {
-	return current_serial;
+	return current_serial - 1;
 }
 
 u_int16_t
