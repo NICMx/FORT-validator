@@ -28,8 +28,53 @@ manifest_decode(OCTET_STRING_t *string, void *arg)
 static int
 validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 {
-	const struct asn_TYPE_descriptor_s *def = &asn_DEF_GeneralizedTime;
-	return (GeneralizedTime_compare(def, this, next) < 0) ? 0 : -EINVAL;
+#define TM_FMT "%02d/%02d/%02d %02d:%02d:%02d"
+#define TM_ARGS(tm)							\
+	tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,			\
+	tm.tm_hour, tm.tm_min, tm.tm_sec
+
+	time_t thisUpdate;
+	time_t nextUpdate;
+	time_t now;
+	struct tm thisUpdate_tm;
+	struct tm nextUpdate_tm;
+
+	/*
+	 * BTW: We only need the tm variables for error messages, which are
+	 * rarely needed.
+	 * So maybe we could get a small performance boost by postponing the
+	 * calls to localtime_r().
+	 */
+	thisUpdate = asn_GT2time(this, &thisUpdate_tm, false);
+	nextUpdate = asn_GT2time(next, &nextUpdate_tm, false);
+
+	if (difftime(thisUpdate, nextUpdate) > 0) {
+		return pr_err(
+		    "Manifest's thisUpdate (" TM_FMT ") > nextUpdate ("
+		        TM_FMT ").",
+		    TM_ARGS(thisUpdate_tm),
+		    TM_ARGS(nextUpdate_tm));
+	}
+
+	now = time(NULL);
+	if (now == ((time_t) -1))
+		return pr_errno(errno, "Error getting the current time");
+
+	if (difftime(now, thisUpdate) < 0) {
+		return pr_err(
+		    "Manifest is not valid yet. (thisUpdate: " TM_FMT ")",
+		    TM_ARGS(thisUpdate_tm));
+	}
+	if (difftime(now, nextUpdate) > 0) {
+		return pr_err(
+		    "Manifest is expired. (nextUpdate: " TM_FMT ")",
+		    TM_ARGS(nextUpdate_tm));
+	}
+
+	return 0;
+
+#undef TM_FMT
+#undef TM_ARGS
 }
 
 static int
@@ -42,16 +87,20 @@ validate_manifest(struct Manifest *manifest)
 	/* rfc6486#section-4.2.1 */
 
 	/*
-	 * TODO (field)
+	 * BTW:
 	 *
-	 * If a "one-time-use" EE certificate is employed to verify a manifest,
+	 * "If a "one-time-use" EE certificate is employed to verify a manifest,
 	 * the EE certificate MUST have a validity period that coincides with
 	 * the interval from thisUpdate to nextUpdate, to prevent needless
-	 * growth of the CA's CRL.
+	 * growth of the CA's CRL."
 	 *
-	 * If a "sequential-use" EE certificate is employed to verify a
+	 * "If a "sequential-use" EE certificate is employed to verify a
 	 * manifest, the EE certificate's validity period needs to be no shorter
-	 * than the nextUpdate time of the current manifest.
+	 * than the nextUpdate time of the current manifest."
+	 *
+	 * It would appear that there's no way to tell whether an EE certificate
+	 * is "one-time-use" or "sequential-use," so we have no way to validate
+	 * this.
 	 */
 
 	/* rfc6486#section-4.4.2 */
@@ -72,33 +121,6 @@ validate_manifest(struct Manifest *manifest)
 	 */
 	if (manifest->manifestNumber.size > 20)
 		return pr_err("Manifest number is larger than 20 octets");
-
-	/*
-	 * TODO (field)
-	 *
-	 * "CRL issuers conforming to this profile MUST encode thisUpdate as
-	 * UTCTime for dates through the year 2049.  CRL issuers conforming to
-	 * this profile MUST encode thisUpdate as GeneralizedTime for dates in
-	 * the year 2050 or later. Conforming applications MUST be able to
-	 * process dates that are encoded in either UTCTime or GeneralizedTime."
-	 *
-	 * WTF man. thisUpdate is defined in the spec as GeneralizedTime;
-	 * not as CMSTime. This requirement makes no sense whatsoever.
-	 *
-	 * Check the errata?
-	 */
-	/* manifest->thisUpdate */
-
-	/*
-	 * TODO (field) again, same bullshit:
-	 *
-	 * "CRL issuers conforming to this profile MUST encode nextUpdate as
-	 * UTCTime for dates through the year 2049.  CRL issuers conforming to
-	 * this profile MUST encode nextUpdate as GeneralizedTime for dates in
-	 * the year 2050 or later.  Conforming applications MUST be able to
-	 * process dates that are encoded in either UTCTime or GeneralizedTime."
-	 */
-	/* manifest->nextUpdate */
 
 	/* rfc6486#section-4.4.3 */
 	error = validate_dates(&manifest->thisUpdate, &manifest->nextUpdate);

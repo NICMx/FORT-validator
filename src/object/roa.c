@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <libcmscodec/RouteOriginAttestation.h>
 
+#include "config.h"
 #include "log.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
@@ -50,6 +51,9 @@ print_addr4(struct resources *parent, unsigned long asn,
 			return pr_err("Prefix length (%u) > maxLength (%lu)",
 			    prefix.len, max_length);
 		}
+
+	} else {
+		max_length = prefix.len;
 	}
 
 	str2 = inet_ntop(AF_INET, &prefix.addr, str, sizeof(str));
@@ -61,13 +65,8 @@ print_addr4(struct resources *parent, unsigned long asn,
 		    prefix.len);
 	}
 
-	printf("AS%lu,%s/%u", asn, str2, prefix.len);
-	if (roa_addr->maxLength != NULL)
-		printf(",%lu", max_length);
-	else
-		printf(",%u", prefix.len);
-	printf("\n");
-
+	fprintf(config_get_roa_output(), "AS%lu,%s/%u,%lu\n", asn, str2,
+	    prefix.len, max_length);
 	return 0;
 }
 
@@ -102,6 +101,9 @@ print_addr6(struct resources *parent, unsigned long asn,
 			return pr_err("Prefix length (%u) > maxLength (%lu)",
 			    prefix.len, max_length);
 		}
+
+	} else {
+		max_length = prefix.len;
 	}
 
 	str2 = inet_ntop(AF_INET6, &prefix.addr, str, sizeof(str));
@@ -113,13 +115,8 @@ print_addr6(struct resources *parent, unsigned long asn,
 		    prefix.len);
 	}
 
-	printf("AS%lu,%s/%u", asn, str2, prefix.len);
-	if (roa_addr->maxLength != NULL)
-		printf(",%lu", max_length);
-	else
-		printf(",%u", prefix.len);
-	printf("\n");
-
+	fprintf(config_get_roa_output(), "AS%lu,%s/%u,%lu\n", asn, str2,
+	    prefix.len, max_length);
 	return 0;
 }
 

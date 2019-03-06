@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <toml.h>
+#include <openssl/bio.h>
 
 /**
  * Note: The only repository synchronization protocol implemented so far is
@@ -219,6 +220,7 @@ bool config_get_shuffle_uris(void);
 unsigned int config_get_max_cert_depth(void);
 bool config_get_color_output(void);
 enum filename_format config_get_filename_format(void);
+FILE *config_get_roa_output(void);
 char *config_get_rsync_program(void);
 struct string_array const *config_get_rsync_args(void);
 

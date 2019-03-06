@@ -21,6 +21,11 @@
 			if ((opt->availability == 0) ||		\
 			    (opt->availability & type))
 
+struct config_out_file {
+	FILE *fd;
+	char *file_name;
+};
+
 /**
  * To add a member to this structure,
  *
@@ -59,13 +64,15 @@ struct rpki_config {
 		bool color;
 		/** Format in which file names will be printed. */
 		enum filename_format filename_format;
+		/** Output stream where the valid ROAs will be dumped. */
+		struct config_out_file roa_output;
 	} output;
 };
 
 static void print_usage(FILE *, bool);
 
 #define DECLARE_PRINT_FN(name)						\
-	void name(							\
+	static void name(						\
 	    struct group_fields const *,				\
 	    struct option_field const *,				\
 	    void *							\
@@ -76,6 +83,7 @@ DECLARE_PRINT_FN(print_string);
 DECLARE_PRINT_FN(print_string_array);
 DECLARE_PRINT_FN(print_sync_strategy);
 DECLARE_PRINT_FN(print_filename_format);
+DECLARE_PRINT_FN(print_out_file);
 
 #define DECLARE_PARSE_ARGV_FN(name)					\
 	static int name(						\
@@ -88,6 +96,7 @@ DECLARE_PARSE_ARGV_FN(parse_argv_u_int);
 DECLARE_PARSE_ARGV_FN(parse_argv_string);
 DECLARE_PARSE_ARGV_FN(parse_argv_sync_strategy);
 DECLARE_PARSE_ARGV_FN(parse_argv_filename_format);
+DECLARE_PARSE_ARGV_FN(parse_argv_out_file);
 
 #define DECLARE_PARSE_TOML_FN(name)					\
 	static int name(						\
@@ -101,6 +110,7 @@ DECLARE_PARSE_TOML_FN(parse_toml_string);
 DECLARE_PARSE_TOML_FN(parse_toml_sync_strategy);
 DECLARE_PARSE_TOML_FN(parse_toml_string_array);
 DECLARE_PARSE_TOML_FN(parse_toml_filename_format);
+DECLARE_PARSE_TOML_FN(parse_toml_out_file);
 
 #define DECLARE_HANDLE_FN(name)						\
 	static int name(						\
@@ -115,6 +125,7 @@ DECLARE_HANDLE_FN(handle_toml);
 #define DECLARE_FREE_FN(name) static void name(void *)
 DECLARE_FREE_FN(free_string);
 DECLARE_FREE_FN(free_string_array);
+DECLARE_FREE_FN(free_out_file);
 
 static char const *program_name;
 static struct rpki_config rpki_config;
@@ -172,6 +183,16 @@ static const struct global_type gt_filename_format = {
 	.parse.argv = parse_argv_filename_format,
 	.parse.toml = parse_toml_filename_format,
 	.arg_doc = FNF_VALUE_GLOBAL "|" FNF_VALUE_LOCAL "|" FNF_VALUE_NAME,
+};
+
+static const struct global_type gt_out_file = {
+	.has_arg = required_argument,
+	.size = sizeof(struct config_out_file),
+	.print = print_out_file,
+	.parse.argv = parse_argv_out_file,
+	.parse.toml = parse_toml_out_file,
+	.free = free_out_file,
+	.arg_doc = "<file>",
 };
 
 /**
@@ -286,13 +307,19 @@ static const struct option_field output_fields[] = {
 		.name = "color-output",
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, output.color),
-		.doc = "Print ANSI color codes?",
+		.doc = "Print ANSI color codes.",
 	}, {
 		.id = 4000,
 		.name = "output-file-name-format",
 		.type = &gt_filename_format,
 		.offset = offsetof(struct rpki_config, output.filename_format),
 		.doc = "File name variant to print during debug/error messages",
+	}, {
+		.id = 'o',
+		.name = "roa-output-file",
+		.type = &gt_out_file,
+		.offset = offsetof(struct rpki_config, output.roa_output),
+		.doc = "File where the valid ROAs will be dumped.",
 	},
 	{ 0 },
 };
@@ -331,7 +358,7 @@ get_rpki_config_field(struct option_field const *field)
 	return ((unsigned char *) &rpki_config) + field->offset;
 }
 
-void
+static void
 print_bool(struct group_fields const *group, struct option_field const *field,
     void *_value)
 {
@@ -340,7 +367,7 @@ print_bool(struct group_fields const *group, struct option_field const *field,
 	    (*value) ? "true" : "false");
 }
 
-void
+static void
 print_u_int(struct group_fields const *group, struct option_field const *field,
     void *value)
 {
@@ -348,14 +375,14 @@ print_u_int(struct group_fields const *group, struct option_field const *field,
 	    *((unsigned int *) value));
 }
 
-void
+static void
 print_string(struct group_fields const *group, struct option_field const *field,
     void *value)
 {
 	pr_info("%s.%s: %s", group->name, field->name, *((char **) value));
 }
 
-void
+static void
 print_string_array(struct group_fields const *group,
     struct option_field const *field, void *_value)
 {
@@ -373,7 +400,7 @@ print_string_array(struct group_fields const *group,
 	pr_indent_rm();
 }
 
-void
+static void
 print_sync_strategy(struct group_fields const *group,
     struct option_field const *field, void *value)
 {
@@ -395,7 +422,7 @@ print_sync_strategy(struct group_fields const *group,
 	pr_info("%s.%s: %s", group->name, field->name, str);
 }
 
-void
+static void
 print_filename_format(struct group_fields const *group,
     struct option_field const *field, void *value)
 {
@@ -415,6 +442,14 @@ print_filename_format(struct group_fields const *group,
 	}
 
 	pr_info("%s.%s: %s", group->name, field->name, str);
+}
+
+static void
+print_out_file(struct group_fields const *group,
+    struct option_field const *field, void *value)
+{
+	struct config_out_file *file = value;
+	pr_info("%s.%s: %s", group->name, field->name, file->file_name);
 }
 
 static int
@@ -521,6 +556,28 @@ parse_argv_filename_format(struct option_field const *field, char const *str,
 }
 
 static int
+parse_argv_out_file(struct option_field const *field, char const *file_name,
+    void *_result)
+{
+	struct config_out_file *file = _result;
+
+	field->type->free(file);
+
+	file->file_name = strdup(file_name);
+	if (file->file_name == NULL)
+		return pr_enomem();
+
+	file->fd = fopen(file_name, "w");
+	if (file->fd == NULL) {
+		free(file->file_name);
+		file->file_name = NULL;
+		return pr_errno(errno, "Could not open file '%s'", file_name);
+	}
+
+	return 0;
+}
+
+static int
 parse_toml_bool(struct option_field const *opt, struct toml_table_t *toml,
     void *_result)
 {
@@ -592,6 +649,7 @@ parse_toml_sync_strategy(struct option_field const *opt,
 	int error;
 	char *string;
 
+	string = NULL;
 	error = parse_toml_string(opt, toml, &string);
 	if (error)
 		return error;
@@ -653,6 +711,7 @@ parse_toml_filename_format(struct option_field const *opt,
 	int error;
 	char *string;
 
+	string = NULL;
 	error = parse_toml_string(opt, toml, &string);
 	if (error)
 		return error;
@@ -660,6 +719,24 @@ parse_toml_filename_format(struct option_field const *opt,
 	error = parse_argv_filename_format(opt, string, _result);
 
 	free(string);
+	return error;
+}
+
+static int
+parse_toml_out_file(struct option_field const *opt, struct toml_table_t *toml,
+    void *_result)
+{
+	char *file_name;
+	int error;
+
+	file_name = NULL;
+	error = parse_toml_string(opt, toml, &file_name);
+	if (error)
+		return error;
+
+	error = parse_argv_out_file(opt, file_name, _result);
+
+	free(file_name);
 	return error;
 }
 
@@ -706,9 +783,24 @@ free_string_array(void *_array)
 
 	for (i = 0; i < array->length; i++)
 		free(array->array[i]);
+	free(array->array);
 
 	array->array = NULL;
 	array->length = 0;
+}
+
+static void
+free_out_file(void *_file)
+{
+	struct config_out_file *file = _file;
+
+	if (file->fd != NULL) {
+		fclose(file->fd);
+		file->fd = NULL;
+	}
+
+	free(file->file_name);
+	file->file_name = NULL;
 }
 
 static bool
@@ -842,6 +934,8 @@ set_default_values(void)
 
 	rpki_config.output.color = false;
 	rpki_config.output.filename_format = FNF_GLOBAL;
+	rpki_config.output.roa_output.fd = NULL;
+	rpki_config.output.roa_output.file_name = NULL;
 
 	return 0;
 
@@ -1017,6 +1111,14 @@ enum filename_format
 config_get_filename_format(void)
 {
 	return rpki_config.output.filename_format;
+}
+
+FILE *
+config_get_roa_output(void)
+{
+	return (rpki_config.output.roa_output.fd != NULL)
+	    ? rpki_config.output.roa_output.fd
+	    : stdout;
 }
 
 char *
