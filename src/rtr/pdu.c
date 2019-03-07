@@ -21,7 +21,8 @@ static int	error_report_from_stream(struct pdu_header *, int, void *);
 static void	error_report_destroy(void *);
 
 int
-pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata)
+pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata,
+    u_int8_t *rtr_version)
 {
 	struct pdu_header header;
 	struct pdu_metadata const *meta;
@@ -44,6 +45,7 @@ pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata)
 		free(*pdu);
 		return err;
 	}
+	*rtr_version = header.protocol_version;
 
 	if (metadata)
 		*metadata = meta;
@@ -139,6 +141,7 @@ error_report_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 {
 	struct error_report_pdu *pdu = pdu_void;
 	u_int32_t sub_pdu_len; /* TODO use this for something */
+	u_int8_t rtr_version;
 	int error;
 
 	memcpy(&pdu->header, header, sizeof(*header));
@@ -147,7 +150,7 @@ error_report_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 	if (error)
 		return error;
 
-	error = pdu_load(fd, &pdu->erroneous_pdu, NULL);
+	error = pdu_load(fd, &pdu->erroneous_pdu, NULL, &rtr_version);
 	if (error)
 		return -EINVAL;
 

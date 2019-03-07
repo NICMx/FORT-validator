@@ -104,7 +104,7 @@ struct pdu_metadata {
 };
 
 __BEGIN_DECLS
-int pdu_load(int, void **, struct pdu_metadata const **);
+int pdu_load(int, void **, struct pdu_metadata const **, u_int8_t *);
 struct pdu_metadata const *pdu_get_metadata(u_int8_t);
 struct pdu_header *pdu_get_header(void *);
 __END_DECLS

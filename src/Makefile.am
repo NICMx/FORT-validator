@@ -6,6 +6,7 @@ bin_PROGRAMS = rtr_server
 rtr_server_SOURCES = main.c
 rtr_server_SOURCES += address.c address.h
 rtr_server_SOURCES += array_list.h
+rtr_server_SOURCES += clients.c clients.h
 rtr_server_SOURCES += common.c common.h
 rtr_server_SOURCES += configuration.c configuration.h
 rtr_server_SOURCES += csv.c csv.h

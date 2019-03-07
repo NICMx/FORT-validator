@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+#include "clients.h"
 #include "configuration.h"
 #include "pdu.h"
 
@@ -55,6 +56,7 @@ create_server_socket(void)
  */
 struct thread_param {
 	int	client_fd;
+	struct sockaddr_storage client_addr;
 };
 
 enum verdict {
@@ -112,12 +114,18 @@ client_thread_cb(void *param_void)
 	struct pdu_metadata const *meta;
 	void *pdu;
 	int err;
+	u_int8_t rtr_version;
 
 	memcpy(&param, param_void, sizeof(param));
 	free(param_void); /* Ha. */
 
 	while (true) { /* For each PDU... */
-		err = pdu_load(param.client_fd, &pdu, &meta);
+		err = pdu_load(param.client_fd, &pdu, &meta, &rtr_version);
+		if (err)
+			return NULL;
+
+		/* RTR Version ready, now update client */
+		err = update_client(&param.client_addr, rtr_version, 3600);
 		if (err)
 			return NULL;
 
@@ -137,7 +145,7 @@ static int
 handle_client_connections(int server_fd)
 {
 	int client_fd;
-	struct sockaddr_in client_addr;
+	struct sockaddr_storage client_addr;
 	socklen_t sizeof_client_addr;
 	struct thread_param *arg;
 	pthread_t thread;
@@ -171,6 +179,7 @@ handle_client_connections(int server_fd)
 			continue;
 		}
 		arg->client_fd = client_fd;
+		arg->client_addr = client_addr;
 
 		/*
 		 * FIXME Handle session IDs, serial IDs, protocol version

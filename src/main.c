@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "rtr/rtr.h"
+#include "clients.h"
 #include "configuration.h"
 #include "csv.h"
 #include "updates_daemon.h"
@@ -49,16 +50,22 @@ main(int argc, char *argv[])
 	if (err)
 		goto end1;
 
-	err = csv_parse_vrps_file();
+	err = clients_db_init();
 	if (err)
 		goto end2;
+
+	err = csv_parse_vrps_file();
+	if (err)
+		goto end3;
 
 	err = updates_daemon_init();
 	if (err)
-		goto end2;
+		goto end3;
 
 	err = rtr_listen();
 
+end3:
+	clients_db_destroy();
 end2:
 	deltas_db_destroy();
 end1:
