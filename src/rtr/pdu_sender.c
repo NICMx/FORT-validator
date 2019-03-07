@@ -1,11 +1,12 @@
 #include "pdu_sender.h"
 
 #include <err.h>
-#include <unistd.h>
+#include <errno.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-#include "../array_list.h"
 #include "../configuration.h"
 #include "../vrps.h"
 #include "pdu.h"
