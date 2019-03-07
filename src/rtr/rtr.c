@@ -125,7 +125,9 @@ client_thread_cb(void *param_void)
 			return NULL;
 
 		/* RTR Version ready, now update client */
-		err = update_client(&param.client_addr, rtr_version, 3600);
+		/* TODO Remove this hardcoded ttl */
+		err = update_client(param.client_fd, &param.client_addr, rtr_version,
+		    3600);
 		if (err)
 			return NULL;
 
