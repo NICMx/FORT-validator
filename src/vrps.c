@@ -14,27 +14,35 @@ struct delta {
 
 ARRAY_LIST(deltasdb, struct delta)
 
-struct deltasdb db;
-u_int32_t current_serial;
-u_int16_t v0_session_id;
-u_int16_t v1_session_id;
-time_t last_modified_date;
+struct state {
+	struct deltasdb *deltas_db;
+	u_int32_t current_serial;
+	u_int16_t v0_session_id;
+	u_int16_t v1_session_id;
+	time_t last_modified_date;
+} state;
 
 int
 deltas_db_init(void)
 {
 	int error;
 
-	error = deltasdb_init(&db);
+	state.deltas_db = malloc(sizeof(struct deltasdb));
+	if (state.deltas_db == NULL){
+		err(-ENOMEM, "Deltas DB couldn't be allocated");
+		return -ENOMEM;
+	}
+
+	error = deltasdb_init(state.deltas_db);
 	if (error) {
-		err(error, "Deltas DB couldn't be allocated");
+		err(error, "Deltas DB couldn't be initialized");
 		return error;
 	}
-	current_serial = 0;
+	state.current_serial = 0;
 	/* The downcast takes the LSBs */
-	v0_session_id = time(NULL);
+	state.v0_session_id = time(NULL);
 	/* Minus 1 to prevent same ID */
-	v1_session_id = v0_session_id - 1;
+	state.v1_session_id = state.v0_session_id - 1;
 
 	return 0;
 }
@@ -109,8 +117,8 @@ create_vrp6(u_int32_t asn, struct in6_addr ipv6_prefix, u_int8_t prefix_length,
 int
 deltas_db_add_delta(struct delta *delta)
 {
-	delta->serial = current_serial++;
-	return deltasdb_add(&db, delta);
+	delta->serial = state.current_serial++;
+	return deltasdb_add(state.deltas_db, delta);
 }
 
 int
@@ -135,7 +143,8 @@ delta_destroy(struct delta *delta)
 void
 deltas_db_destroy(void)
 {
-	deltasdb_cleanup(&db, delta_destroy);
+	deltasdb_cleanup(state.deltas_db, delta_destroy);
+	free(state.deltas_db);
 }
 
 static unsigned int
@@ -143,8 +152,8 @@ get_delta_diff(struct delta *start_delta, struct delta *end_delta,
     struct vrp **result)
 {
 	/* TODO Do some magic to get the diff */
-	*result = db.array[db.len - 1].vrps.array;
-	return db.array[db.len - 1].vrps.len;
+	*result = state.deltas_db->array[state.deltas_db->len - 1].vrps.array;
+	return state.deltas_db->array[state.deltas_db->len - 1].vrps.len;
 }
 
 /*
@@ -163,9 +172,11 @@ get_delta_diff(struct delta *start_delta, struct delta *end_delta,
 int
 deltas_db_status(u_int32_t *serial)
 {
+	struct deltasdb *deltas_db;
 	struct delta *delta;
 
-	if (db.len == 0)
+	deltas_db = state.deltas_db;
+	if (deltas_db->len == 0)
 		return NO_DATA_AVAILABLE;
 
 	// No serial to match, and there's data at DB
@@ -173,7 +184,7 @@ deltas_db_status(u_int32_t *serial)
 		return DIFF_AVAILABLE;
 
 	/* Get the delta corresponding to the serial */
-	ARRAYLIST_FOREACH(&db, delta) {
+	ARRAYLIST_FOREACH(deltas_db, delta) {
 		if (delta->serial == *serial)
 			break;
 	}
@@ -183,7 +194,7 @@ deltas_db_status(u_int32_t *serial)
 		return DIFF_UNDETERMINED;
 
 	/* Is the last version? */
-	if (delta->serial == db.array[db.len-1].serial)
+	if (delta->serial == deltas_db->array[deltas_db->len-1].serial)
 		return NO_DIFF;
 
 	return DIFF_AVAILABLE;
@@ -200,26 +211,28 @@ unsigned int
 get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
     struct vrp **result)
 {
+	struct deltasdb *deltas_db;
 	struct delta *delta0, *delta1;
 
+	deltas_db = state.deltas_db;
 	/* No data */
-	if (db.len == 0)
+	if (deltas_db->len == 0)
 		return 0;
 
 	/* NULL start? Send the last version, there's no need to iterate DB */
 	if (start_serial == NULL) {
-		*result = db.array[db.len - 1].vrps.array;
-		return db.array[db.len - 1].vrps.len;
+		*result = deltas_db->array[deltas_db->len - 1].vrps.array;
+		return deltas_db->array[deltas_db->len - 1].vrps.len;
 		/* TODO Send all data as ANNOUNCEMENTS */
 	}
 
 	/* Apparently nothing to return */
-	if (*start_serial > *end_serial)
+	if (*start_serial >= *end_serial)
 		return 0;
 
 	/* Get the delta corresponding to the serials */
 	delta0 = NULL;
-	ARRAYLIST_FOREACH(&db, delta1) {
+	ARRAYLIST_FOREACH(deltas_db, delta1) {
 		if (delta1->serial == *start_serial)
 			delta0 = delta1;
 		if (delta1->serial == *end_serial)
@@ -236,25 +249,25 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 void
 set_vrps_last_modified_date(time_t new_date)
 {
-	last_modified_date = new_date;
+	state.last_modified_date = new_date;
 }
 
 u_int32_t
 last_serial_number(void)
 {
-	return current_serial - 1;
+	return state.current_serial - 1;
 }
 
 u_int16_t
 current_session_id(u_int8_t rtr_version)
 {
 	if (rtr_version == 1)
-		return v1_session_id;
-	return v0_session_id;
+		return state.v1_session_id;
+	return state.v0_session_id;
 }
 
 time_t
 get_vrps_last_modified_date(void)
 {
-	return last_modified_date;
+	return state.last_modified_date;
 }
