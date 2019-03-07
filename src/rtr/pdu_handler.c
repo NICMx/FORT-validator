@@ -116,7 +116,7 @@ handle_reset_query_pdu(int fd, void *pdu)
 	init_sender_common(&common, fd, version, &session_id, NULL,
 	    &current_serial);
 
-	updates = deltas_db_status(common.start_serial);
+	updates = deltas_db_status(NULL);
 	switch (updates) {
 	case NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
