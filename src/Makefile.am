@@ -11,6 +11,7 @@ rtr_server_SOURCES += common.c common.h
 rtr_server_SOURCES += configuration.c configuration.h
 rtr_server_SOURCES += csv.c csv.h
 rtr_server_SOURCES += line_file.c line_file.h
+rtr_server_SOURCES += notify.c notify.h
 rtr_server_SOURCES += updates_daemon.c updates_daemon.h
 rtr_server_SOURCES += vrps.c vrps.h
 

@@ -2,7 +2,6 @@
 
 #include <err.h>
 #include <errno.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -235,7 +234,7 @@ end:
 }
 
 static int
-load_vrps_file(bool check_update)
+load_vrps_file(bool check_update, bool *updated)
 {
 
 	struct line_file *lfile;
@@ -270,6 +269,10 @@ load_vrps_file(bool check_update)
 	error = load_vrps(lfile);
 	if (error)
 		goto end2;
+
+	if (updated != NULL)
+		*updated = check_update && last_update > get_vrps_last_modified_date();
+
 	set_vrps_last_modified_date(last_update);
 	// TODO Double check of date
 
@@ -282,11 +285,11 @@ end1:
 int
 csv_parse_vrps_file()
 {
-	return load_vrps_file(false);
+	return load_vrps_file(false, NULL);
 }
 
 int
-csv_check_vrps_file()
+csv_check_vrps_file(bool *updated)
 {
-	return load_vrps_file(true);
+	return load_vrps_file(true, updated);
 }

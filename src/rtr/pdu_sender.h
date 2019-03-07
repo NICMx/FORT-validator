@@ -14,6 +14,7 @@ struct sender_common {
 void init_sender_common(struct sender_common *, int, u_int8_t, u_int16_t *,
     u_int32_t *, u_int32_t *);
 
+int send_serial_notify_pdu(struct sender_common *);
 int send_cache_reset_pdu(struct sender_common *);
 int send_cache_response_pdu(struct sender_common *);
 int send_payload_pdus(struct sender_common *);

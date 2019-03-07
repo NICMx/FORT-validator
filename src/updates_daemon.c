@@ -8,11 +8,22 @@
 
 #include "csv.h"
 #include "configuration.h"
+#include "notify.h"
 
 static void *
 check_vrps_updates(void *param_void) {
+	int error;
+	bool updated;
 	do {
-		csv_check_vrps_file();
+		updated = false;
+		error = csv_check_vrps_file(&updated);
+		if (error) {
+			err(error, "Error while searching CSV updates");
+			goto sleep;
+		}
+		if (updated)
+			notify_clients();
+sleep:
 		sleep(config_get_vrps_check_interval());
 	} while (true);
 
