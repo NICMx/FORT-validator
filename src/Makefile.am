@@ -36,6 +36,15 @@ rpki_validator_SOURCES += asn1/decode.h asn1/decode.c
 rpki_validator_SOURCES += asn1/oid.h asn1/oid.c
 rpki_validator_SOURCES += asn1/signed_data.h asn1/signed_data.c
 
+rpki_validator_SOURCES += config/boolean.c config/boolean.h
+rpki_validator_SOURCES += config/filename_format.h config/filename_format.c
+rpki_validator_SOURCES += config/out_file.h config/out_file.c
+rpki_validator_SOURCES += config/str.c config/str.h
+rpki_validator_SOURCES += config/string_array.h config/string_array.c
+rpki_validator_SOURCES += config/sync_strategy.h config/sync_strategy.c
+rpki_validator_SOURCES += config/types.h
+rpki_validator_SOURCES += config/uint.c config/uint.h
+
 rpki_validator_SOURCES += crypto/base64.h crypto/base64.c
 rpki_validator_SOURCES += crypto/hash.h crypto/hash.c
 

@@ -8,6 +8,7 @@
 #include "file.h"
 #include "log.h"
 #include "uri.h"
+#include "config/types.h"
 
 static int
 toml_to_config(struct toml_table_t *root)
