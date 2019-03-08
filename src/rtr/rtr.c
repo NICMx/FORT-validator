@@ -125,9 +125,7 @@ client_thread_cb(void *param_void)
 			return NULL;
 
 		/* RTR Version ready, now update client */
-		/* TODO Remove this hardcoded ttl */
-		err = update_client(param.client_fd, &param.client_addr, rtr_version,
-		    3600);
+		err = update_client(param.client_fd, &param.client_addr, rtr_version);
 		if (err)
 			return NULL;
 
@@ -183,9 +181,6 @@ handle_client_connections(int server_fd)
 		arg->client_fd = client_fd;
 		arg->client_addr = client_addr;
 
-		/*
-		 * FIXME Handle session IDs, serial IDs, protocol version
-		 */
 		errno = pthread_create(&thread, NULL, client_thread_cb, arg);
 		if (errno) {
 			warn("Could not spawn the client's thread");

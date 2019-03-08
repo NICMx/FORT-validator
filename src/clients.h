@@ -2,7 +2,6 @@
 #define SRC_CLIENTS_H_
 
 #include <arpa/inet.h>
-#include <time.h>
 
 struct client {
 	int fd;
@@ -13,12 +12,10 @@ struct client {
 	};
 	in_port_t sin_port;
 	u_int8_t rtr_version;
-	/* TODO forget clients when the expiration time is reached */
-	time_t expiration;
 };
 
 int clients_db_init(void);
-int update_client(int fd, struct sockaddr_storage *, u_int8_t, time_t);
+int update_client(int fd, struct sockaddr_storage *, u_int8_t);
 size_t client_list(struct client **);
 void clients_db_destroy(void);
 

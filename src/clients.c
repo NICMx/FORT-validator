@@ -54,8 +54,7 @@ static struct client
 }
 
 static int
-create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version,
-    time_t ttl)
+create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 {
 	struct client *client;
 
@@ -75,21 +74,19 @@ create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version,
 		client->sin_port = SADDR_IN6(addr)->sin6_port;
 	}
 	client->rtr_version = rtr_version;
-	client->expiration = time(NULL) + ttl;
 
 	return clients_db_add_client(client);
 }
 
 int
-update_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version,
-    time_t ttl)
+update_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 {
 	struct client *client;
 	client = get_client(addr, rtr_version);
 
 	if (client == NULL)
-		return create_client(fd, addr, rtr_version, ttl);
-	client->expiration = time(NULL) + ttl;
+		return create_client(fd, addr, rtr_version);
+	client->fd = fd;
 	return 0;
 }
 
