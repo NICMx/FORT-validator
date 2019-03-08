@@ -2,6 +2,7 @@
 #define SRC_RTR_PDU_SENDER_H_
 
 #include <sys/types.h>
+#include "pdu.h"
 
 struct sender_common {
 	int fd;
@@ -19,7 +20,8 @@ int send_cache_reset_pdu(struct sender_common *);
 int send_cache_response_pdu(struct sender_common *);
 int send_payload_pdus(struct sender_common *);
 int send_end_of_data_pdu(struct sender_common *);
-int send_error_report_pdu(struct sender_common *, u_int16_t, void *, char *);
+int send_error_report_pdu(struct sender_common *, u_int16_t,
+    struct pdu_header *, char *);
 
 
 #endif /* SRC_RTR_PDU_SENDER_H_ */

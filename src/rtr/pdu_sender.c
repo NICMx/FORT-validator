@@ -9,7 +9,6 @@
 
 #include "../configuration.h"
 #include "../vrps.h"
-#include "pdu.h"
 #include "pdu_serializer.h"
 
 /* Header length field is always 64 bits long */
@@ -249,7 +248,7 @@ send_end_of_data_pdu(struct sender_common *common)
 
 int
 send_error_report_pdu(struct sender_common *common, u_int16_t code,
-    void *err_pdu, char *message)
+    struct pdu_header *err_pdu_header, char *message)
 {
 	struct error_report_pdu pdu;
 	char data[BUFFER_SIZE];
@@ -259,11 +258,9 @@ send_error_report_pdu(struct sender_common *common, u_int16_t code,
 	    code);
 
 	pdu.error_pdu_length = 0;
-	pdu.erroneous_pdu = err_pdu;
-	if (err_pdu != NULL) {
-		/* TODO Really? Or get the PDU header length field */
-		pdu.error_pdu_length = sizeof(*err_pdu);
-	}
+	pdu.erroneous_pdu = (void *)err_pdu_header;
+	if (err_pdu_header != NULL)
+		pdu.error_pdu_length = sizeof(err_pdu_header);
 
 	pdu.error_message_length = 0;
 	pdu.error_message = NULL;

@@ -120,6 +120,7 @@ serialize_cache_reset_pdu(struct cache_reset_pdu *pdu, char *buf)
 size_t
 serialize_error_report_pdu(struct error_report_pdu *pdu, char *buf)
 {
+	struct pdu_header *err_pdu_header;
 	size_t head_size;
 	char *ptr, *tmp_ptr;
 	int i;
@@ -130,12 +131,11 @@ serialize_error_report_pdu(struct error_report_pdu *pdu, char *buf)
 
 	ptr = write_int32(ptr, pdu->error_pdu_length);
 	if (pdu->error_pdu_length > 0) {
-		tmp_ptr = pdu->erroneous_pdu;
-		/* TODO Set only the header of err PDU */
-		while (*tmp_ptr != '\0') {
-			ptr = write_int8(ptr, *tmp_ptr);
-			tmp_ptr++;
-		}
+		/* Set only the header of err PDU */
+		err_pdu_header = (struct pdu_header *)pdu->erroneous_pdu;
+		head_size = serialize_pdu_header(err_pdu_header,
+		    err_pdu_header->reserved, ptr);
+		ptr = ptr + head_size;
 	}
 
 	ptr = write_int32(ptr, pdu->error_message_length);
