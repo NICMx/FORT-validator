@@ -29,8 +29,8 @@
 #define DEFAULT_RETRY_INTERVAL		600
 #define DEFAULT_EXPIRE_INTERVAL		7200
 
-/* Protocol timing parameters ranges */
-#define MIN_VRPS_CHECK_INTERVAL	1
+/* Protocol timing parameters ranges in secs */
+#define MIN_VRPS_CHECK_INTERVAL	60
 #define MAX_VRPS_CHECK_INTERVAL	7200
 #define MIN_REFRESH_INTERVAL	1
 #define MAX_REFRESH_INTERVAL	86400
@@ -176,6 +176,11 @@ handle_json(json_t *root)
 			return error;
 		config.vrps_location = str_clone(vrps_location);
 
+		/*
+		 * RFC 6810 and 8210:
+		 * The cache MUST rate-limit Serial Notifies to no more frequently than
+		 * one per minute.
+		 */
 		error = load_interval(vrps, OPTNAME_VRPS_CHECK_INTERVAL,
 		    DEFAULT_VRPS_CHECK_INTERVAL, &vrps_check_interval,
 		    MIN_VRPS_CHECK_INTERVAL, MAX_VRPS_CHECK_INTERVAL);
