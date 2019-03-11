@@ -94,10 +94,7 @@ send_response(int fd, char *data, size_t data_len)
 	error = write(fd, buffer.data, buffer.len);
 	free_buffer(&buffer);
 	if (error < 0) {
-		err(error, "Error sending response");
-		/*
-		 * TODO Send error PDU here depending on error type?
-		 */
+		err(errno, "Error sending response");
 		return error;
 	}
 
@@ -247,14 +244,14 @@ send_end_of_data_pdu(struct sender_common *common)
 }
 
 int
-send_error_report_pdu(struct sender_common *common, u_int16_t code,
-    struct pdu_header *err_pdu_header, char *message)
+send_error_report_pdu(int fd, u_int8_t version, u_int16_t code,
+struct pdu_header *err_pdu_header, char *message)
 {
 	struct error_report_pdu pdu;
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, common->version, PDU_TYPE_ERROR_REPORT,
+	set_header_values(&pdu.header, version, PDU_TYPE_ERROR_REPORT,
 	    code);
 
 	pdu.error_pdu_length = 0;
@@ -279,5 +276,5 @@ send_error_report_pdu(struct sender_common *common, u_int16_t code,
 
 	len = serialize_error_report_pdu(&pdu, data);
 	free(pdu.error_message);
-	return send_response(common->fd, data, len);
+	return send_response(fd, data, len);
 }

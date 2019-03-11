@@ -20,8 +20,8 @@ int send_cache_reset_pdu(struct sender_common *);
 int send_cache_response_pdu(struct sender_common *);
 int send_payload_pdus(struct sender_common *);
 int send_end_of_data_pdu(struct sender_common *);
-int send_error_report_pdu(struct sender_common *, u_int16_t,
-    struct pdu_header *, char *);
+int send_error_report_pdu(int, u_int8_t, u_int16_t, struct pdu_header *,
+    char *);
 
 
 #endif /* SRC_RTR_PDU_SENDER_H_ */

@@ -3,25 +3,27 @@
 #include <err.h>
 #include <errno.h>
 #include <stddef.h>
+#include <unistd.h>
 
+#include "err_pdu.h"
 #include "pdu.h"
 #include "pdu_sender.h"
 #include "vrps.h"
 
-static int warn_unexpected_pdu(char *);
-
 static int
-warn_unexpected_pdu(char *pdu_name)
+warn_unexpected_pdu(int fd, void *pdu, char *pdu_name)
 {
-	warnx("RTR servers are not expected to receive %s PDUs, but we got one anyway (Closing socket.)",
-	    pdu_name);
+	struct pdu_header *pdu_header = pdu;
+	warnx("Unexpected %s PDU received", pdu_name);
+	err_pdu_send(fd, pdu_header->protocol_version, ERR_PDU_UNSUP_PDU_TYPE,
+	    pdu_header, "Unexpected PDU received");
 	return -EINVAL;
 }
 
 int
 handle_serial_notify_pdu(int fd, void *pdu)
 {
-	return warn_unexpected_pdu("Serial Notify");
+	return warn_unexpected_pdu(fd, pdu, "Serial Notify");
 }
 
 static int
@@ -63,7 +65,7 @@ handle_serial_query_pdu(int fd, void *pdu)
 	version = received->header.protocol_version;
 	session_id = current_session_id(version);
 	if (received->header.session_id != session_id)
-		return send_error_report_pdu(&common, ERR_CORRUPT_DATA, NULL, NULL);
+		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, NULL, NULL);
 
 	current_serial = last_serial_number();
 	init_sender_common(&common, fd, version, &session_id,
@@ -73,7 +75,8 @@ handle_serial_query_pdu(int fd, void *pdu)
 	switch (updates) {
 	case NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-		return send_error_report_pdu(&common, ERR_NO_DATA_AVAILABLE, NULL, NULL);
+		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE, NULL,
+		    NULL);
 	case DIFF_UNDETERMINED:
 		/* https://tools.ietf.org/html/rfc8210#section-8.3 */
 		return send_cache_reset_pdu(&common);
@@ -120,7 +123,8 @@ handle_reset_query_pdu(int fd, void *pdu)
 	switch (updates) {
 	case NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-		return send_error_report_pdu(&common, ERR_NO_DATA_AVAILABLE, NULL, NULL);
+		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE, NULL,
+		    NULL);
 	case DIFF_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.1 */
 		return send_commmon_exchange(&common);
@@ -134,42 +138,43 @@ handle_reset_query_pdu(int fd, void *pdu)
 int
 handle_cache_response_pdu(int fd, void *pdu)
 {
-	return warn_unexpected_pdu("Cache Response");
+	return warn_unexpected_pdu(fd, pdu, "Cache Response");
 }
 
 int
 handle_ipv4_prefix_pdu(int fd, void *pdu)
 {
-	return warn_unexpected_pdu("IPv4 Prefix");
+	return warn_unexpected_pdu(fd, pdu, "IPv4 Prefix");
 }
 
 int
 handle_ipv6_prefix_pdu(int fd, void *pdu)
 {
-	return warn_unexpected_pdu("IPv6 Prefix");
+	return warn_unexpected_pdu(fd, pdu, "IPv6 Prefix");
 }
 
 int
 handle_end_of_data_pdu(int fd, void *pdu)
 {
-	return warn_unexpected_pdu("End of Data");
+	return warn_unexpected_pdu(fd, pdu, "End of Data");
 }
 
 int
 handle_cache_reset_pdu(int fd, void *pdu)
 {
-	return warn_unexpected_pdu("Cache Reset");
+	return warn_unexpected_pdu(fd, pdu, "Cache Reset");
 }
 
 int
 handle_error_report_pdu(int fd, void *pdu)
 {
 	struct error_report_pdu *received = pdu;
-	struct sender_common common;
 
-	init_sender_common(&common, fd, received->header.protocol_version,
-		NULL, NULL, NULL);
+	if (err_pdu_is_fatal(received->header.error_code)) {
+		warnx("Fatal error report PDU received, closing socket.");
+		close(fd);
+	}
+	err_pdu_log(received->header.error_code, received->error_message);
 
-	/* TODO complete handler */
 	return 0;
 }

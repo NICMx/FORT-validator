@@ -13,6 +13,7 @@
 
 #include "clients.h"
 #include "configuration.h"
+#include "err_pdu.h"
 #include "pdu.h"
 
 /*
@@ -124,10 +125,17 @@ client_thread_cb(void *param_void)
 		if (err)
 			return NULL;
 
+		/* Protocol Version Negotiation isn't necessary (for now) */
 		/* RTR Version ready, now update client */
 		err = update_client(param.client_fd, &param.client_addr, rtr_version);
-		if (err)
+		if (err) {
+			if (err == -EINVAL) {
+				err_pdu_send(param.client_fd, rtr_version,
+				    ERR_PDU_UNEXPECTED_PROTO_VERSION,
+				    (struct pdu_header *) pdu, NULL);
+			}
 			return NULL;
+		}
 
 		err = meta->handle(param.client_fd, pdu);
 		meta->destructor(pdu);

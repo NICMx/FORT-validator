@@ -160,9 +160,6 @@ error_report_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 		return error;
 	}
 
-	warnx("Error report received from stream. Code %d. Message %s.",
-	    pdu->header.error_code,
-	    strlen(pdu->error_message) == 0 ? "**empty**" : pdu->error_message);
 	return 0;
 }
 

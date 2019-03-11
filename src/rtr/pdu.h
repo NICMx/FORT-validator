@@ -17,16 +17,6 @@
 #define PDU_TYPE_CACHE_RESET		8
 #define PDU_TYPE_ERROR_REPORT		10
 
-#define ERR_CORRUPT_DATA			0
-#define ERR_INTERNAL_ERROR			1
-#define ERR_NO_DATA_AVAILABLE		2
-#define ERR_INVALID_REQUEST			3
-#define ERR_UNSUP_PROTO_VERSION		4
-#define ERR_UNSUP_PDU_TYPE			5
-#define ERR_WITHDRAWAL_UNKNOWN		6
-#define ERR_DUPLICATE_ANNOUNCE		7
-#define UNEXPECTED_PROTO_VERSION	8
-
 struct pdu_header {
 	u_int8_t	protocol_version;
 	u_int8_t	pdu_type;

@@ -32,14 +32,13 @@ clients_db_add_client(struct client *client)
 	return clientsdb_add(clients_db, client);
 }
 
-static struct client
-*get_client(struct sockaddr_storage *addr, u_int8_t rtr_version)
+static struct client *
+get_client(struct sockaddr_storage *addr)
 {
 	struct client *ptr;
 
 	ARRAYLIST_FOREACH(clients_db, ptr)
-		if (ptr->rtr_version == rtr_version &&
-		    ptr->sin_family == addr->ss_family) {
+		if (ptr->sin_family == addr->ss_family) {
 			if (ptr->sin_family == AF_INET) {
 				if (ptr->sin_addr.s_addr == SADDR_IN(addr)->sin_addr.s_addr &&
 				    ptr->sin_port == SADDR_IN(addr)->sin_port)
@@ -78,14 +77,28 @@ create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 	return clients_db_add_client(client);
 }
 
+/*
+ * If the ADDR isn't already stored, store it; otherwise update its file
+ * descriptor.
+ *
+ * Return the creation/update result.
+ *
+ * Code error -EINVAL will be returned when a client exists but its RTR version
+ * isn't the same as in the DB.
+ */
 int
 update_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 {
 	struct client *client;
-	client = get_client(addr, rtr_version);
+	client = get_client(addr);
 
 	if (client == NULL)
 		return create_client(fd, addr, rtr_version);
+
+	/* TODO Isn't ready to handle distinct version on clients reconnection */
+	if (client->rtr_version != rtr_version)
+		return -EINVAL;
+
 	client->fd = fd;
 	return 0;
 }
