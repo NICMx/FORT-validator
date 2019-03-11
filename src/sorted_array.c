@@ -150,6 +150,8 @@ sarray_contains(struct sorted_array *sarray, void *elem)
 		switch (cmp) {
 		case SACMP_LEFT:
 		case SACMP_ADJACENT_LEFT:
+			if (mid == 0) /* Prevents underflow */
+				return false;
 			right = mid - 1;
 			continue;
 		case SACMP_RIGHT:
