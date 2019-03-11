@@ -130,14 +130,14 @@ delta_add_vrp(struct delta *delta, struct vrp *vrp)
 void
 vrp_destroy(struct vrp *vrp)
 {
-	free(vrp);
+	/* Nothing to free yet */
 }
 
 void
 delta_destroy(struct delta *delta)
 {
+	/* Nothing else to free yet */
 	vrps_cleanup(&delta->vrps, vrp_destroy);
-	free(delta);
 }
 
 void
