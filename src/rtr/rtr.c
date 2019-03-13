@@ -16,6 +16,9 @@
 #include "err_pdu.h"
 #include "pdu.h"
 
+/* TODO Support both RTR v0 an v1 */
+#define RTR_VERSION_SUPPORTED	RTR_V0
+
 /*
  * Creates the socket that will stay put and wait for new connections started
  * from the clients.
@@ -125,13 +128,20 @@ client_thread_cb(void *param_void)
 		if (err)
 			return NULL;
 
-		/* Protocol Version Negotiation isn't necessary (for now) */
+		/* Protocol Version Negotiation, accept only what's supported */
+		if (rtr_version != RTR_VERSION_SUPPORTED) {
+			err_pdu_send(param.client_fd, RTR_VERSION_SUPPORTED,
+			    ERR_PDU_UNSUP_PROTO_VERSION,
+			    (struct pdu_header *) pdu, NULL);
+			return NULL;
+		}
 		/* RTR Version ready, now update client */
 		err = update_client(param.client_fd, &param.client_addr, rtr_version);
 		if (err) {
 			if (err == -EINVAL) {
 				err_pdu_send(param.client_fd, rtr_version,
-				    ERR_PDU_UNEXPECTED_PROTO_VERSION,
+				    (rtr_version == RTR_V0 ? ERR_PDU_UNSUP_PROTO_VERSION :
+				        ERR_PDU_UNEXPECTED_PROTO_VERSION),
 				    (struct pdu_header *) pdu, NULL);
 			}
 			return NULL;

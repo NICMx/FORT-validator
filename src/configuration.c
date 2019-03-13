@@ -192,6 +192,10 @@ handle_json(json_t *root)
 		config.vrps_check_interval = DEFAULT_VRPS_CHECK_INTERVAL;
 	}
 
+	/*
+	 * TODO Exclusively for RTR v1, so this are optional values to configure
+	 * since RTR v1 isn't fully supported yet
+	 */
 	interval = json_object_get(root, OPTNAME_RTR_INTERVAL);
 	if (interval != NULL) {
 		if (!json_is_object(interval)) {
