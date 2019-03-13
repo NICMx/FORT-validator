@@ -171,7 +171,8 @@ handle_error_report_pdu(int fd, void *pdu)
 	struct error_report_pdu *received = pdu;
 
 	if (err_pdu_is_fatal(received->header.error_code)) {
-		warnx("Fatal error report PDU received, closing socket.");
+		warnx("Fatal error report PDU received [code %u], closing socket.",
+		    received->header.error_code);
 		close(fd);
 	}
 	err_pdu_log(received->header.error_code, received->error_message);
