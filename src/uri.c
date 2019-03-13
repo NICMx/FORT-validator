@@ -60,9 +60,11 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 			return error;
 	}
 
-	uri->global = strdup(str);
+	uri->global = malloc(str_len + 1);
 	if (uri->global == NULL)
 		return pr_enomem();
+	strncpy(uri->global, str, str_len);
+	uri->global[str_len] = '\0';
 	uri->global_len = str_len;
 
 	return 0;
