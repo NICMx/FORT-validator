@@ -253,13 +253,13 @@ set_vrps_last_modified_date(time_t new_date)
 }
 
 u_int32_t
-last_serial_number(void)
+get_last_serial_number(void)
 {
 	return state.current_serial - 1;
 }
 
 u_int16_t
-current_session_id(u_int8_t rtr_version)
+get_current_session_id(u_int8_t rtr_version)
 {
 	if (rtr_version == 1)
 		return state.v1_session_id;

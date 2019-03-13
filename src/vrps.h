@@ -40,8 +40,8 @@ void delta_destroy(struct delta *);
 void deltas_db_destroy(void);
 void set_vrps_last_modified_date(time_t);
 
-u_int32_t last_serial_number(void);
-u_int16_t current_session_id(u_int8_t);
+u_int32_t get_last_serial_number(void);
+u_int16_t get_current_session_id(u_int8_t);
 time_t get_vrps_last_modified_date(void);
 
 #endif /* SRC_VRPS_H_ */

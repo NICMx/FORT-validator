@@ -63,11 +63,11 @@ handle_serial_query_pdu(int fd, void *pdu)
 	 * with code 0 ("Corrupt Data")"
 	 */
 	version = received->header.protocol_version;
-	session_id = current_session_id(version);
+	session_id = get_current_session_id(version);
 	if (received->header.session_id != session_id)
 		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, NULL, NULL);
 
-	current_serial = last_serial_number();
+	current_serial = get_last_serial_number();
 	init_sender_common(&common, fd, version, &session_id,
 	    &received->serial_number, &current_serial);
 
@@ -114,8 +114,8 @@ handle_reset_query_pdu(int fd, void *pdu)
 	int error, updates;
 
 	version = received->header.protocol_version;
-	session_id = current_session_id(version);
-	current_serial = last_serial_number();
+	session_id = get_current_session_id(version);
+	current_serial = get_last_serial_number();
 	init_sender_common(&common, fd, version, &session_id, NULL,
 	    &current_serial);
 
