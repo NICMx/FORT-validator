@@ -67,7 +67,8 @@ fail1:
 }
 
 static struct vrp *
-create_vrp (u_int32_t asn, u_int8_t prefix_length, u_int8_t max_prefix_length) {
+create_vrp (u_int32_t asn, u_int8_t prefix_length, u_int8_t max_prefix_length)
+{
 	struct vrp *result;
 
 	result = malloc(sizeof(struct vrp));
@@ -183,21 +184,18 @@ deltas_db_status(u_int32_t *serial)
 	if (serial == NULL)
 		return DIFF_AVAILABLE;
 
+	/* Is the last version? */
+	if (*serial == deltas_db->array[deltas_db->len-1].serial)
+		return NO_DIFF;
+
 	/* Get the delta corresponding to the serial */
 	ARRAYLIST_FOREACH(deltas_db, delta) {
 		if (delta->serial == *serial)
-			break;
+			return DIFF_AVAILABLE;
 	}
 
 	/* Reached end, diff can't be determined */
-	if (delta == NULL)
-		return DIFF_UNDETERMINED;
-
-	/* Is the last version? */
-	if (delta->serial == deltas_db->array[deltas_db->len-1].serial)
-		return NO_DIFF;
-
-	return DIFF_AVAILABLE;
+	return DIFF_UNDETERMINED;
 }
 
 /*
