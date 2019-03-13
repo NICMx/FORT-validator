@@ -175,6 +175,11 @@ handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 	if (!X509_EXTENSION_get_critical(ext))
 		return 0; /* Unknown and not critical; ignore it. */
 
+	/*
+	 * TODO (next iteration?) print the NID as string.
+	 * Also "unknown" is misleading. I think it's only "unknown" if the NID
+	 * is -1 or something like that.
+	 */
 	return pr_err("Certificate has unknown extension. (Extension NID: %d)",
 	    nid);
 dupe:

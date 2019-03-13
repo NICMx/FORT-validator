@@ -2,6 +2,8 @@
 #define SRC_OBJECT_CERTIFICATE_H_
 
 #include <stdbool.h>
+#include <libcmscodec/ANY.h>
+#include <libcmscodec/SignatureValue.h>
 #include <openssl/x509.h>
 #include "certificate_refs.h"
 #include "resource.h"
@@ -20,6 +22,8 @@ int certificate_validate_chain(X509 *, STACK_OF(X509_CRL) *);
  * (Except extensions.)
  */
 int certificate_validate_rfc6487(X509 *, bool);
+
+int certificate_validate_signature(X509 *, ANY_t *coded, SignatureValue_t *);
 
 /**
  * Returns the IP and AS resources declared in the respective extensions.

@@ -30,6 +30,7 @@ asn1_decode(const void *buffer, size_t buffer_size,
 
 	*result = NULL;
 
+	/* TODO (next iteration) first argument is more or less important. */
 	rval = ber_decode(0, descriptor, result, buffer, buffer_size);
 	if (rval.code != RC_OK) {
 		/* Must free partial object according to API contracts. */

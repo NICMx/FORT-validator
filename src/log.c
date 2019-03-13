@@ -237,7 +237,7 @@ crypto_err(const char *format, ...)
 		 * If this function was called, then we need to assume that
 		 * there WAS an error; go generic.
 		 */
-		fprintf(STDERR, "(There are no error messages in the stack.)");
+		fprintf(STDERR, "(There are no error messages in libcrypto's stack.)");
 		error = -EINVAL;
 	}
 

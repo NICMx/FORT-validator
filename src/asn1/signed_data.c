@@ -75,8 +75,8 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 }
 
 static int
-handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
-    OCTET_STRING_t *sid)
+handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
+    OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
 	struct validation *state;
 	const unsigned char *tmp;
@@ -99,9 +99,9 @@ handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
 	 * We definitely don't want @any->buf to be modified, so use a dummy
 	 * pointer.
 	 */
-	tmp = (const unsigned char *) any->buf;
+	tmp = (const unsigned char *) cert_encoded->buf;
 
-	cert = d2i_X509(NULL, &tmp, any->size);
+	cert = d2i_X509(NULL, &tmp, cert_encoded->size);
 	if (cert == NULL) {
 		error = crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
 		goto end1;
@@ -115,6 +115,9 @@ handle_sdata_certificate(ANY_t *any, struct signed_object_args *args,
 		goto end2;
 	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
 	    &policy);
+	if (error)
+		goto end2;
+	error = certificate_validate_signature(cert, signedData, signature);
 	if (error)
 		goto end2;
 
@@ -272,7 +275,8 @@ illegal_attrType:
 }
 
 static int
-validate(struct SignedData *sdata, struct signed_object_args *args)
+validate(struct SignedData *sdata, ANY_t *sdata_encoded,
+    struct signed_object_args *args)
 {
 	struct SignerInfo *sinfo;
 	OCTET_STRING_t *sid = NULL;
@@ -322,7 +326,8 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 
 	/*
 	 * We will validate the certificate later, because we need the sid
-	 * first.
+	 * first. We should also probably validate the signed attributes first
+	 * as well.
 	 */
 
 	/* rfc6488#section-2.1.5 */
@@ -351,21 +356,6 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 	/* rfc6488#section-3.1.c 2/2 */
 	/* (Most of this requirement is in handle_ski_ee().) */
 	error = get_sid(sinfo, &sid);
-	if (error)
-		return error;
-
-	/* rfc6488#section-2.1.4 */
-	/* rfc6488#section-3.1.c 1/2 */
-	if (sdata->certificates == NULL)
-		return pr_err("The SignedData does not contain certificates.");
-
-	if (sdata->certificates->list.count != 1) {
-		return pr_err("The SignedData contains %d certificates, one expected.",
-		    sdata->certificates->list.count);
-	}
-
-	error = handle_sdata_certificate(sdata->certificates->list.array[0],
-	    args, sid);
 	if (error)
 		return error;
 
@@ -410,9 +400,22 @@ validate(struct SignedData *sdata, struct signed_object_args *args)
 	if (sinfo->unsignedAttrs != NULL && sinfo->unsignedAttrs->list.count > 0)
 		return pr_err("SignerInfo has at least one unsignedAttr.");
 
+	/* rfc6488#section-2.1.4 */
+	/* rfc6488#section-3.1.c 1/2 */
 	/* rfc6488#section-3.2 */
 	/* rfc6488#section-3.3 */
-	/* TODO (field) */
+	if (sdata->certificates == NULL)
+		return pr_err("The SignedData does not contain certificates.");
+
+	if (sdata->certificates->list.count != 1) {
+		return pr_err("The SignedData contains %d certificates, one expected.",
+		    sdata->certificates->list.count);
+	}
+
+	error = handle_sdata_certificate(sdata->certificates->list.array[0],
+	    args, sid, sdata_encoded, &sinfo->signature);
+	if (error)
+		return error;
 
 	return 0;
 }
@@ -430,7 +433,7 @@ signed_data_decode(ANY_t *coded, struct signed_object_args *args,
 	if (error)
 		return error;
 
-	error = validate(sdata, args);
+	error = validate(sdata, coded, args);
 	if (error) {
 		signed_data_free(sdata);
 		return error;

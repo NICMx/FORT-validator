@@ -304,6 +304,282 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 	return 0;
 }
 
+struct progress {
+	size_t offset;
+	size_t remaining;
+};
+
+/**
+ * Skip the "T" part of a TLV.
+ */
+static int
+skip_t(ANY_t *content, struct progress *p, unsigned int tag)
+{
+	/*
+	 * BTW: I made these errors critical because the signedData is supposed
+	 * to be validated by this point.
+	 */
+
+	if (content->buf[p->offset] != tag) {
+		return pr_crit("Expected tag 0x%x, got 0x%x", tag,
+		    content->buf[p->offset]);
+	}
+
+	if (p->remaining == 0)
+		return pr_crit("Buffer seems to be truncated");
+	p->offset++;
+	p->remaining--;
+	return 0;
+}
+
+/**
+ * Skip the "TL" part of a TLV.
+ */
+static int
+skip_tl(ANY_t *content, struct progress *p, unsigned int tag)
+{
+	ssize_t len_len; /* Length of the length field */
+	ber_tlv_len_t value_len; /* Length of the value */
+	int error;
+
+	error = skip_t(content, p, tag);
+	if (error)
+		return error;
+
+	len_len = ber_fetch_length(true, &content->buf[p->offset], p->remaining,
+	    &value_len);
+	if (len_len == -1)
+		return pr_crit("Could not decipher length (Cause is unknown)");
+	if (len_len == 0)
+		return pr_crit("Buffer seems to be truncated");
+
+	p->offset += len_len;
+	p->remaining -= len_len;
+	return 0;
+}
+
+static int
+skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
+{
+	int is_constructed;
+	int skip;
+	int error;
+
+	is_constructed = BER_TLV_CONSTRUCTED(&content->buf[p->offset]);
+
+	error = skip_t(content, p, tag);
+	if (error)
+		return error;
+
+	skip = ber_skip_length(NULL, is_constructed, &content->buf[p->offset],
+	    p->remaining);
+	if (skip == -1)
+		return pr_crit("Could not skip length (Cause is unknown)");
+	if (skip == 0)
+		return pr_crit("Buffer seems to be truncated");
+
+	p->offset += skip;
+	p->remaining -= skip;
+	return 0;
+}
+
+/**
+ * A structure that points to the LV part of a signedAttrs TLV.
+ */
+struct encoded_signedAttrs {
+	const uint8_t *buffer;
+	ber_tlv_len_t size;
+};
+
+static int
+find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
+{
+#define INTEGER_TAG		0x02
+#define SEQUENCE_TAG		0x30
+#define SET_TAG			0x31
+
+	struct progress p;
+	int error;
+	ssize_t len_len;
+
+	/* Reference: rfc5652-12.1.asn1 */
+
+	p.offset = 0;
+	p.remaining = signedData->size;
+
+	/* SignedData: SEQUENCE */
+	error = skip_tl(signedData, &p, SEQUENCE_TAG);
+	if (error)
+		return error;
+
+	/* SignedData.version: CMSVersion -> INTEGER */
+	error = skip_tlv(signedData, &p, INTEGER_TAG);
+	if (error)
+		return error;
+	/* SignedData.digestAlgorithms: DigestAlgorithmIdentifiers -> SET */
+	error = skip_tlv(signedData, &p, SET_TAG);
+	if (error)
+		return error;
+	/* SignedData.encapContentInfo: EncapsulatedContentInfo -> SEQUENCE */
+	error = skip_tlv(signedData, &p, SEQUENCE_TAG);
+	if (error)
+		return error;
+	/* SignedData.certificates: CertificateSet -> SET */
+	error = skip_tlv(signedData, &p, 0xA0);
+	if (error)
+		return error;
+	/* SignedData.signerInfos: SignerInfos -> SET OF SEQUENCE */
+	error = skip_tl(signedData, &p, SET_TAG);
+	if (error)
+		return error;
+	error = skip_tl(signedData, &p, SEQUENCE_TAG);
+	if (error)
+		return error;
+
+	/* SignedData.signerInfos.version: CMSVersion -> INTEGER */
+	error = skip_tlv(signedData, &p, INTEGER_TAG);
+	if (error)
+		return error;
+	/*
+	 * SignedData.signerInfos.sid: SignerIdentifier -> CHOICE -> always
+	 * subjectKeyIdentifier, which is a [0].
+	 */
+	error = skip_tlv(signedData, &p, 0x80);
+	if (error)
+		return error;
+	/* SignedData.signerInfos.digestAlgorithm: DigestAlgorithmIdentifier
+	 * -> AlgorithmIdentifier -> SEQUENCE */
+	error = skip_tlv(signedData, &p, SEQUENCE_TAG);
+	if (error)
+		return error;
+
+	/* SignedData.signerInfos.signedAttrs: SignedAttributes -> SET */
+	/* We will need to replace the tag 0xA0 with 0x31, so skip it as well */
+	error = skip_t(signedData, &p, 0xA0);
+	if (error)
+		return error;
+
+	result->buffer = &signedData->buf[p.offset];
+	len_len = ber_fetch_length(true, result->buffer,
+	    p.remaining, &result->size);
+	if (len_len == -1)
+		return pr_crit("Could not decipher length (Cause is unknown)");
+	if (len_len == 0)
+		return pr_crit("Buffer seems to be truncated");
+	result->size += len_len;
+
+	return 0;
+}
+
+/*
+ * TODO (next iteration) there exists a thing called "PKCS7_NOVERIFY", which
+ * skips unnecessary validations when using the PKCS7 API. Maybe the methods
+ * we're using have something similar.
+ */
+int
+certificate_validate_signature(X509 *cert, ANY_t *signedData,
+    SignatureValue_t *signature)
+{
+	static const uint8_t EXPLICIT_SET_OF_TAG = 0x31;
+
+	X509_PUBKEY *public_key;
+	EVP_MD_CTX *ctx;
+	struct encoded_signedAttrs signedAttrs;
+	int error;
+
+	public_key = X509_get_X509_PUBKEY(cert);
+	if (public_key == NULL)
+		return crypto_err("Certificate seems to lack a public key");
+
+	/* Create the Message Digest Context */
+	ctx = EVP_MD_CTX_create();
+	if (ctx == NULL)
+		return crypto_err("EVP_MD_CTX_create() error");
+
+	if (1 != EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL,
+	    X509_PUBKEY_get0(public_key))) {
+		error = crypto_err("EVP_DigestVerifyInit() error");
+		goto end;
+	}
+
+	/*
+	 * When the [signedAttrs] field is present
+	 * (...),
+	 * the result is the message
+	 * digest of the complete DER encoding of the SignedAttrs value
+	 * contained in the signedAttrs field.
+	 * (...)
+	 * A separate encoding
+	 * of the signedAttrs field is performed for message digest calculation.
+	 * The IMPLICIT [0] tag in the signedAttrs is not used for the DER
+	 * encoding, rather an EXPLICIT SET OF tag is used.  That is, the DER
+	 * encoding of the EXPLICIT SET OF tag, rather than of the IMPLICIT [0]
+	 * tag, MUST be included in the message digest calculation along with
+	 * the length and content octets of the SignedAttributes value.
+	 *               (https://tools.ietf.org/html/rfc5652#section-5.4)
+	 *
+	 * FYI: IMPLICIT [0] is 0xA0, and EXPLICIT SET OF is 0x31.
+	 *
+	 * I can officially declare that these requirements are a gargantuan
+	 * pain in the ass. Through the validation, we need access to the
+	 * signedAttrs thingo in both encoded and decoded versions.
+	 * (We need the decoded version for the sake of profile validation
+	 * during validate_signed_attrs(), and the encoded version to check
+	 * the signature of the SO right here.)
+	 * Getting the encoded version is the problem. We have two options:
+	 *
+	 * 1. Re-encode the decoded version.
+	 * 2. Extract the encoded version from the original BER SignedData.
+	 *
+	 * The first one sounded less efficient but more straightforward, but
+	 * I couldn't pull it off because there's some memory bug with asn1c's
+	 * encoding function that core dumps the fuck out of everything. It's
+	 * caused by undefined behavior that triggers who knows where.
+	 *
+	 * There's another problem with that approach: If we DER-encode the
+	 * signedAttrs, we have no guarantee that the signature will match
+	 * because of the very real possibility that whoever signed used BER
+	 * instead.
+	 *
+	 * One drawback for the second option is that obviously there's no API
+	 * for it. asn1c encodes and decodes; there's no method for extracting
+	 * a particular encoded object out of an encoded container. We need to
+	 * do the parsing ourselves. But it's not that bad because of of
+	 * ber_fetch_length() and ber_skip_length().
+	 *
+	 * Second option it is.
+	 */
+
+	error = find_signedAttrs(signedData, &signedAttrs);
+	if (error)
+		goto end;
+
+	error = EVP_DigestVerifyUpdate(ctx, &EXPLICIT_SET_OF_TAG,
+	    sizeof(EXPLICIT_SET_OF_TAG));
+	if (1 != error) {
+		error = crypto_err("EVP_DigestVerifyInit() error");
+		goto end;
+	}
+
+	error = EVP_DigestVerifyUpdate(ctx, signedAttrs.buffer,
+	    signedAttrs.size);
+	if (1 != error) {
+		error = crypto_err("EVP_DigestVerifyInit() error");
+		goto end;
+	}
+
+	if (1 != EVP_DigestVerifyFinal(ctx, signature->buf, signature->size)) {
+		error = crypto_err("Signed Object's signature is invalid");
+		goto end;
+	}
+
+	error = 0;
+
+end:
+	EVP_MD_CTX_free(ctx);
+	return error;
+}
+
 int
 certificate_load(struct rpki_uri const *uri, X509 **result)
 {

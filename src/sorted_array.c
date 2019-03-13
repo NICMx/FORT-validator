@@ -72,6 +72,11 @@ get_nth_element(struct sorted_array *sarray, unsigned int index)
 	return ((char *)sarray->array) + index * sarray->size;
 }
 
+/**
+ * Returns success only if @new can be added to @array.
+ * (Meaning, returns success if @new is larger than all of the elements in
+ * @array.)
+ */
 static int
 compare(struct sorted_array *sarray, void *new)
 {
