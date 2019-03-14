@@ -51,6 +51,11 @@ config_get_color_output(void)
 	return false;
 }
 
+enum filename_format
+config_get_filename_format(void)
+{
+	return FNF_NAME;
+}
 
 char *
 config_get_rsync_program(void)

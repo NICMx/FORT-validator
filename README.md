@@ -24,26 +24,27 @@ make install
 
 Further information can be found in the subsections below.
 
-| RFC                              | Implemented |
-|----------------------------------|-------------|
-| 3779 (IP & AS Extensions)        | 100%        |
-| 6350 (VCARD)                     | 0%          |
-| 6482 (ROA)                       | 100%        |
-| 6486 (Manifests)                 | 75%         |
-| 6488 (Signed Objects)            | 90%         |
-| 6487, 7318 (Certificates & CRLs) | 100%        |
-| 6493 (Ghostbusters)              | 100%        |
-| 7730 (TALs)                      | 100%        |
-| 7935 (RPKI algorithms)           | 100%        |
-| 8182 (RRDP)                      | 0%          |
-| 8209 (BGPSec Certificates)       | 0%          |
-| 8360 (Validation Reconsidered)   | 100%        |
+| RFC                                                                        | Implemented |
+|----------------------------------------------------------------------------|-------------|
+| [3779](https://tools.ietf.org/html/rfc3779) (IP & AS Extensions)           | 100%        |
+| [6350](https://tools.ietf.org/html/rfc6350) (vCard)                        | 0%          |
+| [6482](https://tools.ietf.org/html/rfc6482) (ROA)                          | 100%        |
+| [6486](https://tools.ietf.org/html/rfc6486) (Manifests)                    | 75%         |
+| [6487](https://tools.ietf.org/html/rfc6487) (Resource Certificates & CRLs) | 100%        |
+| [6488](https://tools.ietf.org/html/rfc6488) (Signed Objects)               | 90%         |
+| [6493](https://tools.ietf.org/html/rfc6493) (Ghostbusters)                 | 100%        |
+| [7318](https://tools.ietf.org/html/rfc7318) (Policy Qualifiers)            | 100%        |
+| [7730](https://tools.ietf.org/html/rfc7730) (TALs)                         | 100%        |
+| [7935](https://tools.ietf.org/html/rfc7935) (RPKI algorithms)              | 100%        |
+| [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 0%          |
+| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 0%          |
+| [8360](https://tools.ietf.org/html/rfc8360) (Validation Reconsidered)      | 100%        |
 
-### RFC 6350 (VCARD)
+### RFC 6350 (vCard)
 
-The VCARD format is only used by Ghostbusters records. 6350 defines the basic VCARD format, while 6493 defines additional requirements for Ghostbusters-specific VCARDs.
+The vCard format is only used by Ghostbusters records. 6350 defines the basic vCard format, while 6493 defines additional requirements for Ghostbusters-specific vCard.
 
-The specific requirements have been implemented, while the basic ones have not.
+The specific validations have been implemented, while the basic ones have not.
 
 ### RFC 6486 (Manifests)
 

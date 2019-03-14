@@ -1,3 +1,4 @@
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = src test
+SUBDIRS = src $(MAYBE_TESTS)
+DIST_SUBDIRS = src
