@@ -36,7 +36,7 @@ static bool
 addr_is_successor(struct in6_addr const *a, struct in6_addr const *b)
 {
 	struct in6_addr a_plus_1;
-	unsigned int i;
+	int i;
 
 	memcpy(&a_plus_1, a, sizeof(a_plus_1));
 	for (i = 15; i >= 0; i--) {
