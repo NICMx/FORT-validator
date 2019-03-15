@@ -10,8 +10,6 @@ AM_INIT_AUTOMAKE([subdir-objects])
 # Checks for programs.
 AC_PROG_CC
 
-# Checks for libraries.
-
 # Checks for header files.
 AC_CHECK_HEADERS([netinet/in.h stdlib.h string.h unistd.h])
 

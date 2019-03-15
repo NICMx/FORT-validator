@@ -21,10 +21,15 @@ r4_cmp(void *arg1, void *arg2)
 		return SACMP_CHILD;
 	if (n2min <= n1min && n1max <= n2max)
 		return SACMP_PARENT;
+	if (n2min != 0 && n1max == n2min - 1)
+		return SACMP_ADJACENT_RIGHT;
 	if (n1max < n2min)
 		return SACMP_RIGHT;
+	if (n1min != 0 && n2max == n1min - 1)
+		return SACMP_ADJACENT_LEFT;
 	if (n2max < n1min)
 		return SACMP_LEFT;
+
 	return SACMP_INTERSECTION;
 }
 
@@ -77,7 +82,8 @@ res4_add_range(struct resources_ipv4 *ips, struct ipv4_range *range)
 	return sarray_add((struct sorted_array *) ips, &n);
 }
 
-bool res4_empty(struct resources_ipv4 *ips)
+bool
+res4_empty(struct resources_ipv4 *ips)
 {
 	return sarray_empty((struct sorted_array *) ips);
 }

@@ -31,6 +31,25 @@ addr_lt(struct in6_addr const *a, struct in6_addr const *b)
 	return addr_cmp(a, b) < 0;
 }
 
+/* a + 1 == b? */
+static bool
+addr_is_successor(struct in6_addr const *a, struct in6_addr const *b)
+{
+	struct in6_addr a_plus_1;
+	unsigned int i;
+
+	memcpy(&a_plus_1, a, sizeof(a_plus_1));
+	for (i = 15; i >= 0; i--) {
+		if (a_plus_1.s6_addr[i] != UINT8_MAX) {
+			a_plus_1.s6_addr[i]++;
+			return memcmp(&a_plus_1, b, sizeof(a_plus_1)) == 0;
+		}
+		a_plus_1.s6_addr[i] = 0;
+	}
+
+	return false; /* b cannot be the successor of 0xFFFFF...FFF */
+}
+
 static enum sarray_comparison
 r6_cmp(void *arg1, void *arg2)
 {
@@ -45,10 +64,15 @@ r6_cmp(void *arg1, void *arg2)
 		return SACMP_CHILD;
 	if (addr_le(a2min, a1min) && addr_le(a1max, a2max))
 		return SACMP_PARENT;
+	if (addr_is_successor(a1max, a2min))
+		return SACMP_ADJACENT_RIGHT;
 	if (addr_lt(a1max, a2min))
 		return SACMP_RIGHT;
+	if (addr_is_successor(a2max, a1min))
+		return SACMP_ADJACENT_LEFT;
 	if (addr_lt(a2max, a1min))
 		return SACMP_LEFT;
+
 	return SACMP_INTERSECTION;
 }
 

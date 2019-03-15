@@ -161,16 +161,16 @@ sarray_contains(struct sorted_array *sarray, void *elem)
 			continue;
 		case SACMP_RIGHT:
 		case SACMP_ADJACENT_RIGHT:
+			if (mid == sarray->count - 1)
+				return false;
 			left = mid + 1;
 			continue;
 		case SACMP_EQUAL:
 		case SACMP_CHILD:
 			return true;
 		case SACMP_PARENT:
-			return false;
 		case SACMP_INTERSECTION:
-			/* Fall through; it's not supposed to happen here. */
-			break;
+			return false;
 		}
 
 		pr_crit("Unknown comparison value: %u", cmp);
