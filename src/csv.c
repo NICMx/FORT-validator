@@ -179,7 +179,7 @@ error:
 }
 
 static int
-load_vrps(struct line_file *lfile)
+load_vrps(struct line_file *lfile, bool is_update)
 {
 	struct delta *delta;
 	char *line;
@@ -205,7 +205,7 @@ load_vrps(struct line_file *lfile)
 		error = lfile_read(lfile, &line);
 		if (error) {
 			err(error, "Error reading line %d, stop processing file.", current_line);
-			delta_destroy(delta);
+			delta_destroy(&delta);
 			goto end;
 		}
 		if (line == NULL) {
@@ -219,7 +219,7 @@ load_vrps(struct line_file *lfile)
 
 		error = add_vrp(line, delta);
 		if (error) {
-			delta_destroy(delta);
+			delta_destroy(&delta);
 			goto end;
 		}
 	} while (true);
@@ -266,7 +266,7 @@ load_vrps_file(bool check_update, bool *updated)
 	if (check_update && last_update <= get_vrps_last_modified_date())
 		goto end2;
 
-	error = load_vrps(lfile);
+	error = load_vrps(lfile, check_update);
 	if (error)
 		goto end2;
 

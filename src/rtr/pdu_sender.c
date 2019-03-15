@@ -198,26 +198,30 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 int
 send_payload_pdus(struct sender_common *common)
 {
-	struct vrp *vrps, *ptr;
+	struct vrp *vrps;
 	unsigned int len, i;
 	int error;
 
-	len = get_vrps_delta(common->start_serial, common->end_serial, &vrps);
+	vrps = malloc(sizeof(struct vrp));
+	len = get_vrps_delta(common->start_serial, common->end_serial, vrps);
 	if (len == 0)
 		return 0;
 
-	ptr = vrps;
 	for (i = 0; i < len; i++) {
-		if (ptr->in_addr_len == INET_ADDRSTRLEN)
-			error = send_ipv4_prefix_pdu(common, ptr);
+		if (vrps[i].in_addr_len == INET_ADDRSTRLEN)
+			error = send_ipv4_prefix_pdu(common, &vrps[i]);
+		else if (vrps[i].in_addr_len == INET6_ADDRSTRLEN)
+			error = send_ipv6_prefix_pdu(common, &vrps[i]);
 		else
-			error = send_ipv6_prefix_pdu(common, ptr);
+			error = -EINVAL;
 
-		if (error)
+		if (error) {
+			free(vrps);
 			return error;
-		ptr++;
+		}
 	}
 
+	free(vrps);
 	return 0;
 }
 
