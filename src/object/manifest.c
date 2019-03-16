@@ -186,6 +186,12 @@ __handle_manifest(struct manifest *mft, struct rpp **pp)
 		} /* Otherwise ownership was transferred to @pp. */
 	}
 
+	/* rfc6486#section-7 */
+	if (rpp_get_crl(*pp) == NULL) {
+		error = pr_err("Manifest lacks a CRL.");
+		goto fail;
+	}
+
 	return 0;
 
 fail:

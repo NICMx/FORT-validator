@@ -134,8 +134,10 @@ hash_validate_file(char const *algorithm, struct rpki_uri const *uri,
 	if (error)
 		return error;
 
-	if (!hash_matches(expected->buf, expected->size, actual, actual_len))
-		return pr_err("File does not match its hash.");
+	if (!hash_matches(expected->buf, expected->size, actual, actual_len)) {
+		return pr_err("File '%s' does not match its manifest hash.",
+		    uri_get_printable(uri));
+	}
 
 	return 0;
 }

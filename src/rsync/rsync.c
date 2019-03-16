@@ -162,19 +162,15 @@ dir_exists(char *path, bool *result)
 
 	*last_slash = '\0';
 
-	switch (stat(path, &_stat)) {
-	case 0:
+	if (stat(path, &_stat) == 0) {
 		if (!S_ISDIR(_stat.st_mode)) {
 			return pr_err("Path '%s' exists and is not a directory.",
 			    path);
 		}
-
 		*result = true;
-		break;
-	case ENOENT:
+	} else if (errno == ENOENT) {
 		*result = false;
-		break;
-	default:
+	} else {
 		return pr_errno(errno, "stat() failed");
 	}
 
