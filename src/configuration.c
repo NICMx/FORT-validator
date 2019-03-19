@@ -193,7 +193,7 @@ handle_json(json_t *root)
 	}
 
 	/*
-	 * TODO Exclusively for RTR v1, so this are optional values to configure
+	 * Exclusively for RTR v1, so this are optional values to configure
 	 * since RTR v1 isn't fully supported yet
 	 */
 	interval = json_object_get(root, OPTNAME_RTR_INTERVAL);

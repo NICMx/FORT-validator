@@ -95,7 +95,10 @@ update_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 	if (client == NULL)
 		return create_client(fd, addr, rtr_version);
 
-	/* TODO Isn't ready to handle distinct version on clients reconnection */
+	/*
+	 * Isn't ready to handle distinct version on clients reconnection, but for
+	 * now there's no problem since only 1 RTR version is supported (RVR v0).
+	 */
 	if (client->rtr_version != rtr_version)
 		return -EINVAL;
 
