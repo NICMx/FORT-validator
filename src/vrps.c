@@ -291,16 +291,16 @@ add_vrps_filtered(struct vrps *dst, struct vrps *src)
 }
 
 static void
-copy_vrps(struct vrp *dst, struct vrp *src, unsigned int len)
+copy_vrps(struct vrp **dst, struct vrp *src, unsigned int len)
 {
 	struct vrp *tmp;
-	tmp = realloc(dst, len * sizeof(struct vrp));
+	tmp = realloc(*dst, len * sizeof(struct vrp));
 	if (tmp == NULL) {
 		err(-ENOMEM, "Couldn't copy VRPs");
 		return;
 	}
-	dst = tmp;
-	memcpy(dst, src, len * sizeof(struct vrp));
+	*dst = tmp;
+	*dst = memcpy(*dst, src, len * sizeof(struct vrp));
 }
 
 /*
@@ -312,7 +312,7 @@ copy_vrps(struct vrp *dst, struct vrp *src, unsigned int len)
  */
 unsigned int
 get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
-    struct vrp *result)
+    struct vrp **result)
 {
 	struct delta **delta1;
 	struct vrps summary;

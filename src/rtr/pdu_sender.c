@@ -203,9 +203,9 @@ send_payload_pdus(struct sender_common *common)
 	int error;
 
 	vrps = malloc(sizeof(struct vrp));
-	len = get_vrps_delta(common->start_serial, common->end_serial, vrps);
+	len = get_vrps_delta(common->start_serial, common->end_serial, &vrps);
 	if (len == 0)
-		return 0;
+		goto end;
 
 	for (i = 0; i < len; i++) {
 		if (vrps[i].in_addr_len == INET_ADDRSTRLEN)
@@ -220,7 +220,7 @@ send_payload_pdus(struct sender_common *common)
 			return error;
 		}
 	}
-
+end:
 	free(vrps);
 	return 0;
 }

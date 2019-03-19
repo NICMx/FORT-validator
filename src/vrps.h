@@ -33,7 +33,7 @@ int delta_add_vrp(struct delta *, struct vrp *);
 int deltas_db_add_delta(struct delta *);
 int deltas_db_status(u_int32_t *);
 
-unsigned int get_vrps_delta(u_int32_t *, u_int32_t *, struct vrp *);
+unsigned int get_vrps_delta(u_int32_t *, u_int32_t *, struct vrp **);
 
 void vrp_destroy(struct vrp *);
 void delta_destroy(struct delta **);
