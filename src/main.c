@@ -36,6 +36,7 @@ main(int argc, char *argv[])
 		}
 	}
 
+	/* TODO (review) I don't understand this comment; please ellaborate. */
 	/* TODO This will be overriden when reading from config file */
 	if (json_file == NULL) {
 		fprintf(stderr, "Missing flag '-f <file name>'\n");

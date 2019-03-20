@@ -24,6 +24,4 @@
  * does not.
  */
 
-char *str_clone(char const *);
-
 #endif /* _SRC_COMMON_H_ */

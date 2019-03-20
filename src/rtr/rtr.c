@@ -168,6 +168,7 @@ handle_client_connections(int server_fd)
 	struct thread_param *arg;
 	pthread_t thread;
 
+	/* TODO (review) 5 should be configurable. */
 	listen(server_fd, 5);
 
 	sizeof_client_addr = sizeof(client_addr);

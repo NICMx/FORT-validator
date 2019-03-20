@@ -1,5 +1,7 @@
 #include "vrps.h"
 
+/* TODO (review) Can't find the meaning of "VRP" and "VRPS". Please explain. */
+
 #include <stdbool.h>
 #include <string.h>
 #include "array_list.h"
@@ -15,10 +17,19 @@ struct delta {
 	struct vrps vrps;
 };
 
+/* TODO (review) why pointers? */
 ARRAY_LIST(deltasdb, struct delta *)
 
+/*
+ * TODO (review) It seems you only have one instance of this.
+ *
+ * Best remove those asterisks; you don't need `base_db` and `deltas_db` to live
+ * in the heap.
+ */
 struct state {
+	/** The current valid ROAs, freshly loaded from the file */
 	struct delta *base_db;
+	/** ROA changes over time */
 	struct deltasdb *deltas_db;
 	u_int32_t current_serial;
 	u_int16_t v0_session_id;
@@ -48,8 +59,29 @@ deltas_db_init(void)
 		err(error, "Deltas DB couldn't be initialized");
 		return error;
 	}
+
+	/*
+	 * TODO (review) This looks dangerous.
+	 *
+	 * 1. RTR server starts with serial 0
+	 * 2. Router wants serial
+	 * 3. RTR Server provides serial 0
+	 * 4. RTR Server dies
+	 * 5. RTR Server starts with serial 0, but the repository has changed
+	 *    by this point
+	 *
+	 * Can they realize that they are out of sync?
+	 *
+	 * Can't you use the current date as serial?
+	 */
 	state.current_serial = START_SERIAL;
 	/* The downcast takes the LSBs */
+	/*
+	 * TODO (review) The result of `time()` is unlikely to fit in a 16-bit
+	 * integer.
+	 *
+	 * (Also: Integer overflow yields undefined behavior.)
+	 */
 	state.v0_session_id = time(NULL);
 	/* Minus 1 to prevent same ID */
 	state.v1_session_id = state.v0_session_id - 1;
@@ -157,6 +189,12 @@ vrp_is_new(struct vrps *base, struct vrp *vrp)
 	return vrp_locate(base, vrp) == NULL;
 }
 
+/*
+ * TODO (review) I don't understand the name of this function.
+ *
+ * I think that you meant "summarize." I've never seen "resume" used
+ * an spanish "resumen."
+ */
 static struct delta *
 delta_resume(struct delta *delta)
 {
@@ -164,6 +202,13 @@ delta_resume(struct delta *delta)
 	struct vrps *base, *search_list;
 	struct vrp *cursor;
 
+	/*
+	 * Note: Don't fix this function yet.
+	 * I realize why you implemented it this way, and I'm trying to come up
+	 * with a more efficient algorithm.
+	 */
+
+	/* TODO (review) check NULL */
 	resume_delta = create_delta();
 	resume_delta->serial = delta->serial;
 	/* First check for announcements */
@@ -172,6 +217,7 @@ delta_resume(struct delta *delta)
 	ARRAYLIST_FOREACH(base, cursor)
 		if (vrp_is_new(search_list, cursor)) {
 			cursor->flags = FLAG_ANNOUNCEMENT;
+			/* TODO (review) check error code */
 			delta_add_vrp(resume_delta, cursor);
 		}
 
@@ -181,6 +227,7 @@ delta_resume(struct delta *delta)
 	ARRAYLIST_FOREACH(base, cursor)
 		if (vrp_is_new(search_list, cursor)) {
 			cursor->flags = FLAG_WITHDRAWAL;
+			/* TODO (review) check error code */
 			delta_add_vrp(resume_delta, cursor);
 		}
 
@@ -259,6 +306,16 @@ deltas_db_status(u_int32_t *serial)
 	if (state.base_db->vrps.len == 0)
 		return NO_DATA_AVAILABLE;
 
+	/*
+	 * TODO (review) `//`-style comments are somewhat controversial in that
+	 * they weren't added until some late standard. From my reading of it,
+	 * the OpenBSD style does not approve of them either.
+	 *
+	 * If you're using Eclipse, go to `Window > Preferences > C/C++ > Code
+	 * Analysis`, and set `Coding Style > Line Comments` to `Error`.
+	 *
+	 * Then patch all the emerging red underlines.
+	 */
 	// No serial to match, and there's data at DB
 	if (serial == NULL)
 		return DIFF_AVAILABLE;

@@ -7,6 +7,7 @@
 
 ARRAY_LIST(clientsdb, struct client)
 
+/* TODO (review) Does not need to live in the heap */
 struct clientsdb *clients_db;
 
 int
@@ -57,6 +58,7 @@ create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 {
 	struct client *client;
 
+	/* TODO (review) `client` should be in the stack. */
 	client = malloc(sizeof(struct client));
 	if (client == NULL) {
 		err(-ENOMEM, "Couldn't allocate client");
@@ -95,6 +97,16 @@ update_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 	if (client == NULL)
 		return create_client(fd, addr, rtr_version);
 
+	/*
+	 * TODO (review) Your margin seems to be misconfigured; you're violating
+	 * the line width often.
+	 *
+	 * Line width is 80 characters and tabs are 8.
+	 *
+	 * `Window > Preferences > C/C++ > Code Style > Formatter > New... > Ok`
+	 * 	`Indentation > Tab size`
+	 * 	`Line Wrapping > Maximum line width`
+	 */
 	/*
 	 * Isn't ready to handle distinct version on clients reconnection, but for
 	 * now there's no problem since only 1 RTR version is supported (RVR v0).

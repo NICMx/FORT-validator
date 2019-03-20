@@ -103,6 +103,16 @@ prefix6_decode(const char *str, struct ipv6_prefix *result)
 {
 	int error;
 
+	/*
+	 * TODO (review) I see this pattern often: You call `err()`, and then
+	 * throw a pretty exception.
+	 *
+	 * `err()` does not return, so any cleanup that follows it is pointless.
+	 *
+	 * More importantly, returnless functions are bad practice,
+	 * because they destroy the recovery potential of calling code.
+	 * Use `warn()`/`warnx()` instead (and continue throwing cleanly).
+	 */
 	if (str == NULL) {
 		err(-EINVAL, "Null string received, can't decode IPv6 prefix");
 		return -EINVAL;
@@ -122,6 +132,15 @@ prefix_length_decode (const char *text, unsigned int *dst, int max_value)
 {
 	unsigned long len;
 
+	/*
+	 * TODO (review) You probably meant to use `errx()`, not `err()`.
+	 *
+	 * `err()` depends on a thread variable called `errno`. It makes no
+	 * sense to call `err` when you know `errno` has not been set properly
+	 * by some system function.
+	 *
+	 * If you haven't done it, see `man 3 err` and `man 3 errno`.
+	 */
 	if (text == NULL) {
 		err(-EINVAL, "Null string received, can't decode prefix length");
 		return -EINVAL;

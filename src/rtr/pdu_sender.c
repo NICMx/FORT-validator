@@ -208,6 +208,10 @@ send_payload_pdus(struct sender_common *common)
 		goto end;
 
 	for (i = 0; i < len; i++) {
+		/*
+		 * TODO (review) Why are you indexing `vrps`? You did not
+		 * allocate an array.
+		 */
 		if (vrps[i].in_addr_len == INET_ADDRSTRLEN)
 			error = send_ipv4_prefix_pdu(common, &vrps[i]);
 		else if (vrps[i].in_addr_len == INET6_ADDRSTRLEN)

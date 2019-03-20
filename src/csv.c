@@ -165,6 +165,15 @@ add_vrp(char *line, struct delta *delta)
 		goto error;
 	}
 
+	/*
+	 * TODO (review) You seem to be leaking `vrp` on success. (The arraylist
+	 * stores a shallow copy, not the memory block you allocated.)
+	 *
+	 * In fact, `vrp_destroy()` is empty, so you're also leaking on error.
+	 *
+	 * You can avoid all these headaches by moving `vrp` to the stack.
+	 * (ie. remove `vrp`'s asterisk and patch emerging errors.)
+	 */
 	error = delta_add_vrp(delta, vrp);
 	if (error) {
 		vrp_destroy(vrp);
@@ -186,6 +195,13 @@ load_vrps(struct line_file *lfile, bool is_update)
 	int current_line;
 	int error;
 
+	/*
+	 * TODO (review) Skipping the first line should not be hardcoded; if
+	 * there's no header, you will ignore important information.
+	 *
+	 * Try checking whether you need to handle the line by way of the "AS"
+	 * prefix instead.
+	 */
 	/* First line is expected to be the header, ignore it */
 	current_line = 1;
 	error = lfile_read(lfile, &line);
@@ -199,6 +215,7 @@ load_vrps(struct line_file *lfile, bool is_update)
 		return error;
 	}
 	/* Start the initial delta */
+	/* TODO (review) check NULL */
 	delta = create_delta();
 	do {
 		++current_line;
@@ -217,6 +234,7 @@ load_vrps(struct line_file *lfile, bool is_update)
 			continue;
 		}
 
+		/* TODO (review) line is leaking. */
 		error = add_vrp(line, delta);
 		if (error) {
 			delta_destroy(&delta);
@@ -224,6 +242,7 @@ load_vrps(struct line_file *lfile, bool is_update)
 		}
 	} while (true);
 persist:
+	/* TODO (review) delta is leaking. */
 	error = deltas_db_add_delta(delta);
 	if (error)
 		err(error, "VRPs Delta couldn't be persisted");
@@ -244,12 +263,23 @@ load_vrps_file(bool check_update, bool *updated)
 	int error;
 
 	location = config_get_vrps_location();
+
+	/*
+	 * TODO (review) This is a needless bother; remove please.
+	 *
+	 * (Having a csv extension does not guarantee the file is CSV and
+	 * vice versa.)
+	 */
 	if (!location_has_extension(location, ".csv")) {
 		warn("%s isn't a CSV file", location);
 		error = -EINVAL;
 		goto end1;
 	}
 
+	/*
+	 * TODO (review) This is an extremely heavy operation, and should not
+	 * happen before you've confirmed that you need to read the file.
+	 */
 	error = lfile_open(location, &lfile);
 	if (error)
 		goto end1; /* Error msg already printed. */
@@ -263,6 +293,13 @@ load_vrps_file(bool check_update, bool *updated)
 	}
 
 	last_update = attr.st_mtim.tv_sec;
+	/*
+	 * TODO (review) Time comparisons are particularly vulnerable to integer
+	 * overflow. (Think about `time_t` being defined as a small integer,
+	 * and `get_vrps_last_modified_date()` is the max value.)
+	 *
+	 * Usa `difftime()` instead. (`man 3 difftime`)
+	 */
 	if (check_update && last_update <= get_vrps_last_modified_date())
 		goto end2;
 
@@ -282,6 +319,7 @@ end1:
 	return error;
 }
 
+/* TODO (review) Should be `csv_parse_vrps_file(void)`. */
 int
 csv_parse_vrps_file()
 {
