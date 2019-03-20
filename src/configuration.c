@@ -13,6 +13,7 @@
 #define OPTNAME_LISTEN		"listen"
 #define OPTNAME_LISTEN_ADDRESS	"address"
 #define OPTNAME_LISTEN_PORT	"port"
+#define OPTNAME_LISTEN_QUEUE	"queue"
 #define OPTNAME_VRPS	"vrps"
 #define OPTNAME_VRPS_LOCATION	"location"
 #define OPTNAME_VRPS_CHECK_INTERVAL	"checkInterval"
@@ -23,6 +24,7 @@
 
 #define DEFAULT_ADDR		NULL
 #define DEFAULT_PORT		"323"
+#define DEFAULT_QUEUE		10
 #define DEFAULT_VRPS_LOCATION		NULL
 #define DEFAULT_VRPS_CHECK_INTERVAL	60
 #define DEFAULT_REFRESH_INTERVAL		3600
@@ -39,6 +41,10 @@
 #define MIN_EXPIRE_INTERVAL		600
 #define MAX_EXPIRE_INTERVAL		172800
 
+/* Range values for other params */
+#define MIN_LISTEN_QUEUE		1
+#define MAX_LISTEN_QUEUE		SOMAXCONN
+
 struct rtr_config {
 	/** The listener address of the RTR server. */
 	struct addrinfo *address;
@@ -46,6 +52,8 @@ struct rtr_config {
 	char *port;
 	/** VRPs (Validated ROA Payload) location */
 	char *vrps_location;
+	/** Maximum accepted client connections */
+	int queue;
 	/** Interval used to look for updates at VRPs location */
 	int vrps_check_interval;
 	/** Intervals use at RTR v1 End of data PDU **/
@@ -99,19 +107,19 @@ config_cleanup(void)
 }
 
 static int
-load_interval(json_t *parent, char const *name, int default_value,
+load_range(json_t *parent, char const *name, int default_value,
     int *result, int min_value, int max_value)
 {
 	int error;
 
 	error = json_get_int(parent, name, default_value, result);
 	if (error) {
-		err(error, "Invalid value for interval '%s'", name);
+		err(error, "Invalid value for '%s'", name);
 		return error;
 	}
 
 	if (*result < min_value || max_value < *result) {
-		err(-EINVAL, "Interval '%s' (%d) out of range, must be from %d to %d",
+		err(-EINVAL, "'%s' (%d) out of range, must be from %d to %d",
 		    name, *result, min_value, max_value);
 		return -EINVAL;
 	}
@@ -128,6 +136,7 @@ handle_json(json_t *root)
 	char const *address;
 	char const *port;
 	char const *vrps_location;
+	int queue;
 	int vrps_check_interval;
 	int refresh_interval;
 	int retry_interval;
@@ -157,9 +166,17 @@ handle_json(json_t *root)
 		if (error)
 			return error;
 
+		error = load_range(listen, OPTNAME_LISTEN_QUEUE,
+		    DEFAULT_QUEUE, &queue,
+		    MIN_LISTEN_QUEUE, MAX_LISTEN_QUEUE);
+		if (error)
+			return error;
+		config.queue = queue;
+
 	} else {
 		address = DEFAULT_ADDR;
 		port = DEFAULT_PORT;
+		config.queue = DEFAULT_QUEUE;
 	}
 
 	vrps = json_object_get(root, OPTNAME_VRPS);
@@ -182,7 +199,7 @@ handle_json(json_t *root)
 		 * The cache MUST rate-limit Serial Notifies to no more frequently than
 		 * one per minute.
 		 */
-		error = load_interval(vrps, OPTNAME_VRPS_CHECK_INTERVAL,
+		error = load_range(vrps, OPTNAME_VRPS_CHECK_INTERVAL,
 		    DEFAULT_VRPS_CHECK_INTERVAL, &vrps_check_interval,
 		    MIN_VRPS_CHECK_INTERVAL, MAX_VRPS_CHECK_INTERVAL);
 		if (error)
@@ -205,19 +222,19 @@ handle_json(json_t *root)
 			return -EINVAL;
 		}
 
-		error = load_interval(interval, OPTNAME_RTR_INTERVAL_REFRESH,
+		error = load_range(interval, OPTNAME_RTR_INTERVAL_REFRESH,
 		    DEFAULT_REFRESH_INTERVAL, &refresh_interval,
 		    MIN_REFRESH_INTERVAL, MAX_REFRESH_INTERVAL);
 		if (error)
 			return error;
 
-		error = load_interval(interval, OPTNAME_RTR_INTERVAL_RETRY,
+		error = load_range(interval, OPTNAME_RTR_INTERVAL_RETRY,
 		    DEFAULT_RETRY_INTERVAL, &retry_interval,
 		    MIN_RETRY_INTERVAL, MAX_RETRY_INTERVAL);
 		if (error)
 			return error;
 
-		error = load_interval(interval, OPTNAME_RTR_INTERVAL_EXPIRE,
+		error = load_range(interval, OPTNAME_RTR_INTERVAL_EXPIRE,
 		    DEFAULT_EXPIRE_INTERVAL, &expire_interval,
 		    MIN_EXPIRE_INTERVAL, MAX_EXPIRE_INTERVAL);
 		if (error)
@@ -317,6 +334,12 @@ char const *
 config_get_vrps_location(void)
 {
 	return config.vrps_location;
+}
+
+int
+config_get_server_queue(void)
+{
+	return config.queue;
 }
 
 int
