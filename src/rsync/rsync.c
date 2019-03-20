@@ -130,8 +130,12 @@ handle_root_strategy(struct rpki_uri const *src, struct rpki_uri *dst)
 }
 
 static int
-get_rsync_uri(struct rpki_uri const *requested_uri, struct rpki_uri *rsync_uri)
+get_rsync_uri(struct rpki_uri const *requested_uri, bool force_strict,
+    struct rpki_uri *rsync_uri)
 {
+	if (force_strict)
+		return handle_strict_strategy(requested_uri, rsync_uri);
+
 	switch (config_get_sync_strategy()) {
 	case SYNC_ROOT:
 		return handle_root_strategy(requested_uri, rsync_uri);
@@ -335,8 +339,19 @@ do_rsync(struct rpki_uri *uri)
 	exit(-EINVAL);
 }
 
+/**
+ * @force_srict:
+ *     true:
+ *         SYNC_OFF    -> SYNC_OFF
+ *         SYNC_STRICT -> SYNC_STRICT
+ *         SYNC_ROOT   -> SYNC_STRICT
+ *     false:
+ *         SYNC_OFF    -> SYNC_OFF
+ *         SYNC_STRICT -> SYNC_STRICT
+ *         SYNC_ROOT   -> SYNC_ROOT
+ */
 int
-download_files(struct rpki_uri const *requested_uri)
+download_files(struct rpki_uri const *requested_uri, bool force_strict)
 {
 	/**
 	 * Note:
@@ -355,7 +370,7 @@ download_files(struct rpki_uri const *requested_uri)
 		return 0;
 	}
 
-	error = get_rsync_uri(requested_uri, &rsync_uri);
+	error = get_rsync_uri(requested_uri, force_strict, &rsync_uri);
 	if (error)
 		return error;
 

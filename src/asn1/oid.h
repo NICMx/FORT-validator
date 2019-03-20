@@ -43,7 +43,6 @@ typedef asn_oid_arc_t OID[];
 #define OID_SHA256                   { 2, 16, 840, 1, 101, 3, 4, 2, 1 }
 
 int oid2arcs(OBJECT_IDENTIFIER_t *, struct oid_arcs *);
-int any2arcs(ANY_t *, struct oid_arcs *);
 
 bool oid_equal(OBJECT_IDENTIFIER_t *, OBJECT_IDENTIFIER_t *);
 bool arcs_equal(struct oid_arcs const *, struct oid_arcs const *);

@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <libcmscodec/ContentType.h>
 #include "file.h"
+#include "log.h"
 #include "oid.h"
 #include "asn1/decode.h"
 
@@ -19,12 +20,11 @@ validate(struct ContentInfo *info)
 	if (error)
 		return error;
 
-	if (!ARCS_EQUAL_OIDS(&arcs, oid_sdata)) {
-		fprintf(stderr, "Incorrect content-type.");
-		return -EINVAL;
-	}
+	if (!ARCS_EQUAL_OIDS(&arcs, oid_sdata))
+		error = pr_err("Incorrect content-type.");
 
-	return 0;
+	free_arcs(&arcs);
+	return error;
 }
 
 static int

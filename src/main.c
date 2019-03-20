@@ -39,7 +39,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
 	struct validation *state;
 	int error;
 
-	error = download_files(uri);
+	error = download_files(uri, true);
 	if (error) {
 		return pr_warn("TAL URI '%s' could not be RSYNC'd.",
 		    uri->global);

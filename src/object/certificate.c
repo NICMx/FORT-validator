@@ -861,7 +861,7 @@ static int
 handle_caRepository(struct rpki_uri *uri, void *arg)
 {
 	pr_debug("caRepository: %s", uri_get_printable(uri));
-	return download_files(uri);
+	return download_files(uri, false);
 }
 
 static int

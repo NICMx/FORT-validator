@@ -162,10 +162,8 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 	MessageDigest_t *digest;
 	int error;
 
-	if (eci->eContent == NULL) {
-		pr_err("There's no content being signed.");
-		return -EINVAL;
-	}
+	if (eci->eContent == NULL)
+		return pr_err("There's no content being signed.");
 
 	error = asn1_decode_any(value, &asn_DEF_MessageDigest,
 	    (void **) &digest);
@@ -176,7 +174,7 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 	if (error)
 		pr_err("The content's hash does not match the Message-Digest Attribute.");
 
-	free(digest);
+	ASN_STRUCT_FREE(asn_DEF_MessageDigest, digest);
 	return error;
 }
 

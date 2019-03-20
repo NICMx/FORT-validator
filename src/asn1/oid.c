@@ -15,6 +15,9 @@ free_arcs(struct oid_arcs *arcs)
  * Wrapper for OBJECT_IDENTIFIER_get_arcs().
  *
  * Callers must free @result.
+ *
+ * TODO (whatever) Most of the time, this function is called to compare @result
+ * to some oid. Maybe create a wrapper that takes care of all the boilerplate.
  */
 int
 oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
@@ -56,23 +59,6 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 	}
 
 	return 0;
-}
-
-/* Callers must free @result. */
-int
-any2arcs(ANY_t *any, struct oid_arcs *result)
-{
-	OBJECT_IDENTIFIER_t *oid;
-	int error;
-
-	error = asn1_decode_any(any, &asn_DEF_OBJECT_IDENTIFIER,
-	    (void **) &oid);
-	if (error)
-		return error;
-
-	error = oid2arcs(oid, result);
-	ASN_STRUCT_FREE(asn_DEF_OBJECT_IDENTIFIER, oid);
-	return error;
 }
 
 bool oid_equal(OBJECT_IDENTIFIER_t *a, OBJECT_IDENTIFIER_t *b)
