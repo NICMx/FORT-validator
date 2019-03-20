@@ -191,8 +191,13 @@ handle_json(json_t *root)
 			    DEFAULT_VRPS_LOCATION, &vrps_location);
 		if (error)
 			return error;
-		/* TODO (review) check NULL */
+
 		config.vrps_location = strdup(vrps_location);
+		if (config.vrps_location == NULL) {
+			err(errno, "'%s' couldn't be allocated.",
+					OPTNAME_VRPS_LOCATION);
+			return errno;
+		}
 
 		/*
 		 * RFC 6810 and 8210:
@@ -315,6 +320,11 @@ init_addrinfo(char const *hostname, char const *service)
 
 	/* TODO (review) check NULL */
 	config.port = strdup(service);
+	if (config.port == NULL) {
+		err(errno, "'%s' couldn't be allocated.", OPTNAME_LISTEN_PORT);
+		return errno;
+	}
+
 	return 0;
 }
 
