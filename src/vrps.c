@@ -43,7 +43,7 @@ struct state {
 int
 deltas_db_init(void)
 {
-	int error;
+	int error, shift;
 
 	state.base_db = create_delta();
 	if (state.base_db == NULL){
@@ -69,14 +69,10 @@ deltas_db_init(void)
 	 * 'Fields of a PDU')
 	 */
 	state.current_serial = START_SERIAL;
-	/* The downcast takes the LSBs */
-	/*
-	 * TODO (review) The result of `time()` is unlikely to fit in a 16-bit
-	 * integer.
-	 *
-	 * (Also: Integer overflow yields undefined behavior.)
-	 */
-	state.v0_session_id = time(NULL);
+
+	/* Get the bits that'll fit in session_id */
+	shift = sizeof(time_t) - sizeof(state.v0_session_id);
+	state.v0_session_id = (u_int16_t)((time(NULL) << shift) >> shift);
 	/* Minus 1 to prevent same ID */
 	state.v1_session_id = state.v0_session_id - 1;
 
