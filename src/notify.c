@@ -24,11 +24,10 @@ notify_clients(void)
 {
 	struct client *clients, *ptr;
 	size_t clients_len;
-	int i, error;
+	int error;
 
 	clients_len = client_list(&clients);
-	ptr = clients;
-	for (i = 0; i < clients_len; i++, ptr++) {
+	for (ptr = clients; (ptr - clients) < clients_len; ptr++) {
 		/* Send Serial Notify PDU */
 		error = send_notify(ptr->fd, ptr->rtr_version);
 		/* Error? Log it */

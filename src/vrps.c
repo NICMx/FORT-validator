@@ -326,10 +326,10 @@ deltas_db_status(u_int32_t *serial)
 static void
 add_vrps_filtered(struct vrps *dst, struct vrps *src)
 {
-	int i;
-	for (i = 0; i < src->len; i++)
-		if (vrp_is_new(dst, &src->array[i]))
-			vrps_add(dst, &src->array[i]);
+	struct vrp *ptr;
+	for (ptr = src->array; (ptr - src->array) < src->len; ptr++)
+		if (vrp_is_new(dst, ptr))
+			vrps_add(dst, ptr);
 }
 
 static void

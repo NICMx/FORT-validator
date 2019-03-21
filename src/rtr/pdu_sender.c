@@ -202,8 +202,8 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 int
 send_payload_pdus(struct sender_common *common)
 {
-	struct vrp *vrps;
-	unsigned int len, i;
+	struct vrp *vrps, *ptr;
+	unsigned int len;
 	int error;
 
 	vrps = malloc(sizeof(struct vrp));
@@ -211,15 +211,11 @@ send_payload_pdus(struct sender_common *common)
 	if (len == 0)
 		goto end;
 
-	for (i = 0; i < len; i++) {
-		/*
-		 * TODO (review) Why are you indexing `vrps`? You did not
-		 * allocate an array.
-		 */
-		if (vrps[i].in_addr_len == INET_ADDRSTRLEN)
-			error = send_ipv4_prefix_pdu(common, &vrps[i]);
-		else if (vrps[i].in_addr_len == INET6_ADDRSTRLEN)
-			error = send_ipv6_prefix_pdu(common, &vrps[i]);
+	for (ptr = vrps; (ptr - vrps) < len; ptr++) {
+		if (ptr->in_addr_len == INET_ADDRSTRLEN)
+			error = send_ipv4_prefix_pdu(common, ptr);
+		else if (ptr->in_addr_len == INET6_ADDRSTRLEN)
+			error = send_ipv6_prefix_pdu(common, ptr);
 		else
 			error = -EINVAL;
 
