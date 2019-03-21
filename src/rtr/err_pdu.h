@@ -12,7 +12,7 @@
 #define ERR_PDU_UNSUP_PDU_TYPE				5
 #define ERR_PDU_WITHDRAWAL_UNKNOWN			6
 #define ERR_PDU_DUPLICATE_ANNOUNCE			7
-#define ERR_PDU_UNEXPECTED_PROTO_VERSION	8
+#define ERR_PDU_UNEXPECTED_PROTO_VERSION		8
 
 
 int err_pdu_send(int, u_int8_t, u_int16_t, void *, char *);

@@ -14,9 +14,9 @@
  * This program is an RTR server.
  *
  * RTR ("RPKI-to-Router") is a protocol (defined in RFCs 6810 and 8210) that
- * reports the work of an RPKI validator (cryptographcally-verified attestations
- * that define the ASN that owns a given routing prefix). It is normally served
- * to routers who wish to verify BGP claims.
+ * reports the work of an RPKI validator (cryptographcally-verified
+ * attestations that define the ASN that owns a given routing prefix). It is
+ * normally served to routers who wish to verify BGP claims.
  */
 int
 main(int argc, char *argv[])
@@ -36,8 +36,6 @@ main(int argc, char *argv[])
 		}
 	}
 
-	/* TODO (review) I don't understand this comment; please ellaborate. */
-	/* TODO This will be overriden when reading from config file */
 	if (json_file == NULL) {
 		fprintf(stderr, "Missing flag '-f <file name>'\n");
 		return -EINVAL;

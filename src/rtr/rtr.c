@@ -108,8 +108,8 @@ handle_accept_result(int client_fd, int err)
 /*
  * The client socket threads' entry routine.
  *
- * Please remember that this function needs to always release @param_void before
- * returning.
+ * Please remember that this function needs to always release @param_void
+ * before returning.
  */
 static void *
 client_thread_cb(void *param_void)
@@ -128,7 +128,7 @@ client_thread_cb(void *param_void)
 		if (err)
 			return NULL;
 
-		/* Protocol Version Negotiation, accept only what's supported */
+		/* Protocol Version Negotiation */
 		if (rtr_version != RTR_VERSION_SUPPORTED) {
 			err_pdu_send(param.client_fd, RTR_VERSION_SUPPORTED,
 			    ERR_PDU_UNSUP_PROTO_VERSION,
@@ -136,12 +136,14 @@ client_thread_cb(void *param_void)
 			return NULL;
 		}
 		/* RTR Version ready, now update client */
-		err = update_client(param.client_fd, &param.client_addr, rtr_version);
+		err = update_client(param.client_fd, &param.client_addr,
+		    rtr_version);
 		if (err) {
 			if (err == -EINVAL) {
 				err_pdu_send(param.client_fd, rtr_version,
-				    (rtr_version == RTR_V0 ? ERR_PDU_UNSUP_PROTO_VERSION :
-				        ERR_PDU_UNEXPECTED_PROTO_VERSION),
+				    (rtr_version == RTR_V0
+				    ? ERR_PDU_UNSUP_PROTO_VERSION
+				    : ERR_PDU_UNEXPECTED_PROTO_VERSION),
 				    (struct pdu_header *) pdu, NULL);
 			}
 			return NULL;

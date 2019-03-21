@@ -119,8 +119,8 @@ read_and_waste(int fd, unsigned char *str, size_t str_len, u_int32_t total_len)
 #define EINVALID_UTF8 -0xFFFF
 
 /*
- * Returns the length (in octets) of the UTF-8 code point that starts with octet
- * @first_octet.
+ * Returns the length (in octets) of the UTF-8 code point that starts with
+ * octet @first_octet.
  */
 static int
 get_octets(unsigned char first_octet)
@@ -190,8 +190,9 @@ end:
  * Reads an RTR string from the file descriptor @fd. Returns the string as a
  * normal UTF-8 C string (NULL-terminated).
  *
- * Will consume the entire string from the stream, but @result can be truncated.
- * This is because RTR strings are technically allowed to be 4 GBs long.
+ * Will consume the entire string from the stream, but @result can be
+ * truncated. This is because RTR strings are technically allowed to be 4 GBs
+ * long.
  *
  * The result is allocated in the heap. It will length 4096 characters at most.
  * (Including the NULL chara.)
@@ -207,9 +208,9 @@ read_string(int fd, rtr_char **result)
 	 * This exists because there might be value in truncating the string;
 	 * full_length is a fucking 32-bit integer for some reason.
 	 * Note that, because this is UTF-8 we're dealing with, this might not
-	 * necessarily end up being the actual octet length of the final string;
-	 * since our truncation can land in the middle of a code point, the null
-	 * character might need to be shifted left slightly.
+	 * necessarily end up being the actual octet length of the final
+	 * string; since our truncation can land in the middle of a code point,
+	 * the null character might need to be shifted left slightly.
 	 */
 	size_t alloc_length; /* Includes the null chara */
 	rtr_char *str;

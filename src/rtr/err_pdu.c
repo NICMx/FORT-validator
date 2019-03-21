@@ -4,14 +4,17 @@
 #include <unistd.h>
 #include "pdu_sender.h"
 
-int err_pdu_send(int fd, u_int8_t version, u_int16_t code,
-    void *err_pdu_header, char *message)
+int
+err_pdu_send(int fd, u_int8_t version, u_int16_t code, void *err_pdu_header,
+    char *message)
 {
 	int error;
 
-	error = send_error_report_pdu(fd, version, code, err_pdu_header, message);
+	error = send_error_report_pdu(fd, version, code, err_pdu_header,
+	    message);
 	if (err_pdu_is_fatal(code)) {
-		warnx("Fatal error report PDU sent [code %u], closing socket.", code);
+		warnx("Fatal error report PDU sent [code %u], closing socket.",
+		    code);
 		close(fd);
 	}
 

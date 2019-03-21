@@ -55,7 +55,7 @@ pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata,
 static int
 pdu_header_from_stream(int fd, struct pdu_header *header)
 {
-	/* TODO if the first read yields no bytes, the connection was terminated. */
+	/* If the first read yields no bytes, the connection was terminated. */
 	return read_int8(fd, &header->protocol_version)
 	    || read_int8(fd, &header->pdu_type)
 	    || read_int16(fd, &header->session_id)

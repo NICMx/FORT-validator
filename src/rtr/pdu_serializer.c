@@ -38,7 +38,8 @@ serialize_serial_notify_pdu(struct serial_notify_pdu *pdu, char *buf)
 	size_t head_size;
 	char *ptr;
 
-	head_size = serialize_pdu_header(&pdu->header, pdu->header.session_id, buf);
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.session_id,
+	    buf);
 
 	ptr = buf + head_size;
 	ptr = write_int32(ptr, pdu->serial_number);
@@ -59,7 +60,8 @@ serialize_ipv4_prefix_pdu(struct ipv4_prefix_pdu *pdu, char *buf)
 	size_t head_size;
 	char *ptr;
 
-	head_size = serialize_pdu_header(&pdu->header, pdu->header.reserved, buf);
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.reserved,
+	    buf);
 
 	ptr = buf + head_size;
 	ptr = write_int8(ptr, pdu->flags);
@@ -78,7 +80,8 @@ serialize_ipv6_prefix_pdu(struct ipv6_prefix_pdu *pdu, char *buf)
 	size_t head_size;
 	char *ptr;
 
-	head_size = serialize_pdu_header(&pdu->header, pdu->header.reserved, buf);
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.reserved,
+	    buf);
 
 	ptr = buf + head_size;
 	ptr = write_int8(ptr, pdu->flags);
@@ -97,7 +100,8 @@ serialize_end_of_data_pdu(struct end_of_data_pdu *pdu, char *buf)
 	size_t head_size;
 	char *ptr;
 
-	head_size = serialize_pdu_header(&pdu->header, pdu->header.session_id, buf);
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.session_id,
+	    buf);
 
 	ptr = buf + head_size;
 	ptr = write_int32(ptr, pdu->serial_number);
@@ -125,7 +129,8 @@ serialize_error_report_pdu(struct error_report_pdu *pdu, char *buf)
 	char *ptr, *tmp_ptr;
 	int i;
 
-	head_size = serialize_pdu_header(&pdu->header, pdu->header.error_code, buf);
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.error_code,
+	    buf);
 
 	ptr = buf + head_size;
 

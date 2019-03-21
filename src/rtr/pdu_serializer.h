@@ -3,7 +3,7 @@
 
 #include "pdu.h"
 
-#define BUFFER_SIZE 128
+#define BUFFER_SIZE	128
 
 struct data_buffer {
 	size_t len;

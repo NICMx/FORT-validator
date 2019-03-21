@@ -46,10 +46,10 @@
 									\
 			tmp = realloc(list->array, list->capacity	\
 			    * sizeof(elem_type));			\
-			if (tmp == NULL) {					\
-				err(-ENOMEM, "Out of memory");	\
+			if (tmp == NULL) {				\
+				err(-ENOMEM, "Out of memory");		\
 				return -ENOMEM;				\
-			}							\
+			}						\
 			list->array = tmp;				\
 		}							\
 									\

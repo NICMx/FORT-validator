@@ -12,10 +12,10 @@
 #include "pdu_serializer.h"
 
 /* Header length field is always 64 bits long */
-#define HEADER_LENGTH 8
+#define HEADER_LENGTH		8
 /* IPvN PDUs length without header */
-#define IPV4_PREFIX_LENGTH 12
-#define IPV6_PREFIX_LENGTH 24
+#define IPV4_PREFIX_LENGTH	12
+#define IPV6_PREFIX_LENGTH	24
 
 void
 init_sender_common(struct sender_common *common, int fd, u_int8_t version,
@@ -48,7 +48,8 @@ length_serial_notify_pdu(struct serial_notify_pdu *pdu)
 static u_int32_t
 length_ipvx_prefix_pdu(bool isv4)
 {
-	return HEADER_LENGTH + (isv4 ? IPV4_PREFIX_LENGTH : IPV6_PREFIX_LENGTH);
+	return HEADER_LENGTH +
+	    (isv4 ? IPV4_PREFIX_LENGTH : IPV6_PREFIX_LENGTH);
 }
 
 static u_int32_t
@@ -127,7 +128,8 @@ send_cache_reset_pdu(struct sender_common *common)
 	size_t len;
 
 	/* This PDU has only the header */
-	set_header_values(&pdu.header, common->version, PDU_TYPE_CACHE_RESET, 0);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_CACHE_RESET,
+	    0);
 	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_reset_pdu(&pdu, data);
@@ -142,8 +144,8 @@ send_cache_response_pdu(struct sender_common *common)
 	size_t len;
 
 	/* This PDU has only the header */
-	set_header_values(&pdu.header, common->version, PDU_TYPE_CACHE_RESPONSE,
-	    *common->session_id);
+	set_header_values(&pdu.header, common->version,
+	    PDU_TYPE_CACHE_RESPONSE, *common->session_id);
 	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_response_pdu(&pdu, data);
@@ -158,7 +160,8 @@ send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV4_PREFIX, 0);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV4_PREFIX,
+	    0);
 
 	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;
@@ -180,7 +183,8 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV6_PREFIX, 0);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV6_PREFIX,
+	    0);
 
 	pdu.flags = vrp->flags;
 	pdu.prefix_length = vrp->prefix_length;

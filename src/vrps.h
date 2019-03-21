@@ -6,7 +6,7 @@
 
 #define NO_DATA_AVAILABLE	-2
 #define DIFF_UNDETERMINED	-1
-#define NO_DIFF				0
+#define NO_DIFF			0
 #define DIFF_AVAILABLE		1
 
 struct vrp {

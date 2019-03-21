@@ -10,32 +10,32 @@
 #include "common.h"
 #include "csv.h"
 
-#define OPTNAME_LISTEN		"listen"
-#define OPTNAME_LISTEN_ADDRESS	"address"
-#define OPTNAME_LISTEN_PORT	"port"
-#define OPTNAME_LISTEN_QUEUE	"queue"
-#define OPTNAME_VRPS	"vrps"
-#define OPTNAME_VRPS_LOCATION	"location"
+#define OPTNAME_LISTEN			"listen"
+#define OPTNAME_LISTEN_ADDRESS		"address"
+#define OPTNAME_LISTEN_PORT		"port"
+#define OPTNAME_LISTEN_QUEUE		"queue"
+#define OPTNAME_VRPS			"vrps"
+#define OPTNAME_VRPS_LOCATION		"location"
 #define OPTNAME_VRPS_CHECK_INTERVAL	"checkInterval"
-#define OPTNAME_RTR_INTERVAL	"rtrInterval"
+#define OPTNAME_RTR_INTERVAL		"rtrInterval"
 #define OPTNAME_RTR_INTERVAL_REFRESH	"refresh"
 #define OPTNAME_RTR_INTERVAL_RETRY	"retry"
 #define OPTNAME_RTR_INTERVAL_EXPIRE	"expire"
 
-#define DEFAULT_ADDR		NULL
-#define DEFAULT_PORT		"323"
-#define DEFAULT_QUEUE		10
+#define DEFAULT_ADDR			NULL
+#define DEFAULT_PORT			"323"
+#define DEFAULT_QUEUE			10
 #define DEFAULT_VRPS_LOCATION		NULL
 #define DEFAULT_VRPS_CHECK_INTERVAL	60
-#define DEFAULT_REFRESH_INTERVAL		3600
+#define DEFAULT_REFRESH_INTERVAL	3600
 #define DEFAULT_RETRY_INTERVAL		600
 #define DEFAULT_EXPIRE_INTERVAL		7200
 
 /* Protocol timing parameters ranges in secs */
-#define MIN_VRPS_CHECK_INTERVAL	60
-#define MAX_VRPS_CHECK_INTERVAL	7200
-#define MIN_REFRESH_INTERVAL	1
-#define MAX_REFRESH_INTERVAL	86400
+#define MIN_VRPS_CHECK_INTERVAL		60
+#define MAX_VRPS_CHECK_INTERVAL		7200
+#define MIN_REFRESH_INTERVAL		1
+#define MAX_REFRESH_INTERVAL		86400
 #define MIN_RETRY_INTERVAL		1
 #define MAX_RETRY_INTERVAL		7200
 #define MIN_EXPIRE_INTERVAL		600

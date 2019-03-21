@@ -80,8 +80,8 @@ lfile_read(struct line_file *lfile, char **result)
 	 * - The string WILL be NULL-terminated, but the NULL chara will not be
 	 *   included in the returned length. BUT IT'S THERE. Don't worry about
 	 *   writing past the allocated space on the last line.
-	 * - Newline is `\n` according to POSIX, which is good, because RFC 7730
-	 *   agrees. You will have to worry about `\r`, though.
+	 * - Newline is `\n` according to POSIX, which is good, because
+	 *   RFC 7730 agrees. You will have to worry about `\r`, though.
 	 *
 	 * Also, the Linux man page claims the following:
 	 *
@@ -103,14 +103,16 @@ lfile_read(struct line_file *lfile, char **result)
 		free(string);
 		*result = NULL;
 		if (ferror(lfile->file)) {
-			err(error, "Error while reading file: %s\n", strerror(error));
+			err(error, "Error while reading file: %s\n",
+			    strerror(error));
 			return error;
 		}
 		if (feof(lfile->file))
 			return 0;
 
 		error = -EINVAL;
-		err(error, "Supposedly unreachable code reached. ferror:%d feof:%d\n",
+		err(error,
+		    "Supposedly unreachable code reached. ferror:%d feof:%d\n",
 		    ferror(lfile->file), feof(lfile->file));
 		return error;
 	}

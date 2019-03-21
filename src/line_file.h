@@ -14,7 +14,7 @@
 struct line_file;
 
 int lfile_open(const char *, struct line_file **);
-void lfile_close();
+void lfile_close(struct line_file *lf);
 
 int lfile_read(struct line_file *, char **);
 

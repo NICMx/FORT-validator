@@ -1,14 +1,17 @@
 #include "vrps.h"
 
-/* TODO (review) Can't find the meaning of "VRP" and "VRPS". Please explain. */
-
 #include <stdbool.h>
 #include <string.h>
 #include "array_list.h"
 
+/*
+ * Storage of VRPs (term taken from RFC 6811 "Validated ROA Payload") and
+ * Serials that contain such VRPs
+ */
+
 #define FLAG_WITHDRAWAL		0
 #define FLAG_ANNOUNCEMENT	1
-#define START_SERIAL	0
+#define START_SERIAL		0
 
 ARRAY_LIST(vrps, struct vrp)
 
@@ -61,18 +64,9 @@ deltas_db_init(void)
 	}
 
 	/*
-	 * TODO (review) This looks dangerous.
-	 *
-	 * 1. RTR server starts with serial 0
-	 * 2. Router wants serial
-	 * 3. RTR Server provides serial 0
-	 * 4. RTR Server dies
-	 * 5. RTR Server starts with serial 0, but the repository has changed
-	 *    by this point
-	 *
-	 * Can they realize that they are out of sync?
-	 *
-	 * Can't you use the current date as serial?
+	 * Use the same start serial, the session ID will avoid
+	 * "desynchronization" (more at RFC 6810 'Glossary' and
+	 * 'Fields of a PDU')
 	 */
 	state.current_serial = START_SERIAL;
 	/* The downcast takes the LSBs */
@@ -161,7 +155,8 @@ create_vrp6(u_int32_t asn, struct in6_addr ipv6_prefix, u_int8_t prefix_length,
 static bool
 vrp_equal(struct vrp *left, struct vrp *right)
 {
-	return left->asn == right->asn && left->in_addr_len == right->in_addr_len
+	return left->asn == right->asn
+	    && left->in_addr_len == right->in_addr_len
 	    && left->prefix_length == right->prefix_length
 	    && left->max_prefix_length == right->max_prefix_length
 	    && ((left->in_addr_len == INET_ADDRSTRLEN
@@ -296,7 +291,7 @@ deltas_db_destroy(void)
  *  NO_DATA_AVAILABLE -> There's no data at the DB
  *  DIFF_UNDETERMINED -> The diff can't be determined
  *  NO_DIFF -> There's no difference
- *  DIFF_AVAILABLE -> There are differences between SERIAL and the last DB serial
+ *  DIFF_AVAILABLE -> There are diffs between SERIAL and the last DB serial
  */
 int
 deltas_db_status(u_int32_t *serial)
@@ -306,17 +301,7 @@ deltas_db_status(u_int32_t *serial)
 	if (state.base_db->vrps.len == 0)
 		return NO_DATA_AVAILABLE;
 
-	/*
-	 * TODO (review) `//`-style comments are somewhat controversial in that
-	 * they weren't added until some late standard. From my reading of it,
-	 * the OpenBSD style does not approve of them either.
-	 *
-	 * If you're using Eclipse, go to `Window > Preferences > C/C++ > Code
-	 * Analysis`, and set `Coding Style > Line Comments` to `Error`.
-	 *
-	 * Then patch all the emerging red underlines.
-	 */
-	// No serial to match, and there's data at DB
+	/* No serial to match, and there's data at DB */
 	if (serial == NULL)
 		return DIFF_AVAILABLE;
 
@@ -380,7 +365,8 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 
 	/* NULL start? Send the last version, there's no need to iterate DB */
 	if (start_serial == NULL) {
-		copy_vrps(result, state.base_db->vrps.array, state.base_db->vrps.len);
+		copy_vrps(result, state.base_db->vrps.array,
+		    state.base_db->vrps.len);
 		return state.base_db->vrps.len;
 	}
 

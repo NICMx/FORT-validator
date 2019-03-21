@@ -53,7 +53,7 @@ parse_asn(char *text, unsigned int *value)
 	/* An underflow or overflow will be considered here */
 	if (asn < 0 || UINT32_MAX < asn) {
 		err(-EINVAL, "Prefix length (%lu) is out of bounds (0-%u).",
-			asn, UINT32_MAX);
+		    asn, UINT32_MAX);
 		return -EINVAL;
 	}
 	*value = (unsigned int) asn;
@@ -125,14 +125,16 @@ add_vrp(char *line, struct delta *delta)
 
 	/* Second column (second part): Prefix length in numeric format */
 	token = strtok(NULL, ",");
-	error = parse_prefix_length(token, isv4 ? &prefixv4.len : &prefixv6.len,
+	error = parse_prefix_length(token,
+	    isv4 ? &prefixv4.len : &prefixv6.len,
 	    isv4 ? 32 : 128);
 	if (error)
 		goto error;
 
 	/* Third column: Prefix max length in numeric format */
 	token = strtok(NULL, ",");
-	error = parse_prefix_length(token, &max_prefix_length, isv4 ? 32 : 128);
+	error = parse_prefix_length(token, &max_prefix_length,
+	    isv4 ? 32 : 128);
 	if (error)
 		goto error;
 
@@ -155,9 +157,11 @@ add_vrp(char *line, struct delta *delta)
 	}
 
 	if (isv4)
-		vrp = create_vrp4(asn, prefixv4.addr, prefixv4.len, max_prefix_length);
+		vrp = create_vrp4(asn, prefixv4.addr, prefixv4.len,
+		    max_prefix_length);
 	else
-		vrp = create_vrp6(asn, prefixv6.addr, prefixv6.len, max_prefix_length);
+		vrp = create_vrp6(asn, prefixv6.addr, prefixv6.len,
+		    max_prefix_length);
 
 	if (vrp == NULL) {
 		error = -ENOMEM;
@@ -221,7 +225,8 @@ load_vrps(struct line_file *lfile, bool is_update)
 		++current_line;
 		error = lfile_read(lfile, &line);
 		if (error) {
-			err(error, "Error reading line %d, stop processing file.", current_line);
+			err(error, "Error reading line %d, stop processing file.",
+			    current_line);
 			delta_destroy(&delta);
 			goto end;
 		}
@@ -230,7 +235,8 @@ load_vrps(struct line_file *lfile, bool is_update)
 			goto persist;
 		}
 		if (strcmp(line, "") == 0) {
-			warn("There's nothing at line %d, ignoring.", current_line);
+			warn("There's nothing at line %d, ignoring.",
+			    current_line);
 			continue;
 		}
 
@@ -284,7 +290,7 @@ load_vrps_file(bool check_update, bool *updated)
 	if (error)
 		goto end1; /* Error msg already printed. */
 
-	// Look for the last update date
+	/* Look for the last update date */
 	error = stat(location, &attr);
 	if (error) {
 		warn("Couldn't get last modified date of %s, skip update",
@@ -308,10 +314,10 @@ load_vrps_file(bool check_update, bool *updated)
 		goto end2;
 
 	if (updated != NULL)
-		*updated = check_update && last_update > get_vrps_last_modified_date();
+		*updated = check_update &&
+		    last_update > get_vrps_last_modified_date();
 
 	set_vrps_last_modified_date(last_update);
-	// TODO Double check of date
 
 end2:
 	lfile_close(lfile);
@@ -319,9 +325,8 @@ end1:
 	return error;
 }
 
-/* TODO (review) Should be `csv_parse_vrps_file(void)`. */
 int
-csv_parse_vrps_file()
+csv_parse_vrps_file(void)
 {
 	return load_vrps_file(false, NULL);
 }

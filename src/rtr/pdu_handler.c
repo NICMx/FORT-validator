@@ -31,17 +31,17 @@ send_commmon_exchange(struct sender_common *common)
 {
 	int error;
 
-	// Send Cache response PDU
+	/* Send Cache response PDU */
 	error = send_cache_response_pdu(common);
 	if (error)
 		return error;
 
-	// Send Payload PDUs
+	/* Send Payload PDUs */
 	error = send_payload_pdus(common);
 	if (error)
 		return error;
 
-	// Send End of data PDU
+	/* Send End of data PDU */
 	return send_end_of_data_pdu(common);
 }
 
@@ -58,14 +58,15 @@ handle_serial_query_pdu(int fd, void *pdu)
 	/*
 	 * RFC 6810 and 8210:
 	 * "If [...] either the router or the cache finds that the value of the
-	 * Session ID is not the same as the other's, the party which detects the
-	 * mismatch MUST immediately terminate the session with an Error Report PDU
-	 * with code 0 ("Corrupt Data")"
+	 * Session ID is not the same as the other's, the party which detects
+	 * the mismatch MUST immediately terminate the session with an Error
+	 * Report PDU with code 0 ("Corrupt Data")"
 	 */
 	version = received->header.protocol_version;
 	session_id = get_current_session_id(version);
 	if (received->header.session_id != session_id)
-		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, NULL, NULL);
+		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, NULL,
+		    NULL);
 
 	current_serial = get_last_serial_number();
 	init_sender_common(&common, fd, version, &session_id,
@@ -75,8 +76,8 @@ handle_serial_query_pdu(int fd, void *pdu)
 	switch (updates) {
 	case NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE, NULL,
-		    NULL);
+		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE,
+		    NULL, NULL);
 	case DIFF_UNDETERMINED:
 		/* https://tools.ietf.org/html/rfc8210#section-8.3 */
 		return send_cache_reset_pdu(&common);
@@ -116,8 +117,8 @@ handle_reset_query_pdu(int fd, void *pdu)
 	switch (updates) {
 	case NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE, NULL,
-		    NULL);
+		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE,
+		    NULL, NULL);
 	case DIFF_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.1 */
 		return send_commmon_exchange(&common);

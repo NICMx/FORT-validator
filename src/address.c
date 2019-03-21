@@ -149,7 +149,8 @@ prefix_length_decode (const char *text, unsigned int *dst, int max_value)
 	errno = 0;
 	len = strtoul(text, NULL, 10);
 	if (errno) {
-		err(errno, "Invalid prefix length '%s': %s", text, strerror(errno));
+		err(errno, "Invalid prefix length '%s': %s", text,
+		    strerror(errno));
 		return -EINVAL;
 	}
 	/* An underflow or overflow will be considered here */
@@ -169,7 +170,7 @@ prefix4_validate (struct ipv4_prefix *prefix)
 
 	if ((prefix->addr.s_addr & be32_suffix_mask(prefix->len)) != 0) {
 		err(-EINVAL, "IPv4 prefix %s/%u has enabled suffix bits.",
-			addr2str4(&prefix->addr, buffer), prefix->len);
+		    addr2str4(&prefix->addr, buffer), prefix->len);
 		return -EINVAL;
 	}
 	return 0;
@@ -183,12 +184,12 @@ prefix6_validate (struct ipv6_prefix *prefix)
 
 	memset(&suffix, 0, sizeof(suffix));
 	ipv6_suffix_mask(prefix->len, &suffix);
-	if (   (prefix->addr.s6_addr32[0] & suffix.s6_addr32[0])
-		|| (prefix->addr.s6_addr32[1] & suffix.s6_addr32[1])
-		|| (prefix->addr.s6_addr32[2] & suffix.s6_addr32[2])
-		|| (prefix->addr.s6_addr32[3] & suffix.s6_addr32[3])) {
+	if ((prefix->addr.s6_addr32[0] & suffix.s6_addr32[0])
+	    || (prefix->addr.s6_addr32[1] & suffix.s6_addr32[1])
+	    || (prefix->addr.s6_addr32[2] & suffix.s6_addr32[2])
+	    || (prefix->addr.s6_addr32[3] & suffix.s6_addr32[3])) {
 		err(-EINVAL, "IPv6 prefix %s/%u has enabled suffix bits.",
-			addr2str6(&prefix->addr, buffer), prefix->len);
+		    addr2str6(&prefix->addr, buffer), prefix->len);
 		return -EINVAL;
 	}
 	return 0;
