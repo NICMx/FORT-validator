@@ -59,6 +59,7 @@ void
 rpp_destroy(struct rpp *pp)
 {
 	uris_cleanup(&pp->certs, uri_cleanup);
+	uri_cleanup(&pp->crl);
 	uris_cleanup(&pp->roas, uri_cleanup);
 	uris_cleanup(&pp->ghostbusters, uri_cleanup);
 	free(pp);
