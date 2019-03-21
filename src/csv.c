@@ -13,22 +13,6 @@
 #include "line_file.h"
 #include "vrps.h"
 
-/* @ext must include the period. */
-static bool
-location_has_extension(char const *location, char const *ext)
-{
-	size_t ext_len, loc_len;
-	int cmp;
-
-	ext_len = strlen(ext);
-	loc_len = strlen(location);
-	if (loc_len < ext_len)
-		return false;
-
-	cmp = strncmp(location + loc_len - ext_len, ext, ext_len);
-	return cmp == 0;
-}
-
 static int
 parse_asn(char *text, unsigned int *value)
 {
@@ -36,7 +20,7 @@ parse_asn(char *text, unsigned int *value)
 	char *start;
 
 	if (text == NULL) {
-		err(-EINVAL, "Null string received, can't decode ASN");
+		warnx("Null string received, can't decode ASN");
 		return -EINVAL;
 	}
 
@@ -47,12 +31,12 @@ parse_asn(char *text, unsigned int *value)
 	errno = 0;
 	asn = strtoul(start, NULL, 10);
 	if (errno) {
-		err(errno, "Invalid ASN '%s': %s", text, strerror(errno));
+		warn("Invalid ASN '%s'", text);
 		return -EINVAL;
 	}
 	/* An underflow or overflow will be considered here */
 	if (asn < 0 || UINT32_MAX < asn) {
-		err(-EINVAL, "Prefix length (%lu) is out of bounds (0-%u).",
+		warnx("Prefix length (%lu) is out of bounds (0-%u).",
 		    asn, UINT32_MAX);
 		return -EINVAL;
 	}
@@ -95,6 +79,11 @@ add_vrp(char *line, struct delta *delta)
 	int error;
 	bool isv4;
 	char *token, *line_copy;
+
+	if (strcmp(line, "") == 0) {
+		warnx("Empty line.");
+		return -EINVAL;
+	}
 
 	line_copy = malloc(strlen(line) + 1);
 	if (line_copy == NULL) {
@@ -199,33 +188,17 @@ load_vrps(struct line_file *lfile, bool is_update)
 	int current_line;
 	int error;
 
-	/*
-	 * TODO (review) Skipping the first line should not be hardcoded; if
-	 * there's no header, you will ignore important information.
-	 *
-	 * Try checking whether you need to handle the line by way of the "AS"
-	 * prefix instead.
-	 */
-	/* First line is expected to be the header, ignore it */
-	current_line = 1;
-	error = lfile_read(lfile, &line);
-	if (error) {
-		err(error, "Error at first line, stop processing CSV file.");
-		return error;
-	}
-	if (line == NULL) {
-		error = -EINVAL;
-		err(error, "Empty CSV file, stop processing.");
-		return error;
-	}
-	/* Start the initial delta */
-	/* TODO (review) check NULL */
+	/* Init delta */
 	delta = create_delta();
+	if (delta == NULL) {
+		warn("Couldn't allocate new delta");
+		return -ENOMEM;
+	}
+	current_line = 1;
 	do {
-		++current_line;
 		error = lfile_read(lfile, &line);
 		if (error) {
-			err(error, "Error reading line %d, stop processing file.",
+			warn("Error reading line %d, stop processing file.",
 			    current_line);
 			delta_destroy(&delta);
 			goto end;
@@ -234,24 +207,19 @@ load_vrps(struct line_file *lfile, bool is_update)
 			error = 0;
 			goto persist;
 		}
-		if (strcmp(line, "") == 0) {
-			warn("There's nothing at line %d, ignoring.",
-			    current_line);
-			continue;
-		}
 
-		/* TODO (review) line is leaking. */
 		error = add_vrp(line, delta);
-		if (error) {
-			delta_destroy(&delta);
-			goto end;
-		}
+		if (error)
+			warnx("Ignoring content at line %d.", current_line);
+
+		current_line++;
+		free(line);
 	} while (true);
 persist:
 	/* TODO (review) delta is leaking. */
 	error = deltas_db_add_delta(delta);
 	if (error)
-		err(error, "VRPs Delta couldn't be persisted");
+		warnx("VRPs Delta couldn't be persisted");
 end:
 	if (line != NULL)
 		free(line);
@@ -270,58 +238,36 @@ load_vrps_file(bool check_update, bool *updated)
 
 	location = config_get_vrps_location();
 
-	/*
-	 * TODO (review) This is a needless bother; remove please.
-	 *
-	 * (Having a csv extension does not guarantee the file is CSV and
-	 * vice versa.)
-	 */
-	if (!location_has_extension(location, ".csv")) {
-		warn("%s isn't a CSV file", location);
-		error = -EINVAL;
-		goto end1;
-	}
-
-	/*
-	 * TODO (review) This is an extremely heavy operation, and should not
-	 * happen before you've confirmed that you need to read the file.
-	 */
-	error = lfile_open(location, &lfile);
-	if (error)
-		goto end1; /* Error msg already printed. */
-
 	/* Look for the last update date */
 	error = stat(location, &attr);
 	if (error) {
 		warn("Couldn't get last modified date of %s, skip update",
 			location);
-		goto end2;
+		goto end;
 	}
 
 	last_update = attr.st_mtim.tv_sec;
-	/*
-	 * TODO (review) Time comparisons are particularly vulnerable to integer
-	 * overflow. (Think about `time_t` being defined as a small integer,
-	 * and `get_vrps_last_modified_date()` is the max value.)
-	 *
-	 * Usa `difftime()` instead. (`man 3 difftime`)
-	 */
-	if (check_update && last_update <= get_vrps_last_modified_date())
-		goto end2;
+	if (check_update &&
+	    difftime(last_update, get_vrps_last_modified_date()) <= 0)
+		goto end;
+
+	error = lfile_open(location, &lfile);
+	if (error)
+		goto end; /* Error msg already printed. */
 
 	error = load_vrps(lfile, check_update);
 	if (error)
-		goto end2;
+		goto close_file;
 
 	if (updated != NULL)
 		*updated = check_update &&
-		    last_update > get_vrps_last_modified_date();
+		    difftime(last_update, get_vrps_last_modified_date()) > 0;
 
 	set_vrps_last_modified_date(last_update);
 
-end2:
+close_file:
 	lfile_close(lfile);
-end1:
+end:
 	return error;
 }
 
