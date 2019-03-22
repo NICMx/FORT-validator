@@ -43,7 +43,7 @@ main(int argc, char *argv[])
 
 	err = config_init(json_file);
 	if (err)
-		return err;
+		goto end1;
 
 	err = deltas_db_init();
 	if (err)

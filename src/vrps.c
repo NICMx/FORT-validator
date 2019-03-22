@@ -39,6 +39,18 @@ delta_init(struct delta *delta)
 	return vrps_init(&delta->vrps);
 }
 
+static void
+vrp_destroy(struct vrp *vrp)
+{
+	/* Didn't allocate something, so do nothing */
+}
+
+static void
+delta_destroy(struct delta *delta)
+{
+	vrps_cleanup(&delta->vrps, vrp_destroy);
+}
+
 int
 deltas_db_init(void)
 {
@@ -53,6 +65,7 @@ deltas_db_init(void)
 	error = deltasdb_init(&state.deltas_db);
 	if (error) {
 		warnx("Deltas DB couldn't be initialized");
+		delta_destroy(&state.base_db);
 		return error;
 	}
 
@@ -193,6 +206,7 @@ delta_summary(struct delta *base_delta, struct delta *result)
 		}
 
 	memcpy(result, &summary_delta, sizeof(summary_delta));
+	delta_destroy(&summary_delta);
 	return 0;
 }
 
@@ -219,6 +233,7 @@ deltas_db_add_delta(struct delta delta)
 		return result;
 	}
 
+	free(state.base_db.vrps.array);
 	state.base_db = delta;
 	state.current_serial++;
 	return result;
@@ -260,23 +275,12 @@ deltas_db_create_delta(struct vrp *array, unsigned int len)
 	return 0;
 }
 
-static void
-vrp_destroy(struct vrp *vrp)
-{
-	/* Didn't allocate something, so do nothing */
-}
-
-void
-delta_destroy(struct delta *delta)
-{
-	vrps_cleanup(&delta->vrps, vrp_destroy);
-}
-
 void
 deltas_db_destroy(void)
 {
+
+	delta_destroy(&state.base_db);
 	deltasdb_cleanup(&state.deltas_db, delta_destroy);
-	vrps_cleanup(&state.base_db.vrps, vrp_destroy);
 }
 
 /*
