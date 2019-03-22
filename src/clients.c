@@ -106,8 +106,14 @@ client_list(struct client **clients)
 	return clients_db.len;
 }
 
+static void
+client_destroy(struct client *client)
+{
+	/* Didn't allocate something, so do nothing */
+}
+
 void
 clients_db_destroy(void)
 {
-	clientsdb_cleanup(&clients_db, NULL);
+	clientsdb_cleanup(&clients_db, client_destroy);
 }
