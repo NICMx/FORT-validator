@@ -133,12 +133,13 @@ static int
 get_rsync_uri(struct rpki_uri const *requested_uri, bool is_ta,
     struct rpki_uri *rsync_uri)
 {
-	if (is_ta)
-		return handle_strict_strategy(requested_uri, rsync_uri);
-
 	switch (config_get_sync_strategy()) {
 	case SYNC_ROOT:
 		return handle_root_strategy(requested_uri, rsync_uri);
+	case SYNC_ROOT_EXCEPT_TA:
+		return is_ta
+		    ? handle_strict_strategy(requested_uri, rsync_uri)
+		    : handle_root_strategy(requested_uri, rsync_uri);
 	case SYNC_STRICT:
 		return handle_strict_strategy(requested_uri, rsync_uri);
 	case SYNC_OFF:

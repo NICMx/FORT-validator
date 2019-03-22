@@ -7,9 +7,10 @@
 #include "log.h"
 #include "config/str.h"
 
-#define SYNC_VALUE_OFF		"off"
-#define SYNC_VALUE_STRICT	"strict"
-#define SYNC_VALUE_ROOT		"root"
+#define SYNC_VALUE_OFF			"off"
+#define SYNC_VALUE_STRICT		"strict"
+#define SYNC_VALUE_ROOT			"root"
+#define SYNC_VALUE_ROOT_EXCEPT_TA	"root-except-ta"
 
 static void
 print_sync_strategy(struct group_fields const *group,
@@ -28,6 +29,9 @@ print_sync_strategy(struct group_fields const *group,
 	case SYNC_ROOT:
 		str = SYNC_VALUE_ROOT;
 		break;
+	case SYNC_ROOT_EXCEPT_TA:
+		str = SYNC_VALUE_ROOT_EXCEPT_TA;
+		break;
 	}
 
 	pr_info("%s.%s: %s", group->name, field->name, str);
@@ -45,6 +49,8 @@ parse_argv_sync_strategy(struct option_field const *field, char const *str,
 		*result = SYNC_STRICT;
 	else if (strcmp(str, SYNC_VALUE_ROOT) == 0)
 		*result = SYNC_ROOT;
+	else if (strcmp(str, SYNC_VALUE_ROOT_EXCEPT_TA) == 0)
+		*result = SYNC_ROOT_EXCEPT_TA;
 	else
 		return pr_err("Unknown synchronization strategy: '%s'", str);
 
@@ -75,5 +81,8 @@ const struct global_type gt_sync_strategy = {
 	.print = print_sync_strategy,
 	.parse.argv = parse_argv_sync_strategy,
 	.parse.toml = parse_toml_sync_strategy,
-	.arg_doc = SYNC_VALUE_OFF "|" SYNC_VALUE_STRICT "|" SYNC_VALUE_ROOT,
+	.arg_doc = SYNC_VALUE_OFF
+	    "|" SYNC_VALUE_STRICT
+	    "|" SYNC_VALUE_ROOT
+	    "|" SYNC_VALUE_ROOT_EXCEPT_TA,
 };

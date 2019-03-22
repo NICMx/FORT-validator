@@ -607,9 +607,25 @@ config_get_rsync_program(void)
 struct string_array const *
 config_get_rsync_args(bool is_ta)
 {
-	return is_ta
-	    ? &rpki_config.rsync.args.flat
-	    : &rpki_config.rsync.args.recursive;
+	switch (rpki_config.sync_strategy) {
+	case SYNC_ROOT:
+		return &rpki_config.rsync.args.recursive;
+	case SYNC_ROOT_EXCEPT_TA:
+		return is_ta
+		    ? &rpki_config.rsync.args.flat
+		    : &rpki_config.rsync.args.recursive;
+	case SYNC_STRICT:
+		return &rpki_config.rsync.args.flat;
+	case SYNC_OFF:
+		break;
+	}
+
+	pr_crit("Invalid sync strategy: '%u'", rpki_config.sync_strategy);
+	/*
+	 * Return something usable anyway; don't want to check NULL.
+	 * This is supposed to be unreachable code anyway.
+	 */
+	return &rpki_config.rsync.args.recursive;
 }
 
 void

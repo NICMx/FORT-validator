@@ -36,7 +36,7 @@ and/or read.
 .RE
 .P
 
---sync-strategy=(off|strict|root)
+--sync-strategy=(off|strict|root|root-except-ta)
 .RS 4
 RSYNC download strategy.
 .P
@@ -90,6 +90,17 @@ Assuming that the repository is specifically structured to be found within as
 few roots as possible, and they contain minimal RPKI-unrelated noise files, this
 is the fastest synchronization strategy. At time of writing, this is true for
 all the current official repositories.
+.RE
+.P
+root-except-ta
+.RS 4
+Synchronizes the root certificate (the one pointed by the TAL) in 'strict' mode,
+and once it's validated, synchronizes the rest of the repository in 'root' mode.
+.P
+Useful if you want 'root', but the root certificate is separated from the rest
+of the repository. Also useful if you don't want the validator to download the
+entire repository without first confirming the integrity and legitimacy of the
+root certificate.
 .RE
 .RE
 .P

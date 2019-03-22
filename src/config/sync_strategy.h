@@ -48,6 +48,14 @@ enum sync_strategy {
 	 * structured to benefit this strategy.
 	 */
 	SYNC_ROOT,
+	/**
+	 * Same as SYNC_ROOT, except the root certificate is synchronized
+	 * separately.
+	 * (Either because it's in a separate directory, or because we don't
+	 * want to download its entire repository until we've verified its
+	 * legitimacy and integrity.)
+	 */
+	SYNC_ROOT_EXCEPT_TA,
 };
 
 extern const struct global_type gt_sync_strategy;
