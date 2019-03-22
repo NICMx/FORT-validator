@@ -1,11 +1,45 @@
 #include "config/string_array.h"
 
+#include <errno.h>
 #include <getopt.h>
 #include <stdlib.h>
+#include <string.h>
 #include "log.h"
 
+int
+string_array_init(struct string_array *array, char const *const *values,
+    size_t len)
+{
+	size_t i;
+
+	array->length = len;
+
+	array->array = calloc(len, sizeof(char *));
+	if (array->array == NULL)
+		return -ENOMEM;
+
+	for (i = 0; i < len; i++) {
+		array->array[i] = strdup(values[i]);
+		if (array->array[i] == NULL) {
+			string_array_cleanup(array);
+			return -ENOMEM;
+		}
+	}
+
+	return 0;
+}
+
+void
+string_array_cleanup(struct string_array *array)
+{
+	size_t i;
+	for (i = 0; i < array->length; i++)
+		free(array->array[i]);
+	free(array->array);
+}
+
 static void
-print_string_array(struct group_fields const *group,
+string_array_print(struct group_fields const *group,
     struct option_field const *field, void *_value)
 {
 	struct string_array *value = _value;
@@ -23,7 +57,7 @@ print_string_array(struct group_fields const *group,
 }
 
 static int
-parse_toml_string_array(struct option_field const *opt,
+string_array_parse_toml(struct option_field const *opt,
     struct toml_table_t *toml, void *_result)
 {
 	toml_array_t *array;
@@ -67,14 +101,11 @@ fail:
 }
 
 static void
-free_string_array(void *_array)
+string_array_free(void *_array)
 {
 	struct string_array *array = _array;
-	size_t i;
 
-	for (i = 0; i < array->length; i++)
-		free(array->array[i]);
-	free(array->array);
+	string_array_cleanup(array);
 
 	array->array = NULL;
 	array->length = 0;
@@ -83,8 +114,8 @@ free_string_array(void *_array)
 const struct global_type gt_string_array = {
 	.has_arg = required_argument,
 	.size = sizeof(char *const *),
-	.print = print_string_array,
-	.parse.toml = parse_toml_string_array,
-	.free = free_string_array,
+	.print = string_array_print,
+	.parse.toml = string_array_parse_toml,
+	.free = string_array_free,
 	.arg_doc = "<sequence of strings>",
 };

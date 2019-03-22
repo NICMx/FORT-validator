@@ -54,7 +54,10 @@ struct rpki_config {
 
 	struct {
 		char *program;
-		struct string_array args;
+		struct {
+			struct string_array flat;
+			struct string_array recursive;
+		} args;
 	} rsync;
 
 	struct {
@@ -179,10 +182,17 @@ static const struct option_field rsync_fields[] = {
 		.availability = AVAILABILITY_TOML,
 	}, {
 		.id = 3001,
-		.name = "arguments",
+		.name = "arguments-recursive",
 		.type = &gt_string_array,
-		.offset = offsetof(struct rpki_config, rsync.args),
-		.doc = "Arguments to send to the RSYNC program call",
+		.offset = offsetof(struct rpki_config, rsync.args.recursive),
+		.doc = "RSYNC program arguments that will trigger a recursive RSYNC",
+		.availability = AVAILABILITY_TOML,
+	}, {
+		.id = 3002,
+		.name = "arguments-flat",
+		.type = &gt_string_array,
+		.offset = offsetof(struct rpki_config, rsync.args.flat),
+		.doc = "RSYNC program arguments that will trigger a non-recursive RSYNC",
 		.availability = AVAILABILITY_TOML,
 	},
 	{ 0 },
@@ -368,7 +378,7 @@ set_default_values(void)
 		"$LOCAL",
 	};
 
-	size_t i;
+	int error;
 
 	/*
 	 * Values that might need to be freed WILL be freed, so use heap
@@ -386,20 +396,20 @@ set_default_values(void)
 	rpki_config.maximum_certificate_depth = 32;
 
 	rpki_config.rsync.program = strdup("rsync");
-	if (rpki_config.rsync.program == NULL)
+	if (rpki_config.rsync.program == NULL) {
+		error = pr_enomem();
 		goto revert_repository;
-
-	rpki_config.rsync.args.length = ARRAY_LEN(default_rsync_args);
-	rpki_config.rsync.args.array = calloc(rpki_config.rsync.args.length,
-	    sizeof(char *));
-	if (rpki_config.rsync.args.array == NULL)
-		goto revert_rsync_program;
-
-	for (i = 0; i < ARRAY_LEN(default_rsync_args); i++) {
-		rpki_config.rsync.args.array[i] = strdup(default_rsync_args[i]);
-		if (rpki_config.rsync.args.array[i] == NULL)
-			goto revert_rsync_args;
 	}
+
+	error = string_array_init(&rpki_config.rsync.args.recursive,
+	    default_rsync_args, ARRAY_LEN(default_rsync_args));
+	if (error)
+		goto revert_rsync_program;
+	/* Simply remove --recursive and --delete. */
+	error = string_array_init(&rpki_config.rsync.args.flat,
+	    default_rsync_args + 2, ARRAY_LEN(default_rsync_args) - 2);
+	if (error)
+		goto revert_recursive_array;
 
 	rpki_config.output.color = false;
 	rpki_config.output.filename_format = FNF_GLOBAL;
@@ -408,15 +418,13 @@ set_default_values(void)
 
 	return 0;
 
-revert_rsync_args:
-	for (i = 0; i < ARRAY_LEN(default_rsync_args); i++)
-		free(rpki_config.rsync.args.array[i]);
-	free(rpki_config.rsync.args.array);
+revert_recursive_array:
+	string_array_cleanup(&rpki_config.rsync.args.recursive);
 revert_rsync_program:
 	free(rpki_config.rsync.program);
 revert_repository:
 	free(rpki_config.local_repository);
-	return pr_enomem();
+	return error;
 }
 
 static int
@@ -597,9 +605,11 @@ config_get_rsync_program(void)
 }
 
 struct string_array const *
-config_get_rsync_args(void)
+config_get_rsync_args(bool is_ta)
 {
-	return &rpki_config.rsync.args;
+	return is_ta
+	    ? &rpki_config.rsync.args.flat
+	    : &rpki_config.rsync.args.recursive;
 }
 
 void

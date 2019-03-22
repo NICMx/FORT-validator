@@ -130,10 +130,10 @@ handle_root_strategy(struct rpki_uri const *src, struct rpki_uri *dst)
 }
 
 static int
-get_rsync_uri(struct rpki_uri const *requested_uri, bool force_strict,
+get_rsync_uri(struct rpki_uri const *requested_uri, bool is_ta,
     struct rpki_uri *rsync_uri)
 {
-	if (force_strict)
+	if (is_ta)
 		return handle_strict_strategy(requested_uri, rsync_uri);
 
 	switch (config_get_sync_strategy()) {
@@ -231,7 +231,7 @@ create_dir_recursive(char *localuri)
 }
 
 static void
-handle_child_thread(struct rpki_uri *uri)
+handle_child_thread(struct rpki_uri *uri, bool is_ta)
 {
 	/* THIS FUNCTION MUST NEVER RETURN!!! */
 
@@ -240,7 +240,7 @@ handle_child_thread(struct rpki_uri *uri)
 	unsigned int i;
 	int error;
 
-	config_args = config_get_rsync_args();
+	config_args = config_get_rsync_args(is_ta);
 	/*
 	 * We need to work on a copy, because the config args are immutable,
 	 * and we need to add the program name (for some reason) and NULL
@@ -285,7 +285,7 @@ handle_child_thread(struct rpki_uri *uri)
  * Downloads the @uri->global file into the @uri->local path.
  */
 static int
-do_rsync(struct rpki_uri *uri)
+do_rsync(struct rpki_uri *uri, bool is_ta)
 {
 	pid_t child_pid;
 	int child_status;
@@ -297,8 +297,10 @@ do_rsync(struct rpki_uri *uri)
 
 	/* We need to fork because execvp() magics the thread away. */
 	child_pid = fork();
-	if (child_pid == 0)
-		handle_child_thread(uri); /* This code is run by the child. */
+	if (child_pid == 0) {
+		/* This code is run by the child. */
+		handle_child_thread(uri, is_ta);
+	}
 
 	/* This code is run by us. */
 
@@ -340,18 +342,14 @@ do_rsync(struct rpki_uri *uri)
 }
 
 /**
- * @force_srict:
- *     true:
- *         SYNC_OFF    -> SYNC_OFF
- *         SYNC_STRICT -> SYNC_STRICT
- *         SYNC_ROOT   -> SYNC_STRICT
- *     false:
- *         SYNC_OFF    -> SYNC_OFF
- *         SYNC_STRICT -> SYNC_STRICT
- *         SYNC_ROOT   -> SYNC_ROOT
+ * @is_ta: Are we rsync'ing the TA?
+ * The TA rsync will not be recursive, and will force SYNC_STRICT
+ * (unless the strategy has been set to SYNC_OFF.)
+ * Why? Because we should probably not trust the repository until we've
+ * validated the TA's public key.
  */
 int
-download_files(struct rpki_uri const *requested_uri, bool force_strict)
+download_files(struct rpki_uri const *requested_uri, bool is_ta)
 {
 	/**
 	 * Note:
@@ -370,14 +368,14 @@ download_files(struct rpki_uri const *requested_uri, bool force_strict)
 		return 0;
 	}
 
-	error = get_rsync_uri(requested_uri, force_strict, &rsync_uri);
+	error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
 	if (error)
 		return error;
 
 	pr_debug("Going to RSYNC '%s' ('%s').", rsync_uri.global,
 	    rsync_uri.local);
 
-	error = do_rsync(&rsync_uri);
+	error = do_rsync(&rsync_uri, is_ta);
 	if (!error)
 		error = mark_as_downloaded(&rsync_uri);
 

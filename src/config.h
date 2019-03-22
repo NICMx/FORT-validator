@@ -22,7 +22,7 @@ bool config_get_color_output(void);
 enum filename_format config_get_filename_format(void);
 FILE *config_get_roa_output(void);
 char *config_get_rsync_program(void);
-struct string_array const *config_get_rsync_args(void);
+struct string_array const *config_get_rsync_args(bool);
 
 /* Needed public by the TOML module */
 void *get_rpki_config_field(struct option_field const *);
