@@ -20,46 +20,39 @@ struct delta {
 	struct vrps vrps;
 };
 
-/* TODO (review) why pointers? */
-ARRAY_LIST(deltasdb, struct delta *)
+ARRAY_LIST(deltasdb, struct delta)
 
-/*
- * TODO (review) It seems you only have one instance of this.
- *
- * Best remove those asterisks; you don't need `base_db` and `deltas_db` to live
- * in the heap.
- */
 struct state {
 	/** The current valid ROAs, freshly loaded from the file */
-	struct delta *base_db;
+	struct delta base_db;
 	/** ROA changes over time */
-	struct deltasdb *deltas_db;
+	struct deltasdb deltas_db;
 	u_int32_t current_serial;
 	u_int16_t v0_session_id;
 	u_int16_t v1_session_id;
 	time_t last_modified_date;
 } state;
 
+static int
+delta_init(struct delta *delta)
+{
+	return vrps_init(&delta->vrps);
+}
+
 int
 deltas_db_init(void)
 {
 	int error, shift;
 
-	state.base_db = create_delta();
-	if (state.base_db == NULL){
-		err(-ENOMEM, "Delta base DB couldn't be initialized");
-		return -ENOMEM;
+	error = delta_init(&state.base_db);
+	if (error){
+		warnx("Delta base DB couldn't be initialized");
+		return error;
 	}
 
-	state.deltas_db = malloc(sizeof(struct deltasdb));
-	if (state.deltas_db == NULL){
-		err(-ENOMEM, "Deltas DB couldn't be allocated");
-		return -ENOMEM;
-	}
-
-	error = deltasdb_init(state.deltas_db);
+	error = deltasdb_init(&state.deltas_db);
 	if (error) {
-		err(error, "Deltas DB couldn't be initialized");
+		warnx("Deltas DB couldn't be initialized");
 		return error;
 	}
 
@@ -79,71 +72,39 @@ deltas_db_init(void)
 	return 0;
 }
 
-struct delta *
-create_delta(void)
+static void
+init_vrp (struct vrp *vrp, u_int32_t asn, u_int8_t prefix_length,
+    u_int8_t max_prefix_length)
 {
-	struct delta *result;
-
-	result = malloc(sizeof(struct delta));
-	if (result == NULL)
-		goto fail1;
-
-	if (vrps_init(&result->vrps) != 0)
-		goto fail2;
-
-	return result;
-fail2:
-	free(result);
-fail1:
-	return NULL;
-}
-
-static struct vrp *
-create_vrp (u_int32_t asn, u_int8_t prefix_length, u_int8_t max_prefix_length)
-{
-	struct vrp *result;
-
-	result = malloc(sizeof(struct vrp));
-	if (result == NULL)
-		return NULL;
-
-	result->asn = asn;
-	result->prefix_length = prefix_length;
-	result->max_prefix_length = max_prefix_length;
+	vrp->asn = asn;
+	vrp->prefix_length = prefix_length;
+	vrp->max_prefix_length = max_prefix_length;
 	/* Set as ANNOUNCEMENT by default */
-	result->flags = FLAG_ANNOUNCEMENT;
-
-	return result;
+	vrp->flags = FLAG_ANNOUNCEMENT;
 }
 
-struct vrp *
+struct vrp
 create_vrp4(u_int32_t asn, struct in_addr ipv4_prefix, u_int8_t prefix_length,
     u_int8_t max_prefix_length)
 {
-	struct vrp *result;
+	struct vrp result;
 
-	result = create_vrp(asn, prefix_length, max_prefix_length);
-	if (result == NULL)
-		return NULL;
-
-	result->ipv4_prefix = ipv4_prefix;
-	result->in_addr_len = INET_ADDRSTRLEN;
+	init_vrp(&result, asn, prefix_length, max_prefix_length);
+	result.ipv4_prefix = ipv4_prefix;
+	result.in_addr_len = INET_ADDRSTRLEN;
 
 	return result;
 }
 
-struct vrp *
+struct vrp
 create_vrp6(u_int32_t asn, struct in6_addr ipv6_prefix, u_int8_t prefix_length,
     u_int8_t max_prefix_length)
 {
-	struct vrp *result;
+	struct vrp result;
 
-	result = create_vrp(asn, prefix_length, max_prefix_length);
-	if (result == NULL)
-		return NULL;
-
-	result->ipv6_prefix = ipv6_prefix;
-	result->in_addr_len = INET6_ADDRSTRLEN;
+	init_vrp(&result, asn, prefix_length, max_prefix_length);
+	result.ipv6_prefix = ipv6_prefix;
+	result.in_addr_len = INET6_ADDRSTRLEN;
 
 	return result;
 }
@@ -180,18 +141,19 @@ vrp_is_new(struct vrps *base, struct vrp *vrp)
 	return vrp_locate(base, vrp) == NULL;
 }
 
-/*
- * TODO (review) I don't understand the name of this function.
- *
- * I think that you meant "summarize." I've never seen "resume" used
- * an spanish "resumen."
- */
-static struct delta *
-delta_resume(struct delta *delta)
+static int
+delta_add_vrp(struct delta *delta, struct vrp *vrp)
 {
-	struct delta *resume_delta;
+	return vrps_add(&delta->vrps, vrp);
+}
+
+static int
+delta_summary(struct delta *base_delta, struct delta *result)
+{
+	struct delta summary_delta;
 	struct vrps *base, *search_list;
 	struct vrp *cursor;
+	int error;
 
 	/*
 	 * Note: Don't fix this function yet.
@@ -199,81 +161,122 @@ delta_resume(struct delta *delta)
 	 * with a more efficient algorithm.
 	 */
 
-	/* TODO (review) check NULL */
-	resume_delta = create_delta();
-	resume_delta->serial = delta->serial;
+	error = delta_init(&summary_delta);
+	if (error)
+		return error;
+
+	summary_delta.serial = base_delta->serial;
 	/* First check for announcements */
-	base = &delta->vrps;
-	search_list = &state.base_db->vrps;
+	base = &base_delta->vrps;
+	search_list = &state.base_db.vrps;
 	ARRAYLIST_FOREACH(base, cursor)
 		if (vrp_is_new(search_list, cursor)) {
 			cursor->flags = FLAG_ANNOUNCEMENT;
-			/* TODO (review) check error code */
-			delta_add_vrp(resume_delta, cursor);
+			error = delta_add_vrp(&summary_delta, cursor);
+			if (error) {
+				warnx("Couldn't add announcement to summary");
+				return error;
+			}
 		}
 
 	/* Now for withdrawals */
-	base = &state.base_db->vrps;
-	search_list = &delta->vrps;
+	base = &state.base_db.vrps;
+	search_list = &base_delta->vrps;
 	ARRAYLIST_FOREACH(base, cursor)
 		if (vrp_is_new(search_list, cursor)) {
 			cursor->flags = FLAG_WITHDRAWAL;
-			/* TODO (review) check error code */
-			delta_add_vrp(resume_delta, cursor);
+			error = delta_add_vrp(&summary_delta, cursor);
+			if (error) {
+				warnx("Couldn't add withdrawal to summary");
+				return error;
+			}
 		}
 
-	return resume_delta;
+	memcpy(result, &summary_delta, sizeof(summary_delta));
+	return 0;
 }
 
-int
-deltas_db_add_delta(struct delta *delta)
+static int
+deltas_db_add_delta(struct delta delta)
 {
-	struct delta *resume;
+	struct delta summary;
 	int result;
 
 	result = 0;
-	delta->serial = state.current_serial;
+	delta.serial = state.current_serial;
 	/* Store only updates */
-	if (delta->serial != START_SERIAL) {
-		resume = delta_resume(delta);
-		result = deltasdb_add(state.deltas_db, &resume);
+	if (delta.serial != START_SERIAL) {
+		result = delta_summary(&delta, &summary);
+		if (result != 0) {
+			warnx("Error summarizing new delta");
+			return result;
+		}
+		result = deltasdb_add(&state.deltas_db, &summary);
 	}
 	/* Don't set the base in case of error */
-	if (result != 0)
+	if (result != 0) {
+		warnx("Error persisting new delta");
 		return result;
+	}
 
-	free(state.base_db);
 	state.base_db = delta;
 	state.current_serial++;
 	return result;
 }
 
-int
-delta_add_vrp(struct delta *delta, struct vrp *vrp)
+static void
+copy_vrps(struct vrp **dst, struct vrp *src, unsigned int len)
 {
-	return vrps_add(&delta->vrps, vrp);
+	struct vrp *tmp;
+	tmp = realloc(*dst, len * sizeof(struct vrp));
+	if (tmp == NULL) {
+		warnx("Couldn't copy VRPs");
+		return;
+	}
+	*dst = tmp;
+	*dst = memcpy(*dst, src, len * sizeof(struct vrp));
 }
 
-void
+int
+deltas_db_create_delta(struct vrp *array, unsigned int len)
+{
+	struct delta new_delta;
+	int error;
+
+	error = delta_init(&new_delta);
+	if (error) {
+		warn("New Delta couldn't be initialized");
+		return error;
+	}
+
+	copy_vrps(&new_delta.vrps.array, array, len);
+	new_delta.vrps.len = len;
+	new_delta.vrps.capacity = len * sizeof(struct vrp);
+
+	error = deltas_db_add_delta(new_delta);
+	if (error)
+		return error;
+
+	return 0;
+}
+
+static void
 vrp_destroy(struct vrp *vrp)
 {
-	/* Nothing to free yet */
+	/* Didn't allocate something, so do nothing */
 }
 
 void
-delta_destroy(struct delta **delta)
+delta_destroy(struct delta *delta)
 {
-	/* Nothing else to free yet */
-	vrps_cleanup(&(*delta)->vrps, vrp_destroy);
-	free(*delta);
+	vrps_cleanup(&delta->vrps, vrp_destroy);
 }
 
 void
 deltas_db_destroy(void)
 {
-	deltasdb_cleanup(state.deltas_db, delta_destroy);
-	free(state.deltas_db);
-	free(state.base_db);
+	deltasdb_cleanup(&state.deltas_db, delta_destroy);
+	vrps_cleanup(&state.base_db.vrps, vrp_destroy);
 }
 
 /*
@@ -292,9 +295,9 @@ deltas_db_destroy(void)
 int
 deltas_db_status(u_int32_t *serial)
 {
-	struct delta **delta;
+	struct delta *delta;
 
-	if (state.base_db->vrps.len == 0)
+	if (state.base_db.vrps.len == 0)
 		return NO_DATA_AVAILABLE;
 
 	/* No serial to match, and there's data at DB */
@@ -302,12 +305,12 @@ deltas_db_status(u_int32_t *serial)
 		return DIFF_AVAILABLE;
 
 	/* Is the last version? */
-	if (*serial == state.base_db->serial)
+	if (*serial == state.base_db.serial)
 		return NO_DIFF;
 
 	/* Get the delta corresponding to the serial */
-	ARRAYLIST_FOREACH(state.deltas_db, delta) {
-		if ((*delta)->serial == *serial)
+	ARRAYLIST_FOREACH(&state.deltas_db, delta) {
+		if (delta->serial == *serial)
 			return DIFF_AVAILABLE;
 	}
 
@@ -328,19 +331,6 @@ add_vrps_filtered(struct vrps *dst, struct vrps *src)
 			vrps_add(dst, ptr);
 }
 
-static void
-copy_vrps(struct vrp **dst, struct vrp *src, unsigned int len)
-{
-	struct vrp *tmp;
-	tmp = realloc(*dst, len * sizeof(struct vrp));
-	if (tmp == NULL) {
-		err(-ENOMEM, "Couldn't copy VRPs");
-		return;
-	}
-	*dst = tmp;
-	*dst = memcpy(*dst, src, len * sizeof(struct vrp));
-}
-
 /*
  * Get the number of updates from serial START_SERIAL to END_SERIAL, set them
  * at RESULT.
@@ -352,18 +342,18 @@ unsigned int
 get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
     struct vrp **result)
 {
-	struct delta **delta1;
+	struct delta *delta1;
 	struct vrps summary;
 
 	/* No data */
-	if (state.base_db->vrps.len == 0)
+	if (state.base_db.vrps.len == 0)
 		return 0;
 
 	/* NULL start? Send the last version, there's no need to iterate DB */
 	if (start_serial == NULL) {
-		copy_vrps(result, state.base_db->vrps.array,
-		    state.base_db->vrps.len);
-		return state.base_db->vrps.len;
+		copy_vrps(result, state.base_db.vrps.array,
+		    state.base_db.vrps.len);
+		return state.base_db.vrps.len;
 	}
 
 	/* Apparently nothing to return */
@@ -372,10 +362,10 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 
 	/* Get the delta corresponding to the serials */
 	vrps_init(&summary);
-	ARRAYLIST_FOREACH(state.deltas_db, delta1) {
-		if ((*delta1)->serial > *start_serial)
-			add_vrps_filtered(&summary, &(*delta1)->vrps);
-		if ((*delta1)->serial == *end_serial)
+	ARRAYLIST_FOREACH(&state.deltas_db, delta1) {
+		if (delta1->serial > *start_serial)
+			add_vrps_filtered(&summary, &delta1->vrps);
+		if (delta1->serial == *end_serial)
 			break;
 	}
 

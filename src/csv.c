@@ -8,10 +8,13 @@
 #include <time.h>
 #include <sys/stat.h>
 
+#include "array_list.h"
 #include "configuration.h"
 #include "address.h"
 #include "line_file.h"
 #include "vrps.h"
+
+ARRAY_LIST(vrplist, struct vrp)
 
 static int
 parse_asn(char *text, unsigned int *value)
@@ -70,11 +73,11 @@ parse_prefix_length(char *text, unsigned int *value, int max_value)
 }
 
 static int
-add_vrp(char *line, struct delta *delta)
+add_vrp(char *line, struct vrplist *vrplist)
 {
 	struct ipv4_prefix prefixv4;
 	struct ipv6_prefix prefixv6;
-	struct vrp *vrp;
+	struct vrp vrp;
 	unsigned int asn, prefix_length, max_prefix_length;
 	int error;
 	bool isv4;
@@ -140,7 +143,8 @@ add_vrp(char *line, struct delta *delta)
 
 	if (prefix_length > max_prefix_length) {
 		error = -EINVAL;
-		err(error, "Prefix length is greater than max prefix length at line '%s'",
+		err(error,
+		    "Prefix length is greater than max prefix length at line '%s'",
 		    line);
 		goto error;
 	}
@@ -152,47 +156,32 @@ add_vrp(char *line, struct delta *delta)
 		vrp = create_vrp6(asn, prefixv6.addr, prefixv6.len,
 		    max_prefix_length);
 
-	if (vrp == NULL) {
-		error = -ENOMEM;
-		err(error, "Couldn't allocate VRP of line '%s'", line);
-		goto error;
-	}
-
-	/*
-	 * TODO (review) You seem to be leaking `vrp` on success. (The arraylist
-	 * stores a shallow copy, not the memory block you allocated.)
-	 *
-	 * In fact, `vrp_destroy()` is empty, so you're also leaking on error.
-	 *
-	 * You can avoid all these headaches by moving `vrp` to the stack.
-	 * (ie. remove `vrp`'s asterisk and patch emerging errors.)
-	 */
-	error = delta_add_vrp(delta, vrp);
-	if (error) {
-		vrp_destroy(vrp);
-		goto error;
-	}
-
-	return 0;
+	error =  vrplist_add(vrplist, &vrp);
 
 error:
 	free(line_copy);
 	return error;
 }
 
+static void
+clean_localvrps(struct vrp *vrp)
+{
+	/* Nothing special to clean, this is just a warning silencer */
+}
+
 static int
 load_vrps(struct line_file *lfile, bool is_update)
 {
-	struct delta *delta;
+	struct vrplist localvrps;
 	char *line;
 	int current_line;
 	int error;
 
 	/* Init delta */
-	delta = create_delta();
-	if (delta == NULL) {
-		warn("Couldn't allocate new delta");
-		return -ENOMEM;
+	error = vrplist_init(&localvrps);
+	if (error ) {
+		warn("Couldn't allocate new VRPs");
+		return error;
 	}
 	current_line = 1;
 	do {
@@ -200,7 +189,6 @@ load_vrps(struct line_file *lfile, bool is_update)
 		if (error) {
 			warn("Error reading line %d, stop processing file.",
 			    current_line);
-			delta_destroy(&delta);
 			goto end;
 		}
 		if (line == NULL) {
@@ -208,7 +196,7 @@ load_vrps(struct line_file *lfile, bool is_update)
 			goto persist;
 		}
 
-		error = add_vrp(line, delta);
+		error = add_vrp(line, &localvrps);
 		if (error)
 			warnx("Ignoring content at line %d.", current_line);
 
@@ -216,13 +204,13 @@ load_vrps(struct line_file *lfile, bool is_update)
 		free(line);
 	} while (true);
 persist:
-	/* TODO (review) delta is leaking. */
-	error = deltas_db_add_delta(delta);
+	error = deltas_db_create_delta(localvrps.array, localvrps.len);
 	if (error)
 		warnx("VRPs Delta couldn't be persisted");
 end:
 	if (line != NULL)
 		free(line);
+	vrplist_cleanup(&localvrps, clean_localvrps);
 	return error;
 }
 
