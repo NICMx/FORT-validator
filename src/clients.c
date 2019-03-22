@@ -16,7 +16,7 @@ clients_db_init(void)
 
 	error = clientsdb_init(&clients_db);
 	if (error)
-		err(error, "Clients DB couldn't be initialized");
+		warnx( "Clients DB couldn't be initialized");
 
 	return error;
 }

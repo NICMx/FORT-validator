@@ -47,8 +47,8 @@
 			tmp = realloc(list->array, list->capacity	\
 			    * sizeof(elem_type));			\
 			if (tmp == NULL) {				\
-				err(-ENOMEM, "Out of memory");		\
-				return -ENOMEM;				\
+				warn("Couldn't realloc array");		\
+				return errno;				\
 			}						\
 			list->array = tmp;				\
 		}							\

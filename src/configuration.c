@@ -74,12 +74,8 @@ config_init(char const *json_file_path)
 	json_error_t json_error;
 	int error;
 
-	/*
-	 * TODO What's the point of a default start if there's
-	 * no vrps input?
-	 */
 	if (json_file_path == NULL)
-		return init_addrinfo(DEFAULT_ADDR, DEFAULT_PORT);
+		return -EINVAL;
 
 	json_root = json_load_file(json_file_path, JSON_REJECT_DUPLICATES,
 	    &json_error);
@@ -114,13 +110,13 @@ load_range(json_t *parent, char const *name, int default_value,
 
 	error = json_get_int(parent, name, default_value, result);
 	if (error) {
-		err(error, "Invalid value for '%s'", name);
+		warnx("Invalid value for '%s'", name);
 		return error;
 	}
 
 	if (*result < min_value || max_value < *result) {
-		err(-EINVAL, "'%s' (%d) out of range, must be from %d to %d",
-		    name, *result, min_value, max_value);
+		warnx("'%s' (%d) out of range, must be from %d to %d", name,
+		    *result, min_value, max_value);
 		return -EINVAL;
 	}
 
@@ -194,8 +190,8 @@ handle_json(json_t *root)
 
 		config.vrps_location = strdup(vrps_location);
 		if (config.vrps_location == NULL) {
-			err(errno, "'%s' couldn't be allocated.",
-					OPTNAME_VRPS_LOCATION);
+			warn("'%s' couldn't be allocated.",
+			    OPTNAME_VRPS_LOCATION);
 			return errno;
 		}
 
@@ -318,10 +314,9 @@ init_addrinfo(char const *hostname, char const *service)
 		return error;
 	}
 
-	/* TODO (review) check NULL */
 	config.port = strdup(service);
 	if (config.port == NULL) {
-		err(errno, "'%s' couldn't be allocated.", OPTNAME_LISTEN_PORT);
+		warn( "'%s' couldn't be allocated.", OPTNAME_LISTEN_PORT);
 		return errno;
 	}
 

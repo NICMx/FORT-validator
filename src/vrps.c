@@ -230,7 +230,7 @@ copy_vrps(struct vrp **dst, struct vrp *src, unsigned int len)
 	struct vrp *tmp;
 	tmp = realloc(*dst, len * sizeof(struct vrp));
 	if (tmp == NULL) {
-		warnx("Couldn't copy VRPs");
+		warn("Couldn't copy VRPs");
 		return;
 	}
 	*dst = tmp;
@@ -245,7 +245,7 @@ deltas_db_create_delta(struct vrp *array, unsigned int len)
 
 	error = delta_init(&new_delta);
 	if (error) {
-		warn("New Delta couldn't be initialized");
+		warnx("New Delta couldn't be initialized");
 		return error;
 	}
 

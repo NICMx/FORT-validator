@@ -85,9 +85,8 @@ send_response(int fd, char *data, size_t data_len)
 	init_buffer(&buffer);
 	/* Check for buffer overflow */
 	if (data_len > buffer.capacity) {
-		error = -EINVAL;
-		err(error, "Buffer out of capacity");
-		return error;
+		warnx("Response buffer out of capacity");
+		return -EINVAL;
 	}
 	memcpy(buffer.data, data, data_len);
 	buffer.len = data_len;
@@ -95,7 +94,7 @@ send_response(int fd, char *data, size_t data_len)
 	error = write(fd, buffer.data, buffer.len);
 	free_buffer(&buffer);
 	if (error < 0) {
-		err(errno, "Error sending response");
+		warnx("Error sending response");
 		return error;
 	}
 

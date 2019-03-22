@@ -41,7 +41,7 @@ void
 lfile_close(struct line_file *lf)
 {
 	if (fclose(lf->file) == -1)
-		err(errno, "fclose() failed: %s", strerror(errno));
+		warn("fclose() failed");
 	free(lf);
 }
 
@@ -103,7 +103,7 @@ lfile_read(struct line_file *lfile, char **result)
 		free(string);
 		*result = NULL;
 		if (ferror(lfile->file)) {
-			err(error, "Error while reading file: %s\n",
+			warnx("Error while reading file: %s",
 			    strerror(error));
 			return error;
 		}
@@ -111,8 +111,7 @@ lfile_read(struct line_file *lfile, char **result)
 			return 0;
 
 		error = -EINVAL;
-		err(error,
-		    "Supposedly unreachable code reached. ferror:%d feof:%d\n",
+		warnx("Supposedly unreachable code reached. ferror:%d feof:%d",
 		    ferror(lfile->file), feof(lfile->file));
 		return error;
 	}
@@ -127,8 +126,7 @@ lfile_read(struct line_file *lfile, char **result)
 	for (i = 0; i < len; i++) {
 		if (string[i] == '\0') {
 			error = -EINVAL;
-			err(error,
-			    "File '%s' has an illegal null character in its body. Please remove it.\n",
+			warnx("File '%s' has an illegal null character in its body. Please remove it.",
 			    lfile_name(lfile));
 			free(string);
 			return error;

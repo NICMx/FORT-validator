@@ -91,9 +91,8 @@ handle_serial_query_pdu(int fd, void *pdu)
 			return error;
 		return send_end_of_data_pdu(&common);
 	default:
-		error = -EINVAL;
-		err(error, "Reached 'unreachable' code");
-		return error;
+		warnx("Reached 'unreachable' code");
+		return -EINVAL;
 	}
 }
 
@@ -105,7 +104,7 @@ handle_reset_query_pdu(int fd, void *pdu)
 	u_int32_t current_serial;
 	u_int16_t session_id;
 	u_int8_t version;
-	int error, updates;
+	int updates;
 
 	version = received->header.protocol_version;
 	session_id = get_current_session_id(version);
@@ -123,9 +122,8 @@ handle_reset_query_pdu(int fd, void *pdu)
 		/* https://tools.ietf.org/html/rfc8210#section-8.1 */
 		return send_commmon_exchange(&common);
 	default:
-		error = -EINVAL;
-		err(error, "Reached 'unreachable' code");
-		return error;
+		warnx("Reached 'unreachable' code");
+		return -EINVAL;
 	}
 }
 

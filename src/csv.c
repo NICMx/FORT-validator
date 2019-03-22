@@ -39,7 +39,7 @@ parse_asn(char *text, unsigned int *value)
 	}
 	/* An underflow or overflow will be considered here */
 	if (asn < 0 || UINT32_MAX < asn) {
-		warnx("Prefix length (%lu) is out of bounds (0-%u).",
+		warnx("Prefix length (%lu) is out of range (0-%u).",
 		    asn, UINT32_MAX);
 		return -EINVAL;
 	}
@@ -90,8 +90,8 @@ add_vrp(char *line, struct vrplist *vrplist)
 
 	line_copy = malloc(strlen(line) + 1);
 	if (line_copy == NULL) {
-		error = -ENOMEM;
-		err(error, "Out of memory allocating CSV line copy");
+		error = errno;
+		warn("Out of memory allocating CSV line copy");
 		goto error;
 	}
 	strcpy(line_copy, line);
@@ -143,8 +143,7 @@ add_vrp(char *line, struct vrplist *vrplist)
 
 	if (prefix_length > max_prefix_length) {
 		error = -EINVAL;
-		err(error,
-		    "Prefix length is greater than max prefix length at line '%s'",
+		warnx("Prefix length is greater than max prefix length at line '%s'",
 		    line);
 		goto error;
 	}
@@ -179,15 +178,15 @@ load_vrps(struct line_file *lfile, bool is_update)
 
 	/* Init delta */
 	error = vrplist_init(&localvrps);
-	if (error ) {
-		warn("Couldn't allocate new VRPs");
+	if (error) {
+		warnx("Couldn't allocate new VRPs");
 		return error;
 	}
 	current_line = 1;
 	do {
 		error = lfile_read(lfile, &line);
 		if (error) {
-			warn("Error reading line %d, stop processing file.",
+			warnx("Error reading line %d, stop processing file.",
 			    current_line);
 			goto end;
 		}

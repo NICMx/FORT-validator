@@ -18,7 +18,7 @@ check_vrps_updates(void *param_void) {
 		updated = false;
 		error = csv_check_vrps_file(&updated);
 		if (error) {
-			err(error, "Error while searching CSV updates");
+			warnx("Error while searching CSV updates, sleeping..");
 			goto sleep;
 		}
 		if (updated)

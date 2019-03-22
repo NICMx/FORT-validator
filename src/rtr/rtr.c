@@ -133,6 +133,7 @@ client_thread_cb(void *param_void)
 			err_pdu_send(param.client_fd, RTR_VERSION_SUPPORTED,
 			    ERR_PDU_UNSUP_PROTO_VERSION,
 			    (struct pdu_header *) pdu, NULL);
+			meta->destructor(pdu);
 			return NULL;
 		}
 		/* RTR Version ready, now update client */
@@ -146,6 +147,7 @@ client_thread_cb(void *param_void)
 				    : ERR_PDU_UNEXPECTED_PROTO_VERSION),
 				    (struct pdu_header *) pdu, NULL);
 			}
+			meta->destructor(pdu);
 			return NULL;
 		}
 
@@ -194,8 +196,8 @@ handle_client_connections(int server_fd)
 		 */
 
 		arg = malloc(sizeof(struct thread_param));
-		if (!arg) {
-			warnx("Thread parameter allocation failure");
+		if (arg == NULL) {
+			warn("Thread parameter allocation failure");
 			continue;
 		}
 		arg->client_fd = client_fd;

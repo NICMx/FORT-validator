@@ -66,6 +66,6 @@ err_pdu_log(u_int16_t code, char *message)
 		break;
 	}
 
-	warnx("Error report info: '%s', message '%s'.",
+	warnx("Error report PDU info: '%s', message '%s'.",
 	    code_title, message == NULL ? "[empty]" : message);
 }
