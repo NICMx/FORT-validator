@@ -68,13 +68,8 @@ validate_serial_number(X509 *cert)
 static int
 validate_signature_algorithm(X509 *cert)
 {
-	int nid;
-
-	nid = OBJ_obj2nid(X509_get0_tbs_sigalg(cert)->algorithm);
-	if (nid != rpki_signature_algorithm())
-		return pr_err("Certificate's Signature Algorithm is not RSASSA-PKCS1-v1_5.");
-
-	return 0;
+	int nid = OBJ_obj2nid(X509_get0_tbs_sigalg(cert)->algorithm);
+	return validate_certificate_signature_algorithm(nid, "Certificate");
 }
 
 static int
@@ -119,19 +114,61 @@ validate_subject(X509 *cert)
 }
 
 static int
-validate_spki(const unsigned char *cert_spk, int cert_spk_len)
+spki_validate_algorithm(OBJECT_IDENTIFIER_t *tal_alg,
+    X509_PUBKEY *cert_public_key)
+{
+	ASN1_OBJECT *cert_alg;
+	int ok;
+
+	ok = X509_PUBKEY_get0_param(&cert_alg, NULL, NULL, NULL,
+	    cert_public_key);
+	if (!ok)
+		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+
+	if (tal_alg->size != OBJ_length(cert_alg))
+		goto fail;
+	if (memcmp(tal_alg->buf, OBJ_get0_data(cert_alg), tal_alg->size) != 0)
+		goto fail;
+
+	return 0;
+
+fail:
+	return pr_err("TAL's public key algorithm is different than the root certificate's public key algorithm.");
+}
+
+static int
+spki_validate_key(BIT_STRING_t *tal_key, X509_PUBKEY *cert_public_key)
+{
+	unsigned char const *cert_spk;
+	int cert_spk_len;
+	int ok;
+
+	ok = X509_PUBKEY_get0_param(NULL, &cert_spk, &cert_spk_len, NULL,
+	    cert_public_key);
+	if (!ok)
+		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+
+	if (tal_key->size != cert_spk_len)
+		goto fail;
+	if (memcmp(tal_key->buf, cert_spk, cert_spk_len) != 0)
+		goto fail;
+
+	return 0;
+
+fail:
+	return pr_err("TAL's public key is different than the root certificate's public key.");
+}
+
+static int
+validate_spki(X509_PUBKEY *cert_public_key)
 {
 	struct validation *state;
 	struct tal *tal;
+	int error;
 
 	struct SubjectPublicKeyInfo *tal_spki;
 	unsigned char const *_tal_spki;
 	size_t _tal_spki_len;
-
-	static const OID oid_rsa = OID_RSA;
-	struct oid_arcs tal_alg_arcs;
-
-	int error;
 
 	state = state_retrieve();
 	if (state == NULL)
@@ -166,31 +203,18 @@ validate_spki(const unsigned char *cert_spk, int cert_spk_len)
 	if (error)
 		goto fail1;
 
-	/* Algorithm Identifier */
-	error = oid2arcs(&tal_spki->algorithm.algorithm, &tal_alg_arcs);
+	error = spki_validate_algorithm(&tal_spki->algorithm.algorithm,
+	    cert_public_key);
+	if (error)
+		goto fail2;
+	error = spki_validate_key(&tal_spki->subjectPublicKey, cert_public_key);
 	if (error)
 		goto fail2;
 
-	if (!ARCS_EQUAL_OIDS(&tal_alg_arcs, oid_rsa)) {
-		error = pr_err("TAL's public key format is not RSA PKCS#1 v1.5 with SHA-256.");
-		goto fail3;
-	}
-
-	/* SPK */
-	if (tal_spki->subjectPublicKey.size != cert_spk_len)
-		goto fail4;
-	if (memcmp(tal_spki->subjectPublicKey.buf, cert_spk, cert_spk_len) != 0)
-		goto fail4;
-
-	free_arcs(&tal_alg_arcs);
 	ASN_STRUCT_FREE(asn_DEF_SubjectPublicKeyInfo, tal_spki);
 	validation_pubkey_valid(state);
 	return 0;
 
-fail4:
-	error = pr_err("TAL's public key is different than the root certificate's public key.");
-fail3:
-	free_arcs(&tal_alg_arcs);
 fail2:
 	ASN_STRUCT_FREE(asn_DEF_SubjectPublicKeyInfo, tal_spki);
 fail1:
@@ -203,9 +227,6 @@ validate_public_key(X509 *cert, bool is_root)
 {
 	X509_PUBKEY *pubkey;
 	ASN1_OBJECT *alg;
-	int alg_nid;
-	const unsigned char *bytes;
-	int bytes_len;
 	int ok;
 	int error;
 
@@ -213,15 +234,13 @@ validate_public_key(X509 *cert, bool is_root)
 	if (pubkey == NULL)
 		return crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
-	ok = X509_PUBKEY_get0_param(&alg, &bytes, &bytes_len, NULL, pubkey);
+	ok = X509_PUBKEY_get0_param(&alg, NULL, NULL, NULL, pubkey);
 	if (!ok)
 		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
-	alg_nid = OBJ_obj2nid(alg);
-	if (alg_nid != rpki_public_key_algorithm()) {
-		return pr_err("Certificate's public key format is %d, not RSA PKCS#1 v1.5 with SHA-256.",
-		    alg_nid);
-	}
+	error = validate_certificate_public_key_algorithm(OBJ_obj2nid(alg));
+	if (error)
+		return error;
 
 	/*
 	 * BTW: WTF. About that algorithm:
@@ -236,7 +255,7 @@ validate_public_key(X509 *cert, bool is_root)
 	 */
 
 	if (is_root) {
-		error = validate_spki(bytes, bytes_len);
+		error = validate_spki(pubkey);
 		if (error)
 			return error;
 	}

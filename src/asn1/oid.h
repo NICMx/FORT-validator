@@ -39,9 +39,6 @@ typedef asn_oid_arc_t OID[];
 #define OID_MANIFEST                 { 1, 2, 840, 113549, 1, 9, 16, 1, 26 }
 #define OID_GHOSTBUSTERS             { 1, 2, 840, 113549, 1, 9, 16, 1, 35 }
 
-#define OID_RSA                      { 1, 2, 840, 113549, 1, 1, 1 }
-#define OID_SHA256                   { 2, 16, 840, 1, 101, 3, 4, 2, 1 }
-
 int oid2arcs(OBJECT_IDENTIFIER_t *, struct oid_arcs *);
 
 bool oid_equal(OBJECT_IDENTIFIER_t *, OBJECT_IDENTIFIER_t *);

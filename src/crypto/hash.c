@@ -8,23 +8,6 @@
 #include "log.h"
 #include "asn1/oid.h"
 
-int
-hash_is_sha256(OBJECT_IDENTIFIER_t *oid, bool *result)
-{
-	static const OID sha_oid = OID_SHA256;
-	struct oid_arcs arcs;
-	int error;
-
-	error = oid2arcs(oid, &arcs);
-	if (error)
-		return error;
-
-	*result = ARCS_EQUAL_OIDS(&arcs, sha_oid);
-
-	free_arcs(&arcs);
-	return 0;
-}
-
 static int
 get_md(char const *algorithm, EVP_MD const **result)
 {

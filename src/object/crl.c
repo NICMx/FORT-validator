@@ -120,8 +120,10 @@ crl_validate(X509_CRL *crl)
 	if (version != 1)
 		return pr_err("CRL version (%ld) is not v2 (%d).", version, 1);
 
-	if (X509_CRL_get_signature_nid(crl) != rpki_signature_algorithm())
-		return pr_err("CRL's signature algorithm is not RSASSA-PKCS1-v1_5.");
+	error = validate_certificate_signature_algorithm(
+	    X509_CRL_get_signature_nid(crl), "CRL");
+	if (error)
+		return error;
 
 	error = validate_issuer_name("CRL", X509_CRL_get_issuer(crl));
 	if (error)

@@ -4,6 +4,7 @@
 #include <libcmscodec/ContentType.h>
 #include <libcmscodec/MessageDigest.h>
 
+#include "algorithm.h"
 #include "config.h"
 #include "log.h"
 #include "oid.h"
@@ -38,24 +39,6 @@ signed_object_args_cleanup(struct signed_object_args *args)
 {
 	resources_destroy(args->res);
 	refs_cleanup(&args->refs);
-}
-
-static int
-is_digest_algorithm(AlgorithmIdentifier_t *id, char const *what)
-{
-	bool is_hash;
-	int error;
-
-	if (id == NULL)
-		return pr_err("The %s algorithm is NULL.", what);
-
-	error = hash_is_sha256(&id->algorithm, &is_hash);
-	if (error)
-		return error;
-	if (!is_hash)
-		return pr_err("The %s algorithm is not SHA256.", what);
-
-	return 0;
 }
 
 static int
@@ -313,7 +296,7 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 	 * AlgorithmIdentifier instead. There's no API.
 	 * This seems to work fine.
 	 */
-	error = is_digest_algorithm(
+	error = validate_cms_hashing_algorithm(
 	    (AlgorithmIdentifier_t *) sdata->digestAlgorithms.list.array[0],
 	    "SignedData");
 	if (error)
@@ -359,7 +342,8 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 
 	/* rfc6488#section-2.1.6.3 */
 	/* rfc6488#section-3.1.j 2/2 */
-	error = is_digest_algorithm(&sinfo->digestAlgorithm, "SignerInfo");
+	error = validate_cms_hashing_algorithm(&sinfo->digestAlgorithm,
+	    "SignerInfo");
 	if (error)
 		return error;
 
@@ -370,28 +354,12 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 
 	/* rfc6488#section-2.1.6.5 */
 	/* rfc6488#section-3.1.k */
-	/*
-	 * RFC 6485 was obsoleted by 7935. 7935 simply refers to 5652.
-	 *
-	 * RFC 5652:
-	 *
-	 * > Since each signer can employ a different digital signature
-	 * > technique, and future specifications could update the syntax, all
-	 * > implementations MUST gracefully handle unimplemented versions of
-	 * > SignerInfo.  Further, since all implementations will not support
-	 * > every possible signature algorithm, all implementations MUST
-	 * > gracefully handle unimplemented signature algorithms when they are
-	 * > encountered.
-	 *
-	 * So, nothing to do for now.
-	 *
-	 * TODO (field) "In the certificate, the OID appears in the signature
-	 * and signatureAlgorithm fields [RFC4055]." So it has to be the same as
-	 * some other field?
-	 */
+	error = validate_cms_signature_algorithm(&sinfo->signatureAlgorithm);
+	if (error)
+		return error;
 
 	/* rfc6488#section-2.1.6.6 */
-	/* Again, nothing to do for now. */
+	/* Signature handled below. */
 
 	/* rfc6488#section-2.1.6.7 */
 	/* rfc6488#section-3.1.i */

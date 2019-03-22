@@ -1,15 +1,18 @@
 #ifndef SRC_ALGORITHM_H_
 #define SRC_ALGORITHM_H_
 
+#include <libcmscodec/AlgorithmIdentifier.h>
+#include <libcmscodec/OBJECT_IDENTIFIER.h>
+
 /**
- * This file is an implementation of RFC 7935 (previously 6485) and its update,
- * 8208.
- *
- * It's just a bunch of functions that return the NIDs of the algorithms RPKI
- * validations are supposed to employ.
+ * This file is an implementation of RFC 7935 (previously 6485).
  */
 
-int rpki_signature_algorithm(void);
-int rpki_public_key_algorithm(void);
+int validate_certificate_signature_algorithm(int, char const *);
+int validate_certificate_public_key_algorithm(int);
+
+int validate_cms_hashing_algorithm(AlgorithmIdentifier_t *, char const *);
+int validate_cms_hashing_algorithm_oid(OBJECT_IDENTIFIER_t *, char const *);
+int validate_cms_signature_algorithm(AlgorithmIdentifier_t *);
 
 #endif /* SRC_ALGORITHM_H_ */

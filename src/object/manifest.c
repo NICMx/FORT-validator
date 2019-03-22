@@ -4,6 +4,7 @@
 #include <libcmscodec/GeneralizedTime.h>
 #include <libcmscodec/Manifest.h>
 
+#include "algorithm.h"
 #include "log.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
@@ -81,7 +82,6 @@ static int
 validate_manifest(struct Manifest *manifest)
 {
 	unsigned long version;
-	bool is_sha256;
 	int error;
 
 	/* rfc6486#section-4.2.1 */
@@ -127,12 +127,18 @@ validate_manifest(struct Manifest *manifest)
 	if (error)
 		return error;
 
-	/* rfc6486#section-6.6 (I guess) */
-	error = hash_is_sha256(&manifest->fileHashAlg, &is_sha256);
+	/* rfc6486#section-4.2.1.fileHashAlg */
+	/*
+	 * Um, RFC 7935 does not declare a hash algorithm specifically intended
+	 * for manifest hashes. But all the hashes it declares are SHA256, so
+	 * I guess we'll just default to that.
+	 * I'm going with the signed object hash function, since it appears to
+	 * be the closest match.
+	 */
+	error = validate_cms_hashing_algorithm_oid(&manifest->fileHashAlg,
+	    "manifest file");
 	if (error)
 		return error;
-	if (!is_sha256)
-		return pr_err("The hash algorithm is not SHA256.");
 
 	/* The file hashes will be validated during the traversal. */
 
