@@ -381,7 +381,7 @@ set_default_values(void)
 	if (rpki_config.local_repository == NULL)
 		return pr_enomem();
 
-	rpki_config.sync_strategy = SYNC_STRICT;
+	rpki_config.sync_strategy = SYNC_ROOT;
 	rpki_config.shuffle_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
 
