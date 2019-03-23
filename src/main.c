@@ -88,7 +88,7 @@ main(int argc, char **argv)
 	print_stack_trace_on_segfault();
 
 	thvar_init();
-	fnstack_store();
+	fnstack_init();
 
 	error = handle_flags_config(argc, argv);
 	if (error)
@@ -124,5 +124,6 @@ end2:
 	rsync_destroy();
 end1:
 	free_rpki_config();
+	fnstack_cleanup();
 	return error;
 }

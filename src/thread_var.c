@@ -42,6 +42,12 @@ thvar_init(void)
 		exit(error);
 	}
 
+	/*
+	 * Hm. It's a little odd.
+	 * fnstack_discard() is not being called on program termination.
+	 * Not sure if this is an implementation quirk.
+	 * We'll just have to delete it manually.
+	 */
 	error = pthread_key_create(&filenames_key, fnstack_discard);
 	if (error) {
 		fprintf(stderr,
@@ -79,7 +85,7 @@ state_retrieve(void)
 
 /** Initializes the current thread's fnstack. Call once per thread. */
 void
-fnstack_store(void)
+fnstack_init(void)
 {
 	struct filename_stack *files;
 	int error;
@@ -98,6 +104,23 @@ fnstack_store(void)
 	files->size = 32;
 
 	error = pthread_setspecific(filenames_key, files);
+	if (error)
+		fprintf(stderr, "pthread_setspecific() returned %d.", error);
+}
+
+void
+fnstack_cleanup(void)
+{
+	struct filename_stack *files;
+	int error;
+
+	files = pthread_getspecific(filenames_key);
+	if (files == NULL)
+		return;
+
+	fnstack_discard(files);
+
+	error = pthread_setspecific(filenames_key, NULL);
 	if (error)
 		fprintf(stderr, "pthread_setspecific() returned %d.", error);
 }

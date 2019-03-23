@@ -8,7 +8,9 @@ void thvar_init(void);
 int state_store(struct validation *);
 struct validation *state_retrieve(void);
 
-void fnstack_store(void);
+void fnstack_init(void);
+void fnstack_cleanup(void);
+
 void fnstack_push(char const *);
 void fnstack_push_uri(struct rpki_uri const *);
 char const *fnstack_peek(void);
