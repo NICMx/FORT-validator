@@ -47,7 +47,7 @@ parse_toml_bool(struct option_field const *opt, struct toml_table_t *toml,
 
 	raw = toml_raw_in(toml, opt->name);
 	if (raw == NULL)
-		return pr_err("TOML boolean '%s' was not found.", opt->name);
+		return 0;
 	if (toml_rtob(raw, &value) == -1)
 		return pr_err("Cannot parse '%s' as a boolean.", raw);
 

@@ -5,7 +5,6 @@
 
 extern const struct global_type gt_string;
 
-int parse_toml_string(struct option_field const *, struct toml_table_t *,
-    void *);
+int parse_toml_string(struct toml_table_t *, char const *, char **);
 
 #endif /* SRC_CONFIG_STR_H_ */

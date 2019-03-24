@@ -110,6 +110,8 @@ struct global_type {
 		argv_parse_function argv;
 		/**
 		 * Converts from a TOML node to this data type.
+		 * If the node is not present in the file, this function should
+		 * do nothing.
 		 * Optional if there are no fields of this type that are read
 		 * from TOML files.
 		 */

@@ -64,10 +64,11 @@ parse_toml_sync_strategy(struct option_field const *opt,
 	int error;
 	char *string;
 
-	string = NULL;
-	error = parse_toml_string(opt, toml, &string);
+	error = parse_toml_string(toml, opt->name, &string);
 	if (error)
 		return error;
+	if (string == NULL)
+		return 0;
 
 	error = parse_argv_sync_strategy(opt, string, _result);
 

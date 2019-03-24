@@ -58,10 +58,11 @@ parse_toml_filename_format(struct option_field const *opt,
 	char *string;
 	int error;
 
-	string = NULL;
-	error = parse_toml_string(opt, toml, &string);
+	error = parse_toml_string(toml, opt->name, &string);
 	if (error)
 		return error;
+	if (string == NULL)
+		return 0;
 
 	error = parse_argv_filename_format(opt, string, _result);
 

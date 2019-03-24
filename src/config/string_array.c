@@ -39,6 +39,14 @@ string_array_cleanup(struct string_array *array)
 }
 
 static void
+__string_array_free(struct string_array *array)
+{
+	string_array_cleanup(array);
+	array->array = NULL;
+	array->length = 0;
+}
+
+static void
 string_array_print(struct group_fields const *group,
     struct option_field const *field, void *_value)
 {
@@ -67,13 +75,13 @@ string_array_parse_toml(struct option_field const *opt,
 	struct string_array *result = _result;
 	int error;
 
-	/* Remove the previous value (usually the default). */
-	opt->type->free(_result);
-
 	array = toml_array_in(toml, opt->name);
 	if (array == NULL)
-		return pr_err("TOML array '%s' was not found.", opt->name);
+		return 0;
 	array_len = toml_array_nelem(array);
+
+	/* Remove the previous value (usually the default). */
+	__string_array_free(result);
 
 	result->array = malloc(array_len * sizeof(char *));
 	if (result->array == NULL)
@@ -101,14 +109,9 @@ fail:
 }
 
 static void
-string_array_free(void *_array)
+string_array_free(void *array)
 {
-	struct string_array *array = _array;
-
-	string_array_cleanup(array);
-
-	array->array = NULL;
-	array->length = 0;
+	__string_array_free(array);
 }
 
 const struct global_type gt_string_array = {

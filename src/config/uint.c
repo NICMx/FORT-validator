@@ -50,7 +50,7 @@ parse_toml_u_int(struct option_field const *opt, struct toml_table_t *toml,
 
 	raw = toml_raw_in(toml, opt->name);
 	if (raw == NULL)
-		return pr_err("TOML integer '%s' was not found.", opt->name);
+		return 0;
 	if (toml_rtoi(raw, &value) == -1)
 		return pr_err("Cannot parse '%s' as an integer.", raw);
 

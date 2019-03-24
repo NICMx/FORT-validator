@@ -9,6 +9,18 @@
 #include "config/str.h"
 
 static void
+__free_out_file(struct config_out_file *file)
+{
+	if (file->fd != NULL) {
+		fclose(file->fd);
+		file->fd = NULL;
+	}
+
+	free(file->file_name);
+	file->file_name = NULL;
+}
+
+static void
 print_out_file(struct group_fields const *group,
     struct option_field const *field, void *value)
 {
@@ -23,7 +35,7 @@ parse_argv_out_file(struct option_field const *field, char const *file_name,
 	struct config_out_file *file = _result;
 	int error;
 
-	field->type->free(file);
+	__free_out_file(file);
 
 	file->file_name = strdup(file_name);
 	if (file->file_name == NULL)
@@ -47,10 +59,11 @@ parse_toml_out_file(struct option_field const *opt, struct toml_table_t *toml,
 	char *file_name;
 	int error;
 
-	file_name = NULL;
-	error = parse_toml_string(opt, toml, &file_name);
+	error = parse_toml_string(toml, opt->name, &file_name);
 	if (error)
 		return error;
+	if (file_name == NULL)
+		return 0;
 
 	error = parse_argv_out_file(opt, file_name, _result);
 
@@ -59,17 +72,9 @@ parse_toml_out_file(struct option_field const *opt, struct toml_table_t *toml,
 }
 
 static void
-free_out_file(void *_file)
+free_out_file(void *file)
 {
-	struct config_out_file *file = _file;
-
-	if (file->fd != NULL) {
-		fclose(file->fd);
-		file->fd = NULL;
-	}
-
-	free(file->file_name);
-	file->file_name = NULL;
+	__free_out_file(file);
 }
 
 const struct global_type gt_out_file = {
