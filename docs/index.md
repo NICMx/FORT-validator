@@ -1,7 +1,8 @@
 ---
+title: Home
 ---
 
-# Home
+# {{ page.title }}
 
 ## Introduction
 

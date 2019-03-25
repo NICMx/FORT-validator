@@ -1,8 +1,9 @@
 ---
+title: Validator Usage
 command: rpki_validator
 ---
 
-# Validator Usage
+# {{ page.title }}
 
 ## Index
 

@@ -1,7 +1,8 @@
 ---
+title: Introduction to FORT
 ---
 
-# Introduction to FORT
+# {{ page.title }}
 
 ## Design
 

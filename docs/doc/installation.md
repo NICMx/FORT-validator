@@ -1,7 +1,8 @@
 ---
+title: Compilation and Installation
 ---
 
-# Compilation and Installation
+# {{ page.title }}
 
 ## Index
 
