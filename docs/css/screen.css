@@ -1,0 +1,22 @@
+code {
+	background-color: #f8f8f8;
+}
+pre code {
+	display: block;
+	overflow: auto;
+	padding: 1em;
+}
+pre code.terminal {
+	color: lightgray;
+	background-color: black;
+}
+
+.language-bash > .c {
+	color: green;
+}
+.language-bash > .nt {
+	color: purple;
+}
+.language-bash > .s2 {
+	color: blue;
+}
