@@ -42,8 +42,16 @@ main(int argc, char *argv[])
 	}
 
 	err = config_init(json_file);
-	if (err)
+	if (err) {
+		/*
+		 * TODO Special scenario, if the VRPs location doesn't exists
+		 * just send a warning (logged by the config_init function).
+		 *
+		 * This should be fixed later.
+		 */
+		err = (err == -ENOENT ? 0 : err);
 		goto end1;
+	}
 
 	err = deltas_db_init();
 	if (err)

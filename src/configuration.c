@@ -1,6 +1,7 @@
 #include "configuration.h"
 
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <err.h>
 #include <errno.h>
 #include <jansson.h>
@@ -124,19 +125,122 @@ load_range(json_t *parent, char const *name, int default_value,
 }
 
 static int
-handle_json(json_t *root)
+load_vrps(json_t *root)
 {
-	json_t *listen;
+	struct stat attr;
 	json_t *vrps;
-	json_t *interval;
-	char const *address;
-	char const *port;
 	char const *vrps_location;
-	int queue;
 	int vrps_check_interval;
+	int error;
+
+	vrps = json_object_get(root, OPTNAME_VRPS);
+	if (vrps != NULL) {
+		if (!json_is_object(vrps)) {
+			warnx("The '%s' element is not a JSON object.",
+			    OPTNAME_VRPS);
+			return -EINVAL;
+		}
+
+		error = json_get_string(vrps, OPTNAME_VRPS_LOCATION,
+			    DEFAULT_VRPS_LOCATION, &vrps_location);
+		if (error)
+			return error;
+
+		config.vrps_location = strdup(vrps_location);
+		if (config.vrps_location == NULL) {
+			warn("'%s' couldn't be allocated.",
+			    OPTNAME_VRPS_LOCATION);
+			return -errno;
+		}
+
+		/*
+		 * RFC 6810 and 8210:
+		 * The cache MUST rate-limit Serial Notifies to no more frequently than
+		 * one per minute.
+		 */
+		error = load_range(vrps, OPTNAME_VRPS_CHECK_INTERVAL,
+		    DEFAULT_VRPS_CHECK_INTERVAL, &vrps_check_interval,
+		    MIN_VRPS_CHECK_INTERVAL, MAX_VRPS_CHECK_INTERVAL);
+		if (error)
+			return error;
+		config.vrps_check_interval = vrps_check_interval;
+	} else {
+		config.vrps_location = DEFAULT_VRPS_LOCATION;
+		config.vrps_check_interval = DEFAULT_VRPS_CHECK_INTERVAL;
+	}
+
+	/* Validate required data */
+	error = stat(config.vrps_location, &attr) < 0;
+	if (error) {
+		warn("VRPs location '%s' isn't a valid path",
+		    config.vrps_location);
+		return -errno;
+	}
+	if (S_ISDIR(attr.st_mode) != 0) {
+		warnx("VRPs location '%s' isn't a file", config.vrps_location);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/*
+ * Exclusively for RTR v1, so this are optional values to configure
+ * since RTR v1 isn't fully supported yet
+ */
+static int
+load_intervals(json_t *root)
+{
+	json_t *interval;
 	int refresh_interval;
 	int retry_interval;
 	int expire_interval;
+	int error;
+	interval = json_object_get(root, OPTNAME_RTR_INTERVAL);
+	if (interval != NULL) {
+		if (!json_is_object(interval)) {
+			warnx("The '%s' element is not a JSON object.",
+			    OPTNAME_RTR_INTERVAL);
+			return -EINVAL;
+		}
+
+		error = load_range(interval, OPTNAME_RTR_INTERVAL_REFRESH,
+		    DEFAULT_REFRESH_INTERVAL, &refresh_interval,
+		    MIN_REFRESH_INTERVAL, MAX_REFRESH_INTERVAL);
+		if (error)
+			return error;
+
+		error = load_range(interval, OPTNAME_RTR_INTERVAL_RETRY,
+		    DEFAULT_RETRY_INTERVAL, &retry_interval,
+		    MIN_RETRY_INTERVAL, MAX_RETRY_INTERVAL);
+		if (error)
+			return error;
+
+		error = load_range(interval, OPTNAME_RTR_INTERVAL_EXPIRE,
+		    DEFAULT_EXPIRE_INTERVAL, &expire_interval,
+		    MIN_EXPIRE_INTERVAL, MAX_EXPIRE_INTERVAL);
+		if (error)
+			return error;
+
+		config.refresh_interval = refresh_interval;
+		config.retry_interval = retry_interval;
+		config.expire_interval = expire_interval;
+	} else {
+		config.refresh_interval = DEFAULT_REFRESH_INTERVAL;
+		config.retry_interval = DEFAULT_RETRY_INTERVAL;
+		config.expire_interval = DEFAULT_EXPIRE_INTERVAL;
+	}
+
+	return 0;
+}
+
+static int
+handle_json(json_t *root)
+{
+	json_t *listen;
+	char const *address;
+	char const *port;
+	int queue;
 	int error;
 
 	if (!json_is_object(root)) {
@@ -175,80 +279,13 @@ handle_json(json_t *root)
 		config.queue = DEFAULT_QUEUE;
 	}
 
-	vrps = json_object_get(root, OPTNAME_VRPS);
-	if (vrps != NULL) {
-		if (!json_is_object(vrps)) {
-			warnx("The '%s' element is not a JSON object.",
-			    OPTNAME_VRPS);
-			return -EINVAL;
-		}
+	error = load_vrps(root);
+	if (error)
+		return error;
 
-		error = json_get_string(vrps, OPTNAME_VRPS_LOCATION,
-			    DEFAULT_VRPS_LOCATION, &vrps_location);
-		if (error)
-			return error;
-
-		config.vrps_location = strdup(vrps_location);
-		if (config.vrps_location == NULL) {
-			warn("'%s' couldn't be allocated.",
-			    OPTNAME_VRPS_LOCATION);
-			return errno;
-		}
-
-		/*
-		 * RFC 6810 and 8210:
-		 * The cache MUST rate-limit Serial Notifies to no more frequently than
-		 * one per minute.
-		 */
-		error = load_range(vrps, OPTNAME_VRPS_CHECK_INTERVAL,
-		    DEFAULT_VRPS_CHECK_INTERVAL, &vrps_check_interval,
-		    MIN_VRPS_CHECK_INTERVAL, MAX_VRPS_CHECK_INTERVAL);
-		if (error)
-			return error;
-		config.vrps_check_interval = vrps_check_interval;
-	} else {
-		config.vrps_location = DEFAULT_VRPS_LOCATION;
-		config.vrps_check_interval = DEFAULT_VRPS_CHECK_INTERVAL;
-	}
-
-	/*
-	 * Exclusively for RTR v1, so this are optional values to configure
-	 * since RTR v1 isn't fully supported yet
-	 */
-	interval = json_object_get(root, OPTNAME_RTR_INTERVAL);
-	if (interval != NULL) {
-		if (!json_is_object(interval)) {
-			warnx("The '%s' element is not a JSON object.",
-			    OPTNAME_RTR_INTERVAL);
-			return -EINVAL;
-		}
-
-		error = load_range(interval, OPTNAME_RTR_INTERVAL_REFRESH,
-		    DEFAULT_REFRESH_INTERVAL, &refresh_interval,
-		    MIN_REFRESH_INTERVAL, MAX_REFRESH_INTERVAL);
-		if (error)
-			return error;
-
-		error = load_range(interval, OPTNAME_RTR_INTERVAL_RETRY,
-		    DEFAULT_RETRY_INTERVAL, &retry_interval,
-		    MIN_RETRY_INTERVAL, MAX_RETRY_INTERVAL);
-		if (error)
-			return error;
-
-		error = load_range(interval, OPTNAME_RTR_INTERVAL_EXPIRE,
-		    DEFAULT_EXPIRE_INTERVAL, &expire_interval,
-		    MIN_EXPIRE_INTERVAL, MAX_EXPIRE_INTERVAL);
-		if (error)
-			return error;
-
-		config.refresh_interval = refresh_interval;
-		config.retry_interval = retry_interval;
-		config.expire_interval = expire_interval;
-	} else {
-		config.refresh_interval = DEFAULT_REFRESH_INTERVAL;
-		config.retry_interval = DEFAULT_RETRY_INTERVAL;
-		config.expire_interval = DEFAULT_EXPIRE_INTERVAL;
-	}
+	error = load_intervals(root);
+	if (error)
+		return error;
 
 	return init_addrinfo(address, port);
 }
