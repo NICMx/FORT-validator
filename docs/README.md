@@ -1,10 +1,10 @@
-# Fort's website
+# FORT's website
 
-This directory contains the source files of Fort's site and documentation.
+This directory contains the source files of FORT's site and documentation.
 
-On account on not being finished, Github does not automatically compile+serve this yet.
+Github automatically compiles and publishes it at [https://nicmx.github.io/FORT-validator/](https://nicmx.github.io/FORT-validator/). **It's still under construction**.
 
-You can compile the documentation yourself by running [Jekyll](http://jekyllrb.com/) right here.
+You can also compile the documentation yourself by running [Jekyll](http://jekyllrb.com/) right here.
 
 ```bash
 $ jekyll build
