@@ -178,7 +178,7 @@ error_report_destroy(void *pdu_void)
 		warnx("Unknown PDU type (%u).", sub_hdr->pdu_type);
 
 	free(pdu->error_message);
-	free(pdu);
+	free(pdu_void);
 }
 
 #define DEFINE_METADATA(name, dtor)					\

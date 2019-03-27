@@ -7,7 +7,6 @@
 #include "clients.h"
 #include "configuration.h"
 #include "csv.h"
-#include "updates_daemon.h"
 #include "vrps.h"
 
 /*
@@ -65,12 +64,9 @@ main(int argc, char *argv[])
 	if (err)
 		goto end3;
 
-	err = updates_daemon_init();
-	if (err)
-		goto end3;
-
 	err = rtr_listen();
 
+	rtr_cleanup();
 end3:
 	clients_db_destroy();
 end2:

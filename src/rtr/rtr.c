@@ -10,7 +10,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/queue.h>
 
+#include "../updates_daemon.h"
 #include "clients.h"
 #include "configuration.h"
 #include "err_pdu.h"
@@ -18,6 +20,15 @@
 
 /* TODO Support both RTR v0 an v1 */
 #define RTR_VERSION_SUPPORTED	RTR_V0
+
+volatile bool loop;
+
+struct thread_node {
+	pthread_t tid;
+	SLIST_ENTRY(thread_node) next;
+};
+
+SLIST_HEAD(thread_list, thread_node) threads;
 
 /*
  * Creates the socket that will stay put and wait for new connections started
@@ -31,7 +42,8 @@ create_server_socket(void)
 
 	addr = config_get_server_addrinfo();
 	for (; addr != NULL; addr = addr->ai_next) {
-		printf("Attempting to bind socket to address '%s', port '%s'.\n",
+		printf(
+		    "Attempting to bind socket to address '%s', port '%s'.\n",
 		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
 		    config_get_server_port());
 
@@ -121,9 +133,8 @@ client_thread_cb(void *param_void)
 	u_int8_t rtr_version;
 
 	memcpy(&param, param_void, sizeof(param));
-	free(param_void); /* Ha. */
 
-	while (true) { /* For each PDU... */
+	while (loop) { /* For each PDU... */
 		err = pdu_load(param.client_fd, &pdu, &meta, &rtr_version);
 		if (err)
 			return NULL;
@@ -166,11 +177,12 @@ client_thread_cb(void *param_void)
 static int
 handle_client_connections(int server_fd)
 {
-	int client_fd;
 	struct sockaddr_storage client_addr;
+	struct thread_param arg;
+	struct thread_node *new_thread;
 	socklen_t sizeof_client_addr;
-	struct thread_param *arg;
-	pthread_t thread;
+	pthread_attr_t attr;
+	int client_fd;
 
 	listen(server_fd, config_get_server_queue());
 
@@ -190,29 +202,34 @@ handle_client_connections(int server_fd)
 
 		/*
 		 * Note: My gut says that errors from now on (even the unknown
-		 * ones) should be treated as temporary; maybe the next accept()
-		 * will work.
+		 * ones) should be treated as temporary; maybe the next
+		 * accept() will work.
 		 * So don't interrupt the thread when this happens.
 		 */
 
-		arg = malloc(sizeof(struct thread_param));
-		if (arg == NULL) {
-			warn("Thread parameter allocation failure");
-			continue;
-		}
-		arg->client_fd = client_fd;
-		arg->client_addr = client_addr;
-
-		errno = pthread_create(&thread, NULL, client_thread_cb, arg);
-		if (errno) {
-			warn("Could not spawn the client's thread");
-			free(arg);
+		new_thread = malloc(sizeof(struct thread_node));
+		if (new_thread == NULL) {
+			warnx("Couldn't create thread struct");
 			close(client_fd);
 			continue;
 		}
 
-		/* BTW: The thread will be responsible for releasing @arg. */
-		pthread_detach(thread);
+		arg.client_fd = client_fd;
+		arg.client_addr = client_addr;
+
+		pthread_attr_init(&attr);
+		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+		errno = pthread_create(&new_thread->tid, &attr,
+		    client_thread_cb, &arg);
+		pthread_attr_destroy(&attr);
+		if (errno) {
+			warn("Could not spawn the client's thread");
+			free(new_thread);
+			close(client_fd);
+			continue;
+		}
+
+		SLIST_INSERT_HEAD(&threads, new_thread, next);
 
 	} while (true);
 
@@ -229,10 +246,37 @@ int
 rtr_listen(void)
 {
 	int server_fd; /* "file descriptor" */
+	int error;
 
 	server_fd = create_server_socket();
 	if (server_fd < 0)
 		return server_fd;
 
+	/* Server ready, start updates thread */
+	error = updates_daemon_start();
+	if (error)
+		return error;
+
+	/* Init global vars */
+	loop = true;
+	SLIST_INIT(&threads);
+
 	return handle_client_connections(server_fd);
+}
+
+void
+rtr_cleanup(void)
+{
+	struct thread_node *ptr;
+
+	updates_daemon_destroy();
+
+	/* Wait for threads to end gracefully */
+	loop = false;
+	while (!SLIST_EMPTY(&threads)) {
+		ptr = SLIST_FIRST(&threads);
+		SLIST_REMOVE_HEAD(&threads, next);
+		pthread_join(ptr->tid, NULL);
+		free(ptr);
+	}
 }

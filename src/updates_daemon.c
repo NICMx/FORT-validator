@@ -10,6 +10,8 @@
 #include "configuration.h"
 #include "notify.h"
 
+pthread_t thread;
+
 static void *
 check_vrps_updates(void *param_void) {
 	int error;
@@ -31,13 +33,26 @@ sleep:
 }
 
 int
-updates_daemon_init(void) {
-	pthread_t thread;
+updates_daemon_start(void)
+{
+	pthread_attr_t attr;
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	errno = pthread_create(&thread, NULL, check_vrps_updates, NULL);
+	pthread_attr_destroy(&attr);
 	if (errno) {
 		warn("Could not spawn the update daemon thread");
-		return errno;
+		return -errno;
 	}
-	pthread_detach(thread);
+
 	return 0;
+}
+
+void
+updates_daemon_destroy(void)
+{
+	void *ptr = NULL;
+	pthread_cancel(thread);
+	pthread_join(thread, &ptr);
 }
