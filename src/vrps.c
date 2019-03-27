@@ -163,7 +163,6 @@ delta_add_vrp(struct delta *delta, struct vrp *vrp)
 static int
 delta_summary(struct delta *base_delta, struct delta *result)
 {
-	struct delta summary_delta;
 	struct vrps *base, *search_list;
 	struct vrp *cursor;
 	int error;
@@ -174,18 +173,18 @@ delta_summary(struct delta *base_delta, struct delta *result)
 	 * with a more efficient algorithm.
 	 */
 
-	error = delta_init(&summary_delta);
+	error = delta_init(result);
 	if (error)
 		return error;
 
-	summary_delta.serial = base_delta->serial;
+	result->serial = base_delta->serial;
 	/* First check for announcements */
 	base = &base_delta->vrps;
 	search_list = &state.base_db.vrps;
 	ARRAYLIST_FOREACH(base, cursor)
 		if (vrp_is_new(search_list, cursor)) {
 			cursor->flags = FLAG_ANNOUNCEMENT;
-			error = delta_add_vrp(&summary_delta, cursor);
+			error = delta_add_vrp(result, cursor);
 			if (error) {
 				warnx("Couldn't add announcement to summary");
 				return error;
@@ -198,15 +197,13 @@ delta_summary(struct delta *base_delta, struct delta *result)
 	ARRAYLIST_FOREACH(base, cursor)
 		if (vrp_is_new(search_list, cursor)) {
 			cursor->flags = FLAG_WITHDRAWAL;
-			error = delta_add_vrp(&summary_delta, cursor);
+			error = delta_add_vrp(result, cursor);
 			if (error) {
 				warnx("Couldn't add withdrawal to summary");
 				return error;
 			}
 		}
 
-	memcpy(result, &summary_delta, sizeof(summary_delta));
-	delta_destroy(&summary_delta);
 	return 0;
 }
 
@@ -249,7 +246,7 @@ copy_vrps(struct vrp **dst, struct vrp *src, unsigned int len)
 		return;
 	}
 	*dst = tmp;
-	*dst = memcpy(*dst, src, len * sizeof(struct vrp));
+	memcpy(*dst, src, len * sizeof(struct vrp));
 }
 
 int

@@ -206,6 +206,10 @@ send_payload_pdus(struct sender_common *common)
 	int error;
 
 	vrps = malloc(sizeof(struct vrp));
+	if (vrps == NULL) {
+		warn("Couldn't allocate VRPs to send PDUs");
+		return -errno;
+	}
 	len = get_vrps_delta(common->start_serial, common->end_serial, &vrps);
 	if (len == 0)
 		goto end;
