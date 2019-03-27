@@ -36,8 +36,9 @@ write_in_addr(char *buf, struct in_addr value)
 char *
 write_in6_addr(char *buf, struct in6_addr value)
 {
-	buf = write_int32(buf, ntohl(value.s6_addr32[3]));
-	buf = write_int32(buf, ntohl(value.s6_addr32[2]));
-	buf = write_int32(buf, ntohl(value.s6_addr32[1]));
-	return write_int32(buf, ntohl(value.s6_addr32[0]));
+	int i;
+	for (i = 0; i < 16; i++)
+		buf = write_int8(buf, value.s6_addr[i]);
+
+	return buf;
 }
