@@ -1,6 +1,7 @@
 #include "clients.h"
 
 #include "array_list.h"
+#include "common.h"
 
 #define SADDR_IN(addr) ((struct sockaddr_in *)addr)
 #define SADDR_IN6(addr) ((struct sockaddr_in6 *)addr)
@@ -8,6 +9,12 @@
 ARRAY_LIST(clientsdb, struct client)
 
 struct clientsdb clients_db;
+
+/* Read and Write locks */
+sem_t rlock, wlock;
+
+/* Readers counter */
+unsigned int rcounter;
 
 int
 clients_db_init(void)
@@ -18,13 +25,11 @@ clients_db_init(void)
 	if (error)
 		warnx( "Clients DB couldn't be initialized");
 
-	return error;
-}
+	sem_init(&rlock, 0, 1);
+	sem_init(&wlock, 0, 1);
+	rcounter = 0;
 
-static int
-clients_db_add_client(struct client *client)
-{
-	return clientsdb_add(&clients_db, client);
+	return error;
 }
 
 static struct client *
@@ -32,22 +37,28 @@ get_client(struct sockaddr_storage *addr)
 {
 	struct client *ptr;
 
+	read_lock(&rlock, &wlock, &rcounter);
 	ARRAYLIST_FOREACH(&clients_db, ptr)
 		if (ptr->sin_family == addr->ss_family) {
 			if (ptr->sin_family == AF_INET) {
 				if (ptr->sin_addr.s_addr ==
 				    SADDR_IN(addr)->sin_addr.s_addr &&
-				    ptr->sin_port == SADDR_IN(addr)->sin_port)
+				    ptr->sin_port ==
+				    SADDR_IN(addr)->sin_port) {
+					read_unlock(&rlock, &wlock, &rcounter);
 					return ptr;
+				}
 			} else if (ptr->sin_family == AF_INET6)
 				if (IN6_ARE_ADDR_EQUAL(
 				    ptr->sin6_addr.s6_addr32,
 				    SADDR_IN6(addr)->sin6_addr.s6_addr32) &&
 				    ptr->sin_port ==
-				    SADDR_IN6(addr)->sin6_port)
+				    SADDR_IN6(addr)->sin6_port) {
+					read_unlock(&rlock, &wlock, &rcounter);
 					return ptr;
+				}
 		}
-
+	read_unlock(&rlock, &wlock, &rcounter);
 	return NULL;
 }
 
@@ -55,6 +66,7 @@ static int
 create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 {
 	struct client client;
+	int error;
 
 	client.fd = fd;
 	client.sin_family = addr->ss_family;
@@ -67,7 +79,11 @@ create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 	}
 	client.rtr_version = rtr_version;
 
-	return clients_db_add_client(&client);
+	sem_wait(&wlock);
+	error = clientsdb_add(&clients_db, &client);
+	sem_post(&wlock);
+
+	return error;
 }
 
 /*
@@ -102,8 +118,14 @@ update_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
 size_t
 client_list(struct client **clients)
 {
+	size_t len;
+
+	read_lock(&rlock, &wlock, &rcounter);
 	*clients = clients_db.array;
-	return clients_db.len;
+	len = clients_db.len;
+	read_unlock(&rlock, &wlock, &rcounter);
+
+	return len;
 }
 
 static void
@@ -115,5 +137,10 @@ client_destroy(struct client *client)
 void
 clients_db_destroy(void)
 {
+	sem_wait(&wlock);
 	clientsdb_cleanup(&clients_db, client_destroy);
+	sem_post(&wlock);
+
+	sem_destroy(&wlock);
+	sem_destroy(&rlock);
 }
