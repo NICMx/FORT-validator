@@ -1,5 +1,5 @@
 markdown: kramdown
-baseurl: /fort
+baseurl: /FORT-validator
 defaults:
   -
     scope:
