@@ -15,9 +15,10 @@ struct client {
 };
 
 int clients_db_init(void);
-int update_client(int fd, struct sockaddr_storage *, u_int8_t);
+int update_client(int, struct sockaddr_storage *, u_int8_t);
 size_t client_list(struct client **);
 
+void clients_forget(int);
 void clients_db_destroy(void);
 
 #endif /* SRC_CLIENTS_H_ */

@@ -117,6 +117,15 @@ handle_accept_result(int client_fd, int err)
 	return VERDICT_EXIT;
 }
 
+static void *
+end_client(int client_fd, const struct pdu_metadata *meta, void *pdu)
+{
+	if (meta != NULL && pdu != NULL)
+		meta->destructor(pdu);
+	clients_forget(client_fd);
+	return NULL;
+}
+
 /*
  * The client socket threads' entry routine.
  *
@@ -137,15 +146,14 @@ client_thread_cb(void *param_void)
 	while (loop) { /* For each PDU... */
 		err = pdu_load(param.client_fd, &pdu, &meta, &rtr_version);
 		if (err)
-			return NULL;
+			return end_client(param.client_fd, NULL, NULL);
 
 		/* Protocol Version Negotiation */
 		if (rtr_version != RTR_VERSION_SUPPORTED) {
 			err_pdu_send(param.client_fd, RTR_VERSION_SUPPORTED,
 			    ERR_PDU_UNSUP_PROTO_VERSION,
 			    (struct pdu_header *) pdu, NULL);
-			meta->destructor(pdu);
-			return NULL;
+			return end_client(param.client_fd, meta, pdu);
 		}
 		/* RTR Version ready, now update client */
 		err = update_client(param.client_fd, &param.client_addr,
@@ -158,14 +166,13 @@ client_thread_cb(void *param_void)
 				    : ERR_PDU_UNEXPECTED_PROTO_VERSION),
 				    (struct pdu_header *) pdu, NULL);
 			}
-			meta->destructor(pdu);
-			return NULL;
+			return end_client(param.client_fd, meta, pdu);
 		}
 
 		err = meta->handle(param.client_fd, pdu);
 		meta->destructor(pdu);
 		if (err)
-			return NULL;
+			return end_client(param.client_fd, NULL, NULL);
 	}
 
 	return NULL; /* Unreachable. */

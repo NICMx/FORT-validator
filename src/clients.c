@@ -135,6 +135,30 @@ client_destroy(struct client *client)
 }
 
 void
+clients_forget(int fd)
+{
+	struct clientsdb *new_db;
+	struct client *ptr;
+
+	new_db = malloc(sizeof(struct clientsdb));
+	if (new_db == NULL) {
+		warnx("Couldn't allocate new clients DB");
+		return;
+	}
+	clientsdb_init(new_db);
+	read_lock(&rlock, &wlock, &rcounter);
+	ARRAYLIST_FOREACH(&clients_db, ptr)
+		if (ptr->fd != fd)
+			clientsdb_add(new_db, ptr);
+	read_unlock(&rlock, &wlock, &rcounter);
+
+	sem_wait(&wlock);
+	clients_db = *new_db;
+	sem_post(&wlock);
+	free(new_db);
+}
+
+void
 clients_db_destroy(void)
 {
 	sem_wait(&wlock);
