@@ -348,13 +348,13 @@ init_addrinfo(char const *hostname, char const *service)
 		warnx("Could not infer a bindable address out of address '%s' and port '%s': %s",
 		    (hostname != NULL) ? hostname : "any", service,
 		    gai_strerror(error));
-		return error;
+		return -error;
 	}
 
 	config.port = strdup(service);
 	if (config.port == NULL) {
 		warn( "'%s' couldn't be allocated.", OPTNAME_LISTEN_PORT);
-		return errno;
+		return -errno;
 	}
 
 	return 0;

@@ -48,7 +48,7 @@
 			    * sizeof(elem_type));			\
 			if (tmp == NULL) {				\
 				warn("Couldn't realloc array");		\
-				return errno;				\
+				return -ENOMEM;				\
 			}						\
 			list->array = tmp;				\
 		}							\

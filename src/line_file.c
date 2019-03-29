@@ -18,7 +18,6 @@ int
 lfile_open(const char *file_name, struct line_file **result)
 {
 	struct line_file *lfile;
-	int error;
 
 	lfile = malloc(sizeof(struct line_file));
 	if (lfile == NULL)
@@ -26,9 +25,8 @@ lfile_open(const char *file_name, struct line_file **result)
 
 	lfile->file = fopen(file_name, "r");
 	if (lfile->file == NULL) {
-		error = errno;
 		free(lfile);
-		return error;
+		return -errno;
 	}
 	lfile->file_name = file_name;
 	lfile->offset = 0;
@@ -59,7 +57,6 @@ lfile_read(struct line_file *lfile, char **result)
 	size_t alloc_len;
 	ssize_t len;
 	ssize_t i;
-	int error;
 
 	/*
 	 * Note to myself:
@@ -99,21 +96,18 @@ lfile_read(struct line_file *lfile, char **result)
 	len = getline(&string, &alloc_len, lfile->file);
 
 	if (len == -1) {
-		error = errno;
 		free(string);
 		*result = NULL;
 		if (ferror(lfile->file)) {
-			warnx("Error while reading file: %s",
-			    strerror(error));
-			return error;
+			warn("Error while reading file");
+			return -errno;
 		}
 		if (feof(lfile->file))
 			return 0;
 
-		error = -EINVAL;
 		warnx("Supposedly unreachable code reached. ferror:%d feof:%d",
 		    ferror(lfile->file), feof(lfile->file));
-		return error;
+		return -EINVAL;
 	}
 
 	lfile->offset += len;
@@ -125,11 +119,10 @@ lfile_read(struct line_file *lfile, char **result)
 	 */
 	for (i = 0; i < len; i++) {
 		if (string[i] == '\0') {
-			error = -EINVAL;
 			warnx("File '%s' has an illegal null character in its body. Please remove it.",
 			    lfile_name(lfile));
 			free(string);
-			return error;
+			return -EINVAL;
 		}
 	}
 

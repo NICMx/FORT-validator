@@ -95,7 +95,7 @@ send_response(int fd, char *data, size_t data_len)
 	free_buffer(&buffer);
 	if (error < 0) {
 		warnx("Error sending response");
-		return error;
+		return -EINVAL;
 	}
 
 	return 0;
@@ -208,7 +208,7 @@ send_payload_pdus(struct sender_common *common)
 	vrps = malloc(sizeof(struct vrp));
 	if (vrps == NULL) {
 		warn("Couldn't allocate VRPs to send PDUs");
-		return -errno;
+		return -ENOMEM;
 	}
 	len = get_vrps_delta(common->start_serial, common->end_serial, &vrps);
 	if (len == 0)

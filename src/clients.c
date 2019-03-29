@@ -153,6 +153,7 @@ clients_forget(int fd)
 	read_unlock(&rlock, &wlock, &rcounter);
 
 	sem_wait(&wlock);
+	clientsdb_cleanup(&clients_db, client_destroy);
 	clients_db = *new_db;
 	sem_post(&wlock);
 	free(new_db);

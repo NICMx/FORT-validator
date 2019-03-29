@@ -16,14 +16,12 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len)
 {
 	ssize_t read_result;
 	size_t offset;
-	int err;
 
 	for (offset = 0; offset < buffer_len; offset += read_result) {
 		read_result = read(fd, &buffer[offset], buffer_len - offset);
 		if (read_result == -1) {
-			err = errno;
 			warn("Client socket read interrupted");
-			return err;
+			return -errno;
 		}
 		if (read_result == 0) {
 			warnx("Stream ended mid-PDU.");

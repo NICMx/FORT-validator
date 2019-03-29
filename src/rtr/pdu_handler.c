@@ -65,8 +65,8 @@ handle_serial_query_pdu(int fd, void *pdu)
 	version = received->header.protocol_version;
 	session_id = get_current_session_id(version);
 	if (received->header.session_id != session_id)
-		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, NULL,
-		    NULL);
+		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA,
+		    &received->header, NULL);
 
 	current_serial = get_last_serial_number();
 	init_sender_common(&common, fd, version, &session_id,

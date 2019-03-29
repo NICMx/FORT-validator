@@ -90,7 +90,7 @@ add_vrp(char *line, struct vrplist *vrplist)
 
 	line_copy = malloc(strlen(line) + 1);
 	if (line_copy == NULL) {
-		error = errno;
+		error = -errno;
 		warn("Out of memory allocating CSV line copy");
 		goto error;
 	}
@@ -228,8 +228,9 @@ load_vrps_file(bool check_update, bool *updated)
 	/* Look for the last update date */
 	error = stat(location, &attr);
 	if (error) {
-		warn("Couldn't get last modified date of %s, skip update",
+		warnx("Couldn't get last modified date of %s, skip update",
 			location);
+		error = -ENOENT;
 		goto end;
 	}
 
