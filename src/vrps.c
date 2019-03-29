@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "array_list.h"
+#include "common.h"
 
 /*
  * Storage of VRPs (term taken from RFC 6811 "Validated ROA Payload") and
@@ -32,6 +33,12 @@ struct state {
 	u_int16_t v1_session_id;
 	time_t last_modified_date;
 } state;
+
+/* Read and Write locks */
+sem_t rlock, wlock;
+
+/* Readers counter */
+unsigned int rcounter;
 
 static int
 delta_init(struct delta *delta)
@@ -81,6 +88,10 @@ deltas_db_init(void)
 	state.v0_session_id = (u_int16_t)((time(NULL) << shift) >> shift);
 	/* Minus 1 to prevent same ID */
 	state.v1_session_id = state.v0_session_id - 1;
+
+	sem_init(&rlock, 0, 1);
+	sem_init(&wlock, 0, 1);
+	rcounter = 0;
 
 	return 0;
 }
@@ -178,6 +189,7 @@ delta_summary(struct delta *base_delta, struct delta *result)
 		return error;
 
 	result->serial = base_delta->serial;
+	read_lock(&rlock, &wlock, &rcounter);
 	/* First check for announcements */
 	base = &base_delta->vrps;
 	search_list = &state.base_db.vrps;
@@ -187,6 +199,7 @@ delta_summary(struct delta *base_delta, struct delta *result)
 			error = delta_add_vrp(result, cursor);
 			if (error) {
 				warnx("Couldn't add announcement to summary");
+				read_unlock(&rlock, &wlock, &rcounter);
 				return error;
 			}
 		}
@@ -200,10 +213,12 @@ delta_summary(struct delta *base_delta, struct delta *result)
 			error = delta_add_vrp(result, cursor);
 			if (error) {
 				warnx("Couldn't add withdrawal to summary");
+				read_unlock(&rlock, &wlock, &rcounter);
 				return error;
 			}
 		}
 
+	read_unlock(&rlock, &wlock, &rcounter);
 	return 0;
 }
 
@@ -214,7 +229,9 @@ deltas_db_add_delta(struct delta delta)
 	int result;
 
 	result = 0;
+	read_lock(&rlock, &wlock, &rcounter);
 	delta.serial = state.current_serial;
+	read_unlock(&rlock, &wlock, &rcounter);
 	/* Store only updates */
 	if (delta.serial != START_SERIAL) {
 		result = delta_summary(&delta, &summary);
@@ -222,7 +239,9 @@ deltas_db_add_delta(struct delta delta)
 			warnx("Error summarizing new delta");
 			return result;
 		}
+		sem_wait(&wlock);
 		result = deltasdb_add(&state.deltas_db, &summary);
+		sem_post(&wlock);
 	}
 	/* Don't set the base in case of error */
 	if (result != 0) {
@@ -230,9 +249,11 @@ deltas_db_add_delta(struct delta delta)
 		return result;
 	}
 
+	sem_wait(&wlock);
 	free(state.base_db.vrps.array);
 	state.base_db = delta;
 	state.current_serial++;
+	sem_post(&wlock);
 	return result;
 }
 
@@ -275,9 +296,13 @@ deltas_db_create_delta(struct vrp *array, unsigned int len)
 void
 deltas_db_destroy(void)
 {
-
+	sem_wait(&wlock);
 	delta_destroy(&state.base_db);
 	deltasdb_cleanup(&state.deltas_db, delta_destroy);
+	sem_post(&wlock);
+
+	sem_destroy(&wlock);
+	sem_destroy(&rlock);
 }
 
 /*
@@ -297,23 +322,35 @@ int
 deltas_db_status(u_int32_t *serial)
 {
 	struct delta *delta;
+	int result;
 
-	if (state.base_db.vrps.len == 0)
-		return NO_DATA_AVAILABLE;
+	read_lock(&rlock, &wlock, &rcounter);
+	if (state.base_db.vrps.len == 0) {
+		result = NO_DATA_AVAILABLE;
+		goto end;
+	}
 
 	/* No serial to match, and there's data at DB */
-	if (serial == NULL)
-		return DIFF_AVAILABLE;
+	if (serial == NULL) {
+		result = DIFF_AVAILABLE;
+		goto end;
+	}
 
 	/* Is the last version? */
-	if (*serial == state.base_db.serial)
-		return NO_DIFF;
+	if (*serial == state.base_db.serial) {
+		result = NO_DIFF;
+		goto end;
+	}
 
 	/* Get the delta corresponding to the serial */
-	ARRAYLIST_FOREACH(&state.deltas_db, delta) {
-		if (delta->serial == *serial)
-			return DIFF_AVAILABLE;
-	}
+	ARRAYLIST_FOREACH(&state.deltas_db, delta)
+		if (delta->serial == *serial) {
+			result = DIFF_AVAILABLE;
+			goto end;
+		}
+
+	/* No match yet, release lock */
+	read_unlock(&rlock, &wlock, &rcounter);
 
 	/* The first serial isn't at deltas */
 	if (*serial == START_SERIAL)
@@ -321,6 +358,9 @@ deltas_db_status(u_int32_t *serial)
 
 	/* Reached end, diff can't be determined */
 	return DIFF_UNDETERMINED;
+end:
+	read_unlock(&rlock, &wlock, &rcounter);
+	return result;
 }
 
 static void
@@ -345,21 +385,29 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 {
 	struct delta *delta1;
 	struct vrps summary;
+	unsigned int vrps_len;
 
+	read_lock(&rlock, &wlock, &rcounter);
 	/* No data */
-	if (state.base_db.vrps.len == 0)
+	if (state.base_db.vrps.len == 0) {
+		read_unlock(&rlock, &wlock, &rcounter);
 		return 0;
+	}
 
 	/* NULL start? Send the last version, there's no need to iterate DB */
 	if (start_serial == NULL) {
 		copy_vrps(result, state.base_db.vrps.array,
 		    state.base_db.vrps.len);
-		return state.base_db.vrps.len;
+		vrps_len = state.base_db.vrps.len;
+		read_unlock(&rlock, &wlock, &rcounter);
+		return vrps_len;
 	}
 
 	/* Apparently nothing to return */
-	if (*start_serial >= *end_serial)
+	if (*start_serial >= *end_serial) {
+		read_unlock(&rlock, &wlock, &rcounter);
 		return 0;
+	}
 
 	/* Get the delta corresponding to the serials */
 	vrps_init(&summary);
@@ -369,6 +417,7 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 		if (delta1->serial == *end_serial)
 			break;
 	}
+	read_unlock(&rlock, &wlock, &rcounter);
 
 	copy_vrps(result, summary.array, summary.len);
 	vrps_cleanup(&summary, vrp_destroy);
@@ -378,18 +427,27 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 void
 set_vrps_last_modified_date(time_t new_date)
 {
+	sem_wait(&wlock);
 	state.last_modified_date = new_date;
+	sem_post(&wlock);
 }
 
 u_int32_t
 get_last_serial_number(void)
 {
-	return state.current_serial - 1;
+	u_int32_t serial;
+
+	read_lock(&rlock, &wlock, &rcounter);
+	serial = state.current_serial - 1;
+	read_unlock(&rlock, &wlock, &rcounter);
+
+	return serial;
 }
 
 u_int16_t
 get_current_session_id(u_int8_t rtr_version)
 {
+	/* Semaphore isn't needed since this value is set at initialization */
 	if (rtr_version == 1)
 		return state.v1_session_id;
 	return state.v0_session_id;
@@ -398,5 +456,11 @@ get_current_session_id(u_int8_t rtr_version)
 time_t
 get_vrps_last_modified_date(void)
 {
-	return state.last_modified_date;
+	time_t date;
+
+	read_lock(&rlock, &wlock, &rcounter);
+	date = state.last_modified_date;
+	read_unlock(&rlock, &wlock, &rcounter);
+
+	return date;
 }
