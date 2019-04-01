@@ -38,9 +38,8 @@ parse_asn(char *text, unsigned int *value)
 		return -EINVAL;
 	}
 	/* An underflow or overflow will be considered here */
-	if (asn < 0 || UINT32_MAX < asn) {
-		warnx("Prefix length (%lu) is out of range (0-%u).",
-		    asn, UINT32_MAX);
+	if (asn <= 0 || UINT32_MAX < asn) {
+		warnx("ASN (%lu) is out of range [1 - %u].", asn, UINT32_MAX);
 		return -EINVAL;
 	}
 	*value = (unsigned int) asn;
