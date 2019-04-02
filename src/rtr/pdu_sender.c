@@ -215,9 +215,9 @@ send_payload_pdus(struct sender_common *common)
 		goto end;
 
 	for (ptr = vrps; (ptr - vrps) < len; ptr++) {
-		if (ptr->in_addr_len == INET_ADDRSTRLEN)
+		if (ptr->addr_fam == AF_INET)
 			error = send_ipv4_prefix_pdu(common, ptr);
-		else if (ptr->in_addr_len == INET6_ADDRSTRLEN)
+		else if (ptr->addr_fam == AF_INET6)
 			error = send_ipv6_prefix_pdu(common, ptr);
 		else
 			error = -EINVAL;

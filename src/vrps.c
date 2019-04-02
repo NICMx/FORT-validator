@@ -115,7 +115,7 @@ create_vrp4(u_int32_t asn, struct in_addr ipv4_prefix, u_int8_t prefix_length,
 
 	init_vrp(&result, asn, prefix_length, max_prefix_length);
 	result.ipv4_prefix = ipv4_prefix;
-	result.in_addr_len = INET_ADDRSTRLEN;
+	result.addr_fam = AF_INET;
 
 	return result;
 }
@@ -128,7 +128,7 @@ create_vrp6(u_int32_t asn, struct in6_addr ipv6_prefix, u_int8_t prefix_length,
 
 	init_vrp(&result, asn, prefix_length, max_prefix_length);
 	result.ipv6_prefix = ipv6_prefix;
-	result.in_addr_len = INET6_ADDRSTRLEN;
+	result.addr_fam = AF_INET6;
 
 	return result;
 }
@@ -137,12 +137,12 @@ static bool
 vrp_equal(struct vrp *left, struct vrp *right)
 {
 	return left->asn == right->asn
-	    && left->in_addr_len == right->in_addr_len
+	    && left->addr_fam == right->addr_fam
 	    && left->prefix_length == right->prefix_length
 	    && left->max_prefix_length == right->max_prefix_length
-	    && ((left->in_addr_len == INET_ADDRSTRLEN
+	    && ((left->addr_fam == AF_INET
 	        && left->ipv4_prefix.s_addr == right->ipv4_prefix.s_addr)
-	    || (left->in_addr_len == INET6_ADDRSTRLEN
+	    || (left->addr_fam == AF_INET6
 	    && IN6_ARE_ADDR_EQUAL(left->ipv6_prefix.s6_addr32,
 	        right->ipv6_prefix.s6_addr32)));
 }

@@ -17,7 +17,7 @@ struct vrp {
 	};
 	u_int8_t	prefix_length;
 	u_int8_t	max_prefix_length;
-	u_int8_t	in_addr_len;
+	u_int8_t	addr_fam;
 	u_int8_t	flags;
 };
 
