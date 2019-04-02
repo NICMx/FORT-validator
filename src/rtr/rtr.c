@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -243,6 +244,31 @@ handle_client_connections(int server_fd)
 	return 0; /* Unreachable. */
 }
 
+static void
+signal_handler(int signal, siginfo_t *info, void *param)
+{
+	/* Empty handler */
+}
+
+static int
+init_signal_handler(void)
+{
+	struct sigaction act;
+	int error;
+
+	memset(&act, 0, sizeof act);
+	sigemptyset(&act.sa_mask);
+	act.sa_flags = SA_SIGINFO;
+	act.sa_sigaction = signal_handler;
+
+	error = sigaction(SIGINT, &act, NULL);
+	if (error) {
+		warn("Error initializing signal handler");
+		error = -errno;
+	}
+	return error;
+}
+
 /*
  * Starts the server, using the current thread to listen for RTR client
  * requests.
@@ -268,6 +294,10 @@ rtr_listen(void)
 	loop = true;
 	SLIST_INIT(&threads);
 
+	error = init_signal_handler();
+	if (error)
+		return error;
+
 	return handle_client_connections(server_fd);
 }
 
@@ -283,6 +313,7 @@ rtr_cleanup(void)
 	while (!SLIST_EMPTY(&threads)) {
 		ptr = SLIST_FIRST(&threads);
 		SLIST_REMOVE_HEAD(&threads, next);
+		pthread_kill(ptr->tid, SIGINT);
 		pthread_join(ptr->tid, NULL);
 		free(ptr);
 	}
