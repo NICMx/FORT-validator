@@ -5,6 +5,6 @@
 
 extern const struct global_type gt_string;
 
-int parse_toml_string(struct toml_table_t *, char const *, char **);
+int parse_json_string(json_t *, char const *, char const **);
 
 #endif /* SRC_CONFIG_STR_H_ */

@@ -2,6 +2,8 @@
 #define SRC_ARRAY_LIST_H_
 
 #include <errno.h>
+#include <stdlib.h>
+#include "log.h"
 
 #define ARRAY_LIST(name, elem_type)					\
 	struct name {							\
@@ -20,7 +22,7 @@
 		list->len = 0;						\
 		list->array = malloc(list->capacity			\
 		    * sizeof(elem_type));				\
-		return (list->array != NULL) ? 0 : -ENOMEM;		\
+		return (list->array != NULL) ? 0 : pr_enomem();		\
 	}								\
 									\
 	static void							\

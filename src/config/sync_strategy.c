@@ -12,14 +12,14 @@
 #define SYNC_VALUE_ROOT			"root"
 #define SYNC_VALUE_ROOT_EXCEPT_TA	"root-except-ta"
 
+#define DEREFERENCE(void_value) (*((enum sync_strategy *) void_value))
+
 static void
-print_sync_strategy(struct group_fields const *group,
-    struct option_field const *field, void *value)
+print_sync_strategy(struct option_field const *field, void *value)
 {
-	enum sync_strategy *strategy = value;
 	char const *str = "<unknown>";
 
-	switch (*strategy) {
+	switch (DEREFERENCE(value)) {
 	case SYNC_OFF:
 		str = SYNC_VALUE_OFF;
 		break;
@@ -34,23 +34,21 @@ print_sync_strategy(struct group_fields const *group,
 		break;
 	}
 
-	pr_info("%s.%s: %s", group->name, field->name, str);
+	pr_info("%s: %s", field->name, str);
 }
 
 static int
 parse_argv_sync_strategy(struct option_field const *field, char const *str,
-    void *_result)
+    void *result)
 {
-	enum sync_strategy *result = _result;
-
 	if (strcmp(str, SYNC_VALUE_OFF) == 0)
-		*result = SYNC_OFF;
+		DEREFERENCE(result) = SYNC_OFF;
 	else if (strcmp(str, SYNC_VALUE_STRICT) == 0)
-		*result = SYNC_STRICT;
+		DEREFERENCE(result) = SYNC_STRICT;
 	else if (strcmp(str, SYNC_VALUE_ROOT) == 0)
-		*result = SYNC_ROOT;
+		DEREFERENCE(result) = SYNC_ROOT;
 	else if (strcmp(str, SYNC_VALUE_ROOT_EXCEPT_TA) == 0)
-		*result = SYNC_ROOT_EXCEPT_TA;
+		DEREFERENCE(result) = SYNC_ROOT_EXCEPT_TA;
 	else
 		return pr_err("Unknown synchronization strategy: '%s'", str);
 
@@ -58,22 +56,14 @@ parse_argv_sync_strategy(struct option_field const *field, char const *str,
 }
 
 static int
-parse_toml_sync_strategy(struct option_field const *opt,
-    struct toml_table_t *toml, void *_result)
+parse_json_sync_strategy(struct option_field const *opt, struct json_t *json,
+    void *result)
 {
+	char const *string;
 	int error;
-	char *string;
 
-	error = parse_toml_string(toml, opt->name, &string);
-	if (error)
-		return error;
-	if (string == NULL)
-		return 0;
-
-	error = parse_argv_sync_strategy(opt, string, _result);
-
-	free(string);
-	return error;
+	error = parse_json_string(json, opt->name, &string);
+	return error ? error : parse_argv_sync_strategy(opt, string, result);
 }
 
 const struct global_type gt_sync_strategy = {
@@ -81,7 +71,7 @@ const struct global_type gt_sync_strategy = {
 	.size = sizeof(enum sync_strategy),
 	.print = print_sync_strategy,
 	.parse.argv = parse_argv_sync_strategy,
-	.parse.toml = parse_toml_sync_strategy,
+	.parse.json = parse_json_sync_strategy,
 	.arg_doc = SYNC_VALUE_OFF
 	    "|" SYNC_VALUE_STRICT
 	    "|" SYNC_VALUE_ROOT

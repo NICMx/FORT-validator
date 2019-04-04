@@ -1,94 +1,44 @@
-#include <err.h>
-#include <errno.h>
-#include <getopt.h>
-
-#include "common.h"
+#include "clients.h"
 #include "config.h"
 #include "debug.h"
 #include "extension.h"
-#include "log.h"
 #include "nid.h"
-#include "rpp.h"
 #include "thread_var.h"
-#include "object/certificate.h"
-#include "object/manifest.h"
-#include "object/tal.h"
+#include "vrps.h"
 #include "rsync/rsync.h"
+#include "rtr/rtr.h"
 
-/**
- * Performs the whole validation walkthrough on uri @uri, which is assumed to
- * have been extracted from a TAL.
- */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
+start_rtr_server(void)
 {
-	/*
-	 * Because of the way the foreach iterates, this function must return
-	 *
-	 * - 0 on soft errors.
-	 * - `> 0` on URI handled successfully.
-	 * - `< 0` on hard errors.
-	 *
-	 * A "soft error" is "the connection to the preferred URI fails, or the
-	 * retrieved CA certificate public key does not match the TAL public
-	 * key." (RFC 7730)
-	 *
-	 * A "hard error" is any other error.
-	 */
-
-	struct validation *state;
 	int error;
 
-	error = download_files(uri, true);
-	if (error) {
-		return pr_warn("TAL URI '%s' could not be RSYNC'd.",
-		    uri->global);
-	}
-
-	error = validation_prepare(&state, tal);
+	error = deltas_db_init();
 	if (error)
-		return -abs(error);
+		goto end1;
 
-	pr_debug_add("TAL URI '%s' {", uri_get_printable(uri));
+	error = clients_db_init();
+	if (error)
+		goto end2;
 
-	if (!uri_is_certificate(uri)) {
-		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
-		    uri_get_printable(uri));
-		error = -EINVAL;
-		goto end;
-	}
+	error = rtr_listen();
+	rtr_cleanup(); /* TODO shouldn't this only happen on !error? */
 
-	error = certificate_traverse(NULL, uri, NULL, true);
-	if (error) {
-		switch (validation_pubkey_state(state)) {
-		case PKS_INVALID:
-			error = 0;
-			break;
-		case PKS_VALID:
-		case PKS_UNTESTED:
-			error = -abs(error);
-			break;
-		}
-	} else {
-		error = 1;
-	}
-
-end:
-	validation_destroy(state);
-	pr_debug_rm("}");
-	return error;
+	clients_db_destroy();
+end2:	deltas_db_destroy();
+end1:	return error;
 }
 
 int
 main(int argc, char **argv)
 {
-	struct tal *tal;
 	int error;
 
 	print_stack_trace_on_segfault();
 
-	thvar_init();
-	fnstack_init();
+	error = thvar_init();
+	if (error)
+		return error;
 
 	error = handle_flags_config(argc, argv);
 	if (error)
@@ -96,34 +46,25 @@ main(int argc, char **argv)
 
 	error = rsync_init();
 	if (error)
-		goto end1;
-
+		goto revert_config;
 	error = nid_init();
 	if (error)
-		goto end2;
+		goto revert_rsync;
 	error = extension_init();
 	if (error)
-		goto end2;
-	fnstack_push(config_get_tal());
+		goto revert_rsync;
 
-	error = tal_load(config_get_tal(), &tal);
-	if (!error) {
-		if (config_get_shuffle_uris())
-			tal_shuffle_uris(tal);
+	error = perform_standalone_validation(NULL);
+	if (error)
+		goto revert_rsync;
 
-		error = foreach_uri(tal, handle_tal_uri);
-		if (error > 0)
-			error = 0;
-		else if (error == 0)
-			error = pr_err("None of the URIs of the TAL yielded a successful traversal.");
+	if (config_get_server_address() != NULL)
+		error = start_rtr_server();
+	/* Otherwise, no server requested. */
 
-		tal_destroy(tal);
-	}
-
-end2:
+revert_rsync:
 	rsync_destroy();
-end1:
+revert_config:
 	free_rpki_config();
-	fnstack_cleanup();
 	return error;
 }

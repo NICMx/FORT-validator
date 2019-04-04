@@ -4,8 +4,7 @@
 /*
  * A "line file" is a text file that you want to read line-by-line.
  *
- * As defined by RFC7730 (the only current user of this code), lines are
- * terminated by either CRLF or LF.
+ * Lines are terminated by either CRLF or LF.
  * (...which is the same as saying "lines are terminated by LF.")
  */
 
@@ -15,7 +14,7 @@
 struct line_file;
 
 int lfile_open(const char *, struct line_file **);
-void lfile_close();
+void lfile_close(struct line_file *lf);
 
 int lfile_read(struct line_file *, char **);
 

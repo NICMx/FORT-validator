@@ -150,10 +150,10 @@ rpp_traverse(struct rpp *pp)
 
 	/* Use valid address ranges to print ROAs that match them. */
 	ARRAYLIST_FOREACH(&pp->roas, uri)
-		handle_roa(uri, pp, crls);
+		roa_traverse(uri, pp, crls);
 
 	ARRAYLIST_FOREACH(&pp->ghostbusters, uri)
-		handle_ghostbusters(uri, pp, crls);
+		ghostbusters_traverse(uri, pp, crls);
 
 end:
 	sk_X509_CRL_pop_free(crls, X509_CRL_free);

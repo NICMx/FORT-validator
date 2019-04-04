@@ -4,7 +4,9 @@
 #include <getopt.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "log.h"
+#include "config/str.h"
 
 int
 string_array_init(struct string_array *array, char const *const *values,
@@ -47,13 +49,12 @@ __string_array_free(struct string_array *array)
 }
 
 static void
-string_array_print(struct group_fields const *group,
-    struct option_field const *field, void *_value)
+string_array_print(struct option_field const *field, void *_value)
 {
 	struct string_array *value = _value;
 	size_t i;
 
-	pr_info("%s.%s:", group->name, field->name);
+	pr_info("%s:", field->name);
 	pr_indent_add();
 
 	if (value->length == 0)
@@ -65,37 +66,53 @@ string_array_print(struct group_fields const *group,
 }
 
 static int
-string_array_parse_toml(struct option_field const *opt,
-    struct toml_table_t *toml, void *_result)
+string_array_parse_json(struct option_field const *opt, json_t *json,
+    void *_result)
 {
-	toml_array_t *array;
-	int array_len;
-	int i;
-	const char *raw;
-	struct string_array *result = _result;
+	struct string_array *result;
+	json_t *child;
+	size_t i, len;
+	char const *tmp;
 	int error;
 
-	array = toml_array_in(toml, opt->name);
-	if (array == NULL)
+	if (!json_is_array(json)) {
+		return pr_err("The '%s' element is not a JSON array.",
+		    opt->name);
+	}
+
+	len = json_array_size(json);
+	if (len == 0) {
+		__string_array_free(_result);
 		return 0;
-	array_len = toml_array_nelem(array);
+	}
+
+	for (i = 0; i < len; i++) {
+		child = json_array_get(json, i);
+		if (!json_is_string(child)) {
+			return pr_err("'%s' array element #%zu is not a string.",
+			    opt->name, i);
+		}
+	}
+
+	result = _result;
 
 	/* Remove the previous value (usually the default). */
 	__string_array_free(result);
 
-	result->array = malloc(array_len * sizeof(char *));
+	result->array = calloc(len, sizeof(char *));
 	if (result->array == NULL)
 		return pr_enomem();
-	result->length = array_len;
+	result->length = len;
 
-	for (i = 0; i < array_len; i++) {
-		raw = toml_raw_at(array, i);
-		if (raw == NULL) {
-			error = pr_crit("Array index %d is NULL.", i);
+	for (i = 0; i < len; i++) {
+		error = parse_json_string(json_array_get(json, i),
+		    "array element", &tmp);
+		if (error)
 			goto fail;
-		}
-		if (toml_rtos(raw, &result->array[i]) == -1) {
-			error = pr_err("Cannot parse '%s' as a string.", raw);
+
+		result->array[i] = strdup(tmp);
+		if (result->array[i] == NULL) {
+			error = pr_enomem();
 			goto fail;
 		}
 	}
@@ -103,8 +120,7 @@ string_array_parse_toml(struct option_field const *opt,
 	return 0;
 
 fail:
-	free(result->array);
-	result->length = 0;
+	__string_array_free(result);
 	return error;
 }
 
@@ -118,7 +134,7 @@ const struct global_type gt_string_array = {
 	.has_arg = required_argument,
 	.size = sizeof(char *const *),
 	.print = string_array_print,
-	.parse.toml = string_array_parse_toml,
+	.parse.json = string_array_parse_json,
 	.free = string_array_free,
 	.arg_doc = "<sequence of strings>",
 };

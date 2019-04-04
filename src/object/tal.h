@@ -18,4 +18,6 @@ void tal_shuffle_uris(struct tal *);
 char const *tal_get_file_name(struct tal *);
 void tal_get_spki(struct tal *, unsigned char const **, size_t *);
 
+int perform_standalone_validation(bool *);
+
 #endif /* TAL_OBJECT_H_ */

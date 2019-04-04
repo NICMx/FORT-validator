@@ -2,9 +2,14 @@
 #define SRC_OBJECT_ROA_H_
 
 #include <openssl/x509.h>
+
+#include "address.h"
 #include "rpp.h"
 #include "uri.h"
 
-int handle_roa(struct rpki_uri const *, struct rpp *, STACK_OF(X509_CRL) *);
+int roa_traverse(struct rpki_uri const *, struct rpp *, STACK_OF(X509_CRL) *);
+
+int roa_handle_v4(u_int32_t, struct ipv4_prefix *, u_int8_t);
+int roa_handle_v6(u_int32_t, struct ipv6_prefix *, u_int8_t);
 
 #endif /* SRC_OBJECT_ROA_H_ */

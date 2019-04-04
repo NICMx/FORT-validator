@@ -5,6 +5,8 @@
 #include <string.h>
 #include "log.h"
 
+#define DEREFERENCE(void_value) (*((char **) void_value))
+
 static void
 __string_free(char **string)
 {
@@ -13,18 +15,15 @@ __string_free(char **string)
 }
 
 static void
-string_print(struct group_fields const *group, struct option_field const *field,
-    void *value)
+string_print(struct option_field const *field, void *value)
 {
-	pr_info("%s.%s: %s", group->name, field->name, *((char **) value));
+	pr_info("%s: %s", field->name, DEREFERENCE(value));
 }
 
 static int
 string_parse_argv(struct option_field const *field, char const *str,
-    void *_result)
+    void *result)
 {
-	char **result = _result;
-
 	if (field->type->has_arg != required_argument || str == NULL) {
 		return pr_err("String options ('%s' in this case) require an argument.",
 		    field->name);
@@ -33,29 +32,18 @@ string_parse_argv(struct option_field const *field, char const *str,
 	/* Remove the previous value (usually the default). */
 	__string_free(result);
 
-	/* tomlc99 frees @str early, so work with a copy. */
-	*result = strdup(str);
-	return ((*result) != NULL) ? 0 : pr_enomem();
+	DEREFERENCE(result) = strdup(str);
+	return (DEREFERENCE(result) != NULL) ? 0 : pr_enomem();
 }
 
 static int
-string_parse_toml(struct option_field const *opt, struct toml_table_t *toml,
-    void *_result)
+string_parse_json(struct option_field const *opt, json_t *json, void *result)
 {
-	char *tmp;
-	char **result;
+	char const *string;
 	int error;
 
-	error = parse_toml_string(toml, opt->name, &tmp);
-	if (error)
-		return error;
-	if (tmp == NULL)
-		return 0;
-
-	result = _result;
-	__string_free(result);
-	*result = tmp;
-	return 0;
+	error = parse_json_string(json, opt->name, &string);
+	return error ? error : string_parse_argv(opt, string, result);
 }
 
 static void
@@ -69,25 +57,20 @@ const struct global_type gt_string = {
 	.size = sizeof(char *),
 	.print = string_print,
 	.parse.argv = string_parse_argv,
-	.parse.toml = string_parse_toml,
+	.parse.json = string_parse_json,
 	.free = string_free,
 	.arg_doc = "<string>",
 };
 
+/**
+ * *result must not be freed nor long-term stored.
+ */
 int
-parse_toml_string(struct toml_table_t *toml, char const *name, char **result)
+parse_json_string(json_t *json, char const *name, char const **result)
 {
-	const char *raw;
-	char *value;
+	if (!json_is_string(json))
+		return pr_err("The '%s' element is not a JSON string.", name);
 
-	raw = toml_raw_in(toml, name);
-	if (raw == NULL) {
-		*result = NULL;
-		return 0;
-	}
-	if (toml_rtos(raw, &value) == -1)
-		return pr_err("Cannot parse '%s' as a string.", raw);
-
-	*result = value;
+	*result = json_string_value(json);
 	return 0;
 }

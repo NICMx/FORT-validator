@@ -6,19 +6,16 @@
 #include "log.h"
 
 static void
-print_u_int(struct group_fields const *group, struct option_field const *field,
-    void *value)
+print_u_int(struct option_field const *field, void *value)
 {
-	pr_info("%s.%s: %u", group->name, field->name,
-	    *((unsigned int *) value));
+	pr_info("%s: %u", field->name, *((unsigned int *) value));
 }
 
-static int
+int
 parse_argv_u_int(struct option_field const *field, char const *str,
-    void *_result)
+    void *result)
 {
 	unsigned long parsed;
-	int *result;
 
 	if (field->type->has_arg != required_argument || str == NULL) {
 		return pr_err("Integer options ('%s' in this case) require an argument.",
@@ -35,32 +32,28 @@ parse_argv_u_int(struct option_field const *field, char const *str,
 		    field->min, field->max);
 	}
 
-	result = _result;
-	*result = parsed;
+	*((unsigned int *) result) = parsed;
 	return 0;
 }
 
-static int
-parse_toml_u_int(struct option_field const *opt, struct toml_table_t *toml,
-    void *_result)
+int
+parse_json_u_int(struct option_field const *opt, json_t *json, void *result)
 {
-	const char *raw;
-	int64_t value;
-	unsigned int *result;
+	json_int_t value;
 
-	raw = toml_raw_in(toml, opt->name);
-	if (raw == NULL)
-		return 0;
-	if (toml_rtoi(raw, &value) == -1)
-		return pr_err("Cannot parse '%s' as an integer.", raw);
+	if (!json_is_integer(json)) {
+		return pr_err("The '%s' element is not a JSON integer.",
+		    opt->name);
+	}
+
+	value = json_integer_value(json);
 
 	if (value < opt->min || opt->max < value) {
 		return pr_err("Integer '%s' is out of range (%u-%u).",
 		    opt->name, opt->min, opt->max);
 	}
 
-	result = _result;
-	*result = value;
+	*((unsigned int *) result) = value;
 	return 0;
 }
 
@@ -69,6 +62,6 @@ const struct global_type gt_u_int = {
 	.size = sizeof(unsigned int),
 	.print = print_u_int,
 	.parse.argv = parse_argv_u_int,
-	.parse.toml = parse_toml_u_int,
+	.parse.json = parse_json_u_int,
 	.arg_doc = "<unsigned integer>",
 };

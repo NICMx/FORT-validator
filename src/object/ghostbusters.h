@@ -5,7 +5,7 @@
 #include "uri.h"
 #include "rpp.h"
 
-int handle_ghostbusters(struct rpki_uri const *, struct rpp *,
+int ghostbusters_traverse(struct rpki_uri const *, struct rpp *,
     STACK_OF(X509_CRL) *);
 
 #endif /* SRC_OBJECT_GHOSTBUSTERS_H_ */

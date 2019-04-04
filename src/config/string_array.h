@@ -5,6 +5,10 @@
 #include "config/types.h"
 
 struct string_array {
+	/*
+	 * BTW: The array size can be zero, in which case this will be NULL.
+	 * TODO Remember to handle properly.
+	 */
 	char **array;
 	size_t length;
 };

@@ -13,6 +13,9 @@ int BN2string(BIGNUM *, char **);
 
 /**
  * Do not modify fields directly; this should be private.
+ *
+ * This is more or less like strtok(), except it doesn't modify the string at
+ * any point.
  */
 struct string_tokenizer {
 	/** String we're tokenizing. */

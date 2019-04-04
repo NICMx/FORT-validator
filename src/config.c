@@ -5,24 +5,15 @@
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
+#include <sys/socket.h>
 
 #include "common.h"
+#include "json_handler.h"
 #include "log.h"
-#include "toml_handler.h"
 #include "config/boolean.h"
-#include "config/out_file.h"
 #include "config/str.h"
 #include "config/uint.h"
-
-/**
- * Please note that this is actually two `for`s stacked together, so don't use
- * `break` nor `continue` to get out.
- */
-#define FOREACH_OPTION(groups, grp, opt, type)			\
-	for (grp = groups; grp->name != NULL; grp++)		\
-		for (opt = grp->options; opt->id != 0; opt++)	\
-			if ((opt->availability == 0) ||		\
-			    (opt->availability & type))
+#include "config/uint32.h"
 
 /**
  * To add a member to this structure,
@@ -35,22 +26,41 @@
  * Assuming you don't need to create a data type, that should be all.
  */
 struct rpki_config {
-	/** TAL file name/location. */
+	/** TAL file name or directory. TODO support directories */
 	char *tal;
 	/** Path of our local clone of the repository */
 	char *local_repository;
 	/** Synchronization (currently only RSYNC) download strategy. */
 	enum sync_strategy sync_strategy;
 	/**
-	 * Shuffle uris in tal?
-	 * (https://tools.ietf.org/html/rfc7730#section-3, last paragraphs)
+	 * Handle TAL URIs in random order?
+	 * (https://tools.ietf.org/html/rfc7730#section-3, last
+	 * paragraphs)
 	 */
-	bool shuffle_uris;
+	bool shuffle_tal_uris;
 	/**
 	 * rfc6487#section-7.2, last paragraph.
 	 * Prevents arbitrarily long paths and loops.
 	 */
 	unsigned int maximum_certificate_depth;
+
+	struct {
+		/** The listener address of the RTR server. */
+		char *address;
+		/** TODO document */
+		char *port;
+		/** Maximum accepted client connections */
+		unsigned int queue;
+
+		/** Interval used to look for updates at VRPs location */
+		/* TODO rename */
+		unsigned int vrps_check_interval;
+
+		/** Intervals use at RTR v1 End of data PDU **/
+		u_int32_t refresh_interval;
+		u_int32_t retry_interval;
+		u_int32_t expire_interval;
+	} server;
 
 	struct {
 		char *program;
@@ -65,9 +75,7 @@ struct rpki_config {
 		bool color;
 		/** Format in which file names will be printed. */
 		enum filename_format filename_format;
-		/** Output stream where the valid ROAs will be dumped. */
-		struct config_out_file roa_output;
-	} output;
+	} log;
 };
 
 static void print_usage(FILE *, bool);
@@ -80,7 +88,7 @@ static void print_usage(FILE *, bool);
 DECLARE_HANDLE_FN(handle_help);
 DECLARE_HANDLE_FN(handle_usage);
 DECLARE_HANDLE_FN(handle_version);
-DECLARE_HANDLE_FN(handle_toml);
+DECLARE_HANDLE_FN(handle_json);
 
 static char const *program_name;
 static struct rpki_config rpki_config;
@@ -93,7 +101,9 @@ static const struct global_type gt_callback = {
 	.has_arg = no_argument,
 };
 
-static const struct option_field global_fields[] = {
+static const struct option_field options[] = {
+
+	/* ARGP-only, non-fields */
 	{
 		.id = 'h',
 		.name = "help",
@@ -119,10 +129,20 @@ static const struct option_field global_fields[] = {
 		.id = 'f',
 		.name = "configuration-file",
 		.type = &gt_string,
-		.handler = handle_toml,
-		.doc = "TOML file additional configuration will be read from",
+		.handler = handle_json,
+		.doc = "JSON file additional configuration will be read from",
 		.arg_doc = "<file>",
 		.availability = AVAILABILITY_GETOPT,
+	},
+
+	/* Root fields */
+	{
+		.id = 't',
+		.name = "tal",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, tal),
+		.doc = "Path to the TAL file",
+		.arg_doc = "<file>",
 	}, {
 		.id = 'r',
 		.name = "local-repository",
@@ -137,6 +157,12 @@ static const struct option_field global_fields[] = {
 		.offset = offsetof(struct rpki_config, sync_strategy),
 		.doc = "RSYNC download strategy",
 	}, {
+		.id = 2000,
+		.name = "shuffle-uris",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, shuffle_tal_uris),
+		.doc = "Shuffle URIs in the TAL before accessing them",
+	}, {
 		.id = 1002,
 		.name = "maximum-certificate-depth",
 		.type = &gt_u_int,
@@ -150,92 +176,108 @@ static const struct option_field global_fields[] = {
 		 */
 		.max = UINT_MAX - 1,
 	},
-	{ 0 },
-};
 
-static const struct option_field tal_fields[] = {
+	/* Server fields */
 	{
-		.id = 't',
-		.name = "tal",
+		.id = 5000,
+		.name = "server.address",
 		.type = &gt_string,
-		.offset = offsetof(struct rpki_config, tal),
-		.doc = "Path to the TAL file",
-		.arg_doc = "<file>",
+		.offset = offsetof(struct rpki_config, server.address),
+		.doc = "The listener address of the RTR server.",
 	}, {
-		.id = 2000,
-		.name = "shuffle-uris",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, shuffle_uris),
-		.doc = "Shuffle URIs in the TAL before accessing them",
+		.id = 5001,
+		.name = "server.port",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, server.port),
+		.doc = "", /* TODO */
+	}, {
+		.id = 5003,
+		.name = "server.queue",
+		.type = &gt_u_int,
+		.offset = offsetof(struct rpki_config, server.queue),
+		.doc = "Maximum accepted client connections",
+		.min = 1,
+		.max = SOMAXCONN,
+	}, {
+		.id = 5004,
+		.name = "server.vrps-check-interval",
+		.type = &gt_u_int,
+		.offset = offsetof(struct rpki_config, server.vrps_check_interval),
+		.doc = "Interval used to look for updates at VRPs location",
+		/*
+		 * RFC 6810 and 8210:
+		 * The cache MUST rate-limit Serial Notifies to no more frequently than
+		 * one per minute.
+		 */
+		.min = 60,
+		.max = 7200,
+	}, {
+		.id = 5005,
+		.name = "server.rtr-interval.refresh",
+		.type = &gt_u_int32,
+		.offset = offsetof(struct rpki_config, server.refresh_interval),
+		.doc = "Intervals use at RTR v1 End of data PDU",
+		.min = 1,
+		.max = 86400,
+	}, {
+		.id = 5006,
+		.name = "server.rtr-interval.retry",
+		.type = &gt_u_int32,
+		.offset = offsetof(struct rpki_config, server.retry_interval),
+		.doc = "",
+		.min = 1,
+		.max = 7200,
+	}, {
+		.id = 5007,
+		.name = "server.rtr-interval.expire",
+		.type = &gt_u_int32,
+		.offset = offsetof(struct rpki_config, server.expire_interval),
+		.doc = "",
+		.min = 600,
+		.max = 172800,
 	},
-	{ 0 },
-};
 
-static const struct option_field rsync_fields[] = {
+	/* RSYNC fields */
 	{
 		.id = 3000,
-		.name = "program",
+		.name = "rsync.program",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, rsync.program),
 		.doc = "Name of the program needed to execute an RSYNC",
 		.arg_doc = "<path to program>",
-		.availability = AVAILABILITY_TOML,
+		.availability = AVAILABILITY_JSON,
 	}, {
 		.id = 3001,
-		.name = "arguments-recursive",
+		.name = "rsync.arguments-recursive",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.recursive),
 		.doc = "RSYNC program arguments that will trigger a recursive RSYNC",
-		.availability = AVAILABILITY_TOML,
+		.availability = AVAILABILITY_JSON,
 	}, {
 		.id = 3002,
-		.name = "arguments-flat",
+		.name = "rsync.arguments-flat",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.flat),
 		.doc = "RSYNC program arguments that will trigger a non-recursive RSYNC",
-		.availability = AVAILABILITY_TOML,
+		.availability = AVAILABILITY_JSON,
 	},
-	{ 0 },
-};
 
-static const struct option_field output_fields[] = {
+	/* Logging fields */
 	{
 		.id = 'c',
-		.name = "color-output",
+		.name = "log.color-output",
 		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, output.color),
+		.offset = offsetof(struct rpki_config, log.color),
 		.doc = "Print ANSI color codes.",
 	}, {
 		.id = 4000,
-		.name = "output-file-name-format",
+		.name = "log.file-name-format",
 		.type = &gt_filename_format,
-		.offset = offsetof(struct rpki_config, output.filename_format),
+		.offset = offsetof(struct rpki_config, log.filename_format),
 		.doc = "File name variant to print during debug/error messages",
-	}, {
-		.id = 'o',
-		.name = "roa-output-file",
-		.type = &gt_out_file,
-		.offset = offsetof(struct rpki_config, output.roa_output),
-		.doc = "File where the valid ROAs will be dumped.",
 	},
-	{ 0 },
-};
 
-static const struct group_fields groups[] = {
-	{
-		.name = "root",
-		.options = global_fields,
-	}, {
-		.name = "tal",
-		.options = tal_fields,
-	}, {
-		.name = "rsync",
-		.options = rsync_fields,
-	}, {
-		.name = "output",
-		.options = output_fields,
-	},
-	{ NULL },
+	{ 0 },
 };
 
 /**
@@ -277,7 +319,7 @@ handle_version(struct option_field const *field, char *arg)
 }
 
 static int
-handle_toml(struct option_field const *field, char *file_name)
+handle_json(struct option_field const *field, char *file_name)
 {
 	return set_config_from_file(file_name);
 }
@@ -297,7 +339,6 @@ is_alphanumeric(int chara)
 static int
 construct_getopt_options(struct option **_long_opts, char **_short_opts)
 {
-	struct group_fields const *group;
 	struct option_field const *opt;
 	struct option *long_opts;
 	char *short_opts;
@@ -306,7 +347,7 @@ construct_getopt_options(struct option **_long_opts, char **_short_opts)
 
 	total_long_options = 0;
 	total_short_options = 0;
-	FOREACH_OPTION(groups, group, opt, AVAILABILITY_GETOPT) {
+	FOREACH_OPTION(options, opt, AVAILABILITY_GETOPT) {
 		total_long_options++;
 		if (is_alphanumeric(opt->id)) {
 			total_short_options++;
@@ -328,7 +369,7 @@ construct_getopt_options(struct option **_long_opts, char **_short_opts)
 	*_long_opts = long_opts;
 	*_short_opts = short_opts;
 
-	FOREACH_OPTION(groups, group, opt, AVAILABILITY_GETOPT) {
+	FOREACH_OPTION(options, opt, AVAILABILITY_GETOPT) {
 		long_opts->name = opt->name;
 		long_opts->has_arg = opt->type->has_arg;
 		long_opts->flag = NULL;
@@ -352,15 +393,14 @@ construct_getopt_options(struct option **_long_opts, char **_short_opts)
 static void
 print_config(void)
 {
-	struct group_fields const *grp;
 	struct option_field const *opt;
 
 	pr_info("Configuration {");
 	pr_indent_add();
 
-	FOREACH_OPTION(groups, grp, opt, 0xFFFF)
+	FOREACH_OPTION(options, opt, 0xFFFF)
 		if (is_rpki_config_field(opt) && opt->type->print != NULL)
-			opt->type->print(grp, opt, get_rpki_config_field(opt));
+			opt->type->print(opt, get_rpki_config_field(opt));
 
 	pr_indent_rm();
 	pr_info("}");
@@ -385,14 +425,27 @@ set_default_values(void)
 	 * duplicates.
 	 */
 
+	rpki_config.server.address = NULL;
+	rpki_config.server.port = strdup("323");
+	if (rpki_config.server.port == NULL)
+		return pr_enomem();
+
+	rpki_config.server.queue = 10;
+	rpki_config.server.vrps_check_interval = 60;
+	rpki_config.server.refresh_interval = 3600;
+	rpki_config.server.retry_interval = 600;
+	rpki_config.server.expire_interval = 7200;
+
 	rpki_config.tal = NULL;
 
 	rpki_config.local_repository = strdup("repository/");
-	if (rpki_config.local_repository == NULL)
-		return pr_enomem();
+	if (rpki_config.local_repository == NULL) {
+		error = pr_enomem();
+		goto revert_port;
+	}
 
 	rpki_config.sync_strategy = SYNC_ROOT;
-	rpki_config.shuffle_uris = false;
+	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
 
 	rpki_config.rsync.program = strdup("rsync");
@@ -411,10 +464,8 @@ set_default_values(void)
 	if (error)
 		goto revert_recursive_array;
 
-	rpki_config.output.color = false;
-	rpki_config.output.filename_format = FNF_GLOBAL;
-	rpki_config.output.roa_output.fd = NULL;
-	rpki_config.output.roa_output.file_name = NULL;
+	rpki_config.log.color = false;
+	rpki_config.log.filename_format = FNF_GLOBAL;
 
 	return 0;
 
@@ -424,6 +475,8 @@ revert_rsync_program:
 	free(rpki_config.rsync.program);
 revert_repository:
 	free(rpki_config.local_repository);
+revert_port:
+	free(rpki_config.server.port);
 	return error;
 }
 
@@ -438,12 +491,11 @@ validate_config(void)
 static void
 print_usage(FILE *stream, bool print_doc)
 {
-	struct group_fields const *group;
 	struct option_field const *option;
 	char const *arg_doc;
 
 	fprintf(stream, "Usage: %s\n", program_name);
-	FOREACH_OPTION(groups, group, option, AVAILABILITY_GETOPT) {
+	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
 		fprintf(stream, "\t[");
 		fprintf(stream, "--%s", option->name);
 
@@ -475,10 +527,9 @@ print_usage(FILE *stream, bool print_doc)
 static int
 handle_opt(int opt)
 {
-	struct group_fields const *group;
 	struct option_field const *option;
 
-	FOREACH_OPTION(groups, group, option, AVAILABILITY_GETOPT) {
+	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
 		if (option->id == opt) {
 			return is_rpki_config_field(option)
 			    ? option->type->parse.argv(option, optarg,
@@ -542,10 +593,55 @@ end:
 
 }
 
-void
-get_group_fields(struct group_fields const **group_fields)
+struct option_field const *
+get_option_metadatas(void)
 {
-	*group_fields = groups;
+	return options;
+}
+
+char const *
+config_get_server_address(void)
+{
+	return rpki_config.server.address;
+}
+
+char const *
+config_get_server_port(void)
+{
+	return rpki_config.server.port;
+}
+
+int
+config_get_server_queue(void)
+{
+	/*
+	 * The range of this is 1-<small number>, so adding signedness is safe.
+	 */
+	return rpki_config.server.queue;
+}
+
+unsigned int
+config_get_vrps_check_interval(void)
+{
+	return rpki_config.server.vrps_check_interval;
+}
+
+u_int32_t
+config_get_refresh_interval(void)
+{
+	return rpki_config.server.refresh_interval;
+}
+
+u_int32_t
+config_get_retry_interval(void)
+{
+	return rpki_config.server.retry_interval;
+}
+
+u_int32_t
+config_get_expire_interval(void)
+{
+	return rpki_config.server.expire_interval;
 }
 
 char const *
@@ -567,9 +663,9 @@ config_get_sync_strategy(void)
 }
 
 bool
-config_get_shuffle_uris(void)
+config_get_shuffle_tal_uris(void)
 {
-	return rpki_config.shuffle_uris;
+	return rpki_config.shuffle_tal_uris;
 }
 
 unsigned int
@@ -581,21 +677,13 @@ config_get_max_cert_depth(void)
 bool
 config_get_color_output(void)
 {
-	return rpki_config.output.color;
+	return rpki_config.log.color;
 }
 
 enum filename_format
 config_get_filename_format(void)
 {
-	return rpki_config.output.filename_format;
-}
-
-FILE *
-config_get_roa_output(void)
-{
-	return (rpki_config.output.roa_output.fd != NULL)
-	    ? rpki_config.output.roa_output.fd
-	    : stdout;
+	return rpki_config.log.filename_format;
 }
 
 char *
@@ -620,7 +708,8 @@ config_get_rsync_args(bool is_ta)
 		break;
 	}
 
-	pr_crit("Invalid sync strategy: '%u'", rpki_config.sync_strategy);
+	pr_crit("Invalid sync strategy: '%u'",
+	    rpki_config.sync_strategy);
 	/*
 	 * Return something usable anyway; don't want to check NULL.
 	 * This is supposed to be unreachable code anyway.
@@ -631,10 +720,9 @@ config_get_rsync_args(bool is_ta)
 void
 free_rpki_config(void)
 {
-	struct group_fields const *group;
 	struct option_field const *option;
 
-	FOREACH_OPTION(groups, group, option, 0xFFFF)
+	FOREACH_OPTION(options, option, 0xFFFF)
 		if (is_rpki_config_field(option) && option->type->free != NULL)
 			option->type->free(get_rpki_config_field(option));
 }

@@ -1,20 +1,19 @@
 #ifndef SRC_CONFIG_TYPES_H_
 #define SRC_CONFIG_TYPES_H_
 
+#include <jansson.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <toml.h>
 
 struct option_field;
 struct group_fields;
 
 /** This option can be set from the command line. */
 #define AVAILABILITY_GETOPT (1 << 0)
-/** This option can be set from the TOML file. */
-#define AVAILABILITY_TOML (1 << 1)
+/** This option can be set from the JSON file. */
+#define AVAILABILITY_JSON (1 << 1)
 
 typedef void (*print_function)(
-    struct group_fields const *,
     struct option_field const *,
     void *
 );
@@ -23,9 +22,9 @@ typedef int (*argv_parse_function)(
     char const *,
     void *
 );
-typedef int (*toml_parse_function)(
+typedef int (*json_parse_function)(
     struct option_field const *,
-    struct toml_table_t *,
+    struct json_t *,
     void *
 );
 typedef int (*handler_function)(
@@ -80,10 +79,9 @@ struct option_field {
 	unsigned int max;
 };
 
-struct group_fields {
-	char const *name;
-	struct option_field const *options;
-};
+#define FOREACH_OPTION(opts, opt, type) \
+	for (opt = opts; opt->id != 0; opt++) \
+		if ((opt->availability == 0) || (opt->availability & type))
 
 struct global_type {
 	/** Same as struct option.has_arg. Mandatory. */
@@ -109,13 +107,11 @@ struct global_type {
 		 */
 		argv_parse_function argv;
 		/**
-		 * Converts from a TOML node to this data type.
-		 * If the node is not present in the file, this function should
-		 * do nothing.
+		 * Converts from a JSON node to this data type.
 		 * Optional if there are no fields of this type that are read
-		 * from TOML files.
+		 * from JSON files.
 		 */
-		toml_parse_function toml;
+		json_parse_function json;
 	} parse;
 
 	/**

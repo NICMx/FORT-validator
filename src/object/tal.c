@@ -10,10 +10,15 @@
 #include <openssl/evp.h>
 
 #include "common.h"
+#include "config.h"
 #include "line_file.h"
 #include "log.h"
 #include "random.h"
+#include "state.h"
+#include "thread_var.h"
 #include "crypto/base64.h"
+#include "object/certificate.h"
+#include "rsync/rsync.h"
 
 struct uris {
 	char **array; /* This is an array of string pointers. */
@@ -261,4 +266,95 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 {
 	*buffer = tal->spki;
 	*len = tal->spki_len;
+}
+
+/**
+ * Performs the whole validation walkthrough on uri @uri, which is assumed to
+ * have been extracted from a TAL.
+ */
+static int
+handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
+{
+	/*
+	 * Because of the way the foreach iterates, this function must return
+	 *
+	 * - 0 on soft errors.
+	 * - `> 0` on URI handled successfully.
+	 * - `< 0` on hard errors.
+	 *
+	 * A "soft error" is "the connection to the preferred URI fails, or the
+	 * retrieved CA certificate public key does not match the TAL public
+	 * key." (RFC 7730)
+	 *
+	 * A "hard error" is any other error.
+	 */
+
+	struct validation *state;
+	int error;
+
+	error = download_files(uri, true);
+	if (error) {
+		return pr_warn("TAL URI '%s' could not be RSYNC'd.",
+		    uri->global);
+	}
+
+	error = validation_prepare(&state, tal);
+	if (error)
+		return ENSURE_NEGATIVE(error);
+
+	pr_debug_add("TAL URI '%s' {", uri_get_printable(uri));
+
+	if (!uri_is_certificate(uri)) {
+		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
+		    uri_get_printable(uri));
+		error = -EINVAL;
+		goto end;
+	}
+
+	error = certificate_traverse(NULL, uri, NULL, true);
+	if (error) {
+		switch (validation_pubkey_state(state)) {
+		case PKS_INVALID:
+			error = 0;
+			break;
+		case PKS_VALID:
+		case PKS_UNTESTED:
+			error = ENSURE_NEGATIVE(error);
+			break;
+		}
+	} else {
+		error = 1;
+	}
+
+end:	validation_destroy(state);
+	pr_debug_rm("}");
+	return error;
+}
+
+/* TODO set @updated */
+int
+perform_standalone_validation(bool *updated)
+{
+	struct tal *tal;
+	int error;
+
+	fnstack_init();
+	fnstack_push(config_get_tal());
+
+	error = tal_load(config_get_tal(), &tal);
+	if (error)
+		goto end;
+
+	if (config_get_shuffle_tal_uris())
+		tal_shuffle_uris(tal);
+	error = foreach_uri(tal, handle_tal_uri);
+	if (error > 0)
+		error = 0;
+	else if (error == 0)
+		error = pr_err("None of the URIs of the TAL yielded a successful traversal.");
+
+end:	tal_destroy(tal);
+	fnstack_pop();
+	fnstack_cleanup();
+	return error;
 }

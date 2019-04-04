@@ -26,8 +26,6 @@ print_addr4(struct resources *parent, unsigned long asn,
 {
 	struct ipv4_prefix prefix;
 	unsigned long max_length;
-	char str[INET_ADDRSTRLEN];
-	const char *str2;
 	int error;
 
 	error = prefix4_decode(&roa_addr->address, &prefix);
@@ -56,18 +54,19 @@ print_addr4(struct resources *parent, unsigned long asn,
 		max_length = prefix.len;
 	}
 
-	str2 = inet_ntop(AF_INET, &prefix.addr, str, sizeof(str));
-	if (str2 == NULL)
-		return pr_err("inet_ntop() returned NULL.");
-
 	if (!resources_contains_ipv4(parent, &prefix)) {
-		return pr_err("ROA is not allowed to advertise %s/%u.", str2,
-		    prefix.len);
+		return pr_err("ROA is not allowed to advertise %s/%u.",
+		    v4addr2str(&prefix.addr), prefix.len);
 	}
 
-	fprintf(config_get_roa_output(), "AS%lu,%s/%u,%lu\n", asn, str2,
-	    prefix.len, max_length);
-	return 0;
+	/* TODO I think we're not validating asn boundaries */
+	return roa_handle_v4(asn, &prefix, max_length);
+}
+
+int
+roa_handle_v4(u_int32_t asn, struct ipv4_prefix *prefix, u_int8_t max_length)
+{
+	return -ENOTIMPLEMENTED;
 }
 
 static int
@@ -76,8 +75,6 @@ print_addr6(struct resources *parent, unsigned long asn,
 {
 	struct ipv6_prefix prefix;
 	unsigned long max_length;
-	char str[INET6_ADDRSTRLEN];
-	const char *str2;
 	int error;
 
 	error = prefix6_decode(&roa_addr->address, &prefix);
@@ -106,18 +103,18 @@ print_addr6(struct resources *parent, unsigned long asn,
 		max_length = prefix.len;
 	}
 
-	str2 = inet_ntop(AF_INET6, &prefix.addr, str, sizeof(str));
-	if (str2 == NULL)
-		return pr_err("inet_ntop() returned NULL.");
-
 	if (!resources_contains_ipv6(parent, &prefix)) {
-		return pr_err("ROA is not allowed to advertise %s/%u.", str2,
-		    prefix.len);
+		return pr_err("ROA is not allowed to advertise %s/%u.",
+		    v6addr2str(&prefix.addr), prefix.len);
 	}
 
-	fprintf(config_get_roa_output(), "AS%lu,%s/%u,%lu\n", asn, str2,
-	    prefix.len, max_length);
-	return 0;
+	return roa_handle_v6(asn, &prefix, max_length);
+}
+
+int
+roa_handle_v6(u_int32_t asn, struct ipv6_prefix *prefix, u_int8_t max_length)
+{
+	return -ENOTIMPLEMENTED;
 }
 
 static int
@@ -199,7 +196,7 @@ family_error:
 }
 
 int
-handle_roa(struct rpki_uri const *uri, struct rpp *pp,
+roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
     STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_ROA;

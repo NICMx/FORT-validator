@@ -5,32 +5,29 @@
 #include <string.h>
 #include "log.h"
 
+#define DEREFERENCE(void_value) (*((bool *) void_value))
+
 static void
-print_bool(struct group_fields const *group, struct option_field const *field,
-    void *_value)
+print_bool(struct option_field const *field, void *value)
 {
-	bool *value = _value;
-	pr_info("%s.%s: %s", group->name, field->name,
-	    (*value) ? "true" : "false");
+	pr_info("%s: %s", field->name, DEREFERENCE(value) ? "true" : "false");
 }
 
 static int
 parse_argv_bool(struct option_field const *field, char const *str, void *result)
 {
-	bool *value = result;
-
 	if (str == NULL) {
-		*value = true;
+		DEREFERENCE(result) = true;
 		return 0;
 	}
 
 	if (strcmp(str, "true") == 0) {
-		*value = true;
+		DEREFERENCE(result) = true;
 		return 0;
 	}
 
 	if (strcmp(str, "false") == 0) {
-		*value = false;
+		DEREFERENCE(result) = false;
 		return 0;
 	}
 
@@ -38,21 +35,15 @@ parse_argv_bool(struct option_field const *field, char const *str, void *result)
 }
 
 static int
-parse_toml_bool(struct option_field const *opt, struct toml_table_t *toml,
-    void *_result)
+parse_json_bool(struct option_field const *opt, struct json_t *json,
+    void *result)
 {
-	const char *raw;
-	int value;
-	bool *result;
+	if (!json_is_boolean(json)) {
+		return pr_err("The '%s' element is not a JSON boolean.",
+		    opt->name);
+	}
 
-	raw = toml_raw_in(toml, opt->name);
-	if (raw == NULL)
-		return 0;
-	if (toml_rtob(raw, &value) == -1)
-		return pr_err("Cannot parse '%s' as a boolean.", raw);
-
-	result = _result;
-	*result = value;
+	DEREFERENCE(result) = json_boolean_value(json);
 	return 0;
 }
 
@@ -61,6 +52,6 @@ const struct global_type gt_bool = {
 	.size = sizeof(bool),
 	.print = print_bool,
 	.parse.argv = parse_argv_bool,
-	.parse.toml = parse_toml_bool,
+	.parse.json = parse_json_bool,
 	.arg_doc = "true|false",
 };

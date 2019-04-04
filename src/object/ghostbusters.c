@@ -14,7 +14,7 @@ handle_vcard(OCTET_STRING_t *vcard, void *arg)
 }
 
 int
-handle_ghostbusters(struct rpki_uri const *uri, struct rpp *pp,
+ghostbusters_traverse(struct rpki_uri const *uri, struct rpp *pp,
     STACK_OF(X509_CRL) *crls)
 {
 	static OID oid = OID_GHOSTBUSTERS;

@@ -3,7 +3,7 @@
 
 #include "state.h"
 
-void thvar_init(void);
+int thvar_init(void); /* This function does not need cleanup. */
 
 int state_store(struct validation *);
 struct validation *state_retrieve(void);

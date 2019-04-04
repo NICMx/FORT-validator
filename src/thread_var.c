@@ -29,7 +29,7 @@ fnstack_discard(void *arg)
 }
 
 /** Initializes this entire module. Call once per runtime lifetime. */
-void
+int
 thvar_init(void)
 {
 	int error;
@@ -39,7 +39,7 @@ thvar_init(void)
 		fprintf(stderr,
 		    "Fatal: Errcode %d while initializing the validation state thread variable.\n",
 		    error);
-		exit(error);
+		return error;
 	}
 
 	/*
@@ -53,8 +53,10 @@ thvar_init(void)
 		fprintf(stderr,
 		    "Fatal: Errcode %d while initializing the file name stack thread variable.\n",
 		    error);
-		exit(error);
+		return error;
 	}
+
+	return 0;
 }
 
 /* Puts @state in the current thread's variable pool. Call once per thread. */
