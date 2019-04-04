@@ -22,6 +22,9 @@
 #define OPTNAME_RTR_INTERVAL_REFRESH	"refresh"
 #define OPTNAME_RTR_INTERVAL_RETRY	"retry"
 #define OPTNAME_RTR_INTERVAL_EXPIRE	"expire"
+#define OPTNAME_SLURM			"slurm"
+#define OPTNAME_SLURM_LOCATION		"location"
+#define OPTNAME_SLURM_CHECK_INTERVAL	"checkInterval"
 
 #define DEFAULT_ADDR			NULL
 #define DEFAULT_PORT			"323"
@@ -31,6 +34,8 @@
 #define DEFAULT_REFRESH_INTERVAL	3600
 #define DEFAULT_RETRY_INTERVAL		600
 #define DEFAULT_EXPIRE_INTERVAL		7200
+#define DEFAULT_SLURM_LOCATION		NULL
+#define DEFAULT_SLURM_CHECK_INTERVAL	60
 
 /* Protocol timing parameters ranges in secs */
 #define MIN_VRPS_CHECK_INTERVAL		60
@@ -41,6 +46,8 @@
 #define MAX_RETRY_INTERVAL		7200
 #define MIN_EXPIRE_INTERVAL		600
 #define MAX_EXPIRE_INTERVAL		172800
+#define MIN_SLURM_CHECK_INTERVAL	60
+#define MAX_SLURM_CHECK_INTERVAL	7200
 
 /* Range values for other params */
 #define MIN_LISTEN_QUEUE		1
@@ -51,16 +58,20 @@ struct rtr_config {
 	struct addrinfo *address;
 	/** Stored aside only for printing purposes. */
 	char *port;
-	/** VRPs (Validated ROA Payload) location */
-	char *vrps_location;
 	/** Maximum accepted client connections */
 	int queue;
+	/** VRPs (Validated ROA Payload) location */
+	char *vrps_location;
 	/** Interval used to look for updates at VRPs location */
 	int vrps_check_interval;
 	/** Intervals use at RTR v1 End of data PDU **/
 	int refresh_interval;
 	int retry_interval;
 	int expire_interval;
+	/** SLURM location */
+	char *slurm_location;
+	/** Interval used to look for updates at SLURM location */
+	int slurm_check_interval;
 } config;
 
 static int handle_json(json_t *);
@@ -235,6 +246,65 @@ load_intervals(json_t *root)
 }
 
 static int
+load_slurm(json_t *root)
+{
+	struct stat attr;
+	json_t *slurm;
+	char const *slurm_location;
+	int slurm_check_interval;
+	int error;
+
+	slurm = json_object_get(root, OPTNAME_SLURM);
+	if (slurm != NULL) {
+		if (!json_is_object(slurm)) {
+			warnx("The '%s' element is not a JSON object.",
+			    OPTNAME_VRPS);
+			return -EINVAL;
+		}
+
+		error = json_get_string(slurm, OPTNAME_SLURM_LOCATION,
+			    DEFAULT_SLURM_LOCATION, &slurm_location);
+		if (error)
+			return error;
+
+		config.slurm_location = strdup(slurm_location);
+		if (config.slurm_location == NULL) {
+			warn("'%s' couldn't be allocated.",
+			    OPTNAME_SLURM_LOCATION);
+			return -errno;
+		}
+
+		error = load_range(slurm, OPTNAME_SLURM_CHECK_INTERVAL,
+		    DEFAULT_SLURM_CHECK_INTERVAL, &slurm_check_interval,
+		    MIN_SLURM_CHECK_INTERVAL, MAX_SLURM_CHECK_INTERVAL);
+		if (error)
+			return error;
+		config.slurm_check_interval = slurm_check_interval;
+	} else {
+		config.slurm_location = DEFAULT_SLURM_LOCATION;
+		config.slurm_check_interval = DEFAULT_SLURM_CHECK_INTERVAL;
+	}
+
+	/* Validate data (only if a value was set */
+	if (config.slurm_location == NULL)
+		return 0;
+
+	error = stat(config.slurm_location, &attr) < 0;
+	if (error) {
+		warn("SLURM location '%s' isn't a valid path",
+		    config.slurm_location);
+		return -errno;
+	}
+	if (S_ISDIR(attr.st_mode) != 0) {
+		warnx("SLURM location '%s' isn't a file",
+		    config.slurm_location);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int
 handle_json(json_t *root)
 {
 	json_t *listen;
@@ -284,6 +354,10 @@ handle_json(json_t *root)
 		return error;
 
 	error = load_intervals(root);
+	if (error)
+		return error;
+
+	error = load_slurm(root);
 	if (error)
 		return error;
 
@@ -372,16 +446,16 @@ config_get_server_port(void)
 	return config.port;
 }
 
-char const *
-config_get_vrps_location(void)
-{
-	return config.vrps_location;
-}
-
 int
 config_get_server_queue(void)
 {
 	return config.queue;
+}
+
+char const *
+config_get_vrps_location(void)
+{
+	return config.vrps_location;
 }
 
 int
@@ -406,4 +480,16 @@ int
 config_get_expire_interval(void)
 {
 	return config.expire_interval;
+}
+
+char const *
+config_get_slurm_location(void)
+{
+	return config.slurm_location;
+}
+
+int
+config_get_slurm_check_interval(void)
+{
+	return config.slurm_check_interval;
 }

@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "rtr/rtr.h"
+#include "slurm/slurm_parser.h"
 #include "clients.h"
 #include "configuration.h"
 #include "csv.h"
@@ -64,9 +65,17 @@ main(int argc, char *argv[])
 	if (err)
 		goto end3;
 
+	err = slurm_load();
+	if (err)
+		goto end3;
+
 	err = rtr_listen();
+	if (err)
+		goto end4;
 
 	rtr_cleanup();
+end4:
+	slurm_cleanup();
 end3:
 	clients_db_destroy();
 end2:

@@ -24,6 +24,8 @@ rtr_server_SOURCES += rtr/primitive_reader.c rtr/primitive_reader.h
 rtr_server_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 rtr_server_SOURCES += rtr/rtr.c rtr/rtr.h
 
+rtr_server_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
+
 rtr_server_LDADD = ${JANSSON_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.
