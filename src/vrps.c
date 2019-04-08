@@ -17,7 +17,7 @@
 ARRAY_LIST(vrps, struct vrp)
 
 struct delta {
-	u_int32_t serial;
+	uint32_t serial;
 	struct vrps vrps;
 };
 
@@ -28,9 +28,9 @@ struct state {
 	struct delta base_db;
 	/** ROA changes over time */
 	struct deltasdb deltas_db;
-	u_int32_t current_serial;
-	u_int16_t v0_session_id;
-	u_int16_t v1_session_id;
+	uint32_t current_serial;
+	uint16_t v0_session_id;
+	uint16_t v1_session_id;
 	time_t last_modified_date;
 } state;
 
@@ -82,7 +82,7 @@ deltas_db_init(void)
 
 	/* Get the bits that'll fit in session_id */
 	shift = sizeof(time_t) - sizeof(state.v0_session_id);
-	state.v0_session_id = (u_int16_t)((time(NULL) << shift) >> shift);
+	state.v0_session_id = (uint16_t)((time(NULL) << shift) >> shift);
 	/* Minus 1 to prevent same ID */
 	state.v1_session_id = state.v0_session_id - 1;
 
@@ -94,8 +94,8 @@ deltas_db_init(void)
 }
 
 static void
-init_vrp (struct vrp *vrp, u_int32_t asn, u_int8_t prefix_length,
-    u_int8_t max_prefix_length)
+init_vrp (struct vrp *vrp, uint32_t asn, uint8_t prefix_length,
+    uint8_t max_prefix_length)
 {
 	vrp->asn = asn;
 	vrp->prefix_length = prefix_length;
@@ -105,8 +105,8 @@ init_vrp (struct vrp *vrp, u_int32_t asn, u_int8_t prefix_length,
 }
 
 struct vrp
-create_vrp4(u_int32_t asn, struct in_addr ipv4_prefix, u_int8_t prefix_length,
-    u_int8_t max_prefix_length)
+create_vrp4(uint32_t asn, struct in_addr ipv4_prefix, uint8_t prefix_length,
+    uint8_t max_prefix_length)
 {
 	struct vrp result;
 
@@ -118,8 +118,8 @@ create_vrp4(u_int32_t asn, struct in_addr ipv4_prefix, u_int8_t prefix_length,
 }
 
 struct vrp
-create_vrp6(u_int32_t asn, struct in6_addr ipv6_prefix, u_int8_t prefix_length,
-    u_int8_t max_prefix_length)
+create_vrp6(uint32_t asn, struct in6_addr ipv6_prefix, uint8_t prefix_length,
+    uint8_t max_prefix_length)
 {
 	struct vrp result;
 
@@ -314,7 +314,7 @@ deltas_db_destroy(void)
  *  DIFF_AVAILABLE -> There are diffs between SERIAL and the last DB serial
  */
 int
-deltas_db_status(u_int32_t *serial)
+deltas_db_status(uint32_t *serial)
 {
 	struct delta *delta;
 	int result;
@@ -375,7 +375,7 @@ add_vrps_filtered(struct vrps *dst, struct vrps *src)
  * received values.
  */
 unsigned int
-get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
+get_vrps_delta(uint32_t *start_serial, uint32_t *end_serial,
     struct vrp **result)
 {
 	struct delta *delta1;
@@ -427,10 +427,10 @@ set_vrps_last_modified_date(time_t new_date)
 	sem_post(&wlock);
 }
 
-u_int32_t
+uint32_t
 get_last_serial_number(void)
 {
-	u_int32_t serial;
+	uint32_t serial;
 
 	read_lock(&rlock, &wlock, &rcounter);
 	serial = state.current_serial - 1;
@@ -439,8 +439,8 @@ get_last_serial_number(void)
 	return serial;
 }
 
-u_int16_t
-get_current_session_id(u_int8_t rtr_version)
+uint16_t
+get_current_session_id(uint8_t rtr_version)
 {
 	/* Semaphore isn't needed since this value is set at initialization */
 	if (rtr_version == 1)

@@ -10,7 +10,7 @@
 #include "log.h"
 
 static int read_exact(int, unsigned char *, size_t);
-static int read_and_waste(int, unsigned char *, size_t, u_int32_t);
+static int read_and_waste(int, unsigned char *, size_t, uint32_t);
 static int get_octets(unsigned char);
 static void place_null_character(rtr_char *, size_t);
 
@@ -36,14 +36,14 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len)
 }
 
 int
-read_int8(int fd, u_int8_t *result)
+read_int8(int fd, uint8_t *result)
 {
-	return read_exact(fd, result, sizeof(u_int8_t));
+	return read_exact(fd, result, sizeof(uint8_t));
 }
 
 /** Big Endian. */
 int
-read_int16(int fd, u_int16_t *result)
+read_int16(int fd, uint16_t *result)
 {
 	unsigned char buffer[2];
 	int err;
@@ -52,13 +52,13 @@ read_int16(int fd, u_int16_t *result)
 	if (err)
 		return err;
 
-	*result = (((u_int16_t)buffer[0]) << 8) | ((u_int16_t)buffer[1]);
+	*result = (((uint16_t)buffer[0]) << 8) | ((uint16_t)buffer[1]);
 	return 0;
 }
 
 /** Big Endian. */
 int
-read_int32(int fd, u_int32_t *result)
+read_int32(int fd, uint32_t *result)
 {
 	unsigned char buffer[4];
 	int err;
@@ -67,10 +67,10 @@ read_int32(int fd, u_int32_t *result)
 	if (err)
 		return err;
 
-	*result = (((u_int32_t)buffer[0]) << 24)
-	        | (((u_int32_t)buffer[1]) << 16)
-	        | (((u_int32_t)buffer[2]) <<  8)
-	        | (((u_int32_t)buffer[3])      );
+	*result = (((uint32_t)buffer[0]) << 24)
+	        | (((uint32_t)buffer[1]) << 16)
+	        | (((uint32_t)buffer[2]) <<  8)
+	        | (((uint32_t)buffer[3])      );
 	return 0;
 }
 
@@ -96,7 +96,7 @@ read_in6_addr(int fd, struct in6_addr *result)
  * It is required that @str_len <= @total_len.
  */
 static int
-read_and_waste(int fd, unsigned char *str, size_t str_len, u_int32_t total_len)
+read_and_waste(int fd, unsigned char *str, size_t str_len, uint32_t total_len)
 {
 #define TLEN 1024 /* "Trash length" */
 	unsigned char *trash;
@@ -211,8 +211,8 @@ int
 read_string(int fd, rtr_char **result)
 {
 	/* Actual string length claimed by the PDU, in octets. */
-	u_int32_t full_length32; /* Excludes the null chara */
-	u_int64_t full_length64; /* Includes the null chara */
+	uint32_t full_length32; /* Excludes the null chara */
+	uint64_t full_length64; /* Includes the null chara */
 	/*
 	 * Actual length that we allocate. Octets.
 	 * This exists because there might be value in truncating the string;
@@ -230,7 +230,7 @@ read_string(int fd, rtr_char **result)
 	if (err)
 		return err;
 
-	full_length64 = ((u_int64_t) full_length32) + 1;
+	full_length64 = ((uint64_t) full_length32) + 1;
 
 	alloc_length = (full_length64 > 4096) ? 4096 : full_length64;
 	str = malloc(alloc_length);

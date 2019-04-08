@@ -6,13 +6,13 @@
 #include "log.h"
 
 static void
-print_u_int(struct option_field const *field, void *value)
+print_uint(struct option_field const *field, void *value)
 {
 	pr_info("%s: %u", field->name, *((unsigned int *) value));
 }
 
 int
-parse_argv_u_int(struct option_field const *field, char const *str,
+parse_argv_uint(struct option_field const *field, char const *str,
     void *result)
 {
 	unsigned long parsed;
@@ -37,7 +37,7 @@ parse_argv_u_int(struct option_field const *field, char const *str,
 }
 
 int
-parse_json_u_int(struct option_field const *opt, json_t *json, void *result)
+parse_json_uint(struct option_field const *opt, json_t *json, void *result)
 {
 	json_int_t value;
 
@@ -57,11 +57,11 @@ parse_json_u_int(struct option_field const *opt, json_t *json, void *result)
 	return 0;
 }
 
-const struct global_type gt_u_int = {
+const struct global_type gt_uint = {
 	.has_arg = required_argument,
 	.size = sizeof(unsigned int),
-	.print = print_u_int,
-	.parse.argv = parse_argv_u_int,
-	.parse.json = parse_json_u_int,
+	.print = print_uint,
+	.parse.argv = parse_argv_uint,
+	.parse.json = parse_json_uint,
 	.arg_doc = "<unsigned integer>",
 };

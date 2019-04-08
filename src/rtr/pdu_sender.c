@@ -18,8 +18,8 @@
 #define IPV6_PREFIX_LENGTH	24
 
 void
-init_sender_common(struct sender_common *common, int fd, u_int8_t version,
-    u_int16_t *session_id, u_int32_t *start_serial, u_int32_t *end_serial)
+init_sender_common(struct sender_common *common, int fd, uint8_t version,
+    uint16_t *session_id, uint32_t *start_serial, uint32_t *end_serial)
 {
 	common->fd = fd;
 	common->version = version;
@@ -31,31 +31,31 @@ init_sender_common(struct sender_common *common, int fd, u_int8_t version,
  * Set all the header values, EXCEPT length field.
  */
 static void
-set_header_values(struct pdu_header *header, u_int8_t version, u_int8_t type,
-    u_int16_t reserved)
+set_header_values(struct pdu_header *header, uint8_t version, uint8_t type,
+    uint16_t reserved)
 {
 	header->protocol_version = version;
 	header->pdu_type = type;
 	header->m.reserved = reserved;
 }
 
-static u_int32_t
+static uint32_t
 length_serial_notify_pdu(struct serial_notify_pdu *pdu)
 {
 	return HEADER_LENGTH + sizeof(pdu->serial_number);
 }
 
-static u_int32_t
+static uint32_t
 length_ipvx_prefix_pdu(bool isv4)
 {
 	return HEADER_LENGTH +
 	    (isv4 ? IPV4_PREFIX_LENGTH : IPV6_PREFIX_LENGTH);
 }
 
-static u_int32_t
+static uint32_t
 length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 {
-	u_int32_t len;
+	uint32_t len;
 
 	len = HEADER_LENGTH;
 	len += sizeof(pdu->serial_number);
@@ -68,7 +68,7 @@ length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 	return len;
 }
 
-static u_int32_t
+static uint32_t
 length_error_report_pdu(struct error_report_pdu *pdu)
 {
 	return HEADER_LENGTH +
@@ -255,7 +255,7 @@ send_end_of_data_pdu(struct sender_common *common)
 }
 
 int
-send_error_report_pdu(int fd, u_int8_t version, u_int16_t code,
+send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 struct pdu_header *err_pdu_header, char const *message)
 {
 	struct error_report_pdu pdu;

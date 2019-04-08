@@ -11,11 +11,11 @@ struct client {
 		struct in6_addr sin6;
 	} addr;
 	in_port_t sin_port;
-	u_int8_t rtr_version;
+	uint8_t rtr_version;
 };
 
 int clients_db_init(void);
-int update_client(int, struct sockaddr_storage *, u_int8_t);
+int update_client(int, struct sockaddr_storage *, uint8_t);
 size_t client_list(struct client **);
 
 void clients_forget(int);

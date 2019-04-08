@@ -18,8 +18,7 @@ free_buffer(struct data_buffer *buffer)
 }
 
 static size_t
-serialize_pdu_header(struct pdu_header *header, u_int16_t union_value,
-    char *buf)
+serialize_pdu_header(struct pdu_header *header, uint16_t union_value, char *buf)
 {
 	char *ptr;
 

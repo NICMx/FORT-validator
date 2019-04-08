@@ -6,7 +6,7 @@
 #include "log.h"
 
 int
-err_pdu_send(int fd, u_int8_t version, u_int16_t code, void *err_pdu_header,
+err_pdu_send(int fd, uint8_t version, uint16_t code, void *err_pdu_header,
     char const *message)
 {
 	int error;
@@ -23,14 +23,14 @@ err_pdu_send(int fd, u_int8_t version, u_int16_t code, void *err_pdu_header,
 }
 
 bool
-err_pdu_is_fatal(u_int16_t code)
+err_pdu_is_fatal(uint16_t code)
 {
 	/* Only NO_DATA_AVAILABLE error isn't fatal */
 	return code != ERR_PDU_NO_DATA_AVAILABLE;
 }
 
 void
-err_pdu_log(u_int16_t code, char *message)
+err_pdu_log(uint16_t code, char *message)
 {
 	char const *code_title;
 

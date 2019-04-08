@@ -63,7 +63,7 @@ get_client(struct sockaddr_storage *addr)
 }
 
 static int
-create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
+create_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 {
 	struct client client;
 	int error;
@@ -96,7 +96,7 @@ create_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
  * isn't the same as in the DB.
  */
 int
-update_client(int fd, struct sockaddr_storage *addr, u_int8_t rtr_version)
+update_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 {
 	struct client *client;
 	client = get_client(addr);

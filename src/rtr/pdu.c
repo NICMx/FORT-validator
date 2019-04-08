@@ -22,7 +22,7 @@ static void	error_report_destroy(void *);
 
 int
 pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata,
-    u_int8_t *rtr_version)
+    uint8_t *rtr_version)
 {
 	struct pdu_header header;
 	struct pdu_metadata const *meta;
@@ -140,8 +140,8 @@ static int
 error_report_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 {
 	struct error_report_pdu *pdu = pdu_void;
-	u_int32_t sub_pdu_len; /* TODO use this for something */
-	u_int8_t rtr_version;
+	uint32_t sub_pdu_len; /* TODO use this for something */
+	uint8_t rtr_version;
 	int error;
 
 	memcpy(&pdu->header, header, sizeof(*header));
@@ -214,7 +214,7 @@ struct pdu_metadata const *const pdu_metadatas[] = {
 };
 
 struct pdu_metadata const *
-pdu_get_metadata(u_int8_t type)
+pdu_get_metadata(uint8_t type)
 {
 	return (ARRAY_LEN(pdu_metadatas) <= type) ? NULL : pdu_metadatas[type];
 }

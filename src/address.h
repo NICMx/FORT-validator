@@ -8,12 +8,12 @@
 
 struct ipv4_prefix {
 	struct in_addr addr;
-	unsigned int len;
+	uint8_t len;
 };
 
 struct ipv6_prefix {
 	struct in6_addr addr;
-	unsigned int len;
+	uint8_t len;
 };
 
 struct ipv4_range {

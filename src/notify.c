@@ -6,11 +6,11 @@
 #include "vrps.h"
 
 static int
-send_notify(int fd, u_int8_t rtr_version)
+send_notify(int fd, uint8_t rtr_version)
 {
 	struct sender_common common;
-	u_int32_t serial;
-	u_int16_t session_id;
+	uint32_t serial;
+	uint16_t session_id;
 
 	serial = get_last_serial_number();
 	session_id = get_current_session_id(rtr_version);

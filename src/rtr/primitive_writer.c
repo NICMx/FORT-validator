@@ -1,7 +1,7 @@
 #include "primitive_writer.h"
 
 char *
-write_int8(char *buf, u_int8_t value)
+write_int8(char *buf, uint8_t value)
 {
 	buf[0] = value;
 	return buf + 1;
@@ -9,7 +9,7 @@ write_int8(char *buf, u_int8_t value)
 
 /** Big Endian. */
 char *
-write_int16(char *buf, u_int16_t value)
+write_int16(char *buf, uint16_t value)
 {
 	buf[0] = value >> 8;
 	buf[1] = value;
@@ -18,7 +18,7 @@ write_int16(char *buf, u_int16_t value)
 
 /** Big Endian. */
 char *
-write_int32(char *buf, u_int32_t value)
+write_int32(char *buf, uint32_t value)
 {
 	buf[0] = value >> 24;
 	buf[1] = value >> 16;

@@ -179,7 +179,7 @@ client_thread_cb(void *param_void)
 	struct pdu_metadata const *meta;
 	void *pdu;
 	int err;
-	u_int8_t rtr_version;
+	uint8_t rtr_version;
 
 	memcpy(&param, param_void, sizeof(param));
 

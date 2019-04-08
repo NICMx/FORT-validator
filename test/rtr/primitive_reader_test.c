@@ -101,7 +101,7 @@ END_TEST
 
 struct thread_param {
 	int	fd;
-	u_int32_t	msg_size;
+	uint32_t	msg_size;
 	int	err;
 };
 
@@ -146,7 +146,7 @@ writer_thread_cb(void *param_void)
  * of the @WRITER_PATTERN pattern repeatedly.
  */
 static void
-validate_massive_string(u_int32_t expected_len, rtr_char *str)
+validate_massive_string(uint32_t expected_len, rtr_char *str)
 {
 	size_t actual_len;
 	rtr_char *pattern;
@@ -185,7 +185,7 @@ validate_massive_string(u_int32_t expected_len, rtr_char *str)
  * contains the first @return_length characters.
  */
 static void
-test_massive_string(u_int32_t return_length, u_int32_t full_string_length)
+test_massive_string(uint32_t return_length, uint32_t full_string_length)
 {
 	int fd[2];
 	pthread_t writer_thread;

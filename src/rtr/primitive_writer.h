@@ -4,9 +4,9 @@
 #include <netinet/in.h>
 
 __BEGIN_DECLS
-char *write_int8(char *, u_int8_t);
-char *write_int16(char *, u_int16_t);
-char *write_int32(char *, u_int32_t);
+char *write_int8(char *, uint8_t);
+char *write_int16(char *, uint16_t);
+char *write_int32(char *, uint32_t);
 char *write_in_addr(char *, struct in_addr);
 char *write_in6_addr(char *, struct in6_addr);
 __END_DECLS

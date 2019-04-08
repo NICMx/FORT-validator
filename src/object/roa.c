@@ -64,7 +64,7 @@ print_addr4(struct resources *parent, unsigned long asn,
 }
 
 int
-roa_handle_v4(u_int32_t asn, struct ipv4_prefix *prefix, u_int8_t max_length)
+roa_handle_v4(uint32_t asn, struct ipv4_prefix *prefix, uint8_t max_length)
 {
 	return -ENOTIMPLEMENTED;
 }
@@ -112,7 +112,7 @@ print_addr6(struct resources *parent, unsigned long asn,
 }
 
 int
-roa_handle_v6(u_int32_t asn, struct ipv6_prefix *prefix, u_int8_t max_length)
+roa_handle_v6(uint32_t asn, struct ipv6_prefix *prefix, uint8_t max_length)
 {
 	return -ENOTIMPLEMENTED;
 }

@@ -6,7 +6,6 @@
 #include <sys/cdefs.h>
 #include <sys/queue.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 
 #include "config.h"

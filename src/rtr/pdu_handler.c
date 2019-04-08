@@ -51,9 +51,9 @@ handle_serial_query_pdu(int fd, void *pdu)
 	struct serial_query_pdu *received = pdu;
 	struct sender_common common;
 	int error, updates;
-	u_int32_t current_serial;
-	u_int16_t session_id;
-	u_int8_t version;
+	uint32_t current_serial;
+	uint16_t session_id;
+	uint8_t version;
 
 	/*
 	 * RFC 6810 and 8210:
@@ -101,9 +101,9 @@ handle_reset_query_pdu(int fd, void *pdu)
 {
 	struct reset_query_pdu *received = pdu;
 	struct sender_common common;
-	u_int32_t current_serial;
-	u_int16_t session_id;
-	u_int8_t version;
+	uint32_t current_serial;
+	uint16_t session_id;
+	uint8_t version;
 	int updates;
 
 	version = received->header.protocol_version;

@@ -2,7 +2,7 @@
 #define SRC_RTR_ERR_PDU_H_
 
 #include <stdbool.h>
-#include <sys/types.h>
+#include <stdint.h>
 
 #define ERR_PDU_CORRUPT_DATA				0
 #define ERR_PDU_INTERNAL_ERROR				1
@@ -15,8 +15,8 @@
 #define ERR_PDU_UNEXPECTED_PROTO_VERSION		8
 
 
-int err_pdu_send(int, u_int8_t, u_int16_t, void *, char const *);
-bool err_pdu_is_fatal(u_int16_t);
-void err_pdu_log(u_int16_t, char *);
+int err_pdu_send(int, uint8_t, uint16_t, void *, char const *);
+bool err_pdu_is_fatal(uint16_t);
+void err_pdu_log(uint16_t, char *);
 
 #endif /* SRC_RTR_ERR_PDU_H_ */

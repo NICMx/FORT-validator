@@ -57,9 +57,9 @@ struct rpki_config {
 		unsigned int vrps_check_interval;
 
 		/** Intervals use at RTR v1 End of data PDU **/
-		u_int32_t refresh_interval;
-		u_int32_t retry_interval;
-		u_int32_t expire_interval;
+		uint32_t refresh_interval;
+		uint32_t retry_interval;
+		uint32_t expire_interval;
 	} server;
 
 	struct {
@@ -165,7 +165,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 1002,
 		.name = "maximum-certificate-depth",
-		.type = &gt_u_int,
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
 		    maximum_certificate_depth),
 		.doc = "Maximum allowable certificate chain length",
@@ -193,7 +193,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 5003,
 		.name = "server.queue",
-		.type = &gt_u_int,
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, server.queue),
 		.doc = "Maximum accepted client connections",
 		.min = 1,
@@ -201,7 +201,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 5004,
 		.name = "server.vrps-check-interval",
-		.type = &gt_u_int,
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, server.vrps_check_interval),
 		.doc = "Interval used to look for updates at VRPs location",
 		/*
@@ -214,7 +214,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 5005,
 		.name = "server.rtr-interval.refresh",
-		.type = &gt_u_int32,
+		.type = &gt_uint32,
 		.offset = offsetof(struct rpki_config, server.refresh_interval),
 		.doc = "Intervals use at RTR v1 End of data PDU",
 		.min = 1,
@@ -222,7 +222,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 5006,
 		.name = "server.rtr-interval.retry",
-		.type = &gt_u_int32,
+		.type = &gt_uint32,
 		.offset = offsetof(struct rpki_config, server.retry_interval),
 		.doc = "",
 		.min = 1,
@@ -230,7 +230,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 5007,
 		.name = "server.rtr-interval.expire",
-		.type = &gt_u_int32,
+		.type = &gt_uint32,
 		.offset = offsetof(struct rpki_config, server.expire_interval),
 		.doc = "",
 		.min = 600,
@@ -626,19 +626,19 @@ config_get_vrps_check_interval(void)
 	return rpki_config.server.vrps_check_interval;
 }
 
-u_int32_t
+uint32_t
 config_get_refresh_interval(void)
 {
 	return rpki_config.server.refresh_interval;
 }
 
-u_int32_t
+uint32_t
 config_get_retry_interval(void)
 {
 	return rpki_config.server.retry_interval;
 }
 
-u_int32_t
+uint32_t
 config_get_expire_interval(void)
 {
 	return rpki_config.server.expire_interval;
