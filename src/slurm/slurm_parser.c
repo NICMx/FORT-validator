@@ -327,6 +327,12 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result)
 	/* TODO persist, free later */
 	free(result->ski);
 
+	/* Validate that's at least 20 octects long */
+	if (result->ski_len != 20) {
+		warnx("The decoded SKI must be 20 octets long");
+		return -EINVAL;
+	}
+
 	result->data_flag = result->data_flag | SLURM_BGPS_FLAG_SKI;
 	return 0;
 }
