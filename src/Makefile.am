@@ -24,6 +24,7 @@ rtr_server_SOURCES += rtr/primitive_reader.c rtr/primitive_reader.h
 rtr_server_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 rtr_server_SOURCES += rtr/rtr.c rtr/rtr.h
 
+rtr_server_SOURCES += slurm/json_parser.c slurm/json_parser.h
 rtr_server_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
 rtr_server_SOURCES += crypto/base64.c crypto/base64.h

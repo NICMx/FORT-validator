@@ -3,11 +3,15 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <err.h>
+#include <errno.h>
+#include <string.h>
 
 /*
- * TODO This is a copy of fort-validator/src/crypto/base64.c with a small
- * modification at 'base64_decode' (new parameter 'has_nl' to indicate if the
- * encoded string has newlines in it)
+ * TODO This is a copy of fort-validator/src/crypto/base64.c with a few
+ * modifications:
+ * - At 'base64_decode': new parameter 'has_nl' to indicate if the encoded
+ *   string has newlines in it.
+ * - New function 'base64url_decode'.
  */
 
 /**
@@ -119,4 +123,82 @@ end:
 	BIO_free(b64);
 
 	return error ? error_ul2i(error) : 0;
+}
+
+int
+base64url_decode(char const *str_encoded, unsigned char **result,
+    size_t *result_len)
+{
+	BIO *encoded; /* base64 encoded. */
+	char *str_copy;
+	size_t encoded_len, alloc_size, dec_len;
+	int error, pad, i;
+
+	/*
+	 * Apparently there isn't a base64url decoder, and there isn't
+	 * much difference between base64 codification and base64url, just as
+	 * stated in RFC 4648 section 5: "This encoding is technically
+	 * identical to the previous one, except for the 62:nd and 63:rd
+	 * alphabet character, as indicated in Table 2".
+	 *
+	 * The existing base64 can be used if the 62:nd and 63:rd base64url
+	 * alphabet chars are replaced with the corresponding base64 chars, and
+	 * also if we add the optional padding that the member should have.
+	 */
+	encoded_len = strlen(str_encoded);
+	pad = (encoded_len % 4) > 0 ? 4 - (encoded_len % 4) : 0;
+
+	str_copy = malloc(encoded_len + pad + 1);
+	if (str_copy == NULL)
+		return -ENOMEM;
+	/* Set all with pad char, then replace with the original string */
+	memset(str_copy, '=', encoded_len + pad);
+	memcpy(str_copy, str_encoded, encoded_len);
+	str_copy[encoded_len + pad] = '\0';
+
+	for (i = 0; i < encoded_len; i++) {
+		if (str_copy[i] == '-')
+			str_copy[i] = '+';
+		else if (str_copy[i] == '_')
+			str_copy[i] = '/';
+	}
+
+	/* Now decode as regular base64 */
+	encoded =  BIO_new_mem_buf(str_copy, -1);
+	if (encoded == NULL) {
+		warnx("BIO_new() returned NULL");
+		error = -EINVAL;
+		goto free_copy;
+	}
+
+	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
+	*result = malloc(alloc_size + 1);
+	if (*result == NULL) {
+		error = -ENOMEM;
+		goto free_enc;
+	}
+	memset(*result, 0, alloc_size);
+	(*result)[alloc_size] = '\0';
+
+	error = base64_decode(encoded, result, false, alloc_size, &dec_len);
+	if (error)
+		goto free_all;
+
+	if (dec_len == 0) {
+		warnx("'%s' couldn't be decoded", str_encoded);
+		error = -EINVAL;
+		goto free_all;
+	}
+	*result_len = dec_len;
+
+	free(str_copy);
+	BIO_free(encoded);
+	return 0;
+free_all:
+	free(*result);
+free_enc:
+	BIO_free(encoded);
+free_copy:
+	free(str_copy);
+	return error;
 }

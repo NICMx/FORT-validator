@@ -2,7 +2,6 @@
 
 #include <err.h>
 #include <errno.h>
-#include <jansson.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -11,6 +10,7 @@
 #include "../address.h"
 #include "../configuration.h"
 #include "../crypto/base64.h"
+#include "json_parser.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"
@@ -52,15 +52,13 @@ struct slurm_bgpsec {
 	u_int8_t data_flag;
 	u_int32_t asn;
 	unsigned char *ski;
+	size_t ski_len;
 	unsigned char *routerPublicKey;
+	size_t routerPublicKey_len;
 	char const	*comment;
 };
 
 static int handle_json(json_t *);
-static int json_get_string(json_t *, char const *, char const **);
-static int json_get_int(json_t *, char const *, json_int_t *);
-static json_t *json_get_array(json_t *, char const *);
-static json_t *json_get_object(json_t *, char const *);
 
 int
 slurm_load(void)
@@ -270,19 +268,14 @@ set_max_prefix_length(json_t *object, bool is_assertion, u_int8_t addr_fam,
 }
 
 static int
-decode_base64url(char const *str_encoded, unsigned char **result)
+validate_encoded(const char *encoded)
 {
-	BIO *encoded; /* base64 encoded. */
-	char *str_copy;
-	size_t encoded_len, alloc_size, dec_len;
-	int error, pad, i;
-
 	/*
 	 * RFC 8416, sections 3.3.2 (SKI member), and 3.4.2 (SKI and
 	 * routerPublicKey members): "{..} whose value is the Base64 encoding
 	 * without trailing '=' (Section 5 of [RFC4648])"
 	 */
-	if (strrchr(str_encoded, '=') != NULL) {
+	if (strrchr(encoded, '=') != NULL) {
 		warnx("The base64 encoded value has trailing '='");
 		return -EINVAL;
 	}
@@ -301,73 +294,7 @@ decode_base64url(char const *str_encoded, unsigned char **result)
 	 * "{..} whose value is the Base64url encoding without trailing '='
 	 * (Section 5 of [RFC4648])"
 	 */
-
-	/*
-	 * Apparently there isn't a base64url decoder, and there isn't
-	 * much difference between base64 codification and base64url, just as
-	 * stated in RFC 4648 section 5: "This encoding is technically
-	 * identical to the previous one, except for the 62:nd and 63:rd
-	 * alphabet character, as indicated in Table 2".
-	 *
-	 * The existing base64 can be used if the 62:nd and 63:rd base64url
-	 * alphabet chars are replaced with the corresponding base64 chars, and
-	 * also if we add the optional padding that the member should have.
-	 */
-	encoded_len = strlen(str_encoded);
-	pad = (encoded_len % 4) > 0 ? 4 - (encoded_len % 4) : 0;
-
-	str_copy = malloc(encoded_len + pad + 1);
-	if (str_copy == NULL)
-		return -ENOMEM;
-	/* Set all with pad char, then replace with the original string */
-	memset(str_copy, '=', encoded_len + pad);
-	memcpy(str_copy, str_encoded, encoded_len);
-	str_copy[encoded_len + pad] = '\0';
-
-	for (i = 0; i < encoded_len; i++) {
-		if (str_copy[i] == '-')
-			str_copy[i] = '+';
-		else if (str_copy[i] == '_')
-			str_copy[i] = '/';
-	}
-
-	/* Now decode as regular base64 */
-	encoded =  BIO_new_mem_buf(str_copy, -1);
-	if (encoded == NULL) {
-		warnx("BIO_new() returned NULL");
-		error = -EINVAL;
-		goto free_copy;
-	}
-
-	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
-	*result = malloc(alloc_size + 1);
-	if (*result == NULL) {
-		error = -ENOMEM;
-		goto free_enc;
-	}
-	memset(*result, 0, alloc_size);
-	(*result)[alloc_size] = '\0';
-
-	error = base64_decode(encoded, result, false, alloc_size, &dec_len);
-	if (error)
-		goto free_all;
-
-	if (dec_len == 0) {
-		warnx("'%s' couldn't be decoded", str_encoded);
-		error = -EINVAL;
-		goto free_all;
-	}
-
-	free(str_copy);
-	BIO_free(encoded);
 	return 0;
-free_all:
-	free(*result);
-free_enc:
-	BIO_free(encoded);
-free_copy:
-	free(str_copy);
-	return error;
 }
 
 static int
@@ -389,7 +316,11 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result)
 			return 0;
 	}
 
-	error = decode_base64url(str_encoded, &result->ski);
+	error = validate_encoded(str_encoded);
+	if (error)
+		return error;
+
+	error = base64url_decode(str_encoded, &result->ski, &result->ski_len);
 	if (error)
 		return error;
 
@@ -421,8 +352,13 @@ set_router_pub_key(json_t *object, bool is_assertion,
 		return -EINVAL;
 	}
 
+	error = validate_encoded(str_encoded);
+	if (error)
+		return error;
+
 	/* TODO The public key may contain NULL chars as part of the string */
-	error = decode_base64url(str_encoded, &result->routerPublicKey);
+	error = base64url_decode(str_encoded, &result->routerPublicKey,
+	    &result->routerPublicKey_len);
 	if (error)
 		return error;
 
@@ -432,6 +368,15 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	 * as described in [RFC8208].  This is the full ASN.1 DER encoding of
 	 * the subjectPublicKeyInfo, including the ASN.1 tag and length values
 	 * of the subjectPublicKeyInfo SEQUENCE.
+	 */
+	/*
+	 * TODO When the merge is done, reuse the functions at fort-validator
+	 *
+	 * #include <libcmscodec/SubjectPublicKeyInfo.h>
+	 * #include "asn1/decode.h"
+	 * struct SubjectPublicKeyInfo *router_pki;
+	 * error = asn1_decode(result->routerPublicKey, result->routerPublicKey_len,
+	 *     &asn_DEF_SubjectPublicKeyInfo, (void **) &router_pki);
 	 */
 
 	/* TODO persist, free later */
@@ -648,79 +593,4 @@ handle_json(json_t *root)
 		return error;
 
 	return 0;
-}
-
-static int
-json_get_string(json_t *parent, char const *name, char const **result)
-{
-	json_t *child;
-
-	child = json_object_get(parent, name);
-	if (child == NULL) {
-		*result = NULL;
-		return 0;
-	}
-
-	if (!json_is_string(child)) {
-		warnx("The '%s' element is not a JSON string.", name);
-		return -EINVAL;
-	}
-
-	*result = json_string_value(child);
-	return 0;
-}
-
-static int
-json_get_int(json_t *parent, char const *name, json_int_t *result)
-{
-	json_t *child;
-
-	child = json_object_get(parent, name);
-	if (child == NULL) {
-		*result = 0;
-		return 0;
-	}
-
-	if (!json_is_integer(child)) {
-		warnx("The '%s' element is not a JSON integer.", name);
-		return -EINVAL;
-	}
-
-	*result = json_integer_value(child);
-	return 0;
-}
-
-static json_t *
-json_get_array(json_t *parent, char const *name)
-{
-	json_t *child;
-
-	child = json_object_get(parent, name);
-	if (child == NULL) {
-		return NULL;
-	}
-
-	if (!json_is_array(child)) {
-		warnx("The '%s' element is not a JSON array.", name);
-		return NULL;
-	}
-
-	return child;
-}
-
-static json_t *
-json_get_object(json_t *parent, char const *name)
-{
-	json_t *child;
-
-	child = json_object_get(parent, name);
-	if (child == NULL)
-		return NULL;
-
-	if (!json_is_object(child)) {
-		warnx("The '%s' element is not a JSON object.", name);
-		return NULL;
-	}
-
-	return child;
 }
