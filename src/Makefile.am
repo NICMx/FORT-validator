@@ -26,6 +26,8 @@ rtr_server_SOURCES += rtr/rtr.c rtr/rtr.h
 
 rtr_server_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
+rtr_server_SOURCES += crypto/base64.c crypto/base64.h
+
 rtr_server_LDADD = ${JANSSON_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.

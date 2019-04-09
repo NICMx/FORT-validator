@@ -112,6 +112,8 @@ config_cleanup(void)
 		free(config.port);
 	if (config.vrps_location != NULL)
 		free(config.vrps_location);
+	if (config.slurm_location != NULL)
+		free(config.slurm_location);
 }
 
 static int
