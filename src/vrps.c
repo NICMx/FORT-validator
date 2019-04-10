@@ -424,6 +424,21 @@ get_vrps_delta(u_int32_t *start_serial, u_int32_t *end_serial,
 	return summary.len;
 }
 
+/*
+ * Get the number of updates from serial START_SERIAL to END_SERIAL, set them
+ * at RESULT.
+ *
+ * Return 0 if no updates are available or couldn't be calculated with the
+ * received values.
+ */
+unsigned int
+get_router_keys_delta(u_int32_t *start_serial, u_int32_t *end_serial,
+    struct router_key **result)
+{
+	/* TODO Get deltas diff */
+	return 0;
+}
+
 void
 set_vrps_last_modified_date(time_t new_date)
 {

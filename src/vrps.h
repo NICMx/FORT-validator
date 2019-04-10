@@ -21,6 +21,15 @@ struct vrp {
 	u_int8_t	flags;
 };
 
+struct router_key {
+	u_int8_t	flags;
+	unsigned char	*ski;
+	size_t		ski_len;
+	u_int32_t	asn;
+	unsigned char	*spki;
+	size_t		spki_len;
+};
+
 int deltas_db_init(void);
 
 struct vrp create_vrp4(u_int32_t, struct in_addr, u_int8_t, u_int8_t);
@@ -30,6 +39,8 @@ int deltas_db_create_delta(struct vrp *, unsigned int);
 int deltas_db_status(u_int32_t *);
 
 unsigned int get_vrps_delta(u_int32_t *, u_int32_t *, struct vrp **);
+unsigned int get_router_keys_delta(u_int32_t *, u_int32_t *,
+    struct router_key **);
 
 void deltas_db_destroy(void);
 void set_vrps_last_modified_date(time_t);

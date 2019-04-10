@@ -69,6 +69,13 @@ length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 }
 
 static u_int32_t
+length_router_key_pdu(struct router_key_pdu *pdu)
+{
+	return HEADER_LENGTH +
+	    pdu->ski_len + sizeof(pdu->asn) + pdu->spki_len;
+}
+
+static u_int32_t
 length_error_report_pdu(struct error_report_pdu *pdu)
 {
 	return HEADER_LENGTH +
@@ -76,27 +83,67 @@ length_error_report_pdu(struct error_report_pdu *pdu)
 	    pdu->error_message_length + sizeof(pdu->error_message_length);
 }
 
+/*
+ * TODO Needs some testing, this is just a beta version
+ */
 static int
-send_response(int fd, char *data, size_t data_len)
+send_large_response(int fd, struct data_buffer *buffer)
+{
+	unsigned char *tmp_buffer, *ptr;
+	size_t buf_size, pending;
+	int written;
+
+	buf_size = buffer->capacity;
+	pending = buffer->len;
+	ptr = buffer->data;
+	while (pending > 0) {
+		tmp_buffer = calloc(pending, sizeof(unsigned char));
+		if (tmp_buffer == NULL) {
+			warnx("Couldn't allocate temp buffer");
+			return -ENOMEM;
+		}
+		memcpy(tmp_buffer, ptr, buf_size);
+
+		written = write(fd, tmp_buffer, buf_size);
+		free(tmp_buffer);
+		if (written < 0) {
+			warnx("Error sending response");
+			return -EINVAL;
+		}
+		pending -= buf_size;
+		ptr += buf_size;
+		buf_size = pending > buffer->capacity ? buffer->capacity :
+		    pending;
+	}
+
+	return 0;
+}
+
+static int
+send_response(int fd, unsigned char *data, size_t data_len)
 {
 	struct data_buffer buffer;
 	int error;
 
 	init_buffer(&buffer);
-	/* Check for buffer overflow */
-	if (data_len > buffer.capacity) {
-		warnx("Response buffer out of capacity");
-		return -EINVAL;
-	}
 	memcpy(buffer.data, data, data_len);
 	buffer.len = data_len;
 
-	error = write(fd, buffer.data, buffer.len);
-	free_buffer(&buffer);
-	if (error < 0) {
-		warnx("Error sending response");
-		return -EINVAL;
+	/* Check for buffer overflow */
+	if (data_len <= buffer.capacity) {
+		error = write(fd, buffer.data, buffer.len);
+		free_buffer(&buffer);
+		if (error < 0) {
+			warnx("Error sending response");
+			return -EINVAL;
+		}
+		return 0;
 	}
+
+	error = send_large_response(fd, &buffer);
+	free_buffer(&buffer);
+	if (error)
+		return error;
 
 	return 0;
 }
@@ -105,7 +152,7 @@ int
 send_serial_notify_pdu(struct sender_common *common)
 {
 	struct serial_notify_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_SERIAL_NOTIFY,
@@ -123,7 +170,7 @@ int
 send_cache_reset_pdu(struct sender_common *common)
 {
 	struct cache_reset_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
@@ -139,7 +186,7 @@ int
 send_cache_response_pdu(struct sender_common *common)
 {
 	struct cache_response_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
@@ -156,7 +203,7 @@ static int
 send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv4_prefix_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV4_PREFIX,
@@ -179,7 +226,7 @@ static int
 send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv6_prefix_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV6_PREFIX,
@@ -198,8 +245,8 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	return send_response(common->fd, data, len);
 }
 
-int
-send_payload_pdus(struct sender_common *common)
+static int
+send_vrps_payload(struct sender_common *common)
 {
 	struct vrp *vrps, *ptr;
 	unsigned int len;
@@ -232,11 +279,86 @@ end:
 	return 0;
 }
 
+static int
+send_router_key_pdu(struct sender_common *common,
+    struct router_key *router_key)
+{
+	struct router_key_pdu pdu;
+	unsigned char data[BUFFER_SIZE];
+	size_t len;
+	u_int16_t reserved;
+
+	if (common->version == RTR_V0)
+		return 0;
+
+	reserved = 0;
+	/* Set the flags at the first 8 bits of reserved field */
+	reserved += (router_key->flags << 8);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_ROUTER_KEY,
+	    reserved);
+
+	pdu.ski = router_key->ski;
+	pdu.ski_len = router_key->ski_len;
+	pdu.asn = router_key->asn;
+	pdu.spki = router_key->spki;
+	pdu.spki_len = router_key->spki_len;
+	pdu.header.length = length_router_key_pdu(&pdu);
+
+	len = serialize_router_key_pdu(&pdu, data);
+
+	return send_response(common->fd, data, len);
+}
+
+static int
+send_keys_payload(struct sender_common *common)
+{
+	struct router_key *router_keys, *ptr;
+	unsigned int len;
+	int error;
+
+	router_keys = malloc(sizeof(struct router_key));
+	if (router_keys == NULL) {
+		warn("Couldn't allocate Router Keys to send PDUs");
+		return -ENOMEM;
+	}
+	len = get_router_keys_delta(common->start_serial, common->end_serial,
+	    &router_keys);
+	if (len == 0)
+		goto end;
+
+	for (ptr = router_keys; (ptr - router_keys) < len; ptr++) {
+		error = send_router_key_pdu(common, ptr);
+		if (error) {
+			free(router_keys);
+			return error;
+		}
+	}
+end:
+	free(router_keys);
+	return 0;
+}
+
+int
+send_payload_pdus(struct sender_common *common)
+{
+	int error;
+
+	error = send_vrps_payload(common);
+	if (error)
+		return error;
+
+	error = send_keys_payload(common);
+	if (error)
+		return error;
+
+	return 0;
+}
+
 int
 send_end_of_data_pdu(struct sender_common *common)
 {
 	struct end_of_data_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_END_OF_DATA,
@@ -259,7 +381,7 @@ send_error_report_pdu(int fd, u_int8_t version, u_int16_t code,
 struct pdu_header *err_pdu_header, char *message)
 {
 	struct error_report_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, version, PDU_TYPE_ERROR_REPORT,

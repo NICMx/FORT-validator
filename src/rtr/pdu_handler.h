@@ -12,6 +12,7 @@ int handle_ipv4_prefix_pdu(int, void *);
 int handle_ipv6_prefix_pdu(int, void *);
 int handle_end_of_data_pdu(int, void *);
 int handle_cache_reset_pdu(int, void *);
+int handle_router_key_pdu(int, void *);
 int handle_error_report_pdu(int, void *);
 
 #endif /* RTR_PDU_HANDLER_H_ */

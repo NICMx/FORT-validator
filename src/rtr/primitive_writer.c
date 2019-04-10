@@ -1,15 +1,15 @@
 #include "primitive_writer.h"
 
-char *
-write_int8(char *buf, u_int8_t value)
+unsigned char *
+write_int8(unsigned char *buf, u_int8_t value)
 {
 	buf[0] = value;
 	return buf + 1;
 }
 
 /** Big Endian. */
-char *
-write_int16(char *buf, u_int16_t value)
+unsigned char *
+write_int16(unsigned char *buf, u_int16_t value)
 {
 	buf[0] = value >> 8;
 	buf[1] = value;
@@ -17,8 +17,8 @@ write_int16(char *buf, u_int16_t value)
 }
 
 /** Big Endian. */
-char *
-write_int32(char *buf, u_int32_t value)
+unsigned char *
+write_int32(unsigned char *buf, u_int32_t value)
 {
 	buf[0] = value >> 24;
 	buf[1] = value >> 16;
@@ -27,14 +27,14 @@ write_int32(char *buf, u_int32_t value)
 	return buf + 4;
 }
 
-char *
-write_in_addr(char *buf, struct in_addr value)
+unsigned char *
+write_in_addr(unsigned char *buf, struct in_addr value)
 {
 	return write_int32(buf, ntohl(value.s_addr));
 }
 
-char *
-write_in6_addr(char *buf, struct in6_addr value)
+unsigned char *
+write_in6_addr(unsigned char *buf, struct in6_addr value)
 {
 	int i;
 	for (i = 0; i < 16; i++)

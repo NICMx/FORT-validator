@@ -17,6 +17,7 @@ static int	ipv4_prefix_from_stream(struct pdu_header *, int, void *);
 static int	ipv6_prefix_from_stream(struct pdu_header *, int, void *);
 static int	end_of_data_from_stream(struct pdu_header *, int, void *);
 static int	cache_reset_from_stream(struct pdu_header *, int, void *);
+static int	router_key_from_stream(struct pdu_header *, int, void *);
 static int	error_report_from_stream(struct pdu_header *, int, void *);
 static void	error_report_destroy(void *);
 
@@ -137,6 +138,14 @@ cache_reset_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 }
 
 static int
+router_key_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+{
+	struct router_key_pdu *pdu = pdu_void;
+	memcpy(&pdu->header, header, sizeof(*header));
+	return 0;
+}
+
+static int
 error_report_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 {
 	struct error_report_pdu *pdu = pdu_void;
@@ -197,6 +206,7 @@ DEFINE_METADATA(ipv4_prefix, free);
 DEFINE_METADATA(ipv6_prefix, free);
 DEFINE_METADATA(end_of_data, free);
 DEFINE_METADATA(cache_reset, free);
+DEFINE_METADATA(router_key, free);
 DEFINE_METADATA(error_report, error_report_destroy);
 
 struct pdu_metadata const *const pdu_metadatas[] = {
@@ -209,7 +219,7 @@ struct pdu_metadata const *const pdu_metadatas[] = {
 	/* 6 */  &ipv6_prefix_meta,
 	/* 7 */  &end_of_data_meta,
 	/* 8 */  &cache_reset_meta,
-	/* 9 */  NULL,
+	/* 9 */  &router_key_meta,
 	/* 10 */ &error_report_meta,
 };
 
