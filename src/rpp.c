@@ -1,10 +1,10 @@
 #include "rpp.h"
 
 #include <stdlib.h>
-#include "array_list.h"
 #include "log.h"
 #include "thread_var.h"
 #include "uri.h"
+#include "data_structure/array_list.h"
 #include "object/certificate.h"
 #include "object/crl.h"
 #include "object/ghostbusters.h"

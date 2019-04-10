@@ -4,18 +4,17 @@
 #include <stdbool.h>
 #include <openssl/x509.h>
 
-/**
- * It's an RFC5280 name, but from RFC 6487's perspective.
- * Meaning, only commonName and serialNumbers are allowed, and the latter is
- * optional.
- */
-struct rfc5280_name {
-	char *commonName;
-	char *serialNumber;
-};
+struct rfc5280_name;
 
-int x509_name_decode(X509_NAME *, char const *, struct rfc5280_name *);
-void x509_name_cleanup(struct rfc5280_name *);
+/* Constructor */
+int x509_name_decode(X509_NAME *, char const *, struct rfc5280_name **);
+/* Reference counting */
+void x509_name_get(struct rfc5280_name *);
+void x509_name_put(struct rfc5280_name *);
+
+/* Getters */
+char const *x509_name_commonName(struct rfc5280_name *);
+char const *x509_name_serialNumber(struct rfc5280_name *);
 
 bool x509_name_equals(struct rfc5280_name *, struct rfc5280_name *);
 

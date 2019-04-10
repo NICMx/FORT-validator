@@ -11,7 +11,6 @@ struct data_buffer {
 	char *data;
 };
 
-__BEGIN_DECLS
 void init_buffer(struct data_buffer *);
 void free_buffer(struct data_buffer *);
 
@@ -22,6 +21,5 @@ size_t serialize_ipv6_prefix_pdu(struct ipv6_prefix_pdu *, char *);
 size_t serialize_end_of_data_pdu(struct end_of_data_pdu *, char *);
 size_t serialize_cache_reset_pdu(struct cache_reset_pdu *, char *);
 size_t serialize_error_report_pdu(struct error_report_pdu *, char *);
-__END_DECLS
 
 #endif /* SRC_RTR_PDU_SERIALIZER_H_ */

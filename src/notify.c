@@ -1,9 +1,9 @@
 #include "notify.h"
 
 #include <err.h>
-#include "rtr/pdu_sender.h"
 #include "clients.h"
-#include "vrps.h"
+#include "rtr/pdu_sender.h"
+#include "rtr/db/vrps.h"
 
 static int
 send_notify(int fd, uint8_t rtr_version)

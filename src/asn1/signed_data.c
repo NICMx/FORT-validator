@@ -1,4 +1,4 @@
-#include "signed_data.h"
+#include "asn1/signed_data.h"
 
 #include <errno.h>
 #include <libcmscodec/ContentType.h>
@@ -31,6 +31,7 @@ signed_object_args_init(struct signed_object_args *args,
 	args->uri = uri;
 	args->crls = crls;
 	memset(&args->refs, 0, sizeof(args->refs));
+	args->subject_name = NULL;
 	return 0;
 }
 
@@ -39,6 +40,8 @@ signed_object_args_cleanup(struct signed_object_args *args)
 {
 	resources_destroy(args->res);
 	refs_cleanup(&args->refs);
+	if (args->subject_name != NULL)
+		x509_name_put(args->subject_name);
 }
 
 static int
@@ -93,7 +96,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	error = certificate_validate_chain(cert, args->crls);
 	if (error)
 		goto end2;
-	error = certificate_validate_rfc6487(cert, false);
+	error = certificate_validate_rfc6487(cert, &args->subject_name, false);
 	if (error)
 		goto end2;
 	error = certificate_validate_extensions_ee(cert, sid, &args->refs,

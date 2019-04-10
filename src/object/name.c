@@ -7,6 +7,18 @@
 #include "log.h"
 #include "thread_var.h"
 
+/**
+ * It's an RFC5280 name, but from RFC 6487's perspective.
+ * Meaning, only commonName and serialNumbers are allowed, and the latter is
+ * optional.
+ */
+struct rfc5280_name {
+	char *commonName;
+	char *serialNumber;
+	/** Reference counter */
+	unsigned int references;
+};
+
 static int
 name2string(X509_NAME_ENTRY *name, char **_result)
 {
@@ -30,15 +42,21 @@ name2string(X509_NAME_ENTRY *name, char **_result)
 
 int
 x509_name_decode(X509_NAME *name, char const *what,
-    struct rfc5280_name *result)
+    struct rfc5280_name **_result)
 {
+	struct rfc5280_name *result;
 	int i;
 	X509_NAME_ENTRY *entry;
 	int nid;
 	int error;
 
+	result = malloc(sizeof(struct rfc5280_name));
+	if (result == NULL)
+		return pr_enomem();
+
 	result->commonName = NULL;
 	result->serialNumber = NULL;
+	result->references = 1;
 
 	for (i = 0; i < X509_NAME_entry_count(name); i++) {
 		entry = X509_NAME_get_entry(name, i);
@@ -66,18 +84,41 @@ x509_name_decode(X509_NAME *name, char const *what,
 		goto fail;
 	}
 
+	*_result = result;
 	return 0;
 
 fail:
-	x509_name_cleanup(result);
+	x509_name_put(result);
 	return error;
 }
 
 void
-x509_name_cleanup(struct rfc5280_name *name)
+x509_name_get(struct rfc5280_name *name)
 {
-	free(name->commonName);
-	free(name->serialNumber);
+	name->references++;
+}
+
+void
+x509_name_put(struct rfc5280_name *name)
+{
+	name->references--;
+	if (name->references == 0) {
+		free(name->commonName);
+		free(name->serialNumber);
+		free(name);
+	}
+}
+
+char const *
+x509_name_commonName(struct rfc5280_name *name)
+{
+	return name->commonName;
+}
+
+char const *
+x509_name_serialNumber(struct rfc5280_name *name)
+{
+	return name->serialNumber;
 }
 
 /**
@@ -106,8 +147,8 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 {
 	struct validation *state;
 	X509 *parent;
-	struct rfc5280_name parent_subject;
-	struct rfc5280_name child_issuer;
+	struct rfc5280_name *parent_subject;
+	struct rfc5280_name *child_issuer;
 	int error;
 
 	/*
@@ -134,22 +175,24 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 	if (error)
 		goto end;
 
-	if (!x509_name_equals(&parent_subject, &child_issuer)) {
+	if (!x509_name_equals(parent_subject, child_issuer)) {
+		char const *parent_serial;
+		char const *child_serial;
+
+		parent_serial = x509_name_serialNumber(parent_subject);
+		child_serial = x509_name_serialNumber(child_issuer);
+
 		error = pr_err("%s's issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
 		    container,
-		    parent_subject.commonName,
-		    (parent_subject.serialNumber != NULL) ? "/" : "",
-		    (parent_subject.serialNumber != NULL)
-		        ? parent_subject.serialNumber
-		        : "",
-		    child_issuer.commonName,
-		    (child_issuer.serialNumber != NULL) ? "/" : "",
-		    (child_issuer.serialNumber != NULL)
-		        ? child_issuer.serialNumber
-		        : "");
+		    x509_name_commonName(parent_subject),
+		    (parent_serial != NULL) ? "/" : "",
+		    (parent_serial != NULL) ? parent_serial : "",
+		    x509_name_commonName(child_issuer),
+		    (child_serial != NULL) ? "/" : "",
+		    (child_serial != NULL) ? child_serial : "");
 	}
 
-	x509_name_cleanup(&child_issuer);
-end:	x509_name_cleanup(&parent_subject);
+	x509_name_put(child_issuer);
+end:	x509_name_put(parent_subject);
 	return error;
 }

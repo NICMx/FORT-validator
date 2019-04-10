@@ -127,18 +127,6 @@ fnstack_cleanup(void)
 		fprintf(stderr, "pthread_setspecific() returned %d.", error);
 }
 
-static struct filename_stack *
-get_file_stack(void)
-{
-	struct filename_stack *files;
-
-	files = pthread_getspecific(filenames_key);
-	if (files == NULL)
-		fprintf(stderr, "This thread lacks a files stack.\n");
-
-	return files;
-}
-
 /**
  * Call this function every time you're about to start processing a new file.
  * Any pr_err()s and friends will now include the new file name.
@@ -151,7 +139,7 @@ fnstack_push(char const *file)
 	struct filename_stack *files;
 	char const **tmp;
 
-	files = get_file_stack();
+	files = pthread_getspecific(filenames_key);
 	if (files == NULL || files->filenames == NULL)
 		return;
 
@@ -184,7 +172,7 @@ fnstack_peek(void)
 {
 	struct filename_stack *files;
 
-	files = get_file_stack();
+	files = pthread_getspecific(filenames_key);
 	if (files == NULL || files->filenames == NULL || files->len == 0)
 		return NULL;
 
@@ -197,7 +185,7 @@ fnstack_pop(void)
 {
 	struct filename_stack *files;
 
-	files = get_file_stack();
+	files = pthread_getspecific(filenames_key);
 	if (files == NULL || files->filenames == NULL || files->len == 0)
 		return;
 
@@ -205,7 +193,7 @@ fnstack_pop(void)
 }
 
 static char const *
-addr2str(int af, void *addr, char *(*buffer_cb)(struct validation *))
+addr2str(int af, void const *addr, char *(*buffer_cb)(struct validation *))
 {
 	struct validation *state;
 
@@ -227,7 +215,7 @@ addr2str(int af, void *addr, char *(*buffer_cb)(struct validation *))
  * The buffer is the same as v6addr2str()'s, so don't mix them either.
  */
 char const *
-v4addr2str(struct in_addr *addr)
+v4addr2str(struct in_addr const *addr)
 {
 	return addr2str(AF_INET, addr, validation_get_ip_buffer1);
 }
@@ -236,7 +224,7 @@ v4addr2str(struct in_addr *addr)
  * Same as v4addr2str(), except a different buffer is used.
  */
 char const *
-v4addr2str2(struct in_addr *addr)
+v4addr2str2(struct in_addr const *addr)
 {
 	return addr2str(AF_INET, addr, validation_get_ip_buffer2);
 }
@@ -245,7 +233,7 @@ v4addr2str2(struct in_addr *addr)
  * See v4addr2str().
  */
 char const *
-v6addr2str(struct in6_addr *addr)
+v6addr2str(struct in6_addr const *addr)
 {
 	return addr2str(AF_INET6, addr, validation_get_ip_buffer1);
 }
@@ -254,7 +242,7 @@ v6addr2str(struct in6_addr *addr)
  * See v4addr2str2().
  */
 char const *
-v6addr2str2(struct in6_addr *addr)
+v6addr2str2(struct in6_addr const *addr)
 {
 	return addr2str(AF_INET6, addr, validation_get_ip_buffer2);
 }

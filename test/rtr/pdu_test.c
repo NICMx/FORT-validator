@@ -26,7 +26,7 @@ init_pdu_header(struct pdu_header *header)
 {
 	header->protocol_version = 0;
 	header->pdu_type = 22;
-	header->reserved = 12345;
+	header->m.reserved = 12345;
 	header->length = 0xFFAA9955;
 }
 
@@ -35,7 +35,7 @@ assert_pdu_header(struct pdu_header *header)
 {
 	ck_assert_uint_eq(header->protocol_version, 0);
 	ck_assert_uint_eq(header->pdu_type, 22);
-	ck_assert_uint_eq(header->reserved, 12345);
+	ck_assert_uint_eq(header->m.reserved, 12345);
 	ck_assert_uint_eq(header->length, 0xFFAA9955);
 }
 
@@ -54,7 +54,7 @@ START_TEST(test_pdu_header_from_stream)
 
 	ck_assert_uint_eq(header.protocol_version, 0);
 	ck_assert_uint_eq(header.pdu_type, 1);
-	ck_assert_uint_eq(header.reserved, 0x0203);
+	ck_assert_uint_eq(header.m.reserved, 0x0203);
 	ck_assert_uint_eq(header.length, 0x04050607);
 }
 END_TEST
@@ -178,7 +178,7 @@ START_TEST(test_error_report_from_stream)
 	sub_pdu = pdu->erroneous_pdu;
 	ck_assert_uint_eq(sub_pdu->header.protocol_version, 1);
 	ck_assert_uint_eq(sub_pdu->header.pdu_type, 0);
-	ck_assert_uint_eq(sub_pdu->header.reserved, 0x0203);
+	ck_assert_uint_eq(sub_pdu->header.m.reserved, 0x0203);
 	ck_assert_uint_eq(sub_pdu->header.length, 12);
 	ck_assert_uint_eq(sub_pdu->serial_number, 0x01020304);
 	ck_assert_str_eq(pdu->error_message, "hello");

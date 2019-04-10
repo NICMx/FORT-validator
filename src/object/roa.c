@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <libcmscodec/RouteOriginAttestation.h>
 
 #include "config.h"
@@ -10,8 +11,7 @@
 #include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
-
-#include <sys/socket.h>
+#include "rtr/db/roa_tree.h"
 
 static int
 roa_decode(OCTET_STRING_t *string, void *arg)
@@ -21,7 +21,7 @@ roa_decode(OCTET_STRING_t *string, void *arg)
 }
 
 static int
-print_addr4(struct resources *parent, unsigned long asn,
+____handle_roa_v4(struct resources *parent, unsigned long asn,
     struct ROAIPAddress *roa_addr)
 {
 	struct ipv4_prefix prefix;
@@ -59,18 +59,11 @@ print_addr4(struct resources *parent, unsigned long asn,
 		    v4addr2str(&prefix.addr), prefix.len);
 	}
 
-	/* TODO I think we're not validating asn boundaries */
-	return roa_handle_v4(asn, &prefix, max_length);
-}
-
-int
-roa_handle_v4(uint32_t asn, struct ipv4_prefix *prefix, uint8_t max_length)
-{
-	return -ENOTIMPLEMENTED;
+	return vhandler_handle_roa_v4(asn, &prefix, max_length);
 }
 
 static int
-print_addr6(struct resources *parent, unsigned long asn,
+____handle_roa_v6(struct resources *parent, unsigned long asn,
     struct ROAIPAddress *roa_addr)
 {
 	struct ipv6_prefix prefix;
@@ -108,17 +101,11 @@ print_addr6(struct resources *parent, unsigned long asn,
 		    v6addr2str(&prefix.addr), prefix.len);
 	}
 
-	return roa_handle_v6(asn, &prefix, max_length);
-}
-
-int
-roa_handle_v6(uint32_t asn, struct ipv6_prefix *prefix, uint8_t max_length)
-{
-	return -ENOTIMPLEMENTED;
+	return vhandler_handle_roa_v6(asn, &prefix, max_length);
 }
 
 static int
-print_addr(struct resources *parent, ASID_t *as_id, uint8_t family,
+____handle_roa(struct resources *parent, ASID_t *as_id, uint8_t family,
     struct ROAIPAddress *roa_addr)
 {
 	unsigned long asn;
@@ -129,11 +116,14 @@ print_addr(struct resources *parent, ASID_t *as_id, uint8_t family,
 		return pr_err("ROA's AS ID couldn't be parsed as unsigned long");
 	}
 
+	if (asn > UINT32_MAX)
+		return pr_err("AS value (%lu) is out of range.", asn);
+
 	switch (family) {
 	case 1: /* IPv4 */
-		return print_addr4(parent, asn, roa_addr);
+		return ____handle_roa_v4(parent, asn, roa_addr);
 	case 2: /* IPv6 */
-		return print_addr6(parent, asn, roa_addr);
+		return ____handle_roa_v6(parent, asn, roa_addr);
 	}
 
 	return pr_err("Unknown family value: %u", family);
@@ -181,7 +171,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		if (block->addresses.list.array == NULL)
 			return pr_err("ROA's address list array is NULL.");
 		for (a = 0; a < block->addresses.list.count; a++) {
-			error = print_addr(parent, &roa->asID,
+			error = ____handle_roa(parent, &roa->asID,
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
 			if (error)
@@ -216,10 +206,19 @@ roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
 	if (error)
 		goto end2;
 
+	error = vhandler_traverse_down(sobj_args.subject_name);
+	if (error)
+		goto end3;
+
 	error = __handle_roa(roa, sobj_args.res);
 	if (error)
 		goto end3;
 
+	error = vhandler_traverse_up();
+	if (error)
+		goto end3;
+
+	/* TODO why is this happening so late? */
 	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
 
 end3:

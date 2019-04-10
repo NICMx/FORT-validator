@@ -3,9 +3,7 @@
 
 #include "common.h"
 
-__BEGIN_DECLS
 int rtr_listen(void);
 void rtr_cleanup(void);
-__END_DECLS
 
 #endif /* RTR_RTR_H_ */

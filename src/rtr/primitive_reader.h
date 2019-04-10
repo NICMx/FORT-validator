@@ -7,13 +7,11 @@
 
 typedef char rtr_char;
 
-__BEGIN_DECLS
 int read_int8(int, uint8_t *);
 int read_int16(int, uint16_t *);
 int read_int32(int, uint32_t *);
 int read_in_addr(int, struct in_addr *);
 int read_in6_addr(int, struct in6_addr *);
 int read_string(int, rtr_char **);
-__END_DECLS
 
 #endif /* RTR_PRIMITIVE_READER_H_ */

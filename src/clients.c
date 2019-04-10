@@ -1,14 +1,14 @@
 #include "clients.h"
 
-#include "array_list.h"
 #include "common.h"
+#include "data_structure/array_list.h"
 
 #define SADDR_IN(addr) ((struct sockaddr_in *)addr)
 #define SADDR_IN6(addr) ((struct sockaddr_in6 *)addr)
 
 ARRAY_LIST(clientsdb, struct client)
 
-struct clientsdb clients_db;
+static struct clientsdb clients_db;
 
 /* Read and Write locks */
 sem_t rlock, wlock;

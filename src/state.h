@@ -3,12 +3,14 @@
 
 #include <openssl/x509.h>
 #include "resource.h"
+#include "validation_handler.h"
 #include "object/name.h"
 #include "object/tal.h"
 
 struct validation;
 
-int validation_prepare(struct validation **, struct tal *);
+int validation_prepare(struct validation **, struct tal *,
+    struct validation_handler *);
 void validation_destroy(struct validation *);
 
 struct tal *validation_tal(struct validation *);
@@ -38,5 +40,7 @@ int validation_store_subject(struct validation *, struct rfc5280_name *);
 
 char *validation_get_ip_buffer1(struct validation *);
 char *validation_get_ip_buffer2(struct validation *);
+
+struct validation_handler const *validation_get_validation_handler(struct validation *);
 
 #endif /* SRC_STATE_H_ */

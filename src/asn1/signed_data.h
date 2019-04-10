@@ -23,6 +23,8 @@ struct signed_object_args {
 	 * recorded for future validation.
 	 */
 	struct certificate_refs refs;
+	/** Certificate's subject name field */
+	struct rfc5280_name *subject_name;
 };
 
 int signed_object_args_init(struct signed_object_args *,

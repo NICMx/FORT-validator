@@ -8,7 +8,7 @@
 #include "err_pdu.h"
 #include "pdu.h"
 #include "pdu_sender.h"
-#include "vrps.h"
+#include "rtr/db/vrps.h"
 
 static int
 warn_unexpected_pdu(int fd, void *pdu, char const *pdu_name)
@@ -27,7 +27,8 @@ handle_serial_notify_pdu(int fd, void *pdu)
 }
 
 static int
-send_commmon_exchange(struct sender_common *common)
+send_commmon_exchange(struct sender_common *common,
+    int (*pdu_sender)(struct sender_common *))
 {
 	int error;
 
@@ -37,7 +38,7 @@ send_commmon_exchange(struct sender_common *common)
 		return error;
 
 	/* Send Payload PDUs */
-	error = send_payload_pdus(common);
+	error = pdu_sender(common);
 	if (error)
 		return error;
 
@@ -45,12 +46,20 @@ send_commmon_exchange(struct sender_common *common)
 	return send_end_of_data_pdu(common);
 }
 
+/*
+ * TODO The semaphoring is bonkers. The code keeps locking, storing a value,
+ * unlocking, locking again, and using the old value.
+ * It doesn't look like it's a problem for now, but eventually will be, when old
+ * delta forgetting is implemented.
+ * I'm going to defer this because it shouldn't be done during the merge.
+ */
 int
 handle_serial_query_pdu(int fd, void *pdu)
 {
 	struct serial_query_pdu *received = pdu;
 	struct sender_common common;
-	int error, updates;
+	int error;
+	enum delta_status updates;
 	uint32_t current_serial;
 	uint16_t session_id;
 	uint8_t version;
@@ -74,26 +83,26 @@ handle_serial_query_pdu(int fd, void *pdu)
 
 	updates = deltas_db_status(common.start_serial);
 	switch (updates) {
-	case NO_DATA_AVAILABLE:
+	case DS_NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
 		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE,
 		    NULL, NULL);
-	case DIFF_UNDETERMINED:
+	case DS_DIFF_UNDETERMINED:
 		/* https://tools.ietf.org/html/rfc8210#section-8.3 */
 		return send_cache_reset_pdu(&common);
-	case DIFF_AVAILABLE:
+	case DS_DIFF_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.2 */
-		return send_commmon_exchange(&common);
-	case NO_DIFF:
+		return send_commmon_exchange(&common, send_pdus_delta);
+	case DS_NO_DIFF:
 		/* Typical exchange with no Payloads */
 		error = send_cache_response_pdu(&common);
 		if (error)
 			return error;
 		return send_end_of_data_pdu(&common);
-	default:
-		warnx("Reached 'unreachable' code");
-		return -EINVAL;
 	}
+
+	warnx("Reached 'unreachable' code");
+	return -EINVAL;
 }
 
 int
@@ -104,7 +113,7 @@ handle_reset_query_pdu(int fd, void *pdu)
 	uint32_t current_serial;
 	uint16_t session_id;
 	uint8_t version;
-	int updates;
+	enum delta_status updates;
 
 	version = received->header.protocol_version;
 	session_id = get_current_session_id(version);
@@ -114,17 +123,20 @@ handle_reset_query_pdu(int fd, void *pdu)
 
 	updates = deltas_db_status(NULL);
 	switch (updates) {
-	case NO_DATA_AVAILABLE:
+	case DS_NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
 		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE,
 		    NULL, NULL);
-	case DIFF_AVAILABLE:
+	case DS_DIFF_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.1 */
-		return send_commmon_exchange(&common);
-	default:
-		warnx("Reached 'unreachable' code");
-		return -EINVAL;
+		return send_commmon_exchange(&common, send_pdus_base);
+	case DS_DIFF_UNDETERMINED:
+	case DS_NO_DIFF:
+		break;
 	}
+
+	warnx("Reached 'unreachable' code");
+	return -EINVAL;
 }
 
 int

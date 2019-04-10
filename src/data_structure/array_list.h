@@ -1,25 +1,29 @@
-#ifndef SRC_ARRAY_LIST_H_
-#define SRC_ARRAY_LIST_H_
+#ifndef SRC_DATA_STRUCTURE_ARRAY_LIST_H_
+#define SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 
 #include <errno.h>
 #include <stdlib.h>
 #include "log.h"
+#include "data_structure/common.h"
 
-#define ARRAY_LIST(name, elem_type)					\
+/* TODO sizes used to be unsigned ints. Check callers. */
+#define DEFINE_ARRAY_LIST_STRUCT(name, elem_type)			\
 	struct name {							\
 		/** Unidimensional array. */				\
 		elem_type *array;					\
 		/** Number of elements in @array. */			\
-		unsigned int len;					\
+		size_t len;						\
 		/** Actual allocated slots in @array. */		\
-		unsigned int capacity;					\
-	};								\
-									\
+		size_t capacity;					\
+	}
+
+#define DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type)			\
 	static int							\
 	name##_init(struct name *list)					\
 	{								\
 		list->capacity = 8;					\
 		list->len = 0;						\
+		/* TODO I need lazy initialization of this badly */	\
 		list->array = malloc(list->capacity			\
 		    * sizeof(elem_type));				\
 		return (list->array != NULL) ? 0 : pr_enomem();		\
@@ -28,9 +32,11 @@
 	static void							\
 	name##_cleanup(struct name *list, void (*cb)(elem_type *))	\
 	{								\
-		unsigned int i;						\
-		for (i = 0; i < list->len; i++)				\
-			cb(&list->array[i]);				\
+		array_index i;						\
+		/* TODO recently added this. Use it more */		\
+		if (cb != NULL)						\
+			for (i = 0; i < list->len; i++)			\
+				cb(&list->array[i]);			\
 		free(list->array);					\
 	}								\
 									\
@@ -55,10 +61,14 @@
 		return 0;						\
 	}
 
+#define ARRAY_LIST(name, elem_type)					\
+	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
+	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type)
+
 #define ARRAYLIST_FOREACH(list, cursor) for (				\
 	cursor = (list)->array;						\
 	(cursor - ((typeof(cursor)) ((list)->array))) < (list)->len;	\
 	cursor++							\
 )
 
-#endif /* SRC_ARRAY_LIST_H_ */
+#endif /* SRC_DATA_STRUCTURE_ARRAY_LIST_H_ */

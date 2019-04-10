@@ -1,19 +1,20 @@
 #include "clients.h"
 #include "config.h"
+#include "console_handler.h"
 #include "debug.h"
 #include "extension.h"
 #include "nid.h"
 #include "thread_var.h"
-#include "vrps.h"
 #include "rsync/rsync.h"
 #include "rtr/rtr.h"
+#include "rtr/db/vrps.h"
 
 static int
 start_rtr_server(void)
 {
 	int error;
 
-	error = deltas_db_init();
+	error = vrps_init();
 	if (error)
 		goto end1;
 
@@ -25,7 +26,7 @@ start_rtr_server(void)
 	rtr_cleanup(); /* TODO shouldn't this only happen on !error? */
 
 	clients_db_destroy();
-end2:	deltas_db_destroy();
+end2:	vrps_destroy();
 end1:	return error;
 }
 
@@ -54,13 +55,9 @@ main(int argc, char **argv)
 	if (error)
 		goto revert_rsync;
 
-	error = perform_standalone_validation(NULL);
-	if (error)
-		goto revert_rsync;
-
-	if (config_get_server_address() != NULL)
-		error = start_rtr_server();
-	/* Otherwise, no server requested. */
+	error = (config_get_server_address() != NULL)
+	    ? start_rtr_server()
+	    : validate_into_console();
 
 revert_rsync:
 	rsync_destroy();

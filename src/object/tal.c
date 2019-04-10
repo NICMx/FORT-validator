@@ -210,7 +210,7 @@ void tal_destroy(struct tal *tal)
 }
 
 int
-foreach_uri(struct tal *tal, foreach_uri_cb cb)
+foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 {
 	struct rpki_uri uri;
 	unsigned int i;
@@ -227,7 +227,7 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb)
 		if (error)
 			return error;
 
-		error = cb(tal, &uri);
+		error = cb(tal, &uri, arg);
 		uri_cleanup(&uri);
 		if (error)
 			return error;
@@ -273,7 +273,7 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
+handle_tal_uri(struct tal *tal, struct rpki_uri const *uri, void *arg)
 {
 	/*
 	 * Because of the way the foreach iterates, this function must return
@@ -298,7 +298,11 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri)
 		    uri->global);
 	}
 
-	error = validation_prepare(&state, tal);
+	error = validation_prepare(&state, tal, arg);
+	if (error)
+		return ENSURE_NEGATIVE(error);
+
+	error = vhandler_reset(arg);
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
@@ -331,9 +335,8 @@ end:	validation_destroy(state);
 	return error;
 }
 
-/* TODO set @updated */
 int
-perform_standalone_validation(bool *updated)
+perform_standalone_validation(struct validation_handler *handler)
 {
 	struct tal *tal;
 	int error;
@@ -347,7 +350,7 @@ perform_standalone_validation(bool *updated)
 
 	if (config_get_shuffle_tal_uris())
 		tal_shuffle_uris(tal);
-	error = foreach_uri(tal, handle_tal_uri);
+	error = foreach_uri(tal, handle_tal_uri, handler);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)

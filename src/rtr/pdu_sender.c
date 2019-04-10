@@ -8,8 +8,8 @@
 #include <unistd.h>
 
 #include "config.h"
-#include "vrps.h"
 #include "rtr/pdu_serializer.h"
+#include "rtr/db/vrps.h"
 
 /* Header length field is always 64 bits long */
 #define HEADER_LENGTH		8
@@ -166,7 +166,7 @@ send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	pdu.prefix_length = vrp->prefix_length;
 	pdu.max_length = vrp->max_prefix_length;
 	pdu.zero = 0;
-	pdu.ipv4_prefix = vrp->prefix.ipv4;
+	pdu.ipv4_prefix = vrp->prefix.v4;
 	pdu.asn = vrp->asn;
 	pdu.header.length = length_ipvx_prefix_pdu(true);
 
@@ -189,7 +189,7 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	pdu.prefix_length = vrp->prefix_length;
 	pdu.max_length = vrp->max_prefix_length;
 	pdu.zero = 0;
-	pdu.ipv6_prefix = vrp->prefix.ipv6;
+	pdu.ipv6_prefix = vrp->prefix.v6;
 	pdu.asn = vrp->asn;
 	pdu.header.length = length_ipvx_prefix_pdu(false);
 
@@ -199,37 +199,29 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 }
 
 int
-send_payload_pdus(struct sender_common *common)
+send_prefix_pdu(struct vrp *vrp, void *arg)
 {
-	struct vrp *vrps, *ptr;
-	unsigned int len;
-	int error;
-
-	vrps = malloc(sizeof(struct vrp));
-	if (vrps == NULL) {
-		warn("Couldn't allocate VRPs to send PDUs");
-		return -ENOMEM;
+	switch (vrp->addr_fam) {
+	case AF_INET:
+		return send_ipv4_prefix_pdu(arg, vrp);
+	case AF_INET6:
+		return send_ipv6_prefix_pdu(arg, vrp);
 	}
-	len = get_vrps_delta(common->start_serial, common->end_serial, &vrps);
-	if (len == 0)
-		goto end;
 
-	for (ptr = vrps; (ptr - vrps) < len; ptr++) {
-		if (ptr->addr_fam == AF_INET)
-			error = send_ipv4_prefix_pdu(common, ptr);
-		else if (ptr->addr_fam == AF_INET6)
-			error = send_ipv6_prefix_pdu(common, ptr);
-		else
-			error = -EINVAL;
+	return -EINVAL;
+}
 
-		if (error) {
-			free(vrps);
-			return error;
-		}
-	}
-end:
-	free(vrps);
-	return 0;
+int
+send_pdus_base(struct sender_common *common)
+{
+	return vrps_foreach_base_roa(send_prefix_pdu, common);
+}
+
+int
+send_pdus_delta(struct sender_common *common)
+{
+	return vrps_foreach_delta_roa(*common->start_serial,
+	    *common->end_serial, send_prefix_pdu, common);
 }
 
 int

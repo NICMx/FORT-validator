@@ -64,7 +64,7 @@ config_get_rsync_program(void)
 }
 
 struct string_array const *
-config_get_rsync_args(void)
+config_get_rsync_args(bool is_ta)
 {
 	static const struct string_array array = { 0 };
 	return &array;

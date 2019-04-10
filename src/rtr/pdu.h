@@ -93,10 +93,8 @@ struct pdu_metadata {
 	void	(*destructor)(void *);
 };
 
-__BEGIN_DECLS
 int pdu_load(int, void **, struct pdu_metadata const **, uint8_t *);
 struct pdu_metadata const *pdu_get_metadata(uint8_t);
 struct pdu_header *pdu_get_header(void *);
-__END_DECLS
 
 #endif /* RTR_PDU_H_ */

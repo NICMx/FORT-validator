@@ -30,9 +30,12 @@ uint32_t u32_suffix_mask(unsigned int);
 uint32_t be32_suffix_mask(unsigned int);
 void ipv6_suffix_mask(unsigned int, struct in6_addr *);
 
-int prefix4_decode(IPAddress_t *, struct ipv4_prefix *);
-int prefix6_decode(IPAddress_t *, struct ipv6_prefix *);
-int range4_decode(IPAddressRange_t *, struct ipv4_range *);
-int range6_decode(IPAddressRange_t *, struct ipv6_range *);
+bool prefix4_equals(struct ipv4_prefix const *, struct ipv4_prefix const *);
+bool prefix6_equals(struct ipv6_prefix const *, struct ipv6_prefix const *);
+
+int prefix4_decode(IPAddress_t const *, struct ipv4_prefix *);
+int prefix6_decode(IPAddress_t const *, struct ipv6_prefix *);
+int range4_decode(IPAddressRange_t const *, struct ipv4_range *);
+int range6_decode(IPAddressRange_t const *, struct ipv6_range *);
 
 #endif /* SRC_ADDRESS_H_ */

@@ -112,11 +112,34 @@ ipv6_suffix_mask(unsigned int prefix_len, struct in6_addr *result)
 	}
 }
 
+bool
+prefix4_equals(struct ipv4_prefix const *a, struct ipv4_prefix const *b)
+{
+	return (a->addr.s_addr == b->addr.s_addr) && (a->len == b->len);
+}
+
+bool
+prefix6_equals(struct ipv6_prefix const *a, struct ipv6_prefix const *b)
+{
+	unsigned int i;
+
+	/*
+	 * Not sure if I can use a memcmp() instead.
+	 * I feel like in6_addr's union could cause padding in weird
+	 * implementations.
+	 */
+	for (i = 0; i < 16; i++)
+		if (a->addr.s6_addr[i] != b->addr.s6_addr[i])
+			return false;
+
+	return a->len == b->len;
+}
+
 /**
  * Translates an `IPAddress_t` to its equivalent `struct ipv4_prefix`.
  */
 int
-prefix4_decode(IPAddress_t *str, struct ipv4_prefix *result)
+prefix4_decode(IPAddress_t const *str, struct ipv4_prefix *result)
 {
 	int len;
 
@@ -152,7 +175,7 @@ prefix4_decode(IPAddress_t *str, struct ipv4_prefix *result)
  * Translates an `IPAddress_t` to its equivalent `struct ipv6_prefix`.
  */
 int
-prefix6_decode(IPAddress_t *str, struct ipv6_prefix *result)
+prefix6_decode(IPAddress_t const *str, struct ipv6_prefix *result)
 {
 	struct in6_addr suffix;
 	int len;
@@ -226,7 +249,7 @@ check_encoding4(struct ipv4_range *range)
  * Translates an `IPAddressRange_t` to its equivalent `struct ipv4_range`.
  */
 int
-range4_decode(IPAddressRange_t *input, struct ipv4_range *result)
+range4_decode(IPAddressRange_t const *input, struct ipv4_range *result)
 {
 	struct ipv4_prefix prefix;
 	int error;
@@ -319,7 +342,7 @@ check_encoding6(struct ipv6_range *range)
  * Translates an `IPAddressRange_t` to its equivalent `struct ipv6_range`.
  */
 int
-range6_decode(IPAddressRange_t *input, struct ipv6_range *result)
+range6_decode(IPAddressRange_t const *input, struct ipv6_range *result)
 {
 	struct ipv6_prefix prefix;
 	int error;

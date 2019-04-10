@@ -3,10 +3,10 @@
 #include <sys/queue.h>
 #include <errno.h>
 #include <string.h>
-#include "array_list.h"
 #include "log.h"
 #include "str.h"
 #include "thread_var.h"
+#include "data_structure/array_list.h"
 #include "object/certificate.h"
 
 struct serial_number {
@@ -15,7 +15,7 @@ struct serial_number {
 };
 
 struct subject_name {
-	struct rfc5280_name name;
+	struct rfc5280_name *name;
 	char *file; /* File where this subject name was found. */
 };
 
@@ -83,6 +83,8 @@ struct validation {
 	 */
 	char addr_buffer1[INET6_ADDRSTRLEN];
 	char addr_buffer2[INET6_ADDRSTRLEN];
+
+	struct validation_handler validation_handler;
 };
 
 /*
@@ -122,7 +124,8 @@ cb(int ok, X509_STORE_CTX *ctx)
 
 /** Creates a struct validation, puts it in thread local, and returns it. */
 int
-validation_prepare(struct validation **out, struct tal *tal)
+validation_prepare(struct validation **out, struct tal *tal,
+    struct validation_handler *validation_handler)
 {
 	struct validation *result;
 	int error;
@@ -153,6 +156,7 @@ validation_prepare(struct validation **out, struct tal *tal)
 
 	SLIST_INIT(&result->certs);
 	result->pubkey_state = PKS_UNTESTED;
+	result->validation_handler = *validation_handler;
 
 	*out = result;
 	return 0;
@@ -174,7 +178,7 @@ serial_cleanup(struct serial_number *serial)
 static void
 subject_cleanup(struct subject_name *subject)
 {
-	x509_name_cleanup(&subject->name);
+	x509_name_put(subject->name);
 	free(subject->file);
 }
 
@@ -427,9 +431,6 @@ validation_store_serial_number(struct validation *state, BIGNUM *number)
 	return error;
 }
 
-/**
- * This function will steal ownership of @subject on success.
- */
 int
 validation_store_subject(struct validation *state, struct rfc5280_name *subject)
 {
@@ -481,38 +482,40 @@ validation_store_subject(struct validation *state, struct rfc5280_name *subject)
 	 * fixing.
 	 */
 
-	/* Remember to free @subject if you return 0 but don't store it. */
-
 	cert = SLIST_FIRST(&state->certs);
-	if (cert == NULL) {
-		x509_name_cleanup(subject);
+	if (cert == NULL)
 		return 0; /* The TA lacks siblings, so subject is unique. */
-	}
 
 	/* See the large comment in validation_store_serial_number(). */
 	ARRAYLIST_FOREACH(&cert->subjects, cursor) {
-		if (x509_name_equals(&cursor->name, subject)) {
+		if (x509_name_equals(cursor->name, subject)) {
+			char const *serial = x509_name_serialNumber(subject);
 			pr_warn("Subject name '%s%s%s' is not unique. (Also found in '%s'.)",
-			    subject->commonName,
-			    (subject->serialNumber != NULL) ? "/" : "",
-			    (subject->serialNumber != NULL)
-			        ? subject->serialNumber
-			        : "",
+			    x509_name_commonName(subject),
+			    (serial != NULL) ? "/" : "",
+			    (serial != NULL) ? serial : "",
 			    cursor->file);
-			x509_name_cleanup(subject);
 			return 0;
 		}
 	}
 
-	duplicate.name = *subject;
+	duplicate.name = subject;
+	x509_name_get(subject);
+
 	error = get_current_file_name(&duplicate.file);
 	if (error)
-		return error;
+		goto revert_name;
 
 	error = subjects_add(&cert->subjects, &duplicate);
 	if (error)
-		free(duplicate.file);
+		goto revert_file;
 
+	return 0;
+
+revert_file:
+	free(duplicate.file);
+revert_name:
+	x509_name_put(subject);
 	return error;
 }
 
@@ -526,4 +529,10 @@ char *
 validation_get_ip_buffer2(struct validation *state)
 {
 	return state->addr_buffer2;
+}
+
+struct validation_handler const *
+validation_get_validation_handler(struct validation *state)
+{
+	return &state->validation_handler;
 }

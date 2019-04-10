@@ -15,9 +15,11 @@
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
+#include "asn1/signed_data.h"
 #include "crypto/hash.h"
 #include "object/name.h"
 #include "rsync/rsync.h"
+#include "rtr/db/roa_tree.h"
 
 #include <sys/socket.h>
 
@@ -76,7 +78,7 @@ static int
 validate_issuer(X509 *cert, bool is_ta)
 {
 	X509_NAME *issuer;
-	struct rfc5280_name name;
+	struct rfc5280_name *name;
 	int error;
 
 	issuer = X509_get_issuer_name(cert);
@@ -86,16 +88,16 @@ validate_issuer(X509 *cert, bool is_ta)
 
 	error = x509_name_decode(issuer, "issuer", &name);
 	if (!error)
-		x509_name_cleanup(&name);
+		x509_name_put(name);
 
 	return error;
 }
 
 static int
-validate_subject(X509 *cert)
+validate_subject(X509 *cert, struct rfc5280_name **subject_name)
 {
 	struct validation *state;
-	struct rfc5280_name name;
+	struct rfc5280_name *name;
 	int error;
 
 	state = state_retrieve();
@@ -106,11 +108,14 @@ validate_subject(X509 *cert)
 	if (error)
 		return error;
 
-	error = validation_store_subject(state, &name);
-	if (error)
-		x509_name_cleanup(&name);
+	error = validation_store_subject(state, name);
+	if (error) {
+		x509_name_put(name);
+		return error;
+	}
 
-	return error;
+	*subject_name = name; /* Transfer ownership */
+	return 0;
 }
 
 static int
@@ -264,7 +269,8 @@ validate_public_key(X509 *cert, bool is_root)
 }
 
 int
-certificate_validate_rfc6487(X509 *cert, bool is_root)
+certificate_validate_rfc6487(X509 *cert, struct rfc5280_name **subject_name,
+    bool is_root)
 {
 	int error;
 
@@ -306,7 +312,7 @@ certificate_validate_rfc6487(X509 *cert, bool is_root)
 	 * "An issuer SHOULD use a different subject name if the subject's
 	 * key pair has changed" (it's a SHOULD, so [for now] avoid validation)
 	 */
-	error = validate_subject(cert);
+	error = validate_subject(cert, subject_name);
 	if (error)
 		return error;
 
@@ -1435,6 +1441,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 {
 	struct validation *state;
 	X509 *cert;
+	struct rfc5280_name *subject_name;
 	struct rpki_uri mft;
 	struct certificate_refs refs;
 	enum rpki_policy policy;
@@ -1455,46 +1462,57 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	/* -- Validate the certificate (@cert) -- */
 	error = certificate_load(cert_uri, &cert);
 	if (error)
-		goto end1;
+		goto revert_fnstack_and_debug;
 	if (!is_ta) {
 		error = certificate_validate_chain(cert, crls);
 		if (error)
-			goto end2;
+			goto revert_cert;
 	}
-	error = certificate_validate_rfc6487(cert, is_ta);
+	error = certificate_validate_rfc6487(cert, &subject_name, is_ta);
 	if (error)
-		goto end2;
+		goto revert_cert;
 	error = is_ta
 	    ? certificate_validate_extensions_ta(cert, &mft, &policy)
 	    : certificate_validate_extensions_ca(cert, &mft, &refs, &policy);
 	if (error)
-		goto end2;
+		goto revert_subject_name;
 
 	error = refs_validate_ca(&refs, is_ta, rpp_parent);
 	if (error)
-		goto end3;
+		goto revert_uri_and_refs;
 
 	/* -- Validate the manifest (@mft) pointed by the certificate -- */
 	error = validation_push_cert(state, cert_uri, cert, policy, is_ta);
 	if (error)
-		goto end3;
+		goto revert_uri_and_refs;
 
 	error = handle_manifest(&mft, crls, &pp);
 	if (error)
-		goto end4;
+		goto revert_cert_push;
 
 	/* -- Validate & traverse the RPP (@pp) described by the manifest -- */
-	error = rpp_traverse(pp);
+	error = vhandler_traverse_down(subject_name);
+	if (error)
+		goto revert_rpp;
 
+	error = rpp_traverse(pp);
+	if (error)
+		goto revert_rpp;
+
+	error = vhandler_traverse_up();
+
+revert_rpp:
 	rpp_destroy(pp);
-end4:
+revert_cert_push:
 	validation_pop_cert(state); /* Error code is useless. */
-end3:
+revert_uri_and_refs:
 	uri_cleanup(&mft);
 	refs_cleanup(&refs);
-end2:
+revert_subject_name:
+	x509_name_put(subject_name);
+revert_cert:
 	X509_free(cert);
-end1:
+revert_fnstack_and_debug:
 	fnstack_pop();
 	pr_debug_rm("}");
 	return error;

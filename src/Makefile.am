@@ -1,6 +1,6 @@
 # Comment these out during releases.
 # Also increase optimization I guess (-O0 -> -On)
-CFLAGS_DEBUG  = -DDEBUG
+#CFLAGS_DEBUG  = -DDEBUG
 LDFLAGS_DEBUG = -rdynamic
 
 bin_PROGRAMS = fort
@@ -9,8 +9,8 @@ fort_SOURCES  = main.c
 
 fort_SOURCES += address.h address.c
 fort_SOURCES += algorithm.h algorithm.c
-fort_SOURCES += array_list.h
 fort_SOURCES += certificate_refs.h certificate_refs.c
+fort_SOURCES += console_handler.h console_handler.c
 fort_SOURCES += common.h
 fort_SOURCES += config.h config.c
 fort_SOURCES += debug.h debug.c
@@ -28,6 +28,7 @@ fort_SOURCES += str.h str.c
 fort_SOURCES += thread_var.h thread_var.c
 fort_SOURCES += uri.h uri.c
 fort_SOURCES += json_handler.h json_handler.c
+fort_SOURCES += validation_handler.h validation_handler.c
 
 fort_SOURCES += rsync/rsync.h rsync/rsync.c
 
@@ -45,8 +46,13 @@ fort_SOURCES += config/types.h
 fort_SOURCES += config/uint.c config/uint.h
 fort_SOURCES += config/uint32.c config/uint32.h
 
+fort_SOURCES += data_structure/array_list.h
+
 fort_SOURCES += crypto/base64.h crypto/base64.c
 fort_SOURCES += crypto/hash.h crypto/hash.c
+
+fort_SOURCES += data_structure/circular_indexer.h
+fort_SOURCES += data_structure/circular_indexer.c
 
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c
@@ -67,7 +73,6 @@ fort_SOURCES += clients.c clients.h
 fort_SOURCES += common.c common.h
 fort_SOURCES += notify.c notify.h
 fort_SOURCES += updates_daemon.c updates_daemon.h
-fort_SOURCES += vrps.c vrps.h
 
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
 fort_SOURCES += rtr/pdu_handler.c rtr/pdu_handler.h
@@ -78,20 +83,25 @@ fort_SOURCES += rtr/primitive_reader.c rtr/primitive_reader.h
 fort_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 fort_SOURCES += rtr/rtr.c rtr/rtr.h
 
+fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
+fort_SOURCES += rtr/db/roa_tree.c rtr/db/roa_tree.h
+fort_SOURCES += rtr/db/roa.c rtr/db/roa.h
+fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
+
 fort_CFLAGS  = -Wall
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
-fort_CFLAGS += $(GCC_WARNS)
+#fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=gnu99 -O0 -g $(CFLAGS_DEBUG)
 fort_LDFLAGS = $(LDFLAGS_DEBUG)
 fort_LDADD   = ${JANSSON_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.
-#GCC_WARNS  = -fmax-errors=1
+GCC_WARNS  = -fmax-errors=1
 
 # Please ready some arguments if you want to permanently remove some of these
 # flags. I gave a quick read to the documentation of all of these warnings, and
 # generally liked each of them.
-GCC_WARNS = -Wpedantic -pedantic-errors -Waddress -Walloc-zero -Walloca
+GCC_WARNS += -Wpedantic -pedantic-errors -Waddress -Walloc-zero -Walloca
 GCC_WARNS += -Wno-aggressive-loop-optimizations -Warray-bounds=2 -Wbool-compare
 GCC_WARNS += -Wbool-operation -Wno-builtin-declaration-mismatch -Wcast-align
 GCC_WARNS += -Wcast-qual -Wchar-subscripts -Wchkp -Wclobbered -Wcomment
