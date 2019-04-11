@@ -1,5 +1,5 @@
-#ifndef SRC_SLURM_SLURM_PARSER_H_
-#define SRC_SLURM_SLURM_PARSER_H_
+#ifndef SRC_SLURM_PARSER_H_
+#define SRC_SLURM_PARSER_H_
 
 /* Flags to get data from structs */
 #define SLURM_COM_FLAG_NONE		0x00
@@ -16,4 +16,4 @@
 int slurm_load(void);
 void slurm_cleanup(void);
 
-#endif /* SRC_SLURM_SLURM_PARSER_H_ */
+#endif /* SRC_SLURM_PARSER_H_ */

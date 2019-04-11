@@ -10,8 +10,10 @@ rtr_server_SOURCES += clients.c clients.h
 rtr_server_SOURCES += common.c common.h
 rtr_server_SOURCES += configuration.c configuration.h
 rtr_server_SOURCES += csv.c csv.h
+rtr_server_SOURCES += json_parser.c json_parser.h
 rtr_server_SOURCES += line_file.c line_file.h
 rtr_server_SOURCES += notify.c notify.h
+rtr_server_SOURCES += slurm_parser.c slurm_parser.h
 rtr_server_SOURCES += updates_daemon.c updates_daemon.h
 rtr_server_SOURCES += vrps.c vrps.h
 
@@ -23,9 +25,6 @@ rtr_server_SOURCES += rtr/pdu.c rtr/pdu.h
 rtr_server_SOURCES += rtr/primitive_reader.c rtr/primitive_reader.h
 rtr_server_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 rtr_server_SOURCES += rtr/rtr.c rtr/rtr.h
-
-rtr_server_SOURCES += slurm/json_parser.c slurm/json_parser.h
-rtr_server_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
 rtr_server_SOURCES += crypto/base64.c crypto/base64.h
 

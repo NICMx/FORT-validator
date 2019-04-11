@@ -7,9 +7,9 @@
 #include <string.h>
 #include <openssl/evp.h>
 
-#include "../address.h"
-#include "../configuration.h"
-#include "../crypto/base64.h"
+#include "address.h"
+#include "configuration.h"
+#include "crypto/base64.h"
 #include "json_parser.h"
 
 /* JSON members */
