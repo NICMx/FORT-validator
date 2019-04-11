@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #include "rtr/rtr.h"
-#include "slurm_parser.h"
+#include "slurm_loader.h"
 #include "clients.h"
 #include "configuration.h"
 #include "csv.h"

@@ -16,6 +16,5 @@ int config_get_retry_interval(void);
 int config_get_expire_interval(void);
 
 char const *config_get_slurm_location(void);
-int config_get_slurm_check_interval(void);
 
 #endif /* _SRC_CONFIGURATION_H_ */

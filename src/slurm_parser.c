@@ -8,7 +8,6 @@
 #include <openssl/evp.h>
 
 #include "address.h"
-#include "configuration.h"
 #include "crypto/base64.h"
 #include "json_parser.h"
 
@@ -61,18 +60,14 @@ struct slurm_bgpsec {
 static int handle_json(json_t *);
 
 int
-slurm_load(void)
+slurm_parse(char const *location)
 {
 	json_t *json_root;
 	json_error_t json_error;
 	int error;
 
-	/* Optional configuration */
-	if (config_get_slurm_location() == NULL)
-		return 0;
-
-	json_root = json_load_file(config_get_slurm_location(),
-	    JSON_REJECT_DUPLICATES, &json_error);
+	json_root = json_load_file(location, JSON_REJECT_DUPLICATES,
+	    &json_error);
 	if (json_root == NULL) {
 		warnx("SLURM JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
@@ -83,12 +78,6 @@ slurm_load(void)
 
 	json_decref(json_root);
 	return error;
-}
-
-void
-slurm_cleanup(void)
-{
-	/* TODO Nothing for now */
 }
 
 /*

@@ -13,7 +13,7 @@
 #define SLURM_BGPS_FLAG_ROUTER_KEY	0x08
 
 
-int slurm_load(void);
-void slurm_cleanup(void);
+int slurm_parse(char const *);
+
 
 #endif /* SRC_SLURM_PARSER_H_ */

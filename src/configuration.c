@@ -24,7 +24,6 @@
 #define OPTNAME_RTR_INTERVAL_EXPIRE	"expire"
 #define OPTNAME_SLURM			"slurm"
 #define OPTNAME_SLURM_LOCATION		"location"
-#define OPTNAME_SLURM_CHECK_INTERVAL	"checkInterval"
 
 #define DEFAULT_ADDR			NULL
 #define DEFAULT_PORT			"323"
@@ -35,7 +34,6 @@
 #define DEFAULT_RETRY_INTERVAL		600
 #define DEFAULT_EXPIRE_INTERVAL		7200
 #define DEFAULT_SLURM_LOCATION		NULL
-#define DEFAULT_SLURM_CHECK_INTERVAL	60
 
 /* Protocol timing parameters ranges in secs */
 #define MIN_VRPS_CHECK_INTERVAL		60
@@ -46,8 +44,6 @@
 #define MAX_RETRY_INTERVAL		7200
 #define MIN_EXPIRE_INTERVAL		600
 #define MAX_EXPIRE_INTERVAL		172800
-#define MIN_SLURM_CHECK_INTERVAL	60
-#define MAX_SLURM_CHECK_INTERVAL	7200
 
 /* Range values for other params */
 #define MIN_LISTEN_QUEUE		1
@@ -70,8 +66,6 @@ struct rtr_config {
 	int expire_interval;
 	/** SLURM location */
 	char *slurm_location;
-	/** Interval used to look for updates at SLURM location */
-	int slurm_check_interval;
 } config;
 
 static int handle_json(json_t *);
@@ -253,7 +247,6 @@ load_slurm(json_t *root)
 	struct stat attr;
 	json_t *slurm;
 	char const *slurm_location;
-	int slurm_check_interval;
 	int error;
 
 	slurm = json_object_get(root, OPTNAME_SLURM);
@@ -275,17 +268,8 @@ load_slurm(json_t *root)
 			    OPTNAME_SLURM_LOCATION);
 			return -errno;
 		}
-
-		error = load_range(slurm, OPTNAME_SLURM_CHECK_INTERVAL,
-		    DEFAULT_SLURM_CHECK_INTERVAL, &slurm_check_interval,
-		    MIN_SLURM_CHECK_INTERVAL, MAX_SLURM_CHECK_INTERVAL);
-		if (error)
-			return error;
-		config.slurm_check_interval = slurm_check_interval;
-	} else {
+	} else
 		config.slurm_location = DEFAULT_SLURM_LOCATION;
-		config.slurm_check_interval = DEFAULT_SLURM_CHECK_INTERVAL;
-	}
 
 	/* Validate data (only if a value was set */
 	if (config.slurm_location == NULL)
@@ -297,8 +281,8 @@ load_slurm(json_t *root)
 		    config.slurm_location);
 		return -errno;
 	}
-	if (S_ISDIR(attr.st_mode) != 0) {
-		warnx("SLURM location '%s' isn't a file",
+	if (S_ISDIR(attr.st_mode) == 0) {
+		warnx("SLURM location '%s' isn't a directory",
 		    config.slurm_location);
 		return -EINVAL;
 	}
@@ -488,10 +472,4 @@ char const *
 config_get_slurm_location(void)
 {
 	return config.slurm_location;
-}
-
-int
-config_get_slurm_check_interval(void)
-{
-	return config.slurm_check_interval;
 }
