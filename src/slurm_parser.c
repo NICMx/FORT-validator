@@ -7,9 +7,10 @@
 #include <string.h>
 #include <openssl/evp.h>
 
-#include "address.h"
 #include "crypto/base64.h"
+#include "address.h"
 #include "json_parser.h"
+#include "slurm_db.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"
@@ -33,29 +34,6 @@
 		warnx("SLURM member '%s' is required", name);	\
 		return -EINVAL;					\
 	}
-
-struct slurm_prefix {
-	u_int8_t data_flag;
-	u_int32_t asn;
-	union {
-		struct	in_addr ipv4_prefix;
-		struct	in6_addr ipv6_prefix;
-	};
-	u_int8_t	prefix_length;
-	u_int8_t	max_prefix_length;
-	u_int8_t	addr_fam;
-	char const	*comment;
-};
-
-struct slurm_bgpsec {
-	u_int8_t data_flag;
-	u_int32_t asn;
-	unsigned char *ski;
-	size_t ski_len;
-	unsigned char *routerPublicKey;
-	size_t routerPublicKey_len;
-	char const	*comment;
-};
 
 static int handle_json(json_t *);
 
@@ -143,14 +121,18 @@ set_asn(json_t *object, bool is_assertion, u_int32_t *result,
 static int
 set_comment(json_t *object, char const **comment, u_int8_t *flag)
 {
+	char const *tmp;
 	int error;
 
-	error = json_get_string(object, COMMENT, comment);
+	error = json_get_string(object, COMMENT, &tmp);
 	if (error)
 		return error;
 
-	if (*comment != NULL)
-		*flag = *flag | SLURM_COM_FLAG_COMMENT;
+	if (tmp == NULL)
+		return 0;
+
+	*comment = strdup(tmp);
+	*flag = *flag | SLURM_COM_FLAG_COMMENT;
 
 	return 0;
 }
@@ -313,12 +295,10 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result)
 	if (error)
 		return error;
 
-	/* TODO persist, free later */
-	free(result->ski);
-
 	/* Validate that's at least 20 octects long */
 	if (result->ski_len != 20) {
 		warnx("The decoded SKI must be 20 octets long");
+		free(result->ski);
 		return -EINVAL;
 	}
 
@@ -352,8 +332,8 @@ set_router_pub_key(json_t *object, bool is_assertion,
 		return error;
 
 	/* TODO The public key may contain NULL chars as part of the string */
-	error = base64url_decode(str_encoded, &result->routerPublicKey,
-	    &result->routerPublicKey_len);
+	error = base64url_decode(str_encoded, &result->router_public_key,
+	    &result->router_public_key_len);
 	if (error)
 		return error;
 
@@ -370,12 +350,10 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	 * #include <libcmscodec/SubjectPublicKeyInfo.h>
 	 * #include "asn1/decode.h"
 	 * struct SubjectPublicKeyInfo *router_pki;
-	 * error = asn1_decode(result->routerPublicKey, result->routerPublicKey_len,
-	 *     &asn_DEF_SubjectPublicKeyInfo, (void **) &router_pki);
+	 * error = asn1_decode(result->router_public_key,
+	 *     result->router_public_key_len, &asn_DEF_SubjectPublicKeyInfo,
+	 *     (void **) &router_pki);
 	 */
-
-	/* TODO persist, free later */
-	free(result->routerPublicKey);
 
 	result->data_flag = result->data_flag | SLURM_BGPS_FLAG_ROUTER_KEY;
 	return 0;
@@ -418,7 +396,12 @@ load_single_prefix(json_t *object, bool is_assertion)
 			return -EINVAL;
 		}
 
-	/* TODO Loaded! Now persist it... */
+	/* Loaded! Now persist it */
+	if (is_assertion)
+		slurm_db_add_prefix_assertion(&result);
+	else
+		slurm_db_add_prefix_filter(&result);
+
 	return 0;
 }
 
@@ -464,13 +447,27 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 
 	error = set_router_pub_key(object, is_assertion, &result);
 	if (error)
-		return error;
+		goto release_ski;
 
 	error = set_comment(object, &result.comment, &result.data_flag);
 	if (error)
-		return error;
+		goto release_router_key;
 
+	/* Loaded! Now persist it */
+	if (is_assertion)
+		error = slurm_db_add_bgpsec_assertion(&result);
+	else
+		error = slurm_db_add_bgpsec_filter(&result);
+
+	if (error)
+		goto release_router_key;
 	return 0;
+
+release_router_key:
+	free(result.router_public_key);
+release_ski:
+	free(result.ski);
+	return error;
 }
 
 static int

@@ -13,6 +13,7 @@ rtr_server_SOURCES += csv.c csv.h
 rtr_server_SOURCES += json_parser.c json_parser.h
 rtr_server_SOURCES += line_file.c line_file.h
 rtr_server_SOURCES += notify.c notify.h
+rtr_server_SOURCES += slurm_db.c slurm_db.h
 rtr_server_SOURCES += slurm_loader.c slurm_loader.h
 rtr_server_SOURCES += slurm_parser.c slurm_parser.h
 rtr_server_SOURCES += updates_daemon.c updates_daemon.h

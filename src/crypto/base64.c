@@ -125,6 +125,13 @@ end:
 	return error ? error_ul2i(error) : 0;
 }
 
+/*
+ * Decode a base64 encoded string (@str_encoded), the decoded value is
+ * allocated at @result with a length of @result_len.
+ *
+ * Return 0 on success, or the error code if something went wrong. Don't forget
+ * to free @result after a successful decoding.
+ */
 int
 base64url_decode(char const *str_encoded, unsigned char **result,
     size_t *result_len)

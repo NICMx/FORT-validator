@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "configuration.h"
+#include "slurm_db.h"
 #include "slurm_parser.h"
 
 #define SLURM_FILE_EXTENSION	".slurm"
@@ -63,13 +64,16 @@ slurm_load(void)
 	if (slurm_dir == NULL)
 		return 0;
 
+	error = slurm_db_init();
+	if (error)
+		return error;
+
 	dir_loc = opendir(slurm_dir);
 	if (dir_loc == NULL) {
 		warn("Couldn't open dir %s", slurm_dir);
 		return -errno;
 	}
 
-	error = 0;
 	errno = 0;
 	while ((dir_ent = readdir(dir_loc)) != NULL) {
 		error = single_slurm_load(slurm_dir, dir_ent->d_name);
@@ -89,5 +93,7 @@ end:
 void
 slurm_cleanup(void)
 {
-	/* TODO Nothing for now */
+	/* Only if the SLURM was configured */
+	if (config_get_slurm_location() != NULL)
+		slurm_db_cleanup();
 }
