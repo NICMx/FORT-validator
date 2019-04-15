@@ -67,7 +67,7 @@ main(int argc, char *argv[])
 
 	err = slurm_load();
 	if (err)
-		goto end3;
+		goto end4;
 
 	err = rtr_listen();
 	if (err)

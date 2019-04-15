@@ -214,7 +214,7 @@ set_max_prefix_length(json_t *object, bool is_assertion, u_int8_t addr_fam,
 	json_int_t int_tmp;
 	int error;
 
-	/* Ignore for filters */
+	/* Handle error for filters */
 	if (!is_assertion)
 		return 0;
 
@@ -313,7 +313,7 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	char const *str_encoded;
 	int error;
 
-	/* Ignore for filters */
+	/* Handle error for filters */
 	if (!is_assertion)
 		return 0;
 
@@ -359,6 +359,17 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	return 0;
 }
 
+static void
+init_slurm_prefix(struct slurm_prefix *slurm_prefix)
+{
+	slurm_prefix->data_flag = SLURM_COM_FLAG_NONE;
+	slurm_prefix->asn = 0;
+	slurm_prefix->ipv6_prefix = in6addr_any;
+	slurm_prefix->prefix_length = 0;
+	slurm_prefix->max_prefix_length = 0;
+	slurm_prefix->addr_fam = 0;
+}
+
 static int
 load_single_prefix(json_t *object, bool is_assertion)
 {
@@ -370,7 +381,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 		return -EINVAL;
 	}
 
-	result.data_flag = SLURM_COM_FLAG_NONE;
+	init_slurm_prefix(&result);
 
 	error = set_asn(object, is_assertion, &result.asn, &result.data_flag);
 	if (error)
@@ -380,29 +391,66 @@ load_single_prefix(json_t *object, bool is_assertion)
 	if (error)
 		return error;
 
-	error = set_comment(object, &result.comment, &result.data_flag);
-	if (error)
-		return error;
-
 	error = set_max_prefix_length(object, is_assertion, result.addr_fam,
 	    &result.max_prefix_length, &result.data_flag);
 	if (error)
 		return error;
 
-	if (is_assertion && (result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH))
+	error = set_comment(object, &result.comment, &result.data_flag);
+	if (error)
+		return error;
+
+	/* A single comment isn't valid */
+	if (result.data_flag == SLURM_COM_FLAG_COMMENT) {
+		warnx("Single comments aren't valid");
+		error = -EINVAL;
+		goto release_comment;
+	}
+
+	/* A filter must have ASN and/or prefix */
+	if (!is_assertion) {
+		if ((result.data_flag &
+		    (SLURM_COM_FLAG_ASN | SLURM_PFX_FLAG_PREFIX)) == 0) {
+			warnx("Prefix filter must have an asn and/or prefix");
+			error = -EINVAL;
+			goto release_comment;
+		}
+		/* and can't have the max prefix length */
+		if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0) {
+			warnx("Prefix filter can't have a max prefix length");
+			error = -EINVAL;
+			goto release_comment;
+		}
+
+		error = slurm_db_add_prefix_filter(&result);
+		if (error)
+			goto release_comment;
+
+		return 0;
+	}
+
+	/*
+	 * An assertion must have ASN and prefix, the validation is done at
+	 * set_asn and set_prefix
+	 */
+
+	if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
 		if (result.prefix_length > result.max_prefix_length) {
 			warnx(
 			    "Prefix length is greater than max prefix length");
-			return -EINVAL;
+			error = -EINVAL;
+			goto release_comment;
 		}
 
-	/* Loaded! Now persist it */
-	if (is_assertion)
-		slurm_db_add_prefix_assertion(&result);
-	else
-		slurm_db_add_prefix_filter(&result);
+	error = slurm_db_add_prefix_assertion(&result);
+	if (error)
+		goto release_comment;
 
 	return 0;
+
+release_comment:
+	free((void *)result.comment);
+	return error;
 }
 
 static int
@@ -414,14 +462,34 @@ load_prefix_array(json_t *array, bool is_assertion)
 	json_array_foreach(array, index, element) {
 		error = load_single_prefix(element, is_assertion);
 		if (error) {
-			warnx(
-			    "Error at prefix %s, element %d, ignoring content",
-			    (is_assertion ? "assertions" : "filters"),
-			    index + 1);
+			if (error == -EEXIST)
+				warnx(
+				    "The prefix %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
+				    (is_assertion ? "assertion" : "filter"),
+				    index + 1,
+				    (is_assertion ? "assertion" : "filter"));
+			else
+				warnx(
+				    "Error at prefix %s, element #%d, SLURM loading will be stopped",
+				    (is_assertion ? "assertions" : "filters"),
+				    index + 1);
+
+			return error;
 		}
 	}
 
 	return 0;
+}
+
+static void
+init_slurm_bgpsec(struct slurm_bgpsec *slurm_bgpsec)
+{
+	slurm_bgpsec->data_flag = SLURM_COM_FLAG_NONE;
+	slurm_bgpsec->asn = 0;
+	slurm_bgpsec->ski = NULL;
+	slurm_bgpsec->ski_len = 0;
+	slurm_bgpsec->router_public_key = NULL;
+	slurm_bgpsec->router_public_key_len = 0;
 }
 
 static int
@@ -435,7 +503,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 		return -EINVAL;
 	}
 
-	result.data_flag = SLURM_COM_FLAG_NONE;
+	init_slurm_bgpsec(&result);
 
 	error = set_asn(object, is_assertion, &result.asn, &result.data_flag);
 	if (error)
@@ -453,16 +521,43 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 	if (error)
 		goto release_router_key;
 
-	/* Loaded! Now persist it */
-	if (is_assertion)
-		error = slurm_db_add_bgpsec_assertion(&result);
-	else
-		error = slurm_db_add_bgpsec_filter(&result);
+	/* A single comment isn't valid */
+	if (result.data_flag == SLURM_COM_FLAG_COMMENT) {
+		warnx("Single comments aren't valid");
+		error = -EINVAL;
+		goto release_comment;
+	}
 
+	/* A filter must have ASN and/or SKI */
+	if (!is_assertion) {
+		if ((result.data_flag &
+		    (SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI)) == 0) {
+			warnx("BGPsec filter must have an asn and/or SKI");
+			error = -EINVAL;
+			goto release_comment;
+		}
+		/* and can't have the router public key */
+		if ((result.data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0) {
+			warnx("BGPsec filter can't have a router public key");
+			error = -EINVAL;
+			goto release_comment;
+		}
+
+		error = slurm_db_add_bgpsec_filter(&result);
+		if (error)
+			goto release_comment;
+
+		return 0;
+	}
+
+	error = slurm_db_add_bgpsec_assertion(&result);
 	if (error)
-		goto release_router_key;
+		goto release_comment;
+
 	return 0;
 
+release_comment:
+	free((void *)result.comment);
 release_router_key:
 	free(result.router_public_key);
 release_ski:
@@ -479,10 +574,19 @@ load_bgpsec_array(json_t *array, bool is_assertion)
 	json_array_foreach(array, index, element) {
 		error = load_single_bgpsec(element, is_assertion);
 		if (error) {
-			warnx(
-			    "Error at bgpsec %s, element %d, ignoring content",
-			    (is_assertion ? "assertions" : "filters"),
-			    index + 1);
+			if (error == -EEXIST)
+				warnx(
+				    "The bgpsec %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
+				    (is_assertion ? "assertion" : "filter"),
+				    index + 1,
+				    (is_assertion ? "assertion" : "filter"));
+			else
+				warnx(
+				    "Error at bgpsec %s, element #%d, SLURM loading will be stopped",
+				    (is_assertion ? "assertions" : "filters"),
+				    index + 1);
+
+			return error;
 		}
 	}
 
@@ -583,6 +687,13 @@ handle_json(json_t *root)
 	error = load_assertions(root);
 	if (error)
 		return error;
+
+	/*
+	 * TODO Any unknown members should be treated as errors, RFC8416 3.1:
+	 * "JSON members that are not defined here MUST NOT be used in SLURM
+	 * files. An RP MUST consider any deviations from the specifications to
+	 * be errors."
+	 */
 
 	return 0;
 }

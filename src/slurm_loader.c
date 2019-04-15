@@ -77,8 +77,11 @@ slurm_load(void)
 	errno = 0;
 	while ((dir_ent = readdir(dir_loc)) != NULL) {
 		error = single_slurm_load(slurm_dir, dir_ent->d_name);
-		if (error)
+		if (error) {
+			warnx("The error was at SLURM file %s",
+			    dir_ent->d_name);
 			goto end;
+		}
 		errno = 0;
 	}
 	if (errno) {
