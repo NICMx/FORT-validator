@@ -16,23 +16,23 @@ struct arraylist_db {
 	struct al_assertion_bgpsec assertion_bgps_al;
 } array_lists_db;
 
-#define LOCATE_FUNCS(name, type, array_list, equal_cb, filter)			\
+#define LOCATE_FUNCS(name, type, array_list, equal_cb, filter)		\
 	static type *							\
 	name##_locate(array_list *base, type *obj)			\
 	{								\
 		type *cursor;						\
 									\
 		ARRAYLIST_FOREACH(base, cursor)				\
-			if (equal_cb(cursor, obj, filter))			\
+			if (equal_cb(cursor, obj, filter))		\
 				return cursor;				\
 									\
 		return NULL;						\
 	}								\
 									\
 	static bool							\
-	name##_is_new(array_list *base, type *obj)			\
+	name##_exists(array_list *base, type *obj)			\
 	{								\
-		return name##_locate(base, obj) == NULL;		\
+		return name##_locate(base, obj) != NULL;		\
 	}
 
 int
@@ -165,11 +165,10 @@ LOCATE_FUNCS(bgpsec_assertion, struct slurm_bgpsec, struct al_assertion_bgpsec,
 int
 slurm_db_add_prefix_filter(struct slurm_prefix *prefix)
 {
-	if (prefix_filter_is_new(&array_lists_db.filter_pfx_al, prefix))
-		return al_filter_prefix_add(&array_lists_db.filter_pfx_al,
-		    prefix);
+	if (prefix_filter_exists(&array_lists_db.filter_pfx_al, prefix))
+		return -EEXIST;
 
-	return -EEXIST;
+	return al_filter_prefix_add(&array_lists_db.filter_pfx_al, prefix);
 }
 
 /*
@@ -180,11 +179,11 @@ slurm_db_add_prefix_filter(struct slurm_prefix *prefix)
 int
 slurm_db_add_prefix_assertion(struct slurm_prefix *prefix)
 {
-	if (prefix_assertion_is_new(&array_lists_db.assertion_pfx_al, prefix))
-		return al_assertion_prefix_add(
-		    &array_lists_db.assertion_pfx_al, prefix);
+	if (prefix_assertion_exists(&array_lists_db.assertion_pfx_al, prefix))
+		return -EEXIST;
 
-	return -EEXIST;
+	return al_assertion_prefix_add(&array_lists_db.assertion_pfx_al,
+	    prefix);
 }
 
 /*
@@ -195,11 +194,10 @@ slurm_db_add_prefix_assertion(struct slurm_prefix *prefix)
 int
 slurm_db_add_bgpsec_filter(struct slurm_bgpsec *bgpsec)
 {
-	if (bgpsec_filter_is_new(&array_lists_db.filter_bgps_al, bgpsec))
-		return al_filter_bgpsec_add(&array_lists_db.filter_bgps_al,
-		    bgpsec);
+	if (bgpsec_filter_exists(&array_lists_db.filter_bgps_al, bgpsec))
+		return -EEXIST;
 
-	return -EEXIST;
+	return al_filter_bgpsec_add(&array_lists_db.filter_bgps_al, bgpsec);
 }
 
 /*
@@ -210,11 +208,11 @@ slurm_db_add_bgpsec_filter(struct slurm_bgpsec *bgpsec)
 int
 slurm_db_add_bgpsec_assertion(struct slurm_bgpsec *bgpsec)
 {
-	if (bgpsec_assertion_is_new(&array_lists_db.assertion_bgps_al, bgpsec))
-		return al_assertion_bgpsec_add(
-		    &array_lists_db.assertion_bgps_al, bgpsec);
+	if (bgpsec_assertion_exists(&array_lists_db.assertion_bgps_al, bgpsec))
+		return -EEXIST;
 
-	return -EEXIST;
+	return al_assertion_bgpsec_add(&array_lists_db.assertion_bgps_al,
+	    bgpsec);
 }
 
 static void

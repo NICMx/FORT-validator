@@ -106,21 +106,18 @@ set_asn(json_t *object, bool is_assertion, u_int32_t *result,
 	int error;
 
 	error = json_get_int(object, ASN, &int_tmp);
-	if (error)
-		return error;
-
-	if (int_tmp == 0) {
-		/* Optional for filters */
-		if(is_assertion) {
+	if (error == -ENOENT) {
+		if (is_assertion) {
 			warnx("ASN is required");
 			return -EINVAL;
 		} else
-			return 0;
-	}
+			return 0; /* Optional for filters */
+	} else if (error)
+		return error;
 
 	/* An underflow or overflow will be considered here */
-	if (int_tmp <= 0 || UINT32_MAX < int_tmp) {
-		warnx("ASN (%lld) is out of range [1 - %u].", int_tmp,
+	if (int_tmp < 0 || UINT32_MAX < int_tmp) {
+		warnx("ASN (%lld) is out of range [0 - %u].", int_tmp,
 		    UINT32_MAX);
 		return -EINVAL;
 	}
@@ -138,11 +135,10 @@ set_comment(json_t *object, char const **comment, u_int8_t *flag,
 	int error;
 
 	error = json_get_string(object, COMMENT, &tmp);
-	if (error)
+	if (error && error == -ENOENT)
+		return 0; /* Optional member */
+	else if (error)
 		return error;
-
-	if (tmp == NULL)
-		return 0;
 
 	*comment = strdup(tmp);
 	*flag = *flag | SLURM_COM_FLAG_COMMENT;
@@ -164,17 +160,14 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 
 	/* First part: Prefix in string format */
 	error = json_get_string(object, PREFIX, &str_prefix);
-	if (error)
-		return error;
-
-	if (str_prefix == NULL) {
-		/* Optional for filters */
-		if(is_assertion) {
+	if (error && error == -ENOENT) {
+		if (is_assertion) {
 			warnx("SLURM assertion prefix is required");
 			return -EINVAL;
 		} else
-			return 0;
-	}
+			return 0; /* Optional for filters */
+	} else if (error)
+		return error;
 
 	clone = strdup(str_prefix);
 	if (clone == NULL) {
@@ -230,17 +223,18 @@ set_max_prefix_length(json_t *object, bool is_assertion, u_int8_t addr_fam,
 	json_int_t int_tmp;
 	int error;
 
-	/* Handle error for filters */
-	if (!is_assertion)
-		return 0;
-
 	error = json_get_int(object, MAX_PREFIX_LENGTH, &int_tmp);
-	if (error)
+	if (error == -ENOENT)
+		return 0; /* Optional for assertions, unsupported by filters */
+
+	if (error && is_assertion)
 		return error;
 
-	/* Optional for assertions */
-	if (int_tmp == 0)
-		return 0;
+	/* Unsupported by filters */
+	if (!is_assertion) {
+		warnx("Prefix filter can't have a max prefix length");
+		return -EINVAL;
+	}
 
 	/* An underflow or overflow will be considered here */
 	if (int_tmp <= 0 || (addr_fam == AF_INET ? 32 : 128) < int_tmp) {
@@ -293,17 +287,14 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 	int error;
 
 	error = json_get_string(object, SKI, &str_encoded);
-	if (error)
-		return error;
-
-	if (str_encoded == NULL) {
-		/* Optional for filters */
-		if(is_assertion) {
+	if (error && error == -ENOENT) {
+		if (is_assertion) {
 			warnx("SLURM assertion %s is required", SKI);
 			return -EINVAL;
 		} else
-			return 0;
-	}
+			return 0; /* Optional for filters */
+	} else if (error)
+		return error;
 
 	error = validate_base64url_encoded(str_encoded);
 	if (error)
@@ -332,17 +323,22 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	char const *str_encoded;
 	int error;
 
-	/* Handle error for filters */
-	if (!is_assertion)
-		return 0;
-
 	error = json_get_string(object, ROUTER_PUBLIC_KEY, &str_encoded);
-	if (error)
-		return error;
+	if (error == -ENOENT && !is_assertion)
+		return 0; /* OK for filters */
 
-	/* Required for assertions */
-	if (str_encoded == NULL) {
-		warnx("SLURM assertion %s is required", ROUTER_PUBLIC_KEY);
+	/* Required by assertions */
+	if (error && is_assertion) {
+		if (error == -ENOENT) {
+			warnx("SLURM assertion %s is required", ROUTER_PUBLIC_KEY);
+			return -EINVAL;
+		}
+		return error;
+	}
+
+	/* Unsupported by filters */
+	if (!is_assertion) {
+		warnx("BGPsec filter can't have a router public key");
 		return -EINVAL;
 	}
 
@@ -439,16 +435,10 @@ load_single_prefix(json_t *object, bool is_assertion)
 			error = -EINVAL;
 			goto release_comment;
 		}
-		/* and can't have the max prefix length */
-		if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0) {
-			warnx("Prefix filter can't have a max prefix length");
-			error = -EINVAL;
-			goto release_comment;
-		}
 
 		/* Validate expected members */
 		if (!valid_members_count(object, member_count)) {
-			warnx("Prefix filter has unknown members (see RFC 8416 section 3.3.1");
+			warnx("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
 			error = -EINVAL;
 			goto release_comment;
 		}
@@ -475,7 +465,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 
 	/* Validate expected members */
 	if (!valid_members_count(object, member_count)) {
-		warnx("Prefix assertion has unknown members (see RFC 8416 section 3.4.1");
+		warnx("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
 		error = -EINVAL;
 		goto release_comment;
 	}
@@ -580,16 +570,10 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 			error = -EINVAL;
 			goto release_comment;
 		}
-		/* and can't have the router public key */
-		if ((result.data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0) {
-			warnx("BGPsec filter can't have a router public key");
-			error = -EINVAL;
-			goto release_comment;
-		}
 
 		/* Validate expected members */
 		if (!valid_members_count(object, member_count)) {
-			warnx("BGPsec filter has unknown members (see RFC 8416 section 3.3.2");
+			warnx("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
 			error = -EINVAL;
 			goto release_comment;
 		}
@@ -603,7 +587,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 
 	/* Validate expected members */
 	if (!valid_members_count(object, member_count)) {
-		warnx("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2");
+		warnx("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
 		error = -EINVAL;
 		goto release_comment;
 	}

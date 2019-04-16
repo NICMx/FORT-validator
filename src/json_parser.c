@@ -3,6 +3,13 @@
 #include <err.h>
 #include <errno.h>
 
+/*
+ * Try to get member @name from @parent as a char const *. On success, set
+ * @result with the members value.
+ *
+ * Returns 0 on success, -ENOENT if the @name doesn't exists, -EINVAL if the
+ * member isn't a JSON integer.
+ */
 int
 json_get_string(json_t *parent, char const *name, char const **result)
 {
@@ -11,11 +18,12 @@ json_get_string(json_t *parent, char const *name, char const **result)
 	child = json_object_get(parent, name);
 	if (child == NULL) {
 		*result = NULL;
-		return 0;
+		return -ENOENT;
 	}
 
 	if (!json_is_string(child)) {
 		warnx("The '%s' element is not a JSON string.", name);
+		*result = NULL;
 		return -EINVAL;
 	}
 
@@ -23,16 +31,21 @@ json_get_string(json_t *parent, char const *name, char const **result)
 	return 0;
 }
 
+/*
+ * Try to get member @name from @parent as a json_int_t. On success, set
+ * @result with the members value.
+ *
+ * Returns 0 on success, -ENOENT if the @name doesn't exists, -EINVAL if the
+ * member isn't a JSON integer.
+ */
 int
 json_get_int(json_t *parent, char const *name, json_int_t *result)
 {
 	json_t *child;
 
 	child = json_object_get(parent, name);
-	if (child == NULL) {
-		*result = 0;
-		return 0;
-	}
+	if (child == NULL)
+		return -ENOENT;
 
 	if (!json_is_integer(child)) {
 		warnx("The '%s' element is not a JSON integer.", name);
