@@ -19,7 +19,7 @@ ARRAY_LIST(vrplist, struct vrp)
 static int
 parse_asn(char *text, unsigned int *value)
 {
-	unsigned long asn;
+	long asn;
 	char *start;
 
 	if (text == NULL) {
@@ -32,14 +32,14 @@ parse_asn(char *text, unsigned int *value)
 	start = start != NULL ? start + 1 : text;
 
 	errno = 0;
-	asn = strtoul(start, NULL, 10);
+	asn = strtol(start, NULL, 10);
 	if (errno) {
 		warn("Invalid ASN '%s'", text);
 		return -EINVAL;
 	}
 	/* An underflow or overflow will be considered here */
-	if (asn <= 0 || UINT32_MAX < asn) {
-		warnx("ASN (%lu) is out of range [1 - %u].", asn, UINT32_MAX);
+	if (asn < 0 || UINT32_MAX < asn) {
+		warnx("ASN (%ld) is out of range [0 - %u].", asn, UINT32_MAX);
 		return -EINVAL;
 	}
 	*value = (unsigned int) asn;
