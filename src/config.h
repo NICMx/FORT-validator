@@ -17,7 +17,7 @@ void free_rpki_config(void);
 char const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
-unsigned int config_get_vrps_check_interval(void);
+unsigned int config_get_validation_interval(void);
 uint32_t config_get_refresh_interval(void);
 uint32_t config_get_retry_interval(void);
 uint32_t config_get_expire_interval(void);

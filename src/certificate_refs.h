@@ -1,7 +1,6 @@
 #ifndef SRC_CERTIFICATE_REFS_H_
 #define SRC_CERTIFICATE_REFS_H_
 
-#include <stdbool.h>
 #include "rpp.h"
 
 /**
@@ -39,7 +38,7 @@ struct certificate_refs {
 
 void refs_init(struct certificate_refs *);
 void refs_cleanup(struct certificate_refs *);
-int refs_validate_ca(struct certificate_refs *, bool, struct rpp const *);
+int refs_validate_ca(struct certificate_refs *, struct rpp const *);
 int refs_validate_ee(struct certificate_refs *, struct rpp const *,
     struct rpki_uri const *);
 

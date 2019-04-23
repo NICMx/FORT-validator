@@ -11,25 +11,18 @@ ARRAY_LIST(clientsdb, struct client)
 static struct clientsdb clients_db;
 
 /* Read and Write locks */
-sem_t rlock, wlock;
+static sem_t rlock, wlock;
 
 /* Readers counter */
-unsigned int rcounter;
+static unsigned int rcounter;
 
-int
+void
 clients_db_init(void)
 {
-	int error;
-
-	error = clientsdb_init(&clients_db);
-	if (error)
-		return error;
-
+	clientsdb_init(&clients_db);
 	sem_init(&rlock, 0, 1);
 	sem_init(&wlock, 0, 1);
 	rcounter = 0;
-
-	return error;
 }
 
 static struct client *
@@ -45,6 +38,7 @@ get_client(struct sockaddr_storage *addr)
 				    SADDR_IN(addr)->sin_addr.s_addr &&
 				    ptr->sin_port ==
 				    SADDR_IN(addr)->sin_port) {
+					/* TODO (urgent) incorrect locking */
 					read_unlock(&rlock, &wlock, &rcounter);
 					return ptr;
 				}
@@ -125,45 +119,35 @@ client_list(struct client **clients)
 	len = clients_db.len;
 	read_unlock(&rlock, &wlock, &rcounter);
 
+	/* TODO (urgent) incorrect locking */
 	return len;
-}
-
-static void
-client_destroy(struct client *client)
-{
-	/* Didn't allocate something, so do nothing */
 }
 
 void
 clients_forget(int fd)
 {
-	struct clientsdb *new_db;
+	struct clientsdb new_db;
 	struct client *ptr;
 
-	new_db = malloc(sizeof(struct clientsdb));
-	if (new_db == NULL) {
-		pr_err("Couldn't allocate new clients DB");
-		return; /* TODO This is not acceptable... */
-	}
-	clientsdb_init(new_db);
+	clientsdb_init(&new_db);
+	/* TODO (urgent) incorrect locking */
 	read_lock(&rlock, &wlock, &rcounter);
 	ARRAYLIST_FOREACH(&clients_db, ptr)
 		if (ptr->fd != fd)
-			clientsdb_add(new_db, ptr);
+			clientsdb_add(&new_db, ptr);
 	read_unlock(&rlock, &wlock, &rcounter);
 
 	sem_wait(&wlock);
-	clientsdb_cleanup(&clients_db, client_destroy);
-	clients_db = *new_db;
+	clientsdb_cleanup(&clients_db, NULL);
+	clients_db = new_db;
 	sem_post(&wlock);
-	free(new_db);
 }
 
 void
 clients_db_destroy(void)
 {
 	sem_wait(&wlock);
-	clientsdb_cleanup(&clients_db, client_destroy);
+	clientsdb_cleanup(&clients_db, NULL);
 	sem_post(&wlock);
 
 	sem_destroy(&wlock);

@@ -16,6 +16,11 @@ string_array_init(struct string_array *array, char const *const *values,
 
 	array->length = len;
 
+	if (len == 0) {
+		array->array = NULL;
+		return 0;
+	}
+
 	array->array = calloc(len, sizeof(char *));
 	if (array->array == NULL)
 		return -ENOMEM;

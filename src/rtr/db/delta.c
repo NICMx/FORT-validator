@@ -32,37 +32,18 @@ int
 deltas_create(struct deltas **_result)
 {
 	struct deltas *result;
-	int error;
 
 	result = malloc(sizeof(struct deltas));
 	if (result == NULL)
 		return pr_enomem();
 
-	error = deltas_v4_init(&result->v4.adds);
-	if (error)
-		goto revert_result;
-	error = deltas_v4_init(&result->v4.removes);
-	if (error)
-		goto revert_v4_adds;
-	error = deltas_v6_init(&result->v6.adds);
-	if (error)
-		goto revert_v4_removes;
-	error = deltas_v6_init(&result->v6.removes);
-	if (error)
-		goto revert_v6_adds;
+	deltas_v4_init(&result->v4.adds);
+	deltas_v4_init(&result->v4.removes);
+	deltas_v6_init(&result->v6.adds);
+	deltas_v6_init(&result->v6.removes);
 
 	*_result = result;
 	return 0;
-
-revert_v6_adds:
-	deltas_v6_cleanup(&result->v6.adds, NULL);
-revert_v4_removes:
-	deltas_v4_cleanup(&result->v4.removes, NULL);
-revert_v4_adds:
-	deltas_v4_cleanup(&result->v4.adds, NULL);
-revert_result:
-	free(result);
-	return error;
 }
 
 void

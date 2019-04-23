@@ -17,7 +17,7 @@ enum delta_status {
 	DS_DIFF_AVAILABLE,
 };
 
-int vrps_init(void);
+void vrps_init(void);
 void vrps_destroy(void);
 
 int vrps_update(struct roa_tree *, struct deltas *);

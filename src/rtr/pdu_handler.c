@@ -47,8 +47,8 @@ send_commmon_exchange(struct sender_common *common,
 }
 
 /*
- * TODO The semaphoring is bonkers. The code keeps locking, storing a value,
- * unlocking, locking again, and using the old value.
+ * TODO (urgent) The semaphoring is bonkers. The code keeps locking, storing a
+ * value, unlocking, locking again, and using the old value.
  * It doesn't look like it's a problem for now, but eventually will be, when old
  * delta forgetting is implemented.
  * I'm going to defer this because it shouldn't be done during the merge.

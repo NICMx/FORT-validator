@@ -142,23 +142,3 @@ success:
 	indexer->len--;
 	return 0;
 }
-
-void
-arridx_print(char const *prefix, struct circular_indexer *i)
-{
-	array_index o;
-	array_index p;
-
-	pr_info("%s:", prefix);
-	if (i->indexes != NULL) {
-		pr_info("  indexes:");
-		p = i->first;
-		for (o = 0; o < i->len; o++) {
-			pr_info("    %zu", p);
-			p = i->indexes[p].next;
-		}
-	}
-
-	pr_info("  first:%zu current:%zu top:%zu len:%zu allow:%d", i->first,
-	    i->current, i->top, i->len, i->allow_another_lap);
-}

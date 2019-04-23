@@ -102,7 +102,4 @@ array_index *arridx_next(struct circular_indexer *);
 /* Removes the *current* element. (You must be iterating.) */
 int arridx_remove(struct circular_indexer *);
 
-/* TODO remove me */
-void arridx_print(char const *, struct circular_indexer *);
-
 #endif /* SRC_DATA_STRUCTURE_CIRCULAR_INDEXER_H_ */

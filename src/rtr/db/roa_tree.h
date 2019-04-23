@@ -16,7 +16,7 @@ void roa_tree_put(struct roa_tree *);
 
 int roa_tree_foreach_roa(struct roa_tree *, vrp_foreach_cb, void *);
 
-/* TODO rename to tree handler or whatever */
+/* TODO (urgent) rename to tree handler or whatever */
 int forthandler_reset(struct roa_tree *);
 int forthandler_go_down(struct roa_tree *, struct rfc5280_name *);
 int forthandler_go_up(struct roa_tree *);

@@ -14,20 +14,15 @@ start_rtr_server(void)
 {
 	int error;
 
-	error = vrps_init();
-	if (error)
-		goto end1;
-
-	error = clients_db_init();
-	if (error)
-		goto end2;
+	vrps_init();
+	clients_db_init();
 
 	error = rtr_listen();
 	rtr_cleanup(); /* TODO shouldn't this only happen on !error? */
 
 	clients_db_destroy();
-end2:	vrps_destroy();
-end1:	return error;
+	vrps_destroy();
+	return error;
 }
 
 int

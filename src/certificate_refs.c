@@ -77,14 +77,20 @@ validate_signedObject(struct certificate_refs *refs,
 	return 0;
 }
 
+/**
+ * Ensures the @refs URIs match the parent Manifest's URIs. Assumes @refs came
+ * from a CA certificate.
+ *
+ * @refs: References you want validated.
+ * @pp: Repository Publication Point, as described by the parent Manifest.
+ */
 int
-refs_validate_ca(struct certificate_refs *refs, bool is_ta,
-    struct rpp const *pp)
+refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 {
 	int error;
 
-	if (is_ta)
-		return 0;
+	if (pp == NULL)
+		return 0; /* This CA is the TA, and therefore lacks a parent. */
 
 	error = validate_cdp(refs, pp);
 	if (error)
@@ -102,6 +108,14 @@ refs_validate_ca(struct certificate_refs *refs, bool is_ta,
 	return 0;
 }
 
+/**
+ * Ensures the @refs URIs match the Manifest URIs. Assumes @refs came from an
+ * EE certificate.
+ *
+ * @refs: References you want validated.
+ * @pp: Repository Publication Point, as described by the Manifest.
+ * @uri: URL of the signed object that contains the EE certificate.
+ */
 int
 refs_validate_ee(struct certificate_refs *refs, struct rpp const *pp,
     struct rpki_uri const *uri)

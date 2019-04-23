@@ -38,7 +38,7 @@ node_create(struct rfc5280_name *subject_name, struct node *parent)
 	node->subject_name = subject_name;
 	x509_name_get(subject_name);
 	node->parent = parent;
-	node->children.array = NULL;
+	nodes_init(&node->children);
 	node->roa = NULL;
 	return node;
 }
@@ -47,8 +47,7 @@ static void
 node_destroy(struct node *node)
 {
 	x509_name_put(node->subject_name);
-	if (node->children.array != NULL)
-		nodes_cleanup(&node->children, node_destroy);
+	nodes_cleanup(&node->children, node_destroy);
 	if (node->roa != NULL)
 		roa_destroy(node->roa);
 	free(node);
@@ -59,12 +58,6 @@ node_add_child(struct node *parent, struct rfc5280_name *subject_name)
 {
 	struct node *child;
 	int error;
-
-	if (parent->children.array == NULL) {
-		error = nodes_init(&parent->children);
-		if (error)
-			return error;
-	}
 
 	child = node_create(subject_name, parent);
 	if (child == NULL)
@@ -363,8 +356,7 @@ handle_delta_children(struct nodes *children1, struct nodes *children2,
 	 * Changes to one function might need to cascade to the other.
 	 */
 
-	struct node *c1array;
-	array_index c1; /* counter for c1array */
+	struct node *c1node;
 
 	struct node *c2array;
 	array_index c2; /* counter for c2array */
@@ -374,21 +366,20 @@ handle_delta_children(struct nodes *children1, struct nodes *children2,
 
 	int error = 0;
 
-	c1array = children1->array;
 	c2array = children2->array;
 	arridx_init(&c2indexer, children2->len);
 
-	for (c1 = 0; c1 < children1->len; c1++) {
-		if (find_subject_name(&c2indexer, c1array[c1].subject_name,
+	ARRAYLIST_FOREACH(children1, c1node) {
+		if (find_subject_name(&c2indexer, c1node->subject_name,
 		    c2array, &c2)) {
-			error = compute_deltas_node(&c1array[c1], &c2array[c2],
+			error = compute_deltas_node(c1node, &c2array[c2],
 			    deltas);
 			if (error)
 				goto end;
 
 			error = arridx_remove(&c2indexer);
 		} else {
-			error = add_all_deltas(&c1array[c1], deltas, DELTA_RM);
+			error = add_all_deltas(c1node, deltas, DELTA_RM);
 		}
 		if (error)
 			goto end;

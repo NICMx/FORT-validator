@@ -33,26 +33,14 @@ rpp_create(void)
 
 	result = malloc(sizeof(struct rpp));
 	if (result == NULL)
-		goto fail1;
+		return NULL;
 
-	if (uris_init(&result->certs) != 0)
-		goto fail2;
+	uris_init(&result->certs);
 	result->crl_set = false;
-	if (uris_init(&result->roas) != 0)
-		goto fail3;
-	if (uris_init(&result->ghostbusters) != 0)
-		goto fail4;
+	uris_init(&result->roas);
+	uris_init(&result->ghostbusters);
 
 	return result;
-
-fail4:
-	uris_cleanup(&result->roas, uri_cleanup);
-fail3:
-	uris_cleanup(&result->certs, uri_cleanup);
-fail2:
-	free(result);
-fail1:
-	return NULL;
 }
 
 void
@@ -146,7 +134,7 @@ rpp_traverse(struct rpp *pp)
 
 	/* Use CRL stack to validate certificates, and also traverse them. */
 	ARRAYLIST_FOREACH(&pp->certs, uri)
-		certificate_traverse(pp, uri, crls, false);
+		certificate_traverse(pp, uri, crls);
 
 	/* Use valid address ranges to print ROAs that match them. */
 	ARRAYLIST_FOREACH(&pp->roas, uri)

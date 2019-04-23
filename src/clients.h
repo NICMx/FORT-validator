@@ -14,7 +14,7 @@ struct client {
 	uint8_t rtr_version;
 };
 
-int clients_db_init(void);
+void clients_db_init(void);
 int update_client(int, struct sockaddr_storage *, uint8_t);
 size_t client_list(struct client **);
 

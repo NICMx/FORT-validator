@@ -66,6 +66,6 @@ int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
     struct certificate_refs *, enum rpki_policy *);
 
 int certificate_traverse(struct rpp *, struct rpki_uri const *,
-    STACK_OF(X509_CRL) *, bool);
+    STACK_OF(X509_CRL) *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

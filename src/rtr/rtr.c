@@ -19,7 +19,7 @@
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 
-/* TODO Support both RTR v0 an v1 */
+/* TODO (next iteration) Support both RTR v0 an v1 */
 #define RTR_VERSION_SUPPORTED	RTR_V0
 
 volatile bool loop;

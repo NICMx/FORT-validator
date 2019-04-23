@@ -116,7 +116,7 @@ check_vrps_updates(void *param_void)
 		pr_debug("Database updated successfully. Sleeping...");
 
 sleep:
-		sleep(config_get_vrps_check_interval());
+		sleep(config_get_validation_interval());
 	} while (true);
 
 	return NULL;

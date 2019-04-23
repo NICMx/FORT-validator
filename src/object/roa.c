@@ -200,33 +200,32 @@ roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
 
 	error = signed_object_args_init(&sobj_args, uri, crls, false);
 	if (error)
-		goto end1;
+		goto revert_fnstack;
 
 	error = signed_object_decode(&sobj_args, &arcs, roa_decode, &roa);
 	if (error)
-		goto end2;
+		goto revert_sobj;
+
+	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
+	if (error)
+		goto revert_roa;
 
 	error = vhandler_traverse_down(sobj_args.subject_name);
 	if (error)
-		goto end3;
+		goto revert_roa;
 
 	error = __handle_roa(roa, sobj_args.res);
 	if (error)
-		goto end3;
+		goto revert_roa;
 
 	error = vhandler_traverse_up();
-	if (error)
-		goto end3;
 
-	/* TODO why is this happening so late? */
-	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
-
-end3:
+revert_roa:
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
-end2:
+revert_sobj:
 	signed_object_args_cleanup(&sobj_args);
-end1:
-	pr_debug_rm("}");
+revert_fnstack:
 	fnstack_pop();
+	pr_debug_rm("}");
 	return error;
 }

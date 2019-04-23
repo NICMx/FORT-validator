@@ -41,16 +41,12 @@ delta_destroy(struct delta *delta)
 	deltas_destroy(delta->deltas);
 }
 
-int
+void
 vrps_init(void)
 {
-	int error;
-
 	state.base = NULL;
 
-	error = deltas_db_init(&state.deltas);
-	if (error)
-		return error;
+	deltas_db_init(&state.deltas);
 
 	/*
 	 * Use the same start serial, the session ID will avoid
@@ -62,17 +58,13 @@ vrps_init(void)
 	/* Get the bits that'll fit in session_id */
 	state.v0_session_id = time(NULL) & 0xFFFF;
 	/* Minus 1 to prevent same ID */
-	/*
-	 * TODO Assigning an int (and potentially negative) to a uint16_t.
-	 * Is this legal?
-	 */
-	state.v1_session_id = state.v0_session_id - 1;
+	state.v1_session_id = (state.v0_session_id != 0)
+	    ? (state.v0_session_id - 1)
+	    : (0xFFFFu);
 
 	sem_init(&rlock, 0, 1);
 	sem_init(&wlock, 0, 1);
 	rcounter = 0;
-
-	return 0;
 }
 
 void
