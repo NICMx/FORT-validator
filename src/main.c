@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "extension.h"
 #include "nid.h"
+#include "slurm_loader.h"
 #include "thread_var.h"
 #include "rsync/rsync.h"
 #include "rtr/rtr.h"
@@ -22,10 +23,16 @@ start_rtr_server(void)
 	if (error)
 		goto end2;
 
+	error = slurm_load();
+	if (error)
+		goto end3;
+
 	error = rtr_listen();
 	rtr_cleanup(); /* TODO shouldn't this only happen on !error? */
 
+end3:
 	clients_db_destroy();
+	slurm_cleanup();
 end2:	vrps_destroy();
 end1:	return error;
 }

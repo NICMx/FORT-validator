@@ -38,4 +38,11 @@ int prefix6_decode(IPAddress_t const *, struct ipv6_prefix *);
 int range4_decode(IPAddressRange_t const *, struct ipv4_range *);
 int range6_decode(IPAddressRange_t const *, struct ipv6_range *);
 
+int str_to_prefix4(const char *, struct ipv4_prefix *);
+int str_to_prefix6(const char *, struct ipv6_prefix *);
+int str_to_prefix_length(const char *, uint8_t *, uint8_t);
+
+int ipv4_prefix_validate(struct ipv4_prefix *);
+int ipv6_prefix_validate(struct ipv6_prefix *);
+
 #endif /* SRC_ADDRESS_H_ */

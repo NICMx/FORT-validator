@@ -3,10 +3,10 @@
 
 #include <netinet/in.h>
 
-char *write_int8(char *, uint8_t);
-char *write_int16(char *, uint16_t);
-char *write_int32(char *, uint32_t);
-char *write_in_addr(char *, struct in_addr);
-char *write_in6_addr(char *, struct in6_addr);
+unsigned char *write_int8(unsigned char *, uint8_t);
+unsigned char *write_int16(unsigned char *, uint16_t);
+unsigned char *write_int32(unsigned char *, uint32_t);
+unsigned char *write_in_addr(unsigned char *, struct in_addr);
+unsigned char *write_in6_addr(unsigned char *, struct in6_addr);
 
 #endif /* RTR_PRIMITIVE_WRITER_H_ */

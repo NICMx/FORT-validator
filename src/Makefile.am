@@ -71,7 +71,11 @@ fort_SOURCES += resource/asn.h resource/asn.c
 fort_SOURCES += array_list.h
 fort_SOURCES += clients.c clients.h
 fort_SOURCES += common.c common.h
+fort_SOURCES += json_parser.c json_parser.h
 fort_SOURCES += notify.c notify.h
+fort_SOURCES += slurm_db.c slurm_db.h
+fort_SOURCES += slurm_loader.c slurm_loader.h
+fort_SOURCES += slurm_parser.c slurm_parser.h
 fort_SOURCES += updates_daemon.c updates_daemon.h
 
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h

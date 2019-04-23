@@ -18,9 +18,10 @@ free_buffer(struct data_buffer *buffer)
 }
 
 static size_t
-serialize_pdu_header(struct pdu_header *header, uint16_t union_value, char *buf)
+serialize_pdu_header(struct pdu_header *header, uint16_t union_value,
+    unsigned char *buf)
 {
-	char *ptr;
+	unsigned char *ptr;
 
 	ptr = buf;
 	ptr = write_int8(ptr, header->protocol_version);
@@ -32,10 +33,10 @@ serialize_pdu_header(struct pdu_header *header, uint16_t union_value, char *buf)
 }
 
 size_t
-serialize_serial_notify_pdu(struct serial_notify_pdu *pdu, char *buf)
+serialize_serial_notify_pdu(struct serial_notify_pdu *pdu, unsigned char *buf)
 {
 	size_t head_size;
-	char *ptr;
+	unsigned char *ptr;
 
 	head_size = serialize_pdu_header(&pdu->header, pdu->header.m.session_id,
 	    buf);
@@ -47,7 +48,8 @@ serialize_serial_notify_pdu(struct serial_notify_pdu *pdu, char *buf)
 }
 
 size_t
-serialize_cache_response_pdu(struct cache_response_pdu *pdu, char *buf)
+serialize_cache_response_pdu(struct cache_response_pdu *pdu,
+    unsigned char *buf)
 {
 	/* No payload to serialize */
 	return serialize_pdu_header(&pdu->header, pdu->header.m.session_id,
@@ -55,10 +57,10 @@ serialize_cache_response_pdu(struct cache_response_pdu *pdu, char *buf)
 }
 
 size_t
-serialize_ipv4_prefix_pdu(struct ipv4_prefix_pdu *pdu, char *buf)
+serialize_ipv4_prefix_pdu(struct ipv4_prefix_pdu *pdu, unsigned char *buf)
 {
 	size_t head_size;
-	char *ptr;
+	unsigned char *ptr;
 
 	head_size = serialize_pdu_header(&pdu->header, pdu->header.m.reserved,
 	    buf);
@@ -75,10 +77,10 @@ serialize_ipv4_prefix_pdu(struct ipv4_prefix_pdu *pdu, char *buf)
 }
 
 size_t
-serialize_ipv6_prefix_pdu(struct ipv6_prefix_pdu *pdu, char *buf)
+serialize_ipv6_prefix_pdu(struct ipv6_prefix_pdu *pdu, unsigned char *buf)
 {
 	size_t head_size;
-	char *ptr;
+	unsigned char *ptr;
 
 	head_size = serialize_pdu_header(&pdu->header, pdu->header.m.reserved,
 	    buf);
@@ -95,10 +97,10 @@ serialize_ipv6_prefix_pdu(struct ipv6_prefix_pdu *pdu, char *buf)
 }
 
 size_t
-serialize_end_of_data_pdu(struct end_of_data_pdu *pdu, char *buf)
+serialize_end_of_data_pdu(struct end_of_data_pdu *pdu, unsigned char *buf)
 {
 	size_t head_size;
-	char *ptr;
+	unsigned char *ptr;
 
 	head_size = serialize_pdu_header(&pdu->header, pdu->header.m.session_id,
 	    buf);
@@ -115,18 +117,48 @@ serialize_end_of_data_pdu(struct end_of_data_pdu *pdu, char *buf)
 }
 
 size_t
-serialize_cache_reset_pdu(struct cache_reset_pdu *pdu, char *buf)
+serialize_cache_reset_pdu(struct cache_reset_pdu *pdu, unsigned char *buf)
 {
 	/* No payload to serialize */
 	return serialize_pdu_header(&pdu->header, pdu->header.m.reserved, buf);
 }
 
+/*
+ * Don't forget to use 'header->reserved' to set flags
+ */
 size_t
-serialize_error_report_pdu(struct error_report_pdu *pdu, char *buf)
+serialize_router_key_pdu(struct router_key_pdu *pdu, unsigned char *buf)
+{
+	size_t head_size;
+	unsigned char *ptr;
+	int i;
+
+	if (pdu->header.protocol_version == RTR_V0)
+		return 0;
+
+	head_size = serialize_pdu_header(&pdu->header, pdu->header.m.reserved,
+	    buf);
+
+	ptr = buf + head_size;
+
+	for (i = 0; i < pdu->ski_len; i++)
+		ptr = write_int8(ptr, pdu->ski[i]);
+
+	ptr = write_int32(ptr, pdu->asn);
+
+	for (i = 0; i < pdu->spki_len; i++)
+		ptr = write_int8(ptr, pdu->spki[i]);
+
+	return ptr - buf;
+}
+
+size_t
+serialize_error_report_pdu(struct error_report_pdu *pdu, unsigned char *buf)
 {
 	struct pdu_header *err_pdu_header;
 	size_t head_size;
-	char *ptr, *tmp_ptr;
+	unsigned char *ptr;
+	char *tmp_ptr;
 	int i;
 
 	head_size = serialize_pdu_header(&pdu->header, pdu->header.m.error_code,

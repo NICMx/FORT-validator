@@ -15,6 +15,7 @@
 #define PDU_TYPE_IPV6_PREFIX		6
 #define PDU_TYPE_END_OF_DATA		7
 #define PDU_TYPE_CACHE_RESET		8
+#define PDU_TYPE_ROUTER_KEY		9
 #define PDU_TYPE_ERROR_REPORT		10
 
 struct pdu_header {
@@ -76,6 +77,15 @@ struct end_of_data_pdu {
 
 struct cache_reset_pdu {
 	struct	pdu_header header;
+};
+
+struct router_key_pdu {
+	struct	pdu_header header;
+	unsigned char	*ski;
+	size_t		ski_len;
+	u_int32_t	asn;
+	unsigned char	*spki;
+	size_t		spki_len;
 };
 
 struct error_report_pdu {

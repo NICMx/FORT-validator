@@ -21,6 +21,7 @@ unsigned int config_get_vrps_check_interval(void);
 uint32_t config_get_refresh_interval(void);
 uint32_t config_get_retry_interval(void);
 uint32_t config_get_expire_interval(void);
+char const *config_get_slurm_location(void);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);

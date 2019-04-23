@@ -68,6 +68,16 @@ length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 	return len;
 }
 
+/* TODO Include Router Key PDU serials */
+/**
+ * static uint32_t
+ * length_router_key_pdu(struct router_key_pdu *pdu)
+ * {
+ * 	return HEADER_LENGTH +
+ * 	    pdu->ski_len + sizeof(pdu->asn) + pdu->spki_len;
+ * }
+ */
+
 static uint32_t
 length_error_report_pdu(struct error_report_pdu *pdu)
 {
@@ -76,27 +86,67 @@ length_error_report_pdu(struct error_report_pdu *pdu)
 	    pdu->error_message_length + sizeof(pdu->error_message_length);
 }
 
+/*
+ * TODO Needs some testing, this is just a beta version
+ */
 static int
-send_response(int fd, char *data, size_t data_len)
+send_large_response(int fd, struct data_buffer *buffer)
+{
+	unsigned char *tmp_buffer, *ptr;
+	size_t buf_size, pending;
+	int written;
+
+	buf_size = buffer->capacity;
+	pending = buffer->len;
+	ptr = buffer->data;
+	while (pending > 0) {
+		tmp_buffer = calloc(pending, sizeof(unsigned char));
+		if (tmp_buffer == NULL) {
+			warnx("Couldn't allocate temp buffer");
+			return -ENOMEM;
+		}
+		memcpy(tmp_buffer, ptr, buf_size);
+
+		written = write(fd, tmp_buffer, buf_size);
+		free(tmp_buffer);
+		if (written < 0) {
+			warnx("Error sending response");
+			return -EINVAL;
+		}
+		pending -= buf_size;
+		ptr += buf_size;
+		buf_size = pending > buffer->capacity ? buffer->capacity :
+		    pending;
+	}
+
+	return 0;
+}
+
+static int
+send_response(int fd, unsigned char *data, size_t data_len)
 {
 	struct data_buffer buffer;
 	int error;
 
 	init_buffer(&buffer);
-	/* Check for buffer overflow */
-	if (data_len > buffer.capacity) {
-		warnx("Response buffer out of capacity");
-		return -EINVAL;
-	}
 	memcpy(buffer.data, data, data_len);
 	buffer.len = data_len;
 
-	error = write(fd, buffer.data, buffer.len);
-	free_buffer(&buffer);
-	if (error < 0) {
-		warnx("Error sending response");
-		return -EINVAL;
+	/* Check for buffer overflow */
+	if (data_len <= buffer.capacity) {
+		error = write(fd, buffer.data, buffer.len);
+		free_buffer(&buffer);
+		if (error < 0) {
+			warnx("Error sending response");
+			return -EINVAL;
+		}
+		return 0;
 	}
+
+	error = send_large_response(fd, &buffer);
+	free_buffer(&buffer);
+	if (error)
+		return error;
 
 	return 0;
 }
@@ -105,7 +155,7 @@ int
 send_serial_notify_pdu(struct sender_common *common)
 {
 	struct serial_notify_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_SERIAL_NOTIFY,
@@ -123,7 +173,7 @@ int
 send_cache_reset_pdu(struct sender_common *common)
 {
 	struct cache_reset_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
@@ -139,7 +189,7 @@ int
 send_cache_response_pdu(struct sender_common *common)
 {
 	struct cache_response_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
@@ -156,7 +206,7 @@ static int
 send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv4_prefix_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV4_PREFIX,
@@ -179,7 +229,7 @@ static int
 send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv6_prefix_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV6_PREFIX,
@@ -228,7 +278,7 @@ int
 send_end_of_data_pdu(struct sender_common *common)
 {
 	struct end_of_data_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_END_OF_DATA,
@@ -251,7 +301,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 struct pdu_header *err_pdu_header, char const *message)
 {
 	struct error_report_pdu pdu;
-	char data[BUFFER_SIZE];
+	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, version, PDU_TYPE_ERROR_REPORT,

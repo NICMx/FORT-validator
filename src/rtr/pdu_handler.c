@@ -170,6 +170,12 @@ handle_cache_reset_pdu(int fd, void *pdu)
 }
 
 int
+handle_router_key_pdu(int fd, void *pdu)
+{
+	return warn_unexpected_pdu(fd, pdu, "Router Key");
+}
+
+int
 handle_error_report_pdu(int fd, void *pdu)
 {
 	struct error_report_pdu *received = pdu;

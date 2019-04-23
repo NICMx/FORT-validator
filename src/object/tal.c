@@ -141,7 +141,8 @@ read_spki(struct line_file *lfile, struct tal *tal)
 		return crypto_err("BIO_new_fp() returned NULL");
 	}
 
-	error = base64_decode(encoded, tal->spki, alloc_size, &tal->spki_len);
+	error = base64_decode(encoded, tal->spki, true, alloc_size,
+	    &tal->spki_len);
 	if (error)
 		free(tal->spki);
 

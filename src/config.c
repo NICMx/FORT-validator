@@ -60,6 +60,9 @@ struct rpki_config {
 		uint32_t refresh_interval;
 		uint32_t retry_interval;
 		uint32_t expire_interval;
+
+		/** Directory where the .slurm files are located */
+		char *slurm_location;
 	} server;
 
 	struct {
@@ -235,7 +238,13 @@ static const struct option_field options[] = {
 		.doc = "",
 		.min = 600,
 		.max = 172800,
-	},
+	}, {
+		.id = 5008,
+		.name = "server.slurm.location",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, server.slurm_location),
+		.doc = "Directory where the .slurm files are located",
+		},
 
 	/* RSYNC fields */
 	{
@@ -435,6 +444,7 @@ set_default_values(void)
 	rpki_config.server.refresh_interval = 3600;
 	rpki_config.server.retry_interval = 600;
 	rpki_config.server.expire_interval = 7200;
+	rpki_config.server.slurm_location = NULL;
 
 	rpki_config.tal = NULL;
 
@@ -644,6 +654,11 @@ config_get_expire_interval(void)
 	return rpki_config.server.expire_interval;
 }
 
+char const *
+config_get_slurm_location(void)
+{
+	return rpki_config.server.slurm_location;
+}
 char const *
 config_get_tal(void)
 {

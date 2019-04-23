@@ -2,6 +2,9 @@
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <err.h>
+#include <errno.h>
+#include <string.h>
 
 /**
  * Converts error from libcrypto representation to this project's
@@ -20,6 +23,7 @@ error_ul2i(unsigned long error)
  *
  * @in: The BIO that will stream the base64 encoded string you want to decode.
  * @out: Buffer where this function will write the decoded string.
+ * @has_nl: Indicate if the encoded string has newline char.
  * @out_len: Total allocated size of @out. It's supposed to be the result of
  *     EVP_DECODE_LENGTH(<size of the encoded string>).
  * @out_written: This function will write the actual number of decoded bytes
@@ -32,7 +36,8 @@ error_ul2i(unsigned long error)
  * register a libcrypto stack error.
  */
 int
-base64_decode(BIO *in, unsigned char *out, size_t out_len, size_t *out_written)
+base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
+    size_t *out_written)
 {
 	BIO *b64;
 	size_t offset = 0;
@@ -72,6 +77,9 @@ base64_decode(BIO *in, unsigned char *out, size_t out_len, size_t *out_written)
 	 * I'm not risking it.
 	 */
 	in = BIO_push(b64, in);
+	if (!has_nl)
+		BIO_set_flags(in, BIO_FLAGS_BASE64_NO_NL);
+
 	error = ERR_peek_last_error();
 	if (error)
 		goto end;
@@ -107,4 +115,89 @@ end:
 	BIO_free(b64);
 
 	return error ? error_ul2i(error) : 0;
+}
+
+/*
+ * Decode a base64 encoded string (@str_encoded), the decoded value is
+ * allocated at @result with a length of @result_len.
+ *
+ * Return 0 on success, or the error code if something went wrong. Don't forget
+ * to free @result after a successful decoding.
+ */
+int
+base64url_decode(char const *str_encoded, unsigned char **result,
+    size_t *result_len)
+{
+	BIO *encoded; /* base64 encoded. */
+	char *str_copy;
+	size_t encoded_len, alloc_size, dec_len;
+	int error, pad, i;
+
+	/*
+	 * Apparently there isn't a base64url decoder, and there isn't
+	 * much difference between base64 codification and base64url, just as
+	 * stated in RFC 4648 section 5: "This encoding is technically
+	 * identical to the previous one, except for the 62:nd and 63:rd
+	 * alphabet character, as indicated in Table 2".
+	 *
+	 * The existing base64 can be used if the 62:nd and 63:rd base64url
+	 * alphabet chars are replaced with the corresponding base64 chars, and
+	 * also if we add the optional padding that the member should have.
+	 */
+	encoded_len = strlen(str_encoded);
+	pad = (encoded_len % 4) > 0 ? 4 - (encoded_len % 4) : 0;
+
+	str_copy = malloc(encoded_len + pad + 1);
+	if (str_copy == NULL)
+		return -ENOMEM;
+	/* Set all with pad char, then replace with the original string */
+	memset(str_copy, '=', encoded_len + pad);
+	memcpy(str_copy, str_encoded, encoded_len);
+	str_copy[encoded_len + pad] = '\0';
+
+	for (i = 0; i < encoded_len; i++) {
+		if (str_copy[i] == '-')
+			str_copy[i] = '+';
+		else if (str_copy[i] == '_')
+			str_copy[i] = '/';
+	}
+
+	/* Now decode as regular base64 */
+	encoded =  BIO_new_mem_buf(str_copy, -1);
+	if (encoded == NULL) {
+		warnx("BIO_new() returned NULL");
+		error = -EINVAL;
+		goto free_copy;
+	}
+
+	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
+	*result = malloc(alloc_size + 1);
+	if (*result == NULL) {
+		error = -ENOMEM;
+		goto free_enc;
+	}
+	memset(*result, 0, alloc_size);
+	(*result)[alloc_size] = '\0';
+
+	error = base64_decode(encoded, *result, false, alloc_size, &dec_len);
+	if (error)
+		goto free_all;
+
+	if (dec_len == 0) {
+		warnx("'%s' couldn't be decoded", str_encoded);
+		error = -EINVAL;
+		goto free_all;
+	}
+	*result_len = dec_len;
+
+	free(str_copy);
+	BIO_free(encoded);
+	return 0;
+free_all:
+	free(*result);
+free_enc:
+	BIO_free(encoded);
+free_copy:
+	free(str_copy);
+	return error;
 }
