@@ -196,10 +196,10 @@ client_thread_cb(void *param_void)
 			return end_client(param.client_fd, meta, pdu);
 		}
 		/* RTR Version ready, now update client */
-		err = update_client(param.client_fd, &param.client_addr,
+		err = clients_add(param.client_fd, &param.client_addr,
 		    rtr_version);
 		if (err) {
-			if (err == -EINVAL) {
+			if (err == -ERTR_VERSION_MISMATCH) {
 				err_pdu_send(param.client_fd, rtr_version,
 				    (rtr_version == RTR_V0
 				    ? ERR_PDU_UNSUP_PROTO_VERSION

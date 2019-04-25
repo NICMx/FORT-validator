@@ -23,6 +23,10 @@
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
 
+/*
+ * TODO (whatever) question: why are we not using pthread_rwlock_rdlock() and
+ * pthread_rwlock_unlock()?
+ */
 void read_lock(sem_t *, sem_t *, unsigned int *);
 void read_unlock(sem_t *, sem_t *, unsigned int *);
 
