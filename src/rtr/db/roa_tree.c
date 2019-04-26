@@ -26,6 +26,17 @@ struct roa_tree {
 
 DEFINE_ARRAY_LIST_FUNCTIONS(nodes, struct node)
 
+static void
+node_init(struct node *node, struct rfc5280_name *subject_name,
+    struct node *parent)
+{
+	node->subject_name = subject_name;
+	x509_name_get(subject_name);
+	node->parent = parent;
+	node->children.array = NULL;
+	node->roa = NULL;
+}
+
 static struct node *
 node_create(struct rfc5280_name *subject_name, struct node *parent)
 {
@@ -35,29 +46,27 @@ node_create(struct rfc5280_name *subject_name, struct node *parent)
 	if (node == NULL)
 		return NULL;
 
-	node->subject_name = subject_name;
-	x509_name_get(subject_name);
-	node->parent = parent;
-	node->children.array = NULL;
-	node->roa = NULL;
+	node_init(node, subject_name, parent);
 	return node;
 }
 
 static void
-node_destroy(struct node *node)
+node_cleanup(struct node *node)
 {
-	x509_name_put(node->subject_name);
+	if (node->subject_name != NULL)
+		x509_name_put(node->subject_name);
+
 	if (node->children.array != NULL)
-		nodes_cleanup(&node->children, node_destroy);
+		nodes_cleanup(&node->children, node_cleanup);
+
 	if (node->roa != NULL)
 		roa_destroy(node->roa);
-	free(node);
 }
 
 static int
 node_add_child(struct node *parent, struct rfc5280_name *subject_name)
 {
-	struct node *child;
+	struct node child;
 	int error;
 
 	if (parent->children.array == NULL) {
@@ -66,13 +75,11 @@ node_add_child(struct node *parent, struct rfc5280_name *subject_name)
 			return error;
 	}
 
-	child = node_create(subject_name, parent);
-	if (child == NULL)
-		return pr_enomem();
+	node_init(&child, subject_name, parent);
 
-	error = nodes_add(&parent->children, child);
+	error = nodes_add(&parent->children, &child);
 	if (error)
-		node_destroy(child);
+		node_cleanup(&child);
 
 	return error;
 }
@@ -107,7 +114,8 @@ static void
 roa_tree_cleanup(struct roa_tree *tree)
 {
 	if (tree->root != NULL) {
-		node_destroy(tree->root);
+		node_cleanup(tree->root);
+		free(tree->root);
 		tree->root = NULL;
 	}
 	tree->current = NULL;
@@ -181,17 +189,18 @@ __foreach(struct node *node, vrp_foreach_cb cb, void *arg)
 	struct node *child;
 	int error;
 
-	ARRAYLIST_FOREACH(&node->children, child) {
-		error = __foreach(child, cb, arg);
-		if (error)
-			return error;
-	}
+	if (node->children.array != NULL)
+		ARRAYLIST_FOREACH(&node->children, child) {
+			error = __foreach(child, cb, arg);
+			if (error)
+				return error;
+		}
 
-	if (child->roa != NULL) {
-		error = __foreach_v4(child->roa, cb, arg);
+	if (node->roa != NULL) {
+		error = __foreach_v4(node->roa, cb, arg);
 		if (error)
 			return error;
-		error = __foreach_v6(child->roa, cb, arg);
+		error = __foreach_v6(node->roa, cb, arg);
 		if (error)
 			return error;
 	}
@@ -212,12 +221,27 @@ forthandler_reset(struct roa_tree *tree)
 	return 0;
 }
 
+struct node *
+get_last_node(struct nodes *nodes)
+{
+	if (nodes->array == NULL || nodes->len == 0)
+		return NULL;
+
+	return &nodes->array[nodes->len - 1];
+}
+
 int
 forthandler_go_down(struct roa_tree *tree,
     struct rfc5280_name *subject_name)
 {
-	if (tree->current != NULL)
-		return node_add_child(tree->current, subject_name);
+	int error;
+	if (tree->current != NULL) {
+		error = node_add_child(tree->current, subject_name);
+		if (error)
+			return error;
+		tree->current = get_last_node(&tree->current->children);
+		return 0;
+	}
 
 	tree->current = get_root(tree, subject_name);
 	return (tree->current != NULL) ? 0 : pr_enomem();
@@ -226,10 +250,8 @@ forthandler_go_down(struct roa_tree *tree,
 int
 forthandler_go_up(struct roa_tree *tree)
 {
-	if (tree->current == NULL)
-		return pr_crit("Bad tree traversal: Attempting to move to the parent of a root.");
-
-	tree->current = tree->current->parent;
+	if (tree->current != NULL)
+		tree->current = tree->current->parent;
 	return 0;
 }
 
@@ -378,27 +400,33 @@ handle_delta_children(struct nodes *children1, struct nodes *children2,
 	c2array = children2->array;
 	arridx_init(&c2indexer, children2->len);
 
-	for (c1 = 0; c1 < children1->len; c1++) {
-		if (find_subject_name(&c2indexer, c1array[c1].subject_name,
-		    c2array, &c2)) {
-			error = compute_deltas_node(&c1array[c1], &c2array[c2],
-			    deltas);
+	/** TODO I still need to validate that this is ok */
+	if (c1array != NULL)
+		for (c1 = 0; c1 < children1->len; c1++) {
+			if (find_subject_name(&c2indexer,
+			    c1array[c1].subject_name, c2array, &c2)) {
+				error = compute_deltas_node(&c1array[c1],
+				    &c2array[c2], deltas);
+				if (error)
+					goto end;
+
+				error = arridx_remove(&c2indexer);
+			} else {
+				error = add_all_deltas(&c1array[c1], deltas,
+				    DELTA_RM);
+			}
 			if (error)
 				goto end;
-
-			error = arridx_remove(&c2indexer);
-		} else {
-			error = add_all_deltas(&c1array[c1], deltas, DELTA_RM);
 		}
-		if (error)
-			goto end;
-	}
 
-	ARRIDX_FOREACH(&c2indexer, c2p) {
-		error = add_all_deltas(&c2array[*c2p], deltas, DELTA_ADD);
-		if (error)
-			goto end;
-	}
+	/** TODO I still need to validate that this is ok */
+	if (c2array != NULL)
+		ARRIDX_FOREACH(&c2indexer, c2p) {
+			error = add_all_deltas(&c2array[*c2p], deltas,
+			    DELTA_ADD);
+			if (error)
+				goto end;
+		}
 
 end:	arridx_cleanup(&c2indexer);
 	return error;
@@ -459,22 +487,26 @@ find_addr_v6(struct v6_address *address, struct v6_addresses *array,
 		addrs2 = &roa2->field;					\
 		arridx_init(&r2indexer, addrs2->len);			\
 									\
-		ARRAYLIST_FOREACH(addrs1, a1) {				\
-			if (find_fn(a1, addrs2, &r2indexer))		\
-				error = arridx_remove(&r2indexer);	\
-			else						\
-				error = add_one_fn(deltas,		\
-				    roa1->as, a1, DELTA_RM);		\
-			if (error)					\
-				goto end;				\
-		}							\
+		/** TODO I still need to validate that this is ok */	\
+		if (addrs1 != NULL)					\
+			ARRAYLIST_FOREACH(addrs1, a1) {			\
+				if (find_fn(a1, addrs2, &r2indexer))	\
+					error = arridx_remove(&r2indexer);\
+				else					\
+					error = add_one_fn(deltas,	\
+					    roa1->as, a1, DELTA_RM);	\
+				if (error)				\
+					goto end;			\
+			}						\
 									\
-		ARRIDX_FOREACH(&r2indexer, a2p) {			\
-			error = add_one_fn(deltas, roa2->as,		\
-			    &addrs2->array[*a2p], DELTA_ADD);		\
-			if (error)					\
-				goto end;				\
-		}							\
+		/** TODO I still need to validate that this is ok */	\
+		if (addrs2 != NULL)					\
+			ARRIDX_FOREACH(&r2indexer, a2p) {		\
+				error = add_one_fn(deltas, roa2->as,	\
+				    &addrs2->array[*a2p], DELTA_ADD);	\
+				if (error)				\
+					goto end;			\
+			}						\
 									\
 	end:	arridx_cleanup(&r2indexer);				\
 		return error;						\
@@ -493,6 +525,10 @@ compute_deltas_node(struct node *n1, struct node *n2, struct deltas *deltas)
 	error = handle_delta_children(&n1->children, &n2->children, deltas);
 	if (error)
 		return error;
+
+	/** TODO I still need to validate that this is ok */
+	if (n1->roa == NULL || n2->roa == NULL)
+		return 0;
 
 	error = handle_roas_v4(n1->roa, n2->roa, deltas);
 	if (error)
