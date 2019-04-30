@@ -22,12 +22,11 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len)
 
 	for (offset = 0; offset < buffer_len; offset += read_result) {
 		read_result = read(fd, &buffer[offset], buffer_len - offset);
-		if (read_result == -1) {
-			warn("Client socket read interrupted");
-			return -errno;
-		}
+		if (read_result == -1)
+			return -pr_errno(errno, "Client socket read interrupted");
+
 		if (read_result == 0) {
-			warnx("Stream ended mid-PDU.");
+			pr_warn("Stream ended mid-PDU.");
 			return -EPIPE;
 		}
 	}

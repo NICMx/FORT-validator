@@ -32,6 +32,6 @@ notify_clients(void)
 		error = send_notify(ptr->fd, ptr->rtr_version);
 		/* Error? Log it */
 		if (error)
-			warnx("Error sending notify PDU to client");
+			pr_warn("Error sending notify PDU to client");
 	}
 }

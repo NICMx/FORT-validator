@@ -16,7 +16,7 @@ v6_address_destroy(struct v6_address *addr)
 }
 
 int
-roa_create(u_int32_t as, struct roa **_result)
+roa_create(uint32_t as, struct roa **_result)
 {
 	struct roa *result;
 	int error;

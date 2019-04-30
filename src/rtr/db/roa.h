@@ -23,7 +23,7 @@ struct roa {
 	struct v6_addresses addrs6;
 };
 
-int roa_create(u_int32_t, struct roa **);
+int roa_create(uint32_t, struct roa **);
 void roa_destroy(struct roa *);
 
 int roa_add_v4(struct roa *, uint32_t, struct ipv4_prefix const *, uint8_t);

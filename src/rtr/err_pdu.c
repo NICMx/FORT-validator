@@ -1,6 +1,5 @@
 #include "err_pdu.h"
 
-#include <err.h>
 #include <unistd.h>
 #include "pdu_sender.h"
 #include "log.h"
@@ -14,7 +13,7 @@ err_pdu_send(int fd, uint8_t version, uint16_t code, void *err_pdu_header,
 	error = send_error_report_pdu(fd, version, code, err_pdu_header,
 	    message);
 	if (err_pdu_is_fatal(code)) {
-		warnx("Fatal error report PDU sent [code %u], closing socket.",
+		pr_warn("Fatal error report PDU sent [code %u], closing socket.",
 		    code);
 		close(fd);
 	}

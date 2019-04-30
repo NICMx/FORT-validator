@@ -1,6 +1,5 @@
 #include "updates_daemon.h"
 
-#include <err.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -131,10 +130,9 @@ updates_daemon_start(void)
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	errno = pthread_create(&thread, NULL, check_vrps_updates, NULL);
 	pthread_attr_destroy(&attr);
-	if (errno) {
-		warn("Could not spawn the update daemon thread");
-		return -errno;
-	}
+	if (errno)
+		return -pr_errno(errno,
+		    "Could not spawn the update daemon thread");
 
 	return 0;
 }

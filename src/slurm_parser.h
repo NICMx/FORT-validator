@@ -15,21 +15,21 @@
 #define SLURM_BGPS_FLAG_ROUTER_KEY	0x08
 
 struct slurm_prefix {
-	u_int8_t	data_flag;
-	u_int32_t	asn;
+	uint8_t		data_flag;
+	uint32_t	asn;
 	union {
 		struct	in_addr ipv4_prefix;
 		struct	in6_addr ipv6_prefix;
 	};
-	u_int8_t	prefix_length;
-	u_int8_t	max_prefix_length;
-	u_int8_t	addr_fam;
+	uint8_t		prefix_length;
+	uint8_t		max_prefix_length;
+	uint8_t		addr_fam;
 	char const	*comment;
 };
 
 struct slurm_bgpsec {
-	u_int8_t	data_flag;
-	u_int32_t	asn;
+	uint8_t		data_flag;
+	uint32_t	asn;
 	unsigned char	*ski;
 	size_t		ski_len;
 	unsigned char	*router_public_key;

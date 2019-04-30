@@ -2,7 +2,6 @@
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <err.h>
 #include <errno.h>
 #include <string.h>
 
@@ -165,7 +164,6 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 	/* Now decode as regular base64 */
 	encoded =  BIO_new_mem_buf(str_copy, -1);
 	if (encoded == NULL) {
-		warnx("BIO_new() returned NULL");
 		error = -EINVAL;
 		goto free_copy;
 	}
@@ -184,7 +182,6 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 		goto free_all;
 
 	if (dec_len == 0) {
-		warnx("'%s' couldn't be decoded", str_encoded);
 		error = -EINVAL;
 		goto free_all;
 	}

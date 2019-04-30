@@ -1,6 +1,5 @@
 #include "pdu_handler.h"
 
-#include <err.h>
 #include <errno.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -14,7 +13,7 @@ static int
 warn_unexpected_pdu(int fd, void *pdu, char const *pdu_name)
 {
 	struct pdu_header *pdu_header = pdu;
-	warnx("Unexpected %s PDU received", pdu_name);
+	pr_warn("Unexpected %s PDU received", pdu_name);
 	err_pdu_send(fd, pdu_header->protocol_version, ERR_PDU_UNSUP_PDU_TYPE,
 	    pdu_header, "Unexpected PDU received");
 	return -EINVAL;
@@ -101,7 +100,7 @@ handle_serial_query_pdu(int fd, void *pdu)
 		return send_end_of_data_pdu(&common);
 	}
 
-	warnx("Reached 'unreachable' code");
+	pr_warn("Reached 'unreachable' code");
 	return -EINVAL;
 }
 
@@ -135,7 +134,7 @@ handle_reset_query_pdu(int fd, void *pdu)
 		break;
 	}
 
-	warnx("Reached 'unreachable' code");
+	pr_warn("Reached 'unreachable' code");
 	return -EINVAL;
 }
 
@@ -181,7 +180,7 @@ handle_error_report_pdu(int fd, void *pdu)
 	struct error_report_pdu *received = pdu;
 
 	if (err_pdu_is_fatal(received->header.m.error_code)) {
-		warnx("Fatal error report PDU received [code %u], closing socket.",
+		pr_warn("Fatal error report PDU received [code %u], closing socket.",
 		    received->header.m.error_code);
 		close(fd);
 	}

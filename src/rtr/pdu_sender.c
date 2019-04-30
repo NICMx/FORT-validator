@@ -1,6 +1,5 @@
 #include "pdu_sender.h"
 
-#include <err.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -8,6 +7,7 @@
 #include <unistd.h>
 
 #include "config.h"
+#include "log.h"
 #include "rtr/pdu_serializer.h"
 #include "rtr/db/vrps.h"
 
@@ -101,18 +101,16 @@ send_large_response(int fd, struct data_buffer *buffer)
 	ptr = buffer->data;
 	while (pending > 0) {
 		tmp_buffer = calloc(pending, sizeof(unsigned char));
-		if (tmp_buffer == NULL) {
-			warnx("Couldn't allocate temp buffer");
-			return -ENOMEM;
-		}
+		if (tmp_buffer == NULL)
+			return pr_enomem();
+
 		memcpy(tmp_buffer, ptr, buf_size);
 
 		written = write(fd, tmp_buffer, buf_size);
 		free(tmp_buffer);
-		if (written < 0) {
-			warnx("Error sending response");
-			return -EINVAL;
-		}
+		if (written < 0)
+			return pr_err("Error sending response");
+
 		pending -= buf_size;
 		ptr += buf_size;
 		buf_size = pending > buffer->capacity ? buffer->capacity :
@@ -136,10 +134,9 @@ send_response(int fd, unsigned char *data, size_t data_len)
 	if (data_len <= buffer.capacity) {
 		error = write(fd, buffer.data, buffer.len);
 		free_buffer(&buffer);
-		if (error < 0) {
-			warnx("Error sending response");
-			return -EINVAL;
-		}
+		if (error < 0)
+			return pr_err("Error sending response");
+
 		return 0;
 	}
 
@@ -317,7 +314,7 @@ struct pdu_header *err_pdu_header, char const *message)
 	if (message != NULL) {
 		pdu.error_message = malloc(strlen(message) + 1);
 		if (pdu.error_message == NULL)
-			warn("Error message couldn't be allocated, removed from PDU");
+			pr_warn("Error message couldn't be allocated, removed from PDU");
 		else {
 			pdu.error_message_length = strlen(message) + 1;
 			strcpy(pdu.error_message, message);

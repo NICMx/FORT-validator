@@ -3,8 +3,8 @@
 
 #include <netinet/in.h>
 
-#include "../common.h"
-#include "primitive_reader.h"
+#include "common.h"
+#include "rtr/primitive_reader.h"
 
 #define RTR_V0	0
 #define RTR_V1	1
@@ -83,7 +83,7 @@ struct router_key_pdu {
 	struct	pdu_header header;
 	unsigned char	*ski;
 	size_t		ski_len;
-	u_int32_t	asn;
+	uint32_t	asn;
 	unsigned char	*spki;
 	size_t		spki_len;
 };

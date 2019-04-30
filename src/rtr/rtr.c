@@ -1,6 +1,5 @@
 #include "rtr.h"
 
-#include <err.h>
 #include <errno.h>
 #include <netdb.h>
 #include <pthread.h>
@@ -15,6 +14,7 @@
 
 #include "config.h"
 #include "clients.h"
+#include "log.h"
 #include "updates_daemon.h"
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
@@ -48,12 +48,10 @@ init_addrinfo(struct addrinfo **result)
 	service = config_get_server_port();
 
 	error = getaddrinfo(hostname, service, &hints, result);
-	if (error) {
-		warnx("Could not infer a bindable address out of address '%s' and port '%s': %s",
+	if (error)
+		return pr_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
 		    (hostname != NULL) ? hostname : "any", service,
 		    gai_strerror(error));
-		return error;
-	}
 
 	return 0;
 }
@@ -83,12 +81,12 @@ create_server_socket(int *result)
 
 		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
-			warn("socket() failed");
+			pr_errno(errno, "socket() failed");
 			continue;
 		}
 
 		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
-			warn("bind() failed");
+			pr_errno(errno, "bind() failed");
 			continue;
 		}
 
@@ -98,9 +96,8 @@ create_server_socket(int *result)
 		return 0; /* Happy path */
 	}
 
-	warnx("None of the addrinfo candidates could be bound.");
 	freeaddrinfo(addrs);
-	return -EINVAL;
+	return pr_err("None of the addrinfo candidates could be bound.");
 }
 
 /*
@@ -153,7 +150,7 @@ handle_accept_result(int client_fd, int err)
 #pragma GCC diagnostic pop
 
 	errno = err;
-	warn("Connection acceptor thread interrupted");
+	pr_warn("Connection acceptor thread interrupted");
 	return VERDICT_EXIT;
 }
 
@@ -256,7 +253,7 @@ handle_client_connections(int server_fd)
 
 		new_thread = malloc(sizeof(struct thread_node));
 		if (new_thread == NULL) {
-			warnx("Couldn't create thread struct");
+			pr_err("Couldn't create thread struct");
 			close(client_fd);
 			continue;
 		}
@@ -270,7 +267,7 @@ handle_client_connections(int server_fd)
 		    client_thread_cb, &arg);
 		pthread_attr_destroy(&attr);
 		if (errno) {
-			warn("Could not spawn the client's thread");
+			pr_errno(errno, "Could not spawn the client's thread");
 			free(new_thread);
 			close(client_fd);
 			continue;
@@ -302,7 +299,7 @@ init_signal_handler(void)
 
 	error = sigaction(SIGINT, &act, NULL);
 	if (error) {
-		warn("Error initializing signal handler");
+		pr_errno(errno, "Error initializing signal handler");
 		error = -errno;
 	}
 	return error;

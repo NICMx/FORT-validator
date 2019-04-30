@@ -1,12 +1,12 @@
 #include "pdu.h"
 
-#include <err.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "../common.h"
-#include "pdu_handler.h"
+#include "common.h"
+#include "log.h"
+#include "rtr/pdu_handler.h"
 
 static int	pdu_header_from_stream(int, struct pdu_header *);
 static int	serial_notify_from_stream(struct pdu_header *, int, void *);
@@ -184,7 +184,7 @@ error_report_destroy(void *pdu_void)
 	if (sub_meta)
 		sub_meta->destructor(pdu->erroneous_pdu);
 	else
-		warnx("Unknown PDU type (%u).", sub_hdr->pdu_type);
+		pr_warn("Unknown PDU type (%u).", sub_hdr->pdu_type);
 
 	free(pdu->error_message);
 	free(pdu_void);
