@@ -21,10 +21,10 @@ BASIC_MODULES  = ../src/log.c ../src/log.h
 BASIC_MODULES += impersonator.c
 
 check_PROGRAMS  = address.test
-check_PROGRAMS += circular_indexer.test
 check_PROGRAMS += clients.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += rsync.test
+check_PROGRAMS += roa_table.test
 #check_PROGRAMS += tal.test
 check_PROGRAMS += vcard.test
 #check_PROGRAMS += rtr/pdu.test
@@ -35,11 +35,6 @@ address_test_SOURCES  = ${BASIC_MODULES}
 address_test_SOURCES += ../src/address.h
 address_test_SOURCES += address_test.c
 address_test_LDADD = ${MY_LDADD}
-
-circular_indexer_test_SOURCES  = ${BASIC_MODULES}
-circular_indexer_test_SOURCES += ../src/data_structure/circular_indexer.c
-circular_indexer_test_SOURCES += data_structure/circular_indexer_test.c
-circular_indexer_test_LDADD = ${MY_LDADD}
 
 clients_test_SOURCES  = ${BASIC_MODULES}
 clients_test_SOURCES += ../src/clients.c
@@ -52,6 +47,12 @@ line_file_test_SOURCES += ../src/file.c ../src/file.h
 line_file_test_SOURCES += ../src/line_file.c ../src/line_file.h
 line_file_test_SOURCES += line_file_test.c
 line_file_test_LDADD = ${MY_LDADD}
+
+roa_table_test_SOURCES  = ${BASIC_MODULES}
+roa_table_test_SOURCES += ../src/rtr/db/delta.c
+roa_table_test_SOURCES += ../src/rtr/db/roa_table.c
+roa_table_test_SOURCES += rtr/db/roa_table_test.c
+roa_table_test_LDADD = ${MY_LDADD}
 
 rsync_test_SOURCES  = ${BASIC_MODULES}
 rsync_test_SOURCES += ../src/str.c ../src/str.h

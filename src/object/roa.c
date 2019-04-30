@@ -11,7 +11,6 @@
 #include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
-#include "rtr/db/roa_tree.h"
 
 static int
 roa_decode(OCTET_STRING_t *string, void *arg)

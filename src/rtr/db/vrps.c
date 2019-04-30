@@ -21,7 +21,7 @@ struct delta {
 ARRAY_LIST(deltas_db, struct delta)
 
 struct state {
-	struct roa_tree *base; /** All the current valid ROAs */
+	struct roa_table *base; /** All the current valid ROAs */
 	struct deltas_db deltas; /** ROA changes to @base over time */
 
 	uint32_t current_serial;
@@ -74,7 +74,7 @@ vrps_init(void)
 void
 vrps_destroy(void)
 {
-	roa_tree_put(state.base);
+	roa_table_put(state.base);
 	deltas_db_cleanup(&state.deltas, delta_destroy);
 	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }
@@ -83,7 +83,7 @@ vrps_destroy(void)
  * @new_deltas can be NULL, @new_tree cannot.
  */
 int
-vrps_update(struct roa_tree *new_tree, struct deltas *new_deltas)
+vrps_update(struct roa_table *new_roas, struct deltas *new_deltas)
 {
 	struct delta new_delta;
 	int error = 0;
@@ -99,9 +99,9 @@ vrps_update(struct roa_tree *new_tree, struct deltas *new_deltas)
 	}
 
 	if (state.base != NULL)
-		roa_tree_put(state.base);
-	state.base = new_tree;
-	roa_tree_get(new_tree);
+		roa_table_put(state.base);
+	state.base = new_roas;
+	roa_table_get(new_roas);
 	state.current_serial++;
 
 end:
@@ -179,7 +179,7 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 	if (error)
 		return error;
 
-	error = roa_tree_foreach_roa(state.base, cb, arg);
+	error = roa_table_foreach_roa(state.base, cb, arg);
 
 	rwlock_unlock(&lock);
 

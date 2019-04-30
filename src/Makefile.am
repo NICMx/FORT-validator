@@ -51,8 +51,9 @@ fort_SOURCES += data_structure/array_list.h
 fort_SOURCES += crypto/base64.h crypto/base64.c
 fort_SOURCES += crypto/hash.h crypto/hash.c
 
-fort_SOURCES += data_structure/circular_indexer.h
-fort_SOURCES += data_structure/circular_indexer.c
+fort_SOURCES += data_structure/array_list.h
+fort_SOURCES += data_structure/common.h
+fort_SOURCES += data_structure/uthash.h
 
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c
@@ -88,7 +89,7 @@ fort_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 fort_SOURCES += rtr/rtr.c rtr/rtr.h
 
 fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
-fort_SOURCES += rtr/db/roa_tree.c rtr/db/roa_tree.h
+fort_SOURCES += rtr/db/roa_table.c rtr/db/roa_table.h
 fort_SOURCES += rtr/db/roa.c rtr/db/roa.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 

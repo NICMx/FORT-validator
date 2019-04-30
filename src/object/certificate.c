@@ -19,8 +19,6 @@
 #include "crypto/hash.h"
 #include "object/name.h"
 #include "rsync/rsync.h"
-#include "rtr/db/roa_tree.h"
-
 #include <sys/socket.h>
 
 /* Just to prevent some line breaking. */
