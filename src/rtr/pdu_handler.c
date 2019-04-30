@@ -32,6 +32,11 @@ send_commmon_exchange(struct sender_common *common,
 {
 	int error;
 
+	/*
+	 * TODO (urgent) On certain errors, shouldn't we send error PDUs or
+	 * something?
+	 */
+
 	/* Send Cache response PDU */
 	error = send_cache_response_pdu(common);
 	if (error)
@@ -76,12 +81,15 @@ handle_serial_query_pdu(int fd, void *pdu)
 	if (received->header.m.session_id != session_id)
 		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA,
 		    &received->header, NULL);
+	if (get_last_serial_number(&current_serial) != 0)
+		goto critical;
 
-	current_serial = get_last_serial_number();
 	init_sender_common(&common, fd, version, &session_id,
 	    &received->serial_number, &current_serial);
 
-	updates = deltas_db_status(common.start_serial);
+	if (deltas_db_status(common.start_serial, &updates) != 0)
+		goto critical;
+
 	switch (updates) {
 	case DS_NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
@@ -103,6 +111,10 @@ handle_serial_query_pdu(int fd, void *pdu)
 
 	warnx("Reached 'unreachable' code");
 	return -EINVAL;
+
+critical:
+	return err_pdu_send(fd, version, ERR_PDU_INTERNAL_ERROR,
+	    &received->header, NULL);
 }
 
 int
@@ -117,11 +129,14 @@ handle_reset_query_pdu(int fd, void *pdu)
 
 	version = received->header.protocol_version;
 	session_id = get_current_session_id(version);
-	current_serial = get_last_serial_number();
+	if (get_last_serial_number(&current_serial) != 0)
+		goto critical;
+
 	init_sender_common(&common, fd, version, &session_id, NULL,
 	    &current_serial);
 
-	updates = deltas_db_status(NULL);
+	if (deltas_db_status(NULL, &updates) != 0)
+		goto critical;
 	switch (updates) {
 	case DS_NO_DATA_AVAILABLE:
 		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
@@ -137,6 +152,10 @@ handle_reset_query_pdu(int fd, void *pdu)
 
 	warnx("Reached 'unreachable' code");
 	return -EINVAL;
+
+critical:
+	return err_pdu_send(fd, version, ERR_PDU_INTERNAL_ERROR,
+	    &received->header, NULL);
 }
 
 int

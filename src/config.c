@@ -206,8 +206,10 @@ static const struct option_field options[] = {
 		.doc = "Interval used to look for updates at VRPs location",
 		/*
 		 * RFC 6810 and 8210:
-		 * The cache MUST rate-limit Serial Notifies to no more frequently than
-		 * one per minute.
+		 * "The cache MUST rate-limit Serial Notifies to no more
+		 * frequently than one per minute."
+		 * We do this by not getting new information more than once per
+		 * minute.
 		 */
 		.min = 60,
 		.max = 7200,

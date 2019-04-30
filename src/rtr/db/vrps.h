@@ -17,16 +17,16 @@ enum delta_status {
 	DS_DIFF_AVAILABLE,
 };
 
-void vrps_init(void);
+int vrps_init(void);
 void vrps_destroy(void);
 
 int vrps_update(struct roa_tree *, struct deltas *);
-enum delta_status deltas_db_status(uint32_t *);
+int deltas_db_status(uint32_t *, enum delta_status *);
 
 int vrps_foreach_base_roa(vrp_foreach_cb, void *);
 int vrps_foreach_delta_roa(uint32_t, uint32_t, vrp_foreach_cb, void *);
 
-uint32_t get_last_serial_number(void);
+int get_last_serial_number(uint32_t *);
 uint16_t get_current_session_id(uint8_t);
 
 #endif /* SRC_VRPS_H_ */

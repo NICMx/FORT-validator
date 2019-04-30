@@ -112,8 +112,12 @@ check_vrps_updates(void *param_void)
 		}
 
 		old_tree = validation_handler.arg;
-		notify_clients();
-		pr_debug("Database updated successfully. Sleeping...");
+		error = notify_clients();
+		if (error)
+			pr_debug("Could not notify clients of the new VRPs. (Error code %d.) Sleeping...",
+			    error);
+		else
+			pr_debug("Database updated successfully. Sleeping...");
 
 sleep:
 		sleep(config_get_validation_interval());

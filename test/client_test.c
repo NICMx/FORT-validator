@@ -43,7 +43,7 @@ START_TEST(basic_test)
 	addr.sin_port = 1234;
 	addr_ptr = (struct sockaddr_storage *) &addr;
 
-	clients_db_init();
+	ck_assert_int_eq(0, clients_db_init());
 
 	/*
 	 * The address is actually supposed to be unique, but this is rather

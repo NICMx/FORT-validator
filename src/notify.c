@@ -26,9 +26,15 @@ send_notify(struct client const *client, void *arg)
 	return 0; /* Do not interrupt notify to other clients */
 }
 
-void
+int
 notify_clients(void)
 {
-	uint32_t serial = get_last_serial_number();
-	clients_foreach(send_notify, &serial);
+	uint32_t serial;
+	int error;
+
+	error = get_last_serial_number(&serial);
+	if (error)
+		return error;
+
+	return clients_foreach(send_notify, &serial);
 }

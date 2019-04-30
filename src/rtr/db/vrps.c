@@ -1,5 +1,6 @@
 #include "vrps.h"
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <string.h>
 #include "common.h"
@@ -29,11 +30,8 @@ struct state {
 	time_t last_modified_date;
 } state;
 
-/* Read and Write locks */
-static sem_t rlock, wlock;
-
-/* Readers counter */
-static unsigned int rcounter;
+/** Read/write lock, which protects @state and its inhabitants. */
+static pthread_rwlock_t lock;
 
 static void
 delta_destroy(struct delta *delta)
@@ -41,9 +39,11 @@ delta_destroy(struct delta *delta)
 	deltas_destroy(delta->deltas);
 }
 
-void
+int
 vrps_init(void)
 {
+	int error;
+
 	state.base = NULL;
 
 	deltas_db_init(&state.deltas);
@@ -62,21 +62,21 @@ vrps_init(void)
 	    ? (state.v0_session_id - 1)
 	    : (0xFFFFu);
 
-	sem_init(&rlock, 0, 1);
-	sem_init(&wlock, 0, 1);
-	rcounter = 0;
+	error = pthread_rwlock_init(&lock, NULL);
+	if (error) {
+		deltas_db_cleanup(&state.deltas, delta_destroy);
+		return pr_errno(error, "pthread_rwlock_init() errored");
+	}
+
+	return 0;
 }
 
 void
 vrps_destroy(void)
 {
-	sem_wait(&wlock);
 	roa_tree_put(state.base);
 	deltas_db_cleanup(&state.deltas, delta_destroy);
-	sem_post(&wlock);
-
-	sem_destroy(&wlock);
-	sem_destroy(&rlock);
+	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }
 
 /*
@@ -86,18 +86,16 @@ int
 vrps_update(struct roa_tree *new_tree, struct deltas *new_deltas)
 {
 	struct delta new_delta;
-	int error;
+	int error = 0;
 
-	sem_wait(&wlock);
+	rwlock_write_lock(&lock);
 
 	if (new_deltas != NULL) {
 		new_delta.serial = state.current_serial + 1;
 		new_delta.deltas = new_deltas;
 		error = deltas_db_add(&state.deltas, &new_delta);
-		if (error) {
-			sem_post(&wlock);
-			return error;
-		}
+		if (error)
+			goto end;
 	}
 
 	if (state.base != NULL)
@@ -106,8 +104,9 @@ vrps_update(struct roa_tree *new_tree, struct deltas *new_deltas)
 	roa_tree_get(new_tree);
 	state.current_serial++;
 
-	sem_post(&wlock);
-	return 0;
+end:
+	rwlock_unlock(&lock);
+	return error;
 }
 
 /*
@@ -116,50 +115,59 @@ vrps_update(struct roa_tree *new_tree, struct deltas *new_deltas)
  *
  * If SERIAL is received as NULL, and there's data at DB then the status will
  * be DIFF_AVAILABLE.
+ *
+ * This function can only fail due to critical r/w lock bugs.
  */
-enum delta_status
-deltas_db_status(uint32_t *serial)
+int
+deltas_db_status(uint32_t *serial, enum delta_status *result)
 {
 	struct delta *delta;
-	enum delta_status result;
+	int error;
 
-	read_lock(&rlock, &wlock, &rcounter);
+	error = rwlock_read_lock(&lock);
+	if (error)
+		return error;
+
 	if (state.base == NULL) {
-		result = DS_NO_DATA_AVAILABLE;
-		goto end;
+		*result = DS_NO_DATA_AVAILABLE;
+		goto rlock_succeed;
 	}
 
 	/* No serial to match, and there's data at DB */
 	if (serial == NULL) {
-		result = DS_DIFF_AVAILABLE;
-		goto end;
+		*result = DS_DIFF_AVAILABLE;
+		goto rlock_succeed;
 	}
 
 	/* Is the last version? */
 	if (*serial == state.current_serial) {
-		result = DS_NO_DIFF;
-		goto end;
+		*result = DS_NO_DIFF;
+		goto rlock_succeed;
 	}
 
 	/* Get the delta corresponding to the serial */
 	ARRAYLIST_FOREACH(&state.deltas, delta)
 		if (delta->serial == *serial) {
-			result = DS_DIFF_AVAILABLE;
-			goto end;
+			*result = DS_DIFF_AVAILABLE;
+			goto rlock_succeed;
 		}
 
 	/* No match yet, release lock */
-	read_unlock(&rlock, &wlock, &rcounter);
+	rwlock_unlock(&lock);
 
 	/* The first serial isn't at deltas */
-	if (*serial == START_SERIAL)
-		return DS_DIFF_AVAILABLE;
+	if (*serial == START_SERIAL) {
+		*result = DS_DIFF_AVAILABLE;
+		return 0;
+	}
 
 	/* Reached end, diff can't be determined */
-	return DS_DIFF_UNDETERMINED;
-end:
-	read_unlock(&rlock, &wlock, &rcounter);
-	return result;
+	*result = DS_DIFF_UNDETERMINED;
+	return 0;
+
+rlock_succeed:
+	rwlock_unlock(&lock);
+	return 0;
 }
 
 int
@@ -167,9 +175,13 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 {
 	int error;
 
-	read_lock(&rlock, &wlock, &rcounter);
+	error = rwlock_read_lock(&lock);
+	if (error)
+		return error;
+
 	error = roa_tree_foreach_roa(state.base, cb, arg);
-	read_unlock(&rlock, &wlock, &rcounter);
+
+	rwlock_unlock(&lock);
 
 	return error;
 }
@@ -182,9 +194,10 @@ vrps_foreach_delta_roa(uint32_t from, uint32_t to, vrp_foreach_cb cb, void *arg)
 	int error;
 
 	from_found = false;
-	error = 0;
 
-	read_lock(&rlock, &wlock, &rcounter);
+	error = rwlock_read_lock(&lock);
+	if (error)
+		return error;
 
 	ARRAYLIST_FOREACH(&state.deltas, d) {
 		if (!from_found) {
@@ -199,21 +212,25 @@ vrps_foreach_delta_roa(uint32_t from, uint32_t to, vrp_foreach_cb cb, void *arg)
 		}
 	}
 
-	read_unlock(&rlock, &wlock, &rcounter);
+	rwlock_unlock(&lock);
 
 	return error;
 }
 
-uint32_t
-get_last_serial_number(void)
+int
+get_last_serial_number(uint32_t *result)
 {
-	uint32_t serial;
+	int error;
 
-	read_lock(&rlock, &wlock, &rcounter);
-	serial = state.current_serial - 1;
-	read_unlock(&rlock, &wlock, &rcounter);
+	error = rwlock_read_lock(&lock);
+	if (error)
+		return error;
 
-	return serial;
+	*result = state.current_serial - 1;
+
+	rwlock_unlock(&lock);
+
+	return 0;
 }
 
 uint16_t

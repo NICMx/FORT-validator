@@ -16,7 +16,7 @@ struct client {
 	uint8_t rtr_version;
 };
 
-void clients_db_init(void);
+int clients_db_init(void);
 
 int clients_add(int, struct sockaddr_storage *, uint8_t);
 void clients_forget(int);

@@ -1,6 +1,6 @@
 #include "clients.h"
 
-#include <errno.h>
+#include <pthread.h>
 #include "common.h"
 #include "log.h"
 #include "data_structure/uthash.h"
@@ -8,11 +8,10 @@
 /*
  * TODO uthash panics on memory allocations...
  * http://troydhanson.github.io/uthash/userguide.html#_out_of_memory
- * TODO sem_wait(), sem_post(), sem_init() and sem_destroy() return error.
  */
 
-#define SADDR_IN(addr) ((struct sockaddr_in *)addr)
-#define SADDR_IN6(addr) ((struct sockaddr_in6 *)addr)
+#define SADDR_IN(addr) ((struct sockaddr_in *) addr)
+#define SADDR_IN6(addr) ((struct sockaddr_in6 *) addr)
 
 struct hashable_client {
 	struct client meat;
@@ -20,19 +19,21 @@ struct hashable_client {
 };
 
 /** Hash table of clients */
-struct hashable_client *table;
-/** Read and Write locks */
-static sem_t rlock, wlock;
-/** Readers counter */
-static unsigned int rcounter;
+static struct hashable_client *table;
+/** Read/write lock, which protects @table and its inhabitants. */
+static pthread_rwlock_t lock;
 
-void
+int
 clients_db_init(void)
 {
+	int error;
+
 	table = NULL;
-	sem_init(&rlock, 0, 1);
-	sem_init(&wlock, 0, 1);
-	rcounter = 0;
+	error = pthread_rwlock_init(&lock, NULL);
+	if (error)
+		return pr_errno(error, "pthread_rwlock_init() errored");
+
+	return 0;
 }
 
 static int
@@ -83,7 +84,7 @@ clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 	if (error)
 		return error;
 
-	sem_wait(&wlock);
+	rwlock_write_lock(&lock);
 
 	HASH_FIND_INT(table, &fd, old_client);
 	if (old_client == NULL) {
@@ -99,7 +100,7 @@ clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 			error = -ERTR_VERSION_MISMATCH;
 	}
 
-	sem_post(&wlock);
+	rwlock_unlock(&lock);
 
 	if (new_client != NULL)
 		free(new_client);
@@ -112,22 +113,24 @@ clients_forget(int fd)
 {
 	struct hashable_client *client;
 
-	sem_wait(&wlock);
+	rwlock_write_lock(&lock);
 
 	HASH_FIND_INT(table, &fd, client);
 	if (client != NULL)
 		HASH_DEL(table, client);
 
-	sem_post(&wlock);
+	rwlock_unlock(&lock);
 }
 
 int
 clients_foreach(clients_foreach_cb cb, void *arg)
 {
 	struct hashable_client *client;
-	int error = 0;
+	int error;
 
-	read_lock(&rlock, &wlock, &rcounter);
+	error = rwlock_read_lock(&lock);
+	if (error)
+		return error;
 
 	for (client = table; client != NULL; client = client->hh.next) {
 		error = cb(&client->meat, arg);
@@ -135,7 +138,7 @@ clients_foreach(clients_foreach_cb cb, void *arg)
 			break;
 	}
 
-	read_unlock(&rlock, &wlock, &rcounter);
+	rwlock_unlock(&lock);
 
 	return error;
 }
@@ -145,15 +148,10 @@ clients_db_destroy(void)
 {
 	struct hashable_client *node, *tmp;
 
-	sem_wait(&wlock);
-
 	HASH_ITER(hh, table, node, tmp) {
 		HASH_DEL(table, node);
 		free(node);
 	}
 
-	sem_post(&wlock);
-
-	sem_destroy(&wlock);
-	sem_destroy(&rlock);
+	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }
