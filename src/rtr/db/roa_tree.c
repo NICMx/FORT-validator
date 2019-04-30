@@ -33,7 +33,7 @@ node_init(struct node *node, struct rfc5280_name *subject_name,
 	node->subject_name = subject_name;
 	x509_name_get(subject_name);
 	node->parent = parent;
-	node->children.array = NULL;
+	nodes_init(&node->children);
 	node->roa = NULL;
 }
 
@@ -55,10 +55,7 @@ node_cleanup(struct node *node)
 {
 	if (node->subject_name != NULL)
 		x509_name_put(node->subject_name);
-
-	if (node->children.array != NULL)
-		nodes_cleanup(&node->children, node_cleanup);
-
+	nodes_cleanup(&node->children, node_cleanup);
 	if (node->roa != NULL)
 		roa_destroy(node->roa);
 }
@@ -68,12 +65,6 @@ node_add_child(struct node *parent, struct rfc5280_name *subject_name)
 {
 	struct node child;
 	int error;
-
-	if (parent->children.array == NULL) {
-		error = nodes_init(&parent->children);
-		if (error)
-			return error;
-	}
 
 	node_init(&child, subject_name, parent);
 
@@ -189,12 +180,11 @@ __foreach(struct node *node, vrp_foreach_cb cb, void *arg)
 	struct node *child;
 	int error;
 
-	if (node->children.array != NULL)
-		ARRAYLIST_FOREACH(&node->children, child) {
-			error = __foreach(child, cb, arg);
-			if (error)
-				return error;
-		}
+	ARRAYLIST_FOREACH(&node->children, child) {
+		error = __foreach(child, cb, arg);
+		if (error)
+			return error;
+	}
 
 	if (node->roa != NULL) {
 		error = __foreach_v4(node->roa, cb, arg);
@@ -385,8 +375,7 @@ handle_delta_children(struct nodes *children1, struct nodes *children2,
 	 * Changes to one function might need to cascade to the other.
 	 */
 
-	struct node *c1array;
-	array_index c1; /* counter for c1array */
+	struct node *c1node;
 
 	struct node *c2array;
 	array_index c2; /* counter for c2array */
@@ -396,37 +385,30 @@ handle_delta_children(struct nodes *children1, struct nodes *children2,
 
 	int error = 0;
 
-	c1array = children1->array;
 	c2array = children2->array;
 	arridx_init(&c2indexer, children2->len);
 
-	/** TODO I still need to validate that this is ok */
-	if (c1array != NULL)
-		for (c1 = 0; c1 < children1->len; c1++) {
-			if (find_subject_name(&c2indexer,
-			    c1array[c1].subject_name, c2array, &c2)) {
-				error = compute_deltas_node(&c1array[c1],
-				    &c2array[c2], deltas);
-				if (error)
-					goto end;
-
-				error = arridx_remove(&c2indexer);
-			} else {
-				error = add_all_deltas(&c1array[c1], deltas,
-				    DELTA_RM);
-			}
+	ARRAYLIST_FOREACH(children1, c1node) {
+		if (find_subject_name(&c2indexer, c1node->subject_name,
+		    c2array, &c2)) {
+			error = compute_deltas_node(c1node, &c2array[c2],
+			    deltas);
 			if (error)
 				goto end;
-		}
 
-	/** TODO I still need to validate that this is ok */
-	if (c2array != NULL)
-		ARRIDX_FOREACH(&c2indexer, c2p) {
-			error = add_all_deltas(&c2array[*c2p], deltas,
-			    DELTA_ADD);
-			if (error)
-				goto end;
+			error = arridx_remove(&c2indexer);
+		} else {
+			error = add_all_deltas(c1node, deltas, DELTA_RM);
 		}
+		if (error)
+			goto end;
+	}
+
+	ARRIDX_FOREACH(&c2indexer, c2p) {
+		error = add_all_deltas(&c2array[*c2p], deltas, DELTA_ADD);
+		if (error)
+			goto end;
+	}
 
 end:	arridx_cleanup(&c2indexer);
 	return error;
@@ -487,26 +469,22 @@ find_addr_v6(struct v6_address *address, struct v6_addresses *array,
 		addrs2 = &roa2->field;					\
 		arridx_init(&r2indexer, addrs2->len);			\
 									\
-		/** TODO I still need to validate that this is ok */	\
-		if (addrs1 != NULL)					\
-			ARRAYLIST_FOREACH(addrs1, a1) {			\
-				if (find_fn(a1, addrs2, &r2indexer))	\
-					error = arridx_remove(&r2indexer);\
-				else					\
-					error = add_one_fn(deltas,	\
-					    roa1->as, a1, DELTA_RM);	\
-				if (error)				\
-					goto end;			\
-			}						\
+		ARRAYLIST_FOREACH(addrs1, a1) {				\
+			if (find_fn(a1, addrs2, &r2indexer))		\
+				error = arridx_remove(&r2indexer);	\
+			else						\
+				error = add_one_fn(deltas,		\
+				    roa1->as, a1, DELTA_RM);		\
+			if (error)					\
+				goto end;				\
+		}							\
 									\
-		/** TODO I still need to validate that this is ok */	\
-		if (addrs2 != NULL)					\
-			ARRIDX_FOREACH(&r2indexer, a2p) {		\
-				error = add_one_fn(deltas, roa2->as,	\
-				    &addrs2->array[*a2p], DELTA_ADD);	\
-				if (error)				\
-					goto end;			\
-			}						\
+		ARRIDX_FOREACH(&r2indexer, a2p) {			\
+			error = add_one_fn(deltas, roa2->as,		\
+			    &addrs2->array[*a2p], DELTA_ADD);		\
+			if (error)					\
+				goto end;				\
+		}							\
 									\
 	end:	arridx_cleanup(&r2indexer);				\
 		return error;						\

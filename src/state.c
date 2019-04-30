@@ -264,12 +264,8 @@ validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
 	}
 
 	cert->uri = *cert_uri;
-	error = serial_numbers_init(&cert->serials);
-	if (error)
-		goto end2;
-	error = subjects_init(&cert->subjects);
-	if (error)
-		goto end3;
+	serial_numbers_init(&cert->serials);
+	subjects_init(&cert->subjects);
 	cert->resources = resources_create(false);
 	if (cert->resources == NULL) {
 		error = pr_enomem();
@@ -306,8 +302,8 @@ validation_push_cert(struct validation *state, struct rpki_uri const *cert_uri,
 
 end5:	resources_destroy(cert->resources);
 end4:	subjects_cleanup(&cert->subjects, subject_cleanup);
-end3:	serial_numbers_cleanup(&cert->serials, serial_cleanup);
-end2:	free(cert);
+	serial_numbers_cleanup(&cert->serials, serial_cleanup);
+	free(cert);
 end1:	return error;
 }
 

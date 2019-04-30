@@ -316,7 +316,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri, void *arg)
 		goto end;
 	}
 
-	error = certificate_traverse(NULL, uri, NULL, true);
+	error = certificate_traverse(NULL, uri, NULL);
 	if (error) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:

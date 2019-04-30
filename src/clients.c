@@ -1,171 +1,157 @@
 #include "clients.h"
 
+#include <pthread.h>
 #include "common.h"
-#include "data_structure/array_list.h"
+#include "log.h"
+#include "data_structure/uthash.h"
 
-#define SADDR_IN(addr) ((struct sockaddr_in *)addr)
-#define SADDR_IN6(addr) ((struct sockaddr_in6 *)addr)
+/*
+ * TODO uthash panics on memory allocations...
+ * http://troydhanson.github.io/uthash/userguide.html#_out_of_memory
+ */
 
-ARRAY_LIST(clientsdb, struct client)
+#define SADDR_IN(addr) ((struct sockaddr_in *) addr)
+#define SADDR_IN6(addr) ((struct sockaddr_in6 *) addr)
 
-static struct clientsdb clients_db;
+struct hashable_client {
+	struct client meat;
+	UT_hash_handle hh;
+};
 
-/* Read and Write locks */
-sem_t rlock, wlock;
-
-/* Readers counter */
-unsigned int rcounter;
+/** Hash table of clients */
+static struct hashable_client *table;
+/** Read/write lock, which protects @table and its inhabitants. */
+static pthread_rwlock_t lock;
 
 int
 clients_db_init(void)
 {
 	int error;
 
-	error = clientsdb_init(&clients_db);
+	table = NULL;
+	error = pthread_rwlock_init(&lock, NULL);
 	if (error)
-		return error;
+		return pr_errno(error, "pthread_rwlock_init() errored");
 
-	sem_init(&rlock, 0, 1);
-	sem_init(&wlock, 0, 1);
-	rcounter = 0;
-
-	return error;
-}
-
-static struct client *
-get_client(struct sockaddr_storage *addr)
-{
-	struct client *ptr;
-
-	read_lock(&rlock, &wlock, &rcounter);
-	ARRAYLIST_FOREACH(&clients_db, ptr)
-		if (ptr->sin_family == addr->ss_family) {
-			if (ptr->sin_family == AF_INET) {
-				if (ptr->addr.sin.s_addr ==
-				    SADDR_IN(addr)->sin_addr.s_addr &&
-				    ptr->sin_port ==
-				    SADDR_IN(addr)->sin_port) {
-					read_unlock(&rlock, &wlock, &rcounter);
-					return ptr;
-				}
-			} else if (ptr->sin_family == AF_INET6)
-				if (IN6_ARE_ADDR_EQUAL(
-				    ptr->addr.sin6.s6_addr32,
-				    SADDR_IN6(addr)->sin6_addr.s6_addr32) &&
-				    ptr->sin_port ==
-				    SADDR_IN6(addr)->sin6_port) {
-					read_unlock(&rlock, &wlock, &rcounter);
-					return ptr;
-				}
-		}
-	read_unlock(&rlock, &wlock, &rcounter);
-	return NULL;
-}
-
-static int
-create_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
-{
-	struct client client;
-	int error;
-
-	client.fd = fd;
-	client.sin_family = addr->ss_family;
-	if (addr->ss_family == AF_INET) {
-		client.addr.sin = SADDR_IN(addr)->sin_addr;
-		client.sin_port = SADDR_IN(addr)->sin_port;
-	} else if (addr->ss_family == AF_INET6) {
-		client.addr.sin6 = SADDR_IN6(addr)->sin6_addr;
-		client.sin_port = SADDR_IN6(addr)->sin6_port;
-	}
-	client.rtr_version = rtr_version;
-
-	sem_wait(&wlock);
-	error = clientsdb_add(&clients_db, &client);
-	sem_post(&wlock);
-
-	return error;
-}
-
-/*
- * If the ADDR isn't already stored, store it; otherwise update its file
- * descriptor.
- *
- * Return the creation/update result.
- *
- * Code error -EINVAL will be returned when a client exists but its RTR version
- * isn't the same as in the DB.
- */
-int
-update_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
-{
-	struct client *client;
-	client = get_client(addr);
-
-	if (client == NULL)
-		return create_client(fd, addr, rtr_version);
-
-	/*
-	 * Isn't ready to handle distinct version on clients reconnection, but
-	 * for now there's no problem since only RTR v0 is supported.
-	 */
-	if (client->rtr_version != rtr_version)
-		return -EINVAL;
-
-	client->fd = fd;
 	return 0;
 }
 
-size_t
-client_list(struct client **clients)
+static int
+create_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version,
+    struct hashable_client **result)
 {
-	size_t len;
+	struct hashable_client *node;
 
-	read_lock(&rlock, &wlock, &rcounter);
-	*clients = clients_db.array;
-	len = clients_db.len;
-	read_unlock(&rlock, &wlock, &rcounter);
+	node = malloc(sizeof(struct hashable_client));
+	if (node == NULL)
+		return pr_enomem();
 
-	return len;
+	node->meat.fd = fd;
+	node->meat.family = addr->ss_family;
+	switch (addr->ss_family) {
+	case AF_INET:
+		node->meat.sin = SADDR_IN(addr)->sin_addr;
+		node->meat.sin_port = SADDR_IN(addr)->sin_port;
+		break;
+	case AF_INET6:
+		node->meat.sin6 = SADDR_IN6(addr)->sin6_addr;
+		node->meat.sin_port = SADDR_IN6(addr)->sin6_port;
+		break;
+	default:
+		free(node);
+		return pr_crit("Bad protocol: %u", addr->ss_family);
+	}
+	node->meat.rtr_version = rtr_version;
+
+	*result = node;
+	return 0;
 }
 
-static void
-client_destroy(struct client *client)
+/*
+ * If the client whose file descriptor is @fd isn't already stored, store it.
+ *
+ * Code error -ERTR_VERSION_MISMATCH will be returned when a client exists but
+ * its RTR version isn't the same as in the DB.
+ */
+int
+clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 {
-	/* Didn't allocate something, so do nothing */
+	struct hashable_client *new_client = NULL;
+	struct hashable_client *old_client;
+	int error;
+
+	error = create_client(fd, addr, rtr_version, &new_client);
+	if (error)
+		return error;
+
+	rwlock_write_lock(&lock);
+
+	HASH_FIND_INT(table, &fd, old_client);
+	if (old_client == NULL) {
+		HASH_ADD_INT(table, meat.fd, new_client);
+		new_client = NULL;
+	} else {
+		/*
+		 * Isn't ready to handle distinct version on clients
+		 * reconnection, but for now there's no problem since only
+		 * RTRv0 is supported.
+		 */
+		if (old_client->meat.rtr_version != rtr_version)
+			error = -ERTR_VERSION_MISMATCH;
+	}
+
+	rwlock_unlock(&lock);
+
+	if (new_client != NULL)
+		free(new_client);
+
+	return error;
 }
 
 void
 clients_forget(int fd)
 {
-	struct clientsdb *new_db;
-	struct client *ptr;
+	struct hashable_client *client;
 
-	new_db = malloc(sizeof(struct clientsdb));
-	if (new_db == NULL) {
-		pr_err("Couldn't allocate new clients DB");
-		return; /* TODO This is not acceptable... */
+	rwlock_write_lock(&lock);
+
+	HASH_FIND_INT(table, &fd, client);
+	if (client != NULL)
+		HASH_DEL(table, client);
+
+	rwlock_unlock(&lock);
+}
+
+int
+clients_foreach(clients_foreach_cb cb, void *arg)
+{
+	struct hashable_client *client;
+	int error;
+
+	error = rwlock_read_lock(&lock);
+	if (error)
+		return error;
+
+	for (client = table; client != NULL; client = client->hh.next) {
+		error = cb(&client->meat, arg);
+		if (error)
+			break;
 	}
-	clientsdb_init(new_db);
-	read_lock(&rlock, &wlock, &rcounter);
-	ARRAYLIST_FOREACH(&clients_db, ptr)
-		if (ptr->fd != fd)
-			clientsdb_add(new_db, ptr);
-	read_unlock(&rlock, &wlock, &rcounter);
 
-	sem_wait(&wlock);
-	clientsdb_cleanup(&clients_db, client_destroy);
-	clients_db = *new_db;
-	sem_post(&wlock);
-	free(new_db);
+	rwlock_unlock(&lock);
+
+	return error;
 }
 
 void
 clients_db_destroy(void)
 {
-	sem_wait(&wlock);
-	clientsdb_cleanup(&clients_db, client_destroy);
-	sem_post(&wlock);
+	struct hashable_client *node, *tmp;
 
-	sem_destroy(&wlock);
-	sem_destroy(&rlock);
+	HASH_ITER(hh, table, node, tmp) {
+		HASH_DEL(table, node);
+		free(node);
+	}
+
+	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }

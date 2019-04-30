@@ -17,24 +17,24 @@ start_rtr_server(void)
 
 	error = vrps_init();
 	if (error)
-		goto end1;
-
+		goto just_quit;
 	error = clients_db_init();
 	if (error)
-		goto end2;
-
+		goto revert_vrps;
 	error = slurm_load();
 	if (error)
-		goto end3;
+		goto revert_clients;
 
 	error = rtr_listen();
 	rtr_cleanup(); /* TODO shouldn't this only happen on !error? */
 
-end3:
-	clients_db_destroy();
 	slurm_cleanup();
-end2:	vrps_destroy();
-end1:	return error;
+revert_clients:
+	clients_db_destroy();
+revert_vrps:
+	vrps_destroy();
+just_quit:
+	return error;
 }
 
 int

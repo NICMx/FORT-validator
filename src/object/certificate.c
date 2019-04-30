@@ -643,6 +643,9 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 	int ok;
 	int error;
 
+	if (crls == NULL)
+		return 0; /* Certificate is TA; no chain validation needed. */
+
 	state = state_retrieve();
 	if (state == NULL)
 		return -EINVAL;
@@ -661,8 +664,7 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 	}
 
 	X509_STORE_CTX_trusted_stack(ctx, validation_certs(state));
-	if (crls != NULL)
-		X509_STORE_CTX_set0_crls(ctx, crls);
+	X509_STORE_CTX_set0_crls(ctx, crls);
 
 	/*
 	 * HERE'S THE MEAT OF LIBCRYPTO'S VALIDATION.
@@ -1437,8 +1439,11 @@ certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
 /* Boilerplate code for CA certificate validation and recursive traversal. */
 int
 certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
-    STACK_OF(X509_CRL) *crls, bool is_ta)
+    STACK_OF(X509_CRL) *crls)
 {
+/** Is the CA certificate the TA certificate? */
+#define IS_TA (rpp_parent == NULL)
+
 	struct validation *state;
 	X509 *cert;
 	struct rfc5280_name *subject_name;
@@ -1463,26 +1468,24 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	error = certificate_load(cert_uri, &cert);
 	if (error)
 		goto revert_fnstack_and_debug;
-	if (!is_ta) {
-		error = certificate_validate_chain(cert, crls);
-		if (error)
-			goto revert_cert;
-	}
-	error = certificate_validate_rfc6487(cert, &subject_name, is_ta);
+	error = certificate_validate_chain(cert, crls);
 	if (error)
 		goto revert_cert;
-	error = is_ta
+	error = certificate_validate_rfc6487(cert, &subject_name, IS_TA);
+	if (error)
+		goto revert_cert;
+	error = IS_TA
 	    ? certificate_validate_extensions_ta(cert, &mft, &policy)
 	    : certificate_validate_extensions_ca(cert, &mft, &refs, &policy);
 	if (error)
 		goto revert_subject_name;
 
-	error = refs_validate_ca(&refs, is_ta, rpp_parent);
+	error = refs_validate_ca(&refs, rpp_parent);
 	if (error)
 		goto revert_uri_and_refs;
 
 	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	error = validation_push_cert(state, cert_uri, cert, policy, is_ta);
+	error = validation_push_cert(state, cert_uri, cert, policy, IS_TA);
 	if (error)
 		goto revert_uri_and_refs;
 

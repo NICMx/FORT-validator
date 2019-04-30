@@ -26,7 +26,7 @@
  * Assuming you don't need to create a data type, that should be all.
  */
 struct rpki_config {
-	/** TAL file name or directory. TODO support directories */
+	/** TAL file name or directory. TODO (urgent) support directories */
 	char *tal;
 	/** Path of our local clone of the repository */
 	char *local_repository;
@@ -45,16 +45,15 @@ struct rpki_config {
 	unsigned int maximum_certificate_depth;
 
 	struct {
-		/** The listener address of the RTR server. */
+		/** The bound listening address of the RTR server. */
 		char *address;
-		/** TODO document */
+		/** The bound listening port of the RTR server. */
 		char *port;
 		/** Maximum accepted client connections */
 		unsigned int queue;
 
 		/** Interval used to look for updates at VRPs location */
-		/* TODO rename */
-		unsigned int vrps_check_interval;
+		unsigned int validation_interval;
 
 		/** Intervals use at RTR v1 End of data PDU **/
 		uint32_t refresh_interval;
@@ -186,13 +185,13 @@ static const struct option_field options[] = {
 		.name = "server.address",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.address),
-		.doc = "The listener address of the RTR server.",
+		.doc = "Address the RTR server will bind itself to. Can be a name, in which case an address will be resolved.",
 	}, {
 		.id = 5001,
 		.name = "server.port",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.port),
-		.doc = "", /* TODO */
+		.doc = "Port the RTR server will bind itself to. Can be a string, in which case a number will be resolved.",
 	}, {
 		.id = 5003,
 		.name = "server.queue",
@@ -203,14 +202,17 @@ static const struct option_field options[] = {
 		.max = SOMAXCONN,
 	}, {
 		.id = 5004,
-		.name = "server.vrps-check-interval",
+		.name = "server.validation-interval",
 		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, server.vrps_check_interval),
+		.offset = offsetof(struct rpki_config,
+		    server.validation_interval),
 		.doc = "Interval used to look for updates at VRPs location",
 		/*
 		 * RFC 6810 and 8210:
-		 * The cache MUST rate-limit Serial Notifies to no more frequently than
-		 * one per minute.
+		 * "The cache MUST rate-limit Serial Notifies to no more
+		 * frequently than one per minute."
+		 * We do this by not getting new information more than once per
+		 * minute.
 		 */
 		.min = 60,
 		.max = 7200,
@@ -440,7 +442,7 @@ set_default_values(void)
 		return pr_enomem();
 
 	rpki_config.server.queue = 10;
-	rpki_config.server.vrps_check_interval = 60;
+	rpki_config.server.validation_interval = 60;
 	rpki_config.server.refresh_interval = 3600;
 	rpki_config.server.retry_interval = 600;
 	rpki_config.server.expire_interval = 7200;
@@ -631,9 +633,9 @@ config_get_server_queue(void)
 }
 
 unsigned int
-config_get_vrps_check_interval(void)
+config_get_validation_interval(void)
 {
-	return rpki_config.server.vrps_check_interval;
+	return rpki_config.server.validation_interval;
 }
 
 uint32_t
@@ -723,8 +725,7 @@ config_get_rsync_args(bool is_ta)
 		break;
 	}
 
-	pr_crit("Invalid sync strategy: '%u'",
-	    rpki_config.sync_strategy);
+	pr_crit("Invalid sync strategy: '%u'", rpki_config.sync_strategy);
 	/*
 	 * Return something usable anyway; don't want to check NULL.
 	 * This is supposed to be unreachable code anyway.

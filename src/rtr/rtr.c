@@ -19,7 +19,7 @@
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 
-/* TODO Support both RTR v0 an v1 */
+/* TODO (next iteration) Support both RTR v0 and v1 */
 #define RTR_VERSION_SUPPORTED	RTR_V0
 
 volatile bool loop;
@@ -48,10 +48,12 @@ init_addrinfo(struct addrinfo **result)
 	service = config_get_server_port();
 
 	error = getaddrinfo(hostname, service, &hints, result);
-	if (error)
-		return pr_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
+	if (error) {
+		pr_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
 		    (hostname != NULL) ? hostname : "any", service,
 		    gai_strerror(error));
+		return error;
+	}
 
 	return 0;
 }
@@ -68,6 +70,8 @@ create_server_socket(int *result)
 	struct addrinfo *addr;
 	int fd; /* "file descriptor" */
 	int error;
+
+	*result = 0; /* Shuts up gcc */
 
 	error = init_addrinfo(&addrs);
 	if (error)
@@ -179,6 +183,7 @@ client_thread_cb(void *param_void)
 	uint8_t rtr_version;
 
 	memcpy(&param, param_void, sizeof(param));
+	free(param_void);
 
 	while (loop) { /* For each PDU... */
 		err = pdu_load(param.client_fd, &pdu, &meta, &rtr_version);
@@ -193,10 +198,10 @@ client_thread_cb(void *param_void)
 			return end_client(param.client_fd, meta, pdu);
 		}
 		/* RTR Version ready, now update client */
-		err = update_client(param.client_fd, &param.client_addr,
+		err = clients_add(param.client_fd, &param.client_addr,
 		    rtr_version);
 		if (err) {
-			if (err == -EINVAL) {
+			if (err == -ERTR_VERSION_MISMATCH) {
 				err_pdu_send(param.client_fd, rtr_version,
 				    (rtr_version == RTR_V0
 				    ? ERR_PDU_UNSUP_PROTO_VERSION
@@ -222,7 +227,7 @@ static int
 handle_client_connections(int server_fd)
 {
 	struct sockaddr_storage client_addr;
-	struct thread_param arg;
+	struct thread_param *arg;
 	struct thread_node *new_thread;
 	socklen_t sizeof_client_addr;
 	pthread_attr_t attr;
@@ -258,16 +263,29 @@ handle_client_connections(int server_fd)
 			continue;
 		}
 
-		arg.client_fd = client_fd;
-		arg.client_addr = client_addr;
+		arg = malloc(sizeof(struct thread_param));
+		if (arg == NULL) {
+			pr_err("Couldn't create thread_param struct");
+			free(new_thread);
+			close(client_fd);
+			continue;
+		}
+		arg->client_fd = client_fd;
+		arg->client_addr = client_addr;
 
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 		errno = pthread_create(&new_thread->tid, &attr,
-		    client_thread_cb, &arg);
+		    client_thread_cb, arg);
 		pthread_attr_destroy(&attr);
 		if (errno) {
 			pr_errno(errno, "Could not spawn the client's thread");
+			/*
+			 * It is not clear to me whether @arg should be freed
+			 * here. We're supposed to have transferred its
+			 * ownership to the thread.
+			 * Maybe we should store it in @new_thread instead.
+			 */
 			free(new_thread);
 			close(client_fd);
 			continue;
