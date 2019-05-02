@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/queue.h>
 
 #include "config.h"
 #include "log.h"
@@ -264,11 +265,81 @@ send_pdus_base(struct sender_common *common)
 	return vrps_foreach_base_roa(send_prefix_pdu, common);
 }
 
+struct vrp_node {
+	struct vrp vrp;
+	SLIST_ENTRY(vrp_node) next;
+};
+
+/** Sorted list to filter deltas */
+SLIST_HEAD(vrp_slist, vrp_node);
+
+static bool
+vrp_equals(struct vrp *left, struct vrp *right)
+{
+	return left->asn == right->asn
+	    && left->addr_fam == right->addr_fam
+	    && left->prefix_length == right->prefix_length
+	    && left->max_prefix_length == right->max_prefix_length
+	    && ((left->addr_fam == AF_INET
+	        && left->prefix.v4.s_addr == right->prefix.v4.s_addr)
+	    || (left->addr_fam == AF_INET6
+	    && IN6_ARE_ADDR_EQUAL(left->prefix.v6.s6_addr32,
+	        right->prefix.v6.s6_addr32)));
+}
+
+/**
+ * Remove the announcements/withdrawals that override each other
+ */
+static int
+vrp_ovrd_remove(struct vrp *vrp, void *arg)
+{
+	struct vrp_node *ptr;
+	struct vrp_slist *filtered_vrps;
+
+	filtered_vrps = (struct vrp_slist *)arg;
+	SLIST_FOREACH(ptr, filtered_vrps, next)
+		if(vrp_equals(vrp, &ptr->vrp) &&
+		    vrp->flags != ptr->vrp.flags) {
+			SLIST_REMOVE(filtered_vrps, ptr, vrp_node, next);
+			return 0;
+		}
+
+	ptr = malloc(sizeof(struct vrp_node));
+	if (ptr == NULL)
+		return pr_enomem();
+
+	ptr->vrp = *vrp;
+	SLIST_INSERT_HEAD(filtered_vrps, ptr, next);
+	return 0;
+}
+
 int
 send_pdus_delta(struct sender_common *common)
 {
-	return vrps_foreach_delta_roa(*common->start_serial,
-	    *common->end_serial, send_prefix_pdu, common);
+	struct vrp_slist filtered_vrps;
+	struct vrp_node *ptr;
+	int error;
+
+	SLIST_INIT(&filtered_vrps);
+	error = vrps_foreach_delta_roa(*common->start_serial,
+	    *common->end_serial, vrp_ovrd_remove, &filtered_vrps);
+	if (error)
+		return error;
+
+	/** Now send the filtered deltas */
+	SLIST_FOREACH(ptr, &filtered_vrps, next) {
+		error = send_prefix_pdu(&ptr->vrp, common);
+		if (error)
+			break;
+	}
+
+	while (!SLIST_EMPTY(&filtered_vrps)) {
+		ptr = filtered_vrps.slh_first;
+		SLIST_REMOVE_HEAD(&filtered_vrps, next);
+		free(ptr);
+	}
+
+	return error;
 }
 
 int
