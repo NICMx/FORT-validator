@@ -25,8 +25,18 @@
 /* TODO (urgent) this needs to be atomic */
 volatile bool loop;
 
+/*
+ * Arguments that the server socket thread will send to the client
+ * socket threads whenever it creates them.
+ */
+struct thread_param {
+	int client_fd;
+	struct sockaddr_storage client_addr;
+};
+
 struct thread_node {
 	pthread_t tid;
+	struct thread_param params;
 	SLIST_ENTRY(thread_node) next;
 };
 
@@ -105,15 +115,6 @@ create_server_socket(int *result)
 	return pr_err("None of the addrinfo candidates could be bound.");
 }
 
-/*
- * Arguments that the server socket thread will send to the client socket
- * threads whenever it creates them.
- */
-struct thread_param {
-	int	client_fd;
-	struct sockaddr_storage client_addr;
-};
-
 enum verdict {
 	/* No errors; continue happily. */
 	VERDICT_SUCCESS,
@@ -170,52 +171,46 @@ end_client(int client_fd, const struct pdu_metadata *meta, void *pdu)
 
 /*
  * The client socket threads' entry routine.
- *
- * Please remember that this function needs to always release @param_void
- * before returning.
  */
 static void *
 client_thread_cb(void *param_void)
 {
-	struct thread_param param;
+	struct thread_param *param = param_void;
 	struct pdu_metadata const *meta;
 	void *pdu;
 	int err;
 	uint8_t rtr_version;
 
-	memcpy(&param, param_void, sizeof(param));
-	free(param_void);
-
 	while (loop) { /* For each PDU... */
-		err = pdu_load(param.client_fd, &pdu, &meta, &rtr_version);
+		err = pdu_load(param->client_fd, &pdu, &meta, &rtr_version);
 		if (err)
-			return end_client(param.client_fd, NULL, NULL);
+			return end_client(param->client_fd, NULL, NULL);
 
 		/* Protocol Version Negotiation */
 		if (rtr_version != RTR_VERSION_SUPPORTED) {
-			err_pdu_send(param.client_fd, RTR_VERSION_SUPPORTED,
+			err_pdu_send(param->client_fd, RTR_VERSION_SUPPORTED,
 			    ERR_PDU_UNSUP_PROTO_VERSION,
 			    (struct pdu_header *) pdu, NULL);
-			return end_client(param.client_fd, meta, pdu);
+			return end_client(param->client_fd, meta, pdu);
 		}
 		/* RTR Version ready, now update client */
-		err = clients_add(param.client_fd, &param.client_addr,
+		err = clients_add(param->client_fd, &param->client_addr,
 		    rtr_version);
 		if (err) {
 			if (err == -ERTR_VERSION_MISMATCH) {
-				err_pdu_send(param.client_fd, rtr_version,
+				err_pdu_send(param->client_fd, rtr_version,
 				    (rtr_version == RTR_V0
 				    ? ERR_PDU_UNSUP_PROTO_VERSION
 				    : ERR_PDU_UNEXPECTED_PROTO_VERSION),
 				    (struct pdu_header *) pdu, NULL);
 			}
-			return end_client(param.client_fd, meta, pdu);
+			return end_client(param->client_fd, meta, pdu);
 		}
 
-		err = meta->handle(param.client_fd, pdu);
+		err = meta->handle(param->client_fd, pdu);
 		meta->destructor(pdu);
 		if (err)
-			return end_client(param.client_fd, NULL, NULL);
+			return end_client(param->client_fd, NULL, NULL);
 	}
 
 	return NULL; /* Unreachable. */
@@ -228,10 +223,8 @@ static int
 handle_client_connections(int server_fd)
 {
 	struct sockaddr_storage client_addr;
-	struct thread_param *arg;
 	struct thread_node *new_thread;
 	socklen_t sizeof_client_addr;
-	pthread_attr_t attr;
 	int client_fd;
 
 	listen(server_fd, config_get_server_queue());
@@ -264,29 +257,13 @@ handle_client_connections(int server_fd)
 			continue;
 		}
 
-		arg = malloc(sizeof(struct thread_param));
-		if (arg == NULL) {
-			pr_err("Couldn't create thread_param struct");
-			free(new_thread);
-			close(client_fd);
-			continue;
-		}
-		arg->client_fd = client_fd;
-		arg->client_addr = client_addr;
+		new_thread->params.client_fd = client_fd;
+		new_thread->params.client_addr = client_addr;
 
-		pthread_attr_init(&attr);
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-		errno = pthread_create(&new_thread->tid, &attr,
-		    client_thread_cb, arg);
-		pthread_attr_destroy(&attr);
+		errno = pthread_create(&new_thread->tid, NULL,
+		    client_thread_cb, &new_thread->params);
 		if (errno) {
 			pr_errno(errno, "Could not spawn the client's thread");
-			/*
-			 * It is not clear to me whether @arg should be freed
-			 * here. We're supposed to have transferred its
-			 * ownership to the thread.
-			 * Maybe we should store it in @new_thread instead.
-			 */
 			free(new_thread);
 			close(client_fd);
 			continue;

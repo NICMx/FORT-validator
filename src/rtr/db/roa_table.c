@@ -14,7 +14,6 @@ struct hashable_roa {
 
 struct roa_table {
 	struct hashable_roa *roas;
-	unsigned int references;
 };
 
 struct roa_table *
@@ -27,7 +26,6 @@ roa_table_create(void)
 		return NULL;
 
 	table->roas = NULL;
-	table->references = 1;
 	return table;
 }
 
@@ -44,19 +42,10 @@ roa_table_cleanup(struct roa_table *table)
 }
 
 void
-roa_table_get(struct roa_table *table)
+roa_table_destroy(struct roa_table *table)
 {
-	table->references++;
-}
-
-void
-roa_table_put(struct roa_table *table)
-{
-	table->references--;
-	if (table->references == 0) {
-		roa_table_cleanup(table);
-		free(table);
-	}
+	roa_table_cleanup(table);
+	free(table);
 }
 
 int
