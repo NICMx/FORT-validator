@@ -78,6 +78,12 @@ nid_init(void)
 	return 0;
 }
 
+void
+nid_destroy(void)
+{
+	OBJ_cleanup();
+}
+
 int nid_rpkiManifest(void)
 {
 	return NID_rpkiManifest;

@@ -2,6 +2,7 @@
 #define SRC_NID_H_
 
 int nid_init(void);
+void nid_destroy(void);
 
 int nid_rpkiManifest(void);
 int nid_signedObject(void);

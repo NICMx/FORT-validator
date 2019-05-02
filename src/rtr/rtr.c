@@ -22,6 +22,7 @@
 /* TODO (next iteration) Support both RTR v0 and v1 */
 #define RTR_VERSION_SUPPORTED	RTR_V0
 
+/* TODO (urgent) this needs to be atomic */
 volatile bool loop;
 
 struct thread_node {
@@ -315,12 +316,30 @@ init_signal_handler(void)
 	act.sa_flags = SA_SIGINFO;
 	act.sa_sigaction = signal_handler;
 
+	/* TODO is this really legal? @act might need to be global. */
 	error = sigaction(SIGINT, &act, NULL);
 	if (error) {
 		pr_errno(errno, "Error initializing signal handler");
 		error = -errno;
 	}
 	return error;
+}
+
+/* Wait for threads to end gracefully */
+static void
+wait_threads(void)
+{
+	struct thread_node *ptr;
+
+	loop = false;
+	while (!SLIST_EMPTY(&threads)) {
+		ptr = SLIST_FIRST(&threads);
+		SLIST_REMOVE_HEAD(&threads, next);
+		/* TODO interrupt then join? Is this legal? */
+		pthread_kill(ptr->tid, SIGINT);
+		pthread_join(ptr->tid, NULL);
+		free(ptr);
+	}
 }
 
 /*
@@ -342,7 +361,7 @@ rtr_listen(void)
 	/* Server ready, start updates thread */
 	error = updates_daemon_start();
 	if (error)
-		return error;
+		goto revert_server_socket;
 
 	/* Init global vars */
 	loop = true;
@@ -350,25 +369,14 @@ rtr_listen(void)
 
 	error = init_signal_handler();
 	if (error)
-		return error;
+		goto revert_updates_daemon;
 
-	return handle_client_connections(server_fd);
-}
+	error = handle_client_connections(server_fd);
 
-void
-rtr_cleanup(void)
-{
-	struct thread_node *ptr;
-
+	wait_threads();
+revert_updates_daemon:
 	updates_daemon_destroy();
-
-	/* Wait for threads to end gracefully */
-	loop = false;
-	while (!SLIST_EMPTY(&threads)) {
-		ptr = SLIST_FIRST(&threads);
-		SLIST_REMOVE_HEAD(&threads, next);
-		pthread_kill(ptr->tid, SIGINT);
-		pthread_join(ptr->tid, NULL);
-		free(ptr);
-	}
+revert_server_socket:
+	close(server_fd);
+	return error;
 }

@@ -26,7 +26,6 @@ start_rtr_server(void)
 		goto revert_clients;
 
 	error = rtr_listen();
-	rtr_cleanup(); /* TODO shouldn't this only happen on !error? */
 
 	slurm_cleanup();
 revert_clients:
@@ -60,12 +59,14 @@ main(int argc, char **argv)
 		goto revert_rsync;
 	error = extension_init();
 	if (error)
-		goto revert_rsync;
+		goto revert_nid;
 
 	error = (config_get_server_address() != NULL)
 	    ? start_rtr_server()
 	    : validate_into_console();
 
+revert_nid:
+	nid_destroy();
 revert_rsync:
 	rsync_destroy();
 revert_config:

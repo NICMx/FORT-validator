@@ -44,7 +44,9 @@ vrps_init(void)
 {
 	int error;
 
-	state.base = NULL;
+	state.base = roa_table_create();
+	if (state.base == NULL)
+		return pr_enomem();
 
 	deltas_db_init(&state.deltas);
 
@@ -65,6 +67,7 @@ vrps_init(void)
 	error = pthread_rwlock_init(&lock, NULL);
 	if (error) {
 		deltas_db_cleanup(&state.deltas, delta_destroy);
+		roa_table_put(state.base);
 		return pr_errno(error, "pthread_rwlock_init() errored");
 	}
 
