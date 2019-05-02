@@ -91,7 +91,7 @@ vrps_update(struct roa_table *new_roas, struct deltas *new_deltas)
 	rwlock_write_lock(&lock);
 
 	if (new_deltas != NULL) {
-		new_delta.serial = state.current_serial + 1;
+		new_delta.serial = state.current_serial;
 		new_delta.deltas = new_deltas;
 		error = deltas_db_add(&state.deltas, &new_delta);
 		if (error)
@@ -140,8 +140,14 @@ deltas_db_status(uint32_t *serial, enum delta_status *result)
 	}
 
 	/* Is the last version? */
-	if (*serial == state.current_serial) {
+	if (*serial == (state.current_serial - 1)) {
 		*result = DS_NO_DIFF;
+		goto rlock_succeed;
+	}
+
+	/* The first serial isn't at deltas */
+	if (*serial == START_SERIAL) {
+		*result = DS_DIFF_AVAILABLE;
 		goto rlock_succeed;
 	}
 
@@ -154,12 +160,6 @@ deltas_db_status(uint32_t *serial, enum delta_status *result)
 
 	/* No match yet, release lock */
 	rwlock_unlock(&lock);
-
-	/* The first serial isn't at deltas */
-	if (*serial == START_SERIAL) {
-		*result = DS_DIFF_AVAILABLE;
-		return 0;
-	}
 
 	/* Reached end, diff can't be determined */
 	*result = DS_DIFF_UNDETERMINED;
@@ -201,15 +201,16 @@ vrps_foreach_delta_roa(uint32_t from, uint32_t to, vrp_foreach_cb cb, void *arg)
 
 	ARRAYLIST_FOREACH(&state.deltas, d) {
 		if (!from_found) {
-			if (d->serial >= from)
+			if (d->serial > from)
 				from_found = true;
-		} else {
-			if (d->serial > to)
-				break;
-			error = deltas_foreach(d->deltas, cb, arg);
-			if (error)
-				break;
+			else
+				continue;
 		}
+		if (d->serial > to)
+			break;
+		error = deltas_foreach(d->deltas, cb, arg);
+		if (error)
+			break;
 	}
 
 	rwlock_unlock(&lock);
