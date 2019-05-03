@@ -160,8 +160,10 @@ clients_forget(int fd)
 	rwlock_write_lock(&lock);
 
 	HASH_FIND_INT(table, &fd, client);
-	if (client != NULL)
+	if (client != NULL) {
 		HASH_DEL(table, client);
+		free(client);
+	}
 
 	rwlock_unlock(&lock);
 }
