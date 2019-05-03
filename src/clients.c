@@ -23,7 +23,7 @@ static struct hashable_client *table;
 /** Read/write lock, which protects @table and its inhabitants. */
 static pthread_rwlock_t lock;
 /** Serial number from which deltas must be stored */
-uint32_t min_serial;
+static uint32_t min_serial;
 
 int
 clients_db_init(void)
@@ -136,14 +136,10 @@ clients_get_min_serial(void)
 	if (HASH_COUNT(table) == 0)
 		goto unlock;
 
-	HASH_ITER(hh, table, current, ptr) {
-		if (current == table) {
-			min_serial = current->meat.serial_number;
-			continue;
-		}
+	min_serial = table->meat.serial_number;
+	HASH_ITER(hh, table, current, ptr)
 		if (current->meat.serial_number < min_serial)
 			min_serial = current->meat.serial_number;
-	}
 
 unlock:
 	result = min_serial;

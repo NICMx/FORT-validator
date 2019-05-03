@@ -19,6 +19,15 @@
 #define IPV4_PREFIX_LENGTH	12
 #define IPV6_PREFIX_LENGTH	24
 
+
+struct vrp_node {
+	struct vrp vrp;
+	SLIST_ENTRY(vrp_node) next;
+};
+
+/** Sorted list to filter deltas */
+SLIST_HEAD(vrp_slist, vrp_node);
+
 void
 init_sender_common(struct sender_common *common, int fd, uint8_t version,
     uint16_t *session_id, uint32_t *start_serial, uint32_t *end_serial)
@@ -266,14 +275,6 @@ send_pdus_base(struct sender_common *common)
 	return vrps_foreach_base_roa(send_prefix_pdu, common);
 }
 
-struct vrp_node {
-	struct vrp vrp;
-	SLIST_ENTRY(vrp_node) next;
-};
-
-/** Sorted list to filter deltas */
-SLIST_HEAD(vrp_slist, vrp_node);
-
 static bool
 vrp_equals(struct vrp *left, struct vrp *right)
 {
@@ -295,13 +296,13 @@ static int
 vrp_ovrd_remove(struct vrp *vrp, void *arg)
 {
 	struct vrp_node *ptr;
-	struct vrp_slist *filtered_vrps;
+	struct vrp_slist *filtered_vrps = arg;
 
-	filtered_vrps = (struct vrp_slist *)arg;
 	SLIST_FOREACH(ptr, filtered_vrps, next)
-		if(vrp_equals(vrp, &ptr->vrp) &&
+		if (vrp_equals(vrp, &ptr->vrp) &&
 		    vrp->flags != ptr->vrp.flags) {
 			SLIST_REMOVE(filtered_vrps, ptr, vrp_node, next);
+			free(ptr);
 			return 0;
 		}
 
@@ -325,7 +326,7 @@ send_pdus_delta(struct sender_common *common)
 	error = vrps_foreach_delta_roa(*common->start_serial,
 	    *common->end_serial, vrp_ovrd_remove, &filtered_vrps);
 	if (error)
-		return error;
+		goto release_list;
 
 	/** Now send the filtered deltas */
 	SLIST_FOREACH(ptr, &filtered_vrps, next) {
@@ -334,6 +335,7 @@ send_pdus_delta(struct sender_common *common)
 			break;
 	}
 
+release_list:
 	while (!SLIST_EMPTY(&filtered_vrps)) {
 		ptr = filtered_vrps.slh_first;
 		SLIST_REMOVE_HEAD(&filtered_vrps, next);
