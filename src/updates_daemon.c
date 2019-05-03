@@ -99,6 +99,10 @@ check_vrps_updates(void *param_void)
 		}
 
 		old_roas = validation_handler.arg;
+
+		/** Remove unnecessary deltas */
+		vrps_purge();
+
 		error = notify_clients();
 		if (error)
 			pr_debug("Could not notify clients of the new VRPs. (Error code %d.) Sleeping...",

@@ -22,6 +22,8 @@ struct hashable_client {
 static struct hashable_client *table;
 /** Read/write lock, which protects @table and its inhabitants. */
 static pthread_rwlock_t lock;
+/** Serial number from which deltas must be stored */
+uint32_t min_serial;
 
 int
 clients_db_init(void)
@@ -32,7 +34,7 @@ clients_db_init(void)
 	error = pthread_rwlock_init(&lock, NULL);
 	if (error)
 		return pr_errno(error, "pthread_rwlock_init() errored");
-
+	min_serial = 0;
 	return 0;
 }
 
@@ -106,6 +108,48 @@ clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 		free(new_client);
 
 	return error;
+}
+
+void
+clients_update_serial(int fd, uint32_t serial)
+{
+	struct hashable_client *cur_client;
+
+	rwlock_write_lock(&lock);
+	HASH_FIND_INT(table, &fd, cur_client);
+	if (cur_client == NULL)
+		goto unlock;
+
+	cur_client->meat.serial_number = serial;
+
+unlock:
+	rwlock_unlock(&lock);
+}
+
+uint32_t
+clients_get_min_serial(void)
+{
+	struct hashable_client *current, *ptr;
+	uint32_t result;
+
+	rwlock_write_lock(&lock);
+	if (HASH_COUNT(table) == 0)
+		goto unlock;
+
+	HASH_ITER(hh, table, current, ptr) {
+		if (current == table) {
+			min_serial = current->meat.serial_number;
+			continue;
+		}
+		if (current->meat.serial_number < min_serial)
+			min_serial = current->meat.serial_number;
+	}
+
+unlock:
+	result = min_serial;
+	rwlock_unlock(&lock);
+
+	return result;
 }
 
 void

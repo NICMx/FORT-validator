@@ -14,14 +14,17 @@ struct client {
 	};
 	in_port_t sin_port;
 	uint8_t rtr_version;
+	uint32_t serial_number;
 };
 
 int clients_db_init(void);
 
 int clients_add(int, struct sockaddr_storage *, uint8_t);
+void clients_update_serial(int, uint32_t);
 void clients_forget(int);
 typedef int (*clients_foreach_cb)(struct client const *, void *);
 int clients_foreach(clients_foreach_cb, void *);
+uint32_t clients_get_min_serial(void);
 
 void clients_db_destroy(void);
 

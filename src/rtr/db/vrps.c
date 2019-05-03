@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <string.h>
+#include "clients.h"
 #include "common.h"
 #include "data_structure/array_list.h"
 
@@ -216,6 +217,58 @@ vrps_foreach_delta_roa(uint32_t from, uint32_t to, vrp_foreach_cb cb, void *arg)
 	rwlock_unlock(&lock);
 
 	return error;
+}
+
+/**
+ * Reallocate the array of @db starting at @start, the length and capacity are
+ * calculated according to the new start.
+ */
+static void
+resize_deltas_db(struct deltas_db *db, struct delta *start)
+{
+	struct delta *tmp;
+
+	db->len -= (start - db->array);
+	while (db->len < db->capacity / 2)
+		db->capacity /= 2;
+	tmp = malloc(sizeof(struct delta) * db->capacity);
+	if (tmp == NULL) {
+		pr_enomem();
+		return;
+	}
+	memcpy(tmp, start, db->len * sizeof(struct delta));
+	free(db->array);
+	db->array = tmp;
+}
+
+void
+vrps_purge(void)
+{
+	struct delta *d;
+	uint32_t min_serial;
+	int error;
+
+	min_serial = clients_get_min_serial();
+	error = rwlock_read_lock(&lock);
+	if (error) {
+		pr_err("Couldn't lock deltas DB to purge it");
+		return;
+	}
+
+	/** Assume is ordered by serial, so get the new initial pointer */
+	ARRAYLIST_FOREACH(&state.deltas, d)
+		if (d->serial >= min_serial)
+			break;
+
+	/** Is the first element or reached end, nothing to purge */
+	if (d == state.deltas.array ||
+	    (d - state.deltas.array) == state.deltas.len)
+		goto rlock_succeed;
+
+	resize_deltas_db(&state.deltas, d);
+
+rlock_succeed:
+	rwlock_unlock(&lock);
 }
 
 int

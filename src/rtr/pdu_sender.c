@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/queue.h>
 
+#include "clients.h"
 #include "config.h"
 #include "log.h"
 #include "rtr/pdu_serializer.h"
@@ -348,6 +349,7 @@ send_end_of_data_pdu(struct sender_common *common)
 	struct end_of_data_pdu pdu;
 	unsigned char data[BUFFER_SIZE];
 	size_t len;
+	int error;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_END_OF_DATA,
 	    *common->session_id);
@@ -361,7 +363,12 @@ send_end_of_data_pdu(struct sender_common *common)
 
 	len = serialize_end_of_data_pdu(&pdu, data);
 
-	return send_response(common->fd, data, len);
+	error = send_response(common->fd, data, len);
+	if (error)
+		return error;
+
+	clients_update_serial(common->fd, pdu.serial_number);
+	return error;
 }
 
 int
