@@ -1,12 +1,12 @@
 #include "updates_daemon.h"
 
 #include <errno.h>
-#include <pthread.h>
 #include <stdbool.h>
 #include <unistd.h>
 
+#include "common.h"
 #include "config.h"
-#include "log.h" /* TODO delete me probably */
+#include "log.h"
 #include "notify.h"
 #include "object/tal.h"
 #include "rtr/db/vrps.h"
@@ -57,6 +57,6 @@ updates_daemon_start(void)
 void
 updates_daemon_destroy(void)
 {
-	pthread_cancel(thread);
-	pthread_join(thread, NULL);
+	/* Not much to do with the error code. */
+	close_thread(thread, "Validation");
 }

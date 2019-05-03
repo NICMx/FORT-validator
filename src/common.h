@@ -1,6 +1,7 @@
 #ifndef SRC_RTR_COMMON_H_
 #define SRC_RTR_COMMON_H_
 
+#include <pthread.h>
 #include <semaphore.h>
 
 /* "I think that this is not supposed to be implemented." */
@@ -30,5 +31,8 @@
 int rwlock_read_lock(pthread_rwlock_t *);
 void rwlock_write_lock(pthread_rwlock_t *);
 void rwlock_unlock(pthread_rwlock_t *);
+
+/** Also boilerplate. */
+int close_thread(pthread_t thread, char const *what);
 
 #endif /* SRC_RTR_COMMON_H_ */

@@ -302,7 +302,7 @@ init_signal_handler(void)
 	return error;
 }
 
-/* Wait for threads to end gracefully */
+/* Terminates client threads as gracefully as I know how to. */
 static void
 wait_threads(void)
 {
@@ -312,10 +312,12 @@ wait_threads(void)
 	while (!SLIST_EMPTY(&threads)) {
 		ptr = SLIST_FIRST(&threads);
 		SLIST_REMOVE_HEAD(&threads, next);
-		/* TODO interrupt then join? Is this legal? */
-		pthread_kill(ptr->tid, SIGINT);
-		pthread_join(ptr->tid, NULL);
-		free(ptr);
+		/*
+		 * If the close fails, the thread might still be using the
+		 * thread_param variables, so leak instead.
+		 */
+		if (close_thread(ptr->tid, "Client") == 0)
+			free(ptr);
 	}
 }
 
