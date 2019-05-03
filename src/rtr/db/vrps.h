@@ -1,11 +1,8 @@
 #ifndef SRC_VRPS_H_
 #define SRC_VRPS_H_
 
-#include <time.h>
-#include <netinet/ip.h>
-
-#include "rtr/db/delta.h"
-#include "rtr/db/roa_table.h"
+#include <stdbool.h>
+#include "rtr/db/vrp.h"
 
 enum delta_status {
 	/** There's no data at the DB */
@@ -21,12 +18,11 @@ enum delta_status {
 int vrps_init(void);
 void vrps_destroy(void);
 
-int vrps_update(struct roa_table *, struct deltas *);
+int vrps_update(bool *);
 int deltas_db_status(uint32_t *, enum delta_status *);
 
 int vrps_foreach_base_roa(vrp_foreach_cb, void *);
 int vrps_foreach_delta_roa(uint32_t, uint32_t, vrp_foreach_cb, void *);
-void vrps_purge(void);
 
 int get_last_serial_number(uint32_t *);
 uint16_t get_current_session_id(uint8_t);

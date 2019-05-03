@@ -1,7 +1,9 @@
 #include "notify.h"
 
 #include <err.h>
+#include <stddef.h>
 #include "clients.h"
+#include "log.h"
 #include "rtr/pdu_sender.h"
 #include "rtr/db/vrps.h"
 

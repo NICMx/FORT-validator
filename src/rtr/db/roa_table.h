@@ -6,11 +6,8 @@
 
 struct roa_table;
 
-/* Constructor */
 struct roa_table *roa_table_create(void);
-/* Reference counting */
-void roa_table_get(struct roa_table *);
-void roa_table_put(struct roa_table *);
+void roa_table_destroy(struct roa_table *);
 
 int roa_table_foreach_roa(struct roa_table *, vrp_foreach_cb, void *);
 

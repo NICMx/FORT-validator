@@ -5,7 +5,10 @@
 #include <string.h>
 #include "clients.h"
 #include "common.h"
+#include "validation_handler.h"
 #include "data_structure/array_list.h"
+#include "object/tal.h"
+#include "rtr/db/roa_table.h"
 
 /*
  * Storage of VRPs (term taken from RFC 6811 "Validated ROA Payload") and
@@ -22,8 +25,16 @@ struct delta {
 ARRAY_LIST(deltas_db, struct delta)
 
 struct state {
-	struct roa_table *base; /** All the current valid ROAs */
-	struct deltas_db deltas; /** ROA changes to @base over time */
+	/**
+	 * All the current valid ROAs.
+	 *
+	 * Can be NULL, so handle gracefully.
+	 * (We use this to know we're supposed to generate a @deltas entry
+	 * during the current iteration.)
+	 */
+	struct roa_table *base;
+	/** ROA changes to @base over time. */
+	struct deltas_db deltas;
 
 	uint32_t current_serial;
 	uint16_t v0_session_id;
@@ -75,38 +86,168 @@ vrps_init(void)
 void
 vrps_destroy(void)
 {
-	roa_table_put(state.base);
+	if (state.base != NULL)
+		roa_table_destroy(state.base);
 	deltas_db_cleanup(&state.deltas, delta_destroy);
 	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }
 
-/*
- * @new_deltas can be NULL, @new_tree cannot.
- */
-int
-vrps_update(struct roa_table *new_roas, struct deltas *new_deltas)
+static int
+__reset(void *arg)
 {
-	struct delta new_delta;
-	int error = 0;
+	return rtrhandler_reset(arg);
+}
+
+int
+__handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
+    uint8_t max_length, void *arg)
+{
+	return rtrhandler_handle_roa_v4(arg, as, prefix, max_length);
+}
+
+int
+__handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
+    uint8_t max_length, void *arg)
+{
+	return rtrhandler_handle_roa_v6(arg, as, prefix, max_length);
+}
+
+static int
+__perform_standalone_validation(struct roa_table **result)
+{
+	struct roa_table *roas;
+	struct validation_handler validation_handler;
+	int error;
+
+	roas = roa_table_create();
+	if (roas == NULL)
+		return pr_enomem();
+
+	validation_handler.reset = __reset;
+	validation_handler.traverse_down = NULL;
+	validation_handler.traverse_up = NULL;
+	validation_handler.handle_roa_v4 = __handle_roa_v4;
+	validation_handler.handle_roa_v6 = __handle_roa_v6;
+	validation_handler.arg = roas;
+
+	error = perform_standalone_validation(&validation_handler);
+	if (error) {
+		roa_table_destroy(roas);
+		return error;
+	}
+
+	*result = roas;
+	return 0;
+}
+
+
+
+/**
+ * Reallocate the array of @db starting at @start, the length and capacity are
+ * calculated according to the new start.
+ */
+static void
+resize_deltas_db(struct deltas_db *db, struct delta *start)
+{
+	struct delta *tmp;
+
+	db->len -= (start - db->array);
+	while (db->len < db->capacity / 2)
+		db->capacity /= 2;
+	tmp = malloc(sizeof(struct delta) * db->capacity);
+	if (tmp == NULL) {
+		pr_enomem();
+		return;
+	}
+	memcpy(tmp, start, db->len * sizeof(struct delta));
+	free(db->array);
+	db->array = tmp;
+}
+
+static void
+vrps_purge(void)
+{
+	struct delta *d;
+	uint32_t min_serial;
+
+	min_serial = clients_get_min_serial();
+
+	/** Assume is ordered by serial, so get the new initial pointer */
+	ARRAYLIST_FOREACH(&state.deltas, d)
+		if (d->serial >= min_serial)
+			break;
+
+	/** Is the first element or reached end, nothing to purge */
+	if (d == state.deltas.array ||
+	    (d - state.deltas.array) == state.deltas.len)
+		return;
+
+	resize_deltas_db(&state.deltas, d);
+}
+
+int
+vrps_update(bool *changed)
+{
+	struct roa_table *old_base;
+	struct roa_table *new_base;
+	struct deltas *deltas; /* Deltas in raw form */
+	struct delta deltas_node; /* Deltas in database node form */
+	int error;
+
+	*changed = false;
+	old_base = NULL;
+	new_base = NULL;
+
+	error = __perform_standalone_validation(&new_base);
+	if (error)
+		return error;
 
 	rwlock_write_lock(&lock);
 
-	if (new_deltas != NULL) {
-		new_delta.serial = state.current_serial;
-		new_delta.deltas = new_deltas;
-		error = deltas_db_add(&state.deltas, &new_delta);
-		if (error)
-			goto end;
+	if (state.base != NULL) {
+		error = compute_deltas(state.base, new_base, &deltas);
+		if (error) {
+			rwlock_unlock(&lock);
+			goto revert_base;
+		}
+
+		if (deltas_is_empty(deltas)) {
+			rwlock_unlock(&lock);
+			goto revert_deltas; /* error == 0 is good */
+		}
+
+		deltas_node.serial = state.current_serial;
+		deltas_node.deltas = deltas;
+		error = deltas_db_add(&state.deltas, &deltas_node);
+		if (error) {
+			rwlock_unlock(&lock);
+			goto revert_deltas;
+		}
+
+		/*
+		 * Postpone destruction of the old database,
+		 * to release the lock ASAP.
+		 */
+		old_base = state.base;
+
+		/** Remove unnecessary deltas */
+		vrps_purge();
 	}
 
-	if (state.base != NULL)
-		roa_table_put(state.base);
-	state.base = new_roas;
-	roa_table_get(new_roas);
+	*changed = true;
+	state.base = new_base;
 	state.current_serial++;
 
-end:
 	rwlock_unlock(&lock);
+
+	if (old_base != NULL)
+		roa_table_destroy(old_base);
+	return 0;
+
+revert_deltas:
+	deltas_destroy(deltas);
+revert_base:
+	roa_table_destroy(new_base);
 	return error;
 }
 
@@ -180,7 +321,8 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 	if (error)
 		return error;
 
-	error = roa_table_foreach_roa(state.base, cb, arg);
+	if (state.base != NULL)
+		error = roa_table_foreach_roa(state.base, cb, arg);
 
 	rwlock_unlock(&lock);
 
@@ -217,58 +359,6 @@ vrps_foreach_delta_roa(uint32_t from, uint32_t to, vrp_foreach_cb cb, void *arg)
 	rwlock_unlock(&lock);
 
 	return error;
-}
-
-/**
- * Reallocate the array of @db starting at @start, the length and capacity are
- * calculated according to the new start.
- */
-static void
-resize_deltas_db(struct deltas_db *db, struct delta *start)
-{
-	struct delta *tmp;
-
-	db->len -= (start - db->array);
-	while (db->len < db->capacity / 2)
-		db->capacity /= 2;
-	tmp = malloc(sizeof(struct delta) * db->capacity);
-	if (tmp == NULL) {
-		pr_enomem();
-		return;
-	}
-	memcpy(tmp, start, db->len * sizeof(struct delta));
-	free(db->array);
-	db->array = tmp;
-}
-
-void
-vrps_purge(void)
-{
-	struct delta *d;
-	uint32_t min_serial;
-	int error;
-
-	min_serial = clients_get_min_serial();
-	error = rwlock_read_lock(&lock);
-	if (error) {
-		pr_err("Couldn't lock deltas DB to purge it");
-		return;
-	}
-
-	/** Assume is ordered by serial, so get the new initial pointer */
-	ARRAYLIST_FOREACH(&state.deltas, d)
-		if (d->serial >= min_serial)
-			break;
-
-	/** Is the first element or reached end, nothing to purge */
-	if (d == state.deltas.array ||
-	    (d - state.deltas.array) == state.deltas.len)
-		goto rlock_succeed;
-
-	resize_deltas_db(&state.deltas, d);
-
-rlock_succeed:
-	rwlock_unlock(&lock);
 }
 
 int

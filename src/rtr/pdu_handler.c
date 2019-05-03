@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "err_pdu.h"
+#include "log.h"
 #include "pdu.h"
 #include "pdu_sender.h"
 #include "rtr/db/vrps.h"

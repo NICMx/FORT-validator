@@ -1,6 +1,9 @@
 #ifndef SRC_RTR_DB_VRP_H_
 #define SRC_RTR_DB_VRP_H_
 
+#include <stdint.h>
+#include <netinet/in.h>
+
 #define FLAG_WITHDRAWAL		0
 #define FLAG_ANNOUNCEMENT	1
 
