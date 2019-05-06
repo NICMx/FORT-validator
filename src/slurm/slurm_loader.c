@@ -7,8 +7,8 @@
 
 #include "log.h"
 #include "config.h"
-#include "slurm_db.h"
-#include "slurm_parser.h"
+#include "slurm/slurm_db.h"
+#include "slurm/slurm_parser.h"
 
 #define SLURM_FILE_EXTENSION	".slurm"
 

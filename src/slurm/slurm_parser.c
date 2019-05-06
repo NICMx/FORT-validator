@@ -10,7 +10,7 @@
 #include "log.h"
 #include "address.h"
 #include "json_parser.h"
-#include "slurm_db.h"
+#include "slurm/slurm_db.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"

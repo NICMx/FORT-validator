@@ -1,5 +1,5 @@
-#ifndef SRC_SLURM_PARSER_H_
-#define SRC_SLURM_PARSER_H_
+#ifndef SRC_SLURM_SLURM_PARSER_H_
+#define SRC_SLURM_SLURM_PARSER_H_
 
 #include <netinet/in.h>
 
@@ -41,4 +41,4 @@ struct slurm_bgpsec {
 int slurm_parse(char const *);
 
 
-#endif /* SRC_SLURM_PARSER_H_ */
+#endif /* SRC_SLURM_SLURM_PARSER_H_ */

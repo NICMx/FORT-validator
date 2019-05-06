@@ -74,9 +74,6 @@ fort_SOURCES += clients.c clients.h
 fort_SOURCES += common.c common.h
 fort_SOURCES += json_parser.c json_parser.h
 fort_SOURCES += notify.c notify.h
-fort_SOURCES += slurm_db.c slurm_db.h
-fort_SOURCES += slurm_loader.c slurm_loader.h
-fort_SOURCES += slurm_parser.c slurm_parser.h
 fort_SOURCES += updates_daemon.c updates_daemon.h
 
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
@@ -92,6 +89,10 @@ fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
 fort_SOURCES += rtr/db/roa_table.c rtr/db/roa_table.h
 fort_SOURCES += rtr/db/roa.c rtr/db/roa.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
+
+fort_SOURCES += slurm/slurm_db.c slurm/slurm_db.h
+fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
+fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
 fort_CFLAGS  = -Wall
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.

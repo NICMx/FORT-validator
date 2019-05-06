@@ -1,7 +1,7 @@
-#ifndef SRC_SLURM_DB_H_
-#define SRC_SLURM_DB_H_
+#ifndef SRC_SLURM_SLURM_DB_H_
+#define SRC_SLURM_SLURM_DB_H_
 
-#include "slurm_parser.h"
+#include "slurm/slurm_parser.h"
 
 struct slurm_prefix_list {
 	struct slurm_prefix *list;
@@ -29,4 +29,4 @@ int slurm_db_add_bgpsec_assertion(struct slurm_bgpsec *);
 
 void slurm_db_cleanup(void);
 
-#endif /* SRC_SLURM_DB_H_ */
+#endif /* SRC_SLURM_SLURM_DB_H_ */
