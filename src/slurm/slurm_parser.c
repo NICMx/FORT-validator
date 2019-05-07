@@ -1,7 +1,6 @@
 #include "slurm_parser.h"
 
 #include <errno.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <openssl/evp.h>
@@ -54,42 +53,6 @@ slurm_parse(char const *location)
 
 	json_decref(json_root);
 	return error;
-}
-
-static int
-parse_prefix4(char *text, struct ipv4_prefix *prefixv4)
-{
-	if (text == NULL)
-		return -EINVAL;
-	return str_to_prefix4(text, prefixv4);
-}
-
-static int
-parse_prefix6(char *text, struct ipv6_prefix *prefixv6)
-{
-	if (text == NULL)
-		return -EINVAL;
-	return str_to_prefix6(text, prefixv6);
-}
-
-static int
-parse_prefix_length(char *text, uint8_t *value, uint8_t max_value)
-{
-	if (text == NULL)
-		return -EINVAL;
-	return str_to_prefix_length(text, value, max_value);
-}
-
-/*
- * Any unknown members should be treated as errors, RFC8416 3.1:
- * "JSON members that are not defined here MUST NOT be used in SLURM
- * files. An RP MUST consider any deviations from the specifications to
- * be errors."
- */
-static bool
-valid_members_count(json_t *object, size_t expected_size)
-{
-	return json_object_size(object) == expected_size;
 }
 
 static int
@@ -166,9 +129,9 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 	token = strtok(clone, "/");
 	isv4 = strchr(token, ':') == NULL;
 	if (isv4)
-		error = parse_prefix4(token, &prefixv4);
+		error = prefix4_parse(token, &prefixv4);
 	else
-		error = parse_prefix6(token, &prefixv6);
+		error = prefix6_parse(token, &prefixv6);
 
 	if (error) {
 		free(clone);
@@ -177,7 +140,7 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 
 	/* Second part: Prefix length in numeric format */
 	token = strtok(NULL, "/");
-	error = parse_prefix_length(token,
+	error = prefix_length_parse(token,
 	    (isv4 ? &prefixv4.len : &prefixv6.len),
 	    (isv4 ? 32 : 128));
 	free(clone);
@@ -413,7 +376,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 		}
 
 		/* Validate expected members */
-		if (!valid_members_count(object, member_count)) {
+		if (!json_valid_members_count(object, member_count)) {
 			pr_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
 			error = -EINVAL;
 			goto release_comment;
@@ -440,7 +403,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 		}
 
 	/* Validate expected members */
-	if (!valid_members_count(object, member_count)) {
+	if (!json_valid_members_count(object, member_count)) {
 		pr_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
 		error = -EINVAL;
 		goto release_comment;
@@ -546,7 +509,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 		}
 
 		/* Validate expected members */
-		if (!valid_members_count(object, member_count)) {
+		if (!json_valid_members_count(object, member_count)) {
 			pr_err("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
 			error = -EINVAL;
 			goto release_comment;
@@ -560,7 +523,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 	}
 
 	/* Validate expected members */
-	if (!valid_members_count(object, member_count)) {
+	if (!json_valid_members_count(object, member_count)) {
 		pr_err("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
 		error = -EINVAL;
 		goto release_comment;
@@ -644,7 +607,7 @@ load_filters(json_t *root)
 	CHECK_REQUIRED(bgpsec, BGPSEC_FILTERS)
 
 	expected_members = 2;
-	if (!valid_members_count(filters, expected_members))
+	if (!json_valid_members_count(filters, expected_members))
 		return pr_err(
 		    "SLURM '%s' must contain only %lu members (RFC 8416 section 3.2)",
 		    VALIDATION_OUTPUT_FILTERS,
@@ -679,7 +642,7 @@ load_assertions(json_t *root)
 	CHECK_REQUIRED(bgpsec, BGPSEC_ASSERTIONS)
 
 	expected_members = 2;
-	if (!valid_members_count(assertions, expected_members))
+	if (!json_valid_members_count(assertions, expected_members))
 		return pr_err(
 		    "SLURM '%s' must contain only %lu members (RFC 8416 section 3.2)",
 		    LOCALLY_ADDED_ASSERTIONS,
@@ -718,7 +681,7 @@ handle_json(json_t *root)
 		return error;
 
 	expected_members = 3;
-	if (!valid_members_count(root, expected_members))
+	if (!json_valid_members_count(root, expected_members))
 		return pr_err(
 		    "SLURM root must have only %lu members (RFC 8416 section 3.2)",
 		    expected_members);
