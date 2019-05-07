@@ -10,6 +10,7 @@ struct roa_table *roa_table_create(void);
 void roa_table_destroy(struct roa_table *);
 
 int roa_table_foreach_roa(struct roa_table *, vrp_foreach_cb, void *);
+void roa_table_remove_roa(struct roa_table *, struct vrp *);
 
 int rtrhandler_reset(struct roa_table *);
 int rtrhandler_handle_roa_v4(struct roa_table *, uint32_t,

@@ -8,7 +8,6 @@
 #include "rsync/rsync.h"
 #include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
-#include "slurm/slurm_loader.h"
 
 static int
 start_rtr_server(void)
@@ -21,14 +20,9 @@ start_rtr_server(void)
 	error = clients_db_init();
 	if (error)
 		goto revert_vrps;
-	error = slurm_load();
-	if (error)
-		goto revert_clients;
 
 	error = rtr_listen();
 
-	slurm_cleanup();
-revert_clients:
 	clients_db_destroy();
 revert_vrps:
 	vrps_destroy();

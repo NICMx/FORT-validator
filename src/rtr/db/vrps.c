@@ -9,6 +9,7 @@
 #include "data_structure/array_list.h"
 #include "object/tal.h"
 #include "rtr/db/roa_table.h"
+#include "slurm/slurm_loader.h"
 
 /*
  * Storage of VRPs (term taken from RFC 6811 "Validated ROA Payload") and
@@ -149,7 +150,7 @@ __perform_standalone_validation(struct roa_table **result)
 static void
 resize_deltas_db(struct deltas_db *db, struct delta *start)
 {
-	struct delta *tmp;
+	struct delta *tmp, *ptr;
 
 	db->len -= (start - db->array);
 	while (db->len < db->capacity / 2)
@@ -160,6 +161,9 @@ resize_deltas_db(struct deltas_db *db, struct delta *start)
 		return;
 	}
 	memcpy(tmp, start, db->len * sizeof(struct delta));
+	/* Release memory allocated */
+	for (ptr = db->array; ptr < start; ptr++)
+		deltas_destroy(ptr->deltas);
 	free(db->array);
 	db->array = tmp;
 }
@@ -203,6 +207,12 @@ vrps_update(bool *changed)
 		return error;
 
 	rwlock_write_lock(&lock);
+
+	error = slurm_apply(new_base);
+	if (error) {
+		rwlock_unlock(&lock);
+		goto revert_base;
+	}
 
 	if (state.base != NULL) {
 		error = compute_deltas(state.base, new_base, &deltas);

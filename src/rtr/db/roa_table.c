@@ -51,10 +51,10 @@ roa_table_destroy(struct roa_table *table)
 int
 roa_table_foreach_roa(struct roa_table *table, vrp_foreach_cb cb, void *arg)
 {
-	struct hashable_roa *node;
+	struct hashable_roa *node, *tmp;
 	int error;
 
-	for (node = table->roas; node != NULL; node = node->hh.next) {
+	HASH_ITER(hh, table->roas, node, tmp) {
 		error = cb(&node->data, arg);
 		if (error)
 			return error;
@@ -98,6 +98,18 @@ add_roa(struct roa_table *table, struct hashable_roa *new)
 		free(old);
 
 	return 0;
+}
+
+void
+roa_table_remove_roa(struct roa_table *table, struct vrp *del)
+{
+	struct hashable_roa *ptr;
+
+	HASH_FIND(hh, table->roas, del, sizeof(*del), ptr);
+	if (ptr != NULL) {
+		HASH_DELETE(hh, table->roas, ptr);
+		free(ptr);
+	}
 }
 
 int

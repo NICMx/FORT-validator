@@ -1,7 +1,8 @@
 #ifndef SRC_SLURM_SLURM_LOADER_H_
 #define SRC_SLURM_SLURM_LOADER_H_
 
-int slurm_load(void);
-void slurm_cleanup(void);
+#include "rtr/db/roa_table.h"
+
+int slurm_apply(struct roa_table *);
 
 #endif /* SRC_SLURM_SLURM_LOADER_H_ */

@@ -79,6 +79,7 @@ parse_prefix_length(char *text, uint8_t *value, uint8_t max_value)
 		return -EINVAL;
 	return str_to_prefix_length(text, value, max_value);
 }
+
 /*
  * Any unknown members should be treated as errors, RFC8416 3.1:
  * "JSON members that are not defined here MUST NOT be used in SLURM
@@ -187,16 +188,16 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 		error = ipv4_prefix_validate(&prefixv4);
 		if (error)
 			return error;
-		result->addr_fam = AF_INET;
-		result->ipv4_prefix = prefixv4.addr;
-		result->prefix_length = prefixv4.len;
+		result->vrp.addr_fam = AF_INET;
+		result->vrp.prefix.v4 = prefixv4.addr;
+		result->vrp.prefix_length = prefixv4.len;
 	} else {
 		error = ipv6_prefix_validate(&prefixv6);
 		if (error)
 			return error;
-		result->addr_fam = AF_INET6;
-		result->ipv6_prefix = prefixv6.addr;
-		result->prefix_length = prefixv6.len;
+		result->vrp.addr_fam = AF_INET6;
+		result->vrp.prefix.v6 = prefixv6.addr;
+		result->vrp.prefix_length = prefixv6.len;
 	}
 	result->data_flag |= SLURM_PFX_FLAG_PREFIX;
 	(*members_loaded)++;
@@ -354,11 +355,11 @@ static void
 init_slurm_prefix(struct slurm_prefix *slurm_prefix)
 {
 	slurm_prefix->data_flag = SLURM_COM_FLAG_NONE;
-	slurm_prefix->asn = 0;
-	slurm_prefix->ipv6_prefix = in6addr_any;
-	slurm_prefix->prefix_length = 0;
-	slurm_prefix->max_prefix_length = 0;
-	slurm_prefix->addr_fam = 0;
+	slurm_prefix->vrp.asn = 0;
+	slurm_prefix->vrp.prefix.v6 = in6addr_any;
+	slurm_prefix->vrp.prefix_length = 0;
+	slurm_prefix->vrp.max_prefix_length = 0;
+	slurm_prefix->vrp.addr_fam = 0;
 	slurm_prefix->comment = NULL;
 }
 
@@ -375,8 +376,8 @@ load_single_prefix(json_t *object, bool is_assertion)
 	init_slurm_prefix(&result);
 	member_count = 0;
 
-	error = set_asn(object, is_assertion, &result.asn, &result.data_flag,
-	    &member_count);
+	error = set_asn(object, is_assertion, &result.vrp.asn,
+	    &result.data_flag, &member_count);
 	if (error)
 		return error;
 
@@ -384,8 +385,9 @@ load_single_prefix(json_t *object, bool is_assertion)
 	if (error)
 		return error;
 
-	error = set_max_prefix_length(object, is_assertion, result.addr_fam,
-	    &result.max_prefix_length, &result.data_flag, &member_count);
+	error = set_max_prefix_length(object, is_assertion,
+	    result.vrp.addr_fam, &result.vrp.max_prefix_length,
+	    &result.data_flag, &member_count);
 	if (error)
 		return error;
 
@@ -430,7 +432,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 	 */
 
 	if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
-		if (result.prefix_length > result.max_prefix_length) {
+		if (result.vrp.prefix_length > result.vrp.max_prefix_length) {
 			pr_err(
 			    "Prefix length is greater than max prefix length");
 			error = -EINVAL;
