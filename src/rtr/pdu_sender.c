@@ -21,7 +21,7 @@
 
 
 struct vrp_node {
-	struct vrp vrp;
+	struct delta delta;
 	SLIST_ENTRY(vrp_node) next;
 };
 
@@ -29,14 +29,11 @@ struct vrp_node {
 SLIST_HEAD(vrp_slist, vrp_node);
 
 void
-init_sender_common(struct sender_common *common, int fd, uint8_t version,
-    uint16_t *session_id, uint32_t *start_serial, uint32_t *end_serial)
+init_sender_common(struct sender_common *common, int fd, uint8_t version)
 {
 	common->fd = fd;
 	common->version = version;
-	common->session_id = session_id == NULL ? 0 : session_id;
-	common->start_serial = start_serial;
-	common->end_serial = end_serial;
+	common->session_id = get_current_session_id(version);
 }
 /*
  * Set all the header values, EXCEPT length field.
@@ -160,16 +157,16 @@ send_response(int fd, unsigned char *data, size_t data_len)
 }
 
 int
-send_serial_notify_pdu(struct sender_common *common)
+send_serial_notify_pdu(struct sender_common *common, serial_t start_serial)
 {
 	struct serial_notify_pdu pdu;
 	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_SERIAL_NOTIFY,
-	    *common->session_id);
+	    common->session_id);
 
-	pdu.serial_number = *common->start_serial;
+	pdu.serial_number = start_serial;
 	pdu.header.length = length_serial_notify_pdu(&pdu);
 
 	len = serialize_serial_notify_pdu(&pdu, data);
@@ -201,8 +198,8 @@ send_cache_response_pdu(struct sender_common *common)
 	size_t len;
 
 	/* This PDU has only the header */
-	set_header_values(&pdu.header, common->version,
-	    PDU_TYPE_CACHE_RESPONSE, *common->session_id);
+	set_header_values(&pdu.header, common->version, PDU_TYPE_CACHE_RESPONSE,
+	    common->session_id);
 	pdu.header.length = HEADER_LENGTH;
 
 	len = serialize_cache_response_pdu(&pdu, data);
@@ -211,7 +208,8 @@ send_cache_response_pdu(struct sender_common *common)
 }
 
 static int
-send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
+send_ipv4_prefix_pdu(struct sender_common *common, struct vrp const *vrp,
+    uint8_t flags)
 {
 	struct ipv4_prefix_pdu pdu;
 	unsigned char data[BUFFER_SIZE];
@@ -220,7 +218,7 @@ send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV4_PREFIX,
 	    0);
 
-	pdu.flags = vrp->flags;
+	pdu.flags = flags;
 	pdu.prefix_length = vrp->prefix_length;
 	pdu.max_length = vrp->max_prefix_length;
 	pdu.zero = 0;
@@ -234,7 +232,8 @@ send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 }
 
 static int
-send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
+send_ipv6_prefix_pdu(struct sender_common *common, struct vrp const *vrp,
+    uint8_t flags)
 {
 	struct ipv6_prefix_pdu pdu;
 	unsigned char data[BUFFER_SIZE];
@@ -243,7 +242,7 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV6_PREFIX,
 	    0);
 
-	pdu.flags = vrp->flags;
+	pdu.flags = flags;
 	pdu.prefix_length = vrp->prefix_length;
 	pdu.max_length = vrp->max_prefix_length;
 	pdu.zero = 0;
@@ -257,26 +256,21 @@ send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 }
 
 int
-send_prefix_pdu(struct vrp *vrp, void *arg)
+send_prefix_pdu(struct sender_common *common, struct vrp const *vrp,
+    uint8_t flags)
 {
 	switch (vrp->addr_fam) {
 	case AF_INET:
-		return send_ipv4_prefix_pdu(arg, vrp);
+		return send_ipv4_prefix_pdu(common, vrp, flags);
 	case AF_INET6:
-		return send_ipv6_prefix_pdu(arg, vrp);
+		return send_ipv6_prefix_pdu(common, vrp, flags);
 	}
 
 	return -EINVAL;
 }
 
-int
-send_pdus_base(struct sender_common *common)
-{
-	return vrps_foreach_base_roa(send_prefix_pdu, common);
-}
-
 static bool
-vrp_equals(struct vrp *left, struct vrp *right)
+vrp_equals(struct vrp const *left, struct vrp const *right)
 {
 	return left->asn == right->asn
 	    && left->addr_fam == right->addr_fam
@@ -289,18 +283,27 @@ vrp_equals(struct vrp *left, struct vrp *right)
 	        right->prefix.v6.s6_addr32)));
 }
 
+static int
+vrp_simply_send(struct delta const *delta, void *arg)
+{
+	return send_prefix_pdu(arg, &delta->vrp, delta->flags);
+}
+
 /**
- * Remove the announcements/withdrawals that override each other
+ * Remove the announcements/withdrawals that override each other.
+ *
+ * (Note: We're assuming the array is already duplicateless enough thanks to the
+ * hash table.)
  */
 static int
-vrp_ovrd_remove(struct vrp *vrp, void *arg)
+vrp_ovrd_remove(struct delta const *delta, void *arg)
 {
 	struct vrp_node *ptr;
 	struct vrp_slist *filtered_vrps = arg;
 
 	SLIST_FOREACH(ptr, filtered_vrps, next)
-		if (vrp_equals(vrp, &ptr->vrp) &&
-		    vrp->flags != ptr->vrp.flags) {
+		if (vrp_equals(&delta->vrp, &ptr->delta.vrp) &&
+		    delta->flags != ptr->delta.flags) {
 			SLIST_REMOVE(filtered_vrps, ptr, vrp_node, next);
 			free(ptr);
 			return 0;
@@ -310,27 +313,46 @@ vrp_ovrd_remove(struct vrp *vrp, void *arg)
 	if (ptr == NULL)
 		return pr_enomem();
 
-	ptr->vrp = *vrp;
+	ptr->delta = *delta;
 	SLIST_INSERT_HEAD(filtered_vrps, ptr, next);
 	return 0;
 }
 
 int
-send_pdus_delta(struct sender_common *common)
+send_pdus_delta(struct deltas_db *deltas, struct sender_common *common)
 {
 	struct vrp_slist filtered_vrps;
+	struct delta_group *group;
 	struct vrp_node *ptr;
 	int error;
 
-	SLIST_INIT(&filtered_vrps);
-	error = vrps_foreach_delta_roa(*common->start_serial,
-	    *common->end_serial, vrp_ovrd_remove, &filtered_vrps);
-	if (error)
-		goto release_list;
+	/*
+	 * Short circuit: Entries that share serial are already guaranteed to
+	 * not contradict each other, so no filtering required.
+	 */
+	if (deltas->len == 1) {
+		group = &deltas->array[0];
+		return deltas_foreach(group->serial, group->deltas,
+		    vrp_simply_send, common);
+	}
 
-	/** Now send the filtered deltas */
+	/*
+	 * Filter: Remove entries that cancel each other.
+	 * (We'll have to build a separate list because the database nodes
+	 * are immutable.)
+	 */
+	SLIST_INIT(&filtered_vrps);
+	ARRAYLIST_FOREACH(deltas, group) {
+		error = deltas_foreach(group->serial, group->deltas,
+		    vrp_ovrd_remove, &filtered_vrps);
+		if (error)
+			goto release_list;
+	}
+
+	/* Now send the filtered deltas */
 	SLIST_FOREACH(ptr, &filtered_vrps, next) {
-		error = send_prefix_pdu(&ptr->vrp, common);
+		error = send_prefix_pdu(common, &ptr->delta.vrp,
+		    ptr->delta.flags);
 		if (error)
 			break;
 	}
@@ -346,7 +368,7 @@ release_list:
 }
 
 int
-send_end_of_data_pdu(struct sender_common *common)
+send_end_of_data_pdu(struct sender_common *common, serial_t end_serial)
 {
 	struct end_of_data_pdu pdu;
 	unsigned char data[BUFFER_SIZE];
@@ -354,8 +376,8 @@ send_end_of_data_pdu(struct sender_common *common)
 	int error;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_END_OF_DATA,
-	    *common->session_id);
-	pdu.serial_number = *common->end_serial;
+	    common->session_id);
+	pdu.serial_number = end_serial;
 	if (common->version == RTR_V1) {
 		pdu.refresh_interval = config_get_refresh_interval();
 		pdu.retry_interval = config_get_retry_interval();
@@ -381,8 +403,7 @@ struct pdu_header *err_pdu_header, char const *message)
 	unsigned char data[BUFFER_SIZE];
 	size_t len;
 
-	set_header_values(&pdu.header, version, PDU_TYPE_ERROR_REPORT,
-	    code);
+	set_header_values(&pdu.header, version, PDU_TYPE_ERROR_REPORT, code);
 
 	pdu.error_pdu_length = 0;
 	pdu.erroneous_pdu = (void *)err_pdu_header;

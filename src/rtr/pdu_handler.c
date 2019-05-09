@@ -16,7 +16,7 @@ warn_unexpected_pdu(int fd, void *pdu, char const *pdu_name)
 	struct pdu_header *pdu_header = pdu;
 	pr_warn("Unexpected %s PDU received", pdu_name);
 	err_pdu_send(fd, pdu_header->protocol_version, ERR_PDU_UNSUP_PDU_TYPE,
-	    pdu_header, "Unexpected PDU received");
+	    pdu_header, "PDU is unexpected or out of order.");
 	return -EINVAL;
 }
 
@@ -26,49 +26,16 @@ handle_serial_notify_pdu(int fd, void *pdu)
 	return warn_unexpected_pdu(fd, pdu, "Serial Notify");
 }
 
-static int
-send_commmon_exchange(struct sender_common *common,
-    int (*pdu_sender)(struct sender_common *))
-{
-	int error;
-
-	/*
-	 * TODO (urgent) On certain errors, shouldn't we send error PDUs or
-	 * something?
-	 */
-
-	/* Send Cache response PDU */
-	error = send_cache_response_pdu(common);
-	if (error)
-		return error;
-
-	/* Send Payload PDUs */
-	error = pdu_sender(common);
-	if (error)
-		return error;
-
-	/* Send End of data PDU */
-	return send_end_of_data_pdu(common);
-}
-
-/*
- * TODO (urgent) The semaphoring is bonkers. The code keeps locking, storing a
- * value, unlocking, locking again, and using the old value.
- * It doesn't look like it's a problem for now, but eventually will be, when old
- * delta forgetting is implemented.
- * I'm going to defer this because it shouldn't be done during the merge.
- */
 int
 handle_serial_query_pdu(int fd, void *pdu)
 {
 	struct serial_query_pdu *received = pdu;
 	struct sender_common common;
+	struct deltas_db deltas;
+	serial_t final_serial;
 	int error;
-	enum delta_status updates;
-	uint32_t current_serial;
-	uint16_t session_id;
-	uint8_t version;
 
+	init_sender_common(&common, fd, received->header.protocol_version);
 	/*
 	 * RFC 6810 and 8210:
 	 * "If [...] either the router or the cache finds that the value of the
@@ -76,86 +43,107 @@ handle_serial_query_pdu(int fd, void *pdu)
 	 * the mismatch MUST immediately terminate the session with an Error
 	 * Report PDU with code 0 ("Corrupt Data")"
 	 */
-	version = received->header.protocol_version;
-	session_id = get_current_session_id(version);
-	if (received->header.m.session_id != session_id)
-		return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA,
-		    &received->header, NULL);
-	if (get_last_serial_number(&current_serial) != 0)
-		goto critical;
+	if (received->header.m.session_id != common.session_id)
+		return err_pdu_send(fd, common.version, ERR_PDU_CORRUPT_DATA,
+		    &received->header, "Session ID doesn't match.");
 
-	init_sender_common(&common, fd, version, &session_id,
-	    &received->serial_number, &current_serial);
+	/*
+	 * TODO (now) On certain errors, shouldn't we send error PDUs or
+	 * something?
+	 */
 
-	if (deltas_db_status(common.start_serial, &updates) != 0)
-		goto critical;
+	/*
+	 * For the record, there are two reasons why we want to work on a
+	 * (shallow) copy of the deltas (as opposed to eg. a foreach):
+	 * 1. We need to remove deltas that cancel each other.
+	 *    (Which can't be done directly on the DB.)
+	 * 2. It's probably best not to hold the VRPS read lock while writing
+	 *    PDUs, to minimize writer stagnation.
+	 */
 
-	switch (updates) {
-	case DS_NO_DATA_AVAILABLE:
-		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE,
-		    NULL, NULL);
-	case DS_DIFF_UNDETERMINED:
-		/* https://tools.ietf.org/html/rfc8210#section-8.3 */
-		return send_cache_reset_pdu(&common);
-	case DS_DIFF_AVAILABLE:
-		/* https://tools.ietf.org/html/rfc8210#section-8.2 */
-		return send_commmon_exchange(&common, send_pdus_delta);
-	case DS_NO_DIFF:
-		/* Typical exchange with no Payloads */
-		error = send_cache_response_pdu(&common);
+	deltas_db_init(&deltas);
+	error = vrps_get_deltas_from(received->serial_number, &final_serial,
+	    &deltas);
+	if (error == -EAGAIN) {
+		error = err_pdu_send(fd, common.version,
+		    ERR_PDU_NO_DATA_AVAILABLE, NULL, NULL);
+		goto end;
+	}
+	if (error == -ESRCH) {
+		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
+		error = send_cache_reset_pdu(&common);
+		goto end;
+	}
+	if (error)
+		goto end;
+
+	/*
+	 * https://tools.ietf.org/html/rfc6810#section-6.2
+	 * (Except the end of data PDU.)
+	 */
+
+	error = send_cache_response_pdu(&common);
+	if (error)
+		goto end;
+	error = send_pdus_delta(&deltas, &common);
+	if (error)
+		goto end; /* TODO (now) maybe send something? */
+	error = send_end_of_data_pdu(&common, final_serial);
+
+end:
+	deltas_db_cleanup(&deltas, deltagroup_cleanup);
+	return error;
+}
+
+struct base_roa_args {
+	bool started;
+	struct sender_common common;
+	serial_t last_serial;
+};
+
+static int
+send_base_roa(struct vrp const *vrp, void *arg)
+{
+	struct base_roa_args *args = arg;
+	int error;
+
+	if (!args->started) {
+		error = send_cache_response_pdu(&args->common);
 		if (error)
 			return error;
-		return send_end_of_data_pdu(&common);
+		args->started = true;
 	}
 
-	pr_warn("Reached 'unreachable' code");
-	return -EINVAL;
-
-critical:
-	return err_pdu_send(fd, version, ERR_PDU_INTERNAL_ERROR,
-	    &received->header, NULL);
+	/* TODO (now) maybe send something on error? */
+	return send_prefix_pdu(&args->common, vrp, FLAG_ANNOUNCEMENT);
 }
 
 int
 handle_reset_query_pdu(int fd, void *pdu)
 {
 	struct reset_query_pdu *received = pdu;
-	struct sender_common common;
-	uint32_t current_serial;
-	uint16_t session_id;
-	uint8_t version;
-	enum delta_status updates;
+	struct base_roa_args args;
+	serial_t current_serial;
+	int error;
 
-	version = received->header.protocol_version;
-	session_id = get_current_session_id(version);
-	if (get_last_serial_number(&current_serial) != 0)
-		goto critical;
+	args.started = false;
+	init_sender_common(&args.common, fd, received->header.protocol_version);
 
-	init_sender_common(&common, fd, version, &session_id, NULL,
-	    &current_serial);
+	/*
+	 * It's probably best not to work on a copy, because the tree is large.
+	 * Unfortunately, this means we'll have to encourage writer stagnation,
+	 * but most clients are supposed to request far more serial queries than
+	 * reset queries.
+	 */
 
-	if (deltas_db_status(NULL, &updates) != 0)
-		goto critical;
-	switch (updates) {
-	case DS_NO_DATA_AVAILABLE:
-		/* https://tools.ietf.org/html/rfc8210#section-8.4 */
-		return err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE,
-		    NULL, NULL);
-	case DS_DIFF_AVAILABLE:
-		/* https://tools.ietf.org/html/rfc8210#section-8.1 */
-		return send_commmon_exchange(&common, send_pdus_base);
-	case DS_DIFF_UNDETERMINED:
-	case DS_NO_DIFF:
-		break;
-	}
+	error = vrps_foreach_base_roa(send_base_roa, &args, &current_serial);
+	if (error == -EAGAIN)
+		return err_pdu_send(fd, args.common.version,
+		    ERR_PDU_NO_DATA_AVAILABLE, NULL, NULL);
+	if (error)
+		return error;
 
-	pr_warn("Reached 'unreachable' code");
-	return -EINVAL;
-
-critical:
-	return err_pdu_send(fd, version, ERR_PDU_INTERNAL_ERROR,
-	    &received->header, NULL);
+	return send_end_of_data_pdu(&args.common, current_serial);
 }
 
 int

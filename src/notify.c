@@ -11,27 +11,24 @@ static int
 send_notify(struct client const *client, void *arg)
 {
 	struct sender_common common;
-	uint32_t *serial = arg;
-	uint16_t session_id;
+	serial_t *serial = arg;
 	int error;
 
 	/* Send Serial Notify PDU */
-	session_id = get_current_session_id(client->rtr_version);
-	init_sender_common(&common, client->fd, client->rtr_version,
-	    &session_id, serial, NULL);
-	error = send_serial_notify_pdu(&common);
+	init_sender_common(&common, client->fd, client->rtr_version);
+	error = send_serial_notify_pdu(&common, *serial);
 
-	/* Error? Log it */
+	/* Error? Log it... */
 	if (error)
-		pr_warn("Error sending notify PDU to client");
+		pr_warn("Error code %d sending notify PDU to client.", error);
 
-	return 0; /* Do not interrupt notify to other clients */
+	return 0; /* ...but do not interrupt notify to other clients */
 }
 
 int
 notify_clients(void)
 {
-	uint32_t serial;
+	serial_t serial;
 	int error;
 
 	error = get_last_serial_number(&serial);

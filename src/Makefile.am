@@ -10,27 +10,32 @@ fort_SOURCES  = main.c
 fort_SOURCES += address.h address.c
 fort_SOURCES += algorithm.h algorithm.c
 fort_SOURCES += certificate_refs.h certificate_refs.c
+fort_SOURCES += clients.c clients.h
+fort_SOURCES += common.c common.h
 fort_SOURCES += console_handler.h console_handler.c
-fort_SOURCES += common.h
 fort_SOURCES += config.h config.c
 fort_SOURCES += debug.h debug.c
 fort_SOURCES += extension.h extension.c
 fort_SOURCES += file.h file.c
+fort_SOURCES += json_parser.c json_parser.h
 fort_SOURCES += line_file.h line_file.c
 fort_SOURCES += log.h log.c
 fort_SOURCES += nid.h nid.c
+fort_SOURCES += notify.c notify.h
 fort_SOURCES += random.h random.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
+fort_SOURCES += slurm_db.c slurm_db.h
+fort_SOURCES += slurm_loader.c slurm_loader.h
+fort_SOURCES += slurm_parser.c slurm_parser.h
 fort_SOURCES += sorted_array.h sorted_array.c
 fort_SOURCES += state.h state.c
 fort_SOURCES += str.h str.c
 fort_SOURCES += thread_var.h thread_var.c
+fort_SOURCES += updates_daemon.c updates_daemon.h
 fort_SOURCES += uri.h uri.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += validation_handler.h validation_handler.c
-
-fort_SOURCES += rsync/rsync.h rsync/rsync.c
 
 fort_SOURCES += asn1/content_info.h asn1/content_info.c
 fort_SOURCES += asn1/decode.h asn1/decode.c
@@ -45,8 +50,6 @@ fort_SOURCES += config/sync_strategy.h config/sync_strategy.c
 fort_SOURCES += config/types.h
 fort_SOURCES += config/uint.c config/uint.h
 fort_SOURCES += config/uint32.c config/uint32.h
-
-fort_SOURCES += data_structure/array_list.h
 
 fort_SOURCES += crypto/base64.h crypto/base64.c
 fort_SOURCES += crypto/hash.h crypto/hash.c
@@ -69,15 +72,7 @@ fort_SOURCES += resource/ip4.h resource/ip4.c
 fort_SOURCES += resource/ip6.h resource/ip6.c
 fort_SOURCES += resource/asn.h resource/asn.c
 
-fort_SOURCES += array_list.h
-fort_SOURCES += clients.c clients.h
-fort_SOURCES += common.c common.h
-fort_SOURCES += json_parser.c json_parser.h
-fort_SOURCES += notify.c notify.h
-fort_SOURCES += slurm_db.c slurm_db.h
-fort_SOURCES += slurm_loader.c slurm_loader.h
-fort_SOURCES += slurm_parser.c slurm_parser.h
-fort_SOURCES += updates_daemon.c updates_daemon.h
+fort_SOURCES += rsync/rsync.h rsync/rsync.c
 
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
 fort_SOURCES += rtr/pdu_handler.c rtr/pdu_handler.h

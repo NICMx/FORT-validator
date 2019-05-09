@@ -377,7 +377,7 @@ addr2str6(struct in6_addr *addr, char *buffer)
 	return inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN);
 }
 
-static int const
+static int
 str2addr4(const char *addr, struct in_addr *dst)
 {
 	if (!inet_pton(AF_INET, addr, dst))
@@ -385,7 +385,7 @@ str2addr4(const char *addr, struct in_addr *dst)
 	return 0;
 }
 
-static int const
+static int
 str2addr6(const char *addr, struct in6_addr *dst)
 {
 	if (!inet_pton(AF_INET6, addr, dst))
@@ -438,8 +438,8 @@ str_to_prefix_length(const char *text, uint8_t *dst, uint8_t max_value)
 		return -EINVAL;
 	}
 	/* An underflow or overflow will be considered here */
-	if (len < 0 || max_value < len)
-		return pr_err("Prefix length (%ld) is out of range (0-%d).",
+	if (max_value < len)
+		return pr_err("Prefix length (%lu) is out of range (0-%u).",
 		    len, max_value);
 
 	*dst = (uint8_t) len;

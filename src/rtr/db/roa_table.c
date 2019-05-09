@@ -83,7 +83,6 @@ create_roa(uint32_t asn, uint8_t max_length)
 
 	roa->data.asn = asn;
 	roa->data.max_prefix_length = max_length;
-	roa->data.flags = FLAG_ANNOUNCEMENT;
 
 	return roa;
 }
@@ -133,7 +132,7 @@ rtrhandler_handle_roa_v6(struct roa_table *table, uint32_t asn,
 }
 
 static int
-add_delta(struct deltas *deltas, struct hashable_roa *roa, enum delta_op op)
+add_delta(struct deltas *deltas, struct hashable_roa *roa, int op)
 {
 	union {
 		struct v4_address v4;
@@ -163,7 +162,7 @@ add_delta(struct deltas *deltas, struct hashable_roa *roa, enum delta_op op)
  */
 static int
 add_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
-    struct deltas *deltas, enum delta_op op)
+    struct deltas *deltas, int op)
 {
 	struct hashable_roa *n1; /* A node from @roas1 */
 	struct hashable_roa *n2; /* A node from @roas2 */
@@ -192,10 +191,10 @@ compute_deltas(struct roa_table *old, struct roa_table *new,
 	if (error)
 		return error;
 
-	error = add_deltas(new->roas, old->roas, deltas, DELTA_ADD);
+	error = add_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT);
 	if (error)
 		goto fail;
-	error = add_deltas(old->roas, new->roas, deltas, DELTA_RM);
+	error = add_deltas(old->roas, new->roas, deltas, FLAG_WITHDRAWAL);
 	if (error)
 		goto fail;
 
@@ -203,6 +202,6 @@ compute_deltas(struct roa_table *old, struct roa_table *new,
 	return 0;
 
 fail:
-	deltas_destroy(deltas);
+	deltas_put(deltas);
 	return error;
 }

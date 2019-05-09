@@ -1,7 +1,7 @@
 #include "rtr/db/roa.h"
 
-DEFINE_ARRAY_LIST_FUNCTIONS(v4_addresses, struct v4_address)
-DEFINE_ARRAY_LIST_FUNCTIONS(v6_addresses, struct v6_address)
+DEFINE_ARRAY_LIST_FUNCTIONS(v4_addresses, struct v4_address, static)
+DEFINE_ARRAY_LIST_FUNCTIONS(v6_addresses, struct v6_address, static)
 
 int
 roa_create(uint32_t as, struct roa **_result)

@@ -23,10 +23,12 @@ BASIC_MODULES += impersonator.c
 check_PROGRAMS  = address.test
 check_PROGRAMS += clients.test
 check_PROGRAMS += line_file.test
+check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += rsync.test
 check_PROGRAMS += roa_table.test
 #check_PROGRAMS += tal.test
 check_PROGRAMS += vcard.test
+check_PROGRAMS += vrps.test
 #check_PROGRAMS += rtr/pdu.test
 #check_PROGRAMS += rtr/primitive_reader.test
 TESTS = ${check_PROGRAMS}
@@ -47,6 +49,17 @@ line_file_test_SOURCES += ../src/file.c ../src/file.h
 line_file_test_SOURCES += ../src/line_file.c ../src/line_file.h
 line_file_test_SOURCES += line_file_test.c
 line_file_test_LDADD = ${MY_LDADD}
+
+pdu_handler_test_SOURCES  = ${BASIC_MODULES}
+pdu_handler_test_SOURCES += ../src/common.c
+pdu_handler_test_SOURCES += ../src/rtr/pdu_handler.c
+pdu_handler_test_SOURCES += ../src/rtr/err_pdu.c
+pdu_handler_test_SOURCES += ../src/rtr/db/delta.c
+pdu_handler_test_SOURCES += ../src/rtr/db/roa_table.c
+pdu_handler_test_SOURCES += ../src/rtr/db/vrps.c
+pdu_handler_test_SOURCES += rtr/db/impersonator.c
+pdu_handler_test_SOURCES += rtr/pdu_handler_test.c
+pdu_handler_test_LDADD = ${MY_LDADD}
 
 roa_table_test_SOURCES  = ${BASIC_MODULES}
 roa_table_test_SOURCES += ../src/rtr/db/delta.c
@@ -73,6 +86,15 @@ rsync_test_LDADD = ${MY_LDADD}
 vcard_test_SOURCES  = ${BASIC_MODULES}
 vcard_test_SOURCES += vcard_test.c
 vcard_test_LDADD = ${MY_LDADD}
+
+vrps_test_SOURCES  = ${BASIC_MODULES}
+vrps_test_SOURCES += ../src/common.c
+vrps_test_SOURCES += ../src/rtr/db/delta.c
+vrps_test_SOURCES += ../src/rtr/db/roa_table.c
+vrps_test_SOURCES += ../src/rtr/db/vrps.c
+vrps_test_SOURCES += rtr/db/impersonator.c
+vrps_test_SOURCES += rtr/db/vrps_test.c
+vrps_test_LDADD = ${MY_LDADD}
 
 #rtr_pdu_test_SOURCES  = ${BASIC_MODULES}
 #rtr_pdu_test_SOURCES += rtr/pdu_test.c

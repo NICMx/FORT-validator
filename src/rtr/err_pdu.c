@@ -4,6 +4,11 @@
 #include "pdu_sender.h"
 #include "log.h"
 
+/*
+ * TODO (urgent) According to the function below, NO_DATA_AVAILABLE is not
+ * fatal. However, some callers of this function are terminating the connection
+ * regardless of that.
+ */
 int
 err_pdu_send(int fd, uint8_t version, uint16_t code, void *err_pdu_header,
     char const *message)

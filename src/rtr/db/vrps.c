@@ -1,12 +1,9 @@
 #include "vrps.h"
 
 #include <pthread.h>
-#include <stdbool.h>
-#include <string.h>
+#include <time.h>
 #include "clients.h"
 #include "common.h"
-#include "validation_handler.h"
-#include "data_structure/array_list.h"
 #include "object/tal.h"
 #include "rtr/db/roa_table.h"
 
@@ -17,12 +14,7 @@
 
 #define START_SERIAL		0
 
-struct delta {
-	uint32_t serial;
-	struct deltas *deltas;
-};
-
-ARRAY_LIST(deltas_db, struct delta)
+DEFINE_ARRAY_LIST_FUNCTIONS(deltas_db, struct delta_group, )
 
 struct state {
 	/**
@@ -36,7 +28,11 @@ struct state {
 	/** ROA changes to @base over time. */
 	struct deltas_db deltas;
 
-	uint32_t current_serial;
+	/*
+	 * TODO (whatever) Maybe rename this. It's not really the current
+	 * serial; it's the next one.
+	 */
+	serial_t current_serial;
 	uint16_t v0_session_id;
 	uint16_t v1_session_id;
 	time_t last_modified_date;
@@ -45,10 +41,10 @@ struct state {
 /** Read/write lock, which protects @state and its inhabitants. */
 static pthread_rwlock_t lock;
 
-static void
-delta_destroy(struct delta *delta)
+void
+deltagroup_cleanup(struct delta_group *group)
 {
-	deltas_destroy(delta->deltas);
+	deltas_put(group->deltas);
 }
 
 int
@@ -57,7 +53,6 @@ vrps_init(void)
 	int error;
 
 	state.base = NULL;
-
 	deltas_db_init(&state.deltas);
 
 	/*
@@ -66,7 +61,6 @@ vrps_init(void)
 	 * 'Fields of a PDU')
 	 */
 	state.current_serial = START_SERIAL;
-
 	/* Get the bits that'll fit in session_id */
 	state.v0_session_id = time(NULL) & 0xFFFF;
 	/* Minus 1 to prevent same ID */
@@ -76,7 +70,7 @@ vrps_init(void)
 
 	error = pthread_rwlock_init(&lock, NULL);
 	if (error) {
-		deltas_db_cleanup(&state.deltas, delta_destroy);
+		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
 		return pr_errno(error, "pthread_rwlock_init() errored");
 	}
 
@@ -88,7 +82,7 @@ vrps_destroy(void)
 {
 	if (state.base != NULL)
 		roa_table_destroy(state.base);
-	deltas_db_cleanup(&state.deltas, delta_destroy);
+	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
 	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }
 
@@ -140,26 +134,24 @@ __perform_standalone_validation(struct roa_table **result)
 	return 0;
 }
 
-
-
 /**
  * Reallocate the array of @db starting at @start, the length and capacity are
  * calculated according to the new start.
  */
 static void
-resize_deltas_db(struct deltas_db *db, struct delta *start)
+resize_deltas_db(struct deltas_db *db, struct delta_group *start)
 {
-	struct delta *tmp;
+	struct delta_group *tmp;
 
 	db->len -= (start - db->array);
 	while (db->len < db->capacity / 2)
 		db->capacity /= 2;
-	tmp = malloc(sizeof(struct delta) * db->capacity);
+	tmp = malloc(sizeof(struct delta_group) * db->capacity);
 	if (tmp == NULL) {
 		pr_enomem();
 		return;
 	}
-	memcpy(tmp, start, db->len * sizeof(struct delta));
+	memcpy(tmp, start, db->len * sizeof(struct delta_group));
 	free(db->array);
 	db->array = tmp;
 }
@@ -167,22 +159,22 @@ resize_deltas_db(struct deltas_db *db, struct delta *start)
 static void
 vrps_purge(void)
 {
-	struct delta *d;
+	struct delta_group *group;
 	uint32_t min_serial;
 
 	min_serial = clients_get_min_serial();
 
 	/** Assume is ordered by serial, so get the new initial pointer */
-	ARRAYLIST_FOREACH(&state.deltas, d)
-		if (d->serial >= min_serial)
+	ARRAYLIST_FOREACH(&state.deltas, group)
+		if (group->serial >= min_serial)
 			break;
 
 	/** Is the first element or reached end, nothing to purge */
-	if (d == state.deltas.array ||
-	    (d - state.deltas.array) == state.deltas.len)
+	if (group == state.deltas.array ||
+	    (group - state.deltas.array) == state.deltas.len)
 		return;
 
-	resize_deltas_db(&state.deltas, d);
+	resize_deltas_db(&state.deltas, group);
 }
 
 int
@@ -191,7 +183,7 @@ vrps_update(bool *changed)
 	struct roa_table *old_base;
 	struct roa_table *new_base;
 	struct deltas *deltas; /* Deltas in raw form */
-	struct delta deltas_node; /* Deltas in database node form */
+	struct delta_group deltas_node; /* Deltas in database node form */
 	int error;
 
 	*changed = false;
@@ -232,6 +224,27 @@ vrps_update(bool *changed)
 
 		/** Remove unnecessary deltas */
 		vrps_purge();
+
+	} else {
+		/*
+		 * Make an empty dummy delta array.
+		 * It's annoying, but temporary. (Until it expires.)
+		 * Otherwise, it'd be a pain to have to check NULL
+		 * delta_group.deltas all the time.
+		 */
+		error = deltas_create(&deltas);
+		if (error) {
+			rwlock_unlock(&lock);
+			goto revert_base;
+		}
+
+		deltas_node.serial = state.current_serial;
+		deltas_node.deltas = deltas;
+		error = deltas_db_add(&state.deltas, &deltas_node);
+		if (error) {
+			rwlock_unlock(&lock);
+			goto revert_deltas;
+		}
 	}
 
 	*changed = true;
@@ -245,75 +258,15 @@ vrps_update(bool *changed)
 	return 0;
 
 revert_deltas:
-	deltas_destroy(deltas);
+	deltas_put(deltas);
 revert_base:
 	roa_table_destroy(new_base);
 	return error;
 }
 
-/*
- * Get a status to know the difference between the delta with serial SERIAL and
- * the last delta at DB.
- *
- * If SERIAL is received as NULL, and there's data at DB then the status will
- * be DIFF_AVAILABLE.
- *
- * This function can only fail due to critical r/w lock bugs.
- */
+/* TODO (whatever) @serial is a dumb hack. */
 int
-deltas_db_status(uint32_t *serial, enum delta_status *result)
-{
-	struct delta *delta;
-	int error;
-
-	error = rwlock_read_lock(&lock);
-	if (error)
-		return error;
-
-	if (state.base == NULL) {
-		*result = DS_NO_DATA_AVAILABLE;
-		goto rlock_succeed;
-	}
-
-	/* No serial to match, and there's data at DB */
-	if (serial == NULL) {
-		*result = DS_DIFF_AVAILABLE;
-		goto rlock_succeed;
-	}
-
-	/* Is the last version? */
-	if (*serial == (state.current_serial - 1)) {
-		*result = DS_NO_DIFF;
-		goto rlock_succeed;
-	}
-
-	/* The first serial isn't at deltas */
-	if (*serial == START_SERIAL) {
-		*result = DS_DIFF_AVAILABLE;
-		goto rlock_succeed;
-	}
-
-	/* Get the delta corresponding to the serial */
-	ARRAYLIST_FOREACH(&state.deltas, delta)
-		if (delta->serial == *serial) {
-			*result = DS_DIFF_AVAILABLE;
-			goto rlock_succeed;
-		}
-
-	/* No match yet, release lock */
-	rwlock_unlock(&lock);
-
-	/* Reached end, diff can't be determined */
-	*result = DS_DIFF_UNDETERMINED;
-	return 0;
-
-rlock_succeed:
-	rwlock_unlock(&lock);
-	return 0;
-}
-
-int
-vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
+vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg, serial_t *serial)
 {
 	int error;
 
@@ -321,18 +274,36 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 	if (error)
 		return error;
 
-	if (state.base != NULL)
+	if (state.base != NULL) {
 		error = roa_table_foreach_roa(state.base, cb, arg);
+		*serial = state.current_serial - 1;
+	} else {
+		error = -EAGAIN;
+	}
 
 	rwlock_unlock(&lock);
 
 	return error;
 }
 
+/**
+ * Adds to @result the deltas whose serial > @from.
+ *
+ * The result code is one of the following:
+ *
+ * 0: No errors.
+ * -EAGAIN: No data available; database still under construction.
+ * -ESRCH: @from was not found.
+ * Anything else: Generic fail.
+ *
+ * As usual, only 0 guarantees valid out parameters. (@to and @result.)
+ * (But note that @result is supposed to be already initialized, so caller will
+ * have to clean it up regardless of error.)
+ */
 int
-vrps_foreach_delta_roa(uint32_t from, uint32_t to, vrp_foreach_cb cb, void *arg)
+vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 {
-	struct delta *d;
+	struct delta_group *group;
 	bool from_found;
 	int error;
 
@@ -342,27 +313,36 @@ vrps_foreach_delta_roa(uint32_t from, uint32_t to, vrp_foreach_cb cb, void *arg)
 	if (error)
 		return error;
 
-	ARRAYLIST_FOREACH(&state.deltas, d) {
+	if (state.base == NULL) {
+		rwlock_unlock(&lock);
+		return -EAGAIN;
+	}
+
+	ARRAYLIST_FOREACH(&state.deltas, group) {
 		if (!from_found) {
-			if (d->serial > from)
+			if (group->serial == from) {
 				from_found = true;
-			else
-				continue;
+				*to = group->serial;
+			}
+			continue;
 		}
-		if (d->serial > to)
-			break;
-		error = deltas_foreach(d->deltas, cb, arg);
-		if (error)
-			break;
+
+		error = deltas_db_add(result, group);
+		if (error) {
+			rwlock_unlock(&lock);
+			return error;
+		}
+
+		deltas_get(group->deltas);
+		*to = group->serial;
 	}
 
 	rwlock_unlock(&lock);
-
-	return error;
+	return from_found ? 0 : -ESRCH;
 }
 
 int
-get_last_serial_number(uint32_t *result)
+get_last_serial_number(serial_t *result)
 {
 	int error;
 
@@ -370,11 +350,14 @@ get_last_serial_number(uint32_t *result)
 	if (error)
 		return error;
 
-	*result = state.current_serial - 1;
+	if (state.base != NULL)
+		*result = state.current_serial - 1;
+	else
+		error = -EAGAIN;
 
 	rwlock_unlock(&lock);
 
-	return 0;
+	return error;
 }
 
 uint16_t

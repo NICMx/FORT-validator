@@ -189,8 +189,7 @@ client_thread_cb(void *param_void)
 		/* Protocol Version Negotiation */
 		if (rtr_version != RTR_VERSION_SUPPORTED) {
 			err_pdu_send(param->client_fd, RTR_VERSION_SUPPORTED,
-			    ERR_PDU_UNSUP_PROTO_VERSION,
-			    (struct pdu_header *) pdu, NULL);
+			    ERR_PDU_UNSUP_PROTO_VERSION, pdu, NULL);
 			return end_client(param->client_fd, meta, pdu);
 		}
 		/* RTR Version ready, now update client */
@@ -199,10 +198,10 @@ client_thread_cb(void *param_void)
 		if (err) {
 			if (err == -ERTR_VERSION_MISMATCH) {
 				err_pdu_send(param->client_fd, rtr_version,
-				    (rtr_version == RTR_V0
-				    ? ERR_PDU_UNSUP_PROTO_VERSION
-				    : ERR_PDU_UNEXPECTED_PROTO_VERSION),
-				    (struct pdu_header *) pdu, NULL);
+				    (rtr_version == RTR_V0)
+				        ? ERR_PDU_UNSUP_PROTO_VERSION
+				        : ERR_PDU_UNEXPECTED_PROTO_VERSION,
+				    pdu, NULL);
 			}
 			return end_client(param->client_fd, meta, pdu);
 		}

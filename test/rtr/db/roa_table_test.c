@@ -11,8 +11,8 @@ static bool roas_found[TOTAL_ROAS];
 static unsigned int total_found;
 
 static bool
-vrp_equals_v4(struct vrp *vrp, uint8_t as, uint32_t addr, uint8_t prefix_len,
-    uint8_t max_prefix_len)
+vrp_equals_v4(struct vrp const *vrp, uint8_t as, uint32_t addr,
+    uint8_t prefix_len, uint8_t max_prefix_len)
 {
 	return (AF_INET == vrp->addr_fam)
 	    && (as == vrp->asn)
@@ -22,8 +22,8 @@ vrp_equals_v4(struct vrp *vrp, uint8_t as, uint32_t addr, uint8_t prefix_len,
 }
 
 static bool
-vrp_equals_v6(struct vrp *vrp, uint8_t as, uint32_t addr, uint8_t prefix_len,
-    uint8_t max_prefix_len)
+vrp_equals_v6(struct vrp const *vrp, uint8_t as, uint32_t addr,
+    uint8_t prefix_len, uint8_t max_prefix_len)
 {
 	return (AF_INET6 == vrp->addr_fam)
 	    && (as == vrp->asn)
@@ -45,7 +45,7 @@ update_found(array_index index)
 }
 
 static int
-foreach_cb(struct vrp *vrp, void *arg)
+foreach_cb(struct vrp const *vrp, void *arg)
 {
 	char const *str;
 
@@ -156,7 +156,7 @@ START_TEST(test_basic)
 	for (i = 0; i < TOTAL_ROAS; i++)
 		ck_assert_int_eq(true, roas_found[i]);
 
-	roa_table_put(table);
+	roa_table_destroy(table);
 }
 END_TEST
 

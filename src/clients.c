@@ -23,7 +23,7 @@ static struct hashable_client *table;
 /** Read/write lock, which protects @table and its inhabitants. */
 static pthread_rwlock_t lock;
 /** Serial number from which deltas must be stored */
-static uint32_t min_serial;
+static serial_t min_serial;
 
 int
 clients_db_init(void)
@@ -111,7 +111,7 @@ clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 }
 
 void
-clients_update_serial(int fd, uint32_t serial)
+clients_update_serial(int fd, serial_t serial)
 {
 	struct hashable_client *cur_client;
 
@@ -126,11 +126,11 @@ unlock:
 	rwlock_unlock(&lock);
 }
 
-uint32_t
+serial_t
 clients_get_min_serial(void)
 {
 	struct hashable_client *current, *ptr;
-	uint32_t result;
+	serial_t result;
 
 	rwlock_write_lock(&lock);
 	if (HASH_COUNT(table) == 0)

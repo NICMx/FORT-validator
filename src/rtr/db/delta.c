@@ -26,6 +26,9 @@ struct deltas {
 		struct deltas_v6 adds;
 		struct deltas_v6 removes;
 	} v6;
+
+	/* TODO (now) atomic */
+	unsigned int references;
 };
 
 int
@@ -41,24 +44,34 @@ deltas_create(struct deltas **_result)
 	deltas_v4_init(&result->v4.removes);
 	deltas_v6_init(&result->v6.adds);
 	deltas_v6_init(&result->v6.removes);
+	result->references = 1;
 
 	*_result = result;
 	return 0;
 }
 
 void
-deltas_destroy(struct deltas *deltas)
+deltas_get(struct deltas *deltas)
 {
-	deltas_v4_cleanup(&deltas->v4.adds, NULL);
-	deltas_v4_cleanup(&deltas->v4.removes, NULL);
-	deltas_v6_cleanup(&deltas->v6.adds, NULL);
-	deltas_v6_cleanup(&deltas->v6.removes, NULL);
-	free(deltas);
+	deltas->references++;
+}
+
+void
+deltas_put(struct deltas *deltas)
+{
+	deltas->references--;
+	if (deltas->references == 0) {
+		deltas_v4_cleanup(&deltas->v4.adds, NULL);
+		deltas_v4_cleanup(&deltas->v4.removes, NULL);
+		deltas_v6_cleanup(&deltas->v6.adds, NULL);
+		deltas_v6_cleanup(&deltas->v6.removes, NULL);
+		free(deltas);
+	}
 }
 
 int
 deltas_add_roa_v4(struct deltas *deltas, uint32_t as, struct v4_address *addr,
-    enum delta_op op)
+    int op)
 {
 	struct delta_v4 delta = {
 		.as = as,
@@ -67,18 +80,18 @@ deltas_add_roa_v4(struct deltas *deltas, uint32_t as, struct v4_address *addr,
 	};
 
 	switch (op) {
-	case DELTA_ADD:
+	case FLAG_ANNOUNCEMENT:
 		return deltas_v4_add(&deltas->v4.adds, &delta);
-	case DELTA_RM:
+	case FLAG_WITHDRAWAL:
 		return deltas_v4_add(&deltas->v4.removes, &delta);
 	}
 
-	return pr_crit("Unknown delta operation: %u", op);
+	return pr_crit("Unknown delta operation: %d", op);
 }
 
 int
 deltas_add_roa_v6(struct deltas *deltas, uint32_t as, struct v6_address *addr,
-    enum delta_op op)
+    int op)
 {
 	struct delta_v6 delta = {
 		.as = as,
@@ -87,13 +100,13 @@ deltas_add_roa_v6(struct deltas *deltas, uint32_t as, struct v6_address *addr,
 	};
 
 	switch (op) {
-	case DELTA_ADD:
+	case FLAG_ANNOUNCEMENT:
 		return deltas_v6_add(&deltas->v6.adds, &delta);
-	case DELTA_RM:
+	case FLAG_WITHDRAWAL:
 		return deltas_v6_add(&deltas->v6.removes, &delta);
 	}
 
-	return pr_crit("Unknown delta operation: %u", op);
+	return pr_crit("Unknown delta operation: %d", op);
 }
 
 bool
@@ -106,22 +119,23 @@ deltas_is_empty(struct deltas *deltas)
 }
 
 static int
-__foreach_v4(struct deltas_v4 *array, vrp_foreach_cb cb, void *arg,
-    uint8_t flags)
+__foreach_v4(struct deltas_v4 *array, delta_foreach_cb cb, void *arg,
+    serial_t serial, uint8_t flags)
 {
+	struct delta delta;
 	struct delta_v4 *d;
-	struct vrp vrp;
 	int error;
 
-	vrp.addr_fam = AF_INET;
-	vrp.flags = flags;
+	delta.serial = serial;
+	delta.vrp.addr_fam = AF_INET;
+	delta.flags = flags;
 
 	ARRAYLIST_FOREACH(array, d) {
-		vrp.asn = d->as;
-		vrp.prefix.v4 = d->prefix.addr;
-		vrp.prefix_length = d->prefix.len;
-		vrp.max_prefix_length = d->max_length;
-		error = cb(&vrp, arg);
+		delta.vrp.asn = d->as;
+		delta.vrp.prefix.v4 = d->prefix.addr;
+		delta.vrp.prefix_length = d->prefix.len;
+		delta.vrp.max_prefix_length = d->max_length;
+		error = cb(&delta, arg);
 		if (error)
 			return error;
 	}
@@ -130,22 +144,23 @@ __foreach_v4(struct deltas_v4 *array, vrp_foreach_cb cb, void *arg,
 }
 
 static int
-__foreach_v6(struct deltas_v6 *array, vrp_foreach_cb cb, void *arg,
-    uint8_t flags)
+__foreach_v6(struct deltas_v6 *array, delta_foreach_cb cb, void *arg,
+    serial_t serial, uint8_t flags)
 {
+	struct delta delta;
 	struct delta_v6 *d;
-	struct vrp vrp;
 	int error;
 
-	vrp.addr_fam = AF_INET6;
-	vrp.flags = flags;
+	delta.serial = serial;
+	delta.vrp.addr_fam = AF_INET6;
+	delta.flags = flags;
 
 	ARRAYLIST_FOREACH(array, d) {
-		vrp.asn = d->as;
-		vrp.prefix.v6 = d->prefix.addr;
-		vrp.prefix_length = d->prefix.len;
-		vrp.max_prefix_length = d->max_length;
-		error = cb(&vrp, arg);
+		delta.vrp.asn = d->as;
+		delta.vrp.prefix.v6 = d->prefix.addr;
+		delta.vrp.prefix_length = d->prefix.len;
+		delta.vrp.max_prefix_length = d->max_length;
+		error = cb(&delta, arg);
 		if (error)
 			return error;
 	}
@@ -154,19 +169,26 @@ __foreach_v6(struct deltas_v6 *array, vrp_foreach_cb cb, void *arg,
 }
 
 int
-deltas_foreach(struct deltas *deltas, vrp_foreach_cb cb, void *arg)
+deltas_foreach(serial_t serial, struct deltas *deltas, delta_foreach_cb cb,
+    void *arg)
 {
 	int error;
 
-	error = __foreach_v4(&deltas->v4.adds, cb, arg, FLAG_ANNOUNCEMENT);
-	if (error)
-		return error;
-	error = __foreach_v4(&deltas->v4.removes, cb, arg, FLAG_WITHDRAWAL);
+	error = __foreach_v4(&deltas->v4.adds, cb, arg, serial,
+	    FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
 
-	error = __foreach_v6(&deltas->v6.adds, cb, arg, FLAG_ANNOUNCEMENT);
+	error = __foreach_v4(&deltas->v4.removes, cb, arg, serial,
+	    FLAG_WITHDRAWAL);
 	if (error)
 		return error;
-	return __foreach_v6(&deltas->v6.removes, cb, arg, FLAG_WITHDRAWAL);
+
+	error = __foreach_v6(&deltas->v6.adds, cb, arg, serial,
+	    FLAG_ANNOUNCEMENT);
+	if (error)
+		return error;
+
+	return __foreach_v6(&deltas->v6.removes, cb, arg, serial,
+	    FLAG_WITHDRAWAL);
 }

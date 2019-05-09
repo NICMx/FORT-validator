@@ -16,8 +16,13 @@
 		size_t capacity;					\
 	}
 
-#define DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type)			\
-	static void							\
+#define DECLARE_ARRAY_LIST_FUNCTIONS(name, elem_type)			\
+	void name##_init(struct name *);				\
+	void name##_cleanup(struct name *, void (*cb)(elem_type *));	\
+	int name##_add(struct name *list, elem_type *elem);
+
+#define DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, modifiers)		\
+	modifiers void							\
 	name##_init(struct name *list)					\
 	{								\
 		list->array = NULL;					\
@@ -25,7 +30,7 @@
 		list->capacity = 0;					\
 	}								\
 									\
-	static void							\
+	modifiers void							\
 	name##_cleanup(struct name *list, void (*cb)(elem_type *))	\
 	{								\
 		array_index i;						\
@@ -36,7 +41,7 @@
 	}								\
 									\
 	/* Will store a shallow copy, not @elem */			\
-	static int							\
+	modifiers int							\
 	name##_add(struct name *list, elem_type *elem)			\
 	{								\
 		elem_type *tmp;						\
@@ -66,7 +71,7 @@
 
 #define ARRAY_LIST(name, elem_type)					\
 	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
-	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type)
+	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, )
 
 /* c = cursor */
 #define ARRAYLIST_FOREACH(list, c) for (				\
