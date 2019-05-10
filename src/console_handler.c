@@ -27,6 +27,8 @@ validate_into_console(void)
 {
 	struct validation_handler handler;
 
+	handler.merge = NULL;
+	handler.merge_arg = NULL;
 	handler.reset = NULL;
 	handler.traverse_down = NULL;
 	handler.traverse_up = NULL;

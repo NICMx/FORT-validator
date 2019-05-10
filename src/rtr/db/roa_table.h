@@ -17,6 +17,7 @@ int rtrhandler_handle_roa_v4(struct roa_table *, uint32_t,
     struct ipv4_prefix const *, uint8_t);
 int rtrhandler_handle_roa_v6(struct roa_table *, uint32_t,
     struct ipv6_prefix const *, uint8_t);
+int rtrhandler_merge(struct roa_table *, struct roa_table *);
 
 int compute_deltas(struct roa_table *, struct roa_table *, struct deltas **);
 

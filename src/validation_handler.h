@@ -7,6 +7,8 @@
 struct validation_handler {
 	/* All of these can be NULL. */
 
+	int (*merge)(void *, void *);
+	void *merge_arg;
 	int (*reset)(void *);
 	int (*traverse_down)(struct rfc5280_name *, void *);
 	int (*traverse_up)(void *);
@@ -17,6 +19,7 @@ struct validation_handler {
 	void *arg;
 };
 
+int vhandler_merge(struct validation_handler *);
 int vhandler_reset(struct validation_handler *);
 int vhandler_traverse_down(struct rfc5280_name *);
 int vhandler_traverse_up(void);

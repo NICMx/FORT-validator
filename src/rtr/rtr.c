@@ -22,8 +22,7 @@
 /* TODO (next iteration) Support both RTR v0 and v1 */
 #define RTR_VERSION_SUPPORTED	RTR_V0
 
-/* TODO (urgent) this needs to be atomic */
-volatile bool loop;
+struct sigaction act;
 
 /*
  * Arguments that the server socket thread will send to the client
@@ -181,7 +180,7 @@ client_thread_cb(void *param_void)
 	int err;
 	uint8_t rtr_version;
 
-	while (loop) { /* For each PDU... */
+	while (true) { /* For each PDU... */
 		err = pdu_load(param->client_fd, &pdu, &meta, &rtr_version);
 		if (err)
 			return end_client(param->client_fd, NULL, NULL);
@@ -285,7 +284,6 @@ signal_handler(int signal, siginfo_t *info, void *param)
 static int
 init_signal_handler(void)
 {
-	struct sigaction act;
 	int error;
 
 	memset(&act, 0, sizeof act);
@@ -293,7 +291,6 @@ init_signal_handler(void)
 	act.sa_flags = SA_SIGINFO;
 	act.sa_sigaction = signal_handler;
 
-	/* TODO is this really legal? @act might need to be global. */
 	error = sigaction(SIGINT, &act, NULL);
 	if (error) {
 		pr_errno(errno, "Error initializing signal handler");
@@ -308,7 +305,6 @@ wait_threads(void)
 {
 	struct thread_node *ptr;
 
-	loop = false;
 	while (!SLIST_EMPTY(&threads)) {
 		ptr = SLIST_FIRST(&threads);
 		SLIST_REMOVE_HEAD(&threads, next);
@@ -343,7 +339,6 @@ rtr_listen(void)
 		goto revert_server_socket;
 
 	/* Init global vars */
-	loop = true;
 	SLIST_INIT(&threads);
 
 	error = init_signal_handler();

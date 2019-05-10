@@ -79,7 +79,7 @@ length_end_of_data_pdu(struct end_of_data_pdu *pdu)
 	return len;
 }
 
-/* TODO Include Router Key PDU serials */
+/* TODO (next iteration) Include Router Key PDU serials */
 /**
  * static uint32_t
  * length_router_key_pdu(struct router_key_pdu *pdu)
@@ -321,6 +321,11 @@ send_pdus_delta(struct sender_common *common)
 	struct vrp_slist filtered_vrps;
 	struct vrp_node *ptr;
 	int error;
+
+	/** Just 1 delta to send, no need to check for overridden PDUs */
+	if (*common->start_serial == *common->end_serial - 1)
+		return vrps_foreach_delta_roa(*common->start_serial,
+		    *common->end_serial, send_prefix_pdu, common);
 
 	SLIST_INIT(&filtered_vrps);
 	error = vrps_foreach_delta_roa(*common->start_serial,

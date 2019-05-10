@@ -35,7 +35,7 @@
 static int handle_json(json_t *);
 
 int
-slurm_parse(char const *location)
+slurm_parse(char const *location, void *arg)
 {
 	json_t *json_root;
 	json_error_t json_error;
@@ -292,14 +292,12 @@ set_router_pub_key(json_t *object, bool is_assertion,
 		return pr_err("'%s' couldn't be decoded", str_encoded);
 
 	/*
-	 * TODO Validate that 'routerPublicKey' is: "the equivalent to the
-	 * subjectPublicKeyInfo value of the router certificate's public key,
-	 * as described in [RFC8208].  This is the full ASN.1 DER encoding of
-	 * the subjectPublicKeyInfo, including the ASN.1 tag and length values
+	 * TODO (next iteration) Reuse the functions to validate that
+	 * 'routerPublicKey' is: "the equivalent to the subjectPublicKeyInfo
+	 * value of the router certificate's public key, as described in
+	 * [RFC8208]. This is the full ASN.1 DER encoding of the
+	 * subjectPublicKeyInfo, including the ASN.1 tag and length values
 	 * of the subjectPublicKeyInfo SEQUENCE.
-	 */
-	/*
-	 * TODO When the merge is done, reuse the functions at fort-validator
 	 *
 	 * #include <libcmscodec/SubjectPublicKeyInfo.h>
 	 * #include "asn1/decode.h"

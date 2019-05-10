@@ -100,6 +100,55 @@ add_roa(struct roa_table *table, struct hashable_roa *new)
 	return 0;
 }
 
+static int
+duplicate_roa(struct roa_table *dst, struct hashable_roa *new)
+{
+	struct vrp vrp;
+	struct ipv4_prefix prefix4;
+	struct ipv6_prefix prefix6;
+
+	vrp = new->data;
+	switch (vrp.addr_fam) {
+	case AF_INET:
+		prefix4.addr = vrp.prefix.v4;
+		prefix4.len = vrp.prefix_length;
+		return rtrhandler_handle_roa_v4(dst, vrp.asn, &prefix4,
+		    vrp.max_prefix_length);
+	case AF_INET6:
+		prefix6.addr = vrp.prefix.v6;
+		prefix6.len = vrp.prefix_length;
+		return rtrhandler_handle_roa_v6(dst, vrp.asn, &prefix6,
+		    vrp.max_prefix_length);
+	}
+	return pr_crit("Unknown address family: %d", vrp.addr_fam);
+}
+
+static int
+roa_table_merge(struct roa_table *dst, struct roa_table *src)
+{
+	struct hashable_roa *node, *tmp, *found;
+	int error;
+
+	/** Must look for it due to the new mem allocation */
+	HASH_ITER(hh, src->roas, node, tmp) {
+		HASH_FIND(hh, dst->roas, &node->data, sizeof(node->data),
+		    found);
+		if (found != NULL)
+			continue;
+		error = duplicate_roa(dst, node);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+int
+rtrhandler_merge(struct roa_table *dst, struct roa_table *src)
+{
+	return roa_table_merge(dst, src);
+}
+
 void
 roa_table_remove_roa(struct roa_table *table, struct vrp *del)
 {

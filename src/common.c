@@ -1,7 +1,9 @@
 #include "common.h"
 
 #include <errno.h>
+#include <dirent.h>
 #include <stdlib.h>
+#include <string.h>
 #include "log.h"
 
 int
@@ -84,3 +86,75 @@ close_thread(pthread_t thread, char const *what)
 	return error;
 }
 
+static int
+process_file(char const *dir_name, char const *file_name, char const *file_ext,
+    process_file_cb cb, void *arg)
+{
+	char *ext, *fullpath, *tmp;
+	int error;
+
+	if (file_ext != NULL) {
+		ext = strrchr(file_name, '.');
+		/* Ignore file if extension isn't the expected */
+		if (ext == NULL || strcmp(ext, file_ext) != 0)
+			return 0;
+	}
+
+	/* Get the full file path */
+	tmp = strdup(dir_name);
+	if (tmp == NULL)
+		return -pr_errno(errno, "Couldn't create temporal char");
+
+	tmp = realloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
+	if (tmp == NULL)
+		return -pr_errno(errno, "Couldn't reallocate temporal char");
+
+	strcat(tmp, "/");
+	strcat(tmp, file_name);
+	fullpath = realpath(tmp, NULL);
+	if (fullpath == NULL) {
+		free(tmp);
+		return -pr_errno(errno,
+		    "Error getting real path for file '%s' at dir '%s'",
+		    dir_name, file_name);
+	}
+
+	error = cb(fullpath, arg);
+	free(tmp);
+	free(fullpath);
+	return error;
+}
+
+int
+process_dir_files(char const *location, char const *file_ext,
+    process_file_cb cb, void *arg)
+{
+	DIR *dir_loc;
+	struct dirent *dir_ent;
+	int error;
+
+	dir_loc = opendir(location);
+	if (dir_loc == NULL) {
+		error = -pr_errno(errno, "Couldn't open dir %s", location);
+		goto end;
+	}
+
+	errno = 0;
+	while ((dir_ent = readdir(dir_loc)) != NULL) {
+		error = process_file(location, dir_ent->d_name, file_ext, cb,
+		    arg);
+		if (error) {
+			pr_err("The error was at file %s", dir_ent->d_name);
+			goto close_dir;
+		}
+		errno = 0;
+	}
+	if (errno) {
+		pr_err("Error reading dir %s", location);
+		error = -errno;
+	}
+close_dir:
+	closedir(dir_loc);
+end:
+	return error;
+}

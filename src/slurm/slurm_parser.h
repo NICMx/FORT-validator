@@ -31,7 +31,7 @@ struct slurm_bgpsec {
 };
 
 
-int slurm_parse(char const *);
+int slurm_parse(char const *, void *);
 
 
 #endif /* SRC_SLURM_SLURM_PARSER_H_ */
