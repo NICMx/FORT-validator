@@ -4,17 +4,16 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
 
 #include "log.h"
 
-static int read_exact(int, unsigned char *, size_t);
-static int read_and_waste(int, unsigned char *, size_t, uint32_t);
 static int get_octets(unsigned char);
 static void place_null_character(rtr_char *, size_t);
 
-static int
+int
 read_exact(int fd, unsigned char *buffer, size_t buffer_len)
 {
 	ssize_t read_result;
@@ -34,95 +33,81 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len)
 	return 0;
 }
 
-int
-read_int8(int fd, uint8_t *result)
-{
-	return read_exact(fd, result, sizeof(uint8_t));
-}
-
-/** Big Endian. */
-int
-read_int16(int fd, uint16_t *result)
-{
-	unsigned char buffer[2];
-	int err;
-
-	err = read_exact(fd, buffer, sizeof(buffer));
-	if (err)
-		return err;
-
-	*result = (((uint16_t)buffer[0]) << 8) | ((uint16_t)buffer[1]);
-	return 0;
-}
-
-/** Big Endian. */
-int
-read_int32(int fd, uint32_t *result)
-{
-	unsigned char buffer[4];
-	int err;
-
-	err = read_exact(fd, buffer, sizeof(buffer));
-	if (err)
-		return err;
-
-	*result = (((uint32_t)buffer[0]) << 24)
-	        | (((uint32_t)buffer[1]) << 16)
-	        | (((uint32_t)buffer[2]) <<  8)
-	        | (((uint32_t)buffer[3])      );
-	return 0;
-}
-
-int
-read_in_addr(int fd, struct in_addr *result)
-{
-	return read_int32(fd, &result->s_addr);
-}
-
-int
-read_in6_addr(int fd, struct in6_addr *result)
-{
-	return read_int32(fd, &result->s6_addr32[0])
-	    || read_int32(fd, &result->s6_addr32[1])
-	    || read_int32(fd, &result->s6_addr32[2])
-	    || read_int32(fd, &result->s6_addr32[3]);
-}
-
-/*
- * Consumes precisely @total_len bytes from @fd.
- * The first @str_len bytes are stored in @str.
- *
- * It is required that @str_len <= @total_len.
+/**
+ * BTW: I think it's best not to use sizeof for @size, because it risks
+ * including padding.
  */
-static int
-read_and_waste(int fd, unsigned char *str, size_t str_len, uint32_t total_len)
+int
+pdu_reader_init(struct pdu_reader *reader, int fd, unsigned char *buffer,
+    size_t size)
 {
-#define TLEN 1024 /* "Trash length" */
-	unsigned char *trash;
-	size_t offset;
-	int err;
+	reader->buffer = buffer;
+	reader->size = size;
+	return read_exact(fd, reader->buffer, size);
+}
 
-	err = read_exact(fd, str, str_len);
-	if (err)
-		return err;
+static int
+insufficient_bytes(void)
+{
+	pr_crit("Attempted to read past the end of a PDU Reader.");
+	return -EPIPE;
+}
 
-	if (str_len == total_len)
-		return 0;
+int
+read_int8(struct pdu_reader *reader, uint8_t *result)
+{
+	if (reader->size < 1)
+		return insufficient_bytes();
 
-	trash = malloc(TLEN);
-	if (trash == NULL)
-		return pr_enomem();
+	*result = reader->buffer[0];
+	reader->buffer++;
+	reader->size--;
+	return 0;
+}
 
-	for (offset = str_len; offset < total_len; offset += TLEN) {
-		err = read_exact(fd, trash,
-		    (total_len - offset >= TLEN) ? TLEN : (total_len - offset));
-		if (err)
-			break;
-	}
+/** Big Endian. */
+int
+read_int16(struct pdu_reader *reader, uint16_t *result)
+{
+	if (reader->size < 2)
+		return insufficient_bytes();
 
-	free(trash);
-	return err;
-#undef TLEN
+	*result = (((uint16_t)reader->buffer[0]) << 8)
+	        | (((uint16_t)reader->buffer[1])     );
+	reader->buffer += 2;
+	reader->size -= 2;
+	return 0;
+}
+
+/** Big Endian. */
+int
+read_int32(struct pdu_reader *reader, uint32_t *result)
+{
+	if (reader->size < 4)
+		return insufficient_bytes();
+
+	*result = (((uint32_t)reader->buffer[0]) << 24)
+	        | (((uint32_t)reader->buffer[1]) << 16)
+	        | (((uint32_t)reader->buffer[2]) <<  8)
+	        | (((uint32_t)reader->buffer[3])      );
+	reader->buffer += 4;
+	reader->size -= 4;
+	return 0;
+}
+
+int
+read_in_addr(struct pdu_reader *reader, struct in_addr *result)
+{
+	return read_int32(reader, &result->s_addr);
+}
+
+int
+read_in6_addr(struct pdu_reader *reader, struct in6_addr *result)
+{
+	return read_int32(reader, &result->s6_addr32[0])
+	    || read_int32(reader, &result->s6_addr32[1])
+	    || read_int32(reader, &result->s6_addr32[2])
+	    || read_int32(reader, &result->s6_addr32[3]);
 }
 
 #define EINVALID_UTF8 -0xFFFF
@@ -172,7 +157,7 @@ place_null_character(rtr_char *str, size_t len)
 	null_chara_pos = str;
 	cursor = str;
 
-	while (cursor < str + len - 1) {
+	while (cursor < str + len) {
 		octets = get_octets(*UCHAR(cursor));
 		if (octets == EINVALID_UTF8)
 			break;
@@ -180,7 +165,7 @@ place_null_character(rtr_char *str, size_t len)
 
 		for (octet = 1; octet < octets; octet++) {
 			/* Memory ends in the middle of this code point? */
-			if (cursor >= str + len - 1)
+			if (cursor >= str + len)
 				goto end;
 			/* All continuation octets must begin with 0b10. */
 			if ((*(UCHAR(cursor)) >> 6) != 2 /* 0b10 */)
@@ -207,43 +192,41 @@ end:
  * (Including the NULL chara.)
  */
 int
-read_string(int fd, rtr_char **result)
+read_string(struct pdu_reader *reader, uint32_t string_len, rtr_char **result)
 {
 	/* Actual string length claimed by the PDU, in octets. */
-	uint32_t full_length32; /* Excludes the null chara */
-	uint64_t full_length64; /* Includes the null chara */
+	rtr_char *string;
+
+	if (reader->size < string_len)
+		return pr_err("Erroneous PDU's error message is larger than its slot in the PDU.");
+
 	/*
-	 * Actual length that we allocate. Octets.
-	 * This exists because there might be value in truncating the string;
-	 * full_length is a fucking 32-bit integer for some reason.
-	 * Note that, because this is UTF-8 we're dealing with, this might not
-	 * necessarily end up being the actual octet length of the final
-	 * string; since our truncation can land in the middle of a code point,
-	 * the null character might need to be shifted left slightly.
+	 * Ok. Since the PDU size is already sanitized, string_len is guaranteed
+	 * to be relatively small now.
 	 */
-	size_t alloc_length; /* Includes the null chara */
-	rtr_char *str;
-	int err;
 
-	err = read_int32(fd, &full_length32);
-	if (err)
-		return err;
-
-	full_length64 = ((uint64_t) full_length32) + 1;
-
-	alloc_length = (full_length64 > 4096) ? 4096 : full_length64;
-	str = malloc(alloc_length);
-	if (!str)
+	string = malloc(string_len + 1); /* Include NULL chara. */
+	if (!string)
 		return -ENOMEM;
 
-	err = read_and_waste(fd, UCHAR(str), alloc_length - 1, full_length32);
-	if (err) {
-		free(str);
-		return err;
-	}
+	memcpy(string, reader->buffer, string_len);
+	reader->buffer += string_len;
+	reader->size -= string_len;
 
-	place_null_character(str, alloc_length);
+	place_null_character(string, string_len);
 
-	*result = str;
+	*result = string;
+	return 0;
+}
+
+int
+read_bytes(struct pdu_reader *reader, unsigned char *result, size_t num)
+{
+	if (reader->size < num)
+		return insufficient_bytes();
+
+	memcpy(result, reader->buffer, num);
+	reader->buffer += num;
+	reader->size -= num;
 	return 0;
 }

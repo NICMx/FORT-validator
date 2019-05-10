@@ -48,7 +48,7 @@ START_TEST(test_pdu_header_from_stream)
 
 	fd = buffer2fd(input, sizeof(input));
 	ck_assert_int_ge(fd, 0);
-	err = pdu_header_from_stream(fd, &header);
+	err = pdu_header_from_reader(fd, &header);
 	close(fd);
 	ck_assert_int_eq(err, 0);
 

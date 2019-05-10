@@ -9,6 +9,21 @@
 #define RTR_V0	0
 #define RTR_V1	1
 
+struct rtr_client {
+	int fd;
+	struct sockaddr_storage addr;
+};
+
+/** A request from an RTR client. */
+struct rtr_request {
+	/** Raw bytes. */
+	unsigned char *bytes;
+	/** Length of @bytes. */
+	size_t bytes_len;
+	/** Deserialized PDU. One of the *_pdu struct below. */
+	void *pdu;
+};
+
 enum pdu_type {
 	PDU_TYPE_SERIAL_NOTIFY =	0,
 	PDU_TYPE_SERIAL_QUERY =		1,
@@ -21,6 +36,27 @@ enum pdu_type {
 	PDU_TYPE_ROUTER_KEY =		9,
 	PDU_TYPE_ERROR_REPORT =		10,
 };
+
+/*
+ * Note: It's probably best not to use sizeof for these lengths, because it
+ * risks including padding, and this is not the place for it.
+ * These numbers are constants from the RFC anyway.
+ */
+
+/* Header length field is always 64 bits long */
+#define RTRPDU_HEADER_LEN		8
+
+#define RTRPDU_SERIAL_NOTIFY_LEN	12
+#define RTRPDU_SERIAL_QUERY_LEN		12
+#define RTRPDU_RESET_QUERY_LEN		8
+#define RTRPDU_CACHE_RESPONSE_LEN	8
+#define RTRPDU_IPV4_PREFIX_LEN		20
+#define RTRPDU_IPV6_PREFIX_LEN		32
+#define RTRPDU_END_OF_DATA_LEN		12
+#define RTRPDU_CACHE_RESET_LEN		8
+
+/* Ignores Error Report PDUs, which is fine. */
+#define RTRPDU_MAX_LEN			RTRPDU_IPV6_PREFIX_LEN
 
 struct pdu_header {
 	uint8_t	protocol_version;
@@ -95,19 +131,19 @@ struct router_key_pdu {
 struct error_report_pdu {
 	struct	pdu_header header;
 	uint32_t	error_pdu_length;
-	void		*erroneous_pdu;
+	unsigned char	erroneous_pdu[RTRPDU_MAX_LEN];
 	uint32_t	error_message_length;
 	rtr_char	*error_message;
 };
 
 struct pdu_metadata {
 	size_t	length;
-	int	(*from_stream)(struct pdu_header *, int, void *);
-	int	(*handle)(int, void *);
+	int	(*from_stream)(struct pdu_header *, struct pdu_reader *, void *);
+	int	(*handle)(int, struct rtr_request const *);
 	void	(*destructor)(void *);
 };
 
-int pdu_load(int, void **, struct pdu_metadata const **, uint8_t *);
+int pdu_load(int, struct rtr_request *, struct pdu_metadata const **);
 struct pdu_metadata const *pdu_get_metadata(uint8_t);
 struct pdu_header *pdu_get_header(void *);
 

@@ -35,13 +35,13 @@ START_TEST(basic_test)
 	 */
 
 	struct sockaddr_in addr;
-	struct sockaddr_storage *addr_ptr;
+	struct rtr_client client;
+	unsigned int i;
 	unsigned int state;
 
+	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = htonl(0xc0000201u);
-	addr.sin_port = 1234;
-	addr_ptr = (struct sockaddr_storage *) &addr;
+	memcpy(&client.addr, &addr, sizeof(client.addr));
 
 	ck_assert_int_eq(0, clients_db_init());
 
@@ -49,15 +49,17 @@ START_TEST(basic_test)
 	 * The address is actually supposed to be unique, but this is rather
 	 * enforced by calling code, so whatever.
 	 */
-	ck_assert_int_eq(0, clients_add(1, addr_ptr, 0));
-	ck_assert_int_eq(0, clients_add(2, addr_ptr, 0));
-	ck_assert_int_eq(0, clients_add(3, addr_ptr, 1));
-	ck_assert_int_eq(0, clients_add(4, addr_ptr, 1));
 
-	ck_assert_int_eq(0, clients_add(1, addr_ptr, 0));
-	ck_assert_int_eq(-ERTR_VERSION_MISMATCH, clients_add(2, addr_ptr, 1));
-	ck_assert_int_eq(0, clients_add(3, addr_ptr, 1));
-	ck_assert_int_eq(-ERTR_VERSION_MISMATCH, clients_add(4, addr_ptr, 0));
+	for (i = 0; i < 4; i++) {
+		client.fd = 1;
+		ck_assert_int_eq(0, clients_add(&client));
+		client.fd = 2;
+		ck_assert_int_eq(0, clients_add(&client));
+		client.fd = 3;
+		ck_assert_int_eq(0, clients_add(&client));
+		client.fd = 4;
+		ck_assert_int_eq(0, clients_add(&client));
+	}
 
 	clients_forget(3);
 

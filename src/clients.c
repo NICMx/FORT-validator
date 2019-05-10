@@ -4,6 +4,7 @@
 #include "common.h"
 #include "log.h"
 #include "data_structure/uthash.h"
+#include "rtr/pdu.h"
 
 /*
  * TODO uthash panics on memory allocations...
@@ -39,8 +40,7 @@ clients_db_init(void)
 }
 
 static int
-create_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version,
-    struct hashable_client **result)
+create_client(struct rtr_client *client, struct hashable_client **result)
 {
 	struct hashable_client *node;
 
@@ -48,22 +48,21 @@ create_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version,
 	if (node == NULL)
 		return pr_enomem();
 
-	node->meat.fd = fd;
-	node->meat.family = addr->ss_family;
-	switch (addr->ss_family) {
+	node->meat.fd = client->fd;
+	node->meat.family = client->addr.ss_family;
+	switch (client->addr.ss_family) {
 	case AF_INET:
-		node->meat.sin = SADDR_IN(addr)->sin_addr;
-		node->meat.sin_port = SADDR_IN(addr)->sin_port;
+		node->meat.sin = SADDR_IN(&client->addr)->sin_addr;
+		node->meat.sin_port = SADDR_IN(&client->addr)->sin_port;
 		break;
 	case AF_INET6:
-		node->meat.sin6 = SADDR_IN6(addr)->sin6_addr;
-		node->meat.sin_port = SADDR_IN6(addr)->sin6_port;
+		node->meat.sin6 = SADDR_IN6(&client->addr)->sin6_addr;
+		node->meat.sin_port = SADDR_IN6(&client->addr)->sin6_port;
 		break;
 	default:
 		free(node);
-		return pr_crit("Bad protocol: %u", addr->ss_family);
+		return pr_crit("Bad protocol: %u", client->addr.ss_family);
 	}
-	node->meat.rtr_version = rtr_version;
 
 	*result = node;
 	return 0;
@@ -71,35 +70,24 @@ create_client(int fd, struct sockaddr_storage *addr, uint8_t rtr_version,
 
 /*
  * If the client whose file descriptor is @fd isn't already stored, store it.
- *
- * Code error -ERTR_VERSION_MISMATCH will be returned when a client exists but
- * its RTR version isn't the same as in the DB.
  */
 int
-clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
+clients_add(struct rtr_client *client)
 {
 	struct hashable_client *new_client = NULL;
 	struct hashable_client *old_client;
 	int error;
 
-	error = create_client(fd, addr, rtr_version, &new_client);
+	error = create_client(client, &new_client);
 	if (error)
 		return error;
 
 	rwlock_write_lock(&lock);
 
-	HASH_FIND_INT(table, &fd, old_client);
+	HASH_FIND_INT(table, &client->fd, old_client);
 	if (old_client == NULL) {
 		HASH_ADD_INT(table, meat.fd, new_client);
 		new_client = NULL;
-	} else {
-		/*
-		 * Isn't ready to handle distinct version on clients
-		 * reconnection, but for now there's no problem since only
-		 * RTRv0 is supported.
-		 */
-		if (old_client->meat.rtr_version != rtr_version)
-			error = -ERTR_VERSION_MISMATCH;
 	}
 
 	rwlock_unlock(&lock);
@@ -107,7 +95,7 @@ clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 	if (new_client != NULL)
 		free(new_client);
 
-	return error;
+	return 0;
 }
 
 void

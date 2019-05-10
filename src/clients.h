@@ -2,9 +2,8 @@
 #define SRC_CLIENTS_H_
 
 #include <arpa/inet.h>
+#include "rtr/pdu.h"
 #include "rtr/db/vrp.h"
-
-#define ERTR_VERSION_MISMATCH 8754983
 
 struct client {
 	int fd;
@@ -14,13 +13,12 @@ struct client {
 		struct in6_addr sin6;
 	};
 	in_port_t sin_port;
-	uint8_t rtr_version;
 	serial_t serial_number;
 };
 
 int clients_db_init(void);
 
-int clients_add(int, struct sockaddr_storage *, uint8_t);
+int clients_add(struct rtr_client *);
 void clients_update_serial(int, serial_t);
 void clients_forget(int);
 typedef int (*clients_foreach_cb)(struct client const *, void *);

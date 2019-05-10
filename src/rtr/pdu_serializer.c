@@ -155,30 +155,22 @@ serialize_router_key_pdu(struct router_key_pdu *pdu, unsigned char *buf)
 size_t
 serialize_error_report_pdu(struct error_report_pdu *pdu, unsigned char *buf)
 {
-	struct pdu_header *err_pdu_header;
-	size_t head_size;
 	unsigned char *ptr;
-	char *tmp_ptr;
-	int i;
 
-	head_size = serialize_pdu_header(&pdu->header, pdu->header.m.error_code,
-	    buf);
-
-	ptr = buf + head_size;
+	ptr = buf;
+	ptr += serialize_pdu_header(&pdu->header, pdu->header.m.error_code, buf);
 
 	ptr = write_int32(ptr, pdu->error_pdu_length);
 	if (pdu->error_pdu_length > 0) {
-		/* Set only the header of err PDU */
-		err_pdu_header = (struct pdu_header *)pdu->erroneous_pdu;
-		head_size = serialize_pdu_header(err_pdu_header,
-		    err_pdu_header->m.reserved, ptr);
-		ptr = ptr + head_size;
+		memcpy(ptr, pdu->erroneous_pdu, pdu->error_pdu_length);
+		ptr += pdu->error_pdu_length;
 	}
 
 	ptr = write_int32(ptr, pdu->error_message_length);
-	tmp_ptr = pdu->error_message;
-	for (i = 0; i < pdu->error_message_length; i++)
-		ptr = write_int8(ptr, tmp_ptr[i]);
+	if (pdu->error_message_length > 0) {
+		memcpy(ptr, pdu->error_message, pdu->error_message_length);
+		ptr += pdu->error_message_length;
+	}
 
 	return ptr - buf;
 }

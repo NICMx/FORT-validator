@@ -67,8 +67,10 @@ init_db_full(void)
 }
 
 static void
-init_reset_query(struct reset_query_pdu *query)
+init_reset_query(struct rtr_request *request, struct reset_query_pdu *query)
 {
+	request->pdu = query;
+	request->bytes_len = 0;
 	query->header.protocol_version = RTR_V0;
 	query->header.pdu_type = PDU_TYPE_RESET_QUERY;
 	query->header.m.reserved = 0;
@@ -76,8 +78,11 @@ init_reset_query(struct reset_query_pdu *query)
 }
 
 static void
-init_serial_query(struct serial_query_pdu *query, uint32_t serial)
+init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
+    uint32_t serial)
 {
+	request->pdu = query;
+	request->bytes_len = 0;
 	query->header.protocol_version = RTR_V0;
 	query->header.pdu_type = PDU_TYPE_SERIAL_QUERY;
 	query->header.m.session_id = get_current_session_id(RTR_V0);
@@ -93,16 +98,8 @@ clients_get_min_serial(void)
 	return 0;
 }
 
-void
-init_sender_common(struct sender_common *common, int fd, uint8_t version)
-{
-	common->fd = fd;
-	common->version = version;
-	common->session_id = get_current_session_id(version);
-}
-
 int
-send_cache_reset_pdu(struct sender_common *common)
+send_cache_reset_pdu(int fd)
 {
 	pr_info("    Server sent Cache Reset.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESET);
@@ -110,7 +107,7 @@ send_cache_reset_pdu(struct sender_common *common)
 }
 
 int
-send_cache_response_pdu(struct sender_common *common)
+send_cache_response_pdu(int fd)
 {
 	pr_info("    Server sent Cache Response.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESPONSE);
@@ -118,8 +115,7 @@ send_cache_response_pdu(struct sender_common *common)
 }
 
 int
-send_prefix_pdu(struct sender_common *common, struct vrp const *vrp,
-    uint8_t flags)
+send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 {
 	/*
 	 * We don't care about order.
@@ -137,24 +133,25 @@ send_prefix_pdu(struct sender_common *common, struct vrp const *vrp,
 static int
 handle_delta(struct delta const *delta, void *arg)
 {
-	ck_assert_int_eq(0, send_prefix_pdu(arg, &delta->vrp, delta->flags));
+	int *fd = arg;
+	ck_assert_int_eq(0, send_prefix_pdu(*fd, &delta->vrp, delta->flags));
 	return 0;
 }
 
 int
-send_pdus_delta(struct deltas_db *deltas, struct sender_common *common)
+send_delta_pdus(int fd, struct deltas_db *deltas)
 {
 	struct delta_group *group;
 
 	ARRAYLIST_FOREACH(deltas, group)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    handle_delta, common));
+		    handle_delta, &fd));
 
 	return 0;
 }
 
 int
-send_end_of_data_pdu(struct sender_common *common, serial_t end_serial)
+send_end_of_data_pdu(int fd, serial_t end_serial)
 {
 	pr_info("    Server sent End of Data.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_END_OF_DATA);
@@ -162,8 +159,8 @@ send_end_of_data_pdu(struct sender_common *common, serial_t end_serial)
 }
 
 int
-send_error_report_pdu(int fd, uint8_t version, uint16_t code,
-struct pdu_header *err_pdu_header, char const *message)
+send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
+    char *message)
 {
 	pr_info("    Server sent Error Report %u: '%s'", code, message);
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_ERROR_REPORT);
@@ -175,6 +172,7 @@ struct pdu_header *err_pdu_header, char const *message)
 /* https://tools.ietf.org/html/rfc6810#section-6.1 */
 START_TEST(test_start_or_restart)
 {
+	struct rtr_request request;
 	struct reset_query_pdu client_pdu;
 
 	pr_info("-- Start or Restart --");
@@ -183,7 +181,7 @@ START_TEST(test_start_or_restart)
 	init_db_full();
 
 	/* Init client request */
-	init_reset_query(&client_pdu);
+	init_reset_query(&request, &client_pdu);
 
 	/* Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
@@ -192,7 +190,7 @@ START_TEST(test_start_or_restart)
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* Run and validate */
-	ck_assert_int_eq(0, handle_reset_query_pdu(0, &client_pdu));
+	ck_assert_int_eq(0, handle_reset_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */
@@ -203,6 +201,7 @@ END_TEST
 /* https://tools.ietf.org/html/rfc6810#section-6.2 */
 START_TEST(test_typical_exchange)
 {
+	struct rtr_request request;
 	struct serial_query_pdu client_pdu;
 
 	pr_info("-- Typical Exchange --");
@@ -211,7 +210,7 @@ START_TEST(test_typical_exchange)
 	init_db_full();
 
 	/* From serial 0: Init client request */
-	init_serial_query(&client_pdu, 0);
+	init_serial_query(&request, &client_pdu, 0);
 
 	/* From serial 0: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
@@ -222,11 +221,11 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 0: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &client_pdu));
+	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* From serial 1: Init client request */
-	init_serial_query(&client_pdu, 1);
+	init_serial_query(&request, &client_pdu, 1);
 
 	/* From serial 1: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
@@ -235,18 +234,18 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 1: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &client_pdu));
+	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* From serial 2: Init client request */
-	init_serial_query(&client_pdu, 2);
+	init_serial_query(&request, &client_pdu, 2);
 
 	/* From serial 2: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 2: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &client_pdu));
+	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */
@@ -257,6 +256,7 @@ END_TEST
 /* https://tools.ietf.org/html/rfc6810#section-6.3 */
 START_TEST(test_no_incremental_update_available)
 {
+	struct rtr_request request;
 	struct serial_query_pdu serial_query;
 
 	pr_info("-- No Incremental Update Available --");
@@ -265,13 +265,13 @@ START_TEST(test_no_incremental_update_available)
 	init_db_full();
 
 	/* Init client request */
-	init_serial_query(&serial_query, 10000);
+	init_serial_query(&request, &serial_query, 10000);
 
 	/* Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESET);
 
 	/* Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &serial_query));
+	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* The Reset Query is already tested in start_or_restart. */
@@ -284,6 +284,7 @@ END_TEST
 /* https://tools.ietf.org/html/rfc6810#section-6.4 */
 START_TEST(test_cache_has_no_data_available)
 {
+	struct rtr_request request;
 	struct serial_query_pdu serial_query;
 	struct reset_query_pdu reset_query;
 
@@ -293,23 +294,23 @@ START_TEST(test_cache_has_no_data_available)
 	ck_assert_int_eq(0, vrps_init());
 
 	/* Serial Query: Init client request */
-	init_serial_query(&serial_query, 0);
+	init_serial_query(&request, &serial_query, 0);
 
 	/* Serial Query: Define expected server response */
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
 
 	/* Serial Query: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &serial_query));
+	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Reset Query: Init client request */
-	init_reset_query(&reset_query);
+	init_reset_query(&request, &reset_query);
 
 	/* Reset Query: Define expected server response */
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
 
 	/* Reset Query: Run and validate */
-	ck_assert_int_eq(0, handle_reset_query_pdu(0, &reset_query));
+	ck_assert_int_eq(0, handle_reset_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */

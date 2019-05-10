@@ -9,21 +9,76 @@
  * fatal. However, some callers of this function are terminating the connection
  * regardless of that.
  */
-int
-err_pdu_send(int fd, uint8_t version, uint16_t code, void *err_pdu_header,
-    char const *message)
+static int
+err_pdu_send(int fd, uint16_t code, struct rtr_request const *request,
+    char const *message_const)
 {
-	int error;
+	/*
+	 * This function must always return error so callers can interrupt
+	 * themselves easily.
+	 */
 
-	error = send_error_report_pdu(fd, version, code, err_pdu_header,
-	    message);
+	int error;
+	char *message;
+
+	/* TODO (now) Prevent errors to errors */
+
+	message = (message_const != NULL) ? strdup(message_const) : NULL;
+	error = send_error_report_pdu(fd, code, request, message);
+	free(message);
+
 	if (err_pdu_is_fatal(code)) {
 		pr_warn("Fatal error report PDU sent [code %u], closing socket.",
 		    code);
 		close(fd);
 	}
 
-	return error;
+	return error ? error : -EINVAL;
+}
+
+int
+err_pdu_send_corrupt_data(int fd, struct rtr_request const *request,
+    char const *message)
+{
+	return err_pdu_send(fd, ERR_PDU_CORRUPT_DATA, request, message);
+}
+
+int
+err_pdu_send_internal_error(int fd)
+{
+	return err_pdu_send(fd, ERR_PDU_INTERNAL_ERROR, NULL, NULL);
+}
+
+int
+err_pdu_send_no_data_available(int fd)
+{
+	return err_pdu_send(fd, ERR_PDU_NO_DATA_AVAILABLE, NULL, NULL);
+}
+
+int
+err_pdu_send_invalid_request(int fd, struct rtr_request const *request,
+    char const *message)
+{
+	return err_pdu_send(fd, ERR_PDU_INVALID_REQUEST, request, message);
+}
+
+/* Caution: @header is supposed to be in serialized form. */
+int
+err_pdu_send_invalid_request_truncated(int fd, unsigned char *header,
+    char const *message)
+{
+	struct rtr_request request = {
+		.bytes = header,
+		.bytes_len = RTRPDU_HEADER_LEN,
+		.pdu = NULL,
+	};
+	return err_pdu_send_invalid_request(fd, &request, message);
+}
+
+int
+err_pdu_send_unsupported_pdu_type(int fd, struct rtr_request const *request)
+{
+	return err_pdu_send(fd, ERR_PDU_UNSUP_PDU_TYPE, request, NULL);
 }
 
 bool

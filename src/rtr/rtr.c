@@ -19,24 +19,12 @@
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 
-/* TODO (next iteration) Support both RTR v0 and v1 */
-#define RTR_VERSION_SUPPORTED	RTR_V0
-
 /* TODO (urgent) this needs to be atomic */
 volatile bool loop;
 
-/*
- * Arguments that the server socket thread will send to the client
- * socket threads whenever it creates them.
- */
-struct thread_param {
-	int client_fd;
-	struct sockaddr_storage client_addr;
-};
-
 struct thread_node {
 	pthread_t tid;
-	struct thread_param params;
+	struct rtr_client client;
 	SLIST_ENTRY(thread_node) next;
 };
 
@@ -160,12 +148,17 @@ handle_accept_result(int client_fd, int err)
 	return VERDICT_EXIT;
 }
 
-static void *
-end_client(int client_fd, const struct pdu_metadata *meta, void *pdu)
+static void
+clean_request(struct rtr_request *request, const struct pdu_metadata *meta)
 {
-	if (meta != NULL && pdu != NULL)
-		meta->destructor(pdu);
-	clients_forget(client_fd);
+	free(request->bytes);
+	meta->destructor(request->pdu);
+}
+
+static void *
+end_client(struct rtr_client *client)
+{
+	clients_forget(client->fd);
 	return NULL;
 }
 
@@ -173,43 +166,32 @@ end_client(int client_fd, const struct pdu_metadata *meta, void *pdu)
  * The client socket threads' entry routine.
  */
 static void *
-client_thread_cb(void *param_void)
+client_thread_cb(void *arg)
 {
-	struct thread_param *param = param_void;
+	struct rtr_client *client = arg;
 	struct pdu_metadata const *meta;
-	void *pdu;
-	int err;
-	uint8_t rtr_version;
+	struct rtr_request request;
+	int error;
 
 	while (loop) { /* For each PDU... */
-		err = pdu_load(param->client_fd, &pdu, &meta, &rtr_version);
-		if (err)
-			return end_client(param->client_fd, NULL, NULL);
+		error = pdu_load(client->fd, &request, &meta);
+		if (error)
+			return end_client(client);
 
-		/* Protocol Version Negotiation */
-		if (rtr_version != RTR_VERSION_SUPPORTED) {
-			err_pdu_send(param->client_fd, RTR_VERSION_SUPPORTED,
-			    ERR_PDU_UNSUP_PROTO_VERSION, pdu, NULL);
-			return end_client(param->client_fd, meta, pdu);
-		}
-		/* RTR Version ready, now update client */
-		err = clients_add(param->client_fd, &param->client_addr,
-		    rtr_version);
-		if (err) {
-			if (err == -ERTR_VERSION_MISMATCH) {
-				err_pdu_send(param->client_fd, rtr_version,
-				    (rtr_version == RTR_V0)
-				        ? ERR_PDU_UNSUP_PROTO_VERSION
-				        : ERR_PDU_UNEXPECTED_PROTO_VERSION,
-				    pdu, NULL);
-			}
-			return end_client(param->client_fd, meta, pdu);
+		error = clients_add(client);
+		if (error) {
+			clean_request(&request, meta);
+			err_pdu_send_internal_error(client->fd);
+			return end_client(client);
 		}
 
-		err = meta->handle(param->client_fd, pdu);
-		meta->destructor(pdu);
-		if (err)
-			return end_client(param->client_fd, NULL, NULL);
+		error = meta->handle(client->fd, &request);
+		if (error) {
+			clean_request(&request, meta);
+			return end_client(client);
+		}
+
+		clean_request(&request, meta);
 	}
 
 	return NULL; /* Unreachable. */
@@ -256,11 +238,11 @@ handle_client_connections(int server_fd)
 			continue;
 		}
 
-		new_thread->params.client_fd = client_fd;
-		new_thread->params.client_addr = client_addr;
+		new_thread->client.fd = client_fd;
+		new_thread->client.addr = client_addr;
 
 		errno = pthread_create(&new_thread->tid, NULL,
-		    client_thread_cb, &new_thread->params);
+		    client_thread_cb, &new_thread->client);
 		if (errno) {
 			pr_errno(errno, "Could not spawn the client's thread");
 			free(new_thread);

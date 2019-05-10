@@ -1,4 +1,4 @@
-#include "pdu.h"
+#include "rtr/pdu.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -6,81 +6,123 @@
 
 #include "common.h"
 #include "log.h"
+#include "rtr/err_pdu.h"
 #include "rtr/pdu_handler.h"
 
-static int	pdu_header_from_stream(int, struct pdu_header *);
-static int	serial_notify_from_stream(struct pdu_header *, int, void *);
-static int	serial_query_from_stream(struct pdu_header *, int, void *);
-static int	reset_query_from_stream(struct pdu_header *, int, void *);
-static int	cache_response_from_stream(struct pdu_header *, int, void *);
-static int	ipv4_prefix_from_stream(struct pdu_header *, int, void *);
-static int	ipv6_prefix_from_stream(struct pdu_header *, int, void *);
-static int	end_of_data_from_stream(struct pdu_header *, int, void *);
-static int	cache_reset_from_stream(struct pdu_header *, int, void *);
-static int	router_key_from_stream(struct pdu_header *, int, void *);
-static int	error_report_from_stream(struct pdu_header *, int, void *);
-static void	error_report_destroy(void *);
+static int
+pdu_header_from_reader(struct pdu_reader *reader, struct pdu_header *header)
+{
+	return read_int8(reader, &header->protocol_version)
+	    || read_int8(reader, &header->pdu_type)
+	    || read_int16(reader, &header->m.session_id)
+	    || read_int32(reader, &header->length);
+}
 
 int
-pdu_load(int fd, void **pdu, struct pdu_metadata const **metadata,
-    uint8_t *rtr_version)
+pdu_load(int fd, struct rtr_request *request,
+    struct pdu_metadata const **metadata)
 {
+	unsigned char hdr_bytes[RTRPDU_HEADER_LEN];
+	struct pdu_reader reader;
 	struct pdu_header header;
 	struct pdu_metadata const *meta;
-	int err;
+	int error;
 
-	err = pdu_header_from_stream(fd, &header);
-	if (err)
-		return err;
+	/* Read the header into its buffer. */
+	/* TODO If the first read yields no bytes, the connection was terminated. */
+	error = pdu_reader_init(&reader, fd, hdr_bytes, RTRPDU_HEADER_LEN);
+	if (error)
+		/* Communication interrupted; omit error response */
+		return error;
+	error = pdu_header_from_reader(&reader, &header);
+	if (error)
+		/* No error response because the PDU might have been an error */
+		return error;
 
-	meta = pdu_get_metadata(header.pdu_type);
-	if (!meta)
-		return -ENOENT; /* TODO try to skip it anyway? */
+	/*
+	 * RTRv1 expects us to respond RTRv1 messages with RTRv0 messages,
+	 * and future protocols will probably do the same.
+	 * So don't validate the protocol version.
+	 */
 
-	*pdu = malloc(meta->length);
-	if (*pdu == NULL)
-		return -ENOMEM;
+	if (header.length < RTRPDU_HEADER_LEN)
+		return err_pdu_send_invalid_request_truncated(fd, hdr_bytes,
+		    "PDU is too small. (< 8 bytes)");
 
-	err = meta->from_stream(&header, fd, *pdu);
-	if (err) {
-		free(*pdu);
-		return err;
+	/*
+	 * Error messages can be quite large.
+	 * But they're probably not legitimate, so drop 'em.
+	 * 512 is like a 5-paragraph error message, so it's probably enough.
+	 */
+	if (header.length > 512) {
+		pr_warn("Got an extremely large PDU (%u bytes). WTF?",
+		    header.length);
+		return err_pdu_send_invalid_request_truncated(fd, hdr_bytes,
+		    "PDU is too large. (> 512 bytes)");
 	}
-	*rtr_version = header.protocol_version;
 
-	if (metadata)
-		*metadata = meta;
+	/* Read the rest of the PDU into its buffer. */
+	request->bytes_len = header.length;
+	request->bytes = malloc(header.length);
+	if (request->bytes == NULL)
+		return pr_enomem();
+
+	memcpy(request->bytes, hdr_bytes, RTRPDU_HEADER_LEN);
+	error = pdu_reader_init(&reader, fd,
+	    request->bytes + RTRPDU_HEADER_LEN,
+	    header.length - RTRPDU_HEADER_LEN);
+	if (error)
+		goto revert_bytes;
+
+	/* Deserialize the PDU. */
+	meta = pdu_get_metadata(header.pdu_type);
+	if (!meta) {
+		error = err_pdu_send_unsupported_pdu_type(fd, request);
+		goto revert_bytes;
+	}
+
+	request->pdu = malloc(meta->length);
+	if (request->pdu == NULL) {
+		error = pr_enomem();
+		goto revert_bytes;
+	}
+
+	error = meta->from_stream(&header, &reader, request->pdu);
+	if (error)
+		goto revert_pdu;
+
+	/* Happy path. */
+	*metadata = meta;
 	return 0;
+
+revert_pdu:
+	free(request->pdu);
+revert_bytes:
+	free(request->bytes);
+	return error;
 }
 
 static int
-pdu_header_from_stream(int fd, struct pdu_header *header)
-{
-	/* If the first read yields no bytes, the connection was terminated. */
-	return read_int8(fd, &header->protocol_version)
-	    || read_int8(fd, &header->pdu_type)
-	    || read_int16(fd, &header->m.session_id)
-	    || read_int32(fd, &header->length);
-}
-
-static int
-serial_notify_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+serial_notify_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct serial_notify_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
-	return read_int32(fd, &pdu->serial_number);
+	return read_int32(reader, &pdu->serial_number);
 }
 
 static int
-serial_query_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+serial_query_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct serial_query_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
-	return read_int32(fd, &pdu->serial_number);
+	return read_int32(reader, &pdu->serial_number);
 }
 
 static int
-reset_query_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+reset_query_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct reset_query_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
@@ -88,7 +130,8 @@ reset_query_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 }
 
 static int
-cache_response_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+cache_response_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct cache_response_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
@@ -96,41 +139,45 @@ cache_response_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 }
 
 static int
-ipv4_prefix_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+ipv4_prefix_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct ipv4_prefix_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
-	return read_int8(fd, &pdu->flags)
-	    || read_int8(fd, &pdu->prefix_length)
-	    || read_int8(fd, &pdu->max_length)
-	    || read_int8(fd, &pdu->zero)
-	    || read_in_addr(fd, &pdu->ipv4_prefix)
-	    || read_int32(fd, &pdu->asn);
+	return read_int8(reader, &pdu->flags)
+	    || read_int8(reader, &pdu->prefix_length)
+	    || read_int8(reader, &pdu->max_length)
+	    || read_int8(reader, &pdu->zero)
+	    || read_in_addr(reader, &pdu->ipv4_prefix)
+	    || read_int32(reader, &pdu->asn);
 }
 
 static int
-ipv6_prefix_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+ipv6_prefix_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct ipv6_prefix_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
-	return read_int8(fd, &pdu->flags)
-	    || read_int8(fd, &pdu->prefix_length)
-	    || read_int8(fd, &pdu->max_length)
-	    || read_int8(fd, &pdu->zero)
-	    || read_in6_addr(fd, &pdu->ipv6_prefix)
-	    || read_int32(fd, &pdu->asn);
+	return read_int8(reader, &pdu->flags)
+	    || read_int8(reader, &pdu->prefix_length)
+	    || read_int8(reader, &pdu->max_length)
+	    || read_int8(reader, &pdu->zero)
+	    || read_in6_addr(reader, &pdu->ipv6_prefix)
+	    || read_int32(reader, &pdu->asn);
 }
 
 static int
-end_of_data_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+end_of_data_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct end_of_data_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
-	return read_int32(fd, &pdu->serial_number);
+	return read_int32(reader, &pdu->serial_number);
 }
 
 static int
-cache_reset_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+cache_reset_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct cache_reset_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
@@ -138,7 +185,8 @@ cache_reset_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 }
 
 static int
-router_key_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+router_key_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct router_key_pdu *pdu = pdu_void;
 	memcpy(&pdu->header, header, sizeof(*header));
@@ -146,48 +194,33 @@ router_key_from_stream(struct pdu_header *header, int fd, void *pdu_void)
 }
 
 static int
-error_report_from_stream(struct pdu_header *header, int fd, void *pdu_void)
+error_report_from_stream(struct pdu_header *header, struct pdu_reader *reader,
+    void *pdu_void)
 {
 	struct error_report_pdu *pdu = pdu_void;
-	uint32_t sub_pdu_len; /* TODO use this for something */
-	uint8_t rtr_version;
 	int error;
 
 	memcpy(&pdu->header, header, sizeof(*header));
 
-	error = read_int32(fd, &sub_pdu_len);
+	error = read_int32(reader, &pdu->error_pdu_length);
 	if (error)
 		return error;
-
-	error = pdu_load(fd, &pdu->erroneous_pdu, NULL, &rtr_version);
+	error = read_bytes(reader, pdu->erroneous_pdu, pdu->error_pdu_length);
 	if (error)
-		return -EINVAL;
-
-	error = read_string(fd, &pdu->error_message);
-	if (error) {
-		free(pdu->erroneous_pdu);
 		return error;
-	}
-
-	return 0;
+	error = read_int32(reader, &pdu->error_message_length);
+	if (error)
+		return error;
+	return read_string(reader, pdu->error_message_length,
+	    &pdu->error_message);
 }
 
 static void
 error_report_destroy(void *pdu_void)
 {
 	struct error_report_pdu *pdu = pdu_void;
-	struct pdu_header *sub_hdr;
-	struct pdu_metadata const *sub_meta;
-
-	sub_hdr = pdu_get_header(pdu->erroneous_pdu);
-	sub_meta = pdu_get_metadata(sub_hdr->pdu_type);
-	if (sub_meta)
-		sub_meta->destructor(pdu->erroneous_pdu);
-	else
-		pr_warn("Unknown PDU type (%u).", sub_hdr->pdu_type);
-
 	free(pdu->error_message);
-	free(pdu_void);
+	free(pdu);
 }
 
 #define DEFINE_METADATA(name, dtor)					\

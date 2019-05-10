@@ -10,13 +10,11 @@
 static int
 send_notify(struct client const *client, void *arg)
 {
-	struct sender_common common;
 	serial_t *serial = arg;
 	int error;
 
 	/* Send Serial Notify PDU */
-	init_sender_common(&common, client->fd, client->rtr_version);
-	error = send_serial_notify_pdu(&common, *serial);
+	error = send_serial_notify_pdu(client->fd, *serial);
 
 	/* Error? Log it... */
 	if (error)
