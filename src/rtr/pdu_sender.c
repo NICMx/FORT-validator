@@ -19,6 +19,8 @@
 #define IPV4_PREFIX_LENGTH	12
 #define IPV6_PREFIX_LENGTH	24
 
+/* Max buffer size to serialize PDUs (maybe the largest are error PDUs) */
+#define MAX_BUFFER_SIZE		1024
 
 struct vrp_node {
 	struct vrp vrp;
@@ -97,73 +99,24 @@ length_error_report_pdu(struct error_report_pdu *pdu)
 	    pdu->error_message_length + sizeof(pdu->error_message_length);
 }
 
-/*
- * TODO Needs some testing, this is just a beta version
- */
-static int
-send_large_response(int fd, struct data_buffer *buffer)
-{
-	unsigned char *tmp_buffer, *ptr;
-	size_t buf_size, pending;
-	int written;
-
-	buf_size = buffer->capacity;
-	pending = buffer->len;
-	ptr = buffer->data;
-	while (pending > 0) {
-		tmp_buffer = calloc(pending, sizeof(unsigned char));
-		if (tmp_buffer == NULL)
-			return pr_enomem();
-
-		memcpy(tmp_buffer, ptr, buf_size);
-
-		written = write(fd, tmp_buffer, buf_size);
-		free(tmp_buffer);
-		if (written < 0)
-			return pr_err("Error sending response");
-
-		pending -= buf_size;
-		ptr += buf_size;
-		buf_size = pending > buffer->capacity ? buffer->capacity :
-		    pending;
-	}
-
-	return 0;
-}
-
 static int
 send_response(int fd, unsigned char *data, size_t data_len)
 {
-	struct data_buffer buffer;
 	int error;
 
-	init_buffer(&buffer);
-	memcpy(buffer.data, data, data_len);
-	buffer.len = data_len;
-
-	/* Check for buffer overflow */
-	if (data_len <= buffer.capacity) {
-		error = write(fd, buffer.data, buffer.len);
-		free_buffer(&buffer);
-		if (error < 0)
-			return pr_err("Error sending response");
-
-		return 0;
-	}
-
-	error = send_large_response(fd, &buffer);
-	free_buffer(&buffer);
-	if (error)
-		return error;
+	error = write(fd, data, data_len);
+	if (error < 0)
+		return pr_errno(errno, "Error sending response");
 
 	return 0;
 }
+
 
 int
 send_serial_notify_pdu(struct sender_common *common)
 {
 	struct serial_notify_pdu pdu;
-	unsigned char data[BUFFER_SIZE];
+	unsigned char data[MAX_BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_SERIAL_NOTIFY,
@@ -181,7 +134,7 @@ int
 send_cache_reset_pdu(struct sender_common *common)
 {
 	struct cache_reset_pdu pdu;
-	unsigned char data[BUFFER_SIZE];
+	unsigned char data[MAX_BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
@@ -197,7 +150,7 @@ int
 send_cache_response_pdu(struct sender_common *common)
 {
 	struct cache_response_pdu pdu;
-	unsigned char data[BUFFER_SIZE];
+	unsigned char data[MAX_BUFFER_SIZE];
 	size_t len;
 
 	/* This PDU has only the header */
@@ -214,7 +167,7 @@ static int
 send_ipv4_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv4_prefix_pdu pdu;
-	unsigned char data[BUFFER_SIZE];
+	unsigned char data[MAX_BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV4_PREFIX,
@@ -237,7 +190,7 @@ static int
 send_ipv6_prefix_pdu(struct sender_common *common, struct vrp *vrp)
 {
 	struct ipv6_prefix_pdu pdu;
-	unsigned char data[BUFFER_SIZE];
+	unsigned char data[MAX_BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, common->version, PDU_TYPE_IPV6_PREFIX,
@@ -354,7 +307,7 @@ int
 send_end_of_data_pdu(struct sender_common *common)
 {
 	struct end_of_data_pdu pdu;
-	unsigned char data[BUFFER_SIZE];
+	unsigned char data[MAX_BUFFER_SIZE];
 	size_t len;
 	int error;
 
@@ -383,7 +336,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 struct pdu_header *err_pdu_header, char const *message)
 {
 	struct error_report_pdu pdu;
-	unsigned char data[BUFFER_SIZE];
+	unsigned char data[MAX_BUFFER_SIZE];
 	size_t len;
 
 	set_header_values(&pdu.header, version, PDU_TYPE_ERROR_REPORT,
