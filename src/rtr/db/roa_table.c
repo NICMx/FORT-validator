@@ -1,6 +1,6 @@
 #include "rtr/db/roa_table.h"
 
-#include "data_structure/uthash.h"
+#include "data_structure/uthash_nonfatal.h"
 
 struct hashable_roa {
 	/*
@@ -93,7 +93,10 @@ add_roa(struct roa_table *table, struct hashable_roa *new)
 {
 	struct hashable_roa *old;
 
+	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
+	if (errno)
+		return -pr_errno(errno, "ROA couldn't be added to hash table");
 	if (old != NULL)
 		free(old);
 
@@ -166,6 +169,7 @@ rtrhandler_handle_roa_v4(struct roa_table *table, uint32_t asn,
     struct ipv4_prefix const *prefix4, uint8_t max_length)
 {
 	struct hashable_roa *roa;
+	int error;
 
 	roa = create_roa(asn, max_length);
 	if (roa == NULL)
@@ -174,7 +178,10 @@ rtrhandler_handle_roa_v4(struct roa_table *table, uint32_t asn,
 	roa->data.prefix_length = prefix4->len;
 	roa->data.addr_fam = AF_INET;
 
-	return add_roa(table, roa);
+	error = add_roa(table, roa);
+	if (error)
+		free(roa);
+	return error;
 }
 
 int
@@ -182,6 +189,7 @@ rtrhandler_handle_roa_v6(struct roa_table *table, uint32_t asn,
     struct ipv6_prefix const *prefix6, uint8_t max_length)
 {
 	struct hashable_roa *roa;
+	int error;
 
 	roa = create_roa(asn, max_length);
 	if (roa == NULL)
@@ -190,7 +198,10 @@ rtrhandler_handle_roa_v6(struct roa_table *table, uint32_t asn,
 	roa->data.prefix_length = prefix6->len;
 	roa->data.addr_fam = AF_INET6;
 
-	return add_roa(table, roa);
+	error = add_roa(table, roa);
+	if (error)
+		free(roa);
+	return error;
 }
 
 static int

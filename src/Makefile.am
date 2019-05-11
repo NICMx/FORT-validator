@@ -54,6 +54,7 @@ fort_SOURCES += crypto/hash.h crypto/hash.c
 fort_SOURCES += data_structure/array_list.h
 fort_SOURCES += data_structure/common.h
 fort_SOURCES += data_structure/uthash.h
+fort_SOURCES += data_structure/uthash_nonfatal.h
 
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c

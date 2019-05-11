@@ -3,12 +3,8 @@
 #include <pthread.h>
 #include "common.h"
 #include "log.h"
-#include "data_structure/uthash.h"
+#include "data_structure/uthash_nonfatal.h"
 
-/*
- * TODO uthash panics on memory allocations...
- * http://troydhanson.github.io/uthash/userguide.html#_out_of_memory
- */
 
 #define SADDR_IN(addr) ((struct sockaddr_in *) addr)
 #define SADDR_IN6(addr) ((struct sockaddr_in6 *) addr)
@@ -90,7 +86,13 @@ clients_add(int fd, struct sockaddr_storage *addr, uint8_t rtr_version)
 
 	HASH_FIND_INT(table, &fd, old_client);
 	if (old_client == NULL) {
+		errno = 0;
 		HASH_ADD_INT(table, meat.fd, new_client);
+		if (errno) {
+			rwlock_unlock(&lock);
+			free(new_client);
+			return -pr_errno(errno, "Couldn't create client");
+		}
 		new_client = NULL;
 	} else {
 		/*
