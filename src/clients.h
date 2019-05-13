@@ -1,19 +1,15 @@
 #ifndef SRC_CLIENTS_H_
 #define SRC_CLIENTS_H_
 
-#include <arpa/inet.h>
+#include <stdbool.h>
 #include "rtr/pdu.h"
 #include "rtr/db/vrp.h"
 
 struct client {
 	int fd;
-	sa_family_t family;
-	union {
-		struct in_addr sin;
-		struct in6_addr sin6;
-	};
-	in_port_t sin_port;
+
 	serial_t serial_number;
+	bool serial_number_set;
 };
 
 int clients_db_init(void);

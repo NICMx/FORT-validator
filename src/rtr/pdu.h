@@ -11,6 +11,10 @@
 
 struct rtr_client {
 	int fd;
+	/*
+	 * TODO (whatever) this is currently not being used for anything.
+	 * (But consider the end_client() to-do.)
+	 */
 	struct sockaddr_storage addr;
 };
 
@@ -138,7 +142,14 @@ struct error_report_pdu {
 
 struct pdu_metadata {
 	size_t	length;
+	/**
+	 * Caller assumes that from_stream functions are only allowed to fail
+	 * on programming errors. (Because of the internal error response.)
+	 */
 	int	(*from_stream)(struct pdu_header *, struct pdu_reader *, void *);
+	/**
+	 * Handlers are expected to send error PDUs on discretion.
+	 */
 	int	(*handle)(int, struct rtr_request const *);
 	void	(*destructor)(void *);
 };

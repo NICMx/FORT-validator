@@ -10,14 +10,9 @@
 #include "pdu_sender.h"
 #include "rtr/db/vrps.h"
 
-static int
-warn_unexpected_pdu(int fd, struct rtr_request const *request,
-    char const *pdu_name)
-{
-	err_pdu_send_invalid_request(fd, request,
-	    "PDU is unexpected or out of order.");
-	return -EINVAL;
-}
+#define warn_unexpected_pdu(fd, request, pdu_name)			\
+	err_pdu_send_invalid_request(fd, request,			\
+	    "Clients are not supposed to send " pdu_name " PDUs.");
 
 int
 handle_serial_notify_pdu(int fd, struct rtr_request const *request)
@@ -56,27 +51,42 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	deltas_db_init(&deltas);
 	error = vrps_get_deltas_from(query->serial_number, &final_serial,
 	    &deltas);
-	if (error == -EAGAIN) {
+	switch (error) {
+	case 0:
+		break;
+	case -EAGAIN: /* Database still under construction */
 		err_pdu_send_no_data_available(fd);
-		error = 0;
+		error = 0; /* Don't panic; client should retry later */
 		goto end;
-	}
-	if (error == -ESRCH) {
+	case -ESRCH: /* Invalid serial */
 		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
 		error = send_cache_reset_pdu(fd);
 		goto end;
-	}
-	if (error)
+	case -ENOMEM: /* Memory allocation failure */
 		goto end;
+	case EAGAIN: /* Too many threads */
+		/*
+		 * I think this should be more of a "try again" thing, but
+		 * RTR does not provide a code for that. Just fall through.
+		 */
+	default:
+		error = err_pdu_send_internal_error(fd);
+		goto end;
+	}
 
-	/* https://tools.ietf.org/html/rfc6810#section-6.2 */
+	/*
+	 * https://tools.ietf.org/html/rfc6810#section-6.2
+	 *
+	 * These functions presently only fail on writes, allocations and
+	 * programming errors. Best avoid error PDUs.
+	 */
 
 	error = send_cache_response_pdu(fd);
 	if (error)
 		goto end;
 	error = send_delta_pdus(fd, &deltas);
 	if (error)
-		goto end; /* TODO (now) maybe send something? */
+		goto end;
 	error = send_end_of_data_pdu(fd, final_serial);
 
 end:
@@ -102,7 +112,6 @@ send_base_roa(struct vrp const *vrp, void *arg)
 		args->started = true;
 	}
 
-	/* TODO (now) maybe send something on error? */
 	return send_prefix_pdu(args->fd, vrp, FLAG_ANNOUNCEMENT);
 }
 
@@ -119,17 +128,23 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	/*
 	 * It's probably best not to work on a copy, because the tree is large.
 	 * Unfortunately, this means we'll have to encourage writer stagnation,
-	 * but most clients are supposed to request far more serial queries than
-	 * reset queries.
+	 * but thankfully, most clients are supposed to request far more serial
+	 * queries than reset queries.
 	 */
 
 	error = vrps_foreach_base_roa(send_base_roa, &args, &current_serial);
-	if (error == -EAGAIN) {
+
+	/* See handle_serial_query_pdu() for some comments. */
+	switch (error) {
+	case 0:
+		break;
+	case -EAGAIN:
 		err_pdu_send_no_data_available(fd);
 		return 0;
-	}
-	if (error)
+	case EAGAIN:
+		err_pdu_send_internal_error(fd);
 		return error;
+	}
 
 	return send_end_of_data_pdu(fd, current_serial);
 }
@@ -174,13 +189,16 @@ int
 handle_error_report_pdu(int fd, struct rtr_request const *request)
 {
 	struct error_report_pdu *received = request->pdu;
+	char const *error_name;
 
-	if (err_pdu_is_fatal(received->header.m.error_code)) {
-		pr_warn("Fatal error report PDU received [code %u], closing socket.",
-		    received->header.m.error_code);
-		close(fd);
-	}
-	err_pdu_log(received->header.m.error_code, received->error_message);
+	error_name = err_pdu_to_string(received->header.m.error_code);
 
-	return 0;
+	if (received->error_message != NULL)
+		pr_info("Client responded with error PDU '%s' ('%s'). Closing socket.",
+		    error_name, received->error_message);
+	else
+		pr_info("Client responded with error PDU '%s'. Closing socket.",
+		    error_name);
+
+	return -EINVAL;
 }

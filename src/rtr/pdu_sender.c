@@ -283,7 +283,7 @@ send_delta_pdus(int fd, struct deltas_db *deltas)
 	struct vrp_slist filtered_vrps;
 	struct delta_group *group;
 	struct vrp_node *ptr;
-	int error;
+	int error = 0;
 
 	/*
 	 * Short circuit: Entries that share serial are already guaranteed to

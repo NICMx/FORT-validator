@@ -158,6 +158,13 @@ clean_request(struct rtr_request *request, const struct pdu_metadata *meta)
 static void *
 end_client(struct rtr_client *client)
 {
+	/*
+	 * TODO It'd probably be a good idea to print the client's address in
+	 * this message.
+	 */
+	if (close(client->fd) != 0)
+		pr_errno(errno, "close() failed on client socket");
+
 	clients_forget(client->fd);
 	return NULL;
 }
@@ -176,25 +183,15 @@ client_thread_cb(void *arg)
 	while (loop) { /* For each PDU... */
 		error = pdu_load(client->fd, &request, &meta);
 		if (error)
-			return end_client(client);
-
-		error = clients_add(client);
-		if (error) {
-			clean_request(&request, meta);
-			err_pdu_send_internal_error(client->fd);
-			return end_client(client);
-		}
+			break;
 
 		error = meta->handle(client->fd, &request);
-		if (error) {
-			clean_request(&request, meta);
-			return end_client(client);
-		}
-
 		clean_request(&request, meta);
+		if (error)
+			break;
 	}
 
-	return NULL; /* Unreachable. */
+	return end_client(client);
 }
 
 /*
@@ -207,6 +204,7 @@ handle_client_connections(int server_fd)
 	struct thread_node *new_thread;
 	socklen_t sizeof_client_addr;
 	int client_fd;
+	int error;
 
 	listen(server_fd, config_get_server_queue());
 
@@ -231,8 +229,16 @@ handle_client_connections(int server_fd)
 		 * So don't interrupt the thread when this happens.
 		 */
 
+		/*
+		 * TODO this is more complicated than it needs to be.
+		 * We have a client hash table and a thread linked list.
+		 * These two contain essentially the same entries. It's
+		 * redundant.
+		 */
+
 		new_thread = malloc(sizeof(struct thread_node));
 		if (new_thread == NULL) {
+			/* No error response PDU on memory allocation. */
 			pr_err("Couldn't create thread struct");
 			close(client_fd);
 			continue;
@@ -241,10 +247,24 @@ handle_client_connections(int server_fd)
 		new_thread->client.fd = client_fd;
 		new_thread->client.addr = client_addr;
 
-		errno = pthread_create(&new_thread->tid, NULL,
+		error = clients_add(&new_thread->client);
+		if (error) {
+			/*
+			 * Presently, clients_add() can only fail due to alloc
+			 * failure. No error report PDU.
+			 */
+			free(new_thread);
+			close(client_fd);
+			continue;
+		}
+
+		error = pthread_create(&new_thread->tid, NULL,
 		    client_thread_cb, &new_thread->client);
-		if (errno) {
-			pr_errno(errno, "Could not spawn the client's thread");
+		if (error != EAGAIN)
+			err_pdu_send_internal_error(client_fd);
+		if (error) {
+			pr_errno(error, "Could not spawn the client's thread");
+			clients_forget(client_fd);
 			free(new_thread);
 			close(client_fd);
 			continue;

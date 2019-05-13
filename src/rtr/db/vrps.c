@@ -264,7 +264,14 @@ revert_base:
 	return error;
 }
 
-/* TODO (whatever) @serial is a dumb hack. */
+/**
+ * Please keep in mind that there is at least one errcode-aware caller. The most
+ * important ones are
+ * 1. 0: No errors.
+ * 2. -EAGAIN: No data available; database still under construction.
+ *
+ * TODO (whatever) @serial is a dumb hack.
+ */
 int
 vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg, serial_t *serial)
 {
@@ -289,12 +296,11 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg, serial_t *serial)
 /**
  * Adds to @result the deltas whose serial > @from.
  *
- * The result code is one of the following:
- *
- * 0: No errors.
- * -EAGAIN: No data available; database still under construction.
- * -ESRCH: @from was not found.
- * Anything else: Generic fail.
+ * Please keep in mind that there is at least one errcode-aware caller. The most
+ * important ones are
+ * 1. 0: No errors.
+ * 2. -EAGAIN: No data available; database still under construction.
+ * 3. -ESRCH: @from was not found.
  *
  * As usual, only 0 guarantees valid out parameters. (@to and @result.)
  * (But note that @result is supposed to be already initialized, so caller will

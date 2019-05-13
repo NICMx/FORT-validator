@@ -29,7 +29,10 @@ pdu_load(int fd, struct rtr_request *request,
 	int error;
 
 	/* Read the header into its buffer. */
-	/* TODO If the first read yields no bytes, the connection was terminated. */
+	/*
+	 * TODO (urgent) If the first read yields no bytes, the connection was
+	 * terminated. We're not ending gracefully in those cases.
+	 */
 	error = pdu_reader_init(&reader, fd, hdr_bytes, RTRPDU_HEADER_LEN);
 	if (error)
 		/* Communication interrupted; omit error response */
@@ -53,6 +56,7 @@ pdu_load(int fd, struct rtr_request *request,
 	 * Error messages can be quite large.
 	 * But they're probably not legitimate, so drop 'em.
 	 * 512 is like a 5-paragraph error message, so it's probably enough.
+	 * (Warning: I'm assuming english tho.)
 	 */
 	if (header.length > 512) {
 		pr_warn("Got an extremely large PDU (%u bytes). WTF?",
@@ -65,6 +69,7 @@ pdu_load(int fd, struct rtr_request *request,
 	request->bytes_len = header.length;
 	request->bytes = malloc(header.length);
 	if (request->bytes == NULL)
+		/* No error report PDU on allocation failures. */
 		return pr_enomem();
 
 	memcpy(request->bytes, hdr_bytes, RTRPDU_HEADER_LEN);
@@ -72,6 +77,7 @@ pdu_load(int fd, struct rtr_request *request,
 	    request->bytes + RTRPDU_HEADER_LEN,
 	    header.length - RTRPDU_HEADER_LEN);
 	if (error)
+		/* Communication interrupted; no error PDU. */
 		goto revert_bytes;
 
 	/* Deserialize the PDU. */
@@ -88,8 +94,10 @@ pdu_load(int fd, struct rtr_request *request,
 	}
 
 	error = meta->from_stream(&header, &reader, request->pdu);
-	if (error)
+	if (error) {
+		err_pdu_send_internal_error(fd);
 		goto revert_pdu;
+	}
 
 	/* Happy path. */
 	*metadata = meta;

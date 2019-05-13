@@ -4,36 +4,43 @@
 #include "pdu_sender.h"
 #include "log.h"
 
+typedef enum rtr_error_code {
+	ERR_PDU_CORRUPT_DATA			= 0,
+	ERR_PDU_INTERNAL_ERROR			= 1,
+	ERR_PDU_NO_DATA_AVAILABLE		= 2,
+	ERR_PDU_INVALID_REQUEST			= 3,
+	ERR_PDU_UNSUP_PROTO_VERSION		= 4,
+	ERR_PDU_UNSUP_PDU_TYPE			= 5,
+	ERR_PDU_WITHDRAWAL_UNKNOWN		= 6,
+	ERR_PDU_DUPLICATE_ANNOUNCE		= 7,
+	/* RTRv1 only, so not used yet. */
+	ERR_PDU_UNEXPECTED_PROTO_VERSION	= 8,
+} rtr_error_code_t;
+
 /*
  * TODO (urgent) According to the function below, NO_DATA_AVAILABLE is not
  * fatal. However, some callers of this function are terminating the connection
  * regardless of that.
  */
 static int
-err_pdu_send(int fd, uint16_t code, struct rtr_request const *request,
+err_pdu_send(int fd, rtr_error_code_t code, struct rtr_request const *request,
     char const *message_const)
 {
+	char *message;
+
 	/*
 	 * This function must always return error so callers can interrupt
 	 * themselves easily.
+	 * But note that not all callers should use this.
+	 * TODO (now) Prevent errors to errors
+	 * (It's harder than it seems, because request->pdu is sometimes NULL.)
 	 */
 
-	int error;
-	char *message;
-
-	/* TODO (now) Prevent errors to errors */
-
 	message = (message_const != NULL) ? strdup(message_const) : NULL;
-	error = send_error_report_pdu(fd, code, request, message);
+	send_error_report_pdu(fd, code, request, message);
 	free(message);
 
-	if (err_pdu_is_fatal(code)) {
-		pr_warn("Fatal error report PDU sent [code %u], closing socket.",
-		    code);
-		close(fd);
-	}
-
-	return error ? error : -EINVAL;
+	return -EINVAL;
 }
 
 int
@@ -43,6 +50,11 @@ err_pdu_send_corrupt_data(int fd, struct rtr_request const *request,
 	return err_pdu_send(fd, ERR_PDU_CORRUPT_DATA, request, message);
 }
 
+/*
+ * Please note: If you're planning to send this error due to a memory
+ * allocation failure, you probably shouldn't; you'd likely only aggravate the
+ * problem.
+ */
 int
 err_pdu_send_internal_error(int fd)
 {
@@ -84,48 +96,39 @@ err_pdu_send_unsupported_pdu_type(int fd, struct rtr_request const *request)
 bool
 err_pdu_is_fatal(uint16_t code)
 {
-	/* Only NO_DATA_AVAILABLE error isn't fatal */
+	/*
+	 * Only NO_DATA_AVAILABLE error isn't fatal
+	 *
+	 * Addendum: Note that this is only non-fatal if we're the ones sending
+	 * it. If the clients is the one telling us this, then it probably
+	 * counts as "erroneous Error Report PDU", which is totally fatal.
+	 */
 	return code != ERR_PDU_NO_DATA_AVAILABLE;
 }
 
-void
-err_pdu_log(uint16_t code, char *message)
+char const *
+err_pdu_to_string(uint16_t code)
 {
-	char const *code_title;
-
-	switch (code) {
+	switch ((rtr_error_code_t) code) {
 	case ERR_PDU_CORRUPT_DATA:
-		code_title = "Corrupt Data";
-		break;
+		return "Corrupt Data";
 	case ERR_PDU_INTERNAL_ERROR:
-		code_title = "Internal Error";
-		break;
+		return "Internal Error";
 	case ERR_PDU_NO_DATA_AVAILABLE:
-		code_title = "No Data Available";
-		break;
+		return "No Data Available";
 	case ERR_PDU_INVALID_REQUEST:
-		code_title = "Invalid Request";
-		break;
+		return "Invalid Request";
 	case ERR_PDU_UNSUP_PROTO_VERSION:
-		code_title = "Unsupported Protocol Version";
-		break;
+		return "Unsupported Protocol Version";
 	case ERR_PDU_UNSUP_PDU_TYPE:
-		code_title = "Unsupported PDU Type";
-		break;
+		return "Unsupported PDU Type";
 	case ERR_PDU_WITHDRAWAL_UNKNOWN:
-		code_title = "Withdrawal of Unknown Record";
-		break;
+		return "Withdrawal of Unknown Record";
 	case ERR_PDU_DUPLICATE_ANNOUNCE:
-		code_title = "Duplicate Announcement Received";
-		break;
+		return "Duplicate Announcement Received";
 	case ERR_PDU_UNEXPECTED_PROTO_VERSION:
-		code_title = "Unexpected Protocol Version";
-		break;
-	default:
-		code_title = "Unknown error code";
-		break;
+		return "Unexpected Protocol Version";
 	}
 
-	pr_err("Error report PDU info: '%s', message '%s'.",
-	    code_title, message == NULL ? "[empty]" : message);
+	return "Unknown error code";
 }

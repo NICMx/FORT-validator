@@ -49,20 +49,7 @@ create_client(struct rtr_client *client, struct hashable_client **result)
 		return pr_enomem();
 
 	node->meat.fd = client->fd;
-	node->meat.family = client->addr.ss_family;
-	switch (client->addr.ss_family) {
-	case AF_INET:
-		node->meat.sin = SADDR_IN(&client->addr)->sin_addr;
-		node->meat.sin_port = SADDR_IN(&client->addr)->sin_port;
-		break;
-	case AF_INET6:
-		node->meat.sin6 = SADDR_IN6(&client->addr)->sin6_addr;
-		node->meat.sin_port = SADDR_IN6(&client->addr)->sin6_port;
-		break;
-	default:
-		free(node);
-		return pr_crit("Bad protocol: %u", client->addr.ss_family);
-	}
+	node->meat.serial_number_set = false;
 
 	*result = node;
 	return 0;
