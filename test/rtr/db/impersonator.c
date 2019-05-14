@@ -52,6 +52,8 @@ perform_standalone_validation(struct validation_handler *handler)
 		ck_abort_msg("perform_standalone_validation() was called too many times (%d).",
 		    iteration);
 	}
+	if (handler->merge != NULL)
+		handler->merge(handler->merge_arg, handler->arg);
 
 	iteration++;
 	return 0;

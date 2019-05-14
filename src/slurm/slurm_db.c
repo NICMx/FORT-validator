@@ -1,6 +1,5 @@
 #include "slurm_db.h"
 
-#include <stdbool.h>
 #include <string.h>
 
 #include "data_structure/array_list.h"
@@ -17,54 +16,38 @@ struct arraylist_db {
 	struct al_assertion_bgpsec assertion_bgps_al;
 } array_lists_db;
 
-#define LOCATE_FUNCS(name, type, array_list, equal_cb, filter)		\
-	static type *							\
-	name##_locate(array_list *base, type *obj)			\
-	{								\
-		type *cursor;						\
-									\
-		ARRAYLIST_FOREACH(base, cursor)				\
-			if (equal_cb(cursor, obj, filter))		\
-				return cursor;				\
-									\
-		return NULL;						\
-	}								\
-									\
-	static bool							\
-	name##_exists(array_list *base, type *obj)			\
-	{								\
-		return name##_locate(base, obj) != NULL;		\
-	}
-
-int
+void
 slurm_db_init(void)
 {
 	al_filter_prefix_init(&array_lists_db.filter_pfx_al);
 	al_assertion_prefix_init(&array_lists_db.assertion_pfx_al);
 	al_filter_bgpsec_init(&array_lists_db.filter_bgps_al);
 	al_assertion_bgpsec_init(&array_lists_db.assertion_bgps_al);
-
-	return 0;
 }
 
 static bool
-prefix_filtered_by(struct slurm_prefix *prefix, struct slurm_prefix *filter)
+prefix_filtered_by(struct slurm_prefix *filter, struct slurm_prefix *prefix)
 {
+	struct vrp *filter_vrp, *prefix_vrp;
+
+	filter_vrp = &filter->vrp;
+	prefix_vrp = &prefix->vrp;
+
 	/* Both have ASN */
-	if ((prefix->data_flag & SLURM_COM_FLAG_ASN) > 0 &&
-	    (filter->data_flag & SLURM_COM_FLAG_ASN) > 0)
-		return prefix->asn == filter->asn;
+	if ((filter->data_flag & SLURM_COM_FLAG_ASN) > 0 &&
+	    (prefix->data_flag & SLURM_COM_FLAG_ASN) > 0)
+		return filter_vrp->asn == prefix_vrp->asn;
 
 	/* Both have a prefix of the same type */
-	if ((prefix->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
-	    (filter->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
-	    prefix->addr_fam == filter->addr_fam &&
-	    prefix->prefix_length == filter->prefix_length)
-		return ((prefix->addr_fam == AF_INET &&
-		    prefix->ipv4_prefix.s_addr == filter->ipv4_prefix.s_addr) ||
-		    (prefix->addr_fam == AF_INET6 &&
-		    IN6_ARE_ADDR_EQUAL(prefix->ipv6_prefix.s6_addr32,
-		    filter->ipv6_prefix.s6_addr32)));
+	if ((filter->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
+	    (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
+	    filter_vrp->addr_fam == prefix_vrp->addr_fam &&
+	    filter_vrp->prefix_length == prefix_vrp->prefix_length)
+		return ((filter_vrp->addr_fam == AF_INET &&
+		    filter_vrp->prefix.v4.s_addr == prefix_vrp->prefix.v4.s_addr) ||
+		    (filter_vrp->addr_fam == AF_INET6 &&
+		    IN6_ARE_ADDR_EQUAL(filter_vrp->prefix.v6.s6_addr32,
+		    prefix_vrp->prefix.v6.s6_addr32)));
 
 	return false;
 }
@@ -73,7 +56,11 @@ static bool
 prefix_equal(struct slurm_prefix *left, struct slurm_prefix *right,
     bool filter)
 {
+	struct vrp *left_vrp, *right_vrp;
 	bool equal;
+
+	left_vrp = &left->vrp;
+	right_vrp = &right->vrp;
 
 	/* Ignore the comments */
 	if ((left->data_flag & ~SLURM_COM_FLAG_COMMENT) !=
@@ -83,21 +70,22 @@ prefix_equal(struct slurm_prefix *left, struct slurm_prefix *right,
 	/* It has the same data, compare it */
 	equal = true;
 	if ((left->data_flag & SLURM_COM_FLAG_ASN) > 0)
-		equal = equal && left->asn == right->asn;
+		equal = equal && left_vrp->asn == right_vrp->asn;
 
 	if ((left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
-		equal = equal && left->prefix_length == right->prefix_length
-		    && left->addr_fam == right->addr_fam
-		    && ((left->addr_fam == AF_INET
-		    && left->ipv4_prefix.s_addr == right->ipv4_prefix.s_addr)
-		    || (left->addr_fam == AF_INET6
-		    && IN6_ARE_ADDR_EQUAL(left->ipv6_prefix.s6_addr32,
-		    right->ipv6_prefix.s6_addr32)));
+		equal = equal
+		    && left_vrp->prefix_length == right_vrp->prefix_length
+		    && left_vrp->addr_fam == right_vrp->addr_fam
+		    && ((left_vrp->addr_fam == AF_INET
+		    && left_vrp->prefix.v4.s_addr == right_vrp->prefix.v4.s_addr)
+		    || (left_vrp->addr_fam == AF_INET6
+		    && IN6_ARE_ADDR_EQUAL(left_vrp->prefix.v6.s6_addr32,
+		    right_vrp->prefix.v6.s6_addr32)));
 
 	if ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
 		equal = equal &&
 		    ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0) &&
-		    left->max_prefix_length == right->max_prefix_length;
+		    left_vrp->max_prefix_length == right_vrp->max_prefix_length;
 
 	return equal;
 }
@@ -149,71 +137,67 @@ bgpsec_equal(struct slurm_bgpsec *left, struct slurm_bgpsec *right,
 	return equal;
 }
 
-LOCATE_FUNCS(prefix_filter, struct slurm_prefix, struct al_filter_prefix,
-    prefix_equal, true)
-LOCATE_FUNCS(bgpsec_filter, struct slurm_bgpsec, struct al_filter_bgpsec,
-    bgpsec_equal, true)
-LOCATE_FUNCS(prefix_assertion, struct slurm_prefix, struct al_assertion_prefix,
-    prefix_equal, false)
-LOCATE_FUNCS(bgpsec_assertion, struct slurm_bgpsec, struct al_assertion_bgpsec,
-    bgpsec_equal, false)
+#define ADD_FUNCS(name, type, list_name, db_list, equal_cb, filter)	\
+	static type *							\
+	name##_locate(type *obj)					\
+	{								\
+		type *cursor;						\
+									\
+		ARRAYLIST_FOREACH(db_list, cursor)			\
+			if (equal_cb(cursor, obj, filter))		\
+				return cursor;				\
+									\
+		return NULL;						\
+	}								\
+									\
+	static bool							\
+	name##_exists(type *obj)					\
+	{								\
+		return name##_locate(obj) != NULL;			\
+	}								\
+									\
+	int								\
+	slurm_db_add_##name(type *elem) {				\
+		if (name##_exists(elem))				\
+			return -EEXIST;					\
+		return list_name##_add(db_list, elem);			\
+	}
 
-/*
- * Try to persist the @prefix filter, if it already exists or is covered
- * by another filter, then the error -EEXIST is returned; otherwise, returns
- * the result of persisting the @prefix.
- */
-int
-slurm_db_add_prefix_filter(struct slurm_prefix *prefix)
+ADD_FUNCS(prefix_filter, struct slurm_prefix, al_filter_prefix,
+    &array_lists_db.filter_pfx_al, prefix_equal, true)
+ADD_FUNCS(bgpsec_filter, struct slurm_bgpsec, al_filter_bgpsec,
+    &array_lists_db.filter_bgps_al, bgpsec_equal, true)
+ADD_FUNCS(prefix_assertion, struct slurm_prefix, al_assertion_prefix,
+    &array_lists_db.assertion_pfx_al, prefix_equal, false)
+ADD_FUNCS(bgpsec_assertion, struct slurm_bgpsec, al_assertion_bgpsec,
+    &array_lists_db.assertion_bgps_al, bgpsec_equal, false)
+
+bool
+slurm_db_vrp_is_filtered(struct vrp const *vrp)
 {
-	if (prefix_filter_exists(&array_lists_db.filter_pfx_al, prefix))
-		return -EEXIST;
+	struct slurm_prefix slurm_prefix;
 
-	return al_filter_prefix_add(&array_lists_db.filter_pfx_al, prefix);
+	slurm_prefix.data_flag = SLURM_COM_FLAG_ASN | SLURM_PFX_FLAG_PREFIX
+	    | SLURM_PFX_FLAG_MAX_LENGTH;
+	slurm_prefix.vrp = *vrp;
+	slurm_prefix.comment = NULL;
+
+	return prefix_filter_exists(&slurm_prefix);
 }
 
-/*
- * Try to persist the @prefix assertion, if it already exists, then the error
- * -EEXIST is returned; otherwise, returns the result of persisting the
- * @prefix.
- */
 int
-slurm_db_add_prefix_assertion(struct slurm_prefix *prefix)
+slurm_db_foreach_assertion_prefix(assertion_pfx_foreach_cb cb, void *arg)
 {
-	if (prefix_assertion_exists(&array_lists_db.assertion_pfx_al, prefix))
-		return -EEXIST;
+	struct slurm_prefix *cursor;
+	int error;
 
-	return al_assertion_prefix_add(&array_lists_db.assertion_pfx_al,
-	    prefix);
-}
+	ARRAYLIST_FOREACH(&array_lists_db.assertion_pfx_al, cursor) {
+		error = cb(cursor, arg);
+		if (error)
+			return error;
+	}
 
-/*
- * Try to persist the @bgpsec filter, if it already exists or is covered
- * by another filter, then the error -EEXIST is returned; otherwise, returns
- * the result of persisting the @bgpsec.
- */
-int
-slurm_db_add_bgpsec_filter(struct slurm_bgpsec *bgpsec)
-{
-	if (bgpsec_filter_exists(&array_lists_db.filter_bgps_al, bgpsec))
-		return -EEXIST;
-
-	return al_filter_bgpsec_add(&array_lists_db.filter_bgps_al, bgpsec);
-}
-
-/*
- * Try to persist the @bgpsec assertion, if it already exists, then the error
- * -EEXIST is returned; otherwise, returns the result of persisting the
- * @bgpsec.
- */
-int
-slurm_db_add_bgpsec_assertion(struct slurm_bgpsec *bgpsec)
-{
-	if (bgpsec_assertion_exists(&array_lists_db.assertion_bgps_al, bgpsec))
-		return -EEXIST;
-
-	return al_assertion_bgpsec_add(&array_lists_db.assertion_bgps_al,
-	    bgpsec);
+	return 0;
 }
 
 static void

@@ -1,11 +1,15 @@
 #include "vrps.h"
 
 #include <pthread.h>
+#include <string.h>
 #include <time.h>
 #include "clients.h"
 #include "common.h"
+#include "validation_handler.h"
+#include "data_structure/array_list.h"
 #include "object/tal.h"
 #include "rtr/db/roa_table.h"
+#include "slurm/slurm_loader.h"
 
 /*
  * Storage of VRPs (term taken from RFC 6811 "Validated ROA Payload") and
@@ -53,6 +57,7 @@ vrps_init(void)
 	int error;
 
 	state.base = NULL;
+
 	deltas_db_init(&state.deltas);
 
 	/*
@@ -61,6 +66,7 @@ vrps_init(void)
 	 * 'Fields of a PDU')
 	 */
 	state.current_serial = START_SERIAL;
+
 	/* Get the bits that'll fit in session_id */
 	state.v0_session_id = time(NULL) & 0xFFFF;
 	/* Minus 1 to prevent same ID */
@@ -87,6 +93,12 @@ vrps_destroy(void)
 }
 
 static int
+__merge(void *dst, void *src)
+{
+	return rtrhandler_merge(dst, src);
+}
+
+static int
 __reset(void *arg)
 {
 	return rtrhandler_reset(arg);
@@ -109,7 +121,7 @@ __handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
 static int
 __perform_standalone_validation(struct roa_table **result)
 {
-	struct roa_table *roas;
+	struct roa_table *roas, *global_roas;
 	struct validation_handler validation_handler;
 	int error;
 
@@ -117,6 +129,14 @@ __perform_standalone_validation(struct roa_table **result)
 	if (roas == NULL)
 		return pr_enomem();
 
+	global_roas = roa_table_create();
+	if (global_roas == NULL) {
+		roa_table_destroy(roas);
+		return pr_enomem();
+	}
+
+	validation_handler.merge = __merge;
+	validation_handler.merge_arg = global_roas;
 	validation_handler.reset = __reset;
 	validation_handler.traverse_down = NULL;
 	validation_handler.traverse_up = NULL;
@@ -125,12 +145,13 @@ __perform_standalone_validation(struct roa_table **result)
 	validation_handler.arg = roas;
 
 	error = perform_standalone_validation(&validation_handler);
+	roa_table_destroy(roas);
 	if (error) {
-		roa_table_destroy(roas);
+		roa_table_destroy(global_roas);
 		return error;
 	}
 
-	*result = roas;
+	*result = global_roas;
 	return 0;
 }
 
@@ -141,7 +162,7 @@ __perform_standalone_validation(struct roa_table **result)
 static void
 resize_deltas_db(struct deltas_db *db, struct delta_group *start)
 {
-	struct delta_group *tmp;
+	struct delta_group *tmp, *ptr;
 
 	db->len -= (start - db->array);
 	while (db->len < db->capacity / 2)
@@ -152,6 +173,9 @@ resize_deltas_db(struct deltas_db *db, struct delta_group *start)
 		return;
 	}
 	memcpy(tmp, start, db->len * sizeof(struct delta_group));
+	/* Release memory allocated */
+	for (ptr = db->array; ptr < start; ptr++)
+		deltas_put(ptr->deltas);
 	free(db->array);
 	db->array = tmp;
 }
@@ -195,6 +219,12 @@ vrps_update(bool *changed)
 		return error;
 
 	rwlock_write_lock(&lock);
+
+	error = slurm_apply(new_base);
+	if (error) {
+		rwlock_unlock(&lock);
+		goto revert_base;
+	}
 
 	if (state.base != NULL) {
 		error = compute_deltas(state.base, new_base, &deltas);

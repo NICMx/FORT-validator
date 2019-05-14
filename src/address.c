@@ -394,7 +394,7 @@ str2addr6(const char *addr, struct in6_addr *dst)
 }
 
 int
-str_to_prefix4(const char *str, struct ipv4_prefix *result)
+prefix4_parse(const char *str, struct ipv4_prefix *result)
 {
 	int error;
 
@@ -409,7 +409,7 @@ str_to_prefix4(const char *str, struct ipv4_prefix *result)
 }
 
 int
-str_to_prefix6(const char *str, struct ipv6_prefix *result)
+prefix6_parse(const char *str, struct ipv6_prefix *result)
 {
 	int error;
 
@@ -424,7 +424,7 @@ str_to_prefix6(const char *str, struct ipv6_prefix *result)
 }
 
 int
-str_to_prefix_length(const char *text, uint8_t *dst, uint8_t max_value)
+prefix_length_parse(const char *text, uint8_t *dst, uint8_t max_value)
 {
 	unsigned long len;
 

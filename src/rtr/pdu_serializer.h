@@ -1,18 +1,7 @@
 #ifndef SRC_RTR_PDU_SERIALIZER_H_
 #define SRC_RTR_PDU_SERIALIZER_H_
 
-#include "pdu.h"
-
-#define BUFFER_SIZE	512
-
-struct data_buffer {
-	size_t len;
-	size_t capacity;
-	unsigned char *data;
-};
-
-void init_buffer(struct data_buffer *);
-void free_buffer(struct data_buffer *);
+#include "rtr/pdu.h"
 
 size_t serialize_serial_notify_pdu(struct serial_notify_pdu *,
     unsigned char *);

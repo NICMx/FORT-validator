@@ -86,3 +86,15 @@ json_get_object(json_t *parent, char const *name)
 
 	return child;
 }
+
+/*
+ * Any unknown members should be treated as errors, RFC8416 3.1:
+ * "JSON members that are not defined here MUST NOT be used in SLURM
+ * files. An RP MUST consider any deviations from the specifications to
+ * be errors."
+ */
+bool
+json_valid_members_count(json_t *object, size_t expected_size)
+{
+	return json_object_size(object) == expected_size;
+}

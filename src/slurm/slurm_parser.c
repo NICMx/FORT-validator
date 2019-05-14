@@ -1,7 +1,6 @@
 #include "slurm_parser.h"
 
 #include <errno.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <openssl/evp.h>
@@ -10,7 +9,7 @@
 #include "log.h"
 #include "address.h"
 #include "json_parser.h"
-#include "slurm_db.h"
+#include "slurm/slurm_db.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"
@@ -36,7 +35,7 @@
 static int handle_json(json_t *);
 
 int
-slurm_parse(char const *location)
+slurm_parse(char const *location, void *arg)
 {
 	json_t *json_root;
 	json_error_t json_error;
@@ -54,41 +53,6 @@ slurm_parse(char const *location)
 
 	json_decref(json_root);
 	return error;
-}
-
-static int
-parse_prefix4(char *text, struct ipv4_prefix *prefixv4)
-{
-	if (text == NULL)
-		return -EINVAL;
-	return str_to_prefix4(text, prefixv4);
-}
-
-static int
-parse_prefix6(char *text, struct ipv6_prefix *prefixv6)
-{
-	if (text == NULL)
-		return -EINVAL;
-	return str_to_prefix6(text, prefixv6);
-}
-
-static int
-parse_prefix_length(char *text, uint8_t *value, uint8_t max_value)
-{
-	if (text == NULL)
-		return -EINVAL;
-	return str_to_prefix_length(text, value, max_value);
-}
-/*
- * Any unknown members should be treated as errors, RFC8416 3.1:
- * "JSON members that are not defined here MUST NOT be used in SLURM
- * files. An RP MUST consider any deviations from the specifications to
- * be errors."
- */
-static bool
-valid_members_count(json_t *object, size_t expected_size)
-{
-	return json_object_size(object) == expected_size;
 }
 
 static int
@@ -165,9 +129,9 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 	token = strtok(clone, "/");
 	isv4 = strchr(token, ':') == NULL;
 	if (isv4)
-		error = parse_prefix4(token, &prefixv4);
+		error = prefix4_parse(token, &prefixv4);
 	else
-		error = parse_prefix6(token, &prefixv6);
+		error = prefix6_parse(token, &prefixv6);
 
 	if (error) {
 		free(clone);
@@ -176,7 +140,7 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 
 	/* Second part: Prefix length in numeric format */
 	token = strtok(NULL, "/");
-	error = parse_prefix_length(token,
+	error = prefix_length_parse(token,
 	    (isv4 ? &prefixv4.len : &prefixv6.len),
 	    (isv4 ? 32 : 128));
 	free(clone);
@@ -187,16 +151,16 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 		error = ipv4_prefix_validate(&prefixv4);
 		if (error)
 			return error;
-		result->addr_fam = AF_INET;
-		result->ipv4_prefix = prefixv4.addr;
-		result->prefix_length = prefixv4.len;
+		result->vrp.addr_fam = AF_INET;
+		result->vrp.prefix.v4 = prefixv4.addr;
+		result->vrp.prefix_length = prefixv4.len;
 	} else {
 		error = ipv6_prefix_validate(&prefixv6);
 		if (error)
 			return error;
-		result->addr_fam = AF_INET6;
-		result->ipv6_prefix = prefixv6.addr;
-		result->prefix_length = prefixv6.len;
+		result->vrp.addr_fam = AF_INET6;
+		result->vrp.prefix.v6 = prefixv6.addr;
+		result->vrp.prefix_length = prefixv6.len;
 	}
 	result->data_flag |= SLURM_PFX_FLAG_PREFIX;
 	(*members_loaded)++;
@@ -328,14 +292,12 @@ set_router_pub_key(json_t *object, bool is_assertion,
 		return pr_err("'%s' couldn't be decoded", str_encoded);
 
 	/*
-	 * TODO Validate that 'routerPublicKey' is: "the equivalent to the
-	 * subjectPublicKeyInfo value of the router certificate's public key,
-	 * as described in [RFC8208].  This is the full ASN.1 DER encoding of
-	 * the subjectPublicKeyInfo, including the ASN.1 tag and length values
+	 * TODO (next iteration) Reuse the functions to validate that
+	 * 'routerPublicKey' is: "the equivalent to the subjectPublicKeyInfo
+	 * value of the router certificate's public key, as described in
+	 * [RFC8208]. This is the full ASN.1 DER encoding of the
+	 * subjectPublicKeyInfo, including the ASN.1 tag and length values
 	 * of the subjectPublicKeyInfo SEQUENCE.
-	 */
-	/*
-	 * TODO When the merge is done, reuse the functions at fort-validator
 	 *
 	 * #include <libcmscodec/SubjectPublicKeyInfo.h>
 	 * #include "asn1/decode.h"
@@ -354,11 +316,11 @@ static void
 init_slurm_prefix(struct slurm_prefix *slurm_prefix)
 {
 	slurm_prefix->data_flag = SLURM_COM_FLAG_NONE;
-	slurm_prefix->asn = 0;
-	slurm_prefix->ipv6_prefix = in6addr_any;
-	slurm_prefix->prefix_length = 0;
-	slurm_prefix->max_prefix_length = 0;
-	slurm_prefix->addr_fam = 0;
+	slurm_prefix->vrp.asn = 0;
+	slurm_prefix->vrp.prefix.v6 = in6addr_any;
+	slurm_prefix->vrp.prefix_length = 0;
+	slurm_prefix->vrp.max_prefix_length = 0;
+	slurm_prefix->vrp.addr_fam = 0;
 	slurm_prefix->comment = NULL;
 }
 
@@ -375,8 +337,8 @@ load_single_prefix(json_t *object, bool is_assertion)
 	init_slurm_prefix(&result);
 	member_count = 0;
 
-	error = set_asn(object, is_assertion, &result.asn, &result.data_flag,
-	    &member_count);
+	error = set_asn(object, is_assertion, &result.vrp.asn,
+	    &result.data_flag, &member_count);
 	if (error)
 		return error;
 
@@ -384,8 +346,9 @@ load_single_prefix(json_t *object, bool is_assertion)
 	if (error)
 		return error;
 
-	error = set_max_prefix_length(object, is_assertion, result.addr_fam,
-	    &result.max_prefix_length, &result.data_flag, &member_count);
+	error = set_max_prefix_length(object, is_assertion,
+	    result.vrp.addr_fam, &result.vrp.max_prefix_length,
+	    &result.data_flag, &member_count);
 	if (error)
 		return error;
 
@@ -411,7 +374,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 		}
 
 		/* Validate expected members */
-		if (!valid_members_count(object, member_count)) {
+		if (!json_valid_members_count(object, member_count)) {
 			pr_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
 			error = -EINVAL;
 			goto release_comment;
@@ -430,7 +393,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 	 */
 
 	if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
-		if (result.prefix_length > result.max_prefix_length) {
+		if (result.vrp.prefix_length > result.vrp.max_prefix_length) {
 			pr_err(
 			    "Prefix length is greater than max prefix length");
 			error = -EINVAL;
@@ -438,7 +401,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 		}
 
 	/* Validate expected members */
-	if (!valid_members_count(object, member_count)) {
+	if (!json_valid_members_count(object, member_count)) {
 		pr_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
 		error = -EINVAL;
 		goto release_comment;
@@ -544,7 +507,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 		}
 
 		/* Validate expected members */
-		if (!valid_members_count(object, member_count)) {
+		if (!json_valid_members_count(object, member_count)) {
 			pr_err("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
 			error = -EINVAL;
 			goto release_comment;
@@ -558,7 +521,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 	}
 
 	/* Validate expected members */
-	if (!valid_members_count(object, member_count)) {
+	if (!json_valid_members_count(object, member_count)) {
 		pr_err("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
 		error = -EINVAL;
 		goto release_comment;
@@ -642,7 +605,7 @@ load_filters(json_t *root)
 	CHECK_REQUIRED(bgpsec, BGPSEC_FILTERS)
 
 	expected_members = 2;
-	if (!valid_members_count(filters, expected_members))
+	if (!json_valid_members_count(filters, expected_members))
 		return pr_err(
 		    "SLURM '%s' must contain only %lu members (RFC 8416 section 3.2)",
 		    VALIDATION_OUTPUT_FILTERS,
@@ -677,7 +640,7 @@ load_assertions(json_t *root)
 	CHECK_REQUIRED(bgpsec, BGPSEC_ASSERTIONS)
 
 	expected_members = 2;
-	if (!valid_members_count(assertions, expected_members))
+	if (!json_valid_members_count(assertions, expected_members))
 		return pr_err(
 		    "SLURM '%s' must contain only %lu members (RFC 8416 section 3.2)",
 		    LOCALLY_ADDED_ASSERTIONS,
@@ -716,7 +679,7 @@ handle_json(json_t *root)
 		return error;
 
 	expected_members = 3;
-	if (!valid_members_count(root, expected_members))
+	if (!json_valid_members_count(root, expected_members))
 		return pr_err(
 		    "SLURM root must have only %lu members (RFC 8416 section 3.2)",
 		    expected_members);

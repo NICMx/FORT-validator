@@ -88,6 +88,12 @@ err_pdu_send_invalid_request_truncated(int fd, unsigned char *header,
 }
 
 int
+err_pdu_send_unsupported_proto_version(int fd)
+{
+	return err_pdu_send(fd, ERR_PDU_UNSUP_PROTO_VERSION, NULL, NULL);
+}
+
+int
 err_pdu_send_unsupported_pdu_type(int fd, struct rtr_request const *request)
 {
 	return err_pdu_send(fd, ERR_PDU_UNSUP_PDU_TYPE, request, NULL);

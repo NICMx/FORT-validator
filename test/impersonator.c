@@ -69,3 +69,9 @@ config_get_rsync_args(bool is_ta)
 	static const struct string_array array = { 0 };
 	return &array;
 }
+
+char const *
+config_get_slurm_location(void)
+{
+	return NULL;
+}

@@ -43,10 +43,10 @@ pdu_load(int fd, struct rtr_request *request,
 		return error;
 
 	/*
-	 * RTRv1 expects us to respond RTRv1 messages with RTRv0 messages,
-	 * and future protocols will probably do the same.
-	 * So don't validate the protocol version.
+	 * For now, only RTRv0 is supported
 	 */
+	if (header.protocol_version != RTR_V0)
+		return err_pdu_send_unsupported_proto_version(fd);
 
 	if (header.length < RTRPDU_HEADER_LEN)
 		return err_pdu_send_invalid_request_truncated(fd, hdr_bytes,

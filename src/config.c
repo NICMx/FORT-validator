@@ -26,7 +26,7 @@
  * Assuming you don't need to create a data type, that should be all.
  */
 struct rpki_config {
-	/** TAL file name or directory. TODO (urgent) support directories */
+	/** TAL file name or directory. */
 	char *tal;
 	/** Path of our local clone of the repository */
 	char *local_repository;
@@ -143,7 +143,7 @@ static const struct option_field options[] = {
 		.name = "tal",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, tal),
-		.doc = "Path to the TAL file",
+		.doc = "Path to the TAL file or TALs directory",
 		.arg_doc = "<file>",
 	}, {
 		.id = 'r',
@@ -497,7 +497,7 @@ validate_config(void)
 {
 	return (rpki_config.tal != NULL)
 	    ? 0
-	    : pr_err("The TAL file (--tal) is mandatory.");
+	    : pr_err("The TAL file/directory (--tal) is mandatory.");
 }
 
 static void

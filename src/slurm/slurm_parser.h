@@ -1,7 +1,7 @@
-#ifndef SRC_SLURM_PARSER_H_
-#define SRC_SLURM_PARSER_H_
+#ifndef SRC_SLURM_SLURM_PARSER_H_
+#define SRC_SLURM_SLURM_PARSER_H_
 
-#include <netinet/in.h>
+#include "rtr/db/vrp.h"
 
 /* Flags to get data from structs */
 #define SLURM_COM_FLAG_NONE		0x00
@@ -16,14 +16,7 @@
 
 struct slurm_prefix {
 	uint8_t		data_flag;
-	uint32_t	asn;
-	union {
-		struct	in_addr ipv4_prefix;
-		struct	in6_addr ipv6_prefix;
-	};
-	uint8_t		prefix_length;
-	uint8_t		max_prefix_length;
-	uint8_t		addr_fam;
+	struct vrp	vrp;
 	char const	*comment;
 };
 
@@ -38,7 +31,7 @@ struct slurm_bgpsec {
 };
 
 
-int slurm_parse(char const *);
+int slurm_parse(char const *, void *);
 
 
-#endif /* SRC_SLURM_PARSER_H_ */
+#endif /* SRC_SLURM_SLURM_PARSER_H_ */

@@ -20,6 +20,15 @@ MY_LDADD = ${CHECK_LIBS}
 BASIC_MODULES  = ../src/log.c ../src/log.h
 BASIC_MODULES += impersonator.c
 
+SLURM_SOURCES  = ../src/address.c ../src/address.h
+SLURM_SOURCES += ../src/json_parser.c ../src/json_parser.h
+SLURM_SOURCES += ../src/crypto/base64.c ../src/crypto/base64.h
+SLURM_SOURCES += ../src/slurm/slurm_db.c ../src/slurm/slurm_db.h
+SLURM_SOURCES += ../src/slurm/slurm_loader.c
+SLURM_SOURCES += ../src/slurm/slurm_loader.h
+SLURM_SOURCES += ../src/slurm/slurm_parser.c
+SLURM_SOURCES += ../src/slurm/slurm_parser.h
+
 check_PROGRAMS  = address.test
 check_PROGRAMS += clients.test
 check_PROGRAMS += line_file.test
@@ -51,6 +60,7 @@ line_file_test_SOURCES += line_file_test.c
 line_file_test_LDADD = ${MY_LDADD}
 
 pdu_handler_test_SOURCES  = ${BASIC_MODULES}
+pdu_handler_test_SOURCES += ${SLURM_SOURCES}
 pdu_handler_test_SOURCES += ../src/common.c
 pdu_handler_test_SOURCES += ../src/rtr/pdu_handler.c
 pdu_handler_test_SOURCES += ../src/rtr/err_pdu.c
@@ -59,7 +69,7 @@ pdu_handler_test_SOURCES += ../src/rtr/db/roa_table.c
 pdu_handler_test_SOURCES += ../src/rtr/db/vrps.c
 pdu_handler_test_SOURCES += rtr/db/impersonator.c
 pdu_handler_test_SOURCES += rtr/pdu_handler_test.c
-pdu_handler_test_LDADD = ${MY_LDADD}
+pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 roa_table_test_SOURCES  = ${BASIC_MODULES}
 roa_table_test_SOURCES += ../src/rtr/db/delta.c
@@ -88,13 +98,14 @@ vcard_test_SOURCES += vcard_test.c
 vcard_test_LDADD = ${MY_LDADD}
 
 vrps_test_SOURCES  = ${BASIC_MODULES}
+vrps_test_SOURCES += ${SLURM_SOURCES}
 vrps_test_SOURCES += ../src/common.c
 vrps_test_SOURCES += ../src/rtr/db/delta.c
 vrps_test_SOURCES += ../src/rtr/db/roa_table.c
 vrps_test_SOURCES += ../src/rtr/db/vrps.c
 vrps_test_SOURCES += rtr/db/impersonator.c
 vrps_test_SOURCES += rtr/db/vrps_test.c
-vrps_test_LDADD = ${MY_LDADD}
+vrps_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 #rtr_pdu_test_SOURCES  = ${BASIC_MODULES}
 #rtr_pdu_test_SOURCES += rtr/pdu_test.c

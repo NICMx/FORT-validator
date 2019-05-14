@@ -20,6 +20,8 @@
 #include "object/certificate.h"
 #include "rsync/rsync.h"
 
+#define TAL_FILE_EXTENSION	".tal"
+
 struct uris {
 	char **array; /* This is an array of string pointers. */
 	unsigned int count;
@@ -328,7 +330,11 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri, void *arg)
 			break;
 		}
 	} else {
-		error = 1;
+		error = vhandler_merge(arg);
+		if (error)
+			error = ENSURE_NEGATIVE(error);
+		else
+			error = 1;
 	}
 
 end:	validation_destroy(state);
@@ -336,29 +342,53 @@ end:	validation_destroy(state);
 	return error;
 }
 
-int
-perform_standalone_validation(struct validation_handler *handler)
+static int
+do_file_validation(char const *tal_file, void *arg)
 {
 	struct tal *tal;
 	int error;
 
-	fnstack_init();
-	fnstack_push(config_get_tal());
+	fnstack_push(tal_file);
 
-	error = tal_load(config_get_tal(), &tal);
+	error = tal_load(tal_file, &tal);
 	if (error)
 		goto end;
 
 	if (config_get_shuffle_tal_uris())
 		tal_shuffle_uris(tal);
-	error = foreach_uri(tal, handle_tal_uri, handler);
+	error = foreach_uri(tal, handle_tal_uri, arg);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
-		error = pr_err("None of the URIs of the TAL yielded a successful traversal.");
+		error = pr_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
+		    tal_file);
 
 end:	tal_destroy(tal);
 	fnstack_pop();
+	return error;
+}
+
+int
+perform_standalone_validation(struct validation_handler *handler)
+{
+	char const *config_tal;
+	struct stat attr;
+	int error;
+
+	config_tal = config_get_tal();
+	error = stat(config_tal, &attr);
+	if (error) {
+		pr_errno(errno, "Error reading path '%s'", config_tal);
+		return -errno;
+	}
+
+	fnstack_init();
+	if (S_ISDIR(attr.st_mode) == 0)
+		error = do_file_validation(config_tal, handler);
+	else
+		error = process_dir_files(config_tal, TAL_FILE_EXTENSION,
+		    do_file_validation, handler);
+
 	fnstack_cleanup();
 	return error;
 }

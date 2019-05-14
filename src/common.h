@@ -35,4 +35,7 @@ void rwlock_unlock(pthread_rwlock_t *);
 /** Also boilerplate. */
 int close_thread(pthread_t thread, char const *what);
 
+typedef int (*process_file_cb)(char const *, void *);
+int process_dir_files(char const *, char const *, process_file_cb, void *);
+
 #endif /* SRC_RTR_COMMON_H_ */

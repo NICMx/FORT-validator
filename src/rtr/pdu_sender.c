@@ -37,7 +37,7 @@ set_header_values(struct pdu_header *header, uint8_t type, uint16_t reserved)
 	header->m.reserved = reserved;
 }
 
-/* TODO Include Router Key PDU serials */
+/* TODO (next iteration) Include Router Key PDU serials */
 /**
  * static uint32_t
  * length_router_key_pdu(struct router_key_pdu *pdu)
@@ -47,64 +47,14 @@ set_header_values(struct pdu_header *header, uint8_t type, uint16_t reserved)
  * }
  */
 
-/*
- * TODO Needs some testing, this is just a beta version
- */
-static int
-send_large_response(int fd, struct data_buffer *buffer)
-{
-	unsigned char *tmp_buffer, *ptr;
-	size_t buf_size, pending;
-	int written;
-
-	buf_size = buffer->capacity;
-	pending = buffer->len;
-	ptr = buffer->data;
-	while (pending > 0) {
-		tmp_buffer = calloc(pending, sizeof(unsigned char));
-		if (tmp_buffer == NULL)
-			return pr_enomem();
-
-		memcpy(tmp_buffer, ptr, buf_size);
-
-		written = write(fd, tmp_buffer, buf_size);
-		free(tmp_buffer);
-		if (written < 0)
-			return pr_err("Error sending response");
-
-		pending -= buf_size;
-		ptr += buf_size;
-		buf_size = pending > buffer->capacity ? buffer->capacity :
-		    pending;
-	}
-
-	return 0;
-}
-
 static int
 send_response(int fd, unsigned char *data, size_t data_len)
 {
-	struct data_buffer buffer;
 	int error;
 
-	init_buffer(&buffer);
-	memcpy(buffer.data, data, data_len);
-	buffer.len = data_len;
-
-	/* Check for buffer overflow */
-	if (data_len <= buffer.capacity) {
-		error = write(fd, buffer.data, buffer.len);
-		free_buffer(&buffer);
-		if (error < 0)
-			return pr_err("Error sending response");
-
-		return 0;
-	}
-
-	error = send_large_response(fd, &buffer);
-	free_buffer(&buffer);
-	if (error)
-		return error;
+	error = write(fd, data, data_len);
+	if (error < 0)
+		return pr_errno(errno, "Error sending response");
 
 	return 0;
 }

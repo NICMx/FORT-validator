@@ -4,19 +4,6 @@
 #include <string.h>
 #include "primitive_writer.h"
 
-void
-init_buffer(struct data_buffer *buffer)
-{
-	buffer->capacity = BUFFER_SIZE;
-	buffer->data = malloc(BUFFER_SIZE);
-}
-
-void
-free_buffer(struct data_buffer *buffer)
-{
-	free(buffer->data);
-}
-
 static size_t
 serialize_pdu_header(struct pdu_header *header, uint16_t union_value,
     unsigned char *buf)

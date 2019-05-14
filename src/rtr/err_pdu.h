@@ -16,6 +16,7 @@ int err_pdu_send_internal_error(int);
 int err_pdu_send_no_data_available(int);
 int err_pdu_send_invalid_request(int, struct rtr_request const *, char const *);
 int err_pdu_send_invalid_request_truncated(int, unsigned char *, char const *);
+int err_pdu_send_unsupported_proto_version(int);
 int err_pdu_send_unsupported_pdu_type(int, struct rtr_request const *);
 
 bool err_pdu_is_fatal(uint16_t);

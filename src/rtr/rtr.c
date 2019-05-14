@@ -19,8 +19,7 @@
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 
-/* TODO (urgent) this needs to be atomic */
-volatile bool loop;
+struct sigaction act;
 
 struct thread_node {
 	pthread_t tid;
@@ -180,7 +179,7 @@ client_thread_cb(void *arg)
 	struct rtr_request request;
 	int error;
 
-	while (loop) { /* For each PDU... */
+	while (true) { /* For each PDU... */
 		error = pdu_load(client->fd, &request, &meta);
 		if (error)
 			break;
@@ -260,7 +259,7 @@ handle_client_connections(int server_fd)
 
 		error = pthread_create(&new_thread->tid, NULL,
 		    client_thread_cb, &new_thread->client);
-		if (error != EAGAIN)
+		if (error && error != EAGAIN)
 			err_pdu_send_internal_error(client_fd);
 		if (error) {
 			pr_errno(error, "Could not spawn the client's thread");
@@ -286,7 +285,6 @@ signal_handler(int signal, siginfo_t *info, void *param)
 static int
 init_signal_handler(void)
 {
-	struct sigaction act;
 	int error;
 
 	memset(&act, 0, sizeof act);
@@ -294,7 +292,6 @@ init_signal_handler(void)
 	act.sa_flags = SA_SIGINFO;
 	act.sa_sigaction = signal_handler;
 
-	/* TODO is this really legal? @act might need to be global. */
 	error = sigaction(SIGINT, &act, NULL);
 	if (error) {
 		pr_errno(errno, "Error initializing signal handler");
@@ -309,7 +306,6 @@ wait_threads(void)
 {
 	struct thread_node *ptr;
 
-	loop = false;
 	while (!SLIST_EMPTY(&threads)) {
 		ptr = SLIST_FIRST(&threads);
 		SLIST_REMOVE_HEAD(&threads, next);
@@ -344,7 +340,6 @@ rtr_listen(void)
 		goto revert_server_socket;
 
 	/* Init global vars */
-	loop = true;
 	SLIST_INIT(&threads);
 
 	error = init_signal_handler();

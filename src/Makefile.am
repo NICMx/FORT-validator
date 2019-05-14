@@ -25,9 +25,6 @@ fort_SOURCES += notify.c notify.h
 fort_SOURCES += random.h random.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
-fort_SOURCES += slurm_db.c slurm_db.h
-fort_SOURCES += slurm_loader.c slurm_loader.h
-fort_SOURCES += slurm_parser.c slurm_parser.h
 fort_SOURCES += sorted_array.h sorted_array.c
 fort_SOURCES += state.h state.c
 fort_SOURCES += str.h str.c
@@ -57,6 +54,7 @@ fort_SOURCES += crypto/hash.h crypto/hash.c
 fort_SOURCES += data_structure/array_list.h
 fort_SOURCES += data_structure/common.h
 fort_SOURCES += data_structure/uthash.h
+fort_SOURCES += data_structure/uthash_nonfatal.h
 
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c
@@ -87,6 +85,10 @@ fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
 fort_SOURCES += rtr/db/roa_table.c rtr/db/roa_table.h
 fort_SOURCES += rtr/db/roa.c rtr/db/roa.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
+
+fort_SOURCES += slurm/slurm_db.c slurm/slurm_db.h
+fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
+fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
 fort_CFLAGS  = -Wall
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.

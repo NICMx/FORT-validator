@@ -1,6 +1,6 @@
 #include "rtr/db/roa_table.h"
 
-#include "data_structure/uthash.h"
+#include "data_structure/uthash_nonfatal.h"
 
 struct hashable_roa {
 	/*
@@ -51,10 +51,10 @@ roa_table_destroy(struct roa_table *table)
 int
 roa_table_foreach_roa(struct roa_table *table, vrp_foreach_cb cb, void *arg)
 {
-	struct hashable_roa *node;
+	struct hashable_roa *node, *tmp;
 	int error;
 
-	for (node = table->roas; node != NULL; node = node->hh.next) {
+	HASH_ITER(hh, table->roas, node, tmp) {
 		error = cb(&node->data, arg);
 		if (error)
 			return error;
@@ -92,11 +92,75 @@ add_roa(struct roa_table *table, struct hashable_roa *new)
 {
 	struct hashable_roa *old;
 
+	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
+	if (errno)
+		return -pr_errno(errno, "ROA couldn't be added to hash table");
 	if (old != NULL)
 		free(old);
 
 	return 0;
+}
+
+static int
+duplicate_roa(struct roa_table *dst, struct hashable_roa *new)
+{
+	struct vrp vrp;
+	struct ipv4_prefix prefix4;
+	struct ipv6_prefix prefix6;
+
+	vrp = new->data;
+	switch (vrp.addr_fam) {
+	case AF_INET:
+		prefix4.addr = vrp.prefix.v4;
+		prefix4.len = vrp.prefix_length;
+		return rtrhandler_handle_roa_v4(dst, vrp.asn, &prefix4,
+		    vrp.max_prefix_length);
+	case AF_INET6:
+		prefix6.addr = vrp.prefix.v6;
+		prefix6.len = vrp.prefix_length;
+		return rtrhandler_handle_roa_v6(dst, vrp.asn, &prefix6,
+		    vrp.max_prefix_length);
+	}
+	return pr_crit("Unknown address family: %d", vrp.addr_fam);
+}
+
+static int
+roa_table_merge(struct roa_table *dst, struct roa_table *src)
+{
+	struct hashable_roa *node, *tmp, *found;
+	int error;
+
+	/** Must look for it due to the new mem allocation */
+	HASH_ITER(hh, src->roas, node, tmp) {
+		HASH_FIND(hh, dst->roas, &node->data, sizeof(node->data),
+		    found);
+		if (found != NULL)
+			continue;
+		error = duplicate_roa(dst, node);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+int
+rtrhandler_merge(struct roa_table *dst, struct roa_table *src)
+{
+	return roa_table_merge(dst, src);
+}
+
+void
+roa_table_remove_roa(struct roa_table *table, struct vrp const *del)
+{
+	struct hashable_roa *ptr;
+
+	HASH_FIND(hh, table->roas, del, sizeof(*del), ptr);
+	if (ptr != NULL) {
+		HASH_DELETE(hh, table->roas, ptr);
+		free(ptr);
+	}
 }
 
 int
@@ -104,6 +168,7 @@ rtrhandler_handle_roa_v4(struct roa_table *table, uint32_t asn,
     struct ipv4_prefix const *prefix4, uint8_t max_length)
 {
 	struct hashable_roa *roa;
+	int error;
 
 	roa = create_roa(asn, max_length);
 	if (roa == NULL)
@@ -112,7 +177,10 @@ rtrhandler_handle_roa_v4(struct roa_table *table, uint32_t asn,
 	roa->data.prefix_length = prefix4->len;
 	roa->data.addr_fam = AF_INET;
 
-	return add_roa(table, roa);
+	error = add_roa(table, roa);
+	if (error)
+		free(roa);
+	return error;
 }
 
 int
@@ -120,6 +188,7 @@ rtrhandler_handle_roa_v6(struct roa_table *table, uint32_t asn,
     struct ipv6_prefix const *prefix6, uint8_t max_length)
 {
 	struct hashable_roa *roa;
+	int error;
 
 	roa = create_roa(asn, max_length);
 	if (roa == NULL)
@@ -128,7 +197,10 @@ rtrhandler_handle_roa_v6(struct roa_table *table, uint32_t asn,
 	roa->data.prefix_length = prefix6->len;
 	roa->data.addr_fam = AF_INET6;
 
-	return add_roa(table, roa);
+	error = add_roa(table, roa);
+	if (error)
+		free(roa);
+	return error;
 }
 
 static int
