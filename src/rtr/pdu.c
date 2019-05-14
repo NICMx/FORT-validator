@@ -18,6 +18,9 @@ pdu_header_from_reader(struct pdu_reader *reader, struct pdu_header *header)
 	    || read_int32(reader, &header->length);
 }
 
+#define ERROR(report_cb) \
+	((header.pdu_type != PDU_TYPE_ERROR_REPORT) ? (report_cb) : -EINVAL);
+
 int
 pdu_load(int fd, struct rtr_request *request,
     struct pdu_metadata const **metadata)
@@ -49,20 +52,21 @@ pdu_load(int fd, struct rtr_request *request,
 		return err_pdu_send_unsupported_proto_version(fd);
 
 	if (header.length < RTRPDU_HEADER_LEN)
-		return err_pdu_send_invalid_request_truncated(fd, hdr_bytes,
-		    "PDU is too small. (< 8 bytes)");
+		return ERROR(err_pdu_send_invalid_request_truncated(fd,
+		    hdr_bytes, "PDU is too small. (< 8 bytes)"));
 
 	/*
 	 * Error messages can be quite large.
 	 * But they're probably not legitimate, so drop 'em.
 	 * 512 is like a 5-paragraph error message, so it's probably enough.
+	 * Most error messages are bound to be two phrases tops.
 	 * (Warning: I'm assuming english tho.)
 	 */
 	if (header.length > 512) {
 		pr_warn("Got an extremely large PDU (%u bytes). WTF?",
 		    header.length);
-		return err_pdu_send_invalid_request_truncated(fd, hdr_bytes,
-		    "PDU is too large. (> 512 bytes)");
+		return ERROR(err_pdu_send_invalid_request_truncated(fd,
+		    hdr_bytes, "PDU is too large. (> 512 bytes)"));
 	}
 
 	/* Read the rest of the PDU into its buffer. */
@@ -83,7 +87,7 @@ pdu_load(int fd, struct rtr_request *request,
 	/* Deserialize the PDU. */
 	meta = pdu_get_metadata(header.pdu_type);
 	if (!meta) {
-		error = err_pdu_send_unsupported_pdu_type(fd, request);
+		error = ERROR(err_pdu_send_unsupported_pdu_type(fd, request));
 		goto revert_bytes;
 	}
 
@@ -95,7 +99,7 @@ pdu_load(int fd, struct rtr_request *request,
 
 	error = meta->from_stream(&header, &reader, request->pdu);
 	if (error) {
-		err_pdu_send_internal_error(fd);
+		ERROR(err_pdu_send_internal_error(fd));
 		goto revert_pdu;
 	}
 

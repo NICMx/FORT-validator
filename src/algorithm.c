@@ -101,6 +101,7 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 	    0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01,
 	};
 	uint8_t last;
+	int error;
 
 	if (id == NULL)
 		return pr_err("The signature algorithm is absent.");
@@ -132,8 +133,12 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 	 * AlgorithmIdentifier, the parameters MUST be NULL.  Implementations
 	 * MUST accept the parameters being absent as well as present.
 	 */
-	if (id->parameters != NULL)
-		pr_warn("The signature algorithm has parameters.");
+	if (id->parameters != NULL) {
+		error = incidence(INID_SIGNATURE_ALGORITHM_HAS_PARAMS,
+		    "The signature algorithm has parameters.");
+		if (error)
+			return error;
+	}
 
 	return 0;
 

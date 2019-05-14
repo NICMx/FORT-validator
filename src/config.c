@@ -11,6 +11,7 @@
 #include "json_handler.h"
 #include "log.h"
 #include "config/boolean.h"
+#include "config/incidences.h"
 #include "config/str.h"
 #include "config/uint.h"
 #include "config/uint32.h"
@@ -96,7 +97,7 @@ static char const *program_name;
 static struct rpki_config rpki_config;
 
 /**
- * An option that takes no arguments, is not correlated to any rpki_config
+ * An ARGP option that takes no arguments, is not correlated to any rpki_config
  * fields, and is entirely managed by its handler function.
  */
 static const struct global_type gt_callback = {
@@ -279,13 +280,22 @@ static const struct option_field options[] = {
 		.name = "log.color-output",
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, log.color),
-		.doc = "Print ANSI color codes.",
+		.doc = "Print ANSI color codes",
 	}, {
 		.id = 4000,
 		.name = "log.file-name-format",
 		.type = &gt_filename_format,
 		.offset = offsetof(struct rpki_config, log.filename_format),
 		.doc = "File name variant to print during debug/error messages",
+	},
+
+	/* Incidences */
+	{
+		.id = 4001,
+		.name = "incidences",
+		.type = &gt_incidences,
+		.doc = "Override actions on validation errors",
+		.availability = AVAILABILITY_JSON,
 	},
 
 	{ 0 },

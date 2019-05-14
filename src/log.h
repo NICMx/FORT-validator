@@ -1,6 +1,8 @@
 #ifndef SRC_LOG_H_
 #define SRC_LOG_H_
 
+#include "incidence/incidence.h"
+
 /*
  * I know that the OpenBSD style guide says that we shouldn't declare our own
  * error printing functions, but we kind of need to do it:
@@ -58,6 +60,8 @@ int pr_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
 int crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_enomem(void);
 int pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
+
+int incidence(enum incidence_id, const char *, ...) CHECK_FORMAT(2, 3);
 
 #define PR_DEBUG printf("%s:%d (%s())\n", __FILE__, __LINE__, __func__)
 #define PR_DEBUG_MSG(msg, ...) printf("%s:%d (%s()): " msg "\n", \

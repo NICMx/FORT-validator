@@ -31,11 +31,10 @@ err_pdu_send(int fd, rtr_error_code_t code, struct rtr_request const *request,
 	/*
 	 * This function must always return error so callers can interrupt
 	 * themselves easily.
-	 * But note that not all callers should use this.
-	 * TODO (now) Prevent errors to errors
-	 * (It's harder than it seems, because request->pdu is sometimes NULL.)
+	 * But note that not all callers should use this feature.
 	 */
 
+	/* Need a clone to remove the const. */
 	message = (message_const != NULL) ? strdup(message_const) : NULL;
 	send_error_report_pdu(fd, code, request, message);
 	free(message);

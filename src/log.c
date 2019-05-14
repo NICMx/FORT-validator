@@ -268,3 +268,30 @@ pr_crit(const char *format, ...)
 	PR_SUFFIX(STDERR);
 	return -EINVAL;
 }
+
+/**
+ * Prints the [format, ...] error message using the configured logging severity
+ * of the @id incidence.
+ */
+int
+incidence(enum incidence_id id, const char *format, ...)
+{
+	enum incidence_action action;
+	va_list args;
+
+	action = incidence_get_action(id);
+	switch (action) {
+	case INAC_IGNORE:
+		return 0;
+	case INAC_WARN:
+		PR_PREFIX(STDERR, COLOR_WARNING, "WRN", args);
+		PR_SUFFIX(STDERR);
+		return 0;
+	case INAC_ERROR:
+		PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
+		PR_SUFFIX(STDERR);
+		return -EINVAL;
+	}
+
+	return pr_crit("Unknown incidence action: %u", action);
+}

@@ -44,22 +44,9 @@ sudo make install
 
 There are no packages just yet.
 
-### Validator
-
 {% highlight bash %}
 git clone https://github.com/ydahhrk/rpki-validator.git
 cd rpki-validator
-./autogen.sh
-./configure
-make
-sudo make install
-{% endhighlight %}
-
-### RTR-Server
-
-{% highlight bash %}
-git clone https://github.com/ydahhrk/rtr-server.git
-cd rtr-server
 ./autogen.sh
 ./configure
 make

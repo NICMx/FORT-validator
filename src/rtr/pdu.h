@@ -143,12 +143,17 @@ struct error_report_pdu {
 struct pdu_metadata {
 	size_t	length;
 	/**
+	 * Builds the PDU from @header, and the bytes remaining in the reader.
+	 *
 	 * Caller assumes that from_stream functions are only allowed to fail
-	 * on programming errors. (Because of the internal error response.)
+	 * on programming errors. (Because failure results in an internal error
+	 * response.)
 	 */
 	int	(*from_stream)(struct pdu_header *, struct pdu_reader *, void *);
 	/**
-	 * Handlers are expected to send error PDUs on discretion.
+	 * Handlers must return 0 to maintain the connection, nonzero to close
+	 * the socket.
+	 * Also, they are supposed to send error PDUs on discretion.
 	 */
 	int	(*handle)(int, struct rtr_request const *);
 	void	(*destructor)(void *);
