@@ -16,9 +16,10 @@ void fnstack_push_uri(struct rpki_uri const *);
 char const *fnstack_peek(void);
 void fnstack_pop(void);
 
-char const *v4addr2str(struct in_addr const *addr);
-char const *v4addr2str2(struct in_addr const *addr);
-char const *v6addr2str(struct in6_addr const *addr);
-char const *v6addr2str2(struct in6_addr const *addr);
+/* Please remember that these functions can only be used during validations. */
+char const *v4addr2str(struct in_addr const *);
+char const *v4addr2str2(struct in_addr const *);
+char const *v6addr2str(struct in6_addr const *);
+char const *v6addr2str2(struct in6_addr const *);
 
 #endif /* SRC_THREAD_VAR_H_ */

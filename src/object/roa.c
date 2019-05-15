@@ -209,15 +209,7 @@ roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
 	if (error)
 		goto revert_roa;
 
-	error = vhandler_traverse_down(sobj_args.subject_name);
-	if (error)
-		goto revert_roa;
-
 	error = __handle_roa(roa, sobj_args.res);
-	if (error)
-		goto revert_roa;
-
-	error = vhandler_traverse_up();
 
 revert_roa:
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);

@@ -123,6 +123,7 @@ rpp_traverse(struct rpp *pp)
 	 */
 	STACK_OF(X509_CRL) *crls;
 	struct rpki_uri *uri;
+	array_index i;
 	int error;
 
 	crls = sk_X509_CRL_new_null();
@@ -133,14 +134,14 @@ rpp_traverse(struct rpp *pp)
 		goto end;
 
 	/* Use CRL stack to validate certificates, and also traverse them. */
-	ARRAYLIST_FOREACH(&pp->certs, uri)
+	ARRAYLIST_FOREACH(&pp->certs, uri, i)
 		certificate_traverse(pp, uri, crls);
 
 	/* Use valid address ranges to print ROAs that match them. */
-	ARRAYLIST_FOREACH(&pp->roas, uri)
+	ARRAYLIST_FOREACH(&pp->roas, uri, i)
 		roa_traverse(uri, pp, crls);
 
-	ARRAYLIST_FOREACH(&pp->ghostbusters, uri)
+	ARRAYLIST_FOREACH(&pp->ghostbusters, uri, i)
 		ghostbusters_traverse(uri, pp, crls);
 
 end:

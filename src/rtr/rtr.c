@@ -154,15 +154,39 @@ clean_request(struct rtr_request *request, const struct pdu_metadata *meta)
 	meta->destructor(request->pdu);
 }
 
+static void
+print_close_failure(int error, struct sockaddr_storage *sockaddr)
+{
+	char buffer[INET6_ADDRSTRLEN];
+	void *addr = NULL;
+	char const *addr_str;
+
+	switch (sockaddr->ss_family) {
+	case AF_INET:
+		addr = &((struct sockaddr_in *) sockaddr)->sin_addr;
+		break;
+	case AF_INET6:
+		addr = &((struct sockaddr_in6 *) sockaddr)->sin6_addr;
+		break;
+	default:
+		addr_str = "(protocol unknown)";
+		goto done;
+	}
+
+	addr_str = inet_ntop(sockaddr->ss_family, addr, buffer,
+	    INET6_ADDRSTRLEN);
+	if (addr_str == NULL)
+		addr_str = "(unprintable address)";
+
+done:
+	pr_errno(error, "close() failed on socket of client %s", addr_str);
+}
+
 static void *
 end_client(struct rtr_client *client)
 {
-	/*
-	 * TODO It'd probably be a good idea to print the client's address in
-	 * this message.
-	 */
 	if (close(client->fd) != 0)
-		pr_errno(errno, "close() failed on client socket");
+		print_close_failure(errno, &client->addr);
 
 	clients_forget(client->fd);
 	return NULL;

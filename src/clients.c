@@ -6,10 +6,6 @@
 #include "data_structure/uthash_nonfatal.h"
 #include "rtr/pdu.h"
 
-
-#define SADDR_IN(addr) ((struct sockaddr_in *) addr)
-#define SADDR_IN6(addr) ((struct sockaddr_in6 *) addr)
-
 struct hashable_client {
 	struct client meat;
 	UT_hash_handle hh;

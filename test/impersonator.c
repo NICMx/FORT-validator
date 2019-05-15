@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 
 #include "config.h"
+#include "incidence/incidence.h"
 
 /**
  * Some core functions, as linked from unit testing code.
@@ -74,4 +75,12 @@ char const *
 config_get_slurm_location(void)
 {
 	return NULL;
+}
+
+enum incidence_action
+incidence_get_action(enum incidence_id id)
+{
+	return (id == INID_SIGNATURE_ALGORITHM_HAS_PARAMS)
+	    ? INAC_WARN
+	    : INAC_ERROR;
 }

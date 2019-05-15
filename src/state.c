@@ -373,6 +373,7 @@ validation_store_serial_number(struct validation *state, BIGNUM *number)
 {
 	struct certificate *cert;
 	struct serial_number *cursor;
+	array_index i;
 	struct serial_number duplicate;
 	char *string;
 	int error;
@@ -404,7 +405,7 @@ validation_store_serial_number(struct validation *state, BIGNUM *number)
 	 * Also: It's pretty odd; a significant amount of certificates seem to
 	 * be breaking this rule. Maybe we're the only ones catching it?
 	 */
-	ARRAYLIST_FOREACH(&cert->serials, cursor) {
+	ARRAYLIST_FOREACH(&cert->serials, cursor, i) {
 		if (BN_cmp(cursor->number, number) == 0) {
 			BN2string(number, &string);
 			pr_warn("Serial number '%s' is not unique. (Also found in '%s'.)",
@@ -432,6 +433,7 @@ validation_store_subject(struct validation *state, struct rfc5280_name *subject)
 {
 	struct certificate *cert;
 	struct subject_name *cursor;
+	array_index i;
 	struct subject_name duplicate;
 	int error;
 
@@ -483,7 +485,7 @@ validation_store_subject(struct validation *state, struct rfc5280_name *subject)
 		return 0; /* The TA lacks siblings, so subject is unique. */
 
 	/* See the large comment in validation_store_serial_number(). */
-	ARRAYLIST_FOREACH(&cert->subjects, cursor) {
+	ARRAYLIST_FOREACH(&cert->subjects, cursor, i) {
 		if (x509_name_equals(cursor->name, subject)) {
 			char const *serial = x509_name_serialNumber(subject);
 			pr_warn("Subject name '%s%s%s' is not unique. (Also found in '%s'.)",

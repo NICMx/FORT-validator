@@ -11,11 +11,6 @@ typedef uint32_t serial_t;
 
 struct vrp {
 	uint32_t	asn;
-	/*
-	 * TODO (whatever) convert to ipv*_prefix? (from address.h)
-	 * Most of the time, @prefix and @prefix_length are copied from or into
-	 * ipv*_prefixes.
-	 */
 	union {
 		struct	in_addr v4;
 		struct	in6_addr v6;
@@ -23,7 +18,6 @@ struct vrp {
 	uint8_t	prefix_length;
 	uint8_t	max_prefix_length;
 	uint8_t	addr_fam;
-	/* uint8_t	flags; */ /* TODO (now) commit remove */
 };
 
 struct delta {

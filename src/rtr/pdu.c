@@ -18,25 +18,22 @@ pdu_header_from_reader(struct pdu_reader *reader, struct pdu_header *header)
 	    || read_int32(reader, &header->length);
 }
 
-#define ERROR(report_cb) \
+/* Do not use this macro before @header has been initialized, obviously. */
+#define RESPOND_ERROR(report_cb) \
 	((header.pdu_type != PDU_TYPE_ERROR_REPORT) ? (report_cb) : -EINVAL);
 
 int
 pdu_load(int fd, struct rtr_request *request,
     struct pdu_metadata const **metadata)
 {
-	unsigned char hdr_bytes[RTRPDU_HEADER_LEN];
+	unsigned char hdr_bytes[RTRPDU_HDR_LEN];
 	struct pdu_reader reader;
 	struct pdu_header header;
 	struct pdu_metadata const *meta;
 	int error;
 
 	/* Read the header into its buffer. */
-	/*
-	 * TODO (urgent) If the first read yields no bytes, the connection was
-	 * terminated. We're not ending gracefully in those cases.
-	 */
-	error = pdu_reader_init(&reader, fd, hdr_bytes, RTRPDU_HEADER_LEN);
+	error = pdu_reader_init(&reader, fd, hdr_bytes, RTRPDU_HDR_LEN, true);
 	if (error)
 		/* Communication interrupted; omit error response */
 		return error;
@@ -46,14 +43,20 @@ pdu_load(int fd, struct rtr_request *request,
 		return error;
 
 	/*
+	 * DO NOT USE THE err_pdu_* functions directly. Wrap them with
+	 * RESPOND_ERROR() INSTEAD.
+	 */
+
+	/*
 	 * For now, only RTRv0 is supported
 	 */
 	if (header.protocol_version != RTR_V0)
-		return err_pdu_send_unsupported_proto_version(fd);
+		return RESPOND_ERROR(err_pdu_send_unsupported_proto_version(fd,
+		    hdr_bytes, "This server only supports RTRv0."));
 
-	if (header.length < RTRPDU_HEADER_LEN)
-		return ERROR(err_pdu_send_invalid_request_truncated(fd,
-		    hdr_bytes, "PDU is too small. (< 8 bytes)"));
+	if (header.length < RTRPDU_HDR_LEN)
+		return RESPOND_ERROR(err_pdu_send_invalid_request_truncated(fd,
+		    hdr_bytes, "Invalid header length. (< 8 bytes)"));
 
 	/*
 	 * Error messages can be quite large.
@@ -62,12 +65,9 @@ pdu_load(int fd, struct rtr_request *request,
 	 * Most error messages are bound to be two phrases tops.
 	 * (Warning: I'm assuming english tho.)
 	 */
-	if (header.length > 512) {
-		pr_warn("Got an extremely large PDU (%u bytes). WTF?",
-		    header.length);
-		return ERROR(err_pdu_send_invalid_request_truncated(fd,
+	if (header.length > 512)
+		return RESPOND_ERROR(err_pdu_send_invalid_request_truncated(fd,
 		    hdr_bytes, "PDU is too large. (> 512 bytes)"));
-	}
 
 	/* Read the rest of the PDU into its buffer. */
 	request->bytes_len = header.length;
@@ -76,10 +76,11 @@ pdu_load(int fd, struct rtr_request *request,
 		/* No error report PDU on allocation failures. */
 		return pr_enomem();
 
-	memcpy(request->bytes, hdr_bytes, RTRPDU_HEADER_LEN);
+	memcpy(request->bytes, hdr_bytes, RTRPDU_HDR_LEN);
 	error = pdu_reader_init(&reader, fd,
-	    request->bytes + RTRPDU_HEADER_LEN,
-	    header.length - RTRPDU_HEADER_LEN);
+	    request->bytes + RTRPDU_HDR_LEN,
+	    header.length - RTRPDU_HDR_LEN,
+	    false);
 	if (error)
 		/* Communication interrupted; no error PDU. */
 		goto revert_bytes;
@@ -87,7 +88,8 @@ pdu_load(int fd, struct rtr_request *request,
 	/* Deserialize the PDU. */
 	meta = pdu_get_metadata(header.pdu_type);
 	if (!meta) {
-		error = ERROR(err_pdu_send_unsupported_pdu_type(fd, request));
+		error = RESPOND_ERROR(err_pdu_send_unsupported_pdu_type(fd,
+		    request));
 		goto revert_bytes;
 	}
 
@@ -99,7 +101,7 @@ pdu_load(int fd, struct rtr_request *request,
 
 	error = meta->from_stream(&header, &reader, request->pdu);
 	if (error) {
-		ERROR(err_pdu_send_internal_error(fd));
+		RESPOND_ERROR(err_pdu_send_internal_error(fd));
 		goto revert_pdu;
 	}
 

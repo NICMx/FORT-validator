@@ -9,7 +9,6 @@
 #include "resource.h"
 #include "rpp.h"
 #include "uri.h"
-#include "object/name.h"
 
 int certificate_load(struct rpki_uri const *, X509 **);
 
@@ -22,7 +21,7 @@ int certificate_validate_chain(X509 *, STACK_OF(X509_CRL) *);
  * Validates RFC 6487 compliance.
  * (Except extensions.)
  */
-int certificate_validate_rfc6487(X509 *, struct rfc5280_name **, bool);
+int certificate_validate_rfc6487(X509 *, bool);
 
 int certificate_validate_signature(X509 *, ANY_t *coded, SignatureValue_t *);
 

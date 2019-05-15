@@ -35,36 +35,6 @@ get_current_threads_handler(struct validation_handler const **result)
 }
 
 int
-vhandler_traverse_down(struct rfc5280_name *subject_name)
-{
-	struct validation_handler const *handler;
-	int error;
-
-	error = get_current_threads_handler(&handler);
-	if (error)
-		return error;
-
-	return (handler->traverse_down != NULL)
-	    ? handler->traverse_down(subject_name, handler->arg)
-	    : 0;
-}
-
-int
-vhandler_traverse_up(void)
-{
-	struct validation_handler const *handler;
-	int error;
-
-	error = get_current_threads_handler(&handler);
-	if (error)
-		return error;
-
-	return (handler->traverse_up != NULL)
-	    ? handler->traverse_up(handler->arg)
-	    : 0;
-}
-
-int
 vhandler_handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length)
 {

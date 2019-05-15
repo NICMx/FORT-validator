@@ -55,8 +55,7 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	case 0:
 		break;
 	case -EAGAIN: /* Database still under construction */
-		err_pdu_send_no_data_available(fd);
-		error = 0; /* Don't panic; client should retry later */
+		error = err_pdu_send_no_data_available(fd);
 		goto end;
 	case -ESRCH: /* Invalid serial */
 		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
@@ -139,8 +138,7 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	case 0:
 		break;
 	case -EAGAIN:
-		err_pdu_send_no_data_available(fd);
-		return 0;
+		return err_pdu_send_no_data_available(fd);
 	case EAGAIN:
 		err_pdu_send_internal_error(fd);
 		return error;

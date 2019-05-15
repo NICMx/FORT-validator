@@ -142,8 +142,9 @@ bgpsec_equal(struct slurm_bgpsec *left, struct slurm_bgpsec *right,
 	name##_locate(type *obj)					\
 	{								\
 		type *cursor;						\
+		array_index i;						\
 									\
-		ARRAYLIST_FOREACH(db_list, cursor)			\
+		ARRAYLIST_FOREACH(db_list, cursor, i)			\
 			if (equal_cb(cursor, obj, filter))		\
 				return cursor;				\
 									\
@@ -189,9 +190,10 @@ int
 slurm_db_foreach_assertion_prefix(assertion_pfx_foreach_cb cb, void *arg)
 {
 	struct slurm_prefix *cursor;
+	array_index i;
 	int error;
 
-	ARRAYLIST_FOREACH(&array_lists_db.assertion_pfx_al, cursor) {
+	ARRAYLIST_FOREACH(&array_lists_db.assertion_pfx_al, cursor, i) {
 		error = cb(cursor, arg);
 		if (error)
 			return error;

@@ -11,10 +11,6 @@
 
 struct rtr_client {
 	int fd;
-	/*
-	 * TODO (whatever) this is currently not being used for anything.
-	 * (But consider the end_client() to-do.)
-	 */
 	struct sockaddr_storage addr;
 };
 
@@ -48,7 +44,7 @@ enum pdu_type {
  */
 
 /* Header length field is always 64 bits long */
-#define RTRPDU_HEADER_LEN		8
+#define RTRPDU_HDR_LEN			8
 
 #define RTRPDU_SERIAL_NOTIFY_LEN	12
 #define RTRPDU_SERIAL_QUERY_LEN		12

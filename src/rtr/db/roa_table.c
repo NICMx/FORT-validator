@@ -3,11 +3,6 @@
 #include "data_structure/uthash_nonfatal.h"
 
 struct hashable_roa {
-	/*
-	 * TODO (whatever) flags is not useful here.
-	 * Maybe separate struct vrp into two structures: One that doesn't
-	 * contain flags, and one that contains the other.
-	 */
 	struct vrp data;
 	UT_hash_handle hh;
 };

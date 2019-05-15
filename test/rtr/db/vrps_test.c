@@ -175,7 +175,7 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas)
 	ck_assert_uint_eq(to, actual_serial);
 
 	memset(actual_deltas, 0, sizeof(actual_deltas));
-	ARRAYLIST_FOREACH(&deltas, group)
+	ARRAYLIST_FOREACH(&deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
 		    delta_check, actual_deltas));
 	for (i = 0; i < ARRAY_LEN(actual_deltas); i++)

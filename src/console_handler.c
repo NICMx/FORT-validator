@@ -30,8 +30,6 @@ validate_into_console(void)
 	handler.merge = NULL;
 	handler.merge_arg = NULL;
 	handler.reset = NULL;
-	handler.traverse_down = NULL;
-	handler.traverse_up = NULL;
 	handler.handle_roa_v4 = print_v4_roa;
 	handler.handle_roa_v6 = print_v6_roa;
 	handler.arg = NULL;

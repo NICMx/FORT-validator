@@ -13,11 +13,6 @@
 #include "rtr/pdu_serializer.h"
 #include "rtr/db/vrps.h"
 
-/* IPvN PDUs length without header */
-#define IPV4_PREFIX_LENGTH	12
-#define IPV6_PREFIX_LENGTH	24
-
-
 struct vrp_node {
 	struct delta delta;
 	SLIST_ENTRY(vrp_node) next;
@@ -232,6 +227,7 @@ send_delta_pdus(int fd, struct deltas_db *deltas)
 {
 	struct vrp_slist filtered_vrps;
 	struct delta_group *group;
+	array_index i;
 	struct vrp_node *ptr;
 	int error = 0;
 
@@ -251,7 +247,7 @@ send_delta_pdus(int fd, struct deltas_db *deltas)
 	 * are immutable.)
 	 */
 	SLIST_INIT(&filtered_vrps);
-	ARRAYLIST_FOREACH(deltas, group) {
+	ARRAYLIST_FOREACH(deltas, group, i) {
 		error = deltas_foreach(group->serial, group->deltas,
 		    vrp_ovrd_remove, &filtered_vrps);
 		if (error)
@@ -329,7 +325,7 @@ send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
 	pdu.error_message_length = (message != NULL) ? strlen(message) : 0;
 	pdu.error_message = message;
 
-	pdu.header.length = RTRPDU_HEADER_LEN
+	pdu.header.length = RTRPDU_HDR_LEN
 	    + 4 /* Length of Encapsulated PDU field */
 	    + pdu.error_pdu_length
 	    + 4 /* Length of Error Text field */

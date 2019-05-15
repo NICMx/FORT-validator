@@ -73,11 +73,10 @@
 	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
 	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, )
 
-/* c = cursor */
-#define ARRAYLIST_FOREACH(list, c) for (				\
-	(c) = (list)->array;						\
-	((c) != NULL) && (((c) - (typeof(c)) ((list)->array)) < (list)->len); \
-	(c)++								\
+#define ARRAYLIST_FOREACH(list, node, index) for (			\
+	(i) = 0, (node) = (list)->array;				\
+	(i) < (list)->len;						\
+	(i)++, (node)++							\
 )
 
 #endif /* SRC_DATA_STRUCTURE_ARRAY_LIST_H_ */

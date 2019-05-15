@@ -138,8 +138,6 @@ __perform_standalone_validation(struct roa_table **result)
 	validation_handler.merge = __merge;
 	validation_handler.merge_arg = global_roas;
 	validation_handler.reset = __reset;
-	validation_handler.traverse_down = NULL;
-	validation_handler.traverse_up = NULL;
 	validation_handler.handle_roa_v4 = __handle_roa_v4;
 	validation_handler.handle_roa_v6 = __handle_roa_v6;
 	validation_handler.arg = roas;
@@ -184,12 +182,13 @@ static void
 vrps_purge(void)
 {
 	struct delta_group *group;
+	array_index i;
 	uint32_t min_serial;
 
 	min_serial = clients_get_min_serial();
 
 	/** Assume is ordered by serial, so get the new initial pointer */
-	ARRAYLIST_FOREACH(&state.deltas, group)
+	ARRAYLIST_FOREACH(&state.deltas, group, i)
 		if (group->serial >= min_serial)
 			break;
 
@@ -340,6 +339,7 @@ int
 vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 {
 	struct delta_group *group;
+	array_index i;
 	bool from_found;
 	int error;
 
@@ -354,7 +354,7 @@ vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 		return -EAGAIN;
 	}
 
-	ARRAYLIST_FOREACH(&state.deltas, group) {
+	ARRAYLIST_FOREACH(&state.deltas, group, i) {
 		if (!from_found) {
 			if (group->serial == from) {
 				from_found = true;

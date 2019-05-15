@@ -124,13 +124,14 @@ __foreach_v4(struct deltas_v4 *array, delta_foreach_cb cb, void *arg,
 {
 	struct delta delta;
 	struct delta_v4 *d;
+	array_index i;
 	int error;
 
 	delta.serial = serial;
 	delta.vrp.addr_fam = AF_INET;
 	delta.flags = flags;
 
-	ARRAYLIST_FOREACH(array, d) {
+	ARRAYLIST_FOREACH(array, d, i) {
 		delta.vrp.asn = d->as;
 		delta.vrp.prefix.v4 = d->prefix.addr;
 		delta.vrp.prefix_length = d->prefix.len;
@@ -149,13 +150,14 @@ __foreach_v6(struct deltas_v6 *array, delta_foreach_cb cb, void *arg,
 {
 	struct delta delta;
 	struct delta_v6 *d;
+	array_index i;
 	int error;
 
 	delta.serial = serial;
 	delta.vrp.addr_fam = AF_INET6;
 	delta.flags = flags;
 
-	ARRAYLIST_FOREACH(array, d) {
+	ARRAYLIST_FOREACH(array, d, i) {
 		delta.vrp.asn = d->as;
 		delta.vrp.prefix.v6 = d->prefix.addr;
 		delta.vrp.prefix_length = d->prefix.len;

@@ -13,8 +13,19 @@
 static int get_octets(unsigned char);
 static void place_null_character(rtr_char *, size_t);
 
-int
-read_exact(int fd, unsigned char *buffer, size_t buffer_len)
+/**
+ * Reads exactly @buffer_len bytes from @buffer, erroring if this goal cannot be
+ * met.
+ *
+ * If @allow_end is true, will allow immediate EOF in place of the buffer bytes.
+ * (Though all this really means is that the corresponding warning message will
+ * not be printed, which is perfectly fine as far as the only current caller is
+ * concerned.)
+ *
+ * Returns 0 if exactly @buffer_len bytes could be read.
+ */
+static int
+read_exact(int fd, unsigned char *buffer, size_t buffer_len, bool allow_eof)
 {
 	ssize_t read_result;
 	size_t offset;
@@ -25,9 +36,12 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len)
 			return -pr_errno(errno, "Client socket read interrupted");
 
 		if (read_result == 0) {
-			pr_warn("Stream ended mid-PDU.");
+			if (!allow_eof)
+				pr_warn("Stream ended mid-PDU.");
 			return -EPIPE;
 		}
+
+		allow_eof = false;
 	}
 
 	return 0;
@@ -39,11 +53,11 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len)
  */
 int
 pdu_reader_init(struct pdu_reader *reader, int fd, unsigned char *buffer,
-    size_t size)
+    size_t size, bool allow_eof)
 {
 	reader->buffer = buffer;
 	reader->size = size;
-	return read_exact(fd, reader->buffer, size);
+	return read_exact(fd, reader->buffer, size, allow_eof);
 }
 
 static int

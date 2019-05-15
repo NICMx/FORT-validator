@@ -17,11 +17,6 @@ typedef enum rtr_error_code {
 	ERR_PDU_UNEXPECTED_PROTO_VERSION	= 8,
 } rtr_error_code_t;
 
-/*
- * TODO (urgent) According to the function below, NO_DATA_AVAILABLE is not
- * fatal. However, some callers of this function are terminating the connection
- * regardless of that.
- */
 static int
 err_pdu_send(int fd, rtr_error_code_t code, struct rtr_request const *request,
     char const *message_const)
@@ -63,7 +58,12 @@ err_pdu_send_internal_error(int fd)
 int
 err_pdu_send_no_data_available(int fd)
 {
-	return err_pdu_send(fd, ERR_PDU_NO_DATA_AVAILABLE, NULL, NULL);
+	err_pdu_send(fd, ERR_PDU_NO_DATA_AVAILABLE, NULL, NULL);
+	/*
+	 * The connection should not be terminated because of this error.
+	 * So don't panic; client should retry later.
+	 */
+	return 0;
 }
 
 int
@@ -80,35 +80,28 @@ err_pdu_send_invalid_request_truncated(int fd, unsigned char *header,
 {
 	struct rtr_request request = {
 		.bytes = header,
-		.bytes_len = RTRPDU_HEADER_LEN,
+		.bytes_len = RTRPDU_HDR_LEN,
 		.pdu = NULL,
 	};
 	return err_pdu_send_invalid_request(fd, &request, message);
 }
 
 int
-err_pdu_send_unsupported_proto_version(int fd)
+err_pdu_send_unsupported_proto_version(int fd, unsigned char *header,
+    char const *message)
 {
-	return err_pdu_send(fd, ERR_PDU_UNSUP_PROTO_VERSION, NULL, NULL);
+	struct rtr_request request = {
+		.bytes = header,
+		.bytes_len = RTRPDU_HDR_LEN,
+		.pdu = NULL,
+	};
+	return err_pdu_send(fd, ERR_PDU_UNSUP_PROTO_VERSION, &request, message);
 }
 
 int
 err_pdu_send_unsupported_pdu_type(int fd, struct rtr_request const *request)
 {
 	return err_pdu_send(fd, ERR_PDU_UNSUP_PDU_TYPE, request, NULL);
-}
-
-bool
-err_pdu_is_fatal(uint16_t code)
-{
-	/*
-	 * Only NO_DATA_AVAILABLE error isn't fatal
-	 *
-	 * Addendum: Note that this is only non-fatal if we're the ones sending
-	 * it. If the clients is the one telling us this, then it probably
-	 * counts as "erroneous Error Report PDU", which is totally fatal.
-	 */
-	return code != ERR_PDU_NO_DATA_AVAILABLE;
 }
 
 char const *

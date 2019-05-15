@@ -142,8 +142,9 @@ int
 send_delta_pdus(int fd, struct deltas_db *deltas)
 {
 	struct delta_group *group;
+	array_index i;
 
-	ARRAYLIST_FOREACH(deltas, group)
+	ARRAYLIST_FOREACH(deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
 		    handle_delta, &fd));
 

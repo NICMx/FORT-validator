@@ -1,6 +1,7 @@
 #ifndef RTR_PRIMITIVE_READER_H_
 #define RTR_PRIMITIVE_READER_H_
 
+#include <stdbool.h>
 #include <netinet/ip.h>
 
 #include "common.h"
@@ -12,7 +13,8 @@ struct pdu_reader {
 	size_t size;
 };
 
-int pdu_reader_init(struct pdu_reader *, int, unsigned char *, size_t size);
+int pdu_reader_init(struct pdu_reader *, int, unsigned char *, size_t size,
+    bool);
 
 int read_int8(struct pdu_reader *, uint8_t *);
 int read_int16(struct pdu_reader *, uint16_t *);
