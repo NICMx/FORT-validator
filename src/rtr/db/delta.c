@@ -1,5 +1,6 @@
 #include "rtr/db/delta.h"
 
+#include <stdatomic.h>
 #include "data_structure/array_list.h"
 
 struct delta_v4 {
@@ -27,8 +28,7 @@ struct deltas {
 		struct deltas_v6 removes;
 	} v6;
 
-	/* TODO (now) atomic */
-	unsigned int references;
+	atomic_uint references;
 };
 
 int
@@ -44,23 +44,26 @@ deltas_create(struct deltas **_result)
 	deltas_v4_init(&result->v4.removes);
 	deltas_v6_init(&result->v6.adds);
 	deltas_v6_init(&result->v6.removes);
-	result->references = 1;
+	atomic_init(&result->references, 1);
 
 	*_result = result;
 	return 0;
 }
 
 void
-deltas_get(struct deltas *deltas)
+deltas_refget(struct deltas *deltas)
 {
-	deltas->references++;
+	atomic_fetch_add(&deltas->references, 1);
 }
 
 void
-deltas_put(struct deltas *deltas)
+deltas_refput(struct deltas *deltas)
 {
-	deltas->references--;
-	if (deltas->references == 0) {
+	/*
+	 * Reminder: atomic_fetch_sub() returns the previous value, not the
+	 * resulting one.
+	 */
+	if (atomic_fetch_sub(&deltas->references, 1) == 1) {
 		deltas_v4_cleanup(&deltas->v4.adds, NULL);
 		deltas_v4_cleanup(&deltas->v4.removes, NULL);
 		deltas_v6_cleanup(&deltas->v6.adds, NULL);

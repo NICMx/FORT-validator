@@ -48,7 +48,7 @@ static pthread_rwlock_t lock;
 void
 deltagroup_cleanup(struct delta_group *group)
 {
-	deltas_put(group->deltas);
+	deltas_refput(group->deltas);
 }
 
 int
@@ -173,7 +173,7 @@ resize_deltas_db(struct deltas_db *db, struct delta_group *start)
 	memcpy(tmp, start, db->len * sizeof(struct delta_group));
 	/* Release memory allocated */
 	for (ptr = db->array; ptr < start; ptr++)
-		deltas_put(ptr->deltas);
+		deltas_refput(ptr->deltas);
 	free(db->array);
 	db->array = tmp;
 }
@@ -187,12 +187,12 @@ vrps_purge(void)
 
 	min_serial = clients_get_min_serial();
 
-	/** Assume is ordered by serial, so get the new initial pointer */
+	/* Assume is ordered by serial, so get the new initial pointer */
 	ARRAYLIST_FOREACH(&state.deltas, group, i)
 		if (group->serial >= min_serial)
 			break;
 
-	/** Is the first element or reached end, nothing to purge */
+	/* Is the first element or reached end, nothing to purge */
 	if (group == state.deltas.array ||
 	    (group - state.deltas.array) == state.deltas.len)
 		return;
@@ -251,7 +251,7 @@ vrps_update(bool *changed)
 		 */
 		old_base = state.base;
 
-		/** Remove unnecessary deltas */
+		/* Remove unnecessary deltas */
 		vrps_purge();
 
 	} else {
@@ -287,7 +287,7 @@ vrps_update(bool *changed)
 	return 0;
 
 revert_deltas:
-	deltas_put(deltas);
+	deltas_refput(deltas);
 revert_base:
 	roa_table_destroy(new_base);
 	return error;
@@ -369,7 +369,7 @@ vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 			return error;
 		}
 
-		deltas_get(group->deltas);
+		deltas_refget(group->deltas);
 		*to = group->serial;
 	}
 

@@ -269,6 +269,6 @@ compute_deltas(struct roa_table *old, struct roa_table *new,
 	return 0;
 
 fail:
-	deltas_put(deltas);
+	deltas_refput(deltas);
 	return error;
 }

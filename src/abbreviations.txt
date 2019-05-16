@@ -20,6 +20,8 @@ msg: message
 pdu: Protocol Data Unit (RFC 6810)
 pr: print
 ptr: pointer
+refget: reference get (+1 to reference counter)
+refput: reference put (-1 to reference counter)
 str: string
 tmp: temporal
 uint: unsigned int
