@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h> /* SIGINT, SIGQUIT, etc */
 #include <sys/cdefs.h>
 #include <sys/queue.h>
 #include <sys/stat.h>

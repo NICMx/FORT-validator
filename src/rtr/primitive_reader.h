@@ -2,7 +2,7 @@
 #define RTR_PRIMITIVE_READER_H_
 
 #include <stdbool.h>
-#include <netinet/ip.h>
+#include <netinet/in.h> /* in_addr, in6_addr */
 
 #include "common.h"
 

@@ -1,6 +1,8 @@
 #include "slurm_db.h"
 
 #include <string.h>
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "data_structure/array_list.h"
 
@@ -46,8 +48,7 @@ prefix_filtered_by(struct slurm_prefix *filter, struct slurm_prefix *prefix)
 		return ((filter_vrp->addr_fam == AF_INET &&
 		    filter_vrp->prefix.v4.s_addr == prefix_vrp->prefix.v4.s_addr) ||
 		    (filter_vrp->addr_fam == AF_INET6 &&
-		    IN6_ARE_ADDR_EQUAL(filter_vrp->prefix.v6.s6_addr32,
-		    prefix_vrp->prefix.v6.s6_addr32)));
+		    IN6_ARE_ADDR_EQUAL(&filter_vrp->prefix.v6, &prefix_vrp->prefix.v6)));
 
 	return false;
 }
@@ -79,8 +80,7 @@ prefix_equal(struct slurm_prefix *left, struct slurm_prefix *right,
 		    && ((left_vrp->addr_fam == AF_INET
 		    && left_vrp->prefix.v4.s_addr == right_vrp->prefix.v4.s_addr)
 		    || (left_vrp->addr_fam == AF_INET6
-		    && IN6_ARE_ADDR_EQUAL(left_vrp->prefix.v6.s6_addr32,
-		    right_vrp->prefix.v6.s6_addr32)));
+		    && IN6_ARE_ADDR_EQUAL(&left_vrp->prefix.v6, &right_vrp->prefix.v6)));
 
 	if ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
 		equal = equal &&

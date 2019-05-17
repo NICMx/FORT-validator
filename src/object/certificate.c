@@ -4,6 +4,7 @@
 #include <stdint.h> /* SIZE_MAX */
 #include <libcmscodec/SubjectPublicKeyInfo.h>
 #include <libcmscodec/IPAddrBlocks.h>
+#include <sys/socket.h>
 
 #include "algorithm.h"
 #include "config.h"
@@ -19,7 +20,6 @@
 #include "crypto/hash.h"
 #include "object/name.h"
 #include "rsync/rsync.h"
-#include <sys/socket.h>
 
 /* Just to prevent some line breaking. */
 #define GN_URI uniformResourceIdentifier
@@ -113,59 +113,47 @@ validate_subject(X509 *cert)
 }
 
 static int
-spki_validate_algorithm(OBJECT_IDENTIFIER_t *tal_alg,
-    X509_PUBKEY *cert_public_key)
+spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
 {
+	ASN1_OBJECT *tal_alg;
 	ASN1_OBJECT *cert_alg;
+
+	unsigned char const *tal_spk, *cert_spk;
+	int tal_spk_len, cert_spk_len;
+
 	int ok;
 
-	ok = X509_PUBKEY_get0_param(&cert_alg, NULL, NULL, NULL,
-	    cert_public_key);
+	ok = X509_PUBKEY_get0_param(&tal_alg, &tal_spk, &tal_spk_len, NULL,
+	    tal_spki);
 	if (!ok)
-		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+		return crypto_err("X509_PUBKEY_get0_param() 1 returned %d", ok);
+	ok = X509_PUBKEY_get0_param(&cert_alg, &cert_spk, &cert_spk_len, NULL,
+	    cert_spki);
+	if (!ok)
+		return crypto_err("X509_PUBKEY_get0_param() 2 returned %d", ok);
 
-	if (tal_alg->size != OBJ_length(cert_alg))
-		goto fail;
-	if (memcmp(tal_alg->buf, OBJ_get0_data(cert_alg), tal_alg->size) != 0)
-		goto fail;
+	if (OBJ_cmp(tal_alg, cert_alg) != 0)
+		goto different_alg;
+	if (tal_spk_len != cert_spk_len)
+		goto different_pk;
+	if (memcmp(tal_spk, cert_spk, cert_spk_len) != 0)
+		goto different_pk;
 
 	return 0;
 
-fail:
+different_alg:
 	return pr_err("TAL's public key algorithm is different than the root certificate's public key algorithm.");
-}
-
-static int
-spki_validate_key(BIT_STRING_t *tal_key, X509_PUBKEY *cert_public_key)
-{
-	unsigned char const *cert_spk;
-	int cert_spk_len;
-	int ok;
-
-	ok = X509_PUBKEY_get0_param(NULL, &cert_spk, &cert_spk_len, NULL,
-	    cert_public_key);
-	if (!ok)
-		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
-
-	if (tal_key->size != cert_spk_len)
-		goto fail;
-	if (memcmp(tal_key->buf, cert_spk, cert_spk_len) != 0)
-		goto fail;
-
-	return 0;
-
-fail:
+different_pk:
 	return pr_err("TAL's public key is different than the root certificate's public key.");
 }
 
 static int
-validate_spki(X509_PUBKEY *cert_public_key)
+validate_spki(X509_PUBKEY *cert_spki)
 {
 	struct validation *state;
 	struct tal *tal;
-	int error;
 
-	struct SubjectPublicKeyInfo *tal_spki;
+	X509_PUBKEY *tal_spki;
 	unsigned char const *_tal_spki;
 	size_t _tal_spki_len;
 
@@ -191,34 +179,32 @@ validate_spki(X509_PUBKEY *cert_public_key)
 	 * Luckily, the only other component of the SPKI is the algorithm
 	 * identifier. So doing a field-by-field comparison is not too much
 	 * trouble. We'll have to decode the TAL's SPKI though.
+	 *
+	 * Reminder: "X509_PUBKEY" and "Subject Public Key Info" are synonyms.
 	 */
 
 	fnstack_push(tal_get_file_name(tal));
 	tal_get_spki(tal, &_tal_spki, &_tal_spki_len);
-	error = asn1_decode(_tal_spki, _tal_spki_len,
-	    &asn_DEF_SubjectPublicKeyInfo, (void **) &tal_spki);
+	tal_spki = d2i_X509_PUBKEY(NULL, &_tal_spki, _tal_spki_len);
 	fnstack_pop();
 
-	if (error)
+	if (tal_spki == NULL) {
+		crypto_err("The TAL's public key cannot be decoded");
 		goto fail1;
+	}
 
-	error = spki_validate_algorithm(&tal_spki->algorithm.algorithm,
-	    cert_public_key);
-	if (error)
-		goto fail2;
-	error = spki_validate_key(&tal_spki->subjectPublicKey, cert_public_key);
-	if (error)
+	if (spki_cmp(tal_spki, cert_spki) != 0)
 		goto fail2;
 
-	ASN_STRUCT_FREE(asn_DEF_SubjectPublicKeyInfo, tal_spki);
+	X509_PUBKEY_free(tal_spki);
 	validation_pubkey_valid(state);
 	return 0;
 
 fail2:
-	ASN_STRUCT_FREE(asn_DEF_SubjectPublicKeyInfo, tal_spki);
+	X509_PUBKEY_free(tal_spki);
 fail1:
 	validation_pubkey_invalid(state);
-	return error;
+	return -EINVAL;
 }
 
 static int

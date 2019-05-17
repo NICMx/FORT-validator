@@ -1,5 +1,7 @@
 #include "rtr/db/roa_table.h"
 
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include "data_structure/uthash_nonfatal.h"
 
 struct hashable_roa {

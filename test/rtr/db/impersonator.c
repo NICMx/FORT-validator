@@ -18,10 +18,7 @@ static void
 add_v6(struct validation_handler *handler, uint32_t as)
 {
 	struct ipv6_prefix prefix;
-	prefix.addr.s6_addr32[0] = htonl(0x20010DB8);
-	prefix.addr.s6_addr32[1] = 0;
-	prefix.addr.s6_addr32[2] = 0;
-	prefix.addr.s6_addr32[3] = 0;
+	in6_addr_init(&prefix.addr, 0x20010DB8u, 0, 0, 0);
 	prefix.len = 96;
 	ck_assert_int_eq(0, handler->handle_roa_v6(as, &prefix, 120,
 	    handler->arg));

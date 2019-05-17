@@ -70,6 +70,7 @@ vrp_fail(struct vrp const *vrp, void *arg)
 static array_index
 get_vrp_index(struct vrp const *vrp)
 {
+	struct in6_addr tmp;
 	array_index family_bit;
 
 	switch (vrp->addr_fam) {
@@ -81,10 +82,8 @@ get_vrp_index(struct vrp const *vrp)
 		break;
 
 	case AF_INET6:
-		ck_assert_uint_eq(htonl(0x20010DB8), vrp->prefix.v6.s6_addr32[0]);
-		ck_assert_uint_eq(0, vrp->prefix.v6.s6_addr32[1]);
-		ck_assert_uint_eq(0, vrp->prefix.v6.s6_addr32[2]);
-		ck_assert_uint_eq(0, vrp->prefix.v6.s6_addr32[3]);
+		in6_addr_init(&tmp, 0x20010DB8u, 0, 0, 0);
+		ck_assert(IN6_ARE_ADDR_EQUAL(&tmp, &vrp->prefix.v6));
 		ck_assert_uint_eq(96, vrp->prefix_length);
 		ck_assert_uint_eq(120, vrp->max_prefix_length);
 		family_bit = 1;

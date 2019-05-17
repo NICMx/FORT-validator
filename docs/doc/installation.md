@@ -52,3 +52,24 @@ cd rpki-validator
 make
 sudo make install
 {% endhighlight %}
+
+## OpenBSD
+
+{% highlight bash %}
+# pkg_add libexecinfo jansson rsync
+$ 
+$ ftp <libcmscodec tar url>
+$ tar xvzf libcmscodec-<version>.tar.gz
+$ cd libcmscodec
+$ ./configure
+$ make
+# make install
+$ cd ..
+$ ftp <fort tar url>
+$ tar xvzf fort-<version>.tar.gz
+$ cd fort
+$ # clang is needed because of gnu11.
+$ env CC=clang CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ./configure
+$ make
+# make install
+{% endhighlight %}

@@ -182,8 +182,7 @@ vrp_equals(struct vrp const *left, struct vrp const *right)
 	    && ((left->addr_fam == AF_INET
 	        && left->prefix.v4.s_addr == right->prefix.v4.s_addr)
 	    || (left->addr_fam == AF_INET6
-	    && IN6_ARE_ADDR_EQUAL(left->prefix.v6.s6_addr32,
-	        right->prefix.v6.s6_addr32)));
+	    && IN6_ARE_ADDR_EQUAL(&left->prefix.v6, &right->prefix.v6)));
 }
 
 static int

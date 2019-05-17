@@ -1,6 +1,8 @@
 #include "rtr/db/delta.h"
 
 #include <stdatomic.h>
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include "data_structure/array_list.h"
 
 struct delta_v4 {

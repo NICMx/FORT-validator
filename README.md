@@ -26,7 +26,7 @@ More documentation at [https://nicmx.github.io/FORT-validator/](https://nicmx.gi
 
 ## RTR Configuration
 
-> TODO Move this
+> TODO Update this
 
 The RTR server reads the configuration from a JSON file, learn about it at FORT's site [RTR Server arguments](https://nicmx.github.io/FORT-validator/doc/rtr-server.html).
 
@@ -47,6 +47,8 @@ Here's an example of a valid configuration file (assuming that the CSV file retu
 ```
 
 ## Execution
+
+> TODO Update this
 
 The executable needs only one argument: the location of the configuration file. So, assuming that the configuration file is located at `/home/fort/rtr.conf`, use the flag `-f` to indicate such location and run the server:
 

@@ -72,6 +72,7 @@ pdu_handler_test_SOURCES += rtr/pdu_handler_test.c
 pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 roa_table_test_SOURCES  = ${BASIC_MODULES}
+roa_table_test_SOURCES += ../src/address.c
 roa_table_test_SOURCES += ../src/rtr/db/delta.c
 roa_table_test_SOURCES += ../src/rtr/db/roa_table.c
 roa_table_test_SOURCES += rtr/db/roa_table_test.c

@@ -119,16 +119,15 @@ START_TEST(test_ipv6_prefix_from_stream)
 			44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
 			58, 59, 60 };
 	struct ipv6_prefix_pdu pdu;
+	struct in6_addr tmp;
 
 	BUFFER2FD(input, ipv6_prefix_from_stream, &pdu);
 	ck_assert_uint_eq(pdu.flags, 33);
 	ck_assert_uint_eq(pdu.prefix_length, 34);
 	ck_assert_uint_eq(pdu.max_length, 35);
 	ck_assert_uint_eq(pdu.zero, 36);
-	ck_assert_uint_eq(pdu.ipv6_prefix.s6_addr32[0], 0x25262728);
-	ck_assert_uint_eq(pdu.ipv6_prefix.s6_addr32[1], 0x292a2b2c);
-	ck_assert_uint_eq(pdu.ipv6_prefix.s6_addr32[2], 0x2d2e2f30);
-	ck_assert_uint_eq(pdu.ipv6_prefix.s6_addr32[3], 0x31323334);
+	in6_addr_init(&tmp, 0x25262728, 0x292a2b2c, 0x2d2e2f30, 0x31323334);
+	ck_assert(IN6_ARE_ADDR_EQUAL(&tmp, &pdu.ipv6_prefix));
 	ck_assert_uint_eq(pdu.asn, 0x35363738);
 }
 END_TEST

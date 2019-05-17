@@ -3,8 +3,29 @@
 #include <string.h>
 #include <errno.h>
 #include <arpa/inet.h> /* inet_ntop */
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include "log.h"
 #include "thread_var.h"
+
+static void
+init_quadrant(struct in6_addr *addr, unsigned int slot, uint32_t value)
+{
+	addr->s6_addr[slot    ] = (value >> 24)       ;
+	addr->s6_addr[slot + 1] = (value >> 16) & 0xFF;
+	addr->s6_addr[slot + 2] = (value >>  8) & 0xFF;
+	addr->s6_addr[slot + 3] = (value      ) & 0xFF;
+}
+
+void
+in6_addr_init(struct in6_addr *addr, uint32_t quadrant0, uint32_t quadrant1,
+    uint32_t quadrant2, uint32_t quadrant3)
+{
+	init_quadrant(addr, 0, quadrant0);
+	init_quadrant(addr, 4, quadrant1);
+	init_quadrant(addr, 8, quadrant2);
+	init_quadrant(addr, 12, quadrant3);
+}
 
 /*
  * Returns a mask you can use to extract the suffix bits of a 32-bit unsigned
@@ -463,15 +484,15 @@ ipv6_prefix_validate(struct ipv6_prefix *prefix)
 {
 	struct in6_addr suffix;
 	char buffer[INET6_ADDRSTRLEN];
+	unsigned int i;
 
 	memset(&suffix, 0, sizeof(suffix));
 	ipv6_suffix_mask(prefix->len, &suffix);
-	if ((prefix->addr.s6_addr32[0] & suffix.s6_addr32[0])
-	    || (prefix->addr.s6_addr32[1] & suffix.s6_addr32[1])
-	    || (prefix->addr.s6_addr32[2] & suffix.s6_addr32[2])
-	    || (prefix->addr.s6_addr32[3] & suffix.s6_addr32[3]))
-		return pr_err("IPv6 prefix %s/%u has enabled suffix bits.",
-		    addr2str6(&prefix->addr, buffer), prefix->len);
+
+	for (i = 0; i < 16; i++)
+		if (prefix->addr.s6_addr[i] & suffix.s6_addr[i])
+			return pr_err("IPv6 prefix %s/%u has enabled suffix bits.",
+			    addr2str6(&prefix->addr, buffer), prefix->len);
 
 	return 0;
 }

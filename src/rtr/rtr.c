@@ -128,13 +128,25 @@ handle_accept_result(int client_fd, int err)
 	 */
 
 	/*
-	 * TODO this `if` is a Linux quirk and should probably not exist in the
-	 * BSDs. See `man 2 accept`.
+	 * TODO (whatever) print error messages?
+	 * "Connection acceptor thread interrupted" sounds pretty unhelpful.
+	 */
+
+#if __linux__
+	/*
+	 * man 2 accept (on Linux):
+	 * Linux  accept() (...) passes already-pending network errors on the
+	 * new socket as an error code from accept(). This behavior differs from
+	 * other BSD socket implementations. For reliable operation the
+	 * application should detect the network errors defined for the protocol
+	 * after accept() and treat them like EAGAIN by retrying. In the case of
+	 * TCP/IP, these are (...)
 	 */
 	if (err == ENETDOWN || err == EPROTO || err == ENOPROTOOPT
 	    || err == EHOSTDOWN || err == ENONET || err == EHOSTUNREACH
 	    || err == EOPNOTSUPP || err == ENETUNREACH)
 		return VERDICT_RETRY;
+#endif
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wlogical-op"

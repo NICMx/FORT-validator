@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <openssl/evp.h>
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "crypto/base64.h"
 #include "log.h"

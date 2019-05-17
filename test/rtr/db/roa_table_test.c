@@ -25,12 +25,12 @@ static bool
 vrp_equals_v6(struct vrp const *vrp, uint8_t as, uint32_t addr,
     uint8_t prefix_len, uint8_t max_prefix_len)
 {
+	struct in6_addr tmp;
+	in6_addr_init(&tmp, 0x20010DB8u, 0, 0, addr);
+
 	return (AF_INET6 == vrp->addr_fam)
 	    && (as == vrp->asn)
-	    && (htonl(0x20010DB8) == vrp->prefix.v6.s6_addr32[0])
-	    && (0 == vrp->prefix.v6.s6_addr32[1])
-	    && (0 == vrp->prefix.v6.s6_addr32[2])
-	    && (htonl(addr) == vrp->prefix.v6.s6_addr32[3])
+	    && IN6_ARE_ADDR_EQUAL(&tmp, &vrp->prefix.v6)
 	    && (prefix_len == vrp->prefix_length)
 	    && (max_prefix_len == vrp->max_prefix_length);
 }
@@ -98,10 +98,7 @@ START_TEST(test_basic)
 
 	prefix4.addr.s_addr = ADDR1;
 	prefix4.len = 24;
-	prefix6.addr.s6_addr32[0] = htonl(0x20010DB8);
-	prefix6.addr.s6_addr32[1] = 0;
-	prefix6.addr.s6_addr32[2] = 0;
-	prefix6.addr.s6_addr32[3] = htonl(0x00000001);
+	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 1);
 	prefix6.len = 120;
 
 	/* Duplicates should be transparently not re-added. */
@@ -135,11 +132,11 @@ START_TEST(test_basic)
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 11, &prefix6, 128));
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 11, &prefix6, 128));
 
-	prefix6.addr.s6_addr32[3] = htonl(0x00000002);
+	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 2);
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
 
-	prefix6.addr.s6_addr32[3] = htonl(0x00000001);
+	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 1);
 	prefix6.len = 121;
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(table, 10, &prefix6, 128));
@@ -177,10 +174,7 @@ START_TEST(test_merge)
 
 	prefix4.addr.s_addr = ADDR1;
 	prefix4.len = 24;
-	prefix6.addr.s6_addr32[0] = htonl(0x20010DB8);
-	prefix6.addr.s6_addr32[1] = 0;
-	prefix6.addr.s6_addr32[2] = 0;
-	prefix6.addr.s6_addr32[3] = htonl(0x00000001);
+	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 1);
 	prefix6.len = 120;
 
 	left_count = 0;
@@ -217,11 +211,11 @@ START_TEST(test_merge)
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(left, 11, &prefix6, 128));
 	left_count++;
 
-	prefix6.addr.s6_addr32[3] = htonl(0x00000002);
+	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 2);
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(right, 10, &prefix6, 128));
 	right_count++;
 
-	prefix6.addr.s6_addr32[3] = htonl(0x00000001);
+	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 1);
 	prefix6.len = 121;
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(left, 10, &prefix6, 128));
 	left_count++;

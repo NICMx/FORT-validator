@@ -2,6 +2,8 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "log.h"
 #include "config.h"

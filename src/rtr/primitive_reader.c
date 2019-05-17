@@ -118,10 +118,16 @@ read_in_addr(struct pdu_reader *reader, struct in_addr *result)
 int
 read_in6_addr(struct pdu_reader *reader, struct in6_addr *result)
 {
-	return read_int32(reader, &result->s6_addr32[0])
-	    || read_int32(reader, &result->s6_addr32[1])
-	    || read_int32(reader, &result->s6_addr32[2])
-	    || read_int32(reader, &result->s6_addr32[3]);
+	unsigned int i;
+	int error;
+
+	for (i = 0; i < 16; i++) {
+		error = read_int8(reader, &result->s6_addr[i]);
+		if (error)
+			return error;
+	}
+
+	return 0;
 }
 
 #define EINVALID_UTF8 -0xFFFF
