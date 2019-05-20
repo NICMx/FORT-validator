@@ -32,11 +32,7 @@ struct state {
 	/** ROA changes to @base over time. */
 	struct deltas_db deltas;
 
-	/*
-	 * TODO (whatever) Maybe rename this. It's not really the current
-	 * serial; it's the next one.
-	 */
-	serial_t current_serial;
+	serial_t next_serial;
 	uint16_t v0_session_id;
 	uint16_t v1_session_id;
 	time_t last_modified_date;
@@ -65,7 +61,7 @@ vrps_init(void)
 	 * "desynchronization" (more at RFC 6810 'Glossary' and
 	 * 'Fields of a PDU')
 	 */
-	state.current_serial = START_SERIAL;
+	state.next_serial = START_SERIAL;
 
 	/* Get the bits that'll fit in session_id */
 	state.v0_session_id = time(NULL) & 0xFFFF;
@@ -153,11 +149,34 @@ __perform_standalone_validation(struct roa_table **result)
 	return 0;
 }
 
+/*
+ * Make an empty dummy delta array.
+ * It's annoying, but temporary. (Until it expires.) Otherwise, it'd be a pain
+ * to have to check NULL delta_group.deltas all the time.
+ */
+static int
+create_empty_delta(struct deltas **deltas)
+{
+	struct delta_group deltas_node;
+	int error;
+
+	error = deltas_create(deltas);
+	if (error)
+		return error;
+
+	deltas_node.serial = state.next_serial;
+	deltas_node.deltas = *deltas;
+	error = deltas_db_add(&state.deltas, &deltas_node);
+	if (error)
+		deltas_refput(*deltas);
+	return error;
+}
+
 /**
  * Reallocate the array of @db starting at @start, the length and capacity are
  * calculated according to the new start.
  */
-static void
+static int
 resize_deltas_db(struct deltas_db *db, struct delta_group *start)
 {
 	struct delta_group *tmp, *ptr;
@@ -166,38 +185,48 @@ resize_deltas_db(struct deltas_db *db, struct delta_group *start)
 	while (db->len < db->capacity / 2)
 		db->capacity /= 2;
 	tmp = malloc(sizeof(struct delta_group) * db->capacity);
-	if (tmp == NULL) {
-		pr_enomem();
-		return;
-	}
+	if (tmp == NULL)
+		return pr_enomem();
+
 	memcpy(tmp, start, db->len * sizeof(struct delta_group));
 	/* Release memory allocated */
 	for (ptr = db->array; ptr < start; ptr++)
 		deltas_refput(ptr->deltas);
 	free(db->array);
 	db->array = tmp;
+
+	return 0;
 }
 
-static void
-vrps_purge(void)
+/*
+ * Lock must be requested before calling this function
+ */
+static int
+vrps_purge(struct deltas **deltas)
 {
 	struct delta_group *group;
 	array_index i;
-	uint32_t min_serial;
+	serial_t min_serial;
 
-	min_serial = clients_get_min_serial();
+	if (clients_get_min_serial(&min_serial) != 0) {
+		/* Nobody will need deltas, just leave an empty one */
+		deltas_refput(*deltas);
+		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
+		deltas_db_init(&state.deltas);
+		return create_empty_delta(deltas);
+	}
 
-	/* Assume is ordered by serial, so get the new initial pointer */
+	/* Assume its ordered by serial, so get the new initial pointer */
 	ARRAYLIST_FOREACH(&state.deltas, group, i)
 		if (group->serial >= min_serial)
 			break;
 
-	/* Is the first element or reached end, nothing to purge */
+	/* Its the first element or reached end, nothing to purge */
 	if (group == state.deltas.array ||
 	    (group - state.deltas.array) == state.deltas.len)
-		return;
+		return 0;
 
-	resize_deltas_db(&state.deltas, group);
+	return resize_deltas_db(&state.deltas, group);
 }
 
 int
@@ -207,6 +236,7 @@ vrps_update(bool *changed)
 	struct roa_table *new_base;
 	struct deltas *deltas; /* Deltas in raw form */
 	struct delta_group deltas_node; /* Deltas in database node form */
+	serial_t min_serial;
 	int error;
 
 	*changed = false;
@@ -237,12 +267,15 @@ vrps_update(bool *changed)
 			goto revert_deltas; /* error == 0 is good */
 		}
 
-		deltas_node.serial = state.current_serial;
-		deltas_node.deltas = deltas;
-		error = deltas_db_add(&state.deltas, &deltas_node);
-		if (error) {
-			rwlock_unlock(&lock);
-			goto revert_deltas;
+		/* Just store deltas if someone will care about it */
+		if (clients_get_min_serial(&min_serial) == 0) {
+			deltas_node.serial = state.next_serial;
+			deltas_node.deltas = deltas;
+			error = deltas_db_add(&state.deltas, &deltas_node);
+			if (error) {
+				rwlock_unlock(&lock);
+				goto revert_deltas;
+			}
 		}
 
 		/*
@@ -252,33 +285,22 @@ vrps_update(bool *changed)
 		old_base = state.base;
 
 		/* Remove unnecessary deltas */
-		vrps_purge();
-
-	} else {
-		/*
-		 * Make an empty dummy delta array.
-		 * It's annoying, but temporary. (Until it expires.)
-		 * Otherwise, it'd be a pain to have to check NULL
-		 * delta_group.deltas all the time.
-		 */
-		error = deltas_create(&deltas);
+		error = vrps_purge(&deltas);
 		if (error) {
 			rwlock_unlock(&lock);
 			goto revert_base;
 		}
-
-		deltas_node.serial = state.current_serial;
-		deltas_node.deltas = deltas;
-		error = deltas_db_add(&state.deltas, &deltas_node);
+	} else {
+		error = create_empty_delta(&deltas);
 		if (error) {
 			rwlock_unlock(&lock);
-			goto revert_deltas;
+			goto revert_base;
 		}
 	}
 
 	*changed = true;
 	state.base = new_base;
-	state.current_serial++;
+	state.next_serial++;
 
 	rwlock_unlock(&lock);
 
@@ -312,7 +334,7 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg, serial_t *serial)
 
 	if (state.base != NULL) {
 		error = roa_table_foreach_roa(state.base, cb, arg);
-		*serial = state.current_serial - 1;
+		*serial = state.next_serial - 1;
 	} else {
 		error = -EAGAIN;
 	}
@@ -387,7 +409,7 @@ get_last_serial_number(serial_t *result)
 		return error;
 
 	if (state.base != NULL)
-		*result = state.current_serial - 1;
+		*result = state.next_serial - 1;
 	else
 		error = -EAGAIN;
 

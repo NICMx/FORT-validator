@@ -10,11 +10,6 @@
 #define RTR_V0	0
 #define RTR_V1	1
 
-struct rtr_client {
-	int fd;
-	struct sockaddr_storage addr;
-};
-
 /** A request from an RTR client. */
 struct rtr_request {
 	/** Raw bytes. */

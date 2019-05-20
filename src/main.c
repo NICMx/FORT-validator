@@ -17,14 +17,9 @@ start_rtr_server(void)
 	error = vrps_init();
 	if (error)
 		goto just_quit;
-	error = clients_db_init();
-	if (error)
-		goto revert_vrps;
 
 	error = rtr_listen();
 
-	clients_db_destroy();
-revert_vrps:
 	vrps_destroy();
 just_quit:
 	return error;

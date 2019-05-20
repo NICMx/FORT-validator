@@ -10,7 +10,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/queue.h>
 
 #include "config.h"
 #include "clients.h"
@@ -21,13 +20,11 @@
 
 struct sigaction act;
 
-struct thread_node {
+struct thread_param {
+	int fd;
 	pthread_t tid;
-	struct rtr_client client;
-	SLIST_ENTRY(thread_node) next;
+	struct sockaddr_storage addr;
 };
-
-SLIST_HEAD(thread_list, thread_node) threads;
 
 static int
 init_addrinfo(struct addrinfo **result)
@@ -172,25 +169,30 @@ clean_request(struct rtr_request *request, const struct pdu_metadata *meta)
 }
 
 static void
-print_close_failure(int error, struct sockaddr_storage *sockaddr)
+print_close_failure(int error, int fd)
 {
+	struct sockaddr_storage sockaddr;
 	char buffer[INET6_ADDRSTRLEN];
 	void *addr = NULL;
 	char const *addr_str;
 
-	switch (sockaddr->ss_family) {
+	if (clients_get_addr(fd, &sockaddr) != 0) {
+		addr_str = "(unknown)";
+		goto done;
+	}
+	switch (sockaddr.ss_family) {
 	case AF_INET:
-		addr = &((struct sockaddr_in *) sockaddr)->sin_addr;
+		addr = &((struct sockaddr_in *) &sockaddr)->sin_addr;
 		break;
 	case AF_INET6:
-		addr = &((struct sockaddr_in6 *) sockaddr)->sin6_addr;
+		addr = &((struct sockaddr_in6 *) &sockaddr)->sin6_addr;
 		break;
 	default:
 		addr_str = "(protocol unknown)";
 		goto done;
 	}
 
-	addr_str = inet_ntop(sockaddr->ss_family, addr, buffer,
+	addr_str = inet_ntop(sockaddr.ss_family, addr, buffer,
 	    INET6_ADDRSTRLEN);
 	if (addr_str == NULL)
 		addr_str = "(unprintable address)";
@@ -199,39 +201,48 @@ done:
 	pr_errno(error, "close() failed on socket of client %s", addr_str);
 }
 
-static void *
-end_client(struct rtr_client *client)
+static void
+end_client(int fd)
 {
-	if (close(client->fd) != 0)
-		print_close_failure(errno, &client->addr);
-
-	clients_forget(client->fd);
-	return NULL;
+	if (close(fd) != 0)
+		print_close_failure(errno, fd);
 }
 
 /*
  * The client socket threads' entry routine.
+ * @arg must be released.
  */
 static void *
 client_thread_cb(void *arg)
 {
-	struct rtr_client *client = arg;
 	struct pdu_metadata const *meta;
 	struct rtr_request request;
+	struct thread_param param;
 	int error;
 
+	memcpy(&param, arg, sizeof(param));
+	free(arg);
+
+	error = clients_add(param.fd, param.addr, param.tid);
+	if (error) {
+		close(param.fd);
+		return NULL;
+	}
 	while (true) { /* For each PDU... */
-		error = pdu_load(client->fd, &request, &meta);
+		error = pdu_load(param.fd, &request, &meta);
 		if (error)
 			break;
 
-		error = meta->handle(client->fd, &request);
+		error = meta->handle(param.fd, &request);
 		clean_request(&request, meta);
 		if (error)
 			break;
 	}
 
-	return end_client(client);
+	end_client(param.fd);
+	clients_forget(param.fd);
+
+	return NULL;
 }
 
 /*
@@ -241,7 +252,7 @@ static int
 handle_client_connections(int server_fd)
 {
 	struct sockaddr_storage client_addr;
-	struct thread_node *new_thread;
+	struct thread_param *param;
 	socklen_t sizeof_client_addr;
 	int client_fd;
 	int error;
@@ -269,48 +280,25 @@ handle_client_connections(int server_fd)
 		 * So don't interrupt the thread when this happens.
 		 */
 
-		/*
-		 * TODO this is more complicated than it needs to be.
-		 * We have a client hash table and a thread linked list.
-		 * These two contain essentially the same entries. It's
-		 * redundant.
-		 */
-
-		new_thread = malloc(sizeof(struct thread_node));
-		if (new_thread == NULL) {
+		param = malloc(sizeof(struct thread_param));
+		if (param == NULL) {
 			/* No error response PDU on memory allocation. */
-			pr_err("Couldn't create thread struct");
+			pr_err("Couldn't create thread parameters struct");
 			close(client_fd);
 			continue;
 		}
+		param->fd = client_fd;
+		param->addr = client_addr;
 
-		new_thread->client.fd = client_fd;
-		new_thread->client.addr = client_addr;
-
-		error = clients_add(&new_thread->client);
-		if (error) {
-			/*
-			 * Presently, clients_add() can only fail due to alloc
-			 * failure. No error report PDU.
-			 */
-			free(new_thread);
-			close(client_fd);
-			continue;
-		}
-
-		error = pthread_create(&new_thread->tid, NULL,
-		    client_thread_cb, &new_thread->client);
+		error = pthread_create(&param->tid, NULL,
+		    client_thread_cb, param);
 		if (error && error != EAGAIN)
 			err_pdu_send_internal_error(client_fd);
 		if (error) {
 			pr_errno(error, "Could not spawn the client's thread");
-			clients_forget(client_fd);
-			free(new_thread);
 			close(client_fd);
-			continue;
+			free(param);
 		}
-
-		SLIST_INSERT_HEAD(&threads, new_thread, next);
 
 	} while (true);
 
@@ -341,22 +329,28 @@ init_signal_handler(void)
 	return error;
 }
 
-/* Terminates client threads as gracefully as I know how to. */
-static void
-wait_threads(void)
+/*
+ * Receive @arg to be called as a clients_foreach_cb
+ */
+static int
+kill_client(struct client const *client, void *arg)
 {
-	struct thread_node *ptr;
+	end_client(client->fd);
+	/* Don't call clients_forget to avoid deadlock! */
+	return 0;
+}
 
-	while (!SLIST_EMPTY(&threads)) {
-		ptr = SLIST_FIRST(&threads);
-		SLIST_REMOVE_HEAD(&threads, next);
-		/*
-		 * If the close fails, the thread might still be using the
-		 * thread_param variables, so leak instead.
-		 */
-		if (close_thread(ptr->tid, "Client") == 0)
-			free(ptr);
-	}
+static void
+end_clients(void)
+{
+	clients_foreach(kill_client, NULL);
+	/* Let the clients be deleted when clients DB is destroyed */
+}
+
+static int
+join_thread(pthread_t tid, void *arg)
+{
+	return close_thread(tid, "Client");
 }
 
 /*
@@ -375,13 +369,14 @@ rtr_listen(void)
 	if (error)
 		return error;
 
-	/* Server ready, start updates thread */
-	error = updates_daemon_start();
+	/* Server ready, start everything else */
+	error = clients_db_init();
 	if (error)
 		goto revert_server_socket;
 
-	/* Init global vars */
-	SLIST_INIT(&threads);
+	error = updates_daemon_start();
+	if (error)
+		goto revert_clients_db;
 
 	error = init_signal_handler();
 	if (error)
@@ -389,9 +384,11 @@ rtr_listen(void)
 
 	error = handle_client_connections(server_fd);
 
-	wait_threads();
+	end_clients();
 revert_updates_daemon:
 	updates_daemon_destroy();
+revert_clients_db:
+	clients_db_destroy(join_thread, NULL);
 revert_server_socket:
 	close(server_fd);
 	return error;
