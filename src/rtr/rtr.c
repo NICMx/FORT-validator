@@ -145,18 +145,23 @@ handle_accept_result(int client_fd, int err)
 	if (err == ENETDOWN || err == EPROTO || err == ENOPROTOOPT
 	    || err == EHOSTDOWN || err == ENONET || err == EHOSTUNREACH
 	    || err == EOPNOTSUPP || err == ENETUNREACH)
-		return VERDICT_RETRY;
+		goto retry;
 #endif
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wlogical-op"
 	if (err == EAGAIN || err == EWOULDBLOCK)
-		return VERDICT_RETRY;
+		goto retry;
 #pragma GCC diagnostic pop
 
-	errno = err;
-	pr_warn("Connection acceptor thread interrupted");
+	pr_info("Client connection attempt not accepted: %s. Quitting...",
+	    strerror(err));
 	return VERDICT_EXIT;
+
+retry:
+	pr_info("Client connection attempt not accepted: %s. Retrying...",
+	    strerror(err));
+	return VERDICT_RETRY;
 }
 
 static void
@@ -246,7 +251,7 @@ handle_client_connections(int server_fd)
 	sizeof_client_addr = sizeof(client_addr);
 
 	do {
-		client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
+		client_fd = accept(server_fd, (struct sockaddr *) &client_addr,
 		    &sizeof_client_addr);
 		switch (handle_accept_result(client_fd, errno)) {
 		case VERDICT_SUCCESS:
@@ -254,7 +259,7 @@ handle_client_connections(int server_fd)
 		case VERDICT_RETRY:
 			continue;
 		case VERDICT_EXIT:
-			return 0;
+			return -EINVAL;
 		}
 
 		/*

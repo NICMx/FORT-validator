@@ -377,10 +377,8 @@ perform_standalone_validation(struct validation_handler *handler)
 
 	config_tal = config_get_tal();
 	error = stat(config_tal, &attr);
-	if (error) {
-		pr_errno(errno, "Error reading path '%s'", config_tal);
-		return -errno;
-	}
+	if (error)
+		return pr_errno(errno, "Error reading path '%s'", config_tal);
 
 	fnstack_init();
 	if (S_ISDIR(attr.st_mode) == 0)

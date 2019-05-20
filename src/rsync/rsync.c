@@ -204,7 +204,6 @@ create_dir(char *path)
 static int
 create_dir_recursive(char *localuri)
 {
-	size_t repository_len;
 	int i, error;
 	bool exist = false;
 
@@ -215,8 +214,7 @@ create_dir_recursive(char *localuri)
 	if (exist)
 		return 0;
 
-	repository_len = strlen(config_get_local_repository());
-	for (i = 1 + repository_len; localuri[i] != '\0'; i++) {
+	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
 			localuri[i] = '\0';
 			error = create_dir(localuri);
