@@ -143,6 +143,22 @@ roa_table_merge(struct roa_table *dst, struct roa_table *src)
 }
 
 int
+roa_table_clone(struct roa_table **dst, struct roa_table *src)
+{
+	int error;
+
+	*dst = roa_table_create();
+	if (*dst == NULL)
+		return pr_enomem();
+
+	error = roa_table_merge(*dst, src);
+	if (error)
+		free(*dst);
+
+	return error;
+}
+
+int
 rtrhandler_merge(struct roa_table *dst, struct roa_table *src)
 {
 	return roa_table_merge(dst, src);

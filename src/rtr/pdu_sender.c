@@ -172,19 +172,6 @@ send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 	return -EINVAL;
 }
 
-static bool
-vrp_equals(struct vrp const *left, struct vrp const *right)
-{
-	return left->asn == right->asn
-	    && left->addr_fam == right->addr_fam
-	    && left->prefix_length == right->prefix_length
-	    && left->max_prefix_length == right->max_prefix_length
-	    && ((left->addr_fam == AF_INET
-	        && left->prefix.v4.s_addr == right->prefix.v4.s_addr)
-	    || (left->addr_fam == AF_INET6
-	    && IN6_ARE_ADDR_EQUAL(&left->prefix.v6, &right->prefix.v6)));
-}
-
 static int
 vrp_simply_send(struct delta const *delta, void *arg)
 {
@@ -205,7 +192,7 @@ vrp_ovrd_remove(struct delta const *delta, void *arg)
 	struct vrp_slist *filtered_vrps = arg;
 
 	SLIST_FOREACH(ptr, filtered_vrps, next)
-		if (vrp_equals(&delta->vrp, &ptr->delta.vrp) &&
+		if (VRP_EQ(&delta->vrp, &ptr->delta.vrp) &&
 		    delta->flags != ptr->delta.flags) {
 			SLIST_REMOVE(filtered_vrps, ptr, vrp_node, next);
 			free(ptr);
@@ -283,11 +270,7 @@ send_end_of_data_pdu(int fd, serial_t end_serial)
 	pdu.header.length = RTRPDU_END_OF_DATA_LEN;
 
 	pdu.serial_number = end_serial;
-	if (pdu.header.protocol_version == RTR_V1) {
-		pdu.refresh_interval = config_get_refresh_interval();
-		pdu.retry_interval = config_get_retry_interval();
-		pdu.expire_interval = config_get_expire_interval();
-	}
+	/* TODO (next iteration) Add RTRv1 intervals */
 
 	len = serialize_end_of_data_pdu(&pdu, data);
 	if (len != RTRPDU_END_OF_DATA_LEN)

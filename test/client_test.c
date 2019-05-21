@@ -26,6 +26,13 @@ handle_foreach(struct client const *client, void *arg)
 	return 0;
 }
 
+static int
+join_threads(pthread_t tid, void *arg)
+{
+	/* Empty, since no threads are alive */
+	return 0;
+}
+
 START_TEST(basic_test)
 {
 	/*
@@ -33,15 +40,12 @@ START_TEST(basic_test)
 	 * I'm mostly just concerned about uthash usage; I've never used uthash
 	 * before.
 	 */
-
-	struct sockaddr_in addr;
-	struct rtr_client client;
+	struct sockaddr_storage addr;
 	unsigned int i;
 	unsigned int state;
 
 	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	memcpy(&client.addr, &addr, sizeof(client.addr));
+	addr.ss_family = AF_INET;
 
 	ck_assert_int_eq(0, clients_db_init());
 
@@ -51,14 +55,10 @@ START_TEST(basic_test)
 	 */
 
 	for (i = 0; i < 4; i++) {
-		client.fd = 1;
-		ck_assert_int_eq(0, clients_add(&client));
-		client.fd = 2;
-		ck_assert_int_eq(0, clients_add(&client));
-		client.fd = 3;
-		ck_assert_int_eq(0, clients_add(&client));
-		client.fd = 4;
-		ck_assert_int_eq(0, clients_add(&client));
+		ck_assert_int_eq(0, clients_add(1, addr, 10));
+		ck_assert_int_eq(0, clients_add(2, addr, 20));
+		ck_assert_int_eq(0, clients_add(3, addr, 30));
+		ck_assert_int_eq(0, clients_add(4, addr, 40));
 	}
 
 	clients_forget(3);
@@ -67,7 +67,7 @@ START_TEST(basic_test)
 	ck_assert_int_eq(0, clients_foreach(handle_foreach, &state));
 	ck_assert_uint_eq(3, state);
 
-	clients_db_destroy();
+	clients_db_destroy(join_threads, NULL);
 }
 END_TEST
 

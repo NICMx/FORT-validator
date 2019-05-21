@@ -18,10 +18,7 @@ char const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
 unsigned int config_get_validation_interval(void);
-uint32_t config_get_refresh_interval(void);
-uint32_t config_get_retry_interval(void);
-uint32_t config_get_expire_interval(void);
-char const *config_get_slurm_location(void);
+char const *config_get_slurm(void);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);

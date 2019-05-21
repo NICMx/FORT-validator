@@ -371,22 +371,12 @@ end:	tal_destroy(tal);
 int
 perform_standalone_validation(struct validation_handler *handler)
 {
-	char const *config_tal;
-	struct stat attr;
 	int error;
 
-	config_tal = config_get_tal();
-	error = stat(config_tal, &attr);
-	if (error)
-		return pr_errno(errno, "Error reading path '%s'", config_tal);
-
 	fnstack_init();
-	if (S_ISDIR(attr.st_mode) == 0)
-		error = do_file_validation(config_tal, handler);
-	else
-		error = process_dir_files(config_tal, TAL_FILE_EXTENSION,
-		    do_file_validation, handler);
-
+	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
+	    do_file_validation, handler);
 	fnstack_cleanup();
+
 	return error;
 }

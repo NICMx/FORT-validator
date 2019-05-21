@@ -4,6 +4,8 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+
 #include "log.h"
 
 int
@@ -125,7 +127,7 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	return error;
 }
 
-int
+static int
 process_dir_files(char const *location, char const *file_ext,
     process_file_cb cb, void *arg)
 {
@@ -157,4 +159,21 @@ close_dir:
 	closedir(dir_loc);
 end:
 	return error;
+}
+
+int
+process_file_or_dir(char const *location, char const *file_ext,
+    process_file_cb cb, void *arg)
+{
+	struct stat attr;
+	int error;
+
+	error = stat(location, &attr);
+	if (error)
+		return pr_errno(errno, "Error reading path '%s'", location);
+
+	if (S_ISDIR(attr.st_mode) == 0)
+		return cb(location, arg);
+
+	return process_dir_files(location, file_ext, cb, arg);
 }

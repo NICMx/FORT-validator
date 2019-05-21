@@ -72,7 +72,7 @@ config_get_rsync_args(bool is_ta)
 }
 
 char const *
-config_get_slurm_location(void)
+config_get_slurm(void)
 {
 	return NULL;
 }

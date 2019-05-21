@@ -38,17 +38,12 @@ prefix_filtered_by(struct slurm_prefix *filter, struct slurm_prefix *prefix)
 	/* Both have ASN */
 	if ((filter->data_flag & SLURM_COM_FLAG_ASN) > 0 &&
 	    (prefix->data_flag & SLURM_COM_FLAG_ASN) > 0)
-		return filter_vrp->asn == prefix_vrp->asn;
+		return VRP_ASN_EQ(filter_vrp, prefix_vrp);
 
 	/* Both have a prefix of the same type */
 	if ((filter->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
-	    (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
-	    filter_vrp->addr_fam == prefix_vrp->addr_fam &&
-	    filter_vrp->prefix_length == prefix_vrp->prefix_length)
-		return ((filter_vrp->addr_fam == AF_INET &&
-		    filter_vrp->prefix.v4.s_addr == prefix_vrp->prefix.v4.s_addr) ||
-		    (filter_vrp->addr_fam == AF_INET6 &&
-		    IN6_ARE_ADDR_EQUAL(&filter_vrp->prefix.v6, &prefix_vrp->prefix.v6)));
+	    (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
+		return VRP_PREFIX_EQ(filter_vrp, prefix_vrp);
 
 	return false;
 }
@@ -71,21 +66,15 @@ prefix_equal(struct slurm_prefix *left, struct slurm_prefix *right,
 	/* It has the same data, compare it */
 	equal = true;
 	if ((left->data_flag & SLURM_COM_FLAG_ASN) > 0)
-		equal = equal && left_vrp->asn == right_vrp->asn;
+		equal = equal && VRP_ASN_EQ(left_vrp, right_vrp);
 
 	if ((left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
-		equal = equal
-		    && left_vrp->prefix_length == right_vrp->prefix_length
-		    && left_vrp->addr_fam == right_vrp->addr_fam
-		    && ((left_vrp->addr_fam == AF_INET
-		    && left_vrp->prefix.v4.s_addr == right_vrp->prefix.v4.s_addr)
-		    || (left_vrp->addr_fam == AF_INET6
-		    && IN6_ARE_ADDR_EQUAL(&left_vrp->prefix.v6, &right_vrp->prefix.v6)));
+		equal = equal && VRP_PREFIX_EQ(left_vrp, right_vrp);
 
 	if ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
 		equal = equal &&
 		    ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0) &&
-		    left_vrp->max_prefix_length == right_vrp->max_prefix_length;
+		    VRP_MAX_PREFIX_LEN_EQ(left_vrp, right_vrp);
 
 	return equal;
 }

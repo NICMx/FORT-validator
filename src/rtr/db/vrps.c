@@ -249,11 +249,16 @@ vrps_update(bool *changed)
 
 	rwlock_write_lock(&lock);
 
-	error = slurm_apply(new_base);
-	if (error) {
-		rwlock_unlock(&lock);
-		goto revert_base;
-	}
+	/*
+	 * TODO (next iteration) Remember the last valid SLURM
+	 *
+	 * Currently SLURM is ignored if it has errors, the error is logged and
+	 * the new_base isn't altered. Instead of this, the last valid SLURM
+	 * should be remembered, and will be applied when a new SLURM has
+	 * errors; a warning should be logged to indicate which version of the
+	 * SLURM is being applied.
+	 */
+	slurm_apply(&new_base);
 
 	if (state.base != NULL) {
 		error = compute_deltas(state.base, new_base, &deltas);

@@ -44,25 +44,26 @@ struct rpki_config {
 	 * Prevents arbitrarily long paths and loops.
 	 */
 	unsigned int maximum_certificate_depth;
+	/** File or directory where the .slurm file(s) is(are) located */
+	char *slurm;
 
 	struct {
 		/** The bound listening address of the RTR server. */
 		char *address;
 		/** The bound listening port of the RTR server. */
 		char *port;
-		/** Maximum accepted client connections */
-		unsigned int queue;
+		/** Outstanding connections in the socket's listen queue */
+		unsigned int backlog;
 
 		/** Interval used to look for updates at VRPs location */
 		unsigned int validation_interval;
 
-		/** Intervals use at RTR v1 End of data PDU **/
-		uint32_t refresh_interval;
-		uint32_t retry_interval;
-		uint32_t expire_interval;
-
-		/** Directory where the .slurm files are located */
-		char *slurm_location;
+		/*
+		 * TODO (next iteration) Intervals used at End of data PDU
+		 * uint32_t refresh_interval;
+		 * uint32_t retry_interval;
+		 * uint32_t expire_interval;
+		 */
 	} server;
 
 	struct {
@@ -178,6 +179,12 @@ static const struct option_field options[] = {
 		 * overflow and will never be bigger than this.
 		 */
 		.max = UINT_MAX - 1,
+	}, {
+		.id = 1003,
+		.name = "slurm",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, slurm),
+		.doc = "Path to the SLURM file or SLURMs directory (files must have the extension .slurm)",
 	},
 
 	/* Server fields */
@@ -195,10 +202,10 @@ static const struct option_field options[] = {
 		.doc = "Port the RTR server will bind itself to. Can be a string, in which case a number will be resolved.",
 	}, {
 		.id = 5003,
-		.name = "server.queue",
+		.name = "server.backlog",
 		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, server.queue),
-		.doc = "Maximum accepted client connections",
+		.offset = offsetof(struct rpki_config, server.backlog),
+		.doc = "Maximum connections in the socket's listen queue",
 		.min = 1,
 		.max = SOMAXCONN,
 	}, {
@@ -215,39 +222,15 @@ static const struct option_field options[] = {
 		 * We do this by not getting new information more than once per
 		 * minute.
 		 */
-		.min = 60,
+		.min = 10,
 		.max = 7200,
-	}, {
-		.id = 5005,
-		.name = "server.rtr-interval.refresh",
-		.type = &gt_uint32,
-		.offset = offsetof(struct rpki_config, server.refresh_interval),
-		.doc = "Intervals use at RTR v1 End of data PDU",
-		.min = 1,
-		.max = 86400,
-	}, {
-		.id = 5006,
-		.name = "server.rtr-interval.retry",
-		.type = &gt_uint32,
-		.offset = offsetof(struct rpki_config, server.retry_interval),
-		.doc = "",
-		.min = 1,
-		.max = 7200,
-	}, {
-		.id = 5007,
-		.name = "server.rtr-interval.expire",
-		.type = &gt_uint32,
-		.offset = offsetof(struct rpki_config, server.expire_interval),
-		.doc = "",
-		.min = 600,
-		.max = 172800,
-	}, {
-		.id = 5008,
-		.name = "server.slurm.location",
-		.type = &gt_string,
-		.offset = offsetof(struct rpki_config, server.slurm_location),
-		.doc = "Directory where the .slurm files are located",
-		},
+	},
+	/*
+	 * TODO (next iteration) RTRv1 intervals with values:
+	 * - refresh: min = 1, max = 86400, default = 3600
+	 * - retry: min = 1, max = 7200, default = 600
+	 * - expire: min = 600, max = 172800, default = 7200
+	 */
 
 	/* RSYNC fields */
 	{
@@ -451,14 +434,11 @@ set_default_values(void)
 	if (rpki_config.server.port == NULL)
 		return pr_enomem();
 
-	rpki_config.server.queue = 10;
+	rpki_config.server.backlog = SOMAXCONN;
 	rpki_config.server.validation_interval = 60;
-	rpki_config.server.refresh_interval = 3600;
-	rpki_config.server.retry_interval = 600;
-	rpki_config.server.expire_interval = 7200;
-	rpki_config.server.slurm_location = NULL;
 
 	rpki_config.tal = NULL;
+	rpki_config.slurm = NULL;
 
 	rpki_config.local_repository = strdup("/tmp/fort/repository");
 	if (rpki_config.local_repository == NULL) {
@@ -639,7 +619,7 @@ config_get_server_queue(void)
 	/*
 	 * The range of this is 1-<small number>, so adding signedness is safe.
 	 */
-	return rpki_config.server.queue;
+	return rpki_config.server.backlog;
 }
 
 unsigned int
@@ -648,29 +628,12 @@ config_get_validation_interval(void)
 	return rpki_config.server.validation_interval;
 }
 
-uint32_t
-config_get_refresh_interval(void)
-{
-	return rpki_config.server.refresh_interval;
-}
-
-uint32_t
-config_get_retry_interval(void)
-{
-	return rpki_config.server.retry_interval;
-}
-
-uint32_t
-config_get_expire_interval(void)
-{
-	return rpki_config.server.expire_interval;
-}
-
 char const *
-config_get_slurm_location(void)
+config_get_slurm(void)
 {
-	return rpki_config.server.slurm_location;
+	return rpki_config.slurm;
 }
+
 char const *
 config_get_tal(void)
 {

@@ -18,13 +18,13 @@ slurm_load(bool *loaded)
 {
 	/* Optional configuration */
 	*loaded = false;
-	if (config_get_slurm_location() == NULL)
+	if (config_get_slurm() == NULL)
 		return 0;
 
 	*loaded = true;
 	slurm_db_init();
 
-	return process_dir_files(config_get_slurm_location(),
+	return process_file_or_dir(config_get_slurm(),
 	    SLURM_FILE_EXTENSION, slurm_parse, NULL);
 }
 
@@ -32,7 +32,7 @@ static void
 slurm_cleanup(void)
 {
 	/* Only if the SLURM was configured */
-	if (config_get_slurm_location() != NULL)
+	if (config_get_slurm() != NULL)
 		slurm_db_cleanup();
 }
 
@@ -81,9 +81,15 @@ slurm_pfx_assertions_apply(struct roa_table *base)
 	    base);
 }
 
+/*
+ * Load the SLURM file/dir and try to apply it on @base.
+ *
+ * On any error the SLURM won't be applied to @base.
+ */
 int
-slurm_apply(struct roa_table *base)
+slurm_apply(struct roa_table **base)
 {
+	struct roa_table *new_base;
 	bool loaded;
 	int error;
 
@@ -95,14 +101,26 @@ slurm_apply(struct roa_table *base)
 	if (!loaded)
 		return 0;
 
-	error = roa_table_foreach_roa(base, slurm_pfx_filters_apply, base);
+	/* Deep copy of the base so that updates can be reverted */
+	error = roa_table_clone(&new_base, *base);
 	if (error)
 		goto cleanup;
 
-	error = slurm_pfx_assertions_apply(base);
+	error = roa_table_foreach_roa(new_base, slurm_pfx_filters_apply,
+	    new_base);
+	if (error)
+		goto release_new;
+
+	error = slurm_pfx_assertions_apply(new_base);
+	if (!error) {
+		roa_table_destroy(*base);
+		*base = new_base;
+		goto cleanup;
+	}
 
 	/** TODO (next iteration) Apply BGPsec filters and assertions */
-
+release_new:
+	roa_table_destroy(new_base);
 cleanup:
 	slurm_cleanup();
 	return error;
