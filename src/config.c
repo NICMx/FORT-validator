@@ -222,7 +222,7 @@ static const struct option_field options[] = {
 		 * We do this by not getting new information more than once per
 		 * minute.
 		 */
-		.min = 10,
+		.min = 60,
 		.max = 7200,
 	},
 	/*
