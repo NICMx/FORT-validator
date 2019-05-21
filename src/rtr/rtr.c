@@ -124,11 +124,6 @@ handle_accept_result(int client_fd, int err)
 	 * (Linux).
 	 */
 
-	/*
-	 * TODO (whatever) print error messages?
-	 * "Connection acceptor thread interrupted" sounds pretty unhelpful.
-	 */
-
 #if __linux__
 	/*
 	 * man 2 accept (on Linux):

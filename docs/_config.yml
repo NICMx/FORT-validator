@@ -1,8 +1,11 @@
 markdown: kramdown
-baseurl: /FORT-validator
+baseurl: /fort
 defaults:
   -
     scope:
       path: "" # an empty string here means all files in the project
     values:
       layout: "default"
+
+fort-latest-version: 0.0.1
+libcmscodec-latest-version: beta1

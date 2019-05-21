@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <stdint.h> /* SIZE_MAX */
-#include <libcmscodec/SubjectPublicKeyInfo.h>
 #include <libcmscodec/IPAddrBlocks.h>
 #include <sys/socket.h>
 

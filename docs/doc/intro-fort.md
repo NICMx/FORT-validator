@@ -1,18 +1,16 @@
 ---
-title: Introduction to FORT
+title: Introduction to Fort
 ---
 
 # {{ page.title }}
 
 ## Design
 
-FORT is an RPKI Relying Party. It is a service that performs the validation of the entire RPKI repository, and which prepares the ROAs for easy access by your routers.
+Fort is an MIT-licensed RPKI Relying Party. It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers.
 
 ![../img/design.svg](../img/design.svg)
 
-It is currently made out of two separate binaries. One of them is a command line application that can be used to perform manual validations, and a server that takes the output of the former and communicates it to the routers.
-
-So the idea is to routinely run the command line application in a cron job, and serve its output through the server.
+It is a command line application intended for UNIX operating systems. (It requires a C compiler that supports `-std=gnu11`.)
 
 ## Standards Compliance 
 

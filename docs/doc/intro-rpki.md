@@ -32,4 +32,4 @@ So the whole infrastructure functions like a tree-shaped trust network (one for 
 
 In the RPKI, all of these files are required to be publicly-available, so anyone can verify them.
 
-This is, however, too much work for a router, so the validation work is deferred to a trusted _Relying Party_ (RP). That's where [FORT](intro-fort.html) comes in.
+This is, however, too much work for a router, so the validation work is deferred to a trusted _Relying Party_ (RP). That's where [Fort](intro-fort.html) comes in.

@@ -460,7 +460,7 @@ set_default_values(void)
 
 	rpki_config.tal = NULL;
 
-	rpki_config.local_repository = strdup("repository/");
+	rpki_config.local_repository = strdup("/tmp/fort/repository");
 	if (rpki_config.local_repository == NULL) {
 		error = pr_enomem();
 		goto revert_port;
