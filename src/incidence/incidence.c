@@ -17,9 +17,9 @@ struct incidence {
 
 static struct incidence incidences[__INID_MAX] = {
 	{
-		INID_SIGNATURE_ALGORITHM_HAS_PARAMS,
-		"signature algorithm has parameters",
-		INAC_WARN,
+		INID_RSAENCRYPTION_SIGNALG_HAS_PARAMS,
+		"rsaEncryption signature algorithm has parameters",
+		INAC_ERROR,
 	},
 };
 

@@ -2,7 +2,7 @@
 
 An RPKI Validator and RTR Server.
 
-**Still under development!**
+**This software is in beta**
 
 ## Installation
 

@@ -133,9 +133,9 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 	 * AlgorithmIdentifier, the parameters MUST be NULL.  Implementations
 	 * MUST accept the parameters being absent as well as present.
 	 */
-	if (id->parameters != NULL) {
-		error = incidence(INID_SIGNATURE_ALGORITHM_HAS_PARAMS,
-		    "The signature algorithm has parameters.");
+	if (last == 1 && id->parameters != NULL) {
+		error = incidence(INID_RSAENCRYPTION_SIGNALG_HAS_PARAMS,
+		    "rsaEncryption signature algorithm has parameters.");
 		if (error)
 			return error;
 	}

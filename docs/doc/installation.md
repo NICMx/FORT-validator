@@ -2,6 +2,8 @@
 title: Compilation and Installation
 ---
 
+[Documentation](index.html) > {{ page.title }}
+
 # {{ page.title }}
 
 > TODO update with proper .tar.gz releases, once they are created
@@ -44,11 +46,11 @@ cd libcmscodec-beta1/
 make
 sudo make install
 sudo ldconfig
-cd ../..
+cd ../../
 
 ################## fort ###################
 mkdir fort
-cd fort
+cd fort/
 wget https://github.com/NICMx/FORT-validator/archive/master.zip
 # tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 unzip master.zip
@@ -57,7 +59,7 @@ cd FORT-validator-master/
 ./configure
 make
 sudo make install
-cd ../..
+cd ../../
 {% endhighlight %}
 
 ## OpenBSD
@@ -93,7 +95,7 @@ make
 su
 make install
 exit
-cd ../..
+cd ../../
 
 ################## fort ###################
 mkdir fort
@@ -109,5 +111,5 @@ make
 su
 make install
 exit
-cd ../..
+cd ../../
 {% endhighlight %}

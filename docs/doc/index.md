@@ -8,4 +8,6 @@ title: Documentation Index
 2. [Introduction to Fort](intro-fort.html)
 3. [Compilation and Installation](installation.html)
 4. [Running Fort](run.html)
-5. [Validator usage](usage.html)
+5. [Fort usage](usage.html)
+6. [SLURM](slurm.html)
+7. [Incidences](incidence.html)

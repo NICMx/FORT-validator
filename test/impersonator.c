@@ -80,7 +80,5 @@ config_get_slurm(void)
 enum incidence_action
 incidence_get_action(enum incidence_id id)
 {
-	return (id == INID_SIGNATURE_ALGORITHM_HAS_PARAMS)
-	    ? INAC_WARN
-	    : INAC_ERROR;
+	return INAC_ERROR;
 }

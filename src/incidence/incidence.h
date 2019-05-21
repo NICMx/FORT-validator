@@ -8,7 +8,7 @@
  * remember that you also need to add it to the incidences array. That's all.
  */
 enum incidence_id {
-	INID_SIGNATURE_ALGORITHM_HAS_PARAMS,
+	INID_RSAENCRYPTION_SIGNALG_HAS_PARAMS,
 
 	__INID_MAX,
 };

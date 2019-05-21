@@ -1,7 +1,9 @@
 ---
-title: Validator Usage
+title: Fort Usage
 command: fort
 ---
+
+[Documentation](index.html) > {{ page.title }}
 
 # {{ page.title }}
 
@@ -32,6 +34,7 @@ command: fort
 	17. [`rsync.program`](#rsyncprogram)
 	18. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
 	19. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	20. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -70,10 +73,10 @@ $ {{ page.command }} --tal="foo" --tal="bar" --tal="qux"  # tal is "qux"
 
 ### `--help`
 
-- Type: None
-- Availability: `argv` only
+- **Type:** None
+- **Availability:** `argv` only
 
-Prints medium-sized usage message.
+Prints medium-sized syntax remainder message.
 
 {% highlight bash %}
 $ {{ page.command }} --help
@@ -95,10 +98,10 @@ The slightly larger usage message is `man {{ page.command }}` and the large usag
 
 ### `--usage`
 
-- Type: None
-- Availability: `argv` only
+- **Type:** None
+- **Availability:** `argv` only
 
-Prints small-sized help message.
+Prints small-sized syntax remainder message.
 
 {% highlight bash %}
 $ {{ page.command }} --usage
@@ -113,10 +116,10 @@ Usage: {{ page.command }}
 
 ### `--version`
 
-- Type: None
-- Availability: `argv` only
+- **Type:** None
+- **Availability:** `argv` only
 
-Prints small-sized usage message.
+Prints program version.
 
 {% highlight bash %}
 $ {{ page.command }} --version
@@ -125,14 +128,14 @@ $ {{ page.command }} --version
 
 ### `--tal`
 
-- Type: String (Path to file)
-- Availability: `argv` and JSON
+- **Type:** String (Path to file)
+- **Availability:** `argv` and JSON
 
 Path to the _Trust Anchor Locator_ (TAL), or to a directory that contains TALs.
 
 A TAL is a file that points to a _Trust Anchor_ (TA). A TA is a self-signed certificate that serves as root of an RPKI tree you want validated.
 
-The reason why you provide locators instead of anchors is to allow anchors to be officially updated without the need to awkwardly redistribute them.
+The reason why you provide locators instead of anchors is to allow the latter to be officially updated without the need to awkwardly redistribute them.
 
 Whichever registry serves as root of the tree you want to validate is responsible for providing you with its TAL. For convenience, Fort currently ships with the TALs of four of the five RIRs. (The exception is ARIN's, since you need to read and accept an [agreement](https://www.arin.net/resources/manage/rpki/tal/) before you can use it.) If you are paranoid, however, you'd be advised to get your own.
 
@@ -154,9 +157,9 @@ LQIDAQAB
 
 ### `--local-repository`
 
-- Type: String (Path to directory)
-- Availability: `argv` and JSON
-- Default: `/tmp/fort/repository`
+- **Type:** String (Path to directory)
+- **Availability:** `argv` and JSON
+- **Default:** `/tmp/fort/repository`
 
 Path to the directory where Fort will store a local cache of the repository.
 
@@ -166,9 +169,9 @@ Because rsync uses delta encoding, you're advised to keep this cache around. It 
 
 ### `--sync-strategy`
 
-- Type: Enumeration (`off`, `strict`, `root`, `root-except-ta`)
-- Availability: `argv` and JSON
-- Default: `root`
+- **Type:** Enumeration (`off`, `strict`, `root`, `root-except-ta`)
+- **Availability:** `argv` and JSON
+- **Default:** `root`
 
 rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
 
@@ -212,7 +215,8 @@ Useful if you want `root`, but the root certificate is separated from the rest o
 
 ### `--shuffle-uris`
 
-- Availability: `argv` and JSON
+- **Type:** None
+- **Availability:** `argv` and JSON
 
 If enabled, Fort will access TAL URLs in random order. This is meant for load balancing. If disabled, Fort will access TAL URLs in sequential order.
 
@@ -226,9 +230,9 @@ Of course, this is only relevant if the TAL lists more than one URL.
 
 ### `--server.address`
 
-- Type: String
-- Availability: `argv` and JSON
-- Default: `NULL`
+- **Type:** String
+- **Availability:** `argv` and JSON
+- **Default:** `NULL`
 
 Hostname or numeric host address the RTR server will be bound to. Must resolve to (or be) a bindable IP address. IPv4 and IPv6 are supported.
 
@@ -236,9 +240,9 @@ If this field is omitted, Fort falls back to perform an in-place standalone RPKI
 
 ### `--server.port`
 
-- Type: String
-- Availability: `argv` and JSON
-- Default: `"323"`
+- **Type:** String
+- **Availability:** `argv` and JSON
+- **Default:** `"323"`
 
 TCP port or service the server will be bound to.
 
@@ -248,10 +252,10 @@ This is a string because a service alias can be used as a valid value. The alias
 
 ### `--server.backlog`
 
-- Type: Integer
-- Availability: `argv` and JSON
-- Default: [`SOMAXCONN`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/basedefs/sys_socket.h.html)
-- Range: 1--`SOMAXCONN`
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** [`SOMAXCONN`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/basedefs/sys_socket.h.html)
+- **Range:** 1--`SOMAXCONN`
 
 RTR server's listen queue length. It's the second argument of [`listen()`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/functions/listen.html):
 
@@ -261,10 +265,10 @@ See the corresponding manual page from your operating system (likely `man 2 list
 
 ### `--server.validation-interval`
 
-- Type: Integer
-- Availability: `argv` and JSON
-- Default: 60
-- Range: 60--7200
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 60
+- **Range:** 60--7200
 
 Number of seconds the server will sleep between validation cycles.
 
@@ -274,17 +278,16 @@ The timer starts counting every time a validation is finished, not every time it
 
 ### `--slurm`
 
-- Type: String (path to file or directory)
-- Availability: `argv` and JSON
-- Default: `NULL`
+- **Type:** String (path to file or directory)
+- **Availability:** `argv` and JSON
+- **Default:** `NULL`
 
-[SLURM](https://tools.ietf.org/html/rfc8416) file, or directory containing SLURM files.
-
-> TODO this is somewhat involved, and needs a dedicated page. The format is standard, though.
+SLURM file, or directory containing SLURM files. See [SLURM](slurm.html).
 
 ### `--log.color-output`
 
-- Availability: `argv` and JSON
+- **Type:** None
+- **Availability:** `argv` and JSON
 
 If enabled, the logging output will contain ANSI color codes. Meant for human consumption.
 
@@ -298,9 +301,9 @@ If enabled, the logging output will contain ANSI color codes. Meant for human co
 
 ### `--log.file-name-format`
 
-- Type: Enumeration (`global-url`, `local-path`, `file-name`)
-- Availability: `argv` and JSON
-- Default: `global-url`
+- **Type:** Enumeration (`global-url`, `local-path`, `file-name`)
+- **Availability:** `argv` and JSON
+- **Default:** `global-url`
 
 Decides which version of file names should be printed during most debug/error messages.
 
@@ -313,16 +316,18 @@ Suppose a certificate was downloaded from `rsync://rpki.example.com/foo/bar/baz.
 {% highlight bash %}
 $ {{ page.command }} --output-file-name-format global-url --local-repository tmp/repository/ (...)
 ERR: rsync://rpki.afrinic.net/repository/arin/uHxadfPZV0E6uZhkaUbUVB1RFFU.mft: Certificate validation failed: certificate has expired
+
 $ {{ page.command }} --output-file-name-format local-path --local-repository tmp/repository/ (...)
 ERR: tmp/repository/rpki.afrinic.net/repository/arin/uHxadfPZV0E6uZhkaUbUVB1RFFU.mft: Certificate validation failed: certificate has expired
+
 $ {{ page.command }} --output-file-name-format file-name --local-repository tmp/repository/ (...)
 ERR: uHxadfPZV0E6uZhkaUbUVB1RFFU.mft: Certificate validation failed: certificate has expired
 {% endhighlight %}
 
 ### `--configuration-file`
 
-- Type: String (Path to file)
-- Availability: `argv` only
+- **Type:** String (Path to file)
+- **Availability:** `argv` only
 
 Path to a JSON file from which additional configuration will be read.
 
@@ -333,19 +338,18 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--local-repository">local-repository</a>": "tmp/repository",
 	"<a href="#--sync-strategy">sync-strategy</a>": "root",
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
+	"<a href="#--slurm">slurm</a>": "test.slurm",
 
 	"server": {
-		"address": "192.0.2.1",
-		"port": "8323",
-		"backlog": 16,
-		"validation-interval": 120
+		"<a href="#--serveraddress">address</a>": "192.0.2.1",
+		"<a href="#--serverport">port</a>": "8323",
+		"<a href="#--serverbacklog">backlog</a>": 16,
+		"<a href="#--servervalidation-interval">validation-interval</a>": 120
 	},
 
-	"slurm": "test.slurm",
-
 	"log": {
-		"<a href="#--color-output">color-output</a>": true,
-		"<a href="#--output-file-name-format">file-name-format</a>": "file-name"
+		"<a href="#--logcolor-output">color-output</a>": true,
+		"<a href="#--logfile-name-format">file-name-format</a>": "file-name"
 	},
 
 	"rsync": {
@@ -363,9 +367,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		]
 	},
 
-	"incidences": [
+	"<a href="#incidences">incidences</a>": [
 		{
-			"name": "signature algorithm has parameters",
+			"name": "rsaEncryption signature algorithm has parameters",
 			"action": "ignore"
 		}
 	]
@@ -411,17 +415,17 @@ $ # local-repository is "a", sync-strategy is "strict" and maximum-certificate-d
 
 ### rsync.program
 
-- Type: String
-- Availability: JSON
-- Default: `"rsync"`
+- **Type:** String
+- **Availability:** JSON only
+- **Default:** `"rsync"`
 
 Name of the program needed to invoke an rsync file transfer.
 
 ### rsync.arguments-recursive
 
-- Type: String array
-- Availability: JSON
-- Default: `[ "--recursive", "--delete", "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]`
+- **Type:** String array
+- **Availability:** JSON only
+- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a recursive rsync.
 
@@ -429,10 +433,17 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 
 ### rsync.arguments-flat
 
-- Type: String array
-- Availability: JSON
-- Default: `[ "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]`
+- **Type:** String array
+- **Availability:** JSON only
+- **Default:** `[ "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a single-file rsync.
 
 Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
+
+### `incidences`
+
+- **Type:** JSON Object
+- **Availability:** JSON only
+
+A listing of actions to be performed by validation upon encountering certain error conditions. See [incidence](incidence.html).
