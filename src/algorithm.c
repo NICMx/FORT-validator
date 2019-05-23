@@ -1,5 +1,6 @@
 #include "algorithm.h"
 
+#include <stdbool.h>
 #include <openssl/obj_mac.h>
 #include "log.h"
 
@@ -20,13 +21,14 @@ int
 validate_certificate_public_key_algorithm(int nid)
 {
 	/*
-	 * TODO (whatever) RFC says sha256WithRSAEncryption, but everyone uses
-	 * rsaEncryption.
+	 * RFC says sha256WithRSAEncryption, but current IETF concensus (and
+	 * practice) say that the right one is rsaEncryption.
+	 * https://mailarchive.ietf.org/arch/browse/sidr/
 	 */
-	if (nid == NID_rsaEncryption || nid == NID_sha256WithRSAEncryption)
+	if (nid == NID_rsaEncryption)
 		return 0;
 
-	return pr_err("Certificate's public key format is NID '%d', not RSA nor RSA+SHA256.",
+	return pr_err("Certificate's public key format is NID '%d', not rsaEncryption.",
 	    nid);
 }
 
@@ -86,6 +88,20 @@ incorrect_oid:
 	return pr_err("The hash algorithm of the '%s' is not SHA256.", what);
 }
 
+static int
+is_asn1_null(ANY_t *any)
+{
+	if (any == NULL)
+		return true;
+
+	if (any->size != 2)
+		return false;
+	if (any->buf[0] != 5 || any->buf[1] != 0)
+		return false;
+
+	return true;
+}
+
 int
 validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 {
@@ -101,7 +117,6 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 	    0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01,
 	};
 	uint8_t last;
-	int error;
 
 	if (id == NULL)
 		return pr_err("The signature algorithm is absent.");
@@ -119,6 +134,8 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 		goto incorrect_oid;
 
 	/*
+	 * This one's a royal mess.
+	 *
 	 * RFC 7935:
 	 * The object identifier and parameters for rsaEncryption
 	 * [RFC3370] MUST be used for the SignerInfo signatureAlgorithm field
@@ -132,13 +149,35 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 	 * When any of these four object identifiers appears within an
 	 * AlgorithmIdentifier, the parameters MUST be NULL.  Implementations
 	 * MUST accept the parameters being absent as well as present.
+	 *
+	 * I don't know if "MUST contain NULL" means that it must be absent,
+	 * or whether it must contain a NULL ASN object. Everyone is doing the
+	 * latter, which you think would be the logical option, but then 3370
+	 * throws this curveball at us:
+	 *
+	 * There are two possible encodings for the SHA-1 AlgorithmIdentifier
+	 * parameters field.  The two alternatives arise from the fact that when
+	 * the 1988 syntax for AlgorithmIdentifier was translated into the 1997
+	 * syntax, the OPTIONAL associated with the AlgorithmIdentifier
+	 * parameters got lost.  Later the OPTIONAL was recovered via a defect
+	 * report, but by then many people thought that algorithm parameters
+	 * were mandatory.  Because of this history some implementations encode
+	 * parameters as a NULL element and others omit them entirely.  The
+	 * correct encoding is to omit the parameters field; however,
+	 * implementations MUST also handle a SHA-1 AlgorithmIdentifier
+	 * parameters field which contains a NULL.
+	 *
+	 * It does seem to be talking about SHA-1 only, but it's just not clear,
+	 * because it doesn't care to ellaborate in the rsaEncryption section at
+	 * all. Even though it's aware of the ambiguity, it just says "MUST
+	 * contain NULL." It doesn't say "MUST be empty" or "MUST contain a NULL
+	 * object."
+	 *
+	 * I really don't think this is worth making a fuss over, so we'll just
+	 * accept both.
 	 */
-	if (last == 1 && id->parameters != NULL) {
-		error = incidence(INID_RSAENCRYPTION_SIGNALG_HAS_PARAMS,
-		    "rsaEncryption signature algorithm has parameters.");
-		if (error)
-			return error;
-	}
+	if (id->parameters != NULL && !is_asn1_null(id->parameters))
+		return pr_err("The signature algorithm has parameters.");
 
 	return 0;
 

@@ -214,6 +214,7 @@ validate_public_key(X509 *cert, bool is_root)
 	int ok;
 	int error;
 
+	/* Reminder: X509_PUBKEY is the same as SubjectPublicKeyInfo. */
 	pubkey = X509_get_X509_PUBKEY(cert);
 	if (pubkey == NULL)
 		return crypto_err("X509_get_X509_PUBKEY() returned NULL");

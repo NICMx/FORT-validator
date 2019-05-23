@@ -41,7 +41,6 @@ fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
 
 fort_SOURCES += config/boolean.c config/boolean.h
 fort_SOURCES += config/filename_format.h config/filename_format.c
-fort_SOURCES += config/incidences.h config/incidences.c
 fort_SOURCES += config/str.c config/str.h
 fort_SOURCES += config/string_array.h config/string_array.c
 fort_SOURCES += config/sync_strategy.h config/sync_strategy.c
@@ -56,8 +55,6 @@ fort_SOURCES += data_structure/array_list.h
 fort_SOURCES += data_structure/common.h
 fort_SOURCES += data_structure/uthash.h
 fort_SOURCES += data_structure/uthash_nonfatal.h
-
-fort_SOURCES += incidence/incidence.h incidence/incidence.c
 
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c

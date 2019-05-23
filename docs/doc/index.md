@@ -10,4 +10,3 @@ title: Documentation Index
 4. [Running Fort](run.html)
 5. [Fort usage](usage.html)
 6. [SLURM](slurm.html)
-7. [Incidences](incidence.html)

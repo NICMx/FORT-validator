@@ -35,9 +35,6 @@ main(int argc, char **argv)
 	error = thvar_init();
 	if (error)
 		return error;
-	error = incidence_init();
-	if (error)
-		return error;
 
 	error = handle_flags_config(argc, argv);
 	if (error)
