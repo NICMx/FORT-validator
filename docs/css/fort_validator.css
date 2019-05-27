@@ -1,0 +1,46 @@
+/** {
+	font-size: 1rem;
+}*/
+
+body {
+	margin-bottom: 80px;
+}
+
+.site-footer {
+	height: 80px;
+	padding: 20px 0; }
+
+
+blockquote {
+	background-color: #b1b3b7;
+	margin: 0 3em 3em 3em;
+}
+
+code, code span {
+	color: white;
+	font-family: monospace;
+	font-size: inherit;
+	background-color: unset;
+}
+
+pre code{
+	color: white;
+	background-color: black;
+	font-size: 1rem;
+}
+pre code.terminal {
+	color: white;
+}
+
+.language-bash > .nb {
+	color: white;
+}
+
+p img {
+	background-color: #b1b3b7;
+}
+
+.site-footer a img {
+	margin: auto;
+	max-height: 40px;
+}
