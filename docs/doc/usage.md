@@ -267,14 +267,14 @@ See the corresponding manual page from your operating system (likely `man 2 list
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 60
-- **Range:** 60--7200
+- **Default:** 3600
+- **Range:** 60--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/)
 
 Number of seconds the server will sleep between validation cycles.
 
 The timer starts counting every time a validation is finished, not every time it begins. The actual validation loop is, therefore, longer than this number.
 
-> TODO rationale of default value and range?
+"Validation cycle" includes the rsync update along with the validation operation. Because you are taxing the global repositories every time the validator performs an rsync, it is recommended not to reduce the validation interval to the point you might be contributing to DoS'ing the global repository. The minimum value (60) was taken from the [RRDP RFC](https://tools.ietf.org/html/rfc8182#section-3.1), which means it's not necessarily a good value for heavy rsyncs.
 
 ### `--slurm`
 
@@ -307,6 +307,10 @@ If enabled, the logging output will contain ANSI color codes. Meant for human co
 
 Decides which version of file names should be printed during most debug/error messages.
 
+- `global-url`: Prints the global name of the file; the URL that can be used to download it. (Always starts with `rsync://`.)
+- `local-path`: Prints a path that points to the local cached version of the file. (Always starts with [`--local-repository`](#--local-repository)'s value.)
+- `file-name`: Strips prefixes, leaving only the base name of the file (including extension).
+
 Suppose a certificate was downloaded from `rsync://rpki.example.com/foo/bar/baz.cer` into the local cache `repository/`:
 
 - `global-url`: Will print the certificate's name as `rsync://rpki.example.com/foo/bar/baz.cer`.
@@ -314,14 +318,14 @@ Suppose a certificate was downloaded from `rsync://rpki.example.com/foo/bar/baz.
 - `file-name`: Will print the certificate's name as `baz.cer`.
 
 {% highlight bash %}
-$ {{ page.command }} --output-file-name-format global-url --local-repository tmp/repository/ (...)
-ERR: rsync://rpki.afrinic.net/repository/arin/uHxadfPZV0E6uZhkaUbUVB1RFFU.mft: Certificate validation failed: certificate has expired
+$ {{ page.command }} --output-file-name-format global-url --local-repository repository/ (...)
+ERR: rsync://rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
 
-$ {{ page.command }} --output-file-name-format local-path --local-repository tmp/repository/ (...)
-ERR: tmp/repository/rpki.afrinic.net/repository/arin/uHxadfPZV0E6uZhkaUbUVB1RFFU.mft: Certificate validation failed: certificate has expired
+$ {{ page.command }} --output-file-name-format local-path --local-repository repository/ (...)
+ERR: repository/rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
 
-$ {{ page.command }} --output-file-name-format file-name --local-repository tmp/repository/ (...)
-ERR: uHxadfPZV0E6uZhkaUbUVB1RFFU.mft: Certificate validation failed: certificate has expired
+$ {{ page.command }} --output-file-name-format file-name  --local-repository repository/ (...)
+ERR: baz.cer: Certificate validation failed: certificate has expired
 {% endhighlight %}
 
 ### `--configuration-file`

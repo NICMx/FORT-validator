@@ -239,9 +239,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1"
-     inkscape:cx="484.64395"
-     inkscape:cy="285.177"
+     inkscape:zoom="2.8284271"
+     inkscape:cx="443.93358"
+     inkscape:cy="397.96053"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="true"
@@ -278,7 +278,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -291,10 +291,10 @@
     <rect
        style="fill:#ffb380;fill-opacity:1;stroke:#000000;stroke-width:0.26458332;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect1049"
-       width="42.333332"
-       height="97.366669"
-       x="97.366653"
-       y="195.40004" />
+       width="42.333317"
+       height="105.83336"
+       x="97.366661"
+       y="186.93336" />
     <path
        style="fill:none;stroke:#000000;stroke-width:0.5291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="M 8.4666663,190.10837 H 38.099999 v 33.86666 H 8.4666663"
@@ -721,6 +721,17 @@
        transform="translate(69.849995,73.024954)"
        width="100%"
        height="100%" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:3.52777767px;line-height:1.25;font-family:sans-serif;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332"
+       x="118.53333"
+       y="194.34169"
+       id="text995"><tspan
+         sodipodi:role="line"
+         id="tspan993"
+         x="118.53333"
+         y="194.34169"
+         style="font-size:4.93888903px;text-align:center;text-anchor:middle;stroke-width:0.26458332">Fort</tspan></text>
   </g>
   <g
      inkscape:groupmode="layer"

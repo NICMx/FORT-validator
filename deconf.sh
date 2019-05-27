@@ -4,4 +4,5 @@ git clean -dfx \
 	-e .settings \
 	-e .metadata \
 	-e Debug/ \
+	-e tal/arin.tal \
 	-e tmp

@@ -12,7 +12,9 @@ Fort is an MIT-licensed RPKI Relying Party. It is a service that performs the va
 
 ![../img/design.svg](../img/design.svg)
 
-It is a command line application intended for UNIX operating systems. (It requires a C compiler that supports `-std=gnu11`.)
+The Validator is a timer that resynchronizes its [local cache](usage.html#--local-repository), validates the resulting [RPKI trees](intro-rpki.html) and stores the resulting ROAs in memory every [certain amount of time](usage.html#--servervalidation-interval). The RTR [Server](usage.html#--serveraddress) (which is part of the same binary) delivers these ROAs to any requesting routers.
+
+Fort is a command line application intended for UNIX operating systems, written in C. (It requires a compiler that supports `-std=gnu11`.)
 
 ## Standards Compliance 
 
@@ -50,7 +52,9 @@ These constitute the approximate missing 25%.
 
 ### RFC 6488 (Signed Objects)
 
-6488 mandates that all signed objects must be DER-encoded. Fort's current parser cannot tell the difference between BER and DER.
+6488 mandates that all signed objects must be DER-encoded. Fort's current parser cannot tell the difference between DER and (its superset) BER.
+
+Unfortunately, the parser also currently unavoidably [rejects certain technically valid BER objects](https://github.com/vlm/asn1c/blob/master/skeletons/ber_decoder.c#L215-L221). (Although these are not valid DER.)
 
 ### RFC 8182 (RRDP)
 

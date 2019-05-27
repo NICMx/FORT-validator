@@ -223,7 +223,7 @@ static const struct option_field options[] = {
 		 * minute.
 		 */
 		.min = 60,
-		.max = 7200,
+		.max = UINT_MAX,
 	},
 	/*
 	 * TODO (next iteration) RTRv1 intervals with values:
@@ -435,7 +435,7 @@ set_default_values(void)
 		return pr_enomem();
 
 	rpki_config.server.backlog = SOMAXCONN;
-	rpki_config.server.validation_interval = 60;
+	rpki_config.server.validation_interval = 3600;
 
 	rpki_config.tal = NULL;
 	rpki_config.slurm = NULL;

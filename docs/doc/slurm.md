@@ -19,11 +19,9 @@ Note that, with the exception of the following section, most of this document is
 
 ## Handling of SLURM Files
 
-The SLURM files are defined by the [`--slurm`](usage.html#--slurm) flag. If the flag points to a file, the configuration is extracted from that single file. If it points to a directory, the configuration is the aggregation of its contained files' contents.
+The SLURM files are defined by the [`--slurm`](usage.html#--slurm) flag. If the flag points to a file, the configuration is extracted from that single file. If it points to a directory, the configuration is the aggregation of the contents of its contained `.slurm` files.
 
-> TODO: are the children filtered by extension?
-
-None of the entries of the SLURM configuration are allowed to collide with each other. If there is a collision, the overall SLURM configuration is rejected.
+None of the entries of the SLURM configuration are allowed to collide with each other. If there is a collision, the overall SLURM configuration is invalidated.
 
 Fort reloads the SLURM files during every validation cycle. If the new configuration is invalid, **it is treated as nonexistent**. Note that this means that an isolated mistake will temporarily drop all your SLURM overrides. This is intended to change in a future revision of Fort, in which the validator will fall back to the previous valid SLURM configuration on error.
 

@@ -34,7 +34,7 @@ I haven't actually tried this in all the Debian-based distributions. Tested in U
 {% highlight bash %}
 ########### normal dependencies ###########
 # autoconf 2.69 or higher, please.
-sudo apt install autoconf libjansson-dev libssl-dev rsync
+sudo apt install autoconf build-essential libjansson-dev libssl-dev pkg-config rsync unzip
 
 ############### libcmscodec ###############
 mkdir libcmscodec
@@ -70,19 +70,11 @@ cd ../../
 > 
 > For now, I'm working around this by running the `autogen.sh`s in Debian. It probably needn't be fixed, since the releases are going to ship with the `autogen.sh`s already executed anyway.
 
-> TODO: test this again
-
 {% highlight bash %}
 ########### normal dependencies ###########
 su
-# OpenBSD ships with LibreSSL
-# autoconf 2.69 or higher, please.
-pkg_add autoconf automake jansson libexecinfo rsync unzip
+pkg_add jansson libexecinfo rsync unzip # OpenBSD ships with LibreSSL
 exit
-
-# Adjust depending on the choices you made above.
-export AUTOCONF_VERSION=2.69
-export AUTOMAKE_VERSION=1.9
 
 ############### libcmscodec ###############
 mkdir libcmscodec
@@ -103,8 +95,8 @@ cd fort/
 ftp https://github.com/NICMx/FORT-validator/archive/master.zip
 # tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 unzip master.zip
-cd FORT*
-ksh ./autogen.sh
+cd FORT-validator-master
+./autogen.sh # Run this elsewhere
 # clang is needed because of gnu11.
 env CC=clang CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ./configure
 make
