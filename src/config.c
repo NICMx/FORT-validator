@@ -11,6 +11,7 @@
 #include "json_handler.h"
 #include "log.h"
 #include "config/boolean.h"
+#include "config/incidences.h"
 #include "config/str.h"
 #include "config/uint.h"
 #include "config/uint32.h"
@@ -269,6 +270,15 @@ static const struct option_field options[] = {
 		.type = &gt_filename_format,
 		.offset = offsetof(struct rpki_config, log.filename_format),
 		.doc = "File name variant to print during debug/error messages",
+	},
+
+	/* Incidences */
+	{
+		.id = 4001,
+		.name = "incidences",
+		.type = &gt_incidences,
+		.doc = "Override actions on validation errors",
+		.availability = AVAILABILITY_JSON,
 	},
 
 	{ 0 },

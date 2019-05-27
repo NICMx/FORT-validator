@@ -34,6 +34,7 @@ command: fort
 	17. [`rsync.program`](#rsyncprogram)
 	18. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
 	19. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	20. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -364,7 +365,14 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"$REMOTE",
 			"$LOCAL"
 		]
-	}
+	},
+
+	"<a href="#incidences">incidences</a>": [
+		{
+			"name": "Signed Object's hash algorithm has NULL object as parameters",
+			"action": "ignore"
+		}
+	]
 }
 </code></pre>
 
@@ -432,3 +440,10 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a single-file rsync.
 
 Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
+
+### `incidences`
+
+- **Type:** JSON Object
+- **Availability:** JSON only
+
+A listing of actions to be performed by validation upon encountering certain error conditions. See [incidence](incidence.html).
