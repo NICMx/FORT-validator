@@ -44,3 +44,36 @@ p img {
 	margin: auto;
 	max-height: 40px;
 }
+
+.site-section ul, .site-section ul li {
+	margin-left: 10px;
+	margin-bottom: 5px;
+	list-style-type: circle;
+}
+
+h2{
+	margin-top: 2.5rem;
+}
+h3{
+	margin-top: 2.5rem;
+}
+h4{
+	margin-top: 1.5rem;
+}
+p{
+	margin-bottom: 0.5rem;
+}
+
+td, th {
+	text-align: center;
+	border-width: 1px;
+	border-style: solid;
+	border-color: #b1b3b7;
+	border-image: initial;
+	padding: 0.5rem;
+}
+
+pre code a{
+	color: #00bfFF;
+}
+
