@@ -45,11 +45,6 @@ p img {
 	max-height: 40px;
 }
 
-.site-section ul, .site-section ul li {
-	margin-left: 10px;
-	margin-bottom: 5px;
-	list-style-type: circle;
-}
 
 h2{
 	margin-top: 2.5rem;
@@ -75,5 +70,12 @@ td, th {
 
 pre code a{
 	color: #00bfFF;
+}
+
+figure {
+	margin-block-start: 1em;
+	margin-block-end: 1em;
+	margin-inline-start: 40px;
+	margin-inline-end: 40px;
 }
 

@@ -5,8 +5,8 @@
 .bg-blue-dark {
 	background: #10242d; }
 
-ul,
-ul li {
+.site-nav ul,
+.site-nav ul li {
 	margin: 0;
 	padding: 0;
 	list-style-type: none; }
