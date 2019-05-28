@@ -22,11 +22,11 @@ pre code.terminal {
 }
 
 .language-bash > .c {
-	color: green;
+	color: #3CB371;
 }
 .language-bash > .nt {
-	color: purple;
+	color: #DDA0DD;
 }
 .language-bash > .s2 {
-	color: blue;
+	color: #00bfFF;
 }
