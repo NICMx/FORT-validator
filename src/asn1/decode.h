@@ -3,13 +3,15 @@
 
 #include <libcmscodec/ANY.h>
 #include <libcmscodec/constr_TYPE.h>
+#include <stdbool.h>
 #include "file.h"
 
-int asn1_decode(const void *, size_t, asn_TYPE_descriptor_t const *, void **);
-int asn1_decode_any(ANY_t *, asn_TYPE_descriptor_t const *, void **);
+int asn1_decode(const void *, size_t, asn_TYPE_descriptor_t const *, void **,
+    bool);
+int asn1_decode_any(ANY_t *, asn_TYPE_descriptor_t const *, void **, bool);
 int asn1_decode_octet_string(OCTET_STRING_t *, asn_TYPE_descriptor_t const *,
-    void **);
+    void **, bool);
 int asn1_decode_fc(struct file_contents *, asn_TYPE_descriptor_t const *,
-    void **);
+    void **, bool);
 
 #endif /* SRC_ASN1_DECODE_H_ */

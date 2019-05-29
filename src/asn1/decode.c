@@ -5,7 +5,7 @@
 #include "log.h"
 
 static int
-validate(asn_TYPE_descriptor_t const *descriptor, void *result)
+validate(asn_TYPE_descriptor_t const *descriptor, void *result, bool log)
 {
 	char error_msg[256];
 	size_t error_msg_size;
@@ -16,14 +16,16 @@ validate(asn_TYPE_descriptor_t const *descriptor, void *result)
 	error = asn_check_constraints(descriptor, result, error_msg,
 	    &error_msg_size);
 	if (error == -1)
-		return pr_err("Error validating ASN.1 object: %s", error_msg);
+		return log ?
+		    pr_err("Error validating ASN.1 object: %s", error_msg) :
+		    -EINVAL;
 
 	return 0;
 }
 
 int
 asn1_decode(const void *buffer, size_t buffer_size,
-    asn_TYPE_descriptor_t const *descriptor, void **result)
+    asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
 	asn_dec_rval_t rval;
 	int error;
@@ -36,11 +38,13 @@ asn1_decode(const void *buffer, size_t buffer_size,
 		/* Must free partial object according to API contracts. */
 		ASN_STRUCT_FREE(*descriptor, *result);
 		/* We expect the data to be complete; RC_WMORE is an error. */
-		return pr_err("Error '%u' decoding ASN.1 object around byte %zu",
-		    rval.code, rval.consumed);
+		return log ?
+		    pr_err("Error '%u' decoding ASN.1 object around byte %zu",
+		        rval.code, rval.consumed) :
+		    -EINVAL;
 	}
 
-	error = validate(descriptor, *result);
+	error = validate(descriptor, *result, log);
 	if (error) {
 		ASN_STRUCT_FREE(*descriptor, *result);
 		return error;
@@ -51,16 +55,16 @@ asn1_decode(const void *buffer, size_t buffer_size,
 
 int
 asn1_decode_any(ANY_t *any, asn_TYPE_descriptor_t const *descriptor,
-    void **result)
+    void **result, bool log)
 {
-	return asn1_decode(any->buf, any->size, descriptor, result);
+	return asn1_decode(any->buf, any->size, descriptor, result, log);
 }
 
 int
 asn1_decode_octet_string(OCTET_STRING_t *string,
-    asn_TYPE_descriptor_t const *descriptor, void **result)
+    asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
-	return asn1_decode(string->buf, string->size, descriptor, result);
+	return asn1_decode(string->buf, string->size, descriptor, result, log);
 }
 
 /*
@@ -70,7 +74,8 @@ asn1_decode_octet_string(OCTET_STRING_t *string,
  */
 int
 asn1_decode_fc(struct file_contents *fc,
-    asn_TYPE_descriptor_t const *descriptor, void **result)
+    asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
-	return asn1_decode(fc->buffer, fc->buffer_size, descriptor, result);
+	return asn1_decode(fc->buffer, fc->buffer_size, descriptor, result,
+	    log);
 }

@@ -23,7 +23,7 @@ struct manifest {
 static int
 manifest_decode(OCTET_STRING_t *string, void *arg)
 {
-	return asn1_decode_octet_string(string, &asn_DEF_Manifest, arg);
+	return asn1_decode_octet_string(string, &asn_DEF_Manifest, arg, true);
 }
 
 static int

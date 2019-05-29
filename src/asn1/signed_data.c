@@ -128,7 +128,7 @@ validate_content_type_attribute(CMSAttributeValue_t *value,
 	int error;
 
 	error = asn1_decode_any(value, &asn_DEF_OBJECT_IDENTIFIER,
-	    (void **) &attrValues);
+	    (void **) &attrValues, true);
 	if (error)
 		return error;
 	eContentType = &eci->eContentType;
@@ -151,7 +151,7 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 		return pr_err("There's no content being signed.");
 
 	error = asn1_decode_any(value, &asn_DEF_MessageDigest,
-	    (void **) &digest);
+	    (void **) &digest, true);
 	if (error)
 		return error;
 
@@ -404,7 +404,7 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 	int error;
 
 	error = asn1_decode_any(coded, &asn_DEF_SignedDataPKCS7,
-	    (void **) &sdata_pkcs7);
+	    (void **) &sdata_pkcs7, true);
 	if (error)
 		return error;
 
@@ -417,7 +417,7 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 	/* Parse content as OCTET STRING */
 	error = asn1_decode_any(sdata_pkcs7->encapContentInfo.eContent,
 	    &asn_DEF_ContentTypePKCS7,
-	    (void **) &sdata->encapContentInfo.eContent);
+	    (void **) &sdata->encapContentInfo.eContent, true);
 	if (error)
 		goto release_sdata;
 
@@ -453,7 +453,8 @@ signed_data_decode(ANY_t *coded, struct signed_object_args *args,
 
 	/* rfc6488#section-3.1.l */
 	/* TODO (next iteration) this is BER, not guaranteed to be DER. */
-	error = asn1_decode_any(coded, &asn_DEF_SignedData, (void **) &sdata);
+	error = asn1_decode_any(coded, &asn_DEF_SignedData, (void **) &sdata,
+	    false);
 	if (error) {
 		/* Try to decode as PKCS content (RFC 5652 section 5.2.1) */
 		error = signed_data_decode_pkcs7(coded, &sdata);
@@ -515,7 +516,7 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 				return -EINVAL;
 			return asn1_decode_any(attr->attrValues.list.array[0],
 			    &asn_DEF_OBJECT_IDENTIFIER,
-			    (void **) result);
+			    (void **) result, true);
 		}
 	}
 

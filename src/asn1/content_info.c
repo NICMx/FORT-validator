@@ -33,7 +33,8 @@ decode(struct file_contents *fc, struct ContentInfo **result)
 	struct ContentInfo *cinfo;
 	int error;
 
-	error = asn1_decode_fc(fc, &asn_DEF_ContentInfo, (void **) &cinfo);
+	error = asn1_decode_fc(fc, &asn_DEF_ContentInfo, (void **) &cinfo,
+	    true);
 	if (error)
 		return error;
 

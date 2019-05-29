@@ -16,7 +16,7 @@ static int
 roa_decode(OCTET_STRING_t *string, void *arg)
 {
 	return asn1_decode_octet_string(string, &asn_DEF_RouteOriginAttestation,
-	    arg);
+	    arg, true);
 }
 
 static int
