@@ -2,7 +2,9 @@
 
 #include <errno.h>
 #include <libcmscodec/ContentType.h>
+#include <libcmscodec/ContentTypePKCS7.h>
 #include <libcmscodec/MessageDigest.h>
+#include <libcmscodec/SignedDataPKCS7.h>
 
 #include "algorithm.h"
 #include "config.h"
@@ -386,6 +388,62 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 	return 0;
 }
 
+/*
+ * Function to handle 'Compatibility with PKCS #7' (RFC 5652 section 5.2.1:
+ * "If the implementation is unable to ASN.1 decode the SignedData type using
+ *  the CMS SignedData encapContentInfo eContent OCTET STRING syntax,
+ *  then the implementation MAY attempt to decode the SignedData type
+ *  using the PKCS #7 SignedData contentInfo content ANY syntax and
+ *  compute the message digest accordingly."
+ */
+static int
+signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
+{
+	struct SignedDataPKCS7 *sdata_pkcs7;
+	struct SignedData *sdata;
+	int error;
+
+	error = asn1_decode_any(coded, &asn_DEF_SignedDataPKCS7,
+	    (void **) &sdata_pkcs7);
+	if (error)
+		return error;
+
+	sdata = calloc(1, sizeof(struct SignedData));
+	if (sdata == NULL) {
+		error = pr_enomem();
+		goto release_sdata_pkcs7;
+	}
+
+	/* Parse content as OCTET STRING */
+	error = asn1_decode_any(sdata_pkcs7->encapContentInfo.eContent,
+	    &asn_DEF_ContentTypePKCS7,
+	    (void **) &sdata->encapContentInfo.eContent);
+	if (error)
+		goto release_sdata;
+
+	/* Shallow copy to a SignedData struct */
+	sdata->version = sdata_pkcs7->version;
+	sdata->digestAlgorithms = sdata_pkcs7->digestAlgorithms;
+	sdata->encapContentInfo.eContentType =
+	    sdata_pkcs7->encapContentInfo.eContentType;
+	sdata->certificates = sdata_pkcs7->certificates;
+	sdata->crls = sdata_pkcs7->crls;
+	sdata->signerInfos = sdata_pkcs7->signerInfos;
+
+	/* Release what isnt's referenced */
+	ASN_STRUCT_FREE(asn_DEF_ANY, sdata_pkcs7->encapContentInfo.eContent);
+	free(sdata_pkcs7);
+
+	*result = sdata;
+	return 0;
+
+release_sdata:
+	free(sdata);
+release_sdata_pkcs7:
+	ASN_STRUCT_FREE(asn_DEF_SignedDataPKCS7, sdata_pkcs7);
+	return error;
+}
+
 int
 signed_data_decode(ANY_t *coded, struct signed_object_args *args,
     struct SignedData **result)
@@ -396,8 +454,12 @@ signed_data_decode(ANY_t *coded, struct signed_object_args *args,
 	/* rfc6488#section-3.1.l */
 	/* TODO (next iteration) this is BER, not guaranteed to be DER. */
 	error = asn1_decode_any(coded, &asn_DEF_SignedData, (void **) &sdata);
-	if (error)
-		return error;
+	if (error) {
+		/* Try to decode as PKCS content (RFC 5652 section 5.2.1) */
+		error = signed_data_decode_pkcs7(coded, &sdata);
+		if (error)
+			return (error);
+	}
 
 	error = validate(sdata, coded, args);
 	if (error) {

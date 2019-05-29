@@ -15,7 +15,6 @@
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
-#include "asn1/signed_data.h"
 #include "crypto/hash.h"
 #include "object/name.h"
 #include "rsync/rsync.h"
@@ -1437,7 +1436,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	if (sk_X509_num(validation_certs(state)) >= config_get_max_cert_depth())
 		return pr_err("Certificate chain maximum depth exceeded.");
 
-	pr_debug_add("%s Certificate '%s' {", is_ta ? "TA" : "CA",
+	pr_debug_add("%s Certificate '%s' {", IS_TA ? "TA" : "CA",
 	    uri_get_printable(cert_uri));
 	fnstack_push_uri(cert_uri);
 	memset(&refs, 0, sizeof(refs));

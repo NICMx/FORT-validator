@@ -3,7 +3,6 @@
 #include "log.h"
 #include "thread_var.h"
 #include "asn1/oid.h"
-#include "asn1/signed_data.h"
 #include "object/signed_object.h"
 #include "vcard.h"
 
