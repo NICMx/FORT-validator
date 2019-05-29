@@ -13,7 +13,7 @@ body {
 
 blockquote {
 	background-color: #b1b3b7;
-	margin: 0 3em 3em 3em;
+	margin: 0 1.5em 1.5em 1.5em;
 }
 
 code, code span {
@@ -75,7 +75,7 @@ pre code a{
 figure {
 	margin-block-start: 1em;
 	margin-block-end: 1em;
-	margin-inline-start: 40px;
-	margin-inline-end: 40px;
+	margin-inline-start: 1.5em;
+	margin-inline-end: 1.5em;
 }
 
