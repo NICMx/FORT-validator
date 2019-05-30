@@ -5,6 +5,57 @@
 #include "log.h"
 #include "str.h"
 
+/**
+ * All rpki_uris are guaranteed to be RSYNC URLs right now.
+ *
+ * Design notes:
+ *
+ * Because we need to generate @local from @global, @global's allowed character
+ * set must be a subset of @local. Because this is Unix, @local must never
+ * contain NULL (except as a terminating character). Therefore, even though IA5
+ * allows NULL, @global won't.
+ *
+ * Because we will simply embed @global (minus "rsync://") into @local, @local's
+ * encoding must be IA5-compatible. In other words, UTF-16 and UTF-32 are out of
+ * the question.
+ *
+ * Aside from the reference counter, instances are meant to be immutable.
+ */
+struct rpki_uri {
+	/**
+	 * "Global URI".
+	 * The one that always starts with "rsync://".
+	 *
+	 * These things are IA5-encoded, which means you're not bound to get
+	 * non-ASCII characters.
+	 */
+	char *global;
+	/** Length of @global. */
+	size_t global_len;
+
+	/**
+	 * "Local URI".
+	 * The file pointed by @global, but cached in the local filesystem.
+	 *
+	 * I can't find a standard that defines this, but lots of complaints on
+	 * the Internet imply that Unix file paths are specifically meant to be
+	 * C strings.
+	 *
+	 * So just to clarify: This is a string that permits all characters,
+	 * printable or otherwise, except \0. (Because that's the terminating
+	 * character.)
+	 *
+	 * Even though it might contain characters that are non-printable
+	 * according to ASCII, we assume that we can just dump it into the
+	 * output without trouble, because the input should have the same
+	 * encoding as the output.
+	 */
+	char *local;
+	/* "local_len" is never needed right now. */
+
+	unsigned int references;
+};
+
 /*
  * @character is an integer because we sometimes receive signed chars, and other
  * times we get unsigned chars.
@@ -187,50 +238,72 @@ autocomplete_local(struct rpki_uri *uri)
 }
 
 int
-uri_init(struct rpki_uri *uri, void const *guri, size_t guri_len)
+uri_create(struct rpki_uri **result, void const *guri, size_t guri_len)
 {
+	struct rpki_uri *uri;
 	int error;
 
+	uri = malloc(sizeof(struct rpki_uri));
+	if (uri == NULL)
+		return pr_enomem();
+
 	error = str2global(guri, guri_len, uri);
-	if (error)
+	if (error) {
+		free(uri);
 		return error;
+	}
 
 	error = autocomplete_local(uri);
 	if (error) {
 		free(uri->global);
+		free(uri);
 		return error;
 	}
 
+	uri->references = 1;
+	*result = uri;
 	return 0;
 }
 
 int
-uri_init_str(struct rpki_uri *uri, char const *guri, size_t guri_len)
+uri_create_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 {
-	return uri_init(uri, guri, guri_len);
+	return uri_create(uri, guri, guri_len);
 }
 
 /*
  * Manifests URIs are a little special in that they are relative.
  */
 int
-uri_init_mft(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
+uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 {
+	struct rpki_uri *uri;
 	int error;
 
-	error = ia5str2global(uri, mft, ia5);
-	if (error)
+	uri = malloc(sizeof(struct rpki_uri));
+	if (uri == NULL)
+		return pr_enomem();
+
+	error = ia5str2global(uri, mft->global, ia5);
+	if (error) {
+		free(uri);
 		return error;
+	}
 
 	error = autocomplete_local(uri);
-	if (error)
+	if (error) {
 		free(uri->global);
+		free(uri);
+		return error;
+	}
 
-	return error;
+	uri->references = 1;
+	*result = uri;
+	return 0;
 }
 
 int
-uri_init_ad(struct rpki_uri *uri, ACCESS_DESCRIPTION *ad)
+uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad)
 {
 	ASN1_STRING *asn1_string;
 	int type;
@@ -272,37 +345,54 @@ uri_init_ad(struct rpki_uri *uri, ACCESS_DESCRIPTION *ad)
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	return uri_init(uri, ASN1_STRING_get0_data(asn1_string),
+	return uri_create(uri, ASN1_STRING_get0_data(asn1_string),
 	    ASN1_STRING_length(asn1_string));
 }
 
-int
-uri_clone(struct rpki_uri const *old, struct rpki_uri *copy)
+void
+uri_refget(struct rpki_uri *uri)
 {
-	copy->global = strdup(old->global);
-	if (copy->global == NULL)
-		return pr_enomem();
-	copy->global_len = old->global_len;
-
-	copy->local = strdup(old->local);
-	if (copy->local == NULL) {
-		free(copy->global);
-		return pr_enomem();
-	}
-
-	return 0;
+	uri->references++;
 }
 
 void
-uri_cleanup(struct rpki_uri *uri)
+uri_refput(struct rpki_uri *uri)
 {
-	free(uri->global);
-	free(uri->local);
+	uri->references--;
+	if (uri->references == 0) {
+		free(uri->global);
+		free(uri->local);
+		free(uri);
+	}
+}
+
+char const *
+uri_get_global(struct rpki_uri *uri)
+{
+	return uri->global;
+}
+
+char const *
+uri_get_local(struct rpki_uri *uri)
+{
+	return uri->local;
+}
+
+size_t
+uri_get_global_len(struct rpki_uri *uri)
+{
+	return uri->global_len;
+}
+
+bool
+uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
+{
+	return strcmp(u1->global, u2->global) == 0;
 }
 
 /* @ext must include the period. */
 bool
-uri_has_extension(struct rpki_uri const *uri, char const *ext)
+uri_has_extension(struct rpki_uri *uri, char const *ext)
 {
 	size_t ext_len;
 	int cmp;
@@ -316,7 +406,7 @@ uri_has_extension(struct rpki_uri const *uri, char const *ext)
 }
 
 bool
-uri_is_certificate(struct rpki_uri const *uri)
+uri_is_certificate(struct rpki_uri *uri)
 {
 	return uri_has_extension(uri, ".cer");
 }
@@ -329,7 +419,7 @@ get_filename(char const *file_path)
 }
 
 char const *
-uri_get_printable(struct rpki_uri const *uri)
+uri_get_printable(struct rpki_uri *uri)
 {
 	enum filename_format format;
 

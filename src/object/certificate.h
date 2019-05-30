@@ -10,7 +10,7 @@
 #include "rpp.h"
 #include "uri.h"
 
-int certificate_load(struct rpki_uri const *, X509 **);
+int certificate_load(struct rpki_uri *, X509 **);
 
 /**
  * Performs the basic (RFC 5280, presumably) chain validation.
@@ -42,7 +42,7 @@ int certificate_get_resources(X509 *, struct resources *);
  * Also initializes the second argument as the URI of the rpkiManifest Access
  * Description from the SIA extension.
  */
-int certificate_validate_extensions_ta(X509 *, struct rpki_uri *,
+int certificate_validate_extensions_ta(X509 *, struct rpki_uri **,
     enum rpki_policy *);
 /**
  * Validates the certificate extensions, (intermediate) Certificate Authority
@@ -53,7 +53,7 @@ int certificate_validate_extensions_ta(X509 *, struct rpki_uri *,
  * Also initializes the third argument with the references found in the
  * extensions.
  */
-int certificate_validate_extensions_ca(X509 *, struct rpki_uri *,
+int certificate_validate_extensions_ca(X509 *, struct rpki_uri **,
     struct certificate_refs *, enum rpki_policy *);
 /**
  * Validates the certificate extensions, End-Entity style.
@@ -64,7 +64,6 @@ int certificate_validate_extensions_ca(X509 *, struct rpki_uri *,
 int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
     struct certificate_refs *, enum rpki_policy *);
 
-int certificate_traverse(struct rpp *, struct rpki_uri const *,
-    STACK_OF(X509_CRL) *);
+int certificate_traverse(struct rpp *, struct rpki_uri *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

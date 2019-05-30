@@ -161,7 +161,7 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 	state = state_retrieve();
 	if (state == NULL)
 		return -EINVAL;
-	parent = validation_peek_cert(state);
+	parent = x509stack_peek(validation_certstack(state));
 	if (parent == NULL) {
 		return pr_err("%s appears to have no parent certificate.",
 		    container);
@@ -184,12 +184,12 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 
 		error = pr_err("%s's issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
 		    container,
-		    x509_name_commonName(parent_subject),
-		    (parent_serial != NULL) ? "/" : "",
-		    (parent_serial != NULL) ? parent_serial : "",
 		    x509_name_commonName(child_issuer),
 		    (child_serial != NULL) ? "/" : "",
-		    (child_serial != NULL) ? child_serial : "");
+		    (child_serial != NULL) ? child_serial : "",
+		    x509_name_commonName(parent_subject),
+		    (parent_serial != NULL) ? "/" : "",
+		    (parent_serial != NULL) ? parent_serial : "");
 	}
 
 	x509_name_put(child_issuer);

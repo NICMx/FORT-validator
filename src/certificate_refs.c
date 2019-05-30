@@ -14,14 +14,16 @@ void
 refs_cleanup(struct certificate_refs *refs)
 {
 	free(refs->crldp);
-	free(refs->caIssuers);
-	free(refs->signedObject);
+	if (refs->caIssuers != NULL)
+		uri_refput(refs->caIssuers);
+	if (refs->signedObject != NULL)
+		uri_refput(refs->signedObject);
 }
 
 static int
 validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 {
-	struct rpki_uri const *pp_crl;
+	struct rpki_uri *pp_crl;
 
 	if (refs->crldp == NULL)
 		return pr_crit("Certificate's CRL Distribution Point was not recorded.");
@@ -30,9 +32,9 @@ validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 	if (pp_crl == NULL)
 		return pr_crit("Manifest's CRL was not recorded.");
 
-	if (strcmp(refs->crldp, pp_crl->global) != 0) {
+	if (strcmp(refs->crldp, uri_get_global(pp_crl)) != 0) {
 		return pr_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
-		    refs->crldp, pp_crl->global);
+		    refs->crldp, uri_get_global(pp_crl));
 	}
 
 	return 0;
@@ -42,7 +44,7 @@ static int
 validate_aia(struct certificate_refs *refs)
 {
 	struct validation *state;
-	struct rpki_uri const *parent;
+	struct rpki_uri *parent;
 
 	if (refs->caIssuers == NULL)
 		return pr_crit("Certificate's AIA was not recorded.");
@@ -50,13 +52,14 @@ validate_aia(struct certificate_refs *refs)
 	state = state_retrieve();
 	if (state == NULL)
 		return -EINVAL;
-	parent = validation_peek_cert_uri(state);
+	parent = x509stack_peek_uri(validation_certstack(state));
 	if (parent == NULL)
 		return pr_crit("CA certificate has no parent.");
 
-	if (strcmp(refs->caIssuers, parent->global) != 0) {
+	if (!uri_equals(refs->caIssuers, parent)) {
 		return pr_err("Certificate's AIA ('%s') does not match parent's URI ('%s').",
-		    refs->caIssuers, parent->global);
+		    uri_get_printable(refs->caIssuers),
+		    uri_get_printable(parent));
 	}
 
 	return 0;
@@ -64,14 +67,15 @@ validate_aia(struct certificate_refs *refs)
 
 static int
 validate_signedObject(struct certificate_refs *refs,
-    struct rpki_uri const *signedObject_uri)
+    struct rpki_uri *signedObject_uri)
 {
 	if (refs->signedObject == NULL)
 		return pr_crit("Certificate's signedObject was not recorded.");
 
-	if (strcmp(refs->signedObject, signedObject_uri->global) != 0) {
+	if (!uri_equals(refs->signedObject, signedObject_uri)) {
 		return pr_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
-		    refs->signedObject, signedObject_uri->global);
+		    uri_get_printable(refs->signedObject),
+		    uri_get_printable(signedObject_uri));
 	}
 
 	return 0;
@@ -102,7 +106,7 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 
 	if (refs->signedObject != NULL) {
 		return pr_crit("CA summary has a signedObject ('%s').",
-		    refs->signedObject);
+		    uri_get_printable(refs->signedObject));
 	}
 
 	return 0;
@@ -118,7 +122,7 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
  */
 int
 refs_validate_ee(struct certificate_refs *refs, struct rpp const *pp,
-    struct rpki_uri const *uri)
+    struct rpki_uri *uri)
 {
 	int error;
 

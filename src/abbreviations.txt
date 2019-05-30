@@ -7,10 +7,13 @@ addr: address
 addr4: IPv4 address
 addr6: IPv6 address
 be: Big Endian
+cert: certificate
+certstack: certificate stack
 db: database
 eof: end of file
 err: error
 fd: File Descriptor (see `man 2 accept`)
+guri: global URI
 hdr: header
 id: identifier
 len: length
@@ -18,10 +21,12 @@ max: maximum
 min: minimum
 msg: message
 pdu: Protocol Data Unit (RFC 6810)
+pp: Publication Point
 pr: print
 ptr: pointer
 refget: reference get (+1 to reference counter)
 refput: reference put (-1 to reference counter)
+rpp: Repository Publication Point
 str: string
 tmp: temporal
 uint: unsigned int

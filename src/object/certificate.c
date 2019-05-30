@@ -57,7 +57,7 @@ validate_serial_number(X509 *cert)
 	fprintf(stdout, "\n");
 #endif
 
-	error = validation_store_serial_number(state, number);
+	error = x509stack_store_serial(validation_certstack(state), number);
 	if (error)
 		BN_free(number);
 
@@ -105,7 +105,7 @@ validate_subject(X509 *cert)
 	if (error)
 		return error;
 
-	error = validation_store_subject(state, name);
+	error = x509stack_store_subject(validation_certstack(state), name);
 
 	x509_name_put(name);
 	return error;
@@ -585,7 +585,7 @@ end:
 }
 
 int
-certificate_load(struct rpki_uri const *uri, X509 **result)
+certificate_load(struct rpki_uri *uri, X509 **result)
 {
 	X509 *cert = NULL;
 	BIO *bio;
@@ -594,7 +594,7 @@ certificate_load(struct rpki_uri const *uri, X509 **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, uri->local) <= 0) {
+	if (BIO_read_filename(bio, uri_get_local(uri)) <= 0) {
 		error = crypto_err("Error reading certificate");
 		goto end;
 	}
@@ -642,7 +642,8 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 		goto abort;
 	}
 
-	X509_STORE_CTX_trusted_stack(ctx, validation_certs(state));
+	X509_STORE_CTX_trusted_stack(ctx,
+	    certstack_get_x509s(validation_certstack(state)));
 	X509_STORE_CTX_set0_crls(ctx, crls);
 
 	/*
@@ -856,10 +857,9 @@ is_rsync_uri(GENERAL_NAME *name)
 static int
 handle_rpkiManifest(struct rpki_uri *uri, void *arg)
 {
-	struct rpki_uri *mft = arg;
-	*mft = *uri;
-	uri->global = NULL;
-	uri->local = NULL;
+	struct rpki_uri **mft = arg;
+	*mft = uri;
+	uri_refget(uri);
 	return 0;
 }
 
@@ -875,8 +875,8 @@ handle_signedObject(struct rpki_uri *uri, void *arg)
 {
 	struct certificate_refs *refs = arg;
 	pr_debug("signedObject: %s", uri_get_printable(uri));
-	refs->signedObject = uri->global;
-	uri->global = NULL;
+	refs->signedObject = uri;
+	uri_refget(uri);
 	return 0;
 }
 
@@ -1154,7 +1154,7 @@ handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
     int (*cb)(struct rpki_uri *, void *), void *arg)
 {
 	ACCESS_DESCRIPTION *ad;
-	struct rpki_uri uri;
+	struct rpki_uri *uri;
 	bool found = false;
 	int i;
 	int error;
@@ -1162,25 +1162,25 @@ handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == ad_nid) {
-			error = uri_init_ad(&uri, ad);
+			error = uri_create_ad(&uri, ad);
 			if (error == ENOTRSYNC)
 				continue;
 			if (error)
 				return error;
 
 			if (found) {
-				uri_cleanup(&uri);
+				uri_refput(uri);
 				return pr_err("Extension '%s' has multiple '%s' RSYNC URIs.",
 				    ia_name, ad_name);
 			}
 
-			error = cb(&uri, arg);
+			error = cb(uri, arg);
 			if (error) {
-				uri_cleanup(&uri);
+				uri_refput(uri);
 				return error;
 			}
 
-			uri_cleanup(&uri);
+			uri_refput(uri);
 			found = true;
 		}
 	}
@@ -1203,8 +1203,8 @@ handle_caIssuers(struct rpki_uri *uri, void *arg)
 	 * over here is too much trouble, so do the handle_cdp()
 	 * hack.
 	 */
-	refs->caIssuers = uri->global;
-	uri->global = NULL;
+	refs->caIssuers = uri;
+	uri_refget(uri);
 	return 0;
 }
 
@@ -1343,7 +1343,7 @@ handle_ar(X509_EXTENSION *ext, void *arg)
 }
 
 int
-certificate_validate_extensions_ta(X509 *cert, struct rpki_uri *mft,
+certificate_validate_extensions_ta(X509 *cert, struct rpki_uri **mft,
     enum rpki_policy *policy)
 {
 	struct extension_handler handlers[] = {
@@ -1365,7 +1365,7 @@ certificate_validate_extensions_ta(X509 *cert, struct rpki_uri *mft,
 }
 
 int
-certificate_validate_extensions_ca(X509 *cert, struct rpki_uri *mft,
+certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
     struct certificate_refs *refs, enum rpki_policy *policy)
 {
 	struct extension_handler handlers[] = {
@@ -1415,17 +1415,17 @@ certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
 
-/* Boilerplate code for CA certificate validation and recursive traversal. */
+/** Boilerplate code for CA certificate validation and recursive traversal. */
 int
-certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
-    STACK_OF(X509_CRL) *crls)
+certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 {
 /** Is the CA certificate the TA certificate? */
 #define IS_TA (rpp_parent == NULL)
 
 	struct validation *state;
+	int total_parents;
 	X509 *cert;
-	struct rpki_uri mft;
+	struct rpki_uri *mft;
 	struct certificate_refs refs;
 	enum rpki_policy policy;
 	struct rpp *pp;
@@ -1434,10 +1434,11 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	state = state_retrieve();
 	if (state == NULL)
 		return -EINVAL;
-	if (sk_X509_num(validation_certs(state)) >= config_get_max_cert_depth())
+	total_parents = certstack_get_x509_num(validation_certstack(state));
+	if (total_parents >= config_get_max_cert_depth())
 		return pr_err("Certificate chain maximum depth exceeded.");
 
-	pr_debug_add("%s Certificate '%s' {", is_ta ? "TA" : "CA",
+	pr_debug_add("%s Certificate '%s' {", IS_TA ? "TA" : "CA",
 	    uri_get_printable(cert_uri));
 	fnstack_push_uri(cert_uri);
 	memset(&refs, 0, sizeof(refs));
@@ -1446,7 +1447,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 	error = certificate_load(cert_uri, &cert);
 	if (error)
 		goto revert_fnstack_and_debug;
-	error = certificate_validate_chain(cert, crls);
+	error = certificate_validate_chain(cert, rpp_crl(rpp_parent));
 	if (error)
 		goto revert_cert;
 	error = certificate_validate_rfc6487(cert, IS_TA);
@@ -1463,25 +1464,28 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri const *cert_uri,
 		goto revert_uri_and_refs;
 
 	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	error = validation_push_cert(state, cert_uri, cert, policy, IS_TA);
+	error = x509stack_push(validation_certstack(state), cert_uri, cert,
+	    policy, IS_TA);
 	if (error)
 		goto revert_uri_and_refs;
+	cert = NULL; /* Ownership stolen */
 
-	error = handle_manifest(&mft, crls, &pp);
-	if (error)
-		goto revert_cert_push;
+	error = handle_manifest(mft, rpp_crl(rpp_parent), &pp);
+	if (error) {
+		x509stack_cancel(validation_certstack(state));
+		goto revert_uri_and_refs;
+	}
 
 	/* -- Validate & traverse the RPP (@pp) described by the manifest -- */
-	error = rpp_traverse(pp);
+	rpp_traverse(pp);
 
-	rpp_destroy(pp);
-revert_cert_push:
-	validation_pop_cert(state); /* Error code is useless. */
+	rpp_refput(pp);
 revert_uri_and_refs:
-	uri_cleanup(&mft);
+	uri_refput(mft);
 	refs_cleanup(&refs);
 revert_cert:
-	X509_free(cert);
+	if (cert != NULL)
+		X509_free(cert);
 revert_fnstack_and_debug:
 	fnstack_pop();
 	pr_debug_rm("}");

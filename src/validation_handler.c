@@ -5,13 +5,6 @@
 #include "thread_var.h"
 
 int
-vhandler_merge(struct validation_handler *handler)
-{
-	return (handler->merge != NULL) ?
-	    handler->merge(handler->merge_arg, handler->arg) : 0;
-}
-
-int
 vhandler_reset(struct validation_handler *handler)
 {
 	return (handler->reset != NULL) ? handler->reset(handler->arg) : 0;

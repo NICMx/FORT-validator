@@ -89,12 +89,6 @@ vrps_destroy(void)
 }
 
 static int
-__merge(void *dst, void *src)
-{
-	return rtrhandler_merge(dst, src);
-}
-
-static int
 __reset(void *arg)
 {
 	return rtrhandler_reset(arg);
@@ -131,8 +125,6 @@ __perform_standalone_validation(struct roa_table **result)
 		return pr_enomem();
 	}
 
-	validation_handler.merge = __merge;
-	validation_handler.merge_arg = global_roas;
 	validation_handler.reset = __reset;
 	validation_handler.handle_roa_v4 = __handle_roa_v4;
 	validation_handler.handle_roa_v6 = __handle_roa_v6;

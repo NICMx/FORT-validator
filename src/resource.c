@@ -88,7 +88,9 @@ static struct resources *
 get_parent_resources(void)
 {
 	struct validation *state = state_retrieve();
-	return (state != NULL) ? validation_peek_resource(state) : NULL;
+	return (state != NULL)
+	    ? x509stack_peek_resources(validation_certstack(state))
+	    : NULL;
 }
 
 static int

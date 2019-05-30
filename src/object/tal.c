@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
+#include "cert_stack.h"
 #include "common.h"
 #include "config.h"
 #include "line_file.h"
@@ -215,12 +216,12 @@ void tal_destroy(struct tal *tal)
 int
 foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 {
-	struct rpki_uri uri;
+	struct rpki_uri *uri;
 	unsigned int i;
 	int error;
 
 	for (i = 0; i < tal->uris.count; i++) {
-		error = uri_init_str(&uri, tal->uris.array[i],
+		error = uri_create_str(&uri, tal->uris.array[i],
 		    strlen(tal->uris.array[i]));
 		if (error == ENOTRSYNC) {
 			/* Log level should probably be INFO. */
@@ -230,8 +231,8 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 		if (error)
 			return error;
 
-		error = cb(tal, &uri, arg);
-		uri_cleanup(&uri);
+		error = cb(tal, uri, arg);
+		uri_refput(uri);
 		if (error)
 			return error;
 	}
@@ -276,7 +277,7 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri const *uri, void *arg)
+handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 {
 	/*
 	 * Because of the way the foreach iterates, this function must return
@@ -293,12 +294,14 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri, void *arg)
 	 */
 
 	struct validation *state;
+	struct cert_stack *certstack;
+	struct deferred_cert deferred;
 	int error;
 
 	error = download_files(uri, true);
 	if (error) {
-		return pr_warn("TAL URI '%s' could not be RSYNC'd.",
-		    uri->global);
+		return pr_warn("TAL '%s' could not be RSYNC'd.",
+		    uri_get_printable(uri));
 	}
 
 	error = validation_prepare(&state, tal, arg);
@@ -312,31 +315,62 @@ handle_tal_uri(struct tal *tal, struct rpki_uri const *uri, void *arg)
 	pr_debug_add("TAL URI '%s' {", uri_get_printable(uri));
 
 	if (!uri_is_certificate(uri)) {
-		pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
+		error = pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
 		    uri_get_printable(uri));
-		error = -EINVAL;
-		goto end;
+		goto fail;
 	}
 
-	error = certificate_traverse(NULL, uri, NULL);
+	/* Handle root certificate. */
+	error = certificate_traverse(NULL, uri);
 	if (error) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:
-			error = 0;
-			break;
+			error = 0; /* Try a different TAL URI. */
+			goto end;
 		case PKS_VALID:
 		case PKS_UNTESTED:
-			error = ENSURE_NEGATIVE(error);
-			break;
+			goto fail; /* Reject the TAL. */
 		}
-	} else {
-		error = vhandler_merge(arg);
-		if (error)
-			error = ENSURE_NEGATIVE(error);
-		else
-			error = 1;
+
+		error = pr_crit("Unknown public key state: %u",
+		    validation_pubkey_state(state));
+		goto fail;
 	}
 
+	/*
+	 * From now on, the tree should be considered valid, even if subsequent
+	 * certificates fail.
+	 * (the root validated successfully; subtrees are isolated problems.)
+	 */
+
+	/* Handle every other certificate. */
+	certstack = validation_certstack(state);
+	if (certstack == NULL) {
+		error = pr_crit("Validation state has no certificate stack");
+		goto fail;
+	}
+
+	do {
+		error = deferstack_pop(certstack, &deferred);
+		if (error == -ENOENT) {
+			/* No more certificates left; we're done. */
+			error = 1;
+			goto end;
+		}
+		if (error)
+			goto fail;
+
+		/*
+		 * Ignore result code; remaining certificates are unrelated,
+		 * so they should not be affected.
+		 */
+		certificate_traverse(deferred.pp, deferred.uri);
+
+		uri_refput(deferred.uri);
+		rpp_refput(deferred.pp);
+	} while (true);
+
+fail:	error = ENSURE_NEGATIVE(error);
 end:	validation_destroy(state);
 	pr_debug_rm("}");
 	return error;

@@ -185,8 +185,7 @@ family_error:
 }
 
 int
-roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
-    STACK_OF(X509_CRL) *crls)
+roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
@@ -197,7 +196,7 @@ roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
 	pr_debug_add("ROA '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = signed_object_args_init(&sobj_args, uri, crls, false);
+	error = signed_object_args_init(&sobj_args, uri, rpp_crl(pp), false);
 	if (error)
 		goto revert_fnstack;
 

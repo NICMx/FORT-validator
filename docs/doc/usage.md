@@ -226,7 +226,13 @@ Of course, this is only relevant if the TAL lists more than one URL.
 
 ### `--maximum-certificate-depth`
 
-> TODO; unfinished code
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 32
+
+Maximum allowable RPKI tree height. Meant to protect Fort from iterating infinitely due to certificate chain loops.
+
+Fort's tree traversal is actually iterative (not recursive), so there should be no risk of stack overflow, regardless of this value.
 
 ### `--server.address`
 

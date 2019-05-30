@@ -19,6 +19,8 @@
 /*
  * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
  * overflows, so gcc complains sometimes.
+ *
+ * BE CAREFUL ABOUT DOUBLE EVALUATION.
  */
 #define ENSURE_NEGATIVE(error) (((error) < 0) ? (error) : -(error))
 

@@ -20,7 +20,7 @@ static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 int
 signed_object_args_init(struct signed_object_args *args,
-    struct rpki_uri const *uri,
+    struct rpki_uri *uri,
     STACK_OF(X509_CRL) *crls,
     bool force_inherit)
 {
@@ -61,17 +61,15 @@ static int
 handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
     OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
-	struct validation *state;
 	const unsigned char *tmp;
 	X509 *cert;
 	enum rpki_policy policy;
 	int error;
 
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-	if (sk_X509_num(validation_certs(state)) >= config_get_max_cert_depth())
-		return pr_err("Certificate chain maximum depth exceeded.");
+	/*
+	 * No need to validate certificate chain length, since we just arrived
+	 * to a tree leaf. Loops aren't possible.
+	 */
 
 	pr_debug_add("EE Certificate (embedded) {");
 

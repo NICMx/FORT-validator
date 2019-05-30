@@ -325,7 +325,7 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 		goto end;
 	}
 
-	parent = validation_peek_cert(state);
+	parent = x509stack_peek(validation_certstack(state));
 	if (parent == NULL) {
 		error = pr_err("Certificate has no parent.");
 		goto end;

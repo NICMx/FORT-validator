@@ -10,6 +10,7 @@ fort_SOURCES  = main.c
 fort_SOURCES += address.h address.c
 fort_SOURCES += algorithm.h algorithm.c
 fort_SOURCES += certificate_refs.h certificate_refs.c
+fort_SOURCES += cert_stack.h cert_stack.c
 fort_SOURCES += clients.c clients.h
 fort_SOURCES += common.c common.h
 fort_SOURCES += console_handler.h console_handler.c

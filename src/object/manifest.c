@@ -15,11 +15,6 @@
 #include "object/roa.h"
 #include "object/signed_object.h"
 
-struct manifest {
-	struct Manifest *obj;
-	char const *file_path;
-};
-
 static int
 manifest_decode(OCTET_STRING_t *string, void *arg)
 {
@@ -146,21 +141,22 @@ validate_manifest(struct Manifest *manifest)
 }
 
 static int
-__handle_manifest(struct manifest *mft, struct rpp **pp)
+__handle_manifest(struct Manifest *mft, struct rpki_uri *mft_uri,
+    struct rpp **pp)
 {
 	int i;
 	struct FileAndHash *fah;
-	struct rpki_uri uri;
+	struct rpki_uri *uri;
 	int error;
 
 	*pp = rpp_create();
 	if (*pp == NULL)
 		return pr_enomem();
 
-	for (i = 0; i < mft->obj->fileList.list.count; i++) {
-		fah = mft->obj->fileList.list.array[i];
+	for (i = 0; i < mft->fileList.list.count; i++) {
+		fah = mft->fileList.list.array[i];
 
-		error = uri_init_mft(&uri, mft->file_path, &fah->file);
+		error = uri_create_mft(&uri, mft_uri, &fah->file);
 		/*
 		 * Not handling ENOTRSYNC is fine because the manifest URL
 		 * should have been RSYNC. Something went wrong if an RSYNC URL
@@ -169,25 +165,25 @@ __handle_manifest(struct manifest *mft, struct rpp **pp)
 		if (error)
 			goto fail;
 
-		error = hash_validate_file("sha256", &uri, &fah->hash);
+		error = hash_validate_file("sha256", uri, &fah->hash);
 		if (error) {
-			uri_cleanup(&uri);
+			uri_refput(uri);
 			continue;
 		}
 
-		if (uri_has_extension(&uri, ".cer"))
-			error = rpp_add_cert(*pp, &uri);
-		else if (uri_has_extension(&uri, ".roa"))
-			error = rpp_add_roa(*pp, &uri);
-		else if (uri_has_extension(&uri, ".crl"))
-			error = rpp_add_crl(*pp, &uri);
-		else if (uri_has_extension(&uri, ".gbr"))
-			error = rpp_add_ghostbusters(*pp, &uri);
+		if (uri_has_extension(uri, ".cer"))
+			error = rpp_add_cert(*pp, uri);
+		else if (uri_has_extension(uri, ".roa"))
+			error = rpp_add_roa(*pp, uri);
+		else if (uri_has_extension(uri, ".crl"))
+			error = rpp_add_crl(*pp, uri);
+		else if (uri_has_extension(uri, ".gbr"))
+			error = rpp_add_ghostbusters(*pp, uri);
 		else
-			uri_cleanup(&uri); /* ignore it. */
+			uri_refput(uri); /* ignore it. */
 
 		if (error) {
-			uri_cleanup(&uri);
+			uri_refput(uri);
 			goto fail;
 		} /* Otherwise ownership was transferred to @pp. */
 	}
@@ -201,7 +197,7 @@ __handle_manifest(struct manifest *mft, struct rpp **pp)
 	return 0;
 
 fail:
-	rpp_destroy(*pp);
+	rpp_refput(*pp);
 	return error;
 }
 
@@ -210,13 +206,12 @@ fail:
  * @pp.
  */
 int
-handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
-    struct rpp **pp)
+handle_manifest(struct rpki_uri *uri, STACK_OF(X509_CRL) *crls, struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
 	struct signed_object_args sobj_args;
-	struct manifest mft;
+	struct Manifest *mft;
 	int error;
 
 	pr_debug_add("Manifest '%s' {", uri_get_printable(uri));
@@ -225,26 +220,24 @@ handle_manifest(struct rpki_uri const *uri, STACK_OF(X509_CRL) *crls,
 	error = signed_object_args_init(&sobj_args, uri, crls, false);
 	if (error)
 		goto end1;
-	mft.file_path = uri->global;
 
-	error = signed_object_decode(&sobj_args, &arcs,
-	    manifest_decode, &mft.obj);
+	error = signed_object_decode(&sobj_args, &arcs, manifest_decode, &mft);
 	if (error)
 		goto end2;
 
-	error = validate_manifest(mft.obj);
+	error = validate_manifest(mft);
 	if (error)
 		goto end3;
-	error = __handle_manifest(&mft, pp);
+	error = __handle_manifest(mft, uri, pp);
 	if (error)
 		goto end3;
 
 	error = refs_validate_ee(&sobj_args.refs, *pp, uri);
 	if (error)
-		rpp_destroy(*pp);
+		rpp_refput(*pp);
 
 end3:
-	ASN_STRUCT_FREE(asn_DEF_Manifest, mft.obj);
+	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
 end2:
 	signed_object_args_cleanup(&sobj_args);
 end1:

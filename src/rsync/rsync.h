@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include "uri.h"
 
-int download_files(struct rpki_uri const *, bool);
+int download_files(struct rpki_uri *, bool);
 int rsync_init(void);
 void rsync_destroy(void);
 

@@ -6,7 +6,7 @@
 #include <libcmscodec/BIT_STRING.h>
 #include "uri.h"
 
-int hash_validate_file(char const *, struct rpki_uri const *uri,
+int hash_validate_file(char const *, struct rpki_uri *uri,
     BIT_STRING_t const *);
 int hash_validate(char const *, unsigned char const *, size_t,
     unsigned char const *, size_t);

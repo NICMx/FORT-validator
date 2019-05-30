@@ -159,9 +159,14 @@ fnstack_push(char const *file)
 	files->filenames[files->len++] = file;
 }
 
-/** See fnstack_push(). */
+/**
+ * See fnstack_push().
+ *
+ * This function cannot claim a reference for @uri, so @uri will have to outlive
+ * the push/pop.
+ */
 void
-fnstack_push_uri(struct rpki_uri const *uri)
+fnstack_push_uri(struct rpki_uri *uri)
 {
 	fnstack_push(uri_get_printable(uri));
 }
@@ -198,7 +203,7 @@ addr2str(int af, void const *addr, char *(*buffer_cb)(struct validation *))
 	struct validation *state;
 
 	state = state_retrieve();
-	if (!state)
+	if (state == NULL)
 		return NULL;
 
 	return inet_ntop(af, addr, buffer_cb(state), INET6_ADDRSTRLEN);

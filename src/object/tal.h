@@ -12,7 +12,7 @@ struct tal;
 int tal_load(char const *, struct tal **);
 void tal_destroy(struct tal *);
 
-typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri const *, void *);
+typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
 int foreach_uri(struct tal *, foreach_uri_cb, void *);
 void tal_shuffle_uris(struct tal *);
 

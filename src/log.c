@@ -4,6 +4,7 @@
 #include <openssl/err.h>
 
 #include "config.h"
+#include "debug.h"
 #include "thread_var.h"
 
 #ifdef DEBUG
@@ -266,6 +267,8 @@ pr_crit(const char *format, ...)
 	va_end(args);
 
 	PR_SUFFIX(STDERR);
+
+	print_stack_trace();
 	return -EINVAL;
 }
 
