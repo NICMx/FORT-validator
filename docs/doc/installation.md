@@ -39,9 +39,9 @@ sudo apt install autoconf build-essential libjansson-dev libssl-dev pkg-config r
 ############### libcmscodec ###############
 mkdir libcmscodec
 cd libcmscodec/
-wget https://github.com/NICMx/libcmscodec/releases/download/beta1/libcmscodec-beta1.tar.gz
-tar xvzf libcmscodec-beta1.tar.gz
-cd libcmscodec-beta1/
+wget https://github.com/NICMx/libcmscodec/releases/download/{{ site.libcmscodec-latest-version }}/libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
+tar xvzf libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
+cd libcmscodec-{{ site.libcmscodec-latest-version }}/
 ./configure
 make
 sudo make install
@@ -79,7 +79,7 @@ exit
 ############### libcmscodec ###############
 mkdir libcmscodec
 cd libcmscodec/
-ftp https://github.com/NICMx/libcmscodec/releases/download/beta1/libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
+ftp https://github.com/NICMx/libcmscodec/releases/download/{{ site.libcmscodec-latest-version }}/libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
 tar xvzf libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
 cd libcmscodec-{{ site.libcmscodec-latest-version }}/
 ./configure
