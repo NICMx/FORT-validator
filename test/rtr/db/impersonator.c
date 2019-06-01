@@ -41,9 +41,12 @@ perform_standalone_validation(struct validation_handler *handler)
 		add_v6(handler, 1);
 		break;
 	case 2:
-	case 3:
 		add_v4(handler, 1);
 		add_v6(handler, 1);
+		break;
+	case 3:
+		add_v4(handler, 0);
+		add_v6(handler, 0);
 		break;
 	default:
 		ck_abort_msg("perform_standalone_validation() was called too many times (%d).",

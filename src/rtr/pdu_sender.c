@@ -5,21 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/queue.h>
 
 #include "clients.h"
 #include "config.h"
 #include "log.h"
 #include "rtr/pdu_serializer.h"
 #include "rtr/db/vrps.h"
-
-struct vrp_node {
-	struct delta delta;
-	SLIST_ENTRY(vrp_node) next;
-};
-
-/** Sorted list to filter deltas */
-SLIST_HEAD(vrp_slist, vrp_node);
 
 /*
  * Set all the header values, EXCEPT length field.
@@ -179,43 +170,10 @@ vrp_simply_send(struct delta const *delta, void *arg)
 	return send_prefix_pdu(*fd, &delta->vrp, delta->flags);
 }
 
-/**
- * Remove the announcements/withdrawals that override each other.
- *
- * (Note: We're assuming the array is already duplicateless enough thanks to the
- * hash table.)
- */
-static int
-vrp_ovrd_remove(struct delta const *delta, void *arg)
-{
-	struct vrp_node *ptr;
-	struct vrp_slist *filtered_vrps = arg;
-
-	SLIST_FOREACH(ptr, filtered_vrps, next)
-		if (VRP_EQ(&delta->vrp, &ptr->delta.vrp) &&
-		    delta->flags != ptr->delta.flags) {
-			SLIST_REMOVE(filtered_vrps, ptr, vrp_node, next);
-			free(ptr);
-			return 0;
-		}
-
-	ptr = malloc(sizeof(struct vrp_node));
-	if (ptr == NULL)
-		return pr_enomem();
-
-	ptr->delta = *delta;
-	SLIST_INSERT_HEAD(filtered_vrps, ptr, next);
-	return 0;
-}
-
 int
 send_delta_pdus(int fd, struct deltas_db *deltas)
 {
-	struct vrp_slist filtered_vrps;
 	struct delta_group *group;
-	array_index i;
-	struct vrp_node *ptr;
-	int error = 0;
 
 	/*
 	 * Short circuit: Entries that share serial are already guaranteed to
@@ -227,34 +185,7 @@ send_delta_pdus(int fd, struct deltas_db *deltas)
 		    vrp_simply_send, &fd);
 	}
 
-	/*
-	 * Filter: Remove entries that cancel each other.
-	 * (We'll have to build a separate list because the database nodes
-	 * are immutable.)
-	 */
-	SLIST_INIT(&filtered_vrps);
-	ARRAYLIST_FOREACH(deltas, group, i) {
-		error = deltas_foreach(group->serial, group->deltas,
-		    vrp_ovrd_remove, &filtered_vrps);
-		if (error)
-			goto release_list;
-	}
-
-	/* Now send the filtered deltas */
-	SLIST_FOREACH(ptr, &filtered_vrps, next) {
-		error = send_prefix_pdu(fd, &ptr->delta.vrp, ptr->delta.flags);
-		if (error)
-			break;
-	}
-
-release_list:
-	while (!SLIST_EMPTY(&filtered_vrps)) {
-		ptr = filtered_vrps.slh_first;
-		SLIST_REMOVE_HEAD(&filtered_vrps, next);
-		free(ptr);
-	}
-
-	return error;
+	return vrps_foreach_filtered_delta(deltas, vrp_simply_send, &fd);
 }
 
 int

@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <time.h>
+#include <sys/queue.h>
 #include "clients.h"
 #include "common.h"
 #include "validation_handler.h"
@@ -19,6 +20,14 @@
 #define START_SERIAL		0
 
 DEFINE_ARRAY_LIST_FUNCTIONS(deltas_db, struct delta_group, )
+
+struct vrp_node {
+	struct delta delta;
+	SLIST_ENTRY(vrp_node) next;
+};
+
+/** Sorted list to filter deltas */
+SLIST_HEAD(vrp_slist, vrp_node);
 
 struct state {
 	/**
@@ -345,6 +354,79 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg, serial_t *serial)
 	}
 
 	rwlock_unlock(&lock);
+
+	return error;
+}
+
+/*
+ * Remove the announcements/withdrawals that override each other.
+ *
+ * (Note: We're assuming the array is already duplicateless enough thanks to the
+ * hash table.)
+ */
+static int
+vrp_ovrd_remove(struct delta const *delta, void *arg)
+{
+	struct vrp_node *ptr;
+	struct vrp_slist *filtered_vrps = arg;
+
+	SLIST_FOREACH(ptr, filtered_vrps, next)
+		if (VRP_EQ(&delta->vrp, &ptr->delta.vrp) &&
+		    delta->flags != ptr->delta.flags) {
+			SLIST_REMOVE(filtered_vrps, ptr, vrp_node, next);
+			free(ptr);
+			return 0;
+		}
+
+	ptr = malloc(sizeof(struct vrp_node));
+	if (ptr == NULL)
+		return pr_enomem();
+
+	ptr->delta = *delta;
+	SLIST_INSERT_HEAD(filtered_vrps, ptr, next);
+	return 0;
+}
+
+/*
+ * Remove all operations on @deltas that override each other, and do @cb (with
+ * @arg) on each element of the resultant delta.
+ */
+int
+vrps_foreach_filtered_delta(struct deltas_db *deltas, delta_foreach_cb cb,
+    void *arg)
+{
+	struct vrp_slist filtered_vrps;
+	struct delta_group *group;
+	struct vrp_node *ptr;
+	array_index i;
+	int error = 0;
+
+	/*
+	 * Filter: Remove entries that cancel each other.
+	 * (We'll have to build a separate list because the database nodes
+	 * are immutable.)
+	 */
+	SLIST_INIT(&filtered_vrps);
+	ARRAYLIST_FOREACH(deltas, group, i) {
+		error = deltas_foreach(group->serial, group->deltas,
+		    vrp_ovrd_remove, &filtered_vrps);
+		if (error)
+			goto release_list;
+	}
+
+	/* Now do the callback on the filtered deltas */
+	SLIST_FOREACH(ptr, &filtered_vrps, next) {
+		error = cb(&ptr->delta, arg);
+		if (error)
+			break;
+	}
+
+release_list:
+	while (!SLIST_EMPTY(&filtered_vrps)) {
+		ptr = filtered_vrps.slh_first;
+		SLIST_REMOVE_HEAD(&filtered_vrps, next);
+		free(ptr);
+	}
 
 	return error;
 }

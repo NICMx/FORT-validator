@@ -8,9 +8,6 @@
 #include "rtr/pdu_sender.h"
 #include "rtr/db/vrps.h"
 
-/* TODO (now) test the removal of deltas that cancel each other */
-/* TODO (now) test delta forgetting */
-
 /* Helper functions */
 
 struct expected_pdu {
@@ -93,8 +90,9 @@ init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
 /* Impersonator functions */
 
 serial_t
-clients_get_min_serial(void)
+clients_get_min_serial(serial_t *result)
 {
+	*result = 0;
 	return 0;
 }
 
@@ -319,10 +317,36 @@ START_TEST(test_cache_has_no_data_available)
 }
 END_TEST
 
+START_TEST(test_bad_session_id)
+{
+	struct rtr_request request;
+	struct serial_query_pdu client_pdu;
+
+	pr_info("-- Bad Session ID--");
+
+	/* Prepare DB */
+	init_db_full();
+
+	/* From serial 0: Init client request */
+	init_serial_query(&request, &client_pdu, 0);
+	client_pdu.header.m.session_id++;
+
+	/* From serial 0: Define expected server response */
+	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
+
+	/* From serial 0: Run and validate */
+	ck_assert_int_eq(-EINVAL, handle_serial_query_pdu(0, &request));
+	ck_assert_uint_eq(false, has_expected_pdus());
+
+	/* Clean up */
+	vrps_destroy();
+}
+END_TEST
+
 Suite *pdu_suite(void)
 {
 	Suite *suite;
-	TCase *core;
+	TCase *core, *error;
 
 	core = tcase_create("RFC6810-Defined Protocol Sequences");
 	tcase_add_test(core, test_start_or_restart);
@@ -330,10 +354,12 @@ Suite *pdu_suite(void)
 	tcase_add_test(core, test_no_incremental_update_available);
 	tcase_add_test(core, test_cache_has_no_data_available);
 
-	/* TODO (now) add an unhappy path TCase. */
+	error = tcase_create("Unhappy path cases");
+	tcase_add_test(error, test_bad_session_id);
 
 	suite = suite_create("PDU Handler");
 	suite_add_tcase(suite, core);
+	suite_add_tcase(suite, error);
 	return suite;
 }
 
