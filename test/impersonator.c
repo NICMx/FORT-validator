@@ -82,3 +82,8 @@ incidence_get_action(enum incidence_id id)
 {
 	return INAC_ERROR;
 }
+
+void print_stack_trace(void)
+{
+	/* Nothing needed here */
+}

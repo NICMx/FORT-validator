@@ -225,8 +225,8 @@ START_TEST(test_merge)
 	right_count++;
 
 	/** Do the merge */
-	ck_assert_int_eq(0, rtrhandler_merge(merged, left));
-	ck_assert_int_eq(0, rtrhandler_merge(merged, right));
+	ck_assert_int_eq(0, roa_table_merge(merged, left));
+	ck_assert_int_eq(0, roa_table_merge(merged, right));
 
 	/**
 	 * Must have:

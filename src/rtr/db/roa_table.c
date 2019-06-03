@@ -110,7 +110,7 @@ duplicate_roa(struct roa_table *dst, struct hashable_roa *new)
 	return pr_crit("Unknown address family: %d", vrp.addr_fam);
 }
 
-static int
+int
 roa_table_merge(struct roa_table *dst, struct roa_table *src)
 {
 	struct hashable_roa *node, *tmp, *found;

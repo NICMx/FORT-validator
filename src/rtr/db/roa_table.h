@@ -8,6 +8,8 @@ struct roa_table;
 
 struct roa_table *roa_table_create(void);
 void roa_table_destroy(struct roa_table *);
+
+int roa_table_merge(struct roa_table *, struct roa_table *);
 int roa_table_clone(struct roa_table **, struct roa_table *);
 
 int roa_table_foreach_roa(struct roa_table *, vrp_foreach_cb, void *);
