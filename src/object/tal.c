@@ -308,10 +308,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	error = vhandler_reset(arg);
-	if (error)
-		return ENSURE_NEGATIVE(error);
-
 	pr_debug_add("TAL URI '%s' {", uri_get_printable(uri));
 
 	if (!uri_is_certificate(uri)) {
@@ -341,6 +337,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 * From now on, the tree should be considered valid, even if subsequent
 	 * certificates fail.
 	 * (the root validated successfully; subtrees are isolated problems.)
+	 * Only critical errors should trigger negative result codes.
 	 */
 
 	/* Handle every other certificate. */
@@ -357,7 +354,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 			error = 1;
 			goto end;
 		}
-		if (error)
+		if (error) /* All other errors are critical, currently */
 			goto fail;
 
 		/*

@@ -4,12 +4,6 @@
 #include "log.h"
 #include "thread_var.h"
 
-int
-vhandler_reset(struct validation_handler *handler)
-{
-	return (handler->reset != NULL) ? handler->reset(handler->arg) : 0;
-}
-
 static int
 get_current_threads_handler(struct validation_handler const **result)
 {

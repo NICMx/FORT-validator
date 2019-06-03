@@ -22,13 +22,6 @@
  * All of these functions can be NULL.
  */
 struct validation_handler {
-	/**
-	 * Reinitializator; called every time Fort needs to invalidate a tree
-	 * that was presumed to be correct thus far.
-	 * (Implementor should invalidate all ROAs collected by handle_roa_v4()
-	 * and handle_roa_v6().)
-	 */
-	int (*reset)(void *);
 	/** Called every time Fort has successfully validated an IPv4 ROA. */
 	int (*handle_roa_v4)(uint32_t, struct ipv4_prefix const *, uint8_t,
 	    void *);
@@ -39,7 +32,6 @@ struct validation_handler {
 	void *arg;
 };
 
-int vhandler_reset(struct validation_handler *);
 int vhandler_handle_roa_v4(uint32_t, struct ipv4_prefix const *, uint8_t);
 int vhandler_handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t);
 

@@ -27,7 +27,6 @@ validate_into_console(void)
 {
 	struct validation_handler handler;
 
-	handler.reset = NULL;
 	handler.handle_roa_v4 = print_v4_roa;
 	handler.handle_roa_v6 = print_v6_roa;
 	handler.arg = NULL;

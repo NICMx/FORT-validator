@@ -26,8 +26,8 @@ roa_table_create(void)
 	return table;
 }
 
-static void
-roa_table_cleanup(struct roa_table *table)
+void
+roa_table_destroy(struct roa_table *table)
 {
 	struct hashable_roa *node;
 	struct hashable_roa *tmp;
@@ -36,12 +36,7 @@ roa_table_cleanup(struct roa_table *table)
 		HASH_DEL(table->roas, node);
 		free(node);
 	}
-}
 
-void
-roa_table_destroy(struct roa_table *table)
-{
-	roa_table_cleanup(table);
 	free(table);
 }
 
@@ -57,13 +52,6 @@ roa_table_foreach_roa(struct roa_table *table, vrp_foreach_cb cb, void *arg)
 			return error;
 	}
 
-	return 0;
-}
-
-int
-rtrhandler_reset(struct roa_table *table)
-{
-	roa_table_cleanup(table);
 	return 0;
 }
 
@@ -156,12 +144,6 @@ roa_table_clone(struct roa_table **dst, struct roa_table *src)
 		free(*dst);
 
 	return error;
-}
-
-int
-rtrhandler_merge(struct roa_table *dst, struct roa_table *src)
-{
-	return roa_table_merge(dst, src);
 }
 
 void
