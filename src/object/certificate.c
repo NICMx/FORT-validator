@@ -162,7 +162,7 @@ validate_spki(X509_PUBKEY *cert_spki)
 
 	tal = validation_tal(state);
 	if (tal == NULL)
-		return pr_crit("Validation state has no TAL.");
+		pr_crit("Validation state has no TAL.");
 
 	/*
 	 * We have a problem at this point:
@@ -316,7 +316,7 @@ struct progress {
 /**
  * Skip the "T" part of a TLV.
  */
-static int
+static void
 skip_t(ANY_t *content, struct progress *p, unsigned int tag)
 {
 	/*
@@ -324,67 +324,57 @@ skip_t(ANY_t *content, struct progress *p, unsigned int tag)
 	 * to be validated by this point.
 	 */
 
-	if (content->buf[p->offset] != tag) {
-		return pr_crit("Expected tag 0x%x, got 0x%x", tag,
+	if (content->buf[p->offset] != tag)
+		pr_crit("Expected tag 0x%x, got 0x%x", tag,
 		    content->buf[p->offset]);
-	}
 
 	if (p->remaining == 0)
-		return pr_crit("Buffer seems to be truncated");
+		pr_crit("Buffer seems to be truncated");
 	p->offset++;
 	p->remaining--;
-	return 0;
 }
 
 /**
  * Skip the "TL" part of a TLV.
  */
-static int
+static void
 skip_tl(ANY_t *content, struct progress *p, unsigned int tag)
 {
 	ssize_t len_len; /* Length of the length field */
 	ber_tlv_len_t value_len; /* Length of the value */
-	int error;
 
-	error = skip_t(content, p, tag);
-	if (error)
-		return error;
+	skip_t(content, p, tag);
 
 	len_len = ber_fetch_length(true, &content->buf[p->offset], p->remaining,
 	    &value_len);
 	if (len_len == -1)
-		return pr_crit("Could not decipher length (Cause is unknown)");
+		pr_crit("Could not decipher length (Cause is unknown)");
 	if (len_len == 0)
-		return pr_crit("Buffer seems to be truncated");
+		pr_crit("Buffer seems to be truncated");
 
 	p->offset += len_len;
 	p->remaining -= len_len;
-	return 0;
 }
 
-static int
+static void
 skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 {
 	int is_constructed;
 	int skip;
-	int error;
 
 	is_constructed = BER_TLV_CONSTRUCTED(&content->buf[p->offset]);
 
-	error = skip_t(content, p, tag);
-	if (error)
-		return error;
+	skip_t(content, p, tag);
 
 	skip = ber_skip_length(NULL, is_constructed, &content->buf[p->offset],
 	    p->remaining);
 	if (skip == -1)
-		return pr_crit("Could not skip length (Cause is unknown)");
+		pr_crit("Could not skip length (Cause is unknown)");
 	if (skip == 0)
-		return pr_crit("Buffer seems to be truncated");
+		pr_crit("Buffer seems to be truncated");
 
 	p->offset += skip;
 	p->remaining -= skip;
-	return 0;
 }
 
 /**
@@ -395,7 +385,7 @@ struct encoded_signedAttrs {
 	ber_tlv_len_t size;
 };
 
-static int
+static void
 find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 {
 #define INTEGER_TAG		0x02
@@ -403,7 +393,6 @@ find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 #define SET_TAG			0x31
 
 	struct progress p;
-	int error;
 	ssize_t len_len;
 
 	/* Reference: rfc5652-12.1.asn1 */
@@ -412,67 +401,43 @@ find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 	p.remaining = signedData->size;
 
 	/* SignedData: SEQUENCE */
-	error = skip_tl(signedData, &p, SEQUENCE_TAG);
-	if (error)
-		return error;
+	skip_tl(signedData, &p, SEQUENCE_TAG);
 
 	/* SignedData.version: CMSVersion -> INTEGER */
-	error = skip_tlv(signedData, &p, INTEGER_TAG);
-	if (error)
-		return error;
+	skip_tlv(signedData, &p, INTEGER_TAG);
 	/* SignedData.digestAlgorithms: DigestAlgorithmIdentifiers -> SET */
-	error = skip_tlv(signedData, &p, SET_TAG);
-	if (error)
-		return error;
+	skip_tlv(signedData, &p, SET_TAG);
 	/* SignedData.encapContentInfo: EncapsulatedContentInfo -> SEQUENCE */
-	error = skip_tlv(signedData, &p, SEQUENCE_TAG);
-	if (error)
-		return error;
+	skip_tlv(signedData, &p, SEQUENCE_TAG);
 	/* SignedData.certificates: CertificateSet -> SET */
-	error = skip_tlv(signedData, &p, 0xA0);
-	if (error)
-		return error;
+	skip_tlv(signedData, &p, 0xA0);
 	/* SignedData.signerInfos: SignerInfos -> SET OF SEQUENCE */
-	error = skip_tl(signedData, &p, SET_TAG);
-	if (error)
-		return error;
-	error = skip_tl(signedData, &p, SEQUENCE_TAG);
-	if (error)
-		return error;
+	skip_tl(signedData, &p, SET_TAG);
+	skip_tl(signedData, &p, SEQUENCE_TAG);
 
 	/* SignedData.signerInfos.version: CMSVersion -> INTEGER */
-	error = skip_tlv(signedData, &p, INTEGER_TAG);
-	if (error)
-		return error;
+	skip_tlv(signedData, &p, INTEGER_TAG);
 	/*
 	 * SignedData.signerInfos.sid: SignerIdentifier -> CHOICE -> always
 	 * subjectKeyIdentifier, which is a [0].
 	 */
-	error = skip_tlv(signedData, &p, 0x80);
-	if (error)
-		return error;
+	skip_tlv(signedData, &p, 0x80);
 	/* SignedData.signerInfos.digestAlgorithm: DigestAlgorithmIdentifier
 	 * -> AlgorithmIdentifier -> SEQUENCE */
-	error = skip_tlv(signedData, &p, SEQUENCE_TAG);
-	if (error)
-		return error;
+	skip_tlv(signedData, &p, SEQUENCE_TAG);
 
 	/* SignedData.signerInfos.signedAttrs: SignedAttributes -> SET */
 	/* We will need to replace the tag 0xA0 with 0x31, so skip it as well */
-	error = skip_t(signedData, &p, 0xA0);
-	if (error)
-		return error;
+	skip_t(signedData, &p, 0xA0);
 
 	result->buffer = &signedData->buf[p.offset];
 	len_len = ber_fetch_length(true, result->buffer,
 	    p.remaining, &result->size);
 	if (len_len == -1)
-		return pr_crit("Could not decipher length (Cause is unknown)");
+		pr_crit("Could not decipher length (Cause is unknown)");
 	if (len_len == 0)
-		return pr_crit("Buffer seems to be truncated");
+		pr_crit("Buffer seems to be truncated");
 	result->size += len_len;
-
-	return 0;
 }
 
 /*
@@ -554,9 +519,7 @@ certificate_validate_signature(X509 *cert, ANY_t *signedData,
 	 * Second option it is.
 	 */
 
-	error = find_signedAttrs(signedData, &signedAttrs);
-	if (error)
-		goto end;
+	find_signedAttrs(signedData, &signedAttrs);
 
 	error = EVP_DigestVerifyUpdate(ctx, &EXPLICIT_SET_OF_TAG,
 	    sizeof(EXPLICIT_SET_OF_TAG));
@@ -834,7 +797,7 @@ certificate_get_resources(X509 *cert, struct resources *resources)
 		    "8360", "6484");
 	}
 
-	return pr_crit("Unknown policy: %u", policy);
+	pr_crit("Unknown policy: %u", policy);
 }
 
 static bool

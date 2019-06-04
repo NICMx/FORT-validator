@@ -69,7 +69,7 @@ send_serial_notify_pdu(int fd, serial_t start_serial)
 
 	len = serialize_serial_notify_pdu(&pdu, data);
 	if (len != RTRPDU_SERIAL_NOTIFY_LEN)
-		return pr_crit("Serialized Serial Notify is %zu bytes.", len);
+		pr_crit("Serialized Serial Notify is %zu bytes.", len);
 
 	return send_response(fd, data, len);
 }
@@ -87,7 +87,7 @@ send_cache_reset_pdu(int fd)
 
 	len = serialize_cache_reset_pdu(&pdu, data);
 	if (len != RTRPDU_CACHE_RESET_LEN)
-		return pr_crit("Serialized Cache Reset is %zu bytes.", len);
+		pr_crit("Serialized Cache Reset is %zu bytes.", len);
 
 	return send_response(fd, data, len);
 }
@@ -106,7 +106,7 @@ send_cache_response_pdu(int fd)
 
 	len = serialize_cache_response_pdu(&pdu, data);
 	if (len != RTRPDU_CACHE_RESPONSE_LEN)
-		return pr_crit("Serialized Cache Response is %zu bytes.", len);
+		pr_crit("Serialized Cache Response is %zu bytes.", len);
 
 	return send_response(fd, data, len);
 }
@@ -130,7 +130,7 @@ send_ipv4_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 
 	len = serialize_ipv4_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV4_PREFIX_LEN)
-		return pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
+		pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
 
 	return send_response(fd, data, len);
 }
@@ -154,7 +154,7 @@ send_ipv6_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 
 	len = serialize_ipv6_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV6_PREFIX_LEN)
-		return pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
+		pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
 
 	return send_response(fd, data, len);
 }
@@ -274,7 +274,7 @@ send_end_of_data_pdu(int fd, serial_t end_serial)
 
 	len = serialize_end_of_data_pdu(&pdu, data);
 	if (len != RTRPDU_END_OF_DATA_LEN)
-		return pr_crit("Serialized End of Data is %zu bytes.", len);
+		pr_crit("Serialized End of Data is %zu bytes.", len);
 
 	error = send_response(fd, data, len);
 	if (error)
@@ -318,15 +318,12 @@ send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
 		return pr_enomem();
 
 	len = serialize_error_report_pdu(&pdu, data);
-	if (len != pdu.header.length) {
-		error = pr_crit("Serialized Error Report PDU is %zu bytes, not the expected %u.",
+	if (len != pdu.header.length)
+		pr_crit("Serialized Error Report PDU is %zu bytes, not the expected %u.",
 		    len, pdu.header.length);
-		goto end;
-	}
 
 	error = send_response(fd, data, len);
 
-end:
 	free(data);
 	return error;
 }

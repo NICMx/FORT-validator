@@ -150,10 +150,10 @@ get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
 	case SYNC_STRICT:
 		return handle_strict_strategy(requested_uri, rsync_uri);
 	case SYNC_OFF:
-		return pr_crit("Supposedly unreachable code reached.");
+		break;
 	}
 
-	return pr_crit("Unknown sync strategy: %u", config_get_sync_strategy());
+	pr_crit("Invalid sync strategy: %u", config_get_sync_strategy());
 }
 
 static int

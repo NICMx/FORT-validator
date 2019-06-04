@@ -15,7 +15,7 @@ get_current_threads_handler(struct validation_handler const **result)
 		return -EINVAL;
 	handler = validation_get_validation_handler(state);
 	if (handler == NULL)
-		return pr_crit("This thread lacks a validation handler.");
+		pr_crit("This thread lacks a validation handler.");
 
 	*result = handler;
 	return 0;

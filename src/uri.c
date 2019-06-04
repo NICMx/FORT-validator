@@ -434,5 +434,4 @@ uri_get_printable(struct rpki_uri *uri)
 	}
 
 	pr_crit("Unknown file name format: %u", format);
-	return uri->global;
 }

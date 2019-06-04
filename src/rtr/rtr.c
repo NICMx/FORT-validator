@@ -345,7 +345,8 @@ end_clients(void)
 static int
 join_thread(pthread_t tid, void *arg)
 {
-	return close_thread(tid, "Client");
+	close_thread(tid, "Client");
+	return 0;
 }
 
 /*

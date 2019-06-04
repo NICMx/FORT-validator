@@ -26,11 +26,11 @@ validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 	struct rpki_uri *pp_crl;
 
 	if (refs->crldp == NULL)
-		return pr_crit("Certificate's CRL Distribution Point was not recorded.");
+		pr_crit("Certificate's CRL Distribution Point was not recorded.");
 
 	pp_crl = rpp_get_crl(pp);
 	if (pp_crl == NULL)
-		return pr_crit("Manifest's CRL was not recorded.");
+		pr_crit("Manifest's CRL was not recorded.");
 
 	if (strcmp(refs->crldp, uri_get_global(pp_crl)) != 0) {
 		return pr_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
@@ -47,14 +47,14 @@ validate_aia(struct certificate_refs *refs)
 	struct rpki_uri *parent;
 
 	if (refs->caIssuers == NULL)
-		return pr_crit("Certificate's AIA was not recorded.");
+		pr_crit("Certificate's AIA was not recorded.");
 
 	state = state_retrieve();
 	if (state == NULL)
 		return -EINVAL;
 	parent = x509stack_peek_uri(validation_certstack(state));
 	if (parent == NULL)
-		return pr_crit("CA certificate has no parent.");
+		pr_crit("CA certificate has no parent.");
 
 	if (!uri_equals(refs->caIssuers, parent)) {
 		return pr_err("Certificate's AIA ('%s') does not match parent's URI ('%s').",
@@ -70,7 +70,7 @@ validate_signedObject(struct certificate_refs *refs,
     struct rpki_uri *signedObject_uri)
 {
 	if (refs->signedObject == NULL)
-		return pr_crit("Certificate's signedObject was not recorded.");
+		pr_crit("Certificate's signedObject was not recorded.");
 
 	if (!uri_equals(refs->signedObject, signedObject_uri)) {
 		return pr_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
@@ -104,10 +104,9 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 	if (error)
 		return error;
 
-	if (refs->signedObject != NULL) {
-		return pr_crit("CA summary has a signedObject ('%s').",
+	if (refs->signedObject != NULL)
+		pr_crit("CA summary has a signedObject ('%s').",
 		    uri_get_printable(refs->signedObject));
-	}
 
 	return 0;
 }

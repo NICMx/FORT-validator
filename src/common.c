@@ -68,24 +68,20 @@ rwlock_unlock(pthread_rwlock_t *lock)
 	}
 }
 
-int
+void
 close_thread(pthread_t thread, char const *what)
 {
 	int error;
 
 	error = pthread_cancel(thread);
-	if (error && error != ESRCH) {
+	if (error && error != ESRCH)
 		pr_crit("pthread_cancel() threw %d on the '%s' thread.",
 		    error, what);
-		return error;
-	}
 
 	error = pthread_join(thread, NULL);
 	if (error)
 		pr_crit("pthread_join() threw %d on the '%s' thread.",
 		    error, what);
-
-	return error;
 }
 
 static int

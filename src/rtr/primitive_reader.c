@@ -60,18 +60,17 @@ pdu_reader_init(struct pdu_reader *reader, int fd, unsigned char *buffer,
 	return read_exact(fd, reader->buffer, size, allow_eof);
 }
 
-static int
+__dead static void
 insufficient_bytes(void)
 {
 	pr_crit("Attempted to read past the end of a PDU Reader.");
-	return -EPIPE;
 }
 
 int
 read_int8(struct pdu_reader *reader, uint8_t *result)
 {
 	if (reader->size < 1)
-		return insufficient_bytes();
+		insufficient_bytes();
 
 	*result = reader->buffer[0];
 	reader->buffer++;
@@ -84,7 +83,7 @@ int
 read_int16(struct pdu_reader *reader, uint16_t *result)
 {
 	if (reader->size < 2)
-		return insufficient_bytes();
+		insufficient_bytes();
 
 	*result = (((uint16_t)reader->buffer[0]) << 8)
 	        | (((uint16_t)reader->buffer[1])     );
@@ -98,7 +97,7 @@ int
 read_int32(struct pdu_reader *reader, uint32_t *result)
 {
 	if (reader->size < 4)
-		return insufficient_bytes();
+		insufficient_bytes();
 
 	*result = (((uint32_t)reader->buffer[0]) << 24)
 	        | (((uint32_t)reader->buffer[1]) << 16)
@@ -243,7 +242,7 @@ int
 read_bytes(struct pdu_reader *reader, unsigned char *result, size_t num)
 {
 	if (reader->size < num)
-		return insufficient_bytes();
+		insufficient_bytes();
 
 	memcpy(result, reader->buffer, num);
 	reader->buffer += num;

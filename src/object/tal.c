@@ -328,24 +328,20 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 			goto fail; /* Reject the TAL. */
 		}
 
-		error = pr_crit("Unknown public key state: %u",
+		pr_crit("Unknown public key state: %u",
 		    validation_pubkey_state(state));
-		goto fail;
 	}
 
 	/*
 	 * From now on, the tree should be considered valid, even if subsequent
 	 * certificates fail.
 	 * (the root validated successfully; subtrees are isolated problems.)
-	 * Only critical errors should trigger negative result codes.
 	 */
 
 	/* Handle every other certificate. */
 	certstack = validation_certstack(state);
-	if (certstack == NULL) {
-		error = pr_crit("Validation state has no certificate stack");
-		goto fail;
-	}
+	if (certstack == NULL)
+		pr_crit("Validation state has no certificate stack");
 
 	do {
 		error = deferstack_pop(certstack, &deferred);
@@ -353,9 +349,8 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 			/* No more certificates left; we're done. */
 			error = 1;
 			goto end;
-		}
-		if (error) /* All other errors are critical, currently */
-			goto fail;
+		} else if (error) /* All other errors are critical, currently */
+			pr_crit("deferstack_pop() returned illegal %d.", error);
 
 		/*
 		 * Ignore result code; remaining certificates are unrelated,

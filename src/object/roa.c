@@ -152,7 +152,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	/* rfc6482#section-3.3 */
 
 	if (roa->ipAddrBlocks.list.array == NULL)
-		return pr_crit("ipAddrBlocks array is NULL.");
+		pr_crit("ipAddrBlocks array is NULL.");
 
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
 		block = roa->ipAddrBlocks.list.array[b];

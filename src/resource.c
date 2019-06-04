@@ -100,7 +100,7 @@ inherit_aors(struct resources *resources, int family)
 
 	parent = get_parent_resources();
 	if (parent == NULL)
-		return pr_crit("Parent has no resources.");
+		pr_crit("Parent has no resources.");
 
 	switch (family) {
 	case AF_INET:
@@ -122,7 +122,7 @@ inherit_aors(struct resources *resources, int family)
 		return 0;
 	}
 
-	return pr_crit("Unknown address family '%d'", family);
+	pr_crit("Unknown address family '%d'", family);
 }
 
 static int
@@ -225,7 +225,7 @@ add_prefix(struct resources *resources, int family, IPAddress_t *addr)
 		return add_prefix6(resources, addr);
 	}
 
-	return pr_crit("Unknown address family '%d'", family);
+	pr_crit("Unknown address family '%d'", family);
 }
 
 static int
@@ -330,7 +330,7 @@ add_range(struct resources *resources, int family, IPAddressRange_t *range)
 		return add_range6(resources, range);
 	}
 
-	return pr_crit("Unknown address family '%d'", family);
+	pr_crit("Unknown address family '%d'", family);
 }
 
 static int
@@ -402,7 +402,7 @@ inherit_asiors(struct resources *resources)
 
 	parent = get_parent_resources();
 	if (parent == NULL)
-		return pr_crit("Parent has no resources.");
+		pr_crit("Parent has no resources.");
 
 	if (resources->asns != NULL)
 		return pr_err("Certificate inherits ASN resources while also defining others of its own.");

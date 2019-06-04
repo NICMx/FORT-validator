@@ -209,7 +209,7 @@ deferstack_push(struct cert_stack *stack, struct deferred_cert *deferred)
 	return 0;
 }
 
-static int
+static void
 x509stack_pop(struct cert_stack *stack)
 {
 	X509 *cert;
@@ -217,32 +217,30 @@ x509stack_pop(struct cert_stack *stack)
 
 	cert = sk_X509_pop(stack->x509s);
 	if (cert == NULL)
-		return pr_crit("Attempted to pop empty X509 stack");
+		pr_crit("Attempted to pop empty X509 stack");
 	X509_free(cert);
 
 	meta = SLIST_FIRST(&stack->metas);
 	if (meta == NULL)
-		return pr_crit("Attempted to pop empty metadata stack");
+		pr_crit("Attempted to pop empty metadata stack");
 	SLIST_REMOVE_HEAD(&stack->metas, next);
 	meta_destroy(meta);
-
-	return 0;
 }
 
+/**
+ * Contract: Returns either 0 or -ENOENT. No other outcomes.
+ */
 int
 deferstack_pop(struct cert_stack *stack, struct deferred_cert *result)
 {
 	struct defer_node *node;
-	int error;
 
 again:	node = SLIST_FIRST(&stack->defers);
 	if (node == NULL)
 		return -ENOENT;
 
 	if (node->type == DNT_SEPARATOR) {
-		error = x509stack_pop(stack);
-		if (error)
-			return error;
+		x509stack_pop(stack);
 
 		SLIST_REMOVE_HEAD(&stack->defers, next);
 		defer_destroy(node);
@@ -346,10 +344,8 @@ x509stack_cancel(struct cert_stack *stack)
 	x509stack_pop(stack);
 
 	defer_separator = SLIST_FIRST(&stack->defers);
-	if (defer_separator == NULL) {
+	if (defer_separator == NULL)
 		pr_crit("Attempted to pop empty defer stack");
-		return;
-	}
 	SLIST_REMOVE_HEAD(&stack->defers, next);
 	defer_destroy(defer_separator);
 }
@@ -383,7 +379,7 @@ get_current_file_name(char **_result)
 
 	tmp = fnstack_peek();
 	if (tmp == NULL)
-		return pr_crit("The file name stack is empty.");
+		pr_crit("The file name stack is empty.");
 
 	result = strdup(tmp);
 	if (result == NULL)

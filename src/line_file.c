@@ -107,7 +107,7 @@ lfile_read(struct line_file *lfile, char **result)
 			return pr_errno(error, "Error while reading file");
 		if (feof(lfile->file))
 			return 0;
-		return pr_crit("Supposedly unreachable code reached. ferror:%d feof:%d",
+		pr_crit("Supposedly unreachable code reached. ferror:%d feof:%d",
 		    ferror(lfile->file), feof(lfile->file));
 	}
 

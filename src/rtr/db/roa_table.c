@@ -107,7 +107,8 @@ duplicate_roa(struct roa_table *dst, struct hashable_roa *new)
 		return rtrhandler_handle_roa_v6(dst, vrp.asn, &prefix6,
 		    vrp.max_prefix_length);
 	}
-	return pr_crit("Unknown address family: %d", vrp.addr_fam);
+
+	pr_crit("Unknown address family: %d", vrp.addr_fam);
 }
 
 int
@@ -219,7 +220,7 @@ add_delta(struct deltas *deltas, struct hashable_roa *roa, int op)
 		return deltas_add_roa_v6(deltas, roa->data.asn, &addr.v6, op);
 	}
 
-	return pr_crit("Unknown address family: %d", roa->data.addr_fam);
+	pr_crit("Unknown address family: %d", roa->data.addr_fam);
 }
 
 /*

@@ -188,7 +188,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			    attr->attrValues.list.count);
 		}
 		if (attrs->list.array == NULL || attrs->list.array[0] == NULL)
-			return pr_crit("Array size is 1 but array is NULL.");
+			pr_crit("Array size is 1 but array is NULL.");
 
 		error = oid2arcs(&attr->attrType, &attrType);
 		if (error)

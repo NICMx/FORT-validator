@@ -253,7 +253,7 @@ pr_enomem(void)
 	return -ENOMEM;
 }
 
-int
+__dead void
 pr_crit(const char *format, ...)
 {
 	va_list args;
@@ -269,7 +269,7 @@ pr_crit(const char *format, ...)
 	PR_SUFFIX(STDERR);
 
 	print_stack_trace();
-	return -EINVAL;
+	exit(-1);
 }
 
 /**
@@ -296,5 +296,5 @@ incidence(enum incidence_id id, const char *format, ...)
 		return -EINVAL;
 	}
 
-	return pr_crit("Unknown incidence action: %u", action);
+	pr_crit("Unknown incidence action: %u", action);
 }

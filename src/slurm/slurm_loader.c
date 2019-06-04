@@ -71,7 +71,8 @@ slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 		return rtrhandler_handle_roa_v6(table, vrp.asn, &prefix6,
 		    vrp.max_prefix_length);
 	}
-	return -pr_crit("Unkown addr family type");
+
+	pr_crit("Unkown addr family type: %u", vrp.addr_fam);
 }
 
 static int

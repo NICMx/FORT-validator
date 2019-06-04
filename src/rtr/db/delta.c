@@ -91,7 +91,7 @@ deltas_add_roa_v4(struct deltas *deltas, uint32_t as, struct v4_address *addr,
 		return deltas_v4_add(&deltas->v4.removes, &delta);
 	}
 
-	return pr_crit("Unknown delta operation: %d", op);
+	pr_crit("Unknown delta operation: %d", op);
 }
 
 int
@@ -111,7 +111,7 @@ deltas_add_roa_v6(struct deltas *deltas, uint32_t as, struct v6_address *addr,
 		return deltas_v6_add(&deltas->v6.removes, &delta);
 	}
 
-	return pr_crit("Unknown delta operation: %d", op);
+	pr_crit("Unknown delta operation: %d", op);
 }
 
 bool
