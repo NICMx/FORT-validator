@@ -152,7 +152,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	/* rfc6482#section-3.3 */
 
 	if (roa->ipAddrBlocks.list.array == NULL)
-		return pr_crit("ipAddrBlocks array is NULL.");
+		pr_crit("ipAddrBlocks array is NULL.");
 
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
 		block = roa->ipAddrBlocks.list.array[b];
@@ -185,8 +185,7 @@ family_error:
 }
 
 int
-roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
-    STACK_OF(X509_CRL) *crls)
+roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
@@ -197,7 +196,7 @@ roa_traverse(struct rpki_uri const *uri, struct rpp *pp,
 	pr_debug_add("ROA '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = signed_object_args_init(&sobj_args, uri, crls, false);
+	error = signed_object_args_init(&sobj_args, uri, rpp_crl(pp), false);
 	if (error)
 		goto revert_fnstack;
 

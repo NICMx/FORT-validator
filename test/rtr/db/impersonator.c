@@ -27,8 +27,6 @@ add_v6(struct validation_handler *handler, uint32_t as)
 int
 perform_standalone_validation(struct validation_handler *handler)
 {
-	ck_assert_int_eq(0, handler->reset(handler->arg));
-
 	switch (iteration) {
 	case 0:
 		add_v4(handler, 0);
@@ -52,8 +50,6 @@ perform_standalone_validation(struct validation_handler *handler)
 		ck_abort_msg("perform_standalone_validation() was called too many times (%d).",
 		    iteration);
 	}
-	if (handler->merge != NULL)
-		handler->merge(handler->merge_arg, handler->arg);
 
 	iteration++;
 	return 0;

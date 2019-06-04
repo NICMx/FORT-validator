@@ -4,6 +4,7 @@
 #include <openssl/err.h>
 
 #include "config.h"
+#include "debug.h"
 #include "thread_var.h"
 
 #ifdef DEBUG
@@ -252,7 +253,7 @@ pr_enomem(void)
 	return -ENOMEM;
 }
 
-int
+__dead void
 pr_crit(const char *format, ...)
 {
 	va_list args;
@@ -266,7 +267,9 @@ pr_crit(const char *format, ...)
 	va_end(args);
 
 	PR_SUFFIX(STDERR);
-	return -EINVAL;
+
+	print_stack_trace();
+	exit(-1);
 }
 
 /**
@@ -293,5 +296,5 @@ incidence(enum incidence_id id, const char *format, ...)
 		return -EINVAL;
 	}
 
-	return pr_crit("Unknown incidence action: %u", action);
+	pr_crit("Unknown incidence action: %u", action);
 }

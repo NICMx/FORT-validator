@@ -4,6 +4,6 @@
 #include <openssl/x509.h>
 #include "uri.h"
 
-int crl_load(struct rpki_uri const *uri, X509_CRL **);
+int crl_load(struct rpki_uri *uri, X509_CRL **);
 
 #endif /* SRC_OBJECT_CRL_H_ */

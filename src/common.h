@@ -19,6 +19,8 @@
 /*
  * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
  * overflows, so gcc complains sometimes.
+ *
+ * BE CAREFUL ABOUT DOUBLE EVALUATION.
  */
 #define ENSURE_NEGATIVE(error) (((error) < 0) ? (error) : -(error))
 
@@ -33,7 +35,7 @@ void rwlock_write_lock(pthread_rwlock_t *);
 void rwlock_unlock(pthread_rwlock_t *);
 
 /** Also boilerplate. */
-int close_thread(pthread_t thread, char const *what);
+void close_thread(pthread_t thread, char const *what);
 
 typedef int (*process_file_cb)(char const *, void *);
 int process_file_or_dir(char const *, char const *, process_file_cb, void *);

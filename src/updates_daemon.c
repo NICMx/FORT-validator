@@ -57,6 +57,5 @@ updates_daemon_start(void)
 void
 updates_daemon_destroy(void)
 {
-	/* Not much to do with the error code. */
 	close_thread(thread, "Validation");
 }

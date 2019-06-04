@@ -4,19 +4,6 @@
 #include "log.h"
 #include "thread_var.h"
 
-int
-vhandler_merge(struct validation_handler *handler)
-{
-	return (handler->merge != NULL) ?
-	    handler->merge(handler->merge_arg, handler->arg) : 0;
-}
-
-int
-vhandler_reset(struct validation_handler *handler)
-{
-	return (handler->reset != NULL) ? handler->reset(handler->arg) : 0;
-}
-
 static int
 get_current_threads_handler(struct validation_handler const **result)
 {
@@ -28,7 +15,7 @@ get_current_threads_handler(struct validation_handler const **result)
 		return -EINVAL;
 	handler = validation_get_validation_handler(state);
 	if (handler == NULL)
-		return pr_crit("This thread lacks a validation handler.");
+		pr_crit("This thread lacks a validation handler.");
 
 	*result = handler;
 	return 0;

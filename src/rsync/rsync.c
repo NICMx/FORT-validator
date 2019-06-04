@@ -14,8 +14,7 @@
 #include "str.h"
 
 struct uri {
-	char *string;
-	size_t len;
+	struct rpki_uri *uri;
 	SLIST_ENTRY(uri) next;
 };
 
@@ -39,7 +38,7 @@ rsync_destroy(void)
 	while (!SLIST_EMPTY(&visited_uris)) {
 		uri = SLIST_FIRST(&visited_uris);
 		SLIST_REMOVE_HEAD(&visited_uris, next);
-		free(uri->string);
+		uri_refput(uri->uri);
 		free(uri);
 	}
 }
@@ -49,15 +48,15 @@ rsync_destroy(void)
  * Returns false otherwise.
  */
 static bool
-is_descendant(struct uri *ancestor, struct rpki_uri const *descendant)
+is_descendant(struct rpki_uri *ancestor, struct rpki_uri *descendant)
 {
 	struct string_tokenizer ancestor_tokenizer;
 	struct string_tokenizer descendant_tokenizer;
 
-	string_tokenizer_init(&ancestor_tokenizer, ancestor->string,
-	    ancestor->len, '/');
-	string_tokenizer_init(&descendant_tokenizer, descendant->global,
-	    descendant->global_len, '/');
+	string_tokenizer_init(&ancestor_tokenizer, uri_get_global(ancestor),
+	    uri_get_global_len(ancestor), '/');
+	string_tokenizer_init(&descendant_tokenizer, uri_get_global(descendant),
+	    uri_get_global_len(descendant), '/');
 
 	do {
 		if (!string_tokenizer_next(&ancestor_tokenizer))
@@ -74,13 +73,13 @@ is_descendant(struct uri *ancestor, struct rpki_uri const *descendant)
  * run.
  */
 static bool
-is_already_downloaded(struct rpki_uri const *uri)
+is_already_downloaded(struct rpki_uri *uri)
 {
 	struct uri *cursor;
 
 	/* TODO (next iteration) this is begging for a radix trie. */
 	SLIST_FOREACH(cursor, &visited_uris, next)
-		if (is_descendant(cursor, uri))
+		if (is_descendant(cursor->uri, uri))
 			return true;
 
 	return false;
@@ -95,9 +94,8 @@ mark_as_downloaded(struct rpki_uri *uri)
 	if (node == NULL)
 		return pr_enomem();
 
-	node->string = uri->global;
-	node->len = uri->global_len;
-	uri->global = NULL; /* Ownership transferred. */
+	node->uri = uri;
+	uri_refget(uri);
 
 	SLIST_INSERT_HEAD(&visited_uris, node, next);
 
@@ -105,33 +103,42 @@ mark_as_downloaded(struct rpki_uri *uri)
 }
 
 static int
-handle_strict_strategy(struct rpki_uri const *requested_uri,
-    struct rpki_uri *rsync_uri)
+handle_strict_strategy(struct rpki_uri *requested_uri,
+    struct rpki_uri **rsync_uri)
 {
-	return uri_clone(requested_uri, rsync_uri);
+	*rsync_uri = requested_uri;
+	uri_refget(requested_uri);
+	return 0;
 }
 
 static int
-handle_root_strategy(struct rpki_uri const *src, struct rpki_uri *dst)
+handle_root_strategy(struct rpki_uri *src, struct rpki_uri **dst)
 {
+	char const *global;
+	size_t global_len;
 	unsigned int slashes;
 	size_t i;
 
+	global = uri_get_global(src);
+	global_len = uri_get_global_len(src);
 	slashes = 0;
-	for (i = 0; i < src->global_len; i++) {
-		if (src->global[i] == '/') {
+
+	for (i = 0; i < global_len; i++) {
+		if (global[i] == '/') {
 			slashes++;
 			if (slashes == 4)
-				return uri_init_str(dst, src->global, i);
+				return uri_create_str(dst, global, i);
 		}
 	}
 
-	return uri_clone(src, dst);
+	*dst = src;
+	uri_refget(src);
+	return 0;
 }
 
 static int
-get_rsync_uri(struct rpki_uri const *requested_uri, bool is_ta,
-    struct rpki_uri *rsync_uri)
+get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
+    struct rpki_uri **rsync_uri)
 {
 	switch (config_get_sync_strategy()) {
 	case SYNC_ROOT:
@@ -143,14 +150,14 @@ get_rsync_uri(struct rpki_uri const *requested_uri, bool is_ta,
 	case SYNC_STRICT:
 		return handle_strict_strategy(requested_uri, rsync_uri);
 	case SYNC_OFF:
-		return pr_crit("Supposedly unreachable code reached.");
+		break;
 	}
 
-	return pr_crit("Unknown sync strategy: %u", config_get_sync_strategy());
+	pr_crit("Invalid sync strategy: %u", config_get_sync_strategy());
 }
 
 static int
-dir_exists(char *path, bool *result)
+dir_exists(char const *path, bool *result)
 {
 	struct stat _stat;
 	char *last_slash;
@@ -202,17 +209,21 @@ create_dir(char *path)
  * This function fixes that.
  */
 static int
-create_dir_recursive(char *localuri)
+create_dir_recursive(struct rpki_uri *uri)
 {
+	char *localuri;
 	int i, error;
 	bool exist = false;
 
-	error = dir_exists(localuri, &exist);
+	error = dir_exists(uri_get_local(uri), &exist);
 	if (error)
 		return error;
-
 	if (exist)
 		return 0;
+
+	localuri = strdup(uri_get_local(uri));
+	if (localuri == NULL)
+		return pr_enomem();
 
 	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
@@ -221,11 +232,13 @@ create_dir_recursive(char *localuri)
 			localuri[i] = '/';
 			if (error) {
 				/* error msg already printed */
+				free(localuri);
 				return error;
 			}
 		}
 	}
 
+	free(localuri);
 	return 0;
 }
 
@@ -257,9 +270,11 @@ handle_child_thread(struct rpki_uri *uri, bool is_ta)
 
 	for (i = 1; i < config_args->length + 1; i++) {
 		if (strcmp(copy_args[i], "$REMOTE") == 0)
-			copy_args[i] = uri->global;
+			copy_args[i] = strdup(uri_get_global(uri));
 		else if (strcmp(copy_args[i], "$LOCAL") == 0)
-			copy_args[i] = uri->local;
+			copy_args[i] = strdup(uri_get_local(uri));
+		if (copy_args[i] == NULL)
+			exit(pr_enomem());
 	}
 
 	pr_debug("Executing RSYNC:");
@@ -271,12 +286,7 @@ handle_child_thread(struct rpki_uri *uri, bool is_ta)
 	pr_err("Could not execute the rsync command: %s",
 	    strerror(error));
 
-	/*
-	 * https://stackoverflow.com/a/14493459/1735458
-	 * Might as well. Prrbrrrlllt.
-	 */
-	free(copy_args);
-
+	/* https://stackoverflow.com/a/14493459/1735458 */
 	exit(error);
 }
 
@@ -290,7 +300,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	int child_status;
 	int error;
 
-	error = create_dir_recursive(uri->local);
+	error = create_dir_recursive(uri);
 	if (error)
 		return error;
 
@@ -348,7 +358,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
  * validated the TA's public key.
  */
 int
-download_files(struct rpki_uri const *requested_uri, bool is_ta)
+download_files(struct rpki_uri *requested_uri, bool is_ta)
 {
 	/**
 	 * Note:
@@ -356,14 +366,15 @@ download_files(struct rpki_uri const *requested_uri, bool is_ta)
 	 * @rsync_uri is the URL we're actually going to RSYNC.
 	 * (They can differ, depending on config_get_sync_strategy().)
 	 */
-	struct rpki_uri rsync_uri;
+	struct rpki_uri *rsync_uri;
 	int error;
 
 	if (config_get_sync_strategy() == SYNC_OFF)
 		return 0;
 
 	if (is_already_downloaded(requested_uri)) {
-		pr_debug("No need to redownload '%s'.", requested_uri->global);
+		pr_debug("No need to redownload '%s'.",
+		    uri_get_printable(requested_uri));
 		return 0;
 	}
 
@@ -371,13 +382,12 @@ download_files(struct rpki_uri const *requested_uri, bool is_ta)
 	if (error)
 		return error;
 
-	pr_debug("Going to RSYNC '%s' ('%s').", rsync_uri.global,
-	    rsync_uri.local);
+	pr_debug("Going to RSYNC '%s'.", uri_get_printable(rsync_uri));
 
-	error = do_rsync(&rsync_uri, is_ta);
+	error = do_rsync(rsync_uri, is_ta);
 	if (!error)
-		error = mark_as_downloaded(&rsync_uri);
+		error = mark_as_downloaded(rsync_uri);
 
-	uri_cleanup(&rsync_uri);
+	uri_refput(rsync_uri);
 	return error;
 }

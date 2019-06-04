@@ -32,8 +32,8 @@ hash_matches(unsigned char const *expected, size_t expected_len,
 }
 
 static int
-hash_file(char const *algorithm, struct rpki_uri const *uri,
-    unsigned char *result, unsigned int *result_len)
+hash_file(char const *algorithm, struct rpki_uri *uri, unsigned char *result,
+    unsigned int *result_len)
 {
 	EVP_MD const *md;
 	FILE *file;
@@ -48,7 +48,7 @@ hash_file(char const *algorithm, struct rpki_uri const *uri,
 	if (error)
 		return error;
 
-	error = file_open(uri->local, &file, &stat);
+	error = file_open(uri_get_local(uri), &file, &stat);
 	if (error)
 		return error;
 
@@ -103,7 +103,7 @@ end1:
  * "expected" hash). Returns 0 if no errors happened and the hashes match.
  */
 int
-hash_validate_file(char const *algorithm, struct rpki_uri const *uri,
+hash_validate_file(char const *algorithm, struct rpki_uri *uri,
     BIT_STRING_t const *expected)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];

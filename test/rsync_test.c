@@ -15,58 +15,56 @@ END_TEST
 static void
 assert_descendant(bool expected, char *ancestor, char *descendant)
 {
-	struct uri ancestor_uri;
-	struct rpki_uri descendant_uri;
+	struct rpki_uri *ancestor_uri;
+	struct rpki_uri *descendant_uri;
 
-	ancestor_uri.string = ancestor;
-	ancestor_uri.len = strlen(ancestor);
-	descendant_uri.global = descendant;
-	descendant_uri.global_len = strlen(descendant);
+	ck_assert_int_eq(0, uri_create_str(&ancestor_uri, ancestor,
+	    strlen(ancestor)));
+	ck_assert_int_eq(0, uri_create_str(&descendant_uri, descendant,
+	    strlen(descendant)));
 
-	ck_assert_int_eq(is_descendant(&ancestor_uri, &descendant_uri),
-	    expected);
+	ck_assert_int_eq(is_descendant(ancestor_uri, descendant_uri), expected);
+
+	uri_refput(ancestor_uri);
+	uri_refput(descendant_uri);
 }
 
 START_TEST(rsync_test_prefix_equals)
 {
 	char *ancestor;
 
-	ancestor = "proto://a/b/c";
-	assert_descendant(true, ancestor, "proto://a/b/c");
-	assert_descendant(false, ancestor, "proto://a/b/");
-	assert_descendant(true, ancestor, "proto://a/b/c/c");
-	assert_descendant(false, ancestor, "proto://a/b/cc");
-	assert_descendant(false, ancestor, "proto://a/b/cc/");
+	ancestor = "rsync://a/b/c";
+	assert_descendant(true, ancestor, "rsync://a/b/c");
+	assert_descendant(false, ancestor, "rsync://a/b/");
+	assert_descendant(true, ancestor, "rsync://a/b/c/c");
+	assert_descendant(false, ancestor, "rsync://a/b/cc");
+	assert_descendant(false, ancestor, "rsync://a/b/cc/");
 
-	ancestor = "proto://a/b/c/";
-	assert_descendant(true, ancestor, "proto://a/b/c");
-	assert_descendant(false, ancestor, "proto://a/b/");
-	assert_descendant(true, ancestor, "proto://a/b/c/c");
-	assert_descendant(false, ancestor, "proto://a/b/cc");
-	assert_descendant(false, ancestor, "proto://a/b/cc/");
+	ancestor = "rsync://a/b/c/";
+	assert_descendant(true, ancestor, "rsync://a/b/c");
+	assert_descendant(false, ancestor, "rsync://a/b/");
+	assert_descendant(true, ancestor, "rsync://a/b/c/c");
+	assert_descendant(false, ancestor, "rsync://a/b/cc");
+	assert_descendant(false, ancestor, "rsync://a/b/cc/");
 }
 END_TEST
 
 static void
 __mark_as_downloaded(char *uri_str)
 {
-	struct rpki_uri uri;
-
-	uri.global = uri_str;
-	uri.global_len = strlen(uri_str);
-
-	ck_assert_int_eq(mark_as_downloaded(&uri), 0);
+	struct rpki_uri *uri;
+	ck_assert_int_eq(0, uri_create_str(&uri, uri_str, strlen(uri_str)));
+	ck_assert_int_eq(mark_as_downloaded(uri), 0);
+	uri_refput(uri);
 }
 
 static void
 assert_downloaded(char *uri_str, bool expected)
 {
-	struct rpki_uri uri;
-
-	uri.global = uri_str;
-	uri.global_len = strlen(uri_str);
-
-	ck_assert_int_eq(is_already_downloaded(&uri), expected);
+	struct rpki_uri *uri;
+	ck_assert_int_eq(0, uri_create_str(&uri, uri_str, strlen(uri_str)));
+	ck_assert_int_eq(is_already_downloaded(uri), expected);
+	uri_refput(uri);
 }
 
 START_TEST(rsync_test_list)
@@ -100,24 +98,15 @@ END_TEST
 static void
 test_root_strategy(char *test, char *expected)
 {
-	struct rpki_uri src;
-	struct rpki_uri dst;
+	struct rpki_uri *src;
+	struct rpki_uri *dst;
 
-	src.global = strdup(test);
-	if (src.global == NULL)
-		ck_abort_msg("Out of memory.");
-	src.global_len = strlen(test);
-	src.local = strdup("foo");
-	if (src.local == NULL)
-		ck_abort_msg("Out of memory.");
+	ck_assert_int_eq(0, uri_create_str(&src, test, strlen(test)));
+	ck_assert_int_eq(handle_root_strategy(src, &dst), 0);
+	ck_assert_str_eq(uri_get_global(dst), expected);
 
-	ck_assert_int_eq(handle_root_strategy(&src, &dst), 0);
-	ck_assert_str_eq(dst.global, expected);
-
-	free(src.global);
-	free(src.local);
-	free(dst.global);
-	free(dst.local);
+	uri_refput(src);
+	uri_refput(dst);
 }
 
 START_TEST(rsync_test_get_prefix)
@@ -134,10 +123,6 @@ START_TEST(rsync_test_get_prefix)
 	    "rsync://www.example1.com");
 	test_root_strategy("rsync://w", "rsync://w");
 	test_root_strategy("rsync://", "rsync://");
-	test_root_strategy("rsync:/", "rsync:/");
-	test_root_strategy("rsync:", "rsync:");
-	test_root_strategy("r", "r");
-	test_root_strategy("", "");
 }
 END_TEST
 

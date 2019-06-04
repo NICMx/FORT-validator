@@ -699,11 +699,6 @@ config_get_rsync_args(bool is_ta)
 	}
 
 	pr_crit("Invalid sync strategy: '%u'", rpki_config.sync_strategy);
-	/*
-	 * Return something usable anyway; don't want to check NULL.
-	 * This is supposed to be unreachable code anyway.
-	 */
-	return &rpki_config.rsync.args.recursive;
 }
 
 void

@@ -97,18 +97,6 @@ vrps_destroy(void)
 	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }
 
-static int
-__merge(void *dst, void *src)
-{
-	return rtrhandler_merge(dst, src);
-}
-
-static int
-__reset(void *arg)
-{
-	return rtrhandler_reset(arg);
-}
-
 int
 __handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
@@ -126,7 +114,7 @@ __handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
 static int
 __perform_standalone_validation(struct roa_table **result)
 {
-	struct roa_table *roas, *global_roas;
+	struct roa_table *roas;
 	struct validation_handler validation_handler;
 	int error;
 
@@ -134,27 +122,17 @@ __perform_standalone_validation(struct roa_table **result)
 	if (roas == NULL)
 		return pr_enomem();
 
-	global_roas = roa_table_create();
-	if (global_roas == NULL) {
-		roa_table_destroy(roas);
-		return pr_enomem();
-	}
-
-	validation_handler.merge = __merge;
-	validation_handler.merge_arg = global_roas;
-	validation_handler.reset = __reset;
 	validation_handler.handle_roa_v4 = __handle_roa_v4;
 	validation_handler.handle_roa_v6 = __handle_roa_v6;
 	validation_handler.arg = roas;
 
 	error = perform_standalone_validation(&validation_handler);
-	roa_table_destroy(roas);
 	if (error) {
-		roa_table_destroy(global_roas);
+		roa_table_destroy(roas);
 		return error;
 	}
 
-	*result = global_roas;
+	*result = roas;
 	return 0;
 }
 

@@ -13,18 +13,17 @@ handle_vcard(OCTET_STRING_t *vcard, void *arg)
 }
 
 int
-ghostbusters_traverse(struct rpki_uri const *uri, struct rpp *pp,
-    STACK_OF(X509_CRL) *crls)
+ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 {
 	static OID oid = OID_GHOSTBUSTERS;
 	struct oid_arcs arcs = OID2ARCS("ghostbusters", oid);
 	struct signed_object_args sobj_args;
 	int error;
 
-	pr_debug_add("Ghostbusters '%s' {", uri->global);
+	pr_debug_add("Ghostbusters '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = signed_object_args_init(&sobj_args, uri, crls, true);
+	error = signed_object_args_init(&sobj_args, uri, rpp_crl(pp), true);
 	if (error)
 		goto end1;
 

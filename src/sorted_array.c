@@ -105,7 +105,7 @@ compare(struct sorted_array *sarray, void *new)
 		return -EINTERSECTION;
 	}
 
-	return pr_crit("Unknown comparison value: %u", cmp);
+	pr_crit("Unknown comparison value: %u", cmp);
 }
 
 int
@@ -174,7 +174,6 @@ sarray_contains(struct sorted_array *sarray, void *elem)
 		}
 
 		pr_crit("Unknown comparison value: %u", cmp);
-		return false;
 	}
 
 	return false;
