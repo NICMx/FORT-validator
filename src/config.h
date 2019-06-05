@@ -14,6 +14,7 @@ int handle_flags_config(int , char **);
 void free_rpki_config(void);
 
 /* Getters */
+bool config_get_server_enabled(void);
 char const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
@@ -29,6 +30,7 @@ bool config_get_color_output(void);
 enum filename_format config_get_filename_format(void);
 char *config_get_rsync_program(void);
 struct string_array const *config_get_rsync_args(bool);
+char const *config_get_output_roa(void);
 
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);

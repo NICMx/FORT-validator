@@ -16,6 +16,7 @@ struct file_contents {
 };
 
 int file_open(char const *, FILE **, struct stat *);
+int file_write(char const *, FILE **, struct stat *);
 void file_close(FILE *);
 
 int file_load(char const *, struct file_contents *);

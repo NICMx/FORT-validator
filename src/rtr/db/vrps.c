@@ -6,6 +6,7 @@
 #include <sys/queue.h>
 #include "clients.h"
 #include "common.h"
+#include "output_printer.h"
 #include "validation_handler.h"
 #include "data_structure/array_list.h"
 #include "object/tal.h"
@@ -127,6 +128,8 @@ __perform_standalone_validation(struct roa_table **result)
 	validation_handler.arg = roas;
 
 	error = perform_standalone_validation(&validation_handler);
+	/* Print after validation to avoid duplicated info */
+	output_print_roas(roas);
 	if (error) {
 		roa_table_destroy(roas);
 		return error;

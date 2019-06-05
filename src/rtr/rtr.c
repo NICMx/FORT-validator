@@ -17,6 +17,7 @@
 #include "updates_daemon.h"
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
+#include "rtr/db/vrps.h"
 
 struct sigaction act;
 
@@ -351,41 +352,50 @@ join_thread(pthread_t tid, void *arg)
 
 /*
  * Starts the server, using the current thread to listen for RTR client
- * requests.
+ * requests. If configuration parameter 'server.enabled' is false, then the
+ * server runs "one time" (a.k.a. run the validation just once), it doesn't
+ * waits for clients requests.
  *
- * This function blocks.
+ * When listening for client requests, this function blocks.
  */
 int
 rtr_listen(void)
 {
+	bool changed;
 	int server_fd; /* "file descriptor" */
 	int error;
 
-	error = create_server_socket(&server_fd);
+	error = init_signal_handler();
 	if (error)
 		return error;
 
-	/* Server ready, start everything else */
 	error = clients_db_init();
 	if (error)
-		goto revert_server_socket;
+		return error;
 
-	error = updates_daemon_start();
+	if (!config_get_server_enabled()) {
+		error = vrps_update(&changed);
+		if (error)
+			pr_err("Error %d while trying to update the ROA database.",
+			    error);
+		goto revert_clients_db; /* Error 0 it's ok */
+	}
+
+	error = create_server_socket(&server_fd);
 	if (error)
 		goto revert_clients_db;
 
-	error = init_signal_handler();
+	error = updates_daemon_start();
 	if (error)
-		goto revert_updates_daemon;
+		goto revert_server_socket;
 
 	error = handle_client_connections(server_fd);
 
 	end_clients();
-revert_updates_daemon:
 	updates_daemon_destroy();
-revert_clients_db:
-	clients_db_destroy(join_thread, NULL);
 revert_server_socket:
 	close(server_fd);
+revert_clients_db:
+	clients_db_destroy(join_thread, NULL);
 	return error;
 }

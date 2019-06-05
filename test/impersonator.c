@@ -77,6 +77,18 @@ config_get_slurm(void)
 	return NULL;
 }
 
+bool
+config_get_server_enabled(void)
+{
+	return false;
+}
+
+char const *
+config_get_output_roa(void)
+{
+	return "-";
+}
+
 enum incidence_action
 incidence_get_action(enum incidence_id id)
 {

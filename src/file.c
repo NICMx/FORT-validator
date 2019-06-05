@@ -4,13 +4,14 @@
 #include <stdlib.h>
 #include "log.h"
 
-int
-file_open(char const *file_name, FILE **result, struct stat *stat)
+static int
+file_get(char const *file_name, FILE **result, struct stat *stat,
+    char const *mode)
 {
 	FILE *file;
 	int error;
 
-	file = fopen(file_name, "rb");
+	file = fopen(file_name, mode);
 	if (file == NULL)
 		return pr_errno(errno, "Could not open file '%s'", file_name);
 
@@ -29,6 +30,18 @@ file_open(char const *file_name, FILE **result, struct stat *stat)
 fail:
 	file_close(file);
 	return error;
+}
+
+int
+file_open(char const *file_name, FILE **result, struct stat *stat)
+{
+	return file_get(file_name, result, stat, "rb");
+}
+
+int
+file_write(char const *file_name, FILE **result, struct stat *stat)
+{
+	return file_get(file_name, result, stat, "wb");
 }
 
 void

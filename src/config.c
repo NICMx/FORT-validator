@@ -48,6 +48,8 @@ struct rpki_config {
 	char *slurm;
 
 	struct {
+		/** Enable/disable the RTR server. */
+		bool enabled;
 		/** The bound listening address of the RTR server. */
 		char *address;
 		/** The bound listening port of the RTR server. */
@@ -80,6 +82,12 @@ struct rpki_config {
 		/** Format in which file names will be printed. */
 		enum filename_format filename_format;
 	} log;
+
+	struct {
+		/** File where the validated ROAs will be stored */
+		char *roa;
+		/** TODO (next iteration) Add BGPsec output */
+	} output;
 };
 
 static void print_usage(FILE *, bool);
@@ -146,7 +154,7 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, tal),
 		.doc = "Path to the TAL file or TALs directory",
-		.arg_doc = "<file>",
+		.arg_doc = "<file or directory>",
 	}, {
 		.id = 'r',
 		.name = "local-repository",
@@ -190,16 +198,22 @@ static const struct option_field options[] = {
 	/* Server fields */
 	{
 		.id = 5000,
+		.name = "server.enabled",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, server.enabled),
+		.doc = "Enable or disable the RTR server.",
+	}, {
+		.id = 5001,
 		.name = "server.address",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.address),
-		.doc = "Address the RTR server will bind itself to. Can be a name, in which case an address will be resolved.",
+		.doc = "Address to which RTR server will bind itself to. Can be a name, in which case an address will be resolved.",
 	}, {
-		.id = 5001,
+		.id = 5002,
 		.name = "server.port",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.port),
-		.doc = "Port the RTR server will bind itself to. Can be a string, in which case a number will be resolved.",
+		.doc = "Port to which RTR server will bind itself to. Can be a string, in which case a number will be resolved.",
 	}, {
 		.id = 5003,
 		.name = "server.backlog",
@@ -279,6 +293,16 @@ static const struct option_field options[] = {
 		.type = &gt_incidences,
 		.doc = "Override actions on validation errors",
 		.availability = AVAILABILITY_JSON,
+	},
+
+	/* Output files */
+	{
+		.id = 6000,
+		.name = "output.roa",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, output.roa),
+		.doc = "File where ROAs will be stored in CSV format, use '-' to print at console",
+		.arg_doc = "<file>",
 	},
 
 	{ 0 },
@@ -429,6 +453,7 @@ set_default_values(void)
 	 * duplicates.
 	 */
 
+	rpki_config.server.enabled = true;
 	rpki_config.server.address = NULL;
 	rpki_config.server.port = strdup("323");
 	if (rpki_config.server.port == NULL)
@@ -468,6 +493,8 @@ set_default_values(void)
 
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
+
+	rpki_config.output.roa = NULL;
 
 	return 0;
 
@@ -601,6 +628,12 @@ get_option_metadatas(void)
 	return options;
 }
 
+bool
+config_get_server_enabled(void)
+{
+	return rpki_config.server.enabled;
+}
+
 char const *
 config_get_server_address(void)
 {
@@ -699,6 +732,12 @@ config_get_rsync_args(bool is_ta)
 	}
 
 	pr_crit("Invalid sync strategy: '%u'", rpki_config.sync_strategy);
+}
+
+char const *
+config_get_output_roa(void)
+{
+	return rpki_config.output.roa;
 }
 
 void

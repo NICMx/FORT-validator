@@ -23,18 +23,20 @@ command: fort
 		4. [`root-except-ta`](#root-except-ta)
 	7. [`--shuffle-uris`](#--shuffle-uris)
 	8. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
-	9. [`--server.address`](#--serveraddress)
-	10. [`--server.port`](#--serverport)
-	11. [`--server.backlog`](#--serverbacklog)
-	12. [`--server.validation-interval`](#--servervalidation-interval)
-	13. [`--slurm`](#--slurm)
-	14. [`--log.color-output`](#--logcolor-output)
-	15. [`--log.file-name-format`](#--logfile-name-format)
-	16. [`--configuration-file`](#--configuration-file)
-	17. [`rsync.program`](#rsyncprogram)
-	18. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	19. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	20. [`incidences`](#incidences)
+	9. [`--server.enabled`](#--serverenabled)
+	10. [`--server.address`](#--serveraddress)
+	11. [`--server.port`](#--serverport)
+	12. [`--server.backlog`](#--serverbacklog)
+	13. [`--server.validation-interval`](#--servervalidation-interval)
+	14. [`--slurm`](#--slurm)
+	15. [`--log.color-output`](#--logcolor-output)
+	16. [`--log.file-name-format`](#--logfile-name-format)
+	17. [`--output.roa`](#--outputroa)
+	18. [`--configuration-file`](#--configuration-file)
+	19. [`rsync.program`](#rsyncprogram)
+	20. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	21. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	22. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -51,6 +53,7 @@ command: fort
         [--sync-strategy=off|strict|root|root-except-ta]
         [--shuffle-uris]
         [--maximum-certificate-depth=<unsigned integer>]
+        [--server.enabled=true|false]
         [--server.address=<string>]
         [--server.port=<string>]
         [--server.backlog=<unsigned integer>]
@@ -58,6 +61,7 @@ command: fort
         [--slurm=<string>]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
+        [--output.roa=<file>]
 ```
 
 If an argument is declared more than once, the last one takes precedence:
@@ -234,6 +238,16 @@ Maximum allowable RPKI tree height. Meant to protect Fort from iterating infinit
 
 Fort's tree traversal is actually iterative (not recursive), so there should be no risk of stack overflow, regardless of this value.
 
+### `--server.enabled`
+
+- **Type:** Boolean
+- **Availability:** `argv` and JSON
+- **Default:** true
+
+Enable or disable the RTR server.
+
+If set to `false`: the server is disabled, the rest of the `server.*` arguments are discarded, and Fort performs an in-place standalone RPKI validation.
+
 ### `--server.address`
 
 - **Type:** String
@@ -242,7 +256,7 @@ Fort's tree traversal is actually iterative (not recursive), so there should be 
 
 Hostname or numeric host address the RTR server will be bound to. Must resolve to (or be) a bindable IP address. IPv4 and IPv6 are supported.
 
-If this field is omitted, Fort falls back to perform an in-place standalone RPKI validation. Presently, this is only intended for debugging.
+If this field is omitted, Fort will attempt to bind the server using the IP address `INADDR_ANY` (for an IPv4 address) or `IN6ADDR_ANY_INIT` (for an IPv6 address); see '`$ man getaddrinfo`'.
 
 ### `--server.port`
 
@@ -333,6 +347,17 @@ ERR: repository/rpki.example.com/foo/bar/baz.cer: Certificate validation failed:
 $ {{ page.command }} --output-file-name-format file-name  --local-repository repository/ (...)
 ERR: baz.cer: Certificate validation failed: certificate has expired
 {% endhighlight %}
+
+### `--output.roa`
+
+- **Type:** String (Path to file)
+- **Availability:** `argv` and JSON
+
+File where the ROAs will be stored in CSV format.
+
+When the file is specified, its content will be removed to store the ROAs; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the ROAs will be printed every [`--server.validation-interval`](#--servervalidation-interval) secs.
+
+If a value isn't specified, then the ROAs aren't printed.
 
 ### `--configuration-file`
 

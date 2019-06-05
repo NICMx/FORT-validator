@@ -1,6 +1,5 @@
 #include "clients.h"
 #include "config.h"
-#include "console_handler.h"
 #include "debug.h"
 #include "extension.h"
 #include "nid.h"
@@ -53,9 +52,7 @@ main(int argc, char **argv)
 	if (error)
 		goto revert_nid;
 
-	error = (config_get_server_address() != NULL)
-	    ? start_rtr_server()
-	    : validate_into_console();
+	error = start_rtr_server();
 
 revert_nid:
 	nid_destroy();
