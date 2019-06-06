@@ -11,5 +11,4 @@
 # Man, GNU conventions need a 21 century overhaul badly.
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = src man $(MAYBE_TESTS)
-DIST_SUBDIRS = src man
+SUBDIRS = src man test

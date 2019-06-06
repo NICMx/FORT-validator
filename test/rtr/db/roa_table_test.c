@@ -1,7 +1,11 @@
 #include <check.h>
 #include <stdlib.h>
-#include "thread_var.h"
-#include "rtr/db/roa_table.h"
+
+#include "address.c"
+#include "log.c"
+#include "impersonator.c"
+#include "rtr/db/delta.c"
+#include "rtr/db/roa_table.c"
 
 #define ADDR1 htonl(0xC0000201) /* 192.0.2.1 */
 #define ADDR2 htonl(0xC0000202) /* 192.0.2.2 */

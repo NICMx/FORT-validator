@@ -1,8 +1,11 @@
-#include "line_file.h"
-
 #include <check.h>
 #include <errno.h>
 #include <stdlib.h>
+
+#include "file.c"
+#include "impersonator.c"
+#include "line_file.c"
+#include "log.c"
 
 START_TEST(file_line_normal)
 {

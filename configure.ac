@@ -35,35 +35,14 @@ AC_SEARCH_LIBS([backtrace],[execinfo],[],
 )
 
 # Dependencies managed by pkg-config
-
-PKG_CHECK_MODULES([JANSSON], [jansson])
-
 # By the way: Apparently PKG_CHECK_MODULES is poor practice now. I can't tell;
 # it's always the same guy complaining about it in Stack Overflow.
 # (Main one: https://stackoverflow.com/questions/10220946)
 # But I couldn't make check work with AC_SEARCH_LIBS, and (probably due to
 # typical obscure bullshit autotools reasoning) I have no idea why.
-
-AC_ARG_WITH(
-	[unit-tests],
-	AS_HELP_STRING(
-		[--with-unit-tests],
-		[Generate unit tests. (Requires check)]
-	)
-)
-
-# https://www.gnu.org/software/automake/manual/html_node/Conditional-Subdirectories.html
-# "Subdirectories with AM_CONDITIONAL" never worked for me. The problem might
-# be that it puts `MAYBE_TESTS` in `.PRECIOUS`, which maybe is a bug in the
-# autotools. (I honestly can't tell. They are so incredibly poorly designed.)
-# The code below is implemented as "Subdirectories with AC_SUBST."
-if test "x$with_unit_tests" = "xyes"; then
-	PKG_CHECK_MODULES([CHECK], [check])
-	MAYBE_TESTS=test
-else
-	MAYBE_TESTS=
-fi
-AC_SUBST([MAYBE_TESTS])
+PKG_CHECK_MODULES([JANSSON], [jansson])
+PKG_CHECK_MODULES([CHECK], [check], [usetests=yes], [usetests=no])
+AM_CONDITIONAL([USE_TESTS], [test "x$usetests" = "xyes"])
 
 # Spit out the makefiles.
 AC_OUTPUT(Makefile src/Makefile man/Makefile test/Makefile)

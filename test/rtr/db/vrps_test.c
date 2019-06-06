@@ -2,10 +2,21 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "common.h"
-#include "thread_var.h"
-#include "validation_handler.h"
-#include "rtr/db/vrps.h"
+#include "address.c"
+#include "crypto/base64.c"
+#include "common.c"
+#include "file.c"
+#include "impersonator.c"
+#include "json_parser.c"
+#include "log.c"
+#include "output_printer.c"
+#include "rtr/db/delta.c"
+#include "rtr/db/roa_table.c"
+#include "rtr/db/rtr_db_impersonator.c"
+#include "rtr/db/vrps.c"
+#include "slurm/slurm_db.c"
+#include "slurm/slurm_loader.c"
+#include "slurm/slurm_parser.c"
 
 /* -- Expected database descriptors -- */
 
@@ -54,7 +65,7 @@ static const bool deltas_3to3_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, };
 
 serial_t current_min_serial = 0;
 
-serial_t
+int
 clients_get_min_serial(serial_t *result)
 {
 	*result = current_min_serial;

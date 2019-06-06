@@ -1,1 +1,1 @@
-man_MANS = rtr_server.8
+dist_man_MANS = fort.8

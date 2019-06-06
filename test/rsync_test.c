@@ -1,10 +1,12 @@
-#include "rsync/rsync.c"
-
 #include <check.h>
 #include <errno.h>
 #include <stdlib.h>
 
-#include "common.h"
+#include "log.c"
+#include "impersonator.c"
+#include "str.c"
+#include "uri.c"
+#include "rsync/rsync.c"
 
 START_TEST(rsync_load_normal)
 {

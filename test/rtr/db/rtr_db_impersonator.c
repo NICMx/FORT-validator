@@ -1,6 +1,5 @@
-#include "object/tal.h"
-
 #include <check.h>
+#include "object/tal.h"
 
 static int iteration = 0;
 

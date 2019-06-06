@@ -11,25 +11,25 @@ static char addr_buffer1[INET6_ADDRSTRLEN];
 static char addr_buffer2[INET6_ADDRSTRLEN];
 
 char const *
-v4addr2str(struct in_addr *addr)
+v4addr2str(struct in_addr const *addr)
 {
 	return inet_ntop(AF_INET, addr, addr_buffer1, sizeof(addr_buffer1));
 }
 
 char const *
-v4addr2str2(struct in_addr *addr)
+v4addr2str2(struct in_addr const *addr)
 {
 	return inet_ntop(AF_INET, addr, addr_buffer2, sizeof(addr_buffer2));
 }
 
 char const *
-v6addr2str(struct in6_addr *addr)
+v6addr2str(struct in6_addr const *addr)
 {
 	return inet_ntop(AF_INET6, addr, addr_buffer1, sizeof(addr_buffer1));
 }
 
 char const *
-v6addr2str2(struct in6_addr *addr)
+v6addr2str2(struct in6_addr const *addr)
 {
 	return inet_ntop(AF_INET6, addr, addr_buffer2, sizeof(addr_buffer2));
 }

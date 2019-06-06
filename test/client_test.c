@@ -1,7 +1,10 @@
-#include "clients.h"
-
 #include <check.h>
 #include <stdlib.h>
+
+#include "clients.c"
+#include "common.c"
+#include "log.c"
+#include "impersonator.c"
 
 static int
 handle_foreach(struct client const *client, void *arg)

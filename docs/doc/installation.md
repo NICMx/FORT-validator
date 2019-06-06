@@ -14,6 +14,18 @@ title: Compilation and Installation
 2. [Debian-based distributions](#debian-based-distributions)
 3. [OpenBSD](#openbsd)
 
+## Introduction
+
+Currently, you have three options:
+
+- The Debian package: Easiest; for Debian-based distributions only.
+- The generic autotools-based "upstream" tarball: For most (if not all) other users.
+- Compiling on the git repository: Best for developers.
+
+## Debian package
+
+
+
 ## Dependencies
 
 > Note: I'm only including this section in case you intend to install Fort in an unlisted OS (and therefore need a little research). For Debians and OpenBSD, just follow the steps in the sections below.

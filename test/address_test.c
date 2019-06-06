@@ -1,8 +1,10 @@
-#include "address.c"
-
 #include <check.h>
 #include <errno.h>
 #include <stdlib.h>
+
+#include "address.c"
+#include "log.c"
+#include "impersonator.c"
 
 static void
 test_range4(uint32_t min, uint32_t max, bool valid)

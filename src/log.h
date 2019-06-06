@@ -5,14 +5,14 @@
 #include "incidence/incidence.h"
 
 /*
- * __dead is supposed to be defined in sys/cdefs.h, but is apparently not
- * portable.
+ * According to BSD style, __dead is supposed to be defined in sys/cdefs.h,
+ * but it doesn't exist in Linux.
  */
 #ifndef __dead
 #if __GNUC__
 #define __dead __attribute__((noreturn))
 #else
-#define __dead
+#define __dead /* Nothing */
 #endif
 #endif
 

@@ -2,11 +2,23 @@
 #include <stdlib.h>
 #include <sys/queue.h>
 
-#include "validation_handler.h"
-#include "rtr/pdu.h"
-#include "rtr/pdu_handler.h"
-#include "rtr/pdu_sender.h"
-#include "rtr/db/vrps.h"
+#include "address.c"
+#include "common.c"
+#include "file.c"
+#include "impersonator.c"
+#include "json_parser.c"
+#include "log.c"
+#include "output_printer.c"
+#include "crypto/base64.c"
+#include "rtr/pdu_handler.c"
+#include "rtr/err_pdu.c"
+#include "rtr/db/delta.c"
+#include "rtr/db/roa_table.c"
+#include "rtr/db/rtr_db_impersonator.c"
+#include "rtr/db/vrps.c"
+#include "slurm/slurm_db.c"
+#include "slurm/slurm_loader.c"
+#include "slurm/slurm_parser.c"
 
 /* Helper functions */
 
@@ -89,7 +101,7 @@ init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
 
 /* Impersonator functions */
 
-serial_t
+int
 clients_get_min_serial(serial_t *result)
 {
 	*result = 0;

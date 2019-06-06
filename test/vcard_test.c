@@ -1,6 +1,8 @@
-#include "object/vcard.c"
-
 #include <check.h>
+
+#include "log.c"
+#include "impersonator.c"
+#include "object/vcard.c"
 
 #define VC_BEGIN	"BEGIN:VCARD\r\n"
 #define VC_VERSION	"VERSION:4.0\r\n"
