@@ -72,7 +72,8 @@ rpp_refput(struct rpp *pp)
 	pp->references--;
 	if (pp->references == 0) {
 		uris_cleanup(&pp->certs, __uri_refput);
-		uri_refput(pp->crl);
+		if (pp->crl_set)
+			uri_refput(pp->crl);
 		if (pp->crl_stack != NULL)
 			sk_X509_CRL_pop_free(pp->crl_stack, X509_CRL_free);
 		uris_cleanup(&pp->roas, __uri_refput);
