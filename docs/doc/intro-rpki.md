@@ -12,15 +12,7 @@ Routing, having been conceived near the inception of networking, was hardly desi
 
 ## Solution
 
-The RPKI (Resource Public Key Infrastructure) is a PKI (Public Key Infrastructure) that deals with Internet Resources.
-
-> ### PKI
-> 
-> TODO
-
-> ### Internet Resources
-> 
-> In this context, "resource" refers to IP Addresses and AS numbers.
+The RPKI (Resource Public Key Infrastructure) is a PKI (Public Key Infrastructure) that deals with Internet Resources. (In this context, "resource" refers to IP Addresses and AS numbers.)
 
 Basically, the idea is that one should be able to verify the origin of a route by following a chain of criptographically-signed certificates rooted at one of the [RIRs](https://en.wikipedia.org/wiki/Regional_Internet_registry):
 

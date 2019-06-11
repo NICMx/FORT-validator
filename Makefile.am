@@ -12,3 +12,8 @@
 AUTOMAKE_OPTIONS = foreign
 
 SUBDIRS = src man test
+
+EXTRA_DIST  = tal/afrinic.tal
+EXTRA_DIST += tal/apnic.tal
+EXTRA_DIST += tal/lacnic.tal
+EXTRA_DIST += tal/ripe.tal

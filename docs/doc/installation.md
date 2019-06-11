@@ -11,20 +11,11 @@ title: Compilation and Installation
 ## Index
 
 1. [Dependencies](#dependencies)
-2. [Debian-based distributions](#debian-based-distributions)
-3. [OpenBSD](#openbsd)
-
-## Introduction
-
-Currently, you have three options:
-
-- The Debian package: Easiest; for Debian-based distributions only.
-- The generic autotools-based "upstream" tarball: For most (if not all) other users.
-- Compiling on the git repository: Best for developers.
-
-## Debian package
-
-
+2. [Option 1: Installing the Debian package](#option-1-installing-the-debian-package)
+3. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
+	1. [Debian version](#debian-version)
+	2. [OpenBSD version](#openbsd-version)
+4. [Option 3: Compiling from the git repositories](#option-3-compiling-from-the-git-repositories)
 
 ## Dependencies
 
@@ -37,15 +28,41 @@ The dependencies are
 3. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
 4. [rsync](http://rsync.samba.org/)
 
-There's also [autoconf](https://www.gnu.org/software/autoconf/), [automake](https://www.gnu.org/software/automake/) and unzip (or [git](https://git-scm.com/)), but those are only needed for installation paperwork.
+The build dependencies are
 
-## Debian-based distributions
+- [autoconf](https://www.gnu.org/software/autoconf/)
+- [automake](https://www.gnu.org/software/automake/)
+- unzip (or [git](https://git-scm.com/))
 
-I haven't actually tried this in all the Debian-based distributions. Tested in Ubuntu 18.
+(Some builds do not need all these dependencies.)
+
+## Option 1: Installing the Debian package
+
+> TODO Upload to Debian, add more archs and/or host these links on Github releases properly.
+
+{% highlight bash %}
+wget https://www.dropbox.com/s/dbdhn4yd9m3nnct/libcmscodec1_0.0.1-1_amd64.deb
+wget https://www.dropbox.com/s/7c0rs49ewcu6m93/fort_0.0.1-1_amd64.deb
+sudo apt install ./libcmscodec1_0.0.1-1_amd64.deb ./fort_0.0.1-1_amd64.deb
+{% endhighlight %}
+
+Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which you can [configure](usage.html#--configuration-file) at `/etc/fort/config.json`.
+
+{% highlight bash %}
+sudo service fort start
+service fort status
+tail /var/log/syslog
+sudo service fort stop
+{% endhighlight %}
+
+etc.
+
+## Option 2: Compiling and installing the release tarball
+
+### Debian version
 
 {% highlight bash %}
 ########### normal dependencies ###########
-# autoconf 2.69 or higher, please.
 sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync unzip
 
 ############### libcmscodec ###############
@@ -74,7 +91,7 @@ sudo make install
 cd ../../
 {% endhighlight %}
 
-## OpenBSD
+### OpenBSD version
 
 > TODO: The autotools are weird in this OS.
 > 
@@ -85,7 +102,8 @@ cd ../../
 {% highlight bash %}
 ########### normal dependencies ###########
 su
-pkg_add jansson libexecinfo rsync unzip # OpenBSD ships with LibreSSL
+# OpenBSD already ships with LibreSSL
+pkg_add jansson libexecinfo rsync unzip
 exit
 
 ############### libcmscodec ###############
@@ -117,3 +135,39 @@ make install
 exit
 cd ../../
 {% endhighlight %}
+
+## Option 3: Compiling the git repositories
+
+{% highlight bash %}
+########### normal dependencies ###########
+sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync
+
+################## asn1c ##################
+# (Needed by libcmscodec's autogen. Relatively recent commit required.)
+git clone https://github.com/vlm/asn1c.git
+cd asn1c
+test -f configure || autoreconf -iv
+./configure
+make
+sudo make install
+
+############### libcmscodec ###############
+git clone https://github.com/NICMx/libcmscodec.git
+cd libcmscodec/
+./autogen.sh
+./configure
+make
+sudo make install
+sudo ldconfig
+cd ../
+
+################## fort ###################
+git clone https://github.com/NICMx/FORT-validator.git
+cd FORT-validator/
+./autogen.sh
+./configure
+make
+sudo make install
+cd ../
+{% endhighlight %}
+
