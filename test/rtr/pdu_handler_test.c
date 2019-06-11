@@ -1,8 +1,8 @@
 #include <check.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/queue.h>
 
-#include "address.c"
 #include "common.c"
 #include "file.c"
 #include "impersonator.c"
@@ -10,8 +10,12 @@
 #include "log.c"
 #include "output_printer.c"
 #include "crypto/base64.c"
+#include "rtr/pdu.c"
 #include "rtr/pdu_handler.c"
+#include "rtr/primitive_reader.c"
+#include "rtr/primitive_writer.c"
 #include "rtr/err_pdu.c"
+#include "rtr/stream.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/roa_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
@@ -334,7 +338,7 @@ START_TEST(test_bad_session_id)
 	struct rtr_request request;
 	struct serial_query_pdu client_pdu;
 
-	pr_info("-- Bad Session ID--");
+	pr_info("-- Bad Session ID --");
 
 	/* Prepare DB */
 	init_db_full();
@@ -355,6 +359,58 @@ START_TEST(test_bad_session_id)
 }
 END_TEST
 
+size_t
+serialize_serial_query_pdu(struct serial_query_pdu *pdu, unsigned char *buf)
+{
+	unsigned char *ptr;
+
+	ptr = buf;
+	ptr = write_int8(ptr, pdu->header.protocol_version);
+	ptr = write_int8(ptr, pdu->header.pdu_type);
+	ptr = write_int16(ptr, pdu->header.m.session_id);
+	ptr = write_int32(ptr, pdu->header.length);
+	ptr = write_int32(ptr, pdu->serial_number);
+
+	return ptr - buf;
+}
+
+START_TEST(test_bad_length)
+{
+#define BUF_SIZE 13 /* Max expected length */
+	struct rtr_request request;
+	struct serial_query_pdu client_pdu;
+	struct pdu_metadata const *meta;
+	unsigned char buf[BUF_SIZE];
+	int fd;
+
+	pr_info("-- Bad Length --");
+
+	/* Prepare DB */
+	init_db_full();
+
+	/* From serial 0: Init client request */
+	init_serial_query(&request, &client_pdu, 0);
+	/* Less than what's specified */
+	client_pdu.header.length--;
+
+	ck_assert_int_gt(serialize_serial_query_pdu(&client_pdu, buf), 0);
+	fd = buffer2fd(buf, BUF_SIZE);
+	ck_assert_int_ge(fd, 0);
+
+	/* Define expected server response */
+	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
+
+	/* Run and validate, before handling */
+	ck_assert_int_eq(-EINVAL, pdu_load(fd, &request, &meta));
+	ck_assert_uint_eq(false, has_expected_pdus());
+
+	/* Clean up */
+	vrps_destroy();
+	close(fd);
+#undef BUF_SIZE
+}
+END_TEST
+
 Suite *pdu_suite(void)
 {
 	Suite *suite;
@@ -368,6 +424,7 @@ Suite *pdu_suite(void)
 
 	error = tcase_create("Unhappy path cases");
 	tcase_add_test(error, test_bad_session_id);
+	tcase_add_test(error, test_bad_length);
 
 	suite = suite_create("PDU Handler");
 	suite_add_tcase(suite, core);

@@ -48,8 +48,8 @@ struct rpki_config {
 	char *slurm;
 
 	struct {
-		/** Enable/disable the RTR server. */
-		bool enabled;
+		/** Disable the RTR server. */
+		bool disabled;
 		/** The bound listening address of the RTR server. */
 		char *address;
 		/** The bound listening port of the RTR server. */
@@ -198,10 +198,10 @@ static const struct option_field options[] = {
 	/* Server fields */
 	{
 		.id = 5000,
-		.name = "server.enabled",
+		.name = "server.disabled",
 		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, server.enabled),
-		.doc = "Enable or disable the RTR server.",
+		.offset = offsetof(struct rpki_config, server.disabled),
+		.doc = "Disable the RTR server.",
 	}, {
 		.id = 5001,
 		.name = "server.address",
@@ -342,7 +342,7 @@ handle_usage(struct option_field const *field, char *arg)
 static int
 handle_version(struct option_field const *field, char *arg)
 {
-	printf("0.0.1\n");
+	printf("0.0.1-beta\n");
 	exit(0);
 }
 
@@ -453,7 +453,7 @@ set_default_values(void)
 	 * duplicates.
 	 */
 
-	rpki_config.server.enabled = true;
+	rpki_config.server.disabled = false;
 	rpki_config.server.address = NULL;
 	rpki_config.server.port = strdup("323");
 	if (rpki_config.server.port == NULL)
@@ -629,9 +629,9 @@ get_option_metadatas(void)
 }
 
 bool
-config_get_server_enabled(void)
+config_get_server_disabled(void)
 {
-	return rpki_config.server.enabled;
+	return rpki_config.server.disabled;
 }
 
 char const *

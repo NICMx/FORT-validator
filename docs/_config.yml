@@ -7,5 +7,5 @@ defaults:
     values:
       layout: "default"
 
-fort-latest-version: 0.0.1
+fort-latest-version: 0.0.1-beta
 libcmscodec-latest-version: beta2

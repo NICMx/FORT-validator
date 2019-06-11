@@ -1,6 +1,8 @@
 #include <check.h>
 #include "object/tal.h"
 
+#include "address.c"
+
 static int iteration = 0;
 
 static void

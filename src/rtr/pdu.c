@@ -100,6 +100,12 @@ pdu_load(int fd, struct rtr_request *request,
 	}
 
 	error = meta->from_stream(&header, &reader, request->pdu);
+	if (reader.size != 0) {
+		error = RESPOND_ERROR(err_pdu_send_invalid_request(fd,
+		    request,
+		    "The PDU length sent doesn't match the real PDU length"));
+		goto revert_pdu;
+	}
 	if (error) {
 		RESPOND_ERROR(err_pdu_send_internal_error(fd));
 		goto revert_pdu;

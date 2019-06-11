@@ -5,6 +5,75 @@
 #include <stdlib.h>
 #include "common.h"
 
+#include "file.c"
+#include "impersonator.c"
+#include "line_file.c"
+#include "log.c"
+#include "state.h"
+#include "str.c"
+#include "uri.c"
+#include "random.c"
+#include "crypto/base64.c"
+#include "rsync/rsync.c"
+
+/* Impersonate functions that won't be utilized by tests */
+
+int
+validation_prepare(struct validation **out, struct tal *tal,
+    struct validation_handler *validation_handler)
+{
+	return 0;
+}
+
+int
+certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
+{
+	return -EINVAL;
+}
+
+enum pubkey_state
+validation_pubkey_state(struct validation *state)
+{
+	return PKS_INVALID;
+}
+
+void
+validation_destroy(struct validation *state)
+{
+	/* Nothing to destroy */
+}
+
+int
+process_file_or_dir(char const *location, char const *file_ext,
+    process_file_cb cb, void *arg)
+{
+	return 0;
+}
+
+void
+fnstack_init(void)
+{
+	/* Empty */
+}
+
+void
+fnstack_cleanup(void)
+{
+	/* Empty */
+}
+
+void
+fnstack_pop(void)
+{
+	/* Empty */
+}
+
+void
+fnstack_push(char const *file)
+{
+	/* Empty */
+}
+
 START_TEST(tal_load_normal)
 {
 	struct tal *tal;

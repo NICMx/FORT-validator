@@ -2,7 +2,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "address.c"
 #include "crypto/base64.c"
 #include "common.c"
 #include "file.c"

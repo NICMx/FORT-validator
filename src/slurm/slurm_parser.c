@@ -84,7 +84,7 @@ set_asn(json_t *object, bool is_assertion, uint32_t *result, uint8_t *flag,
 }
 
 static int
-set_comment(json_t *object, char const **comment, uint8_t *flag,
+set_comment(json_t *object, char **comment, uint8_t *flag,
     size_t *members_loaded)
 {
 	char const *tmp;
@@ -416,7 +416,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 	return 0;
 
 release_comment:
-	free((void *)result.comment);
+	free(result.comment);
 	return error;
 }
 
@@ -536,7 +536,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 	return 0;
 
 release_comment:
-	free((void *)result.comment);
+	free(result.comment);
 release_router_key:
 	free(result.router_public_key);
 release_ski:

@@ -25,11 +25,11 @@ check_PROGRAMS += line_file.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += rsync.test
 check_PROGRAMS += roa_table.test
-#check_PROGRAMS += tal.test
+check_PROGRAMS += tal.test
 check_PROGRAMS += vcard.test
 check_PROGRAMS += vrps.test
-#check_PROGRAMS += rtr/pdu.test
-#check_PROGRAMS += rtr/primitive_reader.test
+check_PROGRAMS += rtr/pdu.test
+check_PROGRAMS += rtr/primitive_reader.test
 TESTS = ${check_PROGRAMS}
 
 address_test_SOURCES = address_test.c
@@ -50,15 +50,8 @@ roa_table_test_LDADD = ${MY_LDADD}
 rsync_test_SOURCES = rsync_test.c
 rsync_test_LDADD = ${MY_LDADD}
 
-#tal_test_SOURCES  = ${BASIC_MODULES}
-#tal_test_SOURCES += ../src/file.c
-#tal_test_SOURCES += ../src/crypto/base64.c
-#tal_test_SOURCES += ../src/random.c
-#tal_test_SOURCES += ../src/str.c
-#tal_test_SOURCES += ../src/uri.c
-#tal_test_SOURCES += ../src/line_file.c
-#tal_test_SOURCES += tal_test.c
-#tal_test_LDADD = ${MY_LDADD}
+tal_test_SOURCES = tal_test.c
+tal_test_LDADD = ${MY_LDADD}
 
 vcard_test_SOURCES = vcard_test.c
 vcard_test_LDADD = ${MY_LDADD}
@@ -66,17 +59,11 @@ vcard_test_LDADD = ${MY_LDADD}
 vrps_test_SOURCES = rtr/db/vrps_test.c
 vrps_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
-#rtr_pdu_test_SOURCES  = ${BASIC_MODULES}
-#rtr_pdu_test_SOURCES += rtr/pdu_test.c
-#rtr_pdu_test_SOURCES += rtr/stream.c
-#rtr_pdu_test_SOURCES += ../src/rtr/primitive_reader.c
-#rtr_pdu_test_SOURCES += ../src/rtr/pdu_handler.c
-#rtr_pdu_test_LDADD = ${MY_LDADD}
+rtr_pdu_test_SOURCES = rtr/pdu_test.c
+rtr_pdu_test_LDADD = ${MY_LDADD}
 
-#rtr_primitive_reader_test_SOURCES  = ${BASIC_MODULES}
-#rtr_primitive_reader_test_SOURCES += rtr/primitive_reader_test.c
-#rtr_primitive_reader_test_SOURCES += rtr/stream.c
-#rtr_primitive_reader_test_LDADD = ${MY_LDADD}
+rtr_primitive_reader_test_SOURCES = rtr/primitive_reader_test.c
+rtr_primitive_reader_test_LDADD = ${MY_LDADD}
 
 EXTRA_DIST  = impersonator.c
 EXTRA_DIST += rtr/db/rtr_db_impersonator.c

@@ -128,8 +128,6 @@ __perform_standalone_validation(struct roa_table **result)
 	validation_handler.arg = roas;
 
 	error = perform_standalone_validation(&validation_handler);
-	/* Print after validation to avoid duplicated info */
-	output_print_roas(roas);
 	if (error) {
 		roa_table_destroy(roas);
 		return error;
@@ -301,11 +299,17 @@ vrps_update(bool *changed)
 
 	if (old_base != NULL)
 		roa_table_destroy(old_base);
+
+	/* Print after validation to avoid duplicated info */
+	output_print_roas(new_base);
+
 	return 0;
 
 revert_deltas:
 	deltas_refput(deltas);
 revert_base:
+	/* Print info that was already validated */
+	output_print_roas(new_base);
 	roa_table_destroy(new_base);
 	return error;
 }

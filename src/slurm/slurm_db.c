@@ -195,7 +195,7 @@ static void
 clean_slurm_prefix(struct slurm_prefix *prefix)
 {
 	if ((prefix->data_flag & SLURM_COM_FLAG_COMMENT) > 0)
-		free((void *)prefix->comment);
+		free(prefix->comment);
 }
 
 static void
@@ -206,7 +206,7 @@ clean_slurm_bgpsec(struct slurm_bgpsec *bgpsec)
 	if ((bgpsec->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0)
 		free(bgpsec->router_public_key);
 	if ((bgpsec->data_flag & SLURM_COM_FLAG_COMMENT) > 0)
-		free((void *)bgpsec->comment);
+		free(bgpsec->comment);
 }
 
 void

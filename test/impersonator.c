@@ -35,6 +35,24 @@ v6addr2str2(struct in6_addr const *addr)
 }
 
 char const *
+config_get_tal(void)
+{
+	return "tal/";
+}
+
+bool
+config_get_shuffle_tal_uris(void)
+{
+	return false;
+}
+
+unsigned int
+config_get_max_cert_depth(void)
+{
+	return 32;
+}
+
+char const *
 config_get_local_repository(void)
 {
 	return "repository/";
@@ -78,15 +96,15 @@ config_get_slurm(void)
 }
 
 bool
-config_get_server_enabled(void)
+config_get_server_disabled(void)
 {
-	return false;
+	return true;
 }
 
 char const *
 config_get_output_roa(void)
 {
-	return "-";
+	return NULL;
 }
 
 enum incidence_action

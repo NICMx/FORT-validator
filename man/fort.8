@@ -1,51 +1,203 @@
-.TH rpki-validator 8 2019-03-5 v0.0.1-beta "RPKI certificate path validator"
+.TH fort 8 "2019-06-07" "v0.0.1-beta" "FORT validator"
 
 .SH NAME
-rpki-validator - Actually still unnamed officially.
+fort \- RPKI certificate path validator
 
+.SH SYNOPSIS
+.B fort
+[\fIOPTIONS\fR] 
+
+.SH DESCRIPTION
+
+FORT is an RPKI validator and a RTR server (currently only RTR version 0
+is supported).
+In the RPKI context, FORT is also known as an RP (Relying Party).
+A simple resume of the actions performed by an RP can be read at RFC 6480
+section 6
+.RI "(" https://tools.ietf.org/html/rfc6480#section-6 ")."
+.P
+The RTR (RPKI to Router Protocol) is basically "a protocol to deliver validated
+prefix origin data to routers", see RFC 6810
+.RI "(" https://tools.ietf.org/html/rfc6810 ")."
+.P
+
+So, FORT performs RPKI validations starting from a single or set of TALs (Trust
+Anchor Locators), either in a recurrent or single (standalone) way.
+Additionally, it can talk to routers using the RTR protocol (currently version
+0) to provide them the VRPs (Validated ROA Payloads) resultant of the
+validation.
+ 
 .SH OPTIONS
-
---help
+.TP
+.B \-h, \-\-help
 .RS 4
-Print long usage message.
+Print long usage message and exit.
 .RE
 .P
 
---usage
+.B \-\-usage
 .RS 4
-Print short usage message.
+Print short usage message and exit.
 .RE
 .P
 
---version
+.B \-V, \-\-version
 .RS 4
-Print program version.
+Print program version and exit.
 .RE
 .P
 
---configuration-file=<file>
+.BR \-f ", " \-\-configuration-file=\fIFILE\fR
 .RS 4
-Path to a JSON file from which additional configuration will be read.
+Path to a JSON file from where additional configuration will be read.
+.P
+The configuration options are mostly the same as the ones presented in this
+manual. Each property is mapped as a member of the main JSON object, the
+members that contain a dot '.' must be set as objects (eg.
+"--server.address=127.0.0.1" will be set as "{ "server": { "address":
+"127.0.0.1" } }".
+.P
+An example configuration file can be seen in this manual at the \fBEXAMPLES\fR
+section.
+.P
+Some configuration options can't be set at the JSON configuration file:
+\fB--version\fR, \fB--help\fR, \fB--version\fR, and \fB--configuration-file\fR.
+.P
+Other configuration options can be configured exclusively at the JSON
+configuration file:
+.P
+.B rsync.program
+.RS 4
+Name of the program needed to invoke an rsync file transfer. The default value
+is "rsync".
+.RE
+.P
+.B rsync.arguments-recursive
+.RS 4
+Arguments needed by
+.B rsync.program
+to perform a recursive rsync. The arguments are specified as a JSON string
+array; its default value is:
+[ "--recursive", "--delete", "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]
+.P
+FORT will replace "$REMOTE" with the remote URL it needs to download, and
+"$LOCAL" with the target local directory where the file is supposed to be
+dropped.
+.P
+If \fBrsync.program\fR set is \fIrsync\fR (default value), see more about its
+arguments and behavior at \fIrsync(1)\fR.
+.RE
+.P
+.B rsync.arguments-flat
+.RS 4
+Arguments needed by
+.B rsync.program
+to perform a single-file rsync. The arguments are specified as a JSON string
+array; its default value is:
+[ "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]
+.P
+FORT will replace "$REMOTE" with the remote URL it needs to download, and
+"$LOCAL" with the target local directory where the file is supposed to be
+dropped.
+.P
+If \fBrsync.program\fR set is \fIrsync\fR (default value), see more about its
+arguments and behavior at \fIrsync(1)\fR.
+.RE
+.P
+.B incidences
+.RS 4
+A listing of actions to be performed by validation upon encountering certain
+common error conditions. This configuration is a means to modify FORTs
+validator behavior upon encountering profile violations that, from experience,
+are often overlooked.
+.P
+The incidences are configured inside the member "incidences" as a JSON array
+of objects, each with two members "name" and "action", eg:
+.P
+"incidences": [
+.RS 2
+{
+.RS 2
+"name": "Signed Object's hash algorithm has NULL object as parameters",
+.br
+"action": "warn"
+.RE
+}
+.RE
+]
+.P
+An incidence contains a \fBname\fR and an \fBaction\fR. The \fBname\fR is
+merely an identifier defined by FORT that states a particular error condition,
+and the \fBaction\fR is an enumeration that states the outcome of a violation
+of the corresponding incidence.
+.P
+The \fBaction\fR can have one of three values:
+.br
+.RS 4
+\fIerror\fR: Print error message in error log level, fail validation of the
+offending object (and all of its children).
+.br
+\fIwarn\fR: Print error message in warning log level, continue validation as if
+nothing happened.
+.br
+\fIignore\fR: Do not print error message, continue validation as if nothing
+happened.
+.RE
+.P
+By default, all the incidences have an action of \fIerror\fR. Currently there's
+only one registered incidence:
+\fISigned Object's hash algorithm has NULL object as parameters\fR.
+.P
+More information about incidences can be consulted at FORT's web docs.
+.RE
 .RE
 .P
 
---local-repository=<directory>
+.BR \-t ", " \-\-tal=(\fIFILE\fR|\fIDIRECTORY\fR)
+.RS 4
+Path to the TAL file or directory the validation will sprawl from.
+.P
+If a DIRECTORY is specified, the files with the extension '\fI.tal\fR' are
+utilized by fort as TAL.
+.P
+The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
+be used to access the "Trust Anchor" (the root of a particular RPKI tree) and
+its public key. (See RFC 7730.)
+.RE
+.P
+
+.BR \-r ", " \-\-local-repository=\fIDIRECTORY\fR
 .RS 4
 Path to a directory where the local cache of the repository will be stored
 and/or read.
+.P
+Right now, FORT accesses RPKI repositories by way of \fIrsync\fR. During each
+validation cycle, FORT will literally invoke an rsync command (see
+\fBrsync.program\fR and \fBrsync.arguments-recursive\fR), which will download
+the files into \fB--local-repository\fR. FORT’s validation operates on the resulting
+copy.
+.P
+Because rsync uses delta encoding, you’re advised to keep this cache around. It
+significantly speeds up subsequent validation cycles.
 .RE
 .P
 
---sync-strategy=(off|strict|root|root-except-ta)
+.B \-\-sync-strategy=(\fIoff\fR|\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
 .RS 4
-RSYNC download strategy.
+\fIrsync\fR download strategy; states the way rsync URLs are approached during
+downloads. It can have one of four values:
+.IR off ", "
+.IR strict ", "
+.IB "root" "(default value)" \fR, \fR
+.IR root-except-ta "."
 .P
-off
+.I off
 .RS 4
-Skip all RSYNCs. (Validate the existing cache repository pointed by --local-repository.)
+Skip all RSYNCs. (Validate the existing cache repository pointed by
+--local-repository.)
 .RE
 .P
-strict
+.I strict
 .RS 4
 RSYNC every repository publication point separately. Only skip publication
 points that have already been downloaded during the current validation cycle.
@@ -74,7 +226,7 @@ A validator following the `strict` strategy would download `bar`, download
 This is the slowest, but also the strictly correct sync strategy.
 .RE
 .P
-root
+.I root
 .RS 4
 For each publication point found, guess the root of its repository and RSYNC
 that instead. Then skip any subsequent children of said root.
@@ -92,7 +244,7 @@ is the fastest synchronization strategy. At time of writing, this is true for
 all the current official repositories.
 .RE
 .P
-root-except-ta
+.I root-except-ta
 .RS 4
 Synchronizes the root certificate (the one pointed by the TAL) in 'strict' mode,
 and once it's validated, synchronizes the rest of the repository in 'root' mode.
@@ -105,57 +257,304 @@ root certificate.
 .RE
 .P
 
---maximum-certificate-depth=<unsigned integer>
+.B \-\-shuffle-uris
 .RS 4
-Maximum allowable certificate chain length.
+If enabled, FORT will access TAL URLs in random order. This is meant for load
+balancing. If disabled, FORT will access TAL URLs in sequential order.
+.P
+By default, the flag is disabled.
+.P
+This flag is only relevant if the TAL lists more than one URL. Regardless of
+this flag, FORT will stop iterating through the URLs as soon as it finds one
+that yields a successful traversal.
+.RE
+.P
+
+.B \-\-maximum-certificate-depth=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum allowable certificate chain length. Meant to protect FORT from
+iterating infinitely due to certificate chain loops.
+.P
+By default, it has a value of \fI32\fR.
 .P
 (Required to prevent loops and "other degenerate forms of the logical RPKI
 hierarchy." (RFC 6481))
 .RE
 .P
 
---tal=<file>
+.B \-\-slurm=(\fIFILE\fR|\fIDIRECTORY\fR)
 .RS 4
-Path to the TAL file the validation will sprawl from.
+Path to the SLURM FILE or SLURMs DIRECTORY.
 .P
-The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
-be used to access the "Trust Anchor" (the root of a particular RPKI tree) and
-its public key. (See RFC 7730.)
+In case a DIRECTORY is set, the files with extension '\fI.slurm\fR' will be the
+ones considered as SLURM files and FORT will use them.
+.P
+The SLURM definition is from RFC 8416. SLURM stands for "Simplified Local
+Internet Number Resource Management with the RPKI", basically is a document
+that can override (either as a filter or adding assertions) the global RPKI
+repository data fetched by FORT; potentially useful for network operators.
+.P
+A basic example of a SLURM file can be seen in this manual at the
+\fBEXAMPLES\fR section (it's almost the same as the one in RFC 8416).
+.P
+See more about SLURM configuration at FORT's web docs.
 .RE
 .P
 
---shuffle-uris
+.B \-\-server.disabled
 .RS 4
-Shuffle URIs in the TAL before accessing them.
+Disable the RTR server implemented by FORT. If this flag is set, the rest of
+the configuration options "\fIserver.*\fR" are ignored and FORT performs an
+in-place standalone RPKI validation.
+.P
+By default, the RTR server is enabled.
 .RE
 .P
 
---color-output
+.B \-\-server.address=\fINODE\fR
 .RS 4
-Print ANSI color codes.
+Hostname or numeric host address the RTR server will be bound to. Must resolve
+to (or be) a bindable IP address. IPv4 and IPv6 are supported.
+.P
+If this field is omitted, FORT will attempt to bind the server using the IP
+address \fIINADDR_ANY\fR (for an IPv4 address) or \fIIN6ADDR_ANY_INIT\fR (for
+an IPv6 address). See \fBgetaddrinfo(3)\fR.
 .RE
 .P
 
---output-file-name-format=(global-url|local-path|file-name)
+.B \-\-server.port=\fISERVICE\fR
+.RS 4
+TCP port or service the server will be bound to.
+.P
+This is a string because a service alias can be used as a valid value. The
+alias are commonly located at \fI/etc/services\fR. See also
+\fBgetaddrinfo(3)\fR and \fBservices(5)\fR.
+.P
+The default port (323) is privileged. To improve security, either change or
+jail it.
+.RE
+.P
+
+.B \-\-server.backlog=\fIUNSIGNED_INTEGER\fR
+.RS 4
+RTR server’s listen queue length. It’s the second argument of the function
+\fIlisten\fR (see more at man \fBlisten(2)\fR). This provides a hint to the
+implementation which the implementation shall use to limit the number of
+outstanding connections in the socket’s listen queue.
+.P
+By default, it has a value of \fISOMAXCONN\fR.
+.RE
+.P
+
+.B \-\-server.validation-interval=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Number of seconds that FORT will sleep between validation cycles. The timer
+starts counting every time a validation is finished, not every time it begins.
+Therefore, the actual validation loop is longer than this number.
+.P
+By default, it has a value of \fI3600\fR.
+.RE
+.P
+
+.BR \-c ", " \-\-log.color-output
+.RS 4
+If enabled, the logging output will contain ANSI color codes. Meant for human
+consumption.
+.RE
+.P
+
+.B \-\-log.file-name-format=(\fIglobal-url\fR|\fIlocal-path\fR|\fIfile-name\fR)
 .RS 4
 Decides which version of file names should be printed during most debug/error
 messages.
 .P
-Suppose a certificate was downloaded from `rsync://rpki.example.com/foo/bar/baz.cer` into the local cache `repository/`:
+Suppose a certificate was downloaded from
+`rsync://rpki.example.com/foo/bar/baz.cer` into the local cache `repository/`:
 .P
-global-url
+.I global-url
 .RS 4
-will print the certificate's name as `rsync://rpki.example.com/foo/bar/baz.cer`.
+Will print the certificate's name as `rsync://rpki.example.com/foo/bar/baz.cer`.
 .RE
 .P
-local-path
+.I local-path
 .RS 4
-will print the certificate's name as `repository/rpki.example.com/foo/bar/baz.cer`.
+Will print the certificate's name as
+`repository/rpki.example.com/foo/bar/baz.cer`.
 .RE
 .P
-file-name
+.I file-name
 .RS 4
-will print the certificate's name as `baz.cer`.
+Will print the certificate's name as `baz.cer`.
 .RE
 .P
+.RE
+
+.B \-\-output.roa=\fIFILE\fR
+.RS 4
+File where the ROAs will be printed in CSV format.
+.P
+When the \fIFILE\fR is specified, its content will be overwritten by the
+resulting ROAs of the validation (if FILE doesn't exists, it'll be created).
+.P
+In order to print the ROAs at console, use a hyphen as the \fIFILE\fR value, eg.
+.B \-\-output.roa=-
+.RE
+
+.SH EXAMPLES
+.B fort \-t /tmp/tal \-r /tmp/repository \-\-server.port 9323
+.RS 4
+Run FORT with all the default values, using a custom TALs directory, a
+custom repository directory as well, and binding the RTR server to port 9323.
+.RE
+.P
+
+.B fort \-t /tmp/tal \-r /tmp/repository \-\-server.disabled \-\-output.roa -
+.RS 4
+Run FORT as standalone and output ROAs CSV to the console.
+.RE
+.P
+
+.nf
+\fBfort \-t /tmp/tal \-r /tmp/repository \\
+     \-\-server.disabled \\
+     \-\-slurm /tmp/myslurm.slurm\fR
+.fi
+.RS 4
+Run FORT as standalone and using a SLURM file.
+.RE
+.P
+
+.B fort --configuration-file conf.json
+.RS 4
+Run FORT using the JSON configuration file \fIconf.json\fR.
+.RE
+.P
+
+.nf
+\fBfort \-t /tmp/tal \-r /tmp/repository \\
+     \-\-server.address ::1 \-\-server.port 9323 \\
+     \-\-server.validation-interval 1800 \\
+     \-\-output.roa /tmp/roas.csv\fR
+.RS 4
+Run FORT with RTR server listening on IPv6 address \fI::1\fR, port 9323,
+validating every 30 minutes, and printing the ROAs CSV in a file.
+.RE
+.P
+
+.B Complete configuration file
+.RS 4
+This is an example of a valid JSON configuration file with all its members set
+to a specific value:
+.nf
+
+{
+  "tal": "/tmp/tal/",
+  "local-repository": "/tmp/repository",
+  "sync-strategy": "root",
+  "shuffle-uris": true,
+  "maximum-certificate-depth": 32,
+  "slurm": "test.slurm",
+  "server": {
+    "disabled": false,
+    "address": "192.0.2.1",
+    "port": "8323",
+    "backlog": 64,
+    "validation-interval": 3600
+  },
+  "log": {
+    "color-output": true,
+    "file-name-format": "local-path"
+  },
+  "rsync": {
+    "program": "rsync",
+    "arguments-recursive": [
+      "--recursive",
+      "--delete",
+      "--times",
+      "--contimeout=20",
+      "$REMOTE",
+      "$LOCAL"
+    ],
+    "arguments-flat": [
+      "--times",
+      "--contimeout=20",
+      "$REMOTE",
+      "$LOCAL"
+    ]
+  },
+  "incidences": [
+    {
+      "name": "Signed Object's hash algorithm has NULL object as parameters",
+      "action": "ignore"
+    }
+  ],
+  "output": {
+    "roa": "/tmp/roas.csv"
+  }
+}
+.ni
+.RE
+.P
+
+.B Dummy SLURM file
+.RS 4
+This is an example of a SLURM file with some prefix filters and
+assertions:
+.nf
+
+{
+  "slurmVersion": 1,
+  "validationOutputFilters": {
+    "prefixFilters": [
+      {
+        "prefix": "192.0.2.0/24",
+        "comment": "All VRPs encompassed by prefix"
+      },
+      {
+        "asn": 64496,
+        "comment": "All VRPs matching ASN"
+      },
+      {
+        "prefix": "198.51.100.0/24",
+        "asn": 64497,
+        "comment": "All VRPs encompassed by prefix, matching ASN"
+      }
+    ],
+    "bgpsecFilters": []
+  },
+  "locallyAddedAssertions": {
+    "prefixAssertions": [
+      {
+        "asn": 64496,
+        "prefix": "198.51.100.0/24",
+        "comment": "My other important route"
+      },
+      {
+        "asn": 64496,
+        "prefix": "2001:DB8::/32",
+        "maxPrefixLength": 48,
+        "comment": "My other important de-aggregated routes"
+      }
+    ],
+    "bgpsecAssertions": []
+   }
+}
+.RE
+.ni
+.P
+
+.\".SH COPYRIGHT
+.\" FORT-validator 2019
+.\" Licensed under the blah blah...
+
+.SH SEE ALSO
+.B Regular man pages
+.RS 4
+.IR getaddrinfo(3) ", " services(5) ", " listen(2) ", " rsync(1)
+.RE
+.B FORTs official documentation
+.RS 4
+More documentation about FORT validator can be consulted at github repository
+(https://github.com/NICMx/FORT-validator) and github website
+(https://nicmx.github.io/FORT-validator/)
 .RE

@@ -17,7 +17,7 @@
 struct slurm_prefix {
 	uint8_t		data_flag;
 	struct vrp	vrp;
-	char const	*comment;
+	char 		*comment;
 };
 
 struct slurm_bgpsec {
@@ -27,7 +27,7 @@ struct slurm_bgpsec {
 	size_t		ski_len;
 	unsigned char	*router_public_key;
 	size_t		router_public_key_len;
-	char const	*comment;
+	char 		*comment;
 };
 
 

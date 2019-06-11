@@ -9,7 +9,6 @@
 #include "config.h"
 #include "extension.h"
 #include "log.h"
-#include "manifest.h"
 #include "nid.h"
 #include "str.h"
 #include "thread_var.h"
@@ -17,6 +16,7 @@
 #include "asn1/oid.h"
 #include "crypto/hash.h"
 #include "object/name.h"
+#include "object/manifest.h"
 #include "rsync/rsync.h"
 
 /* Just to prevent some line breaking. */

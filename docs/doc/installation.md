@@ -37,7 +37,7 @@ The dependencies are
 3. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
 4. [rsync](http://rsync.samba.org/)
 
-There's also [autoconf](https://www.gnu.org/software/autoconf/) and unzip (or [git](https://git-scm.com/)), but those are only needed for installation paperwork.
+There's also [autoconf](https://www.gnu.org/software/autoconf/), [automake](https://www.gnu.org/software/automake/) and unzip (or [git](https://git-scm.com/)), but those are only needed for installation paperwork.
 
 ## Debian-based distributions
 
@@ -46,7 +46,7 @@ I haven't actually tried this in all the Debian-based distributions. Tested in U
 {% highlight bash %}
 ########### normal dependencies ###########
 # autoconf 2.69 or higher, please.
-sudo apt install autoconf build-essential libjansson-dev libssl-dev pkg-config rsync unzip
+sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync unzip
 
 ############### libcmscodec ###############
 mkdir libcmscodec

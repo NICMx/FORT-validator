@@ -18,7 +18,6 @@ struct rpp {
 	struct uris certs; /* Certificates */
 
 	struct rpki_uri *crl; /* Certificate Revocation List */
-	bool crl_set;
 	/* Initialized lazily. Access via rpp_crl(). */
 	STACK_OF(X509_CRL) *crl_stack;
 
@@ -45,7 +44,7 @@ rpp_create(void)
 		return NULL;
 
 	uris_init(&result->certs);
-	result->crl_set = false;
+	result->crl = NULL;
 	result->crl_stack = NULL;
 	uris_init(&result->roas);
 	uris_init(&result->ghostbusters);
@@ -72,7 +71,7 @@ rpp_refput(struct rpp *pp)
 	pp->references--;
 	if (pp->references == 0) {
 		uris_cleanup(&pp->certs, __uri_refput);
-		if (pp->crl_set)
+		if (pp->crl != NULL)
 			uri_refput(pp->crl);
 		if (pp->crl_stack != NULL)
 			sk_X509_CRL_pop_free(pp->crl_stack, X509_CRL_free);
@@ -108,18 +107,17 @@ int
 rpp_add_crl(struct rpp *pp, struct rpki_uri *uri)
 {
 	/* rfc6481#section-2.2 */
-	if (pp->crl_set)
+	if (pp->crl)
 		return pr_err("Repository Publication Point has more than one CRL.");
 
 	pp->crl = uri;
-	pp->crl_set = true;
 	return 0;
 }
 
 struct rpki_uri *
 rpp_get_crl(struct rpp const *pp)
 {
-	return pp->crl_set ? pp->crl : NULL;
+	return pp->crl;
 }
 
 static int
@@ -152,7 +150,7 @@ rpp_crl(struct rpp *pp)
 {
 	if (pp == NULL)
 		return NULL;
-	if (!pp->crl_set)
+	if (pp->crl == NULL)
 		return NULL;
 	if (pp->crl_stack != NULL)
 		return pp->crl_stack;

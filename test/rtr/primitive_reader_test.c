@@ -5,7 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "stream.h"
+#include "impersonator.c"
+#include "log.c"
+#include "rtr/stream.c"
 #include "rtr/primitive_reader.c"
 
 /*
@@ -14,14 +16,23 @@
 static int
 __read_string(unsigned char *input, size_t size, rtr_char **result)
 {
+	struct pdu_reader reader;
+	unsigned char read_bytes[size];
 	int fd;
 	int err;
+	uint32_t usize;
 
 	fd = buffer2fd(input, size);
 	if (fd < 0)
 		return fd;
 
-	err = read_string(fd, result);
+	err = pdu_reader_init(&reader, fd, read_bytes, size, false);
+	if (err)
+		goto close;
+
+	usize = size & 0xFFFF;
+	err = read_string(&reader, usize, result);
+close:
 	close(fd);
 	return err;
 }
@@ -56,34 +67,31 @@ test_read_string_fail(unsigned char *input, size_t length, int expected)
 
 START_TEST(read_string_ascii)
 {
-	unsigned char input[] = { 0, 0, 0, 4, 'a', 'b', 'c', 'd' };
+	unsigned char input[] = { 'a', 'b', 'c', 'd' };
 	test_read_string_success(input, sizeof(input), "abcd");
 }
 END_TEST
 
 START_TEST(read_string_unicode)
 {
-	unsigned char input0[] = { 0, 0, 0, 7, 's', 'a', 'n', 'd', 0xc3, 0xad,
-	    'a' };
+	unsigned char input0[] = { 's', 'a', 'n', 'd', 0xc3, 0xad, 'a' };
 	test_read_string_success(input0, sizeof(input0), "sandía");
 
-	unsigned char input1[] = { 0, 0, 0, 12,
-	    0xe1, 0x88, 0x90, 0xe1, 0x89, 0xa5, 0xe1, 0x88, 0x90, 0xe1, 0x89,
-	    0xa5 };
+	unsigned char input1[] = { 0xe1, 0x88, 0x90, 0xe1, 0x89, 0xa5, 0xe1,
+	    0x88, 0x90, 0xe1, 0x89, 0xa5 };
 	test_read_string_success(input1, sizeof(input1), "ሐብሐብ");
 
-	unsigned char input2[] = { 0, 0, 0, 12,
-	    0xd8, 0xa7, 0xd9, 0x84, 0xd8, 0xa8, 0xd8, 0xb7, 0xd9, 0x8a, 0xd8,
-	    0xae };
+	unsigned char input2[] = { 0xd8, 0xa7, 0xd9, 0x84, 0xd8, 0xa8, 0xd8,
+	    0xb7, 0xd9, 0x8a, 0xd8, 0xae };
 	test_read_string_success(input2, sizeof(input2), "البطيخ");
 
-	unsigned char input3[] = { 0, 0, 0, 25,
+	unsigned char input3[] = {
 	    0xd5, 0xb1, 0xd5, 0xb4, 0xd5, 0xa5, 0xd6, 0x80, 0xd5, 0xb8, 0xd6,
 	    0x82, 0xd5, 0xaf, 0x20, 0xd0, 0xba, 0xd0, 0xb0, 0xd0, 0xb2, 0xd1,
 	    0x83, 0xd0, 0xbd };
 	test_read_string_success(input3, sizeof(input3), "ձմերուկ кавун");
 
-	unsigned char input4[] = { 0, 0, 0, 36,
+	unsigned char input4[] = {
 	    0xe0, 0xa6, 0xa4, 0xe0, 0xa6, 0xb0, 0xe0, 0xa6, 0xae, 0xe0, 0xa7,
 	    0x81, 0xe0, 0xa6, 0x9c, 0x20, 0xd0, 0xb4, 0xd0, 0xb8, 0xd0, 0xbd,
 	    0xd1, 0x8f, 0x20, 0xe8, 0xa5, 0xbf, 0xe7, 0x93, 0x9c, 0x20, 0xf0,
@@ -94,8 +102,8 @@ END_TEST
 
 START_TEST(read_string_empty)
 {
-	unsigned char input[] = { 0, 0, 0, 0 };
-	test_read_string_success(input, sizeof(input), "");
+	unsigned char *input = { '\0' };
+	test_read_string_fail(input, sizeof(input), -EFAULT);
 }
 END_TEST
 
@@ -116,20 +124,10 @@ writer_thread_cb(void *param_void)
 	struct thread_param *param;
 	rtr_char *pattern;
 	size_t pattern_len;
-	unsigned char header[4];
 
 	param = param_void;
 	pattern = WRITER_PATTERN;
 	pattern_len = strlen(pattern);
-
-	/* Write the string length */
-	header[0] = (param->msg_size >> 24) & 0xFF;
-	header[1] = (param->msg_size >> 16) & 0xFF;
-	header[2] = (param->msg_size >>  8) & 0xFF;
-	header[3] = (param->msg_size >>  0) & 0xFF;
-	param->err = write_exact(param->fd, header, sizeof(header));
-	if (param->err)
-		return param;
 
 	/* Write the string */
 	for (; param->msg_size > pattern_len; param->msg_size -= pattern_len) {
@@ -190,6 +188,8 @@ test_massive_string(uint32_t return_length, uint32_t full_string_length)
 	int fd[2];
 	pthread_t writer_thread;
 	struct thread_param *arg;
+	struct pdu_reader reader;
+	unsigned char *read_bytes;
 	rtr_char *result_string;
 	int err, err2, err3;
 
@@ -216,9 +216,16 @@ test_massive_string(uint32_t return_length, uint32_t full_string_length)
 		free(arg);
 		ck_abort_msg("pthread_create() threw errcode %d", err);
 	}
-	/* The writer thread owns @arg now; do not touch it until retrievel */
+	/* The writer thread owns @arg now; do not touch it until retrieved */
+	do {
+		read_bytes = malloc(full_string_length);
+		err = pdu_reader_init(&reader, fd[0], read_bytes,
+		    full_string_length, false);
+		if (err)
+			break;
+		err = read_string(&reader, full_string_length, &result_string);
+	} while(0);
 
-	err = read_string(fd[0], &result_string);
 	/* Need to free @result_string from now on */
 	err2 = pthread_join(writer_thread, (void **)&arg);
 	/* @arg is now retrieved. */
@@ -227,6 +234,7 @@ test_massive_string(uint32_t return_length, uint32_t full_string_length)
 	close(fd[0]);
 	close(fd[1]);
 	free(arg);
+	free(read_bytes);
 	/* Don't need to close @fd[0], @fd[1] nor free @arg from now on */
 
 	if (err || err2 || err3) {
@@ -245,55 +253,45 @@ START_TEST(read_string_massive)
 	test_massive_string(4000, 4000);
 	test_massive_string(4094, 4094);
 	test_massive_string(4095, 4095);
-	test_massive_string(4095, 4096);
-	test_massive_string(4095, 4097);
-	test_massive_string(4095, 8000);
-	test_massive_string(4095, 16000);
-	test_massive_string(4095, 0xFFFFFFFF);
+	test_massive_string(4096, 4096);
+	test_massive_string(4097, 4097);
+	test_massive_string(8000, 8000);
+	test_massive_string(16000, 16000);
+	test_massive_string(786432000, 786432000); /* 750MB */
 }
 END_TEST
 
 START_TEST(read_string_null)
 {
-	test_read_string_fail(NULL, 0, -EPIPE);
-}
-END_TEST
-
-START_TEST(read_string_truncated)
-{
-	unsigned char input0[] = { 0, 0, 0, 7, 'a', 'b' };
-	test_read_string_fail(input0, sizeof(input0), -EPIPE);
-
-	unsigned char input1[] = { 0, 0 };
-	test_read_string_fail(input1, sizeof(input1), -EPIPE);
+	test_read_string_success(NULL, 0, "");
 }
 END_TEST
 
 START_TEST(read_string_unicode_mix)
 {
 	/* One octet failure */
-	unsigned char input0[] = { 0, 0, 0, 3, 'a', 0x80, 'z' };
+	unsigned char input0[] = { 'a', 0x80, 'z' };
 	test_read_string_success(input0, sizeof(input0), "a");
 
 	/* Two octets success */
-	unsigned char input1[] = { 0, 0, 0, 4, 'a', 0xdf, 0x9a, 'z' };
+	unsigned char input1[] = { 'a', 0xdf, 0x9a, 'z' };
 	test_read_string_success(input1, sizeof(input1), "aߚz");
 	/* Two octets failure */
-	unsigned char input2[] = { 0, 0, 0, 4, 'a', 0xdf, 0xda, 'z' };
+	unsigned char input2[] = { 'a', 0xdf, 0xda, 'z' };
 	test_read_string_success(input2, sizeof(input2), "a");
 
 	/* Three characters success */
-	unsigned char input3[] = { 0, 0, 0, 5, 'a', 0xe2, 0x82, 0xac, 'z' };
+	unsigned char input3[] = { 'a', 0xe2, 0x82, 0xac, 'z' };
 	test_read_string_success(input3, sizeof(input3), "a€z");
 	/* Three characters failure */
-	unsigned char input4[] = { 0, 0, 0, 5, 'a', 0xe2, 0x82, 0x2c, 'z' };
+	unsigned char input4[] = { 'a', 0xe2, 0x82, 0x2c, 'z' };
 	test_read_string_success(input4, sizeof(input4), "a");
 
 	/* Four characters success */
-	unsigned char i5[] = { 0, 0, 0, 6, 'a', 0xf0, 0x90, 0x86, 0x97, 'z' };
+	unsigned char i5[] = { 'a', 0xf0, 0x90, 0x86, 0x97, 'z' };
 	test_read_string_success(i5, sizeof(i5), "a𐆗z");
 	/* Four characters failure */
-	unsigned char i6[] = { 0, 0, 0, 6, 'a', 0xf0, 0x90, 0x90, 0x17, 'z' };
+	unsigned char i6[] = { 'a', 0xf0, 0x90, 0x90, 0x17, 'z' };
 	test_read_string_success(i6, sizeof(i6), "a");
 }
 END_TEST
@@ -310,12 +308,10 @@ Suite *read_string_suite(void)
 	limits = tcase_create("Limits");
 	tcase_add_test(limits, read_string_empty);
 	tcase_add_test(limits, read_string_massive);
-	/* The 0xFFFFFFFF test lasts 1:02 minutes on my computer. */
-	tcase_set_timeout(limits, 120);
+	tcase_set_timeout(limits, 60);
 
 	errors = tcase_create("Errors");
 	tcase_add_test(errors, read_string_null);
-	tcase_add_test(errors, read_string_truncated);
 	tcase_add_test(errors, read_string_unicode_mix);
 
 	suite = suite_create("read_string()");

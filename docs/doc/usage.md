@@ -23,7 +23,7 @@ command: fort
 		4. [`root-except-ta`](#root-except-ta)
 	7. [`--shuffle-uris`](#--shuffle-uris)
 	8. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
-	9. [`--server.enabled`](#--serverenabled)
+	9. [`--server.disabled`](#--serverdisabled)
 	10. [`--server.address`](#--serveraddress)
 	11. [`--server.port`](#--serverport)
 	12. [`--server.backlog`](#--serverbacklog)
@@ -53,7 +53,7 @@ command: fort
         [--sync-strategy=off|strict|root|root-except-ta]
         [--shuffle-uris]
         [--maximum-certificate-depth=<unsigned integer>]
-        [--server.enabled=true|false]
+        [--server.disabled]
         [--server.address=<string>]
         [--server.port=<string>]
         [--server.backlog=<unsigned integer>]
@@ -92,9 +92,9 @@ Usage: {{ page.command }}
         [--version]
             (Print program version)
 	...
-        [--output-file-name-format=global-url|local-path|file-name]
+        [--log.file-name-format=global-url|local-path|file-name]
             (File name variant to print during debug/error messages)
-        [--roa-output-file=<file>]
+        [--output.roa=<file>]
             (File where the valid ROAs will be dumped.)
 {% endhighlight %}
 
@@ -114,8 +114,8 @@ Usage: {{ page.command }}
         [--usage]
         [--version]
 	...
-        [--output-file-name-format=global-url|local-path|file-name]
-        [--roa-output-file=<file>]
+        [--log.file-name-format=global-url|local-path|file-name]
+        [--output.roa=<file>]
 {% endhighlight %}
 
 ### `--version`
@@ -127,7 +127,7 @@ Prints program version.
 
 {% highlight bash %}
 $ {{ page.command }} --version
-0.0.1
+0.0.1-beta
 {% endhighlight %}
 
 ### `--tal`
@@ -238,15 +238,14 @@ Maximum allowable RPKI tree height. Meant to protect Fort from iterating infinit
 
 Fort's tree traversal is actually iterative (not recursive), so there should be no risk of stack overflow, regardless of this value.
 
-### `--server.enabled`
+### `--server.disabled`
 
-- **Type:** Boolean
+- **Type:** None
 - **Availability:** `argv` and JSON
-- **Default:** true
 
-Enable or disable the RTR server.
+Disable the RTR server.
 
-If set to `false`: the server is disabled, the rest of the `server.*` arguments are discarded, and Fort performs an in-place standalone RPKI validation.
+If the flag is set, the server is disabled, the rest of the `server.*` arguments are discarded, and Fort performs an in-place standalone RPKI validation.
 
 ### `--server.address`
 
@@ -338,13 +337,13 @@ Suppose a certificate was downloaded from `rsync://rpki.example.com/foo/bar/baz.
 - `file-name`: Will print the certificate's name as `baz.cer`.
 
 {% highlight bash %}
-$ {{ page.command }} --output-file-name-format global-url --local-repository repository/ (...)
+$ {{ page.command }} --log.file-name-format global-url --local-repository repository/ (...)
 ERR: rsync://rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
 
-$ {{ page.command }} --output-file-name-format local-path --local-repository repository/ (...)
+$ {{ page.command }} --log.file-name-format local-path --local-repository repository/ (...)
 ERR: repository/rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
 
-$ {{ page.command }} --output-file-name-format file-name  --local-repository repository/ (...)
+$ {{ page.command }} --log.file-name-format file-name  --local-repository repository/ (...)
 ERR: baz.cer: Certificate validation failed: certificate has expired
 {% endhighlight %}
 
@@ -370,12 +369,13 @@ The configuration options are mostly the same as the ones from the `argv` interf
 
 <pre><code>{
 	"<a href="#--tal">tal</a>": "/tmp/tal/test.tal",
-	"<a href="#--local-repository">local-repository</a>": "tmp/repository",
+	"<a href="#--local-repository">local-repository</a>": "/tmp/repository",
 	"<a href="#--sync-strategy">sync-strategy</a>": "root",
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
-	"<a href="#--slurm">slurm</a>": "test.slurm",
+	"<a href="#--slurm">slurm</a>": "/tmp/test.slurm",
 
 	"server": {
+		"<a href="#--serverdisabled">disabled</a>": false,
 		"<a href="#--serveraddress">address</a>": "192.0.2.1",
 		"<a href="#--serverport">port</a>": "8323",
 		"<a href="#--serverbacklog">backlog</a>": 16,
@@ -407,7 +407,11 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"name": "Signed Object's hash algorithm has NULL object as parameters",
 			"action": "ignore"
 		}
-	]
+	],
+
+	"output": {
+		"<a href="#--outputroa">roa</a>": "/tmp/fort_roas.csv"
+	}
 }
 </code></pre>
 

@@ -2,32 +2,76 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "stream.h"
+#include "log.c"
+#include "impersonator.c"
+#include "rtr/stream.c"
+#include "rtr/err_pdu.c"
 #include "rtr/pdu.c"
+#include "rtr/primitive_reader.c"
+#include "rtr/db/rtr_db_impersonator.c"
 
 /*
  * Just a wrapper for `buffer2fd()`. Boilerplate one-liner.
  */
 #define BUFFER2FD(buffer, cb, obj) {					\
 	struct pdu_header header;					\
+	struct pdu_reader reader;					\
+	unsigned char read[sizeof(buffer)];				\
 	int fd, err;							\
 									\
 	fd = buffer2fd(buffer, sizeof(buffer));				\
 	ck_assert_int_ge(fd, 0);					\
-	init_pdu_header(&header);					\
-	err = cb(&header, fd, obj);					\
+	ck_assert_int_eq(pdu_reader_init(&reader, fd, read,		\
+	    sizeof(buffer), true), 0);					\
 	close(fd);							\
+	init_pdu_header(&header);					\
+	err = cb(&header, &reader, obj);				\
 	ck_assert_int_eq(err, 0);					\
 	assert_pdu_header(&(obj)->header);				\
 }
 
+/* Impersonator functions */
+
+#define IMPERSONATE_HANDLER(name)					\
+	int								\
+	handle_## name ##_pdu(int fd, struct rtr_request const *req) {	\
+		return 0;						\
+	}
+
+uint16_t
+get_current_session_id(uint8_t rtr_version)
+{
+	return 12345;
+}
+
+IMPERSONATE_HANDLER(serial_notify)
+IMPERSONATE_HANDLER(serial_query)
+IMPERSONATE_HANDLER(reset_query)
+IMPERSONATE_HANDLER(cache_response)
+IMPERSONATE_HANDLER(ipv4_prefix)
+IMPERSONATE_HANDLER(ipv6_prefix)
+IMPERSONATE_HANDLER(end_of_data)
+IMPERSONATE_HANDLER(cache_reset)
+IMPERSONATE_HANDLER(router_key)
+IMPERSONATE_HANDLER(error_report)
+
+int
+send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
+    char *message)
+{
+	pr_info("    Server sent Error Report %u: '%s'", code, message);
+	return 0;
+}
+
+/* End of impersonator */
+
 static void
 init_pdu_header(struct pdu_header *header)
 {
-	header->protocol_version = 0;
+	header->protocol_version = RTR_V0;
 	header->pdu_type = 22;
-	header->m.reserved = 12345;
-	header->length = 0xFFAA9955;
+	header->m.reserved = get_current_session_id(RTR_V0);
+	header->length = 0x00000020;
 }
 
 static void
@@ -35,21 +79,26 @@ assert_pdu_header(struct pdu_header *header)
 {
 	ck_assert_uint_eq(header->protocol_version, 0);
 	ck_assert_uint_eq(header->pdu_type, 22);
-	ck_assert_uint_eq(header->m.reserved, 12345);
-	ck_assert_uint_eq(header->length, 0xFFAA9955);
+	ck_assert_uint_eq(header->m.reserved, get_current_session_id(RTR_V0));
+	ck_assert_uint_eq(header->length, 0x00000020);
 }
 
 START_TEST(test_pdu_header_from_stream)
 {
 	unsigned char input[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+	unsigned char read[RTRPDU_HDR_LEN];
+	struct pdu_reader reader;
 	struct pdu_header header;
 	int fd;
 	int err;
 
 	fd = buffer2fd(input, sizeof(input));
 	ck_assert_int_ge(fd, 0);
-	err = pdu_header_from_reader(fd, &header);
+	ck_assert_int_eq(pdu_reader_init(&reader, fd, read, RTRPDU_HDR_LEN,
+	    true), 0);
 	close(fd);
+	/* Read the header into its buffer. */
+	err = pdu_header_from_reader(&reader, &header);
 	ck_assert_int_eq(err, 0);
 
 	ck_assert_uint_eq(header.protocol_version, 0);
@@ -156,7 +205,7 @@ START_TEST(test_error_report_from_stream)
 	unsigned char input[] = {
 			/* Sub-pdu length */
 			0, 0, 0, 12,
-			/* Sub-pdu */
+			/* Sub-pdu w header*/
 			1, 0, 2, 3, 0, 0, 0, 12, 1, 2, 3, 4,
 			/* Error msg length */
 			0, 0, 0, 5,
@@ -167,14 +216,34 @@ START_TEST(test_error_report_from_stream)
 	};
 	struct error_report_pdu *pdu;
 	struct serial_notify_pdu *sub_pdu;
+	struct pdu_header sub_pdu_header;
+	struct pdu_reader reader;
+	unsigned char sub_pdu_read[12];
+	int fd, err;
 
 	pdu = malloc(sizeof(struct error_report_pdu));
 	if (!pdu)
 		ck_abort_msg("PDU allocation failure");
 
+	sub_pdu = malloc(sizeof(struct serial_notify_pdu));
+	if (!sub_pdu) {
+		ck_abort_msg("SUB PDU allocation failure");
+		free(pdu);
+	}
+
 	BUFFER2FD(input, error_report_from_stream, pdu);
 
-	sub_pdu = pdu->erroneous_pdu;
+	/* Get the erroneous PDU as a serial notify */
+	fd = buffer2fd(pdu->erroneous_pdu, pdu->error_pdu_length);
+	ck_assert_int_ge(fd, 0);
+	ck_assert_int_eq(pdu_reader_init(&reader, fd, sub_pdu_read,
+	    pdu->error_pdu_length, true), 0);
+	close(fd);
+
+	ck_assert_int_eq(pdu_header_from_reader(&reader, &sub_pdu_header), 0);
+	err = serial_notify_from_stream(&sub_pdu_header, &reader, sub_pdu);
+	ck_assert_int_eq(err, 0);
+
 	ck_assert_uint_eq(sub_pdu->header.protocol_version, 1);
 	ck_assert_uint_eq(sub_pdu->header.pdu_type, 0);
 	ck_assert_uint_eq(sub_pdu->header.m.reserved, 0x0203);
@@ -187,20 +256,20 @@ START_TEST(test_error_report_from_stream)
 	 * Not sure how to fix it without making a huge mess.
 	 */
 	error_report_destroy(pdu);
+	free(sub_pdu);
 }
 END_TEST
 
 START_TEST(test_interrupted)
 {
 	unsigned char input[] = { 0, 1 };
-	struct serial_notify_pdu pdu;
-	struct pdu_header header;
+	struct pdu_reader reader;
+	unsigned char read[4];
 	int fd, err;
 
 	fd = buffer2fd(input, sizeof(input));
 	ck_assert_int_ge(fd, 0);
-	init_pdu_header(&header);
-	err = serial_notify_from_stream(&header, fd, &pdu);
+	err = pdu_reader_init(&reader, fd, read, 4, true);
 	close(fd);
 	ck_assert_int_eq(err, -EPIPE);
 }
