@@ -12,7 +12,7 @@ This is probably all you need:
 fort \
 	--tal <path to your TAL files> \
 	--local-repository <path where you want to keep your local cache> \
-	--server.address <your intended RTR server address>
+	--server.address <your intended RTR server address> \
 	--server.port <your intended RTR server port>
 {% endhighlight %}
 

@@ -25,8 +25,6 @@ None of the entries of the SLURM configuration are allowed to collide with each 
 
 Fort reloads the SLURM files during every validation cycle. If the new configuration is invalid, **it is treated as nonexistent**. Note that this means that an isolated mistake will temporarily drop all your SLURM overrides. This is intended to change in a future revision of Fort, in which the validator will fall back to the previous valid SLURM configuration on error.
 
-> TODO: open an issue for that. Giving the users the opportunity to argue it is probably a good idea.
-
 ## SLURM File Definition
 
 ### Root
