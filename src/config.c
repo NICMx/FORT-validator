@@ -437,11 +437,19 @@ print_config(void)
 static int
 set_default_values(void)
 {
-	static char const *default_rsync_args[] = {
+	static char const *recursive_rsync_args[] = {
 		"--recursive",
 		"--delete",
 		"--times",
 		"--contimeout=20",
+		"$REMOTE",
+		"$LOCAL",
+	};
+
+	static char const *flat_rsync_args[] = {
+		"--times",
+		"--contimeout=20",
+		"--dirs",
 		"$REMOTE",
 		"$LOCAL",
 	};
@@ -482,12 +490,12 @@ set_default_values(void)
 	}
 
 	error = string_array_init(&rpki_config.rsync.args.recursive,
-	    default_rsync_args, ARRAY_LEN(default_rsync_args));
+	    recursive_rsync_args, ARRAY_LEN(recursive_rsync_args));
 	if (error)
 		goto revert_rsync_program;
 	/* Simply remove --recursive and --delete. */
 	error = string_array_init(&rpki_config.rsync.args.flat,
-	    default_rsync_args + 2, ARRAY_LEN(default_rsync_args) - 2);
+	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
 	if (error)
 		goto revert_recursive_array;
 

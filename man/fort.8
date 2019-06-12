@@ -94,7 +94,7 @@ Arguments needed by
 .B rsync.program
 to perform a single-file rsync. The arguments are specified as a JSON string
 array; its default value is:
-[ "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]
+[ "--times", "--contimeout=20", "--dirs", "$REMOTE", "$LOCAL" ]
 .P
 FORT will replace "$REMOTE" with the remote URL it needs to download, and
 "$LOCAL" with the target local directory where the file is supposed to be
@@ -478,6 +478,7 @@ to a specific value:
     "arguments-flat": [
       "--times",
       "--contimeout=20",
+      "--dirs",
       "$REMOTE",
       "$LOCAL"
     ]
@@ -552,6 +553,8 @@ assertions:
 .RS 4
 .IR getaddrinfo(3) ", " services(5) ", " listen(2) ", " rsync(1)
 .RE
+.P
+
 .B FORTs official documentation
 .RS 4
 More documentation about FORT validator can be consulted at github repository

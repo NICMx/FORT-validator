@@ -58,6 +58,10 @@ is_descendant(struct rpki_uri *ancestor, struct rpki_uri *descendant)
 	string_tokenizer_init(&descendant_tokenizer, uri_get_global(descendant),
 	    uri_get_global_len(descendant), '/');
 
+	if (config_get_sync_strategy() == SYNC_STRICT)
+		return strcmp(uri_get_global(ancestor),
+		    uri_get_global(descendant)) == 0;
+
 	do {
 		if (!string_tokenizer_next(&ancestor_tokenizer))
 			return true;

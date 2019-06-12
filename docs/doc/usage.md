@@ -397,6 +397,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		],
 		"<a href="#rsyncarguments-flat">arguments-flat</a>": [
 			"--times",
+			"--dirs",
 			"$REMOTE",
 			"$LOCAL"
 		]
@@ -474,7 +475,7 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--times", "--contimeout=20", "--dirs", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a single-file rsync.
 
