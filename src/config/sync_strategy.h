@@ -22,6 +22,9 @@ enum sync_strategy {
 	 *
 	 * No risk of downloading unneeded files, but otherwise slow, as every
 	 * different repository publication point requires a separate sync call.
+	 *
+	 * In order to enable this strategy, compile using the flag:
+	 * ENABLE_STRICT_STRATEGY
 	 */
 	SYNC_STRICT,
 	/**

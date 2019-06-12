@@ -185,6 +185,10 @@ Skips all rsyncs. (Validate the existing cache repository pointed by `--local-re
 
 #### `strict`
 
+> In order to enable this strategy, recompile using the flag: **_ENABLE\_STRICT\_STRATEGY_**.
+>
+> e.g. `$ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'`
+
 rsyncs every repository publication point separately. Only skips publication points that have already been downloaded during the current validation cycle. (Assuming each synchronization is recursive.)
 
 For example, suppose the validator gets certificates whose caRepository access methods (in their Subject Information Access extensions) point to the following publication points:

@@ -199,6 +199,10 @@ Skip all RSYNCs. (Validate the existing cache repository pointed by
 .P
 .I strict
 .RS 4
+In order to enable this strategy, FORT must be compiled using the flag:
+ENABLE\_STRICT\_STRATEGY. e.g.
+\fB $ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'\fR
+.P
 RSYNC every repository publication point separately. Only skip publication
 points that have already been downloaded during the current validation cycle.
 (Assuming each synchronization is recursive.)

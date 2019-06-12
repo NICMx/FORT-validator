@@ -14,6 +14,16 @@
 
 #define DEREFERENCE(void_value) (*((enum sync_strategy *) void_value))
 
+#ifdef ENABLE_STRICT_STRATEGY
+#define PRINT_STRICT_ARG_DOC "|" SYNC_VALUE_STRICT
+#define HANDLE_SYNC_STRICT DEREFERENCE(result) = SYNC_STRICT;
+#else
+#define PRINT_STRICT_ARG_DOC
+#define HANDLE_SYNC_STRICT						\
+	return pr_err("Unknown synchronization strategy: '%s'. In order to use it, recompile using flag ENABLE_STRICT_STRATEGY.",\
+	    str);
+#endif
+
 static void
 print_sync_strategy(struct option_field const *field, void *value)
 {
@@ -44,7 +54,7 @@ parse_argv_sync_strategy(struct option_field const *field, char const *str,
 	if (strcmp(str, SYNC_VALUE_OFF) == 0)
 		DEREFERENCE(result) = SYNC_OFF;
 	else if (strcmp(str, SYNC_VALUE_STRICT) == 0)
-		DEREFERENCE(result) = SYNC_STRICT;
+		HANDLE_SYNC_STRICT
 	else if (strcmp(str, SYNC_VALUE_ROOT) == 0)
 		DEREFERENCE(result) = SYNC_ROOT;
 	else if (strcmp(str, SYNC_VALUE_ROOT_EXCEPT_TA) == 0)
@@ -73,7 +83,7 @@ const struct global_type gt_sync_strategy = {
 	.parse.argv = parse_argv_sync_strategy,
 	.parse.json = parse_json_sync_strategy,
 	.arg_doc = SYNC_VALUE_OFF
-	    "|" SYNC_VALUE_STRICT
+	    PRINT_STRICT_ARG_DOC
 	    "|" SYNC_VALUE_ROOT
 	    "|" SYNC_VALUE_ROOT_EXCEPT_TA,
 };

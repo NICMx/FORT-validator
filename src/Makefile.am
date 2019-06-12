@@ -98,7 +98,7 @@ fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 fort_CFLAGS  = -Wall
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=gnu11 -O0 -g $(CFLAGS_DEBUG)
+fort_CFLAGS += -std=gnu11 -O0 -g $(CFLAGS_DEBUG) $(FORT_FLAGS)
 fort_LDFLAGS = $(LDFLAGS_DEBUG)
 fort_LDADD   = ${JANSSON_LIBS}
 
