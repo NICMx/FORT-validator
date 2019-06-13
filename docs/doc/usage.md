@@ -127,7 +127,7 @@ Prints program version.
 
 {% highlight bash %}
 $ {{ page.command }} --version
-0.0.1-beta
+fort 0.0.1
 {% endhighlight %}
 
 ### `--tal`
@@ -141,7 +141,9 @@ A TAL is a file that points to a _Trust Anchor_ (TA). A TA is a self-signed cert
 
 The reason why you provide locators instead of anchors is to allow the latter to be officially updated without the need to awkwardly redistribute them.
 
-Whichever registry serves as root of the tree you want to validate is responsible for providing you with its TAL. For convenience, Fort currently ships with the TALs of four of the five RIRs. (The exception is ARIN's, since you need to read and accept an [agreement](https://www.arin.net/resources/manage/rpki/tal/) before you can use it.) If you are paranoid, however, you'd be advised to get your own.
+Whichever registry serves as root of the tree you want to validate is responsible for providing you with its TAL. For convenience, Fort currently ships with the TALs of four of the five RIRs. (The exception is ARIN's, since you need to read and accept an [agreement](https://www.arin.net/resources/manage/rpki/tal/) before you can use it.) If you installed the Debian package, they can be found at `/etc/fort/tal/`, otherwise it the `tal/` directory of whatever release tarball you downloaded.
+
+If you are paranoid, however, you'd be advised to get your own TALs.
 
 The TAL file format has been standardized in [RFC 7730](https://tools.ietf.org/html/rfc7730). It is a text file that contains a list of URLs (which serve as alternate access methods for the TA), followed by a blank line, followed by the Base64-encoded public key of the TA.
 
@@ -167,7 +169,7 @@ LQIDAQAB
 
 Path to the directory where Fort will store a local cache of the repository.
 
-Right now, Fort accesses RPKI repositories by way of [rsync](https://en.wikipedia.org/wiki/Rsync). (The alternate protocol [RRDP](https://tools.ietf.org/html/rfc8182) is in the road map.) During each validation cycle, Fort will literally invoke an `rsync` command (see [`rsync.program`](#rsyncprogram) and [`rsync.arguments-recursive`](#rsyncarguments-recursive)), which will download the files into `--local-repository`. Fort's validation operates on the resulting copy.
+Right now, Fort accesses RPKI repositories by way of [rsync](https://en.wikipedia.org/wiki/Rsync). (The alternate protocol [RRDP](https://tools.ietf.org/html/rfc8182) is in the road map.) During each validation cycle, Fort will literally invoke an `rsync` command (see [`rsync.program`](#rsyncprogram) and [`rsync.arguments-recursive`](#rsyncarguments-recursive)), which will download the files into `--local-repository`. Fort's entire validation process operates on the resulting copy.
 
 Because rsync uses delta encoding, you're advised to keep this cache around. It significantly speeds up subsequent validation cycles.
 
@@ -249,7 +251,7 @@ Fort's tree traversal is actually iterative (not recursive), so there should be 
 
 Disable the RTR server.
 
-If the flag is set, the server is disabled, the rest of the `server.*` arguments are discarded, and Fort performs an in-place standalone RPKI validation.
+If the flag is set, the server is disabled, the rest of the `server.*` arguments are ignored, and Fort performs an in-place standalone RPKI validation.
 
 ### `--server.address`
 
@@ -269,7 +271,7 @@ If this field is omitted, Fort will attempt to bind the server using the IP addr
 
 TCP port or service the server will be bound to.
 
-This is a string because a service alias can be used as a valid value. The alias are commonly located at `/etc/services`. (See '`$ man services`'.)
+This is a string because a service alias can be used as a valid value. The available aliases are commonly located at `/etc/services`. (See '`$ man services`'.)
 
 > ![../img/warn.svg](../img/warn.svg) The default port is privileged. To improve security, either change or jail it.
 
@@ -280,7 +282,7 @@ This is a string because a service alias can be used as a valid value. The alias
 - **Default:** [`SOMAXCONN`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/basedefs/sys_socket.h.html)
 - **Range:** 1--`SOMAXCONN`
 
-RTR server's listen queue length. It's the second argument of [`listen()`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/functions/listen.html):
+RTR server's listen queue length. It is the second argument of [`listen()`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/functions/listen.html):
 
 > The backlog argument provides a hint to the implementation which the implementation shall use to limit the number of outstanding connections in the socket's listen queue. Implementations may impose a limit on backlog and silently reduce the specified value. Normally, a larger backlog argument value shall result in a larger or equal length of the listen queue. Implementations shall support values of backlog up to SOMAXCONN, defined in <sys/socket.h>.
 

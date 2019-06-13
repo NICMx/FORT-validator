@@ -62,5 +62,7 @@ RRDP is a protocol intended to replace RSYNC in the RPKI. Fort only implements R
 
 ## TO-DO
 
-- Reach full 100% RFC compliance.
-- Maybe a few optimizations, marked as `TODO` in the code.
+- Reach 100% RFC compliance
+- Multithreading
+- Daemon quirks (stuff like "send self to background automatically"), maybe
+- More languages?

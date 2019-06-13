@@ -15,7 +15,7 @@ title: Incidence
 
 ## Introduction
 
-The RPKI RFCs define fairly strict profiles for RPKI objects, and are unequivocal in stating that incorrectly-formed objects are supposed to be rejected by Relying Party validation. In practice, however, this does not stop a significant amount of Certificate Authorities from issuing incorrect objects.
+The RPKI RFCs define fairly strict profiles for RPKI objects, and are unequivocal in stating that incorrectly-formed objects are supposed to be rejected by Relying Party validation. In practice, however, this does not prevent a significant amount of Certificate Authorities from issuing incorrect objects.
 
 By default, Fort is as pedantic as it can possibly be. The `incidence` section of its configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
 

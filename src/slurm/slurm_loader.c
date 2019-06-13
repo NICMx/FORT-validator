@@ -72,7 +72,7 @@ slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 		    vrp.max_prefix_length);
 	}
 
-	pr_crit("Unkown addr family type: %u", vrp.addr_fam);
+	pr_crit("Unknown addr family type: %u", vrp.addr_fam);
 }
 
 static int

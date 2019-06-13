@@ -10,6 +10,9 @@ AM_INIT_AUTOMAKE([subdir-objects])
 # Checks for programs.
 AC_PROG_CC
 
+# Create src/configure_ac.h, put some useful macros there.
+AC_CONFIG_HEADERS([src/configure_ac.h])
+
 # Checks for header files.
 AC_CHECK_HEADERS([netinet/in.h stdlib.h string.h unistd.h])
 

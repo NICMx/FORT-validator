@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 
 #include "common.h"
+#include "configure_ac.h"
 #include "json_handler.h"
 #include "log.h"
 #include "config/boolean.h"
@@ -342,7 +343,7 @@ handle_usage(struct option_field const *field, char *arg)
 static int
 handle_version(struct option_field const *field, char *arg)
 {
-	printf("0.0.1-beta\n");
+	printf(PACKAGE_STRING "\n");
 	exit(0);
 }
 
@@ -657,9 +658,7 @@ config_get_server_port(void)
 int
 config_get_server_queue(void)
 {
-	/*
-	 * The range of this is 1-<small number>, so adding signedness is safe.
-	 */
+	/* The range of this is 1-<small number>, so adding sign is safe. */
 	return rpki_config.server.backlog;
 }
 

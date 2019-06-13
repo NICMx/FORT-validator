@@ -46,7 +46,7 @@ wget https://www.dropbox.com/s/7c0rs49ewcu6m93/fort_0.0.1-1_amd64.deb
 sudo apt install ./libcmscodec1_0.0.1-1_amd64.deb ./fort_0.0.1-1_amd64.deb
 {% endhighlight %}
 
-Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which you can [configure](usage.html#--configuration-file) at `/etc/fort/config.json`.
+Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which is just the binary ran as a daemon. You can [configure](usage.html#--configuration-file) it at `/etc/fort/config.json`.
 
 {% highlight bash %}
 sudo service fort start

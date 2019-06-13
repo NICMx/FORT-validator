@@ -74,6 +74,8 @@ configure
 depcomp
 install-sh
 missing
+src/configure_ac.h
+src/stamp-h1
 
 # Packaging
 *.7z
