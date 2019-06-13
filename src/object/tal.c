@@ -399,10 +399,15 @@ perform_standalone_validation(struct validation_handler *handler)
 {
 	int error;
 
+	error = rsync_init();
+	if (error)
+		return error;
+
 	fnstack_init();
 	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
 	    do_file_validation, handler);
 	fnstack_cleanup();
+	rsync_destroy();
 
 	return error;
 }

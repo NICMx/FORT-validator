@@ -4,7 +4,6 @@
 #include "extension.h"
 #include "nid.h"
 #include "thread_var.h"
-#include "rsync/rsync.h"
 #include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
 
@@ -42,12 +41,9 @@ main(int argc, char **argv)
 	if (error)
 		return error;
 
-	error = rsync_init();
-	if (error)
-		goto revert_config;
 	error = nid_init();
 	if (error)
-		goto revert_rsync;
+		goto revert_config;
 	error = extension_init();
 	if (error)
 		goto revert_nid;
@@ -56,8 +52,6 @@ main(int argc, char **argv)
 
 revert_nid:
 	nid_destroy();
-revert_rsync:
-	rsync_destroy();
 revert_config:
 	free_rpki_config();
 	return error;
