@@ -1,10 +1,12 @@
 #include "output_printer.h"
 
+#include <arpa/inet.h>
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include "config.h"
 #include "file.h"
 #include "log.h"
 #include "rtr/db/vrp.h"
-#include <arpa/inet.h>
 
 char addr_buf[INET6_ADDRSTRLEN];
 

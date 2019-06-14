@@ -15,7 +15,7 @@ title: Compilation and Installation
 3. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
-4. [Option 3: Compiling the git repositories](#option-3-compiling-the-git-repositories)
+4. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
 
 ## Dependencies
 
@@ -27,21 +27,13 @@ The dependencies are
 2. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
 3. [rsync](http://rsync.samba.org/)
 
-The build dependencies are
-
-- [autoconf](https://www.gnu.org/software/autoconf/)
-- [automake](https://www.gnu.org/software/automake/)
-- unzip (or [git](https://git-scm.com/))
-
-(Some builds do not need all these dependencies.)
-
 ## Option 1: Installing the Debian package
 
-> TODO Upload to Debian, add more archs and/or host these links on Github releases properly.
+> TODO Upload to Debian, add more archs
 
 {% highlight bash %}
-wget https://www.dropbox.com/s/7c0rs49ewcu6m93/fort_0.0.1-1_amd64.deb
-sudo apt install ./fort_0.0.1-1_amd64.deb
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort_{{ site.fort-latest-version }}-1_amd64.deb
+sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
 {% endhighlight %}
 
 Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which is just the binary ran as a daemon. You can [configure](usage.html#--configuration-file) it at `/etc/fort/config.json`.
@@ -60,52 +52,35 @@ etc.
 ### Debian version
 
 {% highlight bash %}
-sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync unzip
+sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync
 
-mkdir fort
-cd fort/
-wget https://github.com/NICMx/FORT-validator/archive/master.zip
-# tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-unzip master.zip
-cd FORT-validator-master/
-./autogen.sh
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
 ./configure
 make
 sudo make install
-cd ../../
 {% endhighlight %}
 
 ### OpenBSD version
 
-> TODO: The autotools are weird in this OS.
-> 
-> They require some global variables the installer doesn't setup on its own for some reason, and then spew error messages encouraging long deprecated macros. WTF?
-> 
-> For now, I'm working around this by running the `autogen.sh`s in Debian. It probably needn't be fixed, since the releases are going to ship with the `autogen.sh`s already executed anyway.
-
 {% highlight bash %}
 su
-# OpenBSD already ships with LibreSSL
-pkg_add jansson libexecinfo rsync unzip
+pkg_add jansson libexecinfo rsync # OpenBSD already ships with LibreSSL
 exit
 
-mkdir fort
-cd fort/
-ftp https://github.com/NICMx/FORT-validator/archive/master.zip
-# tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-unzip master.zip
-cd FORT-validator-master
-./autogen.sh # Run this elsewhere
+ftp https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
 # clang is needed because of gnu11.
 env CC=clang CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ./configure
 make
 su
 make install
 exit
-cd ../../
 {% endhighlight %}
 
-## Option 3: Compiling the git repositories
+## Option 3: Compiling and installing the git repository
 
 {% highlight bash %}
 sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync
@@ -116,6 +91,4 @@ cd FORT-validator/
 ./configure
 make
 sudo make install
-cd ../
 {% endhighlight %}
-
