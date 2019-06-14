@@ -2,13 +2,13 @@
 #define SRC_OBJECT_CERTIFICATE_H_
 
 #include <stdbool.h>
-#include <libcmscodec/ANY.h>
-#include <libcmscodec/SignatureValue.h>
 #include <openssl/x509.h>
 #include "certificate_refs.h"
 #include "resource.h"
 #include "rpp.h"
 #include "uri.h"
+#include "asn1/asn1c/ANY.h"
+#include "asn1/asn1c/SignatureValue.h"
 
 int certificate_load(struct rpki_uri *, X509 **);
 

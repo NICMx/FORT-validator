@@ -2,8 +2,8 @@
 #define SRC_URI_H_
 
 #include <stdbool.h>
-#include <libcmscodec/IA5String.h>
 #include <openssl/x509v3.h>
+#include "asn1/asn1c/IA5String.h"
 
 struct rpki_uri;
 

@@ -1,14 +1,14 @@
 #include "manifest.h"
 
 #include <errno.h>
-#include <libcmscodec/GeneralizedTime.h>
-#include <libcmscodec/Manifest.h>
 
 #include "algorithm.h"
 #include "log.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
+#include "asn1/asn1c/GeneralizedTime.h"
+#include "asn1/asn1c/Manifest.h"
 #include "crypto/hash.h"
 #include "object/certificate.h"
 #include "object/crl.h"

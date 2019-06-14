@@ -1,7 +1,7 @@
 #ifndef SRC_OBJECT_VCARD_H_
 #define SRC_OBJECT_VCARD_H_
 
-#include <libcmscodec/OCTET_STRING.h>
+#include "asn1/asn1c/OCTET_STRING.h"
 
 int handle_ghostbusters_vcard(OCTET_STRING_t *);
 

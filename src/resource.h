@@ -2,9 +2,9 @@
 #define SRC_RESOURCE_H_
 
 #include <stdbool.h>
-#include <libcmscodec/ASIdentifiers.h>
-#include <libcmscodec/IPAddressFamily.h>
 #include "address.h"
+#include "asn1/asn1c/ASIdentifiers.h"
+#include "asn1/asn1c/IPAddressFamily.h"
 
 enum rpki_policy {
 	/**

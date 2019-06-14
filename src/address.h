@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 #include <netinet/in.h>
-#include <libcmscodec/IPAddress.h>
-#include <libcmscodec/IPAddressRange.h>
+#include "asn1/asn1c/IPAddress.h"
+#include "asn1/asn1c/IPAddressRange.h"
 
 struct ipv4_prefix {
 	struct in_addr addr;

@@ -1,8 +1,8 @@
 #ifndef SRC_ALGORITHM_H_
 #define SRC_ALGORITHM_H_
 
-#include <libcmscodec/AlgorithmIdentifier.h>
-#include <libcmscodec/OBJECT_IDENTIFIER.h>
+#include "asn1/asn1c/AlgorithmIdentifier.h"
+#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 /**
  * This file is an implementation of RFC 7935 (previously 6485).

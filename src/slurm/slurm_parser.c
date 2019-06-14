@@ -301,7 +301,7 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	 * subjectPublicKeyInfo, including the ASN.1 tag and length values
 	 * of the subjectPublicKeyInfo SEQUENCE.
 	 *
-	 * #include <libcmscodec/SubjectPublicKeyInfo.h>
+	 * #include <asn1/asn1c/SubjectPublicKeyInfo.h>
 	 * #include "asn1/decode.h"
 	 * struct SubjectPublicKeyInfo *router_pki;
 	 * error = asn1_decode(result->router_public_key,

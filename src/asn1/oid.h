@@ -2,9 +2,9 @@
 #define SRC_OID_H_
 
 #include <stdbool.h>
-#include <libcmscodec/ANY.h>
-#include <libcmscodec/OBJECT_IDENTIFIER.h>
 #include "common.h"
+#include "asn1/asn1c/ANY.h"
+#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 /* These objects are expected to live on the stack. */
 struct oid_arcs {
@@ -47,7 +47,7 @@ bool arcs_equal(struct oid_arcs const *, struct oid_arcs const *);
 bool arcs_equal_oids(struct oid_arcs *, asn_oid_arc_t const *, size_t);
 
 /*
- * a is supposed to be a OBJECT_IDENTIFIER_t (from libcmscodec.)
+ * a is supposed to be a OBJECT_IDENTIFIER_t.
  * b is supposed to be an OID.
  */
 #define ARCS_EQUAL_OIDS(a, b) arcs_equal_oids(a, b, ARRAY_LEN(b))

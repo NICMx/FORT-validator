@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <stdint.h> /* SIZE_MAX */
-#include <libcmscodec/IPAddrBlocks.h>
 #include <sys/socket.h>
 
 #include "algorithm.h"
@@ -14,6 +13,7 @@
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
+#include "asn1/asn1c/IPAddrBlocks.h"
 #include "crypto/hash.h"
 #include "object/name.h"
 #include "object/manifest.h"

@@ -1,10 +1,6 @@
 #include "asn1/signed_data.h"
 
 #include <errno.h>
-#include <libcmscodec/ContentType.h>
-#include <libcmscodec/ContentTypePKCS7.h>
-#include <libcmscodec/MessageDigest.h>
-#include <libcmscodec/SignedDataPKCS7.h>
 
 #include "algorithm.h"
 #include "config.h"
@@ -12,6 +8,10 @@
 #include "oid.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
+#include "asn1/asn1c/ContentType.h"
+#include "asn1/asn1c/ContentTypePKCS7.h"
+#include "asn1/asn1c/MessageDigest.h"
+#include "asn1/asn1c/SignedDataPKCS7.h"
 #include "crypto/hash.h"
 #include "object/certificate.h"
 

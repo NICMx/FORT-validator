@@ -2,7 +2,7 @@
 #define SRC_RESOURCE_ASN_H_
 
 #include <stdbool.h>
-#include <libcmscodec/ASId.h>
+#include "asn1/asn1c/ASId.h"
 
 struct resources_asn;
 

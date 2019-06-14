@@ -95,6 +95,11 @@ fort_SOURCES += slurm/slurm_db.c slurm/slurm_db.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
+# I'm placing these at the end because they rarely change, and I want warnings
+# to appear as soon as possible.
+include asn1/asn1c/Makefile.include
+fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
+
 fort_CFLAGS  = -Wall
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)

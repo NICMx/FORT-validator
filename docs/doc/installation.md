@@ -15,7 +15,7 @@ title: Compilation and Installation
 3. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
-4. [Option 3: Compiling from the git repositories](#option-3-compiling-from-the-git-repositories)
+4. [Option 3: Compiling the git repositories](#option-3-compiling-the-git-repositories)
 
 ## Dependencies
 
@@ -24,9 +24,8 @@ title: Compilation and Installation
 The dependencies are
 
 1. [jansson](http://www.digip.org/jansson/)
-2. [libcmscodec](https://github.com/NICMx/libcmscodec)
-3. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
-4. [rsync](http://rsync.samba.org/)
+2. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
+3. [rsync](http://rsync.samba.org/)
 
 The build dependencies are
 
@@ -41,9 +40,8 @@ The build dependencies are
 > TODO Upload to Debian, add more archs and/or host these links on Github releases properly.
 
 {% highlight bash %}
-wget https://www.dropbox.com/s/dbdhn4yd9m3nnct/libcmscodec1_0.0.1-1_amd64.deb
 wget https://www.dropbox.com/s/7c0rs49ewcu6m93/fort_0.0.1-1_amd64.deb
-sudo apt install ./libcmscodec1_0.0.1-1_amd64.deb ./fort_0.0.1-1_amd64.deb
+sudo apt install ./fort_0.0.1-1_amd64.deb
 {% endhighlight %}
 
 Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which is just the binary ran as a daemon. You can [configure](usage.html#--configuration-file) it at `/etc/fort/config.json`.
@@ -62,22 +60,8 @@ etc.
 ### Debian version
 
 {% highlight bash %}
-########### normal dependencies ###########
 sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync unzip
 
-############### libcmscodec ###############
-mkdir libcmscodec
-cd libcmscodec/
-wget https://github.com/NICMx/libcmscodec/releases/download/{{ site.libcmscodec-latest-version }}/libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
-tar xvzf libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
-cd libcmscodec-{{ site.libcmscodec-latest-version }}/
-./configure
-make
-sudo make install
-sudo ldconfig
-cd ../../
-
-################## fort ###################
 mkdir fort
 cd fort/
 wget https://github.com/NICMx/FORT-validator/archive/master.zip
@@ -100,26 +84,11 @@ cd ../../
 > For now, I'm working around this by running the `autogen.sh`s in Debian. It probably needn't be fixed, since the releases are going to ship with the `autogen.sh`s already executed anyway.
 
 {% highlight bash %}
-########### normal dependencies ###########
 su
 # OpenBSD already ships with LibreSSL
 pkg_add jansson libexecinfo rsync unzip
 exit
 
-############### libcmscodec ###############
-mkdir libcmscodec
-cd libcmscodec/
-ftp https://github.com/NICMx/libcmscodec/releases/download/{{ site.libcmscodec-latest-version }}/libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
-tar xvzf libcmscodec-{{ site.libcmscodec-latest-version }}.tar.gz
-cd libcmscodec-{{ site.libcmscodec-latest-version }}/
-./configure
-make
-su
-make install
-exit
-cd ../../
-
-################## fort ###################
 mkdir fort
 cd fort/
 ftp https://github.com/NICMx/FORT-validator/archive/master.zip
@@ -139,29 +108,8 @@ cd ../../
 ## Option 3: Compiling the git repositories
 
 {% highlight bash %}
-########### normal dependencies ###########
 sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync
 
-################## asn1c ##################
-# (Needed by libcmscodec's autogen. Relatively recent commit required.)
-git clone https://github.com/vlm/asn1c.git
-cd asn1c
-test -f configure || autoreconf -iv
-./configure
-make
-sudo make install
-
-############### libcmscodec ###############
-git clone https://github.com/NICMx/libcmscodec.git
-cd libcmscodec/
-./autogen.sh
-./configure
-make
-sudo make install
-sudo ldconfig
-cd ../
-
-################## fort ###################
 git clone https://github.com/NICMx/FORT-validator.git
 cd FORT-validator/
 ./autogen.sh

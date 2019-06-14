@@ -1,10 +1,10 @@
 #ifndef SRC_ASN1_DECODE_H_
 #define SRC_ASN1_DECODE_H_
 
-#include <libcmscodec/ANY.h>
-#include <libcmscodec/constr_TYPE.h>
 #include <stdbool.h>
 #include "file.h"
+#include "asn1/asn1c/ANY.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 int asn1_decode(const void *, size_t, asn_TYPE_descriptor_t const *, void **,
     bool);

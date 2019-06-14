@@ -3,13 +3,13 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <libcmscodec/RouteOriginAttestation.h>
 
 #include "config.h"
 #include "log.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
+#include "asn1/asn1c/RouteOriginAttestation.h"
 #include "object/signed_object.h"
 
 static int

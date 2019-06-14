@@ -1,11 +1,11 @@
 #ifndef SRC_SIGNED_DATA_H_
 #define SRC_SIGNED_DATA_H_
 
-/* Some wrappers for libcmscodec's SignedData. */
+/* Some wrappers for asn1/asn1c/SignedData.h. */
 
 #include <openssl/x509.h>
-#include <libcmscodec/SignedData.h>
 #include "resource.h"
+#include "asn1/asn1c/SignedData.h"
 #include "object/certificate.h"
 
 /*

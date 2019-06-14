@@ -1,0 +1,216 @@
+ASN_MODULE_SRCS=	\
+	asn1/asn1c/IPAddrBlocks.c	\
+	asn1/asn1c/IPAddressFamily.c	\
+	asn1/asn1c/IPAddressChoice.c	\
+	asn1/asn1c/IPAddressOrRange.c	\
+	asn1/asn1c/IPAddressRange.c	\
+	asn1/asn1c/IPAddress.c	\
+	asn1/asn1c/ASIdentifiers.c	\
+	asn1/asn1c/ASIdentifierChoice.c	\
+	asn1/asn1c/ASIdOrRange.c	\
+	asn1/asn1c/ASRange.c	\
+	asn1/asn1c/ASId.c	\
+	asn1/asn1c/AttributeType.c	\
+	asn1/asn1c/AttributeValue.c	\
+	asn1/asn1c/AttributeTypeAndValue.c	\
+	asn1/asn1c/Name.c	\
+	asn1/asn1c/RDNSequence.c	\
+	asn1/asn1c/DistinguishedName.c	\
+	asn1/asn1c/RelativeDistinguishedName.c	\
+	asn1/asn1c/Version.c	\
+	asn1/asn1c/CertificateSerialNumber.c	\
+	asn1/asn1c/Time.c	\
+	asn1/asn1c/Extensions.c	\
+	asn1/asn1c/Extension.c	\
+	asn1/asn1c/CertificateList.c	\
+	asn1/asn1c/TBSCertList.c	\
+	asn1/asn1c/AlgorithmIdentifier.c	\
+	asn1/asn1c/ContentInfo.c	\
+	asn1/asn1c/ContentType.c	\
+	asn1/asn1c/SignedData.c	\
+	asn1/asn1c/DigestAlgorithmIdentifiers.c	\
+	asn1/asn1c/SignerInfos.c	\
+	asn1/asn1c/EncapsulatedContentInfo.c	\
+	asn1/asn1c/SignedDataPKCS7.c	\
+	asn1/asn1c/EncapsulatedContentInfoPKCS7.c	\
+	asn1/asn1c/ContentTypePKCS7.c	\
+	asn1/asn1c/SignerInfo.c	\
+	asn1/asn1c/SignerIdentifier.c	\
+	asn1/asn1c/SignedAttributes.c	\
+	asn1/asn1c/UnsignedAttributes.c	\
+	asn1/asn1c/CMSAttribute.c	\
+	asn1/asn1c/CMSAttributeValue.c	\
+	asn1/asn1c/SignatureValue.c	\
+	asn1/asn1c/CMSSubjectKeyIdentifier.c	\
+	asn1/asn1c/DigestAlgorithmIdentifier.c	\
+	asn1/asn1c/SignatureAlgorithmIdentifier.c	\
+	asn1/asn1c/RevocationInfoChoices.c	\
+	asn1/asn1c/RevocationInfoChoice.c	\
+	asn1/asn1c/OtherRevocationInfoFormat.c	\
+	asn1/asn1c/CertificateSet.c	\
+	asn1/asn1c/IssuerAndSerialNumber.c	\
+	asn1/asn1c/CMSVersion.c	\
+	asn1/asn1c/MessageDigest.c	\
+	asn1/asn1c/SigningTime.c	\
+	asn1/asn1c/Countersignature.c	\
+	asn1/asn1c/RouteOriginAttestation.c	\
+	asn1/asn1c/ASID.c	\
+	asn1/asn1c/ROAIPAddressFamily.c	\
+	asn1/asn1c/ROAIPAddress.c	\
+	asn1/asn1c/Manifest.c	\
+	asn1/asn1c/FileAndHash.c	\
+	asn1/asn1c/BinarySigningTime.c	\
+	asn1/asn1c/BinaryTime.c
+
+ASN_MODULE_HDRS=	\
+	asn1/asn1c/IPAddrBlocks.h	\
+	asn1/asn1c/IPAddressFamily.h	\
+	asn1/asn1c/IPAddressChoice.h	\
+	asn1/asn1c/IPAddressOrRange.h	\
+	asn1/asn1c/IPAddressRange.h	\
+	asn1/asn1c/IPAddress.h	\
+	asn1/asn1c/ASIdentifiers.h	\
+	asn1/asn1c/ASIdentifierChoice.h	\
+	asn1/asn1c/ASIdOrRange.h	\
+	asn1/asn1c/ASRange.h	\
+	asn1/asn1c/ASId.h	\
+	asn1/asn1c/AttributeType.h	\
+	asn1/asn1c/AttributeValue.h	\
+	asn1/asn1c/AttributeTypeAndValue.h	\
+	asn1/asn1c/Name.h	\
+	asn1/asn1c/RDNSequence.h	\
+	asn1/asn1c/DistinguishedName.h	\
+	asn1/asn1c/RelativeDistinguishedName.h	\
+	asn1/asn1c/Version.h	\
+	asn1/asn1c/CertificateSerialNumber.h	\
+	asn1/asn1c/Time.h	\
+	asn1/asn1c/Extensions.h	\
+	asn1/asn1c/Extension.h	\
+	asn1/asn1c/CertificateList.h	\
+	asn1/asn1c/TBSCertList.h	\
+	asn1/asn1c/AlgorithmIdentifier.h	\
+	asn1/asn1c/ContentInfo.h	\
+	asn1/asn1c/ContentType.h	\
+	asn1/asn1c/SignedData.h	\
+	asn1/asn1c/DigestAlgorithmIdentifiers.h	\
+	asn1/asn1c/SignerInfos.h	\
+	asn1/asn1c/EncapsulatedContentInfo.h	\
+	asn1/asn1c/SignedDataPKCS7.h	\
+	asn1/asn1c/EncapsulatedContentInfoPKCS7.h	\
+	asn1/asn1c/ContentTypePKCS7.h	\
+	asn1/asn1c/SignerInfo.h	\
+	asn1/asn1c/SignerIdentifier.h	\
+	asn1/asn1c/SignedAttributes.h	\
+	asn1/asn1c/UnsignedAttributes.h	\
+	asn1/asn1c/CMSAttribute.h	\
+	asn1/asn1c/CMSAttributeValue.h	\
+	asn1/asn1c/SignatureValue.h	\
+	asn1/asn1c/CMSSubjectKeyIdentifier.h	\
+	asn1/asn1c/DigestAlgorithmIdentifier.h	\
+	asn1/asn1c/SignatureAlgorithmIdentifier.h	\
+	asn1/asn1c/RevocationInfoChoices.h	\
+	asn1/asn1c/RevocationInfoChoice.h	\
+	asn1/asn1c/OtherRevocationInfoFormat.h	\
+	asn1/asn1c/CertificateSet.h	\
+	asn1/asn1c/IssuerAndSerialNumber.h	\
+	asn1/asn1c/CMSVersion.h	\
+	asn1/asn1c/MessageDigest.h	\
+	asn1/asn1c/SigningTime.h	\
+	asn1/asn1c/Countersignature.h	\
+	asn1/asn1c/RouteOriginAttestation.h	\
+	asn1/asn1c/ASID.h	\
+	asn1/asn1c/ROAIPAddressFamily.h	\
+	asn1/asn1c/ROAIPAddress.h	\
+	asn1/asn1c/Manifest.h	\
+	asn1/asn1c/FileAndHash.h	\
+	asn1/asn1c/BinarySigningTime.h	\
+	asn1/asn1c/BinaryTime.h
+
+ASN_MODULE_HDRS+=asn1/asn1c/ANY.h
+ASN_MODULE_SRCS+=asn1/asn1c/ANY.c
+ASN_MODULE_HDRS+=asn1/asn1c/OCTET_STRING.h
+ASN_MODULE_HDRS+=asn1/asn1c/OPEN_TYPE.h
+ASN_MODULE_SRCS+=asn1/asn1c/OPEN_TYPE.c
+ASN_MODULE_HDRS+=asn1/asn1c/constr_CHOICE.h
+ASN_MODULE_HDRS+=asn1/asn1c/BOOLEAN.h
+ASN_MODULE_SRCS+=asn1/asn1c/BOOLEAN.c
+ASN_MODULE_HDRS+=asn1/asn1c/GeneralizedTime.h
+ASN_MODULE_SRCS+=asn1/asn1c/GeneralizedTime.c
+ASN_MODULE_HDRS+=asn1/asn1c/IA5String.h
+ASN_MODULE_SRCS+=asn1/asn1c/IA5String.c
+ASN_MODULE_HDRS+=asn1/asn1c/INTEGER.h
+ASN_MODULE_SRCS+=asn1/asn1c/INTEGER.c
+ASN_MODULE_HDRS+=asn1/asn1c/NULL.h
+ASN_MODULE_SRCS+=asn1/asn1c/NULL.c
+ASN_MODULE_HDRS+=asn1/asn1c/OBJECT_IDENTIFIER.h
+ASN_MODULE_SRCS+=asn1/asn1c/OBJECT_IDENTIFIER.c
+ASN_MODULE_HDRS+=asn1/asn1c/UTCTime.h
+ASN_MODULE_SRCS+=asn1/asn1c/UTCTime.c
+ASN_MODULE_HDRS+=asn1/asn1c/asn_SEQUENCE_OF.h
+ASN_MODULE_SRCS+=asn1/asn1c/asn_SEQUENCE_OF.c
+ASN_MODULE_HDRS+=asn1/asn1c/asn_SET_OF.h
+ASN_MODULE_SRCS+=asn1/asn1c/asn_SET_OF.c
+ASN_MODULE_SRCS+=asn1/asn1c/constr_CHOICE.c
+ASN_MODULE_HDRS+=asn1/asn1c/constr_SEQUENCE.h
+ASN_MODULE_SRCS+=asn1/asn1c/constr_SEQUENCE.c
+ASN_MODULE_HDRS+=asn1/asn1c/constr_SEQUENCE_OF.h
+ASN_MODULE_SRCS+=asn1/asn1c/constr_SEQUENCE_OF.c
+ASN_MODULE_HDRS+=asn1/asn1c/constr_SET_OF.h
+ASN_MODULE_SRCS+=asn1/asn1c/constr_SET_OF.c
+ASN_MODULE_HDRS+=asn1/asn1c/asn_application.h
+ASN_MODULE_SRCS+=asn1/asn1c/asn_application.c
+ASN_MODULE_HDRS+=asn1/asn1c/asn_ioc.h
+ASN_MODULE_HDRS+=asn1/asn1c/asn_system.h
+ASN_MODULE_HDRS+=asn1/asn1c/asn_codecs.h
+ASN_MODULE_HDRS+=asn1/asn1c/asn_internal.h
+ASN_MODULE_SRCS+=asn1/asn1c/asn_internal.c
+ASN_MODULE_HDRS+=asn1/asn1c/asn_random_fill.h
+ASN_MODULE_SRCS+=asn1/asn1c/asn_random_fill.c
+ASN_MODULE_HDRS+=asn1/asn1c/asn_bit_data.h
+ASN_MODULE_SRCS+=asn1/asn1c/asn_bit_data.c
+ASN_MODULE_SRCS+=asn1/asn1c/OCTET_STRING.c
+ASN_MODULE_HDRS+=asn1/asn1c/BIT_STRING.h
+ASN_MODULE_SRCS+=asn1/asn1c/BIT_STRING.c
+ASN_MODULE_SRCS+=asn1/asn1c/asn_codecs_prim.c
+ASN_MODULE_HDRS+=asn1/asn1c/asn_codecs_prim.h
+ASN_MODULE_HDRS+=asn1/asn1c/ber_tlv_length.h
+ASN_MODULE_SRCS+=asn1/asn1c/ber_tlv_length.c
+ASN_MODULE_HDRS+=asn1/asn1c/ber_tlv_tag.h
+ASN_MODULE_SRCS+=asn1/asn1c/ber_tlv_tag.c
+ASN_MODULE_HDRS+=asn1/asn1c/ber_decoder.h
+ASN_MODULE_SRCS+=asn1/asn1c/ber_decoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/der_encoder.h
+ASN_MODULE_SRCS+=asn1/asn1c/der_encoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/constr_TYPE.h
+ASN_MODULE_SRCS+=asn1/asn1c/constr_TYPE.c
+ASN_MODULE_HDRS+=asn1/asn1c/constraints.h
+ASN_MODULE_SRCS+=asn1/asn1c/constraints.c
+ASN_MODULE_HDRS+=asn1/asn1c/xer_support.h
+ASN_MODULE_SRCS+=asn1/asn1c/xer_support.c
+ASN_MODULE_HDRS+=asn1/asn1c/xer_decoder.h
+ASN_MODULE_SRCS+=asn1/asn1c/xer_decoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/xer_encoder.h
+ASN_MODULE_SRCS+=asn1/asn1c/xer_encoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/per_support.h
+ASN_MODULE_SRCS+=asn1/asn1c/per_support.c
+ASN_MODULE_HDRS+=asn1/asn1c/per_decoder.h
+ASN_MODULE_SRCS+=asn1/asn1c/per_decoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/per_encoder.h
+ASN_MODULE_SRCS+=asn1/asn1c/per_encoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/per_opentype.h
+ASN_MODULE_SRCS+=asn1/asn1c/per_opentype.c
+ASN_MODULE_HDRS+=asn1/asn1c/oer_decoder.h
+ASN_MODULE_HDRS+=asn1/asn1c/oer_encoder.h
+ASN_MODULE_HDRS+=asn1/asn1c/oer_support.h
+ASN_MODULE_SRCS+=asn1/asn1c/oer_decoder.c
+ASN_MODULE_SRCS+=asn1/asn1c/oer_encoder.c
+ASN_MODULE_SRCS+=asn1/asn1c/oer_support.c
+ASN_MODULE_SRCS+=asn1/asn1c/OPEN_TYPE_oer.c
+ASN_MODULE_SRCS+=asn1/asn1c/INTEGER_oer.c
+ASN_MODULE_SRCS+=asn1/asn1c/BIT_STRING_oer.c
+ASN_MODULE_SRCS+=asn1/asn1c/OCTET_STRING_oer.c
+ASN_MODULE_SRCS+=asn1/asn1c/constr_CHOICE_oer.c
+ASN_MODULE_SRCS+=asn1/asn1c/constr_SEQUENCE_oer.c
+ASN_MODULE_SRCS+=asn1/asn1c/constr_SET_OF_oer.c
+
+ASN_MODULE_CFLAGS=-DASN_DISABLE_PER_SUPPORT 

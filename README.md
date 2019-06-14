@@ -9,9 +9,8 @@ An RPKI Validator and RTR Server.
 Dependencies:
 
 1. libcrypto ([LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
-1. [jansson](https://github.com/akheron/jansson)
-3. [libcmscodec](https://github.com/ydahhrk/libcmscodec)
-4. [rsync](http://rsync.samba.org/)
+2. [jansson](https://github.com/akheron/jansson)
+3. [rsync](http://rsync.samba.org/)
 
 After all the dependencies are installed, run:
 

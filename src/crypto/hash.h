@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <libcmscodec/BIT_STRING.h>
 #include "uri.h"
+#include "asn1/asn1c/BIT_STRING.h"
 
 int hash_validate_file(char const *, struct rpki_uri *uri,
     BIT_STRING_t const *);
