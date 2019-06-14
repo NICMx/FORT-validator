@@ -305,13 +305,22 @@ See more about SLURM configuration at FORT's web docs.
 .RE
 .P
 
-.B \-\-server.disabled
+.B \-\-mode=(\fIserver\fR|\fIstandalone\fR)
 .RS 4
-Disable the RTR server implemented by FORT. If this flag is set, the rest of
-the configuration options "\fIserver.*\fR" are ignored and FORT performs an
-in-place standalone RPKI validation.
+Commands the way FORT executes the validation, its possible values are:
 .P
-By default, the RTR server is enabled.
+.I server
+.RS 4
+Enable the RTR server using the \fIserver.*\fR arguments.
+.RE
+.P
+.I standalone
+.RS 4
+Disable the RTR server, the configuration options \fIserver.*\fR are ignored
+and FORT performs an in-place standalone validation.
+.RE
+.P
+By default, the mode is \fIserver\fR.
 .RE
 .P
 
@@ -412,7 +421,7 @@ custom repository directory as well, and binding the RTR server to port 9323.
 .RE
 .P
 
-.B fort \-t /tmp/tal \-r /tmp/repository \-\-server.disabled \-\-output.roa -
+.B fort \-t /tmp/tal \-r /tmp/repository \-\-mode=standalone \-\-output.roa -
 .RS 4
 Run FORT as standalone and output ROAs CSV to the console.
 .RE
@@ -420,7 +429,7 @@ Run FORT as standalone and output ROAs CSV to the console.
 
 .nf
 \fBfort \-t /tmp/tal \-r /tmp/repository \\
-     \-\-server.disabled \\
+     \-\-mode=standalone \\
      \-\-slurm /tmp/myslurm.slurm\fR
 .fi
 .RS 4
@@ -458,9 +467,9 @@ to a specific value:
   "sync-strategy": "root",
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
+  "mode": "server",
   "slurm": "test.slurm",
   "server": {
-    "disabled": false,
     "address": "192.0.2.1",
     "port": "8323",
     "backlog": 64,

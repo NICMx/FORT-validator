@@ -47,10 +47,10 @@ struct rpki_config {
 	unsigned int maximum_certificate_depth;
 	/** File or directory where the .slurm file(s) is(are) located */
 	char *slurm;
+	/* Run as RTR server or standalone validation */
+	enum mode mode;
 
 	struct {
-		/** Disable the RTR server. */
-		bool disabled;
 		/** The bound listening address of the RTR server. */
 		char *address;
 		/** The bound listening port of the RTR server. */
@@ -194,29 +194,29 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, slurm),
 		.doc = "Path to the SLURM file or SLURMs directory (files must have the extension .slurm)",
+	}, {
+		.id = 1004,
+		.name = "mode",
+		.type = &gt_mode,
+		.offset = offsetof(struct rpki_config, mode),
+		.doc = "Run mode: 'server' (run as RTR server), 'standalone' (run validation once and exit)",
 	},
 
 	/* Server fields */
 	{
 		.id = 5000,
-		.name = "server.disabled",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, server.disabled),
-		.doc = "Disable the RTR server.",
-	}, {
-		.id = 5001,
 		.name = "server.address",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.address),
 		.doc = "Address to which RTR server will bind itself to. Can be a name, in which case an address will be resolved.",
 	}, {
-		.id = 5002,
+		.id = 5001,
 		.name = "server.port",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.port),
 		.doc = "Port to which RTR server will bind itself to. Can be a string, in which case a number will be resolved.",
 	}, {
-		.id = 5003,
+		.id = 5002,
 		.name = "server.backlog",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, server.backlog),
@@ -224,7 +224,7 @@ static const struct option_field options[] = {
 		.min = 1,
 		.max = SOMAXCONN,
 	}, {
-		.id = 5004,
+		.id = 5003,
 		.name = "server.validation-interval",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
@@ -462,7 +462,6 @@ set_default_values(void)
 	 * duplicates.
 	 */
 
-	rpki_config.server.disabled = false;
 	rpki_config.server.address = NULL;
 	rpki_config.server.port = strdup("323");
 	if (rpki_config.server.port == NULL)
@@ -483,6 +482,7 @@ set_default_values(void)
 	rpki_config.sync_strategy = SYNC_ROOT;
 	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
+	rpki_config.mode = SERVER;
 
 	rpki_config.rsync.program = strdup("rsync");
 	if (rpki_config.rsync.program == NULL) {
@@ -494,7 +494,7 @@ set_default_values(void)
 	    recursive_rsync_args, ARRAY_LEN(recursive_rsync_args));
 	if (error)
 		goto revert_rsync_program;
-	/* Simply remove --recursive and --delete. */
+
 	error = string_array_init(&rpki_config.rsync.args.flat,
 	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
 	if (error)
@@ -637,10 +637,10 @@ get_option_metadatas(void)
 	return options;
 }
 
-bool
-config_get_server_disabled(void)
+enum mode
+config_get_mode(void)
 {
-	return rpki_config.server.disabled;
+	return rpki_config.mode;
 }
 
 char const *

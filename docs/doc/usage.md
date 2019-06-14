@@ -23,7 +23,7 @@ command: fort
 		4. [`root-except-ta`](#root-except-ta)
 	7. [`--shuffle-uris`](#--shuffle-uris)
 	8. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
-	9. [`--server.disabled`](#--serverdisabled)
+	9. [`--mode`](#--mode)
 	10. [`--server.address`](#--serveraddress)
 	11. [`--server.port`](#--serverport)
 	12. [`--server.backlog`](#--serverbacklog)
@@ -53,7 +53,7 @@ command: fort
         [--sync-strategy=off|strict|root|root-except-ta]
         [--shuffle-uris]
         [--maximum-certificate-depth=<unsigned integer>]
-        [--server.disabled]
+        [--mode=server|standalone]
         [--server.address=<string>]
         [--server.port=<string>]
         [--server.backlog=<unsigned integer>]
@@ -244,14 +244,15 @@ Maximum allowable RPKI tree height. Meant to protect Fort from iterating infinit
 
 Fort's tree traversal is actually iterative (not recursive), so there should be no risk of stack overflow, regardless of this value.
 
-### `--server.disabled`
+### `--mode`
 
-- **Type:** None
+- **Type:** Enumeration (`server`, `standalone`)
 - **Availability:** `argv` and JSON
+- **Default:** `server`
 
-Disable the RTR server.
-
-If the flag is set, the server is disabled, the rest of the `server.*` arguments are ignored, and Fort performs an in-place standalone RPKI validation.
+Run mode, commands the way Fort executes the validation. The two possible values and its behavior are:
+- `server`: Enables the RTR server using the `server.*` arguments ([`server.address`](#--serveraddress), [`server.port`](#--serverport), [`server.backlog`](#--serverbacklog), [`server.validation-interval`](#--servervalidation-interval)).
+- `standalone`:  Disables the RTR server, the `server.*` arguments are ignored, and Fort performs an in-place standalone RPKI validation.
 
 ### `--server.address`
 
@@ -379,9 +380,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--sync-strategy">sync-strategy</a>": "root",
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
 	"<a href="#--slurm">slurm</a>": "/tmp/test.slurm",
+	"<a href="#--mode">mode</a>": "server",
 
 	"server": {
-		"<a href="#--serverdisabled">disabled</a>": false,
 		"<a href="#--serveraddress">address</a>": "192.0.2.1",
 		"<a href="#--serverport">port</a>": "8323",
 		"<a href="#--serverbacklog">backlog</a>": 16,

@@ -95,10 +95,10 @@ config_get_slurm(void)
 	return NULL;
 }
 
-bool
-config_get_server_disabled(void)
+enum mode
+config_get_mode(void)
 {
-	return true;
+	return STANDALONE;
 }
 
 char const *

@@ -352,7 +352,7 @@ join_thread(pthread_t tid, void *arg)
 
 /*
  * Starts the server, using the current thread to listen for RTR client
- * requests. If configuration parameter 'server.disabled' is true, then the
+ * requests. If configuration parameter 'mode' is STANDALONE, then the
  * server runs "one time" (a.k.a. run the validation just once), it doesn't
  * waits for clients requests.
  *
@@ -373,7 +373,7 @@ rtr_listen(void)
 	if (error)
 		return error;
 
-	if (config_get_server_disabled()) {
+	if (config_get_mode() == STANDALONE) {
 		error = vrps_update(&changed);
 		if (error)
 			pr_err("Error %d while trying to update the ROA database.",

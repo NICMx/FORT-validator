@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "config/filename_format.h"
+#include "config/mode.h"
 #include "config/sync_strategy.h"
 #include "config/string_array.h"
 #include "config/types.h"
@@ -14,7 +15,6 @@ int handle_flags_config(int , char **);
 void free_rpki_config(void);
 
 /* Getters */
-bool config_get_server_disabled(void);
 char const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
@@ -26,6 +26,7 @@ char const *config_get_local_repository(void);
 enum sync_strategy config_get_sync_strategy(void);
 bool config_get_shuffle_tal_uris(void);
 unsigned int config_get_max_cert_depth(void);
+enum mode config_get_mode(void);
 bool config_get_color_output(void);
 enum filename_format config_get_filename_format(void);
 char *config_get_rsync_program(void);
