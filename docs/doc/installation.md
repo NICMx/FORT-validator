@@ -6,8 +6,6 @@ title: Compilation and Installation
 
 # {{ page.title }}
 
-> TODO update with proper .tar.gz releases, once they are created
-
 ## Index
 
 1. [Dependencies](#dependencies)

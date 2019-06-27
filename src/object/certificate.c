@@ -1386,6 +1386,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 	struct validation *state;
 	int total_parents;
+	STACK_OF(X509_CRL) *rpp_parent_crl;
 	X509 *cert;
 	struct rpki_uri *mft;
 	struct certificate_refs refs;
@@ -1405,11 +1406,15 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	fnstack_push_uri(cert_uri);
 	memset(&refs, 0, sizeof(refs));
 
+	error = rpp_crl(rpp_parent, &rpp_parent_crl);
+	if (error)
+		goto revert_fnstack_and_debug;
+
 	/* -- Validate the certificate (@cert) -- */
 	error = certificate_load(cert_uri, &cert);
 	if (error)
 		goto revert_fnstack_and_debug;
-	error = certificate_validate_chain(cert, rpp_crl(rpp_parent));
+	error = certificate_validate_chain(cert, rpp_parent_crl);
 	if (error)
 		goto revert_cert;
 	error = certificate_validate_rfc6487(cert, IS_TA);
@@ -1432,7 +1437,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		goto revert_uri_and_refs;
 	cert = NULL; /* Ownership stolen */
 
-	error = handle_manifest(mft, rpp_crl(rpp_parent), &pp);
+	error = handle_manifest(mft, rpp_parent_crl, &pp);
 	if (error) {
 		x509stack_cancel(validation_certstack(state));
 		goto revert_uri_and_refs;

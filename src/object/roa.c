@@ -191,12 +191,17 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
 	struct signed_object_args sobj_args;
 	struct RouteOriginAttestation *roa;
+	STACK_OF(X509_CRL) *crl;
 	int error;
 
 	pr_debug_add("ROA '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = signed_object_args_init(&sobj_args, uri, rpp_crl(pp), false);
+	error = rpp_crl(pp, &crl);
+	if (error)
+		goto revert_fnstack;
+
+	error = signed_object_args_init(&sobj_args, uri, crl, false);
 	if (error)
 		goto revert_fnstack;
 

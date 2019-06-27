@@ -145,25 +145,54 @@ end:
 	return error;
 }
 
-STACK_OF(X509_CRL) *
-rpp_crl(struct rpp *pp)
+/**
+ * Returns the pp's CRL in stack form (which is how libcrypto functions want
+ * it).
+ * The stack belongs to @pp and should not be released. Can be NULL, in which
+ * case you're currently validating the TA (since it lacks governing CRL).
+ */
+int
+rpp_crl(struct rpp *pp, STACK_OF(X509_CRL) **result)
 {
-	if (pp == NULL)
-		return NULL;
-	if (pp->crl == NULL)
-		return NULL;
-	if (pp->crl_stack != NULL)
-		return pp->crl_stack;
+	STACK_OF(X509_CRL) *stack;
+	int error;
 
-	pp->crl_stack = sk_X509_CRL_new_null();
-	if (pp->crl_stack == NULL)
-		return NULL;
-	if (add_crl_to_stack(pp, pp->crl_stack) != 0) {
-		sk_X509_CRL_pop_free(pp->crl_stack, X509_CRL_free);
-		return NULL;
+	if (pp == NULL) {
+		/* No pp = currently validating TA. There's no CRL. */
+		*result = NULL;
+		return 0;
+	}
+	if (pp->crl == NULL) {
+		/* rpp_crl() assumes the rpp has been populated already. */
+		pr_crit("RPP lacks a CRL.");
+	}
+	if (pp->crl_stack != NULL) {
+		/* Result already cached. */
+		*result = pp->crl_stack;
+		return 0;
 	}
 
-	return pp->crl_stack;
+	/*
+	 * TODO (performance) ghostbusters_traverse() and roa_traverse() can
+	 * call rpp_crl() repeatedly, which means that, if it errors here,
+	 * it will keep trying to recreate the stack and log the same error
+	 * over and over.
+	 * Consider creating a flag which will keep track of the CRL cache
+	 * status, and prevent this code if it knows it's going to fail.
+	 * Or maybe some other solution.
+	 */
+	stack = sk_X509_CRL_new_null();
+	if (stack == NULL)
+		return pr_enomem();
+	error = add_crl_to_stack(pp, stack);
+	if (error) {
+		sk_X509_CRL_pop_free(stack, X509_CRL_free);
+		return error;
+	}
+
+	pp->crl_stack = stack; /* Cache result */
+	*result = stack;
+	return 0;
 }
 
 static int

@@ -15,7 +15,7 @@ int rpp_add_roa(struct rpp *, struct rpki_uri *);
 int rpp_add_ghostbusters(struct rpp *, struct rpki_uri *);
 
 struct rpki_uri *rpp_get_crl(struct rpp const *);
-STACK_OF(X509_CRL) *rpp_crl(struct rpp *);
+int rpp_crl(struct rpp *, STACK_OF(X509_CRL) **);
 
 void rpp_traverse(struct rpp *);
 

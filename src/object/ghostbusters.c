@@ -18,12 +18,17 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	static OID oid = OID_GHOSTBUSTERS;
 	struct oid_arcs arcs = OID2ARCS("ghostbusters", oid);
 	struct signed_object_args sobj_args;
+	STACK_OF(X509_CRL) *crl;
 	int error;
 
 	pr_debug_add("Ghostbusters '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = signed_object_args_init(&sobj_args, uri, rpp_crl(pp), true);
+	error = rpp_crl(pp, &crl);
+	if (error)
+		goto end1;
+
+	error = signed_object_args_init(&sobj_args, uri, crl, true);
 	if (error)
 		goto end1;
 
