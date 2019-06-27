@@ -17,9 +17,25 @@ ARRAY_LIST(uris, struct rpki_uri *)
 struct rpp {
 	struct uris certs; /* Certificates */
 
-	struct rpki_uri *crl; /* Certificate Revocation List */
-	/* Initialized lazily. Access via rpp_crl(). */
-	STACK_OF(X509_CRL) *crl_stack;
+	/*
+	 * uri NULL implies stack NULL and error 0.
+	 * If uri is set, stack might or might not be set.
+	 * error is only relevant when uri is set and stack is unset.
+	 */
+	struct { /* Certificate Revocation List */
+		struct rpki_uri *uri;
+		/*
+		 * CRL in libcrypto-friendly form.
+		 * Initialized lazily; access via rpp_crl().
+		 */
+		STACK_OF(X509_CRL) *stack;
+		/*
+		 * Some error code if we already tried to initialize @stack but
+		 * failed. Prevents us from wasting time doing it again, and
+		 * flooding the log with identical error messages.
+		 */
+		int error;
+	} crl;
 
 	/* The Manifest is not needed for now. */
 
@@ -44,8 +60,9 @@ rpp_create(void)
 		return NULL;
 
 	uris_init(&result->certs);
-	result->crl = NULL;
-	result->crl_stack = NULL;
+	result->crl.uri = NULL;
+	result->crl.stack = NULL;
+	result->crl.error = 0;
 	uris_init(&result->roas);
 	uris_init(&result->ghostbusters);
 	result->references = 1;
@@ -71,10 +88,10 @@ rpp_refput(struct rpp *pp)
 	pp->references--;
 	if (pp->references == 0) {
 		uris_cleanup(&pp->certs, __uri_refput);
-		if (pp->crl != NULL)
-			uri_refput(pp->crl);
-		if (pp->crl_stack != NULL)
-			sk_X509_CRL_pop_free(pp->crl_stack, X509_CRL_free);
+		if (pp->crl.uri != NULL)
+			uri_refput(pp->crl.uri);
+		if (pp->crl.stack != NULL)
+			sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
 		uris_cleanup(&pp->roas, __uri_refput);
 		uris_cleanup(&pp->ghostbusters, __uri_refput);
 		free(pp);
@@ -107,17 +124,17 @@ int
 rpp_add_crl(struct rpp *pp, struct rpki_uri *uri)
 {
 	/* rfc6481#section-2.2 */
-	if (pp->crl)
+	if (pp->crl.uri)
 		return pr_err("Repository Publication Point has more than one CRL.");
 
-	pp->crl = uri;
+	pp->crl.uri = uri;
 	return 0;
 }
 
 struct rpki_uri *
 rpp_get_crl(struct rpp const *pp)
 {
-	return pp->crl;
+	return pp->crl.uri;
 }
 
 static int
@@ -127,9 +144,9 @@ add_crl_to_stack(struct rpp *pp, STACK_OF(X509_CRL) *crls)
 	int error;
 	int idx;
 
-	fnstack_push_uri(pp->crl);
+	fnstack_push_uri(pp->crl.uri);
 
-	error = crl_load(pp->crl, &crl);
+	error = crl_load(pp->crl.uri, &crl);
 	if (error)
 		goto end;
 
@@ -155,42 +172,40 @@ int
 rpp_crl(struct rpp *pp, STACK_OF(X509_CRL) **result)
 {
 	STACK_OF(X509_CRL) *stack;
-	int error;
 
+	/* -- Short circuits -- */
 	if (pp == NULL) {
 		/* No pp = currently validating TA. There's no CRL. */
 		*result = NULL;
 		return 0;
 	}
-	if (pp->crl == NULL) {
+	if (pp->crl.uri == NULL) {
 		/* rpp_crl() assumes the rpp has been populated already. */
 		pr_crit("RPP lacks a CRL.");
 	}
-	if (pp->crl_stack != NULL) {
+	if (pp->crl.stack != NULL) {
 		/* Result already cached. */
-		*result = pp->crl_stack;
+		*result = pp->crl.stack;
 		return 0;
 	}
-
-	/*
-	 * TODO (performance) ghostbusters_traverse() and roa_traverse() can
-	 * call rpp_crl() repeatedly, which means that, if it errors here,
-	 * it will keep trying to recreate the stack and log the same error
-	 * over and over.
-	 * Consider creating a flag which will keep track of the CRL cache
-	 * status, and prevent this code if it knows it's going to fail.
-	 * Or maybe some other solution.
-	 */
-	stack = sk_X509_CRL_new_null();
-	if (stack == NULL)
-		return pr_enomem();
-	error = add_crl_to_stack(pp, stack);
-	if (error) {
-		sk_X509_CRL_pop_free(stack, X509_CRL_free);
-		return error;
+	if (pp->crl.error) {
+		/* Pretend that we did everything below. */
+		return pp->crl.error;
 	}
 
-	pp->crl_stack = stack; /* Cache result */
+	/* -- Actually initialize pp->crl.stack. -- */
+	stack = sk_X509_CRL_new_null();
+	if (stack == NULL) {
+		pp->crl.error = pr_enomem();
+		return pp->crl.error;
+	}
+	pp->crl.error = add_crl_to_stack(pp, stack);
+	if (pp->crl.error) {
+		sk_X509_CRL_pop_free(stack, X509_CRL_free);
+		return pp->crl.error;
+	}
+
+	pp->crl.stack = stack;
 	*result = stack;
 	return 0;
 }
