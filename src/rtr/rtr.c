@@ -238,6 +238,9 @@ client_thread_cb(void *arg)
 	end_client(param.fd);
 	clients_forget(param.fd);
 
+	/* Release to avoid the wait till the parent tries to join */
+	pthread_detach(param.tid);
+
 	return NULL;
 }
 

@@ -10,6 +10,11 @@
 struct client {
 	int fd;
 	struct sockaddr_storage addr;
+	/*
+	 * The join should be made when the db is cleared, so the main process
+	 * should do it.
+	 */
+	pthread_t tid;
 
 	serial_t serial_number;
 	bool serial_number_set;
