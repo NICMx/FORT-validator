@@ -362,7 +362,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
  * validated the TA's public key.
  */
 int
-download_files(struct rpki_uri *requested_uri, bool is_ta)
+download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 {
 	/**
 	 * Note:
@@ -376,13 +376,17 @@ download_files(struct rpki_uri *requested_uri, bool is_ta)
 	if (config_get_sync_strategy() == SYNC_OFF)
 		return 0;
 
-	if (is_already_downloaded(requested_uri)) {
+	if (!force && is_already_downloaded(requested_uri)) {
 		pr_debug("No need to redownload '%s'.",
 		    uri_get_printable(requested_uri));
 		return 0;
 	}
 
-	error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
+	if (!force)
+		error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
+	else
+		error = handle_strict_strategy(requested_uri, &rsync_uri);
+
 	if (error)
 		return error;
 

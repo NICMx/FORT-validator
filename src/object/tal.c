@@ -298,7 +298,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	struct deferred_cert deferred;
 	int error;
 
-	error = download_files(uri, true);
+	error = download_files(uri, true, false);
 	if (error) {
 		return pr_warn("TAL '%s' could not be RSYNC'd.",
 		    uri_get_printable(uri));
