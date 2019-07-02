@@ -1486,13 +1486,17 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	mft_retry = true;
 	do {
 		error = handle_manifest(mft, rpp_parent_crl, &pp);
+		if (!mft_retry)
+			uri_refput(mft);
 		if (!error || !mft_retry)
 			break;
 
-		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5)");
+		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
+		    uri_get_printable(caRepository));
 		error = download_files(caRepository, false, true);
 		if (error)
 			break;
+		uri_refget(mft);
 		mft_retry = false;
 	} while (true);
 

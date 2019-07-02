@@ -392,8 +392,9 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 
 	pr_debug("Going to RSYNC '%s'.", uri_get_printable(rsync_uri));
 
+	/* Don't store when "force" and if its already downloaded */
 	error = do_rsync(rsync_uri, is_ta);
-	if (!error)
+	if (!error && !(force && is_already_downloaded(rsync_uri)))
 		error = mark_as_downloaded(rsync_uri);
 
 	uri_refput(rsync_uri);
