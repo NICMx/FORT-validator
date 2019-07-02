@@ -155,7 +155,7 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, tal),
 		.doc = "Path to the TAL file or TALs directory",
-		.arg_doc = "<file or directory>",
+		.arg_doc = "<file>|<directory>",
 	}, {
 		.id = 'r',
 		.name = "local-repository",
@@ -194,6 +194,7 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, slurm),
 		.doc = "Path to the SLURM file or SLURMs directory (files must have the extension .slurm)",
+		.arg_doc = "<file>|<directory>"
 	}, {
 		.id = 1004,
 		.name = "mode",

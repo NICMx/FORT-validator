@@ -124,6 +124,17 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	args.started = false;
 	args.fd = fd;
 
+	error = get_last_serial_number(&current_serial);
+	switch (error) {
+	case 0:
+		break;
+	case -EAGAIN:
+		return err_pdu_send_no_data_available(fd);
+	default:
+		err_pdu_send_internal_error(fd);
+		return error;
+	}
+
 	/*
 	 * It's probably best not to work on a copy, because the tree is large.
 	 * Unfortunately, this means we'll have to encourage writer stagnation,
@@ -131,7 +142,7 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	 * queries than reset queries.
 	 */
 
-	error = vrps_foreach_base_roa(send_base_roa, &args, &current_serial);
+	error = vrps_foreach_base_roa(send_base_roa, &args);
 
 	/* See handle_serial_query_pdu() for some comments. */
 	switch (error) {

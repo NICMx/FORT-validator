@@ -40,15 +40,13 @@ command: fort
 
 ## Syntax
 
-<!-- TODO: Update this -->
-
 ```
 {{ page.command }}
         [--help]
         [--usage]
         [--version]
         [--configuration-file=<file>]
-        [--tal=<file>]
+        [--tal=<file>|<directory>]
         [--local-repository=<directory>]
         [--sync-strategy=off|strict|root|root-except-ta]
         [--shuffle-uris]
@@ -58,7 +56,7 @@ command: fort
         [--server.port=<string>]
         [--server.backlog=<unsigned integer>]
         [--server.validation-interval=<unsigned integer>]
-        [--slurm=<string>]
+        [--slurm=<file>|<directory>]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
         [--output.roa=<file>]
