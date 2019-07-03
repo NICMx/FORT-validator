@@ -66,6 +66,12 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 		goto end_error;
 	}
 
+	if (!resources_contains_asn(parent, asn)) {
+		error = pr_err("ROA is not allowed to advertise ASN %lu.",
+		    asn);
+		goto end_error;
+	}
+
 	pr_debug_rm("}");
 	return vhandler_handle_roa_v4(asn, &prefix, max_length);
 end_error:
@@ -117,6 +123,12 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 	if (!resources_contains_ipv6(parent, &prefix)) {
 		error = pr_err("ROA is not allowed to advertise %s/%u.",
 		    v6addr2str(&prefix.addr), prefix.len);
+		goto end_error;
+	}
+
+	if (!resources_contains_asn(parent, asn)) {
+		error = pr_err("ROA is not allowed to advertise ASN %lu.",
+		    asn);
 		goto end_error;
 	}
 
