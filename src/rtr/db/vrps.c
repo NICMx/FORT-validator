@@ -9,6 +9,7 @@
 #include "output_printer.h"
 #include "validation_handler.h"
 #include "data_structure/array_list.h"
+#include "object/router_key.h"
 #include "object/tal.h"
 #include "rtr/db/roa_table.h"
 #include "slurm/slurm_loader.h"
@@ -23,7 +24,7 @@
 DEFINE_ARRAY_LIST_FUNCTIONS(deltas_db, struct delta_group, )
 
 struct vrp_node {
-	struct delta delta;
+	struct delta_vrp delta;
 	SLIST_ENTRY(vrp_node) next;
 };
 
@@ -112,6 +113,17 @@ __handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
 	return rtrhandler_handle_roa_v6(arg, as, prefix, max_length);
 }
 
+int
+__handle_bgpsec(struct router_key const *router_key, void *arg)
+{
+	pr_debug("Handling BGPsec for ASN %u", router_key->asn);
+	/*
+	 * FIXME Add RTR handler
+	 * return rtrhandler_handle_router_key(arg, as, prefix, max_length);
+	 */
+	return 0;
+}
+
 static int
 __perform_standalone_validation(struct roa_table **result)
 {
@@ -125,6 +137,7 @@ __perform_standalone_validation(struct roa_table **result)
 
 	validation_handler.handle_roa_v4 = __handle_roa_v4;
 	validation_handler.handle_roa_v6 = __handle_roa_v6;
+	validation_handler.handle_bgpsec = __handle_bgpsec;
 	validation_handler.arg = roas;
 
 	error = perform_standalone_validation(&validation_handler);
@@ -346,7 +359,7 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
  * hash table.)
  */
 static int
-vrp_ovrd_remove(struct delta const *delta, void *arg)
+vrp_ovrd_remove(struct delta_vrp const *delta, void *arg)
 {
 	struct vrp_node *ptr;
 	struct vrp_slist *filtered_vrps = arg;
@@ -373,7 +386,7 @@ vrp_ovrd_remove(struct delta const *delta, void *arg)
  * @arg) on each element of the resultant delta.
  */
 int
-vrps_foreach_filtered_delta(struct deltas_db *deltas, delta_foreach_cb cb,
+vrps_foreach_filtered_delta(struct deltas_db *deltas, delta_vrp_foreach_cb cb,
     void *arg)
 {
 	struct vrp_slist filtered_vrps;
@@ -389,8 +402,9 @@ vrps_foreach_filtered_delta(struct deltas_db *deltas, delta_foreach_cb cb,
 	 */
 	SLIST_INIT(&filtered_vrps);
 	ARRAYLIST_FOREACH(deltas, group, i) {
+		/* FIXME Add function for router keys */
 		error = deltas_foreach(group->serial, group->deltas,
-		    vrp_ovrd_remove, &filtered_vrps);
+		    vrp_ovrd_remove, NULL, &filtered_vrps);
 		if (error)
 			goto release_list;
 	}

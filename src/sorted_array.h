@@ -42,6 +42,9 @@ int sarray_add(struct sorted_array *, void *);
 bool sarray_empty(struct sorted_array *);
 bool sarray_contains(struct sorted_array *, void *);
 
+typedef int (*sarray_foreach_cb)(void *, void *);
+int sarray_foreach(struct sorted_array *, sarray_foreach_cb, void *);
+
 char const *sarray_err2str(int);
 
 #endif /* SRC_SORTED_ARRAY_H_ */

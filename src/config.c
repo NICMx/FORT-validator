@@ -58,15 +58,13 @@ struct rpki_config {
 		/** Outstanding connections in the socket's listen queue */
 		unsigned int backlog;
 
-		/** Interval used to look for updates at VRPs location */
-		unsigned int validation_interval;
-
-		/*
-		 * TODO (next iteration) Intervals used at End of data PDU
-		 * uint32_t refresh_interval;
-		 * uint32_t retry_interval;
-		 * uint32_t expire_interval;
-		 */
+		struct {
+			/** Interval used to look for updates at VRPs location */
+			unsigned int validation;
+			unsigned int refresh;
+			unsigned int retry;
+			unsigned int expire;
+		} interval;
 	} server;
 
 	struct {
@@ -226,10 +224,10 @@ static const struct option_field options[] = {
 		.max = SOMAXCONN,
 	}, {
 		.id = 5003,
-		.name = "server.validation-interval",
+		.name = "server.interval.validation",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
-		    server.validation_interval),
+		    server.interval.validation),
 		.doc = "Interval used to look for updates at VRPs location",
 		/*
 		 * RFC 6810 and 8210:
@@ -240,13 +238,55 @@ static const struct option_field options[] = {
 		 */
 		.min = 60,
 		.max = UINT_MAX,
+	}, {
+		.id = 5004,
+		.name = "server.interval.refresh",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    server.interval.refresh),
+		.doc = "Interval between normal cache polls", // TODO
+		/*
+		 * RFC 6810 and 8210:
+		 * "The cache MUST rate-limit Serial Notifies to no more
+		 * frequently than one per minute."
+		 * We do this by not getting new information more than once per
+		 * minute.
+		 */
+		.min = 1,
+		.max = 86400,
+	}, {
+		.id = 5005,
+		.name = "server.interval.retry",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    server.interval.retry),
+		.doc = "Interval between cache poll retries after a failed cache poll", // TODO
+		/*
+		 * RFC 6810 and 8210:
+		 * "The cache MUST rate-limit Serial Notifies to no more
+		 * frequently than one per minute."
+		 * We do this by not getting new information more than once per
+		 * minute.
+		 */
+		.min = 1,
+		.max = 7200,
+	}, {
+		.id = 5006,
+		.name = "server.interval.expire",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    server.interval.expire),
+		.doc = "Interval during which data fetched from a cache remains valid in the absence of a successful subsequent cache poll", // TODO
+		/*
+		 * RFC 6810 and 8210:
+		 * "The cache MUST rate-limit Serial Notifies to no more
+		 * frequently than one per minute."
+		 * We do this by not getting new information more than once per
+		 * minute.
+		 */
+		.min = 600,
+		.max = 172800,
 	},
-	/*
-	 * TODO (next iteration) RTRv1 intervals with values:
-	 * - refresh: min = 1, max = 86400, default = 3600
-	 * - retry: min = 1, max = 7200, default = 600
-	 * - expire: min = 600, max = 172800, default = 7200
-	 */
 
 	/* RSYNC fields */
 	{
@@ -469,7 +509,10 @@ set_default_values(void)
 		return pr_enomem();
 
 	rpki_config.server.backlog = SOMAXCONN;
-	rpki_config.server.validation_interval = 3600;
+	rpki_config.server.interval.validation = 3600;
+	rpki_config.server.interval.refresh = 3600;
+	rpki_config.server.interval.retry = 600;
+	rpki_config.server.interval.expire = 7200;
 
 	rpki_config.tal = NULL;
 	rpki_config.slurm = NULL;
@@ -522,6 +565,12 @@ revert_port:
 static int
 validate_config(void)
 {
+	if (rpki_config.server.interval.expire <
+	    rpki_config.server.interval.refresh ||
+	    rpki_config.server.interval.expire <
+	    rpki_config.server.interval.retry)
+		return pr_err("Expire interval must be greater than refresh and retry intervals");
+
 	return (rpki_config.tal != NULL)
 	    ? 0
 	    : pr_err("The TAL file/directory (--tal) is mandatory.");
@@ -666,7 +715,25 @@ config_get_server_queue(void)
 unsigned int
 config_get_validation_interval(void)
 {
-	return rpki_config.server.validation_interval;
+	return rpki_config.server.interval.validation;
+}
+
+unsigned int
+config_get_interval_refresh(void)
+{
+	return rpki_config.server.interval.refresh;
+}
+
+unsigned int
+config_get_interval_retry(void)
+{
+	return rpki_config.server.interval.retry;
+}
+
+unsigned int
+config_get_interval_expire(void)
+{
+	return rpki_config.server.interval.expire;
 }
 
 char const *

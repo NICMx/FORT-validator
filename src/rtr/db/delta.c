@@ -17,8 +17,17 @@ struct delta_v6 {
 	uint8_t max_length;
 };
 
+struct delta_bsec {
+	unsigned char *ski;
+	int *ski_len;
+	uint32_t as;
+	unsigned char *spk;
+	int *spk_len;
+};
+
 ARRAY_LIST(deltas_v6, struct delta_v6)
 ARRAY_LIST(deltas_v4, struct delta_v4)
+ARRAY_LIST(deltas_bgpsec, struct delta_bsec)
 
 struct deltas {
 	struct {
@@ -29,6 +38,10 @@ struct deltas {
 		struct deltas_v6 adds;
 		struct deltas_v6 removes;
 	} v6;
+	struct {
+		struct deltas_bgpsec adds;
+		struct deltas_bgpsec removes;
+	} bgpsec;
 
 	atomic_uint references;
 };
@@ -46,6 +59,8 @@ deltas_create(struct deltas **_result)
 	deltas_v4_init(&result->v4.removes);
 	deltas_v6_init(&result->v6.adds);
 	deltas_v6_init(&result->v6.removes);
+	deltas_bgpsec_init(&result->bgpsec.adds);
+	deltas_bgpsec_init(&result->bgpsec.removes);
 	atomic_init(&result->references, 1);
 
 	*_result = result;
@@ -70,6 +85,8 @@ deltas_refput(struct deltas *deltas)
 		deltas_v4_cleanup(&deltas->v4.removes, NULL);
 		deltas_v6_cleanup(&deltas->v6.adds, NULL);
 		deltas_v6_cleanup(&deltas->v6.removes, NULL);
+		deltas_bgpsec_cleanup(&deltas->bgpsec.adds, NULL);
+		deltas_bgpsec_cleanup(&deltas->bgpsec.removes, NULL);
 		free(deltas);
 	}
 }
@@ -114,20 +131,44 @@ deltas_add_roa_v6(struct deltas *deltas, uint32_t as, struct v6_address *addr,
 	pr_crit("Unknown delta operation: %d", op);
 }
 
+int
+deltas_add_bgpsec(struct deltas *deltas, unsigned char *ski, int ski_len,
+    uint32_t as, unsigned char *spk, int spk_len, int op)
+{
+	struct delta_bsec delta = {
+		.ski = ski,
+		.ski_len = ski_len,
+		.as = as,
+		.spk = spk,
+		.spk_len = spk_len,
+	};
+
+	switch (op) {
+	case FLAG_ANNOUNCEMENT:
+		return deltas_bgpsec_add(&deltas->bgpsec.adds, &delta);
+	case FLAG_WITHDRAWAL:
+		return deltas_bgpsec_add(&deltas->bgpsec.removes, &delta);
+	}
+
+	pr_crit("Unknown delta operation: %d", op);
+}
+
 bool
 deltas_is_empty(struct deltas *deltas)
 {
 	return (deltas->v4.adds.len == 0)
 	    && (deltas->v4.removes.len == 0)
 	    && (deltas->v6.adds.len == 0)
-	    && (deltas->v6.removes.len == 0);
+	    && (deltas->v6.removes.len == 0)
+	    && (deltas->bgpsec.adds.len == 0)
+	    && (deltas->bgpsec.removes.len == 0);
 }
 
 static int
-__foreach_v4(struct deltas_v4 *array, delta_foreach_cb cb, void *arg,
+__foreach_v4(struct deltas_v4 *array, delta_vrp_foreach_cb cb, void *arg,
     serial_t serial, uint8_t flags)
 {
-	struct delta delta;
+	struct delta_vrp delta;
 	struct delta_v4 *d;
 	array_index i;
 	int error;
@@ -150,10 +191,10 @@ __foreach_v4(struct deltas_v4 *array, delta_foreach_cb cb, void *arg,
 }
 
 static int
-__foreach_v6(struct deltas_v6 *array, delta_foreach_cb cb, void *arg,
+__foreach_v6(struct deltas_v6 *array, delta_vrp_foreach_cb cb, void *arg,
     serial_t serial, uint8_t flags)
 {
-	struct delta delta;
+	struct delta_vrp delta;
 	struct delta_v6 *d;
 	array_index i;
 	int error;
@@ -175,27 +216,67 @@ __foreach_v6(struct deltas_v6 *array, delta_foreach_cb cb, void *arg,
 	return 0;
 }
 
+static int
+__foreach_bgpsec(struct deltas_bgpsec *array, delta_bgpsec_foreach_cb cb,
+    void *arg, serial_t serial, uint8_t flags)
+{
+	struct delta_bgpsec delta;
+	struct delta_bsec *d;
+	array_index i;
+	int error;
+
+	delta.serial = serial;
+	delta.flags = flags;
+
+	ARRAYLIST_FOREACH(array, d, i) {
+		delta.router_key.ski = d->ski;
+		delta.router_key.ski_len = d->ski_len;
+		delta.router_key.asn = d->as;
+		delta.router_key.spk = d->spk;
+		delta.router_key.spk_len = d->spk_len;
+		error = cb(&delta, arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
 int
-deltas_foreach(serial_t serial, struct deltas *deltas, delta_foreach_cb cb,
-    void *arg)
+deltas_foreach(serial_t serial, struct deltas *deltas,
+    delta_vrp_foreach_cb cb_vrp, delta_bgpsec_foreach_cb cb_bgpsec, void *arg)
 {
 	int error;
 
-	error = __foreach_v4(&deltas->v4.adds, cb, arg, serial,
+	error = __foreach_v4(&deltas->v4.adds, cb_vrp, arg, serial,
 	    FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
 
-	error = __foreach_v4(&deltas->v4.removes, cb, arg, serial,
+	error = __foreach_v4(&deltas->v4.removes, cb_vrp, arg, serial,
 	    FLAG_WITHDRAWAL);
 	if (error)
 		return error;
 
-	error = __foreach_v6(&deltas->v6.adds, cb, arg, serial,
+	error = __foreach_v6(&deltas->v6.adds, cb_vrp, arg, serial,
 	    FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
 
-	return __foreach_v6(&deltas->v6.removes, cb, arg, serial,
+	error = __foreach_v6(&deltas->v6.removes, cb_vrp, arg, serial,
+	    FLAG_WITHDRAWAL);
+	if (error)
+		return error;
+
+	/* FIXME Temporary, this must not be null */
+	if (cb_bgpsec == NULL)
+		return 0;
+
+	error = __foreach_bgpsec(&deltas->bgpsec.adds, cb_bgpsec, arg, serial,
+	    FLAG_ANNOUNCEMENT);
+	if (error)
+		return error;
+
+	return __foreach_bgpsec(&deltas->bgpsec.removes, cb_bgpsec, arg, serial,
 	    FLAG_WITHDRAWAL);
 }

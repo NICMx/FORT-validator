@@ -52,3 +52,18 @@ vhandler_handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
 	    ? handler->handle_roa_v6(as, prefix, max_length, handler->arg)
 	    : 0;
 }
+
+int
+vhandler_handle_bgpsec(struct router_key const *router_key)
+{
+	struct validation_handler const *handler;
+	int error;
+
+	error = get_current_threads_handler(&handler);
+	if (error)
+		return error;
+
+	return (handler->handle_bgpsec != NULL)
+	    ? handler->handle_bgpsec(router_key, handler->arg)
+	    : 0;
+}

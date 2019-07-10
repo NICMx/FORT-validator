@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <netinet/in.h>
+#include "object/router_key.h"
 
 #define FLAG_WITHDRAWAL		0
 #define FLAG_ANNOUNCEMENT	1
@@ -44,13 +45,22 @@ struct vrp {
 	uint8_t	addr_fam;
 };
 
-struct delta {
+struct delta_vrp {
 	serial_t serial;
 	struct vrp vrp;
 	uint8_t flags;
 };
 
+struct delta_bgpsec {
+	serial_t serial;
+	struct router_key router_key;
+	uint8_t flags;
+};
+
 typedef int (*vrp_foreach_cb)(struct vrp const *, void *);
-typedef int (*delta_foreach_cb)(struct delta const *, void *);
+typedef int (*router_key_foreach_cb)(struct router_key const *, void *);
+
+typedef int (*delta_vrp_foreach_cb)(struct delta_vrp const *, void *);
+typedef int (*delta_bgpsec_foreach_cb)(struct delta_bgpsec const *, void *);
 
 #endif /* SRC_RTR_DB_VRP_H_ */

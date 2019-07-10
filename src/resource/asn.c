@@ -1,6 +1,7 @@
 #include "asn.h"
 
 #include <errno.h>
+#include <limits.h>
 
 #include "log.h"
 #include "sorted_array.h"
@@ -8,6 +9,11 @@
 struct asn_node {
 	unsigned long min;
 	unsigned long max;
+};
+
+struct asn_cb {
+	foreach_asn_cb cb;
+	void *arg;
 };
 
 static enum sarray_comparison
@@ -73,4 +79,40 @@ rasn_contains(struct resources_asn *asns, unsigned long min, unsigned long max)
 {
 	struct asn_node n = { min, max };
 	return sarray_contains((struct sorted_array *) asns, &n);
+}
+
+static int
+asn_node_cb(void *elem, void *arg)
+{
+	struct asn_node *node = elem;
+	struct asn_cb *param = arg;
+	unsigned long index;
+	int error;
+
+	for(index = node->min; index <= node->max; index++) {
+		error = param->cb(index, param->arg);
+		if (error)
+			return error;
+		if (index == ULONG_MAX)
+			break;
+	}
+
+	return 0;
+}
+
+int
+rasn_foreach(struct resources_asn *asns, foreach_asn_cb cb, void *arg)
+{
+	struct asn_cb param;
+	int error;
+
+	param.cb = cb;
+	param.arg = arg;
+
+	rasn_get(asns);
+	error = sarray_foreach((struct sorted_array *) asns, asn_node_cb,
+	    &param);
+	rasn_put(asns);
+
+	return error;
 }

@@ -10,6 +10,14 @@
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/SignatureValue.h"
 
+/* Certificate types in the RPKI */
+enum cert_type {
+	TA,		/* Trust Anchor */
+	CA,		/* Certificate Authority */
+	BGPSEC,		/* BGPsec certificates */
+	EE,		/* End Entity certificates */
+};
+
 int certificate_load(struct rpki_uri *, X509 **);
 
 /**
@@ -21,7 +29,7 @@ int certificate_validate_chain(X509 *, STACK_OF(X509_CRL) *);
  * Validates RFC 6487 compliance.
  * (Except extensions.)
  */
-int certificate_validate_rfc6487(X509 *, bool);
+int certificate_validate_rfc6487(X509 *, enum cert_type);
 
 int certificate_validate_signature(X509 *, ANY_t *coded, SignatureValue_t *);
 
@@ -34,7 +42,7 @@ int certificate_validate_signature(X509 *, ANY_t *coded, SignatureValue_t *);
  * not care about order. I don't know if you'll find other reasons if you choose
  * to migrate it.
  */
-int certificate_get_resources(X509 *, struct resources *);
+int certificate_get_resources(X509 *, struct resources *, enum cert_type);
 
 /**
  * Validates the certificate extensions, End-Entity style.

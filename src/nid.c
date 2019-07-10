@@ -12,6 +12,7 @@ static int NID_certPolicyRpki;
 static int NID_certPolicyRpkiV2;
 static int NID_ipAddrBlocksv2;
 static int NID_autonomousSysIdsv2;
+static int NID_bgpsecRouter;
 
 static int
 register_oid(const char *oid, const char *sn, const char *ln)
@@ -75,6 +76,12 @@ nid_init(void)
 	if (NID_autonomousSysIdsv2 == 0)
 		return -EINVAL;
 
+	NID_bgpsecRouter = register_oid("1.3.6.1.5.5.7.3.30",
+	    "id-kp-bgpsec-router",
+	    "BGPsec Extended Key Usage (RFC 8209)");
+	if (NID_bgpsecRouter == 0)
+		return -EINVAL;
+
 	return 0;
 }
 
@@ -117,4 +124,9 @@ int nid_ipAddrBlocksv2(void)
 int nid_autonomousSysIdsv2(void)
 {
 	return NID_autonomousSysIdsv2;
+}
+
+int nid_bgpsecRouter(void)
+{
+	return NID_bgpsecRouter;
 }

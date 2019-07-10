@@ -19,6 +19,9 @@ char const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
 unsigned int config_get_validation_interval(void);
+unsigned int config_get_interval_refresh(void);
+unsigned int config_get_interval_retry(void);
+unsigned int config_get_interval_expire(void);
 char const *config_get_slurm(void);
 
 char const *config_get_tal(void);

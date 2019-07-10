@@ -4,6 +4,7 @@
 #include <openssl/x509.h>
 #include "resource.h"
 #include "uri.h"
+#include "object/certificate.h"
 #include "object/name.h"
 
 /*
@@ -41,7 +42,7 @@ int deferstack_pop(struct cert_stack *, struct deferred_cert *cert);
 bool deferstack_is_empty(struct cert_stack *);
 
 int x509stack_push(struct cert_stack *, struct rpki_uri *, X509 *,
-    enum rpki_policy, bool);
+    enum rpki_policy, enum cert_type);
 void x509stack_cancel(struct cert_stack *);
 X509 *x509stack_peek(struct cert_stack *);
 struct rpki_uri *x509stack_peek_uri(struct cert_stack *);

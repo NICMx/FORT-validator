@@ -61,12 +61,14 @@ fort_SOURCES += data_structure/uthash_nonfatal.h
 
 fort_SOURCES += incidence/incidence.h incidence/incidence.c
 
+fort_SOURCES += object/bgpsec.h object/bgpsec.c
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c
 fort_SOURCES += object/ghostbusters.h object/ghostbusters.c
 fort_SOURCES += object/manifest.h object/manifest.c
 fort_SOURCES += object/name.h object/name.c
 fort_SOURCES += object/roa.h object/roa.c
+fort_SOURCES += object/router_key.h
 fort_SOURCES += object/signed_object.h object/signed_object.c
 fort_SOURCES += object/tal.h object/tal.c
 fort_SOURCES += object/vcard.h object/vcard.c

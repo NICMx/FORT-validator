@@ -18,20 +18,11 @@
 static void
 set_header_values(struct pdu_header *header, uint8_t type, uint16_t reserved)
 {
+	/* FIXME Remove to support RTR_V1 */
 	header->protocol_version = RTR_V0;
 	header->pdu_type = type;
 	header->m.reserved = reserved;
 }
-
-/* TODO (next iteration) Include Router Key PDU serials */
-/**
- * static uint32_t
- * length_router_key_pdu(struct router_key_pdu *pdu)
- * {
- * 	return HEADER_LENGTH +
- * 	    pdu->ski_len + sizeof(pdu->asn) + pdu->spki_len;
- * }
- */
 
 static int
 send_response(int fd, unsigned char *data, size_t data_len)
@@ -163,11 +154,62 @@ send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 	return -EINVAL;
 }
 
+int
+send_router_key_pdu(int fd, struct router_key const *router_key, uint8_t flags)
+{
+	struct router_key_pdu pdu;
+	unsigned char *data;
+	size_t len;
+	uint16_t reserved;
+	int error;
+
+	/* TODO Sanity check: this can't be sent on RTRv0 */
+
+	reserved = 0;
+	/* Set the flags at the first 8 bits of reserved field */
+	reserved += (flags << 8);
+	set_header_values(&pdu.header, PDU_TYPE_ROUTER_KEY, reserved);
+
+	pdu.ski = router_key->ski;
+	pdu.ski_len = router_key->ski_len;
+	pdu.asn = router_key->asn;
+	pdu.spki = router_key->spk;
+	pdu.spki_len = router_key->spk_len;
+	pdu.header.length = RTRPDU_HDR_LEN
+	    + router_key->ski_len
+	    + sizeof(router_key->asn)
+	    + router_key->spk_len;
+
+	data = malloc(pdu.header.length);
+	if (data == NULL)
+		return pr_enomem();
+
+	len = serialize_router_key_pdu(&pdu, data);
+	if (len != pdu.header.length)
+		pr_crit("Serialized Router Key PDU is %zu bytes, not the expected %u.",
+		    len, pdu.header.length);
+
+	error = send_response(fd, data, len);
+
+	free(data);
+	return error;
+}
+
 static int
-vrp_simply_send(struct delta const *delta, void *arg)
+vrp_simply_send(struct delta_vrp const *delta, void *arg)
 {
 	int *fd = arg;
+
 	return send_prefix_pdu(*fd, &delta->vrp, delta->flags);
+}
+
+static int
+router_key_simply_send(struct delta_bgpsec const *delta, void *arg)
+{
+	int *fd = arg;
+
+	return send_router_key_pdu(*fd, &delta->router_key,
+	    delta->flags);
 }
 
 int
@@ -182,9 +224,10 @@ send_delta_pdus(int fd, struct deltas_db *deltas)
 	if (deltas->len == 1) {
 		group = &deltas->array[0];
 		return deltas_foreach(group->serial, group->deltas,
-		    vrp_simply_send, &fd);
+		    vrp_simply_send, router_key_simply_send, &fd);
 	}
 
+	/* FIXME Apply to router keys as well */
 	return vrps_foreach_filtered_delta(deltas, vrp_simply_send, &fd);
 }
 
@@ -201,7 +244,12 @@ send_end_of_data_pdu(int fd, serial_t end_serial)
 	pdu.header.length = RTRPDU_END_OF_DATA_LEN;
 
 	pdu.serial_number = end_serial;
-	/* TODO (next iteration) Add RTRv1 intervals */
+	/* FIXME WRONG!! Check for the real version */
+	if (pdu.header.protocol_version == RTR_V1) {
+		pdu.refresh_interval = config_get_interval_refresh();
+		pdu.retry_interval = config_get_interval_retry();
+		pdu.expire_interval = config_get_interval_expire();
+	}
 
 	len = serialize_end_of_data_pdu(&pdu, data);
 	if (len != RTRPDU_END_OF_DATA_LEN)

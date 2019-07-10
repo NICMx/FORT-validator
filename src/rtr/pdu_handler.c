@@ -142,6 +142,7 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	 * queries than reset queries.
 	 */
 
+	/* FIXME Apply to router keys as well */
 	error = vrps_foreach_base_roa(send_base_roa, &args);
 
 	/* See handle_serial_query_pdu() for some comments. */

@@ -146,6 +146,16 @@ struct extension_metadata const *ext_cn(void)
 	return &CN;
 }
 
+struct extension_metadata const *ext_eku(void)
+{
+	static const struct extension_metadata EKU = {
+		"Extended Key Usage",
+		NID_ext_key_usage,
+		false,
+	};
+	return &EKU;
+}
+
 static int
 handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 {

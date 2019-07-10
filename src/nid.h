@@ -11,5 +11,6 @@ int nid_certPolicyRpki(void);
 int nid_certPolicyRpkiV2(void);
 int nid_ipAddrBlocksv2(void);
 int nid_autonomousSysIdsv2(void);
+int nid_bgpsecRouter(void);
 
 #endif /* SRC_NID_H_ */

@@ -9,8 +9,15 @@ struct hashable_roa {
 	UT_hash_handle hh;
 };
 
+/* FIXME Update whole roa_table logic */
+struct hashable_keys {
+	struct router_key data;
+	UT_hash_handle hh;
+};
+
 struct roa_table {
 	struct hashable_roa *roas;
+	struct hashable_keys *router_keys;
 };
 
 struct roa_table *

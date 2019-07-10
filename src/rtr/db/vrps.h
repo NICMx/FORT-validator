@@ -28,11 +28,15 @@ int vrps_update(bool *);
  * been called, or while it's still building the database.
  * Handle gracefully.
  */
+
+/* FIXME Also add BGPSEC */
 int vrps_foreach_base_roa(vrp_foreach_cb, void *);
 int vrps_get_deltas_from(serial_t, serial_t *, struct deltas_db *);
 int get_last_serial_number(serial_t *);
 
-int vrps_foreach_filtered_delta(struct deltas_db *, delta_foreach_cb, void *);
+/* FIXME Also filter BGPSEC */
+int vrps_foreach_filtered_delta(struct deltas_db *, delta_vrp_foreach_cb,
+    void *);
 
 uint16_t get_current_session_id(uint8_t);
 
