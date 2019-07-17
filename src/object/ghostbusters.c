@@ -28,7 +28,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	if (error)
 		goto end1;
 
-	error = signed_object_args_init(&sobj_args, uri, crl, true);
+	error = signed_object_args_init(&sobj_args, uri, crl, true, false);
 	if (error)
 		goto end1;
 

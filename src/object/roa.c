@@ -254,7 +254,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	if (error)
 		goto revert_fnstack;
 
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
+	error = signed_object_args_init(&sobj_args, uri, crl, false, false);
 	if (error)
 		goto revert_fnstack;
 
