@@ -643,7 +643,8 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 	    cert_revoked(X509_get_serialNumber(cert),
 	    sk_X509_CRL_value(crls, sk_X509_CRL_num(crls) - 1))) {
 		pr_err("Certificate validation failed: certificate is revoked");
-		goto abort;
+		X509_STORE_CTX_free(ctx);
+		return -EREVOKED;
 	}
 
 	/*
@@ -705,7 +706,8 @@ certificate_revoked_at_crldp(X509 *cert, struct certificate_refs *refs)
 
 	/* Everything OK so far, error 0 is valid */
 	if (cert_revoked(X509_get_serialNumber(cert), crl)) {
-		error = pr_err("Certificate validation failed: certificate is revoked at CRL");
+		pr_err("Certificate validation failed: certificate is revoked at CRL");
+		error = -EREVOKED;
 	}
 
 	X509_CRL_free(crl);
@@ -1550,7 +1552,13 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		error = handle_manifest(mft, rpp_parent_crl, &pp);
 		if (!mft_retry)
 			uri_refput(mft);
-		if (!error || !mft_retry)
+		/*
+		 * Break when:
+		 * - No error
+		 * - No need to retry
+		 * - Manifest its ok, but EE is revoked
+		 */
+		if (!error || !mft_retry || error == -EREVOKED)
 			break;
 
 		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
