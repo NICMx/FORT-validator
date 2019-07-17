@@ -185,8 +185,10 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 
 	/* rfc6482#section-3.3 */
 
-	if (roa->ipAddrBlocks.list.array == NULL)
-		pr_crit("ipAddrBlocks array is NULL.");
+	if (roa->ipAddrBlocks.list.array == NULL) {
+		error = pr_err("ipAddrBlocks array is NULL.");
+		goto end_error;
+	}
 
 	pr_debug_add("ipAddrBlocks {");
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
