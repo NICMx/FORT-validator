@@ -2,6 +2,7 @@
 #define SRC_RTR_PDU_SENDER_H_
 
 #include "pdu.h"
+#include "object/router_key.h"
 #include "rtr/db/vrps.h"
 
 void init_sender_common(int, int, uint8_t);

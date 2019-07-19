@@ -29,14 +29,16 @@ struct validation_handler {
 	/** Called every time Fort has successfully validated an IPv6 ROA. */
 	int (*handle_roa_v6)(uint32_t, struct ipv6_prefix const *, uint8_t,
 	    void *);
-	/** Called every time Fort has successfully a BGPsec certificate */
-	int (*handle_bgpsec)(struct router_key const *, void *);
+	/** Called every time Fort has successfully validated a BGPsec cert */
+	int (*handle_bgpsec)(unsigned char const *, uint32_t,
+	    unsigned char const *, size_t, void *);
 	/** Generic user-defined argument for the functions above. */
 	void *arg;
 };
 
 int vhandler_handle_roa_v4(uint32_t, struct ipv4_prefix const *, uint8_t);
 int vhandler_handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t);
-int vhandler_handle_bgpsec(struct router_key const *);
+int vhandler_handle_bgpsec(unsigned char const *, uint32_t,
+    unsigned char const *, size_t);
 
 #endif /* SRC_VALIDATION_HANDLER_H_ */

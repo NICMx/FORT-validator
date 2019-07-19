@@ -10,6 +10,7 @@
 #include "log.c"
 #include "output_printer.c"
 #include "crypto/base64.c"
+#include "object/router_key.c"
 #include "rtr/pdu.c"
 #include "rtr/pdu_handler.c"
 #include "rtr/primitive_reader.c"
@@ -17,7 +18,7 @@
 #include "rtr/err_pdu.c"
 #include "rtr/stream.c"
 #include "rtr/db/delta.c"
-#include "rtr/db/roa_table.c"
+#include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
 #include "rtr/db/vrps.c"
 #include "slurm/slurm_db.c"
@@ -145,7 +146,7 @@ send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 }
 
 static int
-handle_delta(struct delta const *delta, void *arg)
+handle_delta(struct delta_vrp const *delta, void *arg)
 {
 	int *fd = arg;
 	ck_assert_int_eq(0, send_prefix_pdu(*fd, &delta->vrp, delta->flags));
@@ -158,9 +159,10 @@ send_delta_pdus(int fd, struct deltas_db *deltas)
 	struct delta_group *group;
 	array_index i;
 
+	/* FIXME Add cb function for router keys */
 	ARRAYLIST_FOREACH(deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    handle_delta, &fd));
+		    handle_delta, NULL, &fd));
 
 	return 0;
 }

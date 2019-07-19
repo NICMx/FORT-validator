@@ -42,7 +42,6 @@ struct sia_uris {
 
 struct bgpsec_ski {
 	X509 *cert;
-	int *ski_len;
 	unsigned char **ski_data;
 };
 
@@ -953,9 +952,9 @@ handle_ski_bgpsec(X509_EXTENSION *ext, void *arg)
 	if (tmp == NULL)
 		goto end;
 
-	(*params->ski_len) = ski->length;
 	memcpy(tmp, ski->data, ski->length);
-	*params->ski_data = tmp;
+	tmp[ski->length] = '\0';
+	*(params->ski_data) = tmp;
 
 end:
 	ASN1_OCTET_STRING_free(ski);
@@ -1457,7 +1456,7 @@ certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
 
 static int
 certificate_validate_extensions_bgpsec(X509 *cert, unsigned char **ski,
-    int *ski_len, struct certificate_refs *refs, enum rpki_policy *policy)
+    struct certificate_refs *refs, enum rpki_policy *policy)
 {
 	struct bgpsec_ski ski_param;
 	struct extension_handler handlers[] = {
@@ -1476,7 +1475,6 @@ certificate_validate_extensions_bgpsec(X509 *cert, unsigned char **ski,
 
 	ski_param.cert = cert;
 	ski_param.ski_data = ski;
-	ski_param.ski_len = ski_len;
 
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
@@ -1539,7 +1537,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	enum cert_type type;
 	struct rpp *pp;
 	bool mft_retry;
-	int ski_len;
 	int error;
 
 	state = state_retrieve();
@@ -1598,7 +1595,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		break;
 	case BGPSEC:
 		error = certificate_validate_extensions_bgpsec(cert, &ski,
-		    &ski_len, &refs, &policy);
+		    &refs, &policy);
 		break;
 	default:
 		/* Validate as a CA */
@@ -1621,9 +1618,10 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 	if (type == BGPSEC) {
 		/* This is an EE, so there's no manifest to process */
-		error = handle_bgpsec(cert, ski, ski_len,
+		error = handle_bgpsec(cert, ski,
 		    x509stack_peek_resources(validation_certstack(state)));
 		cert = NULL; /* Ownership stolen at x509stack_push */
+		free(ski); /* No need to remember it */
 		x509stack_cancel(validation_certstack(state));
 
 		goto revert_refs;

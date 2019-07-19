@@ -170,28 +170,36 @@ send_router_key_pdu(int fd, struct router_key const *router_key, uint8_t flags)
 	reserved += (flags << 8);
 	set_header_values(&pdu.header, PDU_TYPE_ROUTER_KEY, reserved);
 
-	pdu.ski = router_key->ski;
-	pdu.ski_len = router_key->ski_len;
-	pdu.asn = router_key->asn;
-	pdu.spki = router_key->spk;
-	pdu.spki_len = router_key->spk_len;
+	pdu.ski = sk_info_get_ski(router_key->sk);
+	pdu.ski_len = RK_SKI_LEN;
+	pdu.asn = router_key->as;
+	pdu.spki = sk_info_get_spk(router_key->sk);
+	pdu.spki_len = sk_info_get_spk_len(router_key->sk);
 	pdu.header.length = RTRPDU_HDR_LEN
-	    + router_key->ski_len
-	    + sizeof(router_key->asn)
-	    + router_key->spk_len;
+	    + RK_SKI_LEN
+	    + sizeof(router_key->as)
+	    + pdu.spki_len;
+	sk_info_refget(router_key->sk);
 
 	data = malloc(pdu.header.length);
-	if (data == NULL)
-		return pr_enomem();
+	if (data == NULL) {
+		error = pr_enomem();
+		goto release_sk;
+	}
 
 	len = serialize_router_key_pdu(&pdu, data);
-	if (len != pdu.header.length)
+	if (len != pdu.header.length) {
+		sk_info_refput(router_key->sk);
+		free(data);
 		pr_crit("Serialized Router Key PDU is %zu bytes, not the expected %u.",
 		    len, pdu.header.length);
+	}
 
 	error = send_response(fd, data, len);
-
 	free(data);
+
+release_sk:
+	sk_info_refput(router_key->sk);
 	return error;
 }
 

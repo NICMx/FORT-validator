@@ -11,7 +11,7 @@
 #include "data_structure/array_list.h"
 #include "object/router_key.h"
 #include "object/tal.h"
-#include "rtr/db/roa_table.h"
+#include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
 
 /*
@@ -39,7 +39,7 @@ struct state {
 	 * (We use this to know we're supposed to generate a @deltas entry
 	 * during the current iteration.)
 	 */
-	struct roa_table *base;
+	struct db_table *base;
 	/** ROA changes to @base over time. */
 	struct deltas_db deltas;
 
@@ -94,7 +94,7 @@ void
 vrps_destroy(void)
 {
 	if (state.base != NULL)
-		roa_table_destroy(state.base);
+		db_table_destroy(state.base);
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
 	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
 }
@@ -114,39 +114,35 @@ __handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
 }
 
 int
-__handle_bgpsec(struct router_key const *router_key, void *arg)
+__handle_bgpsec(unsigned char const *ski, uint32_t as, unsigned char const *spk,
+    size_t spk_len, void *arg)
 {
-	pr_debug("Handling BGPsec for ASN %u", router_key->asn);
-	/*
-	 * FIXME Add RTR handler
-	 * return rtrhandler_handle_router_key(arg, as, prefix, max_length);
-	 */
-	return 0;
+	return rtrhandler_handle_router_key(arg, ski, as, spk, spk_len);
 }
 
 static int
-__perform_standalone_validation(struct roa_table **result)
+__perform_standalone_validation(struct db_table **result)
 {
-	struct roa_table *roas;
+	struct db_table *db;
 	struct validation_handler validation_handler;
 	int error;
 
-	roas = roa_table_create();
-	if (roas == NULL)
+	db = db_table_create();
+	if (db == NULL)
 		return pr_enomem();
 
 	validation_handler.handle_roa_v4 = __handle_roa_v4;
 	validation_handler.handle_roa_v6 = __handle_roa_v6;
 	validation_handler.handle_bgpsec = __handle_bgpsec;
-	validation_handler.arg = roas;
+	validation_handler.arg = db;
 
 	error = perform_standalone_validation(&validation_handler);
 	if (error) {
-		roa_table_destroy(roas);
+		db_table_destroy(db);
 		return error;
 	}
 
-	*result = roas;
+	*result = db;
 	return 0;
 }
 
@@ -233,8 +229,8 @@ vrps_purge(struct deltas **deltas)
 int
 vrps_update(bool *changed)
 {
-	struct roa_table *old_base;
-	struct roa_table *new_base;
+	struct db_table *old_base;
+	struct db_table *new_base;
 	struct deltas *deltas; /* Deltas in raw form */
 	struct delta_group deltas_node; /* Deltas in database node form */
 	serial_t min_serial;
@@ -311,10 +307,10 @@ vrps_update(bool *changed)
 	rwlock_unlock(&lock);
 
 	if (old_base != NULL)
-		roa_table_destroy(old_base);
+		db_table_destroy(old_base);
 
 	/* Print after validation to avoid duplicated info */
-	output_print_roas(new_base);
+	output_print_data(new_base);
 
 	return 0;
 
@@ -322,8 +318,8 @@ revert_deltas:
 	deltas_refput(deltas);
 revert_base:
 	/* Print info that was already validated */
-	output_print_roas(new_base);
-	roa_table_destroy(new_base);
+	output_print_data(new_base);
+	db_table_destroy(new_base);
 	return error;
 }
 
@@ -343,7 +339,7 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 		return error;
 
 	if (state.base != NULL)
-		error = roa_table_foreach_roa(state.base, cb, arg);
+		error = db_table_foreach_roa(state.base, cb, arg);
 	else
 		error = -EAGAIN;
 
@@ -402,7 +398,7 @@ vrps_foreach_filtered_delta(struct deltas_db *deltas, delta_vrp_foreach_cb cb,
 	 */
 	SLIST_INIT(&filtered_vrps);
 	ARRAYLIST_FOREACH(deltas, group, i) {
-		/* FIXME Add function for router keys */
+		/* FIXME Add cb function for router keys */
 		error = deltas_foreach(group->serial, group->deltas,
 		    vrp_ovrd_remove, NULL, &filtered_vrps);
 		if (error)

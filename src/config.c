@@ -85,7 +85,8 @@ struct rpki_config {
 	struct {
 		/** File where the validated ROAs will be stored */
 		char *roa;
-		/** TODO (next iteration) Add BGPsec output */
+		/** File where the validated BGPsec certs will be stored */
+		char *bgpsec;
 	} output;
 };
 
@@ -346,6 +347,14 @@ static const struct option_field options[] = {
 		.doc = "File where ROAs will be stored in CSV format, use '-' to print at console",
 		.arg_doc = "<file>",
 	},
+	{
+		.id = 6001,
+		.name = "output.bgpsec",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, output.bgpsec),
+		.doc = "File where BGPsec certificates will be stored in CSV format, use '-' to print at console",
+		.arg_doc = "<file>",
+	},
 
 	{ 0 },
 };
@@ -548,6 +557,7 @@ set_default_values(void)
 	rpki_config.log.filename_format = FNF_GLOBAL;
 
 	rpki_config.output.roa = NULL;
+	rpki_config.output.bgpsec = NULL;
 
 	return 0;
 
@@ -813,6 +823,12 @@ char const *
 config_get_output_roa(void)
 {
 	return rpki_config.output.roa;
+}
+
+char const *
+config_get_output_bgpsec(void)
+{
+	return rpki_config.output.bgpsec;
 }
 
 void

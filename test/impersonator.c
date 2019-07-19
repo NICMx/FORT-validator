@@ -107,6 +107,12 @@ config_get_output_roa(void)
 	return NULL;
 }
 
+char const *
+config_get_output_bgpsec(void)
+{
+	return NULL;
+}
+
 enum incidence_action
 incidence_get_action(enum incidence_id id)
 {

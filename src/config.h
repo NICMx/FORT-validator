@@ -35,6 +35,7 @@ enum filename_format config_get_filename_format(void);
 char *config_get_rsync_program(void);
 struct string_array const *config_get_rsync_args(bool);
 char const *config_get_output_roa(void);
+char const *config_get_output_bgpsec(void);
 
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);

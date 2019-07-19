@@ -18,11 +18,8 @@ struct delta_v6 {
 };
 
 struct delta_bsec {
-	unsigned char *ski;
-	int *ski_len;
 	uint32_t as;
-	unsigned char *spk;
-	int *spk_len;
+	struct sk_info *sk;
 };
 
 ARRAY_LIST(deltas_v6, struct delta_v6)
@@ -45,6 +42,12 @@ struct deltas {
 
 	atomic_uint references;
 };
+
+static void
+delta_bsec_cleanup(struct delta_bsec *bsec)
+{
+	sk_info_refput(bsec->sk);
+}
 
 int
 deltas_create(struct deltas **_result)
@@ -85,8 +88,9 @@ deltas_refput(struct deltas *deltas)
 		deltas_v4_cleanup(&deltas->v4.removes, NULL);
 		deltas_v6_cleanup(&deltas->v6.adds, NULL);
 		deltas_v6_cleanup(&deltas->v6.removes, NULL);
-		deltas_bgpsec_cleanup(&deltas->bgpsec.adds, NULL);
-		deltas_bgpsec_cleanup(&deltas->bgpsec.removes, NULL);
+		deltas_bgpsec_cleanup(&deltas->bgpsec.adds, delta_bsec_cleanup);
+		deltas_bgpsec_cleanup(&deltas->bgpsec.removes,
+		    delta_bsec_cleanup);
 		free(deltas);
 	}
 }
@@ -132,16 +136,13 @@ deltas_add_roa_v6(struct deltas *deltas, uint32_t as, struct v6_address *addr,
 }
 
 int
-deltas_add_bgpsec(struct deltas *deltas, unsigned char *ski, int ski_len,
-    uint32_t as, unsigned char *spk, int spk_len, int op)
+deltas_add_bgpsec(struct deltas *deltas, struct router_key *key, int op)
 {
 	struct delta_bsec delta = {
-		.ski = ski,
-		.ski_len = ski_len,
-		.as = as,
-		.spk = spk,
-		.spk_len = spk_len,
+		.as = key->as,
+		.sk = key->sk,
 	};
+	sk_info_refget(key->sk);
 
 	switch (op) {
 	case FLAG_ANNOUNCEMENT:
@@ -229,12 +230,11 @@ __foreach_bgpsec(struct deltas_bgpsec *array, delta_bgpsec_foreach_cb cb,
 	delta.flags = flags;
 
 	ARRAYLIST_FOREACH(array, d, i) {
-		delta.router_key.ski = d->ski;
-		delta.router_key.ski_len = d->ski_len;
-		delta.router_key.asn = d->as;
-		delta.router_key.spk = d->spk;
-		delta.router_key.spk_len = d->spk_len;
+		delta.router_key.as = d->as;
+		delta.router_key.sk = d->sk;
+		sk_info_refget(d->sk);
 		error = cb(&delta, arg);
+		sk_info_refput(d->sk);
 		if (error)
 			return error;
 	}

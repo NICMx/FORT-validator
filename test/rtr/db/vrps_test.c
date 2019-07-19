@@ -9,8 +9,9 @@
 #include "json_parser.c"
 #include "log.c"
 #include "output_printer.c"
+#include "object/router_key.c"
 #include "rtr/db/delta.c"
-#include "rtr/db/roa_table.c"
+#include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
 #include "rtr/db/vrps.c"
 #include "slurm/slurm_db.c"
@@ -126,7 +127,7 @@ get_vrp_index(struct vrp const *vrp)
 }
 
 static array_index
-get_delta_index(struct delta const *delta)
+get_delta_index(struct delta_vrp const *delta)
 {
 	array_index result;
 
@@ -150,7 +151,7 @@ vrp_check(struct vrp const *vrp, void *arg)
 }
 
 static int
-delta_check(struct delta const *delta, void *arg)
+delta_check(struct delta_vrp const *delta, void *arg)
 {
 	bool *array = arg;
 	array_index index;
@@ -186,7 +187,7 @@ check_base(serial_t expected_serial, bool const *expected_base)
 }
 
 static int
-vrp_add(struct delta const *delta, void *arg)
+vrp_add(struct delta_vrp const *delta, void *arg)
 {
 	struct deltas *deltas = arg;
 	struct vrp const *vrp;
@@ -250,9 +251,10 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas,
 		filter_deltas(&deltas);
 
 	memset(actual_deltas, 0, sizeof(actual_deltas));
+	/* FIXME Add cb function for router keys */
 	ARRAYLIST_FOREACH(&deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    delta_check, actual_deltas));
+		    delta_check, NULL, actual_deltas));
 	for (i = 0; i < ARRAY_LEN(actual_deltas); i++)
 		ck_assert_uint_eq(expected_deltas[i], actual_deltas[i]);
 }
