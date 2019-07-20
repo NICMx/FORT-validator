@@ -48,7 +48,8 @@ enum pdu_type {
 #define RTRPDU_CACHE_RESPONSE_LEN	8
 #define RTRPDU_IPV4_PREFIX_LEN		20
 #define RTRPDU_IPV6_PREFIX_LEN		32
-#define RTRPDU_END_OF_DATA_LEN		12
+#define RTRPDU_END_OF_DATA_V0_LEN	12
+#define RTRPDU_END_OF_DATA_V1_LEN	24
 #define RTRPDU_CACHE_RESET_LEN		8
 
 /* Ignores Error Report PDUs, which is fine. */

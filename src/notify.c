@@ -14,7 +14,8 @@ send_notify(struct client const *client, void *arg)
 	int error;
 
 	/* Send Serial Notify PDU */
-	error = send_serial_notify_pdu(client->fd, *serial);
+	error = send_serial_notify_pdu(client->fd, client->rtr_version,
+	    *serial);
 
 	/* Error? Log it... */
 	if (error)

@@ -292,7 +292,8 @@ handle_client_connections(int server_fd)
 		error = pthread_create(&param->tid, NULL,
 		    client_thread_cb, param);
 		if (error && error != EAGAIN)
-			err_pdu_send_internal_error(client_fd);
+			/* Error with min RTR version */
+			err_pdu_send_internal_error(client_fd, RTR_V0);
 		if (error) {
 			pr_errno(error, "Could not spawn the client's thread");
 			close(client_fd);

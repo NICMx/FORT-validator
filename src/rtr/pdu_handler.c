@@ -10,14 +10,16 @@
 #include "pdu_sender.h"
 #include "rtr/db/vrps.h"
 
-#define warn_unexpected_pdu(fd, request, pdu_name)			\
-	err_pdu_send_invalid_request(fd, request,			\
-	    "Clients are not supposed to send " pdu_name " PDUs.");
+#define WARN_UNEXPECTED_PDU(name, fd, request, pdu_name)		\
+	struct name##_pdu *pdu = request->pdu;				\
+	return err_pdu_send_invalid_request(fd,				\
+	    pdu->header.protocol_version,				\
+	    request, "Clients are not supposed to send " pdu_name " PDUs.");
 
 int
 handle_serial_notify_pdu(int fd, struct rtr_request const *request)
 {
-	return warn_unexpected_pdu(fd, request, "Serial Notify");
+	WARN_UNEXPECTED_PDU(serial_notify, fd, request, "Serial Notify");
 }
 
 int
@@ -26,6 +28,7 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	struct serial_query_pdu *query = request->pdu;
 	struct deltas_db deltas;
 	serial_t final_serial;
+	uint8_t version;
 	int error;
 
 	/*
@@ -35,8 +38,10 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	 * the mismatch MUST immediately terminate the session with an Error
 	 * Report PDU with code 0 ("Corrupt Data")"
 	 */
-	if (query->header.m.session_id != get_current_session_id(RTR_V0))
-		return err_pdu_send_corrupt_data(fd, request,
+	version = query->header.protocol_version;
+	if (query->header.m.session_id !=
+	    get_current_session_id(version))
+		return err_pdu_send_corrupt_data(fd, version, request,
 		    "Session ID doesn't match.");
 
 	/*
@@ -55,11 +60,11 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	case 0:
 		break;
 	case -EAGAIN: /* Database still under construction */
-		error = err_pdu_send_no_data_available(fd);
+		error = err_pdu_send_no_data_available(fd, version);
 		goto end;
 	case -ESRCH: /* Invalid serial */
 		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
-		error = send_cache_reset_pdu(fd);
+		error = send_cache_reset_pdu(fd, version);
 		goto end;
 	case -ENOMEM: /* Memory allocation failure */
 		goto end;
@@ -69,7 +74,7 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 		 * RTR does not provide a code for that. Just fall through.
 		 */
 	default:
-		error = err_pdu_send_internal_error(fd);
+		error = err_pdu_send_internal_error(fd, version);
 		goto end;
 	}
 
@@ -80,13 +85,13 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	 * programming errors. Best avoid error PDUs.
 	 */
 
-	error = send_cache_response_pdu(fd);
+	error = send_cache_response_pdu(fd, version);
 	if (error)
 		goto end;
-	error = send_delta_pdus(fd, &deltas);
+	error = send_delta_pdus(fd, version, &deltas);
 	if (error)
 		goto end;
-	error = send_end_of_data_pdu(fd, final_serial);
+	error = send_end_of_data_pdu(fd, version, final_serial);
 
 end:
 	deltas_db_cleanup(&deltas, deltagroup_cleanup);
@@ -96,6 +101,7 @@ end:
 struct base_roa_args {
 	bool started;
 	int fd;
+	uint8_t version;
 };
 
 static int
@@ -105,33 +111,35 @@ send_base_roa(struct vrp const *vrp, void *arg)
 	int error;
 
 	if (!args->started) {
-		error = send_cache_response_pdu(args->fd);
+		error = send_cache_response_pdu(args->fd, args->version);
 		if (error)
 			return error;
 		args->started = true;
 	}
 
-	return send_prefix_pdu(args->fd, vrp, FLAG_ANNOUNCEMENT);
+	return send_prefix_pdu(args->fd, args->version, vrp, FLAG_ANNOUNCEMENT);
 }
 
 int
 handle_reset_query_pdu(int fd, struct rtr_request const *request)
 {
+	struct reset_query_pdu *pdu = request->pdu;
 	struct base_roa_args args;
 	serial_t current_serial;
 	int error;
 
 	args.started = false;
 	args.fd = fd;
+	args.version = pdu->header.protocol_version;
 
 	error = get_last_serial_number(&current_serial);
 	switch (error) {
 	case 0:
 		break;
 	case -EAGAIN:
-		return err_pdu_send_no_data_available(fd);
+		return err_pdu_send_no_data_available(fd, args.version);
 	default:
-		err_pdu_send_internal_error(fd);
+		err_pdu_send_internal_error(fd, args.version);
 		return error;
 	}
 
@@ -150,49 +158,49 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	case 0:
 		break;
 	case -EAGAIN:
-		return err_pdu_send_no_data_available(fd);
+		return err_pdu_send_no_data_available(fd, args.version);
 	case EAGAIN:
-		err_pdu_send_internal_error(fd);
+		err_pdu_send_internal_error(fd, args.version);
 		return error;
 	}
 
-	return send_end_of_data_pdu(fd, current_serial);
+	return send_end_of_data_pdu(fd, args.version, current_serial);
 }
 
 int
 handle_cache_response_pdu(int fd, struct rtr_request const *request)
 {
-	return warn_unexpected_pdu(fd, request, "Cache Response");
+	WARN_UNEXPECTED_PDU(cache_response, fd, request, "Cache Response");
 }
 
 int
 handle_ipv4_prefix_pdu(int fd, struct rtr_request const *request)
 {
-	return warn_unexpected_pdu(fd, request, "IPv4 Prefix");
+	WARN_UNEXPECTED_PDU(ipv4_prefix, fd, request, "IPv4 Prefix");
 }
 
 int
 handle_ipv6_prefix_pdu(int fd, struct rtr_request const *request)
 {
-	return warn_unexpected_pdu(fd, request, "IPv6 Prefix");
+	WARN_UNEXPECTED_PDU(ipv6_prefix, fd, request, "IPv6 Prefix");
 }
 
 int
 handle_end_of_data_pdu(int fd, struct rtr_request const *request)
 {
-	return warn_unexpected_pdu(fd, request, "End of Data");
+	WARN_UNEXPECTED_PDU(end_of_data, fd, request, "End of Data");
 }
 
 int
 handle_cache_reset_pdu(int fd, struct rtr_request const *request)
 {
-	return warn_unexpected_pdu(fd, request, "Cache Reset");
+	WARN_UNEXPECTED_PDU(cache_reset, fd, request, "Cache Reset");
 }
 
 int
 handle_router_key_pdu(int fd, struct rtr_request const *request)
 {
-	return warn_unexpected_pdu(fd, request, "Router Key");
+	WARN_UNEXPECTED_PDU(router_key, fd, request, "Router Key");
 }
 
 int

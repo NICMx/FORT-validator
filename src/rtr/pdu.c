@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "clients.h"
 #include "common.h"
 #include "log.h"
 #include "rtr/err_pdu.h"
@@ -22,6 +23,57 @@ pdu_header_from_reader(struct pdu_reader *reader, struct pdu_header *header)
 #define RESPOND_ERROR(report_cb) \
 	((header.pdu_type != PDU_TYPE_ERROR_REPORT) ? (report_cb) : -EINVAL);
 
+static int
+validate_rtr_version(int fd, struct pdu_header *header,
+    unsigned char *hdr_bytes)
+{
+	uint8_t curr_version;
+	bool version_set;
+	int error;
+
+	error = clients_get_rtr_version_set(fd, &version_set, &curr_version);
+	if (error)
+		/* Unlikely, but close connection with min version */
+		return (header->pdu_type != PDU_TYPE_ERROR_REPORT) ?
+		    err_pdu_send_internal_error(fd, RTR_V0) : -EINVAL;
+
+	if (version_set) {
+		if (header->protocol_version == curr_version)
+			return 0;
+
+		/* Don't send error on a rcvd error! */
+		if (header->pdu_type == PDU_TYPE_ERROR_REPORT)
+			return -EINVAL;
+
+		switch(curr_version) {
+		case RTR_V1:
+			/* Rcvd version is valid, but unexpected */
+			if (header->protocol_version == RTR_V0)
+				return err_pdu_send_unexpected_proto_version(
+				    fd, curr_version, hdr_bytes,
+				    "RTR version 0 was expected");
+			/* Send common error */
+		case RTR_V0:
+			return err_pdu_send_unsupported_proto_version(fd,
+			    curr_version, hdr_bytes,
+			    "RTR version received is unknown.");
+		default:
+			pr_crit("Unknown RTR version %u", curr_version);
+			break;
+		}
+	}
+
+	/* Unsigned and incremental values, so compare against major version */
+	if (header->protocol_version > RTR_V1)
+		/* ...and send error with min version */
+		return (header->pdu_type != PDU_TYPE_ERROR_REPORT) ?
+		    err_pdu_send_unsupported_proto_version(fd, RTR_V0,
+		    hdr_bytes, "RTR version received is unknown.")
+		    : -EINVAL;
+
+	return clients_set_rtr_version(fd, header->protocol_version);
+}
+
 int
 pdu_load(int fd, struct rtr_request *request,
     struct pdu_metadata const **metadata)
@@ -30,6 +82,7 @@ pdu_load(int fd, struct rtr_request *request,
 	struct pdu_reader reader;
 	struct pdu_header header;
 	struct pdu_metadata const *meta;
+	uint8_t version;
 	int error;
 
 	/* Read the header into its buffer. */
@@ -42,21 +95,20 @@ pdu_load(int fd, struct rtr_request *request,
 		/* No error response because the PDU might have been an error */
 		return error;
 
+	error = validate_rtr_version(fd, &header, hdr_bytes);
+	if (error)
+		return error; /* Error response PDU already sent */
+
+	/* RTR version ok, keep it for later use */
+	version = header.protocol_version;
+
 	/*
 	 * DO NOT USE THE err_pdu_* functions directly. Wrap them with
 	 * RESPOND_ERROR() INSTEAD.
 	 */
-
-	/*
-	 * For now, only RTRv0 is supported
-	 */
-	if (header.protocol_version != RTR_V0)
-		return RESPOND_ERROR(err_pdu_send_unsupported_proto_version(fd,
-		    hdr_bytes, "This server only supports RTRv0."));
-
 	if (header.length < RTRPDU_HDR_LEN)
 		return RESPOND_ERROR(err_pdu_send_invalid_request_truncated(fd,
-		    hdr_bytes, "Invalid header length. (< 8 bytes)"));
+		    version, hdr_bytes, "Invalid header length. (< 8 bytes)"));
 
 	/*
 	 * Error messages can be quite large.
@@ -67,7 +119,7 @@ pdu_load(int fd, struct rtr_request *request,
 	 */
 	if (header.length > 512)
 		return RESPOND_ERROR(err_pdu_send_invalid_request_truncated(fd,
-		    hdr_bytes, "PDU is too large. (> 512 bytes)"));
+		    version, hdr_bytes, "PDU is too large. (> 512 bytes)"));
 
 	/* Read the rest of the PDU into its buffer. */
 	request->bytes_len = header.length;
@@ -89,7 +141,7 @@ pdu_load(int fd, struct rtr_request *request,
 	meta = pdu_get_metadata(header.pdu_type);
 	if (!meta) {
 		error = RESPOND_ERROR(err_pdu_send_unsupported_pdu_type(fd,
-		    request));
+		    version, request));
 		goto revert_bytes;
 	}
 
@@ -101,13 +153,13 @@ pdu_load(int fd, struct rtr_request *request,
 
 	error = meta->from_stream(&header, &reader, request->pdu);
 	if (reader.size != 0) {
-		error = RESPOND_ERROR(err_pdu_send_invalid_request(fd,
+		error = RESPOND_ERROR(err_pdu_send_invalid_request(fd, version,
 		    request,
 		    "The PDU length sent doesn't match the real PDU length"));
 		goto revert_pdu;
 	}
 	if (error) {
-		RESPOND_ERROR(err_pdu_send_internal_error(fd));
+		RESPOND_ERROR(err_pdu_send_internal_error(fd, version));
 		goto revert_pdu;
 	}
 
