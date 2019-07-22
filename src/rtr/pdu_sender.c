@@ -179,11 +179,11 @@ send_router_key_pdu(int fd, uint8_t version,
 	pdu.ski_len = RK_SKI_LEN;
 	pdu.asn = router_key->as;
 	pdu.spki = sk_info_get_spk(router_key->sk);
-	pdu.spki_len = sk_info_get_spk_len(router_key->sk);
+	pdu.spki_len = RK_SPKI_LEN;
 	pdu.header.length = RTRPDU_HDR_LEN
 	    + RK_SKI_LEN
 	    + sizeof(router_key->as)
-	    + pdu.spki_len;
+	    + RK_SPKI_LEN;
 	sk_info_refget(router_key->sk);
 
 	data = malloc(pdu.header.length);

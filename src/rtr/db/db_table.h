@@ -22,7 +22,7 @@ int rtrhandler_handle_roa_v4(struct db_table *, uint32_t,
 int rtrhandler_handle_roa_v6(struct db_table *, uint32_t,
     struct ipv6_prefix const *, uint8_t);
 int rtrhandler_handle_router_key(struct db_table *, unsigned char const *,
-    uint32_t, unsigned char const *, size_t);
+    uint32_t, unsigned char const *);
 int compute_deltas(struct db_table *, struct db_table *, struct deltas **);
 
 #endif /* SRC_RTR_DB_DB_TABLE_H_ */

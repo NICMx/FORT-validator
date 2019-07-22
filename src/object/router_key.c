@@ -5,9 +5,8 @@
 
 struct sk_info {
 	unsigned char	*ski;
-	/* SKI length its constant (see RK_SKI_LEN) */
+	/* Lengths are constant (see RK_SKI_LEN, RK_SPKI_LEN) */
 	unsigned char	*spk;
-	size_t		spk_len;
 	unsigned int	references;
 };
 
@@ -26,7 +25,7 @@ uchar_create(unsigned char **result, size_t size)
 
 int
 router_key_init(struct router_key *key, unsigned char const *ski,
-    uint32_t as, unsigned char const *spk, size_t spk_len)
+    uint32_t as, unsigned char const *spk)
 {
 	struct sk_info *sk;
 	int error;
@@ -41,7 +40,7 @@ router_key_init(struct router_key *key, unsigned char const *ski,
 		return pr_enomem();
 	}
 
-	error = uchar_create(&sk->spk, spk_len);
+	error = uchar_create(&sk->spk, RK_SPKI_LEN);
 	if (error) {
 		free(sk->ski);
 		free(sk);
@@ -50,9 +49,8 @@ router_key_init(struct router_key *key, unsigned char const *ski,
 
 	memcpy(sk->ski, ski, RK_SKI_LEN);
 	sk->ski[RK_SKI_LEN] = '\0';
-	memcpy(sk->spk, spk, spk_len);
-	sk->spk[spk_len] = '\0';
-	sk->spk_len = spk_len;
+	memcpy(sk->spk, spk, RK_SPKI_LEN);
+	sk->spk[RK_SPKI_LEN] = '\0';
 	sk->references = 1;
 
 	key->as = as;
@@ -94,10 +92,4 @@ unsigned char *
 sk_info_get_spk(struct sk_info *sk)
 {
 	return sk->spk;
-}
-
-size_t
-sk_info_get_spk_len(struct sk_info *sk)
-{
-	return sk->spk_len;
 }

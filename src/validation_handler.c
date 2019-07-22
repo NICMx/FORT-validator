@@ -55,7 +55,7 @@ vhandler_handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
 
 int
 vhandler_handle_bgpsec(unsigned char const *ski, uint32_t as,
-    unsigned char const *spk, size_t spk_len)
+    unsigned char const *spk)
 {
 	struct validation_handler const *handler;
 	int error;
@@ -65,6 +65,6 @@ vhandler_handle_bgpsec(unsigned char const *ski, uint32_t as,
 		return error;
 
 	return (handler->handle_bgpsec != NULL)
-	    ? handler->handle_bgpsec(ski, as, spk, spk_len, handler->arg)
+	    ? handler->handle_bgpsec(ski, as, spk, handler->arg)
 	    : 0;
 }

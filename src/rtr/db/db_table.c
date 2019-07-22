@@ -165,7 +165,7 @@ duplicate_key(struct db_table *dst, struct hashable_key *new)
 	struct sk_info *sk = new->data.sk;
 
 	return rtrhandler_handle_router_key(dst, sk_info_get_ski(sk),
-	    new->data.as, sk_info_get_spk(sk), sk_info_get_spk_len(sk));
+	    new->data.as, sk_info_get_spk(sk));
 }
 
 #define MERGE_ITER(table_prop, name, err_var)				\
@@ -279,8 +279,7 @@ rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
 
 int
 rtrhandler_handle_router_key(struct db_table *table,
-    unsigned char const *ski, uint32_t as, unsigned char const *spk,
-    size_t spk_len)
+    unsigned char const *ski, uint32_t as, unsigned char const *spk)
 {
 	struct hashable_key *key;
 	int error;
@@ -291,7 +290,7 @@ rtrhandler_handle_router_key(struct db_table *table,
 	/* Needed by uthash */
 	memset(key, 0, sizeof(struct hashable_key));
 
-	error = router_key_init(&key->data, ski, as, spk, spk_len);
+	error = router_key_init(&key->data, ski, as, spk);
 	if (error) {
 		free(key);
 		return error;

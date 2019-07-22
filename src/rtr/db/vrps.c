@@ -115,9 +115,9 @@ __handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
 
 int
 __handle_bgpsec(unsigned char const *ski, uint32_t as, unsigned char const *spk,
-    size_t spk_len, void *arg)
+    void *arg)
 {
-	return rtrhandler_handle_router_key(arg, ski, as, spk, spk_len);
+	return rtrhandler_handle_router_key(arg, ski, as, spk);
 }
 
 static int

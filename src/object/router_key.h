@@ -11,6 +11,16 @@
 #define RK_SKI_LEN	20
 
 /*
+ * SPKI (subjectPublicKeyInfo) is 91 bytes long (considering TLVs):
+ *   SEQUENCE subjectPublicKeyInfo: 2 (Tag & Length) + 89 (Value)
+ *     Public key: 2 (TL) + 65 (V)
+ *     SEQUENCE Algorithm: 2 (TL) + 19 (V)
+ *       Algorithm OID: 2 (TL) + 7 (V) [oid: 1.2.840.10045.2.1]
+ *       Algorithm param:  2 (TL) + 8 (V) [oid: 1.2.840.10045.3.1.7]
+ */
+#define RK_SPKI_LEN	91
+
+/*
  * Subject key info with ref counter, use getters to fetch its data
  */
 struct sk_info;
@@ -24,7 +34,7 @@ struct router_key {
 };
 
 int router_key_init(struct router_key *, unsigned char const *, uint32_t,
-    unsigned char const *, size_t);
+    unsigned char const *);
 void router_key_cleanup(struct router_key *);
 
 void sk_info_refget(struct sk_info *);
@@ -32,6 +42,5 @@ void sk_info_refput(struct sk_info *);
 
 unsigned char *sk_info_get_ski(struct sk_info *);
 unsigned char *sk_info_get_spk(struct sk_info *);
-size_t sk_info_get_spk_len(struct sk_info *);
 
 #endif /* SRC_OBJECT_ROUTER_KEY_H_ */

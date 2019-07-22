@@ -111,8 +111,7 @@ print_router_key(struct router_key const *key, void *arg)
 	error = print_to_hex(sk_info_get_ski(key->sk), RK_SKI_LEN, &buf1);
 	if (error)
 		return error;
-	error = print_to_hex(sk_info_get_spk(key->sk),
-	    sk_info_get_spk_len(key->sk), &buf2);
+	error = print_to_hex(sk_info_get_spk(key->sk),RK_SPKI_LEN, &buf2);
 	if (error)
 		return error;
 	fprintf(out, "AS%u,%s,%s\n", key->as, buf1, buf2);
