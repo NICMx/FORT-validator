@@ -120,6 +120,25 @@ send_base_roa(struct vrp const *vrp, void *arg)
 	return send_prefix_pdu(args->fd, args->version, vrp, FLAG_ANNOUNCEMENT);
 }
 
+
+
+static int
+send_base_router_key(struct router_key const *key, void *arg)
+{
+	struct base_roa_args *args = arg;
+	int error;
+
+	if (!args->started) {
+		error = send_cache_response_pdu(args->fd, args->version);
+		if (error)
+			return error;
+		args->started = true;
+	}
+
+	return send_router_key_pdu(args->fd, args->version, key,
+	    FLAG_ANNOUNCEMENT);
+}
+
 int
 handle_reset_query_pdu(int fd, struct rtr_request const *request)
 {
@@ -150,8 +169,7 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	 * queries than reset queries.
 	 */
 
-	/* FIXME Apply to router keys as well */
-	error = vrps_foreach_base_roa(send_base_roa, &args);
+	error = vrps_foreach_base(send_base_roa, send_base_router_key, &args);
 
 	/* See handle_serial_query_pdu() for some comments. */
 	switch (error) {

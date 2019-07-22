@@ -82,6 +82,33 @@ slurm_pfx_assertions_apply(struct db_table *base)
 	    base);
 }
 
+static int
+slurm_bgpsec_filters_apply(struct router_key const *key, void *arg)
+{
+	struct db_table *table = arg;
+
+	if (slurm_db_bgpsec_is_filtered(key))
+		db_table_remove_router_key(table, key);
+
+	return 0;
+}
+
+static int
+slurm_bgpsec_assertions_add(struct slurm_bgpsec *bgpsec, void *arg)
+{
+	struct db_table *table = arg;
+
+	return rtrhandler_handle_router_key(table, bgpsec->ski,
+	    bgpsec->asn, bgpsec->router_public_key);
+}
+
+static int
+slurm_bgpsec_assertions_apply(struct db_table *base)
+{
+	return slurm_db_foreach_assertion_bgpsec(slurm_bgpsec_assertions_add,
+	    base);
+}
+
 /*
  * Load the SLURM file/dir and try to apply it on @base.
  *
@@ -112,14 +139,23 @@ slurm_apply(struct db_table **base)
 	if (error)
 		goto release_new;
 
+	error = db_table_foreach_router_key(new_base,
+	    slurm_bgpsec_filters_apply, new_base);
+	if (error)
+		goto release_new;
+
 	error = slurm_pfx_assertions_apply(new_base);
+	if (error) {
+		goto release_new;
+	}
+
+	error = slurm_bgpsec_assertions_apply(new_base);
 	if (!error) {
 		db_table_destroy(*base);
 		*base = new_base;
 		goto cleanup;
 	}
 
-	/** TODO (next iteration) Apply BGPsec filters and assertions */
 release_new:
 	db_table_destroy(new_base);
 cleanup:

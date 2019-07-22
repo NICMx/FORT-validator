@@ -250,8 +250,8 @@ send_delta_pdus(int fd, uint8_t version, struct deltas_db *deltas)
 		    vrp_simply_send, router_key_simply_send, &param);
 	}
 
-	/* FIXME Apply to router keys as well */
-	return vrps_foreach_filtered_delta(deltas, vrp_simply_send, &param);
+	return vrps_foreach_filtered_delta(deltas, vrp_simply_send,
+	    router_key_simply_send, &param);
 }
 
 #define GET_END_OF_DATA_LENGTH(version)					\

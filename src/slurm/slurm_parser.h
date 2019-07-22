@@ -24,9 +24,7 @@ struct slurm_bgpsec {
 	uint8_t		data_flag;
 	uint32_t	asn;
 	unsigned char	*ski;
-	size_t		ski_len;
 	unsigned char	*router_public_key;
-	size_t		router_public_key_len;
 	char 		*comment;
 };
 

@@ -114,7 +114,21 @@ clients_get_min_serial(serial_t *result)
 }
 
 int
-send_cache_reset_pdu(int fd)
+clients_set_rtr_version(int fd, uint8_t rtr_version)
+{
+	return 0;
+}
+
+int
+clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
+{
+	(*is_set) = true;
+	(*rtr_version) = RTR_V0;
+	return 0;
+}
+
+int
+send_cache_reset_pdu(int fd, uint8_t version)
 {
 	pr_info("    Server sent Cache Reset.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESET);
@@ -122,7 +136,7 @@ send_cache_reset_pdu(int fd)
 }
 
 int
-send_cache_response_pdu(int fd)
+send_cache_response_pdu(int fd, uint8_t version)
 {
 	pr_info("    Server sent Cache Response.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESPONSE);
@@ -130,7 +144,7 @@ send_cache_response_pdu(int fd)
 }
 
 int
-send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
+send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 {
 	/*
 	 * We don't care about order.
@@ -145,30 +159,55 @@ send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 	return 0;
 }
 
+int
+send_router_key_pdu(int fd, uint8_t version,
+    struct router_key const *router_key, uint8_t flags)
+{
+	/*
+	 * We don't care about order.
+	 * If the server is expected to return `M` IPv4 PDUs and `N` IPv6 PDUs,
+	 * we'll just check `M + N` contiguous Prefix PDUs.
+	 */
+	uint8_t pdu_type = pop_expected_pdu();
+	pr_info("    Server sent Router Key PDU.");
+	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
+	    "Server's PDU type is %d, not Router Key type.", pdu_type);
+	return 0;
+}
+
 static int
 handle_delta(struct delta_vrp const *delta, void *arg)
 {
 	int *fd = arg;
-	ck_assert_int_eq(0, send_prefix_pdu(*fd, &delta->vrp, delta->flags));
+	ck_assert_int_eq(0, send_prefix_pdu(*fd, RTR_V0, &delta->vrp,
+	    delta->flags));
+	return 0;
+}
+
+static int
+handle_delta_bgpsec(struct delta_bgpsec const *delta, void *arg)
+{
+	int *fd = arg;
+	ck_assert_int_eq(0, send_router_key_pdu(*fd, RTR_V0, &delta->router_key,
+	    delta->flags));
 	return 0;
 }
 
 int
-send_delta_pdus(int fd, struct deltas_db *deltas)
+send_delta_pdus(int fd, uint8_t version, struct deltas_db *deltas)
 {
 	struct delta_group *group;
 	array_index i;
 
-	/* FIXME Add cb function for router keys */
 	ARRAYLIST_FOREACH(deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    handle_delta, NULL, &fd));
+		    handle_delta, handle_delta_bgpsec, &fd));
 
 	return 0;
 }
 
 int
-send_end_of_data_pdu(int fd, serial_t end_serial)
+send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 {
 	pr_info("    Server sent End of Data.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_END_OF_DATA);
@@ -176,8 +215,8 @@ send_end_of_data_pdu(int fd, serial_t end_serial)
 }
 
 int
-send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
-    char *message)
+send_error_report_pdu(int fd, uint8_t version, uint16_t code,
+    struct rtr_request const *request, char *message)
 {
 	pr_info("    Server sent Error Report %u: '%s'", code, message);
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_ERROR_REPORT);

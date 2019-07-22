@@ -29,14 +29,12 @@ int vrps_update(bool *);
  * Handle gracefully.
  */
 
-/* FIXME Also add BGPSEC */
-int vrps_foreach_base_roa(vrp_foreach_cb, void *);
+int vrps_foreach_base(vrp_foreach_cb, router_key_foreach_cb, void *);
 int vrps_get_deltas_from(serial_t, serial_t *, struct deltas_db *);
 int get_last_serial_number(serial_t *);
 
-/* FIXME Also filter BGPSEC */
 int vrps_foreach_filtered_delta(struct deltas_db *, delta_vrp_foreach_cb,
-    void *);
+    delta_bgpsec_foreach_cb, void *);
 
 uint16_t get_current_session_id(uint8_t);
 

@@ -5,6 +5,7 @@
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "data_structure/array_list.h"
+#include "object/router_key.h"
 
 ARRAY_LIST(al_filter_prefix, struct slurm_prefix)
 ARRAY_LIST(al_assertion_prefix, struct slurm_prefix)
@@ -89,9 +90,8 @@ bgpsec_filtered_by(struct slurm_bgpsec *bgpsec, struct slurm_bgpsec *filter)
 
 	/* Both have a SKI */
 	if ((bgpsec->data_flag & SLURM_BGPS_FLAG_SKI) > 0 &&
-	    (filter->data_flag & SLURM_BGPS_FLAG_SKI) > 0 &&
-	    bgpsec->ski_len == filter->ski_len)
-		return memcmp(bgpsec->ski, filter->ski, bgpsec->ski_len) == 0;
+	    (filter->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
+		return memcmp(bgpsec->ski, filter->ski, RK_SKI_LEN) == 0;
 
 	return false;
 }
@@ -113,15 +113,13 @@ bgpsec_equal(struct slurm_bgpsec *left, struct slurm_bgpsec *right,
 		equal = equal && left->asn == right->asn;
 
 	if ((left->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
-		equal = equal && left->ski_len == right->ski_len &&
-		    memcmp(left->ski, right->ski, left->ski_len) == 0;
+		equal = equal &&
+		    memcmp(left->ski, right->ski, RK_SKI_LEN) == 0;
 
 	if ((left->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0)
 		equal = equal &&
-		    left->router_public_key_len ==
-		    right->router_public_key_len &&
 		    memcmp(left->router_public_key, right->router_public_key,
-		    left->router_public_key_len) == 0;
+		    RK_SPKI_LEN) == 0;
 
 	return equal;
 }
@@ -183,6 +181,38 @@ slurm_db_foreach_assertion_prefix(assertion_pfx_foreach_cb cb, void *arg)
 	int error;
 
 	ARRAYLIST_FOREACH(&array_lists_db.assertion_pfx_al, cursor, i) {
+		error = cb(cursor, arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+bool
+slurm_db_bgpsec_is_filtered(struct router_key const *key)
+{
+	struct slurm_bgpsec slurm_bgpsec;
+
+	sk_info_refget(key->sk);
+	slurm_bgpsec.data_flag = SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI
+	    | SLURM_BGPS_FLAG_ROUTER_KEY;
+	slurm_bgpsec.ski = sk_info_get_ski(key->sk);
+	slurm_bgpsec.router_public_key = sk_info_get_spk(key->sk);
+	slurm_bgpsec.comment = NULL;
+	sk_info_refput(key->sk);
+
+	return bgpsec_filter_exists(&slurm_bgpsec);
+}
+
+int
+slurm_db_foreach_assertion_bgpsec(assertion_bgpsec_foreach_cb cb, void *arg)
+{
+	struct slurm_bgpsec *cursor;
+	array_index i;
+	int error;
+
+	ARRAYLIST_FOREACH(&array_lists_db.assertion_bgps_al, cursor, i) {
 		error = cb(cursor, arg);
 		if (error)
 			return error;

@@ -14,8 +14,9 @@ int db_table_clone(struct db_table **, struct db_table *);
 int db_table_foreach_roa(struct db_table *, vrp_foreach_cb, void *);
 void db_table_remove_roa(struct db_table *, struct vrp const *);
 
-int db_table_foreach_router_key(struct db_table *, router_key_foreach_cb cb,
+int db_table_foreach_router_key(struct db_table *, router_key_foreach_cb,
     void *);
+void db_table_remove_router_key(struct db_table *, struct router_key const *);
 
 int rtrhandler_handle_roa_v4(struct db_table *, uint32_t,
     struct ipv4_prefix const *, uint8_t);

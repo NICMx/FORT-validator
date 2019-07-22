@@ -220,22 +220,19 @@ db_table_remove_roa(struct db_table *table, struct vrp const *del)
 	}
 }
 
-/*
- * FIXME and TODO: add more funcs for router keys
- * void
- * db_table_remove_router_key(struct db_table *table,
- *     struct router_key const *del)
- * {
- * 	struct hashable_key *ptr;
- *
- * 	HASH_FIND(hh, table->router_keys, del, sizeof(*del), ptr);
- * 	if (ptr != NULL) {
- * 		HASH_DELETE(hh, table->router_keys, ptr);
- * 		router_key_cleanup(&ptr->data);
- * 		free(ptr);
- * 	}
- * }
- */
+void
+db_table_remove_router_key(struct db_table *table,
+    struct router_key const *del)
+{
+	struct hashable_key *ptr;
+
+	HASH_FIND(hh, table->router_keys, del, sizeof(*del), ptr);
+	if (ptr != NULL) {
+		HASH_DELETE(hh, table->router_keys, ptr);
+		router_key_cleanup(&ptr->data);
+		free(ptr);
+	}
+}
 
 int
 rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,

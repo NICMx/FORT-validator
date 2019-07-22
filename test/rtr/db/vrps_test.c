@@ -95,6 +95,13 @@ vrp_fail(struct vrp const *vrp, void *arg)
 	return -EINVAL;
 }
 
+static int
+rk_fail(struct router_key const *key, void *arg)
+{
+	ck_abort_msg("Expected no callbacks, got from RK ASN %u.", key->as);
+	return -EINVAL;
+}
+
 static array_index
 get_vrp_index(struct vrp const *vrp)
 {
@@ -151,6 +158,13 @@ vrp_check(struct vrp const *vrp, void *arg)
 }
 
 static int
+rk_check(struct router_key const *rk, void *arg)
+{
+	/* FIXME (now) add index with Router key examples */
+	return 0;
+}
+
+static int
 delta_check(struct delta_vrp const *delta, void *arg)
 {
 	bool *array = arg;
@@ -160,6 +174,13 @@ delta_check(struct delta_vrp const *delta, void *arg)
 	ck_assert_uint_eq(false, array[index]);
 	array[index] = true;
 
+	return 0;
+}
+
+static int
+delta_rk_check(struct delta_bgpsec const *delta, void *arg)
+{
+	/* FIXME (now) add index with Router key examples */
 	return 0;
 }
 
@@ -180,7 +201,8 @@ check_base(serial_t expected_serial, bool const *expected_base)
 
 	memset(actual_base, 0, sizeof(actual_base));
 	ck_assert_int_eq(0, get_last_serial_number(&actual_serial));
-	ck_assert_int_eq(0, vrps_foreach_base_roa(vrp_check, actual_base));
+	ck_assert_int_eq(0, vrps_foreach_base(vrp_check, rk_check,
+	    actual_base));
 	ck_assert_uint_eq(expected_serial, actual_serial);
 	for (i = 0; i < ARRAY_LEN(actual_base); i++)
 		ck_assert_uint_eq(expected_base[i], actual_base[i]);
@@ -214,6 +236,17 @@ vrp_add(struct delta_vrp const *delta, void *arg)
 	return 0;
 }
 
+static int
+rk_add(struct delta_bgpsec const *delta, void *arg)
+{
+	struct deltas *deltas = arg;
+	struct router_key key;
+
+	key = delta->router_key;
+	deltas_add_bgpsec(deltas, &key, delta->flags);
+	return 0;
+}
+
 static void
 filter_deltas(struct deltas_db *db)
 {
@@ -225,7 +258,7 @@ filter_deltas(struct deltas_db *db)
 	ck_assert_int_eq(0, deltas_create(&deltas));
 	group.deltas = deltas;
 	ck_assert_int_eq(0, vrps_foreach_filtered_delta(db, vrp_add,
-	    group.deltas));
+	    rk_add, group.deltas));
 	deltas_db_init(&tmp);
 	ck_assert_int_eq(0, deltas_db_add(&tmp, &group));
 
@@ -251,10 +284,9 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas,
 		filter_deltas(&deltas);
 
 	memset(actual_deltas, 0, sizeof(actual_deltas));
-	/* FIXME Add cb function for router keys */
 	ARRAYLIST_FOREACH(&deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    delta_check, NULL, actual_deltas));
+		    delta_check, delta_rk_check, actual_deltas));
 	for (i = 0; i < ARRAY_LEN(actual_deltas); i++)
 		ck_assert_uint_eq(expected_deltas[i], actual_deltas[i]);
 }
@@ -282,7 +314,7 @@ create_deltas_0to1(struct deltas_db *deltas, serial_t *serial, bool *changed,
 
 	/* First validation not yet performed: Tell routers to wait */
 	ck_assert_int_eq(-EAGAIN, get_last_serial_number(serial));
-	ck_assert_int_eq(-EAGAIN, vrps_foreach_base_roa(vrp_fail,
+	ck_assert_int_eq(-EAGAIN, vrps_foreach_base(vrp_fail, rk_fail,
 	    iterated_entries));
 	ck_assert_int_eq(-EAGAIN, vrps_get_deltas_from(0, serial, deltas));
 

@@ -268,10 +268,6 @@ deltas_foreach(serial_t serial, struct deltas *deltas,
 	if (error)
 		return error;
 
-	/* FIXME Temporary, this must not be null */
-	if (cb_bgpsec == NULL)
-		return 0;
-
 	error = __foreach_bgpsec(&deltas->bgpsec.adds, cb_bgpsec, arg, serial,
 	    FLAG_ANNOUNCEMENT);
 	if (error)

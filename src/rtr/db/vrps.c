@@ -28,8 +28,19 @@ struct vrp_node {
 	SLIST_ENTRY(vrp_node) next;
 };
 
+struct bgpsec_node {
+	struct delta_bgpsec delta;
+	SLIST_ENTRY(bgpsec_node) next;
+};
+
 /** Sorted list to filter deltas */
 SLIST_HEAD(vrp_slist, vrp_node);
+SLIST_HEAD(bgpsec_slist, bgpsec_node);
+
+struct sorted_lists {
+	struct vrp_slist prefixes;
+	struct bgpsec_slist bgpsec;
+};
 
 struct state {
 	/**
@@ -330,7 +341,7 @@ revert_base:
  * 2. -EAGAIN: No data available; database still under construction.
  */
 int
-vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
+vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk, void *arg)
 {
 	int error;
 
@@ -338,11 +349,15 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 	if (error)
 		return error;
 
-	if (state.base != NULL)
-		error = db_table_foreach_roa(state.base, cb, arg);
-	else
+	if (state.base != NULL) {
+		error = db_table_foreach_roa(state.base, cb_roa, arg);
+		if (error)
+			goto unlock;
+		error = db_table_foreach_router_key(state.base, cb_rk, arg);
+	} else
 		error = -EAGAIN;
 
+unlock:
 	rwlock_unlock(&lock);
 
 	return error;
@@ -357,9 +372,11 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 static int
 vrp_ovrd_remove(struct delta_vrp const *delta, void *arg)
 {
+	struct sorted_lists *lists = arg;
 	struct vrp_node *ptr;
-	struct vrp_slist *filtered_vrps = arg;
+	struct vrp_slist *filtered_vrps;
 
+	filtered_vrps = &lists->prefixes;
 	SLIST_FOREACH(ptr, filtered_vrps, next)
 		if (VRP_EQ(&delta->vrp, &ptr->delta.vrp) &&
 		    delta->flags != ptr->delta.flags) {
@@ -377,17 +394,51 @@ vrp_ovrd_remove(struct delta_vrp const *delta, void *arg)
 	return 0;
 }
 
+static int
+bgpsec_ovrd_remove(struct delta_bgpsec const *delta, void *arg)
+{
+	struct sorted_lists *lists = arg;
+	struct bgpsec_node *ptr;
+	struct bgpsec_slist *filtered_bgpsec;
+	struct router_key const *key;
+
+	filtered_bgpsec = &lists->bgpsec;
+	SLIST_FOREACH(ptr, filtered_bgpsec, next) {
+		key = &delta->router_key;
+		if (key->as == ptr->delta.router_key.as &&
+		    memcmp(sk_info_get_ski(key->sk),
+		    sk_info_get_ski(ptr->delta.router_key.sk), RK_SKI_LEN) &&
+		    memcmp(sk_info_get_spk(key->sk),
+		    sk_info_get_spk(ptr->delta.router_key.sk), RK_SPKI_LEN) &&
+		    delta->flags != ptr->delta.flags) {
+			SLIST_REMOVE(filtered_bgpsec, ptr, bgpsec_node, next);
+			free(ptr);
+			return 0;
+		}
+	}
+
+	ptr = malloc(sizeof(struct bgpsec_node));
+	if (ptr == NULL)
+		return pr_enomem();
+
+	ptr->delta = *delta;
+	SLIST_INSERT_HEAD(filtered_bgpsec, ptr, next);
+	return 0;
+}
+
 /*
  * Remove all operations on @deltas that override each other, and do @cb (with
  * @arg) on each element of the resultant delta.
  */
 int
-vrps_foreach_filtered_delta(struct deltas_db *deltas, delta_vrp_foreach_cb cb,
+vrps_foreach_filtered_delta(struct deltas_db *deltas,
+    delta_vrp_foreach_cb cb_prefix, delta_bgpsec_foreach_cb cb_bgpsec,
     void *arg)
 {
-	struct vrp_slist filtered_vrps;
+	struct sorted_lists filtered_lists;
 	struct delta_group *group;
-	struct vrp_node *ptr;
+	struct vrp_node *vnode;
+	struct bgpsec_node *bnode;
 	array_index i;
 	int error = 0;
 
@@ -396,27 +447,37 @@ vrps_foreach_filtered_delta(struct deltas_db *deltas, delta_vrp_foreach_cb cb,
 	 * (We'll have to build a separate list because the database nodes
 	 * are immutable.)
 	 */
-	SLIST_INIT(&filtered_vrps);
+	SLIST_INIT(&filtered_lists.prefixes);
+	SLIST_INIT(&filtered_lists.bgpsec);
 	ARRAYLIST_FOREACH(deltas, group, i) {
-		/* FIXME Add cb function for router keys */
 		error = deltas_foreach(group->serial, group->deltas,
-		    vrp_ovrd_remove, NULL, &filtered_vrps);
+		    vrp_ovrd_remove, bgpsec_ovrd_remove, &filtered_lists);
 		if (error)
 			goto release_list;
 	}
 
-	/* Now do the callback on the filtered deltas */
-	SLIST_FOREACH(ptr, &filtered_vrps, next) {
-		error = cb(&ptr->delta, arg);
+	/* Now do the corresponding callback on the filtered deltas */
+	SLIST_FOREACH(vnode, &filtered_lists.prefixes, next) {
+		error = cb_prefix(&vnode->delta, arg);
+		if (error)
+			break;
+	}
+	SLIST_FOREACH(bnode, &filtered_lists.bgpsec, next) {
+		error = cb_bgpsec(&bnode->delta, arg);
 		if (error)
 			break;
 	}
 
 release_list:
-	while (!SLIST_EMPTY(&filtered_vrps)) {
-		ptr = filtered_vrps.slh_first;
-		SLIST_REMOVE_HEAD(&filtered_vrps, next);
-		free(ptr);
+	while (!SLIST_EMPTY(&filtered_lists.prefixes)) {
+		vnode = filtered_lists.prefixes.slh_first;
+		SLIST_REMOVE_HEAD(&filtered_lists.prefixes, next);
+		free(vnode);
+	}
+	while (!SLIST_EMPTY(&filtered_lists.bgpsec)) {
+		bnode = filtered_lists.bgpsec.slh_first;
+		SLIST_REMOVE_HEAD(&filtered_lists.bgpsec, next);
+		free(bnode);
 	}
 
 	return error;
