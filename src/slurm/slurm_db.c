@@ -202,6 +202,7 @@ slurm_db_bgpsec_is_filtered(struct router_key const *key)
 		return false;
 	}
 	slurm_bgpsec.data_flag = SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI;
+	slurm_bgpsec.asn = key->as;
 	memcpy(tmp, key->ski, RK_SKI_LEN);
 	slurm_bgpsec.ski = tmp;
 	/* Router public key isn't used at filters */

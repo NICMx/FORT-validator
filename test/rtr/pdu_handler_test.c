@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/queue.h>
 
+#include "algorithm.c"
 #include "common.c"
 #include "file.c"
 #include "impersonator.c"

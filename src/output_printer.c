@@ -6,6 +6,7 @@
 #include "config.h"
 #include "file.h"
 #include "log.h"
+#include "crypto/base64.h"
 #include "rtr/db/vrp.h"
 
 char addr_buf[INET6_ADDRSTRLEN];
@@ -74,51 +75,28 @@ print_roa(struct vrp const *vrp, void *arg)
 	return 0;
 }
 
-static int
-print_to_hex(unsigned char const *data, size_t len, char **out)
-{
-	char *tmp;
-	char *init;
-	int i;
-
-	tmp = malloc(len * 3 + 1);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	init = tmp;
-	for (i = 0; i < len * 3; i+=3) {
-		*tmp = ':';
-		tmp++;
-		tmp += sprintf(tmp, "%02X", data[i/3]);
-	}
-	*tmp = '\0';
-
-	*out = init;
-	return 0;
-}
-
-/*
- * FIXME Improve this calls, maybe base64 encode and print?
- */
+/* Print as base64url strings without trailing pad */
 static int
 print_router_key(struct router_key const *key, void *arg)
 {
 	FILE *out = arg;
-	char *buf1;
-	char *buf2;
+	char *buf1, *buf2;
 	int error;
 
-	error = print_to_hex(key->ski, RK_SKI_LEN, &buf1);
+	error = base64url_encode(key->ski, RK_SKI_LEN, &buf1);
 	if (error)
 		return error;
-	error = print_to_hex(key->spk, RK_SPKI_LEN, &buf2);
-	if (error)
-		return error;
-	fprintf(out, "AS%u,%s,%s\n", key->as, buf1, buf2);
-	free(buf1);
-	free(buf2);
 
-	return 0;
+	error = base64url_encode(key->spk, RK_SPKI_LEN, &buf2);
+	if (error)
+		goto free1;
+
+	fprintf(out, "AS%u,%s,%s\n", key->as, buf1, buf2);
+
+	free(buf2);
+free1:
+	free(buf1);
+	return error;
 }
 
 static int
@@ -169,7 +147,7 @@ print_router_keys(struct db_table *db)
 	if (error)
 		return;
 
-	fprintf(out, "ASN,SKI,SPK\n");
+	fprintf(out, "ASN,Subject Key Identifier,Subject Public Key Info\n");
 	error = db_table_foreach_router_key(db, print_router_key, out);
 	if (fopen)
 		file_close(out);
