@@ -28,18 +28,18 @@ struct vrp_node {
 	SLIST_ENTRY(vrp_node) next;
 };
 
-struct bgpsec_node {
-	struct delta_bgpsec delta;
-	SLIST_ENTRY(bgpsec_node) next;
+struct rk_node {
+	struct delta_router_key delta;
+	SLIST_ENTRY(rk_node) next;
 };
 
 /** Sorted list to filter deltas */
 SLIST_HEAD(vrp_slist, vrp_node);
-SLIST_HEAD(bgpsec_slist, bgpsec_node);
+SLIST_HEAD(rk_slist, rk_node);
 
 struct sorted_lists {
 	struct vrp_slist prefixes;
-	struct bgpsec_slist bgpsec;
+	struct rk_slist router_keys;
 };
 
 struct state {
@@ -125,8 +125,8 @@ __handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
 }
 
 int
-__handle_bgpsec(unsigned char const *ski, uint32_t as, unsigned char const *spk,
-    void *arg)
+__handle_router_key(unsigned char const *ski, uint32_t as,
+    unsigned char const *spk, void *arg)
 {
 	return rtrhandler_handle_router_key(arg, ski, as, spk);
 }
@@ -144,7 +144,7 @@ __perform_standalone_validation(struct db_table **result)
 
 	validation_handler.handle_roa_v4 = __handle_roa_v4;
 	validation_handler.handle_roa_v6 = __handle_roa_v6;
-	validation_handler.handle_bgpsec = __handle_bgpsec;
+	validation_handler.handle_router_key = __handle_router_key;
 	validation_handler.arg = db;
 
 	error = perform_standalone_validation(&validation_handler);
@@ -395,34 +395,32 @@ vrp_ovrd_remove(struct delta_vrp const *delta, void *arg)
 }
 
 static int
-bgpsec_ovrd_remove(struct delta_bgpsec const *delta, void *arg)
+router_key_ovrd_remove(struct delta_router_key const *delta, void *arg)
 {
 	struct sorted_lists *lists = arg;
-	struct bgpsec_node *ptr;
-	struct bgpsec_slist *filtered_bgpsec;
+	struct rk_node *ptr;
+	struct rk_slist *filtered_keys;
 	struct router_key const *key;
 
-	filtered_bgpsec = &lists->bgpsec;
-	SLIST_FOREACH(ptr, filtered_bgpsec, next) {
+	filtered_keys = &lists->router_keys;
+	SLIST_FOREACH(ptr, filtered_keys, next) {
 		key = &delta->router_key;
 		if (key->as == ptr->delta.router_key.as &&
-		    memcmp(sk_info_get_ski(key->sk),
-		    sk_info_get_ski(ptr->delta.router_key.sk), RK_SKI_LEN) &&
-		    memcmp(sk_info_get_spk(key->sk),
-		    sk_info_get_spk(ptr->delta.router_key.sk), RK_SPKI_LEN) &&
+		    memcmp(key->ski, ptr->delta.router_key.ski, RK_SKI_LEN) &&
+		    memcmp(key->spk, ptr->delta.router_key.spk, RK_SPKI_LEN) &&
 		    delta->flags != ptr->delta.flags) {
-			SLIST_REMOVE(filtered_bgpsec, ptr, bgpsec_node, next);
+			SLIST_REMOVE(filtered_keys, ptr, rk_node, next);
 			free(ptr);
 			return 0;
 		}
 	}
 
-	ptr = malloc(sizeof(struct bgpsec_node));
+	ptr = malloc(sizeof(struct rk_node));
 	if (ptr == NULL)
 		return pr_enomem();
 
 	ptr->delta = *delta;
-	SLIST_INSERT_HEAD(filtered_bgpsec, ptr, next);
+	SLIST_INSERT_HEAD(filtered_keys, ptr, next);
 	return 0;
 }
 
@@ -432,13 +430,13 @@ bgpsec_ovrd_remove(struct delta_bgpsec const *delta, void *arg)
  */
 int
 vrps_foreach_filtered_delta(struct deltas_db *deltas,
-    delta_vrp_foreach_cb cb_prefix, delta_bgpsec_foreach_cb cb_bgpsec,
+    delta_vrp_foreach_cb cb_prefix, delta_router_key_foreach_cb cb_rk,
     void *arg)
 {
 	struct sorted_lists filtered_lists;
 	struct delta_group *group;
 	struct vrp_node *vnode;
-	struct bgpsec_node *bnode;
+	struct rk_node *rnode;
 	array_index i;
 	int error = 0;
 
@@ -448,10 +446,10 @@ vrps_foreach_filtered_delta(struct deltas_db *deltas,
 	 * are immutable.)
 	 */
 	SLIST_INIT(&filtered_lists.prefixes);
-	SLIST_INIT(&filtered_lists.bgpsec);
+	SLIST_INIT(&filtered_lists.router_keys);
 	ARRAYLIST_FOREACH(deltas, group, i) {
 		error = deltas_foreach(group->serial, group->deltas,
-		    vrp_ovrd_remove, bgpsec_ovrd_remove, &filtered_lists);
+		    vrp_ovrd_remove, router_key_ovrd_remove, &filtered_lists);
 		if (error)
 			goto release_list;
 	}
@@ -462,8 +460,8 @@ vrps_foreach_filtered_delta(struct deltas_db *deltas,
 		if (error)
 			break;
 	}
-	SLIST_FOREACH(bnode, &filtered_lists.bgpsec, next) {
-		error = cb_bgpsec(&bnode->delta, arg);
+	SLIST_FOREACH(rnode, &filtered_lists.router_keys, next) {
+		error = cb_rk(&rnode->delta, arg);
 		if (error)
 			break;
 	}
@@ -474,10 +472,10 @@ release_list:
 		SLIST_REMOVE_HEAD(&filtered_lists.prefixes, next);
 		free(vnode);
 	}
-	while (!SLIST_EMPTY(&filtered_lists.bgpsec)) {
-		bnode = filtered_lists.bgpsec.slh_first;
-		SLIST_REMOVE_HEAD(&filtered_lists.bgpsec, next);
-		free(bnode);
+	while (!SLIST_EMPTY(&filtered_lists.router_keys)) {
+		rnode = filtered_lists.router_keys.slh_first;
+		SLIST_REMOVE_HEAD(&filtered_lists.router_keys, next);
+		free(rnode);
 	}
 
 	return error;

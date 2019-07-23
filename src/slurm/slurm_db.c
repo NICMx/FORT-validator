@@ -69,10 +69,10 @@ prefix_equal(struct slurm_prefix *left, struct slurm_prefix *right,
 	if ((left->data_flag & SLURM_COM_FLAG_ASN) > 0)
 		equal = equal && VRP_ASN_EQ(left_vrp, right_vrp);
 
-	if ((left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
+	if (equal && (left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
 		equal = equal && VRP_PREFIX_EQ(left_vrp, right_vrp);
 
-	if ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
+	if (equal && (left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
 		equal = equal &&
 		    ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0) &&
 		    VRP_MAX_PREFIX_LEN_EQ(left_vrp, right_vrp);
@@ -112,11 +112,11 @@ bgpsec_equal(struct slurm_bgpsec *left, struct slurm_bgpsec *right,
 	if ((left->data_flag & SLURM_COM_FLAG_ASN) > 0)
 		equal = equal && left->asn == right->asn;
 
-	if ((left->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
+	if (equal && (left->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
 		equal = equal &&
 		    memcmp(left->ski, right->ski, RK_SKI_LEN) == 0;
 
-	if ((left->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0)
+	if (equal && (left->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0)
 		equal = equal &&
 		    memcmp(left->router_public_key, right->router_public_key,
 		    RK_SPKI_LEN) == 0;
@@ -193,16 +193,24 @@ bool
 slurm_db_bgpsec_is_filtered(struct router_key const *key)
 {
 	struct slurm_bgpsec slurm_bgpsec;
+	unsigned char *tmp;
+	bool result;
 
-	sk_info_refget(key->sk);
-	slurm_bgpsec.data_flag = SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI
-	    | SLURM_BGPS_FLAG_ROUTER_KEY;
-	slurm_bgpsec.ski = sk_info_get_ski(key->sk);
-	slurm_bgpsec.router_public_key = sk_info_get_spk(key->sk);
+	tmp = malloc(RK_SKI_LEN);
+	if (tmp == NULL) {
+		pr_enomem();
+		return false;
+	}
+	slurm_bgpsec.data_flag = SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI;
+	memcpy(tmp, key->ski, RK_SKI_LEN);
+	slurm_bgpsec.ski = tmp;
+	/* Router public key isn't used at filters */
+	slurm_bgpsec.router_public_key = NULL;
 	slurm_bgpsec.comment = NULL;
-	sk_info_refput(key->sk);
 
-	return bgpsec_filter_exists(&slurm_bgpsec);
+	result = bgpsec_filter_exists(&slurm_bgpsec);
+	free(tmp);
+	return result;
 }
 
 int

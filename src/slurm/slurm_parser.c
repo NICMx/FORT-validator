@@ -553,21 +553,21 @@ load_bgpsec_array(json_t *array, bool is_assertion)
 
 	json_array_foreach(array, index, element) {
 		error = load_single_bgpsec(element, is_assertion);
-		if (error) {
-			if (error == -EEXIST)
-				pr_err(
-				    "The bgpsec %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
-				    (is_assertion ? "assertion" : "filter"),
-				    index + 1,
-				    (is_assertion ? "assertion" : "filter"));
-			else
-				pr_err(
-				    "Error at bgpsec %s, element #%d, SLURM loading will be stopped",
-				    (is_assertion ? "assertions" : "filters"),
-				    index + 1);
+		if (!error)
+			break;
+		if (error == -EEXIST)
+			pr_err(
+			    "The bgpsec %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
+			    (is_assertion ? "assertion" : "filter"),
+			    index + 1,
+			    (is_assertion ? "assertion" : "filter"));
+		else
+			pr_err(
+			    "Error at bgpsec %s, element #%d, SLURM loading will be stopped",
+			    (is_assertion ? "assertions" : "filters"),
+			    index + 1);
 
-			return error;
-		}
+		return error;
 	}
 
 	return 0;

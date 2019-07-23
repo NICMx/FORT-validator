@@ -18,7 +18,7 @@ asn_cb(unsigned long asn, void *arg)
 		return pr_err("BGPsec certificate is not allowed for ASN %lu.",
 		    asn);
 
-	return vhandler_handle_bgpsec(params->ski, asn, params->spk);
+	return vhandler_handle_router_key(params->ski, asn, params->spk);
 }
 
 int

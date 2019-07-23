@@ -48,7 +48,6 @@ db_table_destroy(struct db_table *table)
 
 	HASH_ITER(hh, table->router_keys, node_key, tmp_key) {
 		HASH_DEL(table->router_keys, node_key);
-		router_key_cleanup(&node_key->data);
 		free(node_key);
 	}
 
@@ -127,10 +126,8 @@ add_router_key(struct db_table *table, struct hashable_key *new)
 	HASH_REPLACE(hh, table->router_keys, data, sizeof(new->data), new, old);
 	if (errno)
 		return -pr_errno(errno, "Router Key couldn't be added to hash table");
-	if (old != NULL) {
-		router_key_cleanup(&old->data);
+	if (old != NULL)
 		free(old);
-	}
 
 	return 0;
 }
@@ -162,10 +159,8 @@ duplicate_roa(struct db_table *dst, struct hashable_roa *new)
 static int
 duplicate_key(struct db_table *dst, struct hashable_key *new)
 {
-	struct sk_info *sk = new->data.sk;
-
-	return rtrhandler_handle_router_key(dst, sk_info_get_ski(sk),
-	    new->data.as, sk_info_get_spk(sk));
+	return rtrhandler_handle_router_key(dst, new->data.ski, new->data.as,
+	    new->data.spk);
 }
 
 #define MERGE_ITER(table_prop, name, err_var)				\
@@ -229,7 +224,6 @@ db_table_remove_router_key(struct db_table *table,
 	HASH_FIND(hh, table->router_keys, del, sizeof(*del), ptr);
 	if (ptr != NULL) {
 		HASH_DELETE(hh, table->router_keys, ptr);
-		router_key_cleanup(&ptr->data);
 		free(ptr);
 	}
 }
@@ -287,17 +281,12 @@ rtrhandler_handle_router_key(struct db_table *table,
 	/* Needed by uthash */
 	memset(key, 0, sizeof(struct hashable_key));
 
-	error = router_key_init(&key->data, ski, as, spk);
-	if (error) {
-		free(key);
-		return error;
-	}
+	router_key_init(&key->data, ski, as, spk);
 
 	error = add_router_key(table, key);
-	if (error) {
-		router_key_cleanup(&key->data);
+	if (error)
 		free(key);
-	}
+
 	return error;
 }
 
@@ -353,7 +342,7 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 static int
 add_router_key_delta(struct deltas *deltas, struct hashable_key *key, int op)
 {
-	return deltas_add_bgpsec(deltas, &key->data, op);
+	return deltas_add_router_key(deltas, &key->data, op);
 }
 
 /*

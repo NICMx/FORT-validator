@@ -51,7 +51,7 @@ struct delta_vrp {
 	uint8_t flags;
 };
 
-struct delta_bgpsec {
+struct delta_router_key {
 	serial_t serial;
 	struct router_key router_key;
 	uint8_t flags;
@@ -61,6 +61,7 @@ typedef int (*vrp_foreach_cb)(struct vrp const *, void *);
 typedef int (*router_key_foreach_cb)(struct router_key const *, void *);
 
 typedef int (*delta_vrp_foreach_cb)(struct delta_vrp const *, void *);
-typedef int (*delta_bgpsec_foreach_cb)(struct delta_bgpsec const *, void *);
+typedef int (*delta_router_key_foreach_cb)(struct delta_router_key const *,
+    void *);
 
 #endif /* SRC_RTR_DB_VRP_H_ */

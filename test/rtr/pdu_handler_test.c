@@ -185,7 +185,7 @@ handle_delta(struct delta_vrp const *delta, void *arg)
 }
 
 static int
-handle_delta_bgpsec(struct delta_bgpsec const *delta, void *arg)
+handle_delta_router_key(struct delta_router_key const *delta, void *arg)
 {
 	int *fd = arg;
 	ck_assert_int_eq(0, send_router_key_pdu(*fd, RTR_V0, &delta->router_key,
@@ -201,7 +201,7 @@ send_delta_pdus(int fd, uint8_t version, struct deltas_db *deltas)
 
 	ARRAYLIST_FOREACH(deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    handle_delta, handle_delta_bgpsec, &fd));
+		    handle_delta, handle_delta_router_key, &fd));
 
 	return 0;
 }

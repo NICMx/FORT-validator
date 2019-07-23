@@ -161,10 +161,9 @@ send_router_key_pdu(int fd, uint8_t version,
     struct router_key const *router_key, uint8_t flags)
 {
 	struct router_key_pdu pdu;
-	unsigned char *data;
+	unsigned char data[RTRPDU_ROUTER_KEY_LEN];
 	size_t len;
 	uint16_t reserved;
-	int error;
 
 	/* Sanity check: this can't be sent on RTRv0 */
 	if (version == RTR_V0)
@@ -174,38 +173,20 @@ send_router_key_pdu(int fd, uint8_t version,
 	/* Set the flags at the first 8 bits of reserved field */
 	reserved += (flags << 8);
 	set_header_values(&pdu.header, version, PDU_TYPE_ROUTER_KEY, reserved);
+	pdu.header.length = RTRPDU_ROUTER_KEY_LEN;
 
-	pdu.ski = sk_info_get_ski(router_key->sk);
+	memcpy(pdu.ski, router_key->ski, RK_SKI_LEN);
 	pdu.ski_len = RK_SKI_LEN;
 	pdu.asn = router_key->as;
-	pdu.spki = sk_info_get_spk(router_key->sk);
+	memcpy(pdu.spki, router_key->spk, RK_SPKI_LEN);
 	pdu.spki_len = RK_SPKI_LEN;
-	pdu.header.length = RTRPDU_HDR_LEN
-	    + RK_SKI_LEN
-	    + sizeof(router_key->as)
-	    + RK_SPKI_LEN;
-	sk_info_refget(router_key->sk);
-
-	data = malloc(pdu.header.length);
-	if (data == NULL) {
-		error = pr_enomem();
-		goto release_sk;
-	}
 
 	len = serialize_router_key_pdu(&pdu, data);
-	if (len != pdu.header.length) {
-		sk_info_refput(router_key->sk);
-		free(data);
+	if (len != RTRPDU_ROUTER_KEY_LEN)
 		pr_crit("Serialized Router Key PDU is %zu bytes, not the expected %u.",
 		    len, pdu.header.length);
-	}
 
-	error = send_response(fd, data, len);
-	free(data);
-
-release_sk:
-	sk_info_refput(router_key->sk);
-	return error;
+	return send_response(fd, data, len);
 }
 
 struct simple_param {
@@ -223,7 +204,7 @@ vrp_simply_send(struct delta_vrp const *delta, void *arg)
 }
 
 static int
-router_key_simply_send(struct delta_bgpsec const *delta, void *arg)
+router_key_simply_send(struct delta_router_key const *delta, void *arg)
 {
 	struct simple_param *param = arg;
 

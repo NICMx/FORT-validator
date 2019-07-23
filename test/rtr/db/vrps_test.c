@@ -178,7 +178,7 @@ delta_check(struct delta_vrp const *delta, void *arg)
 }
 
 static int
-delta_rk_check(struct delta_bgpsec const *delta, void *arg)
+delta_rk_check(struct delta_router_key const *delta, void *arg)
 {
 	/* FIXME (now) add index with Router key examples */
 	return 0;
@@ -237,13 +237,13 @@ vrp_add(struct delta_vrp const *delta, void *arg)
 }
 
 static int
-rk_add(struct delta_bgpsec const *delta, void *arg)
+rk_add(struct delta_router_key const *delta, void *arg)
 {
 	struct deltas *deltas = arg;
 	struct router_key key;
 
 	key = delta->router_key;
-	deltas_add_bgpsec(deltas, &key, delta->flags);
+	deltas_add_router_key(deltas, &key, delta->flags);
 	return 0;
 }
 

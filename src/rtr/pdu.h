@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 
 #include "common.h"
+#include "object/router_key.h"
 #include "rtr/primitive_reader.h"
 
 #define RTR_V0	0
@@ -51,9 +52,11 @@ enum pdu_type {
 #define RTRPDU_END_OF_DATA_V0_LEN	12
 #define RTRPDU_END_OF_DATA_V1_LEN	24
 #define RTRPDU_CACHE_RESET_LEN		8
+#define RTRPDU_ROUTER_KEY_LEN		123
 
 /* Ignores Error Report PDUs, which is fine. */
 #define RTRPDU_MAX_LEN			RTRPDU_IPV6_PREFIX_LEN
+#define RTRPDU_ERR_MAX_LEN		256
 
 struct pdu_header {
 	uint8_t	protocol_version;
@@ -118,17 +121,17 @@ struct cache_reset_pdu {
 
 struct router_key_pdu {
 	struct	pdu_header header;
-	unsigned char	*ski;
+	unsigned char	ski[RK_SKI_LEN];
 	size_t		ski_len;
 	uint32_t	asn;
-	unsigned char	*spki;
+	unsigned char	spki[RK_SPKI_LEN];
 	size_t		spki_len;
 };
 
 struct error_report_pdu {
 	struct	pdu_header header;
 	uint32_t	error_pdu_length;
-	unsigned char	erroneous_pdu[RTRPDU_MAX_LEN];
+	unsigned char	erroneous_pdu[RTRPDU_ERR_MAX_LEN];
 	uint32_t	error_message_length;
 	rtr_char	*error_message;
 };

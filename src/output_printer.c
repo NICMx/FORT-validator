@@ -75,7 +75,7 @@ print_roa(struct vrp const *vrp, void *arg)
 }
 
 static int
-print_to_hex(unsigned char *data, size_t len, char **out)
+print_to_hex(unsigned char const *data, size_t len, char **out)
 {
 	char *tmp;
 	char *init;
@@ -108,10 +108,10 @@ print_router_key(struct router_key const *key, void *arg)
 	char *buf2;
 	int error;
 
-	error = print_to_hex(sk_info_get_ski(key->sk), RK_SKI_LEN, &buf1);
+	error = print_to_hex(key->ski, RK_SKI_LEN, &buf1);
 	if (error)
 		return error;
-	error = print_to_hex(sk_info_get_spk(key->sk),RK_SPKI_LEN, &buf2);
+	error = print_to_hex(key->spk, RK_SPKI_LEN, &buf2);
 	if (error)
 		return error;
 	fprintf(out, "AS%u,%s,%s\n", key->as, buf1, buf2);
