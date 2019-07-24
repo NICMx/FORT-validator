@@ -4,6 +4,24 @@
 #include "log.h"
 #include "asn1/content_info.h"
 
+int
+signed_object_decode(struct signed_object *sobj, struct rpki_uri *uri)
+{
+	int error;
+
+	error = content_info_load(uri, &sobj->cinfo);
+	if (error)
+		return error;
+
+	error = signed_data_decode(&sobj->sdata, &sobj->cinfo->content);
+	if (error) {
+		content_info_free(sobj->cinfo);
+		return error;
+	}
+
+	return 0;
+}
+
 static int
 validate_eContentType(struct SignedData *sdata, struct oid_arcs const *oid)
 {
@@ -50,39 +68,30 @@ validate_content_type(struct SignedData *sdata, struct oid_arcs const *oid)
 }
 
 int
-signed_object_decode(struct signed_object_args *args,
-    struct oid_arcs const *oid,
-    signed_object_cb cb,
-    void *cb_arg)
+signed_object_validate(struct signed_object *sobj, struct oid_arcs const *oid,
+    struct signed_object_args *args)
 {
-	struct ContentInfo *cinfo;
-	struct SignedData *sdata;
 	int error;
-
-	error = content_info_load(args->uri, &cinfo);
-	if (error)
-		goto end1;
-
-	error = signed_data_decode(&cinfo->content, args, &sdata);
-	if (error)
-		goto end2;
 
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.1 */
 	/* rfc6486#section-4.4.1 */
-	error = validate_eContentType(sdata, oid);
+	error = validate_eContentType(sobj->sdata.decoded, oid);
 	if (error)
-		goto end3;
+		return error;
 
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.3 */
-	error = validate_content_type(sdata, oid);
+	error = validate_content_type(sobj->sdata.decoded, oid);
 	if (error)
-		goto end3;
+		return error;
 
-	error = cb(sdata->encapContentInfo.eContent, cb_arg);
+	return signed_data_validate(&sobj->sdata, args);
+}
 
-end3:	signed_data_free(sdata);
-end2:	content_info_free(cinfo);
-end1:	return error;
+void
+signed_object_cleanup(struct signed_object *sobj)
+{
+	content_info_free(sobj->cinfo);
+	signed_data_cleanup(&sobj->sdata);
 }

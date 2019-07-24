@@ -79,6 +79,7 @@ validation_prepare(struct validation **out, struct tal *tal,
     struct validation_handler *validation_handler)
 {
 	struct validation *result;
+	X509_VERIFY_PARAM *params;
 	int error;
 
 	result = malloc(sizeof(struct validation));
@@ -97,6 +98,14 @@ validation_prepare(struct validation **out, struct tal *tal,
 		goto abort1;
 	}
 
+	params = X509_VERIFY_PARAM_new();
+	if (params == NULL) {
+		error = pr_enomem();
+		goto abort2;
+	}
+
+	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
+	X509_STORE_set1_param(result->store, params);
 	X509_STORE_set_verify_cb(result->store, cb);
 
 	error = certstack_create(&result->certstack);

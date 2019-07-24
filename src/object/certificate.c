@@ -87,11 +87,15 @@ validate_issuer(X509 *cert, bool is_ta)
 	if (!is_ta)
 		return validate_issuer_name("Certificate", issuer);
 
-	error = x509_name_decode(issuer, "issuer", &name);
-	if (!error)
-		x509_name_put(name);
+	/* TODO wait. Shouldn't we check subject == issuer? */
 
-	return error;
+	error = x509_name_decode(issuer, "issuer", &name);
+	if (error)
+		return error;
+	pr_debug("Issuer: %s", x509_name_commonName(name));
+
+	x509_name_put(name);
+	return 0;
 }
 
 static int
@@ -108,6 +112,7 @@ validate_subject(X509 *cert)
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
 		return error;
+	pr_debug("Subject: %s", x509_name_commonName(name));
 
 	error = x509stack_store_subject(validation_certstack(state), name);
 
@@ -1485,7 +1490,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 */
 	mft_retry = true;
 	do {
-		error = handle_manifest(mft, rpp_parent_crl, &pp);
+		error = handle_manifest(mft, &pp);
 		if (!mft_retry)
 			uri_refput(mft);
 		if (!error || !mft_retry)

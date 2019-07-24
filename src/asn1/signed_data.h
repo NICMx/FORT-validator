@@ -10,6 +10,8 @@
 
 /*
  * This only exists to reduce argument lists.
+ * TODO (fine) rename to signed_data_args, since it has nothing to do with
+ * signed objects anymore.
  */
 struct signed_object_args {
 	/** Location of the signed object. */
@@ -29,9 +31,14 @@ int signed_object_args_init(struct signed_object_args *, struct rpki_uri *,
     STACK_OF(X509_CRL) *, bool);
 void signed_object_args_cleanup(struct signed_object_args *);
 
-int signed_data_decode(ANY_t *, struct signed_object_args *args,
-    struct SignedData **);
-void signed_data_free(struct SignedData *);
+struct signed_data {
+	ANY_t *encoded;
+	struct SignedData *decoded;
+};
+
+int signed_data_decode(struct signed_data *, ANY_t *);
+int signed_data_validate(struct signed_data *, struct signed_object_args *);
+void signed_data_cleanup(struct signed_data *);
 
 int get_content_type_attr(struct SignedData *, OBJECT_IDENTIFIER_t **);
 
