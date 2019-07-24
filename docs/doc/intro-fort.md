@@ -33,7 +33,7 @@ Further information can be found in the subsections below.
 | [7730](https://tools.ietf.org/html/rfc7730) (TALs)                         | 100%        |
 | [7935](https://tools.ietf.org/html/rfc7935) (RPKI algorithms)              | 100%        |
 | [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 0%          |
-| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 0%          |
+| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 100%        |
 | [8360](https://tools.ietf.org/html/rfc8360) (Validation Reconsidered)      | 100%        |
 
 ### RFC 6350 (vCard)

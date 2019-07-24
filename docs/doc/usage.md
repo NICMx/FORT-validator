@@ -27,16 +27,20 @@ command: fort
 	10. [`--server.address`](#--serveraddress)
 	11. [`--server.port`](#--serverport)
 	12. [`--server.backlog`](#--serverbacklog)
-	13. [`--server.validation-interval`](#--servervalidation-interval)
-	14. [`--slurm`](#--slurm)
-	15. [`--log.color-output`](#--logcolor-output)
-	16. [`--log.file-name-format`](#--logfile-name-format)
-	17. [`--output.roa`](#--outputroa)
-	18. [`--configuration-file`](#--configuration-file)
-	19. [`rsync.program`](#rsyncprogram)
-	20. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	21. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	22. [`incidences`](#incidences)
+	13. [`--server.interval.validation`](#--serverintervalvalidation)
+	14. [`--server.interval.refresh`](#--serverintervalrefresh)
+	15. [`--server.interval.retry`](#--serverintervalretry)
+	16. [`--server.interval.expire`](#--serverintervalexpire)
+	17. [`--slurm`](#--slurm)
+	18. [`--log.color-output`](#--logcolor-output)
+	19. [`--log.file-name-format`](#--logfile-name-format)
+	20. [`--output.roa`](#--outputroa)
+	21. [`--output.bgpsec`](#--outputbgpsec)
+	22. [`--configuration-file`](#--configuration-file)
+	23. [`rsync.program`](#rsyncprogram)
+	24. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	25. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	26. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -55,11 +59,15 @@ command: fort
         [--server.address=<string>]
         [--server.port=<string>]
         [--server.backlog=<unsigned integer>]
-        [--server.validation-interval=<unsigned integer>]
+        [--server.interval.validation=<unsigned integer>]
+        [--server.interval.refresh=<unsigned integer>]
+        [--server.interval.retry=<unsigned integer>]
+        [--server.interval.expire=<unsigned integer>]
         [--slurm=<file>|<directory>]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
         [--output.roa=<file>]
+        [--output.bgpsec=<file>]
 ```
 
 If an argument is declared more than once, the last one takes precedence:
@@ -93,7 +101,9 @@ Usage: {{ page.command }}
         [--log.file-name-format=global-url|local-path|file-name]
             (File name variant to print during debug/error messages)
         [--output.roa=<file>]
-            (File where the valid ROAs will be dumped.)
+            (File where ROAs will be stored in CSV format, use '-' to print at console.)
+        [--output.bgpsec=<file>]
+            (File where BGPsec Router Keys will be stored in CSV format, use '-' to print at console.)
 {% endhighlight %}
 
 The slightly larger usage message is `man {{ page.command }}` and the large usage message is this documentation.
@@ -114,6 +124,7 @@ Usage: {{ page.command }}
 	...
         [--log.file-name-format=global-url|local-path|file-name]
         [--output.roa=<file>]
+        [--output.bgpsec=<file>]
 {% endhighlight %}
 
 ### `--version`
@@ -249,7 +260,7 @@ Fort's tree traversal is actually iterative (not recursive), so there should be 
 - **Default:** `server`
 
 Run mode, commands the way Fort executes the validation. The two possible values and its behavior are:
-- `server`: Enables the RTR server using the `server.*` arguments ([`server.address`](#--serveraddress), [`server.port`](#--serverport), [`server.backlog`](#--serverbacklog), [`server.validation-interval`](#--servervalidation-interval)).
+- `server`: Enables the RTR server using the `server.*` arguments ([`server.address`](#--serveraddress), [`server.port`](#--serverport), [`server.backlog`](#--serverbacklog), [`server.interval.validation`](#--serverintervalvalidation), [`server.interval.refresh`](#--serverintervalrefresh), [`server.interval.retry`](#--serverintervalretry), [`server.interval.expire`](#--serverintervalexpire)).
 - `standalone`:  Disables the RTR server, the `server.*` arguments are ignored, and Fort performs an in-place standalone RPKI validation.
 
 ### `--server.address`
@@ -287,7 +298,7 @@ RTR server's listen queue length. It is the second argument of [`listen()`](http
 
 See the corresponding manual page from your operating system (likely `man 2 listen`) for specific implementation details.
 
-### `--server.validation-interval`
+### `--server.interval.validation`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
@@ -299,6 +310,45 @@ Number of seconds the server will sleep between validation cycles.
 The timer starts counting every time a validation is finished, not every time it begins. The actual validation loop is, therefore, longer than this number.
 
 "Validation cycle" includes the rsync update along with the validation operation. Because you are taxing the global repositories every time the validator performs an rsync, it is recommended not to reduce the validation interval to the point you might be contributing to DoS'ing the global repository. The minimum value (60) was taken from the [RRDP RFC](https://tools.ietf.org/html/rfc8182#section-3.1), which means it's not necessarily a good value for heavy rsyncs.
+
+### `--server.interval.refresh`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 3600
+- **Range:** 1--86400
+
+Number of seconds that a router should wait before the next attempt to poll FORT using either a Serial Query PDU or Reset Query PDU.
+
+Countdown for this timer starts upon receipt of an End Of Data PDU (this should be administered by the client).
+
+This value is utilized only on RTR version 1 sessions (more information at [RFC 8210 section 6](https://tools.ietf.org/html/rfc8210#section-6)).
+
+### `--server.interval.retry`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 600
+- **Range:** 1--7200
+
+Number of seconds that a router should wait before retrying a failed Serial Query PDU or Reset Query PDU.
+
+Countdown for this timer starts upon failure of the query and restarts after each subsequent failure until a query succeeds (this should be administered by the client).
+
+This value is utilized only on RTR version 1 sessions (more information at [RFC 8210 section 6](https://tools.ietf.org/html/rfc8210#section-6)).
+
+### `--server.interval.expire`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 7200
+- **Range:** 600--172800
+
+Number of seconds that a router can retain the current version of data while unable to perform a successful subsequent query.
+
+Countdown for this timer starts upon receipt of an End Of Data PDU (this should be administered by the client).
+
+This value is utilized only on RTR version 1 sessions (more information at [RFC 8210 section 6](https://tools.ietf.org/html/rfc8210#section-6)).
 
 ### `--slurm`
 
@@ -359,9 +409,26 @@ ERR: baz.cer: Certificate validation failed: certificate has expired
 
 File where the ROAs will be stored in CSV format.
 
-When the file is specified, its content will be removed to store the ROAs; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the ROAs will be printed every [`--server.validation-interval`](#--servervalidation-interval) secs.
+When the file is specified, its content will be removed to store the ROAs; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
+
+Each line of the result is printed in the following order: _AS, Prefix, Max prefix length_; the first line contains those column descriptors.
 
 If a value isn't specified, then the ROAs aren't printed.
+
+### `--output.bgpsec`
+
+- **Type:** String (Path to file)
+- **Availability:** `argv` and JSON
+
+File where the BGPsec Router Keys will be stored in CSV format.
+
+Since most of the data is binary (Subject Key Identifier and Subject Public Key Info), such data is base64url encoded without trailing pads.
+
+When the file is specified, its content will be removed to store the Router Keys; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
+
+Each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_; the first line contains those column descriptors.
+
+If a value isn't specified, then the BGPsec Router Keys aren't printed.
 
 ### `--configuration-file`
 
@@ -384,7 +451,12 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--serveraddress">address</a>": "192.0.2.1",
 		"<a href="#--serverport">port</a>": "8323",
 		"<a href="#--serverbacklog">backlog</a>": 16,
-		"<a href="#--servervalidation-interval">validation-interval</a>": 120
+		"interval": {
+			"<a href="#--serverintervalvalidation">validation</a>": 3600,
+			"<a href="#--serverintervalrefresh">refresh</a>": 3600,
+			"<a href="#--serverintervalretry">retry</a>": 600,
+			"<a href="#--serverintervalexpire">expire</a>": 7200
+		}
 	},
 
 	"log": {
@@ -416,7 +488,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	],
 
 	"output": {
-		"<a href="#--outputroa">roa</a>": "/tmp/fort_roas.csv"
+		"<a href="#--outputroa">roa</a>": "/tmp/fort_roas.csv",
+		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort_bgpsec.csv"
 	}
 }
 </code></pre>

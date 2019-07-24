@@ -245,13 +245,19 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
 		    server.interval.refresh),
-		.doc = "Interval between normal cache polls", // TODO
+		.doc = "Interval between normal cache polls",
 		/*
-		 * RFC 6810 and 8210:
-		 * "The cache MUST rate-limit Serial Notifies to no more
-		 * frequently than one per minute."
-		 * We do this by not getting new information more than once per
-		 * minute.
+		 * RFC 8210: "Interval between normal cache polls".
+		 * Min, max, and default values taken from RFC 8210 section 6.
+		 *
+		 * RFC mentions "router SHOULD NOT poll the cache sooner than
+		 * indicated by this parameter", but what if this is ignored by
+		 * the router? There's no proper error message to notice the
+		 * client about its error without dropping the connection (I
+		 * don't think that 'No Data Available' is the right option).
+		 *
+		 * So, let the operator configure this option hoping that
+		 * clients honor the interval.
 		 */
 		.min = 1,
 		.max = 86400,
@@ -261,13 +267,11 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
 		    server.interval.retry),
-		.doc = "Interval between cache poll retries after a failed cache poll", // TODO
+		.doc = "Interval between cache poll retries after a failed cache poll",
 		/*
-		 * RFC 6810 and 8210:
-		 * "The cache MUST rate-limit Serial Notifies to no more
-		 * frequently than one per minute."
-		 * We do this by not getting new information more than once per
-		 * minute.
+		 * RFC 8210: "Interval between cache poll retries after a
+		 * failed cache poll"
+		 * Min, max, and default values taken from RFC 8210 section 6.
 		 */
 		.min = 1,
 		.max = 7200,
@@ -277,13 +281,12 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
 		    server.interval.expire),
-		.doc = "Interval during which data fetched from a cache remains valid in the absence of a successful subsequent cache poll", // TODO
+		.doc = "Interval during which data fetched from a cache remains valid in the absence of a successful subsequent cache poll",
 		/*
-		 * RFC 6810 and 8210:
-		 * "The cache MUST rate-limit Serial Notifies to no more
-		 * frequently than one per minute."
-		 * We do this by not getting new information more than once per
-		 * minute.
+		 * RFC 8210: "Interval during which data fetched from a cache
+		 * remains valid in the absence of a successful subsequent
+		 * cache poll"
+		 * Min, max, and default values taken from RFC 8210 section 6.
 		 */
 		.min = 600,
 		.max = 172800,
@@ -352,7 +355,7 @@ static const struct option_field options[] = {
 		.name = "output.bgpsec",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, output.bgpsec),
-		.doc = "File where BGPsec certificates will be stored in CSV format, use '-' to print at console",
+		.doc = "File where BGPsec Router Keys will be stored in CSV format, use '-' to print at console",
 		.arg_doc = "<file>",
 	},
 
