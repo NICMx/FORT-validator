@@ -86,6 +86,7 @@ src/stamp-h1
 *.rar
 *.tar
 *.zip
+*.asc
 
 # Check Framework
 *.test
