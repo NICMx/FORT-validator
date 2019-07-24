@@ -10,9 +10,6 @@
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/SignatureValue.h"
 
-/* Certificate is valid but is revoked */
-#define EREVOKED		8100
-
 int certificate_load(struct rpki_uri *, X509 **);
 
 /**
