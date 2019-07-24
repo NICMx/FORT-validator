@@ -15,7 +15,6 @@
 #include "asn1/oid.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "crypto/hash.h"
-#include "object/crl.h"
 #include "object/name.h"
 #include "object/manifest.h"
 #include "rsync/rsync.h"
@@ -580,24 +579,6 @@ end:
 	return error;
 }
 
-static bool
-cert_revoked(ASN1_INTEGER *serialNumber, X509_CRL *crl)
-{
-	STACK_OF(X509_REVOKED) *revoked;
-	X509_REVOKED *item;
-	int index;
-
-	revoked = X509_CRL_get_REVOKED(crl);
-	for (index = 0; index < sk_X509_REVOKED_num(revoked); index++) {
-		item = sk_X509_REVOKED_value(revoked, index);
-		if (ASN1_INTEGER_cmp(X509_REVOKED_get0_serialNumber(item),
-		    serialNumber) == 0)
-			return true;
-	}
-
-	return false;
-}
-
 int
 certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 {
@@ -630,21 +611,7 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 
 	X509_STORE_CTX_trusted_stack(ctx,
 	    certstack_get_x509s(validation_certstack(state)));
-
-	/*
-	 * The function 'X509_STORE_CTX_set0_crls' could be used with a
-	 * 'X509_VERIFY_PARAM' of 'X509_V_FLAG_CRL_CHECK', but this didn't
-	 * worked as expected.
-	 * 
-	 * Instead of that, fetch the last CRL (father's) and check revoked
-	 * serials "manually".
-	 */
-	if (sk_X509_CRL_num(crls) > 0 &&
-	    cert_revoked(X509_get_serialNumber(cert),
-	    sk_X509_CRL_value(crls, sk_X509_CRL_num(crls) - 1))) {
-		pr_err("Certificate validation failed: certificate is revoked");
-		goto abort;
-	}
+	X509_STORE_CTX_set0_crls(ctx, crls);
 
 	/*
 	 * HERE'S THE MEAT OF LIBCRYPTO'S VALIDATION.
@@ -683,35 +650,6 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 abort:
 	X509_STORE_CTX_free(ctx);
 	return -EINVAL;
-}
-
-/*
- * Load the CRL at CRLDP @refs and check if @cert is revoked there
- */
-int
-certificate_revoked_at_crldp(X509 *cert, struct certificate_refs *refs)
-{
-	X509_CRL *crl;
-	struct rpki_uri *uri;
-	int error;
-
-	error = uri_create_str(&uri, refs->crldp, strlen(refs->crldp));
-	if (error)
-		return error;
-
-	error = crl_load(uri, &crl);
-	if (error)
-		goto release_uri;
-
-	/* Everything OK so far, error 0 is valid */
-	if (cert_revoked(X509_get_serialNumber(cert), crl)) {
-		error = pr_err("Certificate validation failed: certificate is revoked at CRL");
-	}
-
-	X509_CRL_free(crl);
-release_uri:
-	uri_refput(uri);
-	return error;
 }
 
 static int

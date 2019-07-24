@@ -45,8 +45,6 @@ int certificate_get_resources(X509 *, struct resources *);
 int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
     struct certificate_refs *, enum rpki_policy *);
 
-int certificate_revoked_at_crldp(X509 *cert, struct certificate_refs *refs);
-
 int certificate_traverse(struct rpp *, struct rpki_uri *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

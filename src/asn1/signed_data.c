@@ -24,8 +24,7 @@ int
 signed_object_args_init(struct signed_object_args *args,
     struct rpki_uri *uri,
     STACK_OF(X509_CRL) *crls,
-    bool force_inherit,
-    bool use_crldp)
+    bool force_inherit)
 {
 	args->res = resources_create(force_inherit);
 	if (args->res == NULL)
@@ -33,7 +32,6 @@ signed_object_args_init(struct signed_object_args *args,
 
 	args->uri = uri;
 	args->crls = crls;
-	args->use_crldp = use_crldp;
 	memset(&args->refs, 0, sizeof(args->refs));
 	return 0;
 }
@@ -65,7 +63,6 @@ static int
 handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
     OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
-	STACK_OF(X509_CRL) *crls;
 	const unsigned char *tmp;
 	X509 *cert;
 	enum rpki_policy policy;
@@ -93,44 +90,25 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 		goto end1;
 	}
 
-	crls = args->crls;
-	if (args->use_crldp) {
-		crls = sk_X509_CRL_new_null();
-		if (crls == NULL) {
-			error = pr_enomem();
-			goto end2;
-		}
-	}
-
-	error = certificate_validate_chain(cert, crls);
+	error = certificate_validate_chain(cert, args->crls);
 	if (error)
-		goto end3;
+		goto end2;
 	error = certificate_validate_rfc6487(cert, false);
 	if (error)
-		goto end3;
+		goto end2;
 	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
 	    &policy);
 	if (error)
-		goto end3;
+		goto end2;
 	error = certificate_validate_signature(cert, signedData, signature);
 	if (error)
-		goto end3;
-
-	/* Validate in CRL at CRLDP */
-	if (args->use_crldp) {
-		error = certificate_revoked_at_crldp(cert, &args->refs);
-		if (error)
-			goto end3;
-	}
+		goto end2;
 
 	resources_set_policy(args->res, policy);
 	error = certificate_get_resources(cert, args->res);
 	if (error)
-		goto end3;
+		goto end2;
 
-end3:
-	if (args->use_crldp)
-		sk_X509_CRL_free(crls);
 end2:
 	X509_free(cert);
 end1:
