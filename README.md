@@ -12,6 +12,8 @@ Dependencies:
 2. [jansson](https://github.com/akheron/jansson)
 3. [rsync](http://rsync.samba.org/)
 
+The validator is currently supported in *64-bit* OS. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling dates at certificates.
+
 After all the dependencies are installed, run:
 
 ```

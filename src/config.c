@@ -9,6 +9,7 @@
 
 #include "common.h"
 #include "configure_ac.h"
+#include "file.h"
 #include "json_handler.h"
 #include "log.h"
 #include "config/boolean.h"
@@ -182,7 +183,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config,
 		    maximum_certificate_depth),
 		.doc = "Maximum allowable certificate chain length",
-		.min = 1,
+		.min = 5,
 		/**
 		 * It cannot be UINT_MAX, because then the actual number will
 		 * overflow and will never be bigger than this.
@@ -519,9 +520,19 @@ revert_port:
 	return error;
 }
 
+static bool
+valid_output_file(char const *path)
+{
+	return strcmp(path, "-") == 0 || file_valid(path);
+}
+
 static int
 validate_config(void)
 {
+	if (rpki_config.output.roa != NULL &&
+	    !valid_output_file(rpki_config.output.roa))
+		return pr_err("Invalid output.roa file.");
+
 	return (rpki_config.tal != NULL)
 	    ? 0
 	    : pr_err("The TAL file/directory (--tal) is mandatory.");

@@ -179,6 +179,8 @@ copy.
 .P
 Because rsync uses delta encoding, you’re advised to keep this cache around. It
 significantly speeds up subsequent validation cycles.
+.P
+By default, the path is \fI/tmp/fort/repository\fR.
 .RE
 .P
 
@@ -279,7 +281,7 @@ that yields a successful traversal.
 Maximum allowable certificate chain length. Meant to protect FORT from
 iterating infinitely due to certificate chain loops.
 .P
-By default, it has a value of \fI32\fR.
+By default, it has a value of \fI32\fR. The minimum allowed value is 5.
 .P
 (Required to prevent loops and "other degenerate forms of the logical RPKI
 hierarchy." (RFC 6481))
@@ -462,8 +464,8 @@ to a specific value:
 .nf
 
 {
-  "tal": "/tmp/tal/",
-  "local-repository": "/tmp/repository",
+  "tal": "/tmp/fort/tal/",
+  "local-repository": "/tmp/fort/repository",
   "sync-strategy": "root",
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
@@ -504,7 +506,7 @@ to a specific value:
     }
   ],
   "output": {
-    "roa": "/tmp/roas.csv"
+    "roa": "/tmp/fort/roas.csv"
   }
 }
 .fi

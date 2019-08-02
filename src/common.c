@@ -86,7 +86,7 @@ close_thread(pthread_t thread, char const *what)
 
 static int
 process_file(char const *dir_name, char const *file_name, char const *file_ext,
-    process_file_cb cb, void *arg)
+    int *fcount, process_file_cb cb, void *arg)
 {
 	char *ext, *fullpath, *tmp;
 	int error;
@@ -97,6 +97,8 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 		if (ext == NULL || strcmp(ext, file_ext) != 0)
 			return 0;
 	}
+
+	(*fcount)++; /* Increment the found count */
 
 	/* Get the full file path */
 	tmp = strdup(dir_name);
@@ -129,7 +131,7 @@ process_dir_files(char const *location, char const *file_ext,
 {
 	DIR *dir_loc;
 	struct dirent *dir_ent;
-	int error;
+	int found, error;
 
 	dir_loc = opendir(location);
 	if (dir_loc == NULL) {
@@ -138,9 +140,10 @@ process_dir_files(char const *location, char const *file_ext,
 	}
 
 	errno = 0;
+	found = 0;
 	while ((dir_ent = readdir(dir_loc)) != NULL) {
-		error = process_file(location, dir_ent->d_name, file_ext, cb,
-		    arg);
+		error = process_file(location, dir_ent->d_name, file_ext,
+		    &found, cb, arg);
 		if (error) {
 			pr_err("The error was at file %s", dir_ent->d_name);
 			goto close_dir;
@@ -151,6 +154,9 @@ process_dir_files(char const *location, char const *file_ext,
 		pr_err("Error reading dir %s", location);
 		error = -errno;
 	}
+	if (!error && found == 0)
+		pr_warn("Location '%s' doesn't have files with extension '%s'",
+		    location, file_ext);
 close_dir:
 	closedir(dir_loc);
 end:

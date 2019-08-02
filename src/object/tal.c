@@ -389,7 +389,8 @@ do_file_validation(char const *tal_file, void *arg)
 		error = pr_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    tal_file);
 
-end:	tal_destroy(tal);
+	tal_destroy(tal);
+end:
 	fnstack_pop();
 	return error;
 }

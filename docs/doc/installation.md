@@ -25,6 +25,8 @@ The dependencies are
 2. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
 3. [rsync](http://rsync.samba.org/)
 
+Fort is currently supported in *64-bit* OS. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling dates at certificates, and currently there's no work around for this.
+
 ## Option 1: Installing the Debian package
 
 > TODO Upload to Debian, add more archs

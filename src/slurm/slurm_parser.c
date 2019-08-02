@@ -431,15 +431,15 @@ load_prefix_array(json_t *array, bool is_assertion)
 		if (error) {
 			if (error == -EEXIST)
 				pr_err(
-				    "The prefix %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
+				    "The prefix %s element \"%s\", is duplicated or covered by another %s; SLURM loading will be stopped",
 				    (is_assertion ? "assertion" : "filter"),
-				    index + 1,
+				    json_dumps(element, 0),
 				    (is_assertion ? "assertion" : "filter"));
 			else
 				pr_err(
-				    "Error at prefix %s, element #%d, SLURM loading will be stopped",
+				    "Error at prefix %s, element \"%s\", SLURM loading will be stopped",
 				    (is_assertion ? "assertions" : "filters"),
-				    index + 1);
+				    json_dumps(element, 0));
 
 			return error;
 		}
@@ -555,15 +555,15 @@ load_bgpsec_array(json_t *array, bool is_assertion)
 		if (error) {
 			if (error == -EEXIST)
 				pr_err(
-				    "The bgpsec %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
+				    "The bgpsec %s element \"%s\", is duplicated or covered by another %s; SLURM loading will be stopped",
 				    (is_assertion ? "assertion" : "filter"),
-				    index + 1,
+				    json_dumps(element, 0),
 				    (is_assertion ? "assertion" : "filter"));
 			else
 				pr_err(
-				    "Error at bgpsec %s, element #%d, SLURM loading will be stopped",
+				    "Error at bgpsec %s, element \"%s\", SLURM loading will be stopped",
 				    (is_assertion ? "assertions" : "filters"),
-				    index + 1);
+				    json_dumps(element, 0));
 
 			return error;
 		}
