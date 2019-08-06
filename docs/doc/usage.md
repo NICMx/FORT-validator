@@ -411,7 +411,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 
 	"<a href="#incidences">incidences</a>": [
 		{
-			"name": "Signed Object's hash algorithm has NULL object as parameters",
+			"name": "incid-hashalg-has-params",
 			"action": "ignore"
 		}
 	],

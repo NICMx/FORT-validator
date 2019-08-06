@@ -118,7 +118,7 @@ of objects, each with two members "name" and "action", eg:
 .RS 2
 {
 .RS 2
-"name": "Signed Object's hash algorithm has NULL object as parameters",
+"name": "incid-hashalg-has-params",
 .br
 "action": "warn"
 .RE
@@ -144,9 +144,10 @@ nothing happened.
 happened.
 .RE
 .P
-By default, all the incidences have an action of \fIerror\fR. Currently there's
+By default, all the incidences have an action of \fIignore\fR. Currently there's
 only one registered incidence:
-\fISigned Object's hash algorithm has NULL object as parameters\fR.
+\fIincid-hashalg-has-params\fR (Signed Object's hash algorithm has NULL object
+as parameters).
 .P
 More information about incidences can be consulted at FORT's web docs.
 .RE
@@ -174,8 +175,8 @@ and/or read.
 Right now, FORT accesses RPKI repositories by way of \fIrsync\fR. During each
 validation cycle, FORT will literally invoke an rsync command (see
 \fBrsync.program\fR and \fBrsync.arguments-recursive\fR), which will download
-the files into \fB--local-repository\fR. FORT’s validation operates on the resulting
-copy.
+the files into \fB--local-repository\fR. FORT’s validation operates on the
+resulting copy.
 .P
 Because rsync uses delta encoding, you’re advised to keep this cache around. It
 significantly speeds up subsequent validation cycles.
@@ -501,7 +502,7 @@ to a specific value:
   },
   "incidences": [
     {
-      "name": "Signed Object's hash algorithm has NULL object as parameters",
+      "name": "incid-hashalg-has-params",
       "action": "ignore"
     }
   ],

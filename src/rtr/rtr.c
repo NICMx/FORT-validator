@@ -32,7 +32,9 @@ init_addrinfo(struct addrinfo **result)
 {
 	char const *hostname;
 	char const *service;
+	char *tmp;
 	struct addrinfo hints;
+	unsigned long parsed, port;
 	int error;
 
 	memset(&hints, 0 , sizeof(hints));
@@ -51,6 +53,26 @@ init_addrinfo(struct addrinfo **result)
 		    gai_strerror(error));
 		return error;
 	}
+
+	errno = 0;
+	parsed = strtoul(service, &tmp, 10);
+	if (errno || *tmp != '\0')
+		return 0; /* Ok, not a number */
+
+	/*
+	 * 'getaddrinfo' isn't very strict validating the service when a port
+	 * number is indicated. If a port larger than the max (65535) is
+	 * received, the 16 rightmost bits are utilized as the port and set at
+	 * the addrinfo returned.
+	 *
+	 * So, a manual validation is implemented. Port is actually a uint16_t,
+	 * so read what's necessary and compare using the same data type.
+	 */
+	port = (unsigned char)((*result)->ai_addr->sa_data[0]) << 8;
+	port += (unsigned char)((*result)->ai_addr->sa_data[1]);
+	if (parsed != port)
+		return pr_err("Service port %s is out of range (max value is %d)",
+		    service, USHRT_MAX);
 
 	return 0;
 }
