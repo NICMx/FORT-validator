@@ -1472,13 +1472,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_uri_and_refs;
 
-	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	error = x509stack_push(validation_certstack(state), cert_uri, cert,
-	    policy, IS_TA);
-	if (error)
-		goto revert_uri_and_refs;
-	cert = NULL; /* Ownership stolen */
-
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents
 	 * are updated, a repository operator cannot assure RPs that the
@@ -1490,6 +1483,16 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 */
 	mft_retry = true;
 	do {
+		/* Validate the manifest (@mft) pointed by the certificate */
+		error = x509stack_push(validation_certstack(state), cert_uri,
+		    cert, policy, IS_TA);
+		if (error) {
+			if (!mft_retry)
+				uri_refput(mft);
+			goto revert_uri_and_refs;
+		}
+		cert = NULL; /* Ownership stolen */
+
 		error = handle_manifest(mft, &pp);
 		if (!mft_retry)
 			uri_refput(mft);
@@ -1501,6 +1504,13 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		error = download_files(caRepository, false, true);
 		if (error)
 			break;
+
+		/* Cancel stack, reload certificate (no need to revalidate) */
+		x509stack_cancel(validation_certstack(state));
+		error = certificate_load(cert_uri, &cert);
+		if (error) {
+			goto revert_uri_and_refs;
+		}
 		uri_refget(mft);
 		mft_retry = false;
 	} while (true);
