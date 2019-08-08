@@ -8,7 +8,7 @@ An RPKI Validator and RTR Server.
 
 Dependencies:
 
-1. libcrypto ([LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/))
+1. libcrypto ([LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/) >= 1.1)
 2. [jansson](https://github.com/akheron/jansson)
 3. [rsync](http://rsync.samba.org/)
 
