@@ -14,11 +14,15 @@ title: Compilation and Installation
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
 	3. [CentOS version](#centos-version)
+	4. [Fedora version](#fedora-version)
+	5. [openSUSE Leap version](#opensuse-leap-version)
+	6. [FreeBSD version](#freebsd-version)
+	7. [Slackware version](#slackware-version)
 4. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
 
 ## Dependencies
 
-> Note: I'm only including this section in case you intend to install Fort in an unlisted OS (and therefore need a little research). For Debians, OpenBSD and CentOS, just follow the steps in the sections below.
+> Note: I'm only including this section in case you intend to install Fort in an unlisted OS (and therefore need a little research). For: Debians, OpenBSD, CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
 
 The dependencies are
 
@@ -83,6 +87,8 @@ exit
 
 ### CentOS version
 
+The following steps are for CentOS 7, previous versions may require more steps to install Fort validator.
+
 This OS requires additional steps due to its GCC supported version (currently 4.8.5, fort needs >= 4.9 to compile) and default OpenSSL version (currently 1.0.2k, fort needs >= 1.1.0).
 
 **Install dependencies**
@@ -117,11 +123,11 @@ There are two options to upgrade GCC:
 
 {% highlight bash %}
 sudo yum install centos-release-scl
-sudo yum install devtoolset-3-gcc
+sudo yum install devtoolset-7-gcc
 # Start a session using the upgraded GCC
-scl enable devtoolset-3 bash
+scl enable devtoolset-7 bash
 cd ~
-curl -L https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz > fort-{{ site.fort-latest-version }}.tar.gz
+curl -L https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz --output fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}
 ./configure
@@ -131,7 +137,75 @@ sudo make install
 exit
 {% endhighlight %}
 
+### Fedora version
+
+The following steps are for Fedora 30.
+
+{% highlight bash %}
+sudo yum install autoconf automake gcc make openssl-devel jansson-devel
+
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
+make
+sudo make install
+{% endhighlight %}
+
+### openSUSE Leap version
+
+The following steps are for openSUSE Leap 15.1.
+
+{% highlight bash %}
+sudo zypper install autoconf automake gcc libopenssl-devel libjansson-devel
+
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
+make
+sudo make install
+{% endhighlight %}
+
+### FreeBSD version
+
+The following steps are for FreeBSD 12.0.
+
+{% highlight bash %}
+su
+pkg install autoconf automake gcc jansson pkgconf rsync
+exit
+
+curl -L https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz --output fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
+make
+su
+make install
+exit
+{% endhighlight %}
+
+### Slackware version
+
+The following steps are for Slackware 14.2.
+
+All dependencies are included in the current release, so there's no need to install any dependency.
+
+{% highlight bash %}
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
+make
+sudo make install
+{% endhighlight %}
+
 ## Option 3: Compiling and installing the git repository
+
+In case you wan't a fresh version of Fort validator, there's this third option. The steps are mostly the same as in [Option 2](#option-2-compiling-and-installing-the-release-tarball), just another dependency (as minimum) must be installed: "git"; and a few steps are included in order to get the source code and generate configuration scripts.
+
+The following example is the processo to clone, compile and install in Debian OS.
 
 {% highlight bash %}
 sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync
