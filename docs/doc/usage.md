@@ -125,7 +125,7 @@ Prints program version.
 
 {% highlight bash %}
 $ {{ page.command }} --version
-fort 0.0.1
+fort {{ site.fort-latest-version }}
 {% endhighlight %}
 
 ### `--tal`

@@ -93,6 +93,8 @@ This OS requires additional steps due to its GCC supported version (currently 4.
 
 **Install dependencies**
 
+OpenSSL devel (openssl-devel) package isn't necessary, if it's previously installed remove it to avoid future conflicts with newer OpenSSL versions.
+
 {% highlight bash %}
 sudo yum install autoconf automake git jansson-devel pkgconfig rsync
 # Install supported GCC to compile OpenSSL
@@ -111,6 +113,7 @@ make
 sudo make install
 # Update library files
 sudo mv libcrypto.so.1.1 libssl.so.1.1 /usr/lib64/
+sudo ln -sfn /usr/local/bin/openssl /usr/bin/openssl
 # Verify installed version
 openssl version
 {% endhighlight %}
