@@ -188,7 +188,7 @@ exit
 
 ### Slackware version
 
-The following steps are for Slackware 14.2.
+The following steps are for Slackware "current" release (as of 2019-08-12).
 
 All dependencies are included in the current release, so there's no need to install any dependency.
 
