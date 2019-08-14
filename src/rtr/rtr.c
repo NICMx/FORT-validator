@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <netdb.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,8 +17,6 @@
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 #include "rtr/db/vrps.h"
-
-struct sigaction act;
 
 struct thread_param {
 	int fd;
@@ -329,30 +326,6 @@ handle_client_connections(int server_fd)
 	return 0; /* Unreachable. */
 }
 
-static void
-signal_handler(int signal, siginfo_t *info, void *param)
-{
-	/* Empty handler */
-}
-
-static int
-init_signal_handler(void)
-{
-	int error;
-
-	memset(&act, 0, sizeof act);
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = SA_SIGINFO;
-	act.sa_sigaction = signal_handler;
-
-	error = sigaction(SIGINT, &act, NULL);
-	if (error) {
-		pr_errno(errno, "Error initializing signal handler");
-		error = -errno;
-	}
-	return error;
-}
-
 /*
  * Receive @arg to be called as a clients_foreach_cb
  */
@@ -392,10 +365,6 @@ rtr_listen(void)
 	bool changed;
 	int server_fd; /* "file descriptor" */
 	int error;
-
-	error = init_signal_handler();
-	if (error)
-		return error;
 
 	error = clients_db_init();
 	if (error)

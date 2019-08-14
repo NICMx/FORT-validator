@@ -304,6 +304,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	int child_status;
 	int error;
 
+	child_status = 0;
 	error = create_dir_recursive(uri);
 	if (error)
 		return error;
@@ -318,12 +319,16 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	/* This code is run by us. */
 
 	error = waitpid(child_pid, &child_status, 0);
-	if (error == -1) {
-		error = errno;
-		pr_err("The rsync sub-process returned error %d (%s)",
-		    error, strerror(error));
-		return error;
-	}
+	do {
+		if (error == -1) {
+			error = errno;
+			pr_err("The rsync sub-process returned error %d (%s)",
+			    error, strerror(error));
+			if (child_status > 0)
+				break;
+			return error;
+		}
+	} while (0);
 
 	if (WIFEXITED(child_status)) {
 		/* Happy path (but also sad path sometimes). */
@@ -347,11 +352,11 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 			pr_err("The RSYNC was terminated by a signal I don't have a handler for. Dunno; guess I'll just die.");
 			break;
 		}
-		exit(-EINTR); /* Meh? */
+		return -EINTR; /* Meh? */
 	}
 
 	pr_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
-	exit(-EINVAL);
+	return -EINVAL;
 }
 
 /**

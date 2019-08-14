@@ -21,6 +21,9 @@ check_vrps_updates(void *param_void)
 
 	do {
 		error = vrps_update(&changed);
+		if (error == -EINTR)
+			break; /* Process interrupted, terminate thread */
+
 		if (error) {
 			pr_err("Error code %d while trying to update the ROA database. Sleeping...",
 			    error);
