@@ -25,11 +25,13 @@ parse_argv_uint(struct option_field const *field, char const *str,
 	errno = 0;
 	parsed = strtoul(str, NULL, 10);
 	if (errno)
-		return pr_errno(errno, "'%s' is not an unsigned integer", str);
+		return pr_errno(errno,
+		    "Value '%s' at '%s' is not an unsigned integer", str,
+		    field->name);
 
 	if (parsed < field->min || field->max < parsed) {
-		return pr_err("'%lu' is out of bounds (%u-%u).", parsed,
-		    field->min, field->max);
+		return pr_err("Value '%lu' at '%s' is out of range (%u-%u).",
+		    parsed, field->name, field->min, field->max);
 	}
 
 	*((unsigned int *) result) = parsed;

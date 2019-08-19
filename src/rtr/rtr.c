@@ -86,6 +86,7 @@ create_server_socket(int *result)
 {
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
+	unsigned long port;
 	int fd; /* "file descriptor" */
 	int error;
 
@@ -112,7 +113,18 @@ create_server_socket(int *result)
 			continue;
 		}
 
-		printf("Success.\n");
+		error = getsockname(fd, addr->ai_addr, &addr->ai_addrlen);
+		if (error) {
+			close(fd);
+			freeaddrinfo(addrs);
+			return pr_errno(errno, "getsockname() failed");
+		}
+
+		port = (unsigned char)(addr->ai_addr->sa_data[0]) << 8;
+		port += (unsigned char)(addr->ai_addr->sa_data[1]);
+		printf("Success, bound to address '%s', port '%ld'.\n",
+		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
+		    port);
 		freeaddrinfo(addrs);
 		*result = fd;
 		return 0; /* Happy path */
