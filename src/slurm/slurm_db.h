@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "slurm/slurm_parser.h"
+#include "rtr/db/vrp.h"
 
 typedef int (*assertion_pfx_foreach_cb)(struct slurm_prefix *, void *);
 

@@ -38,12 +38,19 @@ slurm_db_init(void)
 }
 
 static bool
-prefix_filtered_by(struct slurm_prefix *filter, struct slurm_prefix *prefix)
+prefix_filtered_by(struct slurm_prefix *filter, struct slurm_prefix *prefix,
+    bool exact_match)
 {
 	struct vrp *filter_vrp, *prefix_vrp;
 
 	filter_vrp = &filter->vrp;
 	prefix_vrp = &prefix->vrp;
+
+	/* The filter has ASN and prefix */
+	if (exact_match && (filter->data_flag & ~SLURM_COM_FLAG_COMMENT) ==
+	    (SLURM_COM_FLAG_ASN | SLURM_PFX_FLAG_PREFIX))
+		return VRP_ASN_EQ(filter_vrp, prefix_vrp) &&
+		    VRP_PREFIX_COV(filter_vrp, prefix_vrp);
 
 	/* Both have ASN */
 	if ((filter->data_flag & SLURM_COM_FLAG_ASN) > 0 &&
@@ -53,7 +60,7 @@ prefix_filtered_by(struct slurm_prefix *filter, struct slurm_prefix *prefix)
 	/* Both have a prefix of the same type */
 	if ((filter->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
 	    (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
-		return VRP_PREFIX_EQ(filter_vrp, prefix_vrp);
+		return VRP_PREFIX_COV(filter_vrp, prefix_vrp);
 
 	return false;
 }
@@ -84,12 +91,16 @@ prefix_contained(struct slurm_prefix_ctx *left_ctx, struct slurm_prefix *right,
 
 	return (left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
 	    (right->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
-	    VRP_PREFIX_EQ(left_vrp, right_vrp);
+	    VRP_PREFIX_COV(left_vrp, right_vrp);
 }
 
+/*
+ * @left_ctx is the prefix loaded from SLURM, @right is the VRP "masked" as a
+ * slurm prefix
+ */
 static bool
 prefix_equal(struct slurm_prefix_ctx *left_ctx, struct slurm_prefix *right,
-    int ctx, bool filter)
+    int ctx, bool filter, bool exact_match)
 {
 	struct slurm_prefix *left;
 	struct vrp *left_vrp, *right_vrp;
@@ -102,30 +113,40 @@ prefix_equal(struct slurm_prefix_ctx *left_ctx, struct slurm_prefix *right,
 	if (prefix_contained(left_ctx, right, ctx))
 		return true;
 
-	/* Ignore the comments */
+	/*
+	 * Ignore the comments, remember: FILTERS don't have the same data (no
+	 * max_length is declared), while ASSERTIONS do.
+	 */
 	if ((left->data_flag & ~SLURM_COM_FLAG_COMMENT) !=
 	    (right->data_flag & ~SLURM_COM_FLAG_COMMENT))
-		return filter && prefix_filtered_by(left, right);
+		return filter && prefix_filtered_by(left, right, exact_match);
 
 	/* It has the same data, compare it */
 	equal = true;
-	if ((left->data_flag & SLURM_COM_FLAG_ASN) > 0)
-		equal = equal && VRP_ASN_EQ(left_vrp, right_vrp);
+	if (equal && (left->data_flag & SLURM_COM_FLAG_ASN) > 0)
+		equal = VRP_ASN_EQ(left_vrp, right_vrp);
 
-	if ((left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
-		equal = equal && VRP_PREFIX_EQ(left_vrp, right_vrp);
+	if (equal && (left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
+		equal = (filter ?
+		    VRP_PREFIX_COV(left_vrp, right_vrp) :
+		    VRP_PREFIX_EQ(left_vrp, right_vrp));
 
-	if ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
-		equal = equal &&
-		    ((left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0) &&
-		    VRP_MAX_PREFIX_LEN_EQ(left_vrp, right_vrp);
+	if (equal && (left->data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
+		equal = VRP_MAX_PREFIX_LEN_EQ(left_vrp, right_vrp);
 
 	return equal;
 }
 
 static bool
-bgpsec_filtered_by(struct slurm_bgpsec *bgpsec, struct slurm_bgpsec *filter)
+bgpsec_filtered_by(struct slurm_bgpsec *bgpsec, struct slurm_bgpsec *filter,
+    bool exact_match)
 {
+	/* The filter has ASN and SKI */
+	if (exact_match && (filter->data_flag & ~SLURM_COM_FLAG_COMMENT) ==
+	    (SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI))
+		return bgpsec->asn == filter->asn &&
+		    memcmp(bgpsec->ski, filter->ski, bgpsec->ski_len) == 0;
+
 	/* Both have ASN */
 	if ((bgpsec->data_flag & SLURM_COM_FLAG_ASN) > 0 &&
 	    (filter->data_flag & SLURM_COM_FLAG_ASN) > 0)
@@ -167,7 +188,7 @@ bgpsec_contained(struct slurm_bgpsec_ctx *left_ctx, struct slurm_bgpsec *right,
 
 static bool
 bgpsec_equal(struct slurm_bgpsec_ctx *left_ctx, struct slurm_bgpsec *right,
-    int ctx, bool filter)
+    int ctx, bool filter, bool exact_filter)
 {
 	struct slurm_bgpsec *left;
 	bool equal;
@@ -180,20 +201,19 @@ bgpsec_equal(struct slurm_bgpsec_ctx *left_ctx, struct slurm_bgpsec *right,
 	/* Ignore the comments */
 	if ((left->data_flag & ~SLURM_COM_FLAG_COMMENT) !=
 	    (right->data_flag & ~SLURM_COM_FLAG_COMMENT))
-		return filter && bgpsec_filtered_by(left, right);
+		return filter && bgpsec_filtered_by(left, right, exact_filter);
 
 	/* It has the same data, compare it */
 	equal = true;
-	if ((left->data_flag & SLURM_COM_FLAG_ASN) > 0)
-		equal = equal && left->asn == right->asn;
+	if (equal && (left->data_flag & SLURM_COM_FLAG_ASN) > 0)
+		equal = left->asn == right->asn;
 
-	if ((left->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
-		equal = equal && left->ski_len == right->ski_len &&
+	if (equal && (left->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
+		equal = left->ski_len == right->ski_len &&
 		    memcmp(left->ski, right->ski, left->ski_len) == 0;
 
-	if ((left->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0)
-		equal = equal &&
-		    left->router_public_key_len ==
+	if (equal && (left->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0)
+		equal = left->router_public_key_len ==
 		    right->router_public_key_len &&
 		    memcmp(left->router_public_key, right->router_public_key,
 		    left->router_public_key_len) == 0;
@@ -204,14 +224,17 @@ bgpsec_equal(struct slurm_bgpsec_ctx *left_ctx, struct slurm_bgpsec *right,
 #define ADD_FUNCS(name, type, list_name, db_list, db_alt_list, equal_cb,\
     cont_cb, filter)							\
 	static type *							\
-	name##_locate(type *obj, int ctx)				\
+	name##_locate(type *obj, bool flt, int ctx)			\
 	{								\
 		type##_ctx *cursor;					\
 		array_index i;						\
 									\
 		ARRAYLIST_FOREACH(db_list, cursor, i)			\
-			if (equal_cb(cursor, obj, ctx, filter))		\
+			if (equal_cb(cursor, obj, ctx, filter, flt))	\
 				return &cursor->element;		\
+									\
+		if (ctx < 0)						\
+			return NULL; /* Avoid the next loop */		\
 									\
 		ARRAYLIST_FOREACH(db_alt_list, cursor, i)		\
 			if (cont_cb(cursor, obj, ctx))			\
@@ -221,15 +244,16 @@ bgpsec_equal(struct slurm_bgpsec_ctx *left_ctx, struct slurm_bgpsec *right,
 	}								\
 									\
 	static bool							\
-	name##_exists(type *obj, int ctx)				\
+	name##_exists(type *obj, bool flt, int ctx)			\
 	{								\
-		return name##_locate(obj, ctx) != NULL;			\
+		return name##_locate(obj, flt, ctx) != NULL;		\
 	}								\
 									\
 	int								\
-	slurm_db_add_##name(type *elem, int ctx) {			\
+	slurm_db_add_##name(type *elem, int ctx)			\
+	{								\
 		type##_ctx new_elem;					\
-		if (name##_exists(elem, ctx))				\
+		if (name##_exists(elem, !filter, ctx))			\
 			return -EEXIST;					\
 		new_elem.element = *elem;				\
 		new_elem.ctx = ctx;					\
@@ -259,7 +283,7 @@ slurm_db_vrp_is_filtered(struct vrp const *vrp)
 	slurm_prefix.vrp = *vrp;
 	slurm_prefix.comment = NULL;
 
-	return prefix_filter_exists(&slurm_prefix, -1);
+	return prefix_filter_exists(&slurm_prefix, true, -1);
 }
 
 int
