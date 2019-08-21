@@ -132,24 +132,15 @@ void
 incidence_print(void)
 {
 	array_index i;
-	bool printed;
 
 	pr_info("Custom incidences:");
 	pr_indent_add();
 
-	printed = false;
-
 	for (i = 0; i < __INID_MAX; i++) {
-		if (incidences[i].action != incidences[i].default_action) {
-			pr_info("%s (%s): %s", incidences[i].name,
-			    incidences[i].description,
-			    action2str(incidences[i].action));
-			printed = true;
-		}
+		pr_info("%s (%s): %s", incidences[i].name,
+		    incidences[i].description,
+		    action2str(incidences[i].action));
 	}
-
-	if (!printed)
-		pr_info("<None>");
 
 	pr_indent_rm();
 }
