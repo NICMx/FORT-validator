@@ -34,7 +34,10 @@
 	if (element == NULL)						\
 		return pr_err("SLURM member '%s' is required", name);
 
-static int handle_json(json_t *);
+/* Context value, local to avoid forwarding the parameter */
+int cur_ctx;
+
+static int handle_json(json_t *, int *);
 
 int
 slurm_parse(char const *location, void *arg)
@@ -51,7 +54,7 @@ slurm_parse(char const *location, void *arg)
 		return -ENOENT;
 	}
 
-	error = handle_json(json_root);
+	error = handle_json(json_root, arg);
 
 	json_decref(json_root);
 	return error;
@@ -382,7 +385,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 			goto release_comment;
 		}
 
-		error = slurm_db_add_prefix_filter(&result);
+		error = slurm_db_add_prefix_filter(&result, cur_ctx);
 		if (error)
 			goto release_comment;
 
@@ -409,7 +412,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 		goto release_comment;
 	}
 
-	error = slurm_db_add_prefix_assertion(&result);
+	error = slurm_db_add_prefix_assertion(&result, cur_ctx);
 	if (error)
 		goto release_comment;
 
@@ -428,21 +431,24 @@ load_prefix_array(json_t *array, bool is_assertion)
 
 	json_array_foreach(array, index, element) {
 		error = load_single_prefix(element, is_assertion);
-		if (error) {
-			if (error == -EEXIST)
-				pr_err(
-				    "The prefix %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
-				    (is_assertion ? "assertion" : "filter"),
-				    index + 1,
-				    (is_assertion ? "assertion" : "filter"));
-			else
-				pr_err(
-				    "Error at prefix %s, element #%d, SLURM loading will be stopped",
-				    (is_assertion ? "assertions" : "filters"),
-				    index + 1);
+		if (!error)
+			continue;
+		if (error == -EEXIST)
+			pr_err(
+			    "The prefix %s element \"%s\", is duplicated or covered by another %s; SLURM loading will be stopped.%s",
+			    (is_assertion ? "assertion" : "filter"),
+			    json_dumps(element, 0),
+			    (is_assertion ? "assertion" : "filter"),
+			    (cur_ctx > 0
+			    ? " TIP: More than 1 SLURM files were found, check if the prefix is contained in multiple files (see RFC 8416 section 4.2)."
+			    : ""));
+		else
+			pr_err(
+			    "Error at prefix %s, element \"%s\", SLURM loading will be stopped",
+			    (is_assertion ? "assertions" : "filters"),
+			    json_dumps(element, 0));
 
-			return error;
-		}
+		return error;
 	}
 
 	return 0;
@@ -515,7 +521,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 			goto release_comment;
 		}
 
-		error = slurm_db_add_bgpsec_filter(&result);
+		error = slurm_db_add_bgpsec_filter(&result, cur_ctx);
 		if (error)
 			goto release_comment;
 
@@ -529,7 +535,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 		goto release_comment;
 	}
 
-	error = slurm_db_add_bgpsec_assertion(&result);
+	error = slurm_db_add_bgpsec_assertion(&result, cur_ctx);
 	if (error)
 		goto release_comment;
 
@@ -552,21 +558,24 @@ load_bgpsec_array(json_t *array, bool is_assertion)
 
 	json_array_foreach(array, index, element) {
 		error = load_single_bgpsec(element, is_assertion);
-		if (error) {
-			if (error == -EEXIST)
-				pr_err(
-				    "The bgpsec %s element #%d, is duplicated or covered by another %s; SLURM loading will be stopped",
-				    (is_assertion ? "assertion" : "filter"),
-				    index + 1,
-				    (is_assertion ? "assertion" : "filter"));
-			else
-				pr_err(
-				    "Error at bgpsec %s, element #%d, SLURM loading will be stopped",
-				    (is_assertion ? "assertions" : "filters"),
-				    index + 1);
+		if (!error)
+			continue;
+		if (error == -EEXIST)
+			pr_err(
+			    "The bgpsec %s element \"%s\", is duplicated or covered by another %s; SLURM loading will be stopped.%s",
+			    (is_assertion ? "assertion" : "filter"),
+			    json_dumps(element, 0),
+			    (is_assertion ? "assertion" : "filter"),
+			    (cur_ctx > 0
+			    ? " TIP: More than 1 SLURM files were found, check if the ASN is contained in multiple files (see RFC 8416 section 4.2)."
+			    : ""));
+		else
+			pr_err(
+			    "Error at bgpsec %s, element \"%s\", SLURM loading will be stopped",
+			    (is_assertion ? "assertions" : "filters"),
+			    json_dumps(element, 0));
 
-			return error;
-		}
+		return error;
 	}
 
 	return 0;
@@ -660,13 +669,15 @@ load_assertions(json_t *root)
 }
 
 static int
-handle_json(json_t *root)
+handle_json(json_t *root, int *ctx)
 {
 	size_t expected_members;
 	int error;
 
 	if (!json_is_object(root))
 		return pr_err("The root of the SLURM is not a JSON object.");
+
+	cur_ctx = *ctx;
 
 	error = load_version(root);
 	if (error)
@@ -685,6 +696,8 @@ handle_json(json_t *root)
 		return pr_err(
 		    "SLURM root must have only %lu members (RFC 8416 section 3.2)",
 		    expected_members);
+
+	(*ctx)++; /* Next time will be another context */
 
 	return 0;
 }

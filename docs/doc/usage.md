@@ -40,15 +40,13 @@ command: fort
 
 ## Syntax
 
-<!-- TODO: Update this -->
-
 ```
 {{ page.command }}
         [--help]
         [--usage]
         [--version]
         [--configuration-file=<file>]
-        [--tal=<file>]
+        [--tal=<file>|<directory>]
         [--local-repository=<directory>]
         [--sync-strategy=off|strict|root|root-except-ta]
         [--shuffle-uris]
@@ -58,7 +56,7 @@ command: fort
         [--server.port=<string>]
         [--server.backlog=<unsigned integer>]
         [--server.validation-interval=<unsigned integer>]
-        [--slurm=<string>]
+        [--slurm=<file>|<directory>]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
         [--output.roa=<file>]
@@ -127,7 +125,7 @@ Prints program version.
 
 {% highlight bash %}
 $ {{ page.command }} --version
-fort 0.0.1
+fort {{ site.fort-latest-version }}
 {% endhighlight %}
 
 ### `--tal`
@@ -239,6 +237,7 @@ Of course, this is only relevant if the TAL lists more than one URL.
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 32
+- **Range:** 5--([`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)--1)
 
 Maximum allowable RPKI tree height. Meant to protect Fort from iterating infinitely due to certificate chain loops.
 
@@ -294,7 +293,7 @@ See the corresponding manual page from your operating system (likely `man 2 list
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 3600
-- **Range:** 60--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/)
+- **Range:** 60--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 Number of seconds the server will sleep between validation cycles.
 
@@ -375,11 +374,11 @@ Path to a JSON file from which additional configuration will be read.
 The configuration options are mostly the same as the ones from the `argv` interface. (See the "Availability" metadata of each field.) Here's a full configuration file example:
 
 <pre><code>{
-	"<a href="#--tal">tal</a>": "/tmp/tal/test.tal",
-	"<a href="#--local-repository">local-repository</a>": "/tmp/repository",
+	"<a href="#--tal">tal</a>": "/tmp/fort/tal/test.tal",
+	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository",
 	"<a href="#--sync-strategy">sync-strategy</a>": "root",
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
-	"<a href="#--slurm">slurm</a>": "/tmp/test.slurm",
+	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
 	"<a href="#--mode">mode</a>": "server",
 
 	"server": {
@@ -412,13 +411,13 @@ The configuration options are mostly the same as the ones from the `argv` interf
 
 	"<a href="#incidences">incidences</a>": [
 		{
-			"name": "Signed Object's hash algorithm has NULL object as parameters",
+			"name": "incid-hashalg-has-params",
 			"action": "ignore"
 		}
 	],
 
 	"output": {
-		"<a href="#--outputroa">roa</a>": "/tmp/fort_roas.csv"
+		"<a href="#--outputroa">roa</a>": "/tmp/fort/roas.csv"
 	}
 }
 </code></pre>
@@ -439,25 +438,25 @@ $ cat a.json
 {
 	"local-repository": "a",
 	"sync-strategy": "root",
-	"maximum-certificate-depth": 1
+	"maximum-certificate-depth": 5
 }
 
 $ cat b.json
 {
 	"sync-strategy": "strict"
-	"maximum-certificate-depth": 2
+	"maximum-certificate-depth": 6
 }
 
 $ cat c.json
 {
-	"maximum-certificate-depth": 4
+	"maximum-certificate-depth": 8
 }
 
 $ {{ page.command }} \
 	--configuration-file="a.json" \
 	--configuration-file="b.json" \
 	--configuration-file="c.json"
-$ # local-repository is "a", sync-strategy is "strict" and maximum-certificate-depth is 4
+$ # local-repository is "a", sync-strategy is "strict" and maximum-certificate-depth is 8
 {% endhighlight %}
 
 ### rsync.program

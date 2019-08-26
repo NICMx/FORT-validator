@@ -319,11 +319,9 @@ revert_base:
  * important ones are
  * 1. 0: No errors.
  * 2. -EAGAIN: No data available; database still under construction.
- *
- * TODO (whatever) @serial is a dumb hack.
  */
 int
-vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg, serial_t *serial)
+vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg)
 {
 	int error;
 
@@ -331,12 +329,10 @@ vrps_foreach_base_roa(vrp_foreach_cb cb, void *arg, serial_t *serial)
 	if (error)
 		return error;
 
-	if (state.base != NULL) {
+	if (state.base != NULL)
 		error = roa_table_foreach_roa(state.base, cb, arg);
-		*serial = state.next_serial - 1;
-	} else {
+	else
 		error = -EAGAIN;
-	}
 
 	rwlock_unlock(&lock);
 

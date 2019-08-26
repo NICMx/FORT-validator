@@ -1,6 +1,5 @@
 #include "clients.h"
 
-#include <sys/queue.h>
 #include "common.h"
 #include "log.h"
 #include "data_structure/uthash_nonfatal.h"
@@ -11,24 +10,9 @@ struct hashable_client {
 	UT_hash_handle hh;
 };
 
-struct thread_node {
-	pthread_t tid;
-	SLIST_ENTRY(thread_node) next;
-};
-
-/*
- * Thread ids are stored apart so that the caller can join each thread at the
- * end.
- *
- * The join should be made when the db is cleared, so the main process should
- * do it.
- */
-SLIST_HEAD(thread_list, thread_node);
-
-/** Hash table of clients and threads */
+/** Hash table of clients */
 static struct clients_table {
 	struct hashable_client *clients;
-	struct thread_list threads;
 } db;
 
 /** Read/write lock, which protects @table and its inhabitants. */
@@ -40,7 +24,6 @@ clients_db_init(void)
 	int error;
 
 	db.clients = NULL;
-	SLIST_INIT(&db.threads);
 
 	error = pthread_rwlock_init(&lock, NULL);
 	if (error)
@@ -62,6 +45,7 @@ create_client(int fd, struct sockaddr_storage addr, pthread_t tid)
 	client->meat.fd = fd;
 	client->meat.serial_number_set = false;
 	client->meat.addr = addr;
+	client->meat.tid = tid;
 
 	return client;
 }
@@ -74,18 +58,10 @@ clients_add(int fd, struct sockaddr_storage addr, pthread_t tid)
 {
 	struct hashable_client *new_client;
 	struct hashable_client *old_client;
-	struct thread_node *new_thread;
 
 	new_client = create_client(fd, addr, tid);
 	if (new_client == NULL)
 		return pr_enomem();
-
-	new_thread = malloc(sizeof(struct thread_node));
-	if (new_thread == NULL) {
-		free(new_client);
-		return pr_enomem();
-	}
-	new_thread->tid = tid;
 
 	rwlock_write_lock(&lock);
 
@@ -99,8 +75,6 @@ clients_add(int fd, struct sockaddr_storage addr, pthread_t tid)
 	}
 	if (old_client != NULL)
 		free(old_client);
-
-	SLIST_INSERT_HEAD(&db.threads, new_thread, next);
 
 	rwlock_unlock(&lock);
 
@@ -215,20 +189,12 @@ void
 clients_db_destroy(join_thread_cb cb, void *arg)
 {
 	struct hashable_client *node, *tmp;
-	struct thread_node *thread;
 
 	HASH_ITER(hh, db.clients, node, tmp) {
+		/* Not much to do on failure */
+		cb(node->meat.tid, arg);
 		HASH_DEL(db.clients, node);
 		free(node);
-	}
-
-	while (!SLIST_EMPTY(&db.threads)) {
-		thread = SLIST_FIRST(&db.threads);
-		SLIST_REMOVE_HEAD(&db.threads, next);
-
-		/* Not much to do on failure */
-		cb(thread->tid, arg);
-		free(thread);
 	}
 
 	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */

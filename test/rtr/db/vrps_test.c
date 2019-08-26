@@ -178,8 +178,8 @@ check_base(serial_t expected_serial, bool const *expected_base)
 	array_index i;
 
 	memset(actual_base, 0, sizeof(actual_base));
-	ck_assert_int_eq(0, vrps_foreach_base_roa(vrp_check, actual_base,
-	    &actual_serial));
+	ck_assert_int_eq(0, get_last_serial_number(&actual_serial));
+	ck_assert_int_eq(0, vrps_foreach_base_roa(vrp_check, actual_base));
 	ck_assert_uint_eq(expected_serial, actual_serial);
 	for (i = 0; i < ARRAY_LEN(actual_base); i++)
 		ck_assert_uint_eq(expected_base[i], actual_base[i]);
@@ -281,7 +281,7 @@ create_deltas_0to1(struct deltas_db *deltas, serial_t *serial, bool *changed,
 	/* First validation not yet performed: Tell routers to wait */
 	ck_assert_int_eq(-EAGAIN, get_last_serial_number(serial));
 	ck_assert_int_eq(-EAGAIN, vrps_foreach_base_roa(vrp_fail,
-	    iterated_entries, serial));
+	    iterated_entries));
 	ck_assert_int_eq(-EAGAIN, vrps_get_deltas_from(0, serial, deltas));
 
 	/* First validation: One tree, no deltas */

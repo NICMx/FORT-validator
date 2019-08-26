@@ -7,9 +7,11 @@
 #include "vcard.h"
 
 static int
-handle_vcard(OCTET_STRING_t *vcard, void *arg)
+handle_vcard(struct signed_object *sobj)
 {
-	return handle_ghostbusters_vcard(vcard);
+	return handle_ghostbusters_vcard(
+		sobj->sdata.decoded->encapContentInfo.eContent
+	);
 }
 
 int
@@ -17,30 +19,42 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 {
 	static OID oid = OID_GHOSTBUSTERS;
 	struct oid_arcs arcs = OID2ARCS("ghostbusters", oid);
+	struct signed_object sobj;
 	struct signed_object_args sobj_args;
 	STACK_OF(X509_CRL) *crl;
 	int error;
 
+	/* Prepare */
 	pr_debug_add("Ghostbusters '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
+	/* Decode */
+	error = signed_object_decode(&sobj, uri);
+	if (error)
+		goto revert_log;
+
+	/* Prepare validation arguments */
 	error = rpp_crl(pp, &crl);
 	if (error)
-		goto end1;
-
+		goto revert_sobj;
 	error = signed_object_args_init(&sobj_args, uri, crl, true);
 	if (error)
-		goto end1;
+		goto revert_sobj;
 
-	error = signed_object_decode(&sobj_args, &arcs, handle_vcard, NULL);
+	/* Validate everything */
+	error = signed_object_validate(&sobj, &arcs, &sobj_args);
 	if (error)
-		goto end2;
-
+		goto revert_args;
+	error = handle_vcard(&sobj);
+	if (error)
+		goto revert_args;
 	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
 
-end2:
+revert_args:
 	signed_object_args_cleanup(&sobj_args);
-end1:
+revert_sobj:
+	signed_object_cleanup(&sobj);
+revert_log:
 	pr_debug_rm("}");
 	fnstack_pop();
 	return error;

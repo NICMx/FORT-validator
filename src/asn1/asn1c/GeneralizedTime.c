@@ -5,6 +5,9 @@
 #define	_POSIX_PTHREAD_SEMANTICS	/* for Sun */
 #define	_REENTRANT			/* for Sun */
 #define __EXTENSIONS__                  /* for Sun */
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE 1
+#endif
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE     /* for timegm(3) */
 #endif

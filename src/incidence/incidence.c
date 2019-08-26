@@ -11,6 +11,7 @@
 struct incidence {
 	const enum incidence_id id;
 	char const *const name;
+	char const *const description;
 	const enum incidence_action default_action;
 	enum incidence_action action;
 };
@@ -18,8 +19,9 @@ struct incidence {
 static struct incidence incidences[__INID_MAX] = {
 	{
 		INID_HASHALG_HAS_PARAMS,
+		"incid-hashalg-has-params",
 		"Signed Object's hash algorithm has NULL object as parameters",
-		INAC_ERROR,
+		INAC_IGNORE,
 	},
 };
 
@@ -81,10 +83,6 @@ init_action(json_t *json)
 	else
 		return pr_err("Unknown incidence action: '%s'", action_str);
 
-	if (action > incidences[id].action)
-		return pr_err("The '%s' incidence cannot have a more severe action than '%s'.",
-		    name, action2str(incidences[id].action));
-
 	incidences[id].action = action;
 	return 0;
 }
@@ -134,23 +132,15 @@ void
 incidence_print(void)
 {
 	array_index i;
-	bool printed;
 
 	pr_info("Custom incidences:");
 	pr_indent_add();
 
-	printed = false;
-
 	for (i = 0; i < __INID_MAX; i++) {
-		if (incidences[i].action != incidences[i].default_action) {
-			pr_info("%s: %s", incidences[i].name,
-			    action2str(incidences[i].action));
-			printed = true;
-		}
+		pr_info("%s (%s): %s", incidences[i].name,
+		    incidences[i].description,
+		    action2str(incidences[i].action));
 	}
-
-	if (!printed)
-		pr_info("<None>");
 
 	pr_indent_rm();
 }

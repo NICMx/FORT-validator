@@ -110,3 +110,25 @@ file_free(struct file_contents *fc)
 {
 	free(fc->buffer);
 }
+
+/*
+ * Validate @file_name, if it doesn't exist, this function will create it and
+ * close it.
+ */
+bool
+file_valid(char const *file_name)
+{
+	FILE *tmp;
+	struct stat stat;
+	int error;
+
+	if (file_name == NULL)
+		return false;
+
+	error = file_write(file_name, &tmp, &stat);
+	if (error)
+		return false;
+
+	file_close(tmp);
+	return true;
+}

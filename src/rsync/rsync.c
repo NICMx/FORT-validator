@@ -304,6 +304,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	int child_status;
 	int error;
 
+	child_status = 0;
 	error = create_dir_recursive(uri);
 	if (error)
 		return error;
@@ -318,12 +319,16 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	/* This code is run by us. */
 
 	error = waitpid(child_pid, &child_status, 0);
-	if (error == -1) {
-		error = errno;
-		pr_err("The rsync sub-process returned error %d (%s)",
-		    error, strerror(error));
-		return error;
-	}
+	do {
+		if (error == -1) {
+			error = errno;
+			pr_err("The rsync sub-process returned error %d (%s)",
+			    error, strerror(error));
+			if (child_status > 0)
+				break;
+			return error;
+		}
+	} while (0);
 
 	if (WIFEXITED(child_status)) {
 		/* Happy path (but also sad path sometimes). */
@@ -347,11 +352,11 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 			pr_err("The RSYNC was terminated by a signal I don't have a handler for. Dunno; guess I'll just die.");
 			break;
 		}
-		exit(-EINTR); /* Meh? */
+		return -EINTR; /* Meh? */
 	}
 
 	pr_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
-	exit(-EINVAL);
+	return -EINVAL;
 }
 
 /**
@@ -362,7 +367,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
  * validated the TA's public key.
  */
 int
-download_files(struct rpki_uri *requested_uri, bool is_ta)
+download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 {
 	/**
 	 * Note:
@@ -376,20 +381,25 @@ download_files(struct rpki_uri *requested_uri, bool is_ta)
 	if (config_get_sync_strategy() == SYNC_OFF)
 		return 0;
 
-	if (is_already_downloaded(requested_uri)) {
+	if (!force && is_already_downloaded(requested_uri)) {
 		pr_debug("No need to redownload '%s'.",
 		    uri_get_printable(requested_uri));
 		return 0;
 	}
 
-	error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
+	if (!force)
+		error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
+	else
+		error = handle_strict_strategy(requested_uri, &rsync_uri);
+
 	if (error)
 		return error;
 
 	pr_debug("Going to RSYNC '%s'.", uri_get_printable(rsync_uri));
 
+	/* Don't store when "force" and if its already downloaded */
 	error = do_rsync(rsync_uri, is_ta);
-	if (!error)
+	if (!error && !(force && is_already_downloaded(rsync_uri)))
 		error = mark_as_downloaded(rsync_uri);
 
 	uri_refput(rsync_uri);

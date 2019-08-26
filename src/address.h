@@ -47,4 +47,7 @@ int prefix_length_parse(const char *, uint8_t *, uint8_t);
 int ipv4_prefix_validate(struct ipv4_prefix *);
 int ipv6_prefix_validate(struct ipv6_prefix *);
 
+bool ipv4_covered(struct in_addr *, uint8_t, struct in_addr *);
+bool ipv6_covered(struct in6_addr *, uint8_t, struct in6_addr *);
+
 #endif /* SRC_ADDRESS_H_ */

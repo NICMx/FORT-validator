@@ -16,9 +16,14 @@
 #include "object/signed_object.h"
 
 static int
-manifest_decode(OCTET_STRING_t *string, void *arg)
+decode_manifest(struct signed_object *sobj, struct Manifest **result)
 {
-	return asn1_decode_octet_string(string, &asn_DEF_Manifest, arg, true);
+	return asn1_decode_octet_string(
+		sobj->sdata.decoded->encapContentInfo.eContent,
+		&asn_DEF_Manifest,
+		(void **) result,
+		true
+	);
 }
 
 static int
@@ -141,8 +146,7 @@ validate_manifest(struct Manifest *manifest)
 }
 
 static int
-__handle_manifest(struct Manifest *mft, struct rpki_uri *mft_uri,
-    struct rpp **pp)
+build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 {
 	int i;
 	struct FileAndHash *fah;
@@ -206,41 +210,65 @@ fail:
  * @pp.
  */
 int
-handle_manifest(struct rpki_uri *uri, STACK_OF(X509_CRL) *crls, struct rpp **pp)
+handle_manifest(struct rpki_uri *uri, struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
+	struct signed_object sobj;
 	struct signed_object_args sobj_args;
 	struct Manifest *mft;
+	STACK_OF(X509_CRL) *crl;
 	int error;
 
+	/* Prepare */
 	pr_debug_add("Manifest '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = signed_object_args_init(&sobj_args, uri, crls, false);
+	/* Decode */
+	error = signed_object_decode(&sobj, uri);
 	if (error)
-		goto end1;
-
-	error = signed_object_decode(&sobj_args, &arcs, manifest_decode, &mft);
+		goto revert_log;
+	error = decode_manifest(&sobj, &mft);
 	if (error)
-		goto end2;
+		goto revert_sobj;
 
+	/* Initialize out parameter (@pp) */
+	error = build_rpp(mft, uri, pp);
+	if (error)
+		goto revert_manifest;
+
+	/* Prepare validation arguments */
+	error = rpp_crl(*pp, &crl);
+	if (error)
+		goto revert_rpp;
+	error = signed_object_args_init(&sobj_args, uri, crl, false);
+	if (error)
+		goto revert_rpp;
+
+	/* Validate everything */
+	error = signed_object_validate(&sobj, &arcs, &sobj_args);
+	if (error)
+		goto revert_args;
 	error = validate_manifest(mft);
 	if (error)
-		goto end3;
-	error = __handle_manifest(mft, uri, pp);
-	if (error)
-		goto end3;
-
+		goto revert_args;
 	error = refs_validate_ee(&sobj_args.refs, *pp, uri);
 	if (error)
-		rpp_refput(*pp);
+		goto revert_args;
 
-end3:
-	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
-end2:
+	/* Success */
 	signed_object_args_cleanup(&sobj_args);
-end1:
+	goto revert_manifest;
+
+revert_args:
+	signed_object_args_cleanup(&sobj_args);
+revert_rpp:
+	rpp_refput(*pp);
+revert_manifest:
+	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
+revert_sobj:
+	signed_object_cleanup(&sobj);
+revert_log:
 	pr_debug_rm("}");
 	fnstack_pop();
 	return error;

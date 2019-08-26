@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.69])
 # TODO change the bug report address
-AC_INIT([fort], [0.0.2], [ydahhrk@gmail.com])
+AC_INIT([fort], [1.0.0], [fort-validator@nic.mx])
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
 
@@ -27,8 +27,8 @@ AC_CHECK_FUNCS([memset socket])
 AC_SEARCH_LIBS([pthread_create], [pthread], [],
 	[AC_MSG_ERROR([unable to find the pthread() function])]
 )
-AC_SEARCH_LIBS([d2i_X509_bio], [crypto], [],
-	[AC_MSG_ERROR([unable to find the d2i_X509_bio() function])]
+AC_SEARCH_LIBS([X509_get_version], [crypto], [],
+	[AC_MSG_ERROR([unable to find the X509_get_version() function])]
 )
 AC_SEARCH_LIBS([backtrace],[execinfo],[],
 	[AC_MSG_ERROR([unable to find backtrace() function])]

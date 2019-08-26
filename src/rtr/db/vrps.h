@@ -28,7 +28,7 @@ int vrps_update(bool *);
  * been called, or while it's still building the database.
  * Handle gracefully.
  */
-int vrps_foreach_base_roa(vrp_foreach_cb, void *, serial_t *);
+int vrps_foreach_base_roa(vrp_foreach_cb, void *);
 int vrps_get_deltas_from(serial_t, serial_t *, struct deltas_db *);
 int get_last_serial_number(serial_t *);
 

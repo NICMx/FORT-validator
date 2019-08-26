@@ -34,6 +34,11 @@ struct ski_arguments {
 	OCTET_STRING_t *sid;
 };
 
+struct sia_uris {
+	struct rpki_uri **caRepository;
+	struct rpki_uri **mft;
+};
+
 static int
 validate_serial_number(X509 *cert)
 {
@@ -82,11 +87,15 @@ validate_issuer(X509 *cert, bool is_ta)
 	if (!is_ta)
 		return validate_issuer_name("Certificate", issuer);
 
-	error = x509_name_decode(issuer, "issuer", &name);
-	if (!error)
-		x509_name_put(name);
+	/* TODO wait. Shouldn't we check subject == issuer? */
 
-	return error;
+	error = x509_name_decode(issuer, "issuer", &name);
+	if (error)
+		return error;
+	pr_debug("Issuer: %s", x509_name_commonName(name));
+
+	x509_name_put(name);
+	return 0;
 }
 
 static int
@@ -103,6 +112,7 @@ validate_subject(X509 *cert)
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
 		return error;
+	pr_debug("Subject: %s", x509_name_commonName(name));
 
 	error = x509stack_store_subject(validation_certstack(state), name);
 
@@ -828,8 +838,11 @@ handle_rpkiManifest(struct rpki_uri *uri, void *arg)
 static int
 handle_caRepository(struct rpki_uri *uri, void *arg)
 {
+	struct rpki_uri **repo = arg;
 	pr_debug("caRepository: %s", uri_get_printable(uri));
-	return download_files(uri, false);
+	*repo = uri;
+	uri_refget(uri);
+	return download_files(uri, false, false);
 }
 
 static int
@@ -1191,6 +1204,7 @@ static int
 handle_sia_ca(X509_EXTENSION *ext, void *arg)
 {
 	SIGNATURE_INFO_ACCESS *sia;
+	struct sia_uris *uris = arg;
 	int error;
 
 	sia = X509V3_EXT_d2i(ext);
@@ -1199,7 +1213,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 
 	/* rsync */
 	error = handle_ad("SIA", sia, "caRepository", NID_caRepository,
-	    handle_caRepository, NULL);
+	    handle_caRepository, uris->caRepository);
 	if (error)
 		goto end;
 
@@ -1209,7 +1223,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	 * is fully valid.)
 	 */
 	error = handle_ad("SIA", sia, "rpkiManifest", nid_rpkiManifest(),
-	    handle_rpkiManifest, arg);
+	    handle_rpkiManifest, uris->mft);
 
 end:
 	AUTHORITY_INFO_ACCESS_free(sia);
@@ -1304,17 +1318,24 @@ handle_ar(X509_EXTENSION *ext, void *arg)
 	return 0; /* Handled in certificate_get_resources(). */
 }
 
-int
+/**
+ * Validates the certificate extensions, Trust Anchor style.
+ *
+ * Also initializes the second argument as the URI of the rpkiManifest Access
+ * Description and the third arg as the CA Repository from the SIA extension.
+ */
+static int
 certificate_validate_extensions_ta(X509 *cert, struct rpki_uri **mft,
-    enum rpki_policy *policy)
+    struct rpki_uri **caRepository, enum rpki_policy *policy)
 {
+	struct sia_uris sia_uris;
 	struct extension_handler handlers[] = {
 	   /* ext        reqd   handler        arg       */
 	    { ext_bc(),  true,  handle_bc,               },
 	    { ext_ski(), true,  handle_ski_ca, cert      },
 	    { ext_aki(), false, handle_aki_ta, cert      },
 	    { ext_ku(),  true,  handle_ku_ca,            },
-	    { ext_sia(), true,  handle_sia_ca, mft       },
+	    { ext_sia(), true,  handle_sia_ca, &sia_uris },
 	    { ext_cp(),  true,  handle_cp,     policy    },
 	    { ext_ir(),  false, handle_ir,               },
 	    { ext_ar(),  false, handle_ar,               },
@@ -1323,13 +1344,27 @@ certificate_validate_extensions_ta(X509 *cert, struct rpki_uri **mft,
 	    { NULL },
 	};
 
+	sia_uris.caRepository = caRepository;
+	sia_uris.mft = mft;
+
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
 
-int
+/**
+ * Validates the certificate extensions, (intermediate) Certificate Authority
+ * style.
+ *
+ * Also initializes the second argument as the URI of the rpkiManifest Access
+ * Description and the third arg as the CA Repository from the SIA extension.
+ * Also initializes the fourth argument with the references found in the
+ * extensions.
+ */
+static int
 certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
-    struct certificate_refs *refs, enum rpki_policy *policy)
+    struct rpki_uri **caRepository, struct certificate_refs *refs,
+    enum rpki_policy *policy)
 {
+	struct sia_uris sia_uris;
 	struct extension_handler handlers[] = {
 	   /* ext        reqd   handler        arg       */
 	    { ext_bc(),  true,  handle_bc,               },
@@ -1338,7 +1373,7 @@ certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
 	    { ext_ku(),  true,  handle_ku_ca,            },
 	    { ext_cdp(), true,  handle_cdp,    refs      },
 	    { ext_aia(), true,  handle_aia,    refs      },
-	    { ext_sia(), true,  handle_sia_ca, mft       },
+	    { ext_sia(), true,  handle_sia_ca, &sia_uris },
 	    { ext_cp(),  true,  handle_cp,     policy    },
 	    { ext_ir(),  false, handle_ir,               },
 	    { ext_ar(),  false, handle_ar,               },
@@ -1346,6 +1381,9 @@ certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
 	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
+
+	sia_uris.caRepository = caRepository;
+	sia_uris.mft = mft;
 
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
@@ -1389,9 +1427,11 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	STACK_OF(X509_CRL) *rpp_parent_crl;
 	X509 *cert;
 	struct rpki_uri *mft;
+	struct rpki_uri *caRepository;
 	struct certificate_refs refs;
 	enum rpki_policy policy;
 	struct rpp *pp;
+	bool mft_retry;
 	int error;
 
 	state = state_retrieve();
@@ -1421,8 +1461,10 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_cert;
 	error = IS_TA
-	    ? certificate_validate_extensions_ta(cert, &mft, &policy)
-	    : certificate_validate_extensions_ca(cert, &mft, &refs, &policy);
+	    ? certificate_validate_extensions_ta(cert, &mft, &caRepository,
+	        &policy)
+	    : certificate_validate_extensions_ca(cert, &mft, &caRepository,
+	        &refs, &policy);
 	if (error)
 		goto revert_cert;
 
@@ -1430,14 +1472,49 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_uri_and_refs;
 
-	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	error = x509stack_push(validation_certstack(state), cert_uri, cert,
-	    policy, IS_TA);
-	if (error)
-		goto revert_uri_and_refs;
-	cert = NULL; /* Ownership stolen */
+	/*
+	 * RFC 6481 section 5: "when the repository publication point contents
+	 * are updated, a repository operator cannot assure RPs that the
+	 * manifest contents and the repository contents will be precisely
+	 * aligned at all times"
+	 *
+	 * Trying to avoid this issue, download the CA repository and validate
+	 * manifest (and its content) again.
+	 */
+	mft_retry = true;
+	do {
+		/* Validate the manifest (@mft) pointed by the certificate */
+		error = x509stack_push(validation_certstack(state), cert_uri,
+		    cert, policy, IS_TA);
+		if (error) {
+			if (!mft_retry)
+				uri_refput(mft);
+			goto revert_uri_and_refs;
+		}
+		cert = NULL; /* Ownership stolen */
 
-	error = handle_manifest(mft, rpp_parent_crl, &pp);
+		error = handle_manifest(mft, &pp);
+		if (!mft_retry)
+			uri_refput(mft);
+		if (!error || !mft_retry)
+			break;
+
+		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
+		    uri_get_printable(caRepository));
+		error = download_files(caRepository, false, true);
+		if (error)
+			break;
+
+		/* Cancel stack, reload certificate (no need to revalidate) */
+		x509stack_cancel(validation_certstack(state));
+		error = certificate_load(cert_uri, &cert);
+		if (error) {
+			goto revert_uri_and_refs;
+		}
+		uri_refget(mft);
+		mft_retry = false;
+	} while (true);
+
 	if (error) {
 		x509stack_cancel(validation_certstack(state));
 		goto revert_uri_and_refs;
@@ -1448,6 +1525,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 	rpp_refput(pp);
 revert_uri_and_refs:
+	uri_refput(caRepository);
 	uri_refput(mft);
 	refs_cleanup(&refs);
 revert_cert:

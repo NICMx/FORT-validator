@@ -1,4 +1,4 @@
-.TH fort 8 "2019-06-07" "v0.0.1-beta" "FORT validator"
+.TH fort 8 "2019-08-26" "v1.0.0" "FORT validator"
 
 .SH NAME
 fort \- RPKI certificate path validator
@@ -118,7 +118,7 @@ of objects, each with two members "name" and "action", eg:
 .RS 2
 {
 .RS 2
-"name": "Signed Object's hash algorithm has NULL object as parameters",
+"name": "incid-hashalg-has-params",
 .br
 "action": "warn"
 .RE
@@ -144,9 +144,10 @@ nothing happened.
 happened.
 .RE
 .P
-By default, all the incidences have an action of \fIerror\fR. Currently there's
+By default, all the incidences have an action of \fIignore\fR. Currently there's
 only one registered incidence:
-\fISigned Object's hash algorithm has NULL object as parameters\fR.
+\fIincid-hashalg-has-params\fR (Signed Object's hash algorithm has NULL object
+as parameters).
 .P
 More information about incidences can be consulted at FORT's web docs.
 .RE
@@ -174,11 +175,13 @@ and/or read.
 Right now, FORT accesses RPKI repositories by way of \fIrsync\fR. During each
 validation cycle, FORT will literally invoke an rsync command (see
 \fBrsync.program\fR and \fBrsync.arguments-recursive\fR), which will download
-the files into \fB--local-repository\fR. FORT’s validation operates on the resulting
-copy.
+the files into \fB--local-repository\fR. FORT’s validation operates on the
+resulting copy.
 .P
 Because rsync uses delta encoding, you’re advised to keep this cache around. It
 significantly speeds up subsequent validation cycles.
+.P
+By default, the path is \fI/tmp/fort/repository\fR.
 .RE
 .P
 
@@ -279,7 +282,7 @@ that yields a successful traversal.
 Maximum allowable certificate chain length. Meant to protect FORT from
 iterating infinitely due to certificate chain loops.
 .P
-By default, it has a value of \fI32\fR.
+By default, it has a value of \fI32\fR. The minimum allowed value is 5.
 .P
 (Required to prevent loops and "other degenerate forms of the logical RPKI
 hierarchy." (RFC 6481))
@@ -462,8 +465,8 @@ to a specific value:
 .nf
 
 {
-  "tal": "/tmp/tal/",
-  "local-repository": "/tmp/repository",
+  "tal": "/tmp/fort/tal/",
+  "local-repository": "/tmp/fort/repository",
   "sync-strategy": "root",
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
@@ -499,12 +502,12 @@ to a specific value:
   },
   "incidences": [
     {
-      "name": "Signed Object's hash algorithm has NULL object as parameters",
+      "name": "incid-hashalg-has-params",
       "action": "ignore"
     }
   ],
   "output": {
-    "roa": "/tmp/roas.csv"
+    "roa": "/tmp/fort/roas.csv"
   }
 }
 .fi

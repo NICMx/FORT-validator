@@ -17,7 +17,7 @@ title: Incidence
 
 The RPKI RFCs define fairly strict profiles for RPKI objects, and are unequivocal in stating that incorrectly-formed objects are supposed to be rejected by Relying Party validation. In practice, however, this does not prevent a significant amount of Certificate Authorities from issuing incorrect objects.
 
-By default, Fort is as pedantic as it can possibly be. The `incidence` section of its configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
+By default, Fort is lax with some of this bad practices. The `incidence` section of its configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
 
 ## `incidences` definition
 
@@ -26,13 +26,13 @@ By default, Fort is as pedantic as it can possibly be. The `incidence` section o
 ```
 "incidences": [
 	{
-		"name": "Signed Object's hash algorithm has NULL object as parameters",
+		"name": "incid-hashalg-has-params",
 		"action": "warn"
 	}
 ]
 ```
 
-`name` is the identifier of an incidence. It is case-sensitive and developer-defined. It states the particular error condition that will be handled by the remaining field.
+`name` is the identifier of an incidence. It is case-sensitive and developer-defined. It states an ID of the particular error condition that will be handled by the remaining field.
 
 `action` is an enumeration that states the outcome of a violation of the corresponding incidence. It can take one of three values:
 
@@ -40,13 +40,16 @@ By default, Fort is as pedantic as it can possibly be. The `incidence` section o
 2. `warn`: Print error message in `warning` log level, continue validation as if nothing happened.
 3. `ignore`: Do not print error message, continue validation as if nothing happened.
 
-By Fort's pedantic nature, most incidences have an `action` of `error` by default.
+Since most of the incidences are result of a bad practice at the global RPKI, they have an `action` of `ignore` by default. If a strict behavior is desired, then the corresponding incidences should be configured with an `action` of `error`.
 
 ## Incidence types
 
 Presently, there is only one incidence type defined. This list is expected to grow when strict DER-parsing is implemented, and might also evolve further over time, depending on the state of the global RPKI and user demand.
 
 ### Signed Object's hash algorithm has NULL object as parameters
+
+- **Name:** `incid-hashalg-has-params`
+- **Default action:** `ignore`
 
 [RFC 6488](https://tools.ietf.org/html/rfc6488) (RPKI Signed Objects) defers digest algorithm specification to RFC 6485:
 
@@ -76,7 +79,7 @@ Presently, there is only one incidence type defined. This list is expected to gr
    parameters field;
 ```
 
-As of 2019-05-21, many signed objects in the global RPKI break this rule.
+As of 2019-08-12, many signed objects in the global RPKI break this rule.
 
 If not `ignore`d, Fort will report this incidence with the following error message:
 

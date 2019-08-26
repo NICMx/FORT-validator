@@ -37,25 +37,6 @@ int certificate_validate_signature(X509 *, ANY_t *coded, SignatureValue_t *);
 int certificate_get_resources(X509 *, struct resources *);
 
 /**
- * Validates the certificate extensions, Trust Anchor style.
- *
- * Also initializes the second argument as the URI of the rpkiManifest Access
- * Description from the SIA extension.
- */
-int certificate_validate_extensions_ta(X509 *, struct rpki_uri **,
-    enum rpki_policy *);
-/**
- * Validates the certificate extensions, (intermediate) Certificate Authority
- * style.
- *
- * Also initializes the second argument as the URI of the rpkiManifest Access
- * Description from the SIA extension.
- * Also initializes the third argument with the references found in the
- * extensions.
- */
-int certificate_validate_extensions_ca(X509 *, struct rpki_uri **,
-    struct certificate_refs *, enum rpki_policy *);
-/**
  * Validates the certificate extensions, End-Entity style.
  *
  * Also initializes the second argument with the references found in the
