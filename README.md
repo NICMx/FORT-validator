@@ -2,8 +2,6 @@
 
 An RPKI Validator and RTR Server.
 
-**This software is in beta**
-
 ## Installation
 
 Dependencies:

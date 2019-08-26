@@ -11,4 +11,4 @@ The documentation can be found [here](doc/index.html).
 
 ## Status
 
-Fort is currently in beta. Testing is underway.
+Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the first official release! Don't forget to read the [docs](doc/index.html).

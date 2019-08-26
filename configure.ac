@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.69])
 # TODO change the bug report address
-AC_INIT([fort], [0.0.2], [ydahhrk@gmail.com])
+AC_INIT([fort], [1.0.0], [fort-validator@nic.mx])
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
 

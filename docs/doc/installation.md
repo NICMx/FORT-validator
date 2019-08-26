@@ -34,8 +34,6 @@ Fort is currently supported in *64-bit* OS. A 32-bit OS may face the [Year 2038 
 
 ## Option 1: Installing the Debian package
 
-> TODO Upload to Debian, add more archs
-
 {% highlight bash %}
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort_{{ site.fort-latest-version }}-1_amd64.deb
 sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
