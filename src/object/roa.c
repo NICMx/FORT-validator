@@ -13,10 +13,14 @@
 #include "object/signed_object.h"
 
 static int
-roa_decode(OCTET_STRING_t *string, void *arg)
+decode_roa(struct signed_object *sobj, struct RouteOriginAttestation **result)
 {
-	return asn1_decode_octet_string(string, &asn_DEF_RouteOriginAttestation,
-	    arg, true);
+	return asn1_decode_octet_string(
+		sobj->sdata.decoded->encapContentInfo.eContent,
+		&asn_DEF_RouteOriginAttestation,
+		(void **) result,
+		true
+	);
 }
 
 static int
@@ -151,7 +155,6 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	int a;
 	int error;
 
-
 	pr_debug_add("eContent {");
 	if (roa->version != NULL) {
 		error = asn_INTEGER2ulong(roa->version, &version);
@@ -185,8 +188,10 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 
 	/* rfc6482#section-3.3 */
 
-	if (roa->ipAddrBlocks.list.array == NULL)
-		pr_crit("ipAddrBlocks array is NULL.");
+	if (roa->ipAddrBlocks.list.array == NULL) {
+		error = pr_err("ipAddrBlocks array is NULL.");
+		goto end_error;
+	}
 
 	pr_debug_add("ipAddrBlocks {");
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
@@ -242,37 +247,48 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
+	struct signed_object sobj;
 	struct signed_object_args sobj_args;
 	struct RouteOriginAttestation *roa;
 	STACK_OF(X509_CRL) *crl;
 	int error;
 
+	/* Prepare */
 	pr_debug_add("ROA '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = rpp_crl(pp, &crl);
+	/* Decode */
+	error = signed_object_decode(&sobj, uri);
 	if (error)
-		goto revert_fnstack;
-
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
-	if (error)
-		goto revert_fnstack;
-
-	error = signed_object_decode(&sobj_args, &arcs, roa_decode, &roa);
+		goto revert_log;
+	error = decode_roa(&sobj, &roa);
 	if (error)
 		goto revert_sobj;
 
-	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
+	/* Prepare validation arguments */
+	error = rpp_crl(pp, &crl);
+	if (error)
+		goto revert_roa;
+	error = signed_object_args_init(&sobj_args, uri, crl, false);
 	if (error)
 		goto revert_roa;
 
+	/* Validate and handle everything */
+	error = signed_object_validate(&sobj, &arcs, &sobj_args);
+	if (error)
+		goto revert_args;
 	error = __handle_roa(roa, sobj_args.res);
+	if (error)
+		goto revert_args;
+	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
 
+revert_args:
+	signed_object_args_cleanup(&sobj_args);
 revert_roa:
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
 revert_sobj:
-	signed_object_args_cleanup(&sobj_args);
-revert_fnstack:
+	signed_object_cleanup(&sobj);
+revert_log:
 	fnstack_pop();
 	pr_debug_rm("}");
 	return error;

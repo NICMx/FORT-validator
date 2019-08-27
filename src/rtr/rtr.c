@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <netdb.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,8 +18,6 @@
 #include "rtr/pdu.h"
 #include "rtr/db/vrps.h"
 
-struct sigaction act;
-
 struct thread_param {
 	int fd;
 	pthread_t tid;
@@ -32,7 +29,9 @@ init_addrinfo(struct addrinfo **result)
 {
 	char const *hostname;
 	char const *service;
+	char *tmp;
 	struct addrinfo hints;
+	unsigned long parsed, port;
 	int error;
 
 	memset(&hints, 0 , sizeof(hints));
@@ -43,6 +42,9 @@ init_addrinfo(struct addrinfo **result)
 	hostname = config_get_server_address();
 	service = config_get_server_port();
 
+	if (hostname != NULL)
+		hints.ai_flags |= AI_CANONNAME;
+
 	error = getaddrinfo(hostname, service, &hints, result);
 	if (error) {
 		pr_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
@@ -50,6 +52,26 @@ init_addrinfo(struct addrinfo **result)
 		    gai_strerror(error));
 		return error;
 	}
+
+	errno = 0;
+	parsed = strtoul(service, &tmp, 10);
+	if (errno || *tmp != '\0')
+		return 0; /* Ok, not a number */
+
+	/*
+	 * 'getaddrinfo' isn't very strict validating the service when a port
+	 * number is indicated. If a port larger than the max (65535) is
+	 * received, the 16 rightmost bits are utilized as the port and set at
+	 * the addrinfo returned.
+	 *
+	 * So, a manual validation is implemented. Port is actually a uint16_t,
+	 * so read what's necessary and compare using the same data type.
+	 */
+	port = (unsigned char)((*result)->ai_addr->sa_data[0]) << 8;
+	port += (unsigned char)((*result)->ai_addr->sa_data[1]);
+	if (parsed != port)
+		return pr_err("Service port %s is out of range (max value is %d)",
+		    service, USHRT_MAX);
 
 	return 0;
 }
@@ -64,6 +86,7 @@ create_server_socket(int *result)
 {
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
+	unsigned long port;
 	int fd; /* "file descriptor" */
 	int error;
 
@@ -90,7 +113,18 @@ create_server_socket(int *result)
 			continue;
 		}
 
-		printf("Success.\n");
+		error = getsockname(fd, addr->ai_addr, &addr->ai_addrlen);
+		if (error) {
+			close(fd);
+			freeaddrinfo(addrs);
+			return pr_errno(errno, "getsockname() failed");
+		}
+
+		port = (unsigned char)(addr->ai_addr->sa_data[0]) << 8;
+		port += (unsigned char)(addr->ai_addr->sa_data[1]);
+		printf("Success, bound to address '%s', port '%ld'.\n",
+		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
+		    port);
 		freeaddrinfo(addrs);
 		*result = fd;
 		return 0; /* Happy path */
@@ -305,30 +339,6 @@ handle_client_connections(int server_fd)
 	return 0; /* Unreachable. */
 }
 
-static void
-signal_handler(int signal, siginfo_t *info, void *param)
-{
-	/* Empty handler */
-}
-
-static int
-init_signal_handler(void)
-{
-	int error;
-
-	memset(&act, 0, sizeof act);
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = SA_SIGINFO;
-	act.sa_sigaction = signal_handler;
-
-	error = sigaction(SIGINT, &act, NULL);
-	if (error) {
-		pr_errno(errno, "Error initializing signal handler");
-		error = -errno;
-	}
-	return error;
-}
-
 /*
  * Receive @arg to be called as a clients_foreach_cb
  */
@@ -368,10 +378,6 @@ rtr_listen(void)
 	bool changed;
 	int server_fd; /* "file descriptor" */
 	int error;
-
-	error = init_signal_handler();
-	if (error)
-		return error;
 
 	error = clients_db_init();
 	if (error)

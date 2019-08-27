@@ -14,8 +14,11 @@
 struct validation {
 	struct tal *tal;
 
-	/** https://www.openssl.org/docs/man1.1.1/man3/X509_STORE_load_locations.html */
-	X509_STORE *store;
+	struct x509_data {
+		/** https://www.openssl.org/docs/man1.1.1/man3/X509_STORE_load_locations.html */
+		X509_STORE *store;
+		X509_VERIFY_PARAM *params;
+	} x509_data;
 
 	struct cert_stack *certstack;
 
@@ -79,6 +82,7 @@ validation_prepare(struct validation **out, struct tal *tal,
     struct validation_handler *validation_handler)
 {
 	struct validation *result;
+	X509_VERIFY_PARAM *params;
 	int error;
 
 	result = malloc(sizeof(struct validation));
@@ -91,26 +95,36 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	result->tal = tal;
 
-	result->store = X509_STORE_new();
-	if (!result->store) {
+	result->x509_data.store = X509_STORE_new();
+	if (!result->x509_data.store) {
 		error = crypto_err("X509_STORE_new() returned NULL");
 		goto abort1;
 	}
 
-	X509_STORE_set_verify_cb(result->store, cb);
+	params = X509_VERIFY_PARAM_new();
+	if (params == NULL) {
+		error = pr_enomem();
+		goto abort2;
+	}
+
+	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
+	X509_STORE_set1_param(result->x509_data.store, params);
+	X509_STORE_set_verify_cb(result->x509_data.store, cb);
 
 	error = certstack_create(&result->certstack);
 	if (error)
-		goto abort2;
+		goto abort3;
 
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
+	result->x509_data.params = params; /* Ownership transfered */
 
 	*out = result;
 	return 0;
-
+abort3:
+	X509_VERIFY_PARAM_free(params);
 abort2:
-	X509_STORE_free(result->store);
+	X509_STORE_free(result->x509_data.store);
 abort1:
 	free(result);
 	return error;
@@ -119,7 +133,8 @@ abort1:
 void
 validation_destroy(struct validation *state)
 {
-	X509_STORE_free(state->store);
+	X509_VERIFY_PARAM_free(state->x509_data.params);
+	X509_STORE_free(state->x509_data.store);
 	certstack_destroy(state->certstack);
 	free(state);
 }
@@ -133,7 +148,7 @@ validation_tal(struct validation *state)
 X509_STORE *
 validation_store(struct validation *state)
 {
-	return state->store;
+	return state->x509_data.store;
 }
 
 struct cert_stack *

@@ -16,6 +16,7 @@
 static int
 slurm_load(bool *loaded)
 {
+	int ctx = 0; /* Context (file number) */
 	/* Optional configuration */
 	*loaded = false;
 	if (config_get_slurm() == NULL)
@@ -24,8 +25,8 @@ slurm_load(bool *loaded)
 	*loaded = true;
 	slurm_db_init();
 
-	return process_file_or_dir(config_get_slurm(),
-	    SLURM_FILE_EXTENSION, slurm_parse, NULL);
+	return process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
+	    slurm_parse, &ctx);
 }
 
 static void

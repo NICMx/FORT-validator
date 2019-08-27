@@ -9,6 +9,7 @@
 
 #include "common.h"
 #include "configure_ac.h"
+#include "file.h"
 #include "json_handler.h"
 #include "log.h"
 #include "config/boolean.h"
@@ -181,7 +182,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config,
 		    maximum_certificate_depth),
 		.doc = "Maximum allowable certificate chain length",
-		.min = 1,
+		.min = 5,
 		/**
 		 * It cannot be UINT_MAX, because then the actual number will
 		 * overflow and will never be bigger than this.
@@ -349,8 +350,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, output.roa),
 		.doc = "File where ROAs will be stored in CSV format, use '-' to print at console",
 		.arg_doc = "<file>",
-	},
-	{
+	}, {
 		.id = 6001,
 		.name = "output.bgpsec",
 		.type = &gt_string,
@@ -575,6 +575,12 @@ revert_port:
 	return error;
 }
 
+static bool
+valid_output_file(char const *path)
+{
+	return strcmp(path, "-") == 0 || file_valid(path);
+}
+
 static int
 validate_config(void)
 {
@@ -583,6 +589,10 @@ validate_config(void)
 	    rpki_config.server.interval.expire <
 	    rpki_config.server.interval.retry)
 		return pr_err("Expire interval must be greater than refresh and retry intervals");
+
+	if (rpki_config.output.roa != NULL &&
+	    !valid_output_file(rpki_config.output.roa))
+		return pr_err("Invalid output.roa file.");
 
 	return (rpki_config.tal != NULL)
 	    ? 0

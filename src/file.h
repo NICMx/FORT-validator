@@ -1,6 +1,7 @@
 #ifndef SRC_FILE_H_
 #define SRC_FILE_H_
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -21,5 +22,7 @@ void file_close(FILE *);
 
 int file_load(char const *, struct file_contents *);
 void file_free(struct file_contents *);
+
+bool file_valid(char const *);
 
 #endif /* SRC_FILE_H_ */

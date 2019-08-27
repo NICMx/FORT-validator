@@ -15,8 +15,8 @@
 #include "asn1/oid.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "crypto/hash.h"
-#include "object/name.h"
 #include "object/bgpsec.h"
+#include "object/name.h"
 #include "object/manifest.h"
 #include "rsync/rsync.h"
 
@@ -93,11 +93,15 @@ validate_issuer(X509 *cert, bool is_ta)
 	if (!is_ta)
 		return validate_issuer_name("Certificate", issuer);
 
-	error = x509_name_decode(issuer, "issuer", &name);
-	if (!error)
-		x509_name_put(name);
+	/* TODO wait. Shouldn't we check subject == issuer? */
 
-	return error;
+	error = x509_name_decode(issuer, "issuer", &name);
+	if (error)
+		return error;
+	pr_debug("Issuer: %s", x509_name_commonName(name));
+
+	x509_name_put(name);
+	return 0;
 }
 
 static int
@@ -114,6 +118,7 @@ validate_subject(X509 *cert)
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
 		return error;
+	pr_debug("Subject: %s", x509_name_commonName(name));
 
 	error = x509stack_store_subject(validation_certstack(state), name);
 
@@ -1610,12 +1615,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_uris;
 
-	/* -- Validate the manifest (@mft) pointed by the certificate -- */
-	error = x509stack_push(validation_certstack(state), cert_uri, cert,
-	    policy, type);
-	if (error)
-		goto revert_uris;
-
 	if (type == BGPSEC) {
 		/* This is an EE, so there's no manifest to process */
 		error = handle_bgpsec(cert, ski,
@@ -1626,7 +1625,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 		goto revert_refs;
 	}
-	cert = NULL; /* Ownership stolen */
 
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents
@@ -1639,7 +1637,17 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 */
 	mft_retry = true;
 	do {
-		error = handle_manifest(mft, rpp_parent_crl, &pp);
+		/* Validate the manifest (@mft) pointed by the certificate */
+		error = x509stack_push(validation_certstack(state), cert_uri,
+		    cert, policy, IS_TA);
+		if (error) {
+			if (!mft_retry)
+				uri_refput(mft);
+			goto revert_uris;
+		}
+		cert = NULL; /* Ownership stolen */
+
+		error = handle_manifest(mft, &pp);
 		if (!mft_retry)
 			uri_refput(mft);
 		if (!error || !mft_retry)
@@ -1650,6 +1658,13 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		error = download_files(caRepository, false, true);
 		if (error)
 			break;
+
+		/* Cancel stack, reload certificate (no need to revalidate) */
+		x509stack_cancel(validation_certstack(state));
+		error = certificate_load(cert_uri, &cert);
+		if (error) {
+			goto revert_uris;
+		}
 		uri_refget(mft);
 		mft_retry = false;
 	} while (true);

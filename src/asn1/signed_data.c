@@ -90,6 +90,8 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 		goto end1;
 	}
 
+	x509_name_pr_debug("Issuer", X509_get_issuer_name(cert));
+
 	error = certificate_validate_chain(cert, args->crls);
 	if (error)
 		goto end2;
@@ -443,37 +445,38 @@ release_sdata_pkcs7:
 }
 
 int
-signed_data_decode(ANY_t *coded, struct signed_object_args *args,
-    struct SignedData **result)
+signed_data_decode(struct signed_data *sdata, ANY_t *coded)
 {
-	struct SignedData *sdata;
 	int error;
+
+	sdata->encoded = coded;
 
 	/* rfc6488#section-3.1.l */
 	/* TODO (next iteration) this is BER, not guaranteed to be DER. */
-	error = asn1_decode_any(coded, &asn_DEF_SignedData, (void **) &sdata,
-	    false);
+	error = asn1_decode_any(coded, &asn_DEF_SignedData,
+	    (void **) &sdata->decoded, false);
 	if (error) {
 		/* Try to decode as PKCS content (RFC 5652 section 5.2.1) */
-		error = signed_data_decode_pkcs7(coded, &sdata);
-		if (error)
-			return (error);
+		error = signed_data_decode_pkcs7(coded, &sdata->decoded);
 	}
 
-	error = validate(sdata, coded, args);
-	if (error) {
-		signed_data_free(sdata);
-		return error;
-	}
+	return error;
+}
 
-	*result = sdata;
-	return 0;
+int
+signed_data_validate(struct signed_data *sdata, struct signed_object_args *args)
+{
+	/*
+	 * TODO (fine) maybe collapse this wrapper,
+	 * since there's no point to it anymore.
+	 */
+	return validate(sdata->decoded, sdata->encoded, args);
 }
 
 void
-signed_data_free(struct SignedData *sdata)
+signed_data_cleanup(struct signed_data *sdata)
 {
-	ASN_STRUCT_FREE(asn_DEF_SignedData, sdata);
+	ASN_STRUCT_FREE(asn_DEF_SignedData, sdata->decoded);
 }
 
 /* Caller must free *@result. */

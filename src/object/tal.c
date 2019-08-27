@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
@@ -110,6 +111,17 @@ read_uris(struct line_file *lfile, struct uris *uris)
 	} while (true);
 }
 
+static size_t
+get_spki_orig_size(struct line_file *lfile)
+{
+	struct stat st;
+	size_t result;
+
+	stat(lfile_name(lfile), &st);
+	result = st.st_size - lfile_offset(lfile);
+	return result;
+}
+
 /*
  * Will usually allocate slightly more because of the newlines, but I'm fine
  * with it.
@@ -117,38 +129,128 @@ read_uris(struct line_file *lfile, struct uris *uris)
 static size_t
 get_spki_alloc_size(struct line_file *lfile)
 {
-	struct stat st;
-	size_t result;
+	return EVP_DECODE_LENGTH(get_spki_orig_size(lfile));
+}
 
-	stat(lfile_name(lfile), &st);
-	result = st.st_size - lfile_offset(lfile);
+/*
+ * Get the base64 chars from @lfile and allocate to @out with lines no greater
+ * than 65 chars (including line feed).
+ *
+ * Why? LibreSSL doesn't like lines greater than 80 chars, so use a common
+ * length per line.
+ */
+static int
+base64_sanitize(struct line_file *lfile, char **out)
+{
+#define BUF_SIZE 65
+	FILE *fd;
+	char buf[BUF_SIZE];
+	char *result, *eol;
+	size_t original_size, new_size;
+	size_t fread_result, offset;
+	int error;
 
-	return EVP_DECODE_LENGTH(result);
+	/*
+	 * lfile_read() isn't called since the lines aren't returned as needed
+	 * "sanitized" (a.k.a. each line with a desired length)
+	 */
+	original_size = get_spki_orig_size(lfile);
+	new_size = original_size + (original_size / BUF_SIZE);
+	result = malloc(new_size + 1);
+	if (result == NULL)
+		return pr_enomem();
+
+	fd = lfile_fd(lfile);
+	offset = 0;
+	while ((fread_result = fread(buf, 1,
+	    (original_size > BUF_SIZE) ? BUF_SIZE : original_size, fd)) > 0) {
+		error = ferror(lfile_fd(lfile));
+		if (error) {
+			/*
+			 * The manpage doesn't say that the result is an error
+			 * code. It literally doesn't say how to get an error
+			 * code.
+			 */
+			pr_errno(error,
+			    "File reading error. Error message (apparently)");
+			goto free_result;
+		}
+
+		original_size -= fread_result;
+		eol = strchr(buf, '\n');
+		/* Larger than buffer length, add LF and copy last char */
+		if (eol == NULL) {
+			memcpy(&result[offset], buf, fread_result - 1);
+			offset += fread_result - 1;
+			result[offset] = '\n';
+			result[offset + 1] = buf[fread_result - 1];
+			offset += 2;
+			continue;
+		}
+		/* Copy till last LF */
+		memcpy(&result[offset], buf, eol - buf + 1);
+		offset += eol - buf + 1;
+		if (eol - buf + 1 < fread_result) {
+			/* And add new line with remaining chars */
+			memcpy(&result[offset], eol + 1,
+			    buf + fread_result - 1 - eol);
+			offset += buf + fread_result -1 - eol;
+			result[offset] = '\n';
+			offset++;
+		}
+	}
+	/* Reallocate to exact size and add nul char */
+	if (offset != new_size + 1) {
+		eol = realloc(result, offset + 1);
+		if (eol == NULL) {
+			error = pr_enomem();
+			goto free_result;
+		}
+		result = eol;
+	}
+	result[offset] = '\0';
+
+	*out = result;
+	return 0;
+free_result:
+	free(result);
+	return error;
+#undef BUF_SIZE
 }
 
 static int
 read_spki(struct line_file *lfile, struct tal *tal)
 {
 	BIO *encoded; /* base64 encoded. */
+	char *tmp;
 	size_t alloc_size;
 	int error;
 
 	alloc_size = get_spki_alloc_size(lfile);
 	tal->spki = malloc(alloc_size);
 	if (tal->spki == NULL)
-		return -ENOMEM;
+		return pr_enomem();
 
-	encoded = BIO_new_fp(lfile_fd(lfile), BIO_NOCLOSE);
+	tmp = NULL;
+	error = base64_sanitize(lfile, &tmp);
+	if (error) {
+		free(tal->spki);
+		return error;
+	}
+
+	encoded = BIO_new_mem_buf(tmp, -1);
 	if (encoded == NULL) {
 		free(tal->spki);
-		return crypto_err("BIO_new_fp() returned NULL");
+		free(tmp);
+		return crypto_err("BIO_new_mem_buf() returned NULL");
 	}
 
 	error = base64_decode(encoded, tal->spki, true, alloc_size,
-	    &tal->spki_len);
+		    &tal->spki_len);
 	if (error)
 		free(tal->spki);
 
+	free(tmp);
 	BIO_free(encoded);
 	return error;
 }
@@ -300,8 +402,9 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 
 	error = download_files(uri, true, false);
 	if (error) {
-		return pr_warn("TAL '%s' could not be RSYNC'd.",
+		pr_warn("TAL '%s' could not be RSYNC'd.",
 		    uri_get_printable(uri));
+		return ENSURE_NEGATIVE(error);
 	}
 
 	error = validation_prepare(&state, tal, arg);
@@ -389,7 +492,8 @@ do_file_validation(char const *tal_file, void *arg)
 		error = pr_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    tal_file);
 
-end:	tal_destroy(tal);
+	tal_destroy(tal);
+end:
 	fnstack_pop();
 	return error;
 }

@@ -10,9 +10,7 @@
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 
 	<!-- Styles -->
-	<link href="../css/screen.css" rel="stylesheet" type="text/css">
-	<link href="../css/fort_project.css" rel="stylesheet" type="text/css">
-	<link href="../css/fort_validator.css" rel="stylesheet" type="text/css">
+	<link href="{% if page.url == '/' %}./css/screen.css{% else %}../css/screen.css{% endif %}" rel="stylesheet" type="text/css">
 
 	<!-- Site is still under construction, so don't index it -->
 	<meta name="robots" content="noindex,nofollow">
@@ -22,12 +20,18 @@
 <!-- Header -->
 <header class="site-header">
 	<div class="container">
-		<div class="row align-items-end">
+		<div class="row align-items-center">
 			<div class="col">
 				<div class="logo">
-					<a href="../index.html" title="" class="d-flex">
-						<img src="../img/logo_validador_fort.svg" alt="Fort">
-					</a>
+					{% if page.url == '/' %}
+						<a href="./index.html" title="" class="d-flex">
+							<img src="./img/logo_validador_fort.svg" alt="Fort" width="125px">
+						</a>
+					{% else %}
+						<a href="../index.html" title="" class="d-flex">
+							<img src="../img/logo_validador_fort.svg" alt="Fort" width="125px">
+						</a>
+					{% endif %}
 				</div>
 			</div>
 			<div class="col-auto">
@@ -39,14 +43,21 @@
 				<div class="navigation">
 					<nav class="site-nav">
 						<ul>
-							<li>
-								<a class="" href="../index.html">
-									Home
-								</a>
-							</li>
-							<li><a href="./index.html">
-								Documentation
-							</a></li>
+							{% if page.url == '/' %}
+								<li>
+									<a class="active-item" href="./index.html">Home</a>
+								</li>
+								<li>
+									<a href="./doc/index.html">Documentation</a>
+								</li>
+							{% else %}
+								<li>
+									<a href="../index.html">Home</a>
+								</li>
+								<li><a class="active-item" href="./index.html">Documentation</a>
+								</li>
+							{% endif %}
+
 						</ul>
 					</nav>
 
@@ -56,19 +67,54 @@
 	</div>
 </header>
 
-<section class="site-section">
+<section class="site-section section-h-full">
 	<div class="container">
+		<div class="row">
+			{% if (page.url.size} > 5 %}
+			<div class="col-lg-3">
+				<aside class="site-aside">
+					<ul class="list-bullet">
 
-		{{ content }}
+						<li>
+							<a class="item-menu{% if page.url == '/doc/intro-rpki.html' %} active{% endif %}" href="intro-rpki.html">Introduction to RPKI</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/doc/intro-fort.html' %} active{% endif %}" href="intro-fort.html">Introduction to Fort</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/doc/installation.html' %} active{% endif %}" href="installation.html">Compilation and Installation</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/doc/run.html' %} active{% endif %}" href="run.html">Running Fort</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/doc/usage.html' %} active{% endif %}" href="usage.html">Fort usage</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/doc/slurm.html' %} active{% endif %}" href="slurm.html">SLURM</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/doc/incidence.html' %} active{% endif %}" href="incidence.html">Incidences</a>
+						</li>
+					</ul>
+				</aside>
+			</div>
+			{% endif %}
+			<div class="col">
+				<article class="article-section">
+				{{ content }}
+				</article>
+			</div>
+		</div>
 	</div>
 </section>
 <!-- Footer -->
 <footer class="site-footer">
 	<div class="container">
 		<div class="row">
-			<div class="col justify-content-center">
-				<a href="https://github.com/NICMx/FORT-validator" target="_blank" title="" class="d-flex">
-					<img src="../img/GitHub-Mark-Light-120px-plus.png" alt="Git">
+			<div class="col">
+				<a href="https://github.com/NICMx/FORT-validator" target="_blank" title="" class="d-flex justify-content-center">
+					<img src="{% if page.url == '/' %}./img/GitHub-Mark-Light-120px-plus.png{% else %}../img/GitHub-Mark-Light-120px-plus.png{% endif %}" alt="Git" width="40">
 				</a>
 			</div>
 		</div>
@@ -83,7 +129,7 @@
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 
 <!-- APP JS -->
-<script src="../js/metodos.js" type="text/javascript"></script>
+<script src="{% if page.url == '/' %}./js/metodos.js{% else %}../js/metodos.js{% endif %}" type="text/javascript"></script>
 
 
 </body>

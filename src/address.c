@@ -496,3 +496,32 @@ ipv6_prefix_validate(struct ipv6_prefix *prefix)
 
 	return 0;
 }
+
+/*
+ * Check if @son_addr is covered by @f_addr prefix of @f_len length
+ */
+bool
+ipv4_covered(struct in_addr *f_addr, uint8_t f_len, struct in_addr *son_addr)
+{
+	return (son_addr->s_addr & ~be32_suffix_mask(f_len)) == f_addr->s_addr;
+}
+
+/*
+ * Check if @son_addr is covered by @f_addr prefix of @f_len length
+ */
+bool
+ipv6_covered(struct in6_addr *f_addr, uint8_t f_len, struct in6_addr *son_addr)
+{
+	struct in6_addr suffix;
+	unsigned int i;
+
+	memset(&suffix, 0, sizeof(suffix));
+	ipv6_suffix_mask(f_len, &suffix);
+
+	for (i = 0; i < 16; i++)
+		if ((son_addr->s6_addr[i] & ~suffix.s6_addr[i]) !=
+		    f_addr->s6_addr[i])
+			return false;
+
+	return true;
+}
