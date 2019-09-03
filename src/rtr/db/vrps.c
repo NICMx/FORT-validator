@@ -61,7 +61,10 @@ struct state {
 } state;
 
 /** Read/write lock, which protects @state and its inhabitants. */
-static pthread_rwlock_t lock;
+static pthread_rwlock_t state_lock;
+
+/** Lock to protect ROA table during construction. */
+static pthread_rwlock_t table_lock;
 
 void
 deltagroup_cleanup(struct delta_group *group)
@@ -92,10 +95,17 @@ vrps_init(void)
 	    ? (state.v0_session_id - 1)
 	    : (0xFFFFu);
 
-	error = pthread_rwlock_init(&lock, NULL);
+	error = pthread_rwlock_init(&state_lock, NULL);
 	if (error) {
 		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
-		return pr_errno(error, "pthread_rwlock_init() errored");
+		return pr_errno(error, "state pthread_rwlock_init() errored");
+	}
+
+	error = pthread_rwlock_init(&table_lock, NULL);
+	if (error) {
+		pthread_rwlock_destroy(&state_lock);
+		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
+		return pr_errno(error, "table pthread_rwlock_init() errored");
 	}
 
 	return 0;
@@ -107,48 +117,55 @@ vrps_destroy(void)
 	if (state.base != NULL)
 		db_table_destroy(state.base);
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
-	pthread_rwlock_destroy(&lock); /* Nothing to do with error code */
+	/* Nothing to do with error codes from now on */
+	pthread_rwlock_destroy(&state_lock);
+	pthread_rwlock_destroy(&table_lock);
 }
 
+#define WLOCK_HANDLER(lock, cb)						\
+	int error;							\
+	rwlock_write_lock(lock);					\
+	error = cb;							\
+	rwlock_unlock(lock);						\
+	return error;
+
 int
-__handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
+handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 {
-	return rtrhandler_handle_roa_v4(arg, as, prefix, max_length);
+	WLOCK_HANDLER(&table_lock,
+	    rtrhandler_handle_roa_v4(arg, as, prefix, max_length))
 }
 
 int
-__handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
+handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
     uint8_t max_length, void *arg)
 {
-	return rtrhandler_handle_roa_v6(arg, as, prefix, max_length);
+	WLOCK_HANDLER(&table_lock,
+	    rtrhandler_handle_roa_v6(arg, as, prefix, max_length))
 }
 
 int
-__handle_router_key(unsigned char const *ski, uint32_t as,
+handle_router_key(unsigned char const *ski, uint32_t as,
     unsigned char const *spk, void *arg)
 {
-	return rtrhandler_handle_router_key(arg, ski, as, spk);
+	WLOCK_HANDLER(&table_lock,
+	    rtrhandler_handle_router_key(arg, ski, as, spk))
 }
 
 static int
 __perform_standalone_validation(struct db_table **result)
 {
 	struct db_table *db;
-	struct validation_handler validation_handler;
 	int error;
 
 	db = db_table_create();
 	if (db == NULL)
 		return pr_enomem();
 
-	validation_handler.handle_roa_v4 = __handle_roa_v4;
-	validation_handler.handle_roa_v6 = __handle_roa_v6;
-	validation_handler.handle_router_key = __handle_router_key;
-	validation_handler.arg = db;
-
-	error = perform_standalone_validation(&validation_handler);
+	error = perform_standalone_validation(db);
 	if (error) {
+		terminate_standalone_validation();
 		db_table_destroy(db);
 		return error;
 	}
@@ -255,7 +272,7 @@ vrps_update(bool *changed)
 	if (error)
 		return error;
 
-	rwlock_write_lock(&lock);
+	rwlock_write_lock(&state_lock);
 
 	/*
 	 * TODO (next iteration) Remember the last valid SLURM
@@ -271,12 +288,12 @@ vrps_update(bool *changed)
 	if (state.base != NULL) {
 		error = compute_deltas(state.base, new_base, &deltas);
 		if (error) {
-			rwlock_unlock(&lock);
+			rwlock_unlock(&state_lock);
 			goto revert_base;
 		}
 
 		if (deltas_is_empty(deltas)) {
-			rwlock_unlock(&lock);
+			rwlock_unlock(&state_lock);
 			goto revert_deltas; /* error == 0 is good */
 		}
 
@@ -286,7 +303,7 @@ vrps_update(bool *changed)
 			deltas_node.deltas = deltas;
 			error = deltas_db_add(&state.deltas, &deltas_node);
 			if (error) {
-				rwlock_unlock(&lock);
+				rwlock_unlock(&state_lock);
 				goto revert_deltas;
 			}
 		}
@@ -300,13 +317,13 @@ vrps_update(bool *changed)
 		/* Remove unnecessary deltas */
 		error = vrps_purge(&deltas);
 		if (error) {
-			rwlock_unlock(&lock);
+			rwlock_unlock(&state_lock);
 			goto revert_base;
 		}
 	} else {
 		error = create_empty_delta(&deltas);
 		if (error) {
-			rwlock_unlock(&lock);
+			rwlock_unlock(&state_lock);
 			goto revert_base;
 		}
 	}
@@ -315,7 +332,7 @@ vrps_update(bool *changed)
 	state.base = new_base;
 	state.next_serial++;
 
-	rwlock_unlock(&lock);
+	rwlock_unlock(&state_lock);
 
 	if (old_base != NULL)
 		db_table_destroy(old_base);
@@ -345,7 +362,7 @@ vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk, void *arg)
 {
 	int error;
 
-	error = rwlock_read_lock(&lock);
+	error = rwlock_read_lock(&state_lock);
 	if (error)
 		return error;
 
@@ -358,7 +375,7 @@ vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk, void *arg)
 		error = -EAGAIN;
 
 unlock:
-	rwlock_unlock(&lock);
+	rwlock_unlock(&state_lock);
 
 	return error;
 }
@@ -504,12 +521,12 @@ vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 
 	from_found = false;
 
-	error = rwlock_read_lock(&lock);
+	error = rwlock_read_lock(&state_lock);
 	if (error)
 		return error;
 
 	if (state.base == NULL) {
-		rwlock_unlock(&lock);
+		rwlock_unlock(&state_lock);
 		return -EAGAIN;
 	}
 
@@ -524,7 +541,7 @@ vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 
 		error = deltas_db_add(result, group);
 		if (error) {
-			rwlock_unlock(&lock);
+			rwlock_unlock(&state_lock);
 			return error;
 		}
 
@@ -532,7 +549,7 @@ vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 		*to = group->serial;
 	}
 
-	rwlock_unlock(&lock);
+	rwlock_unlock(&state_lock);
 	return from_found ? 0 : -ESRCH;
 }
 
@@ -541,7 +558,7 @@ get_last_serial_number(serial_t *result)
 {
 	int error;
 
-	error = rwlock_read_lock(&lock);
+	error = rwlock_read_lock(&state_lock);
 	if (error)
 		return error;
 
@@ -550,7 +567,7 @@ get_last_serial_number(serial_t *result)
 	else
 		error = -EAGAIN;
 
-	rwlock_unlock(&lock);
+	rwlock_unlock(&state_lock);
 
 	return error;
 }

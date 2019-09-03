@@ -22,6 +22,8 @@ struct validation {
 
 	struct cert_stack *certstack;
 
+	struct uri_list *visited_uris;
+
 	/* Did the TAL's public key match the root certificate's public key? */
 	enum pubkey_state pubkey_state;
 
@@ -115,12 +117,18 @@ validation_prepare(struct validation **out, struct tal *tal,
 	if (error)
 		goto abort3;
 
+	error = rsync_create(&result->visited_uris);
+	if (error)
+		goto abort4;
+
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
 	result->x509_data.params = params; /* Ownership transfered */
 
 	*out = result;
 	return 0;
+abort4:
+	certstack_destroy(result->certstack);
 abort3:
 	X509_VERIFY_PARAM_free(params);
 abort2:
@@ -136,6 +144,7 @@ validation_destroy(struct validation *state)
 	X509_VERIFY_PARAM_free(state->x509_data.params);
 	X509_STORE_free(state->x509_data.store);
 	certstack_destroy(state->certstack);
+	rsync_destroy(state->visited_uris);
 	free(state);
 }
 
@@ -155,6 +164,12 @@ struct cert_stack *
 validation_certstack(struct validation *state)
 {
 	return state->certstack;
+}
+
+struct uri_list *
+validation_visited_uris(struct validation *state)
+{
+	return state->visited_uris;
 }
 
 void

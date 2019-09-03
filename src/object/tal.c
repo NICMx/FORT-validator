@@ -3,10 +3,12 @@
 #include "tal.h"
 
 #include <errno.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/queue.h>
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
@@ -18,9 +20,11 @@
 #include "random.h"
 #include "state.h"
 #include "thread_var.h"
+#include "validation_handler.h"
 #include "crypto/base64.h"
 #include "object/certificate.h"
 #include "rsync/rsync.h"
+#include "rtr/db/vrps.h"
 
 #define TAL_FILE_EXTENSION	".tal"
 
@@ -36,6 +40,20 @@ struct tal {
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
 };
+
+struct fv_param {
+	char *tal_file;
+	void *arg;
+};
+
+struct thread {
+	pthread_t pid;
+	char *file;
+	SLIST_ENTRY(thread) next;
+};
+
+/* List of threads, one per TAL file */
+SLIST_HEAD(threads_list, thread) threads;
 
 static int
 uris_init(struct uris *uris)
@@ -132,6 +150,17 @@ get_spki_alloc_size(struct line_file *lfile)
 	return EVP_DECODE_LENGTH(get_spki_orig_size(lfile));
 }
 
+static char *
+locate_char(char *str, size_t len, char find)
+{
+	size_t i;
+
+	for(i = 0; i < len; i++)
+		if (str[i] == find)
+			return str + i;
+	return NULL;
+}
+
 /*
  * Get the base64 chars from @lfile and allocate to @out with lines no greater
  * than 65 chars (including line feed).
@@ -144,8 +173,7 @@ base64_sanitize(struct line_file *lfile, char **out)
 {
 #define BUF_SIZE 65
 	FILE *fd;
-	char buf[BUF_SIZE];
-	char *result, *eol;
+	char *buf, *result, *eol;
 	size_t original_size, new_size;
 	size_t fread_result, offset;
 	int error;
@@ -159,6 +187,12 @@ base64_sanitize(struct line_file *lfile, char **out)
 	result = malloc(new_size + 1);
 	if (result == NULL)
 		return pr_enomem();
+
+	buf = malloc(BUF_SIZE);
+	if (buf == NULL) {
+		free(result);
+		return pr_enomem();
+	}
 
 	fd = lfile_fd(lfile);
 	offset = 0;
@@ -177,7 +211,7 @@ base64_sanitize(struct line_file *lfile, char **out)
 		}
 
 		original_size -= fread_result;
-		eol = strchr(buf, '\n');
+		eol = locate_char(buf, fread_result, '\n');
 		/* Larger than buffer length, add LF and copy last char */
 		if (eol == NULL) {
 			memcpy(&result[offset], buf, fread_result - 1);
@@ -208,11 +242,13 @@ base64_sanitize(struct line_file *lfile, char **out)
 		}
 		result = eol;
 	}
+	free(buf);
 	result[offset] = '\0';
 
 	*out = result;
 	return 0;
 free_result:
+	free(buf);
 	free(result);
 	return error;
 #undef BUF_SIZE
@@ -395,21 +431,28 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 * A "hard error" is any other error.
 	 */
 
+	struct validation_handler validation_handler;
 	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
 	int error;
 
+	validation_handler.handle_roa_v4 = handle_roa_v4;
+	validation_handler.handle_roa_v6 = handle_roa_v6;
+	validation_handler.handle_router_key = handle_router_key;
+	validation_handler.arg = arg;
+
+	error = validation_prepare(&state, tal, &validation_handler);
+	if (error)
+		return ENSURE_NEGATIVE(error);
+
 	error = download_files(uri, true, false);
 	if (error) {
 		pr_warn("TAL '%s' could not be RSYNC'd.",
 		    uri_get_printable(uri));
+		validation_destroy(state);
 		return ENSURE_NEGATIVE(error);
 	}
-
-	error = validation_prepare(&state, tal, arg);
-	if (error)
-		return ENSURE_NEGATIVE(error);
 
 	pr_debug_add("TAL URI '%s' {", uri_get_printable(uri));
 
@@ -471,47 +514,123 @@ end:	validation_destroy(state);
 	return error;
 }
 
-static int
-do_file_validation(char const *tal_file, void *arg)
+static void *
+do_file_validation(void *thread_arg)
 {
+	struct fv_param param;
 	struct tal *tal;
 	int error;
 
-	fnstack_push(tal_file);
+	memcpy(&param, thread_arg, sizeof(param));
+	free(thread_arg);
 
-	error = tal_load(tal_file, &tal);
+	fnstack_init();
+	fnstack_push(param.tal_file);
+
+	error = tal_load(param.tal_file, &tal);
 	if (error)
 		goto end;
 
 	if (config_get_shuffle_tal_uris())
 		tal_shuffle_uris(tal);
-	error = foreach_uri(tal, handle_tal_uri, arg);
+	error = foreach_uri(tal, handle_tal_uri, param.arg);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
 		error = pr_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
-		    tal_file);
+		    param.tal_file);
 
 	tal_destroy(tal);
 end:
-	fnstack_pop();
+	fnstack_cleanup();
+	free(param.tal_file);
+	return NULL;
+}
+
+static void
+thread_destroy(struct thread *thread)
+{
+	free(thread->file);
+	free(thread);
+}
+
+/* Creates a thread for the @tal_file */
+static int
+__do_file_validation(char const *tal_file, void *arg)
+{
+	struct thread *thread;
+	struct fv_param *param;
+	static pthread_t pid;
+	int error;
+
+	param = malloc(sizeof(struct fv_param));
+	if (param == NULL)
+		return pr_enomem();
+
+	param->tal_file = strdup(tal_file);
+	param->arg = arg;
+
+	errno = pthread_create(&pid, NULL, do_file_validation, param);
+	if (errno) {
+		error = -pr_errno(errno,
+		    "Could not spawn the file validation thread");
+		goto free_param;
+	}
+
+	thread = malloc(sizeof(struct thread));
+	if (thread == NULL) {
+		close_thread(pid, tal_file);
+		error = -EINVAL;
+		goto free_param;
+	}
+
+	thread->pid = pid;
+	thread->file = strdup(tal_file);
+	SLIST_INSERT_HEAD(&threads, thread, next);
+
+	return 0;
+free_param:
+	free(param->tal_file);
+	free(param);
 	return error;
 }
 
 int
-perform_standalone_validation(struct validation_handler *handler)
+perform_standalone_validation(struct db_table *table)
 {
+	struct thread *thread;
 	int error;
 
-	error = rsync_init();
+	SLIST_INIT(&threads);
+	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
+	    __do_file_validation, table);
 	if (error)
 		return error;
 
-	fnstack_init();
-	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
-	    do_file_validation, handler);
-	fnstack_cleanup();
-	rsync_destroy();
+	/* Wait for all */
+	while (!SLIST_EMPTY(&threads)) {
+		thread = threads.slh_first;
+		error = pthread_join(thread->pid, NULL);
+		if (error)
+			pr_crit("pthread_join() threw %d on the '%s' thread.",
+			    error, thread->file);
+		SLIST_REMOVE_HEAD(&threads, next);
+		thread_destroy(thread);
+	}
 
 	return error;
+}
+
+void
+terminate_standalone_validation(void)
+{
+	struct thread *thread;
+
+	/* End all threads */
+	while (!SLIST_EMPTY(&threads)) {
+		thread = threads.slh_first;
+		close_thread(thread->pid, thread->file);
+		SLIST_REMOVE_HEAD(&threads, next);
+		thread_destroy(thread);
+	}
 }

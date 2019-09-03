@@ -5,7 +5,7 @@
 
 #include <stddef.h>
 #include "uri.h"
-#include "validation_handler.h"
+#include "rtr/db/db_table.h"
 
 struct tal;
 
@@ -19,6 +19,7 @@ void tal_shuffle_uris(struct tal *);
 char const *tal_get_file_name(struct tal *);
 void tal_get_spki(struct tal *, unsigned char const **, size_t *);
 
-int perform_standalone_validation(struct validation_handler *);
+int perform_standalone_validation(struct db_table *);
+void terminate_standalone_validation(void);
 
 #endif /* TAL_OBJECT_H_ */

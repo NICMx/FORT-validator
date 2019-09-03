@@ -77,6 +77,27 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 	return 0;
 }
 
+int
+rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
+    struct ipv4_prefix const *prefix4, uint8_t max_length)
+{
+	return 0;
+}
+
+int
+rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
+    struct ipv6_prefix const *prefix6, uint8_t max_length)
+{
+	return 0;
+}
+
+int
+rtrhandler_handle_router_key(struct db_table *table,
+    unsigned char const *ski, uint32_t as, unsigned char const *spk)
+{
+	return 0;
+}
+
 /* End of impersonator */
 
 static void

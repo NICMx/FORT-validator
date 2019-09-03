@@ -12,6 +12,7 @@
 #include "config.h"
 #include "log.h"
 #include "str.h"
+#include "thread_var.h"
 
 struct uri {
 	struct rpki_uri *uri;
@@ -19,28 +20,37 @@ struct uri {
 };
 
 /** URIs that we have already downloaded. */
-SLIST_HEAD(uri_list, uri) visited_uris;
+SLIST_HEAD(uri_list, uri);
 
 /* static char const *const RSYNC_PREFIX = "rsync://"; */
 
 int
-rsync_init(void)
+rsync_create(struct uri_list **result)
 {
-	SLIST_INIT(&visited_uris);
+	struct uri_list *visited_uris;
+
+	visited_uris = malloc(sizeof(struct uri_list));
+	if (visited_uris == NULL)
+		return pr_enomem();
+
+	SLIST_INIT(visited_uris);
+
+	*result = visited_uris;
 	return 0;
 }
 
 void
-rsync_destroy(void)
+rsync_destroy(struct uri_list *list)
 {
 	struct uri *uri;
 
-	while (!SLIST_EMPTY(&visited_uris)) {
-		uri = SLIST_FIRST(&visited_uris);
-		SLIST_REMOVE_HEAD(&visited_uris, next);
+	while (!SLIST_EMPTY(list)) {
+		uri = SLIST_FIRST(list);
+		SLIST_REMOVE_HEAD(list, next);
 		uri_refput(uri->uri);
 		free(uri);
 	}
+	free(list);
 }
 
 /*
@@ -77,12 +87,12 @@ is_descendant(struct rpki_uri *ancestor, struct rpki_uri *descendant)
  * run.
  */
 static bool
-is_already_downloaded(struct rpki_uri *uri)
+is_already_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 {
 	struct uri *cursor;
 
 	/* TODO (next iteration) this is begging for a radix trie. */
-	SLIST_FOREACH(cursor, &visited_uris, next)
+	SLIST_FOREACH(cursor, visited_uris, next)
 		if (is_descendant(cursor->uri, uri))
 			return true;
 
@@ -90,7 +100,7 @@ is_already_downloaded(struct rpki_uri *uri)
 }
 
 static int
-mark_as_downloaded(struct rpki_uri *uri)
+mark_as_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 {
 	struct uri *node;
 
@@ -101,7 +111,7 @@ mark_as_downloaded(struct rpki_uri *uri)
 	node->uri = uri;
 	uri_refget(uri);
 
-	SLIST_INSERT_HEAD(&visited_uris, node, next);
+	SLIST_INSERT_HEAD(visited_uris, node, next);
 
 	return 0;
 }
@@ -375,13 +385,21 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	 * @rsync_uri is the URL we're actually going to RSYNC.
 	 * (They can differ, depending on config_get_sync_strategy().)
 	 */
+	struct validation *state;
+	struct uri_list *visited_uris;
 	struct rpki_uri *rsync_uri;
 	int error;
 
 	if (config_get_sync_strategy() == SYNC_OFF)
 		return 0;
 
-	if (!force && is_already_downloaded(requested_uri)) {
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+
+	visited_uris = validation_visited_uris(state);
+
+	if (!force && is_already_downloaded(requested_uri, visited_uris)) {
 		pr_debug("No need to redownload '%s'.",
 		    uri_get_printable(requested_uri));
 		return 0;
@@ -399,8 +417,9 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 
 	/* Don't store when "force" and if its already downloaded */
 	error = do_rsync(rsync_uri, is_ta);
-	if (!error && !(force && is_already_downloaded(rsync_uri)))
-		error = mark_as_downloaded(rsync_uri);
+	if (!error &&
+	    !(force && is_already_downloaded(rsync_uri, visited_uris)))
+		error = mark_as_downloaded(rsync_uri, visited_uris);
 
 	uri_refput(rsync_uri);
 	return error;

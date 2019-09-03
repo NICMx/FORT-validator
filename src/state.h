@@ -5,6 +5,7 @@
 #include "cert_stack.h"
 #include "validation_handler.h"
 #include "object/tal.h"
+#include "rsync/rsync.h"
 
 struct validation;
 
@@ -14,7 +15,8 @@ void validation_destroy(struct validation *);
 
 struct tal *validation_tal(struct validation *);
 X509_STORE *validation_store(struct validation *);
-struct cert_stack *validation_certstack(struct validation *state);
+struct cert_stack *validation_certstack(struct validation *);
+struct uri_list *validation_visited_uris(struct validation *);
 
 enum pubkey_state {
 	PKS_VALID,
