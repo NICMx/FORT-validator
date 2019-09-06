@@ -368,7 +368,7 @@ If enabled, the logging output will contain ANSI color codes. Meant for human co
 
 <pre><code class="terminal">$ {{ page.command }} --color-output (...)
 <span style="color:cyan">DBG: Manifest '62gPOPXWxxu0sQa4vQZYUBLaMbY.mft' {</span>
-<span style="color:lightgray">INF: rpkiManifest registered. Its nid is 1061.</span>
+<span style="color:lightgray">INF: Configuration {</span>
 <span style="color:orange">WRN: H2jRmyC2M.mft: The signature algorithm has parameters.</span>
 <span style="color:red">ERR: H2jRmyC2M.mft: Certificate validation failed: certificate has expired</span>
 <span style="color:magenta">CRT: Programming error: Array size is 1 but array is NULL.</span>

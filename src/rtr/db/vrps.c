@@ -423,8 +423,9 @@ router_key_ovrd_remove(struct delta_router_key const *delta, void *arg)
 	SLIST_FOREACH(ptr, filtered_keys, next) {
 		key = &delta->router_key;
 		if (key->as == ptr->delta.router_key.as &&
-		    memcmp(key->ski, ptr->delta.router_key.ski, RK_SKI_LEN) &&
-		    memcmp(key->spk, ptr->delta.router_key.spk, RK_SPKI_LEN) &&
+		    memcmp(key->ski, ptr->delta.router_key.ski, RK_SKI_LEN) == 0
+		    && memcmp(key->spk, ptr->delta.router_key.spk,
+		    RK_SPKI_LEN) == 0 &&
 		    delta->flags != ptr->delta.flags) {
 			SLIST_REMOVE(filtered_keys, ptr, rk_node, next);
 			free(ptr);

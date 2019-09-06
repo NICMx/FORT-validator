@@ -86,7 +86,7 @@ init_reset_query(struct rtr_request *request, struct reset_query_pdu *query)
 {
 	request->pdu = query;
 	request->bytes_len = 0;
-	query->header.protocol_version = RTR_V0;
+	query->header.protocol_version = RTR_V1;
 	query->header.pdu_type = PDU_TYPE_RESET_QUERY;
 	query->header.m.reserved = 0;
 	query->header.length = 8;
@@ -98,9 +98,9 @@ init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
 {
 	request->pdu = query;
 	request->bytes_len = 0;
-	query->header.protocol_version = RTR_V0;
+	query->header.protocol_version = RTR_V1;
 	query->header.pdu_type = PDU_TYPE_SERIAL_QUERY;
-	query->header.m.session_id = get_current_session_id(RTR_V0);
+	query->header.m.session_id = get_current_session_id(RTR_V1);
 	query->header.length = 12;
 	query->serial_number = serial;
 }
@@ -124,7 +124,7 @@ int
 clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
 {
 	(*is_set) = true;
-	(*rtr_version) = RTR_V0;
+	(*rtr_version) = RTR_V1;
 	return 0;
 }
 
@@ -180,7 +180,7 @@ static int
 handle_delta(struct delta_vrp const *delta, void *arg)
 {
 	int *fd = arg;
-	ck_assert_int_eq(0, send_prefix_pdu(*fd, RTR_V0, &delta->vrp,
+	ck_assert_int_eq(0, send_prefix_pdu(*fd, RTR_V1, &delta->vrp,
 	    delta->flags));
 	return 0;
 }
@@ -189,7 +189,7 @@ static int
 handle_delta_router_key(struct delta_router_key const *delta, void *arg)
 {
 	int *fd = arg;
-	ck_assert_int_eq(0, send_router_key_pdu(*fd, RTR_V0, &delta->router_key,
+	ck_assert_int_eq(0, send_router_key_pdu(*fd, RTR_V1, &delta->router_key,
 	    delta->flags));
 	return 0;
 }
@@ -226,7 +226,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 
 /* Tests */
 
-/* https://tools.ietf.org/html/rfc6810#section-6.1 */
+/* https://tools.ietf.org/html/rfc8210#section-8.1 */
 START_TEST(test_start_or_restart)
 {
 	struct rtr_request request;
@@ -244,6 +244,7 @@ START_TEST(test_start_or_restart)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* Run and validate */
@@ -255,7 +256,7 @@ START_TEST(test_start_or_restart)
 }
 END_TEST
 
-/* https://tools.ietf.org/html/rfc6810#section-6.2 */
+/* https://tools.ietf.org/html/rfc8210#section-8.2 */
 START_TEST(test_typical_exchange)
 {
 	struct rtr_request request;
@@ -273,8 +274,10 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 0: Run and validate */
@@ -288,6 +291,7 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 1: Run and validate */
@@ -310,7 +314,7 @@ START_TEST(test_typical_exchange)
 }
 END_TEST
 
-/* https://tools.ietf.org/html/rfc6810#section-6.3 */
+/* https://tools.ietf.org/html/rfc8210#section-8.3 */
 START_TEST(test_no_incremental_update_available)
 {
 	struct rtr_request request;
@@ -338,7 +342,7 @@ START_TEST(test_no_incremental_update_available)
 }
 END_TEST
 
-/* https://tools.ietf.org/html/rfc6810#section-6.4 */
+/* https://tools.ietf.org/html/rfc8210#section-8.4 */
 START_TEST(test_cache_has_no_data_available)
 {
 	struct rtr_request request;
@@ -458,7 +462,7 @@ Suite *pdu_suite(void)
 	Suite *suite;
 	TCase *core, *error;
 
-	core = tcase_create("RFC6810-Defined Protocol Sequences");
+	core = tcase_create("RFC8210-Defined Protocol Sequences");
 	tcase_add_test(core, test_start_or_restart);
 	tcase_add_test(core, test_typical_exchange);
 	tcase_add_test(core, test_no_incremental_update_available);
