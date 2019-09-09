@@ -2,8 +2,6 @@
 title: Incidence
 ---
  
-[Documentation](index.html) > {{ page.title }}
-
 # {{ page.title }} 
 
 ## Index

@@ -2,8 +2,6 @@
 title: Compilation and Installation
 ---
 
-[Documentation](index.html) > {{ page.title }}
-
 # {{ page.title }}
 
 ## Index

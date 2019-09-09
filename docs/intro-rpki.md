@@ -2,8 +2,6 @@
 title: Introduction to RPKI
 ---
 
-[Documentation](index.html) > {{ page.title }}
-
 # {{ page.title }}
 
 ## Problem Statement

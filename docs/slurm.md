@@ -2,8 +2,6 @@
 title: SLURM
 ---
 
-[Documentation](index.html) > {{ page.title }}
-
 # {{ page.title }} 
 
 ## Introduction
