@@ -37,7 +37,7 @@ log_setup(void)
 	CRT.stream = stderr;
 	UNK.stream = stdout;
 
-	openlog("Fort", LOG_CONS | LOG_PID, LOG_DAEMON);
+	openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);
 	fprintf_enabled = true;
 	syslog_enabled = true;
 }
