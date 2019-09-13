@@ -1,5 +1,5 @@
 ---
-title: Running Fort
+title: Basic Usage
 ---
 
 # {{ page.title }}
@@ -35,4 +35,4 @@ fort \
 	--server.port <your intended RTR server port>
 {% endhighlight %}
 
-These are some examples to run Fort with distinct configurations; see [usage](usage.html) for more details.
+These are some examples to run Fort with distinct configurations; see [Program Arguments](usage.html) for more details.

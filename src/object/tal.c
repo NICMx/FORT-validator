@@ -454,7 +454,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		return ENSURE_NEGATIVE(error);
 	}
 
-	pr_debug_add("TAL URI '%s' {", uri_get_printable(uri));
+	pr_debug("TAL URI '%s' {", uri_get_printable(uri));
 
 	if (!uri_is_certificate(uri)) {
 		error = pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
@@ -510,7 +510,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 
 fail:	error = ENSURE_NEGATIVE(error);
 end:	validation_destroy(state);
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }
 

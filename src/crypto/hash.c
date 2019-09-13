@@ -15,7 +15,7 @@ get_md(char const *algorithm, EVP_MD const **result)
 
 	md = EVP_get_digestbyname(algorithm);
 	if (md == NULL) {
-		printf("Unknown message digest %s\n", algorithm);
+		pr_err("Unknown message digest %s", algorithm);
 		return -EINVAL;
 	}
 

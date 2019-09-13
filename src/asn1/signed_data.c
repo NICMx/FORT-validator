@@ -73,7 +73,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	 * to a tree leaf. Loops aren't possible.
 	 */
 
-	pr_debug_add("EE Certificate (embedded) {");
+	pr_debug("EE Certificate (embedded) {");
 
 	/*
 	 * "If the call is successful *in is incremented to the byte following
@@ -114,7 +114,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 end2:
 	X509_free(cert);
 end1:
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }
 

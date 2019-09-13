@@ -36,8 +36,8 @@ thvar_init(void)
 
 	error = pthread_key_create(&state_key, NULL);
 	if (error) {
-		fprintf(stderr,
-		    "Fatal: Errcode %d while initializing the validation state thread variable.\n",
+		pr_err(
+		    "Fatal: Errcode %d while initializing the validation state thread variable.",
 		    error);
 		return error;
 	}
@@ -50,8 +50,8 @@ thvar_init(void)
 	 */
 	error = pthread_key_create(&filenames_key, fnstack_discard);
 	if (error) {
-		fprintf(stderr,
-		    "Fatal: Errcode %d while initializing the file name stack thread variable.\n",
+		pr_err(
+		    "Fatal: Errcode %d while initializing the file name stack thread variable.",
 		    error);
 		return error;
 	}
@@ -67,7 +67,7 @@ state_store(struct validation *state)
 
 	error = pthread_setspecific(state_key, state);
 	if (error)
-		fprintf(stderr, "pthread_setspecific() returned %d.", error);
+		pr_err("pthread_setspecific() returned %d.", error);
 
 	return error;
 }
@@ -80,7 +80,7 @@ state_retrieve(void)
 
 	state = pthread_getspecific(state_key);
 	if (state == NULL)
-		fprintf(stderr, "Programming error: This thread lacks a validation state.\n");
+		pr_err("Programming error: This thread lacks a validation state.");
 
 	return state;
 }
@@ -107,7 +107,7 @@ fnstack_init(void)
 
 	error = pthread_setspecific(filenames_key, files);
 	if (error)
-		fprintf(stderr, "pthread_setspecific() returned %d.", error);
+		pr_err("pthread_setspecific() returned %d.", error);
 }
 
 void
@@ -124,7 +124,7 @@ fnstack_cleanup(void)
 
 	error = pthread_setspecific(filenames_key, NULL);
 	if (error)
-		fprintf(stderr, "pthread_setspecific() returned %d.", error);
+		pr_err("pthread_setspecific() returned %d.", error);
 }
 
 /**

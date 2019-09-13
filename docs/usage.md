@@ -1,5 +1,5 @@
 ---
-title: Fort Usage
+title: Program Arguments
 command: fort
 ---
 

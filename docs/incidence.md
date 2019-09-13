@@ -13,9 +13,9 @@ title: Incidence
 
 ## Introduction
 
-The RPKI RFCs define fairly strict profiles for RPKI objects, and are unequivocal in stating that incorrectly-formed objects are supposed to be rejected by Relying Party validation. In practice, however, this does not prevent a significant amount of Certificate Authorities from issuing incorrect objects.
+The RPKI RFCs define fairly strict profiles for RPKI objects, and are unequivocal in stating that incorrectly-formed objects are supposed to be rejected by Relying Party validation. In practice, however, this does not prevent a significant amount of legitimate Certificate Authorities from issuing incorrect objects.
 
-By default, Fort is lax with some of this bad practices. The `incidence` section of its configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
+The `incidence` section of Fort's configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
 
 ## `incidences` definition
 
@@ -30,7 +30,7 @@ By default, Fort is lax with some of this bad practices. The `incidence` section
 ]
 ```
 
-`name` is the identifier of an incidence. It is case-sensitive and developer-defined. It states an ID of the particular error condition that will be handled by the remaining field.
+`name` is the identifier of an incidence. It is case-sensitive and developer-defined. It states the ID of the particular error condition that will be handled by the remaining field.
 
 `action` is an enumeration that states the outcome of a violation of the corresponding incidence. It can take one of three values:
 
@@ -38,7 +38,7 @@ By default, Fort is lax with some of this bad practices. The `incidence` section
 2. `warn`: Print error message in `warning` log level, continue validation as if nothing happened.
 3. `ignore`: Do not print error message, continue validation as if nothing happened.
 
-Since most of the incidences are result of a bad practice at the global RPKI, they have an `action` of `ignore` by default. If a strict behavior is desired, then the corresponding incidences should be configured with an `action` of `error`.
+Some incidences are `ignore`d by default, because they stem from bad practices (which are nonetheless likely harmless) in the global RPKI repositories. If a strict behavior is desired, then the corresponding incidence `action` should be upgraded.
 
 ## Incidence types
 

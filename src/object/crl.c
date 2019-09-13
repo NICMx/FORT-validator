@@ -72,8 +72,8 @@ validate_revoked(X509_CRL *crl)
 		pr_debug_prefix();
 		fprintf(stdout, "Revoked: ");
 		BN_print_fp(stdout, serial_bn);
-		fprintf(stdout, "\n");
 		BN_free(serial_bn);
+		pr_debug_suffix();
 #endif
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {
@@ -142,12 +142,12 @@ int
 crl_load(struct rpki_uri *uri, X509_CRL **result)
 {
 	int error;
-	pr_debug_add("CRL '%s' {", uri_get_printable(uri));
+	pr_debug("CRL '%s' {", uri_get_printable(uri));
 
 	error = __crl_load(uri, result);
 	if (!error)
 		error = crl_validate(*result);
 
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }

@@ -64,7 +64,7 @@ validate_serial_number(X509 *cert)
 	pr_debug_prefix();
 	fprintf(stdout, "serial Number: ");
 	BN_print_fp(stdout, number);
-	fprintf(stdout, "\n");
+	pr_debug_suffix();
 #endif
 
 	error = x509stack_store_serial(validation_certstack(state), number);
@@ -758,9 +758,9 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 			if (!X509_EXTENSION_get_critical(ext))
 				return pr_err("The IP extension is not marked as critical.");
 
-			pr_debug_add("IP {");
+			pr_debug("IP {");
 			error = handle_ip_extension(ext, resources);
-			pr_debug_rm("}");
+			pr_debug("}");
 			ip_ext_found = true;
 
 			if (error)
@@ -772,10 +772,10 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 			if (!X509_EXTENSION_get_critical(ext))
 				return pr_err("The AS extension is not marked as critical.");
 
-			pr_debug_add("ASN {");
+			pr_debug("ASN {");
 			error = handle_asn_extension(ext, resources,
 			    allow_asn_inherit);
-			pr_debug_rm("}");
+			pr_debug("}");
 			asn_ext_found = true;
 
 			if (error)
@@ -1553,10 +1553,10 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 #ifdef DEBUG
 	if (IS_TA)
-		pr_debug_add("TA Certificate '%s' {",
+		pr_debug("TA Certificate '%s' {",
 		    uri_get_printable(cert_uri));
 	else
-		pr_debug_add("Certificate '%s' {",
+		pr_debug("Certificate '%s' {",
 		    uri_get_printable(cert_uri));
 #endif
 	fnstack_push_uri(cert_uri);
@@ -1688,6 +1688,6 @@ revert_cert:
 		X509_free(cert);
 revert_fnstack_and_debug:
 	fnstack_pop();
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }

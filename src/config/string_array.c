@@ -60,14 +60,11 @@ string_array_print(struct option_field const *field, void *_value)
 	size_t i;
 
 	pr_info("%s:", field->name);
-	pr_indent_add();
 
 	if (value->length == 0)
-		pr_info("<Nothing>");
+		pr_info("  <Nothing>");
 	else for (i = 0; i < value->length; i++)
-		pr_info("%s", value->array[i]);
-
-	pr_indent_rm();
+		pr_info("  %s", value->array[i]);
 }
 
 static int

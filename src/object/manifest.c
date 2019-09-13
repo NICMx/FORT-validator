@@ -221,7 +221,7 @@ handle_manifest(struct rpki_uri *uri, struct rpp **pp)
 	int error;
 
 	/* Prepare */
-	pr_debug_add("Manifest '%s' {", uri_get_printable(uri));
+	pr_debug("Manifest '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
 	/* Decode */
@@ -269,7 +269,7 @@ revert_manifest:
 revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:
-	pr_debug_rm("}");
+	pr_debug("}");
 	fnstack_pop();
 	return error;
 }

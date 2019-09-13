@@ -97,8 +97,8 @@ create_server_socket(int *result)
 		return error;
 
 	for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-		printf(
-		    "Attempting to bind socket to address '%s', port '%s'.\n",
+		pr_info(
+		    "Attempting to bind socket to address '%s', port '%s'.",
 		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
 		    config_get_server_port());
 
@@ -122,7 +122,7 @@ create_server_socket(int *result)
 
 		port = (unsigned char)(addr->ai_addr->sa_data[0]) << 8;
 		port += (unsigned char)(addr->ai_addr->sa_data[1]);
-		printf("Success, bound to address '%s', port '%ld'.\n",
+		pr_info("Success; bound to address '%s', port '%ld'.",
 		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
 		    port);
 		freeaddrinfo(addrs);
@@ -388,6 +388,8 @@ rtr_listen(void)
 		if (error)
 			pr_err("Error %d while trying to update the ROA database.",
 			    error);
+		else
+			pr_info("Validation finished.");
 		goto revert_clients_db; /* Error 0 it's ok */
 	}
 

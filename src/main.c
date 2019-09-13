@@ -24,7 +24,7 @@ just_quit:
 }
 
 int
-main(int argc, char **argv)
+__main(int argc, char **argv)
 {
 	int error;
 
@@ -41,6 +41,19 @@ main(int argc, char **argv)
 	if (error)
 		return error;
 
+	switch (config_get_mode()) {
+	case SERVER:
+		pr_info("Server mode configured; disabling logging on standard streams.");
+		pr_info("(Logs will be sent to syslog only.)");
+		log_disable_std();
+		break;
+	case STANDALONE:
+		pr_info("Standalone mode configured; disabling logging on syslog.");
+		pr_info("(Logs will be sent to the standard streams only.)");
+		log_disable_syslog();
+		break;
+	}
+
 	error = nid_init();
 	if (error)
 		goto revert_config;
@@ -54,5 +67,17 @@ revert_nid:
 	nid_destroy();
 revert_config:
 	free_rpki_config();
+	return error;
+}
+
+int
+main(int argc, char **argv)
+{
+	int error;
+
+	log_setup();
+	error = __main(argc, argv);
+	log_teardown();
+
 	return error;
 }

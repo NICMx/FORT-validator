@@ -478,13 +478,11 @@ print_config(void)
 	struct option_field const *opt;
 
 	pr_info("Configuration {");
-	pr_indent_add();
 
 	FOREACH_OPTION(options, opt, 0xFFFF)
 		if (is_rpki_config_field(opt) && opt->type->print != NULL)
 			opt->type->print(opt, get_rpki_config_field(opt));
 
-	pr_indent_rm();
 	pr_info("}");
 }
 
