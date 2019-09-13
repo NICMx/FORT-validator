@@ -362,7 +362,7 @@ SLURM file, or directory containing SLURM files. See [SLURM](slurm.html).
 - **Type:** None
 - **Availability:** `argv` and JSON
 
-If enabled, the logging output will contain ANSI color codes. Meant for human consumption.
+If enabled, the logging output will contain ANSI color codes. Meant for human consumption:
 
 <pre><code class="terminal">$ {{ page.command }} --color-output (...)
 <span style="color:cyan">DBG: Manifest '62gPOPXWxxu0sQa4vQZYUBLaMbY.mft' {</span>
@@ -371,6 +371,8 @@ If enabled, the logging output will contain ANSI color codes. Meant for human co
 <span style="color:red">ERR: H2jRmyC2M.mft: Certificate validation failed: certificate has expired</span>
 <span style="color:magenta">CRT: Programming error: Array size is 1 but array is NULL.</span>
 </code></pre>
+
+At present, this flag only affects standard output and standard error. Color codes are not sent to syslog, regardless of this flag.
 
 ### `--log.file-name-format`
 
@@ -400,6 +402,8 @@ ERR: repository/rpki.example.com/foo/bar/baz.cer: Certificate validation failed:
 $ {{ page.command }} --log.file-name-format file-name  --local-repository repository/ (...)
 ERR: baz.cer: Certificate validation failed: certificate has expired
 {% endhighlight %}
+
+This flag affects standard output, standard error and syslog.
 
 ### `--output.roa`
 

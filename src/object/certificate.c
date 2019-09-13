@@ -61,10 +61,9 @@ validate_serial_number(X509 *cert)
 		return crypto_err("Could not parse certificate serial number");
 
 #ifdef DEBUG
-	pr_debug_prefix();
 	fprintf(stdout, "serial Number: ");
 	BN_print_fp(stdout, number);
-	pr_debug_suffix();
+	fprintf(stdout, "\n");
 #endif
 
 	error = x509stack_store_serial(validation_certstack(state), number);

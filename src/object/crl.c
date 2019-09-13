@@ -69,11 +69,10 @@ validate_revoked(X509_CRL *crl)
 			continue;
 		}
 
-		pr_debug_prefix();
 		fprintf(stdout, "Revoked: ");
 		BN_print_fp(stdout, serial_bn);
 		BN_free(serial_bn);
-		pr_debug_suffix();
+		fprintf(stdout, "\n");
 #endif
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {

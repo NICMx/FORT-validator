@@ -55,12 +55,16 @@ void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
 #define pr_debug(...) do {} while (0)
 #endif
 
+/* Non-errors deemed useful to the user. */
 void pr_info(const char *, ...) CHECK_FORMAT(1, 2);
+/* Issues that did not trigger RPKI object rejection. */
 int pr_warn(const char *, ...) CHECK_FORMAT(1, 2);
+/* Errors that trigger RPKI object rejection. */
 int pr_err(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
 int crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_enomem(void);
+/* Programming errors */
 __dead void pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
 
 int incidence(enum incidence_id, const char *, ...) CHECK_FORMAT(2, 3);

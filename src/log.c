@@ -105,45 +105,41 @@ __fprintf(int level, char const *format, ...)
 	fprintf(lvl->stream, "\n");
 }
 
-static bool
-pr_file_name(int level)
-{
-	char const *file_name;
-
-	file_name = fnstack_peek();
-	if (file_name == NULL)
-		return false;
-
-	if (syslog_enabled)
-		syslog(level, "%s:", file_name);
-	if (fprintf_enabled)
-		__fprintf(level, "%s:", file_name);
-
-	return true;
-}
-
 #define MSG_LEN 512
 
 static void
-pr_syslog(int level, bool indent, const char *format, va_list args)
+pr_syslog(int level, const char *format, va_list args)
 {
+	char const *file_name;
+	struct level const *lvl;
 	char msg[MSG_LEN];
+
+	file_name = fnstack_peek();
+	lvl = level2struct(level);
+
 	/* Can't use vsyslog(); it's not portable. */
 	vsnprintf(msg, MSG_LEN, format, args);
-	syslog(level, "%s%s", indent ? "  " : "", msg);
+	if (file_name != NULL)
+		syslog(level, "%s: %s: %s", lvl->label, file_name, msg);
+	else
+		syslog(level, "%s: %s", lvl->label, msg);
 }
 
 static void
-pr_stream(int level, bool indent, const char *format, va_list args)
+pr_stream(int level, const char *format, va_list args)
 {
-	struct level const *lvl = level2struct(level);
+	char const *file_name;
+	struct level const *lvl;
+
+	file_name = fnstack_peek();
+	lvl = level2struct(level);
 
 	if (config_get_color_output())
 		fprintf(lvl->stream, "%s", lvl->color);
 
 	fprintf(lvl->stream, "%s: ", lvl->label);
-	if (indent)
-		fprintf(lvl->stream, "  ");
+	if (file_name != NULL)
+		fprintf(lvl->stream, "%s: ", file_name);
 	vfprintf(lvl->stream, format, args);
 
 	if (config_get_color_output())
@@ -155,19 +151,16 @@ pr_stream(int level, bool indent, const char *format, va_list args)
 #define PR_SIMPLE(level)						\
 	do {								\
 		va_list args;						\
-		bool indent;						\
-									\
-		indent = pr_file_name(level);				\
 									\
 		if (syslog_enabled) {					\
 			va_start(args, format);				\
-			pr_syslog(level, indent, format, args);		\
+			pr_syslog(level, format, args);			\
 			va_end(args);					\
 		}							\
 									\
 		if (fprintf_enabled) {					\
 			va_start(args, format);				\
-			pr_stream(level, indent, format, args);		\
+			pr_stream(level, format, args);			\
 			va_end(args);					\
 		}							\
 	} while (0)
