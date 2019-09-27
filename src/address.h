@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/IPAddressRange.h"
 
@@ -49,5 +50,7 @@ int ipv6_prefix_validate(struct ipv6_prefix *);
 
 bool ipv4_covered(struct in_addr *, uint8_t, struct in_addr *);
 bool ipv6_covered(struct in6_addr *, uint8_t, struct in6_addr *);
+
+char const *sockaddr2str(struct sockaddr_storage *, char *);
 
 #endif /* SRC_ADDRESS_H_ */

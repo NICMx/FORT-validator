@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h> /* inet_ntop */
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "clients.h"
 #include "config.h"
@@ -25,9 +28,11 @@ set_header_values(struct pdu_header *header, uint8_t version, uint8_t type,
 }
 
 static int
-send_response(int fd, unsigned char *data, size_t data_len)
+send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 {
 	int error;
+
+	pr_debug("Sending %s PDU to client.", pdutype2str(pdu_type));
 
 	error = write(fd, data, data_len);
 	if (error < 0)
@@ -53,7 +58,7 @@ send_serial_notify_pdu(int fd, uint8_t version, serial_t start_serial)
 	if (len != RTRPDU_SERIAL_NOTIFY_LEN)
 		pr_crit("Serialized Serial Notify is %zu bytes.", len);
 
-	return send_response(fd, data, len);
+	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
 int
@@ -71,7 +76,7 @@ send_cache_reset_pdu(int fd, uint8_t version)
 	if (len != RTRPDU_CACHE_RESET_LEN)
 		pr_crit("Serialized Cache Reset is %zu bytes.", len);
 
-	return send_response(fd, data, len);
+	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
 int
@@ -90,7 +95,22 @@ send_cache_response_pdu(int fd, uint8_t version)
 	if (len != RTRPDU_CACHE_RESPONSE_LEN)
 		pr_crit("Serialized Cache Response is %zu bytes.", len);
 
-	return send_response(fd, data, len);
+	return send_response(fd, pdu.header.pdu_type, data, len);
+}
+
+static void
+pr_debug_prefix4(struct ipv4_prefix_pdu *pdu)
+{
+#ifdef DEBUG
+	char buffer[INET_ADDRSTRLEN];
+	char const *addr_str;
+
+	addr_str = inet_ntop(AF_INET, &pdu->ipv4_prefix, buffer,
+	    INET_ADDRSTRLEN);
+
+	pr_debug("Encoded prefix %s/%u into a PDU.", addr_str,
+	    pdu->prefix_length);
+#endif
 }
 
 static int
@@ -114,8 +134,24 @@ send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv4_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV4_PREFIX_LEN)
 		pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
+	pr_debug_prefix4(&pdu);
 
-	return send_response(fd, data, len);
+	return send_response(fd, pdu.header.pdu_type, data, len);
+}
+
+static void
+pr_debug_prefix6(struct ipv6_prefix_pdu *pdu)
+{
+#ifdef DEBUG
+	char buffer[INET6_ADDRSTRLEN];
+	char const *addr_str;
+
+	addr_str = inet_ntop(AF_INET6, &pdu->ipv6_prefix, buffer,
+	    INET6_ADDRSTRLEN);
+
+	pr_debug("Encoded prefix %s/%u into a PDU.", addr_str,
+	    pdu->prefix_length);
+#endif
 }
 
 static int
@@ -139,8 +175,9 @@ send_ipv6_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv6_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV6_PREFIX_LEN)
 		pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
+	pr_debug_prefix6(&pdu);
 
-	return send_response(fd, data, len);
+	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
 int
@@ -186,7 +223,7 @@ send_router_key_pdu(int fd, uint8_t version,
 		pr_crit("Serialized Router Key PDU is %zu bytes, not the expected %u.",
 		    len, pdu.header.length);
 
-	return send_response(fd, data, len);
+	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
 struct simple_param {
@@ -262,7 +299,7 @@ send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 	if (len != GET_END_OF_DATA_LENGTH(version))
 		pr_crit("Serialized End of Data is %zu bytes.", len);
 
-	error = send_response(fd, data, len);
+	error = send_response(fd, pdu.header.pdu_type, data, len);
 	if (error)
 		return error;
 
@@ -308,7 +345,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 		pr_crit("Serialized Error Report PDU is %zu bytes, not the expected %u.",
 		    len, pdu.header.length);
 
-	error = send_response(fd, data, len);
+	error = send_response(fd, pdu.header.pdu_type, data, len);
 
 	free(data);
 	return error;

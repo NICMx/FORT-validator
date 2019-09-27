@@ -4,11 +4,41 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "address.h"
 #include "clients.h"
 #include "common.h"
 #include "log.h"
 #include "rtr/err_pdu.h"
 #include "rtr/pdu_handler.h"
+
+char const *
+pdutype2str(enum pdu_type type)
+{
+	switch (type) {
+	case PDU_TYPE_SERIAL_NOTIFY:
+		return "Serial Notify";
+	case PDU_TYPE_SERIAL_QUERY:
+		return "Serial Query";
+	case PDU_TYPE_RESET_QUERY:
+		return "Reset Query";
+	case PDU_TYPE_CACHE_RESPONSE:
+		return "Cache Response";
+	case PDU_TYPE_IPV4_PREFIX:
+		return "IPv4 Prefix";
+	case PDU_TYPE_IPV6_PREFIX:
+		return "IPv6 Prefix";
+	case PDU_TYPE_END_OF_DATA:
+		return "End of Data";
+	case PDU_TYPE_CACHE_RESET:
+		return "Cache Reset";
+	case PDU_TYPE_ROUTER_KEY:
+		return "Router Key";
+	case PDU_TYPE_ERROR_REPORT:
+		return "Error Report";
+	}
+
+	return "(unknown)";
+}
 
 static int
 pdu_header_from_reader(struct pdu_reader *reader, struct pdu_header *header)
@@ -75,8 +105,8 @@ validate_rtr_version(int fd, struct pdu_header *header,
 }
 
 int
-pdu_load(int fd, struct rtr_request *request,
-    struct pdu_metadata const **metadata)
+pdu_load(int fd, struct sockaddr_storage *client_addr,
+    struct rtr_request *request, struct pdu_metadata const **metadata)
 {
 	unsigned char hdr_bytes[RTRPDU_HDR_LEN];
 	struct pdu_reader reader;
@@ -95,6 +125,15 @@ pdu_load(int fd, struct rtr_request *request,
 		/* No error response because the PDU might have been an error */
 		return error;
 
+#ifdef DEBUG
+	{
+		char buffer[INET6_ADDRSTRLEN];
+		pr_debug("Received a %s PDU from %s.",
+		    pdutype2str(header.pdu_type),
+		    sockaddr2str(client_addr, buffer));
+	}
+#endif
+
 	error = validate_rtr_version(fd, &header, hdr_bytes);
 	if (error)
 		return error; /* Error response PDU already sent */
@@ -105,7 +144,10 @@ pdu_load(int fd, struct rtr_request *request,
 	/*
 	 * DO NOT USE THE err_pdu_* functions directly. Wrap them with
 	 * RESPOND_ERROR() INSTEAD.
+	 * TODO I think this comment should be above validate_rtr_version(),
+	 * and validate_rtr_version() is buggy.
 	 */
+
 	if (header.length < RTRPDU_HDR_LEN)
 		return RESPOND_ERROR(err_pdu_send_invalid_request_truncated(fd,
 		    version, hdr_bytes, "Invalid header length. (< 8 bytes)"));

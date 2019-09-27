@@ -76,7 +76,6 @@ init_addrinfo(struct addrinfo **result)
 	return 0;
 }
 
-
 /*
  * Creates the socket that will stay put and wait for new connections started
  * from the clients.
@@ -203,31 +202,12 @@ print_close_failure(int error, int fd)
 {
 	struct sockaddr_storage sockaddr;
 	char buffer[INET6_ADDRSTRLEN];
-	void *addr = NULL;
 	char const *addr_str;
 
-	if (clients_get_addr(fd, &sockaddr) != 0) {
-		addr_str = "(unknown)";
-		goto done;
-	}
-	switch (sockaddr.ss_family) {
-	case AF_INET:
-		addr = &((struct sockaddr_in *) &sockaddr)->sin_addr;
-		break;
-	case AF_INET6:
-		addr = &((struct sockaddr_in6 *) &sockaddr)->sin6_addr;
-		break;
-	default:
-		addr_str = "(protocol unknown)";
-		goto done;
-	}
+	addr_str = (clients_get_addr(fd, &sockaddr) == 0)
+	    ? sockaddr2str(&sockaddr, buffer)
+	    : "(unknown)";
 
-	addr_str = inet_ntop(sockaddr.ss_family, addr, buffer,
-	    INET6_ADDRSTRLEN);
-	if (addr_str == NULL)
-		addr_str = "(unprintable address)";
-
-done:
 	pr_errno(error, "close() failed on socket of client %s", addr_str);
 }
 
@@ -258,8 +238,9 @@ client_thread_cb(void *arg)
 		close(param.fd);
 		return NULL;
 	}
+
 	while (true) { /* For each PDU... */
-		error = pdu_load(param.fd, &request, &meta);
+		error = pdu_load(param.fd, &param.addr, &request, &meta);
 		if (error)
 			break;
 
@@ -294,6 +275,7 @@ handle_client_connections(int server_fd)
 
 	sizeof_client_addr = sizeof(client_addr);
 
+	pr_debug("Waiting for client connections...");
 	do {
 		client_fd = accept(server_fd, (struct sockaddr *) &client_addr,
 		    &sizeof_client_addr);
@@ -305,6 +287,14 @@ handle_client_connections(int server_fd)
 		case VERDICT_EXIT:
 			return -EINVAL;
 		}
+
+#ifdef DEBUG
+		{
+			char buffer[INET6_ADDRSTRLEN];
+			pr_debug("Client accepted: %s",
+			    sockaddr2str(&client_addr, buffer));
+		}
+#endif
 
 		/*
 		 * Note: My gut says that errors from now on (even the unknown

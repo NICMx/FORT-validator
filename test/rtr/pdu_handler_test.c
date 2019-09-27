@@ -447,7 +447,7 @@ START_TEST(test_bad_length)
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
 
 	/* Run and validate, before handling */
-	ck_assert_int_eq(-EINVAL, pdu_load(fd, &request, &meta));
+	ck_assert_int_eq(-EINVAL, pdu_load(fd, NULL, &request, &meta));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */

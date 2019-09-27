@@ -34,6 +34,8 @@ enum pdu_type {
 	PDU_TYPE_ERROR_REPORT =		10,
 };
 
+char const *pdutype2str(enum pdu_type);
+
 /*
  * Note: It's probably best not to use sizeof for these lengths, because it
  * risks including padding, and this is not the place for it.
@@ -155,7 +157,8 @@ struct pdu_metadata {
 	void	(*destructor)(void *);
 };
 
-int pdu_load(int, struct rtr_request *, struct pdu_metadata const **);
+int pdu_load(int, struct sockaddr_storage *, struct rtr_request *,
+    struct pdu_metadata const **);
 struct pdu_metadata const *pdu_get_metadata(uint8_t);
 struct pdu_header *pdu_get_header(void *);
 
