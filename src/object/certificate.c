@@ -45,6 +45,23 @@ struct bgpsec_ski {
 	unsigned char **ski_data;
 };
 
+static void
+debug_serial_number(BIGNUM *number)
+{
+#ifdef DEBUG
+	char *number_str;
+
+	number_str = BN_bn2dec(number);
+	if (number_str == NULL) {
+		crypto_err("Could not convert BN to string");
+		return;
+	}
+
+	pr_debug("serial Number: %s", number_str);
+	free(number_str);
+#endif
+}
+
 static int
 validate_serial_number(X509 *cert)
 {
@@ -60,11 +77,7 @@ validate_serial_number(X509 *cert)
 	if (number == NULL)
 		return crypto_err("Could not parse certificate serial number");
 
-#ifdef DEBUG
-	fprintf(stdout, "serial Number: ");
-	BN_print_fp(stdout, number);
-	fprintf(stdout, "\n");
-#endif
+	debug_serial_number(number);
 
 	error = x509stack_store_serial(validation_certstack(state), number);
 	if (error)
