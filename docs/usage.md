@@ -443,15 +443,16 @@ Path to a JSON file from which additional configuration will be read.
 The configuration options are mostly the same as the ones from the `argv` interface. (See the "Availability" metadata of each field.) Here's a full configuration file example:
 
 <pre><code>{
-	"<a href="#--tal">tal</a>": "/tmp/fort/tal/test.tal",
-	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository",
+	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
+	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository/",
 	"<a href="#--sync-strategy">sync-strategy</a>": "root",
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
+	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
 	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
 	"<a href="#--mode">mode</a>": "server",
 
 	"server": {
-		"<a href="#--serveraddress">address</a>": "192.0.2.1",
+		"<a href="#--serveraddress">address</a>": "127.0.0.1",
 		"<a href="#--serverport">port</a>": "8323",
 		"<a href="#--serverbacklog">backlog</a>": 16,
 		"interval": {
@@ -471,12 +472,15 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
 			"--recursive",
+			"--delete",
 			"--times",
+			"--contimeout=20",
 			"$REMOTE",
 			"$LOCAL"
 		],
 		"<a href="#rsyncarguments-flat">arguments-flat</a>": [
 			"--times",
+			"--contimeout=20",
 			"--dirs",
 			"$REMOTE",
 			"$LOCAL"
@@ -567,4 +571,4 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 - **Type:** JSON Object
 - **Availability:** JSON only
 
-A listing of actions to be performed by validation upon encountering certain error conditions. See [incidence](incidence.html).
+A listing of actions to be performed by validation upon encountering certain error conditions. See [Incidences](incidence.html).

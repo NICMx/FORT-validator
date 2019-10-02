@@ -536,14 +536,14 @@ to a specific value:
 
 {
   "tal": "/tmp/fort/tal/",
-  "local-repository": "/tmp/fort/repository",
+  "local-repository": "/tmp/fort/repository/",
   "sync-strategy": "root",
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
   "mode": "server",
-  "slurm": "test.slurm",
+  "slurm": "/tmp/fort/test.slurm",
   "server": {
-    "address": "192.0.2.1",
+    "address": "127.0.0.1",
     "port": "8323",
     "backlog": 64,
     "interval": {
