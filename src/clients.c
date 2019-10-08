@@ -44,6 +44,7 @@ create_client(int fd, struct sockaddr_storage addr, pthread_t tid)
 
 	client->meat.fd = fd;
 	client->meat.serial_number_set = false;
+	client->meat.rtr_version_set = false;
 	client->meat.addr = addr;
 	client->meat.tid = tid;
 
@@ -88,7 +89,7 @@ clients_get_addr(int fd, struct sockaddr_storage *addr)
 	int result;
 
 	result = -ENOENT;
-	rwlock_write_lock(&lock);
+	rwlock_read_lock(&lock);
 
 	HASH_FIND_INT(db.clients, &fd, client);
 	if (client != NULL) {
@@ -142,6 +143,54 @@ clients_get_min_serial(serial_t *result)
 unlock:
 	rwlock_unlock(&lock);
 	return retval;
+}
+
+int
+clients_set_rtr_version(int fd, uint8_t rtr_version)
+{
+	struct hashable_client *client;
+	int result;
+
+	result = -ENOENT;
+	rwlock_write_lock(&lock);
+
+	HASH_FIND_INT(db.clients, &fd, client);
+	if (client == NULL)
+		goto unlock;
+
+	if (client->meat.rtr_version_set) {
+		result = -EINVAL; /* Can't be modified */
+		goto unlock;
+	}
+
+	client->meat.rtr_version = rtr_version;
+	client->meat.rtr_version_set = true;
+	result = 0;
+unlock:
+	rwlock_unlock(&lock);
+
+	return result;
+}
+
+int
+clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
+{
+	struct hashable_client *client;
+	int result;
+
+	result = -ENOENT;
+	rwlock_read_lock(&lock);
+
+	HASH_FIND_INT(db.clients, &fd, client);
+	if (client != NULL) {
+		(*is_set) = client->meat.rtr_version_set;
+		(*rtr_version) = client->meat.rtr_version;
+		result = 0;
+	}
+
+	rwlock_unlock(&lock);
+
+	return result;
 }
 
 void

@@ -10,10 +10,9 @@
 	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 
 	<!-- Styles -->
-	<link href="{% if page.url == '/' %}./css/screen.css{% else %}../css/screen.css{% endif %}" rel="stylesheet" type="text/css">
+	<link href="./css/screen.css" rel="stylesheet" type="text/css">
 
-	<!-- Site is still under construction, so don't index it -->
-	<meta name="robots" content="noindex,nofollow">
+	<meta name="robots" content="index,follow">
 </head>
 
 <body>
@@ -23,15 +22,9 @@
 		<div class="row align-items-center">
 			<div class="col">
 				<div class="logo">
-					{% if page.url == '/' %}
-						<a href="./index.html" title="" class="d-flex">
-							<img src="./img/logo_validador_fort.svg" alt="Fort" width="125px">
-						</a>
-					{% else %}
-						<a href="../index.html" title="" class="d-flex">
-							<img src="../img/logo_validador_fort.svg" alt="Fort" width="125px">
-						</a>
-					{% endif %}
+					<a href="./index.html" title="" class="d-flex">
+						<img src="./img/logo_validador_fort.svg" alt="Fort" width="125px">
+					</a>
 				</div>
 			</div>
 			<div class="col-auto">
@@ -43,21 +36,9 @@
 				<div class="navigation">
 					<nav class="site-nav">
 						<ul>
-							{% if page.url == '/' %}
-								<li>
-									<a class="active-item" href="./index.html">Home</a>
-								</li>
-								<li>
-									<a href="./doc/index.html">Documentation</a>
-								</li>
-							{% else %}
-								<li>
-									<a href="../index.html">Home</a>
-								</li>
-								<li><a class="active-item" href="./index.html">Documentation</a>
-								</li>
-							{% endif %}
-
+							<li>
+								<a class="active-item" href="./index.html">FORT Validator</a>
+							</li>
 						</ul>
 					</nav>
 
@@ -74,27 +55,32 @@
 			<div class="col-lg-3">
 				<aside class="site-aside">
 					<ul class="list-bullet">
-
 						<li>
-							<a class="item-menu{% if page.url == '/doc/intro-rpki.html' %} active{% endif %}" href="intro-rpki.html">Introduction to RPKI</a>
+							<a class="item-menu{% if page.url == '/' or page.url == '/index.html' %} active{% endif %}" href="index.html">Home</a>
 						</li>
 						<li>
-							<a class="item-menu{% if page.url == '/doc/intro-fort.html' %} active{% endif %}" href="intro-fort.html">Introduction to Fort</a>
+							<a class="item-menu{% if page.url == '/intro-rpki.html' %} active{% endif %}" href="intro-rpki.html">Introduction to RPKI</a>
 						</li>
 						<li>
-							<a class="item-menu{% if page.url == '/doc/installation.html' %} active{% endif %}" href="installation.html">Compilation and Installation</a>
+							<a class="item-menu{% if page.url == '/intro-fort.html' %} active{% endif %}" href="intro-fort.html">Introduction to Fort</a>
 						</li>
 						<li>
-							<a class="item-menu{% if page.url == '/doc/run.html' %} active{% endif %}" href="run.html">Running Fort</a>
+							<a class="item-menu{% if page.url == '/installation.html' %} active{% endif %}" href="installation.html">Compilation and Installation</a>
 						</li>
 						<li>
-							<a class="item-menu{% if page.url == '/doc/usage.html' %} active{% endif %}" href="usage.html">Fort usage</a>
+							<a class="item-menu{% if page.url == '/run.html' %} active{% endif %}" href="run.html">Basic Usage</a>
 						</li>
 						<li>
-							<a class="item-menu{% if page.url == '/doc/slurm.html' %} active{% endif %}" href="slurm.html">SLURM</a>
+							<a class="item-menu{% if page.url == '/usage.html' %} active{% endif %}" href="usage.html">Program Arguments</a>
 						</li>
 						<li>
-							<a class="item-menu{% if page.url == '/doc/incidence.html' %} active{% endif %}" href="incidence.html">Incidences</a>
+							<a class="item-menu{% if page.url == '/logging.html' %} active{% endif %}" href="logging.html">Logging</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/slurm.html' %} active{% endif %}" href="slurm.html">SLURM</a>
+						</li>
+						<li>
+							<a class="item-menu{% if page.url == '/incidence.html' %} active{% endif %}" href="incidence.html">Incidences</a>
 						</li>
 					</ul>
 				</aside>
@@ -111,11 +97,16 @@
 <!-- Footer -->
 <footer class="site-footer">
 	<div class="container">
-		<div class="row">
+		<div class="row align-items-center">
+			<div class="col">
+			</div>
 			<div class="col">
 				<a href="https://github.com/NICMx/FORT-validator" target="_blank" title="" class="d-flex justify-content-center">
-					<img src="{% if page.url == '/' %}./img/GitHub-Mark-Light-120px-plus.png{% else %}../img/GitHub-Mark-Light-120px-plus.png{% endif %}" alt="Git" width="40">
+					<img src="./img/GitHub-Mark-Light-120px-plus.png" alt="Git" width="40">
 				</a>
+			</div>
+			<div class="col-lg text-right">
+				<a href="mailto:fort-validator@nic.mx" target="_blank" title="">fort-validator@nic.mx</a>
 			</div>
 		</div>
 	</div>
@@ -129,7 +120,7 @@
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 
 <!-- APP JS -->
-<script src="{% if page.url == '/' %}./js/metodos.js{% else %}../js/metodos.js{% endif %}" type="text/javascript"></script>
+<script src="./js/metodos.js" type="text/javascript"></script>
 
 
 </body>

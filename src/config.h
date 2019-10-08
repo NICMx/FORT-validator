@@ -19,6 +19,9 @@ char const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
 unsigned int config_get_validation_interval(void);
+unsigned int config_get_interval_refresh(void);
+unsigned int config_get_interval_retry(void);
+unsigned int config_get_interval_expire(void);
 char const *config_get_slurm(void);
 
 char const *config_get_tal(void);
@@ -32,6 +35,7 @@ enum filename_format config_get_filename_format(void);
 char *config_get_rsync_program(void);
 struct string_array const *config_get_rsync_args(bool);
 char const *config_get_output_roa(void);
+char const *config_get_output_bgpsec(void);
 
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);

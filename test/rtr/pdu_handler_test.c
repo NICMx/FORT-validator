@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/queue.h>
 
+#include "algorithm.c"
 #include "common.c"
 #include "file.c"
 #include "impersonator.c"
@@ -10,6 +11,7 @@
 #include "log.c"
 #include "output_printer.c"
 #include "crypto/base64.c"
+#include "object/router_key.c"
 #include "rtr/pdu.c"
 #include "rtr/pdu_handler.c"
 #include "rtr/primitive_reader.c"
@@ -17,7 +19,7 @@
 #include "rtr/err_pdu.c"
 #include "rtr/stream.c"
 #include "rtr/db/delta.c"
-#include "rtr/db/roa_table.c"
+#include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
 #include "rtr/db/vrps.c"
 #include "slurm/slurm_db.c"
@@ -84,7 +86,7 @@ init_reset_query(struct rtr_request *request, struct reset_query_pdu *query)
 {
 	request->pdu = query;
 	request->bytes_len = 0;
-	query->header.protocol_version = RTR_V0;
+	query->header.protocol_version = RTR_V1;
 	query->header.pdu_type = PDU_TYPE_RESET_QUERY;
 	query->header.m.reserved = 0;
 	query->header.length = 8;
@@ -96,9 +98,9 @@ init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
 {
 	request->pdu = query;
 	request->bytes_len = 0;
-	query->header.protocol_version = RTR_V0;
+	query->header.protocol_version = RTR_V1;
 	query->header.pdu_type = PDU_TYPE_SERIAL_QUERY;
-	query->header.m.session_id = get_current_session_id(RTR_V0);
+	query->header.m.session_id = get_current_session_id(RTR_V1);
 	query->header.length = 12;
 	query->serial_number = serial;
 }
@@ -113,7 +115,21 @@ clients_get_min_serial(serial_t *result)
 }
 
 int
-send_cache_reset_pdu(int fd)
+clients_set_rtr_version(int fd, uint8_t rtr_version)
+{
+	return 0;
+}
+
+int
+clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
+{
+	(*is_set) = true;
+	(*rtr_version) = RTR_V1;
+	return 0;
+}
+
+int
+send_cache_reset_pdu(int fd, uint8_t version)
 {
 	pr_info("    Server sent Cache Reset.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESET);
@@ -121,7 +137,7 @@ send_cache_reset_pdu(int fd)
 }
 
 int
-send_cache_response_pdu(int fd)
+send_cache_response_pdu(int fd, uint8_t version)
 {
 	pr_info("    Server sent Cache Response.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESPONSE);
@@ -129,7 +145,7 @@ send_cache_response_pdu(int fd)
 }
 
 int
-send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
+send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 {
 	/*
 	 * We don't care about order.
@@ -144,29 +160,55 @@ send_prefix_pdu(int fd, struct vrp const *vrp, uint8_t flags)
 	return 0;
 }
 
+int
+send_router_key_pdu(int fd, uint8_t version,
+    struct router_key const *router_key, uint8_t flags)
+{
+	/*
+	 * We don't care about order.
+	 * If the server is expected to return `M` IPv4 PDUs and `N` IPv6 PDUs,
+	 * we'll just check `M + N` contiguous Prefix PDUs.
+	 */
+	uint8_t pdu_type = pop_expected_pdu();
+	pr_info("    Server sent Router Key PDU.");
+	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
+	    "Server's PDU type is %d, not Router Key type.", pdu_type);
+	return 0;
+}
+
 static int
-handle_delta(struct delta const *delta, void *arg)
+handle_delta(struct delta_vrp const *delta, void *arg)
 {
 	int *fd = arg;
-	ck_assert_int_eq(0, send_prefix_pdu(*fd, &delta->vrp, delta->flags));
+	ck_assert_int_eq(0, send_prefix_pdu(*fd, RTR_V1, &delta->vrp,
+	    delta->flags));
+	return 0;
+}
+
+static int
+handle_delta_router_key(struct delta_router_key const *delta, void *arg)
+{
+	int *fd = arg;
+	ck_assert_int_eq(0, send_router_key_pdu(*fd, RTR_V1, &delta->router_key,
+	    delta->flags));
 	return 0;
 }
 
 int
-send_delta_pdus(int fd, struct deltas_db *deltas)
+send_delta_pdus(int fd, uint8_t version, struct deltas_db *deltas)
 {
 	struct delta_group *group;
 	array_index i;
 
 	ARRAYLIST_FOREACH(deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    handle_delta, &fd));
+		    handle_delta, handle_delta_router_key, &fd));
 
 	return 0;
 }
 
 int
-send_end_of_data_pdu(int fd, serial_t end_serial)
+send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 {
 	pr_info("    Server sent End of Data.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_END_OF_DATA);
@@ -174,8 +216,8 @@ send_end_of_data_pdu(int fd, serial_t end_serial)
 }
 
 int
-send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
-    char *message)
+send_error_report_pdu(int fd, uint8_t version, uint16_t code,
+    struct rtr_request const *request, char *message)
 {
 	pr_info("    Server sent Error Report %u: '%s'", code, message);
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_ERROR_REPORT);
@@ -184,7 +226,7 @@ send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
 
 /* Tests */
 
-/* https://tools.ietf.org/html/rfc6810#section-6.1 */
+/* https://tools.ietf.org/html/rfc8210#section-8.1 */
 START_TEST(test_start_or_restart)
 {
 	struct rtr_request request;
@@ -202,6 +244,7 @@ START_TEST(test_start_or_restart)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* Run and validate */
@@ -213,7 +256,7 @@ START_TEST(test_start_or_restart)
 }
 END_TEST
 
-/* https://tools.ietf.org/html/rfc6810#section-6.2 */
+/* https://tools.ietf.org/html/rfc8210#section-8.2 */
 START_TEST(test_typical_exchange)
 {
 	struct rtr_request request;
@@ -231,8 +274,10 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 0: Run and validate */
@@ -246,6 +291,7 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 1: Run and validate */
@@ -268,7 +314,7 @@ START_TEST(test_typical_exchange)
 }
 END_TEST
 
-/* https://tools.ietf.org/html/rfc6810#section-6.3 */
+/* https://tools.ietf.org/html/rfc8210#section-8.3 */
 START_TEST(test_no_incremental_update_available)
 {
 	struct rtr_request request;
@@ -296,7 +342,7 @@ START_TEST(test_no_incremental_update_available)
 }
 END_TEST
 
-/* https://tools.ietf.org/html/rfc6810#section-6.4 */
+/* https://tools.ietf.org/html/rfc8210#section-8.4 */
 START_TEST(test_cache_has_no_data_available)
 {
 	struct rtr_request request;
@@ -401,7 +447,7 @@ START_TEST(test_bad_length)
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
 
 	/* Run and validate, before handling */
-	ck_assert_int_eq(-EINVAL, pdu_load(fd, &request, &meta));
+	ck_assert_int_eq(-EINVAL, pdu_load(fd, NULL, &request, &meta));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */
@@ -416,7 +462,7 @@ Suite *pdu_suite(void)
 	Suite *suite;
 	TCase *core, *error;
 
-	core = tcase_create("RFC6810-Defined Protocol Sequences");
+	core = tcase_create("RFC8210-Defined Protocol Sequences");
 	tcase_add_test(core, test_start_or_restart);
 	tcase_add_test(core, test_typical_exchange);
 	tcase_add_test(core, test_no_incremental_update_available);

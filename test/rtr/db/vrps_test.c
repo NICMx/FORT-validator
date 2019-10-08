@@ -3,14 +3,16 @@
 #include <stdlib.h>
 
 #include "crypto/base64.c"
+#include "algorithm.c"
 #include "common.c"
 #include "file.c"
 #include "impersonator.c"
 #include "json_parser.c"
 #include "log.c"
 #include "output_printer.c"
+#include "object/router_key.c"
 #include "rtr/db/delta.c"
-#include "rtr/db/roa_table.c"
+#include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
 #include "rtr/db/vrps.c"
 #include "slurm/slurm_db.c"
@@ -25,40 +27,44 @@
  * 1: IPv4, ASN 1
  * 2: IPv6, ASN 0
  * 3: IPv6, ASN 1
+ * 4: Router key, ASN 0
+ * 5: Router key, ASN 1
  */
-static const bool iteration0_base[] = { 1, 0, 1, 0, };
-static const bool iteration1_base[] = { 1, 1, 1, 1, };
-static const bool iteration2_base[] = { 0, 1, 0, 1, };
-static const bool iteration3_base[] = { 1, 0, 1, 0, };
+static const bool iteration0_base[] = { 1, 0, 1, 0, 1, 0, };
+static const bool iteration1_base[] = { 1, 1, 1, 1, 1, 1, };
+static const bool iteration2_base[] = { 0, 1, 0, 1, 0, 1, };
+static const bool iteration3_base[] = { 1, 0, 1, 0, 1, 0, };
 
 /*
  * DELTA
- * 0: Withdrawal, IPv4, ASN 0    4: Announcement, IPv4, ASN 0
- * 1: Withdrawal, IPv4, ASN 1    5: Announcement, IPv4, ASN 1
- * 2: Withdrawal, IPv6, ASN 0    6: Announcement, IPv6, ASN 0
- * 3: Withdrawal, IPv6, ASN 1    7: Announcement, IPv6, ASN 1
+ * 0: Withdrawal, IPv4, ASN 0    6: Announcement, IPv4, ASN 0
+ * 1: Withdrawal, IPv4, ASN 1    7: Announcement, IPv4, ASN 1
+ * 2: Withdrawal, IPv6, ASN 0    8: Announcement, IPv6, ASN 0
+ * 3: Withdrawal, IPv6, ASN 1    9: Announcement, IPv6, ASN 1
+ * 4: Withdrawal, RK,   ASN 0   10: Announcement, RK,   ASN 0
+ * 5: Withdrawal, RK,   ASN 1   11: Announcement, RK,   ASN 1
  */
 
-static const bool deltas_0to0[] = { 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_0to0[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
-static const bool deltas_0to1[] = { 0, 0, 0, 0, 0, 1, 0, 1, };
-static const bool deltas_1to1[] = { 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_0to1[] = { 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, };
+static const bool deltas_1to1[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
-static const bool deltas_0to2[] = { 1, 0, 1, 0, 0, 1, 0, 1, };
-static const bool deltas_1to2[] = { 1, 0, 1, 0, 0, 0, 0, 0, };
-static const bool deltas_2to2[] = { 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_0to2[] = { 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, };
+static const bool deltas_1to2[] = { 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_2to2[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 /* Deltas with rules that override each other */
-static const bool deltas_0to3_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 1, };
-static const bool deltas_1to3_ovrd[] = { 1, 1, 1, 1, 1, 0, 1, 0, };
-static const bool deltas_2to3_ovrd[] = { 0, 1, 0, 1, 1, 0, 1, 0, };
-static const bool deltas_3to3_ovrd[] = { 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_0to3_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, };
+static const bool deltas_1to3_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, };
+static const bool deltas_2to3_ovrd[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
+static const bool deltas_3to3_ovrd[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 /* Deltas cleaned up */
-static const bool deltas_0to3_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, };
-static const bool deltas_1to3_clean[] = { 0, 1, 0, 1, 0, 0, 0, 0, };
-static const bool deltas_2to3_clean[] = { 0, 1, 0, 1, 1, 0, 1, 0, };
-static const bool deltas_3to3_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_0to3_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_1to3_clean[] = { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_2to3_clean[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
+static const bool deltas_3to3_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 /* Impersonator functions */
 
@@ -94,6 +100,13 @@ vrp_fail(struct vrp const *vrp, void *arg)
 	return -EINVAL;
 }
 
+static int
+rk_fail(struct router_key const *key, void *arg)
+{
+	ck_abort_msg("Expected no callbacks, got from RK ASN %u.", key->as);
+	return -EINVAL;
+}
+
 static array_index
 get_vrp_index(struct vrp const *vrp)
 {
@@ -126,14 +139,43 @@ get_vrp_index(struct vrp const *vrp)
 }
 
 static array_index
-get_delta_index(struct delta const *delta)
+get_rk_index(struct router_key const *rk)
+{
+	array_index i;
+
+	for (i = 0; i < RK_SKI_LEN; i++)
+		ck_assert_uint_eq(rk->ski[i], db_imp_ski[i]);
+
+	ck_assert_msg(rk->as <= 1, "Unexpected AS number: %u", rk->as);
+
+	for (i = 0; i < RK_SPKI_LEN; i++)
+		ck_assert_uint_eq(rk->spk[i], db_imp_spk[i]);
+
+	return rk->as + 4;
+}
+
+static array_index
+get_delta_vrp_index(struct delta_vrp const *delta)
 {
 	array_index result;
 
 	result = get_vrp_index(&delta->vrp);
-	ck_assert_msg(delta->flags <= 1, "Unexpected flags: %u", delta->flags);
+	ck_assert_msg(delta->flags <= 1, "VRP Unexpected flags: %u",
+	    delta->flags);
 
-	return (delta->flags << 2) | result;
+	return result + (delta->flags ? 6 : 0);
+}
+
+static array_index
+get_delta_rk_index(struct delta_router_key const *delta)
+{
+	array_index result;
+
+	result = get_rk_index(&delta->router_key);
+	ck_assert_msg(delta->flags <= 1, "RK Unexpected flags: %u",
+	    delta->flags);
+
+	return result + (delta->flags ? 6 : 0);
 }
 
 static int
@@ -150,12 +192,38 @@ vrp_check(struct vrp const *vrp, void *arg)
 }
 
 static int
-delta_check(struct delta const *delta, void *arg)
+rk_check(struct router_key const *rk, void *arg)
 {
 	bool *array = arg;
 	array_index index;
 
-	index = get_delta_index(delta);
+	index = get_rk_index(rk);
+	ck_assert_uint_eq(false, array[index]);
+	array[index] = true;
+
+	return 0;
+}
+
+static int
+delta_vrp_check(struct delta_vrp const *delta, void *arg)
+{
+	bool *array = arg;
+	array_index index;
+
+	index = get_delta_vrp_index(delta);
+	ck_assert_uint_eq(false, array[index]);
+	array[index] = true;
+
+	return 0;
+}
+
+static int
+delta_rk_check(struct delta_router_key const *delta, void *arg)
+{
+	bool *array = arg;
+	array_index index;
+
+	index = get_delta_rk_index(delta);
 	ck_assert_uint_eq(false, array[index]);
 	array[index] = true;
 
@@ -174,19 +242,20 @@ static void
 check_base(serial_t expected_serial, bool const *expected_base)
 {
 	serial_t actual_serial;
-	bool actual_base[4];
+	bool actual_base[6];
 	array_index i;
 
 	memset(actual_base, 0, sizeof(actual_base));
 	ck_assert_int_eq(0, get_last_serial_number(&actual_serial));
-	ck_assert_int_eq(0, vrps_foreach_base_roa(vrp_check, actual_base));
+	ck_assert_int_eq(0, vrps_foreach_base(vrp_check, rk_check,
+	    actual_base));
 	ck_assert_uint_eq(expected_serial, actual_serial);
 	for (i = 0; i < ARRAY_LEN(actual_base); i++)
 		ck_assert_uint_eq(expected_base[i], actual_base[i]);
 }
 
 static int
-vrp_add(struct delta const *delta, void *arg)
+vrp_add(struct delta_vrp const *delta, void *arg)
 {
 	struct deltas *deltas = arg;
 	struct vrp const *vrp;
@@ -213,6 +282,17 @@ vrp_add(struct delta const *delta, void *arg)
 	return 0;
 }
 
+static int
+rk_add(struct delta_router_key const *delta, void *arg)
+{
+	struct deltas *deltas = arg;
+	struct router_key key;
+
+	key = delta->router_key;
+	deltas_add_router_key(deltas, &key, delta->flags);
+	return 0;
+}
+
 static void
 filter_deltas(struct deltas_db *db)
 {
@@ -224,7 +304,7 @@ filter_deltas(struct deltas_db *db)
 	ck_assert_int_eq(0, deltas_create(&deltas));
 	group.deltas = deltas;
 	ck_assert_int_eq(0, vrps_foreach_filtered_delta(db, vrp_add,
-	    group.deltas));
+	    rk_add, group.deltas));
 	deltas_db_init(&tmp);
 	ck_assert_int_eq(0, deltas_db_add(&tmp, &group));
 
@@ -236,7 +316,7 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas,
     bool filter)
 {
 	serial_t actual_serial;
-	bool actual_deltas[8];
+	bool actual_deltas[12];
 	struct deltas_db deltas;
 	struct delta_group *group;
 	array_index i;
@@ -252,7 +332,7 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas,
 	memset(actual_deltas, 0, sizeof(actual_deltas));
 	ARRAYLIST_FOREACH(&deltas, group, i)
 		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    delta_check, actual_deltas));
+		    delta_vrp_check, delta_rk_check, actual_deltas));
 	for (i = 0; i < ARRAY_LEN(actual_deltas); i++)
 		ck_assert_uint_eq(expected_deltas[i], actual_deltas[i]);
 }
@@ -280,7 +360,7 @@ create_deltas_0to1(struct deltas_db *deltas, serial_t *serial, bool *changed,
 
 	/* First validation not yet performed: Tell routers to wait */
 	ck_assert_int_eq(-EAGAIN, get_last_serial_number(serial));
-	ck_assert_int_eq(-EAGAIN, vrps_foreach_base_roa(vrp_fail,
+	ck_assert_int_eq(-EAGAIN, vrps_foreach_base(vrp_fail, rk_fail,
 	    iterated_entries));
 	ck_assert_int_eq(-EAGAIN, vrps_get_deltas_from(0, serial, deltas));
 
@@ -303,7 +383,7 @@ START_TEST(test_basic)
 	struct deltas_db deltas;
 	serial_t serial;
 	bool changed;
-	bool iterated_entries[8];
+	bool iterated_entries[12];
 
 	create_deltas_0to1(&deltas, &serial, &changed, iterated_entries);
 
@@ -324,7 +404,7 @@ START_TEST(test_delta_forget)
 	struct deltas_db deltas;
 	serial_t serial;
 	bool changed;
-	bool iterated_entries[8];
+	bool iterated_entries[12];
 
 	create_deltas_0to1(&deltas, &serial, &changed, iterated_entries);
 
@@ -354,7 +434,7 @@ START_TEST(test_delta_ovrd)
 	struct deltas_db deltas;
 	serial_t serial;
 	bool changed;
-	bool iterated_entries[8];
+	bool iterated_entries[12];
 
 	create_deltas_0to1(&deltas, &serial, &changed, iterated_entries);
 

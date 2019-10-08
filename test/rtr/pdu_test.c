@@ -44,6 +44,20 @@ get_current_session_id(uint8_t rtr_version)
 	return 12345;
 }
 
+int
+clients_set_rtr_version(int fd, uint8_t rtr_version)
+{
+	return 0;
+}
+
+int
+clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
+{
+	(*is_set) = true;
+	(*rtr_version) = RTR_V0;
+	return 0;
+}
+
 IMPERSONATE_HANDLER(serial_notify)
 IMPERSONATE_HANDLER(serial_query)
 IMPERSONATE_HANDLER(reset_query)
@@ -56,10 +70,31 @@ IMPERSONATE_HANDLER(router_key)
 IMPERSONATE_HANDLER(error_report)
 
 int
-send_error_report_pdu(int fd, uint16_t code, struct rtr_request const *request,
-    char *message)
+send_error_report_pdu(int fd, uint8_t version, uint16_t code,
+    struct rtr_request const *request, char *message)
 {
 	pr_info("    Server sent Error Report %u: '%s'", code, message);
+	return 0;
+}
+
+int
+rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
+    struct ipv4_prefix const *prefix4, uint8_t max_length)
+{
+	return 0;
+}
+
+int
+rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
+    struct ipv6_prefix const *prefix6, uint8_t max_length)
+{
+	return 0;
+}
+
+int
+rtrhandler_handle_router_key(struct db_table *table,
+    unsigned char const *ski, uint32_t as, unsigned char const *spk)
+{
 	return 0;
 }
 

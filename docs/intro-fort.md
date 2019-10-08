@@ -2,8 +2,6 @@
 title: Introduction to Fort
 ---
 
-[Documentation](index.html) > {{ page.title }}
-
 # {{ page.title }}
 
 ## Design
@@ -12,7 +10,7 @@ Fort is an MIT-licensed RPKI Relying Party. It is a service that performs the va
 
 ![../img/design.svg](../img/design.svg)
 
-The Validator is a timer that resynchronizes its [local cache](usage.html#--local-repository), validates the resulting [RPKI trees](intro-rpki.html) and stores the resulting ROAs in memory every [certain amount of time](usage.html#--servervalidation-interval). The RTR [Server](usage.html#--serveraddress) (which is part of the same binary) delivers these ROAs to any requesting routers.
+The Validator is a timer that resynchronizes its [local cache](usage.html#--local-repository), validates the resulting [RPKI trees](intro-rpki.html) and stores the resulting ROAs in memory every [certain amount of time](usage.html#--serverintervalvalidation). The RTR [Server](usage.html#--serveraddress) (which is part of the same binary) delivers these ROAs to any requesting routers.
 
 Fort is a command line application intended for UNIX operating systems, written in C. (It requires a compiler that supports `-std=gnu11`.)
 
@@ -29,12 +27,17 @@ Further information can be found in the subsections below.
 | [6487](https://tools.ietf.org/html/rfc6487) (Resource Certificates & CRLs) | 100%        |
 | [6488](https://tools.ietf.org/html/rfc6488) (Signed Objects)               | 90%         |
 | [6493](https://tools.ietf.org/html/rfc6493) (Ghostbusters)                 | 100%        |
+| [6810](https://tools.ietf.org/html/rfc6810) (RTR Version 0)                | 100%        |
 | [7318](https://tools.ietf.org/html/rfc7318) (Policy Qualifiers)            | 100%        |
 | [7730](https://tools.ietf.org/html/rfc7730) (TALs)                         | 100%        |
 | [7935](https://tools.ietf.org/html/rfc7935) (RPKI algorithms)              | 100%        |
 | [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 0%          |
-| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 0%          |
+| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 100%        |
+| [8210](https://tools.ietf.org/html/rfc8210) (RTR Version 1)                | 100%        |
 | [8360](https://tools.ietf.org/html/rfc8360) (Validation Reconsidered)      | 100%        |
+| [8416](https://tools.ietf.org/html/rfc8416) (SLURM)                        | 100%        |
+| [8608](https://tools.ietf.org/html/rfc8608) (BGPsec algorithms)            | 100%        |
+| [8630](https://tools.ietf.org/html/rfc8630) (TALs with HTTPS URIs)         | 0%          |
 
 ### RFC 6350 (vCard)
 
@@ -60,9 +63,12 @@ Unfortunately, the parser also currently unavoidably [rejects certain technicall
 
 RRDP is a protocol intended to replace RSYNC in the RPKI. Fort only implements RSYNC, currently.
 
+### RFC 8630 (TALs with HTTPS URIs)
+
+This RFC is relatively new (published in August 2019) and obsoletes the currently implemented [RFC 7730](https://tools.ietf.org/html/rfc7730).
+
 ## TO-DO
 
 - Reach 100% RFC compliance
-- Multithreading
 - Daemon quirks (stuff like "send self to background automatically"), maybe
 - More languages?

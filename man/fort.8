@@ -1,4 +1,4 @@
-.TH fort 8 "2019-08-26" "v1.0.0" "FORT validator"
+.TH fort 8 "2019-10-14" "v1.1.0" "FORT validator"
 
 .SH NAME
 fort \- RPKI certificate path validator
@@ -9,8 +9,8 @@ fort \- RPKI certificate path validator
 
 .SH DESCRIPTION
 
-FORT is an RPKI validator and a RTR server (currently only RTR version 0
-is supported).
+FORT is an RPKI validator and a RTR server (RTR versions 0 and 1 are
+supported).
 In the RPKI context, FORT is also known as an RP (Relying Party).
 A simple resume of the actions performed by an RP can be read at RFC 6480
 section 6
@@ -18,13 +18,16 @@ section 6
 .P
 The RTR (RPKI to Router Protocol) is basically "a protocol to deliver validated
 prefix origin data to routers", see RFC 6810
-.RI "(" https://tools.ietf.org/html/rfc6810 ")."
+.RI "(" https://tools.ietf.org/html/rfc6810 ")"
+and RFC 8210
+.RI "(" https://tools.ietf.org/html/rfc8210 ")."
 .P
 
 So, FORT performs RPKI validations starting from a single or set of TALs (Trust
 Anchor Locators), either in a recurrent or single (standalone) way.
-Additionally, it can talk to routers using the RTR protocol (currently version
-0) to provide them the VRPs (Validated ROA Payloads) resultant of the
+Additionally, it can talk to routers using the RTR protocol (version will
+depend on the client, both 0 and 1 are supported) to provide them the VRPs
+(Validated ROA Payloads) and the BGPsec Router Keys resultant of the
 validation.
  
 .SH OPTIONS
@@ -362,13 +365,58 @@ By default, it has a value of \fISOMAXCONN\fR.
 .RE
 .P
 
-.B \-\-server.validation-interval=\fIUNSIGNED_INTEGER\fR
+.B \-\-server.interval.validation=\fIUNSIGNED_INTEGER\fR
 .RS 4
 Number of seconds that FORT will sleep between validation cycles. The timer
 starts counting every time a validation is finished, not every time it begins.
 Therefore, the actual validation loop is longer than this number.
 .P
 By default, it has a value of \fI3600\fR.
+.RE
+.P
+
+.B \-\-server.interval.refresh=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Number of seconds that a router should wait before the next attempt to poll 
+FORT using either a Serial Query PDU or Reset Query PDU. Countdown for this
+timer starts upon receipt of an End Of Data PDU (this should be administered by
+the client).
+.P
+This value is utilized only on RTR version 1 sessions (more information at RFC
+8210 section 6).
+.P
+By default, it has a value of \fI3600\fR. Minimum allowed value: \fI1\fR,
+maximum allowed value \fI86400\fR.
+.RE
+.P
+
+.B \-\-server.interval.retry=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Number of seconds that a router should wait before retrying a failed Serial
+Query PDU or Reset Query PDU. Countdown for this timer starts upon failure of
+the query and restarts after each subsequent failure until a query succeeds
+(this should be administered by the client).
+.P
+This value is utilized only on RTR version 1 sessions (more information at RFC
+8210 section 6).
+.P
+By default, it has a value of \fI600\fR. Minimum allowed value: \fI1\fR,
+maximum allowed value \fI7200\fR.
+.RE
+.P
+
+.B \-\-server.interval.expire=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Number of seconds that a router can retain the current version of data while
+unable to perform a successful subsequent query. Countdown for this timer starts
+upon receipt of an End Of Data PDU (this should be administered by the client).
+.P
+This value is utilized only on RTR version 1 sessions (more information at RFC
+8210 section 6).
+.P
+By default, it has a value of \fI7200\fR. Minimum allowed value: \fI600\fR,
+maximum allowed value \fI172800\fR. It must be larger than
+\fIserver.interval.refresh\fR and \fIserver.interval.retry\fR.
 .RE
 .P
 
@@ -412,8 +460,30 @@ File where the ROAs will be printed in CSV format.
 When the \fIFILE\fR is specified, its content will be overwritten by the
 resulting ROAs of the validation (if FILE doesn't exists, it'll be created).
 .P
+Each line of the result is printed in the following order: AS, Prefix, Max
+prefix length; the first line contains those column descriptors.
+.P
 In order to print the ROAs at console, use a hyphen as the \fIFILE\fR value, eg.
 .B \-\-output.roa=-
+.RE
+
+.B \-\-output.bgpsec=\fIFILE\fR
+.RS 4
+File where the BGPsec Router Keys will be printed in CSV format. Since most of
+the data is binary (Subject Key Identifier and Subject Public Key Info), such
+data is base64url encoded without trailing pads.
+.P
+When the \fIFILE\fR is specified, its content will be overwritten by the
+resulting Router Keys of the validation (if FILE doesn't exists, it'll be
+created).
+.P
+Each line of the result is printed in the following order: AS, Subject Key
+Identifier, Subject Public Key Info; the first line contains those column
+descriptors.
+.P
+In order to print the Router Keys at console, use a hyphen as the \fIFILE\fR
+value, eg.
+.B \-\-output.bgpsec=-
 .RE
 
 .SH EXAMPLES
@@ -449,7 +519,7 @@ Run FORT using the JSON configuration file \fIconf.json\fR.
 .nf
 \fBfort \-t /tmp/tal \-r /tmp/repository \\
      \-\-server.address ::1 \-\-server.port 9323 \\
-     \-\-server.validation-interval 1800 \\
+     \-\-server.interval.validation 1800 \\
      \-\-output.roa /tmp/roas.csv\fR
 .fi
 .RS 4
@@ -466,17 +536,22 @@ to a specific value:
 
 {
   "tal": "/tmp/fort/tal/",
-  "local-repository": "/tmp/fort/repository",
+  "local-repository": "/tmp/fort/repository/",
   "sync-strategy": "root",
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
   "mode": "server",
-  "slurm": "test.slurm",
+  "slurm": "/tmp/fort/test.slurm",
   "server": {
-    "address": "192.0.2.1",
+    "address": "127.0.0.1",
     "port": "8323",
     "backlog": 64,
-    "validation-interval": 3600
+    "interval": {
+      "validation": 3600,
+      "refresh": 3600,
+      "retry": 600,
+      "expire": 7200
+    }
   },
   "log": {
     "color-output": true,
@@ -507,7 +582,8 @@ to a specific value:
     }
   ],
   "output": {
-    "roa": "/tmp/fort/roas.csv"
+    "roa": "/tmp/fort/roas.csv",
+    "bgpsec": "/tmp/fort/bgpsec.csv"
   }
 }
 .fi
@@ -516,8 +592,8 @@ to a specific value:
 
 .B Dummy SLURM file
 .RS 4
-This is an example of a SLURM file with some prefix filters and
-assertions:
+This is an example of a SLURM file with some prefix filters and assertions, as
+well as some dummy Router Keys (BGPsec) info:
 .nf
 
 {
@@ -538,7 +614,21 @@ assertions:
         "comment": "All VRPs encompassed by prefix, matching ASN"
       }
     ],
-    "bgpsecFilters": []
+    "bgpsecFilters": [
+      {
+        "asn": 64496,
+        "comment": "All keys for ASN"
+      },
+      {
+        "SKI": "Q8KMeBsCto1PJ6EuhowleIGNL7A",
+        "comment": "Key matching Router SKI"
+      },
+      {
+        "asn": 64497,
+        "SKI": "g5RQYCnkMpDqEbt9WazTeB19nZs",
+        "comment": "Key for ASN 64497 matching Router SKI"
+      }
+    ]
   },
   "locallyAddedAssertions": {
     "prefixAssertions": [
@@ -554,8 +644,15 @@ assertions:
         "comment": "My other important de-aggregated routes"
       }
     ],
-    "bgpsecAssertions": []
-   }
+    "bgpsecAssertions": [
+      {
+        "asn": 64496,
+        "SKI": "Dulqji-sUM5sX5M-3mqngKaFDjE",
+        "routerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE-rkSLXlPpL_m-L\
+7CfCfKrv1FHrM55FsIc8fMlnjHE6Y5nTuCn3UgWfCV6sYuGUZzPZ0Ey6AvezmfcELUB87eBA"
+      }
+    ]
+  }
 }
 .fi
 .RE

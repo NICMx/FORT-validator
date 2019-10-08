@@ -8,6 +8,13 @@
 #include "uri.c"
 #include "rsync/rsync.c"
 
+
+struct validation *
+state_retrieve(void)
+{
+	return NULL;
+}
+
 START_TEST(rsync_load_normal)
 {
 
@@ -52,48 +59,50 @@ START_TEST(rsync_test_prefix_equals)
 END_TEST
 
 static void
-__mark_as_downloaded(char *uri_str)
+__mark_as_downloaded(char *uri_str, struct uri_list *visited_uris)
 {
 	struct rpki_uri *uri;
 	ck_assert_int_eq(0, uri_create_str(&uri, uri_str, strlen(uri_str)));
-	ck_assert_int_eq(mark_as_downloaded(uri), 0);
+	ck_assert_int_eq(mark_as_downloaded(uri, visited_uris), 0);
 	uri_refput(uri);
 }
 
 static void
-assert_downloaded(char *uri_str, bool expected)
+assert_downloaded(char *uri_str, struct uri_list *visited_uris, bool expected)
 {
 	struct rpki_uri *uri;
 	ck_assert_int_eq(0, uri_create_str(&uri, uri_str, strlen(uri_str)));
-	ck_assert_int_eq(is_already_downloaded(uri), expected);
+	ck_assert_int_eq(is_already_downloaded(uri, visited_uris), expected);
 	uri_refput(uri);
 }
 
 START_TEST(rsync_test_list)
 {
-	struct uri *uri;
+	struct uri_list *visited_uris;
 
-	ck_assert_int_eq(rsync_init(), 0);
+	ck_assert_int_eq(rsync_create(&visited_uris), 0);
 
-	__mark_as_downloaded("rsync://example.foo/repository/");
-	__mark_as_downloaded("rsync://example.foo/member_repository/");
-	__mark_as_downloaded("rsync://example.foz/repository/");
-	__mark_as_downloaded("rsync://example.boo/repo/");
-	__mark_as_downloaded("rsync://example.potato/rpki/");
+	__mark_as_downloaded("rsync://example.foo/repository/", visited_uris);
+	__mark_as_downloaded("rsync://example.foo/member_repository/",
+	    visited_uris);
+	__mark_as_downloaded("rsync://example.foz/repository/", visited_uris);
+	__mark_as_downloaded("rsync://example.boo/repo/", visited_uris);
+	__mark_as_downloaded("rsync://example.potato/rpki/", visited_uris);
 
-	assert_downloaded("rsync://example.foo/repository/", true);
-	assert_downloaded("rsync://example.foo/repository/abc/cdfg", true);
-	assert_downloaded("rsync://example.foo/member_repository/bca", true);
-	assert_downloaded("rsync://example.boo/repository/", false);
-	assert_downloaded("rsync://example.potato/repository/", false);
-	assert_downloaded("rsync://example.potato/rpki/abc/", true);
+	assert_downloaded("rsync://example.foo/repository/", visited_uris,
+	    true);
+	assert_downloaded("rsync://example.foo/repository/abc/cdfg",
+	    visited_uris, true);
+	assert_downloaded("rsync://example.foo/member_repository/bca",
+	    visited_uris, true);
+	assert_downloaded("rsync://example.boo/repository/", visited_uris,
+	    false);
+	assert_downloaded("rsync://example.potato/repository/", visited_uris,
+	    false);
+	assert_downloaded("rsync://example.potato/rpki/abc/", visited_uris,
+	    true);
 
-	/* rsync destroy */
-	while (!SLIST_EMPTY(&visited_uris)) {
-		uri = SLIST_FIRST(&visited_uris);
-		SLIST_REMOVE_HEAD(&visited_uris, next);
-		free(uri);
-	}
+	rsync_destroy(visited_uris);
 }
 END_TEST
 

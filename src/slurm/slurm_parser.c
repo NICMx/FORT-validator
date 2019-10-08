@@ -4,13 +4,16 @@
 #include <stdint.h>
 #include <string.h>
 #include <openssl/evp.h>
+#include <openssl/x509.h>
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "crypto/base64.h"
+#include "algorithm.h"
 #include "log.h"
 #include "address.h"
 #include "json_parser.h"
+#include "object/router_key.h"
 #include "slurm/slurm_db.h"
 
 /* JSON members */
@@ -235,6 +238,7 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
     size_t *members_loaded)
 {
 	char const *str_encoded;
+	size_t ski_len;
 	int error;
 
 	error = json_get_string(object, SKI, &str_encoded);
@@ -250,12 +254,12 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 	if (error)
 		return error;
 
-	error = base64url_decode(str_encoded, &result->ski, &result->ski_len);
+	error = base64url_decode(str_encoded, &result->ski, &ski_len);
 	if (error)
 		return error;
 
 	/* Validate that's at least 20 octects long */
-	if (result->ski_len != 20) {
+	if (ski_len != RK_SKI_LEN) {
 		free(result->ski);
 		return pr_err("The decoded SKI must be 20 octets long");
 	}
@@ -265,11 +269,42 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 	return 0;
 }
 
+/*
+ * Use the provided X509_PUBKEY struct, and validate expected algorithms for a
+ * BGPsec certificate.
+ */
+static int
+validate_router_spki(unsigned char *data, size_t len)
+{
+	unsigned char const *tmp;
+	X509_PUBKEY *spki;
+	X509_ALGOR *pa;
+	ASN1_OBJECT *alg;
+	int ok;
+	int error;
+
+	tmp = data;
+	spki = d2i_X509_PUBKEY(NULL, &tmp, len);
+	if (spki == NULL)
+		return crypto_err("Not a valid router public key");
+
+	ok = X509_PUBKEY_get0_param(&alg, NULL, NULL, &pa, spki);
+	if (!ok) {
+		X509_PUBKEY_free(spki);
+		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+	}
+
+	error = validate_certificate_public_key_algorithm(pa, true);
+	X509_PUBKEY_free(spki);
+	return error; /* Error 0 is ok */
+}
+
 static int
 set_router_pub_key(json_t *object, bool is_assertion,
     struct slurm_bgpsec *result, size_t *members_loaded)
 {
 	char const *str_encoded;
+	size_t spk_len;
 	int error;
 
 	error = json_get_string(object, ROUTER_PUBLIC_KEY, &str_encoded);
@@ -292,25 +327,20 @@ set_router_pub_key(json_t *object, bool is_assertion,
 		return error;
 
 	error = base64url_decode(str_encoded, &result->router_public_key,
-	    &result->router_public_key_len);
+	    &spk_len);
 	if (error)
 		return pr_err("'%s' couldn't be decoded", str_encoded);
 
 	/*
-	 * TODO (next iteration) Reuse the functions to validate that
-	 * 'routerPublicKey' is: "the equivalent to the subjectPublicKeyInfo
-	 * value of the router certificate's public key, as described in
-	 * [RFC8208]. This is the full ASN.1 DER encoding of the
+	 * Validate that "is the full ASN.1 DER encoding of the
 	 * subjectPublicKeyInfo, including the ASN.1 tag and length values
-	 * of the subjectPublicKeyInfo SEQUENCE.
-	 *
-	 * #include <asn1/asn1c/SubjectPublicKeyInfo.h>
-	 * #include "asn1/decode.h"
-	 * struct SubjectPublicKeyInfo *router_pki;
-	 * error = asn1_decode(result->router_public_key,
-	 *     result->router_public_key_len, &asn_DEF_SubjectPublicKeyInfo,
-	 *     (void **) &router_pki);
+	 * of the subjectPublicKeyInfo SEQUENCE." (RFC 8416 section 3.4.2)
 	 */
+	error = validate_router_spki(result->router_public_key, spk_len);
+	if (error) {
+		free(result->router_public_key);
+		return error;
+	}
 
 	result->data_flag = result->data_flag | SLURM_BGPS_FLAG_ROUTER_KEY;
 	(*members_loaded)++;
@@ -460,9 +490,7 @@ init_slurm_bgpsec(struct slurm_bgpsec *slurm_bgpsec)
 	slurm_bgpsec->data_flag = SLURM_COM_FLAG_NONE;
 	slurm_bgpsec->asn = 0;
 	slurm_bgpsec->ski = NULL;
-	slurm_bgpsec->ski_len = 0;
 	slurm_bgpsec->router_public_key = NULL;
-	slurm_bgpsec->router_public_key_len = 0;
 	slurm_bgpsec->comment = NULL;
 }
 

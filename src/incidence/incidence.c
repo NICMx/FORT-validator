@@ -134,15 +134,12 @@ incidence_print(void)
 	array_index i;
 
 	pr_info("Custom incidences:");
-	pr_indent_add();
 
 	for (i = 0; i < __INID_MAX; i++) {
-		pr_info("%s (%s): %s", incidences[i].name,
+		pr_info("  %s (%s): %s", incidences[i].name,
 		    incidences[i].description,
 		    action2str(incidences[i].action));
 	}
-
-	pr_indent_rm();
 }
 
 enum incidence_action

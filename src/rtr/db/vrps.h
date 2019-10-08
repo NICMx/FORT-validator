@@ -28,11 +28,18 @@ int vrps_update(bool *);
  * been called, or while it's still building the database.
  * Handle gracefully.
  */
-int vrps_foreach_base_roa(vrp_foreach_cb, void *);
+
+int vrps_foreach_base(vrp_foreach_cb, router_key_foreach_cb, void *);
 int vrps_get_deltas_from(serial_t, serial_t *, struct deltas_db *);
 int get_last_serial_number(serial_t *);
 
-int vrps_foreach_filtered_delta(struct deltas_db *, delta_foreach_cb, void *);
+int vrps_foreach_filtered_delta(struct deltas_db *, delta_vrp_foreach_cb,
+    delta_router_key_foreach_cb, void *);
+
+int handle_roa_v4(uint32_t, struct ipv4_prefix const *, uint8_t, void *);
+int handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t, void *);
+int handle_router_key(unsigned char const *, uint32_t, unsigned char const *,
+    void *);
 
 uint16_t get_current_session_id(uint8_t);
 

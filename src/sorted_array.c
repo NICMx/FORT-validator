@@ -179,6 +179,21 @@ sarray_contains(struct sorted_array *sarray, void *elem)
 	return false;
 }
 
+int
+sarray_foreach(struct sorted_array *sarray, sarray_foreach_cb cb, void *arg)
+{
+	unsigned int index;
+	int error;
+
+	for (index = 0; index < sarray->count; index++) {
+		error = cb(get_nth_element(sarray, index), arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
 char const *sarray_err2str(int error)
 {
 	switch (abs(error)) {

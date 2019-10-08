@@ -2,8 +2,10 @@
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/buffer.h>
 #include <errno.h>
 #include <string.h>
+#include "log.h"
 
 /**
  * Converts error from libcrypto representation to this project's
@@ -197,4 +199,80 @@ free_enc:
 free_copy:
 	free(str_copy);
 	return error;
+}
+
+static int
+to_base64url(char *base, size_t base_len, char **out)
+{
+	char *pad, *tmp;
+	size_t len;
+	int i;
+
+	/* Remove padding, if present */
+	len = base_len;
+	do {
+		pad = strchr(base, '=');
+		if (pad == NULL)
+			break;
+		len = pad - base;
+	} while(0);
+
+	tmp = malloc(len + 1);
+	if (tmp == NULL)
+		return pr_enomem();
+
+	memcpy(tmp, base, len);
+	tmp[len] = '\0';
+
+	for (i = 0; i < len; i++) {
+		if (tmp[i] == '+')
+			tmp[i] = '-';
+		else if (tmp[i] == '/')
+			tmp[i] = '_';
+	}
+
+	*out = tmp;
+	return 0;
+}
+
+/*
+ * Encode @in (with size @in_len) as base64url without trailing pad, and
+ * allocate at @result.
+ */
+int
+base64url_encode(unsigned char const *in, int in_len, char **result)
+{
+	BIO *b64, *mem;
+	BUF_MEM *mem_buf;
+	int error;
+
+	ERR_clear_error();
+
+	mem = BIO_new(BIO_s_mem());
+	if (mem == NULL) {
+		error = ERR_peek_last_error();
+		return error ? error_ul2i(error) : -ENOMEM;
+	}
+
+	b64 = BIO_new(BIO_f_base64());
+	if (b64 == NULL) {
+		error = ERR_peek_last_error();
+		goto free_mem;
+	}
+	mem = BIO_push(b64, mem);
+	BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+
+	BIO_write(b64, in, in_len);
+	BIO_flush(b64);
+	BIO_get_mem_ptr(mem, &mem_buf);
+
+	error = to_base64url(mem_buf->data, mem_buf->length, result);
+	if (error)
+		goto free_mem;
+
+	BIO_free_all(b64);
+	return 0;
+free_mem:
+	BIO_free_all(b64);
+	return error ? error_ul2i(error) : -ENOMEM;;
 }

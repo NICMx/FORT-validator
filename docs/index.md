@@ -6,8 +6,8 @@ title: Home
 
 ## Introduction
 
-The documentation can be found [here](doc/index.html).
+FORT validator is an MIT-licensed RPKI Relying Party, this is a tool offered as part of the [FORT project](https://www.fortproject.net/). It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers.
 
 ## Status
 
-Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the first official release! Don't forget to read the [docs](doc/index.html).
+Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the latest official release, includes RTR version 1 support and a considerable improvement in execution time.

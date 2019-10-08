@@ -2,145 +2,183 @@
 
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <syslog.h>
 
 #include "config.h"
 #include "debug.h"
 #include "thread_var.h"
 
-#ifdef DEBUG
-#define COLOR_DEBUG	"\x1B[36m"	/* Cyan */
-#endif
+struct level {
+	char const *label;
+	char const *color;
+	FILE *stream;
+};
 
-#define COLOR_INFO	"\x1B[37m"	/* Gray */
-#define COLOR_WARNING	"\x1B[33m"	/* Yellow */
-#define COLOR_ERROR	"\x1B[31m"	/* Red */
-#define COLOR_CRITICAL	"\x1B[35m"	/* Pink */
-#define COLOR_RESET	"\x1B[0m"	/* Reset */
+static struct level DBG = { "DBG", "\x1B[36m" };
+static struct level INF = { "INF", "\x1B[37m" };
+static struct level WRN = { "WRN", "\x1B[33m" };
+static struct level ERR = { "ERR", "\x1B[31m" };
+static struct level CRT = { "CRT", "\x1B[35m" };
+static struct level UNK = { "UNK", "" };
+#define COLOR_RESET "\x1B[0m"
 
-#define STDOUT stdout
-#define STDERR stderr
+/* LOG_PERROR is not portable, apparently, so I implemented it myself */
+static bool fprintf_enabled;
+static bool syslog_enabled;
 
-static unsigned int indent;
+void
+log_setup(void)
+{
+	/* =_= */
+	DBG.stream = stdout;
+	INF.stream = stdout;
+	WRN.stream = stderr;
+	ERR.stream = stderr;
+	CRT.stream = stderr;
+	UNK.stream = stdout;
+
+	openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);
+	fprintf_enabled = true;
+	syslog_enabled = true;
+}
+
+void
+log_disable_std(void)
+{
+	fprintf_enabled = false;
+}
+
+void
+log_disable_syslog(void)
+{
+	if (syslog_enabled) {
+		closelog();
+		syslog_enabled = false;
+	}
+}
+
+void
+log_teardown(void)
+{
+	log_disable_std();
+	log_disable_syslog();
+}
+
+static struct level const *
+level2struct(int level)
+{
+	switch (level) {
+	case LOG_CRIT:
+		return &CRT;
+	case LOG_ERR:
+		return &ERR;
+	case LOG_WARNING:
+		return &WRN;
+	case LOG_INFO:
+		return &INF;
+	case LOG_DEBUG:
+		return &DBG;
+	}
+
+	return &UNK;
+}
 
 static void
-pr_prefix(FILE *stream, char const *color, char const *level)
+__fprintf(int level, char const *format, ...)
 {
-	unsigned int i;
+	struct level const *lvl;
+	va_list args;
+
+	lvl = level2struct(level);
+
 	if (config_get_color_output())
-		fprintf(stream, "%s", color);
-	fprintf(stream, "%s: ", level);
-	for (i = 0; i < indent; i++)
-		fprintf(stream, "  ");
+		fprintf(lvl->stream, "%s", lvl->color);
+
+	fprintf(lvl->stream, "%s: ", lvl->label);
+	va_start(args, format);
+	vfprintf(lvl->stream, format, args);
+	va_end(args);
+
+	if (config_get_color_output())
+		fprintf(lvl->stream, COLOR_RESET);
+
+	fprintf(lvl->stream, "\n");
 }
+
+#define MSG_LEN 512
 
 static void
-pr_file_name(FILE *stream)
+pr_syslog(int level, const char *format, va_list args)
 {
-#ifndef UNIT_TESTING
-	char const *file = fnstack_peek();
-	if (file == NULL)
-		return;
-	fprintf(stream, "%s: ", file);
-#endif
-}
+	char const *file_name;
+	struct level const *lvl;
+	char msg[MSG_LEN];
 
-void
-pr_indent_add(void)
-{
-	indent++;
-}
+	file_name = fnstack_peek();
+	lvl = level2struct(level);
 
-void
-pr_indent_rm(void)
-{
-	if (indent > 0)
-		indent--;
+	/* Can't use vsyslog(); it's not portable. */
+	vsnprintf(msg, MSG_LEN, format, args);
+	if (file_name != NULL)
+		syslog(level, "%s: %s: %s", lvl->label, file_name, msg);
 	else
-		fprintf(STDERR, "Programming error: Too many pr_rm_indent()s.\n");
+		syslog(level, "%s: %s", lvl->label, msg);
 }
+
+static void
+pr_stream(int level, const char *format, va_list args)
+{
+	char const *file_name;
+	struct level const *lvl;
+
+	file_name = fnstack_peek();
+	lvl = level2struct(level);
+
+	if (config_get_color_output())
+		fprintf(lvl->stream, "%s", lvl->color);
+
+	fprintf(lvl->stream, "%s: ", lvl->label);
+	if (file_name != NULL)
+		fprintf(lvl->stream, "%s: ", file_name);
+	vfprintf(lvl->stream, format, args);
+
+	if (config_get_color_output())
+		fprintf(lvl->stream, "%s", COLOR_RESET);
+
+	fprintf(lvl->stream, "\n");
+}
+
+#define PR_SIMPLE(level)						\
+	do {								\
+		va_list args;						\
+									\
+		if (syslog_enabled) {					\
+			va_start(args, format);				\
+			pr_syslog(level, format, args);			\
+			va_end(args);					\
+		}							\
+									\
+		if (fprintf_enabled) {					\
+			va_start(args, format);				\
+			pr_stream(level, format, args);			\
+			va_end(args);					\
+		}							\
+	} while (0)
 
 #ifdef DEBUG
-
-void
-pr_debug_prefix(void)
-{
-	pr_prefix(STDOUT, COLOR_DEBUG, "DBG");
-}
-
-void
-pr_debug_suffix(void)
-{
-	if (config_get_color_output())
-		fprintf(STDOUT, "%s", COLOR_RESET);
-	fprintf(STDOUT, "\n");
-}
 
 void
 pr_debug(const char *format, ...)
 {
-	va_list args;
-
-	pr_debug_prefix();
-
-	va_start(args, format);
-	vfprintf(STDOUT, format, args);
-	va_end(args);
-	pr_debug_suffix();
-}
-
-void
-pr_debug_add(const char *format, ...)
-{
-	va_list args;
-
-	pr_debug_prefix();
-
-	va_start(args, format);
-	vfprintf(STDOUT, format, args);
-	va_end(args);
-	pr_debug_suffix();
-
-	pr_indent_add();
-}
-
-void
-pr_debug_rm(const char *format, ...)
-{
-	va_list args;
-
-	pr_indent_rm();
-
-	pr_debug_prefix();
-
-	va_start(args, format);
-	vfprintf(STDOUT, format, args);
-	va_end(args);
-	pr_debug_suffix();
+	PR_SIMPLE(LOG_DEBUG);
 }
 
 #endif
 
-#define PR_PREFIX(stream, color, level, args) do {			\
-	pr_prefix(stream, color, level);				\
-	pr_file_name(stream);						\
-									\
-	va_start(args, format);						\
-	vfprintf(stream, format, args);					\
-	va_end(args);							\
-} while (0)
-
-#define PR_SUFFIX(stream) do {						\
-	if (config_get_color_output())					\
-		fprintf(stream, "%s", COLOR_RESET);			\
-	fprintf(stream, "\n");						\
-} while (0)
-
 void
 pr_info(const char *format, ...)
 {
-	va_list args;
-	PR_PREFIX(STDOUT, COLOR_INFO, "INF", args);
-	PR_SUFFIX(STDOUT);
+	PR_SIMPLE(LOG_INFO);
 }
 
 /**
@@ -150,9 +188,7 @@ pr_info(const char *format, ...)
 int
 pr_warn(const char *format, ...)
 {
-	va_list args;
-	PR_PREFIX(STDERR, COLOR_WARNING, "WRN", args);
-	PR_SUFFIX(STDERR);
+	PR_SIMPLE(LOG_WARNING);
 	return 0;
 }
 
@@ -162,9 +198,7 @@ pr_warn(const char *format, ...)
 int
 pr_err(const char *format, ...)
 {
-	va_list args;
-	PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
-	PR_SUFFIX(STDERR);
+	PR_SIMPLE(LOG_ERR);
 	return -EINVAL;
 }
 
@@ -185,23 +219,26 @@ pr_err(const char *format, ...)
 int
 pr_errno(int error, const char *format, ...)
 {
-	va_list args;
+	PR_SIMPLE(LOG_ERR);
 
-	PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
+	if (!error)
+		return -EINVAL;
 
-	if (error) {
-		fprintf(STDERR, ": %s", strerror(error));
-	} else {
-		/*
-		 * If this function was called, then we need to assume that
-		 * there WAS an error; go generic.
-		 */
-		fprintf(STDERR, ": (Unknown)");
-		error = -EINVAL;
-	}
+	if (syslog_enabled)
+		syslog(LOG_ERR, "  - %s", strerror(error));
+	if (fprintf_enabled)
+		__fprintf(LOG_ERR, "  - %s", strerror(error));
 
-	PR_SUFFIX(STDERR);
 	return error;
+}
+
+static int log_crypto_error(const char *str, size_t len, void *arg)
+{
+	if (syslog_enabled)
+		syslog(LOG_ERR, "  - %s", str);
+	if (fprintf_enabled)
+		__fprintf(LOG_ERR, "  - %s", str);
+	return 1;
 }
 
 /**
@@ -210,64 +247,50 @@ pr_errno(int error, const char *format, ...)
  *
  * This differs from usual printf-like functions:
  *
- * - It returns the last error code libcrypto threw, not bytes written.
+ * - It returns -EINVAL, not bytes written.
  * - It prints a newline.
- * - Also prints the cryptolib's error message after a colon.
- *   (So don't include periods at the end of @format.)
+ * - Also prints the cryptolib's error message stack.
  *
  * Always appends a newline at the end.
  */
 int
 crypto_err(const char *format, ...)
 {
-	va_list args;
-	int error;
+	unsigned int stack_size;
 
-	PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
-	fprintf(STDERR, ": ");
+	PR_SIMPLE(LOG_ERR);
 
-	error = ERR_GET_REASON(ERR_peek_last_error());
-	if (error) {
-		/*
-		 * Reminder: This clears the error queue.
-		 * BTW: The string format is pretty ugly. Maybe override this.
-		 */
-		ERR_print_errors_fp(STDERR);
-	} else {
-		/*
-		 * If this function was called, then we need to assume that
-		 * there WAS an error; go generic.
-		 */
-		fprintf(STDERR, "(There are no error messages in libcrypto's stack.)");
-		error = -EINVAL;
+	if (syslog_enabled)
+		syslog(LOG_ERR, "  libcrypto error stack:");
+	if (fprintf_enabled)
+		__fprintf(LOG_ERR, "  libcrypto error stack:");
+
+	stack_size = 0;
+	ERR_print_errors_cb(log_crypto_error, &stack_size);
+	if (stack_size == 0) {
+		if (syslog_enabled)
+			syslog(LOG_ERR, "    <Empty>");
+		if (fprintf_enabled)
+			__fprintf(LOG_ERR, "    <Empty>\n");
 	}
 
-	PR_SUFFIX(STDERR);
-	return error;
+	return -EINVAL;
 }
 
 int
 pr_enomem(void)
 {
-	pr_err("Out of memory.");
+	if (syslog_enabled)
+		syslog(LOG_ERR, "Out of memory.");
+	if (fprintf_enabled)
+		__fprintf(LOG_ERR, "Out of memory.\n");
 	return -ENOMEM;
 }
 
 __dead void
 pr_crit(const char *format, ...)
 {
-	va_list args;
-
-	pr_prefix(STDERR, COLOR_CRITICAL, "CRT");
-	pr_file_name(STDERR);
-
-	fprintf(STDERR, "Programming error: ");
-	va_start(args, format);
-	vfprintf(STDERR, format, args);
-	va_end(args);
-
-	PR_SUFFIX(STDERR);
-
+	PR_SIMPLE(LOG_CRIT);
 	print_stack_trace();
 	exit(-1);
 }
@@ -280,19 +303,16 @@ int
 incidence(enum incidence_id id, const char *format, ...)
 {
 	enum incidence_action action;
-	va_list args;
 
 	action = incidence_get_action(id);
 	switch (action) {
 	case INAC_IGNORE:
 		return 0;
 	case INAC_WARN:
-		PR_PREFIX(STDERR, COLOR_WARNING, "WRN", args);
-		PR_SUFFIX(STDERR);
+		PR_SIMPLE(LOG_WARNING);
 		return 0;
 	case INAC_ERROR:
-		PR_PREFIX(STDERR, COLOR_ERROR, "ERR", args);
-		PR_SUFFIX(STDERR);
+		PR_SIMPLE(LOG_ERR);
 		return -EINVAL;
 	}
 

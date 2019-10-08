@@ -51,6 +51,12 @@ process_file_or_dir(char const *location, char const *file_ext,
 }
 
 void
+close_thread(pthread_t thread, char const *what)
+{
+	/* Nothing to close */
+}
+
+void
 fnstack_init(void)
 {
 	/* Empty */
@@ -72,6 +78,12 @@ void
 fnstack_push(char const *file)
 {
 	/* Empty */
+}
+
+struct validation *
+state_retrieve(void)
+{
+	return NULL;
 }
 
 START_TEST(tal_load_normal)

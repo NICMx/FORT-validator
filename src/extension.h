@@ -36,6 +36,7 @@ struct extension_metadata const *ext_ar(void);
 struct extension_metadata const *ext_ir2(void);
 struct extension_metadata const *ext_ar2(void);
 struct extension_metadata const *ext_cn(void);
+struct extension_metadata const *ext_eku(void);
 
 int handle_extensions(struct extension_handler *,
     STACK_OF(X509_EXTENSION) const *);

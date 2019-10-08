@@ -7,7 +7,7 @@
 
 /**
  * Important: -rdynamic needs to be enabled, otherwise this does not print
- * function names. See rpki_validator_LDFLAGS in Makefile.am.
+ * function names. See LDFLAGS_DEBUG in Makefile.am.
  * Also: Only non-static functions will be labeled.
  *
  * During a segfault, the first three printed entries are usually not

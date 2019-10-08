@@ -3,6 +3,7 @@
 
 #include "address.h"
 #include "object/name.h"
+#include "object/router_key.h"
 
 /**
  * Functions that handle validation results.
@@ -28,11 +29,16 @@ struct validation_handler {
 	/** Called every time Fort has successfully validated an IPv6 ROA. */
 	int (*handle_roa_v6)(uint32_t, struct ipv6_prefix const *, uint8_t,
 	    void *);
+	/** Called every time Fort has successfully validated a BGPsec cert */
+	int (*handle_router_key)(unsigned char const *, uint32_t,
+	    unsigned char const *, void *);
 	/** Generic user-defined argument for the functions above. */
 	void *arg;
 };
 
 int vhandler_handle_roa_v4(uint32_t, struct ipv4_prefix const *, uint8_t);
 int vhandler_handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t);
+int vhandler_handle_router_key(unsigned char const *, uint32_t,
+    unsigned char const *);
 
 #endif /* SRC_VALIDATION_HANDLER_H_ */

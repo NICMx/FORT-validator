@@ -5,6 +5,7 @@
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "data_structure/array_list.h"
+#include "object/router_key.h"
 
 struct slurm_prefix_ctx {
 	struct slurm_prefix element;
@@ -145,7 +146,7 @@ bgpsec_filtered_by(struct slurm_bgpsec *bgpsec, struct slurm_bgpsec *filter,
 	if (exact_match && (filter->data_flag & ~SLURM_COM_FLAG_COMMENT) ==
 	    (SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI))
 		return bgpsec->asn == filter->asn &&
-		    memcmp(bgpsec->ski, filter->ski, bgpsec->ski_len) == 0;
+		    memcmp(bgpsec->ski, filter->ski, RK_SKI_LEN) == 0;
 
 	/* Both have ASN */
 	if ((bgpsec->data_flag & SLURM_COM_FLAG_ASN) > 0 &&
@@ -154,9 +155,8 @@ bgpsec_filtered_by(struct slurm_bgpsec *bgpsec, struct slurm_bgpsec *filter,
 
 	/* Both have a SKI */
 	if ((bgpsec->data_flag & SLURM_BGPS_FLAG_SKI) > 0 &&
-	    (filter->data_flag & SLURM_BGPS_FLAG_SKI) > 0 &&
-	    bgpsec->ski_len == filter->ski_len)
-		return memcmp(bgpsec->ski, filter->ski, bgpsec->ski_len) == 0;
+	    (filter->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
+		return memcmp(bgpsec->ski, filter->ski, RK_SPKI_LEN) == 0;
 
 	return false;
 }
@@ -209,14 +209,11 @@ bgpsec_equal(struct slurm_bgpsec_ctx *left_ctx, struct slurm_bgpsec *right,
 		equal = left->asn == right->asn;
 
 	if (equal && (left->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
-		equal = left->ski_len == right->ski_len &&
-		    memcmp(left->ski, right->ski, left->ski_len) == 0;
+		equal = memcmp(left->ski, right->ski, RK_SKI_LEN) == 0;
 
 	if (equal && (left->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) > 0)
-		equal = left->router_public_key_len ==
-		    right->router_public_key_len &&
-		    memcmp(left->router_public_key, right->router_public_key,
-		    left->router_public_key_len) == 0;
+		equal = memcmp(left->router_public_key,
+		    right->router_public_key, RK_SPKI_LEN) == 0;
 
 	return equal;
 }
@@ -294,6 +291,47 @@ slurm_db_foreach_assertion_prefix(assertion_pfx_foreach_cb cb, void *arg)
 	int error;
 
 	ARRAYLIST_FOREACH(&array_lists_db.assertion_pfx_al, cursor, i) {
+		error = cb(&cursor->element, arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+bool
+slurm_db_bgpsec_is_filtered(struct router_key const *key)
+{
+	struct slurm_bgpsec slurm_bgpsec;
+	unsigned char *tmp;
+	bool result;
+
+	tmp = malloc(RK_SKI_LEN);
+	if (tmp == NULL) {
+		pr_enomem();
+		return false;
+	}
+	slurm_bgpsec.data_flag = SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI;
+	slurm_bgpsec.asn = key->as;
+	memcpy(tmp, key->ski, RK_SKI_LEN);
+	slurm_bgpsec.ski = tmp;
+	/* Router public key isn't used at filters */
+	slurm_bgpsec.router_public_key = NULL;
+	slurm_bgpsec.comment = NULL;
+
+	result = bgpsec_filter_exists(&slurm_bgpsec, true, -1);
+	free(tmp);
+	return result;
+}
+
+int
+slurm_db_foreach_assertion_bgpsec(assertion_bgpsec_foreach_cb cb, void *arg)
+{
+	struct slurm_bgpsec_ctx *cursor;
+	array_index i;
+	int error;
+
+	ARRAYLIST_FOREACH(&array_lists_db.assertion_bgps_al, cursor, i) {
 		error = cb(&cursor->element, arg);
 		if (error)
 			return error;

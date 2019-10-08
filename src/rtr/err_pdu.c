@@ -18,8 +18,8 @@ typedef enum rtr_error_code {
 } rtr_error_code_t;
 
 static int
-err_pdu_send(int fd, rtr_error_code_t code, struct rtr_request const *request,
-    char const *message_const)
+err_pdu_send(int fd, uint8_t version, rtr_error_code_t code,
+    struct rtr_request const *request, char const *message_const)
 {
 	char *message;
 
@@ -31,17 +31,18 @@ err_pdu_send(int fd, rtr_error_code_t code, struct rtr_request const *request,
 
 	/* Need a clone to remove the const. */
 	message = (message_const != NULL) ? strdup(message_const) : NULL;
-	send_error_report_pdu(fd, code, request, message);
+	send_error_report_pdu(fd, version, code, request, message);
 	free(message);
 
 	return -EINVAL;
 }
 
 int
-err_pdu_send_corrupt_data(int fd, struct rtr_request const *request,
-    char const *message)
+err_pdu_send_corrupt_data(int fd, uint8_t version,
+    struct rtr_request const *request, char const *message)
 {
-	return err_pdu_send(fd, ERR_PDU_CORRUPT_DATA, request, message);
+	return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, request,
+	    message);
 }
 
 /*
@@ -50,15 +51,15 @@ err_pdu_send_corrupt_data(int fd, struct rtr_request const *request,
  * problem.
  */
 int
-err_pdu_send_internal_error(int fd)
+err_pdu_send_internal_error(int fd, uint8_t version)
 {
-	return err_pdu_send(fd, ERR_PDU_INTERNAL_ERROR, NULL, NULL);
+	return err_pdu_send(fd, version, ERR_PDU_INTERNAL_ERROR, NULL, NULL);
 }
 
 int
-err_pdu_send_no_data_available(int fd)
+err_pdu_send_no_data_available(int fd, uint8_t version)
 {
-	err_pdu_send(fd, ERR_PDU_NO_DATA_AVAILABLE, NULL, NULL);
+	err_pdu_send(fd, version, ERR_PDU_NO_DATA_AVAILABLE, NULL, NULL);
 	/*
 	 * The connection should not be terminated because of this error.
 	 * So don't panic; client should retry later.
@@ -67,15 +68,29 @@ err_pdu_send_no_data_available(int fd)
 }
 
 int
-err_pdu_send_invalid_request(int fd, struct rtr_request const *request,
-    char const *message)
+err_pdu_send_invalid_request(int fd, uint8_t version,
+    struct rtr_request const *request, char const *message)
 {
-	return err_pdu_send(fd, ERR_PDU_INVALID_REQUEST, request, message);
+	return err_pdu_send(fd, version, ERR_PDU_INVALID_REQUEST, request,
+	    message);
 }
 
 /* Caution: @header is supposed to be in serialized form. */
 int
-err_pdu_send_invalid_request_truncated(int fd, unsigned char *header,
+err_pdu_send_invalid_request_truncated(int fd, uint8_t version,
+    unsigned char *header, char const *message)
+{
+	struct rtr_request request = {
+		.bytes = header,
+		.bytes_len = RTRPDU_HDR_LEN,
+		.pdu = NULL,
+	};
+	return err_pdu_send_invalid_request(fd, version, &request, message);
+}
+
+int
+err_pdu_send_unsupported_proto_version(int fd, uint8_t version,
+    unsigned char *header,
     char const *message)
 {
 	struct rtr_request request = {
@@ -83,25 +98,28 @@ err_pdu_send_invalid_request_truncated(int fd, unsigned char *header,
 		.bytes_len = RTRPDU_HDR_LEN,
 		.pdu = NULL,
 	};
-	return err_pdu_send_invalid_request(fd, &request, message);
+	return err_pdu_send(fd, version, ERR_PDU_UNSUP_PROTO_VERSION, &request,
+	    message);
 }
 
 int
-err_pdu_send_unsupported_proto_version(int fd, unsigned char *header,
-    char const *message)
+err_pdu_send_unsupported_pdu_type(int fd, uint8_t version,
+    struct rtr_request const *request)
+{
+	return err_pdu_send(fd, version, ERR_PDU_UNSUP_PDU_TYPE, request, NULL);
+}
+
+int
+err_pdu_send_unexpected_proto_version(int fd, uint8_t version,
+    unsigned char *header, char const *message)
 {
 	struct rtr_request request = {
 		.bytes = header,
 		.bytes_len = RTRPDU_HDR_LEN,
 		.pdu = NULL,
 	};
-	return err_pdu_send(fd, ERR_PDU_UNSUP_PROTO_VERSION, &request, message);
-}
-
-int
-err_pdu_send_unsupported_pdu_type(int fd, struct rtr_request const *request)
-{
-	return err_pdu_send(fd, ERR_PDU_UNSUP_PDU_TYPE, request, NULL);
+	return err_pdu_send(fd, version, ERR_PDU_UNEXPECTED_PROTO_VERSION, &request,
+	    message);
 }
 
 char const *

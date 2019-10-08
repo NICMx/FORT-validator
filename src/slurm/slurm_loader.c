@@ -40,10 +40,10 @@ slurm_cleanup(void)
 static int
 slurm_pfx_filters_apply(struct vrp const *vrp, void *arg)
 {
-	struct roa_table *table = arg;
+	struct db_table *table = arg;
 
 	if (slurm_db_vrp_is_filtered(vrp))
-		roa_table_remove_roa(table, vrp);
+		db_table_remove_roa(table, vrp);
 
 	return 0;
 }
@@ -51,7 +51,7 @@ slurm_pfx_filters_apply(struct vrp const *vrp, void *arg)
 static int
 slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 {
-	struct roa_table *table = arg;
+	struct db_table *table = arg;
 	struct ipv4_prefix prefix4;
 	struct ipv6_prefix prefix6;
 	struct vrp vrp;
@@ -77,9 +77,36 @@ slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 }
 
 static int
-slurm_pfx_assertions_apply(struct roa_table *base)
+slurm_pfx_assertions_apply(struct db_table *base)
 {
 	return slurm_db_foreach_assertion_prefix(slurm_pfx_assertions_add,
+	    base);
+}
+
+static int
+slurm_bgpsec_filters_apply(struct router_key const *key, void *arg)
+{
+	struct db_table *table = arg;
+
+	if (slurm_db_bgpsec_is_filtered(key))
+		db_table_remove_router_key(table, key);
+
+	return 0;
+}
+
+static int
+slurm_bgpsec_assertions_add(struct slurm_bgpsec *bgpsec, void *arg)
+{
+	struct db_table *table = arg;
+
+	return rtrhandler_handle_router_key(table, bgpsec->ski,
+	    bgpsec->asn, bgpsec->router_public_key);
+}
+
+static int
+slurm_bgpsec_assertions_apply(struct db_table *base)
+{
+	return slurm_db_foreach_assertion_bgpsec(slurm_bgpsec_assertions_add,
 	    base);
 }
 
@@ -89,9 +116,9 @@ slurm_pfx_assertions_apply(struct roa_table *base)
  * On any error the SLURM won't be applied to @base.
  */
 int
-slurm_apply(struct roa_table **base)
+slurm_apply(struct db_table **base)
 {
-	struct roa_table *new_base;
+	struct db_table *new_base;
 	bool loaded;
 	int error;
 
@@ -104,25 +131,34 @@ slurm_apply(struct roa_table **base)
 		return 0;
 
 	/* Deep copy of the base so that updates can be reverted */
-	error = roa_table_clone(&new_base, *base);
+	error = db_table_clone(&new_base, *base);
 	if (error)
 		goto cleanup;
 
-	error = roa_table_foreach_roa(new_base, slurm_pfx_filters_apply,
+	error = db_table_foreach_roa(new_base, slurm_pfx_filters_apply,
 	    new_base);
 	if (error)
 		goto release_new;
 
+	error = db_table_foreach_router_key(new_base,
+	    slurm_bgpsec_filters_apply, new_base);
+	if (error)
+		goto release_new;
+
 	error = slurm_pfx_assertions_apply(new_base);
+	if (error) {
+		goto release_new;
+	}
+
+	error = slurm_bgpsec_assertions_apply(new_base);
 	if (!error) {
-		roa_table_destroy(*base);
+		db_table_destroy(*base);
 		*base = new_base;
 		goto cleanup;
 	}
 
-	/** TODO (next iteration) Apply BGPsec filters and assertions */
 release_new:
-	roa_table_destroy(new_base);
+	db_table_destroy(new_base);
 cleanup:
 	slurm_cleanup();
 	return error;

@@ -525,3 +525,32 @@ ipv6_covered(struct in6_addr *f_addr, uint8_t f_len, struct in6_addr *son_addr)
 
 	return true;
 }
+
+/**
+ * buffer must length INET6_ADDRSTRLEN.
+ */
+char const *
+sockaddr2str(struct sockaddr_storage *sockaddr, char *buffer)
+{
+	void *addr = NULL;
+	char const *addr_str;
+
+	if (sockaddr == NULL)
+		return "(null)";
+
+	switch (sockaddr->ss_family) {
+	case AF_INET:
+		addr = &((struct sockaddr_in *) sockaddr)->sin_addr;
+		break;
+	case AF_INET6:
+		addr = &((struct sockaddr_in6 *) sockaddr)->sin6_addr;
+		break;
+	default:
+		return "(protocol unknown)";
+	}
+
+	addr_str = inet_ntop(sockaddr->ss_family, addr, buffer,
+	    INET6_ADDRSTRLEN);
+	return (addr_str != NULL) ? addr_str : "(unprintable address)";
+}
+

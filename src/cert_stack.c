@@ -7,7 +7,6 @@
 #include "thread_var.h"
 #include "data_structure/array_list.h"
 #include "object/name.h"
-#include "object/certificate.h"
 
 enum defer_node_type {
 	DNT_SEPARATOR,
@@ -265,7 +264,7 @@ deferstack_is_empty(struct cert_stack *stack)
 /** Steals ownership of @x509 on success. */
 int
 x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
-    enum rpki_policy policy, bool is_ta)
+    enum rpki_policy policy, enum cert_type type)
 {
 	struct metadata_node *meta;
 	struct defer_node *defer_separator;
@@ -287,7 +286,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 		goto end4;
 	}
 	resources_set_policy(meta->resources, policy);
-	error = certificate_get_resources(x509, meta->resources);
+	error = certificate_get_resources(x509, meta->resources, type);
 	if (error)
 		goto end5;
 
@@ -298,7 +297,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
 	 * part is already handled in certificate_get_resources().
 	 */
-	if (is_ta && resources_empty(meta->resources)) {
+	if (type == TA && resources_empty(meta->resources)) {
 		error = pr_err("Trust Anchor certificate does not define any number resources.");
 		goto end5;
 	}

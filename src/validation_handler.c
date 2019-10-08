@@ -52,3 +52,19 @@ vhandler_handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
 	    ? handler->handle_roa_v6(as, prefix, max_length, handler->arg)
 	    : 0;
 }
+
+int
+vhandler_handle_router_key(unsigned char const *ski, uint32_t as,
+    unsigned char const *spk)
+{
+	struct validation_handler const *handler;
+	int error;
+
+	error = get_current_threads_handler(&handler);
+	if (error)
+		return error;
+
+	return (handler->handle_router_key != NULL)
+	    ? handler->handle_router_key(ski, as, spk, handler->arg)
+	    : 0;
+}

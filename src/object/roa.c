@@ -35,7 +35,7 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 	if (error)
 		return error;
 
-	pr_debug_add("ROAIPAddress {");
+	pr_debug("ROAIPAddress {");
 	pr_debug("address: %s/%u", v4addr2str(&prefix.addr), prefix.len);
 
 	if (roa_addr->maxLength != NULL) {
@@ -70,10 +70,10 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 		goto end_error;
 	}
 
-	pr_debug_rm("}");
+	pr_debug("}");
 	return vhandler_handle_roa_v4(asn, &prefix, max_length);
 end_error:
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }
 
@@ -89,7 +89,7 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 	if (error)
 		return error;
 
-	pr_debug_add("ROAIPAddress {");
+	pr_debug("ROAIPAddress {");
 	pr_debug("address: %s/%u", v6addr2str(&prefix.addr), prefix.len);
 
 	if (roa_addr->maxLength != NULL) {
@@ -124,10 +124,10 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 		goto end_error;
 	}
 
-	pr_debug_rm("}");
+	pr_debug("}");
 	return vhandler_handle_roa_v6(asn, &prefix, max_length);
 end_error:
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }
 
@@ -155,7 +155,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	int a;
 	int error;
 
-	pr_debug_add("eContent {");
+	pr_debug("eContent {");
 	if (roa->version != NULL) {
 		error = asn_INTEGER2ulong(roa->version, &version);
 		if (error) {
@@ -193,7 +193,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		goto end_error;
 	}
 
-	pr_debug_add("ipAddrBlocks {");
+	pr_debug("ipAddrBlocks {");
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
 		block = roa->ipAddrBlocks.list.array[b];
 		if (block == NULL) {
@@ -208,12 +208,12 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		if (block->addressFamily.buf[1] != 1
 		    && block->addressFamily.buf[1] != 2)
 			goto family_error;
-		pr_debug_add("%s {",
+		pr_debug("%s {",
 		    block->addressFamily.buf[1] == 1 ? "v4" : "v6");
 
 		if (block->addresses.list.array == NULL) {
 			error = pr_err("ROA's address list array is NULL.");
-			pr_debug_rm("}");
+			pr_debug("}");
 			goto ip_error;
 		}
 
@@ -222,11 +222,11 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
 			if (error) {
-				pr_debug_rm("}");
+				pr_debug("}");
 				goto ip_error;
 			}
 		}
-		pr_debug_rm("}");
+		pr_debug("}");
 	}
 
 	/* Error 0 it's ok */
@@ -236,9 +236,9 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 family_error:
 	error = pr_err("ROA's IP family is not v4 or v6.");
 ip_error:
-	pr_debug_rm("}");
+	pr_debug("}");
 end_error:
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }
 
@@ -254,7 +254,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	int error;
 
 	/* Prepare */
-	pr_debug_add("ROA '%s' {", uri_get_printable(uri));
+	pr_debug("ROA '%s' {", uri_get_printable(uri));
 	fnstack_push_uri(uri);
 
 	/* Decode */
@@ -290,6 +290,6 @@ revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:
 	fnstack_pop();
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }

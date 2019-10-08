@@ -6,6 +6,7 @@
 #include "config.h"
 #include "file.h"
 #include "log.h"
+#include "crypto/base64.h"
 #include "rtr/db/vrp.h"
 
 char addr_buf[INET6_ADDRSTRLEN];
@@ -23,11 +24,10 @@ strv6addr(struct in6_addr const *addr)
 }
 
 static int
-load_output_file(FILE **result, bool *fopen)
+load_output_file(char const *output, FILE **result, bool *fopen)
 {
 	FILE *tmp;
 	struct stat stat;
-	char const *output = config_get_output_roa();
 	int error;
 
 	if (output == NULL) {
@@ -42,8 +42,10 @@ load_output_file(FILE **result, bool *fopen)
 	}
 
 	error = file_write(output, &tmp, &stat);
-	if (error)
+	if (error) {
+		*result = NULL;
 		return error;
+	}
 
 	*fopen = true;
 	*result = tmp;
@@ -73,29 +75,89 @@ print_roa(struct vrp const *vrp, void *arg)
 	return 0;
 }
 
-void
-output_print_roas(struct roa_table *roas)
+/* Print as base64url strings without trailing pad */
+static int
+print_router_key(struct router_key const *key, void *arg)
+{
+	FILE *out = arg;
+	char *buf1, *buf2;
+	int error;
+
+	error = base64url_encode(key->ski, RK_SKI_LEN, &buf1);
+	if (error)
+		return error;
+
+	error = base64url_encode(key->spk, RK_SPKI_LEN, &buf2);
+	if (error)
+		goto free1;
+
+	fprintf(out, "AS%u,%s,%s\n", key->as, buf1, buf2);
+
+	free(buf2);
+free1:
+	free(buf1);
+	return error;
+}
+
+static int
+open_file(char const *loc, FILE **out, bool *fopen)
+{
+	int error;
+
+	error = load_output_file(loc, out, fopen);
+	if (error)
+		return pr_err("Error getting file '%s'", loc);
+
+	/* No output configured */
+	if (*out == NULL)
+		return -ENOENT;
+
+	return 0;
+}
+
+static void
+print_roas(struct db_table *db)
 {
 	FILE *out;
 	bool fopen;
 	int error;
 
-	error = load_output_file(&out, &fopen);
-	if (error) {
-		pr_err("Error getting file '%s'", config_get_output_roa());
-		return;
-	}
-
-	/* No output configured */
-	if (out == NULL)
+	out = NULL;
+	error = open_file(config_get_output_roa(), &out, &fopen);
+	if (error)
 		return;
 
 	fprintf(out, "ASN,Prefix,Max prefix length\n");
-	error = roa_table_foreach_roa(roas, print_roa, out);
+	error = db_table_foreach_roa(db, print_roa, out);
 	if (fopen)
 		file_close(out);
-	if (error) {
+	if (error)
 		pr_err("Error printing ROAs");
+}
+
+static void
+print_router_keys(struct db_table *db)
+{
+	FILE *out;
+	bool fopen;
+	int error;
+
+	out = NULL;
+	error = open_file(config_get_output_bgpsec(), &out, &fopen);
+	if (error)
 		return;
-	}
+
+	fprintf(out, "ASN,Subject Key Identifier,Subject Public Key Info\n");
+	error = db_table_foreach_router_key(db, print_router_key, out);
+	if (fopen)
+		file_close(out);
+	if (error)
+		pr_err("Error printing Router Keys");
+}
+
+void
+output_print_data(struct db_table *db)
+{
+	print_roas(db);
+	print_router_keys(db);
 }

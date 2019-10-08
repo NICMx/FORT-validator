@@ -59,15 +59,13 @@ struct rpki_config {
 		/** Outstanding connections in the socket's listen queue */
 		unsigned int backlog;
 
-		/** Interval used to look for updates at VRPs location */
-		unsigned int validation_interval;
-
-		/*
-		 * TODO (next iteration) Intervals used at End of data PDU
-		 * uint32_t refresh_interval;
-		 * uint32_t retry_interval;
-		 * uint32_t expire_interval;
-		 */
+		struct {
+			/** Interval used to look for updates at VRPs location */
+			unsigned int validation;
+			unsigned int refresh;
+			unsigned int retry;
+			unsigned int expire;
+		} interval;
 	} server;
 
 	struct {
@@ -88,7 +86,8 @@ struct rpki_config {
 	struct {
 		/** File where the validated ROAs will be stored */
 		char *roa;
-		/** TODO (next iteration) Add BGPsec output */
+		/** File where the validated BGPsec certs will be stored */
+		char *bgpsec;
 	} output;
 };
 
@@ -227,10 +226,10 @@ static const struct option_field options[] = {
 		.max = SOMAXCONN,
 	}, {
 		.id = 5003,
-		.name = "server.validation-interval",
+		.name = "server.interval.validation",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
-		    server.validation_interval),
+		    server.interval.validation),
 		.doc = "Interval used to look for updates at VRPs location",
 		/*
 		 * RFC 6810 and 8210:
@@ -241,13 +240,58 @@ static const struct option_field options[] = {
 		 */
 		.min = 60,
 		.max = UINT_MAX,
+	}, {
+		.id = 5004,
+		.name = "server.interval.refresh",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    server.interval.refresh),
+		.doc = "Interval between normal cache polls",
+		/*
+		 * RFC 8210: "Interval between normal cache polls".
+		 * Min, max, and default values taken from RFC 8210 section 6.
+		 *
+		 * RFC mentions "router SHOULD NOT poll the cache sooner than
+		 * indicated by this parameter", but what if this is ignored by
+		 * the router? There's no proper error message to notice the
+		 * client about its error without dropping the connection (I
+		 * don't think that 'No Data Available' is the right option).
+		 *
+		 * So, let the operator configure this option hoping that
+		 * clients honor the interval.
+		 */
+		.min = 1,
+		.max = 86400,
+	}, {
+		.id = 5005,
+		.name = "server.interval.retry",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    server.interval.retry),
+		.doc = "Interval between cache poll retries after a failed cache poll",
+		/*
+		 * RFC 8210: "Interval between cache poll retries after a
+		 * failed cache poll"
+		 * Min, max, and default values taken from RFC 8210 section 6.
+		 */
+		.min = 1,
+		.max = 7200,
+	}, {
+		.id = 5006,
+		.name = "server.interval.expire",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    server.interval.expire),
+		.doc = "Interval during which data fetched from a cache remains valid in the absence of a successful subsequent cache poll",
+		/*
+		 * RFC 8210: "Interval during which data fetched from a cache
+		 * remains valid in the absence of a successful subsequent
+		 * cache poll"
+		 * Min, max, and default values taken from RFC 8210 section 6.
+		 */
+		.min = 600,
+		.max = 172800,
 	},
-	/*
-	 * TODO (next iteration) RTRv1 intervals with values:
-	 * - refresh: min = 1, max = 86400, default = 3600
-	 * - retry: min = 1, max = 7200, default = 600
-	 * - expire: min = 600, max = 172800, default = 7200
-	 */
 
 	/* RSYNC fields */
 	{
@@ -305,6 +349,13 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, output.roa),
 		.doc = "File where ROAs will be stored in CSV format, use '-' to print at console",
+		.arg_doc = "<file>",
+	}, {
+		.id = 6001,
+		.name = "output.bgpsec",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, output.bgpsec),
+		.doc = "File where BGPsec Router Keys will be stored in CSV format, use '-' to print at console",
 		.arg_doc = "<file>",
 	},
 
@@ -427,13 +478,11 @@ print_config(void)
 	struct option_field const *opt;
 
 	pr_info("Configuration {");
-	pr_indent_add();
 
 	FOREACH_OPTION(options, opt, 0xFFFF)
 		if (is_rpki_config_field(opt) && opt->type->print != NULL)
 			opt->type->print(opt, get_rpki_config_field(opt));
 
-	pr_indent_rm();
 	pr_info("}");
 }
 
@@ -470,7 +519,10 @@ set_default_values(void)
 		return pr_enomem();
 
 	rpki_config.server.backlog = SOMAXCONN;
-	rpki_config.server.validation_interval = 3600;
+	rpki_config.server.interval.validation = 3600;
+	rpki_config.server.interval.refresh = 3600;
+	rpki_config.server.interval.retry = 600;
+	rpki_config.server.interval.expire = 7200;
 
 	rpki_config.tal = NULL;
 	rpki_config.slurm = NULL;
@@ -506,6 +558,7 @@ set_default_values(void)
 	rpki_config.log.filename_format = FNF_GLOBAL;
 
 	rpki_config.output.roa = NULL;
+	rpki_config.output.bgpsec = NULL;
 
 	return 0;
 
@@ -529,6 +582,12 @@ valid_output_file(char const *path)
 static int
 validate_config(void)
 {
+	if (rpki_config.server.interval.expire <
+	    rpki_config.server.interval.refresh ||
+	    rpki_config.server.interval.expire <
+	    rpki_config.server.interval.retry)
+		return pr_err("Expire interval must be greater than refresh and retry intervals");
+
 	if (rpki_config.output.roa != NULL &&
 	    !valid_output_file(rpki_config.output.roa))
 		return pr_err("Invalid output.roa file.");
@@ -677,7 +736,25 @@ config_get_server_queue(void)
 unsigned int
 config_get_validation_interval(void)
 {
-	return rpki_config.server.validation_interval;
+	return rpki_config.server.interval.validation;
+}
+
+unsigned int
+config_get_interval_refresh(void)
+{
+	return rpki_config.server.interval.refresh;
+}
+
+unsigned int
+config_get_interval_retry(void)
+{
+	return rpki_config.server.interval.retry;
+}
+
+unsigned int
+config_get_interval_expire(void)
+{
+	return rpki_config.server.interval.expire;
 }
 
 char const *
@@ -757,6 +834,12 @@ char const *
 config_get_output_roa(void)
 {
 	return rpki_config.output.roa;
+}
+
+char const *
+config_get_output_bgpsec(void)
+{
+	return rpki_config.output.bgpsec;
 }
 
 void

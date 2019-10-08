@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "address.h"
+#include "resource/asn.h"
 #include "asn1/asn1c/ASIdentifiers.h"
 #include "asn1/asn1c/IPAddressFamily.h"
 
@@ -27,7 +28,7 @@ struct resources *resources_create(bool);
 void resources_destroy(struct resources *);
 
 int resources_add_ip(struct resources *, struct IPAddressFamily *);
-int resources_add_asn(struct resources *, struct ASIdentifiers *);
+int resources_add_asn(struct resources *, struct ASIdentifiers *, bool);
 
 bool resources_empty(struct resources *);
 bool resources_contains_asn(struct resources *, unsigned long);
@@ -36,5 +37,7 @@ bool resources_contains_ipv6(struct resources *, struct ipv6_prefix *);
 
 enum rpki_policy resources_get_policy(struct resources *);
 void resources_set_policy(struct resources *, enum rpki_policy);
+
+int resources_foreach_asn(struct resources *, foreach_asn_cb, void *);
 
 #endif /* SRC_RESOURCE_H_ */

@@ -35,6 +35,12 @@ v6addr2str2(struct in6_addr const *addr)
 }
 
 char const *
+fnstack_peek(void)
+{
+	return NULL;
+}
+
+char const *
 config_get_tal(void)
 {
 	return "tal/";
@@ -103,6 +109,12 @@ config_get_mode(void)
 
 char const *
 config_get_output_roa(void)
+{
+	return NULL;
+}
+
+char const *
+config_get_output_bgpsec(void)
 {
 	return NULL;
 }

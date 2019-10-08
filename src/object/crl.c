@@ -38,15 +38,38 @@ end:
 	return error;
 }
 
+static void
+debug_revoked(ASN1_INTEGER const *serial_int)
+{
+#ifdef DEBUG
+	BIGNUM *serial_bn;
+	char *serial_str;
+
+	serial_bn = ASN1_INTEGER_to_BN(serial_int, NULL);
+	if (serial_bn == NULL) {
+		crypto_err("Could not parse revoked serial number");
+		return;
+	}
+
+	serial_str = BN_bn2dec(serial_bn);
+	if (serial_str == NULL) {
+		crypto_err("Could not convert BN to string");
+		goto end;
+	}
+
+	pr_debug("Revoked: %s", serial_str);
+
+	free(serial_str);
+end:	BN_free(serial_bn);
+#endif
+}
+
 static int
 validate_revoked(X509_CRL *crl)
 {
 	STACK_OF(X509_REVOKED) *revoked_stack;
 	X509_REVOKED *revoked;
 	ASN1_INTEGER const *serial_int;
-#ifdef DEBUG
-	BIGNUM *serial_bn;
-#endif
 	int i;
 
 	revoked_stack = X509_CRL_get_REVOKED(crl);
@@ -62,19 +85,7 @@ validate_revoked(X509_CRL *crl)
 			    i + 1);
 		}
 
-#ifdef DEBUG
-		serial_bn = ASN1_INTEGER_to_BN(serial_int, NULL);
-		if (serial_bn == NULL) {
-			crypto_err("Could not parse revoked serial number");
-			continue;
-		}
-
-		pr_debug_prefix();
-		fprintf(stdout, "Revoked: ");
-		BN_print_fp(stdout, serial_bn);
-		fprintf(stdout, "\n");
-		BN_free(serial_bn);
-#endif
+		debug_revoked(serial_int);
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {
 			return pr_err("CRL's revoked entry #%d lacks a revocation date.",
@@ -142,12 +153,12 @@ int
 crl_load(struct rpki_uri *uri, X509_CRL **result)
 {
 	int error;
-	pr_debug_add("CRL '%s' {", uri_get_printable(uri));
+	pr_debug("CRL '%s' {", uri_get_printable(uri));
 
 	error = __crl_load(uri, result);
 	if (!error)
 		error = crl_validate(*result);
 
-	pr_debug_rm("}");
+	pr_debug("}");
 	return error;
 }

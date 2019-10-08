@@ -2,8 +2,6 @@
 title: SLURM
 ---
 
-[Documentation](index.html) > {{ page.title }}
-
 # {{ page.title }} 
 
 ## Introduction
@@ -37,17 +35,17 @@ Each SLURM file is a JSON-formatted collection of filters and/or additions. Each
 
 	"validationOutputFilters": {
 		"prefixFilters": [ <Removed ROAs> ],
-		"bgpsecFilters": []
+		"bgpsecFilters": [ <Removed Router Keys> ]
 	},
 
 	"locallyAddedAssertions": {
 		"prefixAssertions": [ <Added ROAs> ],
-		"bgpsecAssertions": []
+		"bgpsecAssertions": [ <Added Router Keys> ]
 	}
 }
 ```
 
-The root object contains a `slurmVersion` field (which, for now, must be set to 1), a listing of filters called `validationOutputFilters`, and a listing of additions called `locallyAddedAssertions`. Fort does not yet support BGPsec, so `bgpsecFilters` and `bgpsecAssertions` must be empty.
+The root object contains a `slurmVersion` field (which, for now, must be set to 1), a listing of filters called `validationOutputFilters`, and a listing of additions called `locallyAddedAssertions`.
 
 ### `prefixFilters`
 
@@ -67,6 +65,24 @@ One of `prefix` and `asn` can be absent. On absence, any prefix matches `prefix`
 
 `comment` is always optional.
 
+### `bgpsecFilters`
+
+`<Removed Router Keys>` expands to a sequence of (zero or more) JSON objects, each of which follows this pattern:
+
+```
+{
+	"asn": <AS number>,
+	"SKI": <Base64 of some SKI>,
+	"comment": <Explanatory comment; ignored by Fort for now>
+}
+```
+
+Any Router Keys that match `asn` and `SKI` will be invalidated. A Router Key matches `asn` by having the same AS number and `SKI` by having the same decoded Subject Key Identifier.
+
+One of `asn` and `SKI` can be absent. On absence, any AS number matches `asn`, and any Subject Key Identifier matches `SKI`.
+
+`comment` is always optional.
+
 ### `prefixAssertions`
 
 `<Added ROAs>` expands to a sequence of (zero or more) JSON objects, each of which follows this pattern:
@@ -83,6 +99,23 @@ One of `prefix` and `asn` can be absent. On absence, any prefix matches `prefix`
 Will force Fort into believing that the [`prefix`, `asn`, `maxPrefixLength`] ROA validated successfully.
 
 `prefix` and `asn` are mandatory, `maxPrefixLength` and `comment` are not. `maxPrefixLength` defaults to `prefix`'s length.
+
+### `bgpsecAssertions`
+
+`<Added Router Keys>` expands to a sequence of (zero or more) JSON objects, each of which follows this pattern:
+
+```
+{
+	"asn": <AS number>,
+	"SKI": <Base64 of some SKI>,
+	"routerPublicKey": <Base64 of some public key>,
+	"comment": <Explanatory comment; ignored by Fort for now>
+}
+```
+
+Will force Fort into believing that the [`asn`, `SKI`, `routerPublicKey`] Router Key validated successfully.
+
+Only `comment` isn't mandatory, the rest [`asn`, `SKI`, `routerPublicKey`] are mandatory.
 
 ## SLURM File Example
 
@@ -104,7 +137,19 @@ Will force Fort into believing that the [`prefix`, `asn`, `maxPrefixLength`] ROA
 				"comment": "All VRPs encompassed by prefix, matching ASN"
 			}
 		],
-		"bgpsecFilters": []
+		"bgpsecFilters": [
+			{
+				"asn": 64496,
+				"comment": "All keys for ASN"
+			}, {
+				"SKI": "Q8KMeBsCto1PJ6EuhowleIGNL7A",
+				"comment": "Key matching Router SKI"
+			}, {
+				"asn": 64497,
+				"SKI": "g5RQYCnkMpDqEbt9WazTeB19nZs",
+				"comment": "Key for ASN 64497 matching Router SKI"
+			}
+		]
 	},
 
 	"locallyAddedAssertions": {
@@ -120,7 +165,14 @@ Will force Fort into believing that the [`prefix`, `asn`, `maxPrefixLength`] ROA
 				"comment": "My important de-aggregated routes"
 			}
 		],
-		"bgpsecAssertions": []
+		"bgpsecAssertions": [
+			{
+				"asn": 64496,
+				"SKI", "Dulqji-sUM5sX5M-3mqngKaFDjE",
+				"routerPublicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE-rkSLXlPpL_m-L7CfCfKrv1FHrM55FsIc8fMlnjHE6Y5nTuCn3UgWfCV6sYuGUZzPZ0Ey6AvezmfcELUB87eBA",
+				"comment": "My known key for my important ASN"
+			}
+		]
 	}
-	}
+}
 ```

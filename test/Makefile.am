@@ -21,10 +21,10 @@ MY_LDADD = ${CHECK_LIBS}
 
 check_PROGRAMS  = address.test
 check_PROGRAMS += clients.test
+check_PROGRAMS += db_table.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += rsync.test
-check_PROGRAMS += roa_table.test
 check_PROGRAMS += tal.test
 check_PROGRAMS += vcard.test
 check_PROGRAMS += vrps.test
@@ -38,14 +38,14 @@ address_test_LDADD = ${MY_LDADD}
 clients_test_SOURCES = client_test.c
 clients_test_LDADD = ${MY_LDADD}
 
+db_table_test_SOURCES = rtr/db/db_table_test.c
+db_table_test_LDADD = ${MY_LDADD}
+
 line_file_test_SOURCES = line_file_test.c
 line_file_test_LDADD = ${MY_LDADD}
 
 pdu_handler_test_SOURCES = rtr/pdu_handler_test.c
 pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-roa_table_test_SOURCES = rtr/db/roa_table_test.c
-roa_table_test_LDADD = ${MY_LDADD}
 
 rsync_test_SOURCES = rsync_test.c
 rsync_test_LDADD = ${MY_LDADD}

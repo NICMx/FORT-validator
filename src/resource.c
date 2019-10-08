@@ -9,7 +9,6 @@
 #include "thread_var.h"
 #include "resource/ip4.h"
 #include "resource/ip6.h"
-#include "resource/asn.h"
 #include <sys/socket.h>
 
 
@@ -535,7 +534,8 @@ add_asiors(struct resources *resources, struct ASIdentifiers *ids)
 }
 
 int
-resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
+resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
+    bool allow_inherit)
 {
 	if (ids->asnum == NULL)
 		return pr_err("ASN extension lacks 'asnum' element.");
@@ -544,6 +544,9 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids)
 
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
+		if (!allow_inherit)
+			return pr_err("ASIdentifierChoice %u isn't allowed",
+			    ids->asnum->present);
 		return inherit_asiors(resources);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
 		return add_asiors(resources, ids);
@@ -590,4 +593,10 @@ void
 resources_set_policy(struct resources *res, enum rpki_policy policy)
 {
 	res->policy = policy;
+}
+
+int
+resources_foreach_asn(struct resources *res, foreach_asn_cb cb, void *arg)
+{
+	return rasn_foreach(res->asns, cb, arg);
 }
