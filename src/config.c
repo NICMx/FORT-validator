@@ -592,6 +592,10 @@ validate_config(void)
 	    !valid_output_file(rpki_config.output.roa))
 		return pr_err("Invalid output.roa file.");
 
+	if (rpki_config.output.bgpsec != NULL &&
+	    !valid_output_file(rpki_config.output.bgpsec))
+			return pr_err("Invalid output.bgpsec file.");
+
 	return (rpki_config.tal != NULL)
 	    ? 0
 	    : pr_err("The TAL file/directory (--tal) is mandatory.");
