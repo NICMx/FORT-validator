@@ -94,7 +94,7 @@ fort_SOURCES += rtr/db/roa.c rtr/db/roa.h
 fort_SOURCES += rtr/db/vrp.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 
-fort_SOURCES += slurm/slurm_db.c slurm/slurm_db.h
+fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 

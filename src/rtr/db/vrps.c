@@ -51,13 +51,15 @@ struct state {
 	 * during the current iteration.)
 	 */
 	struct db_table *base;
-	/** ROA changes to @base over time. */
+	/** DB changes to @base over time. */
 	struct deltas_db deltas;
+
+	/* Last valid SLURM applied to base */
+	struct db_slurm *slurm;
 
 	serial_t next_serial;
 	uint16_t v0_session_id;
 	uint16_t v1_session_id;
-	time_t last_modified_date;
 } state;
 
 /** Read/write lock, which protects @state and its inhabitants. */
@@ -95,6 +97,8 @@ vrps_init(void)
 	    ? (state.v0_session_id - 1)
 	    : (0xFFFFu);
 
+	state.slurm = NULL;
+
 	error = pthread_rwlock_init(&state_lock, NULL);
 	if (error) {
 		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
@@ -116,6 +120,8 @@ vrps_destroy(void)
 {
 	if (state.base != NULL)
 		db_table_destroy(state.base);
+	if (state.slurm != NULL)
+		db_slurm_destroy(state.slurm);
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
 	/* Nothing to do with error codes from now on */
 	pthread_rwlock_destroy(&state_lock);
@@ -274,16 +280,11 @@ vrps_update(bool *changed)
 
 	rwlock_write_lock(&state_lock);
 
-	/*
-	 * TODO (next iteration) Remember the last valid SLURM
-	 *
-	 * Currently SLURM is ignored if it has errors, the error is logged and
-	 * the new_base isn't altered. Instead of this, the last valid SLURM
-	 * should be remembered, and will be applied when a new SLURM has
-	 * errors; a warning should be logged to indicate which version of the
-	 * SLURM is being applied.
-	 */
-	slurm_apply(&new_base);
+	error = slurm_apply(&new_base, &state.slurm);
+	if (error) {
+		rwlock_unlock(&state_lock);
+		goto revert_base;
+	}
 
 	if (state.base != NULL) {
 		error = compute_deltas(state.base, new_base, &deltas);

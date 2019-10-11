@@ -14,7 +14,6 @@
 #include "address.h"
 #include "json_parser.h"
 #include "object/router_key.h"
-#include "slurm/slurm_db.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"
@@ -38,29 +37,48 @@
 		return pr_err("SLURM member '%s' is required", name);
 
 /* Context value, local to avoid forwarding the parameter */
-int cur_ctx;
+struct db_slurm *db;
+unsigned int cur_ctx;
 
-static int handle_json(json_t *, int *);
+static int handle_json(json_t *, struct db_slurm *, unsigned int *);
 
+/*
+ * Try to parse the SLURM file(s), any syntax error will return an EEXIST error
+ */
 int
 slurm_parse(char const *location, void *arg)
 {
+	struct slurm_parser_params *params;
 	json_t *json_root;
 	json_error_t json_error;
+	unsigned int ctx;
 	int error;
+
+	params = arg;
 
 	json_root = json_load_file(location, JSON_REJECT_DUPLICATES,
 	    &json_error);
 	if (json_root == NULL) {
 		pr_err("SLURM JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
+		/* File was read, but has a content error */
+		if (json_error.position > 0)
+			goto syntax_err;
 		return -ENOENT;
 	}
 
-	error = handle_json(json_root, arg);
-
+	ctx = params->cur_ctx;
+	error = handle_json(json_root, params->db_slurm, &ctx);
 	json_decref(json_root);
-	return error;
+	if (error)
+		goto syntax_err;
+
+	params->cur_ctx = ctx;
+	return 0;
+
+syntax_err:
+	/* File exists, but has a syntax/content error */
+	return -EEXIST;
 }
 
 static int
@@ -89,9 +107,9 @@ set_asn(json_t *object, bool is_assertion, uint32_t *result, uint8_t *flag,
 	return 0;
 }
 
+/* There's no need to store the comment */
 static int
-set_comment(json_t *object, char **comment, uint8_t *flag,
-    size_t *members_loaded)
+set_comment(json_t *object, uint8_t *flag, size_t *members_loaded)
 {
 	char const *tmp;
 	int error;
@@ -102,7 +120,6 @@ set_comment(json_t *object, char **comment, uint8_t *flag,
 	else if (error)
 		return error;
 
-	*comment = strdup(tmp);
 	*flag = *flag | SLURM_COM_FLAG_COMMENT;
 	(*members_loaded)++;
 
@@ -314,7 +331,8 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	/* Required by assertions */
 	if (error && is_assertion) {
 		if (error == -ENOENT)
-			return pr_err("SLURM assertion %s is required", ROUTER_PUBLIC_KEY);
+			return pr_err("SLURM assertion %s is required",
+			    ROUTER_PUBLIC_KEY);
 		return error;
 	}
 
@@ -356,7 +374,6 @@ init_slurm_prefix(struct slurm_prefix *slurm_prefix)
 	slurm_prefix->vrp.prefix_length = 0;
 	slurm_prefix->vrp.max_prefix_length = 0;
 	slurm_prefix->vrp.addr_fam = 0;
-	slurm_prefix->comment = NULL;
 }
 
 static int
@@ -387,37 +404,27 @@ load_single_prefix(json_t *object, bool is_assertion)
 	if (error)
 		return error;
 
-	error = set_comment(object, &result.comment, &result.data_flag,
-	    &member_count);
+	error = set_comment(object, &result.data_flag, &member_count);
 	if (error)
 		return error;
 
 	/* A single comment isn't valid */
-	if (result.data_flag == SLURM_COM_FLAG_COMMENT) {
-		pr_err("Single comments aren't valid");
-		error = -EINVAL;
-		goto release_comment;
-	}
+	if (result.data_flag == SLURM_COM_FLAG_COMMENT)
+		return pr_err("Single comments aren't valid");
 
 	/* A filter must have ASN and/or prefix */
 	if (!is_assertion) {
 		if ((result.data_flag &
-		    (SLURM_COM_FLAG_ASN | SLURM_PFX_FLAG_PREFIX)) == 0) {
-			pr_err("Prefix filter must have an asn and/or prefix");
-			error = -EINVAL;
-			goto release_comment;
-		}
+		    (SLURM_COM_FLAG_ASN | SLURM_PFX_FLAG_PREFIX)) == 0)
+			return pr_err("Prefix filter must have an asn and/or prefix");
 
 		/* Validate expected members */
-		if (!json_valid_members_count(object, member_count)) {
-			pr_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
-			error = -EINVAL;
-			goto release_comment;
-		}
+		if (!json_valid_members_count(object, member_count))
+			return pr_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
 
-		error = slurm_db_add_prefix_filter(&result, cur_ctx);
+		error = db_slurm_add_prefix_filter(db, &result, cur_ctx);
 		if (error)
-			goto release_comment;
+			return error;
 
 		return 0;
 	}
@@ -427,30 +434,19 @@ load_single_prefix(json_t *object, bool is_assertion)
 	 * set_asn and set_prefix
 	 */
 
-	if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0)
-		if (result.vrp.prefix_length > result.vrp.max_prefix_length) {
-			pr_err(
-			    "Prefix length is greater than max prefix length");
-			error = -EINVAL;
-			goto release_comment;
-		}
+	if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0 &&
+	    result.vrp.prefix_length > result.vrp.max_prefix_length)
+		return pr_err("Prefix length is greater than max prefix length");
 
 	/* Validate expected members */
-	if (!json_valid_members_count(object, member_count)) {
-		pr_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
-		error = -EINVAL;
-		goto release_comment;
-	}
+	if (!json_valid_members_count(object, member_count))
+		return pr_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
 
-	error = slurm_db_add_prefix_assertion(&result, cur_ctx);
+	error = db_slurm_add_prefix_assertion(db, &result, cur_ctx);
 	if (error)
-		goto release_comment;
+		return error;
 
 	return 0;
-
-release_comment:
-	free(result.comment);
-	return error;
 }
 
 static int
@@ -491,7 +487,6 @@ init_slurm_bgpsec(struct slurm_bgpsec *slurm_bgpsec)
 	slurm_bgpsec->asn = 0;
 	slurm_bgpsec->ski = NULL;
 	slurm_bgpsec->router_public_key = NULL;
-	slurm_bgpsec->comment = NULL;
 }
 
 static int
@@ -521,8 +516,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 	if (error)
 		goto release_ski;
 
-	error = set_comment(object, &result.comment, &result.data_flag,
-	    &member_count);
+	error = set_comment(object, &result.data_flag, &member_count);
 	if (error)
 		goto release_router_key;
 
@@ -530,7 +524,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 	if (result.data_flag == SLURM_COM_FLAG_COMMENT) {
 		pr_err("Single comments aren't valid");
 		error = -EINVAL;
-		goto release_comment;
+		goto release_router_key;
 	}
 
 	/* A filter must have ASN and/or SKI */
@@ -539,19 +533,19 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 		    (SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI)) == 0) {
 			pr_err("BGPsec filter must have an asn and/or SKI");
 			error = -EINVAL;
-			goto release_comment;
+			goto release_router_key;
 		}
 
 		/* Validate expected members */
 		if (!json_valid_members_count(object, member_count)) {
 			pr_err("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
 			error = -EINVAL;
-			goto release_comment;
+			goto release_router_key;
 		}
 
-		error = slurm_db_add_bgpsec_filter(&result, cur_ctx);
+		error = db_slurm_add_bgpsec_filter(db, &result, cur_ctx);
 		if (error)
-			goto release_comment;
+			goto release_router_key;
 
 		return 0;
 	}
@@ -560,17 +554,15 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 	if (!json_valid_members_count(object, member_count)) {
 		pr_err("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
 		error = -EINVAL;
-		goto release_comment;
+		goto release_router_key;
 	}
 
-	error = slurm_db_add_bgpsec_assertion(&result, cur_ctx);
+	error = db_slurm_add_bgpsec_assertion(db, &result, cur_ctx);
 	if (error)
-		goto release_comment;
+		goto release_router_key;
 
 	return 0;
 
-release_comment:
-	free(result.comment);
 release_router_key:
 	free(result.router_public_key);
 release_ski:
@@ -697,7 +689,7 @@ load_assertions(json_t *root)
 }
 
 static int
-handle_json(json_t *root, int *ctx)
+handle_json(json_t *root, struct db_slurm *db_slurm, unsigned int *ctx)
 {
 	size_t expected_members;
 	int error;
@@ -706,6 +698,7 @@ handle_json(json_t *root, int *ctx)
 		return pr_err("The root of the SLURM is not a JSON object.");
 
 	cur_ctx = *ctx;
+	db = db_slurm;
 
 	error = load_version(root);
 	if (error)

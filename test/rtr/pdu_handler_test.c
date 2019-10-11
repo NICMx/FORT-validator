@@ -22,7 +22,7 @@
 #include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
 #include "rtr/db/vrps.c"
-#include "slurm/slurm_db.c"
+#include "slurm/db_slurm.c"
 #include "slurm/slurm_loader.c"
 #include "slurm/slurm_parser.c"
 

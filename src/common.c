@@ -120,8 +120,8 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	}
 
 	error = cb(fullpath, arg);
-	free(tmp);
 	free(fullpath);
+	free(tmp);
 	return error;
 }
 
