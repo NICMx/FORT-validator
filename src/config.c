@@ -81,6 +81,10 @@ struct rpki_config {
 		bool color;
 		/** Format in which file names will be printed. */
 		enum filename_format filename_format;
+		/* Log level */
+		enum log_level level;
+		/* Log output */
+		enum log_output output;
 	} log;
 
 	struct {
@@ -331,11 +335,23 @@ static const struct option_field options[] = {
 		.type = &gt_filename_format,
 		.offset = offsetof(struct rpki_config, log.filename_format),
 		.doc = "File name variant to print during debug/error messages",
+	}, {
+		.id = 4001,
+		.name = "log.level",
+		.type = &gt_log_level,
+		.offset = offsetof(struct rpki_config, log.level),
+		.doc = "Log level to print message of equal or higher importance",
+	}, {
+		.id = 4002,
+		.name = "log.output",
+		.type = &gt_log_output,
+		.offset = offsetof(struct rpki_config, log.output),
+		.doc = "Output where log messages will be printed",
 	},
 
 	/* Incidences */
 	{
-		.id = 4001,
+		.id = 7001,
 		.name = "incidences",
 		.type = &gt_incidences,
 		.doc = "Override actions on validation errors",
@@ -556,6 +572,8 @@ set_default_values(void)
 
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
+	rpki_config.log.level = LOG_LEVEL_WARNING;
+	rpki_config.log.output = CONSOLE;
 
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
@@ -807,6 +825,18 @@ enum filename_format
 config_get_filename_format(void)
 {
 	return rpki_config.log.filename_format;
+}
+
+enum log_level
+config_get_log_level(void)
+{
+	return rpki_config.log.level;
+}
+
+enum log_output
+config_get_log_output(void)
+{
+	return rpki_config.log.output;
 }
 
 char *

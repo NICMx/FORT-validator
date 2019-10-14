@@ -42,6 +42,7 @@ fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
 
 fort_SOURCES += config/boolean.c config/boolean.h
 fort_SOURCES += config/filename_format.h config/filename_format.c
+fort_SOURCES += config/log_conf.h config/log_conf.c
 fort_SOURCES += config/mode.c config/mode.h
 fort_SOURCES += config/incidences.h config/incidences.c
 fort_SOURCES += config/str.c config/str.h
