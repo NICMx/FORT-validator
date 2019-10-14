@@ -41,19 +41,6 @@ __main(int argc, char **argv)
 	if (error)
 		return error;
 
-	switch (config_get_mode()) {
-	case SERVER:
-		pr_info("Server mode configured; disabling logging on standard streams.");
-		pr_info("(Logs will be sent to syslog only.)");
-		log_disable_std();
-		break;
-	case STANDALONE:
-		pr_info("Standalone mode configured; disabling logging on syslog.");
-		pr_info("(Logs will be sent to the standard streams only.)");
-		log_disable_syslog();
-		break;
-	}
-
 	error = nid_init();
 	if (error)
 		goto revert_config;

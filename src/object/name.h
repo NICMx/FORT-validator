@@ -22,10 +22,6 @@ bool x509_name_equals(struct rfc5280_name *, struct rfc5280_name *);
 /* X509_NAME utils */
 int validate_issuer_name(char const *, X509_NAME *);
 
-#ifdef DEBUG
 void x509_name_pr_debug(char const *, X509_NAME *);
-#else
-#define x509_name_pr_debug(a, b) /* Nothing */
-#endif
 
 #endif /* SRC_OBJECT_NAME_H_ */

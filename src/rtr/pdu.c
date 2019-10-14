@@ -125,14 +125,13 @@ pdu_load(int fd, struct sockaddr_storage *client_addr,
 		/* No error response because the PDU might have been an error */
 		return error;
 
-#ifdef DEBUG
-	{
+
+	if (log_debug_enabled()) {
 		char buffer[INET6_ADDRSTRLEN];
 		pr_debug("Received a %s PDU from %s.",
 		    pdutype2str(header.pdu_type),
 		    sockaddr2str(client_addr, buffer));
 	}
-#endif
 
 	error = validate_rtr_version(fd, &header, hdr_bytes);
 	if (error)

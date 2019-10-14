@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <sys/socket.h>
+#include <syslog.h>
 
 #include "common.h"
 #include "configure_ac.h"
@@ -82,7 +83,7 @@ struct rpki_config {
 		/** Format in which file names will be printed. */
 		enum filename_format filename_format;
 		/* Log level */
-		enum log_level level;
+		uint8_t level;
 		/* Log output */
 		enum log_output output;
 	} log;
@@ -572,7 +573,7 @@ set_default_values(void)
 
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
-	rpki_config.log.level = LOG_LEVEL_WARNING;
+	rpki_config.log.level = LOG_WARNING;
 	rpki_config.log.output = CONSOLE;
 
 	rpki_config.output.roa = NULL;
@@ -712,6 +713,7 @@ handle_flags_config(int argc, char **argv)
 
 	error = validate_config();
 
+	log_start();
 end:
 	if (error)
 		free_rpki_config();
@@ -827,7 +829,7 @@ config_get_filename_format(void)
 	return rpki_config.log.filename_format;
 }
 
-enum log_level
+uint8_t
 config_get_log_level(void)
 {
 	return rpki_config.log.level;

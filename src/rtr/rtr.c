@@ -288,13 +288,11 @@ handle_client_connections(int server_fd)
 			return -EINVAL;
 		}
 
-#ifdef DEBUG
-		{
+		if (log_debug_enabled()) {
 			char buffer[INET6_ADDRSTRLEN];
 			pr_debug("Client accepted: %s",
 			    sockaddr2str(&client_addr, buffer));
 		}
-#endif
 
 		/*
 		 * Note: My gut says that errors from now on (even the unknown

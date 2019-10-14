@@ -33,7 +33,7 @@ unsigned int config_get_max_cert_depth(void);
 enum mode config_get_mode(void);
 bool config_get_color_output(void);
 enum filename_format config_get_filename_format(void);
-enum log_level config_get_log_level(void);
+uint8_t config_get_log_level(void);
 enum log_output config_get_log_output(void);
 char *config_get_rsync_program(void);
 struct string_array const *config_get_rsync_args(bool);

@@ -41,7 +41,6 @@ end:
 static void
 debug_revoked(ASN1_INTEGER const *serial_int)
 {
-#ifdef DEBUG
 	BIGNUM *serial_bn;
 	char *serial_str;
 
@@ -61,7 +60,6 @@ debug_revoked(ASN1_INTEGER const *serial_int)
 
 	free(serial_str);
 end:	BN_free(serial_bn);
-#endif
 }
 
 static int
@@ -85,7 +83,8 @@ validate_revoked(X509_CRL *crl)
 			    i + 1);
 		}
 
-		debug_revoked(serial_int);
+		if (log_debug_enabled())
+			debug_revoked(serial_int);
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {
 			return pr_err("CRL's revoked entry #%d lacks a revocation date.",
