@@ -14,13 +14,13 @@ The RPKI (Resource Public Key Infrastructure) is a PKI (Public Key Infrastructur
 
 Basically, the idea is that one should be able to verify the origin of a route by following a chain of criptographically-signed certificates rooted at one of the [RIRs](https://en.wikipedia.org/wiki/Regional_Internet_registry):
 
-![../img/chain.svg](../img/chain.svg)
+![img/chain.svg](img/chain.svg)
 
 The end result is a _Route Origin Attestation_ (ROA), a digitally signed object that provides a means of verifying that an IP address block holder has authorized an Autonomous System (AS) to originate routes to its address block or one of its children's.
 
 So the whole infrastructure functions like a tree-shaped trust network (one for each RIR) in which authorities (_Certificate Authority_--CA) attest to their resource suballocations:
 
-![../img/tree.svg](../img/tree.svg)
+![img/tree.svg](img/tree.svg)
 
 In the RPKI, all of these files are required to be publicly-available, so anyone can verify them.
 

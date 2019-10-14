@@ -282,7 +282,7 @@ TCP port or service the server will be bound to.
 
 This is a string because a service alias can be used as a valid value. The available aliases are commonly located at `/etc/services`. (See '`$ man services`'.)
 
-> ![../img/warn.svg](../img/warn.svg) The default port is privileged. To improve security, either change or jail it.
+> ![img/warn.svg](img/warn.svg) The default port is privileged. To improve security, either change or jail it.
 
 ### `--server.backlog`
 
