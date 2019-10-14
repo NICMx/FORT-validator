@@ -2,6 +2,7 @@
 #define SRC_LOG_H_
 
 #include <sys/cdefs.h>
+#include <stdbool.h>
 #include "incidence/incidence.h"
 
 /*
@@ -39,8 +40,7 @@
 
 /* Only call this group of functions when you know there's only one thread. */
 void log_setup(void);
-void log_disable_std(void);
-void log_disable_syslog(void);
+void log_start(void);
 void log_teardown(void);
 
 
@@ -49,12 +49,11 @@ void log_teardown(void);
  * error stack) cannot exceed 512 bytes at present.
  */
 
-#ifdef DEBUG
-void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
-#else
-#define pr_debug(...) do {} while (0)
-#endif
+/* Check if debug is enabled, useful to avoid boilerplate code */
+bool log_debug_enabled(void);
 
+/* Debug messages, useful for devs or to track a specific problem */
+void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
 /* Non-errors deemed useful to the user. */
 void pr_info(const char *, ...) CHECK_FORMAT(1, 2);
 /* Issues that did not trigger RPKI object rejection. */

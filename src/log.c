@@ -42,18 +42,35 @@ log_setup(void)
 	syslog_enabled = true;
 }
 
-void
+static void
 log_disable_std(void)
 {
 	fprintf_enabled = false;
 }
 
-void
+static void
 log_disable_syslog(void)
 {
 	if (syslog_enabled) {
 		closelog();
 		syslog_enabled = false;
+	}
+}
+
+void
+log_start(void)
+{
+	switch (config_get_log_output()) {
+	case SYSLOG:
+		pr_info("Syslog log output configured; disabling logging on standard streams.");
+		pr_info("(Logs will be sent to syslog only.)");
+		log_disable_std();
+		break;
+	case CONSOLE:
+		pr_info("Console log output configured; disabling logging on syslog.");
+		pr_info("(Logs will be sent to the standard streams only.)");
+		log_disable_syslog();
+		break;
 	}
 }
 
@@ -152,6 +169,9 @@ pr_stream(int level, const char *format, va_list args)
 	do {								\
 		va_list args;						\
 									\
+		if (level > config_get_log_level())			\
+			break;						\
+									\
 		if (syslog_enabled) {					\
 			va_start(args, format);				\
 			pr_syslog(level, format, args);			\
@@ -165,15 +185,17 @@ pr_stream(int level, const char *format, va_list args)
 		}							\
 	} while (0)
 
-#ifdef DEBUG
+bool
+log_debug_enabled(void)
+{
+	return config_get_log_level() == LOG_DEBUG;
+}
 
 void
 pr_debug(const char *format, ...)
 {
 	PR_SIMPLE(LOG_DEBUG);
 }
-
-#endif
 
 void
 pr_info(const char *format, ...)

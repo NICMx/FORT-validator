@@ -48,7 +48,6 @@ struct bgpsec_ski {
 static void
 debug_serial_number(BIGNUM *number)
 {
-#ifdef DEBUG
 	char *number_str;
 
 	number_str = BN_bn2dec(number);
@@ -59,7 +58,6 @@ debug_serial_number(BIGNUM *number)
 
 	pr_debug("serial Number: %s", number_str);
 	free(number_str);
-#endif
 }
 
 static int
@@ -77,7 +75,8 @@ validate_serial_number(X509 *cert)
 	if (number == NULL)
 		return crypto_err("Could not parse certificate serial number");
 
-	debug_serial_number(number);
+	if (log_debug_enabled())
+		debug_serial_number(number);
 
 	error = x509stack_store_serial(validation_certstack(state), number);
 	if (error)
@@ -1617,14 +1616,14 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (total_parents >= config_get_max_cert_depth())
 		return pr_err("Certificate chain maximum depth exceeded.");
 
-#ifdef DEBUG
+	/* Debug cert type */
 	if (IS_TA)
 		pr_debug("TA Certificate '%s' {",
 		    uri_get_printable(cert_uri));
 	else
 		pr_debug("Certificate '%s' {",
 		    uri_get_printable(cert_uri));
-#endif
+
 	fnstack_push_uri(cert_uri);
 	memset(&refs, 0, sizeof(refs));
 
@@ -1641,7 +1640,8 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		goto revert_cert;
 
 	type = get_certificate_type(cert, IS_TA);
-#ifdef DEBUG
+
+	/* Debug cert type */
 	switch(type) {
 	case TA:
 		break;
@@ -1655,7 +1655,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		pr_debug("Type: unexpected, validated as CA");
 		break;
 	}
-#endif
+
 	error = certificate_validate_rfc6487(cert, type);
 	if (error)
 		goto revert_cert;

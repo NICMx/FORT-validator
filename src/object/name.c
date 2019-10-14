@@ -198,11 +198,12 @@ end:	x509_name_put(parent_subject);
 	return error;
 }
 
-#ifdef DEBUG
-
 void
 x509_name_pr_debug(const char *prefix, X509_NAME *name)
 {
+	if (!log_debug_enabled())
+		return;
+
 	struct rfc5280_name *printable;
 
 	if (name == NULL) {
@@ -216,5 +217,3 @@ x509_name_pr_debug(const char *prefix, X509_NAME *name)
 	pr_debug("%s: %s", prefix, printable->commonName);
 	x509_name_put(printable);
 }
-
-#endif

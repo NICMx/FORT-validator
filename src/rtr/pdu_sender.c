@@ -101,7 +101,6 @@ send_cache_response_pdu(int fd, uint8_t version)
 static void
 pr_debug_prefix4(struct ipv4_prefix_pdu *pdu)
 {
-#ifdef DEBUG
 	char buffer[INET_ADDRSTRLEN];
 	char const *addr_str;
 
@@ -110,7 +109,6 @@ pr_debug_prefix4(struct ipv4_prefix_pdu *pdu)
 
 	pr_debug("Encoded prefix %s/%u into a PDU.", addr_str,
 	    pdu->prefix_length);
-#endif
 }
 
 static int
@@ -134,7 +132,8 @@ send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv4_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV4_PREFIX_LEN)
 		pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
-	pr_debug_prefix4(&pdu);
+	if (log_debug_enabled())
+		pr_debug_prefix4(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);
 }
@@ -142,7 +141,6 @@ send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 static void
 pr_debug_prefix6(struct ipv6_prefix_pdu *pdu)
 {
-#ifdef DEBUG
 	char buffer[INET6_ADDRSTRLEN];
 	char const *addr_str;
 
@@ -151,7 +149,6 @@ pr_debug_prefix6(struct ipv6_prefix_pdu *pdu)
 
 	pr_debug("Encoded prefix %s/%u into a PDU.", addr_str,
 	    pdu->prefix_length);
-#endif
 }
 
 static int
@@ -175,7 +172,8 @@ send_ipv6_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv6_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV6_PREFIX_LEN)
 		pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
-	pr_debug_prefix6(&pdu);
+	if (log_debug_enabled())
+		pr_debug_prefix6(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);
 }
