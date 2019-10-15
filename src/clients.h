@@ -28,7 +28,7 @@ int clients_db_init(void);
 int clients_add(int, struct sockaddr_storage, pthread_t);
 void clients_update_serial(int, serial_t);
 void clients_forget(int);
-typedef int (*clients_foreach_cb)(struct client const *, void *);
+typedef int (*clients_foreach_cb)(struct client *, void *);
 int clients_foreach(clients_foreach_cb, void *);
 int clients_get_min_serial(serial_t *);
 int clients_get_addr(int, struct sockaddr_storage *);

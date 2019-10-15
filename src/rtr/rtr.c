@@ -218,6 +218,14 @@ end_client(int fd)
 		print_close_failure(errno, fd);
 }
 
+static void
+print_client_addr(struct sockaddr_storage *addr, char const *action, int fd)
+{
+	char buffer[INET6_ADDRSTRLEN];
+	pr_info("Client %s [ID %d]: %s", action, fd,
+	    sockaddr2str(addr, buffer));
+}
+
 /*
  * The client socket threads' entry routine.
  * @arg must be released.
@@ -250,6 +258,7 @@ client_thread_cb(void *arg)
 			break;
 	}
 
+	print_client_addr(&param.addr, "closed", param.fd);
 	end_client(param.fd);
 	clients_forget(param.fd);
 
@@ -288,11 +297,7 @@ handle_client_connections(int server_fd)
 			return -EINVAL;
 		}
 
-		if (log_debug_enabled()) {
-			char buffer[INET6_ADDRSTRLEN];
-			pr_debug("Client accepted: %s",
-			    sockaddr2str(&client_addr, buffer));
-		}
+		print_client_addr(&client_addr, "accepted", client_fd);
 
 		/*
 		 * Note: My gut says that errors from now on (even the unknown
@@ -331,9 +336,10 @@ handle_client_connections(int server_fd)
  * Receive @arg to be called as a clients_foreach_cb
  */
 static int
-kill_client(struct client const *client, void *arg)
+kill_client(struct client *client, void *arg)
 {
 	end_client(client->fd);
+	print_client_addr(&(client->addr), "terminated", client->fd);
 	/* Don't call clients_forget to avoid deadlock! */
 	return 0;
 }
@@ -376,8 +382,6 @@ rtr_listen(void)
 		if (error)
 			pr_err("Error %d while trying to update the ROA database.",
 			    error);
-		else
-			pr_info("Validation finished.");
 		goto revert_clients_db; /* Error 0 it's ok */
 	}
 

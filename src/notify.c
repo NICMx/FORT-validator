@@ -8,7 +8,7 @@
 #include "rtr/db/vrps.h"
 
 static int
-send_notify(struct client const *client, void *arg)
+send_notify(struct client *client, void *arg)
 {
 	serial_t *serial = arg;
 	int error;

@@ -260,8 +260,8 @@ vrps_purge(struct deltas **deltas)
 	return resize_deltas_db(&state.deltas, group);
 }
 
-int
-vrps_update(bool *changed)
+static int
+__vrps_update(bool *changed)
 {
 	struct db_table *old_base;
 	struct db_table *new_base;
@@ -358,6 +358,58 @@ revert_base:
 	return error;
 }
 
+int
+vrps_update(bool *changed)
+{
+	time_t start, finish, exec_time;
+	serial_t serial;
+	int error;
+
+	/*
+	 * This wrapper is mainly for log informational data, so if there's no
+	 * need don't do unnecessary calls
+	 */
+	if (!log_info_enabled())
+		return __vrps_update(changed);
+
+	pr_info("Starting validation.");
+	if (config_get_mode() == SERVER) {
+		error = get_last_serial_number(&serial);
+		if (!error)
+			pr_info("- Current serial number is %u.", serial);
+	}
+
+	time(&start);
+	error = __vrps_update(changed);
+	time(&finish);
+	exec_time = finish - start;
+
+	pr_info("Validation finished:");
+	rwlock_read_lock(&state_lock);
+	do {
+		if (state.base == NULL) {
+			rwlock_unlock(&state_lock);
+			pr_info("- Valid ROAs: 0");
+			pr_info("- Valid Router Keys: 0");
+			if (config_get_mode() == SERVER)
+				pr_info("- No serial number.");
+			break;
+		}
+
+		pr_info("- Valid ROAs: %u", db_table_roa_count(state.base));
+		pr_info("- Valid Router Keys: %u",
+		    db_table_router_key_count(state.base));
+		if (config_get_mode() == SERVER) {
+			pr_info("- %s serial number is %u.",
+			    serial == state.next_serial - 1 ? "Current" : "New",
+			    state.next_serial - 1);
+		}
+		rwlock_unlock(&state_lock);
+	} while(0);
+	pr_info("- Real execution time: %ld secs.", exec_time);
+
+	return error;
+}
 /**
  * Please keep in mind that there is at least one errcode-aware caller. The most
  * important ones are

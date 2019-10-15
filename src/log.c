@@ -188,7 +188,13 @@ pr_stream(int level, const char *format, va_list args)
 bool
 log_debug_enabled(void)
 {
-	return config_get_log_level() == LOG_DEBUG;
+	return config_get_log_level() >= LOG_DEBUG;
+}
+
+bool
+log_info_enabled(void)
+{
+	return config_get_log_level() >= LOG_INFO;
 }
 
 void
