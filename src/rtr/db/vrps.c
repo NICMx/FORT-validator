@@ -321,6 +321,12 @@ vrps_update(bool *changed)
 			goto revert_base;
 		}
 	} else {
+		/* There's also an empty base, don't alter state */
+		if (db_table_roa_count(new_base) +
+		    db_table_router_key_count(new_base) == 0) {
+			rwlock_unlock(&state_lock);
+			return 0;
+		}
 		error = create_empty_delta(&deltas);
 		if (error) {
 			rwlock_unlock(&state_lock);

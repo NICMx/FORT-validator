@@ -174,6 +174,12 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	/* See handle_serial_query_pdu() for some comments. */
 	switch (error) {
 	case 0:
+		/* Assure that cache response is (or was) sent */
+		if (args.started)
+			break;
+		error = send_cache_response_pdu(fd, args.version);
+		if (error)
+			return error;
 		break;
 	case -EAGAIN:
 		return err_pdu_send_no_data_available(fd, args.version);
