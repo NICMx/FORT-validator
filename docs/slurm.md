@@ -11,7 +11,7 @@ There are reasons why you might legitimately want to modify the RPKI assertions 
 - To assert the validity of private IP addresses and/or AS numbers for local use. (Since they are outside of the scope of the global RPKI.)
 - To override temporarily incorrect or outdated global RPKI data.
 
-The "Simplified Local Internet Number Resource Management with the RPKI" (SLURM) is a [standard](https://tools.ietf.org/html/rfc8416) means to accomplish this. In a nutshell, it's just a bunch of JSON files with which you can filter out or append arbitrary ROAs to Fort's RTR payload.
+The "Simplified Local Internet Number Resource Management with the RPKI" (SLURM) is a [standard](https://tools.ietf.org/html/rfc8416) means to accomplish this. In a nutshell, it's just a bunch of JSON files with which you can filter out or append arbitrary ROAs to FORT validator's RTR payload.
 
 Note that, with the exception of the following section, most of this document is just a summary of [RFC 8416](https://tools.ietf.org/html/rfc8416). You can find more details there.
 
@@ -21,9 +21,9 @@ The SLURM files are defined by the [`--slurm`](usage.html#--slurm) flag. If the 
 
 None of the entries of the SLURM configuration are allowed to collide with each other. If there is a collision, the overall SLURM configuration is invalidated.
 
-Fort reloads the SLURM files during every validation cycle. If the new configuration is invalid, **it is treated as nonexistent**. Note that this means that an isolated mistake will temporarily drop all your SLURM overrides. This is intended to change in a future revision of Fort, in which the validator will fall back to the previous valid SLURM configuration on error.
+FORT validator reloads the SLURM files during every validation cycle. If the new configuration is invalid (due to either a syntax or content error) the validator will fall back to the previous valid SLURM configuration, and will log a message to indicate this action.
 
-## SLURM File Definition
+## File Definition
 
 ### Root
 
@@ -55,7 +55,7 @@ The root object contains a `slurmVersion` field (which, for now, must be set to 
 {
 	"prefix": <IP prefix>,
 	"asn": <AS number>,
-	"comment": <Explanatory comment; ignored by Fort for now>
+	"comment": <Explanatory comment>
 }
 ```
 
@@ -73,7 +73,7 @@ One of `prefix` and `asn` can be absent. On absence, any prefix matches `prefix`
 {
 	"asn": <AS number>,
 	"SKI": <Base64 of some SKI>,
-	"comment": <Explanatory comment; ignored by Fort for now>
+	"comment": <Explanatory comment>
 }
 ```
 
@@ -92,11 +92,11 @@ One of `asn` and `SKI` can be absent. On absence, any AS number matches `asn`, a
 	"prefix": <IP prefix>,
 	"asn": <AS number>,
 	"maxPrefixLength": <Prefix length>
-	"comment": <Explanatory comment; ignored by Fort for now>
+	"comment": <Explanatory comment>
 }
 ```
 
-Will force Fort into believing that the [`prefix`, `asn`, `maxPrefixLength`] ROA validated successfully.
+Will force the validator into believing that the [`prefix`, `asn`, `maxPrefixLength`] ROA validated successfully.
 
 `prefix` and `asn` are mandatory, `maxPrefixLength` and `comment` are not. `maxPrefixLength` defaults to `prefix`'s length.
 
@@ -109,15 +109,15 @@ Will force Fort into believing that the [`prefix`, `asn`, `maxPrefixLength`] ROA
 	"asn": <AS number>,
 	"SKI": <Base64 of some SKI>,
 	"routerPublicKey": <Base64 of some public key>,
-	"comment": <Explanatory comment; ignored by Fort for now>
+	"comment": <Explanatory comment>
 }
 ```
 
-Will force Fort into believing that the [`asn`, `SKI`, `routerPublicKey`] Router Key validated successfully.
+Will force the validator into believing that the [`asn`, `SKI`, `routerPublicKey`] Router Key validated successfully.
 
 Only `comment` isn't mandatory, the rest [`asn`, `SKI`, `routerPublicKey`] are mandatory.
 
-## SLURM File Example
+## File Example
 
 ```
 {

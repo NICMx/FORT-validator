@@ -296,13 +296,19 @@ hierarchy." (RFC 6481))
 .RS 4
 Path to the SLURM FILE or SLURMs DIRECTORY.
 .P
-In case a DIRECTORY is set, the files with extension '\fI.slurm\fR' will be the
-ones considered as SLURM files and FORT will use them.
-.P
 The SLURM definition is from RFC 8416. SLURM stands for "Simplified Local
 Internet Number Resource Management with the RPKI", basically is a document
 that can override (either as a filter or adding assertions) the global RPKI
 repository data fetched by FORT; potentially useful for network operators.
+.P
+In case a DIRECTORY is set, the files with extension '\fI.slurm\fR' will be the
+ones considered as SLURM files and FORT will use them.
+.P
+The configured SLURM path (either \fIFILE\fR or \fIDIRECTORY\fR) will be read
+each time a new validation cycle begins. If there's a syntax or content error,
+the last valid version of the SLURM will be applied (if there's one) and a
+message will be logged to indicate this action. Note that all this will happen
+only if \fI--mode=server\fR and \fI--slurm\fR is configured.
 .P
 A basic example of a SLURM file can be seen in this manual at the
 \fBEXAMPLES\fR section (it's almost the same as the one in RFC 8416).
