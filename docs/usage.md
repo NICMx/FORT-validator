@@ -30,15 +30,17 @@ command: fort
 	15. [`--server.interval.retry`](#--serverintervalretry)
 	16. [`--server.interval.expire`](#--serverintervalexpire)
 	17. [`--slurm`](#--slurm)
-	18. [`--log.color-output`](#--logcolor-output)
-	19. [`--log.file-name-format`](#--logfile-name-format)
-	20. [`--output.roa`](#--outputroa)
-	21. [`--output.bgpsec`](#--outputbgpsec)
-	22. [`--configuration-file`](#--configuration-file)
-	23. [`rsync.program`](#rsyncprogram)
-	24. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	25. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	26. [`incidences`](#incidences)
+	18. [`--log.level`](#--loglevel)
+	19. [`--log.output`](#--logoutput)
+	20. [`--log.color-output`](#--logcolor-output)
+	21. [`--log.file-name-format`](#--logfile-name-format)
+	22. [`--output.roa`](#--outputroa)
+	23. [`--output.bgpsec`](#--outputbgpsec)
+	24. [`--configuration-file`](#--configuration-file)
+	25. [`rsync.program`](#rsyncprogram)
+	26. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	27. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	28. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -62,6 +64,8 @@ command: fort
         [--server.interval.retry=<unsigned integer>]
         [--server.interval.expire=<unsigned integer>]
         [--slurm=<file>|<directory>]
+        [--log.level=error|warning|info|debug]
+        [--log.output=syslog|console]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
         [--output.roa=<file>]
@@ -357,6 +361,34 @@ This value is utilized only on RTR version 1 sessions (more information at [RFC 
 
 SLURM file, or directory containing SLURM files. See [SLURM](slurm.html).
 
+### `--log.level`
+
+- **Type:** Enumeration (`error`, `warning`, `info`, `debug`)
+- **Availability:** `argv` and JSON
+- **Default:** `warning`
+
+Defines which messages will be logged according to its priority, e.g. a value of `info` will log messages of equal or higher level (`info`, `warning`, and `error`).
+
+The priority levels, from higher to lowest, are:
+- `error`
+- `warning`
+- `info`
+- `debug`
+
+Read more at [Logging > Log level](logging.html#log-level).
+
+### `--log.output`
+
+- **Type:** Enumeration (`syslog`, `console`)
+- **Availability:** `argv` and JSON
+- **Default:** `console`
+
+Desired output where the logs will be printed.
+
+The value `console` will log messages at standard output and standard error; `syslog` will log to [Syslog](https://en.wikipedia.org/wiki/Syslog).
+
+Read more at [Logging > Log output](logging.html#log-output).
+
 ### `--log.color-output`
 
 - **Type:** None
@@ -372,7 +404,7 @@ If enabled, the logging output will contain ANSI color codes. Meant for human co
 <span style="color:magenta">CRT: Programming error: Array size is 1 but array is NULL.</span>
 </code></pre>
 
-At present, this flag only affects standard output and standard error. Color codes are not sent to syslog, regardless of this flag.
+At present, this flag only affects if [`--log.output`](#--logoutput) is `console`. Color codes are not sent to `syslog`, regardless of this flag.
 
 ### `--log.file-name-format`
 
@@ -403,7 +435,7 @@ $ {{ page.command }} --log.file-name-format file-name  --local-repository reposi
 ERR: baz.cer: Certificate validation failed: certificate has expired
 {% endhighlight %}
 
-This flag affects standard output, standard error and syslog.
+This flag affects any of the log output configured at [`--log.output`](#--logoutput) (`syslog` and `console`).
 
 ### `--output.roa`
 
@@ -464,6 +496,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	},
 
 	"log": {
+		"<a href="#--loglevel">level</a>": "warning",
+		"<a href="#--logoutput">output</a>": "console",
 		"<a href="#--logcolor-output">color-output</a>": true,
 		"<a href="#--logfile-name-format">file-name-format</a>": "file-name"
 	},

@@ -1,6 +1,5 @@
 # Comment these out during releases.
 # Also increase optimization I guess (-O0 -> -On)
-#CFLAGS_DEBUG  = -DDEBUG
 LDFLAGS_DEBUG = -rdynamic
 
 bin_PROGRAMS = fort
@@ -107,7 +106,7 @@ fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 fort_CFLAGS  = -Wall
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=gnu11 -O2 -g $(CFLAGS_DEBUG) $(FORT_FLAGS)
+fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS)
 fort_LDFLAGS = $(LDFLAGS_DEBUG)
 fort_LDADD   = ${JANSSON_LIBS}
 
