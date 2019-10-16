@@ -1,7 +1,7 @@
 .TH fort 8 "2019-10-14" "v1.1.1" "FORT validator"
 
 .SH NAME
-fort \- RPKI certificate path validator
+fort \- RPKI certificate path validator and RTR server
 
 .SH SYNOPSIS
 .B fort
@@ -420,10 +420,51 @@ maximum allowed value \fI172800\fR. It must be larger than
 .RE
 .P
 
+.BR \-\-log.level=(\fIerror\fR|\fIwarning\fR|\fIinfo\fR|\fIdebug\fR)
+.RS 4
+Defines which messages will be logged according to its priority, e.g. a value
+of \fIinfo\fR will log messages of equal or higher level (\fIinfo\fR,
+\fIwarning\fR, and \fIerror\fR).
+.P
+The priority levels, from higher to lowest, are:
+.RS 4
+.br
+- \fIerror\fR
+.br
+- \fIwarning\fR
+.br
+- \fIinfo\fR
+.br
+- \fIdebug\fR
+.RE
+.P
+By default, it has a value of \fIwarning\fR.
+.RE
+.P
+
+.BR \-\-log.output=(\fIsyslog\fR|\fIconsole\fR)
+.RS 4
+Desired output where the logs will be printed.
+.P
+The value \fIconsole\fR will log messages at standard output and standard error;
+\fIsyslog\fR will log to syslog.
+.P
+Depending on the OS, distinct implementations of syslog could be installed
+(syslog, rsyslog, or syslog-ng are the most common ones). Syslog usage and
+configuration is out of this man scope.
+.P
+By default, it has a value of \fIconsole\fR.
+.P
+More information about Logging can be consulted at FORT's web docs.
+.RE
+.P
+
 .BR \-c ", " \-\-log.color-output
 .RS 4
 If enabled, the logging output will contain ANSI color codes. Meant for human
 consumption.
+.P
+Meaningful only if \fI--log.output\fR value is \fIconsole\fR.
 .RE
 .P
 
@@ -554,6 +595,8 @@ to a specific value:
     }
   },
   "log": {
+    "level": "warning",
+    "output": "console",
     "color-output": true,
     "file-name-format": "local-path"
   },
