@@ -7,8 +7,9 @@ title: Compilation and Installation
 ## Index
 
 1. [Dependencies](#dependencies)
-2. [Option 1: Installing the Debian package](#option-1-installing-the-debian-package)
-3. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
+2. [Setup script](#setup-script)
+3. [Option 1: Installing the Debian package](#option-1-installing-the-debian-package)
+4. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
 	3. [CentOS version](#centos-version)
@@ -16,7 +17,7 @@ title: Compilation and Installation
 	5. [openSUSE Leap version](#opensuse-leap-version)
 	6. [FreeBSD version](#freebsd-version)
 	7. [Slackware version](#slackware-version)
-4. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
+5. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
 
 ## Dependencies
 
@@ -29,6 +30,31 @@ The dependencies are
 3. [rsync](http://rsync.samba.org/)
 
 Fort is currently supported in *64-bit* OS. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling dates at certificates, and currently there's no work around for this.
+
+## Setup script
+
+> ![img/warn.svg](img/warn.svg) This script exists merely to ease the ARIN TAL download (and some other additional stuff), it isn't a prerequisite to compile or run FORT validator, although we strongly advise to fetch ARIN TAL (using this script or by other means) in order to get the whole RPKI validated by FORT validator.
+
+The script can be found [here](https://github.com/NICMx/FORT-validator/blob/v{{ site.fort-latest-version }}/fort_setup.sh). It only expects one argument: an _existent directory path_ where the 5 RIRs TALS will be downloaded.
+
+Basically, it does the following:
+1. Display message to agree ARIN RPA.
+2. If agreed, download ARIN TAL to the received arg (named `TALS_PATH` from now on).
+3. Download the rest of the TALs to `TALS_PATH`.
+4. Try to create directory `/var/cache/fort/repository`, on error create `/tmp/fort/repository`.
+5. Create configuration file with [`tal`](https://nicmx.github.io/FORT-validator/usage.html#--tal) and [`local-repository`](https://nicmx.github.io/FORT-validator/usage.html#--local-repository) members, with a value of `TALS_PATH` (absolute path) and the directory path created at the previous step.
+6. Display FORT validator execution examples:
+  - Using the created configuration file (uses the arg [`-f`](https://nicmx.github.io/FORT-validator/usage.html#--configuration-file)).
+  - Using the values of the configuration file (uses the args [`--tal`](https://nicmx.github.io/FORT-validator/usage.html#--tal) and [`--local-repository`](https://nicmx.github.io/FORT-validator/usage.html#--local-repository)).
+
+Preferably, run this script with the same user what will run FORT validator. It's recommended that the user has write permission in `/var/cache`, since the script will try to create a directory there ([see more](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch05s05.html)). Here's an execution example:
+
+{% highlight bash %}
+# Get the script
+wget https://raw.githubusercontent.com/NICMx/FORT-validator/v{{ site.fort-latest-version }}/fort_setup.sh
+mkdir ~/tal
+./fort_setup.sh ~/tal
+{% endhighlight %}
 
 ## Option 1: Installing the Debian package
 

@@ -1,0 +1,54 @@
+{
+  "tal": "/tmp/fort/tal/",
+  "local-repository": "/tmp/fort/repository/",
+  "sync-strategy": "root",
+  "shuffle-uris": false,
+  "maximum-certificate-depth": 32,
+  "mode": "server",
+  "server": {
+    "address": "127.0.0.1",
+    "port": "8323",
+    "backlog": 64,
+    "interval": {
+      "validation": 3600,
+      "refresh": 3600,
+      "retry": 600,
+      "expire": 7200
+    }
+  },
+  "slurm": "/tmp/fort/",
+  "log": {
+    "level": "warning",
+    "output": "console",
+    "color-output": false,
+    "file-name-format": "global-url"
+  },
+  "rsync": {
+    "program": "rsync",
+    "arguments-recursive": [
+      "--recursive",
+      "--delete",
+      "--times",
+      "--contimeout=20",
+      "$REMOTE",
+      "$LOCAL"
+    ],
+    "arguments-flat": [
+      "--times",
+      "--contimeout=20",
+      "--dirs",
+      "$REMOTE",
+      "$LOCAL"
+    ]
+  },
+  "incidences": [
+    {
+      "name": "incid-hashalg-has-params",
+      "action": "ignore"
+    }
+  ],
+  "output": {
+    "roa": "/tmp/fort/roas.csv",
+    "bgpsec": "/tmp/fort/bgpsec.csv"
+  }
+}
