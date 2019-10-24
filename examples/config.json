@@ -45,6 +45,10 @@
     {
       "name": "incid-hashalg-has-params",
       "action": "ignore"
+    },
+    {
+      "name": "incid-obj-not-der-encoded",
+      "action": "ignore"
     }
   ],
   "output": {

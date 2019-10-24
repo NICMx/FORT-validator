@@ -9,6 +9,7 @@
  */
 enum incidence_id {
 	INID_HASHALG_HAS_PARAMS,
+	INID_OBJ_NOT_DER,
 
 	__INID_MAX,
 };

@@ -22,7 +22,8 @@ decode_manifest(struct signed_object *sobj, struct Manifest **result)
 		sobj->sdata.decoded->encapContentInfo.eContent,
 		&asn_DEF_Manifest,
 		(void **) result,
-		true
+		true,
+		false
 	);
 }
 

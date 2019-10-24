@@ -125,6 +125,13 @@ of objects, each with two members "name" and "action", eg:
 .br
 "action": "warn"
 .RE
+},
+{
+.RS 2
+"name": "incid-obj-not-der-encoded",
+.br
+"action": "error"
+.RE
 }
 .RE
 ]
@@ -147,10 +154,11 @@ nothing happened.
 happened.
 .RE
 .P
-By default, all the incidences have an action of \fIignore\fR. Currently there's
-only one registered incidence:
+By default, all the incidences have an action of \fIignore\fR. Currently there
+are two registered incidences:
 \fIincid-hashalg-has-params\fR (Signed Object's hash algorithm has NULL object
 as parameters).
+\fIincid-obj-not-der-encoded\fR (Object isn't DER encoded).
 .P
 More information about incidences can be consulted at FORT's web docs.
 .RE
@@ -627,6 +635,10 @@ to a specific value:
   "incidences": [
     {
       "name": "incid-hashalg-has-params",
+      "action": "ignore"
+    },
+    {
+      "name": "incid-obj-not-der-encoded",
       "action": "ignore"
     }
   ],

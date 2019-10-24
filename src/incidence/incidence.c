@@ -23,6 +23,12 @@ static struct incidence incidences[__INID_MAX] = {
 		"Signed Object's hash algorithm has NULL object as parameters",
 		INAC_IGNORE,
 	},
+	{
+		INID_OBJ_NOT_DER,
+		"incid-obj-not-der-encoded",
+		"Object isn't DER encoded",
+		INAC_IGNORE,
+	},
 };
 
 static int
@@ -64,6 +70,7 @@ init_action(json_t *json)
 	enum incidence_action action;
 	int error;
 
+	id = __INID_MAX;
 	error = json_get_string(json, "name", &name);
 	if (error)
 		return error;

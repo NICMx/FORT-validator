@@ -10,6 +10,7 @@ title: Incidence
 2. [`incidences` definition](#incidences-definition)
 3. [Incidence types](#incidence-types)
 	1. [Signed Object's hash algorithm has NULL object as parameters](#signed-objects-hash-algorithm-has-null-object-as-parameters)
+	2. [Object isn't DER encoded](#object-isnt-der-encoded)
 
 ## Introduction
 
@@ -42,7 +43,7 @@ Some incidences are `ignore`d by default, because they stem from bad practices (
 
 ## Incidence types
 
-Presently, there is only one incidence type defined. This list is expected to grow when strict DER-parsing is implemented, and might also evolve further over time, depending on the state of the global RPKI and user demand.
+Presently, there is only a pair of incidence types defined. This list might evolve further over time, depending on the state of the global RPKI and user demand.
 
 ### Signed Object's hash algorithm has NULL object as parameters
 
@@ -86,3 +87,23 @@ If not `ignore`d, Fort will report this incidence with the following error messa
 ```
 
 This only applies to digest parameters that have been defined as NULL objects; any other type of non-absent digest parameters will yield a different error message, and will therefore not be silenced.
+
+### Object isn't DER encoded
+
+- **Name:** `incid-obj-not-der-encoded`
+- **Default action:** `ignore`
+
+
+[RFC 6488](https://tools.ietf.org/html/rfc6488) mandates that all signed objects must be DER-encoded (see [section 3](https://tools.ietf.org/html/rfc6488#section-3)):
+
+```
+      l.  The signed object is DER encoded.
+```
+
+Altough this is mandatory, quite a few signed objects in the global RPKI ignore this rule and are simply BER-encoded.
+
+If not `ignore`d, Fort will report this incidence with the following error message:
+
+```
+<log level>: <offending file name>: '<object>' isn't DER encoded
+```

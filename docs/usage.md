@@ -525,6 +525,10 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		{
 			"name": "incid-hashalg-has-params",
 			"action": "ignore"
+		},
+		{
+			"name": "incid-obj-not-der-encoded",
+			"action": "ignore"
 		}
 	],
 

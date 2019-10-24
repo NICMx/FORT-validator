@@ -25,7 +25,7 @@ Further information can be found in the subsections below.
 | [6482](https://tools.ietf.org/html/rfc6482) (ROA)                          | 100%        |
 | [6486](https://tools.ietf.org/html/rfc6486) (Manifests)                    | 75%         |
 | [6487](https://tools.ietf.org/html/rfc6487) (Resource Certificates & CRLs) | 100%        |
-| [6488](https://tools.ietf.org/html/rfc6488) (Signed Objects)               | 90%         |
+| [6488](https://tools.ietf.org/html/rfc6488) (Signed Objects)               | 100%        |
 | [6493](https://tools.ietf.org/html/rfc6493) (Ghostbusters)                 | 100%        |
 | [6810](https://tools.ietf.org/html/rfc6810) (RTR Version 0)                | 100%        |
 | [7318](https://tools.ietf.org/html/rfc7318) (Policy Qualifiers)            | 100%        |
@@ -52,12 +52,6 @@ This RFC states a bunch of rules that allow some level of tolerance to missing, 
 > signed objects (...) issued by the entity that has published the stale manifest (...) SHOULD be viewed as somewhat suspect, but MAY be used by the RP as per local policy.
 
 These constitute the approximate missing 25%.
-
-### RFC 6488 (Signed Objects)
-
-6488 mandates that all signed objects must be DER-encoded. Fort's current parser cannot tell the difference between DER and (its superset) BER.
-
-Unfortunately, the parser also currently unavoidably [rejects certain technically valid BER objects](https://github.com/vlm/asn1c/blob/master/skeletons/ber_decoder.c#L215-L221). (Although these are not valid DER.)
 
 ### RFC 8182 (RRDP)
 
