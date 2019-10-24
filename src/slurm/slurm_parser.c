@@ -294,7 +294,7 @@ validate_router_spki(unsigned char *data, size_t len)
 		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 	}
 
-	error = validate_certificate_public_key_algorithm(pa, true);
+	error = validate_certificate_public_key_algorithm_bgpsec(pa);
 	X509_PUBKEY_free(spki);
 	return error; /* Error 0 is ok */
 }

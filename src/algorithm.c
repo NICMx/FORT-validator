@@ -31,8 +31,11 @@ validate_certificate_signature_algorithm(int nid, char const *what)
 	    what, nid);
 }
 
+/*
+ * Expected algorithm for certs (expect BGPsec) according to RFC 7935
+ */
 int
-validate_certificate_public_key_algorithm(X509_ALGOR *pa, bool is_bgpsec)
+validate_certificate_public_key_algorithm(X509_ALGOR *pa)
 {
 	int nid;
 
@@ -42,12 +45,22 @@ validate_certificate_public_key_algorithm(X509_ALGOR *pa, bool is_bgpsec)
 	 * https://mailarchive.ietf.org/arch/browse/sidr/
 	 */
 	nid = OBJ_obj2nid(pa->algorithm);
-	if (!is_bgpsec) {
-		if (nid == NID_rsaEncryption)
-			return 0;
-		return pr_err("Certificate's public key format is NID '%s', not rsaEncryption.",
-		    OBJ_nid2sn(nid));
-	}
+	if (nid == NID_rsaEncryption)
+		return 0;
+
+	return pr_err("Certificate's public key format is NID '%s', not rsaEncryption.",
+	    OBJ_nid2sn(nid));
+}
+
+/*
+ * Expected algorithm and parameters for BGPsec certs according to RFC 8608
+ */
+int
+validate_certificate_public_key_algorithm_bgpsec(X509_ALGOR *pa)
+{
+	int nid;
+
+	nid = OBJ_obj2nid(pa->algorithm);
 
 	/* Validate algorithm and parameters (RFC 8608#section-3.1.1) */
 	if (nid != NID_X9_62_id_ecPublicKey)

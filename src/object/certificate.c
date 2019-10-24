@@ -233,6 +233,53 @@ fail1:
 	return -EINVAL;
 }
 
+/*
+ * RFC 7935 Section 3:
+ * "The RSA key pairs used to compute the signatures MUST have a
+ * 2048-bit modulus and a public exponent (e) of 65,537."
+ */
+static int
+validate_subject_public_key(X509_PUBKEY *pubkey)
+{
+#define MODULUS 2048
+#define EXPONENT "65537"
+	const RSA *rsa;
+	const BIGNUM *exp;
+	char *exp_str;
+	int modulus;
+	int error;
+
+	rsa = EVP_PKEY_get0_RSA(X509_PUBKEY_get0(pubkey));
+	if (rsa == NULL)
+		return crypto_err("EVP_PKEY_get0_RSA() returned NULL");
+
+	modulus = RSA_bits(rsa);
+	if (modulus != MODULUS)
+		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) modulus is %d bits, not %d bits.",
+		    modulus, MODULUS);
+
+	exp = RSA_get0_e(rsa);
+	if (exp == NULL)
+		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) exponent isn't set, must be "
+		    EXPONENT " bits.");
+
+	exp_str = BN_bn2dec(exp);
+	if (exp_str == NULL)
+		return crypto_err("Couldn't get subjectPublicKey exponent string");
+
+	if (strcmp(EXPONENT, exp_str) != 0) {
+		error = pr_err("Certificate's subjectPublicKey (RSAPublicKey) exponent is %s, must be "
+		    EXPONENT " bits.", exp_str);
+		free(exp_str);
+		return error;
+	}
+	free(exp_str);
+
+	return 0;
+#undef EXPONENT
+#undef MODULUS
+}
+
 static int
 validate_public_key(X509 *cert, enum cert_type type)
 {
@@ -251,7 +298,14 @@ validate_public_key(X509 *cert, enum cert_type type)
 	if (!ok)
 		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
-	error = validate_certificate_public_key_algorithm(pa, type == BGPSEC);
+	if (type == BGPSEC)
+		return validate_certificate_public_key_algorithm_bgpsec(pa);
+
+	error = validate_certificate_public_key_algorithm(pa);
+	if (error)
+		return error;
+
+	error = validate_subject_public_key(pubkey);
 	if (error)
 		return error;
 
