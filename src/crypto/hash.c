@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <openssl/evp.h>
 #include <sys/stat.h>
+#include <sys/types.h> /* For blksize_t */
 
 #include "file.h"
 #include "log.h"
@@ -39,7 +40,7 @@ hash_file(char const *algorithm, struct rpki_uri *uri, unsigned char *result,
 	FILE *file;
 	struct stat stat;
 	unsigned char *buffer;
-	__blksize_t buffer_len;
+	blksize_t buffer_len;
 	size_t consumed;
 	EVP_MD_CTX *ctx;
 	int error;
