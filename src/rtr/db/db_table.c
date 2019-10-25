@@ -203,6 +203,18 @@ db_table_clone(struct db_table **dst, struct db_table *src)
 	return error;
 }
 
+unsigned int
+db_table_roa_count(struct db_table *table)
+{
+	return HASH_COUNT(table->roas);
+}
+
+unsigned int
+db_table_router_key_count(struct db_table *table)
+{
+	return HASH_COUNT(table->router_keys);
+}
+
 void
 db_table_remove_roa(struct db_table *table, struct vrp const *del)
 {
