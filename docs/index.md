@@ -10,4 +10,4 @@ FORT validator is an MIT-licensed RPKI Relying Party, this is a tool offered as 
 
 ## Status
 
-Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the latest official release, includes RTR version 1 support and a considerable improvement in execution time.
+Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the latest official release, includes some minor bug fixes.
