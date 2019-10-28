@@ -541,6 +541,15 @@ value, eg.
 .B \-\-output.bgpsec=-
 .RE
 
+.B \-\-asn1-decode-max-stack=\fIUNSIGNED_INTEGER\fR
+.RS 4
+ASN1 decoder max allowed stack size in bytes, utilized to avoid a stack
+overflow when a large nested ASN1 object is parsed.
+.P
+By default, it has a value of \fI4096\fR (4 kB).
+.RE
+.P
+
 .SH EXAMPLES
 .B fort \-t /tmp/tal \-r /tmp/repository \-\-server.port 9323
 .RS 4
@@ -645,7 +654,8 @@ to a specific value:
   "output": {
     "roa": "/tmp/fort/roas.csv",
     "bgpsec": "/tmp/fort/bgpsec.csv"
-  }
+  },
+  "asn1-decode-max-stack": 4096
 }
 .fi
 .RE

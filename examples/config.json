@@ -54,5 +54,6 @@
   "output": {
     "roa": "/tmp/fort/roas.csv",
     "bgpsec": "/tmp/fort/bgpsec.csv"
-  }
+  },
+  "asn1-decode-max-stack": 4096
 }

@@ -36,11 +36,12 @@ command: fort
 	21. [`--log.file-name-format`](#--logfile-name-format)
 	22. [`--output.roa`](#--outputroa)
 	23. [`--output.bgpsec`](#--outputbgpsec)
-	24. [`--configuration-file`](#--configuration-file)
-	25. [`rsync.program`](#rsyncprogram)
-	26. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	27. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	28. [`incidences`](#incidences)
+	24. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	25. [`--configuration-file`](#--configuration-file)
+	26. [`rsync.program`](#rsyncprogram)
+	27. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	28. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	29. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -464,6 +465,17 @@ When the file is specified, its content will be removed to store the Router Keys
 Each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_; the first line contains those column descriptors.
 
 If a value isn't specified, then the BGPsec Router Keys aren't printed.
+
+### `--asn1-decode-max-stack`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 4096
+- **Range:** 1--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+ASN1 decoder max allowed stack size in bytes, utilized to avoid a stack overflow when a large nested ASN1 object is parsed.
+
+This check is merely a caution, since ASN1 decoding functions are recursive and might cause a stack overflow. So, this argument probably won't be necessary in most cases, since the RPKI ASN1 objects don't have nested objects that require too much stack allocation (for now).
 
 ### `--configuration-file`
 

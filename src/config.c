@@ -94,6 +94,9 @@ struct rpki_config {
 		/** File where the validated BGPsec certs will be stored */
 		char *bgpsec;
 	} output;
+
+	/* ASN1 decoder max stack size allowed */
+	unsigned int asn1_decode_max_stack;
 };
 
 static void print_usage(FILE *, bool);
@@ -376,6 +379,16 @@ static const struct option_field options[] = {
 		.arg_doc = "<file>",
 	},
 
+	{
+		.id = 8000,
+		.name = "asn1-decode-max-stack",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, asn1_decode_max_stack),
+		.doc = "ASN1 decoder max stack size, utilized to avoid a stack overflow on large nested ASN1 objects",
+		.min = 1,
+		.max = UINT_MAX,
+	},
+
 	{ 0 },
 };
 
@@ -578,6 +591,8 @@ set_default_values(void)
 
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
+
+	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 
 	return 0;
 
@@ -876,6 +891,12 @@ char const *
 config_get_output_bgpsec(void)
 {
 	return rpki_config.output.bgpsec;
+}
+
+unsigned int
+config_get_asn1_decode_max_stack(void)
+{
+	return rpki_config.asn1_decode_max_stack;
 }
 
 void
