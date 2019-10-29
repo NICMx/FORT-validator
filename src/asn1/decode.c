@@ -32,21 +32,6 @@ validate(asn_TYPE_descriptor_t const *descriptor, void *result, bool log)
 	return 0;
 }
 
-static void
-der_debug(size_t size, const void *der, const void *orig, size_t consumed)
-{
-	size_t i;
-
-	for (i = 0; i < size; i++)
-		if (((uint8_t *)der)[i] != ((uint8_t *)orig)[consumed + i]) {
-			pr_debug("Diff starts at byte %ld: BER '%02x', DER '%02x'",
-			    consumed + i,
-			    ((uint8_t *)der)[i],
-			    ((uint8_t *)orig)[consumed + i]);
-			return;
-		}
-}
-
 static int
 der_coder(const void *buf, size_t size, void *app_key)
 {
@@ -58,11 +43,9 @@ der_coder(const void *buf, size_t size, void *app_key)
 		return -1;
 	}
 
-	if (memcmp(data->src + data->consumed, buf, size) != 0) {
-		if (log_debug_enabled())
-			der_debug(size, buf, data->src, data->consumed);
+	if (memcmp(data->src + data->consumed, buf, size) != 0)
 		return -1;
-	}
+
 	data->consumed += size;
 	return 0;
 }
