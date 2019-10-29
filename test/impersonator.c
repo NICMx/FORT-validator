@@ -119,6 +119,24 @@ config_get_output_bgpsec(void)
 	return NULL;
 }
 
+uint8_t
+config_get_log_level(void)
+{
+	return 3; /* LOG_ERR */
+}
+
+enum log_output
+config_get_log_output(void)
+{
+	return CONSOLE;
+}
+
+unsigned int
+config_get_asn1_decode_max_stack(void)
+{
+	return 4096;
+}
+
 enum incidence_action
 incidence_get_action(enum incidence_id id)
 {

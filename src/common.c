@@ -4,6 +4,8 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/stat.h>
 
 #include "log.h"
@@ -178,4 +180,16 @@ process_file_or_dir(char const *location, char const *file_ext,
 		return cb(location, arg);
 
 	return process_dir_files(location, file_ext, cb, arg);
+}
+
+char const *
+addr2str4(struct in_addr const *addr, char *buffer)
+{
+	return inet_ntop(AF_INET, addr, buffer, INET_ADDRSTRLEN);
+}
+
+char const *
+addr2str6(struct in6_addr const *addr, char *buffer)
+{
+	return inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN);
 }

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "address.c"
+#include "common.c"
 #include "log.c"
 #include "impersonator.c"
 #include "object/router_key.c"

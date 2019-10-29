@@ -7,7 +7,7 @@
 #include "impersonator.c"
 
 static int
-handle_foreach(struct client const *client, void *arg)
+handle_foreach(struct client *client, void *arg)
 {
 	unsigned int *state = arg;
 

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "common.c"
 #include "log.c"
 #include "impersonator.c"
 #include "rtr/stream.c"

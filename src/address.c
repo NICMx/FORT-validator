@@ -5,6 +5,7 @@
 #include <arpa/inet.h> /* inet_ntop */
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include "common.h"
 #include "log.h"
 #include "thread_var.h"
 
@@ -384,18 +385,6 @@ range6_decode(IPAddressRange_t const *input, struct ipv6_range *result)
 		return error;
 
 	return check_encoding6(result);
-}
-
-static char const *
-addr2str4(struct in_addr *addr, char *buffer)
-{
-	return inet_ntop(AF_INET, addr, buffer, INET_ADDRSTRLEN);
-}
-
-static char const *
-addr2str6(struct in6_addr *addr, char *buffer)
-{
-	return inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN);
 }
 
 static int

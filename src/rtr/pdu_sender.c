@@ -5,11 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h> /* inet_ntop */
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <arpa/inet.h> /* INET_ADDRSTRLEN */
 
 #include "clients.h"
+#include "common.h"
 #include "config.h"
 #include "log.h"
 #include "rtr/pdu_serializer.h"
@@ -102,13 +101,9 @@ static void
 pr_debug_prefix4(struct ipv4_prefix_pdu *pdu)
 {
 	char buffer[INET_ADDRSTRLEN];
-	char const *addr_str;
 
-	addr_str = inet_ntop(AF_INET, &pdu->ipv4_prefix, buffer,
-	    INET_ADDRSTRLEN);
-
-	pr_debug("Encoded prefix %s/%u into a PDU.", addr_str,
-	    pdu->prefix_length);
+	pr_debug("Encoded prefix %s/%u into a PDU.",
+	    addr2str4(&pdu->ipv4_prefix, buffer), pdu->prefix_length);
 }
 
 static int
@@ -142,13 +137,9 @@ static void
 pr_debug_prefix6(struct ipv6_prefix_pdu *pdu)
 {
 	char buffer[INET6_ADDRSTRLEN];
-	char const *addr_str;
 
-	addr_str = inet_ntop(AF_INET6, &pdu->ipv6_prefix, buffer,
-	    INET6_ADDRSTRLEN);
-
-	pr_debug("Encoded prefix %s/%u into a PDU.", addr_str,
-	    pdu->prefix_length);
+	pr_debug("Encoded prefix %s/%u into a PDU.",
+	    addr2str6(&pdu->ipv6_prefix, buffer), pdu->prefix_length);
 }
 
 static int

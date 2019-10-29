@@ -3,6 +3,7 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <arpa/inet.h>
 
 /* "I think that this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172
@@ -39,5 +40,8 @@ void close_thread(pthread_t thread, char const *what);
 
 typedef int (*process_file_cb)(char const *, void *);
 int process_file_or_dir(char const *, char const *, process_file_cb, void *);
+
+char const *addr2str4(struct in_addr const *, char *);
+char const *addr2str6(struct in6_addr const *, char *);
 
 #endif /* SRC_RTR_COMMON_H_ */

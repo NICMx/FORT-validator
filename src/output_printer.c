@@ -1,8 +1,7 @@
 #include "output_printer.h"
 
 #include <arpa/inet.h>
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
@@ -10,18 +9,6 @@
 #include "rtr/db/vrp.h"
 
 char addr_buf[INET6_ADDRSTRLEN];
-
-static char const *
-strv4addr(struct in_addr const *addr)
-{
-	return inet_ntop(AF_INET, addr, addr_buf, INET6_ADDRSTRLEN);
-}
-
-static char const *
-strv6addr(struct in6_addr const *addr)
-{
-	return inet_ntop(AF_INET6, addr, addr_buf, INET6_ADDRSTRLEN);
-}
 
 static int
 load_output_file(char const *output, FILE **result, bool *fopen)
@@ -60,12 +47,12 @@ print_roa(struct vrp const *vrp, void *arg)
 	switch(vrp->addr_fam) {
 	case AF_INET:
 		fprintf(out, "AS%u,%s/%u,%u\n", vrp->asn,
-		    strv4addr(&vrp->prefix.v4), vrp->prefix_length,
+		    addr2str4(&vrp->prefix.v4, addr_buf), vrp->prefix_length,
 		    vrp->max_prefix_length);
 		break;
 	case AF_INET6:
 		fprintf(out, "AS%u,%s/%u,%u\n", vrp->asn,
-		    strv6addr(&vrp->prefix.v6), vrp->prefix_length,
+		    addr2str6(&vrp->prefix.v6, addr_buf), vrp->prefix_length,
 		    vrp->max_prefix_length);
 		break;
 	default:

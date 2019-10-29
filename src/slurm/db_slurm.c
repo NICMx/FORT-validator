@@ -3,12 +3,11 @@
 #include <string.h>
 #include <time.h>
 #include <arpa/inet.h>
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "crypto/base64.h"
 #include "data_structure/array_list.h"
 #include "object/router_key.h"
+#include "common.h"
 
 struct slurm_prefix_ctx {
 	struct slurm_prefix element;
@@ -359,18 +358,6 @@ db_slurm_update_time(struct db_slurm *db)
 	db->loaded_date_set = true;
 }
 
-static char const *
-strv4addr(struct in_addr const *addr)
-{
-	return inet_ntop(AF_INET, addr, addr_buf, INET6_ADDRSTRLEN);
-}
-
-static char const *
-strv6addr(struct in6_addr const *addr)
-{
-	return inet_ntop(AF_INET6, addr, addr_buf, INET6_ADDRSTRLEN);
-}
-
 static int
 print_prefix_data(struct slurm_prefix *prefix, void *arg)
 {
@@ -384,12 +371,12 @@ print_prefix_data(struct slurm_prefix *prefix, void *arg)
 		switch(prefix->vrp.addr_fam) {
 		case AF_INET:
 			pr_info("%s Prefix: %s/%u", pad,
-			    strv4addr(&prefix->vrp.prefix.v4),
+			    addr2str4(&prefix->vrp.prefix.v4, addr_buf),
 			    prefix->vrp.prefix_length);
 			break;
 		case AF_INET6:
 			pr_info("%s Prefix: %s/%u", pad,
-			    strv6addr(&prefix->vrp.prefix.v6),
+			    addr2str6(&prefix->vrp.prefix.v6, addr_buf),
 			    prefix->vrp.prefix_length);
 			break;
 		default:
