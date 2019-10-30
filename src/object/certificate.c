@@ -258,7 +258,7 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) modulus is %d bits, not %d bits.",
 		    modulus, MODULUS);
 
-	exp = RSA_get0_e(rsa);
+	RSA_get0_key(rsa, NULL, &exp, NULL);
 	if (exp == NULL)
 		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) exponent isn't set, must be "
 		    EXPONENT " bits.");
