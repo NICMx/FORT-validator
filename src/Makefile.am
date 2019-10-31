@@ -103,7 +103,7 @@ fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 include asn1/asn1c/Makefile.include
 fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 
-fort_CFLAGS  = -Wall
+fort_CFLAGS  = -Wall -Wno-cpp
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS)

@@ -1,7 +1,6 @@
 #ifndef SRC_LOG_H_
 #define SRC_LOG_H_
 
-#include <sys/cdefs.h>
 #include <stdbool.h>
 #include "incidence/incidence.h"
 
