@@ -18,6 +18,7 @@
 #include "object/bgpsec.h"
 #include "object/name.h"
 #include "object/manifest.h"
+#include "object/signed_object.h"
 #include "rsync/rsync.h"
 
 /* Just to prevent some line breaking. */
@@ -115,30 +116,13 @@ validate_issuer(X509 *cert, bool is_ta)
 	return 0;
 }
 
+/*
+ * Compare public keys, call @diff_alg_cb when the algorithm is different, call
+ * @diff_pk_cb when the public key is different; return 0 if both are equal.
+ */
 static int
-validate_subject(X509 *cert)
-{
-	struct validation *state;
-	struct rfc5280_name *name;
-	int error;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-
-	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
-	if (error)
-		return error;
-	pr_debug("Subject: %s", x509_name_commonName(name));
-
-	error = x509stack_store_subject(validation_certstack(state), name);
-
-	x509_name_put(name);
-	return error;
-}
-
-static int
-spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
+spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki,
+    int (*diff_alg_cb)(void), int (*diff_pk_cb)(void))
 {
 	ASN1_OBJECT *tal_alg;
 	ASN1_OBJECT *cert_alg;
@@ -158,17 +142,167 @@ spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
 		return crypto_err("X509_PUBKEY_get0_param() 2 returned %d", ok);
 
 	if (OBJ_cmp(tal_alg, cert_alg) != 0)
-		goto different_alg;
+		return diff_alg_cb();
 	if (tal_spk_len != cert_spk_len)
-		goto different_pk;
+		return diff_pk_cb();
 	if (memcmp(tal_spk, cert_spk, cert_spk_len) != 0)
-		goto different_pk;
+		return diff_pk_cb();
 
 	return 0;
+}
 
-different_alg:
+/** Call whenever the public key is different and the subject is the same**/
+static int
+cert_different_pk_err(void)
+{
+	return 1;
+}
+
+/*
+ * Beware: this function skips a lot (maybe all) RPKI validations for a signed
+ * object, and clearly expects that the signed object has at least one
+ * certificate.
+ *
+ * Allocates @result, don't forget to release it.
+ *
+ * It has been placed here to minimize the risk of misuse.
+ */
+static int
+cert_from_signed_object(struct rpki_uri *uri, uint8_t **result, int *size)
+{
+	struct signed_object sobj;
+	ANY_t *cert;
+	unsigned char *tmp;
+	int error;
+
+	error = signed_object_decode(&sobj, uri);
+	if (error)
+		return error;
+
+	cert = sobj.sdata.decoded->certificates->list.array[0];
+
+	tmp = malloc(cert->size);
+	if (tmp == NULL) {
+		signed_object_cleanup(&sobj);
+		return pr_enomem();
+	}
+
+	memcpy(tmp, cert->buf, cert->size);
+
+	*result = tmp;
+	(*size) = cert->size;
+
+	signed_object_cleanup(&sobj);
+	return 0;
+}
+
+static int
+check_dup_public_key(bool *duplicated, char const *file, void *arg)
+{
+	X509 *curr_cert = arg; /* Current cert */
+	X509 *rcvd_cert;
+	X509_PUBKEY *curr_pk, *rcvd_pk;
+	struct rpki_uri *uri;
+	uint8_t *tmp;
+	int tmp_size;
+	int error;
+
+	uri = NULL;
+	rcvd_cert = NULL;
+	tmp_size = 0;
+
+	error = uri_create_str(&uri, file, strlen(file));
+	if (error)
+		return error;
+
+	/* Check if it's '.cer', otherwise treat as a signed object */
+	if (uri_has_extension(uri, ".cer")) {
+		error = certificate_load(uri, &rcvd_cert);
+		if (error)
+			goto free_uri;
+	} else {
+		error = cert_from_signed_object(uri, &tmp, &tmp_size);
+		if (error)
+			goto free_uri;
+
+		rcvd_cert = d2i_X509(NULL, (const unsigned char **) &tmp,
+		    tmp_size);
+		free(tmp); /* Release at once */
+		if (rcvd_cert == NULL) {
+			error = crypto_err("Signed object's '%s' 'certificate' element does not decode into a Certificate",
+			    uri_get_printable(uri));
+			goto free_uri;
+		}
+	}
+
+	curr_pk = X509_get_X509_PUBKEY(curr_cert);
+	if (curr_pk == NULL) {
+		error = crypto_err("X509_get_X509_PUBKEY() returned NULL");
+		goto free_cert;
+	}
+
+	rcvd_pk = X509_get_X509_PUBKEY(rcvd_cert);
+	if (rcvd_pk == NULL) {
+		error = crypto_err("X509_get_X509_PUBKEY() returned NULL");
+		goto free_cert;
+	}
+
+	/*
+	 * The function response will be:
+	 *   < 0 if there's an error
+	 *   = 0 if the PKs are equal
+	 *   > 0 if the PKs are different
+	 */
+	error = spki_cmp(curr_pk, rcvd_pk, cert_different_pk_err,
+	    cert_different_pk_err);
+
+	if (error < 0)
+		goto free_cert;
+
+	/* No error, a positive value means the name is duplicated */
+	if (error)
+		(*duplicated) = true;
+	error = 0;
+
+free_cert:
+	X509_free(rcvd_cert);
+free_uri:
+	uri_refput(uri);
+	return error;
+}
+
+static int
+validate_subject(X509 *cert)
+{
+	struct validation *state;
+	struct rfc5280_name *name;
+	int error;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return -EINVAL;
+
+	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
+	if (error)
+		return error;
+	pr_debug("Subject: %s", x509_name_commonName(name));
+
+	error = x509stack_store_subject(validation_certstack(state), name,
+	    check_dup_public_key, cert);
+
+	x509_name_put(name);
+	return error;
+}
+
+static int
+root_different_alg_err(void)
+{
 	return pr_err("TAL's public key algorithm is different than the root certificate's public key algorithm.");
-different_pk:
+}
+
+static int
+root_different_pk_err(void)
+{
 	return pr_err("TAL's public key is different than the root certificate's public key.");
 }
 
@@ -218,7 +352,8 @@ validate_spki(X509_PUBKEY *cert_spki)
 		goto fail1;
 	}
 
-	if (spki_cmp(tal_spki, cert_spki) != 0)
+	if (spki_cmp(tal_spki, cert_spki, root_different_alg_err,
+	    root_different_pk_err) != 0)
 		goto fail2;
 
 	X509_PUBKEY_free(tal_spki);

@@ -460,15 +460,19 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 /**
  * Intended to validate subject uniqueness.
  * "Stores" the subject in the current relevant certificate metadata, and
- * complains if there's a collision. That's all.
+ * complains if there's a collision. The @cb should check the primary key of
+ * the subject, it will be called when a subject isn't unique (certificate
+ * shares the subject but not the public key). That's all.
  */
 int
-x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject)
+x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject,
+    subject_pk_check_cb cb, void *arg)
 {
 	struct metadata_node *meta;
 	struct subject_name *cursor;
 	array_index i;
 	struct subject_name duplicate;
+	bool duplicated;
 	int error;
 
 	/*
@@ -481,9 +485,10 @@ x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject)
 	 *
 	 * Does the last sentence have any significance to us? I don't even
 	 * understand why the requirement exists. 5280 and 6487 don't even
-	 * define "entity." I guess it's the same meaning from "End-Entity",
-	 * and in this case it's supposed to function as a synonym for "subject
-	 * name."
+	 * define "entity." We'll take the closest definition from the context,
+	 * specifically from RFC 6484 or RFC 6481 (both RFCs don't define
+	 * "entity" explicitly, but use the word in a way that it can be
+	 * inferred what it means).
 	 *
 	 * "An issuer SHOULD use a different
 	 * subject name if the subject's key pair has changed (i.e., when the CA
@@ -504,14 +509,9 @@ x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject)
 	 *   (But maybe issue a warning. It sounds like the two children can
 	 *   impersonate each other.)
 	 * - Certificates share name and public key. This likely means that we
-	 *   are looking at two different versions of the same certificate, but
-	 *   we can't tell for sure right now, and so we should accept it.
+	 *   are looking at two different versions of the same certificate.
+	 *   Accept. (see rfc6484#section-4.7.1 for an example)
 	 *
-	 * This is all conjecture. We should probably mail the IETF.
-	 *
-	 * TODO (next iteration) The code below complains when certificates
-	 * share names, and ignores public keys. I've decided to defer the
-	 * fixing.
 	 */
 
 	meta = SLIST_FIRST(&stack->metas);
@@ -519,8 +519,16 @@ x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject)
 		return 0; /* The TA lacks siblings, so subject is unique. */
 
 	/* See the large comment in certstack_x509_store_serial(). */
+	duplicated = false;
 	ARRAYLIST_FOREACH(&meta->subjects, cursor, i) {
 		if (x509_name_equals(cursor->name, subject)) {
+			error = cb(&duplicated, cursor->file, arg);
+			if (error)
+				return error;
+
+			if (!duplicated)
+				continue;
+
 			char const *serial = x509_name_serialNumber(subject);
 			pr_warn("Subject name '%s%s%s' is not unique. (Also found in '%s'.)",
 			    x509_name_commonName(subject),

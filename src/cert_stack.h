@@ -48,7 +48,9 @@ X509 *x509stack_peek(struct cert_stack *);
 struct rpki_uri *x509stack_peek_uri(struct cert_stack *);
 struct resources *x509stack_peek_resources(struct cert_stack *);
 int x509stack_store_serial(struct cert_stack *, BIGNUM *);
-int x509stack_store_subject(struct cert_stack *, struct rfc5280_name *);
+typedef int (*subject_pk_check_cb)(bool *, char const *, void *);
+int x509stack_store_subject(struct cert_stack *, struct rfc5280_name *,
+    subject_pk_check_cb, void *);
 
 STACK_OF(X509) *certstack_get_x509s(struct cert_stack *);
 int certstack_get_x509_num(struct cert_stack *);
