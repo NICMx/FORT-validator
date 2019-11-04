@@ -166,7 +166,7 @@ echo "- The configuration file '$CONF_FILE' was created with the following conte
 cat $CONF_FILE
 echo ""
 echo "- This configuration file can be utilized with FORT validator, e.g.:"
-echo "  \$ fort --f \"$CONF_FILE\""
+echo "  \$ fort -f \"$CONF_FILE\""
 echo "- Or its members can be utilized as FORT validator arguments, e.g.:"
 echo -n "  \$ fort --tal \"$TALS_LOC\"" && ! [ -z "$REPO_DIR" ] && echo " --local-repository \"$REPO_DIR\""
 echo "" 
