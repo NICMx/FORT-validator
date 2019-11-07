@@ -49,8 +49,11 @@ void log_teardown(void);
  * error stack) cannot exceed 512 bytes at present.
  */
 
-/* Check if debug is enabled, useful to avoid boilerplate code */
+/*
+ * Check if debug or info are enabled, useful to avoid boilerplate code
+ */
 bool log_debug_enabled(void);
+bool log_info_enabled(void);
 
 /* Debug messages, useful for devs or to track a specific problem */
 void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
