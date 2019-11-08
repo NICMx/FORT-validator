@@ -19,7 +19,7 @@ FORT validator logging can be configured using the arguments:
 During the brief period in which configuration has not been completely parsed yet (and therefore, the validator is not yet aware of the desired log output), the standard streams and syslog are used simultaneously.
 
 Once the configuration has been loaded, all the log messages will be printed at the configured {{ page.url-log-output }}, which can have two values:
-- `syslog`: all logging is sent to syslog.
+- `syslog`: all logging is sent to syslog, using **LOG_DAEMON** facility.
 - `console`: informational and debug messages are printed in standard output, error and critical messages are thrown to standard error.
 
 > Syslog configuration and usage is out of this docs scope, here's a brief introduction from [Wikipedia](https://en.wikipedia.org/wiki/Syslog). You can do some research according to your prefered OS distro to familiarize with syslog, since distinct implementations exists (the most common are: syslog, rsyslog, and syslog-ng).
