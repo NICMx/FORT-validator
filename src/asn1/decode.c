@@ -4,6 +4,7 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
+#include "incidence/incidence.h"
 
 #define COND_LOG(log, pr) (log ? pr : -EINVAL)
 
@@ -50,6 +51,10 @@ der_coder(const void *buf, size_t size, void *app_key)
 	return 0;
 }
 
+/*
+ * FIXME (next iteration) This isn't efficient, consider implement DER decoding
+ * or something better.
+ */
 static int
 validate_der(size_t ber_consumed, asn_TYPE_descriptor_t const *descriptor,
     const void *original, void *result)
@@ -99,8 +104,9 @@ asn1_decode(const void *buffer, size_t buffer_size,
 		        rval.code, rval.consumed));
 	}
 
-	/* Validate DER encoding */
-	if (dec_as_der) {
+	/* Validate DER encoding, only if wanted and incidence isn't ignored */
+	if (dec_as_der &&
+	    incidence_get_action(INID_OBJ_NOT_DER) != INAC_IGNORE) {
 		error = validate_der(rval.consumed, descriptor, buffer,
 		    *result);
 		if (error) {

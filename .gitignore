@@ -101,7 +101,8 @@ docs/_site
 # Files we're sorta contractually obligated to exclude.
 # Can't include ARIN's TAL because of their Relying Party Agreement
 # (https://www.arin.net/resources/manage/rpki/tal/)
-tal/arin.tal
+examples/tal/arin.tal
+examples/tal/arin-rfc7730.tal
 
 # Unwanted manure shat by imbecile OSs
 .DS_Store*
