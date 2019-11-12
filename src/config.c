@@ -78,6 +78,17 @@ struct rpki_config {
 	} rsync;
 
 	struct {
+		/* User-Agent header set at requests */
+		char *user_agent;
+		/* Timeout in seconds for the connect phase */
+		unsigned int connect_timeout;
+		/* Maximum allowed time that a request can take */
+		unsigned int transfer_timeout;
+		/* Directory where CA certs to verify peers are found */
+		char *ca_path;
+	} http;
+
+	struct {
 		/** Print ANSI color codes? */
 		bool color;
 		/** Format in which file names will be printed. */
@@ -324,6 +335,41 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, rsync.args.flat),
 		.doc = "RSYNC program arguments that will trigger a non-recursive RSYNC",
 		.availability = AVAILABILITY_JSON,
+	},
+
+	/* HTTP requests parameters */
+	{
+		.id = 9000,
+		.name = "http.user-agent",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, http.user_agent),
+		.doc = "User-Agent to use at HTTP requests, eg. Fort Validator Local/1.0",
+	},
+	{
+		.id = 9001,
+		.name = "http.connect-timeout",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, http.connect_timeout),
+		.doc = "Timeout for the connect phase",
+		.min = 1,
+		.max = UINT_MAX,
+	},
+	{
+		.id = 9002,
+		.name = "http.transfer-timeout",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, http.transfer_timeout),
+		.doc = "Maximum request time (once the connection is established) before dropping the connection",
+		.min = 0,
+		.max = UINT_MAX,
+	},
+	{
+		.id = 9003,
+		.name = "http.ca-path",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, http.ca_path),
+		.doc = "Directory where CA certificates are found, used to verify the peer",
+		.arg_doc = "<directory>",
 	},
 
 	/* Logging fields */
@@ -583,6 +629,15 @@ set_default_values(void)
 	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
 	if (error)
 		goto revert_recursive_array;
+
+	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
+	if (rpki_config.http.user_agent == NULL) {
+		error = pr_enomem();
+		goto revert_recursive_array;
+	}
+	rpki_config.http.connect_timeout = 30;
+	rpki_config.http.transfer_timeout = 30;
+	rpki_config.http.ca_path = NULL; /* Use system default */
 
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
@@ -879,6 +934,30 @@ config_get_rsync_args(bool is_ta)
 	}
 
 	pr_crit("Invalid sync strategy: '%u'", rpki_config.sync_strategy);
+}
+
+char const *
+config_get_http_user_agent(void)
+{
+	return rpki_config.http.user_agent;
+}
+
+unsigned int
+config_get_http_connect_timeout(void)
+{
+	return rpki_config.http.connect_timeout;
+}
+
+unsigned int
+config_get_http_transfer_timeout(void)
+{
+	return rpki_config.http.transfer_timeout;
+}
+
+char const *
+config_get_http_ca_path(void)
+{
+	return rpki_config.http.ca_path;
 }
 
 char const *

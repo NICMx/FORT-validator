@@ -22,6 +22,7 @@ MY_LDADD = ${CHECK_LIBS}
 check_PROGRAMS  = address.test
 check_PROGRAMS += clients.test
 check_PROGRAMS += db_table.test
+check_PROGRAMS += http.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += rsync.test
@@ -40,6 +41,9 @@ clients_test_LDADD = ${MY_LDADD}
 
 db_table_test_SOURCES = rtr/db/db_table_test.c
 db_table_test_LDADD = ${MY_LDADD}
+
+http_test_SOURCES = http_test.c
+http_test_LDADD = ${MY_LDADD} ${CURL_LIBS}
 
 line_file_test_SOURCES = line_file_test.c
 line_file_test_LDADD = ${MY_LDADD}

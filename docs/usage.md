@@ -34,14 +34,18 @@ command: fort
 	19. [`--log.output`](#--logoutput)
 	20. [`--log.color-output`](#--logcolor-output)
 	21. [`--log.file-name-format`](#--logfile-name-format)
-	22. [`--output.roa`](#--outputroa)
-	23. [`--output.bgpsec`](#--outputbgpsec)
-	24. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	25. [`--configuration-file`](#--configuration-file)
-	26. [`rsync.program`](#rsyncprogram)
-	27. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	28. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	29. [`incidences`](#incidences)
+	22. [`--http.user-agent`](#--httpuser-agent)
+	23. [`--http.connect-timeout`](#--httpconnect-timeout)
+	24. [`--http.transfer-timeout`](#--httptransfer-timeout)
+	25. [`--http.ca-path`](#--httpca-path)
+	26. [`--output.roa`](#--outputroa)
+	27. [`--output.bgpsec`](#--outputbgpsec)
+	28. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	29. [`--configuration-file`](#--configuration-file)
+	30. [`rsync.program`](#rsyncprogram)
+	31. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	32. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	33. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -69,6 +73,10 @@ command: fort
         [--log.output=syslog|console]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
+        [--http.user-agent=<string>]
+        [--http.connect-timeout=<unsigned integer>]
+        [--http.transfer-timeout=<unsigned integer>]
+        [--http.ca-path=<directory>]
         [--output.roa=<file>]
         [--output.bgpsec=<file>]
 ```
@@ -438,6 +446,63 @@ ERR: baz.cer: Certificate validation failed: certificate has expired
 
 This flag affects any of the log output configured at [`--log.output`](#--logoutput) (`syslog` and `console`).
 
+### `--http.user-agent`
+
+- **Type:** String
+- **Availability:** `argv` and JSON
+- **Default:** `{{ page.command }}/{{ site.fort-latest-version }}`
+
+_**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
+
+User-Agent to use at HTTP requests.
+
+The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_USERAGENT](https://curl.haxx.se/libcurl/c/CURLOPT_USERAGENT.html).
+
+### `--http.connect-timeout`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 30
+- **Range:** 1--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+_**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
+
+Timeout (in seconds) for the connect phase.
+
+Whenever an HTTP connection will try to be established, the validator will wait a maximum of `http.connect-timeout` for the peer to respond to the connection request; if the timeout is reached, the connection attempt will be ceased.
+
+The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_CONNECTTIMEOUT](https://curl.haxx.se/libcurl/c/CURLOPT_CONNECTTIMEOUT.html).
+
+### `--http.transfer-timeout`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 30
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+_**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
+
+Maximum time in seconds (once the connection is established) that the request can last.
+
+Once the connection is established with the server, the request will last a maximum of `http.transfer-timeout` seconds. A value of 0 means unlimited time (use with caution).
+
+The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_TIMEOUT](https://curl.haxx.se/libcurl/c/CURLOPT_TIMEOUT.html).
+
+### `--http.ca-path`
+
+- **Type:** String (Path to directory)
+- **Availability:** `argv` and JSON
+
+_**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
+
+Local path where the CA's utilized to verify the peers are located.
+
+Useful when the CA from the peer isn't located at the default OS certificate bundle. If specified, the peer certificate will be verified using the CAs at the path. The directory MUST be prepared using the `rehash` utility from the SSL library:
+- OpenSSL command (with help): `$ openssl rehash -h`
+- LibreSSL command (with help): `$ openssl certhash -h`
+
+The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://curl.haxx.se/libcurl/c/CURLOPT_CAPATH.html).
+
 ### `--output.roa`
 
 - **Type:** String (Path to file)
@@ -512,6 +577,13 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--logoutput">output</a>": "console",
 		"<a href="#--logcolor-output">color-output</a>": true,
 		"<a href="#--logfile-name-format">file-name-format</a>": "file-name"
+	},
+
+	"http": {
+		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
+		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
+		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 30,
+		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
 	},
 
 	"rsync": {

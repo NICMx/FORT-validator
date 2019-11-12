@@ -23,6 +23,12 @@
     "color-output": false,
     "file-name-format": "global-url"
   },
+  "http": {
+    "user-agent": "fort/1.2.0",
+    "connect-timeout": 30,
+    "transfer-timeout": 30,
+    "ca-path": "/usr/local/ssl/certs"
+  },
   "rsync": {
     "program": "rsync",
     "arguments-recursive": [

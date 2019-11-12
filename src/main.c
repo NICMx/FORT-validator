@@ -4,6 +4,7 @@
 #include "extension.h"
 #include "nid.h"
 #include "thread_var.h"
+#include "http/http.h"
 #include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
 
@@ -48,8 +49,13 @@ __main(int argc, char **argv)
 	if (error)
 		goto revert_nid;
 
+	error = http_init();
+	if (error)
+		goto revert_nid;
+
 	error = start_rtr_server();
 
+	http_cleanup();
 revert_nid:
 	nid_destroy();
 revert_config:

@@ -40,6 +40,7 @@ AC_SEARCH_LIBS([backtrace],[execinfo],[],
 # But I couldn't make check work with AC_SEARCH_LIBS, and (probably due to
 # typical obscure bullshit autotools reasoning) I have no idea why.
 PKG_CHECK_MODULES([JANSSON], [jansson])
+PKG_CHECK_MODULES([CURL], [libcurl])
 PKG_CHECK_MODULES([CHECK], [check], [usetests=yes], [usetests=no])
 AM_CONDITIONAL([USE_TESTS], [test "x$usetests" = "xyes"])
 

@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+#include "common.h"
 #include "config.h"
 #include "log.h"
 #include "str.h"
@@ -169,92 +170,6 @@ get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
 	pr_crit("Invalid sync strategy: %u", config_get_sync_strategy());
 }
 
-static int
-dir_exists(char const *path, bool *result)
-{
-	struct stat _stat;
-	char *last_slash;
-
-	last_slash = strrchr(path, '/');
-	if (last_slash == NULL) {
-		/*
-		 * Simply because create_dir_recursive() has nothing meaningful
-		 * to do when this happens. It's a pretty strange error.
-		 */
-		*result = true;
-		return 0;
-	}
-
-	*last_slash = '\0';
-
-	if (stat(path, &_stat) == 0) {
-		if (!S_ISDIR(_stat.st_mode)) {
-			return pr_err("Path '%s' exists and is not a directory.",
-			    path);
-		}
-		*result = true;
-	} else if (errno == ENOENT) {
-		*result = false;
-	} else {
-		return pr_errno(errno, "stat() failed");
-	}
-
-	*last_slash = '/';
-	return 0;
-}
-
-static int
-create_dir(char *path)
-{
-	int error;
-
-	error = mkdir(path, 0777);
-
-	if (error && errno != EEXIST)
-		return pr_errno(errno, "Error while making directory '%s'",
-		    path);
-
-	return 0;
-}
-
-/**
- * Apparently, RSYNC does not like to create parent directories.
- * This function fixes that.
- */
-static int
-create_dir_recursive(struct rpki_uri *uri)
-{
-	char *localuri;
-	int i, error;
-	bool exist = false;
-
-	error = dir_exists(uri_get_local(uri), &exist);
-	if (error)
-		return error;
-	if (exist)
-		return 0;
-
-	localuri = strdup(uri_get_local(uri));
-	if (localuri == NULL)
-		return pr_enomem();
-
-	for (i = 1; localuri[i] != '\0'; i++) {
-		if (localuri[i] == '/') {
-			localuri[i] = '\0';
-			error = create_dir(localuri);
-			localuri[i] = '/';
-			if (error) {
-				/* error msg already printed */
-				free(localuri);
-				return error;
-			}
-		}
-	}
-
-	free(localuri);
-	return 0;
-}
-
 static void
 handle_child_thread(struct rpki_uri *uri, bool is_ta)
 {
@@ -314,7 +229,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	int error;
 
 	child_status = 0;
-	error = create_dir_recursive(uri);
+	error = create_dir_recursive(uri_get_local(uri));
 	if (error)
 		return error;
 

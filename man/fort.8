@@ -508,6 +508,72 @@ Will print the certificate's name as `baz.cer`.
 .P
 .RE
 
+.BR \-\-http.user\-agent=\fISTRING\fR
+.RS 4
+User-Agent to use at HTTP requests.
+.P
+The value specified (either by the argument or the default value) is utilized
+in libcurl’s option \fICURLOPT_USERAGENT\fR.
+.P
+By default, the value is \fIfort/<current-version>\fR.
+.RE
+.P
+
+.B \-\-http.connect\-timeout=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Timeout (in seconds) for the connect phase.
+.P
+Whenever an HTTP connection will try to be established, the validator will wait
+a maximum of \fBhttp.connect-timeout\fR seconds for the peer to respond to the
+connection request; if the timeout is reached, the connection attempt will be
+ceased.
+.P
+The value specified (either by the argument or the default value) is utilized
+in libcurl’s option \fICURLOPT_CONNECTTIMEOUT\fR.
+.P
+By default, it has a value of \fI30\fR. The minimum allowed value is \fI1\fR.
+.RE
+.P
+
+.B \-\-http.transfer\-timeout=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum time in seconds (once the connection is established) that the request
+can last.
+.P
+Once the connection is established with the server, the request will last a
+maximum of \fBhttp.transfer-timeout\fR seconds. A value of \fI0\fR means
+unlimited time (use with caution).
+.P
+The value specified (either by the argument or the default value) is utilized
+in libcurl’s option \fICURLOPT_TIMEOUT\fR.
+.P
+By default, it has a value of \fI30\fR. The minimum allowed value is \fI0\fR.
+.RE
+.P
+
+.B \-\-http.ca-path=\fIDIRECTORY\fR
+.RS 4
+Local path where the CA’s utilized to verify the peers are located.
+.P
+Useful when the CA from the peer isn’t located at the default OS certificate
+bundle. If specified, the peer certificate will be verified using the CAs at
+the path. The directory MUST be prepared using the \fIrehash\fR utility from
+the SSL library:
+.RS 4
+.br
+\- OpenSSL command (with help):
+.B $ openssl rehash \-h
+.br
+\- LibreSSL command (with help):
+.B $ openssl certhash \-h
+.RE
+.P
+The value specified is utilized in libcurl’s option \fICURLOPT_CAPATH\fR.
+.P
+By default, the path has a NULL value.
+.RE
+.P
+
 .B \-\-output.roa=\fIFILE\fR
 .RS 4
 File where the ROAs will be printed in CSV format.
@@ -622,6 +688,12 @@ to a specific value:
     "output": "console",
     "color-output": true,
     "file-name-format": "local-path"
+  },
+  "http": {
+    "user-agent": "fort/1.2.0",
+    "connect-timeout": 30,
+    "transfer-timeout": 30,
+    "ca-path": "/usr/local/ssl/certs"
   },
   "rsync": {
     "program": "rsync",

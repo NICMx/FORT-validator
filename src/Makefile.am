@@ -59,6 +59,8 @@ fort_SOURCES += data_structure/common.h
 fort_SOURCES += data_structure/uthash.h
 fort_SOURCES += data_structure/uthash_nonfatal.h
 
+fort_SOURCES += http/http.h http/http.c
+
 fort_SOURCES += incidence/incidence.h incidence/incidence.c
 
 fort_SOURCES += object/bgpsec.h object/bgpsec.c
@@ -108,7 +110,7 @@ fort_CFLAGS  = -Wall -Wno-cpp
 #fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS)
 fort_LDFLAGS = $(LDFLAGS_DEBUG)
-fort_LDADD   = ${JANSSON_LIBS}
+fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.
 GCC_WARNS  = -fmax-errors=1

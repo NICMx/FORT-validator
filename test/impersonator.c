@@ -147,3 +147,27 @@ void print_stack_trace(void)
 {
 	/* Nothing needed here */
 }
+
+/* Impersonate HTTP config */
+char const *
+config_get_http_user_agent(void)
+{
+	return "Test/0.1";
+}
+
+unsigned int
+config_get_http_connect_timeout(void)
+{
+	return 30;
+}
+
+unsigned int
+config_get_http_transfer_timeout(void)
+{
+	return 30;
+}
+char const *
+config_get_http_ca_path(void)
+{
+	return NULL;
+}

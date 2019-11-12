@@ -16,7 +16,12 @@
  * start supporting them.)
  */
 #define ENOTRSYNC 3174
-
+/*
+ * "URI was not HTTPS; ignore it."
+ * Not necessarily an error (just as ENOTRSYNC), since both type of URIs can
+ * still coexist in most scenarios.
+ */
+#define ENOTHTTPS 3175
 /*
  * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
  * overflows, so gcc complains sometimes.
@@ -36,12 +41,14 @@ void rwlock_write_lock(pthread_rwlock_t *);
 void rwlock_unlock(pthread_rwlock_t *);
 
 /** Also boilerplate. */
-void close_thread(pthread_t thread, char const *what);
+void close_thread(pthread_t thread, char const *);
 
 typedef int (*process_file_cb)(char const *, void *);
 int process_file_or_dir(char const *, char const *, process_file_cb, void *);
 
 char const *addr2str4(struct in_addr const *, char *);
 char const *addr2str6(struct in6_addr const *, char *);
+
+int create_dir_recursive(char const *);
 
 #endif /* SRC_RTR_COMMON_H_ */
