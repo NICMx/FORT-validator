@@ -1,7 +1,7 @@
 #ifndef TAL_OBJECT_H_
 #define TAL_OBJECT_H_
 
-/* This is RFC 7730. */
+/* This is RFC 8630. */
 
 #include <stddef.h>
 #include "uri.h"

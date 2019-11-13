@@ -53,6 +53,12 @@ int certificate_get_resources(X509 *, struct resources *, enum cert_type);
 int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
     struct certificate_refs *, enum rpki_policy *);
 
+/*
+ * Specific validation of AIA (rfc6487#section-4.8.7) extension, public so that
+ * CAs and EEs can access it.
+ */
+int certificate_validate_aia(struct rpki_uri *, X509 *);
+
 int certificate_traverse(struct rpp *, struct rpki_uri *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

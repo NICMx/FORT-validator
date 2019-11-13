@@ -1,9 +1,19 @@
 #include "uri.h"
 
+#include <errno.h>
 #include "common.h"
 #include "config.h"
 #include "log.h"
 #include "str.h"
+
+#define URI_VALID_RSYNC 0x01
+#define URI_VALID_HTTPS 0x02
+
+/* Expected URI types */
+enum rpki_uri_type {
+	URI_RSYNC,
+	URI_HTTPS,
+};
 
 /**
  * All rpki_uris are guaranteed to be RSYNC URLs right now.
@@ -24,7 +34,7 @@
 struct rpki_uri {
 	/**
 	 * "Global URI".
-	 * The one that always starts with "rsync://".
+	 * The one that always starts with "rsync://" or "https://".
 	 *
 	 * These things are IA5-encoded, which means you're not bound to get
 	 * non-ASCII characters.
@@ -52,6 +62,9 @@ struct rpki_uri {
 	 */
 	char *local;
 	/* "local_len" is never needed right now. */
+
+	/* Type, currently rysnc and https are valid */
+	enum rpki_uri_type type;
 
 	unsigned int references;
 };
@@ -178,6 +191,63 @@ succeed:
 	return 0;
 }
 
+static int
+validate_uri_begin(char const *uri_pfx, const size_t uri_pfx_len,
+    char const *global, size_t global_len, size_t *size, int error)
+{
+	if (global_len < uri_pfx_len
+	    || strncmp(uri_pfx, global, uri_pfx_len) != 0) {
+		if (!error)
+			return -EINVAL;
+		pr_err("Global URI '%s' does not begin with '%s'.",
+		    global, uri_pfx);
+		return error;
+	}
+
+	(*size) = uri_pfx_len;
+	return 0;
+}
+
+static int
+validate_gprefix(char const *global, size_t global_len, uint8_t flags,
+    size_t *size, enum rpki_uri_type *type)
+{
+	static char const *const PFX_RSYNC = "rsync://";
+	static char const *const PFX_HTTPS = "https://";
+	size_t const PFX_RSYNC_LEN = strlen(PFX_RSYNC);
+	size_t const PFX_HTTPS_LEN = strlen(PFX_HTTPS);
+	int error;
+
+	if (flags == URI_VALID_RSYNC) {
+		(*type) = URI_RSYNC;
+		return validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global,
+		    global_len, size, ENOTRSYNC);
+	}
+	if (flags == URI_VALID_HTTPS) {
+		(*type) = URI_HTTPS;
+		return validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global,
+		    global_len, size, ENOTHTTPS);
+	}
+	if (flags != (URI_VALID_RSYNC & URI_VALID_HTTPS))
+		pr_crit("Unknown URI flag");
+
+	/* It has both flags */
+	error = validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global, global_len,
+	    size, 0);
+	if (!error) {
+		(*type) = URI_RSYNC;
+		return 0;
+	}
+	error = validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global, global_len,
+	    size, 0);
+	if (error)
+		return ENOTSUPPORTED;
+
+	/* @size was already set */
+	(*type) = URI_HTTPS;
+	return 0;
+}
+
 /**
  * Initializes @uri->local by converting @uri->global.
  *
@@ -185,30 +255,28 @@ succeed:
  * "rsync://rpki.ripe.net/repo/manifest.mft", initializes @uri->local as
  * "/tmp/rpki/rpki.ripe.net/repo/manifest.mft".
  *
- * By contract, if @guri is not RSYNC, this will return ENOTRSYNC.
+ * By contract, if @guri is not RSYNC nor HTTPS, this will return ENOTRSYNC.
  * This often should not be treated as an error; please handle gracefully.
  */
 static int
-g2l(char const *global, size_t global_len, char **result)
+g2l(char const *global, size_t global_len, uint8_t flags, char **result,
+    enum rpki_uri_type *result_type)
 {
-	static char const *const PREFIX = "rsync://";
 	char const *repository;
 	char *local;
 	size_t prefix_len;
 	size_t repository_len;
 	size_t extra_slash;
 	size_t offset;
+	enum rpki_uri_type type;
+	int error;
 
 	repository = config_get_local_repository();
 	repository_len = strlen(repository);
-	prefix_len = strlen(PREFIX);
 
-	if (global_len < prefix_len
-	    || strncmp(PREFIX, global, prefix_len) != 0) {
-		pr_err("Global URI '%s' does not begin with '%s'.",
-		    global, PREFIX);
-		return ENOTRSYNC; /* Not an error, so not negative */
-	}
+	error = validate_gprefix(global, global_len, flags, &prefix_len, &type);
+	if (error)
+		return error;
 
 	global += prefix_len;
 	global_len -= prefix_len;
@@ -228,17 +296,20 @@ g2l(char const *global, size_t global_len, char **result)
 	local[offset] = '\0';
 
 	*result = local;
+	(*result_type) = type;
 	return 0;
 }
 
 static int
-autocomplete_local(struct rpki_uri *uri)
+autocomplete_local(struct rpki_uri *uri, uint8_t flags)
 {
-	return g2l(uri->global, uri->global_len, &uri->local);
+	return g2l(uri->global, uri->global_len, flags, &uri->local,
+	    &uri->type);
 }
 
-int
-uri_create(struct rpki_uri **result, void const *guri, size_t guri_len)
+static int
+uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
+    size_t guri_len)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -253,7 +324,7 @@ uri_create(struct rpki_uri **result, void const *guri, size_t guri_len)
 		return error;
 	}
 
-	error = autocomplete_local(uri);
+	error = autocomplete_local(uri, flags);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -268,7 +339,15 @@ uri_create(struct rpki_uri **result, void const *guri, size_t guri_len)
 int
 uri_create_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 {
-	return uri_create(uri, guri, guri_len);
+	return uri_create(uri, URI_VALID_RSYNC, guri, guri_len);
+}
+
+/* A URI that can be rsync or https */
+int
+uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
+{
+	return uri_create(uri, URI_VALID_RSYNC & URI_VALID_HTTPS, guri,
+	    guri_len);
 }
 
 /*
@@ -290,7 +369,7 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 		return error;
 	}
 
-	error = autocomplete_local(uri);
+	error = autocomplete_local(uri, URI_VALID_RSYNC);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -345,7 +424,8 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad)
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	return uri_create(uri, ASN1_STRING_get0_data(asn1_string),
+	return uri_create(uri, URI_VALID_RSYNC,
+	    ASN1_STRING_get0_data(asn1_string),
 	    ASN1_STRING_length(asn1_string));
 }
 
@@ -409,6 +489,12 @@ bool
 uri_is_certificate(struct rpki_uri *uri)
 {
 	return uri_has_extension(uri, ".cer");
+}
+
+bool
+uri_is_rsync(struct rpki_uri *uri)
+{
+	return uri->type == URI_RSYNC;
 }
 
 static char const *

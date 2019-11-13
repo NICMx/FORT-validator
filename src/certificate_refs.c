@@ -41,31 +41,6 @@ validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 }
 
 static int
-validate_aia(struct certificate_refs *refs)
-{
-	struct validation *state;
-	struct rpki_uri *parent;
-
-	if (refs->caIssuers == NULL)
-		pr_crit("Certificate's AIA was not recorded.");
-
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-	parent = x509stack_peek_uri(validation_certstack(state));
-	if (parent == NULL)
-		pr_crit("CA certificate has no parent.");
-
-	if (!uri_equals(refs->caIssuers, parent)) {
-		return pr_err("Certificate's AIA ('%s') does not match parent's URI ('%s').",
-		    uri_get_printable(refs->caIssuers),
-		    uri_get_printable(parent));
-	}
-
-	return 0;
-}
-
-static int
 validate_signedObject(struct certificate_refs *refs,
     struct rpki_uri *signedObject_uri)
 {
@@ -100,10 +75,6 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 	if (error)
 		return error;
 
-	error = validate_aia(refs);
-	if (error)
-		return error;
-
 	if (refs->signedObject != NULL)
 		pr_crit("CA summary has a signedObject ('%s').",
 		    uri_get_printable(refs->signedObject));
@@ -126,10 +97,6 @@ refs_validate_ee(struct certificate_refs *refs, struct rpp const *pp,
 	int error;
 
 	error = validate_cdp(refs, pp);
-	if (error)
-		return error;
-
-	error = validate_aia(refs);
 	if (error)
 		return error;
 

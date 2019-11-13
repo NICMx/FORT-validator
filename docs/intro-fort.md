@@ -29,7 +29,6 @@ Further information can be found in the subsections below.
 | [6493](https://tools.ietf.org/html/rfc6493) (Ghostbusters)                 | 100%        |
 | [6810](https://tools.ietf.org/html/rfc6810) (RTR Version 0)                | 100%        |
 | [7318](https://tools.ietf.org/html/rfc7318) (Policy Qualifiers)            | 100%        |
-| [7730](https://tools.ietf.org/html/rfc7730) (TALs)                         | 100%        |
 | [7935](https://tools.ietf.org/html/rfc7935) (RPKI algorithms)              | 100%        |
 | [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 0%          |
 | [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 100%        |
@@ -37,7 +36,7 @@ Further information can be found in the subsections below.
 | [8360](https://tools.ietf.org/html/rfc8360) (Validation Reconsidered)      | 100%        |
 | [8416](https://tools.ietf.org/html/rfc8416) (SLURM)                        | 100%        |
 | [8608](https://tools.ietf.org/html/rfc8608) (BGPsec algorithms)            | 100%        |
-| [8630](https://tools.ietf.org/html/rfc8630) (TALs with HTTPS URIs)         | 0%          |
+| [8630](https://tools.ietf.org/html/rfc8630) (TALs with HTTPS URIs)         | 100%        |
 
 ### RFC 6350 (vCard)
 
@@ -56,10 +55,6 @@ These constitute the approximate missing 25%.
 ### RFC 8182 (RRDP)
 
 RRDP is a protocol intended to replace RSYNC in the RPKI. Fort only implements RSYNC, currently.
-
-### RFC 8630 (TALs with HTTPS URIs)
-
-This RFC is relatively new (published in August 2019) and obsoletes the currently implemented [RFC 7730](https://tools.ietf.org/html/rfc7730).
 
 ## TO-DO
 

@@ -38,7 +38,7 @@ struct rpki_config {
 	enum sync_strategy sync_strategy;
 	/**
 	 * Handle TAL URIs in random order?
-	 * (https://tools.ietf.org/html/rfc7730#section-3, last
+	 * (https://tools.ietf.org/html/rfc8630#section-3, last
 	 * paragraphs)
 	 */
 	bool shuffle_tal_uris;

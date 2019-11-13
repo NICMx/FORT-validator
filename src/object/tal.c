@@ -22,6 +22,7 @@
 #include "thread_var.h"
 #include "validation_handler.h"
 #include "crypto/base64.h"
+#include "http/http.h"
 #include "object/certificate.h"
 #include "rsync/rsync.h"
 #include "rtr/db/vrps.h"
@@ -105,6 +106,23 @@ read_uris(struct line_file *lfile, struct uris *uris)
 	if (strcmp(uri, "") == 0) {
 		free(uri);
 		return pr_err("There's no URI in the first line of the TAL.");
+	} else if (strncmp(uri, "#", 1) == 0) {
+		/* More comments expected, or an URI */
+		do {
+			free(uri); /* Ignore the comment */
+			error = lfile_read(lfile, &uri);
+			if (error)
+				return error;
+			if (uri == NULL)
+				return pr_err("TAL file ended prematurely. (Expected more comments or an URI list.)");
+			if (strcmp(uri, "") == 0) {
+				free(uri);
+				return pr_err("TAL file comments syntax error. (Expected more comments or an URI list.)");
+			}
+			/* Not a comment, probably the URI(s) */
+			if (strncmp(uri, "#", 1) != 0)
+				break;
+		} while (true);
 	}
 
 	error = uris_add(uris, uri);
@@ -359,11 +377,10 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 	int error;
 
 	for (i = 0; i < tal->uris.count; i++) {
-		error = uri_create_str(&uri, tal->uris.array[i],
+		error = uri_create_mixed_str(&uri, tal->uris.array[i],
 		    strlen(tal->uris.array[i]));
-		if (error == ENOTRSYNC) {
-			/* Log level should probably be INFO. */
-			pr_debug("TAL has non-RSYNC URI; ignoring.");
+		if (error == ENOTSUPPORTED) {
+			pr_info("TAL has non-RSYNC/HTTPS URI; ignoring.");
 			continue;
 		}
 		if (error)
@@ -410,6 +427,26 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
+static size_t
+write_http_cer(unsigned char *content, size_t size, size_t nmemb, void *arg)
+{
+	FILE *fd = arg;
+	size_t read = size * nmemb;
+	size_t written;
+
+	written = fwrite(content, size, nmemb, fd);
+	if (written != nmemb)
+		return -EINVAL;
+
+	return read;
+}
+
+static int
+handle_https_uri(struct rpki_uri *uri)
+{
+	return http_download_file(uri, write_http_cer);
+}
+
 /**
  * Performs the whole validation walkthrough on uri @uri, which is assumed to
  * have been extracted from a TAL.
@@ -426,7 +463,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 *
 	 * A "soft error" is "the connection to the preferred URI fails, or the
 	 * retrieved CA certificate public key does not match the TAL public
-	 * key." (RFC 7730)
+	 * key." (RFC 8630)
 	 *
 	 * A "hard error" is any other error.
 	 */
@@ -446,9 +483,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	error = download_files(uri, true, false);
+	if (uri_is_rsync(uri))
+		error = download_files(uri, true, false);
+	else
+		error = handle_https_uri(uri);
+
 	if (error) {
-		pr_warn("TAL '%s' could not be RSYNC'd.",
+		pr_warn("TAL '%s' could not be downloaded.",
 		    uri_get_printable(uri));
 		validation_destroy(state);
 		return ENSURE_NEGATIVE(error);

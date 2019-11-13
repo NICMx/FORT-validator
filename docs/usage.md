@@ -165,7 +165,7 @@ Whichever registry serves as root of the tree you want to validate is responsibl
 
 If you are paranoid, however, you'd be advised to get your own TALs.
 
-The TAL file format has been standardized in [RFC 7730](https://tools.ietf.org/html/rfc7730). It is a text file that contains a list of URLs (which serve as alternate access methods for the TA), followed by a blank line, followed by the Base64-encoded public key of the TA.
+The TAL file format has been standardized in [RFC 8630](https://tools.ietf.org/html/rfc8630). It is a text file that contains zero or more comments (each comment must start with the character "#" and end with a line break), a list of URLs (which serve as alternate access methods for the TA), followed by a blank line, followed by the Base64-encoded public key of the TA.
 
 Just for completeness sake, here's an example on what a typical TAL looks like:
 

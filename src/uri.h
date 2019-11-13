@@ -7,8 +7,8 @@
 
 struct rpki_uri;
 
-int uri_create(struct rpki_uri **, void const *, size_t);
 int uri_create_str(struct rpki_uri **, char const *, size_t);
+int uri_create_mixed_str(struct rpki_uri **, char const *, size_t);
 int uri_create_mft(struct rpki_uri **, struct rpki_uri *, IA5String_t *);
 int uri_create_ad(struct rpki_uri **, ACCESS_DESCRIPTION *);
 
@@ -26,6 +26,8 @@ size_t uri_get_global_len(struct rpki_uri *);
 bool uri_equals(struct rpki_uri *, struct rpki_uri *);
 bool uri_has_extension(struct rpki_uri *, char const *);
 bool uri_is_certificate(struct rpki_uri *);
+bool uri_is_rsync(struct rpki_uri *);
+
 char const *uri_get_printable(struct rpki_uri *);
 
 #endif /* SRC_URI_H_ */

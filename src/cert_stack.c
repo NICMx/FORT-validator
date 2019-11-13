@@ -291,9 +291,9 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 		goto end5;
 
 	/*
-	 * rfc7730#section-2.2
-	 * "The INR extension(s) of this trust anchor MUST contain a non-empty
-	 * set of number resources."
+	 * rfc8630#section-2.3
+	 * "The INR extension(s) of this TA MUST contain a non-empty set of
+	 * number resources."
 	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
 	 * part is already handled in certificate_get_resources().
 	 */

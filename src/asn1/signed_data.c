@@ -102,6 +102,9 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	    &policy);
 	if (error)
 		goto end2;
+	error = certificate_validate_aia(args->refs.caIssuers, cert);
+	if (error)
+		goto end2;
 	error = certificate_validate_signature(cert, signedData, signature);
 	if (error)
 		goto end2;
