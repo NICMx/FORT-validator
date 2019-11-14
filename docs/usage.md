@@ -619,7 +619,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"output": {
 		"<a href="#--outputroa">roa</a>": "/tmp/fort/roas.csv",
 		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv"
-	}
+	},
+
+	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096
 }
 </code></pre>
 
