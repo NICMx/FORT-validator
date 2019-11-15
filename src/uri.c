@@ -6,9 +6,6 @@
 #include "log.h"
 #include "str.h"
 
-#define URI_VALID_RSYNC 0x01
-#define URI_VALID_HTTPS 0x02
-
 /* Expected URI types */
 enum rpki_uri_type {
 	URI_RSYNC,
@@ -381,8 +378,12 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 	return 0;
 }
 
+/*
+ * Create @uri from the @ad, validating that the uri is of type(s) indicated
+ * at @flags (can be URI_VALID_RSYNC and/or URI_VALID_HTTPS)
+ */
 int
-uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad)
+uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, int flags)
 {
 	ASN1_STRING *asn1_string;
 	int type;
@@ -424,7 +425,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad)
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	return uri_create(uri, URI_VALID_RSYNC,
+	return uri_create(uri, flags,
 	    ASN1_STRING_get0_data(asn1_string),
 	    ASN1_STRING_length(asn1_string));
 }

@@ -36,15 +36,40 @@ struct ski_arguments {
 	OCTET_STRING_t *sid;
 };
 
-struct sia_uris {
-	struct rpki_uri **caRepository;
-	struct rpki_uri **mft;
+struct sia_uri {
+	uint8_t position;
+	struct rpki_uri *uri;
+};
+
+struct sia_ca_uris {
+	struct sia_uri caRepository;
+	struct sia_uri rpkiNotify;
+	struct sia_uri mft;
 };
 
 struct bgpsec_ski {
 	X509 *cert;
 	unsigned char **ski_data;
 };
+
+static void
+sia_ca_uris_init(struct sia_ca_uris *sia_uris)
+{
+	sia_uris->caRepository.uri = NULL;
+	sia_uris->rpkiNotify.uri = NULL;
+	sia_uris->mft.uri = NULL;
+}
+
+static void
+sia_ca_uris_cleanup(struct sia_ca_uris *sia_uris)
+{
+	if (sia_uris->caRepository.uri != NULL)
+		uri_refput(sia_uris->caRepository.uri);
+	if (sia_uris->rpkiNotify.uri != NULL)
+		uri_refput(sia_uris->rpkiNotify.uri);
+	if (sia_uris->mft.uri != NULL)
+		uri_refput(sia_uris->mft.uri);
+}
 
 static void
 debug_serial_number(BIGNUM *number)
@@ -1037,26 +1062,39 @@ is_rsync_uri(GENERAL_NAME *name)
 }
 
 static int
-handle_rpkiManifest(struct rpki_uri *uri, void *arg)
+handle_rpkiManifest(struct rpki_uri *uri, uint8_t pos, void *arg)
 {
-	struct rpki_uri **mft = arg;
-	*mft = uri;
+	struct sia_uri *mft = arg;
+	mft->position = pos;
+	mft->uri = uri;
 	uri_refget(uri);
 	return 0;
 }
 
 static int
-handle_caRepository(struct rpki_uri *uri, void *arg)
+handle_caRepository(struct rpki_uri *uri, uint8_t pos, void *arg)
 {
-	struct rpki_uri **repo = arg;
+	struct sia_uri *repo = arg;
 	pr_debug("caRepository: %s", uri_get_printable(uri));
-	*repo = uri;
+	repo->position = pos;
+	repo->uri = uri;
 	uri_refget(uri);
-	return download_files(uri, false, false);
+	return 0;
 }
 
 static int
-handle_signedObject(struct rpki_uri *uri, void *arg)
+handle_rpkiNotify(struct rpki_uri *uri, uint8_t pos, void *arg)
+{
+	struct sia_uri *notify = arg;
+	pr_debug("rpkiNotify: %s", uri_get_printable(uri));
+	notify->position = pos;
+	notify->uri = uri;
+	uri_refget(uri);
+	return 0;
+}
+
+static int
+handle_signedObject(struct rpki_uri *uri, uint8_t pos, void *arg)
 {
 	struct certificate_refs *refs = arg;
 	pr_debug("signedObject: %s", uri_get_printable(uri));
@@ -1365,31 +1403,42 @@ end:
  */
 static int
 handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
-    char const *ad_name, int ad_nid,
-    int (*cb)(struct rpki_uri *, void *), void *arg)
+    char const *ad_name, int ad_nid, int uri_flags, bool required,
+    int (*cb)(struct rpki_uri *, uint8_t, void *), void *arg)
 {
+# define AD_METHOD (uri_flags == URI_VALID_RSYNC ? \
+	"RSYNC" : \
+	((uri_flags == URI_VALID_HTTPS) ? "HTTPS" : "RSYNC/HTTPS"))
 	ACCESS_DESCRIPTION *ad;
 	struct rpki_uri *uri;
 	bool found = false;
-	int i;
+	unsigned int i;
 	int error;
 
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == ad_nid) {
-			error = uri_create_ad(&uri, ad);
-			if (error == ENOTRSYNC)
+			error = uri_create_ad(&uri, ad, uri_flags);
+			switch(error) {
+			case 0:
+				break;
+			case ENOTRSYNC:
 				continue;
-			if (error)
+			case ENOTHTTPS:
+				continue;
+			case ENOTSUPPORTED:
+				continue;
+			default:
 				return error;
+			}
 
 			if (found) {
 				uri_refput(uri);
-				return pr_err("Extension '%s' has multiple '%s' RSYNC URIs.",
-				    ia_name, ad_name);
+				return pr_err("Extension '%s' has multiple '%s' %s URIs.",
+				    ia_name, ad_name, AD_METHOD);
 			}
 
-			error = cb(uri, arg);
+			error = cb(uri, i, arg);
 			if (error) {
 				uri_refput(uri);
 				return error;
@@ -1400,9 +1449,9 @@ handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
 		}
 	}
 
-	if (!found) {
-		pr_err("Extension '%s' lacks a '%s' RSYNC URI.", ia_name,
-		    ad_name);
+	if (required && !found) {
+		pr_err("Extension '%s' lacks a '%s' valid %s URI.", ia_name,
+		    ad_name, AD_METHOD);
 		return -ESRCH;
 	}
 
@@ -1410,7 +1459,7 @@ handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
 }
 
 static int
-handle_caIssuers(struct rpki_uri *uri, void *arg)
+handle_caIssuers(struct rpki_uri *uri, uint8_t pos, void *arg)
 {
 	struct certificate_refs *refs = arg;
 	/*
@@ -1434,7 +1483,7 @@ handle_aia(X509_EXTENSION *ext, void *arg)
 		return cannot_decode(ext_aia());
 
 	error = handle_ad("AIA", aia, "caIssuers", NID_ad_ca_issuers,
-	    handle_caIssuers, arg);
+	    URI_VALID_RSYNC, true, handle_caIssuers, arg);
 
 	AUTHORITY_INFO_ACCESS_free(aia);
 	return error;
@@ -1444,16 +1493,22 @@ static int
 handle_sia_ca(X509_EXTENSION *ext, void *arg)
 {
 	SIGNATURE_INFO_ACCESS *sia;
-	struct sia_uris *uris = arg;
+	struct sia_ca_uris *uris = arg;
 	int error;
 
 	sia = X509V3_EXT_d2i(ext);
 	if (sia == NULL)
 		return cannot_decode(ext_sia());
 
-	/* rsync */
+	/* rsync, still the preferred and required */
 	error = handle_ad("SIA", sia, "caRepository", NID_caRepository,
-	    handle_caRepository, uris->caRepository);
+	    URI_VALID_RSYNC, true, handle_caRepository, &uris->caRepository);
+	if (error)
+		goto end;
+
+	/* HTTPS RRDP */
+	error = handle_ad("SIA", sia, "rpkiNotify", nid_rpkiNotify(),
+	    URI_VALID_HTTPS, false, handle_rpkiNotify, &uris->rpkiNotify);
 	if (error)
 		goto end;
 
@@ -1463,7 +1518,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	 * is fully valid.)
 	 */
 	error = handle_ad("SIA", sia, "rpkiManifest", nid_rpkiManifest(),
-	    handle_rpkiManifest, uris->mft);
+	    URI_VALID_RSYNC, true, handle_rpkiManifest, &uris->mft);
 
 end:
 	AUTHORITY_INFO_ACCESS_free(sia);
@@ -1481,7 +1536,7 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 		return cannot_decode(ext_sia());
 
 	error = handle_ad("SIA", sia, "signedObject", nid_signedObject(),
-	    handle_signedObject, arg);
+	    URI_VALID_RSYNC, true, handle_signedObject, arg);
 
 	AUTHORITY_INFO_ACCESS_free(sia);
 	return error;
@@ -1592,21 +1647,20 @@ end:
 /**
  * Validates the certificate extensions, Trust Anchor style.
  *
- * Also initializes the second argument as the URI of the rpkiManifest Access
- * Description and the third arg as the CA Repository from the SIA extension.
+ * Depending on the Access Description preference at SIA, the rpki_uri's at
+ * @sia_uris will be allocated.
  */
 static int
-certificate_validate_extensions_ta(X509 *cert, struct rpki_uri **mft,
-    struct rpki_uri **caRepository, enum rpki_policy *policy)
+certificate_validate_extensions_ta(X509 *cert, struct sia_ca_uris *sia_uris,
+    enum rpki_policy *policy)
 {
-	struct sia_uris sia_uris;
 	struct extension_handler handlers[] = {
 	   /* ext        reqd   handler        arg       */
 	    { ext_bc(),  true,  handle_bc,               },
 	    { ext_ski(), true,  handle_ski_ca, cert      },
 	    { ext_aki(), false, handle_aki_ta, cert      },
 	    { ext_ku(),  true,  handle_ku_ca,            },
-	    { ext_sia(), true,  handle_sia_ca, &sia_uris },
+	    { ext_sia(), true,  handle_sia_ca, sia_uris  },
 	    { ext_cp(),  true,  handle_cp,     policy    },
 	    { ext_ir(),  false, handle_ir,               },
 	    { ext_ar(),  false, handle_ar,               },
@@ -1614,9 +1668,6 @@ certificate_validate_extensions_ta(X509 *cert, struct rpki_uri **mft,
 	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
-
-	sia_uris.caRepository = caRepository;
-	sia_uris.mft = mft;
 
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
@@ -1625,17 +1676,15 @@ certificate_validate_extensions_ta(X509 *cert, struct rpki_uri **mft,
  * Validates the certificate extensions, (intermediate) Certificate Authority
  * style.
  *
- * Also initializes the second argument as the URI of the rpkiManifest Access
- * Description and the third arg as the CA Repository from the SIA extension.
+ * Depending on the Access Description preference at SIA, the rpki_uri's at
+ * @sia_uris will be allocated.
  * Also initializes the fourth argument with the references found in the
  * extensions.
  */
 static int
-certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
-    struct rpki_uri **caRepository, struct certificate_refs *refs,
-    enum rpki_policy *policy)
+certificate_validate_extensions_ca(X509 *cert, struct sia_ca_uris *sia_uris,
+    struct certificate_refs *refs, enum rpki_policy *policy)
 {
-	struct sia_uris sia_uris;
 	struct extension_handler handlers[] = {
 	   /* ext        reqd   handler        arg       */
 	    { ext_bc(),  true,  handle_bc,               },
@@ -1644,7 +1693,7 @@ certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
 	    { ext_ku(),  true,  handle_ku_ca,            },
 	    { ext_cdp(), true,  handle_cdp,    refs      },
 	    { ext_aia(), true,  handle_aia,    refs      },
-	    { ext_sia(), true,  handle_sia_ca, &sia_uris },
+	    { ext_sia(), true,  handle_sia_ca, sia_uris  },
 	    { ext_cp(),  true,  handle_cp,     policy    },
 	    { ext_ir(),  false, handle_ir,               },
 	    { ext_ar(),  false, handle_ar,               },
@@ -1652,9 +1701,6 @@ certificate_validate_extensions_ca(X509 *cert, struct rpki_uri **mft,
 	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
-
-	sia_uris.caRepository = caRepository;
-	sia_uris.mft = mft;
 
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
@@ -1837,8 +1883,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	int total_parents;
 	STACK_OF(X509_CRL) *rpp_parent_crl;
 	X509 *cert;
-	struct rpki_uri *mft;
-	struct rpki_uri *caRepository;
+	struct sia_ca_uris sia_uris;
 	struct certificate_refs refs;
 	unsigned char *ski;
 	enum rpki_policy policy;
@@ -1877,6 +1922,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_cert;
 
+	sia_ca_uris_init(&sia_uris);
 	type = get_certificate_type(cert, IS_TA);
 
 	/* Debug cert type */
@@ -1899,8 +1945,8 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		goto revert_cert;
 	switch (type) {
 	case TA:
-		error = certificate_validate_extensions_ta(cert, &mft,
-		    &caRepository, &policy);
+		error = certificate_validate_extensions_ta(cert, &sia_uris,
+		    &policy);
 		break;
 	case BGPSEC:
 		error = certificate_validate_extensions_bgpsec(cert, &ski,
@@ -1908,8 +1954,8 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		break;
 	default:
 		/* Validate as a CA */
-		error = certificate_validate_extensions_ca(cert, &mft,
-		    &caRepository, &refs, &policy);
+		error = certificate_validate_extensions_ca(cert, &sia_uris,
+		    &refs, &policy);
 		break;
 	}
 	if (error)
@@ -1936,6 +1982,21 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		goto revert_refs;
 	}
 
+
+	/* Currently there's support for 2 access methods */
+	/* FIXME (now) Download files according to the preferred method */
+	if (sia_uris.rpkiNotify.uri != NULL &&
+	    sia_uris.caRepository.position > sia_uris.rpkiNotify.position)
+		pr_info("Preferred Access Method: RRDP, but doing rsync anyways");
+	else
+		pr_info("Preferred Access Method: RSYNC [found RRDP? %s]",
+		    (sia_uris.rpkiNotify.uri == NULL ? "NO" : "YES"));
+
+	/* Currently downloading RSYNC (will always be present) */
+	error = download_files(sia_uris.caRepository.uri, false, false);
+	if (error)
+		return error;
+
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents
 	 * are updated, a repository operator cannot assure RPs that the
@@ -1952,20 +2013,20 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		    cert, policy, IS_TA);
 		if (error) {
 			if (!mft_retry)
-				uri_refput(mft);
+				uri_refput(sia_uris.mft.uri);
 			goto revert_uris;
 		}
 		cert = NULL; /* Ownership stolen */
 
-		error = handle_manifest(mft, &pp);
+		error = handle_manifest(sia_uris.mft.uri, &pp);
 		if (!mft_retry)
-			uri_refput(mft);
+			uri_refput(sia_uris.mft.uri);
 		if (!error || !mft_retry)
 			break;
 
 		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
-		    uri_get_printable(caRepository));
-		error = download_files(caRepository, false, true);
+		    uri_get_printable(sia_uris.caRepository.uri));
+		error = download_files(sia_uris.caRepository.uri, false, true);
 		if (error)
 			break;
 
@@ -1975,7 +2036,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		if (error) {
 			goto revert_uris;
 		}
-		uri_refget(mft);
+		uri_refget(sia_uris.mft.uri);
 		mft_retry = false;
 	} while (true);
 
@@ -1989,8 +2050,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 	rpp_refput(pp);
 revert_uris:
-	uri_refput(caRepository);
-	uri_refput(mft);
+	sia_ca_uris_cleanup(&sia_uris);
 revert_refs:
 	refs_cleanup(&refs);
 revert_cert:

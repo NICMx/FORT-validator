@@ -5,12 +5,16 @@
 #include <openssl/x509v3.h>
 #include "asn1/asn1c/IA5String.h"
 
+/* Flags to indicate expected uri type */
+#define URI_VALID_RSYNC 0x01
+#define URI_VALID_HTTPS 0x02
+
 struct rpki_uri;
 
 int uri_create_str(struct rpki_uri **, char const *, size_t);
 int uri_create_mixed_str(struct rpki_uri **, char const *, size_t);
 int uri_create_mft(struct rpki_uri **, struct rpki_uri *, IA5String_t *);
-int uri_create_ad(struct rpki_uri **, ACCESS_DESCRIPTION *);
+int uri_create_ad(struct rpki_uri **, ACCESS_DESCRIPTION *, int);
 
 void uri_refget(struct rpki_uri *);
 void uri_refput(struct rpki_uri *);
