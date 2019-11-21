@@ -7,6 +7,7 @@
 #include "http/http.h"
 #include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
+#include "xml/relax_ng.h"
 
 static int
 start_rtr_server(void)
@@ -53,8 +54,14 @@ __main(int argc, char **argv)
 	if (error)
 		goto revert_nid;
 
+	error = relax_ng_init();
+	if (error)
+		goto revert_http;
+
 	error = start_rtr_server();
 
+	relax_ng_cleanup();
+revert_http:
 	http_cleanup();
 revert_nid:
 	nid_destroy();

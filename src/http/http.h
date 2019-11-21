@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include "uri.h"
 
+/* Init on the main process */
 int http_init(void);
 void http_cleanup(void);
 

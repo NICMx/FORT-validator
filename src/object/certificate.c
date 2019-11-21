@@ -19,6 +19,7 @@
 #include "object/name.h"
 #include "object/manifest.h"
 #include "object/signed_object.h"
+#include "rrdp/rrdp_parser.h"
 #include "rsync/rsync.h"
 
 /* Just to prevent some line breaking. */
@@ -1982,13 +1983,13 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		goto revert_refs;
 	}
 
-
 	/* Currently there's support for 2 access methods */
 	/* FIXME (now) Download files according to the preferred method */
 	if (sia_uris.rpkiNotify.uri != NULL &&
-	    sia_uris.caRepository.position > sia_uris.rpkiNotify.position)
+	    sia_uris.caRepository.position > sia_uris.rpkiNotify.position) {
 		pr_info("Preferred Access Method: RRDP, but doing rsync anyways");
-	else
+		rrdp_parse_notification(sia_uris.rpkiNotify.uri);
+	} else
 		pr_info("Preferred Access Method: RSYNC [found RRDP? %s]",
 		    (sia_uris.rpkiNotify.uri == NULL ? "NO" : "YES"));
 

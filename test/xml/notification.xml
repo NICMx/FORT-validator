@@ -1,0 +1,8 @@
+<notification version="1" session_id="b912d0fc-14d3-4a51-bc6b-ceb9e7384222" serial="1510" xmlns="http://www.ripe.net/rpki/rrdp">
+    <snapshot uri="https://rrdp.ripe.net/b912d0fc-14d3-4a51-bc6b-ceb9e7384222/1510/snapshot.xml" hash="5C6B311E6F5D8132C189308B2E274E5FC62C533E013BB9FACF02872F6D6887A0"/>
+    <delta serial="1510" uri="https://rrdp.ripe.net/b912d0fc-14d3-4a51-bc6b-ceb9e7384222/1510/delta.xml" hash="31B9EBB3B89B9A9719AD3B6E50AADE04188D8075BFEA2B34119FF0DD398F6E1A"/>
+    <delta serial="1509" uri="https://rrdp.ripe.net/b912d0fc-14d3-4a51-bc6b-ceb9e7384222/1509/delta.xml" hash="24EC92A1653860482EE8712776F3CD8E1AC7C7E680CA7101F340617FB1932652"/>
+    <delta serial="1508" uri="https://rrdp.ripe.net/b912d0fc-14d3-4a51-bc6b-ceb9e7384222/1508/delta.xml" hash="FF0EA743A560463EAF9BF8638BD9A81A29B44E10057C288D10F665BFD664594F"/>
+    <delta serial="1507" uri="https://rrdp.ripe.net/b912d0fc-14d3-4a51-bc6b-ceb9e7384222/1507/delta.xml" hash="CDF7A919F49321C4CBC909DBAB789F7178B52ECBB4285F31A01140AAEF8B6B7C"/>
+    <delta serial="1506" uri="https://rrdp.ripe.net/b912d0fc-14d3-4a51-bc6b-ceb9e7384222/1506/delta.xml" hash="B7AB1EBB1BBA30CDEEE2AA21F95AE907625C2FED65C940446CDB08C3D5E973C9"/>
+</notification>

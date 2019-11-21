@@ -79,6 +79,9 @@ fort_SOURCES += resource/ip4.h resource/ip4.c
 fort_SOURCES += resource/ip6.h resource/ip6.c
 fort_SOURCES += resource/asn.h resource/asn.c
 
+fort_SOURCES += rrdp/rrdp_objects.h rrdp/rrdp_objects.c
+fort_SOURCES += rrdp/rrdp_parser.h rrdp/rrdp_parser.c
+
 fort_SOURCES += rsync/rsync.h rsync/rsync.c
 
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
@@ -100,6 +103,8 @@ fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
+fort_SOURCES += xml/relax_ng.c xml/relax_ng.h
+
 # I'm placing these at the end because they rarely change, and I want warnings
 # to appear as soon as possible.
 include asn1/asn1c/Makefile.include
@@ -108,9 +113,9 @@ fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 fort_CFLAGS  = -Wall -Wno-cpp
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS)
+fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
 fort_LDFLAGS = $(LDFLAGS_DEBUG)
-fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS}
+fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.
 GCC_WARNS  = -fmax-errors=1

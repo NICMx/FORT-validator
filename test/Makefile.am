@@ -12,7 +12,7 @@ if USE_TESTS
 # <mumble>_CFLAGS is not defined.
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
-AM_CFLAGS = -pedantic -Wall -std=gnu11 -I../src -DUNIT_TESTING ${CHECK_CFLAGS}
+AM_CFLAGS = -pedantic -Wall -std=gnu11 -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS}
 # Reminder: As opposed to AM_CFLAGS, "AM_LDADD" is not idiomatic automake, and
 # autotools will even reprehend us if we declare it. Therefore, I came up with
 # "my" own "ldadd". Unlike AM_CFLAGS, it needs to be manually added to every
@@ -29,6 +29,7 @@ check_PROGRAMS += rsync.test
 check_PROGRAMS += tal.test
 check_PROGRAMS += vcard.test
 check_PROGRAMS += vrps.test
+check_PROGRAMS += xml.test
 check_PROGRAMS += rtr/pdu.test
 check_PROGRAMS += rtr/primitive_reader.test
 TESTS = ${check_PROGRAMS}
@@ -62,6 +63,9 @@ vcard_test_LDADD = ${MY_LDADD}
 
 vrps_test_SOURCES = rtr/db/vrps_test.c
 vrps_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
+
+xml_test_SOURCES = xml_test.c
+xml_test_LDADD = ${MY_LDADD} ${XML2_LIBS}
 
 rtr_pdu_test_SOURCES = rtr/pdu_test.c
 rtr_pdu_test_LDADD = ${MY_LDADD}
