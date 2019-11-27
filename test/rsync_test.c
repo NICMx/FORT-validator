@@ -27,9 +27,9 @@ assert_descendant(bool expected, char *ancestor, char *descendant)
 	struct rpki_uri *ancestor_uri;
 	struct rpki_uri *descendant_uri;
 
-	ck_assert_int_eq(0, uri_create_str(&ancestor_uri, ancestor,
+	ck_assert_int_eq(0, uri_create_rsync_str(&ancestor_uri, ancestor,
 	    strlen(ancestor)));
-	ck_assert_int_eq(0, uri_create_str(&descendant_uri, descendant,
+	ck_assert_int_eq(0, uri_create_rsync_str(&descendant_uri, descendant,
 	    strlen(descendant)));
 
 	ck_assert_int_eq(is_descendant(ancestor_uri, descendant_uri), expected);
@@ -62,7 +62,7 @@ static void
 __mark_as_downloaded(char *uri_str, struct uri_list *visited_uris)
 {
 	struct rpki_uri *uri;
-	ck_assert_int_eq(0, uri_create_str(&uri, uri_str, strlen(uri_str)));
+	ck_assert_int_eq(0, uri_create_rsync_str(&uri, uri_str, strlen(uri_str)));
 	ck_assert_int_eq(mark_as_downloaded(uri, visited_uris), 0);
 	uri_refput(uri);
 }
@@ -71,7 +71,7 @@ static void
 assert_downloaded(char *uri_str, struct uri_list *visited_uris, bool expected)
 {
 	struct rpki_uri *uri;
-	ck_assert_int_eq(0, uri_create_str(&uri, uri_str, strlen(uri_str)));
+	ck_assert_int_eq(0, uri_create_rsync_str(&uri, uri_str, strlen(uri_str)));
 	ck_assert_int_eq(is_already_downloaded(uri, visited_uris), expected);
 	uri_refput(uri);
 }
@@ -112,7 +112,7 @@ test_root_strategy(char *test, char *expected)
 	struct rpki_uri *src;
 	struct rpki_uri *dst;
 
-	ck_assert_int_eq(0, uri_create_str(&src, test, strlen(test)));
+	ck_assert_int_eq(0, uri_create_rsync_str(&src, test, strlen(test)));
 	ck_assert_int_eq(handle_root_strategy(src, &dst), 0);
 	ck_assert_str_eq(uri_get_global(dst), expected);
 

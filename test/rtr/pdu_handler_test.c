@@ -12,6 +12,7 @@
 #include "output_printer.c"
 #include "crypto/base64.c"
 #include "object/router_key.c"
+#include "rrdp/db_rrdp.c"
 #include "rtr/pdu.c"
 #include "rtr/pdu_handler.c"
 #include "rtr/primitive_reader.c"

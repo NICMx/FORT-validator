@@ -334,9 +334,15 @@ uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
 }
 
 int
-uri_create_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
+uri_create_rsync_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 {
 	return uri_create(uri, URI_VALID_RSYNC, guri, guri_len);
+}
+
+int
+uri_create_https_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
+{
+	return uri_create(uri, URI_VALID_HTTPS, guri, guri_len);
 }
 
 /* A URI that can be rsync or https */

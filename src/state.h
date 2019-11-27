@@ -5,12 +5,13 @@
 #include "cert_stack.h"
 #include "validation_handler.h"
 #include "object/tal.h"
+#include "rrdp/rrdp_handler.h"
 #include "rsync/rsync.h"
 
 struct validation;
 
 int validation_prepare(struct validation **, struct tal *,
-    struct validation_handler *);
+    struct validation_handler *, struct rrdp_handler *);
 void validation_destroy(struct validation *);
 
 struct tal *validation_tal(struct validation *);
@@ -33,5 +34,8 @@ char *validation_get_ip_buffer2(struct validation *);
 
 struct validation_handler const *
 validation_get_validation_handler(struct validation *);
+
+struct rrdp_handler const *
+validation_get_rrdp_handler(struct validation *);
 
 #endif /* SRC_STATE_H_ */

@@ -469,6 +469,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 */
 
 	struct validation_handler validation_handler;
+	struct rrdp_handler rrdp_handler;
 	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
@@ -479,7 +480,11 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	validation_handler.handle_router_key = handle_router_key;
 	validation_handler.arg = arg;
 
-	error = validation_prepare(&state, tal, &validation_handler);
+	rrdp_handler.uri_cmp = rrdp_uri_cmp;
+	rrdp_handler.uri_update = rrdp_uri_update;
+
+	error = validation_prepare(&state, tal, &validation_handler,
+	    &rrdp_handler);
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
@@ -518,6 +523,8 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		pr_crit("Unknown public key state: %u",
 		    validation_pubkey_state(state));
 	}
+
+	/* FIXME (now) Consider RRDP found scenario */
 
 	/*
 	 * From now on, the tree should be considered valid, even if subsequent
@@ -621,7 +628,7 @@ __do_file_validation(char const *tal_file, void *arg)
 	thread = malloc(sizeof(struct thread));
 	if (thread == NULL) {
 		close_thread(pid, tal_file);
-		error = -EINVAL;
+		error = pr_enomem();
 		goto free_param;
 	}
 

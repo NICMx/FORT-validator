@@ -74,9 +74,9 @@
 	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, )
 
 #define ARRAYLIST_FOREACH(list, node, index) for (			\
-	(i) = 0, (node) = (list)->array;				\
-	(i) < (list)->len;						\
-	(i)++, (node)++							\
+	(index) = 0, (node) = (list)->array;				\
+	(index) < (list)->len;						\
+	(index)++, (node)++						\
 )
 
 #endif /* SRC_DATA_STRUCTURE_ARRAY_LIST_H_ */

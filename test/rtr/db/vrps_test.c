@@ -11,6 +11,7 @@
 #include "log.c"
 #include "output_printer.c"
 #include "object/router_key.c"
+#include "rrdp/db_rrdp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"

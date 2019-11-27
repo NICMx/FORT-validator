@@ -19,6 +19,7 @@
 #include "object/name.h"
 #include "object/manifest.h"
 #include "object/signed_object.h"
+#include "rrdp/rrdp_objects.h"
 #include "rrdp/rrdp_parser.h"
 #include "rsync/rsync.h"
 
@@ -52,6 +53,9 @@ struct bgpsec_ski {
 	X509 *cert;
 	unsigned char **ski_data;
 };
+
+/* Callback method to fetch repository objects */
+typedef int (access_method_exec)(struct sia_ca_uris *);
 
 static void
 sia_ca_uris_init(struct sia_ca_uris *sia_uris)
@@ -237,7 +241,7 @@ check_dup_public_key(bool *duplicated, char const *file, void *arg)
 	rcvd_cert = NULL;
 	tmp_size = 0;
 
-	error = uri_create_str(&uri, file, strlen(file));
+	error = uri_create_rsync_str(&uri, file, strlen(file));
 	if (error)
 		return error;
 
@@ -1873,6 +1877,110 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 	return force_aia_validation(caIssuers, cert);
 }
 
+static int
+exec_rrdp_method(struct sia_ca_uris *sia_uris)
+{
+	struct update_notification *upd_notification;
+	struct snapshot *snapshot;
+	enum rrdp_uri_cmp_result res;
+	int error;
+
+	error = rrdp_parse_notification(sia_uris->rpkiNotify.uri,
+	    &upd_notification);
+	if (error)
+		return error;
+
+	res = rhandler_uri_cmp(uri_get_global(sia_uris->rpkiNotify.uri),
+	    upd_notification->global_data.session_id,
+	    upd_notification->global_data.serial);
+	switch(res) {
+	case RRDP_URI_EQUAL:
+		update_notification_destroy(upd_notification);
+		fnstack_pop();
+		return 0;
+	case RRDP_URI_DIFF_SERIAL:
+		/* FIXME (now) Fetch and process the deltas */
+		/* Store the new value */
+		error = rhandler_uri_update(
+		    uri_get_global(sia_uris->rpkiNotify.uri),
+		    upd_notification->global_data.session_id,
+		    upd_notification->global_data.serial);
+		break;
+	case RRDP_URI_DIFF_SESSION:
+		/* FIXME (now) delete the old session files */
+	case RRDP_URI_NOTFOUND:
+		/* Process the snapshot */
+		error = rrdp_parse_snapshot(upd_notification, &snapshot);
+		if (error) {
+			break;
+		}
+		snapshot_destroy(snapshot);
+		fnstack_pop(); /* FIXME (now) Snapshot pop, shouldn't be here */
+		/* Store the new value */
+		error = rhandler_uri_update(
+		    uri_get_global(sia_uris->rpkiNotify.uri),
+		    upd_notification->global_data.session_id,
+		    upd_notification->global_data.serial);
+
+		break;
+	default:
+		pr_crit("Unknown RRDP URI comparison result");
+	}
+
+	/*
+	 * FIXME (now) Now do the validation, start by the root manifest
+	 */
+	update_notification_destroy(upd_notification);
+	fnstack_pop();
+	if (error) {
+		return error;
+	}
+	return 0;
+}
+
+static int
+exec_rsync_method(struct sia_ca_uris *sia_uris)
+{
+	return download_files(sia_uris->caRepository.uri, false, false);
+}
+
+/*
+ * Currently only two access methods are supported, just consider those two:
+ * rsync and RRDP. If a new access method is supported, this function must
+ * change (and probably the sia_ca_uris struct as well).
+ */
+static int
+use_access_method(struct sia_ca_uris *sia_uris,
+    access_method_exec rsync_cb, access_method_exec rrdp_cb)
+{
+	access_method_exec *cb_primary;
+	access_method_exec *cb_secondary;
+	int error;
+
+	/*
+	 * RSYNC will always be present (at least for now, see
+	 * rfc6487#section-4.8.8.1)
+	 */
+	if (sia_uris->rpkiNotify.uri == NULL)
+		return rsync_cb(sia_uris);
+
+	/* Get the preferred */
+	if (sia_uris->caRepository.position > sia_uris->rpkiNotify.position) {
+		cb_primary = rrdp_cb;
+		cb_secondary = rsync_cb;
+	} else {
+		cb_primary = rsync_cb;
+		cb_secondary = rrdp_cb;
+	}
+
+	/* Try with the preferred; in case of error, try with the next one */
+	error = cb_primary(sia_uris);
+	if (!error)
+		return 0;
+
+	return cb_secondary(sia_uris);
+}
+
 /** Boilerplate code for CA certificate validation and recursive traversal. */
 int
 certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
@@ -1983,18 +2091,31 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		goto revert_refs;
 	}
 
-	/* Currently there's support for 2 access methods */
-	/* FIXME (now) Download files according to the preferred method */
-	if (sia_uris.rpkiNotify.uri != NULL &&
-	    sia_uris.caRepository.position > sia_uris.rpkiNotify.position) {
-		pr_info("Preferred Access Method: RRDP, but doing rsync anyways");
-		rrdp_parse_notification(sia_uris.rpkiNotify.uri);
-	} else
-		pr_info("Preferred Access Method: RSYNC [found RRDP? %s]",
-		    (sia_uris.rpkiNotify.uri == NULL ? "NO" : "YES"));
-
-	/* Currently downloading RSYNC (will always be present) */
-	error = download_files(sia_uris.caRepository.uri, false, false);
+	/*
+	 * FIXME (now) Beware: what if RRDP is already being utilized?
+	 *
+	 * There isn't any restriction about the preferred access method of
+	 * children CAs being the same as the parent CA.
+	 *
+	 * Two possible scenarios arise:
+	 * 1) CA Parent didn't utilized (or didn't had) and RRDP update
+	 *    notification URI.
+	 * 2) CA Parent successfully utilized an RRDP update notification URI.
+	 *
+	 * Step (1) is simple, do the check of the preferred access method.
+	 * Step (2) must do something different.
+	 * - The manifest should exist at the snapshot file (aka, directory
+	 *   structure), so it should be processed from there on.
+	 * - Verify that the manifest file exists locally (must be the same
+	 *   session_id and serial, load those at start, the serial can
+	 *   be written to a local file, the session_id can be loaded from the
+	 *   directory structure <local-repository>/rrdp/<session_id>).:
+	 *   + Exists: Read and process normally (no need to do rsync)
+	 *   + Doesn't exists: check for preferred access method, keep the flow
+	 *     from there on.
+	 */
+	error = use_access_method(&sia_uris, exec_rsync_method,
+	    exec_rrdp_method);
 	if (error)
 		return error;
 

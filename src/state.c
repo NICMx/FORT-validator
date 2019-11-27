@@ -38,6 +38,12 @@ struct validation {
 	char addr_buffer2[INET6_ADDRSTRLEN];
 
 	struct validation_handler validation_handler;
+
+	/*
+	 * Handler of RRDP functions, this handler can access data from the
+	 * main thread, so that multiple threads can use it.
+	 */
+	struct rrdp_handler rrdp_handler;
 };
 
 /*
@@ -81,7 +87,8 @@ cb(int ok, X509_STORE_CTX *ctx)
  */
 int
 validation_prepare(struct validation **out, struct tal *tal,
-    struct validation_handler *validation_handler)
+    struct validation_handler *validation_handler,
+    struct rrdp_handler *rrdp_handler)
 {
 	struct validation *result;
 	X509_VERIFY_PARAM *params;
@@ -123,6 +130,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
+	result->rrdp_handler = *rrdp_handler;
 	result->x509_data.params = params; /* Ownership transfered */
 
 	*out = result;
@@ -206,4 +214,10 @@ struct validation_handler const *
 validation_get_validation_handler(struct validation *state)
 {
 	return &state->validation_handler;
+}
+
+struct rrdp_handler const *
+validation_get_rrdp_handler(struct validation *state)
+{
+	return &state->rrdp_handler;
 }

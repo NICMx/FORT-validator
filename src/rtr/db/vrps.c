@@ -11,6 +11,7 @@
 #include "data_structure/array_list.h"
 #include "object/router_key.h"
 #include "object/tal.h"
+#include "rrdp/db_rrdp.h"
 #include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
 
@@ -60,6 +61,10 @@ struct state {
 	serial_t next_serial;
 	uint16_t v0_session_id;
 	uint16_t v1_session_id;
+
+	/* RRDP URIs known from certificates */
+	struct db_rrdp *rrdp_uris;
+
 } state;
 
 /** Read/write lock, which protects @state and its inhabitants. */
@@ -98,21 +103,30 @@ vrps_init(void)
 	    : (0xFFFFu);
 
 	state.slurm = NULL;
+	error = db_rrdp_create(&state.rrdp_uris);
+	if (error)
+		goto release_deltas;
 
 	error = pthread_rwlock_init(&state_lock, NULL);
 	if (error) {
-		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
-		return pr_errno(error, "state pthread_rwlock_init() errored");
+		error = pr_errno(error, "state pthread_rwlock_init() errored");
+		goto release_db_rrdp;
 	}
 
 	error = pthread_rwlock_init(&table_lock, NULL);
 	if (error) {
-		pthread_rwlock_destroy(&state_lock);
-		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
-		return pr_errno(error, "table pthread_rwlock_init() errored");
+		error = pr_errno(error, "table pthread_rwlock_init() errored");
+		goto release_state_lock;
 	}
 
 	return 0;
+release_state_lock:
+	pthread_rwlock_destroy(&state_lock);
+release_db_rrdp:
+	db_rddp_destroy(state.rrdp_uris);
+release_deltas:
+	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
+	return error;
 }
 
 void
@@ -123,6 +137,7 @@ vrps_destroy(void)
 	if (state.slurm != NULL)
 		db_slurm_destroy(state.slurm);
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
+	db_rddp_destroy(state.rrdp_uris);
 	/* Nothing to do with error codes from now on */
 	pthread_rwlock_destroy(&state_lock);
 	pthread_rwlock_destroy(&table_lock);
@@ -131,6 +146,13 @@ vrps_destroy(void)
 #define WLOCK_HANDLER(lock, cb)						\
 	int error;							\
 	rwlock_write_lock(lock);					\
+	error = cb;							\
+	rwlock_unlock(lock);						\
+	return error;
+
+#define RLOCK_HANDLER(lock, cb)						\
+	int error;							\
+	rwlock_read_lock(lock);						\
 	error = cb;							\
 	rwlock_unlock(lock);						\
 	return error;
@@ -157,6 +179,20 @@ handle_router_key(unsigned char const *ski, uint32_t as,
 {
 	WLOCK_HANDLER(&table_lock,
 	    rtrhandler_handle_router_key(arg, ski, as, spk))
+}
+
+enum rrdp_uri_cmp_result
+rrdp_uri_cmp(char const *uri, char const *session_id, unsigned long serial)
+{
+	RLOCK_HANDLER(&state_lock,
+	    db_rrdp_cmp_uri(state.rrdp_uris, uri, session_id, serial))
+}
+
+int
+rrdp_uri_update(char const *uri, char const *session_id, unsigned long serial)
+{
+	WLOCK_HANDLER(&state_lock,
+	    db_rrdp_add_uri(state.rrdp_uris, uri, session_id, serial))
 }
 
 static int
@@ -274,6 +310,7 @@ __vrps_update(bool *changed)
 	old_base = NULL;
 	new_base = NULL;
 
+	/* FIXME (now) identify if RRDP is being utilized? */
 	error = __perform_standalone_validation(&new_base);
 	if (error)
 		return error;

@@ -141,7 +141,7 @@ handle_root_strategy(struct rpki_uri *src, struct rpki_uri **dst)
 		if (global[i] == '/') {
 			slashes++;
 			if (slashes == 4)
-				return uri_create_str(dst, global, i);
+				return uri_create_rsync_str(dst, global, i);
 		}
 	}
 

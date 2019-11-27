@@ -11,7 +11,8 @@
 
 struct rpki_uri;
 
-int uri_create_str(struct rpki_uri **, char const *, size_t);
+int uri_create_rsync_str(struct rpki_uri **, char const *, size_t);
+int uri_create_https_str(struct rpki_uri **, char const *, size_t);
 int uri_create_mixed_str(struct rpki_uri **, char const *, size_t);
 int uri_create_mft(struct rpki_uri **, struct rpki_uri *, IA5String_t *);
 int uri_create_ad(struct rpki_uri **, ACCESS_DESCRIPTION *, int);
