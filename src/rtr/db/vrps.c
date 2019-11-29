@@ -363,7 +363,8 @@ __vrps_update(bool *changed)
 		if (db_table_roa_count(new_base) +
 		    db_table_router_key_count(new_base) == 0) {
 			rwlock_unlock(&state_lock);
-			return 0;
+			error = 0; /* OK (said explicitly) */
+			goto revert_base;
 		}
 		error = create_empty_delta(&deltas);
 		if (error) {
