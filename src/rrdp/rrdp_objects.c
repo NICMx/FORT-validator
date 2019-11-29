@@ -1,10 +1,22 @@
 #include "rrdp_objects.h"
 
+#include <sys/queue.h>
+#include <string.h>
 #include "log.h"
 
 struct xml_source {
 	xmlDoc *doc;
 };
+
+struct delta_head {
+	unsigned long serial;
+	struct doc_data doc_data;
+	unsigned int references;
+	SLIST_ENTRY(delta_head) next;
+};
+
+/* List of deltas inside an update notification file */
+SLIST_HEAD(deltas_head, delta_head);
 
 int
 global_data_init(struct global_data *data)
@@ -69,19 +81,96 @@ xml_source_set(struct xml_source *src, xmlDoc *orig)
 	return 0;
 }
 
+static int
+delta_head_create(struct delta_head **result)
+{
+	struct delta_head *tmp;
+
+	tmp = malloc(sizeof(struct delta_head));
+	if (tmp == NULL)
+		return pr_enomem();
+
+	doc_data_init(&tmp->doc_data);
+	tmp->references = 1;
+
+	*result = tmp;
+	return 0;
+}
+
+unsigned long
+delta_head_get_serial(struct delta_head *delta_head)
+{
+	return delta_head->serial;
+}
+
+struct doc_data *
+delta_head_get_doc_data(struct delta_head *delta_head)
+{
+	return &delta_head->doc_data;
+}
+
+void
+delta_head_refget(struct delta_head *delta_head)
+{
+	delta_head->references++;
+}
+
+void
+delta_head_refput(struct delta_head *delta_head)
+{
+	delta_head->references--;
+	if (delta_head->references == 0) {
+		doc_data_cleanup(&delta_head->doc_data);
+		free(delta_head);
+	}
+}
+
+static int
+deltas_head_create(struct deltas_head **deltas)
+{
+	struct deltas_head *tmp;
+
+	tmp = malloc(sizeof(struct deltas_head));
+	if (tmp == NULL)
+		return pr_enomem();
+
+	SLIST_INIT(tmp);
+
+	*deltas = tmp;
+	return 0;
+}
+
+static void
+deltas_head_destroy(struct deltas_head *deltas)
+{
+	struct delta_head *head;
+
+	while (!SLIST_EMPTY(deltas)) {
+		head = deltas->slh_first;
+		SLIST_REMOVE_HEAD(deltas, next);
+		delta_head_refput(head);
+	}
+	free(deltas);
+}
+
 int
 update_notification_create(struct update_notification **file)
 {
 	struct update_notification *tmp;
+	int error;
 
 	tmp = malloc(sizeof(struct update_notification));
 	if (tmp == NULL)
 		return pr_enomem();
 
+	error = deltas_head_create(&tmp->deltas_list);
+	if (error) {
+		free(tmp);
+		return error;
+	}
+
 	global_data_init(&tmp->global_data);
 	doc_data_init(&tmp->snapshot);
-
-	SLIST_INIT(&tmp->deltas_list);
 
 	*file = tmp;
 	return 0;
@@ -90,38 +179,56 @@ update_notification_create(struct update_notification **file)
 void
 update_notification_destroy(struct update_notification *file)
 {
-	struct deltas_head *list;
-	struct delta_head *head;
-
-	list = &file->deltas_list;
-	while (!SLIST_EMPTY(list)) {
-		head = list->slh_first;
-		SLIST_REMOVE_HEAD(list, next);
-		doc_data_cleanup(&head->doc_data);
-		free(head);
-	}
 	doc_data_cleanup(&file->snapshot);
 	global_data_cleanup(&file->global_data);
-
+	deltas_head_destroy(file->deltas_list);
 	free(file);
 }
 
-/* URI and HASH must already be allocated */
+/* A new delta_head will be allocated, as well as its URI and HASH */
 int
-update_notification_deltas_add(struct deltas_head *deltas, unsigned long serial,
-    char **uri, unsigned char **hash, size_t hash_len)
+deltas_head_add(struct deltas_head *deltas, unsigned long serial,
+    char *uri, unsigned char *hash, size_t hash_len)
 {
 	struct delta_head *elem;
+	int error;
 
-	elem = malloc(sizeof(struct delta_head));
-	if (elem == NULL)
-		return pr_enomem();
+	elem = NULL;
+	error = delta_head_create(&elem);
+	if (error)
+		return error;
 
 	elem->serial = serial;
-	elem->doc_data.uri = *uri;
-	elem->doc_data.hash = *hash;
+
+	elem->doc_data.uri = strdup(uri);
+	if (elem->doc_data.uri == NULL) {
+		free(elem);
+		return pr_enomem();
+	}
+
 	elem->doc_data.hash_len = hash_len;
+	elem->doc_data.hash = malloc(hash_len);
+	if (elem->doc_data.hash == NULL) {
+		free(elem->doc_data.uri);
+		free(elem);
+		return pr_enomem();
+	}
 	SLIST_INSERT_HEAD(deltas, elem, next);
+
+	return 0;
+}
+
+int
+deltas_head_for_each(struct deltas_head *deltas, delta_head_cb cb, void *arg)
+{
+	struct delta_head *cursor;
+	int error;
+
+	SLIST_FOREACH(cursor, deltas, next) {
+		error = cb(cursor, arg);
+		if (error)
+			return error;
+	}
 
 	return 0;
 }
@@ -136,7 +243,6 @@ snapshot_create(struct snapshot **file)
 		return pr_enomem();
 
 	global_data_init(&tmp->global_data);
-	SLIST_INIT(&tmp->publish_list);
 	tmp->source = NULL;
 
 	*file = tmp;
@@ -146,20 +252,32 @@ snapshot_create(struct snapshot **file)
 void
 snapshot_destroy(struct snapshot *file)
 {
-	struct publish_list *list;
-	struct publish *head;
-
-	list = &file->publish_list;
-	while (!SLIST_EMPTY(list)) {
-		head = list->slh_first;
-		SLIST_REMOVE_HEAD(list, next);
-		doc_data_cleanup(&head->doc_data);
-		free(head->content);
-		free(head);
-	}
 	global_data_cleanup(&file->global_data);
 	xml_source_destroy(file->source);
+	free(file);
+}
 
+int
+delta_create(struct delta **file)
+{
+	struct delta *tmp;
+
+	tmp = malloc(sizeof(struct delta));
+	if (tmp == NULL)
+		return pr_enomem();
+
+	global_data_init(&tmp->global_data);
+	tmp->source = NULL;
+
+	*file = tmp;
+	return 0;
+}
+
+void
+delta_destroy(struct delta *file)
+{
+	global_data_cleanup(&file->global_data);
+	xml_source_destroy(file->source);
 	free(file);
 }
 
@@ -189,8 +307,23 @@ publish_destroy(struct publish *file)
 }
 
 int
-publish_list_add(struct publish_list *list, struct publish *elem)
+withdraw_create(struct withdraw **file)
 {
-	SLIST_INSERT_HEAD(list, elem, next);
+	struct withdraw *tmp;
+
+	tmp = malloc(sizeof(struct withdraw));
+	if (tmp == NULL)
+		return pr_enomem();
+
+	doc_data_init(&tmp->doc_data);
+
+	*file = tmp;
 	return 0;
+}
+
+void
+withdraw_destroy(struct withdraw *file)
+{
+	doc_data_cleanup(&file->doc_data);
+	free(file);
 }

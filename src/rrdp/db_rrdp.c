@@ -123,6 +123,20 @@ db_rrdp_add_uri(struct db_rrdp *db, char const *uri, char const *session_id,
 }
 
 int
+db_rrdp_get_serial(struct db_rrdp *db, char const *uri, unsigned long *serial)
+{
+	struct db_rrdp_uri *found;
+
+	HASH_FIND_STR(db->uris, uri, found);
+	if (found == NULL)
+		return -ENOENT;
+
+	*serial = found->data.serial;
+
+	return 0;
+}
+
+int
 db_rrdp_create(struct db_rrdp **result)
 {
 	struct db_rrdp *tmp;

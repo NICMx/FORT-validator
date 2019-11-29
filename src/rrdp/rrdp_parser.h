@@ -5,6 +5,8 @@
 #include "uri.h"
 
 int rrdp_parse_notification(struct rpki_uri *, struct update_notification **);
-int rrdp_parse_snapshot(struct update_notification *, struct snapshot **);
+int rrdp_parse_snapshot(struct update_notification *);
+
+int rrdp_process_deltas(struct update_notification *, unsigned long serial);
 
 #endif /* SRC_RRDP_RRDP_PARSER_H_ */

@@ -22,9 +22,12 @@ struct rrdp_handler {
 	    unsigned long);
 	/* Add or update an RRDP URI */
 	int (*uri_update)(char const *, char const *, unsigned long);
+	/* Get the data related to an URI */
+	int (*uri_get_serial)(char const *, unsigned long *);
 };
 
 enum rrdp_uri_cmp_result rhandler_uri_cmp(char const *, char const *, unsigned long);
 int rhandler_uri_update(char const *, char const *, unsigned long);
+int rhandler_uri_get_serial(char const *, unsigned long *);
 
 #endif /* SRC_RRDP_RRDP_HANDLER_H_ */

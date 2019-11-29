@@ -81,6 +81,7 @@ fort_SOURCES += resource/asn.h resource/asn.c
 
 fort_SOURCES += rrdp/db_rrdp.h rrdp/db_rrdp.c
 fort_SOURCES += rrdp/rrdp_handler.h rrdp/rrdp_handler.c
+fort_SOURCES += rrdp/rrdp_loader.h rrdp/rrdp_loader.c
 fort_SOURCES += rrdp/rrdp_objects.h rrdp/rrdp_objects.c
 fort_SOURCES += rrdp/rrdp_parser.h rrdp/rrdp_parser.c
 

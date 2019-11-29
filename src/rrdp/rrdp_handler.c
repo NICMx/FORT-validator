@@ -50,3 +50,18 @@ rhandler_uri_update(char const *uri, char const *session_id,
 	    ? handler->uri_update(uri, session_id, serial)
 	    : 0;
 }
+
+int
+rhandler_uri_get_serial(char const *uri, unsigned long *serial)
+{
+	struct rrdp_handler const *handler;
+	int error;
+
+	error = get_current_threads_handler(&handler);
+	if (error)
+		return error;
+
+	return (handler->uri_get_serial != NULL)
+	    ? handler->uri_get_serial(uri, serial)
+	    : 0;
+}

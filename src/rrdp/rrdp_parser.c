@@ -6,8 +6,10 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "crypto/base64.h"
 #include "http/http.h"
@@ -31,6 +33,11 @@
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
 
+struct deltas_proc_args {
+	struct delta_head **deltas;
+	unsigned long serial;
+	size_t deltas_set;
+};
 
 static int
 get_root_element(xmlDoc *doc, xmlNode **result)
@@ -243,7 +250,7 @@ parse_long(xmlNode *root, char const *attr, unsigned long *result)
 
 	xml_value = xmlGetProp(root, BAD_CAST attr);
 	if (xml_value == NULL)
-		return pr_err("RRDP file: Couldn't find xml attribute %s",
+		return pr_err("RRDP file: Couldn't find xml attribute '%s'",
 		    attr);
 
 	errno = 0;
@@ -261,8 +268,8 @@ parse_long(xmlNode *root, char const *attr, unsigned long *result)
 }
 
 static int
-parse_hex_string(xmlNode *root, char const *attr, unsigned char **result,
-    size_t *result_len)
+parse_hex_string(xmlNode *root, bool required, char const *attr,
+    unsigned char **result, size_t *result_len)
 {
 	xmlChar *xml_value;
 	unsigned char *tmp, *ptr;
@@ -272,13 +279,14 @@ parse_hex_string(xmlNode *root, char const *attr, unsigned char **result,
 
 	xml_value = xmlGetProp(root, BAD_CAST attr);
 	if (xml_value == NULL)
-		return pr_err("RRDP file: Couldn't find xml attribute %s",
-		    attr);
+		return required ?
+		    pr_err("RRDP file: Couldn't find xml attribute '%s'", attr)
+		    : 0;
 
 	/* The rest of the checks are done at the schema */
 	if (xmlStrlen(xml_value) % 2 != 0) {
 		xmlFree(xml_value);
-		return pr_err("RRDP file: Attribute %s isn't a valid hash",
+		return pr_err("RRDP file: Attribute %s isn't a valid hex string",
 		    attr);
 	}
 
@@ -308,88 +316,116 @@ parse_hex_string(xmlNode *root, char const *attr, unsigned char **result,
 /* @gdata elements are allocated */
 static int
 parse_global_data(xmlNode *root, struct global_data *gdata,
-    struct global_data *parent_data)
+    struct global_data *parent_data, bool validate_serial)
 {
+	char *session_id;
+	unsigned long serial;
 	int error;
 
-	error = parse_string(root, RRDP_ATTR_SESSION_ID, &gdata->session_id);
+	error = parse_string(root, RRDP_ATTR_SESSION_ID, &session_id);
 	if (error)
 		return error;
 
-	error = parse_long(root, RRDP_ATTR_SERIAL, &gdata->serial);
+	error = parse_long(root, RRDP_ATTR_SERIAL, &serial);
 	if (error) {
-		free(gdata->session_id);
+		free(session_id);
 		return error;
 	}
 
 	if (parent_data == NULL)
-		return 0;
+		goto return_val; /* Error O is OK */
 
 	/*
 	 * FIXME (now) Prepare the callers to receive positive error values,
 	 * which means the file was successfully parsed but is has a logic error
 	 * (in this case, session ID or serial don't match parent's).
 	 */
-	if (strcmp(parent_data->session_id, gdata->session_id) != 0) {
+	if (strcmp(parent_data->session_id, session_id) != 0) {
 		pr_info("Object session id doesn't match parent's session id");
-		return EINVAL;
+		error = EINVAL;
+		goto return_val;
 	}
 
-	if (parent_data->serial != gdata->serial) {
+	if (!validate_serial)
+		goto return_val;
+
+	if (parent_data->serial != serial) {
 		pr_info("Object serial doesn't match parent's serial");
-		return EINVAL;
+		error = EINVAL;
 	}
 
-	return 0;
+return_val:
+	gdata->session_id = session_id;
+	gdata->serial = serial;
+	return error;
 }
 
 /* @data elements are allocated */
 static int
-parse_doc_data(xmlNode *root, bool parse_hash, struct doc_data *data)
+parse_doc_data(xmlNode *root, bool parse_hash, bool hash_req,
+    struct doc_data *data)
 {
+	char *uri;
+	unsigned char *hash;
+	size_t hash_len;
 	int error;
 
-	error = parse_string(root, RRDP_ATTR_URI, &data->uri);
+	uri = NULL;
+	hash = NULL;
+	hash_len = 0;
+
+	error = parse_string(root, RRDP_ATTR_URI, &uri);
 	if (error)
 		return error;
 
-	if (!parse_hash)
+	if (!parse_hash) {
+		data->uri = uri;
 		return 0;
+	}
 
-	error = parse_hex_string(root, RRDP_ATTR_HASH, &data->hash,
-	    &data->hash_len);
+	error = parse_hex_string(root, hash_req, RRDP_ATTR_HASH, &hash,
+	    &hash_len);
 	if (error) {
-		free(data->uri);
+		free(uri);
 		return error;
 	}
 
+	data->uri = uri;
+	data->hash = hash;
+	data->hash_len = hash_len;
 	return 0;
 }
 
 static int
 parse_notification_deltas(xmlNode *root, struct deltas_head *deltas)
 {
-	struct delta_head delta;
+	struct doc_data doc_data;
+	unsigned long serial;
 	int error;
 
-	error = parse_long(root, RRDP_ATTR_SERIAL, &delta.serial);
+	error = parse_long(root, RRDP_ATTR_SERIAL, &serial);
 	if (error)
 		return error;
 
-	error = parse_doc_data(root, true, &delta.doc_data);
-	if (error)
-		return error;
-
-	error = update_notification_deltas_add(deltas, delta.serial,
-	    &delta.doc_data.uri, &delta.doc_data.hash, delta.doc_data.hash_len);
+	doc_data_init(&doc_data);
+	error = parse_doc_data(root, true, true, &doc_data);
 	if (error) {
-		doc_data_cleanup(&delta.doc_data);
+		doc_data_cleanup(&doc_data);
 		return error;
 	}
+
+	error = deltas_head_add(deltas, serial, doc_data.uri, doc_data.hash,
+	    doc_data.hash_len);
+
+	/* Always release data */
+	doc_data_cleanup(&doc_data);
+	if (error)
+		return error;
 
 	return 0;
 }
 
+/* Get the notification data. In case of error, the caller must cleanup @file */
 static int
 parse_notification_data(xmlNode *root, struct update_notification *file)
 {
@@ -399,10 +435,11 @@ parse_notification_data(xmlNode *root, struct update_notification *file)
 	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
 		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_DELTA))
 			error = parse_notification_deltas(cur_node,
-			    &file->deltas_list);
+			    file->deltas_list);
 		else if (xmlStrEqual(cur_node->name,
 		    BAD_CAST RRDP_ELEM_SNAPSHOT))
-			error = parse_doc_data(cur_node, true, &file->snapshot);
+			error = parse_doc_data(cur_node, true, true,
+			    &file->snapshot);
 
 		if (error)
 			return error;
@@ -412,7 +449,8 @@ parse_notification_data(xmlNode *root, struct update_notification *file)
 }
 
 static int
-parse_publish(xmlNode *root, bool parse_hash, struct publish **publish)
+parse_publish(xmlNode *root, bool parse_hash, bool hash_required,
+    struct publish **publish)
 {
 	struct publish *tmp;
 	char *base64_str;
@@ -422,7 +460,7 @@ parse_publish(xmlNode *root, bool parse_hash, struct publish **publish)
 	if (error)
 		return error;
 
-	error = parse_doc_data(root, parse_hash, &tmp->doc_data);
+	error = parse_doc_data(root, parse_hash, hash_required, &tmp->doc_data);
 	if (error)
 		goto release_tmp;
 
@@ -434,6 +472,8 @@ parse_publish(xmlNode *root, bool parse_hash, struct publish **publish)
 	if (error)
 		goto release_base64;
 
+	/* FIXME (now) validate hash of base64str vs doc_data->hash */
+
 	free(base64_str);
 	*publish = tmp;
 	return 0;
@@ -441,6 +481,27 @@ release_base64:
 	free(base64_str);
 release_tmp:
 	publish_destroy(tmp);
+	return error;
+}
+
+static int
+parse_withdraw(xmlNode *root, struct withdraw **withdraw)
+{
+	struct withdraw *tmp;
+	int error;
+
+	error = withdraw_create(&tmp);
+	if (error)
+		return error;
+
+	error = parse_doc_data(root, true, true, &tmp->doc_data);
+	if (error)
+		goto release_tmp;
+
+	*withdraw = tmp;
+	return 0;
+release_tmp:
+	withdraw_destroy(tmp);
 	return error;
 }
 
@@ -483,7 +544,71 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len)
 }
 
 static int
-parse_snapshot_publish_list(xmlNode *root, struct snapshot *file)
+delete_from_uri(char const *location)
+{
+	struct rpki_uri *uri;
+	char *local_uri, *work_loc, *tmp;
+	int error;
+
+	error = uri_create_mixed_str(&uri, location, strlen(location));
+	if (error)
+		return error;
+
+	local_uri = strdup(uri_get_local(uri));
+	if (local_uri == NULL) {
+		error = pr_enomem();
+		goto release_uri;
+	}
+
+	/* FIXME (now) validate hash, must come from withdraw element */
+	errno = 0;
+	error = remove(local_uri);
+	if (error) {
+		error = pr_errno(errno, "Couldn't delete %s", local_uri);
+		goto release_str;
+	}
+
+	/*
+	 * Delete parent dirs only if empty.
+	 *
+	 * The algorithm is a bit aggressive, but rmdir() won't delete
+	 * something unless is empty, so in case the dir still has something in
+	 * it the cycle is finished.
+	 */
+	work_loc = local_uri;
+	do {
+		tmp = strrchr(work_loc, '/');
+		if (tmp == NULL)
+			break;
+		*tmp = '\0';
+
+		/* FIXME (now) use a lock, what if the root dir is reached? */
+
+		errno = 0;
+		error = rmdir(work_loc);
+		if (!error)
+			continue; /* Keep deleting up */
+
+		/* Stop if there's content in the dir */
+		if (errno == ENOTEMPTY || errno == EEXIST)
+			break;
+
+		error = pr_errno(errno, "Couldn't delete dir %s", work_loc);
+		goto release_str;
+	} while (true);
+
+	uri_refput(uri);
+	free(local_uri);
+	return 0;
+release_str:
+	free(local_uri);
+release_uri:
+	uri_refput(uri);
+	return error;
+}
+
+static int
+parse_publish_list(xmlNode *root)
 {
 	struct publish *tmp;
 	xmlNode *cur_node;
@@ -493,13 +618,51 @@ parse_snapshot_publish_list(xmlNode *root, struct snapshot *file)
 	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
 		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_PUBLISH)) {
 			tmp = NULL;
-			error = parse_publish(cur_node, false, &tmp);
+			error = parse_publish(cur_node, false, false, &tmp);
 			if (error)
 				return error;
 
 			error = write_from_uri(tmp->doc_data.uri, tmp->content,
 			    tmp->content_len);
 			publish_destroy(tmp);
+			if (error)
+				return error;
+ 		}
+	}
+
+	return 0;
+}
+
+static int
+parse_delta_element_list(xmlNode *root)
+{
+	struct publish *pub;
+	struct withdraw *wit;
+	xmlNode *cur_node;
+	int error;
+
+	/* Elements already validated by syntax */
+	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
+		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_PUBLISH)) {
+			pub = NULL;
+			error = parse_publish(cur_node, true, false, &pub);
+			if (error)
+				return error;
+
+			error = write_from_uri(pub->doc_data.uri, pub->content,
+			    pub->content_len);
+			publish_destroy(pub);
+			if (error)
+				return error;
+ 		} else if (xmlStrEqual(cur_node->name,
+ 		    BAD_CAST RRDP_ELEM_WITHDRAW)) {
+ 			wit = NULL;
+			error = parse_withdraw(cur_node, &wit);
+			if (error)
+				return error;
+
+			error = delete_from_uri(wit->doc_data.uri);
+			withdraw_destroy(wit);
 			if (error)
 				return error;
 		}
@@ -531,7 +694,7 @@ parse_notification(const char *path, struct update_notification **file)
 		goto release_update;
 
 	/* FIXME (now) validate version, namespace, etc. */
-	error = parse_global_data(root, &tmp->global_data, NULL);
+	error = parse_global_data(root, &tmp->global_data, NULL, false);
 	if (error)
 		goto release_update;
 
@@ -551,12 +714,11 @@ release_doc:
 }
 
 static int
-parse_snapshot(const char *path, struct update_notification *parent,
-    struct snapshot **file)
+parse_snapshot(const char *path, struct update_notification *parent)
 {
 	xmlDoc *doc;
 	xmlNode *root;
-	struct snapshot *tmp;
+	struct snapshot *snapshot;
 	struct xml_source *source;
 	int error;
 
@@ -566,7 +728,7 @@ parse_snapshot(const char *path, struct update_notification *parent,
 	if (error)
 		return error;
 
-	error = snapshot_create(&tmp);
+	error = snapshot_create(&snapshot);
 	if (error)
 		goto release_doc;
 
@@ -579,30 +741,137 @@ parse_snapshot(const char *path, struct update_notification *parent,
 	if (error)
 		goto release_snapshot;
 
-	tmp->source = source;
+	snapshot->source = source;
 	error = xml_source_set(source, doc);
 	if (error)
 		goto release_snapshot;
 
-	error = parse_global_data(root, &tmp->global_data,
-	    &parent->global_data);
+	error = parse_global_data(root, &snapshot->global_data,
+	    &parent->global_data, true);
 	if (error)
 		goto release_snapshot;
 
-	error = parse_snapshot_publish_list(root, tmp);
-	if (error)
-		goto release_snapshot;
+	error = parse_publish_list(root);
 
-	*file = tmp;
 	/* Error 0 is ok */
-	goto release_doc;
 release_snapshot:
-	snapshot_destroy(tmp);
+	snapshot_destroy(snapshot);
 release_doc:
 	xmlFreeDoc(doc);
 	return error;
 }
 
+static int
+parse_delta(const char *path, struct update_notification *parent)
+{
+	xmlDoc *doc;
+	xmlNode *root;
+	struct delta *delta;
+	struct xml_source *source;
+	int error;
+
+	root = NULL;
+
+	error = relax_ng_validate(path, &doc);
+	if (error)
+		return error;
+
+	error = delta_create(&delta);
+	if (error)
+		goto release_doc;
+
+	error = get_root_element(doc, &root);
+	if (error)
+		goto release_delta;
+
+	/* FIXME (now) validate hash, version, namespace, etc. */
+	error = xml_source_create(&source);
+	if (error)
+		goto release_delta;
+
+	delta->source = source;
+	error = xml_source_set(source, doc);
+	if (error)
+		goto release_delta;
+
+	error = parse_global_data(root, &delta->global_data,
+	    &parent->global_data, false);
+	if (error)
+		goto release_delta;
+
+	error = parse_delta_element_list(root);
+	/* Error 0 is ok */
+release_delta:
+	delta_destroy(delta);
+release_doc:
+	xmlFreeDoc(doc);
+	return error;
+}
+
+static int
+get_pending_delta(struct delta_head **delta_head, unsigned long pos,
+    struct deltas_proc_args *args)
+{
+	/* Ref to the delta element */
+	args->deltas[pos] = *delta_head;
+	args->deltas_set++;
+	delta_head_refget(*delta_head);
+
+	return 0;
+}
+
+static int
+__get_pending_delta(struct delta_head *delta_head, void *arg)
+{
+	struct deltas_proc_args *args = arg;
+	unsigned long serial;
+
+	serial = delta_head_get_serial(delta_head);
+	if (serial <= args->serial)
+		return 0;
+
+	return get_pending_delta(&delta_head, serial - args->serial - 1, args);
+}
+
+static int process_delta(struct delta_head *delta_head,
+    struct update_notification *parent)
+{
+	struct rpki_uri *uri;
+	struct doc_data *head_data;
+	int error;
+
+	head_data = delta_head_get_doc_data(delta_head);
+
+	error = uri_create_https_str(&uri, head_data->uri,
+	    strlen(head_data->uri));
+	if (error)
+		return error;
+
+	error = http_download_file(uri, write_local);
+	if (error)
+		goto release_uri;
+
+	fnstack_push_uri(uri);
+	error = parse_delta(uri_get_local(uri), parent);
+	if (error) {
+		fnstack_pop();
+		goto release_uri;
+	}
+
+	fnstack_pop();
+	uri_refput(uri);
+
+	return 0;
+release_uri:
+	uri_refput(uri);
+	return error;
+}
+
+/*
+ * Download from @uri and set result file contents to @result, the file name
+ * is pushed into fnstack, so don't forget to do the pop when done working
+ * with the file.
+ */
 int
 rrdp_parse_notification(struct rpki_uri *uri,
     struct update_notification **result)
@@ -630,11 +899,9 @@ rrdp_parse_notification(struct rpki_uri *uri,
 }
 
 int
-rrdp_parse_snapshot(struct update_notification *parent,
-    struct snapshot **result)
+rrdp_parse_snapshot(struct update_notification *parent)
 {
 	struct rpki_uri *uri;
-	struct snapshot *tmp;
 	int error;
 
 	error = uri_create_https_str(&uri, parent->snapshot.uri,
@@ -647,16 +914,62 @@ rrdp_parse_snapshot(struct update_notification *parent,
 		goto release_uri;
 
 	fnstack_push_uri(uri);
-	error = parse_snapshot(uri_get_local(uri), parent, &tmp);
-	if (error)
+	error = parse_snapshot(uri_get_local(uri), parent);
+	if (error) {
+		fnstack_pop();
 		goto release_uri;
+	}
 
-	uri_refput(uri);
-	*result = tmp;
 	fnstack_pop();
+	uri_refput(uri);
+
 	return 0;
 release_uri:
-	fnstack_pop();
 	uri_refput(uri);
+	return error;
+}
+
+int
+rrdp_process_deltas(struct update_notification *parent, unsigned long serial)
+{
+	struct delta_head *deltas[parent->global_data.serial - serial];
+	struct deltas_proc_args args;
+	size_t deltas_len;
+	size_t index;
+	int error;
+
+	deltas_len = parent->global_data.serial - serial;
+	for (index = 0; index < deltas_len; index++)
+		deltas[index] = NULL;
+
+	args.deltas = deltas;
+	args.serial = serial;
+	args.deltas_set = 0;
+
+	error = deltas_head_for_each(parent->deltas_list, __get_pending_delta,
+	    &args);
+	if (error)
+		goto release_deltas;
+
+	/* Check that all expected deltas are set */
+	if (args.deltas_set != deltas_len) {
+		error = pr_err("Less deltas than expected: should be from serial %lu to %lu (%lu), but got only %lu",
+		    serial, parent->global_data.serial, deltas_len,
+		    args.deltas_set);
+		goto release_deltas;
+	}
+
+	/* Now process each delta in order */
+	for (index = 0; index < deltas_len; index++) {
+		error = process_delta(deltas[index], parent);
+		if (error)
+			break;
+	}
+	/* Error 0 it's ok */
+release_deltas:
+	for (index = 0; index < deltas_len; index++)
+		if (deltas[index] != NULL)
+			delta_head_refput(deltas[index]);
+
 	return error;
 }

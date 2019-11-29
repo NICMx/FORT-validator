@@ -19,8 +19,7 @@
 #include "object/name.h"
 #include "object/manifest.h"
 #include "object/signed_object.h"
-#include "rrdp/rrdp_objects.h"
-#include "rrdp/rrdp_parser.h"
+#include "rrdp/rrdp_loader.h"
 #include "rsync/rsync.h"
 
 /* Just to prevent some line breaking. */
@@ -1880,62 +1879,7 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 static int
 exec_rrdp_method(struct sia_ca_uris *sia_uris)
 {
-	struct update_notification *upd_notification;
-	struct snapshot *snapshot;
-	enum rrdp_uri_cmp_result res;
-	int error;
-
-	error = rrdp_parse_notification(sia_uris->rpkiNotify.uri,
-	    &upd_notification);
-	if (error)
-		return error;
-
-	res = rhandler_uri_cmp(uri_get_global(sia_uris->rpkiNotify.uri),
-	    upd_notification->global_data.session_id,
-	    upd_notification->global_data.serial);
-	switch(res) {
-	case RRDP_URI_EQUAL:
-		update_notification_destroy(upd_notification);
-		fnstack_pop();
-		return 0;
-	case RRDP_URI_DIFF_SERIAL:
-		/* FIXME (now) Fetch and process the deltas */
-		/* Store the new value */
-		error = rhandler_uri_update(
-		    uri_get_global(sia_uris->rpkiNotify.uri),
-		    upd_notification->global_data.session_id,
-		    upd_notification->global_data.serial);
-		break;
-	case RRDP_URI_DIFF_SESSION:
-		/* FIXME (now) delete the old session files */
-	case RRDP_URI_NOTFOUND:
-		/* Process the snapshot */
-		error = rrdp_parse_snapshot(upd_notification, &snapshot);
-		if (error) {
-			break;
-		}
-		snapshot_destroy(snapshot);
-		fnstack_pop(); /* FIXME (now) Snapshot pop, shouldn't be here */
-		/* Store the new value */
-		error = rhandler_uri_update(
-		    uri_get_global(sia_uris->rpkiNotify.uri),
-		    upd_notification->global_data.session_id,
-		    upd_notification->global_data.serial);
-
-		break;
-	default:
-		pr_crit("Unknown RRDP URI comparison result");
-	}
-
-	/*
-	 * FIXME (now) Now do the validation, start by the root manifest
-	 */
-	update_notification_destroy(upd_notification);
-	fnstack_pop();
-	if (error) {
-		return error;
-	}
-	return 0;
+	return rrdp_load(sia_uris->rpkiNotify.uri);
 }
 
 static int

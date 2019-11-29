@@ -195,6 +195,13 @@ rrdp_uri_update(char const *uri, char const *session_id, unsigned long serial)
 	    db_rrdp_add_uri(state.rrdp_uris, uri, session_id, serial))
 }
 
+int
+rrdp_uri_get_serial(char const *uri, unsigned long *serial)
+{
+	RLOCK_HANDLER(&state_lock,
+	    db_rrdp_get_serial(state.rrdp_uris, uri, serial))
+}
+
 static int
 __perform_standalone_validation(struct db_table **result)
 {
