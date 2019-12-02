@@ -104,7 +104,7 @@ end1:
  * "expected" hash). Returns 0 if no errors happened and the hashes match.
  */
 int
-hash_validate_file(char const *algorithm, struct rpki_uri *uri,
+hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
     BIT_STRING_t const *expected)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];
@@ -120,6 +120,30 @@ hash_validate_file(char const *algorithm, struct rpki_uri *uri,
 
 	if (!hash_matches(expected->buf, expected->size, actual, actual_len)) {
 		return pr_err("File '%s' does not match its manifest hash.",
+		    uri_get_printable(uri));
+	}
+
+	return 0;
+}
+
+/**
+ * Computes the hash of the file @uri, and compares it to @expected HASH of
+ * @expected_len. Returns 0 if no errors happened and the hashes match.
+ */
+int
+hash_validate_file(char const *algorithm, struct rpki_uri *uri,
+    unsigned char const *expected, size_t expected_len)
+{
+	unsigned char actual[EVP_MAX_MD_SIZE];
+	unsigned int actual_len;
+	int error;
+
+	error = hash_file(algorithm, uri, actual, &actual_len);
+	if (error)
+		return error;
+
+	if (!hash_matches(expected, expected_len, actual, actual_len)) {
+		return pr_err("File '%s' does not match its expected hash.",
 		    uri_get_printable(uri));
 	}
 

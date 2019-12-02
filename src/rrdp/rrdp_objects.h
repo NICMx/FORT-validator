@@ -1,7 +1,6 @@
 #ifndef SRC_RRDP_RRDP_OBJECTS_H_
 #define SRC_RRDP_RRDP_OBJECTS_H_
 
-#include <libxml/tree.h>
 #include <stddef.h>
 
 /* Possible results for an RRDP URI comparison */
@@ -18,9 +17,6 @@ enum rrdp_uri_cmp_result {
 	/* The URI doesn't exists */
 	RRDP_URI_NOTFOUND,
 };
-
-/* Structure to remember the XML source file (useful for hash validations) */
-struct xml_source;
 
 /* Global RRDP files data */
 struct global_data {
@@ -53,7 +49,6 @@ struct withdraw {
  */
 struct delta {
 	struct global_data global_data;
-	struct xml_source *source;
 };
 
 /* Snapshot file content
@@ -61,7 +56,6 @@ struct delta {
  */
 struct snapshot {
 	struct global_data global_data;
-	struct xml_source *source;
 };
 
 /* Delta element located at an update notification file */
@@ -81,10 +75,6 @@ void global_data_cleanup(struct global_data *);
 
 int doc_data_init(struct doc_data *);
 void doc_data_cleanup(struct doc_data *);
-
-int xml_source_create(struct xml_source **);
-void xml_source_destroy(struct xml_source *);
-int xml_source_set(struct xml_source *, xmlDoc *);
 
 int update_notification_create(struct update_notification **);
 void update_notification_destroy(struct update_notification *);

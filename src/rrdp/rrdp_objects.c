@@ -4,10 +4,6 @@
 #include <string.h>
 #include "log.h"
 
-struct xml_source {
-	xmlDoc *doc;
-};
-
 struct delta_head {
 	unsigned long serial;
 	struct doc_data doc_data;
@@ -45,40 +41,6 @@ doc_data_cleanup(struct doc_data *data)
 {
 	free(data->hash);
 	free(data->uri);
-}
-
-int
-xml_source_create(struct xml_source **src)
-{
-	struct xml_source *tmp;
-
-	tmp = malloc(sizeof(struct xml_source));
-	if (tmp == NULL)
-		return pr_enomem();
-
-	*src = tmp;
-	return 0;
-}
-
-void
-xml_source_destroy(struct xml_source *src){
-	if (src != NULL) {
-		xmlFreeDoc(src->doc);
-		free(src);
-	}
-}
-
-int
-xml_source_set(struct xml_source *src, xmlDoc *orig)
-{
-	xmlDoc *cpy;
-
-	cpy = xmlCopyDoc(orig, 1);
-	if (cpy == NULL)
-		return pr_enomem();
-
-	src->doc = cpy;
-	return 0;
 }
 
 static int
@@ -213,6 +175,8 @@ deltas_head_add(struct deltas_head *deltas, unsigned long serial,
 		free(elem);
 		return pr_enomem();
 	}
+	memcpy(elem->doc_data.hash, hash, hash_len);
+
 	SLIST_INSERT_HEAD(deltas, elem, next);
 
 	return 0;
@@ -243,7 +207,6 @@ snapshot_create(struct snapshot **file)
 		return pr_enomem();
 
 	global_data_init(&tmp->global_data);
-	tmp->source = NULL;
 
 	*file = tmp;
 	return 0;
@@ -253,7 +216,6 @@ void
 snapshot_destroy(struct snapshot *file)
 {
 	global_data_cleanup(&file->global_data);
-	xml_source_destroy(file->source);
 	free(file);
 }
 
@@ -267,7 +229,6 @@ delta_create(struct delta **file)
 		return pr_enomem();
 
 	global_data_init(&tmp->global_data);
-	tmp->source = NULL;
 
 	*file = tmp;
 	return 0;
@@ -277,7 +238,6 @@ void
 delta_destroy(struct delta *file)
 {
 	global_data_cleanup(&file->global_data);
-	xml_source_destroy(file->source);
 	free(file);
 }
 

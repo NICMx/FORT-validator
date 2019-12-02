@@ -170,7 +170,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 		if (error)
 			goto fail;
 
-		error = hash_validate_file("sha256", uri, &fah->hash);
+		error = hash_validate_mft_file("sha256", uri, &fah->hash);
 		if (error) {
 			uri_refput(uri);
 			continue;

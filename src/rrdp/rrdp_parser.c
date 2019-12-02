@@ -12,12 +12,16 @@
 #include <unistd.h>
 
 #include "crypto/base64.h"
+#include "crypto/hash.h"
 #include "http/http.h"
 #include "xml/relax_ng.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"
 #include "thread_var.h"
+
+/* XML Common Namespace of files */
+#define RRDP_NAMESPACE		"http://www.ripe.net/rpki/rrdp"
 
 /* XML Elements */
 #define RRDP_ELEM_NOTIFICATION	"notification"
@@ -313,14 +317,39 @@ parse_hex_string(xmlNode *root, bool required, char const *attr,
 	return 0;
 }
 
+static int
+validate_version(xmlNode *root, unsigned long expected_version)
+{
+	unsigned long version;
+	int error;
+
+	error = parse_long(root, RRDP_ATTR_VERSION, &version);
+	if (error)
+		return error;
+
+	if (version != expected_version)
+		return pr_err("Invalid version, must be '%lu' and is '%lu'",
+		    expected_version, version);
+
+	return 0;
+}
+
 /* @gdata elements are allocated */
 static int
 parse_global_data(xmlNode *root, struct global_data *gdata,
-    struct global_data *parent_data, bool validate_serial)
+    char const *expected_session, unsigned long expected_serial)
 {
 	char *session_id;
 	unsigned long serial;
 	int error;
+
+	/*
+	 * The following rule appies to all files:
+	 * - The XML namespace MUST be "http://www.ripe.net/rpki/rrdp".
+	 */
+	if (!xmlStrEqual((root->ns)->href, BAD_CAST RRDP_NAMESPACE))
+		return pr_err("Namespace isn't '%s', current value is '%s'",
+		    RRDP_NAMESPACE, (root->ns)->href);
 
 	error = parse_string(root, RRDP_ATTR_SESSION_ID, &session_id);
 	if (error)
@@ -332,25 +361,25 @@ parse_global_data(xmlNode *root, struct global_data *gdata,
 		return error;
 	}
 
-	if (parent_data == NULL)
+	if (expected_session == NULL)
 		goto return_val; /* Error O is OK */
 
 	/*
 	 * FIXME (now) Prepare the callers to receive positive error values,
 	 * which means the file was successfully parsed but is has a logic error
-	 * (in this case, session ID or serial don't match parent's).
+	 * (in this case, session ID doesn't match parent's).
 	 */
-	if (strcmp(parent_data->session_id, session_id) != 0) {
-		pr_info("Object session id doesn't match parent's session id");
+	if (strcmp(expected_session, session_id) != 0) {
+		pr_info("File session id [%s] doesn't match parent's session id [%s]",
+		    expected_session, session_id);
 		error = EINVAL;
 		goto return_val;
 	}
 
-	if (!validate_serial)
-		goto return_val;
-
-	if (parent_data->serial != serial) {
-		pr_info("Object serial doesn't match parent's serial");
+	/* ...and the serial must match to what's expected at the parent */
+	if (serial != expected_serial) {
+		pr_info("File serial '%lu' doesn't match expected serial '%lu'",
+		    serial, expected_serial);
 		error = EINVAL;
 	}
 
@@ -378,10 +407,8 @@ parse_doc_data(xmlNode *root, bool parse_hash, bool hash_req,
 	if (error)
 		return error;
 
-	if (!parse_hash) {
-		data->uri = uri;
-		return 0;
-	}
+	if (!parse_hash)
+		goto end;
 
 	error = parse_hex_string(root, hash_req, RRDP_ATTR_HASH, &hash,
 	    &hash_len);
@@ -389,7 +416,7 @@ parse_doc_data(xmlNode *root, bool parse_hash, bool hash_req,
 		free(uri);
 		return error;
 	}
-
+end:
 	data->uri = uri;
 	data->hash = hash;
 	data->hash_len = hash_len;
@@ -397,7 +424,8 @@ parse_doc_data(xmlNode *root, bool parse_hash, bool hash_req,
 }
 
 static int
-parse_notification_deltas(xmlNode *root, struct deltas_head *deltas)
+parse_notification_deltas(xmlNode *root, struct deltas_head *deltas,
+    unsigned long *parsed_serial)
 {
 	struct doc_data doc_data;
 	unsigned long serial;
@@ -422,6 +450,7 @@ parse_notification_deltas(xmlNode *root, struct deltas_head *deltas)
 	if (error)
 		return error;
 
+	*parsed_serial = serial;
 	return 0;
 }
 
@@ -430,20 +459,53 @@ static int
 parse_notification_data(xmlNode *root, struct update_notification *file)
 {
 	xmlNode *cur_node;
+	unsigned long loaded_serial, min_serial;
+	unsigned long delta_count;
+	int snapshot_count;
 	int error;
 
+	snapshot_count = 0;
+	delta_count = 0;
+	loaded_serial = 0;
+	min_serial = ULONG_MAX;
+
 	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
-		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_DELTA))
+		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_DELTA)) {
+			delta_count++;
 			error = parse_notification_deltas(cur_node,
-			    file->deltas_list);
-		else if (xmlStrEqual(cur_node->name,
-		    BAD_CAST RRDP_ELEM_SNAPSHOT))
+			    file->deltas_list, &loaded_serial);
+			/* Note that the elements may not be ordered. (¬¬) */
+			if (!error && loaded_serial < min_serial)
+				min_serial = loaded_serial;
+		} else if (xmlStrEqual(cur_node->name,
+		    BAD_CAST RRDP_ELEM_SNAPSHOT)) {
+			/*
+			 * The Update Notification File MUST contain exactly
+			 * one 'snapshot' element for the current repository
+			 * version.
+			 */
+			if (++snapshot_count > 1)
+				return pr_err("More than one snapshot element found");
 			error = parse_doc_data(cur_node, true, true,
 			    &file->snapshot);
+		}
 
 		if (error)
 			return error;
 	}
+
+	/*
+	 * If delta elements are included, they MUST form a contiguous
+	 * sequence of serial numbers starting at a revision determined by
+	 * the Repository Server, up to the serial number mentioned in the
+	 * notification element.
+	 *
+	 * FIXME (now) running out of time, this needs an improvement, but why
+	 * should we validate this? Anyways, leaving it for later.
+	 */
+	if (delta_count > 0 &&
+	    file->global_data.serial - min_serial + 1 != delta_count)
+		return pr_err("Deltas listed don't have a contiguous sequence of serial numbers");
 
 	return 0;
 }
@@ -472,7 +534,16 @@ parse_publish(xmlNode *root, bool parse_hash, bool hash_required,
 	if (error)
 		goto release_base64;
 
-	/* FIXME (now) validate hash of base64str vs doc_data->hash */
+	/* rfc8181#section-2.2 but considering optional hash */
+	if (tmp->doc_data.hash_len > 0) {
+		if (!hash_validate("sha256",
+		    tmp->doc_data.hash, tmp->doc_data.hash_len,
+		    tmp->content, tmp->content_len)) {
+			error = pr_err("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
+			    tmp->doc_data.uri);
+			goto release_base64;
+		}
+	}
 
 	free(base64_str);
 	*publish = tmp;
@@ -488,6 +559,7 @@ static int
 parse_withdraw(xmlNode *root, struct withdraw **withdraw)
 {
 	struct withdraw *tmp;
+	struct rpki_uri *uri;
 	int error;
 
 	error = withdraw_create(&tmp);
@@ -498,8 +570,22 @@ parse_withdraw(xmlNode *root, struct withdraw **withdraw)
 	if (error)
 		goto release_tmp;
 
+	/* rfc8181#section-2.2, get the file from the uri */
+	error = uri_create_mixed_str(&uri, tmp->doc_data.uri,
+	    strlen(tmp->doc_data.uri));
+	if (error)
+		goto release_tmp;
+
+	error = hash_validate_file("sha256", uri,
+	    tmp->doc_data.hash, tmp->doc_data.hash_len);
+	if (error)
+		goto release_uri;
+
+	uri_refput(uri);
 	*withdraw = tmp;
 	return 0;
+release_uri:
+	uri_refput(uri);
 release_tmp:
 	withdraw_destroy(tmp);
 	return error;
@@ -560,7 +646,6 @@ delete_from_uri(char const *location)
 		goto release_uri;
 	}
 
-	/* FIXME (now) validate hash, must come from withdraw element */
 	errno = 0;
 	error = remove(local_uri);
 	if (error) {
@@ -672,7 +757,7 @@ parse_delta_element_list(xmlNode *root)
 }
 
 static int
-parse_notification(const char *path, struct update_notification **file)
+parse_notification(struct rpki_uri *uri, struct update_notification **file)
 {
 	xmlDoc *doc;
 	xmlNode *root;
@@ -681,7 +766,7 @@ parse_notification(const char *path, struct update_notification **file)
 
 	root = NULL;
 
-	error = relax_ng_validate(path, &doc);
+	error = relax_ng_validate(uri_get_local(uri), &doc);
 	if (error)
 		return error;
 
@@ -693,8 +778,13 @@ parse_notification(const char *path, struct update_notification **file)
 	if (error)
 		goto release_update;
 
-	/* FIXME (now) validate version, namespace, etc. */
-	error = parse_global_data(root, &tmp->global_data, NULL, false);
+	/* The version attribute in the notification root element MUST be 1. */
+	error = validate_version(root, 1);
+	if (error)
+		goto release_update;
+
+	/* No parent file, so no need to validate session ID and serial */
+	error = parse_global_data(root, &tmp->global_data, NULL, 0);
 	if (error)
 		goto release_update;
 
@@ -714,17 +804,18 @@ release_doc:
 }
 
 static int
-parse_snapshot(const char *path, struct update_notification *parent)
+parse_snapshot(struct rpki_uri *uri, struct update_notification *parent,
+    unsigned long expected_serial)
 {
 	xmlDoc *doc;
 	xmlNode *root;
 	struct snapshot *snapshot;
-	struct xml_source *source;
 	int error;
 
 	root = NULL;
 
-	error = relax_ng_validate(path, &doc);
+	fnstack_push_uri(uri);
+	error = relax_ng_validate(uri_get_local(uri), &doc);
 	if (error)
 		return error;
 
@@ -736,18 +827,19 @@ parse_snapshot(const char *path, struct update_notification *parent)
 	if (error)
 		goto release_snapshot;
 
-	/* FIXME (now) validate hash, version, namespace, etc. */
-	error = xml_source_create(&source);
+	/* Hash validation */
+	error = hash_validate_file("sha256", uri, parent->snapshot.hash,
+	    parent->snapshot.hash_len);
 	if (error)
 		goto release_snapshot;
 
-	snapshot->source = source;
-	error = xml_source_set(source, doc);
+	/* The version attribute in the snapshot root element MUST be "1". */
+	error = validate_version(root, 1);
 	if (error)
 		goto release_snapshot;
 
 	error = parse_global_data(root, &snapshot->global_data,
-	    &parent->global_data, true);
+	    parent->global_data.session_id, expected_serial);
 	if (error)
 		goto release_snapshot;
 
@@ -758,53 +850,63 @@ release_snapshot:
 	snapshot_destroy(snapshot);
 release_doc:
 	xmlFreeDoc(doc);
+	fnstack_pop();
 	return error;
 }
 
 static int
-parse_delta(const char *path, struct update_notification *parent)
+parse_delta(struct rpki_uri *uri, struct update_notification *parent,
+    struct delta_head *parents_data)
 {
 	xmlDoc *doc;
 	xmlNode *root;
 	struct delta *delta;
-	struct xml_source *source;
+	struct doc_data *expected_data;
 	int error;
 
 	root = NULL;
 
-	error = relax_ng_validate(path, &doc);
+	fnstack_push_uri(uri);
+	error = relax_ng_validate(uri_get_local(uri), &doc);
 	if (error)
-		return error;
+		goto pop_fnstack;
 
 	error = delta_create(&delta);
 	if (error)
 		goto release_doc;
 
+	expected_data = delta_head_get_doc_data(parents_data);
+
+	error = hash_validate_file("sha256", uri, expected_data->hash,
+	    expected_data->hash_len);
+	if (error)
+		goto release_delta;
+
 	error = get_root_element(doc, &root);
 	if (error)
 		goto release_delta;
 
-	/* FIXME (now) validate hash, version, namespace, etc. */
-	error = xml_source_create(&source);
+	/* The version attribute in the delta root element MUST be "1". */
+	error = validate_version(root, 1);
 	if (error)
 		goto release_delta;
 
-	delta->source = source;
-	error = xml_source_set(source, doc);
-	if (error)
-		goto release_delta;
-
+	/* session_id must be the same as the parent */
 	error = parse_global_data(root, &delta->global_data,
-	    &parent->global_data, false);
+	    parent->global_data.session_id,
+	    delta_head_get_serial(parents_data));
 	if (error)
 		goto release_delta;
 
 	error = parse_delta_element_list(root);
+
 	/* Error 0 is ok */
 release_delta:
 	delta_destroy(delta);
 release_doc:
 	xmlFreeDoc(doc);
+pop_fnstack:
+	fnstack_pop();
 	return error;
 }
 
@@ -833,8 +935,8 @@ __get_pending_delta(struct delta_head *delta_head, void *arg)
 	return get_pending_delta(&delta_head, serial - args->serial - 1, args);
 }
 
-static int process_delta(struct delta_head *delta_head,
-    struct update_notification *parent)
+static int
+process_delta(struct delta_head *delta_head, struct update_notification *parent)
 {
 	struct rpki_uri *uri;
 	struct doc_data *head_data;
@@ -851,17 +953,9 @@ static int process_delta(struct delta_head *delta_head,
 	if (error)
 		goto release_uri;
 
-	fnstack_push_uri(uri);
-	error = parse_delta(uri_get_local(uri), parent);
-	if (error) {
-		fnstack_pop();
-		goto release_uri;
-	}
+	error = parse_delta(uri, parent, delta_head);
 
-	fnstack_pop();
-	uri_refput(uri);
-
-	return 0;
+	/* Error 0 its ok */
 release_uri:
 	uri_refput(uri);
 	return error;
@@ -889,7 +983,7 @@ rrdp_parse_notification(struct rpki_uri *uri,
 		return error;
 
 	fnstack_push_uri(uri);
-	error = parse_notification(uri_get_local(uri), result);
+	error = parse_notification(uri, result);
 	if (error) {
 		fnstack_pop();
 		return error;
@@ -913,17 +1007,9 @@ rrdp_parse_snapshot(struct update_notification *parent)
 	if (error)
 		goto release_uri;
 
-	fnstack_push_uri(uri);
-	error = parse_snapshot(uri_get_local(uri), parent);
-	if (error) {
-		fnstack_pop();
-		goto release_uri;
-	}
+	error = parse_snapshot(uri, parent, parent->global_data.serial);
 
-	fnstack_pop();
-	uri_refput(uri);
-
-	return 0;
+	/* Error 0 is ok */
 release_uri:
 	uri_refput(uri);
 	return error;
