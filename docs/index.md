@@ -10,8 +10,5 @@ FORT validator is an MIT-licensed RPKI Relying Party, this is a tool offered as 
 
 ## Status
 
-Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the latest official release, includes minor upgrades:
-- New program arguments: `log.level` and `log.output` (see [Logging](logging.html)).
-- Add license for asn1c created code.
-- Remove `<sys/cdefs.h>` header since isn't really necessary.
-- Add `-Wno-cpp` flag at compilation to avoid such warnings.
+Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the latest official release, includes a bug fix:
+- Whenever multiple TAL's are being validated, if an error occurs while fetching the root certificate from one of them, discard the validation results from the rest of the TALs. This will avoid to send a considerable amount of withdrawal PDUs to the router(s) due to an error that isn't proper of the RPKI validation.
