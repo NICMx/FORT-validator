@@ -42,6 +42,7 @@ struct tal {
 };
 
 struct fv_param {
+	int *exit_status; /* Return status of the file validation */
 	char *tal_file;
 	void *arg;
 };
@@ -49,6 +50,7 @@ struct fv_param {
 struct thread {
 	pthread_t pid;
 	char *file;
+	int *exit_status;
 	SLIST_ENTRY(thread) next;
 };
 
@@ -544,6 +546,8 @@ do_file_validation(void *thread_arg)
 end:
 	fnstack_cleanup();
 	free(param.tal_file);
+	/* param.exit_error isn't released since it's from parent thread */
+	*param.exit_status = error;
 	return NULL;
 }
 
@@ -551,6 +555,7 @@ static void
 thread_destroy(struct thread *thread)
 {
 	free(thread->file);
+	free(thread->exit_status);
 	free(thread);
 }
 
@@ -561,12 +566,20 @@ __do_file_validation(char const *tal_file, void *arg)
 	struct thread *thread;
 	struct fv_param *param;
 	static pthread_t pid;
+	int *exit_status;
 	int error;
 
-	param = malloc(sizeof(struct fv_param));
-	if (param == NULL)
+	exit_status = malloc(sizeof(int));
+	if (exit_status == NULL)
 		return pr_enomem();
 
+	param = malloc(sizeof(struct fv_param));
+	if (param == NULL) {
+		error = pr_enomem();
+		goto free_status;
+	}
+
+	param->exit_status = exit_status;
 	param->tal_file = strdup(tal_file);
 	param->arg = arg;
 
@@ -574,22 +587,24 @@ __do_file_validation(char const *tal_file, void *arg)
 	if (errno) {
 		error = -pr_errno(errno,
 		    "Could not spawn the file validation thread");
-		goto free_param;
+		goto free_status;
 	}
 
 	thread = malloc(sizeof(struct thread));
 	if (thread == NULL) {
 		close_thread(pid, tal_file);
 		error = -EINVAL;
-		goto free_param;
+		goto free_status;
 	}
 
 	thread->pid = pid;
 	thread->file = strdup(tal_file);
+	thread->exit_status = exit_status;
 	SLIST_INSERT_HEAD(&threads, thread, next);
 
 	return 0;
-free_param:
+free_status:
+	free(exit_status);
 	free(param->tal_file);
 	free(param);
 	return error;
@@ -599,7 +614,7 @@ int
 perform_standalone_validation(struct db_table *table)
 {
 	struct thread *thread;
-	int error;
+	int error, t_error;
 
 	SLIST_INIT(&threads);
 	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
@@ -608,6 +623,7 @@ perform_standalone_validation(struct db_table *table)
 		return error;
 
 	/* Wait for all */
+	t_error = 0;
 	while (!SLIST_EMPTY(&threads)) {
 		thread = threads.slh_first;
 		error = pthread_join(thread->pid, NULL);
@@ -615,8 +631,17 @@ perform_standalone_validation(struct db_table *table)
 			pr_crit("pthread_join() threw %d on the '%s' thread.",
 			    error, thread->file);
 		SLIST_REMOVE_HEAD(&threads, next);
+		if (*thread->exit_status) {
+			t_error = *thread->exit_status;
+			pr_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
+			    thread->file);
+		}
 		thread_destroy(thread);
 	}
+
+	/* One thread has errors, validation can't keep the resulting table */
+	if (t_error)
+		return t_error;
 
 	return error;
 }
