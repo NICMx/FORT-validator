@@ -45,6 +45,8 @@ enum rrdp_uri_cmp_result rrdp_uri_cmp(char const *, char const *,
     unsigned long);
 int rrdp_uri_update(char const *, char const *, unsigned long);
 int rrdp_uri_get_serial(char const *, unsigned long *);
+int rrdp_uri_get_last_update(char const *, long *);
+int rrdp_uri_set_last_update(char const *);
 
 uint16_t get_current_session_id(uint8_t);
 

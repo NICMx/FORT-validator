@@ -22,12 +22,25 @@ struct rrdp_handler {
 	    unsigned long);
 	/* Add or update an RRDP URI */
 	int (*uri_update)(char const *, char const *, unsigned long);
-	/* Get the data related to an URI */
+	/*
+	 * Get the serial related to an URI, returns -ENOENT if the URI doesn't
+	 * exists, any other error means that something went wrong.
+	 */
 	int (*uri_get_serial)(char const *, unsigned long *);
+	/*
+	 * Get the last update that an URI was requested, returns -ENOENT if
+	 * the URI doesn't exists, any other error means that something went
+	 * wrong.
+	 */
+	int (*uri_get_last_update)(char const *, long *);
+	/* Set the last update to now */
+	int (*uri_set_last_update)(char const *);
 };
 
 enum rrdp_uri_cmp_result rhandler_uri_cmp(char const *, char const *, unsigned long);
 int rhandler_uri_update(char const *, char const *, unsigned long);
 int rhandler_uri_get_serial(char const *, unsigned long *);
+int rhandler_uri_get_last_update(char const *, long *);
+int rhandler_uri_set_last_update(char const *);
 
 #endif /* SRC_RRDP_RRDP_HANDLER_H_ */

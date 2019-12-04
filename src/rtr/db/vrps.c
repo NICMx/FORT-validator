@@ -202,6 +202,20 @@ rrdp_uri_get_serial(char const *uri, unsigned long *serial)
 	    db_rrdp_get_serial(state.rrdp_uris, uri, serial))
 }
 
+int
+rrdp_uri_get_last_update(char const *uri, long *last_update)
+{
+	RLOCK_HANDLER(&state_lock,
+	    db_rrdp_get_last_update(state.rrdp_uris, uri, last_update))
+}
+
+int
+rrdp_uri_set_last_update(char const *uri)
+{
+	WLOCK_HANDLER(&state_lock,
+	    db_rrdp_set_last_update(state.rrdp_uris, uri))
+}
+
 static int
 __perform_standalone_validation(struct db_table **result)
 {

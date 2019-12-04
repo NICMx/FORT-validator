@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "data_structure/uthash_nonfatal.h"
 #include "rrdp/rrdp_objects.h"
 #include "log.h"
@@ -10,12 +11,26 @@ struct db_rrdp_uri {
 	/* Key */
 	char *uri;
 	struct global_data data;
+	long last_update;
 	UT_hash_handle hh;
 };
 
 struct db_rrdp {
 	struct db_rrdp_uri *uris;
 };
+
+static int
+get_current_time(long *result)
+{
+	time_t now;
+
+	now = time(NULL);
+	if (now == ((time_t) -1))
+		return pr_errno(errno, "Error getting the current time");
+
+	*result = now;
+	return 0;
+}
 
 static int
 db_rrdp_uri_create(char const *uri, char const *session_id,
@@ -43,6 +58,7 @@ db_rrdp_uri_create(char const *uri, char const *session_id,
 	}
 
 	tmp->data.serial = serial;
+	tmp->last_update = 0;
 
 	*result = tmp;
 	return 0;
@@ -134,6 +150,33 @@ db_rrdp_get_serial(struct db_rrdp *db, char const *uri, unsigned long *serial)
 	*serial = found->data.serial;
 
 	return 0;
+}
+
+int
+db_rrdp_get_last_update(struct db_rrdp *db, char const *uri, long *date)
+{
+	struct db_rrdp_uri *found;
+
+	HASH_FIND_STR(db->uris, uri, found);
+	if (found == NULL)
+		return -ENOENT;
+
+	*date = found->last_update;
+
+	return 0;
+}
+
+/* Set the last update to now */
+int
+db_rrdp_set_last_update(struct db_rrdp *db, char const *uri)
+{
+	struct db_rrdp_uri *found;
+
+	HASH_FIND_STR(db->uris, uri, found);
+	if (found == NULL)
+		return -ENOENT;
+
+	return get_current_time(&found->last_update);
 }
 
 int

@@ -14,6 +14,7 @@
 #include "crypto/base64.h"
 #include "crypto/hash.h"
 #include "http/http.h"
+#include "rrdp/rrdp_handler.h"
 #include "xml/relax_ng.h"
 #include "common.h"
 #include "file.h"
@@ -965,9 +966,12 @@ release_uri:
  * Download from @uri and set result file contents to @result, the file name
  * is pushed into fnstack, so don't forget to do the pop when done working
  * with the file.
+ *
+ * If the server didn't sent the file, due to the validation of
+ * 'If-Modified-Since' header, return 0 and set @result to NULL.
  */
 int
-rrdp_parse_notification(struct rpki_uri *uri,
+rrdp_parse_notification(struct rpki_uri *uri, long last_update,
     struct update_notification **result)
 {
 	int error;
@@ -975,12 +979,15 @@ rrdp_parse_notification(struct rpki_uri *uri,
 	if (uri == NULL || uri_is_rsync(uri))
 		pr_crit("Wrong call, trying to parse a non HTTPS URI");
 
-	/*
-	 * FIXME (now) Add "If-Modified-Since" header (see rfc8182#section-4.2)
-	 */
-	error = http_download_file(uri, write_local);
-	if (error)
+	error = http_download_file_with_ims(uri, write_local, last_update);
+	if (error < 0)
 		return error;
+
+	/* No updates yet */
+	if (error > 0) {
+		*result = NULL;
+		return 0;
+	}
 
 	fnstack_push_uri(uri);
 	error = parse_notification(uri, result);

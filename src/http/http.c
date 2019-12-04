@@ -7,6 +7,11 @@
 #include "file.h"
 #include "log.h"
 
+/* HTTP Response Code 304 (Not Modified) */
+#define HTTP_NOT_MODIFIED	304
+/* HTTP Response Code 400 (Bad Request) */
+#define HTTP_BAD_REQUEST	400
+
 struct http_handler {
 	CURL *curl;
 	char errbuf[CURL_ERROR_SIZE];
@@ -61,6 +66,17 @@ http_easy_init(struct http_handler *handler)
 	/* Currently all requests use GET */
 	curl_easy_setopt(tmp, CURLOPT_HTTPGET, 1);
 
+	/*
+	 * Response codes >= 400 will be treated as errors
+	 *
+	 * "This method is not fail-safe and there are occasions where
+	 * non-successful response codes will slip through, especially when
+	 * authentication is involved (response codes 401 and 407)."
+	 *
+	 * Well, be ready for those scenarios when performing the requests.
+	 */
+	curl_easy_setopt(tmp, CURLOPT_FAILONERROR, 1L);
+
 	/* Refer to its error buffer */
 	curl_easy_setopt(tmp, CURLOPT_ERRORBUFFER, handler->errbuf);
 
@@ -69,12 +85,19 @@ http_easy_init(struct http_handler *handler)
 	return 0;
 }
 
+static char const *
+curl_err_string(struct http_handler *handler, CURLcode res)
+{
+	return strlen(handler->errbuf) > 0 ?
+	    handler->errbuf : curl_easy_strerror(res);
+}
+
 /*
  * Fetch data from @uri and write result using @cb (which will receive @arg).
  */
 static int
-http_fetch(struct http_handler *handler, char const *uri, http_write_cb cb,
-    void *arg)
+http_fetch(struct http_handler *handler, char const *uri, long *response_code,
+    http_write_cb cb, void *arg)
 {
 	CURLcode res;
 
@@ -85,12 +108,16 @@ http_fetch(struct http_handler *handler, char const *uri, http_write_cb cb,
 
 	pr_debug("HTTP GET from '%s'.", uri);
 	res = curl_easy_perform(handler->curl);
-	if (res != CURLE_OK)
-		return pr_err("Error requesting URL %s: %s", uri,
-		    strlen(handler->errbuf) > 0 ?
-		    handler->errbuf : curl_easy_strerror(res));
+	curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE, response_code);
+	if (res == CURLE_OK)
+		return 0;
 
-	return 0;
+	if (*response_code >= HTTP_BAD_REQUEST)
+		return pr_err("Error requesting URL %s (received HTTP code %ld): %s",
+		    uri, *response_code, curl_err_string(handler, res));
+
+	return pr_err("Error requesting URL %s: %s", uri,
+	    curl_err_string(handler, res));
 }
 
 static void
@@ -99,13 +126,9 @@ http_easy_cleanup(struct http_handler *handler)
 	curl_easy_cleanup(handler->curl);
 }
 
-/*
- * Try to download from global @uri into a local directory structure created
- * from local @uri. The @cb should be utilized to write into a file; the file
- * will be sent to @cb as the last argument (its a FILE reference).
- */
-int
-http_download_file(struct rpki_uri *uri, http_write_cb cb)
+static int
+__http_download_file(struct rpki_uri *uri, http_write_cb cb,
+    long *response_code, long ims_value)
 {
 	struct http_handler handler;
 	struct stat stat;
@@ -124,7 +147,15 @@ http_download_file(struct rpki_uri *uri, http_write_cb cb)
 	if (error)
 		goto close_file;
 
-	error = http_fetch(&handler, uri_get_global(uri), cb, out);
+	/* Set "If-Modified-Since" header only if a value is specified */
+	if (ims_value > 0) {
+		curl_easy_setopt(handler.curl, CURLOPT_TIMEVALUE, ims_value);
+		curl_easy_setopt(handler.curl, CURLOPT_TIMECONDITION,
+		    CURL_TIMECOND_IFMODSINCE);
+	}
+
+	error = http_fetch(&handler, uri_get_global(uri), response_code, cb,
+	    out);
 	http_easy_cleanup(&handler);
 	file_close(out);
 
@@ -133,4 +164,46 @@ http_download_file(struct rpki_uri *uri, http_write_cb cb)
 close_file:
 	file_close(out);
 	return error;
+}
+
+/*
+ * Try to download from global @uri into a local directory structure created
+ * from local @uri. The @cb should be utilized to write into a file; the file
+ * will be sent to @cb as the last argument (its a FILE reference).
+ *
+ * Regular return value: 0 on success, any other value is an error.
+ */
+int
+http_download_file(struct rpki_uri *uri, http_write_cb cb)
+{
+	long response = 0;
+	return __http_download_file(uri, cb, &response, 0);
+}
+
+/*
+ * Fetch the file from @uri, write it using the @cb.
+ *
+ * The HTTP request is made using the header 'If-Modified-Since' with a value
+ * of @value.
+ *
+ * Returns:
+ *   > 0 file was requested but wasn't downloaded since the server didn't sent
+ *       a response due to its policy using the header 'If-Modified-Since'.
+ *   = 0 file successfully downloaded.
+ *   < 0 an actual error happened.
+ */
+int
+http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value)
+{
+	long response = 0;
+	int error;
+
+	error = __http_download_file(uri, cb, &response, value);
+	if (error)
+		return error;
+
+	/* rfc7232#section-3.3:
+	 * "the origin server SHOULD generate a 304 (Not Modified) response"
+	 */
+	return response == HTTP_NOT_MODIFIED;
 }

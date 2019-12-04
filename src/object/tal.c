@@ -483,6 +483,8 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	rrdp_handler.uri_cmp = rrdp_uri_cmp;
 	rrdp_handler.uri_update = rrdp_uri_update;
 	rrdp_handler.uri_get_serial = rrdp_uri_get_serial;
+	rrdp_handler.uri_get_last_update = rrdp_uri_get_last_update;
+	rrdp_handler.uri_set_last_update = rrdp_uri_set_last_update;
 
 	error = validation_prepare(&state, tal, &validation_handler,
 	    &rrdp_handler);

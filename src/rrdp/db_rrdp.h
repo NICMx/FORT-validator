@@ -17,5 +17,8 @@ enum rrdp_uri_cmp_result db_rrdp_cmp_uri(struct db_rrdp *, char const *,
 int db_rrdp_add_uri(struct db_rrdp *, char const *, char const *,
     unsigned long);
 int db_rrdp_get_serial(struct db_rrdp *, char const *, unsigned long *);
+int db_rrdp_get_last_update(struct db_rrdp *, char const *, long *);
+
+int db_rrdp_set_last_update(struct db_rrdp *, char const *);
 
 #endif /* SRC_RRDP_DB_RRDP_H_ */
