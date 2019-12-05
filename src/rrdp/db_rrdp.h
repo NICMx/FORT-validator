@@ -12,7 +12,7 @@ struct db_rrdp;
 int db_rrdp_create(struct db_rrdp **);
 void db_rddp_destroy(struct db_rrdp *);
 
-enum rrdp_uri_cmp_result db_rrdp_cmp_uri(struct db_rrdp *, char const *,
+rrdp_uri_cmp_result_t db_rrdp_cmp_uri(struct db_rrdp *, char const *,
     char const *, unsigned long);
 int db_rrdp_add_uri(struct db_rrdp *, char const *, char const *,
     unsigned long);

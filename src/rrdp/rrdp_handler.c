@@ -32,7 +32,7 @@ get_current_threads_handler(struct rrdp_handler const **result)
 	return 0;
 }
 
-enum rrdp_uri_cmp_result
+rrdp_uri_cmp_result_t
 rhandler_uri_cmp(char const *uri, char const *session_id, unsigned long serial)
 {
 	CALL_HANDLER_FUNC(uri_cmp, uri_cmp(uri, session_id, serial))

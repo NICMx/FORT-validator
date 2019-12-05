@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "data_structure/array_list.h"
+#include "rrdp/rrdp_objects.h"
 #include "rtr/db/delta.h"
 
 /*
@@ -41,7 +42,7 @@ int handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t, void *);
 int handle_router_key(unsigned char const *, uint32_t, unsigned char const *,
     void *);
 
-enum rrdp_uri_cmp_result rrdp_uri_cmp(char const *, char const *,
+rrdp_uri_cmp_result_t rrdp_uri_cmp(char const *, char const *,
     unsigned long);
 int rrdp_uri_update(char const *, char const *, unsigned long);
 int rrdp_uri_get_serial(char const *, unsigned long *);

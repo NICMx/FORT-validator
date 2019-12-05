@@ -98,7 +98,7 @@ add_rrdp_uri(struct db_rrdp *db, struct db_rrdp_uri *new_uri)
 	return 0;
 }
 
-enum rrdp_uri_cmp_result
+rrdp_uri_cmp_result_t
 db_rrdp_cmp_uri(struct db_rrdp *db, char const *uri, char const *session_id,
     unsigned long serial)
 {

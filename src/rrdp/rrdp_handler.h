@@ -18,7 +18,7 @@ struct rrdp_handler {
 	 * Search the RRDP URI, returns the corresponding enum to indicate
 	 * the comparison result.
 	 */
-	enum rrdp_uri_cmp_result (*uri_cmp)(char const *, char const *,
+	rrdp_uri_cmp_result_t (*uri_cmp)(char const *, char const *,
 	    unsigned long);
 	/* Add or update an RRDP URI */
 	int (*uri_update)(char const *, char const *, unsigned long);
@@ -37,7 +37,8 @@ struct rrdp_handler {
 	int (*uri_set_last_update)(char const *);
 };
 
-enum rrdp_uri_cmp_result rhandler_uri_cmp(char const *, char const *, unsigned long);
+rrdp_uri_cmp_result_t rhandler_uri_cmp(char const *, char const *,
+    unsigned long);
 int rhandler_uri_update(char const *, char const *, unsigned long);
 int rhandler_uri_get_serial(char const *, unsigned long *);
 int rhandler_uri_get_last_update(char const *, long *);

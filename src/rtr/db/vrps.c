@@ -181,7 +181,7 @@ handle_router_key(unsigned char const *ski, uint32_t as,
 	    rtrhandler_handle_router_key(arg, ski, as, spk))
 }
 
-enum rrdp_uri_cmp_result
+rrdp_uri_cmp_result_t
 rrdp_uri_cmp(char const *uri, char const *session_id, unsigned long serial)
 {
 	RLOCK_HANDLER(&state_lock,

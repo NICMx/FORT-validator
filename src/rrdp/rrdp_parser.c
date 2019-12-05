@@ -38,12 +38,6 @@
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
 
-struct deltas_proc_args {
-	struct delta_head **deltas;
-	unsigned long serial;
-	size_t deltas_set;
-};
-
 static int
 get_root_element(xmlDoc *doc, xmlNode **result)
 {
@@ -418,6 +412,13 @@ parse_doc_data(xmlNode *root, bool parse_hash, bool hash_req,
 		return error;
 	}
 end:
+	/* Function called just to do the validation */
+	if (data == NULL) {
+		doc_data_init(data);
+		free(hash);
+		free(uri);
+		return 0;
+	}
 	data->uri = uri;
 	data->hash = hash;
 	data->hash_len = hash_len;
@@ -425,11 +426,12 @@ end:
 }
 
 static int
-parse_notification_deltas(xmlNode *root, struct deltas_head *deltas,
-    unsigned long *parsed_serial)
+parse_notification_deltas(xmlNode *root, unsigned long max_serial,
+    unsigned long deltas_len, struct deltas_head *deltas)
 {
 	struct doc_data doc_data;
 	unsigned long serial;
+	size_t position;
 	int error;
 
 	error = parse_long(root, RRDP_ATTR_SERIAL, &serial);
@@ -443,52 +445,83 @@ parse_notification_deltas(xmlNode *root, struct deltas_head *deltas,
 		return error;
 	}
 
-	error = deltas_head_add(deltas, serial, doc_data.uri, doc_data.hash,
-	    doc_data.hash_len);
+	/*
+	 * The delta will be added to the position it belongs, assuring that
+	 * the deltas list will be ordered.
+	 */
+	position = deltas_len - 1 - (max_serial - serial);
+	error = deltas_head_add(deltas, position, serial, doc_data.uri,
+	    doc_data.hash, doc_data.hash_len);
 
 	/* Always release data */
 	doc_data_cleanup(&doc_data);
-	if (error)
-		return error;
+	if (!error)
+		return 0;
 
-	*parsed_serial = serial;
-	return 0;
+	if (error == -EINVAL)
+		return pr_err("Serial '%lu' at delta elements isn't part of a contiguous list of serials.",
+		    serial);
+
+	if (error == -EEXIST)
+		return pr_err("Duplicated serial '%lu' at delta elements.",
+		    serial);
+
+	return error;
 }
 
 /* Get the notification data. In case of error, the caller must cleanup @file */
 static int
-parse_notification_data(xmlNode *root, struct update_notification *file)
+parse_notification_data(xmlNode *root, struct update_notification *file,
+    char const *uri)
 {
 	xmlNode *cur_node;
-	unsigned long loaded_serial, min_serial;
-	unsigned long delta_count;
-	int snapshot_count;
+	rrdp_uri_cmp_result_t res;
+	unsigned long from_serial, max_serial;
+	unsigned long deltas_len;
+	bool create_snapshot;
 	int error;
 
-	snapshot_count = 0;
-	delta_count = 0;
-	loaded_serial = 0;
-	min_serial = ULONG_MAX;
+	create_snapshot = false;
+	from_serial = 0;
+	max_serial = file->global_data.serial;
+
+	/* By schema, at least one snapshot element will be present */
+	deltas_len = xmlChildElementCount(root) - 1;
+
+	error = deltas_head_set_size(file->deltas_list, deltas_len);
+	if (error)
+		return error;
+
+	res = rhandler_uri_cmp(uri, file->global_data.session_id,
+	    file->global_data.serial);
+	switch (res) {
+	case RRDP_URI_EQUAL:
+		/* Just validate content */
+		break;
+	case RRDP_URI_DIFF_SERIAL:
+		/* Get only the deltas to process and the snapshot */
+		create_snapshot = true;
+		error = rhandler_uri_get_serial(uri, &from_serial);
+		if (error)
+			return pr_err("Couldn't get serial of '%s'.", uri);
+		break;
+	case RRDP_URI_DIFF_SESSION:
+		/* Get only the snapshot */
+	case RRDP_URI_NOTFOUND:
+		create_snapshot = true;
+		break;
+	default:
+		pr_crit("Unexpected RRDP URI comparison result");
+	}
 
 	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
 		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_DELTA)) {
-			delta_count++;
-			error = parse_notification_deltas(cur_node,
-			    file->deltas_list, &loaded_serial);
-			/* Note that the elements may not be ordered. (¬¬) */
-			if (!error && loaded_serial < min_serial)
-				min_serial = loaded_serial;
+			error = parse_notification_deltas(cur_node, max_serial,
+			    deltas_len, file->deltas_list);
 		} else if (xmlStrEqual(cur_node->name,
 		    BAD_CAST RRDP_ELEM_SNAPSHOT)) {
-			/*
-			 * The Update Notification File MUST contain exactly
-			 * one 'snapshot' element for the current repository
-			 * version.
-			 */
-			if (++snapshot_count > 1)
-				return pr_err("More than one snapshot element found");
 			error = parse_doc_data(cur_node, true, true,
-			    &file->snapshot);
+			    (create_snapshot ? &file->snapshot : NULL));
 		}
 
 		if (error)
@@ -496,16 +529,14 @@ parse_notification_data(xmlNode *root, struct update_notification *file)
 	}
 
 	/*
-	 * If delta elements are included, they MUST form a contiguous
+	 * "If delta elements are included, they MUST form a contiguous
 	 * sequence of serial numbers starting at a revision determined by
 	 * the Repository Server, up to the serial number mentioned in the
-	 * notification element.
+	 * notification element."
 	 *
-	 * FIXME (now) running out of time, this needs an improvement, but why
-	 * should we validate this? Anyways, leaving it for later.
+	 * If all expected elements are set, everything is ok.
 	 */
-	if (delta_count > 0 &&
-	    file->global_data.serial - min_serial + 1 != delta_count)
+	if (!deltas_head_values_set(file->deltas_list))
 		return pr_err("Deltas listed don't have a contiguous sequence of serial numbers");
 
 	return 0;
@@ -789,7 +820,7 @@ parse_notification(struct rpki_uri *uri, struct update_notification **file)
 	if (error)
 		goto release_update;
 
-	error = parse_notification_data(root, tmp);
+	error = parse_notification_data(root, tmp, uri_get_global(uri));
 	if (error)
 		goto release_update;
 
@@ -876,7 +907,7 @@ parse_delta(struct rpki_uri *uri, struct update_notification *parent,
 	if (error)
 		goto release_doc;
 
-	expected_data = delta_head_get_doc_data(parents_data);
+	expected_data = &parents_data->doc_data;
 
 	error = hash_validate_file("sha256", uri, expected_data->hash,
 	    expected_data->hash_len);
@@ -895,7 +926,7 @@ parse_delta(struct rpki_uri *uri, struct update_notification *parent,
 	/* session_id must be the same as the parent */
 	error = parse_global_data(root, &delta->global_data,
 	    parent->global_data.session_id,
-	    delta_head_get_serial(parents_data));
+	    parents_data->serial);
 	if (error)
 		goto release_delta;
 
@@ -912,38 +943,14 @@ pop_fnstack:
 }
 
 static int
-get_pending_delta(struct delta_head **delta_head, unsigned long pos,
-    struct deltas_proc_args *args)
+process_delta(struct delta_head *delta_head, void *arg)
 {
-	/* Ref to the delta element */
-	args->deltas[pos] = *delta_head;
-	args->deltas_set++;
-	delta_head_refget(*delta_head);
-
-	return 0;
-}
-
-static int
-__get_pending_delta(struct delta_head *delta_head, void *arg)
-{
-	struct deltas_proc_args *args = arg;
-	unsigned long serial;
-
-	serial = delta_head_get_serial(delta_head);
-	if (serial <= args->serial)
-		return 0;
-
-	return get_pending_delta(&delta_head, serial - args->serial - 1, args);
-}
-
-static int
-process_delta(struct delta_head *delta_head, struct update_notification *parent)
-{
+	struct update_notification *parent = arg;
 	struct rpki_uri *uri;
 	struct doc_data *head_data;
 	int error;
 
-	head_data = delta_head_get_doc_data(delta_head);
+	head_data = &delta_head->doc_data;
 
 	error = uri_create_https_str(&uri, head_data->uri,
 	    strlen(head_data->uri));
@@ -1023,46 +1030,15 @@ release_uri:
 }
 
 int
-rrdp_process_deltas(struct update_notification *parent, unsigned long serial)
+rrdp_process_deltas(struct update_notification *parent,
+    unsigned long cur_serial)
 {
-	struct delta_head *deltas[parent->global_data.serial - serial];
-	struct deltas_proc_args args;
 	size_t deltas_len;
-	size_t index;
-	int error;
+	size_t from;
 
-	deltas_len = parent->global_data.serial - serial;
-	for (index = 0; index < deltas_len; index++)
-		deltas[index] = NULL;
+	deltas_len = deltas_head_get_size(parent->deltas_list);
+	from = deltas_len - (parent->global_data.serial - cur_serial);
 
-	args.deltas = deltas;
-	args.serial = serial;
-	args.deltas_set = 0;
-
-	error = deltas_head_for_each(parent->deltas_list, __get_pending_delta,
-	    &args);
-	if (error)
-		goto release_deltas;
-
-	/* Check that all expected deltas are set */
-	if (args.deltas_set != deltas_len) {
-		error = pr_err("Less deltas than expected: should be from serial %lu to %lu (%lu), but got only %lu",
-		    serial, parent->global_data.serial, deltas_len,
-		    args.deltas_set);
-		goto release_deltas;
-	}
-
-	/* Now process each delta in order */
-	for (index = 0; index < deltas_len; index++) {
-		error = process_delta(deltas[index], parent);
-		if (error)
-			break;
-	}
-	/* Error 0 it's ok */
-release_deltas:
-	for (index = 0; index < deltas_len; index++)
-		if (deltas[index] != NULL)
-			delta_head_refput(deltas[index]);
-
-	return error;
+	return deltas_head_for_each(parent->deltas_list, from, process_delta,
+	    parent);
 }

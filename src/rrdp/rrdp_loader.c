@@ -31,8 +31,8 @@ int
 rrdp_load(struct rpki_uri *uri)
 {
 	struct update_notification *upd_notification;
+	rrdp_uri_cmp_result_t res;
 	long last_update;
-	enum rrdp_uri_cmp_result res;
 	int error;
 
 	last_update = 0;
@@ -51,12 +51,17 @@ rrdp_load(struct rpki_uri *uri)
 	res = rhandler_uri_cmp(uri_get_global(uri),
 	    upd_notification->global_data.session_id,
 	    upd_notification->global_data.serial);
-	switch(res) {
+	switch (res) {
 	case RRDP_URI_EQUAL:
 		goto set_update;
 	case RRDP_URI_DIFF_SERIAL:
 		error = process_diff_serial(upd_notification,
 		    uri_get_global(uri));
+		/* Something went wrong, use snapshot */
+		if (!error)
+			break;
+		pr_warn("There was an error processing RRDP deltas, using the snapshot instead.");
+		error = process_snapshot(upd_notification, uri_get_global(uri));
 		break;
 	case RRDP_URI_DIFF_SESSION:
 		/* FIXME (now) delete the old session files */

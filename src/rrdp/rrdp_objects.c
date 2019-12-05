@@ -1,24 +1,35 @@
 #include "rrdp_objects.h"
 
-#include <sys/queue.h>
+#include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include "log.h"
 
-struct delta_head {
-	unsigned long serial;
-	struct doc_data doc_data;
-	unsigned int references;
-	SLIST_ENTRY(delta_head) next;
+/*
+ * List of deltas inside an update notification file.
+ *
+ * The structure functions are extended and will have the following meaning:
+ *   - capacity : is the size of the array, must be set before using the array
+ *                and can't be modified.
+ *   - len      : number of elements set in the array.
+ *
+ * This struct is a diff version of array_list, utilized to store only the
+ * amount of deltas that may be needed and validate that an update notification
+ * file has a contiguous set of deltas.
+ */
+struct deltas_head {
+	/** Unidimensional array. Initialized lazily. */
+	struct delta_head **array;
+	/** Number of elements in @array. */
+	size_t len;
+	/** Actual allocated slots in @array. */
+	size_t capacity;
 };
 
-/* List of deltas inside an update notification file */
-SLIST_HEAD(deltas_head, delta_head);
-
-int
+void
 global_data_init(struct global_data *data)
 {
 	data->session_id = NULL;
-	return 0;
 }
 
 void
@@ -27,13 +38,12 @@ global_data_cleanup(struct global_data *data)
 	free(data->session_id);
 }
 
-int
+void
 doc_data_init(struct doc_data *data)
 {
 	data->hash = NULL;
 	data->hash_len = 0;
 	data->uri = NULL;
-	return 0;
 }
 
 void
@@ -53,38 +63,37 @@ delta_head_create(struct delta_head **result)
 		return pr_enomem();
 
 	doc_data_init(&tmp->doc_data);
-	tmp->references = 1;
 
 	*result = tmp;
 	return 0;
 }
 
-unsigned long
-delta_head_get_serial(struct delta_head *delta_head)
+static void
+delta_head_destroy(struct delta_head *delta_head)
 {
-	return delta_head->serial;
-}
-
-struct doc_data *
-delta_head_get_doc_data(struct delta_head *delta_head)
-{
-	return &delta_head->doc_data;
-}
-
-void
-delta_head_refget(struct delta_head *delta_head)
-{
-	delta_head->references++;
-}
-
-void
-delta_head_refput(struct delta_head *delta_head)
-{
-	delta_head->references--;
-	if (delta_head->references == 0) {
+	if (delta_head) {
 		doc_data_cleanup(&delta_head->doc_data);
 		free(delta_head);
 	}
+}
+
+static void
+deltas_head_init(struct deltas_head *list)
+{
+	list->array = NULL;
+	list->len = 0;
+	list->capacity = 0;
+}
+
+static void
+deltas_head_cleanup(struct deltas_head *list)
+{
+	size_t i;
+
+	for (i = 0; i < list->capacity; i++)
+		delta_head_destroy(list->array[i]);
+	if (list->array)
+		free(list->array);
 }
 
 static int
@@ -96,7 +105,7 @@ deltas_head_create(struct deltas_head **deltas)
 	if (tmp == NULL)
 		return pr_enomem();
 
-	SLIST_INIT(tmp);
+	deltas_head_init(tmp);
 
 	*deltas = tmp;
 	return 0;
@@ -105,55 +114,63 @@ deltas_head_create(struct deltas_head **deltas)
 static void
 deltas_head_destroy(struct deltas_head *deltas)
 {
-	struct delta_head *head;
-
-	while (!SLIST_EMPTY(deltas)) {
-		head = deltas->slh_first;
-		SLIST_REMOVE_HEAD(deltas, next);
-		delta_head_refput(head);
-	}
+	deltas_head_cleanup(deltas);
 	free(deltas);
 }
 
 int
-update_notification_create(struct update_notification **file)
+deltas_head_set_size(struct deltas_head *deltas, size_t capacity)
 {
-	struct update_notification *tmp;
-	int error;
+	size_t i;
 
-	tmp = malloc(sizeof(struct update_notification));
-	if (tmp == NULL)
+	if (deltas->array != NULL)
+		pr_crit("Size of this list can't be modified");
+
+	deltas->capacity = capacity;
+	if (capacity == 0)
+		return 0; /* Ok, list can have 0 elements */
+
+	deltas->array = malloc(deltas->capacity
+	    * sizeof(struct delta_head *));
+	if (deltas->array == NULL)
 		return pr_enomem();
 
-	error = deltas_head_create(&tmp->deltas_list);
-	if (error) {
-		free(tmp);
-		return error;
-	}
+	/* Point all elements to NULL */
+	for (i = 0; i < deltas->capacity; i++)
+		deltas->array[i] = NULL;
 
-	global_data_init(&tmp->global_data);
-	doc_data_init(&tmp->snapshot);
-
-	*file = tmp;
 	return 0;
 }
 
-void
-update_notification_destroy(struct update_notification *file)
+size_t
+deltas_head_get_size(struct deltas_head *deltas)
 {
-	doc_data_cleanup(&file->snapshot);
-	global_data_cleanup(&file->global_data);
-	deltas_head_destroy(file->deltas_list);
-	free(file);
+	return deltas->capacity;
 }
 
-/* A new delta_head will be allocated, as well as its URI and HASH */
+/*
+ * A new delta_head will be allocated at the @position inside @deltas (also its
+ * URI and HASH will be allocated).
+ *
+ * The following errors can be returned due to a wrong @position:
+ *   -EEXIST: There's already an element at @position.
+ *   -EINVAL: @position can't be inside @deltas list, meaning that such element
+ *            isn't part of a contiguous list.
+ *
+ * Don't forget to call deltas_head_set_size() before this!!
+ */
 int
-deltas_head_add(struct deltas_head *deltas, unsigned long serial,
-    char *uri, unsigned char *hash, size_t hash_len)
+deltas_head_add(struct deltas_head *deltas, size_t position,
+    unsigned long serial, char *uri, unsigned char *hash, size_t hash_len)
 {
 	struct delta_head *elem;
 	int error;
+
+	if (position < 0 || position > deltas->capacity - 1)
+		return -EINVAL;
+
+	if (deltas->array[position] != NULL)
+		return -EEXIST;
 
 	elem = NULL;
 	error = delta_head_create(&elem);
@@ -177,24 +194,74 @@ deltas_head_add(struct deltas_head *deltas, unsigned long serial,
 	}
 	memcpy(elem->doc_data.hash, hash, hash_len);
 
-	SLIST_INSERT_HEAD(deltas, elem, next);
+	deltas->array[position] = elem;
+	deltas->len++;
 
 	return 0;
 }
 
-int
-deltas_head_for_each(struct deltas_head *deltas, delta_head_cb cb, void *arg)
+/* Are all expected values set? */
+bool
+deltas_head_values_set(struct deltas_head *deltas)
 {
-	struct delta_head *cursor;
+	return deltas->len == deltas->capacity;
+}
+
+int
+deltas_head_for_each(struct deltas_head *deltas, size_t from, delta_head_cb cb,
+    void *arg)
+{
+	size_t index;
 	int error;
 
-	SLIST_FOREACH(cursor, deltas, next) {
-		error = cb(cursor, arg);
+	/* No elements, send error so that the snapshot is processed */
+	if (deltas->capacity == 0) {
+		pr_warn("There's no delta list to process.");
+		return -ENOENT;
+	}
+
+	for (index = from; index < deltas->capacity; index++) {
+		error = cb(deltas->array[index], arg);
 		if (error)
 			return error;
 	}
 
 	return 0;
+}
+
+int
+update_notification_create(struct update_notification **file)
+{
+	struct update_notification *tmp;
+	struct deltas_head *list;
+	int error;
+
+	tmp = malloc(sizeof(struct update_notification));
+	if (tmp == NULL)
+		return pr_enomem();
+
+	list = NULL;
+	error = deltas_head_create(&list);
+	if (error) {
+		free(tmp);
+		return pr_enomem();
+	}
+	tmp->deltas_list = list;
+
+	global_data_init(&tmp->global_data);
+	doc_data_init(&tmp->snapshot);
+
+	*file = tmp;
+	return 0;
+}
+
+void
+update_notification_destroy(struct update_notification *file)
+{
+	doc_data_cleanup(&file->snapshot);
+	global_data_cleanup(&file->global_data);
+	deltas_head_destroy(file->deltas_list);
+	free(file);
 }
 
 int
