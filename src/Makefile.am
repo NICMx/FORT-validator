@@ -14,6 +14,7 @@ fort_SOURCES += clients.c clients.h
 fort_SOURCES += common.c common.h
 fort_SOURCES += config.h config.c
 fort_SOURCES += debug.h debug.c
+fort_SOURCES += delete_dir_daemon.h delete_dir_daemon.c
 fort_SOURCES += extension.h extension.c
 fort_SOURCES += file.h file.c
 fort_SOURCES += json_parser.c json_parser.h

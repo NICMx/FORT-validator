@@ -41,7 +41,7 @@ write_cb(unsigned char *content, size_t size, size_t nmemb, void *arg)
 }
 
 static int
-local_download(char const *url, struct response *resp)
+local_download(char const *url, long *response_code, struct response *resp)
 {
 	struct http_handler handler;
 	int error;
@@ -50,7 +50,7 @@ local_download(char const *url, struct response *resp)
 	if (error)
 		return error;
 
-	error = http_fetch(&handler, url, write_cb, resp);
+	error = http_fetch(&handler, url, response_code, write_cb, resp);
 	http_easy_cleanup(&handler);
 	return error;
 }
@@ -58,16 +58,22 @@ local_download(char const *url, struct response *resp)
 START_TEST(http_fetch_normal)
 {
 	struct response resp;
+	long response_code;
 	char const *url = "https://rrdp.ripe.net/notification.xml";
 
 	init_response(&resp);
+	response_code = 0;
 
 	ck_assert_int_eq(http_init(), 0);
-	ck_assert_int_eq(local_download(url, &resp), 0);
+	ck_assert_int_eq(local_download(url, &response_code, &resp), 0);
 	ck_assert_int_gt(resp.size, 0);
 
 	http_cleanup();
 	free(resp.content);
+	if (response_code == 0)
+		ck_abort_msg("NO response code received");
+	else if (response_code >= HTTP_BAD_REQUEST)
+		ck_abort_msg("Received response code %ld", response_code);
 }
 END_TEST
 
