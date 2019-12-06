@@ -142,15 +142,10 @@ deltas_head_set_size(struct deltas_head *deltas, size_t capacity)
 	return 0;
 }
 
-size_t
-deltas_head_get_size(struct deltas_head *deltas)
-{
-	return deltas->capacity;
-}
-
 /*
- * A new delta_head will be allocated at the @position inside @deltas (also its
- * URI and HASH will be allocated).
+ * A new delta_head will be allocated at its corresponding position inside
+ * @deltas (also its URI and HASH will be allocated). The position is calculated
+ * using the difference between @max_serial and @serial.
  *
  * The following errors can be returned due to a wrong @position:
  *   -EEXIST: There's already an element at @position.
@@ -160,12 +155,14 @@ deltas_head_get_size(struct deltas_head *deltas)
  * Don't forget to call deltas_head_set_size() before this!!
  */
 int
-deltas_head_add(struct deltas_head *deltas, size_t position,
+deltas_head_add(struct deltas_head *deltas, unsigned long max_serial,
     unsigned long serial, char *uri, unsigned char *hash, size_t hash_len)
 {
 	struct delta_head *elem;
+	size_t position;
 	int error;
 
+	position = deltas->capacity - 1 - (max_serial - serial);
 	if (position < 0 || position > deltas->capacity - 1)
 		return -EINVAL;
 
@@ -207,11 +204,13 @@ deltas_head_values_set(struct deltas_head *deltas)
 	return deltas->len == deltas->capacity;
 }
 
+/* Do the @cb to the delta head elements from @from_serial to @max_serial */
 int
-deltas_head_for_each(struct deltas_head *deltas, size_t from, delta_head_cb cb,
-    void *arg)
+deltas_head_for_each(struct deltas_head *deltas, unsigned long max_serial,
+    unsigned long from_serial, delta_head_cb cb, void *arg)
 {
 	size_t index;
+	size_t from;
 	int error;
 
 	/* No elements, send error so that the snapshot is processed */
@@ -220,6 +219,7 @@ deltas_head_for_each(struct deltas_head *deltas, size_t from, delta_head_cb cb,
 		return -ENOENT;
 	}
 
+	from = deltas->capacity - (max_serial - from_serial);
 	for (index = from; index < deltas->capacity; index++) {
 		error = cb(deltas->array[index], arg);
 		if (error)

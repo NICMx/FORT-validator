@@ -427,11 +427,10 @@ end:
 
 static int
 parse_notification_deltas(xmlNode *root, unsigned long max_serial,
-    unsigned long deltas_len, struct deltas_head *deltas)
+    struct deltas_head *deltas)
 {
 	struct doc_data doc_data;
 	unsigned long serial;
-	size_t position;
 	int error;
 
 	error = parse_long(root, RRDP_ATTR_SERIAL, &serial);
@@ -449,8 +448,7 @@ parse_notification_deltas(xmlNode *root, unsigned long max_serial,
 	 * The delta will be added to the position it belongs, assuring that
 	 * the deltas list will be ordered.
 	 */
-	position = deltas_len - 1 - (max_serial - serial);
-	error = deltas_head_add(deltas, position, serial, doc_data.uri,
+	error = deltas_head_add(deltas, max_serial, serial, doc_data.uri,
 	    doc_data.hash, doc_data.hash_len);
 
 	/* Always release data */
@@ -477,7 +475,6 @@ parse_notification_data(xmlNode *root, struct update_notification *file,
 	xmlNode *cur_node;
 	rrdp_uri_cmp_result_t res;
 	unsigned long from_serial, max_serial;
-	unsigned long deltas_len;
 	bool create_snapshot;
 	int error;
 
@@ -486,9 +483,8 @@ parse_notification_data(xmlNode *root, struct update_notification *file,
 	max_serial = file->global_data.serial;
 
 	/* By schema, at least one snapshot element will be present */
-	deltas_len = xmlChildElementCount(root) - 1;
-
-	error = deltas_head_set_size(file->deltas_list, deltas_len);
+	error = deltas_head_set_size(file->deltas_list,
+	    xmlChildElementCount(root) - 1);
 	if (error)
 		return error;
 
@@ -517,7 +513,7 @@ parse_notification_data(xmlNode *root, struct update_notification *file,
 	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
 		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_DELTA)) {
 			error = parse_notification_deltas(cur_node, max_serial,
-			    deltas_len, file->deltas_list);
+			    file->deltas_list);
 		} else if (xmlStrEqual(cur_node->name,
 		    BAD_CAST RRDP_ELEM_SNAPSHOT)) {
 			error = parse_doc_data(cur_node, true, true,
@@ -1033,12 +1029,6 @@ int
 rrdp_process_deltas(struct update_notification *parent,
     unsigned long cur_serial)
 {
-	size_t deltas_len;
-	size_t from;
-
-	deltas_len = deltas_head_get_size(parent->deltas_list);
-	from = deltas_len - (parent->global_data.serial - cur_serial);
-
-	return deltas_head_for_each(parent->deltas_list, from, process_delta,
-	    parent);
+	return deltas_head_for_each(parent->deltas_list,
+	    parent->global_data.serial, cur_serial, process_delta, parent);
 }
