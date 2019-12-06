@@ -1423,7 +1423,7 @@ handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == ad_nid) {
 			error = uri_create_ad(&uri, ad, uri_flags);
-			switch(error) {
+			switch (error) {
 			case 0:
 				break;
 			case ENOTRSYNC:
@@ -1979,7 +1979,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	type = get_certificate_type(cert, IS_TA);
 
 	/* Debug cert type */
-	switch(type) {
+	switch (type) {
 	case TA:
 		break;
 	case CA:

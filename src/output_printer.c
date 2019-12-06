@@ -44,7 +44,7 @@ print_roa(struct vrp const *vrp, void *arg)
 {
 	FILE *out = arg;
 
-	switch(vrp->addr_fam) {
+	switch (vrp->addr_fam) {
 	case AF_INET:
 		fprintf(out, "AS%u,%s/%u,%u\n", vrp->asn,
 		    addr2str4(&vrp->prefix.v4, addr_buf), vrp->prefix_length,

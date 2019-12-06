@@ -75,7 +75,7 @@ validate_rtr_version(int fd, struct pdu_header *header,
 		if (header->pdu_type == PDU_TYPE_ERROR_REPORT)
 			return -EINVAL;
 
-		switch(curr_version) {
+		switch (curr_version) {
 		case RTR_V1:
 			/* Rcvd version is valid, but unexpected */
 			if (header->protocol_version == RTR_V0)

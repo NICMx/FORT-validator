@@ -368,7 +368,7 @@ print_prefix_data(struct slurm_prefix *prefix, void *arg)
 		pr_info("%s ASN: %u", pad, prefix->vrp.asn);
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) {
-		switch(prefix->vrp.addr_fam) {
+		switch (prefix->vrp.addr_fam) {
 		case AF_INET:
 			pr_info("%s Prefix: %s/%u", pad,
 			    addr2str4(&prefix->vrp.prefix.v4, addr_buf),

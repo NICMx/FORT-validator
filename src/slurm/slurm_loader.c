@@ -152,7 +152,7 @@ slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
 		return error;
 
 	error = slurm_load(params);
-	switch(error) {
+	switch (error) {
 	case 0:
 		/* Use as last valid slurm */
 		if (*last_slurm != NULL)
