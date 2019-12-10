@@ -9,7 +9,6 @@
 #include "log.h"
 
 xmlRelaxNGPtr schema;
-xmlRelaxNGValidCtxtPtr validctxt;
 xmlRelaxNGParserCtxtPtr rngparser;
 
 /* Initialize global schema to parse RRDP files */
@@ -32,19 +31,11 @@ relax_ng_init(void)
 		goto free_parser_ctx;
 	}
 
-	validctxt = xmlRelaxNGNewValidCtxt(schema);
-	if (validctxt == NULL) {
-		error = pr_err("xmlRelaxNGNewValidCtxt() returned NULL");
-		goto free_schema;
-	}
-
 	/*
 	 * FIXME (now) Use xmlRelaxNGValidityErrorFunc and
 	 * xmlRelaxNGValidityWarningFunc?
 	 */
 	return 0;
-free_schema:
-	xmlRelaxNGFree(schema);
 free_parser_ctx:
 	xmlRelaxNGFreeParserCtxt(rngparser);
 cleanup_parser:
@@ -53,30 +44,52 @@ cleanup_parser:
 }
 
 /*
- * Validate file at @path against globally loaded schema. If the file is valid,
- * the result is set at @doc, returns error otherwise
+ * Validate file at @path against globally loaded schema. The file must be
+ * parsed using @cb (will receive @arg as argument).
  */
 int
-relax_ng_validate(const char *path, xmlDoc **doc)
+relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 {
-	xmlDoc *tmp;
+	xmlTextReaderPtr reader;
+	int read;
 	int error;
 
-	tmp = xmlParseFile(path);
-	error = xmlRelaxNGValidateDoc(validctxt, tmp);
+	reader = xmlNewTextReaderFilename(path);
+	if (reader == NULL)
+		return pr_err("Couldn't get XML reader.");
+
+	error = xmlTextReaderRelaxNGSetSchema(reader, schema);
 	if (error) {
-		xmlFreeDoc(tmp);
-		return -EINVAL;
+		error = pr_err("Couldn't set Relax NG schema.");
+		goto free_reader;
 	}
 
-	*doc = tmp;
+	while ((read = xmlTextReaderRead(reader)) == 1) {
+		error = cb(reader, arg);
+		if (error)
+			goto free_reader;
+	}
+
+	if (read < 0) {
+		error = pr_err("Error parsing XML document.");
+		goto free_reader;
+	}
+
+	if (xmlTextReaderIsValid(reader) <= 0) {
+		error = pr_err("XML document isn't valid.");
+		goto free_reader;
+	}
+
+	xmlFreeTextReader(reader);
 	return 0;
+free_reader:
+	xmlFreeTextReader(reader);
+	return error;
 }
 
 void
 relax_ng_cleanup(void)
 {
-	xmlRelaxNGFreeValidCtxt(validctxt);
 	xmlRelaxNGFree(schema);
 	xmlRelaxNGFreeParserCtxt(rngparser);
 	xmlCleanupParser();

@@ -1,7 +1,7 @@
 #ifndef SRC_XML_RELAX_NG_H_
 #define SRC_XML_RELAX_NG_H_
 
-#include <libxml/tree.h>
+#include <libxml/xmlreader.h>
 #include <string.h>
 
 /*
@@ -164,7 +164,9 @@
 
 
 int relax_ng_init(void);
-int relax_ng_validate(const char *, xmlDoc **);
 void relax_ng_cleanup(void);
+
+typedef int (*xml_read_cb)(xmlTextReaderPtr, void *);
+int relax_ng_parse(const char *, xml_read_cb cb, void *);
 
 #endif /* SRC_XML_RELAX_NG_H_ */

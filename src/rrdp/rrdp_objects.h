@@ -85,6 +85,9 @@ void doc_data_cleanup(struct doc_data *);
 int update_notification_create(struct update_notification **);
 void update_notification_destroy(struct update_notification *);
 
+int delta_head_create(struct delta_head **);
+void delta_head_destroy(struct delta_head *);
+
 typedef int (*delta_head_cb)(struct delta_head *, void *);
 int deltas_head_for_each(struct deltas_head *, unsigned long, unsigned long,
     delta_head_cb, void *);

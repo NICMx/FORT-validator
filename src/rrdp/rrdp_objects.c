@@ -53,7 +53,7 @@ doc_data_cleanup(struct doc_data *data)
 	free(data->uri);
 }
 
-static int
+int
 delta_head_create(struct delta_head **result)
 {
 	struct delta_head *tmp;
@@ -68,7 +68,7 @@ delta_head_create(struct delta_head **result)
 	return 0;
 }
 
-static void
+void
 delta_head_destroy(struct delta_head *delta_head)
 {
 	if (delta_head) {

@@ -1,7 +1,6 @@
 #include "rrdp_parser.h"
 
-#include <libxml/parser.h>
-#include <libxml/tree.h>
+#include <libxml/xmlreader.h>
 #include <openssl/evp.h>
 #include <sys/stat.h>
 #include <ctype.h>
@@ -38,18 +37,39 @@
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
 
-static int
-get_root_element(xmlDoc *doc, xmlNode **result)
-{
-	xmlNode *tmp;
+/* Array list to get deltas from notification file */
+DEFINE_ARRAY_LIST_STRUCT(deltas_parsed, struct delta_head *);
+DEFINE_ARRAY_LIST_FUNCTIONS(deltas_parsed, struct delta_head *, static)
 
-	tmp = xmlDocGetRootElement(doc);
-	if (tmp == NULL)
-		return pr_err("XML file doesn't have a root element");
+/* Context while reading an update notification */
+struct rdr_notification_ctx {
+	/* Data being parsed */
+	struct update_notification *notification;
+	/* Global URI of the notification */
+	char const *uri;
+	/* The snapshot must be allocated? */
+	bool create_snapshot;
+	/* Unordered list of deltas */
+	struct deltas_parsed deltas;
+};
 
-	*result = tmp;
-	return 0;
-}
+/* Context while reading a snapshot */
+struct rdr_snapshot_ctx {
+	/* Data being parsed */
+	struct snapshot *snapshot;
+	/* Parent data to validate session ID and serial */
+	struct update_notification *parent;
+};
+
+/* Context while reading a delta */
+struct rdr_delta_ctx {
+	/* Data being parsed */
+	struct delta *delta;
+	/* Parent data to validate session ID */
+	struct update_notification *parent;
+	/* Current serial loaded from update notification deltas list */
+	unsigned long expected_serial;
+};
 
 static size_t
 write_local(unsigned char *content, size_t size, size_t nmemb, void *arg)
@@ -212,20 +232,20 @@ release_sanitized:
 }
 
 static int
-parse_string(xmlNode *root, char const *attr, char **result)
+parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 {
 	xmlChar *xml_value;
 	char *tmp;
 
 	if (attr == NULL)
-		xml_value = xmlNodeGetContent(root);
+		xml_value = xmlTextReaderValue(reader);
 	else
-		xml_value = xmlGetProp(root, BAD_CAST attr);
+		xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 
 	if (xml_value == NULL)
 		return pr_err("RRDP file: Couldn't find %s from '%s'",
 		    (attr == NULL ? "string content" : "xml attribute"),
-		    root->name);
+		    xmlTextReaderConstLocalName(reader));
 
 	tmp = malloc(xmlStrlen(xml_value) + 1);
 	if (tmp == NULL) {
@@ -242,12 +262,12 @@ parse_string(xmlNode *root, char const *attr, char **result)
 }
 
 static int
-parse_long(xmlNode *root, char const *attr, unsigned long *result)
+parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 {
 	xmlChar *xml_value;
 	unsigned long tmp;
 
-	xml_value = xmlGetProp(root, BAD_CAST attr);
+	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 	if (xml_value == NULL)
 		return pr_err("RRDP file: Couldn't find xml attribute '%s'",
 		    attr);
@@ -267,7 +287,7 @@ parse_long(xmlNode *root, char const *attr, unsigned long *result)
 }
 
 static int
-parse_hex_string(xmlNode *root, bool required, char const *attr,
+parse_hex_string(xmlTextReaderPtr reader, bool required, char const *attr,
     unsigned char **result, size_t *result_len)
 {
 	xmlChar *xml_value;
@@ -276,7 +296,7 @@ parse_hex_string(xmlNode *root, bool required, char const *attr,
 	char buf[2];
 	size_t tmp_len;
 
-	xml_value = xmlGetProp(root, BAD_CAST attr);
+	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 	if (xml_value == NULL)
 		return required ?
 		    pr_err("RRDP file: Couldn't find xml attribute '%s'", attr)
@@ -313,25 +333,25 @@ parse_hex_string(xmlNode *root, bool required, char const *attr,
 }
 
 static int
-validate_version(xmlNode *root, unsigned long expected_version)
+validate_version(xmlTextReaderPtr reader, unsigned long expected)
 {
 	unsigned long version;
 	int error;
 
-	error = parse_long(root, RRDP_ATTR_VERSION, &version);
+	error = parse_long(reader, RRDP_ATTR_VERSION, &version);
 	if (error)
 		return error;
 
-	if (version != expected_version)
-		return pr_err("Invalid version, must be '%lu' and is '%lu'",
-		    expected_version, version);
+	if (version != expected)
+		return pr_err("Invalid version, must be '%lu' and is '%lu'.",
+		    expected, version);
 
 	return 0;
 }
 
 /* @gdata elements are allocated */
 static int
-parse_global_data(xmlNode *root, struct global_data *gdata,
+parse_global_data(xmlTextReaderPtr reader, struct global_data *gdata,
     char const *expected_session, unsigned long expected_serial)
 {
 	char *session_id;
@@ -341,16 +361,23 @@ parse_global_data(xmlNode *root, struct global_data *gdata,
 	/*
 	 * The following rule appies to all files:
 	 * - The XML namespace MUST be "http://www.ripe.net/rpki/rrdp".
+	 * - The version attribute MUST be "1".
 	 */
-	if (!xmlStrEqual((root->ns)->href, BAD_CAST RRDP_NAMESPACE))
+	if (!xmlStrEqual(xmlTextReaderConstNamespaceUri(reader),
+	    BAD_CAST RRDP_NAMESPACE))
 		return pr_err("Namespace isn't '%s', current value is '%s'",
-		    RRDP_NAMESPACE, (root->ns)->href);
+		    RRDP_NAMESPACE, xmlTextReaderConstNamespaceUri(reader));
 
-	error = parse_string(root, RRDP_ATTR_SESSION_ID, &session_id);
+	error = validate_version(reader, 1);
 	if (error)
 		return error;
 
-	error = parse_long(root, RRDP_ATTR_SERIAL, &serial);
+	error = parse_string(reader, RRDP_ATTR_SESSION_ID, &session_id);
+	if (error)
+		return error;
+
+	serial = 0;
+	error = parse_long(reader, RRDP_ATTR_SERIAL, &serial);
 	if (error) {
 		free(session_id);
 		return error;
@@ -386,7 +413,7 @@ return_val:
 
 /* @data elements are allocated */
 static int
-parse_doc_data(xmlNode *root, bool parse_hash, bool hash_req,
+parse_doc_data(xmlTextReaderPtr reader, bool parse_hash, bool hash_req,
     struct doc_data *data)
 {
 	char *uri;
@@ -398,14 +425,14 @@ parse_doc_data(xmlNode *root, bool parse_hash, bool hash_req,
 	hash = NULL;
 	hash_len = 0;
 
-	error = parse_string(root, RRDP_ATTR_URI, &uri);
+	error = parse_string(reader, RRDP_ATTR_URI, &uri);
 	if (error)
 		return error;
 
 	if (!parse_hash)
 		goto end;
 
-	error = parse_hex_string(root, hash_req, RRDP_ATTR_HASH, &hash,
+	error = parse_hex_string(reader, hash_req, RRDP_ATTR_HASH, &hash,
 	    &hash_len);
 	if (error) {
 		free(uri);
@@ -426,120 +453,7 @@ end:
 }
 
 static int
-parse_notification_deltas(xmlNode *root, unsigned long max_serial,
-    struct deltas_head *deltas)
-{
-	struct doc_data doc_data;
-	unsigned long serial;
-	int error;
-
-	error = parse_long(root, RRDP_ATTR_SERIAL, &serial);
-	if (error)
-		return error;
-
-	doc_data_init(&doc_data);
-	error = parse_doc_data(root, true, true, &doc_data);
-	if (error) {
-		doc_data_cleanup(&doc_data);
-		return error;
-	}
-
-	/*
-	 * The delta will be added to the position it belongs, assuring that
-	 * the deltas list will be ordered.
-	 */
-	error = deltas_head_add(deltas, max_serial, serial, doc_data.uri,
-	    doc_data.hash, doc_data.hash_len);
-
-	/* Always release data */
-	doc_data_cleanup(&doc_data);
-	if (!error)
-		return 0;
-
-	if (error == -EINVAL)
-		return pr_err("Serial '%lu' at delta elements isn't part of a contiguous list of serials.",
-		    serial);
-
-	if (error == -EEXIST)
-		return pr_err("Duplicated serial '%lu' at delta elements.",
-		    serial);
-
-	return error;
-}
-
-/* Get the notification data. In case of error, the caller must cleanup @file */
-static int
-parse_notification_data(xmlNode *root, struct update_notification *file,
-    char const *uri)
-{
-	xmlNode *cur_node;
-	rrdp_uri_cmp_result_t res;
-	unsigned long from_serial, max_serial;
-	bool create_snapshot;
-	int error;
-
-	create_snapshot = false;
-	from_serial = 0;
-	max_serial = file->global_data.serial;
-
-	/* By schema, at least one snapshot element will be present */
-	error = deltas_head_set_size(file->deltas_list,
-	    xmlChildElementCount(root) - 1);
-	if (error)
-		return error;
-
-	res = rhandler_uri_cmp(uri, file->global_data.session_id,
-	    file->global_data.serial);
-	switch (res) {
-	case RRDP_URI_EQUAL:
-		/* Just validate content */
-		break;
-	case RRDP_URI_DIFF_SERIAL:
-		/* Get only the deltas to process and the snapshot */
-		create_snapshot = true;
-		error = rhandler_uri_get_serial(uri, &from_serial);
-		if (error)
-			return pr_err("Couldn't get serial of '%s'.", uri);
-		break;
-	case RRDP_URI_DIFF_SESSION:
-		/* Get only the snapshot */
-	case RRDP_URI_NOTFOUND:
-		create_snapshot = true;
-		break;
-	default:
-		pr_crit("Unexpected RRDP URI comparison result");
-	}
-
-	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
-		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_DELTA)) {
-			error = parse_notification_deltas(cur_node, max_serial,
-			    file->deltas_list);
-		} else if (xmlStrEqual(cur_node->name,
-		    BAD_CAST RRDP_ELEM_SNAPSHOT)) {
-			error = parse_doc_data(cur_node, true, true,
-			    (create_snapshot ? &file->snapshot : NULL));
-		}
-
-		if (error)
-			return error;
-	}
-
-	/*
-	 * "If delta elements are included, they MUST form a contiguous
-	 * sequence of serial numbers starting at a revision determined by
-	 * the Repository Server, up to the serial number mentioned in the
-	 * notification element."
-	 *
-	 * If all expected elements are set, everything is ok.
-	 */
-	if (!deltas_head_values_set(file->deltas_list))
-		return pr_err("Deltas listed don't have a contiguous sequence of serial numbers");
-
-	return 0;
-}
-
-static int
-parse_publish(xmlNode *root, bool parse_hash, bool hash_required,
+parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
     struct publish **publish)
 {
 	struct publish *tmp;
@@ -550,11 +464,19 @@ parse_publish(xmlNode *root, bool parse_hash, bool hash_required,
 	if (error)
 		return error;
 
-	error = parse_doc_data(root, parse_hash, hash_required, &tmp->doc_data);
+	error = parse_doc_data(reader, parse_hash, hash_required,
+	    &tmp->doc_data);
 	if (error)
 		goto release_tmp;
 
-	error = parse_string(root, NULL, &base64_str);
+	/* Read the text */
+	if (xmlTextReaderRead(reader) != 1) {
+		error = pr_err("Couldn't read publish content of element '%s'",
+		    tmp->doc_data.uri);
+		goto release_tmp;
+	}
+
+	error = parse_string(reader, NULL, &base64_str);
 	if (error)
 		goto release_tmp;
 
@@ -584,7 +506,7 @@ release_tmp:
 }
 
 static int
-parse_withdraw(xmlNode *root, struct withdraw **withdraw)
+parse_withdraw(xmlTextReaderPtr reader, struct withdraw **withdraw)
 {
 	struct withdraw *tmp;
 	struct rpki_uri *uri;
@@ -594,7 +516,7 @@ parse_withdraw(xmlNode *root, struct withdraw **withdraw)
 	if (error)
 		return error;
 
-	error = parse_doc_data(root, true, true, &tmp->doc_data);
+	error = parse_doc_data(reader, true, true, &tmp->doc_data);
 	if (error)
 		goto release_tmp;
 
@@ -720,65 +642,216 @@ release_uri:
 	return error;
 }
 
+/*
+ * This function will call 'xmlTextReaderRead' so there's no need to expect any
+ * other type at the caller.
+ */
 static int
-parse_publish_list(xmlNode *root)
+parse_publish_elem(xmlTextReaderPtr reader, bool parse_hash, bool hash_required)
 {
 	struct publish *tmp;
-	xmlNode *cur_node;
 	int error;
 
-	/* Only publish elements are expected, already validated by syntax */
-	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
-		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_PUBLISH)) {
-			tmp = NULL;
-			error = parse_publish(cur_node, false, false, &tmp);
-			if (error)
-				return error;
+	tmp = NULL;
+	error = parse_publish(reader, parse_hash, hash_required, &tmp);
+	if (error)
+		return error;
 
-			error = write_from_uri(tmp->doc_data.uri, tmp->content,
-			    tmp->content_len);
-			publish_destroy(tmp);
-			if (error)
-				return error;
- 		}
-	}
+	error = write_from_uri(tmp->doc_data.uri, tmp->content,
+	    tmp->content_len);
+	publish_destroy(tmp);
+	if (error)
+		return error;
+
+	return 0;
+}
+
+/*
+ * This function will call 'xmlTextReaderRead' so there's no need to expect any
+ * other type at the caller.
+ */
+static int
+parse_withdraw_elem(xmlTextReaderPtr reader)
+{
+	struct withdraw *tmp;
+	int error;
+
+	error = parse_withdraw(reader, &tmp);
+	if (error)
+		return error;
+
+	error = delete_from_uri(tmp->doc_data.uri);
+	withdraw_destroy(tmp);
+	if (error)
+		return error;
 
 	return 0;
 }
 
 static int
-parse_delta_element_list(xmlNode *root)
+rdr_notification_ctx_init(struct rdr_notification_ctx *ctx)
 {
-	struct publish *pub;
-	struct withdraw *wit;
-	xmlNode *cur_node;
+	rrdp_uri_cmp_result_t res;
+
+	ctx->create_snapshot = false;
+
+	res = rhandler_uri_cmp(ctx->uri,
+	    ctx->notification->global_data.session_id,
+	    ctx->notification->global_data.serial);
+	switch (res) {
+	case RRDP_URI_EQUAL:
+		/* Just validate content */
+		break;
+	case RRDP_URI_DIFF_SERIAL:
+		/* Get the deltas to process and the snapshot */
+	case RRDP_URI_DIFF_SESSION:
+		/* Get only the snapshot */
+	case RRDP_URI_NOTFOUND:
+		ctx->create_snapshot = true;
+		break;
+	default:
+		pr_crit("Unexpected RRDP URI comparison result");
+	}
+
+	deltas_parsed_init(&ctx->deltas);
+	return 0;
+}
+
+static void
+__delta_head_destroy(struct delta_head **delta_head)
+{
+	delta_head_destroy(*delta_head);
+}
+
+static void
+rdr_notification_ctx_cleanup(struct rdr_notification_ctx *ctx)
+{
+	if (ctx->deltas.array != NULL)
+		deltas_parsed_cleanup(&ctx->deltas, __delta_head_destroy);
+}
+
+static int
+parse_notification_delta(xmlTextReaderPtr reader,
+    struct rdr_notification_ctx *ctx)
+{
+	struct delta_head *tmp;
+	unsigned long serial;
 	int error;
 
-	/* Elements already validated by syntax */
-	for (cur_node = root->children; cur_node; cur_node = cur_node->next) {
-		if (xmlStrEqual(cur_node->name, BAD_CAST RRDP_ELEM_PUBLISH)) {
-			pub = NULL;
-			error = parse_publish(cur_node, true, false, &pub);
-			if (error)
-				return error;
+	error = delta_head_create(&tmp);
+	if (error)
+		return error;
 
-			error = write_from_uri(pub->doc_data.uri, pub->content,
-			    pub->content_len);
-			publish_destroy(pub);
-			if (error)
-				return error;
- 		} else if (xmlStrEqual(cur_node->name,
- 		    BAD_CAST RRDP_ELEM_WITHDRAW)) {
- 			wit = NULL;
-			error = parse_withdraw(cur_node, &wit);
-			if (error)
-				return error;
+	error = parse_long(reader, RRDP_ATTR_SERIAL, &serial);
+	if (error)
+		goto delta_destroy;
+	tmp->serial = serial;
 
-			error = delete_from_uri(wit->doc_data.uri);
-			withdraw_destroy(wit);
-			if (error)
-				return error;
+	error = parse_doc_data(reader, true, true, &tmp->doc_data);
+	if (error)
+		goto delta_destroy;
+
+	error = deltas_parsed_add(&ctx->deltas, &tmp);
+	if (error)
+		goto delta_destroy;
+
+	return 0;
+delta_destroy:
+	delta_head_destroy(tmp);
+	return error;
+}
+
+static int
+order_notification_deltas(struct rdr_notification_ctx *ctx)
+{
+	struct delta_head **ptr;
+	array_index i;
+	int error;
+
+	error = deltas_head_set_size(ctx->notification->deltas_list,
+	    ctx->deltas.len);
+	if (error)
+		return error;
+
+	ARRAYLIST_FOREACH(&ctx->deltas, ptr, i) {
+		error = deltas_head_add(ctx->notification->deltas_list,
+		    ctx->notification->global_data.serial,
+		    (*ptr)->serial,
+		    (*ptr)->doc_data.uri,
+		    (*ptr)->doc_data.hash,
+		    (*ptr)->doc_data.hash_len);
+
+		if (!error)
+			continue;
+
+		if (error == -EINVAL)
+			return pr_err("Serial '%lu' at delta elements isn't part of a contiguous list of serials.",
+			    (*ptr)->serial);
+
+		if (error == -EEXIST)
+			return pr_err("Duplicated serial '%lu' at delta elements.",
+			    (*ptr)->serial);
+
+		return error;
+	}
+
+	/*
+	 * "If delta elements are included, they MUST form a contiguous
+	 * sequence of serial numbers starting at a revision determined by
+	 * the Repository Server, up to the serial number mentioned in the
+	 * notification element."
+	 *
+	 * If all expected elements are set, everything is ok.
+	 */
+	if (!deltas_head_values_set(ctx->notification->deltas_list))
+		return pr_err("Deltas listed don't have a contiguous sequence of serial numbers");
+
+	return 0;
+}
+
+static int
+xml_read_notification(xmlTextReaderPtr reader, void *arg)
+{
+	struct rdr_notification_ctx *ctx = arg;
+	xmlReaderTypes type;
+	xmlChar const *name;
+	int error;
+
+	error = 0;
+	name = xmlTextReaderConstLocalName(reader);
+	type = xmlTextReaderNodeType(reader);
+	switch (type) {
+	case XML_READER_TYPE_ELEMENT:
+		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA)) {
+			error = parse_notification_delta(reader, ctx);
+		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT)) {
+			error = parse_doc_data(reader, true, true,
+			    (ctx->create_snapshot ?
+			    &ctx->notification->snapshot : NULL));
+		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
+			/* No need to validate session ID and serial */
+			error = parse_global_data(reader,
+			    &ctx->notification->global_data, NULL, 0);
+			/* Init context for deltas and snapshot */
+			rdr_notification_ctx_init(ctx);
+		} else {
+			return pr_err("Unexpected '%s' element", name);
 		}
+		break;
+	case XML_READER_TYPE_END_ELEMENT:
+		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
+			error = order_notification_deltas(ctx);
+			rdr_notification_ctx_cleanup(ctx);
+			return error; /* Error 0 is ok */
+		}
+		break;
+	default:
+		return 0;
+	}
+
+	if (error) {
+		rdr_notification_ctx_cleanup(ctx);
+		return error;
 	}
 
 	return 0;
@@ -787,152 +860,150 @@ parse_delta_element_list(xmlNode *root)
 static int
 parse_notification(struct rpki_uri *uri, struct update_notification **file)
 {
-	xmlDoc *doc;
-	xmlNode *root;
+	struct rdr_notification_ctx ctx;
 	struct update_notification *tmp;
 	int error;
 
-	root = NULL;
-
-	error = relax_ng_validate(uri_get_local(uri), &doc);
+	error = update_notification_create(&tmp);
 	if (error)
 		return error;
 
-	error = update_notification_create(&tmp);
-	if (error)
-		goto release_doc;
-
-	error = get_root_element(doc, &root);
-	if (error)
-		goto release_update;
-
-	/* The version attribute in the notification root element MUST be 1. */
-	error = validate_version(root, 1);
-	if (error)
-		goto release_update;
-
-	/* No parent file, so no need to validate session ID and serial */
-	error = parse_global_data(root, &tmp->global_data, NULL, 0);
-	if (error)
-		goto release_update;
-
-	error = parse_notification_data(root, tmp, uri_get_global(uri));
-	if (error)
-		goto release_update;
+	ctx.notification = tmp;
+	ctx.uri = uri_get_global(uri);
+	error = relax_ng_parse(uri_get_local(uri), xml_read_notification,
+	    &ctx);
+	if (error) {
+		update_notification_destroy(tmp);
+		return error;
+	}
 
 	*file = tmp;
-	/* Error 0 is ok */
-	goto release_doc;
-
-release_update:
-	update_notification_destroy(tmp);
-release_doc:
-	xmlFreeDoc(doc);
-	return error;
+	return 0;
 }
 
 static int
-parse_snapshot(struct rpki_uri *uri, struct update_notification *parent,
-    unsigned long expected_serial)
+xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 {
-	xmlDoc *doc;
-	xmlNode *root;
+	struct rdr_snapshot_ctx *ctx = arg;
+	xmlReaderTypes type;
+	xmlChar const *name;
+	int error;
+
+	name = xmlTextReaderConstLocalName(reader);
+	type = xmlTextReaderNodeType(reader);
+	switch (type) {
+	case XML_READER_TYPE_ELEMENT:
+		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
+			error = parse_publish_elem(reader, false, false);
+		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
+			error = parse_global_data(reader,
+			    &ctx->snapshot->global_data,
+			    ctx->parent->global_data.session_id,
+			    ctx->parent->global_data.serial);
+		else
+			return pr_err("Unexpected '%s' element", name);
+
+		if (error)
+			return error;
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+static int
+parse_snapshot(struct rpki_uri *uri, struct update_notification *parent)
+{
+	struct rdr_snapshot_ctx ctx;
 	struct snapshot *snapshot;
 	int error;
 
-	root = NULL;
-
 	fnstack_push_uri(uri);
-	error = relax_ng_validate(uri_get_local(uri), &doc);
-	if (error)
-		return error;
-
-	error = snapshot_create(&snapshot);
-	if (error)
-		goto release_doc;
-
-	error = get_root_element(doc, &root);
-	if (error)
-		goto release_snapshot;
-
 	/* Hash validation */
 	error = hash_validate_file("sha256", uri, parent->snapshot.hash,
 	    parent->snapshot.hash_len);
 	if (error)
-		goto release_snapshot;
+		goto pop;
 
-	/* The version attribute in the snapshot root element MUST be "1". */
-	error = validate_version(root, 1);
+	error = snapshot_create(&snapshot);
 	if (error)
-		goto release_snapshot;
+		goto pop;
 
-	error = parse_global_data(root, &snapshot->global_data,
-	    parent->global_data.session_id, expected_serial);
-	if (error)
-		goto release_snapshot;
-
-	error = parse_publish_list(root);
+	ctx.snapshot = snapshot;
+	ctx.parent = parent;
+	error = relax_ng_parse(uri_get_local(uri), xml_read_snapshot, &ctx);
 
 	/* Error 0 is ok */
-release_snapshot:
 	snapshot_destroy(snapshot);
-release_doc:
-	xmlFreeDoc(doc);
+pop:
 	fnstack_pop();
 	return error;
+}
+
+static int
+xml_read_delta(xmlTextReaderPtr reader, void *arg)
+{
+	struct rdr_delta_ctx *ctx = arg;
+	xmlReaderTypes type;
+	xmlChar const *name;
+	int error;
+
+	name = xmlTextReaderConstLocalName(reader);
+	type = xmlTextReaderNodeType(reader);
+	switch (type) {
+	case XML_READER_TYPE_ELEMENT:
+		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
+			error = parse_publish_elem(reader, true, false);
+		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
+			error = parse_withdraw_elem(reader);
+		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
+			error = parse_global_data(reader,
+			    &ctx->delta->global_data,
+			    ctx->parent->global_data.session_id,
+			    ctx->expected_serial);
+		else
+			return pr_err("Unexpected '%s' element", name);
+
+		if (error)
+			return error;
+		break;
+	default:
+		break;
+	}
+
+	return 0;
 }
 
 static int
 parse_delta(struct rpki_uri *uri, struct update_notification *parent,
     struct delta_head *parents_data)
 {
-	xmlDoc *doc;
-	xmlNode *root;
+	struct rdr_delta_ctx ctx;
 	struct delta *delta;
 	struct doc_data *expected_data;
 	int error;
 
-	root = NULL;
+	expected_data = &parents_data->doc_data;
 
 	fnstack_push_uri(uri);
-	error = relax_ng_validate(uri_get_local(uri), &doc);
+	error = hash_validate_file("sha256", uri, expected_data->hash,
+	    expected_data->hash_len);
 	if (error)
 		goto pop_fnstack;
 
 	error = delta_create(&delta);
 	if (error)
-		goto release_doc;
+		goto pop_fnstack;
 
-	expected_data = &parents_data->doc_data;
-
-	error = hash_validate_file("sha256", uri, expected_data->hash,
-	    expected_data->hash_len);
-	if (error)
-		goto release_delta;
-
-	error = get_root_element(doc, &root);
-	if (error)
-		goto release_delta;
-
-	/* The version attribute in the delta root element MUST be "1". */
-	error = validate_version(root, 1);
-	if (error)
-		goto release_delta;
-
-	/* session_id must be the same as the parent */
-	error = parse_global_data(root, &delta->global_data,
-	    parent->global_data.session_id,
-	    parents_data->serial);
-	if (error)
-		goto release_delta;
-
-	error = parse_delta_element_list(root);
+	ctx.delta = delta;
+	ctx.parent = parent;
+	ctx.expected_serial = parents_data->serial;
+	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
 
 	/* Error 0 is ok */
-release_delta:
 	delta_destroy(delta);
-release_doc:
-	xmlFreeDoc(doc);
 pop_fnstack:
 	fnstack_pop();
 	return error;
@@ -1017,7 +1088,7 @@ rrdp_parse_snapshot(struct update_notification *parent)
 	if (error)
 		goto release_uri;
 
-	error = parse_snapshot(uri, parent, parent->global_data.serial);
+	error = parse_snapshot(uri, parent);
 
 	/* Error 0 is ok */
 release_uri:

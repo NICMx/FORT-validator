@@ -2,19 +2,74 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include <libxml/tree.h>
+#include <libxml/xmlreader.h>
 #include "impersonator.c"
 #include "log.c"
 #include "xml/relax_ng.c"
 
+struct reader_ctx {
+	unsigned int delta_count;
+	unsigned int snapshot_count;
+	char *serial;
+};
+
+static int
+reader_cb(xmlTextReaderPtr reader, void *arg)
+{
+	struct reader_ctx *ctx = arg;
+	xmlReaderTypes type;
+	xmlChar const *name;
+	xmlChar *tmp_char;
+	char *tmp;
+
+	name = xmlTextReaderConstLocalName(reader);
+	type = xmlTextReaderNodeType(reader);
+	switch (type) {
+	case XML_READER_TYPE_ELEMENT:
+		if (xmlStrEqual(name, BAD_CAST "delta")) {
+			ctx->delta_count++;
+		} else if (xmlStrEqual(name, BAD_CAST "snapshot")) {
+			ctx->snapshot_count++;
+		} else if (xmlStrEqual(name, BAD_CAST "notification")) {
+			tmp_char = xmlTextReaderGetAttribute(reader,
+			    BAD_CAST "serial");
+			if (tmp_char == NULL)
+				return -EINVAL;
+			tmp = malloc(xmlStrlen(tmp_char) + 1);
+			if (tmp == NULL) {
+				xmlFree(tmp_char);
+				return -ENOMEM;
+			}
+
+			memcpy(tmp, tmp_char, xmlStrlen(tmp_char));
+			tmp[xmlStrlen(tmp_char)] = '\0';
+			xmlFree(tmp_char);
+			ctx->serial = tmp;
+		} else {
+			return -EINVAL;
+		}
+		break;
+	default:
+		return 0;
+	}
+
+	return 0;
+}
+
 START_TEST(relax_ng_valid)
 {
+	struct reader_ctx ctx;
 	char const *url = "xml/notification.xml";
-	xmlDoc *doc;
 
+	ctx.delta_count = 0;
+	ctx.snapshot_count = 0;
+	ctx.serial = NULL;
 	relax_ng_init();
-	ck_assert_int_eq(relax_ng_validate(url, &doc), 0);
-	xmlFreeDoc(doc);
+	ck_assert_int_eq(relax_ng_parse(url, reader_cb, &ctx), 0);
+	ck_assert_int_eq(ctx.snapshot_count, 1);
+	ck_assert_int_eq(ctx.delta_count, 5);
+	ck_assert_str_eq(ctx.serial, "1510");
+	free(ctx.serial);
 	relax_ng_cleanup();
 }
 END_TEST
