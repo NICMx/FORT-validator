@@ -2078,11 +2078,12 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		break;
 	case CA:
 		if (!visited_uris_exists(uri_get_global(sia_uris.mft.uri))) {
-			mft_exists = true;
 			error = use_access_method(&sia_uris, exec_rsync_method,
 			    exec_rrdp_method);
 			if (error)
 				return error;
+		} else {
+			mft_exists = true;
 		}
 		break;
 	default:
