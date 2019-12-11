@@ -48,6 +48,8 @@ int rrdp_uri_update(char const *, char const *, unsigned long);
 int rrdp_uri_get_serial(char const *, unsigned long *);
 int rrdp_uri_get_last_update(char const *, long *);
 int rrdp_uri_set_last_update(char const *);
+bool rrdp_uri_visited(char const *);
+int rrdp_uri_mark_visited(char const *);
 
 uint16_t get_current_session_id(uint8_t);
 

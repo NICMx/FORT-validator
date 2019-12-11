@@ -469,7 +469,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 */
 
 	struct validation_handler validation_handler;
-	struct rrdp_handler rrdp_handler;
 	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
@@ -480,14 +479,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	validation_handler.handle_router_key = handle_router_key;
 	validation_handler.arg = arg;
 
-	rrdp_handler.uri_cmp = rrdp_uri_cmp;
-	rrdp_handler.uri_update = rrdp_uri_update;
-	rrdp_handler.uri_get_serial = rrdp_uri_get_serial;
-	rrdp_handler.uri_get_last_update = rrdp_uri_get_last_update;
-	rrdp_handler.uri_set_last_update = rrdp_uri_set_last_update;
-
-	error = validation_prepare(&state, tal, &validation_handler,
-	    &rrdp_handler);
+	error = validation_prepare(&state, tal, &validation_handler);
 	if (error)
 		return ENSURE_NEGATIVE(error);
 

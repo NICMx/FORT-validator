@@ -216,6 +216,32 @@ rrdp_uri_set_last_update(char const *uri)
 	    db_rrdp_set_last_update(state.rrdp_uris, uri))
 }
 
+bool
+rrdp_uri_visited(char const *uri)
+{
+	bool result;
+
+	rwlock_read_lock(&state_lock);
+	result = db_rrdp_get_visited(state.rrdp_uris, uri);
+	rwlock_unlock(&state_lock);
+
+	return result;
+}
+
+int
+rrdp_uri_mark_visited(char const *uri)
+{
+	WLOCK_HANDLER(&state_lock,
+	    db_rrdp_set_visited(state.rrdp_uris, uri, true))
+}
+
+static int
+rrdp_uri_reset_visited(void)
+{
+	WLOCK_HANDLER(&state_lock,
+	    db_rrdp_set_all_nonvisited(state.rrdp_uris))
+}
+
 static int
 __perform_standalone_validation(struct db_table **result)
 {
@@ -225,6 +251,17 @@ __perform_standalone_validation(struct db_table **result)
 	db = db_table_create();
 	if (db == NULL)
 		return pr_enomem();
+
+	/*
+	 * Reset all RDDP URIs to 'non visited' every cycle, this way we can
+	 * assure that the update notification file will be requested when
+	 * needed and one time per cycle.
+	 */
+	error = rrdp_uri_reset_visited();
+	if (error) {
+		db_table_destroy(db);
+		return error;
+	}
 
 	error = perform_standalone_validation(db);
 	if (error) {

@@ -1,8 +1,8 @@
 #include "rrdp_loader.h"
 
-#include "rrdp/rrdp_handler.h"
 #include "rrdp/rrdp_objects.h"
 #include "rrdp/rrdp_parser.h"
+#include "rtr/db/vrps.h"
 #include "log.h"
 #include "thread_var.h"
 
@@ -13,7 +13,7 @@ process_diff_serial(struct update_notification *notification, char const *uri)
 	unsigned long serial;
 	int error;
 
-	error = rhandler_uri_get_serial(uri, &serial);
+	error = rrdp_uri_get_serial(uri, &serial);
 	if (error)
 		return error;
 
@@ -32,23 +32,21 @@ rrdp_load(struct rpki_uri *uri)
 {
 	struct update_notification *upd_notification;
 	rrdp_uri_cmp_result_t res;
-	long last_update;
 	int error;
 
-	last_update = 0;
-	error = rhandler_uri_get_last_update(uri_get_global(uri), &last_update);
-	if (error && error != -ENOENT)
-		return error;
+	/* Avoid multiple requests on the same run */
+	if (rrdp_uri_visited(uri_get_global(uri)))
+		return 0;
 
-	error = rrdp_parse_notification(uri, last_update, &upd_notification);
+	error = rrdp_parse_notification(uri, &upd_notification);
 	if (error)
 		return error;
 
-	/* No updates at the file (yet) */
+	/* No updates at the file (yet), didn't pushed to fnstack */
 	if (upd_notification == NULL)
 		return 0;
 
-	res = rhandler_uri_cmp(uri_get_global(uri),
+	res = rrdp_uri_cmp(uri_get_global(uri),
 	    upd_notification->global_data.session_id,
 	    upd_notification->global_data.serial);
 	switch (res) {
@@ -74,7 +72,7 @@ rrdp_load(struct rpki_uri *uri)
 
 	/* Any change, and no error during the process, update db */
 	if (!error) {
-		error = rhandler_uri_update(uri_get_global(uri),
+		error = rrdp_uri_update(uri_get_global(uri),
 		    upd_notification->global_data.session_id,
 		    upd_notification->global_data.serial);
 		if (error)
@@ -83,10 +81,12 @@ rrdp_load(struct rpki_uri *uri)
 
 set_update:
 	/* Set the last update to now */
-	error = rhandler_uri_set_last_update(uri_get_global(uri));
+	error = rrdp_uri_set_last_update(uri_get_global(uri));
 end:
-	update_notification_destroy(upd_notification);
-	fnstack_pop(); /* Pop from rrdp_parse_notification */
+	if (upd_notification != NULL) {
+		update_notification_destroy(upd_notification);
+		fnstack_pop(); /* Pop from rrdp_parse_notification */
+	}
 
 	return error;
 }

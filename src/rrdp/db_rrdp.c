@@ -1,6 +1,7 @@
 #include "db_rrdp.h"
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include "data_structure/uthash_nonfatal.h"
@@ -12,6 +13,7 @@ struct db_rrdp_uri {
 	char *uri;
 	struct global_data data;
 	long last_update;
+	bool visited;
 	UT_hash_handle hh;
 };
 
@@ -59,6 +61,7 @@ db_rrdp_uri_create(char const *uri, char const *session_id,
 
 	tmp->data.serial = serial;
 	tmp->last_update = 0;
+	tmp->visited = true;
 
 	*result = tmp;
 	return 0;
@@ -177,6 +180,42 @@ db_rrdp_set_last_update(struct db_rrdp *db, char const *uri)
 		return -ENOENT;
 
 	return get_current_time(&found->last_update);
+}
+
+bool
+db_rrdp_get_visited(struct db_rrdp *db, char const *uri)
+{
+	struct db_rrdp_uri *found;
+
+	HASH_FIND_STR(db->uris, uri, found);
+	if (found == NULL)
+		return false;
+
+	return found->visited;
+}
+
+int
+db_rrdp_set_visited(struct db_rrdp *db, char const *uri, bool value)
+{
+	struct db_rrdp_uri *found;
+
+	HASH_FIND_STR(db->uris, uri, found);
+	if (found == NULL)
+		return -ENOENT;
+
+	found->visited = value;
+	return 0;
+}
+
+int
+db_rrdp_set_all_nonvisited(struct db_rrdp *db)
+{
+	struct db_rrdp_uri *uri_node, *uri_tmp;
+
+	HASH_ITER(hh, db->uris, uri_node, uri_tmp)
+		uri_node->visited = false;
+
+	return 0;
 }
 
 int

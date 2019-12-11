@@ -20,8 +20,7 @@
 
 int
 validation_prepare(struct validation **out, struct tal *tal,
-    struct validation_handler *validation_handler,
-    struct rrdp_handler *rrdp_handler)
+    struct validation_handler *validation_handler)
 {
 	return 0;
 }

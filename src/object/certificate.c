@@ -11,6 +11,7 @@
 #include "nid.h"
 #include "str.h"
 #include "thread_var.h"
+#include "visited_uris.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
@@ -1899,6 +1900,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 {
 	access_method_exec *cb_primary;
 	access_method_exec *cb_secondary;
+	bool primary_rrdp;
 	int error;
 
 	/*
@@ -1912,15 +1914,26 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	if (sia_uris->caRepository.position > sia_uris->rpkiNotify.position) {
 		cb_primary = rrdp_cb;
 		cb_secondary = rsync_cb;
+		primary_rrdp = true;
 	} else {
 		cb_primary = rsync_cb;
 		cb_secondary = rrdp_cb;
+		primary_rrdp = false;
 	}
 
 	/* Try with the preferred; in case of error, try with the next one */
 	error = cb_primary(sia_uris);
 	if (!error)
 		return 0;
+
+	if (primary_rrdp)
+		pr_warn("Couldn't fetch data from RRDP repository '%s', trying to fetch data now from '%s'.",
+		    uri_get_global(sia_uris->rpkiNotify.uri),
+		    uri_get_global(sia_uris->caRepository.uri));
+	else
+		pr_warn("Couldn't fetch data from repository '%s', trying to fetch data now from RRDP '%s'.",
+		    uri_get_global(sia_uris->caRepository.uri),
+		    uri_get_global(sia_uris->rpkiNotify.uri));
 
 	return cb_secondary(sia_uris);
 }
@@ -1942,7 +1955,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	enum rpki_policy policy;
 	enum cert_type type;
 	struct rpp *pp;
-	bool mft_retry;
+	bool mft_retry, mft_exists;
 	int error;
 
 	state = state_retrieve();
@@ -2036,8 +2049,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	}
 
 	/*
-	 * FIXME (now) Beware: what if RRDP is already being utilized?
-	 *
 	 * There isn't any restriction about the preferred access method of
 	 * children CAs being the same as the parent CA.
 	 *
@@ -2050,18 +2061,33 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 * Step (2) must do something different.
 	 * - The manifest should exist at the snapshot file (aka, directory
 	 *   structure), so it should be processed from there on.
-	 * - Verify that the manifest file exists locally (must be the same
-	 *   session_id and serial, load those at start, the serial can
-	 *   be written to a local file, the session_id can be loaded from the
-	 *   directory structure <local-repository>/rrdp/<session_id>).:
+	 * - Verify that the manifest file exists locally:
 	 *   + Exists: Read and process normally (no need to do rsync)
 	 *   + Doesn't exists: check for preferred access method, keep the flow
 	 *     from there on.
 	 */
-	error = use_access_method(&sia_uris, exec_rsync_method,
-	    exec_rrdp_method);
-	if (error)
-		return error;
+
+	/* Avoid to re-download the repo if the mft was fetched with RRDP */
+	mft_exists = false;
+	switch (type) {
+	case TA:
+		error = use_access_method(&sia_uris, exec_rsync_method,
+		    exec_rrdp_method);
+		if (error)
+			return error;
+		break;
+	case CA:
+		if (!visited_uris_exists(uri_get_global(sia_uris.mft.uri))) {
+			mft_exists = true;
+			error = use_access_method(&sia_uris, exec_rsync_method,
+			    exec_rrdp_method);
+			if (error)
+				return error;
+		}
+		break;
+	default:
+		break;
+	}
 
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents
@@ -2087,7 +2113,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		error = handle_manifest(sia_uris.mft.uri, &pp);
 		if (!mft_retry)
 			uri_refput(sia_uris.mft.uri);
-		if (!error || !mft_retry)
+		if (!error || !mft_retry || mft_exists)
 			break;
 
 		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",

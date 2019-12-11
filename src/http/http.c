@@ -184,7 +184,7 @@ http_download_file(struct rpki_uri *uri, http_write_cb cb)
  * Fetch the file from @uri, write it using the @cb.
  *
  * The HTTP request is made using the header 'If-Modified-Since' with a value
- * of @value.
+ * of @value (if @value is 0, the header isn't set).
  *
  * Returns:
  *   > 0 file was requested but wasn't downloaded since the server didn't sent

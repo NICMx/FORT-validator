@@ -21,4 +21,8 @@ int db_rrdp_get_last_update(struct db_rrdp *, char const *, long *);
 
 int db_rrdp_set_last_update(struct db_rrdp *, char const *);
 
+bool db_rrdp_get_visited(struct db_rrdp *, char const *);
+int db_rrdp_set_visited(struct db_rrdp *, char const *, bool);
+int db_rrdp_set_all_nonvisited(struct db_rrdp *);
+
 #endif /* SRC_RRDP_DB_RRDP_H_ */

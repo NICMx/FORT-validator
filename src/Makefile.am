@@ -34,6 +34,7 @@ fort_SOURCES += updates_daemon.c updates_daemon.h
 fort_SOURCES += uri.h uri.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += validation_handler.h validation_handler.c
+fort_SOURCES += visited_uris.h visited_uris.c
 
 fort_SOURCES += asn1/content_info.h asn1/content_info.c
 fort_SOURCES += asn1/decode.h asn1/decode.c
@@ -81,7 +82,6 @@ fort_SOURCES += resource/ip6.h resource/ip6.c
 fort_SOURCES += resource/asn.h resource/asn.c
 
 fort_SOURCES += rrdp/db_rrdp.h rrdp/db_rrdp.c
-fort_SOURCES += rrdp/rrdp_handler.h rrdp/rrdp_handler.c
 fort_SOURCES += rrdp/rrdp_loader.h rrdp/rrdp_loader.c
 fort_SOURCES += rrdp/rrdp_objects.h rrdp/rrdp_objects.c
 fort_SOURCES += rrdp/rrdp_parser.h rrdp/rrdp_parser.c

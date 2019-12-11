@@ -13,12 +13,13 @@
 #include "crypto/base64.h"
 #include "crypto/hash.h"
 #include "http/http.h"
-#include "rrdp/rrdp_handler.h"
+#include "rtr/db/vrps.h"
 #include "xml/relax_ng.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"
 #include "thread_var.h"
+#include "visited_uris.h"
 
 /* XML Common Namespace of files */
 #define RRDP_NAMESPACE		"http://www.ripe.net/rpki/rrdp"
@@ -70,6 +71,24 @@ struct rdr_delta_ctx {
 	/* Current serial loaded from update notification deltas list */
 	unsigned long expected_serial;
 };
+
+static int
+add_mft_to_list(char const *uri)
+{
+	if (strcmp(".mft", strrchr(uri, '.')) != 0)
+		return 0;
+
+	return visited_uris_add(uri);
+}
+
+static int
+rem_mft_from_list(char const *uri)
+{
+	if (strcmp(".mft", strrchr(uri, '.')) != 0)
+		return 0;
+
+	return visited_uris_remove(uri);
+}
 
 static size_t
 write_local(unsigned char *content, size_t size, size_t nmemb, void *arg)
@@ -574,6 +593,13 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len)
 		    uri_get_local(uri));
 	}
 
+	error = add_mft_to_list(uri_get_global(uri));
+	if (error) {
+		uri_refput(uri);
+		file_close(out);
+		return error;
+	}
+
 	uri_refput(uri);
 	file_close(out);
 	return 0;
@@ -631,6 +657,10 @@ delete_from_uri(char const *location)
 		error = pr_errno(errno, "Couldn't delete dir %s", work_loc);
 		goto release_str;
 	} while (true);
+
+	error = rem_mft_from_list(uri_get_global(uri));
+	if (error)
+		goto release_str;
 
 	uri_refput(uri);
 	free(local_uri);
@@ -695,7 +725,7 @@ rdr_notification_ctx_init(struct rdr_notification_ctx *ctx)
 
 	ctx->create_snapshot = false;
 
-	res = rhandler_uri_cmp(ctx->uri,
+	res = rrdp_uri_cmp(ctx->uri,
 	    ctx->notification->global_data.session_id,
 	    ctx->notification->global_data.serial);
 	switch (res) {
@@ -1045,17 +1075,33 @@ release_uri:
  * 'If-Modified-Since' header, return 0 and set @result to NULL.
  */
 int
-rrdp_parse_notification(struct rpki_uri *uri, long last_update,
+rrdp_parse_notification(struct rpki_uri *uri,
     struct update_notification **result)
 {
-	int error;
+	long last_update;
+	int error, vis_err;
 
 	if (uri == NULL || uri_is_rsync(uri))
 		pr_crit("Wrong call, trying to parse a non HTTPS URI");
 
+	last_update = 0;
+	error = rrdp_uri_get_last_update(uri_get_global(uri), &last_update);
+	if (error && error != -ENOENT)
+		return error;
+
 	error = http_download_file_with_ims(uri, write_local, last_update);
 	if (error < 0)
 		return error;
+
+	/*
+	 * Mark as visited, if it doesn't exists yet, there's no problem since
+	 * this is probably the first time is visited (first run), so it will
+	 * be marked as visited when the URI is stored at DB.
+	 */
+	vis_err = rrdp_uri_mark_visited(uri_get_global(uri));
+	if (vis_err && vis_err !=-ENOENT)
+		return pr_err("Coudln't mark '%s' as visited",
+		    uri_get_global(uri));
 
 	/* No updates yet */
 	if (error > 0) {
