@@ -311,7 +311,7 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	if (state == NULL)
 		return -EINVAL;
 
-	visited_uris = validation_visited_uris(state);
+	visited_uris = validation_rsync_visited_uris(state);
 
 	if (!force && is_already_downloaded(requested_uri, visited_uris)) {
 		pr_debug("No need to redownload '%s'.",

@@ -69,11 +69,12 @@ struct delta_head {
 /* List of deltas inside an update notification file */
 struct deltas_head;
 
-/* Update notification file content */
+/* Update notification file content and location URI */
 struct update_notification {
 	struct global_data global_data;
 	struct doc_data snapshot;
 	struct deltas_head *deltas_list;
+	char *uri;
 };
 
 void global_data_init(struct global_data *);

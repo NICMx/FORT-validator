@@ -1,10 +1,8 @@
 #include "visited_uris.h"
 
 #include <sys/queue.h>
-#include <pthread.h>
 #include <stddef.h>
 #include <string.h>
-#include "common.h"
 #include "log.h"
 
 /*
@@ -15,10 +13,12 @@ struct visited_elem {
 	SLIST_ENTRY(visited_elem) next;
 };
 
-SLIST_HEAD(visited_uris, visited_elem) uris_db;
+SLIST_HEAD(visited_list, visited_elem);
 
-/** Read/write lock, which protects @uris_db. */
-static pthread_rwlock_t lock;
+struct visited_uris {
+	struct visited_list *list;
+	unsigned int refs;
+};
 
 static int
 visited_elem_create(struct visited_elem **elem, char const *uri)
@@ -47,86 +47,127 @@ visited_elem_destroy(struct visited_elem *elem)
 }
 
 int
-visited_uris_init(void)
+visited_uris_create(struct visited_uris **uris)
 {
-	int error;
+	struct visited_uris *tmp;
+	struct visited_list *tmp_list;
 
-	error = pthread_rwlock_init(&lock, NULL);
-	if (error)
-		return pr_errno(error, "Visited uris pthread_rwlock_init() errored");
+	tmp = malloc(sizeof(struct visited_uris));
+	if (tmp == NULL)
+		return pr_enomem();
 
-	SLIST_INIT(&uris_db);
+	tmp_list = malloc(sizeof(struct visited_list));
+	if (tmp_list == NULL) {
+		free(tmp);
+		return pr_enomem();
+	}
+
+	SLIST_INIT(tmp_list);
+	tmp->list = tmp_list;
+	tmp->refs = 1;
+
+	*uris = tmp;
 	return 0;
 }
 
 void
-visited_uris_destroy(void)
+visited_uris_refget(struct visited_uris *uris)
+{
+	uris->refs++;
+}
+
+void
+visited_uris_refput(struct visited_uris *uris)
 {
 	struct visited_elem *elem;
 
-	while (!SLIST_EMPTY(&uris_db)) {
-		elem = uris_db.slh_first;
-		SLIST_REMOVE_HEAD(&uris_db, next);
-		visited_elem_destroy(elem);
+	uris->refs--;
+	if (uris->refs == 0) {
+		while (!SLIST_EMPTY(uris->list)) {
+			elem = uris->list->slh_first;
+			SLIST_REMOVE_HEAD(uris->list, next);
+			visited_elem_destroy(elem);
+		}
+		free(uris->list);
+		free(uris);
 	}
-	pthread_rwlock_destroy(&lock);
 }
 
 static struct visited_elem *
-elem_find(struct visited_uris *list, char const *uri)
+elem_find(struct visited_list *list, char const *uri)
 {
 	struct visited_elem *found;
 
-	rwlock_read_lock(&lock);
-	SLIST_FOREACH(found, list, next) {
-		if (strcmp(uri, found->uri) == 0) {
-			rwlock_unlock(&lock);
+	SLIST_FOREACH(found, list, next)
+		if (strcmp(uri, found->uri) == 0)
 			return found;
-		}
-	}
-	rwlock_unlock(&lock);
+
 	return NULL;
 }
 
 int
-visited_uris_add(char const *uri)
+visited_uris_add(struct visited_uris *uris, char const *uri)
 {
 	struct visited_elem *elem;
 	int error;
 
-	if (elem_find(&uris_db, uri) != NULL)
+	if (elem_find(uris->list, uri) != NULL)
 		return 0; /* Exists, don't add again */
 
 	error = visited_elem_create(&elem, uri);
 	if (error)
 		return error;
 
-	rwlock_write_lock(&lock);
-	SLIST_INSERT_HEAD(&uris_db, elem, next);
-	rwlock_unlock(&lock);
+	SLIST_INSERT_HEAD(uris->list, elem, next);
 
 	return 0;
 }
 
 int
-visited_uris_remove(char const *uri)
+visited_uris_remove(struct visited_uris *uris, char const *uri)
 {
 	struct visited_elem *elem;
 
-	elem = elem_find(&uris_db, uri);
+	elem = elem_find(uris->list, uri);
 	if (elem == NULL)
 		return pr_err("Trying to remove a nonexistent URI '%s'", uri);
 
-	rwlock_write_lock(&lock);
-	SLIST_REMOVE(&uris_db, elem, visited_elem, next);
+	SLIST_REMOVE(uris->list, elem, visited_elem, next);
 	visited_elem_destroy(elem);
-	rwlock_unlock(&lock);
 
 	return 0;
 }
 
 bool
-visited_uris_exists(char const *uri)
+visited_uris_exists(struct visited_uris *uris, char const *uri)
 {
-	return elem_find(&uris_db, uri) != NULL;
+	return elem_find(uris->list, uri) != NULL;
+}
+
+int
+visited_uris_get_root(struct visited_uris *uris, char **result)
+{
+	struct visited_elem *elem;
+	char *tmp, *ptr;
+	size_t size;
+	int i;
+
+	elem = SLIST_FIRST(uris->list);
+
+	i = 0;
+	ptr = strchr(elem->uri, '/');
+	while(i < 2) {
+		ptr = strchr(ptr + 1, '/');
+		i++;
+	}
+	size = ptr - elem->uri;
+	tmp = malloc(size + 1);
+	if (tmp == NULL)
+		return pr_enomem();
+
+	strncpy(tmp, elem->uri, size);
+	tmp[size + 1] = '\0';
+
+	*result = tmp;
+	return 0;
 }

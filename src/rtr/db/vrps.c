@@ -11,7 +11,6 @@
 #include "data_structure/array_list.h"
 #include "object/router_key.h"
 #include "object/tal.h"
-#include "rrdp/db_rrdp.h"
 #include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
 
@@ -61,10 +60,6 @@ struct state {
 	serial_t next_serial;
 	uint16_t v0_session_id;
 	uint16_t v1_session_id;
-
-	/* RRDP URIs known from certificates */
-	struct db_rrdp *rrdp_uris;
-
 } state;
 
 /** Read/write lock, which protects @state and its inhabitants. */
@@ -103,14 +98,11 @@ vrps_init(void)
 	    : (0xFFFFu);
 
 	state.slurm = NULL;
-	error = db_rrdp_create(&state.rrdp_uris);
-	if (error)
-		goto release_deltas;
 
 	error = pthread_rwlock_init(&state_lock, NULL);
 	if (error) {
 		error = pr_errno(error, "state pthread_rwlock_init() errored");
-		goto release_db_rrdp;
+		goto release_deltas;
 	}
 
 	error = pthread_rwlock_init(&table_lock, NULL);
@@ -122,8 +114,6 @@ vrps_init(void)
 	return 0;
 release_state_lock:
 	pthread_rwlock_destroy(&state_lock);
-release_db_rrdp:
-	db_rddp_destroy(state.rrdp_uris);
 release_deltas:
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
 	return error;
@@ -137,7 +127,6 @@ vrps_destroy(void)
 	if (state.slurm != NULL)
 		db_slurm_destroy(state.slurm);
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
-	db_rddp_destroy(state.rrdp_uris);
 	/* Nothing to do with error codes from now on */
 	pthread_rwlock_destroy(&state_lock);
 	pthread_rwlock_destroy(&table_lock);
@@ -181,67 +170,6 @@ handle_router_key(unsigned char const *ski, uint32_t as,
 	    rtrhandler_handle_router_key(arg, ski, as, spk))
 }
 
-rrdp_uri_cmp_result_t
-rrdp_uri_cmp(char const *uri, char const *session_id, unsigned long serial)
-{
-	RLOCK_HANDLER(&state_lock,
-	    db_rrdp_cmp_uri(state.rrdp_uris, uri, session_id, serial))
-}
-
-int
-rrdp_uri_update(char const *uri, char const *session_id, unsigned long serial)
-{
-	WLOCK_HANDLER(&state_lock,
-	    db_rrdp_add_uri(state.rrdp_uris, uri, session_id, serial))
-}
-
-int
-rrdp_uri_get_serial(char const *uri, unsigned long *serial)
-{
-	RLOCK_HANDLER(&state_lock,
-	    db_rrdp_get_serial(state.rrdp_uris, uri, serial))
-}
-
-int
-rrdp_uri_get_last_update(char const *uri, long *last_update)
-{
-	RLOCK_HANDLER(&state_lock,
-	    db_rrdp_get_last_update(state.rrdp_uris, uri, last_update))
-}
-
-int
-rrdp_uri_set_last_update(char const *uri)
-{
-	WLOCK_HANDLER(&state_lock,
-	    db_rrdp_set_last_update(state.rrdp_uris, uri))
-}
-
-bool
-rrdp_uri_visited(char const *uri)
-{
-	bool result;
-
-	rwlock_read_lock(&state_lock);
-	result = db_rrdp_get_visited(state.rrdp_uris, uri);
-	rwlock_unlock(&state_lock);
-
-	return result;
-}
-
-int
-rrdp_uri_mark_visited(char const *uri)
-{
-	WLOCK_HANDLER(&state_lock,
-	    db_rrdp_set_visited(state.rrdp_uris, uri, true))
-}
-
-static int
-rrdp_uri_reset_visited(void)
-{
-	WLOCK_HANDLER(&state_lock,
-	    db_rrdp_set_all_nonvisited(state.rrdp_uris))
-}
-
 static int
 __perform_standalone_validation(struct db_table **result)
 {
@@ -251,17 +179,6 @@ __perform_standalone_validation(struct db_table **result)
 	db = db_table_create();
 	if (db == NULL)
 		return pr_enomem();
-
-	/*
-	 * Reset all RDDP URIs to 'non visited' every cycle, this way we can
-	 * assure that the update notification file will be requested when
-	 * needed and one time per cycle.
-	 */
-	error = rrdp_uri_reset_visited();
-	if (error) {
-		db_table_destroy(db);
-		return error;
-	}
 
 	error = perform_standalone_validation(db);
 	if (error) {
@@ -368,7 +285,6 @@ __vrps_update(bool *changed)
 	old_base = NULL;
 	new_base = NULL;
 
-	/* FIXME (now) identify if RRDP is being utilized? */
 	error = __perform_standalone_validation(&new_base);
 	if (error)
 		return error;

@@ -11,7 +11,6 @@
 #include "nid.h"
 #include "str.h"
 #include "thread_var.h"
-#include "visited_uris.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
@@ -2077,7 +2076,9 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 			return error;
 		break;
 	case CA:
-		if (!visited_uris_exists(uri_get_global(sia_uris.mft.uri))) {
+		if (!db_rrdp_uris_visited_exists(
+		    validation_get_rrdp_uris(state),
+		    uri_get_global(sia_uris.mft.uri))) {
 			error = use_access_method(&sia_uris, exec_rsync_method,
 			    exec_rrdp_method);
 			if (error)

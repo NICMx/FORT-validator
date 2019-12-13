@@ -81,10 +81,12 @@ fort_SOURCES += resource/ip4.h resource/ip4.c
 fort_SOURCES += resource/ip6.h resource/ip6.c
 fort_SOURCES += resource/asn.h resource/asn.c
 
-fort_SOURCES += rrdp/db_rrdp.h rrdp/db_rrdp.c
 fort_SOURCES += rrdp/rrdp_loader.h rrdp/rrdp_loader.c
 fort_SOURCES += rrdp/rrdp_objects.h rrdp/rrdp_objects.c
 fort_SOURCES += rrdp/rrdp_parser.h rrdp/rrdp_parser.c
+
+fort_SOURCES += rrdp/db/db_rrdp.h rrdp/db/db_rrdp.c
+fort_SOURCES += rrdp/db/db_rrdp_uris.h rrdp/db/db_rrdp_uris.c
 
 fort_SOURCES += rsync/rsync.h rsync/rsync.c
 

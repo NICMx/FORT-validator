@@ -4,11 +4,11 @@
 #include "extension.h"
 #include "nid.h"
 #include "thread_var.h"
-#include "visited_uris.h"
 #include "http/http.h"
 #include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
 #include "xml/relax_ng.h"
+#include "rrdp/db/db_rrdp.h"
 
 static int
 start_rtr_server(void)
@@ -19,13 +19,13 @@ start_rtr_server(void)
 	if (error)
 		goto just_quit;
 
-	error = visited_uris_init();
+	error = db_rrdp_init();
 	if (error)
 		goto vrps_cleanup;
 
 	error = rtr_listen();
 
-	visited_uris_destroy();
+	db_rrdp_cleanup();
 vrps_cleanup:
 	vrps_destroy();
 just_quit:

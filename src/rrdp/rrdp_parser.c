@@ -10,16 +10,15 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "rrdp/db/db_rrdp_uris.h"
 #include "crypto/base64.h"
 #include "crypto/hash.h"
 #include "http/http.h"
-#include "rtr/db/vrps.h"
 #include "xml/relax_ng.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"
 #include "thread_var.h"
-#include "visited_uris.h"
 
 /* XML Common Namespace of files */
 #define RRDP_NAMESPACE		"http://www.ripe.net/rpki/rrdp"
@@ -46,8 +45,6 @@ DEFINE_ARRAY_LIST_FUNCTIONS(deltas_parsed, struct delta_head *, static)
 struct rdr_notification_ctx {
 	/* Data being parsed */
 	struct update_notification *notification;
-	/* Global URI of the notification */
-	char const *uri;
 	/* The snapshot must be allocated? */
 	bool create_snapshot;
 	/* Unordered list of deltas */
@@ -60,6 +57,8 @@ struct rdr_snapshot_ctx {
 	struct snapshot *snapshot;
 	/* Parent data to validate session ID and serial */
 	struct update_notification *parent;
+	/* Visited URIs related to this thread */
+	struct visited_uris *visited_uris;
 };
 
 /* Context while reading a delta */
@@ -70,24 +69,32 @@ struct rdr_delta_ctx {
 	struct update_notification *parent;
 	/* Current serial loaded from update notification deltas list */
 	unsigned long expected_serial;
+	/* Visited URIs related to this thread */
+	struct visited_uris *visited_uris;
+};
+
+/* Args to send on update (snapshot/delta) files parsing */
+struct proc_upd_args {
+	struct update_notification *parent;
+	struct visited_uris *visited_uris;
 };
 
 static int
-add_mft_to_list(char const *uri)
+add_mft_to_list(struct visited_uris *visited_uris, char const *uri)
 {
 	if (strcmp(".mft", strrchr(uri, '.')) != 0)
 		return 0;
 
-	return visited_uris_add(uri);
+	return visited_uris_add(visited_uris, uri);
 }
 
 static int
-rem_mft_from_list(char const *uri)
+rem_mft_from_list(struct visited_uris *visited_uris, char const *uri)
 {
 	if (strcmp(".mft", strrchr(uri, '.')) != 0)
 		return 0;
 
-	return visited_uris_remove(uri);
+	return visited_uris_remove(visited_uris, uri);
 }
 
 static size_t
@@ -561,7 +568,8 @@ release_tmp:
 }
 
 static int
-write_from_uri(char const *location, unsigned char *content, size_t content_len)
+write_from_uri(char const *location, unsigned char *content, size_t content_len,
+    struct visited_uris *visited_uris)
 {
 	struct rpki_uri *uri;
 	struct stat stat;
@@ -589,11 +597,11 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len)
 	if (written != content_len) {
 		uri_refput(uri);
 		file_close(out);
-		return pr_err("Coudln't write bytes to file %s",
+		return pr_err("Couldn't write bytes to file %s",
 		    uri_get_local(uri));
 	}
 
-	error = add_mft_to_list(uri_get_global(uri));
+	error = add_mft_to_list(visited_uris, uri_get_global(uri));
 	if (error) {
 		uri_refput(uri);
 		file_close(out);
@@ -606,7 +614,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len)
 }
 
 static int
-delete_from_uri(char const *location)
+delete_from_uri(char const *location, struct visited_uris *visited_uris)
 {
 	struct rpki_uri *uri;
 	char *local_uri, *work_loc, *tmp;
@@ -628,6 +636,10 @@ delete_from_uri(char const *location)
 		error = pr_errno(errno, "Couldn't delete %s", local_uri);
 		goto release_str;
 	}
+
+	error = rem_mft_from_list(visited_uris, uri_get_global(uri));
+	if (error)
+		goto release_str;
 
 	/*
 	 * Delete parent dirs only if empty.
@@ -658,10 +670,6 @@ delete_from_uri(char const *location)
 		goto release_str;
 	} while (true);
 
-	error = rem_mft_from_list(uri_get_global(uri));
-	if (error)
-		goto release_str;
-
 	uri_refput(uri);
 	free(local_uri);
 	return 0;
@@ -677,7 +685,8 @@ release_uri:
  * other type at the caller.
  */
 static int
-parse_publish_elem(xmlTextReaderPtr reader, bool parse_hash, bool hash_required)
+parse_publish_elem(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
+    struct visited_uris *visited_uris)
 {
 	struct publish *tmp;
 	int error;
@@ -688,7 +697,7 @@ parse_publish_elem(xmlTextReaderPtr reader, bool parse_hash, bool hash_required)
 		return error;
 
 	error = write_from_uri(tmp->doc_data.uri, tmp->content,
-	    tmp->content_len);
+	    tmp->content_len, visited_uris);
 	publish_destroy(tmp);
 	if (error)
 		return error;
@@ -701,7 +710,7 @@ parse_publish_elem(xmlTextReaderPtr reader, bool parse_hash, bool hash_required)
  * other type at the caller.
  */
 static int
-parse_withdraw_elem(xmlTextReaderPtr reader)
+parse_withdraw_elem(xmlTextReaderPtr reader, struct visited_uris *visited_uris)
 {
 	struct withdraw *tmp;
 	int error;
@@ -710,7 +719,7 @@ parse_withdraw_elem(xmlTextReaderPtr reader)
 	if (error)
 		return error;
 
-	error = delete_from_uri(tmp->doc_data.uri);
+	error = delete_from_uri(tmp->doc_data.uri, visited_uris);
 	withdraw_destroy(tmp);
 	if (error)
 		return error;
@@ -722,12 +731,17 @@ static int
 rdr_notification_ctx_init(struct rdr_notification_ctx *ctx)
 {
 	rrdp_uri_cmp_result_t res;
+	int error;
 
 	ctx->create_snapshot = false;
 
-	res = rrdp_uri_cmp(ctx->uri,
+	error = db_rrdp_uris_cmp(ctx->notification->uri,
 	    ctx->notification->global_data.session_id,
-	    ctx->notification->global_data.serial);
+	    ctx->notification->global_data.serial,
+	    &res);
+	if (error)
+		return error;
+
 	switch (res) {
 	case RRDP_URI_EQUAL:
 		/* Just validate content */
@@ -892,14 +906,20 @@ parse_notification(struct rpki_uri *uri, struct update_notification **file)
 {
 	struct rdr_notification_ctx ctx;
 	struct update_notification *tmp;
+	char *dup;
 	int error;
+
+	dup = strdup(uri_get_global(uri));
+	if (dup == NULL)
+		return pr_enomem();
 
 	error = update_notification_create(&tmp);
 	if (error)
 		return error;
 
+	tmp->uri = dup;
+
 	ctx.notification = tmp;
-	ctx.uri = uri_get_global(uri);
 	error = relax_ng_parse(uri_get_local(uri), xml_read_notification,
 	    &ctx);
 	if (error) {
@@ -924,7 +944,8 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = parse_publish_elem(reader, false, false);
+			error = parse_publish_elem(reader, false, false,
+			    ctx->visited_uris);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
 			error = parse_global_data(reader,
 			    &ctx->snapshot->global_data,
@@ -944,7 +965,7 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_snapshot(struct rpki_uri *uri, struct update_notification *parent)
+parse_snapshot(struct rpki_uri *uri, struct proc_upd_args *args)
 {
 	struct rdr_snapshot_ctx ctx;
 	struct snapshot *snapshot;
@@ -952,8 +973,8 @@ parse_snapshot(struct rpki_uri *uri, struct update_notification *parent)
 
 	fnstack_push_uri(uri);
 	/* Hash validation */
-	error = hash_validate_file("sha256", uri, parent->snapshot.hash,
-	    parent->snapshot.hash_len);
+	error = hash_validate_file("sha256", uri, args->parent->snapshot.hash,
+	    args->parent->snapshot.hash_len);
 	if (error)
 		goto pop;
 
@@ -962,7 +983,8 @@ parse_snapshot(struct rpki_uri *uri, struct update_notification *parent)
 		goto pop;
 
 	ctx.snapshot = snapshot;
-	ctx.parent = parent;
+	ctx.parent = args->parent;
+	ctx.visited_uris = args->visited_uris;
 	error = relax_ng_parse(uri_get_local(uri), xml_read_snapshot, &ctx);
 
 	/* Error 0 is ok */
@@ -985,9 +1007,10 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = parse_publish_elem(reader, true, false);
+			error = parse_publish_elem(reader, true, false,
+			    ctx->visited_uris);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
-			error = parse_withdraw_elem(reader);
+			error = parse_withdraw_elem(reader, ctx->visited_uris);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
 			error = parse_global_data(reader,
 			    &ctx->delta->global_data,
@@ -1007,9 +1030,9 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_delta(struct rpki_uri *uri, struct update_notification *parent,
-    struct delta_head *parents_data)
+parse_delta(struct rpki_uri *uri, struct delta_head *parents_data, void *arg)
 {
+	struct proc_upd_args *args = arg;
 	struct rdr_delta_ctx ctx;
 	struct delta *delta;
 	struct doc_data *expected_data;
@@ -1028,7 +1051,8 @@ parse_delta(struct rpki_uri *uri, struct update_notification *parent,
 		goto pop_fnstack;
 
 	ctx.delta = delta;
-	ctx.parent = parent;
+	ctx.parent = args->parent;
+	ctx.visited_uris = args->visited_uris;
 	ctx.expected_serial = parents_data->serial;
 	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
 
@@ -1042,13 +1066,13 @@ pop_fnstack:
 static int
 process_delta(struct delta_head *delta_head, void *arg)
 {
-	struct update_notification *parent = arg;
 	struct rpki_uri *uri;
 	struct doc_data *head_data;
 	int error;
 
 	head_data = &delta_head->doc_data;
 
+	pr_debug("Processing delta '%s'.", delta_head->doc_data.uri);
 	error = uri_create_https_str(&uri, head_data->uri,
 	    strlen(head_data->uri));
 	if (error)
@@ -1058,7 +1082,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 	if (error)
 		goto release_uri;
 
-	error = parse_delta(uri, parent, delta_head);
+	error = parse_delta(uri, delta_head, arg);
 
 	/* Error 0 its ok */
 release_uri:
@@ -1084,8 +1108,9 @@ rrdp_parse_notification(struct rpki_uri *uri,
 	if (uri == NULL || uri_is_rsync(uri))
 		pr_crit("Wrong call, trying to parse a non HTTPS URI");
 
+	pr_debug("Processing notification '%s'.", uri_get_global(uri));
 	last_update = 0;
-	error = rrdp_uri_get_last_update(uri_get_global(uri), &last_update);
+	error = db_rrdp_uris_get_last_update(uri_get_global(uri), &last_update);
 	if (error && error != -ENOENT)
 		return error;
 
@@ -1098,8 +1123,8 @@ rrdp_parse_notification(struct rpki_uri *uri,
 	 * this is probably the first time is visited (first run), so it will
 	 * be marked as visited when the URI is stored at DB.
 	 */
-	vis_err = rrdp_uri_mark_visited(uri_get_global(uri));
-	if (vis_err && vis_err !=-ENOENT)
+	vis_err = db_rrdp_uris_set_requested(uri_get_global(uri), true);
+	if (vis_err && vis_err != -ENOENT)
 		return pr_err("Coudln't mark '%s' as visited",
 		    uri_get_global(uri));
 
@@ -1120,11 +1145,17 @@ rrdp_parse_notification(struct rpki_uri *uri,
 }
 
 int
-rrdp_parse_snapshot(struct update_notification *parent)
+rrdp_parse_snapshot(struct update_notification *parent,
+    struct visited_uris *visited_uris)
 {
+	struct proc_upd_args args;
 	struct rpki_uri *uri;
 	int error;
 
+	args.parent = parent;
+	args.visited_uris = visited_uris;
+
+	pr_debug("Processing snapshot '%s'.", parent->snapshot.uri);
 	error = uri_create_https_str(&uri, parent->snapshot.uri,
 	    strlen(parent->snapshot.uri));
 	if (error)
@@ -1134,7 +1165,7 @@ rrdp_parse_snapshot(struct update_notification *parent)
 	if (error)
 		goto release_uri;
 
-	error = parse_snapshot(uri, parent);
+	error = parse_snapshot(uri, &args);
 
 	/* Error 0 is ok */
 release_uri:
@@ -1144,8 +1175,13 @@ release_uri:
 
 int
 rrdp_process_deltas(struct update_notification *parent,
-    unsigned long cur_serial)
+    unsigned long cur_serial, struct visited_uris *visited_uris)
 {
+	struct proc_upd_args args;
+
+	args.parent = parent;
+	args.visited_uris = visited_uris;
+
 	return deltas_head_for_each(parent->deltas_list,
-	    parent->global_data.serial, cur_serial, process_delta, parent);
+	    parent->global_data.serial, cur_serial, process_delta, &args);
 }

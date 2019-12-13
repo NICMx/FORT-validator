@@ -26,6 +26,7 @@
 #include "object/certificate.h"
 #include "rsync/rsync.h"
 #include "rtr/db/vrps.h"
+#include "rrdp/db/db_rrdp.h"
 
 #define TAL_FILE_EXTENSION	".tal"
 
@@ -503,6 +504,14 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		goto fail;
 	}
 
+	/*
+	 * Set all RRDPs URIs to non-requested, this way we will force the
+	 * request on every cycle (to check if there are updates).
+	 */
+	error = db_rrdp_uris_set_all_nonrequested();
+	if (error)
+		goto end;
+
 	/* Handle root certificate. */
 	error = certificate_traverse(NULL, uri);
 	if (error) {
@@ -518,8 +527,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		pr_crit("Unknown public key state: %u",
 		    validation_pubkey_state(state));
 	}
-
-	/* FIXME (now) Consider RRDP found scenario */
 
 	/*
 	 * From now on, the tree should be considered valid, even if subsequent
@@ -606,9 +613,15 @@ __do_file_validation(char const *tal_file, void *arg)
 	static pthread_t pid;
 	int error;
 
+	error = db_rrdp_add_tal(tal_file);
+	if (error)
+		return error;
+
 	param = malloc(sizeof(struct fv_param));
-	if (param == NULL)
-		return pr_enomem();
+	if (param == NULL) {
+		error = pr_enomem();
+		goto free_db_rrdp;
+	}
 
 	param->tal_file = strdup(tal_file);
 	param->arg = arg;
@@ -635,6 +648,8 @@ __do_file_validation(char const *tal_file, void *arg)
 free_param:
 	free(param->tal_file);
 	free(param);
+free_db_rrdp:
+	db_rrdp_rem_tal(tal_file);
 	return error;
 }
 
@@ -660,6 +675,8 @@ perform_standalone_validation(struct db_table *table)
 		SLIST_REMOVE_HEAD(&threads, next);
 		thread_destroy(thread);
 	}
+
+	/* FIXME (now) Remove non-visited rrdps URIS by tal */
 
 	return error;
 }

@@ -247,6 +247,7 @@ update_notification_create(struct update_notification **file)
 		return pr_enomem();
 	}
 	tmp->deltas_list = list;
+	tmp->uri = NULL;
 
 	global_data_init(&tmp->global_data);
 	doc_data_init(&tmp->snapshot);
@@ -261,6 +262,7 @@ update_notification_destroy(struct update_notification *file)
 	doc_data_cleanup(&file->snapshot);
 	global_data_cleanup(&file->global_data);
 	deltas_head_destroy(file->deltas_list);
+	free(file->uri);
 	free(file);
 }
 

@@ -6,6 +6,7 @@
 #include "validation_handler.h"
 #include "object/tal.h"
 #include "rsync/rsync.h"
+#include "rrdp/db/db_rrdp_uris.h"
 
 struct validation;
 
@@ -16,7 +17,7 @@ void validation_destroy(struct validation *);
 struct tal *validation_tal(struct validation *);
 X509_STORE *validation_store(struct validation *);
 struct cert_stack *validation_certstack(struct validation *);
-struct uri_list *validation_visited_uris(struct validation *);
+struct uri_list *validation_rsync_visited_uris(struct validation *);
 
 enum pubkey_state {
 	PKS_VALID,
@@ -33,5 +34,7 @@ char *validation_get_ip_buffer2(struct validation *);
 
 struct validation_handler const *
 validation_get_validation_handler(struct validation *);
+
+struct db_rrdp_uri *validation_get_rrdp_uris(struct validation *);
 
 #endif /* SRC_STATE_H_ */
