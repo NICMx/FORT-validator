@@ -3,7 +3,6 @@
 #include "rrdp/db/db_rrdp_uris.h"
 #include "rrdp/rrdp_objects.h"
 #include "rrdp/rrdp_parser.h"
-#include "delete_dir_daemon.h"
 #include "log.h"
 #include "thread_var.h"
 #include "visited_uris.h"
@@ -43,7 +42,7 @@ process_snapshot(struct update_notification *notification,
 
 	error = rrdp_parse_snapshot(notification, tmp);
 	if (error) {
-		free(tmp);
+		visited_uris_refput(tmp);
 		return error;
 	}
 
@@ -52,29 +51,17 @@ process_snapshot(struct update_notification *notification,
 }
 
 static int
-remove_rrdp_uri_files(struct update_notification *notification)
+remove_rrdp_uri_files(char const *notification_uri)
 {
 	struct visited_uris *tmp;
-	char *root_path;
 	int error;
 
 	/* Work with the existent visited uris */
-	error = db_rrdp_uris_get_visited_uris(notification->uri, &tmp);
+	error = db_rrdp_uris_get_visited_uris(notification_uri, &tmp);
 	if (error)
 		return error;
 
-	error = visited_uris_get_root(tmp, &root_path);
-	if (error)
-		return error;
-
-	error = delete_dir_daemon_start(root_path);
-	if (error) {
-		free(root_path);
-		return error;
-	}
-
-	free(root_path);
-	return 0;
+	return visited_uris_remove_local(tmp);
 }
 
 int
@@ -123,7 +110,7 @@ rrdp_load(struct rpki_uri *uri)
 		pr_warn("There was an error processing RRDP deltas, using the snapshot instead.");
 	case RRDP_URI_DIFF_SESSION:
 		/* Delete the old session files */
-		error = remove_rrdp_uri_files(upd_notification);
+		error = remove_rrdp_uri_files(upd_notification->uri);
 		if (error)
 			break;
 	case RRDP_URI_NOTFOUND:

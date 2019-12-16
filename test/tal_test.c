@@ -86,6 +86,18 @@ state_retrieve(void)
 	return NULL;
 }
 
+void
+db_rrdp_reset_visited_tals(void)
+{
+	/* Empty */
+}
+
+void
+db_rrdp_rem_nonvisited_tals(void)
+{
+	/* Empty */
+}
+
 START_TEST(tal_load_normal)
 {
 	struct tal *tal;

@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "log.h"
+#include "delete_dir_daemon.h"
 
 /*
  * FIXME (now) This should be replaced with something better (rtrie?)
@@ -154,6 +155,12 @@ visited_uris_get_root(struct visited_uris *uris, char **result)
 
 	elem = SLIST_FIRST(uris->list);
 
+	/* No elements yet */
+	if (elem == NULL) {
+		*result = NULL;
+		return 0;
+	}
+
 	i = 0;
 	ptr = strchr(elem->uri, '/');
 	while(i < 2) {
@@ -169,5 +176,28 @@ visited_uris_get_root(struct visited_uris *uris, char **result)
 	tmp[size + 1] = '\0';
 
 	*result = tmp;
+	return 0;
+}
+
+int
+visited_uris_remove_local(struct visited_uris *uris)
+{
+	char *root_path;
+	int error;
+
+	error = visited_uris_get_root(uris, &root_path);
+	if (error)
+		return error;
+
+	if (root_path == NULL)
+		return 0;
+
+	error = delete_dir_daemon_start(root_path);
+	if (error) {
+		free(root_path);
+		return error;
+	}
+
+	free(root_path);
 	return 0;
 }

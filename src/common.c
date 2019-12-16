@@ -4,10 +4,12 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/stat.h>
 
+#include "config.h"
 #include "log.h"
 
 int
@@ -278,4 +280,81 @@ create_dir_recursive(char const *path)
 
 	free(localuri);
 	return 0;
+}
+
+static int
+remove_file(char const *path)
+{
+	int error;
+
+	errno = 0;
+	error = remove(path);
+	if (error)
+		return pr_errno(errno, "Couldn't delete %s", path);
+
+	return 0;
+}
+
+/*
+ * Delete parent dirs of @path only if dirs are empty, @path must be a file
+ * location and will be deleted first.
+ *
+ * The algorithm is a bit aggressive, but rmdir() won't delete
+ * something unless is empty, so in case the dir still has something in
+ * it the cycle is finished.
+ */
+int
+delete_dir_recursive_bottom_up(char const *path)
+{
+	char *config_repo;
+	char *work_loc, *tmp;
+	size_t config_len;
+	int error;
+
+	error = remove_file(path);
+	if (error)
+		return error;
+
+	config_repo = strdup(config_get_local_repository());
+	if (config_repo == NULL)
+		return pr_enomem();
+
+	/* Stop dir removal when the work_dir has this length */
+	config_len = strlen(config_repo);
+	if (config_repo[config_len - 1] == '/')
+		config_len--;
+	free(config_repo);
+
+	work_loc = strdup(path);
+	if (work_loc == NULL)
+		return pr_enomem();
+
+	do {
+		tmp = strrchr(work_loc, '/');
+		if (tmp == NULL)
+			break;
+		*tmp = '\0';
+
+		/* Stop if the root dir is reached */
+		if (strlen(work_loc) == config_len)
+			break;
+
+		errno = 0;
+		error = rmdir(work_loc);
+		if (!error)
+			continue; /* Keep deleting up */
+
+		/* Stop if there's content in the dir */
+		if (errno == ENOTEMPTY || errno == EEXIST)
+			break;
+
+		error = pr_errno(errno, "Couldn't delete dir %s", work_loc);
+		goto release_str;
+	} while (true);
+
+	free(work_loc);
+	return 0;
+release_str:
+	free(work_loc);
+	return error;
 }

@@ -659,6 +659,9 @@ perform_standalone_validation(struct db_table *table)
 	struct thread *thread;
 	int error;
 
+	/* Set existent tal RRDP info to non visited */
+	db_rrdp_reset_visited_tals();
+
 	SLIST_INIT(&threads);
 	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
 	    __do_file_validation, table);
@@ -676,7 +679,8 @@ perform_standalone_validation(struct db_table *table)
 		thread_destroy(thread);
 	}
 
-	/* FIXME (now) Remove non-visited rrdps URIS by tal */
+	/* Remove non-visited rrdps URIS by tal */
+	db_rrdp_rem_nonvisited_tals();
 
 	return error;
 }

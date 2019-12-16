@@ -10,4 +10,7 @@ int db_rrdp_add_tal(char const *);
 void db_rrdp_rem_tal(char const *);
 struct db_rrdp_uri *db_rrdp_get_uris(char const *);
 
+void db_rrdp_reset_visited_tals(void);
+void db_rrdp_rem_nonvisited_tals(void);
+
 #endif /* SRC_RRDP_DB_DB_RRDP_H_ */

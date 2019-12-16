@@ -163,6 +163,7 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	return error;
 close_file:
 	file_close(out);
+	delete_dir_recursive_bottom_up(uri_get_local(uri));
 	return error;
 }
 

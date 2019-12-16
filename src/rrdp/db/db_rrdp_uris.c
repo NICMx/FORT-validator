@@ -346,3 +346,19 @@ db_rrdp_uris_visited_exists(struct db_rrdp_uri *uris, char const *uri)
 
 	return false;
 }
+
+int
+db_rrdp_uris_remove_all_local(struct db_rrdp_uri *uris)
+{
+	struct uris_table *uri_node, *uri_tmp;
+	int error;
+
+	/* Remove each 'visited_uris' from all the table */
+	HASH_ITER(hh, uris->table, uri_node, uri_tmp) {
+		error = visited_uris_remove_local(uri_node->visited_uris);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}

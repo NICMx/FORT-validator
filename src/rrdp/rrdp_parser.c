@@ -413,9 +413,8 @@ parse_global_data(xmlTextReaderPtr reader, struct global_data *gdata,
 		goto return_val; /* Error O is OK */
 
 	/*
-	 * FIXME (now) Prepare the callers to receive positive error values,
-	 * which means the file was successfully parsed but is has a logic error
-	 * (in this case, session ID doesn't match parent's).
+	 * Positive error value means the file was successfully parsed but it
+	 * has a logic error (in this case, session ID doesn't match parent's).
 	 */
 	if (strcmp(expected_session, session_id) != 0) {
 		pr_info("File session id [%s] doesn't match parent's session id [%s]",
@@ -614,68 +613,33 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 }
 
 static int
-delete_from_uri(char const *location, struct visited_uris *visited_uris)
+delete_from_uri(struct rpki_uri *uri, struct visited_uris *visited_uris)
+{
+	int error;
+
+	if (visited_uris) {
+		error = rem_mft_from_list(visited_uris, uri_get_global(uri));
+		if (error)
+			return error;
+	}
+
+	/* Delete parent dirs only if empty. */
+	return delete_dir_recursive_bottom_up(uri_get_local(uri));
+}
+
+int
+__delete_from_uri(char const *location, struct visited_uris *visited_uris)
 {
 	struct rpki_uri *uri;
-	char *local_uri, *work_loc, *tmp;
 	int error;
 
 	error = uri_create_mixed_str(&uri, location, strlen(location));
 	if (error)
 		return error;
 
-	local_uri = strdup(uri_get_local(uri));
-	if (local_uri == NULL) {
-		error = pr_enomem();
-		goto release_uri;
-	}
+	error = delete_from_uri(uri, visited_uris);
 
-	errno = 0;
-	error = remove(local_uri);
-	if (error) {
-		error = pr_errno(errno, "Couldn't delete %s", local_uri);
-		goto release_str;
-	}
-
-	error = rem_mft_from_list(visited_uris, uri_get_global(uri));
-	if (error)
-		goto release_str;
-
-	/*
-	 * Delete parent dirs only if empty.
-	 *
-	 * The algorithm is a bit aggressive, but rmdir() won't delete
-	 * something unless is empty, so in case the dir still has something in
-	 * it the cycle is finished.
-	 */
-	work_loc = local_uri;
-	do {
-		tmp = strrchr(work_loc, '/');
-		if (tmp == NULL)
-			break;
-		*tmp = '\0';
-
-		/* FIXME (now) use a lock, what if the root dir is reached? */
-
-		errno = 0;
-		error = rmdir(work_loc);
-		if (!error)
-			continue; /* Keep deleting up */
-
-		/* Stop if there's content in the dir */
-		if (errno == ENOTEMPTY || errno == EEXIST)
-			break;
-
-		error = pr_errno(errno, "Couldn't delete dir %s", work_loc);
-		goto release_str;
-	} while (true);
-
-	uri_refput(uri);
-	free(local_uri);
-	return 0;
-release_str:
-	free(local_uri);
-release_uri:
+	/* Error 0 is ok */
 	uri_refput(uri);
 	return error;
 }
@@ -719,7 +683,7 @@ parse_withdraw_elem(xmlTextReaderPtr reader, struct visited_uris *visited_uris)
 	if (error)
 		return error;
 
-	error = delete_from_uri(tmp->doc_data.uri, visited_uris);
+	error = __delete_from_uri(tmp->doc_data.uri, visited_uris);
 	withdraw_destroy(tmp);
 	if (error)
 		return error;
@@ -1084,6 +1048,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 
 	error = parse_delta(uri, delta_head, arg);
 
+	delete_from_uri(uri, NULL);
 	/* Error 0 its ok */
 release_uri:
 	uri_refput(uri);
@@ -1130,12 +1095,14 @@ rrdp_parse_notification(struct rpki_uri *uri,
 
 	/* No updates yet */
 	if (error > 0) {
+		delete_from_uri(uri, NULL);
 		*result = NULL;
 		return 0;
 	}
 
 	fnstack_push_uri(uri);
 	error = parse_notification(uri, result);
+	delete_from_uri(uri, NULL);
 	if (error) {
 		fnstack_pop();
 		return error;
@@ -1167,6 +1134,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 
 	error = parse_snapshot(uri, &args);
 
+	delete_from_uri(uri, NULL);
 	/* Error 0 is ok */
 release_uri:
 	uri_refput(uri);

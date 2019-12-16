@@ -50,5 +50,6 @@ char const *addr2str4(struct in_addr const *, char *);
 char const *addr2str6(struct in6_addr const *, char *);
 
 int create_dir_recursive(char const *);
+int delete_dir_recursive_bottom_up(char const *);
 
 #endif /* SRC_RTR_COMMON_H_ */

@@ -13,5 +13,6 @@ int visited_uris_add(struct visited_uris *, char const *);
 int visited_uris_remove(struct visited_uris *, char const *);
 bool visited_uris_exists(struct visited_uris *, char const *);
 int visited_uris_get_root(struct visited_uris *, char **);
+int visited_uris_remove_local(struct visited_uris *);
 
 #endif /* SRC_VISITED_URIS_H_ */

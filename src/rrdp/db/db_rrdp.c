@@ -56,8 +56,10 @@ tal_elem_create(struct tal_elem **elem, char const *name)
 }
 
 static void
-tal_elem_destroy(struct tal_elem *elem)
+tal_elem_destroy(struct tal_elem *elem, bool remove_local)
 {
+	if (remove_local)
+		db_rrdp_uris_remove_all_local(elem->uris);
 	db_rrdp_uris_destroy(elem->uris);
 	free(elem->file_name);
 	free(elem);
@@ -84,7 +86,7 @@ db_rrdp_cleanup(void)
 	while (!SLIST_EMPTY(&db.tals)) {
 		elem = db.tals.slh_first;
 		SLIST_REMOVE_HEAD(&db.tals, next);
-		tal_elem_destroy(elem);
+		tal_elem_destroy(elem, false);
 	}
 	pthread_rwlock_destroy(&lock);
 }
@@ -109,12 +111,15 @@ db_rrdp_find_tal(char const *tal_name)
 int
 db_rrdp_add_tal(char const *tal_name)
 {
-	struct tal_elem *elem;
+	struct tal_elem *elem, *found;
 	int error;
 
 	/* Element exists, no need to create it again */
-	if (db_rrdp_find_tal(tal_name) != NULL)
+	found = db_rrdp_find_tal(tal_name);
+	if (found != NULL) {
+		found->visited = true;
 		return 0;
+	}
 
 	error = tal_elem_create(&elem, tal_name);
 	if (error)
@@ -140,7 +145,7 @@ db_rrdp_rem_tal(char const *tal_name)
 	SLIST_REMOVE(&db.tals, found, tal_elem, next);
 	rwlock_unlock(&lock);
 
-	tal_elem_destroy(found);
+	tal_elem_destroy(found, true);
 }
 
 /* Returns the reference to RRDP URIs of a TAL */
@@ -151,4 +156,33 @@ db_rrdp_get_uris(char const *tal_name)
 
 	found = db_rrdp_find_tal(tal_name);
 	return found != NULL ? found->uris : NULL;
+}
+
+/* Set all tals to non-visited */
+void
+db_rrdp_reset_visited_tals(void)
+{
+	struct tal_elem *found;
+
+	rwlock_read_lock(&lock);
+	SLIST_FOREACH(found, &db.tals, next)
+		found->visited = false;
+
+	rwlock_unlock(&lock);
+}
+
+/* Remove non-visited tals */
+void
+db_rrdp_rem_nonvisited_tals(void)
+{
+	struct tal_elem *found;
+
+	rwlock_read_lock(&lock);
+	SLIST_FOREACH(found, &db.tals, next) {
+		if (!found->visited) {
+			SLIST_REMOVE(&db.tals, found, tal_elem, next);
+			tal_elem_destroy(found, true);
+		}
+	}
+	rwlock_unlock(&lock);
 }

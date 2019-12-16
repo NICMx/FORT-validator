@@ -31,5 +31,6 @@ int db_rrdp_uris_set_all_nonrequested(void);
 int db_rrdp_uris_get_visited_uris(char const *, struct visited_uris **);
 
 bool db_rrdp_uris_visited_exists(struct db_rrdp_uri *, char const *);
+int db_rrdp_uris_remove_all_local(struct db_rrdp_uri *);
 
 #endif /* SRC_RRDP_DB_DB_RRDP_URIS_H_ */
