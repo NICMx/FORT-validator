@@ -5,19 +5,16 @@
 #include <string.h>
 #include "log.h"
 #include "delete_dir_daemon.h"
+#include "data_structure/uthash_nonfatal.h"
 
-/*
- * FIXME (now) This should be replaced with something better (rtrie?)
- */
 struct visited_elem {
+	/* key */
 	char *uri;
-	SLIST_ENTRY(visited_elem) next;
+	UT_hash_handle hh;
 };
 
-SLIST_HEAD(visited_list, visited_elem);
-
 struct visited_uris {
-	struct visited_list *list;
+	struct visited_elem *table;
 	unsigned int refs;
 };
 
@@ -51,24 +48,29 @@ int
 visited_uris_create(struct visited_uris **uris)
 {
 	struct visited_uris *tmp;
-	struct visited_list *tmp_list;
 
 	tmp = malloc(sizeof(struct visited_uris));
 	if (tmp == NULL)
 		return pr_enomem();
 
-	tmp_list = malloc(sizeof(struct visited_list));
-	if (tmp_list == NULL) {
-		free(tmp);
-		return pr_enomem();
-	}
-
-	SLIST_INIT(tmp_list);
-	tmp->list = tmp_list;
-	tmp->refs = 1;
+	tmp->table = NULL;
+	tmp->refs = 0;
 
 	*uris = tmp;
 	return 0;
+}
+
+
+static void
+visited_uris_destroy(struct visited_uris *uris)
+{
+	struct visited_elem *elm_node, *elm_tmp;
+
+	HASH_ITER(hh, uris->table, elm_node, elm_tmp) {
+		HASH_DEL(uris->table, elm_node);
+		visited_elem_destroy(elm_node);
+	}
+	free(uris);
 }
 
 void
@@ -80,30 +82,18 @@ visited_uris_refget(struct visited_uris *uris)
 void
 visited_uris_refput(struct visited_uris *uris)
 {
-	struct visited_elem *elem;
-
 	uris->refs--;
 	if (uris->refs == 0) {
-		while (!SLIST_EMPTY(uris->list)) {
-			elem = uris->list->slh_first;
-			SLIST_REMOVE_HEAD(uris->list, next);
-			visited_elem_destroy(elem);
-		}
-		free(uris->list);
-		free(uris);
+		visited_uris_destroy(uris);
 	}
 }
 
 static struct visited_elem *
-elem_find(struct visited_list *list, char const *uri)
+elem_find(struct visited_uris *list, char const *uri)
 {
 	struct visited_elem *found;
-
-	SLIST_FOREACH(found, list, next)
-		if (strcmp(uri, found->uri) == 0)
-			return found;
-
-	return NULL;
+	HASH_FIND_STR(list->table, uri, found);
+	return found;
 }
 
 int
@@ -112,14 +102,16 @@ visited_uris_add(struct visited_uris *uris, char const *uri)
 	struct visited_elem *elem;
 	int error;
 
-	if (elem_find(uris->list, uri) != NULL)
+	if (elem_find(uris, uri) != NULL)
 		return 0; /* Exists, don't add again */
 
+	elem = NULL;
 	error = visited_elem_create(&elem, uri);
 	if (error)
 		return error;
 
-	SLIST_INSERT_HEAD(uris->list, elem, next);
+	HASH_ADD_KEYPTR(hh, uris->table, elem->uri, strlen(elem->uri),
+	    elem);
 
 	return 0;
 }
@@ -129,11 +121,11 @@ visited_uris_remove(struct visited_uris *uris, char const *uri)
 {
 	struct visited_elem *elem;
 
-	elem = elem_find(uris->list, uri);
+	elem = elem_find(uris, uri);
 	if (elem == NULL)
 		return pr_err("Trying to remove a nonexistent URI '%s'", uri);
 
-	SLIST_REMOVE(uris->list, elem, visited_elem, next);
+	HASH_DEL(uris->table, elem);
 	visited_elem_destroy(elem);
 
 	return 0;
@@ -142,7 +134,7 @@ visited_uris_remove(struct visited_uris *uris, char const *uri)
 bool
 visited_uris_exists(struct visited_uris *uris, char const *uri)
 {
-	return elem_find(uris->list, uri) != NULL;
+	return elem_find(uris, uri) != NULL;
 }
 
 int
@@ -153,9 +145,7 @@ visited_uris_get_root(struct visited_uris *uris, char **result)
 	size_t size;
 	int i;
 
-	elem = SLIST_FIRST(uris->list);
-
-	/* No elements yet */
+	elem = uris->table;
 	if (elem == NULL) {
 		*result = NULL;
 		return 0;
