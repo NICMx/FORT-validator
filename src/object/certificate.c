@@ -1906,7 +1906,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 * RSYNC will always be present (at least for now, see
 	 * rfc6487#section-4.8.8.1)
 	 */
-	if (sia_uris->rpkiNotify.uri == NULL)
+	if (sia_uris->rpkiNotify.uri == NULL || config_get_rrdp_disabled())
 		return rsync_cb(sia_uris);
 
 	/* Get the preferred */

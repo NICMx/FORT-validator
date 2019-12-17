@@ -19,33 +19,35 @@ command: fort
 		2. [`strict`](#strict)
 		3. [`root`](#root)
 		4. [`root-except-ta`](#root-except-ta)
-	7. [`--shuffle-uris`](#--shuffle-uris)
-	8. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
-	9. [`--mode`](#--mode)
-	10. [`--server.address`](#--serveraddress)
-	11. [`--server.port`](#--serverport)
-	12. [`--server.backlog`](#--serverbacklog)
-	13. [`--server.interval.validation`](#--serverintervalvalidation)
-	14. [`--server.interval.refresh`](#--serverintervalrefresh)
-	15. [`--server.interval.retry`](#--serverintervalretry)
-	16. [`--server.interval.expire`](#--serverintervalexpire)
-	17. [`--slurm`](#--slurm)
-	18. [`--log.level`](#--loglevel)
-	19. [`--log.output`](#--logoutput)
-	20. [`--log.color-output`](#--logcolor-output)
-	21. [`--log.file-name-format`](#--logfile-name-format)
-	22. [`--http.user-agent`](#--httpuser-agent)
-	23. [`--http.connect-timeout`](#--httpconnect-timeout)
-	24. [`--http.transfer-timeout`](#--httptransfer-timeout)
-	25. [`--http.ca-path`](#--httpca-path)
-	26. [`--output.roa`](#--outputroa)
-	27. [`--output.bgpsec`](#--outputbgpsec)
-	28. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	29. [`--configuration-file`](#--configuration-file)
-	30. [`rsync.program`](#rsyncprogram)
-	31. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	32. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	33. [`incidences`](#incidences)
+	7. [`--rrdp-disabled`](#--rrdp-disabled)
+	8. [`--shuffle-uris`](#--shuffle-uris)
+	9. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
+	10. [`--mode`](#--mode)
+	11. [`--server.address`](#--serveraddress)
+	12. [`--server.port`](#--serverport)
+	13. [`--server.backlog`](#--serverbacklog)
+	14. [`--server.interval.validation`](#--serverintervalvalidation)
+	15. [`--server.interval.refresh`](#--serverintervalrefresh)
+	16. [`--server.interval.retry`](#--serverintervalretry)
+	17. [`--server.interval.expire`](#--serverintervalexpire)
+	18. [`--slurm`](#--slurm)
+	19. [`--log.level`](#--loglevel)
+	20. [`--log.output`](#--logoutput)
+	21. [`--log.color-output`](#--logcolor-output)
+	22. [`--log.file-name-format`](#--logfile-name-format)
+	23. [`--http.user-agent`](#--httpuser-agent)
+	24. [`--http.connect-timeout`](#--httpconnect-timeout)
+	25. [`--http.transfer-timeout`](#--httptransfer-timeout)
+	26. [`--http.ca-path`](#--httpca-path)
+	27. [`--http.disabled`](#--httpdisabled)
+	28. [`--output.roa`](#--outputroa)
+	29. [`--output.bgpsec`](#--outputbgpsec)
+	30. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	31. [`--configuration-file`](#--configuration-file)
+	32. [`rsync.program`](#rsyncprogram)
+	33. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	34. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	35. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -58,6 +60,7 @@ command: fort
         [--tal=<file>|<directory>]
         [--local-repository=<directory>]
         [--sync-strategy=off|strict|root|root-except-ta]
+        [--rrdp-disabled]
         [--shuffle-uris]
         [--maximum-certificate-depth=<unsigned integer>]
         [--mode=server|standalone]
@@ -77,6 +80,7 @@ command: fort
         [--http.connect-timeout=<unsigned integer>]
         [--http.transfer-timeout=<unsigned integer>]
         [--http.ca-path=<directory>]
+        [--http.disabled]
         [--output.roa=<file>]
         [--output.bgpsec=<file>]
 ```
@@ -189,7 +193,11 @@ LQIDAQAB
 
 Path to the directory where Fort will store a local cache of the repository.
 
-Right now, Fort accesses RPKI repositories by way of [rsync](https://en.wikipedia.org/wiki/Rsync). (The alternate protocol [RRDP](https://tools.ietf.org/html/rfc8182) is in the road map.) During each validation cycle, Fort will literally invoke an `rsync` command (see [`rsync.program`](#rsyncprogram) and [`rsync.arguments-recursive`](#rsyncarguments-recursive)), which will download the files into `--local-repository`. Fort's entire validation process operates on the resulting copy.
+Fort accesses RPKI repositories either with [rsync](https://en.wikipedia.org/wiki/Rsync) or [RRDP](https://tools.ietf.org/html/rfc8182). During each validation cycle, and depending on the preferred access methods defined by the CAs, Fort can do two things:
+- Literally invoke an `rsync` command (see [`rsync.program`](#rsyncprogram) and [`rsync.arguments-recursive`](#rsyncarguments-recursive)), which will download the files into `--local-repository`.
+- Fetch the RRDP Update Notification file (which implies an HTTP request) and fetch the files from there on (can be obtained from a Snapshot file or Delta files). The files will be downloaed into `--local-repository`.
+
+Fort's entire validation process operates on the resulting copy of the files (doesn't matter if the files where fetched by rsync of https).
 
 Because rsync uses delta encoding, you're advised to keep this cache around. It significantly speeds up subsequent validation cycles.
 
@@ -242,6 +250,15 @@ Assuming that the repository is specifically structured to be found within as fe
 Synchronizes the root certificate (the one pointed by the TAL) in `strict` mode, and once it's validated, synchronizes the rest of the repository in `root` mode.
 
 Useful if you want `root`, but the root certificate is separated from the rest of the repository. Also useful if you don't want the validator to download the entire repository without first confirming the integrity and legitimacy of the root certificate.
+
+### `--rrdp-disabled`
+
+- **Type:** None
+- **Availability:** `argv` and JSON
+
+If this flag is activated, Fort will utilize always RSYNC as the preferred access method.
+
+Otherwise, Fort will utilize RRDP when the preferred access method for a certificate repository is an Update Notification file URI.
 
 ### `--shuffle-uris`
 
@@ -503,6 +520,15 @@ Useful when the CA from the peer isn't located at the default OS certificate bun
 
 The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://curl.haxx.se/libcurl/c/CURLOPT_CAPATH.html).
 
+### `--http.disabled`
+
+- **Type:** None
+- **Availability:** `argv` and JSON
+
+If the flag is activated, HTTP requests won't be performed and the files that should have been fetched are searched locally at [`--local-repository`](#--local-repository).
+
+Otherwise, Fort will perform HTTP requests when needed (eg. an HTTPS URI at a TAL, RRDP URIs).
+
 ### `--output.roa`
 
 - **Type:** String (Path to file)
@@ -555,6 +581,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
 	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository/",
 	"<a href="#--sync-strategy">sync-strategy</a>": "root",
+	"<a href="#--rrdp-disabled">rrdp-disabled</a>": false,
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
 	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
@@ -583,7 +610,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
 		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 30,
-		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
+		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs",
+		"<a href="#--httpdisabled">disabled</a>": false
 	},
 
 	"rsync": {

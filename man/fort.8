@@ -187,11 +187,22 @@ its public key. (See RFC 8630.)
 Path to a directory where the local cache of the repository will be stored
 and/or read.
 .P
-Right now, FORT accesses RPKI repositories by way of \fIrsync\fR. During each
-validation cycle, FORT will literally invoke an rsync command (see
-\fBrsync.program\fR and \fBrsync.arguments-recursive\fR), which will download
-the files into \fB--local-repository\fR. FORT’s validation operates on the
-resulting copy.
+FORT accesses RPKI repositories either with \fIrsync\fR or \fIRRDP\fR (see RFC
+8182). During each validation cycle, and depending on the preferred access
+methods defined by the CAs, Fort can do two things:
+.RS 4
+.br
+- Literally invoke an rsync command (see \fBrsync.program\fR and
+\fBrsync.arguments-recursive\fR), which will download the files into
+\fB--local-repository\fR.
+.br
+- Fetch the RRDP Update Notification file (which implies an HTTP request) and
+fetch the files from there on (can be obtained from a Snapshot file or Delta
+files). The files will be downloaed into \fB--local-repository\fR.
+.RE
+.P
+Fort's entire validation process operates on the resulting copy of the files
+(doesn't matter if the files where fetched by rsync of https).
 .P
 Because rsync uses delta encoding, you’re advised to keep this cache around. It
 significantly speeds up subsequent validation cycles.
@@ -276,6 +287,16 @@ of the repository. Also useful if you don't want the validator to download the
 entire repository without first confirming the integrity and legitimacy of the
 root certificate.
 .RE
+.RE
+.P
+
+.B \-\-rrdp-disabled
+.RS 4
+If this flag is activated, Fort will utilize always RSYNC as the preferred
+access method.
+.P
+Otherwise, Fort will utilize RRDP when the preferred access method for a
+certificate repository is an Update Notification file URI.
 .RE
 .P
 
@@ -578,6 +599,16 @@ By default, the path has a NULL value.
 .RE
 .P
 
+.B \-\-http.disabled
+.RS 4
+If this flag is activated, HTTP requests won't be performed and the files that
+should have been fetched are searched locally at \fB--local-repository\fR.
+.P
+Otherwise, Fort will perform HTTP requests when needed (eg. an HTTPS URI at a
+TAL, RRDP URIs).
+.RE
+.P
+
 .B \-\-output.roa=\fIFILE\fR
 .RS 4
 File where the ROAs will be printed in CSV format.
@@ -672,6 +703,7 @@ to a specific value:
   "tal": "/tmp/fort/tal/",
   "local-repository": "/tmp/fort/repository/",
   "sync-strategy": "root",
+  "rrdp-disabled": false,
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
   "mode": "server",
@@ -697,7 +729,8 @@ to a specific value:
     "user-agent": "fort/1.2.0",
     "connect-timeout": 30,
     "transfer-timeout": 30,
-    "ca-path": "/usr/local/ssl/certs"
+    "ca-path": "/usr/local/ssl/certs",
+    "disabled": false
   },
   "rsync": {
     "program": "rsync",

@@ -29,6 +29,7 @@ The dependencies are
 2. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/) >= 1.1)
 3. [rsync](http://rsync.samba.org/)
 4. [libcurl](https://curl.haxx.se/libcurl/)
+5. [libxml2](http://www.xmlsoft.org/)
 
 Fort is currently supported in *64-bit* OS. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling dates at certificates, and currently there's no work around for this.
 
@@ -80,7 +81,7 @@ etc.
 ### Debian version
 
 {% highlight bash %}
-sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync libcurl4
+sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync libcurl4 libxml2
 
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
@@ -94,7 +95,7 @@ sudo make install
 
 {% highlight bash %}
 su
-pkg_add jansson libexecinfo rsync # OpenBSD already ships with LibreSSL
+pkg_add jansson libexecinfo rsync libxml # OpenBSD already ships with LibreSSL
 exit
 
 ftp https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
@@ -119,7 +120,7 @@ This OS requires additional steps due to its GCC supported version (currently 4.
 OpenSSL devel (openssl-devel) package isn't necessary, if it's previously installed remove it to avoid future conflicts with newer OpenSSL versions.
 
 {% highlight bash %}
-sudo yum install autoconf automake git jansson-devel pkgconfig rsync
+sudo yum install autoconf automake git jansson-devel pkgconfig rsync libxml2
 # Install supported GCC to compile OpenSSL
 sudo yum groupinstall "Development Tools"
 {% endhighlight %}
@@ -168,7 +169,7 @@ exit
 The following steps are for Fedora 30.
 
 {% highlight bash %}
-sudo yum install autoconf automake gcc make openssl-devel jansson-devel
+sudo yum install autoconf automake gcc make openssl-devel jansson-devel libxml2
 
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
@@ -183,7 +184,7 @@ sudo make install
 The following steps are for openSUSE Leap 15.1.
 
 {% highlight bash %}
-sudo zypper install autoconf automake gcc libopenssl-devel libjansson-devel
+sudo zypper install autoconf automake gcc libopenssl-devel libjansson-devel libxml2
 
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
@@ -199,7 +200,7 @@ The following steps are for FreeBSD 12.0.
 
 {% highlight bash %}
 su
-pkg install autoconf automake gcc jansson pkgconf rsync
+pkg install autoconf automake gcc jansson pkgconf rsync libxml2
 exit
 
 curl -L https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz --output fort-{{ site.fort-latest-version }}.tar.gz
@@ -234,7 +235,7 @@ In case you wan't a fresh version of Fort validator, there's this third option. 
 The following example is the processo to clone, compile and install in Debian OS.
 
 {% highlight bash %}
-sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync libcurl4-openssl-dev
+sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync libcurl4-openssl-dev libxml2-dev
 
 git clone https://github.com/NICMx/FORT-validator.git
 cd FORT-validator/

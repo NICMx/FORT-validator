@@ -30,7 +30,7 @@ Further information can be found in the subsections below.
 | [6810](https://tools.ietf.org/html/rfc6810) (RTR Version 0)                | 100%        |
 | [7318](https://tools.ietf.org/html/rfc7318) (Policy Qualifiers)            | 100%        |
 | [7935](https://tools.ietf.org/html/rfc7935) (RPKI algorithms)              | 100%        |
-| [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 0%          |
+| [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 100%        |
 | [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 100%        |
 | [8210](https://tools.ietf.org/html/rfc8210) (RTR Version 1)                | 100%        |
 | [8360](https://tools.ietf.org/html/rfc8360) (Validation Reconsidered)      | 100%        |
@@ -51,10 +51,6 @@ This RFC states a bunch of rules that allow some level of tolerance to missing, 
 > signed objects (...) issued by the entity that has published the stale manifest (...) SHOULD be viewed as somewhat suspect, but MAY be used by the RP as per local policy.
 
 These constitute the approximate missing 25%.
-
-### RFC 8182 (RRDP)
-
-RRDP is a protocol intended to replace RSYNC in the RPKI. Fort only implements RSYNC, currently.
 
 ## TO-DO
 

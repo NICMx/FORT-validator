@@ -36,6 +36,8 @@ struct rpki_config {
 	char *local_repository;
 	/** Synchronization (currently only RSYNC) download strategy. */
 	enum sync_strategy sync_strategy;
+	/* Disable RRDP file processing */
+	bool rrdp_disabled;
 	/**
 	 * Handle TAL URIs in random order?
 	 * (https://tools.ietf.org/html/rfc8630#section-3, last
@@ -86,6 +88,11 @@ struct rpki_config {
 		unsigned int transfer_timeout;
 		/* Directory where CA certs to verify peers are found */
 		char *ca_path;
+		/*
+		 * Disable HTTP requests, if 'true' uses local files located at
+		 * local-repository.
+		 */
+		bool disabled;
 	} http;
 
 	struct {
@@ -190,6 +197,12 @@ static const struct option_field options[] = {
 		.doc = "RSYNC download strategy",
 	}, {
 		.id = 2000,
+		.name = "rrdp-disabled",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, rrdp_disabled),
+		.doc = "Disable RRDP file(s) processing",
+	}, {
+		.id = 2001,
 		.name = "shuffle-uris",
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, shuffle_tal_uris),
@@ -370,6 +383,13 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, http.ca_path),
 		.doc = "Directory where CA certificates are found, used to verify the peer",
 		.arg_doc = "<directory>",
+	},
+	{
+		.id = 9004,
+		.name = "http.disabled",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, http.disabled),
+		.doc = "Enable or disable HTTP requests",
 	},
 
 	/* Logging fields */
@@ -609,6 +629,7 @@ set_default_values(void)
 		goto revert_port;
 	}
 
+	rpki_config.rrdp_disabled = false;
 	rpki_config.sync_strategy = SYNC_ROOT;
 	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
@@ -638,6 +659,7 @@ set_default_values(void)
 	rpki_config.http.connect_timeout = 30;
 	rpki_config.http.transfer_timeout = 30;
 	rpki_config.http.ca_path = NULL; /* Use system default */
+	rpki_config.http.disabled = false;
 
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
@@ -876,6 +898,12 @@ config_get_sync_strategy(void)
 }
 
 bool
+config_get_rrdp_disabled(void)
+{
+	return rpki_config.rrdp_disabled;
+}
+
+bool
 config_get_shuffle_tal_uris(void)
 {
 	return rpki_config.shuffle_tal_uris;
@@ -958,6 +986,12 @@ char const *
 config_get_http_ca_path(void)
 {
 	return rpki_config.http.ca_path;
+}
+
+bool
+config_get_http_disabled(void)
+{
+	return rpki_config.http.disabled;
 }
 
 char const *

@@ -71,6 +71,12 @@ config_get_sync_strategy(void)
 }
 
 bool
+config_get_rrdp_disabled(void)
+{
+	return true;
+}
+
+bool
 config_get_color_output(void)
 {
 	return false;
@@ -170,4 +176,10 @@ char const *
 config_get_http_ca_path(void)
 {
 	return NULL;
+}
+
+bool
+config_get_http_disabled(void)
+{
+	return true;
 }
