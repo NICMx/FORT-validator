@@ -401,7 +401,7 @@ vrps_update(bool *changed)
 	do {
 		if (state.base == NULL) {
 			rwlock_unlock(&state_lock);
-			pr_info("- Valid ROAs: 0");
+			pr_info("- Valid Prefixes: 0");
 			pr_info("- Valid Router Keys: 0");
 			if (config_get_mode() == SERVER)
 				pr_info("- No serial number.");

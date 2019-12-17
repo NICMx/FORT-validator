@@ -3,7 +3,7 @@
 
 #include <pthread.h>
 #include <semaphore.h>
-#include <arpa/inet.h>
+#include <netinet/in.h>
 
 /* "I think that this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172
