@@ -26,6 +26,8 @@ visited_elem_create(struct visited_elem **elem, char const *uri)
 	tmp = malloc(sizeof(struct visited_elem));
 	if (tmp == NULL)
 		return pr_enomem();
+	/* Needed by uthash */
+	memset(tmp, 0, sizeof(struct visited_elem));
 
 	tmp->uri = strdup(uri);
 	if (tmp->uri == NULL) {
@@ -54,12 +56,11 @@ visited_uris_create(struct visited_uris **uris)
 		return pr_enomem();
 
 	tmp->table = NULL;
-	tmp->refs = 0;
+	tmp->refs = 1;
 
 	*uris = tmp;
 	return 0;
 }
-
 
 static void
 visited_uris_destroy(struct visited_uris *uris)
@@ -83,9 +84,8 @@ void
 visited_uris_refput(struct visited_uris *uris)
 {
 	uris->refs--;
-	if (uris->refs == 0) {
+	if (uris->refs == 0)
 		visited_uris_destroy(uris);
-	}
 }
 
 static struct visited_elem *

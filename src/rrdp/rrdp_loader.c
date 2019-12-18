@@ -87,8 +87,10 @@ rrdp_load(struct rpki_uri *uri)
 		return error;
 
 	/* No updates at the file (yet), didn't pushed to fnstack */
-	if (upd_notification == NULL)
+	if (upd_notification == NULL) {
+		pr_debug("No updates yet at '%s'.", uri_get_global(uri));
 		return 0;
+	}
 
 	error = db_rrdp_uris_cmp(uri_get_global(uri),
 	    upd_notification->global_data.session_id,
@@ -102,11 +104,11 @@ rrdp_load(struct rpki_uri *uri)
 		goto set_update;
 	case RRDP_URI_DIFF_SERIAL:
 		error = process_diff_serial(upd_notification, &visited);
-		/* Something went wrong, use snapshot */
 		if (!error) {
 			visited_uris_refget(visited);
 			break;
 		}
+		/* Something went wrong, use snapshot */
 		pr_warn("There was an error processing RRDP deltas, using the snapshot instead.");
 	case RRDP_URI_DIFF_SESSION:
 		/* Delete the old session files */
@@ -122,6 +124,12 @@ rrdp_load(struct rpki_uri *uri)
 
 	/* Any change, and no error during the process, update db */
 	if (!error) {
+		pr_debug("Updating local RRDP data of '%s' to:",
+		    uri_get_global(uri));
+		pr_debug("- Session ID: %s",
+		    upd_notification->global_data.session_id);
+		pr_debug("- Serial: %lu",
+		    upd_notification->global_data.serial);
 		error = db_rrdp_uris_update(uri_get_global(uri),
 		    upd_notification->global_data.session_id,
 		    upd_notification->global_data.serial,
@@ -132,6 +140,8 @@ rrdp_load(struct rpki_uri *uri)
 
 set_update:
 	/* Set the last update to now */
+	pr_debug("Set last update of RRDP data of '%s' to now.",
+	    uri_get_global(uri));
 	error = db_rrdp_uris_set_last_update(uri_get_global(uri));
 end:
 	if (upd_notification != NULL) {

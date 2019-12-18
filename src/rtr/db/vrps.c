@@ -408,7 +408,7 @@ vrps_update(bool *changed)
 			break;
 		}
 
-		pr_info("- Valid ROAs: %u", db_table_roa_count(state.base));
+		pr_info("- Valid Prefixes: %u", db_table_roa_count(state.base));
 		pr_info("- Valid Router Keys: %u",
 		    db_table_router_key_count(state.base));
 		if (config_get_mode() == SERVER) {

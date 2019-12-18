@@ -219,6 +219,8 @@ deltas_head_for_each(struct deltas_head *deltas, unsigned long max_serial,
 		return -ENOENT;
 	}
 
+	pr_debug("Getting RRDP deltas from serial %lu to %lu.", from_serial,
+	    max_serial);
 	from = deltas->capacity - (max_serial - from_serial);
 	for (index = from; index < deltas->capacity; index++) {
 		error = cb(deltas->array[index], arg);

@@ -612,6 +612,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 	return 0;
 }
 
+/* Remove a local file and its directory tree (if empty) */
 static int
 delete_from_uri(struct rpki_uri *uri, struct visited_uris *visited_uris)
 {

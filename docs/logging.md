@@ -36,7 +36,7 @@ The validator uses exactly five levels of priority (they're just some of all the
 - `info`: Information deemed useful to the user:
 	- Configuration echo at the beginning.
 	- Server binding status.
-	- Start and end of a validation cycle, including: number of valid ROAs and Router Keys, current serial number (only when [`--mode=server`](usage.html#--mode), and real execution time.
+	- Start and end of a validation cycle, including: number of valid Prefixes and Router Keys, current RTR serial number (only when [`--mode=server`](usage.html#--mode), and real execution time.
 	- SLURM version applied in case of a syntax error or invalid data at the newest loaded SLURM configured at [`--slurm`](usage.html#--slurm).
 	- RTR client connection accepted, closed or terminated.
 - `debug`: Information deemed useful to the developer. Expect a lot of messages when utilized.

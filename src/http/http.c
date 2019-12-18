@@ -106,7 +106,7 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	curl_easy_setopt(handler->curl, CURLOPT_WRITEFUNCTION, cb);
 	curl_easy_setopt(handler->curl, CURLOPT_WRITEDATA, arg);
 
-	pr_debug("HTTP GET from '%s'.", uri);
+	pr_debug("Doing HTTP GET to '%s'.", uri);
 	res = curl_easy_perform(handler->curl);
 	curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE, response_code);
 	if (res == CURLE_OK)
