@@ -10,7 +10,7 @@
 
 /* Decoded BER data */
 struct ber_data {
-	const void *src;
+	const unsigned char *src;
 	size_t src_size;
 	size_t consumed;
 };
@@ -62,7 +62,7 @@ validate_der(size_t ber_consumed, asn_TYPE_descriptor_t const *descriptor,
 	struct ber_data data;
 	asn_enc_rval_t eval;
 
-	data.src = original;
+	data.src = (unsigned char *) original;
 	data.src_size = ber_consumed;
 	data.consumed = 0;
 
