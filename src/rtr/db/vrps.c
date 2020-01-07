@@ -385,6 +385,7 @@ vrps_update(bool *changed)
 		return __vrps_update(changed);
 
 	pr_info("Starting validation.");
+	serial = START_SERIAL;
 	if (config_get_mode() == SERVER) {
 		error = get_last_serial_number(&serial);
 		if (!error)

@@ -19,7 +19,9 @@ SLIST_HEAD(tal_list, tal_elem);
 
 struct db_rrdp {
 	struct tal_list tals;
-} db;
+};
+
+static struct db_rrdp db;
 
 /** Read/write lock, which protects @db. */
 static pthread_rwlock_t lock;
@@ -177,7 +179,7 @@ db_rrdp_rem_nonvisited_tals(void)
 {
 	struct tal_elem *found;
 
-	rwlock_read_lock(&lock);
+	rwlock_write_lock(&lock);
 	SLIST_FOREACH(found, &db.tals, next) {
 		if (!found->visited) {
 			SLIST_REMOVE(&db.tals, found, tal_elem, next);

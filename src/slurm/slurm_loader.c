@@ -173,6 +173,7 @@ slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
 		if (*last_slurm != NULL) {
 			pr_info("Discarding previous valid SLURM");
 			db_slurm_destroy(*last_slurm);
+			*last_slurm = NULL;
 		}
 		goto success;
 	}
