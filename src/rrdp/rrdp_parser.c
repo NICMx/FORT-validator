@@ -303,7 +303,7 @@ parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 	if (errno) {
 		xmlFree(xml_value);
 		pr_errno(errno, "RRDP file: Invalid long value '%s'",
-		   xml_value);
+		    xml_value);
 		return -EINVAL;
 	}
 	xmlFree(xml_value);
@@ -466,7 +466,6 @@ parse_doc_data(xmlTextReaderPtr reader, bool parse_hash, bool hash_req,
 end:
 	/* Function called just to do the validation */
 	if (data == NULL) {
-		doc_data_init(data);
 		free(hash);
 		free(uri);
 		return 0;
