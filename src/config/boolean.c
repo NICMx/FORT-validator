@@ -7,16 +7,16 @@
 
 #define DEREFERENCE(void_value) (*((bool *) void_value))
 
-static void
+void
 print_bool(struct option_field const *field, void *value)
 {
 	pr_info("%s: %s", field->name, DEREFERENCE(value) ? "true" : "false");
 }
 
-static int
+int
 parse_argv_bool(struct option_field const *field, char const *str, void *result)
 {
-	if (str == NULL) {
+	if (str == NULL || strlen(str) == 0) {
 		DEREFERENCE(result) = true;
 		return 0;
 	}
@@ -34,7 +34,7 @@ parse_argv_bool(struct option_field const *field, char const *str, void *result)
 	return pr_err("Cannot parse '%s' as a bool (true|false).", str);
 }
 
-static int
+int
 parse_json_bool(struct option_field const *opt, struct json_t *json,
     void *result)
 {
@@ -48,7 +48,7 @@ parse_json_bool(struct option_field const *opt, struct json_t *json,
 }
 
 const struct global_type gt_bool = {
-	.has_arg = no_argument,
+	.has_arg = optional_argument,
 	.size = sizeof(bool),
 	.print = print_bool,
 	.parse.argv = parse_argv_bool,

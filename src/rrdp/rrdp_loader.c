@@ -3,6 +3,7 @@
 #include "rrdp/db/db_rrdp_uris.h"
 #include "rrdp/rrdp_objects.h"
 #include "rrdp/rrdp_parser.h"
+#include "config.h"
 #include "log.h"
 #include "thread_var.h"
 #include "visited_uris.h"
@@ -72,6 +73,9 @@ rrdp_load(struct rpki_uri *uri)
 	rrdp_uri_cmp_result_t res;
 	int error;
 	bool requested;
+
+	if (!config_get_rrdp_enabled())
+		return 0;
 
 	/* Avoid multiple requests on the same run */
 	requested = false;

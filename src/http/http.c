@@ -135,7 +135,7 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	FILE *out;
 	int error;
 
-	if (config_get_http_disabled()) {
+	if (config_get_work_offline()) {
 		response_code = 0; /* Not 200 code, but also not an error */
 		return 0;
 	}

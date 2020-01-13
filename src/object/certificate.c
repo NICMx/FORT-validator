@@ -1904,21 +1904,26 @@ use_access_method(struct sia_ca_uris *sia_uris,
 
 	/*
 	 * RSYNC will always be present (at least for now, see
-	 * rfc6487#section-4.8.8.1)
+	 * rfc6487#section-4.8.8.1). If rsync is disabled, the cb will take
+	 * care of that.
 	 */
-	if (sia_uris->rpkiNotify.uri == NULL || config_get_rrdp_disabled())
+	if (sia_uris->rpkiNotify.uri == NULL || !config_get_rrdp_enabled())
 		return rsync_cb(sia_uris);
 
-	/* Get the preferred */
-	if (sia_uris->caRepository.position > sia_uris->rpkiNotify.position) {
-		cb_primary = rrdp_cb;
-		cb_secondary = rsync_cb;
-		primary_rrdp = true;
-	} else {
-		cb_primary = rsync_cb;
-		cb_secondary = rrdp_cb;
-		primary_rrdp = false;
-	}
+	/* RSYNC disabled, and RRDP is present, use it */
+	if (!config_get_rsync_enabled())
+		return rrdp_cb(sia_uris);
+
+	/* Use CA's or configured priority? */
+	if (config_get_rsync_priority() == config_get_rrdp_priority())
+		primary_rrdp = sia_uris->caRepository.position
+		    > sia_uris->rpkiNotify.position;
+	else
+		primary_rrdp = config_get_rsync_priority()
+		    < config_get_rrdp_priority();
+
+	cb_primary = primary_rrdp ? rrdp_cb : rsync_cb;
+	cb_secondary = primary_rrdp ? rsync_cb : rrdp_cb;
 
 	/* Try with the preferred; in case of error, try with the next one */
 	error = cb_primary(sia_uris);

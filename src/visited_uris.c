@@ -163,7 +163,7 @@ visited_uris_get_root(struct visited_uris *uris, char **result)
 		return pr_enomem();
 
 	strncpy(tmp, elem->uri, size);
-	tmp[size + 1] = '\0';
+	tmp[size] = '\0';
 
 	*result = tmp;
 	return 0;

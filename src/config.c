@@ -16,8 +16,10 @@
 #include "config/boolean.h"
 #include "config/incidences.h"
 #include "config/str.h"
+#include "config/sync_strategy.h"
 #include "config/uint.h"
 #include "config/uint32.h"
+#include "config/work_offline.h"
 
 /**
  * To add a member to this structure,
@@ -34,10 +36,8 @@ struct rpki_config {
 	char *tal;
 	/** Path of our local clone of the repository */
 	char *local_repository;
-	/** Synchronization (currently only RSYNC) download strategy. */
-	enum sync_strategy sync_strategy;
-	/* Disable RRDP file processing */
-	bool rrdp_disabled;
+	/** FIXME (later) Deprecated, remove it. RSYNC download strategy. */
+	enum rsync_strategy sync_strategy;
 	/**
 	 * Handle TAL URIs in random order?
 	 * (https://tools.ietf.org/html/rfc8630#section-3, last
@@ -53,6 +53,11 @@ struct rpki_config {
 	char *slurm;
 	/* Run as RTR server or standalone validation */
 	enum mode mode;
+	/*
+	 * Disable outgoing requests (currently rsync and http supported), if
+	 * 'true' uses only local files located at local-repository.
+	 */
+	bool work_offline;
 
 	struct {
 		/** The bound listening address of the RTR server. */
@@ -72,12 +77,31 @@ struct rpki_config {
 	} server;
 
 	struct {
+		/* Enables the protocol */
+		bool enabled;
+		/*
+		 * Priority, this will override the order set at the CAs in
+		 * their accessMethod extension.
+		 */
+		unsigned int priority;
+		/* Synchronization download strategy. */
+		enum rsync_strategy strategy;
 		char *program;
 		struct {
 			struct string_array flat;
 			struct string_array recursive;
 		} args;
 	} rsync;
+
+	struct {
+		/* Enables the protocol */
+		bool enabled;
+		/*
+		 * Priority, this will override the order set at the CAs in
+		 * their accessMethod extension.
+		 */
+		unsigned int priority;
+	} rrdp;
 
 	struct {
 		/* User-Agent header set at requests */
@@ -88,11 +112,6 @@ struct rpki_config {
 		unsigned int transfer_timeout;
 		/* Directory where CA certs to verify peers are found */
 		char *ca_path;
-		/*
-		 * Disable HTTP requests, if 'true' uses local files located at
-		 * local-repository.
-		 */
-		bool disabled;
 	} http;
 
 	struct {
@@ -194,13 +213,7 @@ static const struct option_field options[] = {
 		.name = "sync-strategy",
 		.type = &gt_sync_strategy,
 		.offset = offsetof(struct rpki_config, sync_strategy),
-		.doc = "RSYNC download strategy",
-	}, {
-		.id = 2000,
-		.name = "rrdp-disabled",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, rrdp_disabled),
-		.doc = "Disable RRDP file(s) processing",
+		.doc = "RSYNC download strategy. Will be deprecated, use 'rsync.strategy' instead.",
 	}, {
 		.id = 2001,
 		.name = "shuffle-uris",
@@ -233,6 +246,12 @@ static const struct option_field options[] = {
 		.type = &gt_mode,
 		.offset = offsetof(struct rpki_config, mode),
 		.doc = "Run mode: 'server' (run as RTR server), 'standalone' (run validation once and exit)",
+	}, {
+		.id = 1005,
+		.name = "work-offline",
+		.type = &gt_work_offline,
+		.offset = offsetof(struct rpki_config, work_offline),
+		.doc = "Disable all outgoing requests (rsync, http (implies RRDP)) and work only with local repository files.",
 	},
 
 	/* Server fields */
@@ -328,6 +347,26 @@ static const struct option_field options[] = {
 	/* RSYNC fields */
 	{
 		.id = 3000,
+		.name = "rsync.enabled",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, rsync.enabled),
+		.doc = "Enables RSYNC execution",
+	}, {
+		.id = 3001,
+		.name = "rsync.priority",
+		.type = &gt_uint32,
+		.offset = offsetof(struct rpki_config, rsync.priority),
+		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
+		.min = 0,
+		.max = 100,
+	},{
+		.id = 3002,
+		.name = "rsync.strategy",
+		.type = &gt_rsync_strategy,
+		.offset = offsetof(struct rpki_config, rsync.strategy),
+		.doc = "RSYNC download strategy",
+	},{
+		.id = 3003,
 		.name = "rsync.program",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, rsync.program),
@@ -335,19 +374,36 @@ static const struct option_field options[] = {
 		.arg_doc = "<path to program>",
 		.availability = AVAILABILITY_JSON,
 	}, {
-		.id = 3001,
+		.id = 3004,
 		.name = "rsync.arguments-recursive",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.recursive),
 		.doc = "RSYNC program arguments that will trigger a recursive RSYNC",
 		.availability = AVAILABILITY_JSON,
 	}, {
-		.id = 3002,
+		.id = 3005,
 		.name = "rsync.arguments-flat",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.flat),
 		.doc = "RSYNC program arguments that will trigger a non-recursive RSYNC",
 		.availability = AVAILABILITY_JSON,
+	},
+
+	/* RRDP fields */
+	{
+		.id = 10000,
+		.name = "rrdp.enabled",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, rrdp.enabled),
+		.doc = "Enables RRDP execution",
+	}, {
+		.id = 10001,
+		.name = "rrdp.priority",
+		.type = &gt_uint32,
+		.offset = offsetof(struct rpki_config, rrdp.priority),
+		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
+		.min = 0,
+		.max = 100,
 	},
 
 	/* HTTP requests parameters */
@@ -383,13 +439,6 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, http.ca_path),
 		.doc = "Directory where CA certificates are found, used to verify the peer",
 		.arg_doc = "<directory>",
-	},
-	{
-		.id = 9004,
-		.name = "http.disabled",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, http.disabled),
-		.doc = "Enable or disable HTTP requests",
 	},
 
 	/* Logging fields */
@@ -629,12 +678,15 @@ set_default_values(void)
 		goto revert_port;
 	}
 
-	rpki_config.rrdp_disabled = false;
-	rpki_config.sync_strategy = SYNC_ROOT;
+	rpki_config.sync_strategy = RSYNC_ROOT;
 	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
 	rpki_config.mode = SERVER;
+	rpki_config.work_offline = false;
 
+	rpki_config.rsync.enabled = true;
+	rpki_config.rsync.priority = 50;
+	rpki_config.rsync.strategy = RSYNC_ROOT;
 	rpki_config.rsync.program = strdup("rsync");
 	if (rpki_config.rsync.program == NULL) {
 		error = pr_enomem();
@@ -651,15 +703,17 @@ set_default_values(void)
 	if (error)
 		goto revert_recursive_array;
 
+	rpki_config.rrdp.enabled = true;
+	rpki_config.rrdp.priority = 50;
+
 	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	if (rpki_config.http.user_agent == NULL) {
 		error = pr_enomem();
-		goto revert_recursive_array;
+		goto revert_flat_array;
 	}
 	rpki_config.http.connect_timeout = 30;
 	rpki_config.http.transfer_timeout = 30;
 	rpki_config.http.ca_path = NULL; /* Use system default */
-	rpki_config.http.disabled = false;
 
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
@@ -672,7 +726,8 @@ set_default_values(void)
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 
 	return 0;
-
+revert_flat_array:
+	string_array_cleanup(&rpki_config.rsync.args.flat);
 revert_recursive_array:
 	string_array_cleanup(&rpki_config.rsync.args.recursive);
 revert_rsync_program:
@@ -705,7 +760,7 @@ validate_config(void)
 
 	if (rpki_config.output.bgpsec != NULL &&
 	    !valid_output_file(rpki_config.output.bgpsec))
-			return pr_err("Invalid output.bgpsec file.");
+		return pr_err("Invalid output.bgpsec file.");
 
 	return (rpki_config.tal != NULL)
 	    ? 0
@@ -849,6 +904,12 @@ config_get_server_queue(void)
 	return rpki_config.server.backlog;
 }
 
+bool
+config_get_work_offline(void)
+{
+	return rpki_config.work_offline;
+}
+
 unsigned int
 config_get_validation_interval(void)
 {
@@ -891,18 +952,6 @@ config_get_local_repository(void)
 	return rpki_config.local_repository;
 }
 
-enum sync_strategy
-config_get_sync_strategy(void)
-{
-	return rpki_config.sync_strategy;
-}
-
-bool
-config_get_rrdp_disabled(void)
-{
-	return rpki_config.rrdp_disabled;
-}
-
 bool
 config_get_shuffle_tal_uris(void)
 {
@@ -939,6 +988,24 @@ config_get_log_output(void)
 	return rpki_config.log.output;
 }
 
+bool
+config_get_rsync_enabled(void)
+{
+	return rpki_config.rsync.enabled;
+}
+
+unsigned int
+config_get_rsync_priority(void)
+{
+	return rpki_config.rsync.priority;
+}
+
+enum rsync_strategy
+config_get_rsync_strategy(void)
+{
+	return rpki_config.rsync.strategy;
+}
+
 char *
 config_get_rsync_program(void)
 {
@@ -948,20 +1015,32 @@ config_get_rsync_program(void)
 struct string_array const *
 config_get_rsync_args(bool is_ta)
 {
-	switch (rpki_config.sync_strategy) {
-	case SYNC_ROOT:
+	switch (rpki_config.rsync.strategy) {
+	case RSYNC_ROOT:
 		return &rpki_config.rsync.args.recursive;
-	case SYNC_ROOT_EXCEPT_TA:
+	case RSYNC_ROOT_EXCEPT_TA:
 		return is_ta
 		    ? &rpki_config.rsync.args.flat
 		    : &rpki_config.rsync.args.recursive;
-	case SYNC_STRICT:
+	case RSYNC_STRICT:
 		return &rpki_config.rsync.args.flat;
-	case SYNC_OFF:
+	default:
 		break;
 	}
 
-	pr_crit("Invalid sync strategy: '%u'", rpki_config.sync_strategy);
+	pr_crit("Invalid rsync strategy: '%u'", rpki_config.rsync.strategy);
+}
+
+bool
+config_get_rrdp_enabled(void)
+{
+	return rpki_config.rrdp.enabled;
+}
+
+unsigned int
+config_get_rrdp_priority(void)
+{
+	return rpki_config.rrdp.priority;
 }
 
 char const *
@@ -988,12 +1067,6 @@ config_get_http_ca_path(void)
 	return rpki_config.http.ca_path;
 }
 
-bool
-config_get_http_disabled(void)
-{
-	return rpki_config.http.disabled;
-}
-
 char const *
 config_get_output_roa(void)
 {
@@ -1010,6 +1083,18 @@ unsigned int
 config_get_asn1_decode_max_stack(void)
 {
 	return rpki_config.asn1_decode_max_stack;
+}
+
+void
+config_set_rsync_enabled(bool value)
+{
+	rpki_config.rsync.enabled = value;
+}
+
+void
+config_set_rrdp_enabled(bool value)
+{
+	rpki_config.rrdp.enabled = value;
 }
 
 void

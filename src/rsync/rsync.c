@@ -68,7 +68,7 @@ is_descendant(struct rpki_uri *ancestor, struct rpki_uri *descendant)
 	string_tokenizer_init(&descendant_tokenizer, uri_get_global(descendant),
 	    uri_get_global_len(descendant), '/');
 
-	if (config_get_sync_strategy() == SYNC_STRICT)
+	if (config_get_rsync_strategy() == RSYNC_STRICT)
 		return strcmp(uri_get_global(ancestor),
 		    uri_get_global(descendant)) == 0;
 
@@ -154,20 +154,20 @@ static int
 get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
     struct rpki_uri **rsync_uri)
 {
-	switch (config_get_sync_strategy()) {
-	case SYNC_ROOT:
+	switch (config_get_rsync_strategy()) {
+	case RSYNC_ROOT:
 		return handle_root_strategy(requested_uri, rsync_uri);
-	case SYNC_ROOT_EXCEPT_TA:
+	case RSYNC_ROOT_EXCEPT_TA:
 		return is_ta
 		    ? handle_strict_strategy(requested_uri, rsync_uri)
 		    : handle_root_strategy(requested_uri, rsync_uri);
-	case SYNC_STRICT:
+	case RSYNC_STRICT:
 		return handle_strict_strategy(requested_uri, rsync_uri);
-	case SYNC_OFF:
+	default:
 		break;
 	}
 
-	pr_crit("Invalid sync strategy: %u", config_get_sync_strategy());
+	pr_crit("Invalid rsync strategy: %u", config_get_rsync_strategy());
 }
 
 static void
@@ -297,14 +297,14 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	 * Note:
 	 * @requested_uri is the URI we were asked to RSYNC.
 	 * @rsync_uri is the URL we're actually going to RSYNC.
-	 * (They can differ, depending on config_get_sync_strategy().)
+	 * (They can differ, depending on config_get_rsync_strategy().)
 	 */
 	struct validation *state;
 	struct uri_list *visited_uris;
 	struct rpki_uri *rsync_uri;
 	int error;
 
-	if (config_get_sync_strategy() == SYNC_OFF)
+	if (!config_get_rsync_enabled())
 		return 0;
 
 	state = state_retrieve();

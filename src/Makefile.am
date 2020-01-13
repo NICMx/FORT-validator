@@ -46,12 +46,14 @@ fort_SOURCES += config/filename_format.h config/filename_format.c
 fort_SOURCES += config/log_conf.h config/log_conf.c
 fort_SOURCES += config/mode.c config/mode.h
 fort_SOURCES += config/incidences.h config/incidences.c
+fort_SOURCES += config/rsync_strategy.h config/rsync_strategy.c
 fort_SOURCES += config/str.c config/str.h
 fort_SOURCES += config/string_array.h config/string_array.c
 fort_SOURCES += config/sync_strategy.h config/sync_strategy.c
 fort_SOURCES += config/types.h
 fort_SOURCES += config/uint.c config/uint.h
 fort_SOURCES += config/uint32.c config/uint32.h
+fort_SOURCES += config/work_offline.c config/work_offline.h
 
 fort_SOURCES += crypto/base64.h crypto/base64.c
 fort_SOURCES += crypto/hash.h crypto/hash.c

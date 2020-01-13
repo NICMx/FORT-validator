@@ -64,16 +64,40 @@ config_get_local_repository(void)
 	return "repository/";
 }
 
-enum sync_strategy
-config_get_sync_strategy(void)
+enum rsync_strategy
+config_get_rsync_strategy(void)
 {
-	return SYNC_ROOT;
+	return RSYNC_ROOT;
 }
 
 bool
-config_get_rrdp_disabled(void)
+config_get_rsync_enabled(void)
 {
 	return true;
+}
+
+unsigned int
+config_get_rsync_priority(void)
+{
+	return 50;
+}
+
+bool
+config_get_rrdp_enabled(void)
+{
+	return false;
+}
+
+unsigned int
+config_get_rrdp_priority(void)
+{
+	return 50;
+}
+
+bool
+config_get_work_offline(void)
+{
+	return false;
 }
 
 bool
@@ -158,7 +182,7 @@ void print_stack_trace(void)
 char const *
 config_get_http_user_agent(void)
 {
-	return "Test/0.1";
+	return "fort-test/0.1";
 }
 
 unsigned int
@@ -176,10 +200,4 @@ char const *
 config_get_http_ca_path(void)
 {
 	return NULL;
-}
-
-bool
-config_get_http_disabled(void)
-{
-	return true;
 }
