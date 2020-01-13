@@ -1,8 +1,7 @@
 {
   "tal": "/tmp/fort/tal/",
   "local-repository": "/tmp/fort/repository/",
-  "sync-strategy": "root",
-  "rrdp-disabled": false,
+  "work-offline": false,
   "shuffle-uris": false,
   "maximum-certificate-depth": 32,
   "mode": "server",
@@ -28,10 +27,16 @@
     "user-agent": "fort/1.2.0",
     "connect-timeout": 30,
     "transfer-timeout": 30,
-    "ca-path": "/usr/local/ssl/certs",
-    "disabled": false
+    "ca-path": "/usr/local/ssl/certs"
+  },
+  "rrdp": {
+    "enabled": true,
+    "priority": 50
   },
   "rsync": {
+    "enabled": true,
+    "priority": 50,
+    "strategy": "root",
     "program": "rsync",
     "arguments-recursive": [
       "--recursive",

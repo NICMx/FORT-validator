@@ -15,11 +15,7 @@ command: fort
 	4. [`--tal`](#--tal)
 	5. [`--local-repository`](#--local-repository)
 	6. [`--sync-strategy`](#--sync-strategy)
-		1. [`off`](#off)
-		2. [`strict`](#strict)
-		3. [`root`](#root)
-		4. [`root-except-ta`](#root-except-ta)
-	7. [`--rrdp-disabled`](#--rrdp-disabled)
+	7. [`--work-offline`](#--work-offline)
 	8. [`--shuffle-uris`](#--shuffle-uris)
 	9. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
 	10. [`--mode`](#--mode)
@@ -39,15 +35,22 @@ command: fort
 	24. [`--http.connect-timeout`](#--httpconnect-timeout)
 	25. [`--http.transfer-timeout`](#--httptransfer-timeout)
 	26. [`--http.ca-path`](#--httpca-path)
-	27. [`--http.disabled`](#--httpdisabled)
-	28. [`--output.roa`](#--outputroa)
-	29. [`--output.bgpsec`](#--outputbgpsec)
-	30. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	31. [`--configuration-file`](#--configuration-file)
-	32. [`rsync.program`](#rsyncprogram)
-	33. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	34. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	35. [`incidences`](#incidences)
+	27. [`--output.roa`](#--outputroa)
+	28. [`--output.bgpsec`](#--outputbgpsec)
+	29. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	30. [`--configuration-file`](#--configuration-file)
+	31. [`--rrdp.enabled`](#--rrdpenabled)
+	32. [`--rrdp.priority`](#--rrdppriority)
+	33. [`--rsync.enabled`](#--rsyncenabled)
+	34. [`--rsync.priority`](#--rsyncpriority)
+	35. [`--rsync.strategy`](#--rsyncstrategy)
+		1. [`strict`](#strict)
+		2. [`root`](#root)
+		3. [`root-except-ta`](#root-except-ta)
+	36. [`rsync.program`](#rsyncprogram)
+	37. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	38. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	39. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -60,7 +63,7 @@ command: fort
         [--tal=<file>|<directory>]
         [--local-repository=<directory>]
         [--sync-strategy=off|strict|root|root-except-ta]
-        [--rrdp-disabled]
+        [--work-offline]
         [--shuffle-uris]
         [--maximum-certificate-depth=<unsigned integer>]
         [--mode=server|standalone]
@@ -76,11 +79,15 @@ command: fort
         [--log.output=syslog|console]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
+        [--rrdp.enabled=true|false]
+        [--rrdp.priority=<unsigned integer>]
+        [--rsync.enabled=true|false]
+        [--rsync.priority=<unsigned integer>]
+        [--rsync.strategy=strict|root|root-except-ta]
         [--http.user-agent=<string>]
         [--http.connect-timeout=<unsigned integer>]
         [--http.transfer-timeout=<unsigned integer>]
         [--http.ca-path=<directory>]
-        [--http.disabled]
         [--output.roa=<file>]
         [--output.bgpsec=<file>]
 ```
@@ -203,62 +210,28 @@ Because rsync uses delta encoding, you're advised to keep this cache around. It 
 
 ### `--sync-strategy`
 
+> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--rsync.strategy`](#--rsyncstrategy) or [`--rsync.enabled`](#--rsyncenabled) (if rsync is meant to be disabled) instead.
+
 - **Type:** Enumeration (`off`, `strict`, `root`, `root-except-ta`)
 - **Availability:** `argv` and JSON
 - **Default:** `root`
 
 rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
 
-#### `off`
+Despite this argument will be deprecated, it still can be utilized. Its possible values and behaviour will be as listed here:
+- `off`: will disable rsync execution, setting [`--rsync.enabled`](#--rsyncenabled) as `false`. So, using `--sync-strategy=off` will be the same as `--rsync.enabled=false`.
+- `strict`: will be the same as `--rsync.strategy=strict`, see [`strict`](#strict).
+- `root`: will be the same as `--rsync.strategy=root`, see [`root`](#root).
+- `root-except-ta`: will be the same as `--rsync.strategy=root-except-ta`, see [`root-except-ta`](#root-except-ta).
 
-Skips all rsyncs. (Validate the existing cache repository pointed by `--local-repository`.)
-
-#### `strict`
-
-> In order to enable this strategy, recompile using the flag: **_ENABLE\_STRICT\_STRATEGY_**.
->
-> e.g. `$ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'`
-
-rsyncs every repository publication point separately. Only skips publication points that have already been downloaded during the current validation cycle. (Assuming each synchronization is recursive.)
-
-For example, suppose the validator gets certificates whose caRepository access methods (in their Subject Information Access extensions) point to the following publication points:
-
-1. `rsync://rpki.example.com/foo/bar/`
-2. `rsync://rpki.example.com/foo/qux/`
-3. `rsync://rpki.example.com/foo/bar/`
-4. `rsync://rpki.example.com/foo/corge/grault/`
-5. `rsync://rpki.example.com/foo/corge/`
-6. `rsync://rpki.example.com/foo/corge/waldo/`
-
-A  validator following the `strict` strategy would download `bar`, download `qux`, skip `bar`, download `corge/grault`, download `corge` and skip `corge/waldo`.
-
-Though this strategy is the only "strictly" correct one, it is also extremely slow. Its usage is _not_ recommended, unless your repository contains lots of spam files, awkward permissions or can't be found in a repository rooted in a URL that follows the regular expression "`rsync://.+/.+/`".
-
-#### `root`
-
-For each publication point found, guess the root of its repository and rsync that instead. Then skip
-any subsequent children of said root.
-
-(To guess the root of a repository, the validator counts four slashes, and prunes the rest of the URL.)
-
-Reusing the caRepository URLs from the `strict` strategy (above) as example, a  validator following the `root` strategy would download `rsync://rpki.example.com/foo`, and then skip everything else.
-
-Assuming that the repository is specifically structured to be found within as few roots as possible, and they contain minimal RPKI-unrelated noise files, this is the fastest synchronization strategy. At time of writing, this is true for all the current official repositories.
-
-#### `root-except-ta`
-
-Synchronizes the root certificate (the one pointed by the TAL) in `strict` mode, and once it's validated, synchronizes the rest of the repository in `root` mode.
-
-Useful if you want `root`, but the root certificate is separated from the rest of the repository. Also useful if you don't want the validator to download the entire repository without first confirming the integrity and legitimacy of the root certificate.
-
-### `--rrdp-disabled`
+### `--work-offline`
 
 - **Type:** None
 - **Availability:** `argv` and JSON
 
-If this flag is activated, Fort will utilize always RSYNC as the preferred access method.
+If this flag is activated, Fort will disable all outgoing requests (currently done with: *rsync* and *https* (RRDP protocol uses HTTPS to fetch data)). All repository files (certificates, ROAs, etc.) are expected to exist at configured [`--local-repository`](#--local-repository).
 
-Otherwise, Fort will utilize RRDP when the preferred access method for a certificate repository is an Update Notification file URI.
+Otherwise, Fort will perform outgoing requests whenever this is needed. If a specific protocol needs to be deactivated, use [`--rsync.enabled`](#--rsyncenabled) or [`--rrdp.enabled`](#--rrdpenabled).
 
 ### `--shuffle-uris`
 
@@ -580,8 +553,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 <pre><code>{
 	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
 	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository/",
-	"<a href="#--sync-strategy">sync-strategy</a>": "root",
-	"<a href="#--rrdp-disabled">rrdp-disabled</a>": false,
+	"<a href="#--work-offline">work-offline</a>": false,
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
 	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
@@ -610,11 +582,18 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
 		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 30,
-		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs",
-		"<a href="#--httpdisabled">disabled</a>": false
+		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
+	},
+
+	"rrdp": {
+		"<a href="#--rrdpenabled">enabled</a>": true,
+		"<a href="#--rrdppriority">priority</a>": 50
 	},
 
 	"rsync": {
+		"<a href="#--rsyncenabled">enabled</a>": true,
+		"<a href="#--rsyncpriority">priority</a>": 50,
+		"<a href="#--rsyncstrategy">strategy</a>": "root",
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
 			"--recursive",
@@ -668,13 +647,13 @@ $ {{ page.command }} --tal="foo" --configuration-file="cfg.json" --tal="qux"  # 
 $ cat a.json
 {
 	"local-repository": "a",
-	"sync-strategy": "root",
+	"rsync.strategy": "root",
 	"maximum-certificate-depth": 5
 }
 
 $ cat b.json
 {
-	"sync-strategy": "strict"
+	"rsync.strategy": "strict"
 	"maximum-certificate-depth": 6
 }
 
@@ -687,8 +666,106 @@ $ {{ page.command }} \
 	--configuration-file="a.json" \
 	--configuration-file="b.json" \
 	--configuration-file="c.json"
-$ # local-repository is "a", sync-strategy is "strict" and maximum-certificate-depth is 8
+$ # local-repository is "a", rsync.strategy is "strict" and maximum-certificate-depth is 8
 {% endhighlight %}
+
+### `--rrdp.enabled`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `true`
+
+Enables RRDP files requests and processing.
+
+If disabled (eg. `--rrdp.enabled=false`), FORT validator won't download nor process RRDP files, and will expect to find all repository files at [`--local-repository`](#--local-repository).
+
+### `--rrdp.priority`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 50
+- **Range:** 0--100
+
+Assign priority to use RRDP to fetch repository files. A higher value means a higher priority.
+
+This arguments works along with [`--rsync.priority`](#--rsyncpriority), since the higher value of this two arguments will result in the first method to utilize when fetching repositories files. Of course, this depends also on certificates information, since currently RRDP is an optional protocol to use.
+
+Whenever a certificate has both RSYNC and RRDP repositories, the following criteria is followed to prioritize which one to use first:
+- [`--rsync.priority`](#--rsyncpriority) **equals** [`--rrdp.priority`](#--rrdppriority): use the order specified at the certificate to access its repository data.
+- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--rrdp.priority`](#--rrdppriority): use RSYNC repository URI first; if there's an error fetching data, fallback to use RRDP repository data.
+- [`--rsync.priority`](#--rsyncpriority) **less than** [`--rrdp.priority`](#--rrdppriority): use RRDP repository URI first; if there's an error fetching data, fallback to use RSYNC repository data.
+
+### `--rsync.enabled`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `true`
+
+Enables RSYNC requests.
+
+If disabled (eg. `--rsync.enabled=false`), FORT validator won't download files nor directories via RSYNC, and will expect to find all repository files at [`--local-repository`](#--local-repository).
+
+### `--rsync.priority`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 50
+- **Range:** 0--100
+
+Assign priority to use RSYNC to fetch repository files. A higher value means a higher priority.
+
+This arguments works along with [`--rrdp.priority`](#--rrdppriority), since the higher value of this two arguments will result in the first method to utilize when fetching repositories files. Of course, this depends also on certificates information, since currently RRDP is an optional protocol to use.
+
+Whenever a certificate has both RSYNC and RRDP repositories, the following criteria is followed to prioritize which one to use first:
+- [`--rsync.priority`](#--rsyncpriority) **equals** [`--rrdp.priority`](#--rrdppriority): use the order specified at the certificate to access its repository data.
+- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--rrdp.priority`](#--rrdppriority): use RSYNC repository URI first; if there's an error fetching data, fallback to use RRDP repository data.
+- [`--rsync.priority`](#--rsyncpriority) **less than** [`--rrdp.priority`](#--rrdppriority): use RRDP repository URI first; if there's an error fetching data, fallback to use RSYNC repository data.
+
+### `--rsync.strategy`
+
+- **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
+- **Availability:** `argv` and JSON
+- **Default:** `root`
+
+rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
+
+#### `strict`
+
+> In order to enable this strategy, recompile using the flag: **_ENABLE\_STRICT\_STRATEGY_**.
+>
+> e.g. `$ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'`
+
+rsyncs every repository publication point separately. Only skips publication points that have already been downloaded during the current validation cycle. (Assuming each synchronization is recursive.)
+
+For example, suppose the validator gets certificates whose caRepository access methods (in their Subject Information Access extensions) point to the following publication points:
+
+1. `rsync://rpki.example.com/foo/bar/`
+2. `rsync://rpki.example.com/foo/qux/`
+3. `rsync://rpki.example.com/foo/bar/`
+4. `rsync://rpki.example.com/foo/corge/grault/`
+5. `rsync://rpki.example.com/foo/corge/`
+6. `rsync://rpki.example.com/foo/corge/waldo/`
+
+A  validator following the `strict` strategy would download `bar`, download `qux`, skip `bar`, download `corge/grault`, download `corge` and skip `corge/waldo`.
+
+Though this strategy is the only "strictly" correct one, it is also extremely slow. Its usage is _not_ recommended, unless your repository contains lots of spam files, awkward permissions or can't be found in a repository rooted in a URL that follows the regular expression "`rsync://.+/.+/`".
+
+#### `root`
+
+For each publication point found, guess the root of its repository and rsync that instead. Then skip
+any subsequent children of said root.
+
+(To guess the root of a repository, the validator counts four slashes, and prunes the rest of the URL.)
+
+Reusing the caRepository URLs from the `strict` strategy (above) as example, a  validator following the `root` strategy would download `rsync://rpki.example.com/foo`, and then skip everything else.
+
+Assuming that the repository is specifically structured to be found within as few roots as possible, and they contain minimal RPKI-unrelated noise files, this is the fastest synchronization strategy. At time of writing, this is true for all the current official repositories.
+
+#### `root-except-ta`
+
+Synchronizes the root certificate (the one pointed by the TAL) in `strict` mode, and once it's validated, synchronizes the rest of the repository in `root` mode.
+
+Useful if you want `root`, but the root certificate is separated from the rest of the repository. Also useful if you don't want the validator to download the entire repository without first confirming the integrity and legitimacy of the root certificate.
 
 ### rsync.program
 

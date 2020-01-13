@@ -213,90 +213,39 @@ By default, the path is \fI/tmp/fort/repository\fR.
 
 .B \-\-sync-strategy=(\fIoff\fR|\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
 .RS 4
+This argument \fBwill be DEPRECATED\fR. Use \fB--rsync.strategy\fR or
+\fB--rsync.enabled\fR (if rsync is meant to be disabled) instead.
+.P
 \fIrsync\fR download strategy; states the way rsync URLs are approached during
-downloads. It can have one of four values:
-.IR off ", "
-.IR strict ", "
-.IB "root" "(default value)" \fR, \fR
-.IR root-except-ta "."
+downloads.
 .P
-.I off
+Despite this argument will be deprecated, it still can be utilized. It can have
+one of four values:
 .RS 4
-Skip all RSYNCs. (Validate the existing cache repository pointed by
---local-repository.)
-.RE
-.P
-.I strict
-.RS 4
-In order to enable this strategy, FORT must be compiled using the flag:
-ENABLE\_STRICT\_STRATEGY. e.g.
-\fB $ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'\fR
-.P
-RSYNC every repository publication point separately. Only skip publication
-points that have already been downloaded during the current validation cycle.
-(Assuming each synchronization is recursive.)
-.P
-For example, suppose the validator gets certificates whose caRepository access
-methods (in their Subject Information Access extensions) point to the following
-publication points:
-.P
-1. rsync://rpki.example.com/foo/bar/
+- \fIoff\fR: will disable rsync execution. So, using \fB--sync-strategy=off\fR
+will be the same as \fB--rsync.enabled=false\fR.
 .br
-2. rsync://rpki.example.com/foo/qux/
+- \fIstrict\fR: will be the same as \fB--rsync.strategy=strict\fR.
 .br
-3. rsync://rpki.example.com/foo/bar/
+- \fIroot\fR \fB(default value)\fR: will be the same as
+\fB--rsync.strategy=root\fR.
 .br
-4. rsync://rpki.example.com/foo/corge/grault/
-.br
-5. rsync://rpki.example.com/foo/corge/
-.br
-6. rsync://rpki.example.com/foo/corge/waldo/
-.P
-A validator following the `strict` strategy would download `bar`, download
-`qux`, skip `bar`, download `corge/grault`, download `corge` and skip
-`corge/waldo`.
-.P
-This is the slowest, but also the strictly correct sync strategy.
-.RE
-.P
-.I root
-.RS 4
-For each publication point found, guess the root of its repository and RSYNC
-that instead. Then skip any subsequent children of said root.
-.P
-(To guess the root of a repository, the validator counts four slashes, and
-prunes the rest of the URL.)
-.P
-Reusing the caRepository URLs from the `strict` strategy (above) as example, a
-validator following the `root` strategy would download
-`rsync://rpki.example.com/foo`, and then skip everything else.
-.P
-Assuming that the repository is specifically structured to be found within as
-few roots as possible, and they contain minimal RPKI-unrelated noise files, this
-is the fastest synchronization strategy. At time of writing, this is true for
-all the current official repositories.
-.RE
-.P
-.I root-except-ta
-.RS 4
-Synchronizes the root certificate (the one pointed by the TAL) in 'strict' mode,
-and once it's validated, synchronizes the rest of the repository in 'root' mode.
-.P
-Useful if you want 'root', but the root certificate is separated from the rest
-of the repository. Also useful if you don't want the validator to download the
-entire repository without first confirming the integrity and legitimacy of the
-root certificate.
+- \fIroot-except-ta\fR: will be the same as
+\fB--rsync.strategy=root-except-ta\fR.
 .RE
 .RE
 .P
 
-.B \-\-rrdp-disabled
+.B \-\-work-offline
 .RS 4
-If this flag is activated, Fort will utilize always RSYNC as the preferred
-access method.
+If this flag is activated, Fort will disable all outgoing requests (currently
+done with: \fIrsync\fR and \fIhttps\fR (RRDP protocol uses HTTPS to fetch
+data)). All repository files (certificates, ROAs, etc.) are expected to exist
+at configured \fB--local-repository\fR.
 .P
-Otherwise, Fort will utilize RRDP when the preferred access method for a
-certificate repository is an Update Notification file URI.
+Otherwise, Fort will perform outgoing requests whenever this is needed. If a
+specific protocol needs to be deactivated, use \fB--rsync.enabled\fR or
+\fB--rrdp.enabled\fR.
 .RE
 .P
 
@@ -599,13 +548,155 @@ By default, the path has a NULL value.
 .RE
 .P
 
-.B \-\-http.disabled
+.B \-\-rrdp.enabled=\fItrue\fR|\fIfalse\fR
 .RS 4
-If this flag is activated, HTTP requests won't be performed and the files that
-should have been fetched are searched locally at \fB--local-repository\fR.
+Enables RRDP files requests and processing.
 .P
-Otherwise, Fort will perform HTTP requests when needed (eg. an HTTPS URI at a
-TAL, RRDP URIs).
+If disabled (eg. \fB--rrdp.enabled=false\fR), FORT validator won't download nor
+process RRDP files, and will expect to find all repository files at
+\fB--local-repository\fR.
+.RE
+.P
+
+.B \-\-rrdp.priority=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Assign priority to use RRDP to fetch repository files. A higher value means a
+higher priority.
+.P
+This arguments works along with \fB--rsync.priority\fR, since the higher value
+of this two arguments will result in the first method to utilize when fetching
+repositories files. Of course, this depends also on certificates information,
+since currently RRDP is an optional protocol to use.
+.P
+Whenever a certificate has both RSYNC and RRDP repositories, the following
+criteria is followed to prioritize which one to use first:
+.RS 4
+.br
+\- \fI--rsync.priority\fR \fBequals\fR \fI--rrdp.priority\fR: use the order
+specified at the certificate to access its repository data.
+.br
+\- \fI--rsync.priority\fR \fBgreater than\fR \fI--rrdp.priority\fR: use RSYNC
+repository URI first; if there's an error fetching data, fallback to use RRDP
+repository data.
+.br
+\- \fI--rsync.priority\fR \fBless than\fR \fI--rrdp.priority\fR: use RRDP
+repository URI first; if there's an error fetching data, fallback to use RSYNC
+repository data.
+.RE
+.P
+By default, the value is \fI50\fR.
+.RE
+.P
+
+.B \-\-rsync.enabled=\fItrue\fR|\fIfalse\fR
+.RS 4
+Enables RSYNC requests.
+.P
+If disabled (eg. \fB--rsync.enabled=false\fR), FORT validator won't download
+files nor directories via RSYNC, and will expect to find all repository files
+at \fB--local-repository\fR.
+.RE
+.P
+
+.B \-\-rsync.priority=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Assign priority to use RSYNC to fetch repository files. A higher value means a
+higher priority.
+.P
+This arguments works along with \fB--rrdp.priority\fR, since the higher value
+of this two arguments will result in the first method to utilize when fetching
+repositories files. Of course, this depends also on certificates information,
+since currently RRDP is an optional protocol to use.
+.P
+Whenever a certificate has both RSYNC and RRDP repositories, the following
+criteria is followed to prioritize which one to use first:
+.RS 4
+.br
+\- \fI--rsync.priority\fR \fBequals\fR \fI--rrdp.priority\fR: use the order
+specified at the certificate to access its repository data.
+.br
+\- \fI--rsync.priority\fR \fBgreater than\fR \fI--rrdp.priority\fR: use RSYNC
+repository URI first; if there's an error fetching data, fallback to use RRDP
+repository data.
+.br
+\- \fI--rsync.priority\fR \fBless than\fR \fI--rrdp.priority\fR: use RRDP
+repository URI first; if there's an error fetching data, fallback to use RSYNC
+repository data.
+.RE
+.P
+By default, the value is \fI50\fR.
+.RE
+.P
+
+.B \-\-rsync.strategy=(\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
+.RS 4
+\fIrsync\fR download strategy; states the way rsync URLs are approached during
+downloads. It can have one of three values:
+.IR strict ", "
+.IB "root" "(default value)" \fR, \fR
+.IR root-except-ta "."
+.P
+.I strict
+.RS 4
+In order to enable this strategy, FORT must be compiled using the flag:
+ENABLE\_STRICT\_STRATEGY. e.g.
+\fB $ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'\fR
+.P
+RSYNC every repository publication point separately. Only skip publication
+points that have already been downloaded during the current validation cycle.
+(Assuming each synchronization is recursive.)
+.P
+For example, suppose the validator gets certificates whose caRepository access
+methods (in their Subject Information Access extensions) point to the following
+publication points:
+.P
+1. rsync://rpki.example.com/foo/bar/
+.br
+2. rsync://rpki.example.com/foo/qux/
+.br
+3. rsync://rpki.example.com/foo/bar/
+.br
+4. rsync://rpki.example.com/foo/corge/grault/
+.br
+5. rsync://rpki.example.com/foo/corge/
+.br
+6. rsync://rpki.example.com/foo/corge/waldo/
+.P
+A validator following the `strict` strategy would download `bar`, download
+`qux`, skip `bar`, download `corge/grault`, download `corge` and skip
+`corge/waldo`.
+.P
+This is the slowest, but also the strictly correct sync strategy.
+.RE
+.P
+.I root
+.RS 4
+For each publication point found, guess the root of its repository and RSYNC
+that instead. Then skip any subsequent children of said root.
+.P
+(To guess the root of a repository, the validator counts four slashes, and
+prunes the rest of the URL.)
+.P
+Reusing the caRepository URLs from the `strict` strategy (above) as example, a
+validator following the `root` strategy would download
+`rsync://rpki.example.com/foo`, and then skip everything else.
+.P
+Assuming that the repository is specifically structured to be found within as
+few roots as possible, and they contain minimal RPKI-unrelated noise files, this
+is the fastest synchronization strategy. At time of writing, this is true for
+all the current official repositories.
+.RE
+.P
+.I root-except-ta
+.RS 4
+Synchronizes the root certificate (the one pointed by the TAL) in 'strict' mode,
+and once it's validated, synchronizes the rest of the repository in 'root' mode.
+.P
+Useful if you want 'root', but the root certificate is separated from the rest
+of the repository. Also useful if you don't want the validator to download the
+entire repository without first confirming the integrity and legitimacy of the
+root certificate.
+.RE
 .RE
 .P
 
@@ -702,8 +793,7 @@ to a specific value:
 {
   "tal": "/tmp/fort/tal/",
   "local-repository": "/tmp/fort/repository/",
-  "sync-strategy": "root",
-  "rrdp-disabled": false,
+  "work-offline": false,
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
   "mode": "server",
@@ -729,10 +819,16 @@ to a specific value:
     "user-agent": "fort/1.2.0",
     "connect-timeout": 30,
     "transfer-timeout": 30,
-    "ca-path": "/usr/local/ssl/certs",
-    "disabled": false
+    "ca-path": "/usr/local/ssl/certs"
+  },
+  "rrdp": {
+    "enabled": true,
+    "priority": 50
   },
   "rsync": {
+    "enabled": true,
+    "priority": 50,
+    "strategy": "root",
     "program": "rsync",
     "arguments-recursive": [
       "--recursive",
