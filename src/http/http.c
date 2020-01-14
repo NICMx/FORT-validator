@@ -142,11 +142,11 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 
 	error = create_dir_recursive(uri_get_local(uri));
 	if (error)
-		return error;
+		return ENSURE_NEGATIVE(error);
 
 	error = file_write(uri_get_local(uri), &out, &stat);
 	if (error)
-		return error;
+		return ENSURE_NEGATIVE(error);
 
 	error = http_easy_init(&handler);
 	if (error)
@@ -165,11 +165,11 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	file_close(out);
 
 	/* Error 0 it's ok */
-	return error;
+	return ENSURE_NEGATIVE(error);
 close_file:
 	file_close(out);
 	delete_dir_recursive_bottom_up(uri_get_local(uri));
-	return error;
+	return ENSURE_NEGATIVE(error);
 }
 
 /*

@@ -331,48 +331,65 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	int fork_fds[2][2];
 	pid_t child_pid;
+	unsigned int retries;
 	int child_status;
 	int error;
 
-	child_status = 0;
-	error = create_dir_recursive(uri_get_local(uri));
-	if (error)
-		return error;
-
-	error = create_pipes(fork_fds);
-	if (error)
-		return error;
-
-	/* We need to fork because execvp() magics the thread away. */
-	child_pid = fork();
-	if (child_pid == 0) {
-		/* This code is run by the child. */
-		handle_child_thread(uri, is_ta, fork_fds);
-	}
-
-	/* This code is run by us. */
-	error = read_pipes(fork_fds);
-	if (error)
-		return error;
-
-	error = waitpid(child_pid, &child_status, 0);
+	retries = 0;
 	do {
-		if (error == -1) {
-			error = errno;
-			pr_err("The rsync sub-process returned error %d (%s)",
-			    error, strerror(error));
-			if (child_status > 0)
-				break;
+		child_status = 0;
+		error = create_dir_recursive(uri_get_local(uri));
+		if (error)
 			return error;
-		}
-	} while (0);
 
-	if (WIFEXITED(child_status)) {
-		/* Happy path (but also sad path sometimes). */
-		error = WEXITSTATUS(child_status);
-		pr_debug("Child terminated with error code %d.", error);
-		return error;
-	}
+		error = create_pipes(fork_fds);
+		if (error)
+			return error;
+
+		/* We need to fork because execvp() magics the thread away. */
+		child_pid = fork();
+		if (child_pid == 0) {
+			/* This code is run by the child. */
+			handle_child_thread(uri, is_ta, fork_fds);
+		}
+
+		/* This code is run by us. */
+		error = read_pipes(fork_fds);
+		if (error)
+			return error;
+
+		error = waitpid(child_pid, &child_status, 0);
+		do {
+			if (error == -1) {
+				error = errno;
+				pr_err("The rsync sub-process returned error %d (%s)",
+				    error, strerror(error));
+				if (child_status > 0)
+					break;
+				return error;
+			}
+		} while (0);
+
+		if (WIFEXITED(child_status)) {
+			/* Happy path (but also sad path sometimes). */
+			error = WEXITSTATUS(child_status);
+			pr_debug("Child terminated with error code %d.", error);
+			if (!error)
+				return 0;
+			if (retries == config_get_rsync_retry_count()) {
+				pr_info("Max RSYNC retries (%u) reached, won't retry again.",
+				    retries);
+				return error;
+			}
+			pr_info("Retrying RSYNC in %u seconds, %u attempts remaining.",
+			    config_get_rsync_retry_interval(),
+			    config_get_rsync_retry_count() - retries);
+			retries++;
+			sleep(config_get_rsync_retry_interval());
+			continue;
+		}
+		break;
+	} while (true);
 
 	if (WIFSIGNALED(child_status)) {
 		switch (WTERMSIG(child_status)) {

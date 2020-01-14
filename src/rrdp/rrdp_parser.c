@@ -111,6 +111,37 @@ write_local(unsigned char *content, size_t size, size_t nmemb, void *arg)
 	return read;
 }
 
+static int
+download_file(struct rpki_uri *uri, long last_update)
+{
+	unsigned int retries;
+	int error;
+
+	retries = 0;
+	do {
+		if (last_update > 0)
+			error = http_download_file_with_ims(uri, write_local,
+			    last_update);
+		else
+			error = http_download_file(uri, write_local);
+
+		/* Remember: positive values are expected */
+		if (error >= 0)
+			return error;
+
+		if (retries == config_get_rrdp_retry_count()) {
+			pr_info("Max RRDP retries (%u) reached, won't retry again.",
+			    retries);
+			return error;
+		}
+		pr_info("Retrying RRDP file download in %u seconds, %u attempts remaining.",
+		    config_get_rrdp_retry_interval(),
+		    config_get_rrdp_retry_count() - retries);
+		retries++;
+		sleep(config_get_rrdp_retry_interval());
+	} while (true);
+}
+
 /* Trim @from, setting the result at @result pointer */
 static int
 trim(char *from, char **result, size_t *result_size)
@@ -1042,7 +1073,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 	if (error)
 		return error;
 
-	error = http_download_file(uri, write_local);
+	error = download_file(uri, 0);
 	if (error)
 		goto release_uri;
 
@@ -1079,7 +1110,7 @@ rrdp_parse_notification(struct rpki_uri *uri,
 	if (error && error != -ENOENT)
 		return error;
 
-	error = http_download_file_with_ims(uri, write_local, last_update);
+	error = download_file(uri, last_update);
 	if (error < 0)
 		return error;
 
@@ -1128,7 +1159,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 	if (error)
 		return error;
 
-	error = http_download_file(uri, write_local);
+	error = download_file(uri, 0);
 	if (error)
 		goto release_uri;
 

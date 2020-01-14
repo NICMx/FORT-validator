@@ -86,6 +86,13 @@ struct rpki_config {
 		unsigned int priority;
 		/* Synchronization download strategy. */
 		enum rsync_strategy strategy;
+		/* Retry conf, utilized on errors */
+		struct {
+			/* Maximum number of retries on error */
+			unsigned int count;
+			/* Interval (in seconds) between each retry */
+			unsigned int interval;
+		} retry;
 		char *program;
 		struct {
 			struct string_array flat;
@@ -101,6 +108,13 @@ struct rpki_config {
 		 * their accessMethod extension.
 		 */
 		unsigned int priority;
+		/* Retry conf, utilized on errors */
+		struct {
+			/* Maximum number of retries on error */
+			unsigned int count;
+			/* Interval (in seconds) between each retry */
+			unsigned int interval;
+		} retry;
 	} rrdp;
 
 	struct {
@@ -365,8 +379,24 @@ static const struct option_field options[] = {
 		.type = &gt_rsync_strategy,
 		.offset = offsetof(struct rpki_config, rsync.strategy),
 		.doc = "RSYNC download strategy",
-	},{
+	}, {
 		.id = 3003,
+		.name = "rsync.retry.count",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rsync.retry.count),
+		.doc = "Maximum amount of retries whenever there's an RSYNC error",
+		.min = 0,
+		.max = UINT_MAX,
+	}, {
+		.id = 3004,
+		.name = "rsync.retry.interval",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rsync.retry.interval),
+		.doc = "Period (in seconds) to wait between retries after an RSYNC error ocurred",
+		.min = 0,
+		.max = UINT_MAX,
+	},{
+		.id = 3005,
 		.name = "rsync.program",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, rsync.program),
@@ -374,14 +404,14 @@ static const struct option_field options[] = {
 		.arg_doc = "<path to program>",
 		.availability = AVAILABILITY_JSON,
 	}, {
-		.id = 3004,
+		.id = 3006,
 		.name = "rsync.arguments-recursive",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.recursive),
 		.doc = "RSYNC program arguments that will trigger a recursive RSYNC",
 		.availability = AVAILABILITY_JSON,
 	}, {
-		.id = 3005,
+		.id = 3007,
 		.name = "rsync.arguments-flat",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.flat),
@@ -404,6 +434,22 @@ static const struct option_field options[] = {
 		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
 		.min = 0,
 		.max = 100,
+	}, {
+		.id = 10002,
+		.name = "rrdp.retry.count",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rrdp.retry.count),
+		.doc = "Maximum amount of retries whenever there's an error fetching RRDP files",
+		.min = 0,
+		.max = UINT_MAX,
+	}, {
+		.id = 10003,
+		.name = "rrdp.retry.interval",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rrdp.retry.interval),
+		.doc = "Period (in seconds) to wait between retries after an error ocurred fetching RRDP files",
+		.min = 0,
+		.max = UINT_MAX,
 	},
 
 	/* HTTP requests parameters */
@@ -687,6 +733,8 @@ set_default_values(void)
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
 	rpki_config.rsync.strategy = RSYNC_ROOT;
+	rpki_config.rsync.retry.count = 1;
+	rpki_config.rsync.retry.interval = 3;
 	rpki_config.rsync.program = strdup("rsync");
 	if (rpki_config.rsync.program == NULL) {
 		error = pr_enomem();
@@ -705,6 +753,8 @@ set_default_values(void)
 
 	rpki_config.rrdp.enabled = true;
 	rpki_config.rrdp.priority = 50;
+	rpki_config.rrdp.retry.count = 1;
+	rpki_config.rrdp.retry.interval = 3;
 
 	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	if (rpki_config.http.user_agent == NULL) {
@@ -1006,6 +1056,18 @@ config_get_rsync_strategy(void)
 	return rpki_config.rsync.strategy;
 }
 
+unsigned int
+config_get_rsync_retry_count(void)
+{
+	return rpki_config.rsync.retry.count;
+}
+
+unsigned int
+config_get_rsync_retry_interval(void)
+{
+	return rpki_config.rsync.retry.interval;
+}
+
 char *
 config_get_rsync_program(void)
 {
@@ -1041,6 +1103,18 @@ unsigned int
 config_get_rrdp_priority(void)
 {
 	return rpki_config.rrdp.priority;
+}
+
+unsigned int
+config_get_rrdp_retry_count(void)
+{
+	return rpki_config.rrdp.retry.count;
+}
+
+unsigned int
+config_get_rrdp_retry_interval(void)
+{
+	return rpki_config.rrdp.retry.interval;
 }
 
 char const *
