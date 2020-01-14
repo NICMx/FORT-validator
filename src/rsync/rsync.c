@@ -170,8 +170,28 @@ get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
 	pr_crit("Invalid rsync strategy: %u", config_get_rsync_strategy());
 }
 
+/*
+ * Duplicate parent FDs, to pipe rsync output:
+ * - fds[0] = stderr
+ * - fds[1] = stdout
+ */
 static void
-handle_child_thread(struct rpki_uri *uri, bool is_ta)
+duplicate_fds(int fds[2][2])
+{
+	/* Use the loop to catch interruptions */
+	while ((dup2(fds[0][1], STDERR_FILENO) == -1)
+		&& (errno == EINTR)) {}
+	close(fds[0][1]);
+	close(fds[0][0]);
+
+	while ((dup2(fds[1][1], STDOUT_FILENO) == -1)
+	    && (errno == EINTR)) {}
+	close(fds[1][1]);
+	close(fds[1][0]);
+}
+
+static void
+handle_child_thread(struct rpki_uri *uri, bool is_ta, int fds[2][2])
 {
 	/* THIS FUNCTION MUST NEVER RETURN!!! */
 
@@ -209,6 +229,8 @@ handle_child_thread(struct rpki_uri *uri, bool is_ta)
 	for (i = 0; i < config_args->length + 1; i++)
 		pr_debug("    %s", copy_args[i]);
 
+	duplicate_fds(fds);
+
 	execvp(copy_args[0], copy_args);
 	error = errno;
 	pr_err("Could not execute the rsync command: %s",
@@ -218,12 +240,96 @@ handle_child_thread(struct rpki_uri *uri, bool is_ta)
 	exit(error);
 }
 
+static int
+create_pipes(int fds[2][2])
+{
+	if (pipe(fds[0]) == -1)
+		return -pr_errno(errno, "Piping rsync stderr");
+	if (pipe(fds[1]) == -1)
+		return -pr_errno(errno, "Piping rsync stdout");
+	return 0;
+}
+
+static void
+log_buffer(char const *buffer, ssize_t read, int type)
+{
+#define PRE_RSYNC "[RSYNC exec]: "
+	char *cpy, *cur, *tmp;
+
+	cpy = malloc(read + 1);
+	if (cpy == NULL) {
+		pr_enomem();
+		return;
+	}
+	strncpy(cpy, buffer, read);
+	cpy[read] = '\0';
+
+	/* Break lines to one line at log */
+	cur = cpy;
+	while ((tmp = strchr(cur, '\n')) != NULL) {
+		*tmp = '\0';
+		if(strlen(cur) == 0) {
+			cur = tmp + 1;
+			continue;
+		}
+		if (type == 0)
+			pr_err(PRE_RSYNC "%s", cur);
+		else
+			pr_info(PRE_RSYNC "%s", cur);
+		cur = tmp + 1;
+	}
+	free(cpy);
+#undef PRE_RSYNC
+}
+
+static int
+read_pipe(int fd_pipe[2][2], int type)
+{
+	char buffer[4096];
+	ssize_t count;
+
+	while (1) {
+		count = read(fd_pipe[type][0], buffer, sizeof(buffer));
+		if (count == -1) {
+			if (errno == EINTR)
+				continue;
+			return -pr_errno(errno, "Reading rsync buffer");
+		}
+		if (count == 0)
+			break;
+
+		log_buffer(buffer, count, type);
+	}
+	close(fd_pipe[type][0]);
+	return 0;
+}
+
+static int
+read_pipes(int fds[2][2])
+{
+	int error;
+
+	/* Won't be needed */
+	close(fds[0][1]);
+	close(fds[1][1]);
+
+	/* stderr pipe */
+	error = read_pipe(fds, 0);
+	if (error)
+		return error;
+
+	/* stdout pipe */
+	return read_pipe(fds, 1);
+}
+
 /*
  * Downloads the @uri->global file into the @uri->local path.
  */
 static int
 do_rsync(struct rpki_uri *uri, bool is_ta)
 {
+	/* Descriptors to pipe stderr (first element) and stdout (second) */
+	int fork_fds[2][2];
 	pid_t child_pid;
 	int child_status;
 	int error;
@@ -233,14 +339,21 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	if (error)
 		return error;
 
+	error = create_pipes(fork_fds);
+	if (error)
+		return error;
+
 	/* We need to fork because execvp() magics the thread away. */
 	child_pid = fork();
 	if (child_pid == 0) {
 		/* This code is run by the child. */
-		handle_child_thread(uri, is_ta);
+		handle_child_thread(uri, is_ta, fork_fds);
 	}
 
 	/* This code is run by us. */
+	error = read_pipes(fork_fds);
+	if (error)
+		return error;
 
 	error = waitpid(child_pid, &child_status, 0);
 	do {

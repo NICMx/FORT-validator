@@ -86,10 +86,12 @@ create_server_socket(int *result)
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
 	unsigned long port;
+	int reusaddr;
 	int fd; /* "file descriptor" */
 	int error;
 
 	*result = 0; /* Shuts up gcc */
+	reusaddr = 1;
 
 	error = init_addrinfo(&addrs);
 	if (error)
@@ -104,6 +106,13 @@ create_server_socket(int *result)
 		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
 			pr_errno(errno, "socket() failed");
+			continue;
+		}
+
+		/* enable SO_REUSEADDR */
+		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reusaddr,
+		    sizeof(int)) < 0) {
+			pr_errno(errno, "setsockopt(SO_REUSEADDR) failed");
 			continue;
 		}
 
