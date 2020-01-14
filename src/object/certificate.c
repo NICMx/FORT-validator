@@ -2078,7 +2078,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		error = use_access_method(&sia_uris, exec_rsync_method,
 		    exec_rrdp_method);
 		if (error)
-			return error;
+			goto revert_uris;
 		break;
 	case CA:
 		if (!db_rrdp_uris_visited_exists(
@@ -2087,7 +2087,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 			error = use_access_method(&sia_uris, exec_rsync_method,
 			    exec_rrdp_method);
 			if (error)
-				return error;
+				goto revert_uris;
 		} else {
 			mft_exists = true;
 		}
