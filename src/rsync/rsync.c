@@ -377,11 +377,12 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 			if (!error)
 				return 0;
 			if (retries == config_get_rsync_retry_count()) {
-				pr_info("Max RSYNC retries (%u) reached, won't retry again.",
-				    retries);
+				pr_info("Max RSYNC retries (%u) reached on '%s', won't retry again.",
+				    retries, uri_get_global(uri));
 				return error;
 			}
-			pr_info("Retrying RSYNC in %u seconds, %u attempts remaining.",
+			pr_info("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
+			    uri_get_global(uri),
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
 			retries++;

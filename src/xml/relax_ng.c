@@ -56,7 +56,7 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 
 	reader = xmlNewTextReaderFilename(path);
 	if (reader == NULL)
-		return pr_err("Couldn't get XML reader.");
+		return pr_err("Couldn't get XML '%s' file.", path);
 
 	error = xmlTextReaderRelaxNGSetSchema(reader, schema);
 	if (error) {

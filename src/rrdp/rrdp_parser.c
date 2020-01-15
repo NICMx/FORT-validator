@@ -130,11 +130,12 @@ download_file(struct rpki_uri *uri, long last_update)
 			return error;
 
 		if (retries == config_get_rrdp_retry_count()) {
-			pr_info("Max RRDP retries (%u) reached, won't retry again.",
-			    retries);
+			pr_info("Max RRDP retries (%u) reached fetching '%s', won't retry again.",
+			    retries, uri_get_global(uri));
 			return error;
 		}
-		pr_info("Retrying RRDP file download in %u seconds, %u attempts remaining.",
+		pr_info("Retrying RRDP file download '%s' in %u seconds, %u attempts remaining.",
+		    uri_get_global(uri),
 		    config_get_rrdp_retry_interval(),
 		    config_get_rrdp_retry_count() - retries);
 		retries++;
