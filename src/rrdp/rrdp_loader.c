@@ -126,21 +126,19 @@ rrdp_load(struct rpki_uri *uri)
 		pr_crit("Unexpected RRDP URI comparison result");
 	}
 
-	/* Any change, and no error during the process, update db */
-	if (!error) {
-		pr_debug("Updating local RRDP data of '%s' to:",
-		    uri_get_global(uri));
-		pr_debug("- Session ID: %s",
-		    upd_notification->global_data.session_id);
-		pr_debug("- Serial: %lu",
-		    upd_notification->global_data.serial);
-		error = db_rrdp_uris_update(uri_get_global(uri),
-		    upd_notification->global_data.session_id,
-		    upd_notification->global_data.serial,
-		    visited);
-		if (error)
-			goto end;
-	}
+	if (error)
+		goto end;
+
+	/* Any update, and no error during the process, update db as well */
+	pr_debug("Updating local RRDP data of '%s' to:", uri_get_global(uri));
+	pr_debug("- Session ID: %s", upd_notification->global_data.session_id);
+	pr_debug("- Serial: %lu", upd_notification->global_data.serial);
+	error = db_rrdp_uris_update(uri_get_global(uri),
+	    upd_notification->global_data.session_id,
+	    upd_notification->global_data.serial,
+	    visited);
+	if (error)
+		goto end;
 
 set_update:
 	/* Set the last update to now */

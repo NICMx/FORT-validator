@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 #include "log.h"
 
 static void
@@ -18,7 +19,8 @@ parse_argv_uint(struct option_field const *field, char const *str,
 	char *tmp;
 	unsigned long parsed;
 
-	if (field->type->has_arg != required_argument || str == NULL) {
+	if (field->type->has_arg != required_argument || str == NULL ||
+		    strlen(str) == 0) {
 		return pr_err("Integer options ('%s' in this case) require an argument.",
 		    field->name);
 	}

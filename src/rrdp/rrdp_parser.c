@@ -659,7 +659,7 @@ delete_from_uri(struct rpki_uri *uri, struct visited_uris *visited_uris)
 	return delete_dir_recursive_bottom_up(uri_get_local(uri));
 }
 
-int
+static int
 __delete_from_uri(char const *location, struct visited_uris *visited_uris)
 {
 	struct rpki_uri *uri;
