@@ -41,16 +41,20 @@ command: fort
 	30. [`--configuration-file`](#--configuration-file)
 	31. [`--rrdp.enabled`](#--rrdpenabled)
 	32. [`--rrdp.priority`](#--rrdppriority)
-	33. [`--rsync.enabled`](#--rsyncenabled)
-	34. [`--rsync.priority`](#--rsyncpriority)
-	35. [`--rsync.strategy`](#--rsyncstrategy)
+	33. [`--rrdp.retry.count`](#--rrdpretrycount)
+	34. [`--rrdp.retry.interval`](#--rrdpretryinterval)
+	35. [`--rsync.enabled`](#--rsyncenabled)
+	36. [`--rsync.priority`](#--rsyncpriority)
+	37. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	36. [`rsync.program`](#rsyncprogram)
-	37. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	38. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	39. [`incidences`](#incidences)
+	38. [`--rsync.retry.count`](#--rsyncretrycount)
+	39. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	40. [`rsync.program`](#rsyncprogram)
+	41. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	42. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	43. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -81,9 +85,13 @@ command: fort
         [--log.file-name-format=global-url|local-path|file-name]
         [--rrdp.enabled=true|false]
         [--rrdp.priority=<unsigned integer>]
+        [--rrdp.retry.count=<unsigned integer>]
+        [--rrdp.retry.interval=<unsigned integer>]
         [--rsync.enabled=true|false]
         [--rsync.priority=<unsigned integer>]
         [--rsync.strategy=strict|root|root-except-ta]
+        [--rsync.retry.count=<unsigned integer>]
+        [--rsync.retry.interval=<unsigned integer>]
         [--http.user-agent=<string>]
         [--http.connect-timeout=<unsigned integer>]
         [--http.transfer-timeout=<unsigned integer>]
@@ -587,13 +595,21 @@ The configuration options are mostly the same as the ones from the `argv` interf
 
 	"rrdp": {
 		"<a href="#--rrdpenabled">enabled</a>": true,
-		"<a href="#--rrdppriority">priority</a>": 50
+		"<a href="#--rrdppriority">priority</a>": 50,
+		"retry": {
+			"<a href="#--rrdpretrycount">count</a>": 1,
+			"<a href="#--rrdpretryinterval">interval</a>": 3
+		}
 	},
 
 	"rsync": {
 		"<a href="#--rsyncenabled">enabled</a>": true,
 		"<a href="#--rsyncpriority">priority</a>": 50,
 		"<a href="#--rsyncstrategy">strategy</a>": "root",
+		"retry": {
+			"<a href="#--rsyncretrycount">count</a>": 1,
+			"<a href="#--rsyncretryinterval">interval</a>": 3
+		},
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
 			"--recursive",
@@ -695,6 +711,26 @@ Whenever a certificate has both RSYNC and RRDP repositories, the following crite
 - [`--rsync.priority`](#--rsyncpriority) **greater than** [`--rrdp.priority`](#--rrdppriority): use RSYNC repository URI first; if there's an error fetching data, fallback to use RRDP repository data.
 - [`--rsync.priority`](#--rsyncpriority) **less than** [`--rrdp.priority`](#--rrdppriority): use RRDP repository URI first; if there's an error fetching data, fallback to use RSYNC repository data.
 
+### `--rrdp.retry.count`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 1
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Maximum number of retries whenever there's an error fetching RRDP files.
+
+A value of **0** means **no retries**.
+
+### `--rrdp.retry.interval`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 3
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Period of time (in seconds) to wait between each retry to fetch an RRDP file.
+
 ### `--rsync.enabled`
 
 - **Type:** Boolean (`true`, `false`)
@@ -766,6 +802,26 @@ Assuming that the repository is specifically structured to be found within as fe
 Synchronizes the root certificate (the one pointed by the TAL) in `strict` mode, and once it's validated, synchronizes the rest of the repository in `root` mode.
 
 Useful if you want `root`, but the root certificate is separated from the rest of the repository. Also useful if you don't want the validator to download the entire repository without first confirming the integrity and legitimacy of the root certificate.
+
+### `--rsync.retry.count`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 1
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Maximum number of retries whenever there's an error executing an RSYNC.
+
+A value of **0** means **no retries**.
+
+### `--rsync.retry.interval`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 3
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Period of time (in seconds) to wait between each retry to execute an RSYNC.
 
 ### rsync.program
 

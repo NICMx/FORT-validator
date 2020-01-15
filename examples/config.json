@@ -31,12 +31,20 @@
   },
   "rrdp": {
     "enabled": true,
-    "priority": 50
+    "priority": 50,
+    "retry": {
+      "count": 1,
+      "interval": 3
+    }
   },
   "rsync": {
     "enabled": true,
     "priority": 50,
     "strategy": "root",
+    "retry": {
+      "count": 1,
+      "interval": 3
+    },
     "program": "rsync",
     "arguments-recursive": [
       "--recursive",

@@ -1,4 +1,4 @@
-.TH fort 8 "2019-12-18" "v1.2.0" "FORT validator"
+.TH fort 8 "2020-01-14" "v1.2.0" "FORT validator"
 
 .SH NAME
 fort \- RPKI certificate path validator and RTR server
@@ -588,6 +588,25 @@ By default, the value is \fI50\fR.
 .RE
 .P
 
+.B \-\-rrdp.retry.count=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum number of retries whenever there's an error fetching RRDP files.
+.P
+A value of \fI0\fR means no retries.
+.P
+By default, the value is \fI1\fR.
+.RE
+.P
+
+.B \-\-rrdp.retry.interval=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Period (in seconds) to wait between retries after an error ocurred fetching
+RRDP files.
+.P
+By default, the value is \fI3\fR.
+.RE
+.P
+
 .B \-\-rsync.enabled=\fItrue\fR|\fIfalse\fR
 .RS 4
 Enables RSYNC requests.
@@ -697,6 +716,24 @@ of the repository. Also useful if you don't want the validator to download the
 entire repository without first confirming the integrity and legitimacy of the
 root certificate.
 .RE
+.RE
+.P
+
+.B \-\-rsync.retry.count=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum number of retries whenever there's an error executing RSYNC.
+.P
+A value of \fI0\fR means no retries.
+.P
+By default, the value is \fI1\fR.
+.RE
+.P
+
+.B \-\-rsync.retry.interval=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Period (in seconds) to wait between retries after an RSYNC error ocurred.
+.P
+By default, the value is \fI3\fR.
 .RE
 .P
 
