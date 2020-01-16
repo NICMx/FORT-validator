@@ -404,7 +404,8 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 			pr_err("Killed.");
 			break;
 		default:
-			pr_err("The RSYNC was terminated by a signal I don't have a handler for. Dunno; guess I'll just die.");
+			pr_err("The RSYNC was terminated by a signal [%d] I don't have a handler for. Dunno; guess I'll just die.",
+			    WTERMSIG(child_status));
 			break;
 		}
 		return -EINTR; /* Meh? */
