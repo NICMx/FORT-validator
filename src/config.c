@@ -733,8 +733,8 @@ set_default_values(void)
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
 	rpki_config.rsync.strategy = RSYNC_ROOT;
-	rpki_config.rsync.retry.count = 1;
-	rpki_config.rsync.retry.interval = 3;
+	rpki_config.rsync.retry.count = 2;
+	rpki_config.rsync.retry.interval = 5;
 	rpki_config.rsync.program = strdup("rsync");
 	if (rpki_config.rsync.program == NULL) {
 		error = pr_enomem();
@@ -753,8 +753,8 @@ set_default_values(void)
 
 	rpki_config.rrdp.enabled = true;
 	rpki_config.rrdp.priority = 50;
-	rpki_config.rrdp.retry.count = 1;
-	rpki_config.rrdp.retry.interval = 3;
+	rpki_config.rrdp.retry.count = 2;
+	rpki_config.rrdp.retry.interval = 5;
 
 	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	if (rpki_config.http.user_agent == NULL) {

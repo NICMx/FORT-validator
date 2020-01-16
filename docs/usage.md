@@ -597,8 +597,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--rrdpenabled">enabled</a>": true,
 		"<a href="#--rrdppriority">priority</a>": 50,
 		"retry": {
-			"<a href="#--rrdpretrycount">count</a>": 1,
-			"<a href="#--rrdpretryinterval">interval</a>": 3
+			"<a href="#--rrdpretrycount">count</a>": 2,
+			"<a href="#--rrdpretryinterval">interval</a>": 5
 		}
 	},
 
@@ -607,8 +607,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--rsyncpriority">priority</a>": 50,
 		"<a href="#--rsyncstrategy">strategy</a>": "root",
 		"retry": {
-			"<a href="#--rsyncretrycount">count</a>": 1,
-			"<a href="#--rsyncretryinterval">interval</a>": 3
+			"<a href="#--rsyncretrycount">count</a>": 2,
+			"<a href="#--rsyncretryinterval">interval</a>": 5
 		},
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
@@ -715,18 +715,20 @@ Whenever a certificate has both RSYNC and RRDP repositories, the following crite
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 1
+- **Default:** 2
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 Maximum number of retries whenever there's an error fetching RRDP files.
 
 A value of **0** means **no retries**.
 
+Whenever is necessary to fetch an RRDP file, the validator will try the download at least once. If there was an error fetching the file, the validator will retry at most `--rrdp.retry.count` times to fetch the file, waiting [`--rrdp.retry.interval`](#--rrdpretryinterval) seconds between each retry.
+
 ### `--rrdp.retry.interval`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 3
+- **Default:** 5
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 Period of time (in seconds) to wait between each retry to fetch an RRDP file.
@@ -807,18 +809,20 @@ Useful if you want `root`, but the root certificate is separated from the rest o
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 1
+- **Default:** 2
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 Maximum number of retries whenever there's an error executing an RSYNC.
 
 A value of **0** means **no retries**.
 
+Whenever is necessary to execute an RSYNC, the validator will try at least one time the execution. If there was an error executing the RSYNC, the validator will retry it at most `--rrdp.retry.count` times, waiting [`--rsync.retry.interval`](#--rsyncretryinterval) seconds between each retry.
+
 ### `--rsync.retry.interval`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 3
+- **Default:** 5
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 Period of time (in seconds) to wait between each retry to execute an RSYNC.

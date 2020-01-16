@@ -373,7 +373,8 @@ revert_base:
 int
 vrps_update(bool *changed)
 {
-	time_t start, finish, exec_time;
+	time_t start, finish;
+	long int exec_time;
 	serial_t serial;
 	int error;
 

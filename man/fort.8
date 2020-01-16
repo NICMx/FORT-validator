@@ -594,7 +594,12 @@ Maximum number of retries whenever there's an error fetching RRDP files.
 .P
 A value of \fI0\fR means no retries.
 .P
-By default, the value is \fI1\fR.
+Whenever is necessary to fetch an RRDP file, the validator will try the
+download at least once. If there was an error fetching the file, the validator
+will retry at most \fI--rrdp.retry.count\fR times to fetch the file, waiting
+\fI--rrdp.retry.interval\fR seconds between each retry.
+.P
+By default, the value is \fI2\fR.
 .RE
 .P
 
@@ -603,7 +608,7 @@ By default, the value is \fI1\fR.
 Period (in seconds) to wait between retries after an error ocurred fetching
 RRDP files.
 .P
-By default, the value is \fI3\fR.
+By default, the value is \fI5\fR.
 .RE
 .P
 
@@ -725,7 +730,12 @@ Maximum number of retries whenever there's an error executing RSYNC.
 .P
 A value of \fI0\fR means no retries.
 .P
-By default, the value is \fI1\fR.
+Whenever is necessary to execute an RSYNC, the validator will try the execution
+at least once. If there was an error executing the RSYNC, the validator will
+retry it at most \fI--rrdp.retry.count\fR times, waiting
+\fI--rsync.retry.interval\fR seconds between each retry.
+.P
+By default, the value is \fI2\fR.
 .RE
 .P
 
@@ -733,7 +743,7 @@ By default, the value is \fI1\fR.
 .RS 4
 Period (in seconds) to wait between retries after an RSYNC error ocurred.
 .P
-By default, the value is \fI3\fR.
+By default, the value is \fI5\fR.
 .RE
 .P
 
@@ -860,12 +870,20 @@ to a specific value:
   },
   "rrdp": {
     "enabled": true,
-    "priority": 50
+    "priority": 50,
+    "retry": {
+      "count": 2,
+      "interval": 5
+    }
   },
   "rsync": {
     "enabled": true,
     "priority": 50,
     "strategy": "root",
+    "retry": {
+      "count": 2,
+      "interval": 5
+    },
     "program": "rsync",
     "arguments-recursive": [
       "--recursive",
