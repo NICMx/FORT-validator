@@ -185,6 +185,39 @@ process_file_or_dir(char const *location, char const *file_ext,
 	return process_dir_files(location, file_ext, cb, arg);
 }
 
+
+bool
+valid_file_or_dir(char const *location)
+{
+	FILE *file;
+	struct stat attr;
+
+	file = fopen(location, "rb");
+	if (file == NULL) {
+		pr_errno(errno, "Could not open location '%s'",
+		    location);
+		return false;
+	}
+
+	if (fstat(fileno(file), &attr) == -1) {
+		pr_errno(errno, "fstat(%s) failed", location);
+		goto fail;
+	}
+
+	if (!S_ISREG(attr.st_mode) && !S_ISDIR(attr.st_mode)) {
+		pr_err("'%s' does not seem to be a file or directory",
+		    location);
+		goto fail;
+	}
+
+	return true;
+
+fail:
+	if (fclose(file) == -1)
+		pr_errno(errno, "fclose() failed");
+	return false;
+}
+
 char const *
 addr2str4(struct in_addr const *addr, char *buffer)
 {

@@ -14,9 +14,8 @@
 
 /*
  * Load the SLURM file(s) from the configured path, if the path is valid but no
- * data is loaded (specific error for a SLURM folder) return -ENOENT error.
- *
- * Expect an EEXIST error from slurm_parse() if there's a syntax error.
+ * data is loaded (specific error for a SLURM folder) no error is returned and
+ * slurm db from @params is set as NULL.
  */
 static int
 slurm_load(struct slurm_parser_params *params)
@@ -32,20 +31,19 @@ slurm_load(struct slurm_parser_params *params)
 
 	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
 	    slurm_parse, params);
-	if (error)
-		goto err;
+	if (error) {
+		db_slurm_destroy(db);
+		params->db_slurm = NULL;
+		return error;
+	}
 
-	/* A unmodified context means that no SLURM was loaded */
+	/* A unmodified context means that no SLURM was loaded (empty dir) */
 	if(params->cur_ctx == 0) {
-		error = -ENOENT;
-		goto err;
+		db_slurm_destroy(db);
+		params->db_slurm = NULL;
 	}
 
 	return 0;
-err:
-	db_slurm_destroy(db);
-	params->db_slurm = NULL;
-	return error;
 }
 
 static int
@@ -147,38 +145,31 @@ slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
 	if (config_get_slurm() == NULL)
 		return 0;
 
+	pr_info("Applying configured SLURM");
 	error = slurm_create_parser_params(&params);
 	if (error)
 		return error;
 
 	error = slurm_load(params);
-	switch (error) {
-	case 0:
-		/* Use as last valid slurm */
+	if (!error) {
+		/* Use new SLURM as last valid slurm */
 		if (*last_slurm != NULL)
 			db_slurm_destroy(*last_slurm);
 		*last_slurm = params->db_slurm;
-		db_slurm_update_time(*last_slurm);
-		break;
-	case -EEXIST:
-		/* Syntax error, use last valid slurm, log as info */
+		if (*last_slurm != NULL)
+			db_slurm_update_time(*last_slurm);
+	} else {
+		/* Any error: use last valid SLURM */
+		pr_warn("Error loading SLURM, the validation will still continue.");
 		if (*last_slurm != NULL) {
-			pr_warn("A previous valid version of the SLURM exists and will be applied");
+			pr_warn("A previous valid version of the SLURM exists and will be applied.");
 			params->db_slurm = *last_slurm;
+			/* Log applied SLURM as info */
 			db_slurm_log(params->db_slurm);
 		}
-		break;
-	default:
-		/* Some other error, discard SLURM */
-		if (*last_slurm != NULL) {
-			pr_info("Discarding previous valid SLURM");
-			db_slurm_destroy(*last_slurm);
-			*last_slurm = NULL;
-		}
-		goto success;
 	}
 
-	/* If there's no SLURM, stop */
+	/* If there's no new SLURM loaded, stop */
 	if (params->db_slurm == NULL)
 		goto success;
 

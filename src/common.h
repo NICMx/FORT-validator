@@ -3,6 +3,7 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdbool.h>
 #include <netinet/in.h>
 
 /* "I think that this is not supposed to be implemented." */
@@ -45,6 +46,7 @@ void close_thread(pthread_t thread, char const *);
 
 typedef int (*process_file_cb)(char const *, void *);
 int process_file_or_dir(char const *, char const *, process_file_cb, void *);
+bool valid_file_or_dir(char const *);
 
 char const *addr2str4(struct in_addr const *, char *);
 char const *addr2str6(struct in6_addr const *, char *);

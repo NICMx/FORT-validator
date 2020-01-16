@@ -798,6 +798,12 @@ valid_output_file(char const *path)
 static int
 validate_config(void)
 {
+	if (rpki_config.tal == NULL)
+		return pr_err("The TAL file/directory (--tal) is mandatory.");
+
+	if (!valid_file_or_dir(rpki_config.tal))
+		return pr_err("Invalid TAL file/directory.");
+
 	if (rpki_config.server.interval.expire <
 	    rpki_config.server.interval.refresh ||
 	    rpki_config.server.interval.expire <
@@ -812,9 +818,10 @@ validate_config(void)
 	    !valid_output_file(rpki_config.output.bgpsec))
 		return pr_err("Invalid output.bgpsec file.");
 
-	return (rpki_config.tal != NULL)
-	    ? 0
-	    : pr_err("The TAL file/directory (--tal) is mandatory.");
+	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm))
+		return pr_err("Invalid slurm location.");
+
+	return 0;
 }
 
 static void

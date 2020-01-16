@@ -43,7 +43,7 @@ unsigned int cur_ctx;
 static int handle_json(json_t *, struct db_slurm *, unsigned int *);
 
 /*
- * Try to parse the SLURM file(s), any syntax error will return an EEXIST error
+ * Try to parse the SLURM file(s)
  */
 int
 slurm_parse(char const *location, void *arg)
@@ -58,27 +58,19 @@ slurm_parse(char const *location, void *arg)
 
 	json_root = json_load_file(location, JSON_REJECT_DUPLICATES,
 	    &json_error);
-	if (json_root == NULL) {
-		pr_err("SLURM JSON error on line %d, column %d: %s",
+	if (json_root == NULL)
+		/* File wasn't read or has a content error */
+		return pr_err("SLURM JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
-		/* File was read, but has a content error */
-		if (json_error.position > 0)
-			goto syntax_err;
-		return -ENOENT;
-	}
 
 	ctx = params->cur_ctx;
 	error = handle_json(json_root, params->db_slurm, &ctx);
 	json_decref(json_root);
 	if (error)
-		goto syntax_err;
+		return error; /* File exists, but has a syntax error */
 
 	params->cur_ctx = ctx;
 	return 0;
-
-syntax_err:
-	/* File exists, but has a syntax/content error */
-	return -EEXIST;
 }
 
 static int
@@ -610,7 +602,9 @@ load_version(json_t *root)
 	version = -1;
 	error = json_get_int(root, SLURM_VERSION, &version);
 	if (error)
-		return error;
+		return error == -ENOENT ?
+		    pr_err("SLURM member '"SLURM_VERSION"' is required.") :
+		    error;
 
 	/* Validate data */
 	if (version != 1)
