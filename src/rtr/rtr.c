@@ -86,12 +86,12 @@ create_server_socket(int *result)
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
 	unsigned long port;
-	int reusaddr;
+	int reuse;
 	int fd; /* "file descriptor" */
 	int error;
 
 	*result = 0; /* Shuts up gcc */
-	reusaddr = 1;
+	reuse = 1;
 
 	error = init_addrinfo(&addrs);
 	if (error)
@@ -110,9 +110,16 @@ create_server_socket(int *result)
 		}
 
 		/* enable SO_REUSEADDR */
-		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reusaddr,
+		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
 		    sizeof(int)) < 0) {
 			pr_errno(errno, "setsockopt(SO_REUSEADDR) failed");
+			continue;
+		}
+
+		/* enable SO_REUSEPORT */
+		if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse,
+		    sizeof(int)) < 0) {
+			pr_errno(errno, "setsockopt(SO_REUSEPORT) failed");
 			continue;
 		}
 
