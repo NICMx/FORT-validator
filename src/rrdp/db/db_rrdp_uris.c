@@ -16,7 +16,7 @@ struct uris_table {
 	/* Last local update of the URI (after a successful processing) */
 	long last_update;
 	/* The URI has been requested (HTTPS) at this cycle? */
-	bool requested;
+	rrdp_req_status_t request_status;
 	/* MFT URIs loaded from the @uri */
 	struct visited_uris *visited_uris;
 	UT_hash_handle hh;
@@ -28,7 +28,8 @@ struct db_rrdp_uri {
 
 static int
 uris_table_create(char const *uri, char const *session_id,
-    unsigned long serial, struct uris_table **result)
+    unsigned long serial, rrdp_req_status_t req_status,
+    struct uris_table **result)
 {
 	struct uris_table *tmp;
 	int error;
@@ -53,7 +54,7 @@ uris_table_create(char const *uri, char const *session_id,
 
 	tmp->data.serial = serial;
 	tmp->last_update = 0;
-	tmp->requested = true;
+	tmp->request_status = req_status;
 	tmp->visited_uris = NULL;
 
 	*result = tmp;
@@ -82,10 +83,10 @@ find_rrdp_uri(struct db_rrdp_uri *uris, const char *search)
 	return found;
 }
 
-#define RET_NOT_FOUND_URI(uris, search, found, retval)			\
+#define RET_NOT_FOUND_URI(uris, search, found)				\
 	found = find_rrdp_uri(uris, search);				\
 	if (found == NULL)						\
-		return retval;
+		return -ENOENT;
 
 static void
 add_rrdp_uri(struct db_rrdp_uri *uris, struct uris_table *new_uri)
@@ -175,7 +176,8 @@ db_rrdp_uris_cmp(char const *uri, char const *session_id, unsigned long serial,
 
 int
 db_rrdp_uris_update(char const *uri, char const *session_id,
-    unsigned long serial, struct visited_uris *visited_uris)
+    unsigned long serial, rrdp_req_status_t req_status,
+    struct visited_uris *visited_uris)
 {
 	struct db_rrdp_uri *uris;
 	struct uris_table *db_uri;
@@ -186,7 +188,7 @@ db_rrdp_uris_update(char const *uri, char const *session_id,
 		return error;
 
 	db_uri = NULL;
-	error = uris_table_create(uri, session_id, serial, &db_uri);
+	error = uris_table_create(uri, session_id, serial, req_status, &db_uri);
 	if (error)
 		return error;
 
@@ -209,7 +211,7 @@ db_rrdp_uris_get_serial(char const *uri, unsigned long *serial)
 	if (error)
 		return error;
 
-	RET_NOT_FOUND_URI(uris, uri, found, -ENOENT)
+	RET_NOT_FOUND_URI(uris, uri, found)
 	*serial = found->data.serial;
 	return 0;
 }
@@ -225,7 +227,7 @@ db_rrdp_uris_get_last_update(char const *uri, long *date)
 	if (error)
 		return error;
 
-	RET_NOT_FOUND_URI(uris, uri, found, -ENOENT)
+	RET_NOT_FOUND_URI(uris, uri, found)
 	*date = found->last_update;
 	return 0;
 }
@@ -255,12 +257,12 @@ db_rrdp_uris_set_last_update(char const *uri)
 	if (error)
 		return error;
 
-	RET_NOT_FOUND_URI(uris, uri, found, -ENOENT)
+	RET_NOT_FOUND_URI(uris, uri, found)
 	return get_current_time(&found->last_update);
 }
 
 int
-db_rrdp_uris_get_requested(char const *uri, bool *result)
+db_rrdp_uris_get_request_status(char const *uri, rrdp_req_status_t *result)
 {
 	struct db_rrdp_uri *uris;
 	struct uris_table *found;
@@ -270,13 +272,13 @@ db_rrdp_uris_get_requested(char const *uri, bool *result)
 	if (error)
 		return error;
 
-	RET_NOT_FOUND_URI(uris, uri, found, -ENOENT)
-	*result = found->requested;
+	RET_NOT_FOUND_URI(uris, uri, found)
+	*result = found->request_status;
 	return 0;
 }
 
 int
-db_rrdp_uris_set_requested(char const *uri, bool value)
+db_rrdp_uris_set_request_status(char const *uri, rrdp_req_status_t value)
 {
 	struct db_rrdp_uri *uris;
 	struct uris_table *found;
@@ -286,13 +288,13 @@ db_rrdp_uris_set_requested(char const *uri, bool value)
 	if (error)
 		return error;
 
-	RET_NOT_FOUND_URI(uris, uri, found, -ENOENT)
-	found->requested = value;
+	RET_NOT_FOUND_URI(uris, uri, found)
+	found->request_status = value;
 	return 0;
 }
 
 int
-db_rrdp_uris_set_all_nonrequested(void)
+db_rrdp_uris_set_all_unvisited(void)
 {
 	struct db_rrdp_uri *uris;
 	struct uris_table *uri_node, *uri_tmp;
@@ -303,7 +305,7 @@ db_rrdp_uris_set_all_nonrequested(void)
 		return error;
 
 	HASH_ITER(hh, uris->table, uri_node, uri_tmp)
-		uri_node->requested = false;
+		uri_node->request_status = RRDP_URI_REQ_UNVISITED;
 
 	return 0;
 }
@@ -323,7 +325,7 @@ db_rrdp_uris_get_visited_uris(char const *uri, struct visited_uris **result)
 	if (error)
 		return error;
 
-	RET_NOT_FOUND_URI(uris, uri, found, -ENOENT)
+	RET_NOT_FOUND_URI(uris, uri, found)
 	*result = found->visited_uris;
 	return 0;
 }

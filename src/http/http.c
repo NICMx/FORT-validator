@@ -146,7 +146,7 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 
 	error = file_write(uri_get_local(uri), &out, &stat);
 	if (error)
-		return ENSURE_NEGATIVE(error);
+		goto delete_dir;
 
 	error = http_easy_init(&handler);
 	if (error)
@@ -164,10 +164,13 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	http_easy_cleanup(&handler);
 	file_close(out);
 
-	/* Error 0 it's ok */
-	return ENSURE_NEGATIVE(error);
+	if (error)
+		goto delete_dir;
+
+	return 0;
 close_file:
 	file_close(out);
+delete_dir:
 	delete_dir_recursive_bottom_up(uri_get_local(uri));
 	return ENSURE_NEGATIVE(error);
 }

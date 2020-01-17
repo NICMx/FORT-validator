@@ -510,7 +510,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 * Set all RRDPs URIs to non-requested, this way we will force the
 	 * request on every cycle (to check if there are updates).
 	 */
-	error = db_rrdp_uris_set_all_nonrequested();
+	error = db_rrdp_uris_set_all_unvisited();
 	if (error)
 		goto end;
 

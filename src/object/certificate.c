@@ -1930,14 +1930,20 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	if (!error)
 		return 0;
 
-	if (primary_rrdp)
-		pr_warn("Couldn't fetch data from RRDP repository '%s', trying to fetch data now from '%s'.",
-		    uri_get_global(sia_uris->rpkiNotify.uri),
-		    uri_get_global(sia_uris->caRepository.uri));
-	else
+	if (primary_rrdp) {
+		if (error != -EPERM)
+			pr_warn("Couldn't fetch data from RRDP repository '%s', trying to fetch data now from '%s'.",
+			    uri_get_global(sia_uris->rpkiNotify.uri),
+			    uri_get_global(sia_uris->caRepository.uri));
+		else
+			pr_debug("RRDP repository '%s' download/processing returned error previously, now I will try to fetch data from '%s'.",
+			    uri_get_global(sia_uris->rpkiNotify.uri),
+			    uri_get_global(sia_uris->caRepository.uri));
+	} else {
 		pr_warn("Couldn't fetch data from repository '%s', trying to fetch data now from RRDP '%s'.",
 		    uri_get_global(sia_uris->caRepository.uri),
 		    uri_get_global(sia_uris->rpkiNotify.uri));
+	}
 
 	return cb_secondary(sia_uris);
 }

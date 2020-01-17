@@ -1120,9 +1120,10 @@ rrdp_parse_notification(struct rpki_uri *uri,
 	 * this is probably the first time is visited (first run), so it will
 	 * be marked as visited when the URI is stored at DB.
 	 */
-	vis_err = db_rrdp_uris_set_requested(uri_get_global(uri), true);
+	vis_err = db_rrdp_uris_set_request_status(uri_get_global(uri),
+	    RRDP_URI_REQ_VISITED);
 	if (vis_err && vis_err != -ENOENT)
-		return pr_err("Coudln't mark '%s' as visited",
+		return pr_err("Couldn't mark '%s' as visited",
 		    uri_get_global(uri));
 
 	/* No updates yet */
