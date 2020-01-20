@@ -34,27 +34,28 @@ command: fort
 	23. [`--http.user-agent`](#--httpuser-agent)
 	24. [`--http.connect-timeout`](#--httpconnect-timeout)
 	25. [`--http.transfer-timeout`](#--httptransfer-timeout)
-	26. [`--http.ca-path`](#--httpca-path)
-	27. [`--output.roa`](#--outputroa)
-	28. [`--output.bgpsec`](#--outputbgpsec)
-	29. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	30. [`--configuration-file`](#--configuration-file)
-	31. [`--rrdp.enabled`](#--rrdpenabled)
-	32. [`--rrdp.priority`](#--rrdppriority)
-	33. [`--rrdp.retry.count`](#--rrdpretrycount)
-	34. [`--rrdp.retry.interval`](#--rrdpretryinterval)
-	35. [`--rsync.enabled`](#--rsyncenabled)
-	36. [`--rsync.priority`](#--rsyncpriority)
-	37. [`--rsync.strategy`](#--rsyncstrategy)
+	26. [`--http.idle-timeout`](#--httpidle-timeout)
+	27. [`--http.ca-path`](#--httpca-path)
+	28. [`--output.roa`](#--outputroa)
+	29. [`--output.bgpsec`](#--outputbgpsec)
+	20. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	31. [`--configuration-file`](#--configuration-file)
+	32. [`--rrdp.enabled`](#--rrdpenabled)
+	33. [`--rrdp.priority`](#--rrdppriority)
+	34. [`--rrdp.retry.count`](#--rrdpretrycount)
+	35. [`--rrdp.retry.interval`](#--rrdpretryinterval)
+	36. [`--rsync.enabled`](#--rsyncenabled)
+	37. [`--rsync.priority`](#--rsyncpriority)
+	38. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	38. [`--rsync.retry.count`](#--rsyncretrycount)
-	39. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	40. [`rsync.program`](#rsyncprogram)
-	41. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	42. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	43. [`incidences`](#incidences)
+	39. [`--rsync.retry.count`](#--rsyncretrycount)
+	40. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	41. [`rsync.program`](#rsyncprogram)
+	42. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	43. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	44. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -95,6 +96,7 @@ command: fort
         [--http.user-agent=<string>]
         [--http.connect-timeout=<unsigned integer>]
         [--http.transfer-timeout=<unsigned integer>]
+        [--http.idle-timeout=<unsigned integer>]
         [--http.ca-path=<directory>]
         [--output.roa=<file>]
         [--output.bgpsec=<file>]
@@ -475,16 +477,31 @@ The value specified (either by the argument or the default value) is utilized in
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 30
+- **Default:** 0
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
 
 Maximum time in seconds (once the connection is established) that the request can last.
 
-Once the connection is established with the server, the request will last a maximum of `http.transfer-timeout` seconds. A value of 0 means unlimited time (use with caution).
+Once the connection is established with the server, the request will last a maximum of `http.transfer-timeout` seconds. A value of 0 means unlimited time.
 
 The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_TIMEOUT](https://curl.haxx.se/libcurl/c/CURLOPT_TIMEOUT.html).
+
+### `--http.idle-timeout`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 15
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+_**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
+
+Maximum time in seconds (once the connection is established) that a request can be idle before dropping it.
+
+Once the connection is established with the server, the request can last a maximum of `http.idle-timeout` seconds without receiving data before dropping the connection. A value of 0 disables idle time verification (use with caution).
+
+The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_LOW_SPEED_TIME](https://curl.haxx.se/libcurl/c/CURLOPT_LOW_SPEED_TIME.html).
 
 ### `--http.ca-path`
 
@@ -589,7 +606,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"http": {
 		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
-		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 30,
+		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
+		"<a href="#--httpidle-timeout">idle-timeout</a>": 15,
 		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
 	},
 

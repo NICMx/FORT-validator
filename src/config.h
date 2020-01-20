@@ -36,6 +36,7 @@ enum filename_format config_get_filename_format(void);
 char const *config_get_http_user_agent(void);
 unsigned int config_get_http_connect_timeout(void);
 unsigned int config_get_http_transfer_timeout(void);
+unsigned int config_get_http_idle_timeout(void);
 char const *config_get_http_ca_path(void);
 uint8_t config_get_log_level(void);
 enum log_output config_get_log_output(void);

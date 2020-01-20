@@ -124,6 +124,8 @@ struct rpki_config {
 		unsigned int connect_timeout;
 		/* Maximum allowed time that a request can take */
 		unsigned int transfer_timeout;
+		/* Maximum idle time during a request */
+		unsigned int idle_timeout;
 		/* Directory where CA certs to verify peers are found */
 		char *ca_path;
 	} http;
@@ -474,12 +476,21 @@ static const struct option_field options[] = {
 		.name = "http.transfer-timeout",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.transfer_timeout),
-		.doc = "Maximum request time (once the connection is established) before dropping the connection",
+		.doc = "Maximum transfer time (once the connection is established) before dropping the connection",
 		.min = 0,
 		.max = UINT_MAX,
 	},
 	{
 		.id = 9003,
+		.name = "http.idle-timeout",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, http.idle_timeout),
+		.doc = "Maximum idle time (once the connection is established) during a request before dropping the connection",
+		.min = 0,
+		.max = UINT_MAX,
+	},
+	{
+		.id = 9004,
 		.name = "http.ca-path",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, http.ca_path),
@@ -762,7 +773,8 @@ set_default_values(void)
 		goto revert_flat_array;
 	}
 	rpki_config.http.connect_timeout = 30;
-	rpki_config.http.transfer_timeout = 30;
+	rpki_config.http.transfer_timeout = 0;
+	rpki_config.http.idle_timeout = 15;
 	rpki_config.http.ca_path = NULL; /* Use system default */
 
 	rpki_config.log.color = false;
@@ -1140,6 +1152,12 @@ unsigned int
 config_get_http_transfer_timeout(void)
 {
 	return rpki_config.http.transfer_timeout;
+}
+
+unsigned int
+config_get_http_idle_timeout(void)
+{
+	return rpki_config.http.idle_timeout;
 }
 
 char const *

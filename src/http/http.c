@@ -57,6 +57,15 @@ http_easy_init(struct http_handler *handler)
 	    config_get_http_connect_timeout());
 	curl_easy_setopt(tmp, CURLOPT_TIMEOUT,
 	    config_get_http_transfer_timeout());
+	if (config_get_http_idle_timeout() > 0) {
+		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_TIME,
+		    config_get_http_idle_timeout());
+		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_LIMIT, 1);
+	} else {
+		/* Disabled */
+		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_TIME, 0);
+		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_LIMIT, 0);
+	}
 	curl_easy_setopt(tmp, CURLOPT_NOSIGNAL, 1);
 
 	/* Always expect HTTPS usage */

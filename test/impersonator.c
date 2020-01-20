@@ -194,8 +194,15 @@ config_get_http_connect_timeout(void)
 unsigned int
 config_get_http_transfer_timeout(void)
 {
-	return 30;
+	return 0;
 }
+
+unsigned int
+config_get_http_idle_timeout(void)
+{
+	return 15;
+}
+
 char const *
 config_get_http_ca_path(void)
 {

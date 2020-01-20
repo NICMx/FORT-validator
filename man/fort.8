@@ -516,12 +516,29 @@ can last.
 .P
 Once the connection is established with the server, the request will last a
 maximum of \fBhttp.transfer-timeout\fR seconds. A value of \fI0\fR means
-unlimited time (use with caution).
+unlimited time (default value).
 .P
 The value specified (either by the argument or the default value) is utilized
 in libcurl’s option \fICURLOPT_TIMEOUT\fR.
 .P
-By default, it has a value of \fI30\fR. The minimum allowed value is \fI0\fR.
+By default, it has a value of \fI0\fR.
+.RE
+.P
+
+.B \-\-http.idle\-timeout=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum time in seconds (once the connection is established) that the request
+can be idle.
+.P
+Once the connection is established with the server, and if the request stops
+receiving data for at least \fBhttp.idle-timeout\fR seconds, the connection
+will be dropped. A value of \fI0\fR disables idle time verification (use with
+caution).
+.P
+The value specified (either by the argument or the default value) is utilized
+in libcurl’s option \fICURLOPT_LOW_SPEED_TIME\fR.
+.P
+By default, it has a value of \fI15\fR.
 .RE
 .P
 
@@ -865,7 +882,8 @@ to a specific value:
   "http": {
     "user-agent": "fort/1.2.0",
     "connect-timeout": 30,
-    "transfer-timeout": 30,
+    "transfer-timeout": 0,
+    "idle-timeout": 15,
     "ca-path": "/usr/local/ssl/certs"
   },
   "rrdp": {
