@@ -492,10 +492,9 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		error = handle_https_uri(uri);
 
 	if (error) {
-		pr_warn("TAL '%s' could not be downloaded.",
-		    uri_get_printable(uri));
 		validation_destroy(state);
-		return ENSURE_NEGATIVE(error);
+		return pr_warn("TAL '%s' could not be downloaded.",
+		    uri_get_printable(uri));;
 	}
 
 	pr_debug("TAL URI '%s' {", uri_get_printable(uri));
