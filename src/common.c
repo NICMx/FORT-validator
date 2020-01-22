@@ -191,7 +191,9 @@ valid_file_or_dir(char const *location)
 {
 	FILE *file;
 	struct stat attr;
+	bool result;
 
+	result = false;
 	file = fopen(location, "rb");
 	if (file == NULL) {
 		pr_errno(errno, "Could not open location '%s'",
@@ -201,21 +203,20 @@ valid_file_or_dir(char const *location)
 
 	if (fstat(fileno(file), &attr) == -1) {
 		pr_errno(errno, "fstat(%s) failed", location);
-		goto fail;
+		goto end;
 	}
 
 	if (!S_ISREG(attr.st_mode) && !S_ISDIR(attr.st_mode)) {
 		pr_err("'%s' does not seem to be a file or directory",
 		    location);
-		goto fail;
+		goto end;
 	}
 
-	return true;
-
-fail:
+	result = true;
+end:
 	if (fclose(file) == -1)
 		pr_errno(errno, "fclose() failed");
-	return false;
+	return result;
 }
 
 char const *

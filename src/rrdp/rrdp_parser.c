@@ -143,11 +143,11 @@ download_file(struct rpki_uri *uri, long last_update)
 	} while (true);
 }
 
-/* Trim @from, setting the result at @result pointer */
+/* Left trim @from, setting the result at @result pointer */
 static int
-trim(char *from, char **result, size_t *result_size)
+ltrim(char *from, char **result, size_t *result_size)
 {
-	char *start, *end;
+	char *start;
 	size_t tmp_size;
 
 	start = from;
@@ -158,18 +158,6 @@ trim(char *from, char **result, size_t *result_size)
 	}
 	if (*start == '\0')
 		return pr_err("Invalid base64 encoded string (seems to be empty or full of spaces).");
-
-	end = start;
-	while (*end != '\0') {
-		if (!isspace(*end)) {
-			end++;
-			continue;
-		}
-		/* No middle spaces, newlines, etc. allowed */
-		*end = '\0';
-		tmp_size = end - start;
-		break;
-	}
 
 	*result = start;
 	*result_size = tmp_size;
@@ -194,7 +182,7 @@ base64_sanitize(char *content, char **out)
 	int error;
 
 	original_size = 0;
-	error = trim(content, &tmp, &original_size);
+	error = ltrim(content, &tmp, &original_size);
 	if (error)
 		return error;
 
