@@ -237,8 +237,11 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	}
 	error = validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global, global_len,
 	    size, 0);
-	if (error)
+	if (error) {
+		pr_warn("URI '%s' does not begin with '%s' nor '%s'.",
+		    global, PFX_RSYNC, PFX_HTTPS);
 		return ENOTSUPPORTED;
+	}
 
 	/* @size was already set */
 	(*type) = URI_HTTPS;
@@ -345,7 +348,11 @@ uri_create_https_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 	return uri_create(uri, URI_VALID_HTTPS, guri, guri_len);
 }
 
-/* A URI that can be rsync or https */
+/*
+ * A URI that can be rsync or https.
+ *
+ * Return ENOTSUPPORTED if not an rsync or https URI.
+ */
 int
 uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 {
@@ -416,7 +423,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, int flags)
 	 */
 	if (type != GEN_URI) {
 		pr_err("Unknown GENERAL_NAME type: %d", type);
-		return -ENOTSUPPORTED;
+		return ENOTSUPPORTED;
 	}
 
 	/*

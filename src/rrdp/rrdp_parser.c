@@ -565,7 +565,7 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw **withdraw)
 		goto release_tmp;
 
 	/* rfc8181#section-2.2, get the file from the uri */
-	error = uri_create_mixed_str(&uri, tmp->doc_data.uri,
+	error = uri_create_rsync_str(&uri, tmp->doc_data.uri,
 	    strlen(tmp->doc_data.uri));
 	if (error)
 		goto release_tmp;
@@ -595,7 +595,8 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 	size_t written;
 	int error;
 
-	error = uri_create_mixed_str(&uri, location, strlen(location));
+	/* rfc8181#section-2.2 must be an rsync URI */
+	error = uri_create_rsync_str(&uri, location, strlen(location));
 	if (error)
 		return error;
 
@@ -653,7 +654,8 @@ __delete_from_uri(char const *location, struct visited_uris *visited_uris)
 	struct rpki_uri *uri;
 	int error;
 
-	error = uri_create_mixed_str(&uri, location, strlen(location));
+	/* rfc8181#section-2.2 must be an rsync URI */
+	error = uri_create_rsync_str(&uri, location, strlen(location));
 	if (error)
 		return error;
 
