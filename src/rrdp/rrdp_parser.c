@@ -501,6 +501,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
     struct publish **publish)
 {
 	struct publish *tmp;
+	struct rpki_uri *uri;
 	char *base64_str;
 	int error;
 
@@ -529,10 +530,18 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 		goto release_base64;
 
 	/* rfc8181#section-2.2 but considering optional hash */
+	uri = NULL;
 	if (tmp->doc_data.hash_len > 0) {
-		if (!hash_validate("sha256",
-		    tmp->doc_data.hash, tmp->doc_data.hash_len,
-		    tmp->content, tmp->content_len)) {
+		/* Get the current file from the uri */
+		error = uri_create_rsync_str(&uri, tmp->doc_data.uri,
+		    strlen(tmp->doc_data.uri));
+		if (error)
+			goto release_base64;
+
+		error = hash_validate_file("sha256", uri, tmp->doc_data.hash,
+		    tmp->doc_data.hash_len);
+		uri_refput(uri);
+		if (error != 0) {
 			error = pr_err("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
 			    tmp->doc_data.uri);
 			goto release_base64;
