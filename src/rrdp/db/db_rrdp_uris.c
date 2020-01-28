@@ -330,25 +330,6 @@ db_rrdp_uris_get_visited_uris(char const *uri, struct visited_uris **result)
 	return 0;
 }
 
-/*
- * Check if the @uri exists at the @uris struct.
- *
- * Get at another level the @uris related to a thread, since this call may be
- * frequently done.
- */
-bool
-db_rrdp_uris_visited_exists(struct db_rrdp_uri *uris, char const *uri)
-{
-	struct uris_table *uri_node, *uri_tmp;
-
-	/* Search at each 'visited_uris' from all the table */
-	HASH_ITER(hh, uris->table, uri_node, uri_tmp)
-		if (visited_uris_exists(uri_node->visited_uris, uri))
-			return true;
-
-	return false;
-}
-
 int
 db_rrdp_uris_remove_all_local(struct db_rrdp_uri *uris)
 {

@@ -1895,10 +1895,12 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
  */
 static int
 use_access_method(struct sia_ca_uris *sia_uris,
-    access_method_exec rsync_cb, access_method_exec rrdp_cb)
+    access_method_exec rsync_cb, access_method_exec rrdp_cb,
+    bool *rsync_utilized)
 {
 	access_method_exec *cb_primary;
 	access_method_exec *cb_secondary;
+	rrdp_req_status_t rrdp_req_status;
 	bool primary_rrdp;
 	int error;
 
@@ -1907,12 +1909,36 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 * rfc6487#section-4.8.8.1). If rsync is disabled, the cb will take
 	 * care of that.
 	 */
+	(*rsync_utilized) = true;
 	if (sia_uris->rpkiNotify.uri == NULL || !config_get_rrdp_enabled())
 		return rsync_cb(sia_uris);
 
 	/* RSYNC disabled, and RRDP is present, use it */
-	if (!config_get_rsync_enabled())
+	if (!config_get_rsync_enabled()) {
+		(*rsync_utilized) = false;
 		return rrdp_cb(sia_uris);
+	}
+
+	/*
+	 * There isn't any restriction about the preferred access method of
+	 * children CAs being the same as the parent CA.
+	 *
+	 * Two possible scenarios arise:
+	 * 1) CA Parent didn't utilized (or didn't had) and RRDP update
+	 *    notification URI.
+	 * 2) CA Parent successfully utilized an RRDP update notification URI.
+	 *
+	 * Step (1) is simple, do the check of the preferred access method.
+	 * Step (2) must do something different.
+	 * - If RRDP URI was already successfully visited, don't care
+	 *   preference, don't execute access method.
+	 */
+	error = db_rrdp_uris_get_request_status(
+	    uri_get_global(sia_uris->rpkiNotify.uri), &rrdp_req_status);
+	if (error ==  0 && rrdp_req_status == RRDP_URI_REQ_VISITED) {
+		(*rsync_utilized) = false;
+		return 0;
+	}
 
 	/* Use CA's or configured priority? */
 	if (config_get_rsync_priority() == config_get_rrdp_priority())
@@ -1927,8 +1953,10 @@ use_access_method(struct sia_ca_uris *sia_uris,
 
 	/* Try with the preferred; in case of error, try with the next one */
 	error = cb_primary(sia_uris);
-	if (!error)
+	if (!error) {
+		(*rsync_utilized) = !primary_rrdp;
 		return 0;
+	}
 
 	if (primary_rrdp) {
 		if (error != -EPERM)
@@ -1945,6 +1973,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 		    uri_get_global(sia_uris->rpkiNotify.uri));
 	}
 
+	(*rsync_utilized) = primary_rrdp;
 	return cb_secondary(sia_uris);
 }
 
@@ -1965,7 +1994,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	enum rpki_policy policy;
 	enum cert_type type;
 	struct rpp *pp;
-	bool mft_retry, mft_exists;
+	bool mft_retry;
 	int error;
 
 	state = state_retrieve();
@@ -2059,50 +2088,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	}
 
 	/*
-	 * There isn't any restriction about the preferred access method of
-	 * children CAs being the same as the parent CA.
-	 *
-	 * Two possible scenarios arise:
-	 * 1) CA Parent didn't utilized (or didn't had) and RRDP update
-	 *    notification URI.
-	 * 2) CA Parent successfully utilized an RRDP update notification URI.
-	 *
-	 * Step (1) is simple, do the check of the preferred access method.
-	 * Step (2) must do something different.
-	 * - The manifest should exist at the snapshot file (aka, directory
-	 *   structure), so it should be processed from there on.
-	 * - Verify that the manifest file exists locally:
-	 *   + Exists: Read and process normally (no need to do rsync)
-	 *   + Doesn't exists: check for preferred access method, keep the flow
-	 *     from there on.
-	 */
-
-	/* Avoid to re-download the repo if the mft was fetched with RRDP */
-	mft_exists = false;
-	switch (type) {
-	case TA:
-		error = use_access_method(&sia_uris, exec_rsync_method,
-		    exec_rrdp_method);
-		if (error)
-			goto revert_uris;
-		break;
-	case CA:
-		if (!db_rrdp_uris_visited_exists(
-		    validation_get_rrdp_uris(state),
-		    uri_get_global(sia_uris.mft.uri))) {
-			error = use_access_method(&sia_uris, exec_rsync_method,
-			    exec_rrdp_method);
-			if (error)
-				goto revert_uris;
-		} else {
-			mft_exists = true;
-		}
-		break;
-	default:
-		break;
-	}
-
-	/*
 	 * RFC 6481 section 5: "when the repository publication point contents
 	 * are updated, a repository operator cannot assure RPs that the
 	 * manifest contents and the repository contents will be precisely
@@ -2110,23 +2095,26 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 *
 	 * Trying to avoid this issue, download the CA repository and validate
 	 * manifest (and its content) again.
+	 * 
+	 * Avoid to re-download the repo if the mft was fetched with RRDP.
 	 */
 	mft_retry = true;
+	error = use_access_method(&sia_uris, exec_rsync_method,
+	    exec_rrdp_method, &mft_retry);
+	if (error)
+		goto revert_uris;
+
 	do {
 		/* Validate the manifest (@mft) pointed by the certificate */
 		error = x509stack_push(validation_certstack(state), cert_uri,
 		    cert, policy, IS_TA);
-		if (error) {
-			if (!mft_retry)
-				uri_refput(sia_uris.mft.uri);
+		if (error)
 			goto revert_uris;
-		}
+
 		cert = NULL; /* Ownership stolen */
 
 		error = handle_manifest(sia_uris.mft.uri, &pp);
-		if (!mft_retry)
-			uri_refput(sia_uris.mft.uri);
-		if (!error || !mft_retry || mft_exists)
+		if (error == 0 || !mft_retry)
 			break;
 
 		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
@@ -2138,10 +2126,9 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		/* Cancel stack, reload certificate (no need to revalidate) */
 		x509stack_cancel(validation_certstack(state));
 		error = certificate_load(cert_uri, &cert);
-		if (error) {
+		if (error)
 			goto revert_uris;
-		}
-		uri_refget(sia_uris.mft.uri);
+
 		mft_retry = false;
 	} while (true);
 
