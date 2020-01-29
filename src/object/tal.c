@@ -31,7 +31,7 @@
 #define TAL_FILE_EXTENSION	".tal"
 
 struct uris {
-	char **array; /* This is an array of string pointers. */
+	struct rpki_uri **array; /* This is an array of rpki URIs. */
 	unsigned int count;
 	unsigned int size;
 };
@@ -64,7 +64,7 @@ uris_init(struct uris *uris)
 {
 	uris->count = 0;
 	uris->size = 4; /* Most TALs only define one. */
-	uris->array = malloc(uris->size * sizeof(char *));
+	uris->array = malloc(uris->size * sizeof(struct rpki_uri *));
 	return (uris->array != NULL) ? 0 : -ENOMEM;
 }
 
@@ -73,24 +73,36 @@ uris_destroy(struct uris *uris)
 {
 	unsigned int i;
 	for (i = 0; i < uris->count; i++)
-		free(uris->array[i]);
+		uri_refput(uris->array[i]);
 	free(uris->array);
 }
 
 static int
 uris_add(struct uris *uris, char *uri)
 {
-	char **tmp;
+	struct rpki_uri **tmp;
+	struct rpki_uri *new;
+	int error;
+
+	error = uri_create_mixed_str(&new, uri, strlen(uri));
+	if (error == ENOTSUPPORTED)
+		return pr_err("TAL has non-RSYNC/HTTPS URI.");
+
+	if (error)
+		return error;
 
 	if (uris->count + 1 >= uris->size) {
 		uris->size *= 2;
-		tmp = realloc(uris->array, uris->size * sizeof(char *));
-		if (tmp == NULL)
+		tmp = realloc(uris->array,
+		    uris->size * sizeof(struct rpki_uri *));
+		if (tmp == NULL) {
+			uri_refput(new);
 			return pr_enomem();
+		}
 		uris->array = tmp;
 	}
 
-	uris->array[uris->count++] = uri;
+	uris->array[uris->count++] = new;
 	return 0;
 }
 
@@ -128,11 +140,12 @@ read_uris(struct line_file *lfile, struct uris *uris)
 		} while (true);
 	}
 
-	error = uris_add(uris, uri);
-	if (error)
-		return error;
-
 	do {
+		error = uris_add(uris, uri);
+		free(uri); /* Won't be needed anymore */
+		if (error)
+			return error;
+
 		error = lfile_read(lfile, &uri);
 		if (error)
 			return error;
@@ -143,10 +156,6 @@ read_uris(struct line_file *lfile, struct uris *uris)
 			free(uri);
 			return 0; /* Happy path */
 		}
-
-		error = uris_add(uris, uri);
-		if (error)
-			return error;
 	} while (true);
 }
 
@@ -255,7 +264,7 @@ base64_sanitize(struct line_file *lfile, char **out)
 		}
 	}
 	/* Reallocate to exact size and add nul char */
-	if (offset != new_size + 1) {
+	if (offset != new_size) {
 		eol = realloc(result, offset + 1);
 		if (eol == NULL) {
 			error = pr_enomem();
@@ -375,22 +384,11 @@ void tal_destroy(struct tal *tal)
 int
 foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 {
-	struct rpki_uri *uri;
 	unsigned int i;
 	int error;
 
 	for (i = 0; i < tal->uris.count; i++) {
-		error = uri_create_mixed_str(&uri, tal->uris.array[i],
-		    strlen(tal->uris.array[i]));
-		if (error == ENOTSUPPORTED) {
-			pr_info("TAL has non-RSYNC/HTTPS URI; ignoring.");
-			continue;
-		}
-		if (error)
-			return error;
-
-		error = cb(tal, uri, arg);
-		uri_refput(uri);
+		error = cb(tal, tal->uris.array[i], arg);
 		if (error)
 			return error;
 	}
@@ -401,9 +399,9 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 void
 tal_shuffle_uris(struct tal *tal)
 {
-	char **array = tal->uris.array;
+	struct rpki_uri **array = tal->uris.array;
+	struct rpki_uri *tmp;
 	unsigned int count = tal->uris.count;
-	char *tmp;
 	long random_index;
 	unsigned int i;
 

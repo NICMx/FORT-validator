@@ -1,5 +1,5 @@
 rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer
-http://potato
+https://potato
 rsync://potato
 
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqZEzhYK0+PtDOPfub/KR

@@ -138,7 +138,7 @@ START_TEST(tal_load_normal)
 	ck_assert_uint_eq(tal->uris.count, 3);
 	ck_assert_str_eq(tal->uris.array[0],
 	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal->uris.array[1], "http://potato");
+	ck_assert_str_eq(tal->uris.array[1], "https://potato");
 	ck_assert_str_eq(tal->uris.array[2], "rsync://potato");
 
 	ck_assert_uint_eq(ARRAY_LEN(decoded), tal->spki_len);

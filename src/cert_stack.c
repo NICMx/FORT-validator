@@ -324,6 +324,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 end5:	resources_destroy(meta->resources);
 end4:	subjects_cleanup(&meta->subjects, subject_cleanup);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
+	uri_refput(meta->uri);
 	free(meta);
 	return error;
 }
