@@ -470,3 +470,24 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	uri_refput(rsync_uri);
 	return error;
 }
+
+void
+reset_downloaded(void)
+{
+	struct validation *state;
+	struct uri_list *list;
+	struct uri *uri;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return;
+
+	list = validation_rsync_visited_uris(state);
+
+	while (!SLIST_EMPTY(list)) {
+		uri = SLIST_FIRST(list);
+		SLIST_REMOVE_HEAD(list, next);
+		uri_refput(uri->uri);
+		free(uri);
+	}
+}

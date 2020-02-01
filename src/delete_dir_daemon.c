@@ -9,15 +9,23 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "common.h"
 #include "log.h"
 #include "random.h"
 #include "uri.h"
 
 #define MAX_FD_ALLOWED 20
 
+struct rem_dirs {
+	char **arr;
+	size_t arr_len;
+	size_t arr_set;
+};
+
 static int
 remove_file(char const *location)
 {
+	pr_debug("Trying to remove file '%s'.", location);
 	if (remove(location))
 		return pr_errno(errno, "Couldn't delete file '%s'", location);
 	return 0;
@@ -26,6 +34,7 @@ remove_file(char const *location)
 static int
 remove_dir(char const *location)
 {
+	pr_debug("Trying to remove dir '%s'.", location);
 	if (rmdir(location))
 		return pr_errno(errno, "Couldn't delete directory '%s'",
 		    location);
@@ -64,39 +73,44 @@ traverse(char const *path, struct stat const *sb, int flag, struct FTW *ftwbuf)
 static void *
 remove_from_root(void *arg)
 {
-	char *root_arg = arg;
-	char *root;
+	struct rem_dirs *root_arg = arg;
+	char **dirs_arr;
+	size_t len, i;
 	int error;
 
-	pr_debug("Trying to remove dir '%s'.", root_arg);
-	root = strdup(root_arg);
+	dirs_arr = root_arg->arr;
+	len = root_arg->arr_set;
 
 	/* Release received arg, and detach thread */
 	free(root_arg);
 	pthread_detach(pthread_self());
 
-	if (root == NULL) {
-		pr_err("Couldn't allocate memory for a string, the directory '%s' won't be deleted, please delete it manually.",
-		    root);
-		return NULL;
+	for (i = 0; i < len; i++) {
+		error = nftw(dirs_arr[i], traverse, MAX_FD_ALLOWED,
+		    FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+		if (error) {
+			if (errno)
+				pr_debug("Error deleting directory '%s', please delete it manually: %s",
+				    dirs_arr[i], strerror(errno));
+			else
+				pr_debug("Couldn't delete directory '%s', please delete it manually",
+				    dirs_arr[i]);
+		}
+		/* Release at once, won't be needed anymore */
+		free(dirs_arr[i]);
 	}
 
-	error = nftw(root, traverse, MAX_FD_ALLOWED,
-	    FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
-	if (error) {
-		if (errno)
-			pr_errno(errno, "Error deleting directory '%s', please delete it manually.",
-			    root);
-		else
-			pr_err("Couldn't delete directory '%s', please delete it manually",
-			    root);
-	}
-
-	pr_debug("Done removing dir '%s'.", root);
-	free(root);
+	pr_debug("Done removing dirs.");
+	free(dirs_arr);
 	return NULL;
 }
 
+/*
+ * Soft/hard error logic utilized, beware to prepare caller:
+ * - '> 0' is a soft error
+ * - '< 0' is a hard error
+ * - '= 0' no error
+ */
 static int
 get_local_path(char const *rcvd, char **result)
 {
@@ -108,7 +122,7 @@ get_local_path(char const *rcvd, char **result)
 
 	error = uri_create_mixed_str(&uri, rcvd, strlen(rcvd));
 	if (error)
-		return error;
+		return error != -ENOMEM ? EINVAL : error;
 
 	local_path = strdup(uri_get_local(uri));
 	if (local_path == NULL) {
@@ -118,13 +132,18 @@ get_local_path(char const *rcvd, char **result)
 
 	error = stat(local_path, &attr);
 	if (error) {
-		error = -pr_errno(errno, "Error reading path '%s'", local_path);
+		/* Soft error */
+		pr_debug("Error reading path '%s' (discarding): %s",
+		    local_path, strerror(errno));
+		error = errno;
 		goto release_local;
 	}
 
 	if (!S_ISDIR(attr.st_mode)) {
-		error = pr_err("Path '%s' exists but is not a directory.",
+		/* Soft error */
+		pr_debug("Path '%s' exists but is not a directory (discarding).",
 		    local_path);
+		error = ENOTDIR;
 		goto release_local;
 	}
 
@@ -153,6 +172,12 @@ release_uri:
 	return error;
 }
 
+/*
+ * Soft/hard error logic utilized, beware to prepare caller:
+ * - '> 0' is a soft error
+ * - '< 0' is a hard error
+ * - '= 0' no error
+ */
 static int
 rename_local_path(char const *rcvd, char **result)
 {
@@ -177,46 +202,110 @@ rename_local_path(char const *rcvd, char **result)
 	error = rename(rcvd, tmp);
 	if (error) {
 		free(tmp);
-		return -pr_errno(errno, "Couldn't rename '%s' to delete it.",
-		    rcvd);
+		pr_debug("Couldn't rename '%s' to delete it (discarding): %s",
+		    rcvd, strerror(errno));
+		return errno; /* Soft error */
 	}
 
 	*result = tmp;
 	return 0;
 }
 
-/*
- * Start the @thread that will delete every file under @path, @thread must not
- * be joined, since it's detached. @path will be renamed at the file system.
- */
-int
-delete_dir_daemon_start(char const *path)
+static int
+rename_all_roots(struct rem_dirs *rem_dirs, char **src)
 {
-	pthread_t thread;
 	char *local_path, *delete_path;
+	size_t i;
 	int error;
 
-	error = get_local_path(path, &local_path);
+	for (i = 0; i < rem_dirs->arr_len; i++) {
+		local_path = NULL;
+		error = get_local_path(src[(rem_dirs->arr_len - 1) - i],
+		    &local_path);
+		if (error < 0)
+			return error;
+		if (error > 0)
+			continue;
+
+		delete_path = NULL;
+		error = rename_local_path(local_path, &delete_path);
+		free(local_path);
+		if (error < 0)
+			return error;
+		if (error > 0)
+			continue;
+		rem_dirs->arr[rem_dirs->arr_set++] = delete_path;
+	}
+
+	return 0;
+}
+
+static int
+rem_dirs_create(size_t arr_len, struct rem_dirs **result)
+{
+	struct rem_dirs *tmp;
+
+	tmp = malloc(sizeof(struct rem_dirs));
+	if (tmp == NULL)
+		return pr_enomem();
+
+	tmp->arr = calloc(arr_len, sizeof(char *));
+	if (tmp->arr == NULL) {
+		free(tmp);
+		return pr_enomem();
+	}
+
+	tmp->arr_len = arr_len;
+	tmp->arr_set = 0;
+
+	*result = tmp;
+	return 0;
+}
+
+static void
+rem_dirs_destroy(struct rem_dirs *rem_dirs)
+{
+	size_t i;
+
+	for (i = 0; i < rem_dirs->arr_set; i++)
+		free(rem_dirs->arr[i]);
+	free(rem_dirs->arr);
+	free(rem_dirs);
+}
+
+/*
+ * Remove the files listed at @roots array of @roots_len size.
+ * 
+ * The daemon will be as quiet as possible, since most of its job is done
+ * asynchronously. Also, it works on the best possible effort; some errors are
+ * treated as "soft" errors, since the directory deletion still doesn't
+ * considers the relations (parent-child) at dirs.
+ */
+int
+delete_dir_daemon_start(char **roots, size_t roots_len)
+{
+	pthread_t thread;
+	struct rem_dirs *arg;
+	int error;
+
+	arg = NULL;
+	error = rem_dirs_create(roots_len, &arg);
 	if (error)
 		return error;
 
-	delete_path = NULL;
-	error = rename_local_path(local_path, &delete_path);
+	error = rename_all_roots(arg, roots);
 	if (error) {
-		free(local_path);
+		rem_dirs_destroy(arg);
 		return error;
 	}
 
 	/* Thread arg is released at thread before being detached */
-	errno = pthread_create(&thread, NULL, remove_from_root,
-	    (void *) delete_path);
+	errno = pthread_create(&thread, NULL, remove_from_root, (void *) arg);
 	if (errno) {
-		free(delete_path);
-		free(local_path);
-		return -pr_errno(errno,
+		rem_dirs_destroy(arg);
+		return pr_errno(errno,
 		    "Could not spawn the delete dir daemon thread");
 	}
 
-	free(local_path);
 	return 0;
 }

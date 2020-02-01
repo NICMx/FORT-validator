@@ -41,7 +41,7 @@
   "rsync": {
     "enabled": true,
     "priority": 50,
-    "strategy": "root",
+    "strategy": "root-except-ta",
     "retry": {
       "count": 2,
       "interval": 5

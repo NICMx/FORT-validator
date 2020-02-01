@@ -227,10 +227,9 @@ will be the same as \fB--rsync.enabled=false\fR.
 .br
 - \fIstrict\fR: will be the same as \fB--rsync.strategy=strict\fR.
 .br
-- \fIroot\fR \fB(default value)\fR: will be the same as
-\fB--rsync.strategy=root\fR.
+- \fIroot\fR: will be the same as \fB--rsync.strategy=root\fR.
 .br
-- \fIroot-except-ta\fR: will be the same as
+- \fIroot-except-ta\fR \fB(default value)\fR: will be the same as
 \fB--rsync.strategy=root-except-ta\fR.
 .RE
 .RE
@@ -674,8 +673,8 @@ By default, the value is \fI50\fR.
 \fIrsync\fR download strategy; states the way rsync URLs are approached during
 downloads. It can have one of three values:
 .IR strict ", "
-.IB "root" "(default value)" \fR, \fR
-.IR root-except-ta "."
+.IR root ", "
+.IB "root-except-ta" "(default value)" \fR. \fR
 .P
 .I strict
 .RS 4
@@ -897,7 +896,7 @@ to a specific value:
   "rsync": {
     "enabled": true,
     "priority": 50,
-    "strategy": "root",
+    "strategy": "root-except-ta",
     "retry": {
       "count": 2,
       "interval": 5
@@ -1008,7 +1007,7 @@ well as some dummy Router Keys (BGPsec) info:
 .P
 
 .\".SH COPYRIGHT
-.\" FORT-validator 2019
+.\" FORT-validator 2020
 .\" Licensed under the blah blah...
 
 .SH SEE ALSO

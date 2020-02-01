@@ -5,6 +5,7 @@
 #include <string.h>
 #include "log.h"
 #include "delete_dir_daemon.h"
+#include "data_structure/array_list.h"
 #include "data_structure/uthash_nonfatal.h"
 
 struct visited_elem {
@@ -17,6 +18,9 @@ struct visited_uris {
 	struct visited_elem *table;
 	unsigned int refs;
 };
+
+DEFINE_ARRAY_LIST_STRUCT(uris_roots, char *);
+DEFINE_ARRAY_LIST_FUNCTIONS(uris_roots, char *, static)
 
 static int
 visited_elem_create(struct visited_elem **elem, char const *uri)
@@ -131,63 +135,55 @@ visited_uris_remove(struct visited_uris *uris, char const *uri)
 	return 0;
 }
 
-bool
-visited_uris_exists(struct visited_uris *uris, char const *uri)
-{
-	return elem_find(uris, uri) != NULL;
-}
-
-int
-visited_uris_get_root(struct visited_uris *uris, char **result)
+static int
+visited_uris_to_arr(struct visited_uris *uris, struct uris_roots *roots)
 {
 	struct visited_elem *elem;
-	char *tmp, *ptr;
+	char *tmp, *last_slash;
 	size_t size;
-	int i;
 
-	elem = uris->table;
-	if (elem == NULL) {
-		*result = NULL;
-		return 0;
+	for (elem = uris->table; elem != NULL; elem = elem->hh.next) {
+		last_slash = strrchr(elem->uri, '/');
+		size = last_slash - elem->uri;
+		tmp = malloc(size + 1);
+		if (tmp == NULL)
+			return pr_enomem();
+		strncpy(tmp, elem->uri, size);
+		tmp[size] = '\0';
+		uris_roots_add(roots, &tmp);
 	}
 
-	i = 0;
-	ptr = strchr(elem->uri, '/');
-	while(i < 2) {
-		ptr = strchr(ptr + 1, '/');
-		i++;
-	}
-	size = ptr - elem->uri;
-	tmp = malloc(size + 1);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	strncpy(tmp, elem->uri, size);
-	tmp[size] = '\0';
-
-	*result = tmp;
 	return 0;
 }
 
-int
-visited_uris_remove_local(struct visited_uris *uris)
+static void
+uris_root_destroy(char **elem)
 {
-	char *root_path;
+	free(*elem);
+}
+
+int
+visited_uris_delete_local(struct visited_uris *uris)
+{
+	struct uris_roots roots;
 	int error;
 
-	error = visited_uris_get_root(uris, &root_path);
+	uris_roots_init(&roots);
+
+	error = visited_uris_to_arr(uris, &roots);
 	if (error)
-		return error;
+		goto err;
 
-	if (root_path == NULL)
-		return 0;
+	if (roots.len == 0)
+		goto success;
 
-	error = delete_dir_daemon_start(root_path);
-	if (error) {
-		free(root_path);
-		return error;
-	}
-
-	free(root_path);
+	error = delete_dir_daemon_start(roots.array, roots.len);
+	if (error)
+		goto err;
+success:
+	uris_roots_cleanup(&roots, uris_root_destroy);
 	return 0;
+err:
+	uris_roots_cleanup(&roots, uris_root_destroy);
+	return error;
 }

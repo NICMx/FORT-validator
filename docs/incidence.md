@@ -78,7 +78,7 @@ Presently, there is only a pair of incidence types defined. This list might evol
    parameters field;
 ```
 
-As of 2019-08-12, many signed objects in the global RPKI break this rule.
+As of 2020-01-31, many signed objects in the global RPKI break this rule.
 
 If not `ignore`d, Fort will report this incidence with the following error message:
 

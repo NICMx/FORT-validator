@@ -224,7 +224,7 @@ Because rsync uses delta encoding, you're advised to keep this cache around. It 
 
 - **Type:** Enumeration (`off`, `strict`, `root`, `root-except-ta`)
 - **Availability:** `argv` and JSON
-- **Default:** `root`
+- **Default:** `root-except-ta`
 
 rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
 
@@ -623,7 +623,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"rsync": {
 		"<a href="#--rsyncenabled">enabled</a>": true,
 		"<a href="#--rsyncpriority">priority</a>": 50,
-		"<a href="#--rsyncstrategy">strategy</a>": "root",
+		"<a href="#--rsyncstrategy">strategy</a>": "root-except-ta",
 		"retry": {
 			"<a href="#--rsyncretrycount">count</a>": 2,
 			"<a href="#--rsyncretryinterval">interval</a>": 5
@@ -781,7 +781,7 @@ Whenever a certificate has both RSYNC and RRDP repositories, the following crite
 
 - **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
 - **Availability:** `argv` and JSON
-- **Default:** `root`
+- **Default:** `root-except-ta`
 
 rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
 

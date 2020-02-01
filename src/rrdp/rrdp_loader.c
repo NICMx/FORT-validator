@@ -3,6 +3,7 @@
 #include "rrdp/db/db_rrdp_uris.h"
 #include "rrdp/rrdp_objects.h"
 #include "rrdp/rrdp_parser.h"
+#include "rsync/rsync.h"
 #include "config.h"
 #include "log.h"
 #include "thread_var.h"
@@ -62,7 +63,7 @@ remove_rrdp_uri_files(char const *notification_uri)
 	if (error)
 		return error;
 
-	return visited_uris_remove_local(tmp);
+	return visited_uris_delete_local(tmp);
 }
 
 /* Mark the URI as errored with dummy data, so it won't be requested again */
@@ -149,6 +150,15 @@ rrdp_load(struct rpki_uri *uri)
 	switch (res) {
 	case RRDP_URI_EQUAL:
 		goto set_update;
+	case RRDP_URI_DIFF_SESSION:
+		/* Delete the old session files */
+		error = remove_rrdp_uri_files(upd_notification->uri);
+		if (error)
+			goto upd_destroy;
+		error = process_snapshot(upd_notification, &visited);
+		if (error)
+			goto upd_destroy;
+		break;
 	case RRDP_URI_DIFF_SERIAL:
 		error = process_diff_serial(upd_notification, &visited);
 		if (!error) {
@@ -157,20 +167,14 @@ rrdp_load(struct rpki_uri *uri)
 		}
 		/* Something went wrong, use snapshot */
 		pr_warn("There was an error processing RRDP deltas, using the snapshot instead.");
-	case RRDP_URI_DIFF_SESSION:
-		/* Delete the old session files */
-		error = remove_rrdp_uri_files(upd_notification->uri);
-		if (error)
-			break;
 	case RRDP_URI_NOTFOUND:
 		error = process_snapshot(upd_notification, &visited);
+		if (error)
+			goto upd_destroy;
 		break;
 	default:
 		pr_crit("Unexpected RRDP URI comparison result");
 	}
-
-	if (error)
-		goto upd_destroy;
 
 	/* Any update, and no error during the process, update db as well */
 	pr_debug("Updating local RRDP data of '%s' to:", uri_get_global(uri));
@@ -197,6 +201,8 @@ upd_destroy:
 upd_error:
 	/* Don't fall here on success */
 	if (error) {
+		/* Reset RSYNC visited URIs, this may force the update */
+		reset_downloaded();
 		upd_error = mark_rrdp_uri_request_err(uri_get_global(uri));
 		if (upd_error)
 			return upd_error;

@@ -735,7 +735,7 @@ set_default_values(void)
 		goto revert_port;
 	}
 
-	rpki_config.sync_strategy = RSYNC_ROOT;
+	rpki_config.sync_strategy = RSYNC_ROOT_EXCEPT_TA;
 	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
 	rpki_config.mode = SERVER;
@@ -743,7 +743,7 @@ set_default_values(void)
 
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
-	rpki_config.rsync.strategy = RSYNC_ROOT;
+	rpki_config.rsync.strategy = RSYNC_ROOT_EXCEPT_TA;
 	rpki_config.rsync.retry.count = 2;
 	rpki_config.rsync.retry.interval = 5;
 	rpki_config.rsync.program = strdup("rsync");

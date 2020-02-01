@@ -45,8 +45,6 @@ DEFINE_ARRAY_LIST_FUNCTIONS(deltas_parsed, struct delta_head *, static)
 struct rdr_notification_ctx {
 	/* Data being parsed */
 	struct update_notification *notification;
-	/* The snapshot must be allocated? */
-	bool create_snapshot;
 	/* Unordered list of deltas */
 	struct deltas_parsed deltas;
 };
@@ -725,33 +723,6 @@ parse_withdraw_elem(xmlTextReaderPtr reader, struct visited_uris *visited_uris)
 static int
 rdr_notification_ctx_init(struct rdr_notification_ctx *ctx)
 {
-	rrdp_uri_cmp_result_t res;
-	int error;
-
-	ctx->create_snapshot = false;
-
-	error = db_rrdp_uris_cmp(ctx->notification->uri,
-	    ctx->notification->global_data.session_id,
-	    ctx->notification->global_data.serial,
-	    &res);
-	if (error)
-		return error;
-
-	switch (res) {
-	case RRDP_URI_EQUAL:
-		/* Just validate content */
-		break;
-	case RRDP_URI_DIFF_SERIAL:
-		/* Get the deltas to process and the snapshot */
-	case RRDP_URI_DIFF_SESSION:
-		/* Get only the snapshot */
-	case RRDP_URI_NOTFOUND:
-		ctx->create_snapshot = true;
-		break;
-	default:
-		pr_crit("Unexpected RRDP URI comparison result");
-	}
-
 	deltas_parsed_init(&ctx->deltas);
 	return 0;
 }
@@ -865,8 +836,7 @@ xml_read_notification(xmlTextReaderPtr reader, void *arg)
 			error = parse_notification_delta(reader, ctx);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT)) {
 			error = parse_doc_data(reader, true, true,
-			    (ctx->create_snapshot ?
-			    &ctx->notification->snapshot : NULL));
+			    &ctx->notification->snapshot);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
 			/* No need to validate session ID and serial */
 			error = parse_global_data(reader,
