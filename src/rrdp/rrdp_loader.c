@@ -166,7 +166,7 @@ rrdp_load(struct rpki_uri *uri)
 			break;
 		}
 		/* Something went wrong, use snapshot */
-		pr_warn("There was an error processing RRDP deltas, using the snapshot instead.");
+		pr_info("There was an error processing RRDP deltas, using the snapshot instead.");
 	case RRDP_URI_NOTFOUND:
 		error = process_snapshot(upd_notification, &visited);
 		if (error)

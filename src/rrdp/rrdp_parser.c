@@ -540,8 +540,9 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 		    tmp->doc_data.hash_len);
 		uri_refput(uri);
 		if (error != 0) {
-			error = pr_err("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
+			pr_info("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
 			    tmp->doc_data.uri);
+			error = EINVAL;
 			goto release_base64;
 		}
 	}
