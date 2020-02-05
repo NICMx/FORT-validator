@@ -120,6 +120,9 @@ __fprintf(int level, char const *format, ...)
 		fprintf(lvl->stream, COLOR_RESET);
 
 	fprintf(lvl->stream, "\n");
+	/* Force flush */
+	if (lvl->stream == stdout)
+		fflush(lvl->stream);
 }
 
 #define MSG_LEN 512
@@ -163,6 +166,9 @@ pr_stream(int level, const char *format, va_list args)
 		fprintf(lvl->stream, "%s", COLOR_RESET);
 
 	fprintf(lvl->stream, "\n");
+	/* Force flush */
+	if (lvl->stream == stdout)
+		fflush(lvl->stream);
 }
 
 #define PR_SIMPLE(level)						\
