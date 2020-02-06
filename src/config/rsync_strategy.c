@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "config.h"
 #include "log.h"
 #include "config/str.h"
 
@@ -58,6 +59,9 @@ parse_argv_rsync_strategy(struct option_field const *field, char const *str,
 	else
 		return pr_err("Unknown rsync synchronization strategy: '%s'",
 		    str);
+
+	/* FIXME (later) Remove when sync-strategy is fully deprecated */
+	config_set_sync_strategy(DEREFERENCE(result));
 
 	return 0;
 }

@@ -833,6 +833,10 @@ validate_config(void)
 	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm))
 		return pr_err("Invalid slurm location.");
 
+	/* FIXME (later) Remove when sync-strategy is fully deprecated */
+	if (!rpki_config.rsync.enabled)
+		config_set_sync_strategy(RSYNC_OFF);
+
 	return 0;
 }
 
@@ -1194,6 +1198,18 @@ void
 config_set_rrdp_enabled(bool value)
 {
 	rpki_config.rrdp.enabled = value;
+}
+
+void
+config_set_sync_strategy(enum rsync_strategy value)
+{
+	rpki_config.sync_strategy = value;
+}
+
+void
+config_set_rsync_strategy(enum rsync_strategy value)
+{
+	rpki_config.rsync.strategy = value;
 }
 
 void

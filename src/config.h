@@ -62,6 +62,10 @@ unsigned int config_get_asn1_decode_max_stack(void);
 void config_set_rsync_enabled(bool);
 void config_set_rrdp_enabled(bool);
 
+/* FIXME (later) Remove when sync-strategy is fully deprecated */
+void config_set_sync_strategy(enum rsync_strategy);
+void config_set_rsync_strategy(enum rsync_strategy);
+
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);
 struct option_field const *get_option_metadatas(void);
