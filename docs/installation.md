@@ -120,7 +120,7 @@ This OS requires additional steps due to its GCC supported version (currently 4.
 OpenSSL devel (openssl-devel) package isn't necessary, if it's previously installed remove it to avoid future conflicts with newer OpenSSL versions.
 
 {% highlight bash %}
-sudo yum install autoconf automake git jansson-devel pkgconfig rsync libxml2
+sudo yum install autoconf automake git jansson-devel pkgconfig rsync libcurl-devel libxml2-devel
 # Install supported GCC to compile OpenSSL
 sudo yum groupinstall "Development Tools"
 {% endhighlight %}
@@ -169,7 +169,7 @@ exit
 The following steps are for Fedora 30.
 
 {% highlight bash %}
-sudo yum install autoconf automake gcc make openssl-devel jansson-devel libxml2
+sudo yum install autoconf automake gcc make openssl-devel jansson-devel libcurl-devel libxml2-devel
 
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
@@ -184,7 +184,7 @@ sudo make install
 The following steps are for openSUSE Leap 15.1.
 
 {% highlight bash %}
-sudo zypper install autoconf automake gcc libopenssl-devel libjansson-devel libxml2
+sudo zypper install autoconf automake gcc libopenssl-devel libjansson-devel libcurl-devel libxml2-devel
 
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
@@ -197,6 +197,18 @@ sudo make install
 ### FreeBSD version
 
 The following steps are for FreeBSD 12.0.
+
+`curl` library is needed, so in case it isn't already installed there's a port to install it:
+
+{% highlight bash %}
+cd /usr/ports/ftp/curl
+make config
+su
+make install clean
+exit
+{% endhighlight %}
+
+From there on, the installation steps are:
 
 {% highlight bash %}
 su
@@ -215,7 +227,7 @@ exit
 
 ### Slackware version
 
-The following steps are for Slackware "current" release (as of 2019-08-12).
+The following steps are for Slackware "current" release (as of 2020-01-31).
 
 All dependencies are included in the current release, so there's no need to install any dependency.
 
@@ -232,7 +244,7 @@ sudo make install
 
 In case you wan't a fresh version of Fort validator, there's this third option. The steps are mostly the same as in [Option 2](#option-2-compiling-and-installing-the-release-tarball), just another dependency (as minimum) must be installed: "git"; and a few steps are included in order to get the source code and generate configuration scripts.
 
-The following example is the processo to clone, compile and install in Debian OS.
+The following example is the process to clone, compile and install in Debian OS.
 
 {% highlight bash %}
 sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync libcurl4-openssl-dev libxml2-dev

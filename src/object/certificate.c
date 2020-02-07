@@ -1876,16 +1876,42 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 	return force_aia_validation(caIssuers, cert);
 }
 
+/*
+ * Verify that the manifest file actually exists at the local repository, if it
+ * doesn't exist then discard the repository (which can result in a attempt
+ * to fetch data from another repository).
+ */
+static int
+verify_mft_loc(struct rpki_uri *mft_uri)
+{
+	if (!valid_file_or_dir(uri_get_local(mft_uri), true, false))
+		return -EINVAL; /* Error already logged */
+
+	return 0;
+}
+
 static int
 exec_rrdp_method(struct sia_ca_uris *sia_uris)
 {
-	return rrdp_load(sia_uris->rpkiNotify.uri);
+	int error;
+
+	error = rrdp_load(sia_uris->rpkiNotify.uri);
+	if (error)
+		return error;
+
+	return verify_mft_loc(sia_uris->mft.uri);
 }
 
 static int
 exec_rsync_method(struct sia_ca_uris *sia_uris)
 {
-	return download_files(sia_uris->caRepository.uri, false, false);
+	int error;
+
+	error = download_files(sia_uris->caRepository.uri, false, false);
+	if (error)
+		return error;
+
+	return verify_mft_loc(sia_uris->mft.uri);
 }
 
 /*

@@ -696,6 +696,7 @@ set_default_values(void)
 		"--delete",
 		"--times",
 		"--contimeout=20",
+		"--timeout=15",
 		"$REMOTE",
 		"$LOCAL",
 	};
@@ -703,6 +704,7 @@ set_default_values(void)
 	static char const *flat_rsync_args[] = {
 		"--times",
 		"--contimeout=20",
+		"--timeout=15",
 		"--dirs",
 		"$REMOTE",
 		"$LOCAL",
@@ -813,7 +815,7 @@ validate_config(void)
 	if (rpki_config.tal == NULL)
 		return pr_err("The TAL file/directory (--tal) is mandatory.");
 
-	if (!valid_file_or_dir(rpki_config.tal))
+	if (!valid_file_or_dir(rpki_config.tal, true, true))
 		return pr_err("Invalid TAL file/directory.");
 
 	if (rpki_config.server.interval.expire <
@@ -830,7 +832,8 @@ validate_config(void)
 	    !valid_output_file(rpki_config.output.bgpsec))
 		return pr_err("Invalid output.bgpsec file.");
 
-	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm))
+	if (rpki_config.slurm != NULL &&
+	    !valid_file_or_dir(rpki_config.slurm, true, true))
 		return pr_err("Invalid slurm location.");
 
 	/* FIXME (later) Remove when sync-strategy is fully deprecated */

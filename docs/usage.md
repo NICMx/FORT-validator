@@ -634,12 +634,14 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"--delete",
 			"--times",
 			"--contimeout=20",
+			"--timeout=15",
 			"$REMOTE",
 			"$LOCAL"
 		],
 		"<a href="#rsyncarguments-flat">arguments-flat</a>": [
 			"--times",
 			"--contimeout=20",
+			"--timeout=15",
 			"--dirs",
 			"$REMOTE",
 			"$LOCAL"
@@ -857,7 +859,7 @@ Name of the program needed to invoke an rsync file transfer.
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a recursive rsync.
 
@@ -867,7 +869,7 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--times", "--contimeout=20", "--dirs", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--dirs", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a single-file rsync.
 

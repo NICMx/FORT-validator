@@ -187,11 +187,15 @@ process_file_or_dir(char const *location, char const *file_ext,
 
 
 bool
-valid_file_or_dir(char const *location)
+valid_file_or_dir(char const *location, bool check_file, bool check_dir)
 {
 	FILE *file;
 	struct stat attr;
+	bool is_file, is_dir;
 	bool result;
+
+	if (!check_file && !check_dir)
+		pr_crit("Wrong usage, at least one check must be 'true'.");
 
 	result = false;
 	file = fopen(location, "rb");
@@ -206,13 +210,15 @@ valid_file_or_dir(char const *location)
 		goto end;
 	}
 
-	if (!S_ISREG(attr.st_mode) && !S_ISDIR(attr.st_mode)) {
-		pr_err("'%s' does not seem to be a file or directory",
-		    location);
-		goto end;
-	}
+	is_file = check_file && S_ISREG(attr.st_mode);
+	is_dir = check_dir && S_ISDIR(attr.st_mode);
 
-	result = true;
+	result = is_file || is_dir;
+	if (!result)
+		pr_err("'%s' does not seem to be a %s", location,
+		    (check_file && check_dir) ? "file or directory" :
+		    (check_file) ? "file" : "directory");
+
 end:
 	if (fclose(file) == -1)
 		pr_errno(errno, "fclose() failed");

@@ -52,12 +52,14 @@
       "--delete",
       "--times",
       "--contimeout=20",
+      "--timeout=15",
       "$REMOTE",
       "$LOCAL"
     ],
     "arguments-flat": [
       "--times",
       "--contimeout=20",
+      "--timeout=15",
       "--dirs",
       "$REMOTE",
       "$LOCAL"
