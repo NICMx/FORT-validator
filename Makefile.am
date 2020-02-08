@@ -17,3 +17,5 @@ EXTRA_DIST  = examples/tal/afrinic.tal
 EXTRA_DIST += examples/tal/apnic.tal
 EXTRA_DIST += examples/tal/lacnic.tal
 EXTRA_DIST += examples/tal/ripe.tal
+EXTRA_DIST += examples/config.json
+EXTRA_DIST += examples/demo.slurm

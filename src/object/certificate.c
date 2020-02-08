@@ -1861,7 +1861,7 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 	 *   of the certificate where this Issuer is the subject (the issuer's
 	 *   immediate superior certificate)."
 	 *
-	 * November 2019: this isn't a problem, all five RIRs are using one URI
+	 * January 2020: this isn't a problem, all five RIRs are using one URI
 	 * at their TALs, that matches AIA from the first level root certificate
 	 * childs. Anyways, we'll try to consult the subject at IETF.
 	 */
