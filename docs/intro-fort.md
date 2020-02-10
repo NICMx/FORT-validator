@@ -56,4 +56,6 @@ These constitute the approximate missing 25%.
 
 - Reach 100% RFC compliance
 - Daemon quirks (stuff like "send self to background automatically"), maybe
-- More languages?
+- Differentiate validation logs from application logs.
+- Allow to handle stale objects (CRLs and Manifests) as incidences.
+- Bind RTR server to multiple IPs.

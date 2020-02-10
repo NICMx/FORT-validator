@@ -74,7 +74,17 @@ tail /var/log/syslog
 sudo service fort stop
 {% endhighlight %}
 
-etc.
+Or, using systemctl:
+
+{% highlight bash %}
+sudo systemctl start fort
+systemctl status fort
+sudo systemctl stop fort
+
+# In case you don't need to run fort on start
+sudo systemctl disable fort
+sudo systemctl enable fort
+{% endhighlight %}
 
 ## Option 2: Compiling and installing the release tarball
 
