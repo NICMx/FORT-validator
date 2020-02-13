@@ -66,7 +66,6 @@ http_easy_init(struct http_handler *handler)
 		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_TIME, 0);
 		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_LIMIT, 0);
 	}
-	curl_easy_setopt(tmp, CURLOPT_NOSIGNAL, 1);
 
 	/* Always expect HTTPS usage */
 	curl_easy_setopt(tmp, CURLOPT_SSL_VERIFYHOST, 2);
