@@ -78,11 +78,20 @@ if [ "$?" = "0" ] ; then
   TMP=""
 fi
 
+# Get the configuration directory
+CONF_DIR="$(dirname "${TALS_LOC}")"
+if [ ! -w "${CONF_DIR}" ]; then
+  CONF_DIR="/tmp/fort"
+  if [ ! -d "${CONF_DIR}" ]; then
+    mkdir -p "${CONF_DIR}"
+  fi
+fi
+
 # Declare variables
 GITHUB_TALS="https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal"
 ACCEPT="no"
 REPO_DIR="/var/cache/fort/repository"
-CONF_FILE="fort-config.json"
+CONF_FILE="${CONF_DIR}/fort-config.json"
 ARIN_TAL="https://www.arin.net/resources/manage/rpki/arin-rfc7730.tal"
 
 # Agree ARIN RPA. Exit on denial or unknown response, download otherwise.
