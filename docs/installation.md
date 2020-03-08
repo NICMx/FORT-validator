@@ -21,7 +21,7 @@ title: Compilation and Installation
 
 ## Dependencies
 
-> Note: I'm only including this section in case you intend to install Fort in an unlisted OS (and therefore need a little research). For: Debians, OpenBSD, CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
+> Note: I'm only including this section in case you intend to install Fort in an unlisted OS (and therefore need a little research). For: Debians, OpenBSD, RHEL/CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
 
 The dependencies are
 
@@ -119,38 +119,29 @@ make install
 exit
 {% endhighlight %}
 
-### CentOS version
+### RHEL/CentOS version
 
-The following steps are for CentOS 7, previous versions may require more steps to install Fort validator.
-
-This OS requires additional steps due to its GCC supported version (currently 4.8.5, fort needs >= 4.9 to compile) and default OpenSSL version (currently 1.0.2k, fort needs >= 1.1.0).
-
-**Install dependencies**
-
-OpenSSL devel (openssl-devel) package isn't necessary, if it's previously installed remove it to avoid future conflicts with newer OpenSSL versions.
+The following steps are for RHEL/CentOS 8.
 
 {% highlight bash %}
-sudo yum install autoconf automake git jansson-devel pkgconfig rsync libcurl-devel libxml2-devel
-# Install supported GCC to compile OpenSSL
-sudo yum groupinstall "Development Tools"
-{% endhighlight %}
-
-**Upgrade OpenSSL from 1.0.2k to 1.1.0k**
-
-The OpenSSL version must be greater than 1.0, in this case the version 1.1.0k is installed.
-
-{% highlight bash %}
-curl https://www.openssl.org/source/openssl-1.1.0k.tar.gz | tar xvz
-cd openssl-1.1.0k
-./config --prefix=/usr/local --openssldir=/usr/local/openssl
+sudo dnf install autoconf automake gcc jansson-devel libcurl-devel libxml2-devel make openssl-devel pkgconfig rsync tar wget
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
 make
 sudo make install
-# Update library files
-sudo mv libcrypto.so.1.1 libssl.so.1.1 /usr/lib64/
-sudo ln -sfn /usr/local/bin/openssl /usr/bin/openssl
-# Verify installed version
-openssl version
 {% endhighlight %}
+
+The following steps are for RHEL/CentOS 7.
+
+This OS requires additional steps due to its default GCC version (currently 4.8.5, fort needs >= 4.9) and its default OpenSSL version (currently 1.0.2k, fort needs >= 1.1.0).
+
+**Upgrade OpenSSL from 1.0.2k to 1.1.1c**
+
+There are two options to upgrade OpenSSL:
+1. Compile and install a newer version >= 1.1.0 (manual process).
+2. Use the [EPEL](https://fedoraproject.org/wiki/EPEL) repository (indicated at the following steps).
 
 **Upgrade GCC**
 
@@ -159,14 +150,16 @@ There are two options to upgrade GCC:
 2. Use [Software Collections](https://www.softwarecollections.org) (indicated at the following steps).
 
 {% highlight bash %}
-sudo yum install centos-release-scl
-sudo yum install devtoolset-7-gcc
+sudo yum install centos-release-scl epel-release
+sudo yum install autoconf automake devtoolset-8-gcc jansson-devel libcurl-devel libxml2-devel make openssl11-devel pkgconfig rsync tar wget
 # Start a session using the upgraded GCC
-scl enable devtoolset-7 bash
+scl enable devtoolset-8 bash
 cd ~
-curl -L https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz --output fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}
+cd fort-{{ site.fort-latest-version }}/
+# Insert paths from newer OpenSSL version
+export CFLAGS+=" $(pkg-config --cflags openssl11)" LDFLAGS+=" $(pkg-config --libs openssl11)"
 ./configure
 make
 sudo make install
@@ -176,11 +169,10 @@ exit
 
 ### Fedora version
 
-The following steps are for Fedora 30.
+The following steps are for Fedora 30 (and later).
 
 {% highlight bash %}
-sudo yum install autoconf automake gcc make openssl-devel jansson-devel libcurl-devel libxml2-devel
-
+sudo dnf install autoconf automake gcc jansson-devel libcurl-devel libxml2-devel make openssl-devel pkgconfig rsync tar wget
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
