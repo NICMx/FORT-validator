@@ -12,7 +12,7 @@ title: Compilation and Installation
 4. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
-	3. [CentOS version](#centos-version)
+	3. [RHEL/CentOS version](#rhelcentos-version)
 	4. [Fedora version](#fedora-version)
 	5. [openSUSE Leap version](#opensuse-leap-version)
 	6. [FreeBSD version](#freebsd-version)
@@ -121,10 +121,13 @@ exit
 
 ### RHEL/CentOS version
 
+#### RHEL/CentOS 8
+
 The following steps are for RHEL/CentOS 8.
 
 {% highlight bash %}
 sudo dnf install autoconf automake gcc jansson-devel libcurl-devel libxml2-devel make openssl-devel pkgconfig rsync tar wget
+
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
@@ -132,6 +135,8 @@ cd fort-{{ site.fort-latest-version }}/
 make
 sudo make install
 {% endhighlight %}
+
+#### RHEL/CentOS 7
 
 The following steps are for RHEL/CentOS 7.
 
