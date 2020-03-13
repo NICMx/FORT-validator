@@ -48,9 +48,9 @@ Here are a few links to the RPKI configuration docs at some routers:
 
 ### (Re)start
 
-When Fort validator is run for the first time, the RTR server will wait for router connections at [`--server.address`](usage.html#--serveraddress):[`--server.port`](usage.html#--serverport) and will start its first validation cycle.
+When Fort validator is run for the first time, the RTR server will listen for router connections at [`--server.address`](usage.html#--serveraddress):[`--server.port`](usage.html#--serverport) once its first validation cycle ends.
 
-If a router establishes a connection with Fort before the first validation cycle ends, Fort will respond with a **"No Data Available"** RTR error, causing the router to wait some time (this will depend on each router) before asking for updates again.
+If a router tries to establish a connection with Fort before the first validation cycle ends, Fort won't respond at all, causing the router to wait some time (this will depend on each router) before asking for updates again.
 
 Once FORT validator ends its first validation cycle, it will share the resulting data (also known as "Validated ROA Payloads" or VRPs) with any router that establishes an RTR connection.
 
