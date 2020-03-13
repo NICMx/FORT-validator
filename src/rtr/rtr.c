@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -290,11 +291,16 @@ client_thread_cb(void *arg)
 static int
 handle_client_connections(int server_fd)
 {
+	struct sigaction ign;
 	struct sockaddr_storage client_addr;
 	struct thread_param *param;
 	socklen_t sizeof_client_addr;
 	int client_fd;
 	int error;
+
+	/* Ignore SIGPIPES, they're handled apart */
+	ign.sa_handler = SIG_IGN;
+	sigaction(SIGPIPE, &ign, NULL);
 
 	listen(server_fd, config_get_server_queue());
 
