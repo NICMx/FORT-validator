@@ -7,6 +7,8 @@
 #include "file.h"
 #include "log.h"
 
+/* HTTP Response Code 200 (OK) */
+#define HTTP_OK			200
 /* HTTP Response Code 304 (Not Modified) */
 #define HTTP_NOT_MODIFIED	304
 /* HTTP Response Code 400 (Bad Request) */
@@ -105,9 +107,10 @@ curl_err_string(struct http_handler *handler, CURLcode res)
  */
 static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
-    http_write_cb cb, void *arg)
+    long *cond_met, http_write_cb cb, void *arg)
 {
 	CURLcode res;
+	long unmet = 0;
 
 	handler->errbuf[0] = 0;
 	curl_easy_setopt(handler->curl, CURLOPT_URL, uri);
@@ -117,8 +120,24 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	pr_debug("Doing HTTP GET to '%s'.", uri);
 	res = curl_easy_perform(handler->curl);
 	curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE, response_code);
-	if (res == CURLE_OK)
+	if (res == CURLE_OK) {
+		if (*response_code != HTTP_OK)
+			return 0;
+		/*
+		 * Scenario: Received an OK code, but the time condition wasn't
+		 * actually met, handle this as a "Not Modified" code.
+		 *
+		 * This check is due to old libcurl versions, where the impl
+		 * doesn't let us get the response content since the library
+		 * does the time validation, resulting in "The requested
+		 * document is not new enough".
+		 */
+		res = curl_easy_getinfo(handler->curl, CURLINFO_CONDITION_UNMET,
+		    &unmet);
+		if (res == CURLE_OK && unmet == 1)
+			*cond_met = 0;
 		return 0;
+	}
 
 	if (*response_code >= HTTP_BAD_REQUEST)
 		return pr_err("Error requesting URL %s (received HTTP code %ld): %s",
@@ -136,13 +155,14 @@ http_easy_cleanup(struct http_handler *handler)
 
 static int
 __http_download_file(struct rpki_uri *uri, http_write_cb cb,
-    long *response_code, long ims_value)
+    long *response_code, long ims_value, long *cond_met)
 {
 	struct http_handler handler;
 	struct stat stat;
 	FILE *out;
 	int error;
 
+	*cond_met = 1;
 	if (config_get_work_offline()) {
 		response_code = 0; /* Not 200 code, but also not an error */
 		return 0;
@@ -167,8 +187,8 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 		    CURL_TIMECOND_IFMODSINCE);
 	}
 
-	error = http_fetch(&handler, uri_get_global(uri), response_code, cb,
-	    out);
+	error = http_fetch(&handler, uri_get_global(uri), response_code,
+	    cond_met, cb, out);
 	http_easy_cleanup(&handler);
 	file_close(out);
 
@@ -194,7 +214,8 @@ int
 http_download_file(struct rpki_uri *uri, http_write_cb cb)
 {
 	long response = 0;
-	return __http_download_file(uri, cb, &response, 0);
+	long cond_met = 0;
+	return __http_download_file(uri, cb, &response, 0, &cond_met);
 }
 
 /*
@@ -213,14 +234,28 @@ int
 http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value)
 {
 	long response = 0;
+	long cond_met = 0;
 	int error;
 
-	error = __http_download_file(uri, cb, &response, value);
+	error = __http_download_file(uri, cb, &response, value, &cond_met);
 	if (error)
 		return error;
 
 	/* rfc7232#section-3.3:
 	 * "the origin server SHOULD generate a 304 (Not Modified) response"
 	 */
-	return response == HTTP_NOT_MODIFIED;
+	if (response == HTTP_NOT_MODIFIED)
+		return 1;
+
+	/*
+	 * Got another HTTP response code (OK or error).
+	 *
+	 * Check if the time condition was met (in case of error is set as
+	 * 'true'), if it wasn't, then do a regular request (no time condition).
+	 */
+	if (cond_met)
+		return 0;
+
+	return __http_download_file(uri, cb, &response, 0, &cond_met);
+
 }
