@@ -289,13 +289,13 @@ __vrps_update(bool *changed)
 	if (error)
 		return error;
 
-	rwlock_write_lock(&state_lock);
-
 	error = slurm_apply(&new_base, &state.slurm);
 	if (error) {
 		rwlock_unlock(&state_lock);
 		goto revert_base;
 	}
+
+	rwlock_write_lock(&state_lock);
 
 	if (state.base != NULL) {
 		error = compute_deltas(state.base, new_base, &deltas);
