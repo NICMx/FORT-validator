@@ -31,11 +31,12 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 {
 	int error;
 
-	pr_debug("Sending %s PDU to client.", pdutype2str(pdu_type));
+	pr_debug("Sending %s to client.", pdutype2str(pdu_type));
 
 	error = write(fd, data, data_len);
 	if (error < 0)
-		return pr_errno(errno, "Error sending response");
+		return pr_errno(errno, "Error sending %s to client.",
+		    pdutype2str(pdu_type));
 
 	return 0;
 }

@@ -186,6 +186,9 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 	case EAGAIN:
 		err_pdu_send_internal_error(fd, args.version);
 		return error;
+	default:
+		/* Any other error must stop sending more PDUs */
+		return error;
 	}
 
 	return send_end_of_data_pdu(fd, args.version, current_serial);

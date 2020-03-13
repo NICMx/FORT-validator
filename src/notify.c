@@ -11,17 +11,13 @@ static int
 send_notify(struct client *client, void *arg)
 {
 	serial_t *serial = arg;
-	int error;
 
 	/* Send Serial Notify PDU */
-	error = send_serial_notify_pdu(client->fd, client->rtr_version,
+	send_serial_notify_pdu(client->fd, client->rtr_version,
 	    *serial);
 
-	/* Error? Log it... */
-	if (error)
-		pr_warn("Error code %d sending notify PDU to client.", error);
-
-	return 0; /* ...but do not interrupt notify to other clients */
+	/* Errors already logged, do not interrupt notify to other clients */
+	return 0;
 }
 
 int

@@ -16,28 +16,28 @@ pdutype2str(enum pdu_type type)
 {
 	switch (type) {
 	case PDU_TYPE_SERIAL_NOTIFY:
-		return "Serial Notify";
+		return "Serial Notify PDU";
 	case PDU_TYPE_SERIAL_QUERY:
-		return "Serial Query";
+		return "Serial Query PDU";
 	case PDU_TYPE_RESET_QUERY:
-		return "Reset Query";
+		return "Reset Query PDU";
 	case PDU_TYPE_CACHE_RESPONSE:
-		return "Cache Response";
+		return "Cache Response PDU";
 	case PDU_TYPE_IPV4_PREFIX:
-		return "IPv4 Prefix";
+		return "IPv4 Prefix PDU";
 	case PDU_TYPE_IPV6_PREFIX:
-		return "IPv6 Prefix";
+		return "IPv6 Prefix PDU";
 	case PDU_TYPE_END_OF_DATA:
-		return "End of Data";
+		return "End of Data PDU";
 	case PDU_TYPE_CACHE_RESET:
-		return "Cache Reset";
+		return "Cache Reset PDU";
 	case PDU_TYPE_ROUTER_KEY:
-		return "Router Key";
+		return "Router Key PDU";
 	case PDU_TYPE_ERROR_REPORT:
-		return "Error Report";
+		return "Error Report PDU";
 	}
 
-	return "(unknown)";
+	return "unknown PDU";
 }
 
 static int
@@ -128,7 +128,7 @@ pdu_load(int fd, struct sockaddr_storage *client_addr,
 
 	if (log_debug_enabled()) {
 		char buffer[INET6_ADDRSTRLEN];
-		pr_debug("Received a %s PDU from %s.",
+		pr_debug("Received a %s from %s.",
 		    pdutype2str(header.pdu_type),
 		    sockaddr2str(client_addr, buffer));
 	}
