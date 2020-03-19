@@ -36,11 +36,7 @@
 	if (element == NULL)						\
 		return pr_err("SLURM member '%s' is required", name);
 
-/* Context value, local to avoid forwarding the parameter */
-struct db_slurm *db;
-unsigned int cur_ctx;
-
-static int handle_json(json_t *, struct db_slurm *, unsigned int *);
+static int handle_json(json_t *, struct db_slurm *);
 
 /*
  * Try to parse the SLURM file(s)
@@ -51,7 +47,6 @@ slurm_parse(char const *location, void *arg)
 	struct slurm_parser_params *params;
 	json_t *json_root;
 	json_error_t json_error;
-	unsigned int ctx;
 	int error;
 
 	params = arg;
@@ -63,13 +58,11 @@ slurm_parse(char const *location, void *arg)
 		return pr_err("SLURM JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
 
-	ctx = params->cur_ctx;
-	error = handle_json(json_root, params->db_slurm, &ctx);
+	error = handle_json(json_root, params->db_slurm);
 	json_decref(json_root);
 	if (error)
 		return error; /* File exists, but has a syntax error */
 
-	params->cur_ctx = ctx;
 	return 0;
 }
 
@@ -369,7 +362,7 @@ init_slurm_prefix(struct slurm_prefix *slurm_prefix)
 }
 
 static int
-load_single_prefix(json_t *object, bool is_assertion)
+load_single_prefix(json_t *object, struct db_slurm *db, bool is_assertion)
 {
 	struct slurm_prefix result;
 	size_t member_count;
@@ -414,7 +407,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 		if (!json_valid_members_count(object, member_count))
 			return pr_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
 
-		error = db_slurm_add_prefix_filter(db, &result, cur_ctx);
+		error = db_slurm_add_prefix_filter(db, &result);
 		if (error)
 			return error;
 
@@ -434,7 +427,7 @@ load_single_prefix(json_t *object, bool is_assertion)
 	if (!json_valid_members_count(object, member_count))
 		return pr_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
 
-	error = db_slurm_add_prefix_assertion(db, &result, cur_ctx);
+	error = db_slurm_add_prefix_assertion(db, &result);
 	if (error)
 		return error;
 
@@ -442,24 +435,21 @@ load_single_prefix(json_t *object, bool is_assertion)
 }
 
 static int
-load_prefix_array(json_t *array, bool is_assertion)
+load_prefix_array(json_t *array, struct db_slurm *db, bool is_assertion)
 {
 	json_t *element;
 	int index, error;
 
 	json_array_foreach(array, index, element) {
-		error = load_single_prefix(element, is_assertion);
+		error = load_single_prefix(element, db, is_assertion);
 		if (!error)
 			continue;
 		if (error == -EEXIST)
 			pr_err(
-			    "The prefix %s element \"%s\", is duplicated or covered by another %s; SLURM loading will be stopped.%s",
+			    "The prefix %s element \"%s\", covers or is covered by another assertion/filter; SLURM loading will be stopped. %s",
 			    (is_assertion ? "assertion" : "filter"),
 			    json_dumps(element, 0),
-			    (is_assertion ? "assertion" : "filter"),
-			    (cur_ctx > 0
-			    ? " TIP: More than 1 SLURM files were found, check if the prefix is contained in multiple files (see RFC 8416 section 4.2)."
-			    : ""));
+			    "TIP: More than 1 SLURM files were found, check if the prefix is contained in multiple files (see RFC 8416 section 4.2).");
 		else
 			pr_err(
 			    "Error at prefix %s, element \"%s\", SLURM loading will be stopped",
@@ -482,7 +472,7 @@ init_slurm_bgpsec(struct slurm_bgpsec *slurm_bgpsec)
 }
 
 static int
-load_single_bgpsec(json_t *object, bool is_assertion)
+load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 {
 	struct slurm_bgpsec result;
 	size_t member_count;
@@ -535,7 +525,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 			goto release_router_key;
 		}
 
-		error = db_slurm_add_bgpsec_filter(db, &result, cur_ctx);
+		error = db_slurm_add_bgpsec_filter(db, &result);
 		if (error)
 			goto release_router_key;
 
@@ -549,7 +539,7 @@ load_single_bgpsec(json_t *object, bool is_assertion)
 		goto release_router_key;
 	}
 
-	error = db_slurm_add_bgpsec_assertion(db, &result, cur_ctx);
+	error = db_slurm_add_bgpsec_assertion(db, &result);
 	if (error)
 		goto release_router_key;
 
@@ -563,24 +553,21 @@ release_ski:
 }
 
 static int
-load_bgpsec_array(json_t *array, bool is_assertion)
+load_bgpsec_array(json_t *array, struct db_slurm *db, bool is_assertion)
 {
 	json_t *element;
 	int index, error;
 
 	json_array_foreach(array, index, element) {
-		error = load_single_bgpsec(element, is_assertion);
+		error = load_single_bgpsec(element, db, is_assertion);
 		if (!error)
 			continue;
 		if (error == -EEXIST)
 			pr_err(
-			    "The bgpsec %s element \"%s\", is duplicated or covered by another %s; SLURM loading will be stopped.%s",
+			    "The ASN at bgpsec %s element \"%s\", is duplicated in another assertion/filter; SLURM loading will be stopped. %s",
 			    (is_assertion ? "assertion" : "filter"),
 			    json_dumps(element, 0),
-			    (is_assertion ? "assertion" : "filter"),
-			    (cur_ctx > 0
-			    ? " TIP: More than 1 SLURM files were found, check if the ASN is contained in multiple files (see RFC 8416 section 4.2)."
-			    : ""));
+			    "TIP: More than 1 SLURM files were found, check if the ASN is contained in multiple files (see RFC 8416 section 4.2).");
 		else
 			pr_err(
 			    "Error at bgpsec %s, element \"%s\", SLURM loading will be stopped",
@@ -614,7 +601,7 @@ load_version(json_t *root)
 }
 
 static int
-load_filters(json_t *root)
+load_filters(json_t *root, struct db_slurm *db)
 {
 	json_t *filters, *prefix, *bgpsec;
 	size_t expected_members;
@@ -637,11 +624,11 @@ load_filters(json_t *root)
 		    expected_members);
 
 	/* Arrays loaded, now iterate */
-	error = load_prefix_array(prefix, false);
+	error = load_prefix_array(prefix, db, false);
 	if (error)
 		return error;
 
-	error = load_bgpsec_array(bgpsec, false);
+	error = load_bgpsec_array(bgpsec, db, false);
 	if (error)
 		return error;
 
@@ -649,7 +636,7 @@ load_filters(json_t *root)
 }
 
 static int
-load_assertions(json_t *root)
+load_assertions(json_t *root, struct db_slurm *db)
 {
 	json_t *assertions, *prefix, *bgpsec;
 	size_t expected_members;
@@ -671,11 +658,11 @@ load_assertions(json_t *root)
 		    LOCALLY_ADDED_ASSERTIONS,
 		    expected_members);
 
-	error = load_prefix_array(prefix, true);
+	error = load_prefix_array(prefix, db, true);
 	if (error)
 		return error;
 
-	error = load_bgpsec_array(bgpsec, true);
+	error = load_bgpsec_array(bgpsec, db, true);
 	if (error)
 		return error;
 
@@ -683,7 +670,7 @@ load_assertions(json_t *root)
 }
 
 static int
-handle_json(json_t *root, struct db_slurm *db_slurm, unsigned int *ctx)
+handle_json(json_t *root, struct db_slurm *db)
 {
 	size_t expected_members;
 	int error;
@@ -691,18 +678,18 @@ handle_json(json_t *root, struct db_slurm *db_slurm, unsigned int *ctx)
 	if (!json_is_object(root))
 		return pr_err("The root of the SLURM is not a JSON object.");
 
-	cur_ctx = *ctx;
-	db = db_slurm;
-
 	error = load_version(root);
 	if (error)
 		return error;
 
-	error = load_filters(root);
+	/* Start working on the cache */
+	db_slurm_start_cache(db);
+
+	error = load_filters(root, db);
 	if (error)
 		return error;
 
-	error = load_assertions(root);
+	error = load_assertions(root, db);
 	if (error)
 		return error;
 
@@ -712,7 +699,8 @@ handle_json(json_t *root, struct db_slurm *db_slurm, unsigned int *ctx)
 		    "SLURM root must have only %lu members (RFC 8416 section 3.2)",
 		    expected_members);
 
-	(*ctx)++; /* Next time will be another context */
+	/* Persist cached data */
+	db_slurm_flush_cache(db);
 
 	return 0;
 }

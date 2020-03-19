@@ -7,7 +7,6 @@
 struct slurm_parser_params {
 	struct db_table *db_table;
 	struct db_slurm *db_slurm;
-	unsigned int 	cur_ctx; /* Context (file number) */
 };
 
 int slurm_parse(char const *, void *);

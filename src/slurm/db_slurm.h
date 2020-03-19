@@ -34,20 +34,14 @@ typedef int (*bgpsec_foreach_cb)(struct slurm_bgpsec *, void *);
 
 int db_slurm_create(struct db_slurm **);
 
-int db_slurm_add_prefix_filter(struct db_slurm *, struct slurm_prefix *, int);
-int db_slurm_add_prefix_assertion(struct db_slurm *, struct slurm_prefix *,
-    int);
-int db_slurm_add_bgpsec_filter(struct db_slurm *, struct slurm_bgpsec *, int);
-int db_slurm_add_bgpsec_assertion(struct db_slurm *, struct slurm_bgpsec *,
-    int);
+int db_slurm_add_prefix_filter(struct db_slurm *, struct slurm_prefix *);
+int db_slurm_add_prefix_assertion(struct db_slurm *, struct slurm_prefix *);
+int db_slurm_add_bgpsec_filter(struct db_slurm *, struct slurm_bgpsec *);
+int db_slurm_add_bgpsec_assertion(struct db_slurm *, struct slurm_bgpsec *);
 
 bool db_slurm_vrp_is_filtered(struct db_slurm *, struct vrp const *);
 bool db_slurm_bgpsec_is_filtered(struct db_slurm *, struct router_key const *);
 
-int db_slurm_foreach_filter_prefix(struct db_slurm *, prefix_foreach_cb,
-    void *);
-int db_slurm_foreach_filter_bgpsec(struct db_slurm *, bgpsec_foreach_cb,
-    void *);
 int db_slurm_foreach_assertion_prefix(struct db_slurm *, prefix_foreach_cb,
     void *);
 int db_slurm_foreach_assertion_bgpsec(struct db_slurm *, bgpsec_foreach_cb,
@@ -57,6 +51,14 @@ int db_slurm_foreach_assertion_bgpsec(struct db_slurm *, bgpsec_foreach_cb,
 void db_slurm_update_time(struct db_slurm *);
 /* Log the DB in human readable form at INFO level */
 void db_slurm_log(struct db_slurm *);
+
+/* Start working on the cache */
+int db_slurm_start_cache(struct db_slurm *);
+/* Persist all the data stored at cache and erase cache */
+int db_slurm_flush_cache(struct db_slurm *);
+
+/* Does the SLURM DB has data? */
+bool db_slurm_has_data(struct db_slurm *);
 
 void db_slurm_destroy(struct db_slurm *);
 

@@ -37,8 +37,8 @@ slurm_load(struct slurm_parser_params *params)
 		return error;
 	}
 
-	/* A unmodified context means that no SLURM was loaded (empty dir) */
-	if(params->cur_ctx == 0) {
+	/* Empty SLURM dir, or empty SLURM file(s) */
+	if (!db_slurm_has_data(db)) {
 		db_slurm_destroy(db);
 		params->db_slurm = NULL;
 	}
@@ -130,7 +130,6 @@ slurm_create_parser_params(struct slurm_parser_params **result)
 
 	params->db_table = NULL;
 	params->db_slurm = NULL;
-	params->cur_ctx = 0;
 
 	*result = params;
 	return 0;
