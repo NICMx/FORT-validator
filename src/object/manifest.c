@@ -170,8 +170,22 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 		if (error)
 			goto fail;
 
+		/*
+		 * Expect:
+		 * - Negative value: an error not to be ignored, the whole
+		 *   manifest will be discarded.
+		 * - Zero value: hash at manifest matches file's hash, or it
+		 *   doesn't match its hash but there's an incidence to ignore
+		 *   such error.
+		 * - Positive value: file doesn't exist and keep validating
+		 *   manifest.
+		 */
 		error = hash_validate_mft_file("sha256", uri, &fah->hash);
-		if (error) {
+		if (error < 0) {
+			uri_refput(uri);
+			goto fail;
+		}
+		if (error > 0) {
 			uri_refput(uri);
 			continue;
 		}

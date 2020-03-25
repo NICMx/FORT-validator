@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/types.h> /* For blksize_t */
 
+#include "common.h"
 #include "file.h"
 #include "log.h"
 #include "asn1/oid.h"
@@ -101,7 +102,14 @@ end1:
 
 /**
  * Computes the hash of the file @uri, and compares it to @expected (The
- * "expected" hash). Returns 0 if no errors happened and the hashes match.
+ * "expected" hash).
+ *
+ * Returns:
+ *   0 if no errors happened and the hashes match, or the hash doesn't match
+ *     but there's an incidence to ignore such error.
+ * < 0 if there was an error that can't be ignored.
+ * > 0 if there was an error but it can be ignored (file not found and there's
+ *     an incidence to ignore this).
  */
 int
 hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
@@ -114,12 +122,26 @@ hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
 	if (expected->bits_unused != 0)
 		return pr_err("Hash string has unused bits.");
 
-	error = hash_file(algorithm, uri, actual, &actual_len);
-	if (error)
-		return error;
+	do {
+		error = hash_file(algorithm, uri, actual, &actual_len);
+		if (!error)
+			break;
+
+		if (error == EACCES || error == ENOENT) {
+			if (incidence(INID_MFT_FILE_NOT_FOUND,
+			    "File '%s' listed at manifest doesn't exist",
+			    uri_get_printable(uri)))
+				return -EINVAL;
+
+			return error;
+		}
+		/* Any other error (crypto, enomem, file read) */
+		return ENSURE_NEGATIVE(error);
+	} while (0);
 
 	if (!hash_matches(expected->buf, expected->size, actual, actual_len)) {
-		return pr_err("File '%s' does not match its manifest hash.",
+		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
+		    "File '%s' does not match its manifest hash.",
 		    uri_get_printable(uri));
 	}
 
