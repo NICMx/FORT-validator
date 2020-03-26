@@ -346,6 +346,10 @@ alias are commonly located at \fI/etc/services\fR. See also
 .P
 The default port (323) is privileged. To improve security, either change or
 jail it.
+.P
+In case you don't wish to use another port nor execute FORT validator as root,
+you could use CAP_NET_BIND_SERVICE capability (to bind to privileged ports), or
+NAT/firewall port redirection.
 .RE
 .P
 
