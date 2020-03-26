@@ -37,6 +37,14 @@ static int
 hash_file(char const *algorithm, struct rpki_uri *uri, unsigned char *result,
     unsigned int *result_len)
 {
+	return hash_local_file(algorithm, uri_get_local(uri), result,
+		result_len);
+}
+
+int
+hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
+    unsigned int *result_len)
+{
 	EVP_MD const *md;
 	FILE *file;
 	struct stat stat;
@@ -50,7 +58,7 @@ hash_file(char const *algorithm, struct rpki_uri *uri, unsigned char *result,
 	if (error)
 		return error;
 
-	error = file_open(uri_get_local(uri), &file, &stat);
+	error = file_open(uri, &file, &stat);
 	if (error)
 		return error;
 

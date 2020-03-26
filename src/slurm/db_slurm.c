@@ -36,6 +36,7 @@ struct db_slurm {
 	struct slurm_lists *cache;
 	bool loaded_date_set;
 	time_t loaded_date;
+	struct slurm_csum_list csum_list;
 };
 
 char addr_buf[INET6_ADDRSTRLEN];
@@ -111,6 +112,9 @@ db_slurm_create(struct db_slurm **result)
 	al_assertion_bgpsec_init(&db->lists.assertion_bgps_al);
 	db->loaded_date_set = false;
 	db->cache = NULL;
+
+	SLIST_INIT(&db->csum_list);
+	db->csum_list.list_size = 0;
 
 	*result = db;
 	return 0;
@@ -672,8 +676,36 @@ db_slurm_has_data(struct db_slurm *db)
 void
 db_slurm_destroy(struct db_slurm *db)
 {
+	struct slurm_file_csum *tmp;
+
 	slurm_lists_cleanup(&db->lists);
 	if (db->cache)
 		slurm_lists_destroy(db->cache);
+
+	while (!SLIST_EMPTY(&db->csum_list)) {
+		tmp = SLIST_FIRST(&db->csum_list);
+		SLIST_REMOVE_HEAD(&db->csum_list, next);
+		free(tmp);
+	}
+
 	free(db);
 }
+
+int
+db_slurm_set_csum_list(struct db_slurm *db, struct slurm_csum_list *list)
+{
+	if (!SLIST_EMPTY(&db->csum_list))
+		return pr_err("Checksum list for SLURM DB must be empty");
+
+	db->csum_list.slh_first = list->slh_first;
+	db->csum_list.list_size = list->list_size;
+	return 0;
+}
+
+void
+db_slurm_get_csum_list(struct db_slurm *db, struct slurm_csum_list *result)
+{
+	result->list_size = db->csum_list.list_size;
+	result->slh_first = db->csum_list.slh_first;
+}
+

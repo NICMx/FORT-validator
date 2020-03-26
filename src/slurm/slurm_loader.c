@@ -8,6 +8,7 @@
 #include "log.h"
 #include "config.h"
 #include "common.h"
+#include "crypto/hash.h"
 #include "slurm/slurm_parser.h"
 
 #define SLURM_FILE_EXTENSION	".slurm"
@@ -135,19 +136,71 @@ slurm_create_parser_params(struct slurm_parser_params **result)
 	return 0;
 }
 
-int
-slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
+static int
+__slurm_load_checksums(char const *location, void *arg)
 {
-	struct slurm_parser_params *params = NULL;
+	struct slurm_csum_list *list;
+	struct slurm_file_csum *csum;
 	int error;
 
-	if (config_get_slurm() == NULL)
-		return 0;
+	list = arg;
+	csum = malloc(sizeof(struct slurm_file_csum));
+	if (csum == NULL)
+		return pr_enomem();
 
-	pr_info("Applying configured SLURM");
-	error = slurm_create_parser_params(&params);
-	if (error)
+
+	error = hash_local_file("sha256", location, csum->csum,
+	    &csum->csum_len);
+	if (error) {
+		free(csum);
+		return pr_err("Calculating slurm hash");
+	}
+
+	SLIST_INSERT_HEAD(list, csum, next);
+	list->list_size++;
+
+	return 0;
+}
+
+static void
+destroy_local_csum_list(struct slurm_csum_list *list)
+{
+	struct slurm_file_csum *tmp;
+
+	while (!SLIST_EMPTY(list)) {
+		tmp = SLIST_FIRST(list);
+		SLIST_REMOVE_HEAD(list, next);
+		free(tmp);
+	}
+}
+
+static int
+slurm_load_checksums(struct slurm_csum_list *csum_list)
+{
+	struct slurm_csum_list result;
+	int error;
+
+	SLIST_INIT(&result);
+	result.list_size = 0;
+
+	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
+	    __slurm_load_checksums, &result);
+	if (error) {
+		destroy_local_csum_list(&result);
 		return error;
+	}
+
+	csum_list->list_size = result.list_size;
+	csum_list->slh_first = result.slh_first;
+
+	return 0;
+}
+
+static void
+__slurm_apply(struct db_slurm **last_slurm, struct slurm_parser_params *params,
+    struct slurm_csum_list *csum_list)
+{
+	int error;
 
 	error = slurm_load(params);
 	if (!error) {
@@ -155,8 +208,10 @@ slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
 		if (*last_slurm != NULL)
 			db_slurm_destroy(*last_slurm);
 		*last_slurm = params->db_slurm;
-		if (*last_slurm != NULL)
+		if (*last_slurm != NULL) {
 			db_slurm_update_time(*last_slurm);
+			db_slurm_set_csum_list(*last_slurm, csum_list);
+		}
 	} else {
 		/* Any error: use last valid SLURM */
 		pr_warn("Error loading SLURM, the validation will still continue.");
@@ -166,6 +221,84 @@ slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
 			/* Log applied SLURM as info */
 			db_slurm_log(params->db_slurm);
 		}
+		destroy_local_csum_list(csum_list);
+	}
+}
+
+static bool
+are_csum_lists_equals(struct slurm_csum_list *new_list,
+    struct slurm_csum_list *old_list)
+{
+	struct slurm_file_csum *newcsum, *old;
+	bool found = false;
+
+	if (new_list->list_size != old_list->list_size) {
+		return false;
+	}
+
+	SLIST_FOREACH(newcsum, new_list, next) {
+		SLIST_FOREACH(old, old_list, next) {
+
+			if (newcsum->csum_len != old->csum_len)
+				continue;
+
+			if (memcmp(newcsum->csum, old->csum,
+			    newcsum->csum_len) == 0) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			return false;
+
+		found = false;
+	}
+
+	return true;
+}
+
+int
+slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
+{
+	struct slurm_parser_params *params = NULL;
+	struct slurm_csum_list csum_list, old_csum_list;
+	int error;
+	bool list_equals = false;
+
+	if (config_get_slurm() == NULL)
+		return 0;
+
+	pr_info("Checking if there are new or modified SLURM files");
+	error = slurm_load_checksums(&csum_list);
+	if (error)
+		return error;
+
+	if (*last_slurm != NULL) {
+		db_slurm_get_csum_list(*last_slurm, &old_csum_list);
+		list_equals = are_csum_lists_equals(&csum_list, &old_csum_list);
+	}
+
+	error = slurm_create_parser_params(&params);
+	if (error)
+		return error;
+
+	if (list_equals) {
+		if (*last_slurm != NULL) {
+			pr_info("Applying same old SLURM, no changes found.");
+			params->db_slurm = *last_slurm;
+		}
+		destroy_local_csum_list(&csum_list);
+	} else {
+		if (csum_list.list_size == 0) {
+			if (*last_slurm != NULL)
+				db_slurm_destroy(*last_slurm);
+			*last_slurm = params->db_slurm;
+			/* Empty DIR or FILE SLURM not found */
+			goto success;
+		}
+		pr_info("Applying configured SLURM");
+		__slurm_apply(last_slurm, params, &csum_list);
 	}
 
 	/* If there's no new SLURM loaded, stop */

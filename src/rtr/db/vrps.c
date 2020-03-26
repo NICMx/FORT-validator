@@ -290,10 +290,8 @@ __vrps_update(bool *changed)
 		return error;
 
 	error = slurm_apply(&new_base, &state.slurm);
-	if (error) {
-		rwlock_unlock(&state_lock);
+	if (error)
 		goto revert_base;
-	}
 
 	rwlock_write_lock(&state_lock);
 

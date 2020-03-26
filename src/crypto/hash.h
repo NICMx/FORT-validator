@@ -15,4 +15,8 @@ int hash_validate(char const *, unsigned char const *, size_t,
 int hash_validate_octet_string(char const *, OCTET_STRING_t const*,
     OCTET_STRING_t const *);
 
+int hash_local_file(char const *, char const *, unsigned char *,
+    unsigned int *);
+
+
 #endif /* SRC_HASH_H_ */

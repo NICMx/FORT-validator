@@ -2,6 +2,9 @@
 #define SRC_SLURM_db_slurm_H_
 
 #include <stdbool.h>
+#include <sys/queue.h>
+#include <openssl/evp.h>
+
 #include "rtr/db/vrp.h"
 
 /* Flags to get data from structs */
@@ -25,6 +28,18 @@ struct slurm_bgpsec {
 	uint32_t	asn;
 	unsigned char	*ski;
 	unsigned char	*router_public_key;
+};
+
+
+struct slurm_file_csum {
+	unsigned char csum[EVP_MAX_MD_SIZE];
+	unsigned int csum_len;
+	SLIST_ENTRY(slurm_file_csum) next;
+};
+
+struct slurm_csum_list {
+	struct slurm_file_csum *slh_first;	/* first element */
+	unsigned int list_size;
 };
 
 struct db_slurm;
@@ -61,5 +76,8 @@ int db_slurm_flush_cache(struct db_slurm *);
 bool db_slurm_has_data(struct db_slurm *);
 
 void db_slurm_destroy(struct db_slurm *);
+
+int db_slurm_set_csum_list(struct db_slurm *, struct slurm_csum_list *);
+void db_slurm_get_csum_list(struct db_slurm *, struct slurm_csum_list *);
 
 #endif /* SRC_SLURM_db_slurm_H_ */
