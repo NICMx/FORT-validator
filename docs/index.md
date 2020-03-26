@@ -10,9 +10,4 @@ FORT validator is an MIT-licensed RPKI Relying Party, this is a tool offered as 
 
 ## Status
 
-Version [{{ site.fort-latest-version }}](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"} is the latest official release, includes several updates, including:
-- RRDP support (see [RFC 8182](https://tools.ietf.org/html/rfc8182)).
-- Support HTTPS URIs at TALs (see [RFC 8630](https://tools.ietf.org/html/rfc8630)).
-- Remember last valid SLURM in case of syntax error with a newer version.
-- Setup script to fetch ARINs TAL.
-- Add incidence to validate signed objects DER encoding.
+Version **{{ site.fort-latest-version }}** is the latest official release. To fetch or review it, visit the [GitHub release](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"}.
