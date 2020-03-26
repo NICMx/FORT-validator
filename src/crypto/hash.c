@@ -129,7 +129,7 @@ hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
 
 		if (error == EACCES || error == ENOENT) {
 			if (incidence(INID_MFT_FILE_NOT_FOUND,
-			    "File '%s' listed at manifest doesn't exist",
+			    "File '%s' listed at manifest doesn't exist.",
 			    uri_get_printable(uri)))
 				return -EINVAL;
 

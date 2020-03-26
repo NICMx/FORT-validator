@@ -73,6 +73,14 @@
     {
       "name": "incid-obj-not-der-encoded",
       "action": "ignore"
+    },
+    {
+      "name": "incid-file-at_mft-not-found",
+      "action": "error"
+    },
+    {
+      "name": "incid-file-at-mft-hash-not-match",
+      "action": "error"
     }
   ],
   "output": {

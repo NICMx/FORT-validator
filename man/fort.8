@@ -155,14 +155,21 @@ nothing happened.
 happened.
 .RE
 .P
-By default, all the incidences have an action of \fIignore\fR. Currently there
-are two registered incidences:
+Currently these are the registered incidences, each with a distinct
+\fBaction\fR configured by default.
 .RS 4
 .br
 \fIincid-hashalg-has-params\fR (Signed Object's hash algorithm has NULL object
-as parameters).
+as parameters). [Default action: \fBignore\fR]
 .br
-\fIincid-obj-not-der-encoded\fR (Object isn't DER encoded).
+\fIincid-obj-not-der-encoded\fR (Object isn't DER encoded). [Default action:
+\fBignore\fR]
+.br
+\fIincid-file-at_mft-not-found\fR (File listed at manifest doesn't exist).
+[Default action: \fBerror\fR]
+.br
+\fIincid-file-at-mft-hash-not-match\fR (File hash listed at manifest doesn't
+match the actual file hash). [Default action: \fBerror\fR]
 .RE
 .P
 More information about incidences can be consulted at FORT's web docs.

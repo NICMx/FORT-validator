@@ -11,6 +11,8 @@ title: Incidence
 3. [Incidence types](#incidence-types)
 	1. [Signed Object's hash algorithm has NULL object as parameters](#signed-objects-hash-algorithm-has-null-object-as-parameters)
 	2. [Object isn't DER encoded](#object-isnt-der-encoded)
+	3. [File listed at manifest doesn't exist](#file-listed-at-manifest-doesnt-exist)
+	4. [File hash listed at manifest doesn't match the actual file hash](#file-hash-listed-at-manifest-doesnt-match-the-actual-file-hash)
 
 ## Introduction
 
@@ -43,7 +45,7 @@ Some incidences are `ignore`d by default, because they stem from bad practices (
 
 ## Incidence types
 
-Presently, there is only a pair of incidence types defined. This list might evolve further over time, depending on the state of the global RPKI and user demand.
+Presently, there are a few incidences defined. This list might evolve further over time, depending on the state of the global RPKI and user demand.
 
 ### Signed Object's hash algorithm has NULL object as parameters
 
@@ -106,4 +108,51 @@ If not `ignore`d, Fort will report this incidence with the following error messa
 
 ```
 <log level>: <offending file name>: '<object>' isn't DER encoded
+```
+
+### File listed at manifest doesn't exist
+
+- **Name:** `incid-file-at_mft-not-found`
+- **Default action:** `error`
+
+[RFC 6486 section 6.1](https://tools.ietf.org/html/rfc6486#section-6.1) considers this scenario:
+
+```
+   2. {..} If there exist files at the publication point that do not appear
+      on any manifest, or files listed in a manifest that do not appear
+      at the publication point, then see Section 6.5, but still continue
+      with the following test.
+```
+
+If there's a missing file, it could be a publisher error or even an attack against the publication point (see [section 6.5](https://tools.ietf.org/html/rfc6486#section-6.5)).
+
+By default, Fort validator will handle this as an error, thus discarding the manifest file.
+
+When the incidence is not `ignore`d, Fort will report it with the following message:
+
+```
+<log level>: <manifest file name>: File '<file name>' listed at manifest doesn't exist.
+```
+
+### File hash listed at manifest doesn't match the actual file hash
+
+- **Name:** `incid-file-at-mft-hash-not-match`
+- **Default action:** `error`
+
+[RFC 6486 section 6.1](https://tools.ietf.org/html/rfc6486#section-6.1) considers this scenario:
+
+```
+   4. {..} If the computed hash value of a file listed on the manifest does
+      not match the hash value contained in the manifest, then see
+      Section 6.6.
+```
+
+It's up to a local policy to discard these files (and the rest of the manifest files) or trust in them (see [section 6.6](https://tools.ietf.org/html/rfc6486#section-6.6)).
+
+By default, Fort validator will discard such files and the manifest as well.
+
+When the incidence is not `ignore`d, Fort will report it with the following message:
+
+```
+<log level>: <manifest file name>: File '<file name>' does not match its manifest hash.
 ```
