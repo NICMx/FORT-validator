@@ -43,7 +43,7 @@ struct tal {
 	size_t spki_len;
 };
 
-struct fv_param {
+struct pthread_param {
 	int *exit_status; /* Return status of the file validation */
 	char *tal_file;
 	void *arg;
@@ -57,7 +57,12 @@ struct thread {
 };
 
 /* List of threads, one per TAL file */
-SLIST_HEAD(threads_list, thread) threads;
+SLIST_HEAD(threads_list, thread);
+
+struct tal_param {
+	struct db_table *db;
+	struct threads_list *threads;
+};
 
 static int
 uris_init(struct uris *uris)
@@ -566,7 +571,7 @@ end:	validation_destroy(state);
 static void *
 do_file_validation(void *thread_arg)
 {
-	struct fv_param param;
+	struct pthread_param param;
 	struct tal *tal;
 	int error;
 
@@ -610,8 +615,9 @@ thread_destroy(struct thread *thread)
 static int
 __do_file_validation(char const *tal_file, void *arg)
 {
+	struct tal_param *t_param = arg;
 	struct thread *thread;
-	struct fv_param *param;
+	struct pthread_param *p_param;
 	static pthread_t pid;
 	int *exit_status;
 	int error;
@@ -626,17 +632,17 @@ __do_file_validation(char const *tal_file, void *arg)
 		goto free_db_rrdp;
 	}
 
-	param = malloc(sizeof(struct fv_param));
-	if (param == NULL) {
+	p_param = malloc(sizeof(struct pthread_param));
+	if (p_param == NULL) {
 		error = pr_enomem();
 		goto free_status;
 	}
 
-	param->exit_status = exit_status;
-	param->tal_file = strdup(tal_file);
-	param->arg = arg;
+	p_param->exit_status = exit_status;
+	p_param->tal_file = strdup(tal_file);
+	p_param->arg = t_param->db;
 
-	errno = pthread_create(&pid, NULL, do_file_validation, param);
+	errno = pthread_create(&pid, NULL, do_file_validation, p_param);
 	if (errno) {
 		error = -pr_errno(errno,
 		    "Could not spawn the file validation thread");
@@ -653,12 +659,12 @@ __do_file_validation(char const *tal_file, void *arg)
 	thread->pid = pid;
 	thread->file = strdup(tal_file);
 	thread->exit_status = exit_status;
-	SLIST_INSERT_HEAD(&threads, thread, next);
+	SLIST_INSERT_HEAD(t_param->threads, thread, next);
 
 	return 0;
 free_param:
-	free(param->tal_file);
-	free(param);
+	free(p_param->tal_file);
+	free(p_param);
 free_status:
 	free(exit_status);
 free_db_rrdp:
@@ -669,17 +675,36 @@ free_db_rrdp:
 int
 perform_standalone_validation(struct db_table *table)
 {
+	struct tal_param *param;
+	struct threads_list threads;
 	struct thread *thread;
 	int error, t_error;
+
+	param = malloc(sizeof(struct tal_param));
+	if (param == NULL)
+		return pr_enomem();
 
 	/* Set existent tal RRDP info to non visited */
 	db_rrdp_reset_visited_tals();
 
 	SLIST_INIT(&threads);
+
+	param->db = table;
+	param->threads = &threads;
+
 	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
-	    __do_file_validation, table);
-	if (error)
+	    __do_file_validation, param);
+	if (error) {
+		/* End all threads */
+		while (!SLIST_EMPTY(&threads)) {
+			thread = threads.slh_first;
+			close_thread(thread->pid, thread->file);
+			SLIST_REMOVE_HEAD(&threads, next);
+			thread_destroy(thread);
+		}
+		free(param);
 		return error;
+	}
 
 	/* Wait for all */
 	t_error = 0;
@@ -698,6 +723,9 @@ perform_standalone_validation(struct db_table *table)
 		thread_destroy(thread);
 	}
 
+	/* The parameter isn't needed anymore */
+	free(param);
+
 	/* One thread has errors, validation can't keep the resulting table */
 	if (t_error)
 		return t_error;
@@ -706,18 +734,4 @@ perform_standalone_validation(struct db_table *table)
 	db_rrdp_rem_nonvisited_tals();
 
 	return error;
-}
-
-void
-terminate_standalone_validation(void)
-{
-	struct thread *thread;
-
-	/* End all threads */
-	while (!SLIST_EMPTY(&threads)) {
-		thread = threads.slh_first;
-		close_thread(thread->pid, thread->file);
-		SLIST_REMOVE_HEAD(&threads, next);
-		thread_destroy(thread);
-	}
 }

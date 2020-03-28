@@ -111,9 +111,3 @@ perform_standalone_validation(struct db_table *table)
 	iteration++;
 	return 0;
 }
-
-void
-terminate_standalone_validation(void)
-{
-	/* Nothing, no threads to join */
-}

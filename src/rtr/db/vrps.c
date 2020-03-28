@@ -60,7 +60,9 @@ struct state {
 	serial_t next_serial;
 	uint16_t v0_session_id;
 	uint16_t v1_session_id;
-} state;
+};
+
+static struct state state;
 
 /** Read/write lock, which protects @state and its inhabitants. */
 static pthread_rwlock_t state_lock;
@@ -182,7 +184,6 @@ __perform_standalone_validation(struct db_table **result)
 
 	error = perform_standalone_validation(db);
 	if (error) {
-		terminate_standalone_validation();
 		db_table_destroy(db);
 		return error;
 	}

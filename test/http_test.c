@@ -44,13 +44,15 @@ static int
 local_download(char const *url, long *response_code, struct response *resp)
 {
 	struct http_handler handler;
+	long cond;
 	int error;
 
+	cond = 0;
 	error = http_easy_init(&handler);
 	if (error)
 		return error;
 
-	error = http_fetch(&handler, url, response_code, write_cb, resp);
+	error = http_fetch(&handler, url, response_code, &cond, write_cb, resp);
 	http_easy_cleanup(&handler);
 	return error;
 }
