@@ -112,7 +112,7 @@ If not `ignore`d, Fort will report this incidence with the following error messa
 
 ### File listed at manifest doesn't exist
 
-- **Name:** `incid-file-at_mft-not-found`
+- **Name:** `incid-file-at-mft-not-found`
 - **Default action:** `error`
 
 [RFC 6486 section 6.1](https://tools.ietf.org/html/rfc6486#section-6.1) considers this scenario:

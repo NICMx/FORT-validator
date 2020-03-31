@@ -75,7 +75,7 @@
       "action": "ignore"
     },
     {
-      "name": "incid-file-at_mft-not-found",
+      "name": "incid-file-at-mft-not-found",
       "action": "error"
     },
     {

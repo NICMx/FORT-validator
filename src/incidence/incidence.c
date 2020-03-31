@@ -31,7 +31,7 @@ static struct incidence incidences[__INID_MAX] = {
 	},
 	{
 		INID_MFT_FILE_NOT_FOUND,
-		"incid-file-at_mft-not-found",
+		"incid-file-at-mft-not-found",
 		"File listed at manifest doesn't exist",
 		INAC_ERROR,
 	},
