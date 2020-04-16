@@ -19,10 +19,10 @@ struct slurm_bgpsec_ctx {
 	int ctx;
 };
 
-ARRAY_LIST(al_filter_prefix, struct slurm_prefix_ctx)
-ARRAY_LIST(al_assertion_prefix, struct slurm_prefix_ctx)
-ARRAY_LIST(al_filter_bgpsec, struct slurm_bgpsec_ctx)
-ARRAY_LIST(al_assertion_bgpsec, struct slurm_bgpsec_ctx)
+STATIC_ARRAY_LIST(al_filter_prefix, struct slurm_prefix_ctx)
+STATIC_ARRAY_LIST(al_assertion_prefix, struct slurm_prefix_ctx)
+STATIC_ARRAY_LIST(al_filter_bgpsec, struct slurm_bgpsec_ctx)
+STATIC_ARRAY_LIST(al_assertion_bgpsec, struct slurm_bgpsec_ctx)
 
 struct db_slurm {
 	struct al_filter_prefix filter_pfx_al;
@@ -33,7 +33,7 @@ struct db_slurm {
 	time_t loaded_date;
 };
 
-char addr_buf[INET6_ADDRSTRLEN];
+static char addr_buf[INET6_ADDRSTRLEN];
 
 int
 db_slurm_create(struct db_slurm **result)

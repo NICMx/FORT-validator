@@ -962,7 +962,7 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
 	return error;
 }
 
-int
+static int
 __certificate_get_resources(X509 *cert, struct resources *resources,
     int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
     char const *policy_rfc, char const *bad_ext_rfc, bool allow_asn_inherit)

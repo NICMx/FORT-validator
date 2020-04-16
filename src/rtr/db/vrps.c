@@ -42,7 +42,7 @@ struct sorted_lists {
 	struct rk_slist router_keys;
 };
 
-struct state {
+static struct state {
 	/**
 	 * All the current valid ROAs.
 	 *

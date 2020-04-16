@@ -8,8 +8,8 @@
 
 #include "log.h"
 
-xmlRelaxNGPtr schema;
-xmlRelaxNGParserCtxtPtr rngparser;
+static xmlRelaxNGPtr schema;
+static xmlRelaxNGParserCtxtPtr rngparser;
 
 /* Initialize global schema to parse RRDP files */
 int

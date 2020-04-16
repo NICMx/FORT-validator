@@ -37,8 +37,8 @@
 		return pr_err("SLURM member '%s' is required", name);
 
 /* Context value, local to avoid forwarding the parameter */
-struct db_slurm *db;
-unsigned int cur_ctx;
+static struct db_slurm *db;
+static unsigned int cur_ctx;
 
 static int handle_json(json_t *, struct db_slurm *, unsigned int *);
 
@@ -214,7 +214,7 @@ set_max_prefix_length(json_t *object, bool is_assertion, uint8_t addr_fam,
 
 }
 
-int
+static int
 validate_base64url_encoded(const char *encoded)
 {
 	/*

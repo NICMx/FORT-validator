@@ -8,7 +8,7 @@
 #include "crypto/base64.h"
 #include "rtr/db/vrp.h"
 
-char addr_buf[INET6_ADDRSTRLEN];
+static char addr_buf[INET6_ADDRSTRLEN];
 
 static int
 load_output_file(char const *output, FILE **result, bool *fopen)

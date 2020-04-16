@@ -1,4 +1,4 @@
-#include "config/uint.h"
+#include "config/uint32.h"
 
 #include <getopt.h>
 #include <errno.h>
