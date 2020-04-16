@@ -91,7 +91,7 @@ sudo systemctl enable fort
 ### Debian version
 
 {% highlight bash %}
-sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync libcurl4 libxml2
+sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync libcurl4-openssl-dev libxml2-dev
 
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
