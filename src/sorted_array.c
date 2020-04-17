@@ -58,13 +58,6 @@ sarray_put(struct sorted_array *sarray)
 	}
 }
 
-void
-sarray_destroy(struct sorted_array *sarray)
-{
-	free(sarray->array);
-	free(sarray);
-}
-
 /* Does not check boundaries. */
 static void *
 get_nth_element(struct sorted_array *sarray, unsigned int index)

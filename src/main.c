@@ -32,7 +32,7 @@ just_quit:
 	return error;
 }
 
-int
+static int
 __main(int argc, char **argv)
 {
 	int error;

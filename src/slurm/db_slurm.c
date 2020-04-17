@@ -19,10 +19,10 @@ struct slurm_bgpsec_wrap {
 	unsigned int references;
 };
 
-ARRAY_LIST(al_filter_prefix, struct slurm_prefix_wrap)
-ARRAY_LIST(al_assertion_prefix, struct slurm_prefix_wrap)
-ARRAY_LIST(al_filter_bgpsec, struct slurm_bgpsec_wrap)
-ARRAY_LIST(al_assertion_bgpsec, struct slurm_bgpsec_wrap)
+STATIC_ARRAY_LIST(al_filter_prefix, struct slurm_prefix_wrap)
+STATIC_ARRAY_LIST(al_assertion_prefix, struct slurm_prefix_wrap)
+STATIC_ARRAY_LIST(al_filter_bgpsec, struct slurm_bgpsec_wrap)
+STATIC_ARRAY_LIST(al_assertion_bgpsec, struct slurm_bgpsec_wrap)
 
 struct slurm_lists {
 	struct al_filter_prefix filter_pfx_al;
@@ -39,7 +39,7 @@ struct db_slurm {
 	struct slurm_csum_list csum_list;
 };
 
-char addr_buf[INET6_ADDRSTRLEN];
+static char addr_buf[INET6_ADDRSTRLEN];
 
 static void
 slurm_bgpsec_wrap_refget(struct slurm_bgpsec_wrap *elem)

@@ -33,14 +33,14 @@ struct serial_number {
 	char *file; /* File where this serial number was found. */
 };
 
-ARRAY_LIST(serial_numbers, struct serial_number)
+STATIC_ARRAY_LIST(serial_numbers, struct serial_number)
 
 struct subject_name {
 	struct rfc5280_name *name;
 	char *file; /* File where this subject name was found. */
 };
 
-ARRAY_LIST(subjects, struct subject_name)
+STATIC_ARRAY_LIST(subjects, struct subject_name)
 
 /**
  * Cached certificate data.

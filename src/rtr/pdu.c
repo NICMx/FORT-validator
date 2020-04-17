@@ -355,7 +355,7 @@ DEFINE_METADATA(cache_reset, free);
 DEFINE_METADATA(router_key, free);
 DEFINE_METADATA(error_report, error_report_destroy);
 
-struct pdu_metadata const *const pdu_metadatas[] = {
+static struct pdu_metadata const *const pdu_metadatas[] = {
 	/* 0 */  &serial_notify_meta,
 	/* 1 */  &serial_query_meta,
 	/* 2 */  &reset_query_meta,
