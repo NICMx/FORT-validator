@@ -11,7 +11,7 @@
 #include "object/ghostbusters.h"
 #include "object/roa.h"
 
-ARRAY_LIST(uris, struct rpki_uri *)
+STATIC_ARRAY_LIST(uris, struct rpki_uri *)
 
 /** A Repository Publication Point (RFC 6481), as described by some manifest. */
 struct rpp {
@@ -76,7 +76,7 @@ rpp_refget(struct rpp *pp)
 	pp->references++;
 }
 
-void
+static void
 __uri_refput(struct rpki_uri **uri)
 {
 	uri_refput(*uri);

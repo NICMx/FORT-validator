@@ -43,21 +43,21 @@ struct tal {
 	size_t spki_len;
 };
 
-struct pthread_param {
-	int *exit_status; /* Return status of the file validation */
+struct validation_thread {
+	/*
+	 * pid is not guaranteed to be defined in the thread. It should only
+	 * be manipulated by the parent thread.
+	 */
+	pthread_t pid;
 	char *tal_file;
 	void *arg;
-};
-
-struct thread {
-	pthread_t pid;
-	char *file;
-	int *exit_status;
-	SLIST_ENTRY(thread) next;
+	int exit_status;
+	/* This should also only be manipulated by the parent thread. */
+	SLIST_ENTRY(validation_thread) next;
 };
 
 /* List of threads, one per TAL file */
-SLIST_HEAD(threads_list, thread);
+SLIST_HEAD(threads_list, validation_thread);
 
 struct tal_param {
 	struct db_table *db;
@@ -571,43 +571,37 @@ end:	validation_destroy(state);
 static void *
 do_file_validation(void *thread_arg)
 {
-	struct pthread_param param;
+	struct validation_thread *thread = thread_arg;
 	struct tal *tal;
 	int error;
 
-	memcpy(&param, thread_arg, sizeof(param));
-	free(thread_arg);
-
 	fnstack_init();
-	fnstack_push(param.tal_file);
+	fnstack_push(thread->tal_file);
 
-	error = tal_load(param.tal_file, &tal);
+	error = tal_load(thread->tal_file, &tal);
 	if (error)
 		goto end;
 
 	if (config_get_shuffle_tal_uris())
 		tal_shuffle_uris(tal);
-	error = foreach_uri(tal, handle_tal_uri, param.arg);
+	error = foreach_uri(tal, handle_tal_uri, thread->arg);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
 		error = pr_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
-		    param.tal_file);
+		    thread->tal_file);
 
 	tal_destroy(tal);
 end:
 	fnstack_cleanup();
-	free(param.tal_file);
-	/* param.exit_error isn't released since it's from parent thread */
-	*param.exit_status = error;
+	thread->exit_status = error;
 	return NULL;
 }
 
 static void
-thread_destroy(struct thread *thread)
+thread_destroy(struct validation_thread *thread)
 {
-	free(thread->file);
-	free(thread->exit_status);
+	free(thread->tal_file);
 	free(thread);
 }
 
@@ -616,57 +610,41 @@ static int
 __do_file_validation(char const *tal_file, void *arg)
 {
 	struct tal_param *t_param = arg;
-	struct thread *thread;
-	struct pthread_param *p_param;
-	static pthread_t pid;
-	int *exit_status;
+	struct validation_thread *thread;
 	int error;
 
 	error = db_rrdp_add_tal(tal_file);
 	if (error)
 		return error;
 
-	exit_status = malloc(sizeof(int));
-	if (exit_status == NULL) {
+	thread = malloc(sizeof(struct validation_thread));
+	if (thread == NULL) {
 		error = pr_enomem();
 		goto free_db_rrdp;
 	}
 
-	p_param = malloc(sizeof(struct pthread_param));
-	if (p_param == NULL) {
+	thread->tal_file = strdup(tal_file);
+	if (thread->tal_file == NULL) {
 		error = pr_enomem();
-		goto free_status;
+		goto free_thread;
 	}
+	thread->arg = t_param->db;
+	thread->exit_status = -EINTR;
 
-	p_param->exit_status = exit_status;
-	p_param->tal_file = strdup(tal_file);
-	p_param->arg = t_param->db;
-
-	errno = pthread_create(&pid, NULL, do_file_validation, p_param);
+	errno = pthread_create(&thread->pid, NULL, do_file_validation, thread);
 	if (errno) {
 		error = -pr_errno(errno,
 		    "Could not spawn the file validation thread");
-		goto free_param;
+		goto free_tal_file;
 	}
 
-	thread = malloc(sizeof(struct thread));
-	if (thread == NULL) {
-		close_thread(pid, tal_file);
-		error = pr_enomem();
-		goto free_param;
-	}
-
-	thread->pid = pid;
-	thread->file = strdup(tal_file);
-	thread->exit_status = exit_status;
 	SLIST_INSERT_HEAD(t_param->threads, thread, next);
-
 	return 0;
-free_param:
-	free(p_param->tal_file);
-	free(p_param);
-free_status:
-	free(exit_status);
+
+free_tal_file:
+	free(thread->tal_file);
+free_thread:
+	free(thread);
 free_db_rrdp:
 	db_rrdp_rem_tal(tal_file);
 	return error;
@@ -677,7 +655,7 @@ perform_standalone_validation(struct db_table *table)
 {
 	struct tal_param *param;
 	struct threads_list threads;
-	struct thread *thread;
+	struct validation_thread *thread;
 	int error, t_error;
 
 	param = malloc(sizeof(struct tal_param));
@@ -698,7 +676,7 @@ perform_standalone_validation(struct db_table *table)
 		/* End all threads */
 		while (!SLIST_EMPTY(&threads)) {
 			thread = threads.slh_first;
-			close_thread(thread->pid, thread->file);
+			close_thread(thread->pid, thread->tal_file);
 			SLIST_REMOVE_HEAD(&threads, next);
 			thread_destroy(thread);
 		}
@@ -713,12 +691,12 @@ perform_standalone_validation(struct db_table *table)
 		error = pthread_join(thread->pid, NULL);
 		if (error)
 			pr_crit("pthread_join() threw %d on the '%s' thread.",
-			    error, thread->file);
+			    error, thread->tal_file);
 		SLIST_REMOVE_HEAD(&threads, next);
-		if (*thread->exit_status) {
-			t_error = *thread->exit_status;
+		if (thread->exit_status) {
+			t_error = thread->exit_status;
 			pr_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
-			    thread->file);
+			    thread->tal_file);
 		}
 		thread_destroy(thread);
 	}

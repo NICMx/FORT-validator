@@ -207,7 +207,7 @@ set_max_prefix_length(json_t *object, bool is_assertion, uint8_t addr_fam,
 
 }
 
-int
+static int
 validate_base64url_encoded(const char *encoded)
 {
 	/*

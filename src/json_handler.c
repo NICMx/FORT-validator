@@ -7,7 +7,7 @@
 #include "log.h"
 #include "config/types.h"
 
-int
+static int
 find_json(struct json_t *root, char const *full_name, json_t **result)
 {
 	struct {
@@ -39,7 +39,7 @@ static int
 json_to_config(struct json_t *root)
 {
 	struct option_field const *opt;
-	struct json_t *child;
+	struct json_t *child = NULL;
 	int error;
 
 	FOREACH_OPTION(get_option_metadatas(), opt, AVAILABILITY_JSON) {

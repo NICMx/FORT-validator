@@ -164,7 +164,7 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 
 	*cond_met = 1;
 	if (config_get_work_offline()) {
-		response_code = 0; /* Not 200 code, but also not an error */
+		*response_code = 0; /* Not 200 code, but also not an error */
 		return 0;
 	}
 
@@ -213,8 +213,8 @@ delete_dir:
 int
 http_download_file(struct rpki_uri *uri, http_write_cb cb)
 {
-	long response = 0;
-	long cond_met = 0;
+	long response;
+	long cond_met;
 	return __http_download_file(uri, cb, &response, 0, &cond_met);
 }
 
@@ -233,8 +233,8 @@ http_download_file(struct rpki_uri *uri, http_write_cb cb)
 int
 http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value)
 {
-	long response = 0;
-	long cond_met = 0;
+	long response;
+	long cond_met;
 	int error;
 
 	error = __http_download_file(uri, cb, &response, value, &cond_met);

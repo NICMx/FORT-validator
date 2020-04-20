@@ -73,6 +73,10 @@
 	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
 	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, )
 
+#define STATIC_ARRAY_LIST(name, elem_type)				\
+	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
+	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, static)
+
 #define ARRAYLIST_FOREACH(list, node, index) for (			\
 	(index) = 0, (node) = (list)->array;				\
 	(index) < (list)->len;						\
