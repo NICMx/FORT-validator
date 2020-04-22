@@ -19,7 +19,7 @@
  * slurm db from @params is set as NULL.
  */
 static int
-slurm_load(struct slurm_parser_params *params)
+load_slurm_files(struct slurm_parser_params *params)
 {
 	struct db_slurm *db;
 	int error;
@@ -196,23 +196,15 @@ slurm_load_checksums(struct slurm_csum_list *csum_list)
 	return 0;
 }
 
+/* Returns whether a new slurm was allocated */
 static void
-__slurm_apply(struct db_slurm **last_slurm, struct slurm_parser_params *params,
-    struct slurm_csum_list *csum_list)
+__load_slurm_files(struct db_slurm **last_slurm,
+    struct slurm_parser_params *params, struct slurm_csum_list *csum_list)
 {
 	int error;
 
-	error = slurm_load(params);
-	if (!error) {
-		/* Use new SLURM as last valid slurm */
-		if (*last_slurm != NULL)
-			db_slurm_destroy(*last_slurm);
-		*last_slurm = params->db_slurm;
-		if (*last_slurm != NULL) {
-			db_slurm_update_time(*last_slurm);
-			db_slurm_set_csum_list(*last_slurm, csum_list);
-		}
-	} else {
+	error = load_slurm_files(params);
+	if (error) {
 		/* Any error: use last valid SLURM */
 		pr_warn("Error loading SLURM, the validation will still continue.");
 		if (*last_slurm != NULL) {
@@ -222,6 +214,17 @@ __slurm_apply(struct db_slurm **last_slurm, struct slurm_parser_params *params,
 			db_slurm_log(params->db_slurm);
 		}
 		destroy_local_csum_list(csum_list);
+		return;
+	}
+
+	/* Use new SLURM as last valid slurm */
+	if (*last_slurm != NULL)
+		db_slurm_destroy(*last_slurm);
+
+	*last_slurm = params->db_slurm;
+	if (*last_slurm != NULL) {
+		db_slurm_update_time(*last_slurm);
+		db_slurm_set_csum_list(*last_slurm, csum_list);
 	}
 }
 
@@ -258,16 +261,16 @@ are_csum_lists_equals(struct slurm_csum_list *new_list,
 	return true;
 }
 
-int
-slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
+/* Load SLURM file(s) that have updates */
+static int
+load_updated_slurm(struct db_slurm **last_slurm,
+    struct slurm_parser_params *params)
 {
-	struct slurm_parser_params *params = NULL;
 	struct slurm_csum_list csum_list, old_csum_list;
 	int error;
-	bool list_equals = false;
+	bool list_equals;
 
-	if (config_get_slurm() == NULL)
-		return 0;
+	list_equals = false;
 
 	pr_info("Checking if there are new or modified SLURM files");
 	error = slurm_load_checksums(&csum_list);
@@ -279,27 +282,47 @@ slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
 		list_equals = are_csum_lists_equals(&csum_list, &old_csum_list);
 	}
 
-	error = slurm_create_parser_params(&params);
-	if (error)
-		return error;
-
 	if (list_equals) {
 		if (*last_slurm != NULL) {
 			pr_info("Applying same old SLURM, no changes found.");
 			params->db_slurm = *last_slurm;
 		}
 		destroy_local_csum_list(&csum_list);
-	} else {
-		if (csum_list.list_size == 0) {
-			if (*last_slurm != NULL)
-				db_slurm_destroy(*last_slurm);
-			*last_slurm = params->db_slurm;
-			/* Empty DIR or FILE SLURM not found */
-			goto success;
-		}
-		pr_info("Applying configured SLURM");
-		__slurm_apply(last_slurm, params, &csum_list);
+		return 0;
 	}
+
+	/* Empty DIR or FILE SLURM not found */
+	if (csum_list.list_size == 0) {
+		if (*last_slurm != NULL)
+			db_slurm_destroy(*last_slurm);
+		*last_slurm = NULL;
+		params->db_slurm = NULL;
+		return 0;
+	}
+
+	pr_info("Applying configured SLURM");
+	__load_slurm_files(last_slurm, params, &csum_list);
+
+	return 0;
+}
+
+int
+slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
+{
+	struct slurm_parser_params *params;
+	int error;
+
+	if (config_get_slurm() == NULL)
+		return 0;
+
+	params = NULL;
+	error = slurm_create_parser_params(&params);
+	if (error)
+		return error;
+
+	error = load_updated_slurm(last_slurm, params);
+	if (error)
+		goto release_params;
 
 	/* If there's no new SLURM loaded, stop */
 	if (params->db_slurm == NULL)
@@ -308,7 +331,7 @@ slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
 	/* Deep copy of the base so that updates can be reverted */
 	error = db_table_clone(&params->db_table, *base);
 	if (error)
-		goto release_slurm;
+		goto release_params;
 
 	error = db_table_foreach_roa(params->db_table, slurm_pfx_filters_apply,
 	    params);
@@ -336,8 +359,7 @@ success:
 	return 0;
 release_table:
 	db_table_destroy(params->db_table);
-release_slurm:
-	db_slurm_destroy(params->db_slurm);
+release_params:
 	free(params);
 	return error;
 }

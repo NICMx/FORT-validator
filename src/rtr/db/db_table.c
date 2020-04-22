@@ -190,17 +190,21 @@ db_table_merge(struct db_table *dst, struct db_table *src)
 int
 db_table_clone(struct db_table **dst, struct db_table *src)
 {
+	struct db_table *result;
 	int error;
 
-	*dst = db_table_create();
-	if (*dst == NULL)
+	result = db_table_create();
+	if (result == NULL)
 		return pr_enomem();
 
-	error = db_table_merge(*dst, src);
-	if (error)
-		free(*dst);
+	error = db_table_merge(result, src);
+	if (error) {
+		db_table_destroy(result);
+		return error;
+	}
 
-	return error;
+	*dst = result;
+	return 0;
 }
 
 unsigned int
