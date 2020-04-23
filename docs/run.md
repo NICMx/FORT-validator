@@ -61,25 +61,49 @@ For Linux you need:
 
 As root, execute this command to add the capability to the installed FORT validator binary:
 
-```
-# setcap cap_net_bind_service=+ep `which fort`
-```
+{% highlight bash %}
+root# setcap cap_net_bind_service=+ep `which fort`
+{% endhighlight %}
 
 You can check if the capability was added by executing `getcap`, it should result in something like this:
 
-```
-# getcap `which fort`
+{% highlight bash %}
+root# getcap `which fort`
 /usr/local/bin/fort = cap_net_bind_service+ep
-```
+{% endhighlight %}
 
 Now FORT validator can be bound to the default port (323) without being executed as root.
 
 In case you want to remove the capability to the installed FORT binary, execute the next command (as root):
 
-```
-# setcap cap_net_bind_service=-ep `which fort`
-```
+{% highlight bash %}
+root# setcap cap_net_bind_service=-ep `which fort`
+{% endhighlight %}
 
 ### Alternative method (LINUX or BSD)
 
-You can use another method (NAT or firewall) to redirect traffic from port 323 to any other port where FORT service is bound as RTR server, but such methods are out of the scope of these documents.
+You can use another method (NAT or firewall) to redirect traffic from port 323 to any other port where FORTR service is bound as RTR server, but such methods are out of the scope of these documents.
+
+## Tuning memory (Linux & glibc)
+
+> ![img/warn.svg](img/warn.svg) This quirk applies to glibc, you can check if your OS has it by running (from a command line): `$ ldd --version`
+
+FORT validator is currently a multithreaded program (it spawns a thread to validate each configured TAL), and there's a known behavior in GNU C Library (glibc) regarding multithreading and the memory usage growth. This is not precisely an issue nor something to be concerned about, unless the host machine has quite a limited memory (as of today, this isn't probably a common scenario). 
+
+When a new thread is spawned it has its own "arena" available to handle the memory allocations; so, when multiple threads are created, is likely to have the same amount of arenas. Every `malloc`'d and `free`'d block at each thread, will be done in a memory space (a.k.a "arena") reserved for the thread.
+
+Once a memory block is released using `free`, there's no warranty that such memory be returned to the OS, thus the program's memory usage isn't necessarily decreased (in this case, the "arena" size isn't decreased). See more about [glibc `free`](https://www.gnu.org/software/libc/manual/html_node/Freeing-after-Malloc.html).
+
+Most of FORT Validator allocations are temporary since they're needed at the validation cycles, this causes a logarithmic growth on the program memory usage. Only a part of that memory is really allocated, the other part consist of free space that hasn't been returned to the OS yet.
+
+glibc has the _[Tunables](https://www.gnu.org/software/libc/manual/html_node/Tunables.html)_ feature. One of the things that can be tunned is precisely the maximum number of "arenas" that the program will use. There are many other things that can be tunned, but they are out of scope of this document.
+
+Basically, limiting the number of arenas helps to avoid the memory growth. This can be achieved by setting the environment variable `MALLOC_ARENA_MAX`, plese read more at [Memory Allocation Tunables](https://www.gnu.org/software/libc/manual/html_node/Memory-Allocation-Tunables.html#index-glibc_002emalloc_002earena_005fmax).
+
+The recommended value in order to avoid a high performance cost, is `MALLOC_ARENA_MAX=2`. In order to set this value in the current session, this can be executed from the command line:
+
+{% highlight bash %}
+export MALLOC_ARENA_MAX=2
+# Now run fort
+fort --tal=/etc/tals ...
+{% endhighlight %}
