@@ -974,8 +974,13 @@ asn_imax2INTEGER(INTEGER_t *st, intmax_t value) {
 		break;
 	}
 	/* Copy the integer body */
-	for(bp = buf, pend1 += add; p != pend1; p += add)
-		*bp++ = *p;
+	if(*(char *)&littleEndian) {
+		for(bp = buf; p >= pend1; p--)
+			*bp++ = *p;
+	} else {
+		for(bp = buf; p <= pend1; p++)
+			*bp++ = *p;
+	}
 
 	if(st->buf) FREEMEM(st->buf);
 	st->buf = buf;

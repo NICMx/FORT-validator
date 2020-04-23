@@ -211,7 +211,7 @@ bgpsec_filtered_by(struct slurm_bgpsec_wrap *filter_wrap,
 		/* Both have a SKI */
 		if ((bgpsec->data_flag & SLURM_BGPS_FLAG_SKI) > 0 &&
 		    (filter->data_flag & SLURM_BGPS_FLAG_SKI) > 0)
-			return memcmp(bgpsec->ski, filter->ski, RK_SPKI_LEN)
+			return memcmp(bgpsec->ski, filter->ski, RK_SKI_LEN)
 			    == 0;
 
 		return false;

@@ -43,6 +43,7 @@ string_parse_json(struct option_field const *opt, json_t *json, void *result)
 	char const *string;
 	int error;
 
+	string = NULL;
 	error = parse_json_string(json, opt->name, &string);
 	return error ? error : string_parse_argv(opt, string, result);
 }

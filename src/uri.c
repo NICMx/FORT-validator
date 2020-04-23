@@ -289,8 +289,10 @@ g2l(char const *global, size_t global_len, uint8_t flags, char **result,
 	offset = 0;
 	strcpy(local + offset, repository);
 	offset += repository_len;
-	strncpy(local + offset, "/", extra_slash);
-	offset += extra_slash;
+	if (extra_slash) {
+		strcpy(local + offset, "/");
+		offset += extra_slash;
+	}
 	strncpy(local + offset, global, global_len);
 	offset += global_len;
 	local[offset] = '\0';

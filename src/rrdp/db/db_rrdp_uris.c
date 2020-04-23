@@ -150,6 +150,7 @@ db_rrdp_uris_cmp(char const *uri, char const *session_id, unsigned long serial,
 	struct uris_table *found;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -183,6 +184,7 @@ db_rrdp_uris_update(char const *uri, char const *session_id,
 	struct uris_table *db_uri;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -207,6 +209,7 @@ db_rrdp_uris_get_serial(char const *uri, unsigned long *serial)
 	struct uris_table *found;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -223,6 +226,7 @@ db_rrdp_uris_get_last_update(char const *uri, long *date)
 	struct uris_table *found;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -253,6 +257,7 @@ db_rrdp_uris_set_last_update(char const *uri)
 	struct uris_table *found;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -268,6 +273,7 @@ db_rrdp_uris_get_request_status(char const *uri, rrdp_req_status_t *result)
 	struct uris_table *found;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -284,6 +290,7 @@ db_rrdp_uris_set_request_status(char const *uri, rrdp_req_status_t value)
 	struct uris_table *found;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -300,6 +307,7 @@ db_rrdp_uris_set_all_unvisited(void)
 	struct uris_table *uri_node, *uri_tmp;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
@@ -321,6 +329,7 @@ db_rrdp_uris_get_visited_uris(char const *uri, struct visited_uris **result)
 	struct uris_table *found;
 	int error;
 
+	uris = NULL;
 	error = get_thread_rrdp_uris(&uris);
 	if (error)
 		return error;
