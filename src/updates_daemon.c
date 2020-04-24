@@ -34,7 +34,7 @@ check_vrps_updates(void *param_void)
 		if (changed) {
 			error = notify_clients();
 			if (error)
-				pr_debug("Could't notify clients of the new VRPs. (Error code %d.) Sleeping...",
+				pr_debug("Couldn't notify clients of the new VRPs. (Error code %d.) Sleeping...",
 				    error);
 			else
 				pr_debug("Database updated successfully. Sleeping...");
