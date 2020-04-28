@@ -98,7 +98,7 @@ Most of FORT Validator allocations are temporary since they're needed at the val
 
 glibc has the _[Tunables](https://www.gnu.org/software/libc/manual/html_node/Tunables.html)_ feature. One of the things that can be tunned is precisely the maximum number of "arenas" that the program will use. There are many other things that can be tunned, but they are out of scope of this document.
 
-Basically, limiting the number of arenas helps to avoid the memory growth. This can be achieved by setting the environment variable `MALLOC_ARENA_MAX`, plese read more at [Memory Allocation Tunables](https://www.gnu.org/software/libc/manual/html_node/Memory-Allocation-Tunables.html#index-glibc_002emalloc_002earena_005fmax).
+Basically, limiting the number of arenas helps to avoid the memory growth. This can be achieved by setting the environment variable `MALLOC_ARENA_MAX`, please read more at [Memory Allocation Tunables](https://www.gnu.org/software/libc/manual/html_node/Memory-Allocation-Tunables.html#index-glibc_002emalloc_002earena_005fmax).
 
 The recommended value in order to avoid a high performance cost, is `MALLOC_ARENA_MAX=2`. In order to set this value in the current session, this can be executed from the command line:
 
