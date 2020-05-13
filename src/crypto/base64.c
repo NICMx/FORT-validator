@@ -274,5 +274,5 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 	return 0;
 free_mem:
 	BIO_free_all(b64);
-	return error ? error_ul2i(error) : -ENOMEM;;
+	return error ? error_ul2i(error) : -ENOMEM;
 }

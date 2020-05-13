@@ -52,7 +52,8 @@ local_download(char const *url, long *response_code, struct response *resp)
 	if (error)
 		return error;
 
-	error = http_fetch(&handler, url, response_code, &cond, write_cb, resp);
+	error = http_fetch(&handler, url, response_code, &cond, false,
+	    write_cb, resp);
 	http_easy_cleanup(&handler);
 	return error;
 }

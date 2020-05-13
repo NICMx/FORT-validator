@@ -79,6 +79,7 @@ deltagroup_cleanup(struct delta_group *group)
 int
 vrps_init(void)
 {
+	time_t now;
 	int error;
 
 	state.base = NULL;
@@ -93,7 +94,12 @@ vrps_init(void)
 	state.next_serial = START_SERIAL;
 
 	/* Get the bits that'll fit in session_id */
-	state.v0_session_id = time(NULL) & 0xFFFF;
+	now = 0;
+	error = get_current_time(&now);
+	if (error)
+		goto release_deltas;
+	state.v0_session_id = now & 0xFFFF;
+
 	/* Minus 1 to prevent same ID */
 	state.v1_session_id = (state.v0_session_id != 0)
 	    ? (state.v0_session_id - 1)

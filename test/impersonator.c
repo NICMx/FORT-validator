@@ -40,6 +40,12 @@ fnstack_peek(void)
 	return NULL;
 }
 
+void
+reqs_errors_log_summary(void)
+{
+	/* Nothing here */
+}
+
 char const *
 config_get_tal(void)
 {

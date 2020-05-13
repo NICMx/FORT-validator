@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include "algorithm.h"
+#include "common.h"
 #include "log.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
@@ -40,6 +41,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 	time_t now;
 	struct tm thisUpdate_tm;
 	struct tm nextUpdate_tm;
+	int error;
 
 	/*
 	 * BTW: We only need the tm variables for error messages, which are
@@ -58,9 +60,10 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 		    TM_ARGS(nextUpdate_tm));
 	}
 
-	now = time(NULL);
-	if (now == ((time_t) -1))
-		return pr_errno(errno, "Error getting the current time");
+	now = 0;
+	error = get_current_time(&now);
+	if (error)
+		return error;
 
 	if (difftime(now, thisUpdate) < 0) {
 		return pr_err(

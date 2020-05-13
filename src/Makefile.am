@@ -24,6 +24,7 @@ fort_SOURCES += nid.h nid.c
 fort_SOURCES += notify.c notify.h
 fort_SOURCES += output_printer.h output_printer.c
 fort_SOURCES += random.h random.c
+fort_SOURCES += reqs_errors.h reqs_errors.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
 fort_SOURCES += sorted_array.h sorted_array.c

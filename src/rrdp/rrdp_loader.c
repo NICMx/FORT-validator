@@ -4,15 +4,17 @@
 #include "rrdp/rrdp_objects.h"
 #include "rrdp/rrdp_parser.h"
 #include "rsync/rsync.h"
+#include "common.h"
 #include "config.h"
 #include "log.h"
+#include "reqs_errors.h"
 #include "thread_var.h"
 #include "visited_uris.h"
 
 /* Fetch and process the deltas from the @notification */
 static int
 process_diff_serial(struct update_notification *notification,
-    struct visited_uris **visited)
+    bool log_operation, struct visited_uris **visited)
 {
 	unsigned long serial;
 	int error;
@@ -26,12 +28,13 @@ process_diff_serial(struct update_notification *notification,
 	if (error)
 		return error;
 
-	return rrdp_process_deltas(notification, serial, *visited);
+	return rrdp_process_deltas(notification, serial, *visited,
+	    log_operation);
 }
 
 /* Fetch and process the snapshot from the @notification */
 static int
-process_snapshot(struct update_notification *notification,
+process_snapshot(struct update_notification *notification, bool log_operation,
     struct visited_uris **visited)
 {
 	struct visited_uris *tmp;
@@ -42,7 +45,7 @@ process_snapshot(struct update_notification *notification,
 	if (error)
 		return error;
 
-	error = rrdp_parse_snapshot(notification, tmp);
+	error = rrdp_parse_snapshot(notification, tmp, log_operation);
 	if (error) {
 		visited_uris_refput(tmp);
 		return error;
@@ -109,6 +112,7 @@ rrdp_load(struct rpki_uri *uri)
 	struct visited_uris *visited;
 	rrdp_req_status_t requested;
 	rrdp_uri_cmp_result_t res;
+	bool log_operation;
 	int error, upd_error;
 
 	if (!config_get_rrdp_enabled())
@@ -116,7 +120,8 @@ rrdp_load(struct rpki_uri *uri)
 
 	/* Avoid multiple requests on the same run */
 	requested = RRDP_URI_REQ_UNVISITED;
-	error = db_rrdp_uris_get_request_status(uri_get_global(uri), &requested);
+	error = db_rrdp_uris_get_request_status(uri_get_global(uri),
+	    &requested);
 	if (error && error != -ENOENT)
 		return error;
 
@@ -130,14 +135,15 @@ rrdp_load(struct rpki_uri *uri)
 		return -EPERM;
 	}
 
-	error = rrdp_parse_notification(uri, &upd_notification);
+	log_operation = reqs_errors_log_uri(uri_get_global(uri));
+	error = rrdp_parse_notification(uri, log_operation, &upd_notification);
 	if (error)
-		goto upd_error;
+		goto upd_end;
 
 	/* No updates at the file (yet), didn't pushed to fnstack */
 	if (upd_notification == NULL) {
 		pr_debug("No updates yet at '%s'.", uri_get_global(uri));
-		return 0;
+		goto upd_end;
 	}
 
 	error = db_rrdp_uris_cmp(uri_get_global(uri),
@@ -155,12 +161,14 @@ rrdp_load(struct rpki_uri *uri)
 		error = remove_rrdp_uri_files(upd_notification->uri);
 		if (error)
 			goto upd_destroy;
-		error = process_snapshot(upd_notification, &visited);
+		error = process_snapshot(upd_notification, log_operation,
+		    &visited);
 		if (error)
 			goto upd_destroy;
 		break;
 	case RRDP_URI_DIFF_SERIAL:
-		error = process_diff_serial(upd_notification, &visited);
+		error = process_diff_serial(upd_notification, log_operation,
+		    &visited);
 		if (!error) {
 			visited_uris_refget(visited);
 			break;
@@ -168,7 +176,8 @@ rrdp_load(struct rpki_uri *uri)
 		/* Something went wrong, use snapshot */
 		pr_info("There was an error processing RRDP deltas, using the snapshot instead.");
 	case RRDP_URI_NOTFOUND:
-		error = process_snapshot(upd_notification, &visited);
+		error = process_snapshot(upd_notification, log_operation,
+		    &visited);
 		if (error)
 			goto upd_destroy;
 		break;
@@ -198,14 +207,26 @@ upd_destroy:
 		update_notification_destroy(upd_notification);
 		fnstack_pop(); /* Pop from rrdp_parse_notification */
 	}
-upd_error:
-	/* Don't fall here on success */
-	if (error) {
-		/* Reset RSYNC visited URIs, this may force the update */
-		reset_downloaded();
-		upd_error = mark_rrdp_uri_request_err(uri_get_global(uri));
+upd_end:
+	/* Just return on success */
+	if (!error) {
+		/* The repository URI is the notification file URI */
+		reqs_errors_rem_uri(uri_get_global(uri));
+		return 0;
+	}
+
+	/* Request failed, store the repository URI */
+	if (error == EREQFAILED) {
+		upd_error = reqs_errors_add_uri(uri_get_global(uri));
 		if (upd_error)
 			return upd_error;
 	}
+
+	/* Reset RSYNC visited URIs, this may force the update */
+	reset_downloaded();
+	upd_error = mark_rrdp_uri_request_err(uri_get_global(uri));
+	if (upd_error)
+		return upd_error;
+
 	return error;
 }

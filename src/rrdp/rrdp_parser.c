@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 #include <ctype.h>
 #include <errno.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -75,6 +74,7 @@ struct rdr_delta_ctx {
 struct proc_upd_args {
 	struct update_notification *parent;
 	struct visited_uris *visited_uris;
+	bool log_operation;
 };
 
 static int
@@ -110,7 +110,7 @@ write_local(unsigned char *content, size_t size, size_t nmemb, void *arg)
 }
 
 static int
-download_file(struct rpki_uri *uri, long last_update)
+download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 {
 	unsigned int retries;
 	int error;
@@ -119,9 +119,10 @@ download_file(struct rpki_uri *uri, long last_update)
 	do {
 		if (last_update > 0)
 			error = http_download_file_with_ims(uri, write_local,
-			    last_update);
+			    last_update, log_operation);
 		else
-			error = http_download_file(uri, write_local);
+			error = http_download_file(uri, write_local,
+			    log_operation);
 
 		/* Remember: positive values are expected */
 		if (error >= 0)
@@ -130,7 +131,13 @@ download_file(struct rpki_uri *uri, long last_update)
 		if (retries == config_get_rrdp_retry_count()) {
 			pr_info("Max RRDP retries (%u) reached fetching '%s', won't retry again.",
 			    retries, uri_get_global(uri));
-			return error;
+			/*
+			 * Since distinct files can be downloaded (notification,
+			 * snapshot, delta) just return the error and let the
+			 * caller to add only the update notification URI to
+			 * the request errors DB.
+			 */
+			return EREQFAILED;
 		}
 		pr_info("Retrying RRDP file download '%s' in %u seconds, %u attempts remaining.",
 		    uri_get_global(uri),
@@ -996,9 +1003,9 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_delta(struct rpki_uri *uri, struct delta_head *parents_data, void *arg)
+parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
+    struct proc_upd_args *args)
 {
-	struct proc_upd_args *args = arg;
 	struct rdr_delta_ctx ctx;
 	struct delta *delta;
 	struct doc_data *expected_data;
@@ -1032,6 +1039,7 @@ pop_fnstack:
 static int
 process_delta(struct delta_head *delta_head, void *arg)
 {
+	struct proc_upd_args *args = arg;
 	struct rpki_uri *uri;
 	struct doc_data *head_data;
 	int error;
@@ -1044,11 +1052,11 @@ process_delta(struct delta_head *delta_head, void *arg)
 	if (error)
 		return error;
 
-	error = download_file(uri, 0);
+	error = download_file(uri, 0, args->log_operation);
 	if (error)
 		goto release_uri;
 
-	error = parse_delta(uri, delta_head, arg);
+	error = parse_delta(uri, delta_head, args);
 
 	delete_from_uri(uri, NULL);
 	/* Error 0 its ok */
@@ -1066,7 +1074,7 @@ release_uri:
  * 'If-Modified-Since' header, return 0 and set @result to NULL.
  */
 int
-rrdp_parse_notification(struct rpki_uri *uri,
+rrdp_parse_notification(struct rpki_uri *uri, bool log_operation,
     struct update_notification **result)
 {
 	long last_update;
@@ -1081,8 +1089,12 @@ rrdp_parse_notification(struct rpki_uri *uri,
 	if (error && error != -ENOENT)
 		return error;
 
-	error = download_file(uri, last_update);
+	error = download_file(uri, last_update, log_operation);
 	if (error < 0)
+		return error;
+
+	/* Request error, stop processing to handle as such */
+	if (error == EREQFAILED)
 		return error;
 
 	/*
@@ -1116,7 +1128,7 @@ rrdp_parse_notification(struct rpki_uri *uri,
 
 int
 rrdp_parse_snapshot(struct update_notification *parent,
-    struct visited_uris *visited_uris)
+    struct visited_uris *visited_uris, bool log_operation)
 {
 	struct proc_upd_args args;
 	struct rpki_uri *uri;
@@ -1131,7 +1143,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 	if (error)
 		return error;
 
-	error = download_file(uri, 0);
+	error = download_file(uri, 0, log_operation);
 	if (error)
 		goto release_uri;
 
@@ -1146,12 +1158,14 @@ release_uri:
 
 int
 rrdp_process_deltas(struct update_notification *parent,
-    unsigned long cur_serial, struct visited_uris *visited_uris)
+    unsigned long cur_serial, struct visited_uris *visited_uris,
+    bool log_operation)
 {
 	struct proc_upd_args args;
 
 	args.parent = parent;
 	args.visited_uris = visited_uris;
+	args.log_operation = log_operation;
 
 	return deltas_head_for_each(parent->deltas_list,
 	    parent->global_data.serial, cur_serial, process_delta, &args);

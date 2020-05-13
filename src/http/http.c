@@ -107,7 +107,7 @@ curl_err_string(struct http_handler *handler, CURLcode res)
  */
 static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
-    long *cond_met, http_write_cb cb, void *arg)
+    long *cond_met, bool log_operation, http_write_cb cb, void *arg)
 {
 	CURLcode res;
 	long unmet = 0;
@@ -143,8 +143,15 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		return pr_err("Error requesting URL %s (received HTTP code %ld): %s",
 		    uri, *response_code, curl_err_string(handler, res));
 
-	return pr_err("Error requesting URL %s: %s", uri,
+	/* FIXME (NOW) Always log to validation log */
+	pr_err("[VALIDATION] Error requesting URL %s: %s", uri,
 	    curl_err_string(handler, res));
+	/* FIXME (NOW) and send to operation log when requested */
+	if (log_operation)
+		pr_err("[OPERATION] Error requesting URL %s: %s", uri,
+		    curl_err_string(handler, res));
+
+	return EREQFAILED;
 }
 
 static void
@@ -155,7 +162,7 @@ http_easy_cleanup(struct http_handler *handler)
 
 static int
 __http_download_file(struct rpki_uri *uri, http_write_cb cb,
-    long *response_code, long ims_value, long *cond_met)
+    long *response_code, long ims_value, long *cond_met, bool log_operation)
 {
 	struct http_handler handler;
 	struct stat stat;
@@ -188,7 +195,7 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	}
 
 	error = http_fetch(&handler, uri_get_global(uri), response_code,
-	    cond_met, cb, out);
+	    cond_met, log_operation, cb, out);
 	http_easy_cleanup(&handler);
 	file_close(out);
 
@@ -208,14 +215,16 @@ delete_dir:
  * from local @uri. The @cb should be utilized to write into a file; the file
  * will be sent to @cb as the last argument (its a FILE reference).
  *
- * Regular return value: 0 on success, any other value is an error.
+ * Return values: 0 on success, negative value on error, EREQFAILED if the
+ * request to the server failed.
  */
 int
-http_download_file(struct rpki_uri *uri, http_write_cb cb)
+http_download_file(struct rpki_uri *uri, http_write_cb cb, bool log_operation)
 {
 	long response;
 	long cond_met;
-	return __http_download_file(uri, cb, &response, 0, &cond_met);
+	return __http_download_file(uri, cb, &response, 0, &cond_met,
+	    log_operation);
 }
 
 /*
@@ -225,19 +234,22 @@ http_download_file(struct rpki_uri *uri, http_write_cb cb)
  * of @value (if @value is 0, the header isn't set).
  *
  * Returns:
+ *   EREQFAILED the request to the server has failed.
  *   > 0 file was requested but wasn't downloaded since the server didn't sent
  *       a response due to its policy using the header 'If-Modified-Since'.
  *   = 0 file successfully downloaded.
  *   < 0 an actual error happened.
  */
 int
-http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value)
+http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value,
+    bool log_operation)
 {
 	long response;
 	long cond_met;
 	int error;
 
-	error = __http_download_file(uri, cb, &response, value, &cond_met);
+	error = __http_download_file(uri, cb, &response, value, &cond_met,
+	    log_operation);
 	if (error)
 		return error;
 
@@ -256,6 +268,7 @@ http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value)
 	if (cond_met)
 		return 0;
 
-	return __http_download_file(uri, cb, &response, 0, &cond_met);
+	return __http_download_file(uri, cb, &response, 0, &cond_met,
+	    log_operation);
 
 }

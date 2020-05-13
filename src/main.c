@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "extension.h"
 #include "nid.h"
+#include "reqs_errors.h"
 #include "thread_var.h"
 #include "http/http.h"
 #include "rtr/rtr.h"
@@ -23,8 +24,14 @@ start_rtr_server(void)
 	if (error)
 		goto vrps_cleanup;
 
+	error = reqs_errors_init();
+	if (error)
+		goto db_rrdp_cleanup;
+
 	error = rtr_listen();
 
+	reqs_errors_cleanup();
+db_rrdp_cleanup:
 	db_rrdp_cleanup();
 vrps_cleanup:
 	vrps_destroy();

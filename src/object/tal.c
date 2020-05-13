@@ -18,6 +18,7 @@
 #include "line_file.h"
 #include "log.h"
 #include "random.h"
+#include "reqs_errors.h"
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
@@ -450,7 +451,8 @@ write_http_cer(unsigned char *content, size_t size, size_t nmemb, void *arg)
 static int
 handle_https_uri(struct rpki_uri *uri)
 {
-	return http_download_file(uri, write_http_cer);
+	return http_download_file(uri, write_http_cer,
+	    reqs_errors_log_uri(uri_get_global(uri)));
 }
 
 /**
@@ -494,10 +496,11 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	else
 		error = handle_https_uri(uri);
 
+	/* FIXME (NOW) Try to work with local data on the first run? */
 	if (error) {
 		validation_destroy(state);
 		return pr_warn("TAL '%s' could not be downloaded.",
-		    uri_get_printable(uri));;
+		    uri_get_printable(uri));
 	}
 
 	pr_debug("TAL URI '%s' {", uri_get_printable(uri));
@@ -578,6 +581,8 @@ do_file_validation(void *thread_arg)
 	fnstack_init();
 	fnstack_push(thread->tal_file);
 
+	working_repo_init();
+
 	error = tal_load(thread->tal_file, &tal);
 	if (error)
 		goto end;
@@ -593,6 +598,7 @@ do_file_validation(void *thread_arg)
 
 	tal_destroy(tal);
 end:
+	working_repo_cleanup();
 	fnstack_cleanup();
 	thread->exit_status = error;
 	return NULL;
@@ -703,6 +709,9 @@ perform_standalone_validation(struct db_table *table)
 
 	/* The parameter isn't needed anymore */
 	free(param);
+
+	/* FIXME (NOW) Clarify if this really belongs here */
+	reqs_errors_log_summary();
 
 	/* One thread has errors, validation can't keep the resulting table */
 	if (t_error)

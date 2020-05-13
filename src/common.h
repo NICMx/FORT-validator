@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdbool.h>
+#include <time.h>
 #include <netinet/in.h>
 
 /* "I think that this is not supposed to be implemented." */
@@ -23,6 +24,12 @@
  * still coexist in most scenarios.
  */
 #define ENOTHTTPS 3175
+
+/*
+ * A request made to a server (eg. rsync, http) has failed, even after retrying
+ */
+#define EREQFAILED 3176
+
 /*
  * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
  * overflows, so gcc complains sometimes.
@@ -53,5 +60,7 @@ char const *addr2str6(struct in6_addr const *, char *);
 
 int create_dir_recursive(char const *);
 int delete_dir_recursive_bottom_up(char const *);
+
+int get_current_time(time_t *);
 
 #endif /* SRC_RTR_COMMON_H_ */

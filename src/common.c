@@ -399,3 +399,16 @@ release_str:
 	free(work_loc);
 	return error;
 }
+
+int
+get_current_time(time_t *result)
+{
+	time_t now;
+
+	now = time(NULL);
+	if (now == ((time_t) -1))
+		return pr_errno(errno, "Error getting the current time");
+
+	*result = now;
+	return 0;
+}

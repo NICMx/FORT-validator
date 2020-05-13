@@ -54,6 +54,7 @@ unsigned int config_get_rrdp_retry_interval(void);
 char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
 unsigned int config_get_asn1_decode_max_stack(void);
+unsigned int config_get_stale_repository_period(void);
 
 /*
  * Public, so that work-offline can set them, or (to be deprecated)

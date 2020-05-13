@@ -11,6 +11,7 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
+#include "reqs_errors.h"
 #include "str.h"
 #include "thread_var.h"
 
@@ -251,7 +252,7 @@ create_pipes(int fds[2][2])
 }
 
 static void
-log_buffer(char const *buffer, ssize_t read, int type)
+log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 {
 #define PRE_RSYNC "[RSYNC exec]: "
 	char *cpy, *cur, *tmp;
@@ -272,10 +273,19 @@ log_buffer(char const *buffer, ssize_t read, int type)
 			cur = tmp + 1;
 			continue;
 		}
-		if (type == 0)
-			pr_err(PRE_RSYNC "%s", cur);
-		else
-			pr_info(PRE_RSYNC "%s", cur);
+		if (type == 0) {
+			/* FIXME (NOW) Send to operation log if requested */
+			if (log_operation)
+				pr_err(PRE_RSYNC " [OPERATION]: %s", cur);
+			/* FIXME (NOW) Always send to validation log */
+			pr_err(PRE_RSYNC " [VALIDATION]: %s", cur);
+		} else {
+			/* FIXME (NOW) Send to operation log if requested */
+			if (log_operation)
+				pr_info(PRE_RSYNC " [OPERATION]: %s", cur);
+			/* FIXME (NOW) Always send to validation log */
+			pr_info(PRE_RSYNC " [VALIDATION]: %s", cur);
+		}
 		cur = tmp + 1;
 	}
 	free(cpy);
@@ -283,7 +293,7 @@ log_buffer(char const *buffer, ssize_t read, int type)
 }
 
 static int
-read_pipe(int fd_pipe[2][2], int type)
+read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 {
 	char buffer[4096];
 	ssize_t count;
@@ -298,14 +308,14 @@ read_pipe(int fd_pipe[2][2], int type)
 		if (count == 0)
 			break;
 
-		log_buffer(buffer, count, type);
+		log_buffer(buffer, count, type, log_operation);
 	}
 	close(fd_pipe[type][0]);
 	return 0;
 }
 
 static int
-read_pipes(int fds[2][2])
+read_pipes(int fds[2][2], bool log_operation)
 {
 	int error;
 
@@ -314,19 +324,19 @@ read_pipes(int fds[2][2])
 	close(fds[1][1]);
 
 	/* stderr pipe */
-	error = read_pipe(fds, 0);
+	error = read_pipe(fds, 0, log_operation);
 	if (error)
 		return error;
 
 	/* stdout pipe */
-	return read_pipe(fds, 1);
+	return read_pipe(fds, 1, log_operation);
 }
 
 /*
  * Downloads the @uri->global file into the @uri->local path.
  */
 static int
-do_rsync(struct rpki_uri *uri, bool is_ta)
+do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 {
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	int fork_fds[2][2];
@@ -354,7 +364,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 		}
 
 		/* This code is run by us. */
-		error = read_pipes(fork_fds);
+		error = read_pipes(fork_fds, log_operation);
 		if (error)
 			return error;
 
@@ -374,12 +384,15 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 			/* Happy path (but also sad path sometimes). */
 			error = WEXITSTATUS(child_status);
 			pr_debug("Child terminated with error code %d.", error);
-			if (!error)
+			if (!error) {
+				reqs_errors_rem_uri(uri_get_global(uri));
 				return 0;
+			}
 			if (retries == config_get_rsync_retry_count()) {
 				pr_info("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 				    retries, uri_get_global(uri));
-				return error;
+
+				return EREQFAILED;
 			}
 			pr_info("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
 			    uri_get_global(uri),
@@ -434,6 +447,7 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	struct validation *state;
 	struct uri_list *visited_uris;
 	struct rpki_uri *rsync_uri;
+	bool to_op_log;
 	int error;
 
 	if (!config_get_rsync_enabled())
@@ -461,11 +475,24 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 
 	pr_debug("Going to RSYNC '%s'.", uri_get_printable(rsync_uri));
 
-	/* Don't store when "force" and if its already downloaded */
-	error = do_rsync(rsync_uri, is_ta);
-	if (!error &&
-	    !(force && is_already_downloaded(rsync_uri, visited_uris)))
+	to_op_log = reqs_errors_log_uri(uri_get_global(requested_uri));
+	error = do_rsync(rsync_uri, is_ta, to_op_log);
+	switch(error) {
+	case 0:
+		/* Don't store when "force" and if its already downloaded */
+		if (!(force && is_already_downloaded(rsync_uri, visited_uris)))
+			error = mark_as_downloaded(rsync_uri, visited_uris);
+		break;
+	case EREQFAILED:
+		/* All attempts failed, avoid future requests */
+		error = reqs_errors_add_uri(uri_get_global(requested_uri));
+		if (error)
+			break;
 		error = mark_as_downloaded(rsync_uri, visited_uris);
+		break;
+	default:
+		break;
+	}
 
 	uri_refput(rsync_uri);
 	return error;

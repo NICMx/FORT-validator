@@ -1950,7 +1950,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 * children CAs being the same as the parent CA.
 	 *
 	 * Two possible scenarios arise:
-	 * 1) CA Parent didn't utilized (or didn't had) and RRDP update
+	 * 1) CA Parent didn't utilized (or didn't had) an RRDP update
 	 *    notification URI.
 	 * 2) CA Parent successfully utilized an RRDP update notification URI.
 	 *
@@ -1985,6 +1985,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	}
 
 	if (primary_rrdp) {
+		working_repo_push(uri_get_global(sia_uris->rpkiNotify.uri));
 		if (error != -EPERM)
 			pr_info("Couldn't fetch data from RRDP repository '%s', trying to fetch data now from '%s'.",
 			    uri_get_global(sia_uris->rpkiNotify.uri),
@@ -1994,13 +1995,18 @@ use_access_method(struct sia_ca_uris *sia_uris,
 			    uri_get_global(sia_uris->rpkiNotify.uri),
 			    uri_get_global(sia_uris->caRepository.uri));
 	} else {
+		working_repo_push(uri_get_global(sia_uris->caRepository.uri));
 		pr_info("Couldn't fetch data from repository '%s', trying to fetch data now from RRDP '%s'.",
 		    uri_get_global(sia_uris->caRepository.uri),
 		    uri_get_global(sia_uris->rpkiNotify.uri));
 	}
 
 	(*rsync_utilized) = primary_rrdp;
-	return cb_secondary(sia_uris);
+	error = cb_secondary(sia_uris);
+	/* No need to remember the working repository anymore */
+	working_repo_pop();
+
+	return error;
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */
@@ -2143,6 +2149,13 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		if (error == 0 || !mft_retry)
 			break;
 
+		/*
+		 * Don't reach here if:
+		 * - Manifest is valid.
+		 * - Working with local files due to a download error.
+		 * - RRDP was utilized to fetch the manifest.
+		 * - There was a previous attempt to re-fetch the repository.
+		 */
 		pr_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
 		    uri_get_printable(sia_uris.caRepository.uri));
 		error = download_files(sia_uris.caRepository.uri, false, true);

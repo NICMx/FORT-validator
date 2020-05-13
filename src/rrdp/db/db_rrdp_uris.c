@@ -4,9 +4,9 @@
 #include <string.h>
 #include <time.h>
 #include "data_structure/uthash_nonfatal.h"
+#include "common.h"
 #include "log.h"
 #include "thread_var.h"
-#include "visited_uris.h"
 
 struct uris_table {
 	/* Key */
@@ -236,25 +236,13 @@ db_rrdp_uris_get_last_update(char const *uri, long *date)
 	return 0;
 }
 
-static int
-get_current_time(long *result)
-{
-	time_t now;
-
-	now = time(NULL);
-	if (now == ((time_t) -1))
-		return pr_errno(errno, "Error getting the current time");
-
-	*result = now;
-	return 0;
-}
-
 /* Set the last update to now */
 int
 db_rrdp_uris_set_last_update(char const *uri)
 {
 	struct db_rrdp_uri *uris;
 	struct uris_table *found;
+	time_t now;
 	int error;
 
 	uris = NULL;
@@ -263,7 +251,14 @@ db_rrdp_uris_set_last_update(char const *uri)
 		return error;
 
 	RET_NOT_FOUND_URI(uris, uri, found)
-	return get_current_time(&found->last_update);
+
+	now = 0;
+	error = get_current_time(&now);
+	if (error)
+		return error;
+
+	found->last_update = (long)now;
+	return 0;
 }
 
 int
