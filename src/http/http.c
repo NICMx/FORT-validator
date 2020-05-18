@@ -143,12 +143,12 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		return pr_err("Error requesting URL %s (received HTTP code %ld): %s",
 		    uri, *response_code, curl_err_string(handler, res));
 
-	/* FIXME (NOW) Always log to validation log */
-	pr_err("[VALIDATION] Error requesting URL %s: %s", uri,
+	/* FIXME (NOW) Always log this to validation log */
+	pr_err("Error requesting URL %s: %s", uri,
 	    curl_err_string(handler, res));
 	/* FIXME (NOW) and send to operation log when requested */
 	if (log_operation)
-		pr_err("[OPERATION] Error requesting URL %s: %s", uri,
+		pr_err("Error requesting URL %s: %s", uri,
 		    curl_err_string(handler, res));
 
 	return EREQFAILED;

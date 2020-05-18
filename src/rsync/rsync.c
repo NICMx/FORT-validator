@@ -276,15 +276,15 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 		if (type == 0) {
 			/* FIXME (NOW) Send to operation log if requested */
 			if (log_operation)
-				pr_err(PRE_RSYNC " [OPERATION]: %s", cur);
-			/* FIXME (NOW) Always send to validation log */
-			pr_err(PRE_RSYNC " [VALIDATION]: %s", cur);
+				pr_err(PRE_RSYNC "%s", cur);
+			/* FIXME (NOW) Always send this to validation log */
+			pr_err(PRE_RSYNC "%s", cur);
 		} else {
 			/* FIXME (NOW) Send to operation log if requested */
 			if (log_operation)
-				pr_info(PRE_RSYNC " [OPERATION]: %s", cur);
-			/* FIXME (NOW) Always send to validation log */
-			pr_info(PRE_RSYNC " [VALIDATION]: %s", cur);
+				pr_info(PRE_RSYNC "%s", cur);
+			/* FIXME (NOW) Always send this to validation log */
+			pr_info(PRE_RSYNC "%s", cur);
 		}
 		cur = tmp + 1;
 	}

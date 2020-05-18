@@ -2009,6 +2009,102 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	return error;
 }
 
+/*
+ * Get the rsync server part from an rsync URI.
+ *
+ * If the URI is:
+ *   rsync://<server>/<service/<file path>
+ * This will return:
+ *   rsync://<server>
+ */
+static int
+get_rsync_server_uri(struct rpki_uri *src, char **result, size_t *result_len)
+{
+	char const *global;
+	char *tmp;
+	size_t global_len;
+	unsigned int slashes;
+	size_t i;
+
+	global = uri_get_global(src);
+	global_len = uri_get_global_len(src);
+	slashes = 0;
+
+	for (i = 0; i < global_len; i++) {
+		if (global[i] == '/') {
+			slashes++;
+			if (slashes == 3)
+				break;
+		}
+	}
+
+	tmp = malloc(i + 1);
+	if (tmp == NULL)
+		return pr_enomem();
+
+	strncpy(tmp, global, i);
+	tmp[i] = '\0';
+
+	*result_len = i;
+	*result = tmp;
+
+	return 0;
+}
+
+static int
+set_repository_level(bool is_ta, struct validation *state,
+    struct rpki_uri *cert_uri, struct sia_ca_uris *sia_uris)
+{
+	char *parent_server, *current_server;
+	size_t parent_server_len, current_server_len;
+	unsigned int new_level;
+	bool update;
+	int error;
+
+	new_level = 0;
+	if (is_ta || cert_uri == NULL) {
+		working_repo_push_level(new_level);
+		return 0;
+	}
+
+	/* Warning killer */
+	parent_server = NULL;
+	current_server = NULL;
+	parent_server_len = 0;
+	current_server_len = 0;
+
+	/* Both are rsync URIs, check the server part */
+	error = get_rsync_server_uri(cert_uri, &parent_server,
+	    &parent_server_len);
+	if (error)
+		return error;
+
+	error = get_rsync_server_uri(sia_uris->caRepository.uri,
+	    &current_server, &current_server_len);
+	if (error) {
+		free(parent_server);
+		return error;
+	}
+
+	if (parent_server_len != current_server_len) {
+		update = true;
+		goto end;
+	}
+
+	update = (strcmp(parent_server, current_server) != 0);
+end:
+	new_level = x509stack_peek_level(validation_certstack(state));
+	if (update)
+		new_level++;
+
+	working_repo_push_level(new_level);
+
+	free(parent_server);
+	free(current_server);
+
+	return 0;
+}
+
 /** Boilerplate code for CA certificate validation and recursive traversal. */
 int
 certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
@@ -2118,6 +2214,11 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 		goto revert_refs;
 	}
+
+	/* Identify if this is a new repository before fetching it */
+	error = set_repository_level(IS_TA, state, cert_uri, &sia_uris);
+	if (error)
+		goto revert_uris;
 
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents

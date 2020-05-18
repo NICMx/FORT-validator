@@ -63,6 +63,18 @@ struct metadata_node {
 SLIST_HEAD(metadata_stack, metadata_node);
 
 /**
+ * Certificate repository "level". This aims to identify if the
+ * certificate is located at a distinct server than its father (common
+ * case when the RIRs delegate RPKI repositories).
+ */
+struct repo_level_node {
+	unsigned int level;
+	SLIST_ENTRY(repo_level_node) next;
+};
+
+SLIST_HEAD(repo_level_stack, repo_level_node);
+
+/**
  * This is the foundation through which we pull off our iterative traversal,
  * as opposed to a stack-threatening recursive one.
  *
@@ -97,6 +109,12 @@ struct cert_stack {
 	 * seemingly not intended to be used outside of its library.)
 	 */
 	struct metadata_stack metas;
+
+	/**
+	 * Stacked data to store the repository "levels" (each level is a
+	 * delegation of an RPKI server).
+	 */
+	struct repo_level_stack levels;
 };
 
 int
@@ -116,6 +134,7 @@ certstack_create(struct cert_stack **result)
 
 	SLIST_INIT(&stack->defers);
 	SLIST_INIT(&stack->metas);
+	SLIST_INIT(&stack->levels);
 
 	*result = stack;
 	return 0;
@@ -166,6 +185,7 @@ certstack_destroy(struct cert_stack *stack)
 	unsigned int stack_size;
 	struct metadata_node *meta;
 	struct defer_node *post;
+	struct repo_level_node *level;
 
 	stack_size = 0;
 	while (!SLIST_EMPTY(&stack->defers)) {
@@ -187,6 +207,15 @@ certstack_destroy(struct cert_stack *stack)
 		stack_size++;
 	}
 	pr_debug("Deleted %u metadatas.", stack_size);
+
+	stack_size = 0;
+	while (!SLIST_EMPTY(&stack->levels)) {
+		level = SLIST_FIRST(&stack->levels);
+		SLIST_REMOVE_HEAD(&stack->levels, next);
+		free(level);
+		stack_size++;
+	}
+	pr_debug("Deleted %u stacked levels.", stack_size);
 
 	free(stack);
 }
@@ -213,6 +242,7 @@ x509stack_pop(struct cert_stack *stack)
 {
 	X509 *cert;
 	struct metadata_node *meta;
+	struct repo_level_node *repo;
 
 	cert = sk_X509_pop(stack->x509s);
 	if (cert == NULL)
@@ -224,6 +254,12 @@ x509stack_pop(struct cert_stack *stack)
 		pr_crit("Attempted to pop empty metadata stack");
 	SLIST_REMOVE_HEAD(&stack->metas, next);
 	meta_destroy(meta);
+
+	repo = SLIST_FIRST(&stack->levels);
+	if (repo == NULL)
+		pr_crit("Attempted to pop empty repo level stack");
+	SLIST_REMOVE_HEAD(&stack->levels, next);
+	free(repo);
 }
 
 /**
@@ -267,13 +303,29 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
     enum rpki_policy policy, enum cert_type type)
 {
 	struct metadata_node *meta;
+	struct repo_level_node *repo, *head_repo;
 	struct defer_node *defer_separator;
+	unsigned int work_repo_level;
 	int ok;
 	int error;
 
-	meta = malloc(sizeof(struct metadata_node));
-	if (meta == NULL)
+	repo = malloc(sizeof(struct repo_level_node));
+	if (repo == NULL)
 		return pr_enomem();
+
+	repo->level = 0;
+	work_repo_level = working_repo_peek_level();
+	head_repo = SLIST_FIRST(&stack->levels);
+	if (head_repo != NULL && work_repo_level > head_repo->level)
+		repo->level = work_repo_level;
+
+	SLIST_INSERT_HEAD(&stack->levels, repo, next);
+
+	meta = malloc(sizeof(struct metadata_node));
+	if (meta == NULL) {
+		error = pr_enomem();
+		goto end3;
+	}
 
 	meta->uri = uri;
 	uri_refget(uri);
@@ -326,6 +378,7 @@ end4:	subjects_cleanup(&meta->subjects, subject_cleanup);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	uri_refput(meta->uri);
 	free(meta);
+end3:	free(repo);
 	return error;
 }
 
@@ -333,7 +386,7 @@ end4:	subjects_cleanup(&meta->subjects, subject_cleanup);
  * This one is intended to revert a recent x509 push.
  * Reverts that particular push.
  *
- * (x509 stack elements are otherwise indirecly popped through
+ * (x509 stack elements are otherwise indirectly popped through
  * deferstack_pop().)
  */
 void
@@ -369,6 +422,13 @@ x509stack_peek_resources(struct cert_stack *stack)
 {
 	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
 	return (meta != NULL) ? meta->resources : NULL;
+}
+
+unsigned int
+x509stack_peek_level(struct cert_stack *stack)
+{
+	struct repo_level_node *repo = SLIST_FIRST(&stack->levels);
+	return (repo != NULL) ? repo->level : 0;
 }
 
 static int

@@ -220,10 +220,11 @@ upd_end:
 		upd_error = reqs_errors_add_uri(uri_get_global(uri));
 		if (upd_error)
 			return upd_error;
+	} else {
+		/* Reset RSYNC visited URIs, this may force the update */
+		reset_downloaded();
 	}
 
-	/* Reset RSYNC visited URIs, this may force the update */
-	reset_downloaded();
 	upd_error = mark_rrdp_uri_request_err(uri_get_global(uri));
 	if (upd_error)
 		return upd_error;

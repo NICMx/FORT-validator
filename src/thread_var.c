@@ -23,6 +23,7 @@ struct filename_stack {
 
 struct working_repo {
 	char const *uri;
+	unsigned int level;
 };
 
 static void
@@ -229,6 +230,7 @@ working_repo_init(void)
 		return;
 
 	repo->uri = NULL;
+	repo->level = 0;
 
 	error = pthread_setspecific(repository_key, repo);
 	if (error)
@@ -268,6 +270,24 @@ working_repo_push(char const *location)
 	repo->uri = location;
 }
 
+/*
+ * Set the current repository level, must be called before trying to fetch the
+ * repository.
+ *
+ * The level "calculation" must be done by the caller.
+ */
+void
+working_repo_push_level(unsigned int level)
+{
+	struct working_repo *repo;
+
+	repo = pthread_getspecific(repository_key);
+	if (repo == NULL)
+		return;
+
+	repo->level = level;
+}
+
 char const *
 working_repo_peek(void)
 {
@@ -276,6 +296,16 @@ working_repo_peek(void)
 	repo = pthread_getspecific(repository_key);
 
 	return repo == NULL ? NULL : repo->uri;
+}
+
+unsigned int
+working_repo_peek_level(void)
+{
+	struct working_repo *repo;
+
+	repo = pthread_getspecific(repository_key);
+
+	return repo->level;
 }
 
 /*
@@ -292,6 +322,7 @@ working_repo_pop(void)
 		return;
 
 	repo->uri = NULL;
+	repo->level = 0;
 }
 
 static char const *
