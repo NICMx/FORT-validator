@@ -38,24 +38,25 @@ command: fort
 	27. [`--http.ca-path`](#--httpca-path)
 	28. [`--output.roa`](#--outputroa)
 	29. [`--output.bgpsec`](#--outputbgpsec)
-	20. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	31. [`--configuration-file`](#--configuration-file)
-	32. [`--rrdp.enabled`](#--rrdpenabled)
-	33. [`--rrdp.priority`](#--rrdppriority)
-	34. [`--rrdp.retry.count`](#--rrdpretrycount)
-	35. [`--rrdp.retry.interval`](#--rrdpretryinterval)
-	36. [`--rsync.enabled`](#--rsyncenabled)
-	37. [`--rsync.priority`](#--rsyncpriority)
-	38. [`--rsync.strategy`](#--rsyncstrategy)
+	30. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	31. [`--stale-repository-period`](#--stale-repository-period)
+	32. [`--configuration-file`](#--configuration-file)
+	33. [`--rrdp.enabled`](#--rrdpenabled)
+	34. [`--rrdp.priority`](#--rrdppriority)
+	35. [`--rrdp.retry.count`](#--rrdpretrycount)
+	36. [`--rrdp.retry.interval`](#--rrdpretryinterval)
+	37. [`--rsync.enabled`](#--rsyncenabled)
+	38. [`--rsync.priority`](#--rsyncpriority)
+	39. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	39. [`--rsync.retry.count`](#--rsyncretrycount)
-	40. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	41. [`rsync.program`](#rsyncprogram)
-	42. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	43. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	44. [`incidences`](#incidences)
+	40. [`--rsync.retry.count`](#--rsyncretrycount)
+	41. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	42. [`rsync.program`](#rsyncprogram)
+	43. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	44. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	45. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -71,6 +72,8 @@ command: fort
         [--work-offline]
         [--shuffle-uris]
         [--maximum-certificate-depth=<unsigned integer>]
+        [--asn1-decode-max-stack=<unsigned integer>]
+        [--stale-repository-period=<unsigned integer>]
         [--mode=server|standalone]
         [--server.address=<string>]
         [--server.port=<string>]
@@ -568,6 +571,25 @@ ASN1 decoder max allowed stack size in bytes, utilized to avoid a stack overflow
 
 This check is merely a caution, since ASN1 decoding functions are recursive and might cause a stack overflow. So, this argument probably won't be necessary in most cases, since the RPKI ASN1 objects don't have nested objects that require too much stack allocation (for now).
 
+### `--stale-repository-period`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 43200 (12 hours)
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Time period that must lapse to warn about a stale repository (the messages will be sent to the operation log). The time lapse starts once the repository download has been retried (see [`--rsync.retry.count`](#--rsyncretrycount) and [`--rrdp.retry.count`](#--rrdpretrycount)) and failed after such retries.
+
+A repository is considered stale if its files can't be fetched due to a communication error and this error persists across validation cycles. This kind of issues can be due to a local misconfiguration (eg. a firewall that blocks incoming data) or a problem at the server (eg. the server is down).
+
+Despite who's "fault" is, FORT validator will try to work with the local files from [`--local-repository`](#--local-repository).
+
+The communication errors sent to the operation log, are those related to "first level" RPKI servers; commonly this are the servers maintained by the RIRs.
+
+Currently **all** the communication errors are logged at the validation log. This argument (`--stale-repository-period`) is merely to send this error messages also to the operation log.
+
+A value **equal to 0** means that the communication errors will be logged at once.
+
 ### `--configuration-file`
 
 - **Type:** String (Path to file)
@@ -666,7 +688,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv"
 	},
 
-	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096
+	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
+	"<a href="#--stale-repository-period">stale-repository-period</a>": 43200
 }
 </code></pre>
 
