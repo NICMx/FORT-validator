@@ -239,10 +239,10 @@ handle_error_report_pdu(int fd, struct rtr_request const *request)
 	error_name = err_pdu_to_string(received->header.m.error_code);
 
 	if (received->error_message != NULL)
-		pr_info("Client responded with error PDU '%s' ('%s'). Closing socket.",
+		pr_op_info("Client responded with error PDU '%s' ('%s'). Closing socket.",
 		    error_name, received->error_message);
 	else
-		pr_info("Client responded with error PDU '%s'. Closing socket.",
+		pr_op_info("Client responded with error PDU '%s'. Closing socket.",
 		    error_name);
 
 	return -EINVAL;

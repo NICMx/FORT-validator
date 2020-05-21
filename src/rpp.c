@@ -125,7 +125,7 @@ rpp_add_crl(struct rpp *pp, struct rpki_uri *uri)
 {
 	/* rfc6481#section-2.2 */
 	if (pp->crl.uri)
-		return pr_err("Repository Publication Point has more than one CRL.");
+		return pr_val_err("Repository Publication Point has more than one CRL.");
 
 	pp->crl.uri = uri;
 	return 0;
@@ -152,7 +152,7 @@ add_crl_to_stack(struct rpp *pp, STACK_OF(X509_CRL) *crls)
 
 	idx = sk_X509_CRL_push(crls, crl);
 	if (idx <= 0) {
-		error = crypto_err("Could not add CRL to a CRL stack");
+		error = val_crypto_err("Could not add CRL to a CRL stack");
 		X509_CRL_free(crl);
 		goto end;
 	}

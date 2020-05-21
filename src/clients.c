@@ -27,7 +27,7 @@ clients_db_init(void)
 
 	error = pthread_rwlock_init(&lock, NULL);
 	if (error)
-		return pr_errno(error, "pthread_rwlock_init() errored");
+		return pr_op_errno(error, "pthread_rwlock_init() errored");
 	return 0;
 }
 
@@ -72,7 +72,7 @@ clients_add(int fd, struct sockaddr_storage addr, pthread_t tid)
 	if (errno) {
 		rwlock_unlock(&lock);
 		free(new_client);
-		return -pr_errno(errno, "Client couldn't be stored");
+		return -pr_op_errno(errno, "Client couldn't be stored");
 	}
 	if (old_client != NULL)
 		free(old_client);

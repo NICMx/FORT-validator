@@ -92,7 +92,7 @@ uris_add(struct uris *uris, char *uri)
 
 	error = uri_create_mixed_str(&new, uri, strlen(uri));
 	if (error == ENOTSUPPORTED)
-		return pr_err("TAL has non-RSYNC/HTTPS URI.");
+		return pr_op_err("TAL has non-RSYNC/HTTPS URI.");
 
 	if (error)
 		return error;
@@ -123,10 +123,10 @@ read_uris(struct line_file *lfile, struct uris *uris)
 		return error;
 
 	if (uri == NULL)
-		return pr_err("TAL file is empty.");
+		return pr_op_err("TAL file is empty.");
 	if (strcmp(uri, "") == 0) {
 		free(uri);
-		return pr_err("There's no URI in the first line of the TAL.");
+		return pr_op_err("There's no URI in the first line of the TAL.");
 	} else if (strncmp(uri, "#", 1) == 0) {
 		/* More comments expected, or an URI */
 		do {
@@ -135,10 +135,10 @@ read_uris(struct line_file *lfile, struct uris *uris)
 			if (error)
 				return error;
 			if (uri == NULL)
-				return pr_err("TAL file ended prematurely. (Expected more comments or an URI list.)");
+				return pr_op_err("TAL file ended prematurely. (Expected more comments or an URI list.)");
 			if (strcmp(uri, "") == 0) {
 				free(uri);
-				return pr_err("TAL file comments syntax error. (Expected more comments or an URI list.)");
+				return pr_op_err("TAL file comments syntax error. (Expected more comments or an URI list.)");
 			}
 			/* Not a comment, probably the URI(s) */
 			if (strncmp(uri, "#", 1) != 0)
@@ -157,7 +157,7 @@ read_uris(struct line_file *lfile, struct uris *uris)
 			return error;
 
 		if (uri == NULL)
-			return pr_err("TAL file ended prematurely. (Expected URI list, blank line and public key.)");
+			return pr_op_err("TAL file ended prematurely. (Expected URI list, blank line and public key.)");
 		if (strcmp(uri, "") == 0) {
 			free(uri);
 			return 0; /* Happy path */
@@ -241,7 +241,7 @@ base64_sanitize(struct line_file *lfile, char **out)
 			 * code. It literally doesn't say how to get an error
 			 * code.
 			 */
-			pr_errno(error,
+			pr_op_errno(error,
 			    "File reading error. Error message (apparently)");
 			goto free_result;
 		}
@@ -314,7 +314,7 @@ read_spki(struct line_file *lfile, struct tal *tal)
 	if (encoded == NULL) {
 		free(tal->spki);
 		free(tmp);
-		return crypto_err("BIO_new_mem_buf() returned NULL");
+		return op_crypto_err("BIO_new_mem_buf() returned NULL");
 	}
 
 	error = base64_decode(encoded, tal->spki, true, alloc_size,
@@ -339,7 +339,7 @@ tal_load(char const *file_name, struct tal **result)
 
 	error = lfile_open(file_name, &lfile);
 	if (error) {
-		pr_errno(error, "Error opening file '%s'", file_name);
+		pr_op_errno(error, "Error opening file '%s'", file_name);
 		goto fail4;
 	}
 
@@ -499,15 +499,15 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	/* FIXME (NOW) Try to work with local data on the first run? */
 	if (error) {
 		validation_destroy(state);
-		return pr_warn("TAL '%s' could not be downloaded.",
-		    uri_get_printable(uri));
+		return pr_val_warn("TAL '%s' could not be downloaded.",
+		    uri_val_get_printable(uri));
 	}
 
-	pr_debug("TAL URI '%s' {", uri_get_printable(uri));
+	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
 
 	if (!uri_is_certificate(uri)) {
-		error = pr_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
-		    uri_get_printable(uri));
+		error = pr_op_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
+		    uri_op_get_printable(uri));
 		goto fail;
 	}
 
@@ -567,7 +567,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 
 fail:	error = ENSURE_NEGATIVE(error);
 end:	validation_destroy(state);
-	pr_debug("}");
+	pr_val_debug("}");
 	return error;
 }
 
@@ -593,7 +593,7 @@ do_file_validation(void *thread_arg)
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
-		error = pr_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
+		error = pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);
 
 	tal_destroy(tal);
@@ -639,7 +639,7 @@ __do_file_validation(char const *tal_file, void *arg)
 
 	errno = pthread_create(&thread->pid, NULL, do_file_validation, thread);
 	if (errno) {
-		error = -pr_errno(errno,
+		error = -pr_op_errno(errno,
 		    "Could not spawn the file validation thread");
 		goto free_tal_file;
 	}
@@ -701,7 +701,7 @@ perform_standalone_validation(struct db_table *table)
 		SLIST_REMOVE_HEAD(&threads, next);
 		if (thread->exit_status) {
 			t_error = thread->exit_status;
-			pr_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
+			pr_val_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
 			    thread->tal_file);
 		}
 		thread_destroy(thread);

@@ -25,18 +25,18 @@ struct rem_dirs {
 static int
 remove_file(char const *location)
 {
-	pr_debug("Trying to remove file '%s'.", location);
+	pr_op_debug("Trying to remove file '%s'.", location);
 	if (remove(location))
-		return pr_errno(errno, "Couldn't delete file '%s'", location);
+		return pr_op_errno(errno, "Couldn't delete file '%s'", location);
 	return 0;
 }
 
 static int
 remove_dir(char const *location)
 {
-	pr_debug("Trying to remove dir '%s'.", location);
+	pr_op_debug("Trying to remove dir '%s'.", location);
 	if (rmdir(location))
-		return pr_errno(errno, "Couldn't delete directory '%s'",
+		return pr_op_errno(errno, "Couldn't delete directory '%s'",
 		    location);
 	return 0;
 }
@@ -54,18 +54,18 @@ traverse(char const *path, struct stat const *sb, int flag, struct FTW *ftwbuf)
 	case FTW_F:
 		return remove_file(path);
 	case FTW_DNR:
-		return pr_err("Can't access '%s', stop deletion.", path);
+		return pr_op_err("Can't access '%s', stop deletion.", path);
 	case FTW_NS:
-		return pr_err("Can't get information of '%s', stop deletion.",
+		return pr_op_err("Can't get information of '%s', stop deletion.",
 		    path);
 	case FTW_SL:
-		return pr_err("Can't delete '%s' since is a symbolic link, stop deletion.",
+		return pr_op_err("Can't delete '%s' since is a symbolic link, stop deletion.",
 		    path);
 	case FTW_D:
-		return pr_err("Can't delete '%s' dir before deleting its content.",
+		return pr_op_err("Can't delete '%s' dir before deleting its content.",
 		    path);
 	default:
-		return pr_warn("Unknown path flag %d, doing nothing to '%s'.",
+		return pr_op_warn("Unknown path flag %d, doing nothing to '%s'.",
 		    flag, path);
 	}
 }
@@ -90,17 +90,17 @@ remove_from_root(void *arg)
 		    FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
 		if (error) {
 			if (errno)
-				pr_debug("Error deleting directory '%s', please delete it manually: %s",
+				pr_op_debug("Error deleting directory '%s', please delete it manually: %s",
 				    dirs_arr[i], strerror(errno));
 			else
-				pr_debug("Couldn't delete directory '%s', please delete it manually",
+				pr_op_debug("Couldn't delete directory '%s', please delete it manually",
 				    dirs_arr[i]);
 		}
 		/* Release at once, won't be needed anymore */
 		free(dirs_arr[i]);
 	}
 
-	pr_debug("Done removing dirs.");
+	pr_op_debug("Done removing dirs.");
 	free(dirs_arr);
 	return NULL;
 }
@@ -133,7 +133,7 @@ get_local_path(char const *rcvd, char **result)
 	error = stat(local_path, &attr);
 	if (error) {
 		/* Soft error */
-		pr_debug("Error reading path '%s' (discarding): %s",
+		pr_op_debug("Error reading path '%s' (discarding): %s",
 		    local_path, strerror(errno));
 		error = errno;
 		goto release_local;
@@ -141,7 +141,7 @@ get_local_path(char const *rcvd, char **result)
 
 	if (!S_ISDIR(attr.st_mode)) {
 		/* Soft error */
-		pr_debug("Path '%s' exists but is not a directory (discarding).",
+		pr_op_debug("Path '%s' exists but is not a directory (discarding).",
 		    local_path);
 		error = ENOTDIR;
 		goto release_local;
@@ -202,7 +202,7 @@ rename_local_path(char const *rcvd, char **result)
 	error = rename(rcvd, tmp);
 	if (error) {
 		free(tmp);
-		pr_debug("Couldn't rename '%s' to delete it (discarding): %s",
+		pr_op_debug("Couldn't rename '%s' to delete it (discarding): %s",
 		    rcvd, strerror(errno));
 		return errno; /* Soft error */
 	}
@@ -303,7 +303,7 @@ delete_dir_daemon_start(char **roots, size_t roots_len)
 	errno = pthread_create(&thread, NULL, remove_from_root, (void *) arg);
 	if (errno) {
 		rem_dirs_destroy(arg);
-		return pr_errno(errno,
+		return pr_op_errno(errno,
 		    "Could not spawn the delete dir daemon thread");
 	}
 

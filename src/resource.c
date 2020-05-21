@@ -63,7 +63,7 @@ int
 get_addr_family(OCTET_STRING_t *octets)
 {
 	if (octets->size != 2) {
-		pr_err("Address family has %zu octets. (2 expected.)",
+		pr_val_err("Address family has %zu octets. (2 expected.)",
 		    octets->size);
 		return -1;
 	}
@@ -78,7 +78,7 @@ get_addr_family(OCTET_STRING_t *octets)
 	}
 
 unknown:
-	pr_err("Address family has unknown value 0x%02x%02x.", octets->buf[0],
+	pr_val_err("Address family has unknown value 0x%02x%02x.", octets->buf[0],
 	    octets->buf[1]);
 	return -1;
 }
@@ -104,20 +104,20 @@ inherit_aors(struct resources *resources, int family)
 	switch (family) {
 	case AF_INET:
 		if (resources->ip4s != NULL)
-			return pr_err("Certificate inherits IPv4 resources while also defining others of its own.");
+			return pr_val_err("Certificate inherits IPv4 resources while also defining others of its own.");
 		resources->ip4s = parent->ip4s;
 		if (resources->ip4s != NULL)
 			res4_get(resources->ip4s);
-		pr_debug("<Inherit IPv4>");
+		pr_val_debug("<Inherit IPv4>");
 		return 0;
 
 	case AF_INET6:
 		if (resources->ip6s != NULL)
-			return pr_err("Certificate inherits IPv6 resources while also defining others of its own.");
+			return pr_val_err("Certificate inherits IPv6 resources while also defining others of its own.");
 		resources->ip6s = parent->ip6s;
 		if (resources->ip6s != NULL)
 			res6_get(resources->ip6s);
-		pr_debug("<Inherit IPv6>");
+		pr_val_debug("<Inherit IPv6>");
 		return 0;
 	}
 
@@ -134,7 +134,7 @@ add_prefix4(struct resources *resources, IPAddress_t *addr)
 	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->ip4s == parent->ip4s))
-		return pr_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
+		return pr_val_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
 
 	error = prefix4_decode(addr, &prefix);
 	if (error)
@@ -143,10 +143,10 @@ add_prefix4(struct resources *resources, IPAddress_t *addr)
 	if (parent && !res4_contains_prefix(parent->ip4s, &prefix)) {
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
-			return pr_err("Parent certificate doesn't own IPv4 prefix '%s/%u'.",
+			return pr_val_err("Parent certificate doesn't own IPv4 prefix '%s/%u'.",
 			    v4addr2str(&prefix.addr), prefix.len);
 		case RPKI_POLICY_RFC8360:
-			return pr_warn("Certificate is overclaiming the IPv4 prefix '%s/%u'.",
+			return pr_val_warn("Certificate is overclaiming the IPv4 prefix '%s/%u'.",
 			    v4addr2str(&prefix.addr), prefix.len);
 		}
 	}
@@ -159,13 +159,13 @@ add_prefix4(struct resources *resources, IPAddress_t *addr)
 
 	error = res4_add_prefix(resources->ip4s, &prefix);
 	if (error) {
-		pr_err("Error adding IPv4 prefix '%s/%u' to certificate resources: %s",
+		pr_val_err("Error adding IPv4 prefix '%s/%u' to certificate resources: %s",
 		    v4addr2str(&prefix.addr), prefix.len,
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug("Prefix: %s/%u", v4addr2str(&prefix.addr), prefix.len);
+	pr_val_debug("Prefix: %s/%u", v4addr2str(&prefix.addr), prefix.len);
 	return 0;
 }
 
@@ -179,7 +179,7 @@ add_prefix6(struct resources *resources, IPAddress_t *addr)
 	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->ip6s == parent->ip6s))
-		return pr_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
+		return pr_val_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
 
 	error = prefix6_decode(addr, &prefix);
 	if (error)
@@ -188,10 +188,10 @@ add_prefix6(struct resources *resources, IPAddress_t *addr)
 	if (parent && !res6_contains_prefix(parent->ip6s, &prefix)) {
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
-			return pr_err("Parent certificate doesn't own IPv6 prefix '%s/%u'.",
+			return pr_val_err("Parent certificate doesn't own IPv6 prefix '%s/%u'.",
 			    v6addr2str(&prefix.addr), prefix.len);
 		case RPKI_POLICY_RFC8360:
-			return pr_warn("Certificate is overclaiming the IPv6 prefix '%s/%u'.",
+			return pr_val_warn("Certificate is overclaiming the IPv6 prefix '%s/%u'.",
 			    v6addr2str(&prefix.addr), prefix.len);
 		}
 	}
@@ -204,13 +204,13 @@ add_prefix6(struct resources *resources, IPAddress_t *addr)
 
 	error = res6_add_prefix(resources->ip6s, &prefix);
 	if (error) {
-		pr_err("Error adding IPv6 prefix '%s/%u' to certificate resources: %s",
+		pr_val_err("Error adding IPv6 prefix '%s/%u' to certificate resources: %s",
 		    v6addr2str(&prefix.addr), prefix.len,
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug("Prefix: %s/%u", v6addr2str(&prefix.addr), prefix.len);
+	pr_val_debug("Prefix: %s/%u", v6addr2str(&prefix.addr), prefix.len);
 	return 0;
 }
 
@@ -237,7 +237,7 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 	parent = get_parent_resources();
 
 	if (parent && (resources->ip4s == parent->ip4s))
-		return pr_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
+		return pr_val_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
 
 	error = range4_decode(input, &range);
 	if (error)
@@ -246,10 +246,10 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 	if (parent && !res4_contains_range(parent->ip4s, &range)) {
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
-			return pr_err("Parent certificate doesn't own IPv4 range '%s-%s'.",
+			return pr_val_err("Parent certificate doesn't own IPv4 range '%s-%s'.",
 			    v4addr2str(&range.min), v4addr2str2(&range.max));
 		case RPKI_POLICY_RFC8360:
-			return pr_warn("Certificate is overclaiming the IPv4 range '%s-%s'.",
+			return pr_val_warn("Certificate is overclaiming the IPv4 range '%s-%s'.",
 			    v4addr2str(&range.min), v4addr2str2(&range.max));
 		}
 	}
@@ -262,13 +262,13 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 
 	error = res4_add_range(resources->ip4s, &range);
 	if (error) {
-		pr_err("Error adding IPv4 range '%s-%s' to certificate resources: %s",
+		pr_val_err("Error adding IPv4 range '%s-%s' to certificate resources: %s",
 		    v4addr2str(&range.min), v4addr2str2(&range.max),
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug("Range: %s-%s", v4addr2str(&range.min),
+	pr_val_debug("Range: %s-%s", v4addr2str(&range.min),
 	    v4addr2str2(&range.max));
 	return 0;
 }
@@ -283,7 +283,7 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->ip6s == parent->ip6s))
-		return pr_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
+		return pr_val_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
 
 	error = range6_decode(input, &range);
 	if (error)
@@ -292,10 +292,10 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 	if (parent && !res6_contains_range(parent->ip6s, &range)) {
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
-			return pr_err("Parent certificate doesn't own IPv6 range '%s-%s'.",
+			return pr_val_err("Parent certificate doesn't own IPv6 range '%s-%s'.",
 			    v6addr2str(&range.min), v6addr2str2(&range.max));
 		case RPKI_POLICY_RFC8360:
-			return pr_warn("Certificate is overclaiming the IPv6 range '%s-%s'.",
+			return pr_val_warn("Certificate is overclaiming the IPv6 range '%s-%s'.",
 			    v6addr2str(&range.min), v6addr2str2(&range.max));
 		}
 	}
@@ -308,13 +308,13 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 
 	error = res6_add_range(resources->ip6s, &range);
 	if (error) {
-		pr_err("Error adding IPv6 range '%s-%s' to certificate resources: %s",
+		pr_val_err("Error adding IPv6 range '%s-%s' to certificate resources: %s",
 		    v6addr2str(&range.min), v6addr2str2(&range.max),
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_debug("Range: %s-%s", v6addr2str(&range.min),
+	pr_val_debug("Range: %s-%s", v6addr2str(&range.min),
 	    v6addr2str2(&range.max));
 	return 0;
 }
@@ -341,9 +341,9 @@ add_aors(struct resources *resources, int family,
 	int error;
 
 	if (resources->force_inherit)
-		return pr_err("Certificate is only allowed to inherit resources, but defines its own IP addresses or ranges.");
+		return pr_val_err("Certificate is only allowed to inherit resources, but defines its own IP addresses or ranges.");
 	if (aors->list.count == 0)
-		return pr_err("IP extension's set of IP address records is empty.");
+		return pr_val_err("IP extension's set of IP address records is empty.");
 
 	for (i = 0; i < aors->list.count; i++) {
 		aor = aors->list.array[i];
@@ -362,7 +362,7 @@ add_aors(struct resources *resources, int family,
 			break;
 		case IPAddressOrRange_PR_NOTHING:
 			/* rfc3779#section-2.2.3.7 */
-			return pr_err("Unknown IPAddressOrRange type: %u",
+			return pr_val_err("Unknown IPAddressOrRange type: %u",
 			    aor->present);
 		}
 	}
@@ -390,7 +390,7 @@ resources_add_ip(struct resources *resources, struct IPAddressFamily *obj)
 	}
 
 	/* rfc3779#section-2.2.3.4 */
-	return pr_err("Unknown ipAddressChoice type: %u",
+	return pr_val_err("Unknown ipAddressChoice type: %u",
 	    obj->ipAddressChoice.present);
 }
 
@@ -404,12 +404,12 @@ inherit_asiors(struct resources *resources)
 		pr_crit("Parent has no resources.");
 
 	if (resources->asns != NULL)
-		return pr_err("Certificate inherits ASN resources while also defining others of its own.");
+		return pr_val_err("Certificate inherits ASN resources while also defining others of its own.");
 
 	resources->asns = parent->asns;
 	if (resources->asns != NULL)
 		rasn_get(resources->asns);
-	pr_debug("<Inherit ASN>");
+	pr_val_debug("<Inherit ASN>");
 	return 0;
 }
 
@@ -422,12 +422,12 @@ ASId2ulong(ASId_t *as_id, unsigned long *result)
 	error = asn_INTEGER2ulong(as_id, result);
 	if (error) {
 		if (errno)
-			pr_errno(errno, "Error converting ASN value");
-		return pr_err("ASN value is not a valid unsigned long");
+			pr_val_errno(errno, "Error converting ASN value");
+		return pr_val_err("ASN value is not a valid unsigned long");
 	}
 
 	if ((*result) > ASN_MAX) {
-		return pr_err("ASN value '%lu' is out of bounds. (0-%lu)",
+		return pr_val_err("ASN value '%lu' is out of bounds. (0-%lu)",
 		    *result, ASN_MAX);
 	}
 
@@ -441,15 +441,15 @@ add_asn(struct resources *resources, unsigned long min, unsigned long max,
 	int error;
 
 	if (min > max)
-		return pr_err("The ASN range %lu-%lu is inverted.", min, max);
+		return pr_val_err("The ASN range %lu-%lu is inverted.", min, max);
 
 	if (parent && !rasn_contains(parent->asns, min, max)) {
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
-			return pr_err("Parent certificate doesn't own ASN range '%lu-%lu'.",
+			return pr_val_err("Parent certificate doesn't own ASN range '%lu-%lu'.",
 			    min, max);
 		case RPKI_POLICY_RFC8360:
-			return pr_warn("Certificate is overclaiming the ASN range '%lu-%lu'.",
+			return pr_val_warn("Certificate is overclaiming the ASN range '%lu-%lu'.",
 			    min, max);
 		}
 	}
@@ -462,15 +462,15 @@ add_asn(struct resources *resources, unsigned long min, unsigned long max,
 
 	error = rasn_add(resources->asns, min, max);
 	if (error){
-		pr_err("Error adding ASN range '%lu-%lu' to certificate resources: %s",
+		pr_val_err("Error adding ASN range '%lu-%lu' to certificate resources: %s",
 		    min, max, sarray_err2str(error));
 		return error;
 	}
 
 	if (min == max)
-		pr_debug("ASN: %lu", min);
+		pr_val_debug("ASN: %lu", min);
 	else
-		pr_debug("ASN: %lu-%lu", min, max);
+		pr_val_debug("ASN: %lu-%lu", min, max);
 	return 0;
 }
 
@@ -485,7 +485,7 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 	parent = get_parent_resources();
 
 	if ((parent != NULL) && (resources->asns == parent->asns))
-		return pr_err("Certificate defines ASN resources while also inheriting his parent's.");
+		return pr_val_err("Certificate defines ASN resources while also inheriting his parent's.");
 
 	switch (obj->present) {
 	case ASIdOrRange_PR_NOTHING:
@@ -507,7 +507,7 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 		return add_asn(resources, asn_min, asn_max, parent);
 	}
 
-	return pr_err("Unknown ASIdOrRange type: %u", obj->present);
+	return pr_val_err("Unknown ASIdOrRange type: %u", obj->present);
 }
 
 static int
@@ -518,11 +518,11 @@ add_asiors(struct resources *resources, struct ASIdentifiers *ids)
 	int error;
 
 	if (resources->force_inherit)
-		return pr_err("Certificate is only allowed to inherit resources, but defines its own AS numbers.");
+		return pr_val_err("Certificate is only allowed to inherit resources, but defines its own AS numbers.");
 
 	iors = &ids->asnum->choice.asIdsOrRanges;
 	if (iors->list.count == 0)
-		return pr_err("AS extension's set of AS number records is empty.");
+		return pr_val_err("AS extension's set of AS number records is empty.");
 
 	for (i = 0; i < iors->list.count; i++) {
 		error = add_asior(resources, iors->list.array[i]);
@@ -538,14 +538,14 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
     bool allow_inherit)
 {
 	if (ids->asnum == NULL)
-		return pr_err("ASN extension lacks 'asnum' element.");
+		return pr_val_err("ASN extension lacks 'asnum' element.");
 	if (ids->rdi != NULL)
-		return pr_err("ASN extension has 'rdi' element. (Prohibited by RFC6487)");
+		return pr_val_err("ASN extension has 'rdi' element. (Prohibited by RFC6487)");
 
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
 		if (!allow_inherit)
-			return pr_err("ASIdentifierChoice %u isn't allowed",
+			return pr_val_err("ASIdentifierChoice %u isn't allowed",
 			    ids->asnum->present);
 		return inherit_asiors(resources);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
@@ -554,7 +554,7 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
 		break;
 	}
 
-	return pr_err("Unknown ASIdentifierChoice: %u", ids->asnum->present);
+	return pr_val_err("Unknown ASIdentifierChoice: %u", ids->asnum->present);
 }
 
 bool

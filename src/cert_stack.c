@@ -129,7 +129,7 @@ certstack_create(struct cert_stack **result)
 	stack->x509s = sk_X509_new_null();
 	if (stack->x509s == NULL) {
 		free(stack);
-		return crypto_err("sk_X509_new_null() returned NULL");
+		return val_crypto_err("sk_X509_new_null() returned NULL");
 	}
 
 	SLIST_INIT(&stack->defers);
@@ -194,9 +194,9 @@ certstack_destroy(struct cert_stack *stack)
 		defer_destroy(post);
 		stack_size++;
 	}
-	pr_debug("Deleted %u deferred certificates.", stack_size);
+	pr_val_debug("Deleted %u deferred certificates.", stack_size);
 
-	pr_debug("Deleting %d stacked x509s.", sk_X509_num(stack->x509s));
+	pr_val_debug("Deleting %d stacked x509s.", sk_X509_num(stack->x509s));
 	sk_X509_pop_free(stack->x509s, X509_free);
 
 	stack_size = 0;
@@ -206,7 +206,7 @@ certstack_destroy(struct cert_stack *stack)
 		meta_destroy(meta);
 		stack_size++;
 	}
-	pr_debug("Deleted %u metadatas.", stack_size);
+	pr_val_debug("Deleted %u metadatas.", stack_size);
 
 	stack_size = 0;
 	while (!SLIST_EMPTY(&stack->levels)) {
@@ -215,7 +215,7 @@ certstack_destroy(struct cert_stack *stack)
 		free(level);
 		stack_size++;
 	}
-	pr_debug("Deleted %u stacked levels.", stack_size);
+	pr_val_debug("Deleted %u stacked levels.", stack_size);
 
 	free(stack);
 }
@@ -350,7 +350,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 	 * part is already handled in certificate_get_resources().
 	 */
 	if (type == TA && resources_empty(meta->resources)) {
-		error = pr_err("Trust Anchor certificate does not define any number resources.");
+		error = pr_val_err("Trust Anchor certificate does not define any number resources.");
 		goto end5;
 	}
 
@@ -363,7 +363,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 
 	ok = sk_X509_push(stack->x509s, x509);
 	if (ok <= 0) {
-		error = crypto_err(
+		error = val_crypto_err(
 		    "Could not add certificate to trusted stack: %d", ok);
 		goto end5;
 	}
@@ -498,7 +498,7 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 	ARRAYLIST_FOREACH(&meta->serials, cursor, i) {
 		if (BN_cmp(cursor->number, number) == 0) {
 			BN2string(number, &string);
-			pr_warn("Serial number '%s' is not unique. (Also found in '%s'.)",
+			pr_val_warn("Serial number '%s' is not unique. (Also found in '%s'.)",
 			    string, cursor->file);
 			BN_free(number);
 			free(string);
@@ -591,7 +591,7 @@ x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject,
 				continue;
 
 			char const *serial = x509_name_serialNumber(subject);
-			pr_warn("Subject name '%s%s%s' is not unique. (Also found in '%s'.)",
+			pr_val_warn("Subject name '%s%s%s' is not unique. (Also found in '%s'.)",
 			    x509_name_commonName(subject),
 			    (serial != NULL) ? "/" : "",
 			    (serial != NULL) ? serial : "",

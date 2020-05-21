@@ -456,19 +456,19 @@ print_prefix_data(struct slurm_prefix *prefix, void *arg)
 {
 	char *pad = "     ";
 
-	pr_info("    {");
+	pr_op_info("    {");
 	if (prefix->data_flag & SLURM_COM_FLAG_ASN)
-		pr_info("%s ASN: %u", pad, prefix->vrp.asn);
+		pr_op_info("%s ASN: %u", pad, prefix->vrp.asn);
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) {
 		switch (prefix->vrp.addr_fam) {
 		case AF_INET:
-			pr_info("%s Prefix: %s/%u", pad,
+			pr_op_info("%s Prefix: %s/%u", pad,
 			    addr2str4(&prefix->vrp.prefix.v4, addr_buf),
 			    prefix->vrp.prefix_length);
 			break;
 		case AF_INET6:
-			pr_info("%s Prefix: %s/%u", pad,
+			pr_op_info("%s Prefix: %s/%u", pad,
 			    addr2str6(&prefix->vrp.prefix.v6, addr_buf),
 			    prefix->vrp.prefix_length);
 			break;
@@ -479,9 +479,9 @@ print_prefix_data(struct slurm_prefix *prefix, void *arg)
 	}
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_MAX_LENGTH)
-		pr_info("%s Max prefix length: %u", pad,
+		pr_op_info("%s Max prefix length: %u", pad,
 		    prefix->vrp.max_prefix_length);
-	pr_info("    }");
+	pr_op_info("    }");
 
 	return 0;
 }
@@ -493,18 +493,19 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 	char *buf;
 	int error;
 
-	pr_info("    {");
+	pr_op_info("    {");
 	if (bgpsec->data_flag & SLURM_COM_FLAG_ASN)
-		pr_info("%s ASN: %u", pad, bgpsec->asn);
+		pr_op_info("%s ASN: %u", pad, bgpsec->asn);
 
 	if (bgpsec->data_flag & SLURM_BGPS_FLAG_SKI) {
 		do {
 			error = base64url_encode(bgpsec->ski, RK_SKI_LEN, &buf);
 			if (error) {
-				pr_info("%s SKI: <error encoding value>", pad);
+				pr_op_info("%s SKI: <error encoding value>",
+				    pad);
 				break;
 			}
-			pr_info("%s SKI: %s", pad, buf);
+			pr_op_info("%s SKI: %s", pad, buf);
 			free(buf);
 		} while (0);
 	}
@@ -514,15 +515,15 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 			error = base64url_encode(bgpsec->router_public_key,
 			    RK_SPKI_LEN, &buf);
 			if (error) {
-				pr_info("%s Router public key: <error encoding value>",
+				pr_op_info("%s Router public key: <error encoding value>",
 				    pad);
 				break;
 			}
-			pr_info("%s Router public key: %s", pad, buf);
+			pr_op_info("%s Router public key: %s", pad, buf);
 			free(buf);
 		} while (0);
 	}
-	pr_info("    }");
+	pr_op_info("    }");
 
 	return 0;
 }
@@ -531,25 +532,25 @@ void
 db_slurm_log(struct db_slurm *db)
 {
 	if (db->loaded_date_set)
-		pr_info("SLURM loaded at %s",
+		pr_op_info("SLURM loaded at %s",
 		    asctime(localtime(&db->loaded_date)));
-	pr_info("Validation output filters {");
-	pr_info("  Prefix filters {");
+	pr_op_info("Validation output filters {");
+	pr_op_info("  Prefix filters {");
 	foreach_filter_prefix(&db->lists, print_prefix_data, NULL);
-	pr_info("  }");
-	pr_info("  BGPsec filters {");
+	pr_op_info("  }");
+	pr_op_info("  BGPsec filters {");
 	foreach_filter_bgpsec(&db->lists, print_bgpsec_data, NULL);
-	pr_info("  }");
-	pr_info("}");
+	pr_op_info("  }");
+	pr_op_info("}");
 
-	pr_info("Locally added assertions {");
-	pr_info("  Prefix assertions {");
+	pr_op_info("Locally added assertions {");
+	pr_op_info("  Prefix assertions {");
 	foreach_assertion_prefix(&db->lists, print_prefix_data, NULL);
-	pr_info("  }");
-	pr_info("  BGPsec assertions {");
+	pr_op_info("  }");
+	pr_op_info("  BGPsec assertions {");
 	foreach_assertion_bgpsec(&db->lists, print_bgpsec_data, NULL);
-	pr_info("  }");
-	pr_info("}");
+	pr_op_info("  }");
+	pr_op_info("}");
 }
 
 int
@@ -695,7 +696,7 @@ int
 db_slurm_set_csum_list(struct db_slurm *db, struct slurm_csum_list *list)
 {
 	if (!SLIST_EMPTY(&db->csum_list))
-		return pr_err("Checksum list for SLURM DB must be empty");
+		pr_crit("Checksum list for SLURM DB must be empty");
 
 	db->csum_list.slh_first = list->slh_first;
 	db->csum_list.list_size = list->list_size;

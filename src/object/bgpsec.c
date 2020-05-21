@@ -15,7 +15,7 @@ asn_cb(unsigned long asn, void *arg)
 	struct resource_params *params = arg;
 
 	if (!resources_contains_asn(params->resources, asn))
-		return pr_err("BGPsec certificate is not allowed for ASN %lu.",
+		return pr_val_err("BGPsec certificate is not allowed for ASN %lu.",
 		    asn);
 
 	return vhandler_handle_router_key(params->ski, asn, params->spk);
@@ -32,7 +32,7 @@ handle_bgpsec(X509 *cert, unsigned char const *ski, struct resources *resources)
 
 	pub_key = X509_get_X509_PUBKEY(cert);
 	if (pub_key == NULL)
-		return crypto_err("X509_get_X509_PUBKEY() returned NULL at BGPsec");
+		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL at BGPsec");
 
 	cert_spk = malloc(RK_SPKI_LEN);
 	if (cert_spk == NULL)
@@ -42,7 +42,7 @@ handle_bgpsec(X509 *cert, unsigned char const *ski, struct resources *resources)
 	tmp = cert_spk;
 	cert_spk_len = i2d_X509_PUBKEY(pub_key, &tmp);
 	if(cert_spk_len < 0)
-		return crypto_err("i2d_X509_PUBKEY() returned error");
+		return val_crypto_err("i2d_X509_PUBKEY() returned error");
 
 	res_params.spk = cert_spk;
 	res_params.ski = ski;

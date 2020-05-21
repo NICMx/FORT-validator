@@ -33,11 +33,11 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len, bool allow_eof)
 	for (offset = 0; offset < buffer_len; offset += read_result) {
 		read_result = read(fd, &buffer[offset], buffer_len - offset);
 		if (read_result == -1)
-			return -pr_errno(errno, "Client socket read interrupted");
+			return -pr_op_errno(errno, "Client socket read interrupted");
 
 		if (read_result == 0) {
 			if (!allow_eof)
-				pr_warn("Stream ended mid-PDU.");
+				pr_op_warn("Stream ended mid-PDU.");
 			return -EPIPE;
 		}
 
@@ -63,7 +63,7 @@ pdu_reader_init(struct pdu_reader *reader, int fd, unsigned char *buffer,
 static int
 insufficient_bytes(void)
 {
-	pr_debug("Attempted to read past the end of a PDU Reader.");
+	pr_op_debug("Attempted to read past the end of a PDU Reader.");
 	return -EINVAL;
 }
 
@@ -218,7 +218,7 @@ read_string(struct pdu_reader *reader, uint32_t string_len, rtr_char **result)
 	rtr_char *string;
 
 	if (reader->size < string_len)
-		return pr_err("Erroneous PDU's error message is larger than its slot in the PDU.");
+		return pr_op_err("Erroneous PDU's error message is larger than its slot in the PDU.");
 
 	/*
 	 * Ok. Since the PDU size is already sanitized, string_len is guaranteed

@@ -226,15 +226,15 @@ handle_child_thread(struct rpki_uri *uri, bool is_ta, int fds[2][2])
 			exit(pr_enomem());
 	}
 
-	pr_debug("Executing RSYNC:");
+	pr_val_debug("Executing RSYNC:");
 	for (i = 0; i < config_args->length + 1; i++)
-		pr_debug("    %s", copy_args[i]);
+		pr_val_debug("    %s", copy_args[i]);
 
 	duplicate_fds(fds);
 
 	execvp(copy_args[0], copy_args);
 	error = errno;
-	pr_err("Could not execute the rsync command: %s",
+	pr_val_err("Could not execute the rsync command: %s",
 	    strerror(error));
 
 	/* https://stackoverflow.com/a/14493459/1735458 */
@@ -245,9 +245,9 @@ static int
 create_pipes(int fds[2][2])
 {
 	if (pipe(fds[0]) == -1)
-		return -pr_errno(errno, "Piping rsync stderr");
+		return -pr_op_errno(errno, "Piping rsync stderr");
 	if (pipe(fds[1]) == -1)
-		return -pr_errno(errno, "Piping rsync stdout");
+		return -pr_op_errno(errno, "Piping rsync stdout");
 	return 0;
 }
 
@@ -274,17 +274,13 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 			continue;
 		}
 		if (type == 0) {
-			/* FIXME (NOW) Send to operation log if requested */
 			if (log_operation)
-				pr_err(PRE_RSYNC "%s", cur);
-			/* FIXME (NOW) Always send this to validation log */
-			pr_err(PRE_RSYNC "%s", cur);
+				pr_op_err(PRE_RSYNC "%s", cur);
+			pr_val_err(PRE_RSYNC "%s", cur);
 		} else {
-			/* FIXME (NOW) Send to operation log if requested */
 			if (log_operation)
-				pr_info(PRE_RSYNC "%s", cur);
-			/* FIXME (NOW) Always send this to validation log */
-			pr_info(PRE_RSYNC "%s", cur);
+				pr_op_info(PRE_RSYNC "%s", cur);
+			pr_val_info(PRE_RSYNC "%s", cur);
 		}
 		cur = tmp + 1;
 	}
@@ -303,7 +299,7 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 		if (count == -1) {
 			if (errno == EINTR)
 				continue;
-			return -pr_errno(errno, "Reading rsync buffer");
+			return -pr_val_errno(errno, "Reading rsync buffer");
 		}
 		if (count == 0)
 			break;
@@ -372,7 +368,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		do {
 			if (error == -1) {
 				error = errno;
-				pr_err("The rsync sub-process returned error %d (%s)",
+				pr_op_err("The rsync sub-process returned error %d (%s)",
 				    error, strerror(error));
 				if (child_status > 0)
 					break;
@@ -383,18 +379,18 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		if (WIFEXITED(child_status)) {
 			/* Happy path (but also sad path sometimes). */
 			error = WEXITSTATUS(child_status);
-			pr_debug("Child terminated with error code %d.", error);
+			pr_val_debug("Child terminated with error code %d.", error);
 			if (!error) {
 				reqs_errors_rem_uri(uri_get_global(uri));
 				return 0;
 			}
 			if (retries == config_get_rsync_retry_count()) {
-				pr_info("Max RSYNC retries (%u) reached on '%s', won't retry again.",
+				pr_val_info("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 				    retries, uri_get_global(uri));
 
 				return EREQFAILED;
 			}
-			pr_info("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
+			pr_val_info("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
 			    uri_get_global(uri),
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
@@ -408,23 +404,23 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	if (WIFSIGNALED(child_status)) {
 		switch (WTERMSIG(child_status)) {
 		case SIGINT:
-			pr_err("RSYNC was user-interrupted. Guess I'll interrupt myself too.");
+			pr_op_err("RSYNC was user-interrupted. Guess I'll interrupt myself too.");
 			break;
 		case SIGQUIT:
-			pr_err("RSYNC received a quit signal. Guess I'll quit as well.");
+			pr_op_err("RSYNC received a quit signal. Guess I'll quit as well.");
 			break;
 		case SIGKILL:
-			pr_err("Killed.");
+			pr_op_err("Killed.");
 			break;
 		default:
-			pr_err("The RSYNC was terminated by a signal [%d] I don't have a handler for. Dunno; guess I'll just die.",
+			pr_op_err("The RSYNC was terminated by a signal [%d] I don't have a handler for. Dunno; guess I'll just die.",
 			    WTERMSIG(child_status));
 			break;
 		}
 		return -EINTR; /* Meh? */
 	}
 
-	pr_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
+	pr_op_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
 	return -EINVAL;
 }
 
@@ -460,8 +456,8 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	visited_uris = validation_rsync_visited_uris(state);
 
 	if (!force && is_already_downloaded(requested_uri, visited_uris)) {
-		pr_debug("No need to redownload '%s'.",
-		    uri_get_printable(requested_uri));
+		pr_val_debug("No need to redownload '%s'.",
+		    uri_val_get_printable(requested_uri));
 		return 0;
 	}
 
@@ -473,7 +469,7 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	if (error)
 		return error;
 
-	pr_debug("Going to RSYNC '%s'.", uri_get_printable(rsync_uri));
+	pr_val_debug("Going to RSYNC '%s'.", uri_val_get_printable(rsync_uri));
 
 	to_op_log = reqs_errors_log_uri(uri_get_global(requested_uri));
 	error = do_rsync(rsync_uri, is_ta, to_op_log);

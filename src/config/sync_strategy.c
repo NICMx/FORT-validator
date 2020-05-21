@@ -35,7 +35,7 @@ static void
 print_sync_strategy(struct option_field const *field, void *value)
 {
 	if (DEREFERENCE(value) == RSYNC_OFF) {
-		pr_info("%s: %s", field->name, RSYNC_VALUE_OFF);
+		pr_op_info("%s: %s", field->name, RSYNC_VALUE_OFF);
 		return;
 	}
 
@@ -48,8 +48,8 @@ parse_argv_sync_strategy(struct option_field const *field, char const *str,
 {
 	int error;
 
-	pr_warn("'sync-strategy' will be deprecated.");
-	pr_warn("Use 'rsync.strategy' instead; or 'rsync.enabled=false' if you wish to use 'off' strategy.");
+	pr_op_warn("'sync-strategy' will be deprecated.");
+	pr_op_warn("Use 'rsync.strategy' instead; or 'rsync.enabled=false' if you wish to use 'off' strategy.");
 
 	if (strcmp(str, RSYNC_VALUE_OFF) == 0) {
 		DEREFERENCE(result) = RSYNC_OFF;

@@ -166,11 +166,11 @@ prefix4_decode(IPAddress_t const *str, struct ipv4_prefix *result)
 	int len;
 
 	if (str->size > 4) {
-		return pr_err("IPv4 address has too many octets. (%zu)",
+		return pr_val_err("IPv4 address has too many octets. (%zu)",
 		    str->size);
 	}
 	if (str->bits_unused < 0 || 7 < str->bits_unused) {
-		return pr_err("Bit string IPv4 address's unused bits count (%d) is out of range (0-7).",
+		return pr_val_err("Bit string IPv4 address's unused bits count (%d) is out of range (0-7).",
 		    str->bits_unused);
 	}
 
@@ -179,14 +179,14 @@ prefix4_decode(IPAddress_t const *str, struct ipv4_prefix *result)
 	len = 8 * str->size - str->bits_unused;
 
 	if (len < 0 || 32 < len) {
-		return pr_err("IPv4 prefix length (%d) is out of bounds (0-32).",
+		return pr_val_err("IPv4 prefix length (%d) is out of bounds (0-32).",
 		    len);
 	}
 
 	result->len = len;
 
 	if ((result->addr.s_addr & be32_suffix_mask(result->len)) != 0) {
-		return pr_err("IPv4 prefix '%s/%u' has enabled suffix bits.",
+		return pr_val_err("IPv4 prefix '%s/%u' has enabled suffix bits.",
 		    v4addr2str(&result->addr), result->len);
 	}
 
@@ -203,11 +203,11 @@ prefix6_decode(IPAddress_t const *str, struct ipv6_prefix *result)
 	int len;
 
 	if (str->size > 16) {
-		return pr_err("IPv6 address has too many octets. (%zu)",
+		return pr_val_err("IPv6 address has too many octets. (%zu)",
 		    str->size);
 	}
 	if (str->bits_unused < 0 || 7 < str->bits_unused) {
-		return pr_err("Bit string IPv6 address's unused bits count (%d) is out of range (0-7).",
+		return pr_val_err("Bit string IPv6 address's unused bits count (%d) is out of range (0-7).",
 		    str->bits_unused);
 	}
 
@@ -216,7 +216,7 @@ prefix6_decode(IPAddress_t const *str, struct ipv6_prefix *result)
 	len = 8 * str->size - str->bits_unused;
 
 	if (len < 0 || 128 < len) {
-		return pr_err("IPv6 prefix length (%d) is out of bounds (0-128).",
+		return pr_val_err("IPv6 prefix length (%d) is out of bounds (0-128).",
 		    len);
 	}
 
@@ -225,7 +225,7 @@ prefix6_decode(IPAddress_t const *str, struct ipv6_prefix *result)
 	memset(&suffix, 0, sizeof(suffix));
 	ipv6_suffix_mask(result->len, &suffix);
 	if (addr6_bitwise_and(&result->addr, &suffix)) {
-		return pr_err("IPv6 prefix '%s/%u' has enabled suffix bits.",
+		return pr_val_err("IPv6 prefix '%s/%u' has enabled suffix bits.",
 		    v6addr2str(&result->addr), result->len);
 	}
 
@@ -236,7 +236,7 @@ static int
 check_order4(struct ipv4_range *result)
 {
 	if (ntohl(result->min.s_addr) > ntohl(result->max.s_addr)) {
-		return pr_err("The IPv4 range '%s-%s' is inverted.",
+		return pr_val_err("The IPv4 range '%s-%s' is inverted.",
 		    v4addr2str(&result->min), v4addr2str2(&result->max));
 	}
 
@@ -263,7 +263,7 @@ check_encoding4(struct ipv4_range *range)
 		if (((MIN & mask) != 0) || ((MAX & mask) == 0))
 			return 0;
 
-	return pr_err("IPAddressRange '%s-%s' is a range, but should have been encoded as a prefix.",
+	return pr_val_err("IPAddressRange '%s-%s' is a range, but should have been encoded as a prefix.",
 	    v4addr2str(&range->min), v4addr2str2(&range->max));
 }
 
@@ -304,7 +304,7 @@ check_order6(struct ipv6_range *result)
 		min = addr6_get_quadrant(&result->min, quadrant);
 		max = addr6_get_quadrant(&result->max, quadrant);
 		if (min > max) {
-			return pr_err("The IPv6 range '%s-%s' is inverted.",
+			return pr_val_err("The IPv6 range '%s-%s' is inverted.",
 			    v6addr2str(&result->min),
 			    v6addr2str2(&result->max));
 		} else if (min < max) {
@@ -318,7 +318,7 @@ check_order6(struct ipv6_range *result)
 static int
 pr_bad_encoding(struct ipv6_range *range)
 {
-	return pr_err("IPAddressRange %s-%s is a range, but should have been encoded as a prefix.",
+	return pr_val_err("IPAddressRange %s-%s is a range, but should have been encoded as a prefix.",
 	    v6addr2str(&range->min), v6addr2str2(&range->max));
 }
 
@@ -409,11 +409,11 @@ prefix4_parse(const char *str, struct ipv4_prefix *result)
 	int error;
 
 	if (str == NULL)
-		return pr_err("Can't parse NULL IPv4 prefix");
+		return pr_val_err("Can't parse NULL IPv4 prefix");
 
 	error = str2addr4(str, &result->addr);
 	if (error)
-		return pr_err("Invalid IPv4 prefix '%s'", str);
+		return pr_val_err("Invalid IPv4 prefix '%s'", str);
 
 	return 0;
 }
@@ -424,11 +424,11 @@ prefix6_parse(const char *str, struct ipv6_prefix *result)
 	int error;
 
 	if (str == NULL)
-		return pr_err("Can't parse NULL IPv6 prefix");
+		return pr_val_err("Can't parse NULL IPv6 prefix");
 
 	error = str2addr6(str, &result->addr);
 	if (error)
-		return pr_err("Invalid IPv6 prefix '%s'", str);
+		return pr_val_err("Invalid IPv6 prefix '%s'", str);
 
 	return 0;
 }
@@ -439,17 +439,17 @@ prefix_length_parse(const char *text, uint8_t *dst, uint8_t max_value)
 	unsigned long len;
 
 	if (text == NULL)
-		return pr_err("Can't decode NULL prefix length");
+		return pr_val_err("Can't decode NULL prefix length");
 
 	errno = 0;
 	len = strtoul(text, NULL, 10);
 	if (errno) {
-		pr_errno(errno, "Invalid prefix length '%s'", text);
+		pr_val_errno(errno, "Invalid prefix length '%s'", text);
 		return -EINVAL;
 	}
 	/* An underflow or overflow will be considered here */
 	if (max_value < len)
-		return pr_err("Prefix length (%lu) is out of range (0-%u).",
+		return pr_val_err("Prefix length (%lu) is out of range (0-%u).",
 		    len, max_value);
 
 	*dst = (uint8_t) len;
@@ -462,7 +462,7 @@ ipv4_prefix_validate(struct ipv4_prefix *prefix)
 	char buffer[INET_ADDRSTRLEN];
 
 	if ((prefix->addr.s_addr & be32_suffix_mask(prefix->len)) != 0)
-		return pr_err("IPv4 prefix %s/%u has enabled suffix bits.",
+		return pr_val_err("IPv4 prefix %s/%u has enabled suffix bits.",
 		    addr2str4(&prefix->addr, buffer), prefix->len);
 
 	return 0;
@@ -480,7 +480,7 @@ ipv6_prefix_validate(struct ipv6_prefix *prefix)
 
 	for (i = 0; i < 16; i++)
 		if (prefix->addr.s6_addr[i] & suffix.s6_addr[i])
-			return pr_err("IPv6 prefix %s/%u has enabled suffix bits.",
+			return pr_val_err("IPv6 prefix %s/%u has enabled suffix bits.",
 			    addr2str6(&prefix->addr, buffer), prefix->len);
 
 	return 0;

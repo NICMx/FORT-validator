@@ -16,17 +16,17 @@ __crl_load(struct rpki_uri *uri, X509_CRL **result)
 
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
-		return crypto_err("BIO_new(BIO_s_file()) returned NULL");
+		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
 	if (BIO_read_filename(bio, uri_get_local(uri)) <= 0) {
-		error = crypto_err("Error reading CRL '%s'",
-		    uri_get_printable(uri));
+		error = val_crypto_err("Error reading CRL '%s'",
+		    uri_val_get_printable(uri));
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
-		error = crypto_err("Error parsing CRL '%s'",
-		    uri_get_printable(uri));
+		error = val_crypto_err("Error parsing CRL '%s'",
+		    uri_val_get_printable(uri));
 		goto end;
 	}
 
@@ -46,17 +46,17 @@ debug_revoked(ASN1_INTEGER const *serial_int)
 
 	serial_bn = ASN1_INTEGER_to_BN(serial_int, NULL);
 	if (serial_bn == NULL) {
-		crypto_err("Could not parse revoked serial number");
+		val_crypto_err("Could not parse revoked serial number");
 		return;
 	}
 
 	serial_str = BN_bn2dec(serial_bn);
 	if (serial_str == NULL) {
-		crypto_err("Could not convert BN to string");
+		val_crypto_err("Could not convert BN to string");
 		goto end;
 	}
 
-	pr_debug("Revoked: %s", serial_str);
+	pr_val_debug("Revoked: %s", serial_str);
 
 	free(serial_str);
 end:	BN_free(serial_bn);
@@ -79,19 +79,19 @@ validate_revoked(X509_CRL *crl)
 
 		serial_int = X509_REVOKED_get0_serialNumber(revoked);
 		if (serial_int == NULL) {
-			return pr_err("CRL's revoked entry #%d lacks a serial number.",
+			return pr_val_err("CRL's revoked entry #%d lacks a serial number.",
 			    i + 1);
 		}
 
-		if (log_debug_enabled())
+		if (log_val_debug_enabled())
 			debug_revoked(serial_int);
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {
-			return pr_err("CRL's revoked entry #%d lacks a revocation date.",
+			return pr_val_err("CRL's revoked entry #%d lacks a revocation date.",
 			    i + 1);
 		}
 		if (X509_REVOKED_get0_extensions(revoked) != NULL) {
-			return pr_err("CRL's revoked entry #%d has extensions.",
+			return pr_val_err("CRL's revoked entry #%d has extensions.",
 			    i + 1);
 		}
 	}
@@ -130,7 +130,7 @@ crl_validate(X509_CRL *crl)
 
 	version = X509_CRL_get_version(crl);
 	if (version != 1)
-		return pr_err("CRL version (%ld) is not v2 (%d).", version, 1);
+		return pr_val_err("CRL version (%ld) is not v2 (%d).", version, 1);
 
 	error = validate_certificate_signature_algorithm(
 	    X509_CRL_get_signature_nid(crl), "CRL");
@@ -152,12 +152,12 @@ int
 crl_load(struct rpki_uri *uri, X509_CRL **result)
 {
 	int error;
-	pr_debug("CRL '%s' {", uri_get_printable(uri));
+	pr_val_debug("CRL '%s' {", uri_val_get_printable(uri));
 
 	error = __crl_load(uri, result);
 	if (!error)
 		error = crl_validate(*result);
 
-	pr_debug("}");
+	pr_val_debug("}");
 	return error;
 }

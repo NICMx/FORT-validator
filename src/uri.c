@@ -102,7 +102,7 @@ validate_url_character(int character)
 	 */
 	return (0x20 <= character && character <= 0x7E)
 	    ? 0
-	    : pr_err("URL has non-printable character code '%d'.", character);
+	    : pr_val_err("URL has non-printable character code '%d'.", character);
 }
 
 /**
@@ -196,7 +196,7 @@ validate_uri_begin(char const *uri_pfx, const size_t uri_pfx_len,
 	    || strncmp(uri_pfx, global, uri_pfx_len) != 0) {
 		if (!error)
 			return -EINVAL;
-		pr_err("Global URI '%s' does not begin with '%s'.",
+		pr_val_err("Global URI '%s' does not begin with '%s'.",
 		    global, uri_pfx);
 		return error;
 	}
@@ -238,7 +238,7 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	error = validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global, global_len,
 	    size, 0);
 	if (error) {
-		pr_warn("URI '%s' does not begin with '%s' nor '%s'.",
+		pr_val_warn("URI '%s' does not begin with '%s' nor '%s'.",
 		    global, PFX_RSYNC, PFX_HTTPS);
 		return ENOTSUPPORTED;
 	}
@@ -424,7 +424,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, int flags)
 	 * to.
 	 */
 	if (type != GEN_URI) {
-		pr_err("Unknown GENERAL_NAME type: %d", type);
+		pr_val_err("Unknown GENERAL_NAME type: %d", type);
 		return ENOTSUPPORTED;
 	}
 
@@ -520,12 +520,9 @@ get_filename(char const *file_path)
 	return (slash != NULL) ? (slash + 1) : file_path;
 }
 
-char const *
-uri_get_printable(struct rpki_uri *uri)
+static char const *
+uri_get_printable(struct rpki_uri *uri, enum filename_format format)
 {
-	enum filename_format format;
-
-	format = config_get_filename_format();
 	switch (format) {
 	case FNF_GLOBAL:
 		return uri->global;
@@ -536,4 +533,22 @@ uri_get_printable(struct rpki_uri *uri)
 	}
 
 	pr_crit("Unknown file name format: %u", format);
+	return NULL;
 }
+
+char const *
+uri_val_get_printable(struct rpki_uri *uri) {
+	enum filename_format format;
+
+	format = config_get_val_log_filename_format();
+	return uri_get_printable(uri, format);
+}
+
+char const *
+uri_op_get_printable(struct rpki_uri *uri) {
+	enum filename_format format;
+
+	format = config_get_op_log_filename_format();
+	return uri_get_printable(uri, format);
+}
+

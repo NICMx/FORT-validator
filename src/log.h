@@ -51,19 +51,32 @@ void log_teardown(void);
 /*
  * Check if debug or info are enabled, useful to avoid boilerplate code
  */
-bool log_debug_enabled(void);
-bool log_info_enabled(void);
+bool log_val_debug_enabled(void);
+bool log_op_debug_enabled(void);
+bool log_op_info_enabled(void);
 
 /* Debug messages, useful for devs or to track a specific problem */
-void pr_debug(const char *, ...) CHECK_FORMAT(1, 2);
+void pr_op_debug(const char *, ...) CHECK_FORMAT(1, 2);
 /* Non-errors deemed useful to the user. */
-void pr_info(const char *, ...) CHECK_FORMAT(1, 2);
+void pr_op_info(const char *, ...) CHECK_FORMAT(1, 2);
 /* Issues that did not trigger RPKI object rejection. */
-int pr_warn(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_op_warn(const char *, ...) CHECK_FORMAT(1, 2);
 /* Errors that trigger RPKI object rejection. */
-int pr_err(const char *, ...) CHECK_FORMAT(1, 2);
-int pr_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
-int crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_op_err(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_op_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
+int op_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
+
+/* Debug messages, useful for devs or to track a specific problem */
+void pr_val_debug(const char *, ...) CHECK_FORMAT(1, 2);
+/* Non-errors deemed useful to the user. */
+void pr_val_info(const char *, ...) CHECK_FORMAT(1, 2);
+/* Issues that did not trigger RPKI object rejection. */
+int pr_val_warn(const char *, ...) CHECK_FORMAT(1, 2);
+/* Errors that trigger RPKI object rejection. */
+int pr_val_err(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_val_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
+int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
+
 int pr_enomem(void);
 /* Programming errors */
 __dead void pr_crit(const char *, ...) CHECK_FORMAT(1, 2);

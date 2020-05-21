@@ -17,7 +17,7 @@ __string_free(char **string)
 static void
 string_print(struct option_field const *field, void *value)
 {
-	pr_info("%s: %s", field->name, DEREFERENCE(value));
+	pr_op_info("%s: %s", field->name, DEREFERENCE(value));
 }
 
 static int
@@ -26,7 +26,7 @@ string_parse_argv(struct option_field const *field, char const *str,
 {
 	if (field->type->has_arg != required_argument || str == NULL ||
 	    strlen(str) == 0) {
-		return pr_err("String options ('%s' in this case) require an argument.",
+		return pr_op_err("String options ('%s' in this case) require an argument.",
 		    field->name);
 	}
 
@@ -71,7 +71,7 @@ int
 parse_json_string(json_t *json, char const *name, char const **result)
 {
 	if (!json_is_string(json))
-		return pr_err("The '%s' element is not a JSON string.", name);
+		return pr_op_err("The '%s' element is not a JSON string.", name);
 
 	*result = json_string_value(json);
 	return 0;

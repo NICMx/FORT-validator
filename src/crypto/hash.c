@@ -17,7 +17,7 @@ get_md(char const *algorithm, EVP_MD const **result)
 
 	md = EVP_get_digestbyname(algorithm);
 	if (md == NULL) {
-		pr_err("Unknown message digest %s", algorithm);
+		pr_val_err("Unknown message digest %s", algorithm);
 		return -EINVAL;
 	}
 
@@ -76,7 +76,7 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 	}
 
 	if (!EVP_DigestInit_ex(ctx, md, NULL)) {
-		error = crypto_err("EVP_DigestInit_ex() failed");
+		error = val_crypto_err("EVP_DigestInit_ex() failed");
 		goto end3;
 	}
 
@@ -84,20 +84,20 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 		consumed = fread(buffer, 1, buffer_len, file);
 		error = ferror(file);
 		if (error) {
-			pr_errno(error,
+			pr_val_errno(error,
 			    "File reading error. Error message (apparently)");
 			goto end3;
 		}
 
 		if (!EVP_DigestUpdate(ctx, buffer, consumed)) {
-			error = crypto_err("EVP_DigestUpdate() failed");
+			error = val_crypto_err("EVP_DigestUpdate() failed");
 			goto end3;
 		}
 
 	} while (!feof(file));
 
 	if (!EVP_DigestFinal_ex(ctx, result, result_len))
-		error = crypto_err("EVP_DigestFinal_ex() failed");
+		error = val_crypto_err("EVP_DigestFinal_ex() failed");
 
 end3:
 	EVP_MD_CTX_free(ctx);
@@ -128,7 +128,7 @@ hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
 	int error;
 
 	if (expected->bits_unused != 0)
-		return pr_err("Hash string has unused bits.");
+		return pr_val_err("Hash string has unused bits.");
 
 	do {
 		error = hash_file(algorithm, uri, actual, &actual_len);
@@ -138,7 +138,7 @@ hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
 		if (error == EACCES || error == ENOENT) {
 			if (incidence(INID_MFT_FILE_NOT_FOUND,
 			    "File '%s' listed at manifest doesn't exist.",
-			    uri_get_printable(uri)))
+			    uri_val_get_printable(uri)))
 				return -EINVAL;
 
 			return error;
@@ -150,7 +150,7 @@ hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
 	if (!hash_matches(expected->buf, expected->size, actual, actual_len)) {
 		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
 		    "File '%s' does not match its manifest hash.",
-		    uri_get_printable(uri));
+		    uri_val_get_printable(uri));
 	}
 
 	return 0;
@@ -173,8 +173,8 @@ hash_validate_file(char const *algorithm, struct rpki_uri *uri,
 		return error;
 
 	if (!hash_matches(expected, expected_len, actual, actual_len)) {
-		return pr_err("File '%s' does not match its expected hash.",
-		    uri_get_printable(uri));
+		return pr_val_err("File '%s' does not match its expected hash.",
+		    uri_val_get_printable(uri));
 	}
 
 	return 0;
@@ -200,7 +200,7 @@ hash_buffer(char const *algorithm,
 	if (!EVP_DigestInit_ex(ctx, md, NULL)
 	    || !EVP_DigestUpdate(ctx, content, content_len)
 	    || !EVP_DigestFinal_ex(ctx, hash, hash_len)) {
-		error = crypto_err("Buffer hashing failed");
+		error = val_crypto_err("Buffer hashing failed");
 	}
 
 	EVP_MD_CTX_free(ctx);

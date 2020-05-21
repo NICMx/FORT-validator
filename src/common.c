@@ -23,7 +23,7 @@ rwlock_read_lock(pthread_rwlock_t *lock)
 	case 0:
 		return error;
 	case EAGAIN:
-		pr_err("There are too many threads; I can't modify the database.");
+		pr_op_err("There are too many threads; I can't modify the database.");
 		return error;
 	}
 
@@ -34,7 +34,7 @@ rwlock_read_lock(pthread_rwlock_t *lock)
 	 * pthread_rwlock_rdlock() failing like this is akin to `if` failing;
 	 * we're screwed badly, so let's just pull the trigger.
 	 */
-	pr_err("pthread_rwlock_rdlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+	pr_op_err("pthread_rwlock_rdlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
 	    error);
 	exit(error);
 }
@@ -50,7 +50,7 @@ rwlock_write_lock(pthread_rwlock_t *lock)
 	 */
 	error = pthread_rwlock_wrlock(lock);
 	if (error) {
-		pr_err("pthread_rwlock_wrlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		pr_op_err("pthread_rwlock_wrlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
 		    error);
 		exit(error);
 	}
@@ -67,7 +67,7 @@ rwlock_unlock(pthread_rwlock_t *lock)
 	 */
 	error = pthread_rwlock_unlock(lock);
 	if (error) {
-		pr_err("pthread_rwlock_unlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		pr_op_err("pthread_rwlock_unlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
 		    error);
 		exit(error);
 	}
@@ -108,18 +108,18 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	/* Get the full file path */
 	tmp = strdup(dir_name);
 	if (tmp == NULL)
-		return -pr_errno(errno, "Couldn't create temporal char");
+		return -pr_op_errno(errno, "Couldn't create temporal char");
 
 	tmp = realloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
 	if (tmp == NULL)
-		return -pr_errno(errno, "Couldn't reallocate temporal char");
+		return -pr_op_errno(errno, "Couldn't reallocate temporal char");
 
 	strcat(tmp, "/");
 	strcat(tmp, file_name);
 	fullpath = realpath(tmp, NULL);
 	if (fullpath == NULL) {
 		free(tmp);
-		return -pr_errno(errno,
+		return -pr_op_errno(errno,
 		    "Error getting real path for file '%s' at dir '%s'",
 		    dir_name, file_name);
 	}
@@ -140,7 +140,7 @@ process_dir_files(char const *location, char const *file_ext,
 
 	dir_loc = opendir(location);
 	if (dir_loc == NULL) {
-		error = -pr_errno(errno, "Couldn't open dir %s", location);
+		error = -pr_op_errno(errno, "Couldn't open dir %s", location);
 		goto end;
 	}
 
@@ -150,17 +150,17 @@ process_dir_files(char const *location, char const *file_ext,
 		error = process_file(location, dir_ent->d_name, file_ext,
 		    &found, cb, arg);
 		if (error) {
-			pr_err("The error was at file %s", dir_ent->d_name);
+			pr_op_err("The error was at file %s", dir_ent->d_name);
 			goto close_dir;
 		}
 		errno = 0;
 	}
 	if (errno) {
-		pr_err("Error reading dir %s", location);
+		pr_op_err("Error reading dir %s", location);
 		error = -errno;
 	}
 	if (!error && found == 0)
-		pr_warn("Location '%s' doesn't have files with extension '%s'",
+		pr_op_warn("Location '%s' doesn't have files with extension '%s'",
 		    location, file_ext);
 close_dir:
 	closedir(dir_loc);
@@ -177,7 +177,7 @@ process_file_or_dir(char const *location, char const *file_ext,
 
 	error = stat(location, &attr);
 	if (error)
-		return pr_errno(errno, "Error reading path '%s'", location);
+		return pr_op_errno(errno, "Error reading path '%s'", location);
 
 	if (S_ISDIR(attr.st_mode) == 0)
 		return cb(location, arg);
@@ -187,7 +187,8 @@ process_file_or_dir(char const *location, char const *file_ext,
 
 
 bool
-valid_file_or_dir(char const *location, bool check_file, bool check_dir)
+valid_file_or_dir(char const *location, bool check_file, bool check_dir,
+    int (*cb) (int error, const char *format, ...))
 {
 	FILE *file;
 	struct stat attr;
@@ -200,13 +201,13 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir)
 	result = false;
 	file = fopen(location, "rb");
 	if (file == NULL) {
-		pr_errno(errno, "Could not open location '%s'",
+		cb(errno, "Could not open location '%s'",
 		    location);
 		return false;
 	}
 
 	if (fstat(fileno(file), &attr) == -1) {
-		pr_errno(errno, "fstat(%s) failed", location);
+		cb(errno, "fstat(%s) failed", location);
 		goto end;
 	}
 
@@ -215,13 +216,13 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir)
 
 	result = is_file || is_dir;
 	if (!result)
-		pr_err("'%s' does not seem to be a %s", location,
+		pr_op_err("'%s' does not seem to be a %s", location,
 		    (check_file && check_dir) ? "file or directory" :
 		    (check_file) ? "file" : "directory");
 
 end:
 	if (fclose(file) == -1)
-		pr_errno(errno, "fclose() failed");
+		cb(errno, "fclose() failed");
 	return result;
 }
 
@@ -257,14 +258,14 @@ dir_exists(char const *path, bool *result)
 
 	if (stat(path, &_stat) == 0) {
 		if (!S_ISDIR(_stat.st_mode)) {
-			return pr_err("Path '%s' exists and is not a directory.",
+			return pr_op_err("Path '%s' exists and is not a directory.",
 			    path);
 		}
 		*result = true;
 	} else if (errno == ENOENT) {
 		*result = false;
 	} else {
-		return pr_errno(errno, "stat() failed");
+		return pr_op_errno(errno, "stat() failed");
 	}
 
 	*last_slash = '/';
@@ -279,7 +280,7 @@ create_dir(char *path)
 	error = mkdir(path, 0777);
 
 	if (error && errno != EEXIST)
-		return pr_errno(errno, "Error while making directory '%s'",
+		return pr_op_errno(errno, "Error while making directory '%s'",
 		    path);
 
 	return 0;
@@ -331,7 +332,7 @@ remove_file(char const *path)
 	errno = 0;
 	error = remove(path);
 	if (error)
-		return pr_errno(errno, "Couldn't delete %s", path);
+		return pr_op_errno(errno, "Couldn't delete %s", path);
 
 	return 0;
 }
@@ -389,7 +390,7 @@ delete_dir_recursive_bottom_up(char const *path)
 		if (errno == ENOTEMPTY || errno == EEXIST)
 			break;
 
-		error = pr_errno(errno, "Couldn't delete dir %s", work_loc);
+		error = pr_op_errno(errno, "Couldn't delete dir %s", work_loc);
 		goto release_str;
 	} while (true);
 
@@ -407,7 +408,7 @@ get_current_time(time_t *result)
 
 	now = time(NULL);
 	if (now == ((time_t) -1))
-		return pr_errno(errno, "Error getting the current time");
+		return pr_val_errno(errno, "Error getting the current time");
 
 	*result = now;
 	return 0;

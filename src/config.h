@@ -31,15 +31,11 @@ bool config_get_shuffle_tal_uris(void);
 unsigned int config_get_max_cert_depth(void);
 enum mode config_get_mode(void);
 bool config_get_work_offline(void);
-bool config_get_color_output(void);
-enum filename_format config_get_filename_format(void);
 char const *config_get_http_user_agent(void);
 unsigned int config_get_http_connect_timeout(void);
 unsigned int config_get_http_transfer_timeout(void);
 unsigned int config_get_http_idle_timeout(void);
 char const *config_get_http_ca_path(void);
-uint8_t config_get_log_level(void);
-enum log_output config_get_log_output(void);
 bool config_get_rsync_enabled(void);
 unsigned int config_get_rsync_priority(void);
 enum rsync_strategy config_get_rsync_strategy(void);
@@ -55,6 +51,23 @@ char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_stale_repository_period(void);
+
+/* Logging getters */
+bool config_get_op_log_enabled(void);
+char const * config_get_op_log_prefix(void);
+bool config_get_op_log_color_output(void);
+enum filename_format config_get_op_log_filename_format(void);
+uint8_t config_get_op_log_level(void);
+enum log_output config_get_op_log_output(void);
+uint32_t config_get_op_log_facility(void);
+
+bool config_get_val_log_enabled(void);
+char const * config_get_val_log_prefix(void);
+bool config_get_val_log_color_output(void);
+enum filename_format config_get_val_log_filename_format(void);
+uint8_t config_get_val_log_level(void);
+enum log_output config_get_val_log_output(void);
+uint32_t config_get_val_log_facility(void);
 
 /*
  * Public, so that work-offline can set them, or (to be deprecated)

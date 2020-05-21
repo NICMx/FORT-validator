@@ -190,16 +190,16 @@ handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 	 * Also "unknown" is misleading. I think it's only "unknown" if the NID
 	 * is -1 or something like that.
 	 */
-	return pr_err("Certificate has unknown extension. (Extension NID: %d)",
+	return pr_val_err("Certificate has unknown extension. (Extension NID: %d)",
 	    nid);
 dupe:
-	return pr_err("Certificate has more than one '%s' extension.",
+	return pr_val_err("Certificate has more than one '%s' extension.",
 	    handler->meta->name);
 not_critical:
-	return pr_err("Extension '%s' is supposed to be marked critical.",
+	return pr_val_err("Extension '%s' is supposed to be marked critical.",
 	    handler->meta->name);
 critical:
-	return pr_err("Extension '%s' is not supposed to be marked critical.",
+	return pr_val_err("Extension '%s' is not supposed to be marked critical.",
 	    handler->meta->name);
 }
 
@@ -220,7 +220,7 @@ handle_extensions(struct extension_handler *handlers,
 
 	for (handler = handlers; handler->meta != NULL; handler++) {
 		if (handler->mandatory && !handler->found)
-			return pr_err("Certificate is missing the '%s' extension.",
+			return pr_val_err("Certificate is missing the '%s' extension.",
 			    handler->meta->name);
 	}
 
@@ -230,7 +230,7 @@ handle_extensions(struct extension_handler *handlers,
 int
 cannot_decode(struct extension_metadata const *meta)
 {
-	return pr_err("Extension '%s' seems to be malformed. Cannot decode.",
+	return pr_val_err("Extension '%s' seems to be malformed. Cannot decode.",
 	    meta->name);
 }
 
@@ -281,25 +281,25 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 	/* Get the SPK (ask libcrypto) */
 	pubkey = X509_get_X509_PUBKEY(cert);
 	if (pubkey == NULL)
-		return crypto_err("X509_get_X509_PUBKEY() returned NULL");
+		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
 	ok = X509_PUBKEY_get0_param(NULL, &spk, &spk_len, NULL, pubkey);
 	if (!ok)
-		return crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
 	/* Hash the SPK, compare SPK hash with the SKI */
 	if (hash->length < 0 || SIZE_MAX < hash->length) {
-		return pr_err("%s length (%d) is out of bounds. (0-%zu)",
+		return pr_val_err("%s length (%d) is out of bounds. (0-%zu)",
 		    ext_ski()->name, hash->length, SIZE_MAX);
 	}
 	if (spk_len < 0 || SIZE_MAX < spk_len) {
-		return pr_err("Subject Public Key length (%d) is out of bounds. (0-%zu)",
+		return pr_val_err("Subject Public Key length (%d) is out of bounds. (0-%zu)",
 		    spk_len, SIZE_MAX);
 	}
 
 	error = hash_validate("sha1", hash->data, hash->length, spk, spk_len);
 	if (error) {
-		pr_err("The Subject Public Key's hash does not match the %s.",
+		pr_val_err("The Subject Public Key's hash does not match the %s.",
 		    ext_ski()->name);
 	}
 
@@ -319,12 +319,12 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 		return cannot_decode(ext_aki());
 
 	if (aki->issuer != NULL) {
-		error = pr_err("%s extension contains an authorityCertIssuer.",
+		error = pr_val_err("%s extension contains an authorityCertIssuer.",
 		    ext_aki()->name);
 		goto end;
 	}
 	if (aki->serial != NULL) {
-		error = pr_err("%s extension contains an authorityCertSerialNumber.",
+		error = pr_val_err("%s extension contains an authorityCertSerialNumber.",
 		    ext_aki()->name);
 		goto end;
 	}
@@ -337,7 +337,7 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 
 	parent = x509stack_peek(validation_certstack(state));
 	if (parent == NULL) {
-		error = pr_err("Certificate has no parent.");
+		error = pr_val_err("Certificate has no parent.");
 		goto end;
 	}
 

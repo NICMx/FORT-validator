@@ -59,12 +59,12 @@ string_array_print(struct option_field const *field, void *_value)
 	struct string_array *value = _value;
 	size_t i;
 
-	pr_info("%s:", field->name);
+	pr_op_info("%s:", field->name);
 
 	if (value->length == 0)
-		pr_info("  <Nothing>");
+		pr_op_info("  <Nothing>");
 	else for (i = 0; i < value->length; i++)
-		pr_info("  %s", value->array[i]);
+		pr_op_info("  %s", value->array[i]);
 }
 
 static int
@@ -78,7 +78,7 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 	int error;
 
 	if (!json_is_array(json)) {
-		return pr_err("The '%s' element is not a JSON array.",
+		return pr_op_err("The '%s' element is not a JSON array.",
 		    opt->name);
 	}
 
@@ -91,7 +91,7 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 	for (i = 0; i < len; i++) {
 		child = json_array_get(json, i);
 		if (!json_is_string(child)) {
-			return pr_err("'%s' array element #%zu is not a string.",
+			return pr_op_err("'%s' array element #%zu is not a string.",
 			    opt->name, i);
 		}
 	}

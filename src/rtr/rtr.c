@@ -48,7 +48,7 @@ init_addrinfo(struct addrinfo **result)
 
 	error = getaddrinfo(hostname, service, &hints, result);
 	if (error) {
-		pr_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
+		pr_op_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
 		    (hostname != NULL) ? hostname : "any", service,
 		    gai_strerror(error));
 		return error;
@@ -71,7 +71,7 @@ init_addrinfo(struct addrinfo **result)
 	port = (unsigned char)((*result)->ai_addr->sa_data[0]) << 8;
 	port += (unsigned char)((*result)->ai_addr->sa_data[1]);
 	if (parsed != port)
-		return pr_err("Service port %s is out of range (max value is %d)",
+		return pr_op_err("Service port %s is out of range (max value is %d)",
 		    service, USHRT_MAX);
 
 	return 0;
@@ -99,33 +99,33 @@ create_server_socket(int *result)
 		return error;
 
 	for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-		pr_info(
+		pr_op_info(
 		    "Attempting to bind socket to address '%s', port '%s'.",
 		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
 		    config_get_server_port());
 
 		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
-			pr_errno(errno, "socket() failed");
+			pr_op_errno(errno, "socket() failed");
 			continue;
 		}
 
 		/* enable SO_REUSEADDR */
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
 		    sizeof(int)) < 0) {
-			pr_errno(errno, "setsockopt(SO_REUSEADDR) failed");
+			pr_op_errno(errno, "setsockopt(SO_REUSEADDR) failed");
 			continue;
 		}
 
 		/* enable SO_REUSEPORT */
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse,
 		    sizeof(int)) < 0) {
-			pr_errno(errno, "setsockopt(SO_REUSEPORT) failed");
+			pr_op_errno(errno, "setsockopt(SO_REUSEPORT) failed");
 			continue;
 		}
 
 		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
-			pr_errno(errno, "bind() failed");
+			pr_op_errno(errno, "bind() failed");
 			continue;
 		}
 
@@ -133,12 +133,12 @@ create_server_socket(int *result)
 		if (error) {
 			close(fd);
 			freeaddrinfo(addrs);
-			return pr_errno(errno, "getsockname() failed");
+			return pr_op_errno(errno, "getsockname() failed");
 		}
 
 		port = (unsigned char)(addr->ai_addr->sa_data[0]) << 8;
 		port += (unsigned char)(addr->ai_addr->sa_data[1]);
-		pr_info("Success; bound to address '%s', port '%ld'.",
+		pr_op_info("Success; bound to address '%s', port '%ld'.",
 		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
 		    port);
 		freeaddrinfo(addrs);
@@ -147,7 +147,7 @@ create_server_socket(int *result)
 	}
 
 	freeaddrinfo(addrs);
-	return pr_err("None of the addrinfo candidates could be bound.");
+	return pr_op_err("None of the addrinfo candidates could be bound.");
 }
 
 enum verdict {
@@ -197,12 +197,12 @@ handle_accept_result(int client_fd, int err)
 		goto retry;
 #pragma GCC diagnostic pop
 
-	pr_info("Client connection attempt not accepted: %s. Quitting...",
+	pr_op_info("Client connection attempt not accepted: %s. Quitting...",
 	    strerror(err));
 	return VERDICT_EXIT;
 
 retry:
-	pr_info("Client connection attempt not accepted: %s. Retrying...",
+	pr_op_info("Client connection attempt not accepted: %s. Retrying...",
 	    strerror(err));
 	return VERDICT_RETRY;
 }
@@ -225,7 +225,7 @@ print_close_failure(int error, int fd)
 	    ? sockaddr2str(&sockaddr, buffer)
 	    : "(unknown)";
 
-	pr_errno(error, "close() failed on socket of client %s", addr_str);
+	pr_op_errno(error, "close() failed on socket of client %s", addr_str);
 }
 
 static void
@@ -239,7 +239,7 @@ static void
 print_client_addr(struct sockaddr_storage *addr, char const *action, int fd)
 {
 	char buffer[INET6_ADDRSTRLEN];
-	pr_info("Client %s [ID %d]: %s", action, fd,
+	pr_op_info("Client %s [ID %d]: %s", action, fd,
 	    sockaddr2str(addr, buffer));
 }
 
@@ -306,7 +306,7 @@ handle_client_connections(int server_fd)
 
 	sizeof_client_addr = sizeof(client_addr);
 
-	pr_debug("Waiting for client connections...");
+	pr_op_debug("Waiting for client connections...");
 	do {
 		client_fd = accept(server_fd, (struct sockaddr *) &client_addr,
 		    &sizeof_client_addr);
@@ -331,7 +331,7 @@ handle_client_connections(int server_fd)
 		param = malloc(sizeof(struct thread_param));
 		if (param == NULL) {
 			/* No error response PDU on memory allocation. */
-			pr_err("Couldn't create thread parameters struct");
+			pr_op_err("Couldn't create thread parameters struct");
 			close(client_fd);
 			continue;
 		}
@@ -344,7 +344,7 @@ handle_client_connections(int server_fd)
 			/* Error with min RTR version */
 			err_pdu_send_internal_error(client_fd, RTR_V0);
 		if (error) {
-			pr_errno(error, "Could not spawn the client's thread");
+			pr_op_errno(error, "Could not spawn the client's thread");
 			close(client_fd);
 			free(param);
 		}
@@ -402,7 +402,7 @@ rtr_listen(void)
 	if (config_get_mode() == STANDALONE) {
 		error = vrps_update(&changed);
 		if (error)
-			pr_err("Error %d while trying to update the ROA database.",
+			pr_op_err("Error %d while trying to update the ROA database.",
 			    error);
 		goto revert_clients_db; /* Error 0 it's ok */
 	}

@@ -31,11 +31,11 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 {
 	int error;
 
-	pr_debug("Sending %s to client.", pdutype2str(pdu_type));
+	pr_op_debug("Sending %s to client.", pdutype2str(pdu_type));
 
 	error = write(fd, data, data_len);
 	if (error < 0)
-		return pr_errno(errno, "Error sending %s to client.",
+		return pr_op_errno(errno, "Error sending %s to client.",
 		    pdutype2str(pdu_type));
 
 	return 0;
@@ -103,7 +103,7 @@ pr_debug_prefix4(struct ipv4_prefix_pdu *pdu)
 {
 	char buffer[INET_ADDRSTRLEN];
 
-	pr_debug("Encoded prefix %s/%u into a PDU.",
+	pr_op_debug("Encoded prefix %s/%u into a PDU.",
 	    addr2str4(&pdu->ipv4_prefix, buffer), pdu->prefix_length);
 }
 
@@ -128,7 +128,7 @@ send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv4_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV4_PREFIX_LEN)
 		pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
-	if (log_debug_enabled())
+	if (log_op_debug_enabled())
 		pr_debug_prefix4(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);
@@ -139,7 +139,7 @@ pr_debug_prefix6(struct ipv6_prefix_pdu *pdu)
 {
 	char buffer[INET6_ADDRSTRLEN];
 
-	pr_debug("Encoded prefix %s/%u into a PDU.",
+	pr_op_debug("Encoded prefix %s/%u into a PDU.",
 	    addr2str6(&pdu->ipv6_prefix, buffer), pdu->prefix_length);
 }
 
@@ -164,7 +164,7 @@ send_ipv6_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv6_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV6_PREFIX_LEN)
 		pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
-	if (log_debug_enabled())
+	if (log_op_debug_enabled())
 		pr_debug_prefix6(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);

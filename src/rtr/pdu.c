@@ -126,9 +126,9 @@ pdu_load(int fd, struct sockaddr_storage *client_addr,
 		return error;
 
 
-	if (log_debug_enabled()) {
+	if (log_op_debug_enabled()) {
 		char buffer[INET6_ADDRSTRLEN];
-		pr_debug("Received a %s from %s.",
+		pr_op_debug("Received a %s from %s.",
 		    pdutype2str(header.pdu_type),
 		    sockaddr2str(client_addr, buffer));
 	}

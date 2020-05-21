@@ -93,7 +93,7 @@ reqs_errors_init(void)
 
 	error = pthread_rwlock_init(&db_lock, NULL);
 	if (error)
-		return pr_errno(error, "pthread_rwlock_init() errored");
+		return pr_op_errno(error, "pthread_rwlock_init() errored");
 
 	err_uris_db = NULL;
 
@@ -257,12 +257,10 @@ reqs_errors_log_summary(void)
 		if (!node->log_summary)
 			continue;
 		if (first) {
-			/* FIXME (NOW) Send to operation log */
-			pr_warn("The following repositories URIs couldn't be fetched (it can be a local issue or a server issue), please review previous log messages related to such URIs/servers:");
+			pr_op_warn("The following repositories URIs couldn't be fetched (it can be a local issue or a server issue), please review previous log messages related to such URIs/servers:");
 			first = false;
 		}
-		/* FIXME (NOW) Send to operation log */
-		pr_warn("- '%s': can't be downloaded since %s", node->uri,
+		pr_op_warn("- '%s': can't be downloaded since %s", node->uri,
 		    asctime(localtime(&node->first_attempt)));
 	}
 

@@ -93,7 +93,7 @@ open_file(char const *loc, FILE **out, bool *fopen)
 
 	error = load_output_file(loc, out, fopen);
 	if (error)
-		return pr_err("Error getting file '%s'", loc);
+		return pr_op_err("Error getting file '%s'", loc);
 
 	/* No output configured */
 	if (*out == NULL)
@@ -119,7 +119,7 @@ print_roas(struct db_table *db)
 	if (fopen)
 		file_close(out);
 	if (error)
-		pr_err("Error printing ROAs");
+		pr_op_err("Error printing ROAs");
 }
 
 static void
@@ -139,7 +139,7 @@ print_router_keys(struct db_table *db)
 	if (fopen)
 		file_close(out);
 	if (error)
-		pr_err("Error printing Router Keys");
+		pr_op_err("Error printing Router Keys");
 }
 
 void

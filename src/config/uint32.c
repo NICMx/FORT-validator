@@ -10,7 +10,7 @@
 static void
 print_uint32(struct option_field const *field, void *value)
 {
-	pr_info("%s: %u", field->name, *((uint32_t *) value));
+	pr_op_info("%s: %u", field->name, *((uint32_t *) value));
 }
 
 static int

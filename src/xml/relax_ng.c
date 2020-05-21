@@ -21,13 +21,13 @@ relax_ng_init(void)
 
 	rngparser = xmlRelaxNGNewMemParserCtxt(RRDP_V1_RNG, RRDP_V1_RNG_SIZE);
 	if (rngparser == NULL) {
-		error = pr_err("xmlRelaxNGNewMemParserCtxt() returned NULL");
+		error = pr_val_err("xmlRelaxNGNewMemParserCtxt() returned NULL");
 		goto cleanup_parser;
 	}
 
 	schema = xmlRelaxNGParse(rngparser);
 	if (schema == NULL) {
-		error = pr_err("xmlRelaxNGParse() returned NULL");
+		error = pr_val_err("xmlRelaxNGParse() returned NULL");
 		goto free_parser_ctx;
 	}
 
@@ -56,11 +56,11 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 
 	reader = xmlNewTextReaderFilename(path);
 	if (reader == NULL)
-		return pr_err("Couldn't get XML '%s' file.", path);
+		return pr_val_err("Couldn't get XML '%s' file.", path);
 
 	error = xmlTextReaderRelaxNGSetSchema(reader, schema);
 	if (error) {
-		error = pr_err("Couldn't set Relax NG schema.");
+		error = pr_val_err("Couldn't set Relax NG schema.");
 		goto free_reader;
 	}
 
@@ -71,12 +71,12 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 	}
 
 	if (read < 0) {
-		error = pr_err("Error parsing XML document.");
+		error = pr_val_err("Error parsing XML document.");
 		goto free_reader;
 	}
 
 	if (xmlTextReaderIsValid(reader) <= 0) {
-		error = pr_err("XML document isn't valid.");
+		error = pr_val_err("XML document isn't valid.");
 		goto free_reader;
 	}
 

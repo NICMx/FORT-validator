@@ -25,7 +25,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	int error;
 
 	/* Prepare */
-	pr_debug("Ghostbusters '%s' {", uri_get_printable(uri));
+	pr_val_debug("Ghostbusters '%s' {", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
 	/* Decode */
@@ -55,7 +55,7 @@ revert_args:
 revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:
-	pr_debug("}");
+	pr_val_debug("}");
 	fnstack_pop();
 	return error;
 }

@@ -49,7 +49,7 @@ thvar_init(void)
 
 	error = pthread_key_create(&state_key, NULL);
 	if (error) {
-		pr_err(
+		pr_op_err(
 		    "Fatal: Errcode %d while initializing the validation state thread variable.",
 		    error);
 		return error;
@@ -63,7 +63,7 @@ thvar_init(void)
 	 */
 	error = pthread_key_create(&filenames_key, fnstack_discard);
 	if (error) {
-		pr_err(
+		pr_op_err(
 		    "Fatal: Errcode %d while initializing the file name stack thread variable.",
 		    error);
 		return error;
@@ -71,7 +71,7 @@ thvar_init(void)
 
 	error = pthread_key_create(&repository_key, working_repo_discard);
 	if (error) {
-		pr_err(
+		pr_op_err(
 		    "Fatal: Errcode %d while initializing the 'working repository' thread variable.",
 		    error);
 		return error;
@@ -88,7 +88,7 @@ state_store(struct validation *state)
 
 	error = pthread_setspecific(state_key, state);
 	if (error)
-		pr_err("pthread_setspecific() returned %d.", error);
+		pr_op_err("pthread_setspecific() returned %d.", error);
 
 	return error;
 }
@@ -101,7 +101,7 @@ state_retrieve(void)
 
 	state = pthread_getspecific(state_key);
 	if (state == NULL)
-		pr_err("Programming error: This thread lacks a validation state.");
+		pr_op_err("Programming error: This thread lacks a validation state.");
 
 	return state;
 }
@@ -128,7 +128,7 @@ fnstack_init(void)
 
 	error = pthread_setspecific(filenames_key, files);
 	if (error)
-		pr_err("pthread_setspecific() returned %d.", error);
+		pr_op_err("pthread_setspecific() returned %d.", error);
 }
 
 void
@@ -145,12 +145,12 @@ fnstack_cleanup(void)
 
 	error = pthread_setspecific(filenames_key, NULL);
 	if (error)
-		pr_err("pthread_setspecific() returned %d.", error);
+		pr_op_err("pthread_setspecific() returned %d.", error);
 }
 
 /**
  * Call this function every time you're about to start processing a new file.
- * Any pr_err()s and friends will now include the new file name.
+ * Any pr_op_err()s and friends will now include the new file name.
  * Use fnstack_pop() to revert back to the previously stacked file name.
  * @file is not cloned; it's expected to outlive the push/pop operation.
  */
@@ -189,7 +189,7 @@ fnstack_push(char const *file)
 void
 fnstack_push_uri(struct rpki_uri *uri)
 {
-	fnstack_push(uri_get_printable(uri));
+	fnstack_push(uri_val_get_printable(uri));
 }
 
 /* Returns the file name on the top of the file name stack. */
@@ -234,7 +234,7 @@ working_repo_init(void)
 
 	error = pthread_setspecific(repository_key, repo);
 	if (error)
-		pr_err("pthread_setspecific() returned %d.", error);
+		pr_op_err("pthread_setspecific() returned %d.", error);
 }
 
 void
@@ -251,7 +251,7 @@ working_repo_cleanup(void)
 
 	error = pthread_setspecific(repository_key, NULL);
 	if (error)
-		pr_err("pthread_setspecific() returned %d.", error);
+		pr_op_err("pthread_setspecific() returned %d.", error);
 }
 
 /*

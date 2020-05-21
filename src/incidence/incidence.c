@@ -55,7 +55,7 @@ name2id(char const *name, enum incidence_id *id)
 		}
 	}
 
-	return pr_err("Unknown incidence name: %s", name);
+	return pr_op_err("Unknown incidence name: %s", name);
 }
 
 static char const *
@@ -100,7 +100,7 @@ init_action(json_t *json)
 	else if (strcmp("error", action_str) == 0)
 		action = INAC_ERROR;
 	else
-		return pr_err("Unknown incidence action: '%s'", action_str);
+		return pr_op_err("Unknown incidence action: '%s'", action_str);
 
 	incidences[id].action = action;
 	return 0;
@@ -136,7 +136,7 @@ incidence_update(json_t *json)
 	int error;
 
 	if (!json_is_array(json))
-		return pr_err("The incidences JSON element is supposed to be an array.");
+		return pr_op_err("The incidences JSON element is supposed to be an array.");
 
 	json_array_foreach(json, i, child) {
 		error = init_action(child);
@@ -152,10 +152,10 @@ incidence_print(void)
 {
 	array_index i;
 
-	pr_info("Custom incidences:");
+	pr_op_info("Custom incidences:");
 
 	for (i = 0; i < __INID_MAX; i++) {
-		pr_info("  %s (%s): %s", incidences[i].name,
+		pr_op_info("  %s (%s): %s", incidences[i].name,
 		    incidences[i].description,
 		    action2str(incidences[i].action));
 	}

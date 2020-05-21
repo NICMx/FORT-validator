@@ -28,7 +28,7 @@ validate(asn_TYPE_descriptor_t const *descriptor, void *result, bool log)
 	    &error_msg_size);
 	if (error == -1)
 		return COND_LOG(log,
-		    pr_err("Error validating ASN.1 object: %s", error_msg));
+		    pr_val_err("Error validating ASN.1 object: %s", error_msg));
 
 	return 0;
 }
@@ -39,7 +39,7 @@ der_coder(const void *buf, size_t size, void *app_key)
 	struct ber_data *data = app_key;
 
 	if (data->consumed + size > data->src_size) {
-		pr_debug("DER encoding will consume more bytes than expected (expected %lu, will get %lu)",
+		pr_val_debug("DER encoding will consume more bytes than expected (expected %lu, will get %lu)",
 		    data->consumed + size, data->src_size);
 		return -1;
 	}
@@ -72,7 +72,7 @@ validate_der(size_t ber_consumed, asn_TYPE_descriptor_t const *descriptor,
 		    "'%s' isn't DER encoded", eval.failed_type->name);
 
 	if (ber_consumed != eval.encoded) {
-		pr_debug("DER encoding consumed less bytes than expected (expected %lu, got %lu)",
+		pr_val_debug("DER encoding consumed less bytes than expected (expected %lu, got %lu)",
 		    ber_consumed, eval.encoded);
 		return incidence(INID_OBJ_NOT_DER, "'%s' isn't DER encoded",
 		    descriptor->name);
@@ -100,7 +100,7 @@ asn1_decode(const void *buffer, size_t buffer_size,
 		ASN_STRUCT_FREE(*descriptor, *result);
 		/* We expect the data to be complete; RC_WMORE is an error. */
 		return COND_LOG(log,
-		    pr_err("Error '%u' decoding ASN.1 object around byte %zu",
+		    pr_val_err("Error '%u' decoding ASN.1 object around byte %zu",
 		        rval.code, rval.consumed));
 	}
 

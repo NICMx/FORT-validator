@@ -25,7 +25,7 @@ http_init(void)
 	CURLcode res;
 	res = curl_global_init(CURL_GLOBAL_SSL);
 	if (res != CURLE_OK)
-		return pr_err("Error initializing global curl (%s)",
+		return pr_op_err("Error initializing global curl (%s)",
 		    curl_easy_strerror(res));
 
 	return 0;
@@ -117,7 +117,7 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	curl_easy_setopt(handler->curl, CURLOPT_WRITEFUNCTION, cb);
 	curl_easy_setopt(handler->curl, CURLOPT_WRITEDATA, arg);
 
-	pr_debug("Doing HTTP GET to '%s'.", uri);
+	pr_val_debug("Doing HTTP GET to '%s'.", uri);
 	res = curl_easy_perform(handler->curl);
 	curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE, response_code);
 	if (res == CURLE_OK) {
@@ -140,15 +140,13 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	}
 
 	if (*response_code >= HTTP_BAD_REQUEST)
-		return pr_err("Error requesting URL %s (received HTTP code %ld): %s",
+		return pr_val_err("Error requesting URL %s (received HTTP code %ld): %s",
 		    uri, *response_code, curl_err_string(handler, res));
 
-	/* FIXME (NOW) Always log this to validation log */
-	pr_err("Error requesting URL %s: %s", uri,
+	pr_val_err("Error requesting URL %s: %s", uri,
 	    curl_err_string(handler, res));
-	/* FIXME (NOW) and send to operation log when requested */
 	if (log_operation)
-		pr_err("Error requesting URL %s: %s", uri,
+		pr_op_err("Error requesting URL %s: %s", uri,
 		    curl_err_string(handler, res));
 
 	return EREQFAILED;

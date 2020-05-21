@@ -76,7 +76,7 @@ analyze_pos(struct utf8_string *string, size_t pos)
 
 	next1 = next_chara(string, pos);
 	if (next1 == NULL) {
-		pr_err("vCard's final newline is incomplete ('\\r').");
+		pr_val_err("vCard's final newline is incomplete ('\\r').");
 		return SA_ERROR;
 	}
 	if (*next1 != '\n')
@@ -139,7 +139,7 @@ line_next(struct vcard_line *line, OCTET_STRING_t *string8)
 	int error;
 
 	if (string8->size == line->octet_string_offset)
-		return pr_err("vCard ends prematurely. (Expected an END line)");
+		return pr_val_err("vCard ends prematurely. (Expected an END line)");
 
 	string.val = string8->buf + line->octet_string_offset;
 	string.len = string8->size - line->octet_string_offset;
@@ -167,7 +167,7 @@ line_next(struct vcard_line *line, OCTET_STRING_t *string8)
 		}
 	}
 
-	return pr_err("vCard line does not end with a \\r\\n-style newline.");
+	return pr_val_err("vCard line does not end with a \\r\\n-style newline.");
 }
 
 static int
@@ -190,7 +190,7 @@ line_validate(struct vcard_line *line, char const *expected)
 	return 0;
 
 fail:
-	return pr_err("Expected vCard property '%s', got '%s'.",
+	return pr_val_err("Expected vCard property '%s', got '%s'.",
 	    expected, line->str.val);
 }
 
@@ -243,7 +243,7 @@ __handle_ghostbusters_vcard(OCTET_STRING_t *vcard, struct vcard_line *line)
 			break;
 
 		} else {
-			return pr_err("Unexpected vCard line: '%s'",
+			return pr_val_err("Unexpected vCard line: '%s'",
 			    line->str.val);
 		}
 
@@ -253,12 +253,12 @@ __handle_ghostbusters_vcard(OCTET_STRING_t *vcard, struct vcard_line *line)
 	if (error)
 		return error;
 	if (vcard->size != line->octet_string_offset)
-		return pr_err("vCard has content after the END tag.");
+		return pr_val_err("vCard has content after the END tag.");
 
 	if (!fn_found)
-		return pr_err("vCard lacks the 'FN' property.");
+		return pr_val_err("vCard lacks the 'FN' property.");
 	if (!useful_found)
-		return pr_err("vCard lacks the 'ORG', 'ADR', 'TEL' and/or 'EMAIL' properties.");
+		return pr_val_err("vCard lacks the 'ORG', 'ADR', 'TEL' and/or 'EMAIL' properties.");
 
 	return 0;
 }

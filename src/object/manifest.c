@@ -53,7 +53,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 	nextUpdate = asn_GT2time(next, &nextUpdate_tm, false);
 
 	if (difftime(thisUpdate, nextUpdate) > 0) {
-		return pr_err(
+		return pr_val_err(
 		    "Manifest's thisUpdate (" TM_FMT ") > nextUpdate ("
 		        TM_FMT ").",
 		    TM_ARGS(thisUpdate_tm),
@@ -66,12 +66,12 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 		return error;
 
 	if (difftime(now, thisUpdate) < 0) {
-		return pr_err(
+		return pr_val_err(
 		    "Manifest is not valid yet. (thisUpdate: " TM_FMT ")",
 		    TM_ARGS(thisUpdate_tm));
 	}
 	if (difftime(now, nextUpdate) > 0) {
-		return pr_err(
+		return pr_val_err(
 		    "Manifest is expired. (nextUpdate: " TM_FMT ")",
 		    TM_ARGS(nextUpdate_tm));
 	}
@@ -112,8 +112,8 @@ validate_manifest(struct Manifest *manifest)
 		error = asn_INTEGER2ulong(manifest->version, &version);
 		if (error) {
 			if (errno)
-				pr_errno(errno, "Error casting manifest version");
-			return pr_err("The manifest version isn't a valid unsigned long");
+				pr_val_errno(errno, "Error casting manifest version");
+			return pr_val_err("The manifest version isn't a valid unsigned long");
 		}
 		if (version != 0)
 			return -EINVAL;
@@ -124,7 +124,7 @@ validate_manifest(struct Manifest *manifest)
 	 * 20 octets."
 	 */
 	if (manifest->manifestNumber.size > 20)
-		return pr_err("Manifest number is larger than 20 octets");
+		return pr_val_err("Manifest number is larger than 20 octets");
 
 	/* rfc6486#section-4.4.3 */
 	error = validate_dates(&manifest->thisUpdate, &manifest->nextUpdate);
@@ -212,7 +212,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 
 	/* rfc6486#section-7 */
 	if (rpp_get_crl(*pp) == NULL) {
-		error = pr_err("Manifest lacks a CRL.");
+		error = pr_val_err("Manifest lacks a CRL.");
 		goto fail;
 	}
 
@@ -239,7 +239,7 @@ handle_manifest(struct rpki_uri *uri, struct rpp **pp)
 	int error;
 
 	/* Prepare */
-	pr_debug("Manifest '%s' {", uri_get_printable(uri));
+	pr_val_debug("Manifest '%s' {", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
 	/* Decode */
@@ -287,7 +287,7 @@ revert_manifest:
 revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:
-	pr_debug("}");
+	pr_val_debug("}");
 	fnstack_pop();
 	return error;
 }

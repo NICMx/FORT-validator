@@ -109,13 +109,13 @@ vrps_init(void)
 
 	error = pthread_rwlock_init(&state_lock, NULL);
 	if (error) {
-		error = pr_errno(error, "state pthread_rwlock_init() errored");
+		error = pr_op_errno(error, "state pthread_rwlock_init() errored");
 		goto release_deltas;
 	}
 
 	error = pthread_rwlock_init(&table_lock, NULL);
 	if (error) {
-		error = pr_errno(error, "table pthread_rwlock_init() errored");
+		error = pr_op_errno(error, "table pthread_rwlock_init() errored");
 		goto release_state_lock;
 	}
 
@@ -387,15 +387,15 @@ vrps_update(bool *changed)
 	 * This wrapper is mainly for log informational data, so if there's no
 	 * need don't do unnecessary calls
 	 */
-	if (!log_info_enabled())
+	if (!log_op_info_enabled())
 		return __vrps_update(changed);
 
-	pr_info("Starting validation.");
+	pr_op_info("Starting validation.");
 	serial = START_SERIAL;
 	if (config_get_mode() == SERVER) {
 		error = get_last_serial_number(&serial);
 		if (!error)
-			pr_info("- Current serial number is %u.", serial);
+			pr_op_info("- Current serial number is %u.", serial);
 	}
 
 	time(&start);
@@ -403,29 +403,29 @@ vrps_update(bool *changed)
 	time(&finish);
 	exec_time = finish - start;
 
-	pr_info("Validation finished:");
+	pr_op_info("Validation finished:");
 	rwlock_read_lock(&state_lock);
 	do {
 		if (state.base == NULL) {
 			rwlock_unlock(&state_lock);
-			pr_info("- Valid Prefixes: 0");
-			pr_info("- Valid Router Keys: 0");
+			pr_op_info("- Valid Prefixes: 0");
+			pr_op_info("- Valid Router Keys: 0");
 			if (config_get_mode() == SERVER)
-				pr_info("- No serial number.");
+				pr_op_info("- No serial number.");
 			break;
 		}
 
-		pr_info("- Valid Prefixes: %u", db_table_roa_count(state.base));
-		pr_info("- Valid Router Keys: %u",
+		pr_op_info("- Valid Prefixes: %u", db_table_roa_count(state.base));
+		pr_op_info("- Valid Router Keys: %u",
 		    db_table_router_key_count(state.base));
 		if (config_get_mode() == SERVER) {
-			pr_info("- %s serial number is %u.",
+			pr_op_info("- %s serial number is %u.",
 			    serial == state.next_serial - 1 ? "Current" : "New",
 			    state.next_serial - 1);
 		}
 		rwlock_unlock(&state_lock);
 	} while(0);
-	pr_info("- Real execution time: %ld secs.", exec_time);
+	pr_op_info("- Real execution time: %ld secs.", exec_time);
 
 	return error;
 }

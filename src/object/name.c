@@ -27,7 +27,7 @@ name2string(X509_NAME_ENTRY *name, char **_result)
 
 	data = X509_NAME_ENTRY_get_data(name);
 	if (data == NULL)
-		return crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
+		return val_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
 	result = malloc(data->length + 1);
 	if (result == NULL)
@@ -69,7 +69,7 @@ x509_name_decode(X509_NAME *name, char const *what,
 			error = name2string(entry, &result->serialNumber);
 			break;
 		default:
-			error = pr_err("The '%s' name has an unknown attribute. (NID: %d)",
+			error = pr_val_err("The '%s' name has an unknown attribute. (NID: %d)",
 			    what, nid);
 			break;
 		}
@@ -79,7 +79,7 @@ x509_name_decode(X509_NAME *name, char const *what,
 	}
 
 	if (result->commonName == NULL) {
-		error = pr_err("The '%s' name lacks a commonName attribute.",
+		error = pr_val_err("The '%s' name lacks a commonName attribute.",
 		    what);
 		goto fail;
 	}
@@ -163,7 +163,7 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 		return -EINVAL;
 	parent = x509stack_peek(validation_certstack(state));
 	if (parent == NULL) {
-		return pr_err("%s appears to have no parent certificate.",
+		return pr_val_err("%s appears to have no parent certificate.",
 		    container);
 	}
 
@@ -174,7 +174,7 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 	error = x509_name_decode(issuer, "issuer", &child_issuer);
 	if (error)
 		goto end;
-	pr_debug("Issuer: %s", child_issuer->commonName);
+	pr_val_debug("Issuer: %s", child_issuer->commonName);
 
 	if (!x509_name_equals(parent_subject, child_issuer)) {
 		char const *parent_serial;
@@ -183,7 +183,7 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 		parent_serial = x509_name_serialNumber(parent_subject);
 		child_serial = x509_name_serialNumber(child_issuer);
 
-		error = pr_err("%s's issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
+		error = pr_val_err("%s's issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
 		    container,
 		    x509_name_commonName(child_issuer),
 		    (child_serial != NULL) ? "/" : "",
@@ -201,19 +201,19 @@ end:	x509_name_put(parent_subject);
 void
 x509_name_pr_debug(const char *prefix, X509_NAME *name)
 {
-	if (!log_debug_enabled())
+	if (!log_val_debug_enabled())
 		return;
 
 	struct rfc5280_name *printable;
 
 	if (name == NULL) {
-		pr_debug("%s: (null)", prefix);
+		pr_val_debug("%s: (null)", prefix);
 		return;
 	}
 
 	if (x509_name_decode(name, prefix, &printable) != 0)
 		return; /* Error message already printed */
 
-	pr_debug("%s: %s", prefix, printable->commonName);
+	pr_val_debug("%s: %s", prefix, printable->commonName);
 	x509_name_put(printable);
 }

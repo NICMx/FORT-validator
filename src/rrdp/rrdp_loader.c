@@ -76,7 +76,7 @@ mark_rrdp_uri_request_err(char const *notification_uri)
 	struct visited_uris *tmp;
 	int error;
 
-	pr_debug("RRDP data of '%s' won't be requested again during this cycle due to previous error.",
+	pr_val_debug("RRDP data of '%s' won't be requested again during this cycle due to previous error.",
 	    notification_uri);
 
 	error = visited_uris_create(&tmp);
@@ -142,7 +142,7 @@ rrdp_load(struct rpki_uri *uri)
 
 	/* No updates at the file (yet), didn't pushed to fnstack */
 	if (upd_notification == NULL) {
-		pr_debug("No updates yet at '%s'.", uri_get_global(uri));
+		pr_val_debug("No updates yet at '%s'.", uri_get_global(uri));
 		goto upd_end;
 	}
 
@@ -174,7 +174,7 @@ rrdp_load(struct rpki_uri *uri)
 			break;
 		}
 		/* Something went wrong, use snapshot */
-		pr_info("There was an error processing RRDP deltas, using the snapshot instead.");
+		pr_val_info("There was an error processing RRDP deltas, using the snapshot instead.");
 	case RRDP_URI_NOTFOUND:
 		error = process_snapshot(upd_notification, log_operation,
 		    &visited);
@@ -186,9 +186,9 @@ rrdp_load(struct rpki_uri *uri)
 	}
 
 	/* Any update, and no error during the process, update db as well */
-	pr_debug("Updating local RRDP data of '%s' to:", uri_get_global(uri));
-	pr_debug("- Session ID: %s", upd_notification->global_data.session_id);
-	pr_debug("- Serial: %lu", upd_notification->global_data.serial);
+	pr_val_debug("Updating local RRDP data of '%s' to:", uri_get_global(uri));
+	pr_val_debug("- Session ID: %s", upd_notification->global_data.session_id);
+	pr_val_debug("- Serial: %lu", upd_notification->global_data.serial);
 	error = db_rrdp_uris_update(uri_get_global(uri),
 	    upd_notification->global_data.session_id,
 	    upd_notification->global_data.serial,
@@ -199,7 +199,7 @@ rrdp_load(struct rpki_uri *uri)
 
 set_update:
 	/* Set the last update to now */
-	pr_debug("Set last update of RRDP data of '%s' to now.",
+	pr_val_debug("Set last update of RRDP data of '%s' to now.",
 	    uri_get_global(uri));
 	db_rrdp_uris_set_last_update(uri_get_global(uri));
 upd_destroy:

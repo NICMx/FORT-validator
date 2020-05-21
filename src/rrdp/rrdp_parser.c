@@ -129,7 +129,7 @@ download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 			return error;
 
 		if (retries == config_get_rrdp_retry_count()) {
-			pr_info("Max RRDP retries (%u) reached fetching '%s', won't retry again.",
+			pr_val_info("Max RRDP retries (%u) reached fetching '%s', won't retry again.",
 			    retries, uri_get_global(uri));
 			/*
 			 * Since distinct files can be downloaded (notification,
@@ -139,7 +139,7 @@ download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 			 */
 			return EREQFAILED;
 		}
-		pr_info("Retrying RRDP file download '%s' in %u seconds, %u attempts remaining.",
+		pr_val_info("Retrying RRDP file download '%s' in %u seconds, %u attempts remaining.",
 		    uri_get_global(uri),
 		    config_get_rrdp_retry_interval(),
 		    config_get_rrdp_retry_count() - retries);
@@ -162,7 +162,7 @@ ltrim(char *from, char **result, size_t *result_size)
 		tmp_size--;
 	}
 	if (*start == '\0')
-		return pr_err("Invalid base64 encoded string (seems to be empty or full of spaces).");
+		return pr_val_err("Invalid base64 encoded string (seems to be empty or full of spaces).");
 
 	*result = start;
 	*result_size = tmp_size;
@@ -252,7 +252,7 @@ base64_read(char *content, unsigned char **out, size_t *out_len)
 
 	encoded = BIO_new_mem_buf(sanitized, -1);
 	if (encoded == NULL) {
-		error = crypto_err("BIO_new_mem_buf() returned NULL");
+		error = val_crypto_err("BIO_new_mem_buf() returned NULL");
 		goto release_sanitized;
 	}
 
@@ -294,7 +294,7 @@ parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 		xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 
 	if (xml_value == NULL)
-		return pr_err("RRDP file: Couldn't find %s from '%s'",
+		return pr_val_err("RRDP file: Couldn't find %s from '%s'",
 		    (attr == NULL ? "string content" : "xml attribute"),
 		    xmlTextReaderConstLocalName(reader));
 
@@ -320,14 +320,14 @@ parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 
 	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 	if (xml_value == NULL)
-		return pr_err("RRDP file: Couldn't find xml attribute '%s'",
+		return pr_val_err("RRDP file: Couldn't find xml attribute '%s'",
 		    attr);
 
 	errno = 0;
 	tmp = strtoul((char *) xml_value, NULL, 10);
 	if (errno) {
 		xmlFree(xml_value);
-		pr_errno(errno, "RRDP file: Invalid long value '%s'",
+		pr_val_errno(errno, "RRDP file: Invalid long value '%s'",
 		    xml_value);
 		return -EINVAL;
 	}
@@ -350,13 +350,13 @@ parse_hex_string(xmlTextReaderPtr reader, bool required, char const *attr,
 	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 	if (xml_value == NULL)
 		return required ?
-		    pr_err("RRDP file: Couldn't find xml attribute '%s'", attr)
+		    pr_val_err("RRDP file: Couldn't find xml attribute '%s'", attr)
 		    : 0;
 
 	/* The rest of the checks are done at the schema */
 	if (xmlStrlen(xml_value) % 2 != 0) {
 		xmlFree(xml_value);
-		return pr_err("RRDP file: Attribute %s isn't a valid hex string",
+		return pr_val_err("RRDP file: Attribute %s isn't a valid hex string",
 		    attr);
 	}
 
@@ -394,7 +394,7 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 		return error;
 
 	if (version != expected)
-		return pr_err("Invalid version, must be '%lu' and is '%lu'.",
+		return pr_val_err("Invalid version, must be '%lu' and is '%lu'.",
 		    expected, version);
 
 	return 0;
@@ -416,7 +416,7 @@ parse_global_data(xmlTextReaderPtr reader, struct global_data *gdata,
 	 */
 	if (!xmlStrEqual(xmlTextReaderConstNamespaceUri(reader),
 	    BAD_CAST RRDP_NAMESPACE))
-		return pr_err("Namespace isn't '%s', current value is '%s'",
+		return pr_val_err("Namespace isn't '%s', current value is '%s'",
 		    RRDP_NAMESPACE, xmlTextReaderConstNamespaceUri(reader));
 
 	error = validate_version(reader, 1);
@@ -442,7 +442,7 @@ parse_global_data(xmlTextReaderPtr reader, struct global_data *gdata,
 	 * has a logic error (in this case, session ID doesn't match parent's).
 	 */
 	if (strcmp(expected_session, session_id) != 0) {
-		pr_info("File session id [%s] doesn't match parent's session id [%s]",
+		pr_val_info("File session id [%s] doesn't match parent's session id [%s]",
 		    expected_session, session_id);
 		error = EINVAL;
 		goto return_val;
@@ -450,7 +450,7 @@ parse_global_data(xmlTextReaderPtr reader, struct global_data *gdata,
 
 	/* ...and the serial must match to what's expected at the parent */
 	if (serial != expected_serial) {
-		pr_info("File serial '%lu' doesn't match expected serial '%lu'",
+		pr_val_info("File serial '%lu' doesn't match expected serial '%lu'",
 		    serial, expected_serial);
 		error = EINVAL;
 	}
@@ -521,7 +521,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 
 	/* Read the text */
 	if (xmlTextReaderRead(reader) != 1) {
-		error = pr_err("Couldn't read publish content of element '%s'",
+		error = pr_val_err("Couldn't read publish content of element '%s'",
 		    tmp->doc_data.uri);
 		goto release_tmp;
 	}
@@ -547,7 +547,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 		    tmp->doc_data.hash_len);
 		uri_refput(uri);
 		if (error != 0) {
-			pr_info("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
+			pr_val_info("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
 			    tmp->doc_data.uri);
 			error = EINVAL;
 			goto release_base64;
@@ -631,7 +631,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 	if (written != content_len) {
 		uri_refput(uri);
 		file_close(out);
-		return pr_err("Couldn't write bytes to file %s",
+		return pr_val_err("Couldn't write bytes to file %s",
 		    uri_get_local(uri));
 	}
 
@@ -803,11 +803,11 @@ order_notification_deltas(struct rdr_notification_ctx *ctx)
 			continue;
 
 		if (error == -EINVAL)
-			return pr_err("Serial '%lu' at delta elements isn't part of a contiguous list of serials.",
+			return pr_val_err("Serial '%lu' at delta elements isn't part of a contiguous list of serials.",
 			    (*ptr)->serial);
 
 		if (error == -EEXIST)
-			return pr_err("Duplicated serial '%lu' at delta elements.",
+			return pr_val_err("Duplicated serial '%lu' at delta elements.",
 			    (*ptr)->serial);
 
 		return error;
@@ -822,7 +822,7 @@ order_notification_deltas(struct rdr_notification_ctx *ctx)
 	 * If all expected elements are set, everything is ok.
 	 */
 	if (!deltas_head_values_set(ctx->notification->deltas_list))
-		return pr_err("Deltas listed don't have a contiguous sequence of serial numbers");
+		return pr_val_err("Deltas listed don't have a contiguous sequence of serial numbers");
 
 	return 0;
 }
@@ -852,7 +852,7 @@ xml_read_notification(xmlTextReaderPtr reader, void *arg)
 			/* Init context for deltas and snapshot */
 			rdr_notification_ctx_init(ctx);
 		} else {
-			return pr_err("Unexpected '%s' element", name);
+			return pr_val_err("Unexpected '%s' element", name);
 		}
 		break;
 	case XML_READER_TYPE_END_ELEMENT:
@@ -925,7 +925,7 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 			    ctx->parent->global_data.session_id,
 			    ctx->parent->global_data.serial);
 		else
-			return pr_err("Unexpected '%s' element", name);
+			return pr_val_err("Unexpected '%s' element", name);
 
 		if (error)
 			return error;
@@ -990,7 +990,7 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 			    ctx->parent->global_data.session_id,
 			    ctx->expected_serial);
 		else
-			return pr_err("Unexpected '%s' element", name);
+			return pr_val_err("Unexpected '%s' element", name);
 
 		if (error)
 			return error;
@@ -1046,7 +1046,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 
 	head_data = &delta_head->doc_data;
 
-	pr_debug("Processing delta '%s'.", delta_head->doc_data.uri);
+	pr_val_debug("Processing delta '%s'.", delta_head->doc_data.uri);
 	error = uri_create_https_str(&uri, head_data->uri,
 	    strlen(head_data->uri));
 	if (error)
@@ -1083,7 +1083,7 @@ rrdp_parse_notification(struct rpki_uri *uri, bool log_operation,
 	if (uri == NULL || uri_is_rsync(uri))
 		pr_crit("Wrong call, trying to parse a non HTTPS URI");
 
-	pr_debug("Processing notification '%s'.", uri_get_global(uri));
+	pr_val_debug("Processing notification '%s'.", uri_get_global(uri));
 	last_update = 0;
 	error = db_rrdp_uris_get_last_update(uri_get_global(uri), &last_update);
 	if (error && error != -ENOENT)
@@ -1105,7 +1105,7 @@ rrdp_parse_notification(struct rpki_uri *uri, bool log_operation,
 	vis_err = db_rrdp_uris_set_request_status(uri_get_global(uri),
 	    RRDP_URI_REQ_VISITED);
 	if (vis_err && vis_err != -ENOENT)
-		return pr_err("Couldn't mark '%s' as visited",
+		return pr_val_err("Couldn't mark '%s' as visited",
 		    uri_get_global(uri));
 
 	/* No updates yet */
@@ -1137,7 +1137,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 	args.parent = parent;
 	args.visited_uris = visited_uris;
 
-	pr_debug("Processing snapshot '%s'.", parent->snapshot.uri);
+	pr_val_debug("Processing snapshot '%s'.", parent->snapshot.uri);
 	error = uri_create_https_str(&uri, parent->snapshot.uri,
 	    strlen(parent->snapshot.uri));
 	if (error)

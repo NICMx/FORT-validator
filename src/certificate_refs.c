@@ -33,7 +33,7 @@ validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 		pr_crit("Manifest's CRL was not recorded.");
 
 	if (strcmp(refs->crldp, uri_get_global(pp_crl)) != 0) {
-		return pr_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
+		return pr_val_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
 		    refs->crldp, uri_get_global(pp_crl));
 	}
 
@@ -48,9 +48,9 @@ validate_signedObject(struct certificate_refs *refs,
 		pr_crit("Certificate's signedObject was not recorded.");
 
 	if (!uri_equals(refs->signedObject, signedObject_uri)) {
-		return pr_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
-		    uri_get_printable(refs->signedObject),
-		    uri_get_printable(signedObject_uri));
+		return pr_val_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
+		    uri_val_get_printable(refs->signedObject),
+		    uri_val_get_printable(signedObject_uri));
 	}
 
 	return 0;
@@ -77,7 +77,7 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 
 	if (refs->signedObject != NULL)
 		pr_crit("CA summary has a signedObject ('%s').",
-		    uri_get_printable(refs->signedObject));
+		    uri_op_get_printable(refs->signedObject));
 
 	return 0;
 }

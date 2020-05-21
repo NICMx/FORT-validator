@@ -109,7 +109,7 @@ get_thread_rrdp_uris(struct db_rrdp_uri **result)
 
 	state = state_retrieve();
 	if (state == NULL)
-		return pr_err("No state related to this thread");
+		return pr_val_err("No state related to this thread");
 
 	*result = validation_get_rrdp_uris(state);
 	return 0;

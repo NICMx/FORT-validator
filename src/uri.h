@@ -33,6 +33,7 @@ bool uri_has_extension(struct rpki_uri *, char const *);
 bool uri_is_certificate(struct rpki_uri *);
 bool uri_is_rsync(struct rpki_uri *);
 
-char const *uri_get_printable(struct rpki_uri *);
+char const *uri_val_get_printable(struct rpki_uri *);
+char const *uri_op_get_printable(struct rpki_uri *);
 
 #endif /* SRC_URI_H_ */

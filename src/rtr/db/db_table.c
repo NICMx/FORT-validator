@@ -110,7 +110,7 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
 	if (errno)
-		return -pr_errno(errno, "ROA couldn't be added to hash table");
+		return -pr_val_errno(errno, "ROA couldn't be added to hash table");
 	if (old != NULL)
 		free(old);
 
@@ -125,7 +125,7 @@ add_router_key(struct db_table *table, struct hashable_key *new)
 	errno = 0;
 	HASH_REPLACE(hh, table->router_keys, data, sizeof(new->data), new, old);
 	if (errno)
-		return -pr_errno(errno, "Router Key couldn't be added to hash table");
+		return -pr_val_errno(errno, "Router Key couldn't be added to hash table");
 	if (old != NULL)
 		free(old);
 

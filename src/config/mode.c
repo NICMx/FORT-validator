@@ -26,7 +26,7 @@ print_mode(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_info("%s: %s", field->name, str);
+	pr_op_info("%s: %s", field->name, str);
 }
 
 static int
@@ -38,7 +38,7 @@ parse_argv_mode(struct option_field const *field, char const *str,
 	else if (strcmp(str, VALUE_STANDALONE) == 0)
 		DEREFERENCE(result) = STANDALONE;
 	else
-		return pr_err("Unknown mode: '%s'", str);
+		return pr_op_err("Unknown mode: '%s'", str);
 
 	return 0;
 }

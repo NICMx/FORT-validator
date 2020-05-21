@@ -153,7 +153,7 @@ __slurm_load_checksums(char const *location, void *arg)
 	    &csum->csum_len);
 	if (error) {
 		free(csum);
-		return pr_err("Calculating slurm hash");
+		return pr_op_err("Calculating slurm hash");
 	}
 
 	SLIST_INSERT_HEAD(list, csum, next);
@@ -206,9 +206,9 @@ __load_slurm_files(struct db_slurm **last_slurm,
 	error = load_slurm_files(params);
 	if (error) {
 		/* Any error: use last valid SLURM */
-		pr_warn("Error loading SLURM, the validation will still continue.");
+		pr_op_info("Error loading SLURM, the validation will still continue.");
 		if (*last_slurm != NULL) {
-			pr_warn("A previous valid version of the SLURM exists and will be applied.");
+			pr_op_info("A previous valid version of the SLURM exists and will be applied.");
 			params->db_slurm = *last_slurm;
 			/* Log applied SLURM as info */
 			db_slurm_log(params->db_slurm);
@@ -272,7 +272,7 @@ load_updated_slurm(struct db_slurm **last_slurm,
 
 	list_equals = false;
 
-	pr_info("Checking if there are new or modified SLURM files");
+	pr_op_info("Checking if there are new or modified SLURM files");
 	error = slurm_load_checksums(&csum_list);
 	if (error)
 		return error;
@@ -284,7 +284,7 @@ load_updated_slurm(struct db_slurm **last_slurm,
 
 	if (list_equals) {
 		if (*last_slurm != NULL) {
-			pr_info("Applying same old SLURM, no changes found.");
+			pr_op_info("Applying same old SLURM, no changes found.");
 			params->db_slurm = *last_slurm;
 		}
 		destroy_local_csum_list(&csum_list);
@@ -300,7 +300,7 @@ load_updated_slurm(struct db_slurm **last_slurm,
 		return 0;
 	}
 
-	pr_info("Applying configured SLURM");
+	pr_op_info("Applying configured SLURM");
 	__load_slurm_files(last_slurm, params, &csum_list);
 
 	return 0;

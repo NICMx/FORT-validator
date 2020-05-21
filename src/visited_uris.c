@@ -127,7 +127,7 @@ visited_uris_remove(struct visited_uris *uris, char const *uri)
 
 	elem = elem_find(uris, uri);
 	if (elem == NULL)
-		return pr_err("Trying to remove a nonexistent URI '%s'", uri);
+		return pr_val_err("Trying to remove a nonexistent URI '%s'", uri);
 
 	HASH_DEL(uris->table, elem);
 	visited_elem_destroy(elem);

@@ -27,7 +27,7 @@ int
 ia5s2string(ASN1_IA5STRING *ia5, char **result)
 {
 	return (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT)
-	    ? pr_err("CRL URI IA5String has unused bits.")
+	    ? pr_val_err("CRL URI IA5String has unused bits.")
 	    : string_clone(ia5->data, ia5->length, result);
 }
 
@@ -47,7 +47,7 @@ BN2string(BIGNUM *bn, char **_result)
 
 	if (BN_print(bio, bn) == 0) {
 		BIO_free(bio);
-		return crypto_err("Unable to print the BIGNUM into a BIO");
+		return val_crypto_err("Unable to print the BIGNUM into a BIO");
 	}
 
 	written = BIO_number_written(bio);

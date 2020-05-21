@@ -34,7 +34,7 @@ roa_add_v4(struct roa *roa, uint32_t as, struct ipv4_prefix const *prefix,
 	struct v4_address addr;
 
 	if (roa->as != as) {
-		return pr_err("ROA has more than one ASN. (%u and %u)",
+		return pr_val_err("ROA has more than one ASN. (%u and %u)",
 		    roa->as, as);
 	}
 
@@ -50,7 +50,7 @@ roa_add_v6(struct roa *roa, uint32_t as, struct ipv6_prefix const *prefix,
 	struct v6_address addr;
 
 	if (roa->as != as) {
-		return pr_err("ROA has more than one ASN. (%u and %u)",
+		return pr_val_err("ROA has more than one ASN. (%u and %u)",
 		    roa->as, as);
 	}
 

@@ -13,14 +13,14 @@ file_get(char const *file_name, FILE **result, struct stat *stat,
 
 	file = fopen(file_name, mode);
 	if (file == NULL)
-		return pr_errno(errno, "Could not open file '%s'", file_name);
+		return pr_val_errno(errno, "Could not open file '%s'", file_name);
 
 	if (fstat(fileno(file), stat) == -1) {
-		error = pr_errno(errno, "fstat(%s) failed", file_name);
+		error = pr_val_errno(errno, "fstat(%s) failed", file_name);
 		goto fail;
 	}
 	if (!S_ISREG(stat->st_mode)) {
-		error = pr_err("%s does not seem to be a file", file_name);
+		error = pr_op_err("%s does not seem to be a file", file_name);
 		goto fail;
 	}
 
@@ -48,7 +48,7 @@ void
 file_close(FILE *file)
 {
 	if (fclose(file) == -1)
-		pr_errno(errno, "fclose() failed");
+		pr_val_errno(errno, "fclose() failed");
 }
 
 int
@@ -79,7 +79,7 @@ file_load(char const *file_name, struct file_contents *fc)
 			 * code. It literally doesn't say how to get an error
 			 * code.
 			 */
-			pr_errno(error,
+			pr_val_errno(error,
 			    "File reading error. Error message (apparently)");
 			free(fc->buffer);
 			goto end;
@@ -90,8 +90,8 @@ file_load(char const *file_name, struct file_contents *fc)
 		 * less bytes than requested like read() does. It's either
 		 * "consumed everything", "EOF reached" or error.
 		 */
-		pr_err("Likely programming error: fread() < file size");
-		pr_err("fr:%zu bs:%zu EOF:%d", fread_result, fc->buffer_size,
+		pr_op_err("Likely programming error: fread() < file size");
+		pr_op_err("fr:%zu bs:%zu EOF:%d", fread_result, fc->buffer_size,
 		    feof(file));
 		free(fc->buffer);
 		error = -EINVAL;

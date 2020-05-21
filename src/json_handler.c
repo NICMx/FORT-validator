@@ -67,7 +67,7 @@ set_config_from_file(char *file)
 
 	root = json_load_file(file, JSON_REJECT_DUPLICATES, &json_error);
 	if (root == NULL) {
-		pr_err("JSON error on line %d, column %d: %s",
+		pr_op_err("JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
 		return -ENOENT;
 	}

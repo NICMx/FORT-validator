@@ -131,6 +131,10 @@ struct rpki_config {
 	} http;
 
 	struct {
+		/** Enables operation logs **/
+		bool enabled;
+		/** Prefix to identify operation logs **/
+		char *prefix;
 		/** Print ANSI color codes? */
 		bool color;
 		/** Format in which file names will be printed. */
@@ -139,7 +143,26 @@ struct rpki_config {
 		uint8_t level;
 		/* Log output */
 		enum log_output output;
+		/** facility for syslog if output is syslog **/
+		uint32_t facility;
 	} log;
+
+	struct {
+		/** Enables validation Logs **/
+		bool enabled;
+		/** Prefix to identify validation logs **/
+		char *prefix;
+		/** Print ANSI color codes? */
+		bool color;
+		/** Format in which file names will be printed. */
+		enum filename_format filename_format;
+		/* Log level */
+		uint8_t level;
+		/* Log output */
+		enum log_output output;
+		/** facilities for syslog if output is syslog **/
+		uint32_t facility;
+	} validation_log;
 
 	struct {
 		/** File where the validated ROAs will be stored */
@@ -503,29 +526,94 @@ static const struct option_field options[] = {
 
 	/* Logging fields */
 	{
-		.id = 'c',
-		.name = "log.color-output",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, log.color),
-		.doc = "Print ANSI color codes",
-	}, {
 		.id = 4000,
-		.name = "log.file-name-format",
-		.type = &gt_filename_format,
-		.offset = offsetof(struct rpki_config, log.filename_format),
-		.doc = "File name variant to print during debug/error messages",
+		.name = "log.enabled",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, log.enabled),
+		.doc = "Enables operation logs",
 	}, {
 		.id = 4001,
+		.name = "log.output",
+		.type = &gt_log_output,
+		.offset = offsetof(struct rpki_config, log.output),
+		.doc = "Output where operation log messages will be printed",
+	}, {
+		.id = 4002,
 		.name = "log.level",
 		.type = &gt_log_level,
 		.offset = offsetof(struct rpki_config, log.level),
 		.doc = "Log level to print message of equal or higher importance",
 	}, {
-		.id = 4002,
-		.name = "log.output",
+		.id = 4003,
+		.name = "log.prefix",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, log.prefix),
+		.doc = "Prefix to identify operation logs",
+		.arg_doc = "<string>",
+	}, {
+		.id = 4004,
+		.name = "log.facility",
+		.type = &gt_log_facility,
+		.offset = offsetof(struct rpki_config, log.facility),
+		.doc = "Facility for syslog if output is syslog",
+	}, {
+		.id = 4005,
+		.name = "log.file-name-format",
+		.type = &gt_filename_format,
+		.offset = offsetof(struct rpki_config, log.filename_format),
+		.doc = "File name variant to print during debug/error messages",
+	}, {
+		.id = 'c',
+		.name = "log.color-output",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, log.color),
+		.doc = "Print ANSI color codes",
+	},
+
+	{
+		.id = 4010,
+		.name = "validation-log.enabled",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, validation_log.enabled),
+		.doc = "Enables validation logs",
+	}, {
+		.id = 4011,
+		.name = "validation-log.output",
 		.type = &gt_log_output,
-		.offset = offsetof(struct rpki_config, log.output),
-		.doc = "Output where log messages will be printed",
+		.offset = offsetof(struct rpki_config, validation_log.output),
+		.doc = "Output where validation log messages will be printed",
+	}, {
+		.id = 4012,
+		.name = "validation-log.level",
+		.type = &gt_log_level,
+		.offset = offsetof(struct rpki_config, validation_log.level),
+		.doc = "Log level to print message of equal or higher importance",
+	}, {
+		.id = 4013,
+		.name = "validation-log.prefix",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, validation_log.prefix),
+		.doc = "Prefix to identify operation logs",
+		.arg_doc = "<string>",
+	}, {
+		.id = 4014,
+		.name = "validation-log.facility",
+		.type = &gt_log_facility,
+		.offset = offsetof(struct rpki_config, validation_log.facility),
+		.doc = "Facility for syslog if output is syslog",
+	}, {
+		.id = 4015,
+		.name = "validation-log.file-name-format",
+		.type = &gt_filename_format,
+		.offset = offsetof(struct rpki_config,
+		    validation_log.filename_format),
+		.doc = "File name variant to print during debug/error messages",
+	}, {
+		.id = 4016,
+		.name = "validation-log.color-output",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, validation_log.color),
+		.doc = "Print ANSI color codes",
 	},
 
 	/* Incidences */
@@ -691,13 +779,13 @@ print_config(void)
 {
 	struct option_field const *opt;
 
-	pr_info("Configuration {");
+	pr_op_info("Configuration {");
 
 	FOREACH_OPTION(options, opt, 0xFFFF)
 		if (is_rpki_config_field(opt) && opt->type->print != NULL)
 			opt->type->print(opt, get_rpki_config_field(opt));
 
-	pr_info("}");
+	pr_op_info("}");
 }
 
 static int
@@ -796,6 +884,26 @@ set_default_values(void)
 	rpki_config.log.level = LOG_WARNING;
 	rpki_config.log.output = CONSOLE;
 
+	rpki_config.log.enabled = true;
+	rpki_config.log.output = CONSOLE;
+	rpki_config.log.level = LOG_WARNING;
+	rpki_config.log.color = false;
+	rpki_config.log.filename_format = FNF_GLOBAL;
+	rpki_config.log.facility = LOG_DAEMON;
+	rpki_config.log.prefix = NULL;
+
+	rpki_config.validation_log.enabled = false;
+	rpki_config.validation_log.output = CONSOLE;
+	rpki_config.validation_log.level = LOG_WARNING;
+	rpki_config.validation_log.color = false;
+	rpki_config.validation_log.filename_format = FNF_GLOBAL;
+	rpki_config.validation_log.facility = LOG_DAEMON;
+	rpki_config.validation_log.prefix = strdup("Validation");
+	if (rpki_config.validation_log.prefix == NULL) {
+		error = pr_enomem();
+		goto revert_validation_log_prefix;
+	}
+
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
 
@@ -803,6 +911,8 @@ set_default_values(void)
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 
 	return 0;
+revert_validation_log_prefix:
+	free(rpki_config.http.user_agent);
 revert_flat_array:
 	string_array_cleanup(&rpki_config.rsync.args.flat);
 revert_recursive_array:
@@ -826,28 +936,28 @@ static int
 validate_config(void)
 {
 	if (rpki_config.tal == NULL)
-		return pr_err("The TAL file/directory (--tal) is mandatory.");
+		return pr_op_err("The TAL file/directory (--tal) is mandatory.");
 
-	if (!valid_file_or_dir(rpki_config.tal, true, true))
-		return pr_err("Invalid TAL file/directory.");
+	if (!valid_file_or_dir(rpki_config.tal, true, true, pr_op_errno))
+		return pr_op_err("Invalid TAL file/directory.");
 
 	if (rpki_config.server.interval.expire <
 	    rpki_config.server.interval.refresh ||
 	    rpki_config.server.interval.expire <
 	    rpki_config.server.interval.retry)
-		return pr_err("Expire interval must be greater than refresh and retry intervals");
+		return pr_op_err("Expire interval must be greater than refresh and retry intervals");
 
 	if (rpki_config.output.roa != NULL &&
 	    !valid_output_file(rpki_config.output.roa))
-		return pr_err("Invalid output.roa file.");
+		return pr_op_err("Invalid output.roa file.");
 
 	if (rpki_config.output.bgpsec != NULL &&
 	    !valid_output_file(rpki_config.output.bgpsec))
-		return pr_err("Invalid output.bgpsec file.");
+		return pr_op_err("Invalid output.bgpsec file.");
 
 	if (rpki_config.slurm != NULL &&
-	    !valid_file_or_dir(rpki_config.slurm, true, true))
-		return pr_err("Invalid slurm location.");
+	    !valid_file_or_dir(rpki_config.slurm, true, true, pr_op_errno))
+		return pr_op_err("Invalid slurm location.");
 
 	/* FIXME (later) Remove when sync-strategy is fully deprecated */
 	if (!rpki_config.rsync.enabled)
@@ -906,7 +1016,7 @@ handle_opt(int opt)
 		}
 	}
 
-	pr_err("Unrecognized option: %d", opt);
+	pr_op_err("Unrecognized option: %d", opt);
 	return -ESRCH;
 }
 
@@ -943,7 +1053,7 @@ handle_flags_config(int argc, char **argv)
 	 * This program does not have unflagged payload.
 	 */
 	if (optind < argc) {
-		error = pr_err("I don't know what '%s' is.", argv[optind]);
+		error = pr_op_err("I don't know what '%s' is.", argv[optind]);
 		goto end;
 	}
 
@@ -1054,27 +1164,87 @@ config_get_max_cert_depth(void)
 }
 
 bool
-config_get_color_output(void)
+config_get_op_log_enabled(void)
+{
+	return rpki_config.log.enabled;
+}
+
+char const *
+config_get_op_log_prefix(void)
+{
+	return rpki_config.log.prefix;
+}
+
+bool
+config_get_op_log_color_output(void)
 {
 	return rpki_config.log.color;
 }
 
 enum filename_format
-config_get_filename_format(void)
+config_get_op_log_filename_format(void)
 {
 	return rpki_config.log.filename_format;
 }
 
 uint8_t
-config_get_log_level(void)
+config_get_op_log_level(void)
 {
 	return rpki_config.log.level;
 }
 
 enum log_output
-config_get_log_output(void)
+config_get_op_log_output(void)
 {
 	return rpki_config.log.output;
+}
+
+uint32_t
+config_get_op_log_facility(void)
+{
+	return rpki_config.log.facility;
+}
+
+bool
+config_get_val_log_enabled(void)
+{
+	return rpki_config.validation_log.enabled;
+}
+
+char const *
+config_get_val_log_prefix(void)
+{
+	return rpki_config.validation_log.prefix;
+}
+
+bool
+config_get_val_log_color_output(void)
+{
+	return rpki_config.validation_log.color;
+}
+
+enum filename_format
+config_get_val_log_filename_format(void)
+{
+	return rpki_config.validation_log.filename_format;
+}
+
+uint8_t
+config_get_val_log_level(void)
+{
+	return rpki_config.validation_log.level;
+}
+
+enum log_output
+config_get_val_log_output(void)
+{
+	return rpki_config.validation_log.output;
+}
+
+uint32_t
+config_get_val_log_facility(void)
+{
+	return rpki_config.validation_log.facility;
 }
 
 bool

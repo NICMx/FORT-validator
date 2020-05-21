@@ -104,7 +104,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	result->x509_data.store = X509_STORE_new();
 	if (!result->x509_data.store) {
-		error = crypto_err("X509_STORE_new() returned NULL");
+		error = val_crypto_err("X509_STORE_new() returned NULL");
 		goto abort1;
 	}
 

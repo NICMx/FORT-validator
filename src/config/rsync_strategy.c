@@ -20,7 +20,7 @@
 #else
 #define PRINT_STRICT_ARG_DOC
 #define HANDLE_RSYNC_STRICT						\
-	return pr_err("Unknown rsync synchronization strategy: '%s'. In order to use it, recompile using flag ENABLE_STRICT_STRATEGY.",\
+	return pr_op_err("Unknown rsync synchronization strategy: '%s'. In order to use it, recompile using flag ENABLE_STRICT_STRATEGY.",\
 	    str);
 #endif
 
@@ -43,7 +43,7 @@ print_rsync_strategy(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_info("%s: %s", field->name, str);
+	pr_op_info("%s: %s", field->name, str);
 }
 
 int
@@ -57,7 +57,7 @@ parse_argv_rsync_strategy(struct option_field const *field, char const *str,
 	else if (strcmp(str, RSYNC_VALUE_ROOT_EXCEPT_TA) == 0)
 		DEREFERENCE(result) = RSYNC_ROOT_EXCEPT_TA;
 	else
-		return pr_err("Unknown rsync synchronization strategy: '%s'",
+		return pr_op_err("Unknown rsync synchronization strategy: '%s'",
 		    str);
 
 	/* FIXME (later) Remove when sync-strategy is fully deprecated */

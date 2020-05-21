@@ -21,7 +21,7 @@ validate(struct ContentInfo *info)
 		return error;
 
 	if (!ARCS_EQUAL_OIDS(&arcs, oid_sdata))
-		error = pr_err("Incorrect content-type.");
+		error = pr_val_err("Incorrect content-type.");
 
 	free_arcs(&arcs);
 	return error;
