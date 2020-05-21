@@ -8,7 +8,9 @@ title: Compilation and Installation
 
 1. [Dependencies](#dependencies)
 2. [Setup script](#setup-script)
-3. [Option 1: Installing the Debian package](#option-1-installing-the-debian-package)
+3. [Option 1: Installing the package](#option-1-installing-the-package)
+	1. [Debian package](#debian-package)
+	2. [Gentoo package](#gentoo-package)
 4. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
@@ -21,7 +23,7 @@ title: Compilation and Installation
 
 ## Dependencies
 
-> Note: I'm only including this section in case you intend to install Fort in an unlisted OS (and therefore need a little research). For: Debians, OpenBSD, RHEL/CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
+> Note: This section is included in case you intend to install Fort in an unlisted OS (and therefore need a little research). For: Debians, OpenBSD, RHEL/CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
 
 The dependencies are
 
@@ -58,7 +60,9 @@ mkdir ~/tal
 ./fort_setup.sh ~/tal
 {% endhighlight %}
 
-## Option 1: Installing the Debian package
+## Option 1: Installing the package
+
+### Debian package
 
 {% highlight bash %}
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort_{{ site.fort-latest-version }}-1_amd64.deb
@@ -85,6 +89,37 @@ sudo systemctl stop fort
 sudo systemctl disable fort
 sudo systemctl enable fort
 {% endhighlight %}
+
+### Gentoo package
+
+Thanks to [@alarig](https://github.com/alarig) for [his collaboration](https://github.com/NICMx/FORT-validator/issues/23) creating this package.
+
+> ![img/warn.svg](img/warn.svg) The package is currently at the [GURU repository](https://wiki.gentoo.org/wiki/Project:GURU), it could be at least one version behind the latest version, so please check first which version is the latest at the repository '[net-misc/FORT-validator](https://gitweb.gentoo.org/repo/proj/guru.git/tree/net-misc/FORT-validator)'.
+
+Layman will be utilized, so it must be installed in order to add the GURU repository:
+
+{% highlight bash %}
+root# emerge --ask app-portage/layman
+root# layman -a guru
+{% endhighlight %}
+
+Now, allow to install the unstable FORT validator package (use according to your architecture). The following lines can be used for **amd64** arch:
+
+{% highlight bash %}
+root# nano /etc/portage/package.accept_keywords
+## Add the following line and save
+net-misc/FORT-validator ~amd64
+{% endhighlight %}
+
+FORT validator can now be installed. Don't forget to add ARIN's TAL and restart the validator:
+
+{% highlight bash %}
+root# emerge --ask net-misc/FORT-validator
+root# su -s /bin/sh -c '/usr/libexec/fort/fort_setup.sh /usr/share/fort/tal/' fort
+root# rc-service fort restart
+{% endhighlight %}
+
+The configuration file utilized by the service can be found at `/etc/fort/config.json` (see more about [configuration file](usage.html#--configuration-file)).
 
 ## Option 2: Compiling and installing the release tarball
 
