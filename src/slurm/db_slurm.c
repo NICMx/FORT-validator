@@ -444,11 +444,17 @@ db_slurm_foreach_assertion_bgpsec(struct db_slurm *db, bgpsec_foreach_cb cb,
 	return foreach_assertion_bgpsec(&db->lists, cb, arg);
 }
 
-void
+int
 db_slurm_update_time(struct db_slurm *db)
 {
-	db->loaded_date = time(NULL);
+	int error;
+
+	error = get_current_time(&db->loaded_date);
+	if (error)
+		return error;
+
 	db->loaded_date_set = true;
+	return 0;
 }
 
 static int

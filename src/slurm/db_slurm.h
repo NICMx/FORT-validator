@@ -63,7 +63,7 @@ int db_slurm_foreach_assertion_bgpsec(struct db_slurm *, bgpsec_foreach_cb,
     void *);
 
 /* Set the last update to current datetime */
-void db_slurm_update_time(struct db_slurm *);
+int db_slurm_update_time(struct db_slurm *);
 /* Log the DB in human readable form at INFO level */
 void db_slurm_log(struct db_slurm *);
 

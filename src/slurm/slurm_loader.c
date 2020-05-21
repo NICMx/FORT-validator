@@ -204,17 +204,15 @@ __load_slurm_files(struct db_slurm **last_slurm,
 	int error;
 
 	error = load_slurm_files(params);
-	if (error) {
-		/* Any error: use last valid SLURM */
-		pr_op_info("Error loading SLURM, the validation will still continue.");
-		if (*last_slurm != NULL) {
-			pr_op_info("A previous valid version of the SLURM exists and will be applied.");
-			params->db_slurm = *last_slurm;
-			/* Log applied SLURM as info */
-			db_slurm_log(params->db_slurm);
-		}
-		destroy_local_csum_list(csum_list);
-		return;
+	if (error)
+		goto use_last_slurm;
+
+	/* Prepare the new SLURM DB */
+	if (params->db_slurm != NULL) {
+		error = db_slurm_update_time(params->db_slurm);
+		if (error)
+			goto use_last_slurm;
+		db_slurm_set_csum_list(params->db_slurm, csum_list);
 	}
 
 	/* Use new SLURM as last valid slurm */
@@ -222,10 +220,17 @@ __load_slurm_files(struct db_slurm **last_slurm,
 		db_slurm_destroy(*last_slurm);
 
 	*last_slurm = params->db_slurm;
+
+use_last_slurm:
+	/* Any error: use last valid SLURM */
+	pr_op_info("Error loading SLURM, the validation will still continue.");
 	if (*last_slurm != NULL) {
-		db_slurm_update_time(*last_slurm);
-		db_slurm_set_csum_list(*last_slurm, csum_list);
+		pr_op_info("A previous valid version of the SLURM exists and will be applied.");
+		params->db_slurm = *last_slurm;
+		/* Log applied SLURM as info */
+		db_slurm_log(params->db_slurm);
 	}
+	destroy_local_csum_list(csum_list);
 }
 
 static bool
