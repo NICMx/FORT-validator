@@ -27,36 +27,46 @@ command: fort
 	16. [`--server.interval.retry`](#--serverintervalretry)
 	17. [`--server.interval.expire`](#--serverintervalexpire)
 	18. [`--slurm`](#--slurm)
-	19. [`--log.level`](#--loglevel)
-	20. [`--log.output`](#--logoutput)
-	21. [`--log.color-output`](#--logcolor-output)
-	22. [`--log.file-name-format`](#--logfile-name-format)
-	23. [`--http.user-agent`](#--httpuser-agent)
-	24. [`--http.connect-timeout`](#--httpconnect-timeout)
-	25. [`--http.transfer-timeout`](#--httptransfer-timeout)
-	26. [`--http.idle-timeout`](#--httpidle-timeout)
-	27. [`--http.ca-path`](#--httpca-path)
-	28. [`--output.roa`](#--outputroa)
-	29. [`--output.bgpsec`](#--outputbgpsec)
-	30. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	31. [`--stale-repository-period`](#--stale-repository-period)
-	32. [`--configuration-file`](#--configuration-file)
-	33. [`--rrdp.enabled`](#--rrdpenabled)
-	34. [`--rrdp.priority`](#--rrdppriority)
-	35. [`--rrdp.retry.count`](#--rrdpretrycount)
-	36. [`--rrdp.retry.interval`](#--rrdpretryinterval)
-	37. [`--rsync.enabled`](#--rsyncenabled)
-	38. [`--rsync.priority`](#--rsyncpriority)
-	39. [`--rsync.strategy`](#--rsyncstrategy)
+	19. [`--log.enabled`](#--logenabled)
+	20. [`--log.level`](#--loglevel)
+	21. [`--log.output`](#--logoutput)
+	22. [`--log.color-output`](#--logcolor-output)
+	23. [`--log.file-name-format`](#--logfile-name-format)
+	24. [`--log.facility`](#--logfacility)
+	25. [`--log.prefix`](#--logprefix)
+	26. [`--validation-log.enabled`](#--validation-logenabled)
+	27. [`--validation-log.level`](#--validation-loglevel)
+	28. [`--validation-log.output`](#--validation-logoutput)
+	29. [`--validation-log.color-output`](#--validation-logcolor-output)
+	30. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
+	31. [`--validation-log.facility`](#--validation-logfacility)
+	32. [`--validation-log.prefix`](#--validation-logprefix)
+	33. [`--http.user-agent`](#--httpuser-agent)
+	34. [`--http.connect-timeout`](#--httpconnect-timeout)
+	35. [`--http.transfer-timeout`](#--httptransfer-timeout)
+	36. [`--http.idle-timeout`](#--httpidle-timeout)
+	37. [`--http.ca-path`](#--httpca-path)
+	38. [`--output.roa`](#--outputroa)
+	39. [`--output.bgpsec`](#--outputbgpsec)
+	40. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	41. [`--stale-repository-period`](#--stale-repository-period)
+	42. [`--configuration-file`](#--configuration-file)
+	43. [`--rrdp.enabled`](#--rrdpenabled)
+	44. [`--rrdp.priority`](#--rrdppriority)
+	45. [`--rrdp.retry.count`](#--rrdpretrycount)
+	46. [`--rrdp.retry.interval`](#--rrdpretryinterval)
+	47. [`--rsync.enabled`](#--rsyncenabled)
+	48. [`--rsync.priority`](#--rsyncpriority)
+	49. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	40. [`--rsync.retry.count`](#--rsyncretrycount)
-	41. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	42. [`rsync.program`](#rsyncprogram)
-	43. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	44. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	45. [`incidences`](#incidences)
+	50. [`--rsync.retry.count`](#--rsyncretrycount)
+	51. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	52. [`rsync.program`](#rsyncprogram)
+	53. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	54. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	55. [`incidences`](#incidences)
 
 ## Syntax
 
@@ -83,10 +93,20 @@ command: fort
         [--server.interval.retry=<unsigned integer>]
         [--server.interval.expire=<unsigned integer>]
         [--slurm=<file>|<directory>]
+        [--log.enabled=true|false]
         [--log.level=error|warning|info|debug]
         [--log.output=syslog|console]
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
+        [--log.facility=auth|authpriv|cron|daemon|ftp|kern|lpr|mail|news|syslog|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
+        [--log.prefix=<string>]
+        [--validation-log.enabled=true|false]
+        [--validation-log.level=error|warning|info|debug]
+        [--validation-log.output=syslog|console]
+        [--validation-log.color-output]
+        [--validation-log.file-name-format=global-url|local-path|file-name]
+        [--validation-log.facility=auth|authpriv|cron|daemon|ftp|kern|lpr|mail|news|syslog|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
+        [--validation-log.prefix=<string>]
         [--rrdp.enabled=true|false]
         [--rrdp.priority=<unsigned integer>]
         [--rrdp.retry.count=<unsigned integer>]
@@ -375,13 +395,23 @@ This value is utilized only on RTR version 1 sessions (more information at [RFC 
 
 SLURM file, or directory containing SLURM files. See [SLURM](slurm.html).
 
+### `--log.enabled`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `true`
+
+Enables the operation logs.
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Enabled](logging.html#enabled).
+
 ### `--log.level`
 
 - **Type:** Enumeration (`error`, `warning`, `info`, `debug`)
 - **Availability:** `argv` and JSON
 - **Default:** `warning`
 
-Defines which messages will be logged according to its priority, e.g. a value of `info` will log messages of equal or higher level (`info`, `warning`, and `error`).
+Defines which operation log messages will be logged according to its priority, e.g. a value of `info` will log messages of equal or higher level (`info`, `warning`, and `error`).
 
 The priority levels, from higher to lowest, are:
 - `error`
@@ -389,7 +419,7 @@ The priority levels, from higher to lowest, are:
 - `info`
 - `debug`
 
-Read more at [Logging > Log level](logging.html#log-level).
+Read more at [Logging](logging.html) and at [Logging > Configuration > Level](logging.html#level).
 
 ### `--log.output`
 
@@ -397,28 +427,21 @@ Read more at [Logging > Log level](logging.html#log-level).
 - **Availability:** `argv` and JSON
 - **Default:** `console`
 
-Desired output where the logs will be printed.
+Desired output where the operation logs will be printed.
 
 The value `console` will log messages at standard output and standard error; `syslog` will log to [Syslog](https://en.wikipedia.org/wiki/Syslog).
 
-Read more at [Logging > Log output](logging.html#log-output).
+Read more at [Logging](logging.html) and at [Logging > Configuration > Output](logging.html#output).
 
 ### `--log.color-output`
 
-- **Type:** None
+- **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
+- **Default:** `false`
 
-If enabled, the logging output will contain ANSI color codes. Meant for human consumption:
+If enabled, the operation logs output will contain ANSI color codes. Meant for human consumption, and meaningful only if [`--log.output`](#--logoutput) is `console`.
 
-<pre><code class="terminal">$ {{ page.command }} --color-output (...)
-<span style="color:cyan">DBG: Manifest '62gPOPXWxxu0sQa4vQZYUBLaMbY.mft' {</span>
-<span style="color:lightgray">INF: Configuration {</span>
-<span style="color:orange">WRN: H2jRmyC2M.mft: The signature algorithm has parameters.</span>
-<span style="color:red">ERR: H2jRmyC2M.mft: Certificate validation failed: certificate has expired</span>
-<span style="color:magenta">CRT: Programming error: Array size is 1 but array is NULL.</span>
-</code></pre>
-
-At present, this flag only affects if [`--log.output`](#--logoutput) is `console`. Color codes are not sent to `syslog`, regardless of this flag.
+Read more at [Logging](logging.html) and at [Logging > Configuration > Color output](logging.html#color-output).
 
 ### `--log.file-name-format`
 
@@ -426,30 +449,107 @@ At present, this flag only affects if [`--log.output`](#--logoutput) is `console
 - **Availability:** `argv` and JSON
 - **Default:** `global-url`
 
-Decides which version of file names should be printed during most debug/error messages.
+Decides which version of file names should be printed during most debug/error messages at the operation logs.
 
-- `global-url`: Prints the global name of the file; the URL that can be used to download it. (Always starts with `rsync://`.)
-- `local-path`: Prints a path that points to the local cached version of the file. (Always starts with [`--local-repository`](#--local-repository)'s value.)
-- `file-name`: Strips prefixes, leaving only the base name of the file (including extension).
+Read more at [Logging](logging.html) and at [Logging > Configuration > File name format](logging.html#file-name-format).
 
-Suppose a certificate was downloaded from `rsync://rpki.example.com/foo/bar/baz.cer` into the local cache `repository/`:
+### `--log.facility`
 
-- `global-url`: Will print the certificate's name as `rsync://rpki.example.com/foo/bar/baz.cer`.
-- `local-path`: Will print the certificate's name as `repository/rpki.example.com/foo/bar/baz.cer`.
-- `file-name`: Will print the certificate's name as `baz.cer`.
+- **Type:** Enumeration (`auth`, `authpriv`, `cron`, `daemon`, `ftp`, `lpr`, `mail`, `news`, `user`, `uucp`, from `local0` to `local7`)
+- **Availability:** `argv` and JSON
+- **Default:** `daemon`
 
-{% highlight bash %}
-$ {{ page.command }} --log.file-name-format global-url --local-repository repository/ (...)
-ERR: rsync://rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
+Syslog facility utilized for operation logs (meaningful only if [`--log.output`](#--logoutput) is `syslog`).
 
-$ {{ page.command }} --log.file-name-format local-path --local-repository repository/ (...)
-ERR: repository/rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
+Read more at [Logging](logging.html) and at [Logging > Configuration > Facility](logging.html#facility).
 
-$ {{ page.command }} --log.file-name-format file-name  --local-repository repository/ (...)
-ERR: baz.cer: Certificate validation failed: certificate has expired
-{% endhighlight %}
+### `--log.prefix`
 
-This flag affects any of the log output configured at [`--log.output`](#--logoutput) (`syslog` and `console`).
+- **Type:** String
+- **Availability:** `argv` and JSON
+- **Default:** `NULL`
+
+Text prefix that will be added to the operation log messages (it will appear inside square brackets).
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Prefix](logging.html#prefix).
+
+### `--validation-log.enabled`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `false`
+
+Enables the validation logs.
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Enabled](logging.html#enabled).
+
+### `--validation-log.level`
+
+- **Type:** Enumeration (`error`, `warning`, `info`, `debug`)
+- **Availability:** `argv` and JSON
+- **Default:** `warning`
+
+Defines which validation log messages will be logged according to its priority, e.g. a value of `info` will log messages of equal or higher level (`info`, `warning`, and `error`).
+
+The priority levels, from higher to lowest, are:
+- `error`
+- `warning`
+- `info`
+- `debug`
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Level](logging.html#level).
+
+### `--validation-log.output`
+
+- **Type:** Enumeration (`syslog`, `console`)
+- **Availability:** `argv` and JSON
+- **Default:** `console`
+
+Desired output where the validation logs will be printed.
+
+The value `console` will log messages at standard output and standard error; `syslog` will log to [Syslog](https://en.wikipedia.org/wiki/Syslog).
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Output](logging.html#output).
+
+### `--validation-log.color-output`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `false`
+
+If enabled, the validation logs output will contain ANSI color codes. Meant for human consumption, and meaningful only if [`--validation-log.output`](#--validation-logoutput) is `console`.
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Color output](logging.html#color-output).
+
+### `--validation-log.file-name-format`
+
+- **Type:** Enumeration (`global-url`, `local-path`, `file-name`)
+- **Availability:** `argv` and JSON
+- **Default:** `global-url`
+
+Decides which version of file names should be printed during most debug/error messages at the operation logs.
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > File name format](logging.html#file-name-format).
+
+### `--validation-log.facility`
+
+- **Type:** Enumeration (`auth`, `authpriv`, `cron`, `daemon`, `ftp`, `lpr`, `mail`, `news`, `user`, `uucp`, from `local0` to `local7`)
+- **Availability:** `argv` and JSON
+- **Default:** `daemon`
+
+Syslog facility utilized for validation logs (meaningful only if [`--validation-log.output`](#--validation-logoutput) is `syslog`).
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Facility](logging.html#facility).
+
+### `--validation-log.prefix`
+
+- **Type:** String
+- **Availability:** `argv` and JSON
+- **Default:** `Validation`
+
+Text prefix that will be added to the validation log messages (it will appear inside square brackets).
+
+Read more at [Logging](logging.html) and at [Logging > Configuration > Prefix](logging.html#prefix).
 
 ### `--http.user-agent`
 
@@ -680,6 +780,14 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		{
 			"name": "incid-obj-not-der-encoded",
 			"action": "ignore"
+		},
+		{
+			"name": "incid-file-at-mft-not-found",
+			"action": "error"
+		},
+		{
+			"name": "incid-file-at-mft-hash-not-match",
+			"action": "error"
 		}
 	],
 

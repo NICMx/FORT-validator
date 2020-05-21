@@ -1,4 +1,4 @@
-.TH fort 8 "2020-02-07" "v1.3.0" "FORT validator"
+.TH fort 8 "2020-05-21" "v1.3.0" "FORT validator"
 
 .SH NAME
 fort \- RPKI certificate path validator and RTR server
@@ -419,11 +419,21 @@ maximum allowed value \fI172800\fR. It must be larger than
 .RE
 .P
 
+.B \-\-log.enabled=\fItrue\fR|\fIfalse\fR
+.RS 4
+Enables the operation logs.
+.P
+By default, it has a value of \fItrue\fR (these logs are enabled).
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
 .BR \-\-log.level=(\fIerror\fR|\fIwarning\fR|\fIinfo\fR|\fIdebug\fR)
 .RS 4
-Defines which messages will be logged according to its priority, e.g. a value
-of \fIinfo\fR will log messages of equal or higher level (\fIinfo\fR,
-\fIwarning\fR, and \fIerror\fR).
+Defines which operation log messages will be logged according to its priority,
+e.g. a value of \fIinfo\fR will log messages of equal or higher level
+(\fIinfo\fR, \fIwarning\fR, and \fIerror\fR).
 .P
 The priority levels, from higher to lowest, are:
 .RS 4
@@ -438,12 +448,14 @@ The priority levels, from higher to lowest, are:
 .RE
 .P
 By default, it has a value of \fIwarning\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
 .RE
 .P
 
 .BR \-\-log.output=(\fIsyslog\fR|\fIconsole\fR)
 .RS 4
-Desired output where the logs will be printed.
+Desired output where the operation logs will be printed.
 .P
 The value \fIconsole\fR will log messages at standard output and standard error;
 \fIsyslog\fR will log to syslog.
@@ -454,23 +466,28 @@ configuration is out of this man scope.
 .P
 By default, it has a value of \fIconsole\fR.
 .P
-More information about Logging can be consulted at FORT's web docs.
+Read more about logs at FORT validator's web docs, module 'Logging'.
 .RE
 .P
 
-.BR \-c ", " \-\-log.color-output
+.BR \-c ", " \-\-log.color-output=\fItrue\fR|\fIfalse\fR
 .RS 4
-If enabled, the logging output will contain ANSI color codes. Meant for human
-consumption.
+If enabled, the operation logs output will contain ANSI color codes. Meant for
+human consumption.
 .P
 Meaningful only if \fI--log.output\fR value is \fIconsole\fR.
+.P
+By default, it has a value of \fIfalse\fR (it's disabled).
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
 .RE
 .P
 
-.B \-\-log.file-name-format=(\fIglobal-url\fR|\fIlocal-path\fR|\fIfile-name\fR)
+.B \-\-log.file-name-format=(\fIglobal-url\fR | \fIlocal-path\fR |
+.B \fIfile-name\fR)
 .RS 4
 Decides which version of file names should be printed during most debug/error
-messages.
+messages at the operation logs.
 .P
 Suppose a certificate was downloaded from
 `rsync://rpki.example.com/foo/bar/baz.cer` into the local cache `repository/`:
@@ -491,7 +508,154 @@ Will print the certificate's name as
 Will print the certificate's name as `baz.cer`.
 .RE
 .P
+By default, it has a value of \fIglobal-url\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
 .RE
+.P
+
+.B \-\-log.facility=(\fIauth\fR | \fIauthpriv\fR | \fIcron\fR | \fIdaemon\fR |
+\fIftp\fR | \fIlpr\fR | \fImail\fR | \fInews\fR | \fIuser\fR | \fIuucp\fR |
+from \fIlocal0\fR to \fIlocal7\fR)
+.RS 4
+Syslog facility utilized for operation logs (meaningful only if
+\fI--log.output\fR is \fIsyslog\fR).
+.P
+By default, it has a value of \fIdaemon\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.B \-\-log.prefix=\fISTRING\fR
+.RS 4
+Text prefix that will be added to the operation log messages (it will appear
+inside square brackets).
+.P
+By default, it has a NULL value.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.B \-\-validation-log.enabled=\fItrue\fR|\fIfalse\fR
+.RS 4
+Enables the validation logs.
+.P
+By default, it has a value of \fIfalse\fR (these logs are disabled).
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.BR \-\-validation-log.level=(\fIerror\fR|\fIwarning\fR|\fIinfo\fR|\fIdebug\fR)
+.RS 4
+Defines which validation log messages will be logged according to its priority,
+e.g. a value of \fIinfo\fR will log messages of equal or higher level
+(\fIinfo\fR, \fIwarning\fR, and \fIerror\fR).
+.P
+The priority levels, from higher to lowest, are:
+.RS 4
+.br
+- \fIerror\fR
+.br
+- \fIwarning\fR
+.br
+- \fIinfo\fR
+.br
+- \fIdebug\fR
+.RE
+.P
+By default, it has a value of \fIwarning\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.BR \-\-validation-log.output=(\fIsyslog\fR|\fIconsole\fR)
+.RS 4
+Desired output where the validation logs will be printed.
+.P
+The value \fIconsole\fR will log messages at standard output and standard error;
+\fIsyslog\fR will log to syslog.
+.P
+Depending on the OS, distinct implementations of syslog could be installed
+(syslog, rsyslog, or syslog-ng are the most common ones). Syslog usage and
+configuration is out of this man scope.
+.P
+By default, it has a value of \fIconsole\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.BR \-c ", " \-\-validation-log.color-output=\fItrue\fR|\fIfalse\fR
+.RS 4
+If enabled, the validation logs output will contain ANSI color codes. Meant for
+human consumption.
+.P
+Meaningful only if \fI--validation-log.output\fR value is \fIconsole\fR.
+.P
+By default, it has a value of \fIfalse\fR (it's disabled).
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.B \-\-validation-log.file-name-format=(\fIglobal-url\fR | \fIlocal-path\fR |
+.B \fIfile-name\fR)
+.RS 4
+Decides which version of file names should be printed during most debug/error
+messages at the validation logs.
+.P
+Suppose a certificate was downloaded from
+`rsync://rpki.example.com/foo/bar/baz.cer` into the local cache `repository/`:
+.P
+.I global-url
+.RS 4
+Will print the certificate's name as `rsync://rpki.example.com/foo/bar/baz.cer`.
+.RE
+.P
+.I local-path
+.RS 4
+Will print the certificate's name as
+`repository/rpki.example.com/foo/bar/baz.cer`.
+.RE
+.P
+.I file-name
+.RS 4
+Will print the certificate's name as `baz.cer`.
+.RE
+.P
+By default, it has a value of \fIglobal-url\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.B \-\-validation-log.facility=(\fIauth\fR | \fIauthpriv\fR | \fIcron\fR |
+\fIdaemon\fR | \fIftp\fR | \fIlpr\fR | \fImail\fR | \fInews\fR | \fIuser\fR |
+\fIuucp\fR | from \fIlocal0\fR to \fIlocal7\fR)
+.RS 4
+Syslog facility utilized for validation logs (meaningful only if
+\fI--validation-log.output\fR is \fIsyslog\fR).
+.P
+By default, it has a value of \fIdaemon\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
+
+.B \-\-validation-log.prefix=\fISTRING\fR
+.RS 4
+Text prefix that will be added to the validation log messages (it will appear
+inside square brackets).
+.P
+By default, it has the value \fIValidation\fR.
+.P
+Read more about logs at FORT validator's web docs, module 'Logging'.
+.RE
+.P
 
 .BR \-\-http.user\-agent=\fISTRING\fR
 .RS 4
@@ -915,10 +1079,22 @@ to a specific value:
     }
   },
   "log": {
+    "enabled": true,
     "level": "warning",
     "output": "console",
     "color-output": true,
-    "file-name-format": "local-path"
+    "file-name-format": "local-path",
+    "facility": "daemon",
+    "prefix": "Operation"
+  },
+  "validation-log": {
+    "enabled": false,
+    "level": "warning",
+    "output": "console",
+    "color-output": true,
+    "file-name-format": "local-path",
+    "facility": "daemon",
+    "prefix": "Validation"
   },
   "http": {
     "user-agent": "fort/1.3.0",
@@ -970,6 +1146,14 @@ to a specific value:
     {
       "name": "incid-obj-not-der-encoded",
       "action": "ignore"
+    },
+    {
+      "name": "incid-file-at-mft-not-found",
+      "action": "error"
+    },
+    {
+      "name": "incid-file-at-mft-hash-not-match",
+      "action": "error"
     }
   ],
   "output": {
