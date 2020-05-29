@@ -44,7 +44,8 @@ parse_argv_filename_format(struct option_field const *field, char const *str,
 	else if (strcmp(str, FNF_VALUE_NAME) == 0)
 		DEREFERENCE(result) = FNF_NAME;
 	else
-		return pr_op_err("Unknown file name format: '%s'", str);
+		return pr_op_err("Unknown file name format %s: '%s'",
+		    field->name, str);
 
 	return 0;
 }

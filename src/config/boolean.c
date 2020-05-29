@@ -31,7 +31,8 @@ parse_argv_bool(struct option_field const *field, char const *str, void *result)
 		return 0;
 	}
 
-	return pr_op_err("Cannot parse '%s' as a bool (true|false).", str);
+	return pr_op_err("Invalid %s: '%s', must be boolean (true|false)",
+	    field->name, str);
 }
 
 int

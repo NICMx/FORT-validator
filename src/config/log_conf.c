@@ -165,7 +165,7 @@ parse_argv_log_level(struct option_field const *field, char const *str,
 	else if (strcmp(str, LOG_LEVEL_VALUE_DEBUG) == 0)
 		DEREFERENCE_UINT(result) = LOG_DEBUG;
 	else
-		return pr_op_err("Unknown log level: '%s'", str);
+		return pr_op_err("Unknown %s: '%s'", field->name, str);
 
 	return 0;
 }
@@ -179,7 +179,7 @@ parse_argv_log_output(struct option_field const *field, char const *str,
 	else if (strcmp(str, LOG_OUTPUT_VALUE_CONSOLE) == 0)
 		DEREFERENCE_ENUM(result) = CONSOLE;
 	else
-		return pr_op_err("Unknown log output: '%s'", str);
+		return pr_op_err("Unknown %s: '%s'", field->name, str);
 
 	return 0;
 }
@@ -229,7 +229,7 @@ parse_argv_log_facility(struct option_field const *field, char const *str,
 	else if (strcmp(str, LOG_FACILITY_VALUE_LOCAL7) == 0)
 		DEREFERENCE_UINT32(result) = LOG_LOCAL7;
 	else
-		return pr_op_err("Unknown log output: '%s'", str);
+		return pr_op_err("Unknown %s: '%s'", field->name, str);
 
 	return 0;
 }

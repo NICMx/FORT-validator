@@ -72,32 +72,54 @@ log_disable_syslog(void)
 void
 log_start(void)
 {
-	switch (config_get_op_log_output()) {
-	case SYSLOG:
-		pr_op_info("Syslog log output configured; disabling operation logging on standard streams.");
-		pr_op_info("(Operation Logs will be sent to syslog only.)");
-		log_disable_op_std();
-		break;
-	case CONSOLE:
-		pr_op_info("Console log output configured; disabling operation logging on syslog.");
-		pr_op_info("(Operation Logs will be sent to the standard streams only.)");
-		op_syslog_enabled = false;
-		break;
+	if (config_get_val_log_enabled()) {
+		switch (config_get_val_log_output()) {
+		case SYSLOG:
+			pr_op_info("Syslog log output configured; disabling validation logging on standard streams.");
+			pr_op_info("(Validation Logs will be sent to syslog only.)");
+			log_disable_val_std();
+			break;
+		case CONSOLE:
+			pr_op_info("Console log output configured; disabling validation logging on syslog.");
+			pr_op_info("(Validation Logs will be sent to the standard streams only.)");
+			val_syslog_enabled = false;
+			break;
+		}
+	} else {
+		pr_op_info("Disabling validation logging on syslog.");
+		pr_op_info("Disabling validation logging on standard streams.");
+		log_disable_val_std();
+		val_syslog_enabled = false;
 	}
 
-	switch (config_get_val_log_output()) {
-	case SYSLOG:
-		pr_op_info("Syslog log output configured; disabling validation logging on standard streams.");
-		pr_op_info("(Validation Logs will be sent to syslog only.)");
-		log_disable_val_std();
-		break;
-	case CONSOLE:
-		pr_op_info("Console log output configured; disabling validation logging on syslog.");
-		pr_op_info("(Validation Logs will be sent to the standard streams only.)");
-		if (!op_syslog_enabled)
+
+	if (config_get_op_log_enabled()) {
+		switch (config_get_op_log_output()) {
+		case SYSLOG:
+			pr_op_info("Syslog log output configured; disabling operation logging on standard streams.");
+			pr_op_info("(Operation Logs will be sent to syslog only.)");
+			log_disable_op_std();
+			break;
+		case CONSOLE:
+			pr_op_info("Console log output configured; disabling operation logging on syslog.");
+			pr_op_info("(Operation Logs will be sent to the standard streams only.)");
+			if (!val_syslog_enabled)
+				log_disable_syslog();
+			else
+				op_syslog_enabled = false;
+			break;
+		}
+	} else {
+		pr_op_info("Disabling operation logging on syslog.");
+		pr_op_info("Disabling operation logging on standard streams.");
+		log_disable_op_std();
+		if (!val_syslog_enabled)
 			log_disable_syslog();
-		break;
+		else
+			op_syslog_enabled = false;
 	}
+
+
 }
 
 void
