@@ -155,16 +155,88 @@ config_get_output_bgpsec(void)
 	return NULL;
 }
 
+bool
+config_get_op_log_enabled(void)
+{
+	return true;
+}
+
+char const *
+config_get_op_log_prefix(void)
+{
+	return NULL;
+}
+
+bool
+config_get_op_log_color_output(void)
+{
+	return false;
+}
+
+enum filename_format
+config_get_op_log_filename_format(void)
+{
+	return FNF_NAME;
+}
+
 uint8_t
-config_get_log_level(void)
+config_get_op_log_level(void)
 {
 	return 3; /* LOG_ERR */
 }
 
 enum log_output
-config_get_log_output(void)
+config_get_op_log_output(void)
 {
 	return CONSOLE;
+}
+
+uint32_t
+config_get_op_log_facility(void)
+{
+	return (3<<3); /* LOG_DAEMON */
+}
+
+bool
+config_get_val_log_enabled(void)
+{
+	return true;
+}
+
+char const *
+config_get_val_log_prefix(void)
+{
+	return "VALIDATION";
+}
+
+bool
+config_get_val_log_color_output(void)
+{
+	return false;
+}
+
+enum filename_format
+config_get_val_log_filename_format(void)
+{
+	return FNF_NAME;
+}
+
+uint8_t
+config_get_val_log_level(void)
+{
+	return 3; /* LOG_ERR */
+}
+
+enum log_output
+config_get_val_log_output(void)
+{
+	return CONSOLE;
+}
+
+uint32_t
+config_get_val_log_facility(void)
+{
+	return (3<<3); /* LOG_DAEMON */
 }
 
 unsigned int

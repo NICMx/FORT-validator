@@ -131,7 +131,7 @@ clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
 int
 send_cache_reset_pdu(int fd, uint8_t version)
 {
-	pr_info("    Server sent Cache Reset.");
+	pr_op_info("    Server sent Cache Reset.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESET);
 	return 0;
 }
@@ -139,7 +139,7 @@ send_cache_reset_pdu(int fd, uint8_t version)
 int
 send_cache_response_pdu(int fd, uint8_t version)
 {
-	pr_info("    Server sent Cache Response.");
+	pr_op_info("    Server sent Cache Response.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESPONSE);
 	return 0;
 }
@@ -153,7 +153,7 @@ send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 	 * we'll just check `M + N` contiguous Prefix PDUs.
 	 */
 	uint8_t pdu_type = pop_expected_pdu();
-	pr_info("    Server sent Prefix PDU.");
+	pr_op_info("    Server sent Prefix PDU.");
 	ck_assert_msg(pdu_type == PDU_TYPE_IPV4_PREFIX
 	    || pdu_type == PDU_TYPE_IPV6_PREFIX,
 	    "Server's PDU type is %d, not one of the IP Prefixes.", pdu_type);
@@ -170,7 +170,7 @@ send_router_key_pdu(int fd, uint8_t version,
 	 * we'll just check `M + N` contiguous Prefix PDUs.
 	 */
 	uint8_t pdu_type = pop_expected_pdu();
-	pr_info("    Server sent Router Key PDU.");
+	pr_op_info("    Server sent Router Key PDU.");
 	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
 	    "Server's PDU type is %d, not Router Key type.", pdu_type);
 	return 0;
@@ -210,7 +210,7 @@ send_delta_pdus(int fd, uint8_t version, struct deltas_db *deltas)
 int
 send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 {
-	pr_info("    Server sent End of Data.");
+	pr_op_info("    Server sent End of Data.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_END_OF_DATA);
 	return 0;
 }
@@ -219,7 +219,7 @@ int
 send_error_report_pdu(int fd, uint8_t version, uint16_t code,
     struct rtr_request const *request, char *message)
 {
-	pr_info("    Server sent Error Report %u: '%s'", code, message);
+	pr_op_info("    Server sent Error Report %u: '%s'", code, message);
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_ERROR_REPORT);
 	return 0;
 }
@@ -232,7 +232,7 @@ START_TEST(test_start_or_restart)
 	struct rtr_request request;
 	struct reset_query_pdu client_pdu;
 
-	pr_info("-- Start or Restart --");
+	pr_op_info("-- Start or Restart --");
 
 	/* Prepare DB */
 	init_db_full();
@@ -262,7 +262,7 @@ START_TEST(test_typical_exchange)
 	struct rtr_request request;
 	struct serial_query_pdu client_pdu;
 
-	pr_info("-- Typical Exchange --");
+	pr_op_info("-- Typical Exchange --");
 
 	/* Prepare DB */
 	init_db_full();
@@ -320,7 +320,7 @@ START_TEST(test_no_incremental_update_available)
 	struct rtr_request request;
 	struct serial_query_pdu serial_query;
 
-	pr_info("-- No Incremental Update Available --");
+	pr_op_info("-- No Incremental Update Available --");
 
 	/* Prepare DB */
 	init_db_full();
@@ -349,7 +349,7 @@ START_TEST(test_cache_has_no_data_available)
 	struct serial_query_pdu serial_query;
 	struct reset_query_pdu reset_query;
 
-	pr_info("-- Cache Has No Data Available --");
+	pr_op_info("-- Cache Has No Data Available --");
 
 	/* Prepare DB */
 	ck_assert_int_eq(0, vrps_init());
@@ -384,7 +384,7 @@ START_TEST(test_bad_session_id)
 	struct rtr_request request;
 	struct serial_query_pdu client_pdu;
 
-	pr_info("-- Bad Session ID --");
+	pr_op_info("-- Bad Session ID --");
 
 	/* Prepare DB */
 	init_db_full();
@@ -429,7 +429,7 @@ START_TEST(test_bad_length)
 	unsigned char buf[BUF_SIZE];
 	int fd;
 
-	pr_info("-- Bad Length --");
+	pr_op_info("-- Bad Length --");
 
 	/* Prepare DB */
 	init_db_full();
