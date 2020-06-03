@@ -29,6 +29,9 @@ static bool op_syslog_enabled;
 static bool val_fprintf_enabled;
 static bool val_syslog_enabled;
 
+static bool op_global_log_enabled;
+static bool val_global_log_enabled;
+
 void
 log_setup(void)
 {
@@ -45,6 +48,9 @@ log_setup(void)
 	op_syslog_enabled = true;
 	val_fprintf_enabled = true;
 	val_syslog_enabled = true;
+
+	op_global_log_enabled = true;
+	val_global_log_enabled = true;
 }
 
 static void
@@ -72,7 +78,10 @@ log_disable_syslog(void)
 void
 log_start(void)
 {
-	if (config_get_val_log_enabled()) {
+	val_global_log_enabled = config_get_val_log_enabled();
+	op_global_log_enabled = config_get_op_log_enabled();
+
+	if (val_global_log_enabled) {
 		switch (config_get_val_log_output()) {
 		case SYSLOG:
 			pr_op_info("Syslog log output configured; disabling validation logging on standard streams.");
@@ -93,7 +102,8 @@ log_start(void)
 	}
 
 
-	if (config_get_op_log_enabled()) {
+
+	if (op_global_log_enabled) {
 		switch (config_get_op_log_output()) {
 		case SYSLOG:
 			pr_op_info("Syslog log output configured; disabling operation logging on standard streams.");
@@ -268,7 +278,7 @@ pr_stream(int level, char const *prefix, const char *format, bool color_output,
 		bool color = config_get_op_log_color_output();		\
 		int facility = config_get_op_log_facility();		\
 									\
-		if (!config_get_op_log_enabled())			\
+		if (!op_global_log_enabled)				\
 			break;						\
 									\
 		if (level > config_get_op_log_level())			\
@@ -296,7 +306,7 @@ pr_stream(int level, char const *prefix, const char *format, bool color_output,
 		bool color = config_get_val_log_color_output();		\
 		int facility = config_get_val_log_facility();		\
 									\
-		if (!config_get_val_log_enabled())			\
+		if (!val_global_log_enabled)				\
 			break;						\
 									\
 		if (level > config_get_val_log_level())			\
