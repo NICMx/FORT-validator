@@ -131,7 +131,7 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 }
 
 static int
-process_dir_files(char const *location, char const *file_ext,
+process_dir_files(char const *location, char const *file_ext, bool empty_err,
     process_file_cb cb, void *arg)
 {
 	DIR *dir_loc;
@@ -160,8 +160,12 @@ process_dir_files(char const *location, char const *file_ext,
 		error = -errno;
 	}
 	if (!error && found == 0)
-		pr_op_warn("Location '%s' doesn't have files with extension '%s'",
-		    location, file_ext);
+		error = (empty_err ?
+		    pr_op_err("Location '%s' doesn't have files with extension '%s'",
+		    location, file_ext) :
+		    pr_op_warn("Location '%s' doesn't have files with extension '%s'",
+		    location, file_ext));
+
 close_dir:
 	closedir(dir_loc);
 end:
@@ -169,7 +173,7 @@ end:
 }
 
 int
-process_file_or_dir(char const *location, char const *file_ext,
+process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
     process_file_cb cb, void *arg)
 {
 	struct stat attr;
@@ -182,7 +186,7 @@ process_file_or_dir(char const *location, char const *file_ext,
 	if (S_ISDIR(attr.st_mode) == 0)
 		return cb(location, arg);
 
-	return process_dir_files(location, file_ext, cb, arg);
+	return process_dir_files(location, file_ext, empty_err, cb, arg);
 }
 
 

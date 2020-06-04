@@ -52,7 +52,8 @@ void rwlock_unlock(pthread_rwlock_t *);
 void close_thread(pthread_t thread, char const *);
 
 typedef int (*process_file_cb)(char const *, void *);
-int process_file_or_dir(char const *, char const *, process_file_cb, void *);
+int process_file_or_dir(char const *, char const *, bool, process_file_cb,
+    void *);
 
 typedef int (*pr_errno_cb)(int, const char *, ...);
 bool valid_file_or_dir(char const *, bool, bool, pr_errno_cb);

@@ -31,7 +31,7 @@ load_slurm_files(struct slurm_parser_params *params)
 	params->db_slurm = db;
 
 	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
-	    slurm_parse, params);
+	    false, slurm_parse, params);
 	if (error) {
 		db_slurm_destroy(db);
 		params->db_slurm = NULL;
@@ -184,7 +184,7 @@ slurm_load_checksums(struct slurm_csum_list *csum_list)
 	result.list_size = 0;
 
 	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
-	    __slurm_load_checksums, &result);
+	    false, __slurm_load_checksums, &result);
 	if (error) {
 		destroy_local_csum_list(&result);
 		return error;
@@ -220,6 +220,8 @@ __load_slurm_files(struct db_slurm **last_slurm,
 		db_slurm_destroy(*last_slurm);
 
 	*last_slurm = params->db_slurm;
+
+	return;
 
 use_last_slurm:
 	/* Any error: use last valid SLURM */

@@ -676,7 +676,7 @@ perform_standalone_validation(struct db_table *table)
 	param->db = table;
 	param->threads = &threads;
 
-	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION,
+	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION, true,
 	    __do_file_validation, param);
 	if (error) {
 		/* End all threads */
