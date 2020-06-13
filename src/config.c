@@ -133,8 +133,8 @@ struct rpki_config {
 	struct {
 		/** Enables operation logs **/
 		bool enabled;
-		/** Prefix to identify operation logs **/
-		char *prefix;
+		/** String tag to identify operation logs **/
+		char *tag;
 		/** Print ANSI color codes? */
 		bool color;
 		/** Format in which file names will be printed. */
@@ -150,8 +150,8 @@ struct rpki_config {
 	struct {
 		/** Enables validation Logs **/
 		bool enabled;
-		/** Prefix to identify validation logs **/
-		char *prefix;
+		/** String tag to identify validation logs **/
+		char *tag;
 		/** Print ANSI color codes? */
 		bool color;
 		/** Format in which file names will be printed. */
@@ -545,10 +545,10 @@ static const struct option_field options[] = {
 		.doc = "Log level to print message of equal or higher importance",
 	}, {
 		.id = 4003,
-		.name = "log.prefix",
+		.name = "log.tag",
 		.type = &gt_string,
-		.offset = offsetof(struct rpki_config, log.prefix),
-		.doc = "Prefix to identify operation logs",
+		.offset = offsetof(struct rpki_config, log.tag),
+		.doc = "Text tag to identify operation logs",
 		.arg_doc = "<string>",
 	}, {
 		.id = 4004,
@@ -590,10 +590,10 @@ static const struct option_field options[] = {
 		.doc = "Log level to print message of equal or higher importance",
 	}, {
 		.id = 4013,
-		.name = "validation-log.prefix",
+		.name = "validation-log.tag",
 		.type = &gt_string,
-		.offset = offsetof(struct rpki_config, validation_log.prefix),
-		.doc = "Prefix to identify operation logs",
+		.offset = offsetof(struct rpki_config, validation_log.tag),
+		.doc = "Text tag to identify validation logs",
 		.arg_doc = "<string>",
 	}, {
 		.id = 4014,
@@ -890,7 +890,7 @@ set_default_values(void)
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
 	rpki_config.log.facility = LOG_DAEMON;
-	rpki_config.log.prefix = NULL;
+	rpki_config.log.tag = NULL;
 
 	rpki_config.validation_log.enabled = false;
 	rpki_config.validation_log.output = CONSOLE;
@@ -898,10 +898,10 @@ set_default_values(void)
 	rpki_config.validation_log.color = false;
 	rpki_config.validation_log.filename_format = FNF_GLOBAL;
 	rpki_config.validation_log.facility = LOG_DAEMON;
-	rpki_config.validation_log.prefix = strdup("Validation");
-	if (rpki_config.validation_log.prefix == NULL) {
+	rpki_config.validation_log.tag = strdup("Validation");
+	if (rpki_config.validation_log.tag == NULL) {
 		error = pr_enomem();
-		goto revert_validation_log_prefix;
+		goto revert_validation_log_tag;
 	}
 
 	rpki_config.output.roa = NULL;
@@ -911,7 +911,7 @@ set_default_values(void)
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 
 	return 0;
-revert_validation_log_prefix:
+revert_validation_log_tag:
 	free(rpki_config.http.user_agent);
 revert_flat_array:
 	string_array_cleanup(&rpki_config.rsync.args.flat);
@@ -1061,9 +1061,11 @@ handle_flags_config(int argc, char **argv)
 
 	log_start();
 end:
-	if (error)
+	if (error) {
 		free_rpki_config();
-	else
+		pr_op_err("Try '%s --usage' or '%s --help' for more information.",
+		    program_name, program_name);
+	} else
 		print_config();
 
 	free(long_opts);
@@ -1170,9 +1172,9 @@ config_get_op_log_enabled(void)
 }
 
 char const *
-config_get_op_log_prefix(void)
+config_get_op_log_tag(void)
 {
-	return rpki_config.log.prefix;
+	return rpki_config.log.tag;
 }
 
 bool
@@ -1212,9 +1214,9 @@ config_get_val_log_enabled(void)
 }
 
 char const *
-config_get_val_log_prefix(void)
+config_get_val_log_tag(void)
 {
-	return rpki_config.validation_log.prefix;
+	return rpki_config.validation_log.tag;
 }
 
 bool

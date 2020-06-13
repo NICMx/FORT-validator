@@ -7,14 +7,14 @@ url-log-output: "[`--log.output`](usage.html#--logoutput)"
 url-log-color-output: "[`--log.color-output`](usage.html#--logcolor-output)"
 url-log-file-name-format: "[`--log.file-name-format`](usage.html#--logfile-name-format)"
 url-log-facility: "[`--log.facility`](usage.html#--logfacility)"
-url-log-prefix: "[`--log.prefix`](usage.html#--logprefix)"
+url-log-tag: "[`--log.tag`](usage.html#--logtag)"
 url-vlog-enabled: "[`--validation-log.enabled`](usage.html#--validation-logenabled)"
 url-vlog-level: "[`--validation-log.level`](usage.html#--validation-loglevel)"
 url-vlog-output: "[`--validation-log.output`](usage.html#--validation-logoutput)"
 url-vlog-color-output: "[`--validation-log.color-output`](usage.html#--validation-logcolor-output)"
 url-vlog-file-name-format: "[`--validation-log.file-name-format`](usage.html#--validation-logfile-name-format)"
 url-vlog-facility: "[`--validation-log.facility`](usage.html#--validation-logfacility)"
-url-vlog-prefix: "[`--validation-log.prefix`](usage.html#--validation-logprefix)"
+url-vlog-tag: "[`--validation-log.tag`](usage.html#--validation-logtag)"
 ---
 
 # {{ page.title }}
@@ -31,7 +31,7 @@ url-vlog-prefix: "[`--validation-log.prefix`](usage.html#--validation-logprefix)
 	4. [Color output](#color-output)
 	5. [File name format](#file-name-format)
 	6. [Facility](#facility)
-	7. [Prefix](#prefix)
+	7. [Tag](#tag)
 
 ## Log types
 
@@ -78,9 +78,9 @@ The operation log arguments are those that have the prefix `log.`, while the val
 - [`color-output`](#color-output)
 - [`file-name-format`](#file-name-format)
 - [`facility`](#facility)
-- [`prefix`](#prefix)
+- [`tag`](#tag)
 
-For instance, to enable the validation log the argument {{ page.url-vlog-enabled }} should be used (prefix: `validation-log.`, suffix: `enabled`).
+For instance, to enable the "validation log", the argument {{ page.url-vlog-enabled }} should be used (prefix: `validation-log.`, suffix: `enabled`).
 
 The following sub-sections describe how each argument works.
 
@@ -192,18 +192,18 @@ The arguments of each log type are:
 - {{ page.url-log-facility }}
 - {{ page.url-vlog-facility }}
 
-### Prefix
+### Tag
 
-Text prefix that will be added to each message of the corresponding log type. The prefix will be added after the message level, inside square brackets.
+Text tag that will be added to each message of the corresponding log type. The tag will be added after the message level, inside square brackets.
 
 It's a simple mean to differentiate each message according to its type, probably useful if the [`*.output`](#output) is the same for both log types.
 
 E.g. If a validation error is found, it could be logged like this:
 {% highlight bash %}
-$ {{ page.command }} --validation-log.prefix="Validation" (...)
+$ {{ page.command }} --validation-log.tag="Validation" (...)
 ERR [Validation]: rsync://rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
 {% endhighlight %}
 
 The arguments of each log type are:
-- {{ page.url-log-prefix }}
-- {{ page.url-vlog-prefix }}
+- {{ page.url-log-tag }}
+- {{ page.url-vlog-tag }}

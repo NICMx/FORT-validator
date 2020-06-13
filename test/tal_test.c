@@ -44,7 +44,7 @@ validation_destroy(struct validation *state)
 }
 
 int
-process_file_or_dir(char const *location, char const *file_ext,
+process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
     process_file_cb cb, void *arg)
 {
 	return 0;

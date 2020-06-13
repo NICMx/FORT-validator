@@ -54,7 +54,7 @@ unsigned int config_get_stale_repository_period(void);
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);
-char const * config_get_op_log_prefix(void);
+char const * config_get_op_log_tag(void);
 bool config_get_op_log_color_output(void);
 enum filename_format config_get_op_log_filename_format(void);
 uint8_t config_get_op_log_level(void);
@@ -62,7 +62,7 @@ enum log_output config_get_op_log_output(void);
 uint32_t config_get_op_log_facility(void);
 
 bool config_get_val_log_enabled(void);
-char const * config_get_val_log_prefix(void);
+char const * config_get_val_log_tag(void);
 bool config_get_val_log_color_output(void);
 enum filename_format config_get_val_log_filename_format(void);
 uint8_t config_get_val_log_level(void);

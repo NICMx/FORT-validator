@@ -527,9 +527,9 @@ Read more about logs at FORT validator's web docs, module 'Logging'.
 .RE
 .P
 
-.B \-\-log.prefix=\fISTRING\fR
+.B \-\-log.tag=\fISTRING\fR
 .RS 4
-Text prefix that will be added to the operation log messages (it will appear
+Text tag that will be added to the operation log messages (it will appear
 inside square brackets).
 .P
 By default, it has a NULL value.
@@ -646,9 +646,9 @@ Read more about logs at FORT validator's web docs, module 'Logging'.
 .RE
 .P
 
-.B \-\-validation-log.prefix=\fISTRING\fR
+.B \-\-validation-log.tag=\fISTRING\fR
 .RS 4
-Text prefix that will be added to the validation log messages (it will appear
+Text tag that will be added to the validation log messages (it will appear
 inside square brackets).
 .P
 By default, it has the value \fIValidation\fR.
@@ -1085,7 +1085,7 @@ to a specific value:
     "color-output": true,
     "file-name-format": "local-path",
     "facility": "daemon",
-    "prefix": "Operation"
+    "tag": "Operation"
   },
   "validation-log": {
     "enabled": false,
@@ -1094,7 +1094,7 @@ to a specific value:
     "color-output": true,
     "file-name-format": "local-path",
     "facility": "daemon",
-    "prefix": "Validation"
+    "tag": "Validation"
   },
   "http": {
     "user-agent": "fort/1.3.0",

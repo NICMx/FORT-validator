@@ -274,7 +274,7 @@ pr_stream(int level, char const *prefix, const char *format, bool color_output,
 #define PR_OP_SIMPLE(level)						\
 	do {								\
 		va_list args;						\
-		char const *prefix = config_get_op_log_prefix();	\
+		char const *prefix = config_get_op_log_tag();		\
 		bool color = config_get_op_log_color_output();		\
 		int facility = config_get_op_log_facility();		\
 									\
@@ -302,7 +302,7 @@ pr_stream(int level, char const *prefix, const char *format, bool color_output,
 #define PR_VAL_SIMPLE(level)						\
 	do {								\
 		va_list args;						\
-		char const *prefix = config_get_val_log_prefix();	\
+		char const *prefix = config_get_val_log_tag();		\
 		bool color = config_get_val_log_color_output();		\
 		int facility = config_get_val_log_facility();		\
 									\
@@ -462,7 +462,7 @@ pr_op_errno(int error, const char *format, ...)
 	return pr_errno(error, op_syslog_enabled,
 	    op_fprintf_enabled, config_get_op_log_facility(),
 	    config_get_op_log_color_output(),
-	    config_get_op_log_prefix());
+	    config_get_op_log_tag());
 }
 
 int
@@ -473,7 +473,7 @@ pr_val_errno(int error, const char *format, ...)
 	return pr_errno(error, val_syslog_enabled,
 	    val_fprintf_enabled, config_get_val_log_facility(),
 	    config_get_val_log_color_output(),
-	    config_get_val_log_prefix());
+	    config_get_val_log_tag());
 }
 
 static int
@@ -481,9 +481,9 @@ log_op_crypto_error(const char *str, size_t len, void *arg)
 {
 	if (op_syslog_enabled)
 		pr_simple_syslog(LOG_ERR, config_get_op_log_facility(),
-		    config_get_op_log_prefix(), str);
+		    config_get_op_log_tag(), str);
 	if (op_fprintf_enabled)
-		__fprintf(LOG_ERR, config_get_op_log_prefix(),
+		__fprintf(LOG_ERR, config_get_op_log_tag(),
 		    config_get_op_log_color_output(),
 		    "  - %s", str);
 	return 1;
@@ -494,9 +494,9 @@ log_val_crypto_error(const char *str, size_t len, void *arg)
 {
 	if (val_syslog_enabled)
 		pr_simple_syslog(LOG_ERR, config_get_val_log_facility(),
-		    config_get_val_log_prefix(), str);
+		    config_get_val_log_tag(), str);
 	if (val_fprintf_enabled)
-		__fprintf(LOG_ERR, config_get_val_log_prefix(),
+		__fprintf(LOG_ERR, config_get_val_log_tag(),
 		    config_get_val_log_color_output(),
 		    "  - %s", str);
 	return 1;
@@ -549,7 +549,7 @@ op_crypto_err(const char *format, ...)
 
 	return crypto_err(log_op_crypto_error, op_fprintf_enabled,
 	    op_syslog_enabled, config_get_op_log_color_output(),
-	    config_get_op_log_facility(), config_get_op_log_prefix());
+	    config_get_op_log_facility(), config_get_op_log_tag());
 }
 
 /**
@@ -571,7 +571,7 @@ val_crypto_err(const char *format, ...)
 
 	return crypto_err(log_val_crypto_error, val_fprintf_enabled,
 	    val_syslog_enabled, config_get_val_log_color_output(),
-	    config_get_val_log_facility(), config_get_val_log_prefix());
+	    config_get_val_log_facility(), config_get_val_log_tag());
 }
 
 /**
@@ -582,9 +582,9 @@ pr_enomem(void)
 {
 	if (op_syslog_enabled)
 		pr_simple_syslog(LOG_ERR, config_get_op_log_facility(),
-		    config_get_op_log_prefix(), "Out of memory.");
+		    config_get_op_log_tag(), "Out of memory.");
 	if (op_fprintf_enabled)
-		__fprintf(LOG_ERR, config_get_op_log_prefix(),
+		__fprintf(LOG_ERR, config_get_op_log_tag(),
 		    config_get_op_log_color_output(),
 		    "Out of memory.\n");
 	return -ENOMEM;

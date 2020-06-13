@@ -33,14 +33,14 @@ command: fort
 	22. [`--log.color-output`](#--logcolor-output)
 	23. [`--log.file-name-format`](#--logfile-name-format)
 	24. [`--log.facility`](#--logfacility)
-	25. [`--log.prefix`](#--logprefix)
+	25. [`--log.tag`](#--logtag)
 	26. [`--validation-log.enabled`](#--validation-logenabled)
 	27. [`--validation-log.level`](#--validation-loglevel)
 	28. [`--validation-log.output`](#--validation-logoutput)
 	29. [`--validation-log.color-output`](#--validation-logcolor-output)
 	30. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
 	31. [`--validation-log.facility`](#--validation-logfacility)
-	32. [`--validation-log.prefix`](#--validation-logprefix)
+	32. [`--validation-log.tag`](#--validation-logtag)
 	33. [`--http.user-agent`](#--httpuser-agent)
 	34. [`--http.connect-timeout`](#--httpconnect-timeout)
 	35. [`--http.transfer-timeout`](#--httptransfer-timeout)
@@ -99,14 +99,14 @@ command: fort
         [--log.color-output]
         [--log.file-name-format=global-url|local-path|file-name]
         [--log.facility=auth|authpriv|cron|daemon|ftp|kern|lpr|mail|news|syslog|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
-        [--log.prefix=<string>]
+        [--log.tag=<string>]
         [--validation-log.enabled=true|false]
         [--validation-log.level=error|warning|info|debug]
         [--validation-log.output=syslog|console]
         [--validation-log.color-output]
         [--validation-log.file-name-format=global-url|local-path|file-name]
         [--validation-log.facility=auth|authpriv|cron|daemon|ftp|kern|lpr|mail|news|syslog|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
-        [--validation-log.prefix=<string>]
+        [--validation-log.tag=<string>]
         [--rrdp.enabled=true|false]
         [--rrdp.priority=<unsigned integer>]
         [--rrdp.retry.count=<unsigned integer>]
@@ -463,15 +463,15 @@ Syslog facility utilized for operation logs (meaningful only if [`--log.output`]
 
 Read more at [Logging](logging.html) and at [Logging > Configuration > Facility](logging.html#facility).
 
-### `--log.prefix`
+### `--log.tag`
 
 - **Type:** String
 - **Availability:** `argv` and JSON
 - **Default:** `NULL`
 
-Text prefix that will be added to the operation log messages (it will appear inside square brackets).
+Text tag that will be added to the operation log messages (it will appear inside square brackets).
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Prefix](logging.html#prefix).
+Read more at [Logging](logging.html) and at [Logging > Configuration > Tag](logging.html#tag).
 
 ### `--validation-log.enabled`
 
@@ -541,15 +541,15 @@ Syslog facility utilized for validation logs (meaningful only if [`--validation-
 
 Read more at [Logging](logging.html) and at [Logging > Configuration > Facility](logging.html#facility).
 
-### `--validation-log.prefix`
+### `--validation-log.tag`
 
 - **Type:** String
 - **Availability:** `argv` and JSON
 - **Default:** `Validation`
 
-Text prefix that will be added to the validation log messages (it will appear inside square brackets).
+Text tag that will be added to the validation log messages (it will appear inside square brackets).
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Prefix](logging.html#prefix).
+Read more at [Logging](logging.html) and at [Logging > Configuration > Tag](logging.html#tag).
 
 ### `--http.user-agent`
 
@@ -721,10 +721,23 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	},
 
 	"log": {
+		"<a href="#--logenabled">enabled</a>": true,
 		"<a href="#--loglevel">level</a>": "warning",
 		"<a href="#--logoutput">output</a>": "console",
 		"<a href="#--logcolor-output">color-output</a>": true,
-		"<a href="#--logfile-name-format">file-name-format</a>": "file-name"
+		"<a href="#--logfile-name-format">file-name-format</a>": "file-name",
+		"<a href="#--logfacility">facility</a>": "daemon",
+		"<a href="#--logtag">tag</a>": "Operation"
+	},
+
+	"validation-log": {
+		"<a href="#--validation-logenabled">enabled</a>": false,
+		"<a href="#--validation-loglevel">level</a>": "warning",
+		"<a href="#--validation-logoutput">output</a>": "console",
+		"<a href="#--validation-logcolor-output">color-output</a>": true,
+		"<a href="#--validation-logfile-name-format">file-name-format</a>": "global-url",
+		"<a href="#--validation-logfacility">facility</a>": "daemon",
+		"<a href="#--validation-logtag">tag</a>": "Validation"
 	},
 
 	"http": {

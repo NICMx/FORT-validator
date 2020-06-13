@@ -162,7 +162,7 @@ config_get_op_log_enabled(void)
 }
 
 char const *
-config_get_op_log_prefix(void)
+config_get_op_log_tag(void)
 {
 	return NULL;
 }
@@ -204,7 +204,7 @@ config_get_val_log_enabled(void)
 }
 
 char const *
-config_get_val_log_prefix(void)
+config_get_val_log_tag(void)
 {
 	return "VALIDATION";
 }
