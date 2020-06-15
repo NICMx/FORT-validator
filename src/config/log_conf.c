@@ -87,9 +87,6 @@ print_log_facility(struct option_field const *field, void *value)
 	char const *str = "<unknown>";
 
 	switch (DEREFERENCE_UINT32(value)) {
-	case LOG_KERN:
-		str = LOG_FACILITY_VALUE_KERN;
-		break;
 	case LOG_USER:
 		str = LOG_FACILITY_VALUE_USER;
 		break;
@@ -101,9 +98,6 @@ print_log_facility(struct option_field const *field, void *value)
 		break;
 	case LOG_AUTH:
 		str = LOG_FACILITY_VALUE_AUTH;
-		break;
-	case LOG_SYSLOG:
-		str = LOG_FACILITY_VALUE_SYSLOG;
 		break;
 	case LOG_LPR:
 		str = LOG_FACILITY_VALUE_LPR;
@@ -198,16 +192,12 @@ parse_argv_log_facility(struct option_field const *field, char const *str,
 		DEREFERENCE_UINT32(result) = LOG_DAEMON;
 	else if (strcmp(str, LOG_FACILITY_VALUE_FTP) == 0)
 		DEREFERENCE_UINT32(result) = LOG_FTP;
-	else if (strcmp(str, LOG_FACILITY_VALUE_KERN) == 0)
-		DEREFERENCE_UINT32(result) = LOG_KERN;
 	else if (strcmp(str, LOG_FACILITY_VALUE_LPR) == 0)
 		DEREFERENCE_UINT32(result) = LOG_LPR;
 	else if (strcmp(str, LOG_FACILITY_VALUE_MAIL) == 0)
 		DEREFERENCE_UINT32(result) = LOG_MAIL;
 	else if (strcmp(str, LOG_FACILITY_VALUE_NEWS) == 0)
 		DEREFERENCE_UINT32(result) = LOG_NEWS;
-	else if (strcmp(str, LOG_FACILITY_VALUE_SYSLOG) == 0)
-		DEREFERENCE_UINT32(result) = LOG_SYSLOG;
 	else if (strcmp(str, LOG_FACILITY_VALUE_USER) == 0)
 		DEREFERENCE_UINT32(result) = LOG_USER;
 	else if (strcmp(str, LOG_FACILITY_VALUE_UUCP) == 0)
@@ -228,6 +218,10 @@ parse_argv_log_facility(struct option_field const *field, char const *str,
 		DEREFERENCE_UINT32(result) = LOG_LOCAL6;
 	else if (strcmp(str, LOG_FACILITY_VALUE_LOCAL7) == 0)
 		DEREFERENCE_UINT32(result) = LOG_LOCAL7;
+	else if (strcmp(str, LOG_FACILITY_VALUE_KERN) == 0 ||
+	    strcmp(str, LOG_FACILITY_VALUE_SYSLOG) == 0)
+		return pr_op_err("Unsupported %s: '%s', use another value",
+		    field->name, str);
 	else
 		return pr_op_err("Unknown %s: '%s'", field->name, str);
 
@@ -299,11 +293,9 @@ const struct global_type gt_log_facility = {
 	    "|" LOG_FACILITY_VALUE_CRON
 	    "|" LOG_FACILITY_VALUE_DAEMON
 	    "|" LOG_FACILITY_VALUE_FTP
-	    "|" LOG_FACILITY_VALUE_KERN
 	    "|" LOG_FACILITY_VALUE_LPR
 	    "|" LOG_FACILITY_VALUE_MAIL
 	    "|" LOG_FACILITY_VALUE_NEWS
-	    "|" LOG_FACILITY_VALUE_SYSLOG
 	    "|" LOG_FACILITY_VALUE_USER
 	    "|" LOG_FACILITY_VALUE_UUCP
 	    "|" LOG_FACILITY_VALUE_LOCAL0
