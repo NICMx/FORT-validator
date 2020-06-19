@@ -9,6 +9,7 @@
 #include "extension.h"
 #include "log.h"
 #include "nid.h"
+#include "reqs_errors.h"
 #include "str.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
@@ -1894,25 +1895,13 @@ verify_mft_loc(struct rpki_uri *mft_uri)
 static int
 exec_rrdp_method(struct sia_ca_uris *sia_uris)
 {
-	int error;
-
-	error = rrdp_load(sia_uris->rpkiNotify.uri);
-	if (error)
-		return error;
-
-	return verify_mft_loc(sia_uris->mft.uri);
+	return rrdp_load(sia_uris->rpkiNotify.uri);
 }
 
 static int
 exec_rsync_method(struct sia_ca_uris *sia_uris)
 {
-	int error;
-
-	error = download_files(sia_uris->caRepository.uri, false, false);
-	if (error)
-		return error;
-
-	return verify_mft_loc(sia_uris->mft.uri);
+	return download_files(sia_uris->caRepository.uri, false, false);
 }
 
 /*
@@ -1937,13 +1926,16 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 * care of that.
 	 */
 	(*rsync_utilized) = true;
-	if (sia_uris->rpkiNotify.uri == NULL || !config_get_rrdp_enabled())
-		return rsync_cb(sia_uris);
+	if (sia_uris->rpkiNotify.uri == NULL || !config_get_rrdp_enabled()) {
+		error = rsync_cb(sia_uris);
+		goto verify_mft;
+	}
 
 	/* RSYNC disabled, and RRDP is present, use it */
 	if (!config_get_rsync_enabled()) {
 		(*rsync_utilized) = false;
-		return rrdp_cb(sia_uris);
+		error = rrdp_cb(sia_uris);
+		goto verify_mft;
 	}
 
 	/*
@@ -1982,7 +1974,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	error = cb_primary(sia_uris);
 	if (!error) {
 		(*rsync_utilized) = !primary_rrdp;
-		return 0;
+		goto verify_mft;
 	}
 
 	if (primary_rrdp) {
@@ -2007,7 +1999,22 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	/* No need to remember the working repository anymore */
 	working_repo_pop();
 
-	return error;
+verify_mft:
+	switch (error) {
+	case 0:
+		/* Remove the error'd URI, since we got the repo files */
+		if (working_repo_peek() != NULL)
+			reqs_errors_rem_uri(working_repo_peek());
+		break;
+	case EREQFAILED:
+		/* Log that we'll try to work with a local copy */
+		pr_val_warn("Trying to work with the local cache files.");
+		break;
+	default:
+		return error;
+	}
+	/* Look for the manifest */
+	return verify_mft_loc(sia_uris->mft.uri);
 }
 
 /*

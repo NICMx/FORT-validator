@@ -129,7 +129,7 @@ download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 			return error;
 
 		if (retries == config_get_rrdp_retry_count()) {
-			pr_val_info("Max RRDP retries (%u) reached fetching '%s', won't retry again.",
+			pr_val_warn("Max RRDP retries (%u) reached fetching '%s', won't retry again.",
 			    retries, uri_get_global(uri));
 			/*
 			 * Since distinct files can be downloaded (notification,
@@ -139,7 +139,7 @@ download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 			 */
 			return EREQFAILED;
 		}
-		pr_val_info("Retrying RRDP file download '%s' in %u seconds, %u attempts remaining.",
+		pr_val_warn("Retrying RRDP file download '%s' in %u seconds, %u attempts remaining.",
 		    uri_get_global(uri),
 		    config_get_rrdp_retry_interval(),
 		    config_get_rrdp_retry_count() - retries);

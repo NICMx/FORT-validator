@@ -51,6 +51,13 @@ struct validation_thread {
 	 */
 	pthread_t pid;
 	char *tal_file;
+	/*
+	 * Try to use the TA from the local cache? Only if none of the URIs
+	 * was sync'd.
+	 */
+	bool retry_local;
+	/* Try to sync the current TA URI? */
+	bool sync_files;
 	void *arg;
 	int exit_status;
 	/* This should also only be manipulated by the parent thread. */
@@ -476,6 +483,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 * A "hard error" is any other error.
 	 */
 
+	struct validation_thread *thread_arg = arg;
 	struct validation_handler validation_handler;
 	struct validation *state;
 	struct cert_stack *certstack;
@@ -485,28 +493,39 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
-	validation_handler.arg = arg;
+	validation_handler.arg = thread_arg->arg;
 
 	error = validation_prepare(&state, tal, &validation_handler);
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	if (uri_is_rsync(uri))
-		error = download_files(uri, true, false);
-	else
-		error = handle_https_uri(uri);
+	if (thread_arg->sync_files) {
+		if (uri_is_rsync(uri))
+			error = download_files(uri, true, false);
+		else
+			error = handle_https_uri(uri);
+	} else if (!valid_file_or_dir(uri_get_local(uri), true, false,
+	    pr_val_errno)) {
+		return 0; /* Error already logged */
+	}
 
-	/* FIXME (NOW) Try to work with local data on the first run? */
+	/* Friendly reminder: there's a positive error - EREQFAILED */
 	if (error) {
+		working_repo_push(uri_get_global(uri));
 		validation_destroy(state);
-		return pr_val_warn("TAL '%s' could not be downloaded.",
+		return pr_val_warn("TAL URI '%s' could not be downloaded.",
 		    uri_val_get_printable(uri));
 	}
+
+	/* At least one URI was sync'd */
+	thread_arg->retry_local = false;
+	if (thread_arg->sync_files && working_repo_peek() != NULL)
+		reqs_errors_rem_uri(working_repo_peek());
 
 	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
 
 	if (!uri_is_certificate(uri)) {
-		error = pr_op_err("TAL file does not point to a certificate. (Expected .cer, got '%s')",
+		error = pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
 		    uri_op_get_printable(uri));
 		goto fail;
 	}
@@ -571,6 +590,25 @@ end:	validation_destroy(state);
 	return error;
 }
 
+static int
+__handle_tal_uri_sync(struct tal *tal, struct rpki_uri *uri, void *arg)
+{
+	int error;
+
+	error = handle_tal_uri(tal, uri, arg);
+	if (error)
+		return error;
+	working_repo_push(uri_get_global(uri));
+
+	return 0;
+}
+
+static int
+__handle_tal_uri_local(struct tal *tal, struct rpki_uri *uri, void *arg)
+{
+	return handle_tal_uri(tal, uri, arg);
+}
+
 static void *
 do_file_validation(void *thread_arg)
 {
@@ -589,13 +627,30 @@ do_file_validation(void *thread_arg)
 
 	if (config_get_shuffle_tal_uris())
 		tal_shuffle_uris(tal);
-	error = foreach_uri(tal, handle_tal_uri, thread->arg);
+	error = foreach_uri(tal, __handle_tal_uri_sync, thread_arg);
+	if (error > 0) {
+		error = 0;
+		goto destroy_tal;
+	} else if (error < 0)
+		goto destroy_tal;
+
+	if (!thread->retry_local) {
+		error = pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
+		    thread->tal_file);
+		goto destroy_tal;
+	}
+
+	thread->sync_files = false;
+	pr_val_warn("Looking for the TA certificate at the local files.");
+
+	error = foreach_uri(tal, __handle_tal_uri_local, thread_arg);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
 		error = pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);
 
+destroy_tal:
 	tal_destroy(tal);
 end:
 	working_repo_cleanup();
@@ -636,6 +691,8 @@ __do_file_validation(char const *tal_file, void *arg)
 	}
 	thread->arg = t_param->db;
 	thread->exit_status = -EINTR;
+	thread->retry_local = true;
+	thread->sync_files = true;
 
 	errno = pthread_create(&thread->pid, NULL, do_file_validation, thread);
 	if (errno) {
@@ -710,7 +767,7 @@ perform_standalone_validation(struct db_table *table)
 	/* The parameter isn't needed anymore */
 	free(param);
 
-	/* FIXME (NOW) Clarify if this really belongs here */
+	/* Log the error'd URIs summary */
 	reqs_errors_log_summary();
 
 	/* One thread has errors, validation can't keep the resulting table */

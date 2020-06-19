@@ -189,7 +189,7 @@ reqs_errors_rem_uri(char const *uri)
 		return;
 
 	while (found_uri->uri_related != NULL)
-		found_uri = find_error_uri(uri);
+		found_uri = find_error_uri(found_uri->uri_related);
 
 	rwlock_write_lock(&db_lock);
 	do {
@@ -210,6 +210,9 @@ reqs_errors_log_uri(char const *uri)
 	time_t now;
 	unsigned int config_period;
 	int error;
+
+	if (log_op_debug_enabled())
+		return true;
 
 	if (working_repo_peek_level() > LOG_REPO_LEVEL)
 		return false;

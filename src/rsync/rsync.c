@@ -278,8 +278,6 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 				pr_op_err(PRE_RSYNC "%s", cur);
 			pr_val_err(PRE_RSYNC "%s", cur);
 		} else {
-			if (log_operation)
-				pr_op_info(PRE_RSYNC "%s", cur);
 			pr_val_info(PRE_RSYNC "%s", cur);
 		}
 		cur = tmp + 1;
@@ -324,8 +322,8 @@ read_pipes(int fds[2][2], bool log_operation)
 	if (error)
 		return error;
 
-	/* stdout pipe */
-	return read_pipe(fds, 1, log_operation);
+	/* stdout pipe, always logs to info */
+	return read_pipe(fds, 1, true);
 }
 
 /*
@@ -385,12 +383,12 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 				return 0;
 			}
 			if (retries == config_get_rsync_retry_count()) {
-				pr_val_info("Max RSYNC retries (%u) reached on '%s', won't retry again.",
+				pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 				    retries, uri_get_global(uri));
 
 				return EREQFAILED;
 			}
-			pr_val_info("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
+			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
 			    uri_get_global(uri),
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
@@ -485,6 +483,9 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 		if (error)
 			break;
 		error = mark_as_downloaded(rsync_uri, visited_uris);
+		/* Everything went ok? Return the original error */
+		if (!error)
+			error = EREQFAILED;
 		break;
 	default:
 		break;
