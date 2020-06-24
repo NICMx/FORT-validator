@@ -499,15 +499,26 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	if (thread_arg->sync_files) {
-		if (uri_is_rsync(uri))
+	do {
+		if (!thread_arg->sync_files) {
+			/* Look for local files */
+			if (!valid_file_or_dir(uri_get_local(uri), true, false,
+			    pr_val_errno))
+				return 0; /* Error already logged */
+			break;
+		}
+		/* Trying to sync, considering that the sync can be disabled */
+		if (uri_is_rsync(uri)) {
+			if (!config_get_rsync_enabled())
+				return 0; /* Soft error */
 			error = download_files(uri, true, false);
-		else
-			error = handle_https_uri(uri);
-	} else if (!valid_file_or_dir(uri_get_local(uri), true, false,
-	    pr_val_errno)) {
-		return 0; /* Error already logged */
-	}
+			break;
+		}
+		/* FIXME (later) Should be 'config_get_http_enabled()' */
+		if (config_get_work_offline())
+			return 0; /* Soft error */
+		error = handle_https_uri(uri);
+	} while (0);
 
 	/* Friendly reminder: there's a positive error - EREQFAILED */
 	if (error) {
