@@ -140,6 +140,15 @@ log_teardown(void)
 	log_disable_syslog();
 }
 
+void
+log_flush(void)
+{
+	if (op_fprintf_enabled || val_fprintf_enabled) {
+		fflush(stdout);
+		fflush(stderr);
+	}
+}
+
 static struct level const *
 level2struct(int level)
 {

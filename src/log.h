@@ -42,6 +42,8 @@ void log_setup(void);
 void log_start(void);
 void log_teardown(void);
 
+/* Call to flush the stdout/stderr streams */
+void log_flush(void);
 
 /*
  * Please note: The log message (excluding pr_errno's strerror and libcrypto's

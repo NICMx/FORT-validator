@@ -192,14 +192,22 @@ duplicate_fds(int fds[2][2])
 }
 
 static void
-handle_child_thread(struct rpki_uri *uri, bool is_ta, int fds[2][2])
+release_args(char **args, unsigned int size)
 {
-	/* THIS FUNCTION MUST NEVER RETURN!!! */
+	unsigned int i;
 
+	/* args[0] wasn't allocated */
+	for (i = 1; i < size + 1; i++)
+		free(args[i]);
+	free(args);
+}
+
+static int
+prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
+{
 	struct string_array const *config_args;
 	char **copy_args;
 	unsigned int i;
-	int error;
 
 	config_args = config_get_rsync_args(is_ta);
 	/*
@@ -209,7 +217,7 @@ handle_child_thread(struct rpki_uri *uri, bool is_ta, int fds[2][2])
 	 */
 	copy_args = calloc(config_args->length + 2, sizeof(char *));
 	if (copy_args == NULL)
-		exit(pr_enomem());
+		return pr_enomem();
 
 	copy_args[0] = config_get_rsync_program();
 	copy_args[config_args->length + 1] = NULL;
@@ -217,24 +225,36 @@ handle_child_thread(struct rpki_uri *uri, bool is_ta, int fds[2][2])
 	memcpy(copy_args + 1, config_args->array,
 	    config_args->length * sizeof(char *));
 
-	for (i = 1; i < config_args->length + 1; i++) {
-		if (strcmp(copy_args[i], "$REMOTE") == 0)
-			copy_args[i] = strdup(uri_get_global(uri));
-		else if (strcmp(copy_args[i], "$LOCAL") == 0)
-			copy_args[i] = strdup(uri_get_local(uri));
-		if (copy_args[i] == NULL)
-			exit(pr_enomem());
+	for (i = 0; i < config_args->length; i++) {
+		if (strcmp(config_args->array[i], "$REMOTE") == 0)
+			copy_args[i + 1] = strdup(uri_get_global(uri));
+		else if (strcmp(config_args->array[i], "$LOCAL") == 0)
+			copy_args[i + 1] = strdup(uri_get_local(uri));
+		else
+			copy_args[i + 1] = strdup(config_args->array[i]);
+		if (copy_args[i + 1] == NULL) {
+			release_args(copy_args, i);
+			return pr_enomem();
+		}
 	}
 
-	pr_val_debug("Executing RSYNC:");
-	for (i = 0; i < config_args->length + 1; i++)
-		pr_val_debug("    %s", copy_args[i]);
+	*args = copy_args;
+	*args_len = config_args->length;
+	return 0;
+}
+
+static void
+handle_child_thread(char **args, int fds[2][2])
+{
+	/* THIS FUNCTION MUST NEVER RETURN!!! */
+	int error;
 
 	duplicate_fds(fds);
 
-	execvp(copy_args[0], copy_args);
+	execvp(args[0], args);
 	error = errno;
-	pr_val_err("Could not execute the rsync command: %s",
+	/* Log directly to stderr, redirected by the pipes */
+	fprintf(stderr, "Could not execute the rsync command: %s\n",
 	    strerror(error));
 
 	/* https://stackoverflow.com/a/14493459/1735458 */
@@ -246,8 +266,12 @@ create_pipes(int fds[2][2])
 {
 	if (pipe(fds[0]) == -1)
 		return -pr_op_errno(errno, "Piping rsync stderr");
-	if (pipe(fds[1]) == -1)
+	if (pipe(fds[1]) == -1) {
+		/* Close pipe previously created */
+		close(fds[0][0]);
+		close(fds[0][1]);
 		return -pr_op_errno(errno, "Piping rsync stdout");
+	}
 	return 0;
 }
 
@@ -297,6 +321,7 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 		if (count == -1) {
 			if (errno == EINTR)
 				continue;
+			close(fd_pipe[type][0]); /* Close read end */
 			return -pr_val_errno(errno, "Reading rsync buffer");
 		}
 		if (count == 0)
@@ -304,23 +329,30 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 
 		log_buffer(buffer, count, type, log_operation);
 	}
-	close(fd_pipe[type][0]);
+	close(fd_pipe[type][0]); /* Close read end */
 	return 0;
 }
 
+/*
+ * Read the piped output from the child, assures that all pipes are closed on
+ * success and on error.
+ */
 static int
 read_pipes(int fds[2][2], bool log_operation)
 {
 	int error;
 
-	/* Won't be needed */
+	/* Won't be needed (sterr/stdout write ends) */
 	close(fds[0][1]);
 	close(fds[1][1]);
 
 	/* stderr pipe */
 	error = read_pipe(fds, 0, log_operation);
-	if (error)
+	if (error) {
+		/* Close the other pipe pending to read */
+		close(fds[1][0]);
 		return error;
+	}
 
 	/* stdout pipe, always logs to info */
 	return read_pipe(fds, 1, true);
@@ -333,34 +365,70 @@ static int
 do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 {
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
+	char **args;
+	size_t args_len;
 	int fork_fds[2][2];
 	pid_t child_pid;
 	unsigned int retries;
+	unsigned int i;
 	int child_status;
 	int error;
+
+	/* Prepare everything for the child exec */
+	args = NULL;
+	args_len = 0;
+	error = prepare_rsync(uri, is_ta, &args, &args_len);
+	if (error)
+		return error;
+
+	pr_val_debug("Executing RSYNC:");
+	for (i = 0; i < args_len + 1; i++)
+		pr_val_debug("    %s", args[i]);
 
 	retries = 0;
 	do {
 		child_status = 0;
 		error = create_dir_recursive(uri_get_local(uri));
 		if (error)
-			return error;
+			goto release_args;
 
 		error = create_pipes(fork_fds);
 		if (error)
-			return error;
+			goto release_args;
+
+		/* Flush output (avoid locks between father and child) */
+		log_flush();
 
 		/* We need to fork because execvp() magics the thread away. */
 		child_pid = fork();
 		if (child_pid == 0) {
-			/* This code is run by the child. */
-			handle_child_thread(uri, is_ta, fork_fds);
+			/*
+			 * This code is run by the child, and should try to
+			 * call execvp() as soon as possible.
+			 *
+			 * Refer to
+			 * https://pubs.opengroup.org/onlinepubs/9699919799/functions/fork.html
+			 * "{..} to avoid errors, the child process may only
+			 * execute async-signal-safe operations until such time
+			 * as one of the exec functions is called."
+			 */
+			handle_child_thread(args, fork_fds);
+		}
+		if (child_pid < 0) {
+			pr_op_errno(errno, "Couldn't fork to execute rsync");
+			error = errno;
+			/* Close all ends from the created pipes */
+			close(fork_fds[0][0]);
+			close(fork_fds[1][0]);
+			close(fork_fds[0][1]);
+			close(fork_fds[1][1]);
+			goto release_args;
 		}
 
 		/* This code is run by us. */
 		error = read_pipes(fork_fds, log_operation);
 		if (error)
-			return error;
+			kill(child_pid, SIGCHLD); /* Stop the child */
 
 		error = waitpid(child_pid, &child_status, 0);
 		do {
@@ -370,7 +438,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 				    error, strerror(error));
 				if (child_status > 0)
 					break;
-				return error;
+				goto release_args;
 			}
 		} while (0);
 
@@ -380,13 +448,13 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			pr_val_debug("Child terminated with error code %d.", error);
 			if (!error) {
 				reqs_errors_rem_uri(uri_get_global(uri));
-				return 0;
+				goto release_args;
 			}
 			if (retries == config_get_rsync_retry_count()) {
 				pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 				    retries, uri_get_global(uri));
-
-				return EREQFAILED;
+				error = EREQFAILED;
+				goto release_args;
 			}
 			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
 			    uri_get_global(uri),
@@ -398,6 +466,8 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		}
 		break;
 	} while (true);
+
+	release_args(args, args_len);
 
 	if (WIFSIGNALED(child_status)) {
 		switch (WTERMSIG(child_status)) {
@@ -420,6 +490,10 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 
 	pr_op_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
 	return -EINVAL;
+release_args:
+	/* The happy path also falls here */
+	release_args(args, args_len);
+	return error;
 }
 
 /**
