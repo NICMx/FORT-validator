@@ -2010,6 +2010,12 @@ verify_mft:
 		/* Log that we'll try to work with a local copy */
 		pr_val_warn("Trying to work with the local cache files.");
 		break;
+	case -EPERM:
+		/*
+		 * Specific RRPD error: the URI error'd on the first try, so
+		 * we'll keep trying with the local files
+		 */
+		break;
 	default:
 		return error;
 	}
