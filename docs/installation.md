@@ -69,6 +69,12 @@ wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-lat
 sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
 {% endhighlight %}
 
+> If a dependency can't be found at the repositories (i.e. libcurl4), try using a newer repository, such as Debian Buster.
+> 
+> Add the following line to `/etc/apt/sources.list`, replacing the mirror (_http://ftp.mx.debian.org/debian_) with your [prefered one](https://www.debian.org/mirror/list):
+> 
+> `deb http://ftp.mx.debian.org/debian buster main`
+
 Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which is just the binary ran as a daemon. You can [configure](usage.html#--configuration-file) it at `/etc/fort/config.json`.
 
 {% highlight bash %}
