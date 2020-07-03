@@ -446,10 +446,9 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			/* Happy path (but also sad path sometimes). */
 			error = WEXITSTATUS(child_status);
 			pr_val_debug("Child terminated with error code %d.", error);
-			if (!error) {
-				reqs_errors_rem_uri(uri_get_global(uri));
+			if (!error)
 				goto release_args;
-			}
+
 			if (retries == config_get_rsync_retry_count()) {
 				pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 				    retries, uri_get_global(uri));
@@ -496,6 +495,37 @@ release_args:
 	return error;
 }
 
+/*
+ * Returned values if the ancestor URI of @error_uri:
+ * 0 - didn't had a previous request error
+ * EEXIST - had a previous request error
+ * > 0 - nothing, just something bad happened
+ */
+static int
+ancestor_error(char const *error_uri, void *arg)
+{
+	struct rpki_uri *search = arg;
+	struct rpki_uri *req_err_uri;
+	int error;
+
+	req_err_uri = NULL;
+	error = uri_create_rsync_str(&req_err_uri, error_uri,
+	    strlen(error_uri));
+	switch(error) {
+	case 0:
+		break;
+	case ENOTRSYNC:
+		return 0;
+	default:
+		return ENSURE_NEGATIVE(error);
+	}
+
+	error = is_descendant(req_err_uri, search) ? EEXIST : 0;
+
+	free(req_err_uri);
+	return error;
+}
+
 /**
  * @is_ta: Are we rsync'ing the TA?
  * The TA rsync will not be recursive, and will force SYNC_STRICT
@@ -535,8 +565,16 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 
 	if (!force)
 		error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
-	else
+	else {
+		/* Validate if the ancestor URI error'd */
+		error = reqs_errors_foreach(ancestor_error, requested_uri);
+		if (error < 0)
+			return error;
+		/* Return the requests error'd code */
+		if (error == EEXIST)
+			return EREQFAILED;
 		error = handle_strict_strategy(requested_uri, &rsync_uri);
+	}
 
 	if (error)
 		return error;
@@ -550,6 +588,7 @@ download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 		/* Don't store when "force" and if its already downloaded */
 		if (!(force && is_already_downloaded(rsync_uri, visited_uris)))
 			error = mark_as_downloaded(rsync_uri, visited_uris);
+		reqs_errors_rem_uri(uri_get_global(requested_uri));
 		break;
 	case EREQFAILED:
 		/* All attempts failed, avoid future requests */

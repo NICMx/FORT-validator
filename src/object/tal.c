@@ -532,6 +532,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	thread_arg->retry_local = false;
 	if (thread_arg->sync_files && working_repo_peek() != NULL)
 		reqs_errors_rem_uri(working_repo_peek());
+	working_repo_pop();
 
 	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
 

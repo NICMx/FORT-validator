@@ -203,6 +203,25 @@ reqs_errors_rem_uri(char const *uri)
 	rwlock_unlock(&db_lock);
 }
 
+int
+reqs_errors_foreach(reqs_errors_cb cb, void *arg)
+{
+	struct error_uri *node, *tmp;
+	int error;
+
+	rwlock_read_lock(&db_lock);
+	HASH_ITER(hh, err_uris_db, node, tmp) {
+		error = cb(node->uri, arg);
+		if (error) {
+			rwlock_unlock(&db_lock);
+			return error;
+		}
+	}
+	rwlock_unlock(&db_lock);
+
+	return 0;
+}
+
 bool
 reqs_errors_log_uri(char const *uri)
 {
@@ -246,6 +265,7 @@ reqs_errors_log_summary(void)
 	/* Remove all the uris */
 	struct error_uri *node, *tmp;
 	time_t now;
+	char *str_time;
 	bool first;
 	int error;
 
@@ -263,8 +283,12 @@ reqs_errors_log_summary(void)
 			pr_op_warn("The following repositories URIs couldn't be fetched (it can be a local issue or a server issue), please review previous log messages related to such URIs/servers:");
 			first = false;
 		}
+		str_time = asctime(localtime(&node->first_attempt));
+		if (strrchr(str_time, '\n') != NULL) {
+			*(str_time + strlen(str_time) - 1) = ' ';
+		}
 		pr_op_warn("- '%s': can't be downloaded since %s", node->uri,
-		    asctime(localtime(&node->first_attempt)));
+		    str_time);
 	}
 
 	rwlock_unlock(&db_lock);

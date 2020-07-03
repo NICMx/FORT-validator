@@ -1912,7 +1912,7 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
 static int
 use_access_method(struct sia_ca_uris *sia_uris,
     access_method_exec rsync_cb, access_method_exec rrdp_cb,
-    bool *rsync_utilized)
+    bool *retry_repo_sync)
 {
 	access_method_exec *cb_primary;
 	access_method_exec *cb_secondary;
@@ -1925,7 +1925,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 * rfc6487#section-4.8.8.1). If rsync is disabled, the cb will take
 	 * care of that.
 	 */
-	(*rsync_utilized) = true;
+	(*retry_repo_sync) = true;
 	if (sia_uris->rpkiNotify.uri == NULL || !config_get_rrdp_enabled()) {
 		error = rsync_cb(sia_uris);
 		goto verify_mft;
@@ -1933,7 +1933,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 
 	/* RSYNC disabled, and RRDP is present, use it */
 	if (!config_get_rsync_enabled()) {
-		(*rsync_utilized) = false;
+		(*retry_repo_sync) = false;
 		error = rrdp_cb(sia_uris);
 		goto verify_mft;
 	}
@@ -1955,7 +1955,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	error = db_rrdp_uris_get_request_status(
 	    uri_get_global(sia_uris->rpkiNotify.uri), &rrdp_req_status);
 	if (error ==  0 && rrdp_req_status == RRDP_URI_REQ_VISITED) {
-		(*rsync_utilized) = false;
+		(*retry_repo_sync) = false;
 		return 0;
 	}
 
@@ -1973,7 +1973,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	/* Try with the preferred; in case of error, try with the next one */
 	error = cb_primary(sia_uris);
 	if (!error) {
-		(*rsync_utilized) = !primary_rrdp;
+		(*retry_repo_sync) = !primary_rrdp;
 		goto verify_mft;
 	}
 
@@ -1994,7 +1994,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 		    uri_get_global(sia_uris->rpkiNotify.uri));
 	}
 
-	(*rsync_utilized) = primary_rrdp;
+	(*retry_repo_sync) = primary_rrdp;
 	error = cb_secondary(sia_uris);
 	/* No need to remember the working repository anymore */
 	working_repo_pop();
@@ -2009,12 +2009,14 @@ verify_mft:
 	case EREQFAILED:
 		/* Log that we'll try to work with a local copy */
 		pr_val_warn("Trying to work with the local cache files.");
+		(*retry_repo_sync) = false;
 		break;
 	case -EPERM:
 		/*
 		 * Specific RRPD error: the URI error'd on the first try, so
 		 * we'll keep trying with the local files
 		 */
+		(*retry_repo_sync) = false;
 		break;
 	default:
 		return error;
@@ -2136,7 +2138,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	enum rpki_policy policy;
 	enum cert_type type;
 	struct rpp *pp;
-	bool mft_retry;
+	bool repo_retry;
 	int error;
 
 	state = state_retrieve();
@@ -2245,9 +2247,9 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 * 
 	 * Avoid to re-download the repo if the mft was fetched with RRDP.
 	 */
-	mft_retry = true;
+	repo_retry = true;
 	error = use_access_method(&sia_uris, exec_rsync_method,
-	    exec_rrdp_method, &mft_retry);
+	    exec_rrdp_method, &repo_retry);
 	if (error)
 		goto revert_uris;
 
@@ -2261,7 +2263,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		cert = NULL; /* Ownership stolen */
 
 		error = handle_manifest(sia_uris.mft.uri, &pp);
-		if (error == 0 || !mft_retry)
+		if (error == 0 || !repo_retry)
 			break;
 
 		/*
@@ -2283,7 +2285,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		if (error)
 			goto revert_uris;
 
-		mft_retry = false;
+		repo_retry = false;
 	} while (true);
 
 	if (error) {
