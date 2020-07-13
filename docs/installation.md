@@ -19,6 +19,8 @@ title: Compilation and Installation
 	5. [openSUSE Leap version](#opensuse-leap-version)
 	6. [FreeBSD version](#freebsd-version)
 	7. [Slackware version](#slackware-version)
+	8. [Gentoo version](#gentoo-version)
+	9. [Alpine version](#alpine-version)
 5. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
 
 ## Dependencies
@@ -275,7 +277,7 @@ exit
 
 ### Slackware version
 
-The following steps are for Slackware "current" release (as of 2020-01-31).
+The following steps are for Slackware "current" release (as of 2020-07-13).
 
 All dependencies are included in the current release, so there's no need to install any dependency.
 
@@ -286,6 +288,46 @@ cd fort-{{ site.fort-latest-version }}/
 ./configure
 make
 sudo make install
+{% endhighlight %}
+
+### Gentoo version
+
+The following steps are for Gentoo "current" release (as of 2020-07-13).
+
+It's very likely that most of the dependencies are already installed (except `dev-libs/jansson`), still you can execute the following commands.
+
+{% highlight bash %}
+su
+emerge sys-devel/autoconf sys-devel/automake net-misc/rsync net-misc/curl dev-libs/jansson 
+exit
+
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
+make
+su
+make install
+exit
+{% endhighlight %}
+
+### Alpine version
+
+The following steps are for Alpine Linux 3.12.0
+
+{% highlight bash %}
+su
+apk add build-base autoconf automake pkgconfig openssl openssl-dev jansson jansson-dev bsd-compat-headers rsync libexecinfo libexecinfo-dev libxml2 libxml2-dev libcurl curl-dev
+exit
+
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
+make
+su
+make install
+exit
 {% endhighlight %}
 
 ## Option 3: Compiling and installing the git repository
