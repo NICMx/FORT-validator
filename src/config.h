@@ -16,7 +16,7 @@ int handle_flags_config(int , char **);
 void free_rpki_config(void);
 
 /* Getters */
-char const *config_get_server_address(void);
+struct string_array const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
 unsigned int config_get_validation_interval(void);

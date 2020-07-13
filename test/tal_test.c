@@ -10,7 +10,7 @@
 #include "line_file.c"
 #include "log.c"
 #include "state.h"
-#include "str.c"
+#include "str_token.c"
 #include "uri.c"
 #include "random.c"
 #include "crypto/base64.c"

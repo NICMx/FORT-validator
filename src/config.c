@@ -61,7 +61,7 @@ struct rpki_config {
 
 	struct {
 		/** The bound listening address of the RTR server. */
-		char *address;
+		struct string_array address;
 		/** The bound listening port of the RTR server. */
 		char *port;
 		/** Outstanding connections in the socket's listen queue */
@@ -300,15 +300,17 @@ static const struct option_field options[] = {
 	{
 		.id = 5000,
 		.name = "server.address",
-		.type = &gt_string,
+		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, server.address),
-		.doc = "Address to which RTR server will bind itself to. Can be a name, in which case an address will be resolved.",
+		.doc = "List of addresses (comma separated) to which RTR server will bind itself to. Can be a name, in which case an address will be resolved. The format for each address is '<address>[#<port/service>]'.",
+		.min = 0,
+		.max = 50,
 	}, {
 		.id = 5001,
 		.name = "server.port",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.port),
-		.doc = "Port to which RTR server will bind itself to. Can be a string, in which case a number will be resolved.",
+		.doc = "Default port to which RTR server addresses will bind itself to. Can be a string, in which case a number will be resolved. If all of the addresses have a port, this value isn't utilized.",
 	}, {
 		.id = 5002,
 		.name = "server.backlog",
@@ -438,6 +440,8 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, rsync.args.recursive),
 		.doc = "RSYNC program arguments that will trigger a recursive RSYNC",
 		.availability = AVAILABILITY_JSON,
+		/* Unlimited */
+		.max = 0,
 	}, {
 		.id = 3007,
 		.name = "rsync.arguments-flat",
@@ -445,6 +449,8 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, rsync.args.flat),
 		.doc = "RSYNC program arguments that will trigger a non-recursive RSYNC",
 		.availability = AVAILABILITY_JSON,
+		/* Unlimited */
+		.max = 0,
 	},
 
 	/* RRDP fields */
@@ -817,10 +823,15 @@ set_default_values(void)
 	 * duplicates.
 	 */
 
-	rpki_config.server.address = NULL;
-	rpki_config.server.port = strdup("323");
-	if (rpki_config.server.port == NULL)
+	error = string_array_init(&rpki_config.server.address, NULL, 0);
+	if (error)
 		return pr_enomem();
+
+	rpki_config.server.port = strdup("323");
+	if (rpki_config.server.port == NULL) {
+		error = pr_enomem();
+		goto revert_address;
+	}
 
 	rpki_config.server.backlog = SOMAXCONN;
 	rpki_config.server.interval.validation = 3600;
@@ -923,6 +934,8 @@ revert_repository:
 	free(rpki_config.local_repository);
 revert_port:
 	free(rpki_config.server.port);
+revert_address:
+	string_array_cleanup(&rpki_config.server.address);
 	return error;
 }
 
@@ -1086,10 +1099,10 @@ config_get_mode(void)
 	return rpki_config.mode;
 }
 
-char const *
+struct string_array const *
 config_get_server_address(void)
 {
-	return rpki_config.server.address;
+	return &rpki_config.server.address;
 }
 
 char const *

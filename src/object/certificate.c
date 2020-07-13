@@ -10,7 +10,7 @@
 #include "log.h"
 #include "nid.h"
 #include "reqs_errors.h"
-#include "str.h"
+#include "str_token.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"

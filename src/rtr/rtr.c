@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/queue.h>
 
 #include "config.h"
 #include "clients.h"
@@ -19,17 +20,27 @@
 #include "rtr/pdu.h"
 #include "rtr/db/vrps.h"
 
+/* Parameters for each thread that handles client connections */
 struct thread_param {
 	int fd;
 	pthread_t tid;
 	struct sockaddr_storage addr;
 };
 
+/* Parameters for each thread that binds to a server address/socket */
+struct fd_node {
+	int id;
+	pthread_t tid;
+	SLIST_ENTRY(fd_node) next;
+};
+
+/* List of server sockets */
+SLIST_HEAD(server_fds, fd_node);
+
 static int
-init_addrinfo(struct addrinfo **result)
+init_addrinfo(char const *hostname, char const *service,
+    struct addrinfo **result)
 {
-	char const *hostname;
-	char const *service;
 	char *tmp;
 	struct addrinfo hints;
 	unsigned long parsed, port;
@@ -39,9 +50,6 @@ init_addrinfo(struct addrinfo **result)
 	hints.ai_family = AF_UNSPEC;
 	/* hints.ai_socktype = SOCK_DGRAM; */
 	hints.ai_flags |= AI_PASSIVE;
-
-	hostname = config_get_server_address();
-	service = config_get_server_port();
 
 	if (hostname != NULL)
 		hints.ai_flags |= AI_CANONNAME;
@@ -82,7 +90,7 @@ init_addrinfo(struct addrinfo **result)
  * from the clients.
  */
 static int
-create_server_socket(int *result)
+create_server_socket(char const *hostname, char const *service, int *result)
 {
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
@@ -94,7 +102,7 @@ create_server_socket(int *result)
 	*result = 0; /* Shuts up gcc */
 	reuse = 1;
 
-	error = init_addrinfo(&addrs);
+	error = init_addrinfo(hostname, service, &addrs);
 	if (error)
 		return error;
 
@@ -102,7 +110,7 @@ create_server_socket(int *result)
 		pr_op_info(
 		    "Attempting to bind socket to address '%s', port '%s'.",
 		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
-		    config_get_server_port());
+		    service);
 
 		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
@@ -148,6 +156,142 @@ create_server_socket(int *result)
 
 	freeaddrinfo(addrs);
 	return pr_op_err("None of the addrinfo candidates could be bound.");
+}
+
+static int
+fd_node_create(struct fd_node **result)
+{
+	struct fd_node *node;
+
+	node = malloc(sizeof(struct fd_node));
+	if (node == NULL)
+		return pr_enomem();
+
+	node->id = -1;
+	node->tid = -1;
+
+	*result = node;
+	return 0;
+}
+
+static int
+server_fd_add(struct server_fds *fds, char const *address, char const *service)
+{
+	struct fd_node *node;
+	int error;
+
+	node = NULL;
+	error = fd_node_create(&node);
+	if (error)
+		return error;
+
+	error = create_server_socket(address, service, &node->id);
+	if (error) {
+		free(node);
+		return error;
+	}
+
+	SLIST_INSERT_HEAD(fds, node, next);
+	pr_op_debug("Created server socket with FD %d.", node->id);
+	return 0;
+}
+
+static void
+server_fd_cleanup(struct server_fds *fds)
+{
+	struct fd_node *fd;
+
+	while (!SLIST_EMPTY(fds)) {
+		fd = fds->slh_first;
+		SLIST_REMOVE_HEAD(fds, next);
+		close(fd->id);
+		free(fd);
+	}
+}
+
+static int
+parse_address(char const *full_address, char const *default_service,
+    char **address, char **service)
+{
+	char *ptr;
+	char *tmp_addr;
+	char *tmp_serv;
+	size_t tmp_addr_len;
+
+	ptr = strrchr(full_address, '#');
+	if (ptr == NULL) {
+		tmp_addr = strdup(full_address);
+		if (tmp_addr == NULL)
+			return pr_enomem();
+
+		tmp_serv = strdup(default_service);
+		if (tmp_serv == NULL) {
+			free(tmp_addr);
+			return pr_enomem();
+		}
+		*address = tmp_addr;
+		*service = tmp_serv;
+		return 0;
+	}
+
+	if (*(ptr + 1) == '\0')
+		return pr_op_err("Invalid server address '%s', can't end with '#'",
+		    full_address);
+
+	tmp_addr_len = strlen(full_address) - strlen(ptr);
+	tmp_addr = malloc(tmp_addr_len + 1);
+	if (tmp_addr == NULL)
+		return pr_enomem();
+
+	strncpy(tmp_addr, full_address, tmp_addr_len);
+	tmp_addr[tmp_addr_len] = '\0';
+
+	tmp_serv = strdup(ptr + 1);
+	if (tmp_serv == NULL) {
+		free(tmp_addr);
+		return pr_enomem();
+	}
+
+	*address = tmp_addr;
+	*service = tmp_serv;
+	return 0;
+}
+
+static int
+create_server_sockets(struct server_fds *fds)
+{
+	struct string_array const *addresses;
+	char const *default_service;
+	char *address;
+	char *service;
+	unsigned int i;
+	int error;
+
+	default_service = config_get_server_port();
+	addresses = config_get_server_address();
+	if (addresses->length == 0)
+		return server_fd_add(fds, NULL, default_service);
+
+	for (i = 0; i < addresses->length; i++) {
+		address = NULL;
+		service = NULL;
+		error = parse_address(addresses->array[i], default_service,
+		    &address, &service);
+		if (error)
+			goto cleanup_fds;
+
+		error = server_fd_add(fds, address, service);
+		/* Always release them */
+		free(address);
+		free(service);
+		if (error)
+			goto cleanup_fds;
+	}
+
+	return 0;
+cleanup_fds:
+	server_fd_cleanup(fds);
+	return error;
 }
 
 enum verdict {
@@ -300,13 +444,16 @@ handle_client_connections(int server_fd)
 
 	/* Ignore SIGPIPES, they're handled apart */
 	ign.sa_handler = SIG_IGN;
+	ign.sa_flags = 0;
+	sigemptyset(&ign.sa_mask);
 	sigaction(SIGPIPE, &ign, NULL);
 
 	listen(server_fd, config_get_server_queue());
 
 	sizeof_client_addr = sizeof(client_addr);
 
-	pr_op_debug("Waiting for client connections...");
+	pr_op_debug("Waiting for client connections at server FD %d...",
+	    server_fd);
 	do {
 		client_fd = accept(server_fd, (struct sockaddr *) &client_addr,
 		    &sizeof_client_addr);
@@ -338,8 +485,8 @@ handle_client_connections(int server_fd)
 		param->fd = client_fd;
 		param->addr = client_addr;
 
-		error = pthread_create(&param->tid, NULL,
-		    client_thread_cb, param);
+		error = pthread_create(&param->tid, NULL, client_thread_cb,
+		    param);
 		if (error && error != EAGAIN)
 			/* Error with min RTR version */
 			err_pdu_send_internal_error(client_fd, RTR_V0);
@@ -352,6 +499,52 @@ handle_client_connections(int server_fd)
 	} while (true);
 
 	return 0; /* Unreachable. */
+}
+
+static void *
+server_thread_cb(void *arg)
+{
+	int *server_fd = (int *)(arg);
+	handle_client_connections(*server_fd);
+	return NULL;
+}
+
+static void
+server_fd_stop_threads(struct server_fds *fds)
+{
+	struct fd_node *node;
+
+	SLIST_FOREACH(node, fds, next) {
+		if (node ->tid < 0)
+			continue;
+		close_thread(node->tid, "RTR server");
+		node->tid = -1;
+	}
+}
+
+static int
+__handle_client_connections(struct server_fds *fds)
+{
+	struct fd_node *node;
+	int error;
+
+	SLIST_FOREACH(node, fds, next) {
+		error = pthread_create(&node->tid, NULL, server_thread_cb,
+		    &node->id);
+		if (error) {
+			server_fd_stop_threads(fds);
+			return error;
+		}
+	}
+
+	SLIST_FOREACH(node, fds, next) {
+		error = pthread_join(node->tid, NULL);
+		if (error)
+			pr_crit("pthread_join() threw %d on an RTR server thread.",
+			    error);
+	}
+
+	return 0;
 }
 
 /*
@@ -392,7 +585,7 @@ int
 rtr_listen(void)
 {
 	bool changed;
-	int server_fd; /* "file descriptor" */
+	struct server_fds fds; /* "file descriptors" */
 	int error;
 
 	error = clients_db_init();
@@ -407,20 +600,21 @@ rtr_listen(void)
 		goto revert_clients_db; /* Error 0 it's ok */
 	}
 
-	error = create_server_socket(&server_fd);
+	SLIST_INIT(&fds);
+	error = create_server_sockets(&fds);
 	if (error)
 		goto revert_clients_db;
 
 	error = updates_daemon_start();
 	if (error)
-		goto revert_server_socket;
+		goto revert_server_sockets;
 
-	error = handle_client_connections(server_fd);
+	error = __handle_client_connections(&fds);
 
 	end_clients();
 	updates_daemon_destroy();
-revert_server_socket:
-	close(server_fd);
+revert_server_sockets:
+	server_fd_cleanup(&fds);
 revert_clients_db:
 	clients_db_destroy(join_thread, NULL);
 	return error;

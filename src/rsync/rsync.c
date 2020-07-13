@@ -12,7 +12,7 @@
 #include "config.h"
 #include "log.h"
 #include "reqs_errors.h"
-#include "str.h"
+#include "str_token.h"
 #include "thread_var.h"
 
 struct uri {

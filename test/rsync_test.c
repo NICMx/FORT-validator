@@ -4,7 +4,7 @@
 
 #include "log.c"
 #include "impersonator.c"
-#include "str.c"
+#include "str_token.c"
 #include "uri.c"
 #include "rsync/rsync.c"
 

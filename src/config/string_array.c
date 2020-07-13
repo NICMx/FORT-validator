@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "str_token.h"
 #include "config/str.h"
 
 int
@@ -88,6 +89,10 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 		return 0;
 	}
 
+	if (opt->max > 0 && len > opt->max)
+		return pr_op_err("'%s' can have %u elements max; currently it has %lu elements.",
+		    opt->name, opt->max, len);
+
 	for (i = 0; i < len; i++) {
 		child = json_array_get(json, i);
 		if (!json_is_string(child)) {
@@ -126,6 +131,45 @@ fail:
 	return error;
 }
 
+static int
+string_array_parse_argv(struct option_field const *opt, char const *str,
+    void *_result)
+{
+	struct string_tokenizer tokenizer;
+	struct string_array *result;
+	size_t i, len;
+	int error;
+
+	result = _result;
+
+	/* Remove the previous value (usually the default). */
+	__string_array_free(result);
+
+	string_tokenizer_init(&tokenizer, str, strlen(str), ',');
+	len = token_count(&tokenizer);
+
+	if (opt->max > 0 && len > opt->max)
+		return pr_op_err("'%s' can have %u elements max; currently it has %lu elements.",
+		    opt->name, opt->max, len);
+
+	result->array = calloc(len, sizeof(char *));
+	if (result->array == NULL)
+		return pr_enomem();
+	result->length = len;
+
+	for (i = 0; string_tokenizer_next(&tokenizer); i++) {
+		error = token_read(&tokenizer, &result->array[i]);
+		if (error)
+			goto fail;
+	}
+
+	return 0;
+
+fail:
+	__string_array_free(result);
+	return error;
+}
+
 static void
 string_array_free(void *array)
 {
@@ -137,6 +181,7 @@ const struct global_type gt_string_array = {
 	.size = sizeof(char *const *),
 	.print = string_array_print,
 	.parse.json = string_array_parse_json,
+	.parse.argv = string_array_parse_argv,
 	.free = string_array_free,
 	.arg_doc = "<sequence of strings>",
 };

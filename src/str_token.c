@@ -1,4 +1,4 @@
-#include "str.h"
+#include "str_token.h"
 
 #include <errno.h>
 #include <string.h>
@@ -87,13 +87,17 @@ string_tokenizer_next(struct string_tokenizer *tokenizer)
 	if (end == tokenizer->str_len)
 		return false;
 
-	if (end != 0) { /* end is pointing to a slash. */
+	/* Ignore "empty" tokens */
+	while (tokenizer->str[end] == tokenizer->separator) {
 		end++;
-		if (end == tokenizer->str_len)
+		if (end == tokenizer->str_len) {
+			tokenizer->start = end;
+			tokenizer->end = end;
 			return false;
+		}
+	}
 
-		tokenizer->start = end;
-	} /* otherwise it's pointing to the beginning of the string. */
+	tokenizer->start = end;
 
 	for (; end < tokenizer->str_len; end++)
 		if (tokenizer->str[end] == tokenizer->separator)
@@ -114,4 +118,27 @@ token_equals(struct string_tokenizer *t1, struct string_tokenizer *t2)
 	return (t1len == t2len)
 	    ? (memcmp(t1->str + t1->start, t2->str + t2->start, t1len) == 0)
 	    : false;
+}
+
+int
+token_read(struct string_tokenizer *tokenizer, char **token)
+{
+	return string_clone(tokenizer->str + tokenizer->start,
+	    tokenizer->end - tokenizer->start, token);
+}
+
+size_t
+token_count(struct string_tokenizer *tokenizer)
+{
+	struct string_tokenizer copy;
+	size_t count;
+
+	string_tokenizer_init(&copy, tokenizer->str, tokenizer->str_len,
+	    tokenizer->separator);
+
+	count = 0;
+	while (string_tokenizer_next(&copy))
+		count++;
+
+	return count;
 }

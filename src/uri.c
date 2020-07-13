@@ -4,7 +4,7 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
-#include "str.h"
+#include "str_token.h"
 
 /* Expected URI types */
 enum rpki_uri_type {

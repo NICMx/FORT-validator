@@ -1,5 +1,5 @@
-#ifndef SRC_STR_H_
-#define SRC_STR_H_
+#ifndef SRC_STR_TOKEN_H_
+#define SRC_STR_TOKEN_H_
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -9,7 +9,7 @@
 int ia5s2string(ASN1_IA5STRING *, char **);
 int BN2string(BIGNUM *, char **);
 
-/* This file is named "str.h" because "string.h" collides with <string.h>. */
+/* This file is named "str_token.h" because "string.h" collides with <string.h>. */
 
 /**
  * Do not modify fields directly; this should be private.
@@ -33,5 +33,7 @@ void string_tokenizer_init(struct string_tokenizer *, char const *, size_t,
     unsigned char);
 bool string_tokenizer_next(struct string_tokenizer *);
 bool token_equals(struct string_tokenizer *, struct string_tokenizer *);
+int token_read(struct string_tokenizer *, char **);
+size_t token_count(struct string_tokenizer *);
 
-#endif /* SRC_STR_H_ */
+#endif /* SRC_STR_TOKEN_H_ */
