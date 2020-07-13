@@ -92,7 +92,7 @@ GITHUB_TALS="https://raw.githubusercontent.com/NICMx/FORT-validator/master/examp
 ACCEPT="no"
 REPO_DIR="/var/cache/fort/repository"
 CONF_FILE="${CONF_DIR}/fort-config.json"
-ARIN_TAL="https://www.arin.net/resources/manage/rpki/arin-rfc7730.tal"
+ARIN_TAL="https://www.arin.net/resources/manage/rpki/arin.tal"
 
 # Agree ARIN RPA. Exit on denial or unknown response, download otherwise.
 echo "Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf"
