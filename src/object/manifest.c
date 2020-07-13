@@ -71,8 +71,8 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 		    TM_ARGS(thisUpdate_tm));
 	}
 	if (difftime(now, nextUpdate) > 0) {
-		return pr_val_err(
-		    "Manifest is expired. (nextUpdate: " TM_FMT ")",
+		return incidence(INID_MFT_STALE,
+		    "Manifest is stale. (nextUpdate: " TM_FMT ")",
 		    TM_ARGS(nextUpdate_tm));
 	}
 

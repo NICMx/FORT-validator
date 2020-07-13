@@ -2,6 +2,8 @@
 
 #include <errno.h>
 #include <stdint.h> /* SIZE_MAX */
+#include <time.h>
+#include <openssl/asn1.h>
 #include <sys/socket.h>
 
 #include "algorithm.h"
@@ -821,6 +823,120 @@ end:
 	return error;
 }
 
+/*
+ * Allocates a clone of @original_crl and pushes it to @crls.
+ *
+ * Don't forget to pop from @crls and release the popped CRL.
+ */
+static int
+update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
+{
+	ASN1_TIME *tm;
+	X509_CRL *clone;
+	time_t t;
+	int error;
+
+	error = get_current_time(&t);
+	if (error)
+		return error;
+
+	/*
+	 * Yes, this is an awful hack. The other options were:
+	 * - Use X509_V_FLAG_NO_CHECK_TIME parameter, but this avoids also the
+	 *   time check for the certificate.
+	 * - Avoid whole CRL check, but since we don't implement the
+	 *   certificate chain validation, we can't assure that the CRL has
+	 *   only the nextUpdate field wrong (maybe there are other invalid
+	 *   things).
+	 */
+	tm = ASN1_TIME_adj(NULL, t, 0, 60);
+	if (tm == NULL)
+		return pr_val_err("Crypto function ASN1_TIME_adj() returned error");
+
+	clone = X509_CRL_dup(original_crl);
+	if (clone == NULL) {
+		ASN1_STRING_free(tm);
+		return pr_enomem();
+	}
+
+	X509_CRL_set1_nextUpdate(clone, tm);
+	ASN1_STRING_free(tm);
+
+	error = sk_X509_CRL_push(crls, clone);
+	if (error <= 0) {
+		X509_CRL_free(clone);
+		return val_crypto_err("Error calling sk_X509_CRL_push()");
+	}
+
+	return 0;
+}
+
+/*
+ * Retry certificate validation without CRL time validation.
+ */
+static int
+verify_cert_crl_stale(struct validation *state, X509 *cert,
+    STACK_OF(X509_CRL) *crls)
+{
+	X509_STORE_CTX *ctx;
+	X509_CRL *original_crl, *clone;
+	int error;
+	int ok;
+
+	pr_val_info("Re-validating avoiding CRL time check");
+
+	ctx = X509_STORE_CTX_new();
+	if (ctx == NULL) {
+		val_crypto_err("X509_STORE_CTX_new() returned NULL");
+		return -EINVAL;
+	}
+
+	/* Returns 0 or 1 , all callers test ! only. */
+	ok = X509_STORE_CTX_init(ctx, validation_store(state), cert, NULL);
+	if (!ok) {
+		error = val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
+		goto release_ctx;
+	}
+
+	original_crl = sk_X509_CRL_pop(crls);
+	error = update_crl_time(crls, original_crl);
+	if (error)
+		goto push_original;
+
+	X509_STORE_CTX_trusted_stack(ctx,
+	    certstack_get_x509s(validation_certstack(state)));
+	X509_STORE_CTX_set0_crls(ctx, crls);
+
+	ok = X509_verify_cert(ctx);
+	if (ok > 0) {
+		error = 0; /* Happy path */
+		goto pop_clone;
+	}
+
+	error = X509_STORE_CTX_get_error(ctx);
+	if (error)
+		error = pr_val_err("Certificate validation failed: %s",
+		    X509_verify_cert_error_string(error));
+	else
+		error = val_crypto_err("Certificate validation failed: %d", ok);
+
+pop_clone:
+	clone = sk_X509_CRL_pop(crls);
+	if (clone == NULL)
+		error = pr_val_err("Error calling sk_X509_CRL_pop()");
+	else
+		X509_CRL_free(clone);
+push_original:
+	/* Try to return to the "regular" CRL chain */
+	ok = sk_X509_CRL_push(crls, original_crl);
+	if (ok <= 0)
+		error = val_crypto_err("Could not return CRL to a CRL stack");
+release_ctx:
+	X509_STORE_CTX_free(ctx);
+	return error;
+
+}
+
 int
 certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 {
@@ -872,6 +988,13 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 		 */
 		error = X509_STORE_CTX_get_error(ctx);
 		if (error) {
+			if (error == X509_V_ERR_CRL_HAS_EXPIRED) {
+				if (incidence(INID_CRL_STALE, "CRL is stale/expired"))
+					return -EINVAL;
+
+				X509_STORE_CTX_free(ctx);
+				return verify_cert_crl_stale(state, cert, crls);
+			}
 			pr_val_err("Certificate validation failed: %s",
 			    X509_verify_cert_error_string(error));
 		} else {
