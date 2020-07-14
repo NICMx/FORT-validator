@@ -35,7 +35,7 @@
     "tag": "Validation"
   },
   "http": {
-    "user-agent": "fort/1.3.0",
+    "user-agent": "fort/1.4.0",
     "connect-timeout": 30,
     "transfer-timeout": 0,
     "idle-timeout": 15,
