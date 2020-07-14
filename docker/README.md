@@ -6,6 +6,14 @@ Special thanks to [ximon18](https://github.com/ximon18) for its [contribution](h
 
 **This image doesn't include TAL (Trust Anchor Locator) files.** They must be obtained somewhere else (here's [an example](https://github.com/NICMx/FORT-validator/tree/master/examples/tal)).
 
+## Build
+
+Just run a simple:
+
+```
+docker build -t fort:latest .
+```
+
 ## Usage
 
 By default, the container uses a configuration file located (inside the container) at `/etc/fort/fort.conf`. The file content is:

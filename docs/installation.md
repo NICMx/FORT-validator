@@ -22,6 +22,7 @@ title: Compilation and Installation
 	8. [Gentoo version](#gentoo-version)
 	9. [Alpine version](#alpine-version)
 5. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
+6. [Option 4: Running from a Docker container](#option-4-running-from-a-docker-container)
 
 ## Dependencies
 
@@ -346,3 +347,21 @@ cd FORT-validator/
 make
 sudo make install
 {% endhighlight %}
+
+## Option 4: Running from a Docker container
+
+There's also the option to run FORT validator from a Docker container. The Dockerfile to build the image is located at the official Github repository: [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/master/docker).
+
+Once you have the Dockerfile, just run (from the same directory where the Dockerfile is):
+
+{% highlight bash %}
+docker build -t fort:latest .
+{% endhighlight %}
+
+A basic example to run the container using the default values, reading from a local TAL directory (i.e. `host/path/to/tals`), and binding to the local port `8323`:
+
+{% highlight bash %}
+docker run --name fort -v host/path/to/tals:/etc/fort/tal:ro -p 323:323 -d fort
+{% endhighlight %}
+
+Read more about the Docker container at the Github repository [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/master/docker).
