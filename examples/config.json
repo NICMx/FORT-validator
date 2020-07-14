@@ -92,6 +92,14 @@
     {
       "name": "incid-file-at-mft-hash-not-match",
       "action": "error"
+    },
+    {
+      "name": "incid-mft-stale",
+      "action": "error"
+    },
+    {
+      "name": "incid-crl-stale",
+      "action": "error"
     }
   ],
   "output": {

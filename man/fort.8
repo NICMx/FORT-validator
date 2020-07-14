@@ -170,6 +170,12 @@ as parameters). [Default action: \fBignore\fR]
 .br
 \fIincid-file-at-mft-hash-not-match\fR (File hash listed at manifest doesn't
 match the actual file hash). [Default action: \fBerror\fR]
+.br
+\fIincid-mft-stale\fR (Manifest is stale).
+[Default action: \fBerror\fR]
+.br
+\fIincid-crl-stale\fR (CRL is stale).
+[Default action: \fBerror\fR]
 .RE
 .P
 More information about incidences can be consulted at FORT's web docs.
@@ -327,8 +333,25 @@ By default, the mode is \fIserver\fR.
 
 .B \-\-server.address=\fINODE\fR
 .RS 4
-Hostname or numeric host address the RTR server will be bound to. Must resolve
-to (or be) a bindable IP address. IPv4 and IPv6 are supported.
+List of hostnames or numeric host addresses the RTR server will be bound to.
+Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
+.P
+The list of addresses must be comma sepparated, and each address must have the
+following format: \fB<address>[#<port>]\fR. Note that the port is optional; in
+case that a port isn't specified, the value of \fI--server.port\fR will be
+utilized with the corresponding address.
+.P
+Here are some examples of valid values for this argument:
+.br
+- \fI--server.address="localhost"\fR: will bind to 'localhost' and the
+configured port at \fI--server.port\fR.
+.br
+- \fI--server.address="localhost,::1#8324"\fR: same as the previous example,
+and also will bind to IPv6 address '::1' at the port '8324'.
+.br
+- \fI--server.address="localhost#8323,::1#8324"\fR: will bind to 'localhost' at
+port '8323', and to '::1' port '8324'. The value of \fI--server.port\fR isn't
+utilized.
 .P
 If this field is omitted, FORT will attempt to bind the server using the IP
 address \fIINADDR_ANY\fR (for an IPv4 address) or \fIIN6ADDR_ANY_INIT\fR (for
@@ -338,7 +361,8 @@ an IPv6 address). See \fBgetaddrinfo(3)\fR.
 
 .B \-\-server.port=\fISERVICE\fR
 .RS 4
-TCP port or service the server will be bound to.
+TCP port or service the server address(es) will be bound to by default if no
+port is set (see \fI--server.address\fR).
 .P
 This is a string because a service alias can be used as a valid value. The
 alias are commonly located at \fI/etc/services\fR. See also
@@ -1153,6 +1177,14 @@ to a specific value:
     },
     {
       "name": "incid-file-at-mft-hash-not-match",
+      "action": "error"
+    },
+    {
+      "name": "incid-mft-stale",
+      "action": "error"
+    },
+    {
+      "name": "incid-crl-stale",
       "action": "error"
     }
   ],

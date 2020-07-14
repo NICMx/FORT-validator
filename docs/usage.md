@@ -85,7 +85,7 @@ command: fort
         [--asn1-decode-max-stack=<unsigned integer>]
         [--stale-repository-period=<unsigned integer>]
         [--mode=server|standalone]
-        [--server.address=<string>]
+        [--server.address=<sequence of strings>]
         [--server.port=<string>]
         [--server.backlog=<unsigned integer>]
         [--server.interval.validation=<unsigned integer>]
@@ -300,11 +300,18 @@ Run mode, commands the way Fort executes the validation. The two possible values
 
 ### `--server.address`
 
-- **Type:** String
+- **Type:** String array
 - **Availability:** `argv` and JSON
 - **Default:** `NULL`
 
-Hostname or numeric host address the RTR server will be bound to. Must resolve to (or be) a bindable IP address. IPv4 and IPv6 are supported.
+List of hostnames or numeric host addresses where the RTR server will be bound to. Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
+
+The list of addresses must be comma sepparated, and each address must have the following format: `<address>[#<port>]`. Note that the port is optional; in case that a port isn't specified, the value of [`--server.port`](#--serverport) will be utilized with the corresponding address.
+
+Here are some examples of valid values for this argument:
+- `--server.address="localhost"`: will bind to 'localhost' and the configured port at [`--server.port`](#--serverport).
+- `--server.address="localhost,::1#8324"`: same as the previous example, and also will bind to IPv6 address '::1' at the port '8324'.
+- `--server.address="localhost#8323,::1#8324"`: will bind to 'localhost' at port '8323', and to '::1' port '8324'. The value of [`--server.port`](#--serverport) isn't utilized.
 
 If this field is omitted, Fort will attempt to bind the server using the IP address `INADDR_ANY` (for an IPv4 address) or `IN6ADDR_ANY_INIT` (for an IPv6 address); see '`$ man getaddrinfo`'.
 
@@ -314,7 +321,7 @@ If this field is omitted, Fort will attempt to bind the server using the IP addr
 - **Availability:** `argv` and JSON
 - **Default:** `"323"`
 
-TCP port or service the server will be bound to.
+TCP port or service where the server address(es) will be bound to by default if no port is set (see [`--server.address`](#--serveraddress)).
 
 This is a string because a service alias can be used as a valid value. The available aliases are commonly located at `/etc/services`. (See '`$ man services`'.)
 
@@ -800,6 +807,14 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		},
 		{
 			"name": "incid-file-at-mft-hash-not-match",
+			"action": "error"
+		},
+		{
+			"name": "incid-mft-stale",
+			"action": "error"
+		},
+		{
+			"name": "incid-crl-stale",
 			"action": "error"
 		}
 	],

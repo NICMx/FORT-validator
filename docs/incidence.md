@@ -13,12 +13,14 @@ title: Incidence
 	2. [Object isn't DER encoded](#object-isnt-der-encoded)
 	3. [File listed at manifest doesn't exist](#file-listed-at-manifest-doesnt-exist)
 	4. [File hash listed at manifest doesn't match the actual file hash](#file-hash-listed-at-manifest-doesnt-match-the-actual-file-hash)
+	5. [Manifest is stale](#manifest-is-stale)
+	6. [CRL is stale](#crl-is-stale)
 
 ## Introduction
 
 The RPKI RFCs define fairly strict profiles for RPKI objects, and are unequivocal in stating that incorrectly-formed objects are supposed to be rejected by Relying Party validation. In practice, however, this does not prevent a significant amount of legitimate Certificate Authorities from issuing incorrect objects.
 
-The `incidence` section of Fort's configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
+The `incidence` section of FORT's configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
 
 ## `incidences` definition
 
@@ -80,9 +82,9 @@ Presently, there are a few incidences defined. This list might evolve further ov
    parameters field;
 ```
 
-As of 2020-01-31, many signed objects in the global RPKI break this rule.
+As of 2020-07-14, many signed objects in the global RPKI break this rule.
 
-If not `ignore`d, Fort will report this incidence with the following error message:
+If not `ignore`d, FORT will report this incidence with the following error message at the validation log:
 
 ```
 <log level>: <offending file name>: The hash algorithm of the '<object>' has a NULL object as parameters
@@ -104,7 +106,7 @@ This only applies to digest parameters that have been defined as NULL objects; a
 
 Altough this is mandatory, quite a few signed objects in the global RPKI ignore this rule and are simply BER-encoded.
 
-If not `ignore`d, Fort will report this incidence with the following error message:
+If not `ignore`d, FORT will report this incidence with the following error message at the validation log:
 
 ```
 <log level>: <offending file name>: '<object>' isn't DER encoded
@@ -126,9 +128,9 @@ If not `ignore`d, Fort will report this incidence with the following error messa
 
 If there's a missing file, it could be a publisher error or even an attack against the publication point (see [section 6.5](https://tools.ietf.org/html/rfc6486#section-6.5)).
 
-By default, Fort validator will handle this as an error, thus discarding the manifest file.
+By default, FORT validator will handle this as an error, thus discarding the manifest file.
 
-When the incidence is not `ignore`d, Fort will report it with the following message:
+When the incidence is not `ignore`d, FORT will report it with the following message at the validation log:
 
 ```
 <log level>: <manifest file name>: File '<file name>' listed at manifest doesn't exist.
@@ -149,10 +151,66 @@ When the incidence is not `ignore`d, Fort will report it with the following mess
 
 It's up to a local policy to discard these files (and the rest of the manifest files) or trust in them (see [section 6.6](https://tools.ietf.org/html/rfc6486#section-6.6)).
 
-By default, Fort validator will discard such files and the manifest as well.
+By default, FORT validator will discard such files and the manifest as well.
 
-When the incidence is not `ignore`d, Fort will report it with the following message:
+When the incidence is not `ignore`d, FORT will report it with the following message at the validation log:
 
 ```
 <log level>: <manifest file name>: File '<file name>' does not match its manifest hash.
+```
+
+### Manifest is stale
+
+- **Name:** `incid-mft-stale`
+- **Default action:** `error`
+
+[RFC 6486 section 6.1](https://tools.ietf.org/html/rfc6486#section-6.1) considers this scenario:
+
+```
+   3. Check that the current time (translated to UTC) is between
+      thisUpdate and nextUpdate.
+      
+      If the current time does not lie within this interval, then see
+      Section 6.4 {..}
+```
+
+And citing [section 6.4](https://tools.ietf.org/html/rfc6486#section-6.4):
+
+```
+   A manifest is considered stale if the current time is after the
+   nextUpdate time for the manifest. {..}
+   
+   All signed objects at the publication point issued by the entity that
+   has published the stale manifest, and all descendant signed objects
+   that are validated using a certificate issued by the entity that has
+   published the stale manifest at this publication point, SHOULD be
+   viewed as somewhat suspect, but MAY be used by the RP as per local
+   policy.
+```
+
+This 'local policy' is the equivalent to the incidence `incid-mft-stale`.
+
+By default, FORT validator will discard a stale manifest and all of its listed elements.
+
+When the incidence is not `ignore`d, FORT will report it with the following message at the validation log:
+
+```
+<log level>: <manifest file name>: Manifest is stale. (nextUpdate: <human readable date> )
+```
+
+### CRL is stale
+
+- **Name:** `incid-crl-stale`
+- **Default action:** `error`
+
+The RFC's aren't clear about stale CRLs; but as strict (or pedantic) as FORT is, a stale CRL isn't trusted by default. A stale CRL is the one where its 'nextUpdate' is in the past.
+
+The "cost" of stop using a stale CRL, is that all of the related CA childs will be discarded as well.
+
+There's a whole discussion on this subject at SIDROPS WG (see the mail archive for ["[Sidrops] what to do when the CRL is hosed?"](https://mailarchive.ietf.org/arch/msg/sidrops/tCybZO7YvXbdVm5pA7DbHEnuKEc/); so, until a concensus is reached on the matter, the RP operator can configure the incidence `incid-crl-stale` to decide how to treat this CRLs.
+
+When the incidence is not `ignore`d, FORT will report it with the following message at the validation log (note that the CRL is validated as part of the manifest validation):
+
+```
+<log level>: <manifest file name>: CRL is stale/expired
 ```

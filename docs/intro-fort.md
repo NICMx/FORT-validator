@@ -23,7 +23,7 @@ Further information can be found in the subsections below.
 | [3779](https://tools.ietf.org/html/rfc3779) (IP & AS Extensions)           | 100%        |
 | [6350](https://tools.ietf.org/html/rfc6350) (vCard)                        | 0%          |
 | [6482](https://tools.ietf.org/html/rfc6482) (ROA)                          | 100%        |
-| [6486](https://tools.ietf.org/html/rfc6486) (Manifests)                    | 75%         |
+| [6486](https://tools.ietf.org/html/rfc6486) (Manifests)                    | 100%        |
 | [6487](https://tools.ietf.org/html/rfc6487) (Resource Certificates & CRLs) | 100%        |
 | [6488](https://tools.ietf.org/html/rfc6488) (Signed Objects)               | 100%        |
 | [6493](https://tools.ietf.org/html/rfc6493) (Ghostbusters)                 | 100%        |
@@ -44,17 +44,7 @@ The vCard format is only used by Ghostbusters records. 6350 defines the basic vC
 
 The specific validations have been implemented, while the basic ones have not.
 
-### RFC 6486 (Manifests)
-
-This RFC states a bunch of rules that allow some level of tolerance to missing, invalid or stale manifests. Here's an example:
-
-> signed objects (...) issued by the entity that has published the stale manifest (...) SHOULD be viewed as somewhat suspect, but MAY be used by the RP as per local policy.
-
-These constitute the approximate missing 25%.
-
 ## TO-DO
 
 - Reach 100% RFC compliance
 - Daemon quirks (stuff like "send self to background automatically"), maybe
-- Allow to handle stale objects (CRLs and Manifests) as incidences.
-- Bind RTR server to multiple IPs.
