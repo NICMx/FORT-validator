@@ -90,6 +90,9 @@ http_easy_init(struct http_handler *handler)
 	/* Refer to its error buffer */
 	curl_easy_setopt(tmp, CURLOPT_ERRORBUFFER, handler->errbuf);
 
+	/* Prepare for multithreading, avoid signals */
+	curl_easy_setopt(tmp, CURLOPT_NOSIGNAL, 1L);
+
 	handler->curl = tmp;
 
 	return 0;
