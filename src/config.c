@@ -15,6 +15,7 @@
 #include "log.h"
 #include "config/boolean.h"
 #include "config/incidences.h"
+#include "config/rrdp_conf.h"
 #include "config/str.h"
 #include "config/sync_strategy.h"
 #include "config/uint.h"
@@ -118,6 +119,22 @@ struct rpki_config {
 	} rrdp;
 
 	struct {
+		/* Enables the protocol */
+		bool enabled;
+		/*
+		 * Priority, whenever there's an option to sync something via
+		 * http or rsync, use this priority. When working with CAs, this
+		 * will override the order set at the CAs in their accessMethod
+		 * extension.
+		 */
+		unsigned int priority;
+		/* Retry conf, utilized on errors */
+		struct {
+			/* Maximum number of retries on error */
+			unsigned int count;
+			/* Interval (in seconds) between each retry */
+			unsigned int interval;
+		} retry;
 		/* User-Agent header set at requests */
 		char *user_agent;
 		/* Timeout in seconds for the connect phase */
@@ -457,31 +474,31 @@ static const struct option_field options[] = {
 	{
 		.id = 10000,
 		.name = "rrdp.enabled",
-		.type = &gt_bool,
+		.type = &gt_rrdp_enabled,
 		.offset = offsetof(struct rpki_config, rrdp.enabled),
-		.doc = "Enables RRDP execution",
+		.doc = "Enables RRDP execution. Will be deprecated, use 'http.enabled' instead.",
 	}, {
 		.id = 10001,
 		.name = "rrdp.priority",
-		.type = &gt_uint32,
+		.type = &gt_rrdp_priority,
 		.offset = offsetof(struct rpki_config, rrdp.priority),
-		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
+		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority. Will be deprecated, use 'http.priority' instead.",
 		.min = 0,
 		.max = 100,
 	}, {
 		.id = 10002,
 		.name = "rrdp.retry.count",
-		.type = &gt_uint,
+		.type = &gt_rrdp_retry_count,
 		.offset = offsetof(struct rpki_config, rrdp.retry.count),
-		.doc = "Maximum amount of retries whenever there's an error fetching RRDP files",
+		.doc = "Maximum amount of retries whenever there's an error fetching RRDP files. Will be deprecated, use 'http.retry.count' instead.",
 		.min = 0,
 		.max = UINT_MAX,
 	}, {
 		.id = 10003,
 		.name = "rrdp.retry.interval",
-		.type = &gt_uint,
+		.type = &gt_rrdp_retry_interval,
 		.offset = offsetof(struct rpki_config, rrdp.retry.interval),
-		.doc = "Period (in seconds) to wait between retries after an error ocurred fetching RRDP files",
+		.doc = "Period (in seconds) to wait between retries after an error ocurred fetching RRDP files. Will be deprecated, use 'http.retry.interval' instead.",
 		.min = 0,
 		.max = UINT_MAX,
 	},
@@ -489,13 +506,47 @@ static const struct option_field options[] = {
 	/* HTTP requests parameters */
 	{
 		.id = 9000,
+		.name = "http.enabled",
+		.type = &gt_rrdp_enabled,
+		.offset = offsetof(struct rpki_config, http.enabled),
+		.doc = "Enables outgoing HTTP requests",
+	},
+	{
+		.id = 9001,
+		.name = "http.priority",
+		.type = &gt_rrdp_priority,
+		.offset = offsetof(struct rpki_config, http.priority),
+		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
+		.min = 0,
+		.max = 100,
+	},
+	{
+		.id = 9002,
+		.name = "http.retry.count",
+		.type = &gt_rrdp_retry_count,
+		.offset = offsetof(struct rpki_config, http.retry.count),
+		.doc = "Maximum amount of retries whenever there's an error requesting HTTP URIs",
+		.min = 0,
+		.max = UINT_MAX,
+	},
+	{
+		.id = 9003,
+		.name = "http.retry.interval",
+		.type = &gt_rrdp_retry_interval,
+		.offset = offsetof(struct rpki_config, http.retry.interval),
+		.doc = "Period (in seconds) to wait between retries after an error ocurred doing HTTP requests",
+		.min = 0,
+		.max = UINT_MAX,
+	},
+	{
+		.id = 9004,
 		.name = "http.user-agent",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, http.user_agent),
 		.doc = "User-Agent to use at HTTP requests, eg. Fort Validator Local/1.0",
 	},
 	{
-		.id = 9001,
+		.id = 9005,
 		.name = "http.connect-timeout",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.connect_timeout),
@@ -504,7 +555,7 @@ static const struct option_field options[] = {
 		.max = UINT_MAX,
 	},
 	{
-		.id = 9002,
+		.id = 9006,
 		.name = "http.transfer-timeout",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.transfer_timeout),
@@ -513,7 +564,7 @@ static const struct option_field options[] = {
 		.max = UINT_MAX,
 	},
 	{
-		.id = 9003,
+		.id = 9007,
 		.name = "http.idle-timeout",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.idle_timeout),
@@ -522,7 +573,7 @@ static const struct option_field options[] = {
 		.max = UINT_MAX,
 	},
 	{
-		.id = 9004,
+		.id = 9008,
 		.name = "http.ca-path",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, http.ca_path),
@@ -875,11 +926,11 @@ set_default_values(void)
 	if (error)
 		goto revert_recursive_array;
 
-	rpki_config.rrdp.enabled = true;
-	rpki_config.rrdp.priority = 50;
-	rpki_config.rrdp.retry.count = 2;
-	rpki_config.rrdp.retry.interval = 5;
-
+	/* By default, has a higher priority than rsync */
+	rpki_config.http.enabled = true;
+	rpki_config.http.priority = 60;
+	rpki_config.http.retry.count = 2;
+	rpki_config.http.retry.interval = 5;
 	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	if (rpki_config.http.user_agent == NULL) {
 		error = pr_enomem();
@@ -889,6 +940,15 @@ set_default_values(void)
 	rpki_config.http.transfer_timeout = 0;
 	rpki_config.http.idle_timeout = 15;
 	rpki_config.http.ca_path = NULL; /* Use system default */
+
+	/*
+	 * FIXME (later) Same values as http.*, delete when rrdp.* is fully
+	 * deprecated
+	 */
+	rpki_config.rrdp.enabled = rpki_config.http.enabled;
+	rpki_config.rrdp.priority = rpki_config.http.priority;
+	rpki_config.rrdp.retry.count = rpki_config.http.retry.count;
+	rpki_config.rrdp.retry.interval = rpki_config.http.retry.interval;
 
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
@@ -1318,27 +1378,27 @@ config_get_rsync_args(bool is_ta)
 }
 
 bool
-config_get_rrdp_enabled(void)
+config_get_http_enabled(void)
 {
-	return rpki_config.rrdp.enabled;
+	return rpki_config.http.enabled;
 }
 
 unsigned int
-config_get_rrdp_priority(void)
+config_get_http_priority(void)
 {
-	return rpki_config.rrdp.priority;
+	return rpki_config.http.priority;
 }
 
 unsigned int
-config_get_rrdp_retry_count(void)
+config_get_http_retry_count(void)
 {
-	return rpki_config.rrdp.retry.count;
+	return rpki_config.http.retry.count;
 }
 
 unsigned int
-config_get_rrdp_retry_interval(void)
+config_get_http_retry_interval(void)
 {
-	return rpki_config.rrdp.retry.interval;
+	return rpki_config.http.retry.interval;
 }
 
 char const *
@@ -1402,6 +1462,25 @@ config_set_rsync_enabled(bool value)
 }
 
 void
+config_set_http_enabled(bool value)
+{
+	rpki_config.http.enabled = value;
+}
+
+void
+free_rpki_config(void)
+{
+	struct option_field const *option;
+
+	FOREACH_OPTION(options, option, 0xFFFF)
+		if (is_rpki_config_field(option) && option->type->free != NULL)
+			option->type->free(get_rpki_config_field(option));
+}
+
+/*
+ * "To be deprecated" section
+ */
+void
 config_set_rrdp_enabled(bool value)
 {
 	rpki_config.rrdp.enabled = value;
@@ -1420,11 +1499,37 @@ config_set_rsync_strategy(enum rsync_strategy value)
 }
 
 void
-free_rpki_config(void)
+config_set_rrdp_priority(unsigned int value)
 {
-	struct option_field const *option;
+	rpki_config.rrdp.priority = value;
+}
 
-	FOREACH_OPTION(options, option, 0xFFFF)
-		if (is_rpki_config_field(option) && option->type->free != NULL)
-			option->type->free(get_rpki_config_field(option));
+void
+config_set_http_priority(unsigned int value)
+{
+	rpki_config.http.priority = value;
+}
+
+void
+config_set_rrdp_retry_count(unsigned int value)
+{
+	rpki_config.rrdp.retry.count = value;
+}
+
+void
+config_set_http_retry_count(unsigned int value)
+{
+	rpki_config.http.retry.count = value;
+}
+
+void
+config_set_rrdp_retry_interval(unsigned int value)
+{
+	rpki_config.rrdp.retry.interval = value;
+}
+
+void
+config_set_http_retry_interval(unsigned int value)
+{
+	rpki_config.http.retry.interval = value;
 }

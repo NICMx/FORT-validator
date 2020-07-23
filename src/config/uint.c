@@ -6,7 +6,7 @@
 #include <string.h>
 #include "log.h"
 
-static void
+void
 print_uint(struct option_field const *field, void *value)
 {
 	pr_op_info("%s: %u", field->name, *((unsigned int *) value));

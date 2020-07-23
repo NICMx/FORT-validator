@@ -2049,7 +2049,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 * care of that.
 	 */
 	(*retry_repo_sync) = true;
-	if (sia_uris->rpkiNotify.uri == NULL || !config_get_rrdp_enabled()) {
+	if (sia_uris->rpkiNotify.uri == NULL || !config_get_http_enabled()) {
 		error = rsync_cb(sia_uris);
 		goto verify_mft;
 	}
@@ -2083,12 +2083,12 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	}
 
 	/* Use CA's or configured priority? */
-	if (config_get_rsync_priority() == config_get_rrdp_priority())
+	if (config_get_rsync_priority() == config_get_http_priority())
 		primary_rrdp = sia_uris->caRepository.position
 		    > sia_uris->rpkiNotify.position;
 	else
 		primary_rrdp = config_get_rsync_priority()
-		    < config_get_rrdp_priority();
+		    < config_get_http_priority();
 
 	cb_primary = primary_rrdp ? rrdp_cb : rsync_cb;
 	cb_secondary = primary_rrdp ? rsync_cb : rrdp_cb;

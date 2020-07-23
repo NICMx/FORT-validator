@@ -115,7 +115,7 @@ rrdp_load(struct rpki_uri *uri)
 	bool log_operation;
 	int error, upd_error;
 
-	if (!config_get_rrdp_enabled())
+	if (!config_get_http_enabled())
 		return 0;
 
 	/* Avoid multiple requests on the same run */

@@ -43,10 +43,10 @@ unsigned int config_get_rsync_retry_count(void);
 unsigned int config_get_rsync_retry_interval(void);
 char *config_get_rsync_program(void);
 struct string_array const *config_get_rsync_args(bool);
-bool config_get_rrdp_enabled(void);
-unsigned int config_get_rrdp_priority(void);
-unsigned int config_get_rrdp_retry_count(void);
-unsigned int config_get_rrdp_retry_interval(void);
+bool config_get_http_enabled(void);
+unsigned int config_get_http_priority(void);
+unsigned int config_get_http_retry_count(void);
+unsigned int config_get_http_retry_interval(void);
 char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
 unsigned int config_get_asn1_decode_max_stack(void);
@@ -74,11 +74,21 @@ uint32_t config_get_val_log_facility(void);
  * sync-strategy when set to 'off'.
  */
 void config_set_rsync_enabled(bool);
+void config_set_http_enabled(bool);
+/* FIXME (later) This will be deprecated */
 void config_set_rrdp_enabled(bool);
 
 /* FIXME (later) Remove when sync-strategy is fully deprecated */
 void config_set_sync_strategy(enum rsync_strategy);
 void config_set_rsync_strategy(enum rsync_strategy);
+
+/* FIXME (later) Remove once rrdp.* is fully deprecated */
+void config_set_rrdp_priority(unsigned int);
+void config_set_http_priority(unsigned int);
+void config_set_rrdp_retry_count(unsigned int);
+void config_set_http_retry_count(unsigned int);
+void config_set_rrdp_retry_interval(unsigned int);
+void config_set_http_retry_interval(unsigned int);
 
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);

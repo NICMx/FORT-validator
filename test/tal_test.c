@@ -149,16 +149,59 @@ START_TEST(tal_load_normal)
 }
 END_TEST
 
+START_TEST(tal_order_http_first)
+{
+	struct tal *tal;
+
+	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
+
+	config_set_http_priority(60);
+	config_set_rsync_priority(50);
+	ck_assert_int_eq(tal_order_uris(tal), 0);
+
+	ck_assert_str_eq(tal->uris.array[0]->global, "https://potato");
+	ck_assert_str_eq(tal->uris.array[1]->global,
+	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
+	ck_assert_str_eq(tal->uris.array[2]->global, "rsync://potato");
+
+	tal_destroy(tal);
+}
+END_TEST
+
+START_TEST(tal_order_http_last)
+{
+	struct tal *tal;
+
+	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
+
+	config_set_http_priority(50);
+	config_set_rsync_priority(60);
+	ck_assert_int_eq(tal_order_uris(tal), 0);
+
+	ck_assert_str_eq(tal->uris.array[0]->global,
+	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
+	ck_assert_str_eq(tal->uris.array[1]->global, "rsync://potato");
+	ck_assert_str_eq(tal->uris.array[2]->global, "https://potato");
+
+	tal_destroy(tal);
+}
+END_TEST
+
 Suite *tal_load_suite(void)
 {
 	Suite *suite;
-	TCase *core;
+	TCase *core, *order;
 
 	core = tcase_create("Core");
 	tcase_add_test(core, tal_load_normal);
 
-	suite = suite_create("lfile_read()");
+	order = tcase_create("Order");
+	tcase_add_test(order, tal_order_http_first);
+	tcase_add_test(order, tal_order_http_last);
+
+	suite = suite_create("tal_load()");
 	suite_add_tcase(suite, core);
+	suite_add_tcase(suite, order);
 	return suite;
 }
 

@@ -10,6 +10,9 @@
 static char addr_buffer1[INET6_ADDRSTRLEN];
 static char addr_buffer2[INET6_ADDRSTRLEN];
 
+static unsigned int http_priority = 60;
+static unsigned int rsync_priority = 50;
+
 char const *
 v4addr2str(struct in_addr const *addr)
 {
@@ -85,19 +88,19 @@ config_get_rsync_enabled(void)
 unsigned int
 config_get_rsync_priority(void)
 {
-	return 50;
+	return rsync_priority;
 }
 
 bool
-config_get_rrdp_enabled(void)
+config_get_http_enabled(void)
 {
 	return false;
 }
 
 unsigned int
-config_get_rrdp_priority(void)
+config_get_http_priority(void)
 {
-	return 50;
+	return http_priority;
 }
 
 bool
@@ -285,4 +288,16 @@ char const *
 config_get_http_ca_path(void)
 {
 	return NULL;
+}
+
+void
+config_set_rsync_priority(unsigned int value)
+{
+	rsync_priority = value;
+}
+
+void
+config_set_http_priority(unsigned int value)
+{
+	http_priority = value;
 }

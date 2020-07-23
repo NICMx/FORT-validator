@@ -112,40 +112,25 @@ write_local(unsigned char *content, size_t size, size_t nmemb, void *arg)
 static int
 download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 {
-	unsigned int retries;
 	int error;
 
-	retries = 0;
-	do {
-		if (last_update > 0)
-			error = http_download_file_with_ims(uri, write_local,
-			    last_update, log_operation);
-		else
-			error = http_download_file(uri, write_local,
-			    log_operation);
+	if (last_update > 0)
+		error = http_download_file_with_ims(uri, write_local,
+		    last_update, log_operation);
+	else
+		error = http_download_file(uri, write_local,
+		    log_operation);
 
-		/* Remember: positive values are expected */
-		if (error >= 0)
-			return error;
+	/*
+	 * Since distinct files can be downloaded (notification, snapshot,
+	 * delta) just return the error and let the caller to add only the
+	 * update notification URI to the request errors DB.
+	 */
+	if (error == -EREQFAILED)
+		return EREQFAILED;
 
-		if (retries == config_get_rrdp_retry_count()) {
-			pr_val_warn("Max RRDP retries (%u) reached fetching '%s', won't retry again.",
-			    retries, uri_get_global(uri));
-			/*
-			 * Since distinct files can be downloaded (notification,
-			 * snapshot, delta) just return the error and let the
-			 * caller to add only the update notification URI to
-			 * the request errors DB.
-			 */
-			return EREQFAILED;
-		}
-		pr_val_warn("Retrying RRDP file download '%s' in %u seconds, %u attempts remaining.",
-		    uri_get_global(uri),
-		    config_get_rrdp_retry_interval(),
-		    config_get_rrdp_retry_count() - retries);
-		retries++;
-		sleep(config_get_rrdp_retry_interval());
-	} while (true);
+	/* Remember: positive values are expected */
+	return error;
 }
 
 /* Left trim @from, setting the result at @result pointer */

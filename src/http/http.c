@@ -1,5 +1,6 @@
 #include "http.h"
 
+#include <unistd.h>
 #include <curl/curl.h>
 #include <sys/stat.h>
 #include "common.h"
@@ -168,10 +169,12 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	struct http_handler handler;
 	struct stat stat;
 	FILE *out;
+	unsigned int retries;
 	int error;
 
+	retries = 0;
 	*cond_met = 1;
-	if (config_get_work_offline()) {
+	if (!config_get_http_enabled()) {
 		*response_code = 0; /* Not 200 code, but also not an error */
 		return 0;
 	}
@@ -184,19 +187,36 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	if (error)
 		goto delete_dir;
 
-	error = http_easy_init(&handler);
-	if (error)
-		goto close_file;
+	do {
+		error = http_easy_init(&handler);
+		if (error)
+			goto close_file;
 
-	/* Set "If-Modified-Since" header only if a value is specified */
-	if (ims_value > 0) {
-		curl_easy_setopt(handler.curl, CURLOPT_TIMEVALUE, ims_value);
-		curl_easy_setopt(handler.curl, CURLOPT_TIMECONDITION,
-		    CURL_TIMECOND_IFMODSINCE);
-	}
+		/* Set "If-Modified-Since" header only if a value is specified */
+		if (ims_value > 0) {
+			curl_easy_setopt(handler.curl, CURLOPT_TIMEVALUE, ims_value);
+			curl_easy_setopt(handler.curl, CURLOPT_TIMECONDITION,
+			    CURL_TIMECOND_IFMODSINCE);
+		}
+		error = http_fetch(&handler, uri_get_global(uri), response_code,
+		    cond_met, log_operation, cb, out);
+		if (error != EREQFAILED)
+			break;
 
-	error = http_fetch(&handler, uri_get_global(uri), response_code,
-	    cond_met, log_operation, cb, out);
+		if (retries == config_get_http_retry_count()) {
+			pr_val_warn("Max HTTP retries (%u) reached requesting for '%s', won't retry again.",
+			    retries, uri_get_global(uri));
+			break;
+		}
+		pr_val_warn("Retrying HTTP request '%s' in %u seconds, %u attempts remaining.",
+		    uri_get_global(uri),
+		    config_get_http_retry_interval(),
+		    config_get_http_retry_count() - retries);
+		retries++;
+		http_easy_cleanup(&handler);
+		sleep(config_get_http_retry_interval());
+	} while (true);
+
 	http_easy_cleanup(&handler);
 	file_close(out);
 

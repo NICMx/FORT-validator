@@ -47,6 +47,7 @@ fort_SOURCES += config/filename_format.h config/filename_format.c
 fort_SOURCES += config/log_conf.h config/log_conf.c
 fort_SOURCES += config/mode.c config/mode.h
 fort_SOURCES += config/incidences.h config/incidences.c
+fort_SOURCES += config/rrdp_conf.h config/rrdp_conf.c
 fort_SOURCES += config/rsync_strategy.h config/rsync_strategy.c
 fort_SOURCES += config/str.c config/str.h
 fort_SOURCES += config/string_array.h config/string_array.c

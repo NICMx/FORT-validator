@@ -30,11 +30,14 @@
 #include "rrdp/db/db_rrdp.h"
 
 #define TAL_FILE_EXTENSION	".tal"
+typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
 
 struct uris {
 	struct rpki_uri **array; /* This is an array of rpki URIs. */
 	unsigned int count;
 	unsigned int size;
+	unsigned int rsync_count;
+	unsigned int https_count;
 };
 
 struct tal {
@@ -76,9 +79,11 @@ static int
 uris_init(struct uris *uris)
 {
 	uris->count = 0;
+	uris->rsync_count = 0;
+	uris->https_count = 0;
 	uris->size = 4; /* Most TALs only define one. */
 	uris->array = malloc(uris->size * sizeof(struct rpki_uri *));
-	return (uris->array != NULL) ? 0 : -ENOMEM;
+	return (uris->array != NULL) ? 0 : pr_enomem();
 }
 
 static void
@@ -103,6 +108,11 @@ uris_add(struct uris *uris, char *uri)
 
 	if (error)
 		return error;
+
+	if (uri_is_rsync(new))
+		uris->rsync_count++;
+	else
+		uris->https_count++;
 
 	if (uris->count + 1 >= uris->size) {
 		uris->size *= 2;
@@ -409,7 +419,7 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 	return 0;
 }
 
-void
+static void
 tal_shuffle_uris(struct tal *tal)
 {
 	struct rpki_uri **array = tal->uris.array;
@@ -426,6 +436,48 @@ tal_shuffle_uris(struct tal *tal)
 		array[i] = array[random_index];
 		array[random_index] = tmp;
 	}
+}
+
+static int
+tal_order_uris(struct tal *tal)
+{
+	struct rpki_uri **ordered;
+	struct rpki_uri **tmp;
+	bool http_first;
+	unsigned int i;
+	unsigned int last_rsync;
+	unsigned int last_https;
+
+	/* First do the shuffle */
+	if (config_get_shuffle_tal_uris())
+		tal_shuffle_uris(tal);
+
+	if (config_get_rsync_priority() == config_get_http_priority())
+		return 0;
+
+	/* Now order according to the priority */
+	http_first = (config_get_http_priority() > config_get_rsync_priority());
+
+	ordered = malloc(tal->uris.size * sizeof(struct rpki_uri *));
+	if (ordered == NULL)
+		return pr_enomem();
+
+	last_rsync = (http_first ? tal->uris.https_count : 0);
+	last_https = (http_first ? 0 : tal->uris.rsync_count);
+
+	for (i = 0; i < tal->uris.count; i++) {
+		if (uri_is_rsync(tal->uris.array[i]))
+			ordered[last_rsync++] = tal->uris.array[i];
+		else
+			ordered[last_https++] = tal->uris.array[i];
+	}
+
+	/* Everything is ok, point to the ordered array */
+	tmp = tal->uris.array;
+	tal->uris.array = ordered;
+	free(tmp);
+
+	return 0;
 }
 
 char const *
@@ -514,8 +566,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 			error = download_files(uri, true, false);
 			break;
 		}
-		/* FIXME (later) Should be 'config_get_http_enabled()' */
-		if (config_get_work_offline())
+		if (!config_get_http_enabled())
 			return 0; /* Soft error */
 		error = handle_https_uri(uri);
 	} while (0);
@@ -637,8 +688,10 @@ do_file_validation(void *thread_arg)
 	if (error)
 		goto end;
 
-	if (config_get_shuffle_tal_uris())
-		tal_shuffle_uris(tal);
+	error = tal_order_uris(tal);
+	if (error)
+		goto destroy_tal;
+
 	error = foreach_uri(tal, __handle_tal_uri_sync, thread_arg);
 	if (error > 0) {
 		error = 0;

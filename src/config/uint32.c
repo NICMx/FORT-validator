@@ -7,13 +7,13 @@
 #include "log.h"
 #include "config/uint.h"
 
-static void
+void
 print_uint32(struct option_field const *field, void *value)
 {
 	pr_op_info("%s: %u", field->name, *((uint32_t *) value));
 }
 
-static int
+int
 parse_argv_uint32(struct option_field const *field, char const *str,
     void *result)
 {
@@ -29,7 +29,7 @@ parse_argv_uint32(struct option_field const *field, char const *str,
 	return 0;
 }
 
-static int
+int
 parse_json_uint32(struct option_field const *opt, json_t *json, void *result)
 {
 	unsigned int tmp;
