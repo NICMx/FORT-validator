@@ -1,6 +1,7 @@
 #include "uri.h"
 
 #include <errno.h>
+#include <strings.h>
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -193,7 +194,7 @@ validate_uri_begin(char const *uri_pfx, const size_t uri_pfx_len,
     char const *global, size_t global_len, size_t *size, int error)
 {
 	if (global_len < uri_pfx_len
-	    || strncmp(uri_pfx, global, uri_pfx_len) != 0) {
+	    || strncasecmp(uri_pfx, global, uri_pfx_len) != 0) {
 		if (!error)
 			return -EINVAL;
 		pr_val_err("Global URI '%s' does not begin with '%s'.",
