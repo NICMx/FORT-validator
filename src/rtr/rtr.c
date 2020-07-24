@@ -243,7 +243,7 @@ parse_address(char const *full_address, char const *default_service,
 	if (tmp_addr == NULL)
 		return pr_enomem();
 
-	strncpy(tmp_addr, full_address, tmp_addr_len);
+	memcpy(tmp_addr, full_address, tmp_addr_len);
 	tmp_addr[tmp_addr_len] = '\0';
 
 	tmp_serv = strdup(ptr + 1);

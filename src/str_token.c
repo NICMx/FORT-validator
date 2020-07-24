@@ -43,7 +43,7 @@ BN2string(BIGNUM *bn, char **_result)
 
 	bio = BIO_new(BIO_s_mem());
 	if (bio == NULL)
-		return -ENOMEM;
+		return pr_enomem();
 
 	if (BN_print(bio, bn) == 0) {
 		BIO_free(bio);

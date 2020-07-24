@@ -24,13 +24,13 @@ string_array_init(struct string_array *array, char const *const *values,
 
 	array->array = calloc(len, sizeof(char *));
 	if (array->array == NULL)
-		return -ENOMEM;
+		return pr_enomem();
 
 	for (i = 0; i < len; i++) {
 		array->array[i] = strdup(values[i]);
 		if (array->array[i] == NULL) {
 			string_array_cleanup(array);
-			return -ENOMEM;
+			return pr_enomem();
 		}
 	}
 

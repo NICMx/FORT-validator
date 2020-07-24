@@ -1903,24 +1903,40 @@ get_certificate_type(X509 *cert, bool is_ta)
  * verified to comply with rfc6487#section-4.8.7
  */
 static int
-force_aia_validation(struct rpki_uri *caIssuers, void *arg)
+force_aia_validation(struct rpki_uri *caIssuers, X509 *son, bool is_ta_child)
 {
-	X509 *son = arg;
 	X509 *parent;
 	struct rfc5280_name *son_name;
 	struct rfc5280_name *parent_name;
 	int error;
 
-	pr_val_debug("AIA's URI didn't matched parent URI, doing AIA RSYNC");
+	pr_val_debug("AIA's URI didn't matched parent URI, trying to SYNC");
 
 	/* RSYNC is still the prefered access mechanism */
-	error = download_files(caIssuers, false, false);
-	if (error)
+	do {
+		error = download_files(caIssuers, false, false);
+		if (!error)
+			break;
+		if (error == EREQFAILED) {
+			pr_val_info("AIA URI couldn't be downloaded, trying to search locally");
+			break;
+		}
 		return error;
+	} while (0);
 
+	/*
+	 * Consider the scenario where the TA was fetched from a distinct URI
+	 * (maybe an HTTPS URI), in that case keep doing the validation since
+	 * there's no "right" way to validate the AIA, that's where the flag
+	 * 'is_ta_child' comes into play.
+	 *
+	 * A possible way is to load the certificate from the cert_stack, but
+	 * the location itself isn't strictly the location from the AIA (the
+	 * solution works, but maybe it isn't right.
+	 */
 	error = certificate_load(caIssuers, &parent);
 	if (error)
-		return error;
+		return !is_ta_child ? error : 0;
 
 	error = x509_name_decode(X509_get_subject_name(parent), "subject",
 	    &parent_name);
@@ -1997,7 +2013,8 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 	 * the current issuer. This will force an RSYNC of AIA's URI, load
 	 * the certificate and do the comparison.
 	 */
-	return force_aia_validation(caIssuers, cert);
+	return force_aia_validation(caIssuers, cert,
+	    certstack_get_x509_num(validation_certstack(state)) == 1);
 }
 
 /*

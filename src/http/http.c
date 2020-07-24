@@ -1,5 +1,7 @@
 #include "http.h"
 
+#include <errno.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <curl/curl.h>
 #include <sys/stat.h>
@@ -166,10 +168,13 @@ static int
 __http_download_file(struct rpki_uri *uri, http_write_cb cb,
     long *response_code, long ims_value, long *cond_met, bool log_operation)
 {
+	char const *tmp_suffix = "_tmp";
 	struct http_handler handler;
 	struct stat stat;
 	FILE *out;
 	unsigned int retries;
+	char const *original_file;
+	char *tmp_file, *tmp;
 	int error;
 
 	retries = 0;
@@ -179,11 +184,25 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 		return 0;
 	}
 
-	error = create_dir_recursive(uri_get_local(uri));
-	if (error)
-		return ENSURE_NEGATIVE(error);
+	original_file = uri_get_local(uri);
+	tmp_file = strdup(original_file);
+	if (tmp_file == NULL)
+		return pr_enomem();
 
-	error = file_write(uri_get_local(uri), &out, &stat);
+	tmp = realloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
+	if (tmp == NULL) {
+		error = pr_enomem();
+		goto release_tmp;
+	}
+
+	tmp_file = tmp;
+	strcat(tmp_file, tmp_suffix);
+
+	error = create_dir_recursive(tmp_file);
+	if (error)
+		goto release_tmp;
+
+	error = file_write(tmp_file, &out, &stat);
 	if (error)
 		goto delete_dir;
 
@@ -223,11 +242,23 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 	if (error)
 		goto delete_dir;
 
+	/* Overwrite the original file */
+	error = rename(tmp_file, original_file);
+	if (error) {
+		error = errno;
+		pr_val_errno(error, "Renaming temporal file from '%s' to '%s'",
+		    tmp_file, original_file);
+		goto delete_dir;
+	}
+
+	free(tmp_file);
 	return 0;
 close_file:
 	file_close(out);
 delete_dir:
-	delete_dir_recursive_bottom_up(uri_get_local(uri));
+	delete_dir_recursive_bottom_up(tmp_file);
+release_tmp:
+	free(tmp_file);
 	return ENSURE_NEGATIVE(error);
 }
 

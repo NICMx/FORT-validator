@@ -362,7 +362,7 @@ tal_load(char const *file_name, struct tal **result)
 
 	tal = malloc(sizeof(struct tal));
 	if (tal == NULL) {
-		error = -ENOMEM;
+		error = pr_enomem();
 		goto fail3;
 	}
 
@@ -555,19 +555,25 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		if (!thread_arg->sync_files) {
 			/* Look for local files */
 			if (!valid_file_or_dir(uri_get_local(uri), true, false,
-			    pr_val_errno))
+			    pr_val_errno)) {
+				validation_destroy(state);
 				return 0; /* Error already logged */
+			}
 			break;
 		}
 		/* Trying to sync, considering that the sync can be disabled */
 		if (uri_is_rsync(uri)) {
-			if (!config_get_rsync_enabled())
+			if (!config_get_rsync_enabled()) {
+				validation_destroy(state);
 				return 0; /* Soft error */
+			}
 			error = download_files(uri, true, false);
 			break;
 		}
-		if (!config_get_http_enabled())
+		if (!config_get_http_enabled()) {
+			validation_destroy(state);
 			return 0; /* Soft error */
+		}
 		error = handle_https_uri(uri);
 	} while (0);
 
@@ -823,7 +829,7 @@ perform_standalone_validation(struct db_table *table)
 		SLIST_REMOVE_HEAD(&threads, next);
 		if (thread->exit_status) {
 			t_error = thread->exit_status;
-			pr_val_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
+			pr_op_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
 			    thread->tal_file);
 		}
 		thread_destroy(thread);

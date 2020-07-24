@@ -94,7 +94,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	result = malloc(sizeof(struct validation));
 	if (!result)
-		return -ENOMEM;
+		return pr_enomem();
 
 	error = state_store(result);
 	if (error)

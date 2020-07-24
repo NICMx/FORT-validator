@@ -65,7 +65,7 @@ base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
 	b64 = BIO_new(BIO_f_base64());
 	if (b64 == NULL) {
 		error = ERR_peek_last_error();
-		return error ? error_ul2i(error) : -ENOMEM;
+		return error ? error_ul2i(error) : pr_enomem();
 	}
 
 	/*
@@ -150,7 +150,7 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 
 	str_copy = malloc(encoded_len + pad + 1);
 	if (str_copy == NULL)
-		return -ENOMEM;
+		return pr_enomem();
 	/* Set all with pad char, then replace with the original string */
 	memset(str_copy, '=', encoded_len + pad);
 	memcpy(str_copy, str_encoded, encoded_len);
@@ -173,7 +173,7 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
 	*result = malloc(alloc_size + 1);
 	if (*result == NULL) {
-		error = -ENOMEM;
+		error = pr_enomem();
 		goto free_enc;
 	}
 	memset(*result, 0, alloc_size);
@@ -251,7 +251,7 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 	mem = BIO_new(BIO_s_mem());
 	if (mem == NULL) {
 		error = ERR_peek_last_error();
-		return error ? error_ul2i(error) : -ENOMEM;
+		return error ? error_ul2i(error) : pr_enomem();
 	}
 
 	b64 = BIO_new(BIO_f_base64());
@@ -274,5 +274,5 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 	return 0;
 free_mem:
 	BIO_free_all(b64);
-	return error ? error_ul2i(error) : -ENOMEM;
+	return error ? error_ul2i(error) : pr_enomem();
 }
