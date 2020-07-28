@@ -1,4 +1,4 @@
-.TH fort 8 "2020-07-13" "v1.4.0" "FORT validator"
+.TH fort 8 "2020-07-27" "v1.4.0" "FORT validator"
 
 .SH NAME
 fort \- RPKI certificate path validator and RTR server
@@ -258,7 +258,7 @@ at configured \fB--local-repository\fR.
 .P
 Otherwise, Fort will perform outgoing requests whenever this is needed. If a
 specific protocol needs to be deactivated, use \fB--rsync.enabled\fR or
-\fB--rrdp.enabled\fR.
+\fB--http.enabled\fR.
 .RE
 .P
 
@@ -272,6 +272,11 @@ By default, the flag is disabled.
 This flag is only relevant if the TAL lists more than one URL. Regardless of
 this flag, FORT will stop iterating through the URLs as soon as it finds one
 that yields a successful traversal.
+.P
+If the TAL lists more than one URL, the shuffle is done honoring the priority
+of the protocols (see \fB--rsync.priority\fR and \fB--http.priority\fR). i.e.
+if the HTTP protocol has a higher priority than RSYNC, then all the shuffled
+HTTP URLs will come first.
 .RE
 .P
 
@@ -681,6 +686,72 @@ Read more about logs at FORT validator's web docs, module 'Logging'.
 .RE
 .P
 
+.B \-\-http.enabled=\fItrue\fR|\fIfalse\fR
+.RS 4
+Enables outgoing HTTP requests.
+.P
+If disabled (eg. \fB--http.enabled=false\fR), FORT validator won't request HTTP
+URIs, and will expect to find all the corresponding repository files at
+\fB--local-repository\fR.
+.RE
+.P
+
+.B \-\-http.priority=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Assign priority to use HTTP to fetch repository files. A higher value means a
+higher priority.
+.P
+This argument works along with \fB--rsync.priority\fR, since the higher value
+of the two arguments will result in the first protocol to utilize when fetching
+repositories files. Of course, this depends also on certificates information or
+the TAL URIs, since currently HTTP URIs are optional and not every RIR
+repository makes use of them.
+.P
+Whenever a certificate or a TAL has both RSYNC and HTTP URIs, the following
+criteria is followed to prioritize which one to use first:
+.RS 4
+.br
+\- \fI--rsync.priority\fR \fBequals\fR \fI--http.priority\fR: use the order
+specified at the certificate or the TAL to fetch the corresponding URI.
+.br
+\- \fI--rsync.priority\fR \fBgreater than\fR \fI--http.priority\fR: use RSYNC
+repository/TAL URI first; if there's an error fetching data, fallback to fetch
+HTTP repository/TAL URI.
+.br
+\- \fI--rsync.priority\fR \fBless than\fR \fI--http.priority\fR: use HTTP
+repository/TAL URI first; if there's an error fetching data, fallback to use
+RSYNC repository/TAL URI.
+.RE
+.P
+By default, the value is \fI60\fR, so HTTP requests are prefered over rsync
+requests.
+.RE
+.P
+
+.B \-\-http.retry.count=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum number of retries whenever there's an error requesting an HTTP URI.
+.P
+A value of \fI0\fR means no retries.
+.P
+Whenever is necessary to request an HTTP URI, the validator will try the
+request at least once. If there was an error requesting the URI, the validator
+will retry at most \fI--http.retry.count\fR times to fetch the file, waiting
+\fI--http.retry.interval\fR seconds between each retry.
+.P
+By default, the value is \fI2\fR.
+.RE
+.P
+
+.B \-\-http.retry.interval=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Period (in seconds) to wait between retries after an error ocurred requestin
+HTTP URIs.
+.P
+By default, the value is \fI5\fR.
+.RE
+.P
+
 .BR \-\-http.user\-agent=\fISTRING\fR
 .RS 4
 User-Agent to use at HTTP requests.
@@ -766,65 +837,25 @@ By default, the path has a NULL value.
 
 .B \-\-rrdp.enabled=\fItrue\fR|\fIfalse\fR
 .RS 4
-Enables RRDP files requests and processing.
-.P
-If disabled (eg. \fB--rrdp.enabled=false\fR), FORT validator won't download nor
-process RRDP files, and will expect to find all repository files at
-\fB--local-repository\fR.
+This argument \fBwill be DEPRECATED\fR. Use \fB--http.enabled\fR instead.
 .RE
 .P
 
 .B \-\-rrdp.priority=\fIUNSIGNED_INTEGER\fR
 .RS 4
-Assign priority to use RRDP to fetch repository files. A higher value means a
-higher priority.
-.P
-This arguments works along with \fB--rsync.priority\fR, since the higher value
-of this two arguments will result in the first method to utilize when fetching
-repositories files. Of course, this depends also on certificates information,
-since currently RRDP is an optional protocol to use.
-.P
-Whenever a certificate has both RSYNC and RRDP repositories, the following
-criteria is followed to prioritize which one to use first:
-.RS 4
-.br
-\- \fI--rsync.priority\fR \fBequals\fR \fI--rrdp.priority\fR: use the order
-specified at the certificate to access its repository data.
-.br
-\- \fI--rsync.priority\fR \fBgreater than\fR \fI--rrdp.priority\fR: use RSYNC
-repository URI first; if there's an error fetching data, fallback to use RRDP
-repository data.
-.br
-\- \fI--rsync.priority\fR \fBless than\fR \fI--rrdp.priority\fR: use RRDP
-repository URI first; if there's an error fetching data, fallback to use RSYNC
-repository data.
-.RE
-.P
-By default, the value is \fI50\fR.
+This argument \fBwill be DEPRECATED\fR. Use \fB--http.priority\fR instead.
 .RE
 .P
 
 .B \-\-rrdp.retry.count=\fIUNSIGNED_INTEGER\fR
 .RS 4
-Maximum number of retries whenever there's an error fetching RRDP files.
-.P
-A value of \fI0\fR means no retries.
-.P
-Whenever is necessary to fetch an RRDP file, the validator will try the
-download at least once. If there was an error fetching the file, the validator
-will retry at most \fI--rrdp.retry.count\fR times to fetch the file, waiting
-\fI--rrdp.retry.interval\fR seconds between each retry.
-.P
-By default, the value is \fI2\fR.
+This argument \fBwill be DEPRECATED\fR. Use \fB--http.retry.count\fR instead.
 .RE
 .P
 
 .B \-\-rrdp.retry.interval=\fIUNSIGNED_INTEGER\fR
 .RS 4
-Period (in seconds) to wait between retries after an error ocurred fetching
-RRDP files.
-.P
-By default, the value is \fI5\fR.
+This argument \fBwill be DEPRECATED\fR. Use \fB--http.retry.interval\fR instead.
 .RE
 .P
 
@@ -843,28 +874,30 @@ at \fB--local-repository\fR.
 Assign priority to use RSYNC to fetch repository files. A higher value means a
 higher priority.
 .P
-This arguments works along with \fB--rrdp.priority\fR, since the higher value
-of this two arguments will result in the first method to utilize when fetching
-repositories files. Of course, this depends also on certificates information,
-since currently RRDP is an optional protocol to use.
+This argument works along with \fB--http.priority\fR, since the higher value
+of the two arguments will result in the first protocol to utilize when fetching
+repositories files. Of course, this depends also on certificates information or
+the TAL URIs, since currently HTTP URIs are optional and not every RIR
+repository makes use of them.
 .P
-Whenever a certificate has both RSYNC and RRDP repositories, the following
-criteria is followed to prioritize which one to use first:
+Whenever a certificate has both RSYNC and HTTP URIs, the following criteria is
+followed to prioritize which one to use first:
 .RS 4
 .br
-\- \fI--rsync.priority\fR \fBequals\fR \fI--rrdp.priority\fR: use the order
-specified at the certificate to access its repository data.
+\- \fI--rsync.priority\fR \fBequals\fR \fI--http.priority\fR: use the order
+specified at the certificate or the TAL to fetch the corresponding URI.
 .br
-\- \fI--rsync.priority\fR \fBgreater than\fR \fI--rrdp.priority\fR: use RSYNC
-repository URI first; if there's an error fetching data, fallback to use RRDP
-repository data.
+\- \fI--rsync.priority\fR \fBgreater than\fR \fI--http.priority\fR: use RSYNC
+repository/TAL URI first; if there's an error fetching data, fallback to use
+fetch HTTP repository/TAL URI.
 .br
-\- \fI--rsync.priority\fR \fBless than\fR \fI--rrdp.priority\fR: use RRDP
-repository URI first; if there's an error fetching data, fallback to use RSYNC
-repository data.
+\- \fI--rsync.priority\fR \fBless than\fR \fI--http.priority\fR: use HTTP
+repository/TAL URI first; if there's an error fetching data, fallback to use
+RSYNC repository/TAL URI.
 .RE
 .P
-By default, the value is \fI50\fR.
+By default, the value is \fI50\fR, so HTTP requests are prefered over rsync
+requests.
 .RE
 .P
 
@@ -948,7 +981,7 @@ A value of \fI0\fR means no retries.
 .P
 Whenever is necessary to execute an RSYNC, the validator will try the execution
 at least once. If there was an error executing the RSYNC, the validator will
-retry it at most \fI--rrdp.retry.count\fR times, waiting
+retry it at most \fI--rsync.retry.count\fR times, waiting
 \fI--rsync.retry.interval\fR seconds between each retry.
 .P
 By default, the value is \fI2\fR.
@@ -1010,7 +1043,7 @@ By default, it has a value of \fI4096\fR (4 kB).
 Time period that must lapse to warn about a stale repository (the messages will
 be sent to the operation log). The time lapse starts once the repository
 download has been retried (see \fI--rsync.retry.count\fR and
-\fI--rrdp.retry.count\fR) and failed after such retries.
+\fI--http.retry.count\fR) and failed after such retries.
 .P
 A repository is considered stale if its files can't be fetched due to a
 communication error and this error persists across validation cycles. This kind
@@ -1121,19 +1154,17 @@ to a specific value:
     "tag": "Validation"
   },
   "http": {
+    "enabled": true,
+    "priority": 60,
+    "retry": {
+      "count": 2,
+      "interval": 5
+    },
     "user-agent": "fort/1.4.0",
     "connect-timeout": 30,
     "transfer-timeout": 0,
     "idle-timeout": 15,
     "ca-path": "/usr/local/ssl/certs"
-  },
-  "rrdp": {
-    "enabled": true,
-    "priority": 50,
-    "retry": {
-      "count": 2,
-      "interval": 5
-    }
   },
   "rsync": {
     "enabled": true,

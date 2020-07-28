@@ -14,59 +14,64 @@ command: fort
 	3. [`--version`](#--version)
 	4. [`--tal`](#--tal)
 	5. [`--local-repository`](#--local-repository)
-	6. [`--sync-strategy`](#--sync-strategy)
-	7. [`--work-offline`](#--work-offline)
-	8. [`--shuffle-uris`](#--shuffle-uris)
-	9. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
-	10. [`--mode`](#--mode)
-	11. [`--server.address`](#--serveraddress)
-	12. [`--server.port`](#--serverport)
-	13. [`--server.backlog`](#--serverbacklog)
-	14. [`--server.interval.validation`](#--serverintervalvalidation)
-	15. [`--server.interval.refresh`](#--serverintervalrefresh)
-	16. [`--server.interval.retry`](#--serverintervalretry)
-	17. [`--server.interval.expire`](#--serverintervalexpire)
-	18. [`--slurm`](#--slurm)
-	19. [`--log.enabled`](#--logenabled)
-	20. [`--log.level`](#--loglevel)
-	21. [`--log.output`](#--logoutput)
-	22. [`--log.color-output`](#--logcolor-output)
-	23. [`--log.file-name-format`](#--logfile-name-format)
-	24. [`--log.facility`](#--logfacility)
-	25. [`--log.tag`](#--logtag)
-	26. [`--validation-log.enabled`](#--validation-logenabled)
-	27. [`--validation-log.level`](#--validation-loglevel)
-	28. [`--validation-log.output`](#--validation-logoutput)
-	29. [`--validation-log.color-output`](#--validation-logcolor-output)
-	30. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
-	31. [`--validation-log.facility`](#--validation-logfacility)
-	32. [`--validation-log.tag`](#--validation-logtag)
-	33. [`--http.user-agent`](#--httpuser-agent)
-	34. [`--http.connect-timeout`](#--httpconnect-timeout)
-	35. [`--http.transfer-timeout`](#--httptransfer-timeout)
-	36. [`--http.idle-timeout`](#--httpidle-timeout)
-	37. [`--http.ca-path`](#--httpca-path)
-	38. [`--output.roa`](#--outputroa)
-	39. [`--output.bgpsec`](#--outputbgpsec)
-	40. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	41. [`--stale-repository-period`](#--stale-repository-period)
-	42. [`--configuration-file`](#--configuration-file)
-	43. [`--rrdp.enabled`](#--rrdpenabled)
-	44. [`--rrdp.priority`](#--rrdppriority)
-	45. [`--rrdp.retry.count`](#--rrdpretrycount)
-	46. [`--rrdp.retry.interval`](#--rrdpretryinterval)
-	47. [`--rsync.enabled`](#--rsyncenabled)
-	48. [`--rsync.priority`](#--rsyncpriority)
-	49. [`--rsync.strategy`](#--rsyncstrategy)
+	6. [`--work-offline`](#--work-offline)
+	7. [`--shuffle-uris`](#--shuffle-uris)
+	8. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
+	9. [`--mode`](#--mode)
+	10. [`--server.address`](#--serveraddress)
+	11. [`--server.port`](#--serverport)
+	12. [`--server.backlog`](#--serverbacklog)
+	13. [`--server.interval.validation`](#--serverintervalvalidation)
+	14. [`--server.interval.refresh`](#--serverintervalrefresh)
+	15. [`--server.interval.retry`](#--serverintervalretry)
+	16. [`--server.interval.expire`](#--serverintervalexpire)
+	17. [`--slurm`](#--slurm)
+	18. [`--log.enabled`](#--logenabled)
+	19. [`--log.level`](#--loglevel)
+	20. [`--log.output`](#--logoutput)
+	21. [`--log.color-output`](#--logcolor-output)
+	22. [`--log.file-name-format`](#--logfile-name-format)
+	23. [`--log.facility`](#--logfacility)
+	24. [`--log.tag`](#--logtag)
+	25. [`--validation-log.enabled`](#--validation-logenabled)
+	26. [`--validation-log.level`](#--validation-loglevel)
+	27. [`--validation-log.output`](#--validation-logoutput)
+	28. [`--validation-log.color-output`](#--validation-logcolor-output)
+	29. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
+	30. [`--validation-log.facility`](#--validation-logfacility)
+	31. [`--validation-log.tag`](#--validation-logtag)
+	32. [`--http.enabled`](#--httpenabled)
+	33. [`--http.priority`](#--httppriority)
+	34. [`--http.retry.count`](#--httpretrycount)
+	35. [`--http.retry.interval`](#--httpretryinterval)
+	36. [`--http.user-agent`](#--httpuser-agent)
+	37. [`--http.connect-timeout`](#--httpconnect-timeout)
+	38. [`--http.transfer-timeout`](#--httptransfer-timeout)
+	39. [`--http.idle-timeout`](#--httpidle-timeout)
+	40. [`--http.ca-path`](#--httpca-path)
+	41. [`--output.roa`](#--outputroa)
+	42. [`--output.bgpsec`](#--outputbgpsec)
+	43. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	44. [`--stale-repository-period`](#--stale-repository-period)
+	45. [`--configuration-file`](#--configuration-file)
+	46. [`--rsync.enabled`](#--rsyncenabled)
+	47. [`--rsync.priority`](#--rsyncpriority)
+	48. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	50. [`--rsync.retry.count`](#--rsyncretrycount)
-	51. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	52. [`rsync.program`](#rsyncprogram)
-	53. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	54. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	55. [`incidences`](#incidences)
+	49. [`--rsync.retry.count`](#--rsyncretrycount)
+	50. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	51. [`rsync.program`](#rsyncprogram)
+	52. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	53. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	54. [`incidences`](#incidences)
+3. [Deprecated arguments](#deprecated-arguments)
+	1. [`--sync-strategy`](#--sync-strategy)
+	2. [`--rrdp.enabled`](#--rrdpenabled)
+	3. [`--rrdp.priority`](#--rrdppriority)
+	4. [`--rrdp.retry.count`](#--rrdpretrycount)
+	5. [`--rrdp.retry.interval`](#--rrdpretryinterval)
 
 ## Syntax
 
@@ -116,6 +121,10 @@ command: fort
         [--rsync.strategy=strict|root|root-except-ta]
         [--rsync.retry.count=<unsigned integer>]
         [--rsync.retry.interval=<unsigned integer>]
+        [--http.enabled=true|false]
+        [--http.priority=<unsigned integer>]
+        [--http.retry.count=<unsigned integer>]
+        [--http.retry.interval=<unsigned integer>]
         [--http.user-agent=<string>]
         [--http.connect-timeout=<unsigned integer>]
         [--http.transfer-timeout=<unsigned integer>]
@@ -241,22 +250,6 @@ Fort's entire validation process operates on the resulting copy of the files (do
 
 Because rsync uses delta encoding, you're advised to keep this cache around. It significantly speeds up subsequent validation cycles.
 
-### `--sync-strategy`
-
-> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--rsync.strategy`](#--rsyncstrategy) or [`--rsync.enabled`](#--rsyncenabled) (if rsync is meant to be disabled) instead.
-
-- **Type:** Enumeration (`off`, `strict`, `root`, `root-except-ta`)
-- **Availability:** `argv` and JSON
-- **Default:** `root-except-ta`
-
-rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
-
-Despite this argument will be deprecated, it still can be utilized. Its possible values and behaviour will be as listed here:
-- `off`: will disable rsync execution, setting [`--rsync.enabled`](#--rsyncenabled) as `false`. So, using `--sync-strategy=off` will be the same as `--rsync.enabled=false`.
-- `strict`: will be the same as `--rsync.strategy=strict`, see [`strict`](#strict).
-- `root`: will be the same as `--rsync.strategy=root`, see [`root`](#root).
-- `root-except-ta`: will be the same as `--rsync.strategy=root-except-ta`, see [`root-except-ta`](#root-except-ta).
-
 ### `--work-offline`
 
 - **Type:** None
@@ -264,7 +257,7 @@ Despite this argument will be deprecated, it still can be utilized. Its possible
 
 If this flag is activated, Fort will disable all outgoing requests (currently done with: *rsync* and *https* (RRDP protocol uses HTTPS to fetch data)). All repository files (certificates, ROAs, etc.) are expected to exist at configured [`--local-repository`](#--local-repository).
 
-Otherwise, Fort will perform outgoing requests whenever this is needed. If a specific protocol needs to be deactivated, use [`--rsync.enabled`](#--rsyncenabled) or [`--rrdp.enabled`](#--rrdpenabled).
+Otherwise, Fort will perform outgoing requests whenever this is needed. If a specific protocol needs to be deactivated, use [`--rsync.enabled`](#--rsyncenabled) or [`--http.enabled`](#--httpenabled).
 
 ### `--shuffle-uris`
 
@@ -273,9 +266,9 @@ Otherwise, Fort will perform outgoing requests whenever this is needed. If a spe
 
 If enabled, Fort will access TAL URLs in random order. This is meant for load balancing. If disabled, Fort will access TAL URLs in sequential order.
 
-(Regardless of this flag, Fort will stop iterating through the URLs as soon as it finds one that yields a successful traversal.)
+Regardless of this flag, Fort will stop iterating through the URLs as soon as it finds one that yields a successful traversal.
 
-Of course, this is only relevant if the TAL lists more than one URL.
+Of course, this flag is only relevant if the TAL lists more than one URL. If that's the case, the shuffle is done honoring the priority of the protocols (see [`--rsync.priority`](#--rsyncpriority) and [`--http.priority`](#--httppriority)). i.e. if the HTTP protocol has a higher priority than RSYNC, then all the shuffled HTTP URLs will come first.
 
 ### `--maximum-certificate-depth`
 
@@ -558,6 +551,56 @@ Text tag that will be added to the validation log messages (it will appear insid
 
 Read more at [Logging](logging.html) and at [Logging > Configuration > Tag](logging.html#tag).
 
+### `--http.enabled`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `true`
+
+Enables outgoing HTTP requests.
+
+If disabled (eg. `--http.enabled=false`), FORT validator won't request HTTP URIs, and will expect to find all the corresponding repository files at [`--local-repository`](#--local-repository).
+
+### `--http.priority`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 60
+- **Range:** 0--100
+
+> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are prefered over rsync requests.
+
+Assign priority to use HTTP to fetch repository files. A higher value means a higher priority.
+
+This argument works along with [`--rsync.priority`](#--rsyncpriority), since the higher value of the two arguments will result in the first protocol to utilize when fetching repositories files. Of course, this depends also on certificates information or the TAL URIs, since currently HTTP URIs are optional and not every RIR repository makes use of them.
+
+Whenever a certificate or a TAL has both RSYNC and HTTP URIs, the following criteria is followed to prioritize which one to use first:
+- [`--rsync.priority`](#--rsyncpriority) **equals** [`--http.priority`](#--httppriority): use the order specified at the certificate or the TAL to fetch the corresponding URI.
+- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--http.priority`](#--httppriority): use RSYNC repository/TAL URI first; if there's an error fetching data, fallback to fetch HTTP repository/TAL URI.
+- [`--rsync.priority`](#--rsyncpriority) **less than** [`--http.priority`](#--httppriority): use HTTP repsitory/TAL URI first; if there's an error fetching data, fallback to use RSYNC repository/TAL URI.
+
+### `--http.retry.count`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 2
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Maximum number of retries whenever there's an error requesting an HTTP URI.
+
+A value of **0** means **no retries**.
+
+Whenever is necessary to request an HTTP URI, the validator will try the request at least once. If there was an error requesting the URI, the validator will retry at most `--http.retry.count` times to fetch the file, waiting [`--http.retry.interval`](#--httpretryinterval) seconds between each retry.
+
+### `--http.retry.interval`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 5
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Period of time (in seconds) to wait between each retry to request an HTTP URI.
+
 ### `--http.user-agent`
 
 - **Type:** String
@@ -685,7 +728,7 @@ This check is merely a caution, since ASN1 decoding functions are recursive and 
 - **Default:** 43200 (12 hours)
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
-Time period that must lapse to warn about a stale repository (the messages will be sent to the operation log). The time lapse starts once the repository download has been retried (see [`--rsync.retry.count`](#--rsyncretrycount) and [`--rrdp.retry.count`](#--rrdpretrycount)) and failed after such retries.
+Time period that must lapse to warn about a stale repository (the messages will be sent to the operation log). The time lapse starts once the repository download has been retried (see [`--rsync.retry.count`](#--rsyncretrycount) and [`--http.retry.count`](#--httpretrycount)) and failed after such retries.
 
 A repository is considered stale if its files can't be fetched due to a communication error and this error persists across validation cycles. This kind of issues can be due to a local misconfiguration (eg. a firewall that blocks incoming data) or a problem at the server (eg. the server is down).
 
@@ -748,20 +791,17 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	},
 
 	"http": {
+		"<a href="#--httpenabled">enabled</a>": true,
+		"<a href="#--httppriority">priority</a>": 60,
+		"retry": {
+			"<a href="#--httpretrycount">count</a>": 2,
+			"<a href="#--httpretryinterval">interval</a>": 5
+		},
 		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
 		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
 		"<a href="#--httpidle-timeout">idle-timeout</a>": 15,
 		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
-	},
-
-	"rrdp": {
-		"<a href="#--rrdpenabled">enabled</a>": true,
-		"<a href="#--rrdppriority">priority</a>": 50,
-		"retry": {
-			"<a href="#--rrdpretrycount">count</a>": 2,
-			"<a href="#--rrdpretryinterval">interval</a>": 5
-		}
 	},
 
 	"rsync": {
@@ -866,54 +906,6 @@ $ {{ page.command }} \
 $ # local-repository is "a", rsync.strategy is "strict" and maximum-certificate-depth is 8
 {% endhighlight %}
 
-### `--rrdp.enabled`
-
-- **Type:** Boolean (`true`, `false`)
-- **Availability:** `argv` and JSON
-- **Default:** `true`
-
-Enables RRDP files requests and processing.
-
-If disabled (eg. `--rrdp.enabled=false`), FORT validator won't download nor process RRDP files, and will expect to find all repository files at [`--local-repository`](#--local-repository).
-
-### `--rrdp.priority`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 50
-- **Range:** 0--100
-
-Assign priority to use RRDP to fetch repository files. A higher value means a higher priority.
-
-This arguments works along with [`--rsync.priority`](#--rsyncpriority), since the higher value of this two arguments will result in the first method to utilize when fetching repositories files. Of course, this depends also on certificates information, since currently RRDP is an optional protocol to use.
-
-Whenever a certificate has both RSYNC and RRDP repositories, the following criteria is followed to prioritize which one to use first:
-- [`--rsync.priority`](#--rsyncpriority) **equals** [`--rrdp.priority`](#--rrdppriority): use the order specified at the certificate to access its repository data.
-- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--rrdp.priority`](#--rrdppriority): use RSYNC repository URI first; if there's an error fetching data, fallback to use RRDP repository data.
-- [`--rsync.priority`](#--rsyncpriority) **less than** [`--rrdp.priority`](#--rrdppriority): use RRDP repository URI first; if there's an error fetching data, fallback to use RSYNC repository data.
-
-### `--rrdp.retry.count`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 2
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
-
-Maximum number of retries whenever there's an error fetching RRDP files.
-
-A value of **0** means **no retries**.
-
-Whenever is necessary to fetch an RRDP file, the validator will try the download at least once. If there was an error fetching the file, the validator will retry at most `--rrdp.retry.count` times to fetch the file, waiting [`--rrdp.retry.interval`](#--rrdpretryinterval) seconds between each retry.
-
-### `--rrdp.retry.interval`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 5
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
-
-Period of time (in seconds) to wait between each retry to fetch an RRDP file.
-
 ### `--rsync.enabled`
 
 - **Type:** Boolean (`true`, `false`)
@@ -931,14 +923,16 @@ If disabled (eg. `--rsync.enabled=false`), FORT validator won't download files n
 - **Default:** 50
 - **Range:** 0--100
 
+> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are prefered over rsync requests.
+
 Assign priority to use RSYNC to fetch repository files. A higher value means a higher priority.
 
-This arguments works along with [`--rrdp.priority`](#--rrdppriority), since the higher value of this two arguments will result in the first method to utilize when fetching repositories files. Of course, this depends also on certificates information, since currently RRDP is an optional protocol to use.
+This argument works along with [`--http.priority`](#--httppriority), since the higher value of the two arguments will result in the first protocol to utilize when fetching repositories files. Of course, this depends also on certificates information or the TAL URIs, since currently HTTP URIs are optional and not every RIR repository makes use of them.
 
-Whenever a certificate has both RSYNC and RRDP repositories, the following criteria is followed to prioritize which one to use first:
-- [`--rsync.priority`](#--rsyncpriority) **equals** [`--rrdp.priority`](#--rrdppriority): use the order specified at the certificate to access its repository data.
-- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--rrdp.priority`](#--rrdppriority): use RSYNC repository URI first; if there's an error fetching data, fallback to use RRDP repository data.
-- [`--rsync.priority`](#--rsyncpriority) **less than** [`--rrdp.priority`](#--rrdppriority): use RRDP repository URI first; if there's an error fetching data, fallback to use RSYNC repository data.
+Whenever a certificate or a TAL has both RSYNC and HTTP URIs, the following criteria is followed to prioritize which one to use first:
+- [`--rsync.priority`](#--rsyncpriority) **equals** [`--http.priority`](#--httppriority): use the order specified at the certificate or the TAL to fetch the corresponding URI.
+- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--http.priority`](#--httppriority): use RSYNC repository/TAL URI first; if there's an error fetching data, fallback to fetch HTTP repository/TAL URI.
+- [`--rsync.priority`](#--rsyncpriority) **less than** [`--http.priority`](#--httppriority): use HTTP repository/TAL URI first; if there's an error fetching data, fallback to use RSYNC repository/TAL URI.
 
 ### `--rsync.strategy`
 
@@ -1042,3 +1036,56 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 - **Availability:** JSON only
 
 A listing of actions to be performed by validation upon encountering certain error conditions. See [Incidences](incidence.html).
+
+## Deprecated arguments
+
+### `--sync-strategy`
+
+- **Type:** Enumeration (`off`, `strict`, `root`, `root-except-ta`)
+- **Availability:** `argv` and JSON
+- **Default:** `root-except-ta`
+
+> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--rsync.strategy`](#--rsyncstrategy) or [`--rsync.enabled`](#--rsyncenabled) (if rsync is meant to be disabled) instead.
+
+rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
+
+Despite this argument will be deprecated, it still can be utilized. Its possible values and behaviour will be as listed here:
+- `off`: will disable rsync execution, setting [`--rsync.enabled`](#--rsyncenabled) as `false`. So, using `--sync-strategy=off` will be the same as `--rsync.enabled=false`.
+- `strict`: will be the same as `--rsync.strategy=strict`, see [`strict`](#strict).
+- `root`: will be the same as `--rsync.strategy=root`, see [`root`](#root).
+- `root-except-ta`: will be the same as `--rsync.strategy=root-except-ta`, see [`root-except-ta`](#root-except-ta).
+
+### `--rrdp.enabled`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `true`
+
+> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.enabled`](#--httpenabled) instead.
+
+### `--rrdp.priority`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 60
+- **Range:** 0--100
+
+> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.priority`](#--httppriority) instead.
+
+### `--rrdp.retry.count`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 2
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.retry.count`](#--httpretrycount) instead.
+
+### `--rrdp.retry.interval`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 5
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.retry.interval`](#--httpretryinterval) instead.
