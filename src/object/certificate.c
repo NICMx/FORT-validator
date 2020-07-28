@@ -990,7 +990,7 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 		if (error) {
 			if (error == X509_V_ERR_CRL_HAS_EXPIRED) {
 				if (incidence(INID_CRL_STALE, "CRL is stale/expired"))
-					return -EINVAL;
+					goto abort;
 
 				X509_STORE_CTX_free(ctx);
 				return verify_cert_crl_stale(state, cert, crls);

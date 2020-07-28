@@ -1,6 +1,7 @@
 #include "rtr.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <signal.h>
@@ -95,6 +96,7 @@ create_server_socket(char const *hostname, char const *service, int *result)
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
 	unsigned long port;
+	int flags;
 	int reuse;
 	int fd; /* "file descriptor" */
 	int error;
@@ -115,6 +117,20 @@ create_server_socket(char const *hostname, char const *service, int *result)
 		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
 			pr_op_errno(errno, "socket() failed");
+			continue;
+		}
+
+		flags = fcntl(fd, F_GETFL);
+		if (flags == -1) {
+			pr_op_errno(errno, "fcntl() to get flags failed");
+			continue;
+		}
+
+		/* Non-block to allow listening on all server sockets */
+		flags |= O_NONBLOCK;
+
+		if (fcntl(fd, F_SETFL, flags) == -1) {
+			pr_op_errno(errno, "fcntl() to set flags failed");
 			continue;
 		}
 
@@ -429,17 +445,33 @@ client_thread_cb(void *arg)
 	return NULL;
 }
 
+static void
+init_fdset(struct server_fds *fds, fd_set *fdset)
+{
+	struct fd_node *node;
+
+	FD_ZERO (fdset);
+	SLIST_FOREACH(node, fds, next)
+		FD_SET (node->id, fdset);
+
+}
+
 /*
  * Waits for client connections and spawns threads to handle them.
  */
 static int
-handle_client_connections(int server_fd)
+handle_client_connections(struct server_fds *fds)
 {
+	struct fd_node *head_node;
 	struct sigaction ign;
 	struct sockaddr_storage client_addr;
 	struct thread_param *param;
+	struct timeval select_time;
 	socklen_t sizeof_client_addr;
+	fd_set readfds;
+	int last_server_fd;
 	int client_fd;
+	int fd;
 	int error;
 
 	/* Ignore SIGPIPES, they're handled apart */
@@ -448,103 +480,82 @@ handle_client_connections(int server_fd)
 	sigemptyset(&ign.sa_mask);
 	sigaction(SIGPIPE, &ign, NULL);
 
-	listen(server_fd, config_get_server_queue());
+	head_node = SLIST_FIRST(fds);
+	last_server_fd = head_node->id;
+
+	SLIST_FOREACH(head_node, fds, next) {
+		error = listen(head_node->id, config_get_server_queue());
+		if (error)
+			return pr_op_errno(errno,
+			    "Couldn't listen on server socket.");
+	}
 
 	sizeof_client_addr = sizeof(client_addr);
 
-	pr_op_debug("Waiting for client connections at server FD %d...",
-	    server_fd);
+	pr_op_debug("Waiting for client connections at server...");
 	do {
-		client_fd = accept(server_fd, (struct sockaddr *) &client_addr,
-		    &sizeof_client_addr);
-		switch (handle_accept_result(client_fd, errno)) {
-		case VERDICT_SUCCESS:
-			break;
-		case VERDICT_RETRY:
-			continue;
-		case VERDICT_EXIT:
-			return -EINVAL;
-		}
+		/* Look for connections every .2 seconds*/
+		select_time.tv_sec = 0;
+		select_time.tv_usec = 200000;
 
-		print_client_addr(&client_addr, "accepted", client_fd);
+		init_fdset(fds, &readfds);
 
-		/*
-		 * Note: My gut says that errors from now on (even the unknown
-		 * ones) should be treated as temporary; maybe the next
-		 * accept() will work.
-		 * So don't interrupt the thread when this happens.
-		 */
-
-		param = malloc(sizeof(struct thread_param));
-		if (param == NULL) {
-			/* No error response PDU on memory allocation. */
-			pr_op_err("Couldn't create thread parameters struct");
-			close(client_fd);
+		if (select(last_server_fd + 1, &readfds, NULL, NULL,
+		    &select_time) == -1) {
+			pr_op_errno(errno, "Monitoring server sockets");
 			continue;
 		}
-		param->fd = client_fd;
-		param->addr = client_addr;
 
-		error = pthread_create(&param->tid, NULL, client_thread_cb,
-		    param);
-		if (error && error != EAGAIN)
-			/* Error with min RTR version */
-			err_pdu_send_internal_error(client_fd, RTR_V0);
-		if (error) {
-			pr_op_errno(error, "Could not spawn the client's thread");
-			close(client_fd);
-			free(param);
+		for (fd = 0; fd < (last_server_fd + 1); fd++) {
+			if (!FD_ISSET (fd, &readfds))
+				continue;
+
+			/* Accept the connection */
+			client_fd = accept(fd, (struct sockaddr *) &client_addr,
+			    &sizeof_client_addr);
+			switch (handle_accept_result(client_fd, errno)) {
+			case VERDICT_SUCCESS:
+				break;
+			case VERDICT_RETRY:
+				continue;
+			case VERDICT_EXIT:
+				return -EINVAL;
+			}
+
+			print_client_addr(&client_addr, "accepted", client_fd);
+
+			/*
+			 * Note: My gut says that errors from now on (even the
+			 * unknown ones) should be treated as temporary; maybe
+			 * the next accept() will work.
+			 * So don't interrupt the thread when this happens.
+			 */
+
+			param = malloc(sizeof(struct thread_param));
+			if (param == NULL) {
+				/* No error PDU on memory allocation. */
+				pr_enomem();
+				close(client_fd);
+				continue;
+			}
+			param->fd = client_fd;
+			param->addr = client_addr;
+
+			error = pthread_create(&param->tid, NULL,
+			    client_thread_cb, param);
+			if (error && error != EAGAIN)
+				/* Error with min RTR version */
+				err_pdu_send_internal_error(client_fd, RTR_V0);
+			if (error) {
+				pr_op_errno(error,
+				    "Could not spawn the client's thread");
+				close(client_fd);
+				free(param);
+			}
 		}
-
 	} while (true);
 
 	return 0; /* Unreachable. */
-}
-
-static void *
-server_thread_cb(void *arg)
-{
-	int *server_fd = (int *)(arg);
-	handle_client_connections(*server_fd);
-	return NULL;
-}
-
-static void
-server_fd_stop_threads(struct server_fds *fds)
-{
-	struct fd_node *node;
-
-	SLIST_FOREACH(node, fds, next) {
-		if (node ->tid < 0)
-			continue;
-		close_thread(node->tid, "RTR server");
-		node->tid = -1;
-	}
-}
-
-static int
-__handle_client_connections(struct server_fds *fds)
-{
-	struct fd_node *node;
-	int error;
-
-	SLIST_FOREACH(node, fds, next) {
-		error = pthread_create(&node->tid, NULL, server_thread_cb,
-		    &node->id);
-		if (error) {
-			server_fd_stop_threads(fds);
-			return error;
-		}
-	}
-
-	SLIST_FOREACH(node, fds, next) {
-		error = pthread_join(node->tid, NULL);
-		if (error)
-			pr_crit("pthread_join() threw %d on an RTR server thread.",
-			    error);
-	}
-
-	return 0;
 }
 
 /*
@@ -609,7 +620,7 @@ rtr_listen(void)
 	if (error)
 		goto revert_server_sockets;
 
-	error = __handle_client_connections(&fds);
+	error = handle_client_connections(&fds);
 
 	end_clients();
 	updates_daemon_destroy();
