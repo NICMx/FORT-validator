@@ -336,7 +336,7 @@ remove_file(char const *path)
 	errno = 0;
 	error = remove(path);
 	if (error)
-		return pr_op_errno(errno, "Couldn't delete %s", path);
+		return pr_val_errno(errno, "Couldn't delete %s", path);
 
 	return 0;
 }
