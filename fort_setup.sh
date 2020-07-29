@@ -101,7 +101,7 @@ echo -n "Once you've read and if you agree ARIN RPA, type \"yes\" to proceed wit
 read ACCEPT
 exit_on_err "\"$(echo $ACCEPT | tr '[:upper:]' '[:lower:]')\" = \"yes\"" '\nYou haven'"'"'t agreed ARIN RPA! You can manually download its TAL or try running this script again.\n\nWe strongly advise to download ARIN TAL so that the Relying Party (validator) can validate the whole RPKI.'
 
-get_tal "ARIN" "$TALS_LOC/arin-rfc7730.tal" $ARIN_TAL
+get_tal "ARIN" "$TALS_LOC/arin.tal" $ARIN_TAL
 
 # Get the rest of the TALs
 echo ""
