@@ -95,6 +95,9 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 	xmlRelaxNGSetValidErrors(rngvalidctx, relax_ng_log_err,
 	    relax_ng_log_warn, NULL);
 
+	xmlRelaxNGSetParserErrors(rngvalidctx, relax_ng_log_err,
+		    relax_ng_log_warn, NULL);
+
 	error = xmlTextReaderRelaxNGValidateCtxt(reader, rngvalidctx, 1);
 	if (error) {
 		error = pr_val_err("Invalid XML document");
