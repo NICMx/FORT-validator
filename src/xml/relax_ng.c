@@ -56,6 +56,9 @@ relax_ng_init(void)
 		goto free_parser_ctx;
 	}
 
+	xmlRelaxNGSetParserErrors(rngparser, relax_ng_log_err,
+	    relax_ng_log_warn, NULL);
+
 	return 0;
 free_parser_ctx:
 	xmlRelaxNGFreeParserCtxt(rngparser);
@@ -94,9 +97,6 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 
 	xmlRelaxNGSetValidErrors(rngvalidctx, relax_ng_log_err,
 	    relax_ng_log_warn, NULL);
-
-	xmlRelaxNGSetParserErrors(rngvalidctx, relax_ng_log_err,
-		    relax_ng_log_warn, NULL);
 
 	error = xmlTextReaderRelaxNGValidateCtxt(reader, rngvalidctx, 1);
 	if (error) {
