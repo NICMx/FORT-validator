@@ -1,8 +1,8 @@
 #include "relax_ng.h"
 
-#include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 #include <libxml/relaxng.h>
+#include <libxml/xmlmemory.h>
 #include <errno.h>
 #include <stdlib.h>
 
@@ -36,6 +36,17 @@ relax_ng_log_warn(void *ctx, const char *msg, ...)
 	VLOG_MSG(warn)
 }
 
+static void
+relax_ng_log_str_err(void *userData, xmlErrorPtr error)
+{
+	char *ptr;
+
+	ptr = error->message;
+	if (ptr[strlen(ptr) - 1] == '\n')
+		ptr[strlen(ptr) - 1] = '\0';
+	pr_val_err("%s (at line %d)", ptr, error->line);
+}
+
 /* Initialize global schema to parse RRDP files */
 int
 relax_ng_init(void)
@@ -50,14 +61,14 @@ relax_ng_init(void)
 		goto cleanup_parser;
 	}
 
+	xmlRelaxNGSetParserErrors(rngparser, relax_ng_log_err,
+	    relax_ng_log_warn, NULL);
+
 	schema = xmlRelaxNGParse(rngparser);
 	if (schema == NULL) {
 		error = pr_op_err("XML parser init error: xmlRelaxNGParse() returned NULL");
 		goto free_parser_ctx;
 	}
-
-	xmlRelaxNGSetParserErrors(rngparser, relax_ng_log_err,
-	    relax_ng_log_warn, NULL);
 
 	return 0;
 free_parser_ctx:
@@ -103,6 +114,9 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 		error = pr_val_err("Invalid XML document");
 		goto free_valid_ctx;
 	}
+
+	xmlTextReaderSetStructuredErrorHandler(reader, relax_ng_log_str_err,
+	    NULL);
 
 	while ((read = xmlTextReaderRead(reader)) == 1) {
 		error = cb(reader, arg);
