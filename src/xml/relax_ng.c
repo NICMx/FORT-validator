@@ -119,6 +119,11 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 	    NULL);
 
 	while ((read = xmlTextReaderRead(reader)) == 1) {
+		if (xmlTextReaderIsValid(reader) <= 0) {
+			error = pr_val_err("XML document isn't valid.");
+			goto free_valid_ctx;
+		}
+
 		error = cb(reader, arg);
 		if (error)
 			goto free_valid_ctx;
