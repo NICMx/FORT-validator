@@ -1,5 +1,6 @@
 ---
 title: SLURM
+description: "Use SLURM to modify the RPKI assertions validated and published by an RTR server"
 ---
 
 # {{ page.title }} 

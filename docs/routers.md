@@ -1,5 +1,6 @@
 ---
 title: Routers
+description: Configuration guide for FORT Validator interaction with routers through RTR protocol.
 ---
  
 # {{ page.title }}
