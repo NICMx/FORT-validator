@@ -11,6 +11,7 @@ defaults:
 fort-latest-version: 1.3.0
 plugins:
   - jekyll-seo-tag
+  - jekyll-sitemap
 #SEO configuration
 title: "FORT Validator - RPKI Relying Party"
 tagline: "FORT Validator is a RPKI Relying Party"
