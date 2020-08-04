@@ -14,8 +14,8 @@ plugins:
   - jekyll-sitemap
 #SEO configuration
 title: "FORT Validator - RPKI Relying Party"
-tagline: "FORT Validator is a RPKI Relying Party"
-description: "FORT validator is a RPKI Relying Party. It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers."
+tagline: "FORT Validator is an RPKI Relying Party"
+description: "FORT validator is an RPKI Relying Party. It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers."
 lang: en
 twitter:
   card: summary
