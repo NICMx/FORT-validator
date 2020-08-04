@@ -75,7 +75,7 @@ sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
 
 > If a dependency can't be found at the repositories (i.e. libcurl4), try using a newer repository, such as Debian Buster.
 > 
-> Add the following line to `/etc/apt/sources.list`, replacing the mirror (_http://ftp.mx.debian.org/debian_) with your [prefered one](https://www.debian.org/mirror/list):
+> Add the following line to `/etc/apt/sources.list`, replacing the mirror (_http://ftp.mx.debian.org/debian_) with your [preferred one](https://www.debian.org/mirror/list):
 > 
 > `deb http://ftp.mx.debian.org/debian buster main`
 

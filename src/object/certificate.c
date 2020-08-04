@@ -1912,7 +1912,7 @@ force_aia_validation(struct rpki_uri *caIssuers, X509 *son, bool is_ta_child)
 
 	pr_val_debug("AIA's URI didn't matched parent URI, trying to SYNC");
 
-	/* RSYNC is still the prefered access mechanism */
+	/* RSYNC is still the preferred access mechanism */
 	do {
 		error = download_files(caIssuers, false, false);
 		if (!error)

@@ -569,7 +569,7 @@ If disabled (eg. `--http.enabled=false`), FORT validator won't request HTTP URIs
 - **Default:** 60
 - **Range:** 0--100
 
-> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are prefered over rsync requests.
+> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are preferred over rsync requests.
 
 Assign priority to use HTTP to fetch repository files. A higher value means a higher priority.
 
@@ -924,7 +924,7 @@ If disabled (eg. `--rsync.enabled=false`), FORT validator won't download files n
 - **Default:** 50
 - **Range:** 0--100
 
-> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are prefered over rsync requests.
+> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are preferred over rsync requests.
 
 Assign priority to use RSYNC to fetch repository files. A higher value means a higher priority.
 
