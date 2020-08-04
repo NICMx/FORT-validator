@@ -1,6 +1,7 @@
 ---
 title: Logging
 command: fort
+description: This is a guide to configure and use the logging attributes of FORT Validator.
 url-log-enabled: "[`--log.enabled`](usage.html#--logenabled)"
 url-log-level: "[`--log.level`](usage.html#--loglevel)"
 url-log-output: "[`--log.output`](usage.html#--logoutput)"

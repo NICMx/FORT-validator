@@ -1,5 +1,6 @@
 ---
 title: Incidence
+description: The incidence section of Fort's configuration file is a means to modify its behavior upon encountering profile violations that, from experience, are often overlooked.
 ---
  
 # {{ page.title }} 

@@ -1,5 +1,6 @@
 ---
 title: Basic Usage
+description: This is probably all you need, an RTR server will serve the ROAs resulting from a validation rooted at the trust anchors defined by the TALs contained at directory '--tal'.
 ---
 
 # {{ page.title }}
