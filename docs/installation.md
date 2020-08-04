@@ -1,5 +1,6 @@
 ---
 title: Compilation and Installation
+description: Guide to compile and install FORT Validator.
 ---
 
 # {{ page.title }}

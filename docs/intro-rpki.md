@@ -1,5 +1,6 @@
 ---
 title: Introduction to RPKI
+description: The RPKI (Resource Public Key Infrastructure) is a PKI (Public Key Infrastructure) that deals with Internet Resources. (In this context, “resource” refers to IP Addresses and AS numbers.)
 ---
 
 # {{ page.title }}

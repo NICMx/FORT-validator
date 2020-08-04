@@ -1,5 +1,6 @@
 ---
 title: Introduction to Fort
+description: FORT Validator is a command line application intended for UNIX operating systems, written in C.
 ---
 
 # {{ page.title }}

@@ -6,5 +6,16 @@ defaults:
       path: "" # an empty string here means all files in the project
     values:
       layout: "default"
+      image: "/img/logo_validador_og.png"
 
 fort-latest-version: 1.4.0
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+#SEO configuration
+title: "FORT Validator - RPKI Relying Party"
+tagline: "FORT Validator is an RPKI Relying Party"
+description: "FORT validator is an RPKI Relying Party. It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers."
+lang: en
+twitter:
+  card: summary

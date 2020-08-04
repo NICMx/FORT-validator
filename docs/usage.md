@@ -1,6 +1,7 @@
 ---
 title: Program Arguments
 command: fort
+description: Guide to use arguments of FORT Validator.
 ---
 
 # {{ page.title }}
