@@ -18,6 +18,7 @@
 #include "asn1/oid.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "crypto/hash.h"
+#include "incidence/incidence.h"
 #include "object/bgpsec.h"
 #include "object/name.h"
 #include "object/manifest.h"
@@ -883,8 +884,6 @@ verify_cert_crl_stale(struct validation *state, X509 *cert,
 	int error;
 	int ok;
 
-	pr_val_info("Re-validating avoiding CRL time check");
-
 	ctx = X509_STORE_CTX_new();
 	if (ctx == NULL) {
 		val_crypto_err("X509_STORE_CTX_new() returned NULL");
@@ -988,15 +987,18 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 		 */
 		error = X509_STORE_CTX_get_error(ctx);
 		if (error) {
-			if (error == X509_V_ERR_CRL_HAS_EXPIRED) {
-				if (incidence(INID_CRL_STALE, "CRL is stale/expired"))
-					goto abort;
-
-				X509_STORE_CTX_free(ctx);
-				return verify_cert_crl_stale(state, cert, crls);
+			if (error != X509_V_ERR_CRL_HAS_EXPIRED) {
+				pr_val_err("Certificate validation failed: %s",
+				    X509_verify_cert_error_string(error));
+				goto abort;
 			}
-			pr_val_err("Certificate validation failed: %s",
-			    X509_verify_cert_error_string(error));
+			if (incidence(INID_CRL_STALE, "CRL is stale/expired"))
+				goto abort;
+
+			X509_STORE_CTX_free(ctx);
+			if (incidence_get_action(INID_CRL_STALE) == INAC_WARN)
+				pr_val_info("Re-validating avoiding CRL time check");
+			return verify_cert_crl_stale(state, cert, crls);
 		} else {
 			/*
 			 * ...But don't trust X509_STORE_CTX_get_error() either.
