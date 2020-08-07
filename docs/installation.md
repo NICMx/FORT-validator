@@ -68,6 +68,14 @@ mkdir ~/tal
 
 ### Debian package
 
+Currently, there are 2 alternatives to install a debian package:
+- [Latest version](#latest-version): this package is created as part of the latest release (currently v{{ site.fort-latest-version }}) and is manually installed.
+- [Debian repository version](#debian-repository-version): this package is at Debian repositories, so it can be fetched from there.
+
+#### Latest version
+
+Just download the .deb package and install it. The fort service is automatically started once the installation is done.
+
 {% highlight bash %}
 wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort_{{ site.fort-latest-version }}-1_amd64.deb
 sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
@@ -78,6 +86,15 @@ sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
 > Add the following line to `/etc/apt/sources.list`, replacing the mirror (_http://ftp.mx.debian.org/debian_) with your [preferred one](https://www.debian.org/mirror/list):
 > 
 > `deb http://ftp.mx.debian.org/debian buster main`
+
+This version ships with 4 of the 5 TALs, so in order to get the missing one, the [Setup script](#setup-script) can be executed using the argument `/etc/fort/tal`:
+
+{% highlight bash %}
+# Assuming that the script is at the current location and the script was already downloaded
+sudo ./fort_setup.sh /etc/fort/tal
+# Don't forget to restart fort service
+sudo service fort restart
+{% endhighlight %}
 
 Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which is just the binary ran as a daemon. You can [configure](usage.html#--configuration-file) it at `/etc/fort/config.json`.
 
@@ -99,6 +116,41 @@ sudo systemctl stop fort
 sudo systemctl disable fort
 sudo systemctl enable fort
 {% endhighlight %}
+
+#### Debian repository version
+
+Special thanks to [Marco d'Itri](https://github.com/rfc1036) for this collaboration.
+
+To know the current status of this package, visit [`fort-validator` debian package tracker](https://tracker.debian.org/pkg/fort-validator).
+
+The main differences between this version (fort-validator package) and the [Latest version](#latest-version) package are:
+- [`rpki-trust-anchors`](https://tracker.debian.org/pkg/rpki-trust-anchors) dependency: this package has such dependency, while [Latest version](#latest-version) doesn't.
+- Since this package isn't maintained by FORT validator's team, it could be at least one version behind than [Latest version](#latest-version).
+- This version reads the TALs from `/etc/tals`, while [Latest version](#latest-version) reads them from `/etc/fort/tal`.
+
+Assuming that the package is still at the `testing` repository, such repository can be added to the APT sources list in order to do a simple `apt install`.
+
+First, check if the file `/etc/apt/apt.conf` exists, otherwise create it. The file should have the following line to keep using the stable repository as the default:
+
+{% highlight bash %}
+APT::Default-Release "stable";
+{% endhighlight %}
+
+Now add the Debian `testing` repositories, add the following lines to `/etc/apt/sources.list`:
+
+{% highlight bash %}
+deb http://deb.debian.org/debian/ testing main
+deb-src http://deb.debian.org/debian/ testing main
+{% endhighlight %}
+
+Finally, just run:
+
+{% highlight bash %}
+sudo apt update
+sudo apt -t testing install fort-validator
+{% endhighlight %}
+
+FORT validator is now installed as a service, check the status with `sudo service fort start`.
 
 ### Gentoo package
 
