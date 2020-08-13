@@ -108,12 +108,13 @@ create_server_socket(char const *hostname, char const *service, int *result)
 	if (error)
 		return error;
 
-	for (addr = addrs; addr != NULL; addr = addr->ai_next) {
+	if (addrs != NULL)
 		pr_op_info(
 		    "Attempting to bind socket to address '%s', port '%s'.",
-		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
+		    (addrs->ai_canonname != NULL) ? addrs->ai_canonname : "any",
 		    service);
 
+	for (addr = addrs; addr != NULL; addr = addr->ai_next) {
 		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
 			pr_op_errno(errno, "socket() failed");
@@ -123,6 +124,7 @@ create_server_socket(char const *hostname, char const *service, int *result)
 		flags = fcntl(fd, F_GETFL);
 		if (flags == -1) {
 			pr_op_errno(errno, "fcntl() to get flags failed");
+			close(fd);
 			continue;
 		}
 
@@ -131,6 +133,7 @@ create_server_socket(char const *hostname, char const *service, int *result)
 
 		if (fcntl(fd, F_SETFL, flags) == -1) {
 			pr_op_errno(errno, "fcntl() to set flags failed");
+			close(fd);
 			continue;
 		}
 
@@ -138,6 +141,7 @@ create_server_socket(char const *hostname, char const *service, int *result)
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
 		    sizeof(int)) < 0) {
 			pr_op_errno(errno, "setsockopt(SO_REUSEADDR) failed");
+			close(fd);
 			continue;
 		}
 
@@ -145,11 +149,13 @@ create_server_socket(char const *hostname, char const *service, int *result)
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse,
 		    sizeof(int)) < 0) {
 			pr_op_errno(errno, "setsockopt(SO_REUSEPORT) failed");
+			close(fd);
 			continue;
 		}
 
 		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
 			pr_op_errno(errno, "bind() failed");
+			close(fd);
 			continue;
 		}
 
