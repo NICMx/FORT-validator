@@ -28,10 +28,9 @@ struct thread_param {
 	struct sockaddr_storage addr;
 };
 
-/* Parameters for each thread that binds to a server address/socket */
+/* Parameters for each file descriptor that binds to a server address/socket */
 struct fd_node {
 	int id;
-	pthread_t tid;
 	SLIST_ENTRY(fd_node) next;
 };
 
@@ -190,7 +189,6 @@ fd_node_create(struct fd_node **result)
 		return pr_enomem();
 
 	node->id = -1;
-	node->tid = -1;
 
 	*result = node;
 	return 0;
