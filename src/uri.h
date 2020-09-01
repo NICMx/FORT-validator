@@ -6,15 +6,20 @@
 #include "asn1/asn1c/IA5String.h"
 
 /* Flags to indicate expected uri type */
-#define URI_VALID_RSYNC 0x01
-#define URI_VALID_HTTPS 0x02
+#define URI_VALID_RSYNC         0x01
+#define URI_VALID_HTTPS         0x02
+/* Work with a local workspace (eg. map rsync RRPD uri's) */
+#define URI_USE_RRDP_WORKSPACE  0x10
 
 struct rpki_uri;
 
+/* Maps RSYNC URIs of RRDP to a local workspace */
+int uri_create_rsync_str_rrdp(struct rpki_uri **, char const *, size_t);
+int uri_create_https_str_rrdp(struct rpki_uri **, char const *, size_t);
+
 int uri_create_rsync_str(struct rpki_uri **, char const *, size_t);
-int uri_create_https_str(struct rpki_uri **, char const *, size_t);
 int uri_create_mixed_str(struct rpki_uri **, char const *, size_t);
-int uri_create_mft(struct rpki_uri **, struct rpki_uri *, IA5String_t *);
+int uri_create_mft(struct rpki_uri **, struct rpki_uri *, IA5String_t *, bool);
 int uri_create_ad(struct rpki_uri **, ACCESS_DESCRIPTION *, int);
 
 void uri_refget(struct rpki_uri *);

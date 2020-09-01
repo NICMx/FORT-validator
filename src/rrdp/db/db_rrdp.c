@@ -2,15 +2,18 @@
 
 #include <sys/queue.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include "crypto/hash.h"
 #include "common.h"
 #include "log.h"
 
 struct tal_elem {
 	char *file_name;
 	struct db_rrdp_uri *uris;
+	char *workspace;
 	bool visited;
 	SLIST_ENTRY(tal_elem) next;
 };
@@ -26,6 +29,60 @@ static struct db_rrdp db;
 /** Read/write lock, which protects @db. */
 static pthread_rwlock_t lock;
 
+/*
+ * Creates an ID for the RRDP local workspace.
+ *
+ * The ID is generated using the hash (sha-1) of @base. The first 4 bytes of
+ * the hash are "stringified" (8 chars) and a '/' is added at the end to
+ * (later) facilitate the concatenation of the ID at --local-repository.
+ * 
+ * The ID is allocated at @result.
+ */
+static int
+get_workspace_path(char const *base, char **result)
+{
+/* SHA1 produces 20 bytes */
+#define HASH_LEN 20
+/* We'll use the first 4 bytes (8 chars) */
+#define OUT_LEN   8
+	unsigned char *hash;
+	unsigned int hash_len;
+	unsigned int i;
+	char *tmp;
+	char *ptr;
+	int error;
+
+	hash = malloc(HASH_LEN * sizeof(unsigned char));
+	if (hash == NULL)
+		return pr_enomem();
+
+	hash_len = 0;
+	error = hash_str("sha1", base, hash, &hash_len);
+	if (error) {
+		free(hash);
+		return error;
+	}
+
+	/* Get the first bytes + one slash + NUL char */
+	tmp = malloc(OUT_LEN + 2);
+	if (tmp == NULL) {
+		free(hash);
+		return pr_enomem();
+	}
+
+	ptr = tmp;
+	for (i = 0; i < OUT_LEN / 2; i++) {
+		sprintf(ptr, "%02X", hash[i]);
+		ptr += 2;
+	}
+	tmp[OUT_LEN] = '/';
+	tmp[OUT_LEN + 1] = '\0';
+
+	free(hash);
+	*result = tmp;
+	return 0;
+}
+
 static int
 tal_elem_create(struct tal_elem **elem, char const *name)
 {
@@ -39,22 +96,30 @@ tal_elem_create(struct tal_elem **elem, char const *name)
 
 	tmp_uris = NULL;
 	error = db_rrdp_uris_create(&tmp_uris);
-	if (error) {
-		free(tmp);
-		return error;
-	}
+	if (error)
+		goto end1;
 	tmp->uris = tmp_uris;
 
 	tmp->visited = true;
 	tmp->file_name = strdup(name);
 	if (tmp->file_name == NULL) {
-		db_rrdp_uris_destroy(tmp->uris);
-		free(tmp);
-		return pr_enomem();
+		error = pr_enomem();
+		goto end2;
 	}
+
+	error = get_workspace_path(name, &tmp->workspace);
+	if (error)
+		goto end3;
 
 	*elem = tmp;
 	return 0;
+end3:
+	free(tmp->file_name);
+end2:
+	db_rrdp_uris_destroy(tmp->uris);
+end1:
+	free(tmp);
+	return error;
 }
 
 static void
@@ -64,6 +129,7 @@ tal_elem_destroy(struct tal_elem *elem, bool remove_local)
 		db_rrdp_uris_remove_all_local(elem->uris);
 	db_rrdp_uris_destroy(elem->uris);
 	free(elem->file_name);
+	free(elem->workspace);
 	free(elem);
 }
 
@@ -157,7 +223,22 @@ db_rrdp_get_uris(char const *tal_name)
 	struct tal_elem *found;
 
 	found = db_rrdp_find_tal(tal_name);
-	return found != NULL ? found->uris : NULL;
+	if (found == NULL)
+		pr_crit("db_rrdp_find_tal() returned NULL, means it hasn't been initialized");
+
+	return found->uris;
+}
+
+char const *
+db_rrdp_get_workspace(char const *tal_name)
+{
+	struct tal_elem *found;
+
+	found = db_rrdp_find_tal(tal_name);
+	if (found == NULL)
+		pr_crit("db_rrdp_find_tal() returned NULL, means it hasn't been initialized");
+
+	return found->workspace;
 }
 
 /* Set all tals to non-visited */

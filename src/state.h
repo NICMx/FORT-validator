@@ -36,5 +36,6 @@ struct validation_handler const *
 validation_get_validation_handler(struct validation *);
 
 struct db_rrdp_uri *validation_get_rrdp_uris(struct validation *);
+char const *validation_get_rrdp_workspace(struct validation *);
 
 #endif /* SRC_STATE_H_ */

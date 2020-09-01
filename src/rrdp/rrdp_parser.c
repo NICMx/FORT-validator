@@ -523,7 +523,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 	uri = NULL;
 	if (tmp->doc_data.hash_len > 0) {
 		/* Get the current file from the uri */
-		error = uri_create_rsync_str(&uri, tmp->doc_data.uri,
+		error = uri_create_rsync_str_rrdp(&uri, tmp->doc_data.uri,
 		    strlen(tmp->doc_data.uri));
 		if (error)
 			goto release_base64;
@@ -565,7 +565,7 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw **withdraw)
 		goto release_tmp;
 
 	/* rfc8181#section-2.2, get the file from the uri */
-	error = uri_create_rsync_str(&uri, tmp->doc_data.uri,
+	error = uri_create_rsync_str_rrdp(&uri, tmp->doc_data.uri,
 	    strlen(tmp->doc_data.uri));
 	if (error)
 		goto release_tmp;
@@ -596,7 +596,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 	int error;
 
 	/* rfc8181#section-2.2 must be an rsync URI */
-	error = uri_create_rsync_str(&uri, location, strlen(location));
+	error = uri_create_rsync_str_rrdp(&uri, location, strlen(location));
 	if (error)
 		return error;
 
@@ -655,7 +655,7 @@ __delete_from_uri(char const *location, struct visited_uris *visited_uris)
 	int error;
 
 	/* rfc8181#section-2.2 must be an rsync URI */
-	error = uri_create_rsync_str(&uri, location, strlen(location));
+	error = uri_create_rsync_str_rrdp(&uri, location, strlen(location));
 	if (error)
 		return error;
 
@@ -1032,7 +1032,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 	head_data = &delta_head->doc_data;
 
 	pr_val_debug("Processing delta '%s'.", delta_head->doc_data.uri);
-	error = uri_create_https_str(&uri, head_data->uri,
+	error = uri_create_https_str_rrdp(&uri, head_data->uri,
 	    strlen(head_data->uri));
 	if (error)
 		return error;
@@ -1123,7 +1123,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 	args.visited_uris = visited_uris;
 
 	pr_val_debug("Processing snapshot '%s'.", parent->snapshot.uri);
-	error = uri_create_https_str(&uri, parent->snapshot.uri,
+	error = uri_create_https_str_rrdp(&uri, parent->snapshot.uri,
 	    strlen(parent->snapshot.uri));
 	if (error)
 		return error;

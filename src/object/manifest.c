@@ -150,7 +150,8 @@ validate_manifest(struct Manifest *manifest)
 }
 
 static int
-build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
+build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
+    struct rpp **pp)
 {
 	int i;
 	struct FileAndHash *fah;
@@ -164,7 +165,8 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
 
-		error = uri_create_mft(&uri, mft_uri, &fah->file);
+		error = uri_create_mft(&uri, mft_uri, &fah->file,
+		    rrdp_workspace);
 		/*
 		 * Not handling ENOTRSYNC is fine because the manifest URL
 		 * should have been RSYNC. Something went wrong if an RSYNC URL
@@ -225,10 +227,10 @@ fail:
 
 /**
  * Validates the manifest pointed by @uri, returns the RPP described by it in
- * @pp.
+ * @pp. If @rrdp_workspace is true, use the local RRDP repository.
  */
 int
-handle_manifest(struct rpki_uri *uri, struct rpp **pp)
+handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
@@ -251,7 +253,7 @@ handle_manifest(struct rpki_uri *uri, struct rpp **pp)
 		goto revert_sobj;
 
 	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, uri, pp);
+	error = build_rpp(mft, uri, rrdp_workspace, pp);
 	if (error)
 		goto revert_manifest;
 

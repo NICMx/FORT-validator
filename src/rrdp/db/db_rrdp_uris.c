@@ -24,6 +24,7 @@ struct uris_table {
 
 struct db_rrdp_uri {
 	struct uris_table *table;
+	char const *current_workspace;
 };
 
 static int
@@ -115,6 +116,19 @@ get_thread_rrdp_uris(struct db_rrdp_uri **result)
 	return 0;
 }
 
+static int
+get_thread_rrdp_workspace(char const **result)
+{
+	struct validation *state;
+
+	state = state_retrieve();
+	if (state == NULL)
+		return pr_val_err("No state related to this thread");
+
+	*result = validation_get_rrdp_workspace(state);
+	return 0;
+}
+
 int
 db_rrdp_uris_create(struct db_rrdp_uri **uris)
 {
@@ -125,6 +139,7 @@ db_rrdp_uris_create(struct db_rrdp_uri **uris)
 		return pr_enomem();
 
 	tmp->table = NULL;
+	tmp->current_workspace = NULL;
 
 	*uris = tmp;
 	return 0;
@@ -347,5 +362,48 @@ db_rrdp_uris_remove_all_local(struct db_rrdp_uri *uris)
 			return error;
 	}
 
+	return 0;
+}
+
+char const *
+db_rrdp_uris_workspace_get(void)
+{
+	struct db_rrdp_uri *uris;
+	int error;
+
+	uris = NULL;
+	error = get_thread_rrdp_uris(&uris);
+	if (error)
+		return NULL;
+
+	return uris->current_workspace;
+}
+
+int
+db_rrdp_uris_workspace_enable(void)
+{
+	struct db_rrdp_uri *uris;
+	int error;
+
+	uris = NULL;
+	error = get_thread_rrdp_uris(&uris);
+	if (error)
+		return error;
+
+	return get_thread_rrdp_workspace(&uris->current_workspace);
+}
+
+int
+db_rrdp_uris_workspace_disable(void)
+{
+	struct db_rrdp_uri *uris;
+	int error;
+
+	uris = NULL;
+	error = get_thread_rrdp_uris(&uris);
+	if (error)
+		return error;
+
+	uris->current_workspace = NULL;
 	return 0;
 }

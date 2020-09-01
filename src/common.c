@@ -205,13 +205,15 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 	result = false;
 	file = fopen(location, "rb");
 	if (file == NULL) {
-		cb(errno, "Could not open location '%s'",
-		    location);
+		if (cb != NULL)
+			cb(errno, "Could not open location '%s'",
+			    location);
 		return false;
 	}
 
 	if (fstat(fileno(file), &attr) == -1) {
-		cb(errno, "fstat(%s) failed", location);
+		if (cb != NULL)
+			cb(errno, "fstat(%s) failed", location);
 		goto end;
 	}
 
@@ -226,7 +228,8 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 
 end:
 	if (fclose(file) == -1)
-		cb(errno, "fclose() failed");
+		if (cb != NULL)
+			cb(errno, "fclose() failed");
 	return result;
 }
 

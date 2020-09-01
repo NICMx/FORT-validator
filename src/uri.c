@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <strings.h>
+#include "rrdp/db/db_rrdp_uris.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -214,19 +215,23 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	static char const *const PFX_HTTPS = "https://";
 	size_t const PFX_RSYNC_LEN = strlen(PFX_RSYNC);
 	size_t const PFX_HTTPS_LEN = strlen(PFX_HTTPS);
+	uint8_t l_flags;
 	int error;
 
-	if (flags == URI_VALID_RSYNC) {
+	/* Exclude RSYNC RRDP flag, isn't relevant here */
+	l_flags = flags & ~URI_USE_RRDP_WORKSPACE;
+
+	if (l_flags == URI_VALID_RSYNC) {
 		(*type) = URI_RSYNC;
 		return validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global,
 		    global_len, size, ENOTRSYNC);
 	}
-	if (flags == URI_VALID_HTTPS) {
+	if (l_flags == URI_VALID_HTTPS) {
 		(*type) = URI_HTTPS;
 		return validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global,
 		    global_len, size, ENOTHTTPS);
 	}
-	if (flags != (URI_VALID_RSYNC & URI_VALID_HTTPS))
+	if (l_flags != (URI_VALID_RSYNC | URI_VALID_HTTPS))
 		pr_crit("Unknown URI flag");
 
 	/* It has both flags */
@@ -249,6 +254,28 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	return 0;
 }
 
+static int
+get_local_workspace(char **result, size_t *result_len)
+{
+	char const *workspace;
+	char *tmp;
+
+	workspace = db_rrdp_uris_workspace_get();
+	if (workspace == NULL) {
+		*result = NULL;
+		*result_len = 0;
+		return 0;
+	}
+
+	tmp = strdup(workspace);
+	if (tmp == NULL)
+		return pr_enomem();
+
+	*result = tmp;
+	*result_len = strlen(tmp);
+	return 0;
+}
+
 /**
  * Initializes @uri->local by converting @uri->global.
  *
@@ -265,10 +292,12 @@ g2l(char const *global, size_t global_len, uint8_t flags, char **result,
 {
 	char const *repository;
 	char *local;
+	char *workspace;
 	size_t prefix_len;
 	size_t repository_len;
 	size_t extra_slash;
 	size_t offset;
+	size_t workspace_len;
 	enum rpki_uri_type type;
 	int error;
 
@@ -283,9 +312,20 @@ g2l(char const *global, size_t global_len, uint8_t flags, char **result,
 	global_len -= prefix_len;
 	extra_slash = (repository[repository_len - 1] == '/') ? 0 : 1;
 
-	local = malloc(repository_len + extra_slash + global_len + 1);
-	if (!local)
+	workspace = NULL;
+	workspace_len = 0;
+	if ((flags & URI_USE_RRDP_WORKSPACE) != 0) {
+		error = get_local_workspace(&workspace, &workspace_len);
+		if (error)
+			return error;
+	}
+
+	local = malloc(repository_len + extra_slash + workspace_len +
+	    global_len + 1);
+	if (!local) {
+		free(workspace);
 		return pr_enomem();
+	}
 
 	offset = 0;
 	strcpy(local + offset, repository);
@@ -294,10 +334,15 @@ g2l(char const *global, size_t global_len, uint8_t flags, char **result,
 		strcpy(local + offset, "/");
 		offset += extra_slash;
 	}
+	if (workspace_len > 0) {
+		strcpy(local + offset, workspace);
+		offset += workspace_len;
+	}
 	strncpy(local + offset, global, global_len);
 	offset += global_len;
 	local[offset] = '\0';
 
+	free(workspace);
 	*result = local;
 	(*result_type) = type;
 	return 0;
@@ -340,15 +385,25 @@ uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
 }
 
 int
-uri_create_rsync_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
+uri_create_rsync_str_rrdp(struct rpki_uri **uri, char const *guri,
+    size_t guri_len)
 {
-	return uri_create(uri, URI_VALID_RSYNC, guri, guri_len);
+	return uri_create(uri, URI_VALID_RSYNC | URI_USE_RRDP_WORKSPACE, guri,
+	    guri_len);
 }
 
 int
-uri_create_https_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
+uri_create_https_str_rrdp(struct rpki_uri **uri, char const *guri,
+    size_t guri_len)
 {
-	return uri_create(uri, URI_VALID_HTTPS, guri, guri_len);
+	return uri_create(uri, URI_VALID_HTTPS | URI_USE_RRDP_WORKSPACE, guri,
+	    guri_len);
+}
+
+int
+uri_create_rsync_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
+{
+	return uri_create(uri, URI_VALID_RSYNC, guri, guri_len);
 }
 
 /*
@@ -359,7 +414,7 @@ uri_create_https_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 int
 uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 {
-	return uri_create(uri, URI_VALID_RSYNC & URI_VALID_HTTPS, guri,
+	return uri_create(uri, URI_VALID_RSYNC | URI_VALID_HTTPS, guri,
 	    guri_len);
 }
 
@@ -367,9 +422,11 @@ uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
  * Manifests URIs are a little special in that they are relative.
  */
 int
-uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
+uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
+    bool use_rrdp_workspace)
 {
 	struct rpki_uri *uri;
+	uint8_t flags;
 	int error;
 
 	uri = malloc(sizeof(struct rpki_uri));
@@ -382,7 +439,11 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 		return error;
 	}
 
-	error = autocomplete_local(uri, URI_VALID_RSYNC);
+	flags = URI_VALID_RSYNC;
+	if (use_rrdp_workspace)
+		flags |= URI_USE_RRDP_WORKSPACE;
+
+	error = autocomplete_local(uri, flags);
 	if (error) {
 		free(uri->global);
 		free(uri);

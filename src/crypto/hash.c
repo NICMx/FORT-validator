@@ -236,3 +236,28 @@ hash_validate_octet_string(char const *algorithm,
 	return hash_validate(algorithm, expected->buf, expected->size,
 	    data->buf, data->size);
 }
+
+/*
+ * Hash the @str using the specified @algorithm, setting the result at the
+ * @result buffer and its length at @result_len.
+ * 
+ * Return 0 on success, any other value means error.
+ */
+int
+hash_str(char const *algorithm, char const *str, unsigned char *result,
+    unsigned int *result_len)
+{
+	unsigned char *src;
+	int error;
+
+	src = malloc(strlen(str));
+	if (src == NULL)
+		return pr_enomem();
+
+	memcpy(src, str, strlen(str));
+
+	error = hash_buffer(algorithm, src, strlen(str), result, result_len);
+
+	free(src);
+	return error;
+}
