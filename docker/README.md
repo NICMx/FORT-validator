@@ -6,12 +6,16 @@ Special thanks to [ximon18](https://github.com/ximon18) for its [contribution](h
 
 **This image doesn't include TAL (Trust Anchor Locator) files.** They must be obtained somewhere else (here's [an example](https://github.com/NICMx/FORT-validator/tree/master/examples/tal)).
 
-## Build
-
-Just run a simple:
+To pull the official docker image, run:
 
 ```
-docker build -t fort:latest .
+docker pull nicmx/fort-validator:latest
+```
+
+If you want to build the image yourself, run the following command from this source folder:
+
+```
+docker build -t fort-validator:latest .
 ```
 
 ## Usage
@@ -28,18 +32,18 @@ By default, the container uses a configuration file located (inside the containe
 Here's a basic usage example to run FORT validator mostly with default values (runs as RTR server by default, bound to port 323):
 
 ```
-docker run --name fort -v host/path/to/tals:/etc/fort/tal:ro -p 323:323 -d fort
+docker run --name fort-validator -v host/path/to/tals:/etc/fort/tal:ro -p 323:323 -d fort-validator
 ```
 
 At this example:
-- `host/path/to/tals` is the path a the host machine where the TALs are located (`-v` mounts the content at the container, the last value `:ro` is to use it as read only). Inside the container, by default `fort` will seek the TALs at `/etc/fort/tal`.
+- `host/path/to/tals` is the path a the host machine where the TALs are located (`-v` mounts the content at the container, the last value `:ro` is to use it as read only). Inside the container, by default `fort-validator` will seek the TALs at `/etc/fort/tal`.
 - The host port `323` is mapped to the container port `323`, which is the default value where the RTR server will be bound to (see [`--server.port`](https://nicmx.github.io/FORT-validator/usage.html#--serverport)).
 - `-d` runs the container in daemon mode.
 
 When using `-d` to run the service in the background the logs can be tailed like so:
 
 ```
-docker logs -f fort
+docker logs -f fort-validator
 ```
 
 ## Examples
@@ -49,39 +53,39 @@ The container can receive more configuration arguments, useful to set more [Prog
 1. Store the local cache at the host machine (using the path `path/to/cache`) and run as RTR server:
 
 ```
-docker run --name fort -v path/to/tals:/etc/fort/tal:ro \
+docker run --name fort-validator -v path/to/tals:/etc/fort/tal:ro \
            -v path/to/cache:/var/local/fort \
-           -p 323:323 -d fort
+           -p 323:323 -d fort-validator
 ```
 
 2. Use your own config file:
 
 ```
-docker run --name fort -v path/to/config/file:/etc/fort/fort.conf:ro -p 323:323 -d fort
+docker run --name fort-validator -v path/to/config/file:/etc/fort/fort.conf:ro -p 323:323 -d fort-validator
 ```
 
 3. Use your own command arguments:
 
 ```
-docker run --name fort -v path/to/tals:/etc/fort/tal:ro -p 323:323 -ti fort [args]
+docker run --name fort-validator -v path/to/tals:/etc/fort/tal:ro -p 323:323 -ti fort-validator [args]
 ```
 
 3.1. Using the [`--help`](https://nicmx.github.io/FORT-validator/usage.html#--help) argument:
 
 ```
-docker run --name fort --rm -ti fort -- -help
+docker run --name fort-validator --rm -ti fort-validator -- -help
 ```
 
 3.2. Running once and printing the resulting valid ROAs to standard output:
 
 ```
-docker run --name fort --rm -v path/to/tals:/etc/fort/tal:ro \
-           -ti fort --tal /etc/fort/tal --mode standalone --output.roa -
+docker run --name fort-validator --rm -v path/to/tals:/etc/fort/tal:ro \
+           -ti fort-validator --tal /etc/fort/tal --mode standalone --output.roa -
 ```
 
 3.3. Using a SLURM file (located at `path/to/slurm/my.slurm`):
 
 ```
-docker run --name fort -rm -v path/to/tals:/etc/fort/tal:ro -v path/to/slurm:/tmp:ro \
-           -p 323:323 -ti fort --slurm /tmp/my.slurm
+docker run --name fort-validator -rm -v path/to/tals:/etc/fort/tal:ro -v path/to/slurm:/tmp:ro \
+           -p 323:323 -ti fort-validator --slurm /tmp/my.slurm
 ```
