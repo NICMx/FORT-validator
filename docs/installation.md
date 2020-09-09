@@ -12,6 +12,7 @@ description: Guide to compile and install FORT Validator.
 3. [Option 1: Installing the package](#option-1-installing-the-package)
 	1. [Debian package](#debian-package)
 	2. [Gentoo package](#gentoo-package)
+	3. [RHEL/CentOS package](#rhelcentos-package)
 4. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
@@ -179,6 +180,38 @@ FORT validator can now be installed. Don't forget to add ARIN's TAL and restart 
 root# emerge --ask net-misc/FORT-validator
 root# su -s /bin/sh -c '/usr/libexec/fort/fort_setup.sh /usr/share/fort/tal/' fort
 root# rc-service fort restart
+{% endhighlight %}
+
+The configuration file utilized by the service can be found at `/etc/fort/config.json` (see more about [configuration file](usage.html#--configuration-file)).
+
+### RHEL/CentOS package
+
+> **RHEL/CentOS 7** users: the EPEL repository must be enabled to successfully install FORT validator.
+>
+> The following command will do: `sudo yum install epel-release`
+
+Download the .rpm and install it (currently tested at CentOS 7 and 8):
+
+{% highlight bash %}
+wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
+sudo yum install fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
+{% endhighlight %}
+
+This version ships with 4 of the 5 TALs, so in order to get the missing one, the [Setup script](#setup-script) can be executed using the argument `/etc/fort/tal`:
+
+{% highlight bash %}
+# Assuming that the script is at the current location and the script was already downloaded
+sudo ./fort_setup.sh /etc/fort/tal
+{% endhighlight %}
+
+By default, FORT validator service isn't initialized once it's installed; so, initialize the service:
+
+{% highlight bash %}
+sudo systemctl start fort
+systemctl status fort
+
+# In case you want to stop it
+sudo systemctl stop fort
 {% endhighlight %}
 
 The configuration file utilized by the service can be found at `/etc/fort/config.json` (see more about [configuration file](usage.html#--configuration-file)).
