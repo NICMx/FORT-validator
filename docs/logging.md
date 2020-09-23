@@ -51,7 +51,7 @@ The following messages are included at the operation logs:
 - Out of memory errors.
 - Read/write errors on local files.
 - Persistent communication errors with RPKI repositories (see [`--stale-repository-period`](usage.html#--stale-repository-period)).
-- Start and end of a validation cycle, including: number of valid Prefixes and Router Keys, current RTR serial number (only when [`--mode=server`](usage.html#--mode), and real execution time.
+- Start and end of a validation cycle, including: number of valid Prefixes and Router Keys, current RTR serial number (only when [`--mode=server`](usage.html#--mode)), and real execution time.
 - Programming errors (of course, those that could be expected due to an API misuse).
 
 ### Validation

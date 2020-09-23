@@ -166,7 +166,7 @@ db_rrdp_reset_visited_tals(void)
 {
 	struct tal_elem *found;
 
-	rwlock_read_lock(&lock);
+	rwlock_write_lock(&lock);
 	SLIST_FOREACH(found, &db.tals, next)
 		found->visited = false;
 

@@ -115,13 +115,15 @@ reqs_errors_cleanup(void)
 }
 
 static struct error_uri *
-find_error_uri(char const *search)
+find_error_uri(char const *search, bool lock)
 {
 	struct error_uri *found;
 
-	rwlock_read_lock(&db_lock);
+	if (lock)
+		rwlock_read_lock(&db_lock);
 	HASH_FIND_STR(err_uris_db, search, found);
-	rwlock_unlock(&db_lock);
+	if (lock)
+		rwlock_unlock(&db_lock);
 
 	return found;
 }
@@ -136,7 +138,7 @@ set_working_repo(struct error_uri *err_uri)
 	if (work_uri == NULL)
 		return;
 
-	ref = find_error_uri(work_uri);
+	ref = find_error_uri(work_uri, true);
 	if (ref == NULL)
 		return;
 
@@ -151,7 +153,7 @@ reqs_errors_add_uri(char const *uri)
 	int error;
 
 	/* Don't overwrite if it already exists */
-	found_uri = find_error_uri(uri);
+	found_uri = find_error_uri(uri, true);
 	if (found_uri != NULL)
 		return 0;
 
@@ -182,16 +184,23 @@ void
 reqs_errors_rem_uri(char const *uri)
 {
 	struct error_uri *found_uri;
+	struct error_uri *tmp;
 	char *ref_uri;
 
-	found_uri = find_error_uri(uri);
-	if (found_uri == NULL)
-		return;
-
-	while (found_uri->uri_related != NULL)
-		found_uri = find_error_uri(found_uri->uri_related);
-
 	rwlock_write_lock(&db_lock);
+	found_uri = find_error_uri(uri, false);
+	if (found_uri == NULL) {
+		rwlock_unlock(&db_lock);
+		return;
+	}
+
+	while (found_uri->uri_related != NULL) {
+		tmp = find_error_uri(found_uri->uri_related, false);
+		if (tmp == NULL)
+			break;
+		found_uri = tmp;
+	}
+
 	do {
 		ref_uri = found_uri->ref_by;
 		HASH_DELETE(hh, err_uris_db, found_uri);
@@ -199,6 +208,8 @@ reqs_errors_rem_uri(char const *uri)
 		if (ref_uri == NULL)
 			break;
 		HASH_FIND_STR(err_uris_db, ref_uri, found_uri);
+		if (found_uri == NULL)
+			break;
 	} while (true);
 	rwlock_unlock(&db_lock);
 }
@@ -241,7 +252,7 @@ reqs_errors_log_uri(char const *uri)
 	if (config_period == 0)
 		return true;
 
-	node = find_error_uri(uri);
+	node = find_error_uri(uri, true);
 	if (node == NULL)
 		return false;
 

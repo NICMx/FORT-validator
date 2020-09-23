@@ -522,7 +522,7 @@ ancestor_error(char const *error_uri, void *arg)
 
 	error = is_descendant(req_err_uri, search) ? EEXIST : 0;
 
-	free(req_err_uri);
+	uri_refput(req_err_uri);
 	return error;
 }
 
