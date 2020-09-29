@@ -520,7 +520,7 @@ ancestor_error(char const *error_uri, void *arg)
 
 	/* Ignore non rsync error'd URIs */
 	if (!uri_is_rsync(req_err_uri)) {
-		free(req_err_uri);
+		uri_refput(req_err_uri);
 		return 0;
 	}
 
