@@ -44,6 +44,10 @@ Here are a few links to the RPKI configuration docs at some routers:
 - [Cisco](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/command/irg-cr-book/bgp-a1.html#wp2807841905)
 - [Juniper](https://www.juniper.net/documentation/en_US/junos/topics/reference/configuration-statement/validation-edit-routing-options.html)
 - [BIRD](https://bird.network.cz/?get_doc&v=20&f=bird-6.html#ss6.13)
+- [MikroTik](https://help.mikrotik.com/docs/display/ROS/ROSv7+Basic+Routing+Examples#heading-RPKI) (**will be supported until ROSv7**, currently at beta stage)
+- Nokia ([commands](https://infocenter.nokia.com/public/7750SR160R4A/index.jsp?topic=%2Fcom.sr.router.config%2Fhtml%2Fip_router_cli.html&anchor=BGBDCAEF) and [explanation](https://infocenter.nokia.com/public/7750SR160R4A/index.jsp?topic=%2Fcom.sr.unicast%2Fhtml%2Fbgp.html&cp=22_4_7_2&anchor=d2e5364))
+- [Huawei](https://support.huawei.com/enterprise/en/doc/EDOC1100055099/36627f51/improving-bgp-security#dc_vrp_bgp_cfg_3099) (look for your specific router model)
+- [Arista](https://eos.arista.com/sidr-with-rpki/)
 
 ## Behavior
 
