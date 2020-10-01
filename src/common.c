@@ -34,9 +34,8 @@ rwlock_read_lock(pthread_rwlock_t *lock)
 	 * pthread_rwlock_rdlock() failing like this is akin to `if` failing;
 	 * we're screwed badly, so let's just pull the trigger.
 	 */
-	pr_op_err("pthread_rwlock_rdlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+	pr_crit("pthread_rwlock_rdlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
 	    error);
-	exit(error);
 }
 
 void
@@ -49,11 +48,9 @@ rwlock_write_lock(pthread_rwlock_t *lock)
 	 * Both of them indicate serious programming errors.
 	 */
 	error = pthread_rwlock_wrlock(lock);
-	if (error) {
-		pr_op_err("pthread_rwlock_wrlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+	if (error)
+		pr_crit("pthread_rwlock_wrlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
 		    error);
-		exit(error);
-	}
 }
 
 void
@@ -66,11 +63,9 @@ rwlock_unlock(pthread_rwlock_t *lock)
 	 * Both of them indicate serious programming errors.
 	 */
 	error = pthread_rwlock_unlock(lock);
-	if (error) {
-		pr_op_err("pthread_rwlock_unlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+	if (error)
+		pr_crit("pthread_rwlock_unlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
 		    error);
-		exit(error);
-	}
 }
 
 void

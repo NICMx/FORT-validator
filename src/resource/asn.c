@@ -89,7 +89,7 @@ asn_node_cb(void *elem, void *arg)
 	unsigned long index;
 	int error;
 
-	for(index = node->min; index <= node->max; index++) {
+	for (index = node->min; index <= node->max; index++) {
 		error = param->cb(index, param->arg);
 		if (error)
 			return error;

@@ -208,7 +208,7 @@ locate_char(char *str, size_t len, char find)
 {
 	size_t i;
 
-	for(i = 0; i < len; i++)
+	for (i = 0; i < len; i++)
 		if (str[i] == find)
 			return str + i;
 	return NULL;
