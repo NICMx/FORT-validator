@@ -2027,13 +2027,12 @@ verify_mft_loc(struct rpki_uri *mft_uri)
 }
 
 /*
- * Verify the manifest location at the local RRDP workspace. If the manifest
- * exists, then update @mft_uri so that its location be at the workspace.
+ * Verify the manifest location at the local RRDP workspace.
  * 
  * Don't log in case the @mft_uri doesn't exist at the RRDP workspace.
  */
 static int
-verify_rrdp_mft_loc(struct rpki_uri **mft_uri)
+verify_rrdp_mft_loc(struct rpki_uri *mft_uri)
 {
 	struct rpki_uri *tmp;
 	int error;
@@ -2042,18 +2041,17 @@ verify_rrdp_mft_loc(struct rpki_uri **mft_uri)
 		return -ENOENT;
 
 	tmp = NULL;
-	error = uri_create_rsync_str_rrdp(&tmp, uri_get_global(*mft_uri),
-	    uri_get_global_len(*mft_uri));
+	error = uri_create_rsync_str_rrdp(&tmp, uri_get_global(mft_uri),
+	    uri_get_global_len(mft_uri));
 	if (error)
 		return error;
 
 	if (!valid_file_or_dir(uri_get_local(tmp), true, false, NULL)) {
 		uri_refput(tmp);
-		return -EINVAL;
+		return -ENOENT;
 	}
 
-	uri_refput(*mft_uri);
-	*mft_uri = tmp;
+	uri_refput(tmp);
 	return 0;
 }
 
@@ -2079,6 +2077,7 @@ replace_rrdp_mft_uri(struct sia_uri *sia_mft)
 static int
 exec_rrdp_method(struct sia_ca_uris *sia_uris)
 {
+	bool data_updated;
 	int error;
 
 	/* Start working on the RRDP local workspace */
@@ -2086,34 +2085,64 @@ exec_rrdp_method(struct sia_ca_uris *sia_uris)
 	if (error)
 		return error;
 
-	error = rrdp_load(sia_uris->rpkiNotify.uri);
-	if (error) {
-		db_rrdp_uris_workspace_disable();
-		return error;
+	data_updated = false;
+	error = rrdp_load(sia_uris->rpkiNotify.uri, &data_updated);
+	if (error)
+		goto err;
+
+	error = verify_rrdp_mft_loc(sia_uris->mft.uri);
+	switch(error) {
+	case 0:
+		/* MFT exists, great! We're good to go. */
+		break;
+	case -ENOENT:
+		/* Doesn't exist and the RRDP data was updated: error */
+		if (data_updated)
+			goto err;
+
+		/* Otherwise, force the snapshot processing and check again */
+		error = rrdp_reload_snapshot(sia_uris->rpkiNotify.uri);
+		if (error)
+			goto err;
+		error = verify_rrdp_mft_loc(sia_uris->mft.uri);
+		if (error)
+			goto err;
+		break;
+	default:
+		goto err;
 	}
 
 	/* Successfully loaded (or no updates yet), update MFT local URI */
 	error = replace_rrdp_mft_uri(&sia_uris->mft);
-	if (error) {
-		db_rrdp_uris_workspace_disable();
-		return error;
-	}
+	if (error)
+		goto err;
 
 	return 0;
+err:
+	db_rrdp_uris_workspace_disable();
+	return error;
 }
 
 static int
 exec_rsync_method(struct sia_ca_uris *sia_uris)
 {
+	int error;
+
 	/* Stop working on the RRDP local workspace */
 	db_rrdp_uris_workspace_disable();
-	return download_files(sia_uris->caRepository.uri, false, false);
+	error = download_files(sia_uris->caRepository.uri, false, false);
+	if (error)
+		return error;
+
+	return verify_mft_loc(sia_uris->mft.uri);
 }
 
 /*
  * Currently only two access methods are supported, just consider those two:
  * rsync and RRDP. If a new access method is supported, this function must
  * change (and probably the sia_ca_uris struct as well).
+ *
+ * Both access method callbacks must verify the manifest existence.
  */
 static int
 use_access_method(struct sia_ca_uris *sia_uris,
@@ -2151,7 +2180,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 */
 	if (!new_level && db_rrdp_uris_workspace_get() != NULL &&
 	    sia_uris->rpkiNotify.uri == NULL &&
-	    verify_rrdp_mft_loc(&sia_uris->mft.uri) == 0) {
+	    verify_rrdp_mft_loc(sia_uris->mft.uri) == 0) {
 		(*retry_repo_sync) = false;
 		return replace_rrdp_mft_uri(&sia_uris->mft);
 	}
@@ -2164,6 +2193,8 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	if (sia_uris->rpkiNotify.uri == NULL) {
 		primary_rrdp = false;
 		error = rsync_cb(sia_uris);
+		if (!error)
+			return 0;
 		goto verify_mft;
 	}
 
@@ -2208,7 +2239,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	error = cb_primary(sia_uris);
 	if (!error) {
 		(*retry_repo_sync) = !primary_rrdp;
-		goto verify_mft;
+		return 0;
 	}
 
 	if (primary_rrdp) {
@@ -2235,6 +2266,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	working_repo_pop();
 
 verify_mft:
+	/* Reach here on error or when both access methods were utilized */
 	switch (error) {
 	case 0:
 		/* Remove the error'd URI, since we got the repo files */

@@ -14,6 +14,9 @@ enum rpki_uri_type {
 	URI_HTTPS,
 };
 
+static char const *const PFX_RSYNC = "rsync://";
+static char const *const PFX_HTTPS = "https://";
+
 /**
  * All rpki_uris are guaranteed to be RSYNC URLs right now.
  *
@@ -192,7 +195,7 @@ succeed:
 
 static int
 validate_uri_begin(char const *uri_pfx, const size_t uri_pfx_len,
-    char const *global, size_t global_len, size_t *size, int error)
+    char const *global, size_t global_len, int error)
 {
 	if (global_len < uri_pfx_len
 	    || strncasecmp(uri_pfx, global, uri_pfx_len) != 0) {
@@ -203,16 +206,13 @@ validate_uri_begin(char const *uri_pfx, const size_t uri_pfx_len,
 		return error;
 	}
 
-	(*size) = uri_pfx_len;
 	return 0;
 }
 
 static int
 validate_gprefix(char const *global, size_t global_len, uint8_t flags,
-    size_t *size, enum rpki_uri_type *type)
+    enum rpki_uri_type *type)
 {
-	static char const *const PFX_RSYNC = "rsync://";
-	static char const *const PFX_HTTPS = "https://";
 	size_t const PFX_RSYNC_LEN = strlen(PFX_RSYNC);
 	size_t const PFX_HTTPS_LEN = strlen(PFX_HTTPS);
 	uint8_t l_flags;
@@ -224,25 +224,25 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	if (l_flags == URI_VALID_RSYNC) {
 		(*type) = URI_RSYNC;
 		return validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global,
-		    global_len, size, ENOTRSYNC);
+		    global_len, ENOTRSYNC);
 	}
 	if (l_flags == URI_VALID_HTTPS) {
 		(*type) = URI_HTTPS;
 		return validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global,
-		    global_len, size, ENOTHTTPS);
+		    global_len, ENOTHTTPS);
 	}
 	if (l_flags != (URI_VALID_RSYNC | URI_VALID_HTTPS))
 		pr_crit("Unknown URI flag");
 
 	/* It has both flags */
 	error = validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global, global_len,
-	    size, 0);
+	    0);
 	if (!error) {
 		(*type) = URI_RSYNC;
 		return 0;
 	}
 	error = validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global, global_len,
-	    size, 0);
+	    0);
 	if (error) {
 		pr_val_warn("URI '%s' does not begin with '%s' nor '%s'.",
 		    global, PFX_RSYNC, PFX_HTTPS);
@@ -255,7 +255,7 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 }
 
 static int
-get_local_workspace(char **result, size_t *result_len)
+get_local_workspace(char **result)
 {
 	char const *workspace;
 	char *tmp;
@@ -263,7 +263,6 @@ get_local_workspace(char **result, size_t *result_len)
 	workspace = db_rrdp_uris_workspace_get();
 	if (workspace == NULL) {
 		*result = NULL;
-		*result_len = 0;
 		return 0;
 	}
 
@@ -272,7 +271,6 @@ get_local_workspace(char **result, size_t *result_len)
 		return pr_enomem();
 
 	*result = tmp;
-	*result_len = strlen(tmp);
 	return 0;
 }
 
@@ -290,57 +288,30 @@ static int
 g2l(char const *global, size_t global_len, uint8_t flags, char **result,
     enum rpki_uri_type *result_type)
 {
-	char const *repository;
 	char *local;
 	char *workspace;
-	size_t prefix_len;
-	size_t repository_len;
-	size_t extra_slash;
-	size_t offset;
-	size_t workspace_len;
 	enum rpki_uri_type type;
 	int error;
 
-	repository = config_get_local_repository();
-	repository_len = strlen(repository);
-
-	error = validate_gprefix(global, global_len, flags, &prefix_len, &type);
+	error = validate_gprefix(global, global_len, flags, &type);
 	if (error)
 		return error;
 
-	global += prefix_len;
-	global_len -= prefix_len;
-	extra_slash = (repository[repository_len - 1] == '/') ? 0 : 1;
-
 	workspace = NULL;
-	workspace_len = 0;
 	if ((flags & URI_USE_RRDP_WORKSPACE) != 0) {
-		error = get_local_workspace(&workspace, &workspace_len);
+		error = get_local_workspace(&workspace);
 		if (error)
 			return error;
 	}
 
-	local = malloc(repository_len + extra_slash + workspace_len +
-	    global_len + 1);
-	if (!local) {
+	error = map_uri_to_local(global,
+	    type == URI_RSYNC ? PFX_RSYNC : PFX_HTTPS,
+	    workspace,
+	    &local);
+	if (error) {
 		free(workspace);
-		return pr_enomem();
+		return error;
 	}
-
-	offset = 0;
-	strcpy(local + offset, repository);
-	offset += repository_len;
-	if (extra_slash) {
-		strcpy(local + offset, "/");
-		offset += extra_slash;
-	}
-	if (workspace_len > 0) {
-		strcpy(local + offset, workspace);
-		offset += workspace_len;
-	}
-	strncpy(local + offset, global, global_len);
-	offset += global_len;
-	local[offset] = '\0';
 
 	free(workspace);
 	*result = local;
