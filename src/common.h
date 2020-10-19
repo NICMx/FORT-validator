@@ -2,7 +2,6 @@
 #define SRC_RTR_COMMON_H_
 
 #include <pthread.h>
-#include <semaphore.h>
 #include <stdbool.h>
 #include <time.h>
 #include <netinet/in.h>
@@ -65,5 +64,7 @@ int create_dir_recursive(char const *);
 int delete_dir_recursive_bottom_up(char const *);
 
 int get_current_time(time_t *);
+
+int map_uri_to_local(char const *, char const*, char const *, char **);
 
 #endif /* SRC_RTR_COMMON_H_ */

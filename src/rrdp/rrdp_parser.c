@@ -1057,9 +1057,11 @@ release_uri:
  *
  * If the server didn't sent the file, due to the validation of
  * 'If-Modified-Since' header, return 0 and set @result to NULL.
+ *
+ * Set @force to true to omit 'If-Modified-Since' header.
  */
 int
-rrdp_parse_notification(struct rpki_uri *uri, bool log_operation,
+rrdp_parse_notification(struct rpki_uri *uri, bool log_operation, bool force,
     struct update_notification **result)
 {
 	long last_update;
@@ -1070,9 +1072,11 @@ rrdp_parse_notification(struct rpki_uri *uri, bool log_operation,
 
 	pr_val_debug("Processing notification '%s'.", uri_get_global(uri));
 	last_update = 0;
-	error = db_rrdp_uris_get_last_update(uri_get_global(uri), &last_update);
-	if (error && error != -ENOENT)
-		return error;
+	if (!force) {
+		error = db_rrdp_uris_get_last_update(uri_get_global(uri), &last_update);
+		if (error && error != -ENOENT)
+			return error;
+	}
 
 	error = download_file(uri, last_update, log_operation);
 	if (error < 0)

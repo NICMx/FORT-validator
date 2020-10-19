@@ -126,7 +126,7 @@ static void
 tal_elem_destroy(struct tal_elem *elem, bool remove_local)
 {
 	if (remove_local)
-		db_rrdp_uris_remove_all_local(elem->uris);
+		db_rrdp_uris_remove_all_local(elem->uris, elem->workspace);
 	db_rrdp_uris_destroy(elem->uris);
 	free(elem->file_name);
 	free(elem->workspace);

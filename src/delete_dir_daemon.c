@@ -12,7 +12,6 @@
 #include "common.h"
 #include "log.h"
 #include "random.h"
-#include "uri.h"
 
 #define MAX_FD_ALLOWED 20
 
@@ -112,23 +111,18 @@ remove_from_root(void *arg)
  * - '= 0' no error
  */
 static int
-get_local_path(char const *rcvd, char **result)
+get_local_path(char const *rcvd, char const *workspace, char **result)
 {
 	struct stat attr;
-	struct rpki_uri *uri;
 	char *tmp, *local_path;
 	size_t tmp_size;
 	int error;
 
-	error = uri_create_mixed_str(&uri, rcvd, strlen(rcvd));
+	/* Currently, only rsync URIs are utilized */
+	local_path = NULL;
+	error = map_uri_to_local(rcvd, "rsync://", workspace, &local_path);
 	if (error)
-		return error != -ENOMEM ? EINVAL : error;
-
-	local_path = strdup(uri_get_local(uri));
-	if (local_path == NULL) {
-		error = pr_enomem();
-		goto release_uri;
-	}
+		return error;
 
 	error = stat(local_path, &attr);
 	if (error) {
@@ -161,14 +155,11 @@ get_local_path(char const *rcvd, char **result)
 	tmp[tmp_size] = '\0';
 
 	free(local_path);
-	uri_refput(uri);
 
 	*result = tmp;
 	return 0;
 release_local:
 	free(local_path);
-release_uri:
-	uri_refput(uri);
 	return error;
 }
 
@@ -212,7 +203,7 @@ rename_local_path(char const *rcvd, char **result)
 }
 
 static int
-rename_all_roots(struct rem_dirs *rem_dirs, char **src)
+rename_all_roots(struct rem_dirs *rem_dirs, char **src, char const *workspace)
 {
 	char *local_path, *delete_path;
 	size_t i;
@@ -221,7 +212,7 @@ rename_all_roots(struct rem_dirs *rem_dirs, char **src)
 	for (i = 0; i < rem_dirs->arr_len; i++) {
 		local_path = NULL;
 		error = get_local_path(src[(rem_dirs->arr_len - 1) - i],
-		    &local_path);
+		    workspace, &local_path);
 		if (error < 0)
 			return error;
 		if (error > 0)
@@ -274,7 +265,8 @@ rem_dirs_destroy(struct rem_dirs *rem_dirs)
 }
 
 /*
- * Remove the files listed at @roots array of @roots_len size.
+ * Remove the files listed at @roots array of @roots_len size. The local files
+ * will be searched at the specified HTTP local @workspace.
  * 
  * The daemon will be as quiet as possible, since most of its job is done
  * asynchronously. Also, it works on the best possible effort; some errors are
@@ -282,7 +274,7 @@ rem_dirs_destroy(struct rem_dirs *rem_dirs)
  * considers the relations (parent-child) at dirs.
  */
 int
-delete_dir_daemon_start(char **roots, size_t roots_len)
+delete_dir_daemon_start(char **roots, size_t roots_len, char const *workspace)
 {
 	pthread_t thread;
 	struct rem_dirs *arg;
@@ -293,7 +285,7 @@ delete_dir_daemon_start(char **roots, size_t roots_len)
 	if (error)
 		return error;
 
-	error = rename_all_roots(arg, roots);
+	error = rename_all_roots(arg, roots, workspace);
 	if (error) {
 		rem_dirs_destroy(arg);
 		return error;

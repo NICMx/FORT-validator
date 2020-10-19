@@ -59,6 +59,7 @@ static int
 remove_rrdp_uri_files(char const *notification_uri)
 {
 	struct visited_uris *tmp;
+	char const *workspace;
 	int error;
 
 	/* Work with the existent visited uris */
@@ -66,7 +67,9 @@ remove_rrdp_uri_files(char const *notification_uri)
 	if (error)
 		return error;
 
-	return visited_uris_delete_local(tmp);
+	workspace = db_rrdp_uris_workspace_get();
+
+	return visited_uris_delete_local(tmp, workspace);
 }
 
 /* Mark the URI as errored with dummy data, so it won't be requested again */
@@ -93,20 +96,21 @@ mark_rrdp_uri_request_err(char const *notification_uri)
 	return 0;
 }
 
-/*
- * Try to get RRDP Update Notification file and process it accordingly.
- *
- * If there's an error that could lead to an inconsistent local repository
- * state, marks the @uri as error'd so that it won't be requested again during
- * the same validation cycle.
- *
- * If there are no errors, updates the local DB and marks the @uri as visited.
- *
- * If the @uri is being visited again, verify its previous visit state. If there
- * were no errors, just return success; otherwise, return error code -EPERM.
- */
-int
-rrdp_load(struct rpki_uri *uri)
+static int
+process_diff_session(struct update_notification *notification,
+    bool log_operation, struct visited_uris **visited)
+{
+	int error;
+
+	error = remove_rrdp_uri_files(notification->uri);
+	if (error)
+		return error;
+
+	return process_snapshot(notification, log_operation, visited);
+}
+
+static int
+__rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 {
 	struct update_notification *upd_notification;
 	struct visited_uris *visited;
@@ -115,8 +119,12 @@ rrdp_load(struct rpki_uri *uri)
 	bool log_operation;
 	int error, upd_error;
 
-	if (!config_get_http_enabled())
+	(*data_updated) = false;
+
+	if (!config_get_http_enabled()) {
+		(*data_updated) = true;
 		return 0;
+	}
 
 	/* Avoid multiple requests on the same run */
 	requested = RRDP_URI_REQ_UNVISITED;
@@ -125,18 +133,27 @@ rrdp_load(struct rpki_uri *uri)
 	if (error && error != -ENOENT)
 		return error;
 
-	switch(requested) {
-	case RRDP_URI_REQ_VISITED:
-		return 0;
-	case RRDP_URI_REQ_UNVISITED:
-		break;
-	case RRDP_URI_REQ_ERROR:
-		/* Log has been done before this call */
-		return -EPERM;
+	if (!force_snapshot) {
+		switch(requested) {
+		case RRDP_URI_REQ_VISITED:
+			(*data_updated) = true;
+			return 0;
+		case RRDP_URI_REQ_UNVISITED:
+			break;
+		case RRDP_URI_REQ_ERROR:
+			/* Log has been done before this call */
+			return -EPERM;
+		}
+	} else {
+		if (requested != RRDP_URI_REQ_VISITED) {
+			pr_val_info("Skipping RRDP snapshot reload");
+			return -EINVAL;
+		}
 	}
 
 	log_operation = reqs_errors_log_uri(uri_get_global(uri));
-	error = rrdp_parse_notification(uri, log_operation, &upd_notification);
+	error = rrdp_parse_notification(uri, log_operation, force_snapshot,
+	    &upd_notification);
 	if (error)
 		goto upd_end;
 
@@ -146,44 +163,56 @@ rrdp_load(struct rpki_uri *uri)
 		goto upd_end;
 	}
 
-	error = db_rrdp_uris_cmp(uri_get_global(uri),
-	    upd_notification->global_data.session_id,
-	    upd_notification->global_data.serial,
-	    &res);
-	if (error)
-		goto upd_destroy;
-
-	switch (res) {
-	case RRDP_URI_EQUAL:
-		goto set_update;
-	case RRDP_URI_DIFF_SESSION:
-		/* Delete the old session files */
-		error = remove_rrdp_uri_files(upd_notification->uri);
-		if (error)
-			goto upd_destroy;
-		error = process_snapshot(upd_notification, log_operation,
-		    &visited);
-		if (error)
-			goto upd_destroy;
-		break;
-	case RRDP_URI_DIFF_SERIAL:
-		error = process_diff_serial(upd_notification, log_operation,
-		    &visited);
-		if (!error) {
-			visited_uris_refget(visited);
+	do {
+		/* Same flow as a session update */
+		if (force_snapshot) {
+			error = process_diff_session(upd_notification,
+			    log_operation, &visited);
+			if (error)
+				goto upd_destroy;
+			(*data_updated) = true;
 			break;
 		}
-		/* Something went wrong, use snapshot */
-		pr_val_info("There was an error processing RRDP deltas, using the snapshot instead.");
-	case RRDP_URI_NOTFOUND:
-		error = process_snapshot(upd_notification, log_operation,
-		    &visited);
+
+		error = db_rrdp_uris_cmp(uri_get_global(uri),
+		    upd_notification->global_data.session_id,
+		    upd_notification->global_data.serial,
+		    &res);
 		if (error)
 			goto upd_destroy;
-		break;
-	default:
-		pr_crit("Unexpected RRDP URI comparison result");
-	}
+
+		switch (res) {
+		case RRDP_URI_EQUAL:
+			goto set_update;
+		case RRDP_URI_DIFF_SESSION:
+			/* Delete the old session files */
+			error = process_diff_session(upd_notification,
+			    log_operation, &visited);
+			if (error)
+				goto upd_destroy;
+			(*data_updated) = true;
+			break;
+		case RRDP_URI_DIFF_SERIAL:
+			error = process_diff_serial(upd_notification,
+			    log_operation, &visited);
+			if (!error) {
+				visited_uris_refget(visited);
+				(*data_updated) = true;
+				break;
+			}
+			/* Something went wrong, use snapshot */
+			pr_val_info("There was an error processing RRDP deltas, using the snapshot instead.");
+		case RRDP_URI_NOTFOUND:
+			error = process_snapshot(upd_notification, log_operation,
+			    &visited);
+			if (error)
+				goto upd_destroy;
+			(*data_updated) = true;
+			break;
+		default:
+			pr_crit("Unexpected RRDP URI comparison result");
+		}
+	} while (0);
 
 	/* Any update, and no error during the process, update db as well */
 	pr_val_debug("Updating local RRDP data of '%s' to:", uri_get_global(uri));
@@ -230,4 +259,43 @@ upd_end:
 		return upd_error;
 
 	return error;
+}
+
+/*
+ * Try to get RRDP Update Notification file and process it accordingly.
+ *
+ * If there's an error that could lead to an inconsistent local repository
+ * state, marks the @uri as error'd so that it won't be requested again during
+ * the same validation cycle.
+ *
+ * If there are no errors, updates the local DB and marks the @uri as visited.
+ *
+ * If the @uri is being visited again, verify its previous visit state. If there
+ * were no errors, just return success; otherwise, return error code -EPERM.
+ *
+ * @data_updated will be true if:
+ * - Delta files were processed
+ * - Snapshot file was processed
+ * - @uri was already visited at this cycle
+ */
+int
+rrdp_load(struct rpki_uri *uri, bool *data_updated)
+{
+	return __rrdp_load(uri, false, data_updated);
+}
+
+/*
+ * Force the processing of the snapshot. The update notification is requested
+ * again, omitting the 'If-Modified-Since' header at the HTTP request.
+ *
+ * Shouldn't be called if @uri had a previous error or hasn't been requested,
+ * still the check is done.
+ */
+int
+rrdp_reload_snapshot(struct rpki_uri *uri)
+{
+	bool tmp;
+
+	tmp = false;
+	return __rrdp_load(uri, true, &tmp);
 }

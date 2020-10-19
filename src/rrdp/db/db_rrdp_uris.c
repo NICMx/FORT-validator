@@ -350,14 +350,15 @@ db_rrdp_uris_get_visited_uris(char const *uri, struct visited_uris **result)
 }
 
 int
-db_rrdp_uris_remove_all_local(struct db_rrdp_uri *uris)
+db_rrdp_uris_remove_all_local(struct db_rrdp_uri *uris, char const *workspace)
 {
 	struct uris_table *uri_node, *uri_tmp;
 	int error;
 
 	/* Remove each 'visited_uris' from all the table */
 	HASH_ITER(hh, uris->table, uri_node, uri_tmp) {
-		error = visited_uris_delete_local(uri_node->visited_uris);
+		error = visited_uris_delete_local(uri_node->visited_uris,
+		    workspace);
 		if (error)
 			return error;
 	}
