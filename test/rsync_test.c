@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "common.c"
 #include "log.c"
 #include "impersonator.c"
 #include "str_token.c"

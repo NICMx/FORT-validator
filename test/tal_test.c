@@ -56,6 +56,17 @@ close_thread(pthread_t thread, char const *what)
 	/* Nothing to close */
 }
 
+int
+map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
+    char **result)
+{
+	/* These tests focus on global URIs, so set a dummy value */
+	*result = strdup("dummy");
+	if (*result == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
 void
 fnstack_init(void)
 {
