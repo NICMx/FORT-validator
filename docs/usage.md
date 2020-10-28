@@ -13,48 +13,48 @@ description: Guide to use arguments of FORT Validator.
 	1. [`--help`](#--help)
 	2. [`--usage`](#--usage)
 	3. [`--version`](#--version)
-	4. [`--tal`](#--tal)
-	5. [`--local-repository`](#--local-repository)
-	6. [`--work-offline`](#--work-offline)
-	7. [`--shuffle-uris`](#--shuffle-uris)
-	8. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
-	9. [`--mode`](#--mode)
-	10. [`--server.address`](#--serveraddress)
-	11. [`--server.port`](#--serverport)
-	12. [`--server.backlog`](#--serverbacklog)
-	13. [`--server.interval.validation`](#--serverintervalvalidation)
-	14. [`--server.interval.refresh`](#--serverintervalrefresh)
-	15. [`--server.interval.retry`](#--serverintervalretry)
-	16. [`--server.interval.expire`](#--serverintervalexpire)
-	17. [`--slurm`](#--slurm)
-	18. [`--log.enabled`](#--logenabled)
-	19. [`--log.level`](#--loglevel)
-	20. [`--log.output`](#--logoutput)
-	21. [`--log.color-output`](#--logcolor-output)
-	22. [`--log.file-name-format`](#--logfile-name-format)
-	23. [`--log.facility`](#--logfacility)
-	24. [`--log.tag`](#--logtag)
-	25. [`--validation-log.enabled`](#--validation-logenabled)
-	26. [`--validation-log.level`](#--validation-loglevel)
-	27. [`--validation-log.output`](#--validation-logoutput)
-	28. [`--validation-log.color-output`](#--validation-logcolor-output)
-	29. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
-	30. [`--validation-log.facility`](#--validation-logfacility)
-	31. [`--validation-log.tag`](#--validation-logtag)
-	32. [`--http.enabled`](#--httpenabled)
-	33. [`--http.priority`](#--httppriority)
-	34. [`--http.retry.count`](#--httpretrycount)
-	35. [`--http.retry.interval`](#--httpretryinterval)
-	36. [`--http.user-agent`](#--httpuser-agent)
-	37. [`--http.connect-timeout`](#--httpconnect-timeout)
-	38. [`--http.transfer-timeout`](#--httptransfer-timeout)
-	39. [`--http.idle-timeout`](#--httpidle-timeout)
-	40. [`--http.ca-path`](#--httpca-path)
-	41. [`--output.roa`](#--outputroa)
-	42. [`--output.bgpsec`](#--outputbgpsec)
-	43. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	44. [`--stale-repository-period`](#--stale-repository-period)
-	45. [`--configuration-file`](#--configuration-file)
+	4. [`--init-tals`](#--init-tals)
+	5. [`--tal`](#--tal)
+	6. [`--local-repository`](#--local-repository)
+	7. [`--work-offline`](#--work-offline)
+	8. [`--shuffle-uris`](#--shuffle-uris)
+	9. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
+	10. [`--mode`](#--mode)
+	11. [`--server.address`](#--serveraddress)
+	12. [`--server.port`](#--serverport)
+	13. [`--server.backlog`](#--serverbacklog)
+	14. [`--server.interval.validation`](#--serverintervalvalidation)
+	15. [`--server.interval.refresh`](#--serverintervalrefresh)
+	16. [`--server.interval.retry`](#--serverintervalretry)
+	17. [`--server.interval.expire`](#--serverintervalexpire)
+	18. [`--slurm`](#--slurm)
+	19. [`--log.enabled`](#--logenabled)
+	20. [`--log.level`](#--loglevel)
+	21. [`--log.output`](#--logoutput)
+	22. [`--log.color-output`](#--logcolor-output)
+	23. [`--log.file-name-format`](#--logfile-name-format)
+	24. [`--log.facility`](#--logfacility)
+	25. [`--log.tag`](#--logtag)
+	26. [`--validation-log.enabled`](#--validation-logenabled)
+	27. [`--validation-log.level`](#--validation-loglevel)
+	28. [`--validation-log.output`](#--validation-logoutput)
+	29. [`--validation-log.color-output`](#--validation-logcolor-output)
+	30. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
+	31. [`--validation-log.facility`](#--validation-logfacility)
+	32. [`--validation-log.tag`](#--validation-logtag)
+	33. [`--http.enabled`](#--httpenabled)
+	34. [`--http.priority`](#--httppriority)
+	35. [`--http.retry.count`](#--httpretrycount)
+	36. [`--http.retry.interval`](#--httpretryinterval)
+	37. [`--http.user-agent`](#--httpuser-agent)
+	38. [`--http.connect-timeout`](#--httpconnect-timeout)
+	39. [`--http.transfer-timeout`](#--httptransfer-timeout)
+	40. [`--http.idle-timeout`](#--httpidle-timeout)
+	41. [`--http.ca-path`](#--httpca-path)
+	42. [`--output.roa`](#--outputroa)
+	43. [`--output.bgpsec`](#--outputbgpsec)
+	44. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	45. [`--stale-repository-period`](#--stale-repository-period)
 	46. [`--rsync.enabled`](#--rsyncenabled)
 	47. [`--rsync.priority`](#--rsyncpriority)
 	48. [`--rsync.strategy`](#--rsyncstrategy)
@@ -63,10 +63,12 @@ description: Guide to use arguments of FORT Validator.
 		3. [`root-except-ta`](#root-except-ta)
 	49. [`--rsync.retry.count`](#--rsyncretrycount)
 	50. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	51. [`rsync.program`](#rsyncprogram)
-	52. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	53. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	54. [`incidences`](#incidences)
+	51. [`--configuration-file`](#--configuration-file)
+	52. [`rsync.program`](#rsyncprogram)
+	53. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	54. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	55. [`incidences`](#incidences)
+	56. [`init-locations`](#init-locations)
 3. [Deprecated arguments](#deprecated-arguments)
 	1. [`--sync-strategy`](#--sync-strategy)
 	2. [`--rrdp.enabled`](#--rrdpenabled)
@@ -81,6 +83,7 @@ description: Guide to use arguments of FORT Validator.
         [--help]
         [--usage]
         [--version]
+        [--init-tals]
         [--configuration-file=<file>]
         [--tal=<file>|<directory>]
         [--local-repository=<directory>]
@@ -204,9 +207,20 @@ $ {{ page.command }} --version
 fort {{ site.fort-latest-version }}
 {% endhighlight %}
 
+### `--init-tals`
+
+- **Type:** String (Path to directory)
+- **Availability:** `argv` only
+
+Download the RIR TALs into the existent local path directory and exit.
+
+This argument exists merely to have all TALs before running FORT validator, the directory path should be the same that will be set at the [`--tal`](#--tal) argument.
+
+By default, the 4 TALs that don't require a policy acceptance are downloaded from FORT validator's GitHub repository. ARIN TAL does require an explicit acceptance by the user, so it's downloaded only after the user accepts ARIN's RPA; this message is displayed at the terminal and only if the user accepts, ARIN TAL is also downloaded.
+
 ### `--tal`
 
-- **Type:** String (Path to file)
+- **Type:** String (Path to file or directory)
 - **Availability:** `argv` and JSON
 
 Path to the _Trust Anchor Locator_ (TAL), or to a directory that contains TALs.
@@ -741,6 +755,102 @@ Currently **all** the communication errors are logged at the validation log. Thi
 
 A value **equal to 0** means that the communication errors will be logged at once.
 
+### `--rsync.enabled`
+
+- **Type:** Boolean (`true`, `false`)
+- **Availability:** `argv` and JSON
+- **Default:** `true`
+
+Enables RSYNC requests.
+
+If disabled (eg. `--rsync.enabled=false`), FORT validator won't download files nor directories via RSYNC, and will expect to find all repository files at [`--local-repository`](#--local-repository).
+
+### `--rsync.priority`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 50
+- **Range:** 0--100
+
+> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are preferred over rsync requests.
+
+Assign priority to use RSYNC to fetch repository files. A higher value means a higher priority.
+
+This argument works along with [`--http.priority`](#--httppriority), since the higher value of the two arguments will result in the first protocol to utilize when fetching repositories files. Of course, this depends also on certificates information or the TAL URIs, since currently HTTP URIs are optional and not every RIR repository makes use of them.
+
+Whenever a certificate or a TAL has both RSYNC and HTTP URIs, the following criteria is followed to prioritize which one to use first:
+- [`--rsync.priority`](#--rsyncpriority) **equals** [`--http.priority`](#--httppriority): use the order specified at the certificate or the TAL to fetch the corresponding URI.
+- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--http.priority`](#--httppriority): use RSYNC repository/TAL URI first; if there's an error fetching data, fallback to fetch HTTP repository/TAL URI.
+- [`--rsync.priority`](#--rsyncpriority) **less than** [`--http.priority`](#--httppriority): use HTTP repository/TAL URI first; if there's an error fetching data, fallback to use RSYNC repository/TAL URI.
+
+### `--rsync.strategy`
+
+- **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
+- **Availability:** `argv` and JSON
+- **Default:** `root-except-ta`
+
+rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
+
+#### `strict`
+
+> In order to enable this strategy, recompile using the flag: **_ENABLE\_STRICT\_STRATEGY_**.
+>
+> e.g. `$ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'`
+
+rsyncs every repository publication point separately. Only skips publication points that have already been downloaded during the current validation cycle. (Assuming each synchronization is recursive.)
+
+For example, suppose the validator gets certificates whose caRepository access methods (in their Subject Information Access extensions) point to the following publication points:
+
+1. `rsync://rpki.example.com/foo/bar/`
+2. `rsync://rpki.example.com/foo/qux/`
+3. `rsync://rpki.example.com/foo/bar/`
+4. `rsync://rpki.example.com/foo/corge/grault/`
+5. `rsync://rpki.example.com/foo/corge/`
+6. `rsync://rpki.example.com/foo/corge/waldo/`
+
+A  validator following the `strict` strategy would download `bar`, download `qux`, skip `bar`, download `corge/grault`, download `corge` and skip `corge/waldo`.
+
+Though this strategy is the only "strictly" correct one, it is also extremely slow. Its usage is _not_ recommended, unless your repository contains lots of spam files, awkward permissions or can't be found in a repository rooted in a URL that follows the regular expression "`rsync://.+/.+/`".
+
+#### `root`
+
+For each publication point found, guess the root of its repository and rsync that instead. Then skip
+any subsequent children of said root.
+
+(To guess the root of a repository, the validator counts four slashes, and prunes the rest of the URL.)
+
+Reusing the caRepository URLs from the `strict` strategy (above) as example, a  validator following the `root` strategy would download `rsync://rpki.example.com/foo`, and then skip everything else.
+
+Assuming that the repository is specifically structured to be found within as few roots as possible, and they contain minimal RPKI-unrelated noise files, this is the fastest synchronization strategy. At time of writing, this is true for all the current official repositories.
+
+#### `root-except-ta`
+
+Synchronizes the root certificate (the one pointed by the TAL) in `strict` mode, and once it's validated, synchronizes the rest of the repository in `root` mode.
+
+Useful if you want `root`, but the root certificate is separated from the rest of the repository. Also useful if you don't want the validator to download the entire repository without first confirming the integrity and legitimacy of the root certificate.
+
+### `--rsync.retry.count`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 2
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Maximum number of retries whenever there's an error executing an RSYNC.
+
+A value of **0** means **no retries**.
+
+Whenever is necessary to execute an RSYNC, the validator will try at least one time the execution. If there was an error executing the RSYNC, the validator will retry it at most `--rsync.retry.count` times, waiting [`--rsync.retry.interval`](#--rsyncretryinterval) seconds between each retry.
+
+### `--rsync.retry.interval`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 5
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Period of time (in seconds) to wait between each retry to execute an RSYNC.
+
 ### `--configuration-file`
 
 - **Type:** String (Path to file)
@@ -907,102 +1017,6 @@ $ {{ page.command }} \
 $ # local-repository is "a", rsync.strategy is "strict" and maximum-certificate-depth is 8
 {% endhighlight %}
 
-### `--rsync.enabled`
-
-- **Type:** Boolean (`true`, `false`)
-- **Availability:** `argv` and JSON
-- **Default:** `true`
-
-Enables RSYNC requests.
-
-If disabled (eg. `--rsync.enabled=false`), FORT validator won't download files nor directories via RSYNC, and will expect to find all repository files at [`--local-repository`](#--local-repository).
-
-### `--rsync.priority`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 50
-- **Range:** 0--100
-
-> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are preferred over rsync requests.
-
-Assign priority to use RSYNC to fetch repository files. A higher value means a higher priority.
-
-This argument works along with [`--http.priority`](#--httppriority), since the higher value of the two arguments will result in the first protocol to utilize when fetching repositories files. Of course, this depends also on certificates information or the TAL URIs, since currently HTTP URIs are optional and not every RIR repository makes use of them.
-
-Whenever a certificate or a TAL has both RSYNC and HTTP URIs, the following criteria is followed to prioritize which one to use first:
-- [`--rsync.priority`](#--rsyncpriority) **equals** [`--http.priority`](#--httppriority): use the order specified at the certificate or the TAL to fetch the corresponding URI.
-- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--http.priority`](#--httppriority): use RSYNC repository/TAL URI first; if there's an error fetching data, fallback to fetch HTTP repository/TAL URI.
-- [`--rsync.priority`](#--rsyncpriority) **less than** [`--http.priority`](#--httppriority): use HTTP repository/TAL URI first; if there's an error fetching data, fallback to use RSYNC repository/TAL URI.
-
-### `--rsync.strategy`
-
-- **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
-- **Availability:** `argv` and JSON
-- **Default:** `root-except-ta`
-
-rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
-
-#### `strict`
-
-> In order to enable this strategy, recompile using the flag: **_ENABLE\_STRICT\_STRATEGY_**.
->
-> e.g. `$ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'`
-
-rsyncs every repository publication point separately. Only skips publication points that have already been downloaded during the current validation cycle. (Assuming each synchronization is recursive.)
-
-For example, suppose the validator gets certificates whose caRepository access methods (in their Subject Information Access extensions) point to the following publication points:
-
-1. `rsync://rpki.example.com/foo/bar/`
-2. `rsync://rpki.example.com/foo/qux/`
-3. `rsync://rpki.example.com/foo/bar/`
-4. `rsync://rpki.example.com/foo/corge/grault/`
-5. `rsync://rpki.example.com/foo/corge/`
-6. `rsync://rpki.example.com/foo/corge/waldo/`
-
-A  validator following the `strict` strategy would download `bar`, download `qux`, skip `bar`, download `corge/grault`, download `corge` and skip `corge/waldo`.
-
-Though this strategy is the only "strictly" correct one, it is also extremely slow. Its usage is _not_ recommended, unless your repository contains lots of spam files, awkward permissions or can't be found in a repository rooted in a URL that follows the regular expression "`rsync://.+/.+/`".
-
-#### `root`
-
-For each publication point found, guess the root of its repository and rsync that instead. Then skip
-any subsequent children of said root.
-
-(To guess the root of a repository, the validator counts four slashes, and prunes the rest of the URL.)
-
-Reusing the caRepository URLs from the `strict` strategy (above) as example, a  validator following the `root` strategy would download `rsync://rpki.example.com/foo`, and then skip everything else.
-
-Assuming that the repository is specifically structured to be found within as few roots as possible, and they contain minimal RPKI-unrelated noise files, this is the fastest synchronization strategy. At time of writing, this is true for all the current official repositories.
-
-#### `root-except-ta`
-
-Synchronizes the root certificate (the one pointed by the TAL) in `strict` mode, and once it's validated, synchronizes the rest of the repository in `root` mode.
-
-Useful if you want `root`, but the root certificate is separated from the rest of the repository. Also useful if you don't want the validator to download the entire repository without first confirming the integrity and legitimacy of the root certificate.
-
-### `--rsync.retry.count`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 2
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
-
-Maximum number of retries whenever there's an error executing an RSYNC.
-
-A value of **0** means **no retries**.
-
-Whenever is necessary to execute an RSYNC, the validator will try at least one time the execution. If there was an error executing the RSYNC, the validator will retry it at most `--rsync.retry.count` times, waiting [`--rsync.retry.interval`](#--rsyncretryinterval) seconds between each retry.
-
-### `--rsync.retry.interval`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 5
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
-
-Period of time (in seconds) to wait between each retry to execute an RSYNC.
-
 ### rsync.program
 
 - **Type:** String
@@ -1033,10 +1047,41 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 
 ### `incidences`
 
-- **Type:** JSON Object
+- **Type:** JSON Object array
 - **Availability:** JSON only
 
 A listing of actions to be performed by validation upon encountering certain error conditions. See [Incidences](incidence.html).
+
+### `init-locations`
+
+- **Type:** JSON Object array
+- **Availability:** JSON only
+
+List of URLs from where the TALs will be fetched when [`--init-tals`](#--init-tals) is utilized. Each URL can have an optional `accept-message` that will be displayed at the terminal. When this message is displayed, the word **"yes"** is expected by FORT to download the corresponding TAL file; this way an explicit acceptance is obtained to comply with the printed message.
+
+By default it has 4 URLs from each TAL that doesn't require and explicit politics acceptance by the user, and 1 URL that does have an acceptance message so that FORT can proceed with its download.
+
+This is a JSON array of objects, where each object has a mandatory `url` member, and an optional `accept-message` member. The default value is:
+
+<pre><code>
+"init-locations": [
+	{
+		"url": "https://www.arin.net/resources/manage/rpki/arin.tal",
+		"accept-message": "Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal"
+	}
+]</code></pre>
 
 ## Deprecated arguments
 

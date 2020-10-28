@@ -11,10 +11,12 @@
 #include "common.h"
 #include "configure_ac.h"
 #include "file.h"
+#include "init.h"
 #include "json_handler.h"
 #include "log.h"
 #include "config/boolean.h"
 #include "config/incidences.h"
+#include "config/init_tals.h"
 #include "config/rrdp_conf.h"
 #include "config/str.h"
 #include "config/sync_strategy.h"
@@ -193,6 +195,12 @@ struct rpki_config {
 
 	/* Time period that must lapse to warn about a stale repository */
 	unsigned int stale_repository_period;
+
+	/* Local dir where the TALs will be downloaded */
+	char *init_tals;
+
+	/* HTTPS URLS from where the TALS will be fetched */
+	struct init_locations init_tal_locations;
 };
 
 static void print_usage(FILE *, bool);
@@ -718,6 +726,23 @@ static const struct option_field options[] = {
 		.max = UINT_MAX,
 	},
 
+	{
+		.id = 11000,
+		.name = "init-tals",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, init_tals),
+		.doc = "Fetch the RIR's TAL files into the specified path",
+		.availability = AVAILABILITY_GETOPT,
+	},
+	{
+		.id = 11001,
+		.name = "init-locations",
+		.type = &gt_init_tals_locations,
+		.offset = offsetof(struct rpki_config, init_tal_locations),
+		.doc = "Locations from where the TAL files will be downloaded, and its optional accept message",
+		.availability = AVAILABILITY_JSON,
+	},
+
 	{ 0 },
 };
 
@@ -867,6 +892,18 @@ set_default_values(void)
 		"$LOCAL",
 	};
 
+	static char const *init_locations_no_msg[] = {
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal",
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal",
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal",
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal",
+	};
+
+	static char const *init_locations_w_msg[] = {
+		"https://www.arin.net/resources/manage/rpki/arin.tal",
+		"Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:",
+	};
+
 	int error;
 
 	/*
@@ -981,7 +1018,16 @@ set_default_values(void)
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 
+	rpki_config.init_tals = NULL;
+	error = init_locations_init(&rpki_config.init_tal_locations,
+	    init_locations_no_msg, ARRAY_LEN(init_locations_no_msg),
+	    init_locations_w_msg, ARRAY_LEN(init_locations_w_msg));
+	if (error)
+		goto revert_init_locations;
+
 	return 0;
+revert_init_locations:
+	free(rpki_config.validation_log.tag);
 revert_validation_log_tag:
 	free(rpki_config.http.user_agent);
 revert_flat_array:
@@ -1008,6 +1054,14 @@ valid_output_file(char const *path)
 static int
 validate_config(void)
 {
+	if (rpki_config.init_tals != NULL) {
+		if (!valid_file_or_dir(rpki_config.init_tals, false, true,
+		    pr_op_errno))
+			return pr_op_err("Invalid init TAL directory.");
+		/* Ignore the other checks */
+		return 0;
+	}
+
 	if (rpki_config.tal == NULL)
 		return pr_op_err("The TAL file/directory (--tal) is mandatory.");
 
@@ -1131,6 +1185,17 @@ handle_flags_config(int argc, char **argv)
 	}
 
 	error = validate_config();
+
+	/* If present, nothing else is done */
+	if (rpki_config.init_tals != NULL) {
+		if (error)
+			goto end;
+		error = init_tals_exec(&rpki_config.init_tal_locations,
+		    rpki_config.init_tals);
+		free(long_opts);
+		free(short_opts);
+		exit(error);
+	}
 
 	log_start();
 end:

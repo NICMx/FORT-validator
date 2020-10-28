@@ -5,7 +5,13 @@ fort \- RPKI certificate path validator and RTR server
 
 .SH SYNOPSIS
 .B fort
-[\fIOPTIONS\fR] 
+[\fIOPTIONS\fR]
+.P
+.B fort
+--init-tals=\fIPATH\fR
+.P
+.B fort
+[-h|--help|--V|--version|--usage]
 
 .SH DESCRIPTION
 
@@ -47,6 +53,22 @@ Print short usage message and exit.
 .B \-V, \-\-version
 .RS 4
 Print program version and exit.
+.RE
+.P
+
+.B \-\-init-tals=\fIDIRECTORY\fR
+.RS 4
+Download the RIR TALs into the existent local \fIDIRECTORY\fR and exit.
+.P
+This argument exists merely to have all TALs before running FORT validator,
+the \fIDIRECTORY\fR should be the same that will be set at the \fI--tal\fR
+argument.
+.P
+By default, the 4 TALs that don't require a policy acceptance are downloaded
+from FORT validator's GitHub repository. ARIN TAL does require an explicit
+acceptance by the user, so it's downloaded only after the user accepts ARIN's
+RPA; this message is displayed at the terminal and only if the user accepts,
+ARIN TAL is also downloaded.
 .RE
 .P
 
@@ -180,6 +202,62 @@ match the actual file hash). [Default action: \fBerror\fR]
 .P
 More information about incidences can be consulted at FORT's web docs.
 .RE
+
+.P
+.B init-locations
+.RS 4
+List of URLs from where the TALs will be fetched when \fI--init-tals\fR is
+utilized. Each URL can have an optional \fBaccept-message\fR that will be
+displayed at the terminal. When this message is displayed, the word "yes" is
+expected by FORT to download the corresponding TAL file; this way an explicit
+acceptance is obtained to comply with the printed message.
+.P
+By default it has 4 URLs from each TAL that doesn't require and explicit
+politics acceptance by the user, and 1 URL that does have an acceptance message
+so that FORT can proceed with its download.
+.P
+This is a JSON array of objects, where each object has a mandatory \fBurl\fR
+member, and an optional \fBaccept-message\fR member. The default value is:
+.P
+"init-locations": [
+.RS 2
+{
+.RS 2
+"url": "https://www.arin.net/resources/manage/rpki/arin.tal",
+.br
+"accept-message": "Please download and read ARIN Relying Party Agreement (RPA)
+from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and
+if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
+.RE
+},
+{
+.RS 2
+"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
+/tal/lacnic.tal"
+.RE
+},
+{
+.RS 2
+"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
+/tal/ripe.tal"
+.RE
+},
+{
+.RS 2
+"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
+/tal/afrinic.tal"
+.RE
+},
+{
+.RS 2
+"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
+/tal/apnic.tal"
+.RE
+}
+.RE
+]
+.RE
+
 .RE
 .P
 
@@ -1069,14 +1147,21 @@ By default, it has a value of \fI43200\fR (12 hours).
 .P
 
 .SH EXAMPLES
-.B fort \-t /tmp/tal \-r /tmp/repository \-\-server.port 9323
+.B fort \-\-init-tals=/tmp/tal
+.RS 4
+Download the 5 RIR TALs into the specified directory. ARIN TAL will be
+downloaded only if the user accepts ARIN's RPA.
+.RE
+.P
+
+.B fort \-t /tmp/tal \-r /tmp/repository \-\-server.port=9323
 .RS 4
 Run FORT with all the default values, using a custom TALs directory, a
 custom repository directory as well, and binding the RTR server to port 9323.
 .RE
 .P
 
-.B fort \-t /tmp/tal \-r /tmp/repository \-\-mode=standalone \-\-output.roa -
+.B fort \-t /tmp/tal \-r /tmp/repository \-\-mode=standalone \-\-output.roa=-
 .RS 4
 Run FORT as standalone and output ROAs CSV to the console.
 .RE
@@ -1085,14 +1170,14 @@ Run FORT as standalone and output ROAs CSV to the console.
 .nf
 \fBfort \-t /tmp/tal \-r /tmp/repository \\
      \-\-mode=standalone \\
-     \-\-slurm /tmp/myslurm.slurm\fR
+     \-\-slurm=/tmp/myslurm.slurm\fR
 .fi
 .RS 4
 Run FORT as standalone and using a SLURM file.
 .RE
 .P
 
-.B fort --configuration-file conf.json
+.B fort \-\-configuration-file=conf.json
 .RS 4
 Run FORT using the JSON configuration file \fIconf.json\fR.
 .RE
@@ -1100,9 +1185,9 @@ Run FORT using the JSON configuration file \fIconf.json\fR.
 
 .nf
 \fBfort \-t /tmp/tal \-r /tmp/repository \\
-     \-\-server.address ::1 \-\-server.port 9323 \\
-     \-\-server.interval.validation 1800 \\
-     \-\-output.roa /tmp/roas.csv\fR
+     \-\-server.address=::1 \-\-server.port=9323 \\
+     \-\-server.interval.validation=1800 \\
+     \-\-output.roa=/tmp/roas.csv\fR
 .fi
 .RS 4
 Run FORT with RTR server listening on IPv6 address \fI::1\fR, port 9323,

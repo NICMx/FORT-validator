@@ -493,24 +493,10 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-static size_t
-write_http_cer(unsigned char *content, size_t size, size_t nmemb, void *arg)
-{
-	FILE *fd = arg;
-	size_t read = size * nmemb;
-	size_t written;
-
-	written = fwrite(content, size, nmemb, fd);
-	if (written != nmemb)
-		return -EINVAL;
-
-	return read;
-}
-
 static int
 handle_https_uri(struct rpki_uri *uri)
 {
-	return http_download_file(uri, write_http_cer,
+	return http_download_file(uri,
 	    reqs_errors_log_uri(uri_get_global(uri)));
 }
 
