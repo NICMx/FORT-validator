@@ -17,58 +17,59 @@ description: Guide to use arguments of FORT Validator.
 	5. [`--tal`](#--tal)
 	6. [`--local-repository`](#--local-repository)
 	7. [`--work-offline`](#--work-offline)
-	8. [`--shuffle-uris`](#--shuffle-uris)
-	9. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
-	10. [`--mode`](#--mode)
-	11. [`--server.address`](#--serveraddress)
-	12. [`--server.port`](#--serverport)
-	13. [`--server.backlog`](#--serverbacklog)
-	14. [`--server.interval.validation`](#--serverintervalvalidation)
-	15. [`--server.interval.refresh`](#--serverintervalrefresh)
-	16. [`--server.interval.retry`](#--serverintervalretry)
-	17. [`--server.interval.expire`](#--serverintervalexpire)
-	18. [`--slurm`](#--slurm)
-	19. [`--log.enabled`](#--logenabled)
-	20. [`--log.level`](#--loglevel)
-	21. [`--log.output`](#--logoutput)
-	22. [`--log.color-output`](#--logcolor-output)
-	23. [`--log.file-name-format`](#--logfile-name-format)
-	24. [`--log.facility`](#--logfacility)
-	25. [`--log.tag`](#--logtag)
-	26. [`--validation-log.enabled`](#--validation-logenabled)
-	27. [`--validation-log.level`](#--validation-loglevel)
-	28. [`--validation-log.output`](#--validation-logoutput)
-	29. [`--validation-log.color-output`](#--validation-logcolor-output)
-	30. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
-	31. [`--validation-log.facility`](#--validation-logfacility)
-	32. [`--validation-log.tag`](#--validation-logtag)
-	33. [`--http.enabled`](#--httpenabled)
-	34. [`--http.priority`](#--httppriority)
-	35. [`--http.retry.count`](#--httpretrycount)
-	36. [`--http.retry.interval`](#--httpretryinterval)
-	37. [`--http.user-agent`](#--httpuser-agent)
-	38. [`--http.connect-timeout`](#--httpconnect-timeout)
-	39. [`--http.transfer-timeout`](#--httptransfer-timeout)
-	40. [`--http.idle-timeout`](#--httpidle-timeout)
-	41. [`--http.ca-path`](#--httpca-path)
-	42. [`--output.roa`](#--outputroa)
-	43. [`--output.bgpsec`](#--outputbgpsec)
-	44. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	45. [`--stale-repository-period`](#--stale-repository-period)
-	46. [`--rsync.enabled`](#--rsyncenabled)
-	47. [`--rsync.priority`](#--rsyncpriority)
-	48. [`--rsync.strategy`](#--rsyncstrategy)
+	8. [`--daemon`](#--daemon)
+	9. [`--shuffle-uris`](#--shuffle-uris)
+	10. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
+	11. [`--mode`](#--mode)
+	12. [`--server.address`](#--serveraddress)
+	13. [`--server.port`](#--serverport)
+	14. [`--server.backlog`](#--serverbacklog)
+	15. [`--server.interval.validation`](#--serverintervalvalidation)
+	16. [`--server.interval.refresh`](#--serverintervalrefresh)
+	17. [`--server.interval.retry`](#--serverintervalretry)
+	18. [`--server.interval.expire`](#--serverintervalexpire)
+	19. [`--slurm`](#--slurm)
+	20. [`--log.enabled`](#--logenabled)
+	21. [`--log.level`](#--loglevel)
+	22. [`--log.output`](#--logoutput)
+	23. [`--log.color-output`](#--logcolor-output)
+	24. [`--log.file-name-format`](#--logfile-name-format)
+	25. [`--log.facility`](#--logfacility)
+	26. [`--log.tag`](#--logtag)
+	27. [`--validation-log.enabled`](#--validation-logenabled)
+	28. [`--validation-log.level`](#--validation-loglevel)
+	29. [`--validation-log.output`](#--validation-logoutput)
+	30. [`--validation-log.color-output`](#--validation-logcolor-output)
+	31. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
+	32. [`--validation-log.facility`](#--validation-logfacility)
+	33. [`--validation-log.tag`](#--validation-logtag)
+	34. [`--http.enabled`](#--httpenabled)
+	35. [`--http.priority`](#--httppriority)
+	36. [`--http.retry.count`](#--httpretrycount)
+	37. [`--http.retry.interval`](#--httpretryinterval)
+	38. [`--http.user-agent`](#--httpuser-agent)
+	39. [`--http.connect-timeout`](#--httpconnect-timeout)
+	40. [`--http.transfer-timeout`](#--httptransfer-timeout)
+	41. [`--http.idle-timeout`](#--httpidle-timeout)
+	42. [`--http.ca-path`](#--httpca-path)
+	43. [`--output.roa`](#--outputroa)
+	44. [`--output.bgpsec`](#--outputbgpsec)
+	45. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	46. [`--stale-repository-period`](#--stale-repository-period)
+	47. [`--rsync.enabled`](#--rsyncenabled)
+	48. [`--rsync.priority`](#--rsyncpriority)
+	49. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	49. [`--rsync.retry.count`](#--rsyncretrycount)
-	50. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	51. [`--configuration-file`](#--configuration-file)
-	52. [`rsync.program`](#rsyncprogram)
-	53. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	54. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	55. [`incidences`](#incidences)
-	56. [`init-locations`](#init-locations)
+	50. [`--rsync.retry.count`](#--rsyncretrycount)
+	51. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	52. [`--configuration-file`](#--configuration-file)
+	53. [`rsync.program`](#rsyncprogram)
+	54. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	55. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	56. [`incidences`](#incidences)
+	57. [`init-locations`](#init-locations)
 3. [Deprecated arguments](#deprecated-arguments)
 	1. [`--sync-strategy`](#--sync-strategy)
 	2. [`--rrdp.enabled`](#--rrdpenabled)
@@ -89,6 +90,7 @@ description: Guide to use arguments of FORT Validator.
         [--local-repository=<directory>]
         [--sync-strategy=off|strict|root|root-except-ta]
         [--work-offline]
+        [--daemon]
         [--shuffle-uris]
         [--maximum-certificate-depth=<unsigned integer>]
         [--asn1-decode-max-stack=<unsigned integer>]
@@ -273,6 +275,15 @@ Because rsync uses delta encoding, you're advised to keep this cache around. It 
 If this flag is activated, Fort will disable all outgoing requests (currently done with: *rsync* and *https* (RRDP protocol uses HTTPS to fetch data)). All repository files (certificates, ROAs, etc.) are expected to exist at configured [`--local-repository`](#--local-repository).
 
 Otherwise, Fort will perform outgoing requests whenever this is needed. If a specific protocol needs to be deactivated, use [`--rsync.enabled`](#--rsyncenabled) or [`--http.enabled`](#--httpenabled).
+
+### `--daemon`
+
+- **Type:** None
+- **Availability:** `argv` and JSON
+
+If this flag is activated, Fort will run as a daemon. The process is detached from the calling terminal and sent to the background.
+
+All the enabled logs will be sent to syslog, so the configured values of [`--log.output`](#--logoutput) and [`--validation-log.output`](#--validation-logoutput) will be ignored.
 
 ### `--shuffle-uris`
 
@@ -868,6 +879,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
 	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
 	"<a href="#--mode">mode</a>": "server",
+	"<a href="#--daemon">daemon</a>": false,
 
 	"server": {
 		"<a href="#--serveraddress">address</a>": "127.0.0.1",

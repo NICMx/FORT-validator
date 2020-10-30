@@ -101,8 +101,6 @@ log_start(void)
 		val_syslog_enabled = false;
 	}
 
-
-
 	if (op_global_log_enabled) {
 		switch (config_get_op_log_output()) {
 		case SYSLOG:
@@ -128,8 +126,6 @@ log_start(void)
 		else
 			op_syslog_enabled = false;
 	}
-
-
 }
 
 void

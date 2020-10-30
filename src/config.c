@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "configure_ac.h"
+#include "daemon.h"
 #include "file.h"
 #include "init.h"
 #include "json_handler.h"
@@ -61,6 +62,10 @@ struct rpki_config {
 	 * 'true' uses only local files located at local-repository.
 	 */
 	bool work_offline;
+	/*
+	 * Run fort as a daemon.
+	 */
+	bool daemon;
 
 	struct {
 		/** The bound listening address of the RTR server. */
@@ -319,6 +324,12 @@ static const struct option_field options[] = {
 		.type = &gt_work_offline,
 		.offset = offsetof(struct rpki_config, work_offline),
 		.doc = "Disable all outgoing requests (rsync, http (implies RRDP)) and work only with local repository files.",
+	}, {
+		.id = 1006,
+		.name = "daemon",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, daemon),
+		.doc = "Run fort as a daemon.",
 	},
 
 	/* Server fields */
@@ -941,6 +952,7 @@ set_default_values(void)
 	rpki_config.maximum_certificate_depth = 32;
 	rpki_config.mode = SERVER;
 	rpki_config.work_offline = false;
+	rpki_config.daemon = false;
 
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
@@ -1195,6 +1207,15 @@ handle_flags_config(int argc, char **argv)
 		free(long_opts);
 		free(short_opts);
 		exit(error);
+	}
+
+	if (rpki_config.daemon) {
+		pr_op_warn("Executing as daemon, all logs will be sent to syslog.");
+		/* Send all logs to syslog */
+		rpki_config.log.output = SYSLOG;
+		rpki_config.validation_log.output = SYSLOG;
+		error = daemonize(log_start);
+		goto end;
 	}
 
 	log_start();

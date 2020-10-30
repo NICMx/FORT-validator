@@ -5,6 +5,7 @@
   "shuffle-uris": false,
   "maximum-certificate-depth": 32,
   "mode": "server",
+  "daemon": false,
   "server": {
     "address": "127.0.0.1",
     "port": "8323",

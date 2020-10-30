@@ -303,6 +303,16 @@ By default, the path is \fI/tmp/fort/repository\fR.
 .RE
 .P
 
+.B \-\-daemon
+.RS 4
+If this flag is activated, Fort will run as a daemon. The process is detached
+from the calling terminal and sent to the background.
+.P
+All the enabled logs will be sent to syslog, so the configured values of
+\fB--log.output\fR and \fB--validation-log.output\fR will be ignored.
+.RE
+.P
+
 .B \-\-sync-strategy=(\fIoff\fR|\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
 .RS 4
 This argument \fBwill be DEPRECATED\fR. Use \fB--rsync.strategy\fR or
@@ -1208,6 +1218,7 @@ to a specific value:
   "shuffle-uris": true,
   "maximum-certificate-depth": 32,
   "mode": "server",
+  "daemon": false,
   "slurm": "/tmp/fort/test.slurm",
   "server": {
     "address": "127.0.0.1",
