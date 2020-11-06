@@ -70,7 +70,7 @@ __handle_router_key(unsigned char const *ski, uint32_t as,
 }
 
 int
-perform_standalone_validation(struct db_table *table)
+perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 {
 	struct validation_handler handler;
 

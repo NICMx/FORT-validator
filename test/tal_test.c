@@ -15,6 +15,7 @@
 #include "random.c"
 #include "crypto/base64.c"
 #include "rsync/rsync.c"
+#include "thread/thread_pool.c"
 
 /* Impersonate functions that won't be utilized by tests */
 
