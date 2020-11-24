@@ -8,14 +8,6 @@
 
 #define JSON_MEMBER_URL "url"
 #define JSON_MEMBER_MESSAGE "accept-message"
-//
-//struct init_location {
-//	char *url;
-//	char *accept_message;
-//	SLIST_ENTRY(init_location) next;
-//};
-//
-//SLIST_HEAD(init_locations, init_location);
 
 static int
 init_location_create(char const *url, struct init_location **result)
@@ -139,10 +131,6 @@ init_locations_foreach(struct init_locations *locations,
 	int error;
 
 	SLIST_FOREACH(ptr, locations, next) {
-		// FIXME TEST
-		pr_op_err("--> foreach = %s, '%s'", ptr->url,
-		    (ptr->accept_message == NULL) ? "NULL" : ptr->accept_message);
-
 		error = cb(ptr->url, ptr->accept_message, arg);
 		if (error)
 			return error;
