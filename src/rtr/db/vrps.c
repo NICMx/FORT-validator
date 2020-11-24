@@ -86,9 +86,9 @@ vrps_init(void)
 	time_t now;
 	int error;
 
-	/* FIXME (now) Configure max threads for tals pool */
 	pool = NULL;
-	error = thread_pool_create(10, &pool);
+	error = thread_pool_create(config_get_thread_pool_validation_max(),
+	    &pool);
 	if (error)
 		return error;
 

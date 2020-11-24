@@ -74,7 +74,6 @@ struct rpki_config {
 		char *port;
 		/** Outstanding connections in the socket's listen queue */
 		unsigned int backlog;
-
 		struct {
 			/** Interval used to look for updates at VRPs location */
 			unsigned int validation;
@@ -206,6 +205,18 @@ struct rpki_config {
 
 	/* HTTPS URLS from where the TALS will be fetched */
 	struct init_locations init_tal_locations;
+
+	/* Thread pools for specific tasks */
+	struct {
+		/* Threads related to RTR server */
+		struct {
+			unsigned int max;
+		} server;
+		/* Threads related to validation cycles */
+		struct {
+			unsigned int max;
+		} validation;
+	} thread_pool;
 };
 
 static void print_usage(FILE *, bool);
@@ -754,6 +765,27 @@ static const struct option_field options[] = {
 		.availability = AVAILABILITY_JSON,
 	},
 
+	{
+		.id = 12000,
+		.name = "thread-pool.server.max",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, thread_pool.server.max),
+		.doc = "Maximum number of active threads (one thread per RTR client) that can live at the thread pool",
+		.min = 1,
+		/* Would somebody connect more than 400 routers? */
+		.max = 400,
+	},
+	{
+		.id = 12001,
+		.name = "thread-pool.validation.max",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    thread_pool.validation.max),
+		.doc = "Maximum number of active threads (one thread per TAL) that can live at the thread pool",
+		.min = 1,
+		.max = 20,
+	},
+
 	{ 0 },
 };
 
@@ -1036,6 +1068,11 @@ set_default_values(void)
 	    init_locations_w_msg, ARRAY_LEN(init_locations_w_msg));
 	if (error)
 		goto revert_init_locations;
+
+	/* Common scenario is to connect 1 router or a couple of them */
+	rpki_config.thread_pool.server.max = 20;
+	/* Usually 5 TALs, let a few more available */
+	rpki_config.thread_pool.validation.max = 10;
 
 	return 0;
 revert_init_locations:
@@ -1539,6 +1576,18 @@ unsigned int
 config_get_stale_repository_period(void)
 {
 	return rpki_config.stale_repository_period;
+}
+
+unsigned int
+config_get_thread_pool_server_max(void)
+{
+	return rpki_config.thread_pool.server.max;
+}
+
+unsigned int
+config_get_thread_pool_validation_max(void)
+{
+	return rpki_config.thread_pool.validation.max;
 }
 
 void

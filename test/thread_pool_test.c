@@ -6,32 +6,30 @@
 #include "impersonator.c"
 #include "thread/thread_pool.c"
 
-#define TOTAL_THREADS 50
-
 static void *
 thread_work(void *arg)
 {
 	int *value = arg;
-	sleep(2);
 	(*value) += 2;
 	return NULL;
 }
 
-START_TEST(tpool_work)
+static void
+test_threads_work(unsigned int total_threads)
 {
 	struct thread_pool *pool;
 	int **data;
 	int i;
 	int error;
 
-	error = thread_pool_create(TOTAL_THREADS, &pool);
+	error = thread_pool_create(total_threads, &pool);
 	ck_assert_int_eq(error, 0);
 
 	/* Just a dummy array where each thread will modify one slot only */
-	data = calloc(TOTAL_THREADS, sizeof(int *));
+	data = calloc(total_threads, sizeof(int *));
 	ck_assert_ptr_ne(data, NULL);
 
-	for (i = 0; i < TOTAL_THREADS; i++) {
+	for (i = 0; i < total_threads; i++) {
 		data[i] = malloc(sizeof(int));
 		ck_assert_ptr_ne(data[i], NULL);
 		*data[i] = 0;
@@ -42,7 +40,7 @@ START_TEST(tpool_work)
 	thread_pool_wait(pool);
 
 	/* Every element should have been modified */
-	for (i = 0; i < TOTAL_THREADS; i++) {
+	for (i = 0; i < total_threads; i++) {
 		ck_assert_int_eq(*data[i], 2);
 		free(data[i]);
 	}
@@ -50,18 +48,33 @@ START_TEST(tpool_work)
 	free(data);
 	thread_pool_destroy(pool);
 }
+
+START_TEST(tpool_single_work)
+{
+	test_threads_work(1);
+}
+END_TEST
+
+START_TEST(tpool_multiple_work)
+{
+	test_threads_work(200);
+}
 END_TEST
 
 Suite *thread_pool_suite(void)
 {
 	Suite *suite;
-	TCase *work;
+	TCase *single, *multiple;
 
-	work = tcase_create("work");
-	tcase_add_test(work, tpool_work);
+	single = tcase_create("single_work");
+	tcase_add_test(multiple, tpool_single_work);
+
+	multiple = tcase_create("multiple_work");
+	tcase_add_test(multiple, tpool_multiple_work);
 
 	suite = suite_create("thread_pool_test()");
-	suite_add_tcase(suite, work);
+	suite_add_tcase(suite, single);
+	suite_add_tcase(suite, multiple);
 
 	return suite;
 }

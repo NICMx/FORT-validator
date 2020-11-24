@@ -17,7 +17,7 @@ static void place_null_character(rtr_char *, size_t);
  * Reads exactly @buffer_len bytes from @buffer, erroring if this goal cannot be
  * met.
  *
- * If @allow_end is true, will allow immediate EOF in place of the buffer bytes.
+ * If @allow_eof is true, will allow immediate EOF in place of the buffer bytes.
  * (Though all this really means is that the corresponding warning message will
  * not be printed, which is perfectly fine as far as the only current caller is
  * concerned.)
@@ -33,7 +33,8 @@ read_exact(int fd, unsigned char *buffer, size_t buffer_len, bool allow_eof)
 	for (offset = 0; offset < buffer_len; offset += read_result) {
 		read_result = read(fd, &buffer[offset], buffer_len - offset);
 		if (read_result == -1)
-			return -pr_op_errno(errno, "Client socket read interrupted");
+			return -pr_op_errno(errno,
+			    "Client socket read interrupted");
 
 		if (read_result == 0) {
 			if (!allow_eof)

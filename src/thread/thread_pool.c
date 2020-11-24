@@ -121,13 +121,13 @@ tasks_poll(void *arg)
 	while (true) {
 		thread_pool_lock(pool);
 
-		while (TAILQ_EMPTY(&(pool->queue)) && !pool->stop) {
+		while (TAILQ_EMPTY(&(pool->queue)) && !pool->stop)
 			pthread_cond_wait(&(pool->working_cond), &(pool->lock));
-		}
+
 		if (pool->stop)
 			break;
 
-		/* Pop the tail */
+		/* Pull the tail */
 		task = task_queue_pull(&(pool->queue));
 		pool->working_count++;
 		pr_op_debug("Working on task #%u", pool->working_count);
@@ -195,8 +195,7 @@ tpool_thread_spawn(struct thread_pool *pool, thread_pool_task_cb entry_point)
 	if (error)
 		return pr_op_errno(error, "Calling pthread_attr_init()");
 
-	/* FIXME (now) Let at 2MB? */
-	/* 2MB */
+	/* Use 2MB (default in most 64 bits systems) */
 	error = pthread_attr_setstacksize(&attr, 1024 * 1024 * 2);
 	if (error)
 		return pr_op_errno(error,
@@ -328,9 +327,10 @@ thread_pool_push(struct thread_pool *pool, thread_pool_task_cb cb, void *arg)
 
 	thread_pool_lock(pool);
 	task_queue_push(&(pool->queue), task);
+	thread_pool_unlock(pool);
+
 	/* There's work to do! */
 	pthread_cond_broadcast(&(pool->working_cond));
-	thread_pool_unlock(pool);
 
 	return 0;
 }

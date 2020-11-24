@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -15,16 +14,22 @@
 
 #include "config.h"
 #include "clients.h"
+#include "internal_pool.h"
 #include "log.h"
-#include "updates_daemon.h"
+#include "validation_run.h"
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 #include "rtr/db/vrps.h"
+#include "thread/thread_pool.h"
+
+/* Constant messages regarding a client status */
+#define CL_ACCEPTED   "accepted"
+#define CL_CLOSED     "closed"
+#define CL_TERMINATED "terminated"
 
 /* Parameters for each thread that handles client connections */
 struct thread_param {
 	int fd;
-	pthread_t tid;
 	struct sockaddr_storage addr;
 };
 
@@ -36,6 +41,15 @@ struct fd_node {
 
 /* List of server sockets */
 SLIST_HEAD(server_fds, fd_node);
+
+/* Does the server needs to be stopped? */
+static volatile bool server_stop;
+
+/* Parameters for the RTR server task */
+struct rtr_task_param {
+	struct server_fds *fds;
+	struct thread_pool *pool;
+};
 
 static int
 init_addrinfo(char const *hostname, char const *service,
@@ -217,7 +231,7 @@ server_fd_add(struct server_fds *fds, char const *address, char const *service)
 }
 
 static void
-server_fd_cleanup(struct server_fds *fds)
+server_fds_destroy(struct server_fds *fds)
 {
 	struct fd_node *fd;
 
@@ -227,6 +241,7 @@ server_fd_cleanup(struct server_fds *fds)
 		close(fd->id);
 		free(fd);
 	}
+	free(fds);
 }
 
 static int
@@ -298,20 +313,17 @@ create_server_sockets(struct server_fds *fds)
 		error = parse_address(addresses->array[i], default_service,
 		    &address, &service);
 		if (error)
-			goto cleanup_fds;
+			return error;
 
 		error = server_fd_add(fds, address, service);
 		/* Always release them */
 		free(address);
 		free(service);
 		if (error)
-			goto cleanup_fds;
+			return error;
 	}
 
 	return 0;
-cleanup_fds:
-	server_fd_cleanup(fds);
-	return error;
 }
 
 enum verdict {
@@ -378,25 +390,16 @@ clean_request(struct rtr_request *request, const struct pdu_metadata *meta)
 	meta->destructor(request->pdu);
 }
 
-static void
-print_close_failure(int error, int fd)
+static int
+print_close_failure(int error, struct sockaddr_storage *sockaddr)
 {
-	struct sockaddr_storage sockaddr;
 	char buffer[INET6_ADDRSTRLEN];
 	char const *addr_str;
 
-	addr_str = (clients_get_addr(fd, &sockaddr) == 0)
-	    ? sockaddr2str(&sockaddr, buffer)
-	    : "(unknown)";
+	addr_str = sockaddr2str(sockaddr, buffer);
 
-	pr_op_errno(error, "close() failed on socket of client %s", addr_str);
-}
-
-static void
-end_client(int fd)
-{
-	if (close(fd) != 0)
-		print_close_failure(errno, fd);
+	return pr_op_errno(error, "close() failed on socket of client %s",
+	    addr_str);
 }
 
 static void
@@ -405,6 +408,19 @@ print_client_addr(struct sockaddr_storage *addr, char const *action, int fd)
 	char buffer[INET6_ADDRSTRLEN];
 	pr_op_info("Client %s [ID %d]: %s", action, fd,
 	    sockaddr2str(addr, buffer));
+}
+
+static int
+end_client(struct client *client, void *arg)
+{
+	if (arg != NULL && strcmp(arg, CL_TERMINATED) == 0)
+		shutdown(client->fd, SHUT_RDWR);
+
+	if (close(client->fd) != 0)
+		return print_close_failure(errno, &client->addr);
+
+	print_client_addr(&(client->addr), arg, client->fd);
+	return 0;
 }
 
 /*
@@ -422,7 +438,7 @@ client_thread_cb(void *arg)
 	memcpy(&param, arg, sizeof(param));
 	free(arg);
 
-	error = clients_add(param.fd, param.addr, param.tid);
+	error = clients_add(param.fd, param.addr);
 	if (error) {
 		close(param.fd);
 		return NULL;
@@ -439,12 +455,7 @@ client_thread_cb(void *arg)
 			break;
 	}
 
-	print_client_addr(&param.addr, "closed", param.fd);
-	end_client(param.fd);
-	clients_forget(param.fd);
-
-	/* Release to avoid the wait till the parent tries to join */
-	pthread_detach(param.tid);
+	clients_forget(param.fd, end_client, CL_CLOSED);
 
 	return NULL;
 }
@@ -454,20 +465,20 @@ init_fdset(struct server_fds *fds, fd_set *fdset)
 {
 	struct fd_node *node;
 
-	FD_ZERO (fdset);
+	FD_ZERO(fdset);
 	SLIST_FOREACH(node, fds, next)
-		FD_SET (node->id, fdset);
-
+		FD_SET(node->id, fdset);
 }
 
 /*
  * Waits for client connections and spawns threads to handle them.
  */
-static int
-handle_client_connections(struct server_fds *fds)
+static void *
+handle_client_connections(void *arg)
 {
-	struct fd_node *head_node;
-	struct sigaction ign;
+	struct rtr_task_param *rtr_param = arg;
+	struct server_fds *fds;
+	struct thread_pool *pool;
 	struct sockaddr_storage client_addr;
 	struct thread_param *param;
 	struct timeval select_time;
@@ -478,29 +489,27 @@ handle_client_connections(struct server_fds *fds)
 	int fd;
 	int error;
 
-	/* Ignore SIGPIPES, they're handled apart */
-	ign.sa_handler = SIG_IGN;
-	ign.sa_flags = 0;
-	sigemptyset(&ign.sa_mask);
-	sigaction(SIGPIPE, &ign, NULL);
+	/* Get the argument pointers, and release arg at once */
+	fds = rtr_param->fds;
+	pool = rtr_param->pool;
+	free(rtr_param);
 
-	head_node = SLIST_FIRST(fds);
-	last_server_fd = head_node->id;
-
-	SLIST_FOREACH(head_node, fds, next) {
-		error = listen(head_node->id, config_get_server_queue());
-		if (error)
-			return pr_op_errno(errno,
-			    "Couldn't listen on server socket.");
-	}
+	last_server_fd = SLIST_FIRST(fds)->id;
 
 	sizeof_client_addr = sizeof(client_addr);
+
+	/* I'm alive! */
+	server_stop = false;
 
 	pr_op_debug("Waiting for client connections at server...");
 	do {
 		/* Look for connections every .2 seconds*/
 		select_time.tv_sec = 0;
 		select_time.tv_usec = 200000;
+
+		/* Am I still alive? */
+		if (server_stop)
+			break;
 
 		init_fdset(fds, &readfds);
 
@@ -523,10 +532,10 @@ handle_client_connections(struct server_fds *fds)
 			case VERDICT_RETRY:
 				continue;
 			case VERDICT_EXIT:
-				return -EINVAL;
+				return NULL;
 			}
 
-			print_client_addr(&client_addr, "accepted", client_fd);
+			print_client_addr(&client_addr, CL_ACCEPTED, client_fd);
 
 			/*
 			 * Note: My gut says that errors from now on (even the
@@ -545,46 +554,56 @@ handle_client_connections(struct server_fds *fds)
 			param->fd = client_fd;
 			param->addr = client_addr;
 
-			error = pthread_create(&param->tid, NULL,
-			    client_thread_cb, param);
-			if (error && error != EAGAIN)
+			error = thread_pool_push(pool, client_thread_cb,
+			    param);
+			if (error) {
+				pr_op_err("Couldn't push a thread to attend incoming RTR client");
 				/* Error with min RTR version */
 				err_pdu_send_internal_error(client_fd, RTR_V0);
-			if (error) {
-				pr_op_errno(error,
-				    "Could not spawn the client's thread");
 				close(client_fd);
 				free(param);
 			}
 		}
 	} while (true);
 
-	return 0; /* Unreachable. */
-}
-
-/*
- * Receive @arg to be called as a clients_foreach_cb
- */
-static int
-kill_client(struct client *client, void *arg)
-{
-	end_client(client->fd);
-	print_client_addr(&(client->addr), "terminated", client->fd);
-	/* Don't call clients_forget to avoid deadlock! */
-	return 0;
-}
-
-static void
-end_clients(void)
-{
-	clients_foreach(kill_client, NULL);
-	/* Let the clients be deleted when clients DB is destroyed */
+	return NULL; /* Unreachable. */
 }
 
 static int
-join_thread(pthread_t tid, void *arg)
+__handle_client_connections(struct server_fds *fds, struct thread_pool *pool)
 {
-	close_thread(tid, "Client");
+	struct rtr_task_param *param;
+	struct fd_node *node;
+	struct sigaction ign;
+	int error;
+
+	/* Ignore SIGPIPES, they're handled apart */
+	ign.sa_handler = SIG_IGN;
+	ign.sa_flags = 0;
+	sigemptyset(&ign.sa_mask);
+	sigaction(SIGPIPE, &ign, NULL);
+
+	SLIST_FOREACH(node, fds, next) {
+		error = listen(node->id, config_get_server_queue());
+		if (error)
+			return pr_op_errno(errno,
+			    "Couldn't listen on server socket.");
+	}
+
+	param = malloc(sizeof(struct rtr_task_param));
+	if (param == NULL)
+		return pr_enomem();
+
+	param->fds = fds;
+	param->pool = pool;
+
+	/* handle_client_connections() must release param */
+	error = internal_pool_push(handle_client_connections, param);
+	if (error) {
+		free(param);
+		return error;
+	}
+
 	return 0;
 }
 
@@ -599,38 +618,61 @@ join_thread(pthread_t tid, void *arg)
 int
 rtr_listen(void)
 {
-	bool changed;
-	struct server_fds fds; /* "file descriptors" */
+	struct server_fds *fds; /* "file descriptors" */
+	struct thread_pool *pool;
 	int error;
+
+	server_stop = true;
 
 	error = clients_db_init();
 	if (error)
 		return error;
 
 	if (config_get_mode() == STANDALONE) {
-		error = vrps_update(&changed);
-		if (error)
-			pr_op_err("Error %d while trying to update the ROA database.",
-			    error);
+		error = validation_run_first();
 		goto revert_clients_db; /* Error 0 it's ok */
 	}
 
-	SLIST_INIT(&fds);
-	error = create_server_sockets(&fds);
-	if (error)
+	fds = malloc(sizeof(struct server_fds));
+	if (fds == NULL) {
+		error = pr_enomem();
 		goto revert_clients_db;
+	}
 
-	error = updates_daemon_start();
+	SLIST_INIT(fds);
+	error = create_server_sockets(fds);
 	if (error)
-		goto revert_server_sockets;
+		goto revert_server_fds;
 
-	error = handle_client_connections(&fds);
+	pool = NULL;
+	error = thread_pool_create(config_get_thread_pool_server_max(), &pool);
+	if (error)
+		goto revert_server_fds;
 
-	end_clients();
-	updates_daemon_destroy();
-revert_server_sockets:
-	server_fd_cleanup(&fds);
+	/* Do the first run */
+	error = validation_run_first();
+	if (error)
+		goto revert_thread_pool;
+
+	/* Wait for connections at another thread */
+	error = __handle_client_connections(fds, pool);
+	if (error)
+		goto revert_thread_pool;
+
+	/* Keep running the validations on the main thread */
+	error = validation_run_cycle();
+
+	/* Terminate all clients */
+	clients_terminate_all(end_client, CL_TERMINATED);
+
+	/* Stop the server (it lives on a detached thread) */
+	server_stop = true;
+
+revert_thread_pool:
+	thread_pool_destroy(pool);
+revert_server_fds:
+	server_fds_destroy(fds);
 revert_clients_db:
-	clients_db_destroy(join_thread, NULL);
+	clients_db_destroy();
 	return error;
 }

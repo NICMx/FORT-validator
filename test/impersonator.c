@@ -307,3 +307,9 @@ config_set_http_priority(unsigned int value)
 {
 	http_priority = value;
 }
+
+unsigned int
+config_get_thread_pool_validation_max(void)
+{
+	return 10;
+}

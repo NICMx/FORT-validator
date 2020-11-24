@@ -29,13 +29,6 @@ handle_foreach(struct client *client, void *arg)
 	return 0;
 }
 
-static int
-join_threads(pthread_t tid, void *arg)
-{
-	/* Empty, since no threads are alive */
-	return 0;
-}
-
 START_TEST(basic_test)
 {
 	/*
@@ -58,19 +51,19 @@ START_TEST(basic_test)
 	 */
 
 	for (i = 0; i < 4; i++) {
-		ck_assert_int_eq(0, clients_add(1, addr, 10));
-		ck_assert_int_eq(0, clients_add(2, addr, 20));
-		ck_assert_int_eq(0, clients_add(3, addr, 30));
-		ck_assert_int_eq(0, clients_add(4, addr, 40));
+		ck_assert_int_eq(0, clients_add(1, addr));
+		ck_assert_int_eq(0, clients_add(2, addr));
+		ck_assert_int_eq(0, clients_add(3, addr));
+		ck_assert_int_eq(0, clients_add(4, addr));
 	}
 
-	clients_forget(3);
+	clients_forget(3, NULL, NULL);
 
 	state = 0;
 	ck_assert_int_eq(0, clients_foreach(handle_foreach, &state));
 	ck_assert_uint_eq(3, state);
 
-	clients_db_destroy(join_threads, NULL);
+	clients_db_destroy();
 }
 END_TEST
 

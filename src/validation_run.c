@@ -1,26 +1,39 @@
-#include "updates_daemon.h"
+#include "validation_run.h"
 
-#include <errno.h>
 #include <stdbool.h>
 #include <unistd.h>
 
-#include "common.h"
 #include "config.h"
 #include "log.h"
 #include "notify.h"
-#include "object/tal.h"
 #include "rtr/db/vrps.h"
 
-static pthread_t thread;
-
-static void *
-check_vrps_updates(void *param_void)
+/* Runs a single cycle, use at standalone mode or before running RTR server */
+int
+validation_run_first(void)
 {
+	bool upd;
+	int error;
+
+	upd = false;
+	error = vrps_update(&upd);
+	if (error)
+		return pr_op_err("First validation wasn't successful.");
+
+	return 0;
+}
+
+/* Run a validation cycle each 'server.interval.validation' secs */
+int
+validation_run_cycle(void)
+{
+	unsigned int validation_interval;
 	bool changed;
 	int error;
 
+	validation_interval = config_get_validation_interval();
 	do {
-		sleep(config_get_validation_interval());
+		sleep(validation_interval);
 
 		error = vrps_update(&changed);
 		if (error == -EINTR)
@@ -41,29 +54,5 @@ check_vrps_updates(void *param_void)
 		}
 	} while (true);
 
-	return NULL;
-}
-
-int
-updates_daemon_start(void)
-{
-	bool changed;
-	int error;
-
-	error = vrps_update(&changed);
-	if (error)
-		return pr_op_err("First validation wasn't successful.");
-
-	errno = pthread_create(&thread, NULL, check_vrps_updates, NULL);
-	if (errno)
-		return -pr_op_errno(errno,
-		    "Could not spawn the update daemon thread");
-
-	return 0;
-}
-
-void
-updates_daemon_destroy(void)
-{
-	close_thread(thread, "Validation");
+	return error;
 }

@@ -2,6 +2,7 @@
 #include "config.h"
 #include "debug.h"
 #include "extension.h"
+#include "internal_pool.h"
 #include "nid.h"
 #include "reqs_errors.h"
 #include "thread_var.h"
@@ -68,13 +69,19 @@ __main(int argc, char **argv)
 	if (error)
 		goto revert_nid;
 
-	error = relax_ng_init();
+	error = internal_pool_init();
 	if (error)
 		goto revert_http;
+
+	error = relax_ng_init();
+	if (error)
+		goto revert_pool;
 
 	error = start_rtr_server();
 
 	relax_ng_cleanup();
+revert_pool:
+	internal_pool_cleanup();
 revert_http:
 	http_cleanup();
 revert_nid:
