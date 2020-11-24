@@ -48,4 +48,5 @@ The specific validations have been implemented, while the basic ones have not.
 ## TO-DO
 
 - Reach 100% RFC compliance
-- Daemon quirks (stuff like "send self to background automatically"), maybe
+- Trigger revalidation and SLURM reload on SIGHUP.
+- Configurable origin address for outgoing requests.
