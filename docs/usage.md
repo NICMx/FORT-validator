@@ -882,7 +882,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--daemon">daemon</a>": false,
 
 	"server": {
-		"<a href="#--serveraddress">address</a>": "127.0.0.1",
+		"<a href="#--serveraddress">address</a>": [
+			"127.0.0.1"
+		],
 		"<a href="#--serverport">port</a>": "8323",
 		"<a href="#--serverbacklog">backlog</a>": 16,
 		"interval": {

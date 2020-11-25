@@ -79,8 +79,7 @@ Path to a JSON file from where additional configuration will be read.
 The configuration options are mostly the same as the ones presented in this
 manual. Each property is mapped as a member of the main JSON object, the
 members that contain a dot '.' must be set as objects (eg.
-"--server.address=127.0.0.1" will be set as "{ "server": { "address":
-"127.0.0.1" } }".
+"--server.port=8323" will be set as "{ "server": { "port": "8323" } }".
 .P
 An example configuration file can be seen in this manual at the \fBEXAMPLES\fR
 section.
@@ -424,7 +423,7 @@ By default, the mode is \fIserver\fR.
 .RE
 .P
 
-.B \-\-server.address=\fINODE\fR
+.B \-\-server.address=\fINODE(S)\fR
 .RS 4
 List of hostnames or numeric host addresses the RTR server will be bound to.
 Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
@@ -1221,7 +1220,9 @@ to a specific value:
   "daemon": false,
   "slurm": "/tmp/fort/test.slurm",
   "server": {
-    "address": "127.0.0.1",
+    "address": [
+      "127.0.0.1"
+    ],
     "port": "8323",
     "backlog": 64,
     "interval": {
