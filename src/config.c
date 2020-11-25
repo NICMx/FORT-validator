@@ -772,8 +772,8 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, thread_pool.server.max),
 		.doc = "Maximum number of active threads (one thread per RTR client) that can live at the thread pool",
 		.min = 1,
-		/* Would somebody connect more than 400 routers? */
-		.max = 400,
+		/* Would somebody connect more than 500 routers? */
+		.max = 500,
 	},
 	{
 		.id = 12001,
@@ -783,7 +783,7 @@ static const struct option_field options[] = {
 		    thread_pool.validation.max),
 		.doc = "Maximum number of active threads (one thread per TAL) that can live at the thread pool",
 		.min = 1,
-		.max = 20,
+		.max = 100,
 	},
 
 	{ 0 },

@@ -1,4 +1,4 @@
-.TH fort 8 "2020-09-29" "v1.5.0" "FORT validator"
+.TH fort 8 "2020-11-25" "v1.5.0" "FORT validator"
 
 .SH NAME
 fort \- RPKI certificate path validator and RTR server
@@ -1116,6 +1116,44 @@ value, eg.
 .B \-\-output.bgpsec=-
 .RE
 
+.B \-\-thread-pool.server.max=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum number of threads that will be spawned at an internal thread pool to
+attend incoming RTR clients (i.e. routers).
+.P
+The thread pool assigns one thread per RTR client, so a maximum of
+\fI--thread-pool.server.max\fR clients will be attended simultaneously. If the
+max limit is reached, any incoming client will be rejected: an RTR error PDU
+will be sent to the client and the connection will be closed by the server.
+.P
+Once the client or the server terminates the session, the corresponding thread
+will be returned to the pool so that it can be used again by any other incoming
+client.
+.P
+By default, it has a value of \fI20\fR. Minimum allowed value: \fI1\fR,
+maximum allowed value \fI500\fR.
+.RE
+
+.B \-\-thread-pool.validation.max=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum number of threads that will be spawned at an internal thread pool in
+order to run validation cycles.
+.P
+When a validation cycle begins, one thread per configured TAL is utilized; once
+the whole RPKI tree of the TAL is validated, the thread is returned to the pool.
+.P
+If there are more TALs at \fI--tal\fR than \fI--thread-pool.validation.max\fR
+threads at the pool, is very likely that the validation cycles take a bit more
+of time to complete since only \fI--thread-pool.validation.max\fR threads will
+be working at the same time. E.g. if \fI--thread-pool.validation.max=2\fR and
+the location at \fI--tal\fR has 4 TAL files, only 2 TALs will be validated
+simultaneously while the rest waits in a queue until there's an available thread
+at the pool to attend them.
+.P
+By default, it has a value of \fI10\fR. Minimum allowed value: \fI1\fR,
+maximum allowed value \fI100\fR.
+.RE
+
 .B \-\-asn1-decode-max-stack=\fIUNSIGNED_INTEGER\fR
 .RS 4
 ASN1 decoder max allowed stack size in bytes, utilized to avoid a stack
@@ -1319,6 +1357,14 @@ to a specific value:
   "output": {
     "roa": "/tmp/fort/roas.csv",
     "bgpsec": "/tmp/fort/bgpsec.csv"
+  },
+  "thread-pool": {
+    "server": {
+      "max": 20
+    },
+    "validation": {
+      "max": 10
+    }
   },
   "asn1-decode-max-stack": 4096,
   "stale-repository-period": 43200

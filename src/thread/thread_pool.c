@@ -2,7 +2,6 @@
 
 #include <sys/queue.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "log.h"
@@ -333,6 +332,19 @@ thread_pool_push(struct thread_pool *pool, thread_pool_task_cb cb, void *arg)
 	pthread_cond_broadcast(&(pool->working_cond));
 
 	return 0;
+}
+
+/* Are there available threads to work? */
+bool
+thread_pool_avail_threads(struct thread_pool *pool)
+{
+	bool result;
+
+	thread_pool_lock(pool);
+	result = (pool->working_count < pool->thread_count);
+	thread_pool_unlock(pool);
+
+	return result;
 }
 
 /* Waits for all pending tasks at @poll to end */

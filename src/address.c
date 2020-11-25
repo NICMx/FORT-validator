@@ -519,10 +519,11 @@ ipv6_covered(struct in6_addr *f_addr, uint8_t f_len, struct in6_addr *son_addr)
  * buffer must length INET6_ADDRSTRLEN.
  */
 char const *
-sockaddr2str(struct sockaddr_storage *sockaddr, char *buffer)
+sockaddr2str(struct sockaddr_storage *sockaddr)
 {
 	void *addr = NULL;
 	char const *addr_str;
+	char buffer[INET6_ADDRSTRLEN];
 
 	if (sockaddr == NULL)
 		return "(null)";

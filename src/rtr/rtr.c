@@ -26,6 +26,7 @@
 #define CL_ACCEPTED   "accepted"
 #define CL_CLOSED     "closed"
 #define CL_TERMINATED "terminated"
+#define CL_REJECTED   "rejected"
 
 /* Parameters for each thread that handles client connections */
 struct thread_param {
@@ -393,34 +394,48 @@ clean_request(struct rtr_request *request, const struct pdu_metadata *meta)
 static int
 print_close_failure(int error, struct sockaddr_storage *sockaddr)
 {
-	char buffer[INET6_ADDRSTRLEN];
-	char const *addr_str;
-
-	addr_str = sockaddr2str(sockaddr, buffer);
-
 	return pr_op_errno(error, "close() failed on socket of client %s",
-	    addr_str);
-}
-
-static void
-print_client_addr(struct sockaddr_storage *addr, char const *action, int fd)
-{
-	char buffer[INET6_ADDRSTRLEN];
-	pr_op_info("Client %s [ID %d]: %s", action, fd,
-	    sockaddr2str(addr, buffer));
+	    sockaddr2str(sockaddr));
 }
 
 static int
 end_client(struct client *client, void *arg)
 {
-	if (arg != NULL && strcmp(arg, CL_TERMINATED) == 0)
+	char const *action = arg;
+	bool rejected;
+
+	/* When we (server) are closing the connection */
+	rejected = (strcmp(action, CL_REJECTED) == 0);
+	if (arg != NULL && (strcmp(arg, CL_TERMINATED) == 0 || rejected))
 		shutdown(client->fd, SHUT_RDWR);
 
 	if (close(client->fd) != 0)
 		return print_close_failure(errno, &client->addr);
 
-	print_client_addr(&(client->addr), arg, client->fd);
+	if (rejected) {
+		pr_op_warn("Client %s [ID %d]: %s", action, client->fd,
+		    sockaddr2str(&client->addr));
+		pr_op_warn("Use a greater value at 'thread-pool.server.max' if you wish to accept more than %u clients.",
+		    config_get_thread_pool_server_max());
+		return 0;
+	}
+
+	pr_op_info("Client %s [ID %d]: %s", action, client->fd,
+	    sockaddr2str(&client->addr));
 	return 0;
+}
+
+static void
+reject_client(int fd, struct sockaddr_storage *addr)
+{
+	struct client client;
+
+	client.fd = fd;
+	client.addr = *addr;
+
+	/* Try to be polite notifying there was an error */
+	err_pdu_send_internal_error(fd, RTR_V0);
+	end_client(&client, CL_REJECTED);
 }
 
 /*
@@ -535,7 +550,19 @@ handle_client_connections(void *arg)
 				return NULL;
 			}
 
-			print_client_addr(&client_addr, CL_ACCEPTED, client_fd);
+			/*
+			 * It's very likely that the clients won't release their
+			 * sessions once established; so, don't let any new
+			 * client at the thread pool queue since it's probable
+			 * that it'll remain there forever.
+			 */
+			if (!thread_pool_avail_threads(pool)) {
+				reject_client(client_fd, &client_addr);
+				continue;
+			}
+
+			pr_op_info("Client %s [ID %d]: %s", CL_ACCEPTED,
+			    client_fd, sockaddr2str(&client_addr));
 
 			/*
 			 * Note: My gut says that errors from now on (even the

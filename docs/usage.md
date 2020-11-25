@@ -56,20 +56,22 @@ description: Guide to use arguments of FORT Validator.
 	44. [`--output.bgpsec`](#--outputbgpsec)
 	45. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
 	46. [`--stale-repository-period`](#--stale-repository-period)
-	47. [`--rsync.enabled`](#--rsyncenabled)
-	48. [`--rsync.priority`](#--rsyncpriority)
-	49. [`--rsync.strategy`](#--rsyncstrategy)
+	47. [`--thread-pool.server.max`](#--thread-poolservermax)
+	48. [`--thread-pool.validation.max`](#--thread-poolvalidationmax)
+	49. [`--rsync.enabled`](#--rsyncenabled)
+	50. [`--rsync.priority`](#--rsyncpriority)
+	51. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	50. [`--rsync.retry.count`](#--rsyncretrycount)
-	51. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	52. [`--configuration-file`](#--configuration-file)
-	53. [`rsync.program`](#rsyncprogram)
-	54. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	55. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	56. [`incidences`](#incidences)
-	57. [`init-locations`](#init-locations)
+	52. [`--rsync.retry.count`](#--rsyncretrycount)
+	53. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	54. [`--configuration-file`](#--configuration-file)
+	55. [`rsync.program`](#rsyncprogram)
+	56. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	57. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	58. [`incidences`](#incidences)
+	59. [`init-locations`](#init-locations)
 3. [Deprecated arguments](#deprecated-arguments)
 	1. [`--sync-strategy`](#--sync-strategy)
 	2. [`--rrdp.enabled`](#--rrdpenabled)
@@ -138,6 +140,8 @@ description: Guide to use arguments of FORT Validator.
         [--http.ca-path=<directory>]
         [--output.roa=<file>]
         [--output.bgpsec=<file>]
+        [--thread-pool.server.max=<unsigned integer>]
+        [--thread-pool.validation.max=<unsigned integer>]
 ```
 
 If an argument is declared more than once, the last one takes precedence:
@@ -766,6 +770,32 @@ Currently **all** the communication errors are logged at the validation log. Thi
 
 A value **equal to 0** means that the communication errors will be logged at once.
 
+### `--thread-pool.server.max`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 20
+- **Range:** 1--500
+
+Maximum number of threads that will be spawned at an internal thread pool to attend incoming RTR clients (i.e. routers).
+
+The thread pool assigns one thread per RTR client, so a maximum of `--thread-pool.server.max` clients will be attended simultaneously. If the max limit is reached, any incoming client will be rejected: an RTR error PDU will be sent to the client and the connection will be closed by the server.
+
+Once the client or the server terminates the session, the corresponding thread will be returned to the pool so that it can be used again by any other incoming client.
+
+### `--thread-pool.validation.max`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 10
+- **Range:** 1--100
+
+Maximum number of threads that will be spawned at an internal thread pool in order to run validation cycles.
+
+When a validation cycle begins, one thread per configured TAL is utilized; once the whole RPKI tree of the TAL is validated, the thread is returned to the pool.
+
+If there are more TALs at [`--tal`](#--tal) than `--thread-pool.validation.max` threads at the pool, is very likely that the validation cycles take a bit more of time to complete since only `--thread-pool.validation.max` threads will be working at the same time. E.g. if `--thread-pool.validation.max=2` and the location at [`--tal`](#--tal) has 4 TAL files, only 2 TALs will be validated simultaneously while the rest waits in a queue until there's an available thread at the pool to attend them.
+
 ### `--rsync.enabled`
 
 - **Type:** Boolean (`true`, `false`)
@@ -988,6 +1018,15 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--outputroa">roa</a>": "/tmp/fort/roas.csv",
 		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv"
 	},
+
+	"thread-pool": {
+		"server": {
+			"<a href="#--thread-poolservermax">max</a>": 20
+		},
+		"validation": {
+			"<a href="#--thread-poolvalidationmax">max</a>": 10
+		}
+	}
 
 	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
 	"<a href="#--stale-repository-period">stale-repository-period</a>": 43200
