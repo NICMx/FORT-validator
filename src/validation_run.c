@@ -6,6 +6,7 @@
 #include "config.h"
 #include "log.h"
 #include "notify.h"
+#include "config/mode.h"
 #include "rtr/db/vrps.h"
 
 /* Runs a single cycle, use at standalone mode or before running RTR server */
@@ -15,12 +16,20 @@ validation_run_first(void)
 	bool upd;
 	int error;
 
+	if (config_get_mode() == SERVER)
+		pr_op_warn("First validation cycle has begun, wait until the next notification to connect your router(s)");
+	else
+		pr_op_warn("First validation cycle has begun");
+
 	upd = false;
 	error = vrps_update(&upd);
 	if (error)
 		return pr_op_err("First validation wasn't successful.");
 
-	return 0;
+	if (config_get_mode() == SERVER)
+		return pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
+
+	return pr_op_warn("First validation cycle successfully ended, terminating execution");
 }
 
 /* Run a validation cycle each 'server.interval.validation' secs */
