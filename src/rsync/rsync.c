@@ -446,6 +446,9 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			/* Happy path (but also sad path sometimes). */
 			error = WEXITSTATUS(child_status);
 			pr_val_debug("Child terminated with error code %d.", error);
+			if (error == ENOMEM)
+				pr_enomem();
+
 			if (!error)
 				goto release_args;
 

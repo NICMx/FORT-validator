@@ -462,6 +462,9 @@ pr_errno(int error, bool syslog_enabled, bool fprintf_enabled, int facility,
 int
 pr_op_errno(int error, const char *format, ...)
 {
+	if (abs(error) == ENOMEM)
+		pr_enomem();
+
 	PR_OP_SIMPLE(LOG_ERR);
 
 	return pr_errno(error, op_syslog_enabled,
@@ -473,6 +476,9 @@ pr_op_errno(int error, const char *format, ...)
 int
 pr_val_errno(int error, const char *format, ...)
 {
+	if (abs(error) == ENOMEM)
+		pr_enomem();
+
 	PR_VAL_SIMPLE(LOG_ERR);
 
 	return pr_errno(error, val_syslog_enabled,
@@ -592,7 +598,8 @@ pr_enomem(void)
 		__fprintf(LOG_ERR, config_get_op_log_tag(),
 		    config_get_op_log_color_output(),
 		    "Out of memory.\n");
-	return -ENOMEM;
+	print_stack_trace();
+	exit(ENOMEM);
 }
 
 /**
