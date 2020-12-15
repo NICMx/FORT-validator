@@ -12,3 +12,10 @@ FORT validator is an MIT-licensed RPKI Relying Party, this is a tool offered as 
 ## Status
 
 Version **{{ site.fort-latest-version }}** is the latest official release. To fetch or review it, visit the [GitHub release](https://github.com/NICMx/FORT-validator/releases/tag/v{{ site.fort-latest-version }}){:target="_blank"}.
+
+## Quick start
+
+Probably you just want to read:
+- How to install? Visit [Compilation and Installation](installation.html).
+- How to execute? Visit [Basic Usage](run.html) and [Program Arguments](usage.html).
+- How to configure the router(s)? Visit [Routers](routers.html).

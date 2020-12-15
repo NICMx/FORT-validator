@@ -8,12 +8,11 @@ description: Guide to compile and install FORT Validator.
 ## Index
 
 1. [Dependencies](#dependencies)
-2. [Setup script](#setup-script)
-3. [Option 1: Installing the package](#option-1-installing-the-package)
+2. [Option 1: Installing the package](#option-1-installing-the-package)
 	1. [Debian package](#debian-package)
 	2. [Gentoo package](#gentoo-package)
 	3. [RHEL/CentOS package](#rhelcentos-package)
-4. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
+3. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
 	3. [RHEL/CentOS version](#rhelcentos-version)
@@ -23,8 +22,11 @@ description: Guide to compile and install FORT Validator.
 	7. [Slackware version](#slackware-version)
 	8. [Gentoo version](#gentoo-version)
 	9. [Alpine version](#alpine-version)
-5. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
-6. [Option 4: Running from a Docker container](#option-4-running-from-a-docker-container)
+4. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
+5. [Option 4: Running from a Docker container](#option-4-running-from-a-docker-container)
+6. [Fetching the TALs](#fetching-the-tals)
+	1. [`--init-tals` argument](#--init-tals-argument)
+	2. [Setup script](#setup-script)
 
 ## Dependencies
 
@@ -39,31 +41,6 @@ The dependencies are
 5. [libxml2](http://www.xmlsoft.org/)
 
 Fort is currently supported in *64-bit* OS. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling dates at certificates, and currently there's no work around for this.
-
-## Setup script
-
-> ![img/warn.svg](img/warn.svg) This script exists merely to ease the ARIN TAL download (and some other additional stuff), it isn't a prerequisite to compile or run FORT validator, although we strongly advise to fetch ARIN TAL (using this script or by other means) in order to get the whole RPKI validated by FORT validator.
-
-The script can be found [here](https://github.com/NICMx/FORT-validator/blob/v{{ site.fort-latest-version }}/fort_setup.sh). It only expects one argument: an _existent directory path_ where the 5 RIRs TALS will be downloaded.
-
-Basically, it does the following:
-1. Display message to agree ARIN RPA.
-2. If agreed, download ARIN TAL to the received arg (named `TALS_PATH` from now on).
-3. Download the rest of the TALs to `TALS_PATH`.
-4. Try to create directory `/var/cache/fort/repository`, on error create `/tmp/fort/repository`.
-5. Create configuration file with [`tal`](https://nicmx.github.io/FORT-validator/usage.html#--tal) and [`local-repository`](https://nicmx.github.io/FORT-validator/usage.html#--local-repository) members, with a value of `TALS_PATH` (absolute path) and the directory path created at the previous step.
-6. Display FORT validator execution examples:
-  - Using the created configuration file (uses the arg [`-f`](https://nicmx.github.io/FORT-validator/usage.html#--configuration-file)).
-  - Using the values of the configuration file (uses the args [`--tal`](https://nicmx.github.io/FORT-validator/usage.html#--tal) and [`--local-repository`](https://nicmx.github.io/FORT-validator/usage.html#--local-repository)).
-
-Preferably, run this script with the same user what will run FORT validator. It's recommended that the user has write permission in `/var/cache`, since the script will try to create a directory there ([see more](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch05s05.html)). Here's an execution example:
-
-{% highlight bash %}
-# Get the script
-wget https://raw.githubusercontent.com/NICMx/FORT-validator/v{{ site.fort-latest-version }}/fort_setup.sh
-mkdir ~/tal
-./fort_setup.sh ~/tal
-{% endhighlight %}
 
 ## Option 1: Installing the package
 
@@ -88,11 +65,10 @@ sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
 > 
 > `deb http://ftp.mx.debian.org/debian buster main`
 
-This version ships with 4 of the 5 TALs, so in order to get the missing one, the [Setup script](#setup-script) can be executed using the argument `/etc/fort/tal`:
+This version ships with 4 of the 5 TALs, so in order to get the missing one, the [`--init-tals` argument](#--init-tals-argument) can be utilized using also the argument `--tal=/etc/fort/tal`:
 
 {% highlight bash %}
-# Assuming that the script is at the current location and the script was already downloaded
-sudo ./fort_setup.sh /etc/fort/tal
+sudo fort --init-tals --tal=/etc/fort/tal
 # Don't forget to restart fort service
 sudo service fort restart
 {% endhighlight %}
@@ -197,11 +173,10 @@ wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-lat
 sudo yum install fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
 {% endhighlight %}
 
-This version ships with 4 of the 5 TALs, so in order to get the missing one, the [Setup script](#setup-script) can be executed using the argument `/etc/fort/tal`:
+This version ships with 4 of the 5 TALs, so in order to get the missing one, the [`--init-tals` argument](#--init-tals-argument) can be utilized using also the argument `--tal=/etc/fort/tal`:
 
 {% highlight bash %}
-# Assuming that the script is at the current location and the script was already downloaded
-sudo ./fort_setup.sh /etc/fort/tal
+sudo fort --init-tals --tal=/etc/fort/tal
 {% endhighlight %}
 
 By default, FORT validator service isn't initialized once it's installed; so, initialize the service:
@@ -457,3 +432,42 @@ docker run --name fort-validator -v host/path/to/tals:/etc/fort/tal:ro -p 8323:3
 {% endhighlight %}
 
 Read more about the Docker container at the Github repository [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/master/docker).
+
+## Fetching the TALs
+
+Once FORT validator is installed and ready to run, you should have the TAL files from the 5 RIRs. You can obtain them one by one from each RIR, or also you can use the following options.
+
+### `--init-tals` argument
+
+Probably this is a more straight forward approach, since you only need to run Fort binary using the [`--init-tals`](usage.html#--init-tals) argument:
+
+{% highlight bash %}
+fort --init-tals --tal /etc/fort/tal
+{% endhighlight %}
+
+See more about this argument at [Program Arguments - `--init-tals`](usage.html#--init-tals).
+
+### Setup script
+
+> ![img/warn.svg](img/warn.svg) This script exists merely to ease the ARIN TAL download (and some other additional stuff), it isn't a prerequisite to compile or run FORT validator, although we strongly advise to fetch ARIN TAL (using this script or by other means) in order to get the whole RPKI validated by FORT validator.
+
+The script can be found [here](https://github.com/NICMx/FORT-validator/blob/v{{ site.fort-latest-version }}/fort_setup.sh). It only expects one argument: an _existent directory path_ where the 5 RIRs TALS will be downloaded.
+
+Basically, it does the following:
+1. Display message to agree ARIN RPA.
+2. If agreed, download ARIN TAL to the received arg (named `TALS_PATH` from now on).
+3. Download the rest of the TALs to `TALS_PATH`.
+4. Try to create directory `/var/cache/fort/repository`, on error create `/tmp/fort/repository`.
+5. Create configuration file with [`tal`](https://nicmx.github.io/FORT-validator/usage.html#--tal) and [`local-repository`](https://nicmx.github.io/FORT-validator/usage.html#--local-repository) members, with a value of `TALS_PATH` (absolute path) and the directory path created at the previous step.
+6. Display FORT validator execution examples:
+  - Using the created configuration file (uses the arg [`-f`](https://nicmx.github.io/FORT-validator/usage.html#--configuration-file)).
+  - Using the values of the configuration file (uses the args [`--tal`](https://nicmx.github.io/FORT-validator/usage.html#--tal) and [`--local-repository`](https://nicmx.github.io/FORT-validator/usage.html#--local-repository)).
+
+Preferably, run this script with the same user what will run FORT validator. It's recommended that the user has write permission in `/var/cache`, since the script will try to create a directory there ([see more](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch05s05.html)). Here's an execution example:
+
+{% highlight bash %}
+# Get the script
+wget https://raw.githubusercontent.com/NICMx/FORT-validator/v{{ site.fort-latest-version }}/fort_setup.sh
+mkdir ~/tal
+./fort_setup.sh ~/tal
+{% endhighlight %}
