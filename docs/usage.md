@@ -215,14 +215,16 @@ fort {{ site.fort-latest-version }}
 
 ### `--init-tals`
 
-- **Type:** String (Path to directory)
+- **Type:** None
 - **Availability:** `argv` only
 
-Download the RIR TALs into the existent local path directory and exit.
+Download the RIR TALs into the existent local path directory set at [`--tal`](#--tal) argument and exit.
 
-This argument exists merely to have all TALs before running FORT validator, the directory path should be the same that will be set at the [`--tal`](#--tal) argument.
+This argument exists merely to have all TALs before running FORT validator, the directory path should be set at the [`--tal`](#--tal) argument.
 
 By default, the 4 TALs that don't require a policy acceptance are downloaded from FORT validator's GitHub repository. ARIN TAL does require an explicit acceptance by the user, so it's downloaded only after the user accepts ARIN's RPA; this message is displayed at the terminal and only if the user accepts, ARIN TAL is also downloaded.
+
+This is an example on how to use this argument (assuming that `/etc/fort/tal` exists and is writable): `fort --init-tals --tal /etc/fort/tal`
 
 ### `--tal`
 

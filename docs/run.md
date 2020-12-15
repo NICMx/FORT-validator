@@ -8,7 +8,7 @@ description: This is probably all you need, an RTR server will serve the ROAs re
 This is probably all you need: fetch the RIR TALs and then start an RTR server that will serve the ROAs resulting from a validation rooted at the trust anchors defined by the TALs contained at directory `--tal`:
 
 {% highlight bash %}
-fort --init-tals <path to store TAL files>
+fort --init-tals --tal <path to store TAL files>
 
 fort \
 	--tal <path to your TAL files> \

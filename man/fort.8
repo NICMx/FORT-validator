@@ -8,7 +8,7 @@ fort \- RPKI certificate path validator and RTR server
 [\fIOPTIONS\fR]
 .P
 .B fort
---init-tals=\fIPATH\fR
+--init-tals --tal=\fIPATH\fR
 .P
 .B fort
 [-h|--help|--V|--version|--usage]
@@ -56,19 +56,23 @@ Print program version and exit.
 .RE
 .P
 
-.B \-\-init-tals=\fIDIRECTORY\fR
+.B \-\-init-tals
 .RS 4
-Download the RIR TALs into the existent local \fIDIRECTORY\fR and exit.
+Download the RIR TALs into the existent local path directory set at \fI--tal\fR
+argument and exit.
 .P
 This argument exists merely to have all TALs before running FORT validator,
-the \fIDIRECTORY\fR should be the same that will be set at the \fI--tal\fR
-argument.
+the directory path should be set at the \fI--tal\fR argument.
 .P
 By default, the 4 TALs that don't require a policy acceptance are downloaded
 from FORT validator's GitHub repository. ARIN TAL does require an explicit
 acceptance by the user, so it's downloaded only after the user accepts ARIN's
 RPA; this message is displayed at the terminal and only if the user accepts,
 ARIN TAL is also downloaded.
+.P
+This is an example on how to use this argument (assuming that
+\fI/etc/fort/tal\fR exists and is writable):
+\fBfort --init-tals --tal /etc/fort/tal\fR
 .RE
 .P
 
@@ -1194,7 +1198,7 @@ By default, it has a value of \fI43200\fR (12 hours).
 .P
 
 .SH EXAMPLES
-.B fort \-\-init-tals=/tmp/tal
+.B fort \-\-init-tals \-\-tal=/tmp/tal
 .RS 4
 Download the 5 RIR TALs into the specified directory. ARIN TAL will be
 downloaded only if the user accepts ARIN's RPA.

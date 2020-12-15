@@ -200,8 +200,8 @@ struct rpki_config {
 	/* Time period that must lapse to warn about a stale repository */
 	unsigned int stale_repository_period;
 
-	/* Local dir where the TALs will be downloaded */
-	char *init_tals;
+	/* Download the TALs into --tal? */
+	bool init_tals;
 
 	/* HTTPS URLS from where the TALS will be fetched */
 	struct init_locations init_tal_locations;
@@ -751,9 +751,9 @@ static const struct option_field options[] = {
 	{
 		.id = 11000,
 		.name = "init-tals",
-		.type = &gt_string,
+		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, init_tals),
-		.doc = "Fetch the RIR's TAL files into the specified path",
+		.doc = "Fetch the RIR's TAL files into the specified path at --tal",
 		.availability = AVAILABILITY_GETOPT,
 	},
 	{
@@ -1062,7 +1062,7 @@ set_default_values(void)
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 
-	rpki_config.init_tals = NULL;
+	rpki_config.init_tals = false;
 	error = init_locations_init(&rpki_config.init_tal_locations,
 	    init_locations_no_msg, ARRAY_LEN(init_locations_no_msg),
 	    init_locations_w_msg, ARRAY_LEN(init_locations_w_msg));
@@ -1103,19 +1103,17 @@ valid_output_file(char const *path)
 static int
 validate_config(void)
 {
-	if (rpki_config.init_tals != NULL) {
-		if (!valid_file_or_dir(rpki_config.init_tals, false, true,
-		    pr_op_errno))
-			return pr_op_err("Invalid init TAL directory.");
-		/* Ignore the other checks */
-		return 0;
-	}
-
 	if (rpki_config.tal == NULL)
-		return pr_op_err("The TAL file/directory (--tal) is mandatory.");
+		return pr_op_err("The TAL(s) location (--tal) is mandatory.");
 
-	if (!valid_file_or_dir(rpki_config.tal, true, true, pr_op_errno))
-		return pr_op_err("Invalid TAL file/directory.");
+	/* A file location at --tal isn't valid when --init-tals is set */
+	if (!valid_file_or_dir(rpki_config.tal, !rpki_config.init_tals, true,
+	    pr_op_errno))
+		return pr_op_err("Invalid TAL(s) location.");
+
+	/* Ignore the other checks */
+	if (rpki_config.init_tals)
+		return 0;
 
 	if (rpki_config.server.interval.expire <
 	    rpki_config.server.interval.refresh ||
@@ -1234,13 +1232,13 @@ handle_flags_config(int argc, char **argv)
 	}
 
 	error = validate_config();
+	if (error)
+		goto end;
 
 	/* If present, nothing else is done */
-	if (rpki_config.init_tals != NULL) {
-		if (error)
-			goto end;
+	if (rpki_config.init_tals) {
 		error = init_tals_exec(&rpki_config.init_tal_locations,
-		    rpki_config.init_tals);
+		    rpki_config.tal);
 		free(long_opts);
 		free(short_opts);
 		exit(error);
