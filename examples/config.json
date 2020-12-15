@@ -107,6 +107,14 @@
     "roa": "/tmp/fort/roas.csv",
     "bgpsec": "/tmp/fort/bgpsec.csv"
   },
+  "thread-pool": {
+    "server": {
+      "max": 20
+    },
+    "validation": {
+      "max": 5
+    }
+  },
   "asn1-decode-max-stack": 4096,
   "stale-repository-period": 43200
 }

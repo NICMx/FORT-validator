@@ -789,7 +789,7 @@ Once the client or the server terminates the session, the corresponding thread w
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 10
+- **Default:** 5
 - **Range:** 1--100
 
 Maximum number of threads that will be spawned at an internal thread pool in order to run validation cycles.
@@ -1026,9 +1026,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--thread-poolservermax">max</a>": 20
 		},
 		"validation": {
-			"<a href="#--thread-poolvalidationmax">max</a>": 10
+			"<a href="#--thread-poolvalidationmax">max</a>": 5
 		}
-	}
+	},
 
 	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
 	"<a href="#--stale-repository-period">stale-repository-period</a>": 43200

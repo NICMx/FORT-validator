@@ -1154,7 +1154,7 @@ the location at \fI--tal\fR has 4 TAL files, only 2 TALs will be validated
 simultaneously while the rest waits in a queue until there's an available thread
 at the pool to attend them.
 .P
-By default, it has a value of \fI10\fR. Minimum allowed value: \fI1\fR,
+By default, it has a value of \fI5\fR. Minimum allowed value: \fI1\fR,
 maximum allowed value \fI100\fR.
 .RE
 
@@ -1367,7 +1367,7 @@ to a specific value:
       "max": 20
     },
     "validation": {
-      "max": 10
+      "max": 5
     }
   },
   "asn1-decode-max-stack": 4096,

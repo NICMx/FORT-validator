@@ -1072,7 +1072,7 @@ set_default_values(void)
 	/* Common scenario is to connect 1 router or a couple of them */
 	rpki_config.thread_pool.server.max = 20;
 	/* Usually 5 TALs, let a few more available */
-	rpki_config.thread_pool.validation.max = 10;
+	rpki_config.thread_pool.validation.max = 5;
 
 	return 0;
 revert_init_locations:
