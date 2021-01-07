@@ -1,5 +1,5 @@
 FORT validator
-Copyright (c) 2020 NIC Mexico
+Copyright (c) 2021 NIC Mexico
 
 This is a tool offered as part of the FORT project. It is a service that
 performs the validation of the entire RPKI repository, and serves the resulting
