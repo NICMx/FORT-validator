@@ -234,9 +234,10 @@ __handle_ghostbusters_vcard(OCTET_STRING_t *vcard, struct vcard_line *line)
 			fn_found = true;
 
 		} else if (line_starts_with(line, "ORG:")
-		    || line_starts_with(line, "ADR:")
-		    || line_starts_with(line, "TEL:")
-		    || line_starts_with(line, "EMAIL:")) {
+		    || line_starts_with(line, "ADR;")
+		    || line_starts_with(line, "TEL;")
+		    || line_starts_with(line, "EMAIL:")
+		    || line_starts_with(line, "EMAIL;")) {
 			useful_found = true;
 
 		} else if (line_starts_with(line, "END:")) {
