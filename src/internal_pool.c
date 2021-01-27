@@ -10,7 +10,7 @@
  * related to the validation or server thread pool tasks) can be pushed here.
  */
 
-#define INTERNAL_POOL_MAX 5
+#define INTERNAL_POOL_MAX 10
 
 struct thread_pool *pool;
 
