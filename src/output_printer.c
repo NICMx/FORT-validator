@@ -62,6 +62,37 @@ print_roa(struct vrp const *vrp, void *arg)
 	return 0;
 }
 
+typedef struct json_out { FILE *file; int first; } JSON_OUT;
+
+static int
+print_roa_json(struct vrp const *vrp, void *arg)
+{
+	JSON_OUT *json_out = arg;
+	FILE *out = json_out->file;
+
+	if (!json_out->first)
+		fprintf(out, ",");
+
+
+	switch (vrp->addr_fam) {
+	case AF_INET:
+		fprintf(out, "\n  { \"asn\" : \"AS%u\", \"prefix\" : \"%s/%u\", \"maxLength\" : %u }", vrp->asn,
+			addr2str4(&vrp->prefix.v4, addr_buf), vrp->prefix_length,
+			vrp->max_prefix_length);
+		break;
+	case AF_INET6:
+                fprintf(out, "\n  { \"asn\" : \"AS%u\", \"prefix\" : \"%s/%u\", \"maxLength\" : %u }", vrp->asn,
+	                addr2str6(&vrp->prefix.v6, addr_buf), vrp->prefix_length,
+			vrp->max_prefix_length);
+		break;
+	default:
+		pr_crit("Unknown family type");
+	}
+
+	json_out->first = 0;
+	return 0;
+}
+
 /* Print as base64url strings without trailing pad */
 static int
 print_router_key(struct router_key const *key, void *arg)
@@ -123,6 +154,31 @@ print_roas(struct db_table *db)
 }
 
 static void
+print_roas_json(struct db_table *db)
+{
+	FILE *out;
+	bool fopen;
+	int error;
+
+	out = NULL;
+	error = open_file(config_get_output_roa_json(), &out, &fopen);
+	if (error)
+		return;
+
+	JSON_OUT json_out;
+	json_out.file = out;
+	json_out.first = 1;
+
+	fprintf(out, "{ \"roas\" : [");
+	error = db_table_foreach_roa(db, print_roa_json, &json_out);
+	fprintf(out, "\n]}\n");
+	if (fopen)
+		file_close(out);
+	if (error)
+		pr_op_err("Error printing ROAs");
+}
+
+static void
 print_router_keys(struct db_table *db)
 {
 	FILE *out;
@@ -146,5 +202,6 @@ void
 output_print_data(struct db_table *db)
 {
 	print_roas(db);
+	print_roas_json(db);
 	print_router_keys(db);
 }

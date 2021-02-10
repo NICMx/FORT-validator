@@ -186,6 +186,8 @@ struct rpki_config {
 		char *roa;
 		/** File where the validated BGPsec certs will be stored */
 		char *bgpsec;
+                /** File where the validated ROAs will be stored in JSON format */
+		char *roa_json;
 	} output;
 
 	/* ASN1 decoder max stack size allowed */
@@ -697,6 +699,13 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, output.bgpsec),
 		.doc = "File where BGPsec Router Keys will be stored in CSV format, use '-' to print at console",
 		.arg_doc = "<file>",
+	}, {
+	        .id = 6002,
+		.name = "output.roa.json",
+		.type = &gt_string,
+                .offset = offsetof(struct rpki_config, output.roa_json),
+		.doc = "File where ROAs will be stored in JSON format, use '-' to print at console",
+		.arg_doc = "<file>",
 	},
 
 	{
@@ -976,6 +985,7 @@ set_default_values(void)
 	}
 
 	rpki_config.output.roa = NULL;
+	rpki_config.output.roa_json = NULL;
 	rpki_config.output.bgpsec = NULL;
 
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
@@ -1435,6 +1445,12 @@ char const *
 config_get_output_roa(void)
 {
 	return rpki_config.output.roa;
+}
+
+char const *
+config_get_output_roa_json(void)
+{
+	return rpki_config.output.roa_json;
 }
 
 char const *

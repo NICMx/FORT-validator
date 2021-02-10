@@ -48,6 +48,7 @@ unsigned int config_get_http_priority(void);
 unsigned int config_get_http_retry_count(void);
 unsigned int config_get_http_retry_interval(void);
 char const *config_get_output_roa(void);
+char const *config_get_output_roa_json(void);
 char const *config_get_output_bgpsec(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_stale_repository_period(void);
