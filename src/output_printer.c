@@ -229,7 +229,7 @@ print_router_keys(struct db_table *db)
 		json_out.file = out;
 		json_out.first = true;
 
-		fprintf(out, "{ \"router_keys\" : [");
+		fprintf(out, "{ \"router-keys\" : [");
 		error = db_table_foreach_router_key(db, print_router_key_json,
 		    &json_out);
 		fprintf(out, "\n]}\n");

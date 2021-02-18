@@ -52,21 +52,22 @@ description: Guide to use arguments of FORT Validator.
 	40. [`--http.ca-path`](#--httpca-path)
 	41. [`--output.roa`](#--outputroa)
 	42. [`--output.bgpsec`](#--outputbgpsec)
-	43. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	44. [`--stale-repository-period`](#--stale-repository-period)
-	45. [`--configuration-file`](#--configuration-file)
-	46. [`--rsync.enabled`](#--rsyncenabled)
-	47. [`--rsync.priority`](#--rsyncpriority)
-	48. [`--rsync.strategy`](#--rsyncstrategy)
+	43. [`--output.format`](#--outputformat)
+	44. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
+	45. [`--stale-repository-period`](#--stale-repository-period)
+	46. [`--configuration-file`](#--configuration-file)
+	47. [`--rsync.enabled`](#--rsyncenabled)
+	48. [`--rsync.priority`](#--rsyncpriority)
+	49. [`--rsync.strategy`](#--rsyncstrategy)
 		1. [`strict`](#strict)
 		2. [`root`](#root)
 		3. [`root-except-ta`](#root-except-ta)
-	49. [`--rsync.retry.count`](#--rsyncretrycount)
-	50. [`--rsync.retry.interval`](#--rsyncretryinterval)
-	51. [`rsync.program`](#rsyncprogram)
-	52. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	53. [`rsync.arguments-flat`](#rsyncarguments-flat)
-	54. [`incidences`](#incidences)
+	50. [`--rsync.retry.count`](#--rsyncretrycount)
+	51. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	52. [`rsync.program`](#rsyncprogram)
+	53. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
+	54. [`rsync.arguments-flat`](#rsyncarguments-flat)
+	55. [`incidences`](#incidences)
 3. [Deprecated arguments](#deprecated-arguments)
 	1. [`--sync-strategy`](#--sync-strategy)
 	2. [`--rrdp.enabled`](#--rrdpenabled)
@@ -133,6 +134,7 @@ description: Guide to use arguments of FORT Validator.
         [--http.ca-path=<directory>]
         [--output.roa=<file>]
         [--output.bgpsec=<file>]
+        [--output.format=csv|json]
 ```
 
 If an argument is declared more than once, the last one takes precedence:
@@ -688,11 +690,28 @@ Otherwise, Fort will perform HTTP requests when needed (eg. an HTTPS URI at a TA
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
 
-File where the ROAs will be stored in CSV format.
+File where the ROAs will be stored in the configured format (see [`--output.format`](#--outputformat)).
 
 When the file is specified, its content will be removed to store the ROAs; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
 
-Each line of the result is printed in the following order: _AS, Prefix, Max prefix length_; the first line contains those column descriptors.
+When [`--output.format`](#--outputformat)`=csv` (which is the default value), then each line of the result is printed in the following order: _AS, Prefix, Max prefix length_; the first line contains those column descriptors.
+
+When [`--output.format`](#--outputformat)`=json`, then each element is printed inside an object array of `roas`; ie:
+
+<pre><code>{
+	"roas": [
+		{
+			"asn": "AS64496",
+			"prefix": "198.51.100.0/24",
+			"maxLength": 24
+		},
+		{
+			"asn": "AS64496",
+			"prefix": "2001:DB8::/32",
+			"maxLength": 48
+		}
+	]
+}</code></pre>
 
 If a value isn't specified, then the ROAs aren't printed.
 
@@ -701,15 +720,40 @@ If a value isn't specified, then the ROAs aren't printed.
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
 
-File where the BGPsec Router Keys will be stored in CSV format.
+File where the BGPsec Router Keys will be stored in the configured format (see [`--output.format`](#--outputformat)).
 
 Since most of the data is binary (Subject Key Identifier and Subject Public Key Info), such data is base64url encoded without trailing pads.
 
 When the file is specified, its content will be removed to store the Router Keys; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
 
-Each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_; the first line contains those column descriptors.
+When [`--output.format`](#--outputformat)`=csv` (which is the default value), then each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_; the first line contains those column descriptors.
+
+When [`--output.format`](#--outputformat)`=json`, then each element is printed inside an object array of `router-keys`; ie:
+
+<pre><code>{
+	"router-keys": [
+		{
+			"asn": "AS64496",
+			"ski": "<Base64 Encoded SKI>",
+			"spki": "<Base64 Encoded SPKI>"
+		},
+		{
+			"asn": "AS64497",
+			"ski": "<Base64 Encoded SKI>",
+			"spki": "<Base64 Encoded SPKI>"
+		}
+	]
+}</code></pre>
 
 If a value isn't specified, then the BGPsec Router Keys aren't printed.
+
+### `--output.format`
+
+- **Type:** Enumeration (`csv`, `json`)
+- **Availability:** `argv` and JSON
+- **Default:** `csv`
+
+Output format for [`--output.roa`](#--outputroa) and [`--output.bgpsec`](#--outputbgpsec).
 
 ### `--asn1-decode-max-stack`
 
@@ -862,7 +906,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 
 	"output": {
 		"<a href="#--outputroa">roa</a>": "/tmp/fort/roas.csv",
-		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv"
+		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv",
+		"<a href="#--outputformat">format</a>": "csv"
 	},
 
 	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
