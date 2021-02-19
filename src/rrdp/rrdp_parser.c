@@ -95,31 +95,16 @@ rem_mft_from_list(struct visited_uris *visited_uris, char const *uri)
 	return visited_uris_remove(visited_uris, uri);
 }
 
-static size_t
-write_local(unsigned char *content, size_t size, size_t nmemb, void *arg)
-{
-	FILE *fd = arg;
-	size_t read = size * nmemb;
-	size_t written;
-
-	written = fwrite(content, size, nmemb, fd);
-	if (written != nmemb)
-		return -EINVAL;
-
-	return read;
-}
-
 static int
 download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 {
 	int error;
 
 	if (last_update > 0)
-		error = http_download_file_with_ims(uri, write_local,
-		    last_update, log_operation);
-	else
-		error = http_download_file(uri, write_local,
+		error = http_download_file_with_ims(uri, last_update,
 		    log_operation);
+	else
+		error = http_download_file(uri, log_operation);
 
 	/*
 	 * Since distinct files can be downloaded (notification, snapshot,

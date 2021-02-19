@@ -13,6 +13,7 @@
 #include "object/tal.h"
 #include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
+#include "thread/thread_pool.h"
 
 /*
  * Storage of VRPs (term taken from RFC 6811 "Validated ROA Payload") and
@@ -64,6 +65,9 @@ struct state {
 
 static struct state state;
 
+/* Thread pool to use when the TALs will be processed */
+static struct thread_pool *pool;
+
 /** Read/write lock, which protects @state and its inhabitants. */
 static pthread_rwlock_t state_lock;
 
@@ -81,6 +85,12 @@ vrps_init(void)
 {
 	time_t now;
 	int error;
+
+	pool = NULL;
+	error = thread_pool_create(config_get_thread_pool_validation_max(),
+	    &pool);
+	if (error)
+		return error;
 
 	state.base = NULL;
 
@@ -124,6 +134,7 @@ release_state_lock:
 	pthread_rwlock_destroy(&state_lock);
 release_deltas:
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
+	thread_pool_destroy(pool);
 	return error;
 }
 
@@ -138,6 +149,7 @@ vrps_destroy(void)
 	/* Nothing to do with error codes from now on */
 	pthread_rwlock_destroy(&state_lock);
 	pthread_rwlock_destroy(&table_lock);
+	thread_pool_destroy(pool);
 }
 
 #define WLOCK_HANDLER(lock, cb)						\
@@ -188,7 +200,7 @@ __perform_standalone_validation(struct db_table **result)
 	if (db == NULL)
 		return pr_enomem();
 
-	error = perform_standalone_validation(db);
+	error = perform_standalone_validation(pool, db);
 	if (error) {
 		db_table_destroy(db);
 		return error;
@@ -429,6 +441,7 @@ vrps_update(bool *changed)
 
 	return error;
 }
+
 /**
  * Please keep in mind that there is at least one errcode-aware caller. The most
  * important ones are

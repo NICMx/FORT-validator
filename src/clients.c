@@ -32,7 +32,7 @@ clients_db_init(void)
 }
 
 static struct hashable_client *
-create_client(int fd, struct sockaddr_storage addr, pthread_t tid)
+create_client(int fd, struct sockaddr_storage addr)
 {
 	struct hashable_client *client;
 
@@ -46,7 +46,6 @@ create_client(int fd, struct sockaddr_storage addr, pthread_t tid)
 	client->meat.serial_number_set = false;
 	client->meat.rtr_version_set = false;
 	client->meat.addr = addr;
-	client->meat.tid = tid;
 
 	return client;
 }
@@ -55,12 +54,12 @@ create_client(int fd, struct sockaddr_storage addr, pthread_t tid)
  * If the client whose file descriptor is @fd isn't already stored, store it.
  */
 int
-clients_add(int fd, struct sockaddr_storage addr, pthread_t tid)
+clients_add(int fd, struct sockaddr_storage addr)
 {
 	struct hashable_client *new_client;
 	struct hashable_client *old_client;
 
-	new_client = create_client(fd, addr, tid);
+	new_client = create_client(fd, addr);
 	if (new_client == NULL)
 		return pr_enomem();
 
@@ -80,26 +79,6 @@ clients_add(int fd, struct sockaddr_storage addr, pthread_t tid)
 	rwlock_unlock(&lock);
 
 	return 0;
-}
-
-int
-clients_get_addr(int fd, struct sockaddr_storage *addr)
-{
-	struct hashable_client *client;
-	int result;
-
-	result = -ENOENT;
-	rwlock_read_lock(&lock);
-
-	HASH_FIND_INT(db.clients, &fd, client);
-	if (client != NULL) {
-		*addr = client->meat.addr;
-		result = 0;
-	}
-
-	rwlock_unlock(&lock);
-
-	return result;
 }
 
 void
@@ -193,8 +172,12 @@ clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
 	return result;
 }
 
+/*
+ * Remove the client with ID @fd from the DB. If a @cb is set, it will be
+ * called before deleting the client from the DB.
+ */
 void
-clients_forget(int fd)
+clients_forget(int fd, clients_foreach_cb cb, void *arg)
 {
 	struct hashable_client *client;
 
@@ -203,6 +186,9 @@ clients_forget(int fd)
 	HASH_FIND_INT(db.clients, &fd, client);
 	if (client != NULL) {
 		HASH_DEL(db.clients, client);
+		/* Nothing to do at errors */
+		if (cb != NULL)
+			cb(&client->meat, arg);
 		free(client);
 	}
 
@@ -231,17 +217,41 @@ clients_foreach(clients_foreach_cb cb, void *arg)
 }
 
 /*
- * Destroy the clients DB, the @join_thread_cb will be made for each thread
- * that was started by the parent process (@arg will be sent at that call).
+ * Terminate all clients and remove them from DB.
+ *
+ * @cb (with @arg) will be called before deleting the corresponding client from
+ * the DB.
+ */
+int
+clients_terminate_all(clients_foreach_cb cb, void *arg)
+{
+	struct hashable_client *node, *tmp;
+	int error;
+
+	rwlock_write_lock(&lock);
+
+	HASH_ITER(hh, db.clients, node, tmp) {
+		error = cb(&node->meat, arg);
+		if (error)
+			break;
+		HASH_DEL(db.clients, node);
+		free(node);
+	}
+
+	rwlock_unlock(&lock);
+
+	return error;
+}
+
+/*
+ * Destroy the clients DB.
  */
 void
-clients_db_destroy(join_thread_cb cb, void *arg)
+clients_db_destroy(void)
 {
 	struct hashable_client *node, *tmp;
 
 	HASH_ITER(hh, db.clients, node, tmp) {
-		/* Not much to do on failure */
-		cb(node->meat.tid, arg);
 		HASH_DEL(db.clients, node);
 		free(node);
 	}

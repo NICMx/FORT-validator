@@ -48,11 +48,7 @@ struct tal {
 };
 
 struct validation_thread {
-	/*
-	 * pid is not guaranteed to be defined in the thread. It should only
-	 * be manipulated by the parent thread.
-	 */
-	pthread_t pid;
+	/* TAL file name */
 	char *tal_file;
 	/*
 	 * Try to use the TA from the local cache? Only if none of the URIs
@@ -71,6 +67,7 @@ struct validation_thread {
 SLIST_HEAD(threads_list, validation_thread);
 
 struct tal_param {
+	struct thread_pool *pool;
 	struct db_table *db;
 	struct threads_list *threads;
 };
@@ -208,7 +205,7 @@ locate_char(char *str, size_t len, char find)
 {
 	size_t i;
 
-	for(i = 0; i < len; i++)
+	for (i = 0; i < len; i++)
 		if (str[i] == find)
 			return str + i;
 	return NULL;
@@ -394,7 +391,8 @@ fail4:
 	return error;
 }
 
-void tal_destroy(struct tal *tal)
+void
+tal_destroy(struct tal *tal)
 {
 	if (tal == NULL)
 		return;
@@ -493,24 +491,10 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-static size_t
-write_http_cer(unsigned char *content, size_t size, size_t nmemb, void *arg)
-{
-	FILE *fd = arg;
-	size_t read = size * nmemb;
-	size_t written;
-
-	written = fwrite(content, size, nmemb, fd);
-	if (written != nmemb)
-		return -EINVAL;
-
-	return read;
-}
-
 static int
 handle_https_uri(struct rpki_uri *uri)
 {
-	return http_download_file(uri, write_http_cer,
+	return http_download_file(uri,
 	    reqs_errors_log_uri(uri_get_global(uri)));
 }
 
@@ -765,10 +749,9 @@ __do_file_validation(char const *tal_file, void *arg)
 	thread->retry_local = true;
 	thread->sync_files = true;
 
-	errno = pthread_create(&thread->pid, NULL, do_file_validation, thread);
-	if (errno) {
-		error = -pr_op_errno(errno,
-		    "Could not spawn the file validation thread");
+	error = thread_pool_push(t_param->pool, do_file_validation, thread);
+	if (error) {
+		pr_op_err("Couldn't push a thread to do files validation");
 		goto free_tal_file;
 	}
 
@@ -785,7 +768,7 @@ free_db_rrdp:
 }
 
 int
-perform_standalone_validation(struct db_table *table)
+perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 {
 	struct tal_param *param;
 	struct threads_list threads;
@@ -801,16 +784,16 @@ perform_standalone_validation(struct db_table *table)
 
 	SLIST_INIT(&threads);
 
+	param->pool = pool;
 	param->db = table;
 	param->threads = &threads;
 
 	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION, true,
 	    __do_file_validation, param);
 	if (error) {
-		/* End all threads */
+		/* End all thread data */
 		while (!SLIST_EMPTY(&threads)) {
 			thread = threads.slh_first;
-			close_thread(thread->pid, thread->tal_file);
 			SLIST_REMOVE_HEAD(&threads, next);
 			thread_destroy(thread);
 		}
@@ -819,13 +802,11 @@ perform_standalone_validation(struct db_table *table)
 	}
 
 	/* Wait for all */
+	thread_pool_wait(pool);
+
 	t_error = 0;
 	while (!SLIST_EMPTY(&threads)) {
 		thread = threads.slh_first;
-		error = pthread_join(thread->pid, NULL);
-		if (error)
-			pr_crit("pthread_join() threw %d on the '%s' thread.",
-			    error, thread->tal_file);
 		SLIST_REMOVE_HEAD(&threads, next);
 		if (thread->exit_status) {
 			t_error = thread->exit_status;

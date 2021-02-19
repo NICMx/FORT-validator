@@ -8,8 +8,8 @@
 #define VC_VERSION	"VERSION:4.0\r\n"
 #define VC_FN		"FN:name\r\n"
 #define VC_ORG		"ORG:organization\r\n"
-#define VC_ADR		"ADR:address\r\n"
-#define VC_TEL		"TEL:12345678\r\n"
+#define VC_ADR		"ADR;address\r\n"
+#define VC_TEL		"TEL;12345678\r\n"
 #define VC_EMAIL	"EMAIL:e@ma.il\r\n"
 #define VC_END		"END:VCARD\r\n"
 

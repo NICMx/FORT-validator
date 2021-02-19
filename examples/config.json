@@ -5,8 +5,11 @@
   "shuffle-uris": false,
   "maximum-certificate-depth": 32,
   "mode": "server",
+  "daemon": false,
   "server": {
-    "address": "127.0.0.1",
+    "address": [
+      "127.0.0.1"
+    ],
     "port": "8323",
     "backlog": 64,
     "interval": {
@@ -41,7 +44,7 @@
       "count": 2,
       "interval": 5
     },
-    "user-agent": "fort/1.4.2",
+    "user-agent": "fort/1.5.0",
     "connect-timeout": 30,
     "transfer-timeout": 0,
     "idle-timeout": 15,
@@ -104,6 +107,14 @@
     "roa": "/tmp/fort/roas.csv",
     "bgpsec": "/tmp/fort/bgpsec.csv",
     "format": "csv"
+  },
+  "thread-pool": {
+    "server": {
+      "max": 20
+    },
+    "validation": {
+      "max": 5
+    }
   },
   "asn1-decode-max-stack": 4096,
   "stale-repository-period": 43200

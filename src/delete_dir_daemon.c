@@ -5,11 +5,11 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <ftw.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include "common.h"
+#include "internal_pool.h"
 #include "log.h"
 #include "random.h"
 
@@ -80,9 +80,8 @@ remove_from_root(void *arg)
 	dirs_arr = root_arg->arr;
 	len = root_arg->arr_set;
 
-	/* Release received arg, and detach thread */
+	/* Release received arg */
 	free(root_arg);
-	pthread_detach(pthread_self());
 
 	for (i = 0; i < len; i++) {
 		error = nftw(dirs_arr[i], traverse, MAX_FD_ALLOWED,
@@ -276,7 +275,6 @@ rem_dirs_destroy(struct rem_dirs *rem_dirs)
 int
 delete_dir_daemon_start(char **roots, size_t roots_len, char const *workspace)
 {
-	pthread_t thread;
 	struct rem_dirs *arg;
 	int error;
 
@@ -291,12 +289,11 @@ delete_dir_daemon_start(char **roots, size_t roots_len, char const *workspace)
 		return error;
 	}
 
-	/* Thread arg is released at thread before being detached */
-	errno = pthread_create(&thread, NULL, remove_from_root, (void *) arg);
-	if (errno) {
+	/* Thread arg is released at thread */
+	error = internal_pool_push(remove_from_root, (void *) arg);
+	if (error) {
 		rem_dirs_destroy(arg);
-		return pr_op_errno(errno,
-		    "Could not spawn the delete dir daemon thread");
+		return error;
 	}
 
 	return 0;

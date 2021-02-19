@@ -27,6 +27,7 @@ check_PROGRAMS += line_file.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += rsync.test
 check_PROGRAMS += tal.test
+check_PROGRAMS += thread_pool.test
 check_PROGRAMS += vcard.test
 check_PROGRAMS += vrps.test
 check_PROGRAMS += xml.test
@@ -57,6 +58,9 @@ rsync_test_LDADD = ${MY_LDADD}
 
 tal_test_SOURCES = tal_test.c
 tal_test_LDADD = ${MY_LDADD}
+
+thread_pool_test_SOURCES = thread_pool_test.c
+thread_pool_test_LDADD = ${MY_LDADD}
 
 vcard_test_SOURCES = vcard_test.c
 vcard_test_LDADD = ${MY_LDADD}

@@ -17,6 +17,8 @@
 /* HTTP Response Code 400 (Bad Request) */
 #define HTTP_BAD_REQUEST	400
 
+typedef size_t (http_write_cb)(unsigned char *, size_t, size_t, void *);
+
 struct http_handler {
 	CURL *curl;
 	char errbuf[CURL_ERROR_SIZE];
@@ -164,9 +166,23 @@ http_easy_cleanup(struct http_handler *handler)
 	curl_easy_cleanup(handler->curl);
 }
 
+static size_t
+write_cb(unsigned char *content, size_t size, size_t nmemb, void *arg)
+{
+	FILE *fd = arg;
+	size_t read = size * nmemb;
+	size_t written;
+
+	written = fwrite(content, size, nmemb, fd);
+	if (written != nmemb)
+		return -EINVAL;
+
+	return read;
+}
+
 static int
-__http_download_file(struct rpki_uri *uri, http_write_cb cb,
-    long *response_code, long ims_value, long *cond_met, bool log_operation)
+__http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
+    long *cond_met, bool log_operation)
 {
 	char const *tmp_suffix = "_tmp";
 	struct http_handler handler;
@@ -218,7 +234,7 @@ __http_download_file(struct rpki_uri *uri, http_write_cb cb,
 			    CURL_TIMECOND_IFMODSINCE);
 		}
 		error = http_fetch(&handler, uri_get_global(uri), response_code,
-		    cond_met, log_operation, cb, out);
+		    cond_met, log_operation, write_cb, out);
 		if (error != EREQFAILED)
 			break;
 
@@ -264,23 +280,22 @@ release_tmp:
 
 /*
  * Try to download from global @uri into a local directory structure created
- * from local @uri. The @cb should be utilized to write into a file; the file
- * will be sent to @cb as the last argument (its a FILE reference).
+ * from local @uri.
  *
  * Return values: 0 on success, negative value on error, EREQFAILED if the
  * request to the server failed.
  */
 int
-http_download_file(struct rpki_uri *uri, http_write_cb cb, bool log_operation)
+http_download_file(struct rpki_uri *uri, bool log_operation)
 {
 	long response;
 	long cond_met;
-	return __http_download_file(uri, cb, &response, 0, &cond_met,
+	return __http_download_file(uri, &response, 0, &cond_met,
 	    log_operation);
 }
 
 /*
- * Fetch the file from @uri, write it using the @cb.
+ * Fetch the file from @uri.
  *
  * The HTTP request is made using the header 'If-Modified-Since' with a value
  * of @value (if @value is 0, the header isn't set).
@@ -293,14 +308,14 @@ http_download_file(struct rpki_uri *uri, http_write_cb cb, bool log_operation)
  *   < 0 an actual error happened.
  */
 int
-http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value,
+http_download_file_with_ims(struct rpki_uri *uri, long value,
     bool log_operation)
 {
 	long response;
 	long cond_met;
 	int error;
 
-	error = __http_download_file(uri, cb, &response, value, &cond_met,
+	error = __http_download_file(uri, &response, value, &cond_met,
 	    log_operation);
 	if (error)
 		return error;
@@ -320,7 +335,71 @@ http_download_file_with_ims(struct rpki_uri *uri, http_write_cb cb, long value,
 	if (cond_met)
 		return 0;
 
-	return __http_download_file(uri, cb, &response, 0, &cond_met,
+	return __http_download_file(uri, &response, 0, &cond_met,
 	    log_operation);
 
+}
+
+/*
+ * Downloads @remote to the absolute path @dest (no workspace nor directory
+ * structure is created).
+ */
+int
+http_direct_download(char const *remote, char const *dest)
+{
+	char const *tmp_suffix = "_tmp";
+	struct http_handler handler;
+	struct stat stat;
+	FILE *out;
+	long response_code;
+	long cond_met;
+	char *tmp_file, *tmp;
+	int error;
+
+	tmp_file = strdup(dest);
+	if (tmp_file == NULL)
+		return pr_enomem();
+
+	tmp = realloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
+	if (tmp == NULL) {
+		error = pr_enomem();
+		goto release_tmp;
+	}
+
+	tmp_file = tmp;
+	strcat(tmp_file, tmp_suffix);
+
+	error = file_write(tmp_file, &out, &stat);
+	if (error)
+		goto release_tmp;
+
+	error = http_easy_init(&handler);
+	if (error)
+		goto close_file;
+
+	response_code = 0;
+	cond_met = 0;
+	error = http_fetch(&handler, remote, &response_code, &cond_met, true,
+	    write_cb, out);
+	http_easy_cleanup(&handler);
+	file_close(out);
+	if (error)
+		goto release_tmp;
+
+	/* Overwrite the original file */
+	error = rename(tmp_file, dest);
+	if (error) {
+		error = errno;
+		pr_val_errno(error, "Renaming temporal file from '%s' to '%s'",
+		    tmp_file, dest);
+		goto release_tmp;
+	}
+
+	free(tmp_file);
+	return 0;
+close_file:
+	file_close(out);
+release_tmp:
+	free(tmp_file);
+	return error;
 }

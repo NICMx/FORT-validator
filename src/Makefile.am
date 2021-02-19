@@ -13,10 +13,13 @@ fort_SOURCES += cert_stack.h cert_stack.c
 fort_SOURCES += clients.c clients.h
 fort_SOURCES += common.c common.h
 fort_SOURCES += config.h config.c
+fort_SOURCES += daemon.h daemon.c
 fort_SOURCES += debug.h debug.c
 fort_SOURCES += delete_dir_daemon.h delete_dir_daemon.c
 fort_SOURCES += extension.h extension.c
 fort_SOURCES += file.h file.c
+fort_SOURCES += init.h init.c
+fort_SOURCES += internal_pool.h internal_pool.c
 fort_SOURCES += json_parser.c json_parser.h
 fort_SOURCES += line_file.h line_file.c
 fort_SOURCES += log.h log.c
@@ -31,10 +34,10 @@ fort_SOURCES += sorted_array.h sorted_array.c
 fort_SOURCES += state.h state.c
 fort_SOURCES += str_token.h str_token.c
 fort_SOURCES += thread_var.h thread_var.c
-fort_SOURCES += updates_daemon.c updates_daemon.h
 fort_SOURCES += uri.h uri.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += validation_handler.h validation_handler.c
+fort_SOURCES += validation_run.h validation_run.c
 fort_SOURCES += visited_uris.h visited_uris.c
 
 fort_SOURCES += asn1/content_info.h asn1/content_info.c
@@ -48,6 +51,7 @@ fort_SOURCES += config/log_conf.h config/log_conf.c
 fort_SOURCES += config/mode.c config/mode.h
 fort_SOURCES += config/incidences.h config/incidences.c
 fort_SOURCES += config/output_format.h config/output_format.c
+fort_SOURCES += config/init_tals.h config/init_tals.c
 fort_SOURCES += config/rrdp_conf.h config/rrdp_conf.c
 fort_SOURCES += config/rsync_strategy.h config/rsync_strategy.c
 fort_SOURCES += config/str.c config/str.h
@@ -113,6 +117,8 @@ fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
+
+fort_SOURCES += thread/thread_pool.c thread/thread_pool.h
 
 fort_SOURCES += xml/relax_ng.c xml/relax_ng.h
 

@@ -5,7 +5,13 @@ description: This is probably all you need, an RTR server will serve the ROAs re
 
 # {{ page.title }}
 
-This is probably all you need, an RTR server will serve the ROAs resulting from a validation rooted at the trust anchors defined by the TALs contained at directory `--tal`:
+First you'll need the TAL files. If you don't have them already, you can execute Fort validator using the argument [`--init-tals`](usage.html#--init-tals):
+
+{% highlight bash %}
+fort --init-tals --tal <path to store TAL files>
+{% endhighlight %}
+
+Now, this is probably all you need, an RTR server will serve the ROAs resulting from a validation rooted at the trust anchors defined by the TALs contained at directory [`--tal`](usage.html#--tal):
 
 {% highlight bash %}
 fort \

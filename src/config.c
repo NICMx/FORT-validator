@@ -10,11 +10,14 @@
 
 #include "common.h"
 #include "configure_ac.h"
+#include "daemon.h"
 #include "file.h"
+#include "init.h"
 #include "json_handler.h"
 #include "log.h"
 #include "config/boolean.h"
 #include "config/incidences.h"
+#include "config/init_tals.h"
 #include "config/rrdp_conf.h"
 #include "config/str.h"
 #include "config/sync_strategy.h"
@@ -59,6 +62,10 @@ struct rpki_config {
 	 * 'true' uses only local files located at local-repository.
 	 */
 	bool work_offline;
+	/*
+	 * Run fort as a daemon.
+	 */
+	bool daemon;
 
 	struct {
 		/** The bound listening address of the RTR server. */
@@ -67,7 +74,6 @@ struct rpki_config {
 		char *port;
 		/** Outstanding connections in the socket's listen queue */
 		unsigned int backlog;
-
 		struct {
 			/** Interval used to look for updates at VRPs location */
 			unsigned int validation;
@@ -195,6 +201,24 @@ struct rpki_config {
 
 	/* Time period that must lapse to warn about a stale repository */
 	unsigned int stale_repository_period;
+
+	/* Download the TALs into --tal? */
+	bool init_tals;
+
+	/* HTTPS URLS from where the TALS will be fetched */
+	struct init_locations init_tal_locations;
+
+	/* Thread pools for specific tasks */
+	struct {
+		/* Threads related to RTR server */
+		struct {
+			unsigned int max;
+		} server;
+		/* Threads related to validation cycles */
+		struct {
+			unsigned int max;
+		} validation;
+	} thread_pool;
 };
 
 static void print_usage(FILE *, bool);
@@ -313,6 +337,12 @@ static const struct option_field options[] = {
 		.type = &gt_work_offline,
 		.offset = offsetof(struct rpki_config, work_offline),
 		.doc = "Disable all outgoing requests (rsync, http (implies RRDP)) and work only with local repository files.",
+	}, {
+		.id = 1006,
+		.name = "daemon",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, daemon),
+		.doc = "Run fort as a daemon.",
 	},
 
 	/* Server fields */
@@ -726,6 +756,44 @@ static const struct option_field options[] = {
 		.max = UINT_MAX,
 	},
 
+	{
+		.id = 11000,
+		.name = "init-tals",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, init_tals),
+		.doc = "Fetch the RIR's TAL files into the specified path at --tal",
+		.availability = AVAILABILITY_GETOPT,
+	},
+	{
+		.id = 11001,
+		.name = "init-locations",
+		.type = &gt_init_tals_locations,
+		.offset = offsetof(struct rpki_config, init_tal_locations),
+		.doc = "Locations from where the TAL files will be downloaded, and its optional accept message",
+		.availability = AVAILABILITY_JSON,
+	},
+
+	{
+		.id = 12000,
+		.name = "thread-pool.server.max",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, thread_pool.server.max),
+		.doc = "Maximum number of active threads (one thread per RTR client) that can live at the thread pool",
+		.min = 1,
+		/* Would somebody connect more than 500 routers? */
+		.max = 500,
+	},
+	{
+		.id = 12001,
+		.name = "thread-pool.validation.max",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config,
+		    thread_pool.validation.max),
+		.doc = "Maximum number of active threads (one thread per TAL) that can live at the thread pool",
+		.min = 1,
+		.max = 100,
+	},
+
 	{ 0 },
 };
 
@@ -875,6 +943,18 @@ set_default_values(void)
 		"$LOCAL",
 	};
 
+	static char const *init_locations_no_msg[] = {
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal",
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal",
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal",
+		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal",
+	};
+
+	static char const *init_locations_w_msg[] = {
+		"https://www.arin.net/resources/manage/rpki/arin.tal",
+		"Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:",
+	};
+
 	int error;
 
 	/*
@@ -912,6 +992,7 @@ set_default_values(void)
 	rpki_config.maximum_certificate_depth = 32;
 	rpki_config.mode = SERVER;
 	rpki_config.work_offline = false;
+	rpki_config.daemon = false;
 
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
@@ -990,7 +1071,21 @@ set_default_values(void)
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 
+	rpki_config.init_tals = false;
+	error = init_locations_init(&rpki_config.init_tal_locations,
+	    init_locations_no_msg, ARRAY_LEN(init_locations_no_msg),
+	    init_locations_w_msg, ARRAY_LEN(init_locations_w_msg));
+	if (error)
+		goto revert_init_locations;
+
+	/* Common scenario is to connect 1 router or a couple of them */
+	rpki_config.thread_pool.server.max = 20;
+	/* Usually 5 TALs, let a few more available */
+	rpki_config.thread_pool.validation.max = 5;
+
 	return 0;
+revert_init_locations:
+	free(rpki_config.validation_log.tag);
 revert_validation_log_tag:
 	free(rpki_config.http.user_agent);
 revert_flat_array:
@@ -1018,10 +1113,16 @@ static int
 validate_config(void)
 {
 	if (rpki_config.tal == NULL)
-		return pr_op_err("The TAL file/directory (--tal) is mandatory.");
+		return pr_op_err("The TAL(s) location (--tal) is mandatory.");
 
-	if (!valid_file_or_dir(rpki_config.tal, true, true, pr_op_errno))
-		return pr_op_err("Invalid TAL file/directory.");
+	/* A file location at --tal isn't valid when --init-tals is set */
+	if (!valid_file_or_dir(rpki_config.tal, !rpki_config.init_tals, true,
+	    pr_op_errno))
+		return pr_op_err("Invalid TAL(s) location.");
+
+	/* Ignore the other checks */
+	if (rpki_config.init_tals)
+		return 0;
 
 	if (rpki_config.server.interval.expire <
 	    rpki_config.server.interval.refresh ||
@@ -1140,6 +1241,26 @@ handle_flags_config(int argc, char **argv)
 	}
 
 	error = validate_config();
+	if (error)
+		goto end;
+
+	/* If present, nothing else is done */
+	if (rpki_config.init_tals) {
+		error = init_tals_exec(&rpki_config.init_tal_locations,
+		    rpki_config.tal);
+		free(long_opts);
+		free(short_opts);
+		exit(error);
+	}
+
+	if (rpki_config.daemon) {
+		pr_op_warn("Executing as daemon, all logs will be sent to syslog.");
+		/* Send all logs to syslog */
+		rpki_config.log.output = SYSLOG;
+		rpki_config.validation_log.output = SYSLOG;
+		error = daemonize(log_start);
+		goto end;
+	}
 
 	log_start();
 end:
@@ -1468,6 +1589,18 @@ unsigned int
 config_get_stale_repository_period(void)
 {
 	return rpki_config.stale_repository_period;
+}
+
+unsigned int
+config_get_thread_pool_server_max(void)
+{
+	return rpki_config.thread_pool.server.max;
+}
+
+unsigned int
+config_get_thread_pool_validation_max(void)
+{
+	return rpki_config.thread_pool.validation.max;
 }
 
 void

@@ -25,6 +25,7 @@
 #include "slurm/db_slurm.c"
 #include "slurm/slurm_loader.c"
 #include "slurm/slurm_parser.c"
+#include "thread/thread_pool.c"
 
 /* Helper functions */
 

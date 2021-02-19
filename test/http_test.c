@@ -22,7 +22,7 @@ init_response(struct response *resp)
 }
 
 static size_t
-write_cb(unsigned char *content, size_t size, size_t nmemb, void *arg)
+write_buf_cb(unsigned char *content, size_t size, size_t nmemb, void *arg)
 {
 	struct response *resp = arg;
 	unsigned char *tmp;
@@ -53,7 +53,7 @@ local_download(char const *url, long *response_code, struct response *resp)
 		return error;
 
 	error = http_fetch(&handler, url, response_code, &cond, false,
-	    write_cb, resp);
+	    write_buf_cb, resp);
 	http_easy_cleanup(&handler);
 	return error;
 }

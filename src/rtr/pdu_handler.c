@@ -67,6 +67,7 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 		error = send_cache_reset_pdu(fd, version);
 		goto end;
 	case -ENOMEM: /* Memory allocation failure */
+		pr_enomem();
 		goto end;
 	case EAGAIN: /* Too many threads */
 		/*

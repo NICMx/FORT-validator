@@ -258,7 +258,7 @@ handle_child_thread(char **args, int fds[2][2])
 	    strerror(error));
 
 	/* https://stackoverflow.com/a/14493459/1735458 */
-	exit(error);
+	exit(-error);
 }
 
 static int
@@ -445,7 +445,11 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		if (WIFEXITED(child_status)) {
 			/* Happy path (but also sad path sometimes). */
 			error = WEXITSTATUS(child_status);
-			pr_val_debug("Child terminated with error code %d.", error);
+			pr_val_debug("Child terminated with error code %d.",
+			    error);
+			if (error == -ENOMEM)
+				pr_enomem();
+
 			if (!error)
 				goto release_args;
 

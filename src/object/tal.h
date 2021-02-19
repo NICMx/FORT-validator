@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include "uri.h"
 #include "rtr/db/db_table.h"
+#include "thread/thread_pool.h"
 
 struct tal;
 
@@ -15,6 +16,6 @@ void tal_destroy(struct tal *);
 char const *tal_get_file_name(struct tal *);
 void tal_get_spki(struct tal *, unsigned char const **, size_t *);
 
-int perform_standalone_validation(struct db_table *);
+int perform_standalone_validation(struct thread_pool *, struct db_table *);
 
 #endif /* TAL_OBJECT_H_ */

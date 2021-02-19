@@ -53,6 +53,8 @@ char const *config_get_output_bgpsec(void);
 enum output_format config_get_output_format(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_stale_repository_period(void);
+unsigned int config_get_thread_pool_server_max(void);
+unsigned int config_get_thread_pool_validation_max(void);
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);
