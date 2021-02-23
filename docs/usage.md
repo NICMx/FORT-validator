@@ -769,13 +769,13 @@ When [`--output.format`](#--outputformat)`=json`, then each element is printed i
 	"router-keys": [
 		{
 			"asn": "AS64496",
-			"ski": "<Base64 Encoded SKI>",
-			"spki": "<Base64 Encoded SPKI>"
+			"ski": "&lt;Base64 Encoded SKI&gt;",
+			"spki": "&lt;Base64 Encoded SPKI&gt;"
 		},
 		{
 			"asn": "AS64497",
-			"ski": "<Base64 Encoded SKI>",
-			"spki": "<Base64 Encoded SPKI>"
+			"ski": "&lt;Base64 Encoded SKI&gt;",
+			"spki": "&lt;Base64 Encoded SPKI&gt;"
 		}
 	]
 }</code></pre>
