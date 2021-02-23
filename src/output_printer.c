@@ -10,6 +10,11 @@
 
 static char addr_buf[INET6_ADDRSTRLEN];
 
+typedef struct json_out {
+	FILE *file;
+	bool first;
+} JSON_OUT;
+
 static int
 load_output_file(char const *output, FILE **result, bool *fopen)
 {
@@ -40,7 +45,7 @@ load_output_file(char const *output, FILE **result, bool *fopen)
 }
 
 static int
-print_roa(struct vrp const *vrp, void *arg)
+print_roa_csv(struct vrp const *vrp, void *arg)
 {
 	FILE *out = arg;
 
@@ -62,9 +67,44 @@ print_roa(struct vrp const *vrp, void *arg)
 	return 0;
 }
 
+static int
+print_roa_json(struct vrp const *vrp, void *arg)
+{
+	JSON_OUT *json_out = arg;
+	FILE *out;
+
+	out = json_out->file;
+	if (!json_out->first)
+		fprintf(out, ",");
+
+	switch (vrp->addr_fam) {
+	case AF_INET:
+		fprintf(out,
+		    "\n  { \"asn\" : \"AS%u\", \"prefix\" : \"%s/%u\", \"maxLength\" : %u }",
+		    vrp->asn,
+		    addr2str4(&vrp->prefix.v4, addr_buf),
+		    vrp->prefix_length,
+		    vrp->max_prefix_length);
+		break;
+	case AF_INET6:
+		fprintf(out,
+		    "\n  { \"asn\" : \"AS%u\", \"prefix\" : \"%s/%u\", \"maxLength\" : %u }",
+		    vrp->asn,
+		    addr2str6(&vrp->prefix.v6, addr_buf),
+		    vrp->prefix_length,
+		    vrp->max_prefix_length);
+		break;
+	default:
+		pr_crit("Unknown family type");
+	}
+
+	json_out->first = false;
+	return 0;
+}
+
 /* Print as base64url strings without trailing pad */
 static int
-print_router_key(struct router_key const *key, void *arg)
+print_router_key_csv(struct router_key const *key, void *arg)
 {
 	FILE *out = arg;
 	char *buf1, *buf2;
@@ -83,6 +123,40 @@ print_router_key(struct router_key const *key, void *arg)
 	free(buf2);
 free1:
 	free(buf1);
+	return error;
+}
+
+/* Print as base64url strings without trailing pad */
+static int
+print_router_key_json(struct router_key const *key, void *arg)
+{
+	JSON_OUT *json_out = arg;
+	FILE *out;
+	char *buf1, *buf2;
+	int error;
+
+	error = base64url_encode(key->ski, RK_SKI_LEN, &buf1);
+	if (error)
+		return error;
+
+	error = base64url_encode(key->spk, RK_SPKI_LEN, &buf2);
+	if (error)
+		goto free1;
+
+	out = json_out->file;
+	if (!json_out->first)
+		fprintf(out, ",");
+
+	fprintf(out,
+	    "\n  { \"asn\" : \"AS%u\", \"ski\" : \"%s\", \"spki\" : \"%s\" }",
+	    key->as,
+	    buf1,
+	    buf2);
+
+	free(buf2);
+free1:
+	free(buf1);
+	json_out->first = false;
 	return error;
 }
 
@@ -106,6 +180,7 @@ static void
 print_roas(struct db_table *db)
 {
 	FILE *out;
+	JSON_OUT json_out;
 	bool fopen;
 	int error;
 
@@ -114,8 +189,18 @@ print_roas(struct db_table *db)
 	if (error)
 		return;
 
-	fprintf(out, "ASN,Prefix,Max prefix length\n");
-	error = db_table_foreach_roa(db, print_roa, out);
+	if (config_get_output_format() == OFM_CSV) {
+		fprintf(out, "ASN,Prefix,Max prefix length\n");
+		error = db_table_foreach_roa(db, print_roa_csv, out);
+	} else {
+		json_out.file = out;
+		json_out.first = true;
+
+		fprintf(out, "{ \"roas\" : [");
+		error = db_table_foreach_roa(db, print_roa_json, &json_out);
+		fprintf(out, "\n]}\n");
+	}
+
 	if (fopen)
 		file_close(out);
 	if (error)
@@ -126,6 +211,7 @@ static void
 print_router_keys(struct db_table *db)
 {
 	FILE *out;
+	JSON_OUT json_out;
 	bool fopen;
 	int error;
 
@@ -134,8 +220,21 @@ print_router_keys(struct db_table *db)
 	if (error)
 		return;
 
-	fprintf(out, "ASN,Subject Key Identifier,Subject Public Key Info\n");
-	error = db_table_foreach_router_key(db, print_router_key, out);
+	if (config_get_output_format() == OFM_CSV) {
+		fprintf(out,
+		    "ASN,Subject Key Identifier,Subject Public Key Info\n");
+		error = db_table_foreach_router_key(db, print_router_key_csv,
+		    out);
+	} else {
+		json_out.file = out;
+		json_out.first = true;
+
+		fprintf(out, "{ \"router-keys\" : [");
+		error = db_table_foreach_router_key(db, print_router_key_json,
+		    &json_out);
+		fprintf(out, "\n]}\n");
+	}
+
 	if (fopen)
 		file_close(out);
 	if (error)

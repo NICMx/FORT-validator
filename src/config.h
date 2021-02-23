@@ -7,6 +7,7 @@
 #include "config/filename_format.h"
 #include "config/log_conf.h"
 #include "config/mode.h"
+#include "config/output_format.h"
 #include "config/rsync_strategy.h"
 #include "config/string_array.h"
 #include "config/types.h"
@@ -49,6 +50,7 @@ unsigned int config_get_http_retry_count(void);
 unsigned int config_get_http_retry_interval(void);
 char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
+enum output_format config_get_output_format(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_stale_repository_period(void);
 unsigned int config_get_thread_pool_server_max(void);

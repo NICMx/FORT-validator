@@ -192,6 +192,8 @@ struct rpki_config {
 		char *roa;
 		/** File where the validated BGPsec certs will be stored */
 		char *bgpsec;
+		/** Format for the output */
+		enum output_format format;
 	} output;
 
 	/* ASN1 decoder max stack size allowed */
@@ -718,15 +720,21 @@ static const struct option_field options[] = {
 		.name = "output.roa",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, output.roa),
-		.doc = "File where ROAs will be stored in CSV format, use '-' to print at console",
+		.doc = "File where ROAs will be stored, use '-' to print at console",
 		.arg_doc = "<file>",
 	}, {
 		.id = 6001,
 		.name = "output.bgpsec",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, output.bgpsec),
-		.doc = "File where BGPsec Router Keys will be stored in CSV format, use '-' to print at console",
+		.doc = "File where BGPsec Router Keys will be stored, use '-' to print at console",
 		.arg_doc = "<file>",
+	}, {
+		.id = 6002,
+		.name = "output.format",
+		.type = &gt_output_format,
+		.offset = offsetof(struct rpki_config, output.format),
+		.doc = "Format to print ROAs and BGPsec Router Keys",
 	},
 
 	{
@@ -1058,6 +1066,7 @@ set_default_values(void)
 
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
+	rpki_config.output.format = OFM_CSV;
 
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
@@ -1562,6 +1571,12 @@ char const *
 config_get_output_bgpsec(void)
 {
 	return rpki_config.output.bgpsec;
+}
+
+enum output_format
+config_get_output_format(void)
+{
+	return rpki_config.output.format;
 }
 
 unsigned int

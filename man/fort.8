@@ -1089,36 +1089,92 @@ By default, the value is \fI5\fR.
 
 .B \-\-output.roa=\fIFILE\fR
 .RS 4
-File where the ROAs will be printed in CSV format.
+File where the ROAs will be printed in the configured format (see
+\fI--output.format\fR).
 .P
 When the \fIFILE\fR is specified, its content will be overwritten by the
 resulting ROAs of the validation (if FILE doesn't exists, it'll be created).
 .P
-Each line of the result is printed in the following order: AS, Prefix, Max
-prefix length; the first line contains those column descriptors.
+When \fI--output.format=csv\fR (which is the default value), then each line of
+the result is printed in the following order: AS, Prefix, Max prefix length; the
+first line contains those column descriptors.
+.P
+When \fI--output.format=json\fR, then each element is printed inside an object
+array of "roas"; ie:
+.nf
+{
+  "roas": [
+    {
+      "asn": "AS64496",
+      "prefix": "198.51.100.0/24",
+      "maxLength": 24
+    },
+    {
+      "asn": "AS64496",
+      "prefix": "2001:DB8::/32",
+      "maxLength": 48
+    }
+  ]
+}
+.fi
 .P
 In order to print the ROAs at console, use a hyphen as the \fIFILE\fR value, eg.
 .B \-\-output.roa=-
+.P
+By default, it has no value set.
 .RE
+.P
 
 .B \-\-output.bgpsec=\fIFILE\fR
 .RS 4
-File where the BGPsec Router Keys will be printed in CSV format. Since most of
-the data is binary (Subject Key Identifier and Subject Public Key Info), such
-data is base64url encoded without trailing pads.
+File where the BGPsec Router Keys will be printed in the configured format (see
+\fI--output.format\fR).
+.P
+Since most of the data is binary (Subject Key Identifier and Subject Public Key
+Info), such data is base64url encoded without trailing pads.
 .P
 When the \fIFILE\fR is specified, its content will be overwritten by the
 resulting Router Keys of the validation (if FILE doesn't exists, it'll be
 created).
 .P
-Each line of the result is printed in the following order: AS, Subject Key
-Identifier, Subject Public Key Info; the first line contains those column
-descriptors.
+When \fI--output.format=csv\fR (which is the default value), then each line of
+the result is printed in the following order: AS, Subject Key Identifier,
+Subject Public Key Info; the first line contains those column descriptors.
+.P
+When \fI--output.format=json\fR, then each element is printed inside an object
+array of "router-keys"; ie:
+.nf
+{
+  "router-keys": [
+    {
+      "asn": "AS64496",
+      "ski": "<Base64 Encoded SKI>",
+      "spki": "<Base64 Encoded SPKI>"
+    },
+    {
+      "asn": "AS64496",
+      "ski": "<Base64 Encoded SKI>",
+      "spki": "<Base64 Encoded SPKI>"
+    }
+  ]
+}
+.fi
 .P
 In order to print the Router Keys at console, use a hyphen as the \fIFILE\fR
 value, eg.
 .B \-\-output.bgpsec=-
+.P
+By default, it has no value set.
 .RE
+.P
+
+.B \-\-output.format=\fIcsv\fR|\fIjson\fR
+.RS 4
+Output format for \fI--output.roa\fR and \fI--output.bgpsec\fR.
+.P
+By default, it has a value of \fIcsv\fR.
+.RE
+.P
 
 .B \-\-thread-pool.server.max=\fIUNSIGNED_INTEGER\fR
 .RS 4
@@ -1360,7 +1416,8 @@ to a specific value:
   ],
   "output": {
     "roa": "/tmp/fort/roas.csv",
-    "bgpsec": "/tmp/fort/bgpsec.csv"
+    "bgpsec": "/tmp/fort/bgpsec.csv",
+    "format": "csv"
   },
   "thread-pool": {
     "server": {

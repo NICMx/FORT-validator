@@ -105,7 +105,8 @@
   ],
   "output": {
     "roa": "/tmp/fort/roas.csv",
-    "bgpsec": "/tmp/fort/bgpsec.csv"
+    "bgpsec": "/tmp/fort/bgpsec.csv",
+    "format": "csv"
   },
   "thread-pool": {
     "server": {
