@@ -404,7 +404,7 @@ void tal_destroy(struct tal *tal)
 	free(tal);
 }
 
-int
+static int
 foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 {
 	unsigned int i;

@@ -69,7 +69,7 @@ set_retry_interval(char const *name, unsigned int value)
 	return 0;
 }
 
-int
+static int
 parse_argv_enabled(struct option_field const *field, char const *str,
     void *result)
 {
@@ -82,7 +82,7 @@ parse_argv_enabled(struct option_field const *field, char const *str,
 	return set_rrdp_enabled(field->name, DEREFERENCE_BOOL(result));
 }
 
-int
+static int
 parse_json_enabled(struct option_field const *opt, struct json_t *json,
     void *result)
 {
@@ -95,7 +95,7 @@ parse_json_enabled(struct option_field const *opt, struct json_t *json,
 	return set_rrdp_enabled(opt->name, DEREFERENCE_BOOL(result));
 }
 
-int
+static int
 parse_argv_priority(struct option_field const *field, char const *str,
     void *result)
 {
@@ -108,7 +108,7 @@ parse_argv_priority(struct option_field const *field, char const *str,
 	return set_priority(field->name, DEREFERENCE_UINT32(result));
 }
 
-int
+static int
 parse_json_priority(struct option_field const *opt, json_t *json, void *result)
 {
 	int error;
@@ -120,7 +120,7 @@ parse_json_priority(struct option_field const *opt, json_t *json, void *result)
 	return set_priority(opt->name, DEREFERENCE_UINT32(result));
 }
 
-int
+static int
 parse_argv_retry_count(struct option_field const *field, char const *str,
     void *result)
 {
@@ -133,7 +133,7 @@ parse_argv_retry_count(struct option_field const *field, char const *str,
 	return set_retry_count(field->name, DEREFERENCE_UINT(result));
 }
 
-int
+static int
 parse_json_retry_count(struct option_field const *opt, json_t *json,
     void *result)
 {
@@ -146,7 +146,7 @@ parse_json_retry_count(struct option_field const *opt, json_t *json,
 	return set_retry_count(opt->name, DEREFERENCE_UINT(result));
 }
 
-int
+static int
 parse_argv_retry_interval(struct option_field const *field, char const *str,
     void *result)
 {
@@ -159,7 +159,7 @@ parse_argv_retry_interval(struct option_field const *field, char const *str,
 	return set_retry_interval(field->name, DEREFERENCE_UINT(result));
 }
 
-int
+static int
 parse_json_retry_interval(struct option_field const *opt, json_t *json,
     void *result)
 {

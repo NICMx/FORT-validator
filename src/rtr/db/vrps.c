@@ -68,7 +68,7 @@ static struct state state;
 static pthread_rwlock_t state_lock;
 
 /** Lock to protect ROA table during construction. */
-static pthread_rwlock_t table_lock;
+static pthread_mutex_t table_lock;
 
 void
 deltagroup_cleanup(struct delta_group *group)
@@ -113,7 +113,7 @@ vrps_init(void)
 		goto release_deltas;
 	}
 
-	error = pthread_rwlock_init(&table_lock, NULL);
+	error = pthread_mutex_init(&table_lock, NULL);
 	if (error) {
 		error = pr_op_errno(error, "table pthread_rwlock_init() errored");
 		goto release_state_lock;
@@ -137,45 +137,40 @@ vrps_destroy(void)
 	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
 	/* Nothing to do with error codes from now on */
 	pthread_rwlock_destroy(&state_lock);
-	pthread_rwlock_destroy(&table_lock);
+	pthread_mutex_destroy(&table_lock);
 }
-
-#define WLOCK_HANDLER(lock, cb)						\
-	int error;							\
-	rwlock_write_lock(lock);					\
-	error = cb;							\
-	rwlock_unlock(lock);						\
-	return error;
-
-#define RLOCK_HANDLER(lock, cb)						\
-	int error;							\
-	rwlock_read_lock(lock);						\
-	error = cb;							\
-	rwlock_unlock(lock);						\
-	return error;
 
 int
 handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 {
-	WLOCK_HANDLER(&table_lock,
-	    rtrhandler_handle_roa_v4(arg, as, prefix, max_length))
+	int error;
+	mutex_lock(&table_lock);
+	error = rtrhandler_handle_roa_v4(arg, as, prefix, max_length);
+	mutex_unlock(&table_lock);
+	return error;
 }
 
 int
 handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
     uint8_t max_length, void *arg)
 {
-	WLOCK_HANDLER(&table_lock,
-	    rtrhandler_handle_roa_v6(arg, as, prefix, max_length))
+	int error;
+	mutex_lock(&table_lock);
+	error = rtrhandler_handle_roa_v6(arg, as, prefix, max_length);
+	mutex_unlock(&table_lock);
+	return error;
 }
 
 int
 handle_router_key(unsigned char const *ski, uint32_t as,
     unsigned char const *spk, void *arg)
 {
-	WLOCK_HANDLER(&table_lock,
-	    rtrhandler_handle_router_key(arg, ski, as, spk))
+	int error;
+	mutex_lock(&table_lock);
+	error = rtrhandler_handle_router_key(arg, ski, as, spk);
+	mutex_unlock(&table_lock);
+	return error;
 }
 
 static int

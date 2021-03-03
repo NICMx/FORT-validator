@@ -40,9 +40,11 @@
 #define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
 
 /*
- * rwlock wrappers. They are just a bunch of boilerplate, and removal of
+ * mutex wrappers. They are just a bunch of boilerplate, and removal of
  * unrecoverable resulting error codes.
  */
+void mutex_lock(pthread_mutex_t *);
+void mutex_unlock(pthread_mutex_t *);
 int rwlock_read_lock(pthread_rwlock_t *);
 void rwlock_write_lock(pthread_rwlock_t *);
 void rwlock_unlock(pthread_rwlock_t *);

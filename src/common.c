@@ -13,6 +13,32 @@
 #include "config.h"
 #include "log.h"
 
+void
+mutex_lock(pthread_mutex_t *lock)
+{
+	int error;
+
+	error = pthread_mutex_lock(lock);
+	if (error) {
+		pr_op_err("pthread_mutex_lock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		    error);
+		exit(error);
+	}
+}
+
+void
+mutex_unlock(pthread_mutex_t *lock)
+{
+	int error;
+
+	error = pthread_mutex_unlock(lock);
+	if (error) {
+		pr_op_err("pthread_mutex_unlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		    error);
+		exit(error);
+	}
+}
+
 int
 rwlock_read_lock(pthread_rwlock_t *lock)
 {

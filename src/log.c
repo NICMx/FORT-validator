@@ -183,7 +183,7 @@ __fprintf(int level, char const *prefix, bool color_output,
 	if (color_output)
 		fprintf(lvl->stream, "%s", lvl->color);
 
-	now = time(0);
+	now = time(NULL);
 	if (now != ((time_t) -1)) {
 		localtime_r(&now, &stm_buff);
 		strftime(time_buff, sizeof(time_buff), "%b %e %T", &stm_buff);
@@ -255,7 +255,7 @@ pr_stream(int level, char const *prefix, const char *format, bool color_output,
 	if (color_output)
 		fprintf(lvl->stream, "%s", lvl->color);
 
-	now = time(0);
+	now = time(NULL);
 	if (now != ((time_t) -1)) {
 		localtime_r(&now, &stm_buff);
 		strftime(time_buff, sizeof(time_buff), "%b %e %T", &stm_buff);

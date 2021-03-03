@@ -85,7 +85,7 @@ db_table_foreach_router_key(struct db_table *table, router_key_foreach_cb cb,
 	return 0;
 }
 
-static struct hashable_roa *
+struct hashable_roa *
 create_roa(uint32_t asn, uint8_t max_length)
 {
 	struct hashable_roa *roa;
@@ -102,7 +102,7 @@ create_roa(uint32_t asn, uint8_t max_length)
 	return roa;
 }
 
-static int
+int
 add_roa(struct db_table *table, struct hashable_roa *new)
 {
 	struct hashable_roa *old;
