@@ -123,7 +123,7 @@ fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 fort_CFLAGS  = -Wall -Wno-cpp
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
+fort_CFLAGS += -std=gnu11 -O0 -g $(FORT_FLAGS) ${XML2_CFLAGS}
 fort_LDFLAGS = $(LDFLAGS_DEBUG)
 fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS}
 

@@ -90,10 +90,14 @@ create_roa(uint32_t asn, uint8_t max_length)
 {
 	struct hashable_roa *roa;
 
+	fprintf(stderr, "a");
 	roa = malloc(sizeof(struct hashable_roa));
-	if (roa == NULL)
+	if (roa == NULL) {
+		fprintf(stderr, "b");
 		return NULL;
+	}
 	/* Needed by uthash */
+	fprintf(stderr, "c");
 	memset(roa, 0, sizeof(struct hashable_roa));
 
 	roa->data.asn = asn;
@@ -107,13 +111,20 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 {
 	struct hashable_roa *old;
 
+	fprintf(stderr, "h");
 	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
-	if (errno)
+	fprintf(stderr, "i");
+	if (errno) {
+		fprintf(stderr, "j");
 		return -pr_val_errno(errno, "ROA couldn't be added to hash table");
-	if (old != NULL)
+	}
+	if (old != NULL) {
+		fprintf(stderr, "k");
 		free(old);
+	}
 
+	fprintf(stderr, "l");
 	return 0;
 }
 
@@ -251,16 +262,26 @@ rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
 	struct hashable_roa *roa;
 	int error;
 
+	fprintf(stderr, "\n{");
 	roa = create_roa(asn, max_length);
-	if (roa == NULL)
+	fprintf(stderr, "d");
+	if (roa == NULL) {
+		fprintf(stderr, "e}");
 		return pr_enomem();
+	}
+	fprintf(stderr, "f");
 	roa->data.prefix.v4 = prefix4->addr;
 	roa->data.prefix_length = prefix4->len;
 	roa->data.addr_fam = AF_INET;
 
+	fprintf(stderr, "g");
 	error = add_roa(table, roa);
-	if (error)
+	if (error) {
+		fprintf(stderr, "m");
 		free(roa);
+	}
+
+	fprintf(stderr, "n}");
 	return error;
 }
 
