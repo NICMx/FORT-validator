@@ -87,8 +87,8 @@ vrps_init(void)
 	int error;
 
 	pool = NULL;
-	error = thread_pool_create(config_get_thread_pool_validation_max(),
-	    &pool);
+	error = thread_pool_create("Validation",
+	    config_get_thread_pool_validation_max(), &pool);
 	if (error)
 		return error;
 

@@ -581,8 +581,8 @@ handle_client_connections(void *arg)
 			param->fd = client_fd;
 			param->addr = client_addr;
 
-			error = thread_pool_push(pool, client_thread_cb,
-			    param);
+			error = thread_pool_push(pool, "Client thread",
+			    client_thread_cb, param);
 			if (error) {
 				pr_op_err("Couldn't push a thread to attend incoming RTR client");
 				/* Error with min RTR version */
@@ -625,7 +625,8 @@ __handle_client_connections(struct server_fds *fds, struct thread_pool *pool)
 	param->pool = pool;
 
 	/* handle_client_connections() must release param */
-	error = internal_pool_push(handle_client_connections, param);
+	error = internal_pool_push("Server thread", handle_client_connections,
+	    param);
 	if (error) {
 		free(param);
 		return error;
@@ -672,7 +673,8 @@ rtr_listen(void)
 		goto revert_server_fds;
 
 	pool = NULL;
-	error = thread_pool_create(config_get_thread_pool_server_max(), &pool);
+	error = thread_pool_create("Server",
+	    config_get_thread_pool_server_max(), &pool);
 	if (error)
 		goto revert_server_fds;
 
