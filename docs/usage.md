@@ -991,7 +991,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 
 	"server": {
 		"<a href="#--serveraddress">address</a>": [
-			"127.0.0.1"
+			"192.0.2.1",
+			"2001:db8::1"
 		],
 		"<a href="#--serverport">port</a>": "8323",
 		"<a href="#--serverbacklog">backlog</a>": 16,
