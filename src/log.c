@@ -23,19 +23,34 @@ static struct level CRT = { "CRT", "\x1B[35m" };
 static struct level UNK = { "UNK", "" };
 #define COLOR_RESET "\x1B[0m"
 
-/* LOG_PERROR is not portable, apparently, so I implemented it myself */
-static bool op_fprintf_enabled;
-static bool op_syslog_enabled;
-static bool val_fprintf_enabled;
-static bool val_syslog_enabled;
+struct log_config {
+	bool fprintf_enabled; /* Print on the standard streams? */
+	bool syslog_enabled; /* Print on syslog? */
 
-static bool op_global_log_enabled;
-static bool val_global_log_enabled;
+	uint8_t level;
+	char const *prefix;
+	bool color;
+	int facility;
+};
+
+/* Configuration for the operation logs. */
+static struct log_config op_config;
+/* Configuration for the validation logs. */
+static struct log_config val_config;
+
+static void init_config(struct log_config *cfg)
+{
+	cfg->fprintf_enabled = true;
+	cfg->syslog_enabled = true;
+	cfg->level = LOG_DEBUG;
+	cfg->prefix = NULL;
+	cfg->color = false;
+	cfg->facility = LOG_DAEMON;
+}
 
 void
 log_setup(void)
 {
-	/* =_= */
 	DBG.stream = stdout;
 	INF.stream = stdout;
 	WRN.stream = stderr;
@@ -44,105 +59,105 @@ log_setup(void)
 	UNK.stream = stdout;
 
 	openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);
-	op_fprintf_enabled = true;
-	op_syslog_enabled = true;
-	val_fprintf_enabled = true;
-	val_syslog_enabled = true;
 
-	op_global_log_enabled = true;
-	val_global_log_enabled = true;
-}
-
-static void
-log_disable_op_std(void)
-{
-	op_fprintf_enabled = false;
-}
-
-static void
-log_disable_val_std(void)
-{
-	val_fprintf_enabled = false;
+	init_config(&op_config);
+	init_config(&val_config);
 }
 
 static void
 log_disable_syslog(void)
 {
-	if (op_syslog_enabled || val_syslog_enabled) {
+	if (op_config.syslog_enabled || val_config.syslog_enabled) {
 		closelog();
-		op_syslog_enabled = false;
-		val_syslog_enabled = false;
+		op_config.syslog_enabled = false;
+		val_config.syslog_enabled = false;
 	}
 }
 
 void
 log_start(void)
 {
-	val_global_log_enabled = config_get_val_log_enabled();
-	op_global_log_enabled = config_get_op_log_enabled();
-
-	if (val_global_log_enabled) {
+	if (config_get_val_log_enabled()) {
 		switch (config_get_val_log_output()) {
 		case SYSLOG:
 			pr_op_info("Syslog log output configured; disabling validation logging on standard streams.");
 			pr_op_info("(Validation Logs will be sent to syslog only.)");
-			log_disable_val_std();
+			val_config.fprintf_enabled = false;
 			break;
 		case CONSOLE:
 			pr_op_info("Console log output configured; disabling validation logging on syslog.");
 			pr_op_info("(Validation Logs will be sent to the standard streams only.)");
-			val_syslog_enabled = false;
+			val_config.syslog_enabled = false;
 			break;
 		}
 	} else {
 		pr_op_info("Disabling validation logging on syslog.");
 		pr_op_info("Disabling validation logging on standard streams.");
-		log_disable_val_std();
-		val_syslog_enabled = false;
+		val_config.fprintf_enabled = false;
+		val_config.syslog_enabled = false;
 	}
 
-	if (op_global_log_enabled) {
+	if (config_get_op_log_enabled()) {
 		switch (config_get_op_log_output()) {
 		case SYSLOG:
 			pr_op_info("Syslog log output configured; disabling operation logging on standard streams.");
 			pr_op_info("(Operation Logs will be sent to syslog only.)");
-			log_disable_op_std();
+			op_config.fprintf_enabled = false;
 			break;
 		case CONSOLE:
 			pr_op_info("Console log output configured; disabling operation logging on syslog.");
 			pr_op_info("(Operation Logs will be sent to the standard streams only.)");
-			if (!val_syslog_enabled)
-				log_disable_syslog();
+			if (val_config.syslog_enabled)
+				op_config.syslog_enabled = false;
 			else
-				op_syslog_enabled = false;
+				log_disable_syslog();
 			break;
 		}
 	} else {
 		pr_op_info("Disabling operation logging on syslog.");
 		pr_op_info("Disabling operation logging on standard streams.");
-		log_disable_op_std();
-		if (!val_syslog_enabled)
-			log_disable_syslog();
+		op_config.fprintf_enabled = false;
+		if (val_config.syslog_enabled)
+			op_config.syslog_enabled = false;
 		else
-			op_syslog_enabled = false;
+			log_disable_syslog();
 	}
+
+	op_config.level = config_get_op_log_level();
+	op_config.prefix = config_get_op_log_tag();
+	op_config.color = config_get_op_log_color_output();
+	op_config.facility = config_get_op_log_facility();
+	val_config.level = config_get_val_log_level();
+	val_config.prefix = config_get_val_log_tag();
+	val_config.color = config_get_val_log_color_output();
+	val_config.facility = config_get_val_log_facility();
 }
 
 void
 log_teardown(void)
 {
-	log_disable_op_std();
-	log_disable_val_std();
 	log_disable_syslog();
 }
 
 void
 log_flush(void)
 {
-	if (op_fprintf_enabled || val_fprintf_enabled) {
+	if (op_config.fprintf_enabled || val_config.fprintf_enabled) {
 		fflush(stdout);
 		fflush(stderr);
 	}
+}
+
+bool
+log_val_enabled(unsigned int level)
+{
+	return val_config.level >= level;
+}
+
+bool
+log_op_enabled(unsigned int level)
+{
+	return op_config.level >= level;
 }
 
 static struct level const *
@@ -165,18 +180,17 @@ level2struct(int level)
 }
 
 static void
-__fprintf(int level, char const *prefix, bool color_output,
-    char const *format, ...)
+__vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 {
-	struct level const *lvl;
-	va_list args;
 	char time_buff[20];
+	struct level const *lvl;
 	time_t now;
 	struct tm stm_buff;
+	char const *file_name;
 
 	lvl = level2struct(level);
 
-	if (color_output)
+	if (cfg->color)
 		fprintf(lvl->stream, "%s", lvl->color);
 
 	now = time(0);
@@ -187,18 +201,20 @@ __fprintf(int level, char const *prefix, bool color_output,
 	}
 
 	fprintf(lvl->stream, "%s", lvl->label);
-	if (prefix)
-		fprintf(lvl->stream, " [%s]", prefix);
+	if (cfg->prefix)
+		fprintf(lvl->stream, " [%s]", cfg->prefix);
 	fprintf(lvl->stream, ": ");
 
-	va_start(args, format);
+	file_name = fnstack_peek();
+	if (file_name != NULL)
+		fprintf(lvl->stream, "%s: ", file_name);
+
 	vfprintf(lvl->stream, format, args);
-	va_end(args);
 
-	if (color_output)
+	if (cfg->color)
 		fprintf(lvl->stream, COLOR_RESET);
-
 	fprintf(lvl->stream, "\n");
+
 	/* Force flush */
 	if (lvl->stream == stdout)
 		fflush(lvl->stream);
@@ -207,8 +223,7 @@ __fprintf(int level, char const *prefix, bool color_output,
 #define MSG_LEN 512
 
 static void
-pr_syslog(int level, char const *prefix, const char *format, int facility,
-    va_list args)
+__syslog(int level, struct log_config *cfg, const char *format, va_list args)
 {
 	char const *file_name;
 	struct level const *lvl;
@@ -220,145 +235,52 @@ pr_syslog(int level, char const *prefix, const char *format, int facility,
 	/* Can't use vsyslog(); it's not portable. */
 	vsnprintf(msg, MSG_LEN, format, args);
 	if (file_name != NULL) {
-		if (prefix != NULL)
-			syslog(level | facility, "%s [%s]: %s: %s", lvl->label,
-			    prefix, file_name, msg);
+		if (cfg->prefix != NULL)
+			syslog(level | cfg->facility, "%s [%s]: %s: %s",
+			    lvl->label, cfg->prefix, file_name, msg);
 		else
-			syslog(level | facility, "%s: %s: %s", lvl->label,
-			    file_name, msg);
+			syslog(level | cfg->facility, "%s: %s: %s",
+			    lvl->label, file_name, msg);
 	} else {
-		if (prefix != NULL)
-			syslog(level | facility, "%s [%s]: %s", lvl->label,
-			    prefix, msg);
+		if (cfg->prefix != NULL)
+			syslog(level | cfg->facility, "%s [%s]: %s",
+			    lvl->label, cfg->prefix, msg);
 		else
-			syslog(level | facility, "%s: %s", lvl->label, msg);
+			syslog(level | cfg->facility, "%s: %s",
+			    lvl->label, msg);
 	}
 }
 
-static void
-pr_stream(int level, char const *prefix, const char *format, bool color_output,
-    va_list args)
-{
-	char const *file_name;
-	char time_buff[20];
-	struct level const *lvl;
-	time_t now;
-	struct tm stm_buff;
-
-	file_name = fnstack_peek();
-	lvl = level2struct(level);
-
-	if (color_output)
-		fprintf(lvl->stream, "%s", lvl->color);
-
-	now = time(0);
-	if (now != ((time_t) -1)) {
-		localtime_r(&now, &stm_buff);
-		strftime(time_buff, sizeof(time_buff), "%b %e %T", &stm_buff);
-		fprintf(lvl->stream, "%s ", time_buff);
-	}
-
-	fprintf(lvl->stream, "%s", lvl->label);
-	if (prefix)
-		fprintf(lvl->stream, " [%s]", prefix);
-	fprintf(lvl->stream, ": ");
-
-	if (file_name != NULL)
-		fprintf(lvl->stream, "%s: ", file_name);
-	vfprintf(lvl->stream, format, args);
-
-	if (color_output)
-		fprintf(lvl->stream, "%s", COLOR_RESET);
-
-	fprintf(lvl->stream, "\n");
-	/* Force flush */
-	if (lvl->stream == stdout)
-		fflush(lvl->stream);
-}
-
-#define PR_OP_SIMPLE(level)						\
+#define PR_SIMPLE(lvl, config)						\
 	do {								\
 		va_list args;						\
-		char const *prefix = config_get_op_log_tag();		\
-		bool color = config_get_op_log_color_output();		\
-		int facility = config_get_op_log_facility();		\
 									\
-		if (!op_global_log_enabled)				\
+		if (lvl > config.level)					\
 			break;						\
 									\
-		if (level > config_get_op_log_level())			\
-			break;						\
-									\
-		if (op_syslog_enabled) {				\
+		if (config.syslog_enabled) {				\
 			va_start(args, format);				\
-			pr_syslog(level, prefix, format, facility,	\
-			    args);					\
+			__syslog(lvl, &config, format, args);		\
 			va_end(args);					\
 		}							\
 									\
-		if (op_fprintf_enabled) {				\
+		if (config.fprintf_enabled) {				\
 			va_start(args, format);				\
-			pr_stream(level, prefix, format, color, args);	\
+			__vfprintf(lvl, &config, format, args);		\
 			va_end(args);					\
 		}							\
 	} while (0)
-
-
-#define PR_VAL_SIMPLE(level)						\
-	do {								\
-		va_list args;						\
-		char const *prefix = config_get_val_log_tag();		\
-		bool color = config_get_val_log_color_output();		\
-		int facility = config_get_val_log_facility();		\
-									\
-		if (!val_global_log_enabled)				\
-			break;						\
-									\
-		if (level > config_get_val_log_level())			\
-			break;						\
-									\
-		if (val_syslog_enabled) {				\
-			va_start(args, format);				\
-			pr_syslog(level, prefix, format, facility,	\
-			    args);					\
-			va_end(args);					\
-		}							\
-									\
-		if (val_fprintf_enabled) {				\
-			va_start(args, format);				\
-			pr_stream(level, prefix, format, color, args);	\
-			va_end(args);					\
-		}							\
-	} while (0)
-
-bool
-log_val_debug_enabled(void)
-{
-	return config_get_val_log_level() >= LOG_DEBUG;
-}
-
-bool
-log_op_debug_enabled(void)
-{
-	return config_get_op_log_level() >= LOG_DEBUG;
-}
-
-bool
-log_op_info_enabled(void)
-{
-	return config_get_op_log_level() >= LOG_INFO;
-}
 
 void
 pr_op_debug(const char *format, ...)
 {
-	PR_OP_SIMPLE(LOG_DEBUG);
+	PR_SIMPLE(LOG_DEBUG, op_config);
 }
 
 void
 pr_op_info(const char *format, ...)
 {
-	PR_OP_SIMPLE(LOG_INFO);
+	PR_SIMPLE(LOG_INFO, op_config);
 }
 
 /**
@@ -368,30 +290,27 @@ pr_op_info(const char *format, ...)
 int
 pr_op_warn(const char *format, ...)
 {
-	PR_OP_SIMPLE(LOG_WARNING);
+	PR_SIMPLE(LOG_WARNING, op_config);
 	return 0;
 }
 
-/**
- * Always returs -EINVAL.
- */
 int
-pr_op_err(const char *format, ...)
+__pr_op_err(int error, const char *format, ...)
 {
-	PR_OP_SIMPLE(LOG_ERR);
-	return -EINVAL;
+	PR_SIMPLE(LOG_ERR, op_config);
+	return error;
 }
 
 void
 pr_val_debug(const char *format, ...)
 {
-	PR_VAL_SIMPLE(LOG_DEBUG);
+	PR_SIMPLE(LOG_DEBUG, val_config);
 }
 
 void
 pr_val_info(const char *format, ...)
 {
-	PR_VAL_SIMPLE(LOG_INFO);
+	PR_SIMPLE(LOG_INFO, val_config);
 }
 
 /**
@@ -401,142 +320,43 @@ pr_val_info(const char *format, ...)
 int
 pr_val_warn(const char *format, ...)
 {
-	PR_VAL_SIMPLE(LOG_WARNING);
+	PR_SIMPLE(LOG_WARNING, val_config);
 	return 0;
 }
 
-/**
- * Always returs -EINVAL.
- */
 int
-pr_val_err(const char *format, ...)
+__pr_val_err(int error, const char *format, ...)
 {
-	PR_VAL_SIMPLE(LOG_ERR);
-	return -EINVAL;
-}
-
-static void
-pr_simple_syslog(int level, int facility, char const *prefix, const char *msg)
-{
-	struct level const *lvl;
-
-	lvl = level2struct(LOG_ERR);
-	if (prefix != NULL)
-		syslog(LOG_ERR | facility, "%s [%s]: - %s", lvl->label, prefix,
-		    msg);
-	else
-		syslog(LOG_ERR | facility, "%s: - %s", lvl->label, msg);
-}
-
-/**
- * @error fulfills two functions, both of which apply only if it's nonzero:
- *
- * - @error's corresponding generic error message will be appended to the print.
- * - @error's value will be returned. This is for the sake of error code
- *   propagation.
- *
- * If @error is zero, no error message will be appended, and the function will
- * return -EINVAL. (I acknowledge that this looks convoluted at first glance.
- * The purpose is to ensure that this function will propagate an error code even
- * if there is no error code originally.)
- *
- * Always appends a newline at the end.
- */
-static int
-pr_errno(int error, bool syslog_enabled, bool fprintf_enabled, int facility,
-    bool color, char const *prefix)
-{
-	if (!error)
-		return -EINVAL;
-
-	if (syslog_enabled)
-		pr_simple_syslog(LOG_ERR, facility, prefix, strerror(error));
-
-	if (fprintf_enabled)
-		__fprintf(LOG_ERR, prefix, color, "  - %s", strerror(error));
-
+	PR_SIMPLE(LOG_ERR, val_config);
 	return error;
 }
 
-
-int
-pr_op_errno(int error, const char *format, ...)
-{
-	if (abs(error) == ENOMEM)
-		pr_enomem();
-
-	PR_OP_SIMPLE(LOG_ERR);
-
-	return pr_errno(error, op_syslog_enabled,
-	    op_fprintf_enabled, config_get_op_log_facility(),
-	    config_get_op_log_color_output(),
-	    config_get_op_log_tag());
-}
-
-int
-pr_val_errno(int error, const char *format, ...)
-{
-	if (abs(error) == ENOMEM)
-		pr_enomem();
-
-	PR_VAL_SIMPLE(LOG_ERR);
-
-	return pr_errno(error, val_syslog_enabled,
-	    val_fprintf_enabled, config_get_val_log_facility(),
-	    config_get_val_log_color_output(),
-	    config_get_val_log_tag());
-}
-
-static int
-log_op_crypto_error(const char *str, size_t len, void *arg)
-{
-	if (op_syslog_enabled)
-		pr_simple_syslog(LOG_ERR, config_get_op_log_facility(),
-		    config_get_op_log_tag(), str);
-	if (op_fprintf_enabled)
-		__fprintf(LOG_ERR, config_get_op_log_tag(),
-		    config_get_op_log_color_output(),
-		    "  - %s", str);
-	return 1;
-}
-
-static int
-log_val_crypto_error(const char *str, size_t len, void *arg)
-{
-	if (val_syslog_enabled)
-		pr_simple_syslog(LOG_ERR, config_get_val_log_facility(),
-		    config_get_val_log_tag(), str);
-	if (val_fprintf_enabled)
-		__fprintf(LOG_ERR, config_get_val_log_tag(),
-		    config_get_val_log_color_output(),
-		    "  - %s", str);
-	return 1;
-}
-
-static int
-crypto_err(int (*cb) (const char *str, size_t len, void *u),
-    bool fprintf_enabled, bool syslog_enabled, bool color_output, int facility,
-    const char *prefix)
-{
+struct crypto_cb_arg {
 	unsigned int stack_size;
+	int (*error_fn)(int, const char *, ...);
+};
 
-	if (syslog_enabled)
-		pr_simple_syslog(LOG_ERR, facility, prefix,
-		    " libcrypto error stack:");
-	if (fprintf_enabled)
-		__fprintf(LOG_ERR, prefix, color_output,
-		    "  libcrypto error stack:");
+static int
+log_crypto_error(const char *str, size_t len, void *_arg)
+{
+	struct crypto_cb_arg *arg = _arg;
+	arg->error_fn(0, "-> %s", str);
+	arg->stack_size++;
+	return 1;
+}
 
-	stack_size = 0;
-	ERR_print_errors_cb(cb, &stack_size);
-	if (stack_size == 0) {
-		if (syslog_enabled)
-			pr_simple_syslog(LOG_ERR, facility, prefix,
-			    "   <Empty");
-		if (fprintf_enabled)
-			__fprintf(LOG_ERR, prefix, color_output,
-			    "    <Empty>\n");
-	}
+static int
+crypto_err(struct log_config *cfg, int (*error_fn)(int, const char *, ...))
+{
+	struct crypto_cb_arg arg;
+
+	error_fn(0, "libcrypto error stack:");
+
+	arg.stack_size = 0;
+	arg.error_fn = error_fn;
+	ERR_print_errors_cb(log_crypto_error, &arg);
+	if (arg.stack_size == 0)
+		error_fn(0,  "   <Empty>");
 
 	return -EINVAL;
 }
@@ -556,11 +376,8 @@ crypto_err(int (*cb) (const char *str, size_t len, void *u),
 int
 op_crypto_err(const char *format, ...)
 {
-	PR_OP_SIMPLE(LOG_ERR);
-
-	return crypto_err(log_op_crypto_error, op_fprintf_enabled,
-	    op_syslog_enabled, config_get_op_log_color_output(),
-	    config_get_op_log_facility(), config_get_op_log_tag());
+	PR_SIMPLE(LOG_ERR, op_config);
+	return crypto_err(&op_config, __pr_op_err);
 }
 
 /**
@@ -578,11 +395,8 @@ op_crypto_err(const char *format, ...)
 int
 val_crypto_err(const char *format, ...)
 {
-	PR_VAL_SIMPLE(LOG_ERR);
-
-	return crypto_err(log_val_crypto_error, val_fprintf_enabled,
-	    val_syslog_enabled, config_get_val_log_color_output(),
-	    config_get_val_log_facility(), config_get_val_log_tag());
+	PR_SIMPLE(LOG_ERR, val_config);
+	return crypto_err(&val_config, __pr_val_err);
 }
 
 /**
@@ -591,13 +405,7 @@ val_crypto_err(const char *format, ...)
 int
 pr_enomem(void)
 {
-	if (op_syslog_enabled)
-		pr_simple_syslog(LOG_ERR, config_get_op_log_facility(),
-		    config_get_op_log_tag(), "Out of memory.");
-	if (op_fprintf_enabled)
-		__fprintf(LOG_ERR, config_get_op_log_tag(),
-		    config_get_op_log_color_output(),
-		    "Out of memory.\n");
+	pr_op_err("Out of memory.");
 	print_stack_trace();
 	exit(ENOMEM);
 }
@@ -608,7 +416,7 @@ pr_enomem(void)
 __dead void
 pr_crit(const char *format, ...)
 {
-	PR_OP_SIMPLE(LOG_CRIT);
+	PR_SIMPLE(LOG_CRIT, op_config);
 	print_stack_trace();
 	exit(-1);
 }
@@ -627,10 +435,10 @@ incidence(enum incidence_id id, const char *format, ...)
 	case INAC_IGNORE:
 		return 0;
 	case INAC_WARN:
-		PR_VAL_SIMPLE(LOG_WARNING);
+		PR_SIMPLE(LOG_WARNING, val_config);
 		return 0;
 	case INAC_ERROR:
-		PR_VAL_SIMPLE(LOG_ERR);
+		PR_SIMPLE(LOG_ERR, val_config);
 		return -EINVAL;
 	}
 

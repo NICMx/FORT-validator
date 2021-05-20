@@ -2,8 +2,10 @@
 
 #include <pthread.h>
 #include <string.h>
+#include <syslog.h>
 #include <time.h>
 #include <sys/queue.h>
+
 #include "clients.h"
 #include "common.h"
 #include "output_printer.h"
@@ -399,7 +401,7 @@ vrps_update(bool *changed)
 	 * This wrapper is mainly for log informational data, so if there's no
 	 * need don't do unnecessary calls
 	 */
-	if (!log_op_info_enabled())
+	if (!log_op_enabled(LOG_INFO))
 		return __vrps_update(changed);
 
 	pr_op_info("Starting validation.");

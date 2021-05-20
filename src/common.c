@@ -187,7 +187,7 @@ process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
 
 bool
 valid_file_or_dir(char const *location, bool check_file, bool check_dir,
-    int (*cb) (int error, const char *format, ...))
+    int (*error_fn)(int error, const char *format, ...))
 {
 	FILE *file;
 	struct stat attr;
@@ -200,15 +200,15 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 	result = false;
 	file = fopen(location, "rb");
 	if (file == NULL) {
-		if (cb != NULL)
-			cb(errno, "Could not open location '%s'",
+		if (error_fn != NULL)
+			error_fn(errno, "Could not open location '%s'",
 			    location);
 		return false;
 	}
 
 	if (fstat(fileno(file), &attr) == -1) {
-		if (cb != NULL)
-			cb(errno, "fstat(%s) failed", location);
+		if (error_fn != NULL)
+			error_fn(errno, "fstat(%s) failed", location);
 		goto end;
 	}
 
@@ -223,8 +223,8 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 
 end:
 	if (fclose(file) == -1)
-		if (cb != NULL)
-			cb(errno, "fclose() failed");
+		if (error_fn != NULL)
+			error_fn(errno, "fclose() failed");
 	return result;
 }
 

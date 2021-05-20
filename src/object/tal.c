@@ -539,7 +539,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		if (!thread_arg->sync_files) {
 			/* Look for local files */
 			if (!valid_file_or_dir(uri_get_local(uri), true, false,
-			    pr_val_errno)) {
+			    __pr_val_err)) {
 				validation_destroy(state);
 				return 0; /* Error already logged */
 			}

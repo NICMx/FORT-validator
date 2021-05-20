@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 #include <arpa/inet.h> /* INET_ADDRSTRLEN */
 
@@ -128,7 +129,7 @@ send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv4_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV4_PREFIX_LEN)
 		pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
-	if (log_op_debug_enabled())
+	if (log_op_enabled(LOG_DEBUG))
 		pr_debug_prefix4(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);
@@ -164,7 +165,7 @@ send_ipv6_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv6_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV6_PREFIX_LEN)
 		pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
-	if (log_op_debug_enabled())
+	if (log_op_enabled(LOG_DEBUG))
 		pr_debug_prefix6(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);

@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "address.h"
 #include "clients.h"
@@ -126,7 +127,7 @@ pdu_load(int fd, struct sockaddr_storage *client_addr,
 		return error;
 
 
-	if (log_op_debug_enabled())
+	if (log_op_enabled(LOG_DEBUG))
 		pr_op_debug("Received a %s from %s.",
 		    pdutype2str(header.pdu_type),
 		    sockaddr2str(client_addr));

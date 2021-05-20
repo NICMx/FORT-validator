@@ -614,7 +614,7 @@ __handle_client_connections(struct server_fds *fds, struct thread_pool *pool)
 		error = listen(node->id, config_get_server_queue());
 		if (error)
 			return pr_op_errno(errno,
-			    "Couldn't listen on server socket.");
+			    "Couldn't listen on server socket");
 	}
 
 	param = malloc(sizeof(struct rtr_task_param));

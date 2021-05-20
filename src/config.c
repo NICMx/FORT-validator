@@ -1117,7 +1117,7 @@ validate_config(void)
 
 	/* A file location at --tal isn't valid when --init-tals is set */
 	if (!valid_file_or_dir(rpki_config.tal, !rpki_config.init_tals, true,
-	    pr_op_errno))
+	    __pr_op_err))
 		return pr_op_err("Invalid TAL(s) location.");
 
 	/* Ignore the other checks */
@@ -1139,7 +1139,7 @@ validate_config(void)
 		return pr_op_err("Invalid output.bgpsec file.");
 
 	if (rpki_config.slurm != NULL &&
-	    !valid_file_or_dir(rpki_config.slurm, true, true, pr_op_errno))
+	    !valid_file_or_dir(rpki_config.slurm, true, true, __pr_op_err))
 		return pr_op_err("Invalid slurm location.");
 
 	/* FIXME (later) Remove when sync-strategy is fully deprecated */

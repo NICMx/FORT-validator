@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <stdint.h> /* SIZE_MAX */
+#include <syslog.h>
 #include <time.h>
 #include <openssl/asn1.h>
 #include <sys/socket.h>
@@ -109,7 +110,7 @@ validate_serial_number(X509 *cert)
 	if (number == NULL)
 		return val_crypto_err("Could not parse certificate serial number");
 
-	if (log_val_debug_enabled())
+	if (log_val_enabled(LOG_DEBUG))
 		debug_serial_number(number);
 
 	error = x509stack_store_serial(validation_certstack(state), number);
@@ -2020,7 +2021,7 @@ static int
 verify_mft_loc(struct rpki_uri *mft_uri)
 {
 	if (!valid_file_or_dir(uri_get_local(mft_uri), true, false,
-	    pr_val_errno))
+	    __pr_val_err))
 		return -EINVAL; /* Error already logged */
 
 	return 0;

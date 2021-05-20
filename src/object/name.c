@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "log.h"
 #include "thread_var.h"
@@ -201,7 +202,7 @@ end:	x509_name_put(parent_subject);
 void
 x509_name_pr_debug(const char *prefix, X509_NAME *name)
 {
-	if (!log_val_debug_enabled())
+	if (!log_val_enabled(LOG_DEBUG))
 		return;
 
 	struct rfc5280_name *printable;

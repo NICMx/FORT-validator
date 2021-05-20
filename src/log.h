@@ -1,6 +1,8 @@
 #ifndef SRC_LOG_H_
 #define SRC_LOG_H_
 
+#include <errno.h>
+#include <string.h>
 #include <stdbool.h>
 #include "incidence/incidence.h"
 
@@ -51,40 +53,61 @@ void log_flush(void);
  */
 
 /*
- * Check if debug or info are enabled, useful to avoid boilerplate code
+ * Check if corresponding logging is enabled. You can use these to short-circuit
+ * out of heavy logging code.
  */
-bool log_val_debug_enabled(void);
-bool log_op_debug_enabled(void);
-bool log_op_info_enabled(void);
+bool log_val_enabled(unsigned int level);
+bool log_op_enabled(unsigned int level);
 
-/* Debug messages, useful for devs or to track a specific problem */
+/* == Operation logs == */
+
+/* Status reports of no interest to the user. */
 void pr_op_debug(const char *, ...) CHECK_FORMAT(1, 2);
-/* Non-errors deemed useful to the user. */
+/* Status reports likely useful to the user. */
 void pr_op_info(const char *, ...) CHECK_FORMAT(1, 2);
-/* Issues that did not trigger RPKI object rejection. */
+/* Non-errors that suggest a problem. */
 int pr_op_warn(const char *, ...) CHECK_FORMAT(1, 2);
-/* Errors that trigger RPKI object rejection. */
-int pr_op_err(const char *, ...) CHECK_FORMAT(1, 2);
-int pr_op_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
+/* Problematic situations that prevent Fort from doing its job. */
+int __pr_op_err(int, const char *, ...) CHECK_FORMAT(2, 3);
+/* Like pr_op_err(), except it prints libcrypto's error stack as well. */
 int op_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 
-/* Debug messages, useful for devs or to track a specific problem */
+#define pr_op_err(fmt, ...) \
+	__pr_op_err(-EINVAL, fmt, ##__VA_ARGS__)
+#define pr_op_errno(error, fmt, ...) \
+	__pr_op_err(error, fmt ": %s", ##__VA_ARGS__, strerror(abs(error)))
+
+/* == Validation logs == */
+
+/* Status reports of no interest to the user. */
 void pr_val_debug(const char *, ...) CHECK_FORMAT(1, 2);
-/* Non-errors deemed useful to the user. */
+/* Status reports likely useful to the user. */
 void pr_val_info(const char *, ...) CHECK_FORMAT(1, 2);
 /* Issues that did not trigger RPKI object rejection. */
 int pr_val_warn(const char *, ...) CHECK_FORMAT(1, 2);
-/* Errors that trigger RPKI object rejection. */
-int pr_val_err(const char *, ...) CHECK_FORMAT(1, 2);
-int pr_val_errno(int, const char *, ...) CHECK_FORMAT(2, 3);
+/* Problems that trigger RPKI object rejection. */
+int __pr_val_err(int, const char *, ...) CHECK_FORMAT(2, 3);
+/* Like pr_val_err(), except it prints libcrypto's error stack as well. */
 int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 
+#define pr_val_err(fmt, ...) \
+	__pr_val_err(-EINVAL, fmt, ##__VA_ARGS__)
+#define pr_val_errno(error, fmt, ...) \
+	__pr_val_err(error, fmt ": %s", ##__VA_ARGS__, strerror(abs(error)))
+
+/* Like pr_*_err(), specific to out-of-memory situations. */
 int pr_enomem(void);
 /* Programming errors */
 __dead void pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
 
 int incidence(enum incidence_id, const char *, ...) CHECK_FORMAT(2, 3);
 
+/*
+ * Quick and dirty debugging messages.
+ *
+ * These are not meant to be uploaded; remember to delete them once the bug has
+ * been found.
+ */
 #define PR_DEBUG printf("%s:%d (%s())\n", __FILE__, __LINE__, __func__)
 #define PR_DEBUG_MSG(msg, ...) printf("%s:%d (%s()): " msg "\n", \
     __FILE__, __LINE__, __func__, ##__VA_ARGS__)

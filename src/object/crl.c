@@ -1,6 +1,7 @@
 #include "crl.h"
 
 #include <errno.h>
+#include <syslog.h>
 #include "algorithm.h"
 #include "extension.h"
 #include "log.h"
@@ -83,7 +84,7 @@ validate_revoked(X509_CRL *crl)
 			    i + 1);
 		}
 
-		if (log_val_debug_enabled())
+		if (log_val_enabled(LOG_DEBUG))
 			debug_revoked(serial_int);
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {

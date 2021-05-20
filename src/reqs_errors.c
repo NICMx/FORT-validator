@@ -1,7 +1,9 @@
 #include "reqs_errors.h"
 
 #include <pthread.h>
+#include <syslog.h>
 #include <time.h>
+
 #include "data_structure/uthash_nonfatal.h"
 #include "common.h"
 #include "config.h"
@@ -241,7 +243,7 @@ reqs_errors_log_uri(char const *uri)
 	unsigned int config_period;
 	int error;
 
-	if (log_op_debug_enabled())
+	if (log_op_enabled(LOG_DEBUG))
 		return true;
 
 	if (working_repo_peek_level() > LOG_REPO_LEVEL)

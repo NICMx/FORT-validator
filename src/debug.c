@@ -4,6 +4,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "log.h"
 
 /**
  * Important: -rdynamic needs to be enabled, otherwise this does not print
@@ -24,10 +25,10 @@ void print_stack_trace(void)
 	size = backtrace(array, STACK_SIZE);
 	strings = backtrace_symbols(array, size);
 
-	fprintf(stderr, "Stack trace:\n");
+	pr_op_err("Stack trace:");
 	for (i = 0; i < size; i++)
-		fprintf(stderr, "  %s\n", strings[i]);
-	fprintf(stderr, "(Stack size was %zu.)\n", size);
+		pr_op_err("  %s", strings[i]);
+	pr_op_err("(Stack size was %zu.)", size);
 
 	free(strings);
 }
@@ -35,7 +36,7 @@ void print_stack_trace(void)
 static void
 segfault_handler(int thingy)
 {
-	fprintf(stderr, "Segmentation Fault. ");
+	pr_op_err("Segmentation Fault.");
 	print_stack_trace();
 	exit(1);
 }
