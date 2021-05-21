@@ -1,12 +1,13 @@
 #include "log.h"
 
+#include <execinfo.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <signal.h>
 #include <syslog.h>
 #include <time.h>
 
 #include "config.h"
-#include "debug.h"
 #include "thread_var.h"
 
 struct level {
@@ -38,6 +39,77 @@ static struct log_config op_config;
 /* Configuration for the validation logs. */
 static struct log_config val_config;
 
+/*
+ * Note: Normally, fprintf and syslog would have separate locks.
+ *
+ * However, fprintf and syslog are rarely enabled at the same time, so I don't
+ * think it's worth it. So I'm reusing the lock.
+ */
+static pthread_mutex_t lock;
+
+/**
+ * Important: -rdynamic needs to be enabled, otherwise this does not print
+ * function names. See LDFLAGS_DEBUG in Makefile.am.
+ * Also: Only non-static functions will be labeled.
+ *
+ * During a segfault, the first three printed entries are usually not
+ * meaningful. Outside of a segfault, the first entry is not meaningful.
+ * (But I'm printing everything anyway due to paranoia.)
+ *
+ * @title is allowed to be NULL. If you need locking, do it outside. (And be
+ * aware that pthread_mutex_lock() can return error codes, which shouldn't
+ * prevent critical stack traces from printing.)
+ */
+void
+print_stack_trace(char const *title)
+{
+	/*
+	 * Keep this as low-level as possible. Do not employ helper functions,
+	 * even if this causes small inconsistencies.
+	 * Helper functions (ie. any functions declared by Fort) might end up
+	 * attempting to write another stack trace and cause infinite recursion.
+	 */
+
+#define STACK_SIZE 64
+
+	void *array[STACK_SIZE];
+	size_t size;
+	char **strings;
+	size_t i;
+	int fp;
+
+	size = backtrace(array, STACK_SIZE);
+	strings = backtrace_symbols(array, size);
+
+	if (op_config.fprintf_enabled) {
+		if (title != NULL)
+			fprintf(ERR.stream, "%s\n", title);
+		fprintf(ERR.stream, "Stack trace:\n");
+		for (i = 0; i < size; i++)
+			fprintf(ERR.stream, "  %s\n", strings[i]);
+		fprintf(ERR.stream, "(End of stack trace)\n");
+	}
+
+	if (op_config.syslog_enabled) {
+		fp = LOG_ERR | op_config.facility;
+		if (title != NULL)
+			syslog(fp, "%s", title);
+		syslog(fp, "Stack trace:");
+		for (i = 0; i < size; i++)
+			syslog(fp, "  %s", strings[i]);
+		syslog(fp, "(End of stack trace)");
+	}
+
+	free(strings);
+}
+
+static void
+segfault_handler(int thingy)
+{
+	print_stack_trace("Segmentation Fault.");
+	exit(1);
+}
+
 static void init_config(struct log_config *cfg)
 {
 	cfg->fprintf_enabled = true;
@@ -48,9 +120,17 @@ static void init_config(struct log_config *cfg)
 	cfg->facility = LOG_DAEMON;
 }
 
-void
+int
 log_setup(void)
 {
+	/*
+	 * Remember not to use any actual logging functions until logging has
+	 * been properly initialized.
+	 */
+
+	struct sigaction handler;
+	int error;
+
 	DBG.stream = stdout;
 	INF.stream = stdout;
 	WRN.stream = stderr;
@@ -62,6 +142,27 @@ log_setup(void)
 
 	init_config(&op_config);
 	init_config(&val_config);
+
+	error = pthread_mutex_init(&lock, NULL);
+	if (error) {
+		fprintf(ERR.stream, "pthread_mutex_init() returned %d: %s\n",
+		    error, strerror(abs(error)));
+		syslog(LOG_ERR | op_config.facility,
+		    "pthread_mutex_init() returned %d: %s",
+		    error, strerror(abs(error)));
+		return error;
+	}
+
+	/*
+	 * Register stack trace printer on segmentation fault listener.
+	 * Remember to enable -rdynamic (See print_stack_trace()).
+	 */
+	handler.sa_handler = segfault_handler;
+	sigemptyset(&handler.sa_mask);
+	handler.sa_flags = 0;
+	sigaction(SIGSEGV, &handler, NULL);
+
+	return 0;
 }
 
 static void
@@ -137,6 +238,7 @@ void
 log_teardown(void)
 {
 	log_disable_syslog();
+	pthread_mutex_destroy(&lock);
 }
 
 void
@@ -180,6 +282,36 @@ level2struct(int level)
 }
 
 static void
+lock_mutex(void)
+{
+	int error;
+
+	error = pthread_mutex_lock(&lock);
+	if (error) {
+		/*
+		 * Despite being supposed to be impossible, failing to lock the
+		 * mutex is not fatal; it just means we might log some mixed
+		 * messages, which is better than dying.
+		 *
+		 * Furthermore, this might have been called while logging
+		 * another critical. We must absolutely not get in the way of
+		 * that critical's print.
+		 */
+		print_stack_trace(strerror(error));
+	}
+}
+
+static void
+unlock_mutex(void)
+{
+	int error;
+
+	error = pthread_mutex_unlock(&lock);
+	if (error)
+		print_stack_trace(strerror(error)); /* Same as above. */
+}
+
+static void
 __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 {
 	char time_buff[20];
@@ -189,6 +321,8 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 	char const *file_name;
 
 	lvl = level2struct(level);
+
+	lock_mutex();
 
 	if (cfg->color)
 		fprintf(lvl->stream, "%s", lvl->color);
@@ -218,19 +352,23 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 	/* Force flush */
 	if (lvl->stream == stdout)
 		fflush(lvl->stream);
+
+	unlock_mutex();
 }
 
-#define MSG_LEN 512
+#define MSG_LEN 1024
 
 static void
 __syslog(int level, struct log_config *cfg, const char *format, va_list args)
 {
+	static char msg[MSG_LEN];
 	char const *file_name;
 	struct level const *lvl;
-	char msg[MSG_LEN];
 
 	file_name = fnstack_peek();
 	lvl = level2struct(level);
+
+	lock_mutex();
 
 	/* Can't use vsyslog(); it's not portable. */
 	vsnprintf(msg, MSG_LEN, format, args);
@@ -249,6 +387,8 @@ __syslog(int level, struct log_config *cfg, const char *format, va_list args)
 			syslog(level | cfg->facility, "%s: %s",
 			    lvl->label, msg);
 	}
+
+	unlock_mutex();
 }
 
 #define PR_SIMPLE(lvl, config)						\
@@ -356,7 +496,9 @@ crypto_err(struct log_config *cfg, int (*error_fn)(int, const char *, ...))
 	arg.error_fn = error_fn;
 	ERR_print_errors_cb(log_crypto_error, &arg);
 	if (arg.stack_size == 0)
-		error_fn(0,  "   <Empty>");
+		error_fn(0, "   <Empty>");
+	else
+		error_fn(0, "End of libcrypto stack.");
 
 	return -EINVAL;
 }
@@ -399,25 +541,17 @@ val_crypto_err(const char *format, ...)
 	return crypto_err(&val_config, __pr_val_err);
 }
 
-/**
- * This is an operation log
- **/
 int
 pr_enomem(void)
 {
-	pr_op_err("Out of memory.");
-	print_stack_trace();
-	exit(ENOMEM);
+	pr_crit("Out of memory.");
 }
 
-/**
- * This is an operation log
- **/
 __dead void
 pr_crit(const char *format, ...)
 {
-	PR_SIMPLE(LOG_CRIT, op_config);
-	print_stack_trace();
+	PR_SIMPLE(LOG_ERR, op_config);
+	print_stack_trace(NULL);
 	exit(-1);
 }
 

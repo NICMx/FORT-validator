@@ -39,18 +39,21 @@
 #define CHECK_FORMAT(str, args) /* Nothing */
 #endif
 
-/* Only call this group of functions when you know there's only one thread. */
-void log_setup(void);
+/*
+ * Only call this group of functions when you know there's only one thread.
+ *
+ * log_setup() is an incomplete initialization meant to be called when the
+ * program starts. Logging can be performed after log_setup(), but it will use
+ * default values.
+ * log_init() finishes initialization by loading the user's intended config.
+ * log_teardown() reverts initialization.
+ */
+int log_setup(void);
 void log_start(void);
 void log_teardown(void);
 
 /* Call to flush the stdout/stderr streams */
 void log_flush(void);
-
-/*
- * Please note: The log message (excluding pr_errno's strerror and libcrypto's
- * error stack) cannot exceed 512 bytes at present.
- */
 
 /*
  * Check if corresponding logging is enabled. You can use these to short-circuit
@@ -67,15 +70,22 @@ void pr_op_debug(const char *, ...) CHECK_FORMAT(1, 2);
 void pr_op_info(const char *, ...) CHECK_FORMAT(1, 2);
 /* Non-errors that suggest a problem. */
 int pr_op_warn(const char *, ...) CHECK_FORMAT(1, 2);
-/* Problematic situations that prevent Fort from doing its job. */
+/* Do not use this; see pr_op_err() and pr_op_errno(). */
 int __pr_op_err(int, const char *, ...) CHECK_FORMAT(2, 3);
+/*
+ * Problematic situations that prevent Fort from doing its job.
+ * (Always returns -EINVAL.)
+ */
+#define pr_op_err(fmt, ...) __pr_op_err(-EINVAL, fmt, ##__VA_ARGS__)
+/*
+ * Like pr_op_err(), but also prints strerror(error).
+ * (Always returns error).
+ */
+#define pr_op_errno(error, fmt, ...) \
+	__pr_op_err(error, fmt ": %s", ##__VA_ARGS__, strerror(abs(error)))
 /* Like pr_op_err(), except it prints libcrypto's error stack as well. */
 int op_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 
-#define pr_op_err(fmt, ...) \
-	__pr_op_err(-EINVAL, fmt, ##__VA_ARGS__)
-#define pr_op_errno(error, fmt, ...) \
-	__pr_op_err(error, fmt ": %s", ##__VA_ARGS__, strerror(abs(error)))
 
 /* == Validation logs == */
 
@@ -85,15 +95,18 @@ void pr_val_debug(const char *, ...) CHECK_FORMAT(1, 2);
 void pr_val_info(const char *, ...) CHECK_FORMAT(1, 2);
 /* Issues that did not trigger RPKI object rejection. */
 int pr_val_warn(const char *, ...) CHECK_FORMAT(1, 2);
-/* Problems that trigger RPKI object rejection. */
+/* Do not use this; see pr_val_err() and pr_val_errno(). */
 int __pr_val_err(int, const char *, ...) CHECK_FORMAT(2, 3);
-/* Like pr_val_err(), except it prints libcrypto's error stack as well. */
-int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
-
-#define pr_val_err(fmt, ...) \
-	__pr_val_err(-EINVAL, fmt, ##__VA_ARGS__)
+/* Problems that trigger RPKI object rejection. */
+#define pr_val_err(fmt, ...) __pr_val_err(-EINVAL, fmt, ##__VA_ARGS__)
+/*
+ * Like pr_val_err(), but also prints strerror(error).
+ * (Always returns error).
+ */
 #define pr_val_errno(error, fmt, ...) \
 	__pr_val_err(error, fmt ": %s", ##__VA_ARGS__, strerror(abs(error)))
+/* Like pr_val_err(), except it prints libcrypto's error stack as well. */
+int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 
 /* Like pr_*_err(), specific to out-of-memory situations. */
 int pr_enomem(void);

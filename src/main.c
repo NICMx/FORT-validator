@@ -1,6 +1,5 @@
 #include "clients.h"
 #include "config.h"
-#include "debug.h"
 #include "extension.h"
 #include "internal_pool.h"
 #include "nid.h"
@@ -44,8 +43,6 @@ static int
 __main(int argc, char **argv)
 {
 	int error;
-
-	print_stack_trace_on_segfault();
 
 	error = thvar_init();
 	if (error)
@@ -96,8 +93,12 @@ main(int argc, char **argv)
 {
 	int error;
 
-	log_setup();
+	error = log_setup();
+	if (error)
+		return error;
+
 	error = __main(argc, argv);
+
 	log_teardown();
 
 	return error;
