@@ -102,7 +102,8 @@ wait_for_parent_signal(struct thread_pool *pool, unsigned int thread_id)
 static void
 signal_to_parent(struct thread_pool *pool)
 {
-	panic_on_fail(pthread_cond_signal(&pool->worker2parent));
+	panic_on_fail(pthread_cond_signal(&pool->worker2parent),
+	    "pthread_cond_signal");
 }
 
 static void
@@ -115,7 +116,8 @@ wait_for_worker_signal(struct thread_pool *pool)
 static void
 signal_to_worker(struct thread_pool *pool)
 {
-	panic_on_fail(pthread_cond_signal(&pool->parent2worker));
+	panic_on_fail(pthread_cond_signal(&pool->parent2worker),
+	    "pthread_cond_signal");
 }
 
 static int
