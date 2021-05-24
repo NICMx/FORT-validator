@@ -44,8 +44,10 @@ static struct log_config val_config;
  *
  * However, fprintf and syslog are rarely enabled at the same time, so I don't
  * think it's worth it. So I'm reusing the lock.
+ *
+ * "log" + "lock" = "logck"
  */
-static pthread_mutex_t lock;
+static pthread_mutex_t logck;
 
 /**
  * Important: -rdynamic needs to be enabled, otherwise this does not print
@@ -143,7 +145,7 @@ log_setup(void)
 	init_config(&op_config);
 	init_config(&val_config);
 
-	error = pthread_mutex_init(&lock, NULL);
+	error = pthread_mutex_init(&logck, NULL);
 	if (error) {
 		fprintf(ERR.stream, "pthread_mutex_init() returned %d: %s\n",
 		    error, strerror(abs(error)));
@@ -238,7 +240,7 @@ void
 log_teardown(void)
 {
 	log_disable_syslog();
-	pthread_mutex_destroy(&lock);
+	pthread_mutex_destroy(&logck);
 }
 
 void
@@ -286,7 +288,7 @@ lock_mutex(void)
 {
 	int error;
 
-	error = pthread_mutex_lock(&lock);
+	error = pthread_mutex_lock(&logck);
 	if (error) {
 		/*
 		 * Despite being supposed to be impossible, failing to lock the
@@ -306,7 +308,7 @@ unlock_mutex(void)
 {
 	int error;
 
-	error = pthread_mutex_unlock(&lock);
+	error = pthread_mutex_unlock(&logck);
 	if (error)
 		print_stack_trace(strerror(error)); /* Same as above. */
 }

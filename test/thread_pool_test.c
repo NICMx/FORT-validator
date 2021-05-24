@@ -22,7 +22,7 @@ test_threads_work(unsigned int total_threads)
 	int i;
 	int error;
 
-	error = thread_pool_create(total_threads, &pool);
+	error = thread_pool_create("test pool", total_threads, &pool);
 	ck_assert_int_eq(error, 0);
 
 	/* Just a dummy array where each thread will modify one slot only */
@@ -33,7 +33,7 @@ test_threads_work(unsigned int total_threads)
 		data[i] = malloc(sizeof(int));
 		ck_assert_ptr_ne(data[i], NULL);
 		*data[i] = 0;
-		thread_pool_push(pool, thread_work, data[i]);
+		thread_pool_push(pool, "test task", thread_work, data[i]);
 	}
 
 	/* Wait for all to finish (~2 sec) */

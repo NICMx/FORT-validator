@@ -260,11 +260,6 @@ incidence_get_action(enum incidence_id id)
 	return INAC_ERROR;
 }
 
-void print_stack_trace(void)
-{
-	/* Nothing needed here */
-}
-
 /* Impersonate HTTP config */
 char const *
 config_get_http_user_agent(void)

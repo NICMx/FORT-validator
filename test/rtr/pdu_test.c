@@ -74,7 +74,9 @@ int
 send_error_report_pdu(int fd, uint8_t version, uint16_t code,
     struct rtr_request const *request, char *message)
 {
-	pr_op_info("    Server sent Error Report %u: '%s'", code, message);
+	pr_op_info("    Server sent Error Report %u: '%s'", code,
+	    /* gcc is complaining about logging NULL messages. WTF */
+	    (message != NULL) ? message : "");
 	return 0;
 }
 
