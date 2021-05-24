@@ -11,177 +11,232 @@
  * and from https://nachtimwald.com/2019/04/12/thread-pool-in-c/
  */
 
-/* Task to be done by each thread */
-struct task {
+/*
+ * Glossary:
+ *
+ * - Worker Thread: A thread in the pool.
+ * - Working Thread: A worker thread, currently doing work.
+ * - Parent Thread: The thread that owns the pool, and wants to defer work to
+ *   the worker threads.
+ * - Task: Work that will be handled by a Worker Thread.
+ */
+
+/* Task to be done by each Worker Thread. */
+struct thread_pool_task {
+	/*
+	 * Debugging purposes only. Uniqueness is not a requirement.
+	 * Will not be released by task_destroy().
+	 */
+	char const *name;
 	thread_pool_task_cb cb;
 	void *arg;
-	TAILQ_ENTRY(task) next;
+	TAILQ_ENTRY(thread_pool_task) next;
 };
 
-/* Tasks queue (utilized as FIFO) */
-TAILQ_HEAD(task_queue, task);
+/* A collection of Tasks, used as FIFO. */
+TAILQ_HEAD(task_queue, thread_pool_task);
 
 struct thread_pool {
+	/*
+	 * Debugging purposes only. Uniqueness is not a requirement.
+	 * Will not be released by thread_pool_destroy().
+	 */
+	char const *name;
 	pthread_mutex_t lock;
-	/* Work/wait conditions, utilized accordingly to their names */
-	pthread_cond_t working_cond;
-	pthread_cond_t waiting_cond;
-	/* Currently working thread */
+	/*
+	 * Used by the Parent Thread to wake up Worker Threads when there's
+	 * work.
+	 */
+	pthread_cond_t parent2worker;
+	/*
+	 * Used by Working Threads to signal the Parent Thread that workers are
+	 * ready (during initialization) or that all the work is done (after
+	 * initialization).
+	 */
+	pthread_cond_t worker2parent;
+	/* Number of Working Threads. */
 	unsigned int working_count;
-	/* Total number of spawned threads */
+	/* Number of Worker Threads. */
 	unsigned int thread_count;
-	/* Use to stop all the threads */
+	/*
+	 * Enable to signal all threads to stop.
+	 * (But all ongoing tasks will be completed first.)
+	 */
 	bool stop;
-	/* Queue of pending tasks to attend */
+	/*
+	 * Tasks registered by the Parent Thread, currently waiting for a
+	 * Worker Thread to claim them.
+	 */
 	struct task_queue queue;
 };
 
 static void
-thread_pool_lock(struct thread_pool *pool)
+panic_on_fail(int error, char const *function_name)
 {
-	int error;
-
-	error = pthread_mutex_lock(&(pool->lock));
 	if (error)
-		pr_crit("pthread_mutex_lock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
-		    error);
+		pr_crit("%s() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		    function_name, error);
 }
 
 static void
-thread_pool_unlock(struct thread_pool *pool)
+mutex_lock(struct thread_pool *pool)
 {
-	int error;
+	panic_on_fail(pthread_mutex_lock(&pool->lock), "pthread_mutex_lock");
+}
 
-	error = pthread_mutex_unlock(&(pool->lock));
-	if (error)
-		pr_crit("pthread_mutex_unlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
-		    error);
+static void
+mutex_unlock(struct thread_pool *pool)
+{
+	panic_on_fail(pthread_mutex_unlock(&pool->lock), "pthread_mutex_unlock");
+}
+
+/* Wait until the parent sends us work. */
+static void
+wait_for_parent_signal(struct thread_pool *pool, unsigned int thread_id)
+{
+	pr_op_debug("Thread %s.%u: Waiting for work...", pool->name, thread_id);
+	panic_on_fail(pthread_cond_wait(&pool->parent2worker, &pool->lock),
+	    "pthread_cond_wait");
+}
+
+static void
+signal_to_parent(struct thread_pool *pool)
+{
+	panic_on_fail(pthread_cond_signal(&pool->worker2parent));
+}
+
+static void
+wait_for_worker_signal(struct thread_pool *pool)
+{
+	panic_on_fail(pthread_cond_wait(&pool->worker2parent, &pool->lock),
+	    "pthread_cond_wait");
+}
+
+static void
+signal_to_worker(struct thread_pool *pool)
+{
+	panic_on_fail(pthread_cond_signal(&pool->parent2worker));
 }
 
 static int
-task_create(thread_pool_task_cb cb, void *arg, struct task **result)
+task_create(char const *name, thread_pool_task_cb cb, void *arg,
+    struct thread_pool_task **out)
 {
-	struct task *tmp;
+	struct thread_pool_task *task;
 
-	tmp = malloc(sizeof(struct task));
-	if (tmp == NULL)
+	task = malloc(sizeof(struct thread_pool_task));
+	if (task == NULL)
 		return pr_enomem();
 
-	tmp->cb = cb;
-	tmp->arg = arg;
+	task->name = name;
+	task->cb = cb;
+	task->arg = arg;
 
-	*result = tmp;
+	*out = task;
 	return 0;
 }
 
 static void
-task_destroy(struct task *task)
+task_destroy(struct thread_pool_task *task)
 {
 	free(task);
 }
 
-/* Get the TAIL, remove the ref from @queue, don't forget to free the task! */
-static struct task *
-task_queue_pull(struct task_queue *queue)
+/**
+ * Pops the tail of @queue. pthread_cond_signal() is technically allowed to wake
+ * more than one thread, so please keep in mind that the result might be NULL.
+ *
+ * Freeing the task is the caller's responsibility.
+ */
+static struct thread_pool_task *
+task_queue_pull(struct thread_pool *pool, unsigned int thread_id)
 {
-	struct task *tmp;
+	struct thread_pool_task *task;
 
-	tmp = TAILQ_LAST(queue, task_queue);
-	TAILQ_REMOVE(queue, tmp, next);
-	pr_op_debug("Pulling a task from the pool");
+	task = TAILQ_LAST(&pool->queue, task_queue);
+	if (task != NULL) {
+		TAILQ_REMOVE(&pool->queue, task, next);
+		pr_op_debug("Thread %s.%u: Claimed task '%s'", pool->name,
+		    thread_id, task->name);
+	} else {
+		pr_op_debug("Thread %s.%u: Claimed nothing", pool->name,
+		    thread_id);
+	}
 
-	return tmp;
+	return task;
 }
 
 /* Insert the task at the HEAD */
 static void
-task_queue_push(struct task_queue *queue, struct task *task)
+task_queue_push(struct thread_pool *pool, struct thread_pool_task *task)
 {
-	TAILQ_INSERT_HEAD(queue, task, next);
-	pr_op_debug("Pushing a task to the pool");
+	TAILQ_INSERT_HEAD(&pool->queue, task, next);
+	pr_op_debug("Pool '%s': Pushed task '%s'", pool->name, task->name);
 }
 
 /*
- * Poll for pending tasks at the pool queue. Called by each spawned thread.
+ * This is the core Working Thread function.
  *
- * Once a task is available, at least one thread of the pool will process it.
+ * In my opinion, "poll" is a bit of a misnomer. In this context, "poll"
+ * appears to mean four things:
  *
- * The call ends only if the pool wishes to be stopped.
+ * 1. Wait for work.
+ * 2. Claim the work.
+ * 3. Do the work.
+ * 4. Repeat until someone asks us to stop.
  */
 static void *
 tasks_poll(void *arg)
 {
 	struct thread_pool *pool = arg;
-	struct task *task;
+	struct thread_pool_task *task;
+	unsigned int thread_id;
 
-	/* The thread has started, send the signal */
-	thread_pool_lock(pool);
-	pthread_cond_signal(&(pool->waiting_cond));
+	mutex_lock(pool);
+	thread_id = pool->thread_count;
+
+	/* We're running; signal the Parent Thread. */
+	pool->thread_count++;
+	if (pool->thread_count == 1)
+		signal_to_parent(pool);
 
 	while (true) {
-		while (TAILQ_EMPTY(&(pool->queue)) && !pool->stop) {
-			pr_op_debug("Thread waiting for work...");
-			pthread_cond_wait(&(pool->working_cond), &(pool->lock));
-		}
+		while (TAILQ_EMPTY(&pool->queue) && !pool->stop)
+			wait_for_parent_signal(pool, thread_id);
 
 		if (pool->stop)
 			break;
 
-		/* Pull the tail */
-		task = task_queue_pull(&(pool->queue));
+		/* Claim the work. */
+		task = task_queue_pull(pool, thread_id);
 		pool->working_count++;
-		pr_op_debug("Working on task #%u", pool->working_count);
-		thread_pool_unlock(pool);
+		mutex_unlock(pool);
 
 		if (task != NULL) {
 			task->cb(task->arg);
-			/* Now releasing the task */
+			pr_op_debug("Thread %s.%u: Task '%s' ended", pool->name,
+			    thread_id, task->name);
 			task_destroy(task);
-			pr_op_debug("Task ended");
 		}
 
-		thread_pool_lock(pool);
+		mutex_lock(pool);
 		pool->working_count--;
-		if (!pool->stop && pool->working_count == 0 &&
-		    TAILQ_EMPTY(&(pool->queue)))
-			pthread_cond_signal(&(pool->waiting_cond));
+
+		if (pool->stop)
+			break;
+		/* If there's no more work left, wake up parent. */
+		if (pool->working_count == 0 && TAILQ_EMPTY(&pool->queue))
+			signal_to_parent(pool);
 	}
 
 	/* The thread will cease to exist */
 	pool->thread_count--;
-	pthread_cond_signal(&(pool->waiting_cond));
-	thread_pool_unlock(pool);
+	if (pool->thread_count == 0)
+		signal_to_parent(pool);
+	mutex_unlock(pool);
 
+	pr_op_debug("Thread %s.%u: Terminating.", pool->name, thread_id);
 	return NULL;
-}
-
-/*
- * Wait a couple of seconds to be sure the thread has started and is ready to
- * work
- */
-static int
-thread_pool_thread_wait_start(struct thread_pool *pool)
-{
-	struct timespec tmout = {
-	    .tv_sec = 0 ,
-	    .tv_nsec = 0
-	};
-	int error;
-
-	/* 2 seconds to start a thread */
-	clock_gettime(CLOCK_REALTIME, &tmout);
-	tmout.tv_sec += 2;
-
-	thread_pool_lock(pool);
-	error = pthread_cond_timedwait(&(pool->waiting_cond), &(pool->lock),
-	    &tmout);
-	if (error) {
-		thread_pool_unlock(pool);
-		return pr_op_errno(error, "Waiting thread to start");
-	}
-	thread_pool_unlock(pool);
-
-	return 0;
 }
 
 static int
@@ -212,46 +267,53 @@ thread_pool_attr_create(pthread_attr_t *attr)
 }
 
 static int
-tpool_thread_spawn(struct thread_pool *pool, pthread_attr_t *attr,
-    thread_pool_task_cb entry_point)
+spawn_threads(struct thread_pool *pool, unsigned int threads)
 {
-	pthread_t thread_id;
-	int error;
-
-	memset(&thread_id, 0, sizeof(pthread_t));
-
-	error = pthread_create(&thread_id, attr, entry_point, pool);
-	if (error)
-		return pr_op_errno(error, "Spawning pool thread");
-
-	error = thread_pool_thread_wait_start(pool);
-	if (error)
-		return error;
-
-	return 0;
-}
-
-int
-thread_pool_create(unsigned int threads, struct thread_pool **pool)
-{
-	struct thread_pool *tmp;
 	pthread_attr_t attr;
+	pthread_t thread_id;
 	unsigned int i;
 	int error;
 
-	tmp = malloc(sizeof(struct thread_pool));
-	if (tmp == NULL)
+	error = thread_pool_attr_create(&attr);
+	if (error)
+		return error;
+
+	for (i = 0; i < threads; i++) {
+		memset(&thread_id, 0, sizeof(pthread_t));
+		error = pthread_create(&thread_id, &attr, tasks_poll, pool);
+		if (error) {
+			error = pr_op_errno(error, "Spawning pool thread");
+			goto end;
+		}
+
+		pr_op_debug("Pool '%s': Thread #%u spawned", pool->name, i);
+	}
+
+end:
+	pthread_attr_destroy(&attr);
+	return error;
+}
+
+int
+thread_pool_create(char const *name, unsigned int threads,
+    struct thread_pool **pool)
+{
+	struct thread_pool *result;
+	int error;
+
+	result = malloc(sizeof(struct thread_pool));
+	if (result == NULL)
 		return pr_enomem();
 
 	/* Init locking */
-	error = pthread_mutex_init(&(tmp->lock), NULL);
+	error = pthread_mutex_init(&result->lock, NULL);
 	if (error) {
 		error = pr_op_errno(error, "Calling pthread_mutex_init()");
 		goto free_tmp;
 	}
 
 	/* Init conditional to signal pending work */
-	error = pthread_cond_init(&(tmp->working_cond), NULL);
+	error = pthread_cond_init(&result->parent2worker, NULL);
 	if (error) {
 		error = pr_op_errno(error,
 		    "Calling pthread_cond_init() at working condition");
@@ -259,44 +321,33 @@ thread_pool_create(unsigned int threads, struct thread_pool **pool)
 	}
 
 	/* Init conditional to signal no pending work */
-	error = pthread_cond_init(&(tmp->waiting_cond), NULL);
+	error = pthread_cond_init(&result->worker2parent, NULL);
 	if (error) {
 		error = pr_op_errno(error,
 		    "Calling pthread_cond_init() at waiting condition");
 		goto free_working_cond;
 	}
 
-	TAILQ_INIT(&(tmp->queue));
-	tmp->stop = false;
-	tmp->working_count = 0;
-	tmp->thread_count = 0;
+	TAILQ_INIT(&result->queue);
+	result->name = name;
+	result->stop = false;
+	result->working_count = 0;
+	result->thread_count = 0;
 
-	error = thread_pool_attr_create(&attr);
+	error = spawn_threads(result, threads);
 	if (error)
 		goto free_waiting_cond;
 
-	for (i = 0; i < threads; i++) {
-		error = tpool_thread_spawn(tmp, &attr, tasks_poll);
-		if (error) {
-			pthread_attr_destroy(&attr);
-			thread_pool_destroy(tmp);
-			return error;
-		}
-		tmp->thread_count++;
-		pr_op_debug("Pool thread #%u spawned", i);
-	}
-	pthread_attr_destroy(&attr);
-
-	*pool = tmp;
+	*pool = result;
 	return 0;
 free_waiting_cond:
-	pthread_cond_destroy(&(tmp->waiting_cond));
+	pthread_cond_destroy(&result->worker2parent);
 free_working_cond:
-	pthread_cond_destroy(&(tmp->working_cond));
+	pthread_cond_destroy(&result->parent2worker);
 free_mutex:
-	pthread_mutex_destroy(&(tmp->lock));
+	pthread_mutex_destroy(&result->lock);
 free_tmp:
-	free(tmp);
+	free(result);
 	return error;
 }
 
@@ -304,10 +355,10 @@ void
 thread_pool_destroy(struct thread_pool *pool)
 {
 	struct task_queue *queue;
-	struct task *tmp;
+	struct thread_pool_task *tmp;
 
 	/* Remove all pending work and send the signal to stop it */
-	thread_pool_lock(pool);
+	mutex_lock(pool);
 	queue = &(pool->queue);
 	while (!TAILQ_EMPTY(queue)) {
 		tmp = TAILQ_FIRST(queue);
@@ -315,16 +366,44 @@ thread_pool_destroy(struct thread_pool *pool)
 		task_destroy(tmp);
 	}
 	pool->stop = true;
-	pthread_cond_broadcast(&(pool->working_cond));
-	thread_pool_unlock(pool);
+	pthread_cond_broadcast(&pool->parent2worker);
+	mutex_unlock(pool);
 
 	/* Wait for all to end */
 	thread_pool_wait(pool);
 
-	pthread_cond_destroy(&(pool->waiting_cond));
-	pthread_cond_destroy(&(pool->working_cond));
-	pthread_mutex_destroy(&(pool->lock));
+	pthread_cond_destroy(&pool->worker2parent);
+	pthread_cond_destroy(&pool->parent2worker);
+	pthread_mutex_destroy(&pool->lock);
 	free(pool);
+}
+
+/*
+ * pthread_create() does not guarantee that the threads will have started by the
+ * time work needs to be done.
+ *
+ * If they haven't started, this function will add a little timeout.
+ *
+ * Lock must be held.
+ */
+static int validate_thread_count(struct thread_pool *pool)
+{
+	struct timespec tmout;
+	int error;
+
+	if (pool->thread_count != 0)
+		return 0;
+
+	/* Give the threads 2 more seconds */
+	clock_gettime(CLOCK_REALTIME, &tmout);
+	tmout.tv_sec += 2;
+	error = pthread_cond_timedwait(&pool->worker2parent, &pool->lock,
+	    &tmout);
+
+	if (pool->thread_count != 0)
+		return 0;
+
+	return pr_op_errno(error, "Waiting thread to start");
 }
 
 /*
@@ -332,22 +411,28 @@ thread_pool_destroy(struct thread_pool *pool)
  * @arg.
  */
 int
-thread_pool_push(struct thread_pool *pool, thread_pool_task_cb cb, void *arg)
+thread_pool_push(struct thread_pool *pool, char const *task_name,
+    thread_pool_task_cb cb, void *arg)
 {
-	struct task *task;
+	struct thread_pool_task *task;
 	int error;
 
-	task = NULL;
-	error = task_create(cb, arg, &task);
+	error = task_create(task_name, cb, arg, &task);
 	if (error)
 		return error;
 
-	thread_pool_lock(pool);
-	task_queue_push(&(pool->queue), task);
-	/* There's work to do! */
-	pthread_cond_signal(&(pool->working_cond));
-	thread_pool_unlock(pool);
+	mutex_lock(pool);
 
+	error = validate_thread_count(pool);
+	if (error) {
+		mutex_unlock(pool);
+		task_destroy(task);
+		return error;
+	}
+
+	task_queue_push(pool, task);
+	mutex_unlock(pool);
+	signal_to_worker(pool);
 	return 0;
 }
 
@@ -357,9 +442,9 @@ thread_pool_avail_threads(struct thread_pool *pool)
 {
 	bool result;
 
-	thread_pool_lock(pool);
+	mutex_lock(pool);
 	result = (pool->working_count < pool->thread_count);
-	thread_pool_unlock(pool);
+	mutex_unlock(pool);
 
 	return result;
 }
@@ -368,21 +453,31 @@ thread_pool_avail_threads(struct thread_pool *pool)
 void
 thread_pool_wait(struct thread_pool *pool)
 {
-	thread_pool_lock(pool);
+	mutex_lock(pool);
+
 	while (true) {
-		pr_op_debug("Waiting all tasks from the pool to end");
 		pr_op_debug("- Stop: %s", pool->stop ? "true" : "false");
 		pr_op_debug("- Working count: %u", pool->working_count);
 		pr_op_debug("- Thread count: %u", pool->thread_count);
-		pr_op_debug("- Empty queue: %s",
-		    TAILQ_EMPTY(&(pool->queue)) ? "true" : "false");
-		if ((!pool->stop &&
-		    (pool->working_count != 0 || !TAILQ_EMPTY(&(pool->queue)))) ||
-		    (pool->stop && pool->thread_count != 0))
-			pthread_cond_wait(&(pool->waiting_cond), &(pool->lock));
-		else
-			break;
+		pr_op_debug("- Empty task queue: %s",
+		    TAILQ_EMPTY(&pool->queue) ? "true" : "false");
+
+		if (pool->stop) {
+			/* Wait until all Working Threads are dead. */
+			if (pool->thread_count == 0)
+				break;
+		} else {
+			/* Wait until all Working Threads finish. */
+			if (pool->working_count == 0 &&
+			    TAILQ_EMPTY(&pool->queue))
+				break;
+		}
+
+		pr_op_debug("Pool '%s': Waiting for tasks to be completed",
+		    pool->name);
+		wait_for_worker_signal(pool);
 	}
-	thread_pool_unlock(pool);
-	pr_op_debug("Waiting has ended, all tasks have finished");
+
+	mutex_unlock(pool);
+	pr_op_debug("Pool '%s': Waiting has ended, all tasks done", pool->name);
 }

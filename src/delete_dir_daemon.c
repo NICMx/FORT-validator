@@ -290,7 +290,7 @@ delete_dir_daemon_start(char **roots, size_t roots_len, char const *workspace)
 	}
 
 	/* Thread arg is released at thread */
-	error = internal_pool_push(remove_from_root, (void *) arg);
+	error = internal_pool_push("Directory deleter", remove_from_root, arg);
 	if (error) {
 		rem_dirs_destroy(arg);
 		return error;

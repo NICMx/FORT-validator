@@ -749,7 +749,8 @@ __do_file_validation(char const *tal_file, void *arg)
 	thread->retry_local = true;
 	thread->sync_files = true;
 
-	error = thread_pool_push(t_param->pool, do_file_validation, thread);
+	error = thread_pool_push(t_param->pool, thread->tal_file,
+	    do_file_validation, thread);
 	if (error) {
 		pr_op_err("Couldn't push a thread to do files validation");
 		goto free_tal_file;

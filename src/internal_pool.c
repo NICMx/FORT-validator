@@ -20,7 +20,7 @@ internal_pool_init(void)
 	int error;
 
 	pool = NULL;
-	error = thread_pool_create(INTERNAL_POOL_MAX, &pool);
+	error = thread_pool_create("Internal", INTERNAL_POOL_MAX, &pool);
 	if (error)
 		return error;
 
@@ -28,9 +28,9 @@ internal_pool_init(void)
 }
 
 int
-internal_pool_push(thread_pool_task_cb cb, void *arg)
+internal_pool_push(char const *task_name, thread_pool_task_cb cb, void *arg)
 {
-	return thread_pool_push(pool, cb, arg);
+	return thread_pool_push(pool, task_name, cb, arg);
 }
 
 void
