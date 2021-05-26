@@ -1919,7 +1919,7 @@ force_aia_validation(struct rpki_uri *caIssuers, X509 *son)
 
 	/* RSYNC is still the preferred access mechanism, force the sync */
 	do {
-		error = download_files(caIssuers, false, true);
+		error = rsync_download_files(caIssuers, false, true);
 		if (!error)
 			break;
 		if (error == EREQFAILED) {
@@ -2131,7 +2131,7 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
 
 	/* Stop working on the RRDP local workspace */
 	db_rrdp_uris_workspace_disable();
-	error = download_files(sia_uris->caRepository.uri, false, false);
+	error = rsync_download_files(sia_uris->caRepository.uri, false, false);
 	if (error)
 		return error;
 
@@ -2556,7 +2556,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		 */
 		pr_val_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
 		    uri_val_get_printable(sia_uris.caRepository.uri));
-		error = download_files(sia_uris.caRepository.uri, false, true);
+		error = rsync_download_files(sia_uris.caRepository.uri, false, true);
 		if (error)
 			break;
 

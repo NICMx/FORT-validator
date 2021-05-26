@@ -1,6 +1,12 @@
 #ifndef SRC_VRPS_H_
 #define SRC_VRPS_H_
 
+/*
+ * "VRPs" = "Validated ROA Payloads." See RFC 6811.
+ *
+ * This module stores VRPs and their serials.
+ */
+
 #include <stdbool.h>
 #include "data_structure/array_list.h"
 #include "rtr/db/delta.h"

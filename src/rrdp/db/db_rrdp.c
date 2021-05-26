@@ -250,7 +250,6 @@ db_rrdp_reset_visited_tals(void)
 	rwlock_write_lock(&lock);
 	SLIST_FOREACH(found, &db.tals, next)
 		found->visited = false;
-
 	rwlock_unlock(&lock);
 }
 

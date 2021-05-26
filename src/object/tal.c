@@ -491,13 +491,6 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-static int
-handle_https_uri(struct rpki_uri *uri)
-{
-	return http_download_file(uri,
-	    reqs_errors_log_uri(uri_get_global(uri)));
-}
-
 /**
  * Performs the whole validation walkthrough on uri @uri, which is assumed to
  * have been extracted from a TAL.
@@ -535,38 +528,37 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	do {
-		if (!thread_arg->sync_files) {
-			/* Look for local files */
-			if (!valid_file_or_dir(uri_get_local(uri), true, false,
-			    __pr_val_err)) {
-				validation_destroy(state);
-				return 0; /* Error already logged */
-			}
-			break;
-		}
-		/* Trying to sync, considering that the sync can be disabled */
+	if (thread_arg->sync_files) {
 		if (uri_is_rsync(uri)) {
 			if (!config_get_rsync_enabled()) {
 				validation_destroy(state);
 				return 0; /* Soft error */
 			}
-			error = download_files(uri, true, false);
-			break;
+			error = rsync_download_files(uri, true, false);
+		} else /* HTTPS */ {
+			if (!config_get_http_enabled()) {
+				validation_destroy(state);
+				return 0; /* Soft error */
+			}
+			error = http_download_file(uri,
+			    reqs_errors_log_uri(uri_get_global(uri)));
 		}
-		if (!config_get_http_enabled()) {
-			validation_destroy(state);
-			return 0; /* Soft error */
-		}
-		error = handle_https_uri(uri);
-	} while (0);
 
-	/* Friendly reminder: there's a positive error - EREQFAILED */
-	if (error) {
-		working_repo_push(uri_get_global(uri));
-		validation_destroy(state);
-		return pr_val_warn("TAL URI '%s' could not be downloaded.",
-		    uri_val_get_printable(uri));
+		/* Reminder: there's a positive error: EREQFAILED */
+		if (error) {
+			working_repo_push(uri_get_global(uri));
+			validation_destroy(state);
+			return pr_val_warn(
+			    "TAL URI '%s' could not be downloaded.",
+			    uri_val_get_printable(uri));
+		}
+	} else {
+		/* Look for local files */
+		if (!valid_file_or_dir(uri_get_local(uri), true, false,
+		    __pr_val_err)) {
+			validation_destroy(state);
+			return 0; /* Error already logged */
+		}
 	}
 
 	/* At least one URI was sync'd */

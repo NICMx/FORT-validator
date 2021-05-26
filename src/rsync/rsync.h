@@ -6,7 +6,7 @@
 
 struct uri_list;
 
-int download_files(struct rpki_uri *, bool, bool);
+int rsync_download_files(struct rpki_uri *, bool, bool);
 int rsync_create(struct uri_list **);
 void rsync_destroy(struct uri_list *);
 

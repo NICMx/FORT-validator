@@ -18,8 +18,6 @@ static char const *const PFX_RSYNC = "rsync://";
 static char const *const PFX_HTTPS = "https://";
 
 /**
- * All rpki_uris are guaranteed to be RSYNC URLs right now.
- *
  * Design notes:
  *
  * Because we need to generate @local from @global, @global's allowed character

@@ -558,7 +558,7 @@ check_ancestor_error(struct rpki_uri *requested_uri)
  * validated the TA's public key.
  */
 int
-download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
+rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 {
 	/**
 	 * Note:

@@ -17,11 +17,6 @@
 #include "slurm/slurm_loader.h"
 #include "thread/thread_pool.h"
 
-/*
- * Storage of VRPs (term taken from RFC 6811 "Validated ROA Payload") and
- * Serials that contain such VRPs
- */
-
 #define START_SERIAL		0
 
 DEFINE_ARRAY_LIST_FUNCTIONS(deltas_db, struct delta_group, )
@@ -302,7 +297,8 @@ __vrps_update(bool *changed)
 	serial_t min_serial;
 	int error;
 
-	*changed = false;
+	if (changed)
+		*changed = false;
 	old_base = NULL;
 	new_base = NULL;
 
@@ -366,7 +362,8 @@ __vrps_update(bool *changed)
 		}
 	}
 
-	*changed = true;
+	if (changed)
+		*changed = true;
 	state.base = new_base;
 	state.next_serial++;
 

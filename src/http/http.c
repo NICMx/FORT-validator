@@ -42,44 +42,79 @@ http_cleanup(void)
 	curl_global_cleanup();
 }
 
+static void
+setopt_str(CURL *curl, CURLoption opt, char const *value)
+{
+	CURLcode result;
+
+	if (value == NULL)
+		return;
+
+	result = curl_easy_setopt(curl, opt, value);
+	if (result != CURLE_OK) {
+		fprintf(stderr, "curl_easy_setopt(%d, %s) returned %d: %s\n",
+		    opt, value, result, curl_easy_strerror(result));
+	}
+}
+
+static void
+setopt_long(CURL *curl, CURLoption opt, long value)
+{
+	CURLcode result;
+
+	result = curl_easy_setopt(curl, opt, value);
+	if (result != CURLE_OK) {
+		fprintf(stderr, "curl_easy_setopt(%d, %ld) returned %d: %s\n",
+		    opt, value, result, curl_easy_strerror(result));
+	}
+}
+
+static void
+setopt_writefunction(CURL *curl, http_write_cb cb, void *arg)
+{
+	CURLcode result;
+
+	result = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cb);
+	if (result != CURLE_OK) {
+		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
+		    CURLOPT_WRITEFUNCTION, result, curl_easy_strerror(result));
+	}
+
+	result = curl_easy_setopt(curl, CURLOPT_WRITEDATA, arg);
+	if (result != CURLE_OK) {
+		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
+		    CURLOPT_WRITEDATA, result, curl_easy_strerror(result));
+	}
+}
+
 static int
 http_easy_init(struct http_handler *handler)
 {
-	CURL *tmp;
+	CURL *result;
+	long timeout;
 
-	tmp = curl_easy_init();
-	if (tmp == NULL)
+	result = curl_easy_init();
+	if (result == NULL)
 		return pr_enomem();
 
-	/* Use header always */
-	if (config_get_http_user_agent() != NULL)
-		curl_easy_setopt(tmp, CURLOPT_USERAGENT,
-		    config_get_http_user_agent());
-	/* Only utilizes if indicated, otherwise use system default */
-	if (config_get_http_ca_path() != NULL)
-		curl_easy_setopt(tmp, CURLOPT_CAPATH,
-		    config_get_http_ca_path());
+	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
-	curl_easy_setopt(tmp, CURLOPT_CONNECTTIMEOUT,
+	setopt_long(result, CURLOPT_CONNECTTIMEOUT,
 	    config_get_http_connect_timeout());
-	curl_easy_setopt(tmp, CURLOPT_TIMEOUT,
+	setopt_long(result, CURLOPT_TIMEOUT,
 	    config_get_http_transfer_timeout());
-	if (config_get_http_idle_timeout() > 0) {
-		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_TIME,
-		    config_get_http_idle_timeout());
-		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_LIMIT, 1);
-	} else {
-		/* Disabled */
-		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_TIME, 0);
-		curl_easy_setopt(tmp, CURLOPT_LOW_SPEED_LIMIT, 0);
-	}
+
+	timeout = config_get_http_idle_timeout();
+	setopt_long(result, CURLOPT_LOW_SPEED_TIME, timeout);
+	setopt_long(result, CURLOPT_LOW_SPEED_LIMIT, !!timeout);
 
 	/* Always expect HTTPS usage */
-	curl_easy_setopt(tmp, CURLOPT_SSL_VERIFYHOST, 2);
-	curl_easy_setopt(tmp, CURLOPT_SSL_VERIFYPEER, 1);
+	setopt_long(result, CURLOPT_SSL_VERIFYHOST, 2L);
+	setopt_long(result, CURLOPT_SSL_VERIFYPEER, 1L);
+	setopt_str(result, CURLOPT_CAPATH, config_get_http_ca_path());
 
 	/* Currently all requests use GET */
-	curl_easy_setopt(tmp, CURLOPT_HTTPGET, 1);
+	setopt_long(result, CURLOPT_HTTPGET, 1L);
 
 	/*
 	 * Response codes >= 400 will be treated as errors
@@ -90,16 +125,15 @@ http_easy_init(struct http_handler *handler)
 	 *
 	 * Well, be ready for those scenarios when performing the requests.
 	 */
-	curl_easy_setopt(tmp, CURLOPT_FAILONERROR, 1L);
+	setopt_long(result, CURLOPT_FAILONERROR, 1L);
 
 	/* Refer to its error buffer */
-	curl_easy_setopt(tmp, CURLOPT_ERRORBUFFER, handler->errbuf);
+	setopt_str(result, CURLOPT_ERRORBUFFER, handler->errbuf);
 
 	/* Prepare for multithreading, avoid signals */
-	curl_easy_setopt(tmp, CURLOPT_NOSIGNAL, 1L);
+	setopt_long(result, CURLOPT_NOSIGNAL, 1L);
 
-	handler->curl = tmp;
-
+	handler->curl = result;
 	return 0;
 }
 
@@ -117,28 +151,61 @@ static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
     long *cond_met, bool log_operation, http_write_cb cb, void *arg)
 {
-	CURLcode res;
+	CURLcode res, res2;
 	long unmet = 0;
 
 	handler->errbuf[0] = 0;
-	curl_easy_setopt(handler->curl, CURLOPT_URL, uri);
-	curl_easy_setopt(handler->curl, CURLOPT_WRITEFUNCTION, cb);
-	curl_easy_setopt(handler->curl, CURLOPT_WRITEDATA, arg);
+	setopt_str(handler->curl, CURLOPT_URL, uri);
+	setopt_writefunction(handler->curl, cb, arg);
 
 	pr_val_debug("Doing HTTP GET to '%s'.", uri);
 	res = curl_easy_perform(handler->curl);
-	curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE, response_code);
+
+	res2 = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
+	    response_code);
+	if (res2 != CURLE_OK) {
+		return pr_op_err("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
+		    res2, curl_err_string(handler, res2), uri);
+	}
+
 	if (res == CURLE_OK) {
 		if (*response_code != HTTP_OK)
 			return 0;
+
 		/*
-		 * Scenario: Received an OK code, but the time condition wasn't
-		 * actually met, handle this as a "Not Modified" code.
-		 *
-		 * This check is due to old libcurl versions, where the impl
+		 * Scenario: Received an OK code, but the time condition
+		 * (if-modified-since) wasn't actually met (ie. the document
+		 * has not been modified since we last requested it), so handle
+		 * this as a "Not Modified" code.
+ 		 *
+ 		 * This check is due to old libcurl versions, where the impl
 		 * doesn't let us get the response content since the library
 		 * does the time validation, resulting in "The requested
 		 * document is not new enough".
+		 *
+		 * Update 2021-05-25: I just tested libcurl in my old CentOS 7.7
+		 * VM (which is from October 2019, ie. older than the comments
+		 * above), and it behaves normally.
+		 * Also, the changelog doesn't mention anything about
+		 * If-Modified-Since.
+		 * This glue code is suspicious to me.
+		 *
+		 * For the record, this is how it behaves in my today's Ubuntu,
+		 * as well as my Centos 7.7.1908:
+		 *
+		 * 	if if-modified-since is included:
+		 * 		if page was modified:
+		 * 			HTTP 200
+		 * 			unmet: 0
+		 * 			writefunction called
+		 * 		else:
+		 * 			HTTP 304
+		 * 			unmet: 1
+		 * 			writefunction not called
+		 * 	else:
+		 * 		HTTP OK
+		 * 		unmet: 0
+		 * 		writefunction called
 		 */
 		res = curl_easy_getinfo(handler->curl, CURLINFO_CONDITION_UNMET,
 		    &unmet);
@@ -229,8 +296,8 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 
 		/* Set "If-Modified-Since" header only if a value is specified */
 		if (ims_value > 0) {
-			curl_easy_setopt(handler.curl, CURLOPT_TIMEVALUE, ims_value);
-			curl_easy_setopt(handler.curl, CURLOPT_TIMECONDITION,
+			setopt_long(handler.curl, CURLOPT_TIMEVALUE, ims_value);
+			setopt_long(handler.curl, CURLOPT_TIMECONDITION,
 			    CURL_TIMECOND_IFMODSINCE);
 		}
 		error = http_fetch(&handler, uri_get_global(uri), response_code,
@@ -334,6 +401,17 @@ http_download_file_with_ims(struct rpki_uri *uri, long value,
 	 */
 	if (cond_met)
 		return 0;
+
+	/*
+	 * Situation:
+	 *
+	 * - old libcurl (because libcurl returned HTTP 200 and cond_met == 0,
+	 *   which is a contradiction)
+	 * - the download was successful (error == 0)
+	 * - the page WAS modified since the last update
+	 *
+	 * libcurl wrote an empty file, so we have to redownload.
+	 */
 
 	return __http_download_file(uri, &response, 0, &cond_met,
 	    log_operation);
