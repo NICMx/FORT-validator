@@ -274,9 +274,9 @@ upd_end:
  * were no errors, just return success; otherwise, return error code -EPERM.
  *
  * @data_updated will be true if:
- * - Delta files were processed
- * - Snapshot file was processed
- * - @uri was already visited at this cycle
+ * - Delta files were processed,
+ * - Snapshot file was processed,
+ * - or @uri was already visited at this cycle
  */
 int
 rrdp_load(struct rpki_uri *uri, bool *data_updated)

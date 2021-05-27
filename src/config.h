@@ -31,7 +31,6 @@ char const *config_get_local_repository(void);
 bool config_get_shuffle_tal_uris(void);
 unsigned int config_get_max_cert_depth(void);
 enum mode config_get_mode(void);
-bool config_get_work_offline(void);
 char const *config_get_http_user_agent(void);
 unsigned int config_get_http_connect_timeout(void);
 unsigned int config_get_http_transfer_timeout(void);

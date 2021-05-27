@@ -158,7 +158,7 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	setopt_str(handler->curl, CURLOPT_URL, uri);
 	setopt_writefunction(handler->curl, cb, arg);
 
-	pr_val_debug("Doing HTTP GET to '%s'.", uri);
+	pr_val_debug("HTTP GET: %s", uri);
 	res = curl_easy_perform(handler->curl);
 
 	res2 = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,

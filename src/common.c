@@ -189,7 +189,6 @@ bool
 valid_file_or_dir(char const *location, bool check_file, bool check_dir,
     int (*error_fn)(int error, const char *format, ...))
 {
-	FILE *file;
 	struct stat attr;
 	bool is_file, is_dir;
 	bool result;
@@ -197,19 +196,10 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 	if (!check_file && !check_dir)
 		pr_crit("Wrong usage, at least one check must be 'true'.");
 
-	result = false;
-	file = fopen(location, "rb");
-	if (file == NULL) {
+	if (stat(location, &attr) == -1) {
 		if (error_fn != NULL)
-			error_fn(errno, "Could not open location '%s'",
-			    location);
+			error_fn(errno, "stat(%s) failed", location);
 		return false;
-	}
-
-	if (fstat(fileno(file), &attr) == -1) {
-		if (error_fn != NULL)
-			error_fn(errno, "fstat(%s) failed", location);
-		goto end;
 	}
 
 	is_file = check_file && S_ISREG(attr.st_mode);
@@ -221,10 +211,6 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 		    (check_file && check_dir) ? "file or directory" :
 		    (check_file) ? "file" : "directory");
 
-end:
-	if (fclose(file) == -1)
-		if (error_fn != NULL)
-			error_fn(errno, "fclose() failed");
 	return result;
 }
 

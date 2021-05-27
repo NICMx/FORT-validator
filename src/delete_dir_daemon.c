@@ -69,7 +69,7 @@ traverse(char const *path, struct stat const *sb, int flag, struct FTW *ftwbuf)
 	}
 }
 
-static void *
+static void
 remove_from_root(void *arg)
 {
 	struct rem_dirs *root_arg = arg;
@@ -100,7 +100,6 @@ remove_from_root(void *arg)
 
 	pr_op_debug("Done removing dirs.");
 	free(dirs_arr);
-	return NULL;
 }
 
 /*

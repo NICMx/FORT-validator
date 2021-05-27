@@ -6,12 +6,11 @@
 #include "impersonator.c"
 #include "thread/thread_pool.c"
 
-static void *
+static void
 thread_work(void *arg)
 {
 	int *value = arg;
 	(*value) += 2;
-	return NULL;
 }
 
 static void

@@ -437,7 +437,7 @@ reject_client(int fd, struct sockaddr_storage *addr)
  * The client socket threads' entry routine.
  * @arg must be released.
  */
-static void *
+static void
 client_thread_cb(void *arg)
 {
 	struct pdu_metadata const *meta;
@@ -451,7 +451,7 @@ client_thread_cb(void *arg)
 	error = clients_add(param.fd, param.addr);
 	if (error) {
 		close(param.fd);
-		return NULL;
+		return;
 	}
 
 	while (true) { /* For each PDU... */
@@ -466,8 +466,6 @@ client_thread_cb(void *arg)
 	}
 
 	clients_forget(param.fd, end_client, CL_CLOSED);
-
-	return NULL;
 }
 
 static void
@@ -483,7 +481,7 @@ init_fdset(struct server_fds *fds, fd_set *fdset)
 /*
  * Waits for client connections and spawns threads to handle them.
  */
-static void *
+static void
 handle_client_connections(void *arg)
 {
 	struct sockaddr_storage client_addr;
@@ -533,7 +531,7 @@ handle_client_connections(void *arg)
 			case VERDICT_RETRY:
 				continue;
 			case VERDICT_EXIT:
-				return NULL;
+				return;
 			}
 
 			/*
@@ -578,8 +576,6 @@ handle_client_connections(void *arg)
 			}
 		}
 	} while (true);
-
-	return NULL;
 }
 
 static int

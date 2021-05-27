@@ -532,13 +532,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		if (uri_is_rsync(uri)) {
 			if (!config_get_rsync_enabled()) {
 				validation_destroy(state);
-				return 0; /* Soft error */
+				return 0; /* Try some other TAL URI */
 			}
 			error = rsync_download_files(uri, true, false);
 		} else /* HTTPS */ {
 			if (!config_get_http_enabled()) {
 				validation_destroy(state);
-				return 0; /* Soft error */
+				return 0; /* Try some other TAL URI */
 			}
 			error = http_download_file(uri,
 			    reqs_errors_log_uri(uri_get_global(uri)));
@@ -654,7 +654,7 @@ __handle_tal_uri_local(struct tal *tal, struct rpki_uri *uri, void *arg)
 	return handle_tal_uri(tal, uri, arg);
 }
 
-static void *
+static void
 do_file_validation(void *thread_arg)
 {
 	struct validation_thread *thread = thread_arg;
@@ -703,7 +703,6 @@ end:
 	working_repo_cleanup();
 	fnstack_cleanup();
 	thread->exit_status = error;
-	return NULL;
 }
 
 static void

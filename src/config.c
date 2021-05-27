@@ -1308,12 +1308,6 @@ config_get_server_queue(void)
 	return rpki_config.server.backlog;
 }
 
-bool
-config_get_work_offline(void)
-{
-	return rpki_config.work_offline;
-}
-
 unsigned int
 config_get_validation_interval(void)
 {
@@ -1455,7 +1449,7 @@ config_get_val_log_facility(void)
 bool
 config_get_rsync_enabled(void)
 {
-	return rpki_config.rsync.enabled;
+	return !rpki_config.work_offline && rpki_config.rsync.enabled;
 }
 
 unsigned int
@@ -1510,7 +1504,7 @@ config_get_rsync_args(bool is_ta)
 bool
 config_get_http_enabled(void)
 {
-	return rpki_config.http.enabled;
+	return !rpki_config.work_offline && rpki_config.http.enabled;
 }
 
 unsigned int
