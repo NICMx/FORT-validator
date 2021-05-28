@@ -18,7 +18,7 @@ validation_run_first(void)
 	if (config_get_mode() == SERVER)
 		pr_op_warn("First validation cycle has begun, wait until the next notification to connect your router(s)");
 	else
-		pr_op_info("The validation has begun.");
+		pr_op_warn("The validation has begun.");
 
 	error = vrps_update(NULL);
 	if (error)
@@ -27,7 +27,7 @@ validation_run_first(void)
 	if (config_get_mode() == SERVER)
 		pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
 	else
-		pr_op_info("The validation has successfully ended.");
+		pr_op_warn("The validation has successfully ended.");
 
 	return 0;
 }

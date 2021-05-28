@@ -135,9 +135,9 @@ log_setup(void)
 
 	DBG.stream = stdout;
 	INF.stream = stdout;
-	WRN.stream = stderr;
-	ERR.stream = stderr;
-	CRT.stream = stderr;
+	WRN.stream = stdout;
+	ERR.stream = stdout;
+	CRT.stream = stdout;
 	UNK.stream = stdout;
 
 	openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);

@@ -215,6 +215,7 @@ tasks_poll(void *arg)
 		mutex_unlock(pool);
 
 		if (task != NULL) {
+			PR_DEBUG;
 			task->cb(task->arg);
 			pr_op_debug("Thread %s.%u: Task '%s' ended", pool->name,
 			    thread_id, task->name);
