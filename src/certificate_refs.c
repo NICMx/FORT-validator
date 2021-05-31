@@ -102,3 +102,9 @@ refs_validate_ee(struct certificate_refs *refs, struct rpp const *pp,
 
 	return validate_signedObject(refs, uri);
 }
+
+int
+refs_validate_ee_checklist(struct certificate_refs *refs, struct rpp const *pp)
+{
+	return validate_cdp(refs, pp);
+}

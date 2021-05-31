@@ -494,32 +494,32 @@ uri_refput(struct rpki_uri *uri)
 }
 
 char const *
-uri_get_global(struct rpki_uri *uri)
+uri_get_global(struct rpki_uri const *uri)
 {
 	return uri->global;
 }
 
 char const *
-uri_get_local(struct rpki_uri *uri)
+uri_get_local(struct rpki_uri const *uri)
 {
 	return uri->local;
 }
 
 size_t
-uri_get_global_len(struct rpki_uri *uri)
+uri_get_global_len(struct rpki_uri const *uri)
 {
 	return uri->global_len;
 }
 
 bool
-uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
+uri_equals(struct rpki_uri const *u1, struct rpki_uri const *u2)
 {
 	return strcmp(u1->global, u2->global) == 0;
 }
 
 /* @ext must include the period. */
 bool
-uri_has_extension(struct rpki_uri *uri, char const *ext)
+uri_has_extension(struct rpki_uri const *uri, char const *ext)
 {
 	size_t ext_len;
 	int cmp;
@@ -533,13 +533,13 @@ uri_has_extension(struct rpki_uri *uri, char const *ext)
 }
 
 bool
-uri_is_certificate(struct rpki_uri *uri)
+uri_is_certificate(struct rpki_uri const *uri)
 {
 	return uri_has_extension(uri, ".cer");
 }
 
 bool
-uri_is_rsync(struct rpki_uri *uri)
+uri_is_rsync(struct rpki_uri const *uri)
 {
 	return uri->type == URI_RSYNC;
 }
@@ -552,7 +552,7 @@ get_filename(char const *file_path)
 }
 
 static char const *
-uri_get_printable(struct rpki_uri *uri, enum filename_format format)
+uri_get_printable(struct rpki_uri const *uri, enum filename_format format)
 {
 	switch (format) {
 	case FNF_GLOBAL:
@@ -568,7 +568,7 @@ uri_get_printable(struct rpki_uri *uri, enum filename_format format)
 }
 
 char const *
-uri_val_get_printable(struct rpki_uri *uri) {
+uri_val_get_printable(struct rpki_uri const *uri) {
 	enum filename_format format;
 
 	format = config_get_val_log_filename_format();
@@ -576,7 +576,7 @@ uri_val_get_printable(struct rpki_uri *uri) {
 }
 
 char const *
-uri_op_get_printable(struct rpki_uri *uri) {
+uri_op_get_printable(struct rpki_uri const *uri) {
 	enum filename_format format;
 
 	format = config_get_op_log_filename_format();

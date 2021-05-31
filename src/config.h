@@ -25,6 +25,7 @@ unsigned int config_get_interval_refresh(void);
 unsigned int config_get_interval_retry(void);
 unsigned int config_get_interval_expire(void);
 char const *config_get_slurm(void);
+char const *config_get_rsc(void);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);

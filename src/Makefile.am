@@ -81,6 +81,7 @@ fort_SOURCES += object/manifest.h object/manifest.c
 fort_SOURCES += object/name.h object/name.c
 fort_SOURCES += object/roa.h object/roa.c
 fort_SOURCES += object/router_key.c object/router_key.h
+fort_SOURCES += object/rsc.h object/rsc.c
 fort_SOURCES += object/signed_object.h object/signed_object.c
 fort_SOURCES += object/tal.h object/tal.c
 fort_SOURCES += object/vcard.h object/vcard.c

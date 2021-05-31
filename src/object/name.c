@@ -202,10 +202,10 @@ end:	x509_name_put(parent_subject);
 void
 x509_name_pr_debug(const char *prefix, X509_NAME *name)
 {
+	struct rfc5280_name *printable;
+
 	if (!log_val_enabled(LOG_DEBUG))
 		return;
-
-	struct rfc5280_name *printable;
 
 	if (name == NULL) {
 		pr_val_debug("%s: (null)", prefix);

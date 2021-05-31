@@ -9,7 +9,7 @@ struct signed_object {
 	struct signed_data sdata;
 };
 
-int signed_object_decode(struct signed_object *, struct rpki_uri *);
+int signed_object_decode(struct signed_object *, char const *);
 int signed_object_validate(struct signed_object *, struct oid_arcs const *,
     struct signed_object_args *);
 void signed_object_cleanup(struct signed_object *);

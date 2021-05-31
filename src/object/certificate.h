@@ -15,7 +15,8 @@ enum cert_type {
 	TA,		/* Trust Anchor */
 	CA,		/* Certificate Authority */
 	BGPSEC,		/* BGPsec certificates */
-	EE,		/* End Entity certificates */
+	EE,		/* End Entity certificates (Except Signed Checklist) */
+	EE_CHECKLIST,	/* End Entity certificate inside of Signed Checklist */
 };
 
 int certificate_load(struct rpki_uri *, X509 **);
@@ -52,6 +53,9 @@ int certificate_get_resources(X509 *, struct resources *, enum cert_type);
  */
 int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
     struct certificate_refs *, enum rpki_policy *);
+int certificate_validate_extensions_ee_checklist(X509 *cert,
+    OCTET_STRING_t *sid, struct certificate_refs *refs,
+    enum rpki_policy *policy);
 
 /*
  * Specific validation of AIA (rfc6487#section-4.8.7) extension, public so that

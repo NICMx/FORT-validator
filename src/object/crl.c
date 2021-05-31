@@ -114,7 +114,7 @@ static int
 validate_extensions(X509_CRL *crl)
 {
 	struct extension_handler handlers[] = {
-	   /* ext   reqd   handler        arg */
+	   /* ext        reqd   handler        arg */
 	    { ext_aki(), true,  handle_aki,              },
 	    { ext_cn(),  true,  handle_crlnum,           },
 	    { NULL },

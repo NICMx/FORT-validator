@@ -23,6 +23,7 @@
 #include "object/bgpsec.h"
 #include "object/name.h"
 #include "object/manifest.h"
+#include "object/rsc.h"
 #include "object/signed_object.h"
 #include "rrdp/rrdp_loader.h"
 #include "rsync/rsync.h"
@@ -128,7 +129,7 @@ validate_signature_algorithm(X509 *cert)
 }
 
 static int
-validate_issuer(X509 *cert, bool is_ta)
+validate_issuer(X509 *cert, enum cert_type type)
 {
 	X509_NAME *issuer;
 	struct rfc5280_name *name;
@@ -136,7 +137,7 @@ validate_issuer(X509 *cert, bool is_ta)
 
 	issuer = X509_get_issuer_name(cert);
 
-	if (!is_ta)
+	if (type != TA)
 		return validate_issuer_name("Certificate", issuer);
 
 	/* TODO wait. Shouldn't we check subject == issuer? */
@@ -209,7 +210,7 @@ cert_from_signed_object(struct rpki_uri *uri, uint8_t **result, int *size)
 	unsigned char *tmp;
 	int error;
 
-	error = signed_object_decode(&sobj, uri);
+	error = signed_object_decode(&sobj, uri_get_local(uri));
 	if (error)
 		return error;
 
@@ -531,7 +532,7 @@ certificate_validate_rfc6487(X509 *cert, enum cert_type type)
 		return error;
 
 	/* rfc6487#section-4.4 */
-	error = validate_issuer(cert, type == TA);
+	error = validate_issuer(cert, type);
 	if (error)
 		return error;
 
@@ -1071,7 +1072,7 @@ end:
 
 static int
 handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
-    bool allow_inherit)
+    enum cert_type type)
 {
 	ASN1_OCTET_STRING *string;
 	struct ASIdentifiers *ids;
@@ -1083,7 +1084,7 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
 	if (error)
 		return error;
 
-	error = resources_add_asn(resources, ids, allow_inherit);
+	error = resources_add_asn(resources, ids, type);
 
 	ASN_STRUCT_FREE(asn_DEF_ASIdentifiers, ids);
 	return error;
@@ -1092,7 +1093,7 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
 static int
 __certificate_get_resources(X509 *cert, struct resources *resources,
     int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
-    char const *policy_rfc, char const *bad_ext_rfc, bool allow_asn_inherit)
+    char const *policy_rfc, char const *bad_ext_rfc, enum cert_type type)
 {
 	X509_EXTENSION *ext;
 	int nid;
@@ -1129,8 +1130,7 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 				return pr_val_err("The AS extension is not marked as critical.");
 
 			pr_val_debug("ASN {");
-			error = handle_asn_extension(ext, resources,
-			    allow_asn_inherit);
+			error = handle_asn_extension(ext, resources, type);
 			pr_val_debug("}");
 			asn_ext_found = true;
 
@@ -1148,6 +1148,8 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 
 	if (!ip_ext_found && !asn_ext_found)
 		return pr_val_err("Certificate lacks both IP and AS extension.");
+	if (type == EE_CHECKLIST && !ip_ext_found)
+		return pr_val_err("Certificate lacks an IP extension.");
 
 	return 0;
 }
@@ -1164,12 +1166,12 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 		return __certificate_get_resources(cert, resources,
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
-		    "6484", "8360", type != BGPSEC);
+		    "6484", "8360", type);
 	case RPKI_POLICY_RFC8360:
 		return __certificate_get_resources(cert, resources,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
-		    "8360", "6484", type != BGPSEC);
+		    "8360", "6484", type);
 	}
 
 	pr_crit("Unknown policy: %u", policy);
@@ -1537,10 +1539,11 @@ handle_ad(char const *ia_name, SIGNATURE_INFO_ACCESS *ia,
     char const *ad_name, int ad_nid, int uri_flags, bool required,
     int (*cb)(struct rpki_uri *, uint8_t, void *), void *arg)
 {
-# define AD_METHOD ((uri_flags & URI_VALID_RSYNC) == URI_VALID_RSYNC ? \
+#define AD_METHOD ((uri_flags & URI_VALID_RSYNC) == URI_VALID_RSYNC ? \
 	"RSYNC" : \
 	(((uri_flags & URI_VALID_HTTPS) == URI_VALID_HTTPS) ? \
 	"HTTPS" : "RSYNC/HTTPS"))
+
 	ACCESS_DESCRIPTION *ad;
 	struct rpki_uri *uri;
 	bool found = false;
@@ -1886,6 +1889,34 @@ certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
 
 	ski_args.cert = cert;
 	ski_args.sid = sid;
+
+	return handle_extensions(handlers, X509_get0_extensions(cert));
+}
+
+int
+certificate_validate_extensions_ee_checklist(X509 *cert, OCTET_STRING_t *sid,
+    struct certificate_refs *refs, enum rpki_policy *policy)
+{
+	struct ski_arguments ski_args;
+	struct extension_handler handlers[] = {
+	   /* ext        reqd   handler        arg       */
+	    { ext_ski(), true,  handle_ski_ee, &ski_args },
+	    { ext_aki(), true,  handle_aki,              },
+	    { ext_ku(),  true,  handle_ku_ee,            },
+	    { ext_cdp(), true,  handle_cdp,    refs      },
+	    { ext_aia(), true,  handle_aia,    refs      },
+	    { ext_cp(),  true,  handle_cp,     policy    },
+	    { ext_ir(),  false, handle_ir,               },
+	    { ext_ar(),  false, handle_ar,               },
+	    { ext_ir2(), false, handle_ir,               },
+	    { ext_ar2(), false, handle_ar,               },
+	    { NULL },
+	};
+
+	ski_args.cert = cert;
+	ski_args.sid = sid;
+
+	/* TODO (RSC) make sure SIA does not exist. */
 
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
@@ -2399,6 +2430,31 @@ end:
 	return 0;
 }
 
+struct rsc_args {
+	struct rpp *pp;
+	struct rpki_uri *cert_uri;
+};
+
+static int
+check_rsc_uri(struct rpki_uri const *rsc_uri, void *_args)
+{
+	struct rsc_args *args = _args;
+
+	if (uri_equals(rsc_uri, args->cert_uri))
+		exit(rsc_traverse(args->pp));
+
+	return 0;
+}
+
+static void
+handle_rsc(struct validation *state, struct rpp *pp, struct rpki_uri *cert_uri)
+{
+	struct rsc_args args;
+	args.pp = pp;
+	args.cert_uri = cert_uri;
+	validation_foreach_rsc(state, check_rsc_uri, &args);
+}
+
 /** Boilerplate code for CA certificate validation and recursive traversal. */
 int
 certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
@@ -2464,6 +2520,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		pr_val_debug("Type: BGPsec EE");
 		break;
 	case EE:
+	case EE_CHECKLIST:
 		pr_val_debug("Type: unexpected, validated as CA");
 		break;
 	}
@@ -2573,6 +2630,9 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		x509stack_cancel(validation_certstack(state));
 		goto revert_uris;
 	}
+
+	if (config_get_rsc() != NULL)
+		handle_rsc(state, pp, cert_uri);
 
 	/* -- Validate & traverse the RPP (@pp) described by the manifest -- */
 	rpp_traverse(pp);

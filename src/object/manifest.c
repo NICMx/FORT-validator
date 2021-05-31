@@ -245,7 +245,7 @@ handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
 	fnstack_push_uri(uri);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, uri);
+	error = signed_object_decode(&sobj, uri_get_local(uri));
 	if (error)
 		goto revert_log;
 	error = decode_manifest(&sobj, &mft);
@@ -261,7 +261,7 @@ handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
 	error = rpp_crl(*pp, &crl);
 	if (error)
 		goto revert_rpp;
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
+	error = signed_object_args_init(&sobj_args, crl, false);
 	if (error)
 		goto revert_rpp;
 

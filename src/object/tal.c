@@ -29,6 +29,8 @@
 #include "rtr/db/vrps.h"
 #include "rrdp/db/db_rrdp.h"
 
+#include "object/rsc.h" /* TODO (RSC) delete */
+
 #define TAL_FILE_EXTENSION	".tal"
 typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
 
@@ -528,6 +530,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
+	/* TODO (RSC) dumb hack; move this. */
+	if (config_get_rsc() != NULL) {
+		error = rsc_store_aias();
+		if (error)
+			goto end;
+	}
+
 	if (thread_arg->sync_files) {
 		if (uri_is_rsync(uri)) {
 			if (!config_get_rsync_enabled()) {
@@ -767,6 +776,7 @@ perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 	struct validation_thread *thread;
 	int error, t_error;
 
+	/* TODO why is this stored in the heap? */
 	param = malloc(sizeof(struct tal_param));
 	if (param == NULL)
 		return pr_enomem();

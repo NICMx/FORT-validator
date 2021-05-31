@@ -41,5 +41,6 @@ void refs_cleanup(struct certificate_refs *);
 int refs_validate_ca(struct certificate_refs *, struct rpp const *);
 int refs_validate_ee(struct certificate_refs *, struct rpp const *,
     struct rpki_uri *);
+int refs_validate_ee_checklist(struct certificate_refs *, struct rpp const *);
 
 #endif /* SRC_CERTIFICATE_REFS_H_ */

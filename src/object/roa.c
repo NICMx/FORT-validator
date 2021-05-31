@@ -259,7 +259,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	fnstack_push_uri(uri);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, uri);
+	error = signed_object_decode(&sobj, uri_get_local(uri));
 	if (error)
 		goto revert_log;
 	error = decode_roa(&sobj, &roa);
@@ -270,7 +270,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_roa;
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
+	error = signed_object_args_init(&sobj_args, crl, false);
 	if (error)
 		goto revert_roa;
 
@@ -281,7 +281,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = __handle_roa(roa, sobj_args.res);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
+	error = refs_validate_ee(&sobj_args.refs, pp, uri);
 
 revert_args:
 	signed_object_args_cleanup(&sobj_args);

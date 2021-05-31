@@ -28,12 +28,16 @@ struct resources *resources_create(bool);
 void resources_destroy(struct resources *);
 
 int resources_add_ip(struct resources *, struct IPAddressFamily *);
-int resources_add_asn(struct resources *, struct ASIdentifiers *, bool);
+enum cert_type;
+int resources_add_asn(struct resources *, struct ASIdentifiers *,
+    enum cert_type);
 
 bool resources_empty(struct resources *);
 bool resources_contains_asn(struct resources *, unsigned long);
 bool resources_contains_ipv4(struct resources *, struct ipv4_prefix *);
 bool resources_contains_ipv6(struct resources *, struct ipv6_prefix *);
+bool resources_contains_range4(struct resources *, struct ipv4_range *);
+bool resources_contains_range6(struct resources *, struct ipv6_range *);
 
 enum rpki_policy resources_get_policy(struct resources *);
 void resources_set_policy(struct resources *, enum rpki_policy);

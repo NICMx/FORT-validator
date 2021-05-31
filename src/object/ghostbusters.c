@@ -29,7 +29,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	fnstack_push_uri(uri);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, uri);
+	error = signed_object_decode(&sobj, uri_get_local(uri));
 	if (error)
 		goto revert_log;
 
@@ -37,7 +37,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_sobj;
-	error = signed_object_args_init(&sobj_args, uri, crl, true);
+	error = signed_object_args_init(&sobj_args, crl, true);
 	if (error)
 		goto revert_sobj;
 
@@ -48,7 +48,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = handle_vcard(&sobj);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
+	error = refs_validate_ee(&sobj_args.refs, pp, uri);
 
 revert_args:
 	signed_object_args_cleanup(&sobj_args);

@@ -45,6 +45,17 @@ struct validation {
 	char addr_buffer2[INET6_ADDRSTRLEN];
 
 	struct validation_handler validation_handler;
+
+	/**
+	 * URI pointer array. If RSC validation is enabled, these are the Signed
+	 * Checklist's EE certificate's AIA URLs. Otherwise NULL.
+	 *
+	 * Fort needs to look for a CA certificate that matches one of these
+	 * URIs.
+	 */
+	struct rpki_uri **rsc_uris;
+	/** Size of the rsc_uris array. */
+	unsigned int rsc_uris_size;
 };
 
 /*
@@ -228,4 +239,27 @@ char const *
 validation_get_rrdp_workspace(struct validation *state)
 {
 	return state->rrdp_workspace;
+}
+
+int
+validation_foreach_rsc(struct validation *state, foreach_rsc_cb cb, void *arg)
+{
+	unsigned int i;
+	int status;
+
+	for (i = 0; i < state->rsc_uris_size; i++) {
+		status = cb(state->rsc_uris[i], arg);
+		if (status != 0)
+			return status;
+	}
+
+	return 0;
+}
+
+void
+validation_set_rsc_uris(struct validation *state, struct rpki_uri **uris,
+    unsigned int count)
+{
+	state->rsc_uris = uris;
+	state->rsc_uris_size = count;
 }

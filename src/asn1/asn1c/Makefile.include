@@ -1,4 +1,10 @@
 ASN_MODULE_SRCS=	\
+	asn1/asn1c/RpkiSignedChecklist.c	\
+	asn1/asn1c/FileNameAndHash.c	\
+	asn1/asn1c/ResourceBlock.c	\
+	asn1/asn1c/AsList.c	\
+	asn1/asn1c/IPList.c	\
+	asn1/asn1c/IPAddressFamilyItem.c	\
 	asn1/asn1c/IPAddrBlocks.c	\
 	asn1/asn1c/IPAddressFamily.c	\
 	asn1/asn1c/IPAddressChoice.c	\
@@ -63,6 +69,12 @@ ASN_MODULE_SRCS=	\
 	asn1/asn1c/BinaryTime.c
 
 ASN_MODULE_HDRS=	\
+	asn1/asn1c/RpkiSignedChecklist.h	\
+	asn1/asn1c/FileNameAndHash.h	\
+	asn1/asn1c/ResourceBlock.h	\
+	asn1/asn1c/AsList.h	\
+	asn1/asn1c/IPList.h	\
+	asn1/asn1c/IPAddressFamilyItem.h	\
 	asn1/asn1c/IPAddrBlocks.h	\
 	asn1/asn1c/IPAddressFamily.h	\
 	asn1/asn1c/IPAddressChoice.h	\

@@ -38,4 +38,9 @@ validation_get_validation_handler(struct validation *);
 struct db_rrdp_uri *validation_get_rrdp_uris(struct validation *);
 char const *validation_get_rrdp_workspace(struct validation *);
 
+typedef int (*foreach_rsc_cb)(struct rpki_uri const *, void *);
+int validation_foreach_rsc(struct validation *, foreach_rsc_cb, void *);
+void validation_set_rsc_uris(struct validation *, struct rpki_uri **,
+    unsigned int);
+
 #endif /* SRC_STATE_H_ */

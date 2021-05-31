@@ -55,6 +55,12 @@ struct rpki_config {
 	unsigned int maximum_certificate_depth;
 	/** File or directory where the .slurm file(s) is(are) located */
 	char *slurm;
+	/**
+	 * .sig file. If not null, triggers RCS validation
+	 * (draft-ietf-sidrops-rpki-rsc), which replaces the normal RPKI
+	 * validation.
+	 */
+	char *rsc;
 	/* Run as RTR server or standalone validation */
 	enum mode mode;
 	/*
@@ -325,6 +331,13 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, slurm),
 		.doc = "Path to the SLURM file or SLURMs directory (files must have the extension .slurm)",
 		.arg_doc = "<file>|<directory>"
+	}, {
+		.id = 1007,
+		.name = "rsc",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, rsc),
+		.doc = "Path to .sig file. Triggers RCS validation (draft-ietf-sidrops-rpki-rsc), which replaces the normal RPKI validation. Implies --mode standalone.",
+		.arg_doc = "<file>"
 	}, {
 		.id = 1004,
 		.name = "mode",
@@ -980,6 +993,7 @@ set_default_values(void)
 
 	rpki_config.tal = NULL;
 	rpki_config.slurm = NULL;
+	rpki_config.rsc = NULL;
 
 	rpki_config.local_repository = strdup("/tmp/fort/repository");
 	if (rpki_config.local_repository == NULL) {
@@ -1140,7 +1154,11 @@ validate_config(void)
 
 	if (rpki_config.slurm != NULL &&
 	    !valid_file_or_dir(rpki_config.slurm, true, true, __pr_op_err))
-		return pr_op_err("Invalid slurm location.");
+		return -EINVAL;
+
+	if (rpki_config.rsc != NULL &&
+	    !valid_file_or_dir(rpki_config.rsc, true, false, __pr_op_err))
+		return -EINVAL;
 
 	/* FIXME (later) Remove when sync-strategy is fully deprecated */
 	if (!rpki_config.rsync.enabled)
@@ -1286,6 +1304,10 @@ get_option_metadatas(void)
 enum mode
 config_get_mode(void)
 {
+	/* TODO meh, kinda rude. */
+	if (rpki_config.rsc != NULL)
+		return STANDALONE;
+
 	return rpki_config.mode;
 }
 
@@ -1336,6 +1358,12 @@ char const *
 config_get_slurm(void)
 {
 	return rpki_config.slurm;
+}
+
+char const *
+config_get_rsc(void)
+{
+	return rpki_config.rsc;
 }
 
 char const *

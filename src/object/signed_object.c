@@ -5,11 +5,11 @@
 #include "asn1/content_info.h"
 
 int
-signed_object_decode(struct signed_object *sobj, struct rpki_uri *uri)
+signed_object_decode(struct signed_object *sobj, char const *luri)
 {
 	int error;
 
-	error = content_info_load(uri, &sobj->cinfo);
+	error = content_info_load(luri, &sobj->cinfo);
 	if (error)
 		return error;
 

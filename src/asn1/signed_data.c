@@ -22,7 +22,6 @@ static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 int
 signed_object_args_init(struct signed_object_args *args,
-    struct rpki_uri *uri,
     STACK_OF(X509_CRL) *crls,
     bool force_inherit)
 {
@@ -30,7 +29,7 @@ signed_object_args_init(struct signed_object_args *args,
 	if (args->res == NULL)
 		return pr_enomem();
 
-	args->uri = uri;
+	args->cert_type = EE;
 	args->crls = crls;
 	memset(&args->refs, 0, sizeof(args->refs));
 	return 0;
@@ -95,13 +94,25 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	error = certificate_validate_chain(cert, args->crls);
 	if (error)
 		goto end2;
-	error = certificate_validate_rfc6487(cert, EE);
+	error = certificate_validate_rfc6487(cert, args->cert_type);
 	if (error)
 		goto end2;
-	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
-	    &policy);
+
+	switch (args->cert_type) {
+	case EE:
+		error = certificate_validate_extensions_ee(cert, sid,
+		    &args->refs, &policy);
+		break;
+	case EE_CHECKLIST:
+		error = certificate_validate_extensions_ee_checklist(cert, sid,
+		    &args->refs, &policy);
+		break;
+	default:
+		error = pr_val_err("Certificate type is not EE, even though we're validating a Signed Object.");
+	}
 	if (error)
 		goto end2;
+
 	error = certificate_validate_aia(args->refs.caIssuers, cert);
 	if (error)
 		goto end2;
@@ -110,7 +121,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 		goto end2;
 
 	resources_set_policy(args->res, policy);
-	error = certificate_get_resources(cert, args->res, EE);
+	error = certificate_get_resources(cert, args->res, args->cert_type);
 	if (error)
 		goto end2;
 

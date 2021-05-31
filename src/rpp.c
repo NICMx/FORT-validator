@@ -266,6 +266,9 @@ rpp_traverse(struct rpp *pp)
 	 */
 	__cert_traverse(pp);
 
+	if (config_get_rsc() != NULL)
+		return; /* In RSC runs, ROAs and Ghostbusters don't matter. */
+
 	/* Validate ROAs, apply validation_handler on them. */
 	ARRAYLIST_FOREACH(&pp->roas, uri, i)
 		roa_traverse(*uri, pp);

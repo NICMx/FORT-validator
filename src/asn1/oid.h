@@ -38,6 +38,7 @@ typedef asn_oid_arc_t OID[];
 #define OID_ROA                      { 1, 2, 840, 113549, 1, 9, 16, 1, 24 }
 #define OID_MANIFEST                 { 1, 2, 840, 113549, 1, 9, 16, 1, 26 }
 #define OID_GHOSTBUSTERS             { 1, 2, 840, 113549, 1, 9, 16, 1, 35 }
+#define OID_SIGNED_CHECKLIST         { 1, 2, 840, 113549, 1, 9, 16, 1, 48 }
 
 int oid2arcs(OBJECT_IDENTIFIER_t *, struct oid_arcs *);
 

@@ -535,7 +535,7 @@ add_asiors(struct resources *resources, struct ASIdentifiers *ids)
 
 int
 resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
-    bool allow_inherit)
+    enum cert_type type)
 {
 	if (ids->asnum == NULL)
 		return pr_val_err("ASN extension lacks 'asnum' element.");
@@ -544,7 +544,7 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
 
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
-		if (!allow_inherit)
+		if (type == BGPSEC)
 			return pr_val_err("ASIdentifierChoice %u isn't allowed",
 			    ids->asnum->present);
 		return inherit_asiors(resources);
@@ -581,6 +581,18 @@ bool
 resources_contains_ipv6(struct resources *res, struct ipv6_prefix *prefix)
 {
 	return res6_contains_prefix(res->ip6s, prefix);
+}
+
+bool
+resources_contains_range4(struct resources *res, struct ipv4_range *range)
+{
+	return res4_contains_range(res->ip4s, range);
+}
+
+bool
+resources_contains_range6(struct resources *res, struct ipv6_range *range)
+{
+	return res6_contains_range(res->ip6s, range);
 }
 
 enum rpki_policy

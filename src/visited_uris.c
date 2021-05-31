@@ -175,18 +175,15 @@ visited_uris_delete_local(struct visited_uris *uris, char const *workspace)
 
 	error = visited_uris_to_arr(uris, &roots);
 	if (error)
-		goto err;
+		goto end;
 
 	if (roots.len == 0)
-		goto success;
+		goto end; /* success */
 
 	error = delete_dir_daemon_start(roots.array, roots.len, workspace);
-	if (error)
-		goto err;
-success:
-	uris_roots_cleanup(&roots, uris_root_destroy);
-	return 0;
-err:
+	/* Fall through*/
+
+end:
 	uris_roots_cleanup(&roots, uris_root_destroy);
 	return error;
 }
