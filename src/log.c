@@ -546,6 +546,7 @@ val_crypto_err(const char *format, ...)
 int
 pr_enomem(void)
 {
+	/* TODO this being a critical is not acceptable */
 	pr_crit("Out of memory.");
 }
 

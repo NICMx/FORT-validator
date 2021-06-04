@@ -15,6 +15,11 @@
 #include "str_token.h"
 #include "thread_var.h"
 
+#define TA_DEBUG \
+	do { if (is_ta) PR_DEBUG; } while (0)
+#define TA_DEBUG_MSG(fmt, ...) \
+	do { if (is_ta) PR_DEBUG_MSG(fmt, ##__VA_ARGS__); } while (0)
+
 struct uri {
 	struct rpki_uri *uri;
 	SLIST_ENTRY(uri) next;
@@ -164,7 +169,7 @@ get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
 		    : handle_root_strategy(requested_uri, rsync_uri);
 	case RSYNC_STRICT:
 		return handle_strict_strategy(requested_uri, rsync_uri);
-	default:
+	case RSYNC_OFF:
 		break;
 	}
 
@@ -381,9 +386,10 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	if (error)
 		return error;
 
-	pr_val_debug("Executing RSYNC:");
-	for (i = 0; i < args_len + 1; i++)
-		pr_val_debug("    %s", args[i]);
+	TA_DEBUG_MSG("Executing RSYNC:");
+	for (i = 0; i < args_len + 1; i++) {
+		TA_DEBUG_MSG("    %s", args[i]);
+	}
 
 	retries = 0;
 	do {
@@ -392,12 +398,18 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		if (error)
 			goto release_args;
 
+		TA_DEBUG;
+
 		error = create_pipes(fork_fds);
-		if (error)
+		if (error) {
+			TA_DEBUG_MSG("%d", error);
 			goto release_args;
+		}
 
 		/* Flush output (avoid locks between father and child) */
 		log_flush();
+
+		TA_DEBUG;
 
 		/* We need to fork because execvp() magics the thread away. */
 		child_pid = fork();
@@ -425,15 +437,21 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			goto release_args;
 		}
 
+		TA_DEBUG;
+
 		/* This code is run by us. */
 		error = read_pipes(fork_fds, log_operation);
-		if (error)
+		if (error) {
+			TA_DEBUG;
 			kill(child_pid, SIGCHLD); /* Stop the child */
+			TA_DEBUG;
+		}
 
 		error = waitpid(child_pid, &child_status, 0);
 		do {
 			if (error == -1) {
 				error = errno;
+				TA_DEBUG_MSG("%d", error);
 				pr_op_err("The rsync sub-process returned error %d (%s)",
 				    error, strerror(error));
 				if (child_status > 0)
@@ -445,6 +463,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		if (WIFEXITED(child_status)) {
 			/* Happy path (but also sad path sometimes). */
 			error = WEXITSTATUS(child_status);
+			TA_DEBUG_MSG("%d", error);
 			pr_val_debug("Child terminated with error code %d.",
 			    error);
 			if (error == -ENOMEM)
@@ -454,6 +473,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 				goto release_args;
 
 			if (retries == config_get_rsync_retry_count()) {
+				PR_DEBUG_MSG("%u", retries);
 				pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 				    retries, uri_get_global(uri));
 				error = EREQFAILED;
@@ -463,6 +483,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			    uri_get_global(uri),
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
+			PR_DEBUG;
 			retries++;
 			sleep(config_get_rsync_retry_interval());
 			continue;
@@ -473,6 +494,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	release_args(args, args_len);
 
 	if (WIFSIGNALED(child_status)) {
+		TA_DEBUG_MSG("%d", WTERMSIG(child_status));
 		switch (WTERMSIG(child_status)) {
 		case SIGINT:
 			pr_op_err("RSYNC was user-interrupted. Guess I'll interrupt myself too.");
@@ -491,9 +513,11 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		return -EINTR; /* Meh? */
 	}
 
+	TA_DEBUG_MSG("%d", WIFSIGNALED(child_status));
 	pr_op_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
 	return -EINVAL;
 release_args:
+	TA_DEBUG_MSG("%d", error);
 	/* The happy path also falls here */
 	release_args(args, args_len);
 	return error;
@@ -572,59 +596,87 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	bool to_op_log;
 	int error;
 
-	if (!config_get_rsync_enabled())
+	if (!config_get_rsync_enabled()) {
+		TA_DEBUG;
 		return 0;
+	}
+	TA_DEBUG;
 
 	state = state_retrieve();
-	if (state == NULL)
+	if (state == NULL) {
+		TA_DEBUG;
 		return -EINVAL;
+	}
+	TA_DEBUG;
 
 	visited_uris = validation_rsync_visited_uris(state);
+
+	TA_DEBUG;
 
 	if (!force && is_already_downloaded(requested_uri, visited_uris)) {
 		pr_val_debug("No need to redownload '%s'.",
 		    uri_val_get_printable(requested_uri));
+		TA_DEBUG;
 		return check_ancestor_error(requested_uri);
 	}
 
-	if (!force)
+	if (!force) {
+		TA_DEBUG;
 		error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
-	else {
+		TA_DEBUG_MSG("%d", error);
+	} else {
+		TA_DEBUG;
 		error = check_ancestor_error(requested_uri);
-		if (error)
+		if (error) {
+			TA_DEBUG;
 			return error;
+		}
+		TA_DEBUG;
 		error = handle_strict_strategy(requested_uri, &rsync_uri);
+		TA_DEBUG_MSG("%d", error);
 	}
 
-	if (error)
+	if (error) {
+		TA_DEBUG;
 		return error;
+	}
 
 	pr_val_debug("Going to RSYNC '%s'.", uri_val_get_printable(rsync_uri));
+	TA_DEBUG;
 
 	to_op_log = reqs_errors_log_uri(uri_get_global(rsync_uri));
+	TA_DEBUG_MSG("%d", to_op_log);
 	error = do_rsync(rsync_uri, is_ta, to_op_log);
+	TA_DEBUG_MSG("%d", error);
 	switch(error) {
 	case 0:
 		/* Don't store when "force" and if its already downloaded */
-		if (!(force && is_already_downloaded(rsync_uri, visited_uris)))
+		if (!(force && is_already_downloaded(rsync_uri, visited_uris))) {
+			TA_DEBUG;
 			error = mark_as_downloaded(rsync_uri, visited_uris);
+			TA_DEBUG_MSG("%d", error);
+		}
 		reqs_errors_rem_uri(uri_get_global(rsync_uri));
+		TA_DEBUG;
 		break;
 	case EREQFAILED:
 		/* All attempts failed, avoid future requests */
 		error = reqs_errors_add_uri(uri_get_global(rsync_uri));
-		if (error)
+		if (error) {
+			TA_DEBUG_MSG("%d", error);
 			break;
+		}
+		TA_DEBUG;
 		error = mark_as_downloaded(rsync_uri, visited_uris);
+		TA_DEBUG_MSG("%d", error);
 		/* Everything went ok? Return the original error */
 		if (!error)
 			error = EREQFAILED;
 		break;
-	default:
-		break;
 	}
 
 	uri_refput(rsync_uri);
+	TA_DEBUG;
 	return error;
 }
 

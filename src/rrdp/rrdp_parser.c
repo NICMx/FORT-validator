@@ -104,7 +104,7 @@ download_file(struct rpki_uri *uri, long last_update, bool log_operation)
 		error = http_download_file_with_ims(uri, last_update,
 		    log_operation);
 	else
-		error = http_download_file(uri, log_operation);
+		error = http_download_file(uri, log_operation, false);
 
 	/*
 	 * Since distinct files can be downloaded (notification, snapshot,

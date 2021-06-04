@@ -10,6 +10,11 @@
 #include "file.h"
 #include "log.h"
 
+#define TA_DEBUG \
+	do { if (is_ta) PR_DEBUG; } while (0)
+#define TA_DEBUG_MSG(fmt, ...) \
+	do { if (is_ta) PR_DEBUG_MSG(fmt, ##__VA_ARGS__); } while (0)
+
 /* HTTP Response Code 200 (OK) */
 #define HTTP_OK			200
 /* HTTP Response Code 304 (Not Modified) */
@@ -149,28 +154,36 @@ curl_err_string(struct http_handler *handler, CURLcode res)
  */
 static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
-    long *cond_met, bool log_operation, http_write_cb cb, void *arg)
+    long *cond_met, bool log_operation, http_write_cb cb, void *arg, bool is_ta)
 {
 	CURLcode res, res2;
 	long unmet = 0;
+
+	TA_DEBUG;
+	TA_DEBUG_MSG("%s %d", uri, log_operation);
 
 	handler->errbuf[0] = 0;
 	setopt_str(handler->curl, CURLOPT_URL, uri);
 	setopt_writefunction(handler->curl, cb, arg);
 
-	pr_val_debug("HTTP GET: %s", uri);
+	TA_DEBUG_MSG("HTTP GET: %s", uri);
 	res = curl_easy_perform(handler->curl);
+	TA_DEBUG_MSG("%d", res);
 
 	res2 = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
 	    response_code);
+	TA_DEBUG_MSG("%d", res2);
 	if (res2 != CURLE_OK) {
 		return pr_op_err("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
 		    res2, curl_err_string(handler, res2), uri);
 	}
 
+	TA_DEBUG_MSG("%ld", *response_code);
 	if (res == CURLE_OK) {
-		if (*response_code != HTTP_OK)
+		if (*response_code != HTTP_OK) {
+			TA_DEBUG;
 			return 0;
+		}
 
 		/*
 		 * Scenario: Received an OK code, but the time condition
@@ -207,22 +220,29 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		 * 		unmet: 0
 		 * 		writefunction called
 		 */
+		TA_DEBUG;
 		res = curl_easy_getinfo(handler->curl, CURLINFO_CONDITION_UNMET,
 		    &unmet);
 		if (res == CURLE_OK && unmet == 1)
 			*cond_met = 0;
+		TA_DEBUG_MSG("%ld", unmet);
 		return 0;
 	}
 
-	if (*response_code >= HTTP_BAD_REQUEST)
+	if (*response_code >= HTTP_BAD_REQUEST) {
+		TA_DEBUG;
 		return pr_val_err("Error requesting URL %s (received HTTP code %ld): %s",
 		    uri, *response_code, curl_err_string(handler, res));
+	}
 
 	pr_val_err("Error requesting URL %s: %s", uri,
 	    curl_err_string(handler, res));
-	if (log_operation)
+	TA_DEBUG;
+	if (log_operation) {
+		TA_DEBUG;
 		pr_op_err("Error requesting URL %s: %s", uri,
 		    curl_err_string(handler, res));
+	}
 
 	return EREQFAILED;
 }
@@ -249,7 +269,7 @@ write_cb(unsigned char *content, size_t size, size_t nmemb, void *arg)
 
 static int
 __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
-    long *cond_met, bool log_operation)
+    long *cond_met, bool log_operation, bool is_ta)
 {
 	char const *tmp_suffix = "_tmp";
 	struct http_handler handler;
@@ -264,16 +284,24 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 	*cond_met = 1;
 	if (!config_get_http_enabled()) {
 		*response_code = 0; /* Not 200 code, but also not an error */
+		TA_DEBUG;
 		return 0;
 	}
 
+	TA_DEBUG;
+
 	original_file = uri_get_local(uri);
 	tmp_file = strdup(original_file);
-	if (tmp_file == NULL)
+	if (tmp_file == NULL) {
+		TA_DEBUG;
 		return pr_enomem();
+	}
+
+	TA_DEBUG;
 
 	tmp = realloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
 	if (tmp == NULL) {
+		TA_DEBUG;
 		error = pr_enomem();
 		goto release_tmp;
 	}
@@ -281,35 +309,55 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 	tmp_file = tmp;
 	strcat(tmp_file, tmp_suffix);
 
+	TA_DEBUG;
+
 	error = create_dir_recursive(tmp_file);
-	if (error)
+	if (error) {
+		TA_DEBUG_MSG("%d", error);
 		goto release_tmp;
+	}
+
+	TA_DEBUG;
 
 	error = file_write(tmp_file, &out, &stat);
-	if (error)
+	if (error) {
+		TA_DEBUG_MSG("%d", error);
 		goto delete_dir;
+	}
 
 	do {
+		TA_DEBUG;
+
 		error = http_easy_init(&handler);
-		if (error)
+		if (error) {
+			TA_DEBUG_MSG("%d", error);
 			goto close_file;
+		}
 
 		/* Set "If-Modified-Since" header only if a value is specified */
 		if (ims_value > 0) {
+			TA_DEBUG_MSG("%ld", ims_value);
 			setopt_long(handler.curl, CURLOPT_TIMEVALUE, ims_value);
 			setopt_long(handler.curl, CURLOPT_TIMECONDITION,
 			    CURL_TIMECOND_IFMODSINCE);
+			TA_DEBUG;
 		}
 		error = http_fetch(&handler, uri_get_global(uri), response_code,
-		    cond_met, log_operation, write_cb, out);
-		if (error != EREQFAILED)
+		    cond_met, log_operation, write_cb, out, is_ta);
+		if (error != EREQFAILED) {
+			TA_DEBUG_MSG("%d", error);
 			break;
+		}
+
+		TA_DEBUG_MSG("%d", error);
 
 		if (retries == config_get_http_retry_count()) {
+			TA_DEBUG_MSG("%u", retries);
 			pr_val_warn("Max HTTP retries (%u) reached requesting for '%s', won't retry again.",
 			    retries, uri_get_global(uri));
 			break;
 		}
+		TA_DEBUG;
 		pr_val_warn("Retrying HTTP request '%s' in %u seconds, %u attempts remaining.",
 		    uri_get_global(uri),
 		    config_get_http_retry_interval(),
@@ -322,17 +370,25 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 	http_easy_cleanup(&handler);
 	file_close(out);
 
-	if (error)
+	if (error) {
+		TA_DEBUG_MSG("%d", error);
 		goto delete_dir;
+	}
+
+	TA_DEBUG;
+	TA_DEBUG_MSG("%s %s", tmp_file, original_file);
 
 	/* Overwrite the original file */
 	error = rename(tmp_file, original_file);
 	if (error) {
 		error = errno;
+		TA_DEBUG_MSG("%d", error);
 		pr_val_errno(error, "Renaming temporal file from '%s' to '%s'",
 		    tmp_file, original_file);
 		goto delete_dir;
 	}
+
+	TA_DEBUG;
 
 	free(tmp_file);
 	return 0;
@@ -342,6 +398,7 @@ delete_dir:
 	delete_dir_recursive_bottom_up(tmp_file);
 release_tmp:
 	free(tmp_file);
+	TA_DEBUG_MSG("%d", error);
 	return ENSURE_NEGATIVE(error);
 }
 
@@ -353,12 +410,12 @@ release_tmp:
  * request to the server failed.
  */
 int
-http_download_file(struct rpki_uri *uri, bool log_operation)
+http_download_file(struct rpki_uri *uri, bool log_operation, bool is_ta)
 {
 	long response;
 	long cond_met;
 	return __http_download_file(uri, &response, 0, &cond_met,
-	    log_operation);
+	    log_operation, is_ta);
 }
 
 /*
@@ -383,7 +440,7 @@ http_download_file_with_ims(struct rpki_uri *uri, long value,
 	int error;
 
 	error = __http_download_file(uri, &response, value, &cond_met,
-	    log_operation);
+	    log_operation, false);
 	if (error)
 		return error;
 
@@ -414,7 +471,7 @@ http_download_file_with_ims(struct rpki_uri *uri, long value,
 	 */
 
 	return __http_download_file(uri, &response, 0, &cond_met,
-	    log_operation);
+	    log_operation, false);
 
 }
 
@@ -458,7 +515,7 @@ http_direct_download(char const *remote, char const *dest)
 	response_code = 0;
 	cond_met = 0;
 	error = http_fetch(&handler, remote, &response_code, &cond_met, true,
-	    write_cb, out);
+	    write_cb, out, false);
 	http_easy_cleanup(&handler);
 	file_close(out);
 	if (error)

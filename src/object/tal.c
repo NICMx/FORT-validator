@@ -519,25 +519,18 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	struct deferred_cert deferred;
 	int error;
 
-	PR_DEBUG;
-
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
 	validation_handler.arg = thread_arg->arg;
 
-	PR_DEBUG;
-
 	error = validation_prepare(&state, tal, &validation_handler);
-	if (error) {
-		PR_DEBUG_MSG("%d", error);
+	if (error)
 		return ENSURE_NEGATIVE(error);
-	}
-
-	PR_DEBUG;
 
 	if (thread_arg->sync_files) {
 		PR_DEBUG;
+		PR_DEBUG_MSG("%s", uri_op_get_printable(uri));
 
 		if (uri_is_rsync(uri)) {
 			if (!config_get_rsync_enabled()) {
@@ -553,15 +546,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 				return 0; /* Try some other TAL URI */
 			}
 			error = http_download_file(uri,
-			    reqs_errors_log_uri(uri_get_global(uri)));
+			    reqs_errors_log_uri(uri_get_global(uri)), true);
 		}
 
 		PR_DEBUG;
 
 		/* Reminder: there's a positive error: EREQFAILED */
 		if (error) {
-			PR_DEBUG_MSG("%d", error);
-
 			working_repo_push(uri_get_global(uri));
 			validation_destroy(state);
 			return pr_val_warn(
@@ -569,20 +560,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 			    uri_val_get_printable(uri));
 		}
 
-		PR_DEBUG;
-
 	} else {
-		PR_DEBUG;
-
 		/* Look for local files */
 		if (!valid_file_or_dir(uri_get_local(uri), true, false,
 		    __pr_val_err)) {
-			PR_DEBUG;
 			validation_destroy(state);
 			return 0; /* Error already logged */
 		}
-
-		PR_DEBUG;
 	}
 
 	/* At least one URI was sync'd */
@@ -664,8 +648,6 @@ __handle_tal_uri_sync(struct tal *tal, struct rpki_uri *uri, void *arg)
 {
 	int error;
 
-	PR_DEBUG;
-
 	error = handle_tal_uri(tal, uri, arg);
 	if (error)
 		return error;
@@ -687,40 +669,26 @@ do_file_validation(void *thread_arg)
 	struct tal *tal;
 	int error;
 
-	PR_DEBUG;
-
 	fnstack_init();
 	fnstack_push(thread->tal_file);
 
-	PR_DEBUG;
-
 	working_repo_init();
-
-	PR_DEBUG;
 
 	error = tal_load(thread->tal_file, &tal);
 	if (error)
 		goto end;
 
-	PR_DEBUG;
-
 	error = tal_order_uris(tal);
 	if (error)
 		goto destroy_tal;
 
-	PR_DEBUG;
-
 	error = foreach_uri(tal, __handle_tal_uri_sync, thread_arg);
 	if (error > 0) {
-		PR_DEBUG_MSG("error: %d", error);
 		error = 0;
 		goto destroy_tal;
 	} else if (error < 0) {
-		PR_DEBUG_MSG("error: %d", error);
 		goto destroy_tal;
 	}
-
-	PR_DEBUG;
 
 	if (!thread->retry_local) {
 		error = pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
