@@ -34,6 +34,7 @@ main(int argc, char **argv)
 {
 	int error;
 
+	printf("Fort 1.5.0.1\n");
 	/* Initializations */
 
 	error = log_setup();
@@ -113,5 +114,6 @@ revert_config:
 	free_rpki_config();
 revert_log:
 	log_teardown();
+	PR_DEBUG_MSG("Main thread returning.");
 	return error;
 }

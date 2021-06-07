@@ -346,7 +346,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 		    cond_met, log_operation, write_cb, out, is_ta);
 		if (error != EREQFAILED) {
 			TA_DEBUG_MSG("%d", error);
-			break;
+			break; /* Note: Usually happy path */
 		}
 
 		TA_DEBUG_MSG("%d", error);
