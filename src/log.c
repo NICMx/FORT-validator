@@ -6,6 +6,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "thread_var.h"
@@ -54,9 +55,8 @@ static pthread_mutex_t logck;
  * function names. See LDFLAGS_DEBUG in Makefile.am.
  * Also: Only non-static functions will be labeled.
  *
- * During a segfault, the first three printed entries are usually not
- * meaningful. Outside of a segfault, the first entry is not meaningful.
- * (But I'm printing everything anyway due to paranoia.)
+ * The first printed entry is probably not meaningful. (But I'm printing
+ * everything anyway due to paranoia.)
  *
  * @title is allowed to be NULL. If you need locking, do it outside. (And be
  * aware that pthread_mutex_lock() can return error codes, which shouldn't
@@ -65,13 +65,6 @@ static pthread_mutex_t logck;
 void
 print_stack_trace(char const *title)
 {
-	/*
-	 * Keep this as low-level as possible. Do not employ helper functions,
-	 * even if this causes small inconsistencies.
-	 * Helper functions (ie. any functions declared by Fort) might end up
-	 * attempting to write another stack trace and cause infinite recursion.
-	 */
-
 #define STACK_SIZE 64
 
 	void *array[STACK_SIZE];
@@ -105,13 +98,6 @@ print_stack_trace(char const *title)
 	free(strings);
 }
 
-static void
-segfault_handler(int thingy)
-{
-	print_stack_trace("Segmentation Fault.");
-	exit(1);
-}
-
 static void init_config(struct log_config *cfg)
 {
 	cfg->fprintf_enabled = true;
@@ -122,6 +108,57 @@ static void init_config(struct log_config *cfg)
 	cfg->facility = LOG_DAEMON;
 }
 
+static void
+segfault_handler(int signum)
+{
+	/*
+	 * IMPORTANT: See https://stackoverflow.com/questions/29982643
+	 * I went with rationalcoder's answer, because I think not printing
+	 * stack traces on segfaults is a nice way of ending up committing
+	 * suicide.
+	 *
+	 * Here's a list of legal functions:
+	 * https://stackoverflow.com/a/16891799/1735458
+	 * (Man, I wish POSIX standards were easier to link to.)
+	 */
+
+#define STACK_SIZE 64
+	static char const *MSG = "Segmentation Fault.\n";
+	void *array[STACK_SIZE];
+	size_t size;
+	ssize_t trash;
+
+	/* Don't know why, but casting to void is not silencing the warning. */
+	trash = write(STDERR_FILENO, MSG, strlen(MSG));
+	trash++;
+
+	size = backtrace(array, STACK_SIZE);
+	backtrace_symbols_fd(array, size, STDERR_FILENO);
+
+	/* Trigger default SIGSEGV handler. */
+	signal(signum, SIG_DFL);
+	kill(getpid(), signum);
+}
+
+/*
+ * Register stack trace printer on segmentation fault listener.
+ * Remember to enable -rdynamic (See print_stack_trace()).
+ */
+static void
+register_segfault_handler(void)
+{
+	void* dummy = NULL;
+	struct sigaction handler;
+
+	/* Make sure libgcc is loaded; otherwise the handler might allocate. */
+	backtrace(&dummy, 1);
+
+	handler.sa_handler = segfault_handler;
+	sigemptyset(&handler.sa_mask);
+	handler.sa_flags = 0;
+	sigaction(SIGSEGV, &handler, NULL);
+}
+
 int
 log_setup(void)
 {
@@ -130,7 +167,6 @@ log_setup(void)
 	 * been properly initialized.
 	 */
 
-	struct sigaction handler;
 	int error;
 
 	DBG.stream = stdout;
@@ -155,14 +191,7 @@ log_setup(void)
 		return error;
 	}
 
-	/*
-	 * Register stack trace printer on segmentation fault listener.
-	 * Remember to enable -rdynamic (See print_stack_trace()).
-	 */
-	handler.sa_handler = segfault_handler;
-	sigemptyset(&handler.sa_mask);
-	handler.sa_flags = 0;
-	sigaction(SIGSEGV, &handler, NULL);
+	register_segfault_handler();
 
 	return 0;
 }
