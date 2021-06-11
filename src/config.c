@@ -964,7 +964,7 @@ set_default_values(void)
 
 	error = string_array_init(&rpki_config.server.address, NULL, 0);
 	if (error)
-		return pr_enomem();
+		return error;
 
 	rpki_config.server.port = strdup("323");
 	if (rpki_config.server.port == NULL) {

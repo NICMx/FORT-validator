@@ -96,9 +96,6 @@ asn1_decode(const void *buffer, size_t buffer_size,
 	rval = ber_decode(&s_codec_ctx, descriptor, result, buffer,
 	    buffer_size);
 	if (rval.code != RC_OK) {
-		if (rval.code == RC_FAIL && errno == ENOMEM)
-			pr_enomem();
-
 		/* Must free partial object according to API contracts. */
 		ASN_STRUCT_FREE(*descriptor, *result);
 		/* We expect the data to be complete; RC_WMORE is an error. */

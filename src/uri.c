@@ -168,7 +168,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	slash_pos = strrchr(mft, '/');
 	if (slash_pos == NULL) {
 		joined = malloc(ia5->size + 1);
-		if (!joined)
+		if (joined == NULL)
 			return pr_enomem();
 		strncpy(joined, (char *) ia5->buf, ia5->size);
 		joined[ia5->size] = '\0';
@@ -178,7 +178,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 
 	dir_len = (slash_pos + 1) - mft;
 	joined = malloc(dir_len + ia5->size + 1);
-	if (!joined)
+	if (joined == NULL)
 		return pr_enomem();
 
 	strncpy(joined, mft, dir_len);

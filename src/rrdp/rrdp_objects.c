@@ -246,7 +246,7 @@ update_notification_create(struct update_notification **file)
 	error = deltas_head_create(&list);
 	if (error) {
 		free(tmp);
-		return pr_enomem();
+		return error;
 	}
 	tmp->deltas_list = list;
 	tmp->uri = NULL;

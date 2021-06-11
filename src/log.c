@@ -546,8 +546,27 @@ val_crypto_err(const char *format, ...)
 int
 pr_enomem(void)
 {
-	/* TODO this being a critical is not acceptable */
-	pr_crit("Out of memory.");
+	/*
+	 * I'm not using PR_SIMPLE and friends, because those allocate.
+	 * We want to minimize allocations after a memory allocation failure.
+	 */
+
+	if (LOG_ERR > op_config.level)
+		return -ENOMEM;
+
+	if (op_config.syslog_enabled) {
+		lock_mutex();
+		syslog(LOG_ERR | op_config.facility, "Out of memory.");
+		unlock_mutex();
+	}
+
+	if (op_config.fprintf_enabled) {
+		lock_mutex();
+		fprintf(stderr, "Out of memory.\n");
+		unlock_mutex();
+	}
+
+	return -ENOMEM;
 }
 
 __dead void

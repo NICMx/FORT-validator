@@ -248,7 +248,7 @@ prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 	return 0;
 }
 
-static void
+__dead static void
 handle_child_thread(char **args, int fds[2][2])
 {
 	/* THIS FUNCTION MUST NEVER RETURN!!! */
@@ -280,17 +280,16 @@ create_pipes(int fds[2][2])
 	return 0;
 }
 
-static void
+static int
 log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 {
 #define PRE_RSYNC "[RSYNC exec]: "
 	char *cpy, *cur, *tmp;
 
 	cpy = malloc(read + 1);
-	if (cpy == NULL) {
-		pr_enomem();
-		return;
-	}
+	if (cpy == NULL)
+		return pr_enomem();
+
 	strncpy(cpy, buffer, read);
 	cpy[read] = '\0';
 
@@ -312,6 +311,7 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 		cur = tmp + 1;
 	}
 	free(cpy);
+	return 0;
 #undef PRE_RSYNC
 }
 
@@ -320,6 +320,7 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 {
 	char buffer[4096];
 	ssize_t count;
+	int error;
 
 	while (1) {
 		count = read(fd_pipe[type][0], buffer, sizeof(buffer));
@@ -332,7 +333,9 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 		if (count == 0)
 			break;
 
-		log_buffer(buffer, count, type, log_operation);
+		error = log_buffer(buffer, count, type, log_operation);
+		if (error)
+			return error;
 	}
 	close(fd_pipe[type][0]); /* Close read end */
 	return 0;
@@ -466,9 +469,6 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			TA_DEBUG_MSG("%d", error);
 			pr_val_debug("Child terminated with error code %d.",
 			    error);
-			if (error == -ENOMEM)
-				pr_enomem();
-
 			if (!error)
 				goto release_args;
 

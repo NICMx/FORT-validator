@@ -47,9 +47,6 @@ int rwlock_read_lock(pthread_rwlock_t *);
 void rwlock_write_lock(pthread_rwlock_t *);
 void rwlock_unlock(pthread_rwlock_t *);
 
-/** Also boilerplate. */
-void close_thread(pthread_t thread, char const *);
-
 typedef int (*process_file_cb)(char const *, void *);
 int process_file_or_dir(char const *, char const *, bool, process_file_cb,
     void *);

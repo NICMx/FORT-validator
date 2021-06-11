@@ -386,25 +386,17 @@ db_slurm_vrp_is_filtered(struct db_slurm *db, struct vrp const *vrp)
 bool
 db_slurm_bgpsec_is_filtered(struct db_slurm *db, struct router_key const *key)
 {
+	unsigned char ski[RK_SKI_LEN];
 	struct slurm_bgpsec slurm_bgpsec;
-	unsigned char *tmp;
-	bool result;
 
-	tmp = malloc(RK_SKI_LEN);
-	if (tmp == NULL) {
-		pr_enomem();
-		return false;
-	}
 	slurm_bgpsec.data_flag = SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI;
 	slurm_bgpsec.asn = key->as;
-	memcpy(tmp, key->ski, RK_SKI_LEN);
-	slurm_bgpsec.ski = tmp;
+	memcpy(ski, key->ski, RK_SKI_LEN);
+	slurm_bgpsec.ski = ski;
 	/* Router public key isn't used at filters */
 	slurm_bgpsec.router_public_key = NULL;
 
-	result = bgpsec_filtered(db, &slurm_bgpsec);
-	free(tmp);
-	return result;
+	return bgpsec_filtered(db, &slurm_bgpsec);
 }
 
 #define ITERATE_LIST_FUNC(type, object, db_list)			\
