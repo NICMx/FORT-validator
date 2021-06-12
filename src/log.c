@@ -109,7 +109,7 @@ static void init_config(struct log_config *cfg)
 }
 
 static void
-segfault_handler(int signum)
+signal_handler(int signum)
 {
 	/*
 	 * IMPORTANT: See https://stackoverflow.com/questions/29982643
@@ -123,21 +123,42 @@ segfault_handler(int signum)
 	 */
 
 #define STACK_SIZE 64
-	static char const *MSG = "Segmentation Fault.\n";
 	void *array[STACK_SIZE];
 	size_t size;
-	ssize_t trash;
+//	ssize_t trash;
 
-	/* Don't know why, but casting to void is not silencing the warning. */
-	trash = write(STDERR_FILENO, MSG, strlen(MSG));
-	trash++;
+	int tmp;
+	unsigned char digit;
+
+//	/* Don't know why, but casting to void is not silencing the warning. */
+//	trash = write(STDERR_FILENO, title, strlen(title));
+//	trash++;
+
+	tmp = signum;
+	while (tmp != 0) {
+		digit = tmp % 10 + 48;
+		digit = write(STDERR_FILENO, &digit, 1);
+		tmp /= 10;
+	}
+	digit = write(STDERR_FILENO, "\n", 1);
 
 	size = backtrace(array, STACK_SIZE);
 	backtrace_symbols_fd(array, size, STDERR_FILENO);
 
-	/* Trigger default SIGSEGV handler. */
+	/* Trigger default handler. */
 	signal(signum, SIG_DFL);
 	kill(getpid(), signum);
+}
+
+static void
+register_signal_handler(int signum)
+{
+	struct sigaction handler;
+
+	handler.sa_handler = signal_handler;
+	sigemptyset(&handler.sa_mask);
+	handler.sa_flags = 0;
+	sigaction(signum, &handler, NULL);
 }
 
 /*
@@ -145,18 +166,45 @@ segfault_handler(int signum)
  * Remember to enable -rdynamic (See print_stack_trace()).
  */
 static void
-register_segfault_handler(void)
+register_signal_handlers(void)
 {
-	void* dummy = NULL;
-	struct sigaction handler;
+	void* dummy;
 
 	/* Make sure libgcc is loaded; otherwise the handler might allocate. */
+	dummy = NULL;
 	backtrace(&dummy, 1);
 
-	handler.sa_handler = segfault_handler;
-	sigemptyset(&handler.sa_mask);
-	handler.sa_flags = 0;
-	sigaction(SIGSEGV, &handler, NULL);
+	register_signal_handler(SIGHUP);
+	register_signal_handler(SIGINT);
+	register_signal_handler(SIGQUIT);
+	register_signal_handler(SIGILL);
+	register_signal_handler(SIGTRAP);
+	register_signal_handler(SIGABRT);
+	register_signal_handler(SIGBUS);
+	register_signal_handler(SIGFPE);
+	/* register_signal_handler(SIGKILL); */
+	register_signal_handler(SIGUSR1);
+	register_signal_handler(SIGSEGV);
+	register_signal_handler(SIGUSR2);
+	register_signal_handler(SIGPIPE);
+	register_signal_handler(SIGALRM);
+	register_signal_handler(SIGTERM);
+	register_signal_handler(SIGSTKFLT);
+	register_signal_handler(SIGCHLD);
+	register_signal_handler(SIGCONT);
+	/* register_signal_handler(SIGSTOP); */
+	register_signal_handler(SIGTSTP);
+	register_signal_handler(SIGTTIN);
+	register_signal_handler(SIGTTOU);
+	register_signal_handler(SIGURG);
+	register_signal_handler(SIGXCPU);
+	register_signal_handler(SIGXFSZ);
+	register_signal_handler(SIGVTALRM);
+	register_signal_handler(SIGPROF);
+	register_signal_handler(SIGWINCH);
+	register_signal_handler(SIGIO);
+	register_signal_handler(SIGPWR);
+	register_signal_handler(SIGSYS);
 }
 
 int
@@ -191,7 +239,7 @@ log_setup(void)
 		return error;
 	}
 
-	register_segfault_handler();
+	register_signal_handlers();
 
 	return 0;
 }
