@@ -22,8 +22,6 @@
 /* HTTP Response Code 400 (Bad Request) */
 #define HTTP_BAD_REQUEST	400
 
-typedef size_t (http_write_cb)(unsigned char *, size_t, size_t, void *);
-
 struct http_handler {
 	CURL *curl;
 	char errbuf[CURL_ERROR_SIZE];
@@ -75,17 +73,11 @@ setopt_long(CURL *curl, CURLoption opt, long value)
 }
 
 static void
-setopt_writefunction(CURL *curl, http_write_cb cb, void *arg)
+setopt_writedata(CURL *curl, FILE *file)
 {
 	CURLcode result;
 
-	result = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cb);
-	if (result != CURLE_OK) {
-		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
-		    CURLOPT_WRITEFUNCTION, result, curl_easy_strerror(result));
-	}
-
-	result = curl_easy_setopt(curl, CURLOPT_WRITEDATA, arg);
+	result = curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
 	if (result != CURLE_OK) {
 		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
 		    CURLOPT_WRITEDATA, result, curl_easy_strerror(result));
@@ -154,7 +146,7 @@ curl_err_string(struct http_handler *handler, CURLcode res)
  */
 static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
-    long *cond_met, bool log_operation, http_write_cb cb, void *arg, bool is_ta)
+    long *cond_met, bool log_operation, FILE *file, bool is_ta)
 {
 	CURLcode res, res2;
 	long unmet = 0;
@@ -164,7 +156,7 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 
 	handler->errbuf[0] = 0;
 	setopt_str(handler->curl, CURLOPT_URL, uri);
-	setopt_writefunction(handler->curl, cb, arg);
+	setopt_writedata(handler->curl, file);
 
 	TA_DEBUG_MSG("HTTP GET: %s", uri);
 	res = curl_easy_perform(handler->curl);
@@ -253,20 +245,6 @@ http_easy_cleanup(struct http_handler *handler)
 	curl_easy_cleanup(handler->curl);
 }
 
-static size_t
-write_cb(unsigned char *content, size_t size, size_t nmemb, void *arg)
-{
-	FILE *fd = arg;
-	size_t read = size * nmemb;
-	size_t written;
-
-	written = fwrite(content, size, nmemb, fd);
-	if (written != nmemb)
-		return -EINVAL;
-
-	return read;
-}
-
 static int
 __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
     long *cond_met, bool log_operation, bool is_ta)
@@ -343,7 +321,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 			TA_DEBUG;
 		}
 		error = http_fetch(&handler, uri_get_global(uri), response_code,
-		    cond_met, log_operation, write_cb, out, is_ta);
+		    cond_met, log_operation, out, is_ta);
 		if (error != EREQFAILED) {
 			TA_DEBUG_MSG("%d", error);
 			break; /* Note: Usually happy path */
@@ -515,7 +493,7 @@ http_direct_download(char const *remote, char const *dest)
 	response_code = 0;
 	cond_met = 0;
 	error = http_fetch(&handler, remote, &response_code, &cond_met, true,
-	    write_cb, out, false);
+	    out, false);
 	http_easy_cleanup(&handler);
 	file_close(out);
 	if (error)
