@@ -1531,19 +1531,19 @@ config_get_http_user_agent(void)
 	return rpki_config.http.user_agent;
 }
 
-unsigned int
+long
 config_get_http_connect_timeout(void)
 {
 	return rpki_config.http.connect_timeout;
 }
 
-unsigned int
+long
 config_get_http_transfer_timeout(void)
 {
 	return rpki_config.http.transfer_timeout;
 }
 
-unsigned int
+long
 config_get_http_idle_timeout(void)
 {
 	return rpki_config.http.idle_timeout;
