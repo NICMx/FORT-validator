@@ -109,7 +109,7 @@ static void init_config(struct log_config *cfg)
 }
 
 static void
-signal_handler(int signum)
+sigsegv_handler(int signum)
 {
 	/*
 	 * IMPORTANT: See https://stackoverflow.com/questions/29982643
@@ -125,22 +125,6 @@ signal_handler(int signum)
 #define STACK_SIZE 64
 	void *array[STACK_SIZE];
 	size_t size;
-//	ssize_t trash;
-
-	int tmp;
-	unsigned char digit;
-
-//	/* Don't know why, but casting to void is not silencing the warning. */
-//	trash = write(STDERR_FILENO, title, strlen(title));
-//	trash++;
-
-	tmp = signum;
-	while (tmp != 0) {
-		digit = tmp % 10 + 48;
-		digit = write(STDERR_FILENO, &digit, 1);
-		tmp /= 10;
-	}
-	digit = write(STDERR_FILENO, "\n", 1);
 
 	size = backtrace(array, STACK_SIZE);
 	backtrace_symbols_fd(array, size, STDERR_FILENO);
@@ -150,61 +134,62 @@ signal_handler(int signum)
 	kill(getpid(), signum);
 }
 
-static void
-register_signal_handler(int signum)
-{
-	struct sigaction handler;
-
-	handler.sa_handler = signal_handler;
-	sigemptyset(&handler.sa_mask);
-	handler.sa_flags = 0;
-	sigaction(signum, &handler, NULL);
-}
-
 /*
- * Register stack trace printer on segmentation fault listener.
+ * Register better handlers for some signals.
+ *
  * Remember to enable -rdynamic (See print_stack_trace()).
  */
 static void
 register_signal_handlers(void)
 {
+	struct sigaction action;
 	void* dummy;
 
-	/* Make sure libgcc is loaded; otherwise the handler might allocate. */
+	/*
+	 * Make sure libgcc is loaded; otherwise backtrace() might allocate
+	 * during a signal handler. (Which is illegal.)
+	 */
 	dummy = NULL;
 	backtrace(&dummy, 1);
 
-	register_signal_handler(SIGHUP);
-	register_signal_handler(SIGINT);
-	register_signal_handler(SIGQUIT);
-	register_signal_handler(SIGILL);
-	register_signal_handler(SIGTRAP);
-	register_signal_handler(SIGABRT);
-	register_signal_handler(SIGBUS);
-	register_signal_handler(SIGFPE);
-	/* register_signal_handler(SIGKILL); */
-	register_signal_handler(SIGUSR1);
-	register_signal_handler(SIGSEGV);
-	register_signal_handler(SIGUSR2);
-	register_signal_handler(SIGPIPE);
-	register_signal_handler(SIGALRM);
-	register_signal_handler(SIGTERM);
-	register_signal_handler(SIGSTKFLT);
-	register_signal_handler(SIGCHLD);
-	register_signal_handler(SIGCONT);
-	/* register_signal_handler(SIGSTOP); */
-	register_signal_handler(SIGTSTP);
-	register_signal_handler(SIGTTIN);
-	register_signal_handler(SIGTTOU);
-	register_signal_handler(SIGURG);
-	register_signal_handler(SIGXCPU);
-	register_signal_handler(SIGXFSZ);
-	register_signal_handler(SIGVTALRM);
-	register_signal_handler(SIGPROF);
-	register_signal_handler(SIGWINCH);
-	register_signal_handler(SIGIO);
-	register_signal_handler(SIGPWR);
-	register_signal_handler(SIGSYS);
+	/* Register the segmentation fault handler */
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = sigsegv_handler;
+	sigemptyset(&action.sa_mask);
+	action.sa_flags = 0;
+	if (sigaction(SIGSEGV, &action, NULL) == -1) {
+		/*
+		 * Not fatal; it just means we will not print stack traces on
+		 * Segmentation Faults.
+		 */
+		pr_op_errno(errno, "SIGSEGV handler registration failure");
+	}
+
+	/*
+	 * SIGPIPE is sometimes triggered by libcurl:
+	 *
+	 * > libcurl makes an effort to never cause such SIGPIPEs to trigger,
+	 * > but some operating systems have no way to avoid them and even on
+	 * > those that have there are some corner cases when they may still
+	 * > happen
+	 * (Documentation of CURLOPT_NOSIGNAL)
+	 *
+	 * All SIGPIPE usually means is "the server closed the connection for
+	 * some reason, fuck you."
+	 * Which is a normal I/O error, and should be handled by the normal
+	 * error propagation logic, not by a signal handler.
+	 * So, ignore SIGPIPE.
+	 *
+	 * https://github.com/NICMx/FORT-validator/issues/49
+	 */
+	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+		/*
+		 * Not fatal. It just means that, if a broken pipe happens, we
+		 * will die silently.
+		 * But they're somewhat rare, so whatever.
+		 */
+		pr_op_errno(errno, "SIGPIPE handler registration failure");
+	}
 }
 
 int
