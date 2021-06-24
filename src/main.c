@@ -29,6 +29,39 @@ run_rtr_server(void)
 	return error;
 }
 
+/**
+ * Shells don't like it when we return values other than 0-255.
+ * In fact, bash also has its own meanings for 126-255.
+ * (See man 1 bash > EXIT STATUS)
+ *
+ * This function shifts @error to our exclusive range.
+ */
+static int
+convert_to_result(int error)
+{
+	if (error == 0)
+		return 0; /* Happy path */
+
+	/* -INT_MIN overflows, So handle weird case. */
+	if (error == INT_MIN)
+		return 125;
+
+	/* Force range 0-127 */
+	if (error < 0)
+		error = -error;
+	error &= 0x7F;
+
+	switch (error) {
+	case 126:
+		return 122;
+	case 127:
+		return 123;
+	case 0:
+		return 124; /* was divisible by 128; force error. */
+	}
+	return error;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -115,5 +148,5 @@ revert_config:
 revert_log:
 	log_teardown();
 just_quit:
-	return abs(error);
+	return convert_to_result(error);
 }
