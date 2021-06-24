@@ -449,7 +449,6 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 				goto release_args;
 
 			if (retries == config_get_rsync_retry_count()) {
-				PR_DEBUG_MSG("%u", retries);
 				pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 				    retries, uri_get_global(uri));
 				error = EREQFAILED;
@@ -459,7 +458,6 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			    uri_get_global(uri),
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
-			PR_DEBUG;
 			retries++;
 			sleep(config_get_rsync_retry_interval());
 			continue;

@@ -117,7 +117,6 @@ revert_config:
 	free_rpki_config();
 revert_log:
 	log_teardown();
-	PR_DEBUG_MSG("Main thread returning.");
 just_quit:
 	return abs(error);
 }

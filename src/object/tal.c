@@ -529,27 +529,20 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		return ENSURE_NEGATIVE(error);
 
 	if (thread_arg->sync_files) {
-		PR_DEBUG;
-		PR_DEBUG_MSG("%s", uri_op_get_printable(uri));
-
 		if (uri_is_rsync(uri)) {
 			if (!config_get_rsync_enabled()) {
-				PR_DEBUG;
 				validation_destroy(state);
 				return 0; /* Try some other TAL URI */
 			}
 			error = rsync_download_files(uri, true, false);
 		} else /* HTTPS */ {
 			if (!config_get_http_enabled()) {
-				PR_DEBUG;
 				validation_destroy(state);
 				return 0; /* Try some other TAL URI */
 			}
 			error = http_download_file(uri,
 			    reqs_errors_log_uri(uri_get_global(uri)), true);
 		}
-
-		PR_DEBUG;
 
 		/* Reminder: there's a positive error: EREQFAILED */
 		if (error) {
