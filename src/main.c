@@ -40,9 +40,6 @@ main(int argc, char **argv)
 	if (error)
 		goto just_quit;
 
-	/* TODO (issue49) don't forget to improve this. */
-	pr_op_info("Fort 1.5.0.2");
-
 	error = thvar_init();
 	if (error)
 		goto revert_log;

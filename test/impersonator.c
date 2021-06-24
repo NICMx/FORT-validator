@@ -67,12 +67,6 @@ config_get_shuffle_tal_uris(void)
 	return false;
 }
 
-unsigned int
-config_get_max_cert_depth(void)
-{
-	return 32;
-}
-
 char const *
 config_get_local_repository(void)
 {
@@ -97,47 +91,10 @@ config_get_rsync_priority(void)
 	return rsync_priority;
 }
 
-bool
-config_get_http_enabled(void)
-{
-	return false;
-}
-
 unsigned int
 config_get_http_priority(void)
 {
 	return http_priority;
-}
-
-bool
-config_get_work_offline(void)
-{
-	return false;
-}
-
-bool
-config_get_color_output(void)
-{
-	return false;
-}
-
-enum filename_format
-config_get_filename_format(void)
-{
-	return FNF_NAME;
-}
-
-char *
-config_get_rsync_program(void)
-{
-	return "rsync";
-}
-
-struct string_array const *
-config_get_rsync_args(bool is_ta)
-{
-	static const struct string_array array = { 0 };
-	return &array;
 }
 
 char const *
@@ -248,47 +205,10 @@ config_get_val_log_facility(void)
 	return (3<<3); /* LOG_DAEMON */
 }
 
-unsigned int
-config_get_asn1_decode_max_stack(void)
-{
-	return 4096;
-}
-
 enum incidence_action
 incidence_get_action(enum incidence_id id)
 {
 	return INAC_ERROR;
-}
-
-/* Impersonate HTTP config */
-char const *
-config_get_http_user_agent(void)
-{
-	return "fort-test/0.1";
-}
-
-unsigned int
-config_get_http_connect_timeout(void)
-{
-	return 30;
-}
-
-unsigned int
-config_get_http_transfer_timeout(void)
-{
-	return 0;
-}
-
-unsigned int
-config_get_http_idle_timeout(void)
-{
-	return 15;
-}
-
-char const *
-config_get_http_ca_path(void)
-{
-	return NULL;
 }
 
 void

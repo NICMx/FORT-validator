@@ -204,9 +204,9 @@ log_setup(void)
 
 	DBG.stream = stdout;
 	INF.stream = stdout;
-	WRN.stream = stdout;
-	ERR.stream = stdout;
-	CRT.stream = stdout;
+	WRN.stream = stderr;
+	ERR.stream = stderr;
+	CRT.stream = stderr;
 	UNK.stream = stdout;
 
 	openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);
@@ -608,6 +608,9 @@ val_crypto_err(const char *format, ...)
 int
 pr_enomem(void)
 {
+	static char const *ENOMEM_MSG = "Out of memory.\n";
+	ssize_t garbage;
+
 	/*
 	 * I'm not using PR_SIMPLE and friends, because those allocate.
 	 * We want to minimize allocations after a memory allocation failure.
@@ -616,15 +619,21 @@ pr_enomem(void)
 	if (LOG_ERR > op_config.level)
 		return -ENOMEM;
 
-	if (op_config.syslog_enabled) {
-		lock_mutex();
-		syslog(LOG_ERR | op_config.facility, "Out of memory.");
-		unlock_mutex();
-	}
-
 	if (op_config.fprintf_enabled) {
 		lock_mutex();
-		fprintf(stderr, "Out of memory.\n");
+		/*
+		 * write() is AS-Safe, which implies it doesn't allocate,
+		 * unlike printf().
+		 */
+		garbage = write(STDERR_FILENO, ENOMEM_MSG, strlen(ENOMEM_MSG));
+		unlock_mutex();
+		garbage++;
+	}
+
+	if (op_config.syslog_enabled) {
+		lock_mutex();
+		/* This allocates, but I don't think I have more options. */
+		syslog(LOG_ERR | op_config.facility, "Out of memory.");
 		unlock_mutex();
 	}
 

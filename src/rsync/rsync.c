@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h> /* SIGINT, SIGQUIT, etc */
+#include <syslog.h>
 #include <sys/queue.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -373,6 +374,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	int fork_fds[2][2];
 	pid_t child_pid;
 	unsigned int retries;
+	unsigned int i;
 	int child_status;
 	int error;
 
@@ -382,6 +384,12 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	error = prepare_rsync(uri, is_ta, &args, &args_len);
 	if (error)
 		return error;
+
+	if (log_val_enabled(LOG_DEBUG)) {
+		pr_val_debug("Executing RSYNC:");
+		for (i = 0; i < args_len + 1; i++)
+			pr_val_debug("    %s", args[i]);
+	}
 
 	retries = 0;
 	do {
@@ -586,9 +594,8 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 		error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
 	} else {
 		error = check_ancestor_error(requested_uri);
-		if (error) {
+		if (error)
 			return error;
-		}
 		error = handle_strict_strategy(requested_uri, &rsync_uri);
 	}
 

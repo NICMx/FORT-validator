@@ -141,7 +141,7 @@ curl_err_string(struct http_handler *handler, CURLcode res)
  */
 static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
-    long *cond_met, bool log_operation, FILE *file, bool is_ta)
+    long *cond_met, bool log_operation, FILE *file)
 {
 	CURLcode res, res2;
 	long unmet = 0;
@@ -150,6 +150,7 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	setopt_str(handler->curl, CURLOPT_URL, uri);
 	setopt_writedata(handler->curl, file);
 
+	pr_val_debug("HTTP GET: %s", uri);
 	res = curl_easy_perform(handler->curl);
 
 	res2 = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
@@ -205,17 +206,15 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		return 0;
 	}
 
-	if (*response_code >= HTTP_BAD_REQUEST) {
+	if (*response_code >= HTTP_BAD_REQUEST)
 		return pr_val_err("Error requesting URL %s (received HTTP code %ld): %s",
 		    uri, *response_code, curl_err_string(handler, res));
-	}
 
 	pr_val_err("Error requesting URL %s: %s", uri,
 	    curl_err_string(handler, res));
-	if (log_operation) {
+	if (log_operation)
 		pr_op_err("Error requesting URL %s: %s", uri,
 		    curl_err_string(handler, res));
-	}
 
 	return EREQFAILED;
 }
@@ -228,7 +227,7 @@ http_easy_cleanup(struct http_handler *handler)
 
 static int
 __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
-    long *cond_met, bool log_operation, bool is_ta)
+    long *cond_met, bool log_operation)
 {
 	char const *tmp_suffix = "_tmp";
 	struct http_handler handler;
@@ -280,10 +279,9 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 			    CURL_TIMECOND_IFMODSINCE);
 		}
 		error = http_fetch(&handler, uri_get_global(uri), response_code,
-		    cond_met, log_operation, out, is_ta);
-		if (error != EREQFAILED) {
+		    cond_met, log_operation, out);
+		if (error != EREQFAILED)
 			break; /* Note: Usually happy path */
-		}
 
 		if (retries == config_get_http_retry_count()) {
 			pr_val_warn("Max HTTP retries (%u) reached requesting for '%s', won't retry again.",
@@ -333,12 +331,12 @@ release_tmp:
  * request to the server failed.
  */
 int
-http_download_file(struct rpki_uri *uri, bool log_operation, bool is_ta)
+http_download_file(struct rpki_uri *uri, bool log_operation)
 {
 	long response;
 	long cond_met;
 	return __http_download_file(uri, &response, 0, &cond_met,
-	    log_operation, is_ta);
+	    log_operation);
 }
 
 /*
@@ -363,7 +361,7 @@ http_download_file_with_ims(struct rpki_uri *uri, long value,
 	int error;
 
 	error = __http_download_file(uri, &response, value, &cond_met,
-	    log_operation, false);
+	    log_operation);
 	if (error)
 		return error;
 
@@ -394,7 +392,7 @@ http_download_file_with_ims(struct rpki_uri *uri, long value,
 	 */
 
 	return __http_download_file(uri, &response, 0, &cond_met,
-	    log_operation, false);
+	    log_operation);
 
 }
 
@@ -438,7 +436,7 @@ http_direct_download(char const *remote, char const *dest)
 	response_code = 0;
 	cond_met = 0;
 	error = http_fetch(&handler, remote, &response_code, &cond_met, true,
-	    out, false);
+	    out);
 	http_easy_cleanup(&handler);
 	file_close(out);
 	if (error)

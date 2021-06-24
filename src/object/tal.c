@@ -541,7 +541,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 				return 0; /* Try some other TAL URI */
 			}
 			error = http_download_file(uri,
-			    reqs_errors_log_uri(uri_get_global(uri)), true);
+			    reqs_errors_log_uri(uri_get_global(uri)));
 		}
 
 		/* Reminder: there's a positive error: EREQFAILED */
@@ -552,7 +552,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 			    "TAL URI '%s' could not be downloaded.",
 			    uri_val_get_printable(uri));
 		}
-
 	} else {
 		/* Look for local files */
 		if (!valid_file_or_dir(uri_get_local(uri), true, false,
