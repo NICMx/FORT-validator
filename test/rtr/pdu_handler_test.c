@@ -272,14 +272,8 @@ START_TEST(test_typical_exchange)
 	init_serial_query(&request, &client_pdu, 0);
 
 	/* From serial 0: Define expected server response */
-	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
-	expected_pdu_add(PDU_TYPE_END_OF_DATA);
+	/* Server doesn't have serial 0. */
+	expected_pdu_add(PDU_TYPE_CACHE_RESET);
 
 	/* From serial 0: Run and validate */
 	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
@@ -290,6 +284,9 @@ START_TEST(test_typical_exchange)
 
 	/* From serial 1: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
@@ -304,9 +301,23 @@ START_TEST(test_typical_exchange)
 
 	/* From serial 2: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 2: Run and validate */
+	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	ck_assert_uint_eq(false, has_expected_pdus());
+
+	/* From serial 3: Init client request */
+	init_serial_query(&request, &client_pdu, 3);
+
+	/* From serial 3: Define expected server response */
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA);
+
+	/* From serial 3: Run and validate */
 	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
 	ck_assert_uint_eq(false, has_expected_pdus());
 

@@ -31,10 +31,10 @@
  * 4: Router key, ASN 0
  * 5: Router key, ASN 1
  */
-static const bool iteration0_base[] = { 1, 0, 1, 0, 1, 0, };
-static const bool iteration1_base[] = { 1, 1, 1, 1, 1, 1, };
-static const bool iteration2_base[] = { 0, 1, 0, 1, 0, 1, };
-static const bool iteration3_base[] = { 1, 0, 1, 0, 1, 0, };
+static const bool iteration1_base[] = { 1, 0, 1, 0, 1, 0, };
+static const bool iteration2_base[] = { 1, 1, 1, 1, 1, 1, };
+static const bool iteration3_base[] = { 0, 1, 0, 1, 0, 1, };
+static const bool iteration4_base[] = { 1, 0, 1, 0, 1, 0, };
 
 /*
  * DELTA
@@ -46,26 +46,26 @@ static const bool iteration3_base[] = { 1, 0, 1, 0, 1, 0, };
  * 5: Withdrawal, RK,   ASN 1   11: Announcement, RK,   ASN 1
  */
 
-static const bool deltas_0to0[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
-
-static const bool deltas_0to1[] = { 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, };
 static const bool deltas_1to1[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
-static const bool deltas_0to2[] = { 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, };
-static const bool deltas_1to2[] = { 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_1to2[] = { 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, };
 static const bool deltas_2to2[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
+static const bool deltas_1to3[] = { 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, };
+static const bool deltas_2to3[] = { 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_3to3[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
+
 /* Deltas with rules that override each other */
-static const bool deltas_0to3_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, };
-static const bool deltas_1to3_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, };
-static const bool deltas_2to3_ovrd[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
-static const bool deltas_3to3_ovrd[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_1to4_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, };
+static const bool deltas_2to4_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, };
+static const bool deltas_3to4_ovrd[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
+static const bool deltas_4to4_ovrd[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 /* Deltas cleaned up */
-static const bool deltas_0to3_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
-static const bool deltas_1to3_clean[] = { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, };
-static const bool deltas_2to3_clean[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
-static const bool deltas_3to3_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_1to4_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_2to4_clean[] = { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_3to4_clean[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
+static const bool deltas_4to4_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 /* Impersonator functions */
 
@@ -339,18 +339,18 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas,
 }
 
 static void
-check_no_deltas(serial_t from, serial_t to)
+check_no_deltas(serial_t from)
 {
-	serial_t actual_serial;
+	serial_t actual_to;
 	struct deltas_db deltas;
 
 	deltas_db_init(&deltas);
-	ck_assert_int_eq(-ESRCH, vrps_get_deltas_from(from, &actual_serial,
+	ck_assert_int_eq(-ESRCH, vrps_get_deltas_from(from, &actual_to,
 	    &deltas));
 }
 
 static void
-create_deltas_0to1(struct deltas_db *deltas, serial_t *serial, bool *changed,
+create_deltas_1to2(struct deltas_db *deltas, serial_t *serial, bool *changed,
     bool *iterated_entries)
 {
 	current_min_serial = 0;
@@ -367,16 +367,16 @@ create_deltas_0to1(struct deltas_db *deltas, serial_t *serial, bool *changed,
 
 	/* First validation: One tree, no deltas */
 	ck_assert_int_eq(0, vrps_update(changed));
-	check_serial(0);
-	check_base(0, iteration0_base);
-	check_deltas(0, 0, deltas_0to0, false);
+	check_serial(1);
+	check_base(1, iteration1_base);
+	check_deltas(1, 1, deltas_1to1, false);
 
 	/* Second validation: One tree, added deltas */
 	ck_assert_int_eq(0, vrps_update(changed));
-	check_serial(1);
-	check_base(1, iteration1_base);
-	check_deltas(0, 1, deltas_0to1, false);
-	check_deltas(1, 1, deltas_1to1, false);
+	check_serial(2);
+	check_base(2, iteration2_base);
+	check_deltas(1, 2, deltas_1to2, false);
+	check_deltas(2, 2, deltas_2to2, false);
 }
 
 START_TEST(test_basic)
@@ -386,15 +386,15 @@ START_TEST(test_basic)
 	bool changed;
 	bool iterated_entries[12];
 
-	create_deltas_0to1(&deltas, &serial, &changed, iterated_entries);
+	create_deltas_1to2(&deltas, &serial, &changed, iterated_entries);
 
 	/* Third validation: One tree, removed deltas */
 	ck_assert_int_eq(0, vrps_update(&changed));
-	check_serial(2);
-	check_base(2, iteration2_base);
-	check_deltas(0, 2, deltas_0to2, false);
-	check_deltas(1, 2, deltas_1to2, false);
-	check_deltas(2, 2, deltas_2to2, false);
+	check_serial(3);
+	check_base(3, iteration3_base);
+	check_deltas(1, 3, deltas_1to3, false);
+	check_deltas(2, 3, deltas_2to3, false);
+	check_deltas(3, 3, deltas_3to3, false);
 
 	vrps_destroy();
 }
@@ -407,21 +407,21 @@ START_TEST(test_delta_forget)
 	bool changed;
 	bool iterated_entries[12];
 
-	create_deltas_0to1(&deltas, &serial, &changed, iterated_entries);
+	create_deltas_1to2(&deltas, &serial, &changed, iterated_entries);
 
 	/*
-	 * Assume that the client(s) already have serial 1 (serial 2 will be
-	 * created) so serial 0 isn't needed anymore.
+	 * Assume that the client(s) already have serial 2 (serial 3 will be
+	 * created) so serial 1 isn't needed anymore.
 	 */
-	current_min_serial = 1;
+	current_min_serial = 2;
 
-	/* Third validation: One tree, removed deltas and delta 0 removed */
+	/* Third validation: One tree, removed deltas and delta 1 removed */
 	ck_assert_int_eq(0, vrps_update(&changed));
-	check_serial(2);
-	check_base(2, iteration2_base);
-	check_no_deltas(0, 2);
-	check_deltas(1, 2, deltas_1to2, false);
-	check_deltas(2, 2, deltas_2to2, false);
+	check_serial(3);
+	check_base(3, iteration3_base);
+	check_no_deltas(1);
+	check_deltas(2, 3, deltas_2to3, false);
+	check_deltas(3, 3, deltas_3to3, false);
 
 	vrps_destroy();
 
@@ -437,30 +437,30 @@ START_TEST(test_delta_ovrd)
 	bool changed;
 	bool iterated_entries[12];
 
-	create_deltas_0to1(&deltas, &serial, &changed, iterated_entries);
+	create_deltas_1to2(&deltas, &serial, &changed, iterated_entries);
 
 	/* Third validation: One tree, removed deltas */
 	ck_assert_int_eq(0, vrps_update(&changed));
-	check_serial(2);
-	check_base(2, iteration2_base);
-	check_deltas(0, 2, deltas_0to2, false);
-	check_deltas(1, 2, deltas_1to2, false);
-	check_deltas(2, 2, deltas_2to2, false);
+	check_serial(3);
+	check_base(3, iteration3_base);
+	check_deltas(1, 3, deltas_1to3, false);
+	check_deltas(2, 3, deltas_2to3, false);
+	check_deltas(3, 3, deltas_3to3, false);
 
 	/* Fourth validation with deltas that override each other */
 	ck_assert_int_eq(0, vrps_update(&changed));
-	check_serial(3);
-	check_base(3, iteration3_base);
-	check_deltas(0, 3, deltas_0to3_ovrd, false);
-	check_deltas(1, 3, deltas_1to3_ovrd, false);
-	check_deltas(2, 3, deltas_2to3_ovrd, false);
-	check_deltas(3, 3, deltas_3to3_ovrd, false);
+	check_serial(4);
+	check_base(4, iteration4_base);
+	check_deltas(1, 4, deltas_1to4_ovrd, false);
+	check_deltas(2, 4, deltas_2to4_ovrd, false);
+	check_deltas(3, 4, deltas_3to4_ovrd, false);
+	check_deltas(4, 4, deltas_4to4_ovrd, false);
 
 	/* Check "cleaned up" deltas */
-	check_deltas(0, 3, deltas_0to3_clean, true);
-	check_deltas(1, 3, deltas_1to3_clean, true);
-	check_deltas(2, 3, deltas_2to3_clean, true);
-	check_deltas(3, 3, deltas_3to3_clean, true);
+	check_deltas(1, 4, deltas_1to4_clean, true);
+	check_deltas(2, 4, deltas_2to4_clean, true);
+	check_deltas(3, 4, deltas_3to4_clean, true);
+	check_deltas(4, 4, deltas_4to4_clean, true);
 
 	vrps_destroy();
 

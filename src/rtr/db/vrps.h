@@ -11,11 +11,9 @@
 #include "data_structure/array_list.h"
 #include "rtr/db/delta.h"
 
-/*
- * Deltas that share a serial.
- */
 struct delta_group {
 	serial_t serial;
+	/* snapshot(serial - 1) + deltas = snapshot(serial) */
 	struct deltas *deltas;
 };
 

@@ -17,8 +17,6 @@
 #include "slurm/slurm_loader.h"
 #include "thread/thread_pool.h"
 
-#define START_SERIAL		0
-
 DEFINE_ARRAY_LIST_FUNCTIONS(deltas_db, struct delta_group, )
 
 struct vrp_node {
@@ -55,7 +53,20 @@ struct state {
 	/* Last valid SLURM applied to base */
 	struct db_slurm *slurm;
 
-	serial_t next_serial;
+	/*
+	 * This is the serial number of base.
+	 *
+	 * At least one RTR client implementation (Cloudflare's rpki-rtr-client)
+	 * malfunctions if the validator uses zero as the first serial, so this
+	 * value behaves as follows:
+	 *
+	 * serial = 0. After every successful validation cycle, serial++.
+	 *
+	 * Do not use this value to check whether we already finished our first
+	 * validation. (Use base != NULL for that.) Zero is totally a valid
+	 * serial, particularly when the integer wraps.
+	 */
+	serial_t serial;
 	uint16_t v0_session_id;
 	uint16_t v1_session_id;
 };
@@ -98,7 +109,7 @@ vrps_init(void)
 	 * "desynchronization" (more at RFC 6810 'Glossary' and
 	 * 'Fields of a PDU')
 	 */
-	state.next_serial = START_SERIAL;
+	state.serial = 0;
 
 	/* Get the bits that'll fit in session_id */
 	now = 0;
@@ -208,182 +219,148 @@ __perform_standalone_validation(struct db_table **result)
 }
 
 /*
- * Make an empty dummy delta array.
- * It's annoying, but temporary. (Until it expires.) Otherwise, it'd be a pain
- * to have to check NULL delta_group.deltas all the time.
+ * Remove unnecessary deltas from the database.
+ * Unnecessary deltas = those whose serial < min_serial.
  */
-static int
-create_empty_delta(struct deltas **deltas)
+static void
+cleanup_deltas(serial_t min_serial)
 {
-	struct delta_group deltas_node;
-	int error;
-
-	error = deltas_create(deltas);
-	if (error)
-		return error;
-
-	deltas_node.serial = state.next_serial;
-	deltas_node.deltas = *deltas;
-	error = deltas_db_add(&state.deltas, &deltas_node);
-	if (error)
-		deltas_refput(*deltas);
-	return error;
-}
-
-/**
- * Reallocate the array of @db starting at @start, the length and capacity are
- * calculated according to the new start.
- */
-static int
-resize_deltas_db(struct deltas_db *db, struct delta_group *start)
-{
-	struct delta_group *tmp, *ptr;
-
-	db->len -= (start - db->array);
-	while (db->len < db->capacity / 2)
-		db->capacity /= 2;
-	tmp = malloc(sizeof(struct delta_group) * db->capacity);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	memcpy(tmp, start, db->len * sizeof(struct delta_group));
-	/* Release memory allocated */
-	for (ptr = db->array; ptr < start; ptr++)
-		deltas_refput(ptr->deltas);
-	free(db->array);
-	db->array = tmp;
-
-	return 0;
-}
-
-/*
- * Lock must be requested before calling this function
- */
-static int
-vrps_purge(struct deltas **deltas)
-{
-	struct delta_group *group;
+	struct delta_group *initial;
+	struct delta_group *rm;
 	array_index i;
-	serial_t min_serial;
 
-	if (clients_get_min_serial(&min_serial) != 0) {
-		/* Nobody will need deltas, just leave an empty one */
-		deltas_refput(*deltas);
-		deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
-		deltas_db_init(&state.deltas);
-		return create_empty_delta(deltas);
-	}
-
-	/* Assume its ordered by serial, so get the new initial pointer */
-	ARRAYLIST_FOREACH(&state.deltas, group, i)
-		if (group->serial >= min_serial)
+	/*
+	 * TODO the array is sorted by serial, but it's supposed to employ
+	 * serial arithmetic. > is incorrect.
+	 */
+	ARRAYLIST_FOREACH(&state.deltas, initial, i)
+		if (initial->serial > min_serial)
 			break;
 
-	/* Its the first element or reached end, nothing to purge */
-	if (group == state.deltas.array ||
-	    (group - state.deltas.array) == state.deltas.len)
-		return 0;
+	for (rm = state.deltas.array; rm < initial; rm++)
+		deltas_refput(rm->deltas);
 
-	return resize_deltas_db(&state.deltas, group);
+	state.deltas.len -= (initial - state.deltas.array);
+	memmove(state.deltas.array, initial,
+	    state.deltas.len * sizeof(struct delta_group));
 }
 
 static int
-__vrps_update(bool *changed)
+__compute_deltas(struct db_table *old_base, struct db_table *new_base,
+    bool *notify_clients)
 {
-	struct db_table *old_base;
-	struct db_table *new_base;
 	struct deltas *deltas; /* Deltas in raw form */
 	struct delta_group deltas_node; /* Deltas in database node form */
 	serial_t min_serial;
 	int error;
 
-	if (changed)
-		*changed = false;
+	error = 0;
+
+	/* No clients listening = no need for deltas */
+	if (clients_get_min_serial(&min_serial) == -ENOENT)
+		goto purge_deltas;
+
+	if (notify_clients != NULL)
+		*notify_clients = true;
+
+	/* First version of the database = No deltas */
+	if (old_base == NULL)
+		goto purge_deltas;
+
+	/*
+	 * Failure on computing deltas = latest database version lacks deltas,
+	 * which renders all previous deltas useless. (Because clients always
+	 * want the latest.)
+	 */
+	error = compute_deltas(old_base, new_base, &deltas);
+	if (error)
+		goto purge_deltas;
+
+	if (deltas_is_empty(deltas)) {
+		if (notify_clients != NULL)
+			*notify_clients = false;
+		deltas_refput(deltas);
+		goto success; /* Happy path when the DB doesn't change. */
+	}
+
+	deltas_node.serial = state.serial;
+	deltas_node.deltas = deltas;
+	/* On success, ownership of deltas is transferred to state.deltas. */
+	error = deltas_db_add(&state.deltas, &deltas_node);
+	if (error) {
+		deltas_refput(deltas);
+		goto purge_deltas;
+	}
+
+	/* Happy path when the DB changes. (Fall through) */
+
+success:
+	cleanup_deltas(min_serial);
+	return 0;
+
+purge_deltas:
+	deltas_db_cleanup(&state.deltas, deltagroup_cleanup);
+	return error;
+}
+
+static int
+__vrps_update(bool *notify_clients)
+{
+	struct db_table *old_base;
+	struct db_table *new_base;
+	int error;
+
+	if (notify_clients)
+		*notify_clients = false;
 	old_base = NULL;
 	new_base = NULL;
 
 	error = __perform_standalone_validation(&new_base);
 	if (error)
 		return error;
-
 	error = slurm_apply(&new_base, &state.slurm);
-	if (error)
-		goto revert_base;
+	if (error) {
+		db_table_destroy(new_base);
+		return error;
+	}
+
+	/*
+	 * At this point, new_base is completely valid. Even if we error out
+	 * later, report the ROAs.
+	 *
+	 * This is done after the validation, not during it, to prevent
+	 * duplicate ROAs.
+	 */
+	output_print_data(new_base);
 
 	rwlock_write_lock(&state_lock);
 
-	if (state.base != NULL) {
-		error = compute_deltas(state.base, new_base, &deltas);
-		if (error) {
-			rwlock_unlock(&state_lock);
-			goto revert_base;
-		}
-
-		if (deltas_is_empty(deltas)) {
-			rwlock_unlock(&state_lock);
-			goto revert_deltas; /* error == 0 is good */
-		}
-
-		/* Just store deltas if someone will care about it */
-		if (clients_get_min_serial(&min_serial) == 0) {
-			deltas_node.serial = state.next_serial;
-			deltas_node.deltas = deltas;
-			error = deltas_db_add(&state.deltas, &deltas_node);
-			if (error) {
-				rwlock_unlock(&state_lock);
-				goto revert_deltas;
-			}
-		}
-
-		/*
-		 * Postpone destruction of the old database,
-		 * to release the lock ASAP.
-		 */
-		old_base = state.base;
-
-		/* Remove unnecessary deltas */
-		error = vrps_purge(&deltas);
-		if (error) {
-			rwlock_unlock(&state_lock);
-			goto revert_base;
-		}
-	} else {
-		/* There's also an empty base, don't alter state */
-		if (db_table_roa_count(new_base) +
-		    db_table_router_key_count(new_base) == 0) {
-			rwlock_unlock(&state_lock);
-			error = 0; /* OK (said explicitly) */
-			goto revert_base;
-		}
-		error = create_empty_delta(&deltas);
-		if (error) {
-			rwlock_unlock(&state_lock);
-			goto revert_base;
-		}
-	}
-
-	if (changed)
-		*changed = true;
+	old_base = state.base; /* Postpone destruction, to release lock ASAP. */
 	state.base = new_base;
-	state.next_serial++;
+	state.serial++;
+
+	/*
+	 * TODO after refactoring vrps_foreach_filtered_delta(), move this out
+	 * of the mutex. You don't really need the mutex to compute the deltas;
+	 * vrps_update() is supposed to be the only writer.
+	 */
+	error = __compute_deltas(old_base, new_base, notify_clients);
+	if (error) {
+		/*
+		 * Deltas are nice-to haves. As long as state.base is correct,
+		 * the validator can continue serving the routers.
+		 * (Albeit less efficiently.)
+		 * So drop a warning and keep going.
+		 */
+		pr_op_warn("Deltas could not be computed: %s", strerror(error));
+	}
 
 	rwlock_unlock(&state_lock);
 
 	if (old_base != NULL)
 		db_table_destroy(old_base);
 
-	/* Print after validation to avoid duplicated info */
-	output_print_data(new_base);
-
 	return 0;
-
-revert_deltas:
-	deltas_refput(deltas);
-revert_base:
-	/* Print info that was already validated */
-	output_print_data(new_base);
-	db_table_destroy(new_base);
-	return error;
 }
 
 int
@@ -395,18 +372,17 @@ vrps_update(bool *changed)
 	int error;
 
 	/*
-	 * This wrapper is mainly for log informational data, so if there's no
-	 * need don't do unnecessary calls
+	 * This wrapper is mainly intended to log informational data, so if
+	 * there's no need, don't do unnecessary calls.
 	 */
 	if (!log_op_enabled(LOG_INFO))
 		return __vrps_update(changed);
 
 	pr_op_info("Starting validation.");
-	serial = START_SERIAL;
 	if (config_get_mode() == SERVER) {
 		error = get_last_serial_number(&serial);
 		if (!error)
-			pr_op_info("- Current serial number is %u.", serial);
+			pr_op_info("- Serial before validation: %u", serial);
 	}
 
 	time(&start);
@@ -429,11 +405,8 @@ vrps_update(bool *changed)
 		pr_op_info("- Valid Prefixes: %u", db_table_roa_count(state.base));
 		pr_op_info("- Valid Router Keys: %u",
 		    db_table_router_key_count(state.base));
-		if (config_get_mode() == SERVER) {
-			pr_op_info("- %s serial number is %u.",
-			    serial == state.next_serial - 1 ? "Current" : "New",
-			    state.next_serial - 1);
-		}
+		if (config_get_mode() == SERVER)
+			pr_op_info("- Serial: %u", state.serial);
 		rwlock_unlock(&state_lock);
 	} while(0);
 	pr_op_info("- Real execution time: %ld secs.", exec_time);
@@ -606,29 +579,36 @@ int
 vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 {
 	struct delta_group *group;
+	serial_t first_serial;
+	serial_t last_serial;
 	array_index i;
-	bool from_found;
 	int error;
-
-	from_found = false;
 
 	error = rwlock_read_lock(&state_lock);
 	if (error)
 		return error;
 
-	if (state.base == NULL) {
+	if (state.base == NULL)
+		goto try_again; /* Database still under construction. */
+	if (from == state.serial) {
+		/* Client already has the latest serial. */
 		rwlock_unlock(&state_lock);
-		return -EAGAIN;
+		*to = from;
+		return 0;
 	}
+	if (state.deltas.len == 0)
+		goto reset_database; /* No deltas available. */
 
-	ARRAYLIST_FOREACH(&state.deltas, group, i) {
-		if (!from_found) {
-			if (group->serial == from) {
-				from_found = true;
-				*to = group->serial;
-			}
-			continue;
-		}
+	first_serial = state.deltas.array[0].serial - 1;
+	last_serial = state.deltas.array[state.deltas.len - 1].serial;
+
+	if (from < first_serial)
+		goto reset_database; /* Delta was already deleted. */
+	if (from > last_serial)
+		goto reset_database; /* Serial is invalid. */
+
+	for (i = from - first_serial; i < state.deltas.len; i++) {
+		group = &state.deltas.array[i];
 
 		error = deltas_db_add(result, group);
 		if (error) {
@@ -637,11 +617,19 @@ vrps_get_deltas_from(serial_t from, serial_t *to, struct deltas_db *result)
 		}
 
 		deltas_refget(group->deltas);
-		*to = group->serial;
 	}
 
 	rwlock_unlock(&state_lock);
-	return from_found ? 0 : -ESRCH;
+	*to = last_serial;
+	return 0;
+
+try_again:
+	rwlock_unlock(&state_lock);
+	return -EAGAIN;
+
+reset_database:
+	rwlock_unlock(&state_lock);
+	return -ESRCH;
 }
 
 int
@@ -654,7 +642,7 @@ get_last_serial_number(serial_t *result)
 		return error;
 
 	if (state.base != NULL)
-		*result = state.next_serial - 1;
+		*result = state.serial;
 	else
 		error = -EAGAIN;
 
