@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -582,14 +581,7 @@ static int
 start_server_thread(void)
 {
 	struct fd_node *node;
-	struct sigaction ign;
 	int error;
-
-	/* Ignore SIGPIPES, they're handled apart */
-	ign.sa_handler = SIG_IGN;
-	ign.sa_flags = 0;
-	sigemptyset(&ign.sa_mask);
-	sigaction(SIGPIPE, &ign, NULL);
 
 	SLIST_FOREACH(node, &fds, next) {
 		error = listen(node->id, config_get_server_queue());
