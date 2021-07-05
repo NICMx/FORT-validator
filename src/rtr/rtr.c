@@ -95,6 +95,34 @@ init_addrinfo(char const *hostname, char const *service,
 	return 0;
 }
 
+static int
+set_nonblock(int fd, bool value)
+{
+	int flags;
+	int error;
+
+	flags = fcntl(fd, F_GETFL);
+	if (flags == -1) {
+		error = errno;
+		pr_op_errno(error, "fcntl() to get flags failed");
+		return error;
+	}
+
+	/* Non-block to allow listening on all server sockets */
+	if (value)
+		flags |= O_NONBLOCK;
+	else
+		flags &= ~O_NONBLOCK;
+
+	if (fcntl(fd, F_SETFL, flags) == -1) {
+		error = errno;
+		pr_op_errno(error, "fcntl() to set flags failed");
+		return error;
+	}
+
+	return 0;
+}
+
 /*
  * Creates the socket that will stay put and wait for new connections started
  * from the clients.
@@ -105,7 +133,6 @@ create_server_socket(char const *hostname, char const *service, int *result)
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
 	unsigned long port;
-	int flags;
 	int reuse;
 	int fd;
 	int error;
@@ -130,18 +157,8 @@ create_server_socket(char const *hostname, char const *service, int *result)
 			continue;
 		}
 
-		flags = fcntl(fd, F_GETFL);
-		if (flags == -1) {
-			pr_op_errno(errno, "fcntl() to get flags failed");
-			close(fd);
-			continue;
-		}
-
 		/* Non-block to allow listening on all server sockets */
-		flags |= O_NONBLOCK;
-
-		if (fcntl(fd, F_SETFL, flags) == -1) {
-			pr_op_errno(errno, "fcntl() to set flags failed");
+		if (set_nonblock(fd, true) != 0) {
 			close(fd);
 			continue;
 		}
@@ -501,9 +518,9 @@ handle_client_connections(void *arg)
 
 	pr_op_debug("Waiting for client connections at server...");
 	do {
-		/* Look for connections every .2 seconds*/
-		select_time.tv_sec = 0;
-		select_time.tv_usec = 200000;
+		/* Query server_stop every second. */
+		select_time.tv_sec = 1;
+		select_time.tv_usec = 0;
 
 		/* Am I still alive? */
 		if (server_stop)
@@ -553,6 +570,16 @@ handle_client_connections(void *arg)
 			 * the next accept() will work.
 			 * So don't interrupt the thread when this happens.
 			 */
+
+			/*
+			 * On some systems, O_NONBLOCK is inherited.
+			 * We very much don't want O_NONBLOCK on the client
+			 * socket.
+			 */
+			if (set_nonblock(client_fd, false) != 0) {
+				close(client_fd);
+				continue;
+			}
 
 			param = malloc(sizeof(struct thread_param));
 			if (param == NULL) {
