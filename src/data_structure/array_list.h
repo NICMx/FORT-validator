@@ -30,6 +30,7 @@
 		list->capacity = 0;					\
 	}								\
 									\
+	/* Call name##_init() again if you want to reuse the list. */	\
 	modifiers void							\
 	name##_cleanup(struct name *list, void (*cb)(elem_type *))	\
 	{								\

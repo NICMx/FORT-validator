@@ -2,19 +2,17 @@
 
 #include <err.h>
 #include <stddef.h>
-#include "clients.h"
 #include "log.h"
+#include "rtr/rtr.h"
 #include "rtr/pdu_sender.h"
 #include "rtr/db/vrps.h"
 
 static int
-send_notify(struct client *client, void *arg)
+send_notify(struct rtr_client const *client, void *arg)
 {
 	serial_t *serial = arg;
 
-	/* Send Serial Notify PDU */
-	send_serial_notify_pdu(client->fd, client->rtr_version,
-	    *serial);
+	send_serial_notify_pdu(client->fd, client->rtr_version, *serial);
 
 	/* Errors already logged, do not interrupt notify to other clients */
 	return 0;
@@ -30,5 +28,5 @@ notify_clients(void)
 	if (error)
 		return error;
 
-	return clients_foreach(send_notify, &serial);
+	return rtr_foreach_client(send_notify, &serial);
 }

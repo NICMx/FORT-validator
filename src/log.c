@@ -17,11 +17,11 @@ struct level {
 	FILE *stream;
 };
 
-static struct level DBG = { "DBG", "\x1B[36m" };
-static struct level INF = { "INF", "\x1B[37m" };
-static struct level WRN = { "WRN", "\x1B[33m" };
-static struct level ERR = { "ERR", "\x1B[31m" };
-static struct level CRT = { "CRT", "\x1B[35m" };
+static struct level DBG = { "DBG", "\x1B[36m" }; /* Cyan */
+static struct level INF = { "INF", "\x1B[37m" }; /* White */
+static struct level WRN = { "WRN", "\x1B[33m" }; /* Yellow */
+static struct level ERR = { "ERR", "\x1B[31m" }; /* Red */
+static struct level CRT = { "CRT", "\x1B[35m" }; /* Purple */
 static struct level UNK = { "UNK", "" };
 #define COLOR_RESET "\x1B[0m"
 
@@ -98,10 +98,10 @@ print_stack_trace(char const *title)
 	free(strings);
 }
 
-static void init_config(struct log_config *cfg)
+static void init_config(struct log_config *cfg, bool unit_tests)
 {
 	cfg->fprintf_enabled = true;
-	cfg->syslog_enabled = true;
+	cfg->syslog_enabled = !unit_tests;
 	cfg->level = LOG_DEBUG;
 	cfg->prefix = NULL;
 	cfg->color = false;
@@ -166,7 +166,8 @@ register_signal_handlers(void)
 	}
 
 	/*
-	 * SIGPIPE is sometimes triggered by libcurl:
+	 * SIGPIPE can be triggered by any I/O function. libcurl is particularly
+	 * tricky:
 	 *
 	 * > libcurl makes an effort to never cause such SIGPIPEs to trigger,
 	 * > but some operating systems have no way to avoid them and even on
@@ -174,8 +175,8 @@ register_signal_handlers(void)
 	 * > happen
 	 * (Documentation of CURLOPT_NOSIGNAL)
 	 *
-	 * All SIGPIPE usually means is "the server closed the connection for
-	 * some reason, fuck you."
+	 * All SIGPIPE means is "the peer closed the connection for some reason,
+	 * fuck you."
 	 * Which is a normal I/O error, and should be handled by the normal
 	 * error propagation logic, not by a signal handler.
 	 * So, ignore SIGPIPE.
@@ -193,7 +194,7 @@ register_signal_handlers(void)
 }
 
 int
-log_setup(void)
+log_setup(bool unit_tests)
 {
 	/*
 	 * Remember not to use any actual logging functions until logging has
@@ -209,22 +210,25 @@ log_setup(void)
 	CRT.stream = stderr;
 	UNK.stream = stdout;
 
-	openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);
+	if (unit_tests)
+		openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);
 
-	init_config(&op_config);
-	init_config(&val_config);
+	init_config(&op_config, unit_tests);
+	init_config(&val_config, unit_tests);
 
 	error = pthread_mutex_init(&logck, NULL);
 	if (error) {
 		fprintf(ERR.stream, "pthread_mutex_init() returned %d: %s\n",
 		    error, strerror(abs(error)));
-		syslog(LOG_ERR | op_config.facility,
-		    "pthread_mutex_init() returned %d: %s",
-		    error, strerror(abs(error)));
+		if (!unit_tests)
+			syslog(LOG_ERR | op_config.facility,
+			    "pthread_mutex_init() returned %d: %s",
+			    error, strerror(abs(error)));
 		return error;
 	}
 
-	register_signal_handlers();
+	if (!unit_tests)
+		register_signal_handlers();
 
 	return 0;
 }

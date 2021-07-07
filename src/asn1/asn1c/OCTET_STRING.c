@@ -711,7 +711,7 @@ OS__check_escaped_control_char(const void *buf, int size) {
 	/*
 	 * Inefficient algorithm which translates the escape sequences
 	 * defined above into characters. Returns -1 if not found.
-	 * TODO: replace by a faster algorithm (bsearch(), hash or
+	 * TODO (asn1c) replace by a faster algorithm (bsearch(), hash or
 	 * nested table lookups).
 	 */
 	for(i = 0; i < 32 /* Don't spend time on the bottom half */; i++) {

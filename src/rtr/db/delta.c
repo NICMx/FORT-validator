@@ -90,8 +90,8 @@ deltas_refput(struct deltas *deltas)
 }
 
 int
-deltas_add_roa_v4(struct deltas *deltas, uint32_t as, struct v4_address *addr,
-    int op)
+deltas_add_roa_v4(struct deltas *deltas, uint32_t as,
+    struct v4_address const *addr, int op)
 {
 	struct delta_v4 delta = {
 		.as = as,
@@ -110,8 +110,8 @@ deltas_add_roa_v4(struct deltas *deltas, uint32_t as, struct v4_address *addr,
 }
 
 int
-deltas_add_roa_v6(struct deltas *deltas, uint32_t as, struct v6_address *addr,
-    int op)
+deltas_add_roa_v6(struct deltas *deltas, uint32_t as,
+    struct v6_address const *addr, int op)
 {
 	struct delta_v6 delta = {
 		.as = as,
@@ -130,7 +130,8 @@ deltas_add_roa_v6(struct deltas *deltas, uint32_t as, struct v6_address *addr,
 }
 
 int
-deltas_add_router_key(struct deltas *deltas, struct router_key *key, int op)
+deltas_add_router_key(struct deltas *deltas, struct router_key const *key,
+    int op)
 {
 	struct delta_rk delta = {
 		.as = key->as,
@@ -161,14 +162,13 @@ deltas_is_empty(struct deltas *deltas)
 
 static int
 __foreach_v4(struct deltas_v4 *array, delta_vrp_foreach_cb cb, void *arg,
-    serial_t serial, uint8_t flags)
+    uint8_t flags)
 {
 	struct delta_vrp delta;
 	struct delta_v4 *d;
 	array_index i;
 	int error;
 
-	delta.serial = serial;
 	delta.vrp.addr_fam = AF_INET;
 	delta.flags = flags;
 
@@ -187,14 +187,13 @@ __foreach_v4(struct deltas_v4 *array, delta_vrp_foreach_cb cb, void *arg,
 
 static int
 __foreach_v6(struct deltas_v6 *array, delta_vrp_foreach_cb cb, void *arg,
-    serial_t serial, uint8_t flags)
+    uint8_t flags)
 {
 	struct delta_vrp delta;
 	struct delta_v6 *d;
 	array_index i;
 	int error;
 
-	delta.serial = serial;
 	delta.vrp.addr_fam = AF_INET6;
 	delta.flags = flags;
 
@@ -213,14 +212,13 @@ __foreach_v6(struct deltas_v6 *array, delta_vrp_foreach_cb cb, void *arg,
 
 static int
 __foreach_rk(struct deltas_rk *array,  delta_router_key_foreach_cb cb,
-    void *arg, serial_t serial, uint8_t flags)
+    void *arg, uint8_t flags)
 {
 	struct delta_router_key delta;
 	struct delta_rk *d;
 	array_index i;
 	int error;
 
-	delta.serial = serial;
 	delta.flags = flags;
 
 	ARRAYLIST_FOREACH(array, d, i) {
@@ -236,36 +234,30 @@ __foreach_rk(struct deltas_rk *array,  delta_router_key_foreach_cb cb,
 }
 
 int
-deltas_foreach(serial_t serial, struct deltas *deltas,
-    delta_vrp_foreach_cb cb_vrp, delta_router_key_foreach_cb cb_rk, void *arg)
+deltas_foreach(struct deltas *deltas, delta_vrp_foreach_cb cb_vrp,
+    delta_router_key_foreach_cb cb_rk, void *arg)
 {
 	int error;
 
-	error = __foreach_v4(&deltas->v4.adds, cb_vrp, arg, serial,
-	    FLAG_ANNOUNCEMENT);
+	error = __foreach_v4(&deltas->v4.adds, cb_vrp, arg, FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
 
-	error = __foreach_v4(&deltas->v4.removes, cb_vrp, arg, serial,
-	    FLAG_WITHDRAWAL);
+	error = __foreach_v4(&deltas->v4.removes, cb_vrp, arg, FLAG_WITHDRAWAL);
 	if (error)
 		return error;
 
-	error = __foreach_v6(&deltas->v6.adds, cb_vrp, arg, serial,
-	    FLAG_ANNOUNCEMENT);
+	error = __foreach_v6(&deltas->v6.adds, cb_vrp, arg, FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
 
-	error = __foreach_v6(&deltas->v6.removes, cb_vrp, arg, serial,
-	    FLAG_WITHDRAWAL);
+	error = __foreach_v6(&deltas->v6.removes, cb_vrp, arg, FLAG_WITHDRAWAL);
 	if (error)
 		return error;
 
-	error = __foreach_rk(&deltas->rk.adds, cb_rk, arg, serial,
-	    FLAG_ANNOUNCEMENT);
+	error = __foreach_rk(&deltas->rk.adds, cb_rk, arg, FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
 
-	return __foreach_rk(&deltas->rk.removes, cb_rk, arg, serial,
-	    FLAG_WITHDRAWAL);
+	return __foreach_rk(&deltas->rk.removes, cb_rk, arg, FLAG_WITHDRAWAL);
 }

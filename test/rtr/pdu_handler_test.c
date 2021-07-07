@@ -10,6 +10,7 @@
 #include "json_parser.c"
 #include "log.c"
 #include "output_printer.c"
+#include "serial.c"
 #include "crypto/base64.c"
 #include "object/router_key.c"
 #include "rtr/pdu.c"
@@ -17,8 +18,8 @@
 #include "rtr/primitive_reader.c"
 #include "rtr/primitive_writer.c"
 #include "rtr/err_pdu.c"
-#include "rtr/stream.c"
 #include "rtr/db/delta.c"
+#include "rtr/db/deltas_array.c"
 #include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
 #include "rtr/db/vrps.c"
@@ -69,6 +70,10 @@ has_expected_pdus(void)
 	return !STAILQ_EMPTY(&expected_pdus);
 }
 
+/*
+ * This initializes the database using the test values from
+ * db/rtr_db_impersonator.c.
+ */
 static void
 init_db_full(void)
 {
@@ -108,11 +113,10 @@ init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
 
 /* Impersonator functions */
 
-int
-clients_get_min_serial(serial_t *result)
+unsigned int
+config_get_deltas_lifetime(void)
 {
-	*result = 0;
-	return 0;
+	return 5;
 }
 
 int
@@ -145,6 +149,18 @@ send_cache_response_pdu(int fd, uint8_t version)
 	return 0;
 }
 
+static char const *
+flags2str(uint8_t flags)
+{
+	switch (flags) {
+	case FLAG_ANNOUNCEMENT:
+		return "add";
+	case FLAG_WITHDRAWAL:
+		return "rm";
+	}
+	return "unk";
+}
+
 int
 send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 {
@@ -155,9 +171,22 @@ send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 	 */
 	uint8_t pdu_type = pop_expected_pdu();
 	pr_op_info("    Server sent Prefix PDU.");
+
+	switch (vrp->addr_fam) {
+	case AF_INET:
+		PR_DEBUG_MSG("%s asn%u IPv4", flags2str(flags), vrp->asn);
+		break;
+	case AF_INET6:
+		PR_DEBUG_MSG("%s asn%u IPv6", flags2str(flags), vrp->asn);
+		break;
+	default:
+		PR_DEBUG_MSG("%s asn%u Unknown", flags2str(flags), vrp->asn);
+		break;
+	}
+
 	ck_assert_msg(pdu_type == PDU_TYPE_IPV4_PREFIX
 	    || pdu_type == PDU_TYPE_IPV6_PREFIX,
-	    "Server's PDU type is %d, not one of the IP Prefixes.", pdu_type);
+	    "Server sent a prefix. Expected PDU type was %d.", pdu_type);
 	return 0;
 }
 
@@ -172,39 +201,9 @@ send_router_key_pdu(int fd, uint8_t version,
 	 */
 	uint8_t pdu_type = pop_expected_pdu();
 	pr_op_info("    Server sent Router Key PDU.");
+	PR_DEBUG_MSG("%s asn%u RK", flags2str(flags), router_key->as);
 	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
-	    "Server's PDU type is %d, not Router Key type.", pdu_type);
-	return 0;
-}
-
-static int
-handle_delta(struct delta_vrp const *delta, void *arg)
-{
-	int *fd = arg;
-	ck_assert_int_eq(0, send_prefix_pdu(*fd, RTR_V1, &delta->vrp,
-	    delta->flags));
-	return 0;
-}
-
-static int
-handle_delta_router_key(struct delta_router_key const *delta, void *arg)
-{
-	int *fd = arg;
-	ck_assert_int_eq(0, send_router_key_pdu(*fd, RTR_V1, &delta->router_key,
-	    delta->flags));
-	return 0;
-}
-
-int
-send_delta_pdus(int fd, uint8_t version, struct deltas_db *deltas)
-{
-	struct delta_group *group;
-	array_index i;
-
-	ARRAYLIST_FOREACH(deltas, group, i)
-		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    handle_delta, handle_delta_router_key, &fd));
-
+	    "Server sent a Router Key. Expected PDU type was %d.", pdu_type);
 	return 0;
 }
 
@@ -286,14 +285,15 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 1: Run and validate */
 	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	PR_DEBUG;
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* From serial 2: Init client request */
@@ -432,43 +432,6 @@ serialize_serial_query_pdu(struct serial_query_pdu *pdu, unsigned char *buf)
 	return ptr - buf;
 }
 
-START_TEST(test_bad_length)
-{
-#define BUF_SIZE 13 /* Max expected length */
-	struct rtr_request request;
-	struct serial_query_pdu client_pdu;
-	struct pdu_metadata const *meta;
-	unsigned char buf[BUF_SIZE];
-	int fd;
-
-	pr_op_info("-- Bad Length --");
-
-	/* Prepare DB */
-	init_db_full();
-
-	/* From serial 0: Init client request */
-	init_serial_query(&request, &client_pdu, 0);
-	/* Less than what's specified */
-	client_pdu.header.length--;
-
-	ck_assert_int_gt(serialize_serial_query_pdu(&client_pdu, buf), 0);
-	fd = buffer2fd(buf, BUF_SIZE);
-	ck_assert_int_ge(fd, 0);
-
-	/* Define expected server response */
-	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
-
-	/* Run and validate, before handling */
-	ck_assert_int_eq(-EINVAL, pdu_load(fd, NULL, &request, &meta));
-	ck_assert_uint_eq(false, has_expected_pdus());
-
-	/* Clean up */
-	vrps_destroy();
-	close(fd);
-#undef BUF_SIZE
-}
-END_TEST
-
 Suite *pdu_suite(void)
 {
 	Suite *suite;
@@ -482,7 +445,6 @@ Suite *pdu_suite(void)
 
 	error = tcase_create("Unhappy path cases");
 	tcase_add_test(error, test_bad_session_id);
-	tcase_add_test(error, test_bad_length);
 
 	suite = suite_create("PDU Handler");
 	suite_add_tcase(suite, core);
@@ -495,6 +457,8 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	log_setup(true);
 
 	suite = pdu_suite();
 

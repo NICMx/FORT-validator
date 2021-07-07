@@ -48,7 +48,7 @@
  * log_init() finishes initialization by loading the user's intended config.
  * log_teardown() reverts initialization.
  */
-int log_setup(void);
+int log_setup(bool);
 void log_start(void);
 void log_teardown(void);
 
@@ -121,8 +121,13 @@ int incidence(enum incidence_id, const char *, ...) CHECK_FORMAT(2, 3);
  * These are not meant to be uploaded; remember to delete them once the bug has
  * been found.
  */
-#define PR_DEBUG printf("%s:%d (%s())\n", __FILE__, __LINE__, __func__)
-#define PR_DEBUG_MSG(msg, ...) printf("%s:%d (%s()): " msg "\n", \
+#define DBG_COLOR "\x1B[32m" /* Green */
+#define DBG_COLOR_RESET "\x1B[0m"
+#define PR_DEBUG \
+    printf(DBG_COLOR "%s:%d (%s())" DBG_COLOR_RESET "\n", \
+    __FILE__, __LINE__, __func__)
+#define PR_DEBUG_MSG(msg, ...) \
+    printf(DBG_COLOR "%s:%d (%s()): " msg DBG_COLOR_RESET "\n", \
     __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
 #endif /* SRC_LOG_H_ */

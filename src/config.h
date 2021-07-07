@@ -24,6 +24,7 @@ unsigned int config_get_validation_interval(void);
 unsigned int config_get_interval_refresh(void);
 unsigned int config_get_interval_retry(void);
 unsigned int config_get_interval_expire(void);
+unsigned int config_get_deltas_lifetime(void);
 char const *config_get_slurm(void);
 
 char const *config_get_tal(void);

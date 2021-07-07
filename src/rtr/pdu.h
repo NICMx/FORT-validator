@@ -7,6 +7,7 @@
 #include "common.h"
 #include "object/router_key.h"
 #include "rtr/primitive_reader.h"
+#include "rtr/rtr.h"
 
 #define RTR_V0	0
 #define RTR_V1	1
@@ -157,7 +158,7 @@ struct pdu_metadata {
 	void	(*destructor)(void *);
 };
 
-int pdu_load(int, struct sockaddr_storage *, struct rtr_request *,
+int pdu_load(struct pdu_reader *, struct rtr_client *, struct rtr_request *,
     struct pdu_metadata const **);
 struct pdu_metadata const *pdu_get_metadata(uint8_t);
 struct pdu_header *pdu_get_header(void *);

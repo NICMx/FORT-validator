@@ -22,13 +22,61 @@ handle_serial_notify_pdu(int fd, struct rtr_request const *request)
 	WARN_UNEXPECTED_PDU(serial_notify, fd, request, "Serial Notify");
 }
 
+struct send_delta_args {
+	int fd;
+	uint8_t rtr_version;
+	bool cache_response_sent;
+};
+
+static int
+send_cache_response_maybe(struct send_delta_args *args)
+{
+	int error;
+
+	if (!args->cache_response_sent) {
+		error = send_cache_response_pdu(args->fd, args->rtr_version);
+		if (error)
+			return error;
+		args->cache_response_sent = true;
+	}
+
+	return 0;
+}
+
+static int
+send_delta_vrp(struct delta_vrp const *delta, void *arg)
+{
+	struct send_delta_args *args = arg;
+	int error;
+
+	error = send_cache_response_maybe(args);
+	if (error)
+		return error;
+
+	return send_prefix_pdu(args->fd, args->rtr_version, &delta->vrp,
+	    delta->flags);
+}
+
+static int
+send_delta_rk(struct delta_router_key const *delta, void *arg)
+{
+	struct send_delta_args *args = arg;
+	int error;
+
+	error = send_cache_response_maybe(args);
+	if (error)
+		return error;
+
+	return send_router_key_pdu(args->fd, args->rtr_version,
+	    &delta->router_key, delta->flags);
+}
+
 int
 handle_serial_query_pdu(int fd, struct rtr_request const *request)
 {
 	struct serial_query_pdu *query = request->pdu;
-	struct deltas_db deltas;
+	struct send_delta_args args;
 	serial_t final_serial;
-	uint8_t version;
 	int error;
 
 	/*
@@ -38,11 +86,14 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	 * the mismatch MUST immediately terminate the session with an Error
 	 * Report PDU with code 0 ("Corrupt Data")"
 	 */
-	version = query->header.protocol_version;
+	args.rtr_version = query->header.protocol_version;
 	if (query->header.m.session_id !=
-	    get_current_session_id(version))
-		return err_pdu_send_corrupt_data(fd, version, request,
+	    get_current_session_id(args.rtr_version))
+		return err_pdu_send_corrupt_data(fd, args.rtr_version, request,
 		    "Session ID doesn't match.");
+
+	args.fd = fd;
+	args.cache_response_sent = false;
 
 	/*
 	 * For the record, there are two reasons why we want to work on a
@@ -53,50 +104,39 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	 *    PDUs, to minimize writer stagnation.
 	 */
 
-	deltas_db_init(&deltas);
-	error = vrps_get_deltas_from(query->serial_number, &final_serial,
-	    &deltas);
+	error = vrps_foreach_delta_since(query->serial_number, &final_serial,
+	    send_delta_vrp, send_delta_rk, &args);
 	switch (error) {
 	case 0:
-		break;
+		/*
+		 * https://tools.ietf.org/html/rfc6810#section-6.2
+		 *
+		 * These functions presently only fail on writes, allocations
+		 * and programming errors. Best avoid error PDUs.
+		 */
+		if (!args.cache_response_sent) {
+			error = send_cache_response_pdu(fd, args.rtr_version);
+			if (error)
+				return error;
+		}
+		return send_end_of_data_pdu(fd, args.rtr_version, final_serial);
 	case -EAGAIN: /* Database still under construction */
-		error = err_pdu_send_no_data_available(fd, version);
-		goto end;
+		error = err_pdu_send_no_data_available(fd, args.rtr_version);
+		return error;
 	case -ESRCH: /* Invalid serial */
 		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
-		error = send_cache_reset_pdu(fd, version);
-		goto end;
+		return send_cache_reset_pdu(fd, args.rtr_version);
 	case -ENOMEM: /* Memory allocation failure */
-		error = pr_enomem();
-		goto end;
+		return pr_enomem();
 	case EAGAIN: /* Too many threads */
 		/*
 		 * I think this should be more of a "try again" thing, but
 		 * RTR does not provide a code for that. Just fall through.
 		 */
-	default:
-		error = err_pdu_send_internal_error(fd, version);
-		goto end;
+		break;
 	}
 
-	/*
-	 * https://tools.ietf.org/html/rfc6810#section-6.2
-	 *
-	 * These functions presently only fail on writes, allocations and
-	 * programming errors. Best avoid error PDUs.
-	 */
-
-	error = send_cache_response_pdu(fd, version);
-	if (error)
-		goto end;
-	error = send_delta_pdus(fd, version, &deltas);
-	if (error)
-		goto end;
-	error = send_end_of_data_pdu(fd, version, final_serial);
-
-end:
-	deltas_db_cleanup(&deltas, deltagroup_cleanup);
-	return error;
+	return err_pdu_send_internal_error(fd, args.rtr_version);
 }
 
 struct base_roa_args {

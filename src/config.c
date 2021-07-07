@@ -81,6 +81,8 @@ struct rpki_config {
 			unsigned int retry;
 			unsigned int expire;
 		} interval;
+		/** Number of iterations the deltas will be stored. */
+		unsigned int deltas_lifetime;
 	} server;
 
 	struct {
@@ -435,6 +437,14 @@ static const struct option_field options[] = {
 		 */
 		.min = 600,
 		.max = 172800,
+	}, {
+		.id = 5007,
+		.name = "server.deltas.lifetime",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, server.deltas_lifetime),
+		.doc = "Number of iterations the deltas will be stored.",
+		.min = 0,
+		.max = UINT_MAX,
 	},
 
 	/* RSYNC fields */
@@ -977,6 +987,7 @@ set_default_values(void)
 	rpki_config.server.interval.refresh = 3600;
 	rpki_config.server.interval.retry = 600;
 	rpki_config.server.interval.expire = 7200;
+	rpki_config.server.deltas_lifetime = 4;
 
 	rpki_config.tal = NULL;
 	rpki_config.slurm = NULL;
@@ -1330,6 +1341,12 @@ unsigned int
 config_get_interval_expire(void)
 {
 	return rpki_config.server.interval.expire;
+}
+
+unsigned int
+config_get_deltas_lifetime(void)
+{
+	return rpki_config.server.deltas_lifetime;
 }
 
 char const *

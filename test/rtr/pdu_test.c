@@ -5,29 +5,24 @@
 #include "common.c"
 #include "log.c"
 #include "impersonator.c"
-#include "rtr/stream.c"
 #include "rtr/err_pdu.c"
 #include "rtr/pdu.c"
 #include "rtr/primitive_reader.c"
 #include "rtr/db/rtr_db_impersonator.c"
 
 /*
- * Just a wrapper for `buffer2fd()`. Boilerplate one-liner.
+ * Used to be a wrapper for `buffer2fd()`, but that's no longer necessary.
+ *
+ * Converts the @buffer buffer into PDU @obj, using the @cb function.
+ * Also takes care of the header validation.
  */
 #define BUFFER2FD(buffer, cb, obj) {					\
 	struct pdu_header header;					\
 	struct pdu_reader reader;					\
-	unsigned char read[sizeof(buffer)];				\
-	int fd, err;							\
 									\
-	fd = buffer2fd(buffer, sizeof(buffer));				\
-	ck_assert_int_ge(fd, 0);					\
-	ck_assert_int_eq(pdu_reader_init(&reader, fd, read,		\
-	    sizeof(buffer), true), 0);					\
-	close(fd);							\
+	pdu_reader_init(&reader, buffer, sizeof(buffer));		\
 	init_pdu_header(&header);					\
-	err = cb(&header, &reader, obj);				\
-	ck_assert_int_eq(err, 0);					\
+	ck_assert_int_eq(0, cb(&header, &reader, obj));			\
 	assert_pdu_header(&(obj)->header);				\
 }
 
@@ -124,20 +119,12 @@ assert_pdu_header(struct pdu_header *header)
 START_TEST(test_pdu_header_from_stream)
 {
 	unsigned char input[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
-	unsigned char read[RTRPDU_HDR_LEN];
 	struct pdu_reader reader;
 	struct pdu_header header;
-	int fd;
-	int err;
 
-	fd = buffer2fd(input, sizeof(input));
-	ck_assert_int_ge(fd, 0);
-	ck_assert_int_eq(pdu_reader_init(&reader, fd, read, RTRPDU_HDR_LEN,
-	    true), 0);
-	close(fd);
+	pdu_reader_init(&reader, input, ARRAY_LEN(input));
 	/* Read the header into its buffer. */
-	err = pdu_header_from_reader(&reader, &header);
-	ck_assert_int_eq(err, 0);
+	ck_assert_int_eq(0, pdu_header_from_reader(&reader, &header));
 
 	ck_assert_uint_eq(header.protocol_version, 0);
 	ck_assert_uint_eq(header.pdu_type, 1);
@@ -243,7 +230,7 @@ START_TEST(test_error_report_from_stream)
 	unsigned char input[] = {
 			/* Sub-pdu length */
 			0, 0, 0, 12,
-			/* Sub-pdu w header*/
+			/* Sub-pdu with header*/
 			1, 0, 2, 3, 0, 0, 0, 12, 1, 2, 3, 4,
 			/* Error msg length */
 			0, 0, 0, 5,
@@ -252,49 +239,28 @@ START_TEST(test_error_report_from_stream)
 			/* Garbage */
 			1, 2, 3, 4,
 	};
-	struct error_report_pdu *pdu;
-	struct serial_notify_pdu *sub_pdu;
+	struct error_report_pdu pdu;
+	struct serial_notify_pdu sub_pdu;
 	struct pdu_header sub_pdu_header;
 	struct pdu_reader reader;
-	unsigned char sub_pdu_read[12];
-	int fd, err;
 
-	pdu = malloc(sizeof(struct error_report_pdu));
-	if (!pdu)
-		ck_abort_msg("PDU allocation failure");
-
-	sub_pdu = malloc(sizeof(struct serial_notify_pdu));
-	if (!sub_pdu) {
-		ck_abort_msg("SUB PDU allocation failure");
-		free(pdu);
-	}
-
-	BUFFER2FD(input, error_report_from_stream, pdu);
+	BUFFER2FD(input, error_report_from_stream, &pdu);
 
 	/* Get the erroneous PDU as a serial notify */
-	fd = buffer2fd(pdu->erroneous_pdu, pdu->error_pdu_length);
-	ck_assert_int_ge(fd, 0);
-	ck_assert_int_eq(pdu_reader_init(&reader, fd, sub_pdu_read,
-	    pdu->error_pdu_length, true), 0);
-	close(fd);
+	pdu_reader_init(&reader, pdu.erroneous_pdu, pdu.error_pdu_length);
 
-	ck_assert_int_eq(pdu_header_from_reader(&reader, &sub_pdu_header), 0);
-	err = serial_notify_from_stream(&sub_pdu_header, &reader, sub_pdu);
-	ck_assert_int_eq(err, 0);
+	ck_assert_int_eq(0, pdu_header_from_reader(&reader, &sub_pdu_header));
+	ck_assert_int_eq(0, serial_notify_from_stream(&sub_pdu_header, &reader,
+	    &sub_pdu));
 
-	ck_assert_uint_eq(sub_pdu->header.protocol_version, 1);
-	ck_assert_uint_eq(sub_pdu->header.pdu_type, 0);
-	ck_assert_uint_eq(sub_pdu->header.m.reserved, 0x0203);
-	ck_assert_uint_eq(sub_pdu->header.length, 12);
-	ck_assert_uint_eq(sub_pdu->serial_number, 0x01020304);
-	ck_assert_str_eq(pdu->error_message, "hello");
+	ck_assert_uint_eq(sub_pdu.header.protocol_version, 1);
+	ck_assert_uint_eq(sub_pdu.header.pdu_type, 0);
+	ck_assert_uint_eq(sub_pdu.header.m.reserved, 0x0203);
+	ck_assert_uint_eq(sub_pdu.header.length, 12);
+	ck_assert_uint_eq(sub_pdu.serial_number, 0x01020304);
+	ck_assert_str_eq(pdu.error_message, "hello");
 
-	/*
-	 * Yes, this test memory leaks on failure.
-	 * Not sure how to fix it without making a huge mess.
-	 */
-	error_report_destroy(pdu);
-	free(sub_pdu);
+	free(pdu.error_message);
 }
 END_TEST
 
@@ -302,14 +268,10 @@ START_TEST(test_interrupted)
 {
 	unsigned char input[] = { 0, 1 };
 	struct pdu_reader reader;
-	unsigned char read[4];
-	int fd, err;
+	struct pdu_header header;
 
-	fd = buffer2fd(input, sizeof(input));
-	ck_assert_int_ge(fd, 0);
-	err = pdu_reader_init(&reader, fd, read, 4, true);
-	close(fd);
-	ck_assert_int_eq(err, -EPIPE);
+	pdu_reader_init(&reader, input, ARRAY_LEN(input));
+	ck_assert_int_eq(-EPIPE, pdu_header_from_reader(&reader, &header));
 }
 END_TEST
 

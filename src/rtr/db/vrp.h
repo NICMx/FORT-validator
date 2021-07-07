@@ -1,9 +1,9 @@
 #ifndef SRC_RTR_DB_VRP_H_
 #define SRC_RTR_DB_VRP_H_
 
-#include <stdint.h>
 #include <netinet/in.h>
 #include "address.h"
+#include "serial.h"
 #include "object/router_key.h"
 
 #define FLAG_WITHDRAWAL		0
@@ -51,8 +51,6 @@
 #define VRP_EQ(a, b)							\
 	(VRP_ASN_EQ(a, b) && VRP_PREFIX_EQ(a, b) && VRP_MAX_PREFIX_LEN_EQ(a, b))
 
-typedef uint32_t serial_t;
-
 struct vrp {
 	uint32_t	asn;
 	union {
@@ -65,7 +63,6 @@ struct vrp {
 };
 
 struct delta_vrp {
-	serial_t serial;
 	struct vrp vrp;
 	uint8_t flags;
 };

@@ -1,4 +1,3 @@
-#include "clients.h"
 #include "config.h"
 #include "extension.h"
 #include "internal_pool.h"
@@ -69,7 +68,7 @@ main(int argc, char **argv)
 
 	/* Initializations */
 
-	error = log_setup();
+	error = log_setup(false);
 	if (error)
 		goto just_quit;
 
@@ -93,8 +92,8 @@ main(int argc, char **argv)
 		goto revert_nid;
 
 	/*
-	 * TODO this looks like a lot of overhead. Is it really necessary
-	 * when mode is STANDALONE?
+	 * TODO (performance) this looks like a lot of overhead. Is it really
+	 * necessary when mode is STANDALONE?
 	 */
 	error = internal_pool_init();
 	if (error)
@@ -112,9 +111,6 @@ main(int argc, char **argv)
 	error = reqs_errors_init();
 	if (error)
 		goto db_rrdp_cleanup;
-	error = clients_db_init();
-	if (error)
-		goto revert_reqs_errors;
 
 	/* Do stuff */
 	switch (config_get_mode()) {
@@ -128,8 +124,6 @@ main(int argc, char **argv)
 
 	/* End */
 
-	clients_db_destroy();
-revert_reqs_errors:
 	reqs_errors_cleanup();
 db_rrdp_cleanup:
 	db_rrdp_cleanup();

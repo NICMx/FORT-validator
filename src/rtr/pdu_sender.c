@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <arpa/inet.h> /* INET_ADDRSTRLEN */
 
-#include "clients.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -217,52 +216,6 @@ send_router_key_pdu(int fd, uint8_t version,
 	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
-struct simple_param {
-	int	fd;
-	uint8_t	version;
-};
-
-static int
-vrp_simply_send(struct delta_vrp const *delta, void *arg)
-{
-	struct simple_param *param = arg;
-
-	return send_prefix_pdu(param->fd, param->version, &delta->vrp,
-	    delta->flags);
-}
-
-static int
-router_key_simply_send(struct delta_router_key const *delta, void *arg)
-{
-	struct simple_param *param = arg;
-
-	return send_router_key_pdu(param->fd, param->version,
-	    &delta->router_key, delta->flags);
-}
-
-int
-send_delta_pdus(int fd, uint8_t version, struct deltas_db *deltas)
-{
-	struct delta_group *group;
-	struct simple_param param;
-
-	param.fd = fd;
-	param.version = version;
-
-	/*
-	 * Short circuit: Entries that share serial are already guaranteed to
-	 * not contradict each other, so no filtering required.
-	 */
-	if (deltas->len == 1) {
-		group = &deltas->array[0];
-		return deltas_foreach(group->serial, group->deltas,
-		    vrp_simply_send, router_key_simply_send, &param);
-	}
-
-	return vrps_foreach_filtered_delta(deltas, vrp_simply_send,
-	    router_key_simply_send, &param);
-}
-
 #define GET_END_OF_DATA_LENGTH(version)					\
 	((version == RTR_V1) ?						\
 	    RTRPDU_END_OF_DATA_V1_LEN : RTRPDU_END_OF_DATA_V0_LEN)
@@ -273,7 +226,6 @@ send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 	struct end_of_data_pdu pdu;
 	unsigned char data[GET_END_OF_DATA_LENGTH(version)];
 	size_t len;
-	int error;
 
 	set_header_values(&pdu.header, version, PDU_TYPE_END_OF_DATA,
 	    get_current_session_id(version));
@@ -290,12 +242,7 @@ send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 	if (len != GET_END_OF_DATA_LENGTH(version))
 		pr_crit("Serialized End of Data is %zu bytes.", len);
 
-	error = send_response(fd, pdu.header.pdu_type, data, len);
-	if (error)
-		return error;
-
-	clients_update_serial(fd, pdu.serial_number);
-	return 0;
+	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
 int

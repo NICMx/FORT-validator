@@ -2,50 +2,154 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <netdb.h>
+#include <limits.h>
+#include <log.h>
+#include <poll.h>
+#include <pthread.h>
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/queue.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
+#include "address.h"
 #include "config.h"
-#include "clients.h"
-#include "internal_pool.h"
-#include "log.h"
-#include "rtr/err_pdu.h"
+#include "data_structure/array_list.h"
 #include "rtr/pdu.h"
-#include "rtr/db/vrps.h"
 #include "thread/thread_pool.h"
 
-/* Constant messages regarding a client status */
-#define CL_ACCEPTED   "accepted"
-#define CL_CLOSED     "closed"
-#define CL_TERMINATED "terminated"
-#define CL_REJECTED   "rejected"
+static pthread_t server_thread;
+static volatile bool stop_server_thread;
 
-/* Parameters for each thread that handles client connections */
-struct thread_param {
-	int fd;
-	struct sockaddr_storage addr;
+STATIC_ARRAY_LIST(server_arraylist, struct rtr_server);
+STATIC_ARRAY_LIST(client_arraylist, struct rtr_client);
+STATIC_ARRAY_LIST(pollfd_arraylist, struct pollfd);
+
+static struct server_arraylist servers;
+static struct client_arraylist clients;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+struct thread_pool *request_handlers;
+
+#define REQUEST_BUFFER_LEN 1024
+
+struct client_request {
+	struct rtr_client *client;
+	unsigned char buffer[REQUEST_BUFFER_LEN];
+	size_t nread;
 };
 
-/* Parameters for each file descriptor that binds to a server address/socket */
-struct fd_node {
-	int id;
-	SLIST_ENTRY(fd_node) next;
+enum poll_verdict {
+	PV_CONTINUE,
+	PV_RETRY, /* Pause for a while, then continue */
+	PV_STOP,
 };
 
-/* List of server sockets */
-SLIST_HEAD(server_fds, fd_node);
+static void
+panic_on_fail(int error, char const *function_name)
+{
+	if (error)
+		pr_crit("%s() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		    function_name, error);
+}
 
-/* "file descriptors" */
-static struct server_fds fds;
-static struct thread_pool *threads;
-/* Does the server needs to be stopped? */
-static volatile bool server_stop;
+static void
+lock_mutex(void)
+{
+	panic_on_fail(pthread_mutex_lock(&lock), "pthread_mutex_lock");
+}
+
+static void
+unlock_mutex(void)
+{
+	panic_on_fail(pthread_mutex_unlock(&lock), "pthread_mutex_unlock");
+}
+
+static void
+cleanup_server(struct rtr_server *server)
+{
+	if (server->fd != -1)
+		close(server->fd);
+	free(server->addr);
+}
+
+static void
+cleanup_client(struct rtr_client *client)
+{
+	if (client->fd != -1) {
+		shutdown(client->fd, SHUT_RDWR);
+		close(client->fd);
+	}
+}
+
+static void
+destroy_db(void)
+{
+	server_arraylist_cleanup(&servers, cleanup_server);
+	client_arraylist_cleanup(&clients, cleanup_client);
+}
+
+/*
+ * Extracts from @full_address ("IP#[port]") the address and port, and returns
+ * them in @address and @service, respectively.
+ *
+ * The default port is config_get_server_port().
+ */
+static int
+parse_address(char const *full_address, char **address, char **service)
+{
+	char *ptr;
+	char *tmp_addr;
+	char *tmp_serv;
+	size_t tmp_addr_len;
+
+	if (full_address == NULL) {
+		tmp_addr = NULL;
+		tmp_serv = strdup(config_get_server_port());
+		if (tmp_serv == NULL)
+			return pr_enomem();
+		goto done;
+	}
+
+	ptr = strrchr(full_address, '#');
+	if (ptr == NULL) {
+		tmp_addr = strdup(full_address);
+		if (tmp_addr == NULL)
+			return pr_enomem();
+
+		tmp_serv = strdup(config_get_server_port());
+		if (tmp_serv == NULL) {
+			free(tmp_addr);
+			return pr_enomem();
+		}
+
+		goto done;
+	}
+
+	if (*(ptr + 1) == '\0')
+		return pr_op_err("Invalid server address '%s', can't end with '#'",
+		    full_address);
+
+	tmp_addr_len = strlen(full_address) - strlen(ptr);
+	tmp_addr = malloc(tmp_addr_len + 1);
+	if (tmp_addr == NULL)
+		return pr_enomem();
+
+	memcpy(tmp_addr, full_address, tmp_addr_len);
+	tmp_addr[tmp_addr_len] = '\0';
+
+	tmp_serv = strdup(ptr + 1);
+	if (tmp_serv == NULL) {
+		free(tmp_addr);
+		return pr_enomem();
+	}
+
+	/* Fall through */
+done:
+	*address = tmp_addr;
+	*service = tmp_serv;
+	return 0;
+}
 
 static int
 init_addrinfo(char const *hostname, char const *service,
@@ -96,7 +200,7 @@ init_addrinfo(char const *hostname, char const *service,
 }
 
 static int
-set_nonblock(int fd, bool value)
+set_nonblock(int fd)
 {
 	int flags;
 	int error;
@@ -108,11 +212,7 @@ set_nonblock(int fd, bool value)
 		return error;
 	}
 
-	/* Non-block to allow listening on all server sockets */
-	if (value)
-		flags |= O_NONBLOCK;
-	else
-		flags &= ~O_NONBLOCK;
+	flags |= O_NONBLOCK;
 
 	if (fcntl(fd, F_SETFL, flags) == -1) {
 		error = errno;
@@ -128,16 +228,17 @@ set_nonblock(int fd, bool value)
  * from the clients.
  */
 static int
-create_server_socket(char const *hostname, char const *service, int *result)
+create_server_socket(char const *input_addr, char const *hostname,
+    char const *service)
 {
 	struct addrinfo *addrs;
 	struct addrinfo *addr;
 	unsigned long port;
 	int reuse;
 	int fd;
+	struct rtr_server server;
 	int error;
 
-	*result = 0; /* Shuts up gcc */
 	reuse = 1;
 
 	error = init_addrinfo(hostname, service, &addrs);
@@ -157,8 +258,11 @@ create_server_socket(char const *hostname, char const *service, int *result)
 			continue;
 		}
 
-		/* Non-block to allow listening on all server sockets */
-		if (set_nonblock(fd, true) != 0) {
+		/*
+		 * We want to listen to all sockets in one thread,
+		 * so don't block.
+		 */
+		if (set_nonblock(fd) != 0) {
 			close(fd);
 			continue;
 		}
@@ -198,7 +302,21 @@ create_server_socket(char const *hostname, char const *service, int *result)
 		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
 		    port);
 		freeaddrinfo(addrs);
-		*result = fd;
+
+		if (listen(fd, config_get_server_queue()) != 0) {
+			close(fd);
+			return pr_op_errno(errno, "listen() failure");
+		}
+
+		server.fd = fd;
+		/* Ignore failure; this is just a nice-to-have. */
+		server.addr = strdup(input_addr);
+		error = server_arraylist_add(&servers, &server);
+		if (error) {
+			close(fd);
+			return error;
+		}
+
 		return 0; /* Happy path */
 	}
 
@@ -207,155 +325,89 @@ create_server_socket(char const *hostname, char const *service, int *result)
 }
 
 static int
-fd_node_create(struct fd_node **result)
+init_server_fd(char const *input_addr)
 {
-	struct fd_node *node;
-
-	node = malloc(sizeof(struct fd_node));
-	if (node == NULL)
-		return pr_enomem();
-
-	node->id = -1;
-
-	*result = node;
-	return 0;
-}
-
-static int
-server_fd_add(char const *address, char const *service)
-{
-	struct fd_node *node;
+	char *address;
+	char *service;
 	int error;
 
-	node = NULL;
-	error = fd_node_create(&node);
+	address = NULL;
+	service = NULL;
+
+	error = parse_address(input_addr, &address, &service);
 	if (error)
 		return error;
 
-	error = create_server_socket(address, service, &node->id);
-	if (error) {
-		free(node);
-		return error;
+	error = create_server_socket(input_addr, address, service);
+
+	free(address);
+	free(service);
+
+	return error;
+}
+
+static int
+init_server_fds(void)
+{
+	struct string_array const *conf_addrs;
+	unsigned int i;
+	int error;
+
+	conf_addrs = config_get_server_address();
+
+	if (conf_addrs->length == 0)
+		return init_server_fd(NULL);
+
+	for (i = 0; i < conf_addrs->length; i++) {
+		error = init_server_fd(conf_addrs->array[i]);
+		if (error)
+			return error; /* Cleanup happens outside */
 	}
 
-	SLIST_INSERT_HEAD(&fds, node, next);
-	pr_op_debug("Created server socket with FD %d.", node->id);
 	return 0;
 }
 
 static void
-destroy_fds(void)
+handle_client_request(void *arg)
 {
-	struct fd_node *fd;
+	struct client_request *crequest = arg;
+	struct pdu_reader reader;
+	struct rtr_request rrequest;
+	struct pdu_metadata const *meta;
 
-	while (!SLIST_EMPTY(&fds)) {
-		fd = fds.slh_first;
-		SLIST_REMOVE_HEAD(&fds, next);
-		close(fd->id);
-		free(fd);
+	pdu_reader_init(&reader, crequest->buffer, crequest->nread);
+
+	while (pdu_load(&reader, crequest->client, &rrequest, &meta) == 0) {
+		meta->handle(crequest->client->fd, &rrequest);
+		meta->destructor(rrequest.pdu);
 	}
+
+	free(crequest);
 }
 
-static int
-parse_address(char const *full_address, char const *default_service,
-    char **address, char **service)
+static void
+init_pollfd(struct pollfd *pfd, int fd)
 {
-	char *ptr;
-	char *tmp_addr;
-	char *tmp_serv;
-	size_t tmp_addr_len;
-
-	ptr = strrchr(full_address, '#');
-	if (ptr == NULL) {
-		tmp_addr = strdup(full_address);
-		if (tmp_addr == NULL)
-			return pr_enomem();
-
-		tmp_serv = strdup(default_service);
-		if (tmp_serv == NULL) {
-			free(tmp_addr);
-			return pr_enomem();
-		}
-		*address = tmp_addr;
-		*service = tmp_serv;
-		return 0;
-	}
-
-	if (*(ptr + 1) == '\0')
-		return pr_op_err("Invalid server address '%s', can't end with '#'",
-		    full_address);
-
-	tmp_addr_len = strlen(full_address) - strlen(ptr);
-	tmp_addr = malloc(tmp_addr_len + 1);
-	if (tmp_addr == NULL)
-		return pr_enomem();
-
-	memcpy(tmp_addr, full_address, tmp_addr_len);
-	tmp_addr[tmp_addr_len] = '\0';
-
-	tmp_serv = strdup(ptr + 1);
-	if (tmp_serv == NULL) {
-		free(tmp_addr);
-		return pr_enomem();
-	}
-
-	*address = tmp_addr;
-	*service = tmp_serv;
-	return 0;
+	pfd->fd = fd;
+	pfd->events = POLLIN;
+	pfd->revents = 0;
 }
 
-static int
-init_fds(void)
-{
-	struct string_array const *addresses;
-	char const *default_service;
-	char *address;
-	char *service;
-	unsigned int i;
-	int error;
-
-	default_service = config_get_server_port();
-	addresses = config_get_server_address();
-	if (addresses->length == 0)
-		return server_fd_add(NULL, default_service);
-
-	for (i = 0; i < addresses->length; i++) {
-		address = NULL;
-		service = NULL;
-		error = parse_address(addresses->array[i], default_service,
-		    &address, &service);
-		if (error)
-			return error;
-
-		error = server_fd_add(address, service);
-		/* Always release them */
-		free(address);
-		free(service);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
-enum verdict {
-	/* No errors; continue happily. */
-	VERDICT_SUCCESS,
-	/* A temporal error just happened. Try again. */
-	VERDICT_RETRY,
-	/* "Stop whatever you're doing and return." */
-	VERDICT_EXIT,
+enum accept_verdict {
+	AV_SUCCESS,
+	AV_CLIENT_ERROR,
+	AV_SERVER_ERROR,
 };
 
 /*
  * Converts an error code to a verdict.
  * The error code is assumed to have been spewed by the `accept()` function.
  */
-static enum verdict
+static enum accept_verdict
 handle_accept_result(int client_fd, int err)
 {
 	if (client_fd >= 0)
-		return VERDICT_SUCCESS;
+		return AV_SUCCESS;
 
 	/*
 	 * Note: I can't just use a single nice switch because EAGAIN and
@@ -387,279 +439,360 @@ handle_accept_result(int client_fd, int err)
 
 	pr_op_info("Client connection attempt not accepted: %s. Quitting...",
 	    strerror(err));
-	return VERDICT_EXIT;
+	return AV_SERVER_ERROR;
 
 retry:
 	pr_op_info("Client connection attempt not accepted: %s. Retrying...",
 	    strerror(err));
-	return VERDICT_RETRY;
+	return AV_CLIENT_ERROR;
 }
 
-static void
-clean_request(struct rtr_request *request, const struct pdu_metadata *meta)
-{
-	free(request->bytes);
-	meta->destructor(request->pdu);
-}
-
-static int
-print_close_failure(int error, struct sockaddr_storage *sockaddr)
-{
-	return pr_op_errno(error, "close() failed on socket of client %s",
-	    sockaddr2str(sockaddr));
-}
-
-static int
-end_client(struct client *client, void *arg)
-{
-	char const *action = arg;
-	bool rejected;
-
-	/* When we (server) are closing the connection */
-	rejected = (strcmp(action, CL_REJECTED) == 0);
-	if (arg != NULL && (strcmp(arg, CL_TERMINATED) == 0 || rejected))
-		shutdown(client->fd, SHUT_RDWR);
-
-	if (close(client->fd) != 0)
-		return print_close_failure(errno, &client->addr);
-
-	if (rejected) {
-		pr_op_warn("Client %s [ID %d]: %s", action, client->fd,
-		    sockaddr2str(&client->addr));
-		pr_op_warn("Use a greater value at 'thread-pool.server.max' if you wish to accept more than %u clients.",
-		    config_get_thread_pool_server_max());
-		return 0;
-	}
-
-	pr_op_info("Client %s [ID %d]: %s", action, client->fd,
-	    sockaddr2str(&client->addr));
-	return 0;
-}
-
-static void
-reject_client(int fd, struct sockaddr_storage *addr)
-{
-	struct client client;
-
-	client.fd = fd;
-	client.addr = *addr;
-
-	/* Try to be polite notifying there was an error */
-	err_pdu_send_internal_error(fd, RTR_V0);
-	end_client(&client, CL_REJECTED);
-}
-
-/*
- * The client socket threads' entry routine.
- * @arg must be released.
- */
-static void
-client_thread_cb(void *arg)
-{
-	struct pdu_metadata const *meta;
-	struct rtr_request request;
-	struct thread_param param;
-	int error;
-
-	memcpy(&param, arg, sizeof(param));
-	free(arg);
-
-	error = clients_add(param.fd, param.addr);
-	if (error) {
-		close(param.fd);
-		return;
-	}
-
-	while (true) { /* For each PDU... */
-		error = pdu_load(param.fd, &param.addr, &request, &meta);
-		if (error)
-			break;
-
-		error = meta->handle(param.fd, &request);
-		clean_request(&request, meta);
-		if (error)
-			break;
-	}
-
-	clients_forget(param.fd, end_client, CL_CLOSED);
-}
-
-static void
-init_fdset(struct server_fds *fds, fd_set *fdset)
-{
-	struct fd_node *node;
-
-	FD_ZERO(fdset);
-	SLIST_FOREACH(node, fds, next)
-		FD_SET(node->id, fdset);
-}
-
-/*
- * Waits for client connections and spawns threads to handle them.
- */
-static void
-handle_client_connections(void *arg)
+static enum accept_verdict
+accept_new_client(struct pollfd const *server_fd)
 {
 	struct sockaddr_storage client_addr;
-	struct thread_param *param;
-	struct timeval select_time;
 	socklen_t sizeof_client_addr;
-	fd_set readfds;
-	int last_server_fd;
-	int client_fd;
-	int fd;
-	int error;
+	struct rtr_client client;
+	enum accept_verdict result;
 
-	last_server_fd = SLIST_FIRST(&fds)->id;
 	sizeof_client_addr = sizeof(client_addr);
 
-	/* I'm alive! */
-	server_stop = false;
+	/* Accept the connection */
+	client.fd = accept(server_fd->fd, (struct sockaddr *) &client_addr,
+	    &sizeof_client_addr);
 
-	pr_op_debug("Waiting for client connections at server...");
-	do {
-		/* Query server_stop every second. */
-		select_time.tv_sec = 1;
-		select_time.tv_usec = 0;
+	result = handle_accept_result(client.fd, errno);
+	if (result != AV_SUCCESS)
+		return result;
 
-		/* Am I still alive? */
-		if (server_stop)
-			break;
+	if (set_nonblock(client.fd) != 0) {
+		close(client.fd);
+		return AV_CLIENT_ERROR;
+	}
 
-		init_fdset(&fds, &readfds);
+	client.rtr_version = -1;
+	sockaddr2str(&client_addr, client.addr);
+	if (client_arraylist_add(&clients, &client) != 0) {
+		close(client.fd);
+		return AV_CLIENT_ERROR;
+	}
 
-		if (select(last_server_fd + 1, &readfds, NULL, NULL,
-		    &select_time) == -1) {
-			pr_op_errno(errno, "Monitoring server sockets");
-			continue;
+	pr_op_info("Client accepted [FD: %d]: %s", client.fd, client.addr);
+	return AV_SUCCESS;
+}
+
+/*
+ * true: success.
+ * false: oh noes; close socket.
+ */
+static bool
+read_until_block(int fd, struct client_request *request)
+{
+	ssize_t read_result;
+	size_t offset;
+
+	request->nread = 0;
+
+	for (offset = 0; offset < REQUEST_BUFFER_LEN; offset += read_result) {
+		read_result = read(fd, &request->buffer[offset],
+		    REQUEST_BUFFER_LEN - offset);
+		if (read_result == -1) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				return true; /* Ok, we have the full packet. */
+
+			pr_op_errno(errno, "Client socket read interrupted");
+			return false;
 		}
 
-		for (fd = 0; fd < (last_server_fd + 1); fd++) {
-			if (!FD_ISSET(fd, &readfds))
-				continue;
+		if (read_result == 0) {
+			if (offset == 0) {
+				pr_op_debug("Client closed the socket.");
+				return false;
+			}
 
-			/* Accept the connection */
-			client_fd = accept(fd, (struct sockaddr *) &client_addr,
-			    &sizeof_client_addr);
-			switch (handle_accept_result(client_fd, errno)) {
-			case VERDICT_SUCCESS:
+			return true; /* Ok, we have the last packet. */
+		}
+
+		request->nread += read_result;
+	}
+
+	pr_op_warn("Peer's request is too big (>= %u bytes). Peer does not look like an RTR client; closing connection.",
+	    REQUEST_BUFFER_LEN);
+	return false;
+}
+
+static bool
+__handle_client_request(struct rtr_client *client)
+{
+	struct client_request *request;
+	int error;
+
+	request = malloc(sizeof(struct client_request));
+	if (request == NULL) {
+		pr_enomem();
+		return false;
+	}
+
+	request->client = client;
+	if (!read_until_block(client->fd, request))
+		goto cancel;
+
+	pr_op_debug("Client sent %zu bytes.", request->nread);
+	error = thread_pool_push(request_handlers, "RTR request",
+	    handle_client_request, request);
+	if (error)
+		goto cancel;
+
+	return true;
+
+cancel:
+	free(request);
+	return false;
+}
+
+static void
+print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
+{
+	if (pfd->revents & POLLHUP)
+		pr_op_err("%s '%s' down: POLLHUP (Peer hung up)", what, addr);
+	if (pfd->revents & POLLERR)
+		pr_op_err("%s '%s' down: POLLERR (Generic error)", what, addr);
+	if (pfd->revents & POLLNVAL)
+		pr_op_err("%s '%s' down: POLLNVAL (fd not open)", what, addr);
+}
+
+static void
+apply_pollfds(struct pollfd_arraylist *pollfds, unsigned int nclients)
+{
+	struct pollfd *pfd;
+	struct rtr_server *server;
+	struct rtr_client *client;
+	unsigned int i;
+
+	for (i = 0; i < servers.len; i++) {
+		pfd = &pollfds->array[i];
+		server = &servers.array[i];
+
+		/* PR_DEBUG_MSG("pfd:%d server:%d", pfd->fd, server->fd); */
+
+		if ((pfd->fd == -1) && (server->fd != -1)) {
+			close(server->fd);
+			server->fd = -1;
+			print_poll_failure(pfd, "Server", server->addr);
+		}
+	}
+
+	for (i = 0; i < nclients; i++) {
+		pfd = &pollfds->array[servers.len + i];
+		client = &clients.array[i];
+
+		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
+
+		if ((pfd->fd == -1) && (client->fd != -1)) {
+			close(client->fd);
+			client->fd = -1;
+			print_poll_failure(pfd, "Client", client->addr);
+		}
+	}
+
+	/* TODO clean up client array */
+}
+
+static enum poll_verdict
+fddb_poll(void)
+{
+	struct pollfd_arraylist pollfds;
+
+	struct rtr_server *server;
+	struct rtr_client *client;
+	struct pollfd *fd;
+
+	unsigned int nclients;
+	unsigned int i;
+	int error;
+
+	pollfd_arraylist_init(&pollfds);
+
+	pollfds.len = servers.len + clients.len;
+	pollfds.capacity = pollfds.len;
+	pollfds.array = calloc(pollfds.len, sizeof(struct pollfd));
+	if (pollfds.array == NULL) {
+		pr_enomem();
+		return PV_RETRY;
+	}
+
+	ARRAYLIST_FOREACH(&servers, server, i)
+		init_pollfd(&pollfds.array[i], server->fd);
+	ARRAYLIST_FOREACH(&clients, client, i)
+		init_pollfd(&pollfds.array[servers.len + i], client->fd);
+
+	error = poll(pollfds.array, pollfds.len, 1000);
+
+	if (stop_server_thread)
+		goto stop;
+
+	if (error == 0)
+		goto success;
+
+	if (error < 0) {
+		error = errno;
+		switch (error) {
+		case EINTR:
+			pr_op_info("poll() was interrupted by some signal.");
+			goto stop;
+		case ENOMEM:
+			pr_enomem();
+			/* Fall through */
+		case EAGAIN:
+			goto retry;
+		case EFAULT:
+		case EINVAL:
+			pr_crit("poll() returned %d.", error);
+		}
+	}
+
+	/* The servers might change this number, so store a backup. */
+	nclients = clients.len;
+
+	/* New connections */
+	for (i = 0; i < servers.len; i++) {
+		/* This fd is a listening socket. */
+		fd = &pollfds.array[i];
+
+		/* PR_DEBUG_MSG("Server %u: fd:%d revents:%x",
+		    i, fd->fd, fd->revents); */
+
+		if (fd->fd == -1)
+			continue;
+
+		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
+			fd->fd = -1;
+
+		} else if (fd->revents & POLLIN) {
+			switch (accept_new_client(fd)) {
+			case AV_SUCCESS:
+			case AV_CLIENT_ERROR:
 				break;
-			case VERDICT_RETRY:
-				continue;
-			case VERDICT_EXIT:
-				return;
+			case AV_SERVER_ERROR:
+				fd->fd = -1;
 			}
+		}
+	}
 
-			/*
-			 * It's very likely that the clients won't release their
-			 * sessions once established; so, don't let any new
-			 * client at the thread pool queue since it's probable
-			 * that it'll remain there forever.
-			 */
-			if (!thread_pool_avail_threads(threads)) {
-				reject_client(client_fd, &client_addr);
-				continue;
-			}
+	/* Client requests */
+	for (i = 0; i < nclients; i++) {
+		/* This fd is a client handler socket. */
+		fd = &pollfds.array[servers.len + i];
 
-			pr_op_info("Client %s [ID %d]: %s", CL_ACCEPTED,
-			    client_fd, sockaddr2str(&client_addr));
+		/* PR_DEBUG_MSG("Client %u: fd:%d revents:%x", i, fd->fd,
+		    fd->revents); */
 
-			/*
-			 * Note: My gut says that errors from now on (even the
-			 * unknown ones) should be treated as temporary; maybe
-			 * the next accept() will work.
-			 * So don't interrupt the thread when this happens.
-			 */
+		if (fd->fd == -1)
+			continue;
 
-			/*
-			 * On some systems, O_NONBLOCK is inherited.
-			 * We very much don't want O_NONBLOCK on the client
-			 * socket.
-			 */
-			if (set_nonblock(client_fd, false) != 0) {
-				close(client_fd);
-				continue;
-			}
+		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
+			fd->fd = -1;
+		} else if (fd->revents & POLLIN) {
+			if (!__handle_client_request(&clients.array[i]))
+				fd->fd = -1;
+		}
+	}
 
-			param = malloc(sizeof(struct thread_param));
-			if (param == NULL) {
-				/* No error PDU on memory allocation. */
-				pr_enomem();
-				close(client_fd);
-				continue;
-			}
-			param->fd = client_fd;
-			param->addr = client_addr;
+	lock_mutex();
+	apply_pollfds(&pollfds, nclients);
+	unlock_mutex();
+	/* Fall through */
 
-			error = thread_pool_push(threads, "Client thread",
-			    client_thread_cb, param);
-			if (error) {
-				pr_op_err("Couldn't push a thread to attend incoming RTR client");
-				/* Error with min RTR version */
-				err_pdu_send_internal_error(client_fd, RTR_V0);
-				close(client_fd);
-				free(param);
-			}
+success:
+	pollfd_arraylist_cleanup(&pollfds, NULL);
+	return PV_CONTINUE;
+retry:
+	pollfd_arraylist_cleanup(&pollfds, NULL);
+	return PV_RETRY;
+stop:
+	pollfd_arraylist_cleanup(&pollfds, NULL);
+	return PV_STOP;
+}
+
+static void *
+server_cb(void *arg)
+{
+	do {
+		switch (fddb_poll()) {
+		case PV_CONTINUE:
+			break;
+		case PV_RETRY:
+			sleep(1);
+			break;
+		case PV_STOP:
+			return NULL;
 		}
 	} while (true);
 }
 
-static int
-start_server_thread(void)
-{
-	struct fd_node *node;
-	int error;
-
-	SLIST_FOREACH(node, &fds, next) {
-		error = listen(node->id, config_get_server_queue());
-		if (error)
-			return pr_op_errno(errno,
-			    "Couldn't listen on server socket");
-	}
-
-	return internal_pool_push("Server thread", handle_client_connections,
-	    NULL);
-}
-
-/*
- * Starts the RTR server.
- */
 int
 rtr_start(void)
 {
 	int error;
 
-	SLIST_INIT(&fds);
-	threads = NULL;
-	server_stop = true;
+	server_arraylist_init(&servers);
+	client_arraylist_init(&clients);
 
-	error = init_fds();
+	error = init_server_fds();
 	if (error)
-		goto revert_server_fds;
+		goto revert_fds;
 
 	error = thread_pool_create("Server",
-	    config_get_thread_pool_server_max(), &threads);
+	    config_get_thread_pool_server_max(),
+	    &request_handlers);
 	if (error)
-		goto revert_server_fds;
+		goto revert_fds;
 
-	error = start_server_thread();
-	if (error)
-		goto revert_thread_pool;
+	error = pthread_create(&server_thread, NULL, server_cb, NULL);
+	if (error) {
+		thread_pool_destroy(request_handlers);
+		goto revert_fds;
+	}
 
 	return 0;
 
-revert_thread_pool:
-	thread_pool_destroy(threads);
-revert_server_fds:
-	destroy_fds();
+revert_fds:
+	destroy_db();
 	return error;
 }
 
-void
-rtr_stop(void)
+void rtr_stop(void)
 {
-	server_stop = true;
-	clients_terminate_all(end_client, CL_TERMINATED);
-	thread_pool_destroy(threads);
-	destroy_fds();
+	int error;
+
+	stop_server_thread = true;
+	error = pthread_join(server_thread, NULL);
+	if (error)
+		pr_op_errno(error, "pthread_join() returned %d", error);
+
+	thread_pool_destroy(request_handlers);
+
+	destroy_db();
+}
+
+int
+rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
+{
+	struct rtr_client *client;
+	unsigned int i;
+	int error = 0;
+
+	lock_mutex();
+
+	ARRAYLIST_FOREACH(&clients, client, i) {
+		if (client->fd != -1) {
+			error = cb(client, arg);
+			if (error)
+				break;
+		}
+	}
+
+	unlock_mutex();
+
+	return error;
 }

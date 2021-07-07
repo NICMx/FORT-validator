@@ -14,58 +14,21 @@ static int get_octets(unsigned char);
 static void place_null_character(rtr_char *, size_t);
 
 /**
- * Reads exactly @buffer_len bytes from @buffer, erroring if this goal cannot be
- * met.
- *
- * If @allow_eof is true, will allow immediate EOF in place of the buffer bytes.
- * (Though all this really means is that the corresponding warning message will
- * not be printed, which is perfectly fine as far as the only current caller is
- * concerned.)
- *
- * Returns 0 if exactly @buffer_len bytes could be read.
- */
-static int
-read_exact(int fd, unsigned char *buffer, size_t buffer_len, bool allow_eof)
-{
-	ssize_t read_result;
-	size_t offset;
-
-	for (offset = 0; offset < buffer_len; offset += read_result) {
-		read_result = read(fd, &buffer[offset], buffer_len - offset);
-		if (read_result == -1)
-			return -pr_op_errno(errno,
-			    "Client socket read interrupted");
-
-		if (read_result == 0) {
-			if (!allow_eof)
-				pr_op_warn("Stream ended mid-PDU.");
-			return -EPIPE;
-		}
-
-		allow_eof = false;
-	}
-
-	return 0;
-}
-
-/**
  * BTW: I think it's best not to use sizeof for @size, because it risks
  * including padding.
  */
-int
-pdu_reader_init(struct pdu_reader *reader, int fd, unsigned char *buffer,
-    size_t size, bool allow_eof)
+void
+pdu_reader_init(struct pdu_reader *reader, unsigned char *buffer, size_t size)
 {
 	reader->buffer = buffer;
 	reader->size = size;
-	return read_exact(fd, reader->buffer, size, allow_eof);
 }
 
 static int
 insufficient_bytes(void)
 {
 	pr_op_debug("Attempted to read past the end of a PDU Reader.");
-	return -EINVAL;
+	return -EPIPE;
 }
 
 int

@@ -3,6 +3,10 @@
 
 #include <stdbool.h>
 
+/*
+ * THREAD POOL THREADS ARE NOT ALLOWED TO SLEEP FOR LONG PERIODS OF TIME.
+ */
+
 /* Thread pool base struct */
 struct thread_pool;
 

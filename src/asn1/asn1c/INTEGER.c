@@ -177,7 +177,7 @@ INTEGER__dump(const asn_TYPE_descriptor_t *td, const INTEGER_t *st, asn_app_cons
 	}
 
 	/* Output in the long xx:yy:zz... format */
-	/* TODO: replace with generic algorithm (Knuth TAOCP Vol 2, 4.3.1) */
+	/* TODO (asn1c) replace with generic algorithm (Knuth TAOCP Vol 2, 4.3.1) */
 	for(p = scratch; buf < buf_end; buf++) {
 		const char * const h2c = "0123456789ABCDEF";
 		if((p - scratch) >= (ssize_t)(sizeof(scratch) - 4)) {
@@ -684,7 +684,7 @@ INTEGER_decode_uper(const asn_codec_ctx_t *opt_codec_ctx,
 	/* #12.2.3 */
 	if(ct && ct->lower_bound) {
 		/*
-		 * TODO: replace by in-place arithmetics.
+		 * TODO (asn1c) replace by in-place arithmetics.
 		 */
 		long value = 0;
 		if(asn_INTEGER2long(st, &value))
@@ -779,7 +779,7 @@ INTEGER_encode_uper(const asn_TYPE_descriptor_t *td,
 
 	if(ct && ct->lower_bound) {
 		ASN_DEBUG("Adjust lower bound to %ld", ct->lower_bound);
-		/* TODO: adjust lower bound */
+		/* TODO (asn1c) adjust lower bound */
 		ASN__ENCODE_FAILED;
 	}
 

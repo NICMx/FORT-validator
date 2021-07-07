@@ -10,8 +10,10 @@
 #include "json_parser.c"
 #include "log.c"
 #include "output_printer.c"
+#include "serial.c"
 #include "object/router_key.c"
 #include "rtr/db/delta.c"
+#include "rtr/db/deltas_array.c"
 #include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_impersonator.c"
 #include "rtr/db/vrps.c"
@@ -55,56 +57,66 @@ static const bool deltas_1to3[] = { 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, };
 static const bool deltas_2to3[] = { 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, };
 static const bool deltas_3to3[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
-/* Deltas with rules that override each other */
-static const bool deltas_1to4_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, };
-static const bool deltas_2to4_ovrd[] = { 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, };
-static const bool deltas_3to4_ovrd[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
-static const bool deltas_4to4_ovrd[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
-
-/* Deltas cleaned up */
-static const bool deltas_1to4_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
-static const bool deltas_2to4_clean[] = { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, };
-static const bool deltas_3to4_clean[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
-static const bool deltas_4to4_clean[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_1to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_2to4[] = { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, };
+static const bool deltas_3to4[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
+static const bool deltas_4to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 /* Impersonator functions */
 
-serial_t current_min_serial = 0;
+unsigned int deltas_lifetime = 5;
 
-int
-clients_get_min_serial(serial_t *result)
+unsigned int
+config_get_deltas_lifetime(void)
 {
-	*result = current_min_serial;
-	return 0;
+	return deltas_lifetime;
 }
 
 /* Test functions */
 
+static char const *
+vrpaddr2str(struct vrp const *vrp)
+{
+	switch (vrp->addr_fam) {
+	case AF_INET:
+		return v4addr2str(&vrp->prefix.v4);
+	case AF_INET6:
+		return v6addr2str(&vrp->prefix.v6);
+	}
+
+	return "unknown";
+}
+
 static int
 vrp_fail(struct vrp const *vrp, void *arg)
 {
-	char const *addr;
-
-	switch (vrp->addr_fam) {
-	case AF_INET:
-		addr = v4addr2str(&vrp->prefix.v4);
-		break;
-	case AF_INET6:
-		addr = v6addr2str(&vrp->prefix.v6);
-		break;
-	default:
-		addr = "unknown";
-	}
-
 	ck_abort_msg("Expected no callbacks, got VRP %u/%s/%u/%u.",
-	    vrp->asn, addr, vrp->prefix_length, vrp->max_prefix_length);
+	    vrp->asn, vrpaddr2str(vrp), vrp->prefix_length,
+	    vrp->max_prefix_length);
 	return -EINVAL;
 }
 
 static int
 rk_fail(struct router_key const *key, void *arg)
 {
-	ck_abort_msg("Expected no callbacks, got from RK ASN %u.", key->as);
+	ck_abort_msg("Expected no callbacks, got RK %u.", key->as);
+	return -EINVAL;
+}
+
+static int
+dvrp_fail(struct delta_vrp const *delta, void *arg)
+{
+	ck_abort_msg("Expected no callbacks, got Delta VRP %u/%s/%u/%u/%u.",
+	    delta->vrp.asn, vrpaddr2str(&delta->vrp), delta->vrp.prefix_length,
+	    delta->vrp.max_prefix_length, delta->flags);
+	return -EINVAL;
+}
+
+static int
+drk_fail(struct delta_router_key const *delta, void *arg)
+{
+	ck_abort_msg("Expected no callbacks, got Delta RK %u/%u.",
+	    delta->router_key.as, delta->flags);
 	return -EINVAL;
 }
 
@@ -258,82 +270,52 @@ check_base(serial_t expected_serial, bool const *expected_base)
 static int
 vrp_add(struct delta_vrp const *delta, void *arg)
 {
-	struct deltas *deltas = arg;
-	struct vrp const *vrp;
-	struct v4_address v4;
-	struct v6_address v6;
+	union {
+		struct v4_address v4;
+		struct v6_address v6;
+	} addr;
 
-	vrp = &delta->vrp;
-	switch (vrp->addr_fam) {
+	switch (delta->vrp.addr_fam) {
 	case AF_INET:
-		v4.prefix.len = vrp->prefix_length;
-		v4.prefix.addr = vrp->prefix.v4;
-		v4.max_length = vrp->max_prefix_length;
-		deltas_add_roa_v4(deltas, vrp->asn, &v4, delta->flags);
-		break;
+		addr.v4.prefix.len = delta->vrp.prefix_length;
+		addr.v4.prefix.addr = delta->vrp.prefix.v4;
+		addr.v4.max_length = delta->vrp.max_prefix_length;
+		return deltas_add_roa_v4(arg, delta->vrp.asn, &addr.v4,
+		    delta->flags);
 	case AF_INET6:
-		v6.prefix.len = vrp->prefix_length;
-		v6.prefix.addr = vrp->prefix.v6;
-		v6.max_length = vrp->max_prefix_length;
-		deltas_add_roa_v6(deltas, vrp->asn, &v6, delta->flags);
-		break;
-	default:
-		ck_abort_msg("Unknown addr family");
+		addr.v6.prefix.len = delta->vrp.prefix_length;
+		addr.v6.prefix.addr = delta->vrp.prefix.v6;
+		addr.v6.max_length = delta->vrp.max_prefix_length;
+		return deltas_add_roa_v6(arg, delta->vrp.asn, &addr.v6,
+		    delta->flags);
 	}
-	return 0;
+
+	ck_abort_msg("Unknown family: %u", delta->vrp.addr_fam);
 }
 
 static int
 rk_add(struct delta_router_key const *delta, void *arg)
 {
-	struct deltas *deltas = arg;
-	struct router_key key;
-
-	key = delta->router_key;
-	deltas_add_router_key(deltas, &key, delta->flags);
-	return 0;
+	return deltas_add_router_key(arg, &delta->router_key, delta->flags);
 }
 
 static void
-filter_deltas(struct deltas_db *db)
+check_deltas(serial_t from, serial_t to, bool const *expected_deltas)
 {
-	struct deltas_db tmp;
-	struct delta_group group;
 	struct deltas *deltas;
-
-	group.serial = 0;
-	ck_assert_int_eq(0, deltas_create(&deltas));
-	group.deltas = deltas;
-	ck_assert_int_eq(0, vrps_foreach_filtered_delta(db, vrp_add,
-	    rk_add, group.deltas));
-	deltas_db_init(&tmp);
-	ck_assert_int_eq(0, deltas_db_add(&tmp, &group));
-
-	*db = tmp;
-}
-
-static void
-check_deltas(serial_t from, serial_t to, bool const *expected_deltas,
-    bool filter)
-{
 	serial_t actual_serial;
 	bool actual_deltas[12];
-	struct deltas_db deltas;
-	struct delta_group *group;
 	array_index i;
 
-	deltas_db_init(&deltas);
-	ck_assert_int_eq(0, vrps_get_deltas_from(from, &actual_serial,
-	    &deltas));
+	ck_assert_int_eq(0, deltas_create(&deltas));
+
+	ck_assert_int_eq(0, vrps_foreach_delta_since(from, &actual_serial,
+	    vrp_add, rk_add, deltas));
 	ck_assert_uint_eq(to, actual_serial);
 
-	if (filter)
-		filter_deltas(&deltas);
-
 	memset(actual_deltas, 0, sizeof(actual_deltas));
-	ARRAYLIST_FOREACH(&deltas, group, i)
-		ck_assert_int_eq(0, deltas_foreach(group->serial, group->deltas,
-		    delta_vrp_check, delta_rk_check, actual_deltas));
+	ck_assert_int_eq(0, deltas_foreach(deltas, delta_vrp_check,
+	    delta_rk_check, actual_deltas));
 	for (i = 0; i < ARRAY_LEN(actual_deltas); i++)
 		ck_assert_uint_eq(expected_deltas[i], actual_deltas[i]);
 }
@@ -342,59 +324,53 @@ static void
 check_no_deltas(serial_t from)
 {
 	serial_t actual_to;
-	struct deltas_db deltas;
-
-	deltas_db_init(&deltas);
-	ck_assert_int_eq(-ESRCH, vrps_get_deltas_from(from, &actual_to,
-	    &deltas));
+	ck_assert_int_eq(-ESRCH, vrps_foreach_delta_since(from, &actual_to,
+	    dvrp_fail, drk_fail, NULL));
 }
 
 static void
-create_deltas_1to2(struct deltas_db *deltas, serial_t *serial, bool *changed,
-    bool *iterated_entries)
+create_deltas_1to2(serial_t *serial, bool *changed, bool *iterated_entries)
 {
-	current_min_serial = 0;
-
-	deltas_db_init(deltas);
-
 	ck_assert_int_eq(0, vrps_init());
 
 	/* First validation not yet performed: Tell routers to wait */
 	ck_assert_int_eq(-EAGAIN, get_last_serial_number(serial));
 	ck_assert_int_eq(-EAGAIN, vrps_foreach_base(vrp_fail, rk_fail,
 	    iterated_entries));
-	ck_assert_int_eq(-EAGAIN, vrps_get_deltas_from(0, serial, deltas));
+	ck_assert_int_eq(-EAGAIN, vrps_foreach_delta_since(0, serial, dvrp_fail,
+	    drk_fail, NULL));
 
 	/* First validation: One tree, no deltas */
 	ck_assert_int_eq(0, vrps_update(changed));
 	check_serial(1);
 	check_base(1, iteration1_base);
-	check_deltas(1, 1, deltas_1to1, false);
+	check_deltas(1, 1, deltas_1to1);
 
 	/* Second validation: One tree, added deltas */
 	ck_assert_int_eq(0, vrps_update(changed));
 	check_serial(2);
 	check_base(2, iteration2_base);
-	check_deltas(1, 2, deltas_1to2, false);
-	check_deltas(2, 2, deltas_2to2, false);
+	check_deltas(1, 2, deltas_1to2);
+	check_deltas(2, 2, deltas_2to2);
 }
 
 START_TEST(test_basic)
 {
-	struct deltas_db deltas;
 	serial_t serial;
 	bool changed;
 	bool iterated_entries[12];
 
-	create_deltas_1to2(&deltas, &serial, &changed, iterated_entries);
+	deltas_lifetime = 5;
+
+	create_deltas_1to2(&serial, &changed, iterated_entries);
 
 	/* Third validation: One tree, removed deltas */
 	ck_assert_int_eq(0, vrps_update(&changed));
 	check_serial(3);
 	check_base(3, iteration3_base);
-	check_deltas(1, 3, deltas_1to3, false);
-	check_deltas(2, 3, deltas_2to3, false);
-	check_deltas(3, 3, deltas_3to3, false);
+	check_deltas(1, 3, deltas_1to3);
+	check_deltas(2, 3, deltas_2to3);
+	check_deltas(3, 3, deltas_3to3);
 
 	vrps_destroy();
 }
@@ -402,70 +378,54 @@ END_TEST
 
 START_TEST(test_delta_forget)
 {
-	struct deltas_db deltas;
 	serial_t serial;
 	bool changed;
 	bool iterated_entries[12];
 
-	create_deltas_1to2(&deltas, &serial, &changed, iterated_entries);
+	deltas_lifetime = 1;
 
-	/*
-	 * Assume that the client(s) already have serial 2 (serial 3 will be
-	 * created) so serial 1 isn't needed anymore.
-	 */
-	current_min_serial = 2;
+	create_deltas_1to2(&serial, &changed, iterated_entries);
 
 	/* Third validation: One tree, removed deltas and delta 1 removed */
 	ck_assert_int_eq(0, vrps_update(&changed));
 	check_serial(3);
 	check_base(3, iteration3_base);
 	check_no_deltas(1);
-	check_deltas(2, 3, deltas_2to3, false);
-	check_deltas(3, 3, deltas_3to3, false);
+	check_deltas(2, 3, deltas_2to3);
+	check_deltas(3, 3, deltas_3to3);
 
 	vrps_destroy();
-
-	/* Return to its initial value */
-	current_min_serial = 0;
 }
 END_TEST
 
 START_TEST(test_delta_ovrd)
 {
-	struct deltas_db deltas;
 	serial_t serial;
 	bool changed;
 	bool iterated_entries[12];
 
-	create_deltas_1to2(&deltas, &serial, &changed, iterated_entries);
+	deltas_lifetime = 3;
+
+	create_deltas_1to2(&serial, &changed, iterated_entries);
 
 	/* Third validation: One tree, removed deltas */
 	ck_assert_int_eq(0, vrps_update(&changed));
 	check_serial(3);
 	check_base(3, iteration3_base);
-	check_deltas(1, 3, deltas_1to3, false);
-	check_deltas(2, 3, deltas_2to3, false);
-	check_deltas(3, 3, deltas_3to3, false);
+	check_deltas(1, 3, deltas_1to3);
+	check_deltas(2, 3, deltas_2to3);
+	check_deltas(3, 3, deltas_3to3);
 
 	/* Fourth validation with deltas that override each other */
 	ck_assert_int_eq(0, vrps_update(&changed));
 	check_serial(4);
 	check_base(4, iteration4_base);
-	check_deltas(1, 4, deltas_1to4_ovrd, false);
-	check_deltas(2, 4, deltas_2to4_ovrd, false);
-	check_deltas(3, 4, deltas_3to4_ovrd, false);
-	check_deltas(4, 4, deltas_4to4_ovrd, false);
-
-	/* Check "cleaned up" deltas */
-	check_deltas(1, 4, deltas_1to4_clean, true);
-	check_deltas(2, 4, deltas_2to4_clean, true);
-	check_deltas(3, 4, deltas_3to4_clean, true);
-	check_deltas(4, 4, deltas_4to4_clean, true);
+	check_deltas(1, 4, deltas_1to4);
+	check_deltas(2, 4, deltas_2to4);
+	check_deltas(3, 4, deltas_3to4);
+	check_deltas(4, 4, deltas_4to4);
 
 	vrps_destroy();
-
-	/* Return to its initial value */
-	current_min_serial = 0;
 }
 END_TEST
 

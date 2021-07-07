@@ -7,7 +7,6 @@
 
 #include "impersonator.c"
 #include "log.c"
-#include "rtr/stream.c"
 #include "rtr/primitive_reader.c"
 
 /*
@@ -17,24 +16,8 @@ static int
 __read_string(unsigned char *input, size_t size, rtr_char **result)
 {
 	struct pdu_reader reader;
-	unsigned char read_bytes[size];
-	int fd;
-	int err;
-	uint32_t usize;
-
-	fd = buffer2fd(input, size);
-	if (fd < 0)
-		return fd;
-
-	err = pdu_reader_init(&reader, fd, read_bytes, size, false);
-	if (err)
-		goto close;
-
-	usize = size & 0xFFFF;
-	err = read_string(&reader, usize, result);
-close:
-	close(fd);
-	return err;
+	pdu_reader_init(&reader, input, size);
+	return read_string(&reader, size & 0xFFFF, result);
 }
 
 static void
@@ -50,19 +33,6 @@ test_read_string_success(unsigned char *input, size_t length,
 		ck_assert_str_eq(expected, actual);
 		free(actual);
 	}
-}
-
-static void
-test_read_string_fail(unsigned char *input, size_t length, int expected)
-{
-	rtr_char *result;
-	int err;
-
-	err = __read_string(input, length, &result);
-	ck_assert_int_eq(expected, err);
-
-	if (!err)
-		free(result);
 }
 
 START_TEST(read_string_ascii)
@@ -102,8 +72,8 @@ END_TEST
 
 START_TEST(read_string_empty)
 {
-	unsigned char *input = { '\0' };
-	test_read_string_fail(input, sizeof(input), -EFAULT);
+	unsigned char input[] = { 0, 0, 0, 0 };
+	test_read_string_success(input, sizeof(input), "");
 }
 END_TEST
 
@@ -114,30 +84,6 @@ struct thread_param {
 };
 
 #define WRITER_PATTERN "abcdefghijklmnopqrstuvwxyz0123456789"
-
-/*
- * Writes a @param_void->msg_size-sized RTR string in @param_void->fd.
- */
-static void *
-writer_thread_cb(void *param_void)
-{
-	struct thread_param *param;
-	rtr_char *pattern;
-	size_t pattern_len;
-
-	param = param_void;
-	pattern = WRITER_PATTERN;
-	pattern_len = strlen(pattern);
-
-	/* Write the string */
-	for (; param->msg_size > pattern_len; param->msg_size -= pattern_len) {
-		param->err = write_exact(param->fd, UCHAR(pattern), pattern_len);
-		if (param->err)
-			return param;
-	}
-	param->err = write_exact(param->fd, UCHAR(pattern), param->msg_size);
-	return param;
-}
 
 /*
  * Checks that the string @str is made up of @expected_len characters composed
@@ -185,66 +131,36 @@ validate_massive_string(uint32_t expected_len, rtr_char *str)
 static void
 test_massive_string(uint32_t return_length, uint32_t full_string_length)
 {
-	int fd[2];
-	pthread_t writer_thread;
-	struct thread_param *arg;
+	unsigned char *buffer;
+	rtr_char *pattern;
+	size_t pattern_len;
+
+	size_t written;
+	size_t w;
+
 	struct pdu_reader reader;
-	unsigned char *read_bytes;
 	rtr_char *result_string;
-	int err, err2, err3;
 
-	if (pipe(fd) == -1)
-		ck_abort_msg("pipe(fd) threw errcode %d", errno);
-	/* Need to close @fd[0] and @fd[1] from now on */
+	buffer = malloc(full_string_length);
+	if (buffer == NULL)
+		ck_abort_msg("Out of memory.");
 
-	arg = malloc(sizeof(struct thread_param));
-	if (!arg) {
-		close(fd[0]);
-		close(fd[1]);
-		ck_abort_msg("Thread parameter allocation failure");
-	}
-	/* Need to free @arg from now on */
-
-	arg->fd = fd[1];
-	arg->msg_size = full_string_length;
-	arg->err = 0;
-
-	err = pthread_create(&writer_thread, NULL, writer_thread_cb, arg);
-	if (err) {
-		close(fd[0]);
-		close(fd[1]);
-		free(arg);
-		ck_abort_msg("pthread_create() threw errcode %d", err);
-	}
-	/* The writer thread owns @arg now; do not touch it until retrieved */
-	do {
-		read_bytes = malloc(full_string_length);
-		err = pdu_reader_init(&reader, fd[0], read_bytes,
-		    full_string_length, false);
-		if (err)
-			break;
-		err = read_string(&reader, full_string_length, &result_string);
-	} while(0);
-
-	/* Need to free @result_string from now on */
-	err2 = pthread_join(writer_thread, (void **)&arg);
-	/* @arg is now retrieved. */
-	err3 = arg->err;
-
-	close(fd[0]);
-	close(fd[1]);
-	free(arg);
-	free(read_bytes);
-	/* Don't need to close @fd[0], @fd[1] nor free @arg from now on */
-
-	if (err || err2 || err3) {
-		free(result_string);
-		ck_abort_msg("read_string:%d pthread_join:%d write_exact:%d",
-		    err, err2, err3);
+	pattern = WRITER_PATTERN;
+	pattern_len = strlen(pattern);
+	for (written = 0; written < full_string_length; written += w) {
+		w = (full_string_length - written > pattern_len)
+		    ? pattern_len
+		    : (full_string_length - written);
+		memcpy(&buffer[written], pattern, w);
 	}
 
-	/* This function now owns @result_string */
+	pdu_reader_init(&reader, buffer, full_string_length);
+	ck_assert_int_eq(0, read_string(&reader, full_string_length,
+	    &result_string));
+
 	validate_massive_string(return_length, result_string);
+
+	free(buffer);
 }
 
 START_TEST(read_string_massive)
@@ -257,7 +173,6 @@ START_TEST(read_string_massive)
 	test_massive_string(4097, 4097);
 	test_massive_string(8000, 8000);
 	test_massive_string(16000, 16000);
-	test_massive_string(786432000, 786432000); /* 750MB */
 }
 END_TEST
 
@@ -308,7 +223,6 @@ Suite *read_string_suite(void)
 	limits = tcase_create("Limits");
 	tcase_add_test(limits, read_string_empty);
 	tcase_add_test(limits, read_string_massive);
-	tcase_set_timeout(limits, 60);
 
 	errors = tcase_create("Errors");
 	tcase_add_test(errors, read_string_null);

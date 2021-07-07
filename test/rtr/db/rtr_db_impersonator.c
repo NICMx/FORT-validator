@@ -19,7 +19,7 @@ static unsigned char db_imp_spk[] = {
     0x2f, 0x7b, 0x39, 0x9f, 0x70, 0x42, 0xd4, 0x07, 0xce, 0xde,
     0x04 };
 
-static int iteration = 0;
+static int serial = 1;
 
 static void
 add_v4(struct validation_handler *handler, uint32_t as)
@@ -79,35 +79,35 @@ perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 	handler.handle_router_key = __handle_router_key;
 	handler.arg = table;
 
-	switch (iteration) {
-	case 0:
-		add_v4(&handler, 0);
-		add_v6(&handler, 0);
-		add_rk(&handler, 0);
-		break;
+	switch (serial) {
 	case 1:
 		add_v4(&handler, 0);
 		add_v6(&handler, 0);
 		add_rk(&handler, 0);
-		add_v4(&handler, 1);
-		add_v6(&handler, 1);
-		add_rk(&handler, 1);
 		break;
 	case 2:
+		add_v4(&handler, 0);
+		add_v6(&handler, 0);
+		add_rk(&handler, 0);
 		add_v4(&handler, 1);
 		add_v6(&handler, 1);
 		add_rk(&handler, 1);
 		break;
 	case 3:
+		add_v4(&handler, 1);
+		add_v6(&handler, 1);
+		add_rk(&handler, 1);
+		break;
+	case 4:
 		add_v4(&handler, 0);
 		add_v6(&handler, 0);
 		add_rk(&handler, 0);
 		break;
 	default:
 		ck_abort_msg("perform_standalone_validation() was called too many times (%d).",
-		    iteration);
+		    serial);
 	}
 
-	iteration++;
+	serial++;
 	return 0;
 }

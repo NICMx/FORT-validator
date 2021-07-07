@@ -68,7 +68,7 @@ struct thread_pool {
 	 * Enable to signal all threads to stop.
 	 * (But all ongoing tasks will be completed first.)
 	 */
-	bool stop;
+	volatile bool stop;
 	/*
 	 * Tasks registered by the Parent Thread, currently waiting for a
 	 * Worker Thread to claim them.

@@ -1472,7 +1472,7 @@ SEQUENCE_encode_uper(const asn_TYPE_descriptor_t *td,
 
 	ASN_DEBUG("Bit-map of %d elements", n_extensions);
 	/* #18.7. Encoding the extensions presence bit-map. */
-	/* TODO: act upon NOTE in #18.7 for canonical PER */
+	/* TODO (asn1c) act upon NOTE in #18.7 for canonical PER */
 	if(SEQUENCE__handle_extensions(td, sptr, po, 0) != n_extensions)
 		ASN__ENCODE_FAILED;
 

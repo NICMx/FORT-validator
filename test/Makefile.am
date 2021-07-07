@@ -20,11 +20,12 @@ AM_CFLAGS = -pedantic -Wall -std=gnu11 -I../src -DUNIT_TESTING ${CHECK_CFLAGS} $
 MY_LDADD = ${CHECK_LIBS}
 
 check_PROGRAMS  = address.test
-check_PROGRAMS += clients.test
+check_PROGRAMS += deltas_array.test
 check_PROGRAMS += db_table.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += rsync.test
+check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
 check_PROGRAMS += thread_pool.test
 check_PROGRAMS += vcard.test
@@ -37,8 +38,8 @@ TESTS = ${check_PROGRAMS}
 address_test_SOURCES = address_test.c
 address_test_LDADD = ${MY_LDADD}
 
-clients_test_SOURCES = client_test.c
-clients_test_LDADD = ${MY_LDADD}
+deltas_array_test_SOURCES = rtr/db/deltas_array_test.c
+deltas_array_test_LDADD = ${MY_LDADD}
 
 db_table_test_SOURCES = rtr/db/db_table_test.c
 db_table_test_LDADD = ${MY_LDADD}
@@ -51,6 +52,9 @@ pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 rsync_test_SOURCES = rsync_test.c
 rsync_test_LDADD = ${MY_LDADD}
+
+serial_test_SOURCES = serial_test.c
+serial_test_LDADD = ${MY_LDADD}
 
 tal_test_SOURCES = tal_test.c
 tal_test_LDADD = ${MY_LDADD}

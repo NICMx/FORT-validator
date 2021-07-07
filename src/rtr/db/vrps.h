@@ -8,19 +8,8 @@
  */
 
 #include <stdbool.h>
-#include "data_structure/array_list.h"
-#include "rtr/db/delta.h"
 
-struct delta_group {
-	serial_t serial;
-	/* snapshot(serial - 1) + deltas = snapshot(serial) */
-	struct deltas *deltas;
-};
-
-void deltagroup_cleanup(struct delta_group *);
-
-DEFINE_ARRAY_LIST_STRUCT(deltas_db, struct delta_group);
-DECLARE_ARRAY_LIST_FUNCTIONS(deltas_db, struct delta_group)
+#include "rtr/db/deltas_array.h"
 
 int vrps_init(void);
 void vrps_destroy(void);
@@ -34,11 +23,9 @@ int vrps_update(bool *);
  */
 
 int vrps_foreach_base(vrp_foreach_cb, router_key_foreach_cb, void *);
-int vrps_get_deltas_from(serial_t, serial_t *, struct deltas_db *);
-int get_last_serial_number(serial_t *);
-
-int vrps_foreach_filtered_delta(struct deltas_db *, delta_vrp_foreach_cb,
+int vrps_foreach_delta_since(serial_t, serial_t *, delta_vrp_foreach_cb,
     delta_router_key_foreach_cb, void *);
+int get_last_serial_number(serial_t *);
 
 int handle_roa_v4(uint32_t, struct ipv4_prefix const *, uint8_t, void *);
 int handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t, void *);
