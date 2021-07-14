@@ -199,6 +199,14 @@ init_addrinfo(char const *hostname, char const *service,
 	return 0;
 }
 
+/*
+ * By the way: man 2 poll says
+ *
+ * > The operation of poll() and ppoll() is not affected by the O_NONBLOCK flag.
+ *
+ * Which appears to be untrue. If I remove this function, both client and server
+ * hang forever, apparently after the TCP handshake.
+ */
 static int
 set_nonblock(int fd)
 {
