@@ -30,6 +30,12 @@
 #    - Using the values of the configuration file (uses the args '--tal' and
 #      '--local-repository').
 
+echo "WARNING: this script (fort_setup.sh) is deprecated, and will be deleted soon."
+echo "I don't even know if it works properly."
+echo "If you want to download the TALs, use the fort binary's --init-tals option."
+echo "See https://nicmx.github.io/FORT-validator/usage.html#--init-tals"
+echo "===================================="
+
 exit_on_err()
 {
   if ! [ $1 ] ; then

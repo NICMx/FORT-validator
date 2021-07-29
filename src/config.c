@@ -204,11 +204,12 @@ struct rpki_config {
 	/* Time period that must lapse to warn about a stale repository */
 	unsigned int stale_repository_period;
 
-	/* Download the TALs into --tal? */
+	/* Download the normal TALs into --tal? */
 	bool init_tals;
-
-	/* HTTPS URLS from where the TALS will be fetched */
-	struct init_locations init_tal_locations;
+	/* Download AS0 TALs into --tal? */
+	bool init_tal0s;
+	/* Deprecated; currently does nothing. */
+	unsigned int init_tal_locations;
 
 	/* Thread pools for specific tasks */
 	struct {
@@ -771,15 +772,21 @@ static const struct option_field options[] = {
 		.name = "init-tals",
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, init_tals),
-		.doc = "Fetch the RIR's TAL files into the specified path at --tal",
+		.doc = "Fetch the currently-known TAL files into --tal",
 		.availability = AVAILABILITY_GETOPT,
-	},
-	{
+	}, {
+		.id = 11002,
+		.name = "init-as0-tals",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, init_tal0s),
+		.doc = "Fetch the currently-known AS0 TAL files into --tal",
+		.availability = AVAILABILITY_GETOPT,
+	}, {
 		.id = 11001,
 		.name = "init-locations",
 		.type = &gt_init_tals_locations,
 		.offset = offsetof(struct rpki_config, init_tal_locations),
-		.doc = "Locations from where the TAL files will be downloaded, and its optional accept message",
+		.doc = "Deprecated. Does nothing as of Fort 1.5.1.",
 		.availability = AVAILABILITY_JSON,
 	},
 
@@ -953,18 +960,6 @@ set_default_values(void)
 		"$LOCAL",
 	};
 
-	static char const *init_locations_no_msg[] = {
-		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal",
-		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal",
-		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal",
-		"https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal",
-	};
-
-	static char const *init_locations_w_msg[] = {
-		"https://www.arin.net/resources/manage/rpki/arin.tal",
-		"Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:",
-	};
-
 	int error;
 
 	/*
@@ -1083,11 +1078,7 @@ set_default_values(void)
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 
 	rpki_config.init_tals = false;
-	error = init_locations_init(&rpki_config.init_tal_locations,
-	    init_locations_no_msg, ARRAY_LEN(init_locations_no_msg),
-	    init_locations_w_msg, ARRAY_LEN(init_locations_w_msg));
-	if (error)
-		goto revert_init_locations;
+	rpki_config.init_tal_locations = 0;
 
 	/* Common scenario is to connect 1 router or a couple of them */
 	rpki_config.thread_pool.server.max = 20;
@@ -1095,8 +1086,7 @@ set_default_values(void)
 	rpki_config.thread_pool.validation.max = 5;
 
 	return 0;
-revert_init_locations:
-	free(rpki_config.validation_log.tag);
+
 revert_validation_log_tag:
 	free(rpki_config.http.user_agent);
 revert_flat_array:
@@ -1256,9 +1246,11 @@ handle_flags_config(int argc, char **argv)
 		goto end;
 
 	/* If present, nothing else is done */
-	if (rpki_config.init_tals) {
-		error = init_tals_exec(&rpki_config.init_tal_locations,
-		    rpki_config.tal);
+	if (rpki_config.init_tals || rpki_config.init_tal0s) {
+		if (rpki_config.init_tals)
+			error = download_tals();
+		if (!error && rpki_config.init_tal0s)
+			error = download_tal0s();
 		free(long_opts);
 		free(short_opts);
 		exit(error);

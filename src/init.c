@@ -8,40 +8,41 @@
 #include "log.h"
 #include "http/http.h"
 
-/*
- * Quite simple: expect 'yes' from stdin (ignore case)
- */
-static int
-read_stdin(char const *file)
+static bool
+download_arin_tal(void)
 {
 	char c;
 
+	printf("Attention: ARIN requires you to agree to their Relying Party Agreement (RPA) before you can download and use their TAL.\n"
+	    "Please download and read https://www.arin.net/resources/manage/rpki/rpa.pdf\n"
+	    "If you agree to the terms, type 'yes' and hit Enter: ");
+
 	c = getchar();
 	if (c != 'y' && c != 'Y')
-		goto err;
+		goto cancel;
 
 	c = getchar();
 	if (c != 'e' && c != 'E')
-		goto err;
+		goto cancel;
 
 	c = getchar();
 	if (c != 's' && c != 'S')
-		goto err;
+		goto cancel;
 
 	if (feof(stdin) || (c = getchar()) == '\n')
-		return 0;
-err:
-	fprintf(stdout,
-	    "\nWarning: The conditions weren't accepted, the TAL '%s' won't be downloaded.\n",
-	    file);
-	return EINVAL;
+		return true;
+
+	/* Fall through */
+cancel:
+	printf("Skipping ARIN's TAL.\n\n");
+	return false;
 }
 
 static int
-fetch_url(char const *url, char const *accept_message, void *arg)
+fetch_url(char const *url)
 {
 	char const *prefix = "https://";
-	char const *dest_dir = arg;
+	char const *dest_dir;
 	char *dest_file;
 	char *dest;
 	size_t prefix_len;
@@ -53,6 +54,7 @@ fetch_url(char const *url, char const *accept_message, void *arg)
 
 	prefix_len = strlen(prefix);
 	url_len = strlen(url);
+	dest_dir = config_get_tal();
 	dest_dir_len = strlen(dest_dir);
 
 	if (url_len <= prefix_len ||
@@ -62,18 +64,6 @@ fetch_url(char const *url, char const *accept_message, void *arg)
 	dest_file = strrchr(url, '/') + 1;
 	if (*dest_file == '\0')
 		return pr_op_err("HTTPS URL '%s' must be a file location", url);
-
-	/* Each location must be an HTTPS URI */
-	do {
-		if (accept_message == NULL)
-			break;
-
-		fprintf(stdout, "%s\n", accept_message);
-		error = read_stdin(dest_file);
-		/* On error, let the other TALs to be downloaded */
-		if (error)
-			return 0;
-	} while (0);
 
 	extra_slash = (dest_dir[dest_dir_len - 1] == '/') ? 0 : 1;
 
@@ -99,13 +89,50 @@ fetch_url(char const *url, char const *accept_message, void *arg)
 		return error;
 	}
 
-	fprintf(stdout, "Successfully fetched '%s'!\n", dest);
+	fprintf(stdout, "Successfully fetched '%s'!\n\n", dest);
 	free(dest);
 	return 0;
 }
 
 int
-init_tals_exec(struct init_locations *source, char const *dest)
+download_tals(void)
 {
-	return init_locations_foreach(source, fetch_url, (void *)dest);
+	int error;
+
+	/*
+	 * https://afrinic.net/resource-certification/tal
+	 * https://www.apnic.net/community/security/resource-certification/tal-archive/
+	 * https://www.arin.net/resources/manage/rpki/tal/
+	 * https://www.lacnic.net/4984/2/lacnic/rpki-rpki-trust-anchor
+	 * https://www.ripe.net/manage-ips-and-asns/resource-management/rpki/ripe-ncc-rpki-trust-anchor-structure
+	 */
+
+	error = fetch_url("https://rpki.afrinic.net/tal/afrinic.tal");
+	if (error)
+		return error;
+	error = fetch_url("https://tal.apnic.net/apnic.tal");
+	if (error)
+		return error;
+	if (download_arin_tal())
+		error = fetch_url("https://www.arin.net/resources/manage/rpki/arin.tal");
+	error = fetch_url("https://www.lacnic.net/innovaportal/file/4983/1/lacnic.tal");
+	if (error)
+		return error;
+	error = fetch_url("https://tal.rpki.ripe.net/ripe-ncc.tal");
+	if (error)
+		return error;
+
+	return error;
+}
+
+int
+download_tal0s(void)
+{
+	int error;
+
+	error = fetch_url("https://tal.apnic.net/apnic-as0.tal");
+	if (error)
+		return error;
+
+	return fetch_url("https://www.lacnic.net/innovaportal/file/4983/1/lacnic-as0.tal");
 }
