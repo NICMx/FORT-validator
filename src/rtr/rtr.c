@@ -23,7 +23,6 @@ static volatile bool stop_server_thread;
 
 STATIC_ARRAY_LIST(server_arraylist, struct rtr_server);
 STATIC_ARRAY_LIST(client_arraylist, struct rtr_client);
-STATIC_ARRAY_LIST(pollfd_arraylist, struct pollfd);
 
 static struct server_arraylist servers;
 static struct client_arraylist clients;
@@ -570,7 +569,23 @@ print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 }
 
 static void
-apply_pollfds(struct pollfd_arraylist *pollfds, unsigned int nclients)
+delete_dead_clients(void)
+{
+	unsigned int src;
+	unsigned int dst;
+
+	for (src = 0, dst = 0; src < clients.len; src++) {
+		if (clients.array[src].fd != -1) {
+			clients.array[dst] = clients.array[src];
+			dst++;
+		}
+	}
+
+	clients.len = dst;
+}
+
+static void
+apply_pollfds(struct pollfd *pollfds, unsigned int nclients)
 {
 	struct pollfd *pfd;
 	struct rtr_server *server;
@@ -578,7 +593,7 @@ apply_pollfds(struct pollfd_arraylist *pollfds, unsigned int nclients)
 	unsigned int i;
 
 	for (i = 0; i < servers.len; i++) {
-		pfd = &pollfds->array[i];
+		pfd = &pollfds[i];
 		server = &servers.array[i];
 
 		/* PR_DEBUG_MSG("pfd:%d server:%d", pfd->fd, server->fd); */
@@ -591,7 +606,7 @@ apply_pollfds(struct pollfd_arraylist *pollfds, unsigned int nclients)
 	}
 
 	for (i = 0; i < nclients; i++) {
-		pfd = &pollfds->array[servers.len + i];
+		pfd = &pollfds[servers.len + i];
 		client = &clients.array[i];
 
 		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
@@ -603,13 +618,13 @@ apply_pollfds(struct pollfd_arraylist *pollfds, unsigned int nclients)
 		}
 	}
 
-	/* TODO clean up client array */
+	delete_dead_clients();
 }
 
 static enum poll_verdict
 fddb_poll(void)
 {
-	struct pollfd_arraylist pollfds;
+	struct pollfd *pollfds; /* array */
 
 	struct rtr_server *server;
 	struct rtr_client *client;
@@ -619,22 +634,18 @@ fddb_poll(void)
 	unsigned int i;
 	int error;
 
-	pollfd_arraylist_init(&pollfds);
-
-	pollfds.len = servers.len + clients.len;
-	pollfds.capacity = pollfds.len;
-	pollfds.array = calloc(pollfds.len, sizeof(struct pollfd));
-	if (pollfds.array == NULL) {
+	pollfds = calloc(servers.len + clients.len, sizeof(struct pollfd));
+	if (pollfds == NULL) {
 		pr_enomem();
 		return PV_RETRY;
 	}
 
 	ARRAYLIST_FOREACH(&servers, server, i)
-		init_pollfd(&pollfds.array[i], server->fd);
+		init_pollfd(&pollfds[i], server->fd);
 	ARRAYLIST_FOREACH(&clients, client, i)
-		init_pollfd(&pollfds.array[servers.len + i], client->fd);
+		init_pollfd(&pollfds[servers.len + i], client->fd);
 
-	error = poll(pollfds.array, pollfds.len, 1000);
+	error = poll(pollfds, servers.len + clients.len, 1000);
 
 	if (stop_server_thread)
 		goto stop;
@@ -665,7 +676,7 @@ fddb_poll(void)
 	/* New connections */
 	for (i = 0; i < servers.len; i++) {
 		/* This fd is a listening socket. */
-		fd = &pollfds.array[i];
+		fd = &pollfds[i];
 
 		/* PR_DEBUG_MSG("Server %u: fd:%d revents:%x",
 		    i, fd->fd, fd->revents); */
@@ -690,7 +701,7 @@ fddb_poll(void)
 	/* Client requests */
 	for (i = 0; i < nclients; i++) {
 		/* This fd is a client handler socket. */
-		fd = &pollfds.array[servers.len + i];
+		fd = &pollfds[servers.len + i];
 
 		/* PR_DEBUG_MSG("Client %u: fd:%d revents:%x", i, fd->fd,
 		    fd->revents); */
@@ -707,18 +718,18 @@ fddb_poll(void)
 	}
 
 	lock_mutex();
-	apply_pollfds(&pollfds, nclients);
+	apply_pollfds(pollfds, nclients);
 	unlock_mutex();
 	/* Fall through */
 
 success:
-	pollfd_arraylist_cleanup(&pollfds, NULL);
+	free(pollfds);
 	return PV_CONTINUE;
 retry:
-	pollfd_arraylist_cleanup(&pollfds, NULL);
+	free(pollfds);
 	return PV_RETRY;
 stop:
-	pollfd_arraylist_cleanup(&pollfds, NULL);
+	free(pollfds);
 	return PV_STOP;
 }
 
