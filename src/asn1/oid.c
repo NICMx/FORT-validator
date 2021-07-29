@@ -16,7 +16,7 @@ free_arcs(struct oid_arcs *arcs)
  *
  * Callers must free @result.
  *
- * TODO (whatever) Most of the time, this function is called to compare @result
+ * TODO (fine) Most of the time, this function is called to compare @result
  * to some oid. Maybe create a wrapper that takes care of all the boilerplate.
  */
 int

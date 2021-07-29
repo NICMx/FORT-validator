@@ -60,7 +60,7 @@ parse_argv_rsync_strategy(struct option_field const *field, char const *str,
 		return pr_op_err("Unknown rsync synchronization strategy: '%s'",
 		    str);
 
-	/* FIXME (later) Remove when sync-strategy is fully deprecated */
+	/* TODO (later) Remove when sync-strategy is fully deprecated */
 	config_set_sync_strategy(DEREFERENCE(result));
 
 	return 0;

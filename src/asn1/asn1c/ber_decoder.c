@@ -213,11 +213,9 @@ ber_check_tags(const asn_codec_ctx_t *opt_codec_ctx,
 		}
 
 		/*
-		 * FIXME
-		 * As of today, the chain of tags
-		 * must either contain several indefinite length TLVs,
-		 * or several definite length ones.
-		 * No mixing is allowed.
+		 * TODO (fine) As of today, the chain of tags must either
+		 * contain several indefinite length TLVs, or several definite
+		 * length ones. No mixing is allowed.
 		 */
 		if(tlv_len == -1) {
 			/*

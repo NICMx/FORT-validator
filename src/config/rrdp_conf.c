@@ -13,7 +13,7 @@
  * Note that this is just a wrapper to set rrdp.* arguments and its equivalent
  * http.* args.
  *
- * FIXME (later) This wrapper will live until all rrdp.* args are fully
+ * TODO (later) This wrapper will live until all rrdp.* args are fully
  * deprecated.
  */
 

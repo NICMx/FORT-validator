@@ -52,7 +52,7 @@ der_coder(const void *buf, size_t size, void *app_key)
 }
 
 /*
- * FIXME (next iteration) This isn't efficient, consider implement DER decoding
+ * TODO (performance) This isn't efficient, consider implement DER decoding
  * or something better.
  */
 static int

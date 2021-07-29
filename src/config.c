@@ -40,7 +40,7 @@ struct rpki_config {
 	char *tal;
 	/** Path of our local clone of the repository */
 	char *local_repository;
-	/** FIXME (later) Deprecated, remove it. RSYNC download strategy. */
+	/** TODO (later) Deprecated, remove it. RSYNC download strategy. */
 	enum rsync_strategy sync_strategy;
 	/**
 	 * Handle TAL URIs in random order?
@@ -1042,7 +1042,7 @@ set_default_values(void)
 	rpki_config.http.ca_path = NULL; /* Use system default */
 
 	/*
-	 * FIXME (later) Same values as http.*, delete when rrdp.* is fully
+	 * TODO (later) Same values as http.*, delete when rrdp.* is fully
 	 * deprecated
 	 */
 	rpki_config.rrdp.enabled = rpki_config.http.enabled;
@@ -1153,7 +1153,7 @@ validate_config(void)
 	    !valid_file_or_dir(rpki_config.slurm, true, true, __pr_op_err))
 		return pr_op_err("Invalid slurm location.");
 
-	/* FIXME (later) Remove when sync-strategy is fully deprecated */
+	/* TODO (later) Remove when sync-strategy is fully deprecated */
 	if (!rpki_config.rsync.enabled)
 		config_set_sync_strategy(RSYNC_OFF);
 

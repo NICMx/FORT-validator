@@ -79,14 +79,14 @@ uint32_t config_get_val_log_facility(void);
  */
 void config_set_rsync_enabled(bool);
 void config_set_http_enabled(bool);
-/* FIXME (later) This will be deprecated */
+/* TODO (later) This will be deprecated */
 void config_set_rrdp_enabled(bool);
 
-/* FIXME (later) Remove when sync-strategy is fully deprecated */
+/* TODO (later) Remove when sync-strategy is fully deprecated */
 void config_set_sync_strategy(enum rsync_strategy);
 void config_set_rsync_strategy(enum rsync_strategy);
 
-/* FIXME (later) Remove once rrdp.* is fully deprecated */
+/* TODO (later) Remove once rrdp.* is fully deprecated */
 void config_set_rrdp_priority(unsigned int);
 void config_set_http_priority(unsigned int);
 void config_set_rrdp_retry_count(unsigned int);
