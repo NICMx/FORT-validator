@@ -795,10 +795,9 @@ static const struct option_field options[] = {
 		.name = "thread-pool.server.max",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, thread_pool.server.max),
-		.doc = "Maximum number of active threads (one thread per RTR client) that can live at the thread pool",
+		.doc = "Number of threads in the RTR client request thread pool. Also known as the maximum number of client requests the RTR server will be able to handle at the same time.",
 		.min = 1,
-		/* Would somebody connect more than 500 routers? */
-		.max = 500,
+		.max = UINT_MAX,
 	},
 	{
 		.id = 12001,
@@ -806,8 +805,8 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config,
 		    thread_pool.validation.max),
-		.doc = "Maximum number of active threads (one thread per TAL) that can live at the thread pool",
-		.min = 1,
+		.doc = "Number of threads in the validation thread pool. (Each thread handles one TAL tree.)",
+		.min = 0,
 		.max = 100,
 	},
 
@@ -982,7 +981,7 @@ set_default_values(void)
 	rpki_config.server.interval.refresh = 3600;
 	rpki_config.server.interval.retry = 600;
 	rpki_config.server.interval.expire = 7200;
-	rpki_config.server.deltas_lifetime = 4;
+	rpki_config.server.deltas_lifetime = 2;
 
 	rpki_config.tal = NULL;
 	rpki_config.slurm = NULL;

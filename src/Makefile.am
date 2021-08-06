@@ -10,7 +10,6 @@ fort_SOURCES += address.h address.c
 fort_SOURCES += algorithm.h algorithm.c
 fort_SOURCES += certificate_refs.h certificate_refs.c
 fort_SOURCES += cert_stack.h cert_stack.c
-fort_SOURCES += clients.h
 fort_SOURCES += common.c common.h
 fort_SOURCES += config.h config.c
 fort_SOURCES += daemon.h daemon.c
@@ -128,7 +127,7 @@ fort_SOURCES += xml/relax_ng.c xml/relax_ng.h
 include asn1/asn1c/Makefile.include
 fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 
-fort_CFLAGS  = -Wall -Wno-cpp
+fort_CFLAGS  = -Wall -Wno-cpp -Wpedantic
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
@@ -141,7 +140,7 @@ GCC_WARNS  = -fmax-errors=1
 # Please ready some arguments if you want to permanently remove some of these
 # flags. I gave a quick read to the documentation of all of these warnings, and
 # generally liked each of them.
-GCC_WARNS += -Wpedantic -pedantic-errors -Waddress -Walloc-zero -Walloca
+GCC_WARNS += -pedantic-errors -Waddress -Walloc-zero -Walloca
 GCC_WARNS += -Wno-aggressive-loop-optimizations -Warray-bounds=2 -Wbool-compare
 GCC_WARNS += -Wbool-operation -Wno-builtin-declaration-mismatch -Wcast-align
 GCC_WARNS += -Wcast-qual -Wchar-subscripts -Wchkp -Wclobbered -Wcomment

@@ -81,7 +81,6 @@ EXTRA_DIST  = impersonator.c
 EXTRA_DIST += line_file/core.txt
 EXTRA_DIST += line_file/empty.txt
 EXTRA_DIST += line_file/error.txt
-EXTRA_DIST += rtr/stream.c rtr/stream.h
 EXTRA_DIST += rtr/db/rtr_db_impersonator.c
 EXTRA_DIST += tal/lacnic.tal
 EXTRA_DIST += xml/notification.xml

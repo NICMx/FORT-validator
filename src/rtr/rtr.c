@@ -21,8 +21,8 @@
 static pthread_t server_thread;
 static volatile bool stop_server_thread;
 
-STATIC_ARRAY_LIST(server_arraylist, struct rtr_server);
-STATIC_ARRAY_LIST(client_arraylist, struct rtr_client);
+STATIC_ARRAY_LIST(server_arraylist, struct rtr_server)
+STATIC_ARRAY_LIST(client_arraylist, struct rtr_client)
 
 static struct server_arraylist servers;
 static struct client_arraylist clients;

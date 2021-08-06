@@ -13,8 +13,9 @@ description: Guide to use arguments of FORT Validator.
 	1. [`--help`](#--help)
 	2. [`--usage`](#--usage)
 	3. [`--version`](#--version)
-	4. [`--init-tals`](#--init-tals)
 	5. [`--tal`](#--tal)
+	4. [`--init-tals`](#--init-tals)
+	4. [`--init-as0-tals`](#--init-as0-tals)
 	6. [`--local-repository`](#--local-repository)
 	7. [`--work-offline`](#--work-offline)
 	8. [`--daemon`](#--daemon)
@@ -28,6 +29,7 @@ description: Guide to use arguments of FORT Validator.
 	16. [`--server.interval.refresh`](#--serverintervalrefresh)
 	17. [`--server.interval.retry`](#--serverintervalretry)
 	18. [`--server.interval.expire`](#--serverintervalexpire)
+	18. [`--server.deltas.lifetime`](#--serverdeltaslifetime)
 	19. [`--slurm`](#--slurm)
 	20. [`--log.enabled`](#--logenabled)
 	21. [`--log.level`](#--loglevel)
@@ -72,88 +74,89 @@ description: Guide to use arguments of FORT Validator.
 	57. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
 	58. [`rsync.arguments-flat`](#rsyncarguments-flat)
 	59. [`incidences`](#incidences)
-	60. [`init-locations`](#init-locations)
 3. [Deprecated arguments](#deprecated-arguments)
 	1. [`--sync-strategy`](#--sync-strategy)
 	2. [`--rrdp.enabled`](#--rrdpenabled)
 	3. [`--rrdp.priority`](#--rrdppriority)
 	4. [`--rrdp.retry.count`](#--rrdpretrycount)
 	5. [`--rrdp.retry.interval`](#--rrdpretryinterval)
+	60. [`init-locations`](#init-locations)
 
 ## Syntax
 
 ```
 {{ page.command }}
-        [--help]
-        [--usage]
-        [--version]
-        [--init-tals]
-        [--configuration-file=<file>]
-        [--tal=<file>|<directory>]
-        [--local-repository=<directory>]
-        [--sync-strategy=off|strict|root|root-except-ta]
-        [--work-offline]
-        [--daemon]
-        [--shuffle-uris]
-        [--maximum-certificate-depth=<unsigned integer>]
-        [--asn1-decode-max-stack=<unsigned integer>]
-        [--stale-repository-period=<unsigned integer>]
-        [--mode=server|standalone]
-        [--server.address=<sequence of strings>]
-        [--server.port=<string>]
-        [--server.backlog=<unsigned integer>]
-        [--server.interval.validation=<unsigned integer>]
-        [--server.interval.refresh=<unsigned integer>]
-        [--server.interval.retry=<unsigned integer>]
-        [--server.interval.expire=<unsigned integer>]
-        [--slurm=<file>|<directory>]
-        [--log.enabled=true|false]
-        [--log.level=error|warning|info|debug]
-        [--log.output=syslog|console]
-        [--log.color-output]
-        [--log.file-name-format=global-url|local-path|file-name]
-        [--log.facility=auth|authpriv|cron|daemon|ftp|lpr|mail|news|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
-        [--log.tag=<string>]
-        [--validation-log.enabled=true|false]
-        [--validation-log.level=error|warning|info|debug]
-        [--validation-log.output=syslog|console]
-        [--validation-log.color-output]
-        [--validation-log.file-name-format=global-url|local-path|file-name]
-        [--validation-log.facility=auth|authpriv|cron|daemon|ftp|lpr|mail|news|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
-        [--validation-log.tag=<string>]
-        [--rrdp.enabled=true|false]
-        [--rrdp.priority=<unsigned integer>]
-        [--rrdp.retry.count=<unsigned integer>]
-        [--rrdp.retry.interval=<unsigned integer>]
-        [--rsync.enabled=true|false]
-        [--rsync.priority=<unsigned integer>]
-        [--rsync.strategy=strict|root|root-except-ta]
-        [--rsync.retry.count=<unsigned integer>]
-        [--rsync.retry.interval=<unsigned integer>]
-        [--http.enabled=true|false]
-        [--http.priority=<unsigned integer>]
-        [--http.retry.count=<unsigned integer>]
-        [--http.retry.interval=<unsigned integer>]
-        [--http.user-agent=<string>]
-        [--http.connect-timeout=<unsigned integer>]
-        [--http.transfer-timeout=<unsigned integer>]
-        [--http.idle-timeout=<unsigned integer>]
-        [--http.ca-path=<directory>]
-        [--output.roa=<file>]
-        [--output.bgpsec=<file>]
-        [--output.format=csv|json]
-        [--thread-pool.server.max=<unsigned integer>]
-        [--thread-pool.validation.max=<unsigned integer>]
+	[--help]
+	[--usage]
+	[--version]
+	[--configuration-file=<file>]
+	[--tal=<file>|<directory>]
+	[--local-repository=<directory>]
+	[--sync-strategy=off|root|root-except-ta]
+	[--shuffle-uris=true|false]
+	[--maximum-certificate-depth=<unsigned integer>]
+	[--slurm=<file>|<directory>]
+	[--mode=server|standalone]
+	[--work-offline=true|false]
+	[--daemon=true|false]
+	[--server.address=<sequence of strings>]
+	[--server.port=<string>]
+	[--server.backlog=<unsigned integer>]
+	[--server.interval.validation=<unsigned integer>]
+	[--server.interval.refresh=<unsigned integer>]
+	[--server.interval.retry=<unsigned integer>]
+	[--server.interval.expire=<unsigned integer>]
+	[--server.deltas.lifetime=<unsigned integer>]
+	[--rsync.enabled=true|false]
+	[--rsync.priority=<32-bit unsigned integer>]
+	[--rsync.strategy=root|root-except-ta]
+	[--rsync.retry.count=<unsigned integer>]
+	[--rsync.retry.interval=<unsigned integer>]
+	[--rrdp.enabled=true|false]
+	[--rrdp.priority=<32-bit unsigned integer>]
+	[--rrdp.retry.count=<unsigned integer>]
+	[--rrdp.retry.interval=<unsigned integer>]
+	[--http.enabled=true|false]
+	[--http.priority=<32-bit unsigned integer>]
+	[--http.retry.count=<unsigned integer>]
+	[--http.retry.interval=<unsigned integer>]
+	[--http.user-agent=<string>]
+	[--http.connect-timeout=<unsigned integer>]
+	[--http.transfer-timeout=<unsigned integer>]
+	[--http.idle-timeout=<unsigned integer>]
+	[--http.ca-path=<directory>]
+	[--log.enabled=true|false]
+	[--log.output=syslog|console]
+	[--log.level=error|warning|info|debug]
+	[--log.tag=<string>]
+	[--log.facility=auth|authpriv|cron|daemon|ftp|lpr|mail|news|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
+	[--log.file-name-format=global-url|local-path|file-name]
+	[--log.color-output=true|false]
+	[--validation-log.enabled=true|false]
+	[--validation-log.output=syslog|console]
+	[--validation-log.level=error|warning|info|debug]
+	[--validation-log.tag=<string>]
+	[--validation-log.facility=auth|authpriv|cron|daemon|ftp|lpr|mail|news|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
+	[--validation-log.file-name-format=global-url|local-path|file-name]
+	[--validation-log.color-output=true|false]
+	[--output.roa=<file>]
+	[--output.bgpsec=<file>]
+	[--output.format=csv|json]
+	[--asn1-decode-max-stack=<unsigned integer>]
+	[--stale-repository-period=<unsigned integer>]
+	[--init-tals=true|false]
+	[--init-as0-tals=true|false]
+	[--thread-pool.server.max=<unsigned integer>]
+	[--thread-pool.validation.max=<unsigned integer>]
 ```
 
-If an argument is declared more than once, the last one takes precedence:
+If an argument is specified more than once, the last one takes precedence:
 
 {% highlight bash %}
 $ {{ page.command }} --tal="foo"                          # tal is "foo"
 $ {{ page.command }} --tal="foo" --tal="bar"              # tal is "bar"
 $ {{ page.command }} --tal="foo" --tal="bar" --tal="qux"  # tal is "qux"
 {% endhighlight %}
-
 
 ## Arguments
 
@@ -162,24 +165,24 @@ $ {{ page.command }} --tal="foo" --tal="bar" --tal="qux"  # tal is "qux"
 - **Type:** None
 - **Availability:** `argv` only
 
-Prints medium-sized syntax remainder message.
+Prints a medium-sized description of the command-line syntax, then exits.
 
 {% highlight bash %}
 $ {{ page.command }} --help
 Usage: {{ page.command }}
-        [--help]
-            (Give this help list)
-        [--usage]
-            (Give a short usage message)
-        [--version]
-            (Print program version)
+	[--help]
+		(Give this help list)
+	[--usage]
+		(Give a short usage message)
+	[--version]
+		(Print program version)
 	...
-        [--log.file-name-format=global-url|local-path|file-name]
-            (File name variant to print during debug/error messages)
-        [--output.roa=<file>]
-            (File where ROAs will be stored in CSV format, use '-' to print at console.)
-        [--output.bgpsec=<file>]
-            (File where BGPsec Router Keys will be stored in CSV format, use '-' to print at console.)
+	[--init-as0-tals=true|false]
+		(Fetch the currently-known AS0 TAL files into --tal)
+	[--thread-pool.server.max=<unsigned integer>]
+		(Maximum number of active threads (one thread per RTR client) that can live at the thread pool)
+	[--thread-pool.validation.max=<unsigned integer>]
+		(Maximum number of active threads (one thread per TAL) that can live at the thread pool)
 {% endhighlight %}
 
 The slightly larger usage message is `man {{ page.command }}` and the large usage message is this documentation.
@@ -189,7 +192,7 @@ The slightly larger usage message is `man {{ page.command }}` and the large usag
 - **Type:** None
 - **Availability:** `argv` only
 
-Prints small-sized syntax remainder message.
+Prints a small-sized syntax reminder message, then exits.
 
 {% highlight bash %}
 $ {{ page.command }} --usage
@@ -208,28 +211,11 @@ Usage: {{ page.command }}
 - **Type:** None
 - **Availability:** `argv` only
 
-Prints program version.
+Prints the program's version, then exits.
 
 {% highlight bash %}
 $ {{ page.command }} --version
 fort {{ site.fort-latest-version }}
-{% endhighlight %}
-
-### `--init-tals`
-
-- **Type:** None
-- **Availability:** `argv` only
-
-Download the RIR TALs into the existent local path directory set at [`--tal`](#--tal) argument and exit.
-
-This argument exists merely to have all TALs before running FORT validator, the directory path should be set at the [`--tal`](#--tal) argument.
-
-By default, the 4 TALs that don't require a policy acceptance are downloaded from FORT validator's GitHub repository. ARIN TAL does require an explicit acceptance by the user, so it's downloaded only after the user accepts ARIN's RPA; this message is displayed at the terminal and only if the user accepts, ARIN TAL is also downloaded.
-
-This is an example on how to use this argument (assuming that `/etc/fort/tal` exists and is writable):
-
-{% highlight bash %}
-$ {{ page.command }} --init-tals --tal /etc/fort/tal
 {% endhighlight %}
 
 ### `--tal`
@@ -239,19 +225,24 @@ $ {{ page.command }} --init-tals --tal /etc/fort/tal
 
 Path to the _Trust Anchor Locator_ (TAL), or to a directory that contains TALs.
 
-A TAL is a file that points to a _Trust Anchor_ (TA). A TA is a self-signed certificate that serves as root of an RPKI tree you want validated.
+A TAL is a file that points to a _Trust Anchor_ (TA). A TA is an RPKI tree's root certificate.
 
-The reason why you provide locators instead of anchors is to allow the latter to be officially updated without the need to awkwardly redistribute them.
+The reason why you provide locators instead of anchors is to allow the latter to be officially updated without the need to awkwardly redistribute them. (TALs rarely need to change.)
 
-Whichever registry serves as root of the tree you want to validate is responsible for providing you with its TAL. For convenience, Fort currently ships with the TALs of four of the five RIRs. (The exception is ARIN's, since you need to read and accept an [agreement](https://www.arin.net/resources/manage/rpki/tal/) before you can use it.) If you installed the Debian package, they can be found at `/etc/fort/tal/`, otherwise it the `tal/` directory of whatever release tarball you downloaded.
+Registries which own TAs are responsible for providing you with their TALs. For convenience, you can use [`--init-tals`](#--init-tals) and [`--init-as0-tals`](#--init-as0-tals) to speed up and mostly automate this process. Alternatively, you can download the TALs manually. As of 2021-05-26, they can be found by following these links:
 
-If you are paranoid, however, you'd be advised to get your own TALs.
+- [AFRINIC](https://afrinic.net/resource-certification/tal)
+- [APNIC](https://www.apnic.net/community/security/resource-certification/tal-archive/)
+- [ARIN](https://www.arin.net/resources/manage/rpki/tal/)
+- [LACNIC](https://www.lacnic.net/4984/2/lacnic/rpki-rpki-trust-anchor)
+- [RIPE NCC](https://www.ripe.net/manage-ips-and-asns/resource-management/rpki/ripe-ncc-rpki-trust-anchor-structure)
 
 The TAL file format has been standardized in [RFC 8630](https://tools.ietf.org/html/rfc8630). It is a text file that contains zero or more comments (each comment must start with the character "#" and end with a line break), a list of URLs (which serve as alternate access methods for the TA), followed by a blank line, followed by the Base64-encoded public key of the TA.
 
 Just for completeness sake, here's an example on what a typical TAL looks like:
 
 ```
+https://rpki.example.com/repository/root-ca.cer
 rsync://rpki.example.com/repository/root-ca.cer
 
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsqS+PDB1kArJlBTHeYCu
@@ -263,50 +254,100 @@ SMiU+kLHI3dJhv4nJpjc0F+8+6hokIbF0p79yaCgyk0IGz7W3oSPa13KLN6mIPs6
 LQIDAQAB
 ```
 
+### `--init-tals`
+
+- **Type:** None
+- **Availability:** `argv` only
+
+Downloads the currently known core TALs into the [`--tal`](#--tal) directory, then exits. It's a convenience option, meant for quick TAL retrieval, in case you don't have a more formal means to do it.
+
+ARIN's TAL requires that you accept their _Relying Party Agreement_ before the file can be downloaded. This is done through the standard streams.
+
+{% highlight bash %}
+$ {{ page.command }} --init-tals --tal /etc/fort/tal
+Jul 30 12:00:55 DBG: HTTP GET: https://rpki.afrinic.net/tal/afrinic.tal
+Successfully fetched '/etc/fort/tal/afrinic.tal'!
+
+Jul 30 12:00:57 DBG: HTTP GET: https://tal.apnic.net/apnic.tal
+Successfully fetched '/etc/fort/tal/apnic.tal'!
+
+Attention: ARIN requires you to agree to their Relying Party Agreement (RPA) before you can download and use their TAL.
+Please download and read https://www.arin.net/resources/manage/rpki/rpa.pdf
+If you agree to the terms, type 'yes' and hit Enter: yes
+Jul 30 12:01:04 DBG: HTTP GET: https://www.arin.net/resources/manage/rpki/arin.tal
+Successfully fetched '/etc/fort/tal/arin.tal'!
+
+Jul 30 12:01:05 DBG: HTTP GET: https://www.lacnic.net/innovaportal/file/4983/1/lacnic.tal
+Successfully fetched '/etc/fort/tal/lacnic.tal'!
+
+Jul 30 12:01:06 DBG: HTTP GET: https://tal.rpki.ripe.net/ripe-ncc.tal
+Successfully fetched '/etc/fort/tal/ripe-ncc.tal'!
+{% endhighlight %}
+
+This flag can be used in conjunction with `--init-as0-tals`.
+
+### `--init-as0-tals`
+
+- **Type:** None
+- **Availability:** `argv` only
+
+Download the currently known _AS0 Trust Anchor Locators_ (AS0 TALs) into the [`--tal`](#--tal) directory, then exit.
+
+Here's an example. The following command downloads the AS0 TALs into `/etc/fort/tal` (assuming it exists, and is a writable directory):
+
+```bash
+$ {{ page.command }} --init-as0-tals --tal /etc/fort/tal
+Jul 30 12:02:51 DBG: HTTP GET: https://tal.apnic.net/apnic-as0.tal
+Successfully fetched '/etc/fort/tal/apnic-as0.tal'!
+
+Jul 30 12:02:52 DBG: HTTP GET: https://www.lacnic.net/innovaportal/file/4983/1/lacnic-as0.tal
+Successfully fetched '/etc/fort/tal/lacnic-as0.tal'!
+```
+
+This flag can be used in conjunction with `--init-tals`.
+
 ### `--local-repository`
 
 - **Type:** String (Path to directory)
 - **Availability:** `argv` and JSON
 - **Default:** `/tmp/fort/repository`
 
-Path to the directory where Fort will store a local cache of the repository.
+Path to the directory where Fort will store a local cache of the entire repository trees.
 
-Fort accesses RPKI repositories either with [rsync](https://en.wikipedia.org/wiki/Rsync) or [RRDP](https://tools.ietf.org/html/rfc8182). During each validation cycle, and depending on the preferred access methods defined by the CAs, Fort can do two things:
-- Literally invoke an `rsync` command (see [`rsync.program`](#rsyncprogram) and [`rsync.arguments-recursive`](#rsyncarguments-recursive)), which will download the files into `--local-repository`.
-- Fetch the RRDP Update Notification file (which implies an HTTP request) and fetch the files from there on (can be obtained from a Snapshot file or Delta files). The files will be downloaed into `--local-repository`.
+This cache is updated (based on the trees pointed by the TALs) during every validation cycle, and Fort's entire validation process operates on it.
 
-Fort's entire validation process operates on the resulting copy of the files (doesn't matter if the files where fetched by rsync of https).
-
-Because rsync uses delta encoding, you're advised to keep this cache around. It significantly speeds up subsequent validation cycles.
+Assuming not much time has passed since the last time the repository was cached, updating the cache is most of the time much faster than downloading it from scratch. You're therefore encouraged to keep it around.
 
 ### `--work-offline`
 
-- **Type:** None
+- **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
 
-If this flag is activated, Fort will disable all outgoing requests (currently done with: *rsync* and *https* (RRDP protocol uses HTTPS to fetch data)). All repository files (certificates, ROAs, etc.) are expected to exist at configured [`--local-repository`](#--local-repository).
+Skip the repository cache update?
 
-Otherwise, Fort will perform outgoing requests whenever this is needed. If a specific protocol needs to be deactivated, use [`--rsync.enabled`](#--rsyncenabled) or [`--http.enabled`](#--httpenabled).
+If `true`, Fort will disable all outgoing RRDP and RSYNC requests during the validation cycle. The validation results will be entirely based on the (possibly outdated) existing cache. ([`--local-repository`](#--local-repository))
+
+Mostly intended for debugging. See [`--rsync.enabled`](#--rsyncenabled) and [`--http.enabled`](#--httpenabled) if you want to disable a specific protocol.
 
 ### `--daemon`
 
-- **Type:** None
+- **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
 
-If this flag is activated, Fort will run as a daemon. The process is detached from the calling terminal and sent to the background.
+Send process to the background?
 
-All the enabled logs will be sent to syslog, so the configured values of [`--log.output`](#--logoutput) and [`--validation-log.output`](#--validation-logoutput) will be ignored.
+All enabled logs will be sent to syslog; [`--log.output`](#--logoutput) and [`--validation-log.output`](#--validation-logoutput) will be ignored.
 
 ### `--shuffle-uris`
 
-- **Type:** None
+- **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
 
-If enabled, Fort will access TAL URLs in random order. This is meant for load balancing. If disabled, Fort will access TAL URLs in sequential order.
+Access the URLs from the TALs in random order? (This is meant for load balancing.) Otherwise, Fort will try to access them in sequential order. (Which makes more sense when the URLs are ordered by priority.)
 
-Regardless of this flag, Fort will stop iterating through the URLs as soon as it finds one that yields a successful traversal.
+Fort only needs one TA for a successful traversal. As soon as one functioning URL is found, the others are ignored until the next validation cycle.
 
-Of course, this flag is only relevant if the TAL lists more than one URL. If that's the case, the shuffle is done honoring the priority of the protocols (see [`--rsync.priority`](#--rsyncpriority) and [`--http.priority`](#--httppriority)). i.e. if the HTTP protocol has a higher priority than RSYNC, then all the shuffled HTTP URLs will come first.
+> This sorting mechanism is secondary to the protocol sorting mechanism. URLs are first sorted according to their protocol's priorities ([`--rsync.priority`](#--rsyncpriority), [`--http.priority`](#--httppriority)), then according to `--shuffle-uris`.
 
 ### `--maximum-certificate-depth`
 
@@ -325,9 +366,9 @@ Fort's tree traversal is actually iterative (not recursive), so there should be 
 - **Availability:** `argv` and JSON
 - **Default:** `server`
 
-Run mode, commands the way Fort executes the validation. The two possible values and its behavior are:
-- `server`: Enables the RTR server using the `server.*` arguments ([`server.address`](#--serveraddress), [`server.port`](#--serverport), [`server.backlog`](#--serverbacklog), [`server.interval.validation`](#--serverintervalvalidation), [`server.interval.refresh`](#--serverintervalrefresh), [`server.interval.retry`](#--serverintervalretry), [`server.interval.expire`](#--serverintervalexpire)).
-- `standalone`:  Disables the RTR server, the `server.*` arguments are ignored, and Fort performs an in-place standalone RPKI validation.
+In `server` mode, Fort runs endlessly, performing RPKI validation cycles [repeatedly](#--serverintervalvalidation). In parallel, it also starts an [RTR server](#--serveraddress) that will perpetually serve the validation results to upcoming RTR clients. (Which are usually routers.)
+
+In `standalone` mode, Fort simply performs one immediate RPKI validation, then exits. This mode is usually coupled with [`--output.roa`](#--outputroa).
 
 ### `--server.address`
 
@@ -335,16 +376,16 @@ Run mode, commands the way Fort executes the validation. The two possible values
 - **Availability:** `argv` and JSON
 - **Default:** `NULL`
 
-List of hostnames or numeric host addresses where the RTR server will be bound to. Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
+List of hostnames or numeric host addresses the RTR server will be bound to. Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
 
-The list of addresses must be comma sepparated, and each address must have the following format: `<address>[#<port>]`. Note that the port is optional; in case that a port isn't specified, the value of [`--server.port`](#--serverport) will be utilized with the corresponding address.
+The address list must be comma-separated, and each address must have the following format: `<address>[#<port>]`. The port defaults to [`--server.port`](#--serverport).
 
-Here are some examples of valid values for this argument:
-- `--server.address="localhost"`: will bind to 'localhost' and the configured port at [`--server.port`](#--serverport).
-- `--server.address="localhost,::1#8324"`: same as the previous example, and also will bind to IPv6 address '::1' at the port '8324'.
-- `--server.address="localhost#8323,::1#8324"`: will bind to 'localhost' at port '8323', and to '::1' port '8324'. The value of [`--server.port`](#--serverport) isn't utilized.
+Here are some examples:
+- `--server.address="localhost"`: Bind to 'localhost', port [`--server.port`](#--serverport).
+- `--server.address="localhost, ::1#8324"`: Same as above, and also bind to IPv6 address '::1', port '8324'.
+- `--server.address="localhost#8323, ::1#8324"`: Bind to 'localhost' at port '8323', and to '::1' port '8324'. [`--server.port`](#--serverport) is ignored.
 
-If this field is omitted, Fort will attempt to bind the server using the IP address `INADDR_ANY` (for an IPv4 address) or `IN6ADDR_ANY_INIT` (for an IPv6 address); see '`$ man getaddrinfo`'.
+If this field is omitted, the server will accept connections on any of the host's network addresses.
 
 ### `--server.port`
 
@@ -352,13 +393,11 @@ If this field is omitted, Fort will attempt to bind the server using the IP addr
 - **Availability:** `argv` and JSON
 - **Default:** `"323"`
 
-TCP port or service where the server address(es) will be bound to by default if no port is set (see [`--server.address`](#--serveraddress)).
+TCP port or service the server address(es) will be bound to, if [`--server.address`](#--serveraddress) doesn't override it.
 
-This is a string because a service alias can be used as a valid value. The available aliases are commonly located at `/etc/services`. (See '`$ man services`'.)
+This is a string because a service alias can be used as a valid value. The available aliases are commonly located at `/etc/services`. (See '`$ man 5 services`'.)
 
-> ![img/warn.svg](img/warn.svg) The default port is privileged. To improve security, either change or jail it.
->
-> In case you don't wish to change the port, nor run FORT validator as root, see [Non root port binding](run.html#non-root-port-binding).
+> ![img/warn.svg](img/warn.svg) The default port is privileged. To improve security, either change or jail it. See [Non root port binding](run.html#non-root-port-binding).
 
 ### `--server.backlog`
 
@@ -380,11 +419,11 @@ See the corresponding manual page from your operating system (likely `man 2 list
 - **Default:** 3600
 - **Range:** 60--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
-Number of seconds the server will sleep between validation cycles.
+Number of seconds Fort will sleep between validation cycles, when in [`server`](#--mode) mode.
 
 The timer starts counting every time a validation is finished, not every time it begins. The actual validation loop is, therefore, longer than this number.
 
-"Validation cycle" includes the rsync update along with the validation operation. Because you are taxing the global repositories every time the validator performs an rsync, it is recommended not to reduce the validation interval to the point you might be contributing to DoS'ing the global repository. The minimum value (60) was taken from the [RRDP RFC](https://tools.ietf.org/html/rfc8182#section-3.1), which means it's not necessarily a good value for heavy rsyncs.
+"Validation cycle" includes the rsync update along with the validation operation. Because you are taxing the global repositories every time the validator performs a cache synchronization, it is recommended not to reduce the validation interval to the point you might be contributing to DoS'ing the global repository. The minimum value (60) was taken from the [RRDP RFC](https://tools.ietf.org/html/rfc8182#section-3.1), which means it's not necessarily a good value for heavy rsyncs.
 
 ### `--server.interval.refresh`
 
@@ -393,11 +432,11 @@ The timer starts counting every time a validation is finished, not every time it
 - **Default:** 3600
 - **Range:** 1--86400
 
-Number of seconds that a router should wait before the next attempt to poll FORT using either a Serial Query PDU or Reset Query PDU.
+To synchronize their cache of RPKI prefix origin data and router keys, RTR clients (routers) poll Fort's RTR Server at regular intervals.
 
-Countdown for this timer starts upon receipt of an End Of Data PDU (this should be administered by the client).
+`--server.interval.refresh` is the length of that interval (in seconds), as _suggested_ by Fort, to the RTR clients. It is only employed if the peers manage to negociate usage of the RTRv1 protocol for the communication.
 
-This value is utilized only on RTR version 1 sessions (more information at [RFC 8210 section 6](https://tools.ietf.org/html/rfc8210#section-6)).
+See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
 
 ### `--server.interval.retry`
 
@@ -406,11 +445,11 @@ This value is utilized only on RTR version 1 sessions (more information at [RFC 
 - **Default:** 600
 - **Range:** 1--7200
 
-Number of seconds that a router should wait before retrying a failed Serial Query PDU or Reset Query PDU.
+To synchronize their cache of RPKI prefix origin data and router keys, RTR clients (routers) poll Fort's RTR Server at regular intervals.
 
-Countdown for this timer starts upon failure of the query and restarts after each subsequent failure until a query succeeds (this should be administered by the client).
+`--server.interval.retry` is the number of seconds a router should wait before retrying a failed synchronization. It is _suggested_ to them by Fort, and only employed if the peers manage to negociate usage of the RTRv1 protocol for the communication.
 
-This value is utilized only on RTR version 1 sessions (more information at [RFC 8210 section 6](https://tools.ietf.org/html/rfc8210#section-6)).
+See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
 
 ### `--server.interval.expire`
 
@@ -419,11 +458,24 @@ This value is utilized only on RTR version 1 sessions (more information at [RFC 
 - **Default:** 7200
 - **Range:** 600--172800
 
-Number of seconds that a router can retain the current version of data while unable to perform a successful subsequent query.
+To synchronize their cache of RPKI prefix origin data and router keys, RTR clients (routers) poll Fort's RTR Server at regular intervals.
 
-Countdown for this timer starts upon receipt of an End Of Data PDU (this should be administered by the client).
+`--server.interval.expire` is the number of seconds a router should retain their data while unable to perform a successful synchronization with Fort. It is _suggested_ to them by Fort, and only employed if the peers manage to negociate usage of the RTRv1 protocol for the communication.
 
-This value is utilized only on RTR version 1 sessions (more information at [RFC 8210 section 6](https://tools.ietf.org/html/rfc8210#section-6)).
+See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
+
+### `--server.deltas.lifetime`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 2
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+When routers first connect to Fort, they request a _snapshot_ of the validation results. (ROAs and Router Keys.) Because they need to keep their validated objects updated, and snapshots tend to be relatively large amounts of information, they request _deltas_ afterwards over configurable intervals. ("Deltas" being the differences between snapshots.)
+
+During each validation cycle, Fort generates a new snapshot, as well as the deltas needed to build the new snapshot from the previous one. These are all stored in RAM. `--server.deltas.lifetime` is the number of iterations a set of deltas will be kept before being deallocated. (Recall that every iteration lasts [`--server.interval.validation`](#--serverintervalvalidation) seconds, plus however long the validation takes.)
+
+If a router lags behind, to the point Fort has already deleted the deltas it needs to update the router's snapshot, Fort will have to fall back to fetch the entire latest snapshot instead.
 
 ### `--slurm`
 
@@ -439,9 +491,9 @@ SLURM file, or directory containing SLURM files. See [SLURM](slurm.html).
 - **Availability:** `argv` and JSON
 - **Default:** `true`
 
-Enables the operation logs.
+Enable the operation logs?
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Enabled](logging.html#enabled).
+See [Logging](logging.html).
 
 ### `--log.level`
 
@@ -449,15 +501,11 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Enabled](
 - **Availability:** `argv` and JSON
 - **Default:** `warning`
 
-Defines which operation log messages will be logged according to its priority, e.g. a value of `info` will log messages of equal or higher level (`info`, `warning`, and `error`).
+Minimum allowed severity of operation log messages. (Lower severity messages will be dropped.) The highest priority is `error`, and the lowest is `debug`.
 
-The priority levels, from higher to lowest, are:
-- `error`
-- `warning`
-- `info`
-- `debug`
+For example, `--log.level=warning` will cause only `warning` and `error` messages to be logged.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Level](logging.html#level).
+See [Logging > Configuration > Level](logging.html#level).
 
 ### `--log.output`
 
@@ -465,11 +513,11 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Level](lo
 - **Availability:** `argv` and JSON
 - **Default:** `console`
 
-Desired output where the operation logs will be printed.
+Desired target that will take care of actually printing the operation logs.
 
-The value `console` will log messages at standard output and standard error; `syslog` will log to [Syslog](https://en.wikipedia.org/wiki/Syslog).
+`console` will log messages in the standard streams; `syslog` will log on [Syslog](https://en.wikipedia.org/wiki/Syslog).
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Output](logging.html#output).
+See [Logging > Configuration > Output](logging.html#output).
 
 ### `--log.color-output`
 
@@ -477,9 +525,9 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Output](l
 - **Availability:** `argv` and JSON
 - **Default:** `false`
 
-If enabled, the operation logs output will contain ANSI color codes. Meant for human consumption, and meaningful only if [`--log.output`](#--logoutput) is `console`.
+Include ANSI color codes in the logging? Meant to ease human consumption. Only applies when [`--log.output`](#--logoutput) is `console`.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Color output](logging.html#color-output).
+See [Logging > Configuration > Color output](logging.html#color-output).
 
 ### `--log.file-name-format`
 
@@ -489,7 +537,7 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Color out
 
 Decides which version of file names should be printed during most debug/error messages at the operation logs.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > File name format](logging.html#file-name-format).
+See [Logging > Configuration > File name format](logging.html#file-name-format).
 
 ### `--log.facility`
 
@@ -499,7 +547,7 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > File name
 
 Syslog facility utilized for operation logs (meaningful only if [`--log.output`](#--logoutput) is `syslog`).
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Facility](logging.html#facility).
+See [Logging > Configuration > Facility](logging.html#facility).
 
 ### `--log.tag`
 
@@ -507,9 +555,11 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Facility]
 - **Availability:** `argv` and JSON
 - **Default:** `NULL`
 
-Text tag that will be added to the operation log messages (it will appear inside square brackets).
+Prefix tag that will be added to all operation log messages. It's meant to help identify operation logs from other types of logs.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Tag](logging.html#tag).
+The tag will be surrounded by square brackets.
+
+See [Logging > Configuration > Tag](logging.html#tag).
 
 ### `--validation-log.enabled`
 
@@ -517,9 +567,9 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Tag](logg
 - **Availability:** `argv` and JSON
 - **Default:** `false`
 
-Enables the validation logs.
+Enable the validation logs?
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Enabled](logging.html#enabled).
+See [Logging](logging.html).
 
 ### `--validation-log.level`
 
@@ -527,15 +577,11 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Enabled](
 - **Availability:** `argv` and JSON
 - **Default:** `warning`
 
-Defines which validation log messages will be logged according to its priority, e.g. a value of `info` will log messages of equal or higher level (`info`, `warning`, and `error`).
+Minimum allowed severity of validation log messages. (Lower severity messages will be dropped.) The highest priority is `error`, and the lowest is `debug`.
 
-The priority levels, from higher to lowest, are:
-- `error`
-- `warning`
-- `info`
-- `debug`
+For example, `--validation-log.level=warning` will cause only warning and error messages to be logged.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Level](logging.html#level).
+See [Logging > Configuration > Level](logging.html#level).
 
 ### `--validation-log.output`
 
@@ -543,11 +589,11 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Level](lo
 - **Availability:** `argv` and JSON
 - **Default:** `console`
 
-Desired output where the validation logs will be printed.
+Desired target that will take care of actually printing the validation logs.
 
-The value `console` will log messages at standard output and standard error; `syslog` will log to [Syslog](https://en.wikipedia.org/wiki/Syslog).
+`console` will log messages in the standard streams; `syslog` will log on Syslog.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Output](logging.html#output).
+See [Logging > Configuration > Output](logging.html#output).
 
 ### `--validation-log.color-output`
 
@@ -555,9 +601,9 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Output](l
 - **Availability:** `argv` and JSON
 - **Default:** `false`
 
-If enabled, the validation logs output will contain ANSI color codes. Meant for human consumption, and meaningful only if [`--validation-log.output`](#--validation-logoutput) is `console`.
+Include ANSI color codes in the logging? Meant to ease human consumption. Only applies when `--validation-log.output` is `console`.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Color output](logging.html#color-output).
+See [Logging > Configuration > Color output](logging.html#color-output).
 
 ### `--validation-log.file-name-format`
 
@@ -565,9 +611,9 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Color out
 - **Availability:** `argv` and JSON
 - **Default:** `global-url`
 
-Decides which version of file names should be printed during most debug/error messages at the operation logs.
+Decides which version of file names should be printed during most debug/error messages at the validation logs.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > File name format](logging.html#file-name-format).
+See [Logging > Configuration > File name format](logging.html#file-name-format).
 
 ### `--validation-log.facility`
 
@@ -577,7 +623,7 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > File name
 
 Syslog facility utilized for validation logs (meaningful only if [`--validation-log.output`](#--validation-logoutput) is `syslog`).
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Facility](logging.html#facility).
+See [Logging > Configuration > Facility](logging.html#facility).
 
 ### `--validation-log.tag`
 
@@ -585,9 +631,11 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Facility]
 - **Availability:** `argv` and JSON
 - **Default:** `Validation`
 
-Text tag that will be added to the validation log messages (it will appear inside square brackets).
+Prefix tag that will be added to all operation log messages. It's meant to help identify operation logs from other types of logs.
 
-Read more at [Logging](logging.html) and at [Logging > Configuration > Tag](logging.html#tag).
+The tag will be surrounded by square brackets.
+
+See [Logging > Configuration > Tag](logging.html#tag).
 
 ### `--http.enabled`
 
@@ -595,9 +643,11 @@ Read more at [Logging](logging.html) and at [Logging > Configuration > Tag](logg
 - **Availability:** `argv` and JSON
 - **Default:** `true`
 
-Enables outgoing HTTP requests.
+Enable HTTP requests during validation?
 
-If disabled (eg. `--http.enabled=false`), FORT validator won't request HTTP URIs, and will expect to find all the corresponding repository files at [`--local-repository`](#--local-repository).
+If disabled (`--http.enabled=false`), Fort will skip all outgoing HTTP requests during the validation cycle. The relevant validation results will be entirely based on the (possibly outdated) existing cache. ([`--local-repository`](#--local-repository))
+
+Mostly intended for debugging.
 
 ### `--http.priority`
 
@@ -606,16 +656,11 @@ If disabled (eg. `--http.enabled=false`), FORT validator won't request HTTP URIs
 - **Default:** 60
 - **Range:** 0--100
 
-> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are preferred over rsync requests.
+HTTP's (and therefore RRDP's) precedence when choosing the protocol used to download files (assuming Fort has to choose, and both protocols are [enabled](#--http.enabled)). The protocol with the highest priority is used first, and the runner-up is employed as fallback.
 
-Assign priority to use HTTP to fetch repository files. A higher value means a higher priority.
+> At the moment, only two protocols (RRDP/HTTP and RSYNC) are supported. Yes, `--http.priority`'s range is overkill.
 
-This argument works along with [`--rsync.priority`](#--rsyncpriority), since the higher value of the two arguments will result in the first protocol to utilize when fetching repositories files. Of course, this depends also on certificates information or the TAL URIs, since currently HTTP URIs are optional and not every RIR repository makes use of them.
-
-Whenever a certificate or a TAL has both RSYNC and HTTP URIs, the following criteria is followed to prioritize which one to use first:
-- [`--rsync.priority`](#--rsyncpriority) **equals** [`--http.priority`](#--httppriority): use the order specified at the certificate or the TAL to fetch the corresponding URI.
-- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--http.priority`](#--httppriority): use RSYNC repository/TAL URI first; if there's an error fetching data, fallback to fetch HTTP repository/TAL URI.
-- [`--rsync.priority`](#--rsyncpriority) **less than** [`--http.priority`](#--httppriority): use HTTP repsitory/TAL URI first; if there's an error fetching data, fallback to use RSYNC repository/TAL URI.
+See [`--rsync.priority`](#--rsyncpriority).
 
 ### `--http.retry.count`
 
@@ -703,22 +748,14 @@ The value specified (either by the argument or the default value) is utilized in
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
 
-Local path where the CA's utilized to verify the peers are located.
+Path to a directory containing CA certificates, which Fort might employ to verify peers while performing HTTPS requests.
 
 Useful when the CA from the peer isn't located at the default OS certificate bundle. If specified, the peer certificate will be verified using the CAs at the path. The directory MUST be prepared using the `rehash` utility from the SSL library:
+
 - OpenSSL command (with help): `$ openssl rehash -h`
 - LibreSSL command (with help): `$ openssl certhash -h`
 
 The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://curl.haxx.se/libcurl/c/CURLOPT_CAPATH.html).
-
-### `--http.disabled`
-
-- **Type:** None
-- **Availability:** `argv` and JSON
-
-If the flag is activated, HTTP requests won't be performed and the files that should have been fetched are searched locally at [`--local-repository`](#--local-repository).
-
-Otherwise, Fort will perform HTTP requests when needed (eg. an HTTPS URI at a TAL, RRDP URIs).
 
 ### `--output.roa`
 
@@ -727,25 +764,26 @@ Otherwise, Fort will perform HTTP requests when needed (eg. an HTTPS URI at a TA
 
 > Note: The paragraphs below apply to [Fort 1.5.0](https://github.com/NICMx/FORT-validator/releases/tag/v1.5.0).
 
-File where the ROAs will be stored in CSV format.
+File where the ROAs (found during each validation run) will be stored (in CSV format).
 
-When the file is specified, its content will be removed to store the ROAs; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) seconds.
 
-Each line of the result is printed in the following order: _AS, Prefix, Max prefix length_; the first line contains those column descriptors.
+Each line of the result is printed in the following order: _AS, Prefix, Max prefix length_. The first line contains the column names.
 
-If a value isn't specified, then the ROAs aren't printed.
+If `--output.roa` is omitted, the ROAs are not printed.
 
 > Note: The paragraphs below apply to [Fort master](https://github.com/NICMx/FORT-validator).
 
-File where the ROAs will be stored in the configured format (see [`--output.format`](#--outputformat)).
+File where the ROAs (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
-When the file is specified, its content will be removed to store the ROAs; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
 
-When [`--output.format`](#--outputformat)`=csv` (which is the default value), then each line of the result is printed in the following order: _AS, Prefix, Max prefix length_; the first line contains those column descriptors.
+When `--output.format` equals `csv`, each line of the result is printed in the following order: _AS, Prefix, Max prefix length_. The first line contains the column names.
 
-When [`--output.format`](#--outputformat)`=json`, then each element is printed inside an object array of `roas`; ie:
+When `--output.format` equals `json`, each element is printed in an object array of `roas`:
 
-<pre><code>{
+{% highlight json %}
+{
 	"roas": [
 		{
 			"asn": "AS64496",
@@ -758,9 +796,10 @@ When [`--output.format`](#--outputformat)`=json`, then each element is printed i
 			"maxLength": 48
 		}
 	]
-}</code></pre>
+}
+{% endhighlight %}
 
-If a value isn't specified, then the ROAs aren't printed.
+If `--output.roa` is omitted, the ROAs are not printed.
 
 ### `--output.bgpsec`
 
@@ -769,44 +808,46 @@ If a value isn't specified, then the ROAs aren't printed.
 
 > Note: The paragraphs below apply to [Fort 1.5.0](https://github.com/NICMx/FORT-validator/releases/tag/v1.5.0).
 
-File where the BGPsec Router Keys will be stored in CSV format.
+File where the BGPsec Router Keys (found during each validation run) will be stored (in CSV format).
 
-Since most of the data is binary (Subject Key Identifier and Subject Public Key Info), such data is base64url encoded without trailing pads.
+Since most of the data (Subject Key Identifier and Subject Public Key Info) is binary, it is base64url-encoded, without trailing pads.
 
-When the file is specified, its content will be removed to store the Router Keys; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output console, use a hyphen (`-`). If the RTR server is [enabled](#--mode), the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) seconds.
 
-Each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_; the first line contains those column descriptors.
+Each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_. The first line contains the column names.
 
-If a value isn't specified, then the BGPsec Router Keys aren't printed.
+If `--output.bgpsec` is ommited, then the BGPsec Router Keys are not printed.
 
 > Note: The paragraphs below apply to [Fort master](https://github.com/NICMx/FORT-validator).
 
-File where the BGPsec Router Keys will be stored in the configured format (see [`--output.format`](#--outputformat)).
+File where the BGPsec Router Keys (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
-Since most of the data is binary (Subject Key Identifier and Subject Public Key Info), such data is base64url encoded without trailing pads.
+Since most of the data (Subject Key Identifier and Subject Public Key Info) is binary, it is base64url-encoded, without trailing pads.
 
-When the file is specified, its content will be removed to store the Router Keys; if the file doesn't exists, it will be created. To print at console, use a hyphen `"-"`. If RTR server is enabled, then the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) seconds.
 
-When [`--output.format`](#--outputformat)`=csv` (which is the default value), then each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_; the first line contains those column descriptors.
+When `--output.format` equals `csv`, each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_. The first line contains the column names.
 
-When [`--output.format`](#--outputformat)`=json`, then each element is printed inside an object array of `router-keys`; ie:
+When `--output.format` equals `json`, each element is printed in an object array of `router-keys`:
 
-<pre><code>{
+{% highlight json %}
+{
 	"router-keys": [
 		{
 			"asn": "AS64496",
-			"ski": "&lt;Base64 Encoded SKI&gt;",
-			"spki": "&lt;Base64 Encoded SPKI&gt;"
+			"ski": "<Base64 Encoded SKI>",
+			"spki": "<Base64 Encoded SPKI>"
 		},
 		{
 			"asn": "AS64497",
-			"ski": "&lt;Base64 Encoded SKI&gt;",
-			"spki": "&lt;Base64 Encoded SPKI&gt;"
+			"ski": "<Base64 Encoded SKI>",
+			"spki": "<Base64 Encoded SPKI>"
 		}
 	]
-}</code></pre>
+}
+{% endhighlight %}
 
-If a value isn't specified, then the BGPsec Router Keys aren't printed.
+If `--output.bgpsec` is ommited, then the BGPsec Router Keys are not printed.
 
 ### `--output.format`
 
@@ -838,28 +879,26 @@ This check is merely a caution, since ASN1 decoding functions are recursive and 
 
 Time period that must lapse to warn about a stale repository (the messages will be sent to the operation log). The time lapse starts once the repository download has been retried (see [`--rsync.retry.count`](#--rsyncretrycount) and [`--http.retry.count`](#--httpretrycount)) and failed after such retries.
 
-A repository is considered stale if its files can't be fetched due to a communication error and this error persists across validation cycles. This kind of issues can be due to a local misconfiguration (eg. a firewall that blocks incoming data) or a problem at the server (eg. the server is down).
+A repository is considered stale if its files can't be fetched due to a communication error, and this error persists across validation cycles. This kind of issue can be due to a local misconfiguration (eg. a firewall that blocks incoming data) or a problem at the server (eg. the server is down).
 
-Despite who's "fault" is, FORT validator will try to work with the local files from [`--local-repository`](#--local-repository).
+During the downtime, Fort will try to work with the local cache. ([`--local-repository`](#--local-repository))
 
 The communication errors sent to the operation log, are those related to "first level" RPKI servers; commonly this are the servers maintained by the RIRs.
 
-Currently **all** the communication errors are logged at the validation log. This argument (`--stale-repository-period`) is merely to send this error messages also to the operation log.
+Currently **all** the communication errors are logged in the validation log. `--stale-repository-period` is only used to also send them to the operation log.
 
-A value **equal to 0** means that the communication errors will be logged at once.
+A value **equal to 0** means that the communication errors will be logged immediately.
 
 ### `--thread-pool.server.max`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 20
-- **Range:** 1--500
+- **Range:** 1--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
-Maximum number of threads that will be spawned at an internal thread pool to attend incoming RTR clients (i.e. routers).
+Number of threads the RTR server will reserve for RTR client (router) request handling. The server will be able to handle `--thread-pool.server.max` requests at most, at once. Additional requests will queue.
 
-The thread pool assigns one thread per RTR client, so a maximum of `--thread-pool.server.max` clients will be attended simultaneously. If the max limit is reached, any incoming client will be rejected: an RTR error PDU will be sent to the client and the connection will be closed by the server.
-
-Once the client or the server terminates the session, the corresponding thread will be returned to the pool so that it can be used again by any other incoming client.
+> Before Fort 1.5.1, this value used to represent the maximum number of client _connections_ the server would be able to hold at any given time. It scales better now.
 
 ### `--thread-pool.validation.max`
 
@@ -868,11 +907,11 @@ Once the client or the server terminates the session, the corresponding thread w
 - **Default:** 5
 - **Range:** 1--100
 
-Maximum number of threads that will be spawned at an internal thread pool in order to run validation cycles.
+> ![Warning!](img/warn.svg) Deprecated. This value should always equal the number of TALs you have, and will therefore be automated and retired in the future.
 
-When a validation cycle begins, one thread per configured TAL is utilized; once the whole RPKI tree of the TAL is validated, the thread is returned to the pool.
+Number of threads in the validation thread pool.
 
-If there are more TALs at [`--tal`](#--tal) than `--thread-pool.validation.max` threads at the pool, is very likely that the validation cycles take a bit more of time to complete since only `--thread-pool.validation.max` threads will be working at the same time. E.g. if `--thread-pool.validation.max=2` and the location at [`--tal`](#--tal) has 4 TAL files, only 2 TALs will be validated simultaneously while the rest waits in a queue until there's an available thread at the pool to attend them.
+During every validation cycle, one thread is borrowed from this pool per TAL, to validate the RPKI tree of the corresponding TAL.
 
 ### `--rsync.enabled`
 
@@ -880,9 +919,11 @@ If there are more TALs at [`--tal`](#--tal) than `--thread-pool.validation.max` 
 - **Availability:** `argv` and JSON
 - **Default:** `true`
 
-Enables RSYNC requests.
+Enables RSYNC requests during validation?
 
-If disabled (eg. `--rsync.enabled=false`), FORT validator won't download files nor directories via RSYNC, and will expect to find all repository files at [`--local-repository`](#--local-repository).
+If disabled (`--rsync.enabled=false`), Fort will skip all outgoing RSYNC requests during the validation cycle. The relevant validation results will be entirely based on the (possibly outdated) existing cache. ([`--local-repository`](#--local-repository))
+
+Mostly intended for debugging.
 
 ### `--rsync.priority`
 
@@ -891,16 +932,11 @@ If disabled (eg. `--rsync.enabled=false`), FORT validator won't download files n
 - **Default:** 50
 - **Range:** 0--100
 
-> ![img/warn.svg](img/warn.svg) By default, HTTPS requests are preferred over rsync requests.
+RSYNC's precedence when choosing the protocol used to download files (assuming Fort has to choose, and both protocols are [enabled](#--mode)). The protocol with the highest priority is used first, and the runner-up is employed as fallback.
 
-Assign priority to use RSYNC to fetch repository files. A higher value means a higher priority.
+> At the moment, only two protocols (RRDP/HTTP and RSYNC) are supported. Yes, `--rsync.priority`'s range is overkill.
 
-This argument works along with [`--http.priority`](#--httppriority), since the higher value of the two arguments will result in the first protocol to utilize when fetching repositories files. Of course, this depends also on certificates information or the TAL URIs, since currently HTTP URIs are optional and not every RIR repository makes use of them.
-
-Whenever a certificate or a TAL has both RSYNC and HTTP URIs, the following criteria is followed to prioritize which one to use first:
-- [`--rsync.priority`](#--rsyncpriority) **equals** [`--http.priority`](#--httppriority): use the order specified at the certificate or the TAL to fetch the corresponding URI.
-- [`--rsync.priority`](#--rsyncpriority) **greater than** [`--http.priority`](#--httppriority): use RSYNC repository/TAL URI first; if there's an error fetching data, fallback to fetch HTTP repository/TAL URI.
-- [`--rsync.priority`](#--rsyncpriority) **less than** [`--http.priority`](#--httppriority): use HTTP repository/TAL URI first; if there's an error fetching data, fallback to use RSYNC repository/TAL URI.
+See [`--http.priority`](#--httppriority).
 
 ### `--rsync.strategy`
 
@@ -977,7 +1013,7 @@ Period of time (in seconds) to wait between each retry to execute an RSYNC.
 
 Path to a JSON file from which additional configuration will be read.
 
-The configuration options are mostly the same as the ones from the `argv` interface. (See the "Availability" metadata of each field.) Here's a full configuration file example:
+The configuration options are mostly the same as the ones from the `argv` interface. (See the "Availability" metadata of each field.) Here's a (possibly slightly outdated) full configuration file example:
 
 <pre><code>{
 	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
@@ -985,9 +1021,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--work-offline">work-offline</a>": false,
 	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
-	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
 	"<a href="#--mode">mode</a>": "server",
 	"<a href="#--daemon">daemon</a>": false,
+	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
 
 	"server": {
 		"<a href="#--serveraddress">address</a>": [
@@ -1001,6 +1037,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--serverintervalrefresh">refresh</a>": 3600,
 			"<a href="#--serverintervalretry">retry</a>": 600,
 			"<a href="#--serverintervalexpire">expire</a>": 7200
+		},
+		"deltas": {
+			"<a href="#--serverdeltaslifetime">lifetime</a>": 4
 		}
 	},
 
@@ -1185,37 +1224,6 @@ Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$L
 
 A listing of actions to be performed by validation upon encountering certain error conditions. See [Incidences](incidence.html).
 
-### `init-locations`
-
-- **Type:** JSON Object array
-- **Availability:** JSON only
-
-List of URLs from where the TALs will be fetched when [`--init-tals`](#--init-tals) is utilized. Each URL can have an optional `accept-message` that will be displayed at the terminal. When this message is displayed, the word **"yes"** is expected by FORT to download the corresponding TAL file; this way an explicit acceptance is obtained to comply with the printed message.
-
-By default it has 4 URLs from each TAL that doesn't require and explicit politics acceptance by the user, and 1 URL that does have an acceptance message so that FORT can proceed with its download.
-
-This is a JSON array of objects, where each object has a mandatory `url` member, and an optional `accept-message` member. The default value is:
-
-<pre><code>
-"init-locations": [
-	{
-		"url": "https://www.arin.net/resources/manage/rpki/arin.tal",
-		"accept-message": "Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal"
-	}
-]</code></pre>
-
 ## Deprecated arguments
 
 ### `--sync-strategy`
@@ -1240,7 +1248,7 @@ Despite this argument will be deprecated, it still can be utilized. Its possible
 - **Availability:** `argv` and JSON
 - **Default:** `true`
 
-> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.enabled`](#--httpenabled) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.enabled`](#--httpenabled) instead.
 
 ### `--rrdp.priority`
 
@@ -1249,7 +1257,7 @@ Despite this argument will be deprecated, it still can be utilized. Its possible
 - **Default:** 60
 - **Range:** 0--100
 
-> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.priority`](#--httppriority) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.priority`](#--httppriority) instead.
 
 ### `--rrdp.retry.count`
 
@@ -1258,7 +1266,7 @@ Despite this argument will be deprecated, it still can be utilized. Its possible
 - **Default:** 2
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
-> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.retry.count`](#--httpretrycount) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.retry.count`](#--httpretrycount) instead.
 
 ### `--rrdp.retry.interval`
 
@@ -1267,4 +1275,38 @@ Despite this argument will be deprecated, it still can be utilized. Its possible
 - **Default:** 5
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
-> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--http.retry.interval`](#--httpretryinterval) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.retry.interval`](#--httpretryinterval) instead.
+
+### `init-locations`
+
+- **Type:** JSON Object array
+- **Availability:** JSON only
+
+> ![img/warn.svg](img/warn.svg) This argument is deprecated. I don't know why it exists; just do normal wgets or curls instead. As of Fort 1.5.1, it does nothing. The documentation below applies to 1.5.0 and below.
+
+List of URLs from where the TALs will be fetched when [`--init-tals`](#--init-tals) is utilized. Each URL can have an optional `accept-message` that will be displayed at the terminal. When this message is displayed, the word **"yes"** is expected by FORT to download the corresponding TAL file; this way an explicit acceptance is obtained to comply with the printed message.
+
+By default it has 4 URLs from each TAL that doesn't require and explicit politics acceptance by the user, and 1 URL that does have an acceptance message so that FORT can proceed with its download.
+
+This is a JSON array of objects, where each object has a mandatory `url` member, and an optional `accept-message` member. The default value is:
+
+```
+"init-locations": [
+	{
+		"url": "https://www.arin.net/resources/manage/rpki/arin.tal",
+		"accept-message": "Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal"
+	},
+	{
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal"
+	}
+]
+```

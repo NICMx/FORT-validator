@@ -5,13 +5,13 @@ description: This is probably all you need, an RTR server will serve the ROAs re
 
 # {{ page.title }}
 
-First you'll need the TAL files. If you don't have them already, you can execute Fort validator using the argument [`--init-tals`](usage.html#--init-tals):
+First you'll need the Trust Anchor Locator (TAL) files. If you don't have them already, you can download them with [`--init-tals`](usage.html#--init-tals):
 
 {% highlight bash %}
-fort --init-tals --tal <path to store TAL files>
+fort --init-tals --tal <directory in which TALs will be stored>
 {% endhighlight %}
 
-Now, this is probably all you need, an RTR server will serve the ROAs resulting from a validation rooted at the trust anchors defined by the TALs contained at directory [`--tal`](usage.html#--tal):
+Then start the validator and RTR Server with
 
 {% highlight bash %}
 fort \
@@ -21,9 +21,9 @@ fort \
 	--server.port <your intended RTR server port>
 {% endhighlight %}
 
-> ![img/warn.svg](img/warn.svg) In case the RTR server will be bound to a privileged port (eg. to default [`--server.port`](usage.html#--serverport)=323) and you don't want to run FORT validator as root, see [Non root port binding](#non-root-port-binding).
+> ![img/warn.svg](img/warn.svg) The RTR Server's default port (323) is privileged. Obviously, you don't want to use root, so either change the port (&ge; 1024), jail Fort, redirect the traffic by way of a NAT, or [grant Fort `CAP_NET_BIND_SERVICE`](#granting-the-cap_net_bind_service-capability-to-fort).
 
-This will run Fort validator as standalone (perform validation and exit) and print ROAs to CSV file:
+Alternatively, this will run Fort in [standalone mode](usage.html#--mode) (ie. single full RPKI validation then exit), while printing the ROAs to a CSV file:
 
 {% highlight bash %}
 fort \
@@ -33,7 +33,7 @@ fort \
 	--local-repository <path where you want to keep your local cache>
 {% endhighlight %}
 
-This will run Fort validator using a [SLURM file](https://tools.ietf.org/html/rfc8416):
+Add [SLURM files](https://tools.ietf.org/html/rfc8416) using [`--slurm`](usage.html#--slurm) in either server or standalone modes:
 
 {% highlight bash %}
 fort \
@@ -44,64 +44,53 @@ fort \
 	--server.port <your intended RTR server port>
 {% endhighlight %}
 
-These are some examples to run Fort with distinct configurations; see [Program Arguments](usage.html) for more details.
+See [Program Arguments](usage.html) for a more exhaustive option list.
 
-## Non root port binding
-
-By default, RTR server binds to port 323, which is a privileged port (ports lower than 1024 are restricted); so the most simple solutions are:
-- Set [`--server.port`](usage.html#--serverport) to an available port greater than 1024.
-- Leave the default server port and run FORT validator as root.
-
-In case you don't wish to use another port nor execute FORT validator as root, there are other alternatives, such as **capabilities**.
-
-The capability needed is `CAP_NET_BIND_SERVICE`, which allows to bind a socket to "Internet domain privileged ports" (port numbers less than 1024).
+## Granting the `CAP_NET_BIND_SERVICE` capability to Fort
 
 For Linux you need:
 - A recent kernel compiled with POSIX capabilities.
 - The `setcap` and `getcap` utilities.
 
-> **Warnings**:
-> - With the "capabilities" method, any nonprivileged user can run FORT on priviliged ports. You can restrict the execution of the FORT binary using credentials (`chmod`, `chown`).
-> - Everytime you compile the sources, you need to apply this patch for the new binary of FORT validator.
+> ![img/warn.svg](img/warn.svg)
+> 
+> - With the "capabilities" method, any nonprivileged user can run Fort on priviliged ports. You can restrict the execution of the Fort binary using credentials (`chmod`, `chown`).
+> - Every time you compile the sources, you need to apply this patch for the new binary of Fort.
 
 ### Steps
 
-As root, execute this command to add the capability to the installed FORT validator binary:
+As root, execute this command to add the capability to the installed Fort binary:
 
 {% highlight bash %}
 root# setcap cap_net_bind_service=+ep `which fort`
 {% endhighlight %}
 
-You can check if the capability was added by executing `getcap`, it should result in something like this:
+You can check if the capability was added by executing `getcap`:
 
 {% highlight bash %}
 root# getcap `which fort`
 /usr/local/bin/fort = cap_net_bind_service+ep
 {% endhighlight %}
 
-Now FORT validator can be bound to the default port (323) without being executed as root.
+Now Fort can be bound to a priviliged port without needing root.
 
-In case you want to remove the capability to the installed FORT binary, execute the next command (as root):
+If you want to remove the capability from the installed Fort binary, execute the following command (as root):
 
 {% highlight bash %}
 root# setcap cap_net_bind_service=-ep `which fort`
 {% endhighlight %}
 
-### Alternative method (LINUX or BSD)
-
-You can use another method (NAT or firewall) to redirect traffic from port 323 to any other port where FORTR service is bound as RTR server, but such methods are out of the scope of these documents.
-
 ## Tuning memory (Linux & glibc)
 
 > ![img/warn.svg](img/warn.svg) This quirk applies to glibc, you can check if your OS has it by running (from a command line): `$ ldd --version`
 
-FORT validator is currently a multithreaded program (it spawns a thread to validate each configured TAL), and there's a known behavior in GNU C Library (glibc) regarding multithreading and the memory usage growth. This is not precisely an issue nor something to be concerned about, unless the host machine has quite a limited memory (as of today, this isn't probably a common scenario). 
+Fort is currently a multithreaded program (it spawns a thread to validate each configured TAL), and there's a known behavior in GNU C Library (glibc) regarding multithreading and the memory usage growth. This is not precisely an issue nor something to be concerned about, unless the host machine has quite a limited memory (as of today, this isn't probably a common scenario). 
 
 When a new thread is spawned it has its own "arena" available to handle the memory allocations; so, when multiple threads are created, is likely to have the same amount of arenas. Every `malloc`'d and `free`'d block at each thread, will be done in a memory space (a.k.a "arena") reserved for the thread.
 
 Once a memory block is released using `free`, there's no warranty that such memory be returned to the OS, thus the program's memory usage isn't necessarily decreased (in this case, the "arena" size isn't decreased). See more about [glibc `free`](https://www.gnu.org/software/libc/manual/html_node/Freeing-after-Malloc.html).
 
-Most of FORT Validator allocations are temporary since they're needed at the validation cycles, this causes a logarithmic growth on the program memory usage. Only a part of that memory is really allocated, the other part consist of free space that hasn't been returned to the OS yet.
+Most of Fort's allocations are temporary since they're needed at the validation cycles, this causes a logarithmic growth on the program memory usage. Only a part of that memory is really allocated, the other part consist of free space that hasn't been returned to the OS yet.
 
 glibc has the _[Tunables](https://www.gnu.org/software/libc/manual/html_node/Tunables.html)_ feature. One of the things that can be tuned is precisely the maximum number of "arenas" that the program will use. There are many other things that can be tuned, but they are out of scope of this document.
 
@@ -111,6 +100,6 @@ The recommended value in order to avoid a high performance cost, is `MALLOC_AREN
 
 {% highlight bash %}
 export MALLOC_ARENA_MAX=2
-# Now run fort
+# Now run Fort
 fort --tal=/etc/tals ...
 {% endhighlight %}

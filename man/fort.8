@@ -1,11 +1,14 @@
-.TH fort 8 "2020-11-25" "v1.5.0" "FORT validator"
+.TH fort 8 "2021-08-05" "v1.5.1" "FORT validator"
 
 .SH NAME
-fort \- RPKI certificate path validator and RTR server
+fort \- RPKI validator and RTR server
 
 .SH SYNOPSIS
 .B fort
-[\fIOPTIONS\fR]
+[--mode=server] [\fIOPTIONS\fR]
+.P
+.B fort
+--mode=standalone [\fIOPTIONS\fR]
 .P
 .B fort
 --init-tals --tal=\fIPATH\fR
@@ -15,27 +18,20 @@ fort \- RPKI certificate path validator and RTR server
 
 .SH DESCRIPTION
 
-FORT is an RPKI validator and a RTR server (RTR versions 0 and 1 are
-supported).
-In the RPKI context, FORT is also known as an RP (Relying Party).
-A simple resume of the actions performed by an RP can be read at RFC 6480
-section 6
-.RI "(" https://tools.ietf.org/html/rfc6480#section-6 ")."
+Fort is an RPKI "Relying Party" (RP). It's an artifact that validates Route
+Origin Attestations (ROAs) and BGPsec Router Keys, by way of a Public Key
+Infrastructure (PKI). ROAs are employed by routers, to verify BGP routing
+attestations.
 .P
-The RTR (RPKI to Router Protocol) is basically "a protocol to deliver validated
-prefix origin data to routers", see RFC 6810
-.RI "(" https://tools.ietf.org/html/rfc6810 ")"
-and RFC 8210
-.RI "(" https://tools.ietf.org/html/rfc8210 ")."
-.P
+The main validation input is one or more Trust Anchor Locator (TAL) files
+(\fI--tal\fR), which point to the RPKI Trust Anchors (ie. root certificates).
+Fort downloads all the resources governed by the trust anchors into a local
+cache (\fI--local-repository\fR), and proceeds to validate their entirety. The
+output of the validation is a set of trusted ROAs and Router Keys, which are
+printed to files (\fI--output.roa\fR and \fI--output.bgpsec\fR) and/or served to
+routers (\fI--mode=server\fR, \fI--server.address\fR, \fI--server.port\fR)
+through the RTR protocol (version 0 or 1).
 
-So, FORT performs RPKI validations starting from a single or set of TALs (Trust
-Anchor Locators), either in a recurrent or single (standalone) way.
-Additionally, it can talk to routers using the RTR protocol (version will
-depend on the client, both 0 and 1 are supported) to provide them the VRPs
-(Validated ROA Payloads) and the BGPsec Router Keys resultant of the
-validation.
- 
 .SH OPTIONS
 .TP
 .B \-h, \-\-help
@@ -58,23 +54,35 @@ Print program version and exit.
 
 .B \-\-init-tals
 .RS 4
-Download the RIR TALs into the existent local path directory set at \fI--tal\fR
-argument and exit.
+Download the currently known core TALs into the existent local directory \fI--tal\fR, then exit.
 .P
-This argument exists merely to have all TALs before running FORT validator,
-the directory path should be set at the \fI--tal\fR argument.
+The "currently known core TALs" are
 .P
-By default, the 4 TALs that don't require a policy acceptance are downloaded
-from FORT validator's GitHub repository. ARIN TAL does require an explicit
-acceptance by the user, so it's downloaded only after the user accepts ARIN's
-RPA; this message is displayed at the terminal and only if the user accepts,
-ARIN TAL is also downloaded.
+https://rpki.afrinic.net/tal/afrinic.tal
+.br
+https://tal.apnic.net/apnic.tal
+.br
+https://www.arin.net/resources/manage/rpki/arin.tal
+.br
+https://www.lacnic.net/innovaportal/file/4983/1/lacnic.tal
+.br
+https://tal.rpki.ripe.net/ripe-ncc.tal
 .P
-This is an example on how to use this argument (assuming that
-\fI/etc/fort/tal\fR exists and is writable):
-\fBfort --init-tals --tal /etc/fort/tal\fR
+Please note that ARIN requires that you accept a Relying Party Agreement before you can download their TAL: https://www.arin.net/resources/manage/rpki/rpa.pdf
 .RE
+
+.B \-\-init-as0-tals
+.RS 4
+Download the currently known AS0 TALs into the existent local directory \fI--tal\fR, then exit.
 .P
+The "currently known AS0 TALs" are
+.P
+https://tal.apnic.net/apnic-as0.tal
+.br
+https://www.lacnic.net/innovaportal/file/4983/1/lacnic-as0.tal
+.P
+
+.RE
 
 .BR \-f ", " \-\-configuration-file=\fIFILE\fR
 .RS 4
@@ -206,73 +214,14 @@ match the actual file hash). [Default action: \fBerror\fR]
 More information about incidences can be consulted at FORT's web docs.
 .RE
 
-.P
-.B init-locations
-.RS 4
-List of URLs from where the TALs will be fetched when \fI--init-tals\fR is
-utilized. Each URL can have an optional \fBaccept-message\fR that will be
-displayed at the terminal. When this message is displayed, the word "yes" is
-expected by FORT to download the corresponding TAL file; this way an explicit
-acceptance is obtained to comply with the printed message.
-.P
-By default it has 4 URLs from each TAL that doesn't require and explicit
-politics acceptance by the user, and 1 URL that does have an acceptance message
-so that FORT can proceed with its download.
-.P
-This is a JSON array of objects, where each object has a mandatory \fBurl\fR
-member, and an optional \fBaccept-message\fR member. The default value is:
-.P
-"init-locations": [
-.RS 2
-{
-.RS 2
-"url": "https://www.arin.net/resources/manage/rpki/arin.tal",
-.br
-"accept-message": "Please download and read ARIN Relying Party Agreement (RPA)
-from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and
-if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
-.RE
-},
-{
-.RS 2
-"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
-/tal/lacnic.tal"
-.RE
-},
-{
-.RS 2
-"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
-/tal/ripe.tal"
-.RE
-},
-{
-.RS 2
-"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
-/tal/afrinic.tal"
-.RE
-},
-{
-.RS 2
-"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples\
-/tal/apnic.tal"
-.RE
-}
-.RE
-]
-.RE
-
 .RE
 .P
 
 .BR \-t ", " \-\-tal=(\fIFILE\fR|\fIDIRECTORY\fR)
 .RS 4
-Path to the TAL file or directory the validation will sprawl from.
+Path to a .tal, or a directory containing .tal files. Fort will validate the trees pointed by them.
 .P
-If a DIRECTORY is specified, the files with the extension '\fI.tal\fR' are
-utilized by fort as TAL.
-.P
-The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
-be used to access the "Trust Anchor" (the root of a particular RPKI tree) and
+The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can be used to access the "Trust Anchor" (the root of a particular RPKI tree) and
 its public key. (See RFC 8630.)
 .RE
 .P
@@ -1178,20 +1127,13 @@ By default, it has a value of \fIcsv\fR.
 
 .B \-\-thread-pool.server.max=\fIUNSIGNED_INTEGER\fR
 .RS 4
-Maximum number of threads that will be spawned at an internal thread pool to
-attend incoming RTR clients (i.e. routers).
+Number of threads the RTR server will reserve for RTR client (router) request handling. The server will be able to handle \fI--thread-pool.server.max\fR requests at most, at once. Additional requests will queue.
 .P
-The thread pool assigns one thread per RTR client, so a maximum of
-\fI--thread-pool.server.max\fR clients will be attended simultaneously. If the
-max limit is reached, any incoming client will be rejected: an RTR error PDU
-will be sent to the client and the connection will be closed by the server.
-.P
-Once the client or the server terminates the session, the corresponding thread
-will be returned to the pool so that it can be used again by any other incoming
-client.
-.P
-By default, it has a value of \fI20\fR. Minimum allowed value: \fI1\fR,
-maximum allowed value \fI500\fR.
+Minimum: \fI1\fR
+.br
+Maximum: \fIUINT_MAX\fR
+.br
+Default: \fI20\fR
 .RE
 
 .B \-\-thread-pool.validation.max=\fIUNSIGNED_INTEGER\fR
@@ -1319,7 +1261,8 @@ to a specific value:
   "slurm": "/tmp/fort/test.slurm",
   "server": {
     "address": [
-      "127.0.0.1"
+      "192.0.2.1",
+      "2001:db8::1"
     ],
     "port": "8323",
     "backlog": 64,
@@ -1328,6 +1271,9 @@ to a specific value:
       "refresh": 3600,
       "retry": 600,
       "expire": 7200
+    },
+    "deltas": {
+      "lifetime": 4
     }
   },
   "log": {
@@ -1355,7 +1301,7 @@ to a specific value:
       "count": 2,
       "interval": 5
     },
-    "user-agent": "fort/1.5.0",
+    "user-agent": "fort/1.5.1",
     "connect-timeout": 30,
     "transfer-timeout": 0,
     "idle-timeout": 15,

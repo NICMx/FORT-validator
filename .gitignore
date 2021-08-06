@@ -97,6 +97,7 @@ test-driver
 *~
 tmp
 docs/_site
+docs/.jekyll-metadata
 
 # Files we're sorta contractually obligated to exclude.
 # Can't include ARIN's TAL because of their Relying Party Agreement

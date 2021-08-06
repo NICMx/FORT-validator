@@ -113,7 +113,7 @@ get_tal "ARIN" "$TALS_LOC/arin.tal" $ARIN_TAL
 echo ""
 echo "Fetching the rest of the TALs"
 get_tal "LACNIC" "$TALS_LOC/lacnic.tal" "$GITHUB_TALS/lacnic.tal"
-get_tal "RIPE" "$TALS_LOC/ripe.tal" "$GITHUB_TALS/ripe.tal"
+get_tal "RIPE" "$TALS_LOC/ripe-ncc.tal" "$GITHUB_TALS/ripe-ncc.tal"
 get_tal "AFRINIC" "$TALS_LOC/afrinic.tal" "$GITHUB_TALS/afrinic.tal"
 get_tal "APNIC" "$TALS_LOC/apnic.tal" "$GITHUB_TALS/apnic.tal"
 

@@ -30,7 +30,7 @@ description: Guide to compile and install FORT Validator.
 
 ## Dependencies
 
-> Note: This section is included in case you intend to install Fort in an unlisted OS (and therefore need a little research). For: Debians, OpenBSD, RHEL/CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
+> Note: This section is included in case you intend to install Fort in an unlisted OS (and therefore need a little research). For Debians, OpenBSD, RHEL/CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
 
 The dependencies are
 
@@ -40,7 +40,7 @@ The dependencies are
 4. [libcurl](https://curl.haxx.se/libcurl/)
 5. [libxml2](http://www.xmlsoft.org/)
 
-Fort is currently supported in *64-bit* OS. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling dates at certificates, and currently there's no work around for this.
+Fort currently supports *64-bit* Operating Systems. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling certificate dates, and there's no workaround for this at the moment.
 
 ## Option 1: Installing the package
 

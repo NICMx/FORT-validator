@@ -23,8 +23,8 @@ url-vlog-tag: "[`--validation-log.tag`](usage.html#--validation-logtag)"
 ## Index
 
 1. [Log types](#log-types)
-	1. [Operation](#operation)
-	2. [Validation](#validation)
+	1. [Operation Log](#operation-log)
+	2. [Validation Log](#validation-log)
 2. [Configuration](#configuration)
 	1. [Enabled](#enabled)
 	2. [Output](#output)
@@ -36,37 +36,38 @@ url-vlog-tag: "[`--validation-log.tag`](usage.html#--validation-logtag)"
 
 ## Log types
 
-Currently there are two kinds of log messages: those related to the operation, and the ones regarding RPKI objects validation.
+Fort has two different types of log messages: Operation logs and Validation logs.
 
-Each type is described above, as well as how it can be configured.
+They will be described below.
 
-### Operation
+### Operation Log
 
-These type of messages are the ones where the user/operator can be directly involved. Probably these messages are of greater interest to most of the RP operators.
+Operation logs are of likely interest to the operator running Fort; Issues reported here require human intervention. These include
 
-The following messages are included at the operation logs:
-- Configuration information, warnings and errors. E.g. if the location set at [`--tal`](usage.html#--tal) can't be accessed, or a configuration echo at the beginning.
-- RTR information, warnings and errors; such as server binding status, and client connections (accepted, closed or terminated).
-- SLURM information, warnings and errors. E.g. bad SLURM syntax, or SLURM data being applied in case of an error with a newer SLURM file.
-- Out of memory errors.
-- Read/write errors on local files.
-- Persistent communication errors with RPKI repositories (see [`--stale-repository-period`](usage.html#--stale-repository-period)).
-- Start and end of a validation cycle, including: number of valid Prefixes and Router Keys, current RTR serial number (only when [`--mode=server`](usage.html#--mode)), and real execution time.
-- Programming errors (of course, those that could be expected due to an API misuse).
+| Type | INFO example | WARNING example| ERROR example |
+|------|--------------|----------------|---------------|
+| Configuration logs | "And now I'm going to echo my configuration, in case you want to review it." | "This configuration argument is deprecated." | "Bad file syntax." |
+| RTR Server logs | "Accepted connection from client." | "Huh? Peer is not speaking the RTR protocol." | "Cannot bind to address." |
+| Out of memory errors | - | - | "Out of memory." |
+| Read/write errors on local files | - | "The SLURM directory seems to lack SLURM files." | "I don't have permissions to access the repository cache." |
+| Persistent communication errors with RPKI repositories (see [`--stale-repository-period`](usage.html#--stale-repository-period)) | - | - | "Error requesting URL." | 
+| Start and end of a validation cycle | "Validation cycle ended. I got _R_ ROAs, _K_ router keys, my new serial is _S_, and it took _T_ seconds." | - | - |
+| Programming errors | - | - | "Array size is 1, but array is NULL." |
 
-### Validation
+### Validation Log
 
-These type of messages are the ones related to one of the main tasks performed by FORT validator: the RPKI validation. So, they are useful to know the current RPKI state.
+These are messages generated during the RPKI validation cycle, and refer specifically to quirks found in the RPKI objects. (ie. Certificates, CRLs, ROAs, etc.)
 
-All this messages are result of RPKI objects (certificates, CRLs, ROAs, etc.) processing, so probably the operator can't take a direct action trying to solve an error logged here, but it can get to know if something is wrong at the data published at the RPKI repositories.
+These are likely more meaningful to repository administrators, for the sake of reviewing their objects.
 
-Here are some examples of messages included at the validation logs:
-- Validation failures causing an RPKI object rejection (e.g. expired certificate).
-- Suspicious validation outcome, but the RPKI object isn't rejected (e.g. serial numbers duplicated).
-- An [incidence](incidence.html).
-- RRDP file information, warnings and errors.
+They are [disabled by default](usage.html#--validation-logenabled).
 
-> ![img/warn.svg](img/warn.svg) These messages are disabled by default, in order to enable them set [`--validation-log.enabled=true`](usage.html#--validation-logenabled).
+| Type | WARNING example| ERROR example |
+|------|-----------------|---------------|
+| Validation eventualities | "Maximum retries reached; skipping object." | "Certificate is expired." |
+| [Incidences](incidence.html) | "Manifest is stale." | "Manifest is stale." |
+
+(Most informational validation messages have DEBUG priority. Incidence severity is configurable.)
 
 ## Configuration
 
@@ -87,52 +88,49 @@ The following sub-sections describe how each argument works.
 
 ### Enabled
 
-Enables the corresponding log. If disabled (e.g. `--log.enabled=false`) none of the corresponding messages will be logged.
+Sets whether the corresponding log type is printed or suppressed. When `false`, the rest of the corresponding log type's arguments are ignored.
 
-The arguments of each log type are:
 - {{ page.url-log-enabled }}
 - {{ page.url-vlog-enabled }}
 
 ### Output
 
-During the brief period in which configuration has not been completely parsed yet (and therefore, the validator is not yet aware of the desired log output), the standard streams and syslog are used simultaneously.
+Either `syslog` or `console`. The former sends the output to the environment's [syslog](https://en.wikipedia.org/wiki/Syslog) server (using the configured [`*.facility`](#facility)), while the latter employs the standard streams. (DEBUG and INFO are sent to standard output, WARNING and ERROR to standard error.)
 
-Once the configuration has been loaded, all the log messages will be printed at the configured `*.output`, which can have two values:
-- `syslog`: all logging is sent to syslog, using the configured [`*.facility`](#facility).
-- `console`: informational and debug messages are printed in standard output, error and critical messages are thrown to standard error.
+> During the brief period in which configuration has not been completely parsed yet (and therefore, the validator is not yet aware of the desired log output), the standard streams and syslog are used simultaneously.
 
-> Syslog configuration and usage is out of this docs scope, here's a brief introduction from [Wikipedia](https://en.wikipedia.org/wiki/Syslog). You can do some research according to your preferred OS distro to familiarize with syslog, since distinct implementations exists (the most common are: syslog, rsyslog, and syslog-ng).
-
-The arguments of each log type are:
 - {{ page.url-log-output }}
 - {{ page.url-vlog-output }}
 
 ### Level
 
-The `*.level` argument defines which messages will be logged according to its priority. Any log message of equal or higher importance to the one configured, will be logged, e.g. a value of `info` will log messages of equal or higher level (`info`, `warning`, and `error`).
+Only messages of equal or higher priority than `*.level` will be logged. For example, `--log.level=warning` will discard DEBUG and INFO operation messages, and log WARNING and ERROR.
 
-The validator uses exactly five levels of priority (they're just some of all the syslog priority levels), but only four of them can be utilized in the configured [`*.output`](#output). These are their meanings and priority from highest to lowest:
-- `crit`: Programming errors. (These lead to program termination.)
-	- **This level can't be indicated at `level`**, since `error` and `crit` messages are relevant for an adequate operation.
-- `error`: A failure that can stop an internal task (e.g. a certificate has expired so the childs are discarded) or is definitely an operational problem (e.g. no more memory can be allocated).
+The available values are
+
+- `error`: A failure that can stop an internal task (e.g. a certificate has expired so the childs are discarded) or is definitely an operational problem (e.g. no more memory can be allocated). Also detected programming errors.
 - `warning`: Something suspicious, but not a stopper for a task.
-- `info`: Information deemed useful to the user.
-- `debug`: Information deemed useful to the developer. Expect a lot of messages when utilized.
+- `info`: Inoffensive messages that might be of interest to the administrator.
+- `debug`: Information deemed useful to the developer.
 
-The arguments of each log type are:
+Variants:
+
 - {{ page.url-log-level }}
 - {{ page.url-vlog-level }}
 
 ### Color output
 
-The flag `*.color-output` is only meaningful when [`*.output`](#output) is `console` (it doesn't affect to `syslog`). When the flag is enabled, the log messages will have the following colors according to its priority:
-- `crit`: <span style="color:magenta">CYAN</span>
-- `error`: <span style="color:red">RED</span>
+Causes the output to contain ASCII color codes. Meant for human consumption. Only applies when [output](#output) is `console`.
+
+Each color depends on the message's priority:
+
+- `error`: <span style="color:red">RED</span> (Critical errors are <span style="color:magenta">CYAN</span>)
 - `warning`: <span style="color:orange">ORANGE</span>
 - `info`: <span style="color:lightgray">LIGHT GRAY</span>
 - `debug`: <span style="color:cyan">CYAN</span>
 
-These are some examples of how the logs could be displayed when the flag is enabled:
+Examples:
+
 <pre><code class="terminal">$ {{ page.command }} --log.color-output --validation-log.color-output (...)
 <span style="color:cyan">DBG: Manifest '62gPOPXWxxu0sQa4vQZYUBLaMbY.mft' {</span>
 <span style="color:lightgray">INF: Configuration {</span>
@@ -177,19 +175,14 @@ The arguments of each log type are:
 
 ### Facility
 
-Sets the syslog facility, so it's only meaningful when [`*.output`](#output) is `syslog`.
+Sets the syslog [facility](https://en.wikipedia.org/wiki/Syslog#Facility); only meaningful when [`*.output`](#output) is `syslog`.
 
-Currently the supported facilites are:
+The available facilites are
 
---|--|--|--|--|--
 auth | daemon | mail | uucp | local2 | local5
 authpriv | ftp | news | local0 | local3 | local6
 cron | lpr | user | local1 | local4 | local7
 
-
-You could read more about facilites [here](https://en.wikipedia.org/wiki/Syslog#Facility) (since it's out of this docs scope).
-
-The arguments of each log type are:
 - {{ page.url-log-facility }}
 - {{ page.url-vlog-facility }}
 
@@ -197,14 +190,15 @@ The arguments of each log type are:
 
 Text tag that will be added to each message of the corresponding log type. The tag will be added after the message level, inside square brackets.
 
-It's a simple mean to differentiate each message according to its type, probably useful if the [`*.output`](#output) is the same for both log types.
+It's a simple means to differentiate each message according to its type, useful if both log types are [enabled](#enabled), and are printing to the same [`*.output`](#output).
 
-E.g. If a validation error is found, it could be logged like this:
+Example:
+
 {% highlight bash %}
-$ {{ page.command }} --validation-log.tag="Validation" (...)
-ERR [Validation]: rsync://rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
+$ {{ page.command }} --log.tag="!Operation!" --validation-log.tag="!Validation!" (...)
+ERR [!Operation!]: Invalid rsync.enabled: 'tr0ue', must be boolean (true|false)
+ERR [!Validation!]: rsync://rpki.example.com/foo/bar/baz.cer: Certificate validation failed: certificate has expired
 {% endhighlight %}
 
-The arguments of each log type are:
 - {{ page.url-log-tag }}
 - {{ page.url-vlog-tag }}

@@ -7,13 +7,13 @@ description: FORT Validator is a command line application intended for UNIX oper
 
 ## Design
 
-Fort is an MIT-licensed RPKI Relying Party. It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers.
+Fort is an MIT-licensed RPKI Relying Party. It is a service that downloads the RPKI repositories, validates their entirety and serves the resulting ROAs for easy access by your routers.
 
 ![img/design.svg](img/design.svg)
 
-The Validator is a timer that resynchronizes its [local cache](usage.html#--local-repository), validates the resulting [RPKI trees](intro-rpki.html) and stores the resulting ROAs in memory every [certain amount of time](usage.html#--serverintervalvalidation). The RTR [Server](usage.html#--serveraddress) (which is part of the same binary) delivers these ROAs to any requesting routers.
+The Validator is a timer that, [every once in a while](usage.html#--serverintervalvalidation), resynchronizes its [local cache of the RPKI Repository](usage.html#--local-repository), validates the resulting [certificate chains](intro-rpki.html) and stores the resulting valid ROAs in memory. The RTR [Server](usage.html#--serveraddress) (which is part of the same binary) delivers these ROAs to any requesting routers.
 
-Fort is a command line application intended for UNIX operating systems, written in C. (It requires a compiler that supports `-std=gnu11`.)
+Fort is a command-line application intended for UNIX operating systems, written in C. (It requires a compiler that supports `-std=gnu11`.)
 
 ## Standards Compliance 
 

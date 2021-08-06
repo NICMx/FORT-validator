@@ -17,9 +17,9 @@ Basically, the idea is that one should be able to verify the origin of a route b
 
 ![img/chain.svg](img/chain.svg)
 
-The end result is a _Route Origin Attestation_ (ROA), a digitally signed object that provides a means of verifying that an IP address block holder has authorized an Autonomous System (AS) to originate routes to its address block or one of its children's.
+The end result is a _Route Origin Attestation_ (ROA), a digitally signed object that serves as a trustworthy attestation that an IP address block holder has authorized an Autonomous System (AS) to originate routes to its address block (or some of its children).
 
-So the whole infrastructure functions like a tree-shaped trust network (one for each RIR) in which authorities (_Certificate Authority_--CA) attest to their resource suballocations:
+So we end up with a tree-shaped trust network (one for each RIR) in which lots of authorities (_Certificate Authority_--CA) attest to their resource suballocations:
 
 ![img/tree.svg](img/tree.svg)
 
