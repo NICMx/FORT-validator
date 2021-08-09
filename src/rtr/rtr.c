@@ -317,7 +317,7 @@ create_server_socket(char const *input_addr, char const *hostname,
 
 		server.fd = fd;
 		/* Ignore failure; this is just a nice-to-have. */
-		server.addr = strdup(input_addr);
+		server.addr = (input_addr != NULL) ? strdup(input_addr) : NULL;
 		error = server_arraylist_add(&servers, &server);
 		if (error) {
 			close(fd);
