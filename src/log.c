@@ -3,6 +3,7 @@
 #include <execinfo.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <pthread.h>
 #include <signal.h>
 #include <syslog.h>
 #include <time.h>
