@@ -378,7 +378,8 @@ end4:	subjects_cleanup(&meta->subjects, subject_cleanup);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	uri_refput(meta->uri);
 	free(meta);
-end3:	free(repo);
+end3:	SLIST_REMOVE_HEAD(&stack->levels, next);
+	free(repo);
 	return error;
 }
 
