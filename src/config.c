@@ -928,6 +928,7 @@ print_config(void)
 {
 	struct option_field const *opt;
 
+	pr_op_info("Fort 1.5.1.2");
 	pr_op_info("Configuration {");
 
 	FOREACH_OPTION(options, opt, 0xFFFF)
