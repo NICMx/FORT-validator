@@ -5,26 +5,7 @@
 #include <string.h>
 #include "log.h"
 
-/*
- * List of deltas inside an update notification file.
- *
- * The structure functions are extended and will have the following meaning:
- *   - capacity : is the size of the array, must be set before using the array
- *                and can't be modified.
- *   - len      : number of elements set in the array.
- *
- * This struct is a diff version of array_list, utilized to store only the
- * amount of deltas that may be needed and validate that an update notification
- * file has a contiguous set of deltas.
- */
-struct deltas_head {
-	/** Unidimensional array. Initialized lazily. */
-	struct delta_head **array;
-	/** Number of elements in @array. */
-	size_t len;
-	/** Actual allocated slots in @array. */
-	size_t capacity;
-};
+DEFINE_ARRAY_LIST_FUNCTIONS(deltas_head, struct delta_head, )
 
 void
 global_data_init(struct global_data *data)
@@ -41,9 +22,9 @@ global_data_cleanup(struct global_data *data)
 void
 doc_data_init(struct doc_data *data)
 {
+	data->uri = NULL;
 	data->hash = NULL;
 	data->hash_len = 0;
-	data->uri = NULL;
 }
 
 void
@@ -51,157 +32,6 @@ doc_data_cleanup(struct doc_data *data)
 {
 	free(data->hash);
 	free(data->uri);
-}
-
-int
-delta_head_create(struct delta_head **result)
-{
-	struct delta_head *tmp;
-
-	tmp = malloc(sizeof(struct delta_head));
-	if (tmp == NULL)
-		return pr_enomem();
-
-	doc_data_init(&tmp->doc_data);
-
-	*result = tmp;
-	return 0;
-}
-
-void
-delta_head_destroy(struct delta_head *delta_head)
-{
-	if (delta_head) {
-		doc_data_cleanup(&delta_head->doc_data);
-		free(delta_head);
-	}
-}
-
-static void
-deltas_head_init(struct deltas_head *list)
-{
-	list->array = NULL;
-	list->len = 0;
-	list->capacity = 0;
-}
-
-static void
-deltas_head_cleanup(struct deltas_head *list)
-{
-	size_t i;
-
-	for (i = 0; i < list->capacity; i++)
-		delta_head_destroy(list->array[i]);
-	if (list->array)
-		free(list->array);
-}
-
-static int
-deltas_head_create(struct deltas_head **deltas)
-{
-	struct deltas_head *tmp;
-
-	tmp = malloc(sizeof(struct deltas_head));
-	if (tmp == NULL)
-		return pr_enomem();
-
-	deltas_head_init(tmp);
-
-	*deltas = tmp;
-	return 0;
-}
-
-static void
-deltas_head_destroy(struct deltas_head *deltas)
-{
-	deltas_head_cleanup(deltas);
-	free(deltas);
-}
-
-int
-deltas_head_set_size(struct deltas_head *deltas, size_t capacity)
-{
-	size_t i;
-
-	if (deltas->array != NULL)
-		pr_crit("Size of this list can't be modified");
-
-	deltas->capacity = capacity;
-	if (capacity == 0)
-		return 0; /* Ok, list can have 0 elements */
-
-	deltas->array = malloc(deltas->capacity
-	    * sizeof(struct delta_head *));
-	if (deltas->array == NULL)
-		return pr_enomem();
-
-	/* Point all elements to NULL */
-	for (i = 0; i < deltas->capacity; i++)
-		deltas->array[i] = NULL;
-
-	return 0;
-}
-
-/*
- * A new delta_head will be allocated at its corresponding position inside
- * @deltas (also its URI and HASH will be allocated). The position is calculated
- * using the difference between @max_serial and @serial.
- *
- * The following errors can be returned due to a wrong @position:
- *   -EEXIST: There's already an element at @position.
- *   -EINVAL: @position can't be inside @deltas list, meaning that such element
- *            isn't part of a contiguous list.
- *
- * Don't forget to call deltas_head_set_size() before this!!
- */
-int
-deltas_head_add(struct deltas_head *deltas, unsigned long max_serial,
-    unsigned long serial, char *uri, unsigned char *hash, size_t hash_len)
-{
-	struct delta_head *elem;
-	size_t position;
-	int error;
-
-	position = deltas->capacity - 1 - (max_serial - serial);
-	if (position < 0 || position > deltas->capacity - 1)
-		return -EINVAL;
-
-	if (deltas->array[position] != NULL)
-		return -EEXIST;
-
-	elem = NULL;
-	error = delta_head_create(&elem);
-	if (error)
-		return error;
-
-	elem->serial = serial;
-
-	elem->doc_data.uri = strdup(uri);
-	if (elem->doc_data.uri == NULL) {
-		free(elem);
-		return pr_enomem();
-	}
-
-	elem->doc_data.hash_len = hash_len;
-	elem->doc_data.hash = malloc(hash_len);
-	if (elem->doc_data.hash == NULL) {
-		free(elem->doc_data.uri);
-		free(elem);
-		return pr_enomem();
-	}
-	memcpy(elem->doc_data.hash, hash, hash_len);
-
-	deltas->array[position] = elem;
-	deltas->len++;
-
-	return 0;
-}
-
-/* Are all expected values set? */
-bool
-deltas_head_values_set(struct deltas_head *deltas)
-{
-	return deltas->len == deltas->capacity;
 }
 
 /* Do the @cb to the delta head elements from @from_serial to @max_serial */
@@ -223,7 +53,7 @@ deltas_head_for_each(struct deltas_head *deltas, unsigned long max_serial,
 	    max_serial);
 	from = deltas->capacity - (max_serial - from_serial);
 	for (index = from; index < deltas->capacity; index++) {
-		error = cb(deltas->array[index], arg);
+		error = cb(&deltas->array[index], arg);
 		if (error)
 			return error;
 	}
@@ -231,31 +61,83 @@ deltas_head_for_each(struct deltas_head *deltas, unsigned long max_serial,
 	return 0;
 }
 
-int
-update_notification_create(struct update_notification **file)
+static int
+swap_until_sorted(struct delta_head *deltas, unsigned int i,
+    unsigned long min, unsigned long max)
 {
-	struct update_notification *tmp;
-	struct deltas_head *list;
+	unsigned int target_slot;
+	struct delta_head tmp;
+
+	while (true) {
+		if (deltas[i].serial < min || max < deltas[i].serial) {
+			return pr_val_err("Deltas: Serial '%lu' is out of bounds. (min:%lu, max:%lu)",
+			    deltas[i].serial, min, max);
+		}
+
+		target_slot = deltas[i].serial - min;
+		if (i == target_slot)
+			return 0;
+		if (deltas[target_slot].serial == deltas[i].serial) {
+			return pr_val_err("Deltas: Serial '%lu' is not unique.",
+			    deltas[i].serial);
+		}
+
+		/* Simple swap */
+		tmp = deltas[target_slot];
+		deltas[target_slot] = deltas[i];
+		deltas[i] = tmp;
+	}
+}
+
+int
+deltas_head_sort(struct deltas_head *deltas, unsigned long max_serial)
+{
+	unsigned long min_serial;
+	struct delta_head *cursor;
+	array_index i;
 	int error;
 
-	tmp = malloc(sizeof(struct update_notification));
-	if (tmp == NULL)
-		return pr_enomem();
+	if (max_serial + 1 < deltas->len)
+		return pr_val_err("Deltas: Too many deltas (%zu) for serial %lu. (Negative serials not implemented.)",
+		    deltas->len, max_serial);
 
-	list = NULL;
-	error = deltas_head_create(&list);
-	if (error) {
-		free(tmp);
-		return error;
+	min_serial = max_serial + 1 - deltas->len;
+
+	ARRAYLIST_FOREACH(deltas, cursor, i) {
+		error = swap_until_sorted(deltas->array, i, min_serial,
+		    max_serial);
+		if (error)
+			return error;
 	}
-	tmp->deltas_list = list;
-	tmp->uri = NULL;
 
-	global_data_init(&tmp->global_data);
-	doc_data_init(&tmp->snapshot);
-
-	*file = tmp;
 	return 0;
+}
+
+struct update_notification *
+update_notification_create(char const *uri)
+{
+	struct update_notification *result;
+
+	result = malloc(sizeof(struct update_notification));
+	if (result == NULL)
+		return NULL;
+
+	global_data_init(&result->global_data);
+	doc_data_init(&result->snapshot);
+	deltas_head_init(&result->deltas_list);
+	result->uri = strdup(uri);
+	if (result->uri == NULL) {
+		free(result);
+		return NULL;
+	}
+
+	return result;
+}
+
+static void
+delta_head_destroy(struct delta_head *delta)
+{
+	doc_data_cleanup(&delta->doc_data);
 }
 
 void
@@ -263,7 +145,7 @@ update_notification_destroy(struct update_notification *file)
 {
 	doc_data_cleanup(&file->snapshot);
 	global_data_cleanup(&file->global_data);
-	deltas_head_destroy(file->deltas_list);
+	deltas_head_cleanup(&file->deltas_list, delta_head_destroy);
 	free(file->uri);
 	free(file);
 }

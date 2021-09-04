@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include "data_structure/array_list.h"
 
 /* Possible results for an RRDP URI comparison */
 typedef enum {
@@ -62,18 +63,23 @@ struct snapshot {
 
 /* Delta element located at an update notification file */
 struct delta_head {
+	/*
+	 * TODO this is not an RFC 1982 serial. It's supposed to be unbounded,
+	 * so we should probably handle it as a string.
+	 */
 	unsigned long serial;
 	struct doc_data doc_data;
 };
 
 /* List of deltas inside an update notification file */
-struct deltas_head;
+DEFINE_ARRAY_LIST_STRUCT(deltas_head, struct delta_head);
+DECLARE_ARRAY_LIST_FUNCTIONS(deltas_head, struct delta_head)
 
 /* Update notification file content and location URI */
 struct update_notification {
 	struct global_data global_data;
 	struct doc_data snapshot;
-	struct deltas_head *deltas_list;
+	struct deltas_head deltas_list;
 	char *uri;
 };
 
@@ -83,20 +89,13 @@ void global_data_cleanup(struct global_data *);
 void doc_data_init(struct doc_data *);
 void doc_data_cleanup(struct doc_data *);
 
-int update_notification_create(struct update_notification **);
+struct update_notification *update_notification_create(char const *);
 void update_notification_destroy(struct update_notification *);
-
-int delta_head_create(struct delta_head **);
-void delta_head_destroy(struct delta_head *);
 
 typedef int (*delta_head_cb)(struct delta_head *, void *);
 int deltas_head_for_each(struct deltas_head *, unsigned long, unsigned long,
     delta_head_cb, void *);
-int deltas_head_add(struct deltas_head *, unsigned long, unsigned long, char *,
-    unsigned char *, size_t);
-
-int deltas_head_set_size(struct deltas_head *, size_t);
-bool deltas_head_values_set(struct deltas_head *);
+int deltas_head_sort(struct deltas_head *, unsigned long);
 
 int snapshot_create(struct snapshot **);
 void snapshot_destroy(struct snapshot *);

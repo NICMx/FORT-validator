@@ -36,18 +36,6 @@
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
 
-/* Array list to get deltas from notification file */
-DEFINE_ARRAY_LIST_STRUCT(deltas_parsed, struct delta_head *);
-DEFINE_ARRAY_LIST_FUNCTIONS(deltas_parsed, struct delta_head *, static)
-
-/* Context while reading an update notification */
-struct rdr_notification_ctx {
-	/* Data being parsed */
-	struct update_notification *notification;
-	/* Unordered list of deltas */
-	struct deltas_parsed deltas;
-};
-
 /* Context while reading a snapshot */
 struct rdr_snapshot_ctx {
 	/* Data being parsed */
@@ -258,15 +246,17 @@ parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 	xmlChar *xml_value;
 	char *tmp;
 
-	if (attr == NULL)
+	if (attr == NULL) {
 		xml_value = xmlTextReaderValue(reader);
-	else
+		if (xml_value == NULL)
+			return pr_val_err("RRDP file: Couldn't find string content from '%s'",
+			    xmlTextReaderConstLocalName(reader));
+	} else {
 		xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
-
-	if (xml_value == NULL)
-		return pr_val_err("RRDP file: Couldn't find %s from '%s'",
-		    (attr == NULL ? "string content" : "xml attribute"),
-		    xmlTextReaderConstLocalName(reader));
+		if (xml_value == NULL)
+			return pr_val_err("RRDP file: Couldn't find xml attribute '%s' from tag '%s'",
+			    attr, xmlTextReaderConstLocalName(reader));
+	}
 
 	tmp = malloc(xmlStrlen(xml_value) + 1);
 	if (tmp == NULL) {
@@ -699,146 +689,53 @@ parse_withdraw_elem(xmlTextReaderPtr reader, struct visited_uris *visited_uris)
 }
 
 static int
-rdr_notification_ctx_init(struct rdr_notification_ctx *ctx)
-{
-	deltas_parsed_init(&ctx->deltas);
-	return 0;
-}
-
-static void
-__delta_head_destroy(struct delta_head **delta_head)
-{
-	delta_head_destroy(*delta_head);
-}
-
-static void
-rdr_notification_ctx_cleanup(struct rdr_notification_ctx *ctx)
-{
-	if (ctx->deltas.array != NULL)
-		deltas_parsed_cleanup(&ctx->deltas, __delta_head_destroy);
-}
-
-static int
 parse_notification_delta(xmlTextReaderPtr reader,
-    struct rdr_notification_ctx *ctx)
+    struct update_notification *update)
 {
-	struct delta_head *tmp;
-	unsigned long serial;
+	struct delta_head delta;
 	int error;
 
-	error = delta_head_create(&tmp);
+	error = parse_long(reader, RRDP_ATTR_SERIAL, &delta.serial);
+	if (error)
+		return error;
+	error = parse_doc_data(reader, true, true, &delta.doc_data);
 	if (error)
 		return error;
 
-	error = parse_long(reader, RRDP_ATTR_SERIAL, &serial);
+	error = deltas_head_add(&update->deltas_list, &delta);
 	if (error)
-		goto delta_destroy;
-	tmp->serial = serial;
+		doc_data_cleanup(&delta.doc_data);
 
-	error = parse_doc_data(reader, true, true, &tmp->doc_data);
-	if (error)
-		goto delta_destroy;
-
-	error = deltas_parsed_add(&ctx->deltas, &tmp);
-	if (error)
-		goto delta_destroy;
-
-	return 0;
-delta_destroy:
-	delta_head_destroy(tmp);
 	return error;
-}
-
-static int
-order_notification_deltas(struct rdr_notification_ctx *ctx)
-{
-	struct delta_head **ptr;
-	array_index i;
-	int error;
-
-	error = deltas_head_set_size(ctx->notification->deltas_list,
-	    ctx->deltas.len);
-	if (error)
-		return error;
-
-	ARRAYLIST_FOREACH(&ctx->deltas, ptr, i) {
-		error = deltas_head_add(ctx->notification->deltas_list,
-		    ctx->notification->global_data.serial,
-		    (*ptr)->serial,
-		    (*ptr)->doc_data.uri,
-		    (*ptr)->doc_data.hash,
-		    (*ptr)->doc_data.hash_len);
-
-		if (!error)
-			continue;
-
-		if (error == -EINVAL)
-			return pr_val_err("Serial '%lu' at delta elements isn't part of a contiguous list of serials.",
-			    (*ptr)->serial);
-
-		if (error == -EEXIST)
-			return pr_val_err("Duplicated serial '%lu' at delta elements.",
-			    (*ptr)->serial);
-
-		return error;
-	}
-
-	/*
-	 * "If delta elements are included, they MUST form a contiguous
-	 * sequence of serial numbers starting at a revision determined by
-	 * the Repository Server, up to the serial number mentioned in the
-	 * notification element."
-	 *
-	 * If all expected elements are set, everything is ok.
-	 */
-	if (!deltas_head_values_set(ctx->notification->deltas_list))
-		return pr_val_err("Deltas listed don't have a contiguous sequence of serial numbers");
-
-	return 0;
 }
 
 static int
 xml_read_notification(xmlTextReaderPtr reader, void *arg)
 {
-	struct rdr_notification_ctx *ctx = arg;
-	xmlReaderTypes type;
+	struct update_notification *update = arg;
 	xmlChar const *name;
-	int error;
 
-	error = 0;
 	name = xmlTextReaderConstLocalName(reader);
-	type = xmlTextReaderNodeType(reader);
-	switch (type) {
+	switch (xmlTextReaderNodeType(reader)) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA)) {
-			error = parse_notification_delta(reader, ctx);
+			return parse_notification_delta(reader, update);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT)) {
-			error = parse_doc_data(reader, true, true,
-			    &ctx->notification->snapshot);
+			return parse_doc_data(reader, true, true,
+			    &update->snapshot);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
 			/* No need to validate session ID and serial */
-			error = parse_global_data(reader,
-			    &ctx->notification->global_data, NULL, 0);
-			/* Init context for deltas and snapshot */
-			rdr_notification_ctx_init(ctx);
-		} else {
-			return pr_val_err("Unexpected '%s' element", name);
+			return parse_global_data(reader,
+			    &update->global_data, NULL, 0);
 		}
-		break;
-	case XML_READER_TYPE_END_ELEMENT:
-		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
-			error = order_notification_deltas(ctx);
-			rdr_notification_ctx_cleanup(ctx);
-			return error; /* Error 0 is ok */
-		}
-		break;
-	default:
-		return 0;
-	}
 
-	if (error) {
-		rdr_notification_ctx_cleanup(ctx);
-		return error;
+		return pr_val_err("Unexpected '%s' element", name);
+
+	case XML_READER_TYPE_END_ELEMENT:
+		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION))
+			return deltas_head_sort(&update->deltas_list,
+			    update->global_data.serial);
+		break;
 	}
 
 	return 0;
@@ -847,30 +744,21 @@ xml_read_notification(xmlTextReaderPtr reader, void *arg)
 static int
 parse_notification(struct rpki_uri *uri, struct update_notification **file)
 {
-	struct rdr_notification_ctx ctx;
-	struct update_notification *tmp;
-	char *dup;
+	struct update_notification *result;
 	int error;
 
-	dup = strdup(uri_get_global(uri));
-	if (dup == NULL)
+	result = update_notification_create(uri_get_global(uri));
+	if (result == NULL)
 		return pr_enomem();
 
-	error = update_notification_create(&tmp);
-	if (error)
-		return error;
-
-	tmp->uri = dup;
-
-	ctx.notification = tmp;
 	error = relax_ng_parse(uri_get_local(uri), xml_read_notification,
-	    &ctx);
+	    result);
 	if (error) {
-		update_notification_destroy(tmp);
+		update_notification_destroy(result);
 		return error;
 	}
 
-	*file = tmp;
+	*file = result;
 	return 0;
 }
 
@@ -999,8 +887,9 @@ parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
 	ctx.expected_serial = parents_data->serial;
 	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
 
-	/* Error 0 is ok */
 	delta_destroy(delta);
+	/* Error 0 is ok */
+
 pop_fnstack:
 	fnstack_pop();
 	return error;
@@ -1141,6 +1030,6 @@ rrdp_process_deltas(struct update_notification *parent,
 	args.visited_uris = visited_uris;
 	args.log_operation = log_operation;
 
-	return deltas_head_for_each(parent->deltas_list,
+	return deltas_head_for_each(&parent->deltas_list,
 	    parent->global_data.serial, cur_serial, process_delta, &args);
 }
