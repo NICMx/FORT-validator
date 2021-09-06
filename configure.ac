@@ -2,7 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([fort], [1.5.1], [fort-validator@nic.mx])
+AC_INIT([fort], [m4_esyscmd_s([git describe --dirty --always --tags])],
+	[fort-validator@nic.mx])
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
 
