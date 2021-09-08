@@ -1152,6 +1152,9 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 	return 0;
 }
 
+/**
+ * Copies the resources from @cert to @resources.
+ */
 int
 certificate_get_resources(X509 *cert, struct resources *resources,
     enum cert_type type)

@@ -56,23 +56,18 @@ struct metadata_node {
 	struct serial_numbers serials;
 	struct subjects subjects;
 
+	/*
+	 * Certificate repository "level". This aims to identify if the
+	 * certificate is located at a distinct server than its father (common
+	 * case when the RIRs delegate RPKI repositories).
+	 */
+	unsigned int level;
+
 	/** Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(metadata_node) next;
 };
 
 SLIST_HEAD(metadata_stack, metadata_node);
-
-/**
- * Certificate repository "level". This aims to identify if the
- * certificate is located at a distinct server than its father (common
- * case when the RIRs delegate RPKI repositories).
- */
-struct repo_level_node {
-	unsigned int level;
-	SLIST_ENTRY(repo_level_node) next;
-};
-
-SLIST_HEAD(repo_level_stack, repo_level_node);
 
 /**
  * This is the foundation through which we pull off our iterative traversal,
@@ -109,12 +104,6 @@ struct cert_stack {
 	 * seemingly not intended to be used outside of its library.)
 	 */
 	struct metadata_stack metas;
-
-	/**
-	 * Stacked data to store the repository "levels" (each level is a
-	 * delegation of an RPKI server).
-	 */
-	struct repo_level_stack levels;
 };
 
 int
@@ -134,7 +123,6 @@ certstack_create(struct cert_stack **result)
 
 	SLIST_INIT(&stack->defers);
 	SLIST_INIT(&stack->metas);
-	SLIST_INIT(&stack->levels);
 
 	*result = stack;
 	return 0;
@@ -185,7 +173,6 @@ certstack_destroy(struct cert_stack *stack)
 	unsigned int stack_size;
 	struct metadata_node *meta;
 	struct defer_node *post;
-	struct repo_level_node *level;
 
 	stack_size = 0;
 	while (!SLIST_EMPTY(&stack->defers)) {
@@ -207,15 +194,6 @@ certstack_destroy(struct cert_stack *stack)
 		stack_size++;
 	}
 	pr_val_debug("Deleted %u metadatas.", stack_size);
-
-	stack_size = 0;
-	while (!SLIST_EMPTY(&stack->levels)) {
-		level = SLIST_FIRST(&stack->levels);
-		SLIST_REMOVE_HEAD(&stack->levels, next);
-		free(level);
-		stack_size++;
-	}
-	pr_val_debug("Deleted %u stacked levels.", stack_size);
 
 	free(stack);
 }
@@ -242,7 +220,6 @@ x509stack_pop(struct cert_stack *stack)
 {
 	X509 *cert;
 	struct metadata_node *meta;
-	struct repo_level_node *repo;
 
 	cert = sk_X509_pop(stack->x509s);
 	if (cert == NULL)
@@ -254,12 +231,6 @@ x509stack_pop(struct cert_stack *stack)
 		pr_crit("Attempted to pop empty metadata stack");
 	SLIST_REMOVE_HEAD(&stack->metas, next);
 	meta_destroy(meta);
-
-	repo = SLIST_FIRST(&stack->levels);
-	if (repo == NULL)
-		pr_crit("Attempted to pop empty repo level stack");
-	SLIST_REMOVE_HEAD(&stack->levels, next);
-	free(repo);
 }
 
 /**
@@ -297,50 +268,21 @@ deferstack_is_empty(struct cert_stack *stack)
 	return SLIST_EMPTY(&stack->defers);
 }
 
-/** Steals ownership of @x509 on success. */
-int
-x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
-    enum rpki_policy policy, enum cert_type type)
+static int
+init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
+    struct resources **_result)
 {
-	struct metadata_node *meta;
-	struct repo_level_node *repo, *head_repo;
-	struct defer_node *defer_separator;
-	unsigned int work_repo_level;
-	int ok;
+	struct resources *result;
 	int error;
 
-	repo = malloc(sizeof(struct repo_level_node));
-	if (repo == NULL)
+	result = resources_create(false);
+	if (result == NULL)
 		return pr_enomem();
 
-	repo->level = 0;
-	work_repo_level = working_repo_peek_level();
-	head_repo = SLIST_FIRST(&stack->levels);
-	if (head_repo != NULL && work_repo_level > head_repo->level)
-		repo->level = work_repo_level;
-
-	SLIST_INSERT_HEAD(&stack->levels, repo, next);
-
-	meta = malloc(sizeof(struct metadata_node));
-	if (meta == NULL) {
-		error = pr_enomem();
-		goto end3;
-	}
-
-	meta->uri = uri;
-	uri_refget(uri);
-	serial_numbers_init(&meta->serials);
-	subjects_init(&meta->subjects);
-
-	meta->resources = resources_create(false);
-	if (meta->resources == NULL) {
-		error = pr_enomem();
-		goto end4;
-	}
-	resources_set_policy(meta->resources, policy);
-	error = certificate_get_resources(x509, meta->resources, type);
+	resources_set_policy(result, policy);
+	error = certificate_get_resources(x509, result, type);
 	if (error)
-		goto end5;
+		goto fail;
 
 	/*
 	 * rfc8630#section-2.3
@@ -349,23 +291,92 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
 	 * part is already handled in certificate_get_resources().
 	 */
-	if (type == TA && resources_empty(meta->resources)) {
+	if (type == TA && resources_empty(result)) {
 		error = pr_val_err("Trust Anchor certificate does not define any number resources.");
-		goto end5;
+		goto fail;
 	}
 
-	defer_separator = malloc(sizeof(struct defer_node));
+	*_result = result;
+	return 0;
+
+fail:
+	resources_destroy(result);
+	return error;
+}
+
+static int
+init_level(struct cert_stack *stack, unsigned int *_result)
+{
+	struct metadata_node *head_meta;
+	unsigned int work_repo_level;
+	unsigned int result;
+
+	/*
+	 * Bruh, I don't understand the point of this block.
+	 * Why can't it just be `result = working_repo_peek_level();`?
+	 */
+
+	result = 0;
+	work_repo_level = working_repo_peek_level();
+	head_meta = SLIST_FIRST(&stack->metas);
+	if (head_meta != NULL && work_repo_level > head_meta->level)
+		result = work_repo_level;
+
+	*_result = result;
+	return 0;
+}
+
+static struct defer_node *
+create_separator(void)
+{
+	struct defer_node *result;
+
+	result = malloc(sizeof(struct defer_node));
+	if (result == NULL)
+		return NULL;
+
+	result->type = DNT_SEPARATOR;
+	return result;
+}
+
+/** Steals ownership of @x509 on success. */
+int
+x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
+    enum rpki_policy policy, enum cert_type type)
+{
+	struct metadata_node *meta;
+	struct defer_node *defer_separator;
+	int ok;
+	int error;
+
+	meta = malloc(sizeof(struct metadata_node));
+	if (meta == NULL)
+		return pr_enomem();
+
+	meta->uri = uri;
+	uri_refget(uri);
+	serial_numbers_init(&meta->serials);
+	subjects_init(&meta->subjects);
+
+	error = init_resources(x509, policy, type, &meta->resources);
+	if (error)
+		goto cleanup_subjects;
+
+	error = init_level(stack, &meta->level); /* Does not need a revert */
+	if (error)
+		goto destroy_resources;
+
+	defer_separator = create_separator();
 	if (defer_separator == NULL) {
 		error = pr_enomem();
-		goto end5;
+		goto destroy_resources;
 	}
-	defer_separator->type = DNT_SEPARATOR;
 
 	ok = sk_X509_push(stack->x509s, x509);
 	if (ok <= 0) {
 		error = val_crypto_err(
 		    "Could not add certificate to trusted stack: %d", ok);
-		goto end5;
+		goto destroy_separator;
 	}
 
 	SLIST_INSERT_HEAD(&stack->defers, defer_separator, next);
@@ -373,13 +384,15 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 
 	return 0;
 
-end5:	resources_destroy(meta->resources);
-end4:	subjects_cleanup(&meta->subjects, subject_cleanup);
+destroy_separator:
+	free(defer_separator);
+destroy_resources:
+	resources_destroy(meta->resources);
+cleanup_subjects:
+	subjects_cleanup(&meta->subjects, subject_cleanup);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	uri_refput(meta->uri);
 	free(meta);
-end3:	SLIST_REMOVE_HEAD(&stack->levels, next);
-	free(repo);
 	return error;
 }
 
@@ -428,8 +441,8 @@ x509stack_peek_resources(struct cert_stack *stack)
 unsigned int
 x509stack_peek_level(struct cert_stack *stack)
 {
-	struct repo_level_node *repo = SLIST_FIRST(&stack->levels);
-	return (repo != NULL) ? repo->level : 0;
+	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
+	return (meta != NULL) ? meta->level : 0;
 }
 
 static int
