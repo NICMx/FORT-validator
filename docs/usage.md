@@ -52,7 +52,8 @@ description: Guide to use arguments of FORT Validator.
 	38. [`--http.user-agent`](#--httpuser-agent)
 	39. [`--http.connect-timeout`](#--httpconnect-timeout)
 	40. [`--http.transfer-timeout`](#--httptransfer-timeout)
-	41. [`--http.idle-timeout`](#--httpidle-timeout)
+	41. [`--http.low-speed-limit`](#--httplow-speed-limit)
+	41. [`--http.low-speed-time`](#--httplow-speed-time)
 	42. [`--http.ca-path`](#--httpca-path)
 	43. [`--output.roa`](#--outputroa)
 	44. [`--output.bgpsec`](#--outputbgpsec)
@@ -81,6 +82,7 @@ description: Guide to use arguments of FORT Validator.
 	4. [`--rrdp.retry.count`](#--rrdpretrycount)
 	5. [`--rrdp.retry.interval`](#--rrdpretryinterval)
 	60. [`init-locations`](#init-locations)
+	41. [`--http.idle-timeout`](#--httpidle-timeout)
 
 ## Syntax
 
@@ -123,7 +125,8 @@ description: Guide to use arguments of FORT Validator.
 	[--http.user-agent=<string>]
 	[--http.connect-timeout=<unsigned integer>]
 	[--http.transfer-timeout=<unsigned integer>]
-	[--http.idle-timeout=<unsigned integer>]
+	[--http.low-speed-limit=<unsigned integer>]
+	[--http.low-speed-time=<unsigned integer>]
 	[--http.ca-path=<directory>]
 	[--log.enabled=true|false]
 	[--log.output=syslog|console]
@@ -726,20 +729,41 @@ Once the connection is established with the server, the request will last a maxi
 
 The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_TIMEOUT](https://curl.haxx.se/libcurl/c/CURLOPT_TIMEOUT.html).
 
-### `--http.idle-timeout`
+### `--http.low-speed-limit`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 15
+- **Default:** 30
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
-_**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
+The value Fort employs as [CURLOPT_LOW_SPEED_LIMIT](https://curl.haxx.se/libcurl/c/CURLOPT_LOW_SPEED_LIMIT.html) during every HTTP transfer.
 
-Maximum time in seconds (once the connection is established) that a request can be idle before dropping it.
+It is the average transfer speed (in bytes per second) that HTTP transfers (between Fort and RPKI repositories) should be below during [`--http.low-speed-time`](#--httplow-speed-time) seconds for Fort to consider it to be too slow. (Slow connections are dropped.)
 
-Once the connection is established with the server, the request can last a maximum of `http.idle-timeout` seconds without receiving data before dropping the connection. A value of 0 disables idle time verification (use with caution).
+For example:
 
-The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_LOW_SPEED_TIME](https://curl.haxx.se/libcurl/c/CURLOPT_LOW_SPEED_TIME.html).
+```
+--http.low-speed-limit 30 --http.low-speed-time 60
+```
+
+Whenever Fort attempts to retrieve a file from an RPKI repository through HTTP, it will abort the transfer if the connection stays slower than 30 bytes per second, over a period of 60 seconds.
+
+The intent is to prevent malicious repositories from slowing down Fort.
+
+Zero disables the validation.
+
+### `--http.low-speed-time`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 10
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+The value Fort employs as [CURLOPT_LOW_SPEED_TIME](https://curl.haxx.se/libcurl/c/CURLOPT_LOW_SPEED_TIME.html) during every HTTP transfer.
+
+It is the number of seconds that the transfer speed should be below `--http.low-speed-limit` for the Fort to consider it too slow. (Slow connections are dropped.)
+
+See [`--http.low-speed-limit`](#--httplow-speed-limit).
 
 ### `--http.ca-path`
 
@@ -1310,3 +1334,12 @@ This is a JSON array of objects, where each object has a mandatory `url` member,
 	}
 ]
 ```
+
+### `--http.idle-timeout`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 10
+- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+
+Deprecated alias for [`--http.low-speed-time`](#--httplow-speed-time).

@@ -83,7 +83,6 @@ static int
 http_easy_init(struct http_handler *handler)
 {
 	CURL *result;
-	long timeout;
 
 	result = curl_easy_init();
 	if (result == NULL)
@@ -96,9 +95,10 @@ http_easy_init(struct http_handler *handler)
 	setopt_long(result, CURLOPT_TIMEOUT,
 	    config_get_http_transfer_timeout());
 
-	timeout = config_get_http_idle_timeout();
-	setopt_long(result, CURLOPT_LOW_SPEED_TIME, timeout);
-	setopt_long(result, CURLOPT_LOW_SPEED_LIMIT, !!timeout);
+	setopt_long(result, CURLOPT_LOW_SPEED_LIMIT,
+	    config_get_http_low_speed_limit());
+	setopt_long(result, CURLOPT_LOW_SPEED_TIME,
+	    config_get_http_low_speed_time());
 
 	/* Always expect HTTPS usage */
 	setopt_long(result, CURLOPT_SSL_VERIFYHOST, 2L);

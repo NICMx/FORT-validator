@@ -145,12 +145,14 @@ struct rpki_config {
 		} retry;
 		/* User-Agent header set at requests */
 		char *user_agent;
-		/* Timeout in seconds for the connect phase */
+		/* CURLOPT_CONNECTTIMEOUT for our HTTP transfers. */
 		unsigned int connect_timeout;
-		/* Maximum allowed time that a request can take */
+		/* CURLOPT_TIMEOUT for our HTTP transfers. */
 		unsigned int transfer_timeout;
-		/* Maximum idle time during a request */
-		unsigned int idle_timeout;
+		/* CURLOPT_LOW_SPEED_LIMIT for our HTTP transfers. */
+		unsigned int low_speed_limit;
+		/* CURLOPT_LOW_SPEED_TIME for our HTTP transfers. */
+		unsigned int low_speed_time;
 		/* Directory where CA certs to verify peers are found */
 		char *ca_path;
 	} http;
@@ -608,10 +610,28 @@ static const struct option_field options[] = {
 	},
 	{
 		.id = 9007,
-		.name = "http.idle-timeout",
+		.name = "http.idle-timeout", /* TODO DEPRECATED. */
 		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, http.idle_timeout),
-		.doc = "Maximum idle time (once the connection is established) during a request before dropping the connection",
+		.offset = offsetof(struct rpki_config, http.low_speed_time),
+		.doc = "Deprecated; currently an alias for --http.low-speed-time. Use --http.low-speed-time instead.",
+		.min = 0,
+		.max = UINT_MAX,
+	},
+	{
+		.id = 9009,
+		.name = "http.low-speed-limit",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, http.low_speed_limit),
+		.doc = "Average transfer speed (in bytes per second) that the transfer should be below during --http.low-speed-time seconds for Fort to consider it to be too slow. (Slow connections are dropped.)",
+		.min = 0,
+		.max = UINT_MAX,
+	},
+	{
+		.id = 9010,
+		.name = "http.low-speed-time",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, http.low_speed_time),
+		.doc = "Seconds that the transfer speed should be below --http.low-speed-limit for the Fort to consider it too slow. (Slow connections are dropped.)",
 		.min = 0,
 		.max = UINT_MAX,
 	},
@@ -1033,7 +1053,8 @@ set_default_values(void)
 	}
 	rpki_config.http.connect_timeout = 30;
 	rpki_config.http.transfer_timeout = 0;
-	rpki_config.http.idle_timeout = 15;
+	rpki_config.http.low_speed_limit = 30;
+	rpki_config.http.low_speed_time = 10;
 	rpki_config.http.ca_path = NULL; /* Use system default */
 
 	/*
@@ -1553,9 +1574,15 @@ config_get_http_transfer_timeout(void)
 }
 
 long
-config_get_http_idle_timeout(void)
+config_get_http_low_speed_limit(void)
 {
-	return rpki_config.http.idle_timeout;
+	return rpki_config.http.low_speed_limit;
+}
+
+long
+config_get_http_low_speed_time(void)
+{
+	return rpki_config.http.low_speed_time;
 }
 
 char const *
