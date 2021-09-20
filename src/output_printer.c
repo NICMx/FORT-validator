@@ -19,7 +19,6 @@ static int
 load_output_file(char const *output, FILE **result, bool *fopen)
 {
 	FILE *tmp;
-	struct stat stat;
 	int error;
 
 	if (output == NULL) {
@@ -33,7 +32,7 @@ load_output_file(char const *output, FILE **result, bool *fopen)
 		return 0;
 	}
 
-	error = file_write(output, &tmp, &stat);
+	error = file_write(output, &tmp);
 	if (error) {
 		*result = NULL;
 		return error;

@@ -39,9 +39,10 @@ file_open(char const *file_name, FILE **result, struct stat *stat)
 }
 
 int
-file_write(char const *file_name, FILE **result, struct stat *stat)
+file_write(char const *file_name, FILE **result)
 {
-	return file_get(file_name, result, stat, "wb");
+	struct stat stat;
+	return file_get(file_name, result, &stat, "wb");
 }
 
 void
@@ -119,13 +120,12 @@ bool
 file_valid(char const *file_name)
 {
 	FILE *tmp;
-	struct stat stat;
 	int error;
 
 	if (file_name == NULL)
 		return false;
 
-	error = file_write(file_name, &tmp, &stat);
+	error = file_write(file_name, &tmp);
 	if (error)
 		return false;
 

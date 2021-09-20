@@ -565,7 +565,6 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
     struct visited_uris *visited_uris)
 {
 	struct rpki_uri *uri;
-	struct stat stat;
 	FILE *out;
 	size_t written;
 	int error;
@@ -581,7 +580,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 		return error;
 	}
 
-	error = file_write(uri_get_local(uri), &out, &stat);
+	error = file_write(uri_get_local(uri), &out);
 	if (error) {
 		uri_refput(uri);
 		return error;

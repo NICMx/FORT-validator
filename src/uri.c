@@ -568,7 +568,8 @@ uri_get_printable(struct rpki_uri *uri, enum filename_format format)
 }
 
 char const *
-uri_val_get_printable(struct rpki_uri *uri) {
+uri_val_get_printable(struct rpki_uri *uri)
+{
 	enum filename_format format;
 
 	format = config_get_val_log_filename_format();
@@ -576,7 +577,8 @@ uri_val_get_printable(struct rpki_uri *uri) {
 }
 
 char const *
-uri_op_get_printable(struct rpki_uri *uri) {
+uri_op_get_printable(struct rpki_uri *uri)
+{
 	enum filename_format format;
 
 	format = config_get_op_log_filename_format();

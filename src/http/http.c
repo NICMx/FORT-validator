@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <curl/curl.h>
-#include <sys/stat.h>
 #include "common.h"
 #include "config.h"
 #include "file.h"
@@ -67,12 +66,52 @@ setopt_long(CURL *curl, CURLoption opt, long value)
 	}
 }
 
+struct write_callback_arg {
+	size_t total_bytes;
+	int error;
+	FILE *dst;
+};
+
+static size_t
+write_callback(void *data, size_t size, size_t nmemb, void *userp)
+{
+	struct write_callback_arg *arg = userp;
+
+	arg->total_bytes += size * nmemb;
+	if (arg->total_bytes > config_get_http_max_file_size()) {
+		/*
+		 * If the server doesn't provide the file size beforehand,
+		 * CURLOPT_MAXFILESIZE doesn't prevent large file downloads.
+		 *
+		 * Therefore, we cover our asses by way of this reactive
+		 * approach. We already reached the size limit, but we're going
+		 * to reject the file anyway.
+		 */
+		arg->error = -EFBIG;
+		return 0; /* Ugh. See fread(3) */
+	}
+
+	return fwrite(data, size, nmemb, userp);
+}
+
 static void
-setopt_writedata(CURL *curl, FILE *file)
+setopt_writefunction(CURL *curl)
 {
 	CURLcode result;
 
-	result = curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+	result = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+	if (result != CURLE_OK) {
+		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
+		    CURLOPT_WRITEFUNCTION, result, curl_easy_strerror(result));
+	}
+}
+
+static void
+setopt_writedata(CURL *curl, struct write_callback_arg *arg)
+{
+	CURLcode result;
+
+	result = curl_easy_setopt(curl, CURLOPT_WRITEDATA, arg);
 	if (result != CURLE_OK) {
 		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
 		    CURLOPT_WRITEDATA, result, curl_easy_strerror(result));
@@ -94,11 +133,13 @@ http_easy_init(struct http_handler *handler)
 	    config_get_http_connect_timeout());
 	setopt_long(result, CURLOPT_TIMEOUT,
 	    config_get_http_transfer_timeout());
-
 	setopt_long(result, CURLOPT_LOW_SPEED_LIMIT,
 	    config_get_http_low_speed_limit());
 	setopt_long(result, CURLOPT_LOW_SPEED_TIME,
 	    config_get_http_low_speed_time());
+	setopt_long(result, CURLOPT_MAXFILESIZE,
+	    config_get_http_max_file_size());
+	setopt_writefunction(result);
 
 	/* Always expect HTTPS usage */
 	setopt_long(result, CURLOPT_SSL_VERIFYHOST, 2L);
@@ -143,15 +184,26 @@ static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
     long *cond_met, bool log_operation, FILE *file)
 {
+	struct write_callback_arg args;
 	CURLcode res, res2;
 	long unmet = 0;
 
 	handler->errbuf[0] = 0;
 	setopt_str(handler->curl, CURLOPT_URL, uri);
-	setopt_writedata(handler->curl, file);
+
+	args.total_bytes = 0;
+	args.error = 0;
+	args.dst = file;
+	setopt_writedata(handler->curl, &args);
 
 	pr_val_debug("HTTP GET: %s", uri);
 	res = curl_easy_perform(handler->curl);
+
+	if (args.error == -EFBIG) {
+		pr_val_err("The file '%s' is too big (read: %zu bytes). Rejecting.",
+		    uri, args.total_bytes);
+		return -EFBIG;
+	}
 
 	res2 = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
 	    response_code);
@@ -231,11 +283,10 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 {
 	char const *tmp_suffix = "_tmp";
 	struct http_handler handler;
-	struct stat stat;
 	FILE *out;
 	unsigned int retries;
 	char const *original_file;
-	char *tmp_file, *tmp;
+	char *tmp_file;
 	int error;
 
 	retries = 0;
@@ -246,24 +297,18 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 	}
 
 	original_file = uri_get_local(uri);
-	tmp_file = strdup(original_file);
+
+	tmp_file = malloc(strlen(original_file) + strlen(tmp_suffix) + 1);
 	if (tmp_file == NULL)
 		return pr_enomem();
-
-	tmp = realloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
-	if (tmp == NULL) {
-		error = pr_enomem();
-		goto release_tmp;
-	}
-
-	tmp_file = tmp;
+	strcpy(tmp_file, original_file);
 	strcat(tmp_file, tmp_suffix);
 
 	error = create_dir_recursive(tmp_file);
 	if (error)
 		goto release_tmp;
 
-	error = file_write(tmp_file, &out, &stat);
+	error = file_write(tmp_file, &out);
 	if (error)
 		goto delete_dir;
 
@@ -405,7 +450,6 @@ http_direct_download(char const *remote, char const *dest)
 {
 	char const *tmp_suffix = "_tmp";
 	struct http_handler handler;
-	struct stat stat;
 	FILE *out;
 	long response_code;
 	long cond_met;
@@ -425,7 +469,7 @@ http_direct_download(char const *remote, char const *dest)
 	tmp_file = tmp;
 	strcat(tmp_file, tmp_suffix);
 
-	error = file_write(tmp_file, &out, &stat);
+	error = file_write(tmp_file, &out);
 	if (error)
 		goto release_tmp;
 
