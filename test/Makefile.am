@@ -29,6 +29,7 @@ check_PROGRAMS += rsync.test
 check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
 check_PROGRAMS += thread_pool.test
+check_PROGRAMS += uri.test
 check_PROGRAMS += vcard.test
 check_PROGRAMS += vrps.test
 check_PROGRAMS += xml.test
@@ -65,6 +66,9 @@ tal_test_LDADD = ${MY_LDADD}
 
 thread_pool_test_SOURCES = thread_pool_test.c
 thread_pool_test_LDADD = ${MY_LDADD}
+
+uri_test_SOURCES = uri_test.c
+uri_test_LDADD = ${MY_LDADD}
 
 vcard_test_SOURCES = vcard_test.c
 vcard_test_LDADD = ${MY_LDADD}

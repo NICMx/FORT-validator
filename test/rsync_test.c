@@ -16,9 +16,28 @@ state_retrieve(void)
 	return NULL;
 }
 
-START_TEST(rsync_load_normal)
-{
+#define CK_STR(uint, string)						\
+	ck_assert_int_eq(0, uint2string(uint, &str));			\
+	ck_assert_str_eq(string, str);					\
+	free(str);
 
+START_TEST(rsync_test_uint2string)
+{
+	char *str;
+
+	CK_STR(0, "0");
+	CK_STR(1, "1");
+	CK_STR(9, "9");
+	CK_STR(10, "10");
+	CK_STR(100, "100");
+	CK_STR(1000, "1000");
+	CK_STR(10000, "10000");
+	CK_STR(100000, "100000");
+	CK_STR(1000000, "1000000");
+	CK_STR(10000000, "10000000");
+	CK_STR(100000000, "100000000");
+	CK_STR(1000000000, "1000000000");
+	CK_STR(4294967295, "4294967295");
 }
 END_TEST
 
@@ -144,7 +163,7 @@ Suite *rsync_load_suite(void)
 	TCase *core, *prefix_equals, *uri_list, *test_get_prefix;
 
 	core = tcase_create("Core");
-	tcase_add_test(core, rsync_load_normal);
+	tcase_add_test(core, rsync_test_uint2string);
 
 	prefix_equals = tcase_create("PrefixEquals");
 	tcase_add_test(prefix_equals, rsync_test_prefix_equals);

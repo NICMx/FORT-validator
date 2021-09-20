@@ -48,7 +48,7 @@ parse_argv_sync_strategy(struct option_field const *field, char const *str,
 {
 	int error;
 
-	pr_op_warn("'sync-strategy' will be deprecated.");
+	pr_op_warn("'sync-strategy' is deprecated.");
 	pr_op_warn("Use 'rsync.strategy' instead; or 'rsync.enabled=false' if you wish to use 'off' strategy.");
 
 	if (strcmp(str, RSYNC_VALUE_OFF) == 0) {

@@ -54,6 +54,7 @@ description: Guide to use arguments of FORT Validator.
 	40. [`--http.transfer-timeout`](#--httptransfer-timeout)
 	41. [`--http.low-speed-limit`](#--httplow-speed-limit)
 	41. [`--http.low-speed-time`](#--httplow-speed-time)
+	41. [`--http.max-file-size`](#--httpmax-file-size)
 	42. [`--http.ca-path`](#--httpca-path)
 	43. [`--output.roa`](#--outputroa)
 	44. [`--output.bgpsec`](#--outputbgpsec)
@@ -127,6 +128,7 @@ description: Guide to use arguments of FORT Validator.
 	[--http.transfer-timeout=<unsigned integer>]
 	[--http.low-speed-limit=<unsigned integer>]
 	[--http.low-speed-time=<unsigned integer>]
+	[--http.max-file-size=<unsigned integer>]
 	[--http.ca-path=<directory>]
 	[--log.enabled=true|false]
 	[--log.output=syslog|console]
@@ -669,14 +671,12 @@ See [`--rsync.priority`](#--rsyncpriority).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 2
+- **Default:** 0
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
-Maximum number of retries whenever there's an error requesting an HTTP URI.
+Number of additional HTTP requests after a failed attempt.
 
-A value of **0** means **no retries**.
-
-Whenever is necessary to request an HTTP URI, the validator will try the request at least once. If there was an error requesting the URI, the validator will retry at most `--http.retry.count` times to fetch the file, waiting [`--http.retry.interval`](#--httpretryinterval) seconds between each retry.
+If a transient error is returned when Fort tries to perform an HTTP transfer, it will retry this number of times before giving up. Setting the number to 0 makes Fort do no retries (which is the default). "Transient error" is a timeout, an HTTP 408 response code, or an HTTP 5xx response code.
 
 ### `--http.retry.interval`
 
@@ -710,7 +710,7 @@ _**All requests are made using HTTPS, verifying the peer and the certificate nam
 
 Timeout (in seconds) for the connect phase.
 
-Whenever an HTTP connection will try to be established, the validator will wait a maximum of `http.connect-timeout` for the peer to respond to the connection request; if the timeout is reached, the connection attempt will be ceased.
+Whenever an HTTP connection will try to be established, the validator will wait a maximum of `http.connect-timeout` for the peer to respond to the connection request; if the timeout is reached, the connection attempt will be aborted.
 
 The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_CONNECTTIMEOUT](https://curl.haxx.se/libcurl/c/CURLOPT_CONNECTTIMEOUT.html).
 
@@ -764,6 +764,19 @@ The value Fort employs as [CURLOPT_LOW_SPEED_TIME](https://curl.haxx.se/libcurl/
 It is the number of seconds that the transfer speed should be below `--http.low-speed-limit` for the Fort to consider it too slow. (Slow connections are dropped.)
 
 See [`--http.low-speed-limit`](#--httplow-speed-limit).
+
+### `--http.max-file-size`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 10,000,000 (10 Megabytes)
+- **Range:** 0--2,000,000,000 (2 Gigabytes)
+
+The maximum amount of bytes files are allowed to length during HTTP transfers. Files that exceed this limit are dropped, either early (through [CURLOPT_MAXFILESIZE](https://curl.haxx.se/libcurl/c/CURLOPT_MAXFILESIZE.html)) or as they hit the limit (when the file size is not known prior to download).
+
+This is intended to prevent malicious RPKI repositories from stagnating Fort.
+
+As of 2021-09-20, the largest legitimate file I found in the repositories was aprox. 1120 kilobytes.
 
 ### `--http.ca-path`
 
@@ -1012,7 +1025,7 @@ Useful if you want `root`, but the root certificate is separated from the rest o
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 2
+- **Default:** 0
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 Maximum number of retries whenever there's an error executing an RSYNC.
@@ -1097,7 +1110,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
 		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
-		"<a href="#--httpidle-timeout">idle-timeout</a>": 15,
+		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 30,
+		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
+		"<a href="#--httpmax-file-size">max-file-size</a>": 10000000,
 		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
 	},
 
@@ -1225,21 +1240,21 @@ Name of the program needed to invoke an rsync file transfer.
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15", "--max-size", "$HTTP_MAX_FILE_SIZE", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a recursive rsync.
 
-Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
+Fort will replace `"$REMOTE"` with the remote URL it needs to download, `"$LOCAL"` with the target local directory where the file is supposed to be dropped, and `"$HTTP_MAX_FILE_SIZE"` with [`--http.max-file-size`](#--httpmax-file-size).
 
 ### rsync.arguments-flat
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--dirs", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--max-size", "$HTTP_MAX_FILE_SIZE", "--dirs", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a single-file rsync.
 
-Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
+Fort will replace `"$REMOTE"` with the remote URL it needs to download, `"$LOCAL"` with the target local directory where the file is supposed to be dropped, and `"$HTTP_MAX_FILE_SIZE"` with [`--http.max-file-size`](#--httpmax-file-size).
 
 ### `incidences`
 
@@ -1256,11 +1271,10 @@ A listing of actions to be performed by validation upon encountering certain err
 - **Availability:** `argv` and JSON
 - **Default:** `root-except-ta`
 
-> ![img/warn.svg](img/warn.svg) This argument **will be DEPRECATED**. Use [`--rsync.strategy`](#--rsyncstrategy) or [`--rsync.enabled`](#--rsyncenabled) (if rsync is meant to be disabled) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--rsync.strategy`](#--rsyncstrategy) or [`--rsync.enabled`](#--rsyncenabled) (if rsync is meant to be disabled) instead.
 
 rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
 
-Despite this argument will be deprecated, it still can be utilized. Its possible values and behaviour will be as listed here:
 - `off`: will disable rsync execution, setting [`--rsync.enabled`](#--rsyncenabled) as `false`. So, using `--sync-strategy=off` will be the same as `--rsync.enabled=false`.
 - `strict`: will be the same as `--rsync.strategy=strict`, see [`strict`](#strict).
 - `root`: will be the same as `--rsync.strategy=root`, see [`root`](#root).

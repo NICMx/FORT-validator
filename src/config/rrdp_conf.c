@@ -26,7 +26,7 @@ set_rrdp_enabled(char const *name, bool value)
 {
 	/* Warn about future deprecation */
 	if (strcmp(name, "rrdp.enabled") == 0)
-		pr_op_warn("'rrdp.enabled' will be deprecated, use 'http.enabled' instead.");
+		pr_op_warn("'rrdp.enabled' is deprecated; use 'http.enabled' instead.");
 
 	config_set_rrdp_enabled(value);
 	config_set_http_enabled(value);
@@ -38,7 +38,7 @@ set_priority(char const *name, uint32_t value)
 {
 	/* Warn about future deprecation */
 	if (strcmp(name, "rrdp.priority") == 0)
-		pr_op_warn("'rrdp.priority' will be deprecated, use 'http.priority' instead.");
+		pr_op_warn("'rrdp.priority' is deprecated; use 'http.priority' instead.");
 
 	config_set_rrdp_priority(value);
 	config_set_http_priority(value);
@@ -50,7 +50,7 @@ set_retry_count(char const *name, unsigned int value)
 {
 	/* Warn about future deprecation */
 	if (strcmp(name, "rrdp.retry.count") == 0)
-		pr_op_warn("'rrdp.retry.count' will be deprecated, use 'http.retry.count' instead.");
+		pr_op_warn("'rrdp.retry.count' is deprecated; use 'http.retry.count' instead.");
 
 	config_set_rrdp_retry_count(value);
 	config_set_http_retry_count(value);
@@ -62,7 +62,7 @@ set_retry_interval(char const *name, unsigned int value)
 {
 	/* Warn about future deprecation */
 	if (strcmp(name, "rrdp.retry.interval") == 0)
-		pr_op_warn("'rrdp.retry.interval' will be deprecated, use 'http.retry.interval' instead.");
+		pr_op_warn("'rrdp.retry.interval' is deprecated; use 'http.retry.interval' instead.");
 
 	config_set_rrdp_retry_interval(value);
 	config_set_http_retry_interval(value);

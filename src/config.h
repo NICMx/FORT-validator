@@ -81,7 +81,7 @@ uint32_t config_get_val_log_facility(void);
  */
 void config_set_rsync_enabled(bool);
 void config_set_http_enabled(bool);
-/* TODO (later) This will be deprecated */
+/* TODO (later) Deprecated */
 void config_set_rrdp_enabled(bool);
 
 /* TODO (later) Remove when sync-strategy is fully deprecated */

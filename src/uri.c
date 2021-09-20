@@ -134,12 +134,62 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 	return 0;
 }
 
+static bool
+ia5_starts_with_dot_slash(IA5String_t *string)
+{
+	if (string->size < 2)
+		return false;
+	return string->buf[0] == '.' && string->buf[1] == '/';
+}
+
+/*
+ * Files referenced by manifests are not allowed to be anywhere other than the
+ * manifest's own directory.
+ *
+ * I think. RFC 6486:
+ *
+ *	A manifest is a signed object that enumerates all the signed objects
+ *	(files) in the repository publication point (directory) that are
+ *	associated with an authority responsible for publishing at that
+ *	publication point.
+ *
+ * This function checks @ia5 does not contain slashes after the starting chain
+ * of "./"s.
+ */
+static int
+validate_current_directory(IA5String_t *string)
+{
+	IA5String_t clone;
+	size_t i;
+
+	if (string->size == 0)
+		return pr_val_err("Manifest contains a file with an empty string as a name.");
+	if (string->buf[0] == '/')
+		return pr_val_err("Manifest contains a file with an absolute URL.");
+
+	clone.buf = string->buf;
+	clone.size = string->size;
+	while (ia5_starts_with_dot_slash(&clone)) {
+		clone.buf += 2;
+		clone.size -= 2;
+	}
+
+	if (clone.size == 0)
+		return pr_val_err("Manifest contains a file that appears to be a directory.");
+
+	for (i = 0; i < clone.size; i++)
+		if (clone.buf[i] == '/')
+			return pr_val_err("Manifest contains a URL that references a separate repository publication point.");
+
+	return 0;
+}
+
 /**
  * Initializes @uri->global given manifest path @mft and its referenced file
  * @ia5.
  *
- * ie. if @mft is "rsync://a/b/c.mft" and @ia5 is "d/e/f.cer", @uri->global will
- * be "rsync://a/b/d/e/f.cer".
+ * ie. if @mft is "rsync://a/b/c.mft" and @ia5 is "d.cer", @uri->global will
+ * be "rsync://a/b/d.cer".
  *
  * Assumes that @mft is a "global" URL. (ie. extracted from rpki_uri.global.)
  */
@@ -164,6 +214,10 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 		if (error)
 			return error;
 	}
+
+	error = validate_current_directory(ia5);
+	if (error)
+		return error;
 
 	slash_pos = strrchr(mft, '/');
 	if (slash_pos == NULL) {

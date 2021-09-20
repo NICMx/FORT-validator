@@ -91,7 +91,7 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
 		return 0; /* Ugh. See fread(3) */
 	}
 
-	return fwrite(data, size, nmemb, userp);
+	return fwrite(data, size, nmemb, arg->dst);
 }
 
 static void
@@ -258,17 +258,17 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		return 0;
 	}
 
-	if (*response_code >= HTTP_BAD_REQUEST)
-		return pr_val_err("Error requesting URL %s (received HTTP code %ld): %s",
-		    uri, *response_code, curl_err_string(handler, res));
-
-	pr_val_err("Error requesting URL %s: %s", uri,
-	    curl_err_string(handler, res));
+	pr_val_err("Error requesting URL %s: %s. (HTTP code: %ld)", uri,
+	    curl_err_string(handler, res), *response_code);
 	if (log_operation)
-		pr_op_err("Error requesting URL %s: %s", uri,
-		    curl_err_string(handler, res));
+		pr_op_err("Error requesting URL %s: %s. (HTTP code: %ld)", uri,
+		    curl_err_string(handler, res), *response_code);
 
-	return EREQFAILED;
+	/*
+	 * TODO (performance) FILESIZE_EXCEEDED is probably not the only error
+	 * code that should cancel retries.
+	 */
+	return (res == CURLE_FILESIZE_EXCEEDED) ? -EFBIG : EREQFAILED;
 }
 
 static void
@@ -329,8 +329,9 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 			break; /* Note: Usually happy path */
 
 		if (retries == config_get_http_retry_count()) {
-			pr_val_warn("Max HTTP retries (%u) reached requesting for '%s', won't retry again.",
-			    retries, uri_get_global(uri));
+			if (retries > 0)
+				pr_val_warn("Max HTTP retries (%u) reached requesting for '%s', won't retry again.",
+				    retries, uri_get_global(uri));
 			break;
 		}
 		pr_val_warn("Retrying HTTP request '%s' in %u seconds, %u attempts remaining.",

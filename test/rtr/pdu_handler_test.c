@@ -174,13 +174,13 @@ send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 
 	switch (vrp->addr_fam) {
 	case AF_INET:
-		PR_DEBUG_MSG("%s asn%u IPv4", flags2str(flags), vrp->asn);
+		printf("%s asn%u IPv4\n", flags2str(flags), vrp->asn);
 		break;
 	case AF_INET6:
-		PR_DEBUG_MSG("%s asn%u IPv6", flags2str(flags), vrp->asn);
+		printf("%s asn%u IPv6\n", flags2str(flags), vrp->asn);
 		break;
 	default:
-		PR_DEBUG_MSG("%s asn%u Unknown", flags2str(flags), vrp->asn);
+		printf("%s asn%u Unknown\n", flags2str(flags), vrp->asn);
 		break;
 	}
 
@@ -201,7 +201,7 @@ send_router_key_pdu(int fd, uint8_t version,
 	 */
 	uint8_t pdu_type = pop_expected_pdu();
 	pr_op_info("    Server sent Router Key PDU.");
-	PR_DEBUG_MSG("%s asn%u RK", flags2str(flags), router_key->as);
+	printf("%s asn%u RK\n", flags2str(flags), router_key->as);
 	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
 	    "Server sent a Router Key. Expected PDU type was %d.", pdu_type);
 	return 0;
@@ -293,7 +293,6 @@ START_TEST(test_typical_exchange)
 
 	/* From serial 1: Run and validate */
 	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
-	PR_DEBUG;
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* From serial 2: Init client request */

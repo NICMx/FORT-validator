@@ -308,7 +308,7 @@ static const struct option_field options[] = {
 		.name = "sync-strategy",
 		.type = &gt_sync_strategy,
 		.offset = offsetof(struct rpki_config, sync_strategy),
-		.doc = "RSYNC download strategy. Will be deprecated, use 'rsync.strategy' instead.",
+		.doc = "RSYNC download strategy. Deprecated; use 'rsync.strategy' instead.",
 	}, {
 		.id = 2001,
 		.name = "shuffle-uris",
@@ -526,13 +526,13 @@ static const struct option_field options[] = {
 		.name = "rrdp.enabled",
 		.type = &gt_rrdp_enabled,
 		.offset = offsetof(struct rpki_config, rrdp.enabled),
-		.doc = "Enables RRDP execution. Will be deprecated, use 'http.enabled' instead.",
+		.doc = "Enables RRDP execution. Deprecated; use 'http.enabled' instead.",
 	}, {
 		.id = 10001,
 		.name = "rrdp.priority",
 		.type = &gt_rrdp_priority,
 		.offset = offsetof(struct rpki_config, rrdp.priority),
-		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority. Will be deprecated, use 'http.priority' instead.",
+		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority. Deprecated; use 'http.priority' instead.",
 		.min = 0,
 		.max = 100,
 	}, {
@@ -540,7 +540,7 @@ static const struct option_field options[] = {
 		.name = "rrdp.retry.count",
 		.type = &gt_rrdp_retry_count,
 		.offset = offsetof(struct rpki_config, rrdp.retry.count),
-		.doc = "Maximum amount of retries whenever there's an error fetching RRDP files. Will be deprecated, use 'http.retry.count' instead.",
+		.doc = "Maximum amount of retries whenever there's an error fetching RRDP files. Deprecated; use 'http.retry.count' instead.",
 		.min = 0,
 		.max = UINT_MAX,
 	}, {
@@ -548,7 +548,7 @@ static const struct option_field options[] = {
 		.name = "rrdp.retry.interval",
 		.type = &gt_rrdp_retry_interval,
 		.offset = offsetof(struct rpki_config, rrdp.retry.interval),
-		.doc = "Period (in seconds) to wait between retries after an error ocurred fetching RRDP files. Will be deprecated, use 'http.retry.interval' instead.",
+		.doc = "Period (in seconds) to wait between retries after an error ocurred fetching RRDP files. Deprecated; use 'http.retry.interval' instead.",
 		.min = 0,
 		.max = UINT_MAX,
 	},
@@ -981,6 +981,7 @@ set_default_values(void)
 		"--times",
 		"--contimeout=20",
 		"--timeout=15",
+		"--max-size", "$HTTP_MAX_FILE_SIZE",
 		"$REMOTE",
 		"$LOCAL",
 	};
@@ -989,6 +990,7 @@ set_default_values(void)
 		"--times",
 		"--contimeout=20",
 		"--timeout=15",
+		"--max-size", "$HTTP_MAX_FILE_SIZE",
 		"--dirs",
 		"$REMOTE",
 		"$LOCAL",
@@ -1037,7 +1039,7 @@ set_default_values(void)
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
 	rpki_config.rsync.strategy = RSYNC_ROOT_EXCEPT_TA;
-	rpki_config.rsync.retry.count = 2;
+	rpki_config.rsync.retry.count = 0;
 	rpki_config.rsync.retry.interval = 5;
 	rpki_config.rsync.program = strdup("rsync");
 	if (rpki_config.rsync.program == NULL) {
@@ -1058,7 +1060,7 @@ set_default_values(void)
 	/* By default, has a higher priority than rsync */
 	rpki_config.http.enabled = true;
 	rpki_config.http.priority = 60;
-	rpki_config.http.retry.count = 2;
+	rpki_config.http.retry.count = 0;
 	rpki_config.http.retry.interval = 5;
 	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	if (rpki_config.http.user_agent == NULL) {
