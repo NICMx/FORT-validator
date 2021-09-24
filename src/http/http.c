@@ -9,13 +9,6 @@
 #include "file.h"
 #include "log.h"
 
-/* HTTP Response Code 200 (OK) */
-#define HTTP_OK			200
-/* HTTP Response Code 304 (Not Modified) */
-#define HTTP_NOT_MODIFIED	304
-/* HTTP Response Code 400 (Bad Request) */
-#define HTTP_BAD_REQUEST	400
-
 struct http_handler {
 	CURL *curl;
 	char errbuf[CURL_ERROR_SIZE];
@@ -150,13 +143,15 @@ http_easy_init(struct http_handler *handler)
 	setopt_long(result, CURLOPT_HTTPGET, 1L);
 
 	/*
-	 * Response codes >= 400 will be treated as errors
+	 * Treat response codes >= 400 as errors. (In theory, this saves a
+	 * little time by failing early, preventing the pointless download.)
 	 *
 	 * "This method is not fail-safe and there are occasions where
 	 * non-successful response codes will slip through, especially when
 	 * authentication is involved (response codes 401 and 407)."
 	 *
-	 * Well, be ready for those scenarios when performing the requests.
+	 * In other words, the HTTP result code still needs to be checked, even
+	 * if the result of curl_easy_perform() is CURLE_OK.
 	 */
 	setopt_long(result, CURLOPT_FAILONERROR, 1L);
 
@@ -177,6 +172,34 @@ curl_err_string(struct http_handler *handler, CURLcode res)
 	    handler->errbuf : curl_easy_strerror(res);
 }
 
+static int
+get_http_response_code(struct http_handler *handler, long *http_code,
+    char const *uri)
+{
+	CURLcode res;
+
+	res = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
+	    &http_code);
+	if (res != CURLE_OK) {
+		return pr_op_err("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). "
+		    "I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
+		    res, curl_err_string(handler, res), uri);
+	}
+
+	return 0;
+}
+
+static int
+handle_http_response_code(long http_code)
+{
+	/* This is the same logic from CURL, according to its documentation. */
+	if (http_code == 408 || http_code == 429)
+		return EREQFAILED; /* Retry */
+	if (500 <= http_code && http_code < 600)
+		return EREQFAILED; /* Retry */
+	return -EINVAL; /* Do not retry */
+}
+
 /*
  * Fetch data from @uri and write result using @cb (which will receive @arg).
  */
@@ -185,7 +208,8 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
     long *cond_met, bool log_operation, FILE *file)
 {
 	struct write_callback_arg args;
-	CURLcode res, res2;
+	CURLcode res;
+	long http_code;
 	long unmet = 0;
 
 	handler->errbuf[0] = 0;
@@ -205,70 +229,74 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		return -EFBIG;
 	}
 
-	res2 = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
-	    response_code);
-	if (res2 != CURLE_OK) {
-		return pr_op_err("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
-		    res2, curl_err_string(handler, res2), uri);
+	args.error = get_http_response_code(handler, &http_code, uri);
+	if (args.error)
+		return args.error;
+	*response_code = http_code;
+
+	if (res != CURLE_OK) {
+		pr_val_err("Error requesting URL %s: %s. (HTTP code: %ld)",
+		    uri, curl_err_string(handler, res), http_code);
+		if (log_operation)
+			pr_op_err("Error requesting URL %s: %s. (HTTP code: %ld)",
+			    uri, curl_err_string(handler, res), http_code);
+
+		switch (res) {
+		case CURLE_FILESIZE_EXCEEDED:
+			return -EFBIG; /* Do not retry */
+		case CURLE_OPERATION_TIMEDOUT:
+		case CURLE_COULDNT_RESOLVE_HOST:
+		case CURLE_COULDNT_RESOLVE_PROXY:
+		case CURLE_FTP_ACCEPT_TIMEOUT:
+			return EREQFAILED; /* Retry */
+		default:
+			return handle_http_response_code(http_code);
+		}
 	}
 
-	if (res == CURLE_OK) {
-		if (*response_code != HTTP_OK)
-			return 0;
-
-		/*
-		 * Scenario: Received an OK code, but the time condition
-		 * (if-modified-since) wasn't actually met (ie. the document
-		 * has not been modified since we last requested it), so handle
-		 * this as a "Not Modified" code.
- 		 *
- 		 * This check is due to old libcurl versions, where the impl
-		 * doesn't let us get the response content since the library
-		 * does the time validation, resulting in "The requested
-		 * document is not new enough".
-		 *
-		 * Update 2021-05-25: I just tested libcurl in my old CentOS 7.7
-		 * VM (which is from October 2019, ie. older than the comments
-		 * above), and it behaves normally.
-		 * Also, the changelog doesn't mention anything about
-		 * If-Modified-Since.
-		 * This glue code is suspicious to me.
-		 *
-		 * For the record, this is how it behaves in my today's Ubuntu,
-		 * as well as my Centos 7.7.1908:
-		 *
-		 * 	if if-modified-since is included:
-		 * 		if page was modified:
-		 * 			HTTP 200
-		 * 			unmet: 0
-		 * 			writefunction called
-		 * 		else:
-		 * 			HTTP 304
-		 * 			unmet: 1
-		 * 			writefunction not called
-		 * 	else:
-		 * 		HTTP OK
-		 * 		unmet: 0
-		 * 		writefunction called
-		 */
-		res = curl_easy_getinfo(handler->curl, CURLINFO_CONDITION_UNMET,
-		    &unmet);
-		if (res == CURLE_OK && unmet == 1)
-			*cond_met = 0;
-		return 0;
-	}
-
-	pr_val_err("Error requesting URL %s: %s. (HTTP code: %ld)", uri,
-	    curl_err_string(handler, res), *response_code);
-	if (log_operation)
-		pr_op_err("Error requesting URL %s: %s. (HTTP code: %ld)", uri,
-		    curl_err_string(handler, res), *response_code);
+	if (http_code >= 400)
+		return handle_http_response_code(http_code);
 
 	/*
-	 * TODO (performance) FILESIZE_EXCEEDED is probably not the only error
-	 * code that should cancel retries.
+	 * Scenario: Received an OK code, but the time condition
+	 * (if-modified-since) wasn't actually met (ie. the document
+	 * has not been modified since we last requested it), so handle
+	 * this as a "Not Modified" code.
+	 *
+	 * This check is due to old libcurl versions, where the impl
+	 * doesn't let us get the response content since the library
+	 * does the time validation, resulting in "The requested
+	 * document is not new enough".
+	 *
+	 * Update 2021-05-25: I just tested libcurl in my old CentOS 7.7
+	 * VM (which is from October 2019, ie. older than the comments
+	 * above), and it behaves normally.
+	 * Also, the changelog doesn't mention anything about
+	 * If-Modified-Since.
+	 * This glue code is suspicious to me.
+	 *
+	 * For the record, this is how it behaves in my today's Ubuntu,
+	 * as well as my Centos 7.7.1908:
+	 *
+	 * 	if if-modified-since is included:
+	 * 		if page was modified:
+	 * 			HTTP 200
+	 * 			unmet: 0
+	 * 			writefunction called
+	 * 		else:
+	 * 			HTTP 304
+	 * 			unmet: 1
+	 * 			writefunction not called
+	 * 	else:
+	 * 		HTTP OK
+	 * 		unmet: 0
+	 * 		writefunction called
 	 */
-	return (res == CURLE_FILESIZE_EXCEEDED) ? -EFBIG : EREQFAILED;
+	res = curl_easy_getinfo(handler->curl, CURLINFO_CONDITION_UNMET, &unmet);
+	if (res == CURLE_OK && unmet == 1)
+		*cond_met = 0;
+
+	return 0;
 }
 
 static void
@@ -414,7 +442,7 @@ http_download_file_with_ims(struct rpki_uri *uri, long value,
 	/* rfc7232#section-3.3:
 	 * "the origin server SHOULD generate a 304 (Not Modified) response"
 	 */
-	if (response == HTTP_NOT_MODIFIED)
+	if (response == 304)
 		return 1;
 
 	/*
@@ -478,8 +506,6 @@ http_direct_download(char const *remote, char const *dest)
 	if (error)
 		goto close_file;
 
-	response_code = 0;
-	cond_met = 0;
 	error = http_fetch(&handler, remote, &response_code, &cond_met, true,
 	    out);
 	http_easy_cleanup(&handler);
