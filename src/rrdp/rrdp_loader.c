@@ -251,6 +251,7 @@ upd_end:
 			return upd_error;
 	} else {
 		/* Reset RSYNC visited URIs, this may force the update */
+		/* TODO um, what? */
 		reset_downloaded();
 	}
 

@@ -17,6 +17,6 @@
  * - The @last_slurm was applied due to a syntax problem with a newer SLURM
  * - SLURM configured but couldn't be read (file doesn't exists, no permission)
  */
-int slurm_apply(struct db_table **, struct db_slurm **);
+int slurm_apply(struct db_table *, struct db_slurm **);
 
 #endif /* SRC_SLURM_SLURM_LOADER_H_ */

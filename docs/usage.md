@@ -733,7 +733,7 @@ The value specified (either by the argument or the default value) is utilized in
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 30
+- **Default:** 100000 (100 kilobytes/second)
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 The value Fort employs as [CURLOPT_LOW_SPEED_LIMIT](https://curl.haxx.se/libcurl/c/CURLOPT_LOW_SPEED_LIMIT.html) during every HTTP transfer.
@@ -769,14 +769,14 @@ See [`--http.low-speed-limit`](#--httplow-speed-limit).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 10,000,000 (10 Megabytes)
+- **Default:** 1,000,000,000 (1 Gigabyte)
 - **Range:** 0--2,000,000,000 (2 Gigabytes)
 
 The maximum amount of bytes files are allowed to length during HTTP transfers. Files that exceed this limit are dropped, either early (through [CURLOPT_MAXFILESIZE](https://curl.haxx.se/libcurl/c/CURLOPT_MAXFILESIZE.html)) or as they hit the limit (when the file size is not known prior to download).
 
 This is intended to prevent malicious RPKI repositories from stagnating Fort.
 
-As of 2021-09-20, the largest legitimate file I found in the repositories was aprox. 1120 kilobytes.
+As of 2021-10-05, the largest legitimate file in the repositories is an RRDP snapshot that weights ~150 megabytes.
 
 ### `--http.ca-path`
 

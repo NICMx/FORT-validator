@@ -1,4 +1,4 @@
-#include "slurm_loader.h"
+#include "slurm/slurm_loader.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -13,38 +13,44 @@
 
 #define SLURM_FILE_EXTENSION	".slurm"
 
+struct slurm_parser_params {
+	struct db_table *db_table;
+	struct db_slurm *db_slurm;
+};
+
 /*
- * Load the SLURM file(s) from the configured path, if the path is valid but no
- * data is loaded (specific error for a SLURM folder) no error is returned and
- * slurm db from @params is set as NULL.
+ * Load the SLURM file(s) from the configured path.
+ *
+ * If this returns zero but @result is NULL, it's fine. There are no SLURM
+ * rules.
  */
 static int
-load_slurm_files(struct slurm_parser_params *params)
+load_slurm_files(struct slurm_csum_list *csums, struct db_slurm **result)
 {
 	struct db_slurm *db;
 	int error;
 
-	error = db_slurm_create(&db);
+	error = db_slurm_create(csums, &db);
 	if (error)
 		return error;
 
-	params->db_slurm = db;
-
 	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
-	    false, slurm_parse, params);
-	if (error) {
-		db_slurm_destroy(db);
-		params->db_slurm = NULL;
-		return error;
-	}
+	    false, slurm_parse, db);
+	if (error)
+		goto cancel;
 
 	/* Empty SLURM dir, or empty SLURM file(s) */
 	if (!db_slurm_has_data(db)) {
-		db_slurm_destroy(db);
-		params->db_slurm = NULL;
+		*result = NULL;
+		goto cancel; /* Success. */
 	}
 
+	*result = db;
 	return 0;
+
+cancel:
+	db_slurm_destroy(db);
+	return error;
 }
 
 static int
@@ -61,7 +67,7 @@ slurm_pfx_filters_apply(struct vrp const *vrp, void *arg)
 static int
 slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 {
-	struct slurm_parser_params *params = arg;
+	struct db_table *table = arg;
 	struct ipv4_prefix prefix4;
 	struct ipv6_prefix prefix6;
 	struct vrp vrp;
@@ -73,14 +79,14 @@ slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 	if (vrp.addr_fam == AF_INET) {
 		prefix4.addr = vrp.prefix.v4;
 		prefix4.len = vrp.prefix_length;
-		return rtrhandler_handle_roa_v4(params->db_table, vrp.asn,
-		    &prefix4, vrp.max_prefix_length);
+		return rtrhandler_handle_roa_v4(table, vrp.asn, &prefix4,
+		    vrp.max_prefix_length);
 	}
 	if (vrp.addr_fam == AF_INET6) {
 		prefix6.addr = vrp.prefix.v6;
 		prefix6.len = vrp.prefix_length;
-		return rtrhandler_handle_roa_v6(params->db_table, vrp.asn,
-		    &prefix6, vrp.max_prefix_length);
+		return rtrhandler_handle_roa_v6(table, vrp.asn, &prefix6,
+		    vrp.max_prefix_length);
 	}
 
 	pr_crit("Unknown addr family type: %u", vrp.addr_fam);
@@ -90,7 +96,7 @@ static int
 slurm_pfx_assertions_apply(struct slurm_parser_params *params)
 {
 	return db_slurm_foreach_assertion_prefix(params->db_slurm,
-	    slurm_pfx_assertions_add, params);
+	    slurm_pfx_assertions_add, params->db_table);
 }
 
 static int
@@ -107,33 +113,17 @@ slurm_bgpsec_filters_apply(struct router_key const *key, void *arg)
 static int
 slurm_bgpsec_assertions_add(struct slurm_bgpsec *bgpsec, void *arg)
 {
-	struct slurm_parser_params *params = arg;
+	struct db_table *table = arg;
 
-	return rtrhandler_handle_router_key(params->db_table, bgpsec->ski,
-	    bgpsec->asn, bgpsec->router_public_key);
+	return rtrhandler_handle_router_key(table, bgpsec->ski, bgpsec->asn,
+	    bgpsec->router_public_key);
 }
 
 static int
 slurm_bgpsec_assertions_apply(struct slurm_parser_params *params)
 {
 	return db_slurm_foreach_assertion_bgpsec(params->db_slurm,
-	    slurm_bgpsec_assertions_add, params);
-}
-
-static int
-slurm_create_parser_params(struct slurm_parser_params **result)
-{
-	struct slurm_parser_params *params;
-
-	params = malloc(sizeof(struct slurm_parser_params));
-	if (params == NULL)
-		return pr_enomem();
-
-	params->db_table = NULL;
-	params->db_slurm = NULL;
-
-	*result = params;
-	return 0;
+	    slurm_bgpsec_assertions_add, params->db_table);
 }
 
 static int
@@ -143,11 +133,9 @@ __slurm_load_checksums(char const *location, void *arg)
 	struct slurm_file_csum *csum;
 	int error;
 
-	list = arg;
 	csum = malloc(sizeof(struct slurm_file_csum));
 	if (csum == NULL)
 		return pr_enomem();
-
 
 	error = hash_local_file("sha256", location, csum->csum,
 	    &csum->csum_len);
@@ -156,6 +144,7 @@ __slurm_load_checksums(char const *location, void *arg)
 		return pr_op_err("Calculating slurm hash");
 	}
 
+	list = arg;
 	SLIST_INSERT_HEAD(list, csum, next);
 	list->list_size++;
 
@@ -175,64 +164,19 @@ destroy_local_csum_list(struct slurm_csum_list *list)
 }
 
 static int
-slurm_load_checksums(struct slurm_csum_list *csum_list)
+slurm_load_checksums(struct slurm_csum_list *csums)
 {
-	struct slurm_csum_list result;
 	int error;
 
-	SLIST_INIT(&result);
-	result.list_size = 0;
+	SLIST_INIT(csums);
+	csums->list_size = 0;
 
 	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
-	    false, __slurm_load_checksums, &result);
-	if (error) {
-		destroy_local_csum_list(&result);
-		return error;
-	}
-
-	csum_list->list_size = result.list_size;
-	csum_list->slh_first = result.slh_first;
-
-	return 0;
-}
-
-/* Returns whether a new slurm was allocated */
-static void
-__load_slurm_files(struct db_slurm **last_slurm,
-    struct slurm_parser_params *params, struct slurm_csum_list *csum_list)
-{
-	int error;
-
-	error = load_slurm_files(params);
+	    false, __slurm_load_checksums, csums);
 	if (error)
-		goto use_last_slurm;
+		destroy_local_csum_list(csums);
 
-	/* Prepare the new SLURM DB */
-	if (params->db_slurm != NULL) {
-		error = db_slurm_update_time(params->db_slurm);
-		if (error)
-			goto use_last_slurm;
-		db_slurm_set_csum_list(params->db_slurm, csum_list);
-	}
-
-	/* Use new SLURM as last valid slurm */
-	if (*last_slurm != NULL)
-		db_slurm_destroy(*last_slurm);
-
-	*last_slurm = params->db_slurm;
-
-	return;
-
-use_last_slurm:
-	/* Any error: use last valid SLURM */
-	pr_op_info("Error loading SLURM, the validation will still continue.");
-	if (*last_slurm != NULL) {
-		pr_op_info("A previous valid version of the SLURM exists and will be applied.");
-		params->db_slurm = *last_slurm;
-		/* Log applied SLURM as info */
-		db_slurm_log(params->db_slurm);
-	}
-	destroy_local_csum_list(csum_list);
+	return error;
 }
 
 static bool
@@ -270,103 +214,98 @@ are_csum_lists_equals(struct slurm_csum_list *new_list,
 
 /* Load SLURM file(s) that have updates */
 static int
-load_updated_slurm(struct db_slurm **last_slurm,
-    struct slurm_parser_params *params)
+update_slurm(struct db_slurm **slurm)
 {
-	struct slurm_csum_list csum_list, old_csum_list;
+	struct slurm_csum_list new_csums;
+	struct slurm_csum_list old_csums;
+	struct db_slurm *new_slurm = NULL;
 	int error;
-	bool list_equals;
-
-	list_equals = false;
 
 	pr_op_info("Checking if there are new or modified SLURM files");
-	error = slurm_load_checksums(&csum_list);
+
+	error = slurm_load_checksums(&new_csums);
 	if (error)
 		return error;
 
-	if (*last_slurm != NULL) {
-		db_slurm_get_csum_list(*last_slurm, &old_csum_list);
-		list_equals = are_csum_lists_equals(&csum_list, &old_csum_list);
-	}
-
-	if (list_equals) {
-		if (*last_slurm != NULL) {
-			pr_op_info("Applying same old SLURM, no changes found.");
-			params->db_slurm = *last_slurm;
-		}
-		destroy_local_csum_list(&csum_list);
-		return 0;
-	}
-
 	/* Empty DIR or FILE SLURM not found */
-	if (csum_list.list_size == 0) {
-		if (*last_slurm != NULL)
-			db_slurm_destroy(*last_slurm);
-		*last_slurm = NULL;
-		params->db_slurm = NULL;
-		return 0;
+	if (new_csums.list_size == 0)
+		goto success;
+
+	if (*slurm != NULL) {
+		db_slurm_get_csum_list(*slurm, &old_csums);
+		if (are_csum_lists_equals(&new_csums, &old_csums)) {
+			pr_op_info("Applying same old SLURM, no changes found.");
+			destroy_local_csum_list(&new_csums);
+			return 0;
+		}
 	}
 
 	pr_op_info("Applying configured SLURM");
-	__load_slurm_files(last_slurm, params, &csum_list);
 
+	error = load_slurm_files(&new_csums, &new_slurm);
+
+	/*
+	 * Checksums were transferred to new_slurm on success, but they're
+	 * still here on failure.
+	 * Either way, new_csums is ready for cleanup.
+	 */
+	destroy_local_csum_list(&new_csums);
+
+	if (error) {
+		/* Fall back to previous iteration's SLURM */
+		pr_op_info("Error %d loading SLURM. The validation will continue regardless.",
+		    error);
+		if (*slurm != NULL) {
+			pr_op_info("A previous valid version of the SLURM exists and will be applied.");
+			db_slurm_log(*slurm);
+		}
+
+		return 0;
+	}
+
+success:
+	/* Use new SLURM as last valid slurm */
+	if (*slurm != NULL)
+		db_slurm_destroy(*slurm);
+
+	*slurm = new_slurm;
 	return 0;
 }
 
 int
-slurm_apply(struct db_table **base, struct db_slurm **last_slurm)
+slurm_apply(struct db_table *base, struct db_slurm **slurm)
 {
-	struct slurm_parser_params *params;
+	struct slurm_parser_params params;
 	int error;
 
 	if (config_get_slurm() == NULL)
 		return 0;
 
-	params = NULL;
-	error = slurm_create_parser_params(&params);
+	error = update_slurm(slurm);
 	if (error)
 		return error;
 
-	error = load_updated_slurm(last_slurm, params);
+	if (*slurm == NULL)
+		return 0;
+
+	/* Ok, apply SLURM */
+
+	params.db_table = base;
+	params.db_slurm = *slurm;
+
+	/* TODO invert this. SLURM rules are few, and base is massive. */
+	error = db_table_foreach_roa(base, slurm_pfx_filters_apply, &params);
 	if (error)
-		goto release_params;
+		return error;
 
-	/* If there's no new SLURM loaded, stop */
-	if (params->db_slurm == NULL)
-		goto success;
-
-	/* Deep copy of the base so that updates can be reverted */
-	error = db_table_clone(&params->db_table, *base);
+	error = db_table_foreach_router_key(base, slurm_bgpsec_filters_apply,
+	    &params);
 	if (error)
-		goto release_params;
+		return error;
 
-	error = db_table_foreach_roa(params->db_table, slurm_pfx_filters_apply,
-	    params);
+	error = slurm_pfx_assertions_apply(&params);
 	if (error)
-		goto release_table;
+		return error;
 
-	error = db_table_foreach_router_key(params->db_table,
-	    slurm_bgpsec_filters_apply, params);
-	if (error)
-		goto release_table;
-
-	error = slurm_pfx_assertions_apply(params);
-	if (error)
-		goto release_table;
-
-	error = slurm_bgpsec_assertions_apply(params);
-	if (error) {
-		goto release_table;
-	}
-
-	db_table_destroy(*base);
-	*base = params->db_table;
-success:
-	free(params);
-	return 0;
-release_table:
-	db_table_destroy(params->db_table);
-release_params:
-	free(params);
-	return error;
+	return slurm_bgpsec_assertions_apply(&params);
 }

@@ -179,7 +179,7 @@ get_http_response_code(struct http_handler *handler, long *http_code,
 	CURLcode res;
 
 	res = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
-	    &http_code);
+	    http_code);
 	if (res != CURLE_OK) {
 		return pr_op_err("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). "
 		    "I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
@@ -254,8 +254,22 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		}
 	}
 
-	if (http_code >= 400)
+	if (http_code >= 400) {
+		pr_val_err("HTTP result code: %ld", http_code);
 		return handle_http_response_code(http_code);
+	}
+	if (http_code >= 300) {
+		/*
+		 * If you're ever forced to implement this, please remember that
+		 * a malicious server can send us on a wild chase with infinite
+		 * redirects, so there needs to be a limit.
+		 */
+		pr_val_err("HTTP result code: %ld. I don't follow redirects; discarding file.",
+		    http_code);
+		return -EINVAL; /* Do not retry. */
+	}
+
+	pr_val_debug("HTTP result code: %ld", http_code);
 
 	/*
 	 * Scenario: Received an OK code, but the time condition

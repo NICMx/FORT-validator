@@ -1,13 +1,13 @@
-#include "db_slurm.h"
+#include "slurm/db_slurm.h"
 
 #include <string.h>
 #include <time.h>
 #include <arpa/inet.h>
 
+#include "common.h"
 #include "crypto/base64.h"
 #include "data_structure/array_list.h"
 #include "object/router_key.h"
-#include "common.h"
 
 struct slurm_prefix_wrap {
 	struct slurm_prefix element;
@@ -34,7 +34,6 @@ struct slurm_lists {
 struct db_slurm {
 	struct slurm_lists lists;
 	struct slurm_lists *cache;
-	bool loaded_date_set;
 	time_t loaded_date;
 	struct slurm_csum_list csum_list;
 };
@@ -97,24 +96,35 @@ slurm_lists_destroy(struct slurm_lists *lists)
 }
 
 int
-db_slurm_create(struct db_slurm **result)
+db_slurm_create(struct slurm_csum_list *csums, struct db_slurm **result)
 {
 	struct db_slurm *db;
+	int error;
 
 	db = malloc(sizeof(struct db_slurm));
 	if (db == NULL)
 		return pr_enomem();
+
+	error = get_current_time(&db->loaded_date);
+	if (error) {
+		free(db);
+		return error;
+	}
 
 	/* Not ready yet (nor required yet) for multithreading */
 	al_filter_prefix_init(&db->lists.filter_pfx_al);
 	al_assertion_prefix_init(&db->lists.assertion_pfx_al);
 	al_filter_bgpsec_init(&db->lists.filter_bgps_al);
 	al_assertion_bgpsec_init(&db->lists.assertion_bgps_al);
-	db->loaded_date_set = false;
 	db->cache = NULL;
+	db->csum_list = *csums;
 
-	SLIST_INIT(&db->csum_list);
-	db->csum_list.list_size = 0;
+	/*
+	 * Slight hack: Clean up csums, so caller can always call
+	 * destroy_local_csum_list().
+	 */
+	csums->slh_first = NULL;
+	csums->list_size = 0;
 
 	*result = db;
 	return 0;
@@ -436,19 +446,6 @@ db_slurm_foreach_assertion_bgpsec(struct db_slurm *db, bgpsec_foreach_cb cb,
 	return foreach_assertion_bgpsec(&db->lists, cb, arg);
 }
 
-int
-db_slurm_update_time(struct db_slurm *db)
-{
-	int error;
-
-	error = get_current_time(&db->loaded_date);
-	if (error)
-		return error;
-
-	db->loaded_date_set = true;
-	return 0;
-}
-
 static int
 print_prefix_data(struct slurm_prefix *prefix, void *arg)
 {
@@ -529,9 +526,7 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 void
 db_slurm_log(struct db_slurm *db)
 {
-	if (db->loaded_date_set)
-		pr_op_info("SLURM loaded at %s",
-		    asctime(localtime(&db->loaded_date)));
+	pr_op_info("SLURM loaded at %s", asctime(localtime(&db->loaded_date)));
 	pr_op_info("Validation output filters {");
 	pr_op_info("  Prefix filters {");
 	foreach_filter_prefix(&db->lists, print_prefix_data, NULL);
@@ -688,17 +683,6 @@ db_slurm_destroy(struct db_slurm *db)
 	}
 
 	free(db);
-}
-
-int
-db_slurm_set_csum_list(struct db_slurm *db, struct slurm_csum_list *list)
-{
-	if (!SLIST_EMPTY(&db->csum_list))
-		pr_crit("Checksum list for SLURM DB must be empty");
-
-	db->csum_list.slh_first = list->slh_first;
-	db->csum_list.list_size = list->list_size;
-	return 0;
 }
 
 void

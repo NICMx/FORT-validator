@@ -215,6 +215,7 @@ struct rpki_config {
 	bool init_tals;
 	/* Download AS0 TALs into --tal? */
 	bool init_tal0s;
+
 	/* Deprecated; currently does nothing. */
 	unsigned int init_tal_locations;
 
@@ -229,6 +230,11 @@ struct rpki_config {
 			unsigned int max;
 		} validation;
 	} thread_pool;
+
+	struct {
+		unsigned int asns_per_prefix;
+		unsigned int prefixes_per_asn;
+	} roa;
 };
 
 static void print_usage(FILE *, bool);
@@ -470,7 +476,7 @@ static const struct option_field options[] = {
 		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
 		.min = 0,
 		.max = 100,
-	},{
+	}, {
 		.id = 3002,
 		.name = "rsync.strategy",
 		.type = &gt_rsync_strategy,
@@ -492,7 +498,7 @@ static const struct option_field options[] = {
 		.doc = "Period (in seconds) to wait between retries after an RSYNC error ocurred",
 		.min = 0,
 		.max = UINT_MAX,
-	},{
+	}, {
 		.id = 3005,
 		.name = "rsync.program",
 		.type = &gt_string,
@@ -560,8 +566,7 @@ static const struct option_field options[] = {
 		.type = &gt_rrdp_enabled,
 		.offset = offsetof(struct rpki_config, http.enabled),
 		.doc = "Enables outgoing HTTP requests",
-	},
-	{
+	}, {
 		.id = 9001,
 		.name = "http.priority",
 		.type = &gt_rrdp_priority,
@@ -569,8 +574,7 @@ static const struct option_field options[] = {
 		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
 		.min = 0,
 		.max = 100,
-	},
-	{
+	}, {
 		.id = 9002,
 		.name = "http.retry.count",
 		.type = &gt_rrdp_retry_count,
@@ -578,8 +582,7 @@ static const struct option_field options[] = {
 		.doc = "Maximum amount of retries whenever there's an error requesting HTTP URIs",
 		.min = 0,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 9003,
 		.name = "http.retry.interval",
 		.type = &gt_rrdp_retry_interval,
@@ -587,15 +590,13 @@ static const struct option_field options[] = {
 		.doc = "Period (in seconds) to wait between retries after an error ocurred doing HTTP requests",
 		.min = 0,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 9004,
 		.name = "http.user-agent",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, http.user_agent),
 		.doc = "User-Agent to use at HTTP requests, eg. Fort Validator Local/1.0",
-	},
-	{
+	}, {
 		.id = 9005,
 		.name = "http.connect-timeout",
 		.type = &gt_uint,
@@ -603,8 +604,7 @@ static const struct option_field options[] = {
 		.doc = "Timeout for the connect phase",
 		.min = 1,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 9006,
 		.name = "http.transfer-timeout",
 		.type = &gt_uint,
@@ -612,8 +612,7 @@ static const struct option_field options[] = {
 		.doc = "Maximum transfer time (once the connection is established) before dropping the connection",
 		.min = 0,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 9007,
 		.name = "http.idle-timeout", /* TODO DEPRECATED. */
 		.type = &gt_uint,
@@ -621,8 +620,7 @@ static const struct option_field options[] = {
 		.doc = "Deprecated; currently an alias for --http.low-speed-time. Use --http.low-speed-time instead.",
 		.min = 0,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 9009,
 		.name = "http.low-speed-limit",
 		.type = &gt_uint,
@@ -630,8 +628,7 @@ static const struct option_field options[] = {
 		.doc = "Average transfer speed (in bytes per second) that the transfer should be below during --http.low-speed-time seconds for Fort to consider it to be too slow. (Slow connections are dropped.)",
 		.min = 0,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 9010,
 		.name = "http.low-speed-time",
 		.type = &gt_uint,
@@ -639,8 +636,7 @@ static const struct option_field options[] = {
 		.doc = "Seconds that the transfer speed should be below --http.low-speed-limit for the Fort to consider it too slow. (Slow connections are dropped.)",
 		.min = 0,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 9011,
 		.name = "http.max-file-size",
 		.type = &gt_uint,
@@ -648,8 +644,7 @@ static const struct option_field options[] = {
 		.doc = "Fort will refuse to download files larger than this number of bytes.",
 		.min = 0,
 		.max = 2000000000,
-	},
-	{
+	}, {
 		.id = 9008,
 		.name = "http.ca-path",
 		.type = &gt_string,
@@ -790,8 +785,7 @@ static const struct option_field options[] = {
 		.doc = "ASN1 decoder max stack size, utilized to avoid a stack overflow on large nested ASN1 objects",
 		.min = 1,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 8001,
 		.name = "stale-repository-period",
 		.type = &gt_uint,
@@ -832,8 +826,7 @@ static const struct option_field options[] = {
 		.doc = "Number of threads in the RTR client request thread pool. Also known as the maximum number of client requests the RTR server will be able to handle at the same time.",
 		.min = 1,
 		.max = UINT_MAX,
-	},
-	{
+	}, {
 		.id = 12001,
 		.name = "thread-pool.validation.max",
 		.type = &gt_uint,
@@ -842,6 +835,24 @@ static const struct option_field options[] = {
 		.doc = "Number of threads in the validation thread pool. (Each thread handles one TAL tree.)",
 		.min = 0,
 		.max = 100,
+	},
+
+	{
+		.id = 13000,
+		.name = "roa.max_asns_per_prefix",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, roa.asns_per_prefix),
+		.doc = "Maximum number of Autonomous Systems that are allowed to advertise each prefix. (Maximum number of ROAs that are allowed to share any given prefix.)",
+		.min = 0,
+		.max = UINT_MAX,
+	}, {
+		.id = 13001,
+		.name = "roa.max_prefixes_per_asn",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, roa.prefixes_per_asn),
+		.doc = "Maximum number of prefixes that are allowed to be advertised by each Autonomous System. (Maximum number of ROAs that are allowed to share any given ASN.)",
+		.min = 0,
+		.max = UINT_MAX,
 	},
 
 	{ 0 },
@@ -1069,9 +1080,9 @@ set_default_values(void)
 	}
 	rpki_config.http.connect_timeout = 30;
 	rpki_config.http.transfer_timeout = 0;
-	rpki_config.http.low_speed_limit = 30;
+	rpki_config.http.low_speed_limit = 100000;
 	rpki_config.http.low_speed_time = 10;
-	rpki_config.http.max_file_size = 10000000;
+	rpki_config.http.max_file_size = 1000000000;
 	rpki_config.http.ca_path = NULL; /* Use system default */
 
 	/*
@@ -1122,6 +1133,10 @@ set_default_values(void)
 	rpki_config.thread_pool.server.max = 20;
 	/* Usually 5 TALs, let a few more available */
 	rpki_config.thread_pool.validation.max = 5;
+
+	/* TODO adjust */
+	rpki_config.roa.asns_per_prefix = 1024;
+	rpki_config.roa.prefixes_per_asn = 1024;
 
 	return 0;
 
@@ -1654,6 +1669,18 @@ unsigned int
 config_get_thread_pool_validation_max(void)
 {
 	return rpki_config.thread_pool.validation.max;
+}
+
+unsigned int
+config_get_max_asn_per_pfx(void)
+{
+	return rpki_config.roa.asns_per_prefix;
+}
+
+unsigned int
+config_get_max_pfx_per_asn(void)
+{
+	return rpki_config.roa.prefixes_per_asn;
 }
 
 void

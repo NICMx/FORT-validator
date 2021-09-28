@@ -38,6 +38,8 @@ struct slurm_file_csum {
 };
 
 struct slurm_csum_list {
+	/* TODO (fine) why tf is this not a SLIST_HEAD */
+	/* TODO (performance) Actually, why tf is this not an arraylist */
 	struct slurm_file_csum *slh_first;	/* first element */
 	unsigned int list_size;
 };
@@ -47,7 +49,7 @@ struct db_slurm;
 typedef int (*prefix_foreach_cb)(struct slurm_prefix *, void *);
 typedef int (*bgpsec_foreach_cb)(struct slurm_bgpsec *, void *);
 
-int db_slurm_create(struct db_slurm **);
+int db_slurm_create(struct slurm_csum_list *, struct db_slurm **);
 
 int db_slurm_add_prefix_filter(struct db_slurm *, struct slurm_prefix *);
 int db_slurm_add_prefix_assertion(struct db_slurm *, struct slurm_prefix *);
@@ -62,8 +64,6 @@ int db_slurm_foreach_assertion_prefix(struct db_slurm *, prefix_foreach_cb,
 int db_slurm_foreach_assertion_bgpsec(struct db_slurm *, bgpsec_foreach_cb,
     void *);
 
-/* Set the last update to current datetime */
-int db_slurm_update_time(struct db_slurm *);
 /* Log the DB in human readable form at INFO level */
 void db_slurm_log(struct db_slurm *);
 
@@ -77,7 +77,6 @@ bool db_slurm_has_data(struct db_slurm *);
 
 void db_slurm_destroy(struct db_slurm *);
 
-int db_slurm_set_csum_list(struct db_slurm *, struct slurm_csum_list *);
 void db_slurm_get_csum_list(struct db_slurm *, struct slurm_csum_list *);
 
 #endif /* SRC_SLURM_db_slurm_H_ */

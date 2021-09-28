@@ -93,7 +93,7 @@ is_already_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 {
 	struct uri *cursor;
 
-	/* TODO (next iteration) this is begging for a radix trie. */
+	/* TODO (next iteration) this is begging for a hash set. */
 	SLIST_FOREACH(cursor, visited_uris, next)
 		if (is_descendant(cursor->uri, uri))
 			return true;

@@ -23,9 +23,9 @@ struct delta_rk {
 	unsigned char	spk[RK_SPKI_LEN];
 };
 
-ARRAY_LIST(deltas_v6, struct delta_v6)
-ARRAY_LIST(deltas_v4, struct delta_v4)
-ARRAY_LIST(deltas_rk, struct delta_rk)
+STATIC_ARRAY_LIST(deltas_v6, struct delta_v6)
+STATIC_ARRAY_LIST(deltas_v4, struct delta_v4)
+STATIC_ARRAY_LIST(deltas_rk, struct delta_rk)
 
 struct deltas {
 	struct {

@@ -9,8 +9,6 @@ struct db_table;
 struct db_table *db_table_create(void);
 void db_table_destroy(struct db_table *);
 
-int db_table_clone(struct db_table **, struct db_table *);
-
 unsigned int db_table_roa_count(struct db_table *);
 unsigned int db_table_router_key_count(struct db_table *);
 

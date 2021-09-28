@@ -14,6 +14,8 @@
  * This validation (check for errno) must be done on ops that allocate memory,
  * so set 'errno' to 0 before this ops are made. The 'obj' won't be freed,
  * this is the caller's responsibility.
+ *
+ * TODO I think most of the code is not checking this.
  */
 #define HASH_NONFATAL_OOM 1
 #define uthash_nonfatal_oom(obj)					\

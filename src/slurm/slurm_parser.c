@@ -1,4 +1,4 @@
-#include "slurm_parser.h"
+#include "slurm/slurm_parser.h"
 
 #include <errno.h>
 #include <stdint.h>
@@ -14,6 +14,7 @@
 #include "address.h"
 #include "json_parser.h"
 #include "object/router_key.h"
+#include "slurm/db_slurm.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"
@@ -44,12 +45,9 @@ static int handle_json(json_t *, struct db_slurm *);
 int
 slurm_parse(char const *location, void *arg)
 {
-	struct slurm_parser_params *params;
 	json_t *json_root;
 	json_error_t json_error;
 	int error;
-
-	params = arg;
 
 	json_root = json_load_file(location, JSON_REJECT_DUPLICATES,
 	    &json_error);
@@ -58,7 +56,7 @@ slurm_parse(char const *location, void *arg)
 		return pr_op_err("SLURM JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
 
-	error = handle_json(json_root, params->db_slurm);
+	error = handle_json(json_root, arg);
 	json_decref(json_root);
 	if (error)
 		return error; /* File exists, but has a syntax error */

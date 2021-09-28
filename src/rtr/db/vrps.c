@@ -173,13 +173,6 @@ vrps_destroy(void)
 	rwlock_unlock(lock);						\
 	return error;
 
-#define RLOCK_HANDLER(lock, cb)						\
-	int error;							\
-	rwlock_read_lock(lock);						\
-	error = cb;							\
-	rwlock_unlock(lock);						\
-	return error;
-
 int
 handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
@@ -274,7 +267,7 @@ __vrps_update(bool *notify_clients)
 	error = __perform_standalone_validation(&new_base);
 	if (error)
 		return error;
-	error = slurm_apply(&new_base, &state.slurm);
+	error = slurm_apply(new_base, &state.slurm);
 	if (error) {
 		db_table_destroy(new_base);
 		return error;
@@ -357,14 +350,14 @@ vrps_update(bool *changed)
 	do {
 		if (state.base == NULL) {
 			rwlock_unlock(&state_lock);
-			pr_op_info("- Valid Prefixes: 0");
+			pr_op_info("- Valid ROAs: 0");
 			pr_op_info("- Valid Router Keys: 0");
 			if (config_get_mode() == SERVER)
 				pr_op_info("- No serial number.");
 			break;
 		}
 
-		pr_op_info("- Valid Prefixes: %u", db_table_roa_count(state.base));
+		pr_op_info("- Valid ROAs: %u", db_table_roa_count(state.base));
 		pr_op_info("- Valid Router Keys: %u",
 		    db_table_router_key_count(state.base));
 		if (config_get_mode() == SERVER)
