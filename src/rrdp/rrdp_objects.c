@@ -44,15 +44,15 @@ deltas_head_for_each(struct deltas_head *deltas, unsigned long max_serial,
 	int error;
 
 	/* No elements, send error so that the snapshot is processed */
-	if (deltas->capacity == 0) {
+	if (deltas->len == 0) {
 		pr_val_warn("There's no delta list to process.");
 		return -ENOENT;
 	}
 
 	pr_val_debug("Getting RRDP deltas from serial %lu to %lu.", from_serial,
 	    max_serial);
-	from = deltas->capacity - (max_serial - from_serial);
-	for (index = from; index < deltas->capacity; index++) {
+	from = deltas->len - (max_serial - from_serial);
+	for (index = from; index < deltas->len; index++) {
 		error = cb(&deltas->array[index], arg);
 		if (error)
 			return error;
