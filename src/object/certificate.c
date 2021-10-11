@@ -2508,7 +2508,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		    x509stack_peek_resources(validation_certstack(state)));
 		cert = NULL; /* Ownership stolen at x509stack_push */
 		free(ski); /* No need to remember it */
-		x509stack_cancel(validation_certstack(state));
 
 		goto revert_refs;
 	}
