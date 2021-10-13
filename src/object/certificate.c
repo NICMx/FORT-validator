@@ -2465,7 +2465,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		break;
 	case BGPSEC:
 		pr_val_debug("Type: BGPsec EE");
-		break;
+		goto revert_cert;
 	case EE:
 		pr_val_debug("Type: unexpected, validated as CA");
 		break;
