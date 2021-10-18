@@ -1309,36 +1309,6 @@ end:
 }
 
 static int
-handle_ski_bgpsec(X509_EXTENSION *ext, void *arg)
-{
-	ASN1_OCTET_STRING *ski;
-	struct bgpsec_ski *params;
-	unsigned char *tmp;
-	int error;
-
-	ski = X509V3_EXT_d2i(ext);
-	if (ski == NULL)
-		return cannot_decode(ext_ski());
-
-	params = arg;
-	error = validate_public_key_hash(params->cert, ski);
-	if (error)
-		goto end;
-
-	tmp = malloc(ski->length + 1);
-	if (tmp == NULL)
-		goto end;
-
-	memcpy(tmp, ski->data, ski->length);
-	tmp[ski->length] = '\0';
-	*(params->ski_data) = tmp;
-
-end:
-	ASN1_OCTET_STRING_free(ski);
-	return error;
-}
-
-static int
 handle_aki_ta(X509_EXTENSION *ext, void *arg)
 {
 	struct AUTHORITY_KEYID_st *aki;
@@ -1749,37 +1719,6 @@ handle_ar(X509_EXTENSION *ext, void *arg)
 	return 0; /* Handled in certificate_get_resources(). */
 }
 
-static int
-handle_eku(X509_EXTENSION *ext, void *arg)
-{
-	EXTENDED_KEY_USAGE *eku;
-	int nid;
-	int error;
-
-	eku = X509V3_EXT_d2i(ext);
-	if (eku == NULL)
-		return cannot_decode(ext_eku());
-
-	/*
-	 * RFC 8209 allows multiple KeyPurposeId, so look only for the one
-	 * required and specified at section 3.1.3.2
-	 */
-	error = -ENOENT;
-	while (sk_ASN1_OBJECT_num(eku) > 0) {
-		nid = OBJ_obj2nid(sk_ASN1_OBJECT_pop(eku));
-		if (nid == nid_bgpsecRouter()) {
-			error = 0;
-			goto end;
-		}
-	}
-
-	if (error)
-		pr_val_err("Extended Key Usage doesn't include id-kp-bgpsec-router.");
-end:
-	EXTENDED_KEY_USAGE_free(eku);
-	return error;
-}
-
 /**
  * Validates the certificate extensions, Trust Anchor style.
  *
@@ -1837,31 +1776,6 @@ certificate_validate_extensions_ca(X509 *cert, struct sia_ca_uris *sia_uris,
 	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
-
-	return handle_extensions(handlers, X509_get0_extensions(cert));
-}
-
-static int
-certificate_validate_extensions_bgpsec(X509 *cert, unsigned char **ski,
-    struct certificate_refs *refs, enum rpki_policy *policy)
-{
-	struct bgpsec_ski ski_param;
-	struct extension_handler handlers[] = {
-	   /* ext        reqd   handler            arg        */
-	    { ext_ski(), true,  handle_ski_bgpsec, &ski_param },
-	    { ext_aki(), true,  handle_aki,                   },
-	    { ext_ku(),  true,  handle_ku_ee,                 },
-	    { ext_cdp(), true,  handle_cdp,        refs       },
-	    { ext_aia(), true,  handle_aia,        refs       },
-	    { ext_cp(),  true,  handle_cp,         policy     },
-	    { ext_eku(), true,  handle_eku,                   },
-	    { ext_ar(),  false, handle_ar,                    },
-	    { ext_ar2(), false, handle_ar,                    },
-	    { NULL },
-	};
-
-	ski_param.cert = cert;
-	ski_param.ski_data = ski;
 
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
@@ -2415,7 +2329,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	X509 *cert;
 	struct sia_ca_uris sia_uris;
 	struct certificate_refs refs;
-	unsigned char *ski;
 	enum rpki_policy policy;
 	enum cert_type type;
 	struct rpp *pp;
@@ -2464,7 +2377,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		pr_val_debug("Type: CA");
 		break;
 	case BGPSEC:
-		pr_val_debug("Type: BGPsec EE");
+		pr_val_debug("Type: BGPsec EE. Ignoring...");
 		goto revert_cert;
 	case EE:
 		pr_val_debug("Type: unexpected, validated as CA");
@@ -2474,14 +2387,11 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	error = certificate_validate_rfc6487(cert, type);
 	if (error)
 		goto revert_cert;
+
 	switch (type) {
 	case TA:
 		error = certificate_validate_extensions_ta(cert, &sia_uris,
 		    &policy);
-		break;
-	case BGPSEC:
-		error = certificate_validate_extensions_bgpsec(cert, &ski,
-		    &refs, &policy);
 		break;
 	default:
 		/* Validate as a CA */
@@ -2490,7 +2400,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		break;
 	}
 	if (error)
-		goto revert_cert;
+		goto revert_uris;
 
 	if (!IS_TA) {
 		error = certificate_validate_aia(refs.caIssuers, cert);
@@ -2501,16 +2411,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	error = refs_validate_ca(&refs, rpp_parent);
 	if (error)
 		goto revert_uris;
-
-	if (type == BGPSEC) {
-		/* This is an EE, so there's no manifest to process */
-		error = handle_bgpsec(cert, ski,
-		    x509stack_peek_resources(validation_certstack(state)));
-		cert = NULL; /* Ownership stolen at x509stack_push */
-		free(ski); /* No need to remember it */
-
-		goto revert_refs;
-	}
 
 	/* Identify if this is a new repository before fetching it */
 	new_level = false;
@@ -2582,7 +2482,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	rpp_refput(pp);
 revert_uris:
 	sia_ca_uris_cleanup(&sia_uris);
-revert_refs:
 	refs_cleanup(&refs);
 revert_cert:
 	if (cert != NULL)
