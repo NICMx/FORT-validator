@@ -1807,16 +1807,56 @@ certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
 
-static enum cert_type
-get_certificate_type(X509 *cert, bool is_ta)
+static bool
+has_bgpsec_router_eku(X509 *cert)
 {
-	if (is_ta)
-		return TA;
-	if (X509_get_ext_by_NID(cert, ext_bc()->nid, -1) >= 0)
-		return CA;
-	if (X509_get_ext_by_NID(cert, NID_ext_key_usage, -1) >= 0)
-		return BGPSEC;
-	return EE;
+	EXTENDED_KEY_USAGE *eku;
+	int i;
+	int nid;
+
+	eku = X509_get_ext_d2i(cert, NID_ext_key_usage, NULL, NULL);
+	if (eku == NULL)
+		return false;
+
+	/* RFC 8209#section-3.1.3.2: Unknown KeyPurposeIds are allowed. */
+	for (i = 0; i < sk_ASN1_OBJECT_num(eku); i++) {
+		nid = OBJ_obj2nid(sk_ASN1_OBJECT_value(eku, i));
+		if (nid == nid_bgpsecRouter()) {
+			EXTENDED_KEY_USAGE_free(eku);
+			return true;
+		}
+	}
+
+	EXTENDED_KEY_USAGE_free(eku);
+	return false;
+}
+
+/*
+ * Assumption: Meant to be used exclusively in the context of parsing a .cer
+ * certificate.
+ */
+static int
+get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
+{
+	if (is_ta) {
+		/* Note: It looks weird if we log the type here. */
+		*result = TA;
+		return 0;
+	}
+
+	if (X509_check_ca(cert) == 1) {
+		pr_val_debug("Type: CA");
+		*result = CA;
+		return 0;
+	}
+
+	if (has_bgpsec_router_eku(cert)) {
+		pr_val_debug("Type: BGPsec EE");
+		*result = BGPSEC;
+		return 0;
+	}
+
+	return pr_val_err("Certificate is not TA, CA nor BGPsec. Ignoring...");
 }
 
 /*
@@ -2352,7 +2392,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		    uri_val_get_printable(cert_uri));
 
 	fnstack_push_uri(cert_uri);
-	memset(&refs, 0, sizeof(refs));
 
 	error = rpp_crl(rpp_parent, &rpp_parent_crl);
 	if (error)
@@ -2366,8 +2405,9 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_cert;
 
-	sia_ca_uris_init(&sia_uris);
-	type = get_certificate_type(cert, IS_TA);
+	error = get_certificate_type(cert, IS_TA, &type);
+	if (error)
+		goto revert_cert;
 
 	/* Debug cert type */
 	switch (type) {
@@ -2387,6 +2427,9 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	error = certificate_validate_rfc6487(cert, type);
 	if (error)
 		goto revert_cert;
+
+	sia_ca_uris_init(&sia_uris);
+	memset(&refs, 0, sizeof(refs));
 
 	switch (type) {
 	case TA:
