@@ -1,14 +1,13 @@
 #include "common.h"
 
-#include <errno.h>
-#include <dirent.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/stat.h>
+#include <dirent.h> /* readdir(), closedir() */
+#include <limits.h> /* realpath() */
+#include <stdlib.h> /* malloc(), free(), realloc(), realpath() */
+#include <stdio.h> /* remove() */
+#include <string.h> /* strdup(), strrchr(), strcmp(), strcat(), etc */
+#include <unistd.h> /* stat(), rmdir() */
+#include <sys/stat.h> /* stat(), mkdir() */
+#include <sys/types.h> /* stat(), closedir(), mkdir() */
 
 #include "config.h"
 #include "log.h"
@@ -196,18 +195,6 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 		    (check_file) ? "file" : "directory");
 
 	return result;
-}
-
-char const *
-addr2str4(struct in_addr const *addr, char *buffer)
-{
-	return inet_ntop(AF_INET, addr, buffer, INET_ADDRSTRLEN);
-}
-
-char const *
-addr2str6(struct in6_addr const *addr, char *buffer)
-{
-	return inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN);
 }
 
 static int

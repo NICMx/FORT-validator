@@ -1,11 +1,9 @@
 #include "address.h"
 
-#include <string.h>
-#include <errno.h>
-#include <arpa/inet.h> /* inet_ntop */
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include "common.h"
+#include <stdlib.h> /* strtoul() */
+#include <string.h> /* memset(), memcpy() */
+#include <arpa/inet.h> /* inet_ntop(), htonl() */
+
 #include "log.h"
 #include "thread_var.h"
 
@@ -513,6 +511,18 @@ ipv6_covered(struct in6_addr *f_addr, uint8_t f_len, struct in6_addr *son_addr)
 			return false;
 
 	return true;
+}
+
+char const *
+addr2str4(struct in_addr const *addr, char *buffer)
+{
+	return inet_ntop(AF_INET, addr, buffer, INET_ADDRSTRLEN);
+}
+
+char const *
+addr2str6(struct in6_addr const *addr, char *buffer)
+{
+	return inet_ntop(AF_INET6, addr, buffer, INET6_ADDRSTRLEN);
 }
 
 /**

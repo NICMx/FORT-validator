@@ -1839,19 +1839,16 @@ static int
 get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
 {
 	if (is_ta) {
-		/* Note: It looks weird if we log the type here. */
 		*result = TA;
 		return 0;
 	}
 
 	if (X509_check_ca(cert) == 1) {
-		pr_val_debug("Type: CA");
 		*result = CA;
 		return 0;
 	}
 
 	if (has_bgpsec_router_eku(cert)) {
-		pr_val_debug("Type: BGPsec EE");
 		*result = BGPSEC;
 		return 0;
 	}
