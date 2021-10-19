@@ -32,7 +32,7 @@ Further information can be found in the subsections below.
 | [7318](https://tools.ietf.org/html/rfc7318) (Policy Qualifiers)            | 100%        |
 | [7935](https://tools.ietf.org/html/rfc7935) (RPKI algorithms)              | 100%        |
 | [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 100%        |
-| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 100%        |
+| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 0% (This code was [disabled](https://github.com/NICMx/FORT-validator/issues/58#issuecomment-941977925) in version 1.5.2) |
 | [8210](https://tools.ietf.org/html/rfc8210) (RTR Version 1)                | 100%        |
 | [8360](https://tools.ietf.org/html/rfc8360) (Validation Reconsidered)      | 100%        |
 | [8416](https://tools.ietf.org/html/rfc8416) (SLURM)                        | 100%        |
