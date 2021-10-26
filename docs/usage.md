@@ -799,18 +799,6 @@ The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://cur
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
 
-> Note: The paragraphs below apply to [Fort 1.5.0](https://github.com/NICMx/FORT-validator/releases/tag/v1.5.0).
-
-File where the ROAs (found during each validation run) will be stored (in CSV format).
-
-If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) seconds.
-
-Each line of the result is printed in the following order: _AS, Prefix, Max prefix length_. The first line contains the column names.
-
-If `--output.roa` is omitted, the ROAs are not printed.
-
-> Note: The paragraphs below apply to [Fort master](https://github.com/NICMx/FORT-validator).
-
 File where the ROAs (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
 If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
@@ -843,19 +831,7 @@ If `--output.roa` is omitted, the ROAs are not printed.
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
 
-> Note: The paragraphs below apply to [Fort 1.5.0](https://github.com/NICMx/FORT-validator/releases/tag/v1.5.0).
-
-File where the BGPsec Router Keys (found during each validation run) will be stored (in CSV format).
-
-Since most of the data (Subject Key Identifier and Subject Public Key Info) is binary, it is base64url-encoded, without trailing pads.
-
-If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output console, use a hyphen (`-`). If the RTR server is [enabled](#--mode), the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) seconds.
-
-Each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_. The first line contains the column names.
-
-If `--output.bgpsec` is ommited, then the BGPsec Router Keys are not printed.
-
-> Note: The paragraphs below apply to [Fort master](https://github.com/NICMx/FORT-validator).
+> ![Warning!](img/warn.svg) BGPsec certificate validation has been disabled in version 1.5.2 because of [this bug](https://github.com/NICMx/FORT-validator/issues/58). It will be restored in version 1.5.3.
 
 File where the BGPsec Router Keys (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
@@ -891,8 +867,6 @@ If `--output.bgpsec` is ommited, then the BGPsec Router Keys are not printed.
 - **Type:** Enumeration (`csv`, `json`)
 - **Availability:** `argv` and JSON
 - **Default:** `csv`
-
-> Note: This flag only exists in [Fort master](https://github.com/NICMx/FORT-validator).
 
 Output format for [`--output.roa`](#--outputroa) and [`--output.bgpsec`](#--outputbgpsec).
 

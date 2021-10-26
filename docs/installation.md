@@ -47,7 +47,7 @@ Fort currently supports *64-bit* Operating Systems. A 32-bit OS may face the [Ye
 ### Debian package
 
 Currently, there are 2 alternatives to install a debian package:
-- [Latest version](#latest-version): this package is created as part of the latest release (currently v{{ site.fort-latest-version }}) and is manually installed.
+- [Latest version](#latest-version): this package is created as part of the latest release (currently {{ site.fort-latest-version }}) and is manually installed.
 - [Debian repository version](#debian-repository-version): this package is at Debian repositories, so it can be fetched from there.
 
 #### Latest version
@@ -55,7 +55,7 @@ Currently, there are 2 alternatives to install a debian package:
 Just download the .deb package and install it. The fort service is automatically started once the installation is done.
 
 {% highlight bash %}
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort_{{ site.fort-latest-version }}-1_amd64.deb
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort_{{ site.fort-latest-version }}-1_amd64.deb
 sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
 {% endhighlight %}
 
@@ -169,7 +169,7 @@ The configuration file utilized by the service can be found at `/etc/fort/config
 Download the .rpm and install it (currently tested at CentOS 7 and 8):
 
 {% highlight bash %}
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
 sudo yum install fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
 {% endhighlight %}
 
@@ -198,7 +198,7 @@ The configuration file utilized by the service can be found at `/etc/fort/config
 {% highlight bash %}
 sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync libcurl4-openssl-dev libxml2-dev
 
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -213,7 +213,7 @@ su
 pkg_add jansson libexecinfo rsync libxml # OpenBSD already ships with LibreSSL
 exit
 
-ftp https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+ftp https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 # clang is needed because of gnu11.
@@ -233,7 +233,7 @@ The following steps are for RHEL/CentOS 8.
 {% highlight bash %}
 sudo dnf install autoconf automake gcc jansson-devel libcurl-devel libxml2-devel make openssl-devel pkgconfig rsync tar wget
 
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -265,7 +265,7 @@ sudo yum install autoconf automake devtoolset-8-gcc jansson-devel libcurl-devel 
 # Start a session using the upgraded GCC
 scl enable devtoolset-8 bash
 cd ~
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 # Insert paths from newer OpenSSL version
@@ -283,7 +283,7 @@ The following steps are for Fedora 30 (and later).
 
 {% highlight bash %}
 sudo dnf install autoconf automake gcc jansson-devel libcurl-devel libxml2-devel make openssl-devel pkgconfig rsync tar wget
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -298,7 +298,7 @@ The following steps are for openSUSE Leap 15.1.
 {% highlight bash %}
 sudo zypper install autoconf automake gcc libopenssl-devel libjansson-devel libcurl-devel libxml2-devel
 
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -327,7 +327,7 @@ su
 pkg install autoconf automake gcc jansson pkgconf rsync libxml2
 exit
 
-curl -L https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz --output fort-{{ site.fort-latest-version }}.tar.gz
+curl -L https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz --output fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -344,7 +344,7 @@ The following steps are for Slackware "current" release (as of 2020-07-13).
 All dependencies are included in the current release, so there's no need to install any dependency.
 
 {% highlight bash %}
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -363,7 +363,7 @@ su
 emerge sys-devel/autoconf sys-devel/automake net-misc/rsync net-misc/curl dev-libs/jansson 
 exit
 
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -382,7 +382,7 @@ su
 apk add build-base autoconf automake pkgconfig openssl openssl-dev jansson jansson-dev bsd-compat-headers rsync libexecinfo libexecinfo-dev libxml2 libxml2-dev libcurl curl-dev
 exit
 
-wget https://github.com/NICMx/FORT-validator/releases/download/v{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
@@ -451,7 +451,7 @@ See more about this argument at [Program Arguments - `--init-tals`](usage.html#-
 
 > ![img/warn.svg](img/warn.svg) This script exists merely to ease the ARIN TAL download (and some other additional stuff), it isn't a prerequisite to compile or run FORT validator, although we strongly advise to fetch ARIN TAL (using this script or by other means) in order to get the whole RPKI validated by FORT validator.
 
-The script can be found [here](https://github.com/NICMx/FORT-validator/blob/v{{ site.fort-latest-version }}/fort_setup.sh). It only expects one argument: an _existent directory path_ where the 5 RIRs TALS will be downloaded.
+The script can be found [here](https://github.com/NICMx/FORT-validator/blob/{{ site.fort-latest-version }}/fort_setup.sh). It only expects one argument: an _existent directory path_ where the 5 RIRs TALS will be downloaded.
 
 Basically, it does the following:
 1. Display message to agree ARIN RPA.
@@ -467,7 +467,7 @@ Preferably, run this script with the same user what will run FORT validator. It'
 
 {% highlight bash %}
 # Get the script
-wget https://raw.githubusercontent.com/NICMx/FORT-validator/v{{ site.fort-latest-version }}/fort_setup.sh
+wget https://raw.githubusercontent.com/NICMx/FORT-validator/{{ site.fort-latest-version }}/fort_setup.sh
 mkdir ~/tal
 ./fort_setup.sh ~/tal
 {% endhighlight %}

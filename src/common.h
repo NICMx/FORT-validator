@@ -4,7 +4,6 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <time.h>
-#include <netinet/in.h>
 
 /* "I think that this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172
@@ -53,9 +52,6 @@ int process_file_or_dir(char const *, char const *, bool, process_file_cb,
 
 typedef int (*pr_errno_cb)(int, const char *, ...);
 bool valid_file_or_dir(char const *, bool, bool, pr_errno_cb);
-
-char const *addr2str4(struct in_addr const *, char *);
-char const *addr2str6(struct in6_addr const *, char *);
 
 int create_dir_recursive(char const *);
 int delete_dir_recursive_bottom_up(char const *);

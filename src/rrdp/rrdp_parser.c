@@ -904,7 +904,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 
 	head_data = &delta_head->doc_data;
 
-	pr_val_debug("Processing delta '%s'.", delta_head->doc_data.uri);
+	pr_val_debug("Processing delta '%s'.", head_data->uri);
 	error = uri_create_https_str_rrdp(&uri, head_data->uri,
 	    strlen(head_data->uri));
 	if (error)

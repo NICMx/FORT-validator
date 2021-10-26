@@ -1,4 +1,4 @@
-.TH fort 8 "2021-08-05" "v1.5.1" "FORT validator"
+.TH fort 8 "2021-10-19" "v1.5.2" "FORT validator"
 
 .SH NAME
 fort \- RPKI validator and RTR server
@@ -485,6 +485,16 @@ This value is utilized only on RTR version 1 sessions (more information at RFC
 By default, it has a value of \fI7200\fR. Minimum allowed value: \fI600\fR,
 maximum allowed value \fI172800\fR. It must be larger than
 \fIserver.interval.refresh\fR and \fIserver.interval.retry\fR.
+.RE
+.P
+
+.B \-\-server.deltas.lifetime=\fIUNSIGNED_INTEGER\fR
+.RS 4
+When routers first connect to Fort, they request a snapshot of the validation results. (ROAs and Router Keys.) Because they need to keep their validated objects updated, and snapshots tend to be relatively large amounts of information, they request deltas afterwards over configurable intervals. ("Deltas" being the differences between snapshots.)
+.P
+During each validation cycle, Fort generates a new snapshot, as well as the deltas needed to build the new snapshot from the previous one. These are all stored in RAM. \fI--server.deltas.lifetime\fR is the number of iterations a set of deltas will be kept before being deallocated. (Recall that every iteration lasts \fI--server.interval.validation\fR seconds, plus however long the validation takes.)
+.P
+If a router lags behind, to the point Fort has already deleted the deltas it needs to update the router’s snapshot, Fort will have to fall back to fetch the entire latest snapshot instead.
 .RE
 .P
 
