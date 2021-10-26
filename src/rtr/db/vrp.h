@@ -3,7 +3,6 @@
 
 #include <netinet/in.h>
 #include "address.h"
-#include "serial.h"
 #include "object/router_key.h"
 
 #define FLAG_WITHDRAWAL		0
@@ -51,15 +50,22 @@
 #define VRP_EQ(a, b)							\
 	(VRP_ASN_EQ(a, b) && VRP_PREFIX_EQ(a, b) && VRP_MAX_PREFIX_LEN_EQ(a, b))
 
+/*
+ * A ROA.
+ *
+ * I think it's called "VRP" ("Validated ROA Payload") because it was originally
+ * meant to represent an already validated ROA, and used exclusively by the RTR
+ * code. But it doesn't matter anymore.
+ */
 struct vrp {
-	uint32_t	asn;
+	uint32_t asn;
 	union {
-		struct	in_addr v4;
-		struct	in6_addr v6;
+		struct in_addr v4;
+		struct in6_addr v6;
 	} prefix;
-	uint8_t	prefix_length;
-	uint8_t	max_prefix_length;
-	uint8_t	addr_fam;
+	uint8_t prefix_length;
+	uint8_t max_prefix_length;
+	uint8_t addr_fam;
 };
 
 struct delta_vrp {
@@ -68,7 +74,6 @@ struct delta_vrp {
 };
 
 struct delta_router_key {
-	serial_t serial;
 	struct router_key router_key;
 	uint8_t flags;
 };
@@ -79,5 +84,10 @@ typedef int (*router_key_foreach_cb)(struct router_key const *, void *);
 typedef int (*delta_vrp_foreach_cb)(struct delta_vrp const *, void *);
 typedef int (*delta_router_key_foreach_cb)(struct delta_router_key const *,
     void *);
+
+int vrp_print(struct vrp const *, void *);
+int delta_vrp_print(struct delta_vrp const *, void *);
+int router_key_print(struct router_key const *, void *);
+int delta_rk_print(struct delta_router_key const *, void *);
 
 #endif /* SRC_RTR_DB_VRP_H_ */

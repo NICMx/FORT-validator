@@ -3,6 +3,7 @@
 
 #include "log.c"
 #include "impersonator.c"
+#include "rtr/db/vrp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
 

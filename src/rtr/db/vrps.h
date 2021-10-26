@@ -34,4 +34,6 @@ int handle_router_key(unsigned char const *, uint32_t, unsigned char const *,
 
 uint16_t get_current_session_id(uint8_t);
 
+void vrps_print_base(void);
+
 #endif /* SRC_VRPS_H_ */

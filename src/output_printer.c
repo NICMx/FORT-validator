@@ -48,20 +48,12 @@ print_roa_csv(struct vrp const *vrp, void *arg)
 {
 	FILE *out = arg;
 
-	switch (vrp->addr_fam) {
-	case AF_INET:
-		fprintf(out, "AS%u,%s/%u,%u\n", vrp->asn,
-		    addr2str4(&vrp->prefix.v4, addr_buf), vrp->prefix_length,
-		    vrp->max_prefix_length);
-		break;
-	case AF_INET6:
-		fprintf(out, "AS%u,%s/%u,%u\n", vrp->asn,
-		    addr2str6(&vrp->prefix.v6, addr_buf), vrp->prefix_length,
-		    vrp->max_prefix_length);
-		break;
-	default:
+	if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6)
 		pr_crit("Unknown family type");
-	}
+
+	fprintf(out, "AS%u,%s/%u,%u\n", vrp->asn,
+	    inet_ntop(vrp->addr_fam, &vrp->prefix, addr_buf, INET6_ADDRSTRLEN),
+	    vrp->prefix_length, vrp->max_prefix_length);
 
 	return 0;
 }
@@ -76,26 +68,15 @@ print_roa_json(struct vrp const *vrp, void *arg)
 	if (!json_out->first)
 		fprintf(out, ",");
 
-	switch (vrp->addr_fam) {
-	case AF_INET:
-		fprintf(out,
-		    "\n  { \"asn\" : \"AS%u\", \"prefix\" : \"%s/%u\", \"maxLength\" : %u }",
-		    vrp->asn,
-		    addr2str4(&vrp->prefix.v4, addr_buf),
-		    vrp->prefix_length,
-		    vrp->max_prefix_length);
-		break;
-	case AF_INET6:
-		fprintf(out,
-		    "\n  { \"asn\" : \"AS%u\", \"prefix\" : \"%s/%u\", \"maxLength\" : %u }",
-		    vrp->asn,
-		    addr2str6(&vrp->prefix.v6, addr_buf),
-		    vrp->prefix_length,
-		    vrp->max_prefix_length);
-		break;
-	default:
+	if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6)
 		pr_crit("Unknown family type");
-	}
+
+	fprintf(out,
+	    "\n  { \"asn\" : \"AS%u\", \"prefix\" : \"%s/%u\", \"maxLength\" : %u }",
+	    vrp->asn,
+	    inet_ntop(vrp->addr_fam, &vrp->prefix, addr_buf, INET6_ADDRSTRLEN),
+	    vrp->prefix_length,
+	    vrp->max_prefix_length);
 
 	json_out->first = false;
 	return 0;

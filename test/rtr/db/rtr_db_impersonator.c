@@ -56,7 +56,7 @@ __handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
 }
 
 int
-__handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
+__handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
     uint8_t max_length, void *arg)
 {
 	return rtrhandler_handle_roa_v6(arg, as, prefix, max_length);

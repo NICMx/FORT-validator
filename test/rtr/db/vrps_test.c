@@ -12,6 +12,7 @@
 #include "output_printer.c"
 #include "serial.c"
 #include "object/router_key.c"
+#include "rtr/db/vrp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
 #include "rtr/db/db_table.c"
@@ -329,25 +330,32 @@ check_no_deltas(serial_t from)
 }
 
 static void
-create_deltas_1to2(serial_t *serial, bool *changed, bool *iterated_entries)
+create_deltas_1to2(void)
 {
+	serial_t serial;
+	bool changed;
+	bool iterated_entries[12];
+
 	ck_assert_int_eq(0, vrps_init());
 
 	/* First validation not yet performed: Tell routers to wait */
-	ck_assert_int_eq(-EAGAIN, get_last_serial_number(serial));
+	ck_assert_int_eq(-EAGAIN, get_last_serial_number(&serial));
 	ck_assert_int_eq(-EAGAIN, vrps_foreach_base(vrp_fail, rk_fail,
 	    iterated_entries));
-	ck_assert_int_eq(-EAGAIN, vrps_foreach_delta_since(0, serial, dvrp_fail,
-	    drk_fail, NULL));
+	ck_assert_int_eq(-EAGAIN, vrps_foreach_delta_since(0, &serial,
+	    dvrp_fail, drk_fail, NULL));
 
 	/* First validation: One tree, no deltas */
-	ck_assert_int_eq(0, vrps_update(changed));
+	ck_assert_int_eq(0, vrps_update(&changed));
+	ck_assert(changed);
 	check_serial(1);
 	check_base(1, iteration1_base);
 	check_deltas(1, 1, deltas_1to1);
 
 	/* Second validation: One tree, added deltas */
-	ck_assert_int_eq(0, vrps_update(changed));
+	ck_assert_int_eq(0, vrps_update(&changed));
+
+	ck_assert(changed);
 	check_serial(2);
 	check_base(2, iteration2_base);
 	check_deltas(1, 2, deltas_1to2);
@@ -356,16 +364,15 @@ create_deltas_1to2(serial_t *serial, bool *changed, bool *iterated_entries)
 
 START_TEST(test_basic)
 {
-	serial_t serial;
 	bool changed;
-	bool iterated_entries[12];
 
 	deltas_lifetime = 5;
 
-	create_deltas_1to2(&serial, &changed, iterated_entries);
+	create_deltas_1to2();
 
 	/* Third validation: One tree, removed deltas */
 	ck_assert_int_eq(0, vrps_update(&changed));
+	ck_assert(changed);
 	check_serial(3);
 	check_base(3, iteration3_base);
 	check_deltas(1, 3, deltas_1to3);
@@ -378,16 +385,15 @@ END_TEST
 
 START_TEST(test_delta_forget)
 {
-	serial_t serial;
 	bool changed;
-	bool iterated_entries[12];
 
 	deltas_lifetime = 1;
 
-	create_deltas_1to2(&serial, &changed, iterated_entries);
+	create_deltas_1to2();
 
 	/* Third validation: One tree, removed deltas and delta 1 removed */
 	ck_assert_int_eq(0, vrps_update(&changed));
+	ck_assert(changed);
 	check_serial(3);
 	check_base(3, iteration3_base);
 	check_no_deltas(1);
@@ -400,16 +406,15 @@ END_TEST
 
 START_TEST(test_delta_ovrd)
 {
-	serial_t serial;
 	bool changed;
-	bool iterated_entries[12];
 
 	deltas_lifetime = 3;
 
-	create_deltas_1to2(&serial, &changed, iterated_entries);
+	create_deltas_1to2();
 
 	/* Third validation: One tree, removed deltas */
 	ck_assert_int_eq(0, vrps_update(&changed));
+	ck_assert(changed);
 	check_serial(3);
 	check_base(3, iteration3_base);
 	check_deltas(1, 3, deltas_1to3);
@@ -418,6 +423,7 @@ START_TEST(test_delta_ovrd)
 
 	/* Fourth validation with deltas that override each other */
 	ck_assert_int_eq(0, vrps_update(&changed));
+	ck_assert(changed);
 	check_serial(4);
 	check_base(4, iteration4_base);
 	check_deltas(1, 4, deltas_1to4);

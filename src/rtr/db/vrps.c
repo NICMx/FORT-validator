@@ -595,3 +595,9 @@ get_current_session_id(uint8_t rtr_version)
 		return state.v1_session_id;
 	return state.v0_session_id;
 }
+
+void
+vrps_print_base(void)
+{
+	vrps_foreach_base(vrp_print, router_key_print, NULL);
+}

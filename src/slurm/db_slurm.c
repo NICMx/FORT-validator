@@ -456,21 +456,9 @@ print_prefix_data(struct slurm_prefix *prefix, void *arg)
 		pr_op_info("%s ASN: %u", pad, prefix->vrp.asn);
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) {
-		switch (prefix->vrp.addr_fam) {
-		case AF_INET:
-			pr_op_info("%s Prefix: %s/%u", pad,
-			    addr2str4(&prefix->vrp.prefix.v4, addr_buf),
-			    prefix->vrp.prefix_length);
-			break;
-		case AF_INET6:
-			pr_op_info("%s Prefix: %s/%u", pad,
-			    addr2str6(&prefix->vrp.prefix.v6, addr_buf),
-			    prefix->vrp.prefix_length);
-			break;
-		default:
-			pr_crit("Unknown addr family type: %u",
-			    prefix->vrp.addr_fam);
-		}
+		pr_op_info("%s Prefix: %s/%u", pad,
+		    inet_ntop(prefix->vrp.addr_fam, &prefix->vrp.prefix,
+		    addr_buf, INET6_ADDRSTRLEN), prefix->vrp.prefix_length);
 	}
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_MAX_LENGTH)

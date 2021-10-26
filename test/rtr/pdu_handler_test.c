@@ -18,6 +18,7 @@
 #include "rtr/primitive_reader.c"
 #include "rtr/primitive_writer.c"
 #include "rtr/err_pdu.c"
+#include "rtr/db/vrp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
 #include "rtr/db/db_table.c"

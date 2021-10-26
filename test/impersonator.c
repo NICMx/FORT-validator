@@ -228,3 +228,16 @@ config_get_thread_pool_validation_max(void)
 {
 	return 10;
 }
+
+unsigned int
+config_get_max_asn_per_pfx(void)
+{
+	return 10;
+}
+
+unsigned int
+config_get_max_pfx_per_asn(void)
+{
+	return 10;
+}
+

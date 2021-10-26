@@ -111,7 +111,7 @@ fort_SOURCES += rtr/db/db_table.c rtr/db/db_table.h
 fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
 fort_SOURCES += rtr/db/deltas_array.c rtr/db/deltas_array.h
 fort_SOURCES += rtr/db/roa.c rtr/db/roa.h
-fort_SOURCES += rtr/db/vrp.h
+fort_SOURCES += rtr/db/vrp.c rtr/db/vrp.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 
 fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h

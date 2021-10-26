@@ -6,6 +6,7 @@
 #include "log.c"
 #include "impersonator.c"
 #include "object/router_key.c"
+#include "rtr/db/vrp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/db_table.c"
 
@@ -108,7 +109,6 @@ START_TEST(test_basic)
 	prefix6.len = 120;
 
 	/* Duplicates should be transparently not re-added. */
-
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
 
@@ -126,7 +126,7 @@ START_TEST(test_basic)
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 32));
 
-	/* Change the max prefix length slightly */
+	/* Change the max prefix length (counts as duplicate) */
 	prefix4.len = 24;
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 30));
 	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(table, 10, &prefix4, 30));
@@ -163,113 +163,16 @@ START_TEST(test_basic)
 }
 END_TEST
 
-START_TEST(test_merge)
-{
-	struct ipv4_prefix prefix4;
-	struct ipv6_prefix prefix6;
-	struct db_table *left, *right, *merged;
-	array_index i;
-	int left_count, right_count, total_merged;
-
-	left = db_table_create();
-	ck_assert_ptr_ne(NULL, left);
-	right = db_table_create();
-	ck_assert_ptr_ne(NULL, right);
-	merged = db_table_create();
-	ck_assert_ptr_ne(NULL, merged);
-
-	prefix4.addr.s_addr = ADDR1;
-	prefix4.len = 24;
-	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 1);
-	prefix6.len = 120;
-
-	left_count = 0;
-	right_count = 0;
-	total_merged = 0;
-
-	/** Add the same roas on both tables*/
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(left, 10, &prefix4, 32));
-	left_count++;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(right, 10, &prefix4, 32));
-	right_count++;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(left, 11, &prefix4, 32));
-	left_count++;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(right, 11, &prefix4, 32));
-	right_count++;
-
-	/** And add distinct roas on each table */
-	prefix4.addr.s_addr = ADDR2;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(left, 10, &prefix4, 32));
-	left_count++;
-
-	prefix4.addr.s_addr = ADDR1;
-	prefix4.len = 25;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(right, 10, &prefix4, 32));
-	right_count++;
-
-	prefix4.len = 24;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(left, 10, &prefix4, 30));
-	left_count++;
-
-	/* IPv6 */
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(right, 10, &prefix6, 128));
-	right_count++;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(left, 11, &prefix6, 128));
-	left_count++;
-
-	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 2);
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(right, 10, &prefix6, 128));
-	right_count++;
-
-	in6_addr_init(&prefix6.addr, 0x20010DB8u, 0, 0, 1);
-	prefix6.len = 121;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(left, 10, &prefix6, 128));
-	left_count++;
-
-	prefix6.len = 120;
-	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(right, 10, &prefix6, 127));
-	right_count++;
-
-	/** Do the merge */
-	ck_assert_int_eq(0, db_table_merge(merged, left));
-	ck_assert_int_eq(0, db_table_merge(merged, right));
-
-	/**
-	 * Must have:
-	 * count(left) + count(right) - 2 (duplicated elements)
-	 */
-	total_merged = left_count + right_count - 2;
-	ck_assert_int_eq(total_merged, TOTAL_ROAS);
-
-	/* Check table contents and that merged table has new memory refs */
-	db_table_destroy(left);
-	db_table_destroy(right);
-
-	memset(roas_found, 0, sizeof(roas_found));
-	total_found = 0;
-	ck_assert_int_eq(0, db_table_foreach_roa(merged, foreach_cb, NULL));
-	ck_assert_int_eq(TOTAL_ROAS, total_found);
-	for (i = 0; i < TOTAL_ROAS; i++)
-		ck_assert_int_eq(true, roas_found[i]);
-
-	db_table_destroy(merged);
-}
-END_TEST
-
 Suite *pdu_suite(void)
 {
 	Suite *suite;
-	TCase *core, *merge;
+	TCase *core;
 
 	core = tcase_create("Core");
 	tcase_add_test(core, test_basic);
 
-	merge = tcase_create("Merge");
-	tcase_add_test(core, test_merge);
-
 	suite = suite_create("DB Table");
 	suite_add_tcase(suite, core);
-	suite_add_tcase(suite, merge);
 	return suite;
 }
 

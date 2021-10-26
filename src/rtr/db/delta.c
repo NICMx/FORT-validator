@@ -261,3 +261,9 @@ deltas_foreach(struct deltas *deltas, delta_vrp_foreach_cb cb_vrp,
 
 	return __foreach_rk(&deltas->rk.removes, cb_rk, arg, FLAG_WITHDRAWAL);
 }
+
+void
+deltas_print(struct deltas *deltas)
+{
+	deltas_foreach(deltas, delta_vrp_print, delta_rk_print, NULL);
+}
