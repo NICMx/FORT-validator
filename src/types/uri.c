@@ -134,39 +134,40 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 	return 0;
 }
 
-static int
-validate_mft_ia5(IA5String_t *ia5)
+static bool
+is_valid_mft_file_chara(uint8_t chara)
 {
-	size_t i;
-	int error;
+	return ('a' <= chara && chara <= 'z')
+	    || ('A' <= chara && chara <= 'Z')
+	    || ('0' <= chara && chara <= '9')
+	    || (chara == '-')
+	    || (chara == '_');
+}
 
-	if (ia5->size == 0)
-		return pr_val_err("Manifest references a file with an empty string as name.");
-	if (ia5->size == 1 && ia5->buf[0] == '.')
-		return pr_val_err("Manifest references a file named '.'");
-	if (ia5->size == 2 && ia5->buf[0] == '.' && ia5->buf[1] == '.')
-		return pr_val_err("Manifest references a file named '..'");
+/* RFC 6486bis, section 4.2.2 */
+static int
+validate_mft_file(IA5String_t *ia5)
+{
+	size_t dot;
+	size_t i;
+
+	if (ia5->size < 5)
+		return pr_val_err("File name is too short (%zu < 5).", ia5->size);
+	dot = ia5->size - 4;
+	if (ia5->buf[dot] != '.')
+		return pr_val_err("File name seems to lack a three-letter extension.");
 
 	for (i = 0; i < ia5->size; i++) {
-		/*
-		 * RFC 6486: "Each FileAndHash is an ordered pair consisting of
-		 * the name of the file in the repository publication point
-		 * (directory)"
-		 *
-		 * I'm assuming "file name" implies "slash not allowed."
-		 *
-		 * This is particularly relevant because this RPP should never
-		 * be allowed to write in other RPP paths, or worse yet, outside
-		 * of the cache directory.
-		 */
-		if (ia5->buf[i] == '/')
-			return pr_val_err("Manifest references a file whose name has at least one slash character.");
-
-		error = validate_url_character(ia5->buf[i]);
-		if (error)
-			return error;
+		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i])) {
+			return pr_val_err("File name contains illegal character #%u",
+			    ia5->buf[i]);
+		}
 	}
 
+	/*
+	 * Actual extension doesn't matter; if there's no handler,
+	 * we'll naturally ignore the file.
+	 */
 	return 0;
 }
 
@@ -193,7 +194,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	 * `(char *) ia5->buf` is fair, but `strlen(ia5->buf)` is not.
 	 */
 
-	error = validate_mft_ia5(ia5);
+	error = validate_mft_file(ia5);
 	if (error)
 		return error;
 

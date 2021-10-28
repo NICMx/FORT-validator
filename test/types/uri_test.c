@@ -7,45 +7,55 @@
 #include "impersonator.c"
 #include "types/uri.c"
 
+#define BUFFER_LEN 128
+static uint8_t buffer[BUFFER_LEN];
+
 static int
-test_validate(char const *src)
+__test_validate(char const *src, size_t len)
 {
-	uint8_t buffer[32];
 	IA5String_t dst;
 	unsigned int i;
 
-	dst.size = strlen(src);
-
-	memcpy(buffer, src, dst.size);
-	for (i = dst.size; i < 31; i++)
+	memcpy(buffer, src, len);
+	for (i = len; i < BUFFER_LEN - 1; i++)
 		buffer[i] = '_';
-	buffer[31] = 0;
+	buffer[BUFFER_LEN - 1] = 0;
 
 	dst.buf = buffer;
+	dst.size = len;
 
-	return validate_mft_ia5(&dst);
+	return validate_mft_file(&dst);
 }
+
+#define test_validate(str) __test_validate(str, sizeof(str) - 1)
 
 START_TEST(check_validate_current_directory)
 {
-	ck_assert_int_eq(0, test_validate("file"));
-
 	ck_assert_int_eq(-EINVAL, test_validate(""));
-
 	ck_assert_int_eq(-EINVAL, test_validate("."));
-	ck_assert_int_eq(0, test_validate(".file"));
-	ck_assert_int_eq(0, test_validate("fi.le"));
-	ck_assert_int_eq(0, test_validate("file."));
-
 	ck_assert_int_eq(-EINVAL, test_validate(".."));
-	ck_assert_int_eq(0, test_validate("..file"));
-	ck_assert_int_eq(0, test_validate("fi..le"));
-	ck_assert_int_eq(0, test_validate("file.."));
 
-	ck_assert_int_eq(-EINVAL, test_validate("/"));
-	ck_assert_int_eq(-EINVAL, test_validate("/file"));
-	ck_assert_int_eq(-EINVAL, test_validate("fi/le"));
-	ck_assert_int_eq(-EINVAL, test_validate("file/"));
+	ck_assert_int_eq(-EINVAL, test_validate("filename"));
+	ck_assert_int_eq(-EINVAL, test_validate("filename."));
+	ck_assert_int_eq(-EINVAL, test_validate("filename.a"));
+	ck_assert_int_eq(-EINVAL, test_validate("filename.ab"));
+	ck_assert_int_eq(0, test_validate("filename.abc"));
+	ck_assert_int_eq(-EINVAL, test_validate("file.abcd"));
+
+	ck_assert_int_eq(0, test_validate("file-name.ABC"));
+	ck_assert_int_eq(0, test_validate("file_name.123"));
+	ck_assert_int_eq(0, test_validate("file0name.aB2"));
+	ck_assert_int_eq(0, test_validate("file9name.---"));
+	ck_assert_int_eq(0, test_validate("FileName.A3_"));
+	ck_assert_int_eq(-EINVAL, test_validate("file.name.abc"));
+	ck_assert_int_eq(-EINVAL, test_validate("file/name.abc"));
+	ck_assert_int_eq(-EINVAL, test_validate("file\0name.abc"));
+	ck_assert_int_eq(-EINVAL, test_validate("filename.abc\0filename.abc"));
+	ck_assert_int_eq(-EINVAL, test_validate("filenameabc\0filename.abc"));
+	ck_assert_int_eq(0, test_validate("-.---"));
+
+	ck_assert_int_eq(0, test_validate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-_.-_-"));
+	ck_assert_int_eq(0, test_validate("vixxBTS_TVXQ-2pmGOT7.cer"));
 }
 END_TEST
 

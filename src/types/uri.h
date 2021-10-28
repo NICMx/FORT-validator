@@ -11,6 +11,8 @@
 /* Work with a local workspace (eg. map rsync RRPD uri's) */
 #define URI_USE_RRDP_WORKSPACE  0x10
 
+#define ESKIP 85830
+
 struct rpki_uri;
 
 /* Maps RSYNC URIs of RRDP to a local workspace */

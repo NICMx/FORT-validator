@@ -167,6 +167,8 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 
 		error = uri_create_mft(&uri, mft_uri, &fah->file,
 		    rrdp_workspace);
+		if (error == ESKIP)
+			continue;
 		/*
 		 * Not handling ENOTRSYNC is fine because the manifest URL
 		 * should have been RSYNC. Something went wrong if an RSYNC URL
