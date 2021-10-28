@@ -23,20 +23,29 @@ test_validate(char const *src)
 
 	dst.buf = buffer;
 
-	return validate_current_directory(&dst);
+	return validate_mft_ia5(&dst);
 }
 
 START_TEST(check_validate_current_directory)
 {
 	ck_assert_int_eq(0, test_validate("file"));
+
 	ck_assert_int_eq(-EINVAL, test_validate(""));
+
+	ck_assert_int_eq(-EINVAL, test_validate("."));
+	ck_assert_int_eq(0, test_validate(".file"));
+	ck_assert_int_eq(0, test_validate("fi.le"));
+	ck_assert_int_eq(0, test_validate("file."));
+
+	ck_assert_int_eq(-EINVAL, test_validate(".."));
+	ck_assert_int_eq(0, test_validate("..file"));
+	ck_assert_int_eq(0, test_validate("fi..le"));
+	ck_assert_int_eq(0, test_validate("file.."));
+
+	ck_assert_int_eq(-EINVAL, test_validate("/"));
 	ck_assert_int_eq(-EINVAL, test_validate("/file"));
-	ck_assert_int_eq(0, test_validate("./file"));
-	ck_assert_int_eq(0, test_validate("././file"));
-	ck_assert_int_eq(0, test_validate("./././././file"));
-	ck_assert_int_eq(-EINVAL, test_validate("./././././"));
-	ck_assert_int_eq(-EINVAL, test_validate("./././././file/"));
-	ck_assert_int_eq(-EINVAL, test_validate("./././././file/b"));
+	ck_assert_int_eq(-EINVAL, test_validate("fi/le"));
+	ck_assert_int_eq(-EINVAL, test_validate("file/"));
 }
 END_TEST
 

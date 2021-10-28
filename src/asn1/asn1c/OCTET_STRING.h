@@ -11,6 +11,14 @@
 extern "C" {
 #endif
 
+/*
+ * Note: Though this sometimes represents an actual string, I don't see any
+ * guarantees of a NULL character.
+ *
+ * To be safe, if you want to print it, do something like
+ *
+ * 	printf("%.*s", (int)ia5->size, (char *)ia5->buf);
+ */
 typedef struct OCTET_STRING {
 	uint8_t *buf;	/* Buffer with consecutive OCTET_STRING bits */
 	size_t size;	/* Size of the buffer */

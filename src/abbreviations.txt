@@ -26,6 +26,7 @@ pr: print
 ptr: pointer
 refget: reference get (+1 to reference counter)
 refput: reference put (-1 to reference counter)
+rk: Router Key
 rpp: Repository Publication Point
 str: string
 tmp: temporal

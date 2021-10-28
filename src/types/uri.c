@@ -134,52 +134,38 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 	return 0;
 }
 
-static bool
-ia5_starts_with_dot_slash(IA5String_t *string)
-{
-	if (string->size < 2)
-		return false;
-	return string->buf[0] == '.' && string->buf[1] == '/';
-}
-
-/*
- * Files referenced by manifests are not allowed to be anywhere other than the
- * manifest's own directory.
- *
- * I think. RFC 6486:
- *
- *	A manifest is a signed object that enumerates all the signed objects
- *	(files) in the repository publication point (directory) that are
- *	associated with an authority responsible for publishing at that
- *	publication point.
- *
- * This function checks @ia5 does not contain slashes after the starting chain
- * of "./"s.
- */
 static int
-validate_current_directory(IA5String_t *string)
+validate_mft_ia5(IA5String_t *ia5)
 {
-	IA5String_t clone;
 	size_t i;
+	int error;
 
-	if (string->size == 0)
-		return pr_val_err("Manifest contains a file with an empty string as a name.");
-	if (string->buf[0] == '/')
-		return pr_val_err("Manifest contains a file with an absolute URL.");
+	if (ia5->size == 0)
+		return pr_val_err("Manifest references a file with an empty string as name.");
+	if (ia5->size == 1 && ia5->buf[0] == '.')
+		return pr_val_err("Manifest references a file named '.'");
+	if (ia5->size == 2 && ia5->buf[0] == '.' && ia5->buf[1] == '.')
+		return pr_val_err("Manifest references a file named '..'");
 
-	clone.buf = string->buf;
-	clone.size = string->size;
-	while (ia5_starts_with_dot_slash(&clone)) {
-		clone.buf += 2;
-		clone.size -= 2;
+	for (i = 0; i < ia5->size; i++) {
+		/*
+		 * RFC 6486: "Each FileAndHash is an ordered pair consisting of
+		 * the name of the file in the repository publication point
+		 * (directory)"
+		 *
+		 * I'm assuming "file name" implies "slash not allowed."
+		 *
+		 * This is particularly relevant because this RPP should never
+		 * be allowed to write in other RPP paths, or worse yet, outside
+		 * of the cache directory.
+		 */
+		if (ia5->buf[i] == '/')
+			return pr_val_err("Manifest references a file whose name has at least one slash character.");
+
+		error = validate_url_character(ia5->buf[i]);
+		if (error)
+			return error;
 	}
-
-	if (clone.size == 0)
-		return pr_val_err("Manifest contains a file that appears to be a directory.");
-
-	for (i = 0; i < clone.size; i++)
-		if (clone.buf[i] == '/')
-			return pr_val_err("Manifest contains a URL that references a separate repository publication point.");
 
 	return 0;
 }
@@ -196,12 +182,10 @@ validate_current_directory(IA5String_t *string)
 static int
 ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 {
-	int error;
-	size_t i;
-
 	char *joined;
 	char *slash_pos;
 	int dir_len;
+	int error;
 
 	/*
 	 * IA5String is a subset of ASCII. However, IA5String_t doesn't seem to
@@ -209,26 +193,13 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	 * `(char *) ia5->buf` is fair, but `strlen(ia5->buf)` is not.
 	 */
 
-	for (i = 0; i < ia5->size; i++) {
-		error = validate_url_character(ia5->buf[i]);
-		if (error)
-			return error;
-	}
-
-	error = validate_current_directory(ia5);
+	error = validate_mft_ia5(ia5);
 	if (error)
 		return error;
 
 	slash_pos = strrchr(mft, '/');
-	if (slash_pos == NULL) {
-		joined = malloc(ia5->size + 1);
-		if (joined == NULL)
-			return pr_enomem();
-		strncpy(joined, (char *) ia5->buf, ia5->size);
-		joined[ia5->size] = '\0';
-		dir_len = 0;
-		goto succeed;
-	}
+	if (slash_pos == NULL)
+		return pr_val_err("Manifest URL '%s' contains no slashes.", mft);
 
 	dir_len = (slash_pos + 1) - mft;
 	joined = malloc(dir_len + ia5->size + 1);
@@ -239,7 +210,6 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	strncpy(joined + dir_len, (char *) ia5->buf, ia5->size);
 	joined[dir_len + ia5->size] = '\0';
 
-succeed:
 	uri->global = joined;
 	uri->global_len = dir_len + ia5->size;
 	return 0;
@@ -442,7 +412,8 @@ uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
 }
 
 /*
- * Manifests URIs are a little special in that they are relative.
+ * Manifest fileList entries are a little special in that they're just file
+ * names. This function will infer the rest of the URL.
  */
 int
 uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
