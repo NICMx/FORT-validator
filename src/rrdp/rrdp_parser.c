@@ -150,10 +150,9 @@ base64_sanitize(char *content, char **out)
 		return error;
 
 	if (original_size <= BUF_SIZE) {
-		result = malloc(original_size + 1);
+		result = strdup(content);
 		if (result == NULL)
 			return pr_enomem();
-		result[original_size] = '\0';
 		*out = result;
 		return 0;
 	}
