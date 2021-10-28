@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "uri.h"
+#include "types/uri.h"
 
 /* Init on the main process */
 int http_init(void);

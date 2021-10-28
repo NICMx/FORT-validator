@@ -37,7 +37,7 @@ check_PROGRAMS += rtr/pdu.test
 check_PROGRAMS += rtr/primitive_reader.test
 TESTS = ${check_PROGRAMS}
 
-address_test_SOURCES = address_test.c
+address_test_SOURCES = types/address_test.c
 address_test_LDADD = ${MY_LDADD}
 
 deltas_array_test_SOURCES = rtr/db/deltas_array_test.c
@@ -58,7 +58,7 @@ rrdp_objects_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
 rsync_test_SOURCES = rsync_test.c
 rsync_test_LDADD = ${MY_LDADD}
 
-serial_test_SOURCES = serial_test.c
+serial_test_SOURCES = types/serial_test.c
 serial_test_LDADD = ${MY_LDADD}
 
 tal_test_SOURCES = tal_test.c
@@ -67,7 +67,7 @@ tal_test_LDADD = ${MY_LDADD}
 thread_pool_test_SOURCES = thread_pool_test.c
 thread_pool_test_LDADD = ${MY_LDADD}
 
-uri_test_SOURCES = uri_test.c
+uri_test_SOURCES = types/uri_test.c
 uri_test_LDADD = ${MY_LDADD}
 
 vcard_test_SOURCES = vcard_test.c

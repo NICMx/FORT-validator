@@ -2,7 +2,7 @@
 #define SRC_RSYNC_RSYNC_H_
 
 #include <stdbool.h>
-#include "uri.h"
+#include "types/uri.h"
 
 struct uri_list;
 

@@ -10,9 +10,10 @@
 #include "json_parser.c"
 #include "log.c"
 #include "output_printer.c"
-#include "serial.c"
-#include "object/router_key.c"
-#include "rtr/db/vrp.c"
+#include "types/delta.c"
+#include "types/router_key.c"
+#include "types/serial.c"
+#include "types/vrp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
 #include "rtr/db/db_table.c"
@@ -271,27 +272,7 @@ check_base(serial_t expected_serial, bool const *expected_base)
 static int
 vrp_add(struct delta_vrp const *delta, void *arg)
 {
-	union {
-		struct v4_address v4;
-		struct v6_address v6;
-	} addr;
-
-	switch (delta->vrp.addr_fam) {
-	case AF_INET:
-		addr.v4.prefix.len = delta->vrp.prefix_length;
-		addr.v4.prefix.addr = delta->vrp.prefix.v4;
-		addr.v4.max_length = delta->vrp.max_prefix_length;
-		return deltas_add_roa_v4(arg, delta->vrp.asn, &addr.v4,
-		    delta->flags);
-	case AF_INET6:
-		addr.v6.prefix.len = delta->vrp.prefix_length;
-		addr.v6.prefix.addr = delta->vrp.prefix.v6;
-		addr.v6.max_length = delta->vrp.max_prefix_length;
-		return deltas_add_roa_v6(arg, delta->vrp.asn, &addr.v6,
-		    delta->flags);
-	}
-
-	ck_abort_msg("Unknown family: %u", delta->vrp.addr_fam);
+	return deltas_add_roa(arg, &delta->vrp, delta->flags);
 }
 
 static int

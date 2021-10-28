@@ -7,7 +7,7 @@
 #include "common.h"
 #include "crypto/base64.h"
 #include "data_structure/array_list.h"
-#include "object/router_key.h"
+#include "types/router_key.h"
 
 struct slurm_prefix_wrap {
 	struct slurm_prefix element;
@@ -155,18 +155,18 @@ prefix_filtered_by(struct slurm_prefix_wrap *filter_wrap,
 		/* The filter has ASN and prefix */
 		if ((filter->data_flag & ~SLURM_COM_FLAG_COMMENT) ==
 		    (SLURM_COM_FLAG_ASN | SLURM_PFX_FLAG_PREFIX))
-			return VRP_ASN_EQ(filter_vrp, prefix_vrp) &&
-			    VRP_PREFIX_COV(filter_vrp, prefix_vrp);
+			return (filter_vrp->asn == prefix_vrp->asn) &&
+			    vrp_prefix_cov(filter_vrp, prefix_vrp);
 
 		/* Both have ASN */
 		if ((filter->data_flag & SLURM_COM_FLAG_ASN) > 0 &&
 		    (prefix->data_flag & SLURM_COM_FLAG_ASN) > 0)
-			return VRP_ASN_EQ(filter_vrp, prefix_vrp);
+			return filter_vrp->asn == prefix_vrp->asn;
 
 		/* Both have a prefix of the same type */
 		if ((filter->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
 		    (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
-			return VRP_PREFIX_COV(filter_vrp, prefix_vrp);
+			return vrp_prefix_cov(filter_vrp, prefix_vrp);
 
 		return false;
 	}
@@ -174,10 +174,10 @@ prefix_filtered_by(struct slurm_prefix_wrap *filter_wrap,
 	/* It has the same data, compare it */
 	equal = true;
 	if (equal && (filter->data_flag & SLURM_COM_FLAG_ASN) > 0)
-		equal = VRP_ASN_EQ(filter_vrp, prefix_vrp);
+		equal = filter_vrp->asn == prefix_vrp->asn;
 
 	if (equal && (filter->data_flag & SLURM_PFX_FLAG_PREFIX) > 0)
-		equal = VRP_PREFIX_COV(filter_vrp, prefix_vrp);
+		equal = vrp_prefix_cov(filter_vrp, prefix_vrp);
 
 	return equal;
 }
@@ -261,7 +261,7 @@ prefix_contained(struct slurm_prefix *left, struct slurm_prefix *right)
 
 	return (left->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
 	    (right->data_flag & SLURM_PFX_FLAG_PREFIX) > 0 &&
-	    VRP_PREFIX_COV(left_vrp, right_vrp);
+	    vrp_prefix_cov(left_vrp, right_vrp);
 }
 
 /*

@@ -1,12 +1,13 @@
 #include <check.h>
 #include <stdlib.h>
 
-#include "address.c"
 #include "common.c"
 #include "log.c"
 #include "impersonator.c"
-#include "object/router_key.c"
-#include "rtr/db/vrp.c"
+#include "types/address.c"
+#include "types/delta.c"
+#include "types/router_key.c"
+#include "types/vrp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/db_table.c"
 

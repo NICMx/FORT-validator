@@ -1,4 +1,4 @@
-#include "uri.h"
+#include "types/uri.h"
 
 #include <errno.h>
 #include <strings.h>
@@ -638,4 +638,3 @@ uri_op_get_printable(struct rpki_uri *uri)
 	format = config_get_op_log_filename_format();
 	return uri_get_printable(uri, format);
 }
-

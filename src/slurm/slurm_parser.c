@@ -11,9 +11,9 @@
 #include "crypto/base64.h"
 #include "algorithm.h"
 #include "log.h"
-#include "address.h"
 #include "json_parser.h"
-#include "object/router_key.h"
+#include "types/address.h"
+#include "types/router_key.h"
 #include "slurm/db_slurm.h"
 
 /* JSON members */

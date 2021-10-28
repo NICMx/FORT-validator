@@ -2,7 +2,6 @@
 #define SRC_OBJECT_MANIFEST_H_
 
 #include <stdbool.h>
-#include "uri.h"
 #include "rpp.h"
 
 int handle_manifest(struct rpki_uri *, bool, struct rpp **);

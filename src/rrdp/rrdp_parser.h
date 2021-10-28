@@ -2,8 +2,8 @@
 #define SRC_RRDP_RRDP_PARSER_H_
 
 #include <stdbool.h>
+#include "types/uri.h"
 #include "rrdp/rrdp_objects.h"
-#include "uri.h"
 #include "visited_uris.h"
 
 int rrdp_parse_notification(struct rpki_uri *, bool, bool,

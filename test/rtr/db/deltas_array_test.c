@@ -3,7 +3,10 @@
 
 #include "log.c"
 #include "impersonator.c"
-#include "rtr/db/vrp.c"
+#include "types/address.c"
+#include "types/delta.c"
+#include "types/router_key.c"
+#include "types/vrp.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
 

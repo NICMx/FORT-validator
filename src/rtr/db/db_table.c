@@ -2,6 +2,8 @@
 
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+
+#include "log.h"
 #include "data_structure/uthash_nonfatal.h"
 
 struct hashable_roa {
@@ -231,30 +233,6 @@ rtrhandler_handle_router_key(struct db_table *table,
 	return error;
 }
 
-static int
-add_roa_delta(struct deltas *deltas, struct hashable_roa *roa, int op)
-{
-	union {
-		struct v4_address v4;
-		struct v6_address v6;
-	} addr;
-
-	switch (roa->data.addr_fam) {
-	case AF_INET:
-		addr.v4.prefix.addr = roa->data.prefix.v4;
-		addr.v4.prefix.len = roa->data.prefix_length;
-		addr.v4.max_length = roa->data.max_prefix_length;
-		return deltas_add_roa_v4(deltas, roa->data.asn, &addr.v4, op);
-	case AF_INET6:
-		addr.v6.prefix.addr = roa->data.prefix.v6;
-		addr.v6.prefix.len = roa->data.prefix_length;
-		addr.v6.max_length = roa->data.max_prefix_length;
-		return deltas_add_roa_v6(deltas, roa->data.asn, &addr.v6, op);
-	}
-
-	pr_crit("Unknown address family: %d", roa->data.addr_fam);
-}
-
 /*
  * Copies `@roas1 - roas2` into @deltas.
  *
@@ -271,7 +249,7 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 	for (n1 = roas1; n1 != NULL; n1 = n1->hh.next) {
 		HASH_FIND(hh, roas2, &n1->data, sizeof(n1->data), n2);
 		if (n2 == NULL) {
-			error = add_roa_delta(deltas, n1, op);
+			error = deltas_add_roa(deltas, &n1->data, op);
 			if (error)
 				return error;
 		}

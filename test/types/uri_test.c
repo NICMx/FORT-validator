@@ -2,10 +2,10 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include "uri.c"
 #include "common.c"
 #include "log.c"
 #include "impersonator.c"
+#include "types/uri.c"
 
 static int
 test_validate(char const *src)

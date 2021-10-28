@@ -4,9 +4,9 @@
 #include <openssl/x509.h>
 #include <stdbool.h>
 #include "resource.h"
-#include "uri.h"
 #include "object/certificate.h"
 #include "object/name.h"
+#include "types/uri.h"
 
 /*
  * One certificate stack is allocated per validation cycle, and it is used

@@ -6,7 +6,6 @@ bin_PROGRAMS = fort
 
 fort_SOURCES  = main.c
 
-fort_SOURCES += address.h address.c
 fort_SOURCES += algorithm.h algorithm.c
 fort_SOURCES += certificate_refs.h certificate_refs.c
 fort_SOURCES += cert_stack.h cert_stack.c
@@ -28,12 +27,10 @@ fort_SOURCES += random.h random.c
 fort_SOURCES += reqs_errors.h reqs_errors.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
-fort_SOURCES += serial.h serial.c
 fort_SOURCES += sorted_array.h sorted_array.c
 fort_SOURCES += state.h state.c
 fort_SOURCES += str_token.h str_token.c
 fort_SOURCES += thread_var.h thread_var.c
-fort_SOURCES += uri.h uri.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += validation_handler.h validation_handler.c
 fort_SOURCES += validation_run.h validation_run.c
@@ -43,6 +40,13 @@ fort_SOURCES += asn1/content_info.h asn1/content_info.c
 fort_SOURCES += asn1/decode.h asn1/decode.c
 fort_SOURCES += asn1/oid.h asn1/oid.c
 fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
+
+fort_SOURCES += types/address.h types/address.c
+fort_SOURCES += types/delta.c types/delta.h
+fort_SOURCES += types/router_key.c types/router_key.h
+fort_SOURCES += types/serial.h types/serial.c
+fort_SOURCES += types/uri.h types/uri.c
+fort_SOURCES += types/vrp.c types/vrp.h
 
 fort_SOURCES += config/boolean.c config/boolean.h
 fort_SOURCES += config/filename_format.h config/filename_format.c
@@ -80,7 +84,6 @@ fort_SOURCES += object/ghostbusters.h object/ghostbusters.c
 fort_SOURCES += object/manifest.h object/manifest.c
 fort_SOURCES += object/name.h object/name.c
 fort_SOURCES += object/roa.h object/roa.c
-fort_SOURCES += object/router_key.c object/router_key.h
 fort_SOURCES += object/signed_object.h object/signed_object.c
 fort_SOURCES += object/tal.h object/tal.c
 fort_SOURCES += object/vcard.h object/vcard.c
@@ -110,8 +113,7 @@ fort_SOURCES += rtr/rtr.c rtr/rtr.h
 fort_SOURCES += rtr/db/db_table.c rtr/db/db_table.h
 fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
 fort_SOURCES += rtr/db/deltas_array.c rtr/db/deltas_array.h
-fort_SOURCES += rtr/db/roa.c rtr/db/roa.h
-fort_SOURCES += rtr/db/vrp.c rtr/db/vrp.h
+fort_SOURCES += rtr/db/roa.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 
 fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h

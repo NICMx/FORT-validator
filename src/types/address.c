@@ -1,4 +1,4 @@
-#include "address.h"
+#include "types/address.h"
 
 #include <stdlib.h> /* strtoul() */
 #include <string.h> /* memset(), memcpy() */
@@ -45,7 +45,7 @@ u32_suffix_mask(unsigned int prefix_len)
  * Same as u32_suffix_mask(), except the result is in network byte order
  * ("be", for "big endian").
  */
-uint32_t
+static uint32_t
 be32_suffix_mask(unsigned int prefix_len)
 {
 	return htonl(u32_suffix_mask(prefix_len));
@@ -135,24 +135,13 @@ ipv6_suffix_mask(unsigned int prefix_len, struct in6_addr *result)
 bool
 prefix4_equals(struct ipv4_prefix const *a, struct ipv4_prefix const *b)
 {
-	return (a->addr.s_addr == b->addr.s_addr) && (a->len == b->len);
+	return (a->len == b->len) && (a->addr.s_addr == b->addr.s_addr);
 }
 
 bool
 prefix6_equals(struct ipv6_prefix const *a, struct ipv6_prefix const *b)
 {
-	unsigned int i;
-
-	/*
-	 * Not sure if I can use a memcmp() instead.
-	 * I feel like in6_addr's union could cause padding in weird
-	 * implementations.
-	 */
-	for (i = 0; i < 16; i++)
-		if (a->addr.s6_addr[i] != b->addr.s6_addr[i])
-			return false;
-
-	return a->len == b->len;
+	return (a->len == b->len) && IN6_ARE_ADDR_EQUAL(&a->addr, &b->addr);
 }
 
 /**
@@ -488,7 +477,8 @@ ipv6_prefix_validate(struct ipv6_prefix *prefix)
  * Check if @son_addr is covered by @f_addr prefix of @f_len length
  */
 bool
-ipv4_covered(struct in_addr *f_addr, uint8_t f_len, struct in_addr *son_addr)
+ipv4_covered(struct in_addr const *f_addr, uint8_t f_len,
+    struct in_addr const *son_addr)
 {
 	return (son_addr->s_addr & ~be32_suffix_mask(f_len)) == f_addr->s_addr;
 }
@@ -497,7 +487,8 @@ ipv4_covered(struct in_addr *f_addr, uint8_t f_len, struct in_addr *son_addr)
  * Check if @son_addr is covered by @f_addr prefix of @f_len length
  */
 bool
-ipv6_covered(struct in6_addr *f_addr, uint8_t f_len, struct in6_addr *son_addr)
+ipv6_covered(struct in6_addr const *f_addr, uint8_t f_len,
+    struct in6_addr const *son_addr)
 {
 	struct in6_addr suffix;
 	unsigned int i;

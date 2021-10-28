@@ -4,8 +4,8 @@
 #include <stdbool.h>
 #include <sys/queue.h>
 #include <openssl/evp.h>
-
-#include "rtr/db/vrp.h"
+#include "types/vrp.h"
+#include "types/router_key.h"
 
 /* Flags to get data from structs */
 #define SLURM_COM_FLAG_NONE		0x00

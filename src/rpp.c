@@ -4,7 +4,7 @@
 #include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
-#include "uri.h"
+#include "types/uri.h"
 #include "data_structure/array_list.h"
 #include "object/certificate.h"
 #include "object/crl.h"

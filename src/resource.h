@@ -2,8 +2,8 @@
 #define SRC_RESOURCE_H_
 
 #include <stdbool.h>
-#include "address.h"
 #include "resource/asn.h"
+#include "types/address.h"
 #include "asn1/asn1c/ASIdentifiers.h"
 #include "asn1/asn1c/IPAddressFamily.h"
 

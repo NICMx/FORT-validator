@@ -1,9 +1,9 @@
 #ifndef SRC_VALIDATION_HANDLER_H_
 #define SRC_VALIDATION_HANDLER_H_
 
-#include "address.h"
+#include "types/address.h"
+#include "types/router_key.h"
 #include "object/name.h"
-#include "object/router_key.h"
 
 /**
  * Functions that handle validation results.

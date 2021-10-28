@@ -1,7 +1,7 @@
 #include <check.h>
 #include "object/tal.h"
 
-#include "address.c"
+#include "types/address.c"
 
 static unsigned char db_imp_ski[] = {
     0x0e, 0xe9, 0x6a, 0x8e, 0x2f, 0xac, 0x50, 0xce, 0x6c, 0x5f,

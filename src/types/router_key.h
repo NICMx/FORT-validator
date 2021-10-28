@@ -1,5 +1,5 @@
-#ifndef SRC_OBJECT_ROUTER_KEY_H_
-#define SRC_OBJECT_ROUTER_KEY_H_
+#ifndef SRC_TYPES_ROUTER_KEY_H_
+#define SRC_TYPES_ROUTER_KEY_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -30,7 +30,10 @@ struct router_key {
 	unsigned char	spk[RK_SPKI_LEN];
 };
 
+typedef int (*router_key_foreach_cb)(struct router_key const *, void *);
+
 void router_key_init(struct router_key *, unsigned char const *, uint32_t,
     unsigned char const *);
+int router_key_print(struct router_key const *, void *);
 
-#endif /* SRC_OBJECT_ROUTER_KEY_H_ */
+#endif /* SRC_TYPES_ROUTER_KEY_H_ */

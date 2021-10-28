@@ -1,7 +1,7 @@
 #include <check.h>
 #include <stdlib.h>
 
-#include "serial.c"
+#include "types/serial.c"
 
 START_TEST(pivot_0)
 {

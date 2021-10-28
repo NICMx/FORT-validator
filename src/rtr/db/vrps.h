@@ -8,7 +8,7 @@
  */
 
 #include <stdbool.h>
-
+#include "types/address.h"
 #include "rtr/db/deltas_array.h"
 
 int vrps_init(void);

@@ -6,7 +6,7 @@
 #include "file.h"
 #include "log.h"
 #include "crypto/base64.h"
-#include "rtr/db/vrp.h"
+#include "types/vrp.h"
 
 static char addr_buf[INET6_ADDRSTRLEN];
 

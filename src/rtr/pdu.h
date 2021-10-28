@@ -5,7 +5,7 @@
 #include <netinet/in.h>
 
 #include "common.h"
-#include "object/router_key.h"
+#include "types/router_key.h"
 #include "rtr/primitive_reader.h"
 #include "rtr/rtr.h"
 

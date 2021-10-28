@@ -3,6 +3,7 @@
 #include <stdatomic.h>
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include "types/address.h"
 #include "data_structure/array_list.h"
 
 struct delta_v4 {
@@ -89,44 +90,56 @@ deltas_refput(struct deltas *deltas)
 	}
 }
 
-int
-deltas_add_roa_v4(struct deltas *deltas, uint32_t as,
-    struct v4_address const *addr, int op)
+static struct deltas_v4 *
+get_deltas_array4(struct deltas *deltas, int op)
 {
-	struct delta_v4 delta = {
-		.as = as,
-		.prefix = addr->prefix,
-		.max_length = addr->max_length,
-	};
-
 	switch (op) {
 	case FLAG_ANNOUNCEMENT:
-		return deltas_v4_add(&deltas->v4.adds, &delta);
+		return &deltas->v4.adds;
 	case FLAG_WITHDRAWAL:
-		return deltas_v4_add(&deltas->v4.removes, &delta);
+		return &deltas->v4.removes;
+	}
+
+	pr_crit("Unknown delta operation: %d", op);
+}
+
+static struct deltas_v6 *
+get_deltas_array6(struct deltas *deltas, int op)
+{
+	switch (op) {
+	case FLAG_ANNOUNCEMENT:
+		return &deltas->v6.adds;
+	case FLAG_WITHDRAWAL:
+		return &deltas->v6.removes;
 	}
 
 	pr_crit("Unknown delta operation: %d", op);
 }
 
 int
-deltas_add_roa_v6(struct deltas *deltas, uint32_t as,
-    struct v6_address const *addr, int op)
+deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op)
 {
-	struct delta_v6 delta = {
-		.as = as,
-		.prefix = addr->prefix,
-		.max_length = addr->max_length,
-	};
+	union {
+		struct delta_v4 v4;
+		struct delta_v6 v6;
+	} delta;
 
-	switch (op) {
-	case FLAG_ANNOUNCEMENT:
-		return deltas_v6_add(&deltas->v6.adds, &delta);
-	case FLAG_WITHDRAWAL:
-		return deltas_v6_add(&deltas->v6.removes, &delta);
+	switch (vrp->addr_fam) {
+	case AF_INET:
+		delta.v4.as = vrp->asn;
+		delta.v4.prefix.addr = vrp->prefix.v4;
+		delta.v4.prefix.len = vrp->prefix_length;
+		delta.v4.max_length = vrp->max_prefix_length;
+		return deltas_v4_add(get_deltas_array4(deltas, op), &delta.v4);
+	case AF_INET6:
+		delta.v6.as = vrp->asn;
+		delta.v6.prefix.addr = vrp->prefix.v6;
+		delta.v6.prefix.len = vrp->prefix_length;
+		delta.v6.max_length = vrp->max_prefix_length;
+		return deltas_v6_add(get_deltas_array6(deltas, op), &delta.v6);
 	}
 
-	pr_crit("Unknown delta operation: %d", op);
+	pr_crit("Unknown protocol: %d", vrp->addr_fam);
 }
 
 int

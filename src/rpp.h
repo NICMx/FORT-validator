@@ -1,7 +1,7 @@
 #ifndef SRC_RPP_H_
 #define SRC_RPP_H_
 
-#include "uri.h"
+#include "types/uri.h"
 
 struct rpp;
 

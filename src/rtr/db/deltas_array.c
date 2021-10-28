@@ -1,5 +1,9 @@
 #include "rtr/db/deltas_array.h"
 
+#include <limits.h>
+#include <errno.h>
+#include "config.h"
+
 struct deltas_array {
 	struct deltas **array; /* It's a circular array. */
 	unsigned int len; /* Occupied slots. */

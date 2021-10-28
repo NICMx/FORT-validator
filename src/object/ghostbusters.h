@@ -1,8 +1,8 @@
 #ifndef SRC_OBJECT_GHOSTBUSTERS_H_
 #define SRC_OBJECT_GHOSTBUSTERS_H_
 
-#include "uri.h"
 #include "rpp.h"
+#include "types/uri.h"
 
 int ghostbusters_traverse(struct rpki_uri *, struct rpp *);
 

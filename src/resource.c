@@ -3,10 +3,10 @@
 #include <errno.h>
 #include <stdint.h> /* UINT32_MAX */
 
-#include "address.h"
 #include "log.h"
 #include "sorted_array.h"
 #include "thread_var.h"
+#include "types/address.h"
 #include "resource/ip4.h"
 #include "resource/ip6.h"
 #include <sys/socket.h>

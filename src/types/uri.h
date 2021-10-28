@@ -1,5 +1,5 @@
-#ifndef SRC_URI_H_
-#define SRC_URI_H_
+#ifndef SRC_TYPES_URI_H_
+#define SRC_TYPES_URI_H_
 
 #include <stdbool.h>
 #include <openssl/x509v3.h>
@@ -41,4 +41,4 @@ bool uri_is_rsync(struct rpki_uri *);
 char const *uri_val_get_printable(struct rpki_uri *);
 char const *uri_op_get_printable(struct rpki_uri *);
 
-#endif /* SRC_URI_H_ */
+#endif /* SRC_TYPES_URI_H_ */

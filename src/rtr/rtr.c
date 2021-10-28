@@ -12,8 +12,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#include "address.h"
 #include "config.h"
+#include "types/address.h"
 #include "data_structure/array_list.h"
 #include "rtr/pdu.h"
 #include "thread/thread_pool.h"

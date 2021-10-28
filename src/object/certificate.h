@@ -6,7 +6,7 @@
 #include "certificate_refs.h"
 #include "resource.h"
 #include "rpp.h"
-#include "uri.h"
+#include "types/uri.h"
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/SignatureValue.h"
 

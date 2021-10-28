@@ -1,8 +1,9 @@
 #ifndef SRC_RTR_DB_DB_TABLE_H_
 #define SRC_RTR_DB_DB_TABLE_H_
 
+#include "types/address.h"
+#include "types/vrp.h"
 #include "rtr/db/delta.h"
-#include "rtr/db/vrp.h"
 
 struct db_table;
 

@@ -9,8 +9,8 @@
 #include "common.h"
 #include "output_printer.h"
 #include "validation_handler.h"
+#include "types/router_key.h"
 #include "data_structure/array_list.h"
-#include "object/router_key.h"
 #include "object/tal.h"
 #include "rtr/rtr.h"
 #include "rtr/db/db_table.h"
@@ -413,7 +413,7 @@ vrp_ovrd_remove(struct delta_vrp const *delta, void *arg)
 
 	filtered_vrps = &lists->prefixes;
 	SLIST_FOREACH(ptr, filtered_vrps, next)
-		if (VRP_EQ(&delta->vrp, &ptr->delta.vrp) &&
+		if (vrp_equals(&delta->vrp, &ptr->delta.vrp) &&
 		    delta->flags != ptr->delta.flags) {
 			SLIST_REMOVE(filtered_vrps, ptr, vrp_node, next);
 			free(ptr);

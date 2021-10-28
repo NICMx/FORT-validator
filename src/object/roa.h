@@ -1,9 +1,9 @@
 #ifndef SRC_OBJECT_ROA_H_
 #define SRC_OBJECT_ROA_H_
 
-#include "address.h"
 #include "rpp.h"
-#include "uri.h"
+#include "types/address.h"
+#include "types/uri.h"
 
 int roa_traverse(struct rpki_uri *, struct rpp *);
 

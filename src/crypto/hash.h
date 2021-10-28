@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "uri.h"
+#include "types/uri.h"
 #include "asn1/asn1c/BIT_STRING.h"
 
 int hash_validate_mft_file(char const *, struct rpki_uri *uri,

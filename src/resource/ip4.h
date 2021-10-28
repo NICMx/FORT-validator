@@ -2,7 +2,7 @@
 #define SRC_RESOURCE_IP4_H_
 
 #include <stdbool.h>
-#include "address.h"
+#include "types/address.h"
 
 struct resources_ipv4;
 

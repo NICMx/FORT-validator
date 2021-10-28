@@ -2,10 +2,10 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "address.c"
 #include "common.c"
 #include "log.c"
 #include "impersonator.c"
+#include "types/address.c"
 
 static void
 test_range4(uint32_t min, uint32_t max, bool valid)
