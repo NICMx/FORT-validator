@@ -992,7 +992,7 @@ set_default_values(void)
 		"--times",
 		"--contimeout=20",
 		"--timeout=15",
-		"--max-size", "$HTTP_MAX_FILE_SIZE",
+		"--max-size=20MB",
 		"$REMOTE",
 		"$LOCAL",
 	};
@@ -1001,7 +1001,7 @@ set_default_values(void)
 		"--times",
 		"--contimeout=20",
 		"--timeout=15",
-		"--max-size", "$HTTP_MAX_FILE_SIZE",
+		"--max-size=20MB",
 		"--dirs",
 		"$REMOTE",
 		"$LOCAL",
@@ -1050,8 +1050,8 @@ set_default_values(void)
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
 	rpki_config.rsync.strategy = RSYNC_ROOT_EXCEPT_TA;
-	rpki_config.rsync.retry.count = 0;
-	rpki_config.rsync.retry.interval = 5;
+	rpki_config.rsync.retry.count = 1;
+	rpki_config.rsync.retry.interval = 4;
 	rpki_config.rsync.program = strdup("rsync");
 	if (rpki_config.rsync.program == NULL) {
 		error = pr_enomem();
@@ -1071,8 +1071,8 @@ set_default_values(void)
 	/* By default, has a higher priority than rsync */
 	rpki_config.http.enabled = true;
 	rpki_config.http.priority = 60;
-	rpki_config.http.retry.count = 0;
-	rpki_config.http.retry.interval = 5;
+	rpki_config.http.retry.count = 1;
+	rpki_config.http.retry.interval = 4;
 	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	if (rpki_config.http.user_agent == NULL) {
 		error = pr_enomem();

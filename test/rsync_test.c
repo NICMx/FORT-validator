@@ -16,31 +16,6 @@ state_retrieve(void)
 	return NULL;
 }
 
-#define CK_STR(uint, string)						\
-	ck_assert_int_eq(0, uint2string(uint, &str));			\
-	ck_assert_str_eq(string, str);					\
-	free(str);
-
-START_TEST(rsync_test_uint2string)
-{
-	char *str;
-
-	CK_STR(0, "0");
-	CK_STR(1, "1");
-	CK_STR(9, "9");
-	CK_STR(10, "10");
-	CK_STR(100, "100");
-	CK_STR(1000, "1000");
-	CK_STR(10000, "10000");
-	CK_STR(100000, "100000");
-	CK_STR(1000000, "1000000");
-	CK_STR(10000000, "10000000");
-	CK_STR(100000000, "100000000");
-	CK_STR(1000000000, "1000000000");
-	CK_STR(4294967295, "4294967295");
-}
-END_TEST
-
 static void
 assert_descendant(bool expected, char *ancestor, char *descendant)
 {
@@ -160,10 +135,7 @@ END_TEST
 Suite *rsync_load_suite(void)
 {
 	Suite *suite;
-	TCase *core, *prefix_equals, *uri_list, *test_get_prefix;
-
-	core = tcase_create("Core");
-	tcase_add_test(core, rsync_test_uint2string);
+	TCase *prefix_equals, *uri_list, *test_get_prefix;
 
 	prefix_equals = tcase_create("PrefixEquals");
 	tcase_add_test(prefix_equals, rsync_test_prefix_equals);
@@ -175,7 +147,6 @@ Suite *rsync_load_suite(void)
 	tcase_add_test(test_get_prefix, rsync_test_get_prefix);
 
 	suite = suite_create("rsync_test()");
-	suite_add_tcase(suite, core);
 	suite_add_tcase(suite, prefix_equals);
 	suite_add_tcase(suite, uri_list);
 	suite_add_tcase(suite, test_get_prefix);

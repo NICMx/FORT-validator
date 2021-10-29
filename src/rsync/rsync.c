@@ -192,32 +192,6 @@ duplicate_fds(int fds[2][2])
 	close(fds[1][0]);
 }
 
-static int
-uint2string(unsigned int uint, char **result)
-{
-	char *str;
-	int str_len;
-
-	str_len = snprintf(NULL, 0, "%u", uint);
-	if (str_len < 0)
-		return pr_val_err("Cannot compute length of '%u' string: Unknown cause", uint);
-
-	str_len++; /* Null chara */
-
-	str = malloc(str_len * sizeof(char));
-	if (str == NULL)
-		return pr_enomem();
-
-	str_len = snprintf(str, str_len, "%u", uint);
-	if (str_len < 0) {
-		free(str);
-		return pr_val_err("Cannot convert '%u' into a string: Unknown cause", uint);
-	}
-
-	*result = str;
-	return 0;
-}
-
 static void
 release_args(char **args, unsigned int size)
 {
@@ -235,7 +209,6 @@ prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 	struct string_array const *config_args;
 	char **copy_args;
 	unsigned int i;
-	int error;
 
 	config_args = config_get_rsync_args(is_ta);
 	/*
@@ -258,12 +231,7 @@ prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 			copy_args[i + 1] = strdup(uri_get_global(uri));
 		else if (strcmp(config_args->array[i], "$LOCAL") == 0)
 			copy_args[i + 1] = strdup(uri_get_local(uri));
-		else if (strcmp(config_args->array[i], "$HTTP_MAX_FILE_SIZE") == 0) {
-			error = uint2string(config_get_http_max_file_size(),
-			    &copy_args[i + 1]);
-			if (error)
-				return error;
-		} else
+		else
 			copy_args[i + 1] = strdup(config_args->array[i]);
 
 		if (copy_args[i + 1] == NULL) {

@@ -1214,21 +1214,21 @@ Name of the program needed to invoke an rsync file transfer.
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15", "--max-size", "$HTTP_MAX_FILE_SIZE", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a recursive rsync.
 
-Fort will replace `"$REMOTE"` with the remote URL it needs to download, `"$LOCAL"` with the target local directory where the file is supposed to be dropped, and `"$HTTP_MAX_FILE_SIZE"` with [`--http.max-file-size`](#--httpmax-file-size).
+Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
 
 ### rsync.arguments-flat
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--max-size", "$HTTP_MAX_FILE_SIZE", "--dirs", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "--dirs", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a single-file rsync.
 
-Fort will replace `"$REMOTE"` with the remote URL it needs to download, `"$LOCAL"` with the target local directory where the file is supposed to be dropped, and `"$HTTP_MAX_FILE_SIZE"` with [`--http.max-file-size`](#--httpmax-file-size).
+Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
 
 ### `incidences`
 
