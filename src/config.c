@@ -230,11 +230,6 @@ struct rpki_config {
 			unsigned int max;
 		} validation;
 	} thread_pool;
-
-	struct {
-		unsigned int asns_per_prefix;
-		unsigned int prefixes_per_asn;
-	} roa;
 };
 
 static void print_usage(FILE *, bool);
@@ -837,24 +832,6 @@ static const struct option_field options[] = {
 		.max = 100,
 	},
 
-	{
-		.id = 13000,
-		.name = "roa.max_asns_per_prefix",
-		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, roa.asns_per_prefix),
-		.doc = "Maximum number of Autonomous Systems that are allowed to advertise each prefix. (Maximum number of ROAs that are allowed to share any given prefix.)",
-		.min = 0,
-		.max = UINT_MAX,
-	}, {
-		.id = 13001,
-		.name = "roa.max_prefixes_per_asn",
-		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, roa.prefixes_per_asn),
-		.doc = "Maximum number of prefixes that are allowed to be advertised by each Autonomous System. (Maximum number of ROAs that are allowed to share any given ASN.)",
-		.min = 0,
-		.max = UINT_MAX,
-	},
-
 	{ 0 },
 };
 
@@ -1133,10 +1110,6 @@ set_default_values(void)
 	rpki_config.thread_pool.server.max = 20;
 	/* Usually 5 TALs, let a few more available */
 	rpki_config.thread_pool.validation.max = 5;
-
-	/* TODO adjust */
-	rpki_config.roa.asns_per_prefix = 1024;
-	rpki_config.roa.prefixes_per_asn = 1024;
 
 	return 0;
 
@@ -1669,18 +1642,6 @@ unsigned int
 config_get_thread_pool_validation_max(void)
 {
 	return rpki_config.thread_pool.validation.max;
-}
-
-unsigned int
-config_get_max_asn_per_pfx(void)
-{
-	return rpki_config.roa.asns_per_prefix;
-}
-
-unsigned int
-config_get_max_pfx_per_asn(void)
-{
-	return rpki_config.roa.prefixes_per_asn;
 }
 
 void

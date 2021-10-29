@@ -57,8 +57,6 @@ unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_stale_repository_period(void);
 unsigned int config_get_thread_pool_server_max(void);
 unsigned int config_get_thread_pool_validation_max(void);
-unsigned int config_get_max_asn_per_pfx(void);
-unsigned int config_get_max_pfx_per_asn(void);
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);
