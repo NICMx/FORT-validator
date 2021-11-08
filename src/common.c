@@ -312,6 +312,11 @@ delete_dir_recursive_bottom_up(char const *path)
 	size_t config_len;
 	int error;
 
+#ifdef DEBUG_RRDP
+	/* Dev will likely need this file in the next offline run. */
+	return 0;
+#endif
+
 	error = remove_file(path);
 	if (error)
 		return error;

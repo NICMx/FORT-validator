@@ -109,6 +109,15 @@ process_diff_session(struct update_notification *notification,
 	return process_snapshot(notification, log_operation, visited);
 }
 
+/*
+ * Downloads the Update Notification pointed by @uri, and updates the cache
+ * accordingly.
+ *
+ * "Updates the cache accordingly" means it downloads the missing deltas or
+ * snapshot, and explodes them into the corresponding RPP's local directory.
+ * Calling code can then access the files, just as if they had been downloaded
+ * via rsync.
+ */
 static int
 __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 {
@@ -121,10 +130,40 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 
 	(*data_updated) = false;
 
+#ifndef DEBUG_RRDP
+	/*
+	 * In normal mode (DEBUG_RRDP disabled), RRDP files (notifications,
+	 * snapshots and deltas) are not cached.
+	 * I think it was implemented this way to prevent the cache from growing
+	 * indefinitely. (Because otherwise Fort would lose track of RRDP files
+	 * from disappearing CAs. RRDP files are designed to be relevant on
+	 * single validation runs anyway.)
+	 * Note that __rrdp_load() includes the RRDP file explosion. Exploded
+	 * files (manifests, certificates, ROAs and ghostbusters) are cached as
+	 * usual.
+	 *
+	 * Therefore, in normal offline mode, the entirety of __rrdp_load()
+	 * needs to be skipped because it would otherwise error out while
+	 * attempting to access the nonexistent RRDP files.
+	 *
+	 * But if you need to debug RRDP files specifically, their persistent
+	 * deletions will force you to debug them in online mode.
+	 *
+	 * That's why DEBUG_RRDP exists. When it's enabled, RRDP files will not
+	 * be deleted, and config_get_http_enabled() will kick off during
+	 * __http_download_file(). This will allow you to reach the RRDP file
+	 * parsing code in offline mode.
+	 *
+	 * I know this is somewhat convoluted, but I haven't found a more
+	 * elegant way to do it.
+	 *
+	 * Simple enable example: `make FORT_FLAGS=-DDEBUG_RRDP`
+	 */
 	if (!config_get_http_enabled()) {
 		(*data_updated) = true;
 		return 0;
 	}
+#endif
 
 	/* Avoid multiple requests on the same run */
 	requested = RRDP_URI_REQ_UNVISITED;

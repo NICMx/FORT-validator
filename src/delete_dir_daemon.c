@@ -25,19 +25,30 @@ static int
 remove_file(char const *location)
 {
 	pr_op_debug("Trying to remove file '%s'.", location);
-	if (remove(location))
-		return pr_op_errno(errno, "Couldn't delete file '%s'", location);
+
+#ifdef DEBUG_RRDP
+	/* Dev will likely need this file in the next offline run. */
 	return 0;
+#endif
+
+	return remove(location)
+	    ? pr_op_errno(errno, "Couldn't delete file '%s'", location)
+	    : 0;
 }
 
 static int
 remove_dir(char const *location)
 {
 	pr_op_debug("Trying to remove dir '%s'.", location);
-	if (rmdir(location))
-		return pr_op_errno(errno, "Couldn't delete directory '%s'",
-		    location);
+
+#ifdef DEBUG_RRDP
+	/* Dev will likely need this directory in the next offline run. */
 	return 0;
+#endif
+
+	return rmdir(location)
+	    ? pr_op_errno(errno, "Couldn't delete directory '%s'", location)
+	    : 0;
 }
 
 static int
