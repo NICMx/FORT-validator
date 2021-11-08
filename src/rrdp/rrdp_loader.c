@@ -190,6 +190,7 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 		}
 	}
 
+	pr_val_debug("Downloading RRDP Update Notification...");
 	log_operation = reqs_errors_log_uri(uri_get_global(uri));
 	error = rrdp_parse_notification(uri, log_operation, force_snapshot,
 	    &upd_notification);
@@ -198,9 +199,11 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 
 	/* No updates at the file (yet), didn't pushed to fnstack */
 	if (upd_notification == NULL) {
-		pr_val_debug("No updates yet at '%s'.", uri_get_global(uri));
+		pr_val_debug("The Update Notification has not changed.");
 		goto upd_end;
 	}
+
+	pr_val_debug("The Update Notification changed.");
 
 	do {
 		/* Same flow as a session update */

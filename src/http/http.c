@@ -81,7 +81,7 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
 		 * to reject the file anyway.
 		 */
 		arg->error = -EFBIG;
-		return 0; /* Ugh. See fread(3) */
+		return 0; /* Ugh. See fwrite(3) */
 	}
 
 	return fwrite(data, size, nmemb, arg->dst);
@@ -222,6 +222,7 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 
 	pr_val_debug("HTTP GET: %s", uri);
 	res = curl_easy_perform(handler->curl);
+	pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
 
 	if (args.error == -EFBIG) {
 		pr_val_err("The file '%s' is too big (read: %zu bytes). Rejecting.",

@@ -180,8 +180,10 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 		pr_crit("Wrong usage, at least one check must be 'true'.");
 
 	if (stat(location, &attr) == -1) {
-		if (error_fn != NULL)
-			error_fn(errno, "stat(%s) failed", location);
+		if (error_fn != NULL) {
+			error_fn(errno, "stat(%s) failed: %s", location,
+			    strerror(errno));
+		}
 		return false;
 	}
 

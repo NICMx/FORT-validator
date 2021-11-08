@@ -172,20 +172,27 @@ db_rrdp_uris_cmp(char const *uri, char const *session_id, unsigned long serial,
 
 	found = find_rrdp_uri(uris, uri);
 	if (found == NULL) {
+		pr_val_debug("I don't have state for this Update Notification; downloading snapshot...");
 		*result = RRDP_URI_NOTFOUND;
 		return 0;
 	}
 
 	if (strcmp(session_id, found->data.session_id) != 0) {
+		pr_val_debug("session_id changed from '%s' to '%s'.",
+		    found->data.session_id, session_id);
 		*result = RRDP_URI_DIFF_SESSION;
 		return 0;
 	}
 
 	if (serial != found->data.serial) {
+		pr_val_debug("The serial changed from %lu to %lu.",
+		    found->data.serial, serial);
 		*result = RRDP_URI_DIFF_SERIAL;
 		return 0;
 	}
 
+	pr_val_debug("The new Update Notification has the same session_id (%s) and serial (%lu) as the old one.",
+	    session_id, serial);
 	*result = RRDP_URI_EQUAL;
 	return 0;
 }

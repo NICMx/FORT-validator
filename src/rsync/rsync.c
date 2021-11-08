@@ -452,7 +452,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		if (WIFEXITED(child_status)) {
 			/* Happy path (but also sad path sometimes). */
 			error = WEXITSTATUS(child_status);
-			pr_val_debug("Child terminated with error code %d.",
+			pr_val_debug("The rsync sub-process terminated with error code %d.",
 			    error);
 			if (!error)
 				goto release_args;

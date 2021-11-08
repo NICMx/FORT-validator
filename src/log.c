@@ -507,6 +507,9 @@ int
 __pr_op_err(int error, const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
+	lock_mutex();
+	print_stack_trace(NULL);
+	unlock_mutex();
 	return error;
 }
 
