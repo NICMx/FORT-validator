@@ -173,6 +173,26 @@ curl_err_string(struct http_handler *handler, CURLcode res)
 }
 
 static int
+validate_file_size(char const *uri, struct write_callback_arg *args)
+{
+	float ratio;
+
+	if (args->error == -EFBIG) {
+		pr_val_err("File too big (read: %zu bytes). Rejecting.",
+		    args->total_bytes);
+		return -EFBIG;
+	}
+
+	ratio = args->total_bytes / (float) config_get_http_max_file_size();
+	if (ratio > 0.5f) {
+		pr_op_warn("File size exceeds 50%% of the configured limit (%zu/%ld bytes).",
+		    args->total_bytes, config_get_http_max_file_size());
+	}
+
+	return 0;
+}
+
+static int
 get_http_response_code(struct http_handler *handler, long *http_code,
     char const *uri)
 {
@@ -224,11 +244,9 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	res = curl_easy_perform(handler->curl);
 	pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
 
-	if (args.error == -EFBIG) {
-		pr_val_err("The file '%s' is too big (read: %zu bytes). Rejecting.",
-		    uri, args.total_bytes);
-		return -EFBIG;
-	}
+	args.error = validate_file_size(uri, &args);
+	if (args.error)
+		return args.error;
 
 	args.error = get_http_response_code(handler, &http_code, uri);
 	if (args.error)
