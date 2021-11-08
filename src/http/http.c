@@ -254,11 +254,11 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	*response_code = http_code;
 
 	if (res != CURLE_OK) {
-		pr_val_err("Error requesting URL %s: %s. (HTTP code: %ld)",
-		    uri, curl_err_string(handler, res), http_code);
+		pr_val_err("Error requesting URL: %s. (HTTP code: %ld)",
+		    curl_err_string(handler, res), http_code);
 		if (log_operation)
-			pr_op_err("Error requesting URL %s: %s. (HTTP code: %ld)",
-			    uri, curl_err_string(handler, res), http_code);
+			pr_op_err("Error requesting URL: %s. (HTTP code: %ld)",
+			    curl_err_string(handler, res), http_code);
 
 		switch (res) {
 		case CURLE_FILESIZE_EXCEEDED:
@@ -391,12 +391,11 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 
 		if (retries == config_get_http_retry_count()) {
 			if (retries > 0)
-				pr_val_warn("Max HTTP retries (%u) reached requesting for '%s', won't retry again.",
-				    retries, uri_get_global(uri));
+				pr_val_warn("Max HTTP retries (%u) reached. Won't retry again.",
+				    retries);
 			break;
 		}
-		pr_val_warn("Retrying HTTP request '%s' in %u seconds, %u attempts remaining.",
-		    uri_get_global(uri),
+		pr_val_warn("Retrying HTTP request in %u seconds. %u attempts remaining.",
 		    config_get_http_retry_interval(),
 		    config_get_http_retry_count() - retries);
 		retries++;

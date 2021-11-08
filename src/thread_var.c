@@ -153,6 +153,26 @@ fnstack_cleanup(void)
  * Any pr_op_err()s and friends will now include the new file name.
  * Use fnstack_pop() to revert back to the previously stacked file name.
  * @file is not cloned; it's expected to outlive the push/pop operation.
+ *
+ * Sample usage:
+ *
+ * 	void
+ * 	test_fnstack(void)
+ * 	{
+ * 		fnstack_push("text.txt");
+ * 		pr_val_info("Message 1");
+ * 		fnstack_push("image.png");
+ * 		pr_val_info("Message 2");
+ * 		fnstack_pop();
+ * 		pr_val_info("Message 3");
+ * 		fnstack_pop();
+ * 	}
+ *
+ * Prints
+ *
+ * 	text.txt: Message 1
+ * 	image.png: Message 2
+ * 	text.txt: Message 3
  */
 void
 fnstack_push(char const *file)

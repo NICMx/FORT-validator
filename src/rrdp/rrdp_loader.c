@@ -197,7 +197,6 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 	if (error)
 		goto upd_end;
 
-	/* No updates at the file (yet), didn't pushed to fnstack */
 	if (upd_notification == NULL) {
 		pr_val_debug("The Update Notification has not changed.");
 		goto upd_end;
@@ -274,10 +273,8 @@ set_update:
 	    uri_get_global(uri));
 	db_rrdp_uris_set_last_update(uri_get_global(uri));
 upd_destroy:
-	if (upd_notification != NULL) {
+	if (upd_notification != NULL)
 		update_notification_destroy(upd_notification);
-		fnstack_pop(); /* Pop from rrdp_parse_notification */
-	}
 upd_end:
 	/* Just return on success */
 	if (!error) {

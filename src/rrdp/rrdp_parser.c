@@ -909,6 +909,8 @@ process_delta(struct delta_head *delta_head, void *arg)
 	if (error)
 		return error;
 
+	fnstack_push_uri(uri);
+
 	error = download_file(uri, 0, args->log_operation);
 	if (error)
 		goto release_uri;
@@ -918,6 +920,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 	delete_from_uri(uri, NULL);
 	/* Error 0 its ok */
 release_uri:
+	fnstack_pop();
 	uri_refput(uri);
 	return error;
 }
@@ -942,21 +945,23 @@ rrdp_parse_notification(struct rpki_uri *uri, bool log_operation, bool force,
 	if (uri == NULL || uri_is_rsync(uri))
 		pr_crit("Wrong call, trying to parse a non HTTPS URI");
 
-	pr_val_debug("Processing notification '%s'.", uri_get_global(uri));
+	fnstack_push_uri(uri);
+	pr_val_debug("Processing notification.");
+
 	last_update = 0;
 	if (!force) {
 		error = db_rrdp_uris_get_last_update(uri_get_global(uri), &last_update);
 		if (error && error != -ENOENT)
-			return error;
+			goto end;
 	}
 
 	error = download_file(uri, last_update, log_operation);
 	if (error < 0)
-		return error;
+		goto end;
 
 	/* Request error, stop processing to handle as such */
 	if (error == EREQFAILED)
-		return error;
+		goto end;
 
 	/*
 	 * Mark as visited, if it doesn't exists yet, there's no problem since
@@ -965,26 +970,24 @@ rrdp_parse_notification(struct rpki_uri *uri, bool log_operation, bool force,
 	 */
 	vis_err = db_rrdp_uris_set_request_status(uri_get_global(uri),
 	    RRDP_URI_REQ_VISITED);
-	if (vis_err && vis_err != -ENOENT)
-		return pr_val_err("Couldn't mark '%s' as visited",
-		    uri_get_global(uri));
+	if (vis_err && vis_err != -ENOENT) {
+		error = pr_val_err("Couldn't mark file as visited.");
+		goto end;
+	}
 
 	/* No updates yet */
 	if (error > 0) {
 		delete_from_uri(uri, NULL);
 		*result = NULL;
-		return 0;
+		error = 0;
+		goto end;
 	}
 
-	fnstack_push_uri(uri);
 	error = parse_notification(uri, result);
-	delete_from_uri(uri, NULL);
-	if (error) {
-		fnstack_pop();
-		return error;
-	}
 
-	return 0;
+	delete_from_uri(uri, NULL);
+end:	fnstack_pop();
+	return error;
 }
 
 int
@@ -1004,6 +1007,8 @@ rrdp_parse_snapshot(struct update_notification *parent,
 	if (error)
 		return error;
 
+	fnstack_push_uri(uri);
+
 	error = download_file(uri, 0, log_operation);
 	if (error)
 		goto release_uri;
@@ -1013,6 +1018,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 	delete_from_uri(uri, NULL);
 	/* Error 0 is ok */
 release_uri:
+	fnstack_pop();
 	uri_refput(uri);
 	return error;
 }
