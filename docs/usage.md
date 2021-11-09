@@ -763,7 +763,7 @@ The value Fort employs as [CURLOPT_LOW_SPEED_TIME](https://curl.haxx.se/libcurl/
 
 It is the number of seconds that the transfer speed should be below `--http.low-speed-limit` for the Fort to consider it too slow. (Slow connections are dropped.)
 
-See [`--http.low-speed-limit`](#--httplow-speed-limit).
+See [`--http.low-speed-limit`](#--httplow-speed-limit) for an example.
 
 ### `--http.max-file-size`
 
@@ -776,7 +776,13 @@ The maximum amount of bytes files are allowed to length during HTTP transfers. F
 
 This is intended to prevent malicious RPKI repositories from stagnating Fort.
 
-As of 2021-10-05, the largest legitimate file in the repositories is an RRDP snapshot that weights ~150 megabytes.
+As of 2021-10-05, the largest legitimate file in the repositories is an RRDP snapshot that weights ~150 megabytes. (But will double in size during key rollover.)
+
+This configuration value is _transient_. It is expected that the IETF will eventually standardize a more versatile means to prevent unbounded file transfers. In particular, because RRDP snapshots tend to grow over time, `--http.max-file-size`'s default value will likely eventually be exceeded by legitimate files.
+
+Watch out for the following warning in the operation logs:
+
+	File size exceeds 50% of the configured limit
 
 ### `--http.ca-path`
 
@@ -831,7 +837,7 @@ If `--output.roa` is omitted, the ROAs are not printed.
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
 
-> ![Warning!](img/warn.svg) BGPsec certificate validation has been disabled in version 1.5.2 because of [this bug](https://github.com/NICMx/FORT-validator/issues/58). It will be restored in version 1.5.3.
+> ![Warning!](img/warn.svg) BGPsec certificate validation has been disabled in version 1.5.2 because of [this bug](https://github.com/NICMx/FORT-validator/issues/58). It will be restored in version 1.5.4.
 
 File where the BGPsec Router Keys (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
