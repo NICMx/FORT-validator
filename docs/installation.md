@@ -10,8 +10,9 @@ description: Guide to compile and install FORT Validator.
 1. [Dependencies](#dependencies)
 2. [Option 1: Installing the package](#option-1-installing-the-package)
 	1. [Debian package](#debian-package)
-	2. [Gentoo package](#gentoo-package)
-	3. [RHEL/CentOS package](#rhelcentos-package)
+	2. [FreeBSD package](#freebsd-package)
+	3. [Gentoo package](#gentoo-package)
+	4. [RHEL/CentOS package](#rhelcentos-package)
 3. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
 	1. [Debian version](#debian-version)
 	2. [OpenBSD version](#openbsd-version)
@@ -128,6 +129,38 @@ sudo apt -t testing install fort-validator
 {% endhighlight %}
 
 FORT validator is now installed as a service, check the status with `sudo service fort start`.
+
+### FreeBSD package
+
+FORT Validator is available in the FreeBSD ports tree since October 2021.  The port maintainer closely follows the development of FORT.  Updates to the FreeBSD port appear shortly after FORT releases.  Binary packages can be installed in the usual way:
+
+{% highlight bash %}
+pkg install fort
+{% endhighlight %}
+
+If you prefer to build software from ports, this works too:
+
+{% highlight bash %}
+cd /usr/ports/net/fort
+make install clean
+{% endhighlight %}
+
+A default configuration will be installed in `/usr/local/etc/fort/fort-config.json`.  The package is careful not to overwrite an existing configuration.
+
+To use FORT on FreeBSD, you will need the Trust Anchor Locator (TAL) files.  You can download these by running `fort --init-tals` as follows:
+
+{% highlight bash %}
+fort --init-tals --tal /usr/local/etc/fort/tal
+{% endhighlight %}
+
+When you have downloaded the TAL files, you can start the RTR server and validator with the included service script:
+
+{% highlight bash %}
+sysrc fort_enable=YES # or edit /etc/rc.conf manually
+service fort start
+{% endhighlight %}
+
+The default configuration will bind the RTR server to localhost on port 8323.
 
 ### Gentoo package
 
@@ -308,33 +341,28 @@ sudo make install
 
 ### FreeBSD version
 
-The following steps are for FreeBSD 12.0.
+The following steps are for FreeBSD 12.0 and later.
 
-`curl` library is needed, so in case it isn't already installed there's a port to install it:
+FORT validator is available as part of the FreeBSD ports tree.  You can build it it effortlessly from there:
 
 {% highlight bash %}
-cd /usr/ports/ftp/curl
-make config
-su
+cd /usr/ports/net/fort
 make install clean
-exit
 {% endhighlight %}
 
-From there on, the installation steps are:
+The ports system will find and install all the necessary dependencies for you.
+
+Should you want to build from a release tarball or a Git checkout, follow these instructions:
 
 {% highlight bash %}
-su
-pkg install autoconf automake gcc jansson pkgconf rsync libxml2
-exit
-
-curl -L https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz --output fort-{{ site.fort-latest-version }}.tar.gz
+pkg install autotools curl jansson pkgconf rsync libxml2
+fetch https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
+sh ./autoconf.sh
 ./configure
 make
-su
 make install
-exit
 {% endhighlight %}
 
 ### Slackware version
