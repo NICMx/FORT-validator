@@ -23,6 +23,7 @@ daemonize(daemon_log_cb log_cb)
 	char *pwd;
 	pid_t pid;
 	long int fds;
+	int error;
 
 	/* Already a daemon, just return */
 	if (getppid() == 1)
@@ -34,8 +35,11 @@ daemonize(daemon_log_cb log_cb)
 		return pr_enomem();
 
 	pid = fork();
-	if (pid < 0)
-		return pr_op_errno(errno, "Couldn't fork to daemonize");
+	if (pid < 0) {
+		error = errno;
+		pr_op_err("Couldn't fork to daemonize: %s", strerror(error));
+		return error;
+	}
 
 	/* Terminate parent */
 	if (pid > 0)
@@ -46,9 +50,10 @@ daemonize(daemon_log_cb log_cb)
 
 	/* Child goes on from here */
 	if (setsid() < 0) {
-		pr_op_errno(errno,
-		    "Couldn't create new session, ending execution");
-		exit(errno);
+		error = errno;
+		pr_op_err("Couldn't create new session, ending execution: %s",
+		    strerror(error));
+		exit(error);
 	}
 
 	/*
@@ -61,9 +66,10 @@ daemonize(daemon_log_cb log_cb)
 	/* Assure this is not a session leader */
 	pid = fork();
 	if (pid < 0) {
-		pr_op_errno(errno,
-		    "Couldn't fork again to daemonize, ending execution");
-		exit(errno);
+		error = errno;
+		pr_op_err("Couldn't fork again to daemonize, ending execution: %s",
+		    strerror(error));
+		exit(error);
 	}
 
 	/* Terminate parent */
@@ -81,9 +87,10 @@ daemonize(daemon_log_cb log_cb)
 	umask(0);
 
 	if (chdir(pwd) < 0) {
-		pr_op_errno(errno,
-		    "Couldn't chdir() of daemon, ending execution");
-		exit(errno);
+		error = errno;
+		pr_op_err("Couldn't chdir() of daemon, ending execution: %s",
+		    strerror(error));
+		exit(error);
 	}
 
 	free(pwd);

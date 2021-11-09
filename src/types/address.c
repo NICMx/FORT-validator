@@ -424,15 +424,17 @@ int
 prefix_length_parse(const char *text, uint8_t *dst, uint8_t max_value)
 {
 	unsigned long len;
+	int error;
 
 	if (text == NULL)
 		return pr_val_err("Can't decode NULL prefix length");
 
 	errno = 0;
 	len = strtoul(text, NULL, 10);
-	if (errno) {
-		pr_val_errno(errno, "Invalid prefix length '%s'", text);
-		return -EINVAL;
+	error = errno;
+	if (error) {
+		return pr_val_err("Invalid prefix length '%s': %s", text,
+		    strerror(error));
 	}
 	/* An underflow or overflow will be considered here */
 	if (max_value < len)

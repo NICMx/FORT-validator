@@ -413,8 +413,8 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 	error = rename(tmp_file, original_file);
 	if (error) {
 		error = errno;
-		pr_val_errno(error, "Renaming temporal file from '%s' to '%s'",
-		    tmp_file, original_file);
+		pr_val_err("Renaming temporal file from '%s' to '%s': %s",
+		    tmp_file, original_file, strerror(error));
 		goto delete_dir;
 	}
 
@@ -549,8 +549,8 @@ http_direct_download(char const *remote, char const *dest)
 	error = rename(tmp_file, dest);
 	if (error) {
 		error = errno;
-		pr_val_errno(error, "Renaming temporal file from '%s' to '%s'",
-		    tmp_file, dest);
+		pr_val_err("Renaming temporal file from '%s' to '%s': %s",
+		    tmp_file, dest, strerror(error));
 		goto release_tmp;
 	}
 

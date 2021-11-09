@@ -163,7 +163,8 @@ register_signal_handlers(void)
 		 * Not fatal; it just means we will not print stack traces on
 		 * Segmentation Faults.
 		 */
-		pr_op_errno(errno, "SIGSEGV handler registration failure");
+		pr_op_err("SIGSEGV handler registration failure: %s",
+		    strerror(errno));
 	}
 
 	/*
@@ -190,7 +191,8 @@ register_signal_handlers(void)
 		 * will die silently.
 		 * But they're somewhat rare, so whatever.
 		 */
-		pr_op_errno(errno, "SIGPIPE handler registration failure");
+		pr_op_err("SIGPIPE handler registration failure: %s",
+		    strerror(errno));
 	}
 }
 
@@ -220,11 +222,11 @@ log_setup(bool unit_tests)
 	error = pthread_mutex_init(&logck, NULL);
 	if (error) {
 		fprintf(ERR.stream, "pthread_mutex_init() returned %d: %s\n",
-		    error, strerror(abs(error)));
+		    error, strerror(error));
 		if (!unit_tests)
 			syslog(LOG_ERR | op_config.facility,
 			    "pthread_mutex_init() returned %d: %s",
-			    error, strerror(abs(error)));
+			    error, strerror(error));
 		return error;
 	}
 
@@ -504,13 +506,13 @@ pr_op_warn(const char *format, ...)
 }
 
 int
-__pr_op_err(int error, const char *format, ...)
+pr_op_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
 	lock_mutex();
 	print_stack_trace(NULL);
 	unlock_mutex();
-	return error;
+	return -EINVAL;
 }
 
 void
@@ -537,15 +539,15 @@ pr_val_warn(const char *format, ...)
 }
 
 int
-__pr_val_err(int error, const char *format, ...)
+pr_val_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, val_config);
-	return error;
+	return -EINVAL;
 }
 
 struct crypto_cb_arg {
 	unsigned int stack_size;
-	int (*error_fn)(int, const char *, ...);
+	int (*error_fn)(const char *, ...);
 };
 
 static int
@@ -558,19 +560,19 @@ log_crypto_error(const char *str, size_t len, void *_arg)
 }
 
 static int
-crypto_err(struct log_config *cfg, int (*error_fn)(int, const char *, ...))
+crypto_err(struct log_config *cfg, int (*error_fn)(const char *, ...))
 {
 	struct crypto_cb_arg arg;
 
-	error_fn(0, "libcrypto error stack:");
+	error_fn("libcrypto error stack:");
 
 	arg.stack_size = 0;
 	arg.error_fn = error_fn;
 	ERR_print_errors_cb(log_crypto_error, &arg);
 	if (arg.stack_size == 0)
-		error_fn(0, "   <Empty>");
+		error_fn("   <Empty>");
 	else
-		error_fn(0, "End of libcrypto stack.");
+		error_fn("End of libcrypto stack.");
 
 	return -EINVAL;
 }
@@ -591,7 +593,7 @@ int
 op_crypto_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
-	return crypto_err(&op_config, __pr_op_err);
+	return crypto_err(&op_config, pr_op_err);
 }
 
 /**
@@ -610,7 +612,7 @@ int
 val_crypto_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, val_config);
-	return crypto_err(&val_config, __pr_val_err);
+	return crypto_err(&val_config, pr_val_err);
 }
 
 int

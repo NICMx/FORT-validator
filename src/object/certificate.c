@@ -1975,8 +1975,7 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 static int
 verify_mft_loc(struct rpki_uri *mft_uri)
 {
-	if (!valid_file_or_dir(uri_get_local(mft_uri), true, false,
-	    __pr_val_err))
+	if (!valid_file_or_dir(uri_get_local(mft_uri), true, false, pr_val_err))
 		return -EINVAL; /* Error already logged */
 
 	return 0;

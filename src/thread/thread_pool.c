@@ -248,15 +248,19 @@ thread_pool_attr_create(pthread_attr_t *attr)
 	int error;
 
 	error = pthread_attr_init(attr);
-	if (error)
-		return pr_op_errno(error, "Calling pthread_attr_init()");
+	if (error) {
+		pr_op_err("pthread_attr_init() returned error %d: %s",
+		    error, strerror(error));
+		return error;
+	}
 
 	/* Use 2MB (default in most 64 bits systems) */
 	error = pthread_attr_setstacksize(attr, 1024 * 1024 * 2);
 	if (error) {
 		pthread_attr_destroy(attr);
-		return pr_op_errno(error,
-		    "Calling pthread_attr_setstacksize()");
+		pr_op_err("pthread_attr_setstacksize() returned error %d: %s",
+		    error, strerror(error));
+		return error;
 	}
 
 	/*
@@ -293,7 +297,8 @@ spawn_threads(struct thread_pool *pool)
 		error = pthread_create(&pool->thread_ids[i], &attr, tasks_poll,
 		    pool);
 		if (error) {
-			error = pr_op_errno(error, "Spawning pool thread");
+			pr_op_err("pthread_create() returned error %d: %s",
+			    error, strerror(error));
 			goto end;
 		}
 
@@ -319,23 +324,24 @@ thread_pool_create(char const *name, unsigned int threads,
 	/* Init locking */
 	error = pthread_mutex_init(&result->lock, NULL);
 	if (error) {
-		error = pr_op_errno(error, "Calling pthread_mutex_init()");
+		pr_op_err("pthread_mutex_init() returned error %d: %s",
+		    error, strerror(error));
 		goto free_tmp;
 	}
 
 	/* Init conditional to signal pending work */
 	error = pthread_cond_init(&result->parent2worker, NULL);
 	if (error) {
-		error = pr_op_errno(error,
-		    "Calling pthread_cond_init() at working condition");
+		pr_op_err("pthread_cond_init(p2w) returned error %d: %s",
+		    error, strerror(error));
 		goto free_mutex;
 	}
 
 	/* Init conditional to signal no pending work */
 	error = pthread_cond_init(&result->worker2parent, NULL);
 	if (error) {
-		error = pr_op_errno(error,
-		    "Calling pthread_cond_init() at waiting condition");
+		pr_op_err("pthread_cond_init(w2p) returned error %d: %s",
+		    error, strerror(error));
 		goto free_working_cond;
 	}
 

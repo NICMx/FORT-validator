@@ -132,7 +132,7 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 
 	clone = strdup(str_prefix);
 	if (clone == NULL)
-		return -pr_op_errno(errno, "Couldn't allocate string to parse prefix");
+		return pr_enomem();
 
 	token = strtok(clone, "/");
 	isv4 = strchr(token, ':') == NULL;

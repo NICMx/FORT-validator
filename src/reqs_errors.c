@@ -94,8 +94,10 @@ reqs_errors_init(void)
 	int error;
 
 	error = pthread_rwlock_init(&db_lock, NULL);
-	if (error)
-		return pr_op_errno(error, "pthread_rwlock_init() errored");
+	if (error) {
+		pr_op_err("pthread_rwlock_init() errored: %s", strerror(error));
+		return error;
+	}
 
 	err_uris_db = NULL;
 

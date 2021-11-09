@@ -12,11 +12,16 @@ file_get(char const *file_name, FILE **result, struct stat *stat,
 	int error;
 
 	file = fopen(file_name, mode);
-	if (file == NULL)
-		return pr_val_errno(errno, "Could not open file '%s'", file_name);
+	if (file == NULL) {
+		error = errno;
+		pr_val_err("Could not open file '%s': %s", file_name,
+		    strerror(error));
+		return error;
+	}
 
 	if (fstat(fileno(file), stat) == -1) {
-		error = pr_val_errno(errno, "fstat(%s) failed", file_name);
+		error = errno;
+		pr_val_err("fstat(%s) failed: %s", file_name, strerror(error));
 		goto fail;
 	}
 	if (!S_ISREG(stat->st_mode)) {
@@ -49,7 +54,7 @@ void
 file_close(FILE *file)
 {
 	if (fclose(file) == -1)
-		pr_val_errno(errno, "fclose() failed");
+		pr_val_err("fclose() failed: %s", strerror(errno));
 }
 
 int
@@ -80,8 +85,8 @@ file_load(char const *file_name, struct file_contents *fc)
 			 * code. It literally doesn't say how to get an error
 			 * code.
 			 */
-			pr_val_errno(error,
-			    "File reading error. Error message (apparently)");
+			pr_val_err("File reading error. The error message is (apparently) '%s'",
+			    strerror(error));
 			free(fc->buffer);
 			goto end;
 		}

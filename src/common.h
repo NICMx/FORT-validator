@@ -50,7 +50,7 @@ typedef int (*process_file_cb)(char const *, void *);
 int process_file_or_dir(char const *, char const *, bool, process_file_cb,
     void *);
 
-typedef int (*pr_errno_cb)(int, const char *, ...);
+typedef int (*pr_errno_cb)(const char *, ...);
 bool valid_file_or_dir(char const *, bool, bool, pr_errno_cb);
 
 int create_dir_recursive(char const *);

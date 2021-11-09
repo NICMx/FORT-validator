@@ -86,20 +86,21 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	/* Get the full file path */
 	tmp = strdup(dir_name);
 	if (tmp == NULL)
-		return -pr_op_errno(errno, "Couldn't create temporal char");
+		return pr_enomem();
 
 	tmp = realloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
 	if (tmp == NULL)
-		return -pr_op_errno(errno, "Couldn't reallocate temporal char");
+		return pr_enomem();
 
 	strcat(tmp, "/");
 	strcat(tmp, file_name);
 	fullpath = realpath(tmp, NULL);
 	if (fullpath == NULL) {
+		error = errno;
+		pr_op_err("Error getting real path for file '%s' at directory '%s': %s",
+		    dir_name, file_name, strerror(error));
 		free(tmp);
-		return -pr_op_errno(errno,
-		    "Error getting real path for file '%s' at dir '%s'",
-		    dir_name, file_name);
+		return -error;
 	}
 
 	error = cb(fullpath, arg);
@@ -118,7 +119,9 @@ process_dir_files(char const *location, char const *file_ext, bool empty_err,
 
 	dir_loc = opendir(location);
 	if (dir_loc == NULL) {
-		error = -pr_op_errno(errno, "Couldn't open dir %s", location);
+		error = -errno;
+		pr_op_err("Couldn't open directory '%s': %s", location,
+		    strerror(-error));
 		goto end;
 	}
 
@@ -158,8 +161,12 @@ process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
 	int error;
 
 	error = stat(location, &attr);
-	if (error)
-		return pr_op_errno(errno, "Error reading path '%s'", location);
+	if (error) {
+		error = errno;
+		pr_op_err("Error reading path '%s': %s", location,
+		    strerror(error));
+		return error;
+	}
 
 	if (S_ISDIR(attr.st_mode) == 0)
 		return cb(location, arg);
@@ -170,7 +177,7 @@ process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
 
 bool
 valid_file_or_dir(char const *location, bool check_file, bool check_dir,
-    int (*error_fn)(int error, const char *format, ...))
+    int (*error_fn)(const char *format, ...))
 {
 	struct stat attr;
 	bool is_file, is_dir;
@@ -181,7 +188,7 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 
 	if (stat(location, &attr) == -1) {
 		if (error_fn != NULL) {
-			error_fn(errno, "stat(%s) failed: %s", location,
+			error_fn("stat(%s) failed: %s", location,
 			    strerror(errno));
 		}
 		return false;
@@ -204,6 +211,7 @@ dir_exists(char const *path, bool *result)
 {
 	struct stat _stat;
 	char *last_slash;
+	int error;
 
 	last_slash = strrchr(path, '/');
 	if (last_slash == NULL) {
@@ -226,7 +234,9 @@ dir_exists(char const *path, bool *result)
 	} else if (errno == ENOENT) {
 		*result = false;
 	} else {
-		return pr_op_errno(errno, "stat() failed");
+		error = errno;
+		pr_op_err("stat() failed: %s", strerror(error));
+		return error;
 	}
 
 	*last_slash = '/';
@@ -238,11 +248,14 @@ create_dir(char *path)
 {
 	int error;
 
-	error = mkdir(path, 0777);
-
-	if (error && errno != EEXIST)
-		return pr_op_errno(errno, "Error while making directory '%s'",
-		    path);
+	if (mkdir(path, 0777) != 0) {
+		error = errno;
+		if (error != EEXIST) {
+			pr_op_err("Error while making directory '%s': %s",
+			    path, strerror(error));
+			return error;
+		}
+	}
 
 	return 0;
 }
@@ -291,9 +304,12 @@ remove_file(char const *path)
 	int error;
 
 	errno = 0;
-	error = remove(path);
-	if (error)
-		return pr_val_errno(errno, "Couldn't delete %s", path);
+	if (remove(path) != 0) {
+		error = errno;
+		pr_val_err("Couldn't delete '%s': %s", path,
+		    strerror(error));
+		return errno;
+	}
 
 	return 0;
 }
@@ -353,10 +369,12 @@ delete_dir_recursive_bottom_up(char const *path)
 			continue; /* Keep deleting up */
 
 		/* Stop if there's content in the dir */
-		if (errno == ENOTEMPTY || errno == EEXIST)
+		error = errno;
+		if (error == ENOTEMPTY || error == EEXIST)
 			break;
 
-		error = pr_op_errno(errno, "Couldn't delete dir %s", work_loc);
+		pr_op_err("Couldn't delete directory '%s': %s", work_loc,
+		    strerror(error));
 		goto release_str;
 	} while (true);
 
@@ -371,10 +389,15 @@ int
 get_current_time(time_t *result)
 {
 	time_t now;
+	int error;
 
 	now = time(NULL);
-	if (now == ((time_t) -1))
-		return pr_val_errno(errno, "Error getting the current time");
+	if (now == ((time_t) -1)) {
+		error = errno;
+		pr_val_err("Error getting the current time: %s",
+		    strerror(errno));
+		return error;
+	}
 
 	*result = now;
 	return 0;

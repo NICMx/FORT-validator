@@ -279,8 +279,10 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 	/* rfc6488#section-3.1.b */
 	error = asn_INTEGER2ulong(&sdata->version, &version);
 	if (error) {
-		if (errno)
-			pr_val_errno(errno, "Error converting SignedData version");
+		if (errno) {
+			pr_val_err("Error converting SignedData version: %s",
+			    strerror(errno));
+		}
 		return pr_val_err("The SignedData version isn't a valid unsigned long");
 	}
 	if (version != 3) {
@@ -329,8 +331,10 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 
 	error = asn_INTEGER2ulong(&sinfo->version, &version);
 	if (error) {
-		if (errno)
-			pr_val_errno(errno, "Error converting SignerInfo version");
+		if (errno) {
+			pr_val_err("Error converting SignerInfo version: %s",
+			    strerror(errno));
+		}
 		return pr_val_err("The SignerInfo version isn't a valid unsigned long");
 	}
 	if (version != 3) {

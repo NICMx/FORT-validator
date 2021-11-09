@@ -276,6 +276,7 @@ parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 {
 	xmlChar *xml_value;
 	unsigned long tmp;
+	int error;
 
 	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 	if (xml_value == NULL)
@@ -284,10 +285,11 @@ parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 
 	errno = 0;
 	tmp = strtoul((char *) xml_value, NULL, 10);
-	if (errno) {
+	error = errno;
+	if (error) {
 		xmlFree(xml_value);
-		pr_val_errno(errno, "RRDP file: Invalid long value '%s'",
-		    xml_value);
+		pr_val_err("RRDP file: Invalid long value '%s': %s",
+		    xml_value, strerror(error));
 		return -EINVAL;
 	}
 	xmlFree(xml_value);

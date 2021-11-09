@@ -421,8 +421,10 @@ ASId2ulong(ASId_t *as_id, unsigned long *result)
 
 	error = asn_INTEGER2ulong(as_id, result);
 	if (error) {
-		if (errno)
-			pr_val_errno(errno, "Error converting ASN value");
+		if (errno) {
+			pr_val_err("Error converting ASN value: %s",
+			    strerror(errno));
+		}
 		return pr_val_err("ASN value is not a valid unsigned long");
 	}
 

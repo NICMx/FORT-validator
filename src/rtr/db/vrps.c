@@ -129,13 +129,15 @@ vrps_init(void)
 
 	error = pthread_rwlock_init(&state_lock, NULL);
 	if (error) {
-		error = pr_op_errno(error, "state pthread_rwlock_init() errored");
+		pr_op_err("state pthread_rwlock_init() errored: %s",
+		    strerror(error));
 		goto revert_deltas;
 	}
 
 	error = pthread_rwlock_init(&table_lock, NULL);
 	if (error) {
-		error = pr_op_errno(error, "table pthread_rwlock_init() errored");
+		pr_op_err("table pthread_rwlock_init() errored: %s",
+		    strerror(error));
 		goto revert_state_lock;
 	}
 

@@ -24,6 +24,8 @@ struct rem_dirs {
 static int
 remove_file(char const *location)
 {
+	int error;
+
 	pr_op_debug("Trying to remove file '%s'.", location);
 
 #ifdef DEBUG_RRDP
@@ -31,14 +33,21 @@ remove_file(char const *location)
 	return 0;
 #endif
 
-	return remove(location)
-	    ? pr_op_errno(errno, "Couldn't delete file '%s'", location)
-	    : 0;
+	if (remove(location) != 0) {
+		error = errno;
+		pr_op_err("Couldn't delete file '%s': %s", location,
+		    strerror(error));
+		return error;
+	}
+
+	return 0;
 }
 
 static int
 remove_dir(char const *location)
 {
+	int error;
+
 	pr_op_debug("Trying to remove dir '%s'.", location);
 
 #ifdef DEBUG_RRDP
@@ -46,9 +55,14 @@ remove_dir(char const *location)
 	return 0;
 #endif
 
-	return rmdir(location)
-	    ? pr_op_errno(errno, "Couldn't delete directory '%s'", location)
-	    : 0;
+	if (remove(location) != 0) {
+		error = errno;
+		pr_op_err("Couldn't delete directory '%s': %s", location,
+		    strerror(error));
+		return error;
+	}
+
+	return 0;
 }
 
 static int

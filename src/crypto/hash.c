@@ -84,8 +84,8 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 		consumed = fread(buffer, 1, buffer_len, file);
 		error = ferror(file);
 		if (error) {
-			pr_val_errno(error,
-			    "File reading error. Error message (apparently)");
+			pr_val_err("File reading error. Error message (apparently): %s",
+			   strerror(error));
 			goto end3;
 		}
 

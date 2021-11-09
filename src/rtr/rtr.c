@@ -215,7 +215,7 @@ set_nonblock(int fd)
 	flags = fcntl(fd, F_GETFL);
 	if (flags == -1) {
 		error = errno;
-		pr_op_errno(error, "fcntl() to get flags failed");
+		pr_op_err("fcntl() to get flags failed: %s", strerror(error));
 		return error;
 	}
 
@@ -223,7 +223,7 @@ set_nonblock(int fd)
 
 	if (fcntl(fd, F_SETFL, flags) == -1) {
 		error = errno;
-		pr_op_errno(error, "fcntl() to set flags failed");
+		pr_op_err("fcntl() to set flags failed: %s", strerror(error));
 		return error;
 	}
 
@@ -261,7 +261,7 @@ create_server_socket(char const *input_addr, char const *hostname,
 	for (addr = addrs; addr != NULL; addr = addr->ai_next) {
 		fd = socket(addr->ai_family, SOCK_STREAM, 0);
 		if (fd < 0) {
-			pr_op_errno(errno, "socket() failed");
+			pr_op_err("socket() failed: %s", strerror(errno));
 			continue;
 		}
 
@@ -277,7 +277,8 @@ create_server_socket(char const *input_addr, char const *hostname,
 		/* enable SO_REUSEADDR */
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
 		    sizeof(int)) < 0) {
-			pr_op_errno(errno, "setsockopt(SO_REUSEADDR) failed");
+			pr_op_err("setsockopt(SO_REUSEADDR) failed: %s",
+			    strerror(errno));
 			close(fd);
 			continue;
 		}
@@ -285,22 +286,24 @@ create_server_socket(char const *input_addr, char const *hostname,
 		/* enable SO_REUSEPORT */
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse,
 		    sizeof(int)) < 0) {
-			pr_op_errno(errno, "setsockopt(SO_REUSEPORT) failed");
+			pr_op_err("setsockopt(SO_REUSEPORT) failed: %s",
+			    strerror(errno));
 			close(fd);
 			continue;
 		}
 
 		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
-			pr_op_errno(errno, "bind() failed");
+			pr_op_err("bind() failed: %s", strerror(errno));
 			close(fd);
 			continue;
 		}
 
-		error = getsockname(fd, addr->ai_addr, &addr->ai_addrlen);
-		if (error) {
+		if (getsockname(fd, addr->ai_addr, &addr->ai_addrlen) != 0) {
+			error = errno;
 			close(fd);
 			freeaddrinfo(addrs);
-			return pr_op_errno(errno, "getsockname() failed");
+			pr_op_err("getsockname() failed: %s", strerror(error));
+			return error;
 		}
 
 		port = (unsigned char)(addr->ai_addr->sa_data[0]) << 8;
@@ -311,8 +314,10 @@ create_server_socket(char const *input_addr, char const *hostname,
 		freeaddrinfo(addrs);
 
 		if (listen(fd, config_get_server_queue()) != 0) {
+			error = errno;
 			close(fd);
-			return pr_op_errno(errno, "listen() failure");
+			pr_op_err("listen() failure: %s", strerror(error));
+			return error;
 		}
 
 		server.fd = fd;
@@ -438,11 +443,10 @@ handle_accept_result(int client_fd, int err)
 		goto retry;
 #endif
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wlogical-op"
-	if (err == EAGAIN || err == EWOULDBLOCK)
+	if (err == EAGAIN)
 		goto retry;
-#pragma GCC diagnostic pop
+	if (err == EWOULDBLOCK)
+		goto retry;
 
 	pr_op_info("Client connection attempt not accepted: %s. Quitting...",
 	    strerror(err));
@@ -497,6 +501,7 @@ read_until_block(int fd, struct client_request *request)
 {
 	ssize_t read_result;
 	size_t offset;
+	int error;
 
 	request->nread = 0;
 
@@ -504,10 +509,12 @@ read_until_block(int fd, struct client_request *request)
 		read_result = read(fd, &request->buffer[offset],
 		    REQUEST_BUFFER_LEN - offset);
 		if (read_result == -1) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
+			error = errno;
+			if (error == EAGAIN || error == EWOULDBLOCK)
 				return true; /* Ok, we have the full packet. */
 
-			pr_op_errno(errno, "Client socket read interrupted");
+			pr_op_err("Client socket read interrupted: %s",
+			    strerror(error));
 			return false;
 		}
 
@@ -786,8 +793,10 @@ void rtr_stop(void)
 
 	stop_server_thread = true;
 	error = pthread_join(server_thread, NULL);
-	if (error)
-		pr_op_errno(error, "pthread_join() returned %d", error);
+	if (error) {
+		pr_op_err("pthread_join() returned error %d: %s", error,
+		    strerror(error));
+	}
 
 	thread_pool_destroy(request_handlers);
 

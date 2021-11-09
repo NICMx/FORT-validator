@@ -266,14 +266,25 @@ handle_child_thread(char **args, int fds[2][2])
 static int
 create_pipes(int fds[2][2])
 {
-	if (pipe(fds[0]) == -1)
-		return -pr_op_errno(errno, "Piping rsync stderr");
+	int error;
+
+	if (pipe(fds[0]) == -1) {
+		error = errno;
+		pr_op_err("Piping rsync stderr: %s", strerror(error));
+		return -error;
+	}
+
 	if (pipe(fds[1]) == -1) {
+		error = errno;
+
 		/* Close pipe previously created */
 		close(fds[0][0]);
 		close(fds[0][1]);
-		return -pr_op_errno(errno, "Piping rsync stdout");
+
+		pr_op_err("Piping rsync stdout: %s", strerror(error));
+		return -error;
 	}
+
 	return 0;
 }
 
@@ -322,10 +333,13 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 	while (1) {
 		count = read(fd_pipe[type][0], buffer, sizeof(buffer));
 		if (count == -1) {
-			if (errno == EINTR)
+			error = errno;
+			if (error == EINTR)
 				continue;
 			close(fd_pipe[type][0]); /* Close read end */
-			return -pr_val_errno(errno, "Reading rsync buffer");
+			pr_val_err("rsync buffer read error: %s",
+			    strerror(error));
+			return -error;
 		}
 		if (count == 0)
 			break;
@@ -422,8 +436,9 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 			handle_child_thread(args, fork_fds);
 		}
 		if (child_pid < 0) {
-			pr_op_errno(errno, "Couldn't fork to execute rsync");
 			error = errno;
+			pr_op_err("Couldn't fork to execute rsync: %s",
+			   strerror(error));
 			/* Close all ends from the created pipes */
 			close(fork_fds[0][0]);
 			close(fork_fds[1][0]);

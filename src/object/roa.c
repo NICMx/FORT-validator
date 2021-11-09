@@ -42,8 +42,10 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 	if (roa_addr->maxLength != NULL) {
 		error = asn_INTEGER2ulong(roa_addr->maxLength, &max_length);
 		if (error) {
-			if (errno)
-				pr_val_errno(errno, "Error casting ROA's IPv4 maxLength");
+			if (errno) {
+				pr_val_err("Error casting ROA's IPv4 maxLength: %s",
+				    strerror(errno));
+			}
 			error = pr_val_err("The ROA's IPv4 maxLength isn't a valid unsigned long");
 			goto end_error;
 		}
@@ -96,8 +98,10 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 	if (roa_addr->maxLength != NULL) {
 		error = asn_INTEGER2ulong(roa_addr->maxLength, &max_length);
 		if (error) {
-			if (errno)
-				pr_val_errno(errno, "Error casting ROA's IPv6 maxLength");
+			if (errno) {
+				pr_val_err("Error casting ROA's IPv6 maxLength: %s",
+				    strerror(errno));
+			}
 			error = pr_val_err("The ROA's IPv6 maxLength isn't a valid unsigned long");
 			goto end_error;
 		}
@@ -160,8 +164,10 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	if (roa->version != NULL) {
 		error = asn_INTEGER2ulong(roa->version, &version);
 		if (error) {
-			if (errno)
-				pr_val_errno(errno, "Error casting ROA's version");
+			if (errno) {
+				pr_val_err("Error casting ROA's version: %s",
+				    strerror(errno));
+			}
 			error = pr_val_err("The ROA's version isn't a valid long");
 			goto end_error;
 		}
@@ -175,8 +181,10 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 
 	/* rfc6482#section-3.2 */
 	if (asn_INTEGER2ulong(&roa->asID, &asn) != 0) {
-		if (errno)
-			pr_val_errno(errno, "Error casting ROA's AS ID value");
+		if (errno) {
+			pr_val_err("Error casting ROA's AS ID value: %s",
+			    strerror(errno));
+		}
 		error = pr_val_err("ROA's AS ID couldn't be parsed as unsigned long");
 		goto end_error;
 	}

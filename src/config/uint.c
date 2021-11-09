@@ -18,6 +18,7 @@ parse_argv_uint(struct option_field const *field, char const *str,
 {
 	char *tmp;
 	unsigned long parsed;
+	int error;
 
 	if (field->type->has_arg != required_argument || str == NULL ||
 		    strlen(str) == 0) {
@@ -27,12 +28,14 @@ parse_argv_uint(struct option_field const *field, char const *str,
 
 	errno = 0;
 	parsed = strtoul(str, &tmp, 10);
-	if (errno || *tmp != '\0')
-		return errno ? pr_op_errno(errno,
-		    "Value '%s' at '%s' is not an unsigned integer", str,
-		    field->name) :
-		    pr_op_err("Value '%s' at '%s' is not an unsigned integer",
-		    str, field->name);
+	error = errno;
+	if (error || *tmp != '\0') {
+		if (!error)
+			error = -EINVAL;
+		pr_op_err("Value '%s' at '%s' is not an unsigned integer: %s",
+		    str, field->name, strerror(abs(error)));
+		return error;
+	}
 
 	if (parsed < field->min || field->max < parsed) {
 		return pr_op_err("Value of '%s' is out of range (%u-%u).",

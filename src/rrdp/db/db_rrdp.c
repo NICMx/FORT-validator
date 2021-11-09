@@ -139,8 +139,11 @@ db_rrdp_init(void)
 	int error;
 
 	error = pthread_rwlock_init(&lock, NULL);
-	if (error)
-		return pr_op_errno(error, "DB RRDP pthread_rwlock_init() errored");
+	if (error) {
+		pr_op_err("DB RRDP pthread_rwlock_init() errored: %s",
+		    strerror(error));
+		return error;
+	}
 
 	SLIST_INIT(&db.tals);
 	return 0;

@@ -49,10 +49,12 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 			return pr_op_err("poll() returned revents %u.", pfd.revents);
 	} while (!(pfd.revents & POLLOUT));
 
-	error = write(fd, data, data_len);
-	if (error < 0)
-		return pr_op_errno(errno, "Error sending %s to client.",
-		    pdutype2str(pdu_type));
+	if (write(fd, data, data_len) < 0) {
+		error = errno;
+		pr_op_err("Error sending %s to client: %s",
+		    pdutype2str(pdu_type), strerror(error));
+		return error;
+	}
 
 	return 0;
 }

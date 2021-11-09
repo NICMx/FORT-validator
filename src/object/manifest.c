@@ -111,8 +111,10 @@ validate_manifest(struct Manifest *manifest)
 	if (manifest->version != NULL) {
 		error = asn_INTEGER2ulong(manifest->version, &version);
 		if (error) {
-			if (errno)
-				pr_val_errno(errno, "Error casting manifest version");
+			if (errno) {
+				pr_val_err("Error casting manifest version: %s",
+				    strerror(errno));
+			}
 			return pr_val_err("The manifest version isn't a valid unsigned long");
 		}
 		if (version != 0)

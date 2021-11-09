@@ -255,8 +255,8 @@ base64_sanitize(struct line_file *lfile, char **out)
 			 * code. It literally doesn't say how to get an error
 			 * code.
 			 */
-			pr_op_errno(error,
-			    "File reading error. Error message (apparently)");
+			pr_op_err("File reading error. Presumably, the error message is '%s.'",
+			    strerror(error));
 			goto free_result;
 		}
 
@@ -353,7 +353,8 @@ tal_load(char const *file_name, struct tal **result)
 
 	error = lfile_open(file_name, &lfile);
 	if (error) {
-		pr_op_errno(error, "Error opening file '%s'", file_name);
+		pr_op_err("Error opening file '%s': %s", file_name,
+		    strerror(abs(error)));
 		goto fail4;
 	}
 
@@ -555,7 +556,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	} else {
 		/* Look for local files */
 		if (!valid_file_or_dir(uri_get_local(uri), true, false,
-		    __pr_val_err)) {
+		    pr_val_err)) {
 			validation_destroy(state);
 			return 0; /* Error already logged */
 		}
