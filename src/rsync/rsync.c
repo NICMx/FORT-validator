@@ -400,6 +400,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	if (error)
 		return error;
 
+	pr_val_info("rsync: %s", uri_get_global(uri));
 	if (log_val_enabled(LOG_DEBUG)) {
 		pr_val_debug("Executing RSYNC:");
 		for (i = 0; i < args_len + 1; i++)

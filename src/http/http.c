@@ -240,7 +240,7 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	args.dst = file;
 	setopt_writedata(handler->curl, &args);
 
-	pr_val_debug("HTTP GET: %s", uri);
+	pr_val_info("HTTP GET: %s", uri);
 	res = curl_easy_perform(handler->curl);
 	pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
 
