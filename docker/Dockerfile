@@ -1,6 +1,6 @@
 #--- Alpine build container ---
 FROM alpine:latest AS builder
-ARG FORT_VERSION=1.5.0
+ARG FORT_VERSION=1.5.3
 
 # Install compiler and dependencies
 RUN apk --update --no-cache add build-base autoconf automake pkgconfig jansson-dev check-dev \
@@ -8,7 +8,7 @@ RUN apk --update --no-cache add build-base autoconf automake pkgconfig jansson-d
 
 # Download FORT source code
 WORKDIR /root
-RUN wget https://github.com/NICMx/FORT-validator/releases/download/v${FORT_VERSION}/fort-${FORT_VERSION}.tar.gz
+RUN wget https://github.com/NICMx/FORT-validator/releases/download/${FORT_VERSION}/fort-${FORT_VERSION}.tar.gz
 RUN tar -xf fort-${FORT_VERSION}.tar.gz
 
 # Compile and install FORT
