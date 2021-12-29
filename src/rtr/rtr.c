@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 
 #include "config.h"
+#include "str_token.h"
 #include "types/address.h"
 #include "data_structure/array_list.h"
 #include "rtr/pdu.h"
@@ -100,7 +101,7 @@ parse_address(char const *full_address, char **address, char **service)
 	char *ptr;
 	char *tmp_addr;
 	char *tmp_serv;
-	size_t tmp_addr_len;
+	int error;
 
 	if (full_address == NULL) {
 		tmp_addr = NULL;
@@ -129,13 +130,10 @@ parse_address(char const *full_address, char **address, char **service)
 		return pr_op_err("Invalid server address '%s', can't end with '#'",
 		    full_address);
 
-	tmp_addr_len = strlen(full_address) - strlen(ptr);
-	tmp_addr = malloc(tmp_addr_len + 1);
-	if (tmp_addr == NULL)
-		return pr_enomem();
-
-	memcpy(tmp_addr, full_address, tmp_addr_len);
-	tmp_addr[tmp_addr_len] = '\0';
+	error = string_clone(full_address, strlen(full_address) - strlen(ptr),
+	    &tmp_addr);
+	if (error)
+		return error;
 
 	tmp_serv = strdup(ptr + 1);
 	if (tmp_serv == NULL) {

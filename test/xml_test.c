@@ -5,6 +5,7 @@
 #include <libxml/xmlreader.h>
 #include "impersonator.c"
 #include "log.c"
+#include "str_token.c"
 #include "xml/relax_ng.c"
 
 struct reader_ctx {
@@ -17,34 +18,27 @@ static int
 reader_cb(xmlTextReaderPtr reader, void *arg)
 {
 	struct reader_ctx *ctx = arg;
-	xmlReaderTypes type;
 	xmlChar const *name;
-	xmlChar *tmp_char;
-	char *tmp;
+	xmlChar *serial;
+	int error;
 
 	name = xmlTextReaderConstLocalName(reader);
-	type = xmlTextReaderNodeType(reader);
-	switch (type) {
+	switch (xmlTextReaderNodeType(reader)) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST "delta")) {
 			ctx->delta_count++;
 		} else if (xmlStrEqual(name, BAD_CAST "snapshot")) {
 			ctx->snapshot_count++;
 		} else if (xmlStrEqual(name, BAD_CAST "notification")) {
-			tmp_char = xmlTextReaderGetAttribute(reader,
+			serial = xmlTextReaderGetAttribute(reader,
 			    BAD_CAST "serial");
-			if (tmp_char == NULL)
+			if (serial == NULL)
 				return -EINVAL;
-			tmp = malloc(xmlStrlen(tmp_char) + 1);
-			if (tmp == NULL) {
-				xmlFree(tmp_char);
-				return -ENOMEM;
-			}
-
-			memcpy(tmp, tmp_char, xmlStrlen(tmp_char));
-			tmp[xmlStrlen(tmp_char)] = '\0';
-			xmlFree(tmp_char);
-			ctx->serial = tmp;
+			error = string_clone(serial, xmlStrlen(serial),
+			    &ctx->serial);
+			xmlFree(serial);
+			if (error)
+				return error;
 		} else {
 			return -EINVAL;
 		}

@@ -37,8 +37,6 @@
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
  * The SIA's d2i function, therefore, returns AIAs.
  * They are the same as far as LibreSSL is concerned.
- *
- * TODO (aaaa) still needed?
  */
 typedef AUTHORITY_INFO_ACCESS SIGNATURE_INFO_ACCESS;
 
@@ -241,7 +239,7 @@ check_dup_public_key(bool *duplicated, char const *file, void *arg)
 	rcvd_cert = NULL;
 	tmp_size = 0;
 
-	/* TODO (aaaa) what about RRDP? */
+	/* what about RRDP? */
 	/*
 	error = uri_create_rsync(&uri, file);
 	if (error)
@@ -319,6 +317,7 @@ validate_subject(X509 *cert)
 		return error;
 	pr_val_debug("Subject: %s", x509_name_commonName(name));
 
+	/* TODO (aaaa) */
 	if (false) {
 	error = x509stack_store_subject(validation_certstack(state_retrieve()),
 	    name, check_dup_public_key, cert);
@@ -1436,7 +1435,6 @@ end:
 static int
 asnstr2str(ASN1_STRING *asnstr, char **result)
 {
-	char *str;
 	int str_len;
 
 	/*
@@ -1449,15 +1447,7 @@ asnstr2str(ASN1_STRING *asnstr, char **result)
 	if (str_len < 0)
 		return pr_val_err("String has invalid length: %d", str_len);
 
-	str = malloc(str_len + 1);
-	if (str == NULL)
-		return pr_enomem();
-
-	memcpy(str, ASN1_STRING_get0_data(asnstr), str_len);
-	str[str_len] = '\0';
-
-	*result = str;
-	return 0;
+	return string_clone(ASN1_STRING_get0_data(asnstr), str_len, result);
 }
 
 /* Create @uri from @ad */

@@ -59,13 +59,6 @@ validation_destroy(struct validation *state)
 	pr_crit("Not supposed to be called.");
 }
 
-int
-process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
-    process_file_cb cb, void *arg)
-{
-	pr_crit("Not supposed to be called.");
-}
-
 void
 fnstack_init(void)
 {
@@ -92,6 +85,19 @@ fnstack_push(char const *file)
 
 void
 thread_pool_wait(struct thread_pool *pool)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+thread_pool_push(struct thread_pool *pool, char const *task_name,
+    thread_pool_task_cb cb, void *arg)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+string_clone(void const *string, size_t size, char **clone)
 {
 	pr_crit("Not supposed to be called.");
 }

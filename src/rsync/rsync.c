@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "log.h"
+#include "str_token.h"
 #include "rpp/rpp_dl_status.h"
 
 /*
@@ -122,13 +123,11 @@ log_buffer(char const *buffer, ssize_t read, int type)
 {
 #define PRE_RSYNC "[RSYNC exec]: "
 	char *cpy, *cur, *tmp;
+	int error;
 
-	cpy = malloc(read + 1);
-	if (cpy == NULL)
-		return pr_enomem();
-
-	strncpy(cpy, buffer, read);
-	cpy[read] = '\0';
+	error = string_clone(buffer, read, &cpy);
+	if (error)
+		return error;
 
 	/* Break lines to one line at log */
 	cur = cpy;
@@ -299,7 +298,7 @@ do_rsync(struct rpki_uri *uri, bool is_file)
 				if (retries > 0)
 					pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 					    retries, uri_get_global(uri));
-				error = EREQFAILED;
+				error = -EINVAL;
 				goto release_args;
 			}
 			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
@@ -353,9 +352,8 @@ rsync_download_files(struct rpki_uri *uri, bool is_file)
 	int error;
 
 	if (!config_get_rsync_enabled()) {
-		/* TODO (aaaa) equivalent RRDP message */
 		pr_val_debug("rsync disabled; skipping update.");
-		return 0;
+		return ENOTCHANGED;
 	}
 
 	switch (rdsdb_get(uri)) {

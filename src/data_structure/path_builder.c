@@ -67,12 +67,9 @@ path_append_limited(struct path_builder *pb, char const *addend,
 }
 
 void
-path_append_url(struct path_builder *pb, struct rpki_uri *uri)
+path_append_url(struct path_builder *pb, char const *guri)
 {
-	char const *guri;
 	char *colon;
-
-	guri = uri_get_global(uri);
 
 	/* Is there really a point to removing the colon? */
 	colon = strchr(guri, ':');

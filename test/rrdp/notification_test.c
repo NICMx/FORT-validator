@@ -1,10 +1,11 @@
+#include "rrdp/notification.c"
+
 #include <check.h>
 #include <errno.h>
 #include <stdlib.h>
 
 #include "impersonator.c"
 #include "log.c"
-#include "rrdp/notification.c"
 #include "rrdp/types.c"
 #include "types/uri.c"
 #include "data_structure/path_builder.c"
@@ -51,6 +52,12 @@ create_dir_recursive(char const *path)
 int
 base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
     size_t *out_written)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+string_clone(void const *string, size_t size, char **clone)
 {
 	pr_crit("Not supposed to be called.");
 }

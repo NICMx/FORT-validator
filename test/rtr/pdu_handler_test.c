@@ -39,6 +39,12 @@ struct expected_pdu {
 
 static STAILQ_HEAD(, expected_pdu) expected_pdus = STAILQ_HEAD_INITIALIZER(expected_pdus);
 
+int
+string_clone(void const *string, size_t size, char **clone)
+{
+	pr_crit("Not supposed to be called.");
+}
+
 static void
 expected_pdu_add(uint8_t pdu_type)
 {

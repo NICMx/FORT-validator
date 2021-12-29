@@ -7,6 +7,7 @@
 
 #include "log.h"
 #include "thread_var.h"
+#include "str_token.h"
 
 /**
  * It's an RFC5280 name, but from RFC 6487's perspective.
@@ -21,24 +22,15 @@ struct rfc5280_name {
 };
 
 static int
-name2string(X509_NAME_ENTRY *name, char **_result)
+name2string(X509_NAME_ENTRY *name, char **result)
 {
 	const ASN1_STRING *data;
-	char *result;
 
 	data = X509_NAME_ENTRY_get_data(name);
 	if (data == NULL)
 		return val_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
-	result = malloc(data->length + 1);
-	if (result == NULL)
-		return pr_enomem();
-
-	memcpy(result, data->data, data->length);
-	result[data->length] = '\0';
-
-	*_result = result;
-	return 0;
+	return string_clone(data->data, data->length, result);
 }
 
 int

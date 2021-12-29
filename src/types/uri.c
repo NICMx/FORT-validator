@@ -97,7 +97,7 @@ uri_create(char *global, enum rpki_uri_type type, struct rpki_uri **result)
 	case URI_TYPE_HTTP_SIMPLE:
 		path_init(&path);
 		path_append(&path, config_get_local_repository());
-		path_append_url(&path, uri); /* Note: Must include the protocol */
+		path_append_url(&path, uri_get_global(uri));
 		error = path_compile(&path, &uri->local);
 		if (error) {
 			uri_refput(uri);
@@ -133,8 +133,8 @@ uri_create_caged(char *global, struct rpki_uri *notification,
 	path_init(&path);
 	path_append(&path, config_get_local_repository());
 	path_append(&path, "caged");
-	path_append_url(&path, notification);
-	path_append_url(&path, uri);
+	path_append_url(&path, uri_get_global(notification));
+	path_append_url(&path, uri_get_global(uri));
 	error = path_compile(&path, &uri->local);
 	if (error) {
 		uri_refput(uri);

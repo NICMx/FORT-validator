@@ -101,23 +101,23 @@ try_download(struct uri_list *uris, bool try_rrdp, bool try_rsync)
 	struct rpki_uri *uri;
 	char const *guri;
 	size_t u;
+	int error;
 
 	ARRAYLIST_FOREACH(uris, __uri, u) {
 		uri = *__uri;
 		guri = uri_get_global(uri);
 
 		if (try_rrdp && is_http(guri)) {
-			if (uri_get_type(uri) == URI_TYPE_VERSATILE) {
-				if (http_update(uri) == 0)
-					return uri;
-			} else {
-				if (rrdp_update(uri) == 0)
-					return uri;
-			}
+			error = (uri_get_type(uri) == URI_TYPE_VERSATILE)
+			    ? http_update(uri)
+			    : rrdp_update(uri);
+			if (!error || error == ENOTCHANGED || error == EFBIG)
+				return uri;
 		}
 		if (try_rsync && is_rsync(guri)) {
-			if (rsync_download_files(uri, false) == 0)
-				return 0;
+			error = rsync_download_files(uri, false);
+			if (!error || error == ENOTCHANGED || error == EFBIG)
+				return uri;
 		}
 	}
 

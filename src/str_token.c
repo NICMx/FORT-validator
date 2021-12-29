@@ -4,19 +4,17 @@
 #include <string.h>
 #include "log.h"
 
-/**
- * Does not assume that @string is NULL-terminated.
- *
- * TODO (aaaa) use this more.
- */
-static int
+/* Does not assume that @string is NULL-terminated. */
+int
 string_clone(void const *string, size_t size, char **clone)
 {
 	char *result;
 
 	result = malloc(size + 1);
-	if (result == NULL)
+	if (result == NULL) {
+		*clone = NULL;
 		return pr_enomem();
+	}
 
 	memcpy(result, string, size);
 	result[size] = '\0';

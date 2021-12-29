@@ -24,6 +24,12 @@
 #include "slurm/slurm_parser.c"
 #include "thread/thread_pool.c"
 
+int
+string_clone(void const *string, size_t size, char **clone)
+{
+	pr_crit("Not supposed to be called.");
+}
+
 /* -- Expected database descriptors -- */
 
 /*

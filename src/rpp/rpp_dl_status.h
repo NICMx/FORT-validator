@@ -21,7 +21,6 @@ enum rpp_download_status {
  */
 struct rpp_dl_status_db;
 
-/* TODO (aaaa) call these */
 struct rpp_dl_status_db *rdsdb_create(void);
 void rdsdb_destroy(struct rpp_dl_status_db *);
 

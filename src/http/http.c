@@ -262,7 +262,7 @@ do_single_http_get(struct curl_args *handler, char const *src, char const *dst)
 		case CURLE_COULDNT_RESOLVE_HOST:
 		case CURLE_COULDNT_RESOLVE_PROXY:
 		case CURLE_FTP_ACCEPT_TIMEOUT:
-			return EREQFAILED; /* Retry */
+			return EAGAIN; /* Retry */
 		default:
 			return handle_http_response_code(http_code);
 		}
@@ -361,8 +361,10 @@ http_get(struct rpki_uri *uri, long ims)
 	char *tmp_file;
 	int error;
 
-	if (!config_get_http_enabled())
+	if (!config_get_http_enabled()) {
+		pr_val_debug("HTTP disabled; skipping download.");
 		return ENOTCHANGED;
+	}
 
 	/* TODO (aaaa) this is reusable. Move to the thread. */
 	error = http_easy_init(&handler, ims);
@@ -402,8 +404,6 @@ free_handler:
 /*
  * Downloads @remote to the absolute path @dest (no workspace nor directory
  * structure is created).
- *
- * TODO (aaaa) this function needs to shrink even more.
  */
 int
 http_direct_download(char const *remote, char const *dest)
@@ -418,6 +418,5 @@ http_direct_download(char const *remote, char const *dest)
 	error = do_single_http_get(&curl, remote, dest);
 
 	http_easy_cleanup(&curl);
-
 	return error;
 }

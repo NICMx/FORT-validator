@@ -79,7 +79,6 @@ rdsdb_set(struct rpki_uri *uri, int error)
 	char const *key;
 	size_t key_len;
 
-	/* TODO (aaaa) check both protocols do it like this. */
 	if (error == ENOTCHANGED) {
 		pr_val_debug("No updates.");
 		error = 0;

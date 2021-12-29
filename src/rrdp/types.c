@@ -5,6 +5,7 @@
 #include "common.h"
 #include "file.h"
 #include "log.h"
+#include "str_token.h"
 #include "crypto/base64.h"
 #include "crypto/hash.h"
 #include "xml/relax_ng.h"
@@ -209,15 +210,13 @@ release_sanitized:
 	return error;
 }
 
-/*
- * TODO (aaaa) at least one caller doesn't benefit from the memory copy.
- * Analyze.
- */
 static int
 parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 {
 	xmlChar *xml_value;
-	char *tmp;
+	int error;
+
+	*result = NULL;
 
 	if (attr == NULL) {
 		xml_value = xmlTextReaderValue(reader);
@@ -231,18 +230,9 @@ parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 			    attr, xmlTextReaderConstLocalName(reader));
 	}
 
-	tmp = malloc(xmlStrlen(xml_value) + 1);
-	if (tmp == NULL) {
-		xmlFree(xml_value);
-		return pr_enomem();
-	}
-
-	memcpy(tmp, xml_value, xmlStrlen(xml_value));
-	tmp[xmlStrlen(xml_value)] = '\0';
+	error = string_clone(xml_value, xmlStrlen(xml_value), result);
 	xmlFree(xml_value);
-
-	*result = tmp;
-	return 0;
+	return error;
 }
 
 static int

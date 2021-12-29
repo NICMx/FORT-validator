@@ -16,6 +16,7 @@
 #include "types/uri_list.h"
 #include "crypto/base64.h"
 #include "rtr/db/vrps.h"
+#include "thread/thread_pool.h"
 
 typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
 

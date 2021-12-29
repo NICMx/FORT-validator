@@ -5,7 +5,9 @@
 #include <openssl/buffer.h>
 #include <errno.h>
 #include <string.h>
+
 #include "log.h"
+#include "str_token.h"
 
 /**
  * Converts error from libcrypto representation to this project's
@@ -207,6 +209,7 @@ to_base64url(char *base, size_t base_len, char **out)
 	char *pad, *tmp;
 	size_t len;
 	int i;
+	int error;
 
 	/* Remove padding, if present */
 	len = base_len;
@@ -217,12 +220,9 @@ to_base64url(char *base, size_t base_len, char **out)
 		len = pad - base;
 	} while(0);
 
-	tmp = malloc(len + 1);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	memcpy(tmp, base, len);
-	tmp[len] = '\0';
+	error = string_clone(base, len, &tmp);
+	if (error)
+		return error;
 
 	for (i = 0; i < len; i++) {
 		if (tmp[i] == '+')
