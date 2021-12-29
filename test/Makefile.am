@@ -25,7 +25,6 @@ check_PROGRAMS += db_table.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += rrdp_objects.test
-check_PROGRAMS += rsync.test
 check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
 check_PROGRAMS += thread_pool.test
@@ -54,9 +53,6 @@ pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 rrdp_objects_test_SOURCES = rrdp_objects_test.c
 rrdp_objects_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
-
-rsync_test_SOURCES = rsync_test.c
-rsync_test_LDADD = ${MY_LDADD}
 
 serial_test_SOURCES = types/serial_test.c
 serial_test_LDADD = ${MY_LDADD}

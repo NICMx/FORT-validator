@@ -136,8 +136,8 @@ read_notification(struct rrdp_notification *notification)
 {
 	int error;
 
-	error = relax_ng_parse(notification->uri, xml_read_notification,
-	    notification);
+	error = relax_ng_parse(uri_get_local(notification->uri),
+	    xml_read_notification, notification);
 	if (error)
 		return error;
 

@@ -47,7 +47,8 @@ rrdp_parse_snapshot(struct rrdp_notification *notification)
 	if (error)
 		goto pop;
 
-	error = relax_ng_parse(uri, xml_read_snapshot, notification);
+	error = relax_ng_parse(uri_get_local(uri), xml_read_snapshot,
+	    notification);
 
 pop:	fnstack_pop();
 	pr_val_debug("}");

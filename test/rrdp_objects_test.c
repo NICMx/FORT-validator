@@ -5,8 +5,55 @@
 #include "impersonator.c"
 #include "log.c"
 #include "rrdp/notification.c"
+#include "rrdp/types.c"
+#include "types/uri.c"
+#include "data_structure/path_builder.c"
 
 #define END 0xFFFF
+
+int
+relax_ng_parse(char const *path, xml_read_cb cb, void *arg)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+long
+file_get_modification_time(char const *luri)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+http_get(struct rpki_uri *uri, long ims)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+xml_parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+hash_validate_file(char const *algorithm, struct rpki_uri *uri,
+    unsigned char const *expected, size_t expected_len)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+create_dir_recursive(char const *path)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
+    size_t *out_written)
+{
+	pr_crit("Not supposed to be called.");
+}
 
 static void
 add_serials(struct rrdp_notification_deltas *deltas, ...)
@@ -44,7 +91,7 @@ START_TEST(test_deltas_head_sort)
 {
 	struct rrdp_notification_deltas deltas;
 
-	deltas_head_init(&deltas);
+	rrdp_notification_deltas_init(&deltas);
 	ck_assert_int_eq(0, deltas_head_sort(&deltas, 0));
 	ck_assert_int_eq(0, deltas_head_sort(&deltas, 1));
 	ck_assert_int_eq(0, deltas_head_sort(&deltas, 2));
@@ -63,15 +110,15 @@ START_TEST(test_deltas_head_sort)
 	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 4));
 	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 2));
 
-	deltas_head_cleanup(&deltas, NULL);
-	deltas_head_init(&deltas);
+	rrdp_notification_deltas_cleanup(&deltas, NULL);
+	rrdp_notification_deltas_init(&deltas);
 
 	add_serials(&deltas, 3, 0, 1, 2, END);
 	ck_assert_int_eq(0, deltas_head_sort(&deltas, 3));
 	validate_serials(&deltas, 0, 1, 2, 3, END);
 
-	deltas_head_cleanup(&deltas, NULL);
-	deltas_head_init(&deltas);
+	rrdp_notification_deltas_cleanup(&deltas, NULL);
+	rrdp_notification_deltas_init(&deltas);
 
 	add_serials(&deltas, 4, 3, 2, 1, 0, END);
 	ck_assert_int_eq(0, deltas_head_sort(&deltas, 4));
@@ -80,7 +127,7 @@ START_TEST(test_deltas_head_sort)
 	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 5));
 	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 3));
 
-	deltas_head_cleanup(&deltas, NULL);
+	rrdp_notification_deltas_cleanup(&deltas, NULL);
 }
 END_TEST
 

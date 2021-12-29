@@ -145,6 +145,43 @@ uri_create_caged(char *global, struct rpki_uri *notification,
 	return 0;
 }
 
+static bool
+is_valid_mft_file_chara(uint8_t chara)
+{
+	return ('a' <= chara && chara <= 'z')
+	    || ('A' <= chara && chara <= 'Z')
+	    || ('0' <= chara && chara <= '9')
+	    || (chara == '-')
+	    || (chara == '_');
+}
+
+/* RFC 6486bis, section 4.2.2 */
+static int
+validate_mft_file(IA5String_t *ia5)
+{
+	size_t dot;
+	size_t i;
+
+	if (ia5->size < 5)
+		return pr_val_err("File name is too short (%zu < 5).", ia5->size);
+	dot = ia5->size - 4;
+	if (ia5->buf[dot] != '.')
+		return pr_val_err("File name seems to lack a three-letter extension.");
+
+	for (i = 0; i < ia5->size; i++) {
+		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i])) {
+			return pr_val_err("File name contains illegal character #%u",
+			    ia5->buf[i]);
+		}
+	}
+
+	/*
+	 * Actual extension doesn't matter; if there's no handler,
+	 * we'll naturally ignore the file.
+	 */
+	return 0;
+}
+
 static int
 create_neighbor(char const *prefix, IA5String_t *suffix, char **result)
 {
@@ -162,6 +199,10 @@ uri_create_mft(struct rpki_uri *mft, IA5String_t *file,
 	struct rpki_uri *uri;
 	char *global;
 	int error;
+
+	error = validate_mft_file(file);
+	if (error)
+		return error;
 
 	error = create_neighbor(uri_get_global(mft), file, &global);
 	if (error)

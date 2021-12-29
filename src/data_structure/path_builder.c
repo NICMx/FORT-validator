@@ -12,14 +12,7 @@ path_init(struct path_builder *pb)
 	pb->string = malloc(INITIAL_CAPACITY);
 	pb->len = 0;
 	pb->capacity = INITIAL_CAPACITY;
-	pb->error = (pb->string != NULL) ? pr_enomem() : 0;
-}
-
-static void
-fail(struct path_builder *pb, int error)
-{
-	free(pb->string);
-	pb->error = error;
+	pb->error = (pb->string != NULL) ? 0 : pr_enomem();
 }
 
 static void
@@ -33,8 +26,9 @@ add(struct path_builder *pb, char const *addend, size_t addend_len)
 	total_len = pb->len + addend_len;
 	if (total_len > pb->capacity) {
 		if (total_len > MAX_CAPACITY) {
-			fail(pb, pr_val_err("Path too long: %zu > %u characters.",
-			    total_len, MAX_CAPACITY));
+			free(pb->string);
+			pb->error = pr_val_err("Path too long: %zu > %u characters.",
+			    total_len, MAX_CAPACITY);
 			return;
 		}
 
@@ -45,7 +39,7 @@ add(struct path_builder *pb, char const *addend, size_t addend_len)
 		pb->capacity = total_len;
 		pb->string = realloc(pb->string, pb->capacity);
 		if (pb->string == NULL) {
-			fail(pb, pr_enomem());
+			pb->error = pr_enomem();
 			return;
 		}
 	}

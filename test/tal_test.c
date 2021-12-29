@@ -9,105 +9,91 @@
 #include "impersonator.c"
 #include "line_file.c"
 #include "log.c"
-#include "state.h"
-#include "str_token.c"
-#include "random.c"
 #include "types/uri.c"
+#include "types/uri_list.c"
+#include "data_structure/path_builder.c"
 #include "crypto/base64.c"
-#include "rsync/rsync.c"
-#include "thread/thread_pool.c"
 
 /* Impersonate functions that won't be utilized by tests */
 
 int
-validation_prepare(struct validation **out, struct tal *tal,
+http_get(struct rpki_uri *uri, long ims)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+rsync_download_files(struct rpki_uri *uri, bool is_file)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+rrdp_update(struct rpki_uri *uri)
+{
+	pr_crit("Not supposed to be called.");
+}
+
+int
+validation_prepare(struct tal *tal,
     struct validation_handler *validation_handler)
 {
-	return 0;
+	pr_crit("Not supposed to be called.");
 }
 
 int
 certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 {
-	return -EINVAL;
+	pr_crit("Not supposed to be called.");
 }
 
 enum pubkey_state
 validation_pubkey_state(struct validation *state)
 {
-	return PKS_INVALID;
+	pr_crit("Not supposed to be called.");
 }
 
 void
 validation_destroy(struct validation *state)
 {
-	/* Nothing to destroy */
+	pr_crit("Not supposed to be called.");
 }
 
 int
 process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
     process_file_cb cb, void *arg)
 {
-	return 0;
-}
-
-void
-close_thread(pthread_t thread, char const *what)
-{
-	/* Nothing to close */
-}
-
-int
-autocomplete_local_rsync(char const *uri, char const *uri_prefix, char const *workspace,
-    char **result)
-{
-	/* These tests focus on global URIs, so set a dummy value */
-	*result = strdup("dummy");
-	if (*result == NULL)
-		return -ENOMEM;
-	return 0;
+	pr_crit("Not supposed to be called.");
 }
 
 void
 fnstack_init(void)
 {
-	/* Empty */
+	pr_crit("Not supposed to be called.");
 }
 
 void
 fnstack_cleanup(void)
 {
-	/* Empty */
+	pr_crit("Not supposed to be called.");
 }
 
 void
 fnstack_pop(void)
 {
-	/* Empty */
+	pr_crit("Not supposed to be called.");
 }
 
 void
 fnstack_push(char const *file)
 {
-	/* Empty */
-}
-
-struct validation *
-state_retrieve(void)
-{
-	return NULL;
+	pr_crit("Not supposed to be called.");
 }
 
 void
-db_rrdp_reset_visited_tals(void)
+thread_pool_wait(struct thread_pool *pool)
 {
-	/* Empty */
-}
-
-void
-db_rrdp_rem_nonvisited_tals(void)
-{
-	/* Empty */
+	pr_crit("Not supposed to be called.");
 }
 
 START_TEST(tal_load_normal)
@@ -147,11 +133,11 @@ START_TEST(tal_load_normal)
 
 	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
 
-	ck_assert_uint_eq(tal->uris.count, 3);
-	ck_assert_str_eq(tal->uris.array[0]->global,
+	ck_assert_uint_eq(tal->ta.len, 3);
+	ck_assert_str_eq(uri_get_global(tal->ta.array[0]),
 	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal->uris.array[1]->global, "https://potato");
-	ck_assert_str_eq(tal->uris.array[2]->global, "rsync://potato");
+	ck_assert_str_eq(uri_get_global(tal->ta.array[1]), "https://potato");
+	ck_assert_str_eq(uri_get_global(tal->ta.array[2]), "rsync://potato");
 
 	ck_assert_uint_eq(ARRAY_LEN(decoded), tal->spki_len);
 	for (i = 0; i < ARRAY_LEN(decoded); i++)
@@ -161,59 +147,16 @@ START_TEST(tal_load_normal)
 }
 END_TEST
 
-START_TEST(tal_order_http_first)
-{
-	struct tal *tal;
-
-	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
-
-	config_set_http_priority(60);
-	config_set_rsync_priority(50);
-	ck_assert_int_eq(tal_order_uris(tal), 0);
-
-	ck_assert_str_eq(tal->uris.array[0]->global, "https://potato");
-	ck_assert_str_eq(tal->uris.array[1]->global,
-	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal->uris.array[2]->global, "rsync://potato");
-
-	tal_destroy(tal);
-}
-END_TEST
-
-START_TEST(tal_order_http_last)
-{
-	struct tal *tal;
-
-	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
-
-	config_set_http_priority(50);
-	config_set_rsync_priority(60);
-	ck_assert_int_eq(tal_order_uris(tal), 0);
-
-	ck_assert_str_eq(tal->uris.array[0]->global,
-	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal->uris.array[1]->global, "rsync://potato");
-	ck_assert_str_eq(tal->uris.array[2]->global, "https://potato");
-
-	tal_destroy(tal);
-}
-END_TEST
-
 Suite *tal_load_suite(void)
 {
 	Suite *suite;
-	TCase *core, *order;
+	TCase *core;
 
 	core = tcase_create("Core");
 	tcase_add_test(core, tal_load_normal);
 
-	order = tcase_create("Order");
-	tcase_add_test(order, tal_order_http_first);
-	tcase_add_test(order, tal_order_http_last);
-
 	suite = suite_create("tal_load()");
 	suite_add_tcase(suite, core);
-	suite_add_tcase(suite, order);
 	return suite;
 }
 

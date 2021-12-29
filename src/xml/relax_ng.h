@@ -3,7 +3,6 @@
 
 #include <libxml/xmlreader.h>
 #include <string.h>
-#include "types/uri.h"
 
 /*
  * Schema obtained from RFC 8182, converted using the tool rnc2rng
@@ -168,7 +167,7 @@ int relax_ng_init(void);
 void relax_ng_cleanup(void);
 
 typedef int (*xml_read_cb)(xmlTextReaderPtr, void *);
-int relax_ng_parse(struct rpki_uri *, xml_read_cb cb, void *);
+int relax_ng_parse(char const *, xml_read_cb cb, void *);
 
 int xml_parse_long(xmlTextReaderPtr, char const *, unsigned long *);
 

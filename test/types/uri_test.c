@@ -6,6 +6,7 @@
 #include "log.c"
 #include "impersonator.c"
 #include "types/uri.c"
+#include "data_structure/path_builder.c"
 
 #define BUFFER_LEN 128
 static uint8_t buffer[BUFFER_LEN];

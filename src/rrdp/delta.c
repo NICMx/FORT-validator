@@ -107,7 +107,7 @@ process_delta(struct rrdp_notification_delta *deltas,
 
 	ctx.notification = notification;
 	ctx.expected_serial = deltas->serial;
-	error = relax_ng_parse(uri, xml_read_delta, &ctx);
+	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
 
 pop:	fnstack_pop();
 	pr_val_debug("}");

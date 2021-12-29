@@ -83,18 +83,16 @@ cleanup_parser:
  * parsed using @cb (will receive @arg as argument).
  */
 int
-relax_ng_parse(struct rpki_uri *uri, xml_read_cb cb, void *arg)
+relax_ng_parse(char const *path, xml_read_cb cb, void *arg)
 {
 	xmlTextReaderPtr reader;
 	xmlRelaxNGValidCtxtPtr rngvalidctx;
 	int read;
 	int error;
 
-	reader = xmlNewTextReaderFilename(uri_get_local(uri));
-	if (reader == NULL) {
-		return pr_val_err("Couldn't get XML '%s' file.",
-		    uri_get_local(uri));
-	}
+	reader = xmlNewTextReaderFilename(path);
+	if (reader == NULL)
+		return pr_val_err("Couldn't get XML '%s' file.", path);
 
 	error = xmlTextReaderRelaxNGSetSchema(reader, schema);
 	if (error) {

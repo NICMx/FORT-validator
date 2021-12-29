@@ -164,7 +164,6 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
 
-		/* TODO (aaaa) where's the file validation? */
 		error = uri_create_mft(mft_uri, &fah->file, &uri);
 		if (error)
 			goto fail;
