@@ -3,11 +3,12 @@
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <curl/curl.h>
 #include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
+#include "state.h"
+#include "thread_var.h"
 
 struct curl_args {
 	CURL *curl;
@@ -111,14 +112,14 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 	}
 }
 
-static int
-http_easy_init(struct curl_args *handler, long ims)
+CURL *
+curl_create(void)
 {
 	CURL *result;
 
 	result = curl_easy_init();
 	if (result == NULL)
-		return pr_enomem();
+		return NULL;
 
 	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
@@ -155,21 +156,16 @@ http_easy_init(struct curl_args *handler, long ims)
 	 */
 	setopt_long(result, CURLOPT_FAILONERROR, 1L);
 
-	/* Refer to its error buffer */
-	setopt_str(result, CURLOPT_ERRORBUFFER, handler->errbuf);
-
 	/* Prepare for multithreading, avoid signals */
 	setopt_long(result, CURLOPT_NOSIGNAL, 1L);
 
-	if (ims > 0) {
-		/* Set "If-Modified-Since" header */
-		setopt_long(result, CURLOPT_TIMEVALUE, ims);
-		setopt_long(result, CURLOPT_TIMECONDITION,
-		    CURL_TIMECOND_IFMODSINCE);
-	}
-
-	handler->curl = result;
 	return 0;
+}
+
+void
+curl_destroy(CURL *curl)
+{
+	curl_easy_cleanup(curl);
 }
 
 static char const *
@@ -218,42 +214,44 @@ handle_http_response_code(long http_code)
  * only if we don't need to retry.
  */
 static int
-do_single_http_get(struct curl_args *handler, char const *src, char const *dst)
+do_single_http_get(CURL *curl, char const *src, char const *dst)
 {
-	struct write_callback_arg args;
+	struct curl_args cargs;
+	struct write_callback_arg wargs;
 	CURLcode res;
 	long http_code;
 
-	args.total_bytes = 0;
-	handler->errbuf[0] = 0;
-	setopt_str(handler->curl, CURLOPT_URL, src);
-	setopt_writedata(handler->curl, &args);
+	cargs.curl = curl;
+	cargs.errbuf[0] = 0;
+	wargs.total_bytes = 0;
+	setopt_writedata(curl, &wargs);
+	setopt_str(curl, CURLOPT_ERRORBUFFER, cargs.errbuf);
 
 	pr_val_debug("HTTP GET: %s", src);
 
-	args.error = file_write(dst, &args.dst);
-	if (args.error)
-		return args.error;
+	wargs.error = file_write(dst, &wargs.dst);
+	if (wargs.error)
+		return wargs.error;
 
-	res = curl_easy_perform(handler->curl);
+	res = curl_easy_perform(curl);
 
-	file_close(args.dst);
+	file_close(wargs.dst);
 
-	pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
+	pr_val_debug("Done. Total bytes transferred: %zu", wargs.total_bytes);
 
-	if (args.error == EFBIG) {
+	if (wargs.error == EFBIG) {
 		pr_val_err("File too big (read: %zu bytes). Rejecting.",
-		    args.total_bytes);
+		    wargs.total_bytes);
 		return EFBIG;
 	}
 
-	args.error = get_http_response_code(handler, &http_code, src);
-	if (args.error)
-		return args.error;
+	wargs.error = get_http_response_code(&cargs, &http_code, src);
+	if (wargs.error)
+		return wargs.error;
 
 	if (res != CURLE_OK) {
 		pr_val_err("Error requesting URL %s: %s. (HTTP code: %ld)",
-		    src, curl_err_string(handler, res), http_code);
+		    src, curl_err_string(&cargs, res), http_code);
 
 		switch (res) {
 		case CURLE_FILESIZE_EXCEEDED:
@@ -292,17 +290,11 @@ do_single_http_get(struct curl_args *handler, char const *src, char const *dst)
 	return 0;
 }
 
-static void
-http_easy_cleanup(struct curl_args *handler)
-{
-	curl_easy_cleanup(handler->curl);
-}
-
 /* Retries in accordance with configuration limits. */
 static int
-retry_until_done(char const *remote, char const *local,
-    struct curl_args *handler)
+retry_until_done(char const *remote, char const *local, long ims)
 {
+	CURL *curl;
 	unsigned int attempt;
 	unsigned int max_attempts;
 	unsigned int retry_interval;
@@ -312,13 +304,24 @@ retry_until_done(char const *remote, char const *local,
 	if (error)
 		return error;
 
+	curl = validation_curl(state_retrieve());
 	max_attempts = config_get_http_retry_count() + 1;
 	retry_interval = config_get_http_retry_interval();
+
+	setopt_str(curl, CURLOPT_URL, remote);
+	if (ims > 0) {
+		setopt_long(curl, CURLOPT_TIMEVALUE, ims);
+		setopt_long(curl, CURLOPT_TIMECONDITION,
+		    CURL_TIMECOND_IFMODSINCE);
+	} else {
+		setopt_long(curl, CURLOPT_TIMEVALUE, 0);
+		setopt_long(curl, CURLOPT_TIMECONDITION, CURL_TIMECOND_NONE);
+	}
 
 	for (attempt = 1; true; attempt++) {
 		pr_val_debug("HTTP GET attempt %u (out of %u)...",
 		    attempt, max_attempts);
-		error = do_single_http_get(handler, remote, local);
+		error = do_single_http_get(curl, remote, local);
 		if (error == 0)
 			return 0;
 		if (error != EAGAIN)
@@ -357,7 +360,6 @@ http_get(struct rpki_uri *uri, long ims)
 {
 	static char const *TMP_SUFFIX = "_tmp";
 
-	struct curl_args handler;
 	char *tmp_file;
 	int error;
 
@@ -366,27 +368,20 @@ http_get(struct rpki_uri *uri, long ims)
 		return ENOTCHANGED;
 	}
 
-	/* TODO (aaaa) this is reusable. Move to the thread. */
-	error = http_easy_init(&handler, ims);
-	if (error)
-		return error;
-
 	/*
 	 * We will write the file into a temporal location first.
 	 * This will prevent us from overriding the existing file, which is
 	 * going to be a problem if the download turns out to fail.
 	 */
 	tmp_file = malloc(strlen(uri_get_local(uri)) + strlen(TMP_SUFFIX) + 1);
-	if (tmp_file == NULL) {
-		error = pr_enomem();
-		goto free_handler;
-	}
+	if (tmp_file == NULL)
+		return pr_enomem();
 	strcpy(tmp_file, uri_get_local(uri));
 	strcat(tmp_file, TMP_SUFFIX);
 
-	error = retry_until_done(uri_get_global(uri), tmp_file, &handler);
+	error = retry_until_done(uri_get_global(uri), tmp_file, ims);
 	if (error)
-		goto free_tmp;
+		goto end;
 
 	if (rename(tmp_file, uri_get_local(uri)) == -1) {
 		error = errno;
@@ -394,10 +389,7 @@ http_get(struct rpki_uri *uri, long ims)
 		    tmp_file, uri_get_local(uri));
 	}
 
-free_tmp:
-	free(tmp_file);
-free_handler:
-	http_easy_cleanup(&handler);
+end:	free(tmp_file);
 	return error;
 }
 
@@ -408,15 +400,15 @@ free_handler:
 int
 http_direct_download(char const *remote, char const *dest)
 {
-	struct curl_args curl;
+	CURL *curl;
 	int error;
 
-	error = http_easy_init(&curl, 0L);
-	if (error)
-		return error;
+	curl = curl_create();
+	if (curl == NULL)
+		return pr_enomem();
 
 	error = do_single_http_get(&curl, remote, dest);
 
-	http_easy_cleanup(&curl);
+	curl_destroy(&curl);
 	return error;
 }

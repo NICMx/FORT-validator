@@ -1,6 +1,7 @@
 #ifndef SRC_STATE_H_
 #define SRC_STATE_H_
 
+#include <curl/curl.h>
 #include <openssl/x509.h>
 #include "cert_stack.h"
 #include "validation_handler.h"
@@ -12,6 +13,7 @@ int validation_prepare(struct tal *, struct validation_handler *);
 void validation_destroy();
 
 struct tal *validation_tal(struct validation *);
+CURL *validation_curl(struct validation *);
 X509_STORE *validation_store(struct validation *);
 struct cert_stack *validation_certstack(struct validation *);
 

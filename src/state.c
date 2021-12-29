@@ -3,6 +3,7 @@
 #include <errno.h>
 #include "log.h"
 #include "thread_var.h"
+#include "http/http.h"
 #include "rpp/rpp_dl_status.h"
 
 /**
@@ -14,6 +15,9 @@
  */
 struct validation {
 	struct tal *tal;
+
+	/* HTTP retriever. Reused because the documentation recommends it. */
+	CURL *curl;
 
 	struct x509_data {
 		/** https://www.openssl.org/docs/man1.1.1/man3/X509_STORE_load_locations.html */
@@ -98,10 +102,16 @@ validation_prepare(struct tal *tal,
 
 	state->tal = tal;
 
+	state->curl = curl_create();
+	if (state->curl == NULL) {
+		error = pr_enomem();
+		goto revert_state;
+	}
+
 	state->x509_data.store = X509_STORE_new();
 	if (!state->x509_data.store) {
 		error = val_crypto_err("X509_STORE_new() returned NULL");
-		goto revert_state;
+		goto revert_curl;
 	}
 
 	params = X509_VERIFY_PARAM_new();
@@ -134,6 +144,8 @@ revert_params:
 	X509_VERIFY_PARAM_free(params);
 revert_store:
 	X509_STORE_free(state->x509_data.store);
+revert_curl:
+	curl_destroy(state->curl);
 revert_state:
 	free(state);
 	return error;
@@ -150,6 +162,7 @@ validation_destroy(void)
 	certstack_destroy(state->certstack);
 	X509_VERIFY_PARAM_free(state->x509_data.params);
 	X509_STORE_free(state->x509_data.store);
+	curl_destroy(state->curl);
 	free(state);
 }
 
@@ -157,6 +170,12 @@ struct tal *
 validation_tal(struct validation *state)
 {
 	return state->tal;
+}
+
+CURL *
+validation_curl(struct validation *state)
+{
+	return state->curl;
 }
 
 X509_STORE *
