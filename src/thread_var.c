@@ -12,7 +12,6 @@
 
 static pthread_key_t state_key;
 static pthread_key_t filenames_key;
-static pthread_key_t repository_key;
 
 struct filename_stack {
 	/* This can be NULL. Abort all operations if this is the case. */
@@ -21,24 +20,12 @@ struct filename_stack {
 	unsigned int size;
 };
 
-struct working_repo {
-	char const *uri;
-	unsigned int level;
-};
-
 static void
 fnstack_discard(void *arg)
 {
 	struct filename_stack *files = arg;
 	free(files->filenames);
 	free(files);
-}
-
-static void
-working_repo_discard(void *arg)
-{
-	struct working_repo *repo = arg;
-	free(repo);
 }
 
 /** Initializes this entire module. Call once per runtime lifetime. */
@@ -69,14 +56,6 @@ thvar_init(void)
 		return error;
 	}
 
-	error = pthread_key_create(&repository_key, working_repo_discard);
-	if (error) {
-		pr_op_err(
-		    "Fatal: Errcode %d while initializing the 'working repository' thread variable.",
-		    error);
-		return error;
-	}
-
 	return 0;
 }
 
@@ -93,7 +72,15 @@ state_store(struct validation *state)
 	return error;
 }
 
-/* Returns the current thread's validation state. */
+/*
+ * Returns the current thread's validation state.
+ *
+ * The state is stored in the thread because it's needed in both extremely high
+ * and extremely low level functions; it would cause catastrophic clutter if
+ * passed around in argument lists.
+ *
+ * Cannot return NULL.
+ */
 struct validation *
 state_retrieve(void)
 {
@@ -101,7 +88,7 @@ state_retrieve(void)
 
 	state = pthread_getspecific(state_key);
 	if (state == NULL)
-		pr_op_err("Programming error: This thread lacks a validation state.");
+		pr_crit("Programming error: This thread lacks a validation state.");
 
 	return state;
 }
@@ -218,123 +205,11 @@ fnstack_pop(void)
 	files->len--;
 }
 
-/** Initializes the current thread's working repo. Call once per thread. */
-void
-working_repo_init(void)
-{
-	struct working_repo *repo;
-	int error;
-
-	repo = malloc(sizeof(struct working_repo));
-	if (repo == NULL)
-		return;
-
-	repo->uri = NULL;
-	repo->level = 0;
-
-	error = pthread_setspecific(repository_key, repo);
-	if (error)
-		pr_op_err("pthread_setspecific() returned %d.", error);
-}
-
-void
-working_repo_cleanup(void)
-{
-	struct working_repo *repo;
-	int error;
-
-	repo = pthread_getspecific(repository_key);
-	if (repo == NULL)
-		return;
-
-	working_repo_discard(repo);
-
-	error = pthread_setspecific(repository_key, NULL);
-	if (error)
-		pr_op_err("pthread_setspecific() returned %d.", error);
-}
-
-/*
- * Call whenever a certificate has more than one repository where its childs
- * live (rsync or RRDP).
- */
-void
-working_repo_push(char const *location)
-{
-	struct working_repo *repo;
-
-	repo = pthread_getspecific(repository_key);
-	if (repo == NULL)
-		return;
-
-	repo->uri = location;
-}
-
-/*
- * Set the current repository level, must be called before trying to fetch the
- * repository.
- *
- * The level "calculation" must be done by the caller.
- */
-void
-working_repo_push_level(unsigned int level)
-{
-	struct working_repo *repo;
-
-	repo = pthread_getspecific(repository_key);
-	if (repo == NULL)
-		return;
-
-	repo->level = level;
-}
-
-char const *
-working_repo_peek(void)
-{
-	struct working_repo *repo;
-
-	repo = pthread_getspecific(repository_key);
-
-	return repo == NULL ? NULL : repo->uri;
-}
-
-unsigned int
-working_repo_peek_level(void)
-{
-	struct working_repo *repo;
-
-	repo = pthread_getspecific(repository_key);
-
-	return repo->level;
-}
-
-/*
- * Call once the certificate's repositories were downloaded (either successful
- * or erroneously).
- */
-void
-working_repo_pop(void)
-{
-	struct working_repo *repo;
-
-	repo = pthread_getspecific(repository_key);
-	if (repo == NULL)
-		return;
-
-	repo->uri = NULL;
-	repo->level = 0;
-}
-
 static char const *
 addr2str(int af, void const *addr, char *(*buffer_cb)(struct validation *))
 {
-	struct validation *state;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return NULL;
-
-	return inet_ntop(af, addr, buffer_cb(state), INET6_ADDRSTRLEN);
+	return inet_ntop(af, addr, buffer_cb(state_retrieve()),
+	    INET6_ADDRSTRLEN);
 }
 
 /**

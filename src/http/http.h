@@ -9,8 +9,7 @@
 int http_init(void);
 void http_cleanup(void);
 
-int http_download_file(struct rpki_uri *, bool);
-int http_download_file_with_ims(struct rpki_uri *, long, bool);
+int http_get(struct rpki_uri *, long);
 
 int http_direct_download(char const *, char const *);
 

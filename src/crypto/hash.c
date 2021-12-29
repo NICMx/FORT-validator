@@ -1,4 +1,4 @@
-#include "hash.h"
+#include "crypto/hash.h"
 
 #include <errno.h>
 #include <openssl/evp.h>

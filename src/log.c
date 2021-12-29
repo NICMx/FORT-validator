@@ -63,7 +63,7 @@ static pthread_mutex_t logck;
  * aware that pthread_mutex_lock() can return error codes, which shouldn't
  * prevent critical stack traces from printing.)
  */
-void
+static void
 print_stack_trace(char const *title)
 {
 #define STACK_SIZE 64
@@ -507,6 +507,9 @@ int
 __pr_op_err(int error, const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
+	lock_mutex();
+	print_stack_trace(NULL);
+	unlock_mutex();
 	return error;
 }
 

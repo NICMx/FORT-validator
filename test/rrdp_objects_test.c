@@ -4,26 +4,26 @@
 
 #include "impersonator.c"
 #include "log.c"
-#include "rrdp/rrdp_objects.c"
+#include "rrdp/notification.c"
 
 #define END 0xFFFF
 
 static void
-add_serials(struct deltas_head *deltas, ...)
+add_serials(struct rrdp_notification_deltas *deltas, ...)
 {
-	struct delta_head delta;
+	struct rrdp_notification_delta delta;
 	va_list vl;
 
-	doc_data_init(&delta.doc_data);
+	rrdp_file_metadata_init(&delta.meta);
 
 	va_start(vl, deltas);
 	while ((delta.serial = va_arg(vl, unsigned long)) != END)
-		ck_assert_int_eq(0, deltas_head_add(deltas, &delta));
+		ck_assert_int_eq(0, rrdp_notification_deltas_add(deltas, &delta));
 	va_end(vl);
 }
 
 static void
-validate_serials(struct deltas_head *deltas, ...)
+validate_serials(struct rrdp_notification_deltas *deltas, ...)
 {
 	unsigned long serial;
 	unsigned int i;
@@ -42,7 +42,7 @@ validate_serials(struct deltas_head *deltas, ...)
 
 START_TEST(test_deltas_head_sort)
 {
-	struct deltas_head deltas;
+	struct rrdp_notification_deltas deltas;
 
 	deltas_head_init(&deltas);
 	ck_assert_int_eq(0, deltas_head_sort(&deltas, 0));

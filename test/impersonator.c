@@ -76,7 +76,7 @@ config_get_local_repository(void)
 enum rsync_strategy
 config_get_rsync_strategy(void)
 {
-	return RSYNC_ROOT;
+	return RSYNC_STRICT;
 }
 
 bool

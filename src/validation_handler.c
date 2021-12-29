@@ -7,13 +7,9 @@
 static int
 get_current_threads_handler(struct validation_handler const **result)
 {
-	struct validation *state;
 	struct validation_handler const *handler;
 
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-	handler = validation_get_validation_handler(state);
+	handler = validation_get_validation_handler(state_retrieve());
 	if (handler == NULL)
 		pr_crit("This thread lacks a validation handler.");
 

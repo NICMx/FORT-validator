@@ -6,20 +6,27 @@ a bug.
 addr: address
 addr4: IPv4 address
 addr6: IPv6 address
+arg: argument
 be: Big Endian
 cert: certificate
 certstack: certificate stack
 db: database
+dl: download
 eof: end of file
 err: error
 fd: File Descriptor (see `man 2 accept`)
 guri: global URI
 hdr: header
+htable: hash table
 id: identifier
+idx: index
 len: length
 max: maximum
+meta: metadata
+mft: Manifest
 min: minimum
 msg: message
+notif: notification
 pdu: Protocol Data Unit (RFC 6810)
 pp: Publication Point
 pr: print
@@ -29,6 +36,8 @@ refput: reference put (-1 to reference counter)
 rk: Router Key
 rpp: Repository Publication Point
 str: string
+ta: Trust Anchor
+tal: Trust Anchor Locator
 tmp: temporal
 uint: unsigned int
 vrp: Validated ROA Payload (RFC 6811)

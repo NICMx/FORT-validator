@@ -5,8 +5,8 @@
 #include <openssl/x509.h>
 #include "certificate_refs.h"
 #include "resource.h"
-#include "rpp.h"
 #include "types/uri.h"
+#include "rpp/rpp.h"
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/SignatureValue.h"
 
@@ -57,7 +57,7 @@ int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
  * Specific validation of AIA (rfc6487#section-4.8.7) extension, public so that
  * CAs and EEs can access it.
  */
-int certificate_validate_aia(struct rpki_uri *, X509 *);
+int certificate_validate_aia(struct uri_list *, X509 *);
 
 int certificate_traverse(struct rpp *, struct rpki_uri *);
 

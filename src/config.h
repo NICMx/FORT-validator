@@ -29,7 +29,6 @@ char const *config_get_slurm(void);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);
-bool config_get_shuffle_tal_uris(void);
 unsigned int config_get_max_cert_depth(void);
 enum mode config_get_mode(void);
 char const *config_get_http_user_agent(void);
@@ -83,10 +82,6 @@ void config_set_rsync_enabled(bool);
 void config_set_http_enabled(bool);
 /* TODO (later) Deprecated */
 void config_set_rrdp_enabled(bool);
-
-/* TODO (later) Remove when sync-strategy is fully deprecated */
-void config_set_sync_strategy(enum rsync_strategy);
-void config_set_rsync_strategy(enum rsync_strategy);
 
 /* TODO (later) Remove once rrdp.* is fully deprecated */
 void config_set_rrdp_priority(unsigned int);

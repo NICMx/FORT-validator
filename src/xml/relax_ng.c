@@ -1,4 +1,4 @@
-#include "relax_ng.h"
+#include "xml/relax_ng.h"
 
 #include <libxml/parser.h>
 #include <libxml/relaxng.h>
@@ -79,20 +79,22 @@ cleanup_parser:
 }
 
 /*
- * Validate file at @path against globally loaded schema. The file must be
+ * Validate file at @uri against globally loaded schema. The file must be
  * parsed using @cb (will receive @arg as argument).
  */
 int
-relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
+relax_ng_parse(struct rpki_uri *uri, xml_read_cb cb, void *arg)
 {
 	xmlTextReaderPtr reader;
 	xmlRelaxNGValidCtxtPtr rngvalidctx;
 	int read;
 	int error;
 
-	reader = xmlNewTextReaderFilename(path);
-	if (reader == NULL)
-		return pr_val_err("Couldn't get XML '%s' file.", path);
+	reader = xmlNewTextReaderFilename(uri_get_local(uri));
+	if (reader == NULL) {
+		return pr_val_err("Couldn't get XML '%s' file.",
+		    uri_get_local(uri));
+	}
 
 	error = xmlTextReaderRelaxNGSetSchema(reader, schema);
 	if (error) {
@@ -155,4 +157,29 @@ relax_ng_cleanup(void)
 	xmlRelaxNGFree(schema);
 	xmlRelaxNGFreeParserCtxt(rngparser);
 	xmlCleanupParser();
+}
+
+int
+xml_parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
+{
+	xmlChar *xml_value;
+	unsigned long tmp;
+
+	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
+	if (xml_value == NULL)
+		return pr_val_err("RRDP file: Couldn't find xml attribute '%s'",
+		    attr);
+
+	errno = 0;
+	tmp = strtoul((char *) xml_value, NULL, 10);
+	if (errno) {
+		xmlFree(xml_value);
+		pr_val_errno(errno, "RRDP file: Invalid long value '%s'",
+		    xml_value);
+		return -EINVAL;
+	}
+	xmlFree(xml_value);
+
+	(*result) = tmp;
+	return 0;
 }

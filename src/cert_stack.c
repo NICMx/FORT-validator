@@ -56,13 +56,6 @@ struct metadata_node {
 	struct serial_numbers serials;
 	struct subjects subjects;
 
-	/*
-	 * Certificate repository "level". This aims to identify if the
-	 * certificate is located at a distinct server than its father (common
-	 * case when the RIRs delegate RPKI repositories).
-	 */
-	unsigned int level;
-
 	/** Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(metadata_node) next;
 };
@@ -86,9 +79,12 @@ struct cert_stack {
 	struct defer_stack defers;
 
 	/**
-	 * x509 stack. Parents of the certificate we're currently iterating
-	 * through.
-	 * Formatted for immediate libcrypto consumption.
+	 * Trusted stack. A chain of certificates that will (because of the
+	 * order traversal) validate the next certificate, at any given time.
+	 *
+	 * Ancestors of the certificate we're currently iterating through.
+	 *
+	 * Formatted specifically for instant libcrypto consumption.
 	 */
 	STACK_OF(X509) *x509s;
 
@@ -97,7 +93,7 @@ struct cert_stack {
 	 *
 	 * (These two stacks should always have the same size. The reason why I
 	 * don't combine them is because libcrypto's validation function needs
-	 * the X509 stack, and I'm not creating it over and over again.)
+	 * the X509 stack, and I can't add data to it.)
 	 *
 	 * (This is a SLIST and not a STACK_OF because the OpenSSL stack
 	 * implementation is different than the LibreSSL one, and the latter is
@@ -262,12 +258,6 @@ again:	node = SLIST_FIRST(&stack->defers);
 	return 0;
 }
 
-bool
-deferstack_is_empty(struct cert_stack *stack)
-{
-	return SLIST_EMPTY(&stack->defers);
-}
-
 static int
 init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
     struct resources **_result)
@@ -304,28 +294,6 @@ fail:
 	return error;
 }
 
-static int
-init_level(struct cert_stack *stack, unsigned int *_result)
-{
-	struct metadata_node *head_meta;
-	unsigned int work_repo_level;
-	unsigned int result;
-
-	/*
-	 * Bruh, I don't understand the point of this block.
-	 * Why can't it just be `result = working_repo_peek_level();`?
-	 */
-
-	result = 0;
-	work_repo_level = working_repo_peek_level();
-	head_meta = SLIST_FIRST(&stack->metas);
-	if (head_meta != NULL && work_repo_level > head_meta->level)
-		result = work_repo_level;
-
-	*_result = result;
-	return 0;
-}
-
 static struct defer_node *
 create_separator(void)
 {
@@ -339,11 +307,16 @@ create_separator(void)
 	return result;
 }
 
-/** Steals ownership of @x509 on success. */
+/*
+ * Add certificate to the trusted stack.
+ *
+ * Steals ownership of @x509 on success.
+ */
 int
-x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
-    enum rpki_policy policy, enum cert_type type)
+x509stack_push(struct rpki_uri *uri, X509 *x509, enum rpki_policy policy,
+    enum cert_type type)
 {
+	struct cert_stack *stack;
 	struct metadata_node *meta;
 	struct defer_node *defer_separator;
 	int ok;
@@ -362,9 +335,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 	if (error)
 		goto cleanup_subjects;
 
-	error = init_level(stack, &meta->level); /* Does not need a revert */
-	if (error)
-		goto destroy_resources;
+	stack = validation_certstack(state_retrieve());
 
 	defer_separator = create_separator();
 	if (defer_separator == NULL) {
@@ -404,9 +375,12 @@ cleanup_subjects:
  * deferstack_pop().)
  */
 void
-x509stack_cancel(struct cert_stack *stack)
+x509stack_cancel(void)
 {
+	struct cert_stack *stack;
 	struct defer_node *defer_separator;
+
+	stack = validation_certstack(state_retrieve());
 
 	x509stack_pop(stack);
 
@@ -418,8 +392,9 @@ x509stack_cancel(struct cert_stack *stack)
 }
 
 X509 *
-x509stack_peek(struct cert_stack *stack)
+x509stack_peek(void)
 {
+	struct cert_stack *stack = validation_certstack(state_retrieve());
 	return sk_X509_value(stack->x509s, sk_X509_num(stack->x509s) - 1);
 }
 
@@ -436,13 +411,6 @@ x509stack_peek_resources(struct cert_stack *stack)
 {
 	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
 	return (meta != NULL) ? meta->resources : NULL;
-}
-
-unsigned int
-x509stack_peek_level(struct cert_stack *stack)
-{
-	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
-	return (meta != NULL) ? meta->level : 0;
 }
 
 static int
@@ -551,34 +519,94 @@ x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject,
 	int error;
 
 	/*
-	 * There's something that's not clicking with me:
-	 *
 	 * "Each distinct subordinate CA and
 	 * EE certified by the issuer MUST be identified using a subject name
 	 * that is unique per issuer.  In this context, 'distinct' is defined as
 	 * an entity and a given public key."
 	 *
-	 * Does the last sentence have any significance to us? I don't even
-	 * understand why the requirement exists. 5280 and 6487 don't even
-	 * define "entity." We'll take the closest definition from the context,
-	 * specifically from RFC 6484 or RFC 6481 (both RFCs don't define
-	 * "entity" explicitly, but use the word in a way that it can be
-	 * inferred what it means).
+	 * What the hell? Removing redundancy:
+	 *
+	 * 	Each distinct subordinate CA and EE certified by the issuer MUST
+	 * 	have a unique subject name. In this context, 'distinct' is
+	 * 	defined as an entity and a given public key.
+	 *
+	 * Trimming fat:
+	 *
+	 * 	Each distinct child certified by the issuer MUST have a unique
+	 * 	subject name. In this context, 'distinct' is defined as an
+	 * 	entity and a given public key.
+	 *
+	 * Translation:
+	 *
+	 * 	Sibling certificates must have different subject names.
+	 * 	Among a parent's children, siblings are identified by their
+	 * 	[entity, public key] tuple.
+	 *
+	 * From RFC 6484, one can surmise that "entity" means "INR holder."
+	 * (INR = Internet Number Resource = IP address or ASN.)
+	 *
+	 * The requirement is kind of circular because an entity would normally
+	 * be identified by its parent certificate and subject name... right?
+	 * How else would an RPKI consumer identify the entity?
+	 *
+	 * Educated flight of fancy:
+	 *
+	 * 	Sibling certificates must have different subject names.
+	 * 	Among a parent's children, siblings are identified by their
+	 * 	[parent, subject name, public key] tuple.
+	 *
+	 * Given that we've established that we're talking about siblings,
+	 * the parent is always the same, so it becomes
+	 *
+	 * 	Sibling certificates must have different subject names.
+	 * 	Among a parent's children, siblings are identified by their
+	 * 	[subject name, public key] tuple.
+	 *
+	 * Circular:
+	 *
+	 *	Given two siblings, if their [subject name, public key] is
+	 *	different, then their subject names must also be different.
+	 *
+	 * In other words:
+	 *
+	 * - If A = [a, m] and B = [a, m], then no constraints must be imposed.
+	 * - If A = [a, m] and B = [a, n], then a != a. This makes no sense.
+	 * - If A = [a, m] and B = [b, m], then a != b. Self-evident.
+	 * - If A = [a, m] and B = [b, n], then a != b. Self-evident.
+	 *
+	 * So... assuming my train of thought is correct, the requirement can
+	 * therefore be reduced to
+	 *
+	 *	If two sibling certificates have different public keys, then
+	 *	they must have different subject names as well.
+	 *
+	 * In other words, this whole fucking mess is just a reword of the
+	 * (infinitely more competently articulated) immediately following
+	 * sentence:
 	 *
 	 * "An issuer SHOULD use a different
 	 * subject name if the subject's key pair has changed (i.e., when the CA
 	 * issues a certificate as part of re-keying the subject.)"
 	 *
-	 * It's really weird that it seems to be rewording the same requirement
-	 * except the first version is defined as MUST and the second one is
-	 * defined as SHOULD.
+	 * Except... the two requirements are actually contradicting each other:
+	 * The former is defined as a MUST and the latter is a SHOULD.
 	 *
-	 * Ugh. Okay. Let's use some common sense. There are four possible
-	 * situations:
+	 * FFFFFFFFFUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUCK!!!
 	 *
-	 * - Certificates do not share name nor public key. We should accept
-	 *   this.
-	 * - Certificates share name, but not public key. We should reject this.
+	 * There's also another problem: What should we do when we find two
+	 * siblings with different public keys and equal names? Are we even
+	 * expected to do anything? I mean, does this requirement exist to
+	 * simplify the work of RPs, or to be enforced by RPs?
+	 *
+	 * Sigh. I'm gonna have to ping some people. In the meantime, I'm going
+	 * to comment the caller, because this code is conflicting with the
+	 * rpki_uri refactors.
+	 *
+	 * Leftover from the previous version of this comment:
+	 *
+	 * - Certificates do not share name nor public key. This is the most
+	 *   normal situation; accept.
+	 * - Certificates share name, but not public key. Illegal.
 	 * - Certificates share public key, but not name. This is basically
 	 *   impossible, but fine nonetheless. Accept.
 	 *   (But maybe issue a warning. It sounds like the two children can
@@ -586,7 +614,6 @@ x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject,
 	 * - Certificates share name and public key. This likely means that we
 	 *   are looking at two different versions of the same certificate.
 	 *   Accept. (see rfc6484#section-4.7.1 for an example)
-	 *
 	 */
 
 	meta = SLIST_FIRST(&stack->metas);

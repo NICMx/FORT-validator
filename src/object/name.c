@@ -146,7 +146,6 @@ x509_name_equals(struct rfc5280_name *a, struct rfc5280_name *b)
 int
 validate_issuer_name(char const *container, X509_NAME *issuer)
 {
-	struct validation *state;
 	X509 *parent;
 	struct rfc5280_name *parent_subject;
 	struct rfc5280_name *child_issuer;
@@ -159,10 +158,7 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 	 * But let's check it anyway.
 	 */
 
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-	parent = x509stack_peek(validation_certstack(state));
+	parent = x509stack_peek();
 	if (parent == NULL) {
 		return pr_val_err("%s appears to have no parent certificate.",
 		    container);

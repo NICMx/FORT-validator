@@ -1,6 +1,7 @@
-#ifndef SRC_RPP_H_
-#define SRC_RPP_H_
+#ifndef SRC_RPP_RPP_H_
+#define SRC_RPP_RPP_H_
 
+#include <openssl/x509v3.h>
 #include "types/uri.h"
 
 struct rpp;
@@ -19,4 +20,4 @@ int rpp_crl(struct rpp *, STACK_OF(X509_CRL) **);
 
 void rpp_traverse(struct rpp *);
 
-#endif /* SRC_RPP_H_ */
+#endif /* SRC_RPP_RPP_H_ */

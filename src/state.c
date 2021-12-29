@@ -1,9 +1,9 @@
 #include "state.h"
 
 #include <errno.h>
-#include "rrdp/db/db_rrdp.h"
 #include "log.h"
 #include "thread_var.h"
+#include "rpp/rpp_dl_status.h"
 
 /**
  * The current state of the validation cycle.
@@ -23,13 +23,8 @@ struct validation {
 
 	struct cert_stack *certstack;
 
-	struct uri_list *rsync_visited_uris;
-
-	/* Local RRDP workspace path */
-	char const *rrdp_workspace;
-
-	/* Shallow copy of RRDP URIs and its corresponding visited uris */
-	struct db_rrdp_uri *rrdp_uris;
+	/* Download statuses. Prevents us from downloading something twice. */
+	struct rpp_dl_status_db *downloads;
 
 	/* Did the TAL's public key match the root certificate's public key? */
 	enum pubkey_state pubkey_state;
@@ -83,78 +78,78 @@ cb(int ok, X509_STORE_CTX *ctx)
 }
 
 /**
- * Creates a struct validation, puts it in thread local, and (incidentally)
- * returns it.
+ * Creates a struct validation and puts it in thread local.
  */
 int
-validation_prepare(struct validation **out, struct tal *tal,
+validation_prepare(struct tal *tal,
     struct validation_handler *validation_handler)
 {
-	struct validation *result;
+	struct validation *state;
 	X509_VERIFY_PARAM *params;
 	int error;
 
-	result = malloc(sizeof(struct validation));
-	if (!result)
+	state = malloc(sizeof(struct validation));
+	if (!state)
 		return pr_enomem();
 
-	error = state_store(result);
+	error = state_store(state);
 	if (error)
-		goto abort1;
+		goto revert_state;
 
-	result->tal = tal;
+	state->tal = tal;
 
-	result->x509_data.store = X509_STORE_new();
-	if (!result->x509_data.store) {
+	state->x509_data.store = X509_STORE_new();
+	if (!state->x509_data.store) {
 		error = val_crypto_err("X509_STORE_new() returned NULL");
-		goto abort1;
+		goto revert_state;
 	}
 
 	params = X509_VERIFY_PARAM_new();
 	if (params == NULL) {
 		error = pr_enomem();
-		goto abort2;
+		goto revert_store;
 	}
 
 	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
-	X509_STORE_set1_param(result->x509_data.store, params);
-	X509_STORE_set_verify_cb(result->x509_data.store, cb);
+	X509_STORE_set1_param(state->x509_data.store, params);
+	X509_STORE_set_verify_cb(state->x509_data.store, cb);
 
-	error = certstack_create(&result->certstack);
+	error = certstack_create(&state->certstack);
 	if (error)
-		goto abort3;
+		goto revert_params;
 
-	error = rsync_create(&result->rsync_visited_uris);
-	if (error)
-		goto abort4;
+	state->downloads = rdsdb_create();
+	if (state->downloads == NULL)
+		goto revert_certstack;
 
-	result->rrdp_uris = db_rrdp_get_uris(tal_get_file_name(tal));
-	result->rrdp_workspace = db_rrdp_get_workspace(tal_get_file_name(tal));
+	state->pubkey_state = PKS_UNTESTED;
+	state->validation_handler = *validation_handler;
+	state->x509_data.params = params; /* Ownership transfered */
 
-	result->pubkey_state = PKS_UNTESTED;
-	result->validation_handler = *validation_handler;
-	result->x509_data.params = params; /* Ownership transfered */
-
-	*out = result;
 	return 0;
-abort4:
-	certstack_destroy(result->certstack);
-abort3:
+
+revert_certstack:
+	certstack_destroy(state->certstack);
+revert_params:
 	X509_VERIFY_PARAM_free(params);
-abort2:
-	X509_STORE_free(result->x509_data.store);
-abort1:
-	free(result);
+revert_store:
+	X509_STORE_free(state->x509_data.store);
+revert_state:
+	free(state);
 	return error;
 }
 
 void
-validation_destroy(struct validation *state)
+validation_destroy(void)
 {
+	struct validation *state;
+
+	state = state_retrieve();
+
+	rdsdb_destroy(state->downloads);
+	certstack_destroy(state->certstack);
 	X509_VERIFY_PARAM_free(state->x509_data.params);
 	X509_STORE_free(state->x509_data.store);
-	certstack_destroy(state->certstack);
-	rsync_destroy(state->rsync_visited_uris);
 	free(state);
 }
 
@@ -174,12 +169,6 @@ struct cert_stack *
 validation_certstack(struct validation *state)
 {
 	return state->certstack;
-}
-
-struct uri_list *
-validation_rsync_visited_uris(struct validation *state)
-{
-	return state->rsync_visited_uris;
 }
 
 void
@@ -218,14 +207,8 @@ validation_get_validation_handler(struct validation *state)
 	return &state->validation_handler;
 }
 
-struct db_rrdp_uri *
-validation_get_rrdp_uris(struct validation *state)
+struct rpp_dl_status_db *
+validation_get_rppdb(struct validation *state)
 {
-	return state->rrdp_uris;
-}
-
-char const *
-validation_get_rrdp_workspace(struct validation *state)
-{
-	return state->rrdp_workspace;
+	return state->downloads;
 }

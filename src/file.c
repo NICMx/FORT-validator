@@ -1,7 +1,9 @@
 #include "file.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "log.h"
 
 static int
@@ -131,4 +133,34 @@ file_valid(char const *file_name)
 
 	file_close(tmp);
 	return true;
+}
+
+/*
+ * If the modification time is not computable, will return -1.
+ * (This mirrors `man 2 time`.)
+ *
+ * This is because the result of this function is presently always used by
+ * libcurl, which prefers a long.
+ */
+long
+file_get_modification_time(char const *luri)
+{
+	struct stat metadata;
+
+	if (stat(luri, &metadata) != 0)
+		return -1;
+
+	if (metadata.st_mtim.tv_sec < 0) {
+		pr_val_warn("File modification time is negative: %jd",
+		    (intmax_t)metadata.st_mtim.tv_sec);
+		return -1;
+	}
+	if (metadata.st_mtim.tv_sec > LONG_MAX) {
+		pr_val_warn("File modification time is too big for libcurl: %ju",
+		    /* time_t is not guaranteed to be signed. */
+		    (uintmax_t)metadata.st_mtim.tv_sec);
+		return -1;
+	}
+
+	return metadata.st_mtim.tv_sec;
 }

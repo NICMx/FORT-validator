@@ -14,10 +14,8 @@ void
 refs_cleanup(struct certificate_refs *refs)
 {
 	free(refs->crldp);
-	if (refs->caIssuers != NULL)
-		uri_refput(refs->caIssuers);
-	if (refs->signedObject != NULL)
-		uri_refput(refs->signedObject);
+	uris_cleanup(&refs->caIssuers);
+	uris_cleanup(&refs->signedObject);
 }
 
 static int
@@ -32,7 +30,7 @@ validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 	if (pp_crl == NULL)
 		pr_crit("Manifest's CRL was not recorded.");
 
-	if (strcmp(refs->crldp, uri_get_global(pp_crl)) != 0) {
+	if (strcmp(uri_get_global(pp_crl), refs->crldp) != 0) {
 		return pr_val_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
 		    refs->crldp, uri_get_global(pp_crl));
 	}
@@ -44,12 +42,11 @@ static int
 validate_signedObject(struct certificate_refs *refs,
     struct rpki_uri *signedObject_uri)
 {
-	if (refs->signedObject == NULL)
+	if (refs->signedObject.len == 0)
 		pr_crit("Certificate's signedObject was not recorded.");
 
-	if (!uri_equals(refs->signedObject, signedObject_uri)) {
-		return pr_val_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
-		    uri_val_get_printable(refs->signedObject),
+	if (!uris_contains(&refs->signedObject, signedObject_uri)) {
+		return pr_val_err("Certificate's signedObject list does not contain the URI of its own signed object (%s).",
 		    uri_val_get_printable(signedObject_uri));
 	}
 
@@ -75,9 +72,9 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 	if (error)
 		return error;
 
-	if (refs->signedObject != NULL)
-		pr_crit("CA summary has a signedObject ('%s').",
-		    uri_op_get_printable(refs->signedObject));
+	if (refs->signedObject.len != 0)
+		pr_crit("CA summary has at least one signedObject ('%s').",
+		    uri_op_get_printable(refs->signedObject.array[0]));
 
 	return 0;
 }

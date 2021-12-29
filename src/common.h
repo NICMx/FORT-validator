@@ -7,24 +7,11 @@
 
 /* "I think that this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172
-/* "I haven't implemented this yet." */
-#define ENOTIMPLEMENTED 3173
-/*
- * "URI was not RSYNC; ignore it."
- * Not really an error. The RFCs usually declare URI lists; usually only one of
- * them is required to be RSYNC and the others should be skipped (until we
- * start supporting them.)
- */
-#define ENOTRSYNC 3174
-/*
- * "URI was not HTTPS; ignore it."
- * Not necessarily an error (just as ENOTRSYNC), since both type of URIs can
- * still coexist in most scenarios.
- */
-#define ENOTHTTPS 3175
 
 /*
  * A request made to a server (eg. rsync, http) has failed, even after retrying
+ *
+ * TODO (aaaa) I think this should just be EAGAIN.
  */
 #define EREQFAILED 3176
 
@@ -57,7 +44,5 @@ int create_dir_recursive(char const *);
 int delete_dir_recursive_bottom_up(char const *);
 
 int get_current_time(time_t *);
-
-int map_uri_to_local(char const *, char const*, char const *, char **);
 
 #endif /* SRC_RTR_COMMON_H_ */

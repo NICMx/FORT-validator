@@ -6,6 +6,8 @@
 
 /**
  * Does not assume that @string is NULL-terminated.
+ *
+ * TODO (aaaa) use this more.
  */
 static int
 string_clone(void const *string, size_t size, char **clone)

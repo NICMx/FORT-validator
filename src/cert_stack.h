@@ -9,8 +9,8 @@
 #include "types/uri.h"
 
 /*
- * One certificate stack is allocated per validation cycle, and it is used
- * through its entirety to hold the certificates relevant to the ongoing
+ * One certificate stack is allocated per validation cycle thread, and it is
+ * used through its entirety to hold the certificates relevant to the ongoing
  * validation.
  *
  * Keep in mind: This module deals with two different (but correlated) stack
@@ -22,10 +22,8 @@
  *   list, and haven't been opened yet.)
  *   It prevents us from having to validate the RPKI tree in a recursive manner,
  *   which would be prone to stack overflow.
- * - x509 stack: It is a chain of certificates, ready to be validated by
- *   libcrypto.
- *   For any given certificate being validated, this stack stores all of its
- *   parents.
+ * - x509 stack: Trusted stack. It is a chain of certificates, meant to be used
+ *   as ancestors of the certificate being presently validated.
  */
 
 struct cert_stack;
@@ -40,15 +38,12 @@ void certstack_destroy(struct cert_stack *);
 
 int deferstack_push(struct cert_stack *, struct deferred_cert *cert);
 int deferstack_pop(struct cert_stack *, struct deferred_cert *cert);
-bool deferstack_is_empty(struct cert_stack *);
 
-int x509stack_push(struct cert_stack *, struct rpki_uri *, X509 *,
-    enum rpki_policy, enum cert_type);
-void x509stack_cancel(struct cert_stack *);
-X509 *x509stack_peek(struct cert_stack *);
+int x509stack_push(struct rpki_uri *, X509 *, enum rpki_policy, enum cert_type);
+void x509stack_cancel(void);
+X509 *x509stack_peek(void);
 struct rpki_uri *x509stack_peek_uri(struct cert_stack *);
 struct resources *x509stack_peek_resources(struct cert_stack *);
-unsigned int x509stack_peek_level(struct cert_stack *);
 int x509stack_store_serial(struct cert_stack *, BIGNUM *);
 typedef int (*subject_pk_check_cb)(bool *, char const *, void *);
 int x509stack_store_subject(struct cert_stack *, struct rfc5280_name *,

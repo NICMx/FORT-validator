@@ -1,4 +1,4 @@
-#include "rpp.h"
+#include "rpp/rpp.h"
 
 #include <stdlib.h>
 #include "cert_stack.h"
@@ -11,11 +11,9 @@
 #include "object/ghostbusters.h"
 #include "object/roa.h"
 
-STATIC_ARRAY_LIST(uris, struct rpki_uri *)
-
 /** A Repository Publication Point (RFC 6481), as described by some manifest. */
 struct rpp {
-	struct uris certs; /* Certificates */
+	struct uri_list certs; /* Certificates */
 
 	/*
 	 * uri NULL implies stack NULL and error 0.
@@ -39,9 +37,9 @@ struct rpp {
 
 	/* The Manifest is not needed for now. */
 
-	struct uris roas; /* Route Origin Attestations */
+	struct uri_list roas; /* Route Origin Attestations */
 
-	struct uris ghostbusters;
+	struct uri_list ghostbusters;
 
 	/*
 	 * Note that the reference counting functions are not prepared for
@@ -76,24 +74,18 @@ rpp_refget(struct rpp *pp)
 	pp->references++;
 }
 
-static void
-__uri_refput(struct rpki_uri **uri)
-{
-	uri_refput(*uri);
-}
-
 void
 rpp_refput(struct rpp *pp)
 {
 	pp->references--;
 	if (pp->references == 0) {
-		uris_cleanup(&pp->certs, __uri_refput);
+		uris_cleanup(&pp->certs);
 		if (pp->crl.uri != NULL)
 			uri_refput(pp->crl.uri);
 		if (pp->crl.stack != NULL)
 			sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
-		uris_cleanup(&pp->roas, __uri_refput);
-		uris_cleanup(&pp->ghostbusters, __uri_refput);
+		uris_cleanup(&pp->roas);
+		uris_cleanup(&pp->ghostbusters);
 		free(pp);
 	}
 }
@@ -102,21 +94,21 @@ rpp_refput(struct rpp *pp)
 int
 rpp_add_cert(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->certs, &uri);
+	return uris_add(&pp->certs, uri);
 }
 
 /** Steals ownership of @uri. */
 int
 rpp_add_roa(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->roas, &uri);
+	return uris_add(&pp->roas, uri);
 }
 
 /** Steals ownership of @uri. */
 int
 rpp_add_ghostbusters(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->ghostbusters, &uri);
+	return uris_add(&pp->ghostbusters, uri);
 }
 
 /** Steals ownership of @uri. */
@@ -213,7 +205,6 @@ rpp_crl(struct rpp *pp, STACK_OF(X509_CRL) **result)
 static int
 __cert_traverse(struct rpp *pp)
 {
-	struct validation *state;
 	struct cert_stack *certstack;
 	ssize_t i;
 	struct deferred_cert deferred;
@@ -222,10 +213,7 @@ __cert_traverse(struct rpp *pp)
 	if (pp->certs.len == 0)
 		return 0;
 
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-	certstack = validation_certstack(state);
+	certstack = validation_certstack(state_retrieve());
 
 	deferred.pp = pp;
 	/*

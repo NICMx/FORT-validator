@@ -955,13 +955,13 @@ See [`--http.priority`](#--httppriority).
 - **Availability:** `argv` and JSON
 - **Default:** `root-except-ta`
 
+> ![img/warn.svg](img/warn.svg) **DEPRECATED**. Because most of the RPKI repository now prefers RRDP, rsync strategies other than `strict` cause excessive redundant transfers.
+> 
+> Fort 1.6.0 is hardcoded to use `strict`.
+
 rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
 
 #### `strict`
-
-> In order to enable this strategy, recompile using the flag: **_ENABLE\_STRICT\_STRATEGY_**.
->
-> e.g. `$ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'`
 
 rsyncs every repository publication point separately. Only skips publication points that have already been downloaded during the current validation cycle. (Assuming each synchronization is recursive.)
 

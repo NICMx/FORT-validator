@@ -1,7 +1,8 @@
 #ifndef SRC_CERTIFICATE_REFS_H_
 #define SRC_CERTIFICATE_REFS_H_
 
-#include "rpp.h"
+#include "rpp/rpp.h"
+#include "types/uri_list.h"
 
 /**
  * Some of the URLs defined in Access Descriptions of a certificate's
@@ -28,12 +29,12 @@ struct certificate_refs {
 	 * AIA's caIssuers. Non-TA certificates only.
 	 * RFC 6487, section 4.8.7.
 	 */
-	struct rpki_uri *caIssuers;
+	struct uri_list caIssuers;
 	/**
 	 * SIA's signedObject. EE certificates only.
 	 * RFC 6487, section 4.8.8.2.
 	 */
-	struct rpki_uri *signedObject;
+	struct uri_list signedObject;
 };
 
 void refs_init(struct certificate_refs *);

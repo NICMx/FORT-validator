@@ -58,7 +58,7 @@ close_thread(pthread_t thread, char const *what)
 }
 
 int
-map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
+autocomplete_local_rsync(char const *uri, char const *uri_prefix, char const *workspace,
     char **result)
 {
 	/* These tests focus on global URIs, so set a dummy value */

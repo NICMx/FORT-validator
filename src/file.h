@@ -24,5 +24,6 @@ int file_load(char const *, struct file_contents *);
 void file_free(struct file_contents *);
 
 bool file_valid(char const *);
+long file_get_modification_time(char const *);
 
 #endif /* SRC_FILE_H_ */

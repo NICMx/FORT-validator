@@ -20,7 +20,6 @@
 #include "config/init_tals.h"
 #include "config/rrdp_conf.h"
 #include "config/str.h"
-#include "config/sync_strategy.h"
 #include "config/uint.h"
 #include "config/uint32.h"
 #include "config/work_offline.h"
@@ -40,12 +39,12 @@ struct rpki_config {
 	char *tal;
 	/** Path of our local clone of the repository */
 	char *local_repository;
-	/** TODO (later) Deprecated, remove it. RSYNC download strategy. */
-	enum rsync_strategy sync_strategy;
 	/**
 	 * Handle TAL URIs in random order?
 	 * (https://tools.ietf.org/html/rfc8630#section-3, last
 	 * paragraphs)
+	 *
+	 * Deprecated.
 	 */
 	bool shuffle_tal_uris;
 	/**
@@ -93,7 +92,7 @@ struct rpki_config {
 		 * their accessMethod extension.
 		 */
 		unsigned int priority;
-		/* Synchronization download strategy. */
+		/* Synchronization download strategy. TODO Deprecated */
 		enum rsync_strategy strategy;
 		/* Retry conf, utilized on errors */
 		struct {
@@ -105,6 +104,10 @@ struct rpki_config {
 		char *program;
 		struct {
 			struct string_array flat;
+			/*
+			 * Not actually --recursive.
+			 * It's used to fetch RPPs, so it uses --dirs.
+			 */
 			struct string_array recursive;
 		} args;
 	} rsync;
@@ -305,17 +308,11 @@ static const struct option_field options[] = {
 		.doc = "Directory where the repository local cache will be stored/read",
 		.arg_doc = "<directory>",
 	}, {
-		.id = 1001,
-		.name = "sync-strategy",
-		.type = &gt_sync_strategy,
-		.offset = offsetof(struct rpki_config, sync_strategy),
-		.doc = "RSYNC download strategy. Deprecated; use 'rsync.strategy' instead.",
-	}, {
 		.id = 2001,
 		.name = "shuffle-uris",
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, shuffle_tal_uris),
-		.doc = "Shuffle URIs in the TAL before accessing them",
+		.doc = "(Deprecated) Shuffle URIs in the TAL before accessing them",
 	}, {
 		.id = 1002,
 		.name = "maximum-certificate-depth",
@@ -506,7 +503,7 @@ static const struct option_field options[] = {
 		.name = "rsync.arguments-recursive",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.recursive),
-		.doc = "RSYNC program arguments that will trigger a recursive RSYNC",
+		.doc = "RSYNC program arguments that will synchronize RPPs",
 		.availability = AVAILABILITY_JSON,
 		/* Unlimited */
 		.max = 0,
@@ -515,7 +512,7 @@ static const struct option_field options[] = {
 		.name = "rsync.arguments-flat",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.flat),
-		.doc = "RSYNC program arguments that will trigger a non-recursive RSYNC",
+		.doc = "RSYNC program arguments that will synchronize single files",
 		.availability = AVAILABILITY_JSON,
 		/* Unlimited */
 		.max = 0,
@@ -609,7 +606,7 @@ static const struct option_field options[] = {
 		.max = UINT_MAX,
 	}, {
 		.id = 9007,
-		.name = "http.idle-timeout", /* TODO DEPRECATED. */
+		.name = "http.idle-timeout", /* TODO Deprecated. */
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.low_speed_time),
 		.doc = "Deprecated; currently an alias for --http.low-speed-time. Use --http.low-speed-time instead.",
@@ -785,7 +782,7 @@ static const struct option_field options[] = {
 		.name = "stale-repository-period",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, stale_repository_period),
-		.doc = "Time period that must lapse to warn about stale repositories",
+		.doc = "(Deprecated) Time period that must lapse to warn about stale repositories",
 		.min = 0,
 		.max = UINT_MAX,
 	},
@@ -964,7 +961,7 @@ static int
 set_default_values(void)
 {
 	static char const *recursive_rsync_args[] = {
-		"--recursive",
+		"--dirs",
 		"--delete",
 		"--times",
 		"--contimeout=20",
@@ -1017,8 +1014,6 @@ set_default_values(void)
 		goto revert_port;
 	}
 
-	rpki_config.sync_strategy = RSYNC_ROOT_EXCEPT_TA;
-	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
 	rpki_config.mode = SERVER;
 	rpki_config.work_offline = false;
@@ -1026,7 +1021,7 @@ set_default_values(void)
 
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
-	rpki_config.rsync.strategy = RSYNC_ROOT_EXCEPT_TA;
+	rpki_config.rsync.strategy = RSYNC_STRICT;
 	rpki_config.rsync.retry.count = 1;
 	rpki_config.rsync.retry.interval = 4;
 	rpki_config.rsync.program = strdup("rsync");
@@ -1168,10 +1163,6 @@ validate_config(void)
 	if (rpki_config.slurm != NULL &&
 	    !valid_file_or_dir(rpki_config.slurm, true, true, __pr_op_err))
 		return pr_op_err("Invalid slurm location.");
-
-	/* TODO (later) Remove when sync-strategy is fully deprecated */
-	if (!rpki_config.rsync.enabled)
-		config_set_sync_strategy(RSYNC_OFF);
 
 	return 0;
 }
@@ -1385,12 +1376,6 @@ config_get_local_repository(void)
 	return rpki_config.local_repository;
 }
 
-bool
-config_get_shuffle_tal_uris(void)
-{
-	return rpki_config.shuffle_tal_uris;
-}
-
 unsigned int
 config_get_max_cert_depth(void)
 {
@@ -1520,20 +1505,9 @@ config_get_rsync_program(void)
 struct string_array const *
 config_get_rsync_args(bool is_ta)
 {
-	switch (rpki_config.rsync.strategy) {
-	case RSYNC_ROOT:
-		return &rpki_config.rsync.args.recursive;
-	case RSYNC_ROOT_EXCEPT_TA:
-		return is_ta
-		    ? &rpki_config.rsync.args.flat
-		    : &rpki_config.rsync.args.recursive;
-	case RSYNC_STRICT:
-		return &rpki_config.rsync.args.flat;
-	default:
-		break;
-	}
-
-	pr_crit("Invalid rsync strategy: '%u'", rpki_config.rsync.strategy);
+	return is_ta
+	    ? &rpki_config.rsync.args.flat
+	    : &rpki_config.rsync.args.recursive;
 }
 
 bool
@@ -1673,18 +1647,6 @@ void
 config_set_rrdp_enabled(bool value)
 {
 	rpki_config.rrdp.enabled = value;
-}
-
-void
-config_set_sync_strategy(enum rsync_strategy value)
-{
-	rpki_config.sync_strategy = value;
-}
-
-void
-config_set_rsync_strategy(enum rsync_strategy value)
-{
-	rpki_config.rsync.strategy = value;
 }
 
 void

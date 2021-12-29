@@ -6,19 +6,10 @@
 #include "object/name.h"
 
 /**
- * Functions that handle validation results.
+ * Functions that handle validation results. It's currently variable so unit
+ * tests can easily check traversal.
  *
- * At some point, I believe we will end up separating the validator code into a
- * library, so it can be used by other applications aside from Fort's RTR
- * server.
- *
- * This structure is designed with that in mind; it's the callback collection
- * that the library's user application will fill up, so it can do whatever it
- * wants with the validated ROAs.
- *
- * Because it's intended to be used by arbitrary applications, it needs to be
- * generic. Please refrain from adding callbacks that are specifically meant for
- * a particular use case.
+ * TODO (fine) Review that. It clutters the code too much IMO.
  *
  * All of these functions can be NULL.
  */

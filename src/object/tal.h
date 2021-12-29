@@ -4,7 +4,6 @@
 /* This is RFC 8630. */
 
 #include <stddef.h>
-#include "types/uri.h"
 #include "rtr/db/db_table.h"
 #include "thread/thread_pool.h"
 

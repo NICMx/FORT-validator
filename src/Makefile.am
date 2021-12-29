@@ -1,7 +1,3 @@
-# Comment these out during releases.
-# Also increase optimization I guess (-O0 -> -On)
-LDFLAGS_DEBUG = -rdynamic
-
 bin_PROGRAMS = fort
 
 fort_SOURCES  = main.c
@@ -12,11 +8,9 @@ fort_SOURCES += cert_stack.h cert_stack.c
 fort_SOURCES += common.c common.h
 fort_SOURCES += config.h config.c
 fort_SOURCES += daemon.h daemon.c
-fort_SOURCES += delete_dir_daemon.h delete_dir_daemon.c
 fort_SOURCES += extension.h extension.c
 fort_SOURCES += file.h file.c
 fort_SOURCES += init.h init.c
-fort_SOURCES += internal_pool.h internal_pool.c
 fort_SOURCES += json_parser.c json_parser.h
 fort_SOURCES += line_file.h line_file.c
 fort_SOURCES += log.h log.c
@@ -24,9 +18,7 @@ fort_SOURCES += nid.h nid.c
 fort_SOURCES += notify.c notify.h
 fort_SOURCES += output_printer.h output_printer.c
 fort_SOURCES += random.h random.c
-fort_SOURCES += reqs_errors.h reqs_errors.c
 fort_SOURCES += resource.h resource.c
-fort_SOURCES += rpp.h rpp.c
 fort_SOURCES += sorted_array.h sorted_array.c
 fort_SOURCES += state.h state.c
 fort_SOURCES += str_token.h str_token.c
@@ -34,7 +26,6 @@ fort_SOURCES += thread_var.h thread_var.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += validation_handler.h validation_handler.c
 fort_SOURCES += validation_run.h validation_run.c
-fort_SOURCES += visited_uris.h visited_uris.c
 
 fort_SOURCES += asn1/content_info.h asn1/content_info.c
 fort_SOURCES += asn1/decode.h asn1/decode.c
@@ -46,6 +37,7 @@ fort_SOURCES += types/delta.c types/delta.h
 fort_SOURCES += types/router_key.c types/router_key.h
 fort_SOURCES += types/serial.h types/serial.c
 fort_SOURCES += types/uri.h types/uri.c
+fort_SOURCES += types/uri_list.h types/uri_list.c
 fort_SOURCES += types/vrp.c types/vrp.h
 
 fort_SOURCES += config/boolean.c config/boolean.h
@@ -59,7 +51,6 @@ fort_SOURCES += config/rrdp_conf.h config/rrdp_conf.c
 fort_SOURCES += config/rsync_strategy.h config/rsync_strategy.c
 fort_SOURCES += config/str.c config/str.h
 fort_SOURCES += config/string_array.h config/string_array.c
-fort_SOURCES += config/sync_strategy.h config/sync_strategy.c
 fort_SOURCES += config/types.h
 fort_SOURCES += config/uint.c config/uint.h
 fort_SOURCES += config/uint32.c config/uint32.h
@@ -70,6 +61,7 @@ fort_SOURCES += crypto/hash.h crypto/hash.c
 
 fort_SOURCES += data_structure/array_list.h
 fort_SOURCES += data_structure/common.h
+fort_SOURCES += data_structure/path_builder.h data_structure/path_builder.c
 fort_SOURCES += data_structure/uthash.h
 fort_SOURCES += data_structure/uthash_nonfatal.h
 
@@ -92,12 +84,14 @@ fort_SOURCES += resource/ip4.h resource/ip4.c
 fort_SOURCES += resource/ip6.h resource/ip6.c
 fort_SOURCES += resource/asn.h resource/asn.c
 
-fort_SOURCES += rrdp/rrdp_loader.h rrdp/rrdp_loader.c
-fort_SOURCES += rrdp/rrdp_objects.h rrdp/rrdp_objects.c
-fort_SOURCES += rrdp/rrdp_parser.h rrdp/rrdp_parser.c
+fort_SOURCES += rpp/rpp.h rpp/rpp.c
+fort_SOURCES += rpp/rpp_dl_status.h rpp/rpp_dl_status.c
 
-fort_SOURCES += rrdp/db/db_rrdp.h rrdp/db/db_rrdp.c
-fort_SOURCES += rrdp/db/db_rrdp_uris.h rrdp/db/db_rrdp_uris.c
+fort_SOURCES += rrdp/types.h rrdp/types.c
+fort_SOURCES += rrdp/rrdp.h rrdp/rrdp.c
+fort_SOURCES += rrdp/notification.h rrdp/notification.c
+fort_SOURCES += rrdp/snapshot.h rrdp/snapshot.c
+fort_SOURCES += rrdp/delta.h rrdp/delta.c
 
 fort_SOURCES += rsync/rsync.h rsync/rsync.c
 
@@ -113,7 +107,6 @@ fort_SOURCES += rtr/rtr.c rtr/rtr.h
 fort_SOURCES += rtr/db/db_table.c rtr/db/db_table.h
 fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
 fort_SOURCES += rtr/db/deltas_array.c rtr/db/deltas_array.h
-fort_SOURCES += rtr/db/roa.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 
 fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
@@ -133,7 +126,7 @@ fort_CFLAGS  = -Wall -Wno-cpp -Wpedantic
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
-fort_LDFLAGS = $(LDFLAGS_DEBUG)
+fort_LDFLAGS = -rdynamic
 fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.

@@ -310,7 +310,6 @@ int
 handle_aki(X509_EXTENSION *ext, void *arg)
 {
 	AUTHORITY_KEYID *aki;
-	struct validation *state;
 	X509 *parent;
 	int error;
 
@@ -329,13 +328,7 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 		goto end;
 	}
 
-	state = state_retrieve();
-	if (state == NULL) {
-		error = -EINVAL;
-		goto end;
-	}
-
-	parent = x509stack_peek(validation_certstack(state));
+	parent = x509stack_peek();
 	if (parent == NULL) {
 		error = pr_val_err("Certificate has no parent.");
 		goto end;

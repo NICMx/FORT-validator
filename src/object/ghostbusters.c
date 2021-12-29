@@ -55,7 +55,7 @@ revert_args:
 revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:
-	pr_val_debug("}");
 	fnstack_pop();
+	pr_val_debug("}");
 	return error;
 }
