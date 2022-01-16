@@ -554,7 +554,7 @@ static int
 log_crypto_error(const char *str, size_t len, void *_arg)
 {
 	struct crypto_cb_arg *arg = _arg;
-	arg->error_fn(0, "-> %s", str);
+	arg->error_fn("-> %s", str);
 	arg->stack_size++;
 	return 1;
 }
