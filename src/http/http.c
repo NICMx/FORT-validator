@@ -277,6 +277,10 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		pr_val_err("HTTP result code: %ld", http_code);
 		return handle_http_response_code(http_code);
 	}
+	if (http_code == 304) {
+		pr_val_debug("Not modified.");
+		return 0;
+	}
 	if (http_code >= 300) {
 		/*
 		 * If you're ever forced to implement this, please remember that
@@ -406,6 +410,8 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 	http_easy_cleanup(&handler);
 	file_close(out);
 
+	if ((*response_code) == 304)
+		goto end;
 	if (error)
 		goto delete_dir;
 
@@ -418,6 +424,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 		goto delete_dir;
 	}
 
+end:
 	free(tmp_file);
 	return 0;
 close_file:
