@@ -306,9 +306,11 @@ remove_file(char const *path)
 	errno = 0;
 	if (remove(path) != 0) {
 		error = errno;
+		/*
 		pr_val_err("Couldn't delete '%s': %s", path,
 		    strerror(error));
-		return errno;
+		 */
+		return error;
 	}
 
 	return 0;
