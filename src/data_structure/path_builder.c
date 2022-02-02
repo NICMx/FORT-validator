@@ -71,6 +71,9 @@ path_append_url(struct path_builder *pb, char const *guri)
 {
 	char *colon;
 
+	if (guri == NULL)
+		return;
+
 	/* Is there really a point to removing the colon? */
 	colon = strchr(guri, ':');
 	if (colon != NULL) {
