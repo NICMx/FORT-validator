@@ -240,22 +240,24 @@ uri_refput(struct rpki_uri *uri)
 }
 
 /*
- * This function only really makes sense during or after the file download.
- * Otherwise it'll just return the arbitrary first global.
- *
  * Note, if you're trying to print the URI, then you should most likely use
  * uri_*_get_printable() instead.
  */
 char const *
 uri_get_global(struct rpki_uri *uri)
 {
+	if (uri->global == NULL) /* See clear_caged_directory() */
+		pr_crit("URI's global path is not meaningful.");
+
 	return uri->global;
 }
 
-/* Can return NULL. TODO (aaaa) Review callers. */
 char const *
 uri_get_local(struct rpki_uri *uri)
 {
+	if (uri->local == NULL) /* See URI_TYPE_VOID. */
+		pr_crit("URI's local path is not meaningful.");
+
 	return uri->local;
 }
 
