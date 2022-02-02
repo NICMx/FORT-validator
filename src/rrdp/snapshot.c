@@ -21,7 +21,7 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 	name = xmlTextReaderConstLocalName(reader);
 
 	if (xmlStrEqual(name, PUBLISH))
-		return handle_publish_tag(reader, notif);
+		return handle_publish_tag(reader, false, notif);
 	if (xmlStrEqual(name, SNAPSHOT))
 		return validate_header_tag(reader, &notif->session);
 

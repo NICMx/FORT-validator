@@ -235,6 +235,10 @@ parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 	return error;
 }
 
+/*
+ * required `true` means "mandatory," `false` means "forbidden."
+ * (Not "optional.")
+ */
 static int
 parse_hex_string(xmlTextReaderPtr reader, bool required, char const *attr,
     unsigned char **result, size_t *result_len)
@@ -246,10 +250,20 @@ parse_hex_string(xmlTextReaderPtr reader, bool required, char const *attr,
 	size_t tmp_len;
 
 	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
-	if (xml_value == NULL)
-		return required ?
-		    pr_val_err("RRDP file: Couldn't find xml attribute '%s'", attr)
-		    : 0;
+	if (required) {
+		if (xml_value == NULL) {
+			return pr_val_err("RRDP file: xml attribute '%s' is mandatory.",
+			    attr);
+		}
+	} else {
+		if (xml_value != NULL) {
+			return pr_val_err("RRDP file: Unexpected attribute '%s'",
+			    attr);
+		}
+		*result = NULL;
+		*result_len = 0;
+		return 0;
+	}
 
 	/* The rest of the checks are done at the schema */
 	if (xmlStrlen(xml_value) % 2 != 0) {
@@ -433,7 +447,7 @@ write_from_uri(struct rrdp_publish *publish)
 
 static int
 parse_publish_tag(xmlTextReaderPtr reader, struct rrdp_notification *notif,
-    struct rrdp_publish *publish)
+    bool require_hash, struct rrdp_publish *publish)
 {
 	char *base64_str;
 	int error;
@@ -442,7 +456,7 @@ parse_publish_tag(xmlTextReaderPtr reader, struct rrdp_notification *notif,
 	error = parse_caged_uri_attribute(reader, notif, &publish->target);
 	if (error)
 		return error;
-	error = parse_hash_attribute(reader, false, &publish->target);
+	error = parse_hash_attribute(reader, require_hash, &publish->target);
 	if (error)
 		return error;
 
@@ -461,12 +475,9 @@ parse_publish_tag(xmlTextReaderPtr reader, struct rrdp_notification *notif,
 	return error;
 }
 
-/*
- * This function will call 'xmlTextReaderRead' so there's no need to expect any
- * other type at the caller.
- */
 int
-handle_publish_tag(xmlTextReaderPtr reader, struct rrdp_notification *notif)
+handle_publish_tag(xmlTextReaderPtr reader, struct rrdp_notification *notif,
+    bool require_hash)
 {
 	struct rrdp_publish publish;
 	int error;
@@ -475,7 +486,7 @@ handle_publish_tag(xmlTextReaderPtr reader, struct rrdp_notification *notif)
 	publish.content = NULL;
 	publish.content_len = 0;
 
-	error = parse_publish_tag(reader, notif, &publish);
+	error = parse_publish_tag(reader, notif, require_hash, &publish);
 	if (error)
 		goto end;
 
@@ -484,8 +495,6 @@ handle_publish_tag(xmlTextReaderPtr reader, struct rrdp_notification *notif)
 		error = rrdp_file_metadata_validate_hash(&publish.target);
 		if (error)
 			goto end;
-	} else {
-		/* TODO (aaaa) check file does not exist */
 	}
 
 	error = write_from_uri(&publish);

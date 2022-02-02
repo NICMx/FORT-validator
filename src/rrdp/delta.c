@@ -71,7 +71,7 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 	name = xmlTextReaderConstLocalName(reader);
 
 	if (xmlStrEqual(name, PUBLISH))
-		return handle_publish_tag(reader, ctx->notification);
+		return handle_publish_tag(reader, true, ctx->notification);
 	if (xmlStrEqual(name, WITHDRAW))
 		return handle_withdraw_tag(reader, ctx->notification);
 	if (xmlStrEqual(name, DELTA)) {
