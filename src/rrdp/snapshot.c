@@ -1,6 +1,7 @@
 #include "rrdp/snapshot.h"
 
 #define _XOPEN_SOURCE 500
+#define __USE_XOPEN_EXTENDED 1
 #include <ftw.h>
 
 #include "thread_var.h"
@@ -29,7 +30,7 @@ clear_caged_directory(struct rrdp_notification *notif)
 	struct rpki_uri *cage;
 	int error;
 
-	error = uri_create_caged(NULL, notif, &cage);
+	error = uri_create_caged(NULL, notif->uri, &cage);
 	if (error)
 		return error;
 

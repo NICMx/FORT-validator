@@ -54,6 +54,6 @@ int parse_hash_attribute(xmlTextReaderPtr, bool, struct rrdp_file_metadata *);
 
 int parse_header_tag(xmlTextReaderPtr, struct rrdp_session *);
 int validate_header_tag(xmlTextReaderPtr, struct rrdp_session *);
-int handle_publish_tag(xmlTextReaderPtr, struct rrdp_notification *);
+int handle_publish_tag(xmlTextReaderPtr, struct rrdp_notification *, bool);
 
 #endif /* SRC_RRDP_TYPES_H_ */

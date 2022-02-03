@@ -422,14 +422,9 @@ write_from_uri(struct rrdp_publish *publish)
 
 	file = uri_get_local(publish->target.uri);
 
-	/*
-	 * TODO (aaaa) shouldn't this be reverted on error?
-	 * Also, shouldn't create_dir_recursive() be inside file_write()?
-	 */
 	error = create_dir_recursive(file);
 	if (error)
 		return error;
-
 	error = file_write(file, &out);
 	if (error)
 		return error;
@@ -439,6 +434,7 @@ write_from_uri(struct rrdp_publish *publish)
 
 	file_close(out);
 
+	/* fwrite does not yield an error message... */
 	if (written != (sizeof(unsigned char) * publish->content_len))
 		return pr_val_err("Couldn't write bytes to file '%s'", file);
 

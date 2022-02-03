@@ -352,7 +352,7 @@ retry_until_done(char const *remote, char const *local, long ims)
  * Return values:
  *
  * - 0: Download successful.
- * - ENOTCHANGED: File hasn't changed since `args->ims`.
+ * - ENOTCHANGED: File hasn't changed since @ims.
  * - < 0: Something went wrong.
  */
 int

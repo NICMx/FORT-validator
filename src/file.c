@@ -300,13 +300,24 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 }
 
 static int
-dir_exists(char const *path, bool *result)
+dir_exists(char const *_path, bool *result)
 {
-	struct stat _stat;
+	char *path;
 	char *last_slash;
+	struct stat _stat;
+	int error;
+
+	/*
+	 * Need to remove the const, otherwise "= '\0'" below causes undefined
+	 * behavior.
+	 */
+	path = strdup(_path);
+	if (path == NULL)
+		return pr_enomem();
 
 	last_slash = strrchr(path, '/');
 	if (last_slash == NULL) {
+		free(path);
 		/*
 		 * Simply because create_dir_recursive() has nothing meaningful
 		 * to do when this happens. It's a pretty strange error.
@@ -319,17 +330,21 @@ dir_exists(char const *path, bool *result)
 
 	if (stat(path, &_stat) == 0) {
 		if (!S_ISDIR(_stat.st_mode)) {
-			return pr_op_err("Path '%s' exists and is not a directory.",
+			error = pr_op_err("Path '%s' exists and is not a directory.",
 			    path);
+			free(path);
+			return error;
 		}
 		*result = true;
 	} else if (errno == ENOENT) {
 		*result = false;
 	} else {
-		return pr_op_errno(errno, "stat() failed");
+		error = errno;
+		free(path);
+		return pr_op_errno(error, "stat() failed");
 	}
 
-	*last_slash = '/';
+	free(path);
 	return 0;
 }
 
