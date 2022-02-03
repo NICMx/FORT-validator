@@ -1450,10 +1450,16 @@ asnstr2str(ASN1_STRING *asnstr, char **result)
 	return string_clone(ASN1_STRING_get0_data(asnstr), str_len, result);
 }
 
+static bool
+starts_with(char *str, char *pfx)
+{
+	return strncmp(str, pfx, strlen(pfx)) == 0;
+}
+
 /* Create @uri from @ad */
 static int
 add_ad(struct uri_list *uris, ACCESS_DESCRIPTION *ad,
-    enum rpki_uri_type uri_type)
+    enum rpki_uri_type uri_type, bool rsync_only)
 {
 	ASN1_STRING *asn1_string;
 	char *cstring;
@@ -1490,13 +1496,18 @@ add_ad(struct uri_list *uris, ACCESS_DESCRIPTION *ad,
 	if (error)
 		return error;
 
+	if (rsync_only && !starts_with(cstring, "rsync://")) {
+		free(cstring);
+		return ENOTSUPPORTED;
+	}
+
 	return uris_add_str(uris, cstring, uri_type);
 }
 
 static int
 ia2uris(AUTHORITY_INFO_ACCESS *ia, char const *ext_name,
     struct ad_metadata const *ad_metas, char const *ad_name,
-    struct uri_list *uris)
+    bool rsync_only, struct uri_list *uris)
 {
 	ACCESS_DESCRIPTION *ad;
 	struct ad_metadata const *meta;
@@ -1510,7 +1521,8 @@ ia2uris(AUTHORITY_INFO_ACCESS *ia, char const *ext_name,
 
 		for (meta = ad_metas; meta->nid != 0; meta++) {
 			if (ad_nid == meta->nid) {
-				error = add_ad(uris, ad, meta->uri_type);
+				error = add_ad(uris, ad, meta->uri_type,
+				    rsync_only);
 				if (error == ENOTSUPPORTED)
 					break;
 				if (error)
@@ -1558,9 +1570,7 @@ ext2uris(X509_EXTENSION *ext, char const *ext_name,
 	if (ia == NULL)
 		return cannot_decode(ext_aia());
 
-	error = ia2uris(ia, ext_name, ad_metas, ad_name, uris);
-
-	/* TODO (aaaa) force rsync only */
+	error = ia2uris(ia, ext_name, ad_metas, ad_name, true, uris);
 
 	AUTHORITY_INFO_ACCESS_free(ia);
 	return error;
@@ -1607,10 +1617,11 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 	 */
 
 	uris = arg;
-	error = ia2uris(sia, "SIA", sia_metadata, "source", &uris->src);
+	error = ia2uris(sia, "SIA", sia_metadata, "source", false, &uris->src);
 	if (error)
 		goto end;
-	error = ia2uris(sia, "SIA", mft_metadata, "rpkiManifest", &uris->mft);
+	error = ia2uris(sia, "SIA", mft_metadata, "rpkiManifest", true,
+	    &uris->mft);
 	if (error)
 		goto end;
 
