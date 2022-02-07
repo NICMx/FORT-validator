@@ -27,9 +27,6 @@
 #include "rsync/rsync.h"
 #include "types/uri_list.h"
 
-/* Just to prevent some line breaking. */
-#define GN_URI uniformResourceIdentifier
-
 #define METHODS_RRDP (1 << 0)
 #define METHODS_RSYNC (1 << 1)
 
@@ -1168,21 +1165,48 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 	pr_crit("Unknown policy: %u", policy);
 }
 
+/* Paranoid verbose wrapper for GENERAL_NAME_get0_value(). */
+static ASN1_IA5STRING *
+gn2uri(GENERAL_NAME *name)
+{
+	ASN1_IA5STRING *value;
+	int type;
+
+	if (name == NULL) {
+		pr_val_debug("GENERAL_NAME is NULL.");
+		return NULL;
+	}
+
+	value = GENERAL_NAME_get0_value(name, &type);
+	if (type != GEN_URI) {
+		pr_val_debug("Unknown GENERAL_NAME type: %d", type);
+		return NULL;
+	}
+	if (value == NULL)
+		pr_val_debug("URI GENERAL_NAME is NULL.");
+
+	return value;
+}
+
 static bool
 is_rsync(ASN1_IA5STRING *uri)
 {
 	static char const *const PREFIX = "rsync://";
 	size_t prefix_len = strlen(PREFIX);
 
-	return (uri->length >= prefix_len)
-	    ? (strncmp((char *) uri->data, PREFIX, strlen(PREFIX)) == 0)
-	    : false;
-}
+	if (uri == NULL)
+		goto notrsync;
+	/* In case uri->data isn't NULL terminated. */
+	if (uri->length < prefix_len)
+		goto notrsync;
+	if (strncmp((char *) uri->data, PREFIX, prefix_len) != 0)
+		goto notrsync;
 
-static bool
-is_rsync_uri(GENERAL_NAME *name)
-{
-	return name->type == GEN_URI && is_rsync(name->d.GN_URI);
+	return true;
+
+notrsync:
+	pr_val_debug("Not rsync.");
+	return false;
 }
 
 static int
@@ -1355,7 +1379,7 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	STACK_OF(DIST_POINT) *crldp;
 	DIST_POINT *dp;
 	GENERAL_NAMES *names;
-	GENERAL_NAME *name;
+	ASN1_IA5STRING *uri;
 	int i;
 	int error = 0;
 	char const *error_msg;
@@ -1400,8 +1424,8 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 
 	names = dp->distpoint->name.fullname;
 	for (i = 0; i < sk_GENERAL_NAME_num(names); i++) {
-		name = sk_GENERAL_NAME_value(names, i);
-		if (is_rsync_uri(name)) {
+		uri = gn2uri(sk_GENERAL_NAME_value(names, i));
+		if (is_rsync(uri)) {
 			/*
 			 * Since we're parsing and validating the manifest's CRL
 			 * at some point, I think that all we need to do now is
@@ -1416,7 +1440,7 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 			 * So we will store the URI in @refs, and validate it
 			 * later.
 			 */
-			error = ia5s2string(name->d.GN_URI, &refs->crldp);
+			error = ia5s2string(uri, &refs->crldp);
 			goto end;
 		}
 	}
@@ -1432,28 +1456,39 @@ end:
 	return error;
 }
 
+/*
+ * Damn it. libcrypto has i2s_ASN1_IA5STRING(), but it allocates with
+ * OPENSSL_malloc(), which makes release difficult because @result ends up in an
+ * rpki_uri.
+ * It also doesn't check negative, so it sucks all around.
+ *
+ * Note, I'm accesing ia5->length and ia5->data directly, because ASN1_IA5STRING
+ * doesn't have getters like ASN1_STRING.
+ *
+ * I really don't know how to fix this safely. I just can't win with this
+ * freaking library.
+ *
+ * TODO (fine) Add a destructor for uri->global and delete this function.
+ * Really though, I'm probably being paranoid.
+ */
 static int
-asnstr2str(ASN1_STRING *asnstr, char **result)
+ia5str2str(ASN1_IA5STRING *ia5, char **result)
 {
-	int str_len;
-
 	/*
 	 * GEN_URI signals an IA5String.
 	 * IA5String is a subset of ASCII, so it can be converted to char *.
-	 * No guarantees of a NULL chara, though.
+	 *
+	 * TODO I'm assuming libcrypto checked character validity. Which is not
+	 * exactly healthy.
+	 *
+	 * However, there are no guarantees of a NULL chara, so we need to use
+	 * string_clone() instead of strdup().
 	 */
 
-	str_len = ASN1_STRING_length(asnstr);
-	if (str_len < 0)
-		return pr_val_err("String has invalid length: %d", str_len);
+	if (ia5->length < 0)
+		return pr_val_err("String has invalid length: %d", ia5->length);
 
-	return string_clone(ASN1_STRING_get0_data(asnstr), str_len, result);
-}
-
-static bool
-starts_with(char *str, char *pfx)
-{
-	return strncmp(str, pfx, strlen(pfx)) == 0;
+	return string_clone(ia5->data, ia5->length, result);
 }
 
 /* Create @uri from @ad */
@@ -1461,45 +1496,20 @@ static int
 add_ad(struct uri_list *uris, ACCESS_DESCRIPTION *ad,
     enum rpki_uri_type uri_type, bool rsync_only)
 {
-	ASN1_STRING *asn1_string;
+	ASN1_IA5STRING *ia5string;
 	char *cstring;
-	int ad_type;
 	int error;
 
-	asn1_string = GENERAL_NAME_get0_value(ad->location, &ad_type);
-
-	/*
-	 * RFC 6487: "This extension MUST have an instance of an
-	 * AccessDescription with an accessMethod of id-ad-rpkiManifest, (...)
-	 * with an rsync URI [RFC5781] form of accessLocation."
-	 *
-	 * Ehhhhhh. It's a little annoying in that it seems to be stucking more
-	 * than one requirement in a single sentence, which I think is rather
-	 * rare for an RFC. Normally they tend to hammer things more.
-	 *
-	 * Does it imply that the GeneralName CHOICE is constrained to type
-	 * "uniformResourceIdentifier"? I guess so, though I don't see anything
-	 * stopping a few of the other types from also being capable of storing
-	 * URIs.
-	 *
-	 * Also, nobody seems to be using the other types, and handling them
-	 * would be a titanic pain in the ass. So this is what I'm committing
-	 * to.
-	 */
-	if (ad_type != GEN_URI) {
-		pr_val_err("Unknown GENERAL_NAME type: %d", ad_type);
+	ia5string = gn2uri(ad->location);
+	if (ia5string == NULL)
 		return ENOTSUPPORTED;
-	}
 
-	cstring = NULL;
-	error = asnstr2str(asn1_string, &cstring);
+	if (rsync_only && !is_rsync(ia5string))
+		return ENOTSUPPORTED;
+
+	error = ia5str2str(ia5string, &cstring);
 	if (error)
 		return error;
-
-	if (rsync_only && !starts_with(cstring, "rsync://")) {
-		free(cstring);
-		return ENOTSUPPORTED;
-	}
 
 	return uris_add_str(uris, cstring, uri_type);
 }
