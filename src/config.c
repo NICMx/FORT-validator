@@ -17,20 +17,15 @@
 #include "log.h"
 #include "config/boolean.h"
 #include "config/incidences.h"
-#include "config/init_tals.h"
-#include "config/rrdp_conf.h"
 #include "config/str.h"
 #include "config/uint.h"
-#include "config/uint32.h"
-#include "config/work_offline.h"
 
 /**
  * To add a member to this structure,
  *
  * 1. Add it.
- * 2. Add its metadata somewhere in @groups.
- * 3. Add default value to set_default_values().
- * 4. Create the getter.
+ * 2. Add default value to set_default_values().
+ * 3. Create the getter.
  *
  * Assuming you don't need to create a data type, that should be all.
  */
@@ -104,30 +99,9 @@ struct rpki_config {
 		char *program;
 		struct {
 			struct string_array flat;
-			/*
-			 * Not actually --recursive.
-			 * It's used to fetch RPPs, so it uses --dirs.
-			 */
 			struct string_array recursive;
 		} args;
 	} rsync;
-
-	struct {
-		/* Enables the protocol */
-		bool enabled;
-		/*
-		 * Priority, this will override the order set at the CAs in
-		 * their accessMethod extension.
-		 */
-		unsigned int priority;
-		/* Retry conf, utilized on errors */
-		struct {
-			/* Maximum number of retries on error */
-			unsigned int count;
-			/* Interval (in seconds) between each retry */
-			unsigned int interval;
-		} retry;
-	} rrdp;
 
 	struct {
 		/* Enables the protocol */
@@ -218,9 +192,6 @@ struct rpki_config {
 	bool init_tals;
 	/* Download AS0 TALs into --tal? */
 	bool init_tal0s;
-
-	/* Deprecated; currently does nothing. */
-	unsigned int init_tal_locations;
 
 	/* Thread pools for specific tasks */
 	struct {
@@ -342,9 +313,9 @@ static const struct option_field options[] = {
 	}, {
 		.id = 1005,
 		.name = "work-offline",
-		.type = &gt_work_offline,
+		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, work_offline),
-		.doc = "Disable all outgoing requests (rsync, http (implies RRDP)) and work only with local repository files.",
+		.doc = "Disable all outgoing requests (rsync, HTTP) and work only with local repository files.",
 	}, {
 		.id = 1006,
 		.name = "daemon",
@@ -463,7 +434,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 3001,
 		.name = "rsync.priority",
-		.type = &gt_uint32,
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, rsync.priority),
 		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
 		.min = 0,
@@ -518,50 +489,17 @@ static const struct option_field options[] = {
 		.max = 0,
 	},
 
-	/* RRDP fields */
-	{
-		.id = 10000,
-		.name = "rrdp.enabled",
-		.type = &gt_rrdp_enabled,
-		.offset = offsetof(struct rpki_config, rrdp.enabled),
-		.doc = "Enables RRDP execution. Deprecated; use 'http.enabled' instead.",
-	}, {
-		.id = 10001,
-		.name = "rrdp.priority",
-		.type = &gt_rrdp_priority,
-		.offset = offsetof(struct rpki_config, rrdp.priority),
-		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority. Deprecated; use 'http.priority' instead.",
-		.min = 0,
-		.max = 100,
-	}, {
-		.id = 10002,
-		.name = "rrdp.retry.count",
-		.type = &gt_rrdp_retry_count,
-		.offset = offsetof(struct rpki_config, rrdp.retry.count),
-		.doc = "Maximum amount of retries whenever there's an error fetching RRDP files. Deprecated; use 'http.retry.count' instead.",
-		.min = 0,
-		.max = UINT_MAX,
-	}, {
-		.id = 10003,
-		.name = "rrdp.retry.interval",
-		.type = &gt_rrdp_retry_interval,
-		.offset = offsetof(struct rpki_config, rrdp.retry.interval),
-		.doc = "Period (in seconds) to wait between retries after an error ocurred fetching RRDP files. Deprecated; use 'http.retry.interval' instead.",
-		.min = 0,
-		.max = UINT_MAX,
-	},
-
 	/* HTTP requests parameters */
 	{
 		.id = 9000,
 		.name = "http.enabled",
-		.type = &gt_rrdp_enabled,
+		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, http.enabled),
 		.doc = "Enables outgoing HTTP requests",
 	}, {
 		.id = 9001,
 		.name = "http.priority",
-		.type = &gt_rrdp_priority,
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.priority),
 		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
 		.min = 0,
@@ -569,7 +507,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 9002,
 		.name = "http.retry.count",
-		.type = &gt_rrdp_retry_count,
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.retry.count),
 		.doc = "Maximum amount of retries whenever there's an error requesting HTTP URIs",
 		.min = 0,
@@ -577,7 +515,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 9003,
 		.name = "http.retry.interval",
-		.type = &gt_rrdp_retry_interval,
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.retry.interval),
 		.doc = "Period (in seconds) to wait between retries after an error ocurred doing HTTP requests",
 		.min = 0,
@@ -801,13 +739,6 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, init_tal0s),
 		.doc = "Fetch the currently-known AS0 TAL files into --tal",
 		.availability = AVAILABILITY_GETOPT,
-	}, {
-		.id = 11001,
-		.name = "init-locations",
-		.type = &gt_init_tals_locations,
-		.offset = offsetof(struct rpki_config, init_tal_locations),
-		.doc = "Deprecated. Does nothing as of Fort 1.5.1.",
-		.availability = AVAILABILITY_JSON,
 	},
 
 	{
@@ -961,7 +892,7 @@ static int
 set_default_values(void)
 {
 	static char const *recursive_rsync_args[] = {
-		"--dirs",
+		"--recursive",
 		"--delete",
 		"--times",
 		"--contimeout=20",
@@ -1057,15 +988,6 @@ set_default_values(void)
 	rpki_config.http.max_file_size = 1000000000;
 	rpki_config.http.ca_path = NULL; /* Use system default */
 
-	/*
-	 * TODO (later) Same values as http.*, delete when rrdp.* is fully
-	 * deprecated
-	 */
-	rpki_config.rrdp.enabled = rpki_config.http.enabled;
-	rpki_config.rrdp.priority = rpki_config.http.priority;
-	rpki_config.rrdp.retry.count = rpki_config.http.retry.count;
-	rpki_config.rrdp.retry.interval = rpki_config.http.retry.interval;
-
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
 	rpki_config.log.level = LOG_WARNING;
@@ -1099,7 +1021,6 @@ set_default_values(void)
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 
 	rpki_config.init_tals = false;
-	rpki_config.init_tal_locations = 0;
 
 	/* Common scenario is to connect 1 router or a couple of them */
 	rpki_config.thread_pool.server.max = 20;
@@ -1619,18 +1540,6 @@ config_get_thread_pool_validation_max(void)
 }
 
 void
-config_set_rsync_enabled(bool value)
-{
-	rpki_config.rsync.enabled = value;
-}
-
-void
-config_set_http_enabled(bool value)
-{
-	rpki_config.http.enabled = value;
-}
-
-void
 free_rpki_config(void)
 {
 	struct option_field const *option;
@@ -1638,49 +1547,4 @@ free_rpki_config(void)
 	FOREACH_OPTION(options, option, 0xFFFF)
 		if (is_rpki_config_field(option) && option->type->free != NULL)
 			option->type->free(get_rpki_config_field(option));
-}
-
-/*
- * "To be deprecated" section
- */
-void
-config_set_rrdp_enabled(bool value)
-{
-	rpki_config.rrdp.enabled = value;
-}
-
-void
-config_set_rrdp_priority(unsigned int value)
-{
-	rpki_config.rrdp.priority = value;
-}
-
-void
-config_set_http_priority(unsigned int value)
-{
-	rpki_config.http.priority = value;
-}
-
-void
-config_set_rrdp_retry_count(unsigned int value)
-{
-	rpki_config.rrdp.retry.count = value;
-}
-
-void
-config_set_http_retry_count(unsigned int value)
-{
-	rpki_config.http.retry.count = value;
-}
-
-void
-config_set_rrdp_retry_interval(unsigned int value)
-{
-	rpki_config.rrdp.retry.interval = value;
-}
-
-void
-config_set_http_retry_interval(unsigned int value)
-{
-	rpki_config.http.retry.interval = value;
 }

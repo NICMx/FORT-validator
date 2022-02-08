@@ -78,11 +78,6 @@ description: Guide to use arguments of FORT Validator.
 	59. [`incidences`](#incidences)
 3. [Deprecated arguments](#deprecated-arguments)
 	1. [`--sync-strategy`](#--sync-strategy)
-	2. [`--rrdp.enabled`](#--rrdpenabled)
-	3. [`--rrdp.priority`](#--rrdppriority)
-	4. [`--rrdp.retry.count`](#--rrdpretrycount)
-	5. [`--rrdp.retry.interval`](#--rrdpretryinterval)
-	60. [`init-locations`](#init-locations)
 	41. [`--http.idle-timeout`](#--httpidle-timeout)
 
 ## Syntax
@@ -1253,75 +1248,6 @@ rsync synchronization strategy. Commands the way rsync URLs are approached durin
 - `strict`: will be the same as `--rsync.strategy=strict`, see [`strict`](#strict).
 - `root`: will be the same as `--rsync.strategy=root`, see [`root`](#root).
 - `root-except-ta`: will be the same as `--rsync.strategy=root-except-ta`, see [`root-except-ta`](#root-except-ta).
-
-### `--rrdp.enabled`
-
-- **Type:** Boolean (`true`, `false`)
-- **Availability:** `argv` and JSON
-- **Default:** `true`
-
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.enabled`](#--httpenabled) instead.
-
-### `--rrdp.priority`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 60
-- **Range:** 0--100
-
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.priority`](#--httppriority) instead.
-
-### `--rrdp.retry.count`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 2
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
-
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.retry.count`](#--httpretrycount) instead.
-
-### `--rrdp.retry.interval`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 5
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
-
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.retry.interval`](#--httpretryinterval) instead.
-
-### `init-locations`
-
-- **Type:** JSON Object array
-- **Availability:** JSON only
-
-> ![img/warn.svg](img/warn.svg) This argument is deprecated. I don't know why it exists; just do normal wgets or curls instead. As of Fort 1.5.1, it does nothing. The documentation below applies to 1.5.0 and below.
-
-List of URLs from where the TALs will be fetched when [`--init-tals`](#--init-tals) is utilized. Each URL can have an optional `accept-message` that will be displayed at the terminal. When this message is displayed, the word **"yes"** is expected by FORT to download the corresponding TAL file; this way an explicit acceptance is obtained to comply with the printed message.
-
-By default it has 4 URLs from each TAL that doesn't require and explicit politics acceptance by the user, and 1 URL that does have an acceptance message so that FORT can proceed with its download.
-
-This is a JSON array of objects, where each object has a mandatory `url` member, and an optional `accept-message` member. The default value is:
-
-```
-"init-locations": [
-	{
-		"url": "https://www.arin.net/resources/manage/rpki/arin.tal",
-		"accept-message": "Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal"
-	}
-]
-```
 
 ### `--http.idle-timeout`
 

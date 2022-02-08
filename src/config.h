@@ -74,23 +74,6 @@ uint8_t config_get_val_log_level(void);
 enum log_output config_get_val_log_output(void);
 uint32_t config_get_val_log_facility(void);
 
-/*
- * Public, so that work-offline can set them, or (to be deprecated)
- * sync-strategy when set to 'off'.
- */
-void config_set_rsync_enabled(bool);
-void config_set_http_enabled(bool);
-/* TODO (later) Deprecated */
-void config_set_rrdp_enabled(bool);
-
-/* TODO (later) Remove once rrdp.* is fully deprecated */
-void config_set_rrdp_priority(unsigned int);
-void config_set_http_priority(unsigned int);
-void config_set_rrdp_retry_count(unsigned int);
-void config_set_http_retry_count(unsigned int);
-void config_set_rrdp_retry_interval(unsigned int);
-void config_set_http_retry_interval(unsigned int);
-
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);
 struct option_field const *get_option_metadatas(void);
