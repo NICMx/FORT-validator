@@ -72,3 +72,28 @@ const struct global_type gt_uint = {
 	.parse.json = parse_json_uint,
 	.arg_doc = "<unsigned integer>",
 };
+
+static int
+parse_argv_uint_deprecated(struct option_field const *field, char const *str,
+    void *result)
+{
+	pr_op_warn("Warning: Option '%s' is deprecated.", field->name);
+	return parse_argv_uint(field, str, result);
+}
+
+static int
+parse_json_uint_deprecated(struct option_field const *opt, json_t *json,
+    void *result)
+{
+	pr_op_warn("Warning: Option '%s' is deprecated.", opt->name);
+	return parse_json_uint(opt, json, result);
+}
+
+const struct global_type gt_uint_deprecated = {
+	.has_arg = required_argument,
+	.size = sizeof(unsigned int),
+	.print = print_uint,
+	.parse.argv = parse_argv_uint_deprecated,
+	.parse.json = parse_json_uint_deprecated,
+	.arg_doc = "<unsigned integer>",
+};

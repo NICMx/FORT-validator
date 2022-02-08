@@ -545,7 +545,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 9007,
 		.name = "http.idle-timeout", /* TODO Deprecated. */
-		.type = &gt_uint,
+		.type = &gt_uint_deprecated,
 		.offset = offsetof(struct rpki_config, http.low_speed_time),
 		.doc = "Deprecated; currently an alias for --http.low-speed-time. Use --http.low-speed-time instead.",
 		.min = 0,

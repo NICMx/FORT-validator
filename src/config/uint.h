@@ -4,6 +4,7 @@
 #include "config/types.h"
 
 extern const struct global_type gt_uint;
+extern const struct global_type gt_uint_deprecated;
 
 void print_uint(struct option_field const *, void *);
 int parse_argv_uint(struct option_field const *, char const *, void *);
