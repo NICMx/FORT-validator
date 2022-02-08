@@ -35,13 +35,6 @@ struct serial_number {
 
 STATIC_ARRAY_LIST(serial_numbers, struct serial_number)
 
-struct subject_name {
-	struct rfc5280_name *name;
-	char *file; /* File where this subject name was found. */
-};
-
-STATIC_ARRAY_LIST(subjects, struct subject_name)
-
 /**
  * Cached certificate data.
  */
@@ -54,7 +47,6 @@ struct metadata_node {
 	 * don't have many children, and I'm running out of time.
 	 */
 	struct serial_numbers serials;
-	struct subjects subjects;
 
 	/** Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(metadata_node) next;
@@ -147,19 +139,11 @@ serial_cleanup(struct serial_number *serial)
 }
 
 static void
-subject_cleanup(struct subject_name *subject)
-{
-	x509_name_put(subject->name);
-	free(subject->file);
-}
-
-static void
 meta_destroy(struct metadata_node *meta)
 {
 	uri_refput(meta->uri);
 	resources_destroy(meta->resources);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
-	subjects_cleanup(&meta->subjects, subject_cleanup);
 	free(meta);
 }
 
@@ -329,11 +313,10 @@ x509stack_push(struct rpki_uri *uri, X509 *x509, enum rpki_policy policy,
 	meta->uri = uri;
 	uri_refget(uri);
 	serial_numbers_init(&meta->serials);
-	subjects_init(&meta->subjects);
 
 	error = init_resources(x509, policy, type, &meta->resources);
 	if (error)
-		goto cleanup_subjects;
+		goto cleanup_serials;
 
 	stack = validation_certstack(state_retrieve());
 
@@ -359,8 +342,7 @@ destroy_separator:
 	free(defer_separator);
 destroy_resources:
 	resources_destroy(meta->resources);
-cleanup_subjects:
-	subjects_cleanup(&meta->subjects, subject_cleanup);
+cleanup_serials:
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	uri_refput(meta->uri);
 	free(meta);
@@ -497,167 +479,6 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 	if (error)
 		free(duplicate.file);
 
-	return error;
-}
-
-/**
- * Intended to validate subject uniqueness.
- * "Stores" the subject in the current relevant certificate metadata, and
- * complains if there's a collision. The @cb should check the primary key of
- * the subject, it will be called when a subject isn't unique (certificate
- * shares the subject but not the public key). That's all.
- */
-int
-x509stack_store_subject(struct cert_stack *stack, struct rfc5280_name *subject,
-    subject_pk_check_cb cb, void *arg)
-{
-	struct metadata_node *meta;
-	struct subject_name *cursor;
-	array_index i;
-	struct subject_name duplicate;
-	bool duplicated;
-	int error;
-
-	/*
-	 * "Each distinct subordinate CA and
-	 * EE certified by the issuer MUST be identified using a subject name
-	 * that is unique per issuer.  In this context, 'distinct' is defined as
-	 * an entity and a given public key."
-	 *
-	 * What the hell? Removing redundancy:
-	 *
-	 * 	Each distinct subordinate CA and EE certified by the issuer MUST
-	 * 	have a unique subject name. In this context, 'distinct' is
-	 * 	defined as an entity and a given public key.
-	 *
-	 * Trimming fat:
-	 *
-	 * 	Each distinct child certified by the issuer MUST have a unique
-	 * 	subject name. In this context, 'distinct' is defined as an
-	 * 	entity and a given public key.
-	 *
-	 * Translation:
-	 *
-	 * 	Sibling certificates must have different subject names.
-	 * 	Among a parent's children, siblings are identified by their
-	 * 	[entity, public key] tuple.
-	 *
-	 * From RFC 6484, one can surmise that "entity" means "INR holder."
-	 * (INR = Internet Number Resource = IP address or ASN.)
-	 *
-	 * The requirement is kind of circular because an entity would normally
-	 * be identified by its parent certificate and subject name... right?
-	 * How else would an RPKI consumer identify the entity?
-	 *
-	 * Educated flight of fancy:
-	 *
-	 * 	Sibling certificates must have different subject names.
-	 * 	Among a parent's children, siblings are identified by their
-	 * 	[parent, subject name, public key] tuple.
-	 *
-	 * Given that we've established that we're talking about siblings,
-	 * the parent is always the same, so it becomes
-	 *
-	 * 	Sibling certificates must have different subject names.
-	 * 	Among a parent's children, siblings are identified by their
-	 * 	[subject name, public key] tuple.
-	 *
-	 * Circular:
-	 *
-	 *	Given two siblings, if their [subject name, public key] is
-	 *	different, then their subject names must also be different.
-	 *
-	 * In other words:
-	 *
-	 * - If A = [a, m] and B = [a, m], then no constraints must be imposed.
-	 * - If A = [a, m] and B = [a, n], then a != a. This makes no sense.
-	 * - If A = [a, m] and B = [b, m], then a != b. Self-evident.
-	 * - If A = [a, m] and B = [b, n], then a != b. Self-evident.
-	 *
-	 * So... assuming my train of thought is correct, the requirement can
-	 * therefore be reduced to
-	 *
-	 *	If two sibling certificates have different public keys, then
-	 *	they must have different subject names as well.
-	 *
-	 * In other words, this whole fucking mess is just a reword of the
-	 * (infinitely more competently articulated) immediately following
-	 * sentence:
-	 *
-	 * "An issuer SHOULD use a different
-	 * subject name if the subject's key pair has changed (i.e., when the CA
-	 * issues a certificate as part of re-keying the subject.)"
-	 *
-	 * Except... the two requirements are actually contradicting each other:
-	 * The former is defined as a MUST and the latter is a SHOULD.
-	 *
-	 * FFFFFFFFFUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUCK!!!
-	 *
-	 * There's also another problem: What should we do when we find two
-	 * siblings with different public keys and equal names? Are we even
-	 * expected to do anything? I mean, does this requirement exist to
-	 * simplify the work of RPs, or to be enforced by RPs?
-	 *
-	 * Sigh. I'm gonna have to ping some people. In the meantime, I'm going
-	 * to comment the caller, because this code is conflicting with the
-	 * rpki_uri refactors.
-	 *
-	 * Leftover from the previous version of this comment:
-	 *
-	 * - Certificates do not share name nor public key. This is the most
-	 *   normal situation; accept.
-	 * - Certificates share name, but not public key. Illegal.
-	 * - Certificates share public key, but not name. This is basically
-	 *   impossible, but fine nonetheless. Accept.
-	 *   (But maybe issue a warning. It sounds like the two children can
-	 *   impersonate each other.)
-	 * - Certificates share name and public key. This likely means that we
-	 *   are looking at two different versions of the same certificate.
-	 *   Accept. (see rfc6484#section-4.7.1 for an example)
-	 */
-
-	meta = SLIST_FIRST(&stack->metas);
-	if (meta == NULL)
-		return 0; /* The TA lacks siblings, so subject is unique. */
-
-	/* See the large comment in certstack_x509_store_serial(). */
-	duplicated = false;
-	ARRAYLIST_FOREACH(&meta->subjects, cursor, i) {
-		if (x509_name_equals(cursor->name, subject)) {
-			error = cb(&duplicated, cursor->file, arg);
-			if (error)
-				return error;
-
-			if (!duplicated)
-				continue;
-
-			char const *serial = x509_name_serialNumber(subject);
-			pr_val_warn("Subject name '%s%s%s' is not unique. (Also found in '%s'.)",
-			    x509_name_commonName(subject),
-			    (serial != NULL) ? "/" : "",
-			    (serial != NULL) ? serial : "",
-			    cursor->file);
-			return 0;
-		}
-	}
-
-	duplicate.name = subject;
-	x509_name_get(subject);
-
-	error = get_current_file_name(&duplicate.file);
-	if (error)
-		goto revert_name;
-
-	error = subjects_add(&meta->subjects, &duplicate);
-	if (error)
-		goto revert_file;
-
-	return 0;
-
-revert_file:
-	free(duplicate.file);
-revert_name:
-	x509_name_put(subject);
 	return error;
 }
 
