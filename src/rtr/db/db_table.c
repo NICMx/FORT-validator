@@ -254,9 +254,10 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 {
 	struct hashable_roa *n1; /* A node from @roas1 */
 	struct hashable_roa *n2; /* A node from @roas2 */
+	struct hashable_roa *tmp;
 	int error;
 
-	for (n1 = roas1; n1 != NULL; n1 = n1->hh.next) {
+	HASH_ITER(hh, roas1, n1, tmp) {
 		HASH_FIND(hh, roas2, &n1->data, sizeof(n1->data), n2);
 		if (n2 == NULL) {
 			error = deltas_add_roa(deltas, &n1->data, op);
