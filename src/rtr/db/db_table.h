@@ -13,10 +13,10 @@ void db_table_destroy(struct db_table *);
 unsigned int db_table_roa_count(struct db_table *);
 unsigned int db_table_router_key_count(struct db_table *);
 
-int db_table_foreach_roa(struct db_table *, vrp_foreach_cb, void *);
+int db_table_foreach_roa(struct db_table const *, vrp_foreach_cb, void *);
 void db_table_remove_roa(struct db_table *, struct vrp const *);
 
-int db_table_foreach_router_key(struct db_table *, router_key_foreach_cb,
+int db_table_foreach_router_key(struct db_table const *, router_key_foreach_cb,
     void *);
 void db_table_remove_router_key(struct db_table *, struct router_key const *);
 

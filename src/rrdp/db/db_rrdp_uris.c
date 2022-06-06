@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "data_structure/uthash_nonfatal.h"
+#include "data_structure/uthash.h"
 #include "common.h"
 #include "log.h"
 #include "thread_var.h"
@@ -93,6 +93,10 @@ static void
 add_rrdp_uri(struct db_rrdp_uri *uris, struct uris_table *new_uri)
 {
 	struct uris_table *old_uri;
+
+	/*
+	 * TODO (fine) this should use HASH_REPLACE instead of HASH_ADD_KEYPTR
+	 */
 
 	old_uri = find_rrdp_uri(uris, new_uri->uri);
 	if (old_uri != NULL) {

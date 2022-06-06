@@ -157,7 +157,7 @@ open_file(char const *loc, FILE **out, bool *fopen)
 }
 
 static void
-print_roas(struct db_table *db)
+print_roas(struct db_table const *db)
 {
 	FILE *out;
 	JSON_OUT json_out;
@@ -188,7 +188,7 @@ print_roas(struct db_table *db)
 }
 
 static void
-print_router_keys(struct db_table *db)
+print_router_keys(struct db_table const *db)
 {
 	FILE *out;
 	JSON_OUT json_out;
@@ -222,7 +222,7 @@ print_router_keys(struct db_table *db)
 }
 
 void
-output_print_data(struct db_table *db)
+output_print_data(struct db_table const *db)
 {
 	print_roas(db);
 	print_router_keys(db);

@@ -69,7 +69,7 @@ SLIST_HEAD(threads_list, validation_thread);
 struct tal_param {
 	struct thread_pool *pool;
 	struct db_table *db;
-	struct threads_list *threads;
+	struct threads_list threads;
 };
 
 static int
@@ -497,7 +497,8 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
+handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
+    struct validation_thread *thread)
 {
 	/*
 	 * Because of the way the foreach iterates, this function must return
@@ -513,7 +514,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 * A "hard error" is any other error.
 	 */
 
-	struct validation_thread *thread_arg = arg;
 	struct validation_handler validation_handler;
 	struct validation *state;
 	struct cert_stack *certstack;
@@ -523,13 +523,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
-	validation_handler.arg = thread_arg->arg;
+	validation_handler.arg = thread->arg;
 
 	error = validation_prepare(&state, tal, &validation_handler);
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	if (thread_arg->sync_files) {
+	if (thread->sync_files) {
 		if (uri_is_rsync(uri)) {
 			if (!config_get_rsync_enabled()) {
 				validation_destroy(state);
@@ -563,8 +563,8 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	}
 
 	/* At least one URI was sync'd */
-	thread_arg->retry_local = false;
-	if (thread_arg->sync_files && working_repo_peek() != NULL)
+	thread->retry_local = false;
+	if (thread->sync_files && working_repo_peek() != NULL)
 		reqs_errors_rem_uri(working_repo_peek());
 	working_repo_pop();
 
@@ -675,7 +675,7 @@ do_file_validation(void *thread_arg)
 	if (error)
 		goto destroy_tal;
 
-	error = foreach_uri(tal, __handle_tal_uri_sync, thread_arg);
+	error = foreach_uri(tal, __handle_tal_uri_sync, thread);
 	if (error > 0) {
 		error = 0;
 		goto destroy_tal;
@@ -692,7 +692,7 @@ do_file_validation(void *thread_arg)
 	thread->sync_files = false;
 	pr_val_warn("Looking for the TA certificate at the local files.");
 
-	error = foreach_uri(tal, __handle_tal_uri_local, thread_arg);
+	error = foreach_uri(tal, __handle_tal_uri_local, thread);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
@@ -749,7 +749,7 @@ __do_file_validation(char const *tal_file, void *arg)
 		goto free_tal_file;
 	}
 
-	SLIST_INSERT_HEAD(t_param->threads, thread, next);
+	SLIST_INSERT_HEAD(&t_param->threads, thread, next);
 	return 0;
 
 free_tal_file:
@@ -764,64 +764,52 @@ free_db_rrdp:
 int
 perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 {
-	struct tal_param *param;
-	struct threads_list threads;
+	struct tal_param param;
 	struct validation_thread *thread;
-	int error, t_error;
-
-	param = malloc(sizeof(struct tal_param));
-	if (param == NULL)
-		return pr_enomem();
+	int error;
 
 	/* Set existent tal RRDP info to non visited */
 	db_rrdp_reset_visited_tals();
 
-	SLIST_INIT(&threads);
-
-	param->pool = pool;
-	param->db = table;
-	param->threads = &threads;
+	param.pool = pool;
+	param.db = table;
+	SLIST_INIT(&param.threads);
 
 	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION, true,
-	    __do_file_validation, param);
+	    __do_file_validation, &param);
 	if (error) {
 		/* End all thread data */
-		while (!SLIST_EMPTY(&threads)) {
-			thread = threads.slh_first;
-			SLIST_REMOVE_HEAD(&threads, next);
+		while (!SLIST_EMPTY(&param.threads)) {
+			thread = SLIST_FIRST(&param.threads);
+			SLIST_REMOVE_HEAD(&param.threads, next);
 			thread_destroy(thread);
 		}
-		free(param);
 		return error;
 	}
 
 	/* Wait for all */
 	thread_pool_wait(pool);
 
-	t_error = 0;
-	while (!SLIST_EMPTY(&threads)) {
-		thread = threads.slh_first;
-		SLIST_REMOVE_HEAD(&threads, next);
+	while (!SLIST_EMPTY(&param.threads)) {
+		thread = SLIST_FIRST(&param.threads);
+		SLIST_REMOVE_HEAD(&param.threads, next);
 		if (thread->exit_status) {
-			t_error = thread->exit_status;
+			error = thread->exit_status;
 			pr_op_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
 			    thread->tal_file);
 		}
 		thread_destroy(thread);
 	}
 
-	/* The parameter isn't needed anymore */
-	free(param);
-
 	/* Log the error'd URIs summary */
 	reqs_errors_log_summary();
 
 	/* One thread has errors, validation can't keep the resulting table */
-	if (t_error)
-		return t_error;
+	if (error)
+		return error;
 
 	/* Remove non-visited rrdps URIS by tal */
 	db_rrdp_rem_nonvisited_tals();
 
-	return error;
+	return 0;
 }

@@ -4,7 +4,7 @@
 #include <syslog.h>
 #include <time.h>
 
-#include "data_structure/uthash_nonfatal.h"
+#include "data_structure/uthash.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"

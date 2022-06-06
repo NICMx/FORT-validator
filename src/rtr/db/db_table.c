@@ -57,7 +57,7 @@ db_table_destroy(struct db_table *table)
 }
 
 int
-db_table_foreach_roa(struct db_table *table, vrp_foreach_cb cb, void *arg)
+db_table_foreach_roa(struct db_table const *table, vrp_foreach_cb cb, void *arg)
 {
 	struct hashable_roa *node, *tmp;
 	int error;
@@ -72,8 +72,8 @@ db_table_foreach_roa(struct db_table *table, vrp_foreach_cb cb, void *arg)
 }
 
 int
-db_table_foreach_router_key(struct db_table *table, router_key_foreach_cb cb,
-    void *arg)
+db_table_foreach_router_key(struct db_table const *table,
+    router_key_foreach_cb cb, void *arg)
 {
 	struct hashable_key *node, *tmp;
 	int error;

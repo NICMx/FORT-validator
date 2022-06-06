@@ -168,35 +168,32 @@ vrps_destroy(void)
 		db_table_destroy(state.base);
 }
 
-#define WLOCK_HANDLER(lock, cb)						\
+#define WLOCK_HANDLER(cb)						\
 	int error;							\
-	rwlock_write_lock(lock);					\
+	rwlock_write_lock(&table_lock);					\
 	error = cb;							\
-	rwlock_unlock(lock);						\
+	rwlock_unlock(&table_lock);					\
 	return error;
 
 int
 handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 {
-	WLOCK_HANDLER(&table_lock,
-	    rtrhandler_handle_roa_v4(arg, as, prefix, max_length))
+	WLOCK_HANDLER(rtrhandler_handle_roa_v4(arg, as, prefix, max_length))
 }
 
 int
 handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
     uint8_t max_length, void *arg)
 {
-	WLOCK_HANDLER(&table_lock,
-	    rtrhandler_handle_roa_v6(arg, as, prefix, max_length))
+	WLOCK_HANDLER(rtrhandler_handle_roa_v6(arg, as, prefix, max_length))
 }
 
 int
 handle_router_key(unsigned char const *ski, uint32_t as,
     unsigned char const *spk, void *arg)
 {
-	WLOCK_HANDLER(&table_lock,
-	    rtrhandler_handle_router_key(arg, ski, as, spk))
+	WLOCK_HANDLER(rtrhandler_handle_router_key(arg, ski, as, spk))
 }
 
 static int

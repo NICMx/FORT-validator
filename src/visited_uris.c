@@ -6,7 +6,7 @@
 #include "log.h"
 #include "delete_dir_daemon.h"
 #include "data_structure/array_list.h"
-#include "data_structure/uthash_nonfatal.h"
+#include "data_structure/uthash.h"
 
 struct visited_elem {
 	/* key */
