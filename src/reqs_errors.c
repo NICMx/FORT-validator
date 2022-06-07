@@ -177,8 +177,7 @@ reqs_errors_add_uri(char const *uri)
 		    (working_repo_peek_level() <= LOG_REPO_LEVEL);
 
 	rwlock_write_lock(&db_lock);
-	HASH_ADD_KEYPTR(hh, err_uris_db, new_uri->uri, strlen(new_uri->uri),
-	    new_uri);
+	HASH_ADD_STR(err_uris_db, uri, new_uri);
 	rwlock_unlock(&db_lock);
 
 	return 0;
