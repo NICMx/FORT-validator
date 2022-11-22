@@ -76,6 +76,8 @@ install-sh
 missing
 src/configure_ac.h
 src/stamp-h1
+config.guess
+config.sub
 
 # Packaging
 *.7z

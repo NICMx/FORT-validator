@@ -75,6 +75,7 @@ START_TEST(rsync_test_list)
 {
 	struct uri_list *visited_uris;
 
+	visited_uris = NULL;
 	ck_assert_int_eq(rsync_create(&visited_uris), 0);
 
 	__mark_as_downloaded("rsync://example.foo/repository/", visited_uris);

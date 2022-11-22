@@ -71,6 +71,7 @@ set_asn(json_t *object, bool is_assertion, uint32_t *result, uint8_t *flag,
 	json_int_t int_tmp;
 	int error;
 
+	int_tmp = 0;
 	error = json_get_int(object, ASN, &int_tmp);
 	if (error == -ENOENT) {
 		if (is_assertion)
@@ -182,6 +183,7 @@ set_max_prefix_length(json_t *object, bool is_assertion, uint8_t addr_fam,
 	json_int_t int_tmp;
 	int error;
 
+	int_tmp = 0;
 	error = json_get_int(object, MAX_PREFIX_LENGTH, &int_tmp);
 	if (error == -ENOENT)
 		return 0; /* Optional for assertions, unsupported by filters */

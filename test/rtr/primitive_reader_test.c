@@ -101,7 +101,7 @@ validate_massive_string(uint32_t expected_len, rtr_char *str)
 	actual_len = strlen(str);
 	if (expected_len != actual_len) {
 		free(str);
-		ck_abort_msg("Expected length %zu != Actual length %zu",
+		ck_abort_msg("Expected length %u != Actual length %zu",
 		    expected_len, actual_len);
 	}
 
