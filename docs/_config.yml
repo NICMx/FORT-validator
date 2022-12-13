@@ -8,7 +8,7 @@ defaults:
       layout: "default"
       image: "/img/logo_validador_og.png"
 
-fort-latest-version: 1.5.3
+fort-latest-version: 1.5.4
 plugins:
   - jekyll-seo-tag
   - jekyll-sitemap

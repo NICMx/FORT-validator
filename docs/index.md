@@ -7,7 +7,7 @@ descrption: FORT validator is an RPKI Relying Party, a tool offered as part of t
 
 ## Introduction
 
-FORT validator is an MIT-licensed RPKI Relying Party, this is a tool offered as part of the [FORT project](https://www.fortproject.net/). It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers.
+The FORT validator is an MIT-licensed RPKI Relying Party, offered as part of the [FORT project](https://www.fortproject.net/). It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers.
 
 ## Status
 
@@ -15,11 +15,12 @@ FORT validator is an MIT-licensed RPKI Relying Party, this is a tool offered as 
 > 
 > Development will resume in full during 2023.
 
-Version **{{ site.fort-latest-version }}** is the latest official release. To fetch or review it, visit the [GitHub release](https://github.com/NICMx/FORT-validator/releases/tag/{{ site.fort-latest-version }}){:target="_blank"}.
+Version {{ site.fort-latest-version }} is the latest official release. To fetch or review it, visit the [GitHub release](https://github.com/NICMx/FORT-validator/releases/tag/{{ site.fort-latest-version }}){:target="_blank"}.
 
 ## Quick start
 
-Probably you just want to read:
-- How to install? Visit [Compilation and Installation](installation.html).
-- How to execute? Visit [Basic Usage](run.html) and [Program Arguments](usage.html).
-- How to configure the router(s)? Visit [Routers](routers.html).
+- [Compilation and Installation](installation.html)
+- [Basic Usage](run.html)
+- [Program Arguments](usage.html)
+- [Router configuration](routers.html)
+
