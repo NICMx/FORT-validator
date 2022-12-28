@@ -29,9 +29,12 @@ AC_SEARCH_LIBS([pthread_create], [pthread], [],
 AC_SEARCH_LIBS([X509_get_version], [crypto], [],
 	[AC_MSG_ERROR([unable to find the X509_get_version() function])]
 )
-AC_SEARCH_LIBS([backtrace],[execinfo],[],
-	[AC_MSG_ERROR([unable to find backtrace() function])]
+
+AC_SEARCH_LIBS([backtrace],[execinfo],
+	[have_backtrace="yes"],
+	[have_backtrace="no"]
 )
+AM_CONDITIONAL([BACKTRACE_ENABLED], [test "x$have_backtrace" != "xno"])
 
 # Dependencies managed by pkg-config
 # By the way: Apparently PKG_CHECK_MODULES is poor practice now. I can't tell;

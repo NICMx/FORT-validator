@@ -407,7 +407,7 @@ The following steps are for Alpine Linux 3.12.0
 
 {% highlight bash %}
 su
-apk add build-base autoconf automake pkgconfig openssl openssl-dev jansson jansson-dev bsd-compat-headers rsync libexecinfo libexecinfo-dev libxml2 libxml2-dev libcurl curl-dev
+apk add build-base autoconf automake pkgconfig openssl-dev jansson-dev curl-dev libxml2-dev bsd-compat-headers rsync
 exit
 
 wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz

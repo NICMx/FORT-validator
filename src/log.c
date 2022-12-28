@@ -1,6 +1,9 @@
 #include "log.h"
 
+#ifdef BACKTRACE_ENABLED
 #include <execinfo.h>
+#endif
+
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <pthread.h>
@@ -66,6 +69,7 @@ static pthread_mutex_t logck;
 void
 print_stack_trace(char const *title)
 {
+#ifdef BACKTRACE_ENABLED
 #define STACK_SIZE 64
 
 	void *array[STACK_SIZE];
@@ -97,6 +101,7 @@ print_stack_trace(char const *title)
 	}
 
 	free(strings);
+#endif /* BACKTRACE_ENABLED */
 }
 
 static void init_config(struct log_config *cfg, bool unit_tests)
@@ -108,6 +113,8 @@ static void init_config(struct log_config *cfg, bool unit_tests)
 	cfg->color = false;
 	cfg->facility = LOG_DAEMON;
 }
+
+#ifdef BACKTRACE_ENABLED
 
 static void
 sigsegv_handler(int signum)
@@ -135,6 +142,8 @@ sigsegv_handler(int signum)
 	kill(getpid(), signum);
 }
 
+#endif
+
 /*
  * Register better handlers for some signals.
  *
@@ -143,6 +152,7 @@ sigsegv_handler(int signum)
 static void
 register_signal_handlers(void)
 {
+#ifdef BACKTRACE_ENABLED
 	struct sigaction action;
 	void* dummy;
 
@@ -166,6 +176,7 @@ register_signal_handlers(void)
 		pr_op_err("SIGSEGV handler registration failure: %s",
 		    strerror(errno));
 	}
+#endif
 
 	/*
 	 * SIGPIPE can be triggered by any I/O function. libcurl is particularly
