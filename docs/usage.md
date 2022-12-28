@@ -1315,16 +1315,16 @@ This is a JSON array of objects, where each object has a mandatory `url` member,
 		"accept-message": "Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
 	},
 	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/lacnic.tal"
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/lacnic.tal"
 	},
 	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/ripe.tal"
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/ripe-ncc.tal"
 	},
 	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/afrinic.tal"
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/afrinic.tal"
 	},
 	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/master/examples/tal/apnic.tal"
+		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/apnic.tal"
 	}
 ]
 ```

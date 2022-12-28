@@ -439,7 +439,7 @@ sudo make install
 
 ## Option 4: Running from a Docker container
 
-There's also the option to run FORT validator from a Docker container. The image can be pulled from [Docker Hub](https://hub.docker.com/r/nicmx/fort-validator) or built from the official Github repository: [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/master/docker).
+There's also the option to run FORT validator from a Docker container. The image can be pulled from [Docker Hub](https://hub.docker.com/r/nicmx/fort-validator) or built from the official Github repository: [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/main/docker).
 
 To pull the image from the official repository, run:
 
@@ -459,7 +459,7 @@ A basic example to run the container using the default values, reading from a lo
 docker run --name fort-validator -v host/path/to/tals:/etc/fort/tal:ro -p 8323:323 -d fort-validator
 {% endhighlight %}
 
-Read more about the Docker container at the Github repository [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/master/docker).
+Read more about the Docker container at the Github repository [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/main/docker).
 
 ## Fetching the TALs
 

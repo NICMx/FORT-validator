@@ -4,7 +4,7 @@ Docker image for [NICMx/FORT-validator](https://github.com/NICMx/FORT-validator)
 
 Special thanks to [ximon18](https://github.com/ximon18) for its [contribution](https://github.com/NICMx/FORT-validator/issues/17).
 
-**This image doesn't include TAL (Trust Anchor Locator) files.** They must be obtained somewhere else (here's [an example](https://github.com/NICMx/FORT-validator/tree/master/examples/tal)).
+**This image doesn't include TAL (Trust Anchor Locator) files.** They must be obtained somewhere else (here's [an example](https://github.com/NICMx/FORT-validator/tree/main/examples/tal)).
 
 To pull the official docker image, run:
 
