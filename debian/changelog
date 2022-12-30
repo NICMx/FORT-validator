@@ -1,0 +1,347 @@
+fort (1.5.4-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Alberto Leiva Popper <ydahhrk@gmail.com>  Tue, 13 Dec 2022 16:59:44 -0500
+
+fort (1.5.3-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Alberto Leiva Popper <ydahhrk@gmail.com>  Mon, 08 Nov 2021 22:33:28 -0500
+
+fort (1.5.2-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Alberto Leiva Popper <ydahhrk@gmail.com>  Tue, 19 Oct 2021 15:39:43 -0500
+
+fort (1.5.1-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Alberto Leiva Popper <ydahhrk@gmail.com>  Fri, 06 Aug 2021 17:00:00 -0500
+
+fort (1.5.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+  * Add 'RestartForceExitStatus' service setting.
+  * Set service type as 'simple' instead of 'exec'.
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Tue, 15 Dec 2020 17:11:21 -0600
+
+fort (1.4.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Tue, 20 Oct 2020 18:14:29 -0500
+ 
+fort (1.4.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Mon, 28 Sep 2020 12:11:43 -0500
+
+fort (1.4.0-1) UNRELEASED; urgency=medium
+
+  * Bug fix: Some XML parsing and validation errors where printed straight to
+    stderr, now they're printed to the configured "validation-log.output".
+  * Bug fix: The protocol part of an URI only was only valid in lowercase, now
+    the case is ignored.
+
+  * Update: RTR server can bind to multiple IPs.
+  * Update: Deprecate all "rrdp.*" arguments, renaming them to "http.*". The new
+    arguments are "http.enabled", "http.priority", "http.retry.count" and
+    "http.retry.interval". They apply for each outgoing http request.
+  * Update: The 4 TALs now include an HTTPs URI.
+  * Update: HTTPS requests are now preferred by default over RSYNC requests,
+    this applies only where both of the options are present.
+  * Update: New incidences for stale manifests ("incid-mft-stale") and stale
+    CRLs ("incid-crl-stale").
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Tue, 04 Aug 2020 17:03:28 -0500
+
+fort (1.3.0-1) UNRELEASED; urgency=medium
+
+  * Bug fix: Minimize function calls and processing once a fork is made to
+    execute rsync, related to github issue #35.
+
+  * Update: Separate the validation messages from the operation messages, each
+    log type has its own configuration arguments.
+  * Update: Include a configurable syslog facility for each log type, useful
+    when syslog is utilized.
+  * Update: Add new argument 'stale-repository-period'. When a repository URI
+    can't be reached, the validator will log the error messages at the
+    operation log after 'stale-repository-period' seconds had elapsed since the
+    first error fetching the repository URI.
+  * Update: Work with local files if a repository can't be synced.
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Tue, 30 Jun 2020 18:48:18 -0500
+
+fort (1.2.1-1) UNRELEASED; urgency=medium
+
+  * Bug fix: Add broken pipe (SIGPIPE) signal handler, this avoids a sudden
+    death when the socket is still alive at the server but closed at the client
+    side.
+  * Bug fix: Don't hold the DB lock when the SLURM is being loaded.
+  * Bug fix: Specific for CentOS7 libcurl: check for time condition met/unmet
+    (whenever the HTTP header "If-Modified-Since" is sent) when requesting RRDP
+    update notification files.
+  * Bug fix: Stop sending PDUs on reset exchange error.
+  * Bug fix: Fix GCC 10 compiling error and warnings (solves github issue #32).
+
+  * Update: Add capability 'CAP_NET_BIND_SERVICE' to this package in order to
+    bind the RTR server to port 323 by default.
+  * Update: Wait for client connections at '--server.port' until the first
+    validation cycle is done.
+  * Update: Update internal PDU logs.
+  * Update: SLURM upgrades:
+    -Improve loading process, use an internal cache when a SLURM file is being
+     loaded.
+    -Don't discard the loaded SLURM if there's an error applying it.
+    -Calculate SLURM file(s) checksum and compare it with its previous one to
+     avoid loading each SLURM at every validation cycle if there aren't
+     updates.
+    -Stop doing unnecessary validations, since they aren't part of the
+     RFC 8416: duplicated elements at the same file, covered prefixes at the
+     same file.
+  * Update: Add new incidences related to manifests processing (solves github
+    issue #28)
+  * Update: Internal improvements resultant from a code review.
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Fri, 24 Apr 2020 13:25:47 -0500
+
+fort (1.2.0-1) UNRELEASED; urgency=medium
+
+  * Bug fix: Solve github issue #9 "Use previous valid SLURM configuration on
+    SLURM error": whenever there's an error processing the SLURM, apply the last
+    valid SLURM version.
+  * Bug fix: If an empty value was sent to arguments that expect paths
+    (eg. 'fort --tal='), this was treated as valid; now this isn't allowed.
+  * Bug fix: rsync execution logs didn't logged to syslog, now they do.
+  * Bug fix: Allow reuse server address/port on restart.
+  * Bug fix: Try to fetch the trust anchor certificate from another URI whenever
+    the previous TAL URI wasn't fetched due to an error.
+  * Bug fix: Standard output wasn't flushed when the console logs where piped,
+    now it is flushed.
+
+  * Update: Support RRDP (solves github issue #20).
+  * Update: Support HTTPS URIs in TALs (solves github issue #19).
+  * Update: Add new incidence 'incid-obj-not-der-encoded' to validate signed
+    objects DER encoding.
+  * Update: Log additional information on start/end of a validation cycle, the
+    information is printed at log level 'info':
+    -When a client starts/ends a connection, or when the connection is killed
+     (print its address and an internal ID).
+    -When a new validation cycle is started and finished (includes number of
+     valid Prefixes and Router Keys, current/new serial number, and real
+     execution time).
+  * Update: Add setup script to ease ARINs TAL download, explicitly accepting
+    their RPA. The script does the following:
+    -Invites to agree ARIN RPA and downloads ARIN's TAL.
+    -Downloads the rest of the TALS from github repository.
+    -Creates a local repository directory, and an example configuration file.
+  * Update: Create 'examples' directory:
+    -Move 'tal' directory to this new directory.
+    -Add a valid configuration file.
+    -Add a valid SLURM file.
+  * Update: Validate configuration args 'slurm' and 'tal' during startup.
+  * Update: Configuration arg 'sync-strategy' will be deprecated, log a warning
+    if it's set.
+  * Update: New configuration arguments added:
+    -'work-offline': Disables outgoing requests to work only with local files
+      from 'local-repository'.
+    -'http.user-agent': User-Agent header set at HTTP requests.
+    -'http.connect-timeout': Timeout in seconds for the connect phase at HTTP
+      requests.
+    -'http.transfer-timeout': Maximum allowed time that an HTTP request can
+      take.
+    -'http.idle-timeout': Maximum idle time during an HTTP request.
+    -'http.ca-path': Directory where CA certs to verify peers are found.
+    -'rrdp.enabled': Enables RRDP files processing.
+    -'rrdp.priority': Priority to use this protocol whenever a CA has another
+      option to access the repository files.
+    -'rrdp.retry.count': Maximum number of retries on requests error.
+    -'rrdp.retry.interval': Interval (in seconds) between each retry.
+    -'rsync.enabled': Enables RSYNC execution.
+    -'rsync.priority': Priority to use this protocol whenever a CA has another
+      option to access the repository files.
+    -'rsync.strategy': Synchronization download strategy (replaces
+      'sync-strategy').
+    -'rsync.retry.count': Maximum number of retries whenever there's an
+      execution error.
+    .'rsync.retry.interval': Interval (in seconds) between each retry.
+    -'asn1-decode-max-stack': indicates the max stack size that can be utilized
+      when decoding ASN1 objects (mainly to avoid a stack overflow).
+  * Update: Add '--timeout' parameter to rsync default arguments.
+  * Update: Set 'root-except-ta' default value to 'rsync.strategy'.
+  * Update: Update unit tests.
+
+  * Docs: Indicate full RFC 8182 and RFC 8630 compliance.
+  * Docs: Add docs for new configuration parameters (at web docs module
+    'Program arguments' and user man).
+  * Docs: Add the usage of the setup script at Installation module, as well as
+    the new dependencies of 'libcurl' and 'libxml2'.
+  * Docs: Add new section 'Routers', contains a basic explanation of data
+    exchange with routers.
+  * Docs: Update Incidences module to include DER encoding validation
+    ('incid-obj-not-der-encoded').
+  * Docs: Update RFC compliance of RFC 6488 to 100%.
+  * Docs: Update READMEs to use relative paths instead of always use master
+    URLs.
+  * Docs: Replace '2019' year refs to '2020'.
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Fri, 07 Feb 2020 15:42:51 -0600
+
+fort (1.1.3-1) UNRELEASED; urgency=medium
+
+  * Bug fix: Don't update valid prefixes and router keys database if one of the
+    root certificates had a communication error (rsync) or a processing error.
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Wed, 04 Dec 2019 12:47:21 -0600
+
+fort (1.1.2-1) UNRELEASED; urgency=medium
+
+  * Update: Add missing 2-Clause BSD licence to /src/asn1/asn1c/ code.
+  * Update: Add 'log.output' and 'log.level' configuration parameters.
+  * Update: Allow debug log without the need to recompile from source.
+  * Update: Remove '<sys/cdefs.h>' references.
+
+  * Docs: Update Logging and Program Arguments modules to explain new
+    configuration parameters.
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Thu, 07 Nov 2019 12:08:07 -0600
+
+fort (1.1.1-1) UNRELEASED; urgency=medium
+
+  * Bug fix: Validate 'output.bgpsec' path, check if the path is writable
+    during configuration checks.
+  * Bug fix: Fix bad PDU exchange when the ROAs/Router Keys DB was empty, an
+    End of Data was being sent when a Reset Query PDU was received.
+
+  * Update: Add missing validation from RFC 7935 section 3 (subjectPublicKey
+    modulus and exponent).
+  * Update: Use type 'blksize_t' (<sys/types.h>) instead of '__blksize_t'
+    (<bits/types.h>) to avoid a specific compilation error on Alpine Linux.
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Thu, 31 Oct 2019 10:10:34 -0600
+
+fort (1.1.0-1) UNRELEASED; urgency=medium
+
+  * Update: Create a thread to rsync and validate each TAL, trying to improve
+    execution time.
+  * Update: Support RTR version 1:
+    -RTR version negotiation.
+    -Validate version during PDU exchange.
+    -Implement new PDU error "Unexpected Protocol Version".
+    -Implement new PDU type "Router Key".
+    -Add timing parameters to "End of Data PDU".
+  * Update: Support BGPsec EE certificates (validate and consider for deltas)
+    accordingly to RFC 8209 and 8608.
+  * Update: Update configuration parameters:
+    -Rename 'server.validation-interval' to 'server.interval.validation'.
+    -Add 'server.interval.refresh', 'server.interval.retry', and
+    'server.interval.expire' args to use at RTR version 1 "End of Data PDU".
+    -Add "output.bgpsec' (similar to 'output.roa') to print valid Router Keys,
+    the information is printed as base64url encoded strings.
+  * Update: Support BGPsec filters and assertions at SLURM files.
+  * Update: Use syslog when running in server mode, print at console otherwise.
+  * Update: Update unit tests.
+
+  * Docs: Indicate full RFC 8209 compliance.
+  * Docs: Add RFCs compliance (they were missing): 6810, 8210, 8416, 8608, 8630.
+  * Docs: Update SLURM module with BGPsec assertions and filters support, as
+    well as some examples.
+  * Docs: Update Usage module:
+    -Rename to 'Program Arguments'.
+    -Updated configuration property ('server.validation-interval' is now
+    'server.interval.validation').
+    -New properties ('server.interval.refresh', 'server.interval.retry',
+    'server.interval.expire', and 'output.bgpsec').
+    -Show which 'output.roa' headers are printed.
+  * Docs: Use the same layout at home (landing page) to avoid multiple clicks
+    in order to reach the docs.
+  * Docs: Use a similar configuration file as example at web docs and user man.
+  * Docs: Add Logging module to explain how the logs work.
+  * Docs: Update root README with basic information about the project. 
+  * Docs: Update user man: indicate RTR version 1 support, and add the same
+    updates as in the web docs. 
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Mon, 14 Oct 2019 12:02:10 -0500
+
+fort (1.0.0-1) UNRELEASED; urgency=medium
+
+  * Bug fix: Solved github issue #11 "ROAs, MFTs and CAs created with revoked
+    certs are valids".
+  * Bug fix: Solved github issue #12 "Programming error when a ROA without
+    prefixes is validated".
+  * Bug fix: Solved github issue #13 "Wrong "serial number X is not unique"
+    error is displayed when an MFT expired error happens".
+  * Bug fix: Solved github issue #14 "FORT using server mode cannot be
+    interrupted on OpenBSD with SIGINT signal (Control+C)".
+  * Bug fix: The whole set of multiple SLURM files wasn't rejected in overlap
+    cases (RFC 8416 section 4.2).
+  * Bug fix: Validate "server.port" numeric value, since the function
+    "getaddrinfo" is a bit lax with numeric values (it takes into account only
+    the 16 rightmost bits).
+  * Bug fix: Log the configured "server.address" instead of always log "any" as
+    the server address.
+  * Bug fix: Validate "output.roa" file path at initialization.
+  * Bug fix: LibreSSL couldn't decode base64 text with line breaks where at
+    least one line had more than 80 chars.
+  * Bug fix: Remove invalid memory release when a TAL wasn't successfully
+    loaded.
+  * Bug fix: Some files needed by the unit tests were not exporting.
+  * Bug fix: Join each client thread when the connection is terminated.
+  * Bug fix: Avoid memory leak caused by X509_VERIFY_PARAM.
+  * Bug fix: Patch bad initialization of CRL stack.
+  * Bug fix: SLURM filters weren't correctly applied when an asn and prefix
+    were set, only the asn was taken into account to filter VRPs.
+  * Bug fix: SLURM filters of covering prefixes were ignored; e.g. if a prefix
+    X covered ROA prefix Y, the ROA prefix wasn't filtered.
+ 
+  * Update: In case of a SLURM error, log the JSON element with the error
+    instead of logging the element number.
+  * Update: Log a warning when a configuration path ("slurm", "tal") contains 0
+    expected files (extensions ".slurm", ".tal").
+  * Update: Configuration property "maximum-certificate-depth" now has a
+    minimum allowed value of 5 to allow a regular validation using RIR TALs.
+  * Update: The incidence "Signed Object's hash algorithm has NULL object as
+    parameters" now has the ID "incid-hashalg-has-params", and by default it
+    has an action of "ignore".
+  * Update: Update information displayed by "--help" at "--tal" and "--slurm"
+    flags.
+  * Update: Show ROA eContent in debug mode.
+  * Update: Retry file download when there's an error related to a manifest
+    file.
+  * Update: Set compiler optimization level ("-O") from "0" to "2".
+  * Display RTR server info when successfully binded.
+  * Log property name on value error (for unsigned integer values).
+  * Remove compile warning '_BSD_SOURCE and _SVID_SOURCE are deprecated'.
+  * Log custom incidences on initialization.
+
+  * Docs: Indicate current support for 64 bits OSs. 32 bit archs MAY present
+    the 2038 Year Problem.
+  * Docs: Add installation steps for: CentOS 7, Fedora 30, openSUSE Leap,
+    FreeBSD 12, Slackware current release (as of 2019-08-12)
+  * Docs: Add minimum dependencies version required: Openssl >= 1.1.0,
+    GCC >= 4.9.
+  * Docs: Update incidences section, now the registered incidence has a
+    distinct ID and a default action of "ignore".
+  * Docs: Update link to "UINT_MAX" definition at usage section.
+  * Docs: Use path "/tmp/fort/<path>" at multiple examples (man, web docs).
+
+ -- Francisco Moreno <pc.moreno2099@gmail.com>  Mon, 26 Aug 2019 12:01:33 -0500
+
+fort (0.0.2-1) UNRELEASED; urgency=medium
+
+  * libcmscodec dependency removed
+  * Lintian bugs purged
+
+ -- Alberto Leiva Popper <ydahhrk@gmail.com>  Fri, 14 Jun 2019 17:54:20 -0500
+
+fort (0.0.1-1) UNRELEASED; urgency=medium
+
+  * Initial release
+
+ -- Alberto Leiva Popper <ydahhrk@gmail.com>  Wed, 05 Jun 2019 17:01:16 -0500

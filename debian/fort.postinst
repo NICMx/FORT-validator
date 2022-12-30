@@ -1,0 +1,19 @@
+#!/bin/sh -e
+
+create_user() {
+  local username='fort'
+
+  if id $username > /dev/null 2>&1; then return; fi
+
+  adduser --system --no-create-home --home /var/lib/fort --group \
+    --disabled-password --gecos "FORT validator" $username
+}
+
+case "$1" in
+configure)
+  create_user "$@"
+  ;;
+esac
+
+#DEBHELPER#
+

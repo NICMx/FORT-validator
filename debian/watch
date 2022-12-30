@@ -1,0 +1,2 @@
+version=4
+opts=pgpsigurlmangle=s/$/.asc/ https://github.com/NICMx/FORT-validator/releases https://github.com/NICMx/FORT-validator/releases/download/v\d+\.\d+\.\d+/@PACKAGE@@ANY_VERSION@@ARCHIVE_EXT@

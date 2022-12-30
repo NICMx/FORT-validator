@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+clean_var() {
+  echo "Deleting the fort repository..."
+  rm -rf /var/lib/fort/
+}
+
+case "$1" in
+  purge)
+  clean_var "$@"
+  ;;
+esac
+
+#DEBHELPER#
+
