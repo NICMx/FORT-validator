@@ -1725,6 +1725,9 @@ get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
 		return 0;
 	}
 
+	if (X509_check_purpose(cert, -1, -1) <= 0)
+		goto err;
+
 	if (X509_check_ca(cert) == 1) {
 		*result = CA;
 		return 0;
@@ -1735,6 +1738,7 @@ get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
 		return 0;
 	}
 
+err:
 	*result = EE; /* Shuts up nonsense gcc 8.3 warning */
 	return pr_val_err("Certificate is not TA, CA nor BGPsec. Ignoring...");
 }
