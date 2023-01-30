@@ -269,6 +269,25 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 	return 0;
 }
 
+void
+find_bad_vrp(char const *prefix, struct db_table *table)
+{
+	struct hashable_roa *cursor;
+	struct hashable_roa *tmp;
+	uint8_t family;
+
+	if (table == NULL)
+		return;
+
+	HASH_ITER(hh, table->roas, cursor, tmp) {
+		family = cursor->data.addr_fam;
+		if (family != AF_INET && family != AF_INET6) {
+			pr_op_err("%s: VRP corrupted!", prefix);
+			return;
+		}
+	}
+}
+
 static int
 add_router_key_delta(struct deltas *deltas, struct hashable_key *key, int op)
 {

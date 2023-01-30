@@ -15,8 +15,6 @@
  * so set 'errno' to 0 before this ops are made. The 'obj' won't be freed,
  * this is the caller's responsibility.
  *
- * TODO I think most of the code is not checking this.
- *
  * Functions that can OOM:
  *
  * 	HASH_ADD_TO_TABLE
@@ -29,13 +27,16 @@
  * 		HASH_ADD_KEYPTR_BYHASHVALUE
  * 			HASH_REPLACE_BYHASHVALUE
  * 				HASH_REPLACE (*)
- * 			HASH_ADD_KEYPTR (**)
+ * 					HASH_REPLACE_STR (**)
+ * 					HASH_REPLACE_INT
+ * 					HASH_REPLACE_PTR
+ * 			HASH_ADD_KEYPTR
  * 				HASH_ADD
  * 			HASH_ADD_BYHASHVALUE
  * 	HASH_SELECT
  *
  * (*) Used by Fort
- * (**) Used by Fort, but in its fatal uthash form.
+ * (**) Used by Fort, but only in its fatal uthash form.
  */
 #define HASH_NONFATAL_OOM 1
 #define uthash_nonfatal_oom(obj)					\

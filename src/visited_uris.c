@@ -114,9 +114,7 @@ visited_uris_add(struct visited_uris *uris, char const *uri)
 	if (error)
 		return error;
 
-	HASH_ADD_KEYPTR(hh, uris->table, elem->uri, strlen(elem->uri),
-	    elem);
-
+	HASH_ADD_STR(uris->table, uri, elem);
 	return 0;
 }
 
