@@ -7,7 +7,7 @@
 #include "data_structure/uthash_nonfatal.h"
 
 struct hashable_roa {
-	struct vrp data;
+	const struct vrp data;
 	UT_hash_handle hh;
 };
 
@@ -87,28 +87,17 @@ db_table_foreach_router_key(struct db_table const *table,
 	return 0;
 }
 
-static struct hashable_roa *
-create_roa(uint32_t asn, uint8_t max_length)
-{
-	struct hashable_roa *roa;
-
-	roa = malloc(sizeof(struct hashable_roa));
-	if (roa == NULL)
-		return NULL;
-	/* Needed by uthash */
-	memset(roa, 0, sizeof(struct hashable_roa));
-
-	roa->data.asn = asn;
-	roa->data.max_prefix_length = max_length;
-
-	return roa;
-}
-
 static int
-add_roa(struct db_table *table, struct hashable_roa *new)
+add_roa(struct db_table *table, struct hashable_roa const *stack_new)
 {
+	struct hashable_roa *new;
 	struct hashable_roa *old;
 	int error;
+
+	new = malloc(sizeof(struct hashable_roa));
+	if (new == NULL)
+		return pr_enomem();
+	memcpy(new, stack_new, sizeof(*new));
 
 	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
@@ -185,40 +174,30 @@ int
 rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
     struct ipv4_prefix const *prefix4, uint8_t max_length)
 {
-	struct hashable_roa *roa;
-	int error;
+	struct hashable_roa new = {
+		.data.asn = asn,
+		.data.prefix.v4 = prefix4->addr,
+		.data.prefix_length = prefix4->len,
+		.data.max_prefix_length = max_length,
+		.data.addr_fam = AF_INET,
+	};
 
-	roa = create_roa(asn, max_length);
-	if (roa == NULL)
-		return pr_enomem();
-	roa->data.prefix.v4 = prefix4->addr;
-	roa->data.prefix_length = prefix4->len;
-	roa->data.addr_fam = AF_INET;
-
-	error = add_roa(table, roa);
-	if (error)
-		free(roa);
-	return error;
+	return add_roa(table, &new);
 }
 
 int
 rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
     struct ipv6_prefix const *prefix6, uint8_t max_length)
 {
-	struct hashable_roa *roa;
-	int error;
+	struct hashable_roa new = {
+		.data.asn = asn,
+		.data.prefix.v6 = prefix6->addr,
+		.data.prefix_length = prefix6->len,
+		.data.max_prefix_length = max_length,
+		.data.addr_fam = AF_INET6,
+	};
 
-	roa = create_roa(asn, max_length);
-	if (roa == NULL)
-		return pr_enomem();
-	roa->data.prefix.v6 = prefix6->addr;
-	roa->data.prefix_length = prefix6->len;
-	roa->data.addr_fam = AF_INET6;
-
-	error = add_roa(table, roa);
-	if (error)
-		free(roa);
-	return error;
+	return add_roa(table, &new);
 }
 
 int
