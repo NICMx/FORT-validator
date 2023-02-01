@@ -229,20 +229,27 @@ rtrhandler_handle_router_key(struct db_table *table,
  */
 static int
 add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
-    struct deltas *deltas, int op)
+    struct deltas *deltas, int op, char r1type)
 {
 	struct hashable_roa *n1; /* A node from @roas1 */
 	struct hashable_roa *n2; /* A node from @roas2 */
 	struct hashable_roa *tmp;
+	unsigned int r;
+	unsigned int roa1_count;
 	int error;
+
+	r = 0;
+	roa1_count = HASH_COUNT(roas1);
 
 	HASH_ITER(hh, roas1, n1, tmp) {
 		HASH_FIND(hh, roas2, &n1->data, sizeof(n1->data), n2);
 		if (n2 == NULL) {
-			error = deltas_add_roa(deltas, &n1->data, op);
+			error = deltas_add_roa(deltas, &n1->data, op,
+			    r1type, r, roa1_count);
 			if (error)
 				return error;
 		}
+		r++;
 	}
 
 	return 0;
@@ -309,10 +316,12 @@ compute_deltas(struct db_table *old, struct db_table *new,
 	if (error)
 		return error;
 
-	error = add_roa_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT);
+	error = add_roa_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT,
+	    'n');
 	if (error)
 		goto fail;
-	error = add_roa_deltas(old->roas, new->roas, deltas, FLAG_WITHDRAWAL);
+	error = add_roa_deltas(old->roas, new->roas, deltas, FLAG_WITHDRAWAL,
+	    'o');
 	if (error)
 		goto fail;
 	error = add_router_key_deltas(new->router_keys, old->router_keys,
