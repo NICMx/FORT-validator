@@ -266,20 +266,24 @@ __vrps_update(bool *notify_clients)
 	if (notify_clients)
 		*notify_clients = false;
 	old_base = state.base;
-	find_bad_vrp("Old base", old_base);
 	new_base = NULL;
+	find_bad_vrp("Old base", old_base);
 
 	error = __perform_standalone_validation(&new_base);
 	if (error)
 		return error;
-	find_bad_vrp("After standalone", new_base);
+
+	find_bad_vrp("After standalone (old)", old_base);
+	find_bad_vrp("After standalone (new)", new_base);
 
 	error = slurm_apply(new_base, &state.slurm);
 	if (error) {
 		db_table_destroy(new_base);
 		return error;
 	}
-	find_bad_vrp("After SLURM", new_base);
+
+	find_bad_vrp("After SLURM (old)", old_base);
+	find_bad_vrp("After SLURM (new)", new_base);
 
 	/*
 	 * At this point, new_base is completely valid. Even if we error out
@@ -289,7 +293,9 @@ __vrps_update(bool *notify_clients)
 	 * duplicate ROAs.
 	 */
 	output_print_data(new_base);
-	find_bad_vrp("After CSV", new_base);
+
+	find_bad_vrp("After CSV (old)", old_base);
+	find_bad_vrp("After CSV (new)", new_base);
 
 	error = __compute_deltas(old_base, new_base, notify_clients,
 	    &new_deltas);
