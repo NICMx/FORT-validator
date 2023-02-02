@@ -84,8 +84,23 @@ static struct thread_pool *pool;
 /** Protects @state.base, @state.deltas and @state.serial. */
 static pthread_rwlock_t state_lock;
 
-/** Lock to protect ROA table during construction. */
-static pthread_rwlock_t table_lock;
+/**
+ * Lock to protect the ROA table while it's being built up.
+ *
+ * To be honest, I'm tempted to remove this mutex completely. It currently
+ * exists because all the threads store their ROAs in the same table, which is
+ * awkward engineering. Each thread should work on its own table, and the main
+ * thread should join the tables afterwards. This would render the semaphore
+ * redundant, as well as rid the relevant code from any concurrency risks.
+ *
+ * I'm conflicted about committing to the refactor however, because the change
+ * would require about twice as much memory and involve the extra joining step.
+ * And the current implementation is working fine...
+ *
+ * Assuming, that is, that #83/#89 isn't a concurrency problem. But I can't
+ * figure out how it could be.
+ */
+static pthread_mutex_t table_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int
 vrps_init(void)
@@ -134,17 +149,8 @@ vrps_init(void)
 		goto revert_deltas;
 	}
 
-	error = pthread_rwlock_init(&table_lock, NULL);
-	if (error) {
-		pr_op_err("table pthread_rwlock_init() errored: %s",
-		    strerror(error));
-		goto revert_state_lock;
-	}
-
 	return 0;
 
-revert_state_lock:
-	pthread_rwlock_destroy(&state_lock);
 revert_deltas:
 	darray_destroy(state.deltas);
 revert_thread_pool:
@@ -158,7 +164,6 @@ vrps_destroy(void)
 	thread_pool_destroy(pool);
 
 	pthread_rwlock_destroy(&state_lock);
-	pthread_rwlock_destroy(&table_lock);
 
 	if (state.slurm != NULL)
 		db_slurm_destroy(state.slurm);
@@ -170,9 +175,9 @@ vrps_destroy(void)
 
 #define WLOCK_HANDLER(cb)						\
 	int error;							\
-	rwlock_write_lock(&table_lock);					\
+	mutex_lock(&table_lock);					\
 	error = cb;							\
-	rwlock_unlock(&table_lock);					\
+	mutex_unlock(&table_lock);					\
 	return error;
 
 int

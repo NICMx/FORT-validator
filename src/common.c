@@ -12,6 +12,26 @@
 #include "config.h"
 #include "log.h"
 
+void
+panic_on_fail(int error, char const *function_name)
+{
+	if (error)
+		pr_crit("%s() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		    function_name, error);
+}
+
+void
+mutex_lock(pthread_mutex_t *lock)
+{
+	panic_on_fail(pthread_mutex_lock(lock), "pthread_mutex_lock");
+}
+
+void
+mutex_unlock(pthread_mutex_t *lock)
+{
+	panic_on_fail(pthread_mutex_unlock(lock), "pthread_mutex_unlock");
+}
+
 int
 rwlock_read_lock(pthread_rwlock_t *lock)
 {

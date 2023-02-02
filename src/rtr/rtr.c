@@ -45,26 +45,6 @@ enum poll_verdict {
 };
 
 static void
-panic_on_fail(int error, char const *function_name)
-{
-	if (error)
-		pr_crit("%s() returned error code %d. This is too critical for a graceful recovery; I must die now.",
-		    function_name, error);
-}
-
-static void
-lock_mutex(void)
-{
-	panic_on_fail(pthread_mutex_lock(&lock), "pthread_mutex_lock");
-}
-
-static void
-unlock_mutex(void)
-{
-	panic_on_fail(pthread_mutex_unlock(&lock), "pthread_mutex_unlock");
-}
-
-static void
 cleanup_server(struct rtr_server *server)
 {
 	if (server->fd != -1)
@@ -724,9 +704,9 @@ fddb_poll(void)
 		}
 	}
 
-	lock_mutex();
+	mutex_lock(&lock);
 	apply_pollfds(pollfds, nclients);
-	unlock_mutex();
+	mutex_unlock(&lock);
 	/* Fall through */
 
 success:
@@ -810,7 +790,7 @@ rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
 	unsigned int i;
 	int error = 0;
 
-	lock_mutex();
+	mutex_lock(&lock);
 
 	ARRAYLIST_FOREACH(&clients, client, i) {
 		if (client->fd != -1) {
@@ -820,7 +800,7 @@ rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
 		}
 	}
 
-	unlock_mutex();
+	mutex_unlock(&lock);
 
 	return error;
 }

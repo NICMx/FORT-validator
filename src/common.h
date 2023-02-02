@@ -38,6 +38,15 @@
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
 
+void panic_on_fail(int, char const *);
+
+/*
+ * Mutex wrappers. They are just a bunch of boilerplate, and removal of
+ * unrecoverable resulting error codes.
+ */
+void mutex_lock(pthread_mutex_t *);
+void mutex_unlock(pthread_mutex_t *);
+
 /*
  * rwlock wrappers. They are just a bunch of boilerplate, and removal of
  * unrecoverable resulting error codes.
