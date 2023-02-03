@@ -402,6 +402,7 @@ thread_pool_push(struct thread_pool *pool, char const *task_name,
 	struct thread_pool_task *task;
 	int error;
 
+	task = NULL;
 	error = task_create(task_name, cb, arg, &task);
 	if (error)
 		return error;

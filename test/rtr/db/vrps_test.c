@@ -272,7 +272,7 @@ check_base(serial_t expected_serial, bool const *expected_base)
 static int
 vrp_add(struct delta_vrp const *delta, void *arg)
 {
-	return deltas_add_roa(arg, &delta->vrp, delta->flags);
+	return deltas_add_roa(arg, &delta->vrp, delta->flags, 'a', 0, 0);
 }
 
 static int

@@ -110,6 +110,25 @@ db_rrdp_rem_nonvisited_tals(void)
 	/* Empty */
 }
 
+void
+panic_on_fail(int error, char const *function_name)
+{
+	if (error)
+		ck_abort_msg("%s() returned errcode %d", function_name, error);
+}
+
+void
+mutex_lock(pthread_mutex_t *lock)
+{
+	/* Empty */
+}
+
+void
+mutex_unlock(pthread_mutex_t *lock)
+{
+	/* Empty */
+}
+
 START_TEST(tal_load_normal)
 {
 	struct tal *tal;

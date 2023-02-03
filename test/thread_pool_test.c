@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "common.c"
 #include "log.c"
 #include "impersonator.c"
 #include "thread/thread_pool.c"
