@@ -258,19 +258,34 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 void
 find_bad_vrp(char const *prefix, struct db_table *table)
 {
-	struct hashable_roa *cursor;
+	struct hashable_roa *node;
 	struct hashable_roa *tmp;
-	uint8_t family;
+	struct vrp const *vrp;
+	unsigned int roa_counter;
+	unsigned int roa_count;
+	char buffer[INET6_ADDRSTRLEN];
 
 	if (table == NULL)
 		return;
 
-	HASH_ITER(hh, table->roas, cursor, tmp) {
-		family = cursor->data.addr_fam;
-		if (family != AF_INET && family != AF_INET6) {
-			pr_op_err("%s: VRP corrupted!", prefix);
+	roa_counter = 0;
+	roa_count = HASH_COUNT(table->roas);
+
+	HASH_ITER(hh, table->roas, node, tmp) {
+		vrp = &node->data;
+		if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6) {
+			pr_op_err("%s: VRP corrupted! [%u %s/%u-%u %u] %u/%u",
+			    prefix,
+			    vrp->asn,
+			    addr2str6(&vrp->prefix.v6, buffer),
+			    vrp->prefix_length,
+			    vrp->max_prefix_length,
+			    vrp->addr_fam,
+			    roa_counter,
+			    roa_count);
 			return;
 		}
+		roa_counter++;
 	}
 }
 
