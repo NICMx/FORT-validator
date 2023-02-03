@@ -391,8 +391,11 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 		return val_crypto_err("EVP_PKEY_get0_RSA() returned NULL");
 
 	modulus = RSA_bits(rsa);
-	if (modulus != MODULUS)
+	if (modulus < MODULUS)
 		return pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) modulus is %d bits, not %d bits.",
+		    modulus, MODULUS);
+	if (modulus > MODULUS)
+		pr_val_warn("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %d bits, not %d bits",
 		    modulus, MODULUS);
 
 	RSA_get0_key(rsa, NULL, &exp, NULL);
