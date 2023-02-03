@@ -5,6 +5,12 @@
 #include <syslog.h>
 #include <time.h>
 #include <openssl/asn1.h>
+#include <openssl/opensslv.h>
+
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/core_names.h>
+#endif
+
 #include <sys/socket.h>
 
 #include "algorithm.h"
@@ -291,6 +297,87 @@ fail1:
 static int
 validate_subject_public_key(X509_PUBKEY *pubkey)
 {
+#if OPENSSL_VERSION_MAJOR >= 3
+
+	const size_t EXPECTED_BITS = 2048;
+	const size_t EXPECTED_EXPONENT = 65537;
+
+	EVP_PKEY *key;
+	int key_type;
+	size_t bits;
+	size_t exponent;
+
+	key = X509_PUBKEY_get0(pubkey);
+	if (key == NULL)
+		return val_crypto_err("X509_PUBKEY_get0() returned NULL");
+
+	key_type = EVP_PKEY_get_base_id(key);
+	if (key_type != EVP_PKEY_RSA && key_type != EVP_PKEY_RSA2)
+		return val_crypto_err("The public key type is not RSA: %u",
+		    key_type);
+
+	/*
+	 * man 7 EVP_PKEY-RSA:
+	 *
+	 * > "bits" (OSSL_PKEY_PARAM_RSA_BITS) <unsigned integer>
+	 * > The value should be the cryptographic length for the RSA
+	 * > cryptosystem, in bits.
+	 * > "primes" (OSSL_PKEY_PARAM_RSA_PRIMES) <unsigned integer> (...)
+	 * > "e" (OSSL_PKEY_PARAM_RSA_E) <unsigned integer> (...)
+	 *
+	 * I'm having a hard time demonstrating the equality of "cryptographic
+	 * length" and "modulus length" using authoritative sources... but I
+	 * mean, it makes sense in context:
+	 *
+	 * Those three arguments from EVP_PKEY-RSA seem to be low-level
+	 * equivalents to the ones exposed on `man 1 openssl genpkey`:
+	 *
+	 * > rsa_keygen_bits:numbits
+	 * > The number of bits in the generated key. If not specified 2048 is
+	 * > used.
+	 * > rsa_keygen_primes:numprimes (...)
+	 * > rsa_keygen_pubexp:value (...)
+	 *
+	 * And https://en.wikipedia.org/wiki/RSA_(cryptosystem):
+	 *
+	 * > n is used as the modulus for both the public and private keys.
+	 * > Its length, usually expressed in bits, is the *key length*.
+	 *
+	 * So "cryptographic length" equals "key length," and "key length"
+	 * equals "modulus length."
+	 *
+	 * *Shrug*. I'm sorry; it's the best I got.
+	 */
+	if (!EVP_PKEY_get_size_t_param(key, OSSL_PKEY_PARAM_RSA_BITS, &bits))
+		return val_crypto_err("Cannot extract the modulus length from the public key");
+	if (bits < EXPECTED_BITS)
+		return pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %zu bits, not %zu bits",
+		    bits, EXPECTED_BITS);
+	/*
+	 * I'm going to be a bit lenient with this, because a small amount of
+	 * forward compatibility is bound to be invaluably better than nothing.
+	 * (Notice this one's a warning.)
+	 */
+	if (bits > EXPECTED_BITS)
+		pr_val_warn("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %zu bits, not %zu bits",
+		    bits, EXPECTED_BITS);
+
+	/*
+	 * man 7 EVP_PKEY-RSA:
+	 * "e" (OSSL_PKEY_PARAM_RSA_E) <unsigned integer>
+	 * The RSA "e" value. The value may be any odd number greater than or
+	 * equal to 65537. The default value is 65537.
+	 */
+	if (!EVP_PKEY_get_size_t_param(key, OSSL_PKEY_PARAM_RSA_E, &exponent))
+		return val_crypto_err("Cannot extract the exponent from the public key");
+	if (exponent != EXPECTED_EXPONENT)
+		return pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) exponent is %zu, not %zu",
+		    exponent, EXPECTED_EXPONENT);
+
+	return 0;
+
+#else /* if OPENSSL_VERSION_MAJOR < 3 */
+
 #define MODULUS 2048
 #define EXPONENT "65537"
 	const RSA *rsa;
@@ -328,6 +415,8 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 	return 0;
 #undef EXPONENT
 #undef MODULUS
+
+#endif /* OPENSSL_VERSION_MAJOR */
 }
 
 static int
