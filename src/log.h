@@ -72,6 +72,8 @@ void pr_op_info(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_op_warn(const char *, ...) CHECK_FORMAT(1, 2);
 /* Problematic situations that prevent Fort from doing its job. */
 int pr_op_err(const char *, ...) CHECK_FORMAT(1, 2);
+/* Like pr_op_err(), but it also prints a stack trace */
+int pr_op_err_st(const char *format, ...) CHECK_FORMAT(1, 2);
 /* Like pr_op_err(), except it prints libcrypto's error stack as well. */
 int op_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 

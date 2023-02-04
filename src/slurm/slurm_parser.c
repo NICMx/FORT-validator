@@ -198,7 +198,7 @@ set_max_prefix_length(json_t *object, bool is_assertion, uint8_t addr_fam,
 	/* An underflow or overflow will be considered here */
 	if (int_tmp <= 0 || (addr_fam == AF_INET ? 32 : 128) < int_tmp)
 		return pr_op_err("Max prefix length (%lld) is out of range [1 - %d].",
-		    int_tmp, (addr_fam == AF_INET ? 32 : 128));
+		    int_tmp, (addr_fam == AF_INET) ? 32 : 128);
 
 	*flag = *flag | SLURM_PFX_FLAG_MAX_LENGTH;
 	*result = (uint8_t) int_tmp;
@@ -216,7 +216,7 @@ validate_base64url_encoded(const char *encoded)
 	 * without trailing '=' (Section 5 of [RFC4648])"
 	 */
 	if (strrchr(encoded, '=') != NULL)
-		return pr_op_err("The base64 encoded value has trailing '='");
+		return pr_op_err_st("The base64 encoded value has trailing '='");
 
 	/*
 	 * IMHO there's an error at RFC 8416 regarding the use of base64
@@ -589,7 +589,7 @@ load_version(json_t *root)
 	version = -1;
 	error = json_get_int(root, SLURM_VERSION, &version);
 	if (error)
-		return error == -ENOENT ?
+		return (error == -ENOENT) ?
 		    pr_op_err("SLURM member '"SLURM_VERSION"' is required.") :
 		    error;
 

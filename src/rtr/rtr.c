@@ -195,7 +195,7 @@ set_nonblock(int fd)
 	flags = fcntl(fd, F_GETFL);
 	if (flags == -1) {
 		error = errno;
-		pr_op_err("fcntl() to get flags failed: %s", strerror(error));
+		pr_op_err_st("fcntl() to get flags failed: %s", strerror(error));
 		return error;
 	}
 
@@ -203,7 +203,7 @@ set_nonblock(int fd)
 
 	if (fcntl(fd, F_SETFL, flags) == -1) {
 		error = errno;
-		pr_op_err("fcntl() to set flags failed: %s", strerror(error));
+		pr_op_err_st("fcntl() to set flags failed: %s", strerror(error));
 		return error;
 	}
 

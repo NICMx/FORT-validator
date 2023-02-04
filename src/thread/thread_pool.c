@@ -230,7 +230,7 @@ thread_pool_attr_create(pthread_attr_t *attr)
 
 	error = pthread_attr_init(attr);
 	if (error) {
-		pr_op_err("pthread_attr_init() returned error %d: %s",
+		pr_op_err_st("pthread_attr_init() returned error %d: %s",
 		    error, strerror(error));
 		return error;
 	}
@@ -239,7 +239,8 @@ thread_pool_attr_create(pthread_attr_t *attr)
 	error = pthread_attr_setstacksize(attr, 1024 * 1024 * 2);
 	if (error) {
 		pthread_attr_destroy(attr);
-		pr_op_err("pthread_attr_setstacksize() returned error %d: %s",
+		pr_op_err_st(
+		    "pthread_attr_setstacksize() returned error %d: %s",
 		    error, strerror(error));
 		return error;
 	}
@@ -278,7 +279,7 @@ spawn_threads(struct thread_pool *pool)
 		error = pthread_create(&pool->thread_ids[i], &attr, tasks_poll,
 		    pool);
 		if (error) {
-			pr_op_err("pthread_create() returned error %d: %s",
+			pr_op_err_st("pthread_create() returned error %d: %s",
 			    error, strerror(error));
 			goto end;
 		}
@@ -305,7 +306,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	/* Init locking */
 	error = pthread_mutex_init(&result->lock, NULL);
 	if (error) {
-		pr_op_err("pthread_mutex_init() returned error %d: %s",
+		pr_op_err_st("pthread_mutex_init() returned error %d: %s",
 		    error, strerror(error));
 		goto free_tmp;
 	}
@@ -313,7 +314,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	/* Init conditional to signal pending work */
 	error = pthread_cond_init(&result->parent2worker, NULL);
 	if (error) {
-		pr_op_err("pthread_cond_init(p2w) returned error %d: %s",
+		pr_op_err_st("pthread_cond_init(p2w) returned error %d: %s",
 		    error, strerror(error));
 		goto free_mutex;
 	}
@@ -321,7 +322,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	/* Init conditional to signal no pending work */
 	error = pthread_cond_init(&result->worker2parent, NULL);
 	if (error) {
-		pr_op_err("pthread_cond_init(w2p) returned error %d: %s",
+		pr_op_err_st("pthread_cond_init(w2p) returned error %d: %s",
 		    error, strerror(error));
 		goto free_working_cond;
 	}
