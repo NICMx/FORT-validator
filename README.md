@@ -4,9 +4,9 @@ An RPKI Validator and RTR Server, part of the [FORT project](https://www.fortpro
 
 ## Status
 
-Due to a temporary resource shortage, the project's development has slowed down to essential maintenance. No new features are expected to be developed during 2022, but bugfixing and support will remain active.
+Due to a temporary resource shortage, the project's development has slowed down to essential maintenance. No new features are expected to be developed during the first half of 2023, but bugfixing and support will remain active.
 
-Development will resume in full during 2023.
+Development will resume in full during the second half of 2023.
 
 ## Documentation
 

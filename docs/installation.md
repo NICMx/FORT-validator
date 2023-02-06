@@ -243,11 +243,11 @@ sudo make install
 
 {% highlight bash %}
 su
-pkg_add jansson libexecinfo rsync libxml # OpenBSD already ships with LibreSSL
+pkg_add curl jansson libexecinfo rsync libxml # OpenBSD already ships with LibreSSL
 exit
 
 ftp https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+tar xzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 # clang is needed because of gnu11.
 env CC=clang CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ./configure
@@ -256,6 +256,8 @@ su
 make install
 exit
 {% endhighlight %}
+
+Last tested on OpenBSD 7.2.
 
 ### RHEL/CentOS version
 
@@ -341,29 +343,19 @@ sudo make install
 
 ### FreeBSD version
 
-The following steps are for FreeBSD 12.0 and later.
-
-FORT validator is available as part of the FreeBSD ports tree.  You can build it it effortlessly from there:
-
 {% highlight bash %}
-cd /usr/ports/net/fort
-make install clean
-{% endhighlight %}
-
-The ports system will find and install all the necessary dependencies for you.
-
-Should you want to build from a release tarball or a Git checkout, follow these instructions:
-
-{% highlight bash %}
-pkg install autotools curl jansson pkgconf rsync libxml2
+sudo pkg install autotools curl jansson pkgconf rsync libxml2
 fetch https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+tar xzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
-sh ./autoconf.sh
+
+export CFLAGS=-I/usr/local/include
 ./configure
 make
-make install
+sudo make install
 {% endhighlight %}
+
+Last tested on FreeBSD 13.1.
 
 ### Slackware version
 
