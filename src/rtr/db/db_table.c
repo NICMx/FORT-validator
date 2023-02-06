@@ -274,7 +274,8 @@ find_bad_vrp(char const *prefix, struct db_table *table)
 	HASH_ITER(hh, table->roas, node, tmp) {
 		vrp = &node->data;
 		if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6) {
-			pr_op_err("%s: VRP corrupted! [%u %s/%u-%u %u] %u/%u",
+			pr_crit("%s: VRP corrupted! [%u %s/%u-%u %u] %u/%u "
+			    "(Please report this output to https://github.com/NICMx/FORT-validator/issues/89)",
 			    prefix,
 			    vrp->asn,
 			    addr2str6(&vrp->prefix.v6, buffer),
@@ -283,7 +284,6 @@ find_bad_vrp(char const *prefix, struct db_table *table)
 			    vrp->addr_fam,
 			    roa_counter,
 			    roa_count);
-			return;
 		}
 		roa_counter++;
 	}

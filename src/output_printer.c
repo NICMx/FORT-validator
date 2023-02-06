@@ -48,10 +48,8 @@ print_roa_csv(struct vrp const *vrp, void *arg)
 {
 	FILE *out = arg;
 
-	if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6) {
-		/* pr_crit("Unknown family type"); TODO (issue83) */
-		return 0;
-	}
+	if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6)
+		pr_crit("Unknown family type");
 
 	fprintf(out, "AS%u,%s/%u,%u\n", vrp->asn,
 	    inet_ntop(vrp->addr_fam, &vrp->prefix, addr_buf, INET6_ADDRSTRLEN),
