@@ -520,6 +520,13 @@ int
 pr_op_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
+	return -EINVAL;
+}
+
+int
+pr_op_err_st(const char *format, ...)
+{
+	PR_SIMPLE(LOG_ERR, op_config);
 	lock_mutex();
 	print_stack_trace(NULL);
 	unlock_mutex();

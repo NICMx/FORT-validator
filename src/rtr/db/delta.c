@@ -117,12 +117,14 @@ get_deltas_array6(struct deltas *deltas, int op)
 }
 
 int
-deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op)
+deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op,
+    char r1type, unsigned int roa_counter, unsigned int roa_count)
 {
 	union {
 		struct delta_v4 v4;
 		struct delta_v6 v6;
 	} delta;
+	char buffer[INET6_ADDRSTRLEN];
 
 	switch (vrp->addr_fam) {
 	case AF_INET:
@@ -139,7 +141,16 @@ deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op)
 		return deltas_v6_add(get_deltas_array6(deltas, op), &delta.v6);
 	}
 
-	pr_crit("Unknown protocol: %d", vrp->addr_fam);
+	pr_crit("Unknown protocol: [%u %s/%u-%u %u] %c %u/%u "
+	    "(Please report this output to https://github.com/NICMx/FORT-validator/issues/89)",
+	    vrp->asn,
+	    addr2str6(&vrp->prefix.v6, buffer),
+	    vrp->prefix_length,
+	    vrp->max_prefix_length,
+	    vrp->addr_fam,
+	    r1type,
+	    roa_counter,
+	    roa_count);
 }
 
 int

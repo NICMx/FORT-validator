@@ -201,7 +201,7 @@ get_http_response_code(struct http_handler *handler, long *http_code,
 	res = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
 	    http_code);
 	if (res != CURLE_OK) {
-		return pr_op_err("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). "
+		return pr_op_err_st("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). "
 		    "I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
 		    res, curl_err_string(handler, res), uri);
 	}

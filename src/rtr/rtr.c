@@ -45,26 +45,6 @@ enum poll_verdict {
 };
 
 static void
-panic_on_fail(int error, char const *function_name)
-{
-	if (error)
-		pr_crit("%s() returned error code %d. This is too critical for a graceful recovery; I must die now.",
-		    function_name, error);
-}
-
-static void
-lock_mutex(void)
-{
-	panic_on_fail(pthread_mutex_lock(&lock), "pthread_mutex_lock");
-}
-
-static void
-unlock_mutex(void)
-{
-	panic_on_fail(pthread_mutex_unlock(&lock), "pthread_mutex_unlock");
-}
-
-static void
 cleanup_server(struct rtr_server *server)
 {
 	if (server->fd != -1)
@@ -215,7 +195,7 @@ set_nonblock(int fd)
 	flags = fcntl(fd, F_GETFL);
 	if (flags == -1) {
 		error = errno;
-		pr_op_err("fcntl() to get flags failed: %s", strerror(error));
+		pr_op_err_st("fcntl() to get flags failed: %s", strerror(error));
 		return error;
 	}
 
@@ -223,7 +203,7 @@ set_nonblock(int fd)
 
 	if (fcntl(fd, F_SETFL, flags) == -1) {
 		error = errno;
-		pr_op_err("fcntl() to set flags failed: %s", strerror(error));
+		pr_op_err_st("fcntl() to set flags failed: %s", strerror(error));
 		return error;
 	}
 
@@ -724,9 +704,9 @@ fddb_poll(void)
 		}
 	}
 
-	lock_mutex();
+	mutex_lock(&lock);
 	apply_pollfds(pollfds, nclients);
-	unlock_mutex();
+	mutex_unlock(&lock);
 	/* Fall through */
 
 success:
@@ -810,7 +790,7 @@ rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
 	unsigned int i;
 	int error = 0;
 
-	lock_mutex();
+	mutex_lock(&lock);
 
 	ARRAYLIST_FOREACH(&clients, client, i) {
 		if (client->fd != -1) {
@@ -820,7 +800,7 @@ rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
 		}
 	}
 
-	unlock_mutex();
+	mutex_unlock(&lock);
 
 	return error;
 }

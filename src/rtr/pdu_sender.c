@@ -42,16 +42,16 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 		pfd.revents = 0;
 		error = poll(&pfd, 1, -1);
 		if (error < 0)
-			return pr_op_err("poll() error: %d", error);
+			return pr_op_err_st("poll() error: %d", error);
 		if (error == 0)
-			return pr_op_err("poll() returned 0, even though there's no timeout.");
+			return pr_op_err_st("poll() returned 0, even though there's no timeout.");
 		if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
-			return pr_op_err("poll() returned revents %u.", pfd.revents);
+			return pr_op_err_st("poll() returned revents %u.", pfd.revents);
 	} while (!(pfd.revents & POLLOUT));
 
 	if (write(fd, data, data_len) < 0) {
 		error = errno;
-		pr_op_err("Error sending %s to client: %s",
+		pr_op_err_st("Error sending %s to client: %s",
 		    pdutype2str(pdu_type), strerror(error));
 		return error;
 	}

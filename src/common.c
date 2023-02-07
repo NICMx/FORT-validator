@@ -12,6 +12,26 @@
 #include "config.h"
 #include "log.h"
 
+void
+panic_on_fail(int error, char const *function_name)
+{
+	if (error)
+		pr_crit("%s() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		    function_name, error);
+}
+
+void
+mutex_lock(pthread_mutex_t *lock)
+{
+	panic_on_fail(pthread_mutex_lock(lock), "pthread_mutex_lock");
+}
+
+void
+mutex_unlock(pthread_mutex_t *lock)
+{
+	panic_on_fail(pthread_mutex_unlock(lock), "pthread_mutex_unlock");
+}
+
 int
 rwlock_read_lock(pthread_rwlock_t *lock)
 {
@@ -22,7 +42,7 @@ rwlock_read_lock(pthread_rwlock_t *lock)
 	case 0:
 		return error;
 	case EAGAIN:
-		pr_op_err("There are too many threads; I can't modify the database.");
+		pr_op_err_st("There are too many threads; I can't modify the database.");
 		return error;
 	}
 
@@ -120,7 +140,7 @@ process_dir_files(char const *location, char const *file_ext, bool empty_err,
 	dir_loc = opendir(location);
 	if (dir_loc == NULL) {
 		error = -errno;
-		pr_op_err("Couldn't open directory '%s': %s", location,
+		pr_op_err_st("Couldn't open directory '%s': %s", location,
 		    strerror(-error));
 		goto end;
 	}
@@ -137,7 +157,7 @@ process_dir_files(char const *location, char const *file_ext, bool empty_err,
 		errno = 0;
 	}
 	if (errno) {
-		pr_op_err("Error reading dir %s", location);
+		pr_op_err_st("Error reading dir %s", location);
 		error = -errno;
 	}
 	if (!error && found == 0)
@@ -163,7 +183,7 @@ process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
 	error = stat(location, &attr);
 	if (error) {
 		error = errno;
-		pr_op_err("Error reading path '%s': %s", location,
+		pr_op_err_st("Error reading path '%s': %s", location,
 		    strerror(error));
 		return error;
 	}
@@ -227,7 +247,7 @@ dir_exists(char const *path, bool *result)
 
 	if (stat(path, &_stat) == 0) {
 		if (!S_ISDIR(_stat.st_mode)) {
-			return pr_op_err("Path '%s' exists and is not a directory.",
+			return pr_op_err_st("Path '%s' exists and is not a directory.",
 			    path);
 		}
 		*result = true;
@@ -235,7 +255,7 @@ dir_exists(char const *path, bool *result)
 		*result = false;
 	} else {
 		error = errno;
-		pr_op_err("stat() failed: %s", strerror(error));
+		pr_op_err_st("stat() failed: %s", strerror(error));
 		return error;
 	}
 
@@ -251,7 +271,7 @@ create_dir(char *path)
 	if (mkdir(path, 0777) != 0) {
 		error = errno;
 		if (error != EEXIST) {
-			pr_op_err("Error while making directory '%s': %s",
+			pr_op_err_st("Error while making directory '%s': %s",
 			    path, strerror(error));
 			return error;
 		}
@@ -375,7 +395,7 @@ delete_dir_recursive_bottom_up(char const *path)
 		if (error == ENOTEMPTY || error == EEXIST)
 			break;
 
-		pr_op_err("Couldn't delete directory '%s': %s", work_loc,
+		pr_op_err_st("Couldn't delete directory '%s': %s", work_loc,
 		    strerror(error));
 		goto release_str;
 	} while (true);

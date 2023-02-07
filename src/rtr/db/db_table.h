@@ -28,4 +28,6 @@ int rtrhandler_handle_router_key(struct db_table *, unsigned char const *,
     uint32_t, unsigned char const *);
 int compute_deltas(struct db_table *, struct db_table *, struct deltas **);
 
+void find_bad_vrp(char const *, struct db_table *);
+
 #endif /* SRC_RTR_DB_DB_TABLE_H_ */

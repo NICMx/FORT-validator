@@ -94,17 +94,9 @@ add_rrdp_uri(struct db_rrdp_uri *uris, struct uris_table *new_uri)
 {
 	struct uris_table *old_uri;
 
-	/*
-	 * TODO (fine) this should use HASH_REPLACE instead of HASH_ADD_KEYPTR
-	 */
-
-	old_uri = find_rrdp_uri(uris, new_uri->uri);
-	if (old_uri != NULL) {
-		HASH_DELETE(hh, uris->table, old_uri);
+	HASH_REPLACE_STR(uris->table, uri, new_uri, old_uri);
+	if (old_uri != NULL)
 		uris_table_destroy(old_uri);
-	}
-	HASH_ADD_KEYPTR(hh, uris->table, new_uri->uri, strlen(new_uri->uri),
-	    new_uri);
 }
 
 static int

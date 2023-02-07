@@ -270,7 +270,7 @@ create_pipes(int fds[2][2])
 
 	if (pipe(fds[0]) == -1) {
 		error = errno;
-		pr_op_err("Piping rsync stderr: %s", strerror(error));
+		pr_op_err_st("Piping rsync stderr: %s", strerror(error));
 		return -error;
 	}
 
@@ -281,7 +281,7 @@ create_pipes(int fds[2][2])
 		close(fds[0][0]);
 		close(fds[0][1]);
 
-		pr_op_err("Piping rsync stdout: %s", strerror(error));
+		pr_op_err_st("Piping rsync stdout: %s", strerror(error));
 		return -error;
 	}
 
@@ -311,7 +311,7 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 		}
 		if (type == 0) {
 			if (log_operation)
-				pr_op_err(PRE_RSYNC "%s", cur);
+				pr_op_err_st(PRE_RSYNC "%s", cur);
 			pr_val_err(PRE_RSYNC "%s", cur);
 		} else {
 			pr_val_info(PRE_RSYNC "%s", cur);
@@ -438,7 +438,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		}
 		if (child_pid < 0) {
 			error = errno;
-			pr_op_err("Couldn't fork to execute rsync: %s",
+			pr_op_err_st("Couldn't fork to execute rsync: %s",
 			   strerror(error));
 			/* Close all ends from the created pipes */
 			close(fork_fds[0][0]);
@@ -457,7 +457,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		do {
 			if (error == -1) {
 				error = errno;
-				pr_op_err("The rsync sub-process returned error %d (%s)",
+				pr_op_err_st("The rsync sub-process returned error %d (%s)",
 				    error, strerror(error));
 				if (child_status > 0)
 					break;
@@ -496,23 +496,23 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	if (WIFSIGNALED(child_status)) {
 		switch (WTERMSIG(child_status)) {
 		case SIGINT:
-			pr_op_err("RSYNC was user-interrupted. Guess I'll interrupt myself too.");
+			pr_op_err_st("RSYNC was user-interrupted. Guess I'll interrupt myself too.");
 			break;
 		case SIGQUIT:
-			pr_op_err("RSYNC received a quit signal. Guess I'll quit as well.");
+			pr_op_err_st("RSYNC received a quit signal. Guess I'll quit as well.");
 			break;
 		case SIGKILL:
-			pr_op_err("Killed.");
+			pr_op_err_st("Killed.");
 			break;
 		default:
-			pr_op_err("The RSYNC was terminated by a signal [%d] I don't have a handler for. Dunno; guess I'll just die.",
+			pr_op_err_st("The RSYNC was terminated by a signal [%d] I don't have a handler for. Dunno; guess I'll just die.",
 			    WTERMSIG(child_status));
 			break;
 		}
 		return -EINTR; /* Meh? */
 	}
 
-	pr_op_err("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
+	pr_op_err_st("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
 	return -EINVAL;
 release_args:
 	/* The happy path also falls here */

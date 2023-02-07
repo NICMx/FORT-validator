@@ -25,7 +25,7 @@ file_get(char const *file_name, FILE **result, struct stat *stat,
 		goto fail;
 	}
 	if (!S_ISREG(stat->st_mode)) {
-		error = pr_op_err("%s does not seem to be a file", file_name);
+		error = pr_val_err("%s does not seem to be a file", file_name);
 		goto fail;
 	}
 
@@ -96,9 +96,8 @@ file_load(char const *file_name, struct file_contents *fc)
 		 * less bytes than requested like read() does. It's either
 		 * "consumed everything", "EOF reached" or error.
 		 */
-		pr_op_err("Likely programming error: fread() < file size");
-		pr_op_err("fr:%zu bs:%zu EOF:%d", fread_result, fc->buffer_size,
-		    feof(file));
+		pr_op_err_st("Likely programming error: fread() < file size (fr:%zu bs:%zu EOF:%d)",
+		    fread_result, fc->buffer_size, feof(file));
 		free(fc->buffer);
 		error = -EINVAL;
 		goto end;
