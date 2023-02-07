@@ -1,8 +1,10 @@
 fort (1.5.4-1) unstable; urgency=medium
 
   * New upstream release
+  * Fix fort user creation during postinst
+  * Add upstream/ directory
 
- -- Alberto Leiva Popper <ydahhrk@gmail.com>  Tue, 13 Dec 2022 16:59:44 -0500
+ -- Alberto Leiva Popper <ydahhrk@gmail.com>  Mon, 6 Feb 2023 19:32:44 -0500
 
 fort (1.5.3-1) unstable; urgency=medium
 

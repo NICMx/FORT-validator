@@ -1,6 +1,5 @@
 Source: fort
-Maintainer: FORT Validator <fort-validator@nic.mx>
-Uploaders: Alberto Leiva Popper <ydahhrk@gmail.com>
+Maintainer: Alberto Leiva Popper <ydahhrk@gmail.com>
 Section: net
 Priority: optional
 Build-Depends: debhelper-compat (= 11),

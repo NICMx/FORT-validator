@@ -3,7 +3,7 @@ Upstream-Name: fort
 Source: https://github.com/NICMx/FORT-validator
 
 Files: *
-Copyright: 2022 NIC Mexico <fort-validator@nic.mx>
+Copyright: 2023 NIC Mexico <fort-validator@nic.mx>
 License: MIT
 
 Files: src/asn1/asn1c/*
@@ -11,7 +11,7 @@ Copyright: 2003-2013 Lev Walkin <vlm@lionet.info>
 License: BSD-2-clause
 
 Files: debian/*
-Copyright: 2022 Alberto Leiva Popper <ydahhrk@gmail.com>
+Copyright: 2023 Alberto Leiva Popper <ydahhrk@gmail.com>
 License: MIT
 
 License: MIT

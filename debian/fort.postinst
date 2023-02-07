@@ -1,12 +1,14 @@
 #!/bin/sh -e
 
 create_user() {
-  local username='fort'
+	local username='fort'
 
-  if id $username > /dev/null 2>&1; then return; fi
+	if id $username > /dev/null 2>&1; then return; fi
 
-  adduser --system --no-create-home --home /var/lib/fort --group \
-    --disabled-password --gecos "FORT validator" $username
+	adduser --system --no-create-home --home /var/lib/fort --group \
+		--disabled-password --gecos "FORT validator" $username
+	mkdir -p /var/lib/fort
+	chown fort:fort /var/lib/fort
 }
 
 case "$1" in
