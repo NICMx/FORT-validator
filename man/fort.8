@@ -67,8 +67,6 @@ https://www.arin.net/resources/manage/rpki/arin.tal
 https://www.lacnic.net/innovaportal/file/4983/1/lacnic.tal
 .br
 https://tal.rpki.ripe.net/ripe-ncc.tal
-.P
-Please note that ARIN requires that you accept a Relying Party Agreement before you can download their TAL: https://www.arin.net/resources/manage/rpki/rpa.pdf
 .RE
 
 .B \-\-init-as0-tals
@@ -1223,8 +1221,7 @@ By default, it has a value of \fI43200\fR (12 hours).
 .SH EXAMPLES
 .B fort \-\-init-tals \-\-tal=/tmp/tal
 .RS 4
-Download the 5 RIR TALs into the specified directory. ARIN TAL will be
-downloaded only if the user accepts ARIN's RPA.
+Download the 5 RIR TALs into the /tmp/tal directory.
 .RE
 .P
 

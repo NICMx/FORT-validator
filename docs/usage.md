@@ -234,7 +234,7 @@ A TAL is a file that points to a _Trust Anchor_ (TA). A TA is an RPKI tree's roo
 
 The reason why you provide locators instead of anchors is to allow the latter to be officially updated without the need to awkwardly redistribute them. (TALs rarely need to change.)
 
-Registries which own TAs are responsible for providing you with their TALs. For convenience, you can use [`--init-tals`](#--init-tals) and [`--init-as0-tals`](#--init-as0-tals) to speed up and mostly automate this process. Alternatively, you can download the TALs manually. As of 2021-05-26, they can be found by following these links:
+Registries which own TAs are responsible for providing you with their TALs. For convenience, you can use [`--init-tals`](#--init-tals) and [`--init-as0-tals`](#--init-as0-tals) to speed up and automate this process. Alternatively, by following these links, you can download them manually:
 
 - [AFRINIC](https://afrinic.net/resource-certification/tal)
 - [APNIC](https://www.apnic.net/community/security/resource-certification/tal-archive/)
@@ -266,9 +266,7 @@ LQIDAQAB
 
 Downloads the currently known core TALs into the [`--tal`](#--tal) directory, then exits. It's a convenience option, meant for quick TAL retrieval, in case you don't have a more formal means to do it.
 
-ARIN's TAL requires that you accept their _Relying Party Agreement_ before the file can be downloaded. This is done through the standard streams.
-
-{% highlight bash %}
+```bash
 $ {{ page.command }} --init-tals --tal /etc/fort/tal
 Jul 30 12:00:55 DBG: HTTP GET: https://rpki.afrinic.net/tal/afrinic.tal
 Successfully fetched '/etc/fort/tal/afrinic.tal'!
@@ -276,9 +274,6 @@ Successfully fetched '/etc/fort/tal/afrinic.tal'!
 Jul 30 12:00:57 DBG: HTTP GET: https://tal.apnic.net/apnic.tal
 Successfully fetched '/etc/fort/tal/apnic.tal'!
 
-Attention: ARIN requires you to agree to their Relying Party Agreement (RPA) before you can download and use their TAL.
-Please download and read https://www.arin.net/resources/manage/rpki/rpa.pdf
-If you agree to the terms, type 'yes' and hit Enter: yes
 Jul 30 12:01:04 DBG: HTTP GET: https://www.arin.net/resources/manage/rpki/arin.tal
 Successfully fetched '/etc/fort/tal/arin.tal'!
 
@@ -287,7 +282,7 @@ Successfully fetched '/etc/fort/tal/lacnic.tal'!
 
 Jul 30 12:01:06 DBG: HTTP GET: https://tal.rpki.ripe.net/ripe-ncc.tal
 Successfully fetched '/etc/fort/tal/ripe-ncc.tal'!
-{% endhighlight %}
+```
 
 This flag can be used in conjunction with `--init-as0-tals`.
 
@@ -1294,40 +1289,6 @@ rsync synchronization strategy. Commands the way rsync URLs are approached durin
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.retry.interval`](#--httpretryinterval) instead.
-
-### `init-locations`
-
-- **Type:** JSON Object array
-- **Availability:** JSON only
-
-> ![img/warn.svg](img/warn.svg) This argument is deprecated. I don't know why it exists; just do normal wgets or curls instead. As of Fort 1.5.1, it does nothing. The documentation below applies to 1.5.0 and below.
-
-List of URLs from where the TALs will be fetched when [`--init-tals`](#--init-tals) is utilized. Each URL can have an optional `accept-message` that will be displayed at the terminal. When this message is displayed, the word **"yes"** is expected by FORT to download the corresponding TAL file; this way an explicit acceptance is obtained to comply with the printed message.
-
-By default it has 4 URLs from each TAL that doesn't require and explicit politics acceptance by the user, and 1 URL that does have an acceptance message so that FORT can proceed with its download.
-
-This is a JSON array of objects, where each object has a mandatory `url` member, and an optional `accept-message` member. The default value is:
-
-```
-"init-locations": [
-	{
-		"url": "https://www.arin.net/resources/manage/rpki/arin.tal",
-		"accept-message": "Please download and read ARIN Relying Party Agreement (RPA) from https://www.arin.net/resources/manage/rpki/rpa.pdf. Once you've read it and if you agree ARIN RPA, type 'yes' to proceed with ARIN's TAL download:"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/lacnic.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/ripe-ncc.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/afrinic.tal"
-	},
-	{
-		"url": "https://raw.githubusercontent.com/NICMx/FORT-validator/main/examples/tal/apnic.tal"
-	}
-]
-```
 
 ### `--http.idle-timeout`
 

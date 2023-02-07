@@ -8,36 +8,6 @@
 #include "log.h"
 #include "http/http.h"
 
-static bool
-download_arin_tal(void)
-{
-	char c;
-
-	printf("Attention: ARIN requires you to agree to their Relying Party Agreement (RPA) before you can download and use their TAL.\n"
-	    "Please download and read https://www.arin.net/resources/manage/rpki/rpa.pdf\n"
-	    "If you agree to the terms, type 'yes' and hit Enter: ");
-
-	c = getchar();
-	if (c != 'y' && c != 'Y')
-		goto cancel;
-
-	c = getchar();
-	if (c != 'e' && c != 'E')
-		goto cancel;
-
-	c = getchar();
-	if (c != 's' && c != 'S')
-		goto cancel;
-
-	if (feof(stdin) || (c = getchar()) == '\n')
-		return true;
-
-	/* Fall through */
-cancel:
-	printf("Skipping ARIN's TAL.\n\n");
-	return false;
-}
-
 static int
 fetch_url(char const *url)
 {
@@ -110,19 +80,30 @@ download_tals(void)
 	error = fetch_url("https://rpki.afrinic.net/tal/afrinic.tal");
 	if (error)
 		return error;
+	/*
+	 * APNIC is a bit weird. Some thoughts:
+	 *
+	 * 1. The 6490 and ripe-validator TALs are obsolete, and Fort has never
+	 *    been compatible with them.
+	 * 2. apnic.tal is identical to apnic-rfc7730.tal, and neither of them
+	 *    contain HTTP URLs.
+	 * 3. apnic-rfc7730-https.tal is not actually compliant with RFC 7730;
+	 *    it's an RFC 8630 TAL. However, I'm wondering if there's a reason
+	 *    why they haven't upgraded it to their default TAL.
+	 *
+	 * I'll stick to the rsync-only one until I've tested it more.
+	 */
 	error = fetch_url("https://tal.apnic.net/apnic.tal");
 	if (error)
 		return error;
-	if (download_arin_tal())
-		error = fetch_url("https://www.arin.net/resources/manage/rpki/arin.tal");
+	error = fetch_url("https://www.arin.net/resources/manage/rpki/arin.tal");
+	if (error)
+		return error;
 	error = fetch_url("https://www.lacnic.net/innovaportal/file/4983/1/lacnic.tal");
 	if (error)
 		return error;
-	error = fetch_url("https://tal.rpki.ripe.net/ripe-ncc.tal");
-	if (error)
-		return error;
-
-	return error;
+	/* I wish they stated why they don't recommend the 8630 TAL. */
+	return fetch_url("https://tal.rpki.ripe.net/ripe-ncc.tal");
 }
 
 int
@@ -133,6 +114,5 @@ download_tal0s(void)
 	error = fetch_url("https://tal.apnic.net/apnic-as0.tal");
 	if (error)
 		return error;
-
 	return fetch_url("https://www.lacnic.net/innovaportal/file/4983/1/lacnic-as0.tal");
 }
