@@ -1,8 +1,8 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
-AC_INIT([fort], [1.5.4], [fort-validator@nic.mx])
+AC_PREREQ([2.71])
+AC_INIT([fort],[1.5.4],[fort-validator@nic.mx])
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
 
@@ -49,4 +49,5 @@ PKG_CHECK_MODULES([CHECK], [check], [usetests=yes], [usetests=no])
 AM_CONDITIONAL([USE_TESTS], [test "x$usetests" = "xyes"])
 
 # Spit out the makefiles.
-AC_OUTPUT(Makefile src/Makefile man/Makefile test/Makefile)
+AC_CONFIG_FILES([Makefile src/Makefile man/Makefile test/Makefile])
+AC_OUTPUT
