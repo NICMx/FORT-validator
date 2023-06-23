@@ -67,6 +67,6 @@ int delete_dir_recursive_bottom_up(char const *);
 
 int get_current_time(time_t *);
 
-int map_uri_to_local(char const *, char const*, char const *, char **);
+char *map_uri_to_local(char const *, char const*, char const *);
 
 #endif /* SRC_RTR_COMMON_H_ */

@@ -56,8 +56,10 @@ START_TEST(add_only)
 	darray = darray_create();
 	ck_assert_ptr_ne(NULL, darray);
 
-	for (i = 0; i < TOTAL_CREATED; i++)
-		ck_assert_int_eq(0, deltas_create(&created[i]));
+	for (i = 0; i < TOTAL_CREATED; i++) {
+		created[i] = deltas_create();
+		ck_assert_ptr_nonnull(created[i]);
+	}
 
 	test_foreach(darray, 0, 0);
 

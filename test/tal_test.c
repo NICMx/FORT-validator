@@ -57,15 +57,17 @@ close_thread(pthread_t thread, char const *what)
 	/* Nothing to close */
 }
 
-int
-map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
-    char **result)
+char *
+map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace)
 {
+	char *result;
+
 	/* These tests focus on global URIs, so set a dummy value */
-	*result = strdup("dummy");
-	if (*result == NULL)
-		return -ENOMEM;
-	return 0;
+	result = strdup("dummy");
+	if (result == NULL)
+		enomem_panic();
+
+	return result;
 }
 
 void
@@ -188,7 +190,7 @@ START_TEST(tal_order_http_first)
 
 	config_set_http_priority(60);
 	config_set_rsync_priority(50);
-	ck_assert_int_eq(tal_order_uris(tal), 0);
+	tal_order_uris(tal);
 
 	ck_assert_str_eq(tal->uris.array[0]->global, "https://potato");
 	ck_assert_str_eq(tal->uris.array[1]->global,
@@ -207,7 +209,7 @@ START_TEST(tal_order_http_last)
 
 	config_set_http_priority(50);
 	config_set_rsync_priority(60);
-	ck_assert_int_eq(tal_order_uris(tal), 0);
+	tal_order_uris(tal);
 
 	ck_assert_str_eq(tal->uris.array[0]->global,
 	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");

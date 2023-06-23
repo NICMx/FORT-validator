@@ -54,7 +54,7 @@ get_workspace_path(char const *base, char **result)
 
 	hash = malloc(HASH_LEN * sizeof(unsigned char));
 	if (hash == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	hash_len = 0;
 	error = hash_str("sha1", base, hash, &hash_len);
@@ -65,10 +65,8 @@ get_workspace_path(char const *base, char **result)
 
 	/* Get the first bytes + one slash + NUL char */
 	tmp = malloc(OUT_LEN + 2);
-	if (tmp == NULL) {
-		free(hash);
-		return pr_enomem();
-	}
+	if (tmp == NULL)
+		enomem_panic();
 
 	ptr = tmp;
 	for (i = 0; i < OUT_LEN / 2; i++) {
@@ -87,39 +85,28 @@ static int
 tal_elem_create(struct tal_elem **elem, char const *name)
 {
 	struct tal_elem *tmp;
-	struct db_rrdp_uri *tmp_uris;
 	int error;
 
 	tmp = malloc(sizeof(struct tal_elem));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
-	tmp_uris = NULL;
-	error = db_rrdp_uris_create(&tmp_uris);
-	if (error)
-		goto end1;
-	tmp->uris = tmp_uris;
-
+	tmp->uris = db_rrdp_uris_create();
 	tmp->visited = true;
 	tmp->file_name = strdup(name);
-	if (tmp->file_name == NULL) {
-		error = pr_enomem();
-		goto end2;
-	}
+	if (tmp->file_name == NULL)
+		enomem_panic();
 
 	error = get_workspace_path(name, &tmp->workspace);
-	if (error)
-		goto end3;
+	if (error) {
+		free(tmp->file_name);
+		db_rrdp_uris_destroy(tmp->uris);
+		free(tmp);
+		return error;
+	}
 
 	*elem = tmp;
 	return 0;
-end3:
-	free(tmp->file_name);
-end2:
-	db_rrdp_uris_destroy(tmp->uris);
-end1:
-	free(tmp);
-	return error;
 }
 
 static void

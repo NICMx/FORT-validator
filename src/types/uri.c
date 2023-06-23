@@ -126,7 +126,7 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 
 	uri->global = malloc(str_len + 1);
 	if (uri->global == NULL)
-		return pr_enomem();
+		enomem_panic();
 	strncpy(uri->global, str, str_len);
 	uri->global[str_len] = '\0';
 	uri->global_len = str_len;
@@ -205,7 +205,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	dir_len = (slash_pos + 1) - mft;
 	joined = malloc(dir_len + ia5->size + 1);
 	if (joined == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	strncpy(joined, mft, dir_len);
 	strncpy(joined + dir_len, (char *) ia5->buf, ia5->size);
@@ -277,24 +277,21 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	return 0;
 }
 
-static int
-get_local_workspace(char **result)
+static char *
+get_local_workspace(void)
 {
 	char const *workspace;
 	char *tmp;
 
 	workspace = db_rrdp_uris_workspace_get();
-	if (workspace == NULL) {
-		*result = NULL;
-		return 0;
-	}
+	if (workspace == NULL)
+		return NULL;
 
 	tmp = strdup(workspace);
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
-	*result = tmp;
-	return 0;
+	return tmp;
 }
 
 /**
@@ -320,21 +317,13 @@ g2l(char const *global, size_t global_len, uint8_t flags, char **result,
 	if (error)
 		return error;
 
-	workspace = NULL;
-	if ((flags & URI_USE_RRDP_WORKSPACE) != 0) {
-		error = get_local_workspace(&workspace);
-		if (error)
-			return error;
-	}
+	workspace = ((flags & URI_USE_RRDP_WORKSPACE) != 0)
+	    ? get_local_workspace()
+	    : NULL;
 
-	error = map_uri_to_local(global,
+	local = map_uri_to_local(global,
 	    type == URI_RSYNC ? PFX_RSYNC : PFX_HTTPS,
-	    workspace,
-	    &local);
-	if (error) {
-		free(workspace);
-		return error;
-	}
+	    workspace);
 
 	free(workspace);
 	*result = local;
@@ -358,7 +347,7 @@ uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
 
 	uri = malloc(sizeof(struct rpki_uri));
 	if (uri == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	error = str2global(guri, guri_len, uri);
 	if (error) {
@@ -426,7 +415,7 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
 
 	uri = malloc(sizeof(struct rpki_uri));
 	if (uri == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	error = ia5str2global(uri, mft->global, ia5);
 	if (error) {

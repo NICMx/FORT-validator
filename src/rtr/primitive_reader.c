@@ -191,7 +191,7 @@ read_string(struct pdu_reader *reader, uint32_t string_len, rtr_char **result)
 
 	string = malloc(string_len + 1); /* Include NULL chara. */
 	if (string == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	memcpy(string, reader->buffer, string_len);
 	reader->buffer += string_len;

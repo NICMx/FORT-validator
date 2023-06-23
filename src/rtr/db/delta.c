@@ -45,14 +45,14 @@ struct deltas {
 	atomic_uint references;
 };
 
-int
-deltas_create(struct deltas **_result)
+struct deltas *
+deltas_create(void)
 {
 	struct deltas *result;
 
 	result = malloc(sizeof(struct deltas));
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	deltas_v4_init(&result->v4.adds);
 	deltas_v4_init(&result->v4.removes);
@@ -62,8 +62,7 @@ deltas_create(struct deltas **_result)
 	deltas_rk_init(&result->rk.removes);
 	atomic_init(&result->references, 1);
 
-	*_result = result;
-	return 0;
+	return result;
 }
 
 void
@@ -132,13 +131,15 @@ deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op,
 		delta.v4.prefix.addr = vrp->prefix.v4;
 		delta.v4.prefix.len = vrp->prefix_length;
 		delta.v4.max_length = vrp->max_prefix_length;
-		return deltas_v4_add(get_deltas_array4(deltas, op), &delta.v4);
+		deltas_v4_add(get_deltas_array4(deltas, op), &delta.v4);
+		return 0;
 	case AF_INET6:
 		delta.v6.as = vrp->asn;
 		delta.v6.prefix.addr = vrp->prefix.v6;
 		delta.v6.prefix.len = vrp->prefix_length;
 		delta.v6.max_length = vrp->max_prefix_length;
-		return deltas_v6_add(get_deltas_array6(deltas, op), &delta.v6);
+		deltas_v6_add(get_deltas_array6(deltas, op), &delta.v6);
+		return 0;
 	}
 
 	pr_crit("Unknown protocol: [%u %s/%u-%u %u] %c %u/%u "
@@ -165,9 +166,11 @@ deltas_add_router_key(struct deltas *deltas, struct router_key const *key,
 
 	switch (op) {
 	case FLAG_ANNOUNCEMENT:
-		return deltas_rk_add(&deltas->rk.adds, &delta);
+		deltas_rk_add(&deltas->rk.adds, &delta);
+		return 0;
 	case FLAG_WITHDRAWAL:
-		return deltas_rk_add(&deltas->rk.removes, &delta);
+		deltas_rk_add(&deltas->rk.removes, &delta);
+		return 0;
 	}
 
 	pr_crit("Unknown delta operation: %d", op);

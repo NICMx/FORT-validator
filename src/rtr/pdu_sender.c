@@ -294,7 +294,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 
 	data = malloc(pdu.header.length);
 	if (data == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	len = serialize_error_report_pdu(&pdu, data);
 	if (len != pdu.header.length)

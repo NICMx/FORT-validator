@@ -27,44 +27,32 @@ struct db_rrdp_uri {
 	char const *current_workspace;
 };
 
-static int
+static struct uris_table *
 uris_table_create(char const *uri, char const *session_id,
-    unsigned long serial, rrdp_req_status_t req_status,
-    struct uris_table **result)
+    unsigned long serial, rrdp_req_status_t req_status)
 {
 	struct uris_table *tmp;
-	int error;
 
 	tmp = malloc(sizeof(struct uris_table));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 	/* Needed by uthash */
 	memset(tmp, 0, sizeof(struct uris_table));
 
 	tmp->uri = strdup(uri);
-	if (tmp->uri == NULL) {
-		error = pr_enomem();
-		goto release_tmp;
-	}
+	if (tmp->uri == NULL)
+		enomem_panic();
 
 	tmp->data.session_id = strdup(session_id);
-	if (tmp->data.session_id == NULL) {
-		error = pr_enomem();
-		goto release_uri;
-	}
+	if (tmp->data.session_id == NULL)
+		enomem_panic();
 
 	tmp->data.serial = serial;
 	tmp->last_update = 0;
 	tmp->request_status = req_status;
 	tmp->visited_uris = NULL;
 
-	*result = tmp;
-	return 0;
-release_uri:
-	free(tmp->uri);
-release_tmp:
-	free(tmp);
-	return error;
+	return tmp;
 }
 
 static void
@@ -125,20 +113,19 @@ get_thread_rrdp_workspace(char const **result)
 	return 0;
 }
 
-int
-db_rrdp_uris_create(struct db_rrdp_uri **uris)
+struct db_rrdp_uri *
+db_rrdp_uris_create(void)
 {
 	struct db_rrdp_uri *tmp;
 
 	tmp = malloc(sizeof(struct db_rrdp_uri));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	tmp->table = NULL;
 	tmp->current_workspace = NULL;
 
-	*uris = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -207,16 +194,9 @@ db_rrdp_uris_update(char const *uri, char const *session_id,
 	if (error)
 		return error;
 
-	db_uri = NULL;
-	error = uris_table_create(uri, session_id, serial, req_status, &db_uri);
-	if (error)
-		return error;
-
-	/* Ownership transfered */
-	db_uri->visited_uris = visited_uris;
-
+	db_uri = uris_table_create(uri, session_id, serial, req_status);
+	db_uri->visited_uris = visited_uris; /* Ownership transfered */
 	add_rrdp_uri(uris, db_uri);
-
 	return 0;
 }
 

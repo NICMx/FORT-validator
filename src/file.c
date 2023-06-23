@@ -71,10 +71,8 @@ file_load(char const *file_name, struct file_contents *fc)
 
 	fc->buffer_size = stat.st_size;
 	fc->buffer = malloc(fc->buffer_size);
-	if (fc->buffer == NULL) {
-		error = pr_enomem();
-		goto end;
-	}
+	if (fc->buffer == NULL)
+		enomem_panic();
 
 	fread_result = fread(fc->buffer, 1, fc->buffer_size, file);
 	if (fread_result < fc->buffer_size) {

@@ -36,7 +36,7 @@ handle_bgpsec(X509 *cert, unsigned char const *ski, struct resources *resources)
 
 	cert_spk = malloc(RK_SPKI_LEN);
 	if (cert_spk == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	/* Use a temporal pointer, since i2d_X509_PUBKEY moves it */
 	tmp = cert_spk;

@@ -86,7 +86,7 @@ parse_address(char const *full_address, char **address, char **service)
 		tmp_addr = NULL;
 		tmp_serv = strdup(config_get_server_port());
 		if (tmp_serv == NULL)
-			return pr_enomem();
+			enomem_panic();
 		goto done;
 	}
 
@@ -94,13 +94,11 @@ parse_address(char const *full_address, char **address, char **service)
 	if (ptr == NULL) {
 		tmp_addr = strdup(full_address);
 		if (tmp_addr == NULL)
-			return pr_enomem();
+			enomem_panic();
 
 		tmp_serv = strdup(config_get_server_port());
-		if (tmp_serv == NULL) {
-			free(tmp_addr);
-			return pr_enomem();
-		}
+		if (tmp_serv == NULL)
+			enomem_panic();
 
 		goto done;
 	}
@@ -112,16 +110,14 @@ parse_address(char const *full_address, char **address, char **service)
 	tmp_addr_len = strlen(full_address) - strlen(ptr);
 	tmp_addr = malloc(tmp_addr_len + 1);
 	if (tmp_addr == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	memcpy(tmp_addr, full_address, tmp_addr_len);
 	tmp_addr[tmp_addr_len] = '\0';
 
 	tmp_serv = strdup(ptr + 1);
-	if (tmp_serv == NULL) {
-		free(tmp_addr);
-		return pr_enomem();
-	}
+	if (tmp_serv == NULL)
+		enomem_panic();
 
 	/* Fall through */
 done:
@@ -303,11 +299,7 @@ create_server_socket(char const *input_addr, char const *hostname,
 		server.fd = fd;
 		/* Ignore failure; this is just a nice-to-have. */
 		server.addr = (input_addr != NULL) ? strdup(input_addr) : NULL;
-		error = server_arraylist_add(&servers, &server);
-		if (error) {
-			close(fd);
-			return error;
-		}
+		server_arraylist_add(&servers, &server);
 
 		return 0; /* Happy path */
 	}
@@ -463,10 +455,7 @@ accept_new_client(struct pollfd const *server_fd)
 
 	client.rtr_version = -1;
 	sockaddr2str(&client_addr, client.addr);
-	if (client_arraylist_add(&clients, &client) != 0) {
-		close(client.fd);
-		return AV_CLIENT_ERROR;
-	}
+	client_arraylist_add(&clients, &client);
 
 	pr_op_info("Client accepted [FD: %d]: %s", client.fd, client.addr);
 	return AV_SUCCESS;
@@ -519,29 +508,21 @@ static bool
 __handle_client_request(struct rtr_client *client)
 {
 	struct client_request *request;
-	int error;
 
 	request = malloc(sizeof(struct client_request));
-	if (request == NULL) {
-		pr_enomem();
+	if (request == NULL)
+		enomem_panic();
+
+	request->client = client;
+	if (!read_until_block(client->fd, request)) {
+		free(request);
 		return false;
 	}
 
-	request->client = client;
-	if (!read_until_block(client->fd, request))
-		goto cancel;
-
 	pr_op_debug("Client sent %zu bytes.", request->nread);
-	error = thread_pool_push(request_handlers, "RTR request",
-	    handle_client_request, request);
-	if (error)
-		goto cancel;
-
+	thread_pool_push(request_handlers, "RTR request", handle_client_request,
+	    request);
 	return true;
-
-cancel:
-	free(request);
-	return false;
 }
 
 static void
@@ -623,7 +604,7 @@ fddb_poll(void)
 
 	pollfds = calloc(servers.len + clients.len, sizeof(struct pollfd));
 	if (pollfds == NULL) {
-		pr_enomem();
+		enomem_panic();
 		return PV_RETRY;
 	}
 
@@ -647,7 +628,7 @@ fddb_poll(void)
 			pr_op_info("poll() was interrupted by some signal.");
 			goto stop;
 		case ENOMEM:
-			pr_enomem();
+			enomem_panic();
 			/* Fall through */
 		case EAGAIN:
 			goto retry;

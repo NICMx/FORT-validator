@@ -68,9 +68,9 @@ int db_slurm_foreach_assertion_bgpsec(struct db_slurm *, bgpsec_foreach_cb,
 void db_slurm_log(struct db_slurm *);
 
 /* Start working on the cache */
-int db_slurm_start_cache(struct db_slurm *);
+void db_slurm_start_cache(struct db_slurm *);
 /* Persist all the data stored at cache and erase cache */
-int db_slurm_flush_cache(struct db_slurm *);
+void db_slurm_flush_cache(struct db_slurm *);
 
 /* Does the SLURM DB has data? */
 bool db_slurm_has_data(struct db_slurm *);

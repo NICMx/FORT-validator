@@ -114,7 +114,7 @@ sarray_add(struct sorted_array *sarray, void *element)
 	if (sarray->count >= sarray->len) {
 		tmp = realloc(sarray->array, 2 * sarray->len * sarray->size);
 		if (tmp == NULL)
-			return pr_enomem();
+			enomem_panic();
 		sarray->array = tmp;
 		sarray->len *= 2;
 	}

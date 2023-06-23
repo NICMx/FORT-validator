@@ -53,16 +53,14 @@ error_uri_create(char const *uri, struct error_uri **err_uri)
 
 	tmp = malloc(sizeof(struct error_uri));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	/* Needed by uthash */
 	memset(tmp, 0, sizeof(struct error_uri));
 
 	tmp->uri = strdup(uri);
-	if (tmp->uri == NULL) {
-		error = pr_enomem();
-		goto release_tmp;
-	}
+	if (tmp->uri == NULL)
+		enomem_panic();
 
 	error = get_current_time(&tmp->first_attempt);
 	if (error)
@@ -74,9 +72,9 @@ error_uri_create(char const *uri, struct error_uri **err_uri)
 
 	*err_uri = tmp;
 	return 0;
+
 release_uri:
 	free(tmp->uri);
-release_tmp:
 	free(tmp);
 	return error;
 }

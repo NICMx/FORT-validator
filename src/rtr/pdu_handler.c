@@ -127,7 +127,7 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
 		return send_cache_reset_pdu(fd, args.rtr_version);
 	case -ENOMEM: /* Memory allocation failure */
-		return pr_enomem();
+		enomem_panic();
 	case EAGAIN: /* Too many threads */
 		/*
 		 * I think this should be more of a "try again" thing, but

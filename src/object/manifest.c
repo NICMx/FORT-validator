@@ -162,7 +162,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 
 	*pp = rpp_create();
 	if (*pp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
@@ -200,13 +200,13 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 		}
 
 		if (uri_has_extension(uri, ".cer"))
-			error = rpp_add_cert(*pp, uri);
+			rpp_add_cert(*pp, uri);
 		else if (uri_has_extension(uri, ".roa"))
-			error = rpp_add_roa(*pp, uri);
+			rpp_add_roa(*pp, uri);
 		else if (uri_has_extension(uri, ".crl"))
 			error = rpp_add_crl(*pp, uri);
 		else if (uri_has_extension(uri, ".gbr"))
-			error = rpp_add_ghostbusters(*pp, uri);
+			rpp_add_ghostbusters(*pp, uri);
 		else
 			uri_refput(uri); /* ignore it. */
 
@@ -265,9 +265,7 @@ handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
 	error = rpp_crl(*pp, &crl);
 	if (error)
 		goto revert_rpp;
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
-	if (error)
-		goto revert_rpp;
+	signed_object_args_init(&sobj_args, uri, crl, false);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &sobj_args);

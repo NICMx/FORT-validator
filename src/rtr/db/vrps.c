@@ -116,10 +116,6 @@ vrps_init(void)
 
 	state.base = NULL;
 	state.deltas = darray_create();
-	if (state.deltas == NULL) {
-		error = pr_enomem();
-		goto revert_thread_pool;
-	}
 
 	/*
 	 * Use the same start serial, the session ID will avoid
@@ -153,7 +149,6 @@ vrps_init(void)
 
 revert_deltas:
 	darray_destroy(state.deltas);
-revert_thread_pool:
 	thread_pool_destroy(pool);
 	return error;
 }
@@ -209,7 +204,7 @@ __perform_standalone_validation(struct db_table **result)
 
 	db = db_table_create();
 	if (db == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	error = perform_standalone_validation(pool, db);
 	if (error) {
@@ -437,7 +432,7 @@ vrp_ovrd_remove(struct delta_vrp const *delta, void *arg)
 
 	ptr = malloc(sizeof(struct vrp_node));
 	if (ptr == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	ptr->delta = *delta;
 	SLIST_INSERT_HEAD(filtered_vrps, ptr, next);
@@ -468,7 +463,7 @@ router_key_ovrd_remove(struct delta_router_key const *delta, void *arg)
 
 	ptr = malloc(sizeof(struct rk_node));
 	if (ptr == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	ptr->delta = *delta;
 	SLIST_INSERT_HEAD(filtered_keys, ptr, next);

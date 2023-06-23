@@ -24,7 +24,7 @@ lfile_open(const char *file_name, struct line_file **result)
 
 	lfile = malloc(sizeof(struct line_file));
 	if (lfile == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	lfile->file = fopen(file_name, "r");
 	if (lfile->file == NULL) {

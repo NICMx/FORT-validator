@@ -64,20 +64,16 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 
 	buffer_len = stat.st_blksize;
 	buffer = malloc(buffer_len);
-	if (buffer == NULL) {
-		error = pr_enomem();
-		goto end1;
-	}
+	if (buffer == NULL)
+		enomem_panic();
 
 	ctx = EVP_MD_CTX_new();
-	if (ctx == NULL) {
-		error = pr_enomem();
-		goto end2;
-	}
+	if (ctx == NULL)
+		enomem_panic();
 
 	if (!EVP_DigestInit_ex(ctx, md, NULL)) {
 		error = val_crypto_err("EVP_DigestInit_ex() failed");
-		goto end3;
+		goto end;
 	}
 
 	do {
@@ -86,12 +82,12 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 		if (error) {
 			pr_val_err("File reading error. Error message (apparently): %s",
 			   strerror(error));
-			goto end3;
+			goto end;
 		}
 
 		if (!EVP_DigestUpdate(ctx, buffer, consumed)) {
 			error = val_crypto_err("EVP_DigestUpdate() failed");
-			goto end3;
+			goto end;
 		}
 
 	} while (!feof(file));
@@ -99,11 +95,9 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 	if (!EVP_DigestFinal_ex(ctx, result, result_len))
 		error = val_crypto_err("EVP_DigestFinal_ex() failed");
 
-end3:
+end:
 	EVP_MD_CTX_free(ctx);
-end2:
 	free(buffer);
-end1:
 	file_close(file);
 	return error;
 }
@@ -195,7 +189,7 @@ hash_buffer(char const *algorithm,
 
 	ctx = EVP_MD_CTX_new();
 	if (ctx == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	if (!EVP_DigestInit_ex(ctx, md, NULL)
 	    || !EVP_DigestUpdate(ctx, content, content_len)
@@ -252,7 +246,7 @@ hash_str(char const *algorithm, char const *str, unsigned char *result,
 
 	src = malloc(strlen(str));
 	if (src == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	memcpy(src, str, strlen(str));
 

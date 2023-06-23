@@ -133,7 +133,7 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 
 	clone = strdup(str_prefix);
 	if (clone == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	token = strtok(clone, "/");
 	isv4 = strchr(token, ':') == NULL;

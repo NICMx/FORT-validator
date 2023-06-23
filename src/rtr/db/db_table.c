@@ -4,7 +4,7 @@
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
 #include "log.h"
-#include "data_structure/uthash_nonfatal.h"
+#include "data_structure/uthash.h"
 
 struct hashable_roa {
 	const struct vrp data;
@@ -96,7 +96,7 @@ add_roa(struct db_table *table, struct hashable_roa const *stack_new)
 
 	new = malloc(sizeof(struct hashable_roa));
 	if (new == NULL)
-		return pr_enomem();
+		enomem_panic();
 	memcpy(new, stack_new, sizeof(*new));
 
 	errno = 0;
@@ -209,7 +209,7 @@ rtrhandler_handle_router_key(struct db_table *table,
 
 	key = malloc(sizeof(struct hashable_key));
 	if (key == NULL)
-		return pr_enomem();
+		enomem_panic();
 	/* Needed by uthash */
 	memset(key, 0, sizeof(struct hashable_key));
 
@@ -327,9 +327,7 @@ compute_deltas(struct db_table *old, struct db_table *new,
 	struct deltas *deltas;
 	int error;
 
-	error = deltas_create(&deltas);
-	if (error)
-		return error;
+	deltas = deltas_create();
 
 	error = add_roa_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT,
 	    'n');

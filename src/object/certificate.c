@@ -106,7 +106,6 @@ validate_serial_number(X509 *cert)
 {
 	struct validation *state;
 	BIGNUM *number;
-	int error;
 
 	state = state_retrieve();
 	if (state == NULL)
@@ -119,11 +118,8 @@ validate_serial_number(X509 *cert)
 	if (log_val_enabled(LOG_DEBUG))
 		debug_serial_number(number);
 
-	error = x509stack_store_serial(validation_certstack(state), number);
-	if (error)
-		BN_free(number);
-
-	return error;
+	x509stack_store_serial(validation_certstack(state), number);
+	return 0;
 }
 
 static int
@@ -832,7 +828,7 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 	clone = X509_CRL_dup(original_crl);
 	if (clone == NULL) {
 		ASN1_STRING_free(tm);
-		return pr_enomem();
+		enomem_panic();
 	}
 
 	X509_CRL_set1_nextUpdate(clone, tm);
@@ -2242,7 +2238,7 @@ verify_mft:
  * This will return:
  *   rsync://<server>
  */
-static int
+static void
 get_rsync_server_uri(struct rpki_uri *src, char **result, size_t *result_len)
 {
 	char const *global;
@@ -2265,18 +2261,16 @@ get_rsync_server_uri(struct rpki_uri *src, char **result, size_t *result_len)
 
 	tmp = malloc(i + 1);
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	strncpy(tmp, global, i);
 	tmp[i] = '\0';
 
 	*result_len = i;
 	*result = tmp;
-
-	return 0;
 }
 
-static int
+static void
 set_repository_level(bool is_ta, struct validation *state,
     struct rpki_uri *cert_uri, struct sia_ca_uris *sia_uris, bool *updated)
 {
@@ -2284,12 +2278,11 @@ set_repository_level(bool is_ta, struct validation *state,
 	size_t parent_server_len, current_server_len;
 	unsigned int new_level;
 	bool update;
-	int error;
 
 	new_level = 0;
 	if (is_ta || cert_uri == NULL) {
 		working_repo_push_level(new_level);
-		return 0;
+		return;
 	}
 
 	/* Warning killer */
@@ -2299,17 +2292,9 @@ set_repository_level(bool is_ta, struct validation *state,
 	current_server_len = 0;
 
 	/* Both are rsync URIs, check the server part */
-	error = get_rsync_server_uri(cert_uri, &parent_server,
-	    &parent_server_len);
-	if (error)
-		return error;
-
-	error = get_rsync_server_uri(sia_uris->caRepository.uri,
-	    &current_server, &current_server_len);
-	if (error) {
-		free(parent_server);
-		return error;
-	}
+	get_rsync_server_uri(cert_uri, &parent_server, &parent_server_len);
+	get_rsync_server_uri(sia_uris->caRepository.uri, &current_server,
+	    &current_server_len);
 
 	if (parent_server_len != current_server_len) {
 		update = true;
@@ -2328,7 +2313,6 @@ end:
 	free(current_server);
 
 	(*updated) = update;
-	return 0;
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */
@@ -2432,10 +2416,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 	/* Identify if this is a new repository before fetching it */
 	new_level = false;
-	error = set_repository_level(IS_TA, state, cert_uri, &sia_uris,
-	    &new_level);
-	if (error)
-		goto revert_uris;
+	set_repository_level(IS_TA, state, cert_uri, &sia_uris, &new_level);
 
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents

@@ -41,9 +41,7 @@ process_snapshot(struct update_notification *notification, bool log_operation,
 	int error;
 
 	/* Use a new allocated visited_uris struct */
-	error = visited_uris_create(&tmp);
-	if (error)
-		return error;
+	tmp = visited_uris_create();
 
 	error = rrdp_parse_snapshot(notification, tmp, log_operation);
 	if (error) {
@@ -82,9 +80,7 @@ mark_rrdp_uri_request_err(char const *notification_uri)
 	pr_val_debug("RRDP data of '%s' won't be requested again during this cycle due to previous error.",
 	    notification_uri);
 
-	error = visited_uris_create(&tmp);
-	if (error)
-		return error;
+	tmp = visited_uris_create();
 
 	error = db_rrdp_uris_update(notification_uri, "", 0,
 	    RRDP_URI_REQ_ERROR, tmp);

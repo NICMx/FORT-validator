@@ -891,7 +891,7 @@ is_alphanumeric(int chara)
  * "struct option" is the array that getopt expects.
  * "struct args_flag" is our option metadata.
  */
-static int
+static void
 construct_getopt_options(struct option **_long_opts, char **_short_opts)
 {
 	struct option_field const *opt;
@@ -914,12 +914,10 @@ construct_getopt_options(struct option **_long_opts, char **_short_opts)
 	/* +1 NULL end, means end of array. */
 	long_opts = calloc(total_long_options + 1, sizeof(struct option));
 	if (long_opts == NULL)
-		return pr_enomem();
+		enomem_panic();
 	short_opts = malloc(total_short_options + 1);
-	if (short_opts == NULL) {
-		free(long_opts);
-		return pr_enomem();
-	}
+	if (short_opts == NULL)
+		enomem_panic();
 
 	*_long_opts = long_opts;
 	*_short_opts = short_opts;
@@ -942,7 +940,6 @@ construct_getopt_options(struct option **_long_opts, char **_short_opts)
 	}
 
 	*short_opts = '\0';
-	return 0;
 }
 
 static void
@@ -960,7 +957,7 @@ print_config(void)
 	pr_op_info("}");
 }
 
-static int
+static void
 set_default_values(void)
 {
 	static char const *recursive_rsync_args[] = {
@@ -984,22 +981,16 @@ set_default_values(void)
 		"$LOCAL",
 	};
 
-	int error;
-
 	/*
 	 * Values that might need to be freed WILL be freed, so use heap
 	 * duplicates.
 	 */
 
-	error = string_array_init(&rpki_config.server.address, NULL, 0);
-	if (error)
-		return error;
+	string_array_init(&rpki_config.server.address, NULL, 0);
 
 	rpki_config.server.port = strdup("323");
-	if (rpki_config.server.port == NULL) {
-		error = pr_enomem();
-		goto revert_address;
-	}
+	if (rpki_config.server.port == NULL)
+		enomem_panic();
 
 	rpki_config.server.backlog = SOMAXCONN;
 	rpki_config.server.interval.validation = 3600;
@@ -1012,10 +1003,8 @@ set_default_values(void)
 	rpki_config.slurm = NULL;
 
 	rpki_config.local_repository = strdup("/tmp/fort/repository");
-	if (rpki_config.local_repository == NULL) {
-		error = pr_enomem();
-		goto revert_port;
-	}
+	if (rpki_config.local_repository == NULL)
+		enomem_panic();
 
 	rpki_config.sync_strategy = RSYNC_ROOT_EXCEPT_TA;
 	rpki_config.shuffle_tal_uris = false;
@@ -1030,20 +1019,13 @@ set_default_values(void)
 	rpki_config.rsync.retry.count = 1;
 	rpki_config.rsync.retry.interval = 4;
 	rpki_config.rsync.program = strdup("rsync");
-	if (rpki_config.rsync.program == NULL) {
-		error = pr_enomem();
-		goto revert_repository;
-	}
+	if (rpki_config.rsync.program == NULL)
+		enomem_panic();
 
-	error = string_array_init(&rpki_config.rsync.args.recursive,
+	string_array_init(&rpki_config.rsync.args.recursive,
 	    recursive_rsync_args, ARRAY_LEN(recursive_rsync_args));
-	if (error)
-		goto revert_rsync_program;
-
-	error = string_array_init(&rpki_config.rsync.args.flat,
+	string_array_init(&rpki_config.rsync.args.flat,
 	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
-	if (error)
-		goto revert_recursive_array;
 
 	/* By default, has a higher priority than rsync */
 	rpki_config.http.enabled = true;
@@ -1051,10 +1033,8 @@ set_default_values(void)
 	rpki_config.http.retry.count = 1;
 	rpki_config.http.retry.interval = 4;
 	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
-	if (rpki_config.http.user_agent == NULL) {
-		error = pr_enomem();
-		goto revert_flat_array;
-	}
+	if (rpki_config.http.user_agent == NULL)
+		enomem_panic();
 	rpki_config.http.connect_timeout = 30;
 	rpki_config.http.transfer_timeout = 0;
 	rpki_config.http.low_speed_limit = 100000;
@@ -1091,10 +1071,8 @@ set_default_values(void)
 	rpki_config.validation_log.filename_format = FNF_GLOBAL;
 	rpki_config.validation_log.facility = LOG_DAEMON;
 	rpki_config.validation_log.tag = strdup("Validation");
-	if (rpki_config.validation_log.tag == NULL) {
-		error = pr_enomem();
-		goto revert_validation_log_tag;
-	}
+	if (rpki_config.validation_log.tag == NULL)
+		enomem_panic();
 
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
@@ -1110,24 +1088,6 @@ set_default_values(void)
 	rpki_config.thread_pool.server.max = 20;
 	/* Usually 5 TALs, let a few more available */
 	rpki_config.thread_pool.validation.max = 5;
-
-	return 0;
-
-revert_validation_log_tag:
-	free(rpki_config.http.user_agent);
-revert_flat_array:
-	string_array_cleanup(&rpki_config.rsync.args.flat);
-revert_recursive_array:
-	string_array_cleanup(&rpki_config.rsync.args.recursive);
-revert_rsync_program:
-	free(rpki_config.rsync.program);
-revert_repository:
-	free(rpki_config.local_repository);
-revert_port:
-	free(rpki_config.server.port);
-revert_address:
-	string_array_cleanup(&rpki_config.server.address);
-	return error;
 }
 
 static bool
@@ -1239,15 +1199,11 @@ handle_flags_config(int argc, char **argv)
 	int error;
 
 	program_name = argv[0];
-	error = set_default_values();
-	if (error)
-		return error;
+	set_default_values();
 
 	long_opts = NULL;
 	short_opts = NULL;
-	error = construct_getopt_options(&long_opts, &short_opts);
-	if (error)
-		goto end; /* Error msg already printed. */
+	construct_getopt_options(&long_opts, &short_opts);
 
 	while ((opt = getopt_long(argc, argv, short_opts, long_opts, NULL))
 	    != -1) {

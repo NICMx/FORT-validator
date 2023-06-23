@@ -278,9 +278,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_roa;
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
-	if (error)
-		goto revert_roa;
+	signed_object_args_init(&sobj_args, uri, crl, false);
 
 	/* Validate and handle everything */
 	error = signed_object_validate(&sobj, &arcs, &sobj_args);

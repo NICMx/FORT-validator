@@ -32,7 +32,7 @@ name2string(X509_NAME_ENTRY *name, char **_result)
 
 	result = malloc(data->length + 1);
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	memcpy(result, data->data, data->length);
 	result[data->length] = '\0';
@@ -53,7 +53,7 @@ x509_name_decode(X509_NAME *name, char const *what,
 
 	result = malloc(sizeof(struct rfc5280_name));
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	result->commonName = NULL;
 	result->serialNumber = NULL;

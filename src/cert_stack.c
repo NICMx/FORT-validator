@@ -105,7 +105,7 @@ certstack_create(struct cert_stack **result)
 
 	stack = malloc(sizeof(struct cert_stack));
 	if (stack == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	stack->x509s = sk_X509_new_null();
 	if (stack->x509s == NULL) {
@@ -182,21 +182,20 @@ certstack_destroy(struct cert_stack *stack)
 	free(stack);
 }
 
-int
+void
 deferstack_push(struct cert_stack *stack, struct deferred_cert *deferred)
 {
 	struct defer_node *node;
 
 	node = malloc(sizeof(struct defer_node));
 	if (node == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	node->type = DNT_CERT;
 	node->deferred = *deferred;
 	uri_refget(deferred->uri);
 	rpp_refget(deferred->pp);
 	SLIST_INSERT_HEAD(&stack->defers, node, next);
-	return 0;
 }
 
 static void
@@ -261,7 +260,7 @@ init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
 
 	result = resources_create(false);
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	resources_set_policy(result, policy);
 	error = certificate_get_resources(x509, result, type);
@@ -317,7 +316,7 @@ create_separator(void)
 
 	result = malloc(sizeof(struct defer_node));
 	if (result == NULL)
-		return NULL;
+		enomem_panic();
 
 	result->type = DNT_SEPARATOR;
 	return result;
@@ -335,7 +334,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 
 	meta = malloc(sizeof(struct metadata_node));
 	if (meta == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	meta->uri = uri;
 	uri_refget(uri);
@@ -350,10 +349,6 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 		goto destroy_resources;
 
 	defer_separator = create_separator();
-	if (defer_separator == NULL) {
-		error = pr_enomem();
-		goto destroy_resources;
-	}
 
 	ok = sk_X509_push(stack->x509s, x509);
 	if (ok <= 0) {
@@ -427,8 +422,8 @@ x509stack_peek_level(struct cert_stack *stack)
 	return (meta != NULL) ? meta->level : 0;
 }
 
-static int
-get_current_file_name(char **_result)
+static char *
+get_current_file_name(void)
 {
 	char const *file_name;
 	char *result;
@@ -439,10 +434,9 @@ get_current_file_name(char **_result)
 
 	result = strdup(file_name);
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
-	*_result = result;
-	return 0;
+	return result;
 }
 
 /**
@@ -452,7 +446,7 @@ get_current_file_name(char **_result)
  *
  * This function will steal ownership of @number on success.
  */
-int
+void
 x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 {
 	struct metadata_node *meta;
@@ -460,14 +454,13 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 	array_index i;
 	struct serial_number duplicate;
 	char *string;
-	int error;
 
 	/* Remember to free @number if you return 0 but don't store it. */
 
 	meta = SLIST_FIRST(&stack->metas);
 	if (meta == NULL) {
 		BN_free(number);
-		return 0; /* The TA lacks siblings, so serial is unique. */
+		return; /* The TA lacks siblings, so serial is unique. */
 	}
 
 	/*
@@ -498,20 +491,14 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 			    string, cursor->file);
 			BN_free(number);
 			free(string);
-			return 0;
+			return;
 		}
 	}
 
 	duplicate.number = number;
-	error = get_current_file_name(&duplicate.file);
-	if (error)
-		return error;
+	duplicate.file = get_current_file_name();
 
-	error = serial_numbers_add(&meta->serials, &duplicate);
-	if (error)
-		free(duplicate.file);
-
-	return error;
+	serial_numbers_add(&meta->serials, &duplicate);
 }
 
 STACK_OF(X509) *

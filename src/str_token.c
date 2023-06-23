@@ -7,28 +7,29 @@
 /**
  * Does not assume that @string is NULL-terminated.
  */
-static int
-string_clone(void const *string, size_t size, char **clone)
+static char *
+string_clone(void const *string, size_t size)
 {
 	char *result;
 
 	result = malloc(size + 1);
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	memcpy(result, string, size);
 	result[size] = '\0';
 
-	*clone = result;
-	return 0;
+	return result;
 }
 
 int
 ia5s2string(ASN1_IA5STRING *ia5, char **result)
 {
-	return (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT)
-	    ? pr_val_err("CRL URI IA5String has unused bits.")
-	    : string_clone(ia5->data, ia5->length, result);
+	if (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT)
+		return pr_val_err("CRL URI IA5String has unused bits.");
+
+	*result = string_clone(ia5->data, ia5->length);
+	return 0;
 }
 
 int
@@ -43,7 +44,7 @@ BN2string(BIGNUM *bn, char **_result)
 
 	bio = BIO_new(BIO_s_mem());
 	if (bio == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	if (BN_print(bio, bn) == 0) {
 		BIO_free(bio);
@@ -52,10 +53,8 @@ BN2string(BIGNUM *bn, char **_result)
 
 	written = BIO_number_written(bio);
 	result = malloc(written + 1);
-	if (result == NULL) {
-		BIO_free(bio);
-		return pr_enomem();
-	}
+	if (result == NULL)
+		enomem_panic();
 
 	BIO_read(bio, result, written);
 	result[written] = '\0';
@@ -120,11 +119,11 @@ token_equals(struct string_tokenizer *t1, struct string_tokenizer *t2)
 	    : false;
 }
 
-int
-token_read(struct string_tokenizer *tokenizer, char **token)
+char *
+token_read(struct string_tokenizer *tokenizer)
 {
 	return string_clone(tokenizer->str + tokenizer->start,
-	    tokenizer->end - tokenizer->start, token);
+	    tokenizer->end - tokenizer->start);
 }
 
 size_t

@@ -65,7 +65,9 @@ base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
 	b64 = BIO_new(BIO_f_base64());
 	if (b64 == NULL) {
 		error = ERR_peek_last_error();
-		return error ? error_ul2i(error) : pr_enomem();
+		if (error)
+			return error_ul2i(error);
+		enomem_panic();
 	}
 
 	/*
@@ -150,7 +152,7 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 
 	str_copy = malloc(encoded_len + pad + 1);
 	if (str_copy == NULL)
-		return pr_enomem();
+		enomem_panic();
 	/* Set all with pad char, then replace with the original string */
 	memset(str_copy, '=', encoded_len + pad);
 	memcpy(str_copy, str_encoded, encoded_len);
@@ -172,10 +174,8 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 
 	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
 	*result = malloc(alloc_size + 1);
-	if (*result == NULL) {
-		error = pr_enomem();
-		goto free_enc;
-	}
+	if (*result == NULL)
+		enomem_panic();
 	memset(*result, 0, alloc_size);
 	(*result)[alloc_size] = '\0';
 
@@ -194,15 +194,14 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 	return 0;
 free_all:
 	free(*result);
-free_enc:
 	BIO_free(encoded);
 free_copy:
 	free(str_copy);
 	return error;
 }
 
-static int
-to_base64url(char *base, size_t base_len, char **out)
+static char *
+to_base64url(char *base, size_t base_len)
 {
 	char *pad, *tmp;
 	size_t len;
@@ -219,7 +218,7 @@ to_base64url(char *base, size_t base_len, char **out)
 
 	tmp = malloc(len + 1);
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	memcpy(tmp, base, len);
 	tmp[len] = '\0';
@@ -231,8 +230,7 @@ to_base64url(char *base, size_t base_len, char **out)
 			tmp[i] = '_';
 	}
 
-	*out = tmp;
-	return 0;
+	return tmp;
 }
 
 /*
@@ -251,7 +249,7 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 	mem = BIO_new(BIO_s_mem());
 	if (mem == NULL) {
 		error = ERR_peek_last_error();
-		return error ? error_ul2i(error) : pr_enomem();
+		goto peeked;
 	}
 
 	b64 = BIO_new(BIO_f_base64());
@@ -266,13 +264,15 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 	BIO_flush(b64);
 	BIO_get_mem_ptr(mem, &mem_buf);
 
-	error = to_base64url(mem_buf->data, mem_buf->length, result);
-	if (error)
-		goto free_mem;
+	*result = to_base64url(mem_buf->data, mem_buf->length);
 
 	BIO_free_all(b64);
 	return 0;
+
 free_mem:
 	BIO_free_all(b64);
-	return error ? error_ul2i(error) : pr_enomem();
+peeked:
+	if (error)
+		return error_ul2i(error);
+	enomem_panic();
 }

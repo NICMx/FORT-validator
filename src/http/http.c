@@ -111,14 +111,14 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 	}
 }
 
-static int
+static void
 http_easy_init(struct http_handler *handler)
 {
 	CURL *result;
 
 	result = curl_easy_init();
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
@@ -162,7 +162,6 @@ http_easy_init(struct http_handler *handler)
 	setopt_long(result, CURLOPT_NOSIGNAL, 1L);
 
 	handler->curl = result;
-	return 0;
 }
 
 static char const *
@@ -365,7 +364,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 
 	tmp_file = malloc(strlen(original_file) + strlen(tmp_suffix) + 1);
 	if (tmp_file == NULL)
-		return pr_enomem();
+		enomem_panic();
 	strcpy(tmp_file, original_file);
 	strcat(tmp_file, tmp_suffix);
 
@@ -378,9 +377,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 		goto delete_dir;
 
 	do {
-		error = http_easy_init(&handler);
-		if (error)
-			goto close_file;
+		http_easy_init(&handler);
 
 		/* Set "If-Modified-Since" header only if a value is specified */
 		if (ims_value > 0) {
@@ -427,8 +424,6 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 end:
 	free(tmp_file);
 	return 0;
-close_file:
-	file_close(out);
 delete_dir:
 	delete_dir_recursive_bottom_up(tmp_file);
 release_tmp:
@@ -526,31 +521,27 @@ http_direct_download(char const *remote, char const *dest)
 
 	tmp_file = strdup(dest);
 	if (tmp_file == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	tmp = realloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
-	if (tmp == NULL) {
-		error = pr_enomem();
-		goto release_tmp;
-	}
+	if (tmp == NULL)
+		enomem_panic();
 
 	tmp_file = tmp;
 	strcat(tmp_file, tmp_suffix);
 
 	error = file_write(tmp_file, &out);
 	if (error)
-		goto release_tmp;
+		goto end;
 
-	error = http_easy_init(&handler);
-	if (error)
-		goto close_file;
-
+	http_easy_init(&handler);
 	error = http_fetch(&handler, remote, &response_code, &cond_met, true,
 	    out);
 	http_easy_cleanup(&handler);
+
 	file_close(out);
 	if (error)
-		goto release_tmp;
+		goto end;
 
 	/* Overwrite the original file */
 	error = rename(tmp_file, dest);
@@ -558,14 +549,10 @@ http_direct_download(char const *remote, char const *dest)
 		error = errno;
 		pr_val_err("Renaming temporal file from '%s' to '%s': %s",
 		    tmp_file, dest, strerror(error));
-		goto release_tmp;
+		goto end;
 	}
 
-	free(tmp_file);
-	return 0;
-close_file:
-	file_close(out);
-release_tmp:
+end:
 	free(tmp_file);
 	return error;
 }

@@ -26,19 +26,17 @@ SLIST_HEAD(uri_list, uri);
 
 /* static char const *const RSYNC_PREFIX = "rsync://"; */
 
-int
-rsync_create(struct uri_list **result)
+struct uri_list *
+rsync_create(void)
 {
 	struct uri_list *visited_uris;
 
 	visited_uris = malloc(sizeof(struct uri_list));
 	if (visited_uris == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	SLIST_INIT(visited_uris);
-
-	*result = visited_uris;
-	return 0;
+	return visited_uris;
 }
 
 void
@@ -101,21 +99,19 @@ is_already_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 	return false;
 }
 
-static int
+static void
 mark_as_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 {
 	struct uri *node;
 
 	node = malloc(sizeof(struct uri));
 	if (node == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	node->uri = uri;
 	uri_refget(uri);
 
 	SLIST_INSERT_HEAD(visited_uris, node, next);
-
-	return 0;
 }
 
 static int
@@ -203,7 +199,7 @@ release_args(char **args, unsigned int size)
 	free(args);
 }
 
-static int
+static void
 prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 {
 	struct string_array const *config_args;
@@ -218,7 +214,7 @@ prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 	 */
 	copy_args = calloc(config_args->length + 2, sizeof(char *));
 	if (copy_args == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	copy_args[0] = config_get_rsync_program();
 	copy_args[config_args->length + 1] = NULL;
@@ -234,15 +230,12 @@ prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 		else
 			copy_args[i + 1] = strdup(config_args->array[i]);
 
-		if (copy_args[i + 1] == NULL) {
-			release_args(copy_args, i);
-			return pr_enomem();
-		}
+		if (copy_args[i + 1] == NULL)
+			enomem_panic();
 	}
 
 	*args = copy_args;
 	*args_len = config_args->length;
-	return 0;
 }
 
 __dead static void
@@ -288,7 +281,7 @@ create_pipes(int fds[2][2])
 	return 0;
 }
 
-static int
+static void
 log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 {
 #define PRE_RSYNC "[RSYNC exec]: "
@@ -296,7 +289,7 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 
 	cpy = malloc(read + 1);
 	if (cpy == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	strncpy(cpy, buffer, read);
 	cpy[read] = '\0';
@@ -319,7 +312,6 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 		cur = tmp + 1;
 	}
 	free(cpy);
-	return 0;
 #undef PRE_RSYNC
 }
 
@@ -344,10 +336,9 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 		if (count == 0)
 			break;
 
-		error = log_buffer(buffer, count, type, log_operation);
-		if (error)
-			return error;
+		log_buffer(buffer, count, type, log_operation);
 	}
+
 	close(fd_pipe[type][0]); /* Close read end */
 	return 0;
 }
@@ -396,9 +387,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 	/* Prepare everything for the child exec */
 	args = NULL;
 	args_len = 0;
-	error = prepare_rsync(uri, is_ta, &args, &args_len);
-	if (error)
-		return error;
+	prepare_rsync(uri, is_ta, &args, &args_len);
 
 	pr_val_info("rsync: %s", uri_get_global(uri));
 	if (log_val_enabled(LOG_DEBUG)) {
@@ -628,7 +617,7 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	case 0:
 		/* Don't store when "force" and if its already downloaded */
 		if (!(force && is_already_downloaded(rsync_uri, visited_uris)))
-			error = mark_as_downloaded(rsync_uri, visited_uris);
+			mark_as_downloaded(rsync_uri, visited_uris);
 		reqs_errors_rem_uri(uri_get_global(rsync_uri));
 		break;
 	case EREQFAILED:
@@ -636,10 +625,8 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 		error = reqs_errors_add_uri(uri_get_global(rsync_uri));
 		if (error)
 			break;
-		error = mark_as_downloaded(rsync_uri, visited_uris);
-		/* Everything went ok? Return the original error */
-		if (!error)
-			error = EREQFAILED;
+		mark_as_downloaded(rsync_uri, visited_uris);
+		error = EREQFAILED; /* Return the original error */
 		break;
 	}
 

@@ -18,7 +18,7 @@ typedef enum {
  */
 struct db_rrdp_uri;
 
-int db_rrdp_uris_create(struct db_rrdp_uri **);
+struct db_rrdp_uri *db_rrdp_uris_create(void);
 void db_rrdp_uris_destroy(struct db_rrdp_uri *);
 
 int db_rrdp_uris_cmp(char const *, char const *, unsigned long,

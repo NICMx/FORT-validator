@@ -154,7 +154,7 @@ add_prefix4(struct resources *resources, IPAddress_t *addr)
 	if (resources->ip4s == NULL) {
 		resources->ip4s = res4_create();
 		if (resources->ip4s == NULL)
-			return pr_enomem();
+			enomem_panic();
 	}
 
 	error = res4_add_prefix(resources->ip4s, &prefix);
@@ -199,7 +199,7 @@ add_prefix6(struct resources *resources, IPAddress_t *addr)
 	if (resources->ip6s == NULL) {
 		resources->ip6s = res6_create();
 		if (resources->ip6s == NULL)
-			return pr_enomem();
+			enomem_panic();
 	}
 
 	error = res6_add_prefix(resources->ip6s, &prefix);
@@ -257,7 +257,7 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 	if (resources->ip4s == NULL) {
 		resources->ip4s = res4_create();
 		if (resources->ip4s == NULL)
-			return pr_enomem();
+			enomem_panic();
 	}
 
 	error = res4_add_range(resources->ip4s, &range);
@@ -303,7 +303,7 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 	if (resources->ip6s == NULL) {
 		resources->ip6s = res6_create();
 		if (resources->ip6s == NULL)
-			return pr_enomem();
+			enomem_panic();
 	}
 
 	error = res6_add_range(resources->ip6s, &range);
@@ -459,7 +459,7 @@ add_asn(struct resources *resources, unsigned long min, unsigned long max,
 	if (resources->asns == NULL) {
 		resources->asns = rasn_create();
 		if (resources->asns == NULL)
-			return pr_enomem();
+			enomem_panic();
 	}
 
 	error = rasn_add(resources->asns, min, max);

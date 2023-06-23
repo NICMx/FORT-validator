@@ -115,13 +115,11 @@ fnstack_init(void)
 
 	files = malloc(sizeof(struct filename_stack));
 	if (files == NULL)
-		return;
+		enomem_panic();
 
 	files->filenames = malloc(32 * sizeof(char *));
-	if (files->filenames == NULL) {
-		free(files);
-		return;
-	}
+	if (files->filenames == NULL)
+		enomem_panic();
 
 	files->len = 0;
 	files->size = 32;
@@ -186,13 +184,8 @@ fnstack_push(char const *file)
 
 	if (files->len >= files->size) {
 		tmp = realloc(files->filenames, 2 * files->size * sizeof(char *));
-		if (tmp == NULL) {
-			/* Oh noes */
-			free(files->filenames);
-			files->filenames = NULL;
-			return;
-		}
-
+		if (tmp == NULL)
+			enomem_panic();
 		files->filenames = tmp;
 		files->size *= 2;
 	}
@@ -247,7 +240,7 @@ working_repo_init(void)
 
 	repo = malloc(sizeof(struct working_repo));
 	if (repo == NULL)
-		return;
+		enomem_panic();
 
 	repo->uri = NULL;
 	repo->level = 0;

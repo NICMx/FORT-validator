@@ -39,7 +39,7 @@ fetch_url(char const *url)
 
 	dest = malloc(dest_dir_len + extra_slash + strlen(dest_file) + 1);
 	if (dest == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	offset = 0;
 	strcpy(dest + offset, dest_dir);

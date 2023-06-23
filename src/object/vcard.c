@@ -93,7 +93,7 @@ analyze_pos(struct utf8_string *string, size_t pos)
 	return SA_LINE_ENDED; /* \r\n<more lines> */
 }
 
-static int
+static void
 double_line_size(struct vcard_line *line)
 {
 	uint8_t *tmp;
@@ -101,28 +101,19 @@ double_line_size(struct vcard_line *line)
 	line->str.size *= 2;
 	tmp = realloc(line->str.val, line->str.size);
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 	line->str.val = tmp;
-
-	return 0;
 }
 
-static int
+static void
 add_chara(struct vcard_line *line, uint8_t chara, bool inc_str_len)
 {
-	int error;
-
-	if (line->str.len + 1 == line->str.size) {
-		error = double_line_size(line);
-		if (error)
-			return error;
-	}
+	if (line->str.len + 1 == line->str.size)
+		double_line_size(line);
 
 	line->str.val[line->str.len] = chara;
 	if (inc_str_len)
 		line->str.len++;
-
-	return 0;
 }
 
 /**
@@ -136,7 +127,6 @@ line_next(struct vcard_line *line, OCTET_STRING_t *string8)
 {
 	struct utf8_string string;
 	size_t string_pos;
-	int error;
 
 	if (string8->size == line->octet_string_offset)
 		return pr_val_err("vCard ends prematurely. (Expected an END line)");
@@ -149,14 +139,13 @@ line_next(struct vcard_line *line, OCTET_STRING_t *string8)
 	for (string_pos = 0; string_pos < string.len; string_pos++) {
 		switch (analyze_pos(&string, string_pos)) {
 		case SA_COPY_CHARA:
-			error = add_chara(line, string.val[string_pos], true);
-			if (error)
-				return error;
+			add_chara(line, string.val[string_pos], true);
 			break;
 
 		case SA_LINE_ENDED:
 			line->octet_string_offset += string_pos + 2;
-			return add_chara(line, 0, false);
+			add_chara(line, 0, false);
+			return 0;
 
 		case SA_SKIP_THREE_CHARAS:
 			string_pos += 2;
@@ -274,7 +263,7 @@ handle_ghostbusters_vcard(OCTET_STRING_t *vcard)
 	line.str.len = 0;
 	line.str.val = malloc(line.str.size);
 	if (line.str.val == NULL)
-		return pr_enomem();
+		enomem_panic();
 	line.octet_string_offset = 0;
 
 	error = __handle_ghostbusters_vcard(vcard, &line);

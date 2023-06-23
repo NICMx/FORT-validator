@@ -633,8 +633,8 @@ val_crypto_err(const char *format, ...)
 	return crypto_err(&val_config, pr_val_err);
 }
 
-int
-pr_enomem(void)
+__dead void
+enomem_panic(void)
 {
 	static char const *ENOMEM_MSG = "Out of memory.\n";
 	ssize_t garbage;
@@ -645,16 +645,20 @@ pr_enomem(void)
 	 */
 
 	if (LOG_ERR > op_config.level)
-		return -ENOMEM;
+		goto done;
 
 	if (op_config.fprintf_enabled) {
 		lock_mutex();
 		/*
 		 * write() is AS-Safe, which implies it doesn't allocate,
 		 * unlike printf().
+		 *
+		 * "garbage" prevents write()'s warn_unused_result (compiler
+		 * warning).
 		 */
 		garbage = write(STDERR_FILENO, ENOMEM_MSG, strlen(ENOMEM_MSG));
 		unlock_mutex();
+		/* Prevents "set but not used" warning. */
 		garbage++;
 	}
 
@@ -665,7 +669,7 @@ pr_enomem(void)
 		unlock_mutex();
 	}
 
-	return -ENOMEM;
+done:	exit(ENOMEM);
 }
 
 __dead void

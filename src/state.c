@@ -96,7 +96,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	result = malloc(sizeof(struct validation));
 	if (!result)
-		return pr_enomem();
+		enomem_panic();
 
 	error = state_store(result);
 	if (error)
@@ -111,10 +111,8 @@ validation_prepare(struct validation **out, struct tal *tal,
 	}
 
 	params = X509_VERIFY_PARAM_new();
-	if (params == NULL) {
-		error = pr_enomem();
-		goto abort2;
-	}
+	if (params == NULL)
+		enomem_panic();
 
 	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
 	X509_STORE_set1_param(result->x509_data.store, params);
@@ -124,24 +122,17 @@ validation_prepare(struct validation **out, struct tal *tal,
 	if (error)
 		goto abort3;
 
-	error = rsync_create(&result->rsync_visited_uris);
-	if (error)
-		goto abort4;
-
+	result->rsync_visited_uris = rsync_create();
 	result->rrdp_uris = db_rrdp_get_uris(tal_get_file_name(tal));
 	result->rrdp_workspace = db_rrdp_get_workspace(tal_get_file_name(tal));
-
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
 	result->x509_data.params = params; /* Ownership transfered */
 
 	*out = result;
 	return 0;
-abort4:
-	certstack_destroy(result->certstack);
 abort3:
 	X509_VERIFY_PARAM_free(params);
-abort2:
 	X509_STORE_free(result->x509_data.store);
 abort1:
 	free(result);

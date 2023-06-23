@@ -289,7 +289,8 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas)
 	bool actual_deltas[12];
 	array_index i;
 
-	ck_assert_int_eq(0, deltas_create(&deltas));
+	deltas = deltas_create();
+	ck_assert_ptr_nonnull(deltas);
 
 	ck_assert_int_eq(0, vrps_foreach_delta_since(from, &actual_serial,
 	    vrp_add, rk_add, deltas));

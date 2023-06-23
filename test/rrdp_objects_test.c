@@ -18,7 +18,7 @@ add_serials(struct deltas_head *deltas, ...)
 
 	va_start(vl, deltas);
 	while ((delta.serial = va_arg(vl, unsigned long)) != END)
-		ck_assert_int_eq(0, deltas_head_add(deltas, &delta));
+		deltas_head_add(deltas, &delta);
 	va_end(vl);
 }
 

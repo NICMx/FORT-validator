@@ -7,8 +7,8 @@
 #include "log.h"
 #include "config/types.h"
 
-static int
-find_json(struct json_t *root, char const *full_name, json_t **result)
+static json_t *
+find_json(struct json_t *root, char const *full_name)
 {
 	struct {
 		char *opt_name; /* full token sequence string */
@@ -20,7 +20,7 @@ find_json(struct json_t *root, char const *full_name, json_t **result)
 	/* strtok_r() needs a non-const string */
 	strtok.opt_name = strdup(full_name);
 	if (strtok.opt_name == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	node = root;
 	strtok.token = strtok_r(strtok.opt_name, ".", &strtok.saveptr);
@@ -31,8 +31,7 @@ find_json(struct json_t *root, char const *full_name, json_t **result)
 	}
 
 	free(strtok.opt_name);
-	*result = node;
-	return 0;
+	return node;
 }
 
 static int
@@ -43,9 +42,7 @@ json_to_config(struct json_t *root)
 	int error;
 
 	FOREACH_OPTION(get_option_metadatas(), opt, AVAILABILITY_JSON) {
-		error = find_json(root, opt->name, &child);
-		if (error)
-			return error;
+		child = find_json(root, opt->name);
 		if (child == NULL)
 			continue;
 

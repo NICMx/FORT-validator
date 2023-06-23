@@ -65,13 +65,11 @@ struct proc_upd_args {
 	bool log_operation;
 };
 
-static int
+static void
 add_mft_to_list(struct visited_uris *visited_uris, char const *uri)
 {
-	if (strcmp(".mft", strrchr(uri, '.')) != 0)
-		return 0;
-
-	return visited_uris_add(visited_uris, uri);
+	if (strcmp(".mft", strrchr(uri, '.')) == 0)
+		visited_uris_add(visited_uris, uri);
 }
 
 static int
@@ -152,7 +150,7 @@ base64_sanitize(char *content, char **out)
 	if (original_size <= BUF_SIZE) {
 		result = strdup(content);
 		if (result == NULL)
-			return pr_enomem();
+			enomem_panic();
 		*out = result;
 		return 0;
 	}
@@ -160,7 +158,7 @@ base64_sanitize(char *content, char **out)
 	new_size = original_size + (original_size / BUF_SIZE);
 	result = malloc(new_size + 1);
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	offset = 0;
 	while (original_size > 0){
@@ -179,10 +177,8 @@ base64_sanitize(char *content, char **out)
 	/* Reallocate to exact size and add nul char */
 	if (offset != new_size + 1) {
 		tmp = realloc(result, offset + 1);
-		if (tmp == NULL) {
-			free(result);
-			return pr_enomem();
-		}
+		if (tmp == NULL)
+			enomem_panic();
 		result = tmp;
 	}
 
@@ -215,10 +211,8 @@ base64_read(char *content, unsigned char **out, size_t *out_len)
 
 	alloc_size = EVP_DECODE_LENGTH(strlen(content));
 	result = malloc(alloc_size);
-	if (result == NULL) {
-		error = pr_enomem();
-		goto release_bio;
-	}
+	if (result == NULL)
+		enomem_panic();
 
 	error = base64_decode(encoded, result, true, alloc_size, &result_len);
 	if (error)
@@ -232,7 +226,6 @@ base64_read(char *content, unsigned char **out, size_t *out_len)
 	return 0;
 release_result:
 	free(result);
-release_bio:
 	BIO_free(encoded);
 release_sanitized:
 	free(sanitized);
@@ -258,10 +251,8 @@ parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 	}
 
 	tmp = malloc(xmlStrlen(xml_value) + 1);
-	if (tmp == NULL) {
-		xmlFree(xml_value);
-		return pr_enomem();
-	}
+	if (tmp == NULL)
+		enomem_panic();
 
 	memcpy(tmp, xml_value, xmlStrlen(xml_value));
 	tmp[xmlStrlen(xml_value)] = '\0';
@@ -323,10 +314,8 @@ parse_hex_string(xmlTextReaderPtr reader, bool required, char const *attr,
 
 	tmp_len = xmlStrlen(xml_value) / 2;
 	tmp = malloc(tmp_len);
-	if (tmp == NULL) {
-		xmlFree(xml_value);
-		return pr_enomem();
-	}
+	if (tmp == NULL)
+		enomem_panic();
 	memset(tmp, 0, tmp_len);
 
 	ptr = tmp;
@@ -471,9 +460,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 	char *base64_str;
 	int error;
 
-	error = publish_create(&tmp);
-	if (error)
-		return error;
+	tmp = publish_create();
 
 	error = parse_doc_data(reader, parse_hash, hash_required,
 	    &tmp->doc_data);
@@ -532,9 +519,7 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw **withdraw)
 	struct rpki_uri *uri;
 	int error;
 
-	error = withdraw_create(&tmp);
-	if (error)
-		return error;
+	tmp = withdraw_create();
 
 	error = parse_doc_data(reader, true, true, &tmp->doc_data);
 	if (error)
@@ -595,12 +580,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 		    uri_get_local(uri));
 	}
 
-	error = add_mft_to_list(visited_uris, uri_get_global(uri));
-	if (error) {
-		uri_refput(uri);
-		file_close(out);
-		return error;
-	}
+	add_mft_to_list(visited_uris, uri_get_global(uri));
 
 	uri_refput(uri);
 	file_close(out);
@@ -702,11 +682,8 @@ parse_notification_delta(xmlTextReaderPtr reader,
 	if (error)
 		return error;
 
-	error = deltas_head_add(&update->deltas_list, &delta);
-	if (error)
-		doc_data_cleanup(&delta.doc_data);
-
-	return error;
+	deltas_head_add(&update->deltas_list, &delta);
+	return 0;
 }
 
 static int
@@ -749,7 +726,7 @@ parse_notification(struct rpki_uri *uri, struct update_notification **file)
 
 	result = update_notification_create(uri_get_global(uri));
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	error = relax_ng_parse(uri_get_local(uri), xml_read_notification,
 	    result);
@@ -799,7 +776,6 @@ static int
 parse_snapshot(struct rpki_uri *uri, struct proc_upd_args *args)
 {
 	struct rdr_snapshot_ctx ctx;
-	struct snapshot *snapshot;
 	int error;
 
 	fnstack_push_uri(uri);
@@ -809,19 +785,14 @@ parse_snapshot(struct rpki_uri *uri, struct proc_upd_args *args)
 	if (error)
 		goto pop;
 
-	error = snapshot_create(&snapshot);
-	if (error)
-		goto pop;
-
-	ctx.snapshot = snapshot;
+	ctx.snapshot = snapshot_create();
 	ctx.parent = args->parent;
 	ctx.visited_uris = args->visited_uris;
+
 	error = relax_ng_parse(uri_get_local(uri), xml_read_snapshot, &ctx);
 
-	/* Error 0 is ok */
-	snapshot_destroy(snapshot);
-pop:
-	fnstack_pop();
+	snapshot_destroy(ctx.snapshot);
+pop:	fnstack_pop();
 	return error;
 }
 
@@ -865,7 +836,6 @@ parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
     struct proc_upd_args *args)
 {
 	struct rdr_delta_ctx ctx;
-	struct delta *delta;
 	struct doc_data *expected_data;
 	int error;
 
@@ -877,19 +847,14 @@ parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
 	if (error)
 		goto pop_fnstack;
 
-	error = delta_create(&delta);
-	if (error)
-		goto pop_fnstack;
-
-	ctx.delta = delta;
+	ctx.delta = delta_create();
 	ctx.parent = args->parent;
 	ctx.visited_uris = args->visited_uris;
 	ctx.expected_serial = parents_data->serial;
+
 	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
 
-	delta_destroy(delta);
-	/* Error 0 is ok */
-
+	delta_destroy(ctx.delta);
 pop_fnstack:
 	fnstack_pop();
 	return error;

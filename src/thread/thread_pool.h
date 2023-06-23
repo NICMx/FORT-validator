@@ -14,7 +14,7 @@ int thread_pool_create(char const *, unsigned int, struct thread_pool **);
 void thread_pool_destroy(struct thread_pool *);
 
 typedef void (*thread_pool_task_cb)(void *);
-int thread_pool_push(struct thread_pool *, char const *, thread_pool_task_cb,
+void thread_pool_push(struct thread_pool *, char const *, thread_pool_task_cb,
     void *);
 
 bool thread_pool_avail_threads(struct thread_pool *);

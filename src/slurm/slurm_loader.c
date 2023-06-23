@@ -135,7 +135,7 @@ __slurm_load_checksums(char const *location, void *arg)
 
 	csum = malloc(sizeof(struct slurm_file_csum));
 	if (csum == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	error = hash_local_file("sha256", location, csum->csum,
 	    &csum->csum_len);

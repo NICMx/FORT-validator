@@ -27,10 +27,10 @@ internal_pool_init(void)
 	return 0;
 }
 
-int
+void
 internal_pool_push(char const *task_name, thread_pool_task_cb cb, void *arg)
 {
-	return thread_pool_push(pool, task_name, cb, arg);
+	thread_pool_push(pool, task_name, cb, arg);
 }
 
 void

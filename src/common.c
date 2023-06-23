@@ -106,11 +106,11 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	/* Get the full file path */
 	tmp = strdup(dir_name);
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	tmp = realloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	strcat(tmp, "/");
 	strcat(tmp, file_name);
@@ -299,7 +299,7 @@ create_dir_recursive(char const *path)
 
 	localuri = strdup(path);
 	if (localuri == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
@@ -363,7 +363,7 @@ delete_dir_recursive_bottom_up(char const *path)
 
 	config_repo = strdup(config_get_local_repository());
 	if (config_repo == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	/* Stop dir removal when the work_dir has this length */
 	config_len = strlen(config_repo);
@@ -373,7 +373,7 @@ delete_dir_recursive_bottom_up(char const *path)
 
 	work_loc = strdup(path);
 	if (work_loc == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	do {
 		tmp = strrchr(work_loc, '/');
@@ -434,9 +434,8 @@ get_current_time(time_t *result)
  *
  * Returns 0 on success, otherwise an error code.
  */
-int
-map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
-    char **result)
+char *
+map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace)
 {
 	char const *repository;
 	char *local;
@@ -460,10 +459,9 @@ map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
 	if (workspace != NULL)
 		workspace_len = strlen(workspace);
 
-	local = malloc(repository_len + extra_slash + workspace_len + uri_len +
-	    1);
+	local = malloc(repository_len + extra_slash + workspace_len + uri_len + 1);
 	if (local == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	offset = 0;
 	strcpy(local + offset, repository);
@@ -480,6 +478,5 @@ map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
 	offset += uri_len;
 	local[offset] = '\0';
 
-	*result = local;
-	return 0;
+	return local;
 }

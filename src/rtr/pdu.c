@@ -167,7 +167,7 @@ pdu_load(struct pdu_reader *reader, struct rtr_client *client,
 	request->pdu = malloc(meta->length);
 	if (request->pdu == NULL)
 		/* No error report PDU on allocation failures. */
-		return pr_enomem();
+		enomem_panic();
 
 	error = meta->from_stream(&header, reader, request->pdu);
 	if (error) {

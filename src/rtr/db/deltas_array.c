@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <errno.h>
 #include "config.h"
+#include "log.h"
 
 struct deltas_array {
 	struct deltas **array; /* It's a circular array. */
@@ -17,14 +18,12 @@ darray_create(void)
 
 	result = malloc(sizeof(struct deltas_array));
 	if (result == NULL)
-		return NULL;
+		enomem_panic();
 
 	result->array = calloc(config_get_deltas_lifetime(),
 	    sizeof(struct deltas *));
-	if (result->array == NULL) {
-		free(result);
-		return NULL;
-	}
+	if (result->array == NULL)
+		enomem_panic();
 
 	result->len = 0;
 	result->last = UINT_MAX;

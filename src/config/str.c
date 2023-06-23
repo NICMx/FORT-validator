@@ -34,7 +34,10 @@ string_parse_argv(struct option_field const *field, char const *str,
 	__string_free(result);
 
 	DEREFERENCE(result) = strdup(str);
-	return (DEREFERENCE(result) != NULL) ? 0 : pr_enomem();
+	if (DEREFERENCE(result) == NULL)
+		enomem_panic();
+
+	return 0;
 }
 
 static int

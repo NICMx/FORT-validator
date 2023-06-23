@@ -58,7 +58,7 @@ __mark_as_downloaded(char *uri_str, struct uri_list *visited_uris)
 {
 	struct rpki_uri *uri;
 	ck_assert_int_eq(0, uri_create_rsync_str(&uri, uri_str, strlen(uri_str)));
-	ck_assert_int_eq(mark_as_downloaded(uri, visited_uris), 0);
+	mark_as_downloaded(uri, visited_uris);
 	uri_refput(uri);
 }
 
@@ -75,8 +75,8 @@ START_TEST(rsync_test_list)
 {
 	struct uri_list *visited_uris;
 
-	visited_uris = NULL;
-	ck_assert_int_eq(rsync_create(&visited_uris), 0);
+	visited_uris = rsync_create();
+	ck_assert_ptr_nonnull(visited_uris);
 
 	__mark_as_downloaded("rsync://example.foo/repository/", visited_uris);
 	__mark_as_downloaded("rsync://example.foo/member_repository/",

@@ -72,7 +72,7 @@ struct tal_param {
 	struct threads_list threads;
 };
 
-static int
+static void
 uris_init(struct uris *uris)
 {
 	uris->count = 0;
@@ -80,7 +80,8 @@ uris_init(struct uris *uris)
 	uris->https_count = 0;
 	uris->size = 4; /* Most TALs only define one. */
 	uris->array = malloc(uris->size * sizeof(struct rpki_uri *));
-	return (uris->array != NULL) ? 0 : pr_enomem();
+	if (uris->array == NULL)
+		enomem_panic();
 }
 
 static void
@@ -102,7 +103,6 @@ uris_add(struct uris *uris, char *uri)
 	error = uri_create_mixed_str(&new, uri, strlen(uri));
 	if (error == ENOTSUPPORTED)
 		return pr_op_err("TAL has non-RSYNC/HTTPS URI.");
-
 	if (error)
 		return error;
 
@@ -115,10 +115,8 @@ uris_add(struct uris *uris, char *uri)
 		uris->size *= 2;
 		tmp = realloc(uris->array,
 		    uris->size * sizeof(struct rpki_uri *));
-		if (tmp == NULL) {
-			uri_refput(new);
-			return pr_enomem();
-		}
+		if (tmp == NULL)
+			enomem_panic();
 		uris->array = tmp;
 	}
 
@@ -236,13 +234,11 @@ base64_sanitize(struct line_file *lfile, char **out)
 	new_size = original_size + (original_size / BUF_SIZE);
 	result = malloc(new_size + 1);
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	buf = malloc(BUF_SIZE);
-	if (buf == NULL) {
-		free(result);
-		return pr_enomem();
-	}
+	if (buf == NULL)
+		enomem_panic();
 
 	fd = lfile_fd(lfile);
 	offset = 0;
@@ -286,10 +282,8 @@ base64_sanitize(struct line_file *lfile, char **out)
 	/* Reallocate to exact size and add nul char */
 	if (offset != new_size) {
 		eol = realloc(result, offset + 1);
-		if (eol == NULL) {
-			error = pr_enomem();
-			goto free_result;
-		}
+		if (eol == NULL)
+			enomem_panic();
 		result = eol;
 	}
 	free(buf);
@@ -315,7 +309,7 @@ read_spki(struct line_file *lfile, struct tal *tal)
 	alloc_size = get_spki_alloc_size(lfile);
 	tal->spki = malloc(alloc_size);
 	if (tal->spki == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	tmp = NULL;
 	error = base64_sanitize(lfile, &tmp);
@@ -355,40 +349,33 @@ tal_load(char const *file_name, struct tal **result)
 	if (error) {
 		pr_op_err("Error opening file '%s': %s", file_name,
 		    strerror(abs(error)));
-		goto fail4;
+		return error;
 	}
 
 	tal = malloc(sizeof(struct tal));
-	if (tal == NULL) {
-		error = pr_enomem();
-		goto fail3;
-	}
+	if (tal == NULL)
+		enomem_panic();
 
 	tal->file_name = file_name;
 
-	error = uris_init(&tal->uris);
-	if (error)
-		goto fail2;
+	uris_init(&tal->uris);
 
 	error = read_uris(lfile, &tal->uris);
 	if (error)
-		goto fail1;
+		goto fail;
 
 	error = read_spki(lfile, tal);
 	if (error)
-		goto fail1;
+		goto fail;
 
 	lfile_close(lfile);
 	*result = tal;
 	return 0;
 
-fail1:
+fail:
 	uris_destroy(&tal->uris);
-fail2:
 	free(tal);
-fail3:
 	lfile_close(lfile);
-fail4:
 	return error;
 }
 
@@ -437,7 +424,7 @@ tal_shuffle_uris(struct tal *tal)
 	}
 }
 
-static int
+static void
 tal_order_uris(struct tal *tal)
 {
 	struct rpki_uri **ordered;
@@ -452,14 +439,14 @@ tal_order_uris(struct tal *tal)
 		tal_shuffle_uris(tal);
 
 	if (config_get_rsync_priority() == config_get_http_priority())
-		return 0;
+		return;
 
 	/* Now order according to the priority */
 	http_first = (config_get_http_priority() > config_get_rsync_priority());
 
 	ordered = malloc(tal->uris.size * sizeof(struct rpki_uri *));
 	if (ordered == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	last_rsync = (http_first ? tal->uris.https_count : 0);
 	last_https = (http_first ? 0 : tal->uris.rsync_count);
@@ -475,8 +462,6 @@ tal_order_uris(struct tal *tal)
 	tmp = tal->uris.array;
 	tal->uris.array = ordered;
 	free(tmp);
-
-	return 0;
 }
 
 char const *
@@ -671,9 +656,7 @@ do_file_validation(void *thread_arg)
 	if (error)
 		goto end;
 
-	error = tal_order_uris(tal);
-	if (error)
-		goto destroy_tal;
+	tal_order_uris(tal);
 
 	error = foreach_uri(tal, __handle_tal_uri_sync, thread);
 	if (error > 0) {
@@ -727,38 +710,22 @@ __do_file_validation(char const *tal_file, void *arg)
 		return error;
 
 	thread = malloc(sizeof(struct validation_thread));
-	if (thread == NULL) {
-		error = pr_enomem();
-		goto free_db_rrdp;
-	}
+	if (thread == NULL)
+		enomem_panic();
 
 	thread->tal_file = strdup(tal_file);
-	if (thread->tal_file == NULL) {
-		error = pr_enomem();
-		goto free_thread;
-	}
+	if (thread->tal_file == NULL)
+		enomem_panic();
 	thread->arg = t_param->db;
 	thread->exit_status = -EINTR;
 	thread->retry_local = true;
 	thread->sync_files = true;
 
-	error = thread_pool_push(t_param->pool, thread->tal_file,
-	    do_file_validation, thread);
-	if (error) {
-		pr_op_err("Couldn't push a thread to do files validation");
-		goto free_tal_file;
-	}
+	thread_pool_push(t_param->pool, thread->tal_file, do_file_validation,
+	    thread);
 
 	SLIST_INSERT_HEAD(&t_param->threads, thread, next);
 	return 0;
-
-free_tal_file:
-	free(thread->tal_file);
-free_thread:
-	free(thread);
-free_db_rrdp:
-	db_rrdp_rem_tal(tal_file);
-	return error;
 }
 
 int

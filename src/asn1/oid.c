@@ -29,7 +29,7 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 
 	result->arcs = malloc(MAX_ARCS * sizeof(asn_oid_arc_t));
 	if (result->arcs == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	count = OBJECT_IDENTIFIER_get_arcs(oid, result->arcs, MAX_ARCS);
 	if (count < 0) {
@@ -43,10 +43,8 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 	/* If necessary, reallocate arcs array and try again. */
 	if (count > MAX_ARCS) {
 		tmp = realloc(result->arcs, count * sizeof(asn_oid_arc_t));
-		if (tmp == NULL) {
-			free(result->arcs);
-			return pr_enomem();
-		}
+		if (tmp == NULL)
+			enomem_panic();
 		result->arcs = tmp;
 
 		count2 = OBJECT_IDENTIFIER_get_arcs(oid, result->arcs, count);

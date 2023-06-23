@@ -150,19 +150,18 @@ update_notification_destroy(struct update_notification *file)
 	free(file);
 }
 
-int
-snapshot_create(struct snapshot **file)
+struct snapshot *
+snapshot_create(void)
 {
 	struct snapshot *tmp;
 
 	tmp = malloc(sizeof(struct snapshot));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	global_data_init(&tmp->global_data);
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -172,19 +171,18 @@ snapshot_destroy(struct snapshot *file)
 	free(file);
 }
 
-int
-delta_create(struct delta **file)
+struct delta *
+delta_create(void)
 {
 	struct delta *tmp;
 
 	tmp = malloc(sizeof(struct delta));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	global_data_init(&tmp->global_data);
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -194,21 +192,20 @@ delta_destroy(struct delta *file)
 	free(file);
 }
 
-int
-publish_create(struct publish **file)
+struct publish *
+publish_create(void)
 {
 	struct publish *tmp;
 
 	tmp = malloc(sizeof(struct publish));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	doc_data_init(&tmp->doc_data);
 	tmp->content = NULL;
 	tmp->content_len = 0;
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -219,19 +216,18 @@ publish_destroy(struct publish *file)
 	free(file);
 }
 
-int
-withdraw_create(struct withdraw **file)
+struct withdraw *
+withdraw_create(void)
 {
 	struct withdraw *tmp;
 
 	tmp = malloc(sizeof(struct withdraw));
 	if (tmp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	doc_data_init(&tmp->doc_data);
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void
