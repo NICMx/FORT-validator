@@ -2,6 +2,7 @@
 
 #include <limits.h>
 #include <errno.h>
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
 
@@ -16,17 +17,13 @@ darray_create(void)
 {
 	struct deltas_array *result;
 
-	result = malloc(sizeof(struct deltas_array));
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(sizeof(struct deltas_array));
 
-	result->array = calloc(config_get_deltas_lifetime(),
+	result->array = pcalloc(config_get_deltas_lifetime(),
 	    sizeof(struct deltas *));
-	if (result->array == NULL)
-		enomem_panic();
-
 	result->len = 0;
 	result->last = UINT_MAX;
+
 	return result;
 }
 

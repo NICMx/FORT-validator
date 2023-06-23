@@ -5,6 +5,7 @@
 #include <string.h>
 #include <syslog.h>
 
+#include "alloc.h"
 #include "common.h"
 #include "log.h"
 #include "types/address.h"
@@ -164,10 +165,7 @@ pdu_load(struct pdu_reader *reader, struct rtr_client *client,
 		return RESPOND_ERROR(err_pdu_send_unsupported_pdu_type(
 		    client->fd, client->rtr_version, request));
 
-	request->pdu = malloc(meta->length);
-	if (request->pdu == NULL)
-		/* No error report PDU on allocation failures. */
-		enomem_panic();
+	request->pdu = pmalloc(meta->length);
 
 	error = meta->from_stream(&header, reader, request->pdu);
 	if (error) {

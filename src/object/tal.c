@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
+#include "alloc.h"
 #include "cert_stack.h"
 #include "common.h"
 #include "config.h"
@@ -79,9 +80,7 @@ uris_init(struct uris *uris)
 	uris->rsync_count = 0;
 	uris->https_count = 0;
 	uris->size = 4; /* Most TALs only define one. */
-	uris->array = malloc(uris->size * sizeof(struct rpki_uri *));
-	if (uris->array == NULL)
-		enomem_panic();
+	uris->array = pmalloc(uris->size * sizeof(struct rpki_uri *));
 }
 
 static void
@@ -96,7 +95,6 @@ uris_destroy(struct uris *uris)
 static int
 uris_add(struct uris *uris, char *uri)
 {
-	struct rpki_uri **tmp;
 	struct rpki_uri *new;
 	int error;
 
@@ -113,11 +111,8 @@ uris_add(struct uris *uris, char *uri)
 
 	if (uris->count + 1 >= uris->size) {
 		uris->size *= 2;
-		tmp = realloc(uris->array,
+		uris->array = realloc(uris->array,
 		    uris->size * sizeof(struct rpki_uri *));
-		if (tmp == NULL)
-			enomem_panic();
-		uris->array = tmp;
 	}
 
 	uris->array[uris->count++] = new;
@@ -232,13 +227,8 @@ base64_sanitize(struct line_file *lfile, char **out)
 	 */
 	original_size = get_spki_orig_size(lfile);
 	new_size = original_size + (original_size / BUF_SIZE);
-	result = malloc(new_size + 1);
-	if (result == NULL)
-		enomem_panic();
-
-	buf = malloc(BUF_SIZE);
-	if (buf == NULL)
-		enomem_panic();
+	result = pmalloc(new_size + 1);
+	buf = pmalloc(BUF_SIZE);
 
 	fd = lfile_fd(lfile);
 	offset = 0;
@@ -280,12 +270,8 @@ base64_sanitize(struct line_file *lfile, char **out)
 		}
 	}
 	/* Reallocate to exact size and add nul char */
-	if (offset != new_size) {
-		eol = realloc(result, offset + 1);
-		if (eol == NULL)
-			enomem_panic();
-		result = eol;
-	}
+	if (offset != new_size)
+		result = prealloc(result, offset + 1);
 	free(buf);
 	result[offset] = '\0';
 
@@ -307,9 +293,7 @@ read_spki(struct line_file *lfile, struct tal *tal)
 	int error;
 
 	alloc_size = get_spki_alloc_size(lfile);
-	tal->spki = malloc(alloc_size);
-	if (tal->spki == NULL)
-		enomem_panic();
+	tal->spki = pmalloc(alloc_size);
 
 	tmp = NULL;
 	error = base64_sanitize(lfile, &tmp);
@@ -352,18 +336,13 @@ tal_load(char const *file_name, struct tal **result)
 		return error;
 	}
 
-	tal = malloc(sizeof(struct tal));
-	if (tal == NULL)
-		enomem_panic();
+	tal = pmalloc(sizeof(struct tal));
 
 	tal->file_name = file_name;
-
 	uris_init(&tal->uris);
-
 	error = read_uris(lfile, &tal->uris);
 	if (error)
 		goto fail;
-
 	error = read_spki(lfile, tal);
 	if (error)
 		goto fail;
@@ -444,9 +423,7 @@ tal_order_uris(struct tal *tal)
 	/* Now order according to the priority */
 	http_first = (config_get_http_priority() > config_get_rsync_priority());
 
-	ordered = malloc(tal->uris.size * sizeof(struct rpki_uri *));
-	if (ordered == NULL)
-		enomem_panic();
+	ordered = pmalloc(tal->uris.size * sizeof(struct rpki_uri *));
 
 	last_rsync = (http_first ? tal->uris.https_count : 0);
 	last_https = (http_first ? 0 : tal->uris.rsync_count);
@@ -709,13 +686,9 @@ __do_file_validation(char const *tal_file, void *arg)
 	if (error)
 		return error;
 
-	thread = malloc(sizeof(struct validation_thread));
-	if (thread == NULL)
-		enomem_panic();
+	thread = pmalloc(sizeof(struct validation_thread));
 
-	thread->tal_file = strdup(tal_file);
-	if (thread->tal_file == NULL)
-		enomem_panic();
+	thread->tal_file = pstrdup(tal_file);
 	thread->arg = t_param->db;
 	thread->exit_status = -EINTR;
 	thread->retry_local = true;

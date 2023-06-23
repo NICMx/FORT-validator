@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "alloc.h"
 #include "log.h"
 
 struct sorted_array {
@@ -24,15 +26,9 @@ sarray_create(size_t elem_size, sarray_cmp cmp)
 {
 	struct sorted_array *result;
 
-	result = malloc(sizeof(struct sorted_array));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct sorted_array));
 
-	result->array = calloc(8, elem_size);
-	if (result->array == NULL) {
-		free(result);
-		return NULL;
-	}
+	result->array = pcalloc(8, elem_size);
 	result->count = 0;
 	result->len = 8;
 	result->size = elem_size;
@@ -105,17 +101,14 @@ int
 sarray_add(struct sorted_array *sarray, void *element)
 {
 	int error;
-	void *tmp;
 
 	error = compare(sarray, element);
 	if (error)
 		return error;
 
 	if (sarray->count >= sarray->len) {
-		tmp = realloc(sarray->array, 2 * sarray->len * sarray->size);
-		if (tmp == NULL)
-			enomem_panic();
-		sarray->array = tmp;
+		sarray->array = realloc(sarray->array,
+		    2 * sarray->len * sarray->size);
 		sarray->len *= 2;
 	}
 

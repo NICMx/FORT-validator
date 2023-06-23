@@ -2,6 +2,7 @@
 
 #include <sys/queue.h>
 
+#include "alloc.h"
 #include "resource.h"
 #include "str_token.h"
 #include "thread_var.h"
@@ -103,9 +104,7 @@ certstack_create(struct cert_stack **result)
 {
 	struct cert_stack *stack;
 
-	stack = malloc(sizeof(struct cert_stack));
-	if (stack == NULL)
-		enomem_panic();
+	stack = pmalloc(sizeof(struct cert_stack));
 
 	stack->x509s = sk_X509_new_null();
 	if (stack->x509s == NULL) {
@@ -187,9 +186,7 @@ deferstack_push(struct cert_stack *stack, struct deferred_cert *deferred)
 {
 	struct defer_node *node;
 
-	node = malloc(sizeof(struct defer_node));
-	if (node == NULL)
-		enomem_panic();
+	node = pmalloc(sizeof(struct defer_node));
 
 	node->type = DNT_CERT;
 	node->deferred = *deferred;
@@ -314,11 +311,9 @@ create_separator(void)
 {
 	struct defer_node *result;
 
-	result = malloc(sizeof(struct defer_node));
-	if (result == NULL)
-		enomem_panic();
-
+	result = pmalloc(sizeof(struct defer_node));
 	result->type = DNT_SEPARATOR;
+
 	return result;
 }
 
@@ -332,9 +327,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 	int ok;
 	int error;
 
-	meta = malloc(sizeof(struct metadata_node));
-	if (meta == NULL)
-		enomem_panic();
+	meta = pmalloc(sizeof(struct metadata_node));
 
 	meta->uri = uri;
 	uri_refget(uri);
@@ -426,17 +419,12 @@ static char *
 get_current_file_name(void)
 {
 	char const *file_name;
-	char *result;
 
 	file_name = fnstack_peek();
 	if (file_name == NULL)
 		pr_crit("The file name stack is empty.");
 
-	result = strdup(file_name);
-	if (result == NULL)
-		enomem_panic();
-
-	return result;
+	return pstrdup(file_name);
 }
 
 /**

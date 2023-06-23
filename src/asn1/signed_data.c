@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include "algorithm.h"
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
 #include "oid.h"
@@ -414,9 +415,7 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 	if (error)
 		return error;
 
-	sdata = calloc(1, sizeof(struct SignedData));
-	if (sdata == NULL)
-		enomem_panic();
+	sdata = pcalloc(1, sizeof(struct SignedData));
 
 	/* Parse content as OCTET STRING */
 	error = asn1_decode_any(sdata_pkcs7->encapContentInfo.eContent,

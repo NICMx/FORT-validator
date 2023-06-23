@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include "alloc.h"
 #include "crypto/hash.h"
 #include "common.h"
 #include "log.h"
@@ -52,9 +53,7 @@ get_workspace_path(char const *base, char **result)
 	char *ptr;
 	int error;
 
-	hash = malloc(HASH_LEN * sizeof(unsigned char));
-	if (hash == NULL)
-		enomem_panic();
+	hash = pmalloc(HASH_LEN * sizeof(unsigned char));
 
 	hash_len = 0;
 	error = hash_str("sha1", base, hash, &hash_len);
@@ -64,9 +63,7 @@ get_workspace_path(char const *base, char **result)
 	}
 
 	/* Get the first bytes + one slash + NUL char */
-	tmp = malloc(OUT_LEN + 2);
-	if (tmp == NULL)
-		enomem_panic();
+	tmp = pmalloc(OUT_LEN + 2);
 
 	ptr = tmp;
 	for (i = 0; i < OUT_LEN / 2; i++) {
@@ -87,15 +84,11 @@ tal_elem_create(struct tal_elem **elem, char const *name)
 	struct tal_elem *tmp;
 	int error;
 
-	tmp = malloc(sizeof(struct tal_elem));
-	if (tmp == NULL)
-		enomem_panic();
+	tmp = pmalloc(sizeof(struct tal_elem));
 
 	tmp->uris = db_rrdp_uris_create();
 	tmp->visited = true;
-	tmp->file_name = strdup(name);
-	if (tmp->file_name == NULL)
-		enomem_panic();
+	tmp->file_name = pstrdup(name);
 
 	error = get_workspace_path(name, &tmp->workspace);
 	if (error) {

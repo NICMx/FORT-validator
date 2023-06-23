@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "common.h"
 
+#include "alloc.c"
 #include "file.c"
 #include "impersonator.c"
 #include "line_file.c"

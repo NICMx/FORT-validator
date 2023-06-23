@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include "alloc.h"
 #include "config.h"
 #include "types/address.h"
 #include "data_structure/array_list.h"
@@ -84,22 +85,14 @@ parse_address(char const *full_address, char **address, char **service)
 
 	if (full_address == NULL) {
 		tmp_addr = NULL;
-		tmp_serv = strdup(config_get_server_port());
-		if (tmp_serv == NULL)
-			enomem_panic();
+		tmp_serv = pstrdup(config_get_server_port());
 		goto done;
 	}
 
 	ptr = strrchr(full_address, '#');
 	if (ptr == NULL) {
-		tmp_addr = strdup(full_address);
-		if (tmp_addr == NULL)
-			enomem_panic();
-
-		tmp_serv = strdup(config_get_server_port());
-		if (tmp_serv == NULL)
-			enomem_panic();
-
+		tmp_addr = pstrdup(full_address);
+		tmp_serv = pstrdup(config_get_server_port());
 		goto done;
 	}
 
@@ -108,17 +101,12 @@ parse_address(char const *full_address, char **address, char **service)
 		    full_address);
 
 	tmp_addr_len = strlen(full_address) - strlen(ptr);
-	tmp_addr = malloc(tmp_addr_len + 1);
-	if (tmp_addr == NULL)
-		enomem_panic();
+	tmp_addr = pmalloc(tmp_addr_len + 1);
 
 	memcpy(tmp_addr, full_address, tmp_addr_len);
 	tmp_addr[tmp_addr_len] = '\0';
 
-	tmp_serv = strdup(ptr + 1);
-	if (tmp_serv == NULL)
-		enomem_panic();
-
+	tmp_serv = pstrdup(ptr + 1);
 	/* Fall through */
 done:
 	*address = tmp_addr;
@@ -298,7 +286,7 @@ create_server_socket(char const *input_addr, char const *hostname,
 
 		server.fd = fd;
 		/* Ignore failure; this is just a nice-to-have. */
-		server.addr = (input_addr != NULL) ? strdup(input_addr) : NULL;
+		server.addr = (input_addr != NULL) ? pstrdup(input_addr) : NULL;
 		server_arraylist_add(&servers, &server);
 
 		return 0; /* Happy path */
@@ -509,9 +497,7 @@ __handle_client_request(struct rtr_client *client)
 {
 	struct client_request *request;
 
-	request = malloc(sizeof(struct client_request));
-	if (request == NULL)
-		enomem_panic();
+	request = pmalloc(sizeof(struct client_request));
 
 	request->client = client;
 	if (!read_until_block(client->fd, request)) {
@@ -602,11 +588,7 @@ fddb_poll(void)
 	unsigned int i;
 	int error;
 
-	pollfds = calloc(servers.len + clients.len, sizeof(struct pollfd));
-	if (pollfds == NULL) {
-		enomem_panic();
-		return PV_RETRY;
-	}
+	pollfds = pcalloc(servers.len + clients.len, sizeof(struct pollfd));
 
 	ARRAYLIST_FOREACH(&servers, server, i)
 		init_pollfd(&pollfds[i], server->fd);

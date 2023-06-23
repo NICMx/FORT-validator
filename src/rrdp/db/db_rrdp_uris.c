@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include "data_structure/uthash.h"
+#include "alloc.h"
 #include "common.h"
 #include "log.h"
 #include "thread_var.h"
@@ -33,20 +34,10 @@ uris_table_create(char const *uri, char const *session_id,
 {
 	struct uris_table *tmp;
 
-	tmp = malloc(sizeof(struct uris_table));
-	if (tmp == NULL)
-		enomem_panic();
-	/* Needed by uthash */
-	memset(tmp, 0, sizeof(struct uris_table));
+	tmp = pzalloc(sizeof(struct uris_table)); /* Zero needed by uthash */
 
-	tmp->uri = strdup(uri);
-	if (tmp->uri == NULL)
-		enomem_panic();
-
-	tmp->data.session_id = strdup(session_id);
-	if (tmp->data.session_id == NULL)
-		enomem_panic();
-
+	tmp->uri = pstrdup(uri);
+	tmp->data.session_id = pstrdup(session_id);
 	tmp->data.serial = serial;
 	tmp->last_update = 0;
 	tmp->request_status = req_status;
@@ -118,10 +109,7 @@ db_rrdp_uris_create(void)
 {
 	struct db_rrdp_uri *tmp;
 
-	tmp = malloc(sizeof(struct db_rrdp_uri));
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(sizeof(struct db_rrdp_uri));
 	tmp->table = NULL;
 	tmp->current_workspace = NULL;
 

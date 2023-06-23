@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "alloc.c"
 #include "common.c"
 #include "log.c"
 #include "impersonator.c"

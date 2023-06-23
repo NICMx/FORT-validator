@@ -4,6 +4,7 @@
 #include <time.h>
 #include <arpa/inet.h>
 
+#include "alloc.h"
 #include "common.h"
 #include "crypto/base64.h"
 #include "data_structure/array_list.h"
@@ -63,9 +64,7 @@ slurm_lists_create(void)
 {
 	struct slurm_lists *cache;
 
-	cache = malloc(sizeof(struct slurm_lists));
-	if (cache == NULL)
-		enomem_panic();
+	cache = pmalloc(sizeof(struct slurm_lists));
 
 	al_filter_prefix_init(&cache->filter_pfx_al);
 	al_assertion_prefix_init(&cache->assertion_pfx_al);
@@ -100,9 +99,7 @@ db_slurm_create(struct slurm_csum_list *csums, struct db_slurm **result)
 	struct db_slurm *db;
 	int error;
 
-	db = malloc(sizeof(struct db_slurm));
-	if (db == NULL)
-		enomem_panic();
+	db = pmalloc(sizeof(struct db_slurm));
 
 	error = get_current_time(&db->loaded_date);
 	if (error) {

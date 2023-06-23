@@ -189,7 +189,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 		 * - Positive value: file doesn't exist and keep validating
 		 *   manifest.
 		 */
-		error = hash_validate_mft_file("sha256", uri, &fah->hash);
+		error = hash_validate_mft_file(uri, &fah->hash);
 		if (error < 0) {
 			uri_refput(uri);
 			goto fail;

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "alloc.c"
 #include "common.c"
 #include "log.c"
 #include "impersonator.c"

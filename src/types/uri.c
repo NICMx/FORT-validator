@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <strings.h>
 #include "rrdp/db/db_rrdp_uris.h"
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -124,9 +125,7 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 			return error;
 	}
 
-	uri->global = malloc(str_len + 1);
-	if (uri->global == NULL)
-		enomem_panic();
+	uri->global = pmalloc(str_len + 1);
 	strncpy(uri->global, str, str_len);
 	uri->global[str_len] = '\0';
 	uri->global_len = str_len;
@@ -203,9 +202,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 		return pr_val_err("Manifest URL '%s' contains no slashes.", mft);
 
 	dir_len = (slash_pos + 1) - mft;
-	joined = malloc(dir_len + ia5->size + 1);
-	if (joined == NULL)
-		enomem_panic();
+	joined = pmalloc(dir_len + ia5->size + 1);
 
 	strncpy(joined, mft, dir_len);
 	strncpy(joined + dir_len, (char *) ia5->buf, ia5->size);
@@ -281,17 +278,12 @@ static char *
 get_local_workspace(void)
 {
 	char const *workspace;
-	char *tmp;
 
 	workspace = db_rrdp_uris_workspace_get();
 	if (workspace == NULL)
 		return NULL;
 
-	tmp = strdup(workspace);
-	if (tmp == NULL)
-		enomem_panic();
-
-	return tmp;
+	return pstrdup(workspace);
 }
 
 /**
@@ -345,9 +337,7 @@ uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
 	struct rpki_uri *uri;
 	int error;
 
-	uri = malloc(sizeof(struct rpki_uri));
-	if (uri == NULL)
-		enomem_panic();
+	uri = pmalloc(sizeof(struct rpki_uri));
 
 	error = str2global(guri, guri_len, uri);
 	if (error) {
@@ -413,9 +403,7 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
 	uint8_t flags;
 	int error;
 
-	uri = malloc(sizeof(struct rpki_uri));
-	if (uri == NULL)
-		enomem_panic();
+	uri = pmalloc(sizeof(struct rpki_uri));
 
 	error = ia5str2global(uri, mft->global, ia5);
 	if (error) {

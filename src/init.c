@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 
+#include "alloc.h"
 #include "log.h"
 #include "http/http.h"
 
@@ -37,9 +38,7 @@ fetch_url(char const *url)
 
 	extra_slash = (dest_dir[dest_dir_len - 1] == '/') ? 0 : 1;
 
-	dest = malloc(dest_dir_len + extra_slash + strlen(dest_file) + 1);
-	if (dest == NULL)
-		enomem_panic();
+	dest = pmalloc(dest_dir_len + extra_slash + strlen(dest_file) + 1);
 
 	offset = 0;
 	strcpy(dest + offset, dest_dir);

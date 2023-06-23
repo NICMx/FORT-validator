@@ -5,6 +5,7 @@
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
+#include "alloc.h"
 #include "log.h"
 #include "config.h"
 #include "common.h"
@@ -131,15 +132,10 @@ __slurm_load_checksums(char const *location, void *arg)
 {
 	struct slurm_csum_list *list;
 	struct slurm_file_csum *csum;
-	int error;
 
-	csum = malloc(sizeof(struct slurm_file_csum));
-	if (csum == NULL)
-		enomem_panic();
+	csum = pmalloc(sizeof(struct slurm_file_csum));
 
-	error = hash_local_file("sha256", location, csum->csum,
-	    &csum->csum_len);
-	if (error) {
+	if (hash_local_file(location, csum->csum, &csum->csum_len) != 0) {
 		free(csum);
 		return pr_op_err("Calculating slurm hash");
 	}

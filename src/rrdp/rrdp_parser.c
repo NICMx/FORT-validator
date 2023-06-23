@@ -14,6 +14,7 @@
 #include "crypto/hash.h"
 #include "http/http.h"
 #include "xml/relax_ng.h"
+#include "alloc.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"
@@ -148,17 +149,12 @@ base64_sanitize(char *content, char **out)
 		return error;
 
 	if (original_size <= BUF_SIZE) {
-		result = strdup(content);
-		if (result == NULL)
-			enomem_panic();
-		*out = result;
+		*out = pstrdup(content);
 		return 0;
 	}
 
 	new_size = original_size + (original_size / BUF_SIZE);
-	result = malloc(new_size + 1);
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(new_size + 1);
 
 	offset = 0;
 	while (original_size > 0){
@@ -175,12 +171,8 @@ base64_sanitize(char *content, char **out)
 	}
 
 	/* Reallocate to exact size and add nul char */
-	if (offset != new_size + 1) {
-		tmp = realloc(result, offset + 1);
-		if (tmp == NULL)
-			enomem_panic();
-		result = tmp;
-	}
+	if (offset != new_size + 1)
+		result = prealloc(result, offset + 1);
 
 	result[offset] = '\0';
 	*out = result;
@@ -210,9 +202,7 @@ base64_read(char *content, unsigned char **out, size_t *out_len)
 	}
 
 	alloc_size = EVP_DECODE_LENGTH(strlen(content));
-	result = malloc(alloc_size);
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(alloc_size);
 
 	error = base64_decode(encoded, result, true, alloc_size, &result_len);
 	if (error)
@@ -250,10 +240,7 @@ parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 			    attr, xmlTextReaderConstLocalName(reader));
 	}
 
-	tmp = malloc(xmlStrlen(xml_value) + 1);
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(xmlStrlen(xml_value) + 1);
 	memcpy(tmp, xml_value, xmlStrlen(xml_value));
 	tmp[xmlStrlen(xml_value)] = '\0';
 	xmlFree(xml_value);
@@ -313,10 +300,7 @@ parse_hex_string(xmlTextReaderPtr reader, bool required, char const *attr,
 	}
 
 	tmp_len = xmlStrlen(xml_value) / 2;
-	tmp = malloc(tmp_len);
-	if (tmp == NULL)
-		enomem_panic();
-	memset(tmp, 0, tmp_len);
+	tmp = pzalloc(tmp_len);
 
 	ptr = tmp;
 	xml_cur = (char *) xml_value;
@@ -491,7 +475,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 		if (error)
 			goto release_base64;
 
-		error = hash_validate_file("sha256", uri, tmp->doc_data.hash,
+		error = hash_validate_file(uri, tmp->doc_data.hash,
 		    tmp->doc_data.hash_len);
 		uri_refput(uri);
 		if (error != 0) {
@@ -531,8 +515,8 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw **withdraw)
 	if (error)
 		goto release_tmp;
 
-	error = hash_validate_file("sha256", uri,
-	    tmp->doc_data.hash, tmp->doc_data.hash_len);
+	error = hash_validate_file(uri, tmp->doc_data.hash,
+	    tmp->doc_data.hash_len);
 	if (error)
 		goto release_uri;
 
@@ -780,7 +764,7 @@ parse_snapshot(struct rpki_uri *uri, struct proc_upd_args *args)
 
 	fnstack_push_uri(uri);
 	/* Hash validation */
-	error = hash_validate_file("sha256", uri, args->parent->snapshot.hash,
+	error = hash_validate_file(uri, args->parent->snapshot.hash,
 	    args->parent->snapshot.hash_len);
 	if (error)
 		goto pop;
@@ -842,7 +826,7 @@ parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
 	expected_data = &parents_data->doc_data;
 
 	fnstack_push_uri(uri);
-	error = hash_validate_file("sha256", uri, expected_data->hash,
+	error = hash_validate_file(uri, expected_data->hash,
 	    expected_data->hash_len);
 	if (error)
 		goto pop_fnstack;

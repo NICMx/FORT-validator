@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include "alloc.h"
 #include "log.h"
 
 DEFINE_ARRAY_LIST_FUNCTIONS(deltas_head, struct delta_head, )
@@ -118,18 +119,12 @@ update_notification_create(char const *uri)
 {
 	struct update_notification *result;
 
-	result = malloc(sizeof(struct update_notification));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct update_notification));
 
 	global_data_init(&result->global_data);
 	doc_data_init(&result->snapshot);
 	deltas_head_init(&result->deltas_list);
-	result->uri = strdup(uri);
-	if (result->uri == NULL) {
-		free(result);
-		return NULL;
-	}
+	result->uri = pstrdup(uri);
 
 	return result;
 }
@@ -155,10 +150,7 @@ snapshot_create(void)
 {
 	struct snapshot *tmp;
 
-	tmp = malloc(sizeof(struct snapshot));
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(sizeof(struct snapshot));
 	global_data_init(&tmp->global_data);
 
 	return tmp;
@@ -176,10 +168,7 @@ delta_create(void)
 {
 	struct delta *tmp;
 
-	tmp = malloc(sizeof(struct delta));
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(sizeof(struct delta));
 	global_data_init(&tmp->global_data);
 
 	return tmp;
@@ -197,10 +186,7 @@ publish_create(void)
 {
 	struct publish *tmp;
 
-	tmp = malloc(sizeof(struct publish));
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(sizeof(struct publish));
 	doc_data_init(&tmp->doc_data);
 	tmp->content = NULL;
 	tmp->content_len = 0;
@@ -221,10 +207,7 @@ withdraw_create(void)
 {
 	struct withdraw *tmp;
 
-	tmp = malloc(sizeof(struct withdraw));
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(sizeof(struct withdraw));
 	doc_data_init(&tmp->doc_data);
 
 	return tmp;

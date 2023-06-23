@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <syslog.h>
 
+#include "alloc.h"
 #include "common.h"
 #include "configure_ac.h"
 #include "daemon.h"
@@ -912,12 +913,8 @@ construct_getopt_options(struct option **_long_opts, char **_short_opts)
 	}
 
 	/* +1 NULL end, means end of array. */
-	long_opts = calloc(total_long_options + 1, sizeof(struct option));
-	if (long_opts == NULL)
-		enomem_panic();
-	short_opts = malloc(total_short_options + 1);
-	if (short_opts == NULL)
-		enomem_panic();
+	long_opts = pcalloc(total_long_options + 1, sizeof(struct option));
+	short_opts = pmalloc(total_short_options + 1);
 
 	*_long_opts = long_opts;
 	*_short_opts = short_opts;
@@ -987,11 +984,7 @@ set_default_values(void)
 	 */
 
 	string_array_init(&rpki_config.server.address, NULL, 0);
-
-	rpki_config.server.port = strdup("323");
-	if (rpki_config.server.port == NULL)
-		enomem_panic();
-
+	rpki_config.server.port = pstrdup("323");
 	rpki_config.server.backlog = SOMAXCONN;
 	rpki_config.server.interval.validation = 3600;
 	rpki_config.server.interval.refresh = 3600;
@@ -1000,15 +993,11 @@ set_default_values(void)
 	rpki_config.server.deltas_lifetime = 2;
 
 	rpki_config.tal = NULL;
-	rpki_config.slurm = NULL;
-
-	rpki_config.local_repository = strdup("/tmp/fort/repository");
-	if (rpki_config.local_repository == NULL)
-		enomem_panic();
-
+	rpki_config.local_repository = pstrdup("/tmp/fort/repository");
 	rpki_config.sync_strategy = RSYNC_ROOT_EXCEPT_TA;
 	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
+	rpki_config.slurm = NULL;
 	rpki_config.mode = SERVER;
 	rpki_config.work_offline = false;
 	rpki_config.daemon = false;
@@ -1018,23 +1007,18 @@ set_default_values(void)
 	rpki_config.rsync.strategy = RSYNC_ROOT_EXCEPT_TA;
 	rpki_config.rsync.retry.count = 1;
 	rpki_config.rsync.retry.interval = 4;
-	rpki_config.rsync.program = strdup("rsync");
-	if (rpki_config.rsync.program == NULL)
-		enomem_panic();
-
-	string_array_init(&rpki_config.rsync.args.recursive,
-	    recursive_rsync_args, ARRAY_LEN(recursive_rsync_args));
+	rpki_config.rsync.program = pstrdup("rsync");
 	string_array_init(&rpki_config.rsync.args.flat,
 	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
+	string_array_init(&rpki_config.rsync.args.recursive,
+	    recursive_rsync_args, ARRAY_LEN(recursive_rsync_args));
 
 	/* By default, has a higher priority than rsync */
 	rpki_config.http.enabled = true;
 	rpki_config.http.priority = 60;
 	rpki_config.http.retry.count = 1;
 	rpki_config.http.retry.interval = 4;
-	rpki_config.http.user_agent = strdup(PACKAGE_NAME "/" PACKAGE_VERSION);
-	if (rpki_config.http.user_agent == NULL)
-		enomem_panic();
+	rpki_config.http.user_agent = pstrdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	rpki_config.http.connect_timeout = 30;
 	rpki_config.http.transfer_timeout = 0;
 	rpki_config.http.low_speed_limit = 100000;
@@ -1051,28 +1035,21 @@ set_default_values(void)
 	rpki_config.rrdp.retry.count = rpki_config.http.retry.count;
 	rpki_config.rrdp.retry.interval = rpki_config.http.retry.interval;
 
-	rpki_config.log.color = false;
-	rpki_config.log.filename_format = FNF_GLOBAL;
-	rpki_config.log.level = LOG_WARNING;
-	rpki_config.log.output = CONSOLE;
-
 	rpki_config.log.enabled = true;
-	rpki_config.log.output = CONSOLE;
-	rpki_config.log.level = LOG_WARNING;
+	rpki_config.log.tag = NULL;
 	rpki_config.log.color = false;
 	rpki_config.log.filename_format = FNF_GLOBAL;
+	rpki_config.log.level = LOG_WARNING;
+	rpki_config.log.output = CONSOLE;
 	rpki_config.log.facility = LOG_DAEMON;
-	rpki_config.log.tag = NULL;
 
 	rpki_config.validation_log.enabled = false;
-	rpki_config.validation_log.output = CONSOLE;
-	rpki_config.validation_log.level = LOG_WARNING;
+	rpki_config.validation_log.tag = pstrdup("Validation");
 	rpki_config.validation_log.color = false;
 	rpki_config.validation_log.filename_format = FNF_GLOBAL;
+	rpki_config.validation_log.level = LOG_WARNING;
+	rpki_config.validation_log.output = CONSOLE;
 	rpki_config.validation_log.facility = LOG_DAEMON;
-	rpki_config.validation_log.tag = strdup("Validation");
-	if (rpki_config.validation_log.tag == NULL)
-		enomem_panic();
 
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
@@ -1080,13 +1057,10 @@ set_default_values(void)
 
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
-
 	rpki_config.init_tals = false;
 	rpki_config.init_tal_locations = 0;
 
-	/* Common scenario is to connect 1 router or a couple of them */
 	rpki_config.thread_pool.server.max = 20;
-	/* Usually 5 TALs, let a few more available */
 	rpki_config.thread_pool.validation.max = 5;
 }
 

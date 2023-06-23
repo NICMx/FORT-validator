@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdint.h> /* UINT32_MAX */
 
+#include "alloc.h"
 #include "log.h"
 #include "sorted_array.h"
 #include "thread_var.h"
@@ -34,9 +35,7 @@ resources_create(bool force_inherit)
 {
 	struct resources *result;
 
-	result = malloc(sizeof(struct resources));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct resources));
 
 	result->ip4s = NULL;
 	result->ip6s = NULL;

@@ -10,6 +10,7 @@
 
 #include "crypto/base64.h"
 #include "algorithm.h"
+#include "alloc.h"
 #include "log.h"
 #include "json_parser.h"
 #include "types/address.h"
@@ -131,9 +132,7 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 	} else if (error)
 		return error;
 
-	clone = strdup(str_prefix);
-	if (clone == NULL)
-		enomem_panic();
+	clone = pstrdup(str_prefix);
 
 	token = strtok(clone, "/");
 	isv4 = strchr(token, ':') == NULL;

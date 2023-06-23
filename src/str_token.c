@@ -2,6 +2,8 @@
 
 #include <errno.h>
 #include <string.h>
+
+#include "alloc.h"
 #include "log.h"
 
 /**
@@ -12,9 +14,7 @@ string_clone(void const *string, size_t size)
 {
 	char *result;
 
-	result = malloc(size + 1);
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(size + 1);
 
 	memcpy(result, string, size);
 	result[size] = '\0';
@@ -52,9 +52,7 @@ BN2string(BIGNUM *bn, char **_result)
 	}
 
 	written = BIO_number_written(bio);
-	result = malloc(written + 1);
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(written + 1);
 
 	BIO_read(bio, result, written);
 	result[written] = '\0';

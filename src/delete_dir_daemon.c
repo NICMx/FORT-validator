@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "alloc.h"
 #include "common.h"
 #include "internal_pool.h"
 #include "log.h"
@@ -166,9 +167,7 @@ get_local_path(char const *rcvd, char const *workspace, char **result)
 	if (strrchr(local_path, '/') == local_path + strlen(local_path) - 1)
 		tmp_size--;
 
-	tmp = malloc(tmp_size + 1);
-	if (tmp == NULL)
-		enomem_panic();
+	tmp = pmalloc(tmp_size + 1);
 	strncpy(tmp, local_path, tmp_size);
 	tmp[tmp_size] = '\0';
 
@@ -192,9 +191,7 @@ rename_local_path(char const *rcvd, char **result)
 	rcvd_size = strlen(rcvd);
 	/* original size + one underscore + hex random val (8 chars) */
 	tmp_size = rcvd_size + 1 + (sizeof(RAND_MAX) * 2);
-	tmp = malloc(tmp_size + 1);
-	if (tmp == NULL)
-		enomem_panic();
+	tmp = pmalloc(tmp_size + 1);
 
 	/* Rename the path with a random suffix */
 	random_init();
@@ -246,14 +243,9 @@ rem_dirs_create(size_t arr_len)
 {
 	struct rem_dirs *tmp;
 
-	tmp = malloc(sizeof(struct rem_dirs));
-	if (tmp == NULL)
-		enomem_panic();
+	tmp = pmalloc(sizeof(struct rem_dirs));
 
-	tmp->arr = calloc(arr_len, sizeof(char *));
-	if (tmp->arr == NULL)
-		enomem_panic();
-
+	tmp->arr = pcalloc(arr_len, sizeof(char *));
 	tmp->arr_len = arr_len;
 	tmp->arr_set = 0;
 

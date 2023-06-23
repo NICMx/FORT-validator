@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdbool.h>
 
+#include "alloc.h"
 #include "log.h"
 
 /*
@@ -96,13 +97,8 @@ analyze_pos(struct utf8_string *string, size_t pos)
 static void
 double_line_size(struct vcard_line *line)
 {
-	uint8_t *tmp;
-
 	line->str.size *= 2;
-	tmp = realloc(line->str.val, line->str.size);
-	if (tmp == NULL)
-		enomem_panic();
-	line->str.val = tmp;
+	line->str.val = prealloc(line->str.val, line->str.size);
 }
 
 static void
@@ -261,9 +257,7 @@ handle_ghostbusters_vcard(OCTET_STRING_t *vcard)
 
 	line.str.size = 81; /* Okay default, assuming there is no folding. */
 	line.str.len = 0;
-	line.str.val = malloc(line.str.size);
-	if (line.str.val == NULL)
-		enomem_panic();
+	line.str.val = pmalloc(line.str.size);
 	line.octet_string_offset = 0;
 
 	error = __handle_ghostbusters_vcard(vcard, &line);

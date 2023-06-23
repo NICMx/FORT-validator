@@ -5,6 +5,7 @@
 #include <string.h>
 #include <syslog.h>
 
+#include "alloc.h"
 #include "log.h"
 #include "thread_var.h"
 
@@ -30,10 +31,7 @@ name2string(X509_NAME_ENTRY *name, char **_result)
 	if (data == NULL)
 		return val_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
-	result = malloc(data->length + 1);
-	if (result == NULL)
-		enomem_panic();
-
+	result = pmalloc(data->length + 1);
 	memcpy(result, data->data, data->length);
 	result[data->length] = '\0';
 
@@ -51,9 +49,7 @@ x509_name_decode(X509_NAME *name, char const *what,
 	int nid;
 	int error;
 
-	result = malloc(sizeof(struct rfc5280_name));
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(sizeof(struct rfc5280_name));
 
 	result->commonName = NULL;
 	result->serialNumber = NULL;

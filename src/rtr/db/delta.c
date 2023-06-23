@@ -3,6 +3,7 @@
 #include <stdatomic.h>
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include "alloc.h"
 #include "types/address.h"
 #include "data_structure/array_list.h"
 
@@ -50,9 +51,7 @@ deltas_create(void)
 {
 	struct deltas *result;
 
-	result = malloc(sizeof(struct deltas));
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(sizeof(struct deltas));
 
 	deltas_v4_init(&result->v4.adds);
 	deltas_v4_init(&result->v4.removes);

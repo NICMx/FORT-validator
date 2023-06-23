@@ -1,6 +1,6 @@
 #include "rpp.h"
 
-#include <stdlib.h>
+#include "alloc.h"
 #include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
@@ -55,9 +55,7 @@ rpp_create(void)
 {
 	struct rpp *result;
 
-	result = malloc(sizeof(struct rpp));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct rpp));
 
 	uris_init(&result->certs);
 	result->crl.uri = NULL;

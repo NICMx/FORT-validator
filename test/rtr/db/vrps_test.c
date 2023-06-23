@@ -4,6 +4,7 @@
 
 #include "crypto/base64.c"
 #include "algorithm.c"
+#include "alloc.c"
 #include "common.c"
 #include "file.c"
 #include "impersonator.c"

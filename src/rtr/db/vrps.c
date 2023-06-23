@@ -6,6 +6,7 @@
 #include <time.h>
 #include <sys/queue.h>
 
+#include "alloc.h"
 #include "common.h"
 #include "output_printer.h"
 #include "validation_handler.h"
@@ -430,12 +431,10 @@ vrp_ovrd_remove(struct delta_vrp const *delta, void *arg)
 			return 0;
 		}
 
-	ptr = malloc(sizeof(struct vrp_node));
-	if (ptr == NULL)
-		enomem_panic();
-
+	ptr = pmalloc(sizeof(struct vrp_node));
 	ptr->delta = *delta;
 	SLIST_INSERT_HEAD(filtered_vrps, ptr, next);
+
 	return 0;
 }
 
@@ -461,12 +460,10 @@ router_key_ovrd_remove(struct delta_router_key const *delta, void *arg)
 		}
 	}
 
-	ptr = malloc(sizeof(struct rk_node));
-	if (ptr == NULL)
-		enomem_panic();
-
+	ptr = pmalloc(sizeof(struct rk_node));
 	ptr->delta = *delta;
 	SLIST_INSERT_HEAD(filtered_keys, ptr, next);
+
 	return 0;
 }
 

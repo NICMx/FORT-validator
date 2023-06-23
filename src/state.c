@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include "rrdp/db/db_rrdp.h"
+#include "alloc.h"
 #include "log.h"
 #include "thread_var.h"
 
@@ -94,9 +95,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 	X509_VERIFY_PARAM *params;
 	int error;
 
-	result = malloc(sizeof(struct validation));
-	if (!result)
-		enomem_panic();
+	result = pmalloc(sizeof(struct validation));
 
 	error = state_store(result);
 	if (error)

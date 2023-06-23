@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include "alloc.h"
 #include "common.h"
 #include "log.h"
 
@@ -115,9 +116,7 @@ task_create(char const *name, thread_pool_task_cb cb, void *arg)
 {
 	struct thread_pool_task *task;
 
-	task = malloc(sizeof(struct thread_pool_task));
-	if (task == NULL)
-		enomem_panic();
+	task = pmalloc(sizeof(struct thread_pool_task));
 
 	task->name = name;
 	task->cb = cb;
@@ -297,9 +296,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	struct thread_pool *result;
 	int error;
 
-	result = malloc(sizeof(struct thread_pool));
-	if (result == NULL)
-		enomem_panic();
+	result = pmalloc(sizeof(struct thread_pool));
 
 	/* Init locking */
 	error = pthread_mutex_init(&result->lock, NULL);
@@ -330,9 +327,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	result->stop = false;
 	result->working_count = 0;
 	result->thread_count = 0;
-	result->thread_ids = calloc(threads, sizeof(pthread_t));
-	if (result->thread_ids == NULL)
-		enomem_panic();
+	result->thread_ids = pcalloc(threads, sizeof(pthread_t));
 	result->thread_ids_len = threads;
 
 	error = spawn_threads(result);

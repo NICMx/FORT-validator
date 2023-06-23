@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
+#include "alloc.h"
 #include "config.h"
 
 static pthread_key_t state_key;
@@ -113,14 +114,9 @@ fnstack_init(void)
 	struct filename_stack *files;
 	int error;
 
-	files = malloc(sizeof(struct filename_stack));
-	if (files == NULL)
-		enomem_panic();
+	files = pmalloc(sizeof(struct filename_stack));
 
-	files->filenames = malloc(32 * sizeof(char *));
-	if (files->filenames == NULL)
-		enomem_panic();
-
+	files->filenames = pmalloc(32 * sizeof(char *));
 	files->len = 0;
 	files->size = 32;
 
@@ -176,17 +172,14 @@ void
 fnstack_push(char const *file)
 {
 	struct filename_stack *files;
-	char const **tmp;
 
 	files = pthread_getspecific(filenames_key);
 	if (files == NULL || files->filenames == NULL)
 		return;
 
 	if (files->len >= files->size) {
-		tmp = realloc(files->filenames, 2 * files->size * sizeof(char *));
-		if (tmp == NULL)
-			enomem_panic();
-		files->filenames = tmp;
+		files->filenames = prealloc(files->filenames,
+		    2 * files->size * sizeof(char *));
 		files->size *= 2;
 	}
 
@@ -238,9 +231,7 @@ working_repo_init(void)
 	struct working_repo *repo;
 	int error;
 
-	repo = malloc(sizeof(struct working_repo));
-	if (repo == NULL)
-		enomem_panic();
+	repo = pmalloc(sizeof(struct working_repo));
 
 	repo->uri = NULL;
 	repo->level = 0;

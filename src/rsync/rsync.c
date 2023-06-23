@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -31,11 +32,9 @@ rsync_create(void)
 {
 	struct uri_list *visited_uris;
 
-	visited_uris = malloc(sizeof(struct uri_list));
-	if (visited_uris == NULL)
-		enomem_panic();
-
+	visited_uris = pmalloc(sizeof(struct uri_list));
 	SLIST_INIT(visited_uris);
+
 	return visited_uris;
 }
 
@@ -104,10 +103,7 @@ mark_as_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 {
 	struct uri *node;
 
-	node = malloc(sizeof(struct uri));
-	if (node == NULL)
-		enomem_panic();
-
+	node = pmalloc(sizeof(struct uri));
 	node->uri = uri;
 	uri_refget(uri);
 
@@ -212,9 +208,7 @@ prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 	 * and we need to add the program name (for some reason) and NULL
 	 * elements, and replace $REMOTE and $LOCAL.
 	 */
-	copy_args = calloc(config_args->length + 2, sizeof(char *));
-	if (copy_args == NULL)
-		enomem_panic();
+	copy_args = pcalloc(config_args->length + 2, sizeof(char *));
 
 	copy_args[0] = config_get_rsync_program();
 	copy_args[config_args->length + 1] = NULL;
@@ -224,14 +218,11 @@ prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
 
 	for (i = 0; i < config_args->length; i++) {
 		if (strcmp(config_args->array[i], "$REMOTE") == 0)
-			copy_args[i + 1] = strdup(uri_get_global(uri));
+			copy_args[i + 1] = pstrdup(uri_get_global(uri));
 		else if (strcmp(config_args->array[i], "$LOCAL") == 0)
-			copy_args[i + 1] = strdup(uri_get_local(uri));
+			copy_args[i + 1] = pstrdup(uri_get_local(uri));
 		else
-			copy_args[i + 1] = strdup(config_args->array[i]);
-
-		if (copy_args[i + 1] == NULL)
-			enomem_panic();
+			copy_args[i + 1] = pstrdup(config_args->array[i]);
 	}
 
 	*args = copy_args;
@@ -287,9 +278,7 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 #define PRE_RSYNC "[RSYNC exec]: "
 	char *cpy, *cur, *tmp;
 
-	cpy = malloc(read + 1);
-	if (cpy == NULL)
-		enomem_panic();
+	cpy = pmalloc(read + 1);
 
 	strncpy(cpy, buffer, read);
 	cpy[read] = '\0';

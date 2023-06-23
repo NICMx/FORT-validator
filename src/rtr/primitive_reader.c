@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 
+#include "alloc.h"
 #include "log.h"
 
 static int get_octets(unsigned char);
@@ -189,9 +190,7 @@ read_string(struct pdu_reader *reader, uint32_t string_len, rtr_char **result)
 	 * to be relatively small now.
 	 */
 
-	string = malloc(string_len + 1); /* Include NULL chara. */
-	if (string == NULL)
-		enomem_panic();
+	string = pmalloc(string_len + 1); /* Include NULL chara. */
 
 	memcpy(string, reader->buffer, string_len);
 	reader->buffer += string_len;

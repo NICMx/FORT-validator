@@ -7,6 +7,7 @@ bin_PROGRAMS = fort
 fort_SOURCES  = main.c
 
 fort_SOURCES += algorithm.h algorithm.c
+fort_SOURCES += alloc.h alloc.c
 fort_SOURCES += certificate_refs.h certificate_refs.c
 fort_SOURCES += cert_stack.h cert_stack.c
 fort_SOURCES += common.c common.h

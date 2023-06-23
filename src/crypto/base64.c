@@ -5,6 +5,7 @@
 #include <openssl/buffer.h>
 #include <errno.h>
 #include <string.h>
+#include "alloc.h"
 #include "log.h"
 
 /**
@@ -150,9 +151,7 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 	encoded_len = strlen(str_encoded);
 	pad = (encoded_len % 4) > 0 ? 4 - (encoded_len % 4) : 0;
 
-	str_copy = malloc(encoded_len + pad + 1);
-	if (str_copy == NULL)
-		enomem_panic();
+	str_copy = pmalloc(encoded_len + pad + 1);
 	/* Set all with pad char, then replace with the original string */
 	memset(str_copy, '=', encoded_len + pad);
 	memcpy(str_copy, str_encoded, encoded_len);
@@ -173,11 +172,7 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 	}
 
 	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
-	*result = malloc(alloc_size + 1);
-	if (*result == NULL)
-		enomem_panic();
-	memset(*result, 0, alloc_size);
-	(*result)[alloc_size] = '\0';
+	*result = pzalloc(alloc_size + 1);
 
 	error = base64_decode(encoded, *result, false, alloc_size, &dec_len);
 	if (error)
@@ -216,10 +211,7 @@ to_base64url(char *base, size_t base_len)
 		len = pad - base;
 	} while(0);
 
-	tmp = malloc(len + 1);
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(len + 1);
 	memcpy(tmp, base, len);
 	tmp[len] = '\0';
 

@@ -4,6 +4,7 @@
 #include <sys/queue.h>
 
 #include "algorithm.c"
+#include "alloc.c"
 #include "common.c"
 #include "file.c"
 #include "impersonator.c"

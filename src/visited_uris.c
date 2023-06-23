@@ -3,6 +3,7 @@
 #include <sys/queue.h>
 #include <stddef.h>
 #include <string.h>
+#include "alloc.h"
 #include "log.h"
 #include "delete_dir_daemon.h"
 #include "data_structure/array_list.h"
@@ -27,17 +28,8 @@ visited_elem_create(char const *uri)
 {
 	struct visited_elem *tmp;
 
-	tmp = malloc(sizeof(struct visited_elem));
-	if (tmp == NULL)
-		enomem_panic();
-	/* Needed by uthash */
-	memset(tmp, 0, sizeof(struct visited_elem));
-
-	tmp->uri = strdup(uri);
-	if (tmp->uri == NULL) {
-		free(tmp);
-		enomem_panic();
-	}
+	tmp = pzalloc(sizeof(struct visited_elem)); /* Zero needed by uthash */
+	tmp->uri = pstrdup(uri);
 
 	return tmp;
 }
@@ -54,9 +46,7 @@ visited_uris_create(void)
 {
 	struct visited_uris *tmp;
 
-	tmp = malloc(sizeof(struct visited_uris));
-	if (tmp == NULL)
-		enomem_panic();
+	tmp = pmalloc(sizeof(struct visited_uris));
 
 	tmp->table = NULL;
 	tmp->refs = 1;
@@ -130,9 +120,7 @@ visited_uris_to_arr(struct visited_uris *uris, struct uris_roots *roots)
 	for (elem = uris->table; elem != NULL; elem = elem->hh.next) {
 		last_slash = strrchr(elem->uri, '/');
 		size = last_slash - elem->uri;
-		tmp = malloc(size + 1);
-		if (tmp == NULL)
-			enomem_panic();
+		tmp = pmalloc(size + 1);
 		strncpy(tmp, elem->uri, size);
 		tmp[size] = '\0';
 		uris_roots_add(roots, &tmp);

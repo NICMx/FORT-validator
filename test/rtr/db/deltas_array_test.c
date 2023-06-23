@@ -1,6 +1,7 @@
 #include <check.h>
 #include <stdlib.h>
 
+#include "alloc.c"
 #include "log.c"
 #include "impersonator.c"
 #include "types/address.c"

@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 
 #include "algorithm.h"
+#include "alloc.h"
 #include "config.h"
 #include "extension.h"
 #include "log.h"
@@ -2259,10 +2260,7 @@ get_rsync_server_uri(struct rpki_uri *src, char **result, size_t *result_len)
 		}
 	}
 
-	tmp = malloc(i + 1);
-	if (tmp == NULL)
-		enomem_panic();
-
+	tmp = pmalloc(i + 1);
 	strncpy(tmp, global, i);
 	tmp[i] = '\0';
 

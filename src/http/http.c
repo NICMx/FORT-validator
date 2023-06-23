@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <curl/curl.h>
+
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
@@ -362,9 +364,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 
 	original_file = uri_get_local(uri);
 
-	tmp_file = malloc(strlen(original_file) + strlen(tmp_suffix) + 1);
-	if (tmp_file == NULL)
-		enomem_panic();
+	tmp_file = pmalloc(strlen(original_file) + strlen(tmp_suffix) + 1);
 	strcpy(tmp_file, original_file);
 	strcat(tmp_file, tmp_suffix);
 
@@ -516,18 +516,11 @@ http_direct_download(char const *remote, char const *dest)
 	FILE *out;
 	long response_code;
 	long cond_met;
-	char *tmp_file, *tmp;
+	char *tmp_file;
 	int error;
 
-	tmp_file = strdup(dest);
-	if (tmp_file == NULL)
-		enomem_panic();
-
-	tmp = realloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
-	if (tmp == NULL)
-		enomem_panic();
-
-	tmp_file = tmp;
+	tmp_file = pstrdup(dest);
+	tmp_file = prealloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
 	strcat(tmp_file, tmp_suffix);
 
 	error = file_write(tmp_file, &out);

@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "data_structure/uthash.h"
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -51,21 +52,12 @@ error_uri_create(char const *uri, struct error_uri **err_uri)
 	struct error_uri *tmp;
 	int error;
 
-	tmp = malloc(sizeof(struct error_uri));
-	if (tmp == NULL)
-		enomem_panic();
+	tmp = pzalloc(sizeof(struct error_uri)); /* Zero needed by uthash */
 
-	/* Needed by uthash */
-	memset(tmp, 0, sizeof(struct error_uri));
-
-	tmp->uri = strdup(uri);
-	if (tmp->uri == NULL)
-		enomem_panic();
-
+	tmp->uri = pstrdup(uri);
 	error = get_current_time(&tmp->first_attempt);
 	if (error)
 		goto release_uri;
-
 	tmp->log_summary = false;
 	tmp->uri_related = NULL;
 	tmp->ref_by = NULL;

@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
 #include "config/types.h"
@@ -18,9 +19,7 @@ find_json(struct json_t *root, char const *full_name)
 	struct json_t *node;
 
 	/* strtok_r() needs a non-const string */
-	strtok.opt_name = strdup(full_name);
-	if (strtok.opt_name == NULL)
-		enomem_panic();
+	strtok.opt_name = pstrdup(full_name);
 
 	node = root;
 	strtok.token = strtok_r(strtok.opt_name, ".", &strtok.saveptr);

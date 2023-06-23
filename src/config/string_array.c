@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "alloc.h"
 #include "log.h"
 #include "str_token.h"
 #include "config/str.h"
@@ -22,17 +23,9 @@ string_array_init(struct string_array *array, char const *const *values,
 		return;
 	}
 
-	array->array = calloc(len, sizeof(char *));
-	if (array->array == NULL)
-		enomem_panic();
-
-	for (i = 0; i < len; i++) {
-		array->array[i] = strdup(values[i]);
-		if (array->array[i] == NULL) {
-			string_array_cleanup(array);
-			enomem_panic();
-		}
-	}
+	array->array = pcalloc(len, sizeof(char *));
+	for (i = 0; i < len; i++)
+		array->array[i] = pstrdup(values[i]);
 }
 
 void
@@ -104,9 +97,7 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 	/* Remove the previous value (usually the default). */
 	__string_array_free(result);
 
-	result->array = calloc(len, sizeof(char *));
-	if (result->array == NULL)
-		enomem_panic();
+	result->array = pcalloc(len, sizeof(char *));
 	result->length = len;
 
 	for (i = 0; i < len; i++) {
@@ -115,9 +106,7 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 		if (error)
 			goto fail;
 
-		result->array[i] = strdup(tmp);
-		if (result->array[i] == NULL)
-			enomem_panic();
+		result->array[i] = pstrdup(tmp);
 	}
 
 	return 0;
@@ -147,9 +136,7 @@ string_array_parse_argv(struct option_field const *opt, char const *str,
 		return pr_op_err("'%s' can have %u elements max; currently it has %lu elements.",
 		    opt->name, opt->max, len);
 
-	result->array = calloc(len, sizeof(char *));
-	if (result->array == NULL)
-		enomem_panic();
+	result->array = pcalloc(len, sizeof(char *));
 	result->length = len;
 
 	for (i = 0; string_tokenizer_next(&tokenizer); i++)

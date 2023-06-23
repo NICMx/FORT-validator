@@ -2,6 +2,8 @@
 
 #include <errno.h>
 #include <stdlib.h>
+
+#include "alloc.h"
 #include "log.h"
 
 static int
@@ -70,9 +72,7 @@ file_load(char const *file_name, struct file_contents *fc)
 		return error;
 
 	fc->buffer_size = stat.st_size;
-	fc->buffer = malloc(fc->buffer_size);
-	if (fc->buffer == NULL)
-		enomem_panic();
+	fc->buffer = pmalloc(fc->buffer_size);
 
 	fread_result = fread(fc->buffer, 1, fc->buffer_size, file);
 	if (fread_result < fc->buffer_size) {

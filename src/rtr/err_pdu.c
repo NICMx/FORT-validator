@@ -1,6 +1,7 @@
 #include "err_pdu.h"
 
 #include <unistd.h>
+#include "alloc.h"
 #include "pdu_sender.h"
 #include "log.h"
 
@@ -30,7 +31,7 @@ err_pdu_send(int fd, uint8_t version, rtr_error_code_t code,
 	 */
 
 	/* Need a clone to remove the const. */
-	message = (message_const != NULL) ? strdup(message_const) : NULL;
+	message = (message_const != NULL) ? pstrdup(message_const) : NULL;
 	send_error_report_pdu(fd, version, code, request, message);
 	free(message);
 

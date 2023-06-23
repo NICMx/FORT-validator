@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "alloc.c"
 #include "impersonator.c"
 #include "log.c"
 #include "rtr/primitive_reader.c"
