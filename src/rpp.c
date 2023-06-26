@@ -218,8 +218,6 @@ __cert_traverse(struct rpp *pp)
 		return 0;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 	certstack = validation_certstack(state);
 
 	deferred.pp = pp;

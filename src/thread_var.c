@@ -94,7 +94,10 @@ state_store(struct validation *state)
 	return error;
 }
 
-/* Returns the current thread's validation state. */
+/*
+ * Returns the current thread's validation state. Never returns NULL by
+ * contract.
+ */
 struct validation *
 state_retrieve(void)
 {
@@ -332,12 +335,7 @@ working_repo_pop(void)
 static char const *
 addr2str(int af, void const *addr, char *(*buffer_cb)(struct validation *))
 {
-	struct validation *state;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return NULL;
-
+	struct validation *state = state_retrieve();
 	return inet_ntop(af, addr, buffer_cb(state), INET6_ADDRSTRLEN);
 }
 

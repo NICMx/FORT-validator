@@ -85,10 +85,7 @@ unknown:
 static struct resources *
 get_parent_resources(void)
 {
-	struct validation *state = state_retrieve();
-	return (state != NULL)
-	    ? x509stack_peek_resources(validation_certstack(state))
-	    : NULL;
+	return x509stack_peek_resources(validation_certstack(state_retrieve()));
 }
 
 static int

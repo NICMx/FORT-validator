@@ -108,10 +108,6 @@ validate_serial_number(X509 *cert)
 	struct validation *state;
 	BIGNUM *number;
 
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-
 	number = ASN1_INTEGER_to_BN(X509_get0_serialNumber(cert), NULL);
 	if (number == NULL)
 		return val_crypto_err("Could not parse certificate serial number");
@@ -119,6 +115,7 @@ validate_serial_number(X509 *cert)
 	if (log_val_enabled(LOG_DEBUG))
 		debug_serial_number(number);
 
+	state = state_retrieve();
 	x509stack_store_serial(validation_certstack(state), number);
 	return 0;
 }
@@ -196,13 +193,8 @@ spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki,
 static int
 validate_subject(X509 *cert)
 {
-	struct validation *state;
 	struct rfc5280_name *name;
 	int error;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
@@ -236,8 +228,6 @@ validate_spki(X509_PUBKEY *cert_spki)
 	size_t _tal_spki_len;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 
 	tal = validation_tal(state);
 	if (tal == NULL)
@@ -922,8 +912,6 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 		return 0; /* Certificate is TA; no chain validation needed. */
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 
 	ctx = X509_STORE_CTX_new();
 	if (ctx == NULL) {
@@ -1897,8 +1885,7 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 		pr_crit("Certificate's AIA was not recorded.");
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
+
 	parent = x509stack_peek_uri(validation_certstack(state));
 	if (parent == NULL)
 		pr_crit("Certificate has no parent.");
@@ -2011,9 +1998,7 @@ exec_rrdp_method(struct sia_ca_uris *sia_uris)
 	int error;
 
 	/* Start working on the RRDP local workspace */
-	error = db_rrdp_uris_workspace_enable();
-	if (error)
-		return error;
+	db_rrdp_uris_workspace_enable();
 
 	data_updated = false;
 	error = rrdp_load(sia_uris->rpkiNotify.uri, &data_updated);
@@ -2145,11 +2130,7 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	error = db_rrdp_uris_get_request_status(
 	    uri_get_global(sia_uris->rpkiNotify.uri), &rrdp_req_status);
 	if (error ==  0 && rrdp_req_status == RRDP_URI_REQ_VISITED) {
-		error = db_rrdp_uris_workspace_enable();
-		if (error) {
-			db_rrdp_uris_workspace_disable();
-			return error;
-		}
+		db_rrdp_uris_workspace_enable();
 		(*retry_repo_sync) = false;
 		return replace_rrdp_mft_uri(&sia_uris->mft);
 	}
@@ -2334,8 +2315,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	int error;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
+
 	total_parents = certstack_get_x509_num(validation_certstack(state));
 	if (total_parents >= config_get_max_cert_depth())
 		return pr_val_err("Certificate chain maximum depth exceeded.");

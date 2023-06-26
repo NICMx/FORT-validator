@@ -575,9 +575,6 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 		return 0;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-
 	visited_uris = validation_rsync_visited_uris(state);
 
 	if (!force && is_already_downloaded(requested_uri, visited_uris)) {
@@ -626,15 +623,10 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 void
 reset_downloaded(void)
 {
-	struct validation *state;
 	struct uri_list *list;
 	struct uri *uri;
 
-	state = state_retrieve();
-	if (state == NULL)
-		return;
-
-	list = validation_rsync_visited_uris(state);
+	list = validation_rsync_visited_uris(state_retrieve());
 
 	while (!SLIST_EMPTY(list)) {
 		uri = SLIST_FIRST(list);

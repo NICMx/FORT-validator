@@ -156,8 +156,6 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 	 */
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 	parent = x509stack_peek(validation_certstack(state));
 	if (parent == NULL) {
 		return pr_val_err("%s appears to have no parent certificate.",

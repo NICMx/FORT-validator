@@ -24,9 +24,9 @@ process_diff_serial(struct update_notification *notification,
 		return error;
 
 	/* Work with the existent visited uris */
-	error = db_rrdp_uris_get_visited_uris(notification->uri, visited);
-	if (error)
-		return error;
+	*visited = db_rrdp_uris_get_visited_uris(notification->uri);
+	if ((*visited) == NULL)
+		return -ENOENT;
 
 	return rrdp_process_deltas(notification, serial, *visited,
 	    log_operation);
@@ -57,39 +57,23 @@ static int
 remove_rrdp_uri_files(char const *notification_uri)
 {
 	struct visited_uris *tmp;
-	char const *workspace;
-	int error;
 
 	/* Work with the existent visited uris */
-	error = db_rrdp_uris_get_visited_uris(notification_uri, &tmp);
-	if (error)
-		return error;
+	tmp = db_rrdp_uris_get_visited_uris(notification_uri);
+	if (tmp == NULL)
+		return -ENOENT;
 
-	workspace = db_rrdp_uris_workspace_get();
-
-	return visited_uris_delete_local(tmp, workspace);
+	return visited_uris_delete_local(tmp, db_rrdp_uris_workspace_get());
 }
 
 /* Mark the URI as errored with dummy data, so it won't be requested again */
-static int
+static void
 mark_rrdp_uri_request_err(char const *notification_uri)
 {
-	struct visited_uris *tmp;
-	int error;
-
 	pr_val_debug("RRDP data of '%s' won't be requested again during this cycle due to previous error.",
 	    notification_uri);
-
-	tmp = visited_uris_create();
-
-	error = db_rrdp_uris_update(notification_uri, "", 0,
-	    RRDP_URI_REQ_ERROR, tmp);
-	if (error) {
-		visited_uris_refput(tmp);
-		return error;
-	}
-
-	return 0;
+	db_rrdp_uris_update(notification_uri, "", 0, RRDP_URI_REQ_ERROR,
+	    visited_uris_create());
 }
 
 static int
@@ -211,12 +195,9 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 			break;
 		}
 
-		error = db_rrdp_uris_cmp(uri_get_global(uri),
+		res = db_rrdp_uris_cmp(uri_get_global(uri),
 		    upd_notification->global_data.session_id,
-		    upd_notification->global_data.serial,
-		    &res);
-		if (error)
-			goto upd_destroy;
+		    upd_notification->global_data.serial);
 
 		switch (res) {
 		case RRDP_URI_EQUAL:
@@ -255,13 +236,11 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 	pr_val_debug("Updating local RRDP data of '%s' to:", uri_get_global(uri));
 	pr_val_debug("- Session ID: %s", upd_notification->global_data.session_id);
 	pr_val_debug("- Serial: %lu", upd_notification->global_data.serial);
-	error = db_rrdp_uris_update(uri_get_global(uri),
+	db_rrdp_uris_update(uri_get_global(uri),
 	    upd_notification->global_data.session_id,
 	    upd_notification->global_data.serial,
 	    RRDP_URI_REQ_VISITED,
 	    visited);
-	if (error)
-		goto upd_destroy;
 
 set_update:
 	/* Set the last update to now */
@@ -290,9 +269,7 @@ upd_end:
 		reset_downloaded();
 	}
 
-	upd_error = mark_rrdp_uri_request_err(uri_get_global(uri));
-	if (upd_error)
-		return upd_error;
+	mark_rrdp_uri_request_err(uri_get_global(uri));
 
 	return error;
 }
