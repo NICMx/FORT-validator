@@ -40,8 +40,8 @@ AM_CONDITIONAL([BACKTRACE_ENABLED], [test "x$have_backtrace" != "xno"])
 # By the way: Apparently PKG_CHECK_MODULES is poor practice now. I can't tell;
 # it's always the same guy complaining about it in Stack Overflow.
 # (Main one: https://stackoverflow.com/questions/10220946)
-# But I couldn't make check work with AC_SEARCH_LIBS, and (probably due to
-# typical obscure bullshit autotools reasoning) I have no idea why.
+# But I couldn't make check work with AC_SEARCH_LIBS, probably because of some
+# obscure autotools reasoning.
 PKG_CHECK_MODULES([JANSSON], [jansson])
 PKG_CHECK_MODULES([CURL], [libcurl])
 PKG_CHECK_MODULES([XML2], [libxml-2.0])

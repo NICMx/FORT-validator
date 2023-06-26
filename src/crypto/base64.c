@@ -46,7 +46,7 @@ base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
 	unsigned long error;
 
 	/*
-	 * BTW: The libcrypto API was clearly designed by fucking idiots.
+	 * BTW: The libcrypto API is perplexing.
 	 * Peeking at the error stack is the only way I found to figure out
 	 * whether some of the functions error'd.
 	 * But since it's not documented that it's supposed to work this way,

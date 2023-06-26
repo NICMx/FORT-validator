@@ -74,10 +74,9 @@ lfile_read(struct line_file *lfile, char **result)
 	 * - If the file is empty, or all that's left is an empty line, it
 	 *   (confusingly) returns -1. errno will be 0, feof() should return
 	 *   1, ferror() should return 0.
-	 * - The fact that it returns the newline in the buffer is puzzling,
-	 *   because who the fuck wants that nonsense. You will want to remove
-	 *   it, BUT DON'T SWEAT IT IF IT'S NOT THERE, because the last line of
-	 *   the file might not be newline-terminated.
+	 * - It includes the newline in the result, which is puzzling. You will
+	 *   want to remove it, BUT DON'T SWEAT IT IF IT'S NOT THERE, because
+	 *   the last line of the file might not be newline-terminated.
 	 * - The string WILL be NULL-terminated, but the NULL chara will not be
 	 *   included in the returned length. BUT IT'S THERE. Don't worry about
 	 *   writing past the allocated space on the last line.

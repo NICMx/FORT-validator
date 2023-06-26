@@ -274,8 +274,8 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 	 * Bottom line, I don't know. But better be safe than sorry, so here's
 	 * the validation.
 	 *
-	 * Shit. I feel like I'm losing so much performance because the RFCs
-	 * are so wishy-washy about what is our realm and what is not.
+	 * I feel like I'm losing so much performance because the RFCs are so
+	 * wishy-washy about what is our realm and what is not.
 	 */
 
 	/* Get the SPK (ask libcrypto) */

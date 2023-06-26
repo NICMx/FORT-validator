@@ -188,8 +188,8 @@ register_signal_handlers(void)
 	 * > happen
 	 * (Documentation of CURLOPT_NOSIGNAL)
 	 *
-	 * All SIGPIPE means is "the peer closed the connection for some reason,
-	 * fuck you."
+	 * All SIGPIPE means is "the peer closed the connection for some
+	 * reason."
 	 * Which is a normal I/O error, and should be handled by the normal
 	 * error propagation logic, not by a signal handler.
 	 * So, ignore SIGPIPE.

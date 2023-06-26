@@ -726,8 +726,8 @@ certificate_validate_signature(X509 *cert, ANY_t *signedData,
 	 *
 	 * The first one sounded less efficient but more straightforward, but
 	 * I couldn't pull it off because there's some memory bug with asn1c's
-	 * encoding function that core dumps the fuck out of everything. It's
-	 * caused by undefined behavior that triggers who knows where.
+	 * encoding function that crashes everything. It's caused by undefined
+	 * behavior that triggers who knows where.
 	 *
 	 * There's another problem with that approach: If we DER-encode the
 	 * signedAttrs, we have no guarantee that the signature will match
