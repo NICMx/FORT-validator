@@ -91,8 +91,13 @@ elem_find(struct visited_uris *list, char const *uri)
 void
 visited_uris_add(struct visited_uris *uris, char const *uri)
 {
-	if (elem_find(uris, uri) == NULL)
-		HASH_ADD_STR(uris->table, uri, visited_elem_create(uri));
+	struct visited_elem *node;
+
+	if (elem_find(uris, uri) == NULL) {
+		/* Do not inline; HASH_ADD_STR expands "add" multiple times. */
+		node = visited_elem_create(uri);
+		HASH_ADD_STR(uris->table, uri, node);
+	}
 }
 
 int
