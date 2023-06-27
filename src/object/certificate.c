@@ -2113,7 +2113,6 @@ use_access_method(struct sia_ca_uris *sia_uris, access_method_exec rsync_cb,
 	}
 
 	if (primary_rrdp) {
-		working_repo_push(uri_get_global(sia_uris->rpkiNotify.uri));
 		if (error != -EPERM)
 			pr_val_info("Couldn't fetch data from RRDP repository '%s', trying to fetch data now from '%s'.",
 			    uri_get_global(sia_uris->rpkiNotify.uri),
@@ -2123,7 +2122,6 @@ use_access_method(struct sia_ca_uris *sia_uris, access_method_exec rsync_cb,
 			    uri_get_global(sia_uris->rpkiNotify.uri),
 			    uri_get_global(sia_uris->caRepository.uri));
 	} else {
-		working_repo_push(uri_get_global(sia_uris->caRepository.uri));
 		pr_val_info("Couldn't fetch data from repository '%s', trying to fetch data now from RRDP '%s'.",
 		    uri_get_global(sia_uris->caRepository.uri),
 		    uri_get_global(sia_uris->rpkiNotify.uri));
@@ -2132,8 +2130,6 @@ use_access_method(struct sia_ca_uris *sia_uris, access_method_exec rsync_cb,
 	/* Retry if rrdp was the first option but failed */
 	(*retry_repo_sync) = primary_rrdp;
 	error = cb_secondary(sia_uris);
-	/* No need to remember the working repository anymore */
-	working_repo_pop();
 
 verify_mft:
 	/* Reach here on error or when both access methods were utilized */

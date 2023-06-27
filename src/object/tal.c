@@ -458,8 +458,7 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
-    struct validation_thread *thread)
+handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 {
 	/*
 	 * Because of the way the foreach iterates, this function must return
@@ -476,10 +475,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 	 */
 
 	struct validation_handler validation_handler;
+	struct validation_thread *thread;
 	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
 	int error;
+
+	thread = arg;
 
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
@@ -507,7 +509,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 
 		/* Reminder: there's a positive error: EREQFAILED */
 		if (error) {
-			working_repo_push(uri_get_global(uri));
 			validation_destroy(state);
 			return pr_val_warn(
 			    "TAL URI '%s' could not be downloaded.",
@@ -524,7 +525,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 
 	/* At least one URI was sync'd */
 	thread->retry_local = false;
-	working_repo_pop();
 
 	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
 
@@ -592,25 +592,6 @@ end:	validation_destroy(state);
 	return error;
 }
 
-static int
-__handle_tal_uri_sync(struct tal *tal, struct rpki_uri *uri, void *arg)
-{
-	int error;
-
-	error = handle_tal_uri(tal, uri, arg);
-	if (error)
-		return error;
-	working_repo_push(uri_get_global(uri));
-
-	return 0;
-}
-
-static int
-__handle_tal_uri_local(struct tal *tal, struct rpki_uri *uri, void *arg)
-{
-	return handle_tal_uri(tal, uri, arg);
-}
-
 static void
 do_file_validation(void *thread_arg)
 {
@@ -621,15 +602,13 @@ do_file_validation(void *thread_arg)
 	fnstack_init();
 	fnstack_push(thread->tal_file);
 
-	working_repo_init();
-
 	error = tal_load(thread->tal_file, &tal);
 	if (error)
 		goto end;
 
 	tal_order_uris(tal);
 
-	error = foreach_uri(tal, __handle_tal_uri_sync, thread);
+	error = foreach_uri(tal, handle_tal_uri, thread);
 	if (error > 0) {
 		error = 0;
 		goto destroy_tal;
@@ -646,7 +625,7 @@ do_file_validation(void *thread_arg)
 	thread->sync_files = false;
 	pr_val_warn("Looking for the TA certificate at the local files.");
 
-	error = foreach_uri(tal, __handle_tal_uri_local, thread);
+	error = foreach_uri(tal, handle_tal_uri, thread);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
@@ -656,7 +635,6 @@ do_file_validation(void *thread_arg)
 destroy_tal:
 	tal_destroy(tal);
 end:
-	working_repo_cleanup();
 	fnstack_cleanup();
 	thread->exit_status = error;
 }
