@@ -156,8 +156,6 @@ get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
 		    : handle_root_strategy(requested_uri, rsync_uri);
 	case RSYNC_STRICT:
 		return handle_strict_strategy(requested_uri, rsync_uri);
-	case RSYNC_OFF:
-		break;
 	}
 
 	pr_crit("Invalid rsync strategy: %u", config_get_rsync_strategy());

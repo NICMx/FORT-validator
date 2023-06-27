@@ -18,7 +18,6 @@ parse_argv_offline(struct option_field const *field, char const *str, void *resu
 		return error;
 
 	config_set_rsync_enabled(!DEREFERENCE(result));
-	config_set_rrdp_enabled(!DEREFERENCE(result));
 	config_set_http_enabled(!DEREFERENCE(result));
 
 	return 0;
@@ -35,7 +34,6 @@ parse_json_offline(struct option_field const *opt, struct json_t *json,
 		return error;
 
 	config_set_rsync_enabled(!DEREFERENCE(result));
-	config_set_rrdp_enabled(!DEREFERENCE(result));
 	config_set_http_enabled(!DEREFERENCE(result));
 
 	return 0;

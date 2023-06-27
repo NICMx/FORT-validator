@@ -4,14 +4,6 @@
 #include "config/types.h"
 
 enum rsync_strategy {
-	/*
-	 * TODO (later) Deprecated. Still alive so that 'sync-strategy' and
-	 * 'rsync.strategy' can live together.
-	 *
-	 * 'sync-strategy' type must handle this value to set 'rsync.enabled'
-	 * as 'false'.
-	 */
-	RSYNC_OFF,
 	/**
 	 * Strictly correct download strategy.
 	 *
@@ -61,15 +53,5 @@ enum rsync_strategy {
 };
 
 extern const struct global_type gt_rsync_strategy;
-
-/*
- * TODO (later) Public to live along with 'sync-strategy', return them to
- * private whenever 'sync-strategy' is deleted.
- */
-void print_rsync_strategy(struct option_field const *, void *);
-int parse_argv_rsync_strategy(struct option_field const *, char const *,
-    void *);
-int parse_json_rsync_strategy(struct option_field const *, struct json_t *,
-    void *);
 
 #endif /* SRC_CONFIG_RSYNC_STRATEGY_H_ */
