@@ -152,8 +152,7 @@ validate_manifest(struct Manifest *manifest)
 }
 
 static int
-build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
-    struct rpp **pp)
+build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 {
 	int i;
 	struct FileAndHash *fah;
@@ -167,8 +166,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
 
-		error = uri_create_mft(&uri, mft_uri, &fah->file,
-		    rrdp_workspace);
+		error = uri_create_mft(&uri, mft_uri, &fah->file);
 		if (error == ESKIP)
 			continue;
 		/*
@@ -234,7 +232,7 @@ fail:
  * @pp. If @rrdp_workspace is true, use the local RRDP repository.
  */
 int
-handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
+handle_manifest(struct rpki_uri *uri, struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
@@ -257,7 +255,7 @@ handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
 		goto revert_sobj;
 
 	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, uri, rrdp_workspace, pp);
+	error = build_rpp(mft, uri, pp);
 	if (error)
 		goto revert_manifest;
 

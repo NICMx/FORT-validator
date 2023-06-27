@@ -36,10 +36,6 @@ void db_rrdp_uris_set_all_unvisited(void);
 
 struct visited_uris *db_rrdp_uris_get_visited_uris(char const *);
 
-int db_rrdp_uris_remove_all_local(struct db_rrdp_uri *, char const *);
-
 char const *db_rrdp_uris_workspace_get(void);
-void db_rrdp_uris_workspace_enable(void);
-void db_rrdp_uris_workspace_disable(void);
 
 #endif /* SRC_RRDP_DB_DB_RRDP_URIS_H_ */

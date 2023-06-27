@@ -142,7 +142,7 @@ uris_root_destroy(char **elem)
  * Delete all the corresponding local files of @uris located at @workspace
  */
 int
-visited_uris_delete_local(struct visited_uris *uris, char const *workspace)
+visited_uris_delete_local(struct visited_uris *uris)
 {
 	struct uris_roots roots;
 	int error;
@@ -152,7 +152,7 @@ visited_uris_delete_local(struct visited_uris *uris, char const *workspace)
 	if (roots.len == 0)
 		goto success;
 
-	error = delete_dir_daemon_start(roots.array, roots.len, workspace);
+	error = delete_dir_daemon_start(roots.array, roots.len);
 	if (error) {
 		uris_roots_cleanup(&roots, uris_root_destroy);
 		return error;

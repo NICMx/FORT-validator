@@ -235,23 +235,19 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 {
 	size_t const PFX_RSYNC_LEN = strlen(PFX_RSYNC);
 	size_t const PFX_HTTPS_LEN = strlen(PFX_HTTPS);
-	uint8_t l_flags;
 	int error;
 
-	/* Exclude RSYNC RRDP flag, isn't relevant here */
-	l_flags = flags & ~URI_USE_RRDP_WORKSPACE;
-
-	if (l_flags == URI_VALID_RSYNC) {
+	if (flags == URI_VALID_RSYNC) {
 		(*type) = URI_RSYNC;
 		return validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global,
 		    global_len, ENOTRSYNC);
 	}
-	if (l_flags == URI_VALID_HTTPS) {
+	if (flags == URI_VALID_HTTPS) {
 		(*type) = URI_HTTPS;
 		return validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global,
 		    global_len, ENOTHTTPS);
 	}
-	if (l_flags != (URI_VALID_RSYNC | URI_VALID_HTTPS))
+	if (flags != (URI_VALID_RSYNC | URI_VALID_HTTPS))
 		pr_crit("Unknown URI flag");
 
 	/* It has both flags */
@@ -274,18 +270,6 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	return 0;
 }
 
-static char *
-get_local_workspace(void)
-{
-	char const *workspace;
-
-	workspace = db_rrdp_uris_workspace_get();
-	if (workspace == NULL)
-		return NULL;
-
-	return pstrdup(workspace);
-}
-
 /**
  * Initializes @uri->local by converting @uri->global.
  *
@@ -300,8 +284,6 @@ static int
 g2l(char const *global, size_t global_len, uint8_t flags, char **result,
     enum rpki_uri_type *result_type)
 {
-	char *local;
-	char *workspace;
 	enum rpki_uri_type type;
 	int error;
 
@@ -309,16 +291,8 @@ g2l(char const *global, size_t global_len, uint8_t flags, char **result,
 	if (error)
 		return error;
 
-	workspace = ((flags & URI_USE_RRDP_WORKSPACE) != 0)
-	    ? get_local_workspace()
-	    : NULL;
-
-	local = map_uri_to_local(global,
-	    type == URI_RSYNC ? PFX_RSYNC : PFX_HTTPS,
-	    workspace);
-
-	free(workspace);
-	*result = local;
+	*result = map_uri_to_local(global,
+	    type == URI_RSYNC ? PFX_RSYNC : PFX_HTTPS);
 	(*result_type) = type;
 	return 0;
 }
@@ -361,16 +335,14 @@ int
 uri_create_rsync_str_rrdp(struct rpki_uri **uri, char const *guri,
     size_t guri_len)
 {
-	return uri_create(uri, URI_VALID_RSYNC | URI_USE_RRDP_WORKSPACE, guri,
-	    guri_len);
+	return uri_create(uri, URI_VALID_RSYNC, guri, guri_len);
 }
 
 int
 uri_create_https_str_rrdp(struct rpki_uri **uri, char const *guri,
     size_t guri_len)
 {
-	return uri_create(uri, URI_VALID_HTTPS | URI_USE_RRDP_WORKSPACE, guri,
-	    guri_len);
+	return uri_create(uri, URI_VALID_HTTPS, guri, guri_len);
 }
 
 int
@@ -396,11 +368,9 @@ uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
  * names. This function will infer the rest of the URL.
  */
 int
-uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
-    bool use_rrdp_workspace)
+uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 {
 	struct rpki_uri *uri;
-	uint8_t flags;
 	int error;
 
 	uri = pmalloc(sizeof(struct rpki_uri));
@@ -411,11 +381,7 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
 		return error;
 	}
 
-	flags = URI_VALID_RSYNC;
-	if (use_rrdp_workspace)
-		flags |= URI_USE_RRDP_WORKSPACE;
-
-	error = autocomplete_local(uri, flags);
+	error = autocomplete_local(uri, URI_VALID_RSYNC);
 	if (error) {
 		free(uri->global);
 		free(uri);

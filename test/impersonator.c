@@ -50,12 +50,6 @@ reqs_errors_log_summary(void)
 }
 
 char const *
-db_rrdp_uris_workspace_get(void)
-{
-	return NULL;
-}
-
-char const *
 config_get_tal(void)
 {
 	return "tal/";

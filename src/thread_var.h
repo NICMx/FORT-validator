@@ -19,10 +19,9 @@ void fnstack_pop(void);
 void working_repo_init(void);
 void working_repo_cleanup(void);
 
+/* TODO (#78) remove? */
 void working_repo_push(char const *);
-void working_repo_push_level(unsigned int);
 char const *working_repo_peek(void);
-unsigned int working_repo_peek_level(void);
 void working_repo_pop(void);
 
 /* Please remember that these functions can only be used during validations. */

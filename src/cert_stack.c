@@ -49,13 +49,6 @@ struct metadata_node {
 	 */
 	struct serial_numbers serials;
 
-	/*
-	 * Certificate repository "level". This aims to identify if the
-	 * certificate is located at a distinct server than its father (common
-	 * case when the RIRs delegate RPKI repositories).
-	 */
-	unsigned int level;
-
 	/** Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(metadata_node) next;
 };
@@ -284,28 +277,6 @@ fail:
 	return error;
 }
 
-static int
-init_level(struct cert_stack *stack, unsigned int *_result)
-{
-	struct metadata_node *head_meta;
-	unsigned int work_repo_level;
-	unsigned int result;
-
-	/*
-	 * Bruh, I don't understand the point of this block.
-	 * Why can't it just be `result = working_repo_peek_level();`?
-	 */
-
-	result = 0;
-	work_repo_level = working_repo_peek_level();
-	head_meta = SLIST_FIRST(&stack->metas);
-	if (head_meta != NULL && work_repo_level > head_meta->level)
-		result = work_repo_level;
-
-	*_result = result;
-	return 0;
-}
-
 static struct defer_node *
 create_separator(void)
 {
@@ -337,10 +308,6 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 	if (error)
 		goto cleanup_serial;
 
-	error = init_level(stack, &meta->level); /* Does not need a revert */
-	if (error)
-		goto destroy_resources;
-
 	defer_separator = create_separator();
 
 	ok = sk_X509_push(stack->x509s, x509);
@@ -357,7 +324,6 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 
 destroy_separator:
 	free(defer_separator);
-destroy_resources:
 	resources_destroy(meta->resources);
 cleanup_serial:
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
@@ -406,13 +372,6 @@ x509stack_peek_resources(struct cert_stack *stack)
 {
 	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
 	return (meta != NULL) ? meta->resources : NULL;
-}
-
-unsigned int
-x509stack_peek_level(struct cert_stack *stack)
-{
-	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
-	return (meta != NULL) ? meta->level : 0;
 }
 
 static char *

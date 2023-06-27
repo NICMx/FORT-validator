@@ -209,7 +209,7 @@ struct rpki_config {
 	/* ASN1 decoder max stack size allowed */
 	unsigned int asn1_decode_max_stack;
 
-	/* Time period that must lapse to warn about a stale repository */
+	/* Deprecated; does nothing. */
 	unsigned int stale_repository_period;
 
 	/* Download the normal TALs into --tal? */
@@ -786,7 +786,7 @@ static const struct option_field options[] = {
 		.name = "stale-repository-period",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, stale_repository_period),
-		.doc = "Time period that must lapse to warn about stale repositories",
+		.doc = "Deprecated; does nothing.",
 		.min = 0,
 		.max = UINT_MAX,
 	},
@@ -1056,7 +1056,6 @@ set_default_values(void)
 	rpki_config.output.format = OFM_CSV;
 
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
-	rpki_config.stale_repository_period = 43200; /* 12 hours */
 	rpki_config.init_tals = false;
 	rpki_config.init_tal_locations = 0;
 
@@ -1554,12 +1553,6 @@ unsigned int
 config_get_asn1_decode_max_stack(void)
 {
 	return rpki_config.asn1_decode_max_stack;
-}
-
-unsigned int
-config_get_stale_repository_period(void)
-{
-	return rpki_config.stale_repository_period;
 }
 
 unsigned int

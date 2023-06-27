@@ -14,7 +14,7 @@
 /* Fetch and process the deltas from the @notification */
 static int
 process_diff_serial(struct update_notification *notification,
-    bool log_operation, struct visited_uris **visited)
+    struct visited_uris **visited)
 {
 	unsigned long serial;
 	int error;
@@ -28,13 +28,12 @@ process_diff_serial(struct update_notification *notification,
 	if ((*visited) == NULL)
 		return -ENOENT;
 
-	return rrdp_process_deltas(notification, serial, *visited,
-	    log_operation);
+	return rrdp_process_deltas(notification, serial, *visited);
 }
 
 /* Fetch and process the snapshot from the @notification */
 static int
-process_snapshot(struct update_notification *notification, bool log_operation,
+process_snapshot(struct update_notification *notification,
     struct visited_uris **visited)
 {
 	struct visited_uris *tmp;
@@ -43,7 +42,7 @@ process_snapshot(struct update_notification *notification, bool log_operation,
 	/* Use a new allocated visited_uris struct */
 	tmp = visited_uris_create();
 
-	error = rrdp_parse_snapshot(notification, tmp, log_operation);
+	error = rrdp_parse_snapshot(notification, tmp);
 	if (error) {
 		visited_uris_refput(tmp);
 		return error;
@@ -63,7 +62,7 @@ remove_rrdp_uri_files(char const *notification_uri)
 	if (tmp == NULL)
 		return -ENOENT;
 
-	return visited_uris_delete_local(tmp, db_rrdp_uris_workspace_get());
+	return visited_uris_delete_local(tmp);
 }
 
 /* Mark the URI as errored with dummy data, so it won't be requested again */
@@ -78,7 +77,7 @@ mark_rrdp_uri_request_err(char const *notification_uri)
 
 static int
 process_diff_session(struct update_notification *notification,
-    bool log_operation, struct visited_uris **visited)
+    struct visited_uris **visited)
 {
 	int error;
 
@@ -86,7 +85,7 @@ process_diff_session(struct update_notification *notification,
 	if (error)
 		return error;
 
-	return process_snapshot(notification, log_operation, visited);
+	return process_snapshot(notification, visited);
 }
 
 /*
@@ -105,7 +104,6 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 	struct visited_uris *visited;
 	rrdp_req_status_t requested;
 	rrdp_uri_cmp_result_t res;
-	bool log_operation;
 	int error, upd_error;
 
 	(*data_updated) = false;
@@ -171,9 +169,7 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 	}
 
 	pr_val_debug("Downloading RRDP Update Notification...");
-	log_operation = reqs_errors_log_uri(uri_get_global(uri));
-	error = rrdp_parse_notification(uri, log_operation, force_snapshot,
-	    &upd_notification);
+	error = rrdp_parse_notification(uri, force_snapshot, &upd_notification);
 	if (error)
 		goto upd_end;
 
@@ -188,7 +184,7 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 		/* Same flow as a session update */
 		if (force_snapshot) {
 			error = process_diff_session(upd_notification,
-			    log_operation, &visited);
+			    &visited);
 			if (error)
 				goto upd_destroy;
 			(*data_updated) = true;
@@ -205,14 +201,13 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 		case RRDP_URI_DIFF_SESSION:
 			/* Delete the old session files */
 			error = process_diff_session(upd_notification,
-			    log_operation, &visited);
+			    &visited);
 			if (error)
 				goto upd_destroy;
 			(*data_updated) = true;
 			break;
 		case RRDP_URI_DIFF_SERIAL:
-			error = process_diff_serial(upd_notification,
-			    log_operation, &visited);
+			error = process_diff_serial(upd_notification, &visited);
 			if (!error) {
 				visited_uris_refget(visited);
 				(*data_updated) = true;
@@ -221,8 +216,7 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 			/* Something went wrong, use snapshot */
 			pr_val_info("There was an error processing RRDP deltas, using the snapshot instead.");
 		case RRDP_URI_NOTFOUND:
-			error = process_snapshot(upd_notification, log_operation,
-			    &visited);
+			error = process_snapshot(upd_notification, &visited);
 			if (error)
 				goto upd_destroy;
 			(*data_updated) = true;

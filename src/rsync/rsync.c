@@ -273,7 +273,7 @@ create_pipes(int fds[2][2])
 }
 
 static void
-log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
+log_buffer(char const *buffer, ssize_t read, int type)
 {
 #define PRE_RSYNC "[RSYNC exec]: "
 	char *cpy, *cur, *tmp;
@@ -292,8 +292,6 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 			continue;
 		}
 		if (type == 0) {
-			if (log_operation)
-				pr_op_err_st(PRE_RSYNC "%s", cur);
 			pr_val_err(PRE_RSYNC "%s", cur);
 		} else {
 			pr_val_info(PRE_RSYNC "%s", cur);
@@ -305,7 +303,7 @@ log_buffer(char const *buffer, ssize_t read, int type, bool log_operation)
 }
 
 static int
-read_pipe(int fd_pipe[2][2], int type, bool log_operation)
+read_pipe(int fd_pipe[2][2], int type)
 {
 	char buffer[4096];
 	ssize_t count;
@@ -325,7 +323,7 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
 		if (count == 0)
 			break;
 
-		log_buffer(buffer, count, type, log_operation);
+		log_buffer(buffer, count, type);
 	}
 
 	close(fd_pipe[type][0]); /* Close read end */
@@ -337,7 +335,7 @@ read_pipe(int fd_pipe[2][2], int type, bool log_operation)
  * success and on error.
  */
 static int
-read_pipes(int fds[2][2], bool log_operation)
+read_pipes(int fds[2][2])
 {
 	int error;
 
@@ -346,7 +344,7 @@ read_pipes(int fds[2][2], bool log_operation)
 	close(fds[1][1]);
 
 	/* stderr pipe */
-	error = read_pipe(fds, 0, log_operation);
+	error = read_pipe(fds, 0);
 	if (error) {
 		/* Close the other pipe pending to read */
 		close(fds[1][0]);
@@ -354,14 +352,14 @@ read_pipes(int fds[2][2], bool log_operation)
 	}
 
 	/* stdout pipe, always logs to info */
-	return read_pipe(fds, 1, true);
+	return read_pipe(fds, 1);
 }
 
 /*
  * Downloads the @uri->global file into the @uri->local path.
  */
 static int
-do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
+do_rsync(struct rpki_uri *uri, bool is_ta)
 {
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	char **args;
@@ -427,7 +425,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta, bool log_operation)
 		}
 
 		/* This code is run by us. */
-		error = read_pipes(fork_fds, log_operation);
+		error = read_pipes(fork_fds);
 		if (error)
 			kill(child_pid, SIGCHLD); /* Stop the child */
 
@@ -568,7 +566,6 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	struct validation *state;
 	struct uri_list *visited_uris;
 	struct rpki_uri *rsync_uri;
-	bool to_op_log;
 	int error;
 
 	if (!config_get_rsync_enabled())
@@ -597,8 +594,7 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 
 	pr_val_debug("Going to RSYNC '%s'.", uri_val_get_printable(rsync_uri));
 
-	to_op_log = reqs_errors_log_uri(uri_get_global(rsync_uri));
-	error = do_rsync(rsync_uri, is_ta, to_op_log);
+	error = do_rsync(rsync_uri, is_ta);
 	switch(error) {
 	case 0:
 		/* Don't store when "force" and if its already downloaded */

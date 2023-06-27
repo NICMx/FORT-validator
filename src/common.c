@@ -425,14 +425,13 @@ get_current_time(time_t *result)
  * Returns 0 on success, otherwise an error code.
  */
 char *
-map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace)
+map_uri_to_local(char const *uri, char const *uri_prefix)
 {
 	char const *repository;
 	char *local;
 	size_t repository_len;
 	size_t uri_prefix_len;
 	size_t uri_len;
-	size_t workspace_len;
 	size_t extra_slash;
 	size_t offset;
 
@@ -445,11 +444,7 @@ map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace)
 	uri_len -= uri_prefix_len;
 	extra_slash = (repository[repository_len - 1] == '/') ? 0 : 1;
 
-	workspace_len = 0;
-	if (workspace != NULL)
-		workspace_len = strlen(workspace);
-
-	local = pmalloc(repository_len + extra_slash + workspace_len + uri_len + 1);
+	local = pmalloc(repository_len + extra_slash + uri_len + 1);
 
 	offset = 0;
 	strcpy(local + offset, repository);
@@ -457,10 +452,6 @@ map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace)
 	if (extra_slash) {
 		strcpy(local + offset, "/");
 		offset += extra_slash;
-	}
-	if (workspace_len > 0) {
-		strcpy(local + offset, workspace);
-		offset += workspace_len;
 	}
 	strncpy(local + offset, uri, uri_len);
 	offset += uri_len;

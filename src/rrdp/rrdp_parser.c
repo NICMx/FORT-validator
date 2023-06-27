@@ -63,7 +63,6 @@ struct rdr_delta_ctx {
 struct proc_upd_args {
 	struct update_notification *parent;
 	struct visited_uris *visited_uris;
-	bool log_operation;
 };
 
 static void
@@ -83,15 +82,14 @@ rem_mft_from_list(struct visited_uris *visited_uris, char const *uri)
 }
 
 static int
-download_file(struct rpki_uri *uri, long last_update, bool log_operation)
+download_file(struct rpki_uri *uri, long last_update)
 {
 	int error;
 
 	if (last_update > 0)
-		error = http_download_file_with_ims(uri, last_update,
-		    log_operation);
+		error = http_download_file_with_ims(uri, last_update);
 	else
-		error = http_download_file(uri, log_operation);
+		error = http_download_file(uri);
 
 	/*
 	 * Since distinct files can be downloaded (notification, snapshot,
@@ -862,7 +860,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 
 	fnstack_push_uri(uri);
 
-	error = download_file(uri, 0, args->log_operation);
+	error = download_file(uri, 0);
 	if (error)
 		goto release_uri;
 
@@ -887,7 +885,7 @@ release_uri:
  * Set @force to true to omit 'If-Modified-Since' header.
  */
 int
-rrdp_parse_notification(struct rpki_uri *uri, bool log_operation, bool force,
+rrdp_parse_notification(struct rpki_uri *uri, bool force,
     struct update_notification **result)
 {
 	long last_update;
@@ -906,7 +904,7 @@ rrdp_parse_notification(struct rpki_uri *uri, bool log_operation, bool force,
 			goto end;
 	}
 
-	error = download_file(uri, last_update, log_operation);
+	error = download_file(uri, last_update);
 	if (error < 0)
 		goto end;
 
@@ -943,7 +941,7 @@ end:	fnstack_pop();
 
 int
 rrdp_parse_snapshot(struct update_notification *parent,
-    struct visited_uris *visited_uris, bool log_operation)
+    struct visited_uris *visited_uris)
 {
 	struct proc_upd_args args;
 	struct rpki_uri *uri;
@@ -960,7 +958,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 
 	fnstack_push_uri(uri);
 
-	error = download_file(uri, 0, log_operation);
+	error = download_file(uri, 0);
 	if (error)
 		goto release_uri;
 
@@ -976,14 +974,12 @@ release_uri:
 
 int
 rrdp_process_deltas(struct update_notification *parent,
-    unsigned long cur_serial, struct visited_uris *visited_uris,
-    bool log_operation)
+    unsigned long cur_serial, struct visited_uris *visited_uris)
 {
 	struct proc_upd_args args;
 
 	args.parent = parent;
 	args.visited_uris = visited_uris;
-	args.log_operation = log_operation;
 
 	return deltas_head_for_each(&parent->deltas_list,
 	    parent->global_data.serial, cur_serial, process_delta, &args);

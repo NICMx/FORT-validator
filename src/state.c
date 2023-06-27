@@ -26,9 +26,6 @@ struct validation {
 
 	struct uri_list *rsync_visited_uris;
 
-	/* Local RRDP workspace path */
-	char const *rrdp_workspace;
-
 	/* Shallow copy of RRDP URIs and its corresponding visited uris */
 	struct db_rrdp_uri *rrdp_uris;
 
@@ -123,7 +120,6 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	result->rsync_visited_uris = rsync_create();
 	result->rrdp_uris = db_rrdp_get_uris(tal_get_file_name(tal));
-	result->rrdp_workspace = db_rrdp_get_workspace(tal_get_file_name(tal));
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
 	result->x509_data.params = params; /* Ownership transfered */
@@ -212,10 +208,4 @@ struct db_rrdp_uri *
 validation_get_rrdp_uris(struct validation *state)
 {
 	return state->rrdp_uris;
-}
-
-char const *
-validation_get_rrdp_workspace(struct validation *state)
-{
-	return state->rrdp_workspace;
 }

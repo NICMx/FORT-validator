@@ -503,8 +503,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 				validation_destroy(state);
 				return 0; /* Try some other TAL URI */
 			}
-			error = http_download_file(uri,
-			    reqs_errors_log_uri(uri_get_global(uri)));
+			error = http_download_file(uri);
 		}
 
 		/* Reminder: there's a positive error: EREQFAILED */
@@ -678,11 +677,8 @@ __do_file_validation(char const *tal_file, void *arg)
 {
 	struct tal_param *t_param = arg;
 	struct validation_thread *thread;
-	int error;
 
-	error = db_rrdp_add_tal(tal_file);
-	if (error)
-		return error;
+	db_rrdp_add_tal(tal_file);
 
 	thread = pmalloc(sizeof(struct validation_thread));
 
@@ -694,8 +690,8 @@ __do_file_validation(char const *tal_file, void *arg)
 
 	thread_pool_push(t_param->pool, thread->tal_file, do_file_validation,
 	    thread);
-
 	SLIST_INSERT_HEAD(&t_param->threads, thread, next);
+
 	return 0;
 }
 
@@ -738,9 +734,6 @@ perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 		}
 		thread_destroy(thread);
 	}
-
-	/* Log the error'd URIs summary */
-	reqs_errors_log_summary();
 
 	/* One thread has errors, validation can't keep the resulting table */
 	if (error)

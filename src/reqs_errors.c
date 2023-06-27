@@ -11,21 +11,7 @@
 #include "log.h"
 #include "thread_var.h"
 
-/*
- * Only log messages of repositories whose level is less than or equal to this.
- *
- * Level 0 is "top level", mostly used by the root CAs (trust anchors) and RIRs
- * before RPKI servers delegation.
- *
- * Eg. The URIs will have this level (data according to current RPKI state):
- * rsync://repository.lacnic.net/    [level 0]
- * rsync://rpki-repo.registro.br/    [level 1]
- *
- * rsync://rpki.ripe.net/            [level 0]
- * rsync://ca.rg.net/                [level 1]
- * rsync://cc.rg.net/                [level 2]
- */
-#define LOG_REPO_LEVEL 0
+/* TODO (#78) Is any of this still useful? */
 
 struct error_uri {
 	/* Key */
@@ -36,8 +22,6 @@ struct error_uri {
 	char *uri_related;
 	/* Refered by (where this.uri == that.uri_related) */
 	char *ref_by;
-	/* Log the summary */
-	bool log_summary;
 	UT_hash_handle hh;
 };
 
@@ -58,7 +42,6 @@ error_uri_create(char const *uri, struct error_uri **err_uri)
 	error = get_current_time(&tmp->first_attempt);
 	if (error)
 		goto release_uri;
-	tmp->log_summary = false;
 	tmp->uri_related = NULL;
 	tmp->ref_by = NULL;
 
@@ -158,14 +141,6 @@ reqs_errors_add_uri(char const *uri)
 
 	set_working_repo(new_uri);
 
-	/*
-	 * Check if this will always be logged, in that case the summary will
-	 * be logged also if the level must be logged.
-	 */
-	if (config_get_stale_repository_period() == 0)
-		new_uri->log_summary =
-		    (working_repo_peek_level() <= LOG_REPO_LEVEL);
-
 	rwlock_write_lock(&db_lock);
 	HASH_ADD_STR(err_uris_db, uri, new_uri);
 	rwlock_unlock(&db_lock);
@@ -224,76 +199,4 @@ reqs_errors_foreach(reqs_errors_cb cb, void *arg)
 	rwlock_unlock(&db_lock);
 
 	return 0;
-}
-
-bool
-reqs_errors_log_uri(char const *uri)
-{
-	struct error_uri *node;
-	time_t now;
-	unsigned int config_period;
-	int error;
-
-	if (log_op_enabled(LOG_DEBUG))
-		return true;
-
-	if (working_repo_peek_level() > LOG_REPO_LEVEL)
-		return false;
-
-	/* Log always? Don't care if the URI exists yet or not */
-	config_period = config_get_stale_repository_period();
-	if (config_period == 0)
-		return true;
-
-	node = find_error_uri(uri, true);
-	if (node == NULL)
-		return false;
-
-	now = 0;
-	error = get_current_time(&now);
-	if (error)
-		return false;
-
-	node->log_summary = (difftime(now, node->first_attempt) >=
-	    (double)config_period);
-
-	return node->log_summary;
-}
-
-/*
- * Log a summary of the error'd servers.
- */
-void
-reqs_errors_log_summary(void)
-{
-	/* Remove all the uris */
-	struct error_uri *node, *tmp;
-	time_t now;
-	char *str_time;
-	bool first;
-	int error;
-
-	first = true;
-	now = 0;
-	error = get_current_time(&now);
-	if (error)
-		return;
-
-	rwlock_read_lock(&db_lock);
-	HASH_ITER(hh, err_uris_db, node, tmp) {
-		if (!node->log_summary)
-			continue;
-		if (first) {
-			pr_op_warn("The following repositories URIs couldn't be fetched (it can be a local issue or a server issue), please review previous log messages related to such URIs/servers:");
-			first = false;
-		}
-		str_time = asctime(localtime(&node->first_attempt));
-		if (strrchr(str_time, '\n') != NULL) {
-			*(str_time + strlen(str_time) - 1) = ' ';
-		}
-		pr_op_warn("- '%s': can't be downloaded since %s", node->uri,
-		    str_time);
-	}
-
-	rwlock_unlock(&db_lock);
 }

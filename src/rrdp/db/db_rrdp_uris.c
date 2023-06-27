@@ -25,7 +25,6 @@ struct uris_table {
 
 struct db_rrdp_uri {
 	struct uris_table *table;
-	char const *current_workspace;
 };
 
 static struct uris_table *
@@ -79,12 +78,6 @@ get_thread_rrdp_uris(void)
 	return validation_get_rrdp_uris(state_retrieve());
 }
 
-static char const *
-get_thread_rrdp_workspace(void)
-{
-	return validation_get_rrdp_workspace(state_retrieve());
-}
-
 struct db_rrdp_uri *
 db_rrdp_uris_create(void)
 {
@@ -92,7 +85,6 @@ db_rrdp_uris_create(void)
 
 	tmp = pmalloc(sizeof(struct db_rrdp_uri));
 	tmp->table = NULL;
-	tmp->current_workspace = NULL;
 
 	return tmp;
 }
@@ -192,7 +184,6 @@ db_rrdp_uris_set_last_update(char const *uri)
 	if (error)
 		return error;
 
-	/* TODO (#78) why are we casting */
 	found->last_update = (long)now;
 	return 0;
 }
@@ -247,39 +238,4 @@ db_rrdp_uris_get_visited_uris(char const *uri)
 		return NULL;
 
 	return found->visited_uris;
-}
-
-int
-db_rrdp_uris_remove_all_local(struct db_rrdp_uri *uris, char const *workspace)
-{
-	struct uris_table *uri_node, *uri_tmp;
-	int error;
-
-	/* Remove each 'visited_uris' from all the table */
-	HASH_ITER(hh, uris->table, uri_node, uri_tmp) {
-		error = visited_uris_delete_local(uri_node->visited_uris,
-		    workspace);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
-char const *
-db_rrdp_uris_workspace_get(void)
-{
-	return get_thread_rrdp_uris()->current_workspace;
-}
-
-void
-db_rrdp_uris_workspace_enable(void)
-{
-	get_thread_rrdp_uris()->current_workspace = get_thread_rrdp_workspace();
-}
-
-void
-db_rrdp_uris_workspace_disable(void)
-{
-	get_thread_rrdp_uris()->current_workspace = NULL;
 }

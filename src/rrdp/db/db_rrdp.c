@@ -14,7 +14,6 @@
 struct tal_elem {
 	char *file_name;
 	struct db_rrdp_uri *uris;
-	char *workspace;
 	bool visited;
 	SLIST_ENTRY(tal_elem) next;
 };
@@ -38,6 +37,8 @@ static pthread_rwlock_t lock;
  * (later) facilitate the concatenation of the ID at --local-repository.
  * 
  * The ID is allocated at @result.
+ *
+ * TODO (#78) Improve and use this.
  */
 static int
 get_workspace_path(char const *base, char **result)
@@ -78,38 +79,25 @@ get_workspace_path(char const *base, char **result)
 	return 0;
 }
 
-static int
-tal_elem_create(struct tal_elem **elem, char const *name)
+static struct tal_elem *
+tal_elem_create(char const *name)
 {
-	struct tal_elem *tmp;
-	int error;
+	struct tal_elem *result;
 
-	tmp = pmalloc(sizeof(struct tal_elem));
+	result = pmalloc(sizeof(struct tal_elem));
 
-	tmp->uris = db_rrdp_uris_create();
-	tmp->visited = true;
-	tmp->file_name = pstrdup(name);
+	result->uris = db_rrdp_uris_create();
+	result->visited = true;
+	result->file_name = pstrdup(name);
 
-	error = get_workspace_path(name, &tmp->workspace);
-	if (error) {
-		free(tmp->file_name);
-		db_rrdp_uris_destroy(tmp->uris);
-		free(tmp);
-		return error;
-	}
-
-	*elem = tmp;
-	return 0;
+	return result;
 }
 
 static void
 tal_elem_destroy(struct tal_elem *elem, bool remove_local)
 {
-	if (remove_local)
-		db_rrdp_uris_remove_all_local(elem->uris, elem->workspace);
 	db_rrdp_uris_destroy(elem->uris);
 	free(elem->file_name);
-	free(elem->workspace);
 	free(elem);
 }
 
@@ -159,28 +147,23 @@ db_rrdp_find_tal(char const *tal_name)
 	return NULL;
 }
 
-int
+void
 db_rrdp_add_tal(char const *tal_name)
 {
 	struct tal_elem *elem, *found;
-	int error;
 
 	/* Element exists, no need to create it again */
 	found = db_rrdp_find_tal(tal_name);
 	if (found != NULL) {
 		found->visited = true;
-		return 0;
+		return;
 	}
 
-	error = tal_elem_create(&elem, tal_name);
-	if (error)
-		return error;
+	elem = tal_elem_create(tal_name);
 
 	rwlock_write_lock(&lock);
 	SLIST_INSERT_HEAD(&db.tals, elem, next);
 	rwlock_unlock(&lock);
-
-	return 0;
 }
 
 void
@@ -210,18 +193,6 @@ db_rrdp_get_uris(char const *tal_name)
 		pr_crit("db_rrdp_find_tal() returned NULL, means it hasn't been initialized");
 
 	return found->uris;
-}
-
-char const *
-db_rrdp_get_workspace(char const *tal_name)
-{
-	struct tal_elem *found;
-
-	found = db_rrdp_find_tal(tal_name);
-	if (found == NULL)
-		pr_crit("db_rrdp_find_tal() returned NULL, means it hasn't been initialized");
-
-	return found->workspace;
 }
 
 /* Set all tals to non-visited */

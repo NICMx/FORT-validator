@@ -135,7 +135,7 @@ remove_from_root(void *arg)
  * - '= 0' no error
  */
 static int
-get_local_path(char const *rcvd, char const *workspace, char **result)
+get_local_path(char const *rcvd, char **result)
 {
 	struct stat attr;
 	char *tmp, *local_path;
@@ -143,7 +143,7 @@ get_local_path(char const *rcvd, char const *workspace, char **result)
 	int error;
 
 	/* Currently, only rsync URIs are utilized */
-	local_path = map_uri_to_local(rcvd, "rsync://", workspace);
+	local_path = map_uri_to_local(rcvd, "rsync://");
 
 	error = stat(local_path, &attr);
 	if (error) {
@@ -212,7 +212,7 @@ rename_local_path(char const *rcvd, char **result)
 }
 
 static int
-rename_all_roots(struct rem_dirs *rem_dirs, char **src, char const *workspace)
+rename_all_roots(struct rem_dirs *rem_dirs, char **src)
 {
 	char *local_path, *delete_path;
 	size_t i;
@@ -221,7 +221,7 @@ rename_all_roots(struct rem_dirs *rem_dirs, char **src, char const *workspace)
 	for (i = 0; i < rem_dirs->arr_len; i++) {
 		local_path = NULL;
 		error = get_local_path(src[(rem_dirs->arr_len - 1) - i],
-		    workspace, &local_path);
+		    &local_path);
 		if (error < 0)
 			return error;
 		if (error > 0)
@@ -273,14 +273,14 @@ rem_dirs_destroy(struct rem_dirs *rem_dirs)
  * considers the relations (parent-child) at dirs.
  */
 int
-delete_dir_daemon_start(char **roots, size_t roots_len, char const *workspace)
+delete_dir_daemon_start(char **roots, size_t roots_len)
 {
 	struct rem_dirs *arg;
 	int error;
 
 	arg = rem_dirs_create(roots_len);
 
-	error = rename_all_roots(arg, roots, workspace);
+	error = rename_all_roots(arg, roots);
 	if (error) {
 		rem_dirs_destroy(arg);
 		return error;

@@ -1572,8 +1572,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 
 	/* HTTPS RRDP */
 	error = handle_ad("SIA", sia, "rpkiNotify", nid_rpkiNotify(),
-	    URI_VALID_HTTPS | URI_USE_RRDP_WORKSPACE, false, handle_rpkiNotify,
-	    &uris->rpkiNotify);
+	    URI_VALID_HTTPS, false, handle_rpkiNotify, &uris->rpkiNotify);
 	if (error)
 		goto end;
 
@@ -1954,9 +1953,6 @@ verify_rrdp_mft_loc(struct rpki_uri *mft_uri)
 	struct rpki_uri *tmp;
 	int error;
 
-	if (db_rrdp_uris_workspace_get() == NULL)
-		return -ENOENT;
-
 	tmp = NULL;
 	error = uri_create_rsync_str_rrdp(&tmp, uri_get_global(mft_uri),
 	    uri_get_global_len(mft_uri));
@@ -1997,13 +1993,10 @@ exec_rrdp_method(struct sia_ca_uris *sia_uris)
 	bool data_updated;
 	int error;
 
-	/* Start working on the RRDP local workspace */
-	db_rrdp_uris_workspace_enable();
-
 	data_updated = false;
 	error = rrdp_load(sia_uris->rpkiNotify.uri, &data_updated);
 	if (error)
-		goto err;
+		return error;
 
 	error = verify_rrdp_mft_loc(sia_uris->mft.uri);
 	switch(error) {
@@ -2013,29 +2006,22 @@ exec_rrdp_method(struct sia_ca_uris *sia_uris)
 	case -ENOENT:
 		/* Doesn't exist and the RRDP data was updated: error */
 		if (data_updated)
-			goto err;
+			return error;
 
 		/* Otherwise, force the snapshot processing and check again */
 		error = rrdp_reload_snapshot(sia_uris->rpkiNotify.uri);
 		if (error)
-			goto err;
+			return error;
 		error = verify_rrdp_mft_loc(sia_uris->mft.uri);
 		if (error)
-			goto err;
+			return error;
 		break;
 	default:
-		goto err;
+		return error;
 	}
 
 	/* Successfully loaded (or no updates yet), update MFT local URI */
-	error = replace_rrdp_mft_uri(&sia_uris->mft);
-	if (error)
-		goto err;
-
-	return 0;
-err:
-	db_rrdp_uris_workspace_disable();
-	return error;
+	return replace_rrdp_mft_uri(&sia_uris->mft);
 }
 
 static int
@@ -2043,8 +2029,6 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
 {
 	int error;
 
-	/* Stop working on the RRDP local workspace */
-	db_rrdp_uris_workspace_disable();
 	error = rsync_download_files(sia_uris->caRepository.uri, false, false);
 	if (error)
 		return error;
@@ -2060,9 +2044,8 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
  * Both access method callbacks must verify the manifest existence.
  */
 static int
-use_access_method(struct sia_ca_uris *sia_uris,
-    access_method_exec rsync_cb, access_method_exec rrdp_cb, bool new_level,
-    bool *retry_repo_sync)
+use_access_method(struct sia_ca_uris *sia_uris, access_method_exec rsync_cb,
+    access_method_exec rrdp_cb, bool *retry_repo_sync)
 {
 	access_method_exec *cb_primary;
 	access_method_exec *cb_secondary;
@@ -2077,28 +2060,6 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 */
 	primary_rrdp = true;
 	(*retry_repo_sync) = true;
-
-	/*
-	 * Very specific scenario, yet possible:
-	 * - Still working at the same repository level
-	 * - The previous object was working on an RRDP repository
-	 * - This certificate doesn't have an update notification URI
-	 *
-	 * Probably the object does exist at the RRDP repository, so check if
-	 * that's the case. Otherwise, just keep going.
-	 *
-	 * The main reason, is a (possible) hole at RFC 8182. Apparently, the
-	 * CA childs aren't obligated to have the same RRDP accessMethod than
-	 * their parent, so there's no problem if they don't use it at all; not
-	 * even if such childs (and even the grandchilds or anyone below that
-	 * level) "reside" at the RRDP repository.
-	 */
-	if (!new_level && db_rrdp_uris_workspace_get() != NULL &&
-	    sia_uris->rpkiNotify.uri == NULL &&
-	    verify_rrdp_mft_loc(sia_uris->mft.uri) == 0) {
-		(*retry_repo_sync) = false;
-		return replace_rrdp_mft_uri(&sia_uris->mft);
-	}
 
 	/*
 	 * RSYNC will always be present (at least for now, see
@@ -2130,7 +2091,6 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	error = db_rrdp_uris_get_request_status(
 	    uri_get_global(sia_uris->rpkiNotify.uri), &rrdp_req_status);
 	if (error ==  0 && rrdp_req_status == RRDP_URI_REQ_VISITED) {
-		db_rrdp_uris_workspace_enable();
 		(*retry_repo_sync) = false;
 		return replace_rrdp_mft_uri(&sia_uris->mft);
 	}
@@ -2202,7 +2162,6 @@ verify_mft:
 
 	/* Error and the primary access method was RRDP? Use its workspace */
 	if (error && primary_rrdp) {
-		db_rrdp_uris_workspace_enable();
 		upd_error = replace_rrdp_mft_uri(&sia_uris->mft);
 		if (upd_error)
 			return upd_error;
@@ -2210,88 +2169,6 @@ verify_mft:
 
 	/* Look for the manifest */
 	return verify_mft_loc(sia_uris->mft.uri);
-}
-
-/*
- * Get the rsync server part from an rsync URI.
- *
- * If the URI is:
- *   rsync://<server>/<service/<file path>
- * This will return:
- *   rsync://<server>
- */
-static void
-get_rsync_server_uri(struct rpki_uri *src, char **result, size_t *result_len)
-{
-	char const *global;
-	char *tmp;
-	size_t global_len;
-	unsigned int slashes;
-	size_t i;
-
-	global = uri_get_global(src);
-	global_len = uri_get_global_len(src);
-	slashes = 0;
-
-	for (i = 0; i < global_len; i++) {
-		if (global[i] == '/') {
-			slashes++;
-			if (slashes == 3)
-				break;
-		}
-	}
-
-	tmp = pmalloc(i + 1);
-	strncpy(tmp, global, i);
-	tmp[i] = '\0';
-
-	*result_len = i;
-	*result = tmp;
-}
-
-static void
-set_repository_level(bool is_ta, struct validation *state,
-    struct rpki_uri *cert_uri, struct sia_ca_uris *sia_uris, bool *updated)
-{
-	char *parent_server, *current_server;
-	size_t parent_server_len, current_server_len;
-	unsigned int new_level;
-	bool update;
-
-	new_level = 0;
-	if (is_ta || cert_uri == NULL) {
-		working_repo_push_level(new_level);
-		return;
-	}
-
-	/* Warning killer */
-	parent_server = NULL;
-	current_server = NULL;
-	parent_server_len = 0;
-	current_server_len = 0;
-
-	/* Both are rsync URIs, check the server part */
-	get_rsync_server_uri(cert_uri, &parent_server, &parent_server_len);
-	get_rsync_server_uri(sia_uris->caRepository.uri, &current_server,
-	    &current_server_len);
-
-	if (parent_server_len != current_server_len) {
-		update = true;
-		goto end;
-	}
-
-	update = (strcmp(parent_server, current_server) != 0);
-end:
-	new_level = x509stack_peek_level(validation_certstack(state));
-	if (update)
-		new_level++;
-
-	working_repo_push_level(new_level);
-
-	free(parent_server);
-	free(current_server);
-
-	(*updated) = update;
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */
@@ -2311,7 +2188,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	enum cert_type type;
 	struct rpp *pp;
 	bool repo_retry;
-	bool new_level;
 	int error;
 
 	state = state_retrieve();
@@ -2392,10 +2268,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_uris;
 
-	/* Identify if this is a new repository before fetching it */
-	new_level = false;
-	set_repository_level(IS_TA, state, cert_uri, &sia_uris, &new_level);
-
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents
 	 * are updated, a repository operator cannot assure RPs that the
@@ -2409,7 +2281,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 */
 	repo_retry = true;
 	error = use_access_method(&sia_uris, exec_rsync_method,
-	    exec_rrdp_method, new_level, &repo_retry);
+	    exec_rrdp_method, &repo_retry);
 	if (error)
 		goto revert_uris;
 
@@ -2422,7 +2294,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 		cert = NULL; /* Ownership stolen */
 
-		error = handle_manifest(sia_uris.mft.uri, !repo_retry, &pp);
+		error = handle_manifest(sia_uris.mft.uri, &pp);
 		if (error == 0 || !repo_retry)
 			break;
 
