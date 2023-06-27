@@ -2,7 +2,6 @@
 #include "extension.h"
 #include "internal_pool.h"
 #include "nid.h"
-#include "reqs_errors.h"
 #include "thread_var.h"
 #include "validation_run.h"
 #include "http/http.h"
@@ -108,9 +107,6 @@ main(int argc, char **argv)
 	error = db_rrdp_init();
 	if (error)
 		goto vrps_cleanup;
-	error = reqs_errors_init();
-	if (error)
-		goto db_rrdp_cleanup;
 
 	/* Do stuff */
 	switch (config_get_mode()) {
@@ -124,8 +120,6 @@ main(int argc, char **argv)
 
 	/* End */
 
-	reqs_errors_cleanup();
-db_rrdp_cleanup:
 	db_rrdp_cleanup();
 vrps_cleanup:
 	vrps_destroy();

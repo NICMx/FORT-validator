@@ -19,7 +19,6 @@
 #include "extension.h"
 #include "log.h"
 #include "nid.h"
-#include "reqs_errors.h"
 #include "str_token.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
@@ -2140,9 +2139,6 @@ verify_mft:
 	/* Reach here on error or when both access methods were utilized */
 	switch (error) {
 	case 0:
-		/* Remove the error'd URI, since we got the repo files */
-		if (working_repo_peek() != NULL)
-			reqs_errors_rem_uri(working_repo_peek());
 		break;
 	case EREQFAILED:
 		/* Log that we'll try to work with a local copy */

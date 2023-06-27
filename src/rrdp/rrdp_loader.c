@@ -7,7 +7,6 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
-#include "reqs_errors.h"
 #include "thread_var.h"
 #include "visited_uris.h"
 
@@ -104,7 +103,7 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 	struct visited_uris *visited;
 	rrdp_req_status_t requested;
 	rrdp_uri_cmp_result_t res;
-	int error, upd_error;
+	int error;
 
 	(*data_updated) = false;
 
@@ -175,7 +174,7 @@ __rrdp_load(struct rpki_uri *uri, bool force_snapshot, bool *data_updated)
 
 	if (upd_notification == NULL) {
 		pr_val_debug("The Update Notification has not changed.");
-		goto upd_end;
+		return 0;
 	}
 
 	pr_val_debug("The Update Notification changed.");
@@ -246,18 +245,11 @@ upd_destroy:
 		update_notification_destroy(upd_notification);
 upd_end:
 	/* Just return on success */
-	if (!error) {
-		/* The repository URI is the notification file URI */
-		reqs_errors_rem_uri(uri_get_global(uri));
+	if (!error)
 		return 0;
-	}
 
 	/* Request failed, store the repository URI */
-	if (error == EREQFAILED) {
-		upd_error = reqs_errors_add_uri(uri_get_global(uri));
-		if (upd_error)
-			return upd_error;
-	} else {
+	if (error != EREQFAILED) {
 		/* Reset RSYNC visited URIs, this may force the update */
 		/* TODO um, what? */
 		reset_downloaded();

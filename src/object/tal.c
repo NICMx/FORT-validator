@@ -19,7 +19,6 @@
 #include "line_file.h"
 #include "log.h"
 #include "random.h"
-#include "reqs_errors.h"
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
@@ -525,8 +524,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 
 	/* At least one URI was sync'd */
 	thread->retry_local = false;
-	if (thread->sync_files && working_repo_peek() != NULL)
-		reqs_errors_rem_uri(working_repo_peek());
 	working_repo_pop();
 
 	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));

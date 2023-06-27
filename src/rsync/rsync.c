@@ -13,7 +13,6 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
-#include "reqs_errors.h"
 #include "str_token.h"
 #include "thread_var.h"
 
@@ -496,57 +495,6 @@ release_args:
 	return error;
 }
 
-/*
- * Returned values if the ancestor URI of @error_uri:
- * 0 - didn't had a previous request error
- * EEXIST - had a previous request error
- * < 0 - nothing, just something bad happened
- */
-static int
-ancestor_error(char const *error_uri, void *arg)
-{
-	struct rpki_uri *search = arg;
-	struct rpki_uri *req_err_uri;
-	int error;
-
-	req_err_uri = NULL;
-	error = uri_create_mixed_str(&req_err_uri, error_uri,
-	    strlen(error_uri));
-	switch(error) {
-	case 0:
-		break;
-	default:
-		return ENSURE_NEGATIVE(error);
-	}
-
-	/* Ignore non rsync error'd URIs */
-	if (!uri_is_rsync(req_err_uri)) {
-		uri_refput(req_err_uri);
-		return 0;
-	}
-
-	error = is_descendant(req_err_uri, search) ? EEXIST : 0;
-
-	uri_refput(req_err_uri);
-	return error;
-}
-
-/* Validate if the ancestor URI error'd */
-static int
-check_ancestor_error(struct rpki_uri *requested_uri)
-{
-	int error;
-
-	error = reqs_errors_foreach(ancestor_error, requested_uri);
-	if (error < 0)
-		return error;
-	/* Return the requests error'd code */
-	if (error == EEXIST)
-		return EREQFAILED;
-
-	return 0;
-}
-
 /**
  * @is_ta: Are we rsync'ing the TA?
  * The TA rsync will not be recursive, and will force SYNC_STRICT
@@ -577,18 +525,12 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	if (!force && is_already_downloaded(requested_uri, visited_uris)) {
 		pr_val_debug("No need to redownload '%s'.",
 		    uri_val_get_printable(requested_uri));
-		return check_ancestor_error(requested_uri);
+		return 0;
 	}
 
-	if (!force) {
-		error = get_rsync_uri(requested_uri, is_ta, &rsync_uri);
-	} else {
-		error = check_ancestor_error(requested_uri);
-		if (error)
-			return error;
-		error = handle_strict_strategy(requested_uri, &rsync_uri);
-	}
-
+	error = force
+	    ? handle_strict_strategy(requested_uri, &rsync_uri)
+	    : get_rsync_uri(requested_uri, is_ta, &rsync_uri);
 	if (error)
 		return error;
 
@@ -600,13 +542,8 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 		/* Don't store when "force" and if its already downloaded */
 		if (!(force && is_already_downloaded(rsync_uri, visited_uris)))
 			mark_as_downloaded(rsync_uri, visited_uris);
-		reqs_errors_rem_uri(uri_get_global(rsync_uri));
 		break;
 	case EREQFAILED:
-		/* All attempts failed, avoid future requests */
-		error = reqs_errors_add_uri(uri_get_global(rsync_uri));
-		if (error)
-			break;
 		mark_as_downloaded(rsync_uri, visited_uris);
 		error = EREQFAILED; /* Return the original error */
 		break;
