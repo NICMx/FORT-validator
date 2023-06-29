@@ -1,8 +1,7 @@
 #include <check.h>
 
 #include "alloc.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "object/vcard.c"
 
 #define VC_BEGIN	"BEGIN:VCARD\r\n"

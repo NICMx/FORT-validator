@@ -1,136 +1,26 @@
 #include "object/tal.c"
 
 #include <check.h>
-#include <errno.h>
-#include <stdlib.h>
-#include "common.h"
 
 #include "alloc.c"
 #include "file.c"
-#include "impersonator.c"
 #include "line_file.c"
-#include "log.c"
-#include "state.h"
-#include "str_token.c"
-#include "random.c"
+#include "mock.c"
 #include "types/uri.c"
 #include "crypto/base64.c"
-#include "rsync/rsync.c"
-#include "thread/thread_pool.c"
 
-/* Impersonate functions that won't be utilized by tests */
+/* Mocks */
 
-int
-validation_prepare(struct validation **out, struct tal *tal,
-    struct validation_handler *validation_handler)
-{
-	return 0;
-}
+static unsigned int rsync_priority;
+static unsigned int http_priority;
 
-int
-certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
-{
-	return -EINVAL;
-}
+MOCK_UINT(config_get_rsync_priority, rsync_priority, void)
+MOCK_UINT(config_get_http_priority, http_priority, void)
+/* These tests focus on global URIs, so set a dummy value */
+MOCK(map_uri_to_local, char *, pstrdup("dummy"), char const *u, char const *p)
+MOCK_ABORT_VOID(db_rrdp_reset_visited_tals, void)
 
-enum pubkey_state
-validation_pubkey_state(struct validation *state)
-{
-	return PKS_INVALID;
-}
-
-void
-validation_destroy(struct validation *state)
-{
-	/* Nothing to destroy */
-}
-
-int
-process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
-    process_file_cb cb, void *arg)
-{
-	return 0;
-}
-
-void
-close_thread(pthread_t thread, char const *what)
-{
-	/* Nothing to close */
-}
-
-char *
-map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace)
-{
-	char *result;
-
-	/* These tests focus on global URIs, so set a dummy value */
-	result = strdup("dummy");
-	if (result == NULL)
-		enomem_panic();
-
-	return result;
-}
-
-void
-fnstack_init(void)
-{
-	/* Empty */
-}
-
-void
-fnstack_cleanup(void)
-{
-	/* Empty */
-}
-
-void
-fnstack_pop(void)
-{
-	/* Empty */
-}
-
-void
-fnstack_push(char const *file)
-{
-	/* Empty */
-}
-
-struct validation *
-state_retrieve(void)
-{
-	return NULL;
-}
-
-void
-db_rrdp_reset_visited_tals(void)
-{
-	/* Empty */
-}
-
-void
-db_rrdp_rem_nonvisited_tals(void)
-{
-	/* Empty */
-}
-
-void
-panic_on_fail(int error, char const *function_name)
-{
-	if (error)
-		ck_abort_msg("%s() returned errcode %d", function_name, error);
-}
-
-void
-mutex_lock(pthread_mutex_t *lock)
-{
-	/* Empty */
-}
-
-void
-mutex_unlock(pthread_mutex_t *lock)
-{
-	/* Empty */
-}
+/* Tests */
 
 START_TEST(tal_load_normal)
 {
@@ -189,8 +79,8 @@ START_TEST(tal_order_http_first)
 
 	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
 
-	config_set_http_priority(60);
-	config_set_rsync_priority(50);
+	http_priority = 60;
+	rsync_priority = 50;
 	tal_order_uris(tal);
 
 	ck_assert_str_eq(tal->uris.array[0]->global, "https://potato");
@@ -208,8 +98,8 @@ START_TEST(tal_order_http_last)
 
 	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
 
-	config_set_http_priority(50);
-	config_set_rsync_priority(60);
+	http_priority = 50;
+	rsync_priority = 60;
 	tal_order_uris(tal);
 
 	ck_assert_str_eq(tal->uris.array[0]->global,

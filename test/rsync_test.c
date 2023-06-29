@@ -4,18 +4,17 @@
 
 #include "alloc.c"
 #include "common.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "str_token.c"
 #include "types/uri.c"
 #include "rsync/rsync.c"
 
+/* Mocks */
 
-struct validation *
-state_retrieve(void)
-{
-	return NULL;
-}
+MOCK_NULL(state_retrieve, struct validation *, void)
+MOCK_ABORT_PTR(validation_rsync_visited_uris, uri_list, struct validation *s)
+
+/* Tests */
 
 static void
 assert_descendant(bool expected, char *ancestor, char *descendant)

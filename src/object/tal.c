@@ -328,6 +328,7 @@ tal_load(char const *file_name, struct tal **result)
 	struct tal *tal;
 	int error;
 
+	lfile = NULL; /* Warning shutupper */
 	error = lfile_open(file_name, &lfile);
 	if (error) {
 		pr_op_err("Error opening file '%s': %s", file_name,

@@ -6,8 +6,7 @@
 #include <string.h>
 
 #include "alloc.c"
-#include "impersonator.c"
-#include "log.c"
+#include "mock.c"
 #include "rtr/primitive_reader.c"
 
 /*

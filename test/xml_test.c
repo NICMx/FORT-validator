@@ -1,10 +1,9 @@
 #include <check.h>
 #include <errno.h>
 #include <stdlib.h>
-
 #include <libxml/xmlreader.h>
-#include "impersonator.c"
-#include "log.c"
+
+#include "mock.c"
 #include "xml/relax_ng.c"
 
 struct reader_ctx {

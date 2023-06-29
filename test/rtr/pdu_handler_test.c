@@ -7,9 +7,8 @@
 #include "alloc.c"
 #include "common.c"
 #include "file.c"
-#include "impersonator.c"
 #include "json_parser.c"
-#include "log.c"
+#include "mock.c"
 #include "output_printer.c"
 #include "crypto/base64.c"
 #include "types/delta.c"
@@ -24,14 +23,12 @@
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
 #include "rtr/db/db_table.c"
-#include "rtr/db/rtr_db_impersonator.c"
+#include "rtr/db/rtr_db_mock.c"
 #include "rtr/db/vrps.c"
 #include "slurm/db_slurm.c"
 #include "slurm/slurm_loader.c"
 #include "slurm/slurm_parser.c"
 #include "thread/thread_pool.c"
-
-/* Helper functions */
 
 struct expected_pdu {
 	uint8_t pdu_type;
@@ -75,7 +72,7 @@ has_expected_pdus(void)
 
 /*
  * This initializes the database using the test values from
- * db/rtr_db_impersonator.c.
+ * db/rtr_db_mock.c.
  */
 static void
 init_db_full(void)
@@ -114,19 +111,10 @@ init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
 	query->serial_number = serial;
 }
 
-/* Impersonator functions */
+/* Mocks */
 
-unsigned int
-config_get_deltas_lifetime(void)
-{
-	return 5;
-}
-
-int
-clients_set_rtr_version(int fd, uint8_t rtr_version)
-{
-	return 0;
-}
+MOCK_UINT(config_get_deltas_lifetime, 5, void)
+MOCK_INT(clients_set_rtr_version, 0, int f, uint8_t v)
 
 int
 clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
@@ -459,8 +447,6 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
-
-	log_setup(true);
 
 	suite = pdu_suite();
 

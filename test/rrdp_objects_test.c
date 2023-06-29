@@ -3,8 +3,7 @@
 #include <stdlib.h>
 
 #include "alloc.c"
-#include "impersonator.c"
-#include "log.c"
+#include "mock.c"
 #include "rrdp/rrdp_objects.c"
 
 #define END 0xFFFF
@@ -104,8 +103,6 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
-
-	log_setup(true);
 
 	suite = xml_load_suite();
 

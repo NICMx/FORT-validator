@@ -2,8 +2,7 @@
 #include <stdlib.h>
 
 #include "alloc.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "types/address.c"
 #include "types/delta.c"
 #include "types/router_key.c"

@@ -4,8 +4,7 @@
 
 #include "alloc.c"
 #include "common.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "thread/thread_pool.c"
 
 static void

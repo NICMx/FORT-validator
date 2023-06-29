@@ -1833,6 +1833,7 @@ force_aia_validation(struct rpki_uri *caIssuers, X509 *son)
 
 	pr_val_debug("AIA's URI didn't matched parent URI, trying to SYNC");
 
+	/* TODO (#78) RFC misunderstanding; do not rsync here. */
 	/* RSYNC is still the preferred access mechanism, force the sync */
 	do {
 		error = rsync_download_files(caIssuers, false, true);
