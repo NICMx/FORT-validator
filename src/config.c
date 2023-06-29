@@ -21,7 +21,6 @@
 #include "config/init_tals.h"
 #include "config/str.h"
 #include "config/uint.h"
-#include "config/uint32.h"
 #include "config/work_offline.h"
 
 /**
@@ -440,7 +439,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 3001,
 		.name = "rsync.priority",
-		.type = &gt_uint32, /* TODO (#78) this is not u32 */
+		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, rsync.priority),
 		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
 		.min = 0,

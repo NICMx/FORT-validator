@@ -28,19 +28,15 @@ string_array_init(struct string_array *array, char const *const *values,
 		array->array[i] = pstrdup(values[i]);
 }
 
-void
-string_array_cleanup(struct string_array *array)
-{
-	size_t i;
-	for (i = 0; i < array->length; i++)
-		free(array->array[i]);
-	free(array->array);
-}
-
 static void
 __string_array_free(struct string_array *array)
 {
-	string_array_cleanup(array);
+	size_t i;
+
+	for (i = 0; i < array->length; i++)
+		free(array->array[i]);
+	free(array->array);
+
 	array->array = NULL;
 	array->length = 0;
 }

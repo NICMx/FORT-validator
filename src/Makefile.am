@@ -60,7 +60,6 @@ fort_SOURCES += config/str.c config/str.h
 fort_SOURCES += config/string_array.h config/string_array.c
 fort_SOURCES += config/types.h
 fort_SOURCES += config/uint.c config/uint.h
-fort_SOURCES += config/uint32.c config/uint32.h
 fort_SOURCES += config/work_offline.c config/work_offline.h
 
 fort_SOURCES += crypto/base64.h crypto/base64.c
