@@ -5,7 +5,7 @@
 
 struct deltas;
 
-int deltas_create(struct deltas **);
+struct deltas *deltas_create(void);
 void deltas_refget(struct deltas *);
 void deltas_refput(struct deltas *);
 

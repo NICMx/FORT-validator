@@ -3,6 +3,8 @@
 #include <getopt.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "alloc.h"
 #include "log.h"
 
 #define DEREFERENCE(void_value) (*((char **) void_value))
@@ -33,8 +35,8 @@ string_parse_argv(struct option_field const *field, char const *str,
 	/* Remove the previous value (usually the default). */
 	__string_free(result);
 
-	DEREFERENCE(result) = strdup(str);
-	return (DEREFERENCE(result) != NULL) ? 0 : pr_enomem();
+	DEREFERENCE(result) = pstrdup(str);
+	return 0;
 }
 
 static int

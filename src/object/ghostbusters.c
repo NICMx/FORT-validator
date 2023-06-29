@@ -37,9 +37,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_sobj;
-	error = signed_object_args_init(&sobj_args, uri, crl, true);
-	if (error)
-		goto revert_sobj;
+	signed_object_args_init(&sobj_args, uri, crl, true);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &sobj_args);

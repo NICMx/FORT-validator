@@ -2,13 +2,14 @@
 
 #include <dirent.h> /* readdir(), closedir() */
 #include <limits.h> /* realpath() */
-#include <stdlib.h> /* malloc(), free(), realloc(), realpath() */
+#include <stdlib.h> /* free(), realpath() */
 #include <stdio.h> /* remove() */
-#include <string.h> /* strdup(), strrchr(), strcmp(), strcat(), etc */
+#include <string.h> /* strrchr(), strcmp(), strcat(), etc */
 #include <unistd.h> /* stat(), rmdir() */
 #include <sys/stat.h> /* stat(), mkdir() */
 #include <sys/types.h> /* stat(), closedir(), mkdir() */
 
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
 
@@ -104,13 +105,8 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	(*fcount)++; /* Increment the found count */
 
 	/* Get the full file path */
-	tmp = strdup(dir_name);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	tmp = realloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
-	if (tmp == NULL)
-		return pr_enomem();
+	tmp = pstrdup(dir_name);
+	tmp = prealloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
 
 	strcat(tmp, "/");
 	strcat(tmp, file_name);
@@ -297,9 +293,7 @@ create_dir_recursive(char const *path)
 	if (exist)
 		return 0;
 
-	localuri = strdup(path);
-	if (localuri == NULL)
-		return pr_enomem();
+	localuri = pstrdup(path);
 
 	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
@@ -361,9 +355,7 @@ delete_dir_recursive_bottom_up(char const *path)
 	if (error)
 		return error;
 
-	config_repo = strdup(config_get_local_repository());
-	if (config_repo == NULL)
-		return pr_enomem();
+	config_repo = pstrdup(config_get_local_repository());
 
 	/* Stop dir removal when the work_dir has this length */
 	config_len = strlen(config_repo);
@@ -371,9 +363,7 @@ delete_dir_recursive_bottom_up(char const *path)
 		config_len--;
 	free(config_repo);
 
-	work_loc = strdup(path);
-	if (work_loc == NULL)
-		return pr_enomem();
+	work_loc = pstrdup(path);
 
 	do {
 		tmp = strrchr(work_loc, '/');
@@ -434,16 +424,14 @@ get_current_time(time_t *result)
  *
  * Returns 0 on success, otherwise an error code.
  */
-int
-map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
-    char **result)
+char *
+map_uri_to_local(char const *uri, char const *uri_prefix)
 {
 	char const *repository;
 	char *local;
 	size_t repository_len;
 	size_t uri_prefix_len;
 	size_t uri_len;
-	size_t workspace_len;
 	size_t extra_slash;
 	size_t offset;
 
@@ -456,14 +444,7 @@ map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
 	uri_len -= uri_prefix_len;
 	extra_slash = (repository[repository_len - 1] == '/') ? 0 : 1;
 
-	workspace_len = 0;
-	if (workspace != NULL)
-		workspace_len = strlen(workspace);
-
-	local = malloc(repository_len + extra_slash + workspace_len + uri_len +
-	    1);
-	if (local == NULL)
-		return pr_enomem();
+	local = pmalloc(repository_len + extra_slash + uri_len + 1);
 
 	offset = 0;
 	strcpy(local + offset, repository);
@@ -472,14 +453,9 @@ map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
 		strcpy(local + offset, "/");
 		offset += extra_slash;
 	}
-	if (workspace_len > 0) {
-		strcpy(local + offset, workspace);
-		offset += workspace_len;
-	}
 	strncpy(local + offset, uri, uri_len);
 	offset += uri_len;
 	local[offset] = '\0';
 
-	*result = local;
-	return 0;
+	return local;
 }

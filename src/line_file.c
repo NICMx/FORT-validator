@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "alloc.h"
 #include "file.h"
 #include "log.h"
 
@@ -22,9 +23,7 @@ lfile_open(const char *file_name, struct line_file **result)
 	struct line_file *lfile;
 	int error;
 
-	lfile = malloc(sizeof(struct line_file));
-	if (lfile == NULL)
-		return pr_enomem();
+	lfile = pmalloc(sizeof(struct line_file));
 
 	lfile->file = fopen(file_name, "r");
 	if (lfile->file == NULL) {

@@ -18,12 +18,12 @@ typedef enum {
  */
 struct db_rrdp_uri;
 
-int db_rrdp_uris_create(struct db_rrdp_uri **);
+struct db_rrdp_uri *db_rrdp_uris_create(void);
 void db_rrdp_uris_destroy(struct db_rrdp_uri *);
 
-int db_rrdp_uris_cmp(char const *, char const *, unsigned long,
-    rrdp_uri_cmp_result_t *);
-int db_rrdp_uris_update(char const *, char const *session_id, unsigned long,
+rrdp_uri_cmp_result_t db_rrdp_uris_cmp(char const *, char const *,
+    unsigned long);
+void db_rrdp_uris_update(char const *, char const *session_id, unsigned long,
     rrdp_req_status_t, struct visited_uris *);
 int db_rrdp_uris_get_serial(char const *, unsigned long *);
 
@@ -32,14 +32,10 @@ int db_rrdp_uris_set_last_update(char const *);
 
 int db_rrdp_uris_get_request_status(char const *, rrdp_req_status_t *);
 int db_rrdp_uris_set_request_status(char const *, rrdp_req_status_t);
-int db_rrdp_uris_set_all_unvisited(void);
+void db_rrdp_uris_set_all_unvisited(void);
 
-int db_rrdp_uris_get_visited_uris(char const *, struct visited_uris **);
-
-int db_rrdp_uris_remove_all_local(struct db_rrdp_uri *, char const *);
+struct visited_uris *db_rrdp_uris_get_visited_uris(char const *);
 
 char const *db_rrdp_uris_workspace_get(void);
-int db_rrdp_uris_workspace_enable(void);
-int db_rrdp_uris_workspace_disable(void);
 
 #endif /* SRC_RRDP_DB_DB_RRDP_URIS_H_ */

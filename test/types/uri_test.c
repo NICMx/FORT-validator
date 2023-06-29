@@ -2,9 +2,9 @@
 #include <errno.h>
 #include <stdint.h>
 
+#include "alloc.c"
 #include "common.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "types/uri.c"
 
 #define BUFFER_LEN 128

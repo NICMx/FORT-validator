@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include "alloc.h"
 #include "log.h"
 
 DEFINE_ARRAY_LIST_FUNCTIONS(deltas_head, struct delta_head, )
@@ -118,18 +119,12 @@ update_notification_create(char const *uri)
 {
 	struct update_notification *result;
 
-	result = malloc(sizeof(struct update_notification));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct update_notification));
 
 	global_data_init(&result->global_data);
 	doc_data_init(&result->snapshot);
 	deltas_head_init(&result->deltas_list);
-	result->uri = strdup(uri);
-	if (result->uri == NULL) {
-		free(result);
-		return NULL;
-	}
+	result->uri = pstrdup(uri);
 
 	return result;
 }
@@ -150,19 +145,15 @@ update_notification_destroy(struct update_notification *file)
 	free(file);
 }
 
-int
-snapshot_create(struct snapshot **file)
+struct snapshot *
+snapshot_create(void)
 {
 	struct snapshot *tmp;
 
-	tmp = malloc(sizeof(struct snapshot));
-	if (tmp == NULL)
-		return pr_enomem();
-
+	tmp = pmalloc(sizeof(struct snapshot));
 	global_data_init(&tmp->global_data);
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -172,19 +163,15 @@ snapshot_destroy(struct snapshot *file)
 	free(file);
 }
 
-int
-delta_create(struct delta **file)
+struct delta *
+delta_create(void)
 {
 	struct delta *tmp;
 
-	tmp = malloc(sizeof(struct delta));
-	if (tmp == NULL)
-		return pr_enomem();
-
+	tmp = pmalloc(sizeof(struct delta));
 	global_data_init(&tmp->global_data);
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -194,21 +181,17 @@ delta_destroy(struct delta *file)
 	free(file);
 }
 
-int
-publish_create(struct publish **file)
+struct publish *
+publish_create(void)
 {
 	struct publish *tmp;
 
-	tmp = malloc(sizeof(struct publish));
-	if (tmp == NULL)
-		return pr_enomem();
-
+	tmp = pmalloc(sizeof(struct publish));
 	doc_data_init(&tmp->doc_data);
 	tmp->content = NULL;
 	tmp->content_len = 0;
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -219,19 +202,15 @@ publish_destroy(struct publish *file)
 	free(file);
 }
 
-int
-withdraw_create(struct withdraw **file)
+struct withdraw *
+withdraw_create(void)
 {
 	struct withdraw *tmp;
 
-	tmp = malloc(sizeof(struct withdraw));
-	if (tmp == NULL)
-		return pr_enomem();
-
+	tmp = pmalloc(sizeof(struct withdraw));
 	doc_data_init(&tmp->doc_data);
 
-	*file = tmp;
-	return 0;
+	return tmp;
 }
 
 void

@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <sys/types.h> /* For blksize_t */
 
+#include "alloc.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"
@@ -34,27 +35,24 @@ hash_matches(unsigned char const *expected, size_t expected_len,
 }
 
 static int
-hash_file(char const *algorithm, struct rpki_uri *uri, unsigned char *result,
-    unsigned int *result_len)
+hash_file(struct rpki_uri *uri, unsigned char *result, unsigned int *result_len)
 {
-	return hash_local_file(algorithm, uri_get_local(uri), result,
-		result_len);
+	return hash_local_file(uri_get_local(uri), result, result_len);
 }
 
 int
-hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
+hash_local_file(char const *uri, unsigned char *result,
     unsigned int *result_len)
 {
 	EVP_MD const *md;
 	FILE *file;
 	struct stat stat;
 	unsigned char *buffer;
-	blksize_t buffer_len;
 	size_t consumed;
 	EVP_MD_CTX *ctx;
 	int error;
 
-	error = get_md(algorithm, &md);
+	error = get_md("sha256", &md);
 	if (error)
 		return error;
 
@@ -62,36 +60,29 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 	if (error)
 		return error;
 
-	buffer_len = stat.st_blksize;
-	buffer = malloc(buffer_len);
-	if (buffer == NULL) {
-		error = pr_enomem();
-		goto end1;
-	}
+	buffer = pmalloc(stat.st_blksize);
 
 	ctx = EVP_MD_CTX_new();
-	if (ctx == NULL) {
-		error = pr_enomem();
-		goto end2;
-	}
+	if (ctx == NULL)
+		enomem_panic();
 
 	if (!EVP_DigestInit_ex(ctx, md, NULL)) {
 		error = val_crypto_err("EVP_DigestInit_ex() failed");
-		goto end3;
+		goto end;
 	}
 
 	do {
-		consumed = fread(buffer, 1, buffer_len, file);
+		consumed = fread(buffer, 1, stat.st_blksize, file);
 		error = ferror(file);
 		if (error) {
 			pr_val_err("File reading error. Error message (apparently): %s",
 			   strerror(error));
-			goto end3;
+			goto end;
 		}
 
 		if (!EVP_DigestUpdate(ctx, buffer, consumed)) {
 			error = val_crypto_err("EVP_DigestUpdate() failed");
-			goto end3;
+			goto end;
 		}
 
 	} while (!feof(file));
@@ -99,11 +90,9 @@ hash_local_file(char const *algorithm, char const *uri, unsigned char *result,
 	if (!EVP_DigestFinal_ex(ctx, result, result_len))
 		error = val_crypto_err("EVP_DigestFinal_ex() failed");
 
-end3:
+end:
 	EVP_MD_CTX_free(ctx);
-end2:
 	free(buffer);
-end1:
 	file_close(file);
 	return error;
 }
@@ -120,8 +109,7 @@ end1:
  *     an incidence to ignore this).
  */
 int
-hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
-    BIT_STRING_t const *expected)
+hash_validate_mft_file(struct rpki_uri *uri, BIT_STRING_t const *expected)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];
 	unsigned int actual_len;
@@ -131,7 +119,7 @@ hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
 		return pr_val_err("Hash string has unused bits.");
 
 	do {
-		error = hash_file(algorithm, uri, actual, &actual_len);
+		error = hash_file(uri, actual, &actual_len);
 		if (!error)
 			break;
 
@@ -161,14 +149,14 @@ hash_validate_mft_file(char const *algorithm, struct rpki_uri *uri,
  * @expected_len. Returns 0 if no errors happened and the hashes match.
  */
 int
-hash_validate_file(char const *algorithm, struct rpki_uri *uri,
-    unsigned char const *expected, size_t expected_len)
+hash_validate_file(struct rpki_uri *uri, unsigned char const *expected,
+    size_t expected_len)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];
 	unsigned int actual_len;
 	int error;
 
-	error = hash_file(algorithm, uri, actual, &actual_len);
+	error = hash_file(uri, actual, &actual_len);
 	if (error)
 		return error;
 
@@ -195,7 +183,7 @@ hash_buffer(char const *algorithm,
 
 	ctx = EVP_MD_CTX_new();
 	if (ctx == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	if (!EVP_DigestInit_ex(ctx, md, NULL)
 	    || !EVP_DigestUpdate(ctx, content, content_len)
@@ -247,17 +235,6 @@ int
 hash_str(char const *algorithm, char const *str, unsigned char *result,
     unsigned int *result_len)
 {
-	unsigned char *src;
-	int error;
-
-	src = malloc(strlen(str));
-	if (src == NULL)
-		return pr_enomem();
-
-	memcpy(src, str, strlen(str));
-
-	error = hash_buffer(algorithm, src, strlen(str), result, result_len);
-
-	free(src);
-	return error;
+	return hash_buffer(algorithm, (unsigned char const *) str, strlen(str),
+	    result, result_len);
 }

@@ -19,7 +19,7 @@
 #define DECLARE_ARRAY_LIST_FUNCTIONS(name, elem_type)			\
 	void name##_init(struct name *);				\
 	void name##_cleanup(struct name *, void (*cb)(elem_type *));	\
-	int name##_add(struct name *list, elem_type *elem);
+	void name##_add(struct name *list, elem_type *elem);
 
 #define DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, modifiers)		\
 	modifiers void							\
@@ -42,7 +42,7 @@
 	}								\
 									\
 	/* Will store a shallow copy, not @elem */			\
-	modifiers int							\
+	modifiers void							\
 	name##_add(struct name *list, elem_type *elem)			\
 	{								\
 		elem_type *tmp;						\
@@ -52,7 +52,7 @@
 			list->array = malloc(list->capacity		\
 			    * sizeof(elem_type));			\
 			if (list->array == NULL)			\
-				return pr_enomem();			\
+				enomem_panic();				\
 		}							\
 									\
 		list->len++;						\
@@ -62,12 +62,11 @@
 			tmp = realloc(list->array, list->capacity	\
 			    * sizeof(elem_type));			\
 			if (tmp == NULL)				\
-				return pr_enomem();			\
+				enomem_panic();				\
 			list->array = tmp;				\
 		}							\
 									\
 		list->array[list->len - 1] = *elem;			\
-		return 0;						\
 	}
 
 #define ARRAY_LIST(name, elem_type)					\

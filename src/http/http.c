@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <curl/curl.h>
+
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
@@ -111,14 +113,14 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 	}
 }
 
-static int
+static void
 http_easy_init(struct http_handler *handler)
 {
 	CURL *result;
 
 	result = curl_easy_init();
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
@@ -162,7 +164,6 @@ http_easy_init(struct http_handler *handler)
 	setopt_long(result, CURLOPT_NOSIGNAL, 1L);
 
 	handler->curl = result;
-	return 0;
 }
 
 static char const *
@@ -225,12 +226,11 @@ handle_http_response_code(long http_code)
  */
 static int
 http_fetch(struct http_handler *handler, char const *uri, long *response_code,
-    long *cond_met, bool log_operation, FILE *file)
+    FILE *file)
 {
 	struct write_callback_arg args;
 	CURLcode res;
 	long http_code;
-	long unmet = 0;
 
 	handler->errbuf[0] = 0;
 	setopt_str(handler->curl, CURLOPT_URL, uri);
@@ -256,9 +256,6 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	if (res != CURLE_OK) {
 		pr_val_err("Error requesting URL: %s. (HTTP code: %ld)",
 		    curl_err_string(handler, res), http_code);
-		if (log_operation)
-			pr_op_err("Error requesting URL: %s. (HTTP code: %ld)",
-			    curl_err_string(handler, res), http_code);
 
 		switch (res) {
 		case CURLE_FILESIZE_EXCEEDED:
@@ -293,46 +290,6 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 	}
 
 	pr_val_debug("HTTP result code: %ld", http_code);
-
-	/*
-	 * Scenario: Received an OK code, but the time condition
-	 * (if-modified-since) wasn't actually met (ie. the document
-	 * has not been modified since we last requested it), so handle
-	 * this as a "Not Modified" code.
-	 *
-	 * This check is due to old libcurl versions, where the impl
-	 * doesn't let us get the response content since the library
-	 * does the time validation, resulting in "The requested
-	 * document is not new enough".
-	 *
-	 * Update 2021-05-25: I just tested libcurl in my old CentOS 7.7
-	 * VM (which is from October 2019, ie. older than the comments
-	 * above), and it behaves normally.
-	 * Also, the changelog doesn't mention anything about
-	 * If-Modified-Since.
-	 * This glue code is suspicious to me.
-	 *
-	 * For the record, this is how it behaves in my today's Ubuntu,
-	 * as well as my Centos 7.7.1908:
-	 *
-	 * 	if if-modified-since is included:
-	 * 		if page was modified:
-	 * 			HTTP 200
-	 * 			unmet: 0
-	 * 			writefunction called
-	 * 		else:
-	 * 			HTTP 304
-	 * 			unmet: 1
-	 * 			writefunction not called
-	 * 	else:
-	 * 		HTTP OK
-	 * 		unmet: 0
-	 * 		writefunction called
-	 */
-	res = curl_easy_getinfo(handler->curl, CURLINFO_CONDITION_UNMET, &unmet);
-	if (res == CURLE_OK && unmet == 1)
-		*cond_met = 0;
-
 	return 0;
 }
 
@@ -343,8 +300,7 @@ http_easy_cleanup(struct http_handler *handler)
 }
 
 static int
-__http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
-    long *cond_met, bool log_operation)
+__http_download_file(struct rpki_uri *uri, long *response_code, long ims_value)
 {
 	char const *tmp_suffix = "_tmp";
 	struct http_handler handler;
@@ -355,7 +311,6 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 	int error;
 
 	retries = 0;
-	*cond_met = 1;
 	if (!config_get_http_enabled()) {
 		*response_code = 0; /* Not 200 code, but also not an error */
 		return 0;
@@ -363,9 +318,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 
 	original_file = uri_get_local(uri);
 
-	tmp_file = malloc(strlen(original_file) + strlen(tmp_suffix) + 1);
-	if (tmp_file == NULL)
-		return pr_enomem();
+	tmp_file = pmalloc(strlen(original_file) + strlen(tmp_suffix) + 1);
 	strcpy(tmp_file, original_file);
 	strcat(tmp_file, tmp_suffix);
 
@@ -378,9 +331,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 		goto delete_dir;
 
 	do {
-		error = http_easy_init(&handler);
-		if (error)
-			goto close_file;
+		http_easy_init(&handler);
 
 		/* Set "If-Modified-Since" header only if a value is specified */
 		if (ims_value > 0) {
@@ -389,7 +340,7 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 			    CURL_TIMECOND_IFMODSINCE);
 		}
 		error = http_fetch(&handler, uri_get_global(uri), response_code,
-		    cond_met, log_operation, out);
+		    out);
 		if (error != EREQFAILED)
 			break; /* Note: Usually happy path */
 
@@ -427,8 +378,6 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value,
 end:
 	free(tmp_file);
 	return 0;
-close_file:
-	file_close(out);
 delete_dir:
 	delete_dir_recursive_bottom_up(tmp_file);
 release_tmp:
@@ -444,12 +393,10 @@ release_tmp:
  * request to the server failed.
  */
 int
-http_download_file(struct rpki_uri *uri, bool log_operation)
+http_download_file(struct rpki_uri *uri)
 {
 	long response;
-	long cond_met;
-	return __http_download_file(uri, &response, 0, &cond_met,
-	    log_operation);
+	return __http_download_file(uri, &response, 0);
 }
 
 /*
@@ -466,15 +413,12 @@ http_download_file(struct rpki_uri *uri, bool log_operation)
  *   < 0 an actual error happened.
  */
 int
-http_download_file_with_ims(struct rpki_uri *uri, long value,
-    bool log_operation)
+http_download_file_with_ims(struct rpki_uri *uri, long value)
 {
 	long response;
-	long cond_met;
 	int error;
 
-	error = __http_download_file(uri, &response, value, &cond_met,
-	    log_operation);
+	error = __http_download_file(uri, &response, value);
 	if (error)
 		return error;
 
@@ -484,29 +428,7 @@ http_download_file_with_ims(struct rpki_uri *uri, long value,
 	if (response == 304)
 		return 1;
 
-	/*
-	 * Got another HTTP response code (OK or error).
-	 *
-	 * Check if the time condition was met (in case of error is set as
-	 * 'true'), if it wasn't, then do a regular request (no time condition).
-	 */
-	if (cond_met)
-		return 0;
-
-	/*
-	 * Situation:
-	 *
-	 * - old libcurl (because libcurl returned HTTP 200 and cond_met == 0,
-	 *   which is a contradiction)
-	 * - the download was successful (error == 0)
-	 * - the page WAS modified since the last update
-	 *
-	 * libcurl wrote an empty file, so we have to redownload.
-	 */
-
-	return __http_download_file(uri, &response, 0, &cond_met,
-	    log_operation);
-
+	return 0;
 }
 
 /*
@@ -520,37 +442,24 @@ http_direct_download(char const *remote, char const *dest)
 	struct http_handler handler;
 	FILE *out;
 	long response_code;
-	long cond_met;
-	char *tmp_file, *tmp;
+	char *tmp_file;
 	int error;
 
-	tmp_file = strdup(dest);
-	if (tmp_file == NULL)
-		return pr_enomem();
-
-	tmp = realloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
-	if (tmp == NULL) {
-		error = pr_enomem();
-		goto release_tmp;
-	}
-
-	tmp_file = tmp;
+	tmp_file = pstrdup(dest);
+	tmp_file = prealloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
 	strcat(tmp_file, tmp_suffix);
 
 	error = file_write(tmp_file, &out);
 	if (error)
-		goto release_tmp;
+		goto end;
 
-	error = http_easy_init(&handler);
-	if (error)
-		goto close_file;
-
-	error = http_fetch(&handler, remote, &response_code, &cond_met, true,
-	    out);
+	http_easy_init(&handler);
+	error = http_fetch(&handler, remote, &response_code, out);
 	http_easy_cleanup(&handler);
+
 	file_close(out);
 	if (error)
-		goto release_tmp;
+		goto end;
 
 	/* Overwrite the original file */
 	error = rename(tmp_file, dest);
@@ -558,14 +467,10 @@ http_direct_download(char const *remote, char const *dest)
 		error = errno;
 		pr_val_err("Renaming temporal file from '%s' to '%s': %s",
 		    tmp_file, dest, strerror(error));
-		goto release_tmp;
+		goto end;
 	}
 
-	free(tmp_file);
-	return 0;
-close_file:
-	file_close(out);
-release_tmp:
+end:
 	free(tmp_file);
 	return error;
 }

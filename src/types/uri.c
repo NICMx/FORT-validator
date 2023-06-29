@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <strings.h>
 #include "rrdp/db/db_rrdp_uris.h"
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -124,9 +125,7 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 			return error;
 	}
 
-	uri->global = malloc(str_len + 1);
-	if (uri->global == NULL)
-		return pr_enomem();
+	uri->global = pmalloc(str_len + 1);
 	strncpy(uri->global, str, str_len);
 	uri->global[str_len] = '\0';
 	uri->global_len = str_len;
@@ -203,9 +202,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 		return pr_val_err("Manifest URL '%s' contains no slashes.", mft);
 
 	dir_len = (slash_pos + 1) - mft;
-	joined = malloc(dir_len + ia5->size + 1);
-	if (joined == NULL)
-		return pr_enomem();
+	joined = pmalloc(dir_len + ia5->size + 1);
 
 	strncpy(joined, mft, dir_len);
 	strncpy(joined + dir_len, (char *) ia5->buf, ia5->size);
@@ -238,23 +235,19 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 {
 	size_t const PFX_RSYNC_LEN = strlen(PFX_RSYNC);
 	size_t const PFX_HTTPS_LEN = strlen(PFX_HTTPS);
-	uint8_t l_flags;
 	int error;
 
-	/* Exclude RSYNC RRDP flag, isn't relevant here */
-	l_flags = flags & ~URI_USE_RRDP_WORKSPACE;
-
-	if (l_flags == URI_VALID_RSYNC) {
+	if (flags == URI_VALID_RSYNC) {
 		(*type) = URI_RSYNC;
 		return validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global,
 		    global_len, ENOTRSYNC);
 	}
-	if (l_flags == URI_VALID_HTTPS) {
+	if (flags == URI_VALID_HTTPS) {
 		(*type) = URI_HTTPS;
 		return validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global,
 		    global_len, ENOTHTTPS);
 	}
-	if (l_flags != (URI_VALID_RSYNC | URI_VALID_HTTPS))
+	if (flags != (URI_VALID_RSYNC | URI_VALID_HTTPS))
 		pr_crit("Unknown URI flag");
 
 	/* It has both flags */
@@ -277,26 +270,6 @@ validate_gprefix(char const *global, size_t global_len, uint8_t flags,
 	return 0;
 }
 
-static int
-get_local_workspace(char **result)
-{
-	char const *workspace;
-	char *tmp;
-
-	workspace = db_rrdp_uris_workspace_get();
-	if (workspace == NULL) {
-		*result = NULL;
-		return 0;
-	}
-
-	tmp = strdup(workspace);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	*result = tmp;
-	return 0;
-}
-
 /**
  * Initializes @uri->local by converting @uri->global.
  *
@@ -311,8 +284,6 @@ static int
 g2l(char const *global, size_t global_len, uint8_t flags, char **result,
     enum rpki_uri_type *result_type)
 {
-	char *local;
-	char *workspace;
 	enum rpki_uri_type type;
 	int error;
 
@@ -320,24 +291,8 @@ g2l(char const *global, size_t global_len, uint8_t flags, char **result,
 	if (error)
 		return error;
 
-	workspace = NULL;
-	if ((flags & URI_USE_RRDP_WORKSPACE) != 0) {
-		error = get_local_workspace(&workspace);
-		if (error)
-			return error;
-	}
-
-	error = map_uri_to_local(global,
-	    type == URI_RSYNC ? PFX_RSYNC : PFX_HTTPS,
-	    workspace,
-	    &local);
-	if (error) {
-		free(workspace);
-		return error;
-	}
-
-	free(workspace);
-	*result = local;
+	*result = map_uri_to_local(global,
+	    type == URI_RSYNC ? PFX_RSYNC : PFX_HTTPS);
 	(*result_type) = type;
 	return 0;
 }
@@ -356,9 +311,7 @@ uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
 	struct rpki_uri *uri;
 	int error;
 
-	uri = malloc(sizeof(struct rpki_uri));
-	if (uri == NULL)
-		return pr_enomem();
+	uri = pmalloc(sizeof(struct rpki_uri));
 
 	error = str2global(guri, guri_len, uri);
 	if (error) {
@@ -382,16 +335,14 @@ int
 uri_create_rsync_str_rrdp(struct rpki_uri **uri, char const *guri,
     size_t guri_len)
 {
-	return uri_create(uri, URI_VALID_RSYNC | URI_USE_RRDP_WORKSPACE, guri,
-	    guri_len);
+	return uri_create(uri, URI_VALID_RSYNC, guri, guri_len);
 }
 
 int
 uri_create_https_str_rrdp(struct rpki_uri **uri, char const *guri,
     size_t guri_len)
 {
-	return uri_create(uri, URI_VALID_HTTPS | URI_USE_RRDP_WORKSPACE, guri,
-	    guri_len);
+	return uri_create(uri, URI_VALID_HTTPS, guri, guri_len);
 }
 
 int
@@ -417,16 +368,12 @@ uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
  * names. This function will infer the rest of the URL.
  */
 int
-uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
-    bool use_rrdp_workspace)
+uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 {
 	struct rpki_uri *uri;
-	uint8_t flags;
 	int error;
 
-	uri = malloc(sizeof(struct rpki_uri));
-	if (uri == NULL)
-		return pr_enomem();
+	uri = pmalloc(sizeof(struct rpki_uri));
 
 	error = ia5str2global(uri, mft->global, ia5);
 	if (error) {
@@ -434,11 +381,7 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
 		return error;
 	}
 
-	flags = URI_VALID_RSYNC;
-	if (use_rrdp_workspace)
-		flags |= URI_USE_RRDP_WORKSPACE;
-
-	error = autocomplete_local(uri, flags);
+	error = autocomplete_local(uri, URI_VALID_RSYNC);
 	if (error) {
 		free(uri->global);
 		free(uri);

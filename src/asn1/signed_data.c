@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include "algorithm.h"
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
 #include "oid.h"
@@ -20,7 +21,7 @@ static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
-int
+void
 signed_object_args_init(struct signed_object_args *args,
     struct rpki_uri *uri,
     STACK_OF(X509_CRL) *crls,
@@ -28,12 +29,11 @@ signed_object_args_init(struct signed_object_args *args,
 {
 	args->res = resources_create(force_inherit);
 	if (args->res == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	args->uri = uri;
 	args->crls = crls;
 	memset(&args->refs, 0, sizeof(args->refs));
-	return 0;
 }
 
 void
@@ -415,11 +415,7 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 	if (error)
 		return error;
 
-	sdata = calloc(1, sizeof(struct SignedData));
-	if (sdata == NULL) {
-		error = pr_enomem();
-		goto release_sdata_pkcs7;
-	}
+	sdata = pcalloc(1, sizeof(struct SignedData));
 
 	/* Parse content as OCTET STRING */
 	error = asn1_decode_any(sdata_pkcs7->encapContentInfo.eContent,
@@ -446,7 +442,6 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 
 release_sdata:
 	free(sdata);
-release_sdata_pkcs7:
 	ASN_STRUCT_FREE(asn_DEF_SignedDataPKCS7, sdata_pkcs7);
 	return error;
 }

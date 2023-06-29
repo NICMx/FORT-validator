@@ -14,6 +14,7 @@
 #include "crypto/hash.h"
 #include "http/http.h"
 #include "xml/relax_ng.h"
+#include "alloc.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"
@@ -62,16 +63,13 @@ struct rdr_delta_ctx {
 struct proc_upd_args {
 	struct update_notification *parent;
 	struct visited_uris *visited_uris;
-	bool log_operation;
 };
 
-static int
+static void
 add_mft_to_list(struct visited_uris *visited_uris, char const *uri)
 {
-	if (strcmp(".mft", strrchr(uri, '.')) != 0)
-		return 0;
-
-	return visited_uris_add(visited_uris, uri);
+	if (strcmp(".mft", strrchr(uri, '.')) == 0)
+		visited_uris_add(visited_uris, uri);
 }
 
 static int
@@ -84,15 +82,14 @@ rem_mft_from_list(struct visited_uris *visited_uris, char const *uri)
 }
 
 static int
-download_file(struct rpki_uri *uri, long last_update, bool log_operation)
+download_file(struct rpki_uri *uri, long last_update)
 {
 	int error;
 
 	if (last_update > 0)
-		error = http_download_file_with_ims(uri, last_update,
-		    log_operation);
+		error = http_download_file_with_ims(uri, last_update);
 	else
-		error = http_download_file(uri, log_operation);
+		error = http_download_file(uri);
 
 	/*
 	 * Since distinct files can be downloaded (notification, snapshot,
@@ -150,17 +147,12 @@ base64_sanitize(char *content, char **out)
 		return error;
 
 	if (original_size <= BUF_SIZE) {
-		result = strdup(content);
-		if (result == NULL)
-			return pr_enomem();
-		*out = result;
+		*out = pstrdup(content);
 		return 0;
 	}
 
 	new_size = original_size + (original_size / BUF_SIZE);
-	result = malloc(new_size + 1);
-	if (result == NULL)
-		return pr_enomem();
+	result = pmalloc(new_size + 1);
 
 	offset = 0;
 	while (original_size > 0){
@@ -177,14 +169,8 @@ base64_sanitize(char *content, char **out)
 	}
 
 	/* Reallocate to exact size and add nul char */
-	if (offset != new_size + 1) {
-		tmp = realloc(result, offset + 1);
-		if (tmp == NULL) {
-			free(result);
-			return pr_enomem();
-		}
-		result = tmp;
-	}
+	if (offset != new_size + 1)
+		result = prealloc(result, offset + 1);
 
 	result[offset] = '\0';
 	*out = result;
@@ -214,11 +200,7 @@ base64_read(char *content, unsigned char **out, size_t *out_len)
 	}
 
 	alloc_size = EVP_DECODE_LENGTH(strlen(content));
-	result = malloc(alloc_size);
-	if (result == NULL) {
-		error = pr_enomem();
-		goto release_bio;
-	}
+	result = pmalloc(alloc_size);
 
 	error = base64_decode(encoded, result, true, alloc_size, &result_len);
 	if (error)
@@ -232,7 +214,6 @@ base64_read(char *content, unsigned char **out, size_t *out_len)
 	return 0;
 release_result:
 	free(result);
-release_bio:
 	BIO_free(encoded);
 release_sanitized:
 	free(sanitized);
@@ -257,12 +238,7 @@ parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
 			    attr, xmlTextReaderConstLocalName(reader));
 	}
 
-	tmp = malloc(xmlStrlen(xml_value) + 1);
-	if (tmp == NULL) {
-		xmlFree(xml_value);
-		return pr_enomem();
-	}
-
+	tmp = pmalloc(xmlStrlen(xml_value) + 1);
 	memcpy(tmp, xml_value, xmlStrlen(xml_value));
 	tmp[xmlStrlen(xml_value)] = '\0';
 	xmlFree(xml_value);
@@ -322,12 +298,7 @@ parse_hex_string(xmlTextReaderPtr reader, bool required, char const *attr,
 	}
 
 	tmp_len = xmlStrlen(xml_value) / 2;
-	tmp = malloc(tmp_len);
-	if (tmp == NULL) {
-		xmlFree(xml_value);
-		return pr_enomem();
-	}
-	memset(tmp, 0, tmp_len);
+	tmp = pzalloc(tmp_len);
 
 	ptr = tmp;
 	xml_cur = (char *) xml_value;
@@ -471,9 +442,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 	char *base64_str;
 	int error;
 
-	error = publish_create(&tmp);
-	if (error)
-		return error;
+	tmp = publish_create();
 
 	error = parse_doc_data(reader, parse_hash, hash_required,
 	    &tmp->doc_data);
@@ -504,7 +473,7 @@ parse_publish(xmlTextReaderPtr reader, bool parse_hash, bool hash_required,
 		if (error)
 			goto release_base64;
 
-		error = hash_validate_file("sha256", uri, tmp->doc_data.hash,
+		error = hash_validate_file(uri, tmp->doc_data.hash,
 		    tmp->doc_data.hash_len);
 		uri_refput(uri);
 		if (error != 0) {
@@ -532,9 +501,7 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw **withdraw)
 	struct rpki_uri *uri;
 	int error;
 
-	error = withdraw_create(&tmp);
-	if (error)
-		return error;
+	tmp = withdraw_create();
 
 	error = parse_doc_data(reader, true, true, &tmp->doc_data);
 	if (error)
@@ -546,8 +513,8 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw **withdraw)
 	if (error)
 		goto release_tmp;
 
-	error = hash_validate_file("sha256", uri,
-	    tmp->doc_data.hash, tmp->doc_data.hash_len);
+	error = hash_validate_file(uri, tmp->doc_data.hash,
+	    tmp->doc_data.hash_len);
 	if (error)
 		goto release_uri;
 
@@ -595,12 +562,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len,
 		    uri_get_local(uri));
 	}
 
-	error = add_mft_to_list(visited_uris, uri_get_global(uri));
-	if (error) {
-		uri_refput(uri);
-		file_close(out);
-		return error;
-	}
+	add_mft_to_list(visited_uris, uri_get_global(uri));
 
 	uri_refput(uri);
 	file_close(out);
@@ -702,11 +664,8 @@ parse_notification_delta(xmlTextReaderPtr reader,
 	if (error)
 		return error;
 
-	error = deltas_head_add(&update->deltas_list, &delta);
-	if (error)
-		doc_data_cleanup(&delta.doc_data);
-
-	return error;
+	deltas_head_add(&update->deltas_list, &delta);
+	return 0;
 }
 
 static int
@@ -749,7 +708,7 @@ parse_notification(struct rpki_uri *uri, struct update_notification **file)
 
 	result = update_notification_create(uri_get_global(uri));
 	if (result == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	error = relax_ng_parse(uri_get_local(uri), xml_read_notification,
 	    result);
@@ -799,29 +758,23 @@ static int
 parse_snapshot(struct rpki_uri *uri, struct proc_upd_args *args)
 {
 	struct rdr_snapshot_ctx ctx;
-	struct snapshot *snapshot;
 	int error;
 
 	fnstack_push_uri(uri);
 	/* Hash validation */
-	error = hash_validate_file("sha256", uri, args->parent->snapshot.hash,
+	error = hash_validate_file(uri, args->parent->snapshot.hash,
 	    args->parent->snapshot.hash_len);
 	if (error)
 		goto pop;
 
-	error = snapshot_create(&snapshot);
-	if (error)
-		goto pop;
-
-	ctx.snapshot = snapshot;
+	ctx.snapshot = snapshot_create();
 	ctx.parent = args->parent;
 	ctx.visited_uris = args->visited_uris;
+
 	error = relax_ng_parse(uri_get_local(uri), xml_read_snapshot, &ctx);
 
-	/* Error 0 is ok */
-	snapshot_destroy(snapshot);
-pop:
-	fnstack_pop();
+	snapshot_destroy(ctx.snapshot);
+pop:	fnstack_pop();
 	return error;
 }
 
@@ -865,31 +818,25 @@ parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
     struct proc_upd_args *args)
 {
 	struct rdr_delta_ctx ctx;
-	struct delta *delta;
 	struct doc_data *expected_data;
 	int error;
 
 	expected_data = &parents_data->doc_data;
 
 	fnstack_push_uri(uri);
-	error = hash_validate_file("sha256", uri, expected_data->hash,
+	error = hash_validate_file(uri, expected_data->hash,
 	    expected_data->hash_len);
 	if (error)
 		goto pop_fnstack;
 
-	error = delta_create(&delta);
-	if (error)
-		goto pop_fnstack;
-
-	ctx.delta = delta;
+	ctx.delta = delta_create();
 	ctx.parent = args->parent;
 	ctx.visited_uris = args->visited_uris;
 	ctx.expected_serial = parents_data->serial;
+
 	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
 
-	delta_destroy(delta);
-	/* Error 0 is ok */
-
+	delta_destroy(ctx.delta);
 pop_fnstack:
 	fnstack_pop();
 	return error;
@@ -913,7 +860,7 @@ process_delta(struct delta_head *delta_head, void *arg)
 
 	fnstack_push_uri(uri);
 
-	error = download_file(uri, 0, args->log_operation);
+	error = download_file(uri, 0);
 	if (error)
 		goto release_uri;
 
@@ -938,7 +885,7 @@ release_uri:
  * Set @force to true to omit 'If-Modified-Since' header.
  */
 int
-rrdp_parse_notification(struct rpki_uri *uri, bool log_operation, bool force,
+rrdp_parse_notification(struct rpki_uri *uri, bool force,
     struct update_notification **result)
 {
 	long last_update;
@@ -957,7 +904,7 @@ rrdp_parse_notification(struct rpki_uri *uri, bool log_operation, bool force,
 			goto end;
 	}
 
-	error = download_file(uri, last_update, log_operation);
+	error = download_file(uri, last_update);
 	if (error < 0)
 		goto end;
 
@@ -994,7 +941,7 @@ end:	fnstack_pop();
 
 int
 rrdp_parse_snapshot(struct update_notification *parent,
-    struct visited_uris *visited_uris, bool log_operation)
+    struct visited_uris *visited_uris)
 {
 	struct proc_upd_args args;
 	struct rpki_uri *uri;
@@ -1011,7 +958,7 @@ rrdp_parse_snapshot(struct update_notification *parent,
 
 	fnstack_push_uri(uri);
 
-	error = download_file(uri, 0, log_operation);
+	error = download_file(uri, 0);
 	if (error)
 		goto release_uri;
 
@@ -1027,14 +974,12 @@ release_uri:
 
 int
 rrdp_process_deltas(struct update_notification *parent,
-    unsigned long cur_serial, struct visited_uris *visited_uris,
-    bool log_operation)
+    unsigned long cur_serial, struct visited_uris *visited_uris)
 {
 	struct proc_upd_args args;
 
 	args.parent = parent;
 	args.visited_uris = visited_uris;
-	args.log_operation = log_operation;
 
 	return deltas_head_for_each(&parent->deltas_list,
 	    parent->global_data.serial, cur_serial, process_delta, &args);

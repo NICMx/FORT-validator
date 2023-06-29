@@ -24,7 +24,7 @@
 	    str);
 #endif
 
-void
+static void
 print_rsync_strategy(struct option_field const *field, void *value)
 {
 	char const *str = "<unknown>";
@@ -46,7 +46,7 @@ print_rsync_strategy(struct option_field const *field, void *value)
 	pr_op_info("%s: %s", field->name, str);
 }
 
-int
+static int
 parse_argv_rsync_strategy(struct option_field const *field, char const *str,
     void *result)
 {
@@ -60,13 +60,10 @@ parse_argv_rsync_strategy(struct option_field const *field, char const *str,
 		return pr_op_err("Unknown rsync synchronization strategy: '%s'",
 		    str);
 
-	/* TODO (later) Remove when sync-strategy is fully deprecated */
-	config_set_sync_strategy(DEREFERENCE(result));
-
 	return 0;
 }
 
-int
+static int
 parse_json_rsync_strategy(struct option_field const *opt, struct json_t *json,
     void *result)
 {

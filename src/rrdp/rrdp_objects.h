@@ -97,16 +97,16 @@ int deltas_head_for_each(struct deltas_head *, unsigned long, unsigned long,
     delta_head_cb, void *);
 int deltas_head_sort(struct deltas_head *, unsigned long);
 
-int snapshot_create(struct snapshot **);
+struct snapshot *snapshot_create(void);
 void snapshot_destroy(struct snapshot *);
 
-int delta_create(struct delta **);
+struct delta *delta_create(void);
 void delta_destroy(struct delta *);
 
-int publish_create(struct publish **);
+struct publish *publish_create(void);
 void publish_destroy(struct publish *);
 
-int withdraw_create(struct withdraw **);
+struct withdraw *withdraw_create(void);
 void withdraw_destroy(struct withdraw *);
 
 #endif /* SRC_RRDP_RRDP_OBJECTS_H_ */

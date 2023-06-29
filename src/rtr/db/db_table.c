@@ -3,8 +3,9 @@
 #include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 #include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
 
+#include "alloc.h"
 #include "log.h"
-#include "data_structure/uthash_nonfatal.h"
+#include "data_structure/uthash.h"
 
 struct hashable_roa {
 	const struct vrp data;
@@ -26,12 +27,10 @@ db_table_create(void)
 {
 	struct db_table *table;
 
-	table = malloc(sizeof(struct db_table));
-	if (table == NULL)
-		return NULL;
-
+	table = pmalloc(sizeof(struct db_table));
 	table->roas = NULL;
 	table->router_keys = NULL;
+
 	return table;
 }
 
@@ -94,10 +93,7 @@ add_roa(struct db_table *table, struct hashable_roa const *stack_new)
 	struct hashable_roa *old;
 	int error;
 
-	new = malloc(sizeof(struct hashable_roa));
-	if (new == NULL)
-		return pr_enomem();
-	memcpy(new, stack_new, sizeof(*new));
+	new = pmclone(stack_new, sizeof(struct hashable_roa));
 
 	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
@@ -207,11 +203,7 @@ rtrhandler_handle_router_key(struct db_table *table,
 	struct hashable_key *key;
 	int error;
 
-	key = malloc(sizeof(struct hashable_key));
-	if (key == NULL)
-		return pr_enomem();
-	/* Needed by uthash */
-	memset(key, 0, sizeof(struct hashable_key));
+	key = pzalloc(sizeof(struct hashable_key)); /* Zero needed by uthash */
 
 	router_key_init(&key->data, ski, as, spk);
 
@@ -327,9 +319,7 @@ compute_deltas(struct db_table *old, struct db_table *new,
 	struct deltas *deltas;
 	int error;
 
-	error = deltas_create(&deltas);
-	if (error)
-		return error;
+	deltas = deltas_create();
 
 	error = add_roa_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT,
 	    'n');

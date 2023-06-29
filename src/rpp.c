@@ -1,6 +1,6 @@
 #include "rpp.h"
 
-#include <stdlib.h>
+#include "alloc.h"
 #include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
@@ -55,9 +55,7 @@ rpp_create(void)
 {
 	struct rpp *result;
 
-	result = malloc(sizeof(struct rpp));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct rpp));
 
 	uris_init(&result->certs);
 	result->crl.uri = NULL;
@@ -99,24 +97,24 @@ rpp_refput(struct rpp *pp)
 }
 
 /** Steals ownership of @uri. */
-int
+void
 rpp_add_cert(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->certs, &uri);
+	uris_add(&pp->certs, &uri);
 }
 
 /** Steals ownership of @uri. */
-int
+void
 rpp_add_roa(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->roas, &uri);
+	uris_add(&pp->roas, &uri);
 }
 
 /** Steals ownership of @uri. */
-int
+void
 rpp_add_ghostbusters(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->ghostbusters, &uri);
+	uris_add(&pp->ghostbusters, &uri);
 }
 
 /** Steals ownership of @uri. */
@@ -195,10 +193,8 @@ rpp_crl(struct rpp *pp, STACK_OF(X509_CRL) **result)
 
 	/* -- Actually initialize pp->crl.stack. -- */
 	stack = sk_X509_CRL_new_null();
-	if (stack == NULL) {
-		pp->crl.error = pr_enomem();
-		return pp->crl.error;
-	}
+	if (stack == NULL)
+		enomem_panic();
 	pp->crl.error = add_crl_to_stack(pp, stack);
 	if (pp->crl.error) {
 		sk_X509_CRL_pop_free(stack, X509_CRL_free);
@@ -217,14 +213,11 @@ __cert_traverse(struct rpp *pp)
 	struct cert_stack *certstack;
 	ssize_t i;
 	struct deferred_cert deferred;
-	int error;
 
 	if (pp->certs.len == 0)
 		return 0;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 	certstack = validation_certstack(state);
 
 	deferred.pp = pp;
@@ -235,9 +228,7 @@ __cert_traverse(struct rpp *pp)
 	 */
 	for (i = pp->certs.len - 1; i >= 0; i--) {
 		deferred.uri = pp->certs.array[i];
-		error = deferstack_push(certstack, &deferred);
-		if (error)
-			return error;
+		deferstack_push(certstack, &deferred);
 	}
 
 	return 0;

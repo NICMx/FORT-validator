@@ -27,7 +27,7 @@ struct signed_object_args {
 	struct certificate_refs refs;
 };
 
-int signed_object_args_init(struct signed_object_args *, struct rpki_uri *,
+void signed_object_args_init(struct signed_object_args *, struct rpki_uri *,
     STACK_OF(X509_CRL) *, bool);
 void signed_object_args_cleanup(struct signed_object_args *);
 

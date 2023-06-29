@@ -2,49 +2,18 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "alloc.c"
 #include "common.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "rtr/err_pdu.c"
 #include "rtr/pdu.c"
 #include "rtr/primitive_reader.c"
-#include "rtr/db/rtr_db_impersonator.c"
+#include "rtr/db/rtr_db_mock.c"
 
-/*
- * Used to be a wrapper for `buffer2fd()`, but that's no longer necessary.
- *
- * Converts the @buffer buffer into PDU @obj, using the @cb function.
- * Also takes care of the header validation.
- */
-#define BUFFER2FD(buffer, cb, obj) {					\
-	struct pdu_header header;					\
-	struct pdu_reader reader;					\
-									\
-	pdu_reader_init(&reader, buffer, sizeof(buffer));		\
-	init_pdu_header(&header);					\
-	ck_assert_int_eq(0, cb(&header, &reader, obj));			\
-	assert_pdu_header(&(obj)->header);				\
-}
+/* Mocks */
 
-/* Impersonator functions */
-
-#define IMPERSONATE_HANDLER(name)					\
-	int								\
-	handle_## name ##_pdu(int fd, struct rtr_request const *req) {	\
-		return 0;						\
-	}
-
-uint16_t
-get_current_session_id(uint8_t rtr_version)
-{
-	return 12345;
-}
-
-int
-clients_set_rtr_version(int fd, uint8_t rtr_version)
-{
-	return 0;
-}
+MOCK(get_current_session_id, uint16_t, 12345, uint8_t v)
+MOCK_INT(clients_set_rtr_version, 0, int f, uint8_t v)
 
 int
 clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
@@ -54,16 +23,18 @@ clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
 	return 0;
 }
 
-IMPERSONATE_HANDLER(serial_notify)
-IMPERSONATE_HANDLER(serial_query)
-IMPERSONATE_HANDLER(reset_query)
-IMPERSONATE_HANDLER(cache_response)
-IMPERSONATE_HANDLER(ipv4_prefix)
-IMPERSONATE_HANDLER(ipv6_prefix)
-IMPERSONATE_HANDLER(end_of_data)
-IMPERSONATE_HANDLER(cache_reset)
-IMPERSONATE_HANDLER(router_key)
-IMPERSONATE_HANDLER(error_report)
+#define MOCK_HANDLER(n) MOCK(n, int, 0, int f, struct rtr_request const *r)
+
+MOCK_HANDLER(handle_serial_notify_pdu)
+MOCK_HANDLER(handle_serial_query_pdu)
+MOCK_HANDLER(handle_reset_query_pdu)
+MOCK_HANDLER(handle_cache_response_pdu)
+MOCK_HANDLER(handle_ipv4_prefix_pdu)
+MOCK_HANDLER(handle_ipv6_prefix_pdu)
+MOCK_HANDLER(handle_end_of_data_pdu)
+MOCK_HANDLER(handle_cache_reset_pdu)
+MOCK_HANDLER(handle_router_key_pdu)
+MOCK_HANDLER(handle_error_report_pdu)
 
 int
 send_error_report_pdu(int fd, uint8_t version, uint16_t code,
@@ -75,28 +46,30 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 	return 0;
 }
 
-int
-rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
+MOCK_INT(rtrhandler_handle_roa_v4, 0, struct db_table *table, uint32_t asn,
     struct ipv4_prefix const *prefix4, uint8_t max_length)
-{
-	return 0;
-}
-
-int
-rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
+MOCK_INT(rtrhandler_handle_roa_v6, 0, struct db_table *table, uint32_t asn,
     struct ipv6_prefix const *prefix6, uint8_t max_length)
-{
-	return 0;
-}
-
-int
-rtrhandler_handle_router_key(struct db_table *table,
+MOCK_INT(rtrhandler_handle_router_key, 0, struct db_table *table,
     unsigned char const *ski, uint32_t as, unsigned char const *spk)
-{
-	return 0;
-}
 
-/* End of impersonator */
+/* End of mocks */
+
+/*
+* Used to be a wrapper for `buffer2fd()`, but that's no longer necessary.
+*
+* Converts the @buffer buffer into PDU @obj, using the @cb function.
+* Also takes care of the header validation.
+*/
+#define BUFFER2FD(buffer, cb, obj) {					\
+	struct pdu_header header;					\
+	struct pdu_reader reader;					\
+									\
+	pdu_reader_init(&reader, buffer, sizeof(buffer));		\
+	init_pdu_header(&header);					\
+	ck_assert_int_eq(0, cb(&header, &reader, obj));			\
+	assert_pdu_header(&(obj)->header);				\
+}
 
 static void
 init_pdu_header(struct pdu_header *header)

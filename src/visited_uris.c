@@ -3,6 +3,7 @@
 #include <sys/queue.h>
 #include <stddef.h>
 #include <string.h>
+#include "alloc.h"
 #include "log.h"
 #include "delete_dir_daemon.h"
 #include "data_structure/array_list.h"
@@ -22,25 +23,15 @@ struct visited_uris {
 DEFINE_ARRAY_LIST_STRUCT(uris_roots, char *);
 DEFINE_ARRAY_LIST_FUNCTIONS(uris_roots, char *, static)
 
-static int
-visited_elem_create(struct visited_elem **elem, char const *uri)
+static struct visited_elem *
+visited_elem_create(char const *uri)
 {
 	struct visited_elem *tmp;
 
-	tmp = malloc(sizeof(struct visited_elem));
-	if (tmp == NULL)
-		return pr_enomem();
-	/* Needed by uthash */
-	memset(tmp, 0, sizeof(struct visited_elem));
+	tmp = pzalloc(sizeof(struct visited_elem)); /* Zero needed by uthash */
+	tmp->uri = pstrdup(uri);
 
-	tmp->uri = strdup(uri);
-	if (tmp->uri == NULL) {
-		free(tmp);
-		return pr_enomem();
-	}
-
-	*elem = tmp;
-	return 0;
+	return tmp;
 }
 
 static void
@@ -50,20 +41,17 @@ visited_elem_destroy(struct visited_elem *elem)
 	free(elem);
 }
 
-int
-visited_uris_create(struct visited_uris **uris)
+struct visited_uris *
+visited_uris_create(void)
 {
 	struct visited_uris *tmp;
 
-	tmp = malloc(sizeof(struct visited_uris));
-	if (tmp == NULL)
-		return pr_enomem();
+	tmp = pmalloc(sizeof(struct visited_uris));
 
 	tmp->table = NULL;
 	tmp->refs = 1;
 
-	*uris = tmp;
-	return 0;
+	return tmp;
 }
 
 static void
@@ -100,22 +88,16 @@ elem_find(struct visited_uris *list, char const *uri)
 	return found;
 }
 
-int
+void
 visited_uris_add(struct visited_uris *uris, char const *uri)
 {
-	struct visited_elem *elem;
-	int error;
+	struct visited_elem *node;
 
-	if (elem_find(uris, uri) != NULL)
-		return 0; /* Exists, don't add again */
-
-	elem = NULL;
-	error = visited_elem_create(&elem, uri);
-	if (error)
-		return error;
-
-	HASH_ADD_STR(uris->table, uri, elem);
-	return 0;
+	if (elem_find(uris, uri) == NULL) {
+		/* Do not inline; HASH_ADD_STR expands "add" multiple times. */
+		node = visited_elem_create(uri);
+		HASH_ADD_STR(uris->table, uri, node);
+	}
 }
 
 int
@@ -133,7 +115,7 @@ visited_uris_remove(struct visited_uris *uris, char const *uri)
 	return 0;
 }
 
-static int
+static void
 visited_uris_to_arr(struct visited_uris *uris, struct uris_roots *roots)
 {
 	struct visited_elem *elem;
@@ -143,15 +125,11 @@ visited_uris_to_arr(struct visited_uris *uris, struct uris_roots *roots)
 	for (elem = uris->table; elem != NULL; elem = elem->hh.next) {
 		last_slash = strrchr(elem->uri, '/');
 		size = last_slash - elem->uri;
-		tmp = malloc(size + 1);
-		if (tmp == NULL)
-			return pr_enomem();
+		tmp = pmalloc(size + 1);
 		strncpy(tmp, elem->uri, size);
 		tmp[size] = '\0';
 		uris_roots_add(roots, &tmp);
 	}
-
-	return 0;
 }
 
 static void
@@ -164,27 +142,23 @@ uris_root_destroy(char **elem)
  * Delete all the corresponding local files of @uris located at @workspace
  */
 int
-visited_uris_delete_local(struct visited_uris *uris, char const *workspace)
+visited_uris_delete_local(struct visited_uris *uris)
 {
 	struct uris_roots roots;
 	int error;
 
 	uris_roots_init(&roots);
-
-	error = visited_uris_to_arr(uris, &roots);
-	if (error)
-		goto err;
-
+	visited_uris_to_arr(uris, &roots);
 	if (roots.len == 0)
 		goto success;
 
-	error = delete_dir_daemon_start(roots.array, roots.len, workspace);
-	if (error)
-		goto err;
+	error = delete_dir_daemon_start(roots.array, roots.len);
+	if (error) {
+		uris_roots_cleanup(&roots, uris_root_destroy);
+		return error;
+	}
+
 success:
 	uris_roots_cleanup(&roots, uris_root_destroy);
 	return 0;
-err:
-	uris_roots_cleanup(&roots, uris_root_destroy);
-	return error;
 }

@@ -4,6 +4,7 @@
 #include <time.h>
 #include <arpa/inet.h>
 
+#include "alloc.h"
 #include "common.h"
 #include "crypto/base64.h"
 #include "data_structure/array_list.h"
@@ -58,22 +59,19 @@ slurm_bgpsec_wrap_refput(struct slurm_bgpsec_wrap *elem)
 	}
 }
 
-static int
-slurm_lists_create(struct slurm_lists **result)
+static struct slurm_lists *
+slurm_lists_create(void)
 {
 	struct slurm_lists *cache;
 
-	cache = malloc(sizeof(struct slurm_lists));
-	if (cache == NULL)
-		return pr_enomem();
+	cache = pmalloc(sizeof(struct slurm_lists));
 
 	al_filter_prefix_init(&cache->filter_pfx_al);
 	al_assertion_prefix_init(&cache->assertion_pfx_al);
 	al_filter_bgpsec_init(&cache->filter_bgps_al);
 	al_assertion_bgpsec_init(&cache->assertion_bgps_al);
 
-	*result = cache;
-	return 0;
+	return cache;
 }
 
 static void
@@ -101,9 +99,7 @@ db_slurm_create(struct slurm_csum_list *csums, struct db_slurm **result)
 	struct db_slurm *db;
 	int error;
 
-	db = malloc(sizeof(struct db_slurm));
-	if (db == NULL)
-		return pr_enomem();
+	db = pmalloc(sizeof(struct db_slurm));
 
 	error = get_current_time(&db->loaded_date);
 	if (error) {
@@ -301,8 +297,9 @@ db_slurm_add_prefix_filter(struct db_slurm *db, struct slurm_prefix *elem)
 
 	new.element = *elem;
 	new.references = 1;
+	al_filter_prefix_add(&db->cache->filter_pfx_al, &new);
 
-	return al_filter_prefix_add(&db->cache->filter_pfx_al, &new);
+	return 0;
 }
 
 int
@@ -315,8 +312,9 @@ db_slurm_add_prefix_assertion(struct db_slurm *db, struct slurm_prefix *elem)
 
 	new.element = *elem;
 	new.references = 1;
+	al_assertion_prefix_add(&db->cache->assertion_pfx_al, &new);
 
-	return al_assertion_prefix_add(&db->cache->assertion_pfx_al, &new);
+	return 0;
 }
 
 static bool
@@ -363,8 +361,9 @@ db_slurm_add_bgpsec_filter(struct db_slurm *db, struct slurm_bgpsec *elem)
 
 	new.element = *elem;
 	new.references = 1;
+	al_filter_bgpsec_add(&db->cache->filter_bgps_al, &new);
 
-	return al_filter_bgpsec_add(&db->cache->filter_bgps_al, &new);
+	return 0;
 }
 
 int
@@ -377,8 +376,9 @@ db_slurm_add_bgpsec_assertion(struct db_slurm *db, struct slurm_bgpsec *elem)
 
 	new.element = *elem;
 	new.references = 1;
+	al_assertion_bgpsec_add(&db->cache->assertion_bgps_al, &new);
 
-	return al_assertion_bgpsec_add(&db->cache->assertion_bgps_al, &new);
+	return 0;
 }
 
 bool
@@ -534,116 +534,67 @@ db_slurm_log(struct db_slurm *db)
 	pr_op_info("}");
 }
 
-int
+void
 db_slurm_start_cache(struct db_slurm *db)
 {
-	struct slurm_lists *cache;
-	int error;
-
-	cache = NULL;
-	error = slurm_lists_create(&cache);
-	if (error)
-		return error;
-
-	db->cache = cache;
-
-	return 0;
+	db->cache = slurm_lists_create();
 }
 
-static int
+static void
 persist_filter_prefix(struct db_slurm *db)
 {
 	struct slurm_prefix_wrap *cursor;
 	array_index i;
-	int error;
 
-	ARRAYLIST_FOREACH(&db->cache->filter_pfx_al, cursor, i) {
-		error = al_filter_prefix_add(&db->lists.filter_pfx_al, cursor);
-		if (error)
-			return error;
-	}
-
-	return 0;
+	ARRAYLIST_FOREACH(&db->cache->filter_pfx_al, cursor, i)
+		al_filter_prefix_add(&db->lists.filter_pfx_al, cursor);
 }
 
-static int
+static void
 persist_filter_bgpsec(struct db_slurm *db)
 {
 	struct slurm_bgpsec_wrap *cursor;
 	array_index i;
-	int error;
 
 	ARRAYLIST_FOREACH(&db->cache->filter_bgps_al, cursor, i) {
-		error = al_filter_bgpsec_add(&db->lists.filter_bgps_al, cursor);
-		if (error)
-			return error;
+		al_filter_bgpsec_add(&db->lists.filter_bgps_al, cursor);
 		slurm_bgpsec_wrap_refget(cursor);
 	}
-
-	return 0;
 }
 
-static int
+static void
 persist_assertion_prefix(struct db_slurm *db)
 {
 	struct slurm_prefix_wrap *cursor;
 	array_index i;
-	int error;
 
-	ARRAYLIST_FOREACH(&db->cache->assertion_pfx_al, cursor, i) {
-		error = al_assertion_prefix_add(&db->lists.assertion_pfx_al,
-		    cursor);
-		if (error)
-			return error;
-	}
-
-	return 0;
+	ARRAYLIST_FOREACH(&db->cache->assertion_pfx_al, cursor, i)
+		al_assertion_prefix_add(&db->lists.assertion_pfx_al, cursor);
 }
 
-static int
+static void
 persist_assertion_bgpsec(struct db_slurm *db)
 {
 	struct slurm_bgpsec_wrap *cursor;
 	array_index i;
-	int error;
 
 	ARRAYLIST_FOREACH(&db->cache->assertion_bgps_al, cursor, i) {
-		error = al_assertion_bgpsec_add(&db->lists.assertion_bgps_al,
-		    cursor);
-		if (error)
-			return error;
+		al_assertion_bgpsec_add(&db->lists.assertion_bgps_al, cursor);
 		slurm_bgpsec_wrap_refget(cursor);
 	}
-
-	return 0;
 }
 
-int
+/* Copy all data in cache to the main lists */
+void
 db_slurm_flush_cache(struct db_slurm *db)
 {
-	/* Copy all data in cache to the main lists */
-	int error;
-
-	error = persist_filter_prefix(db);
-	if (error)
-		return error;
-
-	error = persist_filter_bgpsec(db);
-	if (error)
-		return error;
-
-	error = persist_assertion_prefix(db);
-	if (error)
-		return error;
-
-	error = persist_assertion_bgpsec(db);
-	if (error)
-		return error;
+	persist_filter_prefix(db);
+	persist_filter_bgpsec(db);
+	persist_assertion_prefix(db);
+	persist_assertion_bgpsec(db);
 
 	slurm_lists_destroy(db->cache);
 	db->cache = NULL;
-
-	return 0;
 }
 
 bool

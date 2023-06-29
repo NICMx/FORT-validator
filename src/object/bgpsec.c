@@ -1,5 +1,6 @@
 #include "bgpsec.h"
 
+#include "alloc.h"
 #include "log.h"
 #include "validation_handler.h"
 
@@ -34,9 +35,7 @@ handle_bgpsec(X509 *cert, unsigned char const *ski, struct resources *resources)
 	if (pub_key == NULL)
 		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL at BGPsec");
 
-	cert_spk = malloc(RK_SPKI_LEN);
-	if (cert_spk == NULL)
-		return pr_enomem();
+	cert_spk = pmalloc(RK_SPKI_LEN);
 
 	/* Use a temporal pointer, since i2d_X509_PUBKEY moves it */
 	tmp = cert_spk;

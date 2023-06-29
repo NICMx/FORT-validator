@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <arpa/inet.h> /* INET_ADDRSTRLEN */
 
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
@@ -292,9 +293,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 	    + 4 /* Length of Error Text field */
 	    + pdu.error_message_length;
 
-	data = malloc(pdu.header.length);
-	if (data == NULL)
-		return pr_enomem();
+	data = pmalloc(pdu.header.length);
 
 	len = serialize_error_report_pdu(&pdu, data);
 	if (len != pdu.header.length)

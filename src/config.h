@@ -54,7 +54,6 @@ char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
 enum output_format config_get_output_format(void);
 unsigned int config_get_asn1_decode_max_stack(void);
-unsigned int config_get_stale_repository_period(void);
 unsigned int config_get_thread_pool_server_max(void);
 unsigned int config_get_thread_pool_validation_max(void);
 
@@ -75,26 +74,9 @@ uint8_t config_get_val_log_level(void);
 enum log_output config_get_val_log_output(void);
 uint32_t config_get_val_log_facility(void);
 
-/*
- * Public, so that work-offline can set them, or (to be deprecated)
- * sync-strategy when set to 'off'.
- */
+/* Public, so --work-offline can override them. */
 void config_set_rsync_enabled(bool);
 void config_set_http_enabled(bool);
-/* TODO (later) Deprecated */
-void config_set_rrdp_enabled(bool);
-
-/* TODO (later) Remove when sync-strategy is fully deprecated */
-void config_set_sync_strategy(enum rsync_strategy);
-void config_set_rsync_strategy(enum rsync_strategy);
-
-/* TODO (later) Remove once rrdp.* is fully deprecated */
-void config_set_rrdp_priority(unsigned int);
-void config_set_http_priority(unsigned int);
-void config_set_rrdp_retry_count(unsigned int);
-void config_set_http_retry_count(unsigned int);
-void config_set_rrdp_retry_interval(unsigned int);
-void config_set_http_retry_interval(unsigned int);
 
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);

@@ -5,11 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "alloc.h"
 #include "log.h"
 #include "str_token.h"
 #include "config/str.h"
 
-int
+void
 string_array_init(struct string_array *array, char const *const *values,
     size_t len)
 {
@@ -19,37 +20,23 @@ string_array_init(struct string_array *array, char const *const *values,
 
 	if (len == 0) {
 		array->array = NULL;
-		return 0;
+		return;
 	}
 
-	array->array = calloc(len, sizeof(char *));
-	if (array->array == NULL)
-		return pr_enomem();
-
-	for (i = 0; i < len; i++) {
-		array->array[i] = strdup(values[i]);
-		if (array->array[i] == NULL) {
-			string_array_cleanup(array);
-			return pr_enomem();
-		}
-	}
-
-	return 0;
-}
-
-void
-string_array_cleanup(struct string_array *array)
-{
-	size_t i;
-	for (i = 0; i < array->length; i++)
-		free(array->array[i]);
-	free(array->array);
+	array->array = pcalloc(len, sizeof(char *));
+	for (i = 0; i < len; i++)
+		array->array[i] = pstrdup(values[i]);
 }
 
 static void
 __string_array_free(struct string_array *array)
 {
-	string_array_cleanup(array);
+	size_t i;
+
+	for (i = 0; i < array->length; i++)
+		free(array->array[i]);
+	free(array->array);
+
 	array->array = NULL;
 	array->length = 0;
 }
@@ -106,9 +93,7 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 	/* Remove the previous value (usually the default). */
 	__string_array_free(result);
 
-	result->array = calloc(len, sizeof(char *));
-	if (result->array == NULL)
-		return pr_enomem();
+	result->array = pcalloc(len, sizeof(char *));
 	result->length = len;
 
 	for (i = 0; i < len; i++) {
@@ -117,11 +102,7 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 		if (error)
 			goto fail;
 
-		result->array[i] = strdup(tmp);
-		if (result->array[i] == NULL) {
-			error = pr_enomem();
-			goto fail;
-		}
+		result->array[i] = pstrdup(tmp);
 	}
 
 	return 0;
@@ -138,7 +119,6 @@ string_array_parse_argv(struct option_field const *opt, char const *str,
 	struct string_tokenizer tokenizer;
 	struct string_array *result;
 	size_t i, len;
-	int error;
 
 	result = _result;
 
@@ -152,22 +132,13 @@ string_array_parse_argv(struct option_field const *opt, char const *str,
 		return pr_op_err("'%s' can have %u elements max; currently it has %lu elements.",
 		    opt->name, opt->max, len);
 
-	result->array = calloc(len, sizeof(char *));
-	if (result->array == NULL)
-		return pr_enomem();
+	result->array = pcalloc(len, sizeof(char *));
 	result->length = len;
 
-	for (i = 0; string_tokenizer_next(&tokenizer); i++) {
-		error = token_read(&tokenizer, &result->array[i]);
-		if (error)
-			goto fail;
-	}
+	for (i = 0; string_tokenizer_next(&tokenizer); i++)
+		result->array[i] = token_read(&tokenizer);
 
 	return 0;
-
-fail:
-	__string_array_free(result);
-	return error;
 }
 
 static void

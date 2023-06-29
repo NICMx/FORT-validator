@@ -33,7 +33,7 @@ void string_tokenizer_init(struct string_tokenizer *, char const *, size_t,
     unsigned char);
 bool string_tokenizer_next(struct string_tokenizer *);
 bool token_equals(struct string_tokenizer *, struct string_tokenizer *);
-int token_read(struct string_tokenizer *, char **);
+char *token_read(struct string_tokenizer *);
 size_t token_count(struct string_tokenizer *);
 
 #endif /* SRC_STR_TOKEN_H_ */

@@ -2,10 +2,10 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "alloc.c"
 #include "file.c"
-#include "impersonator.c"
 #include "line_file.c"
-#include "log.c"
+#include "mock.c"
 
 START_TEST(file_line_normal)
 {

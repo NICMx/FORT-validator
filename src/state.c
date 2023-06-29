@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include "rrdp/db/db_rrdp.h"
+#include "alloc.h"
 #include "log.h"
 #include "thread_var.h"
 
@@ -24,9 +25,6 @@ struct validation {
 	struct cert_stack *certstack;
 
 	struct uri_list *rsync_visited_uris;
-
-	/* Local RRDP workspace path */
-	char const *rrdp_workspace;
 
 	/* Shallow copy of RRDP URIs and its corresponding visited uris */
 	struct db_rrdp_uri *rrdp_uris;
@@ -94,9 +92,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 	X509_VERIFY_PARAM *params;
 	int error;
 
-	result = malloc(sizeof(struct validation));
-	if (!result)
-		return pr_enomem();
+	result = pmalloc(sizeof(struct validation));
 
 	error = state_store(result);
 	if (error)
@@ -111,10 +107,8 @@ validation_prepare(struct validation **out, struct tal *tal,
 	}
 
 	params = X509_VERIFY_PARAM_new();
-	if (params == NULL) {
-		error = pr_enomem();
-		goto abort2;
-	}
+	if (params == NULL)
+		enomem_panic();
 
 	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
 	X509_STORE_set1_param(result->x509_data.store, params);
@@ -124,24 +118,16 @@ validation_prepare(struct validation **out, struct tal *tal,
 	if (error)
 		goto abort3;
 
-	error = rsync_create(&result->rsync_visited_uris);
-	if (error)
-		goto abort4;
-
+	result->rsync_visited_uris = rsync_create();
 	result->rrdp_uris = db_rrdp_get_uris(tal_get_file_name(tal));
-	result->rrdp_workspace = db_rrdp_get_workspace(tal_get_file_name(tal));
-
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
 	result->x509_data.params = params; /* Ownership transfered */
 
 	*out = result;
 	return 0;
-abort4:
-	certstack_destroy(result->certstack);
 abort3:
 	X509_VERIFY_PARAM_free(params);
-abort2:
 	X509_STORE_free(result->x509_data.store);
 abort1:
 	free(result);
@@ -222,10 +208,4 @@ struct db_rrdp_uri *
 validation_get_rrdp_uris(struct validation *state)
 {
 	return state->rrdp_uris;
-}
-
-char const *
-validation_get_rrdp_workspace(struct validation *state)
-{
-	return state->rrdp_workspace;
 }

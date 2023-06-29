@@ -2,8 +2,8 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "impersonator.c"
-#include "log.c"
+#include "alloc.c"
+#include "mock.c"
 #include "rrdp/rrdp_objects.c"
 
 #define END 0xFFFF
@@ -18,7 +18,7 @@ add_serials(struct deltas_head *deltas, ...)
 
 	va_start(vl, deltas);
 	while ((delta.serial = va_arg(vl, unsigned long)) != END)
-		ck_assert_int_eq(0, deltas_head_add(deltas, &delta));
+		deltas_head_add(deltas, &delta);
 	va_end(vl);
 }
 
@@ -103,8 +103,6 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
-
-	log_setup(true);
 
 	suite = xml_load_suite();
 

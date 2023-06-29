@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "alloc.h"
 #include "common.h"
 #include "internal_pool.h"
 #include "log.h"
@@ -134,7 +135,7 @@ remove_from_root(void *arg)
  * - '= 0' no error
  */
 static int
-get_local_path(char const *rcvd, char const *workspace, char **result)
+get_local_path(char const *rcvd, char **result)
 {
 	struct stat attr;
 	char *tmp, *local_path;
@@ -142,10 +143,7 @@ get_local_path(char const *rcvd, char const *workspace, char **result)
 	int error;
 
 	/* Currently, only rsync URIs are utilized */
-	local_path = NULL;
-	error = map_uri_to_local(rcvd, "rsync://", workspace, &local_path);
-	if (error)
-		return error;
+	local_path = map_uri_to_local(rcvd, "rsync://");
 
 	error = stat(local_path, &attr);
 	if (error) {
@@ -169,11 +167,7 @@ get_local_path(char const *rcvd, char const *workspace, char **result)
 	if (strrchr(local_path, '/') == local_path + strlen(local_path) - 1)
 		tmp_size--;
 
-	tmp = malloc(tmp_size + 1);
-	if (tmp == NULL) {
-		error = pr_enomem();
-		goto release_local;
-	}
+	tmp = pmalloc(tmp_size + 1);
 	strncpy(tmp, local_path, tmp_size);
 	tmp[tmp_size] = '\0';
 
@@ -186,12 +180,6 @@ release_local:
 	return error;
 }
 
-/*
- * Soft/hard error logic utilized, beware to prepare caller:
- * - '> 0' is a soft error
- * - '< 0' is a hard error
- * - '= 0' no error
- */
 static int
 rename_local_path(char const *rcvd, char **result)
 {
@@ -203,9 +191,7 @@ rename_local_path(char const *rcvd, char **result)
 	rcvd_size = strlen(rcvd);
 	/* original size + one underscore + hex random val (8 chars) */
 	tmp_size = rcvd_size + 1 + (sizeof(RAND_MAX) * 2);
-	tmp = malloc(tmp_size + 1);
-	if (tmp == NULL)
-		return pr_enomem();
+	tmp = pmalloc(tmp_size + 1);
 
 	/* Rename the path with a random suffix */
 	random_init();
@@ -213,12 +199,12 @@ rename_local_path(char const *rcvd, char **result)
 
 	snprintf(tmp, tmp_size + 1, "%s_%08lX", rcvd, random_sfx);
 
-	error = rename(rcvd, tmp);
-	if (error) {
+	if (rename(rcvd, tmp) != 0) {
+		error = errno;
 		free(tmp);
 		pr_op_debug("Couldn't rename '%s' to delete it (discarding): %s",
-		    rcvd, strerror(errno));
-		return errno; /* Soft error */
+		    rcvd, strerror(error));
+		return error;
 	}
 
 	*result = tmp;
@@ -226,7 +212,7 @@ rename_local_path(char const *rcvd, char **result)
 }
 
 static int
-rename_all_roots(struct rem_dirs *rem_dirs, char **src, char const *workspace)
+rename_all_roots(struct rem_dirs *rem_dirs, char **src)
 {
 	char *local_path, *delete_path;
 	size_t i;
@@ -235,7 +221,7 @@ rename_all_roots(struct rem_dirs *rem_dirs, char **src, char const *workspace)
 	for (i = 0; i < rem_dirs->arr_len; i++) {
 		local_path = NULL;
 		error = get_local_path(src[(rem_dirs->arr_len - 1) - i],
-		    workspace, &local_path);
+		    &local_path);
 		if (error < 0)
 			return error;
 		if (error > 0)
@@ -244,9 +230,7 @@ rename_all_roots(struct rem_dirs *rem_dirs, char **src, char const *workspace)
 		delete_path = NULL;
 		error = rename_local_path(local_path, &delete_path);
 		free(local_path);
-		if (error < 0)
-			return error;
-		if (error > 0)
+		if (error)
 			continue;
 		rem_dirs->arr[rem_dirs->arr_set++] = delete_path;
 	}
@@ -254,26 +238,18 @@ rename_all_roots(struct rem_dirs *rem_dirs, char **src, char const *workspace)
 	return 0;
 }
 
-static int
-rem_dirs_create(size_t arr_len, struct rem_dirs **result)
+static struct rem_dirs *
+rem_dirs_create(size_t arr_len)
 {
 	struct rem_dirs *tmp;
 
-	tmp = malloc(sizeof(struct rem_dirs));
-	if (tmp == NULL)
-		return pr_enomem();
+	tmp = pmalloc(sizeof(struct rem_dirs));
 
-	tmp->arr = calloc(arr_len, sizeof(char *));
-	if (tmp->arr == NULL) {
-		free(tmp);
-		return pr_enomem();
-	}
-
+	tmp->arr = pcalloc(arr_len, sizeof(char *));
 	tmp->arr_len = arr_len;
 	tmp->arr_set = 0;
 
-	*result = tmp;
-	return 0;
+	return tmp;
 }
 
 static void
@@ -297,28 +273,21 @@ rem_dirs_destroy(struct rem_dirs *rem_dirs)
  * considers the relations (parent-child) at dirs.
  */
 int
-delete_dir_daemon_start(char **roots, size_t roots_len, char const *workspace)
+delete_dir_daemon_start(char **roots, size_t roots_len)
 {
 	struct rem_dirs *arg;
 	int error;
 
-	arg = NULL;
-	error = rem_dirs_create(roots_len, &arg);
-	if (error)
-		return error;
+	arg = rem_dirs_create(roots_len);
 
-	error = rename_all_roots(arg, roots, workspace);
+	error = rename_all_roots(arg, roots);
 	if (error) {
 		rem_dirs_destroy(arg);
 		return error;
 	}
 
 	/* Thread arg is released at thread */
-	error = internal_pool_push("Directory deleter", remove_from_root, arg);
-	if (error) {
-		rem_dirs_destroy(arg);
-		return error;
-	}
+	internal_pool_push("Directory deleter", remove_from_root, arg);
 
 	return 0;
 }

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include "data_structure/uthash.h"
+#include "alloc.h"
 #include "common.h"
 #include "log.h"
 #include "thread_var.h"
@@ -24,47 +25,24 @@ struct uris_table {
 
 struct db_rrdp_uri {
 	struct uris_table *table;
-	char const *current_workspace;
 };
 
-static int
+static struct uris_table *
 uris_table_create(char const *uri, char const *session_id,
-    unsigned long serial, rrdp_req_status_t req_status,
-    struct uris_table **result)
+    unsigned long serial, rrdp_req_status_t req_status)
 {
 	struct uris_table *tmp;
-	int error;
 
-	tmp = malloc(sizeof(struct uris_table));
-	if (tmp == NULL)
-		return pr_enomem();
-	/* Needed by uthash */
-	memset(tmp, 0, sizeof(struct uris_table));
+	tmp = pzalloc(sizeof(struct uris_table)); /* Zero needed by uthash */
 
-	tmp->uri = strdup(uri);
-	if (tmp->uri == NULL) {
-		error = pr_enomem();
-		goto release_tmp;
-	}
-
-	tmp->data.session_id = strdup(session_id);
-	if (tmp->data.session_id == NULL) {
-		error = pr_enomem();
-		goto release_uri;
-	}
-
+	tmp->uri = pstrdup(uri);
+	tmp->data.session_id = pstrdup(session_id);
 	tmp->data.serial = serial;
 	tmp->last_update = 0;
 	tmp->request_status = req_status;
 	tmp->visited_uris = NULL;
 
-	*result = tmp;
-	return 0;
-release_uri:
-	free(tmp->uri);
-release_tmp:
-	free(tmp);
-	return error;
+	return tmp;
 }
 
 static void
@@ -84,11 +62,6 @@ find_rrdp_uri(struct db_rrdp_uri *uris, const char *search)
 	return found;
 }
 
-#define RET_NOT_FOUND_URI(uris, search, found)				\
-	found = find_rrdp_uri(uris, search);				\
-	if (found == NULL)						\
-		return -ENOENT;
-
 static void
 add_rrdp_uri(struct db_rrdp_uri *uris, struct uris_table *new_uri)
 {
@@ -99,46 +72,21 @@ add_rrdp_uri(struct db_rrdp_uri *uris, struct uris_table *new_uri)
 		uris_table_destroy(old_uri);
 }
 
-static int
-get_thread_rrdp_uris(struct db_rrdp_uri **result)
+static struct db_rrdp_uri *
+get_thread_rrdp_uris(void)
 {
-	struct validation *state;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return pr_val_err("No state related to this thread");
-
-	*result = validation_get_rrdp_uris(state);
-	return 0;
+	return validation_get_rrdp_uris(state_retrieve());
 }
 
-static int
-get_thread_rrdp_workspace(char const **result)
-{
-	struct validation *state;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return pr_val_err("No state related to this thread");
-
-	*result = validation_get_rrdp_workspace(state);
-	return 0;
-}
-
-int
-db_rrdp_uris_create(struct db_rrdp_uri **uris)
+struct db_rrdp_uri *
+db_rrdp_uris_create(void)
 {
 	struct db_rrdp_uri *tmp;
 
-	tmp = malloc(sizeof(struct db_rrdp_uri));
-	if (tmp == NULL)
-		return pr_enomem();
-
+	tmp = pmalloc(sizeof(struct db_rrdp_uri));
 	tmp->table = NULL;
-	tmp->current_workspace = NULL;
 
-	*uris = tmp;
-	return 0;
+	return tmp;
 }
 
 void
@@ -153,86 +101,55 @@ db_rrdp_uris_destroy(struct db_rrdp_uri *uris)
 	free(uris);
 }
 
-int
-db_rrdp_uris_cmp(char const *uri, char const *session_id, unsigned long serial,
-    rrdp_uri_cmp_result_t *result)
+rrdp_uri_cmp_result_t
+db_rrdp_uris_cmp(char const *uri, char const *session_id, unsigned long serial)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *found;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
-
-	found = find_rrdp_uri(uris, uri);
+	found = find_rrdp_uri(get_thread_rrdp_uris(), uri);
 	if (found == NULL) {
 		pr_val_debug("I don't have state for this Update Notification; downloading snapshot...");
-		*result = RRDP_URI_NOTFOUND;
-		return 0;
+		return RRDP_URI_NOTFOUND;
 	}
 
 	if (strcmp(session_id, found->data.session_id) != 0) {
 		pr_val_debug("session_id changed from '%s' to '%s'.",
 		    found->data.session_id, session_id);
-		*result = RRDP_URI_DIFF_SESSION;
-		return 0;
+		return RRDP_URI_DIFF_SESSION;
 	}
 
 	if (serial != found->data.serial) {
 		pr_val_debug("The serial changed from %lu to %lu.",
 		    found->data.serial, serial);
-		*result = RRDP_URI_DIFF_SERIAL;
-		return 0;
+		return RRDP_URI_DIFF_SERIAL;
 	}
 
 	pr_val_debug("The new Update Notification has the same session_id (%s) and serial (%lu) as the old one.",
 	    session_id, serial);
-	*result = RRDP_URI_EQUAL;
-	return 0;
+	return RRDP_URI_EQUAL;
 }
 
-int
+void
 db_rrdp_uris_update(char const *uri, char const *session_id,
     unsigned long serial, rrdp_req_status_t req_status,
     struct visited_uris *visited_uris)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *db_uri;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
-
-	db_uri = NULL;
-	error = uris_table_create(uri, session_id, serial, req_status, &db_uri);
-	if (error)
-		return error;
-
-	/* Ownership transfered */
-	db_uri->visited_uris = visited_uris;
-
-	add_rrdp_uri(uris, db_uri);
-
-	return 0;
+	db_uri = uris_table_create(uri, session_id, serial, req_status);
+	db_uri->visited_uris = visited_uris; /* Ownership transfered */
+	add_rrdp_uri(get_thread_rrdp_uris(), db_uri);
 }
 
 int
 db_rrdp_uris_get_serial(char const *uri, unsigned long *serial)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *found;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
+	found = find_rrdp_uri(get_thread_rrdp_uris(), uri);
+	if (found == NULL)
+		return -ENOENT;
 
-	RET_NOT_FOUND_URI(uris, uri, found)
 	*serial = found->data.serial;
 	return 0;
 }
@@ -240,16 +157,12 @@ db_rrdp_uris_get_serial(char const *uri, unsigned long *serial)
 int
 db_rrdp_uris_get_last_update(char const *uri, long *date)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *found;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
+	found = find_rrdp_uri(get_thread_rrdp_uris(), uri);
+	if (found == NULL)
+		return -ENOENT;
 
-	RET_NOT_FOUND_URI(uris, uri, found)
 	*date = found->last_update;
 	return 0;
 }
@@ -258,17 +171,13 @@ db_rrdp_uris_get_last_update(char const *uri, long *date)
 int
 db_rrdp_uris_set_last_update(char const *uri)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *found;
 	time_t now;
 	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
-
-	RET_NOT_FOUND_URI(uris, uri, found)
+	found = find_rrdp_uri(get_thread_rrdp_uris(), uri);
+	if (found == NULL)
+		return -ENOENT;
 
 	now = 0;
 	error = get_current_time(&now);
@@ -282,16 +191,12 @@ db_rrdp_uris_set_last_update(char const *uri)
 int
 db_rrdp_uris_get_request_status(char const *uri, rrdp_req_status_t *result)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *found;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
+	found = find_rrdp_uri(get_thread_rrdp_uris(), uri);
+	if (found == NULL)
+		return -ENOENT;
 
-	RET_NOT_FOUND_URI(uris, uri, found)
 	*result = found->request_status;
 	return 0;
 }
@@ -299,115 +204,38 @@ db_rrdp_uris_get_request_status(char const *uri, rrdp_req_status_t *result)
 int
 db_rrdp_uris_set_request_status(char const *uri, rrdp_req_status_t value)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *found;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
+	found = find_rrdp_uri(get_thread_rrdp_uris(), uri);
+	if (found == NULL)
+		return -ENOENT;
 
-	RET_NOT_FOUND_URI(uris, uri, found)
 	found->request_status = value;
 	return 0;
 }
 
-int
+void
 db_rrdp_uris_set_all_unvisited(void)
 {
 	struct db_rrdp_uri *uris;
 	struct uris_table *uri_node, *uri_tmp;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
-
+	uris = get_thread_rrdp_uris();
 	HASH_ITER(hh, uris->table, uri_node, uri_tmp)
 		uri_node->request_status = RRDP_URI_REQ_UNVISITED;
-
-	return 0;
 }
 
 /*
- * Returns a pointer (set in @result) to the visited_uris of the current
- * thread.
+ * Returns a pointer to the visited_uris of the current thread.
  */
-int
-db_rrdp_uris_get_visited_uris(char const *uri, struct visited_uris **result)
+struct visited_uris *
+db_rrdp_uris_get_visited_uris(char const *uri)
 {
-	struct db_rrdp_uri *uris;
 	struct uris_table *found;
-	int error;
 
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
-
-	RET_NOT_FOUND_URI(uris, uri, found)
-	*result = found->visited_uris;
-	return 0;
-}
-
-int
-db_rrdp_uris_remove_all_local(struct db_rrdp_uri *uris, char const *workspace)
-{
-	struct uris_table *uri_node, *uri_tmp;
-	int error;
-
-	/* Remove each 'visited_uris' from all the table */
-	HASH_ITER(hh, uris->table, uri_node, uri_tmp) {
-		error = visited_uris_delete_local(uri_node->visited_uris,
-		    workspace);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
-char const *
-db_rrdp_uris_workspace_get(void)
-{
-	struct db_rrdp_uri *uris;
-	int error;
-
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
+	found = find_rrdp_uri(get_thread_rrdp_uris(), uri);
+	if (found == NULL)
 		return NULL;
 
-	return uris->current_workspace;
-}
-
-int
-db_rrdp_uris_workspace_enable(void)
-{
-	struct db_rrdp_uri *uris;
-	int error;
-
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
-
-	return get_thread_rrdp_workspace(&uris->current_workspace);
-}
-
-int
-db_rrdp_uris_workspace_disable(void)
-{
-	struct db_rrdp_uri *uris;
-	int error;
-
-	uris = NULL;
-	error = get_thread_rrdp_uris(&uris);
-	if (error)
-		return error;
-
-	uris->current_workspace = NULL;
-	return 0;
+	return found->visited_uris;
 }

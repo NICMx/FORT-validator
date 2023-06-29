@@ -152,8 +152,7 @@ validate_manifest(struct Manifest *manifest)
 }
 
 static int
-build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
-    struct rpp **pp)
+build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 {
 	int i;
 	struct FileAndHash *fah;
@@ -162,13 +161,12 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 
 	*pp = rpp_create();
 	if (*pp == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
 
-		error = uri_create_mft(&uri, mft_uri, &fah->file,
-		    rrdp_workspace);
+		error = uri_create_mft(&uri, mft_uri, &fah->file);
 		if (error == ESKIP)
 			continue;
 		/*
@@ -189,7 +187,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 		 * - Positive value: file doesn't exist and keep validating
 		 *   manifest.
 		 */
-		error = hash_validate_mft_file("sha256", uri, &fah->hash);
+		error = hash_validate_mft_file(uri, &fah->hash);
 		if (error < 0) {
 			uri_refput(uri);
 			goto fail;
@@ -200,13 +198,13 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, bool rrdp_workspace,
 		}
 
 		if (uri_has_extension(uri, ".cer"))
-			error = rpp_add_cert(*pp, uri);
+			rpp_add_cert(*pp, uri);
 		else if (uri_has_extension(uri, ".roa"))
-			error = rpp_add_roa(*pp, uri);
+			rpp_add_roa(*pp, uri);
 		else if (uri_has_extension(uri, ".crl"))
 			error = rpp_add_crl(*pp, uri);
 		else if (uri_has_extension(uri, ".gbr"))
-			error = rpp_add_ghostbusters(*pp, uri);
+			rpp_add_ghostbusters(*pp, uri);
 		else
 			uri_refput(uri); /* ignore it. */
 
@@ -234,7 +232,7 @@ fail:
  * @pp. If @rrdp_workspace is true, use the local RRDP repository.
  */
 int
-handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
+handle_manifest(struct rpki_uri *uri, struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
@@ -257,7 +255,7 @@ handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
 		goto revert_sobj;
 
 	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, uri, rrdp_workspace, pp);
+	error = build_rpp(mft, uri, pp);
 	if (error)
 		goto revert_manifest;
 
@@ -265,9 +263,7 @@ handle_manifest(struct rpki_uri *uri, bool rrdp_workspace, struct rpp **pp)
 	error = rpp_crl(*pp, &crl);
 	if (error)
 		goto revert_rpp;
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
-	if (error)
-		goto revert_rpp;
+	signed_object_args_init(&sobj_args, uri, crl, false);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &sobj_args);

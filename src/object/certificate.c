@@ -14,11 +14,11 @@
 #include <sys/socket.h>
 
 #include "algorithm.h"
+#include "alloc.h"
 #include "config.h"
 #include "extension.h"
 #include "log.h"
 #include "nid.h"
-#include "reqs_errors.h"
 #include "str_token.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
@@ -106,11 +106,6 @@ validate_serial_number(X509 *cert)
 {
 	struct validation *state;
 	BIGNUM *number;
-	int error;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 
 	number = ASN1_INTEGER_to_BN(X509_get0_serialNumber(cert), NULL);
 	if (number == NULL)
@@ -119,11 +114,9 @@ validate_serial_number(X509 *cert)
 	if (log_val_enabled(LOG_DEBUG))
 		debug_serial_number(number);
 
-	error = x509stack_store_serial(validation_certstack(state), number);
-	if (error)
-		BN_free(number);
-
-	return error;
+	state = state_retrieve();
+	x509stack_store_serial(validation_certstack(state), number);
+	return 0;
 }
 
 static int
@@ -199,13 +192,8 @@ spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki,
 static int
 validate_subject(X509 *cert)
 {
-	struct validation *state;
 	struct rfc5280_name *name;
 	int error;
-
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
@@ -239,8 +227,6 @@ validate_spki(X509_PUBKEY *cert_spki)
 	size_t _tal_spki_len;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 
 	tal = validation_tal(state);
 	if (tal == NULL)
@@ -771,7 +757,7 @@ end:
 	return error;
 }
 
-int
+static int
 certificate_load(struct rpki_uri *uri, X509 **result)
 {
 	X509 *cert = NULL;
@@ -832,7 +818,7 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 	clone = X509_CRL_dup(original_crl);
 	if (clone == NULL) {
 		ASN1_STRING_free(tm);
-		return pr_enomem();
+		enomem_panic();
 	}
 
 	X509_CRL_set1_nextUpdate(clone, tm);
@@ -925,8 +911,6 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 		return 0; /* Certificate is TA; no chain validation needed. */
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 
 	ctx = X509_STORE_CTX_new();
 	if (ctx == NULL) {
@@ -1587,8 +1571,7 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 
 	/* HTTPS RRDP */
 	error = handle_ad("SIA", sia, "rpkiNotify", nid_rpkiNotify(),
-	    URI_VALID_HTTPS | URI_USE_RRDP_WORKSPACE, false, handle_rpkiNotify,
-	    &uris->rpkiNotify);
+	    URI_VALID_HTTPS, false, handle_rpkiNotify, &uris->rpkiNotify);
 	if (error)
 		goto end;
 
@@ -1835,114 +1818,15 @@ err:
 	return pr_val_err("Certificate is not TA, CA nor BGPsec. Ignoring...");
 }
 
-/*
- * It does some of the things from validate_issuer(), but we can not wait for
- * such validation, since at this point the RSYNC URI at AIA extension must be
- * verified to comply with rfc6487#section-4.8.7
- */
-static int
-force_aia_validation(struct rpki_uri *caIssuers, X509 *son)
-{
-	X509 *parent;
-	struct rfc5280_name *son_name;
-	struct rfc5280_name *parent_name;
-	int error;
-
-	pr_val_debug("AIA's URI didn't matched parent URI, trying to SYNC");
-
-	/* RSYNC is still the preferred access mechanism, force the sync */
-	do {
-		error = rsync_download_files(caIssuers, false, true);
-		if (!error)
-			break;
-		if (error == EREQFAILED) {
-			pr_val_info("AIA URI couldn't be downloaded, trying to search locally");
-			break;
-		}
-		return error;
-	} while (0);
-
-	error = certificate_load(caIssuers, &parent);
-	if (error)
-		return error;
-
-	error = x509_name_decode(X509_get_subject_name(parent), "subject",
-	    &parent_name);
-	if (error)
-		goto free_parent;
-
-	error = x509_name_decode(X509_get_issuer_name(son), "issuer",
-	    &son_name);
-	if (error)
-		goto free_parent_name;
-
-	if (x509_name_equals(parent_name, son_name))
-		error = 0; /* Everything its ok */
-	else
-		error = pr_val_err("Certificate subject from AIA ('%s') isn't issuer of this certificate.",
-		    uri_val_get_printable(caIssuers));
-
-	x509_name_put(son_name);
-free_parent_name:
-	x509_name_put(parent_name);
-free_parent:
-	X509_free(parent);
-	return error;
-}
-
 int
 certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 {
-	struct validation *state;
-	struct rpki_uri *parent;
-
-	if (caIssuers == NULL)
-		pr_crit("Certificate's AIA was not recorded.");
-
-	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
-	parent = x509stack_peek_uri(validation_certstack(state));
-	if (parent == NULL)
-		pr_crit("Certificate has no parent.");
-
 	/*
-	 * There are two possible issues here, specifically at first level root
-	 * certificate's childs:
-	 *
-	 * - Considering that the root certificate can be published at one or
-	 *   more rsync or HTTPS URIs (RFC 8630), the validation is done
-	 *   considering the first valid downloaded certificate URI from the
-	 *   list of URIs; so, that URI doesn't necessarily matches AIA. And
-	 *   this issue is more likely to happen if the 'shuffle-uris' flag
-	 *   is active an a TAL has more than one rsync/HTTPS uri.
-	 *
-	 * - If the TAL has only one URI, and such URI is HTTPS, the root
-	 *   certificate will be located at a distinct point that what it's
-	 *   expected, so this might be an error if such certificate (root
-	 *   certificate) isn't published at an rsync repository. See RFC 6487
-	 *   section-4.8.7:
-	 *
-	 *   "The preferred URI access mechanisms is "rsync", and an rsync URI
-	 *   [RFC5781] MUST be specified with an accessMethod value of
-	 *   id-ad-caIssuers.  The URI MUST reference the point of publication
-	 *   of the certificate where this Issuer is the subject (the issuer's
-	 *   immediate superior certificate)."
-	 *
-	 * As of today, this is a common scenario, since most of the TALs have
-	 * an HTTPS URI.
+	 * TODO (#78) Compare the AIA to the parent's URI.
+	 * We're currently not recording the URI, so this can't be solved until
+	 * the #78 refactor.
 	 */
-	if (uri_equals(caIssuers, parent))
-		return 0;
-
-	/*
-	 * Avoid the check at direct TA childs, otherwise try to match the
-	 * immediate superior subject with the current issuer. This will force
-	 * an RSYNC of AIA's URI, load the certificate and do the comparison.
-	 */
-	return certstack_get_x509_num(validation_certstack(state)) == 1 ?
-	    0 :
-	    force_aia_validation(caIssuers, cert);
+	return 0;
 }
 
 /*
@@ -1969,9 +1853,6 @@ verify_rrdp_mft_loc(struct rpki_uri *mft_uri)
 {
 	struct rpki_uri *tmp;
 	int error;
-
-	if (db_rrdp_uris_workspace_get() == NULL)
-		return -ENOENT;
 
 	tmp = NULL;
 	error = uri_create_rsync_str_rrdp(&tmp, uri_get_global(mft_uri),
@@ -2013,15 +1894,10 @@ exec_rrdp_method(struct sia_ca_uris *sia_uris)
 	bool data_updated;
 	int error;
 
-	/* Start working on the RRDP local workspace */
-	error = db_rrdp_uris_workspace_enable();
-	if (error)
-		return error;
-
 	data_updated = false;
 	error = rrdp_load(sia_uris->rpkiNotify.uri, &data_updated);
 	if (error)
-		goto err;
+		return error;
 
 	error = verify_rrdp_mft_loc(sia_uris->mft.uri);
 	switch(error) {
@@ -2031,29 +1907,22 @@ exec_rrdp_method(struct sia_ca_uris *sia_uris)
 	case -ENOENT:
 		/* Doesn't exist and the RRDP data was updated: error */
 		if (data_updated)
-			goto err;
+			return error;
 
 		/* Otherwise, force the snapshot processing and check again */
 		error = rrdp_reload_snapshot(sia_uris->rpkiNotify.uri);
 		if (error)
-			goto err;
+			return error;
 		error = verify_rrdp_mft_loc(sia_uris->mft.uri);
 		if (error)
-			goto err;
+			return error;
 		break;
 	default:
-		goto err;
+		return error;
 	}
 
 	/* Successfully loaded (or no updates yet), update MFT local URI */
-	error = replace_rrdp_mft_uri(&sia_uris->mft);
-	if (error)
-		goto err;
-
-	return 0;
-err:
-	db_rrdp_uris_workspace_disable();
-	return error;
+	return replace_rrdp_mft_uri(&sia_uris->mft);
 }
 
 static int
@@ -2061,8 +1930,6 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
 {
 	int error;
 
-	/* Stop working on the RRDP local workspace */
-	db_rrdp_uris_workspace_disable();
 	error = rsync_download_files(sia_uris->caRepository.uri, false, false);
 	if (error)
 		return error;
@@ -2078,9 +1945,8 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
  * Both access method callbacks must verify the manifest existence.
  */
 static int
-use_access_method(struct sia_ca_uris *sia_uris,
-    access_method_exec rsync_cb, access_method_exec rrdp_cb, bool new_level,
-    bool *retry_repo_sync)
+use_access_method(struct sia_ca_uris *sia_uris, access_method_exec rsync_cb,
+    access_method_exec rrdp_cb, bool *retry_repo_sync)
 {
 	access_method_exec *cb_primary;
 	access_method_exec *cb_secondary;
@@ -2095,28 +1961,6 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	 */
 	primary_rrdp = true;
 	(*retry_repo_sync) = true;
-
-	/*
-	 * Very specific scenario, yet possible:
-	 * - Still working at the same repository level
-	 * - The previous object was working on an RRDP repository
-	 * - This certificate doesn't have an update notification URI
-	 *
-	 * Probably the object does exist at the RRDP repository, so check if
-	 * that's the case. Otherwise, just keep going.
-	 *
-	 * The main reason, is a (possible) hole at RFC 8182. Apparently, the
-	 * CA childs aren't obligated to have the same RRDP accessMethod than
-	 * their parent, so there's no problem if they don't use it at all; not
-	 * even if such childs (and even the grandchilds or anyone below that
-	 * level) "reside" at the RRDP repository.
-	 */
-	if (!new_level && db_rrdp_uris_workspace_get() != NULL &&
-	    sia_uris->rpkiNotify.uri == NULL &&
-	    verify_rrdp_mft_loc(sia_uris->mft.uri) == 0) {
-		(*retry_repo_sync) = false;
-		return replace_rrdp_mft_uri(&sia_uris->mft);
-	}
 
 	/*
 	 * RSYNC will always be present (at least for now, see
@@ -2148,11 +1992,6 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	error = db_rrdp_uris_get_request_status(
 	    uri_get_global(sia_uris->rpkiNotify.uri), &rrdp_req_status);
 	if (error ==  0 && rrdp_req_status == RRDP_URI_REQ_VISITED) {
-		error = db_rrdp_uris_workspace_enable();
-		if (error) {
-			db_rrdp_uris_workspace_disable();
-			return error;
-		}
 		(*retry_repo_sync) = false;
 		return replace_rrdp_mft_uri(&sia_uris->mft);
 	}
@@ -2176,7 +2015,6 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	}
 
 	if (primary_rrdp) {
-		working_repo_push(uri_get_global(sia_uris->rpkiNotify.uri));
 		if (error != -EPERM)
 			pr_val_info("Couldn't fetch data from RRDP repository '%s', trying to fetch data now from '%s'.",
 			    uri_get_global(sia_uris->rpkiNotify.uri),
@@ -2186,7 +2024,6 @@ use_access_method(struct sia_ca_uris *sia_uris,
 			    uri_get_global(sia_uris->rpkiNotify.uri),
 			    uri_get_global(sia_uris->caRepository.uri));
 	} else {
-		working_repo_push(uri_get_global(sia_uris->caRepository.uri));
 		pr_val_info("Couldn't fetch data from repository '%s', trying to fetch data now from RRDP '%s'.",
 		    uri_get_global(sia_uris->caRepository.uri),
 		    uri_get_global(sia_uris->rpkiNotify.uri));
@@ -2195,16 +2032,11 @@ use_access_method(struct sia_ca_uris *sia_uris,
 	/* Retry if rrdp was the first option but failed */
 	(*retry_repo_sync) = primary_rrdp;
 	error = cb_secondary(sia_uris);
-	/* No need to remember the working repository anymore */
-	working_repo_pop();
 
 verify_mft:
 	/* Reach here on error or when both access methods were utilized */
 	switch (error) {
 	case 0:
-		/* Remove the error'd URI, since we got the repo files */
-		if (working_repo_peek() != NULL)
-			reqs_errors_rem_uri(working_repo_peek());
 		break;
 	case EREQFAILED:
 		/* Log that we'll try to work with a local copy */
@@ -2224,7 +2056,6 @@ verify_mft:
 
 	/* Error and the primary access method was RRDP? Use its workspace */
 	if (error && primary_rrdp) {
-		db_rrdp_uris_workspace_enable();
 		upd_error = replace_rrdp_mft_uri(&sia_uris->mft);
 		if (upd_error)
 			return upd_error;
@@ -2232,103 +2063,6 @@ verify_mft:
 
 	/* Look for the manifest */
 	return verify_mft_loc(sia_uris->mft.uri);
-}
-
-/*
- * Get the rsync server part from an rsync URI.
- *
- * If the URI is:
- *   rsync://<server>/<service/<file path>
- * This will return:
- *   rsync://<server>
- */
-static int
-get_rsync_server_uri(struct rpki_uri *src, char **result, size_t *result_len)
-{
-	char const *global;
-	char *tmp;
-	size_t global_len;
-	unsigned int slashes;
-	size_t i;
-
-	global = uri_get_global(src);
-	global_len = uri_get_global_len(src);
-	slashes = 0;
-
-	for (i = 0; i < global_len; i++) {
-		if (global[i] == '/') {
-			slashes++;
-			if (slashes == 3)
-				break;
-		}
-	}
-
-	tmp = malloc(i + 1);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	strncpy(tmp, global, i);
-	tmp[i] = '\0';
-
-	*result_len = i;
-	*result = tmp;
-
-	return 0;
-}
-
-static int
-set_repository_level(bool is_ta, struct validation *state,
-    struct rpki_uri *cert_uri, struct sia_ca_uris *sia_uris, bool *updated)
-{
-	char *parent_server, *current_server;
-	size_t parent_server_len, current_server_len;
-	unsigned int new_level;
-	bool update;
-	int error;
-
-	new_level = 0;
-	if (is_ta || cert_uri == NULL) {
-		working_repo_push_level(new_level);
-		return 0;
-	}
-
-	/* Warning killer */
-	parent_server = NULL;
-	current_server = NULL;
-	parent_server_len = 0;
-	current_server_len = 0;
-
-	/* Both are rsync URIs, check the server part */
-	error = get_rsync_server_uri(cert_uri, &parent_server,
-	    &parent_server_len);
-	if (error)
-		return error;
-
-	error = get_rsync_server_uri(sia_uris->caRepository.uri,
-	    &current_server, &current_server_len);
-	if (error) {
-		free(parent_server);
-		return error;
-	}
-
-	if (parent_server_len != current_server_len) {
-		update = true;
-		goto end;
-	}
-
-	update = (strcmp(parent_server, current_server) != 0);
-end:
-	new_level = x509stack_peek_level(validation_certstack(state));
-	if (update)
-		new_level++;
-
-	working_repo_push_level(new_level);
-
-	free(parent_server);
-	free(current_server);
-
-	(*updated) = update;
-	return 0;
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */
@@ -2348,12 +2082,10 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	enum cert_type type;
 	struct rpp *pp;
 	bool repo_retry;
-	bool new_level;
 	int error;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
+
 	total_parents = certstack_get_x509_num(validation_certstack(state));
 	if (total_parents >= config_get_max_cert_depth())
 		return pr_val_err("Certificate chain maximum depth exceeded.");
@@ -2430,13 +2162,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_uris;
 
-	/* Identify if this is a new repository before fetching it */
-	new_level = false;
-	error = set_repository_level(IS_TA, state, cert_uri, &sia_uris,
-	    &new_level);
-	if (error)
-		goto revert_uris;
-
 	/*
 	 * RFC 6481 section 5: "when the repository publication point contents
 	 * are updated, a repository operator cannot assure RPs that the
@@ -2450,7 +2175,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	 */
 	repo_retry = true;
 	error = use_access_method(&sia_uris, exec_rsync_method,
-	    exec_rrdp_method, new_level, &repo_retry);
+	    exec_rrdp_method, &repo_retry);
 	if (error)
 		goto revert_uris;
 
@@ -2463,7 +2188,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 		cert = NULL; /* Ownership stolen */
 
-		error = handle_manifest(sia_uris.mft.uri, !repo_retry, &pp);
+		error = handle_manifest(sia_uris.mft.uri, &pp);
 		if (error == 0 || !repo_retry)
 			break;
 

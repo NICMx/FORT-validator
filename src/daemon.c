@@ -32,7 +32,7 @@ daemonize(daemon_log_cb log_cb)
 	/* Get the working dir, the daemon will use (and free) it later */
 	pwd = getcwd(NULL, 0);
 	if (pwd == NULL)
-		return pr_enomem();
+		enomem_panic();
 
 	pid = fork();
 	if (pid < 0) {

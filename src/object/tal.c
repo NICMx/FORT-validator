@@ -12,13 +12,13 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 
+#include "alloc.h"
 #include "cert_stack.h"
 #include "common.h"
 #include "config.h"
 #include "line_file.h"
 #include "log.h"
 #include "random.h"
-#include "reqs_errors.h"
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
@@ -72,15 +72,14 @@ struct tal_param {
 	struct threads_list threads;
 };
 
-static int
+static void
 uris_init(struct uris *uris)
 {
 	uris->count = 0;
 	uris->rsync_count = 0;
 	uris->https_count = 0;
 	uris->size = 4; /* Most TALs only define one. */
-	uris->array = malloc(uris->size * sizeof(struct rpki_uri *));
-	return (uris->array != NULL) ? 0 : pr_enomem();
+	uris->array = pmalloc(uris->size * sizeof(struct rpki_uri *));
 }
 
 static void
@@ -95,14 +94,12 @@ uris_destroy(struct uris *uris)
 static int
 uris_add(struct uris *uris, char *uri)
 {
-	struct rpki_uri **tmp;
 	struct rpki_uri *new;
 	int error;
 
 	error = uri_create_mixed_str(&new, uri, strlen(uri));
 	if (error == ENOTSUPPORTED)
 		return pr_op_err("TAL has non-RSYNC/HTTPS URI.");
-
 	if (error)
 		return error;
 
@@ -113,13 +110,8 @@ uris_add(struct uris *uris, char *uri)
 
 	if (uris->count + 1 >= uris->size) {
 		uris->size *= 2;
-		tmp = realloc(uris->array,
+		uris->array = realloc(uris->array,
 		    uris->size * sizeof(struct rpki_uri *));
-		if (tmp == NULL) {
-			uri_refput(new);
-			return pr_enomem();
-		}
-		uris->array = tmp;
 	}
 
 	uris->array[uris->count++] = new;
@@ -234,15 +226,8 @@ base64_sanitize(struct line_file *lfile, char **out)
 	 */
 	original_size = get_spki_orig_size(lfile);
 	new_size = original_size + (original_size / BUF_SIZE);
-	result = malloc(new_size + 1);
-	if (result == NULL)
-		return pr_enomem();
-
-	buf = malloc(BUF_SIZE);
-	if (buf == NULL) {
-		free(result);
-		return pr_enomem();
-	}
+	result = pmalloc(new_size + 1);
+	buf = pmalloc(BUF_SIZE);
 
 	fd = lfile_fd(lfile);
 	offset = 0;
@@ -284,14 +269,8 @@ base64_sanitize(struct line_file *lfile, char **out)
 		}
 	}
 	/* Reallocate to exact size and add nul char */
-	if (offset != new_size) {
-		eol = realloc(result, offset + 1);
-		if (eol == NULL) {
-			error = pr_enomem();
-			goto free_result;
-		}
-		result = eol;
-	}
+	if (offset != new_size)
+		result = prealloc(result, offset + 1);
 	free(buf);
 	result[offset] = '\0';
 
@@ -313,9 +292,7 @@ read_spki(struct line_file *lfile, struct tal *tal)
 	int error;
 
 	alloc_size = get_spki_alloc_size(lfile);
-	tal->spki = malloc(alloc_size);
-	if (tal->spki == NULL)
-		return pr_enomem();
+	tal->spki = pmalloc(alloc_size);
 
 	tmp = NULL;
 	error = base64_sanitize(lfile, &tmp);
@@ -351,44 +328,33 @@ tal_load(char const *file_name, struct tal **result)
 	struct tal *tal;
 	int error;
 
+	lfile = NULL; /* Warning shutupper */
 	error = lfile_open(file_name, &lfile);
 	if (error) {
 		pr_op_err("Error opening file '%s': %s", file_name,
 		    strerror(abs(error)));
-		goto fail4;
+		return error;
 	}
 
-	tal = malloc(sizeof(struct tal));
-	if (tal == NULL) {
-		error = pr_enomem();
-		goto fail3;
-	}
+	tal = pmalloc(sizeof(struct tal));
 
 	tal->file_name = file_name;
-
-	error = uris_init(&tal->uris);
-	if (error)
-		goto fail2;
-
+	uris_init(&tal->uris);
 	error = read_uris(lfile, &tal->uris);
 	if (error)
-		goto fail1;
-
+		goto fail;
 	error = read_spki(lfile, tal);
 	if (error)
-		goto fail1;
+		goto fail;
 
 	lfile_close(lfile);
 	*result = tal;
 	return 0;
 
-fail1:
+fail:
 	uris_destroy(&tal->uris);
-fail2:
 	free(tal);
-fail3:
 	lfile_close(lfile);
-fail4:
 	return error;
 }
 
@@ -437,7 +403,7 @@ tal_shuffle_uris(struct tal *tal)
 	}
 }
 
-static int
+static void
 tal_order_uris(struct tal *tal)
 {
 	struct rpki_uri **ordered;
@@ -452,14 +418,12 @@ tal_order_uris(struct tal *tal)
 		tal_shuffle_uris(tal);
 
 	if (config_get_rsync_priority() == config_get_http_priority())
-		return 0;
+		return;
 
 	/* Now order according to the priority */
 	http_first = (config_get_http_priority() > config_get_rsync_priority());
 
-	ordered = malloc(tal->uris.size * sizeof(struct rpki_uri *));
-	if (ordered == NULL)
-		return pr_enomem();
+	ordered = pmalloc(tal->uris.size * sizeof(struct rpki_uri *));
 
 	last_rsync = (http_first ? tal->uris.https_count : 0);
 	last_https = (http_first ? 0 : tal->uris.rsync_count);
@@ -475,8 +439,6 @@ tal_order_uris(struct tal *tal)
 	tmp = tal->uris.array;
 	tal->uris.array = ordered;
 	free(tmp);
-
-	return 0;
 }
 
 char const *
@@ -497,8 +459,7 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
-    struct validation_thread *thread)
+handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 {
 	/*
 	 * Because of the way the foreach iterates, this function must return
@@ -515,10 +476,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 	 */
 
 	struct validation_handler validation_handler;
+	struct validation_thread *thread;
 	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
 	int error;
+
+	thread = arg;
 
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
@@ -541,13 +505,11 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 				validation_destroy(state);
 				return 0; /* Try some other TAL URI */
 			}
-			error = http_download_file(uri,
-			    reqs_errors_log_uri(uri_get_global(uri)));
+			error = http_download_file(uri);
 		}
 
 		/* Reminder: there's a positive error: EREQFAILED */
 		if (error) {
-			working_repo_push(uri_get_global(uri));
 			validation_destroy(state);
 			return pr_val_warn(
 			    "TAL URI '%s' could not be downloaded.",
@@ -564,9 +526,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 
 	/* At least one URI was sync'd */
 	thread->retry_local = false;
-	if (thread->sync_files && working_repo_peek() != NULL)
-		reqs_errors_rem_uri(working_repo_peek());
-	working_repo_pop();
 
 	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
 
@@ -580,9 +539,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri,
 	 * Set all RRDPs URIs to non-requested, this way we will force the
 	 * request on every cycle (to check if there are updates).
 	 */
-	error = db_rrdp_uris_set_all_unvisited();
-	if (error)
-		goto end;
+	db_rrdp_uris_set_all_unvisited();
 
 	/* Handle root certificate. */
 	error = certificate_traverse(NULL, uri);
@@ -636,25 +593,6 @@ end:	validation_destroy(state);
 	return error;
 }
 
-static int
-__handle_tal_uri_sync(struct tal *tal, struct rpki_uri *uri, void *arg)
-{
-	int error;
-
-	error = handle_tal_uri(tal, uri, arg);
-	if (error)
-		return error;
-	working_repo_push(uri_get_global(uri));
-
-	return 0;
-}
-
-static int
-__handle_tal_uri_local(struct tal *tal, struct rpki_uri *uri, void *arg)
-{
-	return handle_tal_uri(tal, uri, arg);
-}
-
 static void
 do_file_validation(void *thread_arg)
 {
@@ -665,17 +603,13 @@ do_file_validation(void *thread_arg)
 	fnstack_init();
 	fnstack_push(thread->tal_file);
 
-	working_repo_init();
-
 	error = tal_load(thread->tal_file, &tal);
 	if (error)
 		goto end;
 
-	error = tal_order_uris(tal);
-	if (error)
-		goto destroy_tal;
+	tal_order_uris(tal);
 
-	error = foreach_uri(tal, __handle_tal_uri_sync, thread);
+	error = foreach_uri(tal, handle_tal_uri, thread);
 	if (error > 0) {
 		error = 0;
 		goto destroy_tal;
@@ -692,7 +626,7 @@ do_file_validation(void *thread_arg)
 	thread->sync_files = false;
 	pr_val_warn("Looking for the TA certificate at the local files.");
 
-	error = foreach_uri(tal, __handle_tal_uri_local, thread);
+	error = foreach_uri(tal, handle_tal_uri, thread);
 	if (error > 0)
 		error = 0;
 	else if (error == 0)
@@ -702,7 +636,6 @@ do_file_validation(void *thread_arg)
 destroy_tal:
 	tal_destroy(tal);
 end:
-	working_repo_cleanup();
 	fnstack_cleanup();
 	thread->exit_status = error;
 }
@@ -720,45 +653,22 @@ __do_file_validation(char const *tal_file, void *arg)
 {
 	struct tal_param *t_param = arg;
 	struct validation_thread *thread;
-	int error;
 
-	error = db_rrdp_add_tal(tal_file);
-	if (error)
-		return error;
+	db_rrdp_add_tal(tal_file);
 
-	thread = malloc(sizeof(struct validation_thread));
-	if (thread == NULL) {
-		error = pr_enomem();
-		goto free_db_rrdp;
-	}
+	thread = pmalloc(sizeof(struct validation_thread));
 
-	thread->tal_file = strdup(tal_file);
-	if (thread->tal_file == NULL) {
-		error = pr_enomem();
-		goto free_thread;
-	}
+	thread->tal_file = pstrdup(tal_file);
 	thread->arg = t_param->db;
 	thread->exit_status = -EINTR;
 	thread->retry_local = true;
 	thread->sync_files = true;
 
-	error = thread_pool_push(t_param->pool, thread->tal_file,
-	    do_file_validation, thread);
-	if (error) {
-		pr_op_err("Couldn't push a thread to do files validation");
-		goto free_tal_file;
-	}
-
+	thread_pool_push(t_param->pool, thread->tal_file, do_file_validation,
+	    thread);
 	SLIST_INSERT_HEAD(&t_param->threads, thread, next);
-	return 0;
 
-free_tal_file:
-	free(thread->tal_file);
-free_thread:
-	free(thread);
-free_db_rrdp:
-	db_rrdp_rem_tal(tal_file);
-	return error;
+	return 0;
 }
 
 int
@@ -800,9 +710,6 @@ perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 		}
 		thread_destroy(thread);
 	}
-
-	/* Log the error'd URIs summary */
-	reqs_errors_log_summary();
 
 	/* One thread has errors, validation can't keep the resulting table */
 	if (error)

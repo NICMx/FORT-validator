@@ -2,19 +2,19 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "alloc.c"
 #include "common.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "str_token.c"
 #include "types/uri.c"
 #include "rsync/rsync.c"
 
+/* Mocks */
 
-struct validation *
-state_retrieve(void)
-{
-	return NULL;
-}
+MOCK_NULL(state_retrieve, struct validation *, void)
+MOCK_ABORT_PTR(validation_rsync_visited_uris, uri_list, struct validation *s)
+
+/* Tests */
 
 static void
 assert_descendant(bool expected, char *ancestor, char *descendant)
@@ -58,7 +58,7 @@ __mark_as_downloaded(char *uri_str, struct uri_list *visited_uris)
 {
 	struct rpki_uri *uri;
 	ck_assert_int_eq(0, uri_create_rsync_str(&uri, uri_str, strlen(uri_str)));
-	ck_assert_int_eq(mark_as_downloaded(uri, visited_uris), 0);
+	mark_as_downloaded(uri, visited_uris);
 	uri_refput(uri);
 }
 
@@ -75,8 +75,8 @@ START_TEST(rsync_test_list)
 {
 	struct uri_list *visited_uris;
 
-	visited_uris = NULL;
-	ck_assert_int_eq(rsync_create(&visited_uris), 0);
+	visited_uris = rsync_create();
+	ck_assert_ptr_nonnull(visited_uris);
 
 	__mark_as_downloaded("rsync://example.foo/repository/", visited_uris);
 	__mark_as_downloaded("rsync://example.foo/member_repository/",
