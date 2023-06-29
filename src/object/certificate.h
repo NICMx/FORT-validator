@@ -18,8 +18,6 @@ enum cert_type {
 	EE,		/* End Entity certificates */
 };
 
-int certificate_load(struct rpki_uri *, X509 **);
-
 /**
  * Performs the basic (RFC 5280, presumably) chain validation.
  * (Ignores the IP and AS extensions.)

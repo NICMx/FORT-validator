@@ -757,7 +757,7 @@ end:
 	return error;
 }
 
-int
+static int
 certificate_load(struct rpki_uri *uri, X509 **result)
 {
 	X509 *cert = NULL;
@@ -1818,114 +1818,15 @@ err:
 	return pr_val_err("Certificate is not TA, CA nor BGPsec. Ignoring...");
 }
 
-/*
- * It does some of the things from validate_issuer(), but we can not wait for
- * such validation, since at this point the RSYNC URI at AIA extension must be
- * verified to comply with rfc6487#section-4.8.7
- */
-static int
-force_aia_validation(struct rpki_uri *caIssuers, X509 *son)
-{
-	X509 *parent;
-	struct rfc5280_name *son_name;
-	struct rfc5280_name *parent_name;
-	int error;
-
-	pr_val_debug("AIA's URI didn't matched parent URI, trying to SYNC");
-
-	/* TODO (#78) RFC misunderstanding; do not rsync here. */
-	/* RSYNC is still the preferred access mechanism, force the sync */
-	do {
-		error = rsync_download_files(caIssuers, false, true);
-		if (!error)
-			break;
-		if (error == EREQFAILED) {
-			pr_val_info("AIA URI couldn't be downloaded, trying to search locally");
-			break;
-		}
-		return error;
-	} while (0);
-
-	error = certificate_load(caIssuers, &parent);
-	if (error)
-		return error;
-
-	error = x509_name_decode(X509_get_subject_name(parent), "subject",
-	    &parent_name);
-	if (error)
-		goto free_parent;
-
-	error = x509_name_decode(X509_get_issuer_name(son), "issuer",
-	    &son_name);
-	if (error)
-		goto free_parent_name;
-
-	if (x509_name_equals(parent_name, son_name))
-		error = 0; /* Everything its ok */
-	else
-		error = pr_val_err("Certificate subject from AIA ('%s') isn't issuer of this certificate.",
-		    uri_val_get_printable(caIssuers));
-
-	x509_name_put(son_name);
-free_parent_name:
-	x509_name_put(parent_name);
-free_parent:
-	X509_free(parent);
-	return error;
-}
-
 int
 certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 {
-	struct validation *state;
-	struct rpki_uri *parent;
-
-	if (caIssuers == NULL)
-		pr_crit("Certificate's AIA was not recorded.");
-
-	state = state_retrieve();
-
-	parent = x509stack_peek_uri(validation_certstack(state));
-	if (parent == NULL)
-		pr_crit("Certificate has no parent.");
-
 	/*
-	 * There are two possible issues here, specifically at first level root
-	 * certificate's childs:
-	 *
-	 * - Considering that the root certificate can be published at one or
-	 *   more rsync or HTTPS URIs (RFC 8630), the validation is done
-	 *   considering the first valid downloaded certificate URI from the
-	 *   list of URIs; so, that URI doesn't necessarily matches AIA. And
-	 *   this issue is more likely to happen if the 'shuffle-uris' flag
-	 *   is active an a TAL has more than one rsync/HTTPS uri.
-	 *
-	 * - If the TAL has only one URI, and such URI is HTTPS, the root
-	 *   certificate will be located at a distinct point that what it's
-	 *   expected, so this might be an error if such certificate (root
-	 *   certificate) isn't published at an rsync repository. See RFC 6487
-	 *   section-4.8.7:
-	 *
-	 *   "The preferred URI access mechanisms is "rsync", and an rsync URI
-	 *   [RFC5781] MUST be specified with an accessMethod value of
-	 *   id-ad-caIssuers.  The URI MUST reference the point of publication
-	 *   of the certificate where this Issuer is the subject (the issuer's
-	 *   immediate superior certificate)."
-	 *
-	 * As of today, this is a common scenario, since most of the TALs have
-	 * an HTTPS URI.
+	 * TODO (#78) Compare the AIA to the parent's URI.
+	 * We're currently not recording the URI, so this can't be solved until
+	 * the #78 refactor.
 	 */
-	if (uri_equals(caIssuers, parent))
-		return 0;
-
-	/*
-	 * Avoid the check at direct TA childs, otherwise try to match the
-	 * immediate superior subject with the current issuer. This will force
-	 * an RSYNC of AIA's URI, load the certificate and do the comparison.
-	 */
-	return certstack_get_x509_num(validation_certstack(state)) == 1 ?
-	    0 :
-	    force_aia_validation(caIssuers, cert);
+	return 0;
 }
 
 /*
