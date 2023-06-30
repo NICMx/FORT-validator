@@ -714,6 +714,7 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, stale_repository_period),
 		.doc = "Deprecated; does nothing.",
+		.deprecated = true,
 		.min = 0,
 		.max = UINT_MAX,
 	},
@@ -966,6 +967,7 @@ set_default_values(void)
 	rpki_config.output.format = OFM_CSV;
 
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
+	rpki_config.stale_repository_period = 43200; /* 12 hours */
 	rpki_config.init_tals = false;
 
 	rpki_config.thread_pool.server.max = 20;
@@ -1057,6 +1059,10 @@ handle_opt(int opt)
 
 	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
 		if (option->id == opt) {
+			if (option->deprecated)
+				pr_op_warn("Warning: '%s' is deprecated.",
+				    option->name);
+
 			return is_rpki_config_field(option)
 			    ? option->type->parse.argv(option, optarg,
 			          get_rpki_config_field(option))

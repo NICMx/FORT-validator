@@ -2,6 +2,7 @@
 #define SRC_CONFIG_TYPES_H_
 
 #include <jansson.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -75,6 +76,7 @@ struct option_field {
 	 * Optional.
 	 */
 	int availability;
+	bool deprecated;
 	unsigned int min;
 	unsigned int max;
 };

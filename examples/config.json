@@ -116,5 +116,4 @@
     }
   },
   "asn1-decode-max-stack": 4096,
-  "stale-repository-period": 43200
 }

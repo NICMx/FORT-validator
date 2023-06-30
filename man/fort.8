@@ -1142,31 +1142,7 @@ By default, it has a value of \fI4096\fR (4 kB).
 
 .B \-\-stale-repository-period=\fIUNSIGNED_INTEGER\fR
 .RS 4
-Time period that must lapse to warn about a stale repository (the messages will
-be sent to the operation log). The time lapse starts once the repository
-download has been retried (see \fI--rsync.retry.count\fR and
-\fI--http.retry.count\fR) and failed after such retries.
-.P
-A repository is considered stale if its files can't be fetched due to a
-communication error and this error persists across validation cycles. This kind
-of issues can be due to a local misconfiguration (eg. a firewall that blocks
-incoming data) or a problem at the server (eg. the server is down).
-.P
-Despite who's "fault" is, FORT validator will try to work with the local files
-from \fI--local-repository\fR.
-.P
-The communication errors sent to the operation log, are those related to
-"first level" RPKI servers; commonly this are the servers maintained by the
-RIRs.
-.P
-Currently \fBall\fR the communication errors are logged at the validation log.
-This argument (\fB--stale-repository-period\fR) is merely to send this error
-messages also to the operation log.
-.P
-A value \fBequal to 0\fR means that the communication errors will be logged at
-once.
-.P
-By default, it has a value of \fI43200\fR (12 hours).
+Deprecated; does nothing.
 .RE
 .P
 
@@ -1347,8 +1323,7 @@ to a specific value:
       "max": 5
     }
   },
-  "asn1-decode-max-stack": 4096,
-  "stale-repository-period": 43200
+  "asn1-decode-max-stack": 4096
 }
 .fi
 .RE
