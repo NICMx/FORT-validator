@@ -54,7 +54,6 @@ ASN_MODULE_SRCS=	\
 	asn1/asn1c/SigningTime.c	\
 	asn1/asn1c/Countersignature.c	\
 	asn1/asn1c/RouteOriginAttestation.c	\
-	asn1/asn1c/ASID.c	\
 	asn1/asn1c/ROAIPAddressFamily.c	\
 	asn1/asn1c/ROAIPAddress.c	\
 	asn1/asn1c/Manifest.c	\
@@ -118,7 +117,6 @@ ASN_MODULE_HDRS=	\
 	asn1/asn1c/SigningTime.h	\
 	asn1/asn1c/Countersignature.h	\
 	asn1/asn1c/RouteOriginAttestation.h	\
-	asn1/asn1c/ASID.h	\
 	asn1/asn1c/ROAIPAddressFamily.h	\
 	asn1/asn1c/ROAIPAddress.h	\
 	asn1/asn1c/Manifest.h	\

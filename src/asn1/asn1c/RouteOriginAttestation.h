@@ -13,7 +13,7 @@
 
 /* Including external dependencies */
 #include "asn1/asn1c/INTEGER.h"
-#include "ASID.h"
+#include "ASId.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
@@ -28,7 +28,7 @@ struct ROAIPAddressFamily;
 /* RouteOriginAttestation */
 typedef struct RouteOriginAttestation {
 	INTEGER_t	*version	/* DEFAULT 0 */;
-	ASID_t	 asID;
+	ASId_t	 asId;
 	struct RouteOriginAttestation__ipAddrBlocks {
 		A_SEQUENCE_OF(struct ROAIPAddressFamily) list;
 		

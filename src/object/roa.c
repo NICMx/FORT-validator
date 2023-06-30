@@ -180,7 +180,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	}
 
 	/* rfc6482#section-3.2 */
-	if (asn_INTEGER2ulong(&roa->asID, &asn) != 0) {
+	if (asn_INTEGER2ulong(&roa->asId, &asn) != 0) {
 		if (errno) {
 			pr_val_err("Error casting ROA's AS ID value: %s",
 			    strerror(errno));
@@ -193,7 +193,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		error = pr_val_err("AS value (%lu) is out of range.", asn);
 		goto end_error;
 	}
-	pr_val_debug("asID: %lu", asn);
+	pr_val_debug("asId: %lu", asn);
 
 	/* rfc6482#section-3.3 */
 
