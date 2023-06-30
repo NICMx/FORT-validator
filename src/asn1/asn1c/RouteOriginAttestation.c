@@ -24,7 +24,7 @@ memb_ipAddrBlocks_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr
 	
 	if((size >= 1)) {
 		/* Perform validation of the inner elements */
-		return td->encoding_constraints.general_constraints(td, sptr, ctfailcb, app_key);
+		return SEQUENCE_OF_constraint(td, sptr, ctfailcb, app_key);
 	} else {
 		ASN__CTFAIL(app_key, td, sptr,
 			"%s: constraint failed (%s:%d)",
@@ -110,14 +110,14 @@ static asn_TYPE_member_t asn_MBR_RouteOriginAttestation_1[] = {
 		&asn_DFL_2_set_0,	/* Set DEFAULT 0 */
 		"version"
 		},
-	{ ATF_NOFLAGS, 0, offsetof(struct RouteOriginAttestation, asID),
+	{ ATF_NOFLAGS, 0, offsetof(struct RouteOriginAttestation, asId),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
-		&asn_DEF_ASID,
+		&asn_DEF_ASId,
 		0,
 		{ 0, 0, 0 },
 		0, 0, /* No default value */
-		"asID"
+		"asId"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct RouteOriginAttestation, ipAddrBlocks),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
@@ -134,7 +134,7 @@ static const ber_tlv_tag_t asn_DEF_RouteOriginAttestation_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
 static const asn_TYPE_tag2member_t asn_MAP_RouteOriginAttestation_tag2el_1[] = {
-    { (ASN_TAG_CLASS_UNIVERSAL | (2 << 2)), 1, 0, 0 }, /* asID */
+    { (ASN_TAG_CLASS_UNIVERSAL | (2 << 2)), 1, 0, 0 }, /* asId */
     { (ASN_TAG_CLASS_UNIVERSAL | (16 << 2)), 2, 0, 0 }, /* ipAddrBlocks */
     { (ASN_TAG_CLASS_CONTEXT | (0 << 2)), 0, 0, 0 } /* version */
 };
