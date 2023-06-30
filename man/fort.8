@@ -263,30 +263,6 @@ All the enabled logs will be sent to syslog, so the configured values of
 .RE
 .P
 
-.B \-\-sync-strategy=(\fIoff\fR|\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
-.RS 4
-This argument \fBwill be DEPRECATED\fR. Use \fB--rsync.strategy\fR or
-\fB--rsync.enabled\fR (if rsync is meant to be disabled) instead.
-.P
-\fIrsync\fR download strategy; states the way rsync URLs are approached during
-downloads.
-.P
-Despite this argument will be deprecated, it still can be utilized. It can have
-one of four values:
-.RS 4
-- \fIoff\fR: will disable rsync execution. So, using \fB--sync-strategy=off\fR
-will be the same as \fB--rsync.enabled=false\fR.
-.br
-- \fIstrict\fR: will be the same as \fB--rsync.strategy=strict\fR.
-.br
-- \fIroot\fR: will be the same as \fB--rsync.strategy=root\fR.
-.br
-- \fIroot-except-ta\fR \fB(default value)\fR: will be the same as
-\fB--rsync.strategy=root-except-ta\fR.
-.RE
-.RE
-.P
-
 .B \-\-work-offline
 .RS 4
 If this flag is activated, Fort will disable all outgoing requests (currently
@@ -895,30 +871,6 @@ the SSL library:
 The value specified is utilized in libcurl’s option \fICURLOPT_CAPATH\fR.
 .P
 By default, the path has a NULL value.
-.RE
-.P
-
-.B \-\-rrdp.enabled=\fItrue\fR|\fIfalse\fR
-.RS 4
-This argument \fBwill be DEPRECATED\fR. Use \fB--http.enabled\fR instead.
-.RE
-.P
-
-.B \-\-rrdp.priority=\fIUNSIGNED_INTEGER\fR
-.RS 4
-This argument \fBwill be DEPRECATED\fR. Use \fB--http.priority\fR instead.
-.RE
-.P
-
-.B \-\-rrdp.retry.count=\fIUNSIGNED_INTEGER\fR
-.RS 4
-This argument \fBwill be DEPRECATED\fR. Use \fB--http.retry.count\fR instead.
-.RE
-.P
-
-.B \-\-rrdp.retry.interval=\fIUNSIGNED_INTEGER\fR
-.RS 4
-This argument \fBwill be DEPRECATED\fR. Use \fB--http.retry.interval\fR instead.
 .RE
 .P
 

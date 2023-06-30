@@ -101,7 +101,7 @@ tmp
 docs/_site
 docs/.jekyll-metadata
 
-# Unwanted manure shat by imbecile OSs
+# OS noise
 .DS_Store*
 ehthumbs.db
 Icon?
