@@ -18,7 +18,6 @@
 #include "log.h"
 #include "config/boolean.h"
 #include "config/incidences.h"
-#include "config/init_tals.h"
 #include "config/str.h"
 #include "config/uint.h"
 #include "config/work_offline.h"
@@ -194,9 +193,6 @@ struct rpki_config {
 	bool init_tals;
 	/* Download AS0 TALs into --tal? */
 	bool init_tal0s;
-
-	/* Deprecated; currently does nothing. */
-	unsigned int init_tal_locations;
 
 	/* Thread pools for specific tasks */
 	struct {
@@ -736,13 +732,6 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, init_tal0s),
 		.doc = "Fetch the currently-known AS0 TAL files into --tal",
 		.availability = AVAILABILITY_GETOPT,
-	}, {
-		.id = 11001,
-		.name = "init-locations",
-		.type = &gt_init_tals_locations,
-		.offset = offsetof(struct rpki_config, init_tal_locations),
-		.doc = "Deprecated. Does nothing as of Fort 1.5.1.",
-		.availability = AVAILABILITY_JSON,
 	},
 
 	{
@@ -978,7 +967,6 @@ set_default_values(void)
 
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 	rpki_config.init_tals = false;
-	rpki_config.init_tal_locations = 0;
 
 	rpki_config.thread_pool.server.max = 20;
 	rpki_config.thread_pool.validation.max = 5;
