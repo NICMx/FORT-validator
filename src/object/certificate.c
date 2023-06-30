@@ -1930,7 +1930,7 @@ exec_rsync_method(struct sia_ca_uris *sia_uris)
 {
 	int error;
 
-	error = rsync_download_files(sia_uris->caRepository.uri, false, false);
+	error = rsync_download_files(sia_uris->caRepository.uri, false);
 	if (error)
 		return error;
 
@@ -2201,7 +2201,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		 */
 		pr_val_info("Retrying repository download to discard 'transient inconsistency' manifest issue (see RFC 6481 section 5) '%s'",
 		    uri_val_get_printable(sia_uris.caRepository.uri));
-		error = rsync_download_files(sia_uris.caRepository.uri, false, true);
+		error = rsync_download_files(sia_uris.caRepository.uri, true);
 		if (error)
 			break;
 

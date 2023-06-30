@@ -89,7 +89,7 @@ struct rpki_config {
 		 */
 		unsigned int priority;
 		/* Synchronization download strategy. */
-		enum rsync_strategy strategy;
+		char *strategy;
 		/* Retry conf, utilized on errors */
 		struct {
 			/* Maximum number of retries on error */
@@ -443,9 +443,10 @@ static const struct option_field options[] = {
 	}, {
 		.id = 3002,
 		.name = "rsync.strategy",
-		.type = &gt_rsync_strategy,
+		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, rsync.strategy),
-		.doc = "RSYNC download strategy",
+		.doc = "Deprecated; does nothing.",
+		.deprecated = true,
 	}, {
 		.id = 3003,
 		.name = "rsync.retry.count",
@@ -475,7 +476,7 @@ static const struct option_field options[] = {
 		.name = "rsync.arguments-recursive",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.recursive),
-		.doc = "RSYNC program arguments that will trigger a recursive RSYNC",
+		.doc = "Deprecated; does nothing.",
 		.availability = AVAILABILITY_JSON,
 		/* Unlimited */
 		.max = 0,
@@ -878,17 +879,7 @@ print_config(void)
 static void
 set_default_values(void)
 {
-	static char const *recursive_rsync_args[] = {
-		"--recursive",
-		"--delete",
-		"--times",
-		"--contimeout=20",
-		"--timeout=15",
-		"--max-size=20MB",
-		"$REMOTE",
-		"$LOCAL",
-	};
-
+	static char const *recursive_rsync_args[] = { "<deprecated>" };
 	static char const *flat_rsync_args[] = {
 		"--times",
 		"--contimeout=20",
@@ -904,15 +895,6 @@ set_default_values(void)
 	 * duplicates.
 	 */
 
-	string_array_init(&rpki_config.server.address, NULL, 0);
-	rpki_config.server.port = pstrdup("323");
-	rpki_config.server.backlog = SOMAXCONN;
-	rpki_config.server.interval.validation = 3600;
-	rpki_config.server.interval.refresh = 3600;
-	rpki_config.server.interval.retry = 600;
-	rpki_config.server.interval.expire = 7200;
-	rpki_config.server.deltas_lifetime = 2;
-
 	rpki_config.tal = NULL;
 	rpki_config.local_repository = pstrdup("/tmp/fort/repository");
 	rpki_config.shuffle_tal_uris = false;
@@ -922,9 +904,18 @@ set_default_values(void)
 	rpki_config.work_offline = false;
 	rpki_config.daemon = false;
 
+	string_array_init(&rpki_config.server.address, NULL, 0);
+	rpki_config.server.port = pstrdup("323");
+	rpki_config.server.backlog = SOMAXCONN;
+	rpki_config.server.interval.validation = 3600;
+	rpki_config.server.interval.refresh = 3600;
+	rpki_config.server.interval.retry = 600;
+	rpki_config.server.interval.expire = 7200;
+	rpki_config.server.deltas_lifetime = 2;
+
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
-	rpki_config.rsync.strategy = RSYNC_ROOT_EXCEPT_TA;
+	rpki_config.rsync.strategy = pstrdup("<deprecated>");
 	rpki_config.rsync.retry.count = 1;
 	rpki_config.rsync.retry.interval = 4;
 	rpki_config.rsync.program = pstrdup("rsync");
@@ -933,8 +924,8 @@ set_default_values(void)
 	string_array_init(&rpki_config.rsync.args.recursive,
 	    recursive_rsync_args, ARRAY_LEN(recursive_rsync_args));
 
-	/* By default, has a higher priority than rsync */
 	rpki_config.http.enabled = true;
+	/* Higher priority than rsync by default */
 	rpki_config.http.priority = 60;
 	rpki_config.http.retry.count = 1;
 	rpki_config.http.retry.interval = 4;
@@ -969,6 +960,7 @@ set_default_values(void)
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
 	rpki_config.stale_repository_period = 43200; /* 12 hours */
 	rpki_config.init_tals = false;
+	rpki_config.init_tal0s = false;
 
 	rpki_config.thread_pool.server.max = 20;
 	rpki_config.thread_pool.validation.max = 5;
@@ -1333,12 +1325,6 @@ config_get_rsync_priority(void)
 	return rpki_config.rsync.priority;
 }
 
-enum rsync_strategy
-config_get_rsync_strategy(void)
-{
-	return rpki_config.rsync.strategy;
-}
-
 unsigned int
 config_get_rsync_retry_count(void)
 {
@@ -1358,22 +1344,9 @@ config_get_rsync_program(void)
 }
 
 struct string_array const *
-config_get_rsync_args(bool is_ta)
+config_get_rsync_args(void)
 {
-	switch (rpki_config.rsync.strategy) {
-	case RSYNC_ROOT:
-		return &rpki_config.rsync.args.recursive;
-	case RSYNC_ROOT_EXCEPT_TA:
-		return is_ta
-		    ? &rpki_config.rsync.args.flat
-		    : &rpki_config.rsync.args.recursive;
-	case RSYNC_STRICT:
-		return &rpki_config.rsync.args.flat;
-	default:
-		break;
-	}
-
-	pr_crit("Invalid rsync strategy: '%u'", rpki_config.rsync.strategy);
+	return &rpki_config.rsync.args.flat;
 }
 
 bool

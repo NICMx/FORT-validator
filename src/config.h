@@ -8,7 +8,6 @@
 #include "config/log_conf.h"
 #include "config/mode.h"
 #include "config/output_format.h"
-#include "config/rsync_strategy.h"
 #include "config/string_array.h"
 #include "config/types.h"
 
@@ -41,11 +40,10 @@ long config_get_http_max_file_size(void);
 char const *config_get_http_ca_path(void);
 bool config_get_rsync_enabled(void);
 unsigned int config_get_rsync_priority(void);
-enum rsync_strategy config_get_rsync_strategy(void);
 unsigned int config_get_rsync_retry_count(void);
 unsigned int config_get_rsync_retry_interval(void);
 char *config_get_rsync_program(void);
-struct string_array const *config_get_rsync_args(bool);
+struct string_array const *config_get_rsync_args(void);
 bool config_get_http_enabled(void);
 unsigned int config_get_http_priority(void);
 unsigned int config_get_http_retry_count(void);

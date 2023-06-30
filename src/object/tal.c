@@ -499,7 +499,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 				validation_destroy(state);
 				return 0; /* Try some other TAL URI */
 			}
-			error = rsync_download_files(uri, true, false);
+			error = rsync_download_files(uri, false);
 		} else /* HTTPS */ {
 			if (!config_get_http_enabled()) {
 				validation_destroy(state);

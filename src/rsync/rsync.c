@@ -13,7 +13,6 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
-#include "str_token.h"
 #include "thread_var.h"
 
 struct uri {
@@ -52,35 +51,6 @@ rsync_destroy(struct uri_list *list)
 }
 
 /*
- * Returns true if @ancestor an ancestor of @descendant, or @descendant itself.
- * Returns false otherwise.
- */
-static bool
-is_descendant(struct rpki_uri *ancestor, struct rpki_uri *descendant)
-{
-	struct string_tokenizer ancestor_tokenizer;
-	struct string_tokenizer descendant_tokenizer;
-
-	string_tokenizer_init(&ancestor_tokenizer, uri_get_global(ancestor),
-	    uri_get_global_len(ancestor), '/');
-	string_tokenizer_init(&descendant_tokenizer, uri_get_global(descendant),
-	    uri_get_global_len(descendant), '/');
-
-	if (config_get_rsync_strategy() == RSYNC_STRICT)
-		return strcmp(uri_get_global(ancestor),
-		    uri_get_global(descendant)) == 0;
-
-	do {
-		if (!string_tokenizer_next(&ancestor_tokenizer))
-			return true;
-		if (!string_tokenizer_next(&descendant_tokenizer))
-			return false;
-		if (!token_equals(&ancestor_tokenizer, &descendant_tokenizer))
-			return false;
-	} while (true);
-}
-
-/*
  * Returns whether @uri has already been rsync'd during the current validation
  * run.
  */
@@ -91,7 +61,7 @@ is_already_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 
 	/* TODO (next iteration) this is begging for a hash set. */
 	SLIST_FOREACH(cursor, visited_uris, next)
-		if (is_descendant(cursor->uri, uri))
+		if (uri_equals(cursor->uri, uri))
 			return true;
 
 	return false;
@@ -107,58 +77,6 @@ mark_as_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
 	uri_refget(uri);
 
 	SLIST_INSERT_HEAD(visited_uris, node, next);
-}
-
-static int
-handle_strict_strategy(struct rpki_uri *requested_uri,
-    struct rpki_uri **rsync_uri)
-{
-	*rsync_uri = requested_uri;
-	uri_refget(requested_uri);
-	return 0;
-}
-
-static int
-handle_root_strategy(struct rpki_uri *src, struct rpki_uri **dst)
-{
-	char const *global;
-	size_t global_len;
-	unsigned int slashes;
-	size_t i;
-
-	global = uri_get_global(src);
-	global_len = uri_get_global_len(src);
-	slashes = 0;
-
-	for (i = 0; i < global_len; i++) {
-		if (global[i] == '/') {
-			slashes++;
-			if (slashes == 4)
-				return uri_create_rsync_str(dst, global, i);
-		}
-	}
-
-	*dst = src;
-	uri_refget(src);
-	return 0;
-}
-
-static int
-get_rsync_uri(struct rpki_uri *requested_uri, bool is_ta,
-    struct rpki_uri **rsync_uri)
-{
-	switch (config_get_rsync_strategy()) {
-	case RSYNC_ROOT:
-		return handle_root_strategy(requested_uri, rsync_uri);
-	case RSYNC_ROOT_EXCEPT_TA:
-		return is_ta
-		    ? handle_strict_strategy(requested_uri, rsync_uri)
-		    : handle_root_strategy(requested_uri, rsync_uri);
-	case RSYNC_STRICT:
-		return handle_strict_strategy(requested_uri, rsync_uri);
-	}
-
-	pr_crit("Invalid rsync strategy: %u", config_get_rsync_strategy());
 }
 
 /*
@@ -193,13 +111,13 @@ release_args(char **args, unsigned int size)
 }
 
 static void
-prepare_rsync(struct rpki_uri *uri, bool is_ta, char ***args, size_t *args_len)
+prepare_rsync(struct rpki_uri *uri, char ***args, size_t *args_len)
 {
 	struct string_array const *config_args;
 	char **copy_args;
 	unsigned int i;
 
-	config_args = config_get_rsync_args(is_ta);
+	config_args = config_get_rsync_args();
 	/*
 	 * We need to work on a copy, because the config args are immutable,
 	 * and we need to add the program name (for some reason) and NULL
@@ -356,7 +274,7 @@ read_pipes(int fds[2][2])
  * Downloads the @uri->global file into the @uri->local path.
  */
 static int
-do_rsync(struct rpki_uri *uri, bool is_ta)
+do_rsync(struct rpki_uri *uri)
 {
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	char **args;
@@ -371,7 +289,7 @@ do_rsync(struct rpki_uri *uri, bool is_ta)
 	/* Prepare everything for the child exec */
 	args = NULL;
 	args_len = 0;
-	prepare_rsync(uri, is_ta, &args, &args_len);
+	prepare_rsync(uri, &args, &args_len);
 
 	pr_val_info("rsync: %s", uri_get_global(uri));
 	if (log_val_enabled(LOG_DEBUG)) {
@@ -493,25 +411,11 @@ release_args:
 	return error;
 }
 
-/**
- * @is_ta: Are we rsync'ing the TA?
- * The TA rsync will not be recursive, and will force SYNC_STRICT
- * (unless the strategy has been set to SYNC_OFF.)
- * Why? Because we should probably not trust the repository until we've
- * validated the TA's public key.
- */
 int
-rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
+rsync_download_files(struct rpki_uri *uri, bool force)
 {
-	/**
-	 * Note:
-	 * @requested_uri is the URI we were asked to RSYNC.
-	 * @rsync_uri is the URL we're actually going to RSYNC.
-	 * (They can differ, depending on config_get_rsync_strategy().)
-	 */
 	struct validation *state;
 	struct uri_list *visited_uris;
-	struct rpki_uri *rsync_uri;
 	int error;
 
 	if (!config_get_rsync_enabled())
@@ -520,34 +424,26 @@ rsync_download_files(struct rpki_uri *requested_uri, bool is_ta, bool force)
 	state = state_retrieve();
 	visited_uris = validation_rsync_visited_uris(state);
 
-	if (!force && is_already_downloaded(requested_uri, visited_uris)) {
+	if (!force && is_already_downloaded(uri, visited_uris)) {
 		pr_val_debug("No need to redownload '%s'.",
-		    uri_val_get_printable(requested_uri));
+		    uri_val_get_printable(uri));
 		return 0;
 	}
 
-	error = force
-	    ? handle_strict_strategy(requested_uri, &rsync_uri)
-	    : get_rsync_uri(requested_uri, is_ta, &rsync_uri);
-	if (error)
-		return error;
+	pr_val_debug("Going to RSYNC '%s'.", uri_val_get_printable(uri));
 
-	pr_val_debug("Going to RSYNC '%s'.", uri_val_get_printable(rsync_uri));
-
-	error = do_rsync(rsync_uri, is_ta);
-	switch(error) {
+	error = do_rsync(uri);
+	switch (error) {
 	case 0:
 		/* Don't store when "force" and if its already downloaded */
-		if (!(force && is_already_downloaded(rsync_uri, visited_uris)))
-			mark_as_downloaded(rsync_uri, visited_uris);
+		if (!(force && is_already_downloaded(uri, visited_uris)))
+			mark_as_downloaded(uri, visited_uris);
 		break;
 	case EREQFAILED:
-		mark_as_downloaded(rsync_uri, visited_uris);
-		error = EREQFAILED; /* Return the original error */
+		mark_as_downloaded(uri, visited_uris);
 		break;
 	}
 
-	uri_refput(rsync_uri);
 	return error;
 }
 

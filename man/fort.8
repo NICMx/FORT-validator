@@ -100,29 +100,14 @@ Some configuration options can't be set at the JSON configuration file:
 Other configuration options can be configured exclusively at the JSON
 configuration file:
 .P
+
 .B rsync.program
 .RS 4
 Name of the program needed to invoke an rsync file transfer. The default value
 is "rsync".
 .RE
 .P
-.B rsync.arguments-recursive
-.RS 4
-Arguments needed by
-.B rsync.program
-to perform a recursive rsync. The arguments are specified as a JSON string
-array; its default value is:
-[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15",
-"$REMOTE", "$LOCAL" ]
-.P
-FORT will replace "$REMOTE" with the remote URL it needs to download, and
-"$LOCAL" with the target local directory where the file is supposed to be
-dropped.
-.P
-If \fBrsync.program\fR set is \fIrsync\fR (default value), see more about its
-arguments and behavior at \fIrsync(1)\fR.
-.RE
-.P
+
 .B rsync.arguments-flat
 .RS 4
 Arguments needed by
@@ -139,6 +124,13 @@ If \fBrsync.program\fR set is \fIrsync\fR (default value), see more about its
 arguments and behavior at \fIrsync(1)\fR.
 .RE
 .P
+
+.B rsync.arguments-recursive
+.RS 4
+Deprecated; does nothing.
+.RE
+.P
+
 .B incidences
 .RS 4
 A listing of actions to be performed by validation upon encountering certain
@@ -235,7 +227,7 @@ methods defined by the CAs, Fort can do two things:
 .RS 4
 .br
 - Literally invoke an rsync command (see \fBrsync.program\fR and
-\fBrsync.arguments-recursive\fR), which will download the files into
+\fBrsync.arguments-flat\fR), which will download the files into
 \fB--local-repository\fR.
 .br
 - Fetch the RRDP Update Notification file (which implies an HTTP request) and
@@ -918,73 +910,7 @@ requests.
 
 .B \-\-rsync.strategy=(\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
 .RS 4
-\fIrsync\fR download strategy; states the way rsync URLs are approached during
-downloads. It can have one of three values:
-.IR strict ", "
-.IR root ", "
-.IB "root-except-ta" "(default value)" \fR. \fR
-.P
-.I strict
-.RS 4
-In order to enable this strategy, FORT must be compiled using the flag:
-ENABLE\_STRICT\_STRATEGY. e.g.
-\fB $ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'\fR
-.P
-RSYNC every repository publication point separately. Only skip publication
-points that have already been downloaded during the current validation cycle.
-(Assuming each synchronization is recursive.)
-.P
-For example, suppose the validator gets certificates whose caRepository access
-methods (in their Subject Information Access extensions) point to the following
-publication points:
-.P
-1. rsync://rpki.example.com/foo/bar/
-.br
-2. rsync://rpki.example.com/foo/qux/
-.br
-3. rsync://rpki.example.com/foo/bar/
-.br
-4. rsync://rpki.example.com/foo/corge/grault/
-.br
-5. rsync://rpki.example.com/foo/corge/
-.br
-6. rsync://rpki.example.com/foo/corge/waldo/
-.P
-A validator following the `strict` strategy would download `bar`, download
-`qux`, skip `bar`, download `corge/grault`, download `corge` and skip
-`corge/waldo`.
-.P
-This is the slowest, but also the strictly correct sync strategy.
-.RE
-.P
-.I root
-.RS 4
-For each publication point found, guess the root of its repository and RSYNC
-that instead. Then skip any subsequent children of said root.
-.P
-(To guess the root of a repository, the validator counts four slashes, and
-prunes the rest of the URL.)
-.P
-Reusing the caRepository URLs from the `strict` strategy (above) as example, a
-validator following the `root` strategy would download
-`rsync://rpki.example.com/foo`, and then skip everything else.
-.P
-Assuming that the repository is specifically structured to be found within as
-few roots as possible, and they contain minimal RPKI-unrelated noise files, this
-is the fastest synchronization strategy. At time of writing, this is true for
-all the current official repositories.
-.RE
-.P
-.I root-except-ta
-.RS 4
-Synchronizes the root certificate (the one pointed by the TAL) in 'strict' mode,
-and once it's validated, synchronizes the rest of the repository in 'root' mode.
-.P
-Useful if you want 'root', but the root certificate is separated from the rest
-of the repository. Also useful if you don't want the validator to download the
-entire repository without first confirming the integrity and legitimacy of the
-root certificate.
-.RE
+Deprecated; does nothing.
 .RE
 .P
 
@@ -1260,21 +1186,11 @@ to a specific value:
   "rsync": {
     "enabled": true,
     "priority": 50,
-    "strategy": "root-except-ta",
     "retry": {
       "count": 2,
       "interval": 5
     },
     "program": "rsync",
-    "arguments-recursive": [
-      "--recursive",
-      "--delete",
-      "--times",
-      "--contimeout=20",
-      "--timeout=15",
-      "$REMOTE",
-      "$LOCAL"
-    ],
     "arguments-flat": [
       "--times",
       "--contimeout=20",
