@@ -114,7 +114,7 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 }
 
 static void
-http_easy_init(struct http_handler *handler)
+http_easy_init(struct http_handler *handler, long ims)
 {
 	CURL *result;
 
@@ -162,6 +162,12 @@ http_easy_init(struct http_handler *handler)
 
 	/* Prepare for multithreading, avoid signals */
 	setopt_long(result, CURLOPT_NOSIGNAL, 1L);
+
+	if (ims > 0) {
+		setopt_long(result, CURLOPT_TIMEVALUE, ims);
+		setopt_long(result, CURLOPT_TIMECONDITION,
+		    CURL_TIMECOND_IFMODSINCE);
+	}
 
 	handler->curl = result;
 }
@@ -299,22 +305,81 @@ http_easy_cleanup(struct http_handler *handler)
 	curl_easy_cleanup(handler->curl);
 }
 
+static long
+download(char const *src, char const *dst, long ims, long *response_code)
+{
+	FILE *file;
+	struct http_handler handler;
+	long error;
+
+	error = file_write(dst, &file);
+	if (error)
+		return error;
+	http_easy_init(&handler, ims);
+
+	error = http_fetch(&handler, src, response_code, file);
+
+	http_easy_cleanup(&handler);
+	file_close(file);
+
+	return error;
+}
+
+/*
+ * Assumes @dst's parent directory has already been created.
+ */
+static int
+do_retries(char const *src, char const *dst, long ims, long *response_code)
+{
+	unsigned int r;
+	int error;
+
+	r = 0;
+	do {
+		pr_val_debug("Download attempt #%u...", r);
+
+		error = download(src, dst, ims, response_code);
+		switch (error) {
+		case 0:
+			pr_val_debug("Download successful.");
+			return 0; /* Happy path */
+
+		case EREQFAILED:
+			break;
+
+		default:
+			pr_val_debug("Download failed: %s", strerror(error));
+			return error;
+		}
+
+		if (r >= config_get_http_retry_count()) {
+			pr_val_debug("Download failed: Retries exhausted.");
+			return -EREQFAILED;
+		}
+
+		pr_val_warn("Download failed; retrying in %u seconds.",
+		    config_get_http_retry_interval());
+		/*
+		 * TODO (#78) Wrong. This is slowing the entire tree traversal
+		 * down; use a thread pool.
+		 */
+		sleep(config_get_http_retry_interval());
+		r++;
+	} while (true);
+}
+
 static int
 __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value)
 {
 	char const *tmp_suffix = "_tmp";
-	struct http_handler handler;
-	FILE *out;
-	unsigned int retries;
 	char const *original_file;
 	char *tmp_file;
 	int error;
 
-	retries = 0;
-	if (!config_get_http_enabled()) {
-		*response_code = 0; /* Not 200 code, but also not an error */
+	*response_code = 0;
+
+	if (!config_get_http_enabled())
 		return 0;
-	}
 
 	original_file = uri_get_local(uri);
 
@@ -326,41 +391,9 @@ __http_download_file(struct rpki_uri *uri, long *response_code, long ims_value)
 	if (error)
 		goto release_tmp;
 
-	error = file_write(tmp_file, &out);
-	if (error)
-		goto delete_dir;
-
-	do {
-		http_easy_init(&handler);
-
-		/* Set "If-Modified-Since" header only if a value is specified */
-		if (ims_value > 0) {
-			setopt_long(handler.curl, CURLOPT_TIMEVALUE, ims_value);
-			setopt_long(handler.curl, CURLOPT_TIMECONDITION,
-			    CURL_TIMECOND_IFMODSINCE);
-		}
-		error = http_fetch(&handler, uri_get_global(uri), response_code,
-		    out);
-		if (error != EREQFAILED)
-			break; /* Note: Usually happy path */
-
-		if (retries == config_get_http_retry_count()) {
-			if (retries > 0)
-				pr_val_warn("Max HTTP retries (%u) reached. Won't retry again.",
-				    retries);
-			break;
-		}
-		pr_val_warn("Retrying HTTP request in %u seconds. %u attempts remaining.",
-		    config_get_http_retry_interval(),
-		    config_get_http_retry_count() - retries);
-		retries++;
-		http_easy_cleanup(&handler);
-		sleep(config_get_http_retry_interval());
-	} while (true);
-
-	http_easy_cleanup(&handler);
-	file_close(out);
-
+	error = do_retries(uri_get_global(uri), tmp_file, ims_value,
+	    response_code);
+	/* TODO (#78) Looks like the temporal file isn't being rm'd. */
 	if ((*response_code) == 304)
 		goto end;
 	if (error)
@@ -453,7 +486,7 @@ http_direct_download(char const *remote, char const *dest)
 	if (error)
 		goto end;
 
-	http_easy_init(&handler);
+	http_easy_init(&handler, 0);
 	error = http_fetch(&handler, remote, &response_code, out);
 	http_easy_cleanup(&handler);
 
