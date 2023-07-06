@@ -235,30 +235,32 @@ send_router_key_pdu(int fd, uint8_t version,
 	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
-#define GET_END_OF_DATA_LENGTH(version)					\
-	((version == RTR_V1) ?						\
-	    RTRPDU_END_OF_DATA_V1_LEN : RTRPDU_END_OF_DATA_V0_LEN)
+#define MAX(a, b) ((a > b) ? a : b)
 
 int
 send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 {
 	struct end_of_data_pdu pdu;
-	unsigned char data[GET_END_OF_DATA_LENGTH(version)];
+	unsigned char data[MAX(
+	    RTRPDU_END_OF_DATA_V1_LEN, RTRPDU_END_OF_DATA_V0_LEN
+	)];
 	size_t len;
 
 	set_header_values(&pdu.header, version, PDU_TYPE_END_OF_DATA,
 	    get_current_session_id(version));
-	pdu.header.length = GET_END_OF_DATA_LENGTH(version);
 
 	pdu.serial_number = end_serial;
 	if (version == RTR_V1) {
+		pdu.header.length = RTRPDU_END_OF_DATA_V1_LEN;
 		pdu.refresh_interval = config_get_interval_refresh();
 		pdu.retry_interval = config_get_interval_retry();
 		pdu.expire_interval = config_get_interval_expire();
+	} else {
+		pdu.header.length = RTRPDU_END_OF_DATA_V0_LEN;
 	}
 
 	len = serialize_end_of_data_pdu(&pdu, data);
-	if (len != GET_END_OF_DATA_LENGTH(version))
+	if (len != pdu.header.length)
 		pr_crit("Serialized End of Data is %zu bytes.", len);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);

@@ -12,7 +12,7 @@
 
 #define INTERNAL_POOL_MAX 10
 
-struct thread_pool *pool;
+static struct thread_pool *pool;
 
 int
 internal_pool_init(void)

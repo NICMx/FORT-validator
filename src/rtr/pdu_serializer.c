@@ -5,7 +5,7 @@
 #include "primitive_writer.h"
 
 static size_t
-serialize_pdu_header(struct pdu_header *header, uint16_t union_value,
+serialize_pdu_header(struct pdu_header const *header, uint16_t union_value,
     unsigned char *buf)
 {
 	unsigned char *ptr;
@@ -84,7 +84,7 @@ serialize_ipv6_prefix_pdu(struct ipv6_prefix_pdu *pdu, unsigned char *buf)
 }
 
 size_t
-serialize_end_of_data_pdu(struct end_of_data_pdu *pdu, unsigned char *buf)
+serialize_end_of_data_pdu(struct end_of_data_pdu const *pdu, unsigned char *buf)
 {
 	size_t head_size;
 	unsigned char *ptr;
