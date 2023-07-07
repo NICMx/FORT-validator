@@ -31,7 +31,7 @@ struct resources {
 };
 
 struct resources *
-resources_create(bool force_inherit)
+resources_create(enum rpki_policy policy, bool force_inherit)
 {
 	struct resources *result;
 
@@ -40,7 +40,7 @@ resources_create(bool force_inherit)
 	result->ip4s = NULL;
 	result->ip6s = NULL;
 	result->asns = NULL;
-	result->policy = RPKI_POLICY_RFC6484;
+	result->policy = policy;
 	result->force_inherit = force_inherit;
 
 	return result;

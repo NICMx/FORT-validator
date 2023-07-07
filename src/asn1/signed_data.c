@@ -27,10 +27,7 @@ signed_object_args_init(struct signed_object_args *args,
     STACK_OF(X509_CRL) *crls,
     bool force_inherit)
 {
-	args->res = resources_create(force_inherit);
-	if (args->res == NULL)
-		enomem_panic();
-
+	args->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
 	args->uri = uri;
 	args->crls = crls;
 	memset(&args->refs, 0, sizeof(args->refs));

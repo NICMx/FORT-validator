@@ -24,7 +24,7 @@ int get_addr_family(OCTET_STRING_t *);
 
 struct resources;
 
-struct resources *resources_create(bool);
+struct resources *resources_create(enum rpki_policy, bool);
 void resources_destroy(struct resources *);
 
 int resources_add_ip(struct resources *, struct IPAddressFamily *);

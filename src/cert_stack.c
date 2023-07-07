@@ -248,11 +248,8 @@ init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
 	struct resources *result;
 	int error;
 
-	result = resources_create(false);
-	if (result == NULL)
-		enomem_panic();
+	result = resources_create(policy, false);
 
-	resources_set_policy(result, policy);
 	error = certificate_get_resources(x509, result, type);
 	if (error)
 		goto fail;
