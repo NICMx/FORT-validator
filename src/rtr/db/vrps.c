@@ -191,10 +191,27 @@ handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
 }
 
 int
-handle_router_key(unsigned char const *ski, uint32_t as,
+handle_router_key(unsigned char const *ski, struct asn_range const *asns,
     unsigned char const *spk, void *arg)
 {
-	WLOCK_HANDLER(rtrhandler_handle_router_key(arg, ski, as, spk))
+	uint64_t asn;
+	int error = 0;
+
+	mutex_lock(&table_lock);
+
+	/*
+	 * TODO (warning) Umm... this is begging for a limit.
+	 * If the issuer gets it wrong, we can iterate up to 2^32 times.
+	 * The RFCs don't seem to care about this.
+	 */
+	for (asn = asns->min; asn <= asns->max; asn++) {
+		error = rtrhandler_handle_router_key(arg, ski, asn, spk);
+		if (error)
+			break;
+	}
+
+	mutex_unlock(&table_lock);
+	return error;
 }
 
 static int

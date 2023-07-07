@@ -5,21 +5,21 @@
 #include "validation_handler.h"
 
 struct resource_params {
-	unsigned char const	*ski;
-	unsigned char const	*spk;
-	struct resources	*resources;
+	unsigned char const *ski;
+	unsigned char const *spk;
+	struct resources *parent_resources;
 };
 
 static int
-asn_cb(unsigned long asn, void *arg)
+asn_cb(struct asn_range const *range, void *arg)
 {
 	struct resource_params *params = arg;
 
-	if (!resources_contains_asn(params->resources, asn))
-		return pr_val_err("BGPsec certificate is not allowed for ASN %lu.",
-		    asn);
+	if (!resources_contains_asns(params->parent_resources, range))
+		return pr_val_err("BGPsec certificate is not allowed to contain ASN range %u-%u.",
+		    range->min, range->max);
 
-	return vhandler_handle_router_key(params->ski, asn, params->spk);
+	return vhandler_handle_router_key(params->ski, range, params->spk);
 }
 
 int
@@ -29,7 +29,7 @@ handle_bgpsec(X509 *cert, unsigned char const *ski, struct resources *resources)
 	X509_PUBKEY *pub_key;
 	unsigned char *cert_spk, *tmp;
 	int cert_spk_len;
-	int ok;
+	int error;
 
 	pub_key = X509_get_X509_PUBKEY(cert);
 	if (pub_key == NULL)
@@ -45,9 +45,9 @@ handle_bgpsec(X509 *cert, unsigned char const *ski, struct resources *resources)
 
 	res_params.spk = cert_spk;
 	res_params.ski = ski;
-	res_params.resources = resources;
+	res_params.parent_resources = resources;
 
-	ok = resources_foreach_asn(resources, asn_cb, &res_params);
+	error = resources_foreach_asn(resources, asn_cb, &res_params);
 	free(cert_spk);
-	return ok;
+	return error;
 }
