@@ -12,10 +12,10 @@
 
 /* Certificate types in the RPKI */
 enum cert_type {
-	TA,		/* Trust Anchor */
-	CA,		/* Certificate Authority */
-	BGPSEC,		/* BGPsec certificates */
-	EE,		/* End Entity certificates */
+	CERTYPE_TA,		/* Trust Anchor */
+	CERTYPE_CA,		/* Certificate Authority */
+	CERTYPE_BGPSEC,		/* BGPsec certificates */
+	CERTYPE_EE,		/* End Entity certificates */
 };
 
 /**

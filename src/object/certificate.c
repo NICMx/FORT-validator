@@ -426,7 +426,7 @@ validate_public_key(X509 *cert, enum cert_type type)
 	if (!ok)
 		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
-	if (type == BGPSEC)
+	if (type == CERTYPE_BGPSEC)
 		return validate_certificate_public_key_algorithm_bgpsec(pa);
 
 	error = validate_certificate_public_key_algorithm(pa);
@@ -449,7 +449,7 @@ validate_public_key(X509 *cert, enum cert_type type)
 	 * getting the message.
 	 */
 
-	if (type == TA) {
+	if (type == CERTYPE_TA) {
 		error = validate_spki(pubkey);
 		if (error)
 			return error;
@@ -491,7 +491,7 @@ certificate_validate_rfc6487(X509 *cert, enum cert_type type)
 		return error;
 
 	/* rfc6487#section-4.4 */
-	error = validate_issuer(cert, type == TA);
+	error = validate_issuer(cert, type == CERTYPE_TA);
 	if (error)
 		return error;
 
@@ -1125,12 +1125,12 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 		return __certificate_get_resources(cert, resources,
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
-		    "6484", "8360", type != BGPSEC);
+		    "6484", "8360", type != CERTYPE_BGPSEC);
 	case RPKI_POLICY_RFC8360:
 		return __certificate_get_resources(cert, resources,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
-		    "8360", "6484", type != BGPSEC);
+		    "8360", "6484", type != CERTYPE_BGPSEC);
 	}
 
 	pr_crit("Unknown policy: %u", policy);
@@ -1796,7 +1796,7 @@ static int
 get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
 {
 	if (is_ta) {
-		*result = TA;
+		*result = CERTYPE_TA;
 		return 0;
 	}
 
@@ -1804,17 +1804,17 @@ get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
 		goto err;
 
 	if (X509_check_ca(cert) == 1) {
-		*result = CA;
+		*result = CERTYPE_CA;
 		return 0;
 	}
 
 	if (has_bgpsec_router_eku(cert)) {
-		*result = BGPSEC;
+		*result = CERTYPE_BGPSEC;
 		return 0;
 	}
 
 err:
-	*result = EE; /* Shuts up nonsense gcc 8.3 warning */
+	*result = CERTYPE_EE; /* Shuts up nonsense gcc 8.3 warning */
 	return pr_val_err("Certificate is not TA, CA nor BGPsec. Ignoring...");
 }
 
@@ -2118,15 +2118,15 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 
 	/* Debug cert type */
 	switch (type) {
-	case TA:
+	case CERTYPE_TA:
 		break;
-	case CA:
+	case CERTYPE_CA:
 		pr_val_debug("Type: CA");
 		break;
-	case BGPSEC:
+	case CERTYPE_BGPSEC:
 		pr_val_debug("Type: BGPsec EE. Ignoring...");
 		goto revert_cert;
-	case EE:
+	case CERTYPE_EE:
 		pr_val_debug("Type: unexpected, validated as CA");
 		break;
 	}
@@ -2139,7 +2139,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	memset(&refs, 0, sizeof(refs));
 
 	switch (type) {
-	case TA:
+	case CERTYPE_TA:
 		error = certificate_validate_extensions_ta(cert, &sia_uris,
 		    &policy);
 		break;

@@ -95,7 +95,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	error = certificate_validate_chain(cert, args->crls);
 	if (error)
 		goto end2;
-	error = certificate_validate_rfc6487(cert, EE);
+	error = certificate_validate_rfc6487(cert, CERTYPE_EE);
 	if (error)
 		goto end2;
 	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
@@ -110,7 +110,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 		goto end2;
 
 	resources_set_policy(args->res, policy);
-	error = certificate_get_resources(cert, args->res, EE);
+	error = certificate_get_resources(cert, args->res, CERTYPE_EE);
 	if (error)
 		goto end2;
 
