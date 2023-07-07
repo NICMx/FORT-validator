@@ -1715,16 +1715,17 @@ certificate_validate_extensions_ta(X509 *cert, struct sia_ca_uris *sia_uris,
  */
 static int
 certificate_validate_extensions_ca(X509 *cert, struct sia_ca_uris *sia_uris,
-    struct certificate_refs *refs, enum rpki_policy *policy)
+    enum rpki_policy *policy, struct rpp *rpp_parent)
 {
+	struct certificate_refs refs = { 0 };
 	struct extension_handler handlers[] = {
 	   /* ext        reqd   handler        arg       */
 	    { ext_bc(),  true,  handle_bc,               },
 	    { ext_ski(), true,  handle_ski_ca, cert      },
 	    { ext_aki(), true,  handle_aki,              },
 	    { ext_ku(),  true,  handle_ku_ca,            },
-	    { ext_cdp(), true,  handle_cdp,    refs      },
-	    { ext_aia(), true,  handle_aia,    refs      },
+	    { ext_cdp(), true,  handle_cdp,    &refs     },
+	    { ext_aia(), true,  handle_aia,    &refs     },
 	    { ext_sia(), true,  handle_sia_ca, sia_uris  },
 	    { ext_cp(),  true,  handle_cp,     policy    },
 	    { ext_ir(),  false, handle_ir,               },
@@ -1733,8 +1734,19 @@ certificate_validate_extensions_ca(X509 *cert, struct sia_ca_uris *sia_uris,
 	    { ext_ar2(), false, handle_ar,               },
 	    { NULL },
 	};
+	int error;
 
-	return handle_extensions(handlers, X509_get0_extensions(cert));
+	error = handle_extensions(handlers, X509_get0_extensions(cert));
+	if (error)
+		goto end;
+	error = certificate_validate_aia(refs.caIssuers, cert);
+	if (error)
+		goto end;
+	error = refs_validate_ca(&refs, rpp_parent);
+
+end:
+	refs_cleanup(&refs);
+	return error;
 }
 
 int
@@ -1762,6 +1774,13 @@ certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
 	ski_args.sid = sid;
 
 	return handle_extensions(handlers, X509_get0_extensions(cert));
+}
+
+int
+certificate_validate_extensions_bgpsec(X509 *cert, unsigned char **ski,
+    enum rpki_policy *policy, struct rpp *pp)
+{
+	return 0; /* TODO (#58) */
 }
 
 static bool
@@ -2069,17 +2088,13 @@ verify_mft:
 int
 certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 {
-/** Is the CA certificate the TA certificate? */
-#define IS_TA (rpp_parent == NULL)
-
 	struct validation *state;
 	int total_parents;
 	STACK_OF(X509_CRL) *rpp_parent_crl;
 	X509 *cert;
 	struct sia_ca_uris sia_uris;
-	struct certificate_refs refs;
 	enum rpki_policy policy;
-	enum cert_type type;
+	enum cert_type certype;
 	struct rpp *pp;
 	bool repo_retry;
 	int error;
@@ -2091,7 +2106,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		return pr_val_err("Certificate chain maximum depth exceeded.");
 
 	/* Debug cert type */
-	if (IS_TA)
+	if (rpp_parent == NULL)
 		pr_val_debug("TA Certificate '%s' {",
 		    uri_val_get_printable(cert_uri));
 	else
@@ -2112,12 +2127,12 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_cert;
 
-	error = get_certificate_type(cert, IS_TA, &type);
+	error = get_certificate_type(cert, rpp_parent == NULL, &certype);
 	if (error)
 		goto revert_cert;
 
 	/* Debug cert type */
-	switch (type) {
+	switch (certype) {
 	case CERTYPE_TA:
 		break;
 	case CERTYPE_CA:
@@ -2125,40 +2140,22 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		break;
 	case CERTYPE_BGPSEC:
 		pr_val_debug("Type: BGPsec EE. Ignoring...");
+//		error = handle_bgpsec(cert, x509stack_peek_resources(
+//		    validation_certstack(state)), rpp_parent);
 		goto revert_cert;
-	case CERTYPE_EE:
-		pr_val_debug("Type: unexpected, validated as CA");
-		break;
+	default:
+		pr_val_debug("Type: Unknown. Ignoring...");
+		goto revert_cert;
 	}
 
-	error = certificate_validate_rfc6487(cert, type);
+	error = certificate_validate_rfc6487(cert, certype);
 	if (error)
 		goto revert_cert;
 
 	sia_ca_uris_init(&sia_uris);
-	memset(&refs, 0, sizeof(refs));
-
-	switch (type) {
-	case CERTYPE_TA:
-		error = certificate_validate_extensions_ta(cert, &sia_uris,
-		    &policy);
-		break;
-	default:
-		/* Validate as a CA */
-		error = certificate_validate_extensions_ca(cert, &sia_uris,
-		    &refs, &policy);
-		break;
-	}
-	if (error)
-		goto revert_uris;
-
-	if (!IS_TA) {
-		error = certificate_validate_aia(refs.caIssuers, cert);
-		if (error)
-			goto revert_uris;
-	}
-
-	error = refs_validate_ca(&refs, rpp_parent);
+	error = (certype == CERTYPE_TA)
+	    ? certificate_validate_extensions_ta(cert, &sia_uris, &policy)
+	    : certificate_validate_extensions_ca(cert, &sia_uris, &policy, rpp_parent);
 	if (error)
 		goto revert_uris;
 
@@ -2182,7 +2179,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	do {
 		/* Validate the manifest (@mft) pointed by the certificate */
 		error = x509stack_push(validation_certstack(state), cert_uri,
-		    cert, policy, IS_TA);
+		    cert, policy, certype);
 		if (error)
 			goto revert_uris;
 
@@ -2225,7 +2222,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	rpp_refput(pp);
 revert_uris:
 	sia_ca_uris_cleanup(&sia_uris);
-	refs_cleanup(&refs);
 revert_cert:
 	if (cert != NULL)
 		X509_free(cert);

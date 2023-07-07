@@ -197,8 +197,8 @@ rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
 }
 
 int
-rtrhandler_handle_router_key(struct db_table *table,
-    unsigned char const *ski, uint32_t as, unsigned char const *spk)
+rtrhandler_handle_router_key(struct db_table *table, unsigned char const *ski,
+    uint32_t as, unsigned char const *spk)
 {
 	struct hashable_key *key;
 	int error;

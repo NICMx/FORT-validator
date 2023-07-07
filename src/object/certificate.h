@@ -50,6 +50,8 @@ int certificate_get_resources(X509 *, struct resources *, enum cert_type);
  */
 int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
     struct certificate_refs *, enum rpki_policy *);
+int certificate_validate_extensions_bgpsec(X509 *, unsigned char **,
+    enum rpki_policy *, struct rpp *);
 
 /*
  * Specific validation of AIA (rfc6487#section-4.8.7) extension, public so that
