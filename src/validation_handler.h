@@ -1,6 +1,7 @@
 #ifndef SRC_VALIDATION_HANDLER_H_
 #define SRC_VALIDATION_HANDLER_H_
 
+#include "as_number.h"
 #include "types/address.h"
 #include "types/router_key.h"
 #include "object/name.h"
@@ -30,15 +31,15 @@ struct validation_handler {
 	int (*handle_roa_v6)(uint32_t, struct ipv6_prefix const *, uint8_t,
 	    void *);
 	/** Called every time Fort has successfully validated a BGPsec cert */
-	int (*handle_router_key)(unsigned char const *, uint32_t,
-	    unsigned char const *, void *);
+	int (*handle_router_key)(unsigned char const *,
+	    struct asn_range const *, unsigned char const *, void *);
 	/** Generic user-defined argument for the functions above. */
 	void *arg;
 };
 
 int vhandler_handle_roa_v4(uint32_t, struct ipv4_prefix const *, uint8_t);
 int vhandler_handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t);
-int vhandler_handle_router_key(unsigned char const *, uint32_t,
+int vhandler_handle_router_key(unsigned char const *, struct asn_range const *,
     unsigned char const *);
 
 #endif /* SRC_VALIDATION_HANDLER_H_ */

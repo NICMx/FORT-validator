@@ -12,10 +12,10 @@
 
 /* Certificate types in the RPKI */
 enum cert_type {
-	TA,		/* Trust Anchor */
-	CA,		/* Certificate Authority */
-	BGPSEC,		/* BGPsec certificates */
-	EE,		/* End Entity certificates */
+	CERTYPE_TA,		/* Trust Anchor */
+	CERTYPE_CA,		/* Certificate Authority */
+	CERTYPE_BGPSEC,		/* BGPsec certificates */
+	CERTYPE_EE,		/* End Entity certificates */
 };
 
 /**
@@ -50,6 +50,8 @@ int certificate_get_resources(X509 *, struct resources *, enum cert_type);
  */
 int certificate_validate_extensions_ee(X509 *, OCTET_STRING_t *,
     struct certificate_refs *, enum rpki_policy *);
+int certificate_validate_extensions_bgpsec(X509 *, unsigned char **,
+    enum rpki_policy *, struct rpp *);
 
 /*
  * Specific validation of AIA (rfc6487#section-4.8.7) extension, public so that

@@ -114,5 +114,5 @@
       "max": 5
     }
   },
-  "asn1-decode-max-stack": 4096,
+  "asn1-decode-max-stack": 4096
 }

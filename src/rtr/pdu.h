@@ -47,8 +47,6 @@ char const *pdutype2str(enum pdu_type);
 #define RTRPDU_HDR_LEN			8
 
 #define RTRPDU_SERIAL_NOTIFY_LEN	12
-#define RTRPDU_SERIAL_QUERY_LEN		12
-#define RTRPDU_RESET_QUERY_LEN		8
 #define RTRPDU_CACHE_RESPONSE_LEN	8
 #define RTRPDU_IPV4_PREFIX_LEN		20
 #define RTRPDU_IPV6_PREFIX_LEN		32

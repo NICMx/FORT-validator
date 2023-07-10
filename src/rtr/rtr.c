@@ -29,7 +29,7 @@ static struct server_arraylist servers;
 static struct client_arraylist clients;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-struct thread_pool *request_handlers;
+static struct thread_pool *request_handlers;
 
 #define REQUEST_BUFFER_LEN 1024
 

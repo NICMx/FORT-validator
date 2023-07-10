@@ -66,7 +66,7 @@ static pthread_mutex_t logck;
  * aware that pthread_mutex_lock() can return error codes, which shouldn't
  * prevent critical stack traces from printing.)
  */
-void
+static void
 print_stack_trace(char const *title)
 {
 #ifdef BACKTRACE_ENABLED
@@ -409,7 +409,7 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 	if (cfg->color)
 		fprintf(lvl->stream, "%s", lvl->color);
 
-	now = time(0);
+	now = time(NULL);
 	if (now != ((time_t) -1)) {
 		localtime_r(&now, &stm_buff);
 		strftime(time_buff, sizeof(time_buff), "%b %e %T", &stm_buff);

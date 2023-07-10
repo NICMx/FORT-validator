@@ -35,6 +35,7 @@ check_PROGRAMS += vrps.test
 check_PROGRAMS += xml.test
 check_PROGRAMS += rtr/pdu.test
 check_PROGRAMS += rtr/primitive_reader.test
+check_PROGRAMS += data_structure/uthash.test
 TESTS = ${check_PROGRAMS}
 
 address_test_SOURCES = types/address_test.c
@@ -84,6 +85,9 @@ rtr_pdu_test_LDADD = ${MY_LDADD}
 
 rtr_primitive_reader_test_SOURCES = rtr/primitive_reader_test.c
 rtr_primitive_reader_test_LDADD = ${MY_LDADD}
+
+data_structure_uthash_test_SOURCES = data_structure/uthash_test.c
+data_structure_uthash_test_LDADD = ${MY_LDADD}
 
 EXTRA_DIST  = mock.c
 EXTRA_DIST += line_file/core.txt

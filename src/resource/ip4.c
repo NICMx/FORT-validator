@@ -8,12 +8,12 @@ struct r4_node {
 };
 
 static enum sarray_comparison
-r4_cmp(void *arg1, void *arg2)
+r4_cmp(void const *arg1, void const *arg2)
 {
-	uint32_t n1min = ((struct r4_node *) arg1)->min;
-	uint32_t n2min = ((struct r4_node *) arg2)->min;
-	uint32_t n1max = ((struct r4_node *) arg1)->max;
-	uint32_t n2max = ((struct r4_node *) arg2)->max;
+	uint32_t n1min = ((struct r4_node const *) arg1)->min;
+	uint32_t n2min = ((struct r4_node const *) arg2)->min;
+	uint32_t n1max = ((struct r4_node const *) arg1)->max;
+	uint32_t n2max = ((struct r4_node const *) arg2)->max;
 
 	if (n1min == n2min && n1max == n2max)
 		return SACMP_EQUAL;
@@ -34,14 +34,14 @@ r4_cmp(void *arg1, void *arg2)
 }
 
 static void
-pton(struct ipv4_prefix *p, struct r4_node *n)
+pton(struct ipv4_prefix const *p, struct r4_node *n)
 {
 	n->min = ntohl(p->addr.s_addr);
 	n->max = n->min | u32_suffix_mask(p->len);
 }
 
 static void
-rton(struct ipv4_range *r, struct r4_node *n)
+rton(struct ipv4_range const *r, struct r4_node *n)
 {
 	n->min = ntohl(r->min.s_addr);
 	n->max = ntohl(r->max.s_addr);
@@ -67,7 +67,7 @@ res4_put(struct resources_ipv4 *ips)
 }
 
 int
-res4_add_prefix(struct resources_ipv4 *ips, struct ipv4_prefix *prefix)
+res4_add_prefix(struct resources_ipv4 *ips, struct ipv4_prefix const *prefix)
 {
 	struct r4_node n;
 	pton(prefix, &n);
@@ -75,7 +75,7 @@ res4_add_prefix(struct resources_ipv4 *ips, struct ipv4_prefix *prefix)
 }
 
 int
-res4_add_range(struct resources_ipv4 *ips, struct ipv4_range *range)
+res4_add_range(struct resources_ipv4 *ips, struct ipv4_range const *range)
 {
 	struct r4_node n;
 	rton(range, &n);
@@ -83,13 +83,14 @@ res4_add_range(struct resources_ipv4 *ips, struct ipv4_range *range)
 }
 
 bool
-res4_empty(struct resources_ipv4 *ips)
+res4_empty(struct resources_ipv4 const *ips)
 {
-	return sarray_empty((struct sorted_array *) ips);
+	return sarray_empty((struct sorted_array const *) ips);
 }
 
 bool
-res4_contains_prefix(struct resources_ipv4 *ips, struct ipv4_prefix *prefix)
+res4_contains_prefix(struct resources_ipv4 *ips,
+    struct ipv4_prefix const *prefix)
 {
 	struct r4_node n;
 
@@ -101,7 +102,7 @@ res4_contains_prefix(struct resources_ipv4 *ips, struct ipv4_prefix *prefix)
 }
 
 bool
-res4_contains_range(struct resources_ipv4 *ips, struct ipv4_range *range)
+res4_contains_range(struct resources_ipv4 *ips, struct ipv4_range const *range)
 {
 	struct r4_node n;
 	rton(range, &n);

@@ -44,7 +44,8 @@ add_v6(struct validation_handler *handler, uint32_t as)
 static void
 add_rk(struct validation_handler *handler, uint32_t as)
 {
-	ck_assert_int_eq(0, handler->handle_router_key(db_imp_ski, as,
+	struct asn_range range = { .min = as, .max = as };
+	ck_assert_int_eq(0, handler->handle_router_key(db_imp_ski, &range,
 	    db_imp_spk, handler->arg));
 }
 
@@ -63,10 +64,19 @@ __handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
 }
 
 int
-__handle_router_key(unsigned char const *ski, uint32_t as,
+__handle_router_key(unsigned char const *ski, struct asn_range const *range,
     unsigned char const *spk, void *arg)
 {
-	return rtrhandler_handle_router_key(arg, ski, as, spk);
+	uint64_t as;
+	int error;
+
+	for (as = range->min; as <= range->max; as++) {
+		error = rtrhandler_handle_router_key(arg, ski, as, spk);
+		if (error)
+			break;
+	}
+
+	return error;
 }
 
 int
