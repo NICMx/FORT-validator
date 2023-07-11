@@ -1,23 +1,18 @@
+#define _XOPEN_SOURCE 500
+
 #include <check.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/queue.h>
 
-#include "algorithm.c"
 #include "alloc.c"
 #include "common.c"
-#include "file.c"
-#include "json_parser.c"
 #include "mock.c"
-#include "output_printer.c"
-#include "crypto/base64.c"
 #include "types/delta.c"
 #include "types/router_key.c"
 #include "types/serial.c"
 #include "types/vrp.c"
-#include "rtr/pdu.c"
 #include "rtr/pdu_handler.c"
-#include "rtr/primitive_reader.c"
 #include "rtr/primitive_writer.c"
 #include "rtr/err_pdu.c"
 #include "rtr/db/delta.c"
@@ -25,10 +20,21 @@
 #include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_mock.c"
 #include "rtr/db/vrps.c"
-#include "slurm/db_slurm.c"
-#include "slurm/slurm_loader.c"
-#include "slurm/slurm_parser.c"
 #include "thread/thread_pool.c"
+
+/* Mocks */
+
+MOCK_ABORT_INT(read_int32, struct pdu_reader *reader, uint32_t *result)
+MOCK_ABORT_INT(read_int8, struct pdu_reader *reader, uint8_t *result)
+
+MOCK_VOID(cache_prepare, void)
+
+MOCK_INT(slurm_apply, 0, struct db_table *base, struct db_slurm **slurm)
+MOCK_ABORT_VOID(db_slurm_destroy, struct db_slurm *db)
+
+MOCK_VOID(output_print_data, struct db_table const *db)
+
+/* Mocks end */
 
 struct expected_pdu {
 	uint8_t pdu_type;

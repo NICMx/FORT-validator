@@ -1,4 +1,4 @@
-#include "rsync.h"
+#include "rsync/rsync.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -14,70 +14,6 @@
 #include "config.h"
 #include "log.h"
 #include "thread_var.h"
-
-struct uri {
-	struct rpki_uri *uri;
-	SLIST_ENTRY(uri) next;
-};
-
-/** URIs that we have already downloaded. */
-SLIST_HEAD(uri_list, uri);
-
-/* static char const *const RSYNC_PREFIX = "rsync://"; */
-
-struct uri_list *
-rsync_create(void)
-{
-	struct uri_list *visited_uris;
-
-	visited_uris = pmalloc(sizeof(struct uri_list));
-	SLIST_INIT(visited_uris);
-
-	return visited_uris;
-}
-
-void
-rsync_destroy(struct uri_list *list)
-{
-	struct uri *uri;
-
-	while (!SLIST_EMPTY(list)) {
-		uri = SLIST_FIRST(list);
-		SLIST_REMOVE_HEAD(list, next);
-		uri_refput(uri->uri);
-		free(uri);
-	}
-	free(list);
-}
-
-/*
- * Returns whether @uri has already been rsync'd during the current validation
- * run.
- */
-static bool
-is_already_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
-{
-	struct uri *cursor;
-
-	/* TODO (next iteration) this is begging for a hash set. */
-	SLIST_FOREACH(cursor, visited_uris, next)
-		if (uri_equals(cursor->uri, uri))
-			return true;
-
-	return false;
-}
-
-static void
-mark_as_downloaded(struct rpki_uri *uri, struct uri_list *visited_uris)
-{
-	struct uri *node;
-
-	node = pmalloc(sizeof(struct uri));
-	node->uri = uri;
-	uri_refget(uri);
-
-	SLIST_INSERT_HEAD(visited_uris, node, next);
-}
 
 /*
  * Duplicate parent FDs, to pipe rsync output:
@@ -273,8 +209,8 @@ read_pipes(int fds[2][2])
 /*
  * Downloads the @uri->global file into the @uri->local path.
  */
-static int
-do_rsync(struct rpki_uri *uri)
+int
+rsync_download(struct rpki_uri *uri)
 {
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	char **args;
@@ -285,6 +221,9 @@ do_rsync(struct rpki_uri *uri)
 	unsigned int i;
 	int child_status;
 	int error;
+
+	if (!config_get_rsync_enabled())
+		return 0; /* Skip; caller will work with existing cache. */
 
 	/* Prepare everything for the child exec */
 	args = NULL;
@@ -409,56 +348,4 @@ release_args:
 	/* The happy path also falls here */
 	release_args(args, args_len);
 	return error;
-}
-
-int
-rsync_download_files(struct rpki_uri *uri, bool force)
-{
-	struct validation *state;
-	struct uri_list *visited_uris;
-	int error;
-
-	if (!config_get_rsync_enabled())
-		return 0;
-
-	state = state_retrieve();
-	visited_uris = validation_rsync_visited_uris(state);
-
-	if (!force && is_already_downloaded(uri, visited_uris)) {
-		pr_val_debug("No need to redownload '%s'.",
-		    uri_val_get_printable(uri));
-		return 0;
-	}
-
-	pr_val_debug("Going to RSYNC '%s'.", uri_val_get_printable(uri));
-
-	error = do_rsync(uri);
-	switch (error) {
-	case 0:
-		/* Don't store when "force" and if its already downloaded */
-		if (!(force && is_already_downloaded(uri, visited_uris)))
-			mark_as_downloaded(uri, visited_uris);
-		break;
-	case EREQFAILED:
-		mark_as_downloaded(uri, visited_uris);
-		break;
-	}
-
-	return error;
-}
-
-void
-reset_downloaded(void)
-{
-	struct uri_list *list;
-	struct uri *uri;
-
-	list = validation_rsync_visited_uris(state_retrieve());
-
-	while (!SLIST_EMPTY(list)) {
-		uri = SLIST_FIRST(list);
-		SLIST_REMOVE_HEAD(list, next);
-		uri_refput(uri->uri);
-		free(uri);
-	}
 }

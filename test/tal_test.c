@@ -1,24 +1,38 @@
+#define _XOPEN_SOURCE 500 /* nftw() */
+
 #include "object/tal.c"
 
 #include <check.h>
 
 #include "alloc.c"
+#include "common.c"
 #include "file.c"
 #include "line_file.c"
 #include "mock.c"
+#include "data_structure/path_builder.c"
 #include "types/uri.c"
 #include "crypto/base64.c"
 
 /* Mocks */
 
-static unsigned int rsync_priority;
-static unsigned int http_priority;
+MOCK_ABORT_VOID(thread_pool_push, struct thread_pool *pool,
+    char const *task_name, thread_pool_task_cb cb, void *arg)
+MOCK_ABORT_VOID(thread_pool_wait, struct thread_pool *pool)
 
-MOCK_UINT(config_get_rsync_priority, rsync_priority, void)
-MOCK_UINT(config_get_http_priority, http_priority, void)
-/* These tests focus on global URIs, so set a dummy value */
-MOCK(map_uri_to_local, char *, pstrdup("dummy"), char const *u, char const *p)
-MOCK_ABORT_VOID(db_rrdp_reset_visited_tals, void)
+MOCK_ABORT_INT(handle_roa_v4, uint32_t as, struct ipv4_prefix const *prefix,
+    uint8_t max_length, void *arg)
+MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
+    uint8_t max_length, void *arg)
+MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
+    struct asn_range const *asns, unsigned char const *spk, void *arg)
+
+MOCK_ABORT_PTR(state_retrieve, validation, void)
+MOCK_ABORT_PTR(validation_get_notification_uri, rpki_uri,
+    struct validation *state)
+
+MOCK_ABORT_VOID(fnstack_init, void)
+MOCK_ABORT_VOID(fnstack_cleanup, void)
+MOCK_ABORT_VOID(fnstack_push, char const *f)
 
 /* Tests */
 
@@ -73,59 +87,16 @@ START_TEST(tal_load_normal)
 }
 END_TEST
 
-START_TEST(tal_order_http_first)
-{
-	struct tal *tal;
-
-	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
-
-	http_priority = 60;
-	rsync_priority = 50;
-	tal_order_uris(tal);
-
-	ck_assert_str_eq(tal->uris.array[0]->global, "https://potato");
-	ck_assert_str_eq(tal->uris.array[1]->global,
-	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal->uris.array[2]->global, "rsync://potato");
-
-	tal_destroy(tal);
-}
-END_TEST
-
-START_TEST(tal_order_http_last)
-{
-	struct tal *tal;
-
-	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
-
-	http_priority = 50;
-	rsync_priority = 60;
-	tal_order_uris(tal);
-
-	ck_assert_str_eq(tal->uris.array[0]->global,
-	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal->uris.array[1]->global, "rsync://potato");
-	ck_assert_str_eq(tal->uris.array[2]->global, "https://potato");
-
-	tal_destroy(tal);
-}
-END_TEST
-
 Suite *tal_load_suite(void)
 {
 	Suite *suite;
-	TCase *core, *order;
+	TCase *core;
 
 	core = tcase_create("Core");
 	tcase_add_test(core, tal_load_normal);
 
-	order = tcase_create("Order");
-	tcase_add_test(order, tal_order_http_first);
-	tcase_add_test(order, tal_order_http_last);
-
 	suite = suite_create("tal_load()");
 	suite_add_tcase(suite, core);
-	suite_add_tcase(suite, order);
 	return suite;
 }
 

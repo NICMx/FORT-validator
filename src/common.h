@@ -38,6 +38,8 @@
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
 
+bool str_starts_with(char const *, char const *);
+
 void panic_on_fail(int, char const *);
 
 /*
@@ -66,7 +68,5 @@ int create_dir_recursive(char const *);
 int delete_dir_recursive_bottom_up(char const *);
 
 int get_current_time(time_t *);
-
-char *map_uri_to_local(char const *, char const *);
 
 #endif /* SRC_RTR_COMMON_H_ */

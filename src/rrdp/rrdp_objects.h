@@ -5,29 +5,14 @@
 #include <stdbool.h>
 #include "data_structure/array_list.h"
 
-/* Possible results for an RRDP URI comparison */
-typedef enum {
-	/* The URI exists and has the same session ID and serial */
-	RRDP_URI_EQUAL,
-
-	/* The URI exists but has distinct serial */
-	RRDP_URI_DIFF_SERIAL,
-
-	/* The URI exists but has distinct session ID */
-	RRDP_URI_DIFF_SESSION,
-
-	/* The URI doesn't exists */
-	RRDP_URI_NOTFOUND,
-} rrdp_uri_cmp_result_t;
-
 /* Global RRDP files data */
-struct global_data {
+struct notification_metadata {
 	char *session_id;
 	unsigned long serial;
 };
 
 /* Specific RRDP files data, in some cases the hash can be omitted */
-struct doc_data {
+struct file_metadata {
 	char *uri;
 	unsigned char *hash;
 	size_t hash_len;
@@ -35,14 +20,14 @@ struct doc_data {
 
 /* Represents a <publish> element */
 struct publish {
-	struct doc_data doc_data;
+	struct file_metadata meta;
 	unsigned char *content;
 	size_t content_len;
 };
 
 /* Represents a <withdraw> element */
 struct withdraw {
-	struct doc_data doc_data;
+	struct file_metadata meta;
 };
 
 /*
@@ -50,7 +35,7 @@ struct withdraw {
  * Publish/withdraw list aren't remember, they are processed ASAP.
  */
 struct delta {
-	struct global_data global_data;
+	struct notification_metadata meta;
 };
 
 /*
@@ -58,7 +43,7 @@ struct delta {
  * Publish list isn't remember, is processed ASAP.
  */
 struct snapshot {
-	struct global_data global_data;
+	struct notification_metadata meta;
 };
 
 /* Delta element located at an update notification file */
@@ -68,7 +53,7 @@ struct delta_head {
 	 * so we should probably handle it as a string.
 	 */
 	unsigned long serial;
-	struct doc_data doc_data;
+	struct file_metadata meta;
 };
 
 /* List of deltas inside an update notification file */
@@ -77,19 +62,19 @@ DECLARE_ARRAY_LIST_FUNCTIONS(deltas_head, struct delta_head)
 
 /* Update notification file content and location URI */
 struct update_notification {
-	struct global_data global_data;
-	struct doc_data snapshot;
+	struct notification_metadata meta;
+	struct file_metadata snapshot;
 	struct deltas_head deltas_list;
-	char *uri;
+	struct rpki_uri *uri;
 };
 
-void global_data_init(struct global_data *);
-void global_data_cleanup(struct global_data *);
+void notification_metadata_init(struct notification_metadata *);
+void notification_metadata_cleanup(struct notification_metadata *);
 
-void doc_data_init(struct doc_data *);
-void doc_data_cleanup(struct doc_data *);
+void metadata_init(struct file_metadata *);
+void metadata_cleanup(struct file_metadata *);
 
-struct update_notification *update_notification_create(char const *);
+void update_notification_init(struct update_notification *, struct rpki_uri *);
 void update_notification_destroy(struct update_notification *);
 
 typedef int (*delta_head_cb)(struct delta_head *, void *);

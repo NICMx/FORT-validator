@@ -17,6 +17,19 @@
 #include "object/signed_object.h"
 
 static int
+cage(struct rpki_uri **uri)
+{
+	if (validation_get_notification_uri(state_retrieve()) == NULL) {
+		/* No need to cage */
+		uri_refget(*uri);
+		return 0;
+	}
+
+	return __uri_create(uri, UT_CAGED, uri_get_global(*uri),
+	    uri_get_global_len(*uri));
+}
+
+static int
 decode_manifest(struct signed_object *sobj, struct Manifest **result)
 {
 	return asn1_decode_octet_string(
@@ -167,8 +180,6 @@ build_rpp(struct Manifest *mft, struct rpki_uri *mft_uri, struct rpp **pp)
 		fah = mft->fileList.list.array[i];
 
 		error = uri_create_mft(&uri, mft_uri, &fah->file);
-		if (error == ESKIP)
-			continue;
 		/*
 		 * Not handling ENOTRSYNC is fine because the manifest URL
 		 * should have been RSYNC. Something went wrong if an RSYNC URL
@@ -243,6 +254,9 @@ handle_manifest(struct rpki_uri *uri, struct rpp **pp)
 	int error;
 
 	/* Prepare */
+	error = cage(&uri); /* ref++ */
+	if (error)
+		return error;
 	pr_val_debug("Manifest '%s' {", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
@@ -291,5 +305,6 @@ revert_sobj:
 revert_log:
 	pr_val_debug("}");
 	fnstack_pop();
+	uri_refput(uri); /* ref-- */
 	return error;
 }

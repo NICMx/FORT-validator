@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include "tal.h"
 
 #include <errno.h>
@@ -18,16 +16,13 @@
 #include "config.h"
 #include "line_file.h"
 #include "log.h"
-#include "random.h"
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
 #include "crypto/base64.h"
-#include "http/http.h"
 #include "object/certificate.h"
-#include "rsync/rsync.h"
 #include "rtr/db/vrps.h"
-#include "rrdp/db/db_rrdp.h"
+#include "cache/local_cache.h"
 
 #define TAL_FILE_EXTENSION	".tal"
 typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
@@ -97,9 +92,12 @@ uris_add(struct uris *uris, char *uri)
 	struct rpki_uri *new;
 	int error;
 
-	error = uri_create_mixed_str(&new, uri, strlen(uri));
-	if (error == ENOTSUPPORTED)
-		return pr_op_err("TAL has non-RSYNC/HTTPS URI.");
+	if (str_starts_with(uri, "rsync://"))
+		error = uri_create(&new, UT_RSYNC, uri);
+	else if (str_starts_with(uri, "https://"))
+		error = uri_create(&new, UT_HTTPS, uri);
+	else
+		error = pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
 	if (error)
 		return error;
 
@@ -384,63 +382,6 @@ foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
 	return 0;
 }
 
-static void
-tal_shuffle_uris(struct tal *tal)
-{
-	struct rpki_uri **array = tal->uris.array;
-	struct rpki_uri *tmp;
-	unsigned int count = tal->uris.count;
-	long random_index;
-	unsigned int i;
-
-	random_init();
-
-	for (i = 0; i < count; i++) {
-		tmp = array[i];
-		random_index = random_at_most(count - 1 - i) + i;
-		array[i] = array[random_index];
-		array[random_index] = tmp;
-	}
-}
-
-static void
-tal_order_uris(struct tal *tal)
-{
-	struct rpki_uri **ordered;
-	struct rpki_uri **tmp;
-	bool http_first;
-	unsigned int i;
-	unsigned int last_rsync;
-	unsigned int last_https;
-
-	/* First do the shuffle */
-	if (config_get_shuffle_tal_uris())
-		tal_shuffle_uris(tal);
-
-	if (config_get_rsync_priority() == config_get_http_priority())
-		return;
-
-	/* Now order according to the priority */
-	http_first = (config_get_http_priority() > config_get_rsync_priority());
-
-	ordered = pmalloc(tal->uris.size * sizeof(struct rpki_uri *));
-
-	last_rsync = (http_first ? tal->uris.https_count : 0);
-	last_https = (http_first ? 0 : tal->uris.rsync_count);
-
-	for (i = 0; i < tal->uris.count; i++) {
-		if (uri_is_rsync(tal->uris.array[i]))
-			ordered[last_rsync++] = tal->uris.array[i];
-		else
-			ordered[last_https++] = tal->uris.array[i];
-	}
-
-	/* Everything is ok, point to the ordered array */
-	tmp = tal->uris.array;
-	tal->uris.array = ordered;
-	free(tmp);
-}
-
 char const *
 tal_get_file_name(struct tal *tal)
 {
@@ -494,20 +435,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		return ENSURE_NEGATIVE(error);
 
 	if (thread->sync_files) {
-		if (uri_is_rsync(uri)) {
-			if (!config_get_rsync_enabled()) {
-				validation_destroy(state);
-				return 0; /* Try some other TAL URI */
-			}
-			error = rsync_download_files(uri, false);
-		} else /* HTTPS */ {
-			if (!config_get_http_enabled()) {
-				validation_destroy(state);
-				return 0; /* Try some other TAL URI */
-			}
-			error = http_download_file(uri);
-		}
-
+		error = cache_download(uri, NULL);
 		/* Reminder: there's a positive error: EREQFAILED */
 		if (error) {
 			validation_destroy(state);
@@ -534,12 +462,6 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 		    uri_op_get_printable(uri));
 		goto fail;
 	}
-
-	/*
-	 * Set all RRDPs URIs to non-requested, this way we will force the
-	 * request on every cycle (to check if there are updates).
-	 */
-	db_rrdp_uris_set_all_unvisited();
 
 	/* Handle root certificate. */
 	error = certificate_traverse(NULL, uri);
@@ -607,8 +529,6 @@ do_file_validation(void *thread_arg)
 	if (error)
 		goto end;
 
-	tal_order_uris(tal);
-
 	error = foreach_uri(tal, handle_tal_uri, thread);
 	if (error > 0) {
 		error = 0;
@@ -654,8 +574,6 @@ __do_file_validation(char const *tal_file, void *arg)
 	struct tal_param *t_param = arg;
 	struct validation_thread *thread;
 
-	db_rrdp_add_tal(tal_file);
-
 	thread = pmalloc(sizeof(struct validation_thread));
 
 	thread->tal_file = pstrdup(tal_file);
@@ -677,9 +595,6 @@ perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 	struct tal_param param;
 	struct validation_thread *thread;
 	int error;
-
-	/* Set existent tal RRDP info to non visited */
-	db_rrdp_reset_visited_tals();
 
 	param.pool = pool;
 	param.db = table;
@@ -711,12 +626,6 @@ perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 		thread_destroy(thread);
 	}
 
-	/* One thread has errors, validation can't keep the resulting table */
-	if (error)
-		return error;
-
-	/* Remove non-visited rrdps URIS by tal */
-	db_rrdp_rem_nonvisited_tals();
-
-	return 0;
+	/* If one thread has errors, we can't keep the resulting table. */
+	return error;
 }

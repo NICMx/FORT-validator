@@ -4,4 +4,6 @@ git clean -dfx \
 	-e .settings \
 	-e .metadata \
 	-e Debug/ \
-	-e tmp
+	-e tmp/ \
+	-e sandbox/
+

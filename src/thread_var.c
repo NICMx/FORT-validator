@@ -10,6 +10,7 @@
 
 #include "alloc.h"
 #include "config.h"
+#include "log.h"
 
 static pthread_key_t state_key;
 static pthread_key_t filenames_key;

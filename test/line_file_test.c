@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 500
+
 #include <check.h>
 #include <errno.h>
 #include <stdlib.h>

@@ -4,6 +4,7 @@
 #include <stdint.h> /* UINT32_MAX */
 
 #include "alloc.h"
+#include "cert_stack.h"
 #include "log.h"
 #include "sorted_array.h"
 #include "thread_var.h"

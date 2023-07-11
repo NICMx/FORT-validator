@@ -175,7 +175,7 @@ hash_buffer(char const *algorithm,
 {
 	EVP_MD const *md;
 	EVP_MD_CTX *ctx;
-	int error = 0;
+	int error;
 
 	error = get_md(algorithm, &md);
 	if (error)

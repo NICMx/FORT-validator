@@ -17,6 +17,7 @@
 #include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
 #include "thread/thread_pool.h"
+#include "cache/local_cache.h"
 
 struct vrp_node {
 	struct delta_vrp delta;
@@ -220,9 +221,9 @@ __perform_standalone_validation(struct db_table **result)
 	struct db_table *db;
 	int error;
 
+	cache_prepare();
+
 	db = db_table_create();
-	if (db == NULL)
-		enomem_panic();
 
 	error = perform_standalone_validation(pool, db);
 	if (error) {
@@ -262,6 +263,13 @@ __compute_deltas(struct db_table *old_base, struct db_table *new_base,
 	return 0;
 }
 
+/*
+ * High level validator function.
+ *
+ * - Downloads tree
+ * - Validates tree
+ * - Updates RTR state
+ */
 static int
 __vrps_update(bool *notify_clients)
 {
@@ -280,23 +288,16 @@ __vrps_update(bool *notify_clients)
 		*notify_clients = false;
 	old_base = state.base;
 	new_base = NULL;
-	find_bad_vrp("Old base", old_base);
 
 	error = __perform_standalone_validation(&new_base);
 	if (error)
 		return error;
-
-	find_bad_vrp("After standalone (old)", old_base);
-	find_bad_vrp("After standalone (new)", new_base);
 
 	error = slurm_apply(new_base, &state.slurm);
 	if (error) {
 		db_table_destroy(new_base);
 		return error;
 	}
-
-	find_bad_vrp("After SLURM (old)", old_base);
-	find_bad_vrp("After SLURM (new)", new_base);
 
 	/*
 	 * At this point, new_base is completely valid. Even if we error out
@@ -306,9 +307,6 @@ __vrps_update(bool *notify_clients)
 	 * duplicate ROAs.
 	 */
 	output_print_data(new_base);
-
-	find_bad_vrp("After CSV (old)", old_base);
-	find_bad_vrp("After CSV (new)", new_base);
 
 	error = __compute_deltas(old_base, new_base, notify_clients,
 	    &new_deltas);
@@ -346,53 +344,47 @@ __vrps_update(bool *notify_clients)
 	return 0;
 }
 
+/*
+ * Highest level validator function.
+ *
+ * - Downloads tree
+ * - Validates tree
+ * - Updates RTR state
+ * - Logs status
+ *
+ * TODO (#50) remove this wrapper once Prometheus is implemented
+ */
 int
 vrps_update(bool *changed)
 {
 	time_t start, finish;
-	long int exec_time;
+	unsigned int roas, rks;
 	serial_t serial;
 	int error;
 
-	/*
-	 * This wrapper is mainly intended to log informational data, so if
-	 * there's no need, don't do unnecessary calls.
-	 */
-	if (!log_op_enabled(LOG_INFO))
-		return __vrps_update(changed);
-
-	pr_op_info("Starting validation.");
-	if (config_get_mode() == SERVER) {
-		error = get_last_serial_number(&serial);
-		if (!error)
-			pr_op_info("- Serial before validation: %u", serial);
-	}
-
-	time(&start);
+	start = time(NULL);
 	error = __vrps_update(changed);
-	time(&finish);
-	exec_time = finish - start;
+	finish = time(NULL);
+
+	rwlock_read_lock(&state_lock);
+	if (state.base == NULL) {
+		roas = 0;
+		rks = 0;
+		serial = 0;
+	} else {
+		roas = db_table_roa_count(state.base);
+		rks = db_table_router_key_count(state.base);
+		serial = state.serial;
+	}
+	rwlock_unlock(&state_lock);
 
 	pr_op_info("Validation finished:");
-	rwlock_read_lock(&state_lock);
-	do {
-		if (state.base == NULL) {
-			rwlock_unlock(&state_lock);
-			pr_op_info("- Valid ROAs: 0");
-			pr_op_info("- Valid Router Keys: 0");
-			if (config_get_mode() == SERVER)
-				pr_op_info("- No serial number.");
-			break;
-		}
-
-		pr_op_info("- Valid ROAs: %u", db_table_roa_count(state.base));
-		pr_op_info("- Valid Router Keys: %u",
-		    db_table_router_key_count(state.base));
-		if (config_get_mode() == SERVER)
-			pr_op_info("- Serial: %u", state.serial);
-		rwlock_unlock(&state_lock);
-	} while(0);
-	pr_op_info("- Real execution time: %ld secs.", exec_time);
+	pr_op_info("- Valid ROAs: %u", roas);
+	pr_op_info("- Valid Router Keys: %u", rks);
+	if (config_get_mode() == SERVER)
+		pr_op_info("- Serial: %u", serial);
+	if (start != ((time_t) -1) && finish != ((time_t) -1))
+		pr_op_info("- Real execution time: %ld secs.", finish - start);
 
 	return error;
 }

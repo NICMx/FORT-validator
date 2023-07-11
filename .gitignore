@@ -95,6 +95,9 @@ config.sub
 *.trs
 test-driver
 
+# Developer playground
+sandbox/
+
 # Temporal files
 *~
 tmp

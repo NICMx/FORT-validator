@@ -118,16 +118,92 @@ START_TEST(test_replace)
 }
 END_TEST
 
+/*
+ * To assure myself I can hash nodes using an rpki_uri's global field as key.
+ * (Given that they're private.)
+ *
+ * ie. Neither the node nor the key contains the key, but the key points to it
+ * somewhere else.
+ */
+START_TEST(test_uri)
+{
+	struct test2_key {
+		char *outer_string;
+		int something_else;
+	};
+
+	struct test2_node {
+		struct test2_key *key;
+		int value;
+		UT_hash_handle hh;
+	};
+
+	struct test2_node *table = NULL;
+
+	char *keystr;
+	unsigned int keystrlen;
+	struct test2_node *node, *node2;
+
+	/* Try finding a nonexistent node, because paranoia */
+	keystr = strdup("potato");
+	keystrlen = strlen(keystr);
+
+	HASH_FIND(hh, table, keystr, keystrlen, node);
+	ck_assert_ptr_null(node);
+
+	/* Add a node */
+	node = malloc(sizeof(struct test2_node));
+	node->key = malloc(sizeof(struct test2_key));
+	memset(node->key, 0, sizeof(struct test2_key));
+	node->key->outer_string = keystr;
+	node->key->something_else = 1;
+
+	HASH_ADD_KEYPTR(hh, table, keystr, keystrlen, node);
+
+	/* Try finding the node using the same string */
+	node2 = NULL;
+	HASH_FIND(hh, table, keystr, keystrlen, node2);
+	ck_assert_ptr_eq(node, node2);
+
+	/* Try finding the node using a different (but equal) string */
+	keystr = strdup("potato");
+	node2 = NULL;
+	HASH_FIND(hh, table, keystr, keystrlen, node2);
+	ck_assert_ptr_eq(node, node2);
+	free(keystr);
+
+	/* Try finding some other string */
+	keystr = strdup("potato2");
+	keystrlen = strlen(keystr);
+	node2 = NULL;
+	HASH_FIND(hh, table, keystr, keystrlen, node2);
+	ck_assert_ptr_null(node2);
+	free(keystr);
+
+	/* free the hash table contents */
+	HASH_ITER(hh, table, node, node2) {
+		HASH_DEL(table, node);
+		free(node->key->outer_string);
+		free(node->key);
+		free(node);
+	}
+}
+END_TEST
+
 Suite *pdu_suite(void)
 {
 	Suite *suite;
-	TCase *core;
+	TCase *core, *uri;
 
 	core = tcase_create("simple");
 	tcase_add_test(core, test_replace);
 
+	uri = tcase_create("uri");
+	tcase_add_test(uri, test_uri);
+
 	suite = suite_create("uthash");
 	suite_add_tcase(suite, core);
+	suite_add_tcase(suite, uri);
 	return suite;
 }
 

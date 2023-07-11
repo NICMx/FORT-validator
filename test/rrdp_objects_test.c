@@ -6,6 +6,13 @@
 #include "mock.c"
 #include "rrdp/rrdp_objects.c"
 
+/* Mocks */
+
+MOCK_ABORT_PTR(uri_refget, rpki_uri, struct rpki_uri *uri)
+MOCK_ABORT_VOID(uri_refput, struct rpki_uri *uri)
+
+/* Mocks end */
+
 #define END 0xFFFF
 
 static void
@@ -14,7 +21,7 @@ add_serials(struct deltas_head *deltas, ...)
 	struct delta_head delta;
 	va_list vl;
 
-	doc_data_init(&delta.doc_data);
+	metadata_init(&delta.meta);
 
 	va_start(vl, deltas);
 	while ((delta.serial = va_arg(vl, unsigned long)) != END)

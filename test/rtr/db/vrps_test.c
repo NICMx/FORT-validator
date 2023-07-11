@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 500 /* nftw() */
+
 #include <check.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -69,6 +71,7 @@ static const bool deltas_4to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 unsigned int deltas_lifetime = 5;
 
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
+MOCK_VOID(cache_prepare, void)
 
 /* Test functions */
 

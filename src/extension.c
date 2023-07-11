@@ -1,6 +1,7 @@
 #include "extension.h"
 
 #include <errno.h>
+#include "cert_stack.h"
 #include "common.h"
 #include "log.h"
 #include "nid.h"

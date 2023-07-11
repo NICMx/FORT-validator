@@ -14,18 +14,15 @@ fort_SOURCES += cert_stack.h cert_stack.c
 fort_SOURCES += common.c common.h
 fort_SOURCES += config.h config.c
 fort_SOURCES += daemon.h daemon.c
-fort_SOURCES += delete_dir_daemon.h delete_dir_daemon.c
 fort_SOURCES += extension.h extension.c
 fort_SOURCES += file.h file.c
 fort_SOURCES += init.h init.c
-fort_SOURCES += internal_pool.h internal_pool.c
 fort_SOURCES += json_parser.c json_parser.h
 fort_SOURCES += line_file.h line_file.c
 fort_SOURCES += log.h log.c
 fort_SOURCES += nid.h nid.c
 fort_SOURCES += notify.c notify.h
 fort_SOURCES += output_printer.h output_printer.c
-fort_SOURCES += random.h random.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
 fort_SOURCES += sorted_array.h sorted_array.c
@@ -35,7 +32,6 @@ fort_SOURCES += thread_var.h thread_var.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += validation_handler.h validation_handler.c
 fort_SOURCES += validation_run.h validation_run.c
-fort_SOURCES += visited_uris.h visited_uris.c
 
 fort_SOURCES += asn1/content_info.h asn1/content_info.c
 fort_SOURCES += asn1/decode.h asn1/decode.c
@@ -48,6 +44,9 @@ fort_SOURCES += types/router_key.c types/router_key.h
 fort_SOURCES += types/serial.h types/serial.c
 fort_SOURCES += types/uri.h types/uri.c
 fort_SOURCES += types/vrp.c types/vrp.h
+
+fort_SOURCES += cache/local_cache.c cache/local_cache.h
+fort_SOURCES += cache/tmp.c cache/tmp.h
 
 fort_SOURCES += config/boolean.c config/boolean.h
 fort_SOURCES += config/filename_format.h config/filename_format.c
@@ -66,6 +65,7 @@ fort_SOURCES += crypto/hash.h crypto/hash.c
 
 fort_SOURCES += data_structure/array_list.h
 fort_SOURCES += data_structure/common.h
+fort_SOURCES += data_structure/path_builder.h data_structure/path_builder.c
 fort_SOURCES += data_structure/uthash.h
 
 fort_SOURCES += http/http.h http/http.c
@@ -90,9 +90,6 @@ fort_SOURCES += resource/asn.h resource/asn.c
 fort_SOURCES += rrdp/rrdp_loader.h rrdp/rrdp_loader.c
 fort_SOURCES += rrdp/rrdp_objects.h rrdp/rrdp_objects.c
 fort_SOURCES += rrdp/rrdp_parser.h rrdp/rrdp_parser.c
-
-fort_SOURCES += rrdp/db/db_rrdp.h rrdp/db/db_rrdp.c
-fort_SOURCES += rrdp/db/db_rrdp_uris.h rrdp/db/db_rrdp_uris.c
 
 fort_SOURCES += rsync/rsync.h rsync/rsync.c
 

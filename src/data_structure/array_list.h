@@ -45,25 +45,17 @@
 	modifiers void							\
 	name##_add(struct name *list, elem_type *elem)			\
 	{								\
-		elem_type *tmp;						\
-									\
 		if (list->array == NULL) {				\
 			list->capacity = 8;				\
-			list->array = malloc(list->capacity		\
+			list->array = pmalloc(list->capacity		\
 			    * sizeof(elem_type));			\
-			if (list->array == NULL)			\
-				enomem_panic();				\
 		}							\
 									\
 		list->len++;						\
 		while (list->len >= list->capacity) {			\
 			list->capacity *= 2;				\
-									\
-			tmp = realloc(list->array, list->capacity	\
-			    * sizeof(elem_type));			\
-			if (tmp == NULL)				\
-				enomem_panic();				\
-			list->array = tmp;				\
+			list->array = prealloc(list->array,		\
+			    list->capacity * sizeof(elem_type));	\
 		}							\
 									\
 		list->array[list->len - 1] = *elem;			\

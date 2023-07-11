@@ -1,4 +1,4 @@
-#include "http.h"
+#include "http/http.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -10,6 +10,8 @@
 #include "config.h"
 #include "file.h"
 #include "log.h"
+#include "cache/tmp.h"
+#include "data_structure/uthash.h"
 
 struct http_handler {
 	CURL *curl;
@@ -32,6 +34,22 @@ void
 http_cleanup(void)
 {
 	curl_global_cleanup();
+}
+
+static int
+get_ims(char const *file, time_t *ims)
+{
+	struct stat meta;
+	int error;
+
+	if (stat(file, &meta) != 0) {
+		error = errno;
+		*ims = 0;
+		return (error == ENOENT) ? 0 : error;
+	}
+
+	*ims = meta.st_mtim.tv_sec;
+	return 0;
 }
 
 static void
@@ -64,7 +82,9 @@ setopt_long(CURL *curl, CURLoption opt, long value)
 struct write_callback_arg {
 	size_t total_bytes;
 	int error;
-	FILE *dst;
+
+	char const *file_name;
+	FILE *file; /* Initialized lazily */
 };
 
 static size_t
@@ -86,7 +106,13 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
 		return 0; /* Ugh. See fwrite(3) */
 	}
 
-	return fwrite(data, size, nmemb, arg->dst);
+	if (arg->file == NULL) {
+		arg->error = file_write(arg->file_name, &arg->file);
+		if (arg->error)
+			return 0;
+	}
+
+	return fwrite(data, size, nmemb, arg->file);
 }
 
 static void
@@ -114,7 +140,7 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 }
 
 static void
-http_easy_init(struct http_handler *handler, long ims)
+http_easy_init(struct http_handler *handler, curl_off_t ims)
 {
 	CURL *result;
 
@@ -164,12 +190,18 @@ http_easy_init(struct http_handler *handler, long ims)
 	setopt_long(result, CURLOPT_NOSIGNAL, 1L);
 
 	if (ims > 0) {
-		setopt_long(result, CURLOPT_TIMEVALUE, ims);
+		setopt_long(result, CURLOPT_TIMEVALUE_LARGE, ims);
 		setopt_long(result, CURLOPT_TIMECONDITION,
 		    CURL_TIMECOND_IFMODSINCE);
 	}
 
 	handler->curl = result;
+}
+
+static void
+http_easy_cleanup(struct http_handler *handler)
+{
+	curl_easy_cleanup(handler->curl);
 }
 
 static char const *
@@ -228,61 +260,76 @@ handle_http_response_code(long http_code)
 }
 
 /*
- * Fetch data from @uri and write result using @cb (which will receive @arg).
+ * Fetch data from @src and write result on @dst.
  */
 static int
-http_fetch(struct http_handler *handler, char const *uri, long *response_code,
-    FILE *file)
+http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 {
+	struct http_handler handler;
 	struct write_callback_arg args;
 	CURLcode res;
 	long http_code;
+	int error;
 
-	handler->errbuf[0] = 0;
-	setopt_str(handler->curl, CURLOPT_URL, uri);
+	http_easy_init(&handler, ims);
+
+	handler.errbuf[0] = 0;
+	setopt_str(handler.curl, CURLOPT_URL, src);
 
 	args.total_bytes = 0;
 	args.error = 0;
-	args.dst = file;
-	setopt_writedata(handler->curl, &args);
+	args.file_name = dst;
+	args.file = NULL;
+	setopt_writedata(handler.curl, &args);
 
-	pr_val_info("HTTP GET: %s", uri);
-	res = curl_easy_perform(handler->curl);
+	pr_val_info("HTTP GET: %s", src);
+	res = curl_easy_perform(handler.curl);
+	if (args.file != NULL)
+		file_close(args.file);
 	pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
 
-	args.error = validate_file_size(uri, &args);
-	if (args.error)
-		return args.error;
+	args.error = validate_file_size(src, &args);
+	if (args.error) {
+		error = args.error;
+		goto end;
+	}
 
-	args.error = get_http_response_code(handler, &http_code, uri);
-	if (args.error)
-		return args.error;
-	*response_code = http_code;
+	args.error = get_http_response_code(&handler, &http_code, src);
+	if (args.error) {
+		error = args.error;
+		goto end;
+	}
 
 	if (res != CURLE_OK) {
 		pr_val_err("Error requesting URL: %s. (HTTP code: %ld)",
-		    curl_err_string(handler, res), http_code);
+		    curl_err_string(&handler, res), http_code);
 
 		switch (res) {
 		case CURLE_FILESIZE_EXCEEDED:
-			return -EFBIG; /* Do not retry */
+			error = -EFBIG; /* Do not retry */
+			goto end;
 		case CURLE_OPERATION_TIMEDOUT:
 		case CURLE_COULDNT_RESOLVE_HOST:
 		case CURLE_COULDNT_RESOLVE_PROXY:
 		case CURLE_FTP_ACCEPT_TIMEOUT:
-			return EREQFAILED; /* Retry */
+			error = EREQFAILED; /* Retry */
+			goto end;
 		default:
-			return handle_http_response_code(http_code);
+			error = handle_http_response_code(http_code);
+			goto end;
 		}
 	}
 
 	if (http_code >= 400) {
 		pr_val_err("HTTP result code: %ld", http_code);
-		return handle_http_response_code(http_code);
+		error = handle_http_response_code(http_code);
+		goto end;
 	}
 	if (http_code == 304) {
+		/* Write callback not called, no file to remove. */
 		pr_val_debug("Not modified.");
-		return 0;
+		error = 0;
+		goto end;
 	}
 	if (http_code >= 300) {
 		/*
@@ -292,36 +339,17 @@ http_fetch(struct http_handler *handler, char const *uri, long *response_code,
 		 */
 		pr_val_err("HTTP result code: %ld. I don't follow redirects; discarding file.",
 		    http_code);
-		return -EINVAL; /* Do not retry. */
+		error = -EINVAL; /* Do not retry. */
+		goto end;
 	}
 
 	pr_val_debug("HTTP result code: %ld", http_code);
-	return 0;
-}
+	error = 0;
+	*changed = true;
 
-static void
-http_easy_cleanup(struct http_handler *handler)
-{
-	curl_easy_cleanup(handler->curl);
-}
-
-static long
-download(char const *src, char const *dst, long ims, long *response_code)
-{
-	FILE *file;
-	struct http_handler handler;
-	long error;
-
-	error = file_write(dst, &file);
+end:	http_easy_cleanup(&handler);
 	if (error)
-		return error;
-	http_easy_init(&handler, ims);
-
-	error = http_fetch(&handler, src, response_code, file);
-
-	http_easy_cleanup(&handler);
-	file_close(file);
-
+		remove(dst);
 	return error;
 }
 
@@ -329,16 +357,18 @@ download(char const *src, char const *dst, long ims, long *response_code)
  * Assumes @dst's parent directory has already been created.
  */
 static int
-do_retries(char const *src, char const *dst, long ims, long *response_code)
+do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
 {
 	unsigned int r;
 	int error;
+
+	pr_val_info("Downloading '%s'.", src);
 
 	r = 0;
 	do {
 		pr_val_debug("Download attempt #%u...", r);
 
-		error = download(src, dst, ims, response_code);
+		error = http_fetch(src, dst, ims, changed);
 		switch (error) {
 		case 0:
 			pr_val_debug("Download successful.");
@@ -360,7 +390,7 @@ do_retries(char const *src, char const *dst, long ims, long *response_code)
 		pr_val_warn("Download failed; retrying in %u seconds.",
 		    config_get_http_retry_interval());
 		/*
-		 * TODO (#78) Wrong. This is slowing the entire tree traversal
+		 * TODO (fine) Wrong. This is slowing the entire tree traversal
 		 * down; use a thread pool.
 		 */
 		sleep(config_get_http_retry_interval());
@@ -368,100 +398,60 @@ do_retries(char const *src, char const *dst, long ims, long *response_code)
 	} while (true);
 }
 
-static int
-__http_download_file(struct rpki_uri *uri, long *response_code, long ims_value)
+/*
+ * Download @uri->global into @uri->local; HTTP assumed.
+ *
+ * If @changed returns true, the file was downloaded normally.
+ * If @changed returns false, the file already existed and is already its latest
+ * version.
+ * @changed can be NULL.
+ */
+int
+http_download(struct rpki_uri *uri, bool *changed)
 {
-	char const *tmp_suffix = "_tmp";
-	char const *original_file;
-	char *tmp_file;
+	char *tmp_file_name;
+	char const *final_file_name;
+	time_t ims;
+	bool __changed;
 	int error;
 
-	*response_code = 0;
+	if (changed == NULL)
+		changed = &__changed;
+	*changed = false;
 
-	if (!config_get_http_enabled())
-		return 0;
+	if (!config_get_rsync_enabled())
+		return 0; /* Skip; caller will work with existing cache. */
 
-	original_file = uri_get_local(uri);
-
-	tmp_file = pmalloc(strlen(original_file) + strlen(tmp_suffix) + 1);
-	strcpy(tmp_file, original_file);
-	strcat(tmp_file, tmp_suffix);
-
-	error = create_dir_recursive(tmp_file);
+	error = cache_tmpfile(&tmp_file_name);
 	if (error)
-		goto release_tmp;
-
-	error = do_retries(uri_get_global(uri), tmp_file, ims_value,
-	    response_code);
-	/* TODO (#78) Looks like the temporal file isn't being rm'd. */
-	if ((*response_code) == 304)
+		return error;
+	final_file_name = uri_get_local(uri);
+	error = get_ims(final_file_name, &ims);
+	if (error)
 		goto end;
-	if (error)
-		goto delete_dir;
 
-	/* Overwrite the original file */
-	error = rename(tmp_file, original_file);
+	error = do_retries(uri_get_global(uri), tmp_file_name, (curl_off_t)ims,
+	    changed);
+	if (error || !(*changed))
+		goto end;
+
+	error = create_dir_recursive(final_file_name);
+	if (error) {
+		remove(tmp_file_name);
+		goto end;
+	}
+
+	error = rename(tmp_file_name, final_file_name);
 	if (error) {
 		error = errno;
 		pr_val_err("Renaming temporal file from '%s' to '%s': %s",
-		    tmp_file, original_file, strerror(error));
-		goto delete_dir;
+		    tmp_file_name, final_file_name, strerror(error));
+		remove(tmp_file_name);
+		goto end;
 	}
 
-end:
-	free(tmp_file);
-	return 0;
-delete_dir:
-	delete_dir_recursive_bottom_up(tmp_file);
-release_tmp:
-	free(tmp_file);
-	return ENSURE_NEGATIVE(error);
-}
-
-/*
- * Try to download from global @uri into a local directory structure created
- * from local @uri.
- *
- * Return values: 0 on success, negative value on error, EREQFAILED if the
- * request to the server failed.
- */
-int
-http_download_file(struct rpki_uri *uri)
-{
-	long response;
-	return __http_download_file(uri, &response, 0);
-}
-
-/*
- * Fetch the file from @uri.
- *
- * The HTTP request is made using the header 'If-Modified-Since' with a value
- * of @value (if @value is 0, the header isn't set).
- *
- * Returns:
- *   EREQFAILED the request to the server has failed.
- *   > 0 file was requested but wasn't downloaded since the server didn't sent
- *       a response due to its policy using the header 'If-Modified-Since'.
- *   = 0 file successfully downloaded.
- *   < 0 an actual error happened.
- */
-int
-http_download_file_with_ims(struct rpki_uri *uri, long value)
-{
-	long response;
-	int error;
-
-	error = __http_download_file(uri, &response, value);
-	if (error)
-		return error;
-
-	/* rfc7232#section-3.3:
-	 * "the origin server SHOULD generate a 304 (Not Modified) response"
-	 */
-	if (response == 304)
-		return 1;
-
-	return 0;
+end:	free(tmp_file_name);
+	return error;
 }
 
 /*
@@ -471,26 +461,15 @@ http_download_file_with_ims(struct rpki_uri *uri, long value)
 int
 http_direct_download(char const *remote, char const *dest)
 {
-	char const *tmp_suffix = "_tmp";
-	struct http_handler handler;
-	FILE *out;
-	long response_code;
+	bool changed;
 	char *tmp_file;
 	int error;
 
-	tmp_file = pstrdup(dest);
-	tmp_file = prealloc(tmp_file, strlen(tmp_file) + strlen(tmp_suffix) + 1);
-	strcat(tmp_file, tmp_suffix);
-
-	error = file_write(tmp_file, &out);
+	error = cache_tmpfile(&tmp_file);
 	if (error)
-		goto end;
+		return error;
 
-	http_easy_init(&handler, 0);
-	error = http_fetch(&handler, remote, &response_code, out);
-	http_easy_cleanup(&handler);
-
-	file_close(out);
+	error = http_fetch(remote, tmp_file, 0, &changed);
 	if (error)
 		goto end;
 
@@ -503,7 +482,6 @@ http_direct_download(char const *remote, char const *dest)
 		goto end;
 	}
 
-end:
-	free(tmp_file);
+end:	free(tmp_file);
 	return error;
 }

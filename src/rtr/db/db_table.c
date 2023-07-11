@@ -247,40 +247,6 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 	return 0;
 }
 
-void
-find_bad_vrp(char const *prefix, struct db_table *table)
-{
-	struct hashable_roa *node;
-	struct hashable_roa *tmp;
-	struct vrp const *vrp;
-	unsigned int roa_counter;
-	unsigned int roa_count;
-	char buffer[INET6_ADDRSTRLEN];
-
-	if (table == NULL)
-		return;
-
-	roa_counter = 0;
-	roa_count = HASH_COUNT(table->roas);
-
-	HASH_ITER(hh, table->roas, node, tmp) {
-		vrp = &node->data;
-		if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6) {
-			pr_crit("%s: VRP corrupted! [%u %s/%u-%u %u] %u/%u "
-			    "(Please report this output to https://github.com/NICMx/FORT-validator/issues/89)",
-			    prefix,
-			    vrp->asn,
-			    addr2str6(&vrp->prefix.v6, buffer),
-			    vrp->prefix_length,
-			    vrp->max_prefix_length,
-			    vrp->addr_fam,
-			    roa_counter,
-			    roa_count);
-		}
-		roa_counter++;
-	}
-}
-
 static int
 add_router_key_delta(struct deltas *deltas, struct hashable_key *key, int op)
 {

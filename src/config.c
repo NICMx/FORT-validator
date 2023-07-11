@@ -37,11 +37,7 @@ struct rpki_config {
 	char *tal;
 	/** Path of our local clone of the repository */
 	char *local_repository;
-	/**
-	 * Handle TAL URIs in random order?
-	 * (https://tools.ietf.org/html/rfc8630#section-3, last
-	 * paragraphs)
-	 */
+	/* Deprecated; does nothing. */
 	bool shuffle_tal_uris;
 	/**
 	 * rfc6487#section-7.2, last paragraph.
@@ -83,10 +79,7 @@ struct rpki_config {
 	struct {
 		/* Enables the protocol */
 		bool enabled;
-		/*
-		 * Priority, this will override the order set at the CAs in
-		 * their accessMethod extension.
-		 */
+		/* Deprecated; does nothing. */
 		unsigned int priority;
 		/* Synchronization download strategy. */
 		char *strategy;
@@ -107,12 +100,7 @@ struct rpki_config {
 	struct {
 		/* Enables the protocol */
 		bool enabled;
-		/*
-		 * Priority, whenever there's an option to sync something via
-		 * http or rsync, use this priority. When working with CAs, this
-		 * will override the order set at the CAs in their accessMethod
-		 * extension.
-		 */
+		/* Deprecated; does nothing. */
 		unsigned int priority;
 		/* Retry conf, utilized on errors */
 		struct {
@@ -284,7 +272,8 @@ static const struct option_field options[] = {
 		.name = "shuffle-uris",
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, shuffle_tal_uris),
-		.doc = "Shuffle URIs in the TAL before accessing them",
+		.doc = "Deprecated; does nothing.",
+		.deprecated = true,
 	}, {
 		.id = 1002,
 		.name = "maximum-certificate-depth",
@@ -437,7 +426,8 @@ static const struct option_field options[] = {
 		.name = "rsync.priority",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, rsync.priority),
-		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
+		.doc = "Deprecated; does nothing.",
+		.deprecated = true,
 		.min = 0,
 		.max = 100,
 	}, {
@@ -476,7 +466,7 @@ static const struct option_field options[] = {
 		.name = "rsync.arguments-recursive",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.recursive),
-		.doc = "Deprecated; does nothing.",
+		.doc = "RSYNC program arguments",
 		.availability = AVAILABILITY_JSON,
 		/* Unlimited */
 		.max = 0,
@@ -485,10 +475,11 @@ static const struct option_field options[] = {
 		.name = "rsync.arguments-flat",
 		.type = &gt_string_array,
 		.offset = offsetof(struct rpki_config, rsync.args.flat),
-		.doc = "RSYNC program arguments that will trigger a non-recursive RSYNC",
+		.doc = "Deprecated; does nothing.",
 		.availability = AVAILABILITY_JSON,
 		/* Unlimited */
 		.max = 0,
+		.deprecated = true,
 	},
 
 	/* HTTP requests parameters */
@@ -503,7 +494,8 @@ static const struct option_field options[] = {
 		.name = "http.priority",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.priority),
-		.doc = "Priority of execution to fetch repositories files, a higher value means higher priority",
+		.doc = "Deprecated; does nothing.",
+		.deprecated = true,
 		.min = 0,
 		.max = 100,
 	}, {
@@ -879,16 +871,18 @@ print_config(void)
 static void
 set_default_values(void)
 {
-	static char const *recursive_rsync_args[] = { "<deprecated>" };
-	static char const *flat_rsync_args[] = {
-		"--times",
-		"--contimeout=20",
-		"--timeout=15",
-		"--max-size=20MB",
-		"--dirs",
-		"$REMOTE",
-		"$LOCAL",
+	static char const *recursive_rsync_args[] = {
+		"-rtz", "--delete",
+
+		"--contimeout=20", "--max-size=20MB", "--timeout=15",
+
+		"--include=*/", "--include=*.cer", "--include=*.crl",
+		"--include=*.gbr", "--include=*.mft", "--include=*.roa",
+		"--exclude=*",
+
+		"$REMOTE", "$LOCAL",
 	};
+	static char const *flat_rsync_args[] = { "<deprecated>" };
 
 	/*
 	 * Values that might need to be freed WILL be freed, so use heap
@@ -1217,12 +1211,6 @@ config_get_local_repository(void)
 	return rpki_config.local_repository;
 }
 
-bool
-config_get_shuffle_tal_uris(void)
-{
-	return rpki_config.shuffle_tal_uris;
-}
-
 unsigned int
 config_get_max_cert_depth(void)
 {
@@ -1320,12 +1308,6 @@ config_get_rsync_enabled(void)
 }
 
 unsigned int
-config_get_rsync_priority(void)
-{
-	return rpki_config.rsync.priority;
-}
-
-unsigned int
 config_get_rsync_retry_count(void)
 {
 	return rpki_config.rsync.retry.count;
@@ -1346,19 +1328,13 @@ config_get_rsync_program(void)
 struct string_array const *
 config_get_rsync_args(void)
 {
-	return &rpki_config.rsync.args.flat;
+	return &rpki_config.rsync.args.recursive;
 }
 
 bool
 config_get_http_enabled(void)
 {
 	return !rpki_config.work_offline && rpki_config.http.enabled;
-}
-
-unsigned int
-config_get_http_priority(void)
-{
-	return rpki_config.http.priority;
 }
 
 unsigned int

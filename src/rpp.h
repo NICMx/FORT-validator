@@ -1,6 +1,7 @@
 #ifndef SRC_RPP_H_
 #define SRC_RPP_H_
 
+#include <openssl/x509.h>
 #include "types/uri.h"
 
 struct rpp;

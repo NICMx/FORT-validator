@@ -633,6 +633,7 @@ val_crypto_err(const char *format, ...)
 	return crypto_err(&val_config, pr_val_err);
 }
 
+/* FIXME open call hierarchy */
 __dead void
 enomem_panic(void)
 {

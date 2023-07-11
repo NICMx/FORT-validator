@@ -1,19 +1,25 @@
+#define _XOPEN_SOURCE 500 /* nftw() */
+
 #include "file.h"
 
 #include <errno.h>
 #include <stdlib.h>
+#include <ftw.h> /* nftw() */
+#include <sys/types.h> /* opendir(), closedir() */
+#include <dirent.h> /* opendir(), readdir(), closedir() */
+
 
 #include "alloc.h"
 #include "log.h"
+#include "data_structure/uthash.h"
 
-static int
-file_get(char const *file_name, FILE **result, struct stat *stat,
-    char const *mode)
+int
+file_open(char const *file_name, FILE **result, struct stat *stat)
 {
 	FILE *file;
 	int error;
 
-	file = fopen(file_name, mode);
+	file = fopen(file_name, "rb");
 	if (file == NULL) {
 		error = errno;
 		pr_val_err("Could not open file '%s': %s", file_name,
@@ -40,16 +46,22 @@ fail:
 }
 
 int
-file_open(char const *file_name, FILE **result, struct stat *stat)
-{
-	return file_get(file_name, result, stat, "rb");
-}
-
-int
 file_write(char const *file_name, FILE **result)
 {
-	struct stat stat;
-	return file_get(file_name, result, &stat, "wb");
+	FILE *file;
+	int error;
+
+	file = fopen(file_name, "wb");
+	if (file == NULL) {
+		error = errno;
+		pr_val_err("Could not open file '%s': %s", file_name,
+		    strerror(error));
+		*result = NULL;
+		return error;
+	}
+
+	*result = file;
+	return 0;
 }
 
 void
@@ -83,7 +95,7 @@ file_load(char const *file_name, struct file_contents *fc)
 			 * code. It literally doesn't say how to get an error
 			 * code.
 			 */
-			pr_val_err("File reading error. The error message is (apparently) '%s'",
+			pr_val_err("File reading error. The error message is (possibly) '%s'",
 			    strerror(error));
 			free(fc->buffer);
 			goto end;
@@ -133,4 +145,36 @@ file_valid(char const *file_name)
 
 	file_close(tmp);
 	return true;
+}
+
+static int
+rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
+{
+	return (remove(fpath) != 0) ? errno : 0;
+}
+
+/* Same as `system("rm -rf <path>")`, but more portable and maaaaybe faster. */
+int
+file_rm_rf(char const *path)
+{
+	/* FIXME optimize that 32 */
+	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
+}
+
+static int
+lsR(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
+{
+	unsigned int i;
+
+	for (i = 0; i < ftwbuf->level; i++)
+		printf("\t");
+	printf("%s\n", &fpath[ftwbuf->base]);
+
+	return 0;
+}
+
+void
+file_ls_R(char const *path)
+{
+	nftw(path, lsR, 32, FTW_PHYS);
 }

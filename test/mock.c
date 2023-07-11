@@ -1,7 +1,9 @@
 #include "mock.h"
 
+#include <errno.h>
 #include <arpa/inet.h>
 #include "state.h"
+#include "incidence/incidence.h"
 
 /**
  * Some core functions, as linked from unit tests.
@@ -16,6 +18,7 @@ MOCK_TRUE(log_op_enabled, unsigned int l)
 		va_start(args, format);					\
 		vfprintf(stdout, format, args);				\
 		va_end(args);						\
+		printf("\n");						\
 	} while (0)
 
 #define MOCK_VOID_PRINT(name)						\
@@ -63,9 +66,11 @@ void
 pr_crit(const char *format, ...)
 {
 	va_list args;
+	fprintf(stderr, "pr_crit() called!\n");
 	va_start(args, format);
-	vfprintf(stdout, format, args);
+	vfprintf(stderr, format, args);
 	va_end(args);
+	fprintf(stderr, "\n");
 	ck_abort();
 }
 
@@ -98,8 +103,7 @@ v6addr2str2(struct in6_addr const *addr)
 
 MOCK_NULL(config_get_slurm, char const *, void)
 MOCK(config_get_tal, char const *, "tal/", void)
-MOCK(config_get_local_repository, char const *, "repository/", void)
-MOCK_FALSE(config_get_shuffle_tal_uris, void)
+MOCK(config_get_local_repository, char const *, "tmp", void)
 MOCK(config_get_mode, enum mode, STANDALONE, void)
 MOCK_TRUE(config_get_rsync_enabled, void)
 MOCK_NULL(config_get_output_roa, char const *, void)

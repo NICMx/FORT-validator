@@ -5,34 +5,35 @@
 #include <string.h>
 #include "alloc.h"
 #include "log.h"
+#include "types/uri.h"
 
 DEFINE_ARRAY_LIST_FUNCTIONS(deltas_head, struct delta_head, )
 
 void
-global_data_init(struct global_data *data)
+notification_metadata_init(struct notification_metadata *meta)
 {
-	data->session_id = NULL;
+	meta->session_id = NULL;
 }
 
 void
-global_data_cleanup(struct global_data *data)
+notification_metadata_cleanup(struct notification_metadata *meta)
 {
-	free(data->session_id);
+	free(meta->session_id);
 }
 
 void
-doc_data_init(struct doc_data *data)
+metadata_init(struct file_metadata *meta)
 {
-	data->uri = NULL;
-	data->hash = NULL;
-	data->hash_len = 0;
+	meta->uri = NULL;
+	meta->hash = NULL;
+	meta->hash_len = 0;
 }
 
 void
-doc_data_cleanup(struct doc_data *data)
+metadata_cleanup(struct file_metadata *meta)
 {
-	free(data->hash);
-	free(data->uri);
+	free(meta->hash);
+	free(meta->uri);
 }
 
 /* Do the @cb to the delta head elements from @from_serial to @max_serial */
@@ -114,35 +115,29 @@ deltas_head_sort(struct deltas_head *deltas, unsigned long max_serial)
 	return 0;
 }
 
-struct update_notification *
-update_notification_create(char const *uri)
+void
+update_notification_init(struct update_notification *notification,
+    struct rpki_uri *uri)
 {
-	struct update_notification *result;
-
-	result = pmalloc(sizeof(struct update_notification));
-
-	global_data_init(&result->global_data);
-	doc_data_init(&result->snapshot);
-	deltas_head_init(&result->deltas_list);
-	result->uri = pstrdup(uri);
-
-	return result;
+	notification_metadata_init(&notification->meta);
+	metadata_init(&notification->snapshot);
+	deltas_head_init(&notification->deltas_list);
+	notification->uri = uri_refget(uri);
 }
 
 static void
 delta_head_destroy(struct delta_head *delta)
 {
-	doc_data_cleanup(&delta->doc_data);
+	metadata_cleanup(&delta->meta);
 }
 
 void
 update_notification_destroy(struct update_notification *file)
 {
-	doc_data_cleanup(&file->snapshot);
-	global_data_cleanup(&file->global_data);
+	metadata_cleanup(&file->snapshot);
+	notification_metadata_cleanup(&file->meta);
 	deltas_head_cleanup(&file->deltas_list, delta_head_destroy);
-	free(file->uri);
-	free(file);
+	uri_refput(file->uri);
 }
 
 struct snapshot *
@@ -151,7 +146,7 @@ snapshot_create(void)
 	struct snapshot *tmp;
 
 	tmp = pmalloc(sizeof(struct snapshot));
-	global_data_init(&tmp->global_data);
+	notification_metadata_init(&tmp->meta);
 
 	return tmp;
 }
@@ -159,7 +154,7 @@ snapshot_create(void)
 void
 snapshot_destroy(struct snapshot *file)
 {
-	global_data_cleanup(&file->global_data);
+	notification_metadata_cleanup(&file->meta);
 	free(file);
 }
 
@@ -169,7 +164,7 @@ delta_create(void)
 	struct delta *tmp;
 
 	tmp = pmalloc(sizeof(struct delta));
-	global_data_init(&tmp->global_data);
+	notification_metadata_init(&tmp->meta);
 
 	return tmp;
 }
@@ -177,7 +172,7 @@ delta_create(void)
 void
 delta_destroy(struct delta *file)
 {
-	global_data_cleanup(&file->global_data);
+	notification_metadata_cleanup(&file->meta);
 	free(file);
 }
 
@@ -187,7 +182,7 @@ publish_create(void)
 	struct publish *tmp;
 
 	tmp = pmalloc(sizeof(struct publish));
-	doc_data_init(&tmp->doc_data);
+	metadata_init(&tmp->meta);
 	tmp->content = NULL;
 	tmp->content_len = 0;
 
@@ -197,7 +192,7 @@ publish_create(void)
 void
 publish_destroy(struct publish *file)
 {
-	doc_data_cleanup(&file->doc_data);
+	metadata_cleanup(&file->meta);
 	free(file->content);
 	free(file);
 }
@@ -208,7 +203,7 @@ withdraw_create(void)
 	struct withdraw *tmp;
 
 	tmp = pmalloc(sizeof(struct withdraw));
-	doc_data_init(&tmp->doc_data);
+	metadata_init(&tmp->meta);
 
 	return tmp;
 }
@@ -216,6 +211,6 @@ withdraw_create(void)
 void
 withdraw_destroy(struct withdraw *file)
 {
-	doc_data_cleanup(&file->doc_data);
+	metadata_cleanup(&file->meta);
 	free(file);
 }

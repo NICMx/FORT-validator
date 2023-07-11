@@ -25,4 +25,23 @@ void file_free(struct file_contents *);
 
 bool file_valid(char const *);
 
+int file_rm_rf(char const *);
+void file_ls_R(char const *);
+
+/*
+ * Remember that this API is awkward:
+ *
+ * 1. Check errno after the loop.
+ * 2. Probably also check S_ISDOTS() during the loop.
+ * 3. Do closedir() even on error.
+ */
+#define FOREACH_DIR_FILE(dir, file) for (				\
+		errno = 0, file = readdir(dir);				\
+		file != NULL;						\
+		errno = 0, file = readdir(dir)				\
+	)
+
+#define S_ISDOTS(file) \
+	(strcmp((file)->d_name, ".") == 0 || strcmp((file)->d_name, "..") == 0)
+
 #endif /* SRC_FILE_H_ */

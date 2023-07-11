@@ -1,14 +1,14 @@
 #include "config.h"
 #include "extension.h"
-#include "internal_pool.h"
+#include "log.h"
 #include "nid.h"
 #include "thread_var.h"
 #include "validation_run.h"
 #include "http/http.h"
+#include "incidence/incidence.h"
 #include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
 #include "xml/relax_ng.h"
-#include "rrdp/db/db_rrdp.h"
 
 static int
 run_rtr_server(void)
@@ -90,23 +90,12 @@ main(int argc, char **argv)
 	if (error)
 		goto revert_nid;
 
-	/*
-	 * TODO (performance) this looks like a lot of overhead. Is it really
-	 * necessary when mode is STANDALONE?
-	 */
-	error = internal_pool_init();
-	if (error)
-		goto revert_http;
-
 	error = relax_ng_init();
 	if (error)
-		goto revert_pool;
+		goto revert_http;
 	error = vrps_init();
 	if (error)
 		goto revert_relax_ng;
-	error = db_rrdp_init();
-	if (error)
-		goto vrps_cleanup;
 
 	/* Do stuff */
 	switch (config_get_mode()) {
@@ -120,13 +109,9 @@ main(int argc, char **argv)
 
 	/* End */
 
-	db_rrdp_cleanup();
-vrps_cleanup:
 	vrps_destroy();
 revert_relax_ng:
 	relax_ng_cleanup();
-revert_pool:
-	internal_pool_cleanup();
 revert_http:
 	http_cleanup();
 revert_nid:

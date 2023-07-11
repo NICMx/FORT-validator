@@ -13,6 +13,12 @@
 #include "config.h"
 #include "log.h"
 
+bool
+str_starts_with(char const *str, char const *prefix)
+{
+	return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
 void
 panic_on_fail(int error, char const *function_name)
 {
@@ -346,11 +352,6 @@ delete_dir_recursive_bottom_up(char const *path)
 	size_t config_len;
 	int error;
 
-#ifdef DEBUG_RRDP
-	/* Dev will likely need this file in the next offline run. */
-	return 0;
-#endif
-
 	error = remove_file(path);
 	if (error)
 		return error;
@@ -413,49 +414,4 @@ get_current_time(time_t *result)
 
 	*result = now;
 	return 0;
-}
-
-/*
- * Maps an absolute @uri that begins with @uri_prefix (either 'rsync://' or
- * 'https://') to a local URI. If a @workspace is set, append such location
- * to the local-repository location (this workspace is used at https URIs).
- *
- * @result is allocated with the local URI.
- *
- * Returns 0 on success, otherwise an error code.
- */
-char *
-map_uri_to_local(char const *uri, char const *uri_prefix)
-{
-	char const *repository;
-	char *local;
-	size_t repository_len;
-	size_t uri_prefix_len;
-	size_t uri_len;
-	size_t extra_slash;
-	size_t offset;
-
-	repository = config_get_local_repository();
-	repository_len = strlen(repository);
-	uri_prefix_len = strlen(uri_prefix);
-	uri_len = strlen(uri);
-
-	uri += uri_prefix_len;
-	uri_len -= uri_prefix_len;
-	extra_slash = (repository[repository_len - 1] == '/') ? 0 : 1;
-
-	local = pmalloc(repository_len + extra_slash + uri_len + 1);
-
-	offset = 0;
-	strcpy(local + offset, repository);
-	offset += repository_len;
-	if (extra_slash) {
-		strcpy(local + offset, "/");
-		offset += extra_slash;
-	}
-	strncpy(local + offset, uri, uri_len);
-	offset += uri_len;
-	local[offset] = '\0';
-
-	return local;
 }

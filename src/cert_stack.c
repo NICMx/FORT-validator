@@ -297,8 +297,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 
 	meta = pmalloc(sizeof(struct metadata_node));
 
-	meta->uri = uri;
-	uri_refget(uri);
+	meta->uri = uri_refget(uri);
 	serial_numbers_init(&meta->serials);
 
 	error = init_resources(x509, policy, type, &meta->resources);

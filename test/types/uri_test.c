@@ -6,6 +6,57 @@
 #include "common.c"
 #include "mock.c"
 #include "types/uri.c"
+#include "data_structure/path_builder.c"
+
+/* Mocks */
+
+struct rpki_uri *notification;
+
+MOCK(state_retrieve, struct validation *, NULL, void)
+MOCK(validation_get_notification_uri, struct rpki_uri *, notification,
+    struct validation *state)
+
+/* Tests */
+
+START_TEST(test_constructor)
+{
+	struct rpki_uri *uri;
+
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/e"));
+	ck_assert_str_eq("https://a.b.c/d/e", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c/d/e", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c"));
+	ck_assert_str_eq("https://a.b.c", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://"));
+
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/.."));
+	ck_assert_str_eq("https://a.b.c/d/..", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/.."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/../.."));
+
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/."));
+	ck_assert_str_eq("https://a.b.c/.", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "rsync://a.b.c/d"));
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, ""));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://.."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/../.."));
+
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "rsync://a.b.c/d"));
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "http://a.b.c/d"));
+	ck_assert_int_eq(ENOTRSYNC, uri_create(&uri, UT_RSYNC, "https://a.b.c/d"));
+}
+END_TEST
 
 #define BUFFER_LEN 128
 static uint8_t buffer[BUFFER_LEN];
@@ -59,13 +110,33 @@ START_TEST(check_validate_current_directory)
 }
 END_TEST
 
+START_TEST(check_caged)
+{
+	struct rpki_uri *uri;
+
+	ck_assert_int_eq(0, uri_create(&notification, UT_HTTPS, "https://a.b.c/d/e.xml"));
+	ck_assert_int_eq(0, uri_create(&uri, UT_CAGED, "rsync://x.y.z/v/w.cer"));
+	ck_assert_str_eq("rrdp/https/a.b.c/d/e.xml/rsync/x.y.z/v/w.cer", uri_get_local(uri));
+	uri_refput(uri);
+	uri_refput(notification);
+
+	ck_assert_int_eq(0, uri_create(&notification, UT_RSYNC, "rsync://a.b.c"));
+	ck_assert_int_eq(0, uri_create(&uri, UT_CAGED, "https://w"));
+	ck_assert_str_eq("rrdp/rsync/a.b.c/https/w", uri_get_local(uri));
+	uri_refput(uri);
+	uri_refput(notification);
+}
+END_TEST
+
 Suite *address_load_suite(void)
 {
 	Suite *suite;
 	TCase *core;
 
 	core = tcase_create("Core");
+	tcase_add_test(core, test_constructor);
 	tcase_add_test(core, check_validate_current_directory);
+	tcase_add_test(core, check_caged);
 
 	suite = suite_create("Encoding checking");
 	suite_add_tcase(suite, core);
