@@ -415,14 +415,13 @@ vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk, void *arg)
 	if (state.base != NULL) {
 		error = db_table_foreach_roa(state.base, cb_roa, arg);
 		if (error)
-			goto unlock;
+			goto end;
 		error = db_table_foreach_router_key(state.base, cb_rk, arg);
 	} else
 		error = -EAGAIN;
 
-unlock:
+end:
 	rwlock_unlock(&state_lock);
-
 	return error;
 }
 

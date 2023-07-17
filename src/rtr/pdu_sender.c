@@ -29,16 +29,46 @@ set_header_values(struct pdu_header *header, uint8_t version, uint8_t type,
 }
 
 static int
+print_poll_failure(struct pollfd *pfd)
+{
+	/*
+	 * The main polling thread already logs relevant revents in sensible
+	 * levels (see apply_pollfds()), so we'll just whine on debug.
+	 */
+
+	pr_op_debug("poll() returned revents '0x%02x'. This means", pfd->revents);
+	if (pfd->revents & POLLHUP) {
+		pr_op_debug("- 0x%02x: Peer hung up.", POLLHUP);
+	}
+	if (pfd->revents & POLLERR) {
+		pr_op_debug("- 0x%02x: Read end was closed, or generic error.",
+		    POLLERR);
+	}
+	if (pfd->revents & POLLNVAL) {
+		/*
+		 * In our case, this is perfectly normal. The main polling
+		 * thread closed it while we were trying to write. Whatever.
+		 */
+		pr_op_debug("- 0x%02x: File Descriptor not open.", POLLNVAL);
+	}
+
+	/* Interrupt handler thread, but no need to raise alarms. */
+	return -EINVAL;
+}
+
+static int
 send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 {
 	struct pollfd pfd;
 	int error;
 
-	pr_op_debug("Sending %s to client.", pdutype2str(pdu_type));
-
 	pfd.fd = fd;
 	pfd.events = POLLOUT;
 
+	/*
+	 * We need to poll before writing because the socket has O_NONBLOCK set.
+	 * (And it needs O_NONBLOCK because of the main thread's read poll.)
+	 */
 	do {
 		pfd.revents = 0;
 		error = poll(&pfd, 1, -1);
@@ -47,12 +77,12 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 		if (error == 0)
 			return pr_op_err_st("poll() returned 0, even though there's no timeout.");
 		if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
-			return pr_op_err_st("poll() returned revents %u.", pfd.revents);
+			return print_poll_failure(&pfd);
 	} while (!(pfd.revents & POLLOUT));
 
 	if (write(fd, data, data_len) < 0) {
 		error = errno;
-		pr_op_err_st("Error sending %s to client: %s",
+		pr_op_debug("Error sending %s to client: %s",
 		    pdutype2str(pdu_type), strerror(error));
 		return error;
 	}
@@ -117,15 +147,6 @@ send_cache_response_pdu(int fd, uint8_t version)
 	return send_response(fd, pdu.header.pdu_type, data, len);
 }
 
-static void
-pr_debug_prefix4(struct ipv4_prefix_pdu *pdu)
-{
-	char buffer[INET_ADDRSTRLEN];
-
-	pr_op_debug("Encoded prefix %s/%u into a PDU.",
-	    addr2str4(&pdu->ipv4_prefix, buffer), pdu->prefix_length);
-}
-
 static int
 send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
     uint8_t flags)
@@ -147,19 +168,8 @@ send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv4_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV4_PREFIX_LEN)
 		pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
-	if (log_op_enabled(LOG_DEBUG))
-		pr_debug_prefix4(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);
-}
-
-static void
-pr_debug_prefix6(struct ipv6_prefix_pdu *pdu)
-{
-	char buffer[INET6_ADDRSTRLEN];
-
-	pr_op_debug("Encoded prefix %s/%u into a PDU.",
-	    addr2str6(&pdu->ipv6_prefix, buffer), pdu->prefix_length);
 }
 
 static int
@@ -183,8 +193,6 @@ send_ipv6_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 	len = serialize_ipv6_prefix_pdu(&pdu, data);
 	if (len != RTRPDU_IPV6_PREFIX_LEN)
 		pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
-	if (log_op_enabled(LOG_DEBUG))
-		pr_debug_prefix6(&pdu);
 
 	return send_response(fd, pdu.header.pdu_type, data, len);
 }

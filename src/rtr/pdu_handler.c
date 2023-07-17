@@ -79,6 +79,11 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	serial_t final_serial;
 	int error;
 
+	pr_op_debug("Serial Query. Request version/session/serial: %u/%u/%u",
+	    query->header.protocol_version,
+	    query->header.m.session_id,
+	    query->serial_number);
+
 	/*
 	 * RFC 6810 and 8210:
 	 * "If [...] either the router or the cache finds that the value of the

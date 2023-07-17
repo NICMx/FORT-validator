@@ -310,7 +310,7 @@ error_report_destroy(void *pdu_void)
 
 DEFINE_METADATA(serial_notify, free);
 DEFINE_METADATA(serial_query, free); /* handle_serial_query_pdu */
-DEFINE_METADATA(reset_query, free);
+DEFINE_METADATA(reset_query, free); /* handle_reset_query_pdu */
 DEFINE_METADATA(cache_response, free);
 DEFINE_METADATA(ipv4_prefix, free);
 DEFINE_METADATA(ipv6_prefix, free);
