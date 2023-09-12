@@ -1932,12 +1932,11 @@ static int
 download_rpp(struct sia_uris *uris)
 {
 	struct rpki_uri **node, *uri;
-	array_index index;
 
 	if (uris->rpp.len == 0)
 		return pr_val_err("SIA lacks both caRepository and rpkiNotify.");
 
-	ARRAYLIST_FOREACH(&uris->rpp, node, index) {
+	ARRAYLIST_FOREACH(&uris->rpp, node) {
 		uri = *node;
 		switch (uri_get_type(uri)) {
 		case UT_RSYNC:

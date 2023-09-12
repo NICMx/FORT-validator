@@ -95,7 +95,6 @@ int
 deltas_head_sort(struct deltas_head *deltas, unsigned long max_serial)
 {
 	unsigned long min_serial;
-	struct delta_head *cursor;
 	array_index i;
 	int error;
 
@@ -105,7 +104,7 @@ deltas_head_sort(struct deltas_head *deltas, unsigned long max_serial)
 
 	min_serial = max_serial + 1 - deltas->len;
 
-	ARRAYLIST_FOREACH(deltas, cursor, i) {
+	ARRAYLIST_FOREACH_IDX(deltas, i) {
 		error = swap_until_sorted(deltas->array, i, min_serial,
 		    max_serial);
 		if (error)

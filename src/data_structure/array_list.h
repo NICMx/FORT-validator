@@ -69,10 +69,16 @@
 	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
 	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, static)
 
-#define ARRAYLIST_FOREACH(list, node, index) for (			\
-	(index) = 0, (node) = (list)->array;				\
+#define ARRAYLIST_FOREACH(list, node) for (				\
+	(node) = (list)->array;						\
+	(node) < (list)->array + (list)->len;				\
+	(node)++							\
+)
+
+#define ARRAYLIST_FOREACH_IDX(list, index) for (			\
+	(index) = 0;							\
 	(index) < (list)->len;						\
-	(index)++, (node)++						\
+	(index)++							\
 )
 
 #endif /* SRC_DATA_STRUCTURE_ARRAY_LIST_H_ */

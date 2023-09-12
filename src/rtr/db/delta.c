@@ -192,13 +192,12 @@ __foreach_v4(struct deltas_v4 *array, delta_vrp_foreach_cb cb, void *arg,
 {
 	struct delta_vrp delta;
 	struct delta_v4 *d;
-	array_index i;
 	int error;
 
 	delta.vrp.addr_fam = AF_INET;
 	delta.flags = flags;
 
-	ARRAYLIST_FOREACH(array, d, i) {
+	ARRAYLIST_FOREACH(array, d) {
 		delta.vrp.asn = d->as;
 		delta.vrp.prefix.v4 = d->prefix.addr;
 		delta.vrp.prefix_length = d->prefix.len;
@@ -217,13 +216,12 @@ __foreach_v6(struct deltas_v6 *array, delta_vrp_foreach_cb cb, void *arg,
 {
 	struct delta_vrp delta;
 	struct delta_v6 *d;
-	array_index i;
 	int error;
 
 	delta.vrp.addr_fam = AF_INET6;
 	delta.flags = flags;
 
-	ARRAYLIST_FOREACH(array, d, i) {
+	ARRAYLIST_FOREACH(array, d) {
 		delta.vrp.asn = d->as;
 		delta.vrp.prefix.v6 = d->prefix.addr;
 		delta.vrp.prefix_length = d->prefix.len;
@@ -242,12 +240,11 @@ __foreach_rk(struct deltas_rk *array,  delta_router_key_foreach_cb cb,
 {
 	struct delta_router_key delta;
 	struct delta_rk *d;
-	array_index i;
 	int error;
 
 	delta.flags = flags;
 
-	ARRAYLIST_FOREACH(array, d, i) {
+	ARRAYLIST_FOREACH(array, d) {
 		delta.router_key.as = d->as;
 		memcpy(delta.router_key.ski, d->ski, RK_SKI_LEN);
 		memcpy(delta.router_key.spk, d->spk, RK_SPKI_LEN);

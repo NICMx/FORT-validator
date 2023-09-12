@@ -579,21 +579,17 @@ static enum poll_verdict
 fddb_poll(void)
 {
 	struct pollfd *pollfds; /* array */
-
-	struct rtr_server *server;
-	struct rtr_client *client;
 	struct pollfd *fd;
-
 	unsigned int nclients;
 	unsigned int i;
 	int error;
 
 	pollfds = pcalloc(servers.len + clients.len, sizeof(struct pollfd));
 
-	ARRAYLIST_FOREACH(&servers, server, i)
-		init_pollfd(&pollfds[i], server->fd);
-	ARRAYLIST_FOREACH(&clients, client, i)
-		init_pollfd(&pollfds[servers.len + i], client->fd);
+	ARRAYLIST_FOREACH_IDX(&servers, i)
+		init_pollfd(&pollfds[i], servers.array[i].fd);
+	ARRAYLIST_FOREACH_IDX(&clients, i)
+		init_pollfd(&pollfds[servers.len + i], clients.array[i].fd);
 
 	error = poll(pollfds, servers.len + clients.len, 1000);
 
@@ -750,12 +746,11 @@ int
 rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
 {
 	struct rtr_client *client;
-	unsigned int i;
 	int error = 0;
 
 	mutex_lock(&lock);
 
-	ARRAYLIST_FOREACH(&clients, client, i) {
+	ARRAYLIST_FOREACH(&clients, client) {
 		if (client->fd != -1) {
 			error = cb(client, arg);
 			if (error)

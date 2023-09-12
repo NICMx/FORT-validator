@@ -394,7 +394,6 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 {
 	struct metadata_node *meta;
 	struct serial_number *cursor;
-	array_index i;
 	struct serial_number duplicate;
 	char *string;
 
@@ -427,7 +426,7 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 	 *
 	 * TODO I haven't seen this warning in a while. Review.
 	 */
-	ARRAYLIST_FOREACH(&meta->serials, cursor, i) {
+	ARRAYLIST_FOREACH(&meta->serials, cursor) {
 		if (BN_cmp(cursor->number, number) == 0) {
 			BN2string(number, &string);
 			pr_val_warn("Serial number '%s' is not unique. (Also found in '%s'.)",

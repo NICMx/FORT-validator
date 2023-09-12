@@ -182,9 +182,8 @@ static bool
 prefix_filtered(struct db_slurm *db, struct slurm_prefix *prefix)
 {
 	struct slurm_prefix_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->lists.filter_pfx_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->lists.filter_pfx_al, cursor)
 		if (prefix_filtered_by(cursor, prefix))
 			return true;
 
@@ -238,9 +237,8 @@ static bool
 bgpsec_filtered(struct db_slurm *db, struct slurm_bgpsec *bgpsec)
 {
 	struct slurm_bgpsec_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->lists.filter_bgps_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->lists.filter_bgps_al, cursor)
 		if (bgpsec_filtered_by(cursor, bgpsec))
 			return true;
 
@@ -272,14 +270,13 @@ static bool
 prefix_exists(struct db_slurm *db, struct slurm_prefix *elem)
 {
 	struct slurm_prefix_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->lists.filter_pfx_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->lists.filter_pfx_al, cursor)
 		if (prefix_contained(&cursor->element, elem) ||
 		    prefix_contained(elem, &cursor->element))
 			return true;
 
-	ARRAYLIST_FOREACH(&db->lists.assertion_pfx_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->lists.assertion_pfx_al, cursor)
 		if (prefix_contained(&cursor->element, elem) ||
 		    prefix_contained(elem, &cursor->element))
 			return true;
@@ -336,14 +333,13 @@ static bool
 bgpsec_exists(struct db_slurm *db, struct slurm_bgpsec *elem)
 {
 	struct slurm_bgpsec_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->lists.filter_bgps_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->lists.filter_bgps_al, cursor)
 		if (bgpsec_contained(&cursor->element, elem) ||
 		    bgpsec_contained(elem, &cursor->element))
 			return true;
 
-	ARRAYLIST_FOREACH(&db->lists.assertion_bgps_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->lists.assertion_bgps_al, cursor)
 		if (bgpsec_contained(&cursor->element, elem) ||
 		    bgpsec_contained(elem, &cursor->element))
 			return true;
@@ -415,10 +411,9 @@ db_slurm_bgpsec_is_filtered(struct db_slurm *db, struct router_key const *key)
 	    object##_foreach_cb cb, void *arg)				\
 	{								\
 		struct slurm_##object##_wrap *cursor;			\
-		array_index i;						\
 		int error;						\
 									\
-		ARRAYLIST_FOREACH(&lists->db_list, cursor, i) {		\
+		ARRAYLIST_FOREACH(&lists->db_list, cursor) {		\
 			error = cb(&cursor->element, arg);		\
 			if (error)					\
 				return error;				\
@@ -544,9 +539,8 @@ static void
 persist_filter_prefix(struct db_slurm *db)
 {
 	struct slurm_prefix_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->cache->filter_pfx_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->cache->filter_pfx_al, cursor)
 		al_filter_prefix_add(&db->lists.filter_pfx_al, cursor);
 }
 
@@ -554,9 +548,8 @@ static void
 persist_filter_bgpsec(struct db_slurm *db)
 {
 	struct slurm_bgpsec_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->cache->filter_bgps_al, cursor, i) {
+	ARRAYLIST_FOREACH(&db->cache->filter_bgps_al, cursor) {
 		al_filter_bgpsec_add(&db->lists.filter_bgps_al, cursor);
 		slurm_bgpsec_wrap_refget(cursor);
 	}
@@ -566,9 +559,8 @@ static void
 persist_assertion_prefix(struct db_slurm *db)
 {
 	struct slurm_prefix_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->cache->assertion_pfx_al, cursor, i)
+	ARRAYLIST_FOREACH(&db->cache->assertion_pfx_al, cursor)
 		al_assertion_prefix_add(&db->lists.assertion_pfx_al, cursor);
 }
 
@@ -576,9 +568,8 @@ static void
 persist_assertion_bgpsec(struct db_slurm *db)
 {
 	struct slurm_bgpsec_wrap *cursor;
-	array_index i;
 
-	ARRAYLIST_FOREACH(&db->cache->assertion_bgps_al, cursor, i) {
+	ARRAYLIST_FOREACH(&db->cache->assertion_bgps_al, cursor) {
 		al_assertion_bgpsec_add(&db->lists.assertion_bgps_al, cursor);
 		slurm_bgpsec_wrap_refget(cursor);
 	}

@@ -241,7 +241,6 @@ void
 rpp_traverse(struct rpp *pp)
 {
 	struct rpki_uri **uri;
-	array_index i;
 
 	/*
 	 * A subtree should not invalidate the rest of the tree, so error codes
@@ -258,13 +257,13 @@ rpp_traverse(struct rpp *pp)
 	__cert_traverse(pp);
 
 	/* Validate ROAs, apply validation_handler on them. */
-	ARRAYLIST_FOREACH(&pp->roas, uri, i)
+	ARRAYLIST_FOREACH(&pp->roas, uri)
 		roa_traverse(*uri, pp);
 
 	/*
 	 * We don't do much with the ghostbusters right now.
 	 * Just validate them.
 	 */
-	ARRAYLIST_FOREACH(&pp->ghostbusters, uri, i)
+	ARRAYLIST_FOREACH(&pp->ghostbusters, uri)
 		ghostbusters_traverse(*uri, pp);
 }
