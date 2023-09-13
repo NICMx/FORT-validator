@@ -4,6 +4,7 @@
 #include "nid.h"
 #include "thread_var.h"
 #include "validation_run.h"
+#include "cache/local_cache.h"
 #include "http/http.h"
 #include "incidence/incidence.h"
 #include "rtr/rtr.h"
@@ -121,5 +122,6 @@ revert_config:
 revert_log:
 	log_teardown();
 just_quit:
+	cache_teardown();
 	return convert_to_result(error);
 }

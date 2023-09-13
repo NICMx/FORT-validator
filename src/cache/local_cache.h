@@ -14,7 +14,6 @@ int cache_download(struct rpki_uri *uri, bool *);
 /* FIXME call this */
 void cache_cleanup(void);
 
-/* FIXME call this */
 void cache_teardown(void);
 
 #endif /* SRC_CACHE_LOCAL_CACHE_H_ */

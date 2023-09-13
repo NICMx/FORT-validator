@@ -3,13 +3,13 @@
 #include "cache/local_cache.h"
 
 #include <dirent.h> /* opendir(), readdir(), closedir() */
+#include <jansson.h>
 #include <strings.h> /* strcasecmp */
 #include <sys/types.h> /* opendir(), closedir(), stat() */
 #include <sys/stat.h> /* stat() */
 #include <sys/queue.h> /* STAILQ */
-#include <unistd.h> /* stat() */
 #include <time.h>
-#include <jansson.h>
+#include <unistd.h> /* stat() */
 
 #include "alloc.h"
 #include "file.h"
@@ -18,6 +18,22 @@
 #include "data_structure/uthash.h"
 #include "http/http.h"
 #include "rsync/rsync.h"
+
+/*
+ * Please note: Some of the functions in this module (the ones that have to do
+ * with jansson, both inside and outside of it) are recursive.
+ *
+ * This is fine. Infinite recursion is prevented through path_builder's
+ * MAX_CAPACITY (which is currently defined as 4096), which has to be done
+ * anyway.
+ *
+ * And given that you need at least one character and one slash per directory
+ * level, the maximum allowed recursion level is 2048, which happens to align
+ * with jansson's JSON_PARSER_MAX_DEPTH. (Which is also something we can't
+ * change.)
+ *
+ * FIXME test max recursion
+ */
 
 /* FIXME needs locking */
 
@@ -71,12 +87,6 @@ static struct cache_node *https;
 
 static time_t startup_time; /* When we started the last validation */
 
-static bool
-is_root(struct cache_node *node)
-{
-	return node->parent == NULL;
-}
-
 /* Minimizes multiple evaluation */
 static struct cache_node *
 add_child(struct cache_node *parent, char const *basename)
@@ -109,21 +119,59 @@ init_root(struct cache_node *root, char const *name)
 	return root;
 }
 
-/* FIXME recursive */
 static void
-delete_node(struct cache_node *node, bool force)
+__delete_node(struct cache_node *node)
 {
-	struct cache_node *child, *tmp;
+	if (node->parent != NULL)
+		HASH_DEL(node->parent->children, node);
+	free(node->basename);
+	free(node);
 
-	HASH_ITER(hh, node->children, child, tmp)
-		delete_node(child, force);
+	if (node == rsync)
+		rsync = NULL;
+	else if (node == https)
+		https = NULL;
+}
 
-	if (force || !is_root(node)) {
-		if (node->parent != NULL)
-			HASH_DEL(node->parent->children, node);
-		free(node->basename);
-		free(node);
+static void
+delete_node(struct cache_node *node)
+{
+	struct cache_node *parent;
+
+	if (node == NULL)
+		return;
+
+	if (node->parent != NULL) {
+		HASH_DEL(node->parent->children, node);
+		node->parent = NULL;
 	}
+
+	do {
+		while (node->children != NULL)
+			node = node->children;
+		parent = node->parent;
+		__delete_node(node);
+		node = parent;
+	} while (node != NULL);
+}
+
+static int
+get_metadata_json_filename(char **filename)
+{
+	struct path_builder pb;
+	int error;
+
+	path_init(&pb);
+	path_append(&pb, config_get_local_repository());
+	path_append(&pb, "metadata.json");
+
+	error = path_compile(&pb, filename);
+	if (error) {
+		pr_op_err("Unable to build metadata.json's path: %s",
+		    strerror(error));
+	}
+
+	return error;
 }
 
 static int
@@ -218,37 +266,26 @@ json2node(json_t *json, struct cache_node *parent)
 	return node;
 
 cancel:
-	delete_node(node, true);
+	delete_node(node);
 	return NULL;
 }
 
 static void
 load_metadata_json(void)
 {
+	char *filename;
+	json_t *root;
+	json_error_t jerror;
+	struct cache_node *node;
+	size_t d;
+
 	/*
 	 * Note: Loading metadata.json is one of few things Fort can fail at
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
-	struct path_builder pb;
-	char *filename;
-	json_t *root;
-	json_error_t jerror;
-
-	struct cache_node *node;
-	size_t d;
-
-	int error;
-
-	path_init(&pb);
-	path_append(&pb, config_get_local_repository());
-	path_append(&pb, "metadata.json");
-	error = path_compile(&pb, &filename);
-	if (error) {
-		pr_op_err("Unable to build metadata.json's path: %s",
-		    strerror(error));
-		goto end;
-	}
+	if (get_metadata_json_filename(&filename) != 0)
+		return;
 
 	root = json_load_file(filename, 0, &jerror);
 
@@ -275,16 +312,12 @@ load_metadata_json(void)
 		else {
 			pr_op_warn("Ignoring unrecognized json node '%s'.",
 			    node->basename);
-			delete_node(node, true);
+			delete_node(node);
 		}
 	}
 
 end:
 	json_decref(root);
-	if (rsync == NULL)
-		rsync = init_root(rsync, "rsync");
-	if (https == NULL)
-		https = init_root(https, "https");
 }
 
 void
@@ -340,16 +373,13 @@ was_recently_downloaded(struct cache_node *node)
 	return (node->flags & CNF_DIRECT) && (startup_time <= node->ts_attempt);
 }
 
-static void destroy_tree(struct cache_node *);
-
-/* FIXME recursive */
 static void
 drop_children(struct cache_node *node)
 {
 	struct cache_node *child, *tmp;
 
 	HASH_ITER(hh, node->children, child, tmp)
-		destroy_tree(child);
+		delete_node(child);
 }
 
 /**
@@ -372,11 +402,11 @@ cache_download(struct rpki_uri *uri, bool *changed)
 
 	switch (uri_get_type(uri)) {
 	case UT_RSYNC:
-		node = rsync;
+		node = rsync = init_root(rsync, "rsync");
 		recursive = true;
 		break;
 	case UT_HTTPS:
-		node = https;
+		node = https = init_root(https, "https");
 		recursive = false;
 		break;
 	default:
@@ -449,8 +479,55 @@ end:
 	return error;
 }
 
+static struct cache_node *
+find_next(struct cache_node *sibling, struct cache_node *parent)
+{
+	if (sibling != NULL)
+		return sibling;
+
+	while (parent != NULL) {
+		while (!parent->children) {
+			sibling = parent;
+			parent = sibling->parent;
+			delete_node(sibling);
+			if (parent == NULL)
+				return NULL;
+		}
+
+		sibling = parent->hh.next;
+		if (sibling)
+			return sibling;
+
+		parent = parent->parent;
+	}
+
+	return NULL;
+}
+
+static void cleanup_nodes(struct cache_node *node)
+{
+	struct cache_node *parent, *next;
+
+	while (node != NULL) {
+		if (was_recently_downloaded(node) && !node->error) {
+			drop_children(node);
+			node = find_next(node->hh.next, node->parent);
+		} else if (node->children) {
+			node = node->children;
+		} else {
+			parent = node->parent;
+			next = node->hh.next;
+			delete_node(node);
+			node = find_next(next, parent);
+		}
+	}
+}
+
+/*
+ * @force: ignore nonexistent files
+ */
 static void
-path_rm_rf(struct path_builder *pb, char const *filename)
+path_rm_r(struct path_builder *pb, char const *filename, bool force)
 {
 	char const *path;
 	int error;
@@ -463,14 +540,64 @@ path_rm_rf(struct path_builder *pb, char const *filename)
 	}
 
 	error = file_rm_rf(path);
-	if (error)
+	if (error && !force)
 		pr_op_err("Cannot delete %s: %s", path, strerror(error));
 }
 
-/* FIXME recursive */
+/* Safe removal, Postorder */
+struct cache_tree_traverser {
+	struct path_builder *pb;
+	struct cache_node *next;
+	bool next_sibling;
+};
+
 static void
-cleanup_recursive(struct cache_node *node, struct path_builder *pb)
+ctt_init(struct cache_tree_traverser *ctt, struct cache_node *node,
+    struct path_builder *pb)
 {
+	if (node == NULL) {
+		ctt->next = NULL;
+		return;
+	}
+
+	while (node->children != NULL) {
+		/* FIXME We need to recover from path too long... */
+		path_append(pb, node->basename);
+		node = node->children;
+	}
+	path_append(pb, "a");
+	ctt->pb = pb;
+	ctt->next = node;
+	ctt->next_sibling = true;
+}
+
+static struct cache_node *
+ctt_next(struct cache_tree_traverser *ctt)
+{
+	struct cache_node *next = ctt->next;
+
+	if (next == NULL)
+		return NULL;
+
+	path_pop(ctt->pb, true);
+	if (ctt->next_sibling)
+		path_append(ctt->pb, next->basename);
+
+	if (next->hh.next != NULL) {
+		ctt->next = next->hh.next;
+		ctt->next_sibling = true;
+	} else {
+		ctt->next = next->parent;
+		ctt->next_sibling = false;
+	}
+
+	return next;
+}
+
+static void cleanup_files(struct cache_node *node, char const *name)
+{
+	struct cache_tree_traverser ctt;
+	struct path_builder pb;
 	char const *path;
 	struct stat meta;
 	DIR *dir;
@@ -478,54 +605,57 @@ cleanup_recursive(struct cache_node *node, struct path_builder *pb)
 	struct cache_node *child, *tmp;
 	int error;
 
-	/* FIXME We need to recover from path too long... */
-	path_append(pb, node->basename);
-	error = path_peek(pb, &path);
-	if (error) {
-		pr_op_err("Cannot clean up directory (basename is '%s'): %s",
-		    node->basename, strerror(error));
-		goto end;
+	path_init(&pb);
+	path_append(&pb, config_get_local_repository());
+
+	if (node == NULL) {
+		/* File might exist but node doesn't: Delete file */
+		path_append(&pb, name);
+		path_rm_r(&pb, name, true);
+		path_cancel(&pb);
+		return;
 	}
 
-	if (stat(path, &meta) != 0) {
-		error = errno;
-		if (error == ENOENT) {
-			/* Node exists but file doesn't: Delete node */
-			delete_node(node, false);
-			goto end;
+	ctt_init(&ctt, node, &pb);
+
+	while ((node = ctt_next(&ctt)) != NULL) {
+		error = path_peek(&pb, &path);
+		if (error) {
+			pr_op_err("Cannot clean up directory (basename is '%s'): %s",
+			    node->basename, strerror(error));
+			break;
 		}
 
-		pr_op_err("Cannot clean up '%s'; stat() returned errno %d: %s",
-		    path, error, strerror(error));
-		goto end;
-	}
+		if (stat(path, &meta) != 0) {
+			error = errno;
+			if (error == ENOENT) {
+				/* Node exists but file doesn't: Delete node */
+				delete_node(node);
+				continue;
+			}
 
-	if (was_recently_downloaded(node) && !node->error)
-		goto end; /* Node is active (ie. used recently): Keep it. */
+			pr_op_err("Cannot clean up '%s'; stat() returned errno %d: %s",
+			    path, error, strerror(error));
+			break;
+		}
 
-	/*
-	 * From now on, file exists but node is stale.
-	 * We'll aim to delete both.
-	 */
+		if (!node->children)
+			continue; /* Node represents file, file does exist. */
+		/* Node represents directory. */
 
-	if (S_ISREG(meta.st_mode)) {
-		/* Both node and file exist, but inactive: Delete */
-		remove(path);
-		delete_node(node, false);
+		if (!S_ISDIR(meta.st_mode)) {
+			/* File is not a directory; welp. */
+			remove(path);
+			delete_node(node);
+		}
 
-	} else if (S_ISDIR(meta.st_mode)) {
 		dir = opendir(path);
 		if (dir == NULL) {
 			error = errno;
 			pr_op_err("Cannot clean up '%s'; S_ISDIR() but !opendir(): %s",
 			    path, strerror(error));
-			goto end;
+			continue; /* AAAAAAAAAAAAAAAAAH */
 		}
-
-		/*
-		 * Directory exists but node is stale.
-		 * A child might be fresh, so recurse.
-		 */
 
 		FOREACH_DIR_FILE(dir, file) {
 			if (S_ISDOTS(file))
@@ -534,22 +664,22 @@ cleanup_recursive(struct cache_node *node, struct path_builder *pb)
 			HASH_FIND_STR(node->children, file->d_name, child);
 			if (child != NULL) {
 				child->flags |= CNF_FOUND;
-				/* File child's node does exist: Recurse. */
-				cleanup_recursive(child, pb);
 			} else {
 				/* File child's node does not exist: Delete. */
-				path_append(pb, file->d_name);
-				path_rm_rf(pb, file->d_name);
-				path_pop(pb, true);
+				path_append(&pb, file->d_name);
+				path_rm_r(&pb, file->d_name, false);
+				path_pop(&pb, true);
 			}
-
 		}
+
 		error = errno;
 		closedir(dir);
 		if (error) {
 			pr_op_err("Cannot clean up directory (basename is '%s'): %s",
 			    node->basename, strerror(error));
-			goto end;
+			HASH_ITER(hh, node->children, child, tmp)
+				child->flags &= ~CNF_FOUND;
+			continue; /* AAAAAAAAAAAAAAAAAH */
 		}
 
 		HASH_ITER(hh, node->children, child, tmp) {
@@ -562,24 +692,18 @@ cleanup_recursive(struct cache_node *node, struct path_builder *pb)
 				child->flags &= ~CNF_FOUND;
 			} else {
 				/* Node child's file does not exist: Delete. */
-				delete_node(child, false);
+				delete_node(child);
 			}
 		}
 
-		if (node->children == NULL && !is_root(node)) {
+		if (node->children == NULL) {
 			/* Node is inactive and we rm'd its children: Delete. */
-			path_rm_rf(pb, node->basename);
-			delete_node(node, false);
+			path_rm_r(&pb, node->basename, false);
+			delete_node(node);
 		}
-
-	} else {
-		/* Outdated, not file nor directory: Delete. */
-		remove(path);
-		delete_node(node, false);
 	}
 
-end:
-	path_pop(pb, true);
+	path_cancel(&pb);
 }
 
 static int
@@ -599,7 +723,6 @@ tt2json(time_t tt, json_t **result)
 	return 0;
 }
 
-/* FIXME recursive */
 static json_t *
 node2json(struct cache_node *node)
 {
@@ -690,6 +813,8 @@ append_node(json_t *root, struct cache_node *node, char const *name)
 {
 	json_t *child;
 
+	if (node == NULL)
+		return 0;
 	child = node2json(node);
 	if (child == NULL)
 		return -1;
@@ -723,60 +848,42 @@ build_metadata_json(void)
 }
 
 static void
-write_metadata_json(char const *filename)
+write_metadata_json(void)
 {
 	struct json_t *json;
+	char *filename;
 
 	json = build_metadata_json();
 	if (json == NULL)
 		return;
 
+	if (get_metadata_json_filename(&filename) != 0)
+		return;
+
 	if (json_dump_file(json, filename, JSON_COMPACT))
 		pr_op_err("Unable to write metadata.json; unknown cause.");
 
+	free(filename);
 	json_decref(json);
 }
 
 void
 cache_cleanup(void)
 {
-	struct path_builder pb;
-	char const *json_filename;
-	int error;
+	cleanup_nodes(rsync);
+	cleanup_files(rsync, "rsync");
 
-	path_init(&pb);
-	path_append(&pb, config_get_local_repository());
+	cleanup_nodes(https);
+	cleanup_files(https, "https");
 
-	cleanup_recursive(rsync, &pb);
-	cleanup_recursive(https, &pb);
-
-	path_append(&pb, "metadata.json");
-	error = path_peek(&pb, &json_filename);
-	if (error)
-		pr_op_err("Cannot create metadata.json: %s", strerror(error));
-	else
-		write_metadata_json(json_filename);
-
-	path_cancel(&pb);
-}
-
-/* FIXME recursive */
-static void
-destroy_tree(struct cache_node *node)
-{
-	if (node == NULL)
-		return;
-
-	free(node->basename);
-	drop_children(node);
-	if (node->parent != NULL)
-		HASH_DEL(node->parent->children, node);
-	free(node);
+	write_metadata_json();
 }
 
 void
 cache_teardown(void)
 {
-	destroy_tree(rsync);
-	destroy_tree(https);
+	delete_node(rsync);
+	rsync = NULL;
+	delete_node(https);
+	https = NULL;
 }
