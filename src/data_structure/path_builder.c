@@ -15,7 +15,7 @@
 #define MAX_CAPACITY 4096
 
 void
-path_init(struct path_builder *pb)
+pb_init(struct path_builder *pb)
 {
 	pb->string = pmalloc(INITIAL_CAPACITY);
 	pb->len = 0;
@@ -27,7 +27,7 @@ path_init(struct path_builder *pb)
  * Returns true on success, false on failure.
  */
 static bool
-path_grow(struct path_builder *pb, size_t total_len)
+pb_grow(struct path_builder *pb, size_t total_len)
 {
 	if (total_len > MAX_CAPACITY) {
 		free(pb->string);
@@ -67,17 +67,11 @@ add(struct path_builder *pb, char const *addend, size_t addlen)
 	size_t total_len;
 
 	total_len = pb->len + addlen;
-	if (total_len > pb->capacity && !path_grow(pb, total_len))
+	if (total_len > pb->capacity && !pb_grow(pb, total_len))
 		return;
 
 	memcpy(pb->string + pb->len, addend, addlen);
 	pb->len += addlen;
-}
-
-void
-path_append(struct path_builder *pb, char const *addend)
-{
-	path_append_limited(pb, addend, strlen(addend));
 }
 
 static void
@@ -91,7 +85,7 @@ add_slashed(struct path_builder *pb, char const *addend, size_t addlen)
 		break;
 	case 2:
 		if (addend[0] == '.' && addend[1] == '.') {
-			path_pop(pb, false);
+			pb_pop(pb, false);
 			return;
 		}
 		break;
@@ -104,8 +98,8 @@ add_slashed(struct path_builder *pb, char const *addend, size_t addlen)
 }
 
 /* Do NOT include the null character in @addlen. */
-void
-path_append_limited(struct path_builder *pb, char const *addend, size_t addlen)
+static void
+pb_append_limited(struct path_builder *pb, char const *addend, size_t addlen)
 {
 	char const *wall;
 	char const *next_slash;
@@ -127,7 +121,13 @@ path_append_limited(struct path_builder *pb, char const *addend, size_t addlen)
 }
 
 void
-path_append_guri(struct path_builder *pb, struct rpki_uri *uri)
+pb_append(struct path_builder *pb, char const *addend)
+{
+	pb_append_limited(pb, addend, strlen(addend));
+}
+
+void
+pb_append_guri(struct path_builder *pb, struct rpki_uri *uri)
 {
 	char const *guri;
 	char const *colon;
@@ -140,14 +140,14 @@ path_append_guri(struct path_builder *pb, struct rpki_uri *uri)
 
 	colon = strstr(guri, ":");
 	schema_len = colon - guri;
-	path_append_limited(pb, guri, schema_len);
+	pb_append_limited(pb, guri, schema_len);
 
-	path_append_limited(pb, colon + 3,
+	pb_append_limited(pb, colon + 3,
 	    uri_get_global_len(uri) - schema_len - 3);
 }
 
 void
-path_append_uint(struct path_builder *pb, unsigned int num)
+pb_append_uint(struct path_builder *pb, unsigned int num)
 {
 	size_t room;
 	int num_len;
@@ -163,7 +163,7 @@ path_append_uint(struct path_builder *pb, unsigned int num)
 	if (num_len < 0)
 		goto bad_print;
 	if (num_len >= room) {
-		if (!path_grow(pb, pb->len + num_len + 1))
+		if (!pb_grow(pb, pb->len + num_len + 1))
 			return;
 
 		room = pb->capacity - pb->len;
@@ -184,7 +184,7 @@ bad_print:
 
 /* Removes the last component added. */
 void
-path_pop(struct path_builder *pb, bool fatal)
+pb_pop(struct path_builder *pb, bool fatal)
 {
 	size_t i;
 
@@ -223,7 +223,7 @@ reverse_string(char *str, size_t len)
 
 /* Turns ab/cd/ef/gh into gh/ef/cd/ab. */
 void
-path_reverse(struct path_builder *pb)
+pb_reverse(struct path_builder *pb)
 {
 	size_t min;
 	size_t max;
@@ -250,7 +250,7 @@ path_reverse(struct path_builder *pb)
  * functions on @pb afterwards.
  */
 int
-path_peek(struct path_builder *pb, char const **result)
+pb_peek(struct path_builder *pb, char const **result)
 {
 	add(pb, "\0", 1);
 	if (pb->error)
@@ -263,7 +263,7 @@ path_peek(struct path_builder *pb, char const **result)
 
 /* Should not be called more than once. */
 int
-path_compile(struct path_builder *pb, char **result)
+pb_compile(struct path_builder *pb, char **result)
 {
 	add(pb, "\0", 1);
 	if (pb->error)
@@ -274,7 +274,7 @@ path_compile(struct path_builder *pb, char **result)
 }
 
 void
-path_cancel(struct path_builder *pb)
+pb_cancel(struct path_builder *pb)
 {
 	free(pb->string);
 }

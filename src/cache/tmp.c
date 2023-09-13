@@ -21,11 +21,11 @@ cache_tmpfile(char **filename)
 {
 	struct path_builder pb;
 
-	path_init(&pb);
+	pb_init(&pb);
 
-	path_append(&pb, config_get_local_repository());
-	path_append(&pb, "tmp");
-	path_append_uint(&pb, atomic_fetch_add(&file_counter, 1u));
+	pb_append(&pb, config_get_local_repository());
+	pb_append(&pb, "tmp");
+	pb_append_uint(&pb, atomic_fetch_add(&file_counter, 1u));
 
-	return path_compile(&pb, filename);
+	return pb_compile(&pb, filename);
 }

@@ -191,7 +191,7 @@ validate_node(struct cache_node *expected, struct cache_node *expected_parent,
 	}
 	ck_assert_ptr_eq(expected_parent, actual->parent);
 
-	path_append(pb, expected->basename);
+	pb_append(pb, expected->basename);
 
 	HASH_ITER(hh, expected->children, expected_child, tmp) {
 		HASH_FIND_STR(actual->children, expected_child->basename,
@@ -208,7 +208,7 @@ validate_node(struct cache_node *expected, struct cache_node *expected_parent,
 			expected_not_found(actual_child);
 	}
 
-	path_pop(pb, true);
+	pb_pop(pb, true);
 }
 
 static void
@@ -245,8 +245,8 @@ validate_file(struct cache_node *expected, struct path_builder *pb)
 	if (expected == NULL)
 		return;
 
-	path_append(pb, expected->basename);
-	ck_assert_int_eq(0, path_peek(pb, &path));
+	pb_append(pb, expected->basename);
+	ck_assert_int_eq(0, pb_peek(pb, &path));
 
 	if (is_rsync(expected)) {
 		/* Currently, the unit tests do not fake rsync files */
@@ -297,7 +297,7 @@ must_be_dir:
 
 	closedir(dir);
 end:
-	path_pop(pb, true);
+	pb_pop(pb, true);
 }
 
 static void
@@ -320,13 +320,13 @@ validate_trees(struct cache_node *actual, struct cache_node *nodes,
 		file_ls_R("tmp");
 	}
 
-	path_init(&pb);
-	path_append(&pb, "tmp");
+	pb_init(&pb);
+	pb_append(&pb, "tmp");
 
 	validate_node(nodes, NULL, actual, &pb);
 	validate_file(files, &pb);
 
-	path_cancel(&pb);
+	pb_cancel(&pb);
 
 	delete_node(nodes);
 	if (nodes != files)

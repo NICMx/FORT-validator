@@ -14,7 +14,7 @@ struct path_builder {
 	int error;
 };
 
-void path_init(struct path_builder *);
+void pb_init(struct path_builder *);
 
 /*
  * Note, the append()s merge slashes:
@@ -27,18 +27,17 @@ void path_init(struct path_builder *);
  * 	a///b + c//d = a/b/c/d
  */
 
-void path_append(struct path_builder *, char const *);
-void path_append_limited(struct path_builder *, char const *, size_t);
-void path_append_guri(struct path_builder *, struct rpki_uri *);
-void path_append_uint(struct path_builder *, unsigned int);
+void pb_append(struct path_builder *, char const *);
+void pb_append_guri(struct path_builder *, struct rpki_uri *);
+void pb_append_uint(struct path_builder *, unsigned int);
 
-void path_pop(struct path_builder *, bool);
+void pb_pop(struct path_builder *, bool);
 
-void path_reverse(struct path_builder *);
+void pb_reverse(struct path_builder *);
 
-int path_peek(struct path_builder *, char const **);
-int path_compile(struct path_builder *, char **);
+int pb_peek(struct path_builder *, char const **);
+int pb_compile(struct path_builder *, char **);
 
-void path_cancel(struct path_builder *);
+void pb_cancel(struct path_builder *);
 
 #endif /* SRC_DATA_STRUCTURE_PATH_BUILDER_H_ */

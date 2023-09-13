@@ -225,9 +225,9 @@ map_simple(struct rpki_uri *uri, char const *gprefix, char const *lprefix,
 		return err;
 	}
 
-	path_init(&pb);
-	path_append_guri(&pb, uri);
-	error = path_compile(&pb, &uri->local);
+	pb_init(&pb);
+	pb_append_guri(&pb, uri);
+	error = pb_compile(&pb, &uri->local);
 	if (error)
 		return error;
 
@@ -248,20 +248,20 @@ map_simple(struct rpki_uri *uri, char const *gprefix, char const *lprefix,
 static int
 map_caged(struct rpki_uri *uri)
 {
-	struct path_builder builder;
+	struct path_builder pb;
 	struct rpki_uri *notification;
 
 	notification = validation_get_notification_uri(state_retrieve());
 	if (notification == NULL)
 		pr_crit("Programming error: Notification not recorded.");
 
-	path_init(&builder);
+	pb_init(&pb);
 
-	path_append(&builder, "rrdp");
-	path_append_guri(&builder, notification);
-	path_append_guri(&builder, uri);
+	pb_append(&pb, "rrdp");
+	pb_append_guri(&pb, notification);
+	pb_append_guri(&pb, uri);
 
-	return path_compile(&builder, &uri->local);
+	return pb_compile(&pb, &uri->local);
 }
 
 static int
