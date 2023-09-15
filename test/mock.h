@@ -22,9 +22,6 @@
     type name(__VA_ARGS__) { __MOCK_ABORT_MSG; return result; }
 #define MOCK_ABORT_INT(name, ...) \
     __MOCK_ABORT(name, int, 0, __VA_ARGS__)
-/* FIXME delete? */
-#define MOCK_ABORT_BOOL(name, ...) \
-    __MOCK_ABORT(name, bool, false, __VA_ARGS__)
 #define MOCK_ABORT_ENUM(name, type, ...) \
     __MOCK_ABORT(name, enum type, 0, __VA_ARGS__)
 #define MOCK_ABORT_PTR(name, type, ...) \

@@ -191,7 +191,7 @@ validate_node(struct cache_node *expected, struct cache_node *expected_parent,
 	}
 	ck_assert_ptr_eq(expected_parent, actual->parent);
 
-	pb_append(pb, expected->basename);
+	ck_assert_int_eq(0, pb_append(pb, expected->basename));
 
 	HASH_ITER(hh, expected->children, expected_child, tmp) {
 		HASH_FIND_STR(actual->children, expected_child->basename,
@@ -235,7 +235,6 @@ search_dir(DIR *parent, char const *path, char const *name)
 static void
 validate_file(struct cache_node *expected, struct path_builder *pb)
 {
-	char const *path;
 	struct stat meta;
 	DIR *dir;
 	struct dirent *file;
@@ -245,8 +244,7 @@ validate_file(struct cache_node *expected, struct path_builder *pb)
 	if (expected == NULL)
 		return;
 
-	pb_append(pb, expected->basename);
-	ck_assert_int_eq(0, pb_peek(pb, &path));
+	ck_assert_int_eq(0, pb_append(pb, expected->basename));
 
 	if (is_rsync(expected)) {
 		/* Currently, the unit tests do not fake rsync files */
@@ -266,13 +264,13 @@ validate_file(struct cache_node *expected, struct path_builder *pb)
 	}
 
 must_be_file:
-	ck_assert_int_eq(0, stat(path, &meta));
+	ck_assert_int_eq(0, stat(pb->string, &meta));
 	ck_assert_int_eq(1, S_ISREG(meta.st_mode));
 	goto end;
 
 must_be_dir:
 	errno = 0;
-	dir = opendir(path);
+	dir = opendir(pb->string);
 	error = errno;
 	ck_assert_int_eq(0, error);
 	ck_assert_ptr_nonnull(dir);
@@ -284,7 +282,7 @@ must_be_dir:
 		HASH_FIND_STR(expected->children, file->d_name, child);
 		if (child == NULL) {
 			ck_abort_msg("file %s/%s is not supposed to exist.",
-			    path, file->d_name);
+			    pb->string, file->d_name);
 		}
 
 		validate_file(child, pb);
@@ -293,7 +291,7 @@ must_be_dir:
 	ck_assert_int_eq(0, error);
 
 	HASH_ITER(hh, expected->children, child, tmp)
-		search_dir(dir, path, child->basename);
+		search_dir(dir, pb->string, child->basename);
 
 	closedir(dir);
 end:
@@ -321,12 +319,12 @@ validate_trees(struct cache_node *actual, struct cache_node *nodes,
 	}
 
 	pb_init(&pb);
-	pb_append(&pb, "tmp");
+	ck_assert_int_eq(0, pb_append(&pb, "tmp"));
 
 	validate_node(nodes, NULL, actual, &pb);
 	validate_file(files, &pb);
 
-	pb_cancel(&pb);
+	pb_cleanup(&pb);
 
 	delete_node(nodes);
 	if (nodes != files)

@@ -162,15 +162,18 @@ get_metadata_json_filename(char **filename)
 	int error;
 
 	pb_init(&pb);
-	pb_append(&pb, config_get_local_repository());
-	pb_append(&pb, "metadata.json");
+	error = pb_append(&pb, config_get_local_repository());
+	if (error)
+		goto cancel;
+	error = pb_append(&pb, "metadata.json");
+	if (error)
+		goto cancel;
 
-	error = pb_compile(&pb, filename);
-	if (error) {
-		pr_op_err("Unable to build metadata.json's path: %s",
-		    strerror(error));
-	}
+	*filename = pb.string;
+	return 0;
 
+cancel:
+	pb_cleanup(&pb);
 	return error;
 }
 
@@ -336,34 +339,36 @@ delete_node_file(struct cache_node *node, bool is_file)
 {
 	struct path_builder pb;
 	struct cache_node *cursor;
-	char *path;
 	int error;
 
 	pb_init(&pb);
-	for (cursor = node; cursor != NULL; cursor = cursor->parent)
-		pb_append(&pb, cursor->basename);
-	pb_append(&pb, config_get_local_repository());
-	pb_reverse(&pb);
-	error = pb_compile(&pb, &path);
-	if (error) {
-		pr_val_err("Cannot override '%s'; path is bogus: %s",
-		    node->basename, strerror(error));
-		return error;
+	for (cursor = node; cursor != NULL; cursor = cursor->parent) {
+		error = pb_append(&pb, cursor->basename);
+		if (error)
+			goto cancel;
 	}
+	error = pb_append(&pb, config_get_local_repository());
+	if (error)
+		goto cancel;
+	pb_reverse(&pb);
 
 	if (is_file) {
-		if (remove(path) != 0) {
+		if (remove(pb.string) != 0) {
 			error = errno;
 			pr_val_err("Cannot override file '%s': %s",
-			    path, strerror(error));
+			    pb.string, strerror(error));
 		}
 	} else {
-		error = file_rm_rf(path);
+		error = file_rm_rf(pb.string);
 		pr_val_err("Cannot override directory '%s': %s",
-		    path, strerror(error));
+		    pb.string, strerror(error));
 	}
 
-	free(path);
+	pb_cleanup(&pb);
+	return error;
+
+cancel:
+	pb_cleanup(&pb);
 	return error;
 }
 
@@ -529,19 +534,11 @@ static void cleanup_nodes(struct cache_node *node)
 static void
 pb_rm_r(struct path_builder *pb, char const *filename, bool force)
 {
-	char const *path;
 	int error;
 
-	error = pb_peek(pb, &path);
-	if (error) {
-		pr_op_err("Path builder error code %d; cannot delete directory. (Basename is '%s')",
-		    error, filename);
-		return;
-	}
-
-	error = file_rm_rf(path);
+	error = file_rm_rf(pb->string);
 	if (error && !force)
-		pr_op_err("Cannot delete %s: %s", path, strerror(error));
+		pr_op_err("Cannot delete %s: %s", pb->string, strerror(error));
 }
 
 /* Safe removal, Postorder */
@@ -560,12 +557,18 @@ ctt_init(struct cache_tree_traverser *ctt, struct cache_node *node,
 		return;
 	}
 
+	/* FIXME test these error paths */
 	while (node->children != NULL) {
-		/* FIXME We need to recover from path too long... */
-		pb_append(pb, node->basename);
+		if (pb_append(pb, node->basename) != 0) {
+			node = node->parent;
+			goto end;
+		}
 		node = node->children;
 	}
-	pb_append(pb, "a");
+	if (pb_append(pb, "a") != 0)
+		node = node->parent;
+
+end:
 	ctt->pb = pb;
 	ctt->next = node;
 	ctt->next_sibling = true;
@@ -581,7 +584,7 @@ ctt_next(struct cache_tree_traverser *ctt)
 
 	pb_pop(ctt->pb, true);
 	if (ctt->next_sibling)
-		pb_append(ctt->pb, next->basename);
+		pb_append(ctt->pb, next->basename); /* FIXME */
 
 	if (next->hh.next != NULL) {
 		ctt->next = next->hh.next;
@@ -598,7 +601,6 @@ static void cleanup_files(struct cache_node *node, char const *name)
 {
 	struct cache_tree_traverser ctt;
 	struct path_builder pb;
-	char const *path;
 	struct stat meta;
 	DIR *dir;
 	struct dirent *file;
@@ -606,27 +608,22 @@ static void cleanup_files(struct cache_node *node, char const *name)
 	int error;
 
 	pb_init(&pb);
-	pb_append(&pb, config_get_local_repository());
+	if (pb_append(&pb, config_get_local_repository()) != 0)
+		goto end;
 
 	if (node == NULL) {
 		/* File might exist but node doesn't: Delete file */
-		pb_append(&pb, name);
+		if (pb_append(&pb, name) != 0)
+			goto end;
 		pb_rm_r(&pb, name, true);
-		pb_cancel(&pb);
+		pb_cleanup(&pb);
 		return;
 	}
 
 	ctt_init(&ctt, node, &pb);
 
 	while ((node = ctt_next(&ctt)) != NULL) {
-		error = pb_peek(&pb, &path);
-		if (error) {
-			pr_op_err("Cannot clean up directory (basename is '%s'): %s",
-			    node->basename, strerror(error));
-			break;
-		}
-
-		if (stat(path, &meta) != 0) {
+		if (stat(pb.string, &meta) != 0) {
 			error = errno;
 			if (error == ENOENT) {
 				/* Node exists but file doesn't: Delete node */
@@ -635,7 +632,7 @@ static void cleanup_files(struct cache_node *node, char const *name)
 			}
 
 			pr_op_err("Cannot clean up '%s'; stat() returned errno %d: %s",
-			    path, error, strerror(error));
+			    pb.string, error, strerror(error));
 			break;
 		}
 
@@ -645,15 +642,15 @@ static void cleanup_files(struct cache_node *node, char const *name)
 
 		if (!S_ISDIR(meta.st_mode)) {
 			/* File is not a directory; welp. */
-			remove(path);
+			remove(pb.string);
 			delete_node(node);
 		}
 
-		dir = opendir(path);
+		dir = opendir(pb.string);
 		if (dir == NULL) {
 			error = errno;
 			pr_op_err("Cannot clean up '%s'; S_ISDIR() but !opendir(): %s",
-			    path, strerror(error));
+			    pb.string, strerror(error));
 			continue; /* AAAAAAAAAAAAAAAAAH */
 		}
 
@@ -666,9 +663,10 @@ static void cleanup_files(struct cache_node *node, char const *name)
 				child->flags |= CNF_FOUND;
 			} else {
 				/* File child's node does not exist: Delete. */
-				pb_append(&pb, file->d_name);
-				pb_rm_r(&pb, file->d_name, false);
-				pb_pop(&pb, true);
+				if (pb_append(&pb, file->d_name) == 0) {
+					pb_rm_r(&pb, file->d_name, false);
+					pb_pop(&pb, true);
+				}
 			}
 		}
 
@@ -703,7 +701,8 @@ static void cleanup_files(struct cache_node *node, char const *name)
 		}
 	}
 
-	pb_cancel(&pb);
+end:
+	pb_cleanup(&pb);
 }
 
 static int

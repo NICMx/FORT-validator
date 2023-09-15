@@ -1,43 +1,31 @@
 #ifndef SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 #define SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 
-/* FIXME add support for absolute paths */
-
 #include <stdbool.h>
 #include <stddef.h>
 #include "types/uri.h"
 
 struct path_builder {
 	char *string;
-	size_t len;
+	size_t len; /* Includes the null chara */
 	size_t capacity;
-	int error;
 };
 
 void pb_init(struct path_builder *);
 
 /*
- * Note, the append()s merge slashes:
- *
- * 	a + b = a/b
- * 	a/ + b = a/b
- * 	a + /b = a/b
- * 	a/ + /b = a/b
- * 	a// + ///b = a/b
- * 	a///b + c//d = a/b/c/d
+ * The appends are atomic.
+ * They are also naive; they don't collapse `.`, `..` nor slashes.
  */
 
-void pb_append(struct path_builder *, char const *);
-void pb_append_guri(struct path_builder *, struct rpki_uri *);
-void pb_append_uint(struct path_builder *, unsigned int);
+int pb_appendn(struct path_builder *, char const *, size_t);
+int pb_append(struct path_builder *, char const *);
+int pb_append_u32(struct path_builder *, uint32_t);
 
-void pb_pop(struct path_builder *, bool);
+int pb_pop(struct path_builder *, bool);
 
 void pb_reverse(struct path_builder *);
 
-int pb_peek(struct path_builder *, char const **);
-int pb_compile(struct path_builder *, char **);
-
-void pb_cancel(struct path_builder *);
+void pb_cleanup(struct path_builder *);
 
 #endif /* SRC_DATA_STRUCTURE_PATH_BUILDER_H_ */

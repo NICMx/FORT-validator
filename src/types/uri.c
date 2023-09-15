@@ -209,35 +209,117 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	return 0;
 }
 
+struct path_parser {
+	char const *token;
+	char const *slash;
+	size_t len;
+};
+
+/* Return true if there's a new token, false if we're done. */
+static bool
+path_next(struct path_parser *parser)
+{
+	if (parser->slash == NULL)
+		return false;
+
+	parser->token = parser->slash + 1;
+	parser->slash = strchr(parser->token, '/');
+	parser->len = (parser->slash != NULL)
+	    ? (parser->slash - parser->token)
+	    : strlen(parser->token);
+
+	return parser->token[0] != 0;
+}
+
+static bool
+path_is_dot(struct path_parser *parser)
+{
+	return parser->len == 1 && parser->token[0] == '.';
+}
+
+static bool
+path_is_dotdots(struct path_parser *parser)
+{
+	return parser->len == 2
+	    && parser->token[0] == '.'
+	    && parser->token[1] == '.' ;
+}
+
+static int
+append_guri(struct path_builder *pb, char const *guri, char const *gprefix,
+    int err, bool skip_schema)
+{
+	struct path_parser parser;
+	size_t dot_dot_limit;
+	int error;
+
+	/* Schema */
+	if (!str_starts_with(guri, gprefix)) {
+		pr_val_err("URI '%s' does not begin with '%s'.", guri, gprefix);
+		return err;
+	}
+
+	if (!skip_schema) {
+		error = pb_appendn(pb, guri, 5);
+		if (error)
+			return error;
+	}
+
+	/* Domain */
+	parser.slash = guri + 7;
+	if (!path_next(&parser))
+		return pr_val_err("URI '%s' seems to lack a domain.", guri);
+	if (path_is_dot(&parser)) {
+		/* Dumping files to the cache root is unsafe. */
+		return pr_val_err("URI '%s' employs the root domain. This is not really cacheable, so I'm going to distrust it.",
+		    guri);
+	}
+	if (path_is_dotdots(&parser)) {
+		return pr_val_err("URI '%s' seems to be dot-dotting past its own schema.",
+		    guri);
+	}
+	error = pb_appendn(pb, parser.token, parser.len);
+	if (error)
+		return error;
+
+	/* Other components */
+	dot_dot_limit = pb->len;
+	while (path_next(&parser)) {
+		if (path_is_dotdots(&parser)) {
+			error = pb_pop(pb, false);
+			if (error)
+				return error;
+			if (pb->len < dot_dot_limit) {
+				return pr_val_err("URI '%s' seems to be dot-dotting past its own domain.",
+				    guri);
+			}
+		} else if (!path_is_dot(&parser)) {
+			error = pb_appendn(pb, parser.token, parser.len);
+			if (error)
+				return error;
+		}
+	}
+
+	return 0;
+}
+
 /*
  * Maps "rsync://a.b.c/d/e.cer" into "<local-repository>/rsync/a.b.c/d/e.cer".
  */
 static int
-map_simple(struct rpki_uri *uri, char const *gprefix, char const *lprefix,
-    int err)
+map_simple(struct rpki_uri *uri, char const *gprefix, int err)
 {
 	struct path_builder pb;
 	int error;
 
-	if (!str_starts_with(uri->global, gprefix)) {
-		pr_val_err("URI '%s' does not begin with '%s'.",
-		    uri->global, lprefix);
-		return err;
-	}
-
 	pb_init(&pb);
-	pb_append_guri(&pb, uri);
-	error = pb_compile(&pb, &uri->local);
-	if (error)
+	error = append_guri(&pb, uri->global, gprefix, err, false);
+	if (error) {
+		pb_cleanup(&pb);
 		return error;
-
-	if (!str_starts_with(uri->local, lprefix)) {
-		pr_val_err("URI '%s' seems to be dot-dotting to its scheme.",
-		    uri->global);
-		free(uri->local);
-		return -EINVAL;
 	}
 
+	uri->local = pb.string;
 	return 0;
 }
 
@@ -250,6 +332,7 @@ map_caged(struct rpki_uri *uri)
 {
 	struct path_builder pb;
 	struct rpki_uri *notification;
+	int error;
 
 	notification = validation_get_notification_uri(state_retrieve());
 	if (notification == NULL)
@@ -257,11 +340,18 @@ map_caged(struct rpki_uri *uri)
 
 	pb_init(&pb);
 
-	pb_append(&pb, "rrdp");
-	pb_append_guri(&pb, notification);
-	pb_append_guri(&pb, uri);
+	error = pb_append(&pb, "rrdp");
+	if (error)
+		return error;
+	error = append_guri(&pb, notification->global, "https://", ENOTHTTPS, true);
+	if (error)
+		return error;
+	error = append_guri(&pb, uri->global, "rsync://", ENOTRSYNC, true);
+	if (error)
+		return error;
 
-	return pb_compile(&pb, &uri->local);
+	uri->local = pb.string;
+	return 0;
 }
 
 static int
@@ -269,9 +359,9 @@ autocomplete_local(struct rpki_uri *uri)
 {
 	switch (uri->type) {
 	case UT_RSYNC:
-		return map_simple(uri, "rsync://", "rsync/", ENOTRSYNC);
+		return map_simple(uri, "rsync://", ENOTRSYNC);
 	case UT_HTTPS:
-		return map_simple(uri, "https://", "https/", ENOTHTTPS);
+		return map_simple(uri, "https://", ENOTHTTPS);
 	case UT_CAGED:
 		return map_caged(uri);
 	}

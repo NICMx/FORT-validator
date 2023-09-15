@@ -22,35 +22,63 @@ START_TEST(test_constructor)
 {
 	struct rpki_uri *uri;
 
-	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/e"));
-	ck_assert_str_eq("https://a.b.c/d/e", uri_get_global(uri));
-	ck_assert_str_eq("https/a.b.c/d/e", uri_get_local(uri));
-	uri_refput(uri);
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, ""));
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "h"));
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "http"));
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "https"));
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "https:"));
+	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "https:/"));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://"));
 
 	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c"));
 	ck_assert_str_eq("https://a.b.c", uri_get_global(uri));
 	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
 	uri_refput(uri);
 
-	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://"));
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/"));
+	ck_assert_str_eq("https://a.b.c/", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/d"));
+	ck_assert_str_eq("https://a.b.c/d", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c/d", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/e"));
+	ck_assert_str_eq("https://a.b.c/d/e", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c/d/e", uri_get_local(uri));
+	uri_refput(uri);
 
 	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/.."));
 	ck_assert_str_eq("https://a.b.c/d/..", uri_get_global(uri));
 	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
 	uri_refput(uri);
 
-	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/.."));
-	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/../.."));
-
 	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/."));
 	ck_assert_str_eq("https://a.b.c/.", uri_get_global(uri));
 	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
 	uri_refput(uri);
 
-	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "rsync://a.b.c/d"));
-	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, ""));
-	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://.."));
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/././d/././e/./."));
+	ck_assert_str_eq("https://a.b.c/././d/././e/./.", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c/d/e", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(0, uri_create(&uri, UT_HTTPS, "https://a.b.c/a/b/.././.."));
+	ck_assert_str_eq("https://a.b.c/a/b/.././..", uri_get_global(uri));
+	ck_assert_str_eq("https/a.b.c", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/.."));
 	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/../.."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/../.."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://a.b.c/d/../../.."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://./."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://.."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://../.."));
+	ck_assert_int_eq(-EINVAL, uri_create(&uri, UT_HTTPS, "https://../../.."));
 
 	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "rsync://a.b.c/d"));
 	ck_assert_int_eq(ENOTHTTPS, uri_create(&uri, UT_HTTPS, "http://a.b.c/d"));
@@ -116,13 +144,13 @@ START_TEST(check_caged)
 
 	ck_assert_int_eq(0, uri_create(&notification, UT_HTTPS, "https://a.b.c/d/e.xml"));
 	ck_assert_int_eq(0, uri_create(&uri, UT_CAGED, "rsync://x.y.z/v/w.cer"));
-	ck_assert_str_eq("rrdp/https/a.b.c/d/e.xml/rsync/x.y.z/v/w.cer", uri_get_local(uri));
+	ck_assert_str_eq("rrdp/a.b.c/d/e.xml/x.y.z/v/w.cer", uri_get_local(uri));
 	uri_refput(uri);
 	uri_refput(notification);
 
-	ck_assert_int_eq(0, uri_create(&notification, UT_RSYNC, "rsync://a.b.c"));
-	ck_assert_int_eq(0, uri_create(&uri, UT_CAGED, "https://w"));
-	ck_assert_str_eq("rrdp/rsync/a.b.c/https/w", uri_get_local(uri));
+	ck_assert_int_eq(0, uri_create(&notification, UT_HTTPS, "https://a.b.c"));
+	ck_assert_int_eq(0, uri_create(&uri, UT_CAGED, "rsync://w"));
+	ck_assert_str_eq("rrdp/a.b.c/w", uri_get_local(uri));
 	uri_refput(uri);
 	uri_refput(notification);
 }
