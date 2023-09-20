@@ -233,7 +233,8 @@ search_dir(DIR *parent, char const *path, char const *name)
 }
 
 static void
-validate_file(struct cache_node *expected, struct path_builder *pb)
+validate_file(struct cache_node *expected, struct path_builder *pb,
+    char const *tree)
 {
 	struct stat meta;
 	DIR *dir;
@@ -241,8 +242,16 @@ validate_file(struct cache_node *expected, struct path_builder *pb)
 	struct cache_node *child, *tmp;
 	int error;
 
-	if (expected == NULL)
-		return;
+	if (expected == NULL) {
+		pb_append(pb, tree);
+		if (stat(pb->string, &meta) != 0) {
+			error = errno;
+			ck_assert_int_eq(ENOENT, error);
+			pb_pop(pb, true);
+			return;
+		}
+		ck_abort_msg("'%s' exists, but it shouldn't.", pb->string);
+	}
 
 	ck_assert_int_eq(0, pb_append(pb, expected->basename));
 
@@ -285,7 +294,7 @@ must_be_dir:
 			    pb->string, file->d_name);
 		}
 
-		validate_file(child, pb);
+		validate_file(child, pb, tree);
 	}
 	error = errno;
 	ck_assert_int_eq(0, error);
@@ -309,20 +318,18 @@ validate_trees(struct cache_node *actual, struct cache_node *nodes,
 	print_tree(nodes, 1);
 	printf("Actual nodes:\n");
 	print_tree(actual, 1);
-	if (files != NULL) {
-		if (nodes != files) {
-			printf("Expected files:\n");
-			print_tree(files, 0);
-		}
-		printf("Actual files:\n");
-		file_ls_R("tmp");
+	if (nodes != files) {
+		printf("Expected files:\n");
+		print_tree(files, 0);
 	}
+	printf("Actual files:\n");
+	file_ls_R("tmp");
 
 	pb_init(&pb);
 	ck_assert_int_eq(0, pb_append(&pb, "tmp"));
 
 	validate_node(nodes, NULL, actual, &pb);
-	validate_file(files, &pb);
+	validate_file(files, &pb, (actual == rsync) ? "rsync" : "https");
 
 	pb_cleanup(&pb);
 
@@ -602,9 +609,12 @@ START_TEST(test_cache_cleanup_rsync)
 	validate_tree(rsync, NULL);
 
 	/* Node exists, but file doesn't */
+	printf("Tmp files:\n");
+	file_ls_R("tmp");
 	__cache_prepare();
 	download_rsync("rsync://a.b.c/e", 0, 1);
 	download_rsync("rsync://a.b.c/f/g/h", 0, 1);
+
 	validate_tree(rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
@@ -957,6 +967,9 @@ START_TEST(test_metadata_json)
 	json_t *json;
 	char *str;
 
+	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	ck_assert_int_eq(0, system("mkdir tmp/"));
+
 	rsync = TNODE("rsync", 0, NOW + 0, NOW + 1, 0,
 			TNODE("a.b.c", 0, NOW + 2, NOW + 3, 0,
 				TNODE("d", SUCCESS, NOW + 4, NOW + 5, 0),
@@ -1010,12 +1023,156 @@ START_TEST(test_metadata_json)
 }
 END_TEST
 
+#define INIT(_root)							\
+	pb_init(&pb);							\
+	root = _root;							\
+	ctt_init(&ctt, &root, &pb)
+#define DONE								\
+	delete_node(root);						\
+	pb_cleanup(&pb)
+
+#define ASSERT_NEXT_NODE(_basename, _path)				\
+	node = ctt_next(&ctt);						\
+	ck_assert_ptr_ne(NULL, node);					\
+	ck_assert_str_eq(_basename, node->basename);			\
+	ck_assert_str_eq(_path, pb.string)
+#define ASSERT_NEXT_NULL	ck_assert_ptr_eq(NULL, ctt_next(&ctt))
+#define ASSERT_TREE(_root)	validate_trees(root, _root, NULL)
+
+#define BRANCH(bn, ...) __NODE(bn, 0, 0, 0, 0, __VA_ARGS__, NULL)
+#define LEAF(bn) __NODE(bn, CNF_DIRECT, now, now, 0, NULL)
+
+START_TEST(test_ctt_traversal)
+{
+	struct cache_tree_traverser ctt;
+	struct path_builder pb;
+	struct cache_node *root;
+	struct cache_node *node;
+	time_t now;
+
+	ck_assert_int_eq(0, system("rm -rf tmp/"));
+
+	cache_prepare();
+	now = time(NULL);
+	if (now == ((time_t) -1))
+		ck_abort_msg("time(NULL) returned -1");
+
+	INIT(LEAF("a"));
+	ASSERT_NEXT_NODE("a", "a");
+	ASSERT_NEXT_NULL;
+	ASSERT_TREE(LEAF("a"));
+	DONE;
+
+	INIT(BRANCH("a", LEAF("b")));
+	ASSERT_NEXT_NODE("b", "a/b");
+	ASSERT_NEXT_NODE("a", "a");
+	ASSERT_NEXT_NULL;
+	ASSERT_TREE(BRANCH("a", LEAF("b")));
+	DONE;
+
+	INIT(BRANCH("a",
+		BRANCH("b",
+			BRANCH("c",
+				LEAF("d")))));
+	ASSERT_NEXT_NODE("d", "a/b/c/d");
+	ASSERT_NEXT_NODE("c", "a/b/c");
+	ASSERT_NEXT_NODE("b", "a/b");
+	ASSERT_NEXT_NODE("a", "a");
+	ASSERT_NEXT_NULL;
+	ASSERT_TREE(BRANCH("a",
+			BRANCH("b",
+				BRANCH("c",
+					LEAF("d")))));
+	DONE;
+
+	INIT(BRANCH("a",
+		LEAF("b"),
+		BRANCH("c",
+			LEAF("d")),
+		LEAF("e")));
+	ASSERT_NEXT_NODE("b", "a/b");
+	ASSERT_NEXT_NODE("d", "a/c/d");
+	ASSERT_NEXT_NODE("c", "a/c");
+	ASSERT_NEXT_NODE("e", "a/e");
+	ASSERT_NEXT_NODE("a", "a");
+	ASSERT_NEXT_NULL;
+	ASSERT_TREE(BRANCH("a",
+			LEAF("b"),
+			BRANCH("c",
+				LEAF("d")),
+			LEAF("e")));
+	DONE;
+
+	INIT(BRANCH("a",
+		BRANCH("b",
+			LEAF("c")),
+		BRANCH("d",
+			LEAF("e")),
+		BRANCH("f",
+			LEAF("g"))));
+	ASSERT_NEXT_NODE("c", "a/b/c");
+	ASSERT_NEXT_NODE("b", "a/b");
+	ASSERT_NEXT_NODE("e", "a/d/e");
+	ASSERT_NEXT_NODE("d", "a/d");
+	ASSERT_NEXT_NODE("g", "a/f/g");
+	ASSERT_NEXT_NODE("f", "a/f");
+	ASSERT_NEXT_NODE("a", "a");
+	ASSERT_NEXT_NULL;
+	ASSERT_TREE(BRANCH("a",
+			BRANCH("b",
+				LEAF("c")),
+			BRANCH("d",
+				LEAF("e")),
+			BRANCH("f",
+				LEAF("g"))));
+	DONE;
+
+	INIT(BRANCH("a",
+		BRANCH("b",
+			LEAF("c")),
+		BRANCH("d",
+			LEAF("e")),
+		BRANCH("f",
+			BRANCH("g", NULL))));
+	ASSERT_NEXT_NODE("c", "a/b/c");
+	ASSERT_NEXT_NODE("b", "a/b");
+	ASSERT_NEXT_NODE("e", "a/d/e");
+	ASSERT_NEXT_NODE("d", "a/d");
+	ASSERT_NEXT_NODE("a", "a");
+	ASSERT_NEXT_NULL;
+	ASSERT_TREE(BRANCH("a",
+			BRANCH("b",
+				LEAF("c")),
+			BRANCH("d",
+				LEAF("e"))));
+	DONE;
+
+	INIT(NULL);
+	ASSERT_NEXT_NULL;
+	ck_assert_ptr_eq(NULL, root);
+	DONE;
+
+	INIT(BRANCH("a", NULL));
+	ASSERT_NEXT_NULL;
+	ck_assert_ptr_eq(NULL, root);
+	DONE;
+
+	INIT(BRANCH("a",
+		BRANCH("b", NULL),
+		BRANCH("c", NULL),
+		BRANCH("d", NULL)));
+	ASSERT_NEXT_NULL;
+	ck_assert_ptr_eq(NULL, root);
+	DONE;
+}
+END_TEST
+
 /* Boilerplate */
 
 Suite *thread_pool_suite(void)
 {
 	Suite *suite;
-	TCase *rsync , *https, *dot, *meta;
+	TCase *rsync , *https, *dot, *meta, *ctt;
 
 	rsync = tcase_create("rsync");
 	tcase_add_test(rsync, test_cache_download_rsync);
@@ -1035,11 +1192,15 @@ Suite *thread_pool_suite(void)
 	meta = tcase_create("metadata.json");
 	tcase_add_test(meta, test_metadata_json);
 
+	ctt = tcase_create("ctt");
+	tcase_add_test(ctt, test_ctt_traversal);
+
 	suite = suite_create("local-cache");
 	suite_add_tcase(suite, rsync);
 	suite_add_tcase(suite, https);
 	suite_add_tcase(suite, dot);
 	suite_add_tcase(suite, meta);
+	suite_add_tcase(suite, ctt);
 
 	return suite;
 }

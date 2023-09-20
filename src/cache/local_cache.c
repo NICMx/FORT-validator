@@ -484,50 +484,6 @@ end:
 	return error;
 }
 
-static struct cache_node *
-find_next(struct cache_node *sibling, struct cache_node *parent)
-{
-	if (sibling != NULL)
-		return sibling;
-
-	while (parent != NULL) {
-		while (!parent->children) {
-			sibling = parent;
-			parent = sibling->parent;
-			delete_node(sibling);
-			if (parent == NULL)
-				return NULL;
-		}
-
-		sibling = parent->hh.next;
-		if (sibling)
-			return sibling;
-
-		parent = parent->parent;
-	}
-
-	return NULL;
-}
-
-static void cleanup_nodes(struct cache_node *node)
-{
-	struct cache_node *parent, *next;
-
-	while (node != NULL) {
-		if (was_recently_downloaded(node) && !node->error) {
-			drop_children(node);
-			node = find_next(node->hh.next, node->parent);
-		} else if (node->children) {
-			node = node->children;
-		} else {
-			parent = node->parent;
-			next = node->hh.next;
-			delete_node(node);
-			node = find_next(next, parent);
-		}
-	}
-}
-
 /*
  * @force: ignore nonexistent files
  */
@@ -541,39 +497,149 @@ pb_rm_r(struct path_builder *pb, char const *filename, bool force)
 		pr_op_err("Cannot delete %s: %s", pb->string, strerror(error));
 }
 
-/* Safe removal, Postorder */
+enum ctt_status {
+	CTTS_STILL,
+	CTTS_UP,
+	CTTS_DOWN,
+};
+
 struct cache_tree_traverser {
-	struct path_builder *pb;
+	struct cache_node **root;
 	struct cache_node *next;
-	bool next_sibling;
+	struct path_builder *pb;
+	enum ctt_status status;
 };
 
 static void
-ctt_init(struct cache_tree_traverser *ctt, struct cache_node *node,
+ctt_init(struct cache_tree_traverser *ctt, struct cache_node **root,
     struct path_builder *pb)
 {
-	if (node == NULL) {
-		ctt->next = NULL;
-		return;
-	}
+	struct cache_node *node;
 
-	/* FIXME test these error paths */
-	while (node->children != NULL) {
-		if (pb_append(pb, node->basename) != 0) {
-			node = node->parent;
-			goto end;
-		}
-		node = node->children;
-	}
-	if (pb_append(pb, "a") != 0)
+	node = *root;
+	if (node != NULL && (pb_append(pb, "a") != 0))
 		node = node->parent;
 
-end:
-	ctt->pb = pb;
+	ctt->root = root;
 	ctt->next = node;
-	ctt->next_sibling = true;
+	ctt->pb = pb;
+	ctt->status = CTTS_DOWN;
 }
 
+static bool
+is_node_fresh(struct cache_node *node)
+{
+	return was_recently_downloaded(node) && !node->error;
+}
+
+/*
+ * Assumes @node has not been added to the pb.
+ */
+static struct cache_node *
+ctt_delete(struct cache_tree_traverser *ctt, struct cache_node *node)
+{
+	struct cache_node *parent, *sibling;
+
+	sibling = node->hh.next;
+	parent = node->parent;
+
+	delete_node(node);
+
+	if (sibling != NULL) {
+		ctt->status = CTTS_DOWN;
+		return sibling;
+	}
+
+	if (parent != NULL) {
+		ctt->status = CTTS_UP;
+		return parent;
+	}
+
+	*ctt->root = NULL;
+	return NULL;
+}
+
+/*
+ * Assumes @node is not NULL, has yet to be traversed, and is already included
+ * in the pb.
+ */
+static struct cache_node *
+go_up(struct cache_tree_traverser *ctt, struct cache_node *node)
+{
+	if (node->children == NULL && !is_node_fresh(node)) {
+		pb_pop(ctt->pb, true);
+		return ctt_delete(ctt, node);
+	}
+
+	ctt->status = CTTS_STILL;
+	return node;
+}
+
+static struct cache_node *
+find_first_viable_child(struct cache_tree_traverser *ctt,
+    struct cache_node *node)
+{
+	struct cache_node *child, *tmp;
+
+	HASH_ITER(hh, node->children, child, tmp) {
+		if (pb_append(ctt->pb, child->basename) == 0)
+			return child;
+		delete_node(child); /* Unviable */
+	}
+
+	return NULL;
+}
+
+/*
+ * Assumes @node is not NULL, has yet to be traversed, and has not yet been
+ * added to the pb.
+ */
+static struct cache_node *
+go_down(struct cache_tree_traverser *ctt, struct cache_node *node)
+{
+	struct cache_node *child;
+
+	if (pb_append(ctt->pb, node->basename) != 0)
+		return ctt_delete(ctt, node);
+
+	do {
+		if (is_node_fresh(node)) {
+			drop_children(node);
+			ctt->status = CTTS_STILL;
+			return node;
+		}
+
+		child = find_first_viable_child(ctt, node);
+		if (child == NULL) {
+			/* Welp; stale and no children. */
+			ctt->status = CTTS_UP;
+			return node;
+		}
+
+		node = child;
+	} while (true);
+}
+
+/*
+ * - Depth-first, post-order, non-recursive, safe [1] traversal.
+ * - However, deletion is the only allowed modification during the traversal.
+ * - If the node is fresh [2], it will have no children.
+ *   (Because they would be redundant.)
+ *   (Childless nodes do not imply corresponding childless directories.)
+ * - If the node is not fresh, it WILL have children.
+ *   (Stale [3] nodes are always sustained by fresh descendant nodes.)
+ * - The ctt will automatically clean up unviable [4] and unsustained stale
+ *   nodes during the traversal, caller doesn't have to worry about them.
+ * - The ctt's pb will be updated at all times, caller should not modify the
+ *   string.
+ *
+ * [1] Safe = caller can delete the returned node via delete_node(), during
+ *     iteration.
+ * [2] Fresh = Mapped to a file or directory that was downloaded/updated
+ *     successfully at some point since the beginning of the iteration.
+ * [3] Stale = Not fresh
+ * [4] Unviable = Node's path is too long, ie. cannot be mapped to a cache file.
+ */
 static struct cache_node *
 ctt_next(struct cache_tree_traverser *ctt)
 {
@@ -583,44 +649,45 @@ ctt_next(struct cache_tree_traverser *ctt)
 		return NULL;
 
 	pb_pop(ctt->pb, true);
-	if (ctt->next_sibling)
-		pb_append(ctt->pb, next->basename); /* FIXME */
+
+	do {
+		if (ctt->status == CTTS_DOWN)
+			next = go_down(ctt, next);
+		else if (ctt->status == CTTS_UP)
+			next = go_up(ctt, next);
+
+		if (next == NULL) {
+			ctt->next = NULL;
+			return NULL;
+		}
+	} while (ctt->status != CTTS_STILL);
 
 	if (next->hh.next != NULL) {
 		ctt->next = next->hh.next;
-		ctt->next_sibling = true;
+		ctt->status = CTTS_DOWN;
 	} else {
 		ctt->next = next->parent;
-		ctt->next_sibling = false;
+		ctt->status = CTTS_UP;
 	}
 
 	return next;
 }
 
-static void cleanup_files(struct cache_node *node, char const *name)
+static void cleanup_tree(struct cache_node **root, char const *treename)
 {
 	struct cache_tree_traverser ctt;
 	struct path_builder pb;
 	struct stat meta;
 	DIR *dir;
 	struct dirent *file;
-	struct cache_node *child, *tmp;
+	struct cache_node *node, *child, *tmp;
 	int error;
 
 	pb_init(&pb);
 	if (pb_append(&pb, config_get_local_repository()) != 0)
 		goto end;
 
-	if (node == NULL) {
-		/* File might exist but node doesn't: Delete file */
-		if (pb_append(&pb, name) != 0)
-			goto end;
-		pb_rm_r(&pb, name, true);
-		pb_cleanup(&pb);
-		return;
-	}
-
-	ctt_init(&ctt, node, &pb);
+	ctt_init(&ctt, root, &pb);
 
 	while ((node = ctt_next(&ctt)) != NULL) {
 		if (stat(pb.string, &meta) != 0) {
@@ -633,7 +700,7 @@ static void cleanup_files(struct cache_node *node, char const *name)
 
 			pr_op_err("Cannot clean up '%s'; stat() returned errno %d: %s",
 			    pb.string, error, strerror(error));
-			break;
+			continue;
 		}
 
 		if (!node->children)
@@ -644,6 +711,7 @@ static void cleanup_files(struct cache_node *node, char const *name)
 			/* File is not a directory; welp. */
 			remove(pb.string);
 			delete_node(node);
+			continue;
 		}
 
 		dir = opendir(pb.string);
@@ -701,6 +769,8 @@ static void cleanup_files(struct cache_node *node, char const *name)
 		}
 	}
 
+	if ((*root) == NULL && pb_append(&pb, treename) == 0)
+		pb_rm_r(&pb, treename, true);
 end:
 	pb_cleanup(&pb);
 }
@@ -869,12 +939,8 @@ write_metadata_json(void)
 void
 cache_cleanup(void)
 {
-	cleanup_nodes(rsync);
-	cleanup_files(rsync, "rsync");
-
-	cleanup_nodes(https);
-	cleanup_files(https, "https");
-
+	cleanup_tree(&rsync, "rsync");
+	cleanup_tree(&https, "https");
 	write_metadata_json();
 }
 
