@@ -1,4 +1,4 @@
-#include "certificate.h"
+#include "object/certificate.h"
 
 #include <errno.h>
 #include <stdint.h> /* SIZE_MAX */

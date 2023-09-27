@@ -1,4 +1,4 @@
-#include "signed_object.h"
+#include "object/signed_object.h"
 
 #include <errno.h>
 #include "log.h"

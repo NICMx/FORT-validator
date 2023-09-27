@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "ASIdentifiers.h"
+#include "asn1/asn1c/ASIdentifiers.h"
 
 static asn_TYPE_member_t asn_MBR_ASIdentifiers_1[] = {
 	{ ATF_POINTER, 2, offsetof(struct ASIdentifiers, asnum),

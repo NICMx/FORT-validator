@@ -13,7 +13,7 @@
 
 /* Including external dependencies */
 #include "asn1/asn1c/INTEGER.h"
-#include "ASId.h"
+#include "asn1/asn1c/ASId.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
@@ -48,7 +48,7 @@ extern asn_TYPE_descriptor_t asn_DEF_RouteOriginAttestation;
 #endif
 
 /* Referred external types */
-#include "ROAIPAddressFamily.h"
+#include "asn1/asn1c/ROAIPAddressFamily.h"
 
 #endif	/* _RouteOriginAttestation_H_ */
 #include "asn1/asn1c/asn_internal.h"

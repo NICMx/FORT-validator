@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "ROAIPAddress.h"
+#include "asn1/asn1c/ROAIPAddress.h"
 
 asn_TYPE_member_t asn_MBR_ROAIPAddress_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct ROAIPAddress, address),

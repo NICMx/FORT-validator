@@ -12,12 +12,12 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "Version.h"
-#include "AlgorithmIdentifier.h"
-#include "Name.h"
-#include "Time.h"
+#include "asn1/asn1c/Version.h"
+#include "asn1/asn1c/AlgorithmIdentifier.h"
+#include "asn1/asn1c/Name.h"
+#include "asn1/asn1c/Time.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "CertificateSerialNumber.h"
+#include "asn1/asn1c/CertificateSerialNumber.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 
@@ -68,8 +68,8 @@ extern asn_TYPE_member_t asn_MBR_TBSCertList_1[7];
 #endif
 
 /* Referred external types */
-#include "Time.h"
-#include "Extensions.h"
+#include "asn1/asn1c/Time.h"
+#include "asn1/asn1c/Extensions.h"
 
 #endif	/* _TBSCertList_H_ */
 #include "asn1/asn1c/asn_internal.h"

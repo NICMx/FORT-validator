@@ -1,8 +1,8 @@
-#include "err_pdu.h"
+#include "rtr/err_pdu.h"
 
 #include <unistd.h>
 #include "alloc.h"
-#include "pdu_sender.h"
+#include "rtr/pdu_sender.h"
 #include "log.h"
 
 typedef enum rtr_error_code {

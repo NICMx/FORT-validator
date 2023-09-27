@@ -1,4 +1,4 @@
-#include "relax_ng.h"
+#include "xml/relax_ng.h"
 
 #include <libxml/parser.h>
 #include <libxml/relaxng.h>

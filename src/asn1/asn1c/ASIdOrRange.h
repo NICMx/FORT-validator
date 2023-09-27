@@ -12,8 +12,8 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "ASId.h"
-#include "ASRange.h"
+#include "asn1/asn1c/ASId.h"
+#include "asn1/asn1c/ASRange.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
 #ifdef __cplusplus

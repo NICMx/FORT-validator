@@ -12,8 +12,8 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "TBSCertList.h"
-#include "AlgorithmIdentifier.h"
+#include "asn1/asn1c/TBSCertList.h"
+#include "asn1/asn1c/AlgorithmIdentifier.h"
 #include "asn1/asn1c/BIT_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 

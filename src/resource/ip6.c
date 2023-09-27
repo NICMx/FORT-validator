@@ -1,4 +1,4 @@
-#include "ip6.h"
+#include "resource/ip6.h"
 
 #include <string.h>
 #include "sorted_array.h"

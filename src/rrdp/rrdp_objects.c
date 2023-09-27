@@ -1,4 +1,4 @@
-#include "rrdp_objects.h"
+#include "rrdp/rrdp_objects.h"
 
 #include <errno.h>
 #include <stdlib.h>

@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "CertificateSerialNumber.h"
+#include "asn1/asn1c/CertificateSerialNumber.h"
 
 /*
  * This type is implemented using INTEGER,

@@ -10,7 +10,7 @@
 #ifndef __EXTENSIONS__
 #define __EXTENSIONS__          /* for Sun */
 #endif
-#include "asn_application.h"	/* Application-visible API */
+#include "asn1/asn1c/asn_application.h"	/* Application-visible API */
 
 #ifndef	__NO_ASSERT_H__		/* Include assert.h only for internal use. */
 #include <assert.h>		/* for assert() macro */

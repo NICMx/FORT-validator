@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "ROAIPAddressFamily.h"
+#include "asn1/asn1c/ROAIPAddressFamily.h"
 
 static int
 memb_addressFamily_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,

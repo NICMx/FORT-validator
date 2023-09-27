@@ -40,7 +40,7 @@ extern asn_TYPE_member_t asn_MBR_RevocationInfoChoices_1[1];
 #endif
 
 /* Referred external types */
-#include "RevocationInfoChoice.h"
+#include "asn1/asn1c/RevocationInfoChoice.h"
 
 #endif	/* _RevocationInfoChoices_H_ */
 #include "asn1/asn1c/asn_internal.h"

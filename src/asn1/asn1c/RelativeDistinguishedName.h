@@ -40,7 +40,7 @@ extern asn_TYPE_member_t asn_MBR_RelativeDistinguishedName_1[1];
 #endif
 
 /* Referred external types */
-#include "AttributeTypeAndValue.h"
+#include "asn1/asn1c/AttributeTypeAndValue.h"
 
 #endif	/* _RelativeDistinguishedName_H_ */
 #include "asn1/asn1c/asn_internal.h"

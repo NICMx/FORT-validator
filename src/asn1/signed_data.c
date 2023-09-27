@@ -6,7 +6,7 @@
 #include "alloc.h"
 #include "config.h"
 #include "log.h"
-#include "oid.h"
+#include "asn1/oid.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/asn1c/ContentType.h"

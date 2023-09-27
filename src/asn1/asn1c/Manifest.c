@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "Manifest.h"
+#include "asn1/asn1c/Manifest.h"
 
 static int
 memb_manifestNumber_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,

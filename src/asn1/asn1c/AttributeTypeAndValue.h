@@ -12,8 +12,8 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "AttributeType.h"
-#include "AttributeValue.h"
+#include "asn1/asn1c/AttributeType.h"
+#include "asn1/asn1c/AttributeValue.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #ifdef __cplusplus

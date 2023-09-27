@@ -1,8 +1,8 @@
-#include "pdu_serializer.h"
+#include "rtr/pdu_serializer.h"
 
 #include <stdlib.h>
 #include <string.h>
-#include "primitive_writer.h"
+#include "rtr/primitive_writer.h"
 
 static size_t
 serialize_pdu_header(struct pdu_header const *header, uint16_t union_value,

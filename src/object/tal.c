@@ -1,4 +1,4 @@
-#include "tal.h"
+#include "object/tal.h"
 
 #include <errno.h>
 #include <pthread.h>

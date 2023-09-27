@@ -4,7 +4,7 @@
 #include "thread_var.h"
 #include "asn1/oid.h"
 #include "object/signed_object.h"
-#include "vcard.h"
+#include "object/vcard.h"
 
 static int
 handle_vcard(struct signed_object *sobj)

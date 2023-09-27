@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "SignedData.h"
+#include "asn1/asn1c/SignedData.h"
 
 static asn_TYPE_member_t asn_MBR_SignedData_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct SignedData, version),

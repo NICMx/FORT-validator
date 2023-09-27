@@ -13,7 +13,7 @@
 
 /* Including external dependencies */
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "CMSAttributeValue.h"
+#include "asn1/asn1c/CMSAttributeValue.h"
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"

@@ -12,8 +12,8 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "CertificateList.h"
-#include "OtherRevocationInfoFormat.h"
+#include "asn1/asn1c/CertificateList.h"
+#include "asn1/asn1c/OtherRevocationInfoFormat.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
 #ifdef __cplusplus

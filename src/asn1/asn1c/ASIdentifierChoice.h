@@ -58,7 +58,7 @@ extern asn_TYPE_member_t asn_MBR_ASIdentifierChoice_1[2];
 #endif
 
 /* Referred external types */
-#include "ASIdOrRange.h"
+#include "asn1/asn1c/ASIdOrRange.h"
 
 #endif	/* _ASIdentifierChoice_H_ */
 #include "asn1/asn1c/asn_internal.h"

@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "ASIdentifierChoice.h"
+#include "asn1/asn1c/ASIdentifierChoice.h"
 
 static asn_oer_constraints_t asn_OER_type_ASIdentifierChoice_constr_1 CC_NOTUSED = {
 	{ 0, 0 },

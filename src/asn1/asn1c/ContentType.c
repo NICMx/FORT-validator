@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "ContentType.h"
+#include "asn1/asn1c/ContentType.h"
 
 /*
  * This type is implemented using OBJECT_IDENTIFIER,

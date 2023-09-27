@@ -38,7 +38,7 @@ extern asn_TYPE_descriptor_t asn_DEF_IPAddrBlocks;
 #endif
 
 /* Referred external types */
-#include "IPAddressFamily.h"
+#include "asn1/asn1c/IPAddressFamily.h"
 
 #endif	/* _IPAddrBlocks_H_ */
 #include "asn1/asn1c/asn_internal.h"

@@ -1,7 +1,7 @@
 #ifndef SRC_RTR_PDU_SENDER_H_
 #define SRC_RTR_PDU_SENDER_H_
 
-#include "pdu.h"
+#include "rtr/pdu.h"
 #include "types/router_key.h"
 #include "rtr/db/vrps.h"
 

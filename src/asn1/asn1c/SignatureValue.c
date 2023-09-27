@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "SignatureValue.h"
+#include "asn1/asn1c/SignatureValue.h"
 
 /*
  * This type is implemented using OCTET_STRING,

@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "BinarySigningTime.h"
+#include "asn1/asn1c/BinarySigningTime.h"
 
 int
 BinarySigningTime_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
