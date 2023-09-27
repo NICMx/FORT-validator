@@ -14,43 +14,9 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 
-#ifdef	__CYGWIN__
-#include "/usr/include/time.h"
-#else
 #include <time.h>
-#endif	/* __CYGWIN__ */
-
 #include <stdio.h>
 #include <errno.h>
-
-#if	defined(_WIN32)
-#pragma message( "PLEASE STOP AND READ!")
-#pragma message( "  localtime_r is implemented via localtime(), which may be not thread-safe.")
-#pragma message( "  gmtime_r is implemented via gmtime(), which may be not thread-safe.")
-#pragma message( "  ")
-#pragma message( "  You must fix the code by inserting appropriate locking")
-#pragma message( "  if you want to use asn_GT2time() or asn_UT2time().")
-#pragma message( "PLEASE STOP AND READ!")
-
-static struct tm *localtime_r(const time_t *tloc, struct tm *result) {
-	struct tm *tm;
-	if((tm = localtime(tloc)))
-		return memcpy(result, tm, sizeof(struct tm));
-	return 0;
-}
-
-static struct tm *gmtime_r(const time_t *tloc, struct tm *result) {
-	struct tm *tm;
-	if((tm = gmtime(tloc)))
-		return memcpy(result, tm, sizeof(struct tm));
-	return 0;
-}
-
-#define	tzset()	_tzset()
-#define	putenv(c)	_putenv(c)
-#define	_EMULATE_TIMEGM
-
-#endif	/* _WIN32 */
 
 #if	defined(sun) || defined(__sun) || defined(__solaris__)
 #define	_EMULATE_TIMEGM
@@ -76,14 +42,6 @@ static struct tm *gmtime_r(const time_t *tloc, struct tm *result) {
 #define	GMTOFF(tm)	(-timezone)
 #endif	/* HAVE_TM_GMTOFF */
 
-#if	defined(_WIN32)
-#pragma message( "PLEASE STOP AND READ!")
-#pragma message( "  timegm() is implemented via getenv(\"TZ\")/setenv(\"TZ\"), which may be not thread-safe.")
-#pragma message( "  ")
-#pragma message( "  You must fix the code by inserting appropriate locking")
-#pragma message( "  if you want to use asn_GT2time() or asn_UT2time().")
-#pragma message( "PLEASE STOP AND READ!")
-#else
 #if	(defined(_EMULATE_TIMEGM) || !defined(HAVE_TM_GMTOFF))
 #warning "PLEASE STOP AND READ!"
 #warning "  timegm() is implemented via getenv(\"TZ\")/setenv(\"TZ\"), which may be not thread-safe."
@@ -92,29 +50,6 @@ static struct tm *gmtime_r(const time_t *tloc, struct tm *result) {
 #warning "  if you want to use asn_GT2time() or asn_UT2time()."
 #warning "PLEASE STOP AND READ!"
 #endif	/* _EMULATE_TIMEGM */
-#endif
-
-/*
- * Override our GMTOFF decision for other known platforms.
- */
-#ifdef __CYGWIN__
-#undef	GMTOFF
-static long GMTOFF(struct tm a){
-	struct tm *lt;
-	time_t local_time, gmt_time;
-	long zone;
-
-	tzset();
-	gmt_time = time (NULL);
-
-	lt = gmtime(&gmt_time);
-
-	local_time = mktime(lt);
-	return (gmt_time - local_time);
-}
-#define	_EMULATE_TIMEGM
-
-#endif	/* __CYGWIN__ */
 
 #define	ATZVARS do {							\
 	char tzoldbuf[64];						\
