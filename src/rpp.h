@@ -1,6 +1,7 @@
 #ifndef SRC_RPP_H_
 #define SRC_RPP_H_
 
+#include <openssl/safestack.h>
 #include <openssl/x509.h>
 #include "types/uri.h"
 

@@ -1,8 +1,7 @@
 #ifndef SRC_CERT_STACK_H_
 #define SRC_CERT_STACK_H_
 
-#include <openssl/x509.h>
-#include <stdbool.h>
+#include <openssl/bn.h>
 #include "resource.h"
 #include "object/certificate.h"
 #include "object/name.h"

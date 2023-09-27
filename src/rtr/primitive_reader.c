@@ -1,12 +1,6 @@
 #include "rtr/primitive_reader.h"
 
-#include <err.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-#include <unistd.h>
-#include <netinet/in.h>
 
 #include "alloc.h"
 #include "log.h"

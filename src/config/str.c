@@ -1,8 +1,6 @@
 #include "config/str.h"
 
 #include <getopt.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "alloc.h"
 #include "log.h"

@@ -1,11 +1,7 @@
 #include "init.h"
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdbool.h>
-#include <unistd.h>
-
 #include "alloc.h"
+#include "config.h"
 #include "log.h"
 #include "http/http.h"
 

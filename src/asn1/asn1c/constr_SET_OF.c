@@ -3,6 +3,9 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#include <assert.h>
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_SET_OF.h"
 #include "asn1/asn1c/asn_SET_OF.h"
@@ -1345,4 +1348,3 @@ SET_OF_random_fill(const asn_TYPE_descriptor_t *td, void **sptr,
 
     return res_ok;
 }
-

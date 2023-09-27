@@ -6,7 +6,7 @@
 #include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "asn1/asn1c/OCTET_STRING.h"
-#include <limits.h>	/* for CHAR_BIT */
+#include <assert.h>
 #include <errno.h>
 
 /*

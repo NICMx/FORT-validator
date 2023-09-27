@@ -44,4 +44,3 @@ asn_TYPE_descriptor_t asn_DEF_RelativeDistinguishedName = {
 	1,	/* Single element */
 	&asn_SPC_RelativeDistinguishedName_specs_1	/* Additional specs */
 };
-

@@ -67,4 +67,3 @@ asn_TYPE_descriptor_t asn_DEF_CertificateList = {
 	3,	/* Elements count */
 	&asn_SPC_CertificateList_specs_1	/* Additional specs */
 };
-

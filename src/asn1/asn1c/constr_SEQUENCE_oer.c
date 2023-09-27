@@ -8,7 +8,7 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 #include "asn1/asn1c/OPEN_TYPE.h"
-#include <errno.h>
+#include <assert.h>
 
 /*
  * This macro "eats" the part of the buffer which is definitely "consumed",

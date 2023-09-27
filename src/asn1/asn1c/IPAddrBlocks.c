@@ -41,4 +41,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddrBlocks = {
 	1,	/* Single element */
 	&asn_SPC_IPAddrBlocks_specs_1	/* Additional specs */
 };
-

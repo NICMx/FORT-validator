@@ -7,7 +7,6 @@
 
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-#include <errno.h>
 
 /*
  * Return a standardized complex structure.

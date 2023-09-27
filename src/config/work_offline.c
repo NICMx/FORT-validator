@@ -1,7 +1,6 @@
 #include "config/work_offline.h"
 
 #include <getopt.h>
-#include <stdbool.h>
 
 #include "config.h"
 #include "config/boolean.h"

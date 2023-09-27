@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_FileAndHash = {
 	2,	/* Elements count */
 	&asn_SPC_FileAndHash_specs_1	/* Additional specs */
 };
-

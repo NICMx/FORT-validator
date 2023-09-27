@@ -26,9 +26,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define UTHASH_VERSION 2.1.0
 
-#include <string.h>   /* memcmp, memset, strlen */
-#include <stddef.h>   /* ptrdiff_t */
-#include <stdlib.h>   /* exit */
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 /* These macros use decltype or the earlier __typeof GNU extension.
    As decltype is only available in newer compilers (VS2010 or gcc 4.3+
@@ -62,7 +70,6 @@ do {                                                                            
 } while (0)
 #endif
 
-#include <stdint.h>
 
 #ifndef uthash_malloc
 #define uthash_malloc(sz) malloc(sz)      /* malloc fcn                      */

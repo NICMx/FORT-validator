@@ -4,6 +4,7 @@
  */
 #ifndef	ASN_SET_OF_H
 #define	ASN_SET_OF_H
+#include <stdlib.h>
 
 #ifdef __cplusplus
 #define A_SET_OF(type)                   \

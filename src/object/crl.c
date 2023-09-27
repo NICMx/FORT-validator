@@ -1,6 +1,7 @@
 #include "object/crl.h"
 
-#include <errno.h>
+#include <openssl/bio.h>
+#include <openssl/bn.h>
 #include <syslog.h>
 #include "algorithm.h"
 #include "extension.h"

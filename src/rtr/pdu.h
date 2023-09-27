@@ -1,9 +1,6 @@
 #ifndef RTR_PDU_H_
 #define RTR_PDU_H_
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-
 #include "common.h"
 #include "types/router_key.h"
 #include "rtr/primitive_reader.h"

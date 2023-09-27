@@ -1,8 +1,8 @@
 #ifndef SRC_OBJECT_NAME_H_
 #define SRC_OBJECT_NAME_H_
 
-#include <stdbool.h>
 #include <openssl/x509.h>
+#include <stdbool.h>
 
 struct rfc5280_name;
 

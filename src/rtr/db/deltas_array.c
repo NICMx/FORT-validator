@@ -1,7 +1,8 @@
 #include "rtr/db/deltas_array.h"
 
-#include <limits.h>
 #include <errno.h>
+#include <limits.h>
+
 #include "alloc.h"
 #include "config.h"
 #include "log.h"

@@ -1,7 +1,5 @@
 #include "asn1/signed_data.h"
 
-#include <errno.h>
-
 #include "algorithm.h"
 #include "alloc.h"
 #include "config.h"

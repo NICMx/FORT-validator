@@ -14,8 +14,7 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 
-#include <time.h>
-#include <stdio.h>
+#include <assert.h>
 #include <errno.h>
 
 #if	defined(sun) || defined(__sun) || defined(__solaris__)
@@ -83,7 +82,6 @@
 
 #ifndef HAVE_TIMEGM
 #ifdef	_EMULATE_TIMEGM
-#include <stdlib.h>
 static time_t timegm(struct tm *tm) {
 	time_t tloc;
 	ATZVARS;
@@ -764,4 +762,3 @@ GeneralizedTime_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
     }
 
 }
-

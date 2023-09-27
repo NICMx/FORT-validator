@@ -1,8 +1,5 @@
 #include "http/http.h"
 
-#include <errno.h>
-#include <stdio.h>
-#include <unistd.h>
 #include <curl/curl.h>
 
 #include "alloc.h"

@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressRange = {
 	2,	/* Elements count */
 	&asn_SPC_IPAddressRange_specs_1	/* Additional specs */
 };
-

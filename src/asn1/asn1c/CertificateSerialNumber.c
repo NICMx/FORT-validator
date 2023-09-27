@@ -28,4 +28,3 @@ asn_TYPE_descriptor_t asn_DEF_CertificateSerialNumber = {
 	0, 0,	/* No members */
 	0	/* No specifics */
 };
-

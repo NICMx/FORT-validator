@@ -1,6 +1,5 @@
 #include "types/vrp.h"
 
-#include <arpa/inet.h>
 #include "log.h"
 #include "types/address.h"
 

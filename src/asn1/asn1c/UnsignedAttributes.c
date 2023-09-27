@@ -44,4 +44,3 @@ asn_TYPE_descriptor_t asn_DEF_UnsignedAttributes = {
 	1,	/* Single element */
 	&asn_SPC_UnsignedAttributes_specs_1	/* Additional specs */
 };
-

@@ -6,8 +6,8 @@
 #include "asn1/asn1c/UTCTime.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 
+#include <assert.h>
 #include <errno.h>
-#include <time.h>
 
 #ifndef	ASN___INTERNAL_TEST_MODE
 
@@ -266,4 +266,3 @@ UTCTime_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
         return 1;
     }
 }
-

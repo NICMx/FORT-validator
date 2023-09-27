@@ -1,8 +1,7 @@
 #include "object/name.h"
 
-#include <errno.h>
-#include <stdbool.h>
-#include <string.h>
+#include <openssl/asn1.h>
+#include <openssl/objects.h>
 #include <syslog.h>
 
 #include "alloc.h"

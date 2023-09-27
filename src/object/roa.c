@@ -1,9 +1,5 @@
 #include "object/roa.h"
 
-#include <errno.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-
 #include "config.h"
 #include "log.h"
 #include "thread_var.h"

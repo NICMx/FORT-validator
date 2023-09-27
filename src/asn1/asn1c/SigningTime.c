@@ -27,4 +27,3 @@ asn_TYPE_descriptor_t asn_DEF_SigningTime = {
 	2,	/* Elements count */
 	&asn_SPC_Time_specs_1	/* Additional specs */
 };
-

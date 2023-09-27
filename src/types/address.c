@@ -1,8 +1,6 @@
 #include "types/address.h"
 
-#include <stdlib.h> /* strtoul() */
-#include <string.h> /* memset(), memcpy() */
-#include <arpa/inet.h> /* inet_ntop(), htonl() */
+#include <errno.h>
 
 #include "log.h"
 #include "thread_var.h"
@@ -548,4 +546,3 @@ sockaddr2str(struct sockaddr_storage *sockaddr, char *buffer)
 	if (str == NULL)
 		strcpy(buffer, "(unprintable address)");
 }
-

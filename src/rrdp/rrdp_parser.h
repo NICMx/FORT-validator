@@ -1,7 +1,6 @@
 #ifndef SRC_RRDP_RRDP_PARSER_H_
 #define SRC_RRDP_RRDP_PARSER_H_
 
-#include <stdbool.h>
 #include "types/uri.h"
 #include "rrdp/rrdp_objects.h"
 

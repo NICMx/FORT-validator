@@ -1,8 +1,6 @@
 #ifndef SRC_HASH_H_
 #define SRC_HASH_H_
 
-#include <stdbool.h>
-#include <stddef.h>
 #include "types/uri.h"
 #include "asn1/asn1c/BIT_STRING.h"
 

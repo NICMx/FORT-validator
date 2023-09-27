@@ -5,6 +5,14 @@
 #ifndef	ASN_RANDOM_FILL
 #define	ASN_RANDOM_FILL
 
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 /* Forward declarations */
 struct asn_TYPE_descriptor_s;
 struct asn_encoding_constraints_s;

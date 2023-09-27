@@ -7,7 +7,6 @@
 
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/BIT_STRING.h"
-#include <errno.h>
 
 asn_dec_rval_t
 BIT_STRING_decode_oer(const asn_codec_ctx_t *opt_codec_ctx,

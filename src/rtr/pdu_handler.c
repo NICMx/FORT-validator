@@ -1,8 +1,6 @@
 #include "rtr/pdu_handler.h"
 
 #include <errno.h>
-#include <stddef.h>
-#include <unistd.h>
 
 #include "rtr/err_pdu.h"
 #include "log.h"
@@ -159,8 +157,6 @@ send_base_roa(struct vrp const *vrp, void *arg)
 
 	return send_prefix_pdu(args->fd, args->version, vrp, FLAG_ANNOUNCEMENT);
 }
-
-
 
 static int
 send_base_router_key(struct router_key const *key, void *arg)

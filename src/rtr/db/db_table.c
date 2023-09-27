@@ -1,7 +1,6 @@
 #include "rtr/db/db_table.h"
 
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <errno.h>
 
 #include "alloc.h"
 #include "log.h"

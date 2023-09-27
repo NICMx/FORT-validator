@@ -1,7 +1,5 @@
 #include "object/manifest.h"
 
-#include <errno.h>
-
 #include "algorithm.h"
 #include "common.h"
 #include "log.h"

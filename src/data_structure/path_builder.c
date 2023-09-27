@@ -1,6 +1,6 @@
 #include "data_structure/path_builder.h"
 
-#include <openssl/evp.h>
+#include <errno.h>
 
 #include "alloc.h"
 #include "log.h"

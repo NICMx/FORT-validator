@@ -1,7 +1,6 @@
 #ifndef SRC_CONFIG_STRING_ARRAY_H_
 #define SRC_CONFIG_STRING_ARRAY_H_
 
-#include <stddef.h>
 #include "config/types.h"
 
 struct string_array {

@@ -1,9 +1,6 @@
 #ifndef SRC_RTR_ERR_PDU_H_
 #define SRC_RTR_ERR_PDU_H_
 
-#include <stdbool.h>
-#include <stdint.h>
-
 #include "rtr/pdu.h"
 
 /*

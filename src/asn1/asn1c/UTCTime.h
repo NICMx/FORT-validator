@@ -6,6 +6,8 @@
 #define	_UTCTime_H_
 
 #include "asn1/asn1c/OCTET_STRING.h"
+#include <sys/stat.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {

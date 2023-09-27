@@ -2,15 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
-#include <log.h>
 #include <poll.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 
 #include "alloc.h"
 #include "config.h"

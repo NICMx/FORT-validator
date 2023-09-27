@@ -3,6 +3,9 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#include <assert.h>
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/asn_random_fill.h"
 #include "asn1/asn1c/constr_TYPE.h"

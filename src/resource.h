@@ -1,7 +1,6 @@
 #ifndef SRC_RESOURCE_H_
 #define SRC_RESOURCE_H_
 
-#include <stdbool.h>
 #include "resource/asn.h"
 #include "types/address.h"
 #include "asn1/asn1c/ASIdentifiers.h"

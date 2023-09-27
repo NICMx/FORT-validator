@@ -2,6 +2,9 @@
  * Copyright (c) 2004-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#include <assert.h>
+
 #include "asn1/asn1c/asn_application.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/xer_support.h"		/* XER/XML parsing support */

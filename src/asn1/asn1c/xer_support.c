@@ -224,4 +224,3 @@ finish:
 	*stateContext = (int)state;
 	return chunk_start - (const char *)xmlbuf;
 }
-

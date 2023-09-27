@@ -1,8 +1,7 @@
 #include "rrdp/rrdp_loader.h"
 
-#include <sys/types.h>
+#include <errno.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include "log.h"
 #include "thread_var.h"

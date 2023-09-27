@@ -6,6 +6,7 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/asn_codecs_prim.h"	/* Encoder and decoder of a primitive type */
+#include <assert.h>
 #include <errno.h>
 
 /*

@@ -2,12 +2,7 @@
 
 #include "file.h"
 
-#include <errno.h>
-#include <stdlib.h>
-#include <ftw.h> /* nftw() */
-#include <sys/types.h> /* opendir(), closedir() */
-#include <dirent.h> /* opendir(), readdir(), closedir() */
-
+#include <ftw.h>
 
 #include "alloc.h"
 #include "log.h"

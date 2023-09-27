@@ -1,8 +1,6 @@
 #ifndef SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 #define SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 
-#include <errno.h>
-#include <stdlib.h>
 #include "log.h"
 #include "data_structure/common.h"
 

@@ -8,10 +8,6 @@
 #ifndef	ASN_SYSTEM_H
 #define	ASN_SYSTEM_H
 
-#ifdef	HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE 1
 #endif
@@ -20,22 +16,19 @@
 #define _BSD_SOURCE /* for snprintf() on some linux systems  */
 #endif
 
-#include <stdio.h>	/* For snprintf(3) */
-#include <stdlib.h>	/* For *alloc(3) */
-#include <string.h>	/* For memcpy(3) */
-#include <sys/types.h>	/* For size_t */
-#include <limits.h>	/* For LONG_MAX */
-#include <stdarg.h>	/* For va_start */
-#include <stddef.h>	/* for offsetof and ptrdiff_t */
+#include <arpa/inet.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <netinet/in.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#if defined(__vxworks)
-#include <types/vxTypes.h>
-#else	/* !defined(__vxworks) */
-
-#include <inttypes.h>	/* C99 specifies this file */
-#include <netinet/in.h> /* for ntohl() */
 #define	sys_ntohl(foo)	ntohl(foo)
-#endif	/* defined(__vxworks) */
 
 #if	__GNUC__ >= 3 || defined(__clang__)
 #define CC_ATTRIBUTE(attr)    __attribute__((attr))

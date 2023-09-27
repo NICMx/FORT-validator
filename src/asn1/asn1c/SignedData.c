@@ -99,4 +99,3 @@ asn_TYPE_descriptor_t asn_DEF_SignedData = {
 	6,	/* Elements count */
 	&asn_SPC_SignedData_specs_1	/* Additional specs */
 };
-

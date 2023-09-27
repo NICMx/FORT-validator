@@ -1,6 +1,5 @@
 #include "certificate_refs.h"
 
-#include <errno.h>
 #include "log.h"
 #include "thread_var.h"
 

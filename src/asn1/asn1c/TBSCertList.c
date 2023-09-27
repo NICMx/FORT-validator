@@ -212,4 +212,3 @@ asn_TYPE_descriptor_t asn_DEF_TBSCertList = {
 	7,	/* Elements count */
 	&asn_SPC_TBSCertList_specs_1	/* Additional specs */
 };
-

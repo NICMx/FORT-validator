@@ -1,6 +1,8 @@
 #include "extension.h"
 
-#include <errno.h>
+#include <openssl/asn1t.h>
+#include <openssl/objects.h>
+#include <openssl/x509v3.h>
 #include "cert_stack.h"
 #include "common.h"
 #include "log.h"

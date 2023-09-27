@@ -3,7 +3,6 @@
 
 /* Some wrappers for asn1/asn1c/SignedData.h. */
 
-#include <openssl/x509.h>
 #include "resource.h"
 #include "asn1/asn1c/SignedData.h"
 #include "object/certificate.h"

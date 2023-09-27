@@ -1,6 +1,5 @@
 #include "asn1/content_info.h"
 
-#include <errno.h>
 #include "file.h"
 #include "log.h"
 #include "asn1/oid.h"

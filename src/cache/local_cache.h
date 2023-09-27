@@ -1,7 +1,6 @@
 #ifndef SRC_CACHE_LOCAL_CACHE_H_
 #define SRC_CACHE_LOCAL_CACHE_H_
 
-#include <stdbool.h>
 #include "types/uri.h"
 
 /* Warms up cache for new validation run */

@@ -59,4 +59,3 @@ asn_TYPE_descriptor_t asn_DEF_ROAIPAddress = {
 	2,	/* Elements count */
 	&asn_SPC_ROAIPAddress_specs_1	/* Additional specs */
 };
-

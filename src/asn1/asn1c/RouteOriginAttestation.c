@@ -162,4 +162,3 @@ asn_TYPE_descriptor_t asn_DEF_RouteOriginAttestation = {
 	3,	/* Elements count */
 	&asn_SPC_RouteOriginAttestation_specs_1	/* Additional specs */
 };
-

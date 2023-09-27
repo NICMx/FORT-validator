@@ -165,4 +165,3 @@ der_tlv_length_serialize(ber_tlv_len_t len, void *bufp, size_t size) {
 
 	return required_size + 1;
 }
-

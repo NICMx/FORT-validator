@@ -1,13 +1,10 @@
 #include "rsync/rsync.h"
 
 #include <errno.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <signal.h> /* SIGINT, SIGQUIT, etc */
-#include <syslog.h>
-#include <sys/queue.h>
-#include <sys/stat.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <sys/wait.h>
+#include <syslog.h>
 
 #include "alloc.h"
 #include "common.h"

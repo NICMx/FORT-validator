@@ -6,6 +6,7 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/BIT_STRING.h"	/* for .bits_unused member */
+#include <assert.h>
 #include <errno.h>
 
 /*

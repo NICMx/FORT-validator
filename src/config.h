@@ -1,7 +1,9 @@
 #ifndef SRC_CONFIG_H_
 #define SRC_CONFIG_H_
 
-#include <stdbool.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <stdint.h>
 
 #include "config/filename_format.h"

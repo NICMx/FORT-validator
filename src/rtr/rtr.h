@@ -2,6 +2,7 @@
 #define RTR_RTR_H_
 
 #include <arpa/inet.h>
+#include <netinet/in.h>
 
 struct rtr_server {
 	int fd;

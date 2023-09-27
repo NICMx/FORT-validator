@@ -5,6 +5,14 @@
 #ifndef	_BER_TLV_LENGTH_H_
 #define	_BER_TLV_LENGTH_H_
 
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

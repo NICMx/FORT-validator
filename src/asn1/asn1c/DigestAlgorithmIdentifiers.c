@@ -41,4 +41,3 @@ asn_TYPE_descriptor_t asn_DEF_DigestAlgorithmIdentifiers = {
 	1,	/* Single element */
 	&asn_SPC_DigestAlgorithmIdentifiers_specs_1	/* Additional specs */
 };
-

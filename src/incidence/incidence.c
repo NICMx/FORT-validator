@@ -1,8 +1,6 @@
 #include "incidence/incidence.h"
 
 #include <assert.h>
-#include <stdbool.h>
-#include <string.h>
 #include "common.h"
 #include "json_parser.h"
 #include "log.h"

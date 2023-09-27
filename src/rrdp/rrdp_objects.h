@@ -1,8 +1,6 @@
 #ifndef SRC_RRDP_RRDP_OBJECTS_H_
 #define SRC_RRDP_RRDP_OBJECTS_H_
 
-#include <stddef.h>
-#include <stdbool.h>
 #include "data_structure/array_list.h"
 
 /* Global RRDP files data */

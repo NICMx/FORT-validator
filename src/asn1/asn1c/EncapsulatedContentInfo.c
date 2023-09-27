@@ -59,4 +59,3 @@ asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfo = {
 	2,	/* Elements count */
 	&asn_SPC_EncapsulatedContentInfo_specs_1	/* Additional specs */
 };
-

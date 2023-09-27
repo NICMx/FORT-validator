@@ -1,9 +1,7 @@
 #include "config/uint.h"
 
-#include <getopt.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <string.h>
+#include <getopt.h>
 #include "log.h"
 
 static void

@@ -1,9 +1,6 @@
 #include "crypto/hash.h"
 
-#include <errno.h>
 #include <openssl/evp.h>
-#include <sys/stat.h>
-#include <sys/types.h> /* For blksize_t */
 
 #include "alloc.h"
 #include "common.h"

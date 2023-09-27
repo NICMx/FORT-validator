@@ -4,13 +4,14 @@
 #include <execinfo.h>
 #endif
 
-#include <openssl/bio.h>
+#include <errno.h>
 #include <openssl/err.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <sys/stat.h>
 #include <syslog.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "config.h"
 #include "thread_var.h"

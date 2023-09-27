@@ -7,7 +7,6 @@
  * This module stores VRPs and their serials.
  */
 
-#include <stdbool.h>
 #include "as_number.h"
 #include "types/address.h"
 #include "rtr/db/deltas_array.h"

@@ -1,9 +1,8 @@
 #ifndef SRC_LOG_H_
 #define SRC_LOG_H_
 
-#include <errno.h>
-#include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include "incidence/incidence.h"
 
 /*

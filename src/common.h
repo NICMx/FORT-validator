@@ -3,7 +3,8 @@
 
 #include <pthread.h>
 #include <stdbool.h>
-#include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 /* "I think that this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172

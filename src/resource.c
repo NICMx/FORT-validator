@@ -1,7 +1,6 @@
 #include "resource.h"
 
 #include <errno.h>
-#include <stdint.h> /* UINT32_MAX */
 
 #include "alloc.h"
 #include "cert_stack.h"
@@ -11,8 +10,6 @@
 #include "types/address.h"
 #include "resource/ip4.h"
 #include "resource/ip6.h"
-#include <sys/socket.h>
-
 
 /* The resources we extracted from one certificate. */
 struct resources {

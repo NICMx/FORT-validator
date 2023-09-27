@@ -56,4 +56,3 @@ asn_TYPE_descriptor_t asn_DEF_AttributeTypeAndValue = {
 	2,	/* Elements count */
 	&asn_SPC_AttributeTypeAndValue_specs_1	/* Additional specs */
 };
-

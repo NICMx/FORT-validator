@@ -1,7 +1,5 @@
 #include "rtr/pdu_serializer.h"
 
-#include <stdlib.h>
-#include <string.h>
 #include "rtr/primitive_writer.h"
 
 static size_t

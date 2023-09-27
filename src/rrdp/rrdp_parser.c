@@ -1,13 +1,7 @@
 #include "rrdp/rrdp_parser.h"
 
-#include <libxml/xmlreader.h>
-#include <openssl/evp.h>
-#include <sys/stat.h>
 #include <ctype.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include <openssl/evp.h>
 
 #include "crypto/base64.h"
 #include "crypto/hash.h"

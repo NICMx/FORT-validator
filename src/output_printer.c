@@ -1,6 +1,5 @@
 #include "output_printer.h"
 
-#include <arpa/inet.h>
 #include "common.h"
 #include "config.h"
 #include "file.h"

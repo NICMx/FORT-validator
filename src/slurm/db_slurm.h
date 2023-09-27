@@ -1,9 +1,8 @@
 #ifndef SRC_SLURM_db_slurm_H_
 #define SRC_SLURM_db_slurm_H_
 
-#include <stdbool.h>
-#include <sys/queue.h>
 #include <openssl/evp.h>
+#include <sys/queue.h>
 #include "types/vrp.h"
 #include "types/router_key.h"
 
@@ -29,7 +28,6 @@ struct slurm_bgpsec {
 	unsigned char	*ski;
 	unsigned char	*router_public_key;
 };
-
 
 struct slurm_file_csum {
 	unsigned char csum[EVP_MAX_MD_SIZE];

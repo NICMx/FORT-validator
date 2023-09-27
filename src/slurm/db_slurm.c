@@ -1,8 +1,7 @@
 #include "slurm/db_slurm.h"
 
-#include <string.h>
+#include <errno.h>
 #include <time.h>
-#include <arpa/inet.h>
 
 #include "alloc.h"
 #include "common.h"
@@ -621,4 +620,3 @@ db_slurm_get_csum_list(struct db_slurm *db, struct slurm_csum_list *result)
 	result->list_size = db->csum_list.list_size;
 	result->slh_first = db->csum_list.slh_first;
 }
-

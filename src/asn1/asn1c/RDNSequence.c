@@ -41,4 +41,3 @@ asn_TYPE_descriptor_t asn_DEF_RDNSequence = {
 	1,	/* Single element */
 	&asn_SPC_RDNSequence_specs_1	/* Additional specs */
 };
-

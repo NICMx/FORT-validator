@@ -3,6 +3,13 @@
 
 #include <jansson.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 int json_get_string(json_t *, char const *, char const **);
 int json_get_int(json_t *, char const *, json_int_t *);

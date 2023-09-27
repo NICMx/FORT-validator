@@ -2,7 +2,6 @@
 #define SRC_TYPES_ADDRESS_H_
 
 #include <stdbool.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/IPAddressRange.h"

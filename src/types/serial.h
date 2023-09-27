@@ -1,6 +1,9 @@
 #ifndef SRC_TYPES_SERIAL_H_
 #define SRC_TYPES_SERIAL_H_
 
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>
 

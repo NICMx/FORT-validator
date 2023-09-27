@@ -41,4 +41,3 @@ asn_TYPE_descriptor_t asn_DEF_RevocationInfoChoices = {
 	1,	/* Single element */
 	&asn_SPC_RevocationInfoChoices_specs_1	/* Additional specs */
 };
-

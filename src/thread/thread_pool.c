@@ -1,9 +1,6 @@
 #include "thread/thread_pool.h"
 
 #include <sys/queue.h>
-#include <pthread.h>
-#include <stdlib.h>
-#include <string.h>
 #include "alloc.h"
 #include "common.h"
 #include "log.h"

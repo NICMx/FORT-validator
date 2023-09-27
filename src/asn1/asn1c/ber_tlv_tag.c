@@ -141,4 +141,3 @@ ber_tlv_tag_serialize(ber_tlv_tag_t tag, void *bufp, size_t size) {
 
 	return required_size + 1;
 }
-

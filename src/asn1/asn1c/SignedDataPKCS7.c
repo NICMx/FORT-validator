@@ -99,4 +99,3 @@ asn_TYPE_descriptor_t asn_DEF_SignedDataPKCS7 = {
 	6,	/* Elements count */
 	&asn_SPC_SignedDataPKCS7_specs_1	/* Additional specs */
 };
-

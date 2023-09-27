@@ -29,4 +29,3 @@ asn_TYPE_descriptor_t asn_DEF_DigestAlgorithmIdentifier = {
 	2,	/* Elements count */
 	&asn_SPC_AlgorithmIdentifier_specs_1	/* Additional specs */
 };
-

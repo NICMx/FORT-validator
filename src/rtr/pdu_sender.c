@@ -2,12 +2,7 @@
 
 #include <errno.h>
 #include <poll.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
 #include <syslog.h>
-#include <unistd.h>
-#include <arpa/inet.h> /* INET_ADDRSTRLEN */
 
 #include "alloc.h"
 #include "common.h"

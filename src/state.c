@@ -1,6 +1,5 @@
 #include "state.h"
 
-#include <errno.h>
 #include "alloc.h"
 #include "cert_stack.h"
 #include "log.h"

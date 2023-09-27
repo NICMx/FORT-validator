@@ -1,7 +1,16 @@
 #ifndef RTR_PRIMITIVE_READER_H_
 #define RTR_PRIMITIVE_READER_H_
 
-#include <netinet/in.h> /* in_addr, in6_addr */
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
 
 #include "common.h"
 

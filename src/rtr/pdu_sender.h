@@ -14,5 +14,4 @@ int send_end_of_data_pdu(int, uint8_t, serial_t);
 int send_error_report_pdu(int, uint8_t, uint16_t, struct rtr_request const *,
     char *);
 
-
 #endif /* SRC_RTR_PDU_SENDER_H_ */

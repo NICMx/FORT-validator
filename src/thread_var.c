@@ -1,12 +1,6 @@
 #include "thread_var.h"
 
-#include <errno.h>
 #include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 
 #include "alloc.h"
 #include "config.h"

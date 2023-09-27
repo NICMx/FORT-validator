@@ -1,6 +1,5 @@
 #include "config/incidences.h"
 
-#include <getopt.h>
 #include "incidence/incidence.h"
 
 static void

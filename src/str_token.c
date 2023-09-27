@@ -1,7 +1,7 @@
 #include "str_token.h"
 
-#include <errno.h>
-#include <string.h>
+#include <openssl/bio.h>
+#include <stdint.h>
 
 #include "alloc.h"
 #include "log.h"

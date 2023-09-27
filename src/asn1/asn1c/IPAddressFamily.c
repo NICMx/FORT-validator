@@ -87,4 +87,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressFamily = {
 	2,	/* Elements count */
 	&asn_SPC_IPAddressFamily_specs_1	/* Additional specs */
 };
-

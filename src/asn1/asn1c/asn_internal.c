@@ -1,5 +1,7 @@
 #include "asn1/asn1c/asn_internal.h"
 
+#include <stdarg.h>
+
 ssize_t
 asn__format_to_callback(int (*cb)(const void *, size_t, void *key), void *key,
                         const char *fmt, ...) {
@@ -44,4 +46,3 @@ asn__format_to_callback(int (*cb)(const void *, size_t, void *key), void *key,
 
     return wrote;
 }
-

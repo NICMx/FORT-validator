@@ -1,5 +1,6 @@
 #include "cert_stack.h"
 
+#include <errno.h>
 #include <sys/queue.h>
 
 #include "alloc.h"

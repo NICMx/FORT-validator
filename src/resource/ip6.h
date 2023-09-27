@@ -1,7 +1,6 @@
 #ifndef SRC_RESOURCE_IP6_H_
 #define SRC_RESOURCE_IP6_H_
 
-#include <stdbool.h>
 #include "types/address.h"
 
 struct resources_ipv6;

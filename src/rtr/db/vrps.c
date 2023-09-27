@@ -1,13 +1,11 @@
 #include "rtr/db/vrps.h"
 
-#include <pthread.h>
-#include <string.h>
-#include <syslog.h>
+#include <errno.h>
 #include <time.h>
-#include <sys/queue.h>
 
 #include "alloc.h"
 #include "common.h"
+#include "config.h"
 #include "output_printer.h"
 #include "validation_handler.h"
 #include "types/router_key.h"

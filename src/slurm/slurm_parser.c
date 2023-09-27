@@ -1,12 +1,7 @@
 #include "slurm/slurm_parser.h"
 
 #include <errno.h>
-#include <stdint.h>
-#include <string.h>
-#include <openssl/evp.h>
-#include <openssl/x509.h>
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <openssl/asn1.h>
 
 #include "crypto/base64.h"
 #include "algorithm.h"

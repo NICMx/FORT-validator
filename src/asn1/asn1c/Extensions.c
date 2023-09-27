@@ -44,4 +44,3 @@ asn_TYPE_descriptor_t asn_DEF_Extensions = {
 	1,	/* Single element */
 	&asn_SPC_Extensions_specs_1	/* Additional specs */
 };
-

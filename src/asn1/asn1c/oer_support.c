@@ -3,6 +3,9 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#include <assert.h>
+
 #include "asn1/asn1c/asn_system.h"
 #include "asn1/asn1c/asn_internal.h"
 
@@ -119,4 +122,3 @@ oer_serialize_length(size_t length, asn_app_consume_bytes_f *cb,
 
     return sp - scratch;
 }
-

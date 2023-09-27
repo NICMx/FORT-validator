@@ -56,4 +56,3 @@ asn_TYPE_descriptor_t asn_DEF_OtherRevocationInfoFormat = {
 	2,	/* Elements count */
 	&asn_SPC_OtherRevocationInfoFormat_specs_1	/* Additional specs */
 };
-

@@ -1,8 +1,6 @@
 #ifndef SRC_OBJECT_CERTIFICATE_H_
 #define SRC_OBJECT_CERTIFICATE_H_
 
-#include <stdbool.h>
-#include <openssl/x509.h>
 #include "certificate_refs.h"
 #include "resource.h"
 #include "rpp.h"

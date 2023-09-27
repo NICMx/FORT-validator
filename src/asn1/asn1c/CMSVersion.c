@@ -28,4 +28,3 @@ asn_TYPE_descriptor_t asn_DEF_CMSVersion = {
 	0, 0,	/* Defined elsewhere */
 	0	/* No specifics */
 };
-

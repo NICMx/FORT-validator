@@ -2,16 +2,10 @@
 
 #include "cache/local_cache.h"
 
-#include <dirent.h> /* opendir(), readdir(), closedir() */
-#include <jansson.h>
-#include <strings.h> /* strcasecmp */
-#include <sys/types.h> /* opendir(), closedir(), stat() */
-#include <sys/stat.h> /* stat() */
-#include <sys/queue.h> /* STAILQ */
 #include <time.h>
-#include <unistd.h> /* stat() */
 
 #include "alloc.h"
+#include "config.h"
 #include "file.h"
 #include "log.h"
 #include "data_structure/path_builder.h"

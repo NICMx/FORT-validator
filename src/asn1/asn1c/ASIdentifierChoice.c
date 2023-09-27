@@ -93,4 +93,3 @@ asn_TYPE_descriptor_t asn_DEF_ASIdentifierChoice = {
 	2,	/* Elements count */
 	&asn_SPC_ASIdentifierChoice_specs_1	/* Additional specs */
 };
-

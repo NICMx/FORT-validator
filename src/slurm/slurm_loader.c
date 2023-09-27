@@ -1,10 +1,5 @@
 #include "slurm/slurm_loader.h"
 
-#include <stdlib.h>
-#include <stdbool.h>
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-
 #include "alloc.h"
 #include "log.h"
 #include "config.h"

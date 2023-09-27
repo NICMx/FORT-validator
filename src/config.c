@@ -1,10 +1,7 @@
 #include "config.h"
 
-#include <limits.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
 #include <getopt.h>
+#include <limits.h>
 #include <sys/socket.h>
 #include <syslog.h>
 
@@ -1036,7 +1033,6 @@ print_usage(FILE *stream, bool print_doc)
 			fprintf(stream, "\t    (%s)\n", option->doc);
 	}
 }
-
 
 static int
 handle_opt(int opt)

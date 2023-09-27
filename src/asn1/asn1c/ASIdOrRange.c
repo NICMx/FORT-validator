@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_ASIdOrRange = {
 	2,	/* Elements count */
 	&asn_SPC_ASIdOrRange_specs_1	/* Additional specs */
 };
-

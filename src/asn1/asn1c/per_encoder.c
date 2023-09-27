@@ -162,4 +162,3 @@ _uper_encode_flush_outp(asn_per_outp_t *po) {
 
 	return po->output(po->tmpspace, buf - po->tmpspace, po->op_key);
 }
-

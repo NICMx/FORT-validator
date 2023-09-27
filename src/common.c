@@ -1,13 +1,8 @@
 #include "common.h"
 
-#include <dirent.h> /* readdir(), closedir() */
-#include <limits.h> /* realpath() */
-#include <stdlib.h> /* free(), realpath() */
-#include <stdio.h> /* remove() */
-#include <string.h> /* strrchr(), strcmp(), strcat(), etc */
-#include <unistd.h> /* stat(), rmdir() */
-#include <sys/stat.h> /* stat(), mkdir() */
-#include <sys/types.h> /* stat(), closedir(), mkdir() */
+#include <dirent.h>
+#include <errno.h>
+#include <time.h>
 
 #include "alloc.h"
 #include "config.h"
@@ -195,7 +190,6 @@ process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
 
 	return process_dir_files(location, file_ext, empty_err, cb, arg);
 }
-
 
 bool
 valid_file_or_dir(char const *location, bool check_file, bool check_dir,

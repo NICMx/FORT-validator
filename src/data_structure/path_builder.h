@@ -1,8 +1,6 @@
 #ifndef SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 #define SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 
-#include <stdbool.h>
-#include <stddef.h>
 #include "types/uri.h"
 
 struct path_builder {

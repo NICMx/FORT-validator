@@ -1,7 +1,6 @@
 #ifndef SRC_STATE_H_
 #define SRC_STATE_H_
 
-#include <openssl/x509.h>
 #include "validation_handler.h"
 #include "object/tal.h"
 

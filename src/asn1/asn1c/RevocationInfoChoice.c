@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_RevocationInfoChoice = {
 	2,	/* Elements count */
 	&asn_SPC_RevocationInfoChoice_specs_1	/* Additional specs */
 };
-

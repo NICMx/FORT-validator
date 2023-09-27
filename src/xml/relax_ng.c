@@ -1,10 +1,9 @@
 #include "xml/relax_ng.h"
 
-#include <libxml/parser.h>
-#include <libxml/relaxng.h>
-#include <libxml/xmlmemory.h>
-#include <errno.h>
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "log.h"
 

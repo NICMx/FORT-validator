@@ -1,14 +1,8 @@
 #include "object/tal.h"
 
 #include <errno.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/queue.h>
-#include <sys/stat.h>
 #include <openssl/evp.h>
+#include <sys/queue.h>
 
 #include "alloc.h"
 #include "cert_stack.h"

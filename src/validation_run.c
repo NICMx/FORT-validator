@@ -1,7 +1,6 @@
 #include "validation_run.h"
 
-#include <stdbool.h>
-#include <unistd.h>
+#include <errno.h>
 
 #include "config.h"
 #include "log.h"

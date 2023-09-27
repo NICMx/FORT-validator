@@ -1,7 +1,5 @@
 #include "notify.h"
 
-#include <err.h>
-#include <stddef.h>
 #include "log.h"
 #include "rtr/rtr.h"
 #include "rtr/pdu_sender.h"

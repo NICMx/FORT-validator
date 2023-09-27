@@ -1,6 +1,5 @@
 #include "object/signed_object.h"
 
-#include <errno.h>
 #include "log.h"
 #include "asn1/content_info.h"
 
