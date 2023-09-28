@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L /* strtok_r() */
+
 #include "json_handler.h"
 
 #include <errno.h>

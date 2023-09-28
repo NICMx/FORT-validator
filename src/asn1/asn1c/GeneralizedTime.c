@@ -5,12 +5,11 @@
 #define	_POSIX_PTHREAD_SEMANTICS	/* for Sun */
 #define	_REENTRANT			/* for Sun */
 #define __EXTENSIONS__                  /* for Sun */
-#ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE 1
-#endif
-#ifndef _BSD_SOURCE
-#define _BSD_SOURCE     /* for timegm(3) */
-#endif
+
+#define _DEFAULT_SOURCE 1 /* timegm() */
+#define _XOPEN_SOURCE 600 /* snprintf(), timezone */
+#define _POSIX_C_SOURCE 200112L /* gmtime_r(), localtime_r(), tzset() */
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 

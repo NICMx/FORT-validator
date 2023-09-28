@@ -1,3 +1,5 @@
+#define _GNU_SOURCE /* getopt_long() */
+
 #include "config.h"
 
 #include <getopt.h>

@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L /* localtime_r() */
+
 #include "object/manifest.h"
 
 #include "algorithm.h"

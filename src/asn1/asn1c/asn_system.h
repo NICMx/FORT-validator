@@ -8,14 +8,6 @@
 #ifndef	ASN_SYSTEM_H
 #define	ASN_SYSTEM_H
 
-#ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE 1
-#endif
-
-#ifndef _BSD_SOURCE
-#define _BSD_SOURCE /* for snprintf() on some linux systems  */
-#endif
-
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <limits.h>

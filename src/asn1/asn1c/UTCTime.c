@@ -2,6 +2,9 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#define _XOPEN_SOURCE 500 /* snprintf() */
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/UTCTime.h"
 #include "asn1/asn1c/GeneralizedTime.h"

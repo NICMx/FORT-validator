@@ -1,3 +1,6 @@
+/* getaddrinfo(), freeaddrinfo(), gai_strerror() */
+#define _POSIX_C_SOURCE 200112L
+
 #include "rtr/rtr.h"
 
 #include <errno.h>

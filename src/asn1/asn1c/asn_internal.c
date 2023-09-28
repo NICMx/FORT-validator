@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 500 /* vsnprintf() */
+
 #include "asn1/asn1c/asn_internal.h"
 
 #include <stdarg.h>

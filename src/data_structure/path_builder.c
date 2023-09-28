@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 500 /* snprintf() */
+
 #include "data_structure/path_builder.h"
 
 #include <errno.h>

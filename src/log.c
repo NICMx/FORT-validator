@@ -1,3 +1,6 @@
+#define _XOPEN_SOURCE 600 /* vsnprintf() */
+#define _POSIX_C_SOURCE 200112L /* localtime_r() */
+
 #include "log.h"
 
 #ifdef BACKTRACE_ENABLED
