@@ -239,15 +239,6 @@ create_server_socket(char const *input_addr, char const *hostname,
 			continue;
 		}
 
-		/* enable SO_REUSEPORT */
-		if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse,
-		    sizeof(int)) < 0) {
-			pr_op_err("setsockopt(SO_REUSEPORT) failed: %s",
-			    strerror(errno));
-			close(fd);
-			continue;
-		}
-
 		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
 			pr_op_err("bind() failed: %s", strerror(errno));
 			close(fd);
