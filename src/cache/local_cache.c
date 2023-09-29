@@ -814,25 +814,25 @@ node2json(struct cache_node *node)
 
 	error = tt2json(node->ts_success, &date);
 	if (error) {
-		pr_op_err("Cannot convert timestamp %ld to json: %s",
-		    node->ts_success, strerror(error));
+		pr_op_err("Cannot convert %s's success timestamp to json: %s",
+		    node->basename, strerror(error));
 		goto cancel;
 	}
 	if (json_object_set_new(json, "ts_success", date)) {
-		pr_op_err("Cannot convert timestamp %ld to json; unknown cause.",
-		    node->ts_success);
+		pr_op_err("Cannot convert %s's success timestamp to json; unknown cause.",
+		    node->basename);
 		goto cancel;
 	}
 
 	error = tt2json(node->ts_attempt, &date);
 	if (error) {
-		pr_op_err("Cannot convert timestamp %ld to json: %s",
-		    node->ts_attempt, strerror(error));
+		pr_op_err("Cannot convert %s's attempt timestamp to json: %s",
+		    node->basename, strerror(error));
 		goto cancel;
 	}
 	if (json_object_set_new(json, "ts_attempt", date)) {
-		pr_op_err("Cannot convert timestamp %ld to json; unknown cause.",
-		    node->ts_attempt);
+		pr_op_err("Cannot convert %s's attempt timestamp to json; unknown cause.",
+		    node->basename);
 		goto cancel;
 	}
 

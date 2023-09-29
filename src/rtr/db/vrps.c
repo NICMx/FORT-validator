@@ -382,7 +382,7 @@ vrps_update(bool *changed)
 	if (config_get_mode() == SERVER)
 		pr_op_info("- Serial: %u", serial);
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
-		pr_op_info("- Real execution time: %ld secs.", finish - start);
+		pr_op_info("- Real execution time: %.0lf secs.", difftime(finish, start));
 
 	return error;
 }
