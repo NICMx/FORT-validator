@@ -41,6 +41,29 @@ decode_manifest(struct signed_object *sobj, struct Manifest **result)
 	);
 }
 
+/*
+ * Expects both arguments to be normalized and CST.
+ */
+static int
+tm_cmp(struct tm *tm1, struct tm *tm2)
+{
+#define TM_CMP(field)							\
+	if (tm1->field < tm2->field)					\
+		return -1;						\
+	if (tm1->field > tm2->field)					\
+		return 1;						\
+
+	TM_CMP(tm_year);
+	TM_CMP(tm_mon);
+	TM_CMP(tm_mday);
+	TM_CMP(tm_hour);
+	TM_CMP(tm_min);
+	TM_CMP(tm_sec);
+	return 0;
+
+#undef TM_CMP
+}
+
 static int
 validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 {
@@ -49,44 +72,46 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 	tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,			\
 	tm.tm_hour, tm.tm_min, tm.tm_sec
 
-	time_t thisUpdate;
-	time_t nextUpdate;
-	time_t now;
-	struct tm thisUpdate_tm;
-	struct tm nextUpdate_tm;
+	time_t now_tt;
+	struct tm now;
+	struct tm thisUpdate;
+	struct tm nextUpdate;
 	int error;
 
-	/*
-	 * BTW: We only need the tm variables for error messages, which are
-	 * rarely needed.
-	 * So maybe we could get a small performance boost by postponing the
-	 * calls to localtime_r().
-	 */
-	thisUpdate = asn_GT2time(this, &thisUpdate_tm, false);
-	nextUpdate = asn_GT2time(next, &nextUpdate_tm, false);
+	error = asn_GT2time(this, &thisUpdate);
+	if (error)
+		return pr_val_err("Manifest's thisUpdate date is unparseable.");
+	error = asn_GT2time(next, &nextUpdate);
+	if (error)
+		return pr_val_err("Manifest's nextUpdate date is unparseable.");
 
-	if (difftime(thisUpdate, nextUpdate) > 0) {
+	if (tm_cmp(&thisUpdate, &nextUpdate) > 0) {
 		return pr_val_err(
 		    "Manifest's thisUpdate (" TM_FMT ") > nextUpdate ("
 		        TM_FMT ").",
-		    TM_ARGS(thisUpdate_tm),
-		    TM_ARGS(nextUpdate_tm));
+		    TM_ARGS(thisUpdate),
+		    TM_ARGS(nextUpdate));
 	}
 
-	now = 0;
-	error = get_current_time(&now);
+	now_tt = 0;
+	error = get_current_time(&now_tt);
 	if (error)
 		return error;
+	if (gmtime_r(&now_tt, &now) == NULL) {
+		error = errno;
+		return pr_val_err("gmtime_r(now) error %d: %s", error,
+		    strerror(error));
+	}
 
-	if (difftime(now, thisUpdate) < 0) {
+	if (tm_cmp(&now, &thisUpdate) < 0) {
 		return pr_val_err(
 		    "Manifest is not valid yet. (thisUpdate: " TM_FMT ")",
-		    TM_ARGS(thisUpdate_tm));
+		    TM_ARGS(thisUpdate));
 	}
-	if (difftime(now, nextUpdate) > 0) {
+	if (tm_cmp(&now, &nextUpdate) > 0) {
 		return incidence(INID_MFT_STALE,
 		    "Manifest is stale. (nextUpdate: " TM_FMT ")",
-		    TM_ARGS(nextUpdate_tm));
+		    TM_ARGS(nextUpdate));
 	}
 
 	return 0;

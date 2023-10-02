@@ -35,8 +35,6 @@ asn_random_fill_f  GeneralizedTime_random_fill;
  * Some handy helpers. *
  ***********************/
 
-struct tm;	/* <time.h> */
-
 /*
  * Convert a GeneralizedTime structure into time_t
  * and optionally into struct tm.
@@ -44,13 +42,12 @@ struct tm;	/* <time.h> */
  * instead of default local one.
  * On error returns -1 and errno set to EINVAL
  */
-time_t asn_GT2time(const GeneralizedTime_t *, struct tm *_optional_tm4fill,
-	int as_gmt);
+int asn_GT2time(const GeneralizedTime_t *, struct tm *_optional_tm4fill);
 
 /* A version of the above function also returning the fractions of seconds */
-time_t asn_GT2time_frac(const GeneralizedTime_t *,
+int asn_GT2time_frac(const GeneralizedTime_t *,
 	int *frac_value, int *frac_digits,	/* (value / (10 ^ digits)) */
-	struct tm *_optional_tm4fill, int as_gmt);
+	struct tm *_optional_tm4fill);
 
 /*
  * Another version returning fractions with defined precision
@@ -59,7 +56,7 @@ time_t asn_GT2time_frac(const GeneralizedTime_t *,
  */
 time_t asn_GT2time_prec(const GeneralizedTime_t *,
 	int *frac_value, int frac_digits,
-	struct tm *_optional_tm4fill, int as_gmt);
+	struct tm *_optional_tm4fill);
 
 /*
  * Convert a struct tm into GeneralizedTime.
@@ -69,9 +66,9 @@ time_t asn_GT2time_prec(const GeneralizedTime_t *,
  * On error, this function returns 0 and sets errno.
  */
 GeneralizedTime_t *asn_time2GT(GeneralizedTime_t *_optional_gt,
-	const struct tm *, int force_gmt);
+	const struct tm *);
 GeneralizedTime_t *asn_time2GT_frac(GeneralizedTime_t *_optional_gt,
-	const struct tm *, int frac_value, int frac_digits, int force_gmt);
+	const struct tm *, int frac_value, int frac_digits);
 
 #ifdef __cplusplus
 }
