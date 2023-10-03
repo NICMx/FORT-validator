@@ -302,15 +302,17 @@ load_metadata_json(void)
 
 	root = json_load_file(filename, 0, &jerror);
 
-	free(filename);
-
 	if (root == NULL) {
-		pr_op_err("Json parsing failure at metadata.json (%d:%d): %s",
-		    jerror.line, jerror.column, jerror.text);
+		if (json_error_code(&jerror) == json_error_cannot_open_file) {
+			pr_op_debug("%s does not exist.", filename);
+		} else {
+			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+			    filename, jerror.line, jerror.column, jerror.text);
+		}
 		goto end;
 	}
 	if (json_typeof(root) != JSON_ARRAY) {
-		pr_op_err("The root tag of metadata.json is not an array.");
+		pr_op_err("The root tag of %s is not an array.", filename);
 		goto end;
 	}
 
@@ -323,13 +325,14 @@ load_metadata_json(void)
 		else if (strcasecmp(node->basename, "https") == 0)
 			https = node;
 		else {
-			pr_op_warn("Ignoring unrecognized json node '%s'.",
-			    node->basename);
+			pr_op_warn("%s: Ignoring unrecognized json node '%s'.",
+			    filename, node->basename);
 			delete_node(node);
 		}
 	}
 
 end:
+	free(filename);
 	json_decref(root);
 }
 
