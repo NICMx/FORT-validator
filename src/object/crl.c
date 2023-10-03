@@ -154,12 +154,18 @@ int
 crl_load(struct rpki_uri *uri, X509_CRL **result)
 {
 	int error;
+
 	pr_val_debug("CRL '%s' {", uri_val_get_printable(uri));
 
 	error = __crl_load(uri, result);
-	if (!error)
-		error = crl_validate(*result);
+	if (error)
+		goto end;
 
+	error = crl_validate(*result);
+	if (error)
+		X509_CRL_free(*result);
+
+end:
 	pr_val_debug("}");
 	return error;
 }
