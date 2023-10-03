@@ -10,7 +10,7 @@ fetch_url(char const *url)
 {
 	char const *prefix = "https://";
 	char const *dest_dir;
-	char *dest_file;
+	char const *dest_file;
 	char *dest;
 	size_t prefix_len;
 	size_t url_len;

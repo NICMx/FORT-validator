@@ -93,7 +93,9 @@ static int
 process_file(char const *dir_name, char const *file_name, char const *file_ext,
     int *fcount, process_file_cb cb, void *arg)
 {
-	char *ext, *fullpath, *tmp;
+	char const *ext;
+	char *fullpath;
+	char *tmp;
 	int error;
 
 	if (file_ext != NULL) {
@@ -223,7 +225,7 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 }
 
 static int
-dir_exists(char const *path, bool *result)
+dir_exists(char *path, bool *result)
 {
 	struct stat _stat;
 	char *last_slash;
@@ -285,31 +287,28 @@ create_dir_recursive(char const *path)
 {
 	char *localuri;
 	int i, error;
-	bool exist = false;
+	bool exist;
 
-	error = dir_exists(path, &exist);
-	if (error)
-		return error;
-	if (exist)
-		return 0;
+	localuri = pstrdup(path); /* Remove const */
 
-	localuri = pstrdup(path);
+	exist = false;
+	error = dir_exists(localuri, &exist);
+	if (error || exist)
+		goto end;
 
 	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
 			localuri[i] = '\0';
 			error = create_dir(localuri);
 			localuri[i] = '/';
-			if (error) {
-				/* error msg already printed */
-				free(localuri);
-				return error;
-			}
+			if (error)
+				goto end; /* error msg already printed */
 		}
 	}
 
+end:
 	free(localuri);
-	return 0;
+	return error;
 }
 
 static int

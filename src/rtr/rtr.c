@@ -73,7 +73,7 @@ destroy_db(void)
 static int
 parse_address(char const *full_address, char **address, char **service)
 {
-	char *ptr;
+	char const *ptr;
 	char *tmp_addr;
 	char *tmp_serv;
 	size_t tmp_addr_len;

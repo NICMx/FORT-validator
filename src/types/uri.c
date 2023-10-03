@@ -179,7 +179,7 @@ static int
 ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 {
 	char *joined;
-	char *slash_pos;
+	char const *slash_pos;
 	int dir_len;
 	int error;
 

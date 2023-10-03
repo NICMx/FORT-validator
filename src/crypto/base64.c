@@ -195,9 +195,10 @@ free_copy:
 }
 
 static char *
-to_base64url(char *base, size_t base_len)
+to_base64url(char const *base, size_t base_len)
 {
-	char *pad, *tmp;
+	char const *pad;
+	char *tmp;
 	size_t len;
 	int i;
 
