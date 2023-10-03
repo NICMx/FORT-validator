@@ -1,6 +1,3 @@
-#define _XOPEN_SOURCE 600 /* nftw() */
-#define _POSIX_C_SOURCE 200112L /* fileno() */
-
 #include "file.h"
 
 #include <ftw.h>

@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 500 /* strdup() */
-
 #include "alloc.h"
 
 #include "log.h"

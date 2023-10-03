@@ -174,7 +174,7 @@ START_TEST(test_ipv6_prefix_from_stream)
 	ck_assert_uint_eq(pdu.max_length, 35);
 	ck_assert_uint_eq(pdu.zero, 36);
 	in6_addr_init(&tmp, 0x25262728, 0x292a2b2c, 0x2d2e2f30, 0x31323334);
-	ck_assert(IN6_ARE_ADDR_EQUAL(&tmp, &pdu.ipv6_prefix));
+	ck_assert(addr6_equals(&tmp, &pdu.ipv6_prefix));
 	ck_assert_uint_eq(pdu.asn, 0x35363738);
 }
 END_TEST

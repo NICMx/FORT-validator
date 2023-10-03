@@ -120,10 +120,11 @@ fort_SOURCES += xml/relax_ng.c xml/relax_ng.h
 include asn1/asn1c/Makefile.include
 fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 
-fort_CFLAGS  = -Wall -Wno-cpp -Wpedantic
+fort_CFLAGS  = -Wall -Wpedantic
 # Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=gnu11 -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
+fort_CFLAGS += -std=c99 -D_POSIX_C_SOURCE=200809 -D_XOPEN_SOURCE=700
+fort_CFLAGS += -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
 if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED
 endif

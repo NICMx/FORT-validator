@@ -31,6 +31,8 @@ void in6_addr_init(struct in6_addr *, uint32_t, uint32_t, uint32_t, uint32_t);
 uint32_t u32_suffix_mask(unsigned int);
 void ipv6_suffix_mask(unsigned int, struct in6_addr *);
 
+bool addr6_equals(struct in6_addr const *, struct in6_addr const *);
+
 bool prefix4_equals(struct ipv4_prefix const *, struct ipv4_prefix const *);
 bool prefix6_equals(struct ipv6_prefix const *, struct ipv6_prefix const *);
 

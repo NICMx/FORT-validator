@@ -1,7 +1,5 @@
 /* This test will create temporal directory "tmp/". Needs permissions. */
 
-#define _XOPEN_SOURCE 500 /* snprintf() */
-
 #include "cache/local_cache.c"
 
 #include <check.h>

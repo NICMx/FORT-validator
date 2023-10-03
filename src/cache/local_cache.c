@@ -1,6 +1,3 @@
-#define _XOPEN_SOURCE 600 /* strptime() */
-#define _POSIX_C_SOURCE 200112L /* localtime_r(), strtok_r() */
-
 #include "cache/local_cache.h"
 
 #include <time.h>

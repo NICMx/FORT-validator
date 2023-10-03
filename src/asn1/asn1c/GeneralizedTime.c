@@ -6,9 +6,6 @@
 #define	_REENTRANT			/* for Sun */
 #define __EXTENSIONS__                  /* for Sun */
 
-#define _XOPEN_SOURCE 600 /* snprintf(), timezone */
-#define _POSIX_C_SOURCE 200112L /* gmtime_r(), localtime_r(), tzset() */
-
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 

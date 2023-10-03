@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 500
-
 #include <check.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,7 +25,7 @@
 MOCK_ABORT_INT(read_int32, struct pdu_reader *reader, uint32_t *result)
 MOCK_ABORT_INT(read_int8, struct pdu_reader *reader, uint8_t *result)
 
-MOCK_VOID(cache_prepare, void)
+MOCK_INT(cache_prepare, 0, void)
 
 MOCK_INT(slurm_apply, 0, struct db_table *base, struct db_slurm **slurm)
 MOCK_ABORT_VOID(db_slurm_destroy, struct db_slurm *db)

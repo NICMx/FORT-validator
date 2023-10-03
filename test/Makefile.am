@@ -12,7 +12,9 @@ if USE_TESTS
 # <mumble>_CFLAGS is not defined.
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
-AM_CFLAGS = -pedantic -Wall -std=gnu11 -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS}
+AM_CFLAGS =  -pedantic -Wall
+AM_CFLAGS += -std=c99 -D_POSIX_C_SOURCE=200809 -D_XOPEN_SOURCE=700
+AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS}
 # Reminder: As opposed to AM_CFLAGS, "AM_LDADD" is not idiomatic automake, and
 # autotools will even reprehend us if we declare it. Therefore, I came up with
 # "my" own "ldadd". Unlike AM_CFLAGS, it needs to be manually added to every

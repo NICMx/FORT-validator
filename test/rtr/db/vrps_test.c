@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 500 /* nftw() */
-
 #include <check.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -71,7 +69,7 @@ static const bool deltas_4to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 unsigned int deltas_lifetime = 5;
 
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
-MOCK_VOID(cache_prepare, void)
+MOCK_INT(cache_prepare, 0, void)
 
 /* Test functions */
 
@@ -137,7 +135,7 @@ get_vrp_index(struct vrp const *vrp)
 
 	case AF_INET6:
 		in6_addr_init(&tmp, 0x20010DB8u, 0, 0, 0);
-		ck_assert(IN6_ARE_ADDR_EQUAL(&tmp, &vrp->prefix.v6));
+		ck_assert(addr6_equals(&tmp, &vrp->prefix.v6));
 		ck_assert_uint_eq(96, vrp->prefix_length);
 		ck_assert_uint_eq(120, vrp->max_prefix_length);
 		family_bit = 1;

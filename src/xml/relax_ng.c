@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 500 /* vsnprintf() */
-
 #include "xml/relax_ng.h"
 
 #include <stdarg.h>

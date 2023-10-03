@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include "state.h"
+#include "config/filename_format.h"
+#include "config/mode.h"
 #include "incidence/incidence.h"
 
 /**

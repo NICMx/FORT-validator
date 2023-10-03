@@ -87,6 +87,9 @@ lfile_read(struct line_file *lfile, char **result)
 	 * because getline is normally meant to be used repeatedly with a
 	 * recycled buffer. (free() is a no-op if its argument is NULL so go
 	 * nuts.)
+	 *
+	 * Update: If you remove getline(), consider downgrading _POSIX_C_SOURCE
+	 * to 200112L. (And _XOPEN_SOURCE to 600.)
 	 */
 
 	string = NULL;

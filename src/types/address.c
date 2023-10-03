@@ -131,6 +131,17 @@ ipv6_suffix_mask(unsigned int prefix_len, struct in6_addr *result)
 }
 
 bool
+addr6_equals(struct in6_addr const *a, struct in6_addr const *b)
+{
+	unsigned int i;
+	for (i = 0; i < INET_ADDRSTRLEN; i++) {
+		if (a->s6_addr[i] != b->s6_addr[i])
+			return false;
+	}
+	return true;
+}
+
+bool
 prefix4_equals(struct ipv4_prefix const *a, struct ipv4_prefix const *b)
 {
 	return (a->len == b->len) && (a->addr.s_addr == b->addr.s_addr);
@@ -139,7 +150,7 @@ prefix4_equals(struct ipv4_prefix const *a, struct ipv4_prefix const *b)
 bool
 prefix6_equals(struct ipv6_prefix const *a, struct ipv6_prefix const *b)
 {
-	return (a->len == b->len) && IN6_ARE_ADDR_EQUAL(&a->addr, &b->addr);
+	return (a->len == b->len) && addr6_equals(&a->addr, &b->addr);
 }
 
 /**

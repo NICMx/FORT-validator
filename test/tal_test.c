@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 500 /* nftw() */
-
 #include "object/tal.c"
 
 #include <check.h>
