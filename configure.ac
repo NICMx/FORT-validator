@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.71])
+AC_PREREQ([2.69])
 AC_INIT([fort],[1.5.4],[fort-validator@nic.mx])
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
