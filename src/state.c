@@ -118,6 +118,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
 	result->x509_data.params = params; /* Ownership transfered */
+	result->notification_uri = NULL;
 
 	*out = result;
 	return 0;
