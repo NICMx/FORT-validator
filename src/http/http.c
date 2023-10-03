@@ -280,7 +280,7 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	setopt_writedata(handler.curl, &args);
 
 	pr_val_info("HTTP GET: %s", src);
-	res = curl_easy_perform(handler.curl);
+	res = curl_easy_perform(handler.curl); /* write_callback() */
 	if (args.file != NULL)
 		file_close(args.file);
 	pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);

@@ -262,7 +262,7 @@ dir_exists(char *path, bool *result)
 }
 
 static int
-create_dir(char *path)
+create_dir(char const *path)
 {
 	int error;
 

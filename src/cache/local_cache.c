@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "alloc.h"
+#include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
@@ -82,6 +83,26 @@ static struct cache_node *https;
 
 static time_t startup_time; /* When we started the last validation */
 
+static int
+init_cache_pb(struct path_builder *pb, char const *subdir)
+{
+	int error;
+
+	pb_init(pb);
+	error = pb_append(pb, config_get_local_repository());
+	if (error)
+		goto cancel;
+	error = pb_append(pb, subdir);
+	if (error)
+		goto cancel;
+
+	return 0;
+
+cancel:
+	pb_cleanup(pb);
+	return error;
+}
+
 /* Minimizes multiple evaluation */
 static struct cache_node *
 add_child(struct cache_node *parent, char const *basename)
@@ -156,20 +177,14 @@ get_metadata_json_filename(char **filename)
 	struct path_builder pb;
 	int error;
 
-	pb_init(&pb);
-	error = pb_append(&pb, config_get_local_repository());
-	if (error)
-		goto cancel;
-	error = pb_append(&pb, "metadata.json");
-	if (error)
-		goto cancel;
+	error = init_cache_pb(&pb, "metadata.json");
+	if (error) {
+		pb_cleanup(&pb);
+		return error;
+	}
 
 	*filename = pb.string;
 	return 0;
-
-cancel:
-	pb_cleanup(&pb);
-	return error;
 }
 
 static int
@@ -318,15 +333,25 @@ end:
 	json_decref(root);
 }
 
-void
+int
 cache_prepare(void)
 {
+	struct path_builder pb;
+	int error;
+
 	startup_time = time(NULL);
 	if (startup_time == ((time_t) -1))
 		pr_crit("time(NULL) returned -1");
 
 	if (rsync == NULL)
 		load_metadata_json();
+
+	error = init_cache_pb(&pb, "tmp/a");
+	if (error)
+		return error;
+	error = create_dir_recursive(pb.string);
+	pb_cleanup(&pb);
+	return error;
 }
 
 static int
@@ -678,8 +703,7 @@ static void cleanup_tree(struct cache_node **root, char const *treename)
 	struct cache_node *node, *child, *tmp;
 	int error;
 
-	pb_init(&pb);
-	if (pb_append(&pb, config_get_local_repository()) != 0)
+	if (init_cache_pb(&pb, NULL) != 0)
 		goto end;
 
 	ctt_init(&ctt, root, &pb);

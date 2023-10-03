@@ -219,7 +219,9 @@ __perform_standalone_validation(struct db_table **result)
 	struct db_table *db;
 	int error;
 
-	cache_prepare();
+	error = cache_prepare();
+	if (error)
+		return error;
 
 	db = db_table_create();
 

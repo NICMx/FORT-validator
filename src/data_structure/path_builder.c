@@ -79,7 +79,9 @@ pb_appendn(struct path_builder *pb, char const *addend, size_t addlen)
 int
 pb_append(struct path_builder *pb, char const *addend)
 {
-	return pb_appendn(pb, addend, strlen(addend));
+	return (addend != NULL)
+	    ? pb_appendn(pb, addend, strlen(addend))
+	    : 0;
 }
 
 int

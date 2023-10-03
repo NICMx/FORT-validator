@@ -4,7 +4,7 @@
 #include "types/uri.h"
 
 /* Warms up cache for new validation run */
-void cache_prepare(void);
+int cache_prepare(void);
 
 /* Downloads @uri into the cache */
 int cache_download(struct rpki_uri *uri, bool *);

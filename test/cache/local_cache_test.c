@@ -363,7 +363,7 @@ backtrack_times(struct cache_node *node)
 static void
 __cache_prepare(void)
 {
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 	/* Ensure the old ts_successes and ts_attempts are outdated */
 	backtrack_times(rsync);
 	backtrack_times(https);
@@ -376,7 +376,7 @@ START_TEST(test_cache_download_rsync)
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 	dl_error = false;
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 
 	download_rsync("rsync://a.b.c/d/e", 0, 1);
 	validate_tree(rsync,
@@ -457,7 +457,7 @@ START_TEST(test_cache_download_rsync_error)
 {
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 
 	dl_error = false;
 	download_rsync("rsync://a.b.c/d", 0, 1);
@@ -639,7 +639,7 @@ START_TEST(test_cache_cleanup_rsync_error)
 {
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 
 	/* Set up */
 	dl_error = false;
@@ -692,7 +692,7 @@ START_TEST(test_cache_download_https)
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 	dl_error = false;
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 
 	/* Download *file* e. */
 	download_https("https://a.b.c/d/e", 0, 1);
@@ -744,7 +744,7 @@ START_TEST(test_cache_download_https_error)
 {
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 
 	dl_error = false;
 	download_https("https://a.b.c/d", 0, 1);
@@ -886,7 +886,7 @@ START_TEST(test_cache_cleanup_https_error)
 {
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 
 	/* Set up */
 	dl_error = false;
@@ -934,7 +934,7 @@ START_TEST(test_dots)
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 	dl_error = false;
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 
 	download_https("https://a.b.c/d", 0, 1);
 	validate_tree(https,
@@ -1054,7 +1054,7 @@ START_TEST(test_ctt_traversal)
 
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 
-	cache_prepare();
+	ck_assert_int_eq(0, cache_prepare());
 	now = time(NULL);
 	if (now == ((time_t) -1))
 		ck_abort_msg("time(NULL) returned -1");
