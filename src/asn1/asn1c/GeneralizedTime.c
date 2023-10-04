@@ -108,11 +108,7 @@ GeneralizedTime_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
                            void *app_key) {
     const GeneralizedTime_t *st = (const GeneralizedTime_t *)sptr;
 
-	/* asn_GT2time() no longer supports NULL tm and no GMT */
-	fprintf(stderr, "GeneralizedTime_constraint() is not implemented for now.\n");
-	abort();
-
-	if(asn_GT2time(st, 0) != 0) {
+	if(asn_GT2time(st, NULL) != 0) {
 		ASN__CTFAIL(app_key, td, sptr,
 			"%s: Invalid time format: %s (%s:%d)",
 			td->name, strerror(errno), __FILE__, __LINE__);
@@ -395,12 +391,10 @@ asn_GT2time_frac(const GeneralizedTime_t *st, int *frac_value, int *frac_digits,
 	tm_s.tm_year -= 1900;
 	tm_s.tm_isdst = 0;
 
-	*ret_tm = tm_s;
-
-	/* Fractions of seconds */
+	/* Return */
 	if(frac_value) *frac_value = fvalue;
 	if(frac_digits) *frac_digits = fdigits;
-
+	if(ret_tm) *ret_tm = tm_s;
 	return 0;
 
 garbage:
