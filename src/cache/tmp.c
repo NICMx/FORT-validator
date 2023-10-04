@@ -2,7 +2,6 @@
 
 #include <stdatomic.h>
 
-#include "config.h"
 #include "data_structure/path_builder.h"
 
 static atomic_uint file_counter;
@@ -23,12 +22,7 @@ cache_tmpfile(char **filename)
 	struct path_builder pb;
 	int error;
 
-	pb_init(&pb);
-
-	error = pb_append(&pb, config_get_local_repository());
-	if (error)
-		return error;
-	error = pb_append(&pb, "tmp");
+	error = pb_init_cache(&pb, "tmp");
 	if (error)
 		return error;
 	error = pb_append_u32(&pb, atomic_fetch_add(&file_counter, 1u));

@@ -30,7 +30,7 @@ rsync_download(struct rpki_uri *uri)
 		return -EINVAL;
 
 	cmd = pmalloc(128);
-	printed = snprintf(cmd, 128, "mkdir -p tmp/%s", uri_get_local(uri));
+	printed = snprintf(cmd, 128, "mkdir -p %s", uri_get_local(uri));
 	ck_assert(printed < 128);
 
 	ck_assert_int_eq(0, system(cmd));
@@ -53,7 +53,7 @@ http_download(struct rpki_uri *uri, bool *changed)
 	cmd = pmalloc(128);
 	printed = snprintf(cmd, 128,
 	    /* "create file, but only if it's not already a directory" */
-	    "test ! -d tmp/%s && install -D /dev/null tmp/%s",
+	    "test ! -d %s && install -D /dev/null %s",
 	    uri_get_local(uri), uri_get_local(uri));
 	ck_assert(printed < 128);
 

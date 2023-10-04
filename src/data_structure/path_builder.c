@@ -3,6 +3,7 @@
 #include <errno.h>
 
 #include "alloc.h"
+#include "config.h"
 #include "log.h"
 #include "crypto/hash.h"
 
@@ -21,6 +22,28 @@ pb_init(struct path_builder *pb)
 	pb->string[0] = 0;
 	pb->len = 0;
 	pb->capacity = INITIAL_CAPACITY;
+}
+
+int
+pb_init_cache(struct path_builder *pb, char const *subdir)
+{
+	int error;
+
+	pb_init(pb);
+
+	error = pb_append(pb, config_get_local_repository());
+	if (error)
+		goto cancel;
+
+	error = pb_append(pb, subdir);
+	if (error)
+		goto cancel;
+
+	return 0;
+
+cancel:
+	pb_cleanup(pb);
+	return error;
 }
 
 static int

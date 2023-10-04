@@ -80,26 +80,6 @@ static struct cache_node *https;
 
 static time_t startup_time; /* When we started the last validation */
 
-static int
-init_cache_pb(struct path_builder *pb, char const *subdir)
-{
-	int error;
-
-	pb_init(pb);
-	error = pb_append(pb, config_get_local_repository());
-	if (error)
-		goto cancel;
-	error = pb_append(pb, subdir);
-	if (error)
-		goto cancel;
-
-	return 0;
-
-cancel:
-	pb_cleanup(pb);
-	return error;
-}
-
 /* Minimizes multiple evaluation */
 static struct cache_node *
 add_child(struct cache_node *parent, char const *basename)
@@ -174,11 +154,9 @@ get_metadata_json_filename(char **filename)
 	struct path_builder pb;
 	int error;
 
-	error = init_cache_pb(&pb, "metadata.json");
-	if (error) {
-		pb_cleanup(&pb);
+	error = pb_init_cache(&pb, "metadata.json");
+	if (error)
 		return error;
-	}
 
 	*filename = pb.string;
 	return 0;
@@ -346,7 +324,7 @@ cache_prepare(void)
 	if (rsync == NULL)
 		load_metadata_json();
 
-	error = init_cache_pb(&pb, "tmp/a");
+	error = pb_init_cache(&pb, "tmp/a");
 	if (error)
 		return error;
 	error = create_dir_recursive(pb.string);
@@ -407,6 +385,18 @@ drop_children(struct cache_node *node)
 		delete_node(child);
 }
 
+static char *
+uri2luri(struct rpki_uri *uri)
+{
+	char const *luri;
+
+	luri = uri_get_local(uri) + strlen(config_get_local_repository());
+	while (luri[0] == '/')
+		luri++;
+
+	return pstrdup(luri);
+}
+
 /**
  * @changed only on HTTP.
  */
@@ -422,7 +412,7 @@ cache_download(struct rpki_uri *uri, bool *changed)
 
 	if (changed != NULL)
 		*changed = false;
-	luri = pstrdup(uri_get_local(uri));
+	luri = uri2luri(uri);
 	token = strtok_r(luri, "/", &saveptr);
 
 	switch (uri_get_type(uri)) {
@@ -703,8 +693,8 @@ static void cleanup_tree(struct cache_node **root, char const *treename)
 	struct cache_node *node, *child, *tmp;
 	int error;
 
-	if (init_cache_pb(&pb, NULL) != 0)
-		goto end;
+	if (pb_init_cache(&pb, NULL) != 0)
+		return;
 
 	ctt_init(&ctt, root, &pb);
 
@@ -790,7 +780,7 @@ static void cleanup_tree(struct cache_node **root, char const *treename)
 
 	if ((*root) == NULL && pb_append(&pb, treename) == 0)
 		pb_rm_r(&pb, treename, true);
-end:
+
 	pb_cleanup(&pb);
 }
 

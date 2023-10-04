@@ -312,7 +312,10 @@ map_simple(struct rpki_uri *uri, char const *gprefix, int err)
 	struct path_builder pb;
 	int error;
 
-	pb_init(&pb);
+	error = pb_init_cache(&pb, NULL);
+	if (error)
+		return error;
+
 	error = append_guri(&pb, uri->global, gprefix, err, false);
 	if (error) {
 		pb_cleanup(&pb);

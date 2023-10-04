@@ -13,6 +13,7 @@ if USE_TESTS
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
 AM_CFLAGS =  -pedantic -Wall
+#AM_CFLAGS += -Wno-unused
 AM_CFLAGS += -std=c99 -D_POSIX_C_SOURCE=200809 -D_XOPEN_SOURCE=700
 AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS}
 # Reminder: As opposed to AM_CFLAGS, "AM_LDADD" is not idiomatic automake, and
