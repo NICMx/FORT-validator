@@ -416,7 +416,7 @@ http_download(struct rpki_uri *uri, bool *changed)
 		changed = &__changed;
 	*changed = false;
 
-	if (!config_get_rsync_enabled())
+	if (!config_get_http_enabled())
 		return 0; /* Skip; caller will work with existing cache. */
 
 	error = cache_tmpfile(&tmp_file_name);
