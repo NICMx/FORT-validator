@@ -33,7 +33,7 @@ get_metadata(struct rpki_uri *uri, struct notification_metadata *result)
 		return error;
 
 	*result = notification.meta;
-
+	memset(&notification.meta, 0, sizeof(notification.meta));
 	update_notification_destroy(&notification);
 	return 0;
 }
