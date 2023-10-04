@@ -58,6 +58,13 @@ rrdp_update(struct rpki_uri *uri)
 	if (uri == NULL || !uri_is_https(uri))
 		pr_crit("Wrong call, trying to parse a non HTTPS URI");
 
+	/*
+	 * TODO (fine) this is dirty and error prone.
+	 * Find a better way to deliver the notification URI to the RRDP objects
+	 * and manifest.
+	 */
+	validation_set_notification_uri(state_retrieve(), uri);
+
 	fnstack_push_uri(uri);
 	pr_val_debug("Processing notification.");
 
@@ -104,11 +111,6 @@ revert_notification:
 	update_notification_destroy(&new);
 
 end:	notification_metadata_cleanup(&old);
-
-	/* TODO (fine) hideous function side effect; find a better way. */
-	if (!error)
-		validation_set_notification_uri(state_retrieve(), uri);
-
 	fnstack_pop();
 	return error;
 }
