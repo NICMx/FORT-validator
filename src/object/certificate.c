@@ -2033,9 +2033,17 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_uris;
 
-	error = handle_manifest(sia_uris.mft, &pp);
+	error = x509stack_push(validation_certstack(state), cert_uri,
+		    cert, policy, certype);
 	if (error)
 		goto revert_uris;
+	cert = NULL; /* Ownership stolen */
+
+	error = handle_manifest(sia_uris.mft, &pp);
+	if (error) {
+		x509stack_cancel(validation_certstack(state));
+		goto revert_uris;
+	}
 
 	/* -- Validate & traverse the RPP (@pp) described by the manifest -- */
 	rpp_traverse(pp);
