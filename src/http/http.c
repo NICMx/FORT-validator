@@ -279,7 +279,7 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	args.file = NULL;
 	setopt_writedata(handler.curl, &args);
 
-	pr_val_info("HTTP GET: %s", src);
+	pr_val_info("HTTP GET: %s -> %s", src, dst);
 	res = curl_easy_perform(handler.curl); /* write_callback() */
 	if (args.file != NULL)
 		file_close(args.file);
@@ -471,6 +471,7 @@ http_direct_download(char const *remote, char const *dest)
 		goto end;
 
 	/* Overwrite the original file */
+	pr_val_debug("Moving %s to %s.", tmp_file, dest);
 	error = rename(tmp_file, dest);
 	if (error) {
 		error = errno;
