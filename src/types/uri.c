@@ -341,9 +341,7 @@ map_caged(struct rpki_uri *uri)
 	if (notification == NULL)
 		pr_crit("Programming error: Notification not recorded.");
 
-	pb_init(&pb);
-
-	error = pb_append(&pb, "rrdp");
+	error = pb_init_cache(&pb, "rrdp");
 	if (error)
 		return error;
 	error = append_guri(&pb, notification->global, "https://", ENOTHTTPS, true);
@@ -430,7 +428,9 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 		return error;
 	}
 
-	uri->type = UT_RSYNC;
+	uri->type = (validation_get_notification_uri(state_retrieve()) == NULL)
+	    ? UT_RSYNC
+	    : UT_CAGED;
 
 	error = autocomplete_local(uri);
 	if (error) {
