@@ -43,6 +43,53 @@ release_args(char **args, unsigned int size)
 	free(args);
 }
 
+/*
+ * See rsync(1):
+ *
+ * > You can think of a trailing / on a source as meaning "copy the contents of
+ * > this directory" as opposed to "copy the directory by name"
+ *
+ * This gets in our way:
+ *
+ * - If URI is "rsync://a.b/d", we need to rsync into "cache/rsync/a.b"
+ *   (rsync will create d).
+ * - If URI is "rsync://a.b/d/", we need to rsync into "cache/rsync/a.b/d"
+ *   (rsync will not create d).
+ */
+static bool
+has_trailing_slash(struct rpki_uri *uri)
+{
+	char const *guri;
+	size_t glen;
+
+	guri = uri_get_global(uri);
+	glen = uri_get_global_len(uri);
+
+	if (glen == 0)
+		pr_crit("URI length is zero: %s", guri);
+
+	return guri[glen - 1] == '/';
+}
+
+static char *
+get_target(struct rpki_uri *uri)
+{
+	char *target;
+	char *last_slash;
+
+	target = pstrdup(uri_get_local(uri));
+
+	if (has_trailing_slash(uri))
+		return target;
+
+	last_slash = strrchr(target, '/');
+	if (last_slash == NULL)
+		pr_crit("path contains zero slashes: %s", target);
+
+	*last_slash = '\0';
+	return target;
+}
+
 static void
 prepare_rsync(struct rpki_uri *uri, char ***args, size_t *args_len)
 {
@@ -68,7 +115,7 @@ prepare_rsync(struct rpki_uri *uri, char ***args, size_t *args_len)
 		if (strcmp(config_args->array[i], "$REMOTE") == 0)
 			copy_args[i + 1] = pstrdup(uri_get_global(uri));
 		else if (strcmp(config_args->array[i], "$LOCAL") == 0)
-			copy_args[i + 1] = pstrdup(uri_get_local(uri));
+			copy_args[i + 1] = pstrdup(get_target(uri));
 		else
 			copy_args[i + 1] = pstrdup(config_args->array[i]);
 	}
@@ -234,12 +281,14 @@ rsync_download(struct rpki_uri *uri)
 			pr_val_debug("    %s", args[i]);
 	}
 
+	error = create_dir_recursive(uri_get_local(uri),
+	    has_trailing_slash(uri));
+	if (error)
+		goto release_args;
+
 	retries = 0;
 	do {
 		child_status = 0;
-		error = create_dir_recursive(uri_get_local(uri));
-		if (error)
-			goto release_args;
 
 		error = create_pipes(fork_fds);
 		if (error)

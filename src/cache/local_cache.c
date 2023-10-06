@@ -324,10 +324,10 @@ cache_prepare(void)
 	if (rsync == NULL)
 		load_metadata_json();
 
-	error = pb_init_cache(&pb, "tmp/a");
+	error = pb_init_cache(&pb, "tmp");
 	if (error)
 		return error;
-	error = create_dir_recursive(pb.string);
+	error = create_dir_recursive(pb.string, true);
 	pb_cleanup(&pb);
 	return error;
 }

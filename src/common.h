@@ -65,7 +65,7 @@ int process_file_or_dir(char const *, char const *, bool, process_file_cb,
 typedef int (*pr_errno_cb)(const char *, ...);
 bool valid_file_or_dir(char const *, bool, bool, pr_errno_cb);
 
-int create_dir_recursive(char const *);
+int create_dir_recursive(char const *, bool);
 int delete_dir_recursive_bottom_up(char const *);
 
 int get_current_time(time_t *);

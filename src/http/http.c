@@ -432,7 +432,7 @@ http_download(struct rpki_uri *uri, bool *changed)
 	if (error || !(*changed))
 		goto end;
 
-	error = create_dir_recursive(final_file_name);
+	error = create_dir_recursive(final_file_name, false);
 	if (error) {
 		remove(tmp_file_name);
 		goto end;

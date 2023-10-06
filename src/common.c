@@ -224,41 +224,31 @@ valid_file_or_dir(char const *location, bool check_file, bool check_dir,
 	return result;
 }
 
+/*
+ * > 0: exists
+ * = 0: !exists
+ * < 0: error
+ */
 static int
-dir_exists(char *path, bool *result)
+dir_exists(char const *path)
 {
-	struct stat _stat;
-	char *last_slash;
+	struct stat meta;
 	int error;
 
-	last_slash = strrchr(path, '/');
-	if (last_slash == NULL) {
-		/*
-		 * Simply because create_dir_recursive() has nothing meaningful
-		 * to do when this happens. It's a pretty strange error.
-		 */
-		*result = true;
-		return 0;
-	}
-
-	*last_slash = '\0';
-
-	if (stat(path, &_stat) == 0) {
-		if (!S_ISDIR(_stat.st_mode)) {
-			return pr_op_err_st("Path '%s' exists and is not a directory.",
-			    path);
-		}
-		*result = true;
-	} else if (errno == ENOENT) {
-		*result = false;
-	} else {
+	if (stat(path, &meta) != 0) {
 		error = errno;
+		if (error == ENOENT)
+			return false;
 		pr_op_err_st("stat() failed: %s", strerror(error));
 		return error;
 	}
 
-	*last_slash = '/';
-	return 0;
+	if (!S_ISDIR(meta.st_mode)) {
+		return pr_op_err_st("Path '%s' exists and is not a directory.",
+		    path);
+	}
+
+	return 1;
 }
 
 static int
@@ -283,32 +273,38 @@ create_dir(char const *path)
  * This function fixes that.
  */
 int
-create_dir_recursive(char const *path)
+create_dir_recursive(char const *path, bool include_basename)
 {
-	char *localuri;
-	int i, error;
-	bool exist;
+	char *localuri, *last_slash;
+	int i, result = 0;
 
 	localuri = pstrdup(path); /* Remove const */
 
-	exist = false;
-	error = dir_exists(localuri, &exist);
-	if (error || exist)
+	if (!include_basename) {
+		last_slash = strrchr(localuri, '/');
+		if (last_slash == NULL)
+			goto end;
+		*last_slash = '\0';
+	}
+
+	result = dir_exists(localuri); /* short circuit */
+	if (result != 0)
 		goto end;
 
 	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
 			localuri[i] = '\0';
-			error = create_dir(localuri);
+			result = create_dir(localuri);
 			localuri[i] = '/';
-			if (error)
+			if (result != 0)
 				goto end; /* error msg already printed */
 		}
 	}
+	result = create_dir(localuri);
 
 end:
 	free(localuri);
-	return error;
+	return result;
 }
 
 static int

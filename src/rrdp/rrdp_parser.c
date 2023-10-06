@@ -489,7 +489,7 @@ write_from_uri(char const *location, unsigned char *content, size_t content_len)
 
 	/* pr_val_debug("Expanding %s.", uri_get_local(uri)); */
 
-	error = create_dir_recursive(uri_get_local(uri));
+	error = create_dir_recursive(uri_get_local(uri), false);
 	if (error) {
 		uri_refput(uri);
 		return error;
