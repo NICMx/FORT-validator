@@ -28,9 +28,8 @@ check_PROGRAMS += db_table.test
 check_PROGRAMS += deltas_array.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += pb.test
-check_PROGRAMS += pdu.test
 check_PROGRAMS += pdu_handler.test
-check_PROGRAMS += primitive_reader.test
+check_PROGRAMS += pdu_stream.test
 check_PROGRAMS += rrdp_objects.test
 check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
@@ -60,14 +59,11 @@ line_file_test_LDADD = ${MY_LDADD}
 pb_test_SOURCES = data_structure/path_builder_test.c
 pb_test_LDADD = ${MY_LDADD}
 
-pdu_test_SOURCES = rtr/pdu_test.c
-pdu_test_LDADD = ${MY_LDADD}
-
 pdu_handler_test_SOURCES = rtr/pdu_handler_test.c
 pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
-primitive_reader_test_SOURCES = rtr/primitive_reader_test.c
-primitive_reader_test_LDADD = ${MY_LDADD}
+pdu_stream_test_SOURCES = rtr/pdu_stream_test.c
+pdu_stream_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 rrdp_objects_test_SOURCES = rrdp_objects_test.c
 rrdp_objects_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}

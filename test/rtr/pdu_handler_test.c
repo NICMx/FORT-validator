@@ -11,7 +11,6 @@
 #include "types/serial.c"
 #include "types/vrp.c"
 #include "rtr/pdu_handler.c"
-#include "rtr/primitive_writer.c"
 #include "rtr/err_pdu.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
@@ -22,8 +21,22 @@
 
 /* Mocks */
 
-MOCK_ABORT_INT(read_int32, struct pdu_reader *reader, uint32_t *result)
-MOCK_ABORT_INT(read_int8, struct pdu_reader *reader, uint8_t *result)
+struct rtr_buffer const *
+pdustream_last_pdu_raw(struct pdu_stream *s)
+{
+	static unsigned char bytes[] = {
+		/* header */
+		1, 1, 7, 8, 0, 0, 0, 12,
+		/* serial number */
+		14, 15, 16, 17,
+	};
+	static struct rtr_buffer buf = {
+		.bytes = bytes,
+		.bytes_len = sizeof(bytes),
+	};
+
+	return &buf;
+}
 
 MOCK_INT(cache_prepare, 0, void)
 
@@ -92,33 +105,48 @@ init_db_full(void)
 }
 
 static void
-init_reset_query(struct rtr_request *request, struct reset_query_pdu *query)
+init_request(struct rtr_request *request, struct rtr_pdu *pdu)
 {
-	request->pdu = query;
-	request->bytes_len = 0;
-	query->header.protocol_version = RTR_V1;
-	query->header.pdu_type = PDU_TYPE_RESET_QUERY;
-	query->header.m.reserved = 0;
-	query->header.length = 8;
+	request->fd = 0;
+	strcpy(request->client_addr, "192.0.2.1");
+	STAILQ_INIT(&request->pdus);
+	if (pdu != NULL)
+		STAILQ_INSERT_TAIL(&request->pdus, pdu, hook);
+	request->eos = false;
 }
 
 static void
-init_serial_query(struct rtr_request *request, struct serial_query_pdu *query,
-    uint32_t serial)
+init_reset_query(struct rtr_pdu *pdu)
 {
-	request->pdu = query;
-	request->bytes_len = 0;
-	query->header.protocol_version = RTR_V1;
-	query->header.pdu_type = PDU_TYPE_SERIAL_QUERY;
-	query->header.m.session_id = get_current_session_id(RTR_V1);
-	query->header.length = 12;
-	query->serial_number = serial;
+	static unsigned char raw[] = { 1, 2, 0, 0, 0, 0, 0, 8 };
+
+	pdu->obj.rq.header.version = RTR_V1;
+	pdu->obj.rq.header.type = PDU_TYPE_RESET_QUERY;
+	pdu->obj.rq.header.m.reserved = 0;
+	pdu->obj.rq.header.length = 8;
+	pdu->raw.bytes = raw;
+	pdu->raw.bytes_len = sizeof(raw);
+	memset(&pdu->hook, 0, sizeof(pdu->hook));
+}
+
+static void
+init_serial_query(struct rtr_pdu *pdu, uint32_t serial)
+{
+	static unsigned char raw[] = { 1, 1, 0, 0, 0, 0, 0, 12, 0, 0, 0, 0 };
+
+	pdu->obj.sq.header.version = RTR_V1;
+	pdu->obj.sq.header.type = PDU_TYPE_SERIAL_QUERY;
+	pdu->obj.sq.header.m.session_id = get_current_session_id(RTR_V1);
+	pdu->obj.sq.header.length = 12;
+	pdu->obj.sq.serial_number = serial;
+	pdu->raw.bytes = raw;
+	pdu->raw.bytes_len = sizeof(raw);
+	memset(&pdu->hook, 0, sizeof(pdu->hook));
 }
 
 /* Mocks */
 
 MOCK_UINT(config_get_deltas_lifetime, 5, void)
-MOCK_INT(clients_set_rtr_version, 0, int f, uint8_t v)
 
 int
 clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
@@ -212,7 +240,7 @@ send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 
 int
 send_error_report_pdu(int fd, uint8_t version, uint16_t code,
-    struct rtr_request const *request, char *message)
+    struct rtr_buffer const *request, char *message)
 {
 	pr_op_info("    Server sent Error Report %u: '%s'", code, message);
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_ERROR_REPORT);
@@ -225,15 +253,14 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 START_TEST(test_start_or_restart)
 {
 	struct rtr_request request;
-	struct reset_query_pdu client_pdu;
+	struct rtr_pdu client_pdu;
 
 	pr_op_info("-- Start or Restart --");
 
-	/* Prepare DB */
+	/* Init */
 	init_db_full();
-
-	/* Init client request */
-	init_reset_query(&request, &client_pdu);
+	init_reset_query(&client_pdu);
+	init_request(&request, &client_pdu);
 
 	/* Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
@@ -243,7 +270,7 @@ START_TEST(test_start_or_restart)
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* Run and validate */
-	ck_assert_int_eq(0, handle_reset_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_reset_query_pdu(&request, &client_pdu));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */
@@ -255,26 +282,25 @@ END_TEST
 START_TEST(test_typical_exchange)
 {
 	struct rtr_request request;
-	struct serial_query_pdu client_pdu;
+	struct rtr_pdu client_pdu;
 
 	pr_op_info("-- Typical Exchange --");
 
-	/* Prepare DB */
+	/* Init */
 	init_db_full();
-
-	/* From serial 0: Init client request */
-	init_serial_query(&request, &client_pdu, 0);
+	init_serial_query(&client_pdu, 0);
+	init_request(&request, &client_pdu);
 
 	/* From serial 0: Define expected server response */
 	/* Server doesn't have serial 0. */
 	expected_pdu_add(PDU_TYPE_CACHE_RESET);
 
 	/* From serial 0: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_serial_query_pdu(&request, &client_pdu));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* From serial 1: Init client request */
-	init_serial_query(&request, &client_pdu, 1);
+	init_serial_query(&client_pdu, 1);
 
 	/* From serial 1: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
@@ -287,11 +313,11 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 1: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_serial_query_pdu(&request, &client_pdu));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* From serial 2: Init client request */
-	init_serial_query(&request, &client_pdu, 2);
+	init_serial_query(&client_pdu, 2);
 
 	/* From serial 2: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
@@ -301,18 +327,18 @@ START_TEST(test_typical_exchange)
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 2: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_serial_query_pdu(&request, &client_pdu));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* From serial 3: Init client request */
-	init_serial_query(&request, &client_pdu, 3);
+	init_serial_query(&client_pdu, 3);
 
 	/* From serial 3: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 3: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_serial_query_pdu(&request, &client_pdu));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */
@@ -324,21 +350,20 @@ END_TEST
 START_TEST(test_no_incremental_update_available)
 {
 	struct rtr_request request;
-	struct serial_query_pdu serial_query;
+	struct rtr_pdu client_pdu;
 
 	pr_op_info("-- No Incremental Update Available --");
 
-	/* Prepare DB */
+	/* Init */
 	init_db_full();
-
-	/* Init client request */
-	init_serial_query(&request, &serial_query, 10000);
+	init_serial_query(&client_pdu, 10000);
+	init_request(&request, &client_pdu);
 
 	/* Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESET);
 
 	/* Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_serial_query_pdu(&request, &client_pdu));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* The Reset Query is already tested in start_or_restart. */
@@ -352,33 +377,38 @@ END_TEST
 START_TEST(test_cache_has_no_data_available)
 {
 	struct rtr_request request;
-	struct serial_query_pdu serial_query;
-	struct reset_query_pdu reset_query;
+	struct rtr_pdu serial_query;
+	struct rtr_pdu reset_query;
 
 	pr_op_info("-- Cache Has No Data Available --");
 
-	/* Prepare DB */
+	/* Init */
 	ck_assert_int_eq(0, vrps_init());
+	init_request(&request, NULL);
 
 	/* Serial Query: Init client request */
-	init_serial_query(&request, &serial_query, 0);
+	init_serial_query(&serial_query, 0);
+	STAILQ_INSERT_TAIL(&request.pdus, &serial_query, hook);
 
 	/* Serial Query: Define expected server response */
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
 
 	/* Serial Query: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_serial_query_pdu(&request, &serial_query));
 	ck_assert_uint_eq(false, has_expected_pdus());
+	STAILQ_REMOVE_HEAD(&request.pdus, hook);
 
 	/* Reset Query: Init client request */
-	init_reset_query(&request, &reset_query);
+	init_reset_query(&reset_query);
+	STAILQ_INSERT_TAIL(&request.pdus, &reset_query, hook);
 
 	/* Reset Query: Define expected server response */
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
 
 	/* Reset Query: Run and validate */
-	ck_assert_int_eq(0, handle_reset_query_pdu(0, &request));
+	ck_assert_int_eq(0, handle_reset_query_pdu(&request, &reset_query));
 	ck_assert_uint_eq(false, has_expected_pdus());
+	STAILQ_REMOVE_HEAD(&request.pdus, hook);
 
 	/* Clean up */
 	vrps_destroy();
@@ -388,43 +418,27 @@ END_TEST
 START_TEST(test_bad_session_id)
 {
 	struct rtr_request request;
-	struct serial_query_pdu client_pdu;
+	struct rtr_pdu client_pdu;
 
 	pr_op_info("-- Bad Session ID --");
 
-	/* Prepare DB */
+	/* Init */
 	init_db_full();
-
-	/* From serial 0: Init client request */
-	init_serial_query(&request, &client_pdu, 0);
-	client_pdu.header.m.session_id++;
+	init_serial_query(&client_pdu, 0);
+	client_pdu.obj.sq.header.m.session_id++;
+	init_request(&request, &client_pdu);
 
 	/* From serial 0: Define expected server response */
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
 
 	/* From serial 0: Run and validate */
-	ck_assert_int_eq(-EINVAL, handle_serial_query_pdu(0, &request));
+	ck_assert_int_eq(-EINVAL, handle_serial_query_pdu(&request, &client_pdu));
 	ck_assert_uint_eq(false, has_expected_pdus());
 
 	/* Clean up */
 	vrps_destroy();
 }
 END_TEST
-
-size_t
-serialize_serial_query_pdu(struct serial_query_pdu *pdu, unsigned char *buf)
-{
-	unsigned char *ptr;
-
-	ptr = buf;
-	ptr = write_int8(ptr, pdu->header.protocol_version);
-	ptr = write_int8(ptr, pdu->header.pdu_type);
-	ptr = write_int16(ptr, pdu->header.m.session_id);
-	ptr = write_int32(ptr, pdu->header.length);
-	ptr = write_int32(ptr, pdu->serial_number);
-
-	return ptr - buf;
-}
 
 Suite *pdu_suite(void)
 {

@@ -1,24 +1,10 @@
 #include "rtr/pdu_handler.h"
 
 #include <errno.h>
-
-#include "rtr/err_pdu.h"
 #include "log.h"
-#include "rtr/pdu.h"
+#include "rtr/err_pdu.h"
 #include "rtr/pdu_sender.h"
-#include "rtr/db/vrps.h"
-
-#define WARN_UNEXPECTED_PDU(name, fd, request, pdu_name)		\
-	struct name##_pdu *pdu = request->pdu;				\
-	return err_pdu_send_invalid_request(fd,				\
-	    pdu->header.protocol_version,				\
-	    request, "Clients are not supposed to send " pdu_name " PDUs.");
-
-int
-handle_serial_notify_pdu(int fd, struct rtr_request const *request)
-{
-	WARN_UNEXPECTED_PDU(serial_notify, fd, request, "Serial Notify");
-}
+#include "rtr/pdu_stream.h"
 
 struct send_delta_args {
 	int fd;
@@ -70,12 +56,17 @@ send_delta_rk(struct delta_router_key const *delta, void *arg)
 }
 
 int
-handle_serial_query_pdu(int fd, struct rtr_request const *request)
+handle_serial_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
 {
-	struct serial_query_pdu *query = request->pdu;
+	struct serial_query_pdu *sq;
 	struct send_delta_args args;
 	serial_t final_serial;
 	int error;
+
+	sq = &pdu->obj.sq;
+	args.fd = request->fd;
+	args.rtr_version = sq->header.version;
+	args.cache_response_sent = false;
 
 	/*
 	 * RFC 6810 and 8210:
@@ -84,14 +75,9 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	 * the mismatch MUST immediately terminate the session with an Error
 	 * Report PDU with code 0 ("Corrupt Data")"
 	 */
-	args.rtr_version = query->header.protocol_version;
-	if (query->header.m.session_id !=
-	    get_current_session_id(args.rtr_version))
-		return err_pdu_send_corrupt_data(fd, args.rtr_version, request,
-		    "Session ID doesn't match.");
-
-	args.fd = fd;
-	args.cache_response_sent = false;
+	if (sq->header.m.session_id != get_current_session_id(args.rtr_version))
+		return err_pdu_send_corrupt_data(args.fd, args.rtr_version,
+			&pdu->raw, "Session ID doesn't match.");
 
 	/*
 	 * For the record, there are two reasons why we want to work on a
@@ -102,7 +88,7 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 	 *    PDUs, to minimize writer stagnation.
 	 */
 
-	error = vrps_foreach_delta_since(query->serial_number, &final_serial,
+	error = vrps_foreach_delta_since(sq->serial_number, &final_serial,
 	    send_delta_vrp, send_delta_rk, &args);
 	switch (error) {
 	case 0:
@@ -113,16 +99,18 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 		 * and programming errors. Best avoid error PDUs.
 		 */
 		if (!args.cache_response_sent) {
-			error = send_cache_response_pdu(fd, args.rtr_version);
+			error = send_cache_response_pdu(args.fd,
+			    args.rtr_version);
 			if (error)
 				return error;
 		}
-		return send_end_of_data_pdu(fd, args.rtr_version, final_serial);
+		return send_end_of_data_pdu(args.fd, args.rtr_version,
+		    final_serial);
 	case -EAGAIN: /* Database still under construction */
-		return err_pdu_send_no_data_available(fd, args.rtr_version);
+		return err_pdu_send_no_data_available(args.fd, args.rtr_version);
 	case -ESRCH: /* Invalid serial */
 		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
-		return send_cache_reset_pdu(fd, args.rtr_version);
+		return send_cache_reset_pdu(args.fd, args.rtr_version);
 	case -ENOMEM: /* Memory allocation failure */
 		enomem_panic();
 	case EAGAIN: /* Too many threads */
@@ -133,7 +121,7 @@ handle_serial_query_pdu(int fd, struct rtr_request const *request)
 		break;
 	}
 
-	return err_pdu_send_internal_error(fd, args.rtr_version);
+	return err_pdu_send_internal_error(args.fd, args.rtr_version);
 }
 
 struct base_roa_args {
@@ -176,25 +164,24 @@ send_base_router_key(struct router_key const *key, void *arg)
 }
 
 int
-handle_reset_query_pdu(int fd, struct rtr_request const *request)
+handle_reset_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
 {
-	struct reset_query_pdu *pdu = request->pdu;
 	struct base_roa_args args;
 	serial_t current_serial;
 	int error;
 
 	args.started = false;
-	args.fd = fd;
-	args.version = pdu->header.protocol_version;
+	args.fd = request->fd;
+	args.version = pdu->obj.hdr.version;
 
 	error = get_last_serial_number(&current_serial);
 	switch (error) {
 	case 0:
 		break;
 	case -EAGAIN:
-		return err_pdu_send_no_data_available(fd, args.version);
+		return err_pdu_send_no_data_available(args.fd, args.version);
 	default:
-		err_pdu_send_internal_error(fd, args.version);
+		err_pdu_send_internal_error(args.fd, args.version);
 		return error;
 	}
 
@@ -213,73 +200,39 @@ handle_reset_query_pdu(int fd, struct rtr_request const *request)
 		/* Assure that cache response is (or was) sent */
 		if (args.started)
 			break;
-		error = send_cache_response_pdu(fd, args.version);
+		error = send_cache_response_pdu(args.fd, args.version);
 		if (error)
 			return error;
 		break;
 	case -EAGAIN:
-		return err_pdu_send_no_data_available(fd, args.version);
+		return err_pdu_send_no_data_available(args.fd, args.version);
 	case EAGAIN:
-		err_pdu_send_internal_error(fd, args.version);
+		err_pdu_send_internal_error(args.fd, args.version);
 		return error;
 	default:
 		/* Any other error must stop sending more PDUs */
 		return error;
 	}
 
-	return send_end_of_data_pdu(fd, args.version, current_serial);
+	return send_end_of_data_pdu(args.fd, args.version, current_serial);
 }
 
 int
-handle_cache_response_pdu(int fd, struct rtr_request const *request)
+handle_error_report_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
 {
-	WARN_UNEXPECTED_PDU(cache_response, fd, request, "Cache Response");
-}
-
-int
-handle_ipv4_prefix_pdu(int fd, struct rtr_request const *request)
-{
-	WARN_UNEXPECTED_PDU(ipv4_prefix, fd, request, "IPv4 Prefix");
-}
-
-int
-handle_ipv6_prefix_pdu(int fd, struct rtr_request const *request)
-{
-	WARN_UNEXPECTED_PDU(ipv6_prefix, fd, request, "IPv6 Prefix");
-}
-
-int
-handle_end_of_data_pdu(int fd, struct rtr_request const *request)
-{
-	WARN_UNEXPECTED_PDU(end_of_data, fd, request, "End of Data");
-}
-
-int
-handle_cache_reset_pdu(int fd, struct rtr_request const *request)
-{
-	WARN_UNEXPECTED_PDU(cache_reset, fd, request, "Cache Reset");
-}
-
-int
-handle_router_key_pdu(int fd, struct rtr_request const *request)
-{
-	WARN_UNEXPECTED_PDU(router_key, fd, request, "Router Key");
-}
-
-int
-handle_error_report_pdu(int fd, struct rtr_request const *request)
-{
-	struct error_report_pdu *received = request->pdu;
+	struct error_report_pdu *er;
 	char const *error_name;
 
-	error_name = err_pdu_to_string(received->header.m.error_code);
+	er = &pdu->obj.er;
+	error_name = err_pdu_to_string(er->header.m.error_code);
 
-	if (received->error_message != NULL)
-		pr_op_info("Client responded with error PDU '%s' ('%s'). Closing socket.",
-		    error_name, received->error_message);
-	else
-		pr_op_info("Client responded with error PDU '%s'. Closing socket.",
-		    error_name);
+	if (er->errmsg != NULL) {
+		pr_op_info("RTR client %s responded with error PDU '%s' ('%s'). Closing socket.",
+		    request->client_addr, error_name, er->errmsg);
+	} else {
+		pr_op_info("RTR client %s responded with error PDU '%s'. Closing socket.",
+		    request->client_addr, error_name);
+	}
 
 	return -EINVAL;
 }

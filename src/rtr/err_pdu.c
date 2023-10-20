@@ -14,36 +14,30 @@ typedef enum rtr_error_code {
 	ERR_PDU_UNSUP_PDU_TYPE			= 5,
 	ERR_PDU_WITHDRAWAL_UNKNOWN		= 6,
 	ERR_PDU_DUPLICATE_ANNOUNCE		= 7,
-	/* RTRv1 only, so not used yet. */
 	ERR_PDU_UNEXPECTED_PROTO_VERSION	= 8,
 } rtr_error_code_t;
 
 static int
 err_pdu_send(int fd, uint8_t version, rtr_error_code_t code,
-    struct rtr_request const *request, char const *message_const)
+    struct rtr_buffer const *request, char const *msg_const)
 {
-	char *message;
+	char *msg;
 
-	/*
-	 * This function must always return error so callers can interrupt
-	 * themselves easily.
-	 * But note that not all callers should use this feature.
-	 */
+	if ((request == NULL) || (request->bytes[1] != PDU_TYPE_ERROR_REPORT)) {
+		/* Need a clone to remove the const. */
+		msg = (msg_const != NULL) ? pstrdup(msg_const) : NULL;
+		send_error_report_pdu(fd, version, code, request, msg);
+		free(msg);
+	}
 
-	/* Need a clone to remove the const. */
-	message = (message_const != NULL) ? pstrdup(message_const) : NULL;
-	send_error_report_pdu(fd, version, code, request, message);
-	free(message);
-
-	return -EINVAL;
+	return -EINVAL; /* For propagation */
 }
 
 int
 err_pdu_send_corrupt_data(int fd, uint8_t version,
-    struct rtr_request const *request, char const *message)
+    struct rtr_buffer const *request, char const *msg)
 {
-	return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, request,
-	    message);
+	return err_pdu_send(fd, version, ERR_PDU_CORRUPT_DATA, request, msg);
 }
 
 /*
@@ -70,57 +64,39 @@ err_pdu_send_no_data_available(int fd, uint8_t version)
 
 int
 err_pdu_send_invalid_request(int fd, uint8_t version,
-    struct rtr_request const *request, char const *message)
+    struct rtr_buffer const *request, char const *msg)
 {
-	return err_pdu_send(fd, version, ERR_PDU_INVALID_REQUEST, request,
-	    message);
+	return err_pdu_send(fd, version, ERR_PDU_INVALID_REQUEST, request, msg);
 }
 
-/* Caution: @header is supposed to be in serialized form. */
 int
 err_pdu_send_invalid_request_truncated(int fd, uint8_t version,
-    unsigned char *header, char const *message)
+    struct rtr_buffer const *request, char const *msg)
 {
-	struct rtr_request request = {
-		.bytes = header,
-		.bytes_len = RTRPDU_HDR_LEN,
-		.pdu = NULL,
-	};
-	return err_pdu_send_invalid_request(fd, version, &request, message);
+	return err_pdu_send_invalid_request(fd, version, request, msg);
 }
 
 int
 err_pdu_send_unsupported_proto_version(int fd, uint8_t version,
-    unsigned char *header,
-    char const *message)
+    struct rtr_buffer const *request, char const *msg)
 {
-	struct rtr_request request = {
-		.bytes = header,
-		.bytes_len = RTRPDU_HDR_LEN,
-		.pdu = NULL,
-	};
-	return err_pdu_send(fd, version, ERR_PDU_UNSUP_PROTO_VERSION, &request,
-	    message);
+	return err_pdu_send(fd, version, ERR_PDU_UNSUP_PROTO_VERSION, request,
+	    msg);
 }
 
 int
 err_pdu_send_unsupported_pdu_type(int fd, uint8_t version,
-    struct rtr_request const *request)
+    struct rtr_buffer const *request)
 {
 	return err_pdu_send(fd, version, ERR_PDU_UNSUP_PDU_TYPE, request, NULL);
 }
 
 int
 err_pdu_send_unexpected_proto_version(int fd, uint8_t version,
-    unsigned char *header, char const *message)
+    struct rtr_buffer const *request, char const *msg)
 {
-	struct rtr_request request = {
-		.bytes = header,
-		.bytes_len = RTRPDU_HDR_LEN,
-		.pdu = NULL,
-	};
-	return err_pdu_send(fd, version, ERR_PDU_UNEXPECTED_PROTO_VERSION, &request,
-	    message);
+	return err_pdu_send(fd, version, ERR_PDU_UNEXPECTED_PROTO_VERSION,
+	    request, msg);
 }
 
 char const *

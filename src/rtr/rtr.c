@@ -8,28 +8,29 @@
 #include "config.h"
 #include "types/address.h"
 #include "data_structure/array_list.h"
+#include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
+#include "rtr/pdu_handler.h"
+#include "rtr/pdu_stream.h"
 #include "thread/thread_pool.h"
+
+struct rtr_server {
+	int fd;
+	/* Printable address to which the server was bound. */
+	char *addr;
+};
 
 static pthread_t server_thread;
 static volatile bool stop_server_thread;
 
 STATIC_ARRAY_LIST(server_arraylist, struct rtr_server)
-STATIC_ARRAY_LIST(client_arraylist, struct rtr_client)
+STATIC_ARRAY_LIST(client_arraylist, struct pdu_stream *)
 
 static struct server_arraylist servers;
 static struct client_arraylist clients;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct thread_pool *request_handlers;
-
-#define REQUEST_BUFFER_LEN 1024
-
-struct client_request {
-	struct rtr_client *client;
-	unsigned char buffer[REQUEST_BUFFER_LEN];
-	size_t nread;
-};
 
 enum poll_verdict {
 	PV_CONTINUE,
@@ -46,19 +47,10 @@ cleanup_server(struct rtr_server *server)
 }
 
 static void
-cleanup_client(struct rtr_client *client)
-{
-	if (client->fd != -1) {
-		shutdown(client->fd, SHUT_RDWR);
-		close(client->fd);
-	}
-}
-
-static void
 destroy_db(void)
 {
 	server_arraylist_cleanup(&servers, cleanup_server);
-	client_arraylist_cleanup(&clients, cleanup_client);
+	client_arraylist_cleanup(&clients, pdustream_destroy);
 }
 
 /*
@@ -325,19 +317,31 @@ init_server_fds(void)
 static void
 handle_client_request(void *arg)
 {
-	struct client_request *crequest = arg;
-	struct pdu_reader reader;
-	struct rtr_request rrequest;
-	struct pdu_metadata const *meta;
+	struct rtr_request *request = arg;
+	struct rtr_pdu *pdu;
 
-	pdu_reader_init(&reader, crequest->buffer, crequest->nread);
-
-	while (pdu_load(&reader, crequest->client, &rrequest, &meta) == 0) {
-		meta->handle(crequest->client->fd, &rrequest);
-		meta->destructor(rrequest.pdu);
+	STAILQ_FOREACH(pdu, &request->pdus, hook) {
+		switch (pdu->obj.hdr.type) {
+		case PDU_TYPE_SERIAL_QUERY:
+			handle_serial_query_pdu(request, pdu);
+			break;
+		case PDU_TYPE_RESET_QUERY:
+			handle_reset_query_pdu(request, pdu);
+			break;
+		case PDU_TYPE_ERROR_REPORT:
+			handle_error_report_pdu(request, pdu);
+			break;
+		default:
+			/* Should have been catched during constructor */
+			pr_crit("Unexpected PDU type: %u", pdu->obj.hdr.type);
+		}
 	}
 
-	free(crequest);
+	if (request->eos)
+		/* Wake poller to close the socket. Read side already shut. */
+		shutdown(request->fd, SHUT_WR);
+
+	rtreq_destroy(request);
 }
 
 static void
@@ -406,89 +410,49 @@ accept_new_client(struct pollfd const *server_fd)
 {
 	struct sockaddr_storage client_addr;
 	socklen_t sizeof_client_addr;
-	struct rtr_client client;
+	int fd;
+	char addr[INET6_ADDRSTRLEN];
+	struct pdu_stream *client;
 	enum accept_verdict result;
 
 	sizeof_client_addr = sizeof(client_addr);
 
-	/* Accept the connection */
-	client.fd = accept(server_fd->fd, (struct sockaddr *) &client_addr,
+	fd = accept(server_fd->fd, (struct sockaddr *) &client_addr,
 	    &sizeof_client_addr);
 
-	result = handle_accept_result(client.fd, errno);
+	result = handle_accept_result(fd, errno);
 	if (result != AV_SUCCESS)
 		return result;
 
-	if (set_nonblock(client.fd) != 0) {
-		close(client.fd);
+	if (set_nonblock(fd) != 0) {
+		close(fd);
 		return AV_CLIENT_ERROR;
 	}
 
-	client.rtr_version = -1;
-	sockaddr2str(&client_addr, client.addr);
+	sockaddr2str(&client_addr, addr);
+	client = pdustream_create(fd, addr);
+
 	client_arraylist_add(&clients, &client);
 
-	pr_op_info("Client accepted [FD: %d]: %s", client.fd, client.addr);
+	pr_op_info("Client accepted [FD: %d]: %s", fd, addr);
 	return AV_SUCCESS;
 }
 
-/*
- * true: success.
- * false: oh noes; close socket.
- */
 static bool
-read_until_block(int fd, struct client_request *request)
+__handle_client_request(struct pdu_stream *stream)
 {
-	ssize_t read_result;
-	size_t offset;
-	int error;
+	struct rtr_request *request;
+	bool eos;
 
-	request->nread = 0;
-
-	for (offset = 0; offset < REQUEST_BUFFER_LEN; offset += read_result) {
-		read_result = read(fd, &request->buffer[offset],
-		    REQUEST_BUFFER_LEN - offset);
-		if (read_result == -1) {
-			error = errno;
-			if (error == EAGAIN || error == EWOULDBLOCK)
-				return true; /* Ok, we have the full packet. */
-
-			pr_op_err("Client socket read interrupted: %s",
-			    strerror(error));
-			return false;
-		}
-
-		if (read_result == 0) {
-			if (offset == 0) {
-				pr_op_debug("Client closed the socket.");
-				return false;
-			}
-
-			return true; /* Ok, we have the last packet. */
-		}
-
-		request->nread += read_result;
-	}
-
-	pr_op_warn("Peer's request is too big (>= %u bytes). Peer does not look like an RTR client; closing connection.",
-	    REQUEST_BUFFER_LEN);
-	return false;
-}
-
-static bool
-__handle_client_request(struct rtr_client *client)
-{
-	struct client_request *request;
-
-	request = pmalloc(sizeof(struct client_request));
-
-	request->client = client;
-	if (!read_until_block(client->fd, request)) {
-		free(request);
+	if (pdustream_next(stream, &request) != 0)
 		return false;
+
+	if (STAILQ_EMPTY(&request->pdus)) {
+		eos = request->eos;
+		free(request);
+		return !eos;
 	}
 
-	pr_op_debug("Client sent %zu bytes.", request->nread);
 	thread_pool_push(request_handlers, "RTR request", handle_client_request,
 	    request);
 	return true;
@@ -512,7 +476,7 @@ delete_dead_clients(void)
 	unsigned int dst;
 
 	for (src = 0, dst = 0; src < clients.len; src++) {
-		if (clients.array[src].fd != -1) {
+		if (clients.array[src] != NULL) {
 			clients.array[dst] = clients.array[src];
 			dst++;
 		}
@@ -526,7 +490,7 @@ apply_pollfds(struct pollfd *pollfds, unsigned int nclients)
 {
 	struct pollfd *pfd;
 	struct rtr_server *server;
-	struct rtr_client *client;
+	struct pdu_stream *client;
 	unsigned int i;
 
 	for (i = 0; i < servers.len; i++) {
@@ -544,14 +508,14 @@ apply_pollfds(struct pollfd *pollfds, unsigned int nclients)
 
 	for (i = 0; i < nclients; i++) {
 		pfd = &pollfds[servers.len + i];
-		client = &clients.array[i];
+		client = clients.array[i];
 
 		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
 
-		if ((pfd->fd == -1) && (client->fd != -1)) {
-			close(client->fd);
-			client->fd = -1;
-			print_poll_failure(pfd, "Client", client->addr);
+		if ((pfd->fd == -1) && (pdustream_fd(client) != -1)) {
+			pdustream_destroy(&client);
+			clients.array[i] = NULL;
+			print_poll_failure(pfd, "Client", pdustream_addr(client));
 		}
 	}
 
@@ -572,7 +536,7 @@ fddb_poll(void)
 	ARRAYLIST_FOREACH_IDX(&servers, i)
 		init_pollfd(&pollfds[i], servers.array[i].fd);
 	ARRAYLIST_FOREACH_IDX(&clients, i)
-		init_pollfd(&pollfds[servers.len + i], clients.array[i].fd);
+		init_pollfd(&pollfds[servers.len + i], pdustream_fd(clients.array[i]));
 
 	error = poll(pollfds, servers.len + clients.len, 1000);
 
@@ -635,13 +599,13 @@ fddb_poll(void)
 		/* PR_DEBUG_MSG("Client %u: fd:%d revents:%x", i, fd->fd,
 		    fd->revents); */
 
-		if (fd->fd == -1)
-			continue;
+//		if (fd->fd == -1)
+//			continue;
 
 		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
 			fd->fd = -1;
 		} else if (fd->revents & POLLIN) {
-			if (!__handle_client_request(&clients.array[i]))
+			if (!__handle_client_request(clients.array[i]))
 				fd->fd = -1;
 		}
 	}
@@ -728,14 +692,16 @@ void rtr_stop(void)
 int
 rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
 {
-	struct rtr_client *client;
+	struct pdu_stream **client;
+	int fd;
 	int error = 0;
 
 	mutex_lock(&lock);
 
 	ARRAYLIST_FOREACH(&clients, client) {
-		if (client->fd != -1) {
-			error = cb(client, arg);
+		fd = pdustream_fd(*client);
+		if (fd != -1) {
+			error = cb(fd, pdustream_version(*client), arg);
 			if (error)
 				break;
 		}

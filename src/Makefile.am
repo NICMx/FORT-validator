@@ -93,12 +93,11 @@ fort_SOURCES += rrdp/rrdp_parser.h rrdp/rrdp_parser.c
 
 fort_SOURCES += rsync/rsync.h rsync/rsync.c
 
+fort_SOURCES += rtr/pdu_stream.c rtr/pdu_stream.h
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
 fort_SOURCES += rtr/pdu_handler.c rtr/pdu_handler.h
 fort_SOURCES += rtr/pdu_sender.c rtr/pdu_sender.h
-fort_SOURCES += rtr/pdu_serializer.c rtr/pdu_serializer.h
 fort_SOURCES += rtr/pdu.c rtr/pdu.h
-fort_SOURCES += rtr/primitive_reader.c rtr/primitive_reader.h
 fort_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 fort_SOURCES += rtr/rtr.c rtr/rtr.h
 

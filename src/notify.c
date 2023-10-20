@@ -6,11 +6,11 @@
 #include "rtr/db/vrps.h"
 
 static int
-send_notify(struct rtr_client const *client, void *arg)
+send_notify(int fd, int rtr_version, void *arg)
 {
 	serial_t *serial = arg;
 
-	send_serial_notify_pdu(client->fd, client->rtr_version, *serial);
+	send_serial_notify_pdu(fd, rtr_version, *serial);
 
 	/* Errors already logged, do not interrupt notify to other clients */
 	return 0;

@@ -8,19 +8,18 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
-#include "rtr/pdu_serializer.h"
 #include "rtr/db/vrps.h"
+#include "rtr/primitive_writer.h"
 
-/*
- * Set all the header values, EXCEPT length field.
- */
-static void
-set_header_values(struct pdu_header *header, uint8_t version, uint8_t type,
-    uint16_t reserved)
+static unsigned char *
+serialize_hdr(unsigned char *buf, uint8_t version, uint8_t type,
+    uint16_t m, uint32_t length)
 {
-	header->protocol_version = version;
-	header->pdu_type = type;
-	header->m.reserved = reserved;
+	buf = write_uint8(buf, version);
+	buf = write_uint8(buf, type);
+	buf = write_uint16(buf, m);
+	buf = write_uint32(buf, length);
+	return buf;
 }
 
 static int
@@ -58,130 +57,80 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 int
 send_serial_notify_pdu(int fd, uint8_t version, serial_t start_serial)
 {
-	struct serial_notify_pdu pdu;
+	static const uint8_t type = PDU_TYPE_SERIAL_NOTIFY;
+	static const uint32_t len = RTRPDU_SERIAL_NOTIFY_LEN;
 	unsigned char data[RTRPDU_SERIAL_NOTIFY_LEN];
-	size_t len;
+	unsigned char *buf;
 
-	set_header_values(&pdu.header, version, PDU_TYPE_SERIAL_NOTIFY,
-	    get_current_session_id(version));
+	buf = serialize_hdr(data, version, type,
+	    get_current_session_id(version), len);
+	buf = write_uint32(buf, start_serial);
 
-	pdu.serial_number = start_serial;
-	pdu.header.length = RTRPDU_SERIAL_NOTIFY_LEN;
-
-	len = serialize_serial_notify_pdu(&pdu, data);
-	if (len != RTRPDU_SERIAL_NOTIFY_LEN)
-		pr_crit("Serialized Serial Notify is %zu bytes.", len);
-
-	return send_response(fd, pdu.header.pdu_type, data, len);
+	return send_response(fd, type, data, len);
 }
 
 int
 send_cache_reset_pdu(int fd, uint8_t version)
 {
-	struct cache_reset_pdu pdu;
+	static const uint8_t type = PDU_TYPE_CACHE_RESET;
+	static const uint32_t len = RTRPDU_CACHE_RESET_LEN;
 	unsigned char data[RTRPDU_CACHE_RESET_LEN];
-	size_t len;
 
-	/* This PDU has only the header */
-	set_header_values(&pdu.header, version, PDU_TYPE_CACHE_RESET, 0);
-	pdu.header.length = RTRPDU_CACHE_RESET_LEN;
+	serialize_hdr(data, version, type, 0, len);
 
-	len = serialize_cache_reset_pdu(&pdu, data);
-	if (len != RTRPDU_CACHE_RESET_LEN)
-		pr_crit("Serialized Cache Reset is %zu bytes.", len);
-
-	return send_response(fd, pdu.header.pdu_type, data, len);
+	return send_response(fd, type, data, len);
 }
 
 int
 send_cache_response_pdu(int fd, uint8_t version)
 {
-	struct cache_response_pdu pdu;
+	static const uint8_t type = PDU_TYPE_CACHE_RESPONSE;
+	static const uint32_t len = RTRPDU_CACHE_RESPONSE_LEN;
 	unsigned char data[RTRPDU_CACHE_RESPONSE_LEN];
-	size_t len;
 
-	/* This PDU has only the header */
-	set_header_values(&pdu.header, version, PDU_TYPE_CACHE_RESPONSE,
-	    get_current_session_id(version));
-	pdu.header.length = RTRPDU_CACHE_RESPONSE_LEN;
+	serialize_hdr(data, version, type, get_current_session_id(version), len);
 
-	len = serialize_cache_response_pdu(&pdu, data);
-	if (len != RTRPDU_CACHE_RESPONSE_LEN)
-		pr_crit("Serialized Cache Response is %zu bytes.", len);
-
-	return send_response(fd, pdu.header.pdu_type, data, len);
-}
-
-static void
-pr_debug_prefix4(struct ipv4_prefix_pdu *pdu)
-{
-	char buffer[INET_ADDRSTRLEN];
-
-	pr_op_debug("Encoded prefix %s/%u into a PDU.",
-	    addr2str4(&pdu->ipv4_prefix, buffer), pdu->prefix_length);
+	return send_response(fd, type, data, len);
 }
 
 static int
 send_ipv4_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
     uint8_t flags)
 {
-	struct ipv4_prefix_pdu pdu;
+	static const uint8_t type = PDU_TYPE_IPV4_PREFIX;
+	static const uint32_t len = RTRPDU_IPV4_PREFIX_LEN;
 	unsigned char data[RTRPDU_IPV4_PREFIX_LEN];
-	size_t len;
+	unsigned char *buf;
 
-	set_header_values(&pdu.header, version, PDU_TYPE_IPV4_PREFIX, 0);
-	pdu.header.length = RTRPDU_IPV4_PREFIX_LEN;
+	buf = serialize_hdr(data, version, type, 0, len);
+	buf = write_uint8(buf, flags);
+	buf = write_uint8(buf, vrp->prefix_length);
+	buf = write_uint8(buf, vrp->max_prefix_length);
+	buf = write_uint8(buf, 0);
+	buf = write_in_addr(buf, vrp->prefix.v4);
+	buf = write_uint32(buf, vrp->asn);
 
-	pdu.flags = flags;
-	pdu.prefix_length = vrp->prefix_length;
-	pdu.max_length = vrp->max_prefix_length;
-	pdu.zero = 0;
-	pdu.ipv4_prefix = vrp->prefix.v4;
-	pdu.asn = vrp->asn;
-
-	len = serialize_ipv4_prefix_pdu(&pdu, data);
-	if (len != RTRPDU_IPV4_PREFIX_LEN)
-		pr_crit("Serialized IPv4 Prefix is %zu bytes.", len);
-	if (log_op_enabled(LOG_DEBUG))
-		pr_debug_prefix4(&pdu);
-
-	return send_response(fd, pdu.header.pdu_type, data, len);
-}
-
-static void
-pr_debug_prefix6(struct ipv6_prefix_pdu *pdu)
-{
-	char buffer[INET6_ADDRSTRLEN];
-
-	pr_op_debug("Encoded prefix %s/%u into a PDU.",
-	    addr2str6(&pdu->ipv6_prefix, buffer), pdu->prefix_length);
+	return send_response(fd, type, data, len);
 }
 
 static int
 send_ipv6_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
     uint8_t flags)
 {
-	struct ipv6_prefix_pdu pdu;
+	static const uint8_t type = PDU_TYPE_IPV6_PREFIX;
+	static const uint32_t len = RTRPDU_IPV6_PREFIX_LEN;
 	unsigned char data[RTRPDU_IPV6_PREFIX_LEN];
-	size_t len;
+	unsigned char *buf;
 
-	set_header_values(&pdu.header, version, PDU_TYPE_IPV6_PREFIX, 0);
-	pdu.header.length = RTRPDU_IPV6_PREFIX_LEN;
+	buf = serialize_hdr(data, version, PDU_TYPE_IPV6_PREFIX, 0, len);
+	buf = write_uint8(buf, flags);
+	buf = write_uint8(buf, vrp->prefix_length);
+	buf = write_uint8(buf, vrp->max_prefix_length);
+	buf = write_uint8(buf, 0);
+	buf = write_in6_addr(buf, &vrp->prefix.v6);
+	buf = write_uint32(buf, vrp->asn);
 
-	pdu.flags = flags;
-	pdu.prefix_length = vrp->prefix_length;
-	pdu.max_length = vrp->max_prefix_length;
-	pdu.zero = 0;
-	pdu.ipv6_prefix = vrp->prefix.v6;
-	pdu.asn = vrp->asn;
-
-	len = serialize_ipv6_prefix_pdu(&pdu, data);
-	if (len != RTRPDU_IPV6_PREFIX_LEN)
-		pr_crit("Serialized IPv6 Prefix is %zu bytes.", len);
-	if (log_op_enabled(LOG_DEBUG))
-		pr_debug_prefix6(&pdu);
-
-	return send_response(fd, pdu.header.pdu_type, data, len);
+	return send_response(fd, type, data, len);
 }
 
 int
@@ -201,33 +150,22 @@ int
 send_router_key_pdu(int fd, uint8_t version,
     struct router_key const *router_key, uint8_t flags)
 {
-	struct router_key_pdu pdu;
+	static const uint8_t type = PDU_TYPE_ROUTER_KEY;
+	static const uint32_t len = RTRPDU_ROUTER_KEY_LEN;
 	unsigned char data[RTRPDU_ROUTER_KEY_LEN];
-	size_t len;
-	uint16_t reserved;
+	unsigned char *buf;
 
-	/* Sanity check: this can't be sent on RTRv0 */
 	if (version == RTR_V0)
 		return 0;
 
-	reserved = 0;
-	/* Set the flags at the first 8 bits of reserved field */
-	reserved += (flags << 8);
-	set_header_values(&pdu.header, version, PDU_TYPE_ROUTER_KEY, reserved);
-	pdu.header.length = RTRPDU_ROUTER_KEY_LEN;
+	buf = serialize_hdr(data, version, type, flags << 8, len);
+	memcpy(buf, router_key->ski, sizeof(router_key->ski));
+	buf += sizeof(router_key->ski);
+	buf = write_uint32(buf, router_key->as);
+	memcpy(buf, router_key->spk, sizeof(router_key->spk));
+	buf += sizeof(router_key->spk);
 
-	memcpy(pdu.ski, router_key->ski, RK_SKI_LEN);
-	pdu.ski_len = RK_SKI_LEN;
-	pdu.asn = router_key->as;
-	memcpy(pdu.spki, router_key->spk, RK_SPKI_LEN);
-	pdu.spki_len = RK_SPKI_LEN;
-
-	len = serialize_router_key_pdu(&pdu, data);
-	if (len != RTRPDU_ROUTER_KEY_LEN)
-		pr_crit("Serialized Router Key PDU is %zu bytes, not the expected %u.",
-		    len, pdu.header.length);
-
-	return send_response(fd, pdu.header.pdu_type, data, len);
+	return send_response(fd, type, data, len);
 }
 
 #define MAX(a, b) ((a > b) ? a : b)
@@ -235,70 +173,74 @@ send_router_key_pdu(int fd, uint8_t version,
 int
 send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 {
-	struct end_of_data_pdu pdu;
-	unsigned char data[MAX(
-	    RTRPDU_END_OF_DATA_V1_LEN, RTRPDU_END_OF_DATA_V0_LEN
-	)];
-	size_t len;
+	static const uint8_t type = PDU_TYPE_ROUTER_KEY;
+	unsigned char data[
+	    MAX(RTRPDU_END_OF_DATA_V1_LEN, RTRPDU_END_OF_DATA_V0_LEN)
+	];
+	unsigned char *buf;
+	uint32_t len;
 
-	set_header_values(&pdu.header, version, PDU_TYPE_END_OF_DATA,
-	    get_current_session_id(version));
+	len = (version == RTR_V1)
+	    ? RTRPDU_END_OF_DATA_V1_LEN
+	    : RTRPDU_END_OF_DATA_V0_LEN;
+	buf = serialize_hdr(data, version, type,
+	    get_current_session_id(version), len);
 
-	pdu.serial_number = end_serial;
+	buf = write_uint32(buf, end_serial);
 	if (version == RTR_V1) {
-		pdu.header.length = RTRPDU_END_OF_DATA_V1_LEN;
-		pdu.refresh_interval = config_get_interval_refresh();
-		pdu.retry_interval = config_get_interval_retry();
-		pdu.expire_interval = config_get_interval_expire();
-	} else {
-		pdu.header.length = RTRPDU_END_OF_DATA_V0_LEN;
+		buf = write_uint32(buf, config_get_interval_refresh());
+		buf = write_uint32(buf, config_get_interval_retry());
+		buf = write_uint32(buf, config_get_interval_expire());
 	}
 
-	len = serialize_end_of_data_pdu(&pdu, data);
-	if (len != pdu.header.length)
-		pr_crit("Serialized End of Data is %zu bytes.", len);
+	return send_response(fd, type, data, len);
+}
 
-	return send_response(fd, pdu.header.pdu_type, data, len);
+static size_t
+compute_error_pdu_len(struct rtr_buffer const *request)
+{
+	unsigned int result;
+
+	if (request == NULL || request->bytes_len < RTR_HDR_LEN)
+		return 0;
+
+	result = (((unsigned int)(request->bytes[4])) << 24)
+	       | (((unsigned int)(request->bytes[5])) << 16)
+	       | (((unsigned int)(request->bytes[6])) <<  8)
+	       | (((unsigned int)(request->bytes[7]))      );
+
+	return (result <= RTRPDU_MAX_LEN) ? result : RTRPDU_MAX_LEN;
 }
 
 int
 send_error_report_pdu(int fd, uint8_t version, uint16_t code,
-    struct rtr_request const *request, char *message)
+    struct rtr_buffer const *request, char *message)
 {
-	struct error_report_pdu pdu;
-	unsigned char *data;
+	static const uint8_t type = PDU_TYPE_ERROR_REPORT;
+	unsigned char *data, *buf;
+	size_t error_pdu_len;
+	size_t error_msg_len;
 	size_t len;
 	int error;
 
-	set_header_values(&pdu.header, version, PDU_TYPE_ERROR_REPORT, code);
+	error_pdu_len = compute_error_pdu_len(request);
+	error_msg_len = (message != NULL) ? strlen(message) : 0;
+	len = rtrpdu_error_report_len(error_pdu_len, error_msg_len);
+	data = pmalloc(len);
 
-	if (request != NULL) {
-		pdu.error_pdu_length = (request->bytes_len > RTRPDU_MAX_LEN)
-		    ? RTRPDU_MAX_LEN
-		    : request->bytes_len;
-		memcpy(pdu.erroneous_pdu, request->bytes, pdu.error_pdu_length);
-	} else {
-		pdu.error_pdu_length = 0;
+	buf = serialize_hdr(data, version, type, 0, len);
+	buf = write_uint32(buf, error_pdu_len);
+	if (error_pdu_len > 0) {
+		memcpy(buf, request->bytes, error_pdu_len);
+		buf += error_pdu_len;
+	}
+	buf = write_uint32(buf, error_msg_len);
+	if (error_msg_len > 0) {
+		memcpy(buf, message, error_msg_len);
+		buf += error_msg_len;
 	}
 
-	pdu.error_message_length = (message != NULL) ? strlen(message) : 0;
-	pdu.error_message = message;
-
-	pdu.header.length = RTRPDU_HDR_LEN
-	    + 4 /* Length of Encapsulated PDU field */
-	    + pdu.error_pdu_length
-	    + 4 /* Length of Error Text field */
-	    + pdu.error_message_length;
-
-	data = pmalloc(pdu.header.length);
-
-	len = serialize_error_report_pdu(&pdu, data);
-	if (len != pdu.header.length)
-		pr_crit("Serialized Error Report PDU is %zu bytes, not the expected %u.",
-		    len, pdu.header.length);
-
-	error = send_response(fd, pdu.header.pdu_type, data, len);
-
+	error = send_response(fd, type, data, len);
 	free(data);
 	return error;
 }

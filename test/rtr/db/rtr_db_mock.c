@@ -68,15 +68,15 @@ __handle_router_key(unsigned char const *ski, struct asn_range const *range,
     unsigned char const *spk, void *arg)
 {
 	uint64_t as;
-	int error = 0;
+	int error;
 
 	for (as = range->min; as <= range->max; as++) {
 		error = rtrhandler_handle_router_key(arg, ski, as, spk);
 		if (error)
-			break;
+			return error;
 	}
 
-	return error;
+	return 0;
 }
 
 int
