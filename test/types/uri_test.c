@@ -144,13 +144,13 @@ START_TEST(check_caged)
 
 	ck_assert_int_eq(0, uri_create(&notification, UT_HTTPS, "https://a.b.c/d/e.xml"));
 	ck_assert_int_eq(0, uri_create(&uri, UT_CAGED, "rsync://x.y.z/v/w.cer"));
-	ck_assert_str_eq("rrdp/a.b.c/d/e.xml/x.y.z/v/w.cer", uri_get_local(uri));
+	ck_assert_str_eq("tmp/rrdp/a.b.c/d/e.xml/x.y.z/v/w.cer", uri_get_local(uri));
 	uri_refput(uri);
 	uri_refput(notification);
 
 	ck_assert_int_eq(0, uri_create(&notification, UT_HTTPS, "https://a.b.c"));
 	ck_assert_int_eq(0, uri_create(&uri, UT_CAGED, "rsync://w"));
-	ck_assert_str_eq("rrdp/a.b.c/w", uri_get_local(uri));
+	ck_assert_str_eq("tmp/rrdp/a.b.c/w", uri_get_local(uri));
 	uri_refput(uri);
 	uri_refput(notification);
 }

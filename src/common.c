@@ -288,8 +288,12 @@ create_dir_recursive(char const *path, bool include_basename)
 	}
 
 	result = dir_exists(localuri); /* short circuit */
-	if (result != 0)
+	if (result > 0) {
+		result = 0;
 		goto end;
+	} else if (result < 0) {
+		goto end;
+	}
 
 	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
