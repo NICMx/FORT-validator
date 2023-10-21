@@ -31,6 +31,17 @@ struct pdu_stream {
 	unsigned char *end;
 };
 
+struct pdu_header {
+	enum rtr_version version;
+	enum pdu_type type;
+	union {
+		uint16_t session_id;
+		uint16_t reserved;
+		uint16_t error_code;
+	} m; /* Note: "m" stands for "meh." I have no idea what to call this. */
+	uint32_t len;
+};
+
 struct pdu_stream *pdustream_create(int fd, char const *addr)
 {
 	struct pdu_stream *result;
@@ -88,12 +99,14 @@ update_buffer(struct pdu_stream *in /* "in"put stream */)
 		consumed = read(in->fd, in->end, RTRPDU_MAX_LEN2 - get_length(in));
 		if (consumed == -1) {
 			error = errno;
-			if (error == EAGAIN || error == EWOULDBLOCK)
+			if (error == EAGAIN || error == EWOULDBLOCK) {
+				pr_op_debug("Reached stream limit for now.");
 				return BS_WOULD_BLOCK;
-
-			pr_op_err("Client socket read interrupted: %s",
-			    strerror(error));
-			return BS_ERROR;
+			} else {
+				pr_op_err("Client socket read interrupted: %s",
+				    strerror(error));
+				return BS_ERROR;
+			}
 		}
 
 		if (consumed == 0) {
@@ -107,6 +120,7 @@ update_buffer(struct pdu_stream *in /* "in"put stream */)
 	 * big PDU that either lengths exactly RTRPDU_MAX_LEN2, or is too big
 	 * for us to to allow it.
 	 */
+	pr_op_debug("Stream limit not reached yet.");
 	return BS_KEEP_READING;
 }
 
@@ -217,7 +231,7 @@ read_hdr(struct pdu_stream *stream, struct pdu_header *header)
 	header->version = stream->start[0];
 	header->type = stream->start[1];
 	header->m.reserved = read_uint16(stream->start + 2);
-	header->length = read_uint32(stream->start + 4);
+	header->len = read_uint32(stream->start + 4);
 }
 
 static int
@@ -273,124 +287,154 @@ unexpected:
 
 static int
 load_serial_query(struct pdu_stream *stream, struct pdu_header *hdr,
-    struct rtr_pdu *result)
+    struct rtr_request *result)
 {
-	if (hdr->length != RTRPDU_SERIAL_QUERY_LEN) {
+	size_t length;
+
+	if (hdr->len != RTRPDU_SERIAL_QUERY_LEN) {
+		pr_op_err("%s: Header length is not %u: %u",
+		    stream->addr, RTRPDU_SERIAL_QUERY_LEN, hdr->len);
 		return err_pdu_send_invalid_request(
-			stream->fd, stream->rtr_version, &result->raw,
+			stream->fd, stream->rtr_version, &result->pdu.raw,
 			"Expected length 12 for Serial Query PDUs."
 		);
 	}
-	if (get_length(stream) < RTRPDU_SERIAL_QUERY_LEN)
+
+	length = get_length(stream);
+	if (length < RTRPDU_SERIAL_QUERY_LEN) {
+		pr_op_debug("PDU fragmented after hdr (%zu)", length);
 		return EAGAIN;
+	}
 
 	pr_op_debug("Received a Serial Query from %s.", stream->addr);
 
-	memcpy(&result->obj.sq.header, hdr, sizeof(*hdr));
+	result->pdu.obj.sq.session_id = hdr->m.session_id;
 	stream->start += RTR_HDR_LEN;
-	result->obj.sq.serial_number = read_uint32(stream->start);
+	result->pdu.obj.sq.serial_number = read_uint32(stream->start);
 	stream->start += 4;
-
 	return 0;
 }
 
 static int
 load_reset_query(struct pdu_stream *stream, struct pdu_header *hdr,
-    struct rtr_pdu *result)
+    struct rtr_request *result)
 {
-	if (hdr->length != RTRPDU_RESET_QUERY_LEN) {
+	size_t length;
+
+	if (hdr->len != RTRPDU_RESET_QUERY_LEN) {
+		pr_op_err("%s: Header length is not %u: %u",
+		    stream->addr, RTRPDU_RESET_QUERY_LEN, hdr->len);
 		return err_pdu_send_invalid_request(
-			stream->fd, stream->rtr_version, &result->raw,
+			stream->fd, stream->rtr_version, &result->pdu.raw,
 			"Expected length 8 for Reset Query PDUs."
 		);
 	}
-	if (get_length(stream) < RTRPDU_RESET_QUERY_LEN)
+
+	length = get_length(stream);
+	if (length < RTRPDU_RESET_QUERY_LEN) {
+		pr_op_debug("PDU fragmented after hdr (%zu)", length);
 		return EAGAIN;
+	}
 
 	pr_op_debug("Received a Reset Query from %s.", stream->addr);
 
-	memcpy(&result->obj.rq.header, hdr, sizeof(*hdr));
 	stream->start += RTR_HDR_LEN;
-
 	return 0;
 }
 
-static int
-load_error_report(struct pdu_stream *stream, struct pdu_header *hdr,
-    struct rtr_pdu *result)
+static void
+handle_error_report_pdu(uint16_t errcode, char const *errmsg,
+    char const *client_addr)
 {
-	struct error_report_pdu *pdu;
+	if (errmsg != NULL) {
+		pr_op_err("RTR client %s responded with error PDU '%s' ('%s'). Closing socket.",
+		    client_addr, err_pdu_to_string(errcode), errmsg);
+	} else {
+		pr_op_err("RTR client %s responded with error PDU '%s'. Closing socket.",
+		    client_addr, err_pdu_to_string(errcode));
+	}
+}
+
+
+static int
+load_error_report(struct pdu_stream *stream, struct pdu_header *hdr)
+{
+	uint32_t errpdu_len;
+	uint32_t errmsg_len;
+	char *errmsg;
 	int error;
 
-	if (hdr->length > RTRPDU_ERROR_REPORT_MAX_LEN) {
+	if (hdr->len > RTRPDU_ERROR_REPORT_MAX_LEN) {
 		return pr_op_err(
 			"RTR client %s sent a large Error Report PDU (%u bytes). This looks broken, so I'm dropping the connection.",
-			stream->addr, hdr->length
+			stream->addr, hdr->len
 		);
 	}
 
 	pr_op_debug("Received an Error Report from %s.", stream->addr);
 
-	pdu = &result->obj.er;
-
 	/* Header */
-	memcpy(&pdu->header, hdr, sizeof(*hdr));
 	stream->start += RTR_HDR_LEN;
 
 	/* Error PDU length */
 	if (get_length(stream) < 4) {
+		pr_op_debug("Fragmented on error PDU length.");
 		error = EAGAIN;
 		goto revert_hdr;
 	}
-	pdu->errpdu_len = read_uint32(stream->start);
+	errpdu_len = read_uint32(stream->start);
 	stream->start += 4;
-	if (pdu->errpdu_len > RTRPDU_MAX_LEN) {
+	if (errpdu_len > RTRPDU_MAX_LEN) {
 		/*
 		 * We truncate PDUs larger than RTRPDU_MAX_LEN, so we couldn't
 		 * have sent this PDU. Looks like someone is messing with us.
 		 */
 		error = pr_op_err(
 			"RTR client %s sent an Error Report PDU containing a large error PDU (%u bytes). This looks broken/insecure; I'm dropping the connection.",
-			stream->addr, pdu->errpdu_len
+			stream->addr, errpdu_len
 		);
 		goto revert_errpdu_len;
 	}
 
 	/* Error PDU */
-	if (get_length(stream) < pdu->errpdu_len) {
+	if (get_length(stream) < errpdu_len) {
+		pr_op_debug("Fragmented on error PDU.");
 		error = EAGAIN;
 		goto revert_errpdu_len;
 	}
 
-	memcpy(pdu->errpdu, stream->start, pdu->errpdu_len);
-	stream->start += pdu->errpdu_len;
+	stream->start += errpdu_len; /* Skip it for now; we don't use it */
 
 	/* Error msg length */
 	if (get_length(stream) < 4) {
+		pr_op_debug("Fragmented on error message length.");
 		error = EAGAIN;
 		goto revert_errpdu;
 	}
-	pdu->errmsg_len = read_uint32(stream->start);
+	errmsg_len = read_uint32(stream->start);
 	stream->start += 4;
-	if (hdr->length != rtrpdu_error_report_len(pdu->errpdu_len, pdu->errmsg_len)) {
+	if (hdr->len != rtrpdu_error_report_len(errpdu_len, errmsg_len)) {
 		error = pr_op_err(
 			"RTR client %s sent a malformed Error Report PDU; header length is %u, but effective length is %u + %u + %u + %u + %u.",
-			stream->addr, hdr->length,
-			RTR_HDR_LEN, 4, pdu->errpdu_len, 4, pdu->errmsg_len
+			stream->addr, hdr->len,
+			RTR_HDR_LEN, 4, errpdu_len, 4, errmsg_len
 		);
 		goto revert_errmsg_len;
 	}
 
 	/* Error msg */
-	pdu->errmsg = read_string(stream, pdu->errmsg_len);
-	stream->start += pdu->errmsg_len;
+	errmsg = read_string(stream, errmsg_len);
+	stream->start += errmsg_len;
 
-	return 0;
+	handle_error_report_pdu(hdr->m.error_code, errmsg, stream->addr);
+
+	free(errmsg);
+	return EINVAL;
 
 revert_errmsg_len:
 	stream->start -= 4;
 revert_errpdu:
-	stream->start -= pdu->errpdu_len;
+	stream->start -= errpdu_len;
 revert_errpdu_len:
 	stream->start -= 4;
 revert_hdr:
@@ -398,119 +442,162 @@ revert_hdr:
 	return error;
 }
 
-/*
- * Returns:
- * == 0: Success; at least zero PDUs read.
- * != 0: Communication broken; close the connection.
- */
-int
-pdustream_next(struct pdu_stream *stream, struct rtr_request **_result)
+static struct rtr_request *
+create_request(struct pdu_stream *stream, struct pdu_header *hdr,
+    struct rtr_buffer *raw)
 {
-	enum buffer_state state;
-	struct pdu_header hdr;
 	struct rtr_request *result;
-	struct rtr_pdu *pdu;
-	size_t remainder;
-	int error;
 
 	result = pmalloc(sizeof(struct rtr_request));
 	result->fd = stream->fd;
 	strcpy(result->client_addr, stream->addr);
-	STAILQ_INIT(&result->pdus);
+	result->pdu.rtr_version = hdr->version;
+	result->pdu.type = hdr->type;
+	result->pdu.raw = *raw;
 	result->eos = false;
 
-	pdu = NULL;
+	return result;
+}
+
+/*
+ * Returns the next "usable" PDU in the stream. Does not block.
+ *
+ * I call it "usable" because there can technically be multiple PDUs in the
+ * stream, and if that happens, it doesn't make sense to handle all of them
+ * sequentially. So there's no queuing.
+ *
+ * If there is at least one Error Report, it'll induce end of stream. This is
+ * because all the currently defined client-sourced Error Reports are fatal.
+ * The caller does not need to concern itself with handling Error Reports.
+ *
+ * Otherwise, if there are multiple PDUs in the stream, the last one will be
+ * returned, and the rest will be ignored.
+ * This is because Serial Queries and Reset Queries are the only non-error PDUs
+ * the server is supposed to receive, and they serve the same purpose. If the
+ * client sent two of them (maybe because we took too long to respond for some
+ * reason), it's most likely given up on the old one.
+ *
+ * Just to be clear, most of this is probably just paranoid error handling; a
+ * well-behaving client will never send us multiple PDUs in quick succession.
+ * But we don't know for sure how much buffering the underlying socket does,
+ * so we want to do something sensible if it happens.
+ *
+ * Returns:
+ * true: Success. @result might or might not point to a PDU; check NULL.
+ * false: Communication ended or broken; close the connection, ignore @result.
+ */
+bool
+pdustream_next(struct pdu_stream *stream, struct rtr_request **result)
+{
+	enum buffer_state state;
+	struct pdu_header hdr;
+	struct rtr_buffer raw = { 0 };
+	struct rtr_request *request = NULL;
+	struct rtr_request *request_tmp;
+	size_t remainder;
+	int error;
+
+	*result = NULL;
 
 again:
 	state = update_buffer(stream);
-	if (state == BS_ERROR) {
-		error = EINVAL;
-		goto fail;
-	}
+	if (state == BS_ERROR)
+		return false;
 
 	while (stream->start < stream->end) {
+		request_tmp = NULL;
 		remainder = get_length(stream);
 
 		/* Read header. */
-		if (remainder < RTR_HDR_LEN)
-			break;
+		if (remainder < RTR_HDR_LEN) {
+			pr_op_debug("PDU fragmented on header (%zu)", remainder);
+			break; /* PDU is fragmented */
+		}
 		read_hdr(stream, &hdr);
 
 		/* Init raw PDU; Needed early because of error responses. */
-		pdu = pzalloc(sizeof(struct rtr_pdu));
-		pdu->raw.bytes_len = (hdr.length <= remainder)
-		    ? hdr.length : remainder;
-		pdu->raw.bytes = pmalloc(pdu->raw.bytes_len);
-		memcpy(pdu->raw.bytes, stream->start, pdu->raw.bytes_len);
+		raw.bytes_len = (hdr.len <= remainder) ? hdr.len : remainder;
+		raw.bytes = pmalloc(raw.bytes_len);
+		memcpy(raw.bytes, stream->start, raw.bytes_len);
 
 		/* Validate length; Needs raw. */
-		if (hdr.length > RTRPDU_MAX_LEN2) {
-			error = err_pdu_send_invalid_request(
+		if (hdr.len > RTRPDU_MAX_LEN2) {
+			pr_op_err("%s: Header length too big: %u > %u",
+			     stream->addr, hdr.len, RTRPDU_MAX_LEN2);
+			err_pdu_send_invalid_request(
 				stream->fd,
 				(stream->rtr_version != -1)
 				    ? stream->rtr_version
 				    : hdr.version,
-				&pdu->raw,
+				&raw,
 				"PDU is too large."
 			);
 			goto fail;
 		}
 
-		if (remainder < hdr.length) {
-			free(pdu->raw.bytes);
-			free(pdu);
-			break;
+		/* Validate version; Needs raw. */
+		if (validate_rtr_version(stream, &hdr, &raw) != 0) {
+			pr_op_err("%s: Bad RTR version: %u",
+			    stream->addr, hdr.version);
+			goto fail;
 		}
 
-		/* Validate version; Needs raw. */
-		error = validate_rtr_version(stream, &hdr, &pdu->raw);
-		if (error)
-			goto fail;
+		request_tmp = create_request(stream, &hdr, &raw);
+		raw.bytes = NULL; /* Ownership transferred */
 
 		switch (hdr.type) {
 		case PDU_TYPE_SERIAL_QUERY:
-			error = load_serial_query(stream, &hdr, pdu);
+			error = load_serial_query(stream, &hdr, request_tmp);
 			break;
 		case PDU_TYPE_RESET_QUERY:
-			error = load_reset_query(stream, &hdr, pdu);
+			error = load_reset_query(stream, &hdr, request_tmp);
 			break;
 		case PDU_TYPE_ERROR_REPORT:
-			error = load_error_report(stream, &hdr, pdu);
+			error = load_error_report(stream, &hdr);
 			break;
 		default:
+			pr_op_err("%s: Unknown PDU type: %u",
+			    stream->addr, hdr.version);
 			err_pdu_send_unsupported_pdu_type(stream->fd,
-			    stream->rtr_version, &pdu->raw);
-			error = ENOTSUP;
+			    stream->rtr_version, &request_tmp->pdu.raw);
+			goto fail;
 		}
 
-		if (error)
+		if (error == EAGAIN) {
+			rtreq_destroy(request_tmp);
+			break;
+		} else if (error) {
 			goto fail;
+		}
 
-		STAILQ_INSERT_TAIL(&result->pdus, pdu, hook);
+		if (request != NULL)
+			rtreq_destroy(request);
+		request = request_tmp;
 	}
 
-	*_result = result;
-
 	switch (state) {
-	case BS_WOULD_BLOCK:
-		result->eos = false;
-		return 0;
 	case BS_EOS:
-		result->eos = true;
-		return 0;
+		if (request == NULL)
+			return false;
+		request->eos = true;
+		/* Fall through */
+	case BS_WOULD_BLOCK:
+		*result = request;
+		return true;
 	case BS_KEEP_READING:
 		goto again;
-	default:
-		error = EINVAL;
+	case BS_ERROR:
+		pr_crit("This should have been catched earlier.");
 	}
 
 fail:
-	if (pdu != NULL) {
-		free(pdu->raw.bytes);
-		free(pdu);
-	}
-	rtreq_destroy(result);
-	return error;
+	if (request != NULL)
+		rtreq_destroy(request);
+	if (request_tmp != NULL)
+		rtreq_destroy(request_tmp);
+	if (raw.bytes != NULL)
+		free(raw.bytes);
+	return false;
 }
 
 int
@@ -534,16 +621,7 @@ pdustream_version(struct pdu_stream *stream)
 void
 rtreq_destroy(struct rtr_request *request)
 {
-	struct rtr_pdu *pdu;
-
-	while (!STAILQ_EMPTY(&request->pdus)) {
-		pdu = STAILQ_FIRST(&request->pdus);
-		STAILQ_REMOVE_HEAD(&request->pdus, hook);
-
-		if (pdu->obj.hdr.type == PDU_TYPE_ERROR_REPORT)
-			free(pdu->obj.er.errmsg);
-		free(pdu->raw.bytes);
-		free(pdu);
-	}
+	free(request->pdu.raw.bytes);
+	free(request);
 }
 

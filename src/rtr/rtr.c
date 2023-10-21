@@ -318,27 +318,21 @@ static void
 handle_client_request(void *arg)
 {
 	struct rtr_request *request = arg;
-	struct rtr_pdu *pdu;
 
-	STAILQ_FOREACH(pdu, &request->pdus, hook) {
-		switch (pdu->obj.hdr.type) {
-		case PDU_TYPE_SERIAL_QUERY:
-			handle_serial_query_pdu(request, pdu);
-			break;
-		case PDU_TYPE_RESET_QUERY:
-			handle_reset_query_pdu(request, pdu);
-			break;
-		case PDU_TYPE_ERROR_REPORT:
-			handle_error_report_pdu(request, pdu);
-			break;
-		default:
-			/* Should have been catched during constructor */
-			pr_crit("Unexpected PDU type: %u", pdu->obj.hdr.type);
-		}
+	switch (request->pdu.type) {
+	case PDU_TYPE_SERIAL_QUERY:
+		handle_serial_query_pdu(request);
+		break;
+	case PDU_TYPE_RESET_QUERY:
+		handle_reset_query_pdu(request);
+		break;
+	default:
+		/* Should have been catched during constructor */
+		pr_crit("Unexpected PDU type: %u", request->pdu.type);
 	}
 
 	if (request->eos)
-		/* Wake poller to close the socket. Read side already shut. */
+		/* Wake poller to close the socket */
 		shutdown(request->fd, SHUT_WR);
 
 	rtreq_destroy(request);
@@ -442,16 +436,12 @@ static bool
 __handle_client_request(struct pdu_stream *stream)
 {
 	struct rtr_request *request;
-	bool eos;
 
-	if (pdustream_next(stream, &request) != 0)
+	if (!pdustream_next(stream, &request))
 		return false;
 
-	if (STAILQ_EMPTY(&request->pdus)) {
-		eos = request->eos;
-		free(request);
-		return !eos;
-	}
+	if (request == NULL)
+		return true;
 
 	thread_pool_push(request_handlers, "RTR request", handle_client_request,
 	    request);
@@ -563,7 +553,7 @@ fddb_poll(void)
 		}
 	}
 
-	/* The servers might change this number, so store a backup. */
+	/* accept_new_client() might change this number, so store a backup. */
 	nclients = clients.len;
 
 	/* New connections */
@@ -598,9 +588,6 @@ fddb_poll(void)
 
 		/* PR_DEBUG_MSG("Client %u: fd:%d revents:%x", i, fd->fd,
 		    fd->revents); */
-
-//		if (fd->fd == -1)
-//			continue;
 
 		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
 			fd->fd = -1;

@@ -173,7 +173,7 @@ send_router_key_pdu(int fd, uint8_t version,
 int
 send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 {
-	static const uint8_t type = PDU_TYPE_ROUTER_KEY;
+	static const uint8_t type = PDU_TYPE_END_OF_DATA;
 	unsigned char data[
 	    MAX(RTRPDU_END_OF_DATA_V1_LEN, RTRPDU_END_OF_DATA_V0_LEN)
 	];
@@ -228,7 +228,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 	len = rtrpdu_error_report_len(error_pdu_len, error_msg_len);
 	data = pmalloc(len);
 
-	buf = serialize_hdr(data, version, type, 0, len);
+	buf = serialize_hdr(data, version, type, code, len);
 	buf = write_uint32(buf, error_pdu_len);
 	if (error_pdu_len > 0) {
 		memcpy(buf, request->bytes, error_pdu_len);

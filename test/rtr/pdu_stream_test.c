@@ -17,6 +17,13 @@ MOCK_ABORT_INT(err_pdu_send_unsupported_pdu_type, int fd, uint8_t version,
 MOCK_ABORT_INT(err_pdu_send_unexpected_proto_version, int fd, uint8_t version,
     struct rtr_buffer const *request, char const *msg)
 
+char const *
+err_pdu_to_string(uint16_t c)
+{
+	ck_assert_uint_eq(c, 0x1617);
+	return "achoo";
+}
+
 /* End of mocks */
 
 static void
@@ -54,18 +61,6 @@ create_stream_fd(unsigned char *data, size_t datalen, int rtr_version)
 	return result;
 }
 
-static void
-assert_pdu_count(unsigned int expected, struct rtr_request *request)
-{
-	struct rtr_pdu *pdu;
-	unsigned int npdu;
-
-	npdu = 0;
-	STAILQ_FOREACH(pdu, &request->pdus, hook)
-		npdu++;
-	ck_assert_uint_eq(expected, npdu);
-}
-
 START_TEST(test_pdu_header_from_stream)
 {
 	unsigned char input[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
@@ -78,7 +73,7 @@ START_TEST(test_pdu_header_from_stream)
 	ck_assert_uint_eq(hdr.version, 0);
 	ck_assert_uint_eq(hdr.type, 1);
 	ck_assert_uint_eq(hdr.m.reserved, 0x0203);
-	ck_assert_uint_eq(hdr.length, 0x04050607);
+	ck_assert_uint_eq(hdr.len, 0x04050607);
 
 	free(stream);
 }
@@ -94,25 +89,19 @@ START_TEST(test_serial_query_from_stream)
 	};
 	struct pdu_stream *stream;
 	struct rtr_request *request;
-	struct rtr_pdu *pdu;
-	struct serial_query_pdu *sq;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
-	ck_assert_int_eq(0, pdustream_next(stream, &request));
+	ck_assert_uint_eq(true, pdustream_next(stream, &request));
 
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
+	ck_assert_uint_eq(RTR_V1, request->pdu.rtr_version);
+	ck_assert_uint_eq(PDU_TYPE_SERIAL_QUERY, request->pdu.type);
+	ck_assert_uint_eq(0x0e0f1011, request->pdu.obj.sq.serial_number);
+	ck_assert_uint_eq(0x0708, request->pdu.obj.sq.session_id);
+	ck_assert_uint_eq(12, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(input, request->pdu.raw.bytes, 12) == 0);
 	ck_assert_uint_eq(1, request->eos);
-	assert_pdu_count(1, request);
-
-	pdu = STAILQ_FIRST(&request->pdus);
-	sq = &pdu->obj.sq;
-
-	ck_assert_uint_eq(sq->header.version, RTR_V1);
-	ck_assert_uint_eq(sq->header.type, PDU_TYPE_SERIAL_QUERY);
-	ck_assert_uint_eq(sq->header.m.reserved, 0x0708);
-	ck_assert_uint_eq(sq->header.length, 12);
-	ck_assert_uint_eq(sq->serial_number, 0x0e0f1011);
 
 	rtreq_destroy(request);
 	pdustream_destroy(&stream);
@@ -127,27 +116,16 @@ START_TEST(test_reset_query_from_stream)
 	};
 	struct pdu_stream *stream;
 	struct rtr_request *request;
-	struct rtr_pdu *pdu;
-	struct reset_query_pdu *rq;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V0);
-	ck_assert_int_eq(0, pdustream_next(stream, &request));
-
+	ck_assert_uint_eq(true, pdustream_next(stream, &request));
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
+	ck_assert_uint_eq(RTR_V0, request->pdu.rtr_version);
+	ck_assert_uint_eq(PDU_TYPE_RESET_QUERY, request->pdu.type);
+	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(input, request->pdu.raw.bytes, 8) == 0);
 	ck_assert_uint_eq(1, request->eos);
-	assert_pdu_count(1, request);
-
-	pdu = STAILQ_FIRST(&request->pdus);
-	rq = &pdu->obj.rq;
-
-	ck_assert_uint_eq(rq->header.version, RTR_V0);
-	ck_assert_uint_eq(rq->header.type, PDU_TYPE_RESET_QUERY);
-	ck_assert_uint_eq(rq->header.m.reserved, 0x0c0d);
-	ck_assert_uint_eq(rq->header.length, 8);
-
-	ck_assert_uint_eq(8, pdu->raw.bytes_len);
-	ck_assert(memcmp(input, pdu->raw.bytes, 8) == 0);
 
 	rtreq_destroy(request);
 	pdustream_destroy(&stream);
@@ -172,60 +150,23 @@ START_TEST(test_error_report_from_stream)
 	};
 	struct pdu_stream *stream;
 	struct rtr_request *request;
-	struct rtr_pdu *pdu;
-	struct error_report_pdu *er;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
-	ck_assert_int_eq(0, pdustream_next(stream, &request));
-
-	ck_assert_int_eq(stream->fd, request->fd);
-	ck_assert_str_eq(stream->addr, request->client_addr);
-	ck_assert_uint_eq(1, request->eos);
-	assert_pdu_count(1, request);
-
-	pdu = STAILQ_FIRST(&request->pdus);
-	er = &pdu->obj.er;
-
-	ck_assert_uint_eq(er->header.version, RTR_V1);
-	ck_assert_uint_eq(er->header.type, PDU_TYPE_ERROR_REPORT);
-	ck_assert_uint_eq(er->header.m.reserved, 0x1617);
-	ck_assert_uint_eq(er->header.length, 33);
-	ck_assert_uint_eq(er->errpdu_len, 12);
-	ck_assert_uint_eq(er->errpdu[0], 1);
-	ck_assert_uint_eq(er->errpdu[1], 0);
-	ck_assert_uint_eq(er->errpdu[2], 2);
-	ck_assert_uint_eq(er->errpdu[3], 3);
-	ck_assert_uint_eq(er->errpdu[4], 0);
-	ck_assert_uint_eq(er->errpdu[5], 0);
-	ck_assert_uint_eq(er->errpdu[6], 0);
-	ck_assert_uint_eq(er->errpdu[7], 12);
-	ck_assert_uint_eq(er->errpdu[8], 1);
-	ck_assert_uint_eq(er->errpdu[9], 2);
-	ck_assert_uint_eq(er->errpdu[10], 3);
-	ck_assert_uint_eq(er->errpdu[11], 4);
-	ck_assert_uint_eq(er->errmsg_len, 5);
-	ck_assert_str_eq(er->errmsg, "hello");
-
-	ck_assert_uint_eq(33, pdu->raw.bytes_len);
-	ck_assert(memcmp(input, pdu->raw.bytes, 33) == 0);
-
-	rtreq_destroy(request);
+	ck_assert_uint_eq(false, pdustream_next(stream, &request));
+	ck_assert_ptr_null(request);
 	pdustream_destroy(&stream);
 }
 END_TEST
 
-#define ASSERT_RQ(_rq, _version, _type, _reserved, _length)		\
-	ck_assert_uint_eq(_rq.header.version, _version);		\
-	ck_assert_uint_eq(_rq.header.type, _type);			\
-	ck_assert_uint_eq(_rq.header.m.reserved, _reserved);		\
-	ck_assert_uint_eq(_rq.header.length, _length);
+#define ASSERT_RQ(_req, _version)					\
+	ck_assert_uint_eq(_req->pdu.rtr_version, _version);		\
+	ck_assert_uint_eq(_req->pdu.type, PDU_TYPE_RESET_QUERY);
 
-#define ASSERT_SQ(_sq, _version, _type, _reserved, _length, _serial)	\
-	ck_assert_uint_eq(_sq.header.version, _version);		\
-	ck_assert_uint_eq(_sq.header.type, _type);			\
-	ck_assert_uint_eq(_sq.header.m.reserved, _reserved);		\
-	ck_assert_uint_eq(_sq.header.length, _length);			\
-	ck_assert_uint_eq(_sq.serial_number, _serial);
+#define ASSERT_SQ(_req, _version, _type, _session, _serial)		\
+	ck_assert_uint_eq(_req->pdu.rtr_version, _version);		\
+	ck_assert_uint_eq(_req->pdu.type, PDU_TYPE_SERIAL_QUERY);	\
+	ck_assert_uint_eq(_req->pdu.obj.sq.session_id, _session);	\
+	ck_assert_uint_eq(_req->pdu.obj.sq.serial_number, _serial);
 
 START_TEST(test_multiple_pdus)
 {
@@ -241,7 +182,6 @@ START_TEST(test_multiple_pdus)
 	};
 	struct pdu_stream *stream;
 	struct rtr_request *request;
-	struct rtr_pdu *pdu;
 	int pipes[2];
 
 	setup_pipes(pipes);
@@ -251,64 +191,36 @@ START_TEST(test_multiple_pdus)
 	/* Input 1 */
 
 	ck_assert_int_eq(32, write(pipes[1], input1, sizeof(input1)));
-	ck_assert_int_eq(0, pdustream_next(stream, &request));
+	ck_assert_uint_eq(true, pdustream_next(stream, &request));
 
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
+	ASSERT_RQ(request, RTR_V1);
+	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(input1 + 20, request->pdu.raw.bytes, 8) == 0);
 	ck_assert_uint_eq(0, request->eos);
-	assert_pdu_count(3, request);
-
-	pdu = STAILQ_FIRST(&request->pdus);
-	ASSERT_RQ(pdu->obj.rq, RTR_V1, PDU_TYPE_RESET_QUERY, 0, 8);
-	ck_assert_uint_eq(8, pdu->raw.bytes_len);
-	ck_assert(memcmp(input1 + 0, pdu->raw.bytes, 8) == 0);
-
-	pdu = STAILQ_NEXT(pdu, hook);
-	ASSERT_SQ(pdu->obj.sq, RTR_V1, PDU_TYPE_SERIAL_QUERY, 0, 12, 0x1020304);
-	ck_assert_uint_eq(12, pdu->raw.bytes_len);
-	ck_assert(memcmp(input1 + 8, pdu->raw.bytes, 12) == 0);
-
-	pdu = STAILQ_NEXT(pdu, hook);
-	ASSERT_RQ(pdu->obj.rq, RTR_V1, PDU_TYPE_RESET_QUERY, 0x304, 8);
-	ck_assert_uint_eq(8, pdu->raw.bytes_len);
-	ck_assert(memcmp(input1 + 20, pdu->raw.bytes, 8) == 0);
 
 	rtreq_destroy(request);
 
 	/* Input 2 */
 
 	ck_assert_int_eq(12, write(pipes[1], input2, sizeof(input2)));
-	ck_assert_int_eq(0, pdustream_next(stream, &request));
+	ck_assert_uint_eq(true, pdustream_next(stream, &request));
 
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
+	ASSERT_RQ(request, RTR_V1);
+	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(input2 + 4,  request->pdu.raw.bytes, 8) == 0);
 	ck_assert_uint_eq(0, request->eos);
-	assert_pdu_count(2, request);
-
-	pdu = STAILQ_FIRST(&request->pdus);
-	ASSERT_RQ(pdu->obj.rq, RTR_V1, PDU_TYPE_RESET_QUERY, 0x304, 8);
-	ck_assert_uint_eq(8, pdu->raw.bytes_len);
-	ck_assert(memcmp(input1 + 28, &pdu->raw.bytes[0], 4) == 0);
-	ck_assert(memcmp(input2 + 0,  &pdu->raw.bytes[4], 4) == 0);
-
-	pdu = STAILQ_NEXT(pdu, hook);
-	ASSERT_RQ(pdu->obj.rq, RTR_V1, PDU_TYPE_RESET_QUERY, 0x607, 8);
-	ck_assert_uint_eq(8, pdu->raw.bytes_len);
-	ck_assert(memcmp(input2 + 4, pdu->raw.bytes, 8) == 0);
 
 	rtreq_destroy(request);
 
 	/* Input 3 */
 
 	close(pipes[1]);
-	ck_assert_int_eq(0, pdustream_next(stream, &request));
-
-	ck_assert_int_eq(stream->fd, request->fd);
-	ck_assert_str_eq(stream->addr, request->client_addr);
-	ck_assert_uint_eq(1, request->eos);
-	assert_pdu_count(0, request);
-
-	rtreq_destroy(request);
+	ck_assert_uint_eq(false, pdustream_next(stream, &request));
+	ck_assert_ptr_null(request);
 
 	/* Clean up */
 
@@ -323,14 +235,10 @@ START_TEST(test_interrupted)
 	struct rtr_request *request;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
-	ck_assert_int_eq(0, pdustream_next(stream, &request));
 
-	ck_assert_int_eq(stream->fd, request->fd);
-	ck_assert_str_eq(stream->addr, request->client_addr);
-	ck_assert_uint_eq(1, request->eos);
-	assert_pdu_count(0, request);
+	ck_assert_uint_eq(false, pdustream_next(stream, &request));
+	ck_assert_ptr_null(request);
 
-	rtreq_destroy(request);
 	pdustream_destroy(&stream);
 }
 END_TEST

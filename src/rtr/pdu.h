@@ -62,34 +62,6 @@ char const *pdutype2str(enum pdu_type);
 
 #define RTRPDU_MAX_LEN2			RTRPDU_ERROR_REPORT_MAX_LEN
 
-struct pdu_header {
-	enum rtr_version version;
-	enum pdu_type type;
-	union {
-		uint16_t session_id;
-		uint16_t reserved;
-		uint16_t error_code;
-	} m; /* Note: "m" stands for "meh." I have no idea what to call this. */
-	uint32_t length;
-};
-
-struct serial_query_pdu {
-	struct	pdu_header header;
-	uint32_t	serial_number;
-};
-
-struct reset_query_pdu {
-	struct	pdu_header header;
-};
-
-struct error_report_pdu {
-	struct	pdu_header header;
-	uint32_t	errpdu_len;
-	unsigned char	errpdu[RTRPDU_MAX_LEN];
-	uint32_t	errmsg_len;
-	char		*errmsg;
-};
-
 static inline size_t
 rtrpdu_error_report_len(uint32_t errpdu_len, uint32_t errmsg_len)
 {

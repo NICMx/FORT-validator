@@ -56,16 +56,14 @@ send_delta_rk(struct delta_router_key const *delta, void *arg)
 }
 
 int
-handle_serial_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
+handle_serial_query_pdu(struct rtr_request *request)
 {
-	struct serial_query_pdu *sq;
 	struct send_delta_args args;
 	serial_t final_serial;
 	int error;
 
-	sq = &pdu->obj.sq;
 	args.fd = request->fd;
-	args.rtr_version = sq->header.version;
+	args.rtr_version = request->pdu.rtr_version;
 	args.cache_response_sent = false;
 
 	/*
@@ -75,9 +73,9 @@ handle_serial_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
 	 * the mismatch MUST immediately terminate the session with an Error
 	 * Report PDU with code 0 ("Corrupt Data")"
 	 */
-	if (sq->header.m.session_id != get_current_session_id(args.rtr_version))
+	if (request->pdu.obj.sq.session_id != get_current_session_id(args.rtr_version))
 		return err_pdu_send_corrupt_data(args.fd, args.rtr_version,
-			&pdu->raw, "Session ID doesn't match.");
+			&request->pdu.raw, "Session ID doesn't match.");
 
 	/*
 	 * For the record, there are two reasons why we want to work on a
@@ -88,8 +86,8 @@ handle_serial_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
 	 *    PDUs, to minimize writer stagnation.
 	 */
 
-	error = vrps_foreach_delta_since(sq->serial_number, &final_serial,
-	    send_delta_vrp, send_delta_rk, &args);
+	error = vrps_foreach_delta_since(request->pdu.obj.sq.serial_number,
+	    &final_serial, send_delta_vrp, send_delta_rk, &args);
 	switch (error) {
 	case 0:
 		/*
@@ -164,7 +162,7 @@ send_base_router_key(struct router_key const *key, void *arg)
 }
 
 int
-handle_reset_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
+handle_reset_query_pdu(struct rtr_request *request)
 {
 	struct base_roa_args args;
 	serial_t current_serial;
@@ -172,7 +170,7 @@ handle_reset_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
 
 	args.started = false;
 	args.fd = request->fd;
-	args.version = pdu->obj.hdr.version;
+	args.version = request->pdu.rtr_version;
 
 	error = get_last_serial_number(&current_serial);
 	switch (error) {
@@ -215,24 +213,4 @@ handle_reset_query_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
 	}
 
 	return send_end_of_data_pdu(args.fd, args.version, current_serial);
-}
-
-int
-handle_error_report_pdu(struct rtr_request *request, struct rtr_pdu *pdu)
-{
-	struct error_report_pdu *er;
-	char const *error_name;
-
-	er = &pdu->obj.er;
-	error_name = err_pdu_to_string(er->header.m.error_code);
-
-	if (er->errmsg != NULL) {
-		pr_op_info("RTR client %s responded with error PDU '%s' ('%s'). Closing socket.",
-		    request->client_addr, error_name, er->errmsg);
-	} else {
-		pr_op_info("RTR client %s responded with error PDU '%s'. Closing socket.",
-		    request->client_addr, error_name);
-	}
-
-	return -EINVAL;
 }
