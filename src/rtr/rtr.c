@@ -457,6 +457,8 @@ print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 		pr_op_err("%s '%s' down: POLLERR (Generic error)", what, addr);
 	if (pfd->revents & POLLNVAL)
 		pr_op_err("%s '%s' down: POLLNVAL (fd not open)", what, addr);
+	if (!(pfd->revents & (POLLHUP | POLLERR | POLLNVAL)))
+		pr_op_info("%s '%s' down.", what, addr);
 }
 
 static void
@@ -490,9 +492,9 @@ apply_pollfds(struct pollfd *pollfds, unsigned int nclients)
 		/* PR_DEBUG_MSG("pfd:%d server:%d", pfd->fd, server->fd); */
 
 		if ((pfd->fd == -1) && (server->fd != -1)) {
+			print_poll_failure(pfd, "Server", server->addr);
 			close(server->fd);
 			server->fd = -1;
-			print_poll_failure(pfd, "Server", server->addr);
 		}
 	}
 
@@ -503,9 +505,9 @@ apply_pollfds(struct pollfd *pollfds, unsigned int nclients)
 		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
 
 		if ((pfd->fd == -1) && (pdustream_fd(client) != -1)) {
+			print_poll_failure(pfd, "Client", pdustream_addr(client));
 			pdustream_destroy(&client);
 			clients.array[i] = NULL;
-			print_poll_failure(pfd, "Client", pdustream_addr(client));
 		}
 	}
 

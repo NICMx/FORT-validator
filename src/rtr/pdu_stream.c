@@ -366,7 +366,13 @@ load_error_report(struct pdu_stream *stream, struct pdu_header *hdr)
 
 	if (hdr->len > RTRPDU_ERROR_REPORT_MAX_LEN) {
 		return pr_op_err(
-			"RTR client %s sent a large Error Report PDU (%u bytes). This looks broken, so I'm dropping the connection.",
+			"%s: Error Report PDU is too big (%u bytes).",
+			stream->addr, hdr->len
+		);
+	}
+	if (hdr->len < RTR_HDR_LEN + 8) { /* hdr + errpdu len + errmsg len */
+		return pr_op_err(
+			"%s: Error Report PDU is too small (%u bytes).",
 			stream->addr, hdr->len
 		);
 	}
@@ -390,8 +396,15 @@ load_error_report(struct pdu_stream *stream, struct pdu_header *hdr)
 		 * have sent this PDU. Looks like someone is messing with us.
 		 */
 		error = pr_op_err(
-			"RTR client %s sent an Error Report PDU containing a large error PDU (%u bytes). This looks broken/insecure; I'm dropping the connection.",
+			"%s: Error Report PDU's embedded PDU is too big (%u bytes).",
 			stream->addr, errpdu_len
+		);
+		goto revert_errpdu_len;
+	}
+	if (hdr->len < RTR_HDR_LEN + 8 + errpdu_len) {
+		error = pr_op_err(
+			"%s: Invalid Length of Encapsulated PDU (%u); PDU length is %u.",
+			stream->addr, errpdu_len, hdr->len
 		);
 		goto revert_errpdu_len;
 	}
@@ -415,7 +428,7 @@ load_error_report(struct pdu_stream *stream, struct pdu_header *hdr)
 	stream->start += 4;
 	if (hdr->len != rtrpdu_error_report_len(errpdu_len, errmsg_len)) {
 		error = pr_op_err(
-			"RTR client %s sent a malformed Error Report PDU; header length is %u, but effective length is %u + %u + %u + %u + %u.",
+			"%s: Error Report PDU is malformed; header length is %u, but effective length is %u + %u + %u + %u + %u.",
 			stream->addr, hdr->len,
 			RTR_HDR_LEN, 4, errpdu_len, 4, errmsg_len
 		);
