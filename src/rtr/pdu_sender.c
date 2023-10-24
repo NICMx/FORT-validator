@@ -209,6 +209,7 @@ compute_error_pdu_len(struct rtr_buffer const *request)
 	       | (((unsigned int)(request->bytes[6])) <<  8)
 	       | (((unsigned int)(request->bytes[7]))      );
 
+	result = (result <= request->bytes_len) ? result : request->bytes_len;
 	return (result <= RTRPDU_MAX_LEN) ? result : RTRPDU_MAX_LEN;
 }
 
