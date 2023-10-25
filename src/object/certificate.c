@@ -1927,28 +1927,60 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 	return 0;
 }
 
+static bool
+try_uris(struct sia_uris *uris, enum uri_type const *filter)
+{
+	struct rpki_uri **node, *uri;
+	enum uri_type type;
+
+	ARRAYLIST_FOREACH(&uris->rpp, node) {
+		uri = *node;
+		type = uri_get_type(uri);
+
+		if (filter != NULL && (*filter) != type)
+			continue;
+
+		switch (type) {
+		case UT_RSYNC:
+			if (cache_download(uri, NULL) == 0)
+				return true;
+			break;
+		case UT_HTTPS:
+			if (rrdp_update(uri) == 0)
+				return true;
+			break;
+		default:
+			pr_crit("Unknown URI type: %u", type);
+		}
+	}
+
+	return false;
+}
+
 static int
 download_rpp(struct sia_uris *uris)
 {
-	struct rpki_uri **node, *uri;
+	static const enum uri_type HTTP = UT_HTTPS;
+	static const enum uri_type RSYNC = UT_RSYNC;
 
 	if (uris->rpp.len == 0)
 		return pr_val_err("SIA lacks both caRepository and rpkiNotify.");
 
-	ARRAYLIST_FOREACH(&uris->rpp, node) {
-		uri = *node;
-		switch (uri_get_type(uri)) {
-		case UT_RSYNC:
-			if (cache_download(uri, NULL) == 0)
-				return 0;
-			break;
-		case UT_HTTPS:
-			if (rrdp_update(uri) == 0)
-				return 0;
-			break;
-		default:
-			pr_crit("Unknown URI type: %u", uri_get_type(uri));
-		}
+	if (config_get_http_priority() > config_get_rsync_priority()) {
+		if (try_uris(uris, &HTTP))
+			return 0;
+		if (try_uris(uris, &RSYNC))
+			return 0;
+
+	} else if (config_get_http_priority() < config_get_rsync_priority()) {
+		if (try_uris(uris, &RSYNC))
+			return 0;
+		if (try_uris(uris, &HTTP))
+			return 0;
+
+	} else {
+		if (try_uris(uris, NULL))
+			return 0;
 	}
 
 	return pr_val_err("The RPP could not be downloaded.");

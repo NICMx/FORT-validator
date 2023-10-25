@@ -362,18 +362,48 @@ tal_destroy(struct tal *tal)
 }
 
 static int
-foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
+foreach(enum uri_type const *filter, struct tal *tal,
+    foreach_uri_cb cb, void *arg)
 {
+	struct rpki_uri *uri;
 	unsigned int i;
 	int error;
 
 	for (i = 0; i < tal->uris.count; i++) {
-		error = cb(tal, tal->uris.array[i], arg);
-		if (error)
-			return error;
+		uri = tal->uris.array[i];
+		if (filter == NULL || (*filter) == uri_get_type(uri)) {
+			error = cb(tal, uri, arg);
+			if (error)
+				return error;
+		}
 	}
 
 	return 0;
+}
+
+static int
+foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
+{
+	static const enum uri_type HTTP = UT_HTTPS;
+	static const enum uri_type RSYNC = UT_RSYNC;
+	int error;
+
+	if (config_get_http_priority() > config_get_rsync_priority()) {
+		error = foreach(&HTTP, tal, cb, arg);
+		if (!error)
+			error = foreach(&RSYNC, tal, cb, arg);
+
+	} else if (config_get_http_priority() < config_get_rsync_priority()) {
+		error = foreach(&RSYNC, tal, cb, arg);
+		if (!error)
+			error = foreach(&HTTP, tal, cb, arg);
+
+	} else {
+		error = foreach(NULL, tal, cb, arg);
+
+	}
+
+	return error;
 }
 
 char const *

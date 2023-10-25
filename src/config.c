@@ -1304,6 +1304,12 @@ config_get_rsync_enabled(void)
 }
 
 unsigned int
+config_get_rsync_priority(void)
+{
+	return rpki_config.rsync.priority;
+}
+
+unsigned int
 config_get_rsync_retry_count(void)
 {
 	return rpki_config.rsync.retry.count;
@@ -1331,6 +1337,12 @@ bool
 config_get_http_enabled(void)
 {
 	return !rpki_config.work_offline && rpki_config.http.enabled;
+}
+
+unsigned int
+config_get_http_priority(void)
+{
+	return rpki_config.http.priority;
 }
 
 unsigned int
