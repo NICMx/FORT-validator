@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <poll.h>
-#include <syslog.h>
 
 #include "alloc.h"
 #include "common.h"

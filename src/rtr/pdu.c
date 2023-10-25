@@ -1,15 +1,5 @@
 #include "rtr/pdu.h"
 
-#include <errno.h>
-
-#include "alloc.h"
-#include "common.h"
-#include "log.h"
-#include "types/address.h"
-#include "rtr/err_pdu.h"
-#include "rtr/pdu_handler.h"
-#include "rtr/pdu_sender.h"
-
 char const *
 pdutype2str(enum pdu_type type)
 {
@@ -38,4 +28,3 @@ pdutype2str(enum pdu_type type)
 
 	return "unknown PDU";
 }
-

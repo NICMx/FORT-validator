@@ -1,7 +1,6 @@
 #include "rtr/pdu_stream.h"
 
 #include <errno.h>
-#include <stddef.h>
 
 #include "log.h"
 #include "alloc.h"
@@ -637,4 +636,3 @@ rtreq_destroy(struct rtr_request *request)
 	free(request->pdu.raw.bytes);
 	free(request);
 }
-
