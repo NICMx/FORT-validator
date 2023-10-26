@@ -62,7 +62,6 @@ description: Guide to use arguments of FORT Validator.
 	46. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
 	47. [`--stale-repository-period`](#--stale-repository-period)
 	48. [`--thread-pool.server.max`](#--thread-poolservermax)
-	49. [`--thread-pool.validation.max`](#--thread-poolvalidationmax)
 	50. [`--rsync.enabled`](#--rsyncenabled)
 	51. [`--rsync.priority`](#--rsyncpriority)
 	52. [`--rsync.strategy`](#--rsyncstrategy)
@@ -84,6 +83,7 @@ description: Guide to use arguments of FORT Validator.
 	5. [`--rrdp.retry.interval`](#--rrdpretryinterval)
 	60. [`init-locations`](#init-locations)
 	41. [`--http.idle-timeout`](#--httpidle-timeout)
+	49. [`--thread-pool.validation.max`](#--thread-poolvalidationmax)
 
 ## Syntax
 
@@ -912,19 +912,6 @@ Number of threads the RTR server will reserve for RTR client (router) request ha
 
 > Before Fort 1.5.1, this value used to represent the maximum number of client _connections_ the server would be able to hold at any given time. It scales better now.
 
-### `--thread-pool.validation.max`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 5
-- **Range:** 1--100
-
-> ![Warning!](img/warn.svg) Deprecated. This value should always equal the number of TALs you have, and will therefore be automated and retired in the future.
-
-Number of threads in the validation thread pool.
-
-During every validation cycle, one thread is borrowed from this pool per TAL, to validate the RPKI tree of the corresponding TAL.
-
 ### `--rsync.enabled`
 
 - **Type:** Boolean (`true`, `false`)
@@ -1298,3 +1285,14 @@ rsync synchronization strategy. Commands the way rsync URLs are approached durin
 - **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
 
 Deprecated alias for [`--http.low-speed-time`](#--httplow-speed-time).
+
+### `--thread-pool.validation.max`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 5
+- **Range:** 1--100
+
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
+
+Does nothing as of Fort 1.6.0.

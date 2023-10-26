@@ -37,6 +37,8 @@ struct tal {
 };
 
 struct validation_thread {
+	pthread_t pid;
+
 	/* TAL file name */
 	char *tal_file;
 	/*
@@ -56,7 +58,6 @@ struct validation_thread {
 SLIST_HEAD(threads_list, validation_thread);
 
 struct tal_param {
-	struct thread_pool *pool;
 	struct db_table *db;
 	struct threads_list threads;
 };
@@ -539,10 +540,10 @@ end:	validation_destroy(state);
 	return error;
 }
 
-static void
-do_file_validation(void *thread_arg)
+static void *
+do_file_validation(void *arg)
 {
-	struct validation_thread *thread = thread_arg;
+	struct validation_thread *thread = arg;
 	struct tal *tal;
 	int error;
 
@@ -582,6 +583,7 @@ destroy_tal:
 end:
 	fnstack_cleanup();
 	thread->exit_status = error;
+	return NULL;
 }
 
 static void
@@ -597,6 +599,7 @@ __do_file_validation(char const *tal_file, void *arg)
 {
 	struct tal_param *t_param = arg;
 	struct validation_thread *thread;
+	int error;
 
 	thread = pmalloc(sizeof(struct validation_thread));
 
@@ -606,21 +609,27 @@ __do_file_validation(char const *tal_file, void *arg)
 	thread->retry_local = true;
 	thread->sync_files = true;
 
-	thread_pool_push(t_param->pool, thread->tal_file, do_file_validation,
-	    thread);
+	error = pthread_create(&thread->pid, NULL, do_file_validation, thread);
+	if (error) {
+		pr_op_err("Could not spawn the file validation thread: %s",
+		    strerror(error));
+		free(thread->tal_file);
+		free(thread);
+		return error;
+	}
+
 	SLIST_INSERT_HEAD(&t_param->threads, thread, next);
 
 	return 0;
 }
 
 int
-perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
+perform_standalone_validation(struct db_table *table)
 {
 	struct tal_param param;
 	struct validation_thread *thread;
 	int error;
 
-	param.pool = pool;
 	param.db = table;
 	SLIST_INIT(&param.threads);
 
@@ -637,10 +646,12 @@ perform_standalone_validation(struct thread_pool *pool, struct db_table *table)
 	}
 
 	/* Wait for all */
-	thread_pool_wait(pool);
-
 	while (!SLIST_EMPTY(&param.threads)) {
 		thread = SLIST_FIRST(&param.threads);
+		error = pthread_join(thread->pid, NULL);
+		if (error)
+			pr_crit("pthread_join() threw %d on the '%s' thread.",
+			    error, thread->tal_file);
 		SLIST_REMOVE_HEAD(&param.threads, next);
 		if (thread->exit_status) {
 			error = thread->exit_status;

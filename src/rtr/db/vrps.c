@@ -14,7 +14,6 @@
 #include "rtr/rtr.h"
 #include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
-#include "thread/thread_pool.h"
 #include "cache/local_cache.h"
 
 struct vrp_node {
@@ -78,9 +77,6 @@ struct state {
 
 static struct state state;
 
-/* Thread pool to use when the TALs will be processed */
-static struct thread_pool *pool;
-
 /** Protects @state.base, @state.deltas and @state.serial. */
 static pthread_rwlock_t state_lock;
 
@@ -107,12 +103,6 @@ vrps_init(void)
 {
 	time_t now;
 	int error;
-
-	pool = NULL;
-	error = thread_pool_create("Validation",
-	    config_get_thread_pool_validation_max(), &pool);
-	if (error)
-		return error;
 
 	state.base = NULL;
 	state.deltas = darray_create();
@@ -149,15 +139,12 @@ vrps_init(void)
 
 revert_deltas:
 	darray_destroy(state.deltas);
-	thread_pool_destroy(pool);
 	return error;
 }
 
 void
 vrps_destroy(void)
 {
-	thread_pool_destroy(pool);
-
 	pthread_rwlock_destroy(&state_lock);
 
 	if (state.slurm != NULL)
@@ -225,7 +212,7 @@ __perform_standalone_validation(struct db_table **result)
 
 	db = db_table_create();
 
-	error = perform_standalone_validation(pool, db);
+	error = perform_standalone_validation(db);
 	if (error) {
 		db_table_destroy(db);
 		return error;
