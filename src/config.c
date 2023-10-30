@@ -1080,10 +1080,8 @@ handle_flags_config(int argc, char **argv)
 	}
 
 	/*
-	 * This triggers when the user runs something like
-	 * `rpki-validator disable-rsync` instead of
-	 * `rpki-validator --disable-rsync`.
-	 * This program does not have unflagged payload.
+	 * This triggers when the user runs something like `fort help` instead
+	 * of `fort --help`. This program does not have unflagged payload.
 	 */
 	if (optind < argc) {
 		error = pr_op_err("I don't know what '%s' is.", argv[optind]);

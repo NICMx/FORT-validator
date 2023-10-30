@@ -18,15 +18,12 @@
 #include "rtr/db/vrps.h"
 #include "cache/local_cache.h"
 
-#define TAL_FILE_EXTENSION	".tal"
 typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
 
 struct uris {
 	struct rpki_uri **array; /* This is an array of rpki URIs. */
 	unsigned int count;
 	unsigned int size;
-	unsigned int rsync_count;
-	unsigned int https_count;
 };
 
 struct tal {
@@ -48,7 +45,7 @@ struct validation_thread {
 	bool retry_local;
 	/* Try to sync the current TA URI? */
 	bool sync_files;
-	void *arg;
+	struct db_table *db;
 	int exit_status;
 	/* This should also only be manipulated by the parent thread. */
 	SLIST_ENTRY(validation_thread) next;
@@ -66,8 +63,6 @@ static void
 uris_init(struct uris *uris)
 {
 	uris->count = 0;
-	uris->rsync_count = 0;
-	uris->https_count = 0;
 	uris->size = 4; /* Most TALs only define one. */
 	uris->array = pmalloc(uris->size * sizeof(struct rpki_uri *));
 }
@@ -95,11 +90,6 @@ uris_add(struct uris *uris, char *uri)
 		error = pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
 	if (error)
 		return error;
-
-	if (uri_is_rsync(new))
-		uris->rsync_count++;
-	else
-		uris->https_count++;
 
 	if (uris->count + 1 >= uris->size) {
 		uris->size *= 2;
@@ -453,7 +443,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
-	validation_handler.arg = thread->arg;
+	validation_handler.arg = thread->db;
 
 	error = validation_prepare(&state, tal, &validation_handler);
 	if (error)
@@ -595,32 +585,30 @@ thread_destroy(struct validation_thread *thread)
 
 /* Creates a thread for the @tal_file */
 static int
-__do_file_validation(char const *tal_file, void *arg)
+spawn_tal_thread(char const *tal_file, void *arg)
 {
-	struct tal_param *t_param = arg;
+	struct tal_param *param = arg;
 	struct validation_thread *thread;
 	int error;
 
 	thread = pmalloc(sizeof(struct validation_thread));
 
 	thread->tal_file = pstrdup(tal_file);
-	thread->arg = t_param->db;
-	thread->exit_status = -EINTR;
 	thread->retry_local = true;
 	thread->sync_files = true;
+	thread->db = param->db;
+	thread->exit_status = -EINTR;
+	SLIST_INSERT_HEAD(&param->threads, thread, next);
 
 	error = pthread_create(&thread->pid, NULL, do_file_validation, thread);
 	if (error) {
-		pr_op_err("Could not spawn the file validation thread: %s",
-		    strerror(error));
+		pr_op_err("Could not spawn validation thread for %s: %s",
+		    tal_file, strerror(error));
 		free(thread->tal_file);
 		free(thread);
-		return error;
 	}
 
-	SLIST_INSERT_HEAD(&t_param->threads, thread, next);
-
-	return 0;
+	return error;
 }
 
 int
@@ -633,10 +621,10 @@ perform_standalone_validation(struct db_table *table)
 	param.db = table;
 	SLIST_INIT(&param.threads);
 
-	error = process_file_or_dir(config_get_tal(), TAL_FILE_EXTENSION, true,
-	    __do_file_validation, &param);
+	/* TODO (fine) Maybe don't use threads if there's only one TAL */
+	error = foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
+	    &param);
 	if (error) {
-		/* End all thread data */
 		while (!SLIST_EMPTY(&param.threads)) {
 			thread = SLIST_FIRST(&param.threads);
 			SLIST_REMOVE_HEAD(&param.threads, next);
@@ -650,13 +638,13 @@ perform_standalone_validation(struct db_table *table)
 		thread = SLIST_FIRST(&param.threads);
 		tmperr = pthread_join(thread->pid, NULL);
 		if (tmperr)
-			pr_crit("pthread_join() threw %d on the '%s' thread.",
-			    tmperr, thread->tal_file);
+			pr_crit("pthread_join() threw %d (%s) on the '%s' thread.",
+			    tmperr, strerror(tmperr), thread->tal_file);
 		SLIST_REMOVE_HEAD(&param.threads, next);
 		if (thread->exit_status) {
 			error = thread->exit_status;
-			pr_op_warn("Validation from TAL '%s' yielded error, discarding any other validation results.",
-			    thread->tal_file);
+			pr_op_warn("Validation from TAL '%s' yielded error %d (%s); discarding all validation results.",
+			    thread->tal_file, error, strerror(abs(error)));
 		}
 		thread_destroy(thread);
 	}

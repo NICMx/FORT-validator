@@ -4,7 +4,7 @@
 #include "types/uri.h"
 
 /* Warms up cache for new validation run */
-int cache_prepare(void);
+int cache_prepare(void); /* No revert needed */
 
 /* Downloads @uri into the cache */
 int cache_download(struct rpki_uri *uri, bool *);
@@ -13,6 +13,6 @@ int cache_download(struct rpki_uri *uri, bool *);
 /* FIXME call this */
 void cache_cleanup(void);
 
-void cache_teardown(void);
+void cache_teardown(void); /* No setup needed */
 
 #endif /* SRC_CACHE_LOCAL_CACHE_H_ */

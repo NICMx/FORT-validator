@@ -11,8 +11,11 @@
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 #include "rtr/pdu_handler.h"
+#include "rtr/pdu_sender.h"
 #include "rtr/pdu_stream.h"
+#include "rtr/db/vrps.h"
 #include "thread/thread_pool.h"
+#include "types/serial.h"
 
 struct rtr_server {
 	int fd;
@@ -678,25 +681,29 @@ void rtr_stop(void)
 	destroy_db();
 }
 
-int
-rtr_foreach_client(rtr_foreach_client_cb cb, void *arg)
+void
+rtr_notify(void)
 {
+	serial_t serial;
 	struct pdu_stream **client;
 	int fd;
-	int error = 0;
+	int error;
+
+	error = get_last_serial_number(&serial);
+	if (error) {
+		pr_op_info("Can't notify RTR clients: %d (%s)", error,
+		    strerror(abs(error)));
+		return;
+	}
 
 	mutex_lock(&lock);
 
 	ARRAYLIST_FOREACH(&clients, client) {
 		fd = pdustream_fd(*client);
-		if (fd != -1) {
-			error = cb(fd, pdustream_version(*client), arg);
-			if (error)
-				break;
-		}
+		if (fd != -1)
+			send_serial_notify_pdu(fd, pdustream_version(*client),
+			    serial);
 	}
 
 	mutex_unlock(&lock);
-
-	return error;
 }

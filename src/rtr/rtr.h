@@ -4,7 +4,6 @@
 int rtr_start(void);
 void rtr_stop(void);
 
-typedef int (*rtr_foreach_client_cb)(int, int, void *);
-int rtr_foreach_client(rtr_foreach_client_cb, void *);
+void rtr_notify(void);
 
 #endif /* RTR_RTR_H_ */

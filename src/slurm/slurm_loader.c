@@ -30,7 +30,7 @@ load_slurm_files(struct slurm_csum_list *csums, struct db_slurm **result)
 	if (error)
 		return error;
 
-	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
+	error = foreach_file(config_get_slurm(), SLURM_FILE_EXTENSION,
 	    false, slurm_parse, db);
 	if (error)
 		goto cancel;
@@ -162,7 +162,7 @@ slurm_load_checksums(struct slurm_csum_list *csums)
 	SLIST_INIT(csums);
 	csums->list_size = 0;
 
-	error = process_file_or_dir(config_get_slurm(), SLURM_FILE_EXTENSION,
+	error = foreach_file(config_get_slurm(), SLURM_FILE_EXTENSION,
 	    false, __slurm_load_checksums, csums);
 	if (error)
 		destroy_local_csum_list(csums);

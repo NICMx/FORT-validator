@@ -21,7 +21,6 @@ fort_SOURCES += json_parser.c json_parser.h
 fort_SOURCES += line_file.h line_file.c
 fort_SOURCES += log.h log.c
 fort_SOURCES += nid.h nid.c
-fort_SOURCES += notify.c notify.h
 fort_SOURCES += output_printer.h output_printer.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
@@ -31,7 +30,6 @@ fort_SOURCES += str_token.h str_token.c
 fort_SOURCES += thread_var.h thread_var.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += validation_handler.h validation_handler.c
-fort_SOURCES += validation_run.h validation_run.c
 
 fort_SOURCES += asn1/content_info.h asn1/content_info.c
 fort_SOURCES += asn1/decode.h asn1/decode.c

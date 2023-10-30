@@ -256,9 +256,11 @@ __compute_deltas(struct db_table *old_base, struct db_table *new_base,
  * - Downloads tree
  * - Validates tree
  * - Updates RTR state
+ *
+ * If the database changed, @changed will be true. Meant for RTR notificates.
  */
 static int
-__vrps_update(bool *notify_clients)
+__vrps_update(bool *changed)
 {
 	/*
 	 * This function is the only writer, and it runs once at a time.
@@ -271,8 +273,8 @@ __vrps_update(bool *notify_clients)
 	struct deltas *new_deltas;
 	int error;
 
-	if (notify_clients)
-		*notify_clients = false;
+	if (changed)
+		*changed = false;
 	old_base = state.base;
 	new_base = NULL;
 
@@ -295,8 +297,7 @@ __vrps_update(bool *notify_clients)
 	 */
 	output_print_data(new_base);
 
-	error = __compute_deltas(old_base, new_base, notify_clients,
-	    &new_deltas);
+	error = __compute_deltas(old_base, new_base, changed, &new_deltas);
 	if (error) {
 		/*
 		 * Deltas are nice-to haves. As long as state.base is correct,
@@ -371,7 +372,7 @@ vrps_update(bool *changed)
 	if (config_get_mode() == SERVER)
 		pr_op_info("- Serial: %u", serial);
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
-		pr_op_info("- Real execution time: %.0lf secs.", difftime(finish, start));
+		pr_op_info("- Real execution time: %.0lfs", difftime(finish, start));
 
 	return error;
 }

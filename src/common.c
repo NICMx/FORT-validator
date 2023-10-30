@@ -91,7 +91,7 @@ rwlock_unlock(pthread_rwlock_t *lock)
 
 static int
 process_file(char const *dir_name, char const *file_name, char const *file_ext,
-    int *fcount, process_file_cb cb, void *arg)
+    int *fcount, foreach_file_cb cb, void *arg)
 {
 	char const *ext;
 	char *fullpath;
@@ -130,7 +130,7 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 
 static int
 process_dir_files(char const *location, char const *file_ext, bool empty_err,
-    process_file_cb cb, void *arg)
+    foreach_file_cb cb, void *arg)
 {
 	DIR *dir_loc;
 	struct dirent *dir_ent;
@@ -172,9 +172,16 @@ end:
 	return error;
 }
 
+/*
+ * If @location points to a file, run @cb on it.
+ * If @location points to a directory, run @cb on every child file suffixed
+ * @file_ext.
+ *
+ * TODO (fine) It's weird that @file_ext only filters in directory mode.
+ */
 int
-process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
-    process_file_cb cb, void *arg)
+foreach_file(char const *location, char const *file_ext, bool empty_err,
+    foreach_file_cb cb, void *arg)
 {
 	struct stat attr;
 	int error;
