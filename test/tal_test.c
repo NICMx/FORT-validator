@@ -13,10 +13,6 @@
 
 /* Mocks */
 
-MOCK_ABORT_VOID(thread_pool_push, struct thread_pool *pool,
-    char const *task_name, thread_pool_task_cb cb, void *arg)
-MOCK_ABORT_VOID(thread_pool_wait, struct thread_pool *pool)
-
 MOCK_ABORT_INT(handle_roa_v4, uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
