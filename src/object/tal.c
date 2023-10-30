@@ -628,7 +628,7 @@ perform_standalone_validation(struct db_table *table)
 {
 	struct tal_param param;
 	struct validation_thread *thread;
-	int error;
+	int error, tmperr;
 
 	param.db = table;
 	SLIST_INIT(&param.threads);
@@ -648,10 +648,10 @@ perform_standalone_validation(struct db_table *table)
 	/* Wait for all */
 	while (!SLIST_EMPTY(&param.threads)) {
 		thread = SLIST_FIRST(&param.threads);
-		error = pthread_join(thread->pid, NULL);
-		if (error)
+		tmperr = pthread_join(thread->pid, NULL);
+		if (tmperr)
 			pr_crit("pthread_join() threw %d on the '%s' thread.",
-			    error, thread->tal_file);
+			    tmperr, thread->tal_file);
 		SLIST_REMOVE_HEAD(&param.threads, next);
 		if (thread->exit_status) {
 			error = thread->exit_status;
