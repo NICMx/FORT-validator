@@ -32,7 +32,4 @@ validation_get_validation_handler(struct validation *);
 
 struct db_rrdp_uri *validation_get_rrdp_uris(struct validation *);
 
-struct rpki_uri *validation_get_notification_uri(struct validation *);
-void validation_set_notification_uri(struct validation *, struct rpki_uri *);
-
 #endif /* SRC_STATE_H_ */

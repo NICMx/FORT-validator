@@ -971,8 +971,7 @@ validate_config(void)
 		return pr_op_err("The TAL(s) location (--tal) is mandatory.");
 
 	/* A file location at --tal isn't valid when --init-tals is set */
-	if (!valid_file_or_dir(rpki_config.tal, !rpki_config.init_tals, true,
-	    pr_op_err))
+	if (!valid_file_or_dir(rpki_config.tal, !rpki_config.init_tals))
 		return pr_op_err("Invalid TAL(s) location.");
 
 	/* Ignore the other checks */
@@ -993,8 +992,7 @@ validate_config(void)
 	    !valid_output_file(rpki_config.output.bgpsec))
 		return pr_op_err("Invalid output.bgpsec file.");
 
-	if (rpki_config.slurm != NULL &&
-	    !valid_file_or_dir(rpki_config.slurm, true, true, pr_op_err))
+	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm, true))
 		return pr_op_err("Invalid slurm location.");
 
 	return 0;

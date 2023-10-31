@@ -1,5 +1,7 @@
 #include "types/uri.h"
 
+#include <errno.h>
+
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
@@ -9,6 +11,8 @@
 #include "thread_var.h"
 #include "config/filename_format.h"
 #include "data_structure/path_builder.h"
+#include "cache/local_cache.h"
+#include "rrdp/rrdp_loader.h"
 
 /**
  * Design notes:
@@ -331,20 +335,15 @@ map_simple(struct rpki_uri *uri, char const *gprefix, int err)
  * "<local-repository>/rrdp/<notification-path>/a.b.c/d/e.cer".
  */
 static int
-map_caged(struct rpki_uri *uri)
+map_caged(struct rpki_uri *uri, struct rpki_uri *notif)
 {
 	struct path_builder pb;
-	struct rpki_uri *notification;
 	int error;
-
-	notification = validation_get_notification_uri(state_retrieve());
-	if (notification == NULL)
-		pr_crit("Programming error: Notification not recorded.");
 
 	error = pb_init_cache(&pb, "rrdp");
 	if (error)
 		return error;
-	error = append_guri(&pb, notification->global, "https://", ENOTHTTPS, true);
+	error = append_guri(&pb, notif->global, "https://", ENOTHTTPS, true);
 	if (error)
 		return error;
 	error = append_guri(&pb, uri->global, "rsync://", ENOTRSYNC, true);
@@ -356,7 +355,7 @@ map_caged(struct rpki_uri *uri)
 }
 
 static int
-autocomplete_local(struct rpki_uri *uri)
+autocomplete_local(struct rpki_uri *uri, struct rpki_uri *notif)
 {
 	switch (uri->type) {
 	case UT_RSYNC:
@@ -364,7 +363,7 @@ autocomplete_local(struct rpki_uri *uri)
 	case UT_HTTPS:
 		return map_simple(uri, "https://", ENOTHTTPS);
 	case UT_CAGED:
-		return map_caged(uri);
+		return map_caged(uri, notif);
 	}
 
 	pr_crit("Unknown URI type: %u", uri->type);
@@ -375,8 +374,8 @@ autocomplete_local(struct rpki_uri *uri)
  * need to be NULL terminated, but I'm not sure.
  */
 int
-__uri_create(struct rpki_uri **result, enum uri_type type, void const *guri,
-    size_t guri_len)
+__uri_create(struct rpki_uri **result, enum uri_type type,
+    struct rpki_uri *notif, void const *guri, size_t guri_len)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -391,7 +390,7 @@ __uri_create(struct rpki_uri **result, enum uri_type type, void const *guri,
 
 	uri->type = type;
 
-	error = autocomplete_local(uri);
+	error = autocomplete_local(uri, notif);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -405,9 +404,10 @@ __uri_create(struct rpki_uri **result, enum uri_type type, void const *guri,
 }
 
 int
-uri_create(struct rpki_uri **result, enum uri_type type, char const *guri)
+uri_create(struct rpki_uri **result, enum uri_type type, struct rpki_uri *notif,
+    char const *guri)
 {
-	return __uri_create(result, type, guri, strlen(guri));
+	return __uri_create(result, type, notif, guri, strlen(guri));
 }
 
 /*
@@ -415,7 +415,8 @@ uri_create(struct rpki_uri **result, enum uri_type type, char const *guri)
  * names. This function will infer the rest of the URL.
  */
 int
-uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
+uri_create_mft(struct rpki_uri **result, struct rpki_uri *notif,
+    struct rpki_uri *mft, IA5String_t *ia5)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -428,11 +429,9 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5)
 		return error;
 	}
 
-	uri->type = (validation_get_notification_uri(state_retrieve()) == NULL)
-	    ? UT_RSYNC
-	    : UT_CAGED;
+	uri->type = (notif == NULL) ? UT_RSYNC : UT_CAGED;
 
-	error = autocomplete_local(uri);
+	error = autocomplete_local(uri, notif);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -455,6 +454,9 @@ uri_refget(struct rpki_uri *uri)
 void
 uri_refput(struct rpki_uri *uri)
 {
+	if (uri == NULL)
+		return;
+
 	uri->references--;
 	if (uri->references == 0) {
 		free(uri->global);
@@ -565,4 +567,96 @@ uri_op_get_printable(struct rpki_uri *uri)
 
 	format = config_get_op_log_filename_format();
 	return uri_get_printable(uri, format);
+}
+
+DEFINE_ARRAY_LIST_FUNCTIONS(uri_list, struct rpki_uri *, static)
+
+void
+uris_init(struct uri_list *uris)
+{
+	uri_list_init(uris);
+}
+
+static void
+__uri_refput(struct rpki_uri **uri)
+{
+	uri_refput(*uri);
+}
+
+void
+uris_cleanup(struct uri_list *uris)
+{
+	uri_list_cleanup(uris, __uri_refput);
+}
+
+/* Swallows @uri. */
+void
+uris_add(struct uri_list *uris, struct rpki_uri *uri)
+{
+	uri_list_add(uris, &uri);
+}
+
+static int
+download(struct rpki_uri *uri, bool use_rrdp)
+{
+	return (use_rrdp && (uri_get_type(uri) == UT_HTTPS))
+	    ? rrdp_update(uri)
+	    : cache_download(uri, NULL);
+}
+
+static struct rpki_uri *
+download_uris(struct uri_list *uris, enum uri_type type, bool use_rrdp)
+{
+	struct rpki_uri **cursor, *uri;
+	ARRAYLIST_FOREACH(uris, cursor) {
+		uri = *cursor;
+		if (uri_get_type(uri) == type && download(uri, use_rrdp) == 0)
+			return uri;
+	}
+	return NULL;
+}
+
+/**
+ * Assumes all the URIs are URLs, and represent different ways to access the
+ * same content.
+ *
+ * Sequentially (in the order dictated by their priorities) attempts to update
+ * (in the cache) the content pointed by each URL.
+ * Stops on the first success, returning the corresponding URI.
+ *
+ * If there's no successful update, attempts to find one that's already cached.
+ * Returns the newest successfully cached URI.
+ *
+ * Does not grab any references.
+ */
+struct rpki_uri *
+uris_download(struct uri_list *uris, bool use_rrdp)
+{
+	struct rpki_uri **cursor, *uri;
+
+	if (config_get_http_priority() > config_get_rsync_priority()) {
+		uri = download_uris(uris, UT_HTTPS, use_rrdp);
+		if (uri != NULL)
+			return uri;
+		uri = download_uris(uris, UT_RSYNC, use_rrdp);
+		if (uri != NULL)
+			return uri;
+
+	} else if (config_get_http_priority() < config_get_rsync_priority()) {
+		uri = download_uris(uris, UT_RSYNC, use_rrdp);
+		if (uri != NULL)
+			return uri;
+		uri = download_uris(uris, UT_HTTPS, use_rrdp);
+		if (uri != NULL)
+			return uri;
+
+	} else {
+		ARRAYLIST_FOREACH(uris, cursor) {
+			uri = *cursor;
+			if (download(uri, use_rrdp) == 0)
+				return uri;
+		}
+	}
+
+	return cache_recover(uris, use_rrdp);
 }

@@ -28,6 +28,11 @@ MOCK_ABORT_VOID(fnstack_init, void)
 MOCK_ABORT_VOID(fnstack_cleanup, void)
 MOCK_ABORT_VOID(fnstack_push, char const *f)
 
+MOCK_ABORT_INT(cache_download, struct rpki_uri *uri, bool *changed)
+MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
+MOCK_ABORT_PTR(cache_recover, rpki_uri, struct uri_list *uris,
+    bool use_rrdp)
+
 /* Tests */
 
 START_TEST(tal_load_normal)
@@ -67,7 +72,7 @@ START_TEST(tal_load_normal)
 
 	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
 
-	ck_assert_uint_eq(tal->uris.count, 3);
+	ck_assert_uint_eq(tal->uris.len, 3);
 	ck_assert_str_eq(tal->uris.array[0]->global,
 	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
 	ck_assert_str_eq(tal->uris.array[1]->global, "https://potato");

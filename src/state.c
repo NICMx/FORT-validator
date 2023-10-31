@@ -37,9 +37,6 @@ struct validation {
 	char addr_buffer2[INET6_ADDRSTRLEN];
 
 	struct validation_handler validation_handler;
-
-	/* URL of the Notification file currently being traversed. */
-	struct rpki_uri *notification_uri;
 };
 
 /*
@@ -118,7 +115,6 @@ validation_prepare(struct validation **out, struct tal *tal,
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
 	result->x509_data.params = params; /* Ownership transfered */
-	result->notification_uri = NULL;
 
 	*out = result;
 	return 0;
@@ -191,20 +187,4 @@ struct validation_handler const *
 validation_get_validation_handler(struct validation *state)
 {
 	return &state->validation_handler;
-}
-
-struct rpki_uri *
-validation_get_notification_uri(struct validation *state)
-{
-	return state->notification_uri;
-}
-
-void
-validation_set_notification_uri(struct validation *state, struct rpki_uri *uri)
-{
-	if (state->notification_uri != NULL)
-		uri_refput(state->notification_uri);
-	state->notification_uri = uri;
-	if (uri != NULL)
-		uri_refget(uri);
 }

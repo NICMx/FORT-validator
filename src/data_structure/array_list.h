@@ -59,10 +59,6 @@
 		list->array[list->len - 1] = *elem;			\
 	}
 
-#define ARRAY_LIST(name, elem_type)					\
-	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
-	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, )
-
 #define STATIC_ARRAY_LIST(name, elem_type)				\
 	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
 	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, static)

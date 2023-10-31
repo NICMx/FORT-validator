@@ -201,32 +201,24 @@ foreach_file(char const *location, char const *file_ext, bool empty_err,
 }
 
 bool
-valid_file_or_dir(char const *location, bool check_file, bool check_dir,
-    int (*error_fn)(const char *format, ...))
+valid_file_or_dir(char const *location, bool check_file)
 {
 	struct stat attr;
 	bool is_file, is_dir;
 	bool result;
 
-	if (!check_file && !check_dir)
-		pr_crit("Wrong usage, at least one check must be 'true'.");
-
 	if (stat(location, &attr) == -1) {
-		if (error_fn != NULL) {
-			error_fn("stat(%s) failed: %s", location,
-			    strerror(errno));
-		}
+		pr_op_err("stat(%s) failed: %s", location, strerror(errno));
 		return false;
 	}
 
 	is_file = check_file && S_ISREG(attr.st_mode);
-	is_dir = check_dir && S_ISDIR(attr.st_mode);
+	is_dir = S_ISDIR(attr.st_mode);
 
 	result = is_file || is_dir;
 	if (!result)
 		pr_op_err("'%s' does not seem to be a %s", location,
-		    (check_file && check_dir) ? "file or directory" :
-		    (check_file) ? "file" : "directory");
+		    check_file ? "file or directory" : "directory");
 
 	return result;
 }

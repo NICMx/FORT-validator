@@ -444,13 +444,13 @@ cache_download(struct rpki_uri *uri, bool *changed)
 				token = strtok_r(NULL, "/", &saveptr);
 			} while (token != NULL);
 			goto download;
+		}
 
-		} else if (recursive) {
+		if (recursive) {
 			if (was_recently_downloaded(child) && !child->error) {
 				error = 0;
 				goto end;
 			}
-
 		}
 
 		node = child;
@@ -492,6 +492,144 @@ download:
 end:
 	free(luri);
 	return error;
+}
+
+static struct cache_node *
+find_uri(struct rpki_uri *uri)
+{
+	char *luri, *token, *saveptr;
+	struct cache_node *parent, *node;
+	bool recursive;
+	struct cache_node *result;
+
+	luri = uri2luri(uri);
+	token = strtok_r(luri, "/", &saveptr);
+	node = NULL;
+	result = NULL;
+
+	switch (uri_get_type(uri)) {
+	case UT_RSYNC:
+		parent = rsync;
+		recursive = true;
+		break;
+	case UT_HTTPS:
+		parent = https;
+		recursive = false;
+		break;
+	default:
+		pr_crit("Unexpected URI type: %d", uri_get_type(uri));
+	}
+
+	if (parent == NULL)
+		goto end;
+
+	while ((token = strtok_r(NULL, "/", &saveptr)) != NULL) {
+		HASH_FIND_STR(parent->children, token, node);
+		if (node == NULL)
+			goto end;
+		if (recursive && (node->flags & CNF_DIRECT))
+			result = node;
+		parent = node;
+	}
+
+	if ((node != NULL) && (node->flags & CNF_DIRECT))
+		result = node;
+
+end:
+	free(luri);
+	return result;
+}
+
+static unsigned int
+get_score(struct cache_node *node)
+{
+	unsigned int score;
+
+	/*
+	 * Highest to lowest priority:
+	 *
+	 * 1. Recent Success: !error, CNF_SUCCESS, high ts_success.
+	 * 2. Old Success: !error, CNF_SUCCESS, low ts_success.
+	 * 3. Previous Recent Success: error, CNF_SUCCESS, high ts_success.
+	 * 4. Previous Old Success: error, CNF_SUCCESS, old ts_success.
+	 * 5. No Success: error, !CNF_SUCCESS (completely unviable)
+	 */
+
+	if (node == NULL)
+		return 0;
+
+	score = 0;
+	if (!node->error)
+		score |= (1 << 1);
+	if (node->flags & CNF_SUCCESS)
+		score |= (1 << 0);
+	return score;
+}
+
+/*
+ * Returns true if @n1's success happened earlier than n2's.
+ */
+static bool
+earlier_success(struct cache_node *n1, struct cache_node *n2)
+{
+	return difftime(n1->ts_success, n2->ts_success) < 0;
+}
+
+struct rpki_uri *
+cache_recover(struct uri_list *uris, bool use_rrdp)
+{
+	struct scr {
+		struct rpki_uri *uri;
+		struct cache_node *node;
+		unsigned int score;
+	};
+
+	struct rpki_uri **uri;
+	struct scr cursor;
+	struct scr best = { 0 };
+
+	ARRAYLIST_FOREACH(uris, uri) {
+		cursor.uri = *uri;
+		cursor.node = find_uri(cursor.uri);
+		cursor.score = get_score(cursor.node);
+		if (cursor.score == 0)
+			continue;
+		if (cursor.score > best.score)
+			best = cursor;
+		else if (cursor.score == best.score
+		      && earlier_success(best.node, cursor.node))
+			best = cursor;
+	}
+
+	return best.uri;
+}
+
+static void
+__cache_print(struct cache_node *node, unsigned int tabs)
+{
+	unsigned int i;
+	struct cache_node *child, *tmp;
+
+	if (node == NULL)
+		return;
+
+	for (i = 0; i < tabs; i++)
+		printf("\t");
+	printf("%s: %sdirect %ssuccess %sfile error:%d\n",
+	    node->basename,
+	    (node->flags & CNF_DIRECT) ? "" : "!",
+	    (node->flags & CNF_SUCCESS) ? "" : "!",
+	    (node->flags & CNF_FILE) ? "" : "!",
+	    node->error);
+	HASH_ITER(hh, node->children, child, tmp)
+		__cache_print(child, tabs + 1);
+}
+
+void
+cache_print(void)
+{
+	__cache_print(rsync, 0);
+	__cache_print(https, 0);
 }
 
 /*

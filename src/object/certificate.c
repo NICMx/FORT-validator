@@ -49,10 +49,8 @@ struct ski_arguments {
 	OCTET_STRING_t *sid;
 };
 
-STATIC_ARRAY_LIST(sia_rpp_uris, struct rpki_uri *)
-
 struct sia_uris {
-	struct sia_rpp_uris rpp;
+	struct uri_list rpp;
 	struct rpki_uri *mft;
 };
 
@@ -115,20 +113,14 @@ static const struct ad_metadata RPKI_MANIFEST = {
 static void
 sia_uris_init(struct sia_uris *uris)
 {
-	sia_rpp_uris_init(&uris->rpp);
+	uris_init(&uris->rpp);
 	uris->mft = NULL;
-}
-
-static void
-cleanup_uri(struct rpki_uri **uri)
-{
-	uri_refput(*uri);
 }
 
 static void
 sia_uris_cleanup(struct sia_uris *uris)
 {
-	sia_rpp_uris_cleanup(&uris->rpp, cleanup_uri);
+	uris_cleanup(&uris->rpp);
 	uri_refput(uris->mft);
 }
 
@@ -1214,7 +1206,7 @@ handle_caRepository(struct rpki_uri *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
 	pr_val_debug("caRepository: %s", uri_val_get_printable(uri));
-	sia_rpp_uris_add(&uris->rpp, &uri);
+	uris_add(&uris->rpp, uri);
 	uri_refget(uri);
 	return 0;
 }
@@ -1224,7 +1216,7 @@ handle_rpkiNotify(struct rpki_uri *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
 	pr_val_debug("rpkiNotify: %s", uri_val_get_printable(uri));
-	sia_rpp_uris_add(&uris->rpp, &uri);
+	uris_add(&uris->rpp, uri);
 	uri_refget(uri);
 	return 0;
 }
@@ -1531,7 +1523,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	return __uri_create(uri, type,
+	return __uri_create(uri, type, NULL,
 	    ASN1_STRING_get0_data(asn1_string),
 	    ASN1_STRING_length(asn1_string));
 }
@@ -1927,63 +1919,15 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 	return 0;
 }
 
-static bool
-try_uris(struct sia_uris *uris, enum uri_type const *filter)
-{
-	struct rpki_uri **node, *uri;
-	enum uri_type type;
-
-	ARRAYLIST_FOREACH(&uris->rpp, node) {
-		uri = *node;
-		type = uri_get_type(uri);
-
-		if (filter != NULL && (*filter) != type)
-			continue;
-
-		switch (type) {
-		case UT_RSYNC:
-			if (cache_download(uri, NULL) == 0)
-				return true;
-			break;
-		case UT_HTTPS:
-			if (rrdp_update(uri) == 0)
-				return true;
-			break;
-		default:
-			pr_crit("Unknown URI type: %u", type);
-		}
-	}
-
-	return false;
-}
-
-static int
+static struct rpki_uri *
 download_rpp(struct sia_uris *uris)
 {
-	static const enum uri_type HTTP = UT_HTTPS;
-	static const enum uri_type RSYNC = UT_RSYNC;
-
-	if (uris->rpp.len == 0)
-		return pr_val_err("SIA lacks both caRepository and rpkiNotify.");
-
-	if (config_get_http_priority() > config_get_rsync_priority()) {
-		if (try_uris(uris, &HTTP))
-			return 0;
-		if (try_uris(uris, &RSYNC))
-			return 0;
-
-	} else if (config_get_http_priority() < config_get_rsync_priority()) {
-		if (try_uris(uris, &RSYNC))
-			return 0;
-		if (try_uris(uris, &HTTP))
-			return 0;
-
-	} else {
-		if (try_uris(uris, NULL))
-			return 0;
+	if (uris->rpp.len == 0) {
+		pr_val_err("SIA lacks both caRepository and rpkiNotify.");
+		return NULL;
 	}
 
-	return pr_val_err("The RPP could not be downloaded.");
+	return uris_download(&uris->rpp, true);
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */
@@ -1995,6 +1939,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	STACK_OF(X509_CRL) *rpp_parent_crl;
 	X509 *cert;
 	struct sia_uris sia_uris;
+	struct rpki_uri *downloaded;
 	enum rpki_policy policy;
 	enum cert_type certype;
 	struct rpp *pp;
@@ -2061,17 +2006,21 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	if (error)
 		goto revert_uris;
 
-	error = download_rpp(&sia_uris);
-	if (error)
+	downloaded = download_rpp(&sia_uris);
+	if (downloaded == NULL) {
+		error = EINVAL;
 		goto revert_uris;
+	}
 
-	error = x509stack_push(validation_certstack(state), cert_uri,
-		    cert, policy, certype);
+	error = x509stack_push(validation_certstack(state), cert_uri, cert,
+	    policy, certype);
 	if (error)
 		goto revert_uris;
 	cert = NULL; /* Ownership stolen */
 
-	error = handle_manifest(sia_uris.mft, &pp);
+	error = handle_manifest(sia_uris.mft,
+	    (uri_get_type(downloaded) == UT_HTTPS) ? downloaded : NULL,
+	    &pp);
 	if (error) {
 		x509stack_cancel(validation_certstack(state));
 		goto revert_uris;
@@ -2082,7 +2031,6 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	rpp_refput(pp);
 
 revert_uris:
-	validation_set_notification_uri(state, NULL);
 	sia_uris_cleanup(&sia_uris);
 revert_cert:
 	if (cert != NULL)

@@ -250,9 +250,9 @@ handle_http_response_code(long http_code)
 {
 	/* This is the same logic from CURL, according to its documentation. */
 	if (http_code == 408 || http_code == 429)
-		return EREQFAILED; /* Retry */
+		return EAGAIN; /* Retry */
 	if (500 <= http_code && http_code < 600)
-		return EREQFAILED; /* Retry */
+		return EAGAIN; /* Retry */
 	return -EINVAL; /* Do not retry */
 }
 
@@ -309,7 +309,7 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 		case CURLE_COULDNT_RESOLVE_HOST:
 		case CURLE_COULDNT_RESOLVE_PROXY:
 		case CURLE_FTP_ACCEPT_TIMEOUT:
-			error = EREQFAILED; /* Retry */
+			error = EAGAIN; /* Retry */
 			goto end;
 		default:
 			error = handle_http_response_code(http_code);
@@ -371,7 +371,7 @@ do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
 			pr_val_debug("Download successful.");
 			return 0; /* Happy path */
 
-		case EREQFAILED:
+		case EAGAIN:
 			break;
 
 		default:
@@ -381,7 +381,7 @@ do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
 
 		if (r >= config_get_http_retry_count()) {
 			pr_val_debug("Download failed: Retries exhausted.");
-			return -EREQFAILED;
+			return EIO;
 		}
 
 		pr_val_warn("Download failed; retrying in %u seconds.",

@@ -353,7 +353,7 @@ rsync_download(struct rpki_uri *uri)
 				if (retries > 0)
 					pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 					    retries, uri_get_global(uri));
-				error = EREQFAILED;
+				error = EIO;
 				goto release_args;
 			}
 			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",

@@ -34,7 +34,7 @@ get_metadata(struct rpki_uri *uri, struct notification_metadata *result)
 
 	*result = notification.meta;
 	memset(&notification.meta, 0, sizeof(notification.meta));
-	update_notification_destroy(&notification);
+	update_notification_cleanup(&notification);
 	return 0;
 }
 
@@ -54,16 +54,6 @@ rrdp_update(struct rpki_uri *uri)
 	struct update_notification new;
 	bool changed;
 	int error;
-
-	if (uri == NULL || !uri_is_https(uri))
-		pr_crit("Wrong call, trying to parse a non HTTPS URI");
-
-	/*
-	 * TODO (fine) this is dirty and error prone.
-	 * Find a better way to deliver the notification URI to the RRDP objects
-	 * and manifest.
-	 */
-	validation_set_notification_uri(state_retrieve(), uri);
 
 	fnstack_push_uri(uri);
 	pr_val_debug("Processing notification.");
@@ -108,7 +98,7 @@ rrdp_update(struct rpki_uri *uri)
 	pr_val_debug("The Notification changed, but the session ID and serial didn't.");
 
 revert_notification:
-	update_notification_destroy(&new);
+	update_notification_cleanup(&new);
 
 end:	notification_metadata_cleanup(&old);
 	fnstack_pop();

@@ -21,6 +21,7 @@ len: length
 max: maximum
 min: minimum
 msg: message
+notif: Notification
 pdu: Protocol Data Unit (RFC 6810)
 pp: Publication Point
 pr: print

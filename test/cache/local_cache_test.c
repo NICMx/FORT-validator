@@ -63,6 +63,8 @@ http_download(struct rpki_uri *uri, bool *changed)
 	return error;
 }
 
+MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
+
 /* Helpers */
 
 static const int SUCCESS = CNF_DIRECT | CNF_SUCCESS;
@@ -90,7 +92,7 @@ __download(char const *url, enum uri_type uritype, int expected_error,
 {
 	struct rpki_uri *uri;
 
-	ck_assert_int_eq(0, uri_create(&uri, uritype, url));
+	ck_assert_int_eq(0, uri_create(&uri, uritype, NULL, url));
 	dl_count = 0;
 
 	ck_assert_int_eq(expected_error, cache_download(uri, NULL));
@@ -1167,6 +1169,177 @@ START_TEST(test_ctt_traversal)
 }
 END_TEST
 
+static void
+prepare_uri_list(struct uri_list *uris, ...)
+{
+	char const *str;
+	enum uri_type type;
+	struct rpki_uri *uri;
+	va_list args;
+
+	uris_init(uris);
+
+	va_start(args, uris);
+	while ((str = va_arg(args, char const *)) != NULL) {
+		if (str_starts_with(str, "https://"))
+			type = UT_HTTPS;
+		else if (str_starts_with(str, "rsync://"))
+			type = UT_RSYNC;
+		else
+			ck_abort_msg("Bad protocol: %s", str);
+		ck_assert_int_eq(0, uri_create(&uri, type, NULL, str));
+		uris_add(uris, uri);
+	}
+	va_end(args);
+}
+
+#define PREPARE_URI_LIST(uris, ...) prepare_uri_list(uris, ##__VA_ARGS__, NULL)
+
+START_TEST(test_recover)
+{
+	struct uri_list uris;
+
+	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	dl_error = false;
+
+	/* Query on empty database */
+	PREPARE_URI_LIST(&uris, "rsync://a.b.c/d", "https://a.b.c/d");
+	ck_assert_ptr_null(cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	/* Only first URI is cached */
+	ck_assert_int_eq(0, cache_prepare());
+	download_rsync("rsync://a/b/c", 0, 1);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	cache_teardown();
+
+	/* Only second URI is cached */
+	ck_assert_int_eq(0, cache_prepare());
+	download_https("https://d/e", 0, 1);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	cache_teardown();
+
+	/* Only third URI is cached */
+	ck_assert_int_eq(0, cache_prepare());
+	download_https("https://f", 0, 1);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_eq(uris.array[2], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	cache_teardown();
+
+	/* None was cached */
+	ck_assert_int_eq(0, cache_prepare());
+	download_rsync("rsync://d/e", 0, 1);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_null(cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	cache_teardown();
+
+	/*
+	 * At present, cache_recover() can only be called after all of a
+	 * download's URLs yielded failure.
+	 * However, node.error can still be zero. This happens when the download
+	 * was successful, but the RRDP code wasn't able to expand the snapshot
+	 * or deltas.
+	 */
+	rsync = NODE("rsync", 0, 0,
+		NODE("a", 0, 0,
+			TNODE("1", CNF_DIRECT | CNF_SUCCESS, 100, 100, 0),
+			TNODE("2", CNF_DIRECT | CNF_SUCCESS, 100, 100, 1),
+			TNODE("3", CNF_DIRECT | CNF_SUCCESS, 100, 200, 0),
+			TNODE("4", CNF_DIRECT | CNF_SUCCESS, 100, 200, 1),
+			TNODE("5", CNF_DIRECT | CNF_SUCCESS, 200, 100, 0),
+			TNODE("6", CNF_DIRECT | CNF_SUCCESS, 200, 100, 1)),
+		NODE("b", 0, 0,
+			TNODE("1", CNF_DIRECT, 100, 100, 0),
+			TNODE("2", CNF_DIRECT, 100, 100, 1),
+			TNODE("3", CNF_DIRECT, 100, 200, 0),
+			TNODE("4", CNF_DIRECT, 100, 200, 1),
+			TNODE("5", CNF_DIRECT, 200, 100, 0),
+			TNODE("6", CNF_DIRECT, 200, 100, 1)),
+		TNODE("c", CNF_DIRECT | CNF_SUCCESS, 300, 300, 0,
+			TNODE("1", 0, 0, 0, 0)),
+		TNODE("d", CNF_DIRECT | CNF_SUCCESS, 50, 50, 0,
+			TNODE("1", 0, 0, 0, 0)));
+
+	/* Multiple successful caches: Prioritize the most recent one */
+	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://a/3", "rsync://a/5");
+	ck_assert_ptr_eq(uris.array[2], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://a/1", "rsync://a/3");
+	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	/* No successful caches: No viable candidates */
+	PREPARE_URI_LIST(&uris, "rsync://b/2", "rsync://b/4", "rsync://b/6");
+	ck_assert_ptr_null(cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	/* Status: CNF_SUCCESS is better than 0. */
+	PREPARE_URI_LIST(&uris, "rsync://b/1", "rsync://a/1");
+	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	/*
+	 * If CNF_SUCCESS && error, Fort will probably run into a problem
+	 * reading the cached directory, because it's either outdated or
+	 * recently corrupted.
+	 * But it should still TRY to read it, as there's a chance the
+	 * outdatedness is not that severe.
+	 */
+	PREPARE_URI_LIST(&uris, "rsync://a/2", "rsync://b/2");
+	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	/* Parents of downloaded nodes */
+	PREPARE_URI_LIST(&uris, "rsync://a", "rsync://b");
+	ck_assert_ptr_null(cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	/* Children of downloaded nodes */
+	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://c/1");
+	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://c/2");
+	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://d/1");
+	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://d/2");
+	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	/* Try them all at the same time */
+	PREPARE_URI_LIST(&uris,
+	    "rsync://a", "rsync://a/1", "rsync://a/2", "rsync://a/3",
+	    "rsync://a/4", "rsync://a/5", "rsync://a/6",
+	    "rsync://b", "rsync://b/1", "rsync://b/2", "rsync://b/3",
+	    "rsync://b/4", "rsync://b/5", "rsync://b/6",
+	    "rsync://c/2", "rsync://d/1", "rsync://e/1");
+	ck_assert_ptr_eq(uris.array[14], cache_recover(&uris, false));
+	uris_cleanup(&uris);
+
+	cache_teardown();
+}
+END_TEST
+
 /* Boilerplate */
 
 Suite *thread_pool_suite(void)
@@ -1194,6 +1367,9 @@ Suite *thread_pool_suite(void)
 
 	ctt = tcase_create("ctt");
 	tcase_add_test(ctt, test_ctt_traversal);
+
+	ctt = tcase_create("recover");
+	tcase_add_test(ctt, test_recover);
 
 	suite = suite_create("local-cache");
 	suite_add_tcase(suite, rsync);

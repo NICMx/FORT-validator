@@ -11,7 +11,7 @@ struct notification_metadata {
 
 /* Specific RRDP files data, in some cases the hash can be omitted */
 struct file_metadata {
-	char *uri;
+	struct rpki_uri *uri;
 	unsigned char *hash;
 	size_t hash_len;
 };
@@ -73,7 +73,7 @@ void metadata_init(struct file_metadata *);
 void metadata_cleanup(struct file_metadata *);
 
 void update_notification_init(struct update_notification *, struct rpki_uri *);
-void update_notification_destroy(struct update_notification *);
+void update_notification_cleanup(struct update_notification *);
 
 typedef int (*delta_head_cb)(struct delta_head *, void *);
 int deltas_head_for_each(struct deltas_head *, unsigned long, unsigned long,
@@ -86,10 +86,10 @@ void snapshot_destroy(struct snapshot *);
 struct delta *delta_create(void);
 void delta_destroy(struct delta *);
 
-struct publish *publish_create(void);
-void publish_destroy(struct publish *);
+void publish_init(struct publish *);
+void publish_cleanup(struct publish *);
 
-struct withdraw *withdraw_create(void);
-void withdraw_destroy(struct withdraw *);
+void withdraw_init(struct withdraw *);
+void withdraw_cleanup(struct withdraw *);
 
 #endif /* SRC_RRDP_RRDP_OBJECTS_H_ */

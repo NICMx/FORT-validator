@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "asn1/asn1c/IA5String.h"
+#include "data_structure/array_list.h"
 
 enum uri_type {
 	/* rsync URL */
@@ -18,9 +19,12 @@ enum uri_type {
 
 struct rpki_uri;
 
-int __uri_create(struct rpki_uri **, enum uri_type, void const *, size_t);
-int uri_create(struct rpki_uri **, enum uri_type, char const *);
-int uri_create_mft(struct rpki_uri **, struct rpki_uri *, IA5String_t *);
+int __uri_create(struct rpki_uri **, enum uri_type, struct rpki_uri *,
+    void const *, size_t);
+int uri_create(struct rpki_uri **, enum uri_type, struct rpki_uri *,
+    char const *);
+int uri_create_mft(struct rpki_uri **, struct rpki_uri *, struct rpki_uri *,
+    IA5String_t *);
 
 struct rpki_uri *uri_refget(struct rpki_uri *);
 void uri_refput(struct rpki_uri *);
@@ -43,5 +47,15 @@ bool uri_is_https(struct rpki_uri *);
 
 char const *uri_val_get_printable(struct rpki_uri *);
 char const *uri_op_get_printable(struct rpki_uri *);
+
+/* Plural */
+
+DEFINE_ARRAY_LIST_STRUCT(uri_list, struct rpki_uri *);
+
+void uris_init(struct uri_list *);
+void uris_cleanup(struct uri_list *);
+
+void uris_add(struct uri_list *, struct rpki_uri *);
+struct rpki_uri *uris_download(struct uri_list *, bool);
 
 #endif /* SRC_TYPES_URI_H_ */

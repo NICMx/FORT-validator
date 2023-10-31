@@ -20,31 +20,17 @@
 
 typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
 
-struct uris {
-	struct rpki_uri **array; /* This is an array of rpki URIs. */
-	unsigned int count;
-	unsigned int size;
-};
-
 struct tal {
 	char const *file_name;
-	struct uris uris;
+	struct uri_list uris;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
 };
 
 struct validation_thread {
 	pthread_t pid;
-
 	/* TAL file name */
 	char *tal_file;
-	/*
-	 * Try to use the TA from the local cache? Only if none of the URIs
-	 * was sync'd.
-	 */
-	bool retry_local;
-	/* Try to sync the current TA URI? */
-	bool sync_files;
 	struct db_table *db;
 	int exit_status;
 	/* This should also only be manipulated by the parent thread. */
@@ -59,50 +45,27 @@ struct tal_param {
 	struct threads_list threads;
 };
 
-static void
-uris_init(struct uris *uris)
-{
-	uris->count = 0;
-	uris->size = 4; /* Most TALs only define one. */
-	uris->array = pmalloc(uris->size * sizeof(struct rpki_uri *));
-}
-
-static void
-uris_destroy(struct uris *uris)
-{
-	unsigned int i;
-	for (i = 0; i < uris->count; i++)
-		uri_refput(uris->array[i]);
-	free(uris->array);
-}
-
 static int
-uris_add(struct uris *uris, char *uri)
+add_uri(struct uri_list *uris, char *uri)
 {
 	struct rpki_uri *new;
 	int error;
 
 	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, UT_RSYNC, uri);
+		error = uri_create(&new, UT_RSYNC, NULL, uri);
 	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, UT_HTTPS, uri);
+		error = uri_create(&new, UT_HTTPS, NULL, uri);
 	else
 		error = pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
 	if (error)
 		return error;
 
-	if (uris->count + 1 >= uris->size) {
-		uris->size *= 2;
-		uris->array = realloc(uris->array,
-		    uris->size * sizeof(struct rpki_uri *));
-	}
-
-	uris->array[uris->count++] = new;
+	uris_add(uris, new);
 	return 0;
 }
 
 static int
-read_uris(struct line_file *lfile, struct uris *uris)
+read_uris(struct line_file *lfile, struct uri_list *uris)
 {
 	char *uri;
 	int error;
@@ -136,7 +99,7 @@ read_uris(struct line_file *lfile, struct uris *uris)
 	}
 
 	do {
-		error = uris_add(uris, uri);
+		error = add_uri(uris, uri);
 		free(uri); /* Won't be needed anymore */
 		if (error)
 			return error;
@@ -335,7 +298,7 @@ tal_load(char const *file_name, struct tal **result)
 	return 0;
 
 fail:
-	uris_destroy(&tal->uris);
+	uris_cleanup(&tal->uris);
 	free(tal);
 	lfile_close(lfile);
 	return error;
@@ -347,54 +310,9 @@ tal_destroy(struct tal *tal)
 	if (tal == NULL)
 		return;
 
-	uris_destroy(&tal->uris);
+	uris_cleanup(&tal->uris);
 	free(tal->spki);
 	free(tal);
-}
-
-static int
-foreach(enum uri_type const *filter, struct tal *tal,
-    foreach_uri_cb cb, void *arg)
-{
-	struct rpki_uri *uri;
-	unsigned int i;
-	int error;
-
-	for (i = 0; i < tal->uris.count; i++) {
-		uri = tal->uris.array[i];
-		if (filter == NULL || (*filter) == uri_get_type(uri)) {
-			error = cb(tal, uri, arg);
-			if (error)
-				return error;
-		}
-	}
-
-	return 0;
-}
-
-static int
-foreach_uri(struct tal *tal, foreach_uri_cb cb, void *arg)
-{
-	static const enum uri_type HTTP = UT_HTTPS;
-	static const enum uri_type RSYNC = UT_RSYNC;
-	int error;
-
-	if (config_get_http_priority() > config_get_rsync_priority()) {
-		error = foreach(&HTTP, tal, cb, arg);
-		if (!error)
-			error = foreach(&RSYNC, tal, cb, arg);
-
-	} else if (config_get_http_priority() < config_get_rsync_priority()) {
-		error = foreach(&RSYNC, tal, cb, arg);
-		if (!error)
-			error = foreach(&HTTP, tal, cb, arg);
-
-	} else {
-		error = foreach(NULL, tal, cb, arg);
-
-	}
-
-	return error;
 }
 
 char const *
@@ -415,7 +333,7 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
  * have been extracted from a TAL.
  */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
+handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 {
 	/*
 	 * Because of the way the foreach iterates, this function must return
@@ -432,45 +350,21 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, void *arg)
 	 */
 
 	struct validation_handler validation_handler;
-	struct validation_thread *thread;
 	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
 	int error;
 
-	thread = arg;
+	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
 
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
-	validation_handler.arg = thread->db;
+	validation_handler.arg = db;
 
 	error = validation_prepare(&state, tal, &validation_handler);
 	if (error)
 		return ENSURE_NEGATIVE(error);
-
-	if (thread->sync_files) {
-		error = cache_download(uri, NULL);
-		/* Reminder: there's a positive error: EREQFAILED */
-		if (error) {
-			validation_destroy(state);
-			return pr_val_warn(
-			    "TAL URI '%s' could not be downloaded.",
-			    uri_val_get_printable(uri));
-		}
-	} else {
-		/* Look for local files */
-		if (!valid_file_or_dir(uri_get_local(uri), true, false,
-		    pr_val_err)) {
-			validation_destroy(state);
-			return 0; /* Error already logged */
-		}
-	}
-
-	/* At least one URI was sync'd */
-	thread->retry_local = false;
-
-	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
 
 	if (!uri_is_certificate(uri)) {
 		error = pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
@@ -535,6 +429,7 @@ do_file_validation(void *arg)
 {
 	struct validation_thread *thread = arg;
 	struct tal *tal;
+	struct rpki_uri *ta_uri;
 	int error;
 
 	fnstack_init();
@@ -544,29 +439,14 @@ do_file_validation(void *arg)
 	if (error)
 		goto end;
 
-	error = foreach_uri(tal, handle_tal_uri, thread);
-	if (error > 0) {
-		error = 0;
-		goto destroy_tal;
-	} else if (error < 0) {
-		goto destroy_tal;
-	}
-
-	if (!thread->retry_local) {
+	ta_uri = uris_download(&tal->uris, false);
+	if (ta_uri == NULL) {
 		error = pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);
 		goto destroy_tal;
 	}
 
-	thread->sync_files = false;
-	pr_val_warn("Looking for the TA certificate at the local files.");
-
-	error = foreach_uri(tal, handle_tal_uri, thread);
-	if (error > 0)
-		error = 0;
-	else if (error == 0)
-		error = pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
-		    thread->tal_file);
+	error = handle_tal_uri(tal, ta_uri, thread->db);
 
 destroy_tal:
 	tal_destroy(tal);
@@ -594,8 +474,6 @@ spawn_tal_thread(char const *tal_file, void *arg)
 	thread = pmalloc(sizeof(struct validation_thread));
 
 	thread->tal_file = pstrdup(tal_file);
-	thread->retry_local = true;
-	thread->sync_files = true;
 	thread->db = param->db;
 	thread->exit_status = -EINTR;
 	SLIST_INSERT_HEAD(&param->threads, thread, next);

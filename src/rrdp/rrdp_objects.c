@@ -31,7 +31,7 @@ void
 metadata_cleanup(struct file_metadata *meta)
 {
 	free(meta->hash);
-	free(meta->uri);
+	uri_refput(meta->uri);
 }
 
 /* Do the @cb to the delta head elements from @from_serial to @max_serial */
@@ -113,13 +113,13 @@ deltas_head_sort(struct deltas_head *deltas, unsigned long max_serial)
 }
 
 void
-update_notification_init(struct update_notification *notification,
+update_notification_init(struct update_notification *notif,
     struct rpki_uri *uri)
 {
-	notification_metadata_init(&notification->meta);
-	metadata_init(&notification->snapshot);
-	deltas_head_init(&notification->deltas_list);
-	notification->uri = uri_refget(uri);
+	notification_metadata_init(&notif->meta);
+	metadata_init(&notif->snapshot);
+	deltas_head_init(&notif->deltas_list);
+	notif->uri = uri_refget(uri);
 }
 
 static void
@@ -129,7 +129,7 @@ delta_head_destroy(struct delta_head *delta)
 }
 
 void
-update_notification_destroy(struct update_notification *file)
+update_notification_cleanup(struct update_notification *file)
 {
 	metadata_cleanup(&file->snapshot);
 	notification_metadata_cleanup(&file->meta);
@@ -173,41 +173,29 @@ delta_destroy(struct delta *file)
 	free(file);
 }
 
-struct publish *
-publish_create(void)
+void
+publish_init(struct publish *tag)
 {
-	struct publish *tmp;
-
-	tmp = pmalloc(sizeof(struct publish));
-	metadata_init(&tmp->meta);
-	tmp->content = NULL;
-	tmp->content_len = 0;
-
-	return tmp;
+	metadata_init(&tag->meta);
+	tag->content = NULL;
+	tag->content_len = 0;
 }
 
 void
-publish_destroy(struct publish *file)
+publish_cleanup(struct publish *tag)
 {
-	metadata_cleanup(&file->meta);
-	free(file->content);
-	free(file);
-}
-
-struct withdraw *
-withdraw_create(void)
-{
-	struct withdraw *tmp;
-
-	tmp = pmalloc(sizeof(struct withdraw));
-	metadata_init(&tmp->meta);
-
-	return tmp;
+	metadata_cleanup(&tag->meta);
+	free(tag->content);
 }
 
 void
-withdraw_destroy(struct withdraw *file)
+withdraw_init(struct withdraw *tag)
 {
-	metadata_cleanup(&file->meta);
-	free(file);
+	metadata_init(&tag->meta);
+}
+
+void
+withdraw_cleanup(struct withdraw *tag)
+{
+	metadata_cleanup(&tag->meta);
 }
