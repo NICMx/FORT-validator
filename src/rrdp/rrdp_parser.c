@@ -32,16 +32,12 @@
 
 /* Context while reading a snapshot */
 struct rdr_snapshot_ctx {
-	/* Data being parsed */
-	struct snapshot *snapshot;
 	/* Parent data to validate session ID and serial */
 	struct update_notification *notif;
 };
 
 /* Context while reading a delta */
 struct rdr_delta_ctx {
-	/* Data being parsed */
-	struct delta *delta;
 	/* Parent data to validate session ID */
 	struct update_notification *notif;
 	/* Current serial loaded from update notification deltas list */
@@ -283,13 +279,9 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 	return 0;
 }
 
-/* @gdata elements are allocated */
 static int
-parse_metadata(xmlTextReaderPtr reader, struct notification_metadata *meta,
-    char const *expected_session, unsigned long expected_serial)
+parse_metadata(xmlTextReaderPtr reader, struct notification_metadata *meta)
 {
-	char *session_id;
-	unsigned long serial;
 	int error;
 
 	/*
@@ -306,42 +298,46 @@ parse_metadata(xmlTextReaderPtr reader, struct notification_metadata *meta,
 	if (error)
 		return error;
 
-	error = parse_string(reader, RRDP_ATTR_SESSION_ID, &session_id);
+	meta->serial = 0;
+	error = parse_long(reader, RRDP_ATTR_SERIAL, &meta->serial);
 	if (error)
 		return error;
 
-	serial = 0;
-	error = parse_long(reader, RRDP_ATTR_SERIAL, &serial);
-	if (error) {
-		free(session_id);
+	return parse_string(reader, RRDP_ATTR_SESSION_ID, &meta->session_id);
+}
+
+static int
+validate_metadata(xmlTextReaderPtr reader, char const *expected_session,
+    unsigned long expected_serial)
+{
+	struct notification_metadata meta;
+	int error;
+
+	notification_metadata_init(&meta);
+
+	error = parse_metadata(reader, &meta);
+	if (error)
 		return error;
-	}
 
-	if (expected_session == NULL)
-		goto return_val; /* Error O is OK */
-
-	/*
-	 * Positive error value means the file was successfully parsed but it
-	 * has a logic error (in this case, session ID doesn't match parent's).
-	 */
-	if (strcmp(expected_session, session_id) != 0) {
+	if (strcmp(expected_session, meta.session_id) != 0) {
+		/* FIXME why are these not error messages */
 		pr_val_info("File session id [%s] doesn't match parent's session id [%s]",
-		    expected_session, session_id);
-		error = EINVAL;
-		goto return_val;
+		    expected_session, meta.session_id);
+		goto fail;
 	}
 
-	/* ...and the serial must match to what's expected at the parent */
-	if (serial != expected_serial) {
+	if (meta.serial != expected_serial) {
 		pr_val_info("File serial '%lu' doesn't match expected serial '%lu'",
-		    serial, expected_serial);
-		error = EINVAL;
+		    meta.serial, expected_serial);
+		goto fail;
 	}
 
-return_val:
-	meta->session_id = session_id;
-	meta->serial = serial;
-	return error;
+	notification_metadata_cleanup(&meta);
+	return 0;
+
+fail:
+	notification_metadata_cleanup(&meta);
+	return EINVAL;
 }
 
 /*
@@ -419,11 +415,6 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 
 	/* rfc8181#section-2.2 but considering optional hash */
 	if (tag->meta.hash_len > 0) {
-		/*
-		 * FIXME How come you're checking the hash of the file?
-		 * You haven't written the file yet.
-		 */
-
 		/* Get the current file from the uri */
 		error = hash_validate_file(tag->meta.uri, tag->meta.hash,
 		    tag->meta.hash_len);
@@ -579,7 +570,7 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 			    &notif->snapshot);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
 			/* No need to validate session ID and serial */
-			return parse_metadata(reader, &notif->meta, NULL, 0);
+			return parse_metadata(reader, &notif->meta);
 		}
 
 		return pr_val_err("Unexpected '%s' element", name);
@@ -625,8 +616,7 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 			error = parse_publish_elem(reader, ctx->notif->uri,
 			    HR_IGNORE);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
-			error = parse_metadata(reader,
-			    &ctx->snapshot->meta,
+			error = validate_metadata(reader,
 			    ctx->notif->meta.session_id,
 			    ctx->notif->meta.serial);
 		else
@@ -655,12 +645,10 @@ parse_snapshot(struct rpki_uri *uri, struct update_notification *notif)
 	if (error)
 		goto pop;
 
-	ctx.snapshot = snapshot_create();
 	ctx.notif = notif;
 
 	error = relax_ng_parse(uri_get_local(uri), xml_read_snapshot, &ctx);
 
-	snapshot_destroy(ctx.snapshot);
 pop:	fnstack_pop();
 	return error;
 }
@@ -683,8 +671,7 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
 			error = parse_withdraw_elem(reader, ctx->notif->uri);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
-			error = parse_metadata(reader,
-			    &ctx->delta->meta,
+			error = validate_metadata(reader,
 			    ctx->notif->meta.session_id,
 			    ctx->expected_serial);
 		else
@@ -716,13 +703,11 @@ parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
 	if (error)
 		goto pop_fnstack;
 
-	ctx.delta = delta_create();
 	ctx.notif = notif;
 	ctx.expected_serial = parents_data->serial;
 
 	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
 
-	delta_destroy(ctx.delta);
 pop_fnstack:
 	fnstack_pop();
 	return error;

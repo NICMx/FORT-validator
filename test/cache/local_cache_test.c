@@ -1336,6 +1336,8 @@ START_TEST(test_recover)
 	ck_assert_ptr_eq(uris.array[14], cache_recover(&uris, false));
 	uris_cleanup(&uris);
 
+	/* FIXME test HTTP (non-recursive) */
+
 	cache_teardown();
 }
 END_TEST

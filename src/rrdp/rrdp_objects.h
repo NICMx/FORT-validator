@@ -28,22 +28,6 @@ struct withdraw {
 	struct file_metadata meta;
 };
 
-/*
- * Delta file content.
- * Publish/withdraw list aren't remember, they are processed ASAP.
- */
-struct delta {
-	struct notification_metadata meta;
-};
-
-/*
- * Snapshot file content
- * Publish list isn't remember, is processed ASAP.
- */
-struct snapshot {
-	struct notification_metadata meta;
-};
-
 /* Delta element located at an update notification file */
 struct delta_head {
 	/*
@@ -79,12 +63,6 @@ typedef int (*delta_head_cb)(struct delta_head *, void *);
 int deltas_head_for_each(struct deltas_head *, unsigned long, unsigned long,
     delta_head_cb, void *);
 int deltas_head_sort(struct deltas_head *, unsigned long);
-
-struct snapshot *snapshot_create(void);
-void snapshot_destroy(struct snapshot *);
-
-struct delta *delta_create(void);
-void delta_destroy(struct delta *);
 
 void publish_init(struct publish *);
 void publish_cleanup(struct publish *);

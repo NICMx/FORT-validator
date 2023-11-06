@@ -137,42 +137,6 @@ update_notification_cleanup(struct update_notification *file)
 	uri_refput(file->uri);
 }
 
-struct snapshot *
-snapshot_create(void)
-{
-	struct snapshot *tmp;
-
-	tmp = pmalloc(sizeof(struct snapshot));
-	notification_metadata_init(&tmp->meta);
-
-	return tmp;
-}
-
-void
-snapshot_destroy(struct snapshot *file)
-{
-	notification_metadata_cleanup(&file->meta);
-	free(file);
-}
-
-struct delta *
-delta_create(void)
-{
-	struct delta *tmp;
-
-	tmp = pmalloc(sizeof(struct delta));
-	notification_metadata_init(&tmp->meta);
-
-	return tmp;
-}
-
-void
-delta_destroy(struct delta *file)
-{
-	notification_metadata_cleanup(&file->meta);
-	free(file);
-}
-
 void
 publish_init(struct publish *tag)
 {
