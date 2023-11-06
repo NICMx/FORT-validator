@@ -16,18 +16,6 @@ struct file_metadata {
 	size_t hash_len;
 };
 
-/* Represents a <publish> element */
-struct publish {
-	struct file_metadata meta;
-	unsigned char *content;
-	size_t content_len;
-};
-
-/* Represents a <withdraw> element */
-struct withdraw {
-	struct file_metadata meta;
-};
-
 /* Delta element located at an update notification file */
 struct delta_head {
 	/*
@@ -63,11 +51,5 @@ typedef int (*delta_head_cb)(struct delta_head *, void *);
 int deltas_head_for_each(struct deltas_head *, unsigned long, unsigned long,
     delta_head_cb, void *);
 int deltas_head_sort(struct deltas_head *, unsigned long);
-
-void publish_init(struct publish *);
-void publish_cleanup(struct publish *);
-
-void withdraw_init(struct withdraw *);
-void withdraw_cleanup(struct withdraw *);
 
 #endif /* SRC_RRDP_RRDP_OBJECTS_H_ */

@@ -136,30 +136,3 @@ update_notification_cleanup(struct update_notification *file)
 	deltas_head_cleanup(&file->deltas_list, delta_head_destroy);
 	uri_refput(file->uri);
 }
-
-void
-publish_init(struct publish *tag)
-{
-	metadata_init(&tag->meta);
-	tag->content = NULL;
-	tag->content_len = 0;
-}
-
-void
-publish_cleanup(struct publish *tag)
-{
-	metadata_cleanup(&tag->meta);
-	free(tag->content);
-}
-
-void
-withdraw_init(struct withdraw *tag)
-{
-	metadata_init(&tag->meta);
-}
-
-void
-withdraw_cleanup(struct withdraw *tag)
-{
-	metadata_cleanup(&tag->meta);
-}

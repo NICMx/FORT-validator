@@ -30,6 +30,18 @@
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
 
+/* Represents a <publish> element */
+struct publish {
+	struct file_metadata meta;
+	unsigned char *content;
+	size_t content_len;
+};
+
+/* Represents a <withdraw> element */
+struct withdraw {
+	struct file_metadata meta;
+};
+
 /* Context while reading a snapshot */
 struct rdr_snapshot_ctx {
 	/* Parent data to validate session ID and serial */
@@ -392,26 +404,23 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	char *base64_str;
 	int error;
 
-	publish_init(tag);
-
 	error = parse_doc_data(reader, notif, hr, &tag->meta);
 	if (error)
-		goto release_tmp;
+		return error;
 
 	/* Read the text */
 	if (xmlTextReaderRead(reader) != 1) {
-		error = pr_val_err("Couldn't read publish content of element '%s'",
+		return pr_val_err("Couldn't read publish content of element '%s'",
 		    uri_get_global(tag->meta.uri));
-		goto release_tmp;
 	}
 
 	error = parse_string(reader, NULL, &base64_str);
 	if (error)
-		goto release_tmp;
-
+		return error;
 	error = base64_read(base64_str, &tag->content, &tag->content_len);
+	free(base64_str);
 	if (error)
-		goto release_base64;
+		return error;
 
 	/* rfc8181#section-2.2 but considering optional hash */
 	if (tag->meta.hash_len > 0) {
@@ -421,18 +430,11 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 		if (error) {
 			pr_val_info("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
 			    uri_get_global(tag->meta.uri));
-			error = EINVAL;
-			goto release_base64;
+			return EINVAL;
 		}
 	}
 
-	free(base64_str);
 	return 0;
-release_base64:
-	free(base64_str);
-release_tmp:
-	publish_cleanup(tag);
-	return error;
 }
 
 static int
@@ -441,22 +443,12 @@ parse_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif,
 {
 	int error;
 
-	withdraw_init(tag);
-
 	error = parse_doc_data(reader, notif, HR_MANDATORY, &tag->meta);
 	if (error)
-		goto fail;
+		return error;
 
-	error = hash_validate_file(tag->meta.uri, tag->meta.hash,
+	return hash_validate_file(tag->meta.uri, tag->meta.hash,
 	    tag->meta.hash_len);
-	if (error)
-		goto fail;
-
-	return 0;
-
-fail:
-	withdraw_cleanup(tag);
-	return error;
 }
 
 static int
@@ -475,15 +467,15 @@ write_from_uri(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 		return error;
 
 	written = fwrite(content, sizeof(unsigned char), content_len, out);
+	file_close(out);
+
 	if (written != content_len) {
-		file_close(out);
 		return pr_val_err(
 		    "Couldn't write file '%s' (error code not available)",
 		    uri_get_local(uri)
 		);
 	}
 
-	file_close(out);
 	return 0;
 }
 
@@ -506,13 +498,19 @@ parse_publish_elem(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	struct publish tag;
 	int error;
 
+	metadata_init(&tag.meta);
+	tag.content = NULL;
+	tag.content_len = 0;
+
 	error = parse_publish(reader, notif, hr, &tag);
 	if (error)
-		return error;
+		goto end;
 
 	error = write_from_uri(tag.meta.uri, tag.content, tag.content_len);
 
-	publish_cleanup(&tag);
+end:
+	metadata_cleanup(&tag.meta);
+	free(tag.content);
 	return error;
 }
 
@@ -526,13 +524,16 @@ parse_withdraw_elem(xmlTextReaderPtr reader, struct rpki_uri *notif)
 	struct withdraw tag;
 	int error;
 
+	metadata_init(&tag.meta);
+
 	error = parse_withdraw(reader, notif, &tag);
 	if (error)
-		return error;
+		goto end;
 
 	error = delete_from_uri(tag.meta.uri);
 
-	withdraw_cleanup(&tag);
+end:
+	metadata_cleanup(&tag.meta);
 	return error;
 }
 
