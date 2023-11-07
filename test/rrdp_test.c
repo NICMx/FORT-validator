@@ -20,21 +20,19 @@ MOCK_ABORT_VOID(fnstack_pop, void)
 #define END 0xFFFF
 
 static void
-add_serials(struct deltas_head *deltas, ...)
+add_serials(struct notification_deltas *deltas, ...)
 {
-	struct delta_head delta;
+	struct notification_delta delta = { 0 };
 	va_list vl;
-
-	metadata_init(&delta.meta);
 
 	va_start(vl, deltas);
 	while ((delta.serial = va_arg(vl, unsigned long)) != END)
-		deltas_head_add(deltas, &delta);
+		notification_deltas_add(deltas, &delta);
 	va_end(vl);
 }
 
 static void
-validate_serials(struct deltas_head *deltas, ...)
+validate_serials(struct notification_deltas *deltas, ...)
 {
 	unsigned long serial;
 	unsigned int i;
@@ -51,47 +49,47 @@ validate_serials(struct deltas_head *deltas, ...)
 	va_end(vl);
 }
 
-START_TEST(test_deltas_head_sort)
+START_TEST(test_notification_deltas_sort)
 {
-	struct deltas_head deltas;
+	struct notification_deltas deltas;
 
-	deltas_head_init(&deltas);
-	ck_assert_int_eq(0, deltas_head_sort(&deltas, 0));
-	ck_assert_int_eq(0, deltas_head_sort(&deltas, 1));
-	ck_assert_int_eq(0, deltas_head_sort(&deltas, 2));
+	notification_deltas_init(&deltas);
+	ck_assert_int_eq(0, notification_deltas_sort(&deltas, 0));
+	ck_assert_int_eq(0, notification_deltas_sort(&deltas, 1));
+	ck_assert_int_eq(0, notification_deltas_sort(&deltas, 2));
 
 	add_serials(&deltas, 0, END);
-	ck_assert_int_eq(0, deltas_head_sort(&deltas, 0));
+	ck_assert_int_eq(0, notification_deltas_sort(&deltas, 0));
 	validate_serials(&deltas, 0, END);
 
-	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 2));
-	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 1));
+	ck_assert_int_eq(-EINVAL, notification_deltas_sort(&deltas, 2));
+	ck_assert_int_eq(-EINVAL, notification_deltas_sort(&deltas, 1));
 
 	add_serials(&deltas, 1, 2, 3, END);
-	ck_assert_int_eq(0, deltas_head_sort(&deltas, 3));
+	ck_assert_int_eq(0, notification_deltas_sort(&deltas, 3));
 	validate_serials(&deltas, 0, 1, 2, 3, END);
 
-	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 4));
-	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 2));
+	ck_assert_int_eq(-EINVAL, notification_deltas_sort(&deltas, 4));
+	ck_assert_int_eq(-EINVAL, notification_deltas_sort(&deltas, 2));
 
-	deltas_head_cleanup(&deltas, NULL);
-	deltas_head_init(&deltas);
+	notification_deltas_cleanup(&deltas, NULL);
+	notification_deltas_init(&deltas);
 
 	add_serials(&deltas, 3, 0, 1, 2, END);
-	ck_assert_int_eq(0, deltas_head_sort(&deltas, 3));
+	ck_assert_int_eq(0, notification_deltas_sort(&deltas, 3));
 	validate_serials(&deltas, 0, 1, 2, 3, END);
 
-	deltas_head_cleanup(&deltas, NULL);
-	deltas_head_init(&deltas);
+	notification_deltas_cleanup(&deltas, NULL);
+	notification_deltas_init(&deltas);
 
 	add_serials(&deltas, 4, 3, 2, 1, 0, END);
-	ck_assert_int_eq(0, deltas_head_sort(&deltas, 4));
+	ck_assert_int_eq(0, notification_deltas_sort(&deltas, 4));
 	validate_serials(&deltas, 0, 1, 2, 3, 4, END);
 
-	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 5));
-	ck_assert_int_eq(-EINVAL, deltas_head_sort(&deltas, 3));
+	ck_assert_int_eq(-EINVAL, notification_deltas_sort(&deltas, 5));
+	ck_assert_int_eq(-EINVAL, notification_deltas_sort(&deltas, 3));
 
-	deltas_head_cleanup(&deltas, NULL);
+	notification_deltas_cleanup(&deltas, NULL);
 }
 END_TEST
 
@@ -101,7 +99,7 @@ Suite *xml_load_suite(void)
 	TCase *validate;
 
 	validate = tcase_create("Validate");
-	tcase_add_test(validate, test_deltas_head_sort);
+	tcase_add_test(validate, test_notification_deltas_sort);
 
 	suite = suite_create("xml_test()");
 	suite_add_tcase(suite, validate);

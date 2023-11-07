@@ -13,41 +13,39 @@
 #include "cache/local_cache.h"
 #include "crypto/base64.h"
 #include "crypto/hash.h"
-#include "data_structure/array_list.h"
 #include "xml/relax_ng.h"
 
-/* XML Common Namespace of files */
+/* RRDP's XML namespace */
 #define RRDP_NAMESPACE		"http://www.ripe.net/rpki/rrdp"
 
-/* XML Elements */
+/* XML tags */
 #define RRDP_ELEM_NOTIFICATION	"notification"
 #define RRDP_ELEM_SNAPSHOT	"snapshot"
 #define RRDP_ELEM_DELTA		"delta"
 #define RRDP_ELEM_PUBLISH	"publish"
 #define RRDP_ELEM_WITHDRAW	"withdraw"
 
-/* XML Attributes */
+/* XML attributes */
 #define RRDP_ATTR_VERSION	"version"
 #define RRDP_ATTR_SESSION_ID	"session_id"
 #define RRDP_ATTR_SERIAL	"serial"
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
 
-/* Global RRDP files data */
-struct notification_metadata {
-	char *session_id;
+struct rrdp_session {
+	xmlChar *session_id;
 	unsigned long serial;
 };
 
-/* Specific RRDP files data, in some cases the hash can be omitted */
+/* The hash is sometimes omitted. */
 struct file_metadata {
 	struct rpki_uri *uri;
 	unsigned char *hash;
 	size_t hash_len;
 };
 
-/* Delta element located at an update notification file */
-struct delta_head {
+/* A delta tag, listed by a notification. (Not the actual delta file.) */
+struct notification_delta {
 	/*
 	 * TODO this is not an RFC 1982 serial. It's supposed to be unbounded,
 	 * so we should probably handle it as a string.
@@ -56,41 +54,33 @@ struct delta_head {
 	struct file_metadata meta;
 };
 
-/* List of deltas inside an update notification file */
-STATIC_ARRAY_LIST(deltas_head, struct delta_head)
+/* An array of delta tags, listed by a notification. */
+STATIC_ARRAY_LIST(notification_deltas, struct notification_delta)
 
-/* Update notification file content and location URI */
+/* A deserialized "Update Notification" file (aka "Notification"). */
 struct update_notification {
-	struct notification_metadata meta;
+	struct rrdp_session session;
 	struct file_metadata snapshot;
-	struct deltas_head deltas_list;
+	struct notification_deltas deltas;
 	struct rpki_uri *uri;
 };
 
-/* Represents a <publish> element */
+/* A deserialized <publish> tag, from a snapshot or delta. */
 struct publish {
 	struct file_metadata meta;
 	unsigned char *content;
 	size_t content_len;
 };
 
-/* Represents a <withdraw> element */
+/* A deserialized <withdraw> tag, from a delta. */
 struct withdraw {
 	struct file_metadata meta;
 };
 
-/* Context while reading a snapshot */
-struct rdr_snapshot_ctx {
-	/* Parent data to validate session ID and serial */
-	struct update_notification *notif;
-};
-
-/* Context while reading a delta */
-struct rdr_delta_ctx {
-	/* Parent data to validate session ID */
-	struct update_notification *notif;
-	/* Current serial loaded from update notification deltas list */
-	unsigned long expected_serial;
+/* Helpful context while reading a snapshot or delta. */
+struct rrdp_ctx {
+	struct rpki_uri *notif;
+	struct rrdp_session session;
 };
 
 typedef enum {
@@ -99,63 +89,55 @@ typedef enum {
 	HR_IGNORE,
 } hash_requirement;
 
-void
-notification_metadata_init(struct notification_metadata *meta)
+static void
+rrdp_session_cleanup(struct rrdp_session *meta)
 {
-	meta->session_id = NULL;
+	xmlFree(meta->session_id);
 }
 
-void
-notification_metadata_cleanup(struct notification_metadata *meta)
-{
-	free(meta->session_id);
-}
-
-void
-metadata_init(struct file_metadata *meta)
-{
-	meta->uri = NULL;
-	meta->hash = NULL;
-	meta->hash_len = 0;
-}
-
-void
+static void
 metadata_cleanup(struct file_metadata *meta)
 {
 	free(meta->hash);
 	uri_refput(meta->uri);
 }
 
-void
+static void
 update_notification_init(struct update_notification *notif,
     struct rpki_uri *uri)
 {
-	notification_metadata_init(&notif->meta);
-	metadata_init(&notif->snapshot);
-	deltas_head_init(&notif->deltas_list);
+	memset(&notif->session, 0, sizeof(notif->session));
+	memset(&notif->snapshot, 0, sizeof(notif->snapshot));
+	notification_deltas_init(&notif->deltas);
 	notif->uri = uri_refget(uri);
 }
 
 static void
-delta_head_destroy(struct delta_head *delta)
+notification_delta_destroy(struct notification_delta *delta)
 {
 	metadata_cleanup(&delta->meta);
 }
 
-void
+static void
 update_notification_cleanup(struct update_notification *file)
 {
 	metadata_cleanup(&file->snapshot);
-	notification_metadata_cleanup(&file->meta);
-	deltas_head_cleanup(&file->deltas_list, delta_head_destroy);
+	rrdp_session_cleanup(&file->session);
+	notification_deltas_cleanup(&file->deltas, notification_delta_destroy);
 	uri_refput(file->uri);
+}
+
+static int
+validate_hash(struct file_metadata *meta)
+{
+	return hash_validate_file(meta->uri, meta->hash, meta->hash_len);
 }
 
 /* Left trim @from, setting the result at @result pointer */
 static int
-ltrim(char *from, char **result, size_t *result_size)
+ltrim(char const *from, char const **result, size_t *result_size)
 {
-	char *start;
+	char const *start;
 	size_t tmp_size;
 
 	start = from;
@@ -180,11 +162,11 @@ ltrim(char *from, char **result, size_t *result_size)
  * length per line.
  */
 static int
-base64_sanitize(char *content, char **out)
+base64_sanitize(char const *content, char **out)
 {
 #define BUF_SIZE 65
 	char *result;
-	char *tmp;
+	char const *tmp;
 	size_t original_size, new_size;
 	size_t offset, buf_len;
 	int error;
@@ -227,7 +209,7 @@ base64_sanitize(char *content, char **out)
 }
 
 static int
-base64_read(char *content, unsigned char **out, size_t *out_len)
+base64_read(char const *content, unsigned char **out, size_t *out_len)
 {
 	BIO *encoded; /* base64 encoded. */
 	unsigned char *result;
@@ -257,7 +239,7 @@ base64_read(char *content, unsigned char **out, size_t *out_len)
 	free(sanitized);
 	BIO_free(encoded);
 
-	*out = result;
+	(*out) = result;
 	(*out_len) = result_len;
 	return 0;
 release_result:
@@ -269,57 +251,47 @@ release_sanitized:
 }
 
 static int
-parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
+parse_ulong(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 {
-	xmlChar *xml_value;
-	unsigned long tmp;
+	xmlChar *str;
 	int error;
 
-	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
-	if (xml_value == NULL)
+	str = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
+	if (str == NULL)
 		return pr_val_err("RRDP file: Couldn't find xml attribute '%s'",
 		    attr);
 
 	errno = 0;
-	tmp = strtoul((char *) xml_value, NULL, 10);
+	*result = strtoul((char const *) str, NULL, 10);
 	error = errno;
+	xmlFree(str);
 	if (error) {
-		xmlFree(xml_value);
 		pr_val_err("RRDP file: Invalid long value '%s': %s",
-		    xml_value, strerror(error));
-		return -EINVAL;
+		    str, strerror(error));
+		return error;
 	}
-	xmlFree(xml_value);
 
-	(*result) = tmp;
 	return 0;
 }
 
-static int
-parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
+static xmlChar *
+parse_string(xmlTextReaderPtr reader, char const *attr)
 {
-	xmlChar *xml_value;
-	char *tmp;
+	xmlChar *result;
 
 	if (attr == NULL) {
-		xml_value = xmlTextReaderValue(reader);
-		if (xml_value == NULL)
-			return pr_val_err("RRDP file: Couldn't find string content from '%s'",
+		result = xmlTextReaderValue(reader);
+		if (result == NULL)
+			pr_val_err("RRDP file: Couldn't find string content from '%s'",
 			    xmlTextReaderConstLocalName(reader));
 	} else {
-		xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
-		if (xml_value == NULL)
-			return pr_val_err("RRDP file: Couldn't find xml attribute '%s' from tag '%s'",
+		result = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
+		if (result == NULL)
+			pr_val_err("RRDP file: Couldn't find xml attribute '%s' from tag '%s'",
 			    attr, xmlTextReaderConstLocalName(reader));
 	}
 
-	tmp = pmalloc(xmlStrlen(xml_value) + 1);
-	memcpy(tmp, xml_value, xmlStrlen(xml_value));
-	tmp[xmlStrlen(xml_value)] = '\0';
-	xmlFree(xml_value);
-
-	*result = tmp;
-	return 0;
+	return result;
 }
 
 static int
@@ -369,7 +341,7 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 	unsigned long version;
 	int error;
 
-	error = parse_long(reader, RRDP_ATTR_VERSION, &version);
+	error = parse_ulong(reader, RRDP_ATTR_VERSION, &version);
 	if (error)
 		return error;
 
@@ -381,7 +353,7 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 }
 
 static int
-parse_metadata(xmlTextReaderPtr reader, struct notification_metadata *meta)
+parse_session(xmlTextReaderPtr reader, struct rrdp_session *meta)
 {
 	int error;
 
@@ -400,44 +372,42 @@ parse_metadata(xmlTextReaderPtr reader, struct notification_metadata *meta)
 		return error;
 
 	meta->serial = 0;
-	error = parse_long(reader, RRDP_ATTR_SERIAL, &meta->serial);
+	error = parse_ulong(reader, RRDP_ATTR_SERIAL, &meta->serial);
 	if (error)
 		return error;
 
-	return parse_string(reader, RRDP_ATTR_SESSION_ID, &meta->session_id);
+	meta->session_id = parse_string(reader, RRDP_ATTR_SESSION_ID);
+	return (meta->session_id != NULL) ? 0 : -EINVAL;
 }
 
 static int
-validate_metadata(xmlTextReaderPtr reader, char const *expected_session,
-    unsigned long expected_serial)
+validate_session(xmlTextReaderPtr reader, struct rrdp_session *expected)
 {
-	struct notification_metadata meta;
+	struct rrdp_session actual = { 0 };
 	int error;
 
-	notification_metadata_init(&meta);
-
-	error = parse_metadata(reader, &meta);
+	error = parse_session(reader, &actual);
 	if (error)
 		return error;
 
-	if (strcmp(expected_session, meta.session_id) != 0) {
+	if (xmlStrcmp(expected->session_id, actual.session_id) != 0) {
 		/* FIXME why are these not error messages */
 		pr_val_info("File session id [%s] doesn't match parent's session id [%s]",
-		    expected_session, meta.session_id);
+		    expected->session_id, actual.session_id);
 		goto fail;
 	}
 
-	if (meta.serial != expected_serial) {
+	if (actual.serial != expected->serial) {
 		pr_val_info("File serial '%lu' doesn't match expected serial '%lu'",
-		    meta.serial, expected_serial);
+		    actual.serial, expected->serial);
 		goto fail;
 	}
 
-	notification_metadata_cleanup(&meta);
+	rrdp_session_cleanup(&actual);
 	return 0;
 
 fail:
-	notification_metadata_cleanup(&meta);
+	rrdp_session_cleanup(&actual);
 	return EINVAL;
 }
 
@@ -448,41 +418,34 @@ fail:
  * 2. "hash" (optional, depending on @hr)
  */
 static int
-parse_doc_data(xmlTextReaderPtr reader, struct rpki_uri *notif,
-    hash_requirement hr, struct file_metadata *data)
+parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
+    hash_requirement hr, struct file_metadata *meta)
 {
-	char *uri_str;
-	struct rpki_uri *uri;
-	unsigned char *hash;
-	size_t hash_len;
+	xmlChar *uri;
 	int error;
 
-	uri_str = NULL;
-	uri = NULL;
-	hash = NULL;
-	hash_len = 0;
+	memset(meta, 0, sizeof(*meta));
 
-	error = parse_string(reader, RRDP_ATTR_URI, &uri_str);
-	if (error)
-		return error;
-	error = uri_create(&uri, (notif != NULL) ? UT_CAGED : UT_HTTPS, notif,
-	    uri_str);
-	free(uri_str);
+	uri = parse_string(reader, RRDP_ATTR_URI);
+	if (uri == NULL)
+		return -EINVAL;
+	error = uri_create(&meta->uri, (notif != NULL) ? UT_CAGED : UT_HTTPS,
+	    notif, (char const *)uri);
+	xmlFree(uri);
 	if (error)
 		return error;
 
 	if (hr == HR_IGNORE)
-		goto end;
+		return 0;
 
-	error = parse_hex_string(reader, hr, RRDP_ATTR_HASH, &hash, &hash_len);
+	error = parse_hex_string(reader, hr, RRDP_ATTR_HASH, &meta->hash,
+	    &meta->hash_len);
 	if (error) {
-		free(uri);
+		uri_refput(meta->uri);
+		meta->uri = NULL;
 		return error;
 	}
-end:
-	data->uri = uri;
-	data->hash = hash;
-	data->hash_len = hash_len;
+
 	return 0;
 }
 
@@ -490,10 +453,10 @@ static int
 parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
     hash_requirement hr, struct publish *tag)
 {
-	char *base64_str;
+	xmlChar *base64_str;
 	int error;
 
-	error = parse_doc_data(reader, notif, hr, &tag->meta);
+	error = parse_file_metadata(reader, notif, hr, &tag->meta);
 	if (error)
 		return error;
 
@@ -503,23 +466,22 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 		    uri_get_global(tag->meta.uri));
 	}
 
-	error = parse_string(reader, NULL, &base64_str);
-	if (error)
-		return error;
-	error = base64_read(base64_str, &tag->content, &tag->content_len);
-	free(base64_str);
+	base64_str = parse_string(reader, NULL);
+	if (base64_str == NULL)
+		return -EINVAL;
+	error = base64_read((char const *)base64_str, &tag->content,
+	    &tag->content_len);
+	xmlFree(base64_str);
 	if (error)
 		return error;
 
 	/* rfc8181#section-2.2 but considering optional hash */
 	if (tag->meta.hash_len > 0) {
-		/* Get the current file from the uri */
-		error = hash_validate_file(tag->meta.uri, tag->meta.hash,
-		    tag->meta.hash_len);
+		error = validate_hash(&tag->meta);
 		if (error) {
 			pr_val_info("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
 			    uri_get_global(tag->meta.uri));
-			return EINVAL;
+			return error;
 		}
 	}
 
@@ -532,16 +494,15 @@ parse_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif,
 {
 	int error;
 
-	error = parse_doc_data(reader, notif, HR_MANDATORY, &tag->meta);
+	error = parse_file_metadata(reader, notif, HR_MANDATORY, &tag->meta);
 	if (error)
 		return error;
 
-	return hash_validate_file(tag->meta.uri, tag->meta.hash,
-	    tag->meta.hash_len);
+	return validate_hash(&tag->meta);
 }
 
 static int
-write_from_uri(struct rpki_uri *uri, unsigned char *content, size_t content_len)
+write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 {
 	FILE *out;
 	size_t written;
@@ -570,58 +531,38 @@ write_from_uri(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 
 /* Remove a local file and its directory tree (if empty) */
 static int
-delete_from_uri(struct rpki_uri *uri)
+delete_file(struct rpki_uri *uri)
 {
 	/* Delete parent dirs only if empty. */
 	return delete_dir_recursive_bottom_up(uri_get_local(uri));
 }
 
-/*
- * This function will call 'xmlTextReaderRead' so there's no need to expect any
- * other type at the caller.
- */
 static int
-parse_publish_elem(xmlTextReaderPtr reader, struct rpki_uri *notif,
+handle_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
     hash_requirement hr)
 {
-	struct publish tag;
+	struct publish tag = { 0 };
 	int error;
 
-	metadata_init(&tag.meta);
-	tag.content = NULL;
-	tag.content_len = 0;
-
 	error = parse_publish(reader, notif, hr, &tag);
-	if (error)
-		goto end;
+	if (!error)
+		error = write_file(tag.meta.uri, tag.content, tag.content_len);
 
-	error = write_from_uri(tag.meta.uri, tag.content, tag.content_len);
-
-end:
 	metadata_cleanup(&tag.meta);
 	free(tag.content);
 	return error;
 }
 
-/*
- * This function will call 'xmlTextReaderRead' so there's no need to expect any
- * other type at the caller.
- */
 static int
-parse_withdraw_elem(xmlTextReaderPtr reader, struct rpki_uri *notif)
+handle_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif)
 {
-	struct withdraw tag;
+	struct withdraw tag = { 0 };
 	int error;
 
-	metadata_init(&tag.meta);
-
 	error = parse_withdraw(reader, notif, &tag);
-	if (error)
-		goto end;
+	if (!error)
+		error = delete_file(tag.meta.uri);
 
-	error = delete_from_uri(tag.meta.uri);
-
-end:
 	metadata_cleanup(&tag.meta);
 	return error;
 }
@@ -630,55 +571,26 @@ static int
 parse_notification_delta(xmlTextReaderPtr reader,
     struct update_notification *notif)
 {
-	struct delta_head delta;
+	struct notification_delta delta;
 	int error;
 
-	error = parse_long(reader, RRDP_ATTR_SERIAL, &delta.serial);
+	error = parse_ulong(reader, RRDP_ATTR_SERIAL, &delta.serial);
 	if (error)
 		return error;
-	error = parse_doc_data(reader, NULL, HR_MANDATORY, &delta.meta);
+	error = parse_file_metadata(reader, NULL, HR_MANDATORY, &delta.meta);
 	if (error)
 		return error;
 
-	deltas_head_add(&notif->deltas_list, &delta);
-	return 0;
-}
-
-typedef int (*delta_head_cb)(struct delta_head *, void *);
-
-/* Do the @cb to the delta head elements from @from_serial to @max_serial */
-int
-deltas_head_for_each(struct deltas_head *deltas, unsigned long max_serial,
-    unsigned long from_serial, delta_head_cb cb, void *arg)
-{
-	size_t index;
-	size_t from;
-	int error;
-
-	/* No elements, send error so that the snapshot is processed */
-	if (deltas->len == 0) {
-		pr_val_warn("There's no delta list to process.");
-		return -ENOENT;
-	}
-
-	pr_val_debug("Getting RRDP deltas from serial %lu to %lu.", from_serial,
-	    max_serial);
-	from = deltas->len - (max_serial - from_serial);
-	for (index = from; index < deltas->len; index++) {
-		error = cb(&deltas->array[index], arg);
-		if (error)
-			return error;
-	}
-
+	notification_deltas_add(&notif->deltas, &delta);
 	return 0;
 }
 
 static int
-swap_until_sorted(struct delta_head *deltas, unsigned int i,
+swap_until_sorted(struct notification_delta *deltas, unsigned int i,
     unsigned long min, unsigned long max)
 {
 	unsigned int target_slot;
-	struct delta_head tmp;
+	struct notification_delta tmp;
 
 	while (true) {
 		if (deltas[i].serial < min || max < deltas[i].serial) {
@@ -701,8 +613,9 @@ swap_until_sorted(struct delta_head *deltas, unsigned int i,
 	}
 }
 
-int
-deltas_head_sort(struct deltas_head *deltas, unsigned long max_serial)
+static int
+notification_deltas_sort(struct notification_deltas *deltas,
+    unsigned long max_serial)
 {
 	unsigned long min_serial;
 	array_index i;
@@ -736,28 +649,27 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA)) {
 			return parse_notification_delta(reader, notif);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT)) {
-			return parse_doc_data(reader, NULL, HR_MANDATORY,
+			return parse_file_metadata(reader, NULL, HR_MANDATORY,
 			    &notif->snapshot);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
 			/* No need to validate session ID and serial */
-			return parse_metadata(reader, &notif->meta);
+			return parse_session(reader, &notif->session);
 		}
 
 		return pr_val_err("Unexpected '%s' element", name);
 
 	case XML_READER_TYPE_END_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION))
-			return deltas_head_sort(&notif->deltas_list,
-			    notif->meta.serial);
+			return notification_deltas_sort(&notif->deltas,
+			    notif->session.serial);
 		break;
 	}
 
 	return 0;
 }
 
-int
-rrdp_parse_notification(struct rpki_uri *uri,
-    struct update_notification *result)
+static int
+parse_notification(struct rpki_uri *uri, struct update_notification *result)
 {
 	int error;
 
@@ -773,7 +685,7 @@ rrdp_parse_notification(struct rpki_uri *uri,
 static int
 xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 {
-	struct rdr_snapshot_ctx *ctx = arg;
+	struct rrdp_ctx *ctx = arg;
 	xmlReaderTypes type;
 	xmlChar const *name;
 	int error;
@@ -783,15 +695,11 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = parse_publish_elem(reader, ctx->notif->uri,
-			    HR_IGNORE);
+			error = handle_publish(reader, ctx->notif, HR_IGNORE);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
-			error = validate_metadata(reader,
-			    ctx->notif->meta.session_id,
-			    ctx->notif->meta.serial);
+			error = validate_session(reader, &ctx->session);
 		else
 			return pr_val_err("Unexpected '%s' element", name);
-
 		if (error)
 			return error;
 		break;
@@ -803,28 +711,24 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_snapshot(struct rpki_uri *uri, struct update_notification *notif)
+parse_snapshot(struct update_notification *notif)
 {
-	struct rdr_snapshot_ctx ctx;
+	struct rrdp_ctx ctx;
 	int error;
 
-	fnstack_push_uri(uri);
-	/* Hash validation */
-	error = hash_validate_file(uri, notif->snapshot.hash,
-	    notif->snapshot.hash_len);
+	error = validate_hash(&notif->snapshot);
 	if (error)
-		goto pop;
+		return error;
 
-	ctx.notif = notif;
+	ctx.notif = notif->uri;
+	ctx.session = notif->session;
 
-	error = relax_ng_parse(uri_get_local(uri), xml_read_snapshot, &ctx);
-
-pop:	fnstack_pop();
-	return error;
+	return relax_ng_parse(uri_get_local(notif->snapshot.uri),
+	    xml_read_snapshot, &ctx);
 }
 
-int
-rrdp_parse_snapshot(struct update_notification *notif)
+static int
+handle_snapshot(struct update_notification *notif)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -837,8 +741,8 @@ rrdp_parse_snapshot(struct update_notification *notif)
 	error = cache_download(uri, NULL);
 	if (error)
 		goto end;
-	error = parse_snapshot(uri, notif);
-	delete_from_uri(uri);
+	error = parse_snapshot(notif);
+	delete_file(uri);
 
 end:
 	fnstack_pop();
@@ -848,7 +752,7 @@ end:
 static int
 xml_read_delta(xmlTextReaderPtr reader, void *arg)
 {
-	struct rdr_delta_ctx *ctx = arg;
+	struct rrdp_ctx *ctx = arg;
 	xmlReaderTypes type;
 	xmlChar const *name;
 	int error;
@@ -858,14 +762,11 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = parse_publish_elem(reader, ctx->notif->uri,
-			    HR_OPTIONAL);
+			error = handle_publish(reader, ctx->notif, HR_OPTIONAL);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
-			error = parse_withdraw_elem(reader, ctx->notif->uri);
+			error = handle_withdraw(reader, ctx->notif);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
-			error = validate_metadata(reader,
-			    ctx->notif->meta.session_id,
-			    ctx->expected_serial);
+			error = validate_session(reader, &ctx->session);
 		else
 			return pr_val_err("Unexpected '%s' element", name);
 
@@ -880,33 +781,25 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_delta(struct rpki_uri *uri, struct delta_head *parents_data,
-    struct update_notification *notif)
+parse_delta(struct update_notification *notif, struct notification_delta *delta)
 {
-	struct rdr_delta_ctx ctx;
-	struct file_metadata *expected_data;
+	struct rrdp_ctx ctx;
 	int error;
 
-	expected_data = &parents_data->meta;
-
-	fnstack_push_uri(uri);
-	error = hash_validate_file(uri, expected_data->hash,
-	    expected_data->hash_len);
+	error = validate_hash(&delta->meta);
 	if (error)
-		goto pop_fnstack;
+		return error;
 
-	ctx.notif = notif;
-	ctx.expected_serial = parents_data->serial;
+	ctx.notif = notif->uri;
+	ctx.session.session_id = notif->session.session_id;
+	ctx.session.serial = delta->serial;
 
-	error = relax_ng_parse(uri_get_local(uri), xml_read_delta, &ctx);
-
-pop_fnstack:
-	fnstack_pop();
-	return error;
+	return relax_ng_parse(uri_get_local(delta->meta.uri), xml_read_delta,
+	    &ctx);
 }
 
 static int
-process_delta(struct delta_head *delta, void *arg)
+handle_delta(struct update_notification *notif, struct notification_delta *delta)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -919,23 +812,41 @@ process_delta(struct delta_head *delta, void *arg)
 	error = cache_download(uri, NULL);
 	if (error)
 		goto end;
-	error = parse_delta(uri, delta, arg);
-	delete_from_uri(uri);
+	error = parse_delta(notif, delta);
+	delete_file(uri);
 
 end:
 	fnstack_pop();
 	return error;
 }
 
-int
-rrdp_process_deltas(struct update_notification *notif, unsigned long serial)
+static int
+handle_deltas(struct update_notification *notif, unsigned long serial)
 {
-	return deltas_head_for_each(&notif->deltas_list, notif->meta.serial,
-	    serial, process_delta, notif);
+	size_t index;
+	size_t from;
+	int error;
+
+	/* No elements, send error so that the snapshot is processed */
+	if (notif->deltas.len == 0) {
+		pr_val_warn("There's no delta list to process.");
+		return -ENOENT;
+	}
+
+	pr_val_debug("Getting RRDP deltas from serial %lu to %lu.", serial,
+	    notif->session.serial);
+	from = notif->deltas.len - (notif->session.serial - serial);
+	for (index = from; index < notif->deltas.len; index++) {
+		error = handle_delta(notif, &notif->deltas.array[index]);
+		if (error)
+			return error;
+	}
+
+	return 0;
 }
 
 static int
-get_metadata(struct rpki_uri *uri, struct notification_metadata *result)
+get_metadata(struct rpki_uri *uri, struct rrdp_session *result)
 {
 	struct stat st;
 	struct update_notification notification;
@@ -953,12 +864,12 @@ get_metadata(struct rpki_uri *uri, struct notification_metadata *result)
 	 * TODO (fine) optimize by not reading everything,
 	 * or maybe keep it if it doesn't change.
 	 */
-	error = rrdp_parse_notification(uri, &notification);
+	error = parse_notification(uri, &notification);
 	if (error)
 		return error;
 
-	*result = notification.meta;
-	memset(&notification.meta, 0, sizeof(notification.meta));
+	*result = notification.session;
+	memset(&notification.session, 0, sizeof(notification.session));
 	update_notification_cleanup(&notification);
 	return 0;
 }
@@ -975,7 +886,7 @@ get_metadata(struct rpki_uri *uri, struct notification_metadata *result)
 int
 rrdp_update(struct rpki_uri *uri)
 {
-	struct notification_metadata old;
+	struct rrdp_session old;
 	struct update_notification new;
 	bool changed;
 	int error;
@@ -996,27 +907,27 @@ rrdp_update(struct rpki_uri *uri)
 		goto end;
 	}
 
-	error = rrdp_parse_notification(uri, &new);
+	error = parse_notification(uri, &new);
 	if (error)
 		goto end; /* FIXME fall back to previous? */
-	pr_val_debug("New session/serial: %s/%lu", new.meta.session_id,
-	    new.meta.serial);
+	pr_val_debug("New session/serial: %s/%lu", new.session.session_id,
+	    new.session.serial);
 
 	if (old.session_id == NULL) {
 		pr_val_debug("This is a new Notification.");
-		error = rrdp_parse_snapshot(&new);
+		error = handle_snapshot(&new);
 		goto revert_notification;
 	}
 
-	if (strcmp(old.session_id, new.meta.session_id) != 0) {
+	if (xmlStrcmp(old.session_id, new.session.session_id) != 0) {
 		pr_val_debug("The Notification's session ID changed.");
-		error = rrdp_parse_snapshot(&new);
+		error = handle_snapshot(&new);
 		goto revert_notification;
 	}
 
-	if (old.serial != new.meta.serial) {
+	if (old.serial != new.session.serial) {
 		pr_val_debug("The Notification' serial changed.");
-		error = rrdp_process_deltas(&new, old.serial);
+		error = handle_deltas(&new, old.serial);
 		goto revert_notification;
 	}
 
@@ -1025,7 +936,7 @@ rrdp_update(struct rpki_uri *uri)
 revert_notification:
 	update_notification_cleanup(&new);
 
-end:	notification_metadata_cleanup(&old);
+end:	rrdp_session_cleanup(&old);
 	fnstack_pop();
 	return error;
 }
