@@ -19,6 +19,7 @@
 #include "extension.h"
 #include "log.h"
 #include "nid.h"
+#include "rrdp.h"
 #include "str_token.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
@@ -31,7 +32,6 @@
 #include "object/name.h"
 #include "object/manifest.h"
 #include "object/signed_object.h"
-#include "rrdp/rrdp_loader.h"
 #include "cache/local_cache.h"
 
 /* Just to prevent some line breaking. */

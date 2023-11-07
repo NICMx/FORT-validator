@@ -4,12 +4,16 @@
 
 #include "alloc.c"
 #include "mock.c"
-#include "rrdp/rrdp_objects.c"
+#include "rrdp.c"
 
 /* Mocks */
 
 MOCK_ABORT_PTR(uri_refget, rpki_uri, struct rpki_uri *uri)
 MOCK_ABORT_VOID(uri_refput, struct rpki_uri *uri)
+__MOCK_ABORT(uri_get_local, char const *, NULL, struct rpki_uri *uri)
+MOCK(uri_val_get_printable, char const *, "uri", struct rpki_uri *uri)
+MOCK_ABORT_VOID(fnstack_push_uri, struct rpki_uri *uri)
+MOCK_ABORT_VOID(fnstack_pop, void)
 
 /* Mocks end */
 

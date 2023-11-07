@@ -1,17 +1,20 @@
-#include "rrdp/rrdp_parser.h"
+#include "rrdp.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <openssl/evp.h>
+#include <sys/stat.h>
 
-#include "crypto/base64.h"
-#include "crypto/hash.h"
-#include "xml/relax_ng.h"
 #include "alloc.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"
 #include "thread_var.h"
 #include "cache/local_cache.h"
+#include "crypto/base64.h"
+#include "crypto/hash.h"
+#include "data_structure/array_list.h"
+#include "xml/relax_ng.h"
 
 /* XML Common Namespace of files */
 #define RRDP_NAMESPACE		"http://www.ripe.net/rpki/rrdp"
@@ -29,6 +32,40 @@
 #define RRDP_ATTR_SERIAL	"serial"
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
+
+/* Global RRDP files data */
+struct notification_metadata {
+	char *session_id;
+	unsigned long serial;
+};
+
+/* Specific RRDP files data, in some cases the hash can be omitted */
+struct file_metadata {
+	struct rpki_uri *uri;
+	unsigned char *hash;
+	size_t hash_len;
+};
+
+/* Delta element located at an update notification file */
+struct delta_head {
+	/*
+	 * TODO this is not an RFC 1982 serial. It's supposed to be unbounded,
+	 * so we should probably handle it as a string.
+	 */
+	unsigned long serial;
+	struct file_metadata meta;
+};
+
+/* List of deltas inside an update notification file */
+STATIC_ARRAY_LIST(deltas_head, struct delta_head)
+
+/* Update notification file content and location URI */
+struct update_notification {
+	struct notification_metadata meta;
+	struct file_metadata snapshot;
+	struct deltas_head deltas_list;
+	struct rpki_uri *uri;
+};
 
 /* Represents a <publish> element */
 struct publish {
@@ -61,6 +98,58 @@ typedef enum {
 	HR_OPTIONAL,
 	HR_IGNORE,
 } hash_requirement;
+
+void
+notification_metadata_init(struct notification_metadata *meta)
+{
+	meta->session_id = NULL;
+}
+
+void
+notification_metadata_cleanup(struct notification_metadata *meta)
+{
+	free(meta->session_id);
+}
+
+void
+metadata_init(struct file_metadata *meta)
+{
+	meta->uri = NULL;
+	meta->hash = NULL;
+	meta->hash_len = 0;
+}
+
+void
+metadata_cleanup(struct file_metadata *meta)
+{
+	free(meta->hash);
+	uri_refput(meta->uri);
+}
+
+void
+update_notification_init(struct update_notification *notif,
+    struct rpki_uri *uri)
+{
+	notification_metadata_init(&notif->meta);
+	metadata_init(&notif->snapshot);
+	deltas_head_init(&notif->deltas_list);
+	notif->uri = uri_refget(uri);
+}
+
+static void
+delta_head_destroy(struct delta_head *delta)
+{
+	metadata_cleanup(&delta->meta);
+}
+
+void
+update_notification_cleanup(struct update_notification *file)
+{
+	metadata_cleanup(&file->snapshot);
+	notification_metadata_cleanup(&file->meta);
+	deltas_head_cleanup(&file->deltas_list, delta_head_destroy);
+	uri_refput(file->uri);
+}
 
 /* Left trim @from, setting the result at @result pointer */
 static int
@@ -180,33 +269,6 @@ release_sanitized:
 }
 
 static int
-parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
-{
-	xmlChar *xml_value;
-	char *tmp;
-
-	if (attr == NULL) {
-		xml_value = xmlTextReaderValue(reader);
-		if (xml_value == NULL)
-			return pr_val_err("RRDP file: Couldn't find string content from '%s'",
-			    xmlTextReaderConstLocalName(reader));
-	} else {
-		xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
-		if (xml_value == NULL)
-			return pr_val_err("RRDP file: Couldn't find xml attribute '%s' from tag '%s'",
-			    attr, xmlTextReaderConstLocalName(reader));
-	}
-
-	tmp = pmalloc(xmlStrlen(xml_value) + 1);
-	memcpy(tmp, xml_value, xmlStrlen(xml_value));
-	tmp[xmlStrlen(xml_value)] = '\0';
-	xmlFree(xml_value);
-
-	*result = tmp;
-	return 0;
-}
-
-static int
 parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 {
 	xmlChar *xml_value;
@@ -230,6 +292,33 @@ parse_long(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 	xmlFree(xml_value);
 
 	(*result) = tmp;
+	return 0;
+}
+
+static int
+parse_string(xmlTextReaderPtr reader, char const *attr, char **result)
+{
+	xmlChar *xml_value;
+	char *tmp;
+
+	if (attr == NULL) {
+		xml_value = xmlTextReaderValue(reader);
+		if (xml_value == NULL)
+			return pr_val_err("RRDP file: Couldn't find string content from '%s'",
+			    xmlTextReaderConstLocalName(reader));
+	} else {
+		xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
+		if (xml_value == NULL)
+			return pr_val_err("RRDP file: Couldn't find xml attribute '%s' from tag '%s'",
+			    attr, xmlTextReaderConstLocalName(reader));
+	}
+
+	tmp = pmalloc(xmlStrlen(xml_value) + 1);
+	memcpy(tmp, xml_value, xmlStrlen(xml_value));
+	tmp[xmlStrlen(xml_value)] = '\0';
+	xmlFree(xml_value);
+
+	*result = tmp;
 	return 0;
 }
 
@@ -555,6 +644,86 @@ parse_notification_delta(xmlTextReaderPtr reader,
 	return 0;
 }
 
+typedef int (*delta_head_cb)(struct delta_head *, void *);
+
+/* Do the @cb to the delta head elements from @from_serial to @max_serial */
+int
+deltas_head_for_each(struct deltas_head *deltas, unsigned long max_serial,
+    unsigned long from_serial, delta_head_cb cb, void *arg)
+{
+	size_t index;
+	size_t from;
+	int error;
+
+	/* No elements, send error so that the snapshot is processed */
+	if (deltas->len == 0) {
+		pr_val_warn("There's no delta list to process.");
+		return -ENOENT;
+	}
+
+	pr_val_debug("Getting RRDP deltas from serial %lu to %lu.", from_serial,
+	    max_serial);
+	from = deltas->len - (max_serial - from_serial);
+	for (index = from; index < deltas->len; index++) {
+		error = cb(&deltas->array[index], arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+static int
+swap_until_sorted(struct delta_head *deltas, unsigned int i,
+    unsigned long min, unsigned long max)
+{
+	unsigned int target_slot;
+	struct delta_head tmp;
+
+	while (true) {
+		if (deltas[i].serial < min || max < deltas[i].serial) {
+			return pr_val_err("Deltas: Serial '%lu' is out of bounds. (min:%lu, max:%lu)",
+			    deltas[i].serial, min, max);
+		}
+
+		target_slot = deltas[i].serial - min;
+		if (i == target_slot)
+			return 0;
+		if (deltas[target_slot].serial == deltas[i].serial) {
+			return pr_val_err("Deltas: Serial '%lu' is not unique.",
+			    deltas[i].serial);
+		}
+
+		/* Simple swap */
+		tmp = deltas[target_slot];
+		deltas[target_slot] = deltas[i];
+		deltas[i] = tmp;
+	}
+}
+
+int
+deltas_head_sort(struct deltas_head *deltas, unsigned long max_serial)
+{
+	unsigned long min_serial;
+	array_index i;
+	int error;
+
+	if (max_serial + 1 < deltas->len)
+		return pr_val_err("Deltas: Too many deltas (%zu) for serial %lu. (Negative serials not implemented.)",
+		    deltas->len, max_serial);
+
+	min_serial = max_serial + 1 - deltas->len;
+
+	ARRAYLIST_FOREACH_IDX(deltas, i) {
+		error = swap_until_sorted(deltas->array, i, min_serial,
+		    max_serial);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
 static int
 xml_read_notif(xmlTextReaderPtr reader, void *arg)
 {
@@ -654,6 +823,28 @@ pop:	fnstack_pop();
 	return error;
 }
 
+int
+rrdp_parse_snapshot(struct update_notification *notif)
+{
+	struct rpki_uri *uri;
+	int error;
+
+	uri = notif->snapshot.uri;
+
+	pr_val_debug("Processing snapshot '%s'.", uri_val_get_printable(uri));
+	fnstack_push_uri(uri);
+
+	error = cache_download(uri, NULL);
+	if (error)
+		goto end;
+	error = parse_snapshot(uri, notif);
+	delete_from_uri(uri);
+
+end:
+	fnstack_pop();
+	return error;
+}
+
 static int
 xml_read_delta(xmlTextReaderPtr reader, void *arg)
 {
@@ -737,30 +928,104 @@ end:
 }
 
 int
-rrdp_parse_snapshot(struct update_notification *notif)
-{
-	struct rpki_uri *uri;
-	int error;
-
-	uri = notif->snapshot.uri;
-
-	pr_val_debug("Processing snapshot '%s'.", uri_val_get_printable(uri));
-	fnstack_push_uri(uri);
-
-	error = cache_download(uri, NULL);
-	if (error)
-		goto end;
-	error = parse_snapshot(uri, notif);
-	delete_from_uri(uri);
-
-end:
-	fnstack_pop();
-	return error;
-}
-
-int
 rrdp_process_deltas(struct update_notification *notif, unsigned long serial)
 {
 	return deltas_head_for_each(&notif->deltas_list, notif->meta.serial,
 	    serial, process_delta, notif);
+}
+
+static int
+get_metadata(struct rpki_uri *uri, struct notification_metadata *result)
+{
+	struct stat st;
+	struct update_notification notification;
+	int error;
+
+	result->session_id = NULL;
+	result->serial = 0;
+
+	if (stat(uri_get_local(uri), &st) != 0) {
+		error = errno;
+		return (error == ENOENT) ? 0 : error;
+	}
+
+	/*
+	 * TODO (fine) optimize by not reading everything,
+	 * or maybe keep it if it doesn't change.
+	 */
+	error = rrdp_parse_notification(uri, &notification);
+	if (error)
+		return error;
+
+	*result = notification.meta;
+	memset(&notification.meta, 0, sizeof(notification.meta));
+	update_notification_cleanup(&notification);
+	return 0;
+}
+
+/*
+ * Downloads the Update Notification pointed by @uri, and updates the cache
+ * accordingly.
+ *
+ * "Updates the cache accordingly" means it downloads the missing deltas or
+ * snapshot, and explodes them into the corresponding RPP's local directory.
+ * Calling code can then access the files, just as if they had been downloaded
+ * via rsync.
+ */
+int
+rrdp_update(struct rpki_uri *uri)
+{
+	struct notification_metadata old;
+	struct update_notification new;
+	bool changed;
+	int error;
+
+	fnstack_push_uri(uri);
+	pr_val_debug("Processing notification.");
+
+	error = get_metadata(uri, &old);
+	if (error)
+		goto end;
+	pr_val_debug("Old session/serial: %s/%lu", old.session_id, old.serial);
+
+	error = cache_download(uri, &changed);
+	if (error)
+		goto end;
+	if (!changed) {
+		pr_val_debug("The Notification has not changed.");
+		goto end;
+	}
+
+	error = rrdp_parse_notification(uri, &new);
+	if (error)
+		goto end; /* FIXME fall back to previous? */
+	pr_val_debug("New session/serial: %s/%lu", new.meta.session_id,
+	    new.meta.serial);
+
+	if (old.session_id == NULL) {
+		pr_val_debug("This is a new Notification.");
+		error = rrdp_parse_snapshot(&new);
+		goto revert_notification;
+	}
+
+	if (strcmp(old.session_id, new.meta.session_id) != 0) {
+		pr_val_debug("The Notification's session ID changed.");
+		error = rrdp_parse_snapshot(&new);
+		goto revert_notification;
+	}
+
+	if (old.serial != new.meta.serial) {
+		pr_val_debug("The Notification' serial changed.");
+		error = rrdp_process_deltas(&new, old.serial);
+		goto revert_notification;
+	}
+
+	pr_val_debug("The Notification changed, but the session ID and serial didn't.");
+
+revert_notification:
+	update_notification_cleanup(&new);
+
+end:	notification_metadata_cleanup(&old);
+	fnstack_pop();
+	return error;
 }

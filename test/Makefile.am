@@ -30,7 +30,7 @@ check_PROGRAMS += line_file.test
 check_PROGRAMS += pb.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += pdu_stream.test
-check_PROGRAMS += rrdp_objects.test
+check_PROGRAMS += rrdp.test
 check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
 check_PROGRAMS += thread_pool.test
@@ -65,8 +65,8 @@ pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 pdu_stream_test_SOURCES = rtr/pdu_stream_test.c
 pdu_stream_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
-rrdp_objects_test_SOURCES = rrdp_objects_test.c
-rrdp_objects_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
+rrdp_test_SOURCES = rrdp_test.c
+rrdp_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
 
 serial_test_SOURCES = types/serial_test.c
 serial_test_LDADD = ${MY_LDADD}
