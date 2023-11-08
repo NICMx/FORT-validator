@@ -391,24 +391,20 @@ validate_session(xmlTextReaderPtr reader, struct rrdp_session *expected)
 		return error;
 
 	if (xmlStrcmp(expected->session_id, actual.session_id) != 0) {
-		/* FIXME why are these not error messages */
-		pr_val_info("File session id [%s] doesn't match parent's session id [%s]",
+		error = pr_val_err("File session id [%s] doesn't match notification's session id [%s]",
 		    expected->session_id, actual.session_id);
-		goto fail;
+		goto end;
 	}
 
 	if (actual.serial != expected->serial) {
-		pr_val_info("File serial '%lu' doesn't match expected serial '%lu'",
+		error = pr_val_err("File serial '%lu' doesn't match notification's serial '%lu'",
 		    actual.serial, expected->serial);
-		goto fail;
+		goto end;
 	}
 
+end:
 	rrdp_session_cleanup(&actual);
-	return 0;
-
-fail:
-	rrdp_session_cleanup(&actual);
-	return EINVAL;
+	return error;
 }
 
 /*
@@ -462,8 +458,10 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 
 	/* Read the text */
 	if (xmlTextReaderRead(reader) != 1) {
-		return pr_val_err("Couldn't read publish content of element '%s'",
-		    uri_get_global(tag->meta.uri));
+		return pr_val_err(
+		    "Couldn't read publish content of element '%s'",
+		    uri_get_global(tag->meta.uri)
+		);
 	}
 
 	base64_str = parse_string(reader, NULL);
@@ -476,16 +474,10 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 		return error;
 
 	/* rfc8181#section-2.2 but considering optional hash */
-	if (tag->meta.hash_len > 0) {
+	if (tag->meta.hash_len > 0)
 		error = validate_hash(&tag->meta);
-		if (error) {
-			pr_val_info("Hash of base64 decoded element from URI '%s' doesn't match <publish> element hash",
-			    uri_get_global(tag->meta.uri));
-			return error;
-		}
-	}
 
-	return 0;
+	return error;
 }
 
 static int
@@ -769,7 +761,6 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 			error = validate_session(reader, &ctx->session);
 		else
 			return pr_val_err("Unexpected '%s' element", name);
-
 		if (error)
 			return error;
 		break;
