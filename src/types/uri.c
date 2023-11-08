@@ -597,23 +597,35 @@ uris_add(struct uri_list *uris, struct rpki_uri *uri)
 }
 
 static int
-download(struct rpki_uri *uri, bool use_rrdp)
+download(struct rpki_uri *uri, bool use_rrdp, uris_dl_cb cb, void *arg)
 {
-	return (use_rrdp && (uri_get_type(uri) == UT_HTTPS))
+	int error;
+
+	error = (use_rrdp && (uri_get_type(uri) == UT_HTTPS))
 	    ? rrdp_update(uri)
 	    : cache_download(uri, NULL);
+	if (error)
+		return 1;
+
+	return cb(uri, arg);
 }
 
-static struct rpki_uri *
-download_uris(struct uri_list *uris, enum uri_type type, bool use_rrdp)
+static int
+download_uris(struct uri_list *uris, enum uri_type type, bool use_rrdp,
+    uris_dl_cb cb, void *arg)
 {
-	struct rpki_uri **cursor, *uri;
-	ARRAYLIST_FOREACH(uris, cursor) {
-		uri = *cursor;
-		if (uri_get_type(uri) == type && download(uri, use_rrdp) == 0)
-			return uri;
+	struct rpki_uri **uri;
+	int error;
+
+	ARRAYLIST_FOREACH(uris, uri) {
+		if (uri_get_type(*uri) == type) {
+			error = download(*uri, use_rrdp, cb, arg);
+			if (error <= 0)
+				return error;
+		}
 	}
-	return NULL;
+
+	return 1;
 }
 
 /**
@@ -622,41 +634,42 @@ download_uris(struct uri_list *uris, enum uri_type type, bool use_rrdp)
  *
  * Sequentially (in the order dictated by their priorities) attempts to update
  * (in the cache) the content pointed by each URL.
- * Stops on the first success, returning the corresponding URI.
+ * If a download succeeds, calls cb on it. If cb succeeds, returns without
+ * trying more URLs.
  *
- * If there's no successful update, attempts to find one that's already cached.
- * Returns the newest successfully cached URI.
- *
- * Does not grab any references.
+ * If none of the URLs download and callback properly, attempts to find one
+ * that's already cached, and callbacks it.
  */
-struct rpki_uri *
-uris_download(struct uri_list *uris, bool use_rrdp)
+int
+uris_download(struct uri_list *uris, bool use_rrdp, uris_dl_cb cb, void *arg)
 {
 	struct rpki_uri **cursor, *uri;
+	int error;
 
 	if (config_get_http_priority() > config_get_rsync_priority()) {
-		uri = download_uris(uris, UT_HTTPS, use_rrdp);
-		if (uri != NULL)
-			return uri;
-		uri = download_uris(uris, UT_RSYNC, use_rrdp);
-		if (uri != NULL)
-			return uri;
+		error = download_uris(uris, UT_HTTPS, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
+		error = download_uris(uris, UT_RSYNC, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
 
 	} else if (config_get_http_priority() < config_get_rsync_priority()) {
-		uri = download_uris(uris, UT_RSYNC, use_rrdp);
-		if (uri != NULL)
-			return uri;
-		uri = download_uris(uris, UT_HTTPS, use_rrdp);
-		if (uri != NULL)
-			return uri;
+		error = download_uris(uris, UT_RSYNC, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
+		error = download_uris(uris, UT_HTTPS, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
 
 	} else {
 		ARRAYLIST_FOREACH(uris, cursor) {
-			uri = *cursor;
-			if (download(uri, use_rrdp) == 0)
-				return uri;
+			error = download(*cursor, use_rrdp, cb, arg);
+			if (error <= 0)
+				return error;
 		}
 	}
 
-	return cache_recover(uris, use_rrdp);
+	uri = cache_recover(uris, use_rrdp);
+	return (uri != NULL) ? cb(uri, arg) : ESRCH;
 }

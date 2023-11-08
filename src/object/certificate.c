@@ -1919,15 +1919,27 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 	return 0;
 }
 
+static int
+retrieve_uri(struct rpki_uri *uri, void *arg)
+{
+	struct rpki_uri **result = arg;
+	*result = uri;
+	return 0;
+}
+
 static struct rpki_uri *
 download_rpp(struct sia_uris *uris)
 {
+	struct rpki_uri *uri;
+	int error;
+
 	if (uris->rpp.len == 0) {
 		pr_val_err("SIA lacks both caRepository and rpkiNotify.");
 		return NULL;
 	}
 
-	return uris_download(&uris->rpp, true);
+	error = uris_download(&uris->rpp, true, retrieve_uri, &uri);
+	return error ? NULL : uri;
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */

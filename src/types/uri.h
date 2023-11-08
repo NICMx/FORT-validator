@@ -56,6 +56,15 @@ void uris_init(struct uri_list *);
 void uris_cleanup(struct uri_list *);
 
 void uris_add(struct uri_list *, struct rpki_uri *);
-struct rpki_uri *uris_download(struct uri_list *, bool);
+
+/*
+ * The callback should return
+ *
+ * - 0 on success ("URI handled successfully")
+ * - > 0 on soft errors ("Try another URI")
+ * - < 0 on hard errors ("Abandon foreach")
+ */
+typedef int (*uris_dl_cb)(struct rpki_uri *, void *);
+int uris_download(struct uri_list *, bool, uris_dl_cb, void *);
 
 #endif /* SRC_TYPES_URI_H_ */

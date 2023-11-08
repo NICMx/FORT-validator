@@ -40,9 +40,14 @@ struct validation_thread {
 /* List of threads, one per TAL file */
 SLIST_HEAD(threads_list, validation_thread);
 
-struct tal_param {
+struct tal_thread_args {
 	struct db_table *db;
 	struct threads_list threads;
+};
+
+struct handle_tal_args {
+	struct tal *tal;
+	struct db_table *db;
 };
 
 static int
@@ -330,25 +335,11 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 
 /**
  * Performs the whole validation walkthrough on uri @uri, which is assumed to
- * have been extracted from a TAL.
+ * have been extracted from TAL @tal.
  */
 static int
 handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 {
-	/*
-	 * Because of the way the foreach iterates, this function must return
-	 *
-	 * - 0 on soft errors.
-	 * - `> 0` on URI handled successfully.
-	 * - `< 0` on hard errors.
-	 *
-	 * A "soft error" is "the connection to the preferred URI fails, or the
-	 * retrieved CA certificate public key does not match the TAL public
-	 * key." (RFC 8630)
-	 *
-	 * A "hard error" is any other error.
-	 */
-
 	struct validation_handler validation_handler;
 	struct validation *state;
 	struct cert_stack *certstack;
@@ -367,9 +358,10 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 		return ENSURE_NEGATIVE(error);
 
 	if (!uri_is_certificate(uri)) {
-		error = pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
+		pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
 		    uri_op_get_printable(uri));
-		goto fail;
+		error = EINVAL;
+		goto end;
 	}
 
 	/* Handle root certificate. */
@@ -377,13 +369,13 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 	if (error) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:
-			error = 0; /* Try a different TAL URI. */
+			error = EINVAL;
 			goto end;
 		case PKS_VALID:
 		case PKS_UNTESTED:
-			goto fail; /* Reject the TAL. */
+			error = ENSURE_NEGATIVE(error);
+			goto end;
 		}
-
 		pr_crit("Unknown public key state: %u",
 		    validation_pubkey_state(state));
 	}
@@ -402,8 +394,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 	do {
 		error = deferstack_pop(certstack, &deferred);
 		if (error == -ENOENT) {
-			/* No more certificates left; we're done. */
-			error = 1;
+			error = 0; /* No more certificates left; we're done */
 			goto end;
 		} else if (error) /* All other errors are critical, currently */
 			pr_crit("deferstack_pop() returned illegal %d.", error);
@@ -418,10 +409,16 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 		rpp_refput(deferred.pp);
 	} while (true);
 
-fail:	error = ENSURE_NEGATIVE(error);
 end:	validation_destroy(state);
 	pr_val_debug("}");
 	return error;
+}
+
+static int
+__handle_tal_uri(struct rpki_uri *uri, void *arg)
+{
+	struct handle_tal_args *args = arg;
+	return handle_tal_uri(args->tal, uri, args->db);
 }
 
 static void *
@@ -429,7 +426,7 @@ do_file_validation(void *arg)
 {
 	struct validation_thread *thread = arg;
 	struct tal *tal;
-	struct rpki_uri *ta_uri;
+	struct handle_tal_args handle_args;
 	int error;
 
 	fnstack_init();
@@ -439,19 +436,15 @@ do_file_validation(void *arg)
 	if (error)
 		goto end;
 
-	ta_uri = uris_download(&tal->uris, false);
-	if (ta_uri == NULL) {
-		error = pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
+	handle_args.tal = tal;
+	handle_args.db = thread->db;
+	error = uris_download(&tal->uris, false, __handle_tal_uri, &handle_args);
+	if (error)
+		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);
-		goto destroy_tal;
-	}
 
-	error = handle_tal_uri(tal, ta_uri, thread->db);
-
-destroy_tal:
 	tal_destroy(tal);
-end:
-	fnstack_cleanup();
+end:	fnstack_cleanup();
 	thread->exit_status = error;
 	return NULL;
 }
@@ -467,16 +460,16 @@ thread_destroy(struct validation_thread *thread)
 static int
 spawn_tal_thread(char const *tal_file, void *arg)
 {
-	struct tal_param *param = arg;
+	struct tal_thread_args *thread_args = arg;
 	struct validation_thread *thread;
 	int error;
 
 	thread = pmalloc(sizeof(struct validation_thread));
 
 	thread->tal_file = pstrdup(tal_file);
-	thread->db = param->db;
+	thread->db = thread_args->db;
 	thread->exit_status = -EINTR;
-	SLIST_INSERT_HEAD(&param->threads, thread, next);
+	SLIST_INSERT_HEAD(&thread_args->threads, thread, next);
 
 	error = pthread_create(&thread->pid, NULL, do_file_validation, thread);
 	if (error) {
@@ -492,33 +485,33 @@ spawn_tal_thread(char const *tal_file, void *arg)
 int
 perform_standalone_validation(struct db_table *table)
 {
-	struct tal_param param;
+	struct tal_thread_args args;
 	struct validation_thread *thread;
 	int error, tmperr;
 
-	param.db = table;
-	SLIST_INIT(&param.threads);
+	args.db = table;
+	SLIST_INIT(&args.threads);
 
-	/* TODO (fine) Maybe don't use threads if there's only one TAL */
+	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
 	error = foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
-	    &param);
+	    &args);
 	if (error) {
-		while (!SLIST_EMPTY(&param.threads)) {
-			thread = SLIST_FIRST(&param.threads);
-			SLIST_REMOVE_HEAD(&param.threads, next);
+		while (!SLIST_EMPTY(&args.threads)) {
+			thread = SLIST_FIRST(&args.threads);
+			SLIST_REMOVE_HEAD(&args.threads, next);
 			thread_destroy(thread);
 		}
 		return error;
 	}
 
 	/* Wait for all */
-	while (!SLIST_EMPTY(&param.threads)) {
-		thread = SLIST_FIRST(&param.threads);
+	while (!SLIST_EMPTY(&args.threads)) {
+		thread = SLIST_FIRST(&args.threads);
 		tmperr = pthread_join(thread->pid, NULL);
 		if (tmperr)
 			pr_crit("pthread_join() threw %d (%s) on the '%s' thread.",
 			    tmperr, strerror(tmperr), thread->tal_file);
-		SLIST_REMOVE_HEAD(&param.threads, next);
+		SLIST_REMOVE_HEAD(&args.threads, next);
 		if (thread->exit_status) {
 			error = thread->exit_status;
 			pr_op_warn("Validation from TAL '%s' yielded error %d (%s); discarding all validation results.",
