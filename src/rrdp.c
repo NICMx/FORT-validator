@@ -32,9 +32,15 @@
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
 
+/* These are supposed to be unbounded */
+struct rrdp_serial {
+	BIGNUM *num;
+	xmlChar *str; /* for printing */
+};
+
 struct rrdp_session {
 	xmlChar *session_id;
-	unsigned long serial;
+	struct rrdp_serial serial;
 };
 
 /* The hash is sometimes omitted. */
@@ -46,11 +52,7 @@ struct file_metadata {
 
 /* A delta tag, listed by a notification. (Not the actual delta file.) */
 struct notification_delta {
-	/*
-	 * TODO this is not an RFC 1982 serial. It's supposed to be unbounded,
-	 * so we should probably handle it as a string.
-	 */
-	unsigned long serial;
+	struct rrdp_serial serial;
 	struct file_metadata meta;
 };
 
@@ -89,10 +91,21 @@ typedef enum {
 	HR_IGNORE,
 } hash_requirement;
 
+static BIGNUM *
+BN_create(void)
+{
+	BIGNUM *result = BN_new();
+	if (result == NULL)
+		enomem_panic();
+	return result;
+}
+
 static void
 rrdp_session_cleanup(struct rrdp_session *meta)
 {
 	xmlFree(meta->session_id);
+	BN_free(meta->serial.num);
+	xmlFree(meta->serial.str);
 }
 
 static void
@@ -338,7 +351,7 @@ parse_hex_string(xmlTextReaderPtr reader, hash_requirement hr, char const *attr,
 static int
 validate_version(xmlTextReaderPtr reader, unsigned long expected)
 {
-	unsigned long version;
+	unsigned long version = 0;
 	int error;
 
 	error = parse_ulong(reader, RRDP_ATTR_VERSION, &version);
@@ -350,6 +363,37 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 		    expected, version);
 
 	return 0;
+}
+
+static void
+serial_cleanup(struct rrdp_serial *serial)
+{
+	BN_free(serial->num);
+	serial->num = NULL;
+	xmlFree(serial->str);
+	serial->str = NULL;
+}
+
+static int
+parse_serial(xmlTextReaderPtr reader, struct rrdp_serial *serial)
+{
+	serial->str = parse_string(reader, RRDP_ATTR_SERIAL);
+	if (serial->str == NULL)
+		return EINVAL;
+
+	serial->num = BN_create();
+	if (BN_dec2bn(&serial->num, (char const *) serial->str) == 0)
+		goto fail;
+	if (BN_is_negative(serial->num)) {
+		pr_val_err("Serial '%s' is negative.", serial->str);
+		goto fail;
+	}
+
+	return 0;
+
+fail:
+	serial_cleanup(serial);
+	return EINVAL;
 }
 
 static int
@@ -371,13 +415,18 @@ parse_session(xmlTextReaderPtr reader, struct rrdp_session *meta)
 	if (error)
 		return error;
 
-	meta->serial = 0;
-	error = parse_ulong(reader, RRDP_ATTR_SERIAL, &meta->serial);
-	if (error)
-		return error;
-
 	meta->session_id = parse_string(reader, RRDP_ATTR_SESSION_ID);
-	return (meta->session_id != NULL) ? 0 : -EINVAL;
+	if (meta->session_id == NULL)
+		return EINVAL;
+
+	error = parse_serial(reader, &meta->serial);
+	if (error) {
+		xmlFree(meta->session_id);
+		meta->session_id = NULL;
+		return error;
+	}
+
+	return 0;
 }
 
 static int
@@ -396,9 +445,9 @@ validate_session(xmlTextReaderPtr reader, struct rrdp_session *expected)
 		goto end;
 	}
 
-	if (actual.serial != expected->serial) {
-		error = pr_val_err("File serial '%lu' doesn't match notification's serial '%lu'",
-		    actual.serial, expected->serial);
+	if (BN_cmp(actual.serial.num, expected->serial.num) != 0) {
+		error = pr_val_err("File serial [%s] doesn't match notification's serial [%s]",
+		    actual.serial.str, expected->serial.str);
 		goto end;
 	}
 
@@ -566,67 +615,106 @@ parse_notification_delta(xmlTextReaderPtr reader,
 	struct notification_delta delta;
 	int error;
 
-	error = parse_ulong(reader, RRDP_ATTR_SERIAL, &delta.serial);
+	error = parse_serial(reader, &delta.serial);
 	if (error)
 		return error;
+
 	error = parse_file_metadata(reader, NULL, HR_MANDATORY, &delta.meta);
-	if (error)
+	if (error) {
+		serial_cleanup(&delta.serial);
 		return error;
+	}
 
 	notification_deltas_add(&notif->deltas, &delta);
 	return 0;
 }
 
 static int
-swap_until_sorted(struct notification_delta *deltas, unsigned int i,
-    unsigned long min, unsigned long max)
+swap_until_sorted(struct notification_delta *deltas, array_index i,
+    BIGNUM *min, struct rrdp_serial *max, BIGNUM *target_slot)
 {
-	unsigned int target_slot;
+	BN_ULONG _target_slot;
 	struct notification_delta tmp;
 
 	while (true) {
-		if (deltas[i].serial < min || max < deltas[i].serial) {
-			return pr_val_err("Deltas: Serial '%lu' is out of bounds. (min:%lu, max:%lu)",
-			    deltas[i].serial, min, max);
+		if (BN_cmp(deltas[i].serial.num, min) < 0) {
+			char *str = BN_bn2dec(min);
+			pr_val_err(
+			    "Deltas: Serial '%s' is out of bounds. (min:%s)",
+			    deltas[i].serial.str, str);
+			OPENSSL_free(str);
+			return -EINVAL;
 		}
+		if (BN_cmp(max->num, deltas[i].serial.num) < 0)
+			return pr_val_err(
+			    "Deltas: Serial '%s' is out of bounds. (max:%s)",
+			    deltas[i].serial.str, max->str);
 
-		target_slot = deltas[i].serial - min;
-		if (i == target_slot)
+		if (!BN_sub(target_slot, deltas[i].serial.num, min))
+			enomem_panic();
+		_target_slot = BN_get_word(target_slot);
+		if (i == _target_slot)
 			return 0;
-		if (deltas[target_slot].serial == deltas[i].serial) {
-			return pr_val_err("Deltas: Serial '%lu' is not unique.",
-			    deltas[i].serial);
+		if (BN_cmp(deltas[_target_slot].serial.num, deltas[i].serial.num) == 0) {
+			return pr_val_err("Deltas: Serial '%s' is not unique.",
+			    deltas[i].serial.str);
 		}
 
 		/* Simple swap */
-		tmp = deltas[target_slot];
-		deltas[target_slot] = deltas[i];
+		tmp = deltas[_target_slot];
+		deltas[_target_slot] = deltas[i];
 		deltas[i] = tmp;
 	}
 }
 
 static int
-notification_deltas_sort(struct notification_deltas *deltas,
-    unsigned long max_serial)
+sort_deltas(struct update_notification *notif)
 {
-	unsigned long min_serial;
+	struct notification_deltas *deltas;
+	BIGNUM *min_serial;
+	struct rrdp_serial *max_serial;
+	BIGNUM *aux;
 	array_index i;
 	int error;
 
-	if (max_serial + 1 < deltas->len)
-		return pr_val_err("Deltas: Too many deltas (%zu) for serial %lu. (Negative serials not implemented.)",
-		    deltas->len, max_serial);
+	/*
+	 * Note: The RFC explicitly states that the serials have to be
+	 * a "contiguous sequence."
+	 * Effective linear sort FTW.
+	 */
 
-	min_serial = max_serial + 1 - deltas->len;
+	deltas = &notif->deltas;
+	if (deltas->len == 0)
+		return 0;
 
-	ARRAYLIST_FOREACH_IDX(deltas, i) {
-		error = swap_until_sorted(deltas->array, i, min_serial,
-		    max_serial);
-		if (error)
-			return error;
+	max_serial = &notif->session.serial;
+	min_serial = BN_dup(max_serial->num);
+	if (min_serial == NULL)
+		enomem_panic();
+	if (!BN_sub_word(min_serial, deltas->len - 1)) {
+		error = pr_val_err("Could not subtract %s - %zu; unknown cause.",
+		    notif->session.serial.str, deltas->len - 1);
+		goto end;
+	}
+	if (BN_is_negative(min_serial)) {
+		error = pr_val_err("Too many deltas (%zu) for serial %s. (Negative serials not implemented.)",
+		    deltas->len, max_serial->str);
+		goto end;
 	}
 
-	return 0;
+	aux = BN_create();
+
+	error = 0;
+	ARRAYLIST_FOREACH_IDX(deltas, i) {
+		error = swap_until_sorted(deltas->array, i, min_serial,
+		    max_serial, aux);
+		if (error)
+			break;
+	}
+
+	BN_free(aux);
+end:	BN_free(min_serial);
+	return error;
 }
 
 static int
@@ -652,8 +740,7 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 
 	case XML_READER_TYPE_END_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION))
-			return notification_deltas_sort(&notif->deltas,
-			    notif->session.serial);
+			return sort_deltas(notif);
 		break;
 	}
 
@@ -812,10 +899,11 @@ end:
 }
 
 static int
-handle_deltas(struct update_notification *notif, unsigned long serial)
+handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
 {
-	size_t index;
-	size_t from;
+	BIGNUM *diff_bn;
+	BN_ULONG diff;
+	array_index d;
 	int error;
 
 	/* No elements, send error so that the snapshot is processed */
@@ -824,11 +912,30 @@ handle_deltas(struct update_notification *notif, unsigned long serial)
 		return -ENOENT;
 	}
 
-	pr_val_debug("Getting RRDP deltas from serial %lu to %lu.", serial,
-	    notif->session.serial);
-	from = notif->deltas.len - (notif->session.serial - serial);
-	for (index = from; index < notif->deltas.len; index++) {
-		error = handle_delta(notif, &notif->deltas.array[index]);
+	pr_val_debug("Handling RRDP delta serials %s-%s.", serial->str,
+	    notif->session.serial.str);
+
+	diff_bn = BN_create();
+	if (!BN_sub(diff_bn, notif->session.serial.num, serial->num)) {
+		BN_free(diff_bn);
+		return pr_val_err("Could not subtract %s - %s; unknown cause.",
+		    notif->session.serial.str, serial->str);
+	}
+	if (BN_is_negative(diff_bn)) {
+		BN_free(diff_bn);
+		/* FIXME delete RPP and fall back to snapshot */
+		return pr_val_err("Cached delta's serial [%s] is larger than Notification's current serial [%s].",
+		    serial->str, notif->session.serial.str);
+	}
+	diff = BN_get_word(diff_bn);
+	BN_free(diff_bn);
+	/* TODO (fine) 64 may be too much; optimize it. */
+	if (diff > 64ul || diff > notif->deltas.len)
+		return pr_val_err("Cached RPP is too old. (Cached serial: %s; current serial: %s)",
+		    serial->str, notif->session.serial.str);
+
+	for (d = notif->deltas.len - diff; d < notif->deltas.len; d++) {
+		error = handle_delta(notif, &notif->deltas.array[d]);
 		if (error)
 			return error;
 	}
@@ -842,9 +949,6 @@ get_metadata(struct rpki_uri *uri, struct rrdp_session *result)
 	struct stat st;
 	struct update_notification notification;
 	int error;
-
-	result->session_id = NULL;
-	result->serial = 0;
 
 	if (stat(uri_get_local(uri), &st) != 0) {
 		error = errno;
@@ -871,13 +975,11 @@ get_metadata(struct rpki_uri *uri, struct rrdp_session *result)
  *
  * "Updates the cache accordingly" means it downloads the missing deltas or
  * snapshot, and explodes them into the corresponding RPP's local directory.
- * Calling code can then access the files, just as if they had been downloaded
- * via rsync.
  */
 int
 rrdp_update(struct rpki_uri *uri)
 {
-	struct rrdp_session old;
+	struct rrdp_session old = { 0 };
 	struct update_notification new;
 	bool changed;
 	int error;
@@ -888,7 +990,8 @@ rrdp_update(struct rpki_uri *uri)
 	error = get_metadata(uri, &old);
 	if (error)
 		goto end;
-	pr_val_debug("Old session/serial: %s/%lu", old.session_id, old.serial);
+	pr_val_debug("Old session/serial: %s/%s", old.session_id,
+	    old.serial.str);
 
 	error = cache_download(uri, &changed);
 	if (error)
@@ -900,11 +1003,11 @@ rrdp_update(struct rpki_uri *uri)
 
 	error = parse_notification(uri, &new);
 	if (error)
-		goto end; /* FIXME fall back to previous? */
-	pr_val_debug("New session/serial: %s/%lu", new.session.session_id,
-	    new.session.serial);
+		goto end;
+	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
+	    new.session.serial.str);
 
-	if (old.session_id == NULL) {
+	if (old.session_id == NULL || old.serial.num == NULL) {
 		pr_val_debug("This is a new Notification.");
 		error = handle_snapshot(&new);
 		goto revert_notification;
@@ -916,9 +1019,9 @@ rrdp_update(struct rpki_uri *uri)
 		goto revert_notification;
 	}
 
-	if (old.serial != new.session.serial) {
-		pr_val_debug("The Notification' serial changed.");
-		error = handle_deltas(&new, old.serial);
+	if (BN_cmp(old.serial.num, new.session.serial.num) != 0) {
+		pr_val_debug("The Notification's serial changed.");
+		error = handle_deltas(&new, &old.serial);
 		goto revert_notification;
 	}
 
@@ -926,8 +1029,8 @@ rrdp_update(struct rpki_uri *uri)
 
 revert_notification:
 	update_notification_cleanup(&new);
-
-end:	rrdp_session_cleanup(&old);
+end:
+	rrdp_session_cleanup(&old);
 	fnstack_pop();
 	return error;
 }
