@@ -923,7 +923,6 @@ handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
 	}
 	if (BN_is_negative(diff_bn)) {
 		BN_free(diff_bn);
-		/* FIXME delete RPP and fall back to snapshot */
 		return pr_val_err("Cached delta's serial [%s] is larger than Notification's current serial [%s].",
 		    serial->str, notif->session.serial.str);
 	}
@@ -1022,6 +1021,10 @@ rrdp_update(struct rpki_uri *uri)
 	if (BN_cmp(old.serial.num, new.session.serial.num) != 0) {
 		pr_val_debug("The Notification's serial changed.");
 		error = handle_deltas(&new, &old.serial);
+		if (error) {
+			pr_val_debug("Falling back to snapshot.");
+			error = handle_snapshot(&new);
+		}
 		goto revert_notification;
 	}
 
