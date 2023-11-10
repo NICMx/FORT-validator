@@ -98,14 +98,14 @@ START_TEST(test_sort_deltas)
 	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 4, "4"));
 	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 2, "2"));
 
-	notification_deltas_cleanup(&deltas, notification_delta_destroy);
+	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
 	notification_deltas_init(&deltas);
 
 	add_serials(&deltas, 3, 0, 1, 2, END);
 	ck_assert_int_eq(0, __sort_deltas(&deltas, 3, "3"));
 	validate_serials(&deltas, 0, 1, 2, 3, END);
 
-	notification_deltas_cleanup(&deltas, notification_delta_destroy);
+	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
 	notification_deltas_init(&deltas);
 
 	add_serials(&deltas, 4, 3, 2, 1, 0, END);
@@ -115,7 +115,7 @@ START_TEST(test_sort_deltas)
 	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 5, "5"));
 	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 3, "3"));
 
-	notification_deltas_cleanup(&deltas, notification_delta_destroy);
+	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
 }
 END_TEST
 

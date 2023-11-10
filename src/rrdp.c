@@ -101,7 +101,16 @@ BN_create(void)
 }
 
 static void
-rrdp_session_cleanup(struct rrdp_session *meta)
+serial_cleanup(struct rrdp_serial *serial)
+{
+	BN_free(serial->num);
+	serial->num = NULL;
+	xmlFree(serial->str);
+	serial->str = NULL;
+}
+
+static void
+session_cleanup(struct rrdp_session *meta)
 {
 	xmlFree(meta->session_id);
 	BN_free(meta->serial.num);
@@ -116,6 +125,13 @@ metadata_cleanup(struct file_metadata *meta)
 }
 
 static void
+notification_delta_cleanup(struct notification_delta *delta)
+{
+	serial_cleanup(&delta->serial);
+	metadata_cleanup(&delta->meta);
+}
+
+static void
 update_notification_init(struct update_notification *notif,
     struct rpki_uri *uri)
 {
@@ -126,17 +142,11 @@ update_notification_init(struct update_notification *notif,
 }
 
 static void
-notification_delta_destroy(struct notification_delta *delta)
-{
-	metadata_cleanup(&delta->meta);
-}
-
-static void
 update_notification_cleanup(struct update_notification *file)
 {
 	metadata_cleanup(&file->snapshot);
-	rrdp_session_cleanup(&file->session);
-	notification_deltas_cleanup(&file->deltas, notification_delta_destroy);
+	session_cleanup(&file->session);
+	notification_deltas_cleanup(&file->deltas, notification_delta_cleanup);
 	uri_refput(file->uri);
 }
 
@@ -365,15 +375,6 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 	return 0;
 }
 
-static void
-serial_cleanup(struct rrdp_serial *serial)
-{
-	BN_free(serial->num);
-	serial->num = NULL;
-	xmlFree(serial->str);
-	serial->str = NULL;
-}
-
 static int
 parse_serial(xmlTextReaderPtr reader, struct rrdp_serial *serial)
 {
@@ -452,7 +453,7 @@ validate_session(xmlTextReaderPtr reader, struct rrdp_session *expected)
 	}
 
 end:
-	rrdp_session_cleanup(&actual);
+	session_cleanup(&actual);
 	return error;
 }
 
@@ -1044,7 +1045,7 @@ rrdp_update(struct rpki_uri *uri)
 revert_notification:
 	update_notification_cleanup(&new);
 end:
-	rrdp_session_cleanup(&old);
+	session_cleanup(&old);
 	fnstack_pop();
 	return error;
 }
