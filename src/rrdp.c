@@ -761,6 +761,15 @@ parse_notification(struct rpki_uri *uri, struct update_notification *result)
 	return error;
 }
 
+static void
+delete_rpp(struct rpki_uri *notif)
+{
+	char *path = uri_get_rrdp_workspace(notif);
+	pr_val_debug("Snapshot: Deleting cached RPP '%s'.", path);
+	file_rm_rf(path);
+	free(path);
+}
+
 static int
 xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 {
@@ -811,6 +820,8 @@ handle_snapshot(struct update_notification *notif)
 {
 	struct rpki_uri *uri;
 	int error;
+
+	delete_rpp(notif->uri);
 
 	uri = notif->snapshot.uri;
 

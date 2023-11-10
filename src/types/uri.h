@@ -48,6 +48,8 @@ bool uri_is_https(struct rpki_uri *);
 char const *uri_val_get_printable(struct rpki_uri *);
 char const *uri_op_get_printable(struct rpki_uri *);
 
+char *uri_get_rrdp_workspace(struct rpki_uri *);
+
 /* Plural */
 
 DEFINE_ARRAY_LIST_STRUCT(uri_list, struct rpki_uri *);

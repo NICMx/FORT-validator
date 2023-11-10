@@ -246,7 +246,7 @@ path_is_dotdots(struct path_parser *parser)
 {
 	return parser->len == 2
 	    && parser->token[0] == '.'
-	    && parser->token[1] == '.' ;
+	    && parser->token[1] == '.';
 }
 
 static int
@@ -307,6 +307,21 @@ append_guri(struct path_builder *pb, char const *guri, char const *gprefix,
 	return 0;
 }
 
+static int
+get_rrdp_workspace(struct path_builder *pb, struct rpki_uri *notif)
+{
+	int error;
+
+	error = pb_init_cache(pb, "rrdp");
+	if (error)
+		return error;
+
+	error = append_guri(pb, notif->global, "https://", ENOTHTTPS, true);
+	if (error)
+		pb_cleanup(pb);
+	return error;
+}
+
 /*
  * Maps "rsync://a.b.c/d/e.cer" into "<local-repository>/rsync/a.b.c/d/e.cer".
  */
@@ -340,15 +355,14 @@ map_caged(struct rpki_uri *uri, struct rpki_uri *notif)
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, "rrdp");
-	if (error)
-		return error;
-	error = append_guri(&pb, notif->global, "https://", ENOTHTTPS, true);
+	error = get_rrdp_workspace(&pb, notif);
 	if (error)
 		return error;
 	error = append_guri(&pb, uri->global, "rsync://", ENOTRSYNC, true);
-	if (error)
+	if (error) {
+		pb_cleanup(&pb);
 		return error;
+	}
 
 	uri->local = pb.string;
 	return 0;
@@ -567,6 +581,13 @@ uri_op_get_printable(struct rpki_uri *uri)
 
 	format = config_get_op_log_filename_format();
 	return uri_get_printable(uri, format);
+}
+
+char *
+uri_get_rrdp_workspace(struct rpki_uri *notif)
+{
+	struct path_builder pb;
+	return (get_rrdp_workspace(&pb, notif) == 0) ? pb.string : NULL;
 }
 
 DEFINE_ARRAY_LIST_FUNCTIONS(uri_list, struct rpki_uri *, static)
