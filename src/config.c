@@ -423,8 +423,7 @@ static const struct option_field options[] = {
 		.name = "rsync.priority",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, rsync.priority),
-		.doc = "Deprecated; does nothing.",
-		.deprecated = true,
+		.doc = "rsync's priority for repository file fetching. Higher value means higher priority.",
 		.min = 0,
 		.max = 100,
 	}, {
@@ -491,8 +490,7 @@ static const struct option_field options[] = {
 		.name = "http.priority",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.priority),
-		.doc = "Deprecated; does nothing.",
-		.deprecated = true,
+		.doc = "HTTP's priority for repository file fetching. Higher value means higher priority.",
 		.min = 0,
 		.max = 100,
 	}, {

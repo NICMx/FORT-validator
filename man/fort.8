@@ -108,28 +108,25 @@ is "rsync".
 .RE
 .P
 
-.B rsync.arguments-flat
+.B rsync.arguments-recursive
 .RS 4
 Arguments needed by
 .B rsync.program
-to perform a single-file rsync. The arguments are specified as a JSON string
+to perform a recursive rsync. The arguments are specified as a JSON string
 array; its default value is:
-[ "--times", "--contimeout=20", "--timeout=15", "--dirs", "$REMOTE", "$LOCAL" ]
+[ "-rtz", "--delete", "--contimeout=20", "--max-size=20MB",
+"--timeout=15", "--include=*/", "--include=*.cer", "--include=*.crl",
+"--include=*.gbr", "--include=*.mft", "--include=*.roa", "--exclude=*",
+"$REMOTE", "$LOCAL" ]
 .P
 FORT will replace "$REMOTE" with the remote URL it needs to download, and
 "$LOCAL" with the target local directory where the file is supposed to be
 dropped.
 .P
-If \fBrsync.program\fR set is \fIrsync\fR (default value), see more about its
-arguments and behavior at \fIrsync(1)\fR.
+See \fIrsync(1)\fR for a description of each argument.
 .RE
 .P
 
-.B rsync.arguments-recursive
-.RS 4
-Deprecated; does nothing.
-.RE
-.P
 
 .B incidences
 .RS 4
@@ -265,24 +262,6 @@ at configured \fB--local-repository\fR.
 Otherwise, Fort will perform outgoing requests whenever this is needed. If a
 specific protocol needs to be deactivated, use \fB--rsync.enabled\fR or
 \fB--http.enabled\fR.
-.RE
-.P
-
-.B \-\-shuffle-uris
-.RS 4
-If enabled, FORT will access TAL URLs in random order. This is meant for load
-balancing. If disabled, FORT will access TAL URLs in sequential order.
-.P
-By default, the flag is disabled.
-.P
-This flag is only relevant if the TAL lists more than one URL. Regardless of
-this flag, FORT will stop iterating through the URLs as soon as it finds one
-that yields a successful traversal.
-.P
-If the TAL lists more than one URL, the shuffle is done honoring the priority
-of the protocols (see \fB--rsync.priority\fR and \fB--http.priority\fR). i.e.
-if the HTTP protocol has a higher priority than RSYNC, then all the shuffled
-HTTP URLs will come first.
 .RE
 .P
 
@@ -908,12 +887,6 @@ requests.
 .RE
 .P
 
-.B \-\-rsync.strategy=(\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
-.RS 4
-Deprecated; does nothing.
-.RE
-.P
-
 .B \-\-rsync.retry.count=\fIUNSIGNED_INTEGER\fR
 .RS 4
 Maximum number of retries whenever there's an error executing RSYNC.
@@ -1037,38 +1010,12 @@ Maximum: \fIUINT_MAX\fR
 Default: \fI20\fR
 .RE
 
-.B \-\-thread-pool.validation.max=\fIUNSIGNED_INTEGER\fR
-.RS 4
-Maximum number of threads that will be spawned at an internal thread pool in
-order to run validation cycles.
-.P
-When a validation cycle begins, one thread per configured TAL is utilized; once
-the whole RPKI tree of the TAL is validated, the thread is returned to the pool.
-.P
-If there are more TALs at \fI--tal\fR than \fI--thread-pool.validation.max\fR
-threads at the pool, is very likely that the validation cycles take a bit more
-of time to complete since only \fI--thread-pool.validation.max\fR threads will
-be working at the same time. E.g. if \fI--thread-pool.validation.max=2\fR and
-the location at \fI--tal\fR has 4 TAL files, only 2 TALs will be validated
-simultaneously while the rest waits in a queue until there's an available thread
-at the pool to attend them.
-.P
-By default, it has a value of \fI5\fR. Minimum allowed value: \fI1\fR,
-maximum allowed value \fI100\fR.
-.RE
-
 .B \-\-asn1-decode-max-stack=\fIUNSIGNED_INTEGER\fR
 .RS 4
 ASN1 decoder max allowed stack size in bytes, utilized to avoid a stack
 overflow when a large nested ASN1 object is parsed.
 .P
 By default, it has a value of \fI4096\fR (4 kB).
-.RE
-.P
-
-.B \-\-stale-repository-period=\fIUNSIGNED_INTEGER\fR
-.RS 4
-Deprecated; does nothing.
 .RE
 .P
 

@@ -64,18 +64,14 @@ download_tals(void)
 {
 	int error;
 
-	/*
-	 * https://afrinic.net/resource-certification/tal
-	 * https://www.apnic.net/community/security/resource-certification/tal-archive/
-	 * https://www.arin.net/resources/manage/rpki/tal/
-	 * https://www.lacnic.net/4984/2/lacnic/rpki-rpki-trust-anchor
-	 * https://www.ripe.net/manage-ips-and-asns/resource-management/rpki/ripe-ncc-rpki-trust-anchor-structure
-	 */
-
+	/* https://afrinic.net/resource-certification/tal */
 	error = fetch_url("https://rpki.afrinic.net/tal/afrinic.tal");
 	if (error)
 		return error;
+
 	/*
+	 * https://www.apnic.net/community/security/resource-certification/tal-archive/
+	 *
 	 * APNIC is a bit weird. Some thoughts:
 	 *
 	 * 1. The 6490 and ripe-validator TALs are obsolete, and Fort has never
@@ -91,13 +87,21 @@ download_tals(void)
 	error = fetch_url("https://tal.apnic.net/apnic.tal");
 	if (error)
 		return error;
+
+	/* https://www.arin.net/resources/manage/rpki/tal/ */
 	error = fetch_url("https://www.arin.net/resources/manage/rpki/arin.tal");
 	if (error)
 		return error;
+
+	/* https://www.lacnic.net/4984/2/lacnic/rpki-rpki-trust-anchor */
 	error = fetch_url("https://www.lacnic.net/innovaportal/file/4983/1/lacnic.tal");
 	if (error)
 		return error;
-	/* I wish they stated why they don't recommend the 8630 TAL. */
+
+	/*
+	 * https://www.ripe.net/manage-ips-and-asns/resource-management/rpki/ripe-ncc-rpki-trust-anchor-structure
+	 * I wish they stated why they don't recommend the 8630 TAL.
+	 */
 	return fetch_url("https://tal.rpki.ripe.net/ripe-ncc.tal");
 }
 

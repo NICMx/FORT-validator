@@ -19,7 +19,6 @@ description: Guide to use arguments of FORT Validator.
 	6. [`--local-repository`](#--local-repository)
 	7. [`--work-offline`](#--work-offline)
 	8. [`--daemon`](#--daemon)
-	9. [`--shuffle-uris`](#--shuffle-uris)
 	10. [`--maximum-certificate-depth`](#--maximum-certificate-depth)
 	11. [`--mode`](#--mode)
 	12. [`--server.address`](#--serveraddress)
@@ -60,29 +59,20 @@ description: Guide to use arguments of FORT Validator.
 	44. [`--output.bgpsec`](#--outputbgpsec)
 	45. [`--output.format`](#--outputformat)
 	46. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
-	47. [`--stale-repository-period`](#--stale-repository-period)
 	48. [`--thread-pool.server.max`](#--thread-poolservermax)
 	50. [`--rsync.enabled`](#--rsyncenabled)
 	51. [`--rsync.priority`](#--rsyncpriority)
-	52. [`--rsync.strategy`](#--rsyncstrategy)
-		1. [`strict`](#strict)
-		2. [`root`](#root)
-		3. [`root-except-ta`](#root-except-ta)
 	53. [`--rsync.retry.count`](#--rsyncretrycount)
 	54. [`--rsync.retry.interval`](#--rsyncretryinterval)
 	55. [`--configuration-file`](#--configuration-file)
 	56. [`rsync.program`](#rsyncprogram)
 	57. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
-	58. [`rsync.arguments-flat`](#rsyncarguments-flat)
 	59. [`incidences`](#incidences)
 3. [Deprecated arguments](#deprecated-arguments)
-	1. [`--sync-strategy`](#--sync-strategy)
-	2. [`--rrdp.enabled`](#--rrdpenabled)
-	3. [`--rrdp.priority`](#--rrdppriority)
-	4. [`--rrdp.retry.count`](#--rrdpretrycount)
-	5. [`--rrdp.retry.interval`](#--rrdpretryinterval)
-	60. [`init-locations`](#init-locations)
-	41. [`--http.idle-timeout`](#--httpidle-timeout)
+	9. [`--shuffle-uris`](#--shuffle-uris)
+	47. [`--stale-repository-period`](#--stale-repository-period)
+	52. [`--rsync.strategy`](#--rsyncstrategy)
+	58. [`rsync.arguments-flat`](#rsyncarguments-flat)
 	49. [`--thread-pool.validation.max`](#--thread-poolvalidationmax)
 
 ## Syntax
@@ -338,23 +328,12 @@ Send process to the background?
 
 All enabled logs will be sent to syslog; [`--log.output`](#--logoutput) and [`--validation-log.output`](#--validation-logoutput) will be ignored.
 
-### `--shuffle-uris`
-
-- **Type:** Boolean (`true`, `false`)
-- **Availability:** `argv` and JSON
-
-Access the URLs from the TALs in random order? (This is meant for load balancing.) Otherwise, Fort will try to access them in sequential order. (Which makes more sense when the URLs are ordered by priority.)
-
-Fort only needs one TA for a successful traversal. As soon as one functioning URL is found, the others are ignored until the next validation cycle.
-
-> This sorting mechanism is secondary to the protocol sorting mechanism. URLs are first sorted according to their protocol's priorities ([`--rsync.priority`](#--rsyncpriority), [`--http.priority`](#--httppriority)), then according to `--shuffle-uris`.
-
 ### `--maximum-certificate-depth`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 32
-- **Range:** 5--([`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)--1)
+- **Range:** [5, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html))
 
 Maximum allowable RPKI tree height. Meant to protect Fort from iterating infinitely due to certificate chain loops.
 
@@ -404,7 +383,7 @@ This is a string because a service alias can be used as a valid value. The avail
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** [`SOMAXCONN`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/basedefs/sys_socket.h.html)
-- **Range:** 1--`SOMAXCONN`
+- **Range:** [1, `SOMAXCONN`]
 
 RTR server's listen queue length. It is the second argument of [`listen()`](http://pubs.opengroup.org/onlinepubs/9699919799.2008edition/functions/listen.html):
 
@@ -417,7 +396,7 @@ See the corresponding manual page from your operating system (likely `man 2 list
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 3600
-- **Range:** 60--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [60, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Number of seconds Fort will sleep between validation cycles, when in [`server`](#--mode) mode.
 
@@ -430,7 +409,7 @@ The timer starts counting every time a validation is finished, not every time it
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 3600
-- **Range:** 1--86400
+- **Range:** [1, 86400]
 
 To synchronize their cache of RPKI prefix origin data and router keys, RTR clients (routers) poll Fort's RTR Server at regular intervals.
 
@@ -443,7 +422,7 @@ See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 600
-- **Range:** 1--7200
+- **Range:** [1, 7200]
 
 To synchronize their cache of RPKI prefix origin data and router keys, RTR clients (routers) poll Fort's RTR Server at regular intervals.
 
@@ -456,7 +435,7 @@ See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 7200
-- **Range:** 600--172800
+- **Range:** [600, 172800]
 
 To synchronize their cache of RPKI prefix origin data and router keys, RTR clients (routers) poll Fort's RTR Server at regular intervals.
 
@@ -469,7 +448,7 @@ See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 2
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 When routers first connect to Fort, they request a _snapshot_ of the validation results. (ROAs and Router Keys.) Because they need to keep their validated objects updated, and snapshots tend to be relatively large amounts of information, they request _deltas_ afterwards over configurable intervals. ("Deltas" being the differences between snapshots.)
 
@@ -654,9 +633,9 @@ Mostly intended for debugging.
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 60
-- **Range:** 0--100
+- **Range:** [0, 100]
 
-HTTP's (and therefore RRDP's) precedence when choosing the protocol used to download files (assuming Fort has to choose, and both protocols are [enabled](#--http.enabled)). The protocol with the highest priority is used first, and the runner-up is employed as fallback.
+HTTP's (and therefore RRDP's) precedence when choosing the protocol used to download files (assuming Fort has to choose, and both protocols are [enabled](#--httpenabled)). The protocol with the highest priority is used first, and the runner-up is employed as fallback.
 
 > At the moment, only two protocols (RRDP/HTTP and RSYNC) are supported. Yes, `--http.priority`'s range is overkill.
 
@@ -667,7 +646,7 @@ See [`--rsync.priority`](#--rsyncpriority).
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 0
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Number of additional HTTP requests after a failed attempt.
 
@@ -678,7 +657,7 @@ If a transient error is returned when Fort tries to perform an HTTP transfer, it
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 5
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Period of time (in seconds) to wait between each retry to request an HTTP URI.
 
@@ -699,7 +678,7 @@ The value specified (either by the argument or the default value) is utilized in
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 30
-- **Range:** 1--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [1, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
 
@@ -714,7 +693,7 @@ The value specified (either by the argument or the default value) is utilized in
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 0
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
 
@@ -729,7 +708,7 @@ The value specified (either by the argument or the default value) is utilized in
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 100000 (100 kilobytes/second)
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 The value Fort employs as [CURLOPT_LOW_SPEED_LIMIT](https://curl.haxx.se/libcurl/c/CURLOPT_LOW_SPEED_LIMIT.html) during every HTTP transfer.
 
@@ -752,7 +731,7 @@ Zero disables the validation.
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 10
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 The value Fort employs as [CURLOPT_LOW_SPEED_TIME](https://curl.haxx.se/libcurl/c/CURLOPT_LOW_SPEED_TIME.html) during every HTTP transfer.
 
@@ -765,7 +744,7 @@ See [`--http.low-speed-limit`](#--httplow-speed-limit) for an example.
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 1,000,000,000 (1 Gigabyte)
-- **Range:** 0--2,000,000,000 (2 Gigabytes)
+- **Range:** [0, 2000000000] (2 Gigabytes)
 
 The maximum amount of bytes files are allowed to length during HTTP transfers. Files that exceed this limit are dropped, either early (through [CURLOPT_MAXFILESIZE](https://curl.haxx.se/libcurl/c/CURLOPT_MAXFILESIZE.html)) or as they hit the limit (when the file size is not known prior to download).
 
@@ -876,37 +855,18 @@ Output format for [`--output.roa`](#--outputroa) and [`--output.bgpsec`](#--outp
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 4096
-- **Range:** 1--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [1, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 ASN1 decoder max allowed stack size in bytes, utilized to avoid a stack overflow when a large nested ASN1 object is parsed.
 
 This check is merely a caution, since ASN1 decoding functions are recursive and might cause a stack overflow. So, this argument probably won't be necessary in most cases, since the RPKI ASN1 objects don't have nested objects that require too much stack allocation (for now).
-
-### `--stale-repository-period`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 43200 (12 hours)
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
-
-Time period that must lapse to warn about a stale repository (the messages will be sent to the operation log). The time lapse starts once the repository download has been retried (see [`--rsync.retry.count`](#--rsyncretrycount) and [`--http.retry.count`](#--httpretrycount)) and failed after such retries.
-
-A repository is considered stale if its files can't be fetched due to a communication error, and this error persists across validation cycles. This kind of issue can be due to a local misconfiguration (eg. a firewall that blocks incoming data) or a problem at the server (eg. the server is down).
-
-During the downtime, Fort will try to work with the local cache. ([`--local-repository`](#--local-repository))
-
-The communication errors sent to the operation log, are those related to "first level" RPKI servers; commonly this are the servers maintained by the RIRs.
-
-Currently **all** the communication errors are logged in the validation log. `--stale-repository-period` is only used to also send them to the operation log.
-
-A value **equal to 0** means that the communication errors will be logged immediately.
 
 ### `--thread-pool.server.max`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 20
-- **Range:** 1--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [1, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Number of threads the RTR server will reserve for RTR client (router) request handling. The server will be able to handle `--thread-pool.server.max` requests at most, at once. Additional requests will queue.
 
@@ -929,66 +889,20 @@ Mostly intended for debugging.
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 50
-- **Range:** 0--100
+- **Range:** [0, 100]
 
-RSYNC's precedence when choosing the protocol used to download files (assuming Fort has to choose, and both protocols are [enabled](#--mode)). The protocol with the highest priority is used first, and the runner-up is employed as fallback.
+RSYNC's precedence when choosing the protocol used to download files (assuming Fort has to choose, and both protocols are [enabled](#--rsyncenabled)). The protocol with the highest priority is used first, and the runner-up is employed as fallback.
 
 > At the moment, only two protocols (RRDP/HTTP and RSYNC) are supported. Yes, `--rsync.priority`'s range is overkill.
 
 See [`--http.priority`](#--httppriority).
-
-### `--rsync.strategy`
-
-- **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
-- **Availability:** `argv` and JSON
-- **Default:** `root-except-ta`
-
-rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
-
-#### `strict`
-
-> In order to enable this strategy, recompile using the flag: **_ENABLE\_STRICT\_STRATEGY_**.
->
-> e.g. `$ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'`
-
-rsyncs every repository publication point separately. Only skips publication points that have already been downloaded during the current validation cycle. (Assuming each synchronization is recursive.)
-
-For example, suppose the validator gets certificates whose caRepository access methods (in their Subject Information Access extensions) point to the following publication points:
-
-1. `rsync://rpki.example.com/foo/bar/`
-2. `rsync://rpki.example.com/foo/qux/`
-3. `rsync://rpki.example.com/foo/bar/`
-4. `rsync://rpki.example.com/foo/corge/grault/`
-5. `rsync://rpki.example.com/foo/corge/`
-6. `rsync://rpki.example.com/foo/corge/waldo/`
-
-A  validator following the `strict` strategy would download `bar`, download `qux`, skip `bar`, download `corge/grault`, download `corge` and skip `corge/waldo`.
-
-Though this strategy is the only "strictly" correct one, it is also extremely slow. Its usage is _not_ recommended, unless your repository contains lots of spam files, awkward permissions or can't be found in a repository rooted in a URL that follows the regular expression "`rsync://.+/.+/`".
-
-#### `root`
-
-For each publication point found, guess the root of its repository and rsync that instead. Then skip
-any subsequent children of said root.
-
-(To guess the root of a repository, the validator counts four slashes, and prunes the rest of the URL.)
-
-Reusing the caRepository URLs from the `strict` strategy (above) as example, a  validator following the `root` strategy would download `rsync://rpki.example.com/foo`, and then skip everything else.
-
-Assuming that the repository is specifically structured to be found within as few roots as possible, and they contain minimal RPKI-unrelated noise files, this is the fastest synchronization strategy. At time of writing, this is true for all the current official repositories.
-
-#### `root-except-ta`
-
-Synchronizes the root certificate (the one pointed by the TAL) in `strict` mode, and once it's validated, synchronizes the rest of the repository in `root` mode.
-
-Useful if you want `root`, but the root certificate is separated from the rest of the repository. Also useful if you don't want the validator to download the entire repository without first confirming the integrity and legitimacy of the root certificate.
 
 ### `--rsync.retry.count`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 0
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Maximum number of retries whenever there's an error executing an RSYNC.
 
@@ -1001,7 +915,7 @@ Whenever is necessary to execute an RSYNC, the validator will try at least one t
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 5
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Period of time (in seconds) to wait between each retry to execute an RSYNC.
 
@@ -1190,7 +1104,7 @@ $ {{ page.command }} \
 $ # local-repository is "a", rsync.strategy is "strict" and maximum-certificate-depth is 8
 {% endhighlight %}
 
-### rsync.program
+### `rsync.program`
 
 - **Type:** String
 - **Availability:** JSON only
@@ -1198,23 +1112,13 @@ $ # local-repository is "a", rsync.strategy is "strict" and maximum-certificate-
 
 Name of the program needed to invoke an rsync file transfer.
 
-### rsync.arguments-recursive
+### `rsync.arguments-recursive`
 
 - **Type:** String array
 - **Availability:** JSON only
 - **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a recursive rsync.
-
-Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
-
-### rsync.arguments-flat
-
-- **Type:** String array
-- **Availability:** JSON only
-- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "--dirs", "$REMOTE", "$LOCAL" ]`
-
-Arguments needed by [`rsync.program`](#rsyncprogram) to perform a single-file rsync.
 
 Fort will replace `"$REMOTE"` with the remote URL it needs to download, and `"$LOCAL"` with the target local directory where the file is supposed to be dropped.
 
@@ -1227,71 +1131,52 @@ A listing of actions to be performed by validation upon encountering certain err
 
 ## Deprecated arguments
 
-### `--sync-strategy`
-
-- **Type:** Enumeration (`off`, `strict`, `root`, `root-except-ta`)
-- **Availability:** `argv` and JSON
-- **Default:** `root-except-ta`
-
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--rsync.strategy`](#--rsyncstrategy) or [`--rsync.enabled`](#--rsyncenabled) (if rsync is meant to be disabled) instead.
-
-rsync synchronization strategy. Commands the way rsync URLs are approached during downloads.
-
-- `off`: will disable rsync execution, setting [`--rsync.enabled`](#--rsyncenabled) as `false`. So, using `--sync-strategy=off` will be the same as `--rsync.enabled=false`.
-- `strict`: will be the same as `--rsync.strategy=strict`, see [`strict`](#strict).
-- `root`: will be the same as `--rsync.strategy=root`, see [`root`](#root).
-- `root-except-ta`: will be the same as `--rsync.strategy=root-except-ta`, see [`root-except-ta`](#root-except-ta).
-
-### `--rrdp.enabled`
+### `--shuffle-uris`
 
 - **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
-- **Default:** `true`
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.enabled`](#--httpenabled) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
-### `--rrdp.priority`
+Does nothing as of Fort 1.6.0.
 
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 60
-- **Range:** 0--100
-
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.priority`](#--httppriority) instead.
-
-### `--rrdp.retry.count`
+### `--stale-repository-period`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 2
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Default:** 43200 (12 hours)
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.retry.count`](#--httpretrycount) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
-### `--rrdp.retry.interval`
+Does nothing as of Fort 1.6.0.
 
-- **Type:** Integer
+### `--rsync.strategy`
+
+- **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
 - **Availability:** `argv` and JSON
-- **Default:** 5
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+- **Default:** `root-except-ta`
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**. Use [`--http.retry.interval`](#--httpretryinterval) instead.
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
-### `--http.idle-timeout`
+Does nothing as of Fort 1.6.0.
 
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 10
-- **Range:** 0--[`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)
+### `rsync.arguments-flat`
 
-Deprecated alias for [`--http.low-speed-time`](#--httplow-speed-time).
+- **Type:** String array
+- **Availability:** JSON only
+- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "--dirs", "$REMOTE", "$LOCAL" ]`
+
+> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
+
+Does nothing as of Fort 1.6.0.
 
 ### `--thread-pool.validation.max`
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 5
-- **Range:** 1--100
+- **Range:** [1, 100]
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
