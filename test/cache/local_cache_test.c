@@ -1336,7 +1336,29 @@ START_TEST(test_recover)
 	ck_assert_ptr_eq(uris.array[14], cache_recover(&uris, false));
 	uris_cleanup(&uris);
 
-	/* FIXME test HTTP (non-recursive) */
+	cache_teardown();
+
+
+	struct uri_and_node un = { 0 };
+
+	rsync = NODE("rsync", 0, 0,
+		TNODE("1", CNF_SUCCESS, 200, 200, 0,
+			TNODE("2", CNF_DIRECT, 200, 200, 1,
+				TNODE("3", CNF_DIRECT | CNF_SUCCESS, 100, 100, 1,
+					TNODE("4", CNF_DIRECT | CNF_SUCCESS, 200, 200, 1,
+						TNODE("5", CNF_DIRECT | CNF_SUCCESS, 100, 100, 0,
+							TNODE("6", CNF_DIRECT | CNF_SUCCESS, 200, 200, 0)))))));
+
+	/* Try them all at the same time */
+	PREPARE_URI_LIST(&uris, "rsync://1/2/3/4/5/6");
+	__cache_recover(&uris, false, &un);
+	ck_assert_ptr_eq(uris.array[0], un.uri);
+	ck_assert_str_eq("6", un.node->basename);
+	uris_cleanup(&uris);
+
+	/* TODO (test) HTTP (non-recursive) */
+	/* TODO (test) more variations */
+	/* TODO (test) node with DIRECT, then not direct, then DIRECT */
 
 	cache_teardown();
 }

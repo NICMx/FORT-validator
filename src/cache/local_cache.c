@@ -80,7 +80,6 @@ static struct cache_node *https;
 
 static time_t startup_time; /* When we started the last validation */
 
-/* Minimizes multiple evaluation */
 static struct cache_node *
 add_child(struct cache_node *parent, char const *basename)
 {
@@ -494,8 +493,41 @@ end:
 	return error;
 }
 
+/*
+ * Highest to lowest priority:
+ *
+ * 1. Recent Success: !error, CNF_SUCCESS, high ts_success.
+ * 2. Old Success: !error, CNF_SUCCESS, low ts_success.
+ * 3. Previous Recent Success: error, CNF_SUCCESS, high ts_success.
+ * 4. Previous Old Success: error, CNF_SUCCESS, old ts_success.
+ * 5. No Success: !CNF_SUCCESS (completely unviable)
+ */
 static struct cache_node *
-find_uri(struct rpki_uri *uri)
+choose_better(struct cache_node *old, struct cache_node *new)
+{
+	if (!(new->flags & CNF_SUCCESS))
+		return old;
+	if (old == NULL)
+		return new;
+
+	/*
+	 * We're gonna have to get subjective here.
+	 * Should we prioritize a candidate that was successfully downloaded a
+	 * long time ago (with no retries since), or one that failed recently?
+	 * Both are terrible, but returning something is still better than
+	 * returning nothing, because the validator might manage to salvage
+	 * remnant cached ROAs that haven't expired yet.
+	 */
+
+	if (old->error && !new->error)
+		return new;
+	if (!old->error && new->error)
+		return old;
+	return (difftime(old->ts_success, new->ts_success) < 0) ? new : old;
+}
+
+static struct cache_node *
+find_node(struct rpki_uri *uri)
 {
 	char *luri, *token, *saveptr;
 	struct cache_node *parent, *node;
@@ -528,79 +560,45 @@ find_uri(struct rpki_uri *uri)
 		if (node == NULL)
 			goto end;
 		if (recursive && (node->flags & CNF_DIRECT))
-			result = node;
+			result = choose_better(result, node);
 		parent = node;
 	}
 
-	if ((node != NULL) && (node->flags & CNF_DIRECT))
-		result = node;
+	if (!recursive && (node != NULL) && (node->flags & CNF_DIRECT))
+		result = choose_better(result, node);
 
 end:
 	free(luri);
 	return result;
 }
 
-static unsigned int
-get_score(struct cache_node *node)
+struct uri_and_node {
+	struct rpki_uri *uri;
+	struct cache_node *node;
+};
+
+/* Separated because of unit tests. */
+static void
+__cache_recover(struct uri_list *uris, bool use_rrdp, struct uri_and_node *best)
 {
-	unsigned int score;
+	struct rpki_uri **uri;
+	struct uri_and_node cursor;
 
-	/*
-	 * Highest to lowest priority:
-	 *
-	 * 1. Recent Success: !error, CNF_SUCCESS, high ts_success.
-	 * 2. Old Success: !error, CNF_SUCCESS, low ts_success.
-	 * 3. Previous Recent Success: error, CNF_SUCCESS, high ts_success.
-	 * 4. Previous Old Success: error, CNF_SUCCESS, old ts_success.
-	 * 5. No Success: error, !CNF_SUCCESS (completely unviable)
-	 */
-
-	if (node == NULL)
-		return 0;
-
-	score = 0;
-	if (!node->error)
-		score |= (1 << 1);
-	if (node->flags & CNF_SUCCESS)
-		score |= (1 << 0);
-	return score;
-}
-
-/*
- * Returns true if @n1's success happened earlier than n2's.
- */
-static bool
-earlier_success(struct cache_node *n1, struct cache_node *n2)
-{
-	return difftime(n1->ts_success, n2->ts_success) < 0;
+	ARRAYLIST_FOREACH(uris, uri) {
+		cursor.uri = *uri;
+		cursor.node = find_node(cursor.uri);
+		if (cursor.node == NULL)
+			continue;
+		if (choose_better(best->node, cursor.node) == cursor.node)
+			*best = cursor;
+	}
 }
 
 struct rpki_uri *
 cache_recover(struct uri_list *uris, bool use_rrdp)
 {
-	struct scr {
-		struct rpki_uri *uri;
-		struct cache_node *node;
-		unsigned int score;
-	};
-
-	struct rpki_uri **uri;
-	struct scr cursor;
-	struct scr best = { 0 };
-
-	ARRAYLIST_FOREACH(uris, uri) {
-		cursor.uri = *uri;
-		cursor.node = find_uri(cursor.uri);
-		cursor.score = get_score(cursor.node);
-		if (cursor.score == 0)
-			continue;
-		if (cursor.score > best.score)
-			best = cursor;
-		else if (cursor.score == best.score
-		      && earlier_success(best.node, cursor.node))
-			best = cursor;
-	}
-
+	struct uri_and_node best = { 0 };
+	__cache_recover(uris, use_rrdp, &best);
 	return best.uri;
 }
 
