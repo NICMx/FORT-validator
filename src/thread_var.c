@@ -75,13 +75,7 @@ state_store(struct validation *state)
 struct validation *
 state_retrieve(void)
 {
-	struct validation *state;
-
-	state = pthread_getspecific(state_key);
-	if (state == NULL)
-		pr_crit("Programming error: This thread lacks a validation state.");
-
-	return state;
+	return pthread_getspecific(state_key);
 }
 
 /** Initializes the current thread's fnstack. Call once per thread. */

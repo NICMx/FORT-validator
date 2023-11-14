@@ -7,6 +7,8 @@
 #include "config.h"
 #include "file.h"
 #include "log.h"
+#include "rrdp.h"
+#include "thread_var.h"
 #include "data_structure/path_builder.h"
 #include "data_structure/uthash.h"
 #include "http/http.h"
@@ -27,8 +29,6 @@
  *
  * FIXME test max recursion
  */
-
-/* FIXME needs locking */
 
 /*
  * Have we ever attempted to download this directly?
@@ -75,10 +75,13 @@ struct cache_node {
 	UT_hash_handle hh; /* Hash table hook */
 };
 
-static struct cache_node *rsync;
-static struct cache_node *https;
+struct rpki_cache {
+	char *tal;
+	struct cache_node *rsync;
+	struct cache_node *https;
+	time_t startup_time; /* When we started the last validation */
+};
 
-static time_t startup_time; /* When we started the last validation */
 
 static struct cache_node *
 add_child(struct cache_node *parent, char const *basename)
@@ -118,11 +121,6 @@ __delete_node(struct cache_node *node)
 		HASH_DEL(node->parent->children, node);
 	free(node->basename);
 	free(node);
-
-	if (node == rsync)
-		rsync = NULL;
-	else if (node == https)
-		https = NULL;
 }
 
 static void
@@ -148,12 +146,12 @@ delete_node(struct cache_node *node)
 }
 
 static int
-get_metadata_json_filename(char **filename)
+get_metadata_json_filename(char const *tal, char **filename)
 {
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, "metadata.json");
+	error = pb_init_cache(&pb, tal, "metadata.json");
 	if (error)
 		return error;
 
@@ -258,7 +256,7 @@ cancel:
 }
 
 static void
-load_metadata_json(void)
+load_metadata_json(struct rpki_cache *cache)
 {
 	char *filename;
 	json_t *root;
@@ -271,7 +269,7 @@ load_metadata_json(void)
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
-	if (get_metadata_json_filename(&filename) != 0)
+	if (get_metadata_json_filename(cache->tal, &filename) != 0)
 		return;
 
 	root = json_load_file(filename, 0, &jerror);
@@ -295,9 +293,9 @@ load_metadata_json(void)
 		if (node == NULL)
 			continue;
 		else if (strcasecmp(node->basename, "rsync") == 0)
-			rsync = node;
+			cache->rsync = node;
 		else if (strcasecmp(node->basename, "https") == 0)
-			https = node;
+			cache->https = node;
 		else {
 			pr_op_warn("%s: Ignoring unrecognized json node '%s'.",
 			    filename, node->basename);
@@ -310,29 +308,36 @@ end:
 	json_decref(root);
 }
 
-int
-cache_prepare(void)
+struct rpki_cache *
+cache_create(char const *tal)
 {
-	struct path_builder pb;
-	int error;
+	struct rpki_cache *cache;
 
-	startup_time = time(NULL);
-	if (startup_time == ((time_t) -1))
+	cache = pmalloc(sizeof(struct rpki_cache));
+	cache->tal = pstrdup(tal);
+	cache->rsync = NULL;
+	cache->https = NULL;
+	cache->startup_time = time(NULL);
+	if (cache->startup_time == ((time_t) -1))
 		pr_crit("time(NULL) returned -1");
 
-	if (rsync == NULL)
-		load_metadata_json();
+	load_metadata_json(cache);
 
-	error = pb_init_cache(&pb, "tmp");
-	if (error)
-		return error;
-	error = create_dir_recursive(pb.string, true);
-	pb_cleanup(&pb);
-	return error;
+	return cache;
+}
+
+void
+cache_destroy(struct rpki_cache *cache)
+{
+	free(cache->tal);
+	delete_node(cache->rsync);
+	delete_node(cache->https);
+	free(cache);
 }
 
 static int
-delete_node_file(struct cache_node *node, bool is_file)
+delete_node_file(struct rpki_cache *cache, struct cache_node *node,
+    bool is_file)
 {
 	struct path_builder pb;
 	struct cache_node *cursor;
@@ -344,6 +349,9 @@ delete_node_file(struct cache_node *node, bool is_file)
 		if (error)
 			goto cancel;
 	}
+	error = pb_append(&pb, cache->tal);
+	if (error)
+		goto cancel;
 	error = pb_append(&pb, config_get_local_repository());
 	if (error)
 		goto cancel;
@@ -370,9 +378,10 @@ cancel:
 }
 
 static bool
-was_recently_downloaded(struct cache_node *node)
+was_recently_downloaded(struct rpki_cache *cache, struct cache_node *node)
 {
-	return (node->flags & CNF_DIRECT) && (startup_time <= node->ts_attempt);
+	return (node->flags & CNF_DIRECT) &&
+	       (cache->startup_time <= node->ts_attempt);
 }
 
 static void
@@ -400,7 +409,7 @@ uri2luri(struct rpki_uri *uri)
  * @changed only on HTTP.
  */
 int
-cache_download(struct rpki_uri *uri, bool *changed)
+cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed)
 {
 	char *luri;
 	char *token;
@@ -412,15 +421,23 @@ cache_download(struct rpki_uri *uri, bool *changed)
 	if (changed != NULL)
 		*changed = false;
 	luri = uri2luri(uri);
-	token = strtok_r(luri, "/", &saveptr);
 
+	token = strtok_r(luri, "/", &saveptr);
+	if (strcmp(token, cache->tal) != 0)
+		pr_crit("Expected TAL %s for path %s.", cache->tal, uri_get_local(uri));
+
+	token = strtok_r(NULL, "/", &saveptr);
 	switch (uri_get_type(uri)) {
 	case UT_RSYNC:
-		node = rsync = init_root(rsync, "rsync");
+		if (strcmp(token, "rsync") != 0)
+			return pr_val_err("Path is not rsync: %s", uri_get_local(uri));
+		node = cache->rsync = init_root(cache->rsync, "rsync");
 		recursive = true;
 		break;
 	case UT_HTTPS:
-		node = https = init_root(https, "https");
+		if (strcmp(token, "https") != 0)
+			return pr_val_err("Path is not HTTPS: %s", uri_get_local(uri));
+		node = cache->https = init_root(cache->https, "https");
 		recursive = false;
 		break;
 	default:
@@ -430,7 +447,7 @@ cache_download(struct rpki_uri *uri, bool *changed)
 	while ((token = strtok_r(NULL, "/", &saveptr)) != NULL) {
 		if (node->flags & CNF_FILE) {
 			/* node used to be a file, now it's a dir. */
-			delete_node_file(node, true);
+			delete_node_file(cache, node, true);
 			node->flags = 0;
 		}
 
@@ -446,7 +463,8 @@ cache_download(struct rpki_uri *uri, bool *changed)
 		}
 
 		if (recursive) {
-			if (was_recently_downloaded(child) && !child->error) {
+			if (was_recently_downloaded(cache, child) &&
+			    !child->error) {
 				error = 0;
 				goto end;
 			}
@@ -455,14 +473,14 @@ cache_download(struct rpki_uri *uri, bool *changed)
 		node = child;
 	}
 
-	if (was_recently_downloaded(node)) {
+	if (was_recently_downloaded(cache, node)) {
 		error = node->error;
 		goto end;
 	}
 
 	if (!recursive && !(node->flags & CNF_FILE)) {
 		/* node used to be a dir, now it's a file. */
-		delete_node_file(node, false);
+		delete_node_file(cache, node, false);
 	}
 
 download:
@@ -491,6 +509,86 @@ download:
 end:
 	free(luri);
 	return error;
+}
+
+static int
+download(struct rpki_cache *cache, struct rpki_uri *uri, bool use_rrdp,
+    uris_dl_cb cb, void *arg)
+{
+	int error;
+
+	error = (use_rrdp && (uri_get_type(uri) == UT_HTTPS))
+	    ? rrdp_update(uri)
+	    : cache_download(cache, uri, NULL);
+	if (error)
+		return 1;
+
+	return cb(uri, arg);
+}
+
+static int
+download_uris(struct rpki_cache *cache, struct uri_list *uris,
+    enum uri_type type, bool use_rrdp, uris_dl_cb cb, void *arg)
+{
+	struct rpki_uri **uri;
+	int error;
+
+	ARRAYLIST_FOREACH(uris, uri) {
+		if (uri_get_type(*uri) == type) {
+			error = download(cache, *uri, use_rrdp, cb, arg);
+			if (error <= 0)
+				return error;
+		}
+	}
+
+	return 1;
+}
+
+/**
+ * Assumes all the URIs are URLs, and represent different ways to access the
+ * same content.
+ *
+ * Sequentially (in the order dictated by their priorities) attempts to update
+ * (in the cache) the content pointed by each URL.
+ * If a download succeeds, calls cb on it. If cb succeeds, returns without
+ * trying more URLs.
+ *
+ * If none of the URLs download and callback properly, attempts to find one
+ * that's already cached, and callbacks it.
+ */
+int
+cache_download_alt(struct rpki_cache *cache, struct uri_list *uris,
+    bool use_rrdp, uris_dl_cb cb, void *arg)
+{
+	struct rpki_uri **cursor, *uri;
+	int error;
+
+	if (config_get_http_priority() > config_get_rsync_priority()) {
+		error = download_uris(cache, uris, UT_HTTPS, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
+		error = download_uris(cache, uris, UT_RSYNC, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
+
+	} else if (config_get_http_priority() < config_get_rsync_priority()) {
+		error = download_uris(cache, uris, UT_RSYNC, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
+		error = download_uris(cache, uris, UT_HTTPS, use_rrdp, cb, arg);
+		if (error <= 0)
+			return error;
+
+	} else {
+		ARRAYLIST_FOREACH(uris, cursor) {
+			error = download(cache, *cursor, use_rrdp, cb, arg);
+			if (error <= 0)
+				return error;
+		}
+	}
+
+	uri = cache_recover(cache, uris, use_rrdp);
+	return (uri != NULL) ? cb(uri, arg) : ESRCH;
 }
 
 /*
@@ -527,7 +625,7 @@ choose_better(struct cache_node *old, struct cache_node *new)
 }
 
 static struct cache_node *
-find_node(struct rpki_uri *uri)
+find_node(struct rpki_cache *cache, struct rpki_uri *uri)
 {
 	char *luri, *token, *saveptr;
 	struct cache_node *parent, *node;
@@ -535,17 +633,21 @@ find_node(struct rpki_uri *uri)
 	struct cache_node *result;
 
 	luri = uri2luri(uri);
-	token = strtok_r(luri, "/", &saveptr);
 	node = NULL;
 	result = NULL;
 
+	token = strtok_r(luri, "/", &saveptr);
+	if (strcmp(token, cache->tal) != 0)
+		pr_crit("Expected TAL %s for path %s.", cache->tal, uri_get_local(uri));
+
+	token = strtok_r(NULL, "/", &saveptr);
 	switch (uri_get_type(uri)) {
 	case UT_RSYNC:
-		parent = rsync;
+		parent = cache->rsync;
 		recursive = true;
 		break;
 	case UT_HTTPS:
-		parent = https;
+		parent = cache->https;
 		recursive = false;
 		break;
 	default:
@@ -579,14 +681,15 @@ struct uri_and_node {
 
 /* Separated because of unit tests. */
 static void
-__cache_recover(struct uri_list *uris, bool use_rrdp, struct uri_and_node *best)
+__cache_recover(struct rpki_cache *cache, struct uri_list *uris, bool use_rrdp,
+    struct uri_and_node *best)
 {
 	struct rpki_uri **uri;
 	struct uri_and_node cursor;
 
 	ARRAYLIST_FOREACH(uris, uri) {
 		cursor.uri = *uri;
-		cursor.node = find_node(cursor.uri);
+		cursor.node = find_node(cache, cursor.uri);
 		if (cursor.node == NULL)
 			continue;
 		if (choose_better(best->node, cursor.node) == cursor.node)
@@ -595,10 +698,10 @@ __cache_recover(struct uri_list *uris, bool use_rrdp, struct uri_and_node *best)
 }
 
 struct rpki_uri *
-cache_recover(struct uri_list *uris, bool use_rrdp)
+cache_recover(struct rpki_cache *cache, struct uri_list *uris, bool use_rrdp)
 {
 	struct uri_and_node best = { 0 };
-	__cache_recover(uris, use_rrdp, &best);
+	__cache_recover(cache, uris, use_rrdp, &best);
 	return best.uri;
 }
 
@@ -624,10 +727,10 @@ __cache_print(struct cache_node *node, unsigned int tabs)
 }
 
 void
-cache_print(void)
+cache_print(struct rpki_cache *cache)
 {
-	__cache_print(rsync, 0);
-	__cache_print(https, 0);
+	__cache_print(cache->rsync, 0);
+	__cache_print(cache->https, 0);
 }
 
 /*
@@ -650,6 +753,7 @@ enum ctt_status {
 };
 
 struct cache_tree_traverser {
+	struct rpki_cache *cache;
 	struct cache_node **root;
 	struct cache_node *next;
 	struct path_builder *pb;
@@ -657,8 +761,8 @@ struct cache_tree_traverser {
 };
 
 static void
-ctt_init(struct cache_tree_traverser *ctt, struct cache_node **root,
-    struct path_builder *pb)
+ctt_init(struct cache_tree_traverser *ctt, struct rpki_cache *cache,
+    struct cache_node **root, struct path_builder *pb)
 {
 	struct cache_node *node;
 
@@ -666,6 +770,7 @@ ctt_init(struct cache_tree_traverser *ctt, struct cache_node **root,
 	if (node != NULL && (pb_append(pb, "a") != 0))
 		node = node->parent;
 
+	ctt->cache = cache;
 	ctt->root = root;
 	ctt->next = node;
 	ctt->pb = pb;
@@ -673,9 +778,9 @@ ctt_init(struct cache_tree_traverser *ctt, struct cache_node **root,
 }
 
 static bool
-is_node_fresh(struct cache_node *node)
+is_node_fresh(struct rpki_cache *cache, struct cache_node *node)
 {
-	return was_recently_downloaded(node) && !node->error;
+	return was_recently_downloaded(cache, node) && !node->error;
 }
 
 /*
@@ -712,7 +817,7 @@ ctt_delete(struct cache_tree_traverser *ctt, struct cache_node *node)
 static struct cache_node *
 go_up(struct cache_tree_traverser *ctt, struct cache_node *node)
 {
-	if (node->children == NULL && !is_node_fresh(node)) {
+	if (node->children == NULL && !is_node_fresh(ctt->cache, node)) {
 		pb_pop(ctt->pb, true);
 		return ctt_delete(ctt, node);
 	}
@@ -749,7 +854,7 @@ go_down(struct cache_tree_traverser *ctt, struct cache_node *node)
 		return ctt_delete(ctt, node);
 
 	do {
-		if (is_node_fresh(node)) {
+		if (is_node_fresh(ctt->cache, node)) {
 			drop_children(node);
 			ctt->status = CTTS_STILL;
 			return node;
@@ -819,7 +924,8 @@ ctt_next(struct cache_tree_traverser *ctt)
 	return next;
 }
 
-static void cleanup_tree(struct cache_node **root, char const *treename)
+static void cleanup_tree(struct rpki_cache *cache, struct cache_node **root,
+    char const *treename)
 {
 	struct cache_tree_traverser ctt;
 	struct path_builder pb;
@@ -829,10 +935,10 @@ static void cleanup_tree(struct cache_node **root, char const *treename)
 	struct cache_node *node, *child, *tmp;
 	int error;
 
-	if (pb_init_cache(&pb, NULL) != 0)
+	if (pb_init_cache(&pb, cache->tal, NULL) != 0)
 		return;
 
-	ctt_init(&ctt, root, &pb);
+	ctt_init(&ctt, cache, root, &pb);
 
 	while ((node = ctt_next(&ctt)) != NULL) {
 		if (stat(pb.string, &meta) != 0) {
@@ -1042,7 +1148,7 @@ append_node(json_t *root, struct cache_node *node, char const *name)
 }
 
 static json_t *
-build_metadata_json(void)
+build_metadata_json(struct rpki_cache *cache)
 {
 	json_t *root;
 
@@ -1052,8 +1158,8 @@ build_metadata_json(void)
 		return NULL;
 	}
 
-	if (append_node(root, rsync, "rsync")
-	    || append_node(root, https, "https")) {
+	if (append_node(root, cache->rsync, "rsync")
+	    || append_node(root, cache->https, "https")) {
 		json_decref(root);
 		return NULL;
 	}
@@ -1062,16 +1168,16 @@ build_metadata_json(void)
 }
 
 static void
-write_metadata_json(void)
+write_metadata_json(struct rpki_cache *cache)
 {
 	struct json_t *json;
 	char *filename;
 
-	json = build_metadata_json();
+	json = build_metadata_json(cache);
 	if (json == NULL)
 		return;
 
-	if (get_metadata_json_filename(&filename) != 0)
+	if (get_metadata_json_filename(cache->tal, &filename) != 0)
 		return;
 
 	if (json_dump_file(json, filename, JSON_COMPACT))
@@ -1084,16 +1190,8 @@ write_metadata_json(void)
 void
 cache_cleanup(void)
 {
-	cleanup_tree(&rsync, "rsync");
-	cleanup_tree(&https, "https");
-	write_metadata_json();
-}
-
-void
-cache_teardown(void)
-{
-	delete_node(rsync);
-	rsync = NULL;
-	delete_node(https);
-	https = NULL;
+	struct rpki_cache *cache = validation_cache(state_retrieve());
+	cleanup_tree(cache, &cache->rsync, "rsync");
+	cleanup_tree(cache, &cache->https, "https");
+	write_metadata_json(cache);
 }

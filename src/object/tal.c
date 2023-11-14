@@ -13,6 +13,7 @@
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
+#include "cache/tmp.h"
 #include "crypto/base64.h"
 #include "object/certificate.h"
 #include "rtr/db/vrps.h"
@@ -25,14 +26,15 @@ struct tal {
 	struct uri_list uris;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
+
+	struct rpki_cache *cache;
 };
 
 struct validation_thread {
 	pthread_t pid;
-	/* TAL file name */
-	char *tal_file;
+	char *tal_file; /* TAL file name */
 	struct db_table *db;
-	int exit_status;
+	int error;
 	/* This should also only be manipulated by the parent thread. */
 	SLIST_ENTRY(validation_thread) next;
 };
@@ -40,28 +42,23 @@ struct validation_thread {
 /* List of threads, one per TAL file */
 SLIST_HEAD(threads_list, validation_thread);
 
-struct tal_thread_args {
-	struct db_table *db;
-	struct threads_list threads;
-};
-
 struct handle_tal_args {
-	struct tal *tal;
+	struct tal tal;
 	struct db_table *db;
 };
 
 static int
-add_uri(struct uri_list *uris, char *uri)
+add_uri(struct uri_list *uris, char const *tal, char *uri)
 {
-	struct rpki_uri *new;
+	struct rpki_uri *new = NULL;
 	int error;
 
 	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, UT_RSYNC, NULL, uri);
+		error = uri_create(&new, tal, UT_RSYNC, NULL, uri);
 	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, UT_HTTPS, NULL, uri);
+		error = uri_create(&new, tal, UT_HTTPS, NULL, uri);
 	else
-		error = pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
+		return pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
 	if (error)
 		return error;
 
@@ -70,7 +67,7 @@ add_uri(struct uri_list *uris, char *uri)
 }
 
 static int
-read_uris(struct line_file *lfile, struct uri_list *uris)
+read_uris(struct line_file *lfile, char const *tal, struct uri_list *uris)
 {
 	char *uri;
 	int error;
@@ -104,7 +101,7 @@ read_uris(struct line_file *lfile, struct uri_list *uris)
 	}
 
 	do {
-		error = add_uri(uris, uri);
+		error = add_uri(uris, tal, uri);
 		free(uri); /* Won't be needed anymore */
 		if (error)
 			return error;
@@ -270,60 +267,58 @@ read_spki(struct line_file *lfile, struct tal *tal)
 }
 
 /**
- * @file_name is expected to outlive @result.
+ * @file_name is expected to outlive the result.
  */
-int
-tal_load(char const *file_name, struct tal **result)
+static int
+tal_init(struct tal *tal, char const *file_path)
 {
 	struct line_file *lfile;
-	struct tal *tal;
+	char const *file_name;
 	int error;
 
 	lfile = NULL; /* Warning shutupper */
-	error = lfile_open(file_name, &lfile);
+	error = lfile_open(file_path, &lfile);
 	if (error) {
-		pr_op_err("Error opening file '%s': %s", file_name,
+		pr_op_err("Error opening file '%s': %s", file_path,
 		    strerror(abs(error)));
 		return error;
 	}
 
-	tal = pmalloc(sizeof(struct tal));
+	file_name = strrchr(file_path, '/');
+	file_name = (file_name != NULL) ? (file_name + 1) : file_path;
 
 	tal->file_name = file_name;
 	uris_init(&tal->uris);
-	error = read_uris(lfile, &tal->uris);
+	error = read_uris(lfile, file_name, &tal->uris);
 	if (error)
 		goto fail;
 	error = read_spki(lfile, tal);
 	if (error)
 		goto fail;
 
+	tal->cache = cache_create(file_name);
+
 	lfile_close(lfile);
-	*result = tal;
 	return 0;
 
 fail:
 	uris_cleanup(&tal->uris);
-	free(tal);
 	lfile_close(lfile);
 	return error;
 }
 
-void
-tal_destroy(struct tal *tal)
+static void
+tal_cleanup(struct tal *tal)
 {
-	if (tal == NULL)
-		return;
-
-	uris_cleanup(&tal->uris);
+	cache_destroy(tal->cache);
 	free(tal->spki);
-	free(tal);
+	uris_cleanup(&tal->uris);
 }
 
 char const *
 tal_get_file_name(struct tal *tal)
 {
-	return tal->file_name;
+	return (tal != NULL) ? tal->file_name : NULL;
 }
 
 void
@@ -331,6 +326,12 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 {
 	*buffer = tal->spki;
 	*len = tal->spki_len;
+}
+
+struct rpki_cache *
+tal_get_cache(struct tal *tal)
+{
+	return tal->cache;
 }
 
 /**
@@ -418,34 +419,35 @@ static int
 __handle_tal_uri(struct rpki_uri *uri, void *arg)
 {
 	struct handle_tal_args *args = arg;
-	return handle_tal_uri(args->tal, uri, args->db);
+	return handle_tal_uri(&args->tal, uri, args->db);
 }
 
 static void *
 do_file_validation(void *arg)
 {
 	struct validation_thread *thread = arg;
-	struct tal *tal;
-	struct handle_tal_args handle_args;
-	int error;
+	struct handle_tal_args args;
 
 	fnstack_init();
 	fnstack_push(thread->tal_file);
 
-	error = tal_load(thread->tal_file, &tal);
-	if (error)
+	thread->error = tal_init(&args.tal, thread->tal_file);
+	if (thread->error)
 		goto end;
 
-	handle_args.tal = tal;
-	handle_args.db = thread->db;
-	error = uris_download(&tal->uris, false, __handle_tal_uri, &handle_args);
-	if (error)
+	args.db = db_table_create();
+	thread->error = cache_download_alt(args.tal.cache, &args.tal.uris,
+	    false, __handle_tal_uri, &args);
+	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);
+		db_table_destroy(args.db);
+	} else {
+		thread->db = args.db;
+	}
 
-	tal_destroy(tal);
+	tal_cleanup(&args.tal);
 end:	fnstack_cleanup();
-	thread->exit_status = error;
 	return NULL;
 }
 
@@ -453,23 +455,24 @@ static void
 thread_destroy(struct validation_thread *thread)
 {
 	free(thread->tal_file);
+	db_table_destroy(thread->db);
 	free(thread);
 }
 
-/* Creates a thread for the @tal_file */
+/* Creates a thread for the @tal_file TAL */
 static int
 spawn_tal_thread(char const *tal_file, void *arg)
 {
-	struct tal_thread_args *thread_args = arg;
+	struct threads_list *threads = arg;
 	struct validation_thread *thread;
 	int error;
 
 	thread = pmalloc(sizeof(struct validation_thread));
 
 	thread->tal_file = pstrdup(tal_file);
-	thread->db = thread_args->db;
-	thread->exit_status = -EINTR;
-	SLIST_INSERT_HEAD(&thread_args->threads, thread, next);
+	thread->db = NULL;
+	thread->error = -EINTR;
+	SLIST_INSERT_HEAD(threads, thread, next);
 
 	error = pthread_create(&thread->pid, NULL, do_file_validation, thread);
 	if (error) {
@@ -482,44 +485,63 @@ spawn_tal_thread(char const *tal_file, void *arg)
 	return error;
 }
 
-int
-perform_standalone_validation(struct db_table *table)
+struct db_table *
+perform_standalone_validation(void)
 {
-	struct tal_thread_args args;
+	struct threads_list threads = SLIST_HEAD_INITIALIZER(threads);
 	struct validation_thread *thread;
+	struct db_table *db = NULL;
 	int error, tmperr;
 
-	args.db = table;
-	SLIST_INIT(&args.threads);
+	error = init_tmpdir();
+	if (error) {
+		pr_val_err("Cannot initialize the cache's temporal directory: %s",
+		    strerror(error));
+		return NULL;
+	}
 
 	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
-	error = foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
-	    &args);
-	if (error) {
-		while (!SLIST_EMPTY(&args.threads)) {
-			thread = SLIST_FIRST(&args.threads);
-			SLIST_REMOVE_HEAD(&args.threads, next);
+	if (foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
+			 &threads) != 0) {
+		while (!SLIST_EMPTY(&threads)) {
+			thread = SLIST_FIRST(&threads);
+			SLIST_REMOVE_HEAD(&threads, next);
 			thread_destroy(thread);
 		}
-		return error;
+		return NULL;
 	}
 
 	/* Wait for all */
-	while (!SLIST_EMPTY(&args.threads)) {
-		thread = SLIST_FIRST(&args.threads);
+	while (!SLIST_EMPTY(&threads)) {
+		thread = SLIST_FIRST(&threads);
 		tmperr = pthread_join(thread->pid, NULL);
 		if (tmperr)
 			pr_crit("pthread_join() threw %d (%s) on the '%s' thread.",
 			    tmperr, strerror(tmperr), thread->tal_file);
-		SLIST_REMOVE_HEAD(&args.threads, next);
-		if (thread->exit_status) {
-			error = thread->exit_status;
+		SLIST_REMOVE_HEAD(&threads, next);
+		if (thread->error) {
+			error = thread->error;
 			pr_op_warn("Validation from TAL '%s' yielded error %d (%s); discarding all validation results.",
 			    thread->tal_file, error, strerror(abs(error)));
 		}
+
+		if (!error) {
+			if (db == NULL) {
+				db = thread->db;
+				thread->db = NULL;
+			} else {
+				error = db_table_join(db, thread->db);
+			}
+		}
+
 		thread_destroy(thread);
 	}
 
 	/* If one thread has errors, we can't keep the resulting table. */
-	return error;
+	if (error) {
+		db_table_destroy(db);
+		db = NULL;
+	}
+
+	return db;
 }

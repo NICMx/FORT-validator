@@ -49,19 +49,6 @@ prealloc(void *ptr, size_t size)
 	return result;
 }
 
-void *
-pmclone(void const *src, size_t size)
-{
-	void *result;
-
-	result = pmalloc(size);
-	if (result == NULL)
-		enomem_panic();
-	memcpy(result, src, size);
-
-	return result;
-}
-
 char *
 pstrdup(const char *s)
 {

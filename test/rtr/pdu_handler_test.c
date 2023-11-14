@@ -38,8 +38,6 @@ pdustream_last_pdu_raw(struct pdu_stream *s)
 	return &buf;
 }
 
-MOCK_INT(cache_prepare, 0, void)
-
 MOCK_INT(slurm_apply, 0, struct db_table *base, struct db_slurm **slurm)
 MOCK_ABORT_VOID(db_slurm_destroy, struct db_slurm *db)
 

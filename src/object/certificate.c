@@ -1523,7 +1523,8 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	return __uri_create(uri, type, NULL,
+	return __uri_create(uri,
+	    tal_get_file_name(validation_tal(state_retrieve())), type, NULL,
 	    ASN1_STRING_get0_data(asn1_string),
 	    ASN1_STRING_length(asn1_string));
 }
@@ -1931,6 +1932,7 @@ static struct rpki_uri *
 download_rpp(struct sia_uris *uris)
 {
 	struct rpki_uri *uri;
+	struct rpki_cache *cache;
 	int error;
 
 	if (uris->rpp.len == 0) {
@@ -1938,7 +1940,8 @@ download_rpp(struct sia_uris *uris)
 		return NULL;
 	}
 
-	error = uris_download(&uris->rpp, true, retrieve_uri, &uri);
+	cache = validation_cache(state_retrieve());
+	error = cache_download_alt(cache, &uris->rpp, true, retrieve_uri, &uri);
 	return error ? NULL : uri;
 }
 

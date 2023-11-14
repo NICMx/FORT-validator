@@ -79,15 +79,15 @@ __handle_router_key(unsigned char const *ski, struct asn_range const *range,
 	return 0;
 }
 
-int
-perform_standalone_validation(struct db_table *table)
+struct db_table *
+perform_standalone_validation(void)
 {
 	struct validation_handler handler;
 
 	handler.handle_roa_v4 = __handle_roa_v4;
 	handler.handle_roa_v6 = __handle_roa_v6;
 	handler.handle_router_key = __handle_router_key;
-	handler.arg = table;
+	handler.arg = db_table_create();
 
 	switch (serial) {
 	case 1:
@@ -119,5 +119,5 @@ perform_standalone_validation(struct db_table *table)
 	}
 
 	serial++;
-	return 0;
+	return handler.arg;
 }

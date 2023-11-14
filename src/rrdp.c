@@ -475,7 +475,9 @@ parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	uri = parse_string(reader, RRDP_ATTR_URI);
 	if (uri == NULL)
 		return -EINVAL;
-	error = uri_create(&meta->uri, (notif != NULL) ? UT_CAGED : UT_HTTPS,
+	error = uri_create(&meta->uri,
+	    tal_get_file_name(validation_tal(state_retrieve())),
+	    (notif != NULL) ? UT_CAGED : UT_HTTPS,
 	    notif, (char const *)uri);
 	xmlFree(uri);
 	if (error)
@@ -763,9 +765,9 @@ parse_notification(struct rpki_uri *uri, struct update_notification *result)
 }
 
 static void
-delete_rpp(struct rpki_uri *notif)
+delete_rpp(char const *tal, struct rpki_uri *notif)
 {
-	char *path = uri_get_rrdp_workspace(notif);
+	char *path = uri_get_rrdp_workspace(tal, notif);
 	pr_val_debug("Snapshot: Deleting cached RPP '%s'.", path);
 	file_rm_rf(path);
 	free(path);
@@ -819,17 +821,20 @@ parse_snapshot(struct update_notification *notif)
 static int
 handle_snapshot(struct update_notification *notif)
 {
+	struct validation *state;
 	struct rpki_uri *uri;
 	int error;
 
-	delete_rpp(notif->uri);
+	state = state_retrieve();
+
+	delete_rpp(tal_get_file_name(validation_tal(state)), notif->uri);
 
 	uri = notif->snapshot.uri;
 
 	pr_val_debug("Processing snapshot '%s'.", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = cache_download(uri, NULL);
+	error = cache_download(validation_cache(state), uri, NULL);
 	if (error)
 		goto end;
 	error = parse_snapshot(notif);
@@ -899,7 +904,7 @@ handle_delta(struct update_notification *notif, struct notification_delta *delta
 	pr_val_debug("Processing delta '%s'.", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = cache_download(uri, NULL);
+	error = cache_download(validation_cache(state_retrieve()), uri, NULL);
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta);
@@ -1004,7 +1009,7 @@ rrdp_update(struct rpki_uri *uri)
 	pr_val_debug("Old session/serial: %s/%s", old.session_id,
 	    old.serial.str);
 
-	error = cache_download(uri, &changed);
+	error = cache_download(validation_cache(state_retrieve()), uri, &changed);
 	if (error)
 		goto end;
 	if (!changed) {

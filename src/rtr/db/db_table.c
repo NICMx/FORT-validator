@@ -7,7 +7,7 @@
 #include "data_structure/uthash.h"
 
 struct hashable_roa {
-	const struct vrp data;
+	struct vrp data;
 	UT_hash_handle hh;
 };
 
@@ -36,63 +36,30 @@ db_table_create(void)
 void
 db_table_destroy(struct db_table *table)
 {
-	struct hashable_roa *node;
-	struct hashable_roa *tmp;
-	struct hashable_key *node_key;
-	struct hashable_key *tmp_key;
+	struct hashable_roa *roa, *tmpr;
+	struct hashable_key *rk, *tmpk;
 
-	HASH_ITER(hh, table->roas, node, tmp) {
-		HASH_DEL(table->roas, node);
-		free(node);
+	if (table == NULL)
+		return;
+
+	HASH_ITER(hh, table->roas, roa, tmpr) {
+		HASH_DEL(table->roas, roa);
+		free(roa);
 	}
 
-	HASH_ITER(hh, table->router_keys, node_key, tmp_key) {
-		HASH_DEL(table->router_keys, node_key);
-		free(node_key);
+	HASH_ITER(hh, table->router_keys, rk, tmpk) {
+		HASH_DEL(table->router_keys, rk);
+		free(rk);
 	}
 
 	free(table);
 }
 
-int
-db_table_foreach_roa(struct db_table const *table, vrp_foreach_cb cb, void *arg)
-{
-	struct hashable_roa *node, *tmp;
-	int error;
-
-	HASH_ITER(hh, table->roas, node, tmp) {
-		error = cb(&node->data, arg);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
-int
-db_table_foreach_router_key(struct db_table const *table,
-    router_key_foreach_cb cb, void *arg)
-{
-	struct hashable_key *node, *tmp;
-	int error;
-
-	HASH_ITER(hh, table->router_keys, node, tmp) {
-		error = cb(&node->data, arg);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
 static int
-add_roa(struct db_table *table, struct hashable_roa const *stack_new)
+add_roa(struct db_table *table, struct hashable_roa *new)
 {
-	struct hashable_roa *new;
 	struct hashable_roa *old;
 	int error;
-
-	new = pmclone(stack_new, sizeof(struct hashable_roa));
 
 	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
@@ -124,6 +91,62 @@ add_router_key(struct db_table *table, struct hashable_key *new)
 	}
 	if (old != NULL)
 		free(old);
+
+	return 0;
+}
+
+/* Moves the content from @src into @dst. */
+int
+db_table_join(struct db_table *dst, struct db_table *src)
+{
+	struct hashable_roa *roa, *tmpr;
+	struct hashable_key *rk, *tmpk;
+	int error;
+
+	HASH_ITER(hh, src->roas, roa, tmpr) {
+		HASH_DEL(src->roas, roa);
+		error = add_roa(dst, roa);
+		if (error)
+			return error;
+	}
+
+	HASH_ITER(hh, src->router_keys, rk, tmpk) {
+		HASH_DEL(src->router_keys, rk);
+		error = add_router_key(dst, rk);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+int
+db_table_foreach_roa(struct db_table const *table, vrp_foreach_cb cb, void *arg)
+{
+	struct hashable_roa *node, *tmp;
+	int error;
+
+	HASH_ITER(hh, table->roas, node, tmp) {
+		error = cb(&node->data, arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
+int
+db_table_foreach_router_key(struct db_table const *table,
+    router_key_foreach_cb cb, void *arg)
+{
+	struct hashable_key *node, *tmp;
+	int error;
+
+	HASH_ITER(hh, table->router_keys, node, tmp) {
+		error = cb(&node->data, arg);
+		if (error)
+			return error;
+	}
 
 	return 0;
 }
@@ -169,30 +192,30 @@ int
 rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
     struct ipv4_prefix const *prefix4, uint8_t max_length)
 {
-	struct hashable_roa new = {
-		.data.asn = asn,
-		.data.prefix.v4 = prefix4->addr,
-		.data.prefix_length = prefix4->len,
-		.data.max_prefix_length = max_length,
-		.data.addr_fam = AF_INET,
-	};
+	struct hashable_roa *roa = pzalloc(sizeof(struct hashable_roa));
 
-	return add_roa(table, &new);
+	roa->data.asn = asn;
+	roa->data.prefix.v4 = prefix4->addr;
+	roa->data.prefix_length = prefix4->len;
+	roa->data.max_prefix_length = max_length;
+	roa->data.addr_fam = AF_INET;
+
+	return add_roa(table, roa);
 }
 
 int
 rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
     struct ipv6_prefix const *prefix6, uint8_t max_length)
 {
-	struct hashable_roa new = {
-		.data.asn = asn,
-		.data.prefix.v6 = prefix6->addr,
-		.data.prefix_length = prefix6->len,
-		.data.max_prefix_length = max_length,
-		.data.addr_fam = AF_INET6,
-	};
+	struct hashable_roa *roa = pzalloc(sizeof(struct hashable_roa));
 
-	return add_roa(table, &new);
+	roa->data.asn = asn;
+	roa->data.prefix.v6 = prefix6->addr;
+	roa->data.prefix_length = prefix6->len;
+	roa->data.max_prefix_length = max_length;
+	roa->data.addr_fam = AF_INET6;
+
+	return add_roa(table, roa);
 }
 
 int

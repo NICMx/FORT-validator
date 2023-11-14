@@ -4,6 +4,7 @@
 #include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
+#include "cache/local_cache.h"
 
 /**
  * The current state of the validation cycle.
@@ -90,14 +91,14 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	error = state_store(result);
 	if (error)
-		goto abort1;
+		goto undo_result;
 
 	result->tal = tal;
 
 	result->x509_data.store = X509_STORE_new();
 	if (!result->x509_data.store) {
 		error = val_crypto_err("X509_STORE_new() returned NULL");
-		goto abort1;
+		goto undo_result;
 	}
 
 	params = X509_VERIFY_PARAM_new();
@@ -110,7 +111,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	error = certstack_create(&result->certstack);
 	if (error)
-		goto abort3;
+		goto undo_crypto;
 
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
@@ -118,10 +119,11 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	*out = result;
 	return 0;
-abort3:
+
+undo_crypto:
 	X509_VERIFY_PARAM_free(params);
 	X509_STORE_free(result->x509_data.store);
-abort1:
+undo_result:
 	free(result);
 	return error;
 }
@@ -138,7 +140,13 @@ validation_destroy(struct validation *state)
 struct tal *
 validation_tal(struct validation *state)
 {
-	return state->tal;
+	return (state != NULL) ? state->tal : NULL;
+}
+
+struct rpki_cache *
+validation_cache(struct validation *state)
+{
+	return tal_get_cache(state->tal);
 }
 
 X509_STORE *

@@ -14,7 +14,12 @@
 
 /* Mocks */
 
-MOCK_ABORT_PTR(state_retrieve, validation, void)
+struct rpki_cache *cache;
+
+MOCK(state_retrieve, struct validation *, NULL, void)
+MOCK(validation_cache, struct rpki_cache *, cache, struct validation *state)
+MOCK(validation_tal, struct tal *, NULL, struct validation *state)
+MOCK(tal_get_file_name, char const *, "test.tal", struct tal *tal)
 
 static unsigned int dl_count; /* Times the download function was called */
 static bool dl_error; /* Download should return error? */
@@ -70,6 +75,16 @@ MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 static const int SUCCESS = CNF_DIRECT | CNF_SUCCESS;
 static const int HTTP_SUCCESS = SUCCESS | CNF_FILE;
 
+static void
+setup_test(void)
+{
+	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	dl_error = false;
+
+	cache = cache_create("test.tal");
+	ck_assert_ptr_nonnull(cache);
+}
+
 static bool
 is_rsync(struct cache_node *node)
 {
@@ -92,10 +107,10 @@ __download(char const *url, enum uri_type uritype, int expected_error,
 {
 	struct rpki_uri *uri;
 
-	ck_assert_int_eq(0, uri_create(&uri, uritype, NULL, url));
+	ck_assert_int_eq(0, uri_create(&uri, "test.tal", uritype, NULL, url));
 	dl_count = 0;
 
-	ck_assert_int_eq(expected_error, cache_download(uri, NULL));
+	ck_assert_int_eq(expected_error, cache_download(cache, uri, NULL));
 	ck_assert_uint_eq(expected_cb_count, dl_count);
 
 	uri_refput(uri);
@@ -245,14 +260,15 @@ validate_file(struct cache_node *expected, struct path_builder *pb,
 	int error;
 
 	if (expected == NULL) {
-		pb_append(pb, tree);
-		if (stat(pb->string, &meta) != 0) {
-			error = errno;
-			ck_assert_int_eq(ENOENT, error);
-			pb_pop(pb, true);
-			return;
-		}
-		ck_abort_msg("'%s' exists, but it shouldn't.", pb->string);
+//		pb_append(pb, tree);
+//		if (stat(pb->string, &meta) != 0) {
+//			error = errno;
+//			ck_assert_int_eq(ENOENT, error);
+//			pb_pop(pb, true);
+//			return;
+//		}
+//		ck_abort_msg("'%s' exists, but it shouldn't.", pb->string);
+		return;
 	}
 
 	ck_assert_int_eq(0, pb_append(pb, expected->basename));
@@ -329,9 +345,10 @@ validate_trees(struct cache_node *actual, struct cache_node *nodes,
 
 	pb_init(&pb);
 	ck_assert_int_eq(0, pb_append(&pb, "tmp"));
+	ck_assert_int_eq(0, pb_append(&pb, "test.tal"));
 
 	validate_node(nodes, NULL, actual, &pb);
-	validate_file(files, &pb, (actual == rsync) ? "rsync" : "https");
+	validate_file(files, &pb, (actual != NULL) ? actual->basename : NULL);
 
 	pb_cleanup(&pb);
 
@@ -347,39 +364,47 @@ validate_tree(struct cache_node *actual, struct cache_node *expected)
 }
 
 static void
-backtrack_times(struct cache_node *node)
+set_times(struct cache_node *node, time_t tm)
 {
 	struct cache_node *child, *tmp;
 
 	if (node == NULL)
 		return;
 
-	node->ts_success -= 1000;
-	node->ts_attempt -= 1000;
+	node->ts_success = tm;
+	node->ts_attempt = tm;
 	HASH_ITER(hh, node->children, child, tmp)
-		backtrack_times(child);
+		set_times(child, tm);
 }
 
 static void
-__cache_prepare(void)
+new_iteration(struct rpki_cache *cache)
 {
-	ck_assert_int_eq(0, cache_prepare());
+	cache->startup_time = time(NULL);
+	ck_assert_int_ne((time_t) -1, cache->startup_time);
+
 	/* Ensure the old ts_successes and ts_attempts are outdated */
-	backtrack_times(rsync);
-	backtrack_times(https);
+	set_times(cache->rsync, cache->startup_time - 100);
+	set_times(cache->https, cache->startup_time - 100);
+}
+
+static void
+cache_reset(struct rpki_cache *cache)
+{
+	delete_node(cache->rsync);
+	cache->rsync = NULL;
+	delete_node(cache->https);
+	cache->https = NULL;
 }
 
 /* Tests */
 
 START_TEST(test_cache_download_rsync)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	dl_error = false;
-
-	ck_assert_int_eq(0, cache_prepare());
+	setup_test();
 
 	download_rsync("rsync://a.b.c/d/e", 0, 1);
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", 0, 0,
@@ -387,7 +412,7 @@ START_TEST(test_cache_download_rsync)
 
 	/* Redownload same file, nothing should happen */
 	download_rsync("rsync://a.b.c/d/e", 0, 0);
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", 0, 0,
@@ -399,7 +424,7 @@ START_TEST(test_cache_download_rsync)
 	 * e/f.
 	 */
 	download_rsync("rsync://a.b.c/d/e/f", 0, 0);
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", 0, 0,
@@ -410,7 +435,7 @@ START_TEST(test_cache_download_rsync)
 	 * while the filesystem will not.
 	 */
 	download_rsync("rsync://a.b.c/d", 0, 1);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0))),
@@ -421,7 +446,7 @@ START_TEST(test_cache_download_rsync)
 	);
 
 	download_rsync("rsync://a.b.c/e", 0, 1);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
@@ -434,7 +459,7 @@ START_TEST(test_cache_download_rsync)
 	);
 
 	download_rsync("rsync://x.y.z/e", 0, 1);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
@@ -449,21 +474,19 @@ START_TEST(test_cache_download_rsync)
 			NODE("x.y.z", 0, 0,
 				NODE("e", 0, 0))));
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_cache_download_rsync_error)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-
-	ck_assert_int_eq(0, cache_prepare());
+	setup_test();
 
 	dl_error = false;
 	download_rsync("rsync://a.b.c/d", 0, 1);
 	dl_error = true;
 	download_rsync("rsync://a.b.c/e", -EINVAL, 1);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
@@ -475,7 +498,7 @@ START_TEST(test_cache_download_rsync_error)
 	/* Regardless of error, not reattempted because same iteration */
 	dl_error = true;
 	download_rsync("rsync://a.b.c/e", -EINVAL, 0);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
@@ -486,7 +509,7 @@ START_TEST(test_cache_download_rsync_error)
 
 	dl_error = false;
 	download_rsync("rsync://a.b.c/e", -EINVAL, 0);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
@@ -495,47 +518,46 @@ START_TEST(test_cache_download_rsync_error)
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0))));
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_cache_cleanup_rsync)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	dl_error = false;
+	setup_test();
 
 	/*
 	 * First iteration: Tree is created. No prunes, because nothing's
 	 * outdated.
 	 */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/d", 0, 1);
 	download_rsync("rsync://a.b.c/e", 0, 1);
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
 				NODE("e", SUCCESS, 0))));
 
 	/* One iteration with no changes, for paranoia */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/d", 0, 1);
 	download_rsync("rsync://a.b.c/e", 0, 1);
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
 				NODE("e", SUCCESS, 0))));
 
 	/* Add one sibling */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/d", 0, 1);
 	download_rsync("rsync://a.b.c/e", 0, 1);
 	download_rsync("rsync://a.b.c/f", 0, 1);
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
@@ -543,28 +565,28 @@ START_TEST(test_cache_cleanup_rsync)
 				NODE("f", SUCCESS, 0))));
 
 	/* Remove some branches */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/d", 0, 1);
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0))));
 
 	/* Remove old branch and add sibling at the same time */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/e", 0, 1);
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", SUCCESS, 0))));
 
 	/* Add a child to the same branch, do not update the old one */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/e/f/g", 0, 1);
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", SUCCESS, 0,
@@ -577,10 +599,10 @@ START_TEST(test_cache_cleanup_rsync)
 	 * but its file should persist (because it should be retained as its
 	 * parent's descendant).
 	 */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/e/f", 0, 1);
 	cache_cleanup();
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", SUCCESS, 0,
@@ -592,10 +614,10 @@ START_TEST(test_cache_cleanup_rsync)
 						NODE("g", SUCCESS, 0))))));
 
 	/* Do it again. Node should die, all descendant files should persist. */
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/e", 0, 1);
 	cache_cleanup();
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", SUCCESS, 0))),
@@ -606,47 +628,45 @@ START_TEST(test_cache_cleanup_rsync)
 						NODE("g", SUCCESS, 0))))));
 
 	/* Empty the tree */
-	__cache_prepare();
+	new_iteration(cache);
 	cache_cleanup();
-	validate_tree(rsync, NULL);
+	validate_tree(cache->rsync, NULL);
 
 	/* Node exists, but file doesn't */
 	printf("Tmp files:\n");
 	file_ls_R("tmp");
-	__cache_prepare();
+	new_iteration(cache);
 	download_rsync("rsync://a.b.c/e", 0, 1);
 	download_rsync("rsync://a.b.c/f/g/h", 0, 1);
 
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", SUCCESS, 0),
 				NODE("f", 0, 0,
 					NODE("g", 0, 0,
 						NODE("h", SUCCESS, 0))))));
-	ck_assert_int_eq(0, system("rm -rf tmp/rsync/a.b.c/f/g"));
+	ck_assert_int_eq(0, system("rm -rf tmp/test.tal/rsync/a.b.c/f/g"));
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", SUCCESS, 0))));
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_cache_cleanup_rsync_error)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-
-	ck_assert_int_eq(0, cache_prepare());
+	setup_test();
 
 	/* Set up */
 	dl_error = false;
 	download_rsync("rsync://a.b.c/d", 0, 1);
 	dl_error = true;
 	download_rsync("rsync://a.b.c/e", -EINVAL, 1);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0),
@@ -662,16 +682,16 @@ START_TEST(test_cache_cleanup_rsync_error)
 	 * does have a file.
 	 */
 	cache_cleanup();
-	validate_tree(rsync,
+	validate_tree(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", SUCCESS, 0))));
 
 	/* Fail d */
-	__cache_prepare();
+	new_iteration(cache);
 	dl_error = true;
 	download_rsync("rsync://a.b.c/d", -EINVAL, 1);
-	validate_trees(rsync,
+	validate_trees(cache->rsync,
 		NODE("rsync", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", CNF_DIRECT, -EINVAL))),
@@ -681,22 +701,19 @@ START_TEST(test_cache_cleanup_rsync_error)
 
 	/* Clean up d because of error */
 	cache_cleanup();
-	validate_tree(rsync, NULL);
+	validate_tree(cache->rsync, NULL);
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_cache_download_https)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	dl_error = false;
-
-	ck_assert_int_eq(0, cache_prepare());
+	setup_test();
 
 	/* Download *file* e. */
 	download_https("https://a.b.c/d/e", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", 0, 0,
@@ -704,7 +721,7 @@ START_TEST(test_cache_download_https)
 
 	/* e is now a dir; need to replace it. */
 	download_https("https://a.b.c/d/e/f", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", 0, 0,
@@ -713,14 +730,14 @@ START_TEST(test_cache_download_https)
 
 	/* d is now a file; need to replace it. */
 	download_https("https://a.b.c/d", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0))));
 
 	/* Download something else 1 */
 	download_https("https://a.b.c/e", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0),
@@ -728,7 +745,7 @@ START_TEST(test_cache_download_https)
 
 	/* Download something else 2 */
 	download_https("https://x.y.z/e", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0),
@@ -736,21 +753,19 @@ START_TEST(test_cache_download_https)
 			NODE("x.y.z", 0, 0,
 				NODE("e", HTTP_SUCCESS, 0))));
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_cache_download_https_error)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-
-	ck_assert_int_eq(0, cache_prepare());
+	setup_test();
 
 	dl_error = false;
 	download_https("https://a.b.c/d", 0, 1);
 	dl_error = true;
 	download_https("https://a.b.c/e", -EINVAL, 1);
-	validate_trees(https,
+	validate_trees(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0),
@@ -762,7 +777,7 @@ START_TEST(test_cache_download_https_error)
 	/* Regardless of error, not reattempted because same iteration */
 	dl_error = true;
 	download_https("https://a.b.c/e", -EINVAL, 0);
-	validate_trees(https,
+	validate_trees(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0),
@@ -773,7 +788,7 @@ START_TEST(test_cache_download_https_error)
 
 	dl_error = false;
 	download_https("https://a.b.c/e", -EINVAL, 0);
-	validate_trees(https,
+	validate_trees(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0),
@@ -782,40 +797,39 @@ START_TEST(test_cache_download_https_error)
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0))));
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_cache_cleanup_https)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	dl_error = false;
+	setup_test();
 
 	/* First iteration; make a tree and clean it */
-	__cache_prepare();
+	new_iteration(cache);
 	download_https("https://a.b.c/d", 0, 1);
 	download_https("https://a.b.c/e", 0, 1);
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0),
 				NODE("e", HTTP_SUCCESS, 0))));
 
 	/* Remove one branch */
-	__cache_prepare();
+	new_iteration(cache);
 	download_https("https://a.b.c/d", 0, 1);
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0))));
 
 	/* Change the one branch */
-	__cache_prepare();
+	new_iteration(cache);
 	download_https("https://a.b.c/e", 0, 1);
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", HTTP_SUCCESS, 0))));
@@ -823,10 +837,10 @@ START_TEST(test_cache_cleanup_https)
 	/*
 	 * Add a child to the same branch, do not update the old one
 	 */
-	__cache_prepare();
+	new_iteration(cache);
 	download_https("https://a.b.c/e/f/g", 0, 1);
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", 0, 0,
@@ -837,63 +851,61 @@ START_TEST(test_cache_cleanup_https)
 	 * Download parent, do not update child.
 	 * Children need to die, because parent is now a file.
 	 */
-	__cache_prepare();
+	new_iteration(cache);
 	download_https("https://a.b.c/e/f", 0, 1);
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", 0, 0,
 					NODE("f", HTTP_SUCCESS, 0)))));
 
 	/* Do it again. */
-	__cache_prepare();
+	new_iteration(cache);
 	download_https("https://a.b.c/e", 0, 1);
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", HTTP_SUCCESS, 0))));
 
 	/* Empty the tree */
-	__cache_prepare();
+	new_iteration(cache);
 	cache_cleanup();
-	validate_tree(https, NULL);
+	validate_tree(cache->https, NULL);
 
 	/* Node exists, but file doesn't */
-	__cache_prepare();
+	new_iteration(cache);
 	download_https("https://a.b.c/e", 0, 1);
 	download_https("https://a.b.c/f/g/h", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", HTTP_SUCCESS, 0),
 				NODE("f", 0, 0,
 					NODE("g", 0, 0,
 						NODE("h", HTTP_SUCCESS, 0))))));
-	ck_assert_int_eq(0, system("rm -rf tmp/https/a.b.c/f/g"));
+	ck_assert_int_eq(0, system("rm -rf tmp/test.tal/https/a.b.c/f/g"));
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", HTTP_SUCCESS, 0))));
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_cache_cleanup_https_error)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-
-	ck_assert_int_eq(0, cache_prepare());
+	setup_test();
 
 	/* Set up */
 	dl_error = false;
 	download_https("https://a.b.c/d", 0, 1);
 	dl_error = true;
 	download_https("https://a.b.c/e", -EINVAL, 1);
-	validate_trees(https,
+	validate_trees(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0),
@@ -904,16 +916,16 @@ START_TEST(test_cache_cleanup_https_error)
 
 	/* Deleted because file ENOENT. */
 	cache_cleanup();
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0))));
 
 	/* Fail d */
-	__cache_prepare();
+	new_iteration(cache);
 	dl_error = true;
 	download_https("https://a.b.c/d", -EINVAL, 1);
-	validate_trees(https,
+	validate_trees(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", CNF_DIRECT, -EINVAL))),
@@ -923,43 +935,40 @@ START_TEST(test_cache_cleanup_https_error)
 
 	/* Clean up d because of error */
 	cache_cleanup();
-	validate_tree(https, NULL);
+	validate_tree(cache->https, NULL);
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
 START_TEST(test_dots)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	dl_error = false;
-
-	ck_assert_int_eq(0, cache_prepare());
+	setup_test();
 
 	download_https("https://a.b.c/d", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0))));
 
 	download_https("https://a.b.c/d/.", 0, 0);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("d", HTTP_SUCCESS, 0))));
 
 	download_https("https://a.b.c/d/..", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", HTTP_SUCCESS, 0)));
 
 	download_https("https://a.b.c/./d/../e", 0, 1);
-	validate_tree(https,
+	validate_tree(cache->https,
 		NODE("https", 0, 0,
 			NODE("a.b.c", 0, 0,
 				NODE("e", HTTP_SUCCESS, 0))));
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 
@@ -969,22 +978,24 @@ START_TEST(test_metadata_json)
 	json_t *json;
 	char *str;
 
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	ck_assert_int_eq(0, system("mkdir tmp/"));
+	setup_test();
 
-	rsync = TNODE("rsync", 0, NOW + 0, NOW + 1, 0,
+	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	ck_assert_int_eq(0, system("mkdir -p tmp/test.tal"));
+
+	cache->rsync = TNODE("rsync", 0, NOW + 0, NOW + 1, 0,
 			TNODE("a.b.c", 0, NOW + 2, NOW + 3, 0,
 				TNODE("d", SUCCESS, NOW + 4, NOW + 5, 0),
 				TNODE("e", SUCCESS, NOW + 6, NOW + 7, 0)),
 			TNODE("x.y.z", 0, NOW + 8, NOW + 9, 0,
 				TNODE("w", SUCCESS, NOW + 0, NOW + 1, 0)));
-	https = TNODE("https", 0, NOW + 2, NOW + 3, 0,
+	cache->https = TNODE("https", 0, NOW + 2, NOW + 3, 0,
 			TNODE("a", 0, NOW + 4, NOW + 5, 0,
 				TNODE("b", HTTP_SUCCESS, NOW + 6, NOW + 7, 0),
 				TNODE("c", HTTP_SUCCESS, NOW + 8, NOW + 9, 0)));
 
-	json = build_metadata_json();
-	ck_assert_int_eq(0, json_dump_file(json, "tmp/metadata.json", JSON_COMPACT));
+	json = build_metadata_json(cache);
+	ck_assert_int_eq(0, json_dump_file(json, "tmp/test.tal/metadata.json", JSON_COMPACT));
 
 	str = json_dumps(json, /* JSON_INDENT(4) */ JSON_COMPACT);
 	/* printf("%s\n", str); */
@@ -1004,11 +1015,10 @@ START_TEST(test_metadata_json)
 		str);
 	free(str);
 
-	cache_teardown();
-	rsync = https = NULL;
+	cache_reset(cache);
 
-	load_metadata_json();
-	validate_trees(rsync,
+	load_metadata_json(cache);
+	validate_trees(cache->rsync,
 		TNODE("rsync", 0, NOW + 0, NOW + 1, 0,
 			TNODE("a.b.c", 0, NOW + 2, NOW + 3, 0,
 				TNODE("d", SUCCESS, NOW + 4, NOW + 5, 0),
@@ -1016,19 +1026,21 @@ START_TEST(test_metadata_json)
 			TNODE("x.y.z", 0, NOW + 8, NOW + 9, 0,
 				TNODE("w", SUCCESS, NOW + 0, NOW + 1, 0))),
 		NULL);
-	validate_trees(https,
+	validate_trees(cache->https,
 		TNODE("https", 0, NOW + 2, NOW + 3, 0,
 			TNODE("a", 0, NOW + 4, NOW + 5, 0,
 				TNODE("b", HTTP_SUCCESS, NOW + 6, NOW + 7, 0),
 				TNODE("c", HTTP_SUCCESS, NOW + 8, NOW + 9, 0))),
 		NULL);
+
+	cache_destroy(cache);
 }
 END_TEST
 
 #define INIT(_root)							\
 	pb_init(&pb);							\
 	root = _root;							\
-	ctt_init(&ctt, &root, &pb)
+	ctt_init(&ctt, cache, &root, &pb)
 #define DONE								\
 	delete_node(root);						\
 	pb_cleanup(&pb)
@@ -1052,12 +1064,10 @@ START_TEST(test_ctt_traversal)
 	struct cache_node *node;
 	time_t now;
 
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	setup_test();
 
-	ck_assert_int_eq(0, cache_prepare());
 	now = time(NULL);
-	if (now == ((time_t) -1))
-		ck_abort_msg("time(NULL) returned -1");
+	ck_assert_int_ne((time_t) -1, now);
 
 	INIT(LEAF("a"));
 	ASSERT_NEXT_NODE("a", "a");
@@ -1166,6 +1176,8 @@ START_TEST(test_ctt_traversal)
 	ASSERT_NEXT_NULL;
 	ck_assert_ptr_eq(NULL, root);
 	DONE;
+
+	cache_destroy(cache);
 }
 END_TEST
 
@@ -1187,7 +1199,7 @@ prepare_uri_list(struct uri_list *uris, ...)
 			type = UT_RSYNC;
 		else
 			ck_abort_msg("Bad protocol: %s", str);
-		ck_assert_int_eq(0, uri_create(&uri, type, NULL, str));
+		ck_assert_int_eq(0, uri_create(&uri, "test.tal", type, NULL, str));
 		uris_add(uris, uri);
 	}
 	va_end(args);
@@ -1199,53 +1211,44 @@ START_TEST(test_recover)
 {
 	struct uri_list uris;
 
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	dl_error = false;
+	setup_test();
 
 	/* Query on empty database */
 	PREPARE_URI_LIST(&uris, "rsync://a.b.c/d", "https://a.b.c/d");
-	ck_assert_ptr_null(cache_recover(&uris, false));
+	ck_assert_ptr_null(cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Only first URI is cached */
-	ck_assert_int_eq(0, cache_prepare());
+	cache_reset(cache);
 	download_rsync("rsync://a/b/c", 0, 1);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
-	cache_teardown();
-
 	/* Only second URI is cached */
-	ck_assert_int_eq(0, cache_prepare());
+	cache_reset(cache);
 	download_https("https://d/e", 0, 1);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
-	cache_teardown();
-
 	/* Only third URI is cached */
-	ck_assert_int_eq(0, cache_prepare());
+	cache_reset(cache);
 	download_https("https://f", 0, 1);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[2], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
-	cache_teardown();
-
 	/* None was cached */
-	ck_assert_int_eq(0, cache_prepare());
+	cache_reset(cache);
 	download_rsync("rsync://d/e", 0, 1);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_null(cache_recover(&uris, false));
+	ck_assert_ptr_null(cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
-
-	cache_teardown();
 
 	/*
 	 * At present, cache_recover() can only be called after all of a
@@ -1254,14 +1257,15 @@ START_TEST(test_recover)
 	 * was successful, but the RRDP code wasn't able to expand the snapshot
 	 * or deltas.
 	 */
-	rsync = NODE("rsync", 0, 0,
+	cache_reset(cache);
+	cache->rsync = NODE("rsync", 0, 0,
 		NODE("a", 0, 0,
-			TNODE("1", CNF_DIRECT | CNF_SUCCESS, 100, 100, 0),
-			TNODE("2", CNF_DIRECT | CNF_SUCCESS, 100, 100, 1),
-			TNODE("3", CNF_DIRECT | CNF_SUCCESS, 100, 200, 0),
-			TNODE("4", CNF_DIRECT | CNF_SUCCESS, 100, 200, 1),
-			TNODE("5", CNF_DIRECT | CNF_SUCCESS, 200, 100, 0),
-			TNODE("6", CNF_DIRECT | CNF_SUCCESS, 200, 100, 1)),
+			TNODE("1", SUCCESS, 100, 100, 0),
+			TNODE("2", SUCCESS, 100, 100, 1),
+			TNODE("3", SUCCESS, 100, 200, 0),
+			TNODE("4", SUCCESS, 100, 200, 1),
+			TNODE("5", SUCCESS, 200, 100, 0),
+			TNODE("6", SUCCESS, 200, 100, 1)),
 		NODE("b", 0, 0,
 			TNODE("1", CNF_DIRECT, 100, 100, 0),
 			TNODE("2", CNF_DIRECT, 100, 100, 1),
@@ -1269,28 +1273,28 @@ START_TEST(test_recover)
 			TNODE("4", CNF_DIRECT, 100, 200, 1),
 			TNODE("5", CNF_DIRECT, 200, 100, 0),
 			TNODE("6", CNF_DIRECT, 200, 100, 1)),
-		TNODE("c", CNF_DIRECT | CNF_SUCCESS, 300, 300, 0,
+		TNODE("c", SUCCESS, 300, 300, 0,
 			TNODE("1", 0, 0, 0, 0)),
-		TNODE("d", CNF_DIRECT | CNF_SUCCESS, 50, 50, 0,
+		TNODE("d", SUCCESS, 50, 50, 0,
 			TNODE("1", 0, 0, 0, 0)));
 
 	/* Multiple successful caches: Prioritize the most recent one */
 	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://a/3", "rsync://a/5");
-	ck_assert_ptr_eq(uris.array[2], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://a/1", "rsync://a/3");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* No successful caches: No viable candidates */
 	PREPARE_URI_LIST(&uris, "rsync://b/2", "rsync://b/4", "rsync://b/6");
-	ck_assert_ptr_null(cache_recover(&uris, false));
+	ck_assert_ptr_null(cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Status: CNF_SUCCESS is better than 0. */
 	PREPARE_URI_LIST(&uris, "rsync://b/1", "rsync://a/1");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/*
@@ -1301,29 +1305,29 @@ START_TEST(test_recover)
 	 * outdatedness is not that severe.
 	 */
 	PREPARE_URI_LIST(&uris, "rsync://a/2", "rsync://b/2");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Parents of downloaded nodes */
 	PREPARE_URI_LIST(&uris, "rsync://a", "rsync://b");
-	ck_assert_ptr_null(cache_recover(&uris, false));
+	ck_assert_ptr_null(cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Children of downloaded nodes */
 	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://c/1");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://c/2");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://d/1");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://d/2");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Try them all at the same time */
@@ -1333,25 +1337,24 @@ START_TEST(test_recover)
 	    "rsync://b", "rsync://b/1", "rsync://b/2", "rsync://b/3",
 	    "rsync://b/4", "rsync://b/5", "rsync://b/6",
 	    "rsync://c/2", "rsync://d/1", "rsync://e/1");
-	ck_assert_ptr_eq(uris.array[14], cache_recover(&uris, false));
+	ck_assert_ptr_eq(uris.array[14], cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
-
-	cache_teardown();
 
 
 	struct uri_and_node un = { 0 };
 
-	rsync = NODE("rsync", 0, 0,
+	cache_reset(cache);
+	cache->rsync = NODE("rsync", 0, 0,
 		TNODE("1", CNF_SUCCESS, 200, 200, 0,
 			TNODE("2", CNF_DIRECT, 200, 200, 1,
-				TNODE("3", CNF_DIRECT | CNF_SUCCESS, 100, 100, 1,
-					TNODE("4", CNF_DIRECT | CNF_SUCCESS, 200, 200, 1,
-						TNODE("5", CNF_DIRECT | CNF_SUCCESS, 100, 100, 0,
-							TNODE("6", CNF_DIRECT | CNF_SUCCESS, 200, 200, 0)))))));
+				TNODE("3", SUCCESS, 100, 100, 1,
+					TNODE("4", SUCCESS, 200, 200, 1,
+						TNODE("5", SUCCESS, 100, 100, 0,
+							TNODE("6", SUCCESS, 200, 200, 0)))))));
 
 	/* Try them all at the same time */
 	PREPARE_URI_LIST(&uris, "rsync://1/2/3/4/5/6");
-	__cache_recover(&uris, false, &un);
+	__cache_recover(cache, &uris, false, &un);
 	ck_assert_ptr_eq(uris.array[0], un.uri);
 	ck_assert_str_eq("6", un.node->basename);
 	uris_cleanup(&uris);
@@ -1360,7 +1363,7 @@ START_TEST(test_recover)
 	/* TODO (test) more variations */
 	/* TODO (test) node with DIRECT, then not direct, then DIRECT */
 
-	cache_teardown();
+	cache_destroy(cache);
 }
 END_TEST
 

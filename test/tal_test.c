@@ -20,7 +20,8 @@ MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
 
-MOCK_ABORT_PTR(state_retrieve, validation, void)
+MOCK(state_retrieve, struct validation *, NULL, void)
+MOCK(validation_tal, struct tal *, NULL, struct validation *state)
 MOCK_ABORT_PTR(validation_get_notification_uri, rpki_uri,
     struct validation *state)
 
@@ -28,16 +29,24 @@ MOCK_ABORT_VOID(fnstack_init, void)
 MOCK_ABORT_VOID(fnstack_cleanup, void)
 MOCK_ABORT_VOID(fnstack_push, char const *f)
 
-MOCK_ABORT_INT(cache_download, struct rpki_uri *uri, bool *changed)
+MOCK(cache_create, struct rpki_cache *, NULL, char const *tal)
+MOCK_VOID(cache_destroy, struct rpki_cache *cache)
+MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
+    bool *changed)
 MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
-MOCK_ABORT_PTR(cache_recover, rpki_uri, struct uri_list *uris,
-    bool use_rrdp)
+MOCK_ABORT_PTR(cache_recover, rpki_uri, struct rpki_cache *cache,
+    struct uri_list *uris, bool use_rrdp)
+
+MOCK_ABORT_INT(init_tmpdir, void)
+
+MOCK_VOID(db_table_destroy, struct db_table *table)
+MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
 
 /* Tests */
 
 START_TEST(tal_load_normal)
 {
-	struct tal *tal;
+	struct tal tal;
 	unsigned int i;
 	/* Got this by feeding the subjectPublicKeyInfo to `base64 -d`. */
 	unsigned char decoded[] = {
@@ -70,19 +79,19 @@ START_TEST(tal_load_normal)
 	    0x83, 0x63, 0x0D, 0x02, 0x03, 0x01, 0x00, 0x01
 	};
 
-	ck_assert_int_eq(tal_load("tal/lacnic.tal", &tal), 0);
+	ck_assert_int_eq(tal_init(&tal, "tal/lacnic.tal"), 0);
 
-	ck_assert_uint_eq(tal->uris.len, 3);
-	ck_assert_str_eq(tal->uris.array[0]->global,
+	ck_assert_uint_eq(tal.uris.len, 3);
+	ck_assert_str_eq(tal.uris.array[0]->global,
 	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal->uris.array[1]->global, "https://potato");
-	ck_assert_str_eq(tal->uris.array[2]->global, "rsync://potato");
+	ck_assert_str_eq(tal.uris.array[1]->global, "https://potato");
+	ck_assert_str_eq(tal.uris.array[2]->global, "rsync://potato");
 
-	ck_assert_uint_eq(ARRAY_LEN(decoded), tal->spki_len);
+	ck_assert_uint_eq(ARRAY_LEN(decoded), tal.spki_len);
 	for (i = 0; i < ARRAY_LEN(decoded); i++)
-		ck_assert_uint_eq(tal->spki[i], decoded[i]);
+		ck_assert_uint_eq(tal.spki[i], decoded[i]);
 
-	tal_destroy(tal);
+	tal_cleanup(&tal);
 }
 END_TEST
 

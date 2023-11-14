@@ -10,7 +10,7 @@ struct path_builder {
 };
 
 void pb_init(struct path_builder *);
-int pb_init_cache(struct path_builder *, char const *);
+int pb_init_cache(struct path_builder *, char const *, char const *);
 
 /*
  * The appends are atomic.

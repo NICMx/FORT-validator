@@ -14,7 +14,6 @@
 #include "rtr/rtr.h"
 #include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
-#include "cache/local_cache.h"
 
 struct vrp_node {
 	struct delta_vrp delta;
@@ -80,24 +79,6 @@ static struct state state;
 /** Protects @state.base, @state.deltas and @state.serial. */
 static pthread_rwlock_t state_lock;
 
-/**
- * Lock to protect the ROA table while it's being built up.
- *
- * To be honest, I'm tempted to remove this mutex completely. It currently
- * exists because all the threads store their ROAs in the same table, which is
- * awkward engineering. Each thread should work on its own table, and the main
- * thread should join the tables afterwards. This would render the semaphore
- * redundant, as well as rid the relevant code from any concurrency risks.
- *
- * I'm conflicted about committing to the refactor however, because the change
- * would require about twice as much memory and involve the extra joining step.
- * And the current implementation is working fine...
- *
- * Assuming, that is, that #83/#89 isn't a concurrency problem. But I can't
- * figure out how it could be.
- */
-static pthread_mutex_t table_lock = PTHREAD_MUTEX_INITIALIZER;
-
 int
 vrps_init(void)
 {
@@ -155,25 +136,18 @@ vrps_destroy(void)
 		db_table_destroy(state.base);
 }
 
-#define WLOCK_HANDLER(cb)						\
-	int error;							\
-	mutex_lock(&table_lock);					\
-	error = cb;							\
-	mutex_unlock(&table_lock);					\
-	return error;
-
 int
 handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 {
-	WLOCK_HANDLER(rtrhandler_handle_roa_v4(arg, as, prefix, max_length))
+	return rtrhandler_handle_roa_v4(arg, as, prefix, max_length);
 }
 
 int
 handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
     uint8_t max_length, void *arg)
 {
-	WLOCK_HANDLER(rtrhandler_handle_roa_v6(arg, as, prefix, max_length))
+	return rtrhandler_handle_roa_v6(arg, as, prefix, max_length);
 }
 
 int
@@ -181,9 +155,7 @@ handle_router_key(unsigned char const *ski, struct asn_range const *asns,
     unsigned char const *spk, void *arg)
 {
 	uint64_t asn;
-	int error = 0;
-
-	mutex_lock(&table_lock);
+	int error;
 
 	/*
 	 * TODO (warning) Umm... this is begging for a limit.
@@ -193,32 +165,9 @@ handle_router_key(unsigned char const *ski, struct asn_range const *asns,
 	for (asn = asns->min; asn <= asns->max; asn++) {
 		error = rtrhandler_handle_router_key(arg, ski, asn, spk);
 		if (error)
-			break;
+			return error;
 	}
 
-	mutex_unlock(&table_lock);
-	return error;
-}
-
-static int
-__perform_standalone_validation(struct db_table **result)
-{
-	struct db_table *db;
-	int error;
-
-	error = cache_prepare();
-	if (error)
-		return error;
-
-	db = db_table_create();
-
-	error = perform_standalone_validation(db);
-	if (error) {
-		db_table_destroy(db);
-		return error;
-	}
-
-	*result = db;
 	return 0;
 }
 
@@ -278,9 +227,9 @@ __vrps_update(bool *changed)
 	old_base = state.base;
 	new_base = NULL;
 
-	error = __perform_standalone_validation(&new_base);
-	if (error)
-		return error;
+	new_base = perform_standalone_validation();
+	if (new_base == NULL)
+		return EINVAL;
 
 	error = slurm_apply(new_base, &state.slurm);
 	if (error) {

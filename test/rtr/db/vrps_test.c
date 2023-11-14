@@ -69,7 +69,6 @@ static const bool deltas_4to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 unsigned int deltas_lifetime = 5;
 
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
-MOCK_INT(cache_prepare, 0, void)
 
 /* Test functions */
 

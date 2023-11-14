@@ -17,8 +17,6 @@ void *pzalloc(size_t size);
 void *pcalloc(size_t nmemb, size_t size);
 /* realloc(), but panic on allocation failure. */
 void *prealloc(void *ptr, size_t size);
-/* Clone @src on the heap, panic on allocation failure. */
-void *pmclone(void const *src, size_t size);
 
 /* strdup(), but panic on allocation failure. */
 char *pstrdup(char const *s);
