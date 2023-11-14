@@ -266,9 +266,6 @@ rsync_download(struct rpki_uri *uri)
 	int child_status;
 	int error;
 
-	if (!config_get_rsync_enabled())
-		return 0; /* Skip; caller will work with existing cache. */
-
 	/* Prepare everything for the child exec */
 	args = NULL;
 	args_len = 0;

@@ -405,6 +405,23 @@ uri2luri(struct rpki_uri *uri)
 	return pstrdup(luri);
 }
 
+/* Returns 0 if the file exists, nonzero otherwise. */
+static int
+cache_check(struct rpki_uri *uri)
+{
+	struct stat meta;
+	int error;
+
+	if (stat(uri_get_local(uri), &meta) != 0) {
+		error = errno;
+		pr_val_debug("Offline mode, file is not cached.");
+		return error;
+	}
+
+	pr_val_debug("Offline mode, file is cached.");
+	return 0;
+}
+
 /**
  * @changed only on HTTP.
  */
@@ -431,12 +448,20 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed)
 	case UT_RSYNC:
 		if (strcmp(token, "rsync") != 0)
 			return pr_val_err("Path is not rsync: %s", uri_get_local(uri));
+		if (!config_get_rsync_enabled()) {
+			error = cache_check(uri);
+			goto end;
+		}
 		node = cache->rsync = init_root(cache->rsync, "rsync");
 		recursive = true;
 		break;
 	case UT_HTTPS:
 		if (strcmp(token, "https") != 0)
 			return pr_val_err("Path is not HTTPS: %s", uri_get_local(uri));
+		if (!config_get_http_enabled()) {
+			error = cache_check(uri);
+			goto end;
+		}
 		node = cache->https = init_root(cache->https, "https");
 		recursive = false;
 		break;
@@ -516,6 +541,8 @@ download(struct rpki_cache *cache, struct rpki_uri *uri, bool use_rrdp,
     uris_dl_cb cb, void *arg)
 {
 	int error;
+
+	pr_val_debug("Trying URL %s...", uri_get_global(uri));
 
 	error = (use_rrdp && (uri_get_type(uri) == UT_HTTPS))
 	    ? rrdp_update(uri)
