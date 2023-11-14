@@ -459,27 +459,5 @@ int
 http_direct_download(char const *remote, char const *dest)
 {
 	bool changed;
-	char *tmp_file;
-	int error;
-
-	error = cache_tmpfile(&tmp_file);
-	if (error)
-		return error;
-
-	error = http_fetch(remote, tmp_file, 0, &changed);
-	if (error)
-		goto end;
-
-	/* Overwrite the original file */
-	pr_val_debug("Moving %s to %s.", tmp_file, dest);
-	error = rename(tmp_file, dest);
-	if (error) {
-		error = errno;
-		pr_val_err("Renaming temporal file from '%s' to '%s': %s",
-		    tmp_file, dest, strerror(error));
-		goto end;
-	}
-
-end:	free(tmp_file);
-	return error;
+	return http_fetch(remote, dest, 0, &changed);
 }

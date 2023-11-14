@@ -69,8 +69,8 @@ state_store(struct validation *state)
 }
 
 /*
- * Returns the current thread's validation state. Never returns NULL by
- * contract.
+ * Returns the current thread's validation state. Should not be used outside of
+ * validation threads.
  */
 struct validation *
 state_retrieve(void)
