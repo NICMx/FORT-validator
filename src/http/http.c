@@ -317,7 +317,7 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 		}
 	}
 
-	if (http_code >= 400) {
+	if (http_code >= 400 || http_code == 204) {
 		pr_val_err("HTTP result code: %ld", http_code);
 		error = handle_http_response_code(http_code);
 		goto end;
