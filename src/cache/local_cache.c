@@ -308,6 +308,167 @@ end:
 	json_decref(root);
 }
 
+static int
+tt2json(time_t tt, json_t **result)
+{
+	char str[32];
+	struct tm tmbuffer, *tm;
+
+	memset(&tmbuffer, 0, sizeof(tmbuffer));
+	tm = localtime_r(&tt, &tmbuffer);
+	if (tm == NULL)
+		return errno;
+	if (strftime(str, sizeof(str) - 1, "%FT%T%z", tm) == 0)
+		return ENOSPC;
+
+	*result = json_string(str);
+	return 0;
+}
+
+static json_t *
+node2json(struct cache_node *node)
+{
+	json_t *json, *date, *children, *jchild;
+	struct cache_node *child, *tmp;
+	int error;
+
+	json = json_object();
+	if (json == NULL) {
+		pr_op_err("json object allocation failure.");
+		return NULL;
+	}
+
+	if (json_object_set_new(json, "basename", json_string(node->basename))) {
+		pr_op_err("Cannot convert string '%s' to json; unknown cause.",
+		    node->basename);
+		goto cancel;
+	}
+
+	if (json_object_set_new(json, "flags", json_integer(node->flags))) {
+		pr_op_err("Cannot convert int '%d' to json; unknown cause.",
+		    node->flags);
+		goto cancel;
+	}
+
+	error = tt2json(node->ts_success, &date);
+	if (error) {
+		pr_op_err("Cannot convert %s's success timestamp to json: %s",
+		    node->basename, strerror(error));
+		goto cancel;
+	}
+	if (json_object_set_new(json, "ts_success", date)) {
+		pr_op_err("Cannot convert %s's success timestamp to json; unknown cause.",
+		    node->basename);
+		goto cancel;
+	}
+
+	error = tt2json(node->ts_attempt, &date);
+	if (error) {
+		pr_op_err("Cannot convert %s's attempt timestamp to json: %s",
+		    node->basename, strerror(error));
+		goto cancel;
+	}
+	if (json_object_set_new(json, "ts_attempt", date)) {
+		pr_op_err("Cannot convert %s's attempt timestamp to json; unknown cause.",
+		    node->basename);
+		goto cancel;
+	}
+
+	if (json_object_set_new(json, "error", json_integer(node->error))) {
+		pr_op_err("Cannot convert int '%d' to json; unknown cause.",
+		    node->error);
+		goto cancel;
+	}
+
+	if (node->children != NULL) {
+		children = json_array();
+		if (children == NULL) {
+			pr_op_err("json array allocation failure.");
+			return NULL;
+		}
+
+		if (json_object_set_new(json, "children", children)) {
+			pr_op_err("Cannot push children array into json node; unknown cause.");
+			goto cancel;
+		}
+
+		HASH_ITER(hh, node->children, child, tmp) {
+			jchild = node2json(child);
+			if (jchild == NULL)
+				goto cancel; /* Error msg already printed */
+			if (json_array_append(children, jchild)) {
+				pr_op_err("Cannot push child into json node; unknown cause.");
+				goto cancel;
+			}
+		}
+	}
+
+	return json;
+
+cancel:
+	json_decref(json);
+	return NULL;
+}
+
+static int
+append_node(json_t *root, struct cache_node *node, char const *name)
+{
+	json_t *child;
+
+	if (node == NULL)
+		return 0;
+	child = node2json(node);
+	if (child == NULL)
+		return -1;
+	if (json_array_append(root, child)) {
+		pr_op_err("Cannot push %s json node into json root; unknown cause.",
+		    name);
+		return -1;
+	}
+
+	return 0;
+}
+
+static json_t *
+build_metadata_json(struct rpki_cache *cache)
+{
+	json_t *root;
+
+	root = json_array();
+	if (root == NULL) {
+		pr_op_err("json root allocation failure.");
+		return NULL;
+	}
+
+	if (append_node(root, cache->rsync, "rsync")
+	    || append_node(root, cache->https, "https")) {
+		json_decref(root);
+		return NULL;
+	}
+
+	return root;
+}
+
+static void
+write_metadata_json(struct rpki_cache *cache)
+{
+	struct json_t *json;
+	char *filename;
+
+	json = build_metadata_json(cache);
+	if (json == NULL)
+		return;
+
+	if (get_metadata_json_filename(cache->tal, &filename) != 0)
+		return;
+
+	if (json_dump_file(json, filename, JSON_COMPACT))
+		pr_op_err("Unable to write metadata.json; unknown cause.");
+
+	free(filename);
+	json_decref(json);
+}
+
 struct rpki_cache *
 cache_create(char const *tal)
 {
@@ -329,6 +490,7 @@ cache_create(char const *tal)
 void
 cache_destroy(struct rpki_cache *cache)
 {
+	write_metadata_json(cache);
 	free(cache->tal);
 	delete_node(cache->rsync);
 	delete_node(cache->https);
@@ -951,7 +1113,8 @@ ctt_next(struct cache_tree_traverser *ctt)
 	return next;
 }
 
-static void cleanup_tree(struct rpki_cache *cache, struct cache_node **root,
+static void
+cleanup_tree(struct rpki_cache *cache, struct cache_node **root,
     char const *treename)
 {
 	struct cache_tree_traverser ctt;
@@ -1051,167 +1214,6 @@ static void cleanup_tree(struct rpki_cache *cache, struct cache_node **root,
 		pb_rm_r(&pb, treename, true);
 
 	pb_cleanup(&pb);
-}
-
-static int
-tt2json(time_t tt, json_t **result)
-{
-	char str[32];
-	struct tm tmbuffer, *tm;
-
-	memset(&tmbuffer, 0, sizeof(tmbuffer));
-	tm = localtime_r(&tt, &tmbuffer);
-	if (tm == NULL)
-		return errno;
-	if (strftime(str, sizeof(str) - 1, "%FT%T%z", tm) == 0)
-		return ENOSPC;
-
-	*result = json_string(str);
-	return 0;
-}
-
-static json_t *
-node2json(struct cache_node *node)
-{
-	json_t *json, *date, *children, *jchild;
-	struct cache_node *child, *tmp;
-	int error;
-
-	json = json_object();
-	if (json == NULL) {
-		pr_op_err("json object allocation failure.");
-		return NULL;
-	}
-
-	if (json_object_set_new(json, "basename", json_string(node->basename))) {
-		pr_op_err("Cannot convert string '%s' to json; unknown cause.",
-		    node->basename);
-		goto cancel;
-	}
-
-	if (json_object_set_new(json, "flags", json_integer(node->flags))) {
-		pr_op_err("Cannot convert int '%d' to json; unknown cause.",
-		    node->flags);
-		goto cancel;
-	}
-
-	error = tt2json(node->ts_success, &date);
-	if (error) {
-		pr_op_err("Cannot convert %s's success timestamp to json: %s",
-		    node->basename, strerror(error));
-		goto cancel;
-	}
-	if (json_object_set_new(json, "ts_success", date)) {
-		pr_op_err("Cannot convert %s's success timestamp to json; unknown cause.",
-		    node->basename);
-		goto cancel;
-	}
-
-	error = tt2json(node->ts_attempt, &date);
-	if (error) {
-		pr_op_err("Cannot convert %s's attempt timestamp to json: %s",
-		    node->basename, strerror(error));
-		goto cancel;
-	}
-	if (json_object_set_new(json, "ts_attempt", date)) {
-		pr_op_err("Cannot convert %s's attempt timestamp to json; unknown cause.",
-		    node->basename);
-		goto cancel;
-	}
-
-	if (json_object_set_new(json, "error", json_integer(node->error))) {
-		pr_op_err("Cannot convert int '%d' to json; unknown cause.",
-		    node->error);
-		goto cancel;
-	}
-
-	if (node->children != NULL) {
-		children = json_array();
-		if (children == NULL) {
-			pr_op_err("json array allocation failure.");
-			return NULL;
-		}
-
-		if (json_object_set_new(json, "children", children)) {
-			pr_op_err("Cannot push children array into json node; unknown cause.");
-			goto cancel;
-		}
-
-		HASH_ITER(hh, node->children, child, tmp) {
-			jchild = node2json(child);
-			if (jchild == NULL)
-				goto cancel; /* Error msg already printed */
-			if (json_array_append(children, jchild)) {
-				pr_op_err("Cannot push child into json node; unknown cause.");
-				goto cancel;
-			}
-		}
-	}
-
-	return json;
-
-cancel:
-	json_decref(json);
-	return NULL;
-}
-
-static int
-append_node(json_t *root, struct cache_node *node, char const *name)
-{
-	json_t *child;
-
-	if (node == NULL)
-		return 0;
-	child = node2json(node);
-	if (child == NULL)
-		return -1;
-	if (json_array_append(root, child)) {
-		pr_op_err("Cannot push %s json node into json root; unknown cause.",
-		    name);
-		return -1;
-	}
-
-	return 0;
-}
-
-static json_t *
-build_metadata_json(struct rpki_cache *cache)
-{
-	json_t *root;
-
-	root = json_array();
-	if (root == NULL) {
-		pr_op_err("json root allocation failure.");
-		return NULL;
-	}
-
-	if (append_node(root, cache->rsync, "rsync")
-	    || append_node(root, cache->https, "https")) {
-		json_decref(root);
-		return NULL;
-	}
-
-	return root;
-}
-
-static void
-write_metadata_json(struct rpki_cache *cache)
-{
-	struct json_t *json;
-	char *filename;
-
-	json = build_metadata_json(cache);
-	if (json == NULL)
-		return;
-
-	if (get_metadata_json_filename(cache->tal, &filename) != 0)
-		return;
-
-	if (json_dump_file(json, filename, JSON_COMPACT))
-		pr_op_err("Unable to write metadata.json; unknown cause.");
-
-	free(filename);
-	json_decref(json);
 }
 
 void
