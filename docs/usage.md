@@ -811,7 +811,7 @@ If `--output.roa` is omitted, the ROAs are not printed.
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
 
-> ![Warning!](img/warn.svg) BGPsec certificate validation has been disabled in version 1.5.2 because of [this bug](https://github.com/NICMx/FORT-validator/issues/58). It will be restored in version 1.5.4.
+> ![Warning!](img/warn.svg) BGPsec certificate validation has been disabled in version 1.5.2 because of [this bug](https://github.com/NICMx/FORT-validator/issues/58).
 
 File where the BGPsec Router Keys (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
