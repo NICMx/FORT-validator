@@ -8,6 +8,7 @@
 #include "alloc.c"
 #include "common.c"
 #include "file.c"
+#include "json_util.c"
 #include "mock.c"
 #include "data_structure/path_builder.c"
 #include "types/uri.c"
@@ -986,12 +987,12 @@ START_TEST(test_metadata_json)
 	cache->rsync = TNODE("rsync", 0, NOW + 0, NOW + 1, 0,
 			TNODE("a.b.c", 0, NOW + 2, NOW + 3, 0,
 				TNODE("d", SUCCESS, NOW + 4, NOW + 5, 0),
-				TNODE("e", SUCCESS, NOW + 6, NOW + 7, 0)),
+				TNODE("e", CNF_DIRECT, NOW + 6, NOW + 7, 1)),
 			TNODE("x.y.z", 0, NOW + 8, NOW + 9, 0,
 				TNODE("w", SUCCESS, NOW + 0, NOW + 1, 0)));
 	cache->https = TNODE("https", 0, NOW + 2, NOW + 3, 0,
 			TNODE("a", 0, NOW + 4, NOW + 5, 0,
-				TNODE("b", HTTP_SUCCESS, NOW + 6, NOW + 7, 0),
+				TNODE("b", HTTP_SUCCESS, NOW + 6, NOW + 7, 1),
 				TNODE("c", HTTP_SUCCESS, NOW + 8, NOW + 9, 0)));
 
 	json = build_metadata_json(cache);
@@ -1001,35 +1002,39 @@ START_TEST(test_metadata_json)
 	/* printf("%s\n", str); */
 	json_decref(json);
 
+	/* TODO (test) Time zones are hardcoded to CST */
 	ck_assert_str_eq(
-		"[{\"basename\":\"rsync\",\"flags\":0,\"ts_success\":\"2023-09-05T16:23:30-0600\",\"ts_attempt\":\"2023-09-05T16:23:31-0600\",\"error\":0,\"children\":["
-			"{\"basename\":\"a.b.c\",\"flags\":0,\"ts_success\":\"2023-09-05T16:23:32-0600\",\"ts_attempt\":\"2023-09-05T16:23:33-0600\",\"error\":0,\"children\":["
-				"{\"basename\":\"d\",\"flags\":3,\"ts_success\":\"2023-09-05T16:23:34-0600\",\"ts_attempt\":\"2023-09-05T16:23:35-0600\",\"error\":0},"
-				"{\"basename\":\"e\",\"flags\":3,\"ts_success\":\"2023-09-05T16:23:36-0600\",\"ts_attempt\":\"2023-09-05T16:23:37-0600\",\"error\":0}]},"
-			"{\"basename\":\"x.y.z\",\"flags\":0,\"ts_success\":\"2023-09-05T16:23:38-0600\",\"ts_attempt\":\"2023-09-05T16:23:39-0600\",\"error\":0,\"children\":["
-				"{\"basename\":\"w\",\"flags\":3,\"ts_success\":\"2023-09-05T16:23:30-0600\",\"ts_attempt\":\"2023-09-05T16:23:31-0600\",\"error\":0}]}]},"
-		"{\"basename\":\"https\",\"flags\":0,\"ts_success\":\"2023-09-05T16:23:32-0600\",\"ts_attempt\":\"2023-09-05T16:23:33-0600\",\"error\":0,\"children\":["
-			"{\"basename\":\"a\",\"flags\":0,\"ts_success\":\"2023-09-05T16:23:34-0600\",\"ts_attempt\":\"2023-09-05T16:23:35-0600\",\"error\":0,\"children\":["
-				"{\"basename\":\"b\",\"flags\":11,\"ts_success\":\"2023-09-05T16:23:36-0600\",\"ts_attempt\":\"2023-09-05T16:23:37-0600\",\"error\":0},"
-				"{\"basename\":\"c\",\"flags\":11,\"ts_success\":\"2023-09-05T16:23:38-0600\",\"ts_attempt\":\"2023-09-05T16:23:39-0600\",\"error\":0}]}]}]",
+		"[{\"basename\":\"rsync\",\"children\":["
+			"{\"basename\":\"a.b.c\",\"children\":["
+				"{\"basename\":\"d\",\"direct-download\":true,\"latest-result\":0,\"attempt-timestamp\":\"2023-09-05T16:23:35-0600\",\"successful-download\":true,\"success-timestamp\":\"2023-09-05T16:23:34-0600\"},"
+				"{\"basename\":\"e\",\"direct-download\":true,\"latest-result\":1,\"attempt-timestamp\":\"2023-09-05T16:23:37-0600\"}]},"
+			"{\"basename\":\"x.y.z\",\"children\":["
+				"{\"basename\":\"w\",\"direct-download\":true,\"latest-result\":0,\"attempt-timestamp\":\"2023-09-05T16:23:31-0600\",\"successful-download\":true,\"success-timestamp\":\"2023-09-05T16:23:30-0600\"}]}]},"
+		"{\"basename\":\"https\",\"children\":["
+			"{\"basename\":\"a\",\"children\":["
+				"{\"basename\":\"b\",\"direct-download\":true,\"latest-result\":1,\"attempt-timestamp\":\"2023-09-05T16:23:37-0600\",\"successful-download\":true,\"success-timestamp\":\"2023-09-05T16:23:36-0600\",\"is-file\":true},"
+				"{\"basename\":\"c\",\"direct-download\":true,\"latest-result\":0,\"attempt-timestamp\":\"2023-09-05T16:23:39-0600\",\"successful-download\":true,\"success-timestamp\":\"2023-09-05T16:23:38-0600\",\"is-file\":true}]}]}]",
 		str);
 	free(str);
 
 	cache_reset(cache);
 
 	load_metadata_json(cache);
+	ck_assert_ptr_nonnull(cache->rsync);
+	ck_assert_ptr_nonnull(cache->https);
+
 	validate_trees(cache->rsync,
-		TNODE("rsync", 0, NOW + 0, NOW + 1, 0,
-			TNODE("a.b.c", 0, NOW + 2, NOW + 3, 0,
+		TNODE("rsync", 0, 0, 0, 0,
+			TNODE("a.b.c", 0, 0, 0, 0,
 				TNODE("d", SUCCESS, NOW + 4, NOW + 5, 0),
-				TNODE("e", SUCCESS, NOW + 6, NOW + 7, 0)),
-			TNODE("x.y.z", 0, NOW + 8, NOW + 9, 0,
+				TNODE("e", CNF_DIRECT, NOW + 6, NOW + 7, 1)),
+			TNODE("x.y.z", 0, 0, 0, 0,
 				TNODE("w", SUCCESS, NOW + 0, NOW + 1, 0))),
 		NULL);
 	validate_trees(cache->https,
-		TNODE("https", 0, NOW + 2, NOW + 3, 0,
-			TNODE("a", 0, NOW + 4, NOW + 5, 0,
-				TNODE("b", HTTP_SUCCESS, NOW + 6, NOW + 7, 0),
+		TNODE("https", 0, 0, 0, 0,
+			TNODE("a", 0, 0, 0, 0,
+				TNODE("b", HTTP_SUCCESS, NOW + 6, NOW + 7, 1),
 				TNODE("c", HTTP_SUCCESS, NOW + 8, NOW + 9, 0))),
 		NULL);
 

@@ -7,7 +7,7 @@
 #include "alloc.c"
 #include "common.c"
 #include "file.c"
-#include "json_parser.c"
+#include "json_util.c"
 #include "mock.c"
 #include "output_printer.c"
 #include "types/delta.c"

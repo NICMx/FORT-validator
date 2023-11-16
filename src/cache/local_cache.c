@@ -6,6 +6,7 @@
 #include "common.h"
 #include "config.h"
 #include "file.h"
+#include "json_util.h"
 #include "log.h"
 #include "rrdp.h"
 #include "thread_var.h"
@@ -29,6 +30,15 @@
  *
  * FIXME test max recursion
  */
+
+#define TAGNAME_BN		"basename"
+#define TAGNAME_DIRECT		"direct-download"
+#define TAGNAME_ERROR		"latest-result"
+#define TAGNAME_TSATTEMPT	"attempt-timestamp"
+#define TAGNAME_SUCCESS		"successful-download"
+#define TAGNAME_TSSUCCESS	"success-timestamp"
+#define TAGNAME_FILE		"is-file"
+#define TAGNAME_CHILDREN	"children"
 
 /*
  * Have we ever attempted to download this directly?
@@ -81,7 +91,6 @@ struct rpki_cache {
 	struct cache_node *https;
 	time_t startup_time; /* When we started the last validation */
 };
-
 
 static struct cache_node *
 add_child(struct cache_node *parent, char const *basename)
@@ -159,90 +168,60 @@ get_metadata_json_filename(char const *tal, char **filename)
 	return 0;
 }
 
-static int
-json_tt_value(struct json_t const *json, time_t *result)
-{
-	char const *str;
-	struct tm tm;
-	time_t tmp;
-
-	if (json == NULL)
-		return -1;
-	str = json_string_value(json);
-	if (str == NULL)
-		return -1;
-	str = strptime(str, "%FT%T%z", &tm);
-	if (str == NULL || *str != 0)
-		return -1;
-	tmp = mktime(&tm);
-	if (tmp == ((time_t) -1))
-		return -1;
-
-	*result = tmp;
-	return 0;
-}
-
 static struct cache_node *
 json2node(json_t *json, struct cache_node *parent)
 {
 	struct cache_node *node, *child;
 	char const *string;
+	bool boolean;
 	json_t *jchild;
 	size_t c;
+	int error;
 
 	if (json == NULL)
 		return NULL;
 
 	node = pzalloc(sizeof(struct cache_node));
 
-	string = json_string_value(json_object_get(json, "basename"));
-	if (string == NULL) {
-		pr_op_warn("Tag 'basename' of a metadata.json's download node cannot be parsed as a string; skipping.");
+	error = json_get_str(json, TAGNAME_BN, &string);
+	if (error) {
+		if (error > 0)
+			pr_op_err("Node is missing the '" TAGNAME_BN "' tag.");
 		goto cancel;
 	}
 	node->basename = pstrdup(string);
 
-	jchild = json_object_get(json, "flags");
-	if (!json_is_integer(jchild)) {
-		pr_op_warn("Tag 'flags' of metadata.json's download node '%s' cannot be parsed as an integer; skipping.",
-		    node->basename);
+	if (json_get_bool(json, TAGNAME_DIRECT, &boolean) < 0)
 		goto cancel;
-	}
-	node->flags = json_integer_value(jchild);
+	if (boolean) {
+		node->flags |= CNF_DIRECT;
+		if (json_get_int(json, TAGNAME_ERROR, &node->error) < 0)
+			goto cancel;
 
-	if (json_tt_value(json_object_get(json, "ts_success"), &node->ts_success)) {
-		pr_op_warn("Tag 'success' of metadata.json's download node '%s' cannot be parsed as a date; skipping.",
-		    node->basename);
-		goto cancel;
-	}
+		if (json_get_ts(json, TAGNAME_TSATTEMPT, &node->ts_attempt) < 0)
+			goto cancel;
 
-	if (json_tt_value(json_object_get(json, "ts_attempt"), &node->ts_attempt)) {
-		pr_op_warn("Tag 'attempt' of metadata.json's download node '%s' cannot be parsed as a date; skipping.",
-		    node->basename);
-		goto cancel;
-	}
-
-	jchild = json_object_get(json, "error");
-	if (!json_is_integer(jchild)) {
-		pr_op_warn("Tag 'error' of metadata.json's download node '%s' cannot be parsed as an integer; skipping.",
-		    node->basename);
-		goto cancel;
-	}
-	node->error = json_integer_value(jchild);
-
-	jchild = json_object_get(json, "children");
-	if (jchild != NULL && !json_is_array(jchild)) {
-		pr_op_warn("Tag 'children' of metadata.json's download node '%s' cannot be parsed as an array; skipping.",
-		    node->basename);
-		goto cancel;
+		if (json_get_bool(json, TAGNAME_SUCCESS, &boolean) < 0)
+			goto cancel;
+		if (boolean) {
+			node->flags |= CNF_SUCCESS;
+			if (json_get_ts(json, TAGNAME_TSSUCCESS, &node->ts_success) < 0)
+				goto cancel;
+		}
 	}
 
+	if (json_get_bool(json, TAGNAME_FILE, &boolean) < 0)
+		goto cancel;
+	if (boolean)
+		node->flags |= CNF_FILE;
+
+	if (json_get_array(json, "children", &jchild) < 0)
+		goto cancel;
 	for (c = 0; c < json_array_size(jchild); c++) {
 		child = json2node(json_array_get(jchild, c), node);
-		if (child == NULL)
-			goto cancel;
-		HASH_ADD_KEYPTR(hh, node->children, child->basename,
-				strlen(child->basename), child);
+		if (child != NULL)
+			HASH_ADD_KEYPTR(hh, node->children, child->basename,
+			    strlen(child->basename), child);
 	}
 
 	node->parent = parent;
@@ -308,29 +287,12 @@ end:
 	json_decref(root);
 }
 
-static int
-tt2json(time_t tt, json_t **result)
-{
-	char str[32];
-	struct tm tmbuffer, *tm;
-
-	memset(&tmbuffer, 0, sizeof(tmbuffer));
-	tm = localtime_r(&tt, &tmbuffer);
-	if (tm == NULL)
-		return errno;
-	if (strftime(str, sizeof(str) - 1, "%FT%T%z", tm) == 0)
-		return ENOSPC;
-
-	*result = json_string(str);
-	return 0;
-}
-
 static json_t *
 node2json(struct cache_node *node)
 {
-	json_t *json, *date, *children, *jchild;
+	json_t *json, *children, *jchild;
 	struct cache_node *child, *tmp;
-	int error;
+	int cnf;
 
 	json = json_object();
 	if (json == NULL) {
@@ -338,47 +300,28 @@ node2json(struct cache_node *node)
 		return NULL;
 	}
 
-	if (json_object_set_new(json, "basename", json_string(node->basename))) {
-		pr_op_err("Cannot convert string '%s' to json; unknown cause.",
-		    node->basename);
+	if (json_add_str(json, TAGNAME_BN, node->basename))
 		goto cancel;
-	}
 
-	if (json_object_set_new(json, "flags", json_integer(node->flags))) {
-		pr_op_err("Cannot convert int '%d' to json; unknown cause.",
-		    node->flags);
-		goto cancel;
+	cnf = node->flags & CNF_DIRECT;
+	if (cnf) {
+		if (json_add_bool(json, TAGNAME_DIRECT, cnf))
+			goto cancel;
+		if (json_add_int(json, TAGNAME_ERROR, node->error))
+			goto cancel;
+		if (json_add_date(json, TAGNAME_TSATTEMPT, node->ts_attempt))
+			goto cancel;
+		cnf = node->flags & CNF_SUCCESS;
+		if (cnf) {
+			if (json_add_bool(json, TAGNAME_SUCCESS, cnf))
+				goto cancel;
+			if (json_add_date(json, TAGNAME_TSSUCCESS, node->ts_success))
+				goto cancel;
+		}
 	}
-
-	error = tt2json(node->ts_success, &date);
-	if (error) {
-		pr_op_err("Cannot convert %s's success timestamp to json: %s",
-		    node->basename, strerror(error));
+	cnf = node->flags & CNF_FILE;
+	if (cnf && json_add_bool(json, TAGNAME_FILE, cnf))
 		goto cancel;
-	}
-	if (json_object_set_new(json, "ts_success", date)) {
-		pr_op_err("Cannot convert %s's success timestamp to json; unknown cause.",
-		    node->basename);
-		goto cancel;
-	}
-
-	error = tt2json(node->ts_attempt, &date);
-	if (error) {
-		pr_op_err("Cannot convert %s's attempt timestamp to json: %s",
-		    node->basename, strerror(error));
-		goto cancel;
-	}
-	if (json_object_set_new(json, "ts_attempt", date)) {
-		pr_op_err("Cannot convert %s's attempt timestamp to json; unknown cause.",
-		    node->basename);
-		goto cancel;
-	}
-
-	if (json_object_set_new(json, "error", json_integer(node->error))) {
-		pr_op_err("Cannot convert int '%d' to json; unknown cause.",
-		    node->error);
-		goto cancel;
-	}
 
 	if (node->children != NULL) {
 		children = json_array();
@@ -387,7 +330,7 @@ node2json(struct cache_node *node)
 			return NULL;
 		}
 
-		if (json_object_set_new(json, "children", children)) {
+		if (json_object_set_new(json, TAGNAME_CHILDREN, children)) {
 			pr_op_err("Cannot push children array into json node; unknown cause.");
 			goto cancel;
 		}

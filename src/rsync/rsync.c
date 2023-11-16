@@ -189,7 +189,7 @@ log_buffer(char const *buffer, ssize_t read, int type)
 		if (type == 0) {
 			pr_val_err(PRE_RSYNC "%s", cur);
 		} else {
-			pr_val_info(PRE_RSYNC "%s", cur);
+			pr_val_debug(PRE_RSYNC "%s", cur);
 		}
 		cur = tmp + 1;
 	}
