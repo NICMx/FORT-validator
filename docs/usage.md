@@ -49,6 +49,7 @@ description: Guide to use arguments of FORT Validator.
 	36. [`--http.retry.count`](#--httpretrycount)
 	37. [`--http.retry.interval`](#--httpretryinterval)
 	38. [`--http.user-agent`](#--httpuser-agent)
+	38. [`--http.max-redirs`](#--httpmax-redirs)
 	39. [`--http.connect-timeout`](#--httpconnect-timeout)
 	40. [`--http.transfer-timeout`](#--httptransfer-timeout)
 	41. [`--http.low-speed-limit`](#--httplow-speed-limit)
@@ -672,6 +673,17 @@ _**All requests are made using HTTPS, verifying the peer and the certificate nam
 User-Agent to use at HTTP requests.
 
 The value specified (either by the argument or the default value) is utilized in libcurl's option [CURLOPT_USERAGENT](https://curl.haxx.se/libcurl/c/CURLOPT_USERAGENT.html).
+
+### `--http.max-redirs`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 10
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
+
+Maximum allowed number of redirections to follow per HTTP request. (The total number of requests is `--http.max-redirs + 1`.)
+
+Unlike [`curl`'s `--max-redirs`](https://curl.se/docs/manpage.html#--max-redirs), Fort does not provide a means to allow for infinite redirects.
 
 ### `--http.connect-timeout`
 

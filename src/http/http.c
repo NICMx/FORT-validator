@@ -147,6 +147,9 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 
 	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
+	setopt_long(result, CURLOPT_FOLLOWLOCATION, 1);
+	setopt_long(result, CURLOPT_MAXREDIRS, config_get_max_redirs());
+
 	setopt_long(result, CURLOPT_CONNECTTIMEOUT,
 	    config_get_http_connect_timeout());
 	setopt_long(result, CURLOPT_TIMEOUT,
@@ -311,6 +314,9 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 		case CURLE_FTP_ACCEPT_TIMEOUT:
 			error = EAGAIN; /* Retry */
 			goto end;
+		case CURLE_TOO_MANY_REDIRECTS:
+			error = -EINVAL;
+			goto end;
 		default:
 			error = handle_http_response_code(http_code);
 			goto end;
@@ -326,17 +332,6 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 		/* Write callback not called, no file to remove. */
 		pr_val_debug("Not modified.");
 		error = 0;
-		goto end;
-	}
-	if (http_code >= 300) {
-		/*
-		 * If you're ever forced to implement this, please remember that
-		 * a malicious server can send us on a wild chase with infinite
-		 * redirects, so there needs to be a limit.
-		 */
-		pr_val_err("HTTP result code: %ld. I don't follow redirects; discarding file.",
-		    http_code);
-		error = -EINVAL; /* Do not retry. */
 		goto end;
 	}
 
@@ -363,7 +358,7 @@ do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
 
 	r = 0;
 	do {
-		pr_val_debug("Download attempt #%u...", r);
+		pr_val_debug("Download attempt #%u...", r + 1);
 
 		error = http_fetch(src, dst, ims, changed);
 		switch (error) {
@@ -375,7 +370,7 @@ do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
 			break;
 
 		default:
-			pr_val_debug("Download failed: %s", strerror(error));
+			pr_val_debug("Download failed.");
 			return error;
 		}
 

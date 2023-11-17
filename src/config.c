@@ -76,9 +76,9 @@ struct rpki_config {
 	struct {
 		/* Enables the protocol */
 		bool enabled;
-		/* Deprecated; does nothing. */
+		/* Protocol preference; compared to http.priority */
 		unsigned int priority;
-		/* Synchronization download strategy. */
+		/* Deprecated; does nothing. */
 		char *strategy;
 		/* Retry conf, utilized on errors */
 		struct {
@@ -89,7 +89,7 @@ struct rpki_config {
 		} retry;
 		char *program;
 		struct {
-			struct string_array flat;
+			struct string_array flat; /* Deprecated */
 			struct string_array recursive;
 		} args;
 	} rsync;
@@ -97,7 +97,7 @@ struct rpki_config {
 	struct {
 		/* Enables the protocol */
 		bool enabled;
-		/* Deprecated; does nothing. */
+		/* Protocol preference; compared to rsync.priority */
 		unsigned int priority;
 		/* Retry conf, utilized on errors */
 		struct {
@@ -106,8 +106,10 @@ struct rpki_config {
 			/* Interval (in seconds) between each retry */
 			unsigned int interval;
 		} retry;
-		/* User-Agent header set at requests */
+		/* HTTP User-Agent request header */
 		char *user_agent;
+		/* Allowed redirects per request */
+		unsigned int max_redirs;
 		/* CURLOPT_CONNECTTIMEOUT for our HTTP transfers. */
 		unsigned int connect_timeout;
 		/* CURLOPT_TIMEOUT for our HTTP transfers. */
@@ -516,6 +518,14 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, http.user_agent),
 		.doc = "User-Agent to use at HTTP requests, eg. Fort Validator Local/1.0",
 	}, {
+		.id = 9012,
+		.name = "http.max-redirs",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, http.max_redirs),
+		.doc = "Maximum number of redirections to follow, per request.",
+		.min = 0,
+		.max = UINT_MAX,
+	}, {
 		.id = 9005,
 		.name = "http.connect-timeout",
 		.type = &gt_uint,
@@ -920,6 +930,7 @@ set_default_values(void)
 	rpki_config.http.retry.count = 1;
 	rpki_config.http.retry.interval = 4;
 	rpki_config.http.user_agent = pstrdup(PACKAGE_NAME "/" PACKAGE_VERSION);
+	rpki_config.http.max_redirs = 10;
 	rpki_config.http.connect_timeout = 30;
 	rpki_config.http.transfer_timeout = 0;
 	rpki_config.http.low_speed_limit = 100000;
@@ -1356,6 +1367,12 @@ char const *
 config_get_http_user_agent(void)
 {
 	return rpki_config.http.user_agent;
+}
+
+unsigned int
+config_get_max_redirs(void)
+{
+	return rpki_config.http.max_redirs;
 }
 
 long
