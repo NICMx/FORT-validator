@@ -115,7 +115,7 @@ prepare_rsync(struct rpki_uri *uri, char ***args, size_t *args_len)
 		if (strcmp(config_args->array[i], "$REMOTE") == 0)
 			copy_args[i + 1] = pstrdup(uri_get_global(uri));
 		else if (strcmp(config_args->array[i], "$LOCAL") == 0)
-			copy_args[i + 1] = pstrdup(get_target(uri));
+			copy_args[i + 1] = get_target(uri);
 		else
 			copy_args[i + 1] = pstrdup(config_args->array[i]);
 	}

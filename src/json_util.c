@@ -112,6 +112,7 @@ json_get_ts(json_t *parent, char const *name, time_t *result)
 	if (error)
 		return error;
 
+	memset(&tm, 0, sizeof(tm));
 	consumed = strptime(str, "%FT%T%z", &tm);
 	if (consumed == NULL || (*consumed) != 0)
 		return pr_op_err("String '%s' does not appear to be a timestamp.",

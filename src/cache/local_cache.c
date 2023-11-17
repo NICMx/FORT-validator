@@ -325,10 +325,8 @@ node2json(struct cache_node *node)
 
 	if (node->children != NULL) {
 		children = json_array();
-		if (children == NULL) {
-			pr_op_err("json array allocation failure.");
-			return NULL;
-		}
+		if (children == NULL)
+			enomem_panic();
 
 		if (json_object_set_new(json, TAGNAME_CHILDREN, children)) {
 			pr_op_err("Cannot push children array into json node; unknown cause.");
@@ -339,7 +337,7 @@ node2json(struct cache_node *node)
 			jchild = node2json(child);
 			if (jchild == NULL)
 				goto cancel; /* Error msg already printed */
-			if (json_array_append(children, jchild)) {
+			if (json_array_append_new(children, jchild)) {
 				pr_op_err("Cannot push child into json node; unknown cause.");
 				goto cancel;
 			}
@@ -363,7 +361,7 @@ append_node(json_t *root, struct cache_node *node, char const *name)
 	child = node2json(node);
 	if (child == NULL)
 		return -1;
-	if (json_array_append(root, child)) {
+	if (json_array_append_new(root, child)) {
 		pr_op_err("Cannot push %s json node into json root; unknown cause.",
 		    name);
 		return -1;
@@ -403,13 +401,13 @@ write_metadata_json(struct rpki_cache *cache)
 		return;
 
 	if (get_metadata_json_filename(cache->tal, &filename) != 0)
-		return;
+		goto end;
 
 	if (json_dump_file(json, filename, JSON_COMPACT))
 		pr_op_err("Unable to write metadata.json; unknown cause.");
 
 	free(filename);
-	json_decref(json);
+end:	json_decref(json);
 }
 
 struct rpki_cache *

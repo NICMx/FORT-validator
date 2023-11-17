@@ -522,7 +522,7 @@ static const struct option_field options[] = {
 		.name = "http.max-redirs",
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, http.max_redirs),
-		.doc = "Maximum number of redirections to follow, per request.",
+		.doc = "Maximum number of redirections to follow, per HTTP request.",
 		.min = 0,
 		.max = UINT_MAX,
 	}, {
