@@ -49,7 +49,7 @@ int foreach_file(char const *, char const *, bool, foreach_file_cb, void *);
 
 bool valid_file_or_dir(char const *, bool);
 
-int create_dir_recursive(char const *, bool);
+int mkdir_p(char const *, bool);
 int delete_dir_recursive_bottom_up(char const *);
 
 int get_current_time(time_t *);

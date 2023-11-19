@@ -119,6 +119,14 @@ file_free(struct file_contents *fc)
 	free(fc->buffer);
 }
 
+/* Wrapper for stat(), mostly for the sake of unit test mocking. */
+int
+file_exists(char const *path)
+{
+	struct stat meta;
+	return (stat(path, &meta) == 0) ? 0 : errno;
+}
+
 /*
  * Validate @file_name, if it doesn't exist, this function will create it and
  * close it.
@@ -152,22 +160,4 @@ file_rm_rf(char const *path)
 {
 	/* FIXME optimize that 32 */
 	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
-}
-
-static int
-lsR(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-{
-	unsigned int i;
-
-	for (i = 0; i < ftwbuf->level; i++)
-		printf("\t");
-	printf("%s\n", &fpath[ftwbuf->base]);
-
-	return 0;
-}
-
-void
-file_ls_R(char const *path)
-{
-	nftw(path, lsR, 32, FTW_PHYS);
 }

@@ -552,7 +552,7 @@ write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 	size_t written;
 	int error;
 
-	error = create_dir_recursive(uri_get_local(uri), false);
+	error = mkdir_p(uri_get_local(uri), false);
 	if (error)
 		return error;
 

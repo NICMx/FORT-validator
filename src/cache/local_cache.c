@@ -9,27 +9,10 @@
 #include "json_util.h"
 #include "log.h"
 #include "rrdp.h"
-#include "thread_var.h"
 #include "data_structure/path_builder.h"
 #include "data_structure/uthash.h"
 #include "http/http.h"
 #include "rsync/rsync.h"
-
-/*
- * Please note: Some of the functions in this module (the ones that have to do
- * with jansson, both inside and outside of it) are recursive.
- *
- * This is fine. Infinite recursion is prevented through path_builder's
- * MAX_CAPACITY (which is currently defined as 4096), which has to be done
- * anyway.
- *
- * And given that you need at least one character and one slash per directory
- * level, the maximum allowed recursion level is 2048, which happens to align
- * with jansson's JSON_PARSER_MAX_DEPTH. (Which is also something we can't
- * change.)
- *
- * FIXME test max recursion
- */
 
 #define TAGNAME_BN		"basename"
 #define TAGNAME_DIRECT		"direct-download"
@@ -40,198 +23,110 @@
 #define TAGNAME_FILE		"is-file"
 #define TAGNAME_CHILDREN	"children"
 
-/*
- * Have we ever attempted to download this directly?
- * Otherwise we actually downloaded a descendant.
- *
- * Directly downloaded nodes need to be retained, along with their ancestors.
- * If the download was successful, they should never have children (as this
- * would be redundant), though their directory counterparts probably will.
- */
-#define CNF_DIRECT (1 << 0)
-/* Has it downloaded successfully at some point? */
-#define CNF_SUCCESS (1 << 1)
-/* Has it been traversed during the current cleanup? */
-#define CNF_FOUND (1 << 2)
-/*
- * If enabled, node represents a file. Otherwise, node is a directory.
- * Only valid on HTTPs trees; we never know what rsync downloads.
- */
-#define CNF_FILE (1 << 3)
-
 struct cache_node {
-	char *basename; /* Simple file name, parents not included */
+	struct rpki_uri *url;
 
-	/* CNF_* */
-	int flags;
-	/*
-	 * Last successful download timestamp.
-	 * (Only if CNF_DIRECT & CNF_SUCCESS.)
-	 * FIXME Intended to later decide whether a file should be deleted,
-	 * when the cache is running out of space.
-	 */
-	time_t ts_success;
-	/*
-	 * Last download attempt timestamp. (Only if CNF_DIRECT.)
-	 * Decides whether the file needs to be updated.
-	 */
-	time_t ts_attempt;
-	/* Last download attempt's result status. (Only if CNF_DIRECT) */
-	int error;
+	struct {
+		time_t ts; /* Last download attempt's timestamp */
+		int result; /* Last download attempt's result status code */
+	} attempt;
 
-	struct cache_node *parent; /* Simple pointer */
-	struct cache_node *children; /* Hash table */
+	struct {
+		/* Has a download attempt ever been successful? */
+		bool happened;
+		/* Last successful download timestamp. (Only if @happened.) */
+		time_t ts;
+	} success;
 
 	UT_hash_handle hh; /* Hash table hook */
 };
 
 struct rpki_cache {
 	char *tal;
-	struct cache_node *rsync;
-	struct cache_node *https;
-	time_t startup_time; /* When we started the last validation */
+	struct cache_node *ht;
+	time_t startup_ts; /* When we started the last validation */
 };
 
-static struct cache_node *
-add_child(struct cache_node *parent, char const *basename)
-{
-	struct cache_node *child;
-	char *key;
-	size_t keylen;
+#define TAGNAME_URL "url"
+#define TAGNAME_ATTEMPT_TS "attempt-timestamp"
+#define TAGNAME_ATTEMPT_ERR "attempt-result"
+#define TAGNAME_SUCCESS_TS "success-timestamp"
 
-	child = pzalloc(sizeof(struct cache_node));
-	child->basename = pstrdup(basename);
-	child->parent = parent;
-
-	key = child->basename;
-	keylen = strlen(key);
-
-	HASH_ADD_KEYPTR(hh, parent->children, key, keylen, child);
-
-	return child;
-}
-
-static struct cache_node *
-init_root(struct cache_node *root, char const *name)
-{
-	if (root != NULL)
-		return root;
-
-	root = pzalloc(sizeof(struct cache_node));
-	root->basename = pstrdup(name);
-
-	return root;
-}
-
-static void
-__delete_node(struct cache_node *node)
-{
-	if (node->parent != NULL)
-		HASH_DEL(node->parent->children, node);
-	free(node->basename);
-	free(node);
-}
-
-static void
-delete_node(struct cache_node *node)
-{
-	struct cache_node *parent;
-
-	if (node == NULL)
-		return;
-
-	if (node->parent != NULL) {
-		HASH_DEL(node->parent->children, node);
-		node->parent = NULL;
-	}
-
-	do {
-		while (node->children != NULL)
-			node = node->children;
-		parent = node->parent;
-		__delete_node(node);
-		node = parent;
-	} while (node != NULL);
-}
-
-static int
-get_metadata_json_filename(char const *tal, char **filename)
+static char *
+get_json_filename(struct rpki_cache *cache)
 {
 	struct path_builder pb;
-	int error;
-
-	error = pb_init_cache(&pb, tal, "metadata.json");
-	if (error)
-		return error;
-
-	*filename = pb.string;
-	return 0;
+	return pb_init_cache(&pb, cache->tal, "metadata.json")
+	    ? NULL : pb.string;
 }
 
 static struct cache_node *
-json2node(json_t *json, struct cache_node *parent)
+json2node(struct rpki_cache *cache, json_t *json)
 {
-	struct cache_node *node, *child;
-	char const *string;
-	bool boolean;
-	json_t *jchild;
-	size_t c;
+	struct cache_node *node;
+	char const *url;
+	enum uri_type type;
 	int error;
-
-	if (json == NULL)
-		return NULL;
 
 	node = pzalloc(sizeof(struct cache_node));
 
-	error = json_get_str(json, TAGNAME_BN, &string);
+	error = json_get_str(json, TAGNAME_URL, &url);
 	if (error) {
 		if (error > 0)
-			pr_op_err("Node is missing the '" TAGNAME_BN "' tag.");
-		goto cancel;
-	}
-	node->basename = pstrdup(string);
-
-	if (json_get_bool(json, TAGNAME_DIRECT, &boolean) < 0)
-		goto cancel;
-	if (boolean) {
-		node->flags |= CNF_DIRECT;
-		if (json_get_int(json, TAGNAME_ERROR, &node->error) < 0)
-			goto cancel;
-
-		if (json_get_ts(json, TAGNAME_TSATTEMPT, &node->ts_attempt) < 0)
-			goto cancel;
-
-		if (json_get_bool(json, TAGNAME_SUCCESS, &boolean) < 0)
-			goto cancel;
-		if (boolean) {
-			node->flags |= CNF_SUCCESS;
-			if (json_get_ts(json, TAGNAME_TSSUCCESS, &node->ts_success) < 0)
-				goto cancel;
-		}
+			pr_op_err("Node is missing the '" TAGNAME_URL "' tag.");
+		goto fail;
 	}
 
-	if (json_get_bool(json, TAGNAME_FILE, &boolean) < 0)
-		goto cancel;
-	if (boolean)
-		node->flags |= CNF_FILE;
+	if (str_starts_with(url, "https://"))
+		type = UT_HTTPS;
+	else if (str_starts_with(url, "rsync://"))
+		type = UT_RSYNC;
+	else {
+		pr_op_err("Unknown protocol: %s", url);
+		goto fail;
+	}
+	error = uri_create(&node->url, cache->tal, type, NULL, url);
 
-	if (json_get_array(json, "children", &jchild) < 0)
-		goto cancel;
-	for (c = 0; c < json_array_size(jchild); c++) {
-		child = json2node(json_array_get(jchild, c), node);
-		if (child != NULL)
-			HASH_ADD_KEYPTR(hh, node->children, child->basename,
-			    strlen(child->basename), child);
+	error = json_get_ts(json, TAGNAME_ATTEMPT_TS, &node->attempt.ts);
+	if (error) {
+		if (error > 0)
+			pr_op_err("Node '%s' is missing the '"
+			    TAGNAME_ATTEMPT_TS "' tag.", url);
+		goto fail;
 	}
 
-	node->parent = parent;
-	pr_op_debug("Node '%s' successfully loaded from metadata.json.",
-	    node->basename);
+	if (json_get_int(json, TAGNAME_ATTEMPT_ERR, &node->attempt.result) < 0)
+		goto fail;
+
+	error = json_get_ts(json, TAGNAME_SUCCESS_TS, &node->success.ts);
+	if (error < 0)
+		goto fail;
+	node->success.happened = (error == 0);
+
+	pr_op_debug("Node '%s' loaded successfully.", url);
 	return node;
 
-cancel:
-	delete_node(node);
+fail:
+	uri_refput(node->url);
+	free(node);
 	return NULL;
+}
+
+static struct cache_node*
+find_node(struct rpki_cache *cache, struct rpki_uri *uri)
+{
+	char const *key = uri_get_local(uri);
+	struct cache_node *result;
+	HASH_FIND_STR(cache->ht, key, result);
+	return result;
+}
+
+static void
+add_node(struct rpki_cache *cache, struct cache_node *node)
+{
+	char const *key = uri_get_local(node->url);
+	size_t keylen = strlen(key);
+	HASH_ADD_KEYPTR(hh, cache->ht, key, keylen, node);
 }
 
 static void
@@ -240,26 +135,26 @@ load_metadata_json(struct rpki_cache *cache)
 	char *filename;
 	json_t *root;
 	json_error_t jerror;
+	size_t n;
 	struct cache_node *node;
-	size_t d;
 
 	/*
 	 * Note: Loading metadata.json is one of few things Fort can fail at
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
-	if (get_metadata_json_filename(cache->tal, &filename) != 0)
+	filename = get_json_filename(cache);
+	if (filename == NULL)
 		return;
 
 	root = json_load_file(filename, 0, &jerror);
 
 	if (root == NULL) {
-		if (json_error_code(&jerror) == json_error_cannot_open_file) {
+		if (json_error_code(&jerror) == json_error_cannot_open_file)
 			pr_op_debug("%s does not exist.", filename);
-		} else {
+		else
 			pr_op_err("Json parsing failure at %s (%d:%d): %s",
 			    filename, jerror.line, jerror.column, jerror.text);
-		}
 		goto end;
 	}
 	if (json_typeof(root) != JSON_ARRAY) {
@@ -267,32 +162,33 @@ load_metadata_json(struct rpki_cache *cache)
 		goto end;
 	}
 
-	for (d = 0; d < json_array_size(root); d++) {
-		node = json2node(json_array_get(root, d), NULL);
-		if (node == NULL)
-			continue;
-		else if (strcasecmp(node->basename, "rsync") == 0)
-			cache->rsync = node;
-		else if (strcasecmp(node->basename, "https") == 0)
-			cache->https = node;
-		else {
-			pr_op_warn("%s: Ignoring unrecognized json node '%s'.",
-			    filename, node->basename);
-			delete_node(node);
-		}
+	for (n = 0; n < json_array_size(root); n++) {
+		node = json2node(cache, json_array_get(root, n));
+		if (node != NULL)
+			add_node(cache, node);
 	}
 
-end:
+end:	json_decref(root);
 	free(filename);
-	json_decref(root);
+}
+
+struct rpki_cache *
+cache_create(char const *tal)
+{
+	struct rpki_cache *cache;
+	cache = pzalloc(sizeof(struct rpki_cache));
+	cache->tal = pstrdup(tal);
+	cache->startup_ts = time(NULL);
+	if (cache->startup_ts == (time_t) -1)
+		pr_crit("time(NULL) returned (time_t) -1.");
+	load_metadata_json(cache);
+	return cache;
 }
 
 static json_t *
 node2json(struct cache_node *node)
 {
-	json_t *json, *children, *jchild;
-	struct cache_node *child, *tmp;
-	int cnf;
+	json_t *json;
 
 	json = json_object();
 	if (json == NULL) {
@@ -300,49 +196,15 @@ node2json(struct cache_node *node)
 		return NULL;
 	}
 
-	if (json_add_str(json, TAGNAME_BN, node->basename))
+	if (json_add_str(json, TAGNAME_URL, uri_get_global(node->url)))
 		goto cancel;
-
-	cnf = node->flags & CNF_DIRECT;
-	if (cnf) {
-		if (json_add_bool(json, TAGNAME_DIRECT, cnf))
-			goto cancel;
-		if (json_add_int(json, TAGNAME_ERROR, node->error))
-			goto cancel;
-		if (json_add_date(json, TAGNAME_TSATTEMPT, node->ts_attempt))
-			goto cancel;
-		cnf = node->flags & CNF_SUCCESS;
-		if (cnf) {
-			if (json_add_bool(json, TAGNAME_SUCCESS, cnf))
-				goto cancel;
-			if (json_add_date(json, TAGNAME_TSSUCCESS, node->ts_success))
-				goto cancel;
-		}
-	}
-	cnf = node->flags & CNF_FILE;
-	if (cnf && json_add_bool(json, TAGNAME_FILE, cnf))
+	if (json_add_date(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
 		goto cancel;
-
-	if (node->children != NULL) {
-		children = json_array();
-		if (children == NULL)
-			enomem_panic();
-
-		if (json_object_set_new(json, TAGNAME_CHILDREN, children)) {
-			pr_op_err("Cannot push children array into json node; unknown cause.");
+	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
+		goto cancel;
+	if (node->success.happened)
+		if (json_add_date(json, TAGNAME_SUCCESS_TS, node->success.ts))
 			goto cancel;
-		}
-
-		HASH_ITER(hh, node->children, child, tmp) {
-			jchild = node2json(child);
-			if (jchild == NULL)
-				goto cancel; /* Error msg already printed */
-			if (json_array_append_new(children, jchild)) {
-				pr_op_err("Cannot push child into json node; unknown cause.");
-				goto cancel;
-			}
-		}
-	}
 
 	return json;
 
@@ -351,40 +213,25 @@ cancel:
 	return NULL;
 }
 
-static int
-append_node(json_t *root, struct cache_node *node, char const *name)
-{
-	json_t *child;
-
-	if (node == NULL)
-		return 0;
-	child = node2json(node);
-	if (child == NULL)
-		return -1;
-	if (json_array_append_new(root, child)) {
-		pr_op_err("Cannot push %s json node into json root; unknown cause.",
-		    name);
-		return -1;
-	}
-
-	return 0;
-}
-
 static json_t *
 build_metadata_json(struct rpki_cache *cache)
 {
-	json_t *root;
+	struct cache_node *node, *tmp;
+	json_t *root, *child;
 
 	root = json_array();
-	if (root == NULL) {
-		pr_op_err("json root allocation failure.");
-		return NULL;
-	}
+	if (root == NULL)
+		enomem_panic();
 
-	if (append_node(root, cache->rsync, "rsync")
-	    || append_node(root, cache->https, "https")) {
-		json_decref(root);
-		return NULL;
+	HASH_ITER(hh, cache->ht, node, tmp) {
+		child = node2json(node);
+		if (child == NULL)
+			continue;
+		if (json_array_append_new(root, child)) {
+			pr_op_err("Cannot push %s json node into json root; unknown cause.",
+			    uri_op_get_printable(node->url));
+			continue;
+		}
 	}
 
 	return root;
@@ -393,136 +240,156 @@ build_metadata_json(struct rpki_cache *cache)
 static void
 write_metadata_json(struct rpki_cache *cache)
 {
-	struct json_t *json;
 	char *filename;
+	struct json_t *json;
 
 	json = build_metadata_json(cache);
 	if (json == NULL)
 		return;
 
-	if (get_metadata_json_filename(cache->tal, &filename) != 0)
+	filename = get_json_filename(cache);
+	if (filename == NULL)
 		goto end;
 
-	if (json_dump_file(json, filename, JSON_COMPACT))
-		pr_op_err("Unable to write metadata.json; unknown cause.");
+	if (json_dump_file(json, filename, JSON_INDENT(2)))
+		pr_op_err("Unable to write %s; unknown cause.", filename);
 
-	free(filename);
 end:	json_decref(json);
+	free(filename);
 }
 
-struct rpki_cache *
-cache_create(char const *tal)
+static void
+delete_node(struct rpki_cache *cache, struct cache_node *node)
 {
-	struct rpki_cache *cache;
-
-	cache = pmalloc(sizeof(struct rpki_cache));
-	cache->tal = pstrdup(tal);
-	cache->rsync = NULL;
-	cache->https = NULL;
-	cache->startup_time = time(NULL);
-	if (cache->startup_time == ((time_t) -1))
-		pr_crit("time(NULL) returned -1");
-
-	load_metadata_json(cache);
-
-	return cache;
+	HASH_DEL(cache->ht, node);
+	uri_refput(node->url);
+	free(node);
 }
 
 void
 cache_destroy(struct rpki_cache *cache)
 {
+	struct cache_node *node, *tmp;
+
 	write_metadata_json(cache);
+
+	HASH_ITER(hh, cache->ht, node, tmp)
+		delete_node(cache, node);
 	free(cache->tal);
-	delete_node(cache->rsync);
-	delete_node(cache->https);
 	free(cache);
 }
 
 static int
-delete_node_file(struct rpki_cache *cache, struct cache_node *node,
-    bool is_file)
+get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
 {
-	struct path_builder pb;
-	struct cache_node *cursor;
+	char const *guri, *c;
+	char *guri2;
+	unsigned int slashes;
 	int error;
 
-	pb_init(&pb);
-	for (cursor = node; cursor != NULL; cursor = cursor->parent) {
-		error = pb_append(&pb, cursor->basename);
-		if (error)
-			goto cancel;
+	if (uri_get_type(uri) != UT_RSYNC) {
+		uri_refget(uri);
+		*url = uri;
+		return 0;
 	}
-	error = pb_append(&pb, cache->tal);
-	if (error)
-		goto cancel;
-	error = pb_append(&pb, config_get_local_repository());
-	if (error)
-		goto cancel;
-	pb_reverse(&pb);
 
-	if (is_file) {
-		if (remove(pb.string) != 0) {
-			error = errno;
-			pr_val_err("Cannot override file '%s': %s",
-			    pb.string, strerror(error));
+	/*
+	 * Careful with this code. rsync(1):
+	 *
+	 * > A trailing slash on the source changes this behavior to avoid
+	 * > creating an additional directory level at the destination. You can
+	 * > think of a trailing / on a source as meaning "copy the contents of
+	 * > this directory" as opposed to "copy the directory by name", but in
+	 * > both cases the attributes of the containing directory are
+	 * > transferred to the containing directory on the destination. In
+	 * > other words, each of the following commands copies the files in the
+	 * > same way, including their setting of the attributes of /dest/foo:
+	 * >
+	 * >     rsync -av /src/foo  /dest
+	 * >     rsync -av /src/foo/ /dest/foo
+	 *
+	 * This quirk does not behave consistently. In practice, if you rsync
+	 * at the module level, rsync servers behave as if the trailing slash
+	 * always existed.
+	 *
+	 * ie. the two following rsyncs behave identically:
+	 *
+	 * 	rsync -rtz rsync://repository.lacnic.net/rpki  potatoes
+	 * 		(Copies the content of rpki to potatoes.)
+	 * 	rsync -rtz rsync://repository.lacnic.net/rpki/ potatoes
+	 * 		(Copies the content of rpki to potatoes.)
+	 *
+	 * Even though the following do not:
+	 *
+	 * 	rsync -rtz rsync://repository.lacnic.net/rpki/lacnic  potatoes
+	 * 		(Copies lacnic to potatoes.)
+	 * 	rsync -rtz rsync://repository.lacnic.net/rpki/lacnic/ potatoes
+	 * 		(Copies the content of lacnic to potatoes.)
+	 *
+	 * This is important to us, because an inconsistent missing directory
+	 * component will screw our URLs-to-cache mappings.
+	 *
+	 * My solution is to add the slash myself. That's all I can do to force
+	 * it to behave consistently, it seems.
+	 *
+	 * But note: This only works if we're synchronizing a directory.
+	 * But this is fine, because this hack stacks with the minimum common
+	 * path performance hack.
+	 */
+
+	guri = uri_get_global(uri);
+	slashes = 0;
+	for (c = guri; *c != '\0'; c++) {
+		if (*c == '/') {
+			slashes++;
+			if (slashes == 4)
+				return __uri_create(url, tal, UT_RSYNC, NULL,
+				    guri, c - guri + 1);
 		}
-	} else {
-		error = file_rm_rf(pb.string);
-		pr_val_err("Cannot override directory '%s': %s",
-		    pb.string, strerror(error));
 	}
 
-	pb_cleanup(&pb);
-	return error;
+	if (slashes == 3 && *(c - 1) != '/') {
+		guri2 = pstrdup(guri); /* Remove const */
+		guri2[c - guri] = '/';
+		error = __uri_create(url, tal, UT_RSYNC, NULL, guri2,
+		    c - guri + 1);
+		free(guri2);
+		return error;
+	}
 
-cancel:
-	pb_cleanup(&pb);
-	return error;
+	/*
+	 * Minimum common path performance hack: rsync the rsync module root,
+	 * not every RPP separately. The former is much faster.
+	 */
+	return pr_val_err("Can't rsync URL '%s': The URL seems to be missing a domain or rsync module.",
+	    guri);
 }
 
 static bool
 was_recently_downloaded(struct rpki_cache *cache, struct cache_node *node)
 {
-	return (node->flags & CNF_DIRECT) &&
-	       (cache->startup_time <= node->ts_attempt);
+	return difftime(cache->startup_ts, node->attempt.ts) <= 0;
 }
 
-static void
-drop_children(struct cache_node *node)
-{
-	struct cache_node *child, *tmp;
-
-	HASH_ITER(hh, node->children, child, tmp)
-		delete_node(child);
-}
-
-static char *
-uri2luri(struct rpki_uri *uri)
-{
-	char const *luri;
-
-	luri = uri_get_local(uri) + strlen(config_get_local_repository());
-	while (luri[0] == '/')
-		luri++;
-
-	return pstrdup(luri);
-}
-
-/* Returns 0 if the file exists, nonzero otherwise. */
 static int
-cache_check(struct rpki_uri *uri)
+cache_check(struct rpki_uri *url)
 {
-	struct stat meta;
 	int error;
 
-	if (stat(uri_get_local(uri), &meta) != 0) {
-		error = errno;
+	error = file_exists(uri_get_local(url));
+	switch (error) {
+	case 0:
+		pr_val_debug("Offline mode, file is cached.");
+		break;
+	case ENOENT:
 		pr_val_debug("Offline mode, file is not cached.");
-		return error;
+		break;
+	default:
+		pr_val_debug("Offline mode, unknown result %d (%s)",
+		    error, strerror(error));
 	}
 
-	pr_val_debug("Offline mode, file is cached.");
-	return 0;
+	return error;
 }
 
 /**
@@ -531,111 +398,53 @@ cache_check(struct rpki_uri *uri)
 int
 cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed)
 {
-	char *luri;
-	char *token;
-	char *saveptr;
-	struct cache_node *node, *child;
-	bool recursive;
+	struct rpki_uri *url;
+	struct cache_node *node;
 	int error;
 
 	if (changed != NULL)
 		*changed = false;
-	luri = uri2luri(uri);
 
-	token = strtok_r(luri, "/", &saveptr);
-	if (strcmp(token, cache->tal) != 0)
-		pr_crit("Expected TAL %s for path %s.", cache->tal, uri_get_local(uri));
+	error = get_url(uri, cache->tal, &url);
+	if (error)
+		return error;
 
-	token = strtok_r(NULL, "/", &saveptr);
-	switch (uri_get_type(uri)) {
+	node = find_node(cache, url);
+	if (node != NULL) {
+		uri_refput(url);
+		if (was_recently_downloaded(cache, node))
+			return node->attempt.result;
+		url = node->url;
+	} else {
+		node = pzalloc(sizeof(struct cache_node));
+		node->url = url;
+		add_node(cache, node);
+	}
+
+	switch (uri_get_type(url)) {
 	case UT_RSYNC:
-		if (strcmp(token, "rsync") != 0)
-			return pr_val_err("Path is not rsync: %s", uri_get_local(uri));
-		if (!config_get_rsync_enabled()) {
-			error = cache_check(uri);
-			goto end;
-		}
-		node = cache->rsync = init_root(cache->rsync, "rsync");
-		recursive = true;
+		error = config_get_rsync_enabled()
+		    ? rsync_download(url)
+		    : cache_check(url);
 		break;
 	case UT_HTTPS:
-		if (strcmp(token, "https") != 0)
-			return pr_val_err("Path is not HTTPS: %s", uri_get_local(uri));
-		if (!config_get_http_enabled()) {
-			error = cache_check(uri);
-			goto end;
-		}
-		node = cache->https = init_root(cache->https, "https");
-		recursive = false;
+		error = config_get_http_enabled()
+		    ? http_download(url, changed)
+		    : cache_check(url);
 		break;
 	default:
-		pr_crit("Unexpected URI type: %d", uri_get_type(uri));
+		pr_crit("Unexpected URI type: %d", uri_get_type(url));
 	}
 
-	while ((token = strtok_r(NULL, "/", &saveptr)) != NULL) {
-		if (node->flags & CNF_FILE) {
-			/* node used to be a file, now it's a dir. */
-			delete_node_file(cache, node, true);
-			node->flags = 0;
-		}
-
-		HASH_FIND_STR(node->children, token, child);
-
-		if (child == NULL) {
-			/* Create child */
-			do {
-				node = add_child(node, token);
-				token = strtok_r(NULL, "/", &saveptr);
-			} while (token != NULL);
-			goto download;
-		}
-
-		if (recursive) {
-			if (was_recently_downloaded(cache, child) &&
-			    !child->error) {
-				error = 0;
-				goto end;
-			}
-		}
-
-		node = child;
-	}
-
-	if (was_recently_downloaded(cache, node)) {
-		error = node->error;
-		goto end;
-	}
-
-	if (!recursive && !(node->flags & CNF_FILE)) {
-		/* node used to be a dir, now it's a file. */
-		delete_node_file(cache, node, false);
-	}
-
-download:
-	switch (uri_get_type(uri)) {
-	case UT_RSYNC:
-		error = rsync_download(uri);
-		break;
-	case UT_HTTPS:
-		error = http_download(uri, changed);
-		break;
-	default:
-		pr_crit("Unexpected URI type: %d", uri_get_type(uri));
-	}
-
-	node->error = error;
-	node->flags = CNF_DIRECT;
-	node->ts_attempt = time(NULL);
-	if (node->ts_attempt == ((time_t) -1))
-		pr_crit("time(NULL) returned -1");
+	node->attempt.ts = time(NULL);
+	if (node->attempt.ts == (time_t) -1)
+		pr_crit("time(NULL) returned (time_t) -1");
+	node->attempt.result = error;
 	if (!error) {
-		node->flags |= CNF_SUCCESS | (recursive ? 0 : CNF_FILE);
-		node->ts_success = node->ts_attempt;
+		node->success.happened = true;
+		node->success.ts = node->attempt.ts;
 	}
-	drop_children(node);
 
-end:
-	free(luri);
 	return error;
 }
 
@@ -733,7 +542,7 @@ cache_download_alt(struct rpki_cache *cache, struct uri_list *uris,
 static struct cache_node *
 choose_better(struct cache_node *old, struct cache_node *new)
 {
-	if (!(new->flags & CNF_SUCCESS))
+	if (!new->success.happened)
 		return old;
 	if (old == NULL)
 		return new;
@@ -747,61 +556,11 @@ choose_better(struct cache_node *old, struct cache_node *new)
 	 * remnant cached ROAs that haven't expired yet.
 	 */
 
-	if (old->error && !new->error)
+	if (old->attempt.result && !new->attempt.result)
 		return new;
-	if (!old->error && new->error)
+	if (!old->attempt.result && new->attempt.result)
 		return old;
-	return (difftime(old->ts_success, new->ts_success) < 0) ? new : old;
-}
-
-static struct cache_node *
-find_node(struct rpki_cache *cache, struct rpki_uri *uri)
-{
-	char *luri, *token, *saveptr;
-	struct cache_node *parent, *node;
-	bool recursive;
-	struct cache_node *result;
-
-	luri = uri2luri(uri);
-	node = NULL;
-	result = NULL;
-
-	token = strtok_r(luri, "/", &saveptr);
-	if (strcmp(token, cache->tal) != 0)
-		pr_crit("Expected TAL %s for path %s.", cache->tal, uri_get_local(uri));
-
-	token = strtok_r(NULL, "/", &saveptr);
-	switch (uri_get_type(uri)) {
-	case UT_RSYNC:
-		parent = cache->rsync;
-		recursive = true;
-		break;
-	case UT_HTTPS:
-		parent = cache->https;
-		recursive = false;
-		break;
-	default:
-		pr_crit("Unexpected URI type: %d", uri_get_type(uri));
-	}
-
-	if (parent == NULL)
-		goto end;
-
-	while ((token = strtok_r(NULL, "/", &saveptr)) != NULL) {
-		HASH_FIND_STR(parent->children, token, node);
-		if (node == NULL)
-			goto end;
-		if (recursive && (node->flags & CNF_DIRECT))
-			result = choose_better(result, node);
-		parent = node;
-	}
-
-	if (!recursive && (node != NULL) && (node->flags & CNF_DIRECT))
-		result = choose_better(result, node);
-
-end:
-	free(luri);
-	return result;
+	return (difftime(old->success.ts, new->success.ts) < 0) ? new : old;
 }
 
 struct uri_and_node {
@@ -815,13 +574,19 @@ __cache_recover(struct rpki_cache *cache, struct uri_list *uris, bool use_rrdp,
     struct uri_and_node *best)
 {
 	struct rpki_uri **uri;
+	struct rpki_uri *url;
 	struct uri_and_node cursor;
 
 	ARRAYLIST_FOREACH(uris, uri) {
 		cursor.uri = *uri;
-		cursor.node = find_node(cache, cursor.uri);
+
+		if (get_url(cursor.uri, cache->tal, &url) != 0)
+			continue;
+		cursor.node = find_node(cache, url);
+		uri_refput(url);
 		if (cursor.node == NULL)
 			continue;
+
 		if (choose_better(best->node, cursor.node) == cursor.node)
 			*best = cursor;
 	}
@@ -835,333 +600,83 @@ cache_recover(struct rpki_cache *cache, struct uri_list *uris, bool use_rrdp)
 	return best.uri;
 }
 
-static void
-__cache_print(struct cache_node *node, unsigned int tabs)
-{
-	unsigned int i;
-	struct cache_node *child, *tmp;
-
-	if (node == NULL)
-		return;
-
-	for (i = 0; i < tabs; i++)
-		printf("\t");
-	printf("%s: %sdirect %ssuccess %sfile error:%d\n",
-	    node->basename,
-	    (node->flags & CNF_DIRECT) ? "" : "!",
-	    (node->flags & CNF_SUCCESS) ? "" : "!",
-	    (node->flags & CNF_FILE) ? "" : "!",
-	    node->error);
-	HASH_ITER(hh, node->children, child, tmp)
-		__cache_print(child, tabs + 1);
-}
-
 void
 cache_print(struct rpki_cache *cache)
 {
-	__cache_print(cache->rsync, 0);
-	__cache_print(cache->https, 0);
-}
+	struct cache_node *node, *tmp;
 
-/*
- * @force: ignore nonexistent files
- */
-static void
-pb_rm_r(struct path_builder *pb, char const *filename, bool force)
-{
-	int error;
-
-	error = file_rm_rf(pb->string);
-	if (error && !force)
-		pr_op_err("Cannot delete %s: %s", pb->string, strerror(error));
-}
-
-enum ctt_status {
-	CTTS_STILL,
-	CTTS_UP,
-	CTTS_DOWN,
-};
-
-struct cache_tree_traverser {
-	struct rpki_cache *cache;
-	struct cache_node **root;
-	struct cache_node *next;
-	struct path_builder *pb;
-	enum ctt_status status;
-};
-
-static void
-ctt_init(struct cache_tree_traverser *ctt, struct rpki_cache *cache,
-    struct cache_node **root, struct path_builder *pb)
-{
-	struct cache_node *node;
-
-	node = *root;
-	if (node != NULL && (pb_append(pb, "a") != 0))
-		node = node->parent;
-
-	ctt->cache = cache;
-	ctt->root = root;
-	ctt->next = node;
-	ctt->pb = pb;
-	ctt->status = CTTS_DOWN;
+	HASH_ITER(hh, cache->ht, node, tmp)
+		printf("- %s (%s): %ssuccess error:%d\n",
+		    uri_get_local(node->url),
+		    uri_get_global(node->url),
+		    node->success.happened ? "" : "!",
+		    node->attempt.result);
 }
 
 static bool
-is_node_fresh(struct rpki_cache *cache, struct cache_node *node)
+is_node_fresh(struct cache_node *node, time_t epoch)
 {
-	return was_recently_downloaded(cache, node) && !node->error;
+	/* TODO This is a startup; probably complicate this. */
+	return difftime(epoch, node->attempt.ts) < 0;
 }
 
-/*
- * Assumes @node has not been added to the pb.
- */
-static struct cache_node *
-ctt_delete(struct cache_tree_traverser *ctt, struct cache_node *node)
+static time_t
+get_days_ago(int days)
 {
-	struct cache_node *parent, *sibling;
+	time_t tt_now, last_week;
+	struct tm tm;
+	int error;
 
-	sibling = node->hh.next;
-	parent = node->parent;
-
-	delete_node(node);
-
-	if (sibling != NULL) {
-		ctt->status = CTTS_DOWN;
-		return sibling;
+	tt_now = time(NULL);
+	if (tt_now == (time_t) -1)
+		pr_crit("time(NULL) returned (time_t) -1.");
+	if (localtime_r(&tt_now, &tm) == NULL) {
+		error = errno;
+		pr_crit("localtime_r(tt, &tm) returned error: %s",
+		    strerror(error));
 	}
+	tm.tm_mday -= days;
+	last_week = mktime(&tm);
+	if (last_week == (time_t) -1)
+		pr_crit("mktime(tm) returned (time_t) -1.");
 
-	if (parent != NULL) {
-		ctt->status = CTTS_UP;
-		return parent;
-	}
-
-	*ctt->root = NULL;
-	return NULL;
-}
-
-/*
- * Assumes @node is not NULL, has yet to be traversed, and is already included
- * in the pb.
- */
-static struct cache_node *
-go_up(struct cache_tree_traverser *ctt, struct cache_node *node)
-{
-	if (node->children == NULL && !is_node_fresh(ctt->cache, node)) {
-		pb_pop(ctt->pb, true);
-		return ctt_delete(ctt, node);
-	}
-
-	ctt->status = CTTS_STILL;
-	return node;
-}
-
-static struct cache_node *
-find_first_viable_child(struct cache_tree_traverser *ctt,
-    struct cache_node *node)
-{
-	struct cache_node *child, *tmp;
-
-	HASH_ITER(hh, node->children, child, tmp) {
-		if (pb_append(ctt->pb, child->basename) == 0)
-			return child;
-		delete_node(child); /* Unviable */
-	}
-
-	return NULL;
-}
-
-/*
- * Assumes @node is not NULL, has yet to be traversed, and has not yet been
- * added to the pb.
- */
-static struct cache_node *
-go_down(struct cache_tree_traverser *ctt, struct cache_node *node)
-{
-	struct cache_node *child;
-
-	if (pb_append(ctt->pb, node->basename) != 0)
-		return ctt_delete(ctt, node);
-
-	do {
-		if (is_node_fresh(ctt->cache, node)) {
-			drop_children(node);
-			ctt->status = CTTS_STILL;
-			return node;
-		}
-
-		child = find_first_viable_child(ctt, node);
-		if (child == NULL) {
-			/* Welp; stale and no children. */
-			ctt->status = CTTS_UP;
-			return node;
-		}
-
-		node = child;
-	} while (true);
-}
-
-/*
- * - Depth-first, post-order, non-recursive, safe [1] traversal.
- * - However, deletion is the only allowed modification during the traversal.
- * - If the node is fresh [2], it will have no children.
- *   (Because they would be redundant.)
- *   (Childless nodes do not imply corresponding childless directories.)
- * - If the node is not fresh, it WILL have children.
- *   (Stale [3] nodes are always sustained by fresh descendant nodes.)
- * - The ctt will automatically clean up unviable [4] and unsustained stale
- *   nodes during the traversal, caller doesn't have to worry about them.
- * - The ctt's pb will be updated at all times, caller should not modify the
- *   string.
- *
- * [1] Safe = caller can delete the returned node via delete_node(), during
- *     iteration.
- * [2] Fresh = Mapped to a file or directory that was downloaded/updated
- *     successfully at some point since the beginning of the iteration.
- * [3] Stale = Not fresh
- * [4] Unviable = Node's path is too long, ie. cannot be mapped to a cache file.
- */
-static struct cache_node *
-ctt_next(struct cache_tree_traverser *ctt)
-{
-	struct cache_node *next = ctt->next;
-
-	if (next == NULL)
-		return NULL;
-
-	pb_pop(ctt->pb, true);
-
-	do {
-		if (ctt->status == CTTS_DOWN)
-			next = go_down(ctt, next);
-		else if (ctt->status == CTTS_UP)
-			next = go_up(ctt, next);
-
-		if (next == NULL) {
-			ctt->next = NULL;
-			return NULL;
-		}
-	} while (ctt->status != CTTS_STILL);
-
-	if (next->hh.next != NULL) {
-		ctt->next = next->hh.next;
-		ctt->status = CTTS_DOWN;
-	} else {
-		ctt->next = next->parent;
-		ctt->status = CTTS_UP;
-	}
-
-	return next;
+	return last_week;
 }
 
 static void
-cleanup_tree(struct rpki_cache *cache, struct cache_node **root,
-    char const *treename)
+cleanup_node(struct rpki_cache *cache, struct cache_node *node,
+    time_t last_week)
 {
-	struct cache_tree_traverser ctt;
-	struct path_builder pb;
-	struct stat meta;
-	DIR *dir;
-	struct dirent *file;
-	struct cache_node *node, *child, *tmp;
 	int error;
 
-	if (pb_init_cache(&pb, cache->tal, NULL) != 0)
+	error = file_exists(uri_get_local(node->url));
+	switch (error) {
+	case 0:
+		break;
+	case ENOENT:
+		/* Node exists but file doesn't: Delete node */
+		delete_node(cache, node);
 		return;
-
-	ctt_init(&ctt, cache, root, &pb);
-
-	while ((node = ctt_next(&ctt)) != NULL) {
-		if (stat(pb.string, &meta) != 0) {
-			error = errno;
-			if (error == ENOENT) {
-				/* Node exists but file doesn't: Delete node */
-				delete_node(node);
-				continue;
-			}
-
-			pr_op_err("Cannot clean up '%s'; stat() returned errno %d: %s",
-			    pb.string, error, strerror(error));
-			continue;
-		}
-
-		if (!node->children)
-			continue; /* Node represents file, file does exist. */
-		/* Node represents directory. */
-
-		if (!S_ISDIR(meta.st_mode)) {
-			/* File is not a directory; welp. */
-			remove(pb.string);
-			delete_node(node);
-			continue;
-		}
-
-		dir = opendir(pb.string);
-		if (dir == NULL) {
-			error = errno;
-			pr_op_err("Cannot clean up '%s'; S_ISDIR() but !opendir(): %s",
-			    pb.string, strerror(error));
-			continue; /* AAAAAAAAAAAAAAAAAH */
-		}
-
-		FOREACH_DIR_FILE(dir, file) {
-			if (S_ISDOTS(file))
-				continue;
-
-			HASH_FIND_STR(node->children, file->d_name, child);
-			if (child != NULL) {
-				child->flags |= CNF_FOUND;
-			} else {
-				/* File child's node does not exist: Delete. */
-				if (pb_append(&pb, file->d_name) == 0) {
-					pb_rm_r(&pb, file->d_name, false);
-					pb_pop(&pb, true);
-				}
-			}
-		}
-
-		error = errno;
-		closedir(dir);
-		if (error) {
-			pr_op_err("Cannot clean up directory (basename is '%s'): %s",
-			    node->basename, strerror(error));
-			HASH_ITER(hh, node->children, child, tmp)
-				child->flags &= ~CNF_FOUND;
-			continue; /* AAAAAAAAAAAAAAAAAH */
-		}
-
-		HASH_ITER(hh, node->children, child, tmp) {
-			if (child->flags & CNF_FOUND) {
-				/*
-				 * File child still exists, which means there's
-				 * at least one active descendant.
-				 * Clean the flag and keep the node.
-				 */
-				child->flags &= ~CNF_FOUND;
-			} else {
-				/* Node child's file does not exist: Delete. */
-				delete_node(child);
-			}
-		}
-
-		if (node->children == NULL) {
-			/* Node is inactive and we rm'd its children: Delete. */
-			pb_rm_r(&pb, node->basename, false);
-			delete_node(node);
-		}
+	default:
+		pr_op_err("Trouble cleaning '%s'; stat() returned errno %d: %s",
+		    uri_op_get_printable(node->url), error, strerror(error));
 	}
 
-	if ((*root) == NULL && pb_append(&pb, treename) == 0)
-		pb_rm_r(&pb, treename, true);
-
-	pb_cleanup(&pb);
+	if (!is_node_fresh(node, last_week)) {
+		file_rm_rf(uri_get_local(node->url));
+		delete_node(cache, node);
+	}
 }
 
 void
-cache_cleanup(void)
+cache_cleanup(struct rpki_cache *cache)
 {
-	struct rpki_cache *cache = validation_cache(state_retrieve());
-	cleanup_tree(cache, &cache->rsync, "rsync");
-	cleanup_tree(cache, &cache->https, "https");
+	struct cache_node *node, *tmp;
+	time_t last_week;
+
+	last_week = get_days_ago(7);
+	HASH_ITER(hh, cache->ht, node, tmp)
+		cleanup_node(cache, node, last_week);
+
 	write_metadata_json(cache);
 }

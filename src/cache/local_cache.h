@@ -30,6 +30,6 @@ void cache_print(struct rpki_cache *);
 
 /* Deletes old untraversed cached files, writes metadata into XML */
 /* FIXME call this */
-void cache_cleanup(void);
+void cache_cleanup(struct rpki_cache *);
 
 #endif /* SRC_CACHE_LOCAL_CACHE_H_ */

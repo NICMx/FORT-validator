@@ -267,12 +267,9 @@ create_dir(char const *path)
 	return 0;
 }
 
-/**
- * Apparently, RSYNC does not like to create parent directories.
- * This function fixes that.
- */
+/* mkdir -p $path */
 int
-create_dir_recursive(char const *path, bool include_basename)
+mkdir_p(char const *path, bool include_basename)
 {
 	char *localuri, *last_slash;
 	int i, result = 0;

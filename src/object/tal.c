@@ -427,6 +427,9 @@ do_file_validation(void *arg)
 {
 	struct validation_thread *thread = arg;
 	struct handle_tal_args args;
+	time_t start, finish;
+
+	start = time(NULL);
 
 	fnstack_init();
 	fnstack_push(thread->tal_file);
@@ -448,6 +451,11 @@ do_file_validation(void *arg)
 
 	tal_cleanup(&args.tal);
 end:	fnstack_cleanup();
+
+	finish = time(NULL);
+	if (start != ((time_t) -1) && finish != ((time_t) -1))
+		pr_op_info("- Tal %s: %.0lfs", args.tal.file_name,
+		    difftime(finish, start));
 	return NULL;
 }
 

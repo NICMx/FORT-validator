@@ -23,7 +23,7 @@ init_tmpdir(void)
 	if (error)
 		return error;
 
-	error = create_dir_recursive(pb.string, true);
+	error = mkdir_p(pb.string, true);
 
 	pb_cleanup(&pb);
 	return error;
