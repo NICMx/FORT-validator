@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <openssl/evp.h>
 #include <sys/queue.h>
+#include <time.h>
 
 #include "alloc.h"
 #include "cert_stack.h"

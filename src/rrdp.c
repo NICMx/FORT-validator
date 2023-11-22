@@ -1,9 +1,8 @@
 #include "rrdp.h"
 
 #include <ctype.h>
-#include <errno.h>
+#include <openssl/bn.h>
 #include <openssl/evp.h>
-#include <sys/stat.h>
 
 #include "alloc.h"
 #include "common.h"

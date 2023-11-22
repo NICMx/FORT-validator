@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <time.h>
 #include "log.h"
 
 int
