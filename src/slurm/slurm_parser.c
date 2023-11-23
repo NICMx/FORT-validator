@@ -234,16 +234,15 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 		return error;
 	if (str_encoded == NULL)
 		return is_assertion
-		    ? pr_op_err("SLURM assertion %s is required", SKI)
+		    ? pr_op_err("SLURM assertion " SKI " is required")
 		    : 0; /* Optional for filters */
 
 	error = validate_base64url_encoded(str_encoded);
 	if (error)
 		return error;
 
-	error = base64url_decode(str_encoded, &result->ski, &ski_len);
-	if (error)
-		return error;
+	if (!base64url_decode(str_encoded, &result->ski, &ski_len))
+		return op_crypto_err("The " SKI " could not be decoded.");
 
 	/* Validate that's at least 20 octects long */
 	if (ski_len != RK_SKI_LEN) {
@@ -290,11 +289,11 @@ static int
 set_router_pub_key(json_t *object, bool is_assertion,
     struct slurm_bgpsec *result, size_t *members_loaded)
 {
-	char const *str_encoded;
+	char const *encoded;
 	size_t spk_len;
 	int error;
 
-	error = json_get_str(object, ROUTER_PUBLIC_KEY, &str_encoded);
+	error = json_get_str(object, ROUTER_PUBLIC_KEY, &encoded);
 	if (error < 0)
 		return error;
 
@@ -305,18 +304,15 @@ set_router_pub_key(json_t *object, bool is_assertion,
 		    : 0;
 
 	/* Assertions */
-	if (str_encoded == NULL)
-		return pr_op_err("SLURM assertion %s is required",
-		    ROUTER_PUBLIC_KEY);
+	if (encoded == NULL)
+		return pr_op_err("SLURM assertion " ROUTER_PUBLIC_KEY " is required.");
 
-	error = validate_base64url_encoded(str_encoded);
+	error = validate_base64url_encoded(encoded);
 	if (error)
 		return error;
 
-	error = base64url_decode(str_encoded, &result->router_public_key,
-	    &spk_len);
-	if (error)
-		return pr_op_err("'%s' couldn't be decoded", str_encoded);
+	if (!base64url_decode(encoded, &result->router_public_key, &spk_len))
+		return op_crypto_err("The " ROUTER_PUBLIC_KEY " could not be decoded.");
 
 	/*
 	 * Validate that "is the full ASN.1 DER encoding of the

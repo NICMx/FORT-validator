@@ -44,7 +44,7 @@ BN2string(BIGNUM *bn, char **_result)
 
 	bio = BIO_new(BIO_s_mem());
 	if (bio == NULL)
-		enomem_panic();
+		return val_crypto_err("Cannot create a BIO.");
 
 	if (BN_print(bio, bn) == 0) {
 		BIO_free(bio);

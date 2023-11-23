@@ -5,45 +5,32 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include "alloc.h"
-#include "log.h"
-
-/**
- * Converts error from libcrypto representation to this project's
- * representation.
- */
-static int
-error_ul2i(unsigned long error)
-{
-	/* I'm assuming int has at least 32 bits. Don't mess with the sign. */
-	int interror = error & 0x7FFFFFFFul;
-	return interror ? interror : -EINVAL;
-}
 
 /*
  * Reference: openbsd/src/usr.bin/openssl/enc.c
  *
  * @in: The BIO that will stream the base64 encoded string you want to decode.
  * @out: Buffer where this function will write the decoded string.
- * @has_nl: Indicate if the encoded string has newline char.
+ * @has_nl: Encoded string has newline char?
  * @out_len: Total allocated size of @out. It's supposed to be the result of
  *     EVP_DECODE_LENGTH(<size of the encoded string>).
  * @out_written: This function will write the actual number of decoded bytes
  *     here.
  *
- * Returns error status. (Nonzero = error code, zero = success)
+ * Returns true on success, false on failure. If the caller wants to print
+ * errors, do it with the crypto functions. If not, remember to clean
+ * libcrypto's error queue somehow.
  *
- * If this returns error, do visit ERR_print_errors(), but also print an
- * additional error message anyway. Functions such as BIO_new() don't always
- * register a libcrypto stack error.
+ * TODO (fine) Callers always do a bunch of boilerplate; refactor.
  */
-int
+bool
 base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
     size_t *out_written)
 {
 	BIO *b64;
 	size_t offset = 0;
 	int written = 0;
-	unsigned long error;
+	bool success = false;
 
 	/*
 	 * BTW: The libcrypto API is perplexing.
@@ -63,29 +50,34 @@ base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
 	 * populate the error stack.
 	 */
 	b64 = BIO_new(BIO_f_base64());
-	if (b64 == NULL) {
-		error = ERR_peek_last_error();
-		if (error)
-			return error_ul2i(error);
-		enomem_panic();
-	}
+	if (b64 == NULL)
+		return false;
 
 	/*
 	 * BIO_push() can technically fail through BIO_ctrl(), but it ignores
 	 * the error. This will not cause it to revert the push, so we have to
 	 * do it ourselves.
+	 *
+	 * BTW: I'm assigning the result of BIO_push() to @in (instead of @b64
+	 * or, more logically, throwing it away) because the sample reference in
+	 * enc.c does it that way.
+	 * But the writer of enc.c probably overcomplicated things.
+	 * It shouldn't make a difference. We don't need @in anymore; just
+	 * assume both @b64 and @in now point to the same BIO, which is @b64.
+	 */
+	in = BIO_push(b64, in);
+
+	/*
 	 * Should we ignore this error? BIO_ctrl(BIO_CTRL_PUSH) performs some
 	 * "internal, used to signify change" thing, whose importance is
 	 * undefined due to BIO_ctrl()'s callback spaghetti.
-	 * I'm not risking it.
+	 * Let's be strict, I guess.
 	 */
-	in = BIO_push(b64, in);
-	if (!has_nl)
-		BIO_set_flags(in, BIO_FLAGS_BASE64_NO_NL);
-
-	error = ERR_peek_last_error();
-	if (error)
+	if (ERR_peek_last_error() != 0)
 		goto end;
+
+	if (!has_nl)
+		BIO_set_flags(in, BIO_FLAGS_BASE64_NO_NL); /* Cannot fail */
 
 	do {
 		/*
@@ -94,18 +86,15 @@ base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
 		 * imply error, and which ruins the counter.
 		 */
 		offset += written;
-		/*
-		 * According to the documentation, the first argument should
-		 * be b64, not in.
-		 * But this is how it's written in enc.c.
-		 * It doesn't seem to make a difference either way.
-		 */
 		written = BIO_read(in, out + offset, out_len - offset);
 	} while (written > 0);
 
 	/* BIO_read() can fail. It does not return status. */
-	error = ERR_peek_last_error();
+	if (ERR_peek_last_error() != 0)
+		goto end;
+
 	*out_written = offset;
+	success = true;
 
 end:
 	/*
@@ -117,7 +106,7 @@ end:
 	/* Returns 0 on failure, but that's only if b64 is NULL. Meaningless. */
 	BIO_free(b64);
 
-	return error ? error_ul2i(error) : 0;
+	return success;
 }
 
 /*
@@ -127,14 +116,14 @@ end:
  * Return 0 on success, or the error code if something went wrong. Don't forget
  * to free @result after a successful decoding.
  */
-int
+bool
 base64url_decode(char const *str_encoded, unsigned char **result,
     size_t *result_len)
 {
 	BIO *encoded; /* base64 encoded. */
 	char *str_copy;
 	size_t encoded_len, alloc_size, dec_len;
-	int error, pad, i;
+	int pad, i;
 
 	/*
 	 * Apparently there isn't a base64url decoder, and there isn't
@@ -165,33 +154,30 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 
 	/* Now decode as regular base64 */
 	encoded =  BIO_new_mem_buf(str_copy, -1);
-	if (encoded == NULL) {
-		error = -EINVAL;
+	if (encoded == NULL)
 		goto free_copy;
-	}
 
 	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
 	*result = pzalloc(alloc_size + 1);
 
-	error = base64_decode(encoded, *result, false, alloc_size, &dec_len);
-	if (error)
+	if (!base64_decode(encoded, *result, false, alloc_size, &dec_len))
 		goto free_all;
 
-	if (dec_len == 0) {
-		error = -EINVAL;
+	if (dec_len == 0)
 		goto free_all;
-	}
+
 	*result_len = dec_len;
 
 	free(str_copy);
 	BIO_free(encoded);
-	return 0;
+	return true;
+
 free_all:
 	free(*result);
 	BIO_free(encoded);
 free_copy:
 	free(str_copy);
-	return error;
+	return false;
 }
 
 static char *
@@ -228,30 +214,35 @@ to_base64url(char const *base, size_t base_len)
 /*
  * Encode @in (with size @in_len) as base64url without trailing pad, and
  * allocate at @result.
+ *
+ * TODO (SLURM, RK) From the way this function keeps being called in pairs and
+ * failing too late, it would appear the code should be caching the encoded
+ * result during construction.
  */
-int
+bool
 base64url_encode(unsigned char const *in, int in_len, char **result)
 {
 	BIO *b64, *mem;
 	BUF_MEM *mem_buf;
-	int error;
 
 	ERR_clear_error();
 
 	mem = BIO_new(BIO_s_mem());
-	if (mem == NULL) {
-		error = ERR_peek_last_error();
-		goto peeked;
-	}
+	if (mem == NULL)
+		return false;
 
 	b64 = BIO_new(BIO_f_base64());
 	if (b64 == NULL) {
-		error = ERR_peek_last_error();
-		goto free_mem;
+		BIO_free(mem);
+		return false;
 	}
+
+	/*
+	 * TODO (SLURM, RK) WHY IS THERE NO ERROR HANDLING HERE
+	 * ARGGGGGGGGGGGGGGGGGGGGHHHHHHHHHHHHHHHHHHHHH
+	 */
 	mem = BIO_push(b64, mem);
 	BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-
 	BIO_write(b64, in, in_len);
 	BIO_flush(b64);
 	BIO_get_mem_ptr(mem, &mem_buf);
@@ -259,12 +250,5 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 	*result = to_base64url(mem_buf->data, mem_buf->length);
 
 	BIO_free_all(b64);
-	return 0;
-
-free_mem:
-	BIO_free_all(b64);
-peeked:
-	if (error)
-		return error_ul2i(error);
-	enomem_panic();
+	return true;
 }

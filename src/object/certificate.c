@@ -853,12 +853,12 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 	 */
 	tm = ASN1_TIME_adj(NULL, t, 0, 60);
 	if (tm == NULL)
-		return pr_val_err("Crypto function ASN1_TIME_adj() returned error");
+		return val_crypto_err("ASN1_TIME_adj() returned NULL.");
 
 	clone = X509_CRL_dup(original_crl);
 	if (clone == NULL) {
 		ASN1_STRING_free(tm);
-		enomem_panic();
+		return val_crypto_err("X509_CRL_dup() returned NULL.");
 	}
 
 	X509_CRL_set1_nextUpdate(clone, tm);

@@ -35,8 +35,13 @@ daemonize(daemon_log_cb log_cb)
 
 	/* Get the working dir, the daemon will use (and free) it later */
 	pwd = getcwd(NULL, 0);
-	if (pwd == NULL)
-		enomem_panic();
+	if (pwd == NULL) {
+		error = errno;
+		if (error == ENOMEM)
+			enomem_panic();
+		pr_op_err("Cannot get current directory: %s", strerror(error));
+		return error;
+	}
 
 	pid = fork();
 	if (pid < 0) {

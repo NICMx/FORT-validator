@@ -237,33 +237,38 @@ read_spki(struct line_file *lfile, struct tal *tal)
 {
 	BIO *encoded; /* base64 encoded. */
 	char *tmp;
-	size_t alloc_size;
+	size_t size;
 	int error;
 
-	alloc_size = get_spki_alloc_size(lfile);
-	tal->spki = pmalloc(alloc_size);
+	size = get_spki_alloc_size(lfile);
+	tal->spki = pmalloc(size);
 
 	tmp = NULL;
 	error = base64_sanitize(lfile, &tmp);
-	if (error) {
-		free(tal->spki);
-		return error;
-	}
+	if (error)
+		goto revert_spki;
 
 	encoded = BIO_new_mem_buf(tmp, -1);
 	if (encoded == NULL) {
-		free(tal->spki);
-		free(tmp);
-		return op_crypto_err("BIO_new_mem_buf() returned NULL");
+		error = op_crypto_err("BIO_new_mem_buf() returned NULL.");
+		goto revert_tmp;
 	}
 
-	error = base64_decode(encoded, tal->spki, true, alloc_size,
-		    &tal->spki_len);
-	if (error)
-		free(tal->spki);
+	if (!base64_decode(encoded, tal->spki, true, size, &tal->spki_len)) {
+		error = op_crypto_err("Cannot decode SPKI.");
+		goto revert_encoded;
+	}
 
 	free(tmp);
 	BIO_free(encoded);
+	return 0;
+
+revert_encoded:
+	BIO_free(encoded);
+revert_tmp:
+	free(tmp);
+revert_spki:
+	free(tal->spki);
 	return error;
 }
 

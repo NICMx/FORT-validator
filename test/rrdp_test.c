@@ -29,7 +29,7 @@ __sort_deltas(struct notification_deltas *deltas, unsigned int max_serial,
 	notif.deltas = *deltas;
 	notif.session.serial.num = BN_create();
 	if (!BN_set_word(notif.session.serial.num, max_serial))
-		enomem_panic();
+		ck_abort_msg("BN_set_word() returned zero.");
 	notif.session.serial.str = (unsigned char *) max_serial_str;
 
 	error = sort_deltas(&notif);
@@ -49,7 +49,7 @@ add_serials(struct notification_deltas *deltas, ...)
 	while ((cursor = va_arg(vl, unsigned long)) != END) {
 		delta.serial.num = BN_create();
 		if (!BN_set_word(delta.serial.num, cursor))
-			enomem_panic();
+			ck_abort_msg("BN_set_word() returned zero.");
 		notification_deltas_add(deltas, &delta);
 	}
 	va_end(vl);

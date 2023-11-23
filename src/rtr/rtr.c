@@ -549,7 +549,6 @@ fddb_poll(void)
 			goto stop;
 		case ENOMEM:
 			enomem_panic();
-			/* Fall through */
 		case EAGAIN:
 			goto retry;
 		case EFAULT:

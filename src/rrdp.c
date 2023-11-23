@@ -254,9 +254,10 @@ base64_read(char const *content, unsigned char **out, size_t *out_len)
 	alloc_size = EVP_DECODE_LENGTH(strlen(content));
 	result = pmalloc(alloc_size);
 
-	error = base64_decode(encoded, result, true, alloc_size, &result_len);
-	if (error)
+	if (!base64_decode(encoded, result, true, alloc_size, &result_len)) {
+		error = val_crypto_err("Cannot decode publish tag's base64.");
 		goto release_result;
+	}
 
 	free(sanitized);
 	BIO_free(encoded);
@@ -264,6 +265,7 @@ base64_read(char const *content, unsigned char **out, size_t *out_len)
 	(*out) = result;
 	(*out_len) = result_len;
 	return 0;
+
 release_result:
 	free(result);
 	BIO_free(encoded);
@@ -653,7 +655,7 @@ swap_until_sorted(struct notification_delta *deltas, array_index i,
 			    deltas[i].serial.str, max->str);
 
 		if (!BN_sub(target_slot, deltas[i].serial.num, min))
-			enomem_panic();
+			return val_crypto_err("BN_sub() returned error.");
 		_target_slot = BN_get_word(target_slot);
 		if (i == _target_slot)
 			return 0;
@@ -692,7 +694,7 @@ sort_deltas(struct update_notification *notif)
 	max_serial = &notif->session.serial;
 	min_serial = BN_dup(max_serial->num);
 	if (min_serial == NULL)
-		enomem_panic();
+		return val_crypto_err("BN_dup() returned NULL.");
 	if (!BN_sub_word(min_serial, deltas->len - 1)) {
 		error = pr_val_err("Could not subtract %s - %zu; unknown cause.",
 		    notif->session.serial.str, deltas->len - 1);

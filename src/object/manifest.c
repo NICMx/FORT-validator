@@ -200,8 +200,6 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 	int error;
 
 	*pp = rpp_create();
-	if (*pp == NULL)
-		enomem_panic();
 
 	tal = tal_get_file_name(validation_tal(state_retrieve()));
 

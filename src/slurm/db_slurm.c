@@ -468,7 +468,6 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 {
 	char *pad = "     ";
 	char *buf;
-	int error;
 
 	pr_op_info("    {");
 	if (bgpsec->data_flag & SLURM_COM_FLAG_ASN)
@@ -476,8 +475,8 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 
 	if (bgpsec->data_flag & SLURM_BGPS_FLAG_SKI) {
 		do {
-			error = base64url_encode(bgpsec->ski, RK_SKI_LEN, &buf);
-			if (error) {
+			if (!base64url_encode(bgpsec->ski, RK_SKI_LEN, &buf)) {
+				op_crypto_err("Cannot encode SKI.");
 				pr_op_info("%s SKI: <error encoding value>",
 				    pad);
 				break;
@@ -489,9 +488,9 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 
 	if (bgpsec->data_flag & SLURM_BGPS_FLAG_ROUTER_KEY) {
 		do {
-			error = base64url_encode(bgpsec->router_public_key,
-			    RK_SPKI_LEN, &buf);
-			if (error) {
+			if (!base64url_encode(bgpsec->router_public_key,
+			    RK_SPKI_LEN, &buf)) {
+				op_crypto_err("Cannot encode routerPublicKey.");
 				pr_op_info("%s Router public key: <error encoding value>",
 				    pad);
 				break;

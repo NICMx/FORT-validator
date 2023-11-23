@@ -87,22 +87,23 @@ print_router_key_csv(struct router_key const *key, void *arg)
 {
 	FILE *out = arg;
 	char *buf1, *buf2;
-	int error;
 
-	error = base64url_encode(key->ski, RK_SKI_LEN, &buf1);
-	if (error)
-		return error;
+	if (!base64url_encode(key->ski, RK_SKI_LEN, &buf1)) {
+		op_crypto_err("Cannot encode SKI.");
+		return 0; /* Skip it, I guess */
+	}
 
-	error = base64url_encode(key->spk, RK_SPKI_LEN, &buf2);
-	if (error)
-		goto free1;
+	if (!base64url_encode(key->spk, RK_SPKI_LEN, &buf2)) {
+		op_crypto_err("Cannot encode SPK.");
+		free(buf1);
+		return 0; /* Skip it, I guess */
+	}
 
 	fprintf(out, "AS%u,%s,%s\n", key->as, buf1, buf2);
 
 	free(buf2);
-free1:
 	free(buf1);
-	return error;
+	return 0;
 }
 
 /* Print as base64url strings without trailing pad */
@@ -112,15 +113,17 @@ print_router_key_json(struct router_key const *key, void *arg)
 	JSON_OUT *json_out = arg;
 	FILE *out;
 	char *buf1, *buf2;
-	int error;
 
-	error = base64url_encode(key->ski, RK_SKI_LEN, &buf1);
-	if (error)
-		return error;
+	if (!base64url_encode(key->ski, RK_SKI_LEN, &buf1)) {
+		op_crypto_err("Cannot encode SKI.");
+		return 0; /* Skip it, I guess */
+	}
 
-	error = base64url_encode(key->spk, RK_SPKI_LEN, &buf2);
-	if (error)
-		goto free1;
+	if (!base64url_encode(key->spk, RK_SPKI_LEN, &buf2)) {
+		op_crypto_err("Cannot encode SPK.");
+		free(buf1);
+		return 0; /* Skip it, I guess */
+	}
 
 	out = json_out->file;
 	if (!json_out->first)
@@ -133,10 +136,9 @@ print_router_key_json(struct router_key const *key, void *arg)
 	    buf2);
 
 	free(buf2);
-free1:
 	free(buf1);
 	json_out->first = false;
-	return error;
+	return 0;
 }
 
 static int

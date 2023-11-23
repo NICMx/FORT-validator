@@ -136,14 +136,16 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 	}
 }
 
-static void
+static int
 http_easy_init(struct http_handler *handler, curl_off_t ims)
 {
 	CURL *result;
 
 	result = curl_easy_init();
 	if (result == NULL)
-		enomem_panic();
+		return pr_val_err(
+		    "curl_easy_init() returned NULL; no error message given."
+		);
 
 	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
@@ -196,6 +198,7 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 	}
 
 	handler->curl = result;
+	return 0;
 }
 
 static void
@@ -271,7 +274,9 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	long http_code;
 	int error;
 
-	http_easy_init(&handler, ims);
+	error = http_easy_init(&handler, ims);
+	if (error)
+		return error;
 
 	handler.errbuf[0] = 0;
 	setopt_str(handler.curl, CURLOPT_URL, src);
