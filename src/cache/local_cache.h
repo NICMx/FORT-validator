@@ -28,8 +28,4 @@ struct rpki_uri *cache_recover(struct rpki_cache *, struct uri_list *, bool);
 /* Prints the cache in standard output. */
 void cache_print(struct rpki_cache *);
 
-/* Deletes old untraversed cached files, writes metadata into XML */
-/* FIXME call this */
-void cache_cleanup(struct rpki_cache *);
-
 #endif /* SRC_CACHE_LOCAL_CACHE_H_ */

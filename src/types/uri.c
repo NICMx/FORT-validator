@@ -357,13 +357,17 @@ map_caged(struct rpki_uri *uri, char const *tal, struct rpki_uri *notif)
 	error = get_rrdp_workspace(&pb, tal, notif);
 	if (error)
 		return error;
+
+	if (uri->global[0] == '\0')
+		goto end; /* Caller is only interested in the cage. */
+
 	error = append_guri(&pb, uri->global, "rsync://", ENOTRSYNC, true);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;
 	}
 
-	uri->local = pb.string;
+end:	uri->local = pb.string;
 	return 0;
 }
 

@@ -258,27 +258,6 @@ end:	json_decref(json);
 	free(filename);
 }
 
-static void
-delete_node(struct rpki_cache *cache, struct cache_node *node)
-{
-	HASH_DEL(cache->ht, node);
-	uri_refput(node->url);
-	free(node);
-}
-
-void
-cache_destroy(struct rpki_cache *cache)
-{
-	struct cache_node *node, *tmp;
-
-	write_metadata_json(cache);
-
-	HASH_ITER(hh, cache->ht, node, tmp)
-		delete_node(cache, node);
-	free(cache->tal);
-	free(cache);
-}
-
 static int
 get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
 {
@@ -620,6 +599,33 @@ is_node_fresh(struct cache_node *node, time_t epoch)
 	return difftime(epoch, node->attempt.ts) < 0;
 }
 
+static void
+delete_node(struct rpki_cache *cache, struct cache_node *node)
+{
+	HASH_DEL(cache->ht, node);
+	uri_refput(node->url);
+	free(node);
+}
+
+static void
+delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
+{
+	struct rpki_uri *cage;
+	int error;
+
+	if (uri_get_type(node->url) == UT_HTTPS) {
+		error = __uri_create(&cage, cache->tal, UT_CAGED, node->url,
+		    "", 0);
+		if (!error) {
+			pr_op_debug("Deleting cage %s.", uri_get_local(cage));
+			file_rm_rf(uri_get_local(cage));
+			uri_refput(cage);
+		}
+	}
+
+	delete_node(cache, node);
+}
+
 static time_t
 get_days_ago(int days)
 {
@@ -647,15 +653,17 @@ static void
 cleanup_node(struct rpki_cache *cache, struct cache_node *node,
     time_t last_week)
 {
+	char const *path;
 	int error;
 
-	error = file_exists(uri_get_local(node->url));
+	path = uri_get_local(node->url);
+	error = file_exists(path);
 	switch (error) {
 	case 0:
 		break;
 	case ENOENT:
 		/* Node exists but file doesn't: Delete node */
-		delete_node(cache, node);
+		delete_node_and_cage(cache, node);
 		return;
 	default:
 		pr_op_err("Trouble cleaning '%s'; stat() returned errno %d: %s",
@@ -663,12 +671,14 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 	}
 
 	if (!is_node_fresh(node, last_week)) {
-		file_rm_rf(uri_get_local(node->url));
-		delete_node(cache, node);
+		pr_op_debug("Deleting expired cache element %s.", path);
+		file_rm_rf(path);
+		delete_node_and_cage(cache, node);
 	}
 }
 
-void
+/* Deletes old untraversed cached files, writes metadata into XML */
+static void
 cache_cleanup(struct rpki_cache *cache)
 {
 	struct cache_node *node, *tmp;
@@ -677,6 +687,18 @@ cache_cleanup(struct rpki_cache *cache)
 	last_week = get_days_ago(7);
 	HASH_ITER(hh, cache->ht, node, tmp)
 		cleanup_node(cache, node, last_week);
+}
 
+void
+cache_destroy(struct rpki_cache *cache)
+{
+	struct cache_node *node, *tmp;
+
+	cache_cleanup(cache);
 	write_metadata_json(cache);
+
+	HASH_ITER(hh, cache->ht, node, tmp)
+		delete_node(cache, node);
+	free(cache->tal);
+	free(cache);
 }

@@ -835,6 +835,12 @@ handle_snapshot(struct update_notification *notif)
 	pr_val_debug("Processing snapshot '%s'.", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
+	/*
+	 * TODO (performance) Is there a point in caching the snapshot?
+	 * Especially considering we delete it 4 lines afterwards.
+	 * Maybe stream it instead.
+	 * Same for deltas.
+	 */
 	error = cache_download(validation_cache(state), uri, NULL);
 	if (error)
 		goto end;
