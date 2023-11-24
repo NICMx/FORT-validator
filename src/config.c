@@ -882,6 +882,7 @@ set_default_values(void)
 		"--recursive",
 		"--delete",
 		"--times",
+		"--omit-dir-times",
 		"--contimeout=20",
 		"--timeout=15",
 		"--max-size=20MB",
@@ -891,6 +892,7 @@ set_default_values(void)
 
 	static char const *flat_rsync_args[] = {
 		"--times",
+		"--omit-dir-times",
 		"--contimeout=20",
 		"--timeout=15",
 		"--max-size=20MB",
