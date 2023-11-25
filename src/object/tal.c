@@ -460,8 +460,8 @@ end:	fnstack_cleanup();
 
 	finish = time(NULL);
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
-		pr_op_info("- Tal %s: %.0lfs", args.tal.file_name,
-		    difftime(finish, start));
+		pr_op_debug("The %s tree took %.0lf seconds.",
+		    args.tal.file_name, difftime(finish, start));
 	return NULL;
 }
 

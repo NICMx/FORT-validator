@@ -24,6 +24,7 @@ int uri_create(struct rpki_uri **, char const *, enum uri_type,
     struct rpki_uri *, char const *);
 int uri_create_mft(struct rpki_uri **, char const *, struct rpki_uri *,
     struct rpki_uri *, IA5String_t *);
+struct rpki_uri *uri_create_cache(char const *);
 
 struct rpki_uri *uri_refget(struct rpki_uri *);
 void uri_refput(struct rpki_uri *);

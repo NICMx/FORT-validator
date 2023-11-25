@@ -462,6 +462,19 @@ uri_create_mft(struct rpki_uri **result, char const *tal,
 	return 0;
 }
 
+/* Cache-only; global URI and type are meaningless. */
+struct rpki_uri *
+uri_create_cache(char const *path)
+{
+	struct rpki_uri *uri;
+
+	uri = pzalloc(sizeof(struct rpki_uri));
+	uri->local = pstrdup(path);
+	uri->references = 1;
+
+	return uri;
+}
+
 struct rpki_uri *
 uri_refget(struct rpki_uri *uri)
 {

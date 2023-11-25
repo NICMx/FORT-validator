@@ -1,5 +1,6 @@
 #include "cache/local_cache.h"
 
+#include <ftw.h>
 #include <time.h>
 
 #include "alloc.h"
@@ -9,19 +10,11 @@
 #include "json_util.h"
 #include "log.h"
 #include "rrdp.h"
+#include "data_structure/array_list.h"
 #include "data_structure/path_builder.h"
 #include "data_structure/uthash.h"
 #include "http/http.h"
 #include "rsync/rsync.h"
-
-#define TAGNAME_BN		"basename"
-#define TAGNAME_DIRECT		"direct-download"
-#define TAGNAME_ERROR		"latest-result"
-#define TAGNAME_TSATTEMPT	"attempt-timestamp"
-#define TAGNAME_SUCCESS		"successful-download"
-#define TAGNAME_TSSUCCESS	"success-timestamp"
-#define TAGNAME_FILE		"is-file"
-#define TAGNAME_CHILDREN	"children"
 
 struct cache_node {
 	struct rpki_uri *url;
@@ -677,7 +670,101 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 	}
 }
 
-/* Deletes old untraversed cached files, writes metadata into XML */
+/*
+ * "Do not clean." List of URIs that should not be deleted from the cache.
+ * Global because nftw doesn't have a generic argument.
+ */
+static struct uri_list dnc;
+static pthread_mutex_t dnc_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static bool
+is_cached(char const *_fpath)
+{
+	struct rpki_uri **node;
+	char const *fpath, *npath;
+	size_t c;
+
+	/*
+	 * This relies on paths being normalized, which is currently done by the
+	 * URI constructors.
+	 */
+
+	ARRAYLIST_FOREACH(&dnc, node) {
+		fpath = _fpath;
+		npath = uri_get_local(*node);
+
+		for (c = 0; fpath[c] == npath[c]; c++)
+			if (fpath[c] == '\0')
+				return true;
+		if (fpath[c] == '\0' && npath[c] == '/')
+			return true;
+		if (npath[c] == '\0' && fpath[c] == '/')
+			return true;
+	}
+
+	return false;
+}
+
+static int
+delete_if_unknown(const char *fpath, const struct stat *sb, int typeflag,
+    struct FTW *ftw)
+{
+	if (!is_cached(fpath)) {
+		pr_op_debug("Deleting untracked file or directory %s.", fpath);
+		remove(fpath);
+	}
+	return 0;
+}
+
+static void
+delete_unknown_files(struct rpki_cache *cache)
+{
+	struct cache_node *node, *tmp;
+	struct rpki_uri *cage;
+	struct path_builder pb;
+	int error;
+
+	error = pb_init_cache(&pb, cache->tal, "metadata.json");
+	if (error) {
+		pr_op_err("Cannot delete unknown files from %s's cache: %s",
+		    cache->tal, strerror(error));
+		return;
+	}
+
+	mutex_lock(&dnc_lock);
+	uris_init(&dnc);
+
+	uris_add(&dnc, uri_create_cache(pb.string));
+	HASH_ITER(hh, cache->ht, node, tmp) {
+		uri_refget(node->url);
+		uris_add(&dnc, node->url);
+
+		error = __uri_create(&cage, cache->tal, UT_CAGED, node->url,
+		    "", 0);
+		if (error) {
+			pr_op_err("Cannot generate %s's cage. I'm probably going to end up deleting it from the cache.",
+			    uri_op_get_printable(node->url));
+			continue;
+		}
+		uris_add(&dnc, cage);
+	}
+
+	pb_pop(&pb, true);
+	/* TODO (performance) optimize that 32 */
+	error = nftw(pb.string, delete_if_unknown, 32, FTW_PHYS);
+	if (error)
+		pr_op_warn("The cache cleanup ended prematurely with error code %d (%s)",
+		    error, strerror(error));
+
+	uris_cleanup(&dnc);
+	mutex_unlock(&dnc_lock);
+
+	pb_cleanup(&pb);
+}
+
+/*
+ * Deletes unknown and old untraversed cached files, writes metadata into XML.
+ */
 static void
 cache_cleanup(struct rpki_cache *cache)
 {
@@ -687,6 +774,8 @@ cache_cleanup(struct rpki_cache *cache)
 	last_week = get_days_ago(7);
 	HASH_ITER(hh, cache->ht, node, tmp)
 		cleanup_node(cache, node, last_week);
+
+	delete_unknown_files(cache);
 }
 
 void

@@ -158,6 +158,6 @@ rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 int
 file_rm_rf(char const *path)
 {
-	/* FIXME optimize that 32 */
+	/* TODO (performance) optimize that 32 */
 	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
 }
