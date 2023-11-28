@@ -454,14 +454,42 @@ __handle_client_request(struct pdu_stream *stream)
 static void
 print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 {
-	if (pfd->revents & POLLHUP)
-		pr_op_err("%s '%s' down: POLLHUP (Peer hung up)", what, addr);
-	if (pfd->revents & POLLERR)
-		pr_op_err("%s '%s' down: POLLERR (Generic error)", what, addr);
-	if (pfd->revents & POLLNVAL)
-		pr_op_err("%s '%s' down: POLLNVAL (fd not open)", what, addr);
-	if (!(pfd->revents & (POLLHUP | POLLERR | POLLNVAL)))
-		pr_op_info("%s '%s' down.", what, addr);
+	/*
+	 * Note, POLLHUP and POLLER are implemented somewhat differently across
+	 * the board: http://www.greenend.org.uk/rjk/tech/poll.html
+	 */
+
+	if (pfd->revents & POLLHUP) {
+		/* Normal; we don't have control over the client. */
+		pr_op_info("%s '%s' down: Peer hung up. (Revents 0x%02x)",
+		    what, addr, pfd->revents);
+	}
+	if (pfd->revents & POLLERR) {
+		/*
+		 * The documentation of this one stinks. The UNIX spec and
+		 * OpenBSD mostly unhelpfully define it as "An error has
+		 * occurred," and Linux appends "read end has been closed"
+		 * (which doesn't seem standard).
+		 *
+		 * I often get it when the client closes the socket while the
+		 * handler thread is sending it data (Making it a synonym to
+		 * POLLHUP in this case), so we can't make too much of a fuss
+		 * when it shows up.
+		 *
+		 * Warning it is.
+		 */
+		pr_op_warn("%s '%s' down: Generic error. (Revents 0x%02x)",
+		    what, addr, pfd->revents);
+	}
+	if (pfd->revents & POLLNVAL) {
+		/*
+		 * Definitely suggests a programming error.
+		 * We're the main polling thread, so nobody else should be
+		 * closing sockets on us.
+		 */
+		pr_op_err("%s '%s' down: File Descriptor closed. (Revents 0x%02x)",
+		    what, addr, pfd->revents);
+	}
 }
 
 static void

@@ -109,7 +109,8 @@ update_buffer(struct pdu_stream *in /* "in"put stream */)
 		}
 
 		if (consumed == 0) {
-			pr_op_debug("Client closed the socket.");
+			pr_op_debug("Client '%s' closed the socket.",
+			    in->addr);
 			return BS_EOS;
 		}
 	}

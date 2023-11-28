@@ -62,6 +62,11 @@ handle_serial_query_pdu(struct rtr_request *request)
 	serial_t final_serial;
 	int error;
 
+	pr_op_debug("Serial Query. Request version/session/serial: %u/%u/%u",
+	    request->pdu.rtr_version,
+	    request->pdu.obj.sq.session_id,
+	    request->pdu.obj.sq.serial_number);
+
 	args.fd = request->fd;
 	args.rtr_version = request->pdu.rtr_version;
 	args.cache_response_sent = false;

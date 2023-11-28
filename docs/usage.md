@@ -1128,7 +1128,7 @@ Name of the program needed to invoke an rsync file transfer.
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--recursive", "--delete", "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "--recursive", "--delete", "--times", "--omit-dir-times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a recursive rsync.
 

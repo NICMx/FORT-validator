@@ -114,7 +114,7 @@ Arguments needed by
 .B rsync.program
 to perform a recursive rsync. The arguments are specified as a JSON string
 array; its default value is:
-[ "-rtz", "--delete", "--contimeout=20", "--max-size=20MB",
+[ "-rtz", "--delete", "--omit-dir-times", "--contimeout=20", "--max-size=20MB",
 "--timeout=15", "--include=*/", "--include=*.cer", "--include=*.crl",
 "--include=*.gbr", "--include=*.mft", "--include=*.roa", "--exclude=*",
 "$REMOTE", "$LOCAL" ]
@@ -126,7 +126,6 @@ dropped.
 See \fIrsync(1)\fR for a description of each argument.
 .RE
 .P
-
 
 .B incidences
 .RS 4
@@ -224,7 +223,7 @@ methods defined by the CAs, Fort can do two things:
 .RS 4
 .br
 - Literally invoke an rsync command (see \fBrsync.program\fR and
-\fBrsync.arguments-flat\fR), which will download the files into
+\fBrsync.arguments-recursive\fR), which will download the files into
 \fB--local-repository\fR.
 .br
 - Fetch the RRDP Update Notification file (which implies an HTTP request) and
@@ -262,6 +261,24 @@ at configured \fB--local-repository\fR.
 Otherwise, Fort will perform outgoing requests whenever this is needed. If a
 specific protocol needs to be deactivated, use \fB--rsync.enabled\fR or
 \fB--http.enabled\fR.
+.RE
+.P
+
+.B \-\-shuffle-uris
+.RS 4
+If enabled, FORT will access TAL URLs in random order. This is meant for load
+balancing. If disabled, FORT will access TAL URLs in sequential order.
+.P
+By default, the flag is disabled.
+.P
+This flag is only relevant if the TAL lists more than one URL. Regardless of
+this flag, FORT will stop iterating through the URLs as soon as it finds one
+that yields a successful traversal.
+.P
+If the TAL lists more than one URL, the shuffle is done honoring the priority
+of the protocols (see \fB--rsync.priority\fR and \fB--http.priority\fR). i.e.
+if the HTTP protocol has a higher priority than RSYNC, then all the shuffled
+HTTP URLs will come first.
 .RE
 .P
 
@@ -758,14 +775,6 @@ By default, the value is \fIfort/<current-version>\fR.
 .RE
 .P
 
-.BR \-\-http.max\-redirs=\fIUNSIGNED_INTEGER\fR
-.RS 4
-Maximum number of redirections to follow, per HTTP request.
-.P
-Defaults to 10.
-.RE
-.P
-
 .B \-\-http.connect\-timeout=\fIUNSIGNED_INTEGER\fR
 .RS 4
 Timeout (in seconds) for the connect phase.
@@ -895,6 +904,78 @@ requests.
 .RE
 .P
 
+.B \-\-rsync.strategy=(\fIstrict\fR|\fIroot\fR|\fIroot-except-ta\fR)
+.RS 4
+\fIrsync\fR download strategy; states the way rsync URLs are approached during
+downloads. It can have one of three values:
+.IR strict ", "
+.IR root ", "
+.IB "root-except-ta" "(default value)" \fR. \fR
+.P
+.I strict
+.RS 4
+In order to enable this strategy, FORT must be compiled using the flag:
+ENABLE\_STRICT\_STRATEGY. e.g.
+\fB $ make FORT_FLAGS='-DENABLE_STRICT_STRATEGY'\fR
+.P
+RSYNC every repository publication point separately. Only skip publication
+points that have already been downloaded during the current validation cycle.
+(Assuming each synchronization is recursive.)
+.P
+For example, suppose the validator gets certificates whose caRepository access
+methods (in their Subject Information Access extensions) point to the following
+publication points:
+.P
+1. rsync://rpki.example.com/foo/bar/
+.br
+2. rsync://rpki.example.com/foo/qux/
+.br
+3. rsync://rpki.example.com/foo/bar/
+.br
+4. rsync://rpki.example.com/foo/corge/grault/
+.br
+5. rsync://rpki.example.com/foo/corge/
+.br
+6. rsync://rpki.example.com/foo/corge/waldo/
+.P
+A validator following the `strict` strategy would download `bar`, download
+`qux`, skip `bar`, download `corge/grault`, download `corge` and skip
+`corge/waldo`.
+.P
+This is the slowest, but also the strictly correct sync strategy.
+.RE
+.P
+.I root
+.RS 4
+For each publication point found, guess the root of its repository and RSYNC
+that instead. Then skip any subsequent children of said root.
+.P
+(To guess the root of a repository, the validator counts four slashes, and
+prunes the rest of the URL.)
+.P
+Reusing the caRepository URLs from the `strict` strategy (above) as example, a
+validator following the `root` strategy would download
+`rsync://rpki.example.com/foo`, and then skip everything else.
+.P
+Assuming that the repository is specifically structured to be found within as
+few roots as possible, and they contain minimal RPKI-unrelated noise files, this
+is the fastest synchronization strategy. At time of writing, this is true for
+all the current official repositories.
+.RE
+.P
+.I root-except-ta
+.RS 4
+Synchronizes the root certificate (the one pointed by the TAL) in 'strict' mode,
+and once it's validated, synchronizes the rest of the repository in 'root' mode.
+.P
+Useful if you want 'root', but the root certificate is separated from the rest
+of the repository. Also useful if you don't want the validator to download the
+entire repository without first confirming the integrity and legitimacy of the
+root certificate.
+.RE
+.RE
+.P
+
 .B \-\-rsync.retry.count=\fIUNSIGNED_INTEGER\fR
 .RS 4
 Maximum number of retries whenever there's an error executing RSYNC.
@@ -1018,12 +1099,38 @@ Maximum: \fIUINT_MAX\fR
 Default: \fI20\fR
 .RE
 
+.B \-\-thread-pool.validation.max=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum number of threads that will be spawned at an internal thread pool in
+order to run validation cycles.
+.P
+When a validation cycle begins, one thread per configured TAL is utilized; once
+the whole RPKI tree of the TAL is validated, the thread is returned to the pool.
+.P
+If there are more TALs at \fI--tal\fR than \fI--thread-pool.validation.max\fR
+threads at the pool, is very likely that the validation cycles take a bit more
+of time to complete since only \fI--thread-pool.validation.max\fR threads will
+be working at the same time. E.g. if \fI--thread-pool.validation.max=2\fR and
+the location at \fI--tal\fR has 4 TAL files, only 2 TALs will be validated
+simultaneously while the rest waits in a queue until there's an available thread
+at the pool to attend them.
+.P
+By default, it has a value of \fI5\fR. Minimum allowed value: \fI1\fR,
+maximum allowed value \fI100\fR.
+.RE
+
 .B \-\-asn1-decode-max-stack=\fIUNSIGNED_INTEGER\fR
 .RS 4
 ASN1 decoder max allowed stack size in bytes, utilized to avoid a stack
 overflow when a large nested ASN1 object is parsed.
 .P
 By default, it has a value of \fI4096\fR (4 kB).
+.RE
+.P
+
+.B \-\-stale-repository-period=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Deprecated; does nothing.
 .RE
 .P
 
@@ -1141,11 +1248,21 @@ to a specific value:
   "rsync": {
     "enabled": true,
     "priority": 50,
+    "strategy": "root-except-ta",
     "retry": {
       "count": 2,
       "interval": 5
     },
     "program": "rsync",
+    "arguments-recursive": [
+      "--recursive",
+      "--delete",
+      "--times",
+      "--contimeout=20",
+      "--timeout=15",
+      "$REMOTE",
+      "$LOCAL"
+    ],
     "arguments-flat": [
       "--times",
       "--contimeout=20",

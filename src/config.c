@@ -878,7 +878,7 @@ static void
 set_default_values(void)
 {
 	static char const *recursive_rsync_args[] = {
-		"-rtz", "--delete",
+		"-rtz", "--delete", "--omit-dir-times",
 
 		"--contimeout=20", "--max-size=20MB", "--timeout=15",
 
