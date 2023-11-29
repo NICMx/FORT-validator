@@ -259,6 +259,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, tal),
 		.doc = "Path to the TAL file or TALs directory",
 		.arg_doc = "<file>|<directory>",
+		.json_null_allowed = false,
 	}, {
 		.id = 'r',
 		.name = "local-repository",
@@ -266,6 +267,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, local_repository),
 		.doc = "Directory where the repository local cache will be stored/read",
 		.arg_doc = "<directory>",
+		.json_null_allowed = false,
 	}, {
 		.id = 2001,
 		.name = "shuffle-uris",
@@ -292,7 +294,8 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, slurm),
 		.doc = "Path to the SLURM file or SLURMs directory (files must have the extension .slurm)",
-		.arg_doc = "<file>|<directory>"
+		.arg_doc = "<file>|<directory>",
+		.json_null_allowed = true,
 	}, {
 		.id = 1004,
 		.name = "mode",
@@ -328,6 +331,7 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, server.port),
 		.doc = "Default port to which RTR server addresses will bind itself to. Can be a string, in which case a number will be resolved. If all of the addresses have a port, this value isn't utilized.",
+		.json_null_allowed = false,
 	}, {
 		.id = 5002,
 		.name = "server.backlog",
@@ -434,6 +438,7 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, rsync.strategy),
 		.doc = "Deprecated; does nothing.",
+		.json_null_allowed = true,
 		.deprecated = true,
 	}, {
 		.id = 3003,
@@ -459,6 +464,7 @@ static const struct option_field options[] = {
 		.doc = "Name of the program needed to execute an RSYNC",
 		.arg_doc = "<path to program>",
 		.availability = AVAILABILITY_JSON,
+		.json_null_allowed = false,
 	}, {
 		.id = 3006,
 		.name = "rsync.arguments-recursive",
@@ -517,6 +523,7 @@ static const struct option_field options[] = {
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, http.user_agent),
 		.doc = "User-Agent to use at HTTP requests, eg. Fort Validator Local/1.0",
+		.json_null_allowed = false,
 	}, {
 		.id = 9012,
 		.name = "http.max-redirs",
@@ -572,6 +579,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, http.ca_path),
 		.doc = "Directory where CA certificates are found, used to verify the peer",
 		.arg_doc = "<directory>",
+		.json_null_allowed = false,
 	},
 
 	/* Logging fields */
@@ -600,6 +608,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, log.tag),
 		.doc = "Text tag to identify operation logs",
 		.arg_doc = "<string>",
+		.json_null_allowed = true,
 	}, {
 		.id = 4004,
 		.name = "log.facility",
@@ -645,6 +654,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, validation_log.tag),
 		.doc = "Text tag to identify validation logs",
 		.arg_doc = "<string>",
+		.json_null_allowed = true,
 	}, {
 		.id = 4014,
 		.name = "validation-log.facility",
@@ -683,6 +693,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, output.roa),
 		.doc = "File where ROAs will be stored, use '-' to print at console",
 		.arg_doc = "<file>",
+		.json_null_allowed = true,
 	}, {
 		.id = 6001,
 		.name = "output.bgpsec",
@@ -690,6 +701,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, output.bgpsec),
 		.doc = "File where BGPsec Router Keys will be stored, use '-' to print at console",
 		.arg_doc = "<file>",
+		.json_null_allowed = true,
 	}, {
 		.id = 6002,
 		.name = "output.format",

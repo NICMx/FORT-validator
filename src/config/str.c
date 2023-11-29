@@ -45,7 +45,23 @@ string_parse_json(struct option_field const *opt, json_t *json, void *result)
 
 	string = NULL;
 	error = parse_json_string(json, opt->name, &string);
-	return error ? error : string_parse_argv(opt, string, result);
+	if (error)
+		return error;
+
+	if (string == NULL) {
+		if (opt->json_null_allowed) {
+			DEREFERENCE(result) = NULL;
+			return 0;
+		} else {
+			if (string == NULL) {
+				return pr_op_err(
+				    "The '%s' field is not allowed to be null.",
+				    opt->name);
+			}
+		}
+	}
+
+	return string_parse_argv(opt, string, result);
 }
 
 static void
@@ -70,6 +86,11 @@ const struct global_type gt_string = {
 int
 parse_json_string(json_t *json, char const *name, char const **result)
 {
+	if (json_is_null(json)) {
+		*result = NULL;
+		return 0;
+	}
+
 	if (!json_is_string(json))
 		return pr_op_err("The '%s' element is not a JSON string.", name);
 

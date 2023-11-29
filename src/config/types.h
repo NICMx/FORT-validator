@@ -81,6 +81,8 @@ struct option_field {
 	 * Optional.
 	 */
 	int availability;
+	/* Explicit null only; absence of field implies default value. */
+	bool json_null_allowed;
 	bool deprecated;
 	unsigned int min;
 	unsigned int max;
