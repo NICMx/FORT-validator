@@ -140,7 +140,7 @@ START_TEST(test_sort_deltas)
 }
 END_TEST
 
-Suite *xml_load_suite(void)
+static Suite *xml_load_suite(void)
 {
 	Suite *suite;
 	TCase *validate;

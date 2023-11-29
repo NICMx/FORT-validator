@@ -299,7 +299,7 @@ START_TEST(test_reverse)
 }
 END_TEST
 
-Suite *
+static Suite *
 pdu_suite(void)
 {
 	Suite *suite;

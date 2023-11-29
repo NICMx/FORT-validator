@@ -66,7 +66,7 @@ static const bool deltas_4to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 /* Mocks */
 
-unsigned int deltas_lifetime = 5;
+static unsigned int deltas_lifetime = 5;
 
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
 MOCK_ABORT_ENUM(config_get_output_format, output_format, void)
@@ -416,7 +416,7 @@ START_TEST(test_delta_ovrd)
 }
 END_TEST
 
-Suite *pdu_suite(void)
+static Suite *pdu_suite(void)
 {
 	Suite *suite;
 	TCase *core;

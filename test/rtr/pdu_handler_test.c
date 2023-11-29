@@ -21,23 +21,6 @@
 
 /* Mocks */
 
-struct rtr_buffer const *
-pdustream_last_pdu_raw(struct pdu_stream *s)
-{
-	static unsigned char bytes[] = {
-		/* header */
-		1, 1, 7, 8, 0, 0, 0, 12,
-		/* serial number */
-		14, 15, 16, 17,
-	};
-	static struct rtr_buffer buf = {
-		.bytes = bytes,
-		.bytes_len = sizeof(bytes),
-	};
-
-	return &buf;
-}
-
 MOCK_INT(slurm_apply, 0, struct db_table *base, struct db_slurm **slurm)
 MOCK_ABORT_VOID(db_slurm_destroy, struct db_slurm *db)
 
@@ -135,14 +118,6 @@ init_serial_query(struct rtr_request *request, uint32_t serial)
 /* Mocks */
 
 MOCK_UINT(config_get_deltas_lifetime, 5, void)
-
-int
-clients_get_rtr_version_set(int fd, bool *is_set, uint8_t *rtr_version)
-{
-	(*is_set) = true;
-	(*rtr_version) = RTR_V1;
-	return 0;
-}
 
 int
 send_cache_reset_pdu(int fd, uint8_t version)
@@ -413,7 +388,7 @@ START_TEST(test_bad_session_id)
 }
 END_TEST
 
-Suite *pdu_suite(void)
+static Suite *pdu_suite(void)
 {
 	Suite *suite;
 	TCase *core, *error;

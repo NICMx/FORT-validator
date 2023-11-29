@@ -11,7 +11,7 @@
 #include "rtr/db/deltas_array.c"
 
 #define TOTAL_CREATED 15
-struct deltas *created[TOTAL_CREATED];
+static struct deltas *created[TOTAL_CREATED];
 
 unsigned int
 config_get_deltas_lifetime(void)
@@ -82,7 +82,7 @@ START_TEST(add_only)
 }
 END_TEST
 
-Suite *address_load_suite(void)
+static Suite *address_load_suite(void)
 {
 	Suite *suite;
 	TCase *core;

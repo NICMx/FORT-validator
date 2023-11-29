@@ -1,4 +1,4 @@
-.TH fort 8 "2023-11-16" "v1.6.0" "FORT validator"
+.TH fort 8 "2023-11-30" "v1.6.0" "FORT validator"
 
 .SH NAME
 fort \- RPKI validator and RTR server
@@ -1187,23 +1187,23 @@ validating every 30 minutes, and printing the ROAs CSV in a file.
 This is an example of a valid JSON configuration file with all its members set
 to a specific value:
 .nf
-
 {
   "tal": "/tmp/fort/tal/",
-  "local-repository": "/tmp/fort/repository/",
+  "local-repository": "/tmp/fort/repository",
   "work-offline": false,
-  "shuffle-uris": true,
   "maximum-certificate-depth": 32,
   "mode": "server",
   "daemon": false,
   "slurm": "/tmp/fort/test.slurm",
+  "asn1-decode-max-stack": 4096,
+
   "server": {
     "address": [
       "192.0.2.1",
       "2001:db8::1"
     ],
     "port": "8323",
-    "backlog": 64,
+    "backlog": 4096,
     "interval": {
       "validation": 3600,
       "refresh": 3600,
@@ -1211,67 +1211,74 @@ to a specific value:
       "expire": 7200
     },
     "deltas": {
-      "lifetime": 4
+      "lifetime": 2
     }
   },
+
   "log": {
     "enabled": true,
-    "level": "warning",
     "output": "console",
-    "color-output": true,
-    "file-name-format": "local-path",
+    "level": "info",
+    "tag": "Operation",
     "facility": "daemon",
-    "tag": "Operation"
+    "file-name-format": "global-url",
+    "color-output": false
   },
+
   "validation-log": {
     "enabled": false,
-    "level": "warning",
     "output": "console",
-    "color-output": true,
-    "file-name-format": "local-path",
+    "level": "warning",
+    "tag": "Validation",
     "facility": "daemon",
-    "tag": "Validation"
+    "file-name-format": "global-url",
+    "color-output": false
   },
+
   "http": {
     "enabled": true,
     "priority": 60,
     "retry": {
-      "count": 2,
-      "interval": 5
+      "count": 1,
+      "interval": 4
     },
-    "user-agent": "fort/1.5.1",
+    "user-agent": "fort/1.6.0",
+    "max-redirs": 10,
     "connect-timeout": 30,
     "transfer-timeout": 0,
-    "idle-timeout": 15,
+    "low-speed-limit": 100000,
+    "low-speed-time": 10,
+    "max-file-size": 1000000000,
     "ca-path": "/usr/local/ssl/certs"
   },
+
   "rsync": {
     "enabled": true,
     "priority": 50,
-    "strategy": "root-except-ta",
     "retry": {
-      "count": 2,
-      "interval": 5
+      "count": 1,
+      "interval": 4
     },
     "program": "rsync",
     "arguments-recursive": [
-      "--recursive",
+      "-rtz",
       "--delete",
-      "--times",
+      "--omit-dir-times",
       "--contimeout=20",
+      "--max-size=20MB",
       "--timeout=15",
-      "$REMOTE",
-      "$LOCAL"
-    ],
-    "arguments-flat": [
-      "--times",
-      "--contimeout=20",
-      "--timeout=15",
-      "--dirs",
+      "--include=*/",
+      "--include=*.cer",
+      "--include=*.crl",
+      "--include=*.gbr",
+      "--include=*.mft",
+      "--include=*.roa",
+      "--exclude=*",
       "$REMOTE",
       "$LOCAL"
     ]
   },
+
   "incidences": [
     {
       "name": "incid-hashalg-has-params",
@@ -1298,20 +1305,18 @@ to a specific value:
       "action": "error"
     }
   ],
+
   "output": {
     "roa": "/tmp/fort/roas.csv",
     "bgpsec": "/tmp/fort/bgpsec.csv",
     "format": "csv"
   },
+
   "thread-pool": {
     "server": {
       "max": 20
-    },
-    "validation": {
-      "max": 5
     }
-  },
-  "asn1-decode-max-stack": 4096
+  }
 }
 .fi
 .RE

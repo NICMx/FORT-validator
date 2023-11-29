@@ -43,8 +43,6 @@ MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
 MOCK_ABORT_VOID(validation_destroy, struct validation *state)
-MOCK_ABORT_PTR(validation_get_notification_uri, rpki_uri,
-    struct validation *state)
 MOCK_ABORT_INT(validation_prepare, struct validation **out, struct tal *tal,
     struct validation_handler *validation_handler)
 MOCK_ABORT_ENUM(validation_pubkey_state, pubkey_state, struct validation *state)
@@ -103,7 +101,7 @@ START_TEST(tal_load_normal)
 }
 END_TEST
 
-Suite *tal_load_suite(void)
+static Suite *tal_load_suite(void)
 {
 	Suite *suite;
 	TCase *core;

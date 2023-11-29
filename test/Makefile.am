@@ -92,7 +92,7 @@ vrps_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 xml_test_SOURCES = xml_test.c
 xml_test_LDADD = ${MY_LDADD} ${XML2_LIBS}
 
-EXTRA_DIST  = mock.c
+EXTRA_DIST  = mock.c mock.h
 EXTRA_DIST += line_file/core.txt
 EXTRA_DIST += line_file/empty.txt
 EXTRA_DIST += line_file/error.txt

@@ -99,7 +99,7 @@ START_TEST(vcard_normal)
 }
 END_TEST
 
-Suite *ghostbusters_suite(void)
+static Suite *ghostbusters_suite(void)
 {
 	Suite *suite;
 	TCase *hgv;

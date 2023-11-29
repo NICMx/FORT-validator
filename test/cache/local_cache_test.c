@@ -17,7 +17,7 @@
 
 #define TAL_FILE "test.tal"
 
-struct rpki_cache *cache;
+static struct rpki_cache *cache;
 
 static bool dl_error; /* Download should return error? */
 
@@ -30,8 +30,8 @@ struct downloaded_path {
 /* Paths downloaded during the test */
 static SLIST_HEAD(downloaded_paths, downloaded_path) downloaded;
 
-unsigned int rsync_counter; /* Times the rsync function was called */
-unsigned int https_counter; /* Times the https function was called */
+static unsigned int rsync_counter; /* Times the rsync function was called */
+static unsigned int https_counter; /* Times the https function was called */
 
 int
 file_exists(char const *file)
@@ -294,7 +294,7 @@ new_iteration(bool outdate)
 		node->attempt.ts = epoch;
 }
 
-void
+static void
 cache_reset(struct rpki_cache *cache)
 {
 	struct cache_node *node, *tmp;
@@ -903,7 +903,7 @@ END_TEST
 
 /* Boilerplate */
 
-Suite *thread_pool_suite(void)
+static Suite *thread_pool_suite(void)
 {
 	Suite *suite;
 	TCase *rsync , *https, *dot, *meta, *recover;

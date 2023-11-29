@@ -2,7 +2,9 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
+#include "config.h"
 #include "state.h"
+#include "thread_var.h"
 #include "config/filename_format.h"
 #include "config/mode.h"
 #include "incidence/incidence.h"
@@ -113,6 +115,5 @@ MOCK_TRUE(config_get_http_enabled, void)
 MOCK_UINT(config_get_http_priority, 60, void)
 MOCK_NULL(config_get_output_roa, char const *, void)
 MOCK_NULL(config_get_output_bgpsec, char const *, void)
-MOCK_UINT(config_get_thread_pool_validation_max, 10, void)
 MOCK(config_get_op_log_filename_format, enum filename_format, FNF_NAME, void)
 MOCK(config_get_val_log_filename_format, enum filename_format, FNF_NAME, void)

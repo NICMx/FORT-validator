@@ -86,7 +86,7 @@ START_TEST(file_line_null_chara)
 }
 END_TEST
 
-Suite *ghostbusters_suite(void)
+static Suite *ghostbusters_suite(void)
 {
 	Suite *suite;
 	TCase *core, *limits, *errors;

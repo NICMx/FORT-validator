@@ -10,18 +10,13 @@
 
 /* Mocks */
 
-struct rpki_uri *notif;
+static struct rpki_uri *notif;
 
 MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK(validation_tal, struct tal *, NULL, struct validation *state)
 MOCK(tal_get_file_name, char const *, "test.tal", struct tal *tal)
-MOCK(validation_get_notification_uri, struct rpki_uri *, notif,
-    struct validation *state)
 
-MOCK_ABORT_INT(cache_download, struct rpki_uri *uri, bool *changed)
 MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
-MOCK_ABORT_PTR(cache_recover, rpki_uri, struct uri_list *uris,
-    bool use_rrdp)
 
 /* Tests */
 
@@ -166,7 +161,7 @@ START_TEST(check_caged)
 }
 END_TEST
 
-Suite *address_load_suite(void)
+static Suite *address_load_suite(void)
 {
 	Suite *suite;
 	TCase *core;

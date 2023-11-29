@@ -161,7 +161,7 @@ START_TEST(check_encoding6_test)
 }
 END_TEST
 
-Suite *address_load_suite(void)
+static Suite *address_load_suite(void)
 {
 	Suite *suite;
 	TCase *core;

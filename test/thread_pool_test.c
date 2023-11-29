@@ -61,7 +61,7 @@ START_TEST(tpool_multiple_work)
 }
 END_TEST
 
-Suite *thread_pool_suite(void)
+static Suite *thread_pool_suite(void)
 {
 	Suite *suite;
 	TCase *single, *multiple;

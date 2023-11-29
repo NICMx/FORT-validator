@@ -49,21 +49,21 @@ add_rk(struct validation_handler *handler, uint32_t as)
 	    db_imp_spk, handler->arg));
 }
 
-int
+static int
 __handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 {
 	return rtrhandler_handle_roa_v4(arg, as, prefix, max_length);
 }
 
-int
+static int
 __handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
     uint8_t max_length, void *arg)
 {
 	return rtrhandler_handle_roa_v6(arg, as, prefix, max_length);
 }
 
-int
+static int
 __handle_router_key(unsigned char const *ski, struct asn_range const *range,
     unsigned char const *spk, void *arg)
 {

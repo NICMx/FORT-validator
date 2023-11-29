@@ -86,8 +86,6 @@ description: Guide to use arguments of FORT Validator.
 	[--configuration-file=<file>]
 	[--tal=<file>|<directory>]
 	[--local-repository=<directory>]
-	[--sync-strategy=off|root|root-except-ta]
-	[--shuffle-uris=true|false]
 	[--maximum-certificate-depth=<unsigned integer>]
 	[--slurm=<file>|<directory>]
 	[--mode=server|standalone]
@@ -102,19 +100,15 @@ description: Guide to use arguments of FORT Validator.
 	[--server.interval.expire=<unsigned integer>]
 	[--server.deltas.lifetime=<unsigned integer>]
 	[--rsync.enabled=true|false]
-	[--rsync.priority=<32-bit unsigned integer>]
-	[--rsync.strategy=root|root-except-ta]
+	[--rsync.priority=<unsigned integer>]
 	[--rsync.retry.count=<unsigned integer>]
 	[--rsync.retry.interval=<unsigned integer>]
-	[--rrdp.enabled=true|false]
-	[--rrdp.priority=<32-bit unsigned integer>]
-	[--rrdp.retry.count=<unsigned integer>]
-	[--rrdp.retry.interval=<unsigned integer>]
 	[--http.enabled=true|false]
-	[--http.priority=<32-bit unsigned integer>]
+	[--http.priority=<unsigned integer>]
 	[--http.retry.count=<unsigned integer>]
 	[--http.retry.interval=<unsigned integer>]
 	[--http.user-agent=<string>]
+	[--http.max-redirs=<unsigned integer>]
 	[--http.connect-timeout=<unsigned integer>]
 	[--http.transfer-timeout=<unsigned integer>]
 	[--http.low-speed-limit=<unsigned integer>]
@@ -139,11 +133,9 @@ description: Guide to use arguments of FORT Validator.
 	[--output.bgpsec=<file>]
 	[--output.format=csv|json]
 	[--asn1-decode-max-stack=<unsigned integer>]
-	[--stale-repository-period=<unsigned integer>]
 	[--init-tals=true|false]
 	[--init-as0-tals=true|false]
 	[--thread-pool.server.max=<unsigned integer>]
-	[--thread-pool.validation.max=<unsigned integer>]
 ```
 
 If an argument is specified more than once, the last one takes precedence:
@@ -942,13 +934,13 @@ The configuration options are mostly the same as the ones from the `argv` interf
 
 <pre><code>{
 	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
-	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository/",
+	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository",
 	"<a href="#--work-offline">work-offline</a>": false,
-	"<a href="#--shuffle-uris">shuffle-uris</a>": true,
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
 	"<a href="#--mode">mode</a>": "server",
 	"<a href="#--daemon">daemon</a>": false,
 	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
+	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
 
 	"server": {
 		"<a href="#--serveraddress">address</a>": [
@@ -956,7 +948,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"2001:db8::1"
 		],
 		"<a href="#--serverport">port</a>": "8323",
-		"<a href="#--serverbacklog">backlog</a>": 16,
+		"<a href="#--serverbacklog">backlog</a>": 4096,
 		"interval": {
 			"<a href="#--serverintervalvalidation">validation</a>": 3600,
 			"<a href="#--serverintervalrefresh">refresh</a>": 3600,
@@ -964,69 +956,69 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--serverintervalexpire">expire</a>": 7200
 		},
 		"deltas": {
-			"<a href="#--serverdeltaslifetime">lifetime</a>": 4
+			"<a href="#--serverdeltaslifetime">lifetime</a>": 2
 		}
 	},
 
 	"log": {
 		"<a href="#--logenabled">enabled</a>": true,
-		"<a href="#--loglevel">level</a>": "warning",
 		"<a href="#--logoutput">output</a>": "console",
-		"<a href="#--logcolor-output">color-output</a>": true,
-		"<a href="#--logfile-name-format">file-name-format</a>": "file-name",
+		"<a href="#--loglevel">level</a>": "info",
+		"<a href="#--logtag">tag</a>": "Operation",
 		"<a href="#--logfacility">facility</a>": "daemon",
-		"<a href="#--logtag">tag</a>": "Operation"
+		"<a href="#--logfile-name-format">file-name-format</a>": "global-url",
+		"<a href="#--logcolor-output">color-output</a>": false
 	},
 
 	"validation-log": {
 		"<a href="#--validation-logenabled">enabled</a>": false,
-		"<a href="#--validation-loglevel">level</a>": "warning",
 		"<a href="#--validation-logoutput">output</a>": "console",
-		"<a href="#--validation-logcolor-output">color-output</a>": true,
-		"<a href="#--validation-logfile-name-format">file-name-format</a>": "global-url",
+		"<a href="#--validation-loglevel">level</a>": "warning",
+		"<a href="#--validation-logtag">tag</a>": "Validation",
 		"<a href="#--validation-logfacility">facility</a>": "daemon",
-		"<a href="#--validation-logtag">tag</a>": "Validation"
+		"<a href="#--validation-logfile-name-format">file-name-format</a>": "global-url",
+		"<a href="#--validation-logcolor-output">color-output</a>": false
 	},
 
 	"http": {
 		"<a href="#--httpenabled">enabled</a>": true,
 		"<a href="#--httppriority">priority</a>": 60,
 		"retry": {
-			"<a href="#--httpretrycount">count</a>": 2,
-			"<a href="#--httpretryinterval">interval</a>": 5
+			"<a href="#--httpretrycount">count</a>": 1,
+			"<a href="#--httpretryinterval">interval</a>": 4
 		},
 		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
+		"<a href="#--httpconnect-timeout">max-redirs</a>": 10,
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
 		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
-		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 30,
+		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
 		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
-		"<a href="#--httpmax-file-size">max-file-size</a>": 10000000,
+		"<a href="#--httpmax-file-size">max-file-size</a>": 1000000000,
 		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
 	},
 
 	"rsync": {
 		"<a href="#--rsyncenabled">enabled</a>": true,
 		"<a href="#--rsyncpriority">priority</a>": 50,
-		"<a href="#--rsyncstrategy">strategy</a>": "root-except-ta",
 		"retry": {
-			"<a href="#--rsyncretrycount">count</a>": 2,
-			"<a href="#--rsyncretryinterval">interval</a>": 5
+			"<a href="#--rsyncretrycount">count</a>": 1,
+			"<a href="#--rsyncretryinterval">interval</a>": 4
 		},
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
-			"--recursive",
+			"-rtz",
 			"--delete",
-			"--times",
+			"--omit-dir-times",
 			"--contimeout=20",
+			"--max-size=20MB",
 			"--timeout=15",
-			"$REMOTE",
-			"$LOCAL"
-		],
-		"<a href="#rsyncarguments-flat">arguments-flat</a>": [
-			"--times",
-			"--contimeout=20",
-			"--timeout=15",
-			"--dirs",
+			"--include=*/",
+			"--include=*.cer",
+			"--include=*.crl",
+			"--include=*.gbr",
+			"--include=*.mft",
+			"--include=*.roa",
+			"--exclude=*",
 			"$REMOTE",
 			"$LOCAL"
 		]
@@ -1068,14 +1060,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"thread-pool": {
 		"server": {
 			"<a href="#--thread-poolservermax">max</a>": 20
-		},
-		"validation": {
-			"<a href="#--thread-poolvalidationmax">max</a>": 5
 		}
-	},
-
-	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
-	"<a href="#--stale-repository-period">stale-repository-period</a>": 43200
+	}
 }
 </code></pre>
 

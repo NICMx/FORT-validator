@@ -190,7 +190,7 @@ START_TEST(test_uri)
 }
 END_TEST
 
-Suite *pdu_suite(void)
+static Suite *pdu_suite(void)
 {
 	Suite *suite;
 	TCase *core, *uri;
