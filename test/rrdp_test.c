@@ -8,12 +8,33 @@
 
 /* Mocks */
 
+__MOCK_ABORT(base64_decode, bool, false, BIO *in, unsigned char *out,
+    bool has_nl, size_t out_len, size_t *out_written)
+MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
+    bool *changed)
+MOCK_ABORT_VOID(file_close, FILE *file)
+MOCK_ABORT_INT(file_rm_rf, char const *path)
+MOCK_ABORT_INT(file_write, char const *file_name, FILE **result)
+MOCK_ABORT_INT(delete_dir_recursive_bottom_up, char const *path)
+MOCK_ABORT_INT(mkdir_p, char const *path, bool include_basename)
+MOCK_ABORT_VOID(fnstack_pop, void)
+MOCK_ABORT_VOID(fnstack_push_uri, struct rpki_uri *uri)
+MOCK_ABORT_INT(hash_validate_file, struct rpki_uri *uri,
+    unsigned char const *expected, size_t expected_len)
+MOCK_ABORT_INT(relax_ng_parse, const char *path, xml_read_cb cb, void *arg)
+MOCK_ABORT_PTR(state_retrieve, validation, void)
+__MOCK_ABORT(tal_get_file_name, char const *, NULL, struct tal *tal)
+MOCK_ABORT_INT(uri_create, struct rpki_uri **result, char const *tal,
+    enum uri_type type, struct rpki_uri *notif, char const *guri)
+__MOCK_ABORT(uri_get_global, char const *, NULL, struct rpki_uri *uri)
+__MOCK_ABORT(uri_get_local, char const *, NULL, struct rpki_uri *uri)
+__MOCK_ABORT(uri_get_rrdp_workspace, char *, NULL, char const *tal,
+    struct rpki_uri *notif)
 MOCK_ABORT_PTR(uri_refget, rpki_uri, struct rpki_uri *uri)
 MOCK_VOID(uri_refput, struct rpki_uri *uri)
-__MOCK_ABORT(uri_get_local, char const *, NULL, struct rpki_uri *uri)
 MOCK(uri_val_get_printable, char const *, "uri", struct rpki_uri *uri)
-MOCK_ABORT_VOID(fnstack_push_uri, struct rpki_uri *uri)
-MOCK_ABORT_VOID(fnstack_pop, void)
+MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
+MOCK_ABORT_PTR(validation_tal, tal, struct validation *state)
 
 /* Mocks end */
 

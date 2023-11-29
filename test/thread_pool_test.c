@@ -67,7 +67,7 @@ Suite *thread_pool_suite(void)
 	TCase *single, *multiple;
 
 	single = tcase_create("single_work");
-	tcase_add_test(multiple, tpool_single_work);
+	tcase_add_test(single, tpool_single_work);
 
 	multiple = tcase_create("multiple_work");
 	tcase_add_test(multiple, tpool_multiple_work);

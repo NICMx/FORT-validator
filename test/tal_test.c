@@ -13,34 +13,42 @@
 
 /* Mocks */
 
+MOCK(cache_create, struct rpki_cache *, NULL, char const *tal)
+MOCK_VOID(cache_destroy, struct rpki_cache *cache)
+MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
+    bool *changed)
+MOCK_ABORT_INT(cache_download_alt, struct rpki_cache *cache,
+    struct uri_list *uris, bool use_rrdp, uris_dl_cb cb, void *arg)
+MOCK_ABORT_PTR(cache_recover, rpki_uri, struct rpki_cache *cache,
+    struct uri_list *uris, bool use_rrdp)
+MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
+    struct rpki_uri *cert_uri)
+MOCK_ABORT_PTR(db_table_create, db_table, void)
+MOCK_VOID(db_table_destroy, struct db_table *table)
+MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
+MOCK_ABORT_INT(deferstack_pop, struct cert_stack *stack,
+    struct deferred_cert *result)
+MOCK_ABORT_VOID(fnstack_cleanup, void)
+MOCK_ABORT_VOID(fnstack_init, void)
+MOCK_ABORT_VOID(fnstack_push, char const *f)
 MOCK_ABORT_INT(handle_roa_v4, uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
     uint8_t max_length, void *arg)
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
-
+MOCK_ABORT_INT(init_tmpdir, void)
+MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
+MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 MOCK(state_retrieve, struct validation *, NULL, void)
-MOCK(validation_tal, struct tal *, NULL, struct validation *state)
+MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
+MOCK_ABORT_VOID(validation_destroy, struct validation *state)
 MOCK_ABORT_PTR(validation_get_notification_uri, rpki_uri,
     struct validation *state)
-
-MOCK_ABORT_VOID(fnstack_init, void)
-MOCK_ABORT_VOID(fnstack_cleanup, void)
-MOCK_ABORT_VOID(fnstack_push, char const *f)
-
-MOCK(cache_create, struct rpki_cache *, NULL, char const *tal)
-MOCK_VOID(cache_destroy, struct rpki_cache *cache)
-MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
-    bool *changed)
-MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
-MOCK_ABORT_PTR(cache_recover, rpki_uri, struct rpki_cache *cache,
-    struct uri_list *uris, bool use_rrdp)
-
-MOCK_ABORT_INT(init_tmpdir, void)
-
-MOCK_VOID(db_table_destroy, struct db_table *table)
-MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
+MOCK_ABORT_INT(validation_prepare, struct validation **out, struct tal *tal,
+    struct validation_handler *validation_handler)
+MOCK_ABORT_ENUM(validation_pubkey_state, pubkey_state, struct validation *state)
+MOCK(validation_tal, struct tal *, NULL, struct validation *state)
 
 /* Tests */
 
