@@ -2,9 +2,10 @@ Description: Mimic patches from Marco D'itri debian packaging
  These are almost the same updates from fort-validator package, trying to
  simplify the migration from this package to that package.
 Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
+Forwarded: not-needed
 --- a/man/fort.8
 +++ b/man/fort.8
-@@ -225,6 +225,8 @@ The TAL ("Trust Anchor Locator") is a te
+@@ -211,6 +211,8 @@ The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
  its public key. (See RFC 8630.)
  .RE
  .P
@@ -13,7 +14,7 @@ Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
  
  .BR \-r ", " \-\-local-repository=\fIDIRECTORY\fR
  .RS 4
-@@ -251,7 +253,7 @@ Fort's entire validation process operate
+@@ -237,7 +239,7 @@ Fort's entire validation process operates on the resulting copy of the files
  Because rsync uses delta encoding, you’re advised to keep this cache around. It
  significantly speeds up subsequent validation cycles.
  .P
@@ -22,15 +23,14 @@ Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
  .RE
  .P
  
-@@ -1196,30 +1198,30 @@ By default, it has a value of \fI43200\f
+@@ -1135,27 +1137,27 @@ Deprecated; does nothing.
  .P
  
  .SH EXAMPLES
 -.B fort \-\-init-tals \-\-tal=/tmp/tal
 +.B fort \-\-init-tals \-\-tal=/etc/tals
  .RS 4
- Download the 5 RIR TALs into the specified directory. ARIN TAL will be
- downloaded only if the user accepts ARIN's RPA.
+ Download the 5 RIR TALs into the /tmp/tal directory.
  .RE
  .P
  
@@ -53,12 +53,9 @@ Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
 -\fBfort \-t /tmp/tal \-r /tmp/repository \\
 +\fBfort \-t /etc/tals \-r /var/lib/fort \\
       \-\-mode=standalone \\
--     \-\-slurm=/tmp/myslurm.slurm\fR
-+     \-\-slurm=/etc/fort/slurm/\fR
+      \-\-slurm=/tmp/myslurm.slurm\fR
  .fi
- .RS 4
- Run FORT as standalone and using a SLURM file.
-@@ -1233,7 +1235,7 @@ Run FORT using the JSON configuration fi
+@@ -1171,7 +1173,7 @@ Run FORT using the JSON configuration file \fIconf.json\fR.
  .P
  
  .nf
@@ -67,53 +64,35 @@ Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
       \-\-server.address=::1 \-\-server.port=9323 \\
       \-\-server.interval.validation=1800 \\
       \-\-output.roa=/tmp/roas.csv\fR
-@@ -1251,14 +1253,14 @@ to a specific value:
+@@ -1188,13 +1190,14 @@ This is an example of a valid JSON configuration file with all its members set
+ to a specific value:
  .nf
- 
  {
 -  "tal": "/tmp/fort/tal/",
--  "local-repository": "/tmp/fort/repository/",
+-  "local-repository": "/tmp/fort/repository",
 +  "tal": "/etc/tals/",
 +  "local-repository": "/var/lib/fort/",
    "work-offline": false,
-   "shuffle-uris": true,
    "maximum-certificate-depth": 32,
    "mode": "server",
    "daemon": false,
--  "slurm": "/tmp/fort/test.slurm",
+   "slurm": "/tmp/fort/test.slurm",
 +  "slurm": "/etc/fort/slurm/",
+   "asn1-decode-max-stack": 4096,
+ 
    "server": {
-     "address": [
-       "192.0.2.1",
+diff --git a/src/config.c b/src/config.c
+index de54d90..14a33b9 100644
 --- a/src/config.c
 +++ b/src/config.c
-@@ -983,13 +983,17 @@ set_default_values(void)
- 	rpki_config.server.interval.expire = 7200;
- 	rpki_config.server.deltas_lifetime = 2;
+@@ -907,8 +907,8 @@ set_default_values(void)
+ 	 * duplicates.
+ 	 */
  
 -	rpki_config.tal = NULL;
-+	rpki_config.tal = strdup("/etc/tals");
-+	if (rpki_config.tal == NULL) {
-+		error = pr_enomem();
-+		goto revert_port;
-+	}
- 	rpki_config.slurm = NULL;
- 
--	rpki_config.local_repository = strdup("/tmp/fort/repository");
+-	rpki_config.local_repository = pstrdup("/tmp/fort/repository");
++	rpki_config.tal = pstrdup("/etc/tals");
 +	rpki_config.local_repository = strdup("/var/lib/fort");
- 	if (rpki_config.local_repository == NULL) {
- 		error = pr_enomem();
--		goto revert_port;
-+		goto revert_tal;
- 	}
- 
- 	rpki_config.sync_strategy = RSYNC_ROOT_EXCEPT_TA;
-@@ -1096,6 +1100,8 @@ revert_rsync_program:
- 	free(rpki_config.rsync.program);
- revert_repository:
- 	free(rpki_config.local_repository);
-+revert_tal:
-+	free(rpki_config.tal);
- revert_port:
- 	free(rpki_config.server.port);
- revert_address:
+ 	rpki_config.shuffle_tal_uris = false;
+ 	rpki_config.maximum_certificate_depth = 32;
+ 	rpki_config.slurm = NULL;

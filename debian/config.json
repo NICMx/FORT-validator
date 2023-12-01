@@ -1,7 +1,6 @@
 {
 	"tal": "/etc/fort/tal",
 	"local-repository": "/var/lib/fort",
-	"slurm": "/etc/fort/slurm/",
 	"server": {
 		"port": "323"
 	},
