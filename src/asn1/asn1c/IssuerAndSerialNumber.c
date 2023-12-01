@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "IssuerAndSerialNumber.h"
+#include "asn1/asn1c/IssuerAndSerialNumber.h"
 
 asn_TYPE_member_t asn_MBR_IssuerAndSerialNumber_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct IssuerAndSerialNumber, issuer),
@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_IssuerAndSerialNumber = {
 	2,	/* Elements count */
 	&asn_SPC_IssuerAndSerialNumber_specs_1	/* Additional specs */
 };
-

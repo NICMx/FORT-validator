@@ -50,7 +50,6 @@ Operation logs are of likely interest to the operator running Fort; Issues repor
 | RTR Server logs | "Accepted connection from client." | "Huh? Peer is not speaking the RTR protocol." | "Cannot bind to address." |
 | Out of memory errors | - | - | "Out of memory." |
 | Read/write errors on local files | - | "The SLURM directory seems to lack SLURM files." | "I don't have permissions to access the repository cache." |
-| Persistent communication errors with RPKI repositories (see [`--stale-repository-period`](usage.html#--stale-repository-period)) | - | - | "Error requesting URL." | 
 | Start and end of a validation cycle | "Validation cycle ended. I got _R_ ROAs, _K_ router keys, my new serial is _S_, and it took _T_ seconds." | - | - |
 | Programming errors | - | - | "Array size is 1, but array is NULL." |
 

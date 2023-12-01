@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "IPAddressRange.h"
+#include "asn1/asn1c/IPAddressRange.h"
 
 asn_TYPE_member_t asn_MBR_IPAddressRange_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct IPAddressRange, min),
@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressRange = {
 	2,	/* Elements count */
 	&asn_SPC_IPAddressRange_specs_1	/* Additional specs */
 };
-

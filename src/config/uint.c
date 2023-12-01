@@ -1,18 +1,16 @@
 #include "config/uint.h"
 
-#include <getopt.h>
 #include <errno.h>
-#include <stdlib.h>
-#include <string.h>
+#include <getopt.h>
 #include "log.h"
 
-void
+static void
 print_uint(struct option_field const *field, void *value)
 {
 	pr_op_info("%s: %u", field->name, *((unsigned int *) value));
 }
 
-int
+static int
 parse_argv_uint(struct option_field const *field, char const *str,
     void *result)
 {
@@ -46,7 +44,7 @@ parse_argv_uint(struct option_field const *field, char const *str,
 	return 0;
 }
 
-int
+static int
 parse_json_uint(struct option_field const *opt, json_t *json, void *result)
 {
 	json_int_t value;

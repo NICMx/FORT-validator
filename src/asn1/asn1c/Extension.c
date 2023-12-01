@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "Extension.h"
+#include "asn1/asn1c/Extension.h"
 
 static int asn_DFL_3_cmp_0(const void *sptr) {
 	const BOOLEAN_t *st = sptr;
@@ -92,4 +92,3 @@ asn_TYPE_descriptor_t asn_DEF_Extension = {
 	3,	/* Elements count */
 	&asn_SPC_Extension_specs_1	/* Additional specs */
 };
-

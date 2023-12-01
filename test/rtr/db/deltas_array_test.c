@@ -1,8 +1,8 @@
 #include <check.h>
 #include <stdlib.h>
 
-#include "log.c"
-#include "impersonator.c"
+#include "alloc.c"
+#include "mock.c"
 #include "types/address.c"
 #include "types/delta.c"
 #include "types/router_key.c"
@@ -11,7 +11,7 @@
 #include "rtr/db/deltas_array.c"
 
 #define TOTAL_CREATED 15
-struct deltas *created[TOTAL_CREATED];
+static struct deltas *created[TOTAL_CREATED];
 
 unsigned int
 config_get_deltas_lifetime(void)
@@ -56,8 +56,10 @@ START_TEST(add_only)
 	darray = darray_create();
 	ck_assert_ptr_ne(NULL, darray);
 
-	for (i = 0; i < TOTAL_CREATED; i++)
-		ck_assert_int_eq(0, deltas_create(&created[i]));
+	for (i = 0; i < TOTAL_CREATED; i++) {
+		created[i] = deltas_create();
+		ck_assert_ptr_nonnull(created[i]);
+	}
 
 	test_foreach(darray, 0, 0);
 
@@ -80,7 +82,7 @@ START_TEST(add_only)
 }
 END_TEST
 
-Suite *address_load_suite(void)
+static Suite *address_load_suite(void)
 {
 	Suite *suite;
 	TCase *core;

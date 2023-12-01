@@ -85,4 +85,3 @@ asn_set_empty(void *asn_set_of_x) {
 	}
 
 }
-

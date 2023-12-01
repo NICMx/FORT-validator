@@ -1,6 +1,5 @@
-#include "ip6.h"
+#include "resource/ip6.h"
 
-#include <string.h>
 #include "sorted_array.h"
 
 static int
@@ -51,12 +50,12 @@ addr_is_successor(struct in6_addr const *a, struct in6_addr const *b)
 }
 
 static enum sarray_comparison
-r6_cmp(void *arg1, void *arg2)
+r6_cmp(void const *arg1, void const *arg2)
 {
-	struct in6_addr const *a1min = &((struct ipv6_range *) arg1)->min;
-	struct in6_addr const *a2min = &((struct ipv6_range *) arg2)->min;
-	struct in6_addr const *a1max = &((struct ipv6_range *) arg1)->max;
-	struct in6_addr const *a2max = &((struct ipv6_range *) arg2)->max;
+	struct in6_addr const *a1min = &((struct ipv6_range const *) arg1)->min;
+	struct in6_addr const *a2min = &((struct ipv6_range const *) arg2)->min;
+	struct in6_addr const *a1max = &((struct ipv6_range const *) arg1)->max;
+	struct in6_addr const *a2max = &((struct ipv6_range const *) arg2)->max;
 
 	if (addr_equals(a1min, a2min) && addr_equals(a1max, a2max))
 		return SACMP_EQUAL;
@@ -104,7 +103,7 @@ res6_put(struct resources_ipv6 *ips)
 }
 
 int
-res6_add_prefix(struct resources_ipv6 *ips, struct ipv6_prefix *prefix)
+res6_add_prefix(struct resources_ipv6 *ips, struct ipv6_prefix const *prefix)
 {
 	struct ipv6_range r;
 	ptor(prefix, &r);
@@ -112,19 +111,20 @@ res6_add_prefix(struct resources_ipv6 *ips, struct ipv6_prefix *prefix)
 }
 
 int
-res6_add_range(struct resources_ipv6 *ips, struct ipv6_range *range)
+res6_add_range(struct resources_ipv6 *ips, struct ipv6_range const *range)
 {
 	return sarray_add((struct sorted_array *) ips, range);
 }
 
 bool
-res6_empty(struct resources_ipv6 *ips)
+res6_empty(struct resources_ipv6 const *ips)
 {
-	return sarray_empty((struct sorted_array *) ips);
+	return sarray_empty((struct sorted_array const *) ips);
 }
 
 bool
-res6_contains_prefix(struct resources_ipv6 *ips, struct ipv6_prefix *prefix)
+res6_contains_prefix(struct resources_ipv6 *ips,
+    struct ipv6_prefix const *prefix)
 {
 	struct ipv6_range r;
 	ptor(prefix, &r);
@@ -132,7 +132,7 @@ res6_contains_prefix(struct resources_ipv6 *ips, struct ipv6_prefix *prefix)
 }
 
 bool
-res6_contains_range(struct resources_ipv6 *ips, struct ipv6_range *range)
+res6_contains_range(struct resources_ipv6 *ips, struct ipv6_range const *range)
 {
 	return sarray_contains((struct sorted_array *) ips, range);
 }

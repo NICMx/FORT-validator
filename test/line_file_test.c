@@ -2,10 +2,10 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "alloc.c"
 #include "file.c"
-#include "impersonator.c"
 #include "line_file.c"
-#include "log.c"
+#include "mock.c"
 
 START_TEST(file_line_normal)
 {
@@ -86,7 +86,7 @@ START_TEST(file_line_null_chara)
 }
 END_TEST
 
-Suite *ghostbusters_suite(void)
+static Suite *ghostbusters_suite(void)
 {
 	Suite *suite;
 	TCase *core, *limits, *errors;

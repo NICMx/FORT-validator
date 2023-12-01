@@ -12,8 +12,8 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "Name.h"
-#include "CertificateSerialNumber.h"
+#include "asn1/asn1c/Name.h"
+#include "asn1/asn1c/CertificateSerialNumber.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #ifdef __cplusplus

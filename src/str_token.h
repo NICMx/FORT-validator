@@ -1,10 +1,16 @@
 #ifndef SRC_STR_TOKEN_H_
 #define SRC_STR_TOKEN_H_
 
+#include <openssl/asn1.h>
+#include <openssl/bn.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <openssl/asn1.h>
-#include <openssl/x509.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 int ia5s2string(ASN1_IA5STRING *, char **);
 int BN2string(BIGNUM *, char **);
@@ -33,7 +39,7 @@ void string_tokenizer_init(struct string_tokenizer *, char const *, size_t,
     unsigned char);
 bool string_tokenizer_next(struct string_tokenizer *);
 bool token_equals(struct string_tokenizer *, struct string_tokenizer *);
-int token_read(struct string_tokenizer *, char **);
+char *token_read(struct string_tokenizer *);
 size_t token_count(struct string_tokenizer *);
 
 #endif /* SRC_STR_TOKEN_H_ */

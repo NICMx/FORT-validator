@@ -1,10 +1,8 @@
 #include "incidence/incidence.h"
 
 #include <assert.h>
-#include <stdbool.h>
-#include <string.h>
 #include "common.h"
-#include "json_parser.h"
+#include "json_util.h"
 #include "log.h"
 #include "data_structure/common.h"
 
@@ -95,15 +93,20 @@ init_action(json_t *json)
 	int error;
 
 	id = __INID_MAX;
-	error = json_get_string(json, "name", &name);
-	if (error)
+	error = json_get_str(json, "name", &name);
+	if (error < 0)
 		return error;
+	if (error > 0)
+		return pr_op_err("Incidence is missing the 'name' tag.");
 	error = name2id(name, &id);
 	if (error)
 		return error;
-	error = json_get_string(json, "action", &action_str);
-	if (error)
+	error = json_get_str(json, "action", &action_str);
+	if (error < 0)
 		return error;
+	if (error > 0)
+		return pr_op_err("Incidence '%s' is missing the 'action' tag.",
+		    name);
 
 	if (strcmp("ignore", action_str) == 0)
 		action = INAC_IGNORE;

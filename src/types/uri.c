@@ -1,21 +1,16 @@
 #include "types/uri.h"
 
-#include <errno.h>
-#include <strings.h>
-#include "rrdp/db/db_rrdp_uris.h"
+
+#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
+#include "rrdp.h"
+#include "state.h"
 #include "str_token.h"
-
-/* Expected URI types */
-enum rpki_uri_type {
-	URI_RSYNC,
-	URI_HTTPS,
-};
-
-static char const *const PFX_RSYNC = "rsync://";
-static char const *const PFX_HTTPS = "https://";
+#include "thread_var.h"
+#include "config/filename_format.h"
+#include "data_structure/path_builder.h"
 
 /**
  * Design notes:
@@ -59,12 +54,16 @@ struct rpki_uri {
 	 * according to ASCII, we assume that we can just dump it into the
 	 * output without trouble, because the input should have the same
 	 * encoding as the output.
+	 *
+	 * Technically, "global" URI "https://a.b.c/d/..///./d" is not the same
+	 * identifier as "https://a.b.c/d", but since we're supposed to download
+	 * to a filesystem where "https/a.b.c/d" is the same file as
+	 * "https/a.b.c/d/..///./d", @local will always be normalized.
 	 */
 	char *local;
 	/* "local_len" is never needed right now. */
 
-	/* Type, currently rysnc and https are valid */
-	enum rpki_uri_type type;
+	enum uri_type type;
 
 	unsigned int references;
 };
@@ -124,9 +123,7 @@ str2global(char const *str, size_t str_len, struct rpki_uri *uri)
 			return error;
 	}
 
-	uri->global = malloc(str_len + 1);
-	if (uri->global == NULL)
-		return pr_enomem();
+	uri->global = pmalloc(str_len + 1);
 	strncpy(uri->global, str, str_len);
 	uri->global[str_len] = '\0';
 	uri->global_len = str_len;
@@ -184,7 +181,7 @@ static int
 ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 {
 	char *joined;
-	char *slash_pos;
+	char const *slash_pos;
 	int dir_len;
 	int error;
 
@@ -203,9 +200,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 		return pr_val_err("Manifest URL '%s' contains no slashes.", mft);
 
 	dir_len = (slash_pos + 1) - mft;
-	joined = malloc(dir_len + ia5->size + 1);
-	if (joined == NULL)
-		return pr_enomem();
+	joined = pmalloc(dir_len + ia5->size + 1);
 
 	strncpy(joined, mft, dir_len);
 	strncpy(joined + dir_len, (char *) ia5->buf, ia5->size);
@@ -216,149 +211,194 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	return 0;
 }
 
-static int
-validate_uri_begin(char const *uri_pfx, const size_t uri_pfx_len,
-    char const *global, size_t global_len, int error)
-{
-	if (global_len < uri_pfx_len
-	    || strncasecmp(uri_pfx, global, uri_pfx_len) != 0) {
-		if (!error)
-			return -EINVAL;
-		pr_val_err("Global URI '%s' does not begin with '%s'.",
-		    global, uri_pfx);
-		return error;
-	}
+struct path_parser {
+	char const *token;
+	char const *slash;
+	size_t len;
+};
 
-	return 0;
+/* Return true if there's a new token, false if we're done. */
+static bool
+path_next(struct path_parser *parser)
+{
+	if (parser->slash == NULL)
+		return false;
+
+	parser->token = parser->slash + 1;
+	parser->slash = strchr(parser->token, '/');
+	parser->len = (parser->slash != NULL)
+	    ? (parser->slash - parser->token)
+	    : strlen(parser->token);
+
+	return parser->token[0] != 0;
+}
+
+static bool
+path_is_dot(struct path_parser *parser)
+{
+	return parser->len == 1 && parser->token[0] == '.';
+}
+
+static bool
+path_is_dotdots(struct path_parser *parser)
+{
+	return parser->len == 2
+	    && parser->token[0] == '.'
+	    && parser->token[1] == '.';
 }
 
 static int
-validate_gprefix(char const *global, size_t global_len, uint8_t flags,
-    enum rpki_uri_type *type)
+append_guri(struct path_builder *pb, char const *guri, char const *gprefix,
+    int err, bool skip_schema)
 {
-	size_t const PFX_RSYNC_LEN = strlen(PFX_RSYNC);
-	size_t const PFX_HTTPS_LEN = strlen(PFX_HTTPS);
-	uint8_t l_flags;
+	struct path_parser parser;
+	size_t dot_dot_limit;
 	int error;
 
-	/* Exclude RSYNC RRDP flag, isn't relevant here */
-	l_flags = flags & ~URI_USE_RRDP_WORKSPACE;
-
-	if (l_flags == URI_VALID_RSYNC) {
-		(*type) = URI_RSYNC;
-		return validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global,
-		    global_len, ENOTRSYNC);
-	}
-	if (l_flags == URI_VALID_HTTPS) {
-		(*type) = URI_HTTPS;
-		return validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global,
-		    global_len, ENOTHTTPS);
-	}
-	if (l_flags != (URI_VALID_RSYNC | URI_VALID_HTTPS))
-		pr_crit("Unknown URI flag");
-
-	/* It has both flags */
-	error = validate_uri_begin(PFX_RSYNC, PFX_RSYNC_LEN, global, global_len,
-	    0);
-	if (!error) {
-		(*type) = URI_RSYNC;
-		return 0;
-	}
-	error = validate_uri_begin(PFX_HTTPS, PFX_HTTPS_LEN, global, global_len,
-	    0);
-	if (error) {
-		pr_val_warn("URI '%s' does not begin with '%s' nor '%s'.",
-		    global, PFX_RSYNC, PFX_HTTPS);
-		return ENOTSUPPORTED;
+	/* Schema */
+	if (!str_starts_with(guri, gprefix)) {
+		pr_val_err("URI '%s' does not begin with '%s'.", guri, gprefix);
+		return err;
 	}
 
-	/* @size was already set */
-	(*type) = URI_HTTPS;
-	return 0;
-}
-
-static int
-get_local_workspace(char **result)
-{
-	char const *workspace;
-	char *tmp;
-
-	workspace = db_rrdp_uris_workspace_get();
-	if (workspace == NULL) {
-		*result = NULL;
-		return 0;
-	}
-
-	tmp = strdup(workspace);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	*result = tmp;
-	return 0;
-}
-
-/**
- * Initializes @uri->local by converting @uri->global.
- *
- * For example, given local cache repository "/tmp/rpki" and global uri
- * "rsync://rpki.ripe.net/repo/manifest.mft", initializes @uri->local as
- * "/tmp/rpki/rpki.ripe.net/repo/manifest.mft".
- *
- * By contract, if @guri is not RSYNC nor HTTPS, this will return ENOTRSYNC.
- * This often should not be treated as an error; please handle gracefully.
- */
-static int
-g2l(char const *global, size_t global_len, uint8_t flags, char **result,
-    enum rpki_uri_type *result_type)
-{
-	char *local;
-	char *workspace;
-	enum rpki_uri_type type;
-	int error;
-
-	error = validate_gprefix(global, global_len, flags, &type);
-	if (error)
-		return error;
-
-	workspace = NULL;
-	if ((flags & URI_USE_RRDP_WORKSPACE) != 0) {
-		error = get_local_workspace(&workspace);
+	if (!skip_schema) {
+		error = pb_appendn(pb, guri, 5);
 		if (error)
 			return error;
 	}
 
-	error = map_uri_to_local(global,
-	    type == URI_RSYNC ? PFX_RSYNC : PFX_HTTPS,
-	    workspace,
-	    &local);
-	if (error) {
-		free(workspace);
+	/* Domain */
+	parser.slash = guri + 7;
+	if (!path_next(&parser))
+		return pr_val_err("URI '%s' seems to lack a domain.", guri);
+	if (path_is_dot(&parser)) {
+		/* Dumping files to the cache root is unsafe. */
+		return pr_val_err("URI '%s' employs the root domain. This is not really cacheable, so I'm going to distrust it.",
+		    guri);
+	}
+	if (path_is_dotdots(&parser)) {
+		return pr_val_err("URI '%s' seems to be dot-dotting past its own schema.",
+		    guri);
+	}
+	error = pb_appendn(pb, parser.token, parser.len);
+	if (error)
 		return error;
+
+	/* Other components */
+	dot_dot_limit = pb->len;
+	while (path_next(&parser)) {
+		if (path_is_dotdots(&parser)) {
+			error = pb_pop(pb, false);
+			if (error)
+				return error;
+			if (pb->len < dot_dot_limit) {
+				return pr_val_err("URI '%s' seems to be dot-dotting past its own domain.",
+				    guri);
+			}
+		} else if (!path_is_dot(&parser)) {
+			error = pb_appendn(pb, parser.token, parser.len);
+			if (error)
+				return error;
+		}
 	}
 
-	free(workspace);
-	*result = local;
-	(*result_type) = type;
 	return 0;
 }
 
 static int
-autocomplete_local(struct rpki_uri *uri, uint8_t flags)
+get_rrdp_workspace(struct path_builder *pb, char const *tal,
+    struct rpki_uri *notif)
 {
-	return g2l(uri->global, uri->global_len, flags, &uri->local,
-	    &uri->type);
+	int error;
+
+	error = pb_init_cache(pb, tal, "rrdp");
+	if (error)
+		return error;
+
+	error = append_guri(pb, notif->global, "https://", ENOTHTTPS, true);
+	if (error)
+		pb_cleanup(pb);
+	return error;
+}
+
+/*
+ * Maps "rsync://a.b.c/d/e.cer" into "<local-repository>/rsync/a.b.c/d/e.cer".
+ */
+static int
+map_simple(struct rpki_uri *uri, char const *tal, char const *gprefix, int err)
+{
+	struct path_builder pb;
+	int error;
+
+	error = pb_init_cache(&pb, tal, NULL);
+	if (error)
+		return error;
+
+	error = append_guri(&pb, uri->global, gprefix, err, false);
+	if (error) {
+		pb_cleanup(&pb);
+		return error;
+	}
+
+	uri->local = pb.string;
+	return 0;
+}
+
+/*
+ * Maps "rsync://a.b.c/d/e.cer" into
+ * "<local-repository>/rrdp/<notification-path>/a.b.c/d/e.cer".
+ */
+static int
+map_caged(struct rpki_uri *uri, char const *tal, struct rpki_uri *notif)
+{
+	struct path_builder pb;
+	int error;
+
+	error = get_rrdp_workspace(&pb, tal, notif);
+	if (error)
+		return error;
+
+	if (uri->global[0] == '\0')
+		goto end; /* Caller is only interested in the cage. */
+
+	error = append_guri(&pb, uri->global, "rsync://", ENOTRSYNC, true);
+	if (error) {
+		pb_cleanup(&pb);
+		return error;
+	}
+
+end:	uri->local = pb.string;
+	return 0;
 }
 
 static int
-uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
-    size_t guri_len)
+autocomplete_local(struct rpki_uri *uri, char const *tal,
+    struct rpki_uri *notif)
+{
+	switch (uri->type) {
+	case UT_RSYNC:
+		return map_simple(uri, tal, "rsync://", ENOTRSYNC);
+	case UT_HTTPS:
+		return map_simple(uri, tal, "https://", ENOTHTTPS);
+	case UT_CAGED:
+		return map_caged(uri, tal, notif);
+	}
+
+	pr_crit("Unknown URI type: %u", uri->type);
+}
+
+/*
+ * I think the reason why @guri is not a char * is to convey that it doesn't
+ * need to be NULL terminated, but I'm not sure.
+ */
+int
+__uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
+    struct rpki_uri *notif, void const *guri, size_t guri_len)
 {
 	struct rpki_uri *uri;
 	int error;
 
-	uri = malloc(sizeof(struct rpki_uri));
-	if (uri == NULL)
-		return pr_enomem();
+	uri = pmalloc(sizeof(struct rpki_uri));
 
 	error = str2global(guri, guri_len, uri);
 	if (error) {
@@ -366,7 +406,9 @@ uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
 		return error;
 	}
 
-	error = autocomplete_local(uri, flags);
+	uri->type = type;
+
+	error = autocomplete_local(uri, tal, notif);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -374,42 +416,16 @@ uri_create(struct rpki_uri **result, uint8_t flags, void const *guri,
 	}
 
 	uri->references = 1;
+
 	*result = uri;
 	return 0;
 }
 
 int
-uri_create_rsync_str_rrdp(struct rpki_uri **uri, char const *guri,
-    size_t guri_len)
+uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
+    struct rpki_uri *notif, char const *guri)
 {
-	return uri_create(uri, URI_VALID_RSYNC | URI_USE_RRDP_WORKSPACE, guri,
-	    guri_len);
-}
-
-int
-uri_create_https_str_rrdp(struct rpki_uri **uri, char const *guri,
-    size_t guri_len)
-{
-	return uri_create(uri, URI_VALID_HTTPS | URI_USE_RRDP_WORKSPACE, guri,
-	    guri_len);
-}
-
-int
-uri_create_rsync_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
-{
-	return uri_create(uri, URI_VALID_RSYNC, guri, guri_len);
-}
-
-/*
- * A URI that can be rsync or https.
- *
- * Return ENOTSUPPORTED if not an rsync or https URI.
- */
-int
-uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
-{
-	return uri_create(uri, URI_VALID_RSYNC | URI_VALID_HTTPS, guri,
-	    guri_len);
+	return __uri_create(result, tal, type, notif, guri, strlen(guri));
 }
 
 /*
@@ -417,16 +433,13 @@ uri_create_mixed_str(struct rpki_uri **uri, char const *guri, size_t guri_len)
  * names. This function will infer the rest of the URL.
  */
 int
-uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
-    bool use_rrdp_workspace)
+uri_create_mft(struct rpki_uri **result, char const *tal,
+    struct rpki_uri *notif, struct rpki_uri *mft, IA5String_t *ia5)
 {
 	struct rpki_uri *uri;
-	uint8_t flags;
 	int error;
 
-	uri = malloc(sizeof(struct rpki_uri));
-	if (uri == NULL)
-		return pr_enomem();
+	uri = pmalloc(sizeof(struct rpki_uri));
 
 	error = ia5str2global(uri, mft->global, ia5);
 	if (error) {
@@ -434,11 +447,9 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
 		return error;
 	}
 
-	flags = URI_VALID_RSYNC;
-	if (use_rrdp_workspace)
-		flags |= URI_USE_RRDP_WORKSPACE;
+	uri->type = (notif == NULL) ? UT_RSYNC : UT_CAGED;
 
-	error = autocomplete_local(uri, flags);
+	error = autocomplete_local(uri, tal, notif);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -446,71 +457,37 @@ uri_create_mft(struct rpki_uri **result, struct rpki_uri *mft, IA5String_t *ia5,
 	}
 
 	uri->references = 1;
+
 	*result = uri;
 	return 0;
 }
 
-/*
- * Create @uri from the @ad, validating that the uri is of type(s) indicated
- * at @flags (can be URI_VALID_RSYNC and/or URI_VALID_HTTPS)
- */
-int
-uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, int flags)
+/* Cache-only; global URI and type are meaningless. */
+struct rpki_uri *
+uri_create_cache(char const *path)
 {
-	ASN1_STRING *asn1_string;
-	int type;
+	struct rpki_uri *uri;
 
-	asn1_string = GENERAL_NAME_get0_value(ad->location, &type);
+	uri = pzalloc(sizeof(struct rpki_uri));
+	uri->local = pstrdup(path);
+	uri->references = 1;
 
-	/*
-	 * RFC 6487: "This extension MUST have an instance of an
-	 * AccessDescription with an accessMethod of id-ad-rpkiManifest, (...)
-	 * with an rsync URI [RFC5781] form of accessLocation."
-	 *
-	 * Ehhhhhh. It's a little annoying in that it seems to be stucking more
-	 * than one requirement in a single sentence, which I think is rather
-	 * rare for an RFC. Normally they tend to hammer things more.
-	 *
-	 * Does it imply that the GeneralName CHOICE is constrained to type
-	 * "uniformResourceIdentifier"? I guess so, though I don't see anything
-	 * stopping a few of the other types from also being capable of storing
-	 * URIs.
-	 *
-	 * Also, nobody seems to be using the other types, and handling them
-	 * would be a titanic pain in the ass. So this is what I'm committing
-	 * to.
-	 */
-	if (type != GEN_URI) {
-		pr_val_err("Unknown GENERAL_NAME type: %d", type);
-		return ENOTSUPPORTED;
-	}
-
-	/*
-	 * GEN_URI signals an IA5String.
-	 * IA5String is a subset of ASCII, so this cast is safe.
-	 * No guarantees of a NULL chara, though.
-	 *
-	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
-	 * somehow converted into URI form. I don't think that's an issue
-	 * because the RSYNC clone operation should not have performed the
-	 * conversion, so we should be looking at precisely the IA5String
-	 * directory our g2l version of @asn1_string should contain.
-	 * But ask the testers to keep an eye on it anyway.
-	 */
-	return uri_create(uri, flags,
-	    ASN1_STRING_get0_data(asn1_string),
-	    ASN1_STRING_length(asn1_string));
+	return uri;
 }
 
-void
+struct rpki_uri *
 uri_refget(struct rpki_uri *uri)
 {
 	uri->references++;
+	return uri;
 }
 
 void
 uri_refput(struct rpki_uri *uri)
 {
+	if (uri == NULL)
+		return;
+
 	uri->references--;
 	if (uri->references == 0) {
 		free(uri->global);
@@ -564,10 +541,22 @@ uri_is_certificate(struct rpki_uri *uri)
 	return uri_has_extension(uri, ".cer");
 }
 
+enum uri_type
+uri_get_type(struct rpki_uri *uri)
+{
+	return uri->type;
+}
+
 bool
 uri_is_rsync(struct rpki_uri *uri)
 {
-	return uri->type == URI_RSYNC;
+	return uri->type == UT_RSYNC;
+}
+
+bool
+uri_is_https(struct rpki_uri *uri)
+{
+	return uri->type == UT_HTTPS;
 }
 
 static char const *
@@ -609,4 +598,38 @@ uri_op_get_printable(struct rpki_uri *uri)
 
 	format = config_get_op_log_filename_format();
 	return uri_get_printable(uri, format);
+}
+
+char *
+uri_get_rrdp_workspace(char const *tal, struct rpki_uri *notif)
+{
+	struct path_builder pb;
+	return (get_rrdp_workspace(&pb, tal, notif) == 0) ? pb.string : NULL;
+}
+
+DEFINE_ARRAY_LIST_FUNCTIONS(uri_list, struct rpki_uri *, static)
+
+void
+uris_init(struct uri_list *uris)
+{
+	uri_list_init(uris);
+}
+
+static void
+__uri_refput(struct rpki_uri **uri)
+{
+	uri_refput(*uri);
+}
+
+void
+uris_cleanup(struct uri_list *uris)
+{
+	uri_list_cleanup(uris, __uri_refput);
+}
+
+/* Swallows @uri. */
+void
+uris_add(struct uri_list *uris, struct rpki_uri *uri)
+{
+	uri_list_add(uris, &uri);
 }

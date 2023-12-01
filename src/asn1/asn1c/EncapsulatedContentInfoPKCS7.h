@@ -12,7 +12,7 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "ContentType.h"
+#include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 

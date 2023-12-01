@@ -40,7 +40,7 @@ extern asn_TYPE_member_t asn_MBR_DigestAlgorithmIdentifiers_1[1];
 #endif
 
 /* Referred external types */
-#include "DigestAlgorithmIdentifier.h"
+#include "asn1/asn1c/DigestAlgorithmIdentifier.h"
 
 #endif	/* _DigestAlgorithmIdentifiers_H_ */
 #include "asn1/asn1c/asn_internal.h"

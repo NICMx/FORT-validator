@@ -1,7 +1,7 @@
 #include <check.h>
 
-#include "log.c"
-#include "impersonator.c"
+#include "alloc.c"
+#include "mock.c"
 #include "object/vcard.c"
 
 #define VC_BEGIN	"BEGIN:VCARD\r\n"
@@ -99,7 +99,7 @@ START_TEST(vcard_normal)
 }
 END_TEST
 
-Suite *ghostbusters_suite(void)
+static Suite *ghostbusters_suite(void)
 {
 	Suite *suite;
 	TCase *hgv;

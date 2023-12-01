@@ -1,7 +1,9 @@
 #include "cert_stack.h"
 
+#include <errno.h>
 #include <sys/queue.h>
 
+#include "alloc.h"
 #include "resource.h"
 #include "str_token.h"
 #include "thread_var.h"
@@ -47,13 +49,6 @@ struct metadata_node {
 	 * don't have many children, and I'm running out of time.
 	 */
 	struct serial_numbers serials;
-
-	/*
-	 * Certificate repository "level". This aims to identify if the
-	 * certificate is located at a distinct server than its father (common
-	 * case when the RIRs delegate RPKI repositories).
-	 */
-	unsigned int level;
 
 	/** Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(metadata_node) next;
@@ -103,9 +98,7 @@ certstack_create(struct cert_stack **result)
 {
 	struct cert_stack *stack;
 
-	stack = malloc(sizeof(struct cert_stack));
-	if (stack == NULL)
-		return pr_enomem();
+	stack = pmalloc(sizeof(struct cert_stack));
 
 	stack->x509s = sk_X509_new_null();
 	if (stack->x509s == NULL) {
@@ -182,21 +175,18 @@ certstack_destroy(struct cert_stack *stack)
 	free(stack);
 }
 
-int
+void
 deferstack_push(struct cert_stack *stack, struct deferred_cert *deferred)
 {
 	struct defer_node *node;
 
-	node = malloc(sizeof(struct defer_node));
-	if (node == NULL)
-		return pr_enomem();
+	node = pmalloc(sizeof(struct defer_node));
 
 	node->type = DNT_CERT;
 	node->deferred = *deferred;
 	uri_refget(deferred->uri);
 	rpp_refget(deferred->pp);
 	SLIST_INSERT_HEAD(&stack->defers, node, next);
-	return 0;
 }
 
 static void
@@ -259,11 +249,8 @@ init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
 	struct resources *result;
 	int error;
 
-	result = resources_create(false);
-	if (result == NULL)
-		return pr_enomem();
+	result = resources_create(policy, false);
 
-	resources_set_policy(result, policy);
 	error = certificate_get_resources(x509, result, type);
 	if (error)
 		goto fail;
@@ -275,7 +262,7 @@ init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
 	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
 	 * part is already handled in certificate_get_resources().
 	 */
-	if (type == TA && resources_empty(result)) {
+	if (type == CERTYPE_TA && resources_empty(result)) {
 		error = pr_val_err("Trust Anchor certificate does not define any number resources.");
 		goto fail;
 	}
@@ -288,38 +275,14 @@ fail:
 	return error;
 }
 
-static int
-init_level(struct cert_stack *stack, unsigned int *_result)
-{
-	struct metadata_node *head_meta;
-	unsigned int work_repo_level;
-	unsigned int result;
-
-	/*
-	 * Bruh, I don't understand the point of this block.
-	 * Why can't it just be `result = working_repo_peek_level();`?
-	 */
-
-	result = 0;
-	work_repo_level = working_repo_peek_level();
-	head_meta = SLIST_FIRST(&stack->metas);
-	if (head_meta != NULL && work_repo_level > head_meta->level)
-		result = work_repo_level;
-
-	*_result = result;
-	return 0;
-}
-
 static struct defer_node *
 create_separator(void)
 {
 	struct defer_node *result;
 
-	result = malloc(sizeof(struct defer_node));
-	if (result == NULL)
-		return NULL;
-
+	result = pmalloc(sizeof(struct defer_node));
 	result->type = DNT_SEPARATOR;
+
 	return result;
 }
 
@@ -333,27 +296,16 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 	int ok;
 	int error;
 
-	meta = malloc(sizeof(struct metadata_node));
-	if (meta == NULL)
-		return pr_enomem();
+	meta = pmalloc(sizeof(struct metadata_node));
 
-	meta->uri = uri;
-	uri_refget(uri);
+	meta->uri = uri_refget(uri);
 	serial_numbers_init(&meta->serials);
 
 	error = init_resources(x509, policy, type, &meta->resources);
 	if (error)
 		goto cleanup_serial;
 
-	error = init_level(stack, &meta->level); /* Does not need a revert */
-	if (error)
-		goto destroy_resources;
-
 	defer_separator = create_separator();
-	if (defer_separator == NULL) {
-		error = pr_enomem();
-		goto destroy_resources;
-	}
 
 	ok = sk_X509_push(stack->x509s, x509);
 	if (ok <= 0) {
@@ -369,7 +321,6 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 
 destroy_separator:
 	free(defer_separator);
-destroy_resources:
 	resources_destroy(meta->resources);
 cleanup_serial:
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
@@ -420,29 +371,16 @@ x509stack_peek_resources(struct cert_stack *stack)
 	return (meta != NULL) ? meta->resources : NULL;
 }
 
-unsigned int
-x509stack_peek_level(struct cert_stack *stack)
-{
-	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
-	return (meta != NULL) ? meta->level : 0;
-}
-
-static int
-get_current_file_name(char **_result)
+static char *
+get_current_file_name(void)
 {
 	char const *file_name;
-	char *result;
 
 	file_name = fnstack_peek();
 	if (file_name == NULL)
 		pr_crit("The file name stack is empty.");
 
-	result = strdup(file_name);
-	if (result == NULL)
-		return pr_enomem();
-
-	*_result = result;
-	return 0;
+	return pstrdup(file_name);
 }
 
 /**
@@ -452,22 +390,20 @@ get_current_file_name(char **_result)
  *
  * This function will steal ownership of @number on success.
  */
-int
+void
 x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 {
 	struct metadata_node *meta;
 	struct serial_number *cursor;
-	array_index i;
 	struct serial_number duplicate;
 	char *string;
-	int error;
 
 	/* Remember to free @number if you return 0 but don't store it. */
 
 	meta = SLIST_FIRST(&stack->metas);
 	if (meta == NULL) {
 		BN_free(number);
-		return 0; /* The TA lacks siblings, so serial is unique. */
+		return; /* The TA lacks siblings, so serial is unique. */
 	}
 
 	/*
@@ -491,27 +427,21 @@ x509stack_store_serial(struct cert_stack *stack, BIGNUM *number)
 	 *
 	 * TODO I haven't seen this warning in a while. Review.
 	 */
-	ARRAYLIST_FOREACH(&meta->serials, cursor, i) {
+	ARRAYLIST_FOREACH(&meta->serials, cursor) {
 		if (BN_cmp(cursor->number, number) == 0) {
 			BN2string(number, &string);
 			pr_val_warn("Serial number '%s' is not unique. (Also found in '%s'.)",
 			    string, cursor->file);
 			BN_free(number);
 			free(string);
-			return 0;
+			return;
 		}
 	}
 
 	duplicate.number = number;
-	error = get_current_file_name(&duplicate.file);
-	if (error)
-		return error;
+	duplicate.file = get_current_file_name();
 
-	error = serial_numbers_add(&meta->serials, &duplicate);
-	if (error)
-		free(duplicate.file);
-
-	return error;
+	serial_numbers_add(&meta->serials, &duplicate);
 }
 
 STACK_OF(X509) *

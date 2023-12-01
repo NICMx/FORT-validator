@@ -1,3 +1,5 @@
+#include <assert.h>
+
 #include "asn1/asn1c/asn_application.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/per_decoder.h"
@@ -94,4 +96,3 @@ uper_decode(const asn_codec_ctx_t *opt_codec_ctx,
 	}
 	return rval;
 }
-

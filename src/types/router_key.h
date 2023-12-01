@@ -1,8 +1,10 @@
 #ifndef SRC_TYPES_ROUTER_KEY_H_
 #define SRC_TYPES_ROUTER_KEY_H_
 
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 /*
  * SKI is always 20 bytes long rfc6487#section-4.8.2:

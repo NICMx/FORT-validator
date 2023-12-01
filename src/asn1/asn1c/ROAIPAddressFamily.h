@@ -48,7 +48,7 @@ extern asn_TYPE_member_t asn_MBR_ROAIPAddressFamily_1[2];
 #endif
 
 /* Referred external types */
-#include "ROAIPAddress.h"
+#include "asn1/asn1c/ROAIPAddress.h"
 
 #endif	/* _ROAIPAddressFamily_H_ */
 #include "asn1/asn1c/asn_internal.h"

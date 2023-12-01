@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "DistinguishedName.h"
+#include "asn1/asn1c/DistinguishedName.h"
 
 /*
  * This type is implemented using RDNSequence,
@@ -29,4 +29,3 @@ asn_TYPE_descriptor_t asn_DEF_DistinguishedName = {
 	1,	/* Single element */
 	&asn_SPC_RDNSequence_specs_1	/* Additional specs */
 };
-

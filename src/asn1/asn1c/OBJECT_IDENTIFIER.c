@@ -2,11 +2,12 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "asn1/asn1c/OCTET_STRING.h"
-#include <limits.h>	/* for CHAR_BIT */
+#include <assert.h>
 #include <errno.h>
 
 /*

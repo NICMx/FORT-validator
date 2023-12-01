@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "Time.h"
+#include "asn1/asn1c/Time.h"
 
 static asn_oer_constraints_t asn_OER_type_Time_constr_1 CC_NOTUSED = {
 	{ 0, 0 },
@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_Time = {
 	2,	/* Elements count */
 	&asn_SPC_Time_specs_1	/* Additional specs */
 };
-

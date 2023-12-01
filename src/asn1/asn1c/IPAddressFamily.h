@@ -13,7 +13,7 @@
 
 /* Including external dependencies */
 #include "asn1/asn1c/OCTET_STRING.h"
-#include "IPAddressChoice.h"
+#include "asn1/asn1c/IPAddressChoice.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #ifdef __cplusplus

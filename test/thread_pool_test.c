@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "alloc.c"
 #include "common.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "thread/thread_pool.c"
 
 static void
@@ -61,13 +61,13 @@ START_TEST(tpool_multiple_work)
 }
 END_TEST
 
-Suite *thread_pool_suite(void)
+static Suite *thread_pool_suite(void)
 {
 	Suite *suite;
 	TCase *single, *multiple;
 
 	single = tcase_create("single_work");
-	tcase_add_test(multiple, tpool_single_work);
+	tcase_add_test(single, tpool_single_work);
 
 	multiple = tcase_create("multiple_work");
 	tcase_add_test(multiple, tpool_multiple_work);

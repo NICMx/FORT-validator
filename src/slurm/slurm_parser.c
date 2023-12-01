@@ -1,17 +1,13 @@
 #include "slurm/slurm_parser.h"
 
 #include <errno.h>
-#include <stdint.h>
-#include <string.h>
-#include <openssl/evp.h>
-#include <openssl/x509.h>
-#include <sys/types.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
-#include <sys/socket.h> /* AF_INET, AF_INET6 (needed in OpenBSD) */
+#include <openssl/asn1.h>
 
 #include "crypto/base64.h"
 #include "algorithm.h"
+#include "alloc.h"
+#include "json_util.h"
 #include "log.h"
-#include "json_parser.h"
 #include "types/address.h"
 #include "types/router_key.h"
 #include "slurm/db_slurm.h"
@@ -33,9 +29,7 @@
 #define ROUTER_PUBLIC_KEY		"routerPublicKey"
 #define COMMENT				"comment"
 
-#define CHECK_REQUIRED(element, name)					\
-	if (element == NULL)						\
-		return pr_op_err("SLURM member '%s' is required", name);
+#define COMPLAIN_REQUIRED(name) pr_op_err("SLURM member '" name "' is required")
 
 static int handle_json(json_t *, struct db_slurm *);
 
@@ -68,25 +62,16 @@ static int
 set_asn(json_t *object, bool is_assertion, uint32_t *result, uint8_t *flag,
     size_t *members_loaded)
 {
-	json_int_t int_tmp;
 	int error;
 
-	int_tmp = 0;
-	error = json_get_int(object, ASN, &int_tmp);
-	if (error == -ENOENT) {
-		if (is_assertion)
-			return pr_op_err("ASN is required");
-		else
-			return 0; /* Optional for filters */
-	} else if (error)
+	error = json_get_u32(object, ASN, result);
+	if (error < 0)
 		return error;
+	if (error > 0)
+		/* Optional for filters */
+		return is_assertion ? pr_op_err("ASN is required") : 0;
 
-	/* An underflow or overflow will be considered here */
-	if (int_tmp < 0 || UINT32_MAX < int_tmp)
-		return pr_op_err("ASN (%lld) is out of range [0 - %u].", int_tmp,
-		    UINT32_MAX);
 	*flag = *flag | SLURM_COM_FLAG_ASN;
-	*result = (uint32_t) int_tmp;
 	(*members_loaded)++;
 	return 0;
 }
@@ -95,14 +80,14 @@ set_asn(json_t *object, bool is_assertion, uint32_t *result, uint8_t *flag,
 static int
 set_comment(json_t *object, uint8_t *flag, size_t *members_loaded)
 {
-	char const *tmp;
+	char const *comment;
 	int error;
 
-	error = json_get_string(object, COMMENT, &tmp);
-	if (error && error == -ENOENT)
-		return 0; /* Optional member */
-	else if (error)
+	error = json_get_str(object, COMMENT, &comment);
+	if (error < 0)
 		return error;
+	if (comment == NULL)
+		return 0;
 
 	*flag = *flag | SLURM_COM_FLAG_COMMENT;
 	(*members_loaded)++;
@@ -122,18 +107,16 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 	int error;
 
 	/* First part: Prefix in string format */
-	error = json_get_string(object, PREFIX, &str_prefix);
-	if (error && error == -ENOENT) {
-		if (is_assertion)
-			return pr_op_err("SLURM assertion prefix is required");
-		else
-			return 0; /* Optional for filters */
-	} else if (error)
+	error = json_get_str(object, PREFIX, &str_prefix);
+	if (error < 0)
 		return error;
+	if (str_prefix == NULL) {
+		return is_assertion
+		    ? pr_op_err("SLURM assertion prefix is required")
+		    : 0; /* Optional for filters */
+	}
 
-	clone = strdup(str_prefix);
-	if (clone == NULL)
-		return pr_enomem();
+	clone = pstrdup(str_prefix);
 
 	token = strtok(clone, "/");
 	isv4 = strchr(token, ':') == NULL;
@@ -180,28 +163,31 @@ static int
 set_max_prefix_length(json_t *object, bool is_assertion, uint8_t addr_fam,
     uint8_t *result, uint8_t *flag, size_t *members_loaded)
 {
-	json_int_t int_tmp;
+	uint32_t u32;
+	unsigned int max;
 	int error;
 
-	int_tmp = 0;
-	error = json_get_int(object, MAX_PREFIX_LENGTH, &int_tmp);
-	if (error == -ENOENT)
-		return 0; /* Optional for assertions, unsupported by filters */
-
-	if (error && is_assertion)
+	error = json_get_u32(object, MAX_PREFIX_LENGTH, &u32);
+	if (error < 0)
 		return error;
 
-	/* Unsupported by filters */
+	/* Filters */
 	if (!is_assertion)
-		return pr_op_err("Prefix filter can't have a max prefix length");
+		return (error == 0)
+		    ? pr_op_err("Prefix filter can't have a max prefix length")
+		    : 0;
 
-	/* An underflow or overflow will be considered here */
-	if (int_tmp <= 0 || (addr_fam == AF_INET ? 32 : 128) < int_tmp)
-		return pr_op_err("Max prefix length (%lld) is out of range [1 - %d].",
-		    int_tmp, (addr_fam == AF_INET) ? 32 : 128);
+	/* Assertions */
+	if (error > 0)
+		return 0;
+
+	max = (addr_fam == AF_INET) ? 32 : 128;
+	if (max < u32)
+		return pr_op_err("Max prefix length (%u) is out of range [0, %u].",
+		    u32, max);
 
 	*flag = *flag | SLURM_PFX_FLAG_MAX_LENGTH;
-	*result = (uint8_t) int_tmp;
+	*result = (uint8_t) u32;
 	(*members_loaded)++;
 	return 0;
 
@@ -243,22 +229,20 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 	size_t ski_len;
 	int error;
 
-	error = json_get_string(object, SKI, &str_encoded);
-	if (error && error == -ENOENT) {
-		if (is_assertion)
-			return pr_op_err("SLURM assertion %s is required", SKI);
-		else
-			return 0; /* Optional for filters */
-	} else if (error)
+	error = json_get_str(object, SKI, &str_encoded);
+	if (error < 0)
 		return error;
+	if (str_encoded == NULL)
+		return is_assertion
+		    ? pr_op_err("SLURM assertion " SKI " is required")
+		    : 0; /* Optional for filters */
 
 	error = validate_base64url_encoded(str_encoded);
 	if (error)
 		return error;
 
-	error = base64url_decode(str_encoded, &result->ski, &ski_len);
-	if (error)
-		return error;
+	if (!base64url_decode(str_encoded, &result->ski, &ski_len))
+		return op_crypto_err("The " SKI " could not be decoded.");
 
 	/* Validate that's at least 20 octects long */
 	if (ski_len != RK_SKI_LEN) {
@@ -305,34 +289,30 @@ static int
 set_router_pub_key(json_t *object, bool is_assertion,
     struct slurm_bgpsec *result, size_t *members_loaded)
 {
-	char const *str_encoded;
+	char const *encoded;
 	size_t spk_len;
 	int error;
 
-	error = json_get_string(object, ROUTER_PUBLIC_KEY, &str_encoded);
-	if (error == -ENOENT && !is_assertion)
-		return 0; /* OK for filters */
-
-	/* Required by assertions */
-	if (error && is_assertion) {
-		if (error == -ENOENT)
-			return pr_op_err("SLURM assertion %s is required",
-			    ROUTER_PUBLIC_KEY);
+	error = json_get_str(object, ROUTER_PUBLIC_KEY, &encoded);
+	if (error < 0)
 		return error;
-	}
 
-	/* Unsupported by filters */
+	/* Filters */
 	if (!is_assertion)
-		return pr_op_err("BGPsec filter can't have a router public key");
+		return (error == 0)
+		    ? pr_op_err("BGPsec filter can't have a router public key")
+		    : 0;
 
-	error = validate_base64url_encoded(str_encoded);
+	/* Assertions */
+	if (encoded == NULL)
+		return pr_op_err("SLURM assertion " ROUTER_PUBLIC_KEY " is required.");
+
+	error = validate_base64url_encoded(encoded);
 	if (error)
 		return error;
 
-	error = base64url_decode(str_encoded, &result->router_public_key,
-	    &spk_len);
-	if (error)
-		return pr_op_err("'%s' couldn't be decoded", str_encoded);
+	if (!base64url_decode(encoded, &result->router_public_key, &spk_len))
+		return op_crypto_err("The " ROUTER_PUBLIC_KEY " could not be decoded.");
 
 	/*
 	 * Validate that "is the full ASN.1 DER encoding of the
@@ -583,19 +563,18 @@ load_bgpsec_array(json_t *array, struct db_slurm *db, bool is_assertion)
 static int
 load_version(json_t *root)
 {
-	json_int_t version;
+	uint32_t version;
 	int error;
 
-	version = -1;
-	error = json_get_int(root, SLURM_VERSION, &version);
-	if (error)
-		return (error == -ENOENT) ?
-		    pr_op_err("SLURM member '"SLURM_VERSION"' is required.") :
-		    error;
+	error = json_get_u32(root, SLURM_VERSION, &version);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return COMPLAIN_REQUIRED(SLURM_VERSION);
 
 	/* Validate data */
 	if (version != 1)
-		return pr_op_err("'%s' must be 1", SLURM_VERSION);
+		return pr_op_err("'" SLURM_VERSION "' must be 1");
 
 	return 0;
 }
@@ -607,14 +586,23 @@ load_filters(json_t *root, struct db_slurm *db)
 	size_t expected_members;
 	int error;
 
-	filters = json_get_object(root, VALIDATION_OUTPUT_FILTERS);
-	CHECK_REQUIRED(filters, VALIDATION_OUTPUT_FILTERS)
+	error = json_get_object(root, VALIDATION_OUTPUT_FILTERS, &filters);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return COMPLAIN_REQUIRED(VALIDATION_OUTPUT_FILTERS);
 
-	prefix = json_get_array(filters, PREFIX_FILTERS);
-	CHECK_REQUIRED(prefix, PREFIX_FILTERS)
+	error = json_get_array(filters, PREFIX_FILTERS, &prefix);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return COMPLAIN_REQUIRED(PREFIX_FILTERS);
 
-	bgpsec = json_get_array(filters, BGPSEC_FILTERS);
-	CHECK_REQUIRED(bgpsec, BGPSEC_FILTERS)
+	error = json_get_array(filters, BGPSEC_FILTERS, &bgpsec);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return COMPLAIN_REQUIRED(BGPSEC_FILTERS);
 
 	expected_members = 2;
 	if (!json_valid_members_count(filters, expected_members))
@@ -642,14 +630,23 @@ load_assertions(json_t *root, struct db_slurm *db)
 	size_t expected_members;
 	int error;
 
-	assertions = json_get_object(root, LOCALLY_ADDED_ASSERTIONS);
-	CHECK_REQUIRED(assertions, LOCALLY_ADDED_ASSERTIONS)
+	error = json_get_object(root, LOCALLY_ADDED_ASSERTIONS, &assertions);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return COMPLAIN_REQUIRED(LOCALLY_ADDED_ASSERTIONS);
 
-	prefix = json_get_array(assertions, PREFIX_ASSERTIONS);
-	CHECK_REQUIRED(prefix, PREFIX_ASSERTIONS)
+	error = json_get_array(assertions, PREFIX_ASSERTIONS, &prefix);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return COMPLAIN_REQUIRED(PREFIX_ASSERTIONS);
 
-	bgpsec = json_get_array(assertions, BGPSEC_ASSERTIONS);
-	CHECK_REQUIRED(bgpsec, BGPSEC_ASSERTIONS)
+	error = json_get_array(assertions, BGPSEC_ASSERTIONS, &bgpsec);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return COMPLAIN_REQUIRED(BGPSEC_ASSERTIONS);
 
 	expected_members = 2;
 	if (!json_valid_members_count(assertions, expected_members))

@@ -4,13 +4,14 @@
 #include <execinfo.h>
 #endif
 
-#include <openssl/bio.h>
+#include <errno.h>
 #include <openssl/err.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdarg.h>
+#include <sys/stat.h>
 #include <syslog.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "config.h"
 #include "thread_var.h"
@@ -66,7 +67,7 @@ static pthread_mutex_t logck;
  * aware that pthread_mutex_lock() can return error codes, which shouldn't
  * prevent critical stack traces from printing.)
  */
-void
+static void
 print_stack_trace(char const *title)
 {
 #ifdef BACKTRACE_ENABLED
@@ -188,8 +189,8 @@ register_signal_handlers(void)
 	 * > happen
 	 * (Documentation of CURLOPT_NOSIGNAL)
 	 *
-	 * All SIGPIPE means is "the peer closed the connection for some reason,
-	 * fuck you."
+	 * All SIGPIPE means is "the peer closed the connection for some
+	 * reason."
 	 * Which is a normal I/O error, and should be handled by the normal
 	 * error propagation logic, not by a signal handler.
 	 * So, ignore SIGPIPE.
@@ -409,7 +410,7 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 	if (cfg->color)
 		fprintf(lvl->stream, "%s", lvl->color);
 
-	now = time(0);
+	now = time(NULL);
 	if (now != ((time_t) -1)) {
 		localtime_r(&now, &stm_buff);
 		strftime(time_buff, sizeof(time_buff), "%b %e %T", &stm_buff);
@@ -633,8 +634,8 @@ val_crypto_err(const char *format, ...)
 	return crypto_err(&val_config, pr_val_err);
 }
 
-int
-pr_enomem(void)
+__dead void
+enomem_panic(void)
 {
 	static char const *ENOMEM_MSG = "Out of memory.\n";
 	ssize_t garbage;
@@ -645,16 +646,20 @@ pr_enomem(void)
 	 */
 
 	if (LOG_ERR > op_config.level)
-		return -ENOMEM;
+		goto done;
 
 	if (op_config.fprintf_enabled) {
 		lock_mutex();
 		/*
 		 * write() is AS-Safe, which implies it doesn't allocate,
 		 * unlike printf().
+		 *
+		 * "garbage" prevents write()'s warn_unused_result (compiler
+		 * warning).
 		 */
 		garbage = write(STDERR_FILENO, ENOMEM_MSG, strlen(ENOMEM_MSG));
 		unlock_mutex();
+		/* Prevents "set but not used" warning. */
 		garbage++;
 	}
 
@@ -665,7 +670,7 @@ pr_enomem(void)
 		unlock_mutex();
 	}
 
-	return -ENOMEM;
+done:	exit(ENOMEM);
 }
 
 __dead void

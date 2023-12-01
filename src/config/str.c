@@ -1,8 +1,8 @@
 #include "config/str.h"
 
 #include <getopt.h>
-#include <stdlib.h>
-#include <string.h>
+
+#include "alloc.h"
 #include "log.h"
 
 #define DEREFERENCE(void_value) (*((char **) void_value))
@@ -33,8 +33,8 @@ string_parse_argv(struct option_field const *field, char const *str,
 	/* Remove the previous value (usually the default). */
 	__string_free(result);
 
-	DEREFERENCE(result) = strdup(str);
-	return (DEREFERENCE(result) != NULL) ? 0 : pr_enomem();
+	DEREFERENCE(result) = pstrdup(str);
+	return 0;
 }
 
 static int
@@ -45,7 +45,23 @@ string_parse_json(struct option_field const *opt, json_t *json, void *result)
 
 	string = NULL;
 	error = parse_json_string(json, opt->name, &string);
-	return error ? error : string_parse_argv(opt, string, result);
+	if (error)
+		return error;
+
+	if (string == NULL) {
+		if (opt->json_null_allowed) {
+			DEREFERENCE(result) = NULL;
+			return 0;
+		} else {
+			if (string == NULL) {
+				return pr_op_err(
+				    "The '%s' field is not allowed to be null.",
+				    opt->name);
+			}
+		}
+	}
+
+	return string_parse_argv(opt, string, result);
 }
 
 static void
@@ -70,6 +86,11 @@ const struct global_type gt_string = {
 int
 parse_json_string(json_t *json, char const *name, char const **result)
 {
+	if (json_is_null(json)) {
+		*result = NULL;
+		return 0;
+	}
+
 	if (!json_is_string(json))
 		return pr_op_err("The '%s' element is not a JSON string.", name);
 

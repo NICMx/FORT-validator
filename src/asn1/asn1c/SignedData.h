@@ -12,10 +12,10 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "CMSVersion.h"
-#include "DigestAlgorithmIdentifiers.h"
-#include "EncapsulatedContentInfo.h"
-#include "SignerInfos.h"
+#include "asn1/asn1c/CMSVersion.h"
+#include "asn1/asn1c/DigestAlgorithmIdentifiers.h"
+#include "asn1/asn1c/EncapsulatedContentInfo.h"
+#include "asn1/asn1c/SignerInfos.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #ifdef __cplusplus
@@ -47,8 +47,8 @@ extern asn_TYPE_descriptor_t asn_DEF_SignedData;
 #endif
 
 /* Referred external types */
-#include "CertificateSet.h"
-#include "RevocationInfoChoices.h"
+#include "asn1/asn1c/CertificateSet.h"
+#include "asn1/asn1c/RevocationInfoChoices.h"
 
 #endif	/* _SignedData_H_ */
 #include "asn1/asn1c/asn_internal.h"

@@ -3,7 +3,6 @@
 
 /* Some wrappers for asn1/asn1c/SignedData.h. */
 
-#include <openssl/x509.h>
 #include "resource.h"
 #include "asn1/asn1c/SignedData.h"
 #include "object/certificate.h"
@@ -27,7 +26,7 @@ struct signed_object_args {
 	struct certificate_refs refs;
 };
 
-int signed_object_args_init(struct signed_object_args *, struct rpki_uri *,
+void signed_object_args_init(struct signed_object_args *, struct rpki_uri *,
     STACK_OF(X509_CRL) *, bool);
 void signed_object_args_cleanup(struct signed_object_args *);
 

@@ -3,6 +3,12 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 /*
  * This implementation is not a generic sorted array; It's intended to store RFC
@@ -24,7 +30,7 @@ enum sarray_comparison {
 	SACMP_INTERSECTION,
 };
 
-typedef enum sarray_comparison (*sarray_cmp)(void *, void *);
+typedef enum sarray_comparison (*sarray_cmp)(void const *, void const *);
 
 struct sorted_array *sarray_create(size_t, sarray_cmp);
 void sarray_get(struct sorted_array *);
@@ -38,9 +44,9 @@ void sarray_put(struct sorted_array *);
 #define EADJRIGHT	7899
 #define EINTERSECTION	7900
 
-int sarray_add(struct sorted_array *, void *);
-bool sarray_empty(struct sorted_array *);
-bool sarray_contains(struct sorted_array *, void *);
+int sarray_add(struct sorted_array *, void const *);
+bool sarray_empty(struct sorted_array const *);
+bool sarray_contains(struct sorted_array const *, void const *);
 
 typedef int (*sarray_foreach_cb)(void *, void *);
 int sarray_foreach(struct sorted_array *, sarray_foreach_cb, void *);

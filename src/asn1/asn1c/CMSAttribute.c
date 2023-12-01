@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "CMSAttribute.h"
+#include "asn1/asn1c/CMSAttribute.h"
 
 static asn_TYPE_member_t asn_MBR_attrValues_3[] = {
 	{ ATF_ANY_TYPE | ATF_POINTER, 0, 0,
@@ -93,4 +93,3 @@ asn_TYPE_descriptor_t asn_DEF_CMSAttribute = {
 	2,	/* Elements count */
 	&asn_SPC_CMSAttribute_specs_1	/* Additional specs */
 };
-

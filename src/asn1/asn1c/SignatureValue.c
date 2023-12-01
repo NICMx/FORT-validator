@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "SignatureValue.h"
+#include "asn1/asn1c/SignatureValue.h"
 
 /*
  * This type is implemented using OCTET_STRING,
@@ -28,4 +28,3 @@ asn_TYPE_descriptor_t asn_DEF_SignatureValue = {
 	0, 0,	/* No members */
 	&asn_SPC_OCTET_STRING_specs	/* Additional specs */
 };
-

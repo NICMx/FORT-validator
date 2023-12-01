@@ -58,7 +58,7 @@ extern asn_TYPE_member_t asn_MBR_IPAddressChoice_1[2];
 #endif
 
 /* Referred external types */
-#include "IPAddressOrRange.h"
+#include "asn1/asn1c/IPAddressOrRange.h"
 
 #endif	/* _IPAddressChoice_H_ */
 #include "asn1/asn1c/asn_internal.h"

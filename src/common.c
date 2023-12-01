@@ -1,16 +1,18 @@
 #include "common.h"
 
-#include <dirent.h> /* readdir(), closedir() */
-#include <limits.h> /* realpath() */
-#include <stdlib.h> /* malloc(), free(), realloc(), realpath() */
-#include <stdio.h> /* remove() */
-#include <string.h> /* strdup(), strrchr(), strcmp(), strcat(), etc */
-#include <unistd.h> /* stat(), rmdir() */
-#include <sys/stat.h> /* stat(), mkdir() */
-#include <sys/types.h> /* stat(), closedir(), mkdir() */
+#include <dirent.h>
+#include <errno.h>
+#include <time.h>
 
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
+
+bool
+str_starts_with(char const *str, char const *prefix)
+{
+	return strncmp(str, prefix, strlen(prefix)) == 0;
+}
 
 void
 panic_on_fail(int error, char const *function_name)
@@ -89,9 +91,11 @@ rwlock_unlock(pthread_rwlock_t *lock)
 
 static int
 process_file(char const *dir_name, char const *file_name, char const *file_ext,
-    int *fcount, process_file_cb cb, void *arg)
+    int *fcount, foreach_file_cb cb, void *arg)
 {
-	char *ext, *fullpath, *tmp;
+	char const *ext;
+	char *fullpath;
+	char *tmp;
 	int error;
 
 	if (file_ext != NULL) {
@@ -104,13 +108,8 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	(*fcount)++; /* Increment the found count */
 
 	/* Get the full file path */
-	tmp = strdup(dir_name);
-	if (tmp == NULL)
-		return pr_enomem();
-
-	tmp = realloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
-	if (tmp == NULL)
-		return pr_enomem();
+	tmp = pstrdup(dir_name);
+	tmp = prealloc(tmp, strlen(tmp) + 1 + strlen(file_name) + 1);
 
 	strcat(tmp, "/");
 	strcat(tmp, file_name);
@@ -131,7 +130,7 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 
 static int
 process_dir_files(char const *location, char const *file_ext, bool empty_err,
-    process_file_cb cb, void *arg)
+    foreach_file_cb cb, void *arg)
 {
 	DIR *dir_loc;
 	struct dirent *dir_ent;
@@ -173,9 +172,16 @@ end:
 	return error;
 }
 
+/*
+ * If @location points to a file, run @cb on it.
+ * If @location points to a directory, run @cb on every child file suffixed
+ * @file_ext.
+ *
+ * TODO (fine) It's weird that @file_ext only filters in directory mode.
+ */
 int
-process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
-    process_file_cb cb, void *arg)
+foreach_file(char const *location, char const *file_ext, bool empty_err,
+    foreach_file_cb cb, void *arg)
 {
 	struct stat attr;
 	int error;
@@ -194,77 +200,58 @@ process_file_or_dir(char const *location, char const *file_ext, bool empty_err,
 	return process_dir_files(location, file_ext, empty_err, cb, arg);
 }
 
-
 bool
-valid_file_or_dir(char const *location, bool check_file, bool check_dir,
-    int (*error_fn)(const char *format, ...))
+valid_file_or_dir(char const *location, bool check_file)
 {
 	struct stat attr;
 	bool is_file, is_dir;
 	bool result;
 
-	if (!check_file && !check_dir)
-		pr_crit("Wrong usage, at least one check must be 'true'.");
-
 	if (stat(location, &attr) == -1) {
-		if (error_fn != NULL) {
-			error_fn("stat(%s) failed: %s", location,
-			    strerror(errno));
-		}
+		pr_op_err("stat(%s) failed: %s", location, strerror(errno));
 		return false;
 	}
 
 	is_file = check_file && S_ISREG(attr.st_mode);
-	is_dir = check_dir && S_ISDIR(attr.st_mode);
+	is_dir = S_ISDIR(attr.st_mode);
 
 	result = is_file || is_dir;
 	if (!result)
 		pr_op_err("'%s' does not seem to be a %s", location,
-		    (check_file && check_dir) ? "file or directory" :
-		    (check_file) ? "file" : "directory");
+		    check_file ? "file or directory" : "directory");
 
 	return result;
 }
 
+/*
+ * > 0: exists
+ * = 0: !exists
+ * < 0: error
+ */
 static int
-dir_exists(char const *path, bool *result)
+dir_exists(char const *path)
 {
-	struct stat _stat;
-	char *last_slash;
+	struct stat meta;
 	int error;
 
-	last_slash = strrchr(path, '/');
-	if (last_slash == NULL) {
-		/*
-		 * Simply because create_dir_recursive() has nothing meaningful
-		 * to do when this happens. It's a pretty strange error.
-		 */
-		*result = true;
-		return 0;
-	}
-
-	*last_slash = '\0';
-
-	if (stat(path, &_stat) == 0) {
-		if (!S_ISDIR(_stat.st_mode)) {
-			return pr_op_err_st("Path '%s' exists and is not a directory.",
-			    path);
-		}
-		*result = true;
-	} else if (errno == ENOENT) {
-		*result = false;
-	} else {
+	if (stat(path, &meta) != 0) {
 		error = errno;
+		if (error == ENOENT)
+			return false;
 		pr_op_err_st("stat() failed: %s", strerror(error));
 		return error;
 	}
 
-	*last_slash = '/';
-	return 0;
+	if (!S_ISDIR(meta.st_mode)) {
+		return pr_op_err_st("Path '%s' exists and is not a directory.",
+		    path);
+	}
+
+	return 1;
 }
 
 static int
-create_dir(char *path)
+create_dir(char const *path)
 {
 	int error;
 
@@ -280,42 +267,44 @@ create_dir(char *path)
 	return 0;
 }
 
-/**
- * Apparently, RSYNC does not like to create parent directories.
- * This function fixes that.
- */
+/* mkdir -p $path */
 int
-create_dir_recursive(char const *path)
+mkdir_p(char const *path, bool include_basename)
 {
-	char *localuri;
-	int i, error;
-	bool exist = false;
+	char *localuri, *last_slash;
+	int i, result = 0;
 
-	error = dir_exists(path, &exist);
-	if (error)
-		return error;
-	if (exist)
-		return 0;
+	localuri = pstrdup(path); /* Remove const */
 
-	localuri = strdup(path);
-	if (localuri == NULL)
-		return pr_enomem();
+	if (!include_basename) {
+		last_slash = strrchr(localuri, '/');
+		if (last_slash == NULL)
+			goto end;
+		*last_slash = '\0';
+	}
+
+	result = dir_exists(localuri); /* short circuit */
+	if (result > 0) {
+		result = 0;
+		goto end;
+	} else if (result < 0) {
+		goto end;
+	}
 
 	for (i = 1; localuri[i] != '\0'; i++) {
 		if (localuri[i] == '/') {
 			localuri[i] = '\0';
-			error = create_dir(localuri);
+			result = create_dir(localuri);
 			localuri[i] = '/';
-			if (error) {
-				/* error msg already printed */
-				free(localuri);
-				return error;
-			}
+			if (result != 0)
+				goto end; /* error msg already printed */
 		}
 	}
+	result = create_dir(localuri);
 
+end:
 	free(localuri);
-	return 0;
+	return result;
 }
 
 static int
@@ -352,18 +341,11 @@ delete_dir_recursive_bottom_up(char const *path)
 	size_t config_len;
 	int error;
 
-#ifdef DEBUG_RRDP
-	/* Dev will likely need this file in the next offline run. */
-	return 0;
-#endif
-
 	error = remove_file(path);
 	if (error)
 		return error;
 
-	config_repo = strdup(config_get_local_repository());
-	if (config_repo == NULL)
-		return pr_enomem();
+	config_repo = pstrdup(config_get_local_repository());
 
 	/* Stop dir removal when the work_dir has this length */
 	config_len = strlen(config_repo);
@@ -371,9 +353,7 @@ delete_dir_recursive_bottom_up(char const *path)
 		config_len--;
 	free(config_repo);
 
-	work_loc = strdup(path);
-	if (work_loc == NULL)
-		return pr_enomem();
+	work_loc = pstrdup(path);
 
 	do {
 		tmp = strrchr(work_loc, '/');
@@ -422,64 +402,5 @@ get_current_time(time_t *result)
 	}
 
 	*result = now;
-	return 0;
-}
-
-/*
- * Maps an absolute @uri that begins with @uri_prefix (either 'rsync://' or
- * 'https://') to a local URI. If a @workspace is set, append such location
- * to the local-repository location (this workspace is used at https URIs).
- *
- * @result is allocated with the local URI.
- *
- * Returns 0 on success, otherwise an error code.
- */
-int
-map_uri_to_local(char const *uri, char const *uri_prefix, char const *workspace,
-    char **result)
-{
-	char const *repository;
-	char *local;
-	size_t repository_len;
-	size_t uri_prefix_len;
-	size_t uri_len;
-	size_t workspace_len;
-	size_t extra_slash;
-	size_t offset;
-
-	repository = config_get_local_repository();
-	repository_len = strlen(repository);
-	uri_prefix_len = strlen(uri_prefix);
-	uri_len = strlen(uri);
-
-	uri += uri_prefix_len;
-	uri_len -= uri_prefix_len;
-	extra_slash = (repository[repository_len - 1] == '/') ? 0 : 1;
-
-	workspace_len = 0;
-	if (workspace != NULL)
-		workspace_len = strlen(workspace);
-
-	local = malloc(repository_len + extra_slash + workspace_len + uri_len +
-	    1);
-	if (local == NULL)
-		return pr_enomem();
-
-	offset = 0;
-	strcpy(local + offset, repository);
-	offset += repository_len;
-	if (extra_slash) {
-		strcpy(local + offset, "/");
-		offset += extra_slash;
-	}
-	if (workspace_len > 0) {
-		strcpy(local + offset, workspace);
-		offset += workspace_len;
-	}
-	strncpy(local + offset, uri, uri_len);
-	offset += uri_len;
-	local[offset] = '\0';
-
-	*result = local;
 	return 0;
 }

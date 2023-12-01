@@ -8,78 +8,19 @@
 #ifndef	ASN_SYSTEM_H
 #define	ASN_SYSTEM_H
 
-#ifdef	HAVE_CONFIG_H
-#include "config.h"
-#endif
+#include <arpa/inet.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <netinet/in.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE 1
-#endif
-
-#ifndef _BSD_SOURCE
-#define _BSD_SOURCE /* for snprintf() on some linux systems  */
-#endif
-
-#include <stdio.h>	/* For snprintf(3) */
-#include <stdlib.h>	/* For *alloc(3) */
-#include <string.h>	/* For memcpy(3) */
-#include <sys/types.h>	/* For size_t */
-#include <limits.h>	/* For LONG_MAX */
-#include <stdarg.h>	/* For va_start */
-#include <stddef.h>	/* for offsetof and ptrdiff_t */
-
-#ifdef	_WIN32
-
-#include <malloc.h>
-#define	 snprintf	_snprintf
-#define	 vsnprintf	_vsnprintf
-
-/* To avoid linking with ws2_32.lib, here's the definition of ntohl() */
-#define sys_ntohl(l)	((((l) << 24)  & 0xff000000)	\
-			| (((l) << 8) & 0xff0000)	\
-			| (((l) >> 8)  & 0xff00)	\
-			| ((l >> 24) & 0xff))
-
-#ifdef _MSC_VER			/* MSVS.Net */
-#ifndef __cplusplus
-#define inline __inline
-#endif
-#ifndef	ASSUMESTDTYPES	/* Standard types have been defined elsewhere */
-#define	ssize_t		SSIZE_T
-#if _MSC_VER < 1600
-typedef	char		int8_t;
-typedef	short		int16_t;
-typedef	int		int32_t;
-typedef	unsigned char	uint8_t;
-typedef	unsigned short	uint16_t;
-typedef	unsigned int	uint32_t;
-#else /* _MSC_VER >= 1600 */
-#include <stdint.h>
-#endif /* _MSC_VER < 1600 */
-#endif	/* ASSUMESTDTYPES */
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <float.h>
-#define isnan _isnan
-#define finite _finite
-#define copysign _copysign
-#define	ilogb	_logb
-#else	/* !_MSC_VER */
-#include <stdint.h>
-#endif	/* _MSC_VER */
-
-#else	/* !_WIN32 */
-
-#if defined(__vxworks)
-#include <types/vxTypes.h>
-#else	/* !defined(__vxworks) */
-
-#include <inttypes.h>	/* C99 specifies this file */
-#include <netinet/in.h> /* for ntohl() */
 #define	sys_ntohl(foo)	ntohl(foo)
-#endif	/* defined(__vxworks) */
-
-#endif	/* _WIN32 */
 
 #if	__GNUC__ >= 3 || defined(__clang__)
 #define CC_ATTRIBUTE(attr)    __attribute__((attr))

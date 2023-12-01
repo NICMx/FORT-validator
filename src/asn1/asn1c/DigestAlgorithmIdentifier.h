@@ -12,7 +12,7 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "AlgorithmIdentifier.h"
+#include "asn1/asn1c/AlgorithmIdentifier.h"
 
 #ifdef __cplusplus
 extern "C" {

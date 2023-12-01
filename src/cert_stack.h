@@ -1,8 +1,7 @@
 #ifndef SRC_CERT_STACK_H_
 #define SRC_CERT_STACK_H_
 
-#include <openssl/x509.h>
-#include <stdbool.h>
+#include <openssl/bn.h>
 #include "resource.h"
 #include "object/certificate.h"
 #include "object/name.h"
@@ -38,7 +37,7 @@ struct deferred_cert {
 int certstack_create(struct cert_stack **);
 void certstack_destroy(struct cert_stack *);
 
-int deferstack_push(struct cert_stack *, struct deferred_cert *cert);
+void deferstack_push(struct cert_stack *, struct deferred_cert *cert);
 int deferstack_pop(struct cert_stack *, struct deferred_cert *cert);
 bool deferstack_is_empty(struct cert_stack *);
 
@@ -48,8 +47,7 @@ void x509stack_cancel(struct cert_stack *);
 X509 *x509stack_peek(struct cert_stack *);
 struct rpki_uri *x509stack_peek_uri(struct cert_stack *);
 struct resources *x509stack_peek_resources(struct cert_stack *);
-unsigned int x509stack_peek_level(struct cert_stack *);
-int x509stack_store_serial(struct cert_stack *, BIGNUM *);
+void x509stack_store_serial(struct cert_stack *, BIGNUM *);
 typedef int (*subject_pk_check_cb)(bool *, char const *, void *);
 int x509stack_store_subject(struct cert_stack *, struct rfc5280_name *,
     subject_pk_check_cb, void *);

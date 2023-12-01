@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "CertificateSet.h"
+#include "asn1/asn1c/CertificateSet.h"
 
 asn_TYPE_member_t asn_MBR_CertificateSet_1[] = {
 	{ ATF_ANY_TYPE | ATF_POINTER, 0, 0,
@@ -41,4 +41,3 @@ asn_TYPE_descriptor_t asn_DEF_CertificateSet = {
 	1,	/* Single element */
 	&asn_SPC_CertificateSet_specs_1	/* Additional specs */
 };
-

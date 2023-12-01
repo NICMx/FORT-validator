@@ -3,6 +3,9 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#include <assert.h>
+
 #include "asn1/asn1c/asn_system.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/asn_bit_data.h"
@@ -330,4 +333,3 @@ asn_put_aligned_flush(asn_bit_outp_t *po) {
         return 0;
     }
 }
-

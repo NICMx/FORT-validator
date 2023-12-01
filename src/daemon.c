@@ -1,10 +1,14 @@
 #include "daemon.h"
 
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <errno.h>
-#include <signal.h>
-#include <stdlib.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include "log.h"
 
@@ -31,8 +35,13 @@ daemonize(daemon_log_cb log_cb)
 
 	/* Get the working dir, the daemon will use (and free) it later */
 	pwd = getcwd(NULL, 0);
-	if (pwd == NULL)
-		return pr_enomem();
+	if (pwd == NULL) {
+		error = errno;
+		if (error == ENOMEM)
+			enomem_panic();
+		pr_op_err("Cannot get current directory: %s", strerror(error));
+		return error;
+	}
 
 	pid = fork();
 	if (pid < 0) {

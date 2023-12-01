@@ -120,7 +120,7 @@ START_TEST(rfc1982_section_5_2)
 }
 END_TEST
 
-Suite *serial_suite(void)
+static Suite *serial_suite(void)
 {
 	Suite *suite;
 	TCase *core;

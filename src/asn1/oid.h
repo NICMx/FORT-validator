@@ -1,7 +1,6 @@
 #ifndef SRC_OID_H_
 #define SRC_OID_H_
 
-#include <stdbool.h>
 #include "common.h"
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"

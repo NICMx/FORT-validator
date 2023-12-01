@@ -10,6 +10,8 @@ struct db_table;
 struct db_table *db_table_create(void);
 void db_table_destroy(struct db_table *);
 
+int db_table_join(struct db_table *, struct db_table *);
+
 unsigned int db_table_roa_count(struct db_table *);
 unsigned int db_table_router_key_count(struct db_table *);
 
@@ -27,7 +29,5 @@ int rtrhandler_handle_roa_v6(struct db_table *, uint32_t,
 int rtrhandler_handle_router_key(struct db_table *, unsigned char const *,
     uint32_t, unsigned char const *);
 int compute_deltas(struct db_table *, struct db_table *, struct deltas **);
-
-void find_bad_vrp(char const *, struct db_table *);
 
 #endif /* SRC_RTR_DB_DB_TABLE_H_ */

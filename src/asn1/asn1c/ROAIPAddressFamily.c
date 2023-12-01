@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "ROAIPAddressFamily.h"
+#include "asn1/asn1c/ROAIPAddressFamily.h"
 
 static int
 memb_addressFamily_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
@@ -50,7 +50,7 @@ memb_addresses_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
 	
 	if((size >= 1)) {
 		/* Perform validation of the inner elements */
-		return td->encoding_constraints.general_constraints(td, sptr, ctfailcb, app_key);
+		return SEQUENCE_OF_constraint(td, sptr, ctfailcb, app_key);
 	} else {
 		ASN__CTFAIL(app_key, td, sptr,
 			"%s: constraint failed (%s:%d)",
@@ -154,4 +154,3 @@ asn_TYPE_descriptor_t asn_DEF_ROAIPAddressFamily = {
 	2,	/* Elements count */
 	&asn_SPC_ROAIPAddressFamily_specs_1	/* Additional specs */
 };
-

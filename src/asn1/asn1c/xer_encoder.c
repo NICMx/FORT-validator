@@ -3,8 +3,6 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 #include "asn1/asn1c/asn_internal.h"
-#include <stdio.h>
-#include <errno.h>
 
 /*
  * The XER encoder of any type. May be invoked by the application.
@@ -234,4 +232,3 @@ xer_equivalent(const struct asn_TYPE_descriptor_s *td, const void *struct1,
 	FREEMEM(xb2.buffer);
 	return XEQ_SUCCESS;
 }
-

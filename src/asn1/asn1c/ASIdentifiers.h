@@ -38,7 +38,7 @@ extern asn_TYPE_descriptor_t asn_DEF_ASIdentifiers;
 #endif
 
 /* Referred external types */
-#include "ASIdentifierChoice.h"
+#include "asn1/asn1c/ASIdentifierChoice.h"
 
 #endif	/* _ASIdentifiers_H_ */
 #include "asn1/asn1c/asn_internal.h"

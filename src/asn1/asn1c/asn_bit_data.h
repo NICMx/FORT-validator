@@ -6,6 +6,8 @@
 #define	ASN_BIT_DATA
 
 #include "asn1/asn1c/asn_system.h"		/* Platform-specific types */
+#include <netdb.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {

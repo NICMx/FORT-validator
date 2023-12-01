@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "IPAddressOrRange.h"
+#include "asn1/asn1c/IPAddressOrRange.h"
 
 static asn_oer_constraints_t asn_OER_type_IPAddressOrRange_constr_1 CC_NOTUSED = {
 	{ 0, 0 },
@@ -57,4 +57,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressOrRange = {
 	2,	/* Elements count */
 	&asn_SPC_IPAddressOrRange_specs_1	/* Additional specs */
 };
-

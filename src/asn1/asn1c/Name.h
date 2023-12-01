@@ -12,7 +12,7 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "RDNSequence.h"
+#include "asn1/asn1c/RDNSequence.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
 #ifdef __cplusplus

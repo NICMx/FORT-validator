@@ -12,7 +12,7 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "BinaryTime.h"
+#include "asn1/asn1c/BinaryTime.h"
 
 #ifdef __cplusplus
 extern "C" {

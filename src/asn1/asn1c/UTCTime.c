@@ -2,16 +2,13 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/UTCTime.h"
 #include "asn1/asn1c/GeneralizedTime.h"
-#include <errno.h>
 
-#ifdef	__CYGWIN__
-#include "/usr/include/time.h"
-#else
-#include <time.h>
-#endif	/* __CYGWIN__ */
+#include <assert.h>
+#include <errno.h>
 
 #ifndef	ASN___INTERNAL_TEST_MODE
 
@@ -77,11 +74,12 @@ int
 UTCTime_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
                    asn_app_constraint_failed_f *ctfailcb, void *app_key) {
     const UTCTime_t *st = (const UTCTime_t *)sptr;
-	time_t tloc;
 
-	errno = EPERM;			/* Just an unlikely error code */
-	tloc = asn_UT2time(st, 0, 0);
-	if(tloc == -1 && errno != EPERM) {
+    /* asn_UT2time() no longer supports NULL tm and no GMT. */
+    fprintf(stderr, "UTCTime_constraint() is not implemented for now.\n");
+    abort();
+
+	if(asn_UT2time(st, 0) != 0) {
         ASN__CTFAIL(app_key, td, sptr, "%s: Invalid time format: %s (%s:%d)",
                     td->name, strerror(errno), __FILE__, __LINE__);
         return -1;
@@ -101,13 +99,11 @@ UTCTime_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
 		UTCTime_t *ut;
 		struct tm tm;
 
-		errno = EPERM;
-		if(asn_UT2time((const UTCTime_t *)sptr, &tm, 1) == -1
-				&& errno != EPERM)
+		if(asn_UT2time((const UTCTime_t *)sptr, &tm) != 0)
 			ASN__ENCODE_FAILED;
 
 		/* Fractions are not allowed in UTCTime */
-		ut = asn_time2UT(0, &tm, 1);
+		ut = asn_time2UT(0, &tm);
 		if(!ut) ASN__ENCODE_FAILED;
 
 		rv = OCTET_STRING_encode_xer_utf8(td, sptr, ilevel, flags,
@@ -135,8 +131,7 @@ UTCTime_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		struct tm tm;
 		int ret;
 
-		errno = EPERM;
-		if(asn_UT2time(st, &tm, 1) == -1 && errno != EPERM)
+		if(asn_UT2time(st, &tm) != 0)
 			return (cb("<bad-value>", 11, app_key) < 0) ? -1 : 0;
 
 		ret = snprintf(buf, sizeof(buf),
@@ -151,7 +146,7 @@ UTCTime_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 }
 
 time_t
-asn_UT2time(const UTCTime_t *st, struct tm *_tm, int as_gmt) {
+asn_UT2time(const UTCTime_t *st, struct tm *_tm) {
 	char buf[24];	/* "AAMMJJhhmmss+hhmm" + cushion */
 	GeneralizedTime_t gt;
 
@@ -174,14 +169,14 @@ asn_UT2time(const UTCTime_t *st, struct tm *_tm, int as_gmt) {
 		gt.buf[1] = 0x30;
 	}
 
-	return asn_GT2time(&gt, _tm, as_gmt);
+	return asn_GT2time(&gt, _tm);
 }
 
 UTCTime_t *
-asn_time2UT(UTCTime_t *opt_ut, const struct tm *tm, int force_gmt) {
+asn_time2UT(UTCTime_t *opt_ut, const struct tm *tm) {
 	GeneralizedTime_t *gt = (GeneralizedTime_t *)opt_ut;
 
-	gt = asn_time2GT(gt, tm, force_gmt);
+	gt = asn_time2GT(gt, tm);
 	if(gt == 0) return 0;
 
 	assert(gt->size >= 2);
@@ -232,15 +227,19 @@ UTCTime_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
 
     (void)td;
 
+    /* asn_UT2time() no longer supports NULL tm and no GMT. */
+    fprintf(stderr, "UTCTime_compare() is not implemented for now.\n");
+    abort();
+
     if(a && b) {
         time_t at, bt;
         int aerr, berr;
 
         errno = EPERM;
-        at = asn_UT2time(a, 0, 0);
+        at = asn_UT2time(a, 0);
         aerr = errno;
         errno = EPERM;
-        bt = asn_UT2time(b, 0, 0);
+        bt = asn_UT2time(b, 0);
         berr = errno;
 
         if(at == -1 && aerr != EPERM) {
@@ -270,4 +269,3 @@ UTCTime_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
         return 1;
     }
 }
-

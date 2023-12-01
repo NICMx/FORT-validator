@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "Version.h"
+#include "asn1/asn1c/Version.h"
 
 /*
  * This type is implemented using INTEGER,
@@ -28,4 +28,3 @@ asn_TYPE_descriptor_t asn_DEF_Version = {
 	0, 0,	/* Defined elsewhere */
 	0	/* No specifics */
 };
-

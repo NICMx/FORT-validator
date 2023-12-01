@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "IPAddress.h"
+#include "asn1/asn1c/IPAddress.h"
 
 /*
  * This type is implemented using BIT_STRING,
@@ -28,4 +28,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddress = {
 	0, 0,	/* No members */
 	&asn_SPC_BIT_STRING_specs	/* Additional specs */
 };
-

@@ -16,15 +16,6 @@ void fnstack_push_uri(struct rpki_uri *);
 char const *fnstack_peek(void);
 void fnstack_pop(void);
 
-void working_repo_init(void);
-void working_repo_cleanup(void);
-
-void working_repo_push(char const *);
-void working_repo_push_level(unsigned int);
-char const *working_repo_peek(void);
-unsigned int working_repo_peek_level(void);
-void working_repo_pop(void);
-
 /* Please remember that these functions can only be used during validations. */
 char const *v4addr2str(struct in_addr const *);
 char const *v4addr2str2(struct in_addr const *);

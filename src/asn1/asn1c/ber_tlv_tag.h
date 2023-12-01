@@ -5,6 +5,16 @@
 #ifndef	_BER_TLV_TAG_H_
 #define	_BER_TLV_TAG_H_
 
+#include <netinet/in.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

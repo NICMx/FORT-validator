@@ -6,6 +6,8 @@
 #define	_UTCTime_H_
 
 #include "asn1/asn1c/OCTET_STRING.h"
+#include <sys/stat.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,10 +38,10 @@ asn_random_fill_f  UTCTime_random_fill;
 struct tm;	/* <time.h> */
 
 /* See asn_GT2time() in GeneralizedTime.h */
-time_t asn_UT2time(const UTCTime_t *, struct tm *_optional_tm4fill, int as_gmt);
+time_t asn_UT2time(const UTCTime_t *, struct tm *_optional_tm4fill);
 
 /* See asn_time2GT() in GeneralizedTime.h */
-UTCTime_t *asn_time2UT(UTCTime_t *__opt_ut, const struct tm *, int force_gmt);
+UTCTime_t *asn_time2UT(UTCTime_t *__opt_ut, const struct tm *);
 
 #ifdef __cplusplus
 }

@@ -1,9 +1,8 @@
 #ifndef SRC_LOG_H_
 #define SRC_LOG_H_
 
-#include <errno.h>
-#include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include "incidence/incidence.h"
 
 /*
@@ -91,8 +90,11 @@ int pr_val_err(const char *, ...) CHECK_FORMAT(1, 2);
 /* Like pr_val_err(), except it prints libcrypto's error stack as well. */
 int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 
-/* Like pr_*_err(), specific to out-of-memory situations. */
-int pr_enomem(void);
+/*
+ * Like pr_*_err(), specific to out-of-memory situations.
+ * Also terminates the program.
+ */
+__dead void enomem_panic(void);
 /* Programming errors */
 __dead void pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
 

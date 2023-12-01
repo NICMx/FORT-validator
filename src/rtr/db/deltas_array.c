@@ -1,8 +1,11 @@
 #include "rtr/db/deltas_array.h"
 
-#include <limits.h>
 #include <errno.h>
+#include <limits.h>
+
+#include "alloc.h"
 #include "config.h"
+#include "log.h"
 
 struct deltas_array {
 	struct deltas **array; /* It's a circular array. */
@@ -15,19 +18,13 @@ darray_create(void)
 {
 	struct deltas_array *result;
 
-	result = malloc(sizeof(struct deltas_array));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct deltas_array));
 
-	result->array = calloc(config_get_deltas_lifetime(),
+	result->array = pcalloc(config_get_deltas_lifetime(),
 	    sizeof(struct deltas *));
-	if (result->array == NULL) {
-		free(result);
-		return NULL;
-	}
-
 	result->len = 0;
 	result->last = UINT_MAX;
+
 	return result;
 }
 

@@ -1,8 +1,10 @@
 #ifndef SRC_EXTENSION_H_
 #define SRC_EXTENSION_H_
 
-#include <stdbool.h>
+#include <openssl/asn1.h>
+#include <openssl/safestack.h>
 #include <openssl/x509.h>
+#include <stdbool.h>
 
 struct extension_metadata {
 	char const *name;

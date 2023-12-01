@@ -1,6 +1,5 @@
 #include "certificate_refs.h"
 
-#include <errno.h>
 #include "log.h"
 #include "thread_var.h"
 
@@ -58,7 +57,7 @@ validate_signedObject(struct certificate_refs *refs,
 
 /**
  * Ensures the @refs URIs match the parent Manifest's URIs. Assumes @refs came
- * from a CA certificate.
+ * from a (non-TA) CA certificate.
  *
  * @refs: References you want validated.
  * @pp: Repository Publication Point, as described by the parent Manifest.
@@ -67,9 +66,6 @@ int
 refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 {
 	int error;
-
-	if (pp == NULL)
-		return 0; /* This CA is the TA, and therefore lacks a parent. */
 
 	error = validate_cdp(refs, pp);
 	if (error)

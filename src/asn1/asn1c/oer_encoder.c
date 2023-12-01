@@ -2,6 +2,9 @@
  * Copyright (c) 2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#include <assert.h>
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/asn_codecs_prim.h"
 
@@ -138,4 +141,3 @@ oer_open_type_put(const asn_TYPE_descriptor_t *td,
 
     return len_len + er.encoded;
 }
-

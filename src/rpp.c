@@ -1,6 +1,6 @@
 #include "rpp.h"
 
-#include <stdlib.h>
+#include "alloc.h"
 #include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
@@ -11,11 +11,9 @@
 #include "object/ghostbusters.h"
 #include "object/roa.h"
 
-STATIC_ARRAY_LIST(uris, struct rpki_uri *)
-
 /** A Repository Publication Point (RFC 6481), as described by some manifest. */
 struct rpp {
-	struct uris certs; /* Certificates */
+	struct uri_list certs; /* Certificates */
 
 	/*
 	 * uri NULL implies stack NULL and error 0.
@@ -39,9 +37,9 @@ struct rpp {
 
 	/* The Manifest is not needed for now. */
 
-	struct uris roas; /* Route Origin Attestations */
+	struct uri_list roas; /* Route Origin Attestations */
 
-	struct uris ghostbusters;
+	struct uri_list ghostbusters;
 
 	/*
 	 * Note that the reference counting functions are not prepared for
@@ -55,9 +53,7 @@ rpp_create(void)
 {
 	struct rpp *result;
 
-	result = malloc(sizeof(struct rpp));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct rpp));
 
 	uris_init(&result->certs);
 	result->crl.uri = NULL;
@@ -76,47 +72,41 @@ rpp_refget(struct rpp *pp)
 	pp->references++;
 }
 
-static void
-__uri_refput(struct rpki_uri **uri)
-{
-	uri_refput(*uri);
-}
-
 void
 rpp_refput(struct rpp *pp)
 {
 	pp->references--;
 	if (pp->references == 0) {
-		uris_cleanup(&pp->certs, __uri_refput);
+		uris_cleanup(&pp->certs);
 		if (pp->crl.uri != NULL)
 			uri_refput(pp->crl.uri);
 		if (pp->crl.stack != NULL)
 			sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
-		uris_cleanup(&pp->roas, __uri_refput);
-		uris_cleanup(&pp->ghostbusters, __uri_refput);
+		uris_cleanup(&pp->roas);
+		uris_cleanup(&pp->ghostbusters);
 		free(pp);
 	}
 }
 
 /** Steals ownership of @uri. */
-int
+void
 rpp_add_cert(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->certs, &uri);
+	uris_add(&pp->certs, uri);
 }
 
 /** Steals ownership of @uri. */
-int
+void
 rpp_add_roa(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->roas, &uri);
+	uris_add(&pp->roas, uri);
 }
 
 /** Steals ownership of @uri. */
-int
+void
 rpp_add_ghostbusters(struct rpp *pp, struct rpki_uri *uri)
 {
-	return uris_add(&pp->ghostbusters, &uri);
+	uris_add(&pp->ghostbusters, uri);
 }
 
 /** Steals ownership of @uri. */
@@ -195,10 +185,8 @@ rpp_crl(struct rpp *pp, STACK_OF(X509_CRL) **result)
 
 	/* -- Actually initialize pp->crl.stack. -- */
 	stack = sk_X509_CRL_new_null();
-	if (stack == NULL) {
-		pp->crl.error = pr_enomem();
-		return pp->crl.error;
-	}
+	if (stack == NULL)
+		enomem_panic();
 	pp->crl.error = add_crl_to_stack(pp, stack);
 	if (pp->crl.error) {
 		sk_X509_CRL_pop_free(stack, X509_CRL_free);
@@ -217,14 +205,11 @@ __cert_traverse(struct rpp *pp)
 	struct cert_stack *certstack;
 	ssize_t i;
 	struct deferred_cert deferred;
-	int error;
 
 	if (pp->certs.len == 0)
 		return 0;
 
 	state = state_retrieve();
-	if (state == NULL)
-		return -EINVAL;
 	certstack = validation_certstack(state);
 
 	deferred.pp = pp;
@@ -235,9 +220,7 @@ __cert_traverse(struct rpp *pp)
 	 */
 	for (i = pp->certs.len - 1; i >= 0; i--) {
 		deferred.uri = pp->certs.array[i];
-		error = deferstack_push(certstack, &deferred);
-		if (error)
-			return error;
+		deferstack_push(certstack, &deferred);
 	}
 
 	return 0;
@@ -250,7 +233,6 @@ void
 rpp_traverse(struct rpp *pp)
 {
 	struct rpki_uri **uri;
-	array_index i;
 
 	/*
 	 * A subtree should not invalidate the rest of the tree, so error codes
@@ -267,13 +249,13 @@ rpp_traverse(struct rpp *pp)
 	__cert_traverse(pp);
 
 	/* Validate ROAs, apply validation_handler on them. */
-	ARRAYLIST_FOREACH(&pp->roas, uri, i)
+	ARRAYLIST_FOREACH(&pp->roas, uri)
 		roa_traverse(*uri, pp);
 
 	/*
 	 * We don't do much with the ghostbusters right now.
 	 * Just validate them.
 	 */
-	ARRAYLIST_FOREACH(&pp->ghostbusters, uri, i)
+	ARRAYLIST_FOREACH(&pp->ghostbusters, uri)
 		ghostbusters_traverse(*uri, pp);
 }

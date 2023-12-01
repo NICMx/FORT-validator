@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "IPAddressFamily.h"
+#include "asn1/asn1c/IPAddressFamily.h"
 
 static int
 memb_addressFamily_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
@@ -87,4 +87,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressFamily = {
 	2,	/* Elements count */
 	&asn_SPC_IPAddressFamily_specs_1	/* Additional specs */
 };
-

@@ -1,16 +1,15 @@
 #include "resource.h"
 
 #include <errno.h>
-#include <stdint.h> /* UINT32_MAX */
 
+#include "alloc.h"
+#include "cert_stack.h"
 #include "log.h"
 #include "sorted_array.h"
 #include "thread_var.h"
 #include "types/address.h"
 #include "resource/ip4.h"
 #include "resource/ip6.h"
-#include <sys/socket.h>
-
 
 /* The resources we extracted from one certificate. */
 struct resources {
@@ -30,18 +29,16 @@ struct resources {
 };
 
 struct resources *
-resources_create(bool force_inherit)
+resources_create(enum rpki_policy policy, bool force_inherit)
 {
 	struct resources *result;
 
-	result = malloc(sizeof(struct resources));
-	if (result == NULL)
-		return NULL;
+	result = pmalloc(sizeof(struct resources));
 
 	result->ip4s = NULL;
 	result->ip6s = NULL;
 	result->asns = NULL;
-	result->policy = RPKI_POLICY_RFC6484;
+	result->policy = policy;
 	result->force_inherit = force_inherit;
 
 	return result;
@@ -86,10 +83,7 @@ unknown:
 static struct resources *
 get_parent_resources(void)
 {
-	struct validation *state = state_retrieve();
-	return (state != NULL)
-	    ? x509stack_peek_resources(validation_certstack(state))
-	    : NULL;
+	return x509stack_peek_resources(validation_certstack(state_retrieve()));
 }
 
 static int
@@ -151,11 +145,8 @@ add_prefix4(struct resources *resources, IPAddress_t *addr)
 		}
 	}
 
-	if (resources->ip4s == NULL) {
+	if (resources->ip4s == NULL)
 		resources->ip4s = res4_create();
-		if (resources->ip4s == NULL)
-			return pr_enomem();
-	}
 
 	error = res4_add_prefix(resources->ip4s, &prefix);
 	if (error) {
@@ -196,11 +187,8 @@ add_prefix6(struct resources *resources, IPAddress_t *addr)
 		}
 	}
 
-	if (resources->ip6s == NULL) {
+	if (resources->ip6s == NULL)
 		resources->ip6s = res6_create();
-		if (resources->ip6s == NULL)
-			return pr_enomem();
-	}
 
 	error = res6_add_prefix(resources->ip6s, &prefix);
 	if (error) {
@@ -254,11 +242,8 @@ add_range4(struct resources *resources, IPAddressRange_t *input)
 		}
 	}
 
-	if (resources->ip4s == NULL) {
+	if (resources->ip4s == NULL)
 		resources->ip4s = res4_create();
-		if (resources->ip4s == NULL)
-			return pr_enomem();
-	}
 
 	error = res4_add_range(resources->ip4s, &range);
 	if (error) {
@@ -300,11 +285,8 @@ add_range6(struct resources *resources, IPAddressRange_t *input)
 		}
 	}
 
-	if (resources->ip6s == NULL) {
+	if (resources->ip6s == NULL)
 		resources->ip6s = res6_create();
-		if (resources->ip6s == NULL)
-			return pr_enomem();
-	}
 
 	error = res6_add_range(resources->ip6s, &range);
 	if (error) {
@@ -414,12 +396,13 @@ inherit_asiors(struct resources *resources)
 }
 
 static int
-ASId2ulong(ASId_t *as_id, unsigned long *result)
+ASId2u32(ASId_t *as_id, uint32_t *result)
 {
 	static const unsigned long ASN_MAX = UINT32_MAX;
+	unsigned long ulong;
 	int error;
 
-	error = asn_INTEGER2ulong(as_id, result);
+	error = asn_INTEGER2ulong(as_id, &ulong);
 	if (error) {
 		if (errno) {
 			pr_val_err("Error converting ASN value: %s",
@@ -428,51 +411,51 @@ ASId2ulong(ASId_t *as_id, unsigned long *result)
 		return pr_val_err("ASN value is not a valid unsigned long");
 	}
 
-	if ((*result) > ASN_MAX) {
+	if (ulong > ASN_MAX) {
 		return pr_val_err("ASN value '%lu' is out of bounds. (0-%lu)",
-		    *result, ASN_MAX);
+		    ulong, ASN_MAX);
 	}
 
+	*result = ulong;
 	return 0;
 }
 
 static int
-add_asn(struct resources *resources, unsigned long min, unsigned long max,
+add_asn(struct resources *resources, struct asn_range const *asns,
     struct resources *parent)
 {
 	int error;
 
-	if (min > max)
-		return pr_val_err("The ASN range %lu-%lu is inverted.", min, max);
+	if (asns->min > asns->max) {
+		return pr_val_err("The ASN range %u-%u is inverted.",
+		    asns->min, asns->max);
+	}
 
-	if (parent && !rasn_contains(parent->asns, min, max)) {
+	if (parent && !rasn_contains(parent->asns, asns)) {
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
-			return pr_val_err("Parent certificate doesn't own ASN range '%lu-%lu'.",
-			    min, max);
+			return pr_val_err("Parent certificate doesn't own ASN range '%u-%u'.",
+			    asns->min, asns->max);
 		case RPKI_POLICY_RFC8360:
-			return pr_val_warn("Certificate is overclaiming the ASN range '%lu-%lu'.",
-			    min, max);
+			return pr_val_warn("Certificate is overclaiming the ASN range '%u-%u'.",
+			    asns->min, asns->max);
 		}
 	}
 
-	if (resources->asns == NULL) {
+	if (resources->asns == NULL)
 		resources->asns = rasn_create();
-		if (resources->asns == NULL)
-			return pr_enomem();
-	}
 
-	error = rasn_add(resources->asns, min, max);
+	error = rasn_add(resources->asns, asns);
 	if (error){
-		pr_val_err("Error adding ASN range '%lu-%lu' to certificate resources: %s",
-		    min, max, sarray_err2str(error));
+		pr_val_err("Error adding ASN range '%u-%u' to certificate resources: %s",
+		    asns->min, asns->max, sarray_err2str(error));
 		return error;
 	}
 
-	if (min == max)
-		pr_val_debug("ASN: %lu", min);
+	if (asns->min == asns->max)
+		pr_val_debug("ASN: %u", asns->min);
 	else
-		pr_val_debug("ASN: %lu-%lu", min, max);
+		pr_val_debug("ASN: %u-%u", asns->min, asns->max);
 	return 0;
 }
 
@@ -480,8 +463,7 @@ static int
 add_asior(struct resources *resources, struct ASIdOrRange *obj)
 {
 	struct resources *parent;
-	unsigned long asn_min;
-	unsigned long asn_max;
+	struct asn_range asns;
 	int error;
 
 	parent = get_parent_resources();
@@ -494,19 +476,20 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 		break;
 
 	case ASIdOrRange_PR_id:
-		error = ASId2ulong(&obj->choice.id, &asn_min);
+		error = ASId2u32(&obj->choice.id, &asns.min);
 		if (error)
 			return error;
-		return add_asn(resources, asn_min, asn_min, parent);
+		asns.max = asns.min;
+		return add_asn(resources, &asns, parent);
 
 	case ASIdOrRange_PR_range:
-		error = ASId2ulong(&obj->choice.range.min, &asn_min);
+		error = ASId2u32(&obj->choice.range.min, &asns.min);
 		if (error)
 			return error;
-		error = ASId2ulong(&obj->choice.range.max, &asn_max);
+		error = ASId2u32(&obj->choice.range.max, &asns.max);
 		if (error)
 			return error;
-		return add_asn(resources, asn_min, asn_max, parent);
+		return add_asn(resources, &asns, parent);
 	}
 
 	return pr_val_err("Unknown ASIdOrRange type: %u", obj->present);
@@ -568,19 +551,19 @@ resources_empty(struct resources *res)
 }
 
 bool
-resources_contains_asn(struct resources *res, unsigned long asn)
+resources_contains_asns(struct resources *res, struct asn_range const *range)
 {
-	return rasn_contains(res->asns, asn, asn);
+	return rasn_contains(res->asns, range);
 }
 
 bool
-resources_contains_ipv4(struct resources *res, struct ipv4_prefix *prefix)
+resources_contains_ipv4(struct resources *res, struct ipv4_prefix const *prefix)
 {
 	return res4_contains_prefix(res->ip4s, prefix);
 }
 
 bool
-resources_contains_ipv6(struct resources *res, struct ipv6_prefix *prefix)
+resources_contains_ipv6(struct resources *res, struct ipv6_prefix const *prefix)
 {
 	return res6_contains_prefix(res->ip6s, prefix);
 }

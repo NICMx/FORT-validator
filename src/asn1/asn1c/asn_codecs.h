@@ -5,6 +5,14 @@
 #ifndef	ASN_CODECS_H
 #define	ASN_CODECS_H
 
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

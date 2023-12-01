@@ -3,30 +3,17 @@
 
 #include <pthread.h>
 #include <stdbool.h>
-#include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-/* "I think that this is not supposed to be implemented." */
+/* "I think this is not supposed to be implemented." */
 #define ENOTSUPPORTED 3172
 /* "I haven't implemented this yet." */
 #define ENOTIMPLEMENTED 3173
-/*
- * "URI was not RSYNC; ignore it."
- * Not really an error. The RFCs usually declare URI lists; usually only one of
- * them is required to be RSYNC and the others should be skipped (until we
- * start supporting them.)
- */
+/* "URI was not RSYNC." */
 #define ENOTRSYNC 3174
-/*
- * "URI was not HTTPS; ignore it."
- * Not necessarily an error (just as ENOTRSYNC), since both type of URIs can
- * still coexist in most scenarios.
- */
+/* "URI was not HTTPS." */
 #define ENOTHTTPS 3175
-
-/*
- * A request made to a server (eg. rsync, http) has failed, even after retrying
- */
-#define EREQFAILED 3176
 
 /*
  * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
@@ -37,6 +24,8 @@
 #define ENSURE_NEGATIVE(error) (((error) < 0) ? (error) : -(error))
 
 #define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
+
+bool str_starts_with(char const *, char const *);
 
 void panic_on_fail(int, char const *);
 
@@ -55,18 +44,14 @@ int rwlock_read_lock(pthread_rwlock_t *);
 void rwlock_write_lock(pthread_rwlock_t *);
 void rwlock_unlock(pthread_rwlock_t *);
 
-typedef int (*process_file_cb)(char const *, void *);
-int process_file_or_dir(char const *, char const *, bool, process_file_cb,
-    void *);
+typedef int (*foreach_file_cb)(char const *, void *);
+int foreach_file(char const *, char const *, bool, foreach_file_cb, void *);
 
-typedef int (*pr_errno_cb)(const char *, ...);
-bool valid_file_or_dir(char const *, bool, bool, pr_errno_cb);
+bool valid_file_or_dir(char const *, bool);
 
-int create_dir_recursive(char const *);
+int mkdir_p(char const *, bool);
 int delete_dir_recursive_bottom_up(char const *);
 
 int get_current_time(time_t *);
-
-int map_uri_to_local(char const *, char const*, char const *, char **);
 
 #endif /* SRC_RTR_COMMON_H_ */

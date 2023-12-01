@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "SigningTime.h"
+#include "asn1/asn1c/SigningTime.h"
 
 /*
  * This type is implemented using Time,
@@ -27,4 +27,3 @@ asn_TYPE_descriptor_t asn_DEF_SigningTime = {
 	2,	/* Elements count */
 	&asn_SPC_Time_specs_1	/* Additional specs */
 };
-

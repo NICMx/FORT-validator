@@ -11,9 +11,7 @@ The FORT validator is an MIT-licensed RPKI Relying Party, offered as part of the
 
 ## Status
 
-> Due to a temporary resource shortage, the project's development has slowed down to essential maintenance. No new features are expected to be developed during the first half of 2023, but bugfixing and support will remain active.
-> 
-> Development will resume in full during the second half of 2023.
+As of 2023-06-22, development has resumed. You might want to bump your desired patches and features in the [tracker](https://github.com/NICMx/FORT-validator/issues).
 
 Version {{ site.fort-latest-version }} is the latest official release. To fetch or review it, visit the [GitHub release](https://github.com/NICMx/FORT-validator/releases/tag/{{ site.fort-latest-version }}){:target="_blank"}.
 

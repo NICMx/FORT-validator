@@ -4,6 +4,7 @@
  */
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ANY.h"
+#include <assert.h>
 #include <errno.h>
 
 asn_OCTET_STRING_specifics_t asn_SPC_ANY_specs = {
@@ -274,4 +275,3 @@ ANY_encode_uper(const asn_TYPE_descriptor_t *td,
 }
 
 #endif /* ASN_DISABLE_PER_SUPPORT */
-

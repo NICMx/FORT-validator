@@ -1,6 +1,6 @@
 #include "algorithm.h"
 
-#include <stdbool.h>
+#include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
@@ -37,14 +37,17 @@ validate_certificate_signature_algorithm(int nid, char const *what)
 int
 validate_certificate_public_key_algorithm(X509_ALGOR *pa)
 {
+	ASN1_OBJECT const *algorithm;
 	int nid;
+
+	X509_ALGOR_get0(&algorithm, NULL, NULL, pa);
 
 	/*
 	 * RFC says sha256WithRSAEncryption, but current IETF concensus (and
 	 * practice) say that the right one is rsaEncryption.
 	 * https://mailarchive.ietf.org/arch/browse/sidr/
 	 */
-	nid = OBJ_obj2nid(pa->algorithm);
+	nid = OBJ_obj2nid(algorithm);
 	if (nid == NID_rsaEncryption)
 		return 0;
 

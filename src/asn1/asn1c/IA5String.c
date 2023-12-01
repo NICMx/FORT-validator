@@ -90,4 +90,3 @@ IA5String_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
 
 	return 0;
 }
-

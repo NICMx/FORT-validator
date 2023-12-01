@@ -1,9 +1,10 @@
 #include "state.h"
 
-#include <errno.h>
-#include "rrdp/db/db_rrdp.h"
+#include "alloc.h"
+#include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
+#include "cache/local_cache.h"
 
 /**
  * The current state of the validation cycle.
@@ -22,14 +23,6 @@ struct validation {
 	} x509_data;
 
 	struct cert_stack *certstack;
-
-	struct uri_list *rsync_visited_uris;
-
-	/* Local RRDP workspace path */
-	char const *rrdp_workspace;
-
-	/* Shallow copy of RRDP URIs and its corresponding visited uris */
-	struct db_rrdp_uri *rrdp_uris;
 
 	/* Did the TAL's public key match the root certificate's public key? */
 	enum pubkey_state pubkey_state;
@@ -94,27 +87,23 @@ validation_prepare(struct validation **out, struct tal *tal,
 	X509_VERIFY_PARAM *params;
 	int error;
 
-	result = malloc(sizeof(struct validation));
-	if (!result)
-		return pr_enomem();
+	result = pmalloc(sizeof(struct validation));
 
 	error = state_store(result);
 	if (error)
-		goto abort1;
+		goto undo_result;
 
 	result->tal = tal;
 
 	result->x509_data.store = X509_STORE_new();
 	if (!result->x509_data.store) {
 		error = val_crypto_err("X509_STORE_new() returned NULL");
-		goto abort1;
+		goto undo_result;
 	}
 
 	params = X509_VERIFY_PARAM_new();
-	if (params == NULL) {
-		error = pr_enomem();
-		goto abort2;
-	}
+	if (params == NULL)
+		enomem_panic();
 
 	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
 	X509_STORE_set1_param(result->x509_data.store, params);
@@ -122,14 +111,7 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	error = certstack_create(&result->certstack);
 	if (error)
-		goto abort3;
-
-	error = rsync_create(&result->rsync_visited_uris);
-	if (error)
-		goto abort4;
-
-	result->rrdp_uris = db_rrdp_get_uris(tal_get_file_name(tal));
-	result->rrdp_workspace = db_rrdp_get_workspace(tal_get_file_name(tal));
+		goto undo_crypto;
 
 	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
@@ -137,13 +119,11 @@ validation_prepare(struct validation **out, struct tal *tal,
 
 	*out = result;
 	return 0;
-abort4:
-	certstack_destroy(result->certstack);
-abort3:
+
+undo_crypto:
 	X509_VERIFY_PARAM_free(params);
-abort2:
 	X509_STORE_free(result->x509_data.store);
-abort1:
+undo_result:
 	free(result);
 	return error;
 }
@@ -154,14 +134,19 @@ validation_destroy(struct validation *state)
 	X509_VERIFY_PARAM_free(state->x509_data.params);
 	X509_STORE_free(state->x509_data.store);
 	certstack_destroy(state->certstack);
-	rsync_destroy(state->rsync_visited_uris);
 	free(state);
 }
 
 struct tal *
 validation_tal(struct validation *state)
 {
-	return state->tal;
+	return (state != NULL) ? state->tal : NULL;
+}
+
+struct rpki_cache *
+validation_cache(struct validation *state)
+{
+	return tal_get_cache(state->tal);
 }
 
 X509_STORE *
@@ -174,12 +159,6 @@ struct cert_stack *
 validation_certstack(struct validation *state)
 {
 	return state->certstack;
-}
-
-struct uri_list *
-validation_rsync_visited_uris(struct validation *state)
-{
-	return state->rsync_visited_uris;
 }
 
 void
@@ -216,16 +195,4 @@ struct validation_handler const *
 validation_get_validation_handler(struct validation *state)
 {
 	return &state->validation_handler;
-}
-
-struct db_rrdp_uri *
-validation_get_rrdp_uris(struct validation *state)
-{
-	return state->rrdp_uris;
-}
-
-char const *
-validation_get_rrdp_workspace(struct validation *state)
-{
-	return state->rrdp_workspace;
 }

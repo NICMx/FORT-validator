@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "IPAddressChoice.h"
+#include "asn1/asn1c/IPAddressChoice.h"
 
 static asn_oer_constraints_t asn_OER_type_IPAddressChoice_constr_1 CC_NOTUSED = {
 	{ 0, 0 },
@@ -93,4 +93,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressChoice = {
 	2,	/* Elements count */
 	&asn_SPC_IPAddressChoice_specs_1	/* Additional specs */
 };
-

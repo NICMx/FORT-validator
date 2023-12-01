@@ -2,6 +2,9 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
+
+#include <assert.h>
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 #include "asn1/asn1c/per_opentype.h"

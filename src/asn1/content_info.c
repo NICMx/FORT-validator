@@ -1,9 +1,8 @@
-#include "content_info.h"
+#include "asn1/content_info.h"
 
-#include <errno.h>
 #include "file.h"
 #include "log.h"
-#include "oid.h"
+#include "asn1/oid.h"
 #include "asn1/decode.h"
 #include "asn1/asn1c/ContentType.h"
 

@@ -1,38 +1,31 @@
 #ifndef RTR_PDU_H_
 #define RTR_PDU_H_
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-
 #include "common.h"
 #include "types/router_key.h"
-#include "rtr/primitive_reader.h"
 #include "rtr/rtr.h"
 
-#define RTR_V0	0
-#define RTR_V1	1
+enum rtr_version {
+	RTR_V0			= 0,
+	RTR_V1			= 1,
+};
 
-/** A request from an RTR client. */
-struct rtr_request {
-	/** Raw bytes. */
-	unsigned char *bytes;
-	/** Length of @bytes. */
-	size_t bytes_len;
-	/** Deserialized PDU. One of the *_pdu struct below. */
-	void *pdu;
+struct rtr_buffer {
+	unsigned char *bytes; /* Raw bytes */
+	size_t bytes_len; /* Length of @bytes */
 };
 
 enum pdu_type {
-	PDU_TYPE_SERIAL_NOTIFY =	0,
-	PDU_TYPE_SERIAL_QUERY =		1,
-	PDU_TYPE_RESET_QUERY =		2,
-	PDU_TYPE_CACHE_RESPONSE =	3,
-	PDU_TYPE_IPV4_PREFIX =		4,
-	PDU_TYPE_IPV6_PREFIX =		6,
-	PDU_TYPE_END_OF_DATA =		7,
-	PDU_TYPE_CACHE_RESET =		8,
-	PDU_TYPE_ROUTER_KEY =		9,
-	PDU_TYPE_ERROR_REPORT =		10,
+	PDU_TYPE_SERIAL_NOTIFY	= 0,
+	PDU_TYPE_SERIAL_QUERY	= 1,
+	PDU_TYPE_RESET_QUERY	= 2,
+	PDU_TYPE_CACHE_RESPONSE	= 3,
+	PDU_TYPE_IPV4_PREFIX	= 4,
+	PDU_TYPE_IPV6_PREFIX	= 6,
+	PDU_TYPE_END_OF_DATA 	= 7,
+	PDU_TYPE_CACHE_RESET	= 8,
+	PDU_TYPE_ROUTER_KEY	= 9,
+	PDU_TYPE_ERROR_REPORT	= 10,
 };
 
 char const *pdutype2str(enum pdu_type);
@@ -44,123 +37,39 @@ char const *pdutype2str(enum pdu_type);
  */
 
 /* Header length field is always 64 bits long */
-#define RTRPDU_HDR_LEN			8
+#define RTR_HDR_LEN			8u
 
-#define RTRPDU_SERIAL_NOTIFY_LEN	12
-#define RTRPDU_SERIAL_QUERY_LEN		12
-#define RTRPDU_RESET_QUERY_LEN		8
-#define RTRPDU_CACHE_RESPONSE_LEN	8
-#define RTRPDU_IPV4_PREFIX_LEN		20
-#define RTRPDU_IPV6_PREFIX_LEN		32
-#define RTRPDU_END_OF_DATA_V0_LEN	12
-#define RTRPDU_END_OF_DATA_V1_LEN	24
-#define RTRPDU_CACHE_RESET_LEN		8
-#define RTRPDU_ROUTER_KEY_LEN		123
+/* Please remember to update the MAX_LENs if you modify this list. */
+#define RTRPDU_SERIAL_NOTIFY_LEN	12u
+#define RTRPDU_SERIAL_QUERY_LEN		12u
+#define RTRPDU_RESET_QUERY_LEN		8u
+#define RTRPDU_CACHE_RESPONSE_LEN	8u
+#define RTRPDU_IPV4_PREFIX_LEN		20u
+#define RTRPDU_IPV6_PREFIX_LEN		32u
+#define RTRPDU_END_OF_DATA_V0_LEN	12u
+#define RTRPDU_END_OF_DATA_V1_LEN	24u
+#define RTRPDU_CACHE_RESET_LEN		8u
+#define RTRPDU_ROUTER_KEY_LEN		123u
+/* See rtrpdu_error_report_len() for the missing one. */
 
-/* Ignores Error Report PDUs, which is fine. */
-#define RTRPDU_MAX_LEN			RTRPDU_IPV6_PREFIX_LEN
-#define RTRPDU_ERR_MAX_LEN		256
+/* Except for Error Report PDUs. */
+#define RTRPDU_MAX_LEN			RTRPDU_ROUTER_KEY_LEN
+/*
+ * The length field is 32 bits. Error PDUs don't need to be that large.
+ * 1024 is arbitrary.
+ */
+#define RTRPDU_ERROR_REPORT_MAX_LEN	1024u
 
-struct pdu_header {
-	uint8_t	protocol_version;
-	uint8_t	pdu_type;
-	union {
-		uint16_t	session_id;
-		uint16_t	reserved;
-		uint16_t	error_code;
-	} m; /* Note: "m" stands for "meh." I have no idea what to call this. */
-	uint32_t	length;
-};
+#define RTRPDU_MAX_LEN2			RTRPDU_ERROR_REPORT_MAX_LEN
 
-struct serial_notify_pdu {
-	struct	pdu_header header;
-	uint32_t	serial_number;
-};
-
-struct serial_query_pdu {
-	struct	pdu_header header;
-	uint32_t	serial_number;
-};
-
-struct reset_query_pdu {
-	struct	pdu_header header;
-};
-
-struct cache_response_pdu {
-	struct pdu_header header;
-};
-
-struct ipv4_prefix_pdu {
-	struct	pdu_header header;
-	uint8_t	flags;
-	uint8_t	prefix_length;
-	uint8_t	max_length;
-	uint8_t	zero;
-	struct	in_addr ipv4_prefix;
-	uint32_t	asn;
-};
-
-struct ipv6_prefix_pdu {
-	struct	pdu_header header;
-	uint8_t	flags;
-	uint8_t	prefix_length;
-	uint8_t	max_length;
-	uint8_t	zero;
-	struct	in6_addr ipv6_prefix;
-	uint32_t	asn;
-};
-
-struct end_of_data_pdu {
-	struct	pdu_header header;
-	uint32_t	serial_number;
-	uint32_t	refresh_interval;
-	uint32_t	retry_interval;
-	uint32_t	expire_interval;
-};
-
-struct cache_reset_pdu {
-	struct	pdu_header header;
-};
-
-struct router_key_pdu {
-	struct	pdu_header header;
-	unsigned char	ski[RK_SKI_LEN];
-	size_t		ski_len;
-	uint32_t	asn;
-	unsigned char	spki[RK_SPKI_LEN];
-	size_t		spki_len;
-};
-
-struct error_report_pdu {
-	struct	pdu_header header;
-	uint32_t	error_pdu_length;
-	unsigned char	erroneous_pdu[RTRPDU_ERR_MAX_LEN];
-	uint32_t	error_message_length;
-	rtr_char	*error_message;
-};
-
-struct pdu_metadata {
-	size_t	length;
-	/**
-	 * Builds the PDU from @header, and the bytes remaining in the reader.
-	 *
-	 * Caller assumes that from_stream functions are only allowed to fail
-	 * on programming errors. (Because failure results in an internal error
-	 * response.)
-	 */
-	int	(*from_stream)(struct pdu_header *, struct pdu_reader *, void *);
-	/**
-	 * Handlers must return 0 to maintain the connection, nonzero to close
-	 * the socket.
-	 * Also, they are supposed to send error PDUs on discretion.
-	 */
-	int	(*handle)(int, struct rtr_request const *);
-	void	(*destructor)(void *);
-};
-
-int pdu_load(struct pdu_reader *, struct rtr_client *, struct rtr_request *,
-    struct pdu_metadata const **);
-struct pdu_metadata const *pdu_get_metadata(uint8_t);
-struct pdu_header *pdu_get_header(void *);
+static inline size_t
+rtrpdu_error_report_len(uint32_t errpdu_len, uint32_t errmsg_len)
+{
+	return RTR_HDR_LEN
+	    + 4 /* Length of Encapsulated PDU field */
+	    + errpdu_len
+	    + 4 /* Length of Error Text field */
+	    + errmsg_len;
+}
 
 #endif /* RTR_PDU_H_ */

@@ -12,8 +12,8 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "IssuerAndSerialNumber.h"
-#include "CMSSubjectKeyIdentifier.h"
+#include "asn1/asn1c/IssuerAndSerialNumber.h"
+#include "asn1/asn1c/CMSSubjectKeyIdentifier.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
 #ifdef __cplusplus

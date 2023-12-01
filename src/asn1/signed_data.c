@@ -1,11 +1,10 @@
 #include "asn1/signed_data.h"
 
-#include <errno.h>
-
 #include "algorithm.h"
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
-#include "oid.h"
+#include "asn1/oid.h"
 #include "thread_var.h"
 #include "asn1/decode.h"
 #include "asn1/asn1c/ContentType.h"
@@ -20,20 +19,16 @@ static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
-int
+void
 signed_object_args_init(struct signed_object_args *args,
     struct rpki_uri *uri,
     STACK_OF(X509_CRL) *crls,
     bool force_inherit)
 {
-	args->res = resources_create(force_inherit);
-	if (args->res == NULL)
-		return pr_enomem();
-
+	args->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
 	args->uri = uri;
 	args->crls = crls;
 	memset(&args->refs, 0, sizeof(args->refs));
-	return 0;
 }
 
 void
@@ -95,7 +90,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	error = certificate_validate_chain(cert, args->crls);
 	if (error)
 		goto end2;
-	error = certificate_validate_rfc6487(cert, EE);
+	error = certificate_validate_rfc6487(cert, CERTYPE_EE);
 	if (error)
 		goto end2;
 	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
@@ -110,7 +105,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 		goto end2;
 
 	resources_set_policy(args->res, policy);
-	error = certificate_get_resources(cert, args->res, EE);
+	error = certificate_get_resources(cert, args->res, CERTYPE_EE);
 	if (error)
 		goto end2;
 
@@ -415,11 +410,7 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 	if (error)
 		return error;
 
-	sdata = calloc(1, sizeof(struct SignedData));
-	if (sdata == NULL) {
-		error = pr_enomem();
-		goto release_sdata_pkcs7;
-	}
+	sdata = pcalloc(1, sizeof(struct SignedData));
 
 	/* Parse content as OCTET STRING */
 	error = asn1_decode_any(sdata_pkcs7->encapContentInfo.eContent,
@@ -446,7 +437,6 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 
 release_sdata:
 	free(sdata);
-release_sdata_pkcs7:
 	ASN_STRUCT_FREE(asn_DEF_SignedDataPKCS7, sdata_pkcs7);
 	return error;
 }

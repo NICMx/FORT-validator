@@ -1,6 +1,5 @@
-#include "decode.h"
+#include "asn1/decode.h"
 
-#include <errno.h>
 #include "common.h"
 #include "config.h"
 #include "log.h"

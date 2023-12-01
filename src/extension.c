@@ -1,6 +1,9 @@
 #include "extension.h"
 
-#include <errno.h>
+#include <openssl/asn1t.h>
+#include <openssl/objects.h>
+#include <openssl/x509v3.h>
+#include "cert_stack.h"
 #include "common.h"
 #include "log.h"
 #include "nid.h"
@@ -274,8 +277,8 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 	 * Bottom line, I don't know. But better be safe than sorry, so here's
 	 * the validation.
 	 *
-	 * Shit. I feel like I'm losing so much performance because the RFCs
-	 * are so wishy-washy about what is our realm and what is not.
+	 * I feel like I'm losing so much performance because the RFCs are so
+	 * wishy-washy about what is our realm and what is not.
 	 */
 
 	/* Get the SPK (ask libcrypto) */
@@ -330,11 +333,6 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 	}
 
 	state = state_retrieve();
-	if (state == NULL) {
-		error = -EINVAL;
-		goto end;
-	}
-
 	parent = x509stack_peek(validation_certstack(state));
 	if (parent == NULL) {
 		error = pr_val_err("Certificate has no parent.");

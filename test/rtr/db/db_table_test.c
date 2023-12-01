@@ -1,9 +1,9 @@
 #include <check.h>
 #include <stdlib.h>
 
+#include "alloc.c"
 #include "common.c"
-#include "log.c"
-#include "impersonator.c"
+#include "mock.c"
 #include "types/address.c"
 #include "types/delta.c"
 #include "types/router_key.c"
@@ -38,7 +38,7 @@ vrp_equals_v6(struct vrp const *vrp, uint8_t as, uint32_t addr,
 
 	return (AF_INET6 == vrp->addr_fam)
 	    && (as == vrp->asn)
-	    && IN6_ARE_ADDR_EQUAL(&tmp, &vrp->prefix.v6)
+	    && addr6_equals(&tmp, &vrp->prefix.v6)
 	    && (prefix_len == vrp->prefix_length)
 	    && (max_prefix_len == vrp->max_prefix_length);
 }
@@ -164,7 +164,7 @@ START_TEST(test_basic)
 }
 END_TEST
 
-Suite *pdu_suite(void)
+static Suite *pdu_suite(void)
 {
 	Suite *suite;
 	TCase *core;

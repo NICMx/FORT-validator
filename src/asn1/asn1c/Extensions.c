@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "Extensions.h"
+#include "asn1/asn1c/Extensions.h"
 
 static asn_oer_constraints_t asn_OER_type_Extensions_constr_1 CC_NOTUSED = {
 	{ 0, 0 },
@@ -44,4 +44,3 @@ asn_TYPE_descriptor_t asn_DEF_Extensions = {
 	1,	/* Single element */
 	&asn_SPC_Extensions_specs_1	/* Additional specs */
 };
-

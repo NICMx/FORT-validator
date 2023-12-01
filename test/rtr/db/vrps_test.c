@@ -4,11 +4,11 @@
 
 #include "crypto/base64.c"
 #include "algorithm.c"
+#include "alloc.c"
 #include "common.c"
 #include "file.c"
-#include "impersonator.c"
-#include "json_parser.c"
-#include "log.c"
+#include "json_util.c"
+#include "mock.c"
 #include "output_printer.c"
 #include "types/delta.c"
 #include "types/router_key.c"
@@ -17,7 +17,7 @@
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
 #include "rtr/db/db_table.c"
-#include "rtr/db/rtr_db_impersonator.c"
+#include "rtr/db/rtr_db_mock.c"
 #include "rtr/db/vrps.c"
 #include "slurm/db_slurm.c"
 #include "slurm/slurm_loader.c"
@@ -64,15 +64,14 @@ static const bool deltas_2to4[] = { 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, };
 static const bool deltas_3to4[] = { 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, };
 static const bool deltas_4to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
-/* Impersonator functions */
+/* Mocks */
 
-unsigned int deltas_lifetime = 5;
+static unsigned int deltas_lifetime = 5;
 
-unsigned int
-config_get_deltas_lifetime(void)
-{
-	return deltas_lifetime;
-}
+MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
+MOCK_ABORT_ENUM(config_get_output_format, output_format, void)
+MOCK_ABORT_INT(hash_local_file, char const *uri, unsigned char *result,
+    unsigned int *result_len)
 
 /* Test functions */
 
@@ -138,7 +137,7 @@ get_vrp_index(struct vrp const *vrp)
 
 	case AF_INET6:
 		in6_addr_init(&tmp, 0x20010DB8u, 0, 0, 0);
-		ck_assert(IN6_ARE_ADDR_EQUAL(&tmp, &vrp->prefix.v6));
+		ck_assert(addr6_equals(&tmp, &vrp->prefix.v6));
 		ck_assert_uint_eq(96, vrp->prefix_length);
 		ck_assert_uint_eq(120, vrp->max_prefix_length);
 		family_bit = 1;
@@ -289,7 +288,8 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas)
 	bool actual_deltas[12];
 	array_index i;
 
-	ck_assert_int_eq(0, deltas_create(&deltas));
+	deltas = deltas_create();
+	ck_assert_ptr_nonnull(deltas);
 
 	ck_assert_int_eq(0, vrps_foreach_delta_since(from, &actual_serial,
 	    vrp_add, rk_add, deltas));
@@ -416,7 +416,7 @@ START_TEST(test_delta_ovrd)
 }
 END_TEST
 
-Suite *pdu_suite(void)
+static Suite *pdu_suite(void)
 {
 	Suite *suite;
 	TCase *core;

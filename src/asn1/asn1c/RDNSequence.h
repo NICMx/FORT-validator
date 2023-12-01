@@ -40,7 +40,7 @@ extern asn_TYPE_member_t asn_MBR_RDNSequence_1[1];
 #endif
 
 /* Referred external types */
-#include "RelativeDistinguishedName.h"
+#include "asn1/asn1c/RelativeDistinguishedName.h"
 
 #endif	/* _RDNSequence_H_ */
 #include "asn1/asn1c/asn_internal.h"

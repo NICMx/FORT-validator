@@ -12,11 +12,11 @@
 #include "asn1/asn1c/asn_application.h"
 
 /* Including external dependencies */
-#include "CMSVersion.h"
-#include "SignerIdentifier.h"
-#include "DigestAlgorithmIdentifier.h"
-#include "SignatureAlgorithmIdentifier.h"
-#include "SignatureValue.h"
+#include "asn1/asn1c/CMSVersion.h"
+#include "asn1/asn1c/SignerIdentifier.h"
+#include "asn1/asn1c/DigestAlgorithmIdentifier.h"
+#include "asn1/asn1c/SignatureAlgorithmIdentifier.h"
+#include "asn1/asn1c/SignatureValue.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #ifdef __cplusplus
@@ -51,8 +51,8 @@ extern asn_TYPE_member_t asn_MBR_SignerInfo_1[7];
 #endif
 
 /* Referred external types */
-#include "SignedAttributes.h"
-#include "UnsignedAttributes.h"
+#include "asn1/asn1c/SignedAttributes.h"
+#include "asn1/asn1c/UnsignedAttributes.h"
 
 #endif	/* _SignerInfo_H_ */
 #include "asn1/asn1c/asn_internal.h"

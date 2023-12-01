@@ -1,9 +1,7 @@
 #include "thread/thread_pool.h"
 
 #include <sys/queue.h>
-#include <pthread.h>
-#include <stdlib.h>
-#include <string.h>
+#include "alloc.h"
 #include "common.h"
 #include "log.h"
 
@@ -110,22 +108,18 @@ signal_to_worker(struct thread_pool *pool)
 	    "pthread_cond_signal");
 }
 
-static int
-task_create(char const *name, thread_pool_task_cb cb, void *arg,
-    struct thread_pool_task **out)
+static struct thread_pool_task *
+task_create(char const *name, thread_pool_task_cb cb, void *arg)
 {
 	struct thread_pool_task *task;
 
-	task = malloc(sizeof(struct thread_pool_task));
-	if (task == NULL)
-		return pr_enomem();
+	task = pmalloc(sizeof(struct thread_pool_task));
 
 	task->name = name;
 	task->cb = cb;
 	task->arg = arg;
 
-	*out = task;
-	return 0;
+	return task;
 }
 
 static void
@@ -299,9 +293,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	struct thread_pool *result;
 	int error;
 
-	result = malloc(sizeof(struct thread_pool));
-	if (result == NULL)
-		return pr_enomem();
+	result = pmalloc(sizeof(struct thread_pool));
 
 	/* Init locking */
 	error = pthread_mutex_init(&result->lock, NULL);
@@ -332,11 +324,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	result->stop = false;
 	result->working_count = 0;
 	result->thread_count = 0;
-	result->thread_ids = calloc(threads, sizeof(pthread_t));
-	if (result->thread_ids == NULL) {
-		error = pr_enomem();
-		goto free_waiting_cond;
-	}
+	result->thread_ids = pcalloc(threads, sizeof(pthread_t));
 	result->thread_ids_len = threads;
 
 	error = spawn_threads(result);
@@ -348,7 +336,6 @@ thread_pool_create(char const *name, unsigned int threads,
 
 free_thread_ids:
 	free(result->thread_ids);
-free_waiting_cond:
 	pthread_cond_destroy(&result->worker2parent);
 free_working_cond:
 	pthread_cond_destroy(&result->parent2worker);
@@ -396,17 +383,13 @@ thread_pool_destroy(struct thread_pool *pool)
  * Push a new task to @pool, the task to be executed is @cb with the argument
  * @arg.
  */
-int
+void
 thread_pool_push(struct thread_pool *pool, char const *task_name,
     thread_pool_task_cb cb, void *arg)
 {
 	struct thread_pool_task *task;
-	int error;
 
-	task = NULL;
-	error = task_create(task_name, cb, arg, &task);
-	if (error)
-		return error;
+	task = task_create(task_name, cb, arg);
 
 	mutex_lock(&pool->lock);
 	task_queue_push(pool, task);
@@ -417,7 +400,6 @@ thread_pool_push(struct thread_pool *pool, char const *task_name,
 	 * If not, they will claim work once they spawn anyway.
 	 */
 	signal_to_worker(pool);
-	return 0;
 }
 
 /* There are available threads to work? */

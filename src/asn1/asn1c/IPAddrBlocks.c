@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "IPAddrBlocks.h"
+#include "asn1/asn1c/IPAddrBlocks.h"
 
 static asn_TYPE_member_t asn_MBR_IPAddrBlocks_1[] = {
 	{ ATF_POINTER, 0, 0,
@@ -41,4 +41,3 @@ asn_TYPE_descriptor_t asn_DEF_IPAddrBlocks = {
 	1,	/* Single element */
 	&asn_SPC_IPAddrBlocks_specs_1	/* Additional specs */
 };
-

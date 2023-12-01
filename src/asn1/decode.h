@@ -1,7 +1,6 @@
 #ifndef SRC_ASN1_DECODE_H_
 #define SRC_ASN1_DECODE_H_
 
-#include <stdbool.h>
 #include "file.h"
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/constr_TYPE.h"

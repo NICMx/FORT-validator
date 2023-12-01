@@ -47,13 +47,11 @@
     "user-agent": "fort/1.5.0",
     "connect-timeout": 30,
     "transfer-timeout": 0,
-    "idle-timeout": 15,
     "ca-path": "/usr/local/ssl/certs"
   },
   "rsync": {
     "enabled": true,
     "priority": 50,
-    "strategy": "root-except-ta",
     "retry": {
       "count": 2,
       "interval": 5
@@ -116,6 +114,5 @@
       "max": 5
     }
   },
-  "asn1-decode-max-stack": 4096,
-  "stale-repository-period": 43200
+  "asn1-decode-max-stack": 4096
 }

@@ -7,13 +7,10 @@
  */
 #ifndef	ASN_INTERNAL_H
 #define	ASN_INTERNAL_H
+#ifndef __EXTENSIONS__
 #define __EXTENSIONS__          /* for Sun */
-
-#include "asn_application.h"	/* Application-visible API */
-
-#ifndef	__NO_ASSERT_H__		/* Include assert.h only for internal use. */
-#include <assert.h>		/* for assert() macro */
 #endif
+#include "asn1/asn1c/asn_application.h"	/* Application-visible API */
 
 #ifdef	__cplusplus
 extern "C" {

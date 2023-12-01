@@ -2,8 +2,14 @@
 #define SRC_CONFIG_TYPES_H_
 
 #include <jansson.h>
-#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 struct option_field;
 struct group_fields;
@@ -75,6 +81,9 @@ struct option_field {
 	 * Optional.
 	 */
 	int availability;
+	/* Explicit null only; absence of field implies default value. */
+	bool json_null_allowed;
+	bool deprecated;
 	unsigned int min;
 	unsigned int max;
 };

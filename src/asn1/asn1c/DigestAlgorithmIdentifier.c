@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "DigestAlgorithmIdentifier.h"
+#include "asn1/asn1c/DigestAlgorithmIdentifier.h"
 
 /*
  * This type is implemented using AlgorithmIdentifier,
@@ -29,4 +29,3 @@ asn_TYPE_descriptor_t asn_DEF_DigestAlgorithmIdentifier = {
 	2,	/* Elements count */
 	&asn_SPC_AlgorithmIdentifier_specs_1	/* Additional specs */
 };
-

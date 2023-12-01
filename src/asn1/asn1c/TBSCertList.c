@@ -5,7 +5,7 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "TBSCertList.h"
+#include "asn1/asn1c/TBSCertList.h"
 
 static asn_TYPE_member_t asn_MBR_Member_8[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct TBSCertList__revokedCertificates__Member, userCertificate),
@@ -212,4 +212,3 @@ asn_TYPE_descriptor_t asn_DEF_TBSCertList = {
 	7,	/* Elements count */
 	&asn_SPC_TBSCertList_specs_1	/* Additional specs */
 };
-

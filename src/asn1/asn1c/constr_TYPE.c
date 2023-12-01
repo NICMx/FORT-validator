@@ -5,6 +5,7 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_TYPE.h"
 #include <errno.h>
+#include <stdarg.h>
 
 /*
  * Version of the ASN.1 infrastructure shipped with compiler.

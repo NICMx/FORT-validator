@@ -1,8 +1,6 @@
 #ifndef SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 #define SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 
-#include <errno.h>
-#include <stdlib.h>
 #include "log.h"
 #include "data_structure/common.h"
 
@@ -19,7 +17,7 @@
 #define DECLARE_ARRAY_LIST_FUNCTIONS(name, elem_type)			\
 	void name##_init(struct name *);				\
 	void name##_cleanup(struct name *, void (*cb)(elem_type *));	\
-	int name##_add(struct name *list, elem_type *elem);
+	void name##_add(struct name *list, elem_type *elem);
 
 #define DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, modifiers)		\
 	modifiers void							\
@@ -42,46 +40,39 @@
 	}								\
 									\
 	/* Will store a shallow copy, not @elem */			\
-	modifiers int							\
+	modifiers void							\
 	name##_add(struct name *list, elem_type *elem)			\
 	{								\
-		elem_type *tmp;						\
-									\
 		if (list->array == NULL) {				\
 			list->capacity = 8;				\
-			list->array = malloc(list->capacity		\
+			list->array = pmalloc(list->capacity		\
 			    * sizeof(elem_type));			\
-			if (list->array == NULL)			\
-				return pr_enomem();			\
 		}							\
 									\
 		list->len++;						\
 		while (list->len >= list->capacity) {			\
 			list->capacity *= 2;				\
-									\
-			tmp = realloc(list->array, list->capacity	\
-			    * sizeof(elem_type));			\
-			if (tmp == NULL)				\
-				return pr_enomem();			\
-			list->array = tmp;				\
+			list->array = prealloc(list->array,		\
+			    list->capacity * sizeof(elem_type));	\
 		}							\
 									\
 		list->array[list->len - 1] = *elem;			\
-		return 0;						\
 	}
-
-#define ARRAY_LIST(name, elem_type)					\
-	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
-	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, )
 
 #define STATIC_ARRAY_LIST(name, elem_type)				\
 	DEFINE_ARRAY_LIST_STRUCT(name, elem_type);			\
 	DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, static)
 
-#define ARRAYLIST_FOREACH(list, node, index) for (			\
-	(index) = 0, (node) = (list)->array;				\
+#define ARRAYLIST_FOREACH(list, node) for (				\
+	(node) = (list)->array;						\
+	(node) < (list)->array + (list)->len;				\
+	(node)++							\
+)
+
+#define ARRAYLIST_FOREACH_IDX(list, index) for (			\
+	(index) = 0;							\
 	(index) < (list)->len;						\
-	(index)++, (node)++						\
+	(index)++							\
 )
 
 #endif /* SRC_DATA_STRUCTURE_ARRAY_LIST_H_ */

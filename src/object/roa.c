@@ -1,9 +1,5 @@
 #include "object/roa.h"
 
-#include <errno.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-
 #include "config.h"
 #include "log.h"
 #include "thread_var.h"
@@ -180,7 +176,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	}
 
 	/* rfc6482#section-3.2 */
-	if (asn_INTEGER2ulong(&roa->asID, &asn) != 0) {
+	if (asn_INTEGER2ulong(&roa->asId, &asn) != 0) {
 		if (errno) {
 			pr_val_err("Error casting ROA's AS ID value: %s",
 			    strerror(errno));
@@ -193,7 +189,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		error = pr_val_err("AS value (%lu) is out of range.", asn);
 		goto end_error;
 	}
-	pr_val_debug("asID: %lu", asn);
+	pr_val_debug("asId: %lu", asn);
 
 	/* rfc6482#section-3.3 */
 
@@ -278,9 +274,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_roa;
-	error = signed_object_args_init(&sobj_args, uri, crl, false);
-	if (error)
-		goto revert_roa;
+	signed_object_args_init(&sobj_args, uri, crl, false);
 
 	/* Validate and handle everything */
 	error = signed_object_validate(&sobj, &arcs, &sobj_args);
