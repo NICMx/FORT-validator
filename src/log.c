@@ -264,19 +264,13 @@ log_start(void)
 	if (config_get_val_log_enabled()) {
 		switch (config_get_val_log_output()) {
 		case SYSLOG:
-			pr_op_info("Syslog log output configured; disabling validation logging on standard streams.");
-			pr_op_info("(Validation Logs will be sent to syslog only.)");
 			val_config.fprintf_enabled = false;
 			break;
 		case CONSOLE:
-			pr_op_info("Console log output configured; disabling validation logging on syslog.");
-			pr_op_info("(Validation Logs will be sent to the standard streams only.)");
 			val_config.syslog_enabled = false;
 			break;
 		}
 	} else {
-		pr_op_info("Disabling validation logging on syslog.");
-		pr_op_info("Disabling validation logging on standard streams.");
 		val_config.fprintf_enabled = false;
 		val_config.syslog_enabled = false;
 	}
@@ -284,13 +278,9 @@ log_start(void)
 	if (config_get_op_log_enabled()) {
 		switch (config_get_op_log_output()) {
 		case SYSLOG:
-			pr_op_info("Syslog log output configured; disabling operation logging on standard streams.");
-			pr_op_info("(Operation Logs will be sent to syslog only.)");
 			op_config.fprintf_enabled = false;
 			break;
 		case CONSOLE:
-			pr_op_info("Console log output configured; disabling operation logging on syslog.");
-			pr_op_info("(Operation Logs will be sent to the standard streams only.)");
 			if (val_config.syslog_enabled)
 				op_config.syslog_enabled = false;
 			else
@@ -298,8 +288,6 @@ log_start(void)
 			break;
 		}
 	} else {
-		pr_op_info("Disabling operation logging on syslog.");
-		pr_op_info("Disabling operation logging on standard streams.");
 		op_config.fprintf_enabled = false;
 		if (val_config.syslog_enabled)
 			op_config.syslog_enabled = false;
