@@ -225,21 +225,11 @@ __vrps_update(bool *changed)
 	}
 
 	rwlock_write_lock(&state_lock);
-
 	state.base = new_base;
 	state.serial++;
-	if (new_deltas != NULL) {
+	if (new_deltas != NULL)
 		/* Ownership transferred */
 		darray_add(state.deltas, new_deltas);
-	} else {
-		/*
-		 * If the latest base has no deltas, all existing deltas are
-		 * rendered useless. This is because clients always want to
-		 * reach the latest serial, no matter where they are.
-		 */
-		darray_clear(state.deltas);
-	}
-
 	rwlock_unlock(&state_lock);
 
 	if (old_base != NULL)
