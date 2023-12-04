@@ -153,7 +153,7 @@ START_TEST(test_error_report_from_stream)
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
 	ck_assert_uint_eq(false, pdustream_next(stream, &request));
-	ck_assert_ptr_null(request);
+	ck_assert_ptr_eq(NULL, request);
 	pdustream_destroy(&stream);
 }
 END_TEST
@@ -220,7 +220,7 @@ START_TEST(test_multiple_pdus)
 
 	close(pipes[1]);
 	ck_assert_uint_eq(false, pdustream_next(stream, &request));
-	ck_assert_ptr_null(request);
+	ck_assert_ptr_eq(NULL, request);
 
 	/* Clean up */
 
@@ -237,7 +237,7 @@ START_TEST(test_interrupted)
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
 
 	ck_assert_uint_eq(false, pdustream_next(stream, &request));
-	ck_assert_ptr_null(request);
+	ck_assert_ptr_eq(NULL, request);
 
 	pdustream_destroy(&stream);
 }
@@ -252,7 +252,10 @@ test_read_string_success(unsigned char *input, size_t length, char *expected)
 	stream = create_stream(input, length);
 
 	actual = read_string(stream, length);
-	ck_assert_pstr_eq(expected, actual);
+	if (expected == NULL)
+		ck_assert_ptr_eq(NULL, actual);
+	else
+		ck_assert_str_eq(expected, actual);
 
 	free(actual);
 	free(stream);

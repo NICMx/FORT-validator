@@ -58,7 +58,7 @@ START_TEST(add_only)
 
 	for (i = 0; i < TOTAL_CREATED; i++) {
 		created[i] = deltas_create();
-		ck_assert_ptr_nonnull(created[i]);
+		ck_assert_ptr_ne(NULL, created[i]);
 	}
 
 	test_foreach(darray, 0, 0);

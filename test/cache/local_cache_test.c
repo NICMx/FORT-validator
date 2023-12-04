@@ -103,7 +103,7 @@ setup_test(void)
 
 	dl_error = false;
 	cache = cache_create(TAL_FILE);
-	ck_assert_ptr_nonnull(cache);
+	ck_assert_ptr_ne(NULL, cache);
 	SLIST_INIT(&downloaded);
 }
 
@@ -746,7 +746,7 @@ START_TEST(test_metadata_json)
 	cache_reset(cache);
 
 	load_metadata_json(cache);
-	ck_assert_ptr_nonnull(cache->ht);
+	ck_assert_ptr_ne(NULL, cache->ht);
 
 	validate_cache(0,
 	    NODE("rsync://a.b.c/d", 0, 1, 0),
@@ -794,7 +794,7 @@ START_TEST(test_recover)
 
 	/* Query on empty database */
 	PREPARE_URI_LIST(&uris, "rsync://a.b.c/d", "https://a.b.c/d");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Only first URI is cached */
@@ -826,7 +826,7 @@ START_TEST(test_recover)
 	run_cache_download("rsync://d/e", 0, 1, 0);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/*
@@ -862,7 +862,7 @@ START_TEST(test_recover)
 
 	/* No successful caches: No viable candidates */
 	PREPARE_URI_LIST(&uris, "rsync://b/2", "rsync://b/4", "rsync://b/6");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Status: CNF_SUCCESS is better than 0. */
@@ -883,7 +883,7 @@ START_TEST(test_recover)
 
 	/* Parents of downloaded nodes */
 	PREPARE_URI_LIST(&uris, "rsync://a", "rsync://b");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Try them all at the same time */
