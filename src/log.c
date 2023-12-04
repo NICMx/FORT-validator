@@ -434,10 +434,8 @@ __syslog(int level, struct log_config *cfg, const char *format, va_list args)
 {
 	static char msg[MSG_LEN];
 	char const *file_name;
-	struct level const *lvl;
 
 	file_name = fnstack_peek();
-	lvl = level2struct(level);
 
 	lock_mutex();
 
@@ -445,18 +443,16 @@ __syslog(int level, struct log_config *cfg, const char *format, va_list args)
 	vsnprintf(msg, MSG_LEN, format, args);
 	if (file_name != NULL) {
 		if (cfg->prefix != NULL)
-			syslog(level | cfg->facility, "%s [%s]: %s: %s",
-			    lvl->label, cfg->prefix, file_name, msg);
+			syslog(level | cfg->facility, "[%s] %s: %s",
+			    cfg->prefix, file_name, msg);
 		else
-			syslog(level | cfg->facility, "%s: %s: %s",
-			    lvl->label, file_name, msg);
+			syslog(level | cfg->facility, "%s: %s", file_name, msg);
 	} else {
 		if (cfg->prefix != NULL)
-			syslog(level | cfg->facility, "%s [%s]: %s",
-			    lvl->label, cfg->prefix, msg);
+			syslog(level | cfg->facility, "[%s] %s",
+			    cfg->prefix, msg);
 		else
-			syslog(level | cfg->facility, "%s: %s",
-			    lvl->label, msg);
+			syslog(level | cfg->facility, "%s", msg);
 	}
 
 	unlock_mutex();
