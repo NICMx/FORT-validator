@@ -97,6 +97,7 @@ get_deltas_array4(struct deltas *deltas, int op)
 	}
 
 	pr_crit("Unknown delta operation: %d", op);
+	return NULL; /* Warning shutupper */
 }
 
 static struct deltas_v6 *
@@ -110,9 +111,10 @@ get_deltas_array6(struct deltas *deltas, int op)
 	}
 
 	pr_crit("Unknown delta operation: %d", op);
+	return NULL; /* Warning shutupper */
 }
 
-int
+void
 deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op,
     char r1type, unsigned int roa_counter, unsigned int roa_count)
 {
@@ -129,14 +131,14 @@ deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op,
 		delta.v4.prefix.len = vrp->prefix_length;
 		delta.v4.max_length = vrp->max_prefix_length;
 		deltas_v4_add(get_deltas_array4(deltas, op), &delta.v4);
-		return 0;
+		return;
 	case AF_INET6:
 		delta.v6.as = vrp->asn;
 		delta.v6.prefix.addr = vrp->prefix.v6;
 		delta.v6.prefix.len = vrp->prefix_length;
 		delta.v6.max_length = vrp->max_prefix_length;
 		deltas_v6_add(get_deltas_array6(deltas, op), &delta.v6);
-		return 0;
+		return;
 	}
 
 	pr_crit("Unknown protocol: [%u %s/%u-%u %u] %c %u/%u "
@@ -151,7 +153,7 @@ deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op,
 	    roa_count);
 }
 
-int
+void
 deltas_add_router_key(struct deltas *deltas, struct router_key const *key,
     int op)
 {
@@ -164,10 +166,10 @@ deltas_add_router_key(struct deltas *deltas, struct router_key const *key,
 	switch (op) {
 	case FLAG_ANNOUNCEMENT:
 		deltas_rk_add(&deltas->rk.adds, &delta);
-		return 0;
+		return;
 	case FLAG_WITHDRAWAL:
 		deltas_rk_add(&deltas->rk.removes, &delta);
-		return 0;
+		return;
 	}
 
 	pr_crit("Unknown delta operation: %d", op);

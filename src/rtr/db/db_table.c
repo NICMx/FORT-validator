@@ -250,29 +250,25 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 	struct hashable_roa *tmp;
 	unsigned int r;
 	unsigned int roa1_count;
-	int error;
 
 	r = 0;
 	roa1_count = HASH_COUNT(roas1);
 
 	HASH_ITER(hh, roas1, n1, tmp) {
 		HASH_FIND(hh, roas2, &n1->data, sizeof(n1->data), n2);
-		if (n2 == NULL) {
-			error = deltas_add_roa(deltas, &n1->data, op,
-			    r1type, r, roa1_count);
-			if (error)
-				return error;
-		}
+		if (n2 == NULL)
+			deltas_add_roa(deltas, &n1->data, op, r1type, r,
+			    roa1_count);
 		r++;
 	}
 
 	return 0;
 }
 
-static int
+static void
 add_router_key_delta(struct deltas *deltas, struct hashable_key *key, int op)
 {
-	return deltas_add_router_key(deltas, &key->data, op);
+	deltas_add_router_key(deltas, &key->data, op);
 }
 
 /*
@@ -280,56 +276,36 @@ add_router_key_delta(struct deltas *deltas, struct hashable_key *key, int op)
  *
  * (Places the Router Keys that exist in @keys1 but not in @key2 in @deltas.)
  */
-static int
+static void
 add_router_key_deltas(struct hashable_key *keys1, struct hashable_key *keys2,
     struct deltas *deltas, int op)
 {
 	struct hashable_key *n1; /* A node from @keys1 */
 	struct hashable_key *n2; /* A node from @keys2 */
-	int error;
 
 	for (n1 = keys1; n1 != NULL; n1 = n1->hh.next) {
 		HASH_FIND(hh, keys2, &n1->data, sizeof(n1->data), n2);
-		if (n2 == NULL) {
-			error = add_router_key_delta(deltas, n1, op);
-			if (error)
-				return error;
-		}
+		if (n2 == NULL)
+			add_router_key_delta(deltas, n1, op);
 	}
-
-	return 0;
 }
 
-int
-compute_deltas(struct db_table *old, struct db_table *new,
-    struct deltas **result)
+struct deltas *
+compute_deltas(struct db_table *old, struct db_table *new)
 {
-	struct deltas *deltas;
-	int error;
+	struct deltas *deltas = deltas_create();
 
-	deltas = deltas_create();
+	add_roa_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT, 'n');
+	add_roa_deltas(old->roas, new->roas, deltas, FLAG_WITHDRAWAL, 'o');
+	add_router_key_deltas(new->router_keys, old->router_keys, deltas,
+	    FLAG_ANNOUNCEMENT);
+	add_router_key_deltas(old->router_keys, new->router_keys, deltas,
+	    FLAG_WITHDRAWAL);
 
-	error = add_roa_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT,
-	    'n');
-	if (error)
-		goto fail;
-	error = add_roa_deltas(old->roas, new->roas, deltas, FLAG_WITHDRAWAL,
-	    'o');
-	if (error)
-		goto fail;
-	error = add_router_key_deltas(new->router_keys, old->router_keys,
-	    deltas, FLAG_ANNOUNCEMENT);
-	if (error)
-		goto fail;
-	error = add_router_key_deltas(old->router_keys, new->router_keys,
-	    deltas, FLAG_WITHDRAWAL);
-	if (error)
-		goto fail;
+	if (deltas_is_empty(deltas)) {
+		deltas_refput(deltas);
+		return NULL;
+	}
 
-	*result = deltas;
-	return 0;
-
-fail:
-	deltas_refput(deltas);
-	return error;
+	return deltas;
 }

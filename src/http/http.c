@@ -45,7 +45,11 @@ get_ims(char const *file, time_t *ims)
 		return (error == ENOENT) ? 0 : error;
 	}
 
+#ifdef __APPLE__
+	*ims = meta.st_mtime; /* Seriously, Apple? */
+#else
 	*ims = meta.st_mtim.tv_sec;
+#endif
 	return 0;
 }
 

@@ -116,6 +116,7 @@ inherit_aors(struct resources *resources, int family)
 	}
 
 	pr_crit("Unknown address family '%d'", family);
+	return EINVAL; /* Warning shutupper */
 }
 
 static int
@@ -213,6 +214,7 @@ add_prefix(struct resources *resources, int family, IPAddress_t *addr)
 	}
 
 	pr_crit("Unknown address family '%d'", family);
+	return EINVAL; /* Warning shutupper */
 }
 
 static int
@@ -312,6 +314,7 @@ add_range(struct resources *resources, int family, IPAddressRange_t *range)
 	}
 
 	pr_crit("Unknown address family '%d'", family);
+	return EINVAL; /* Warning shutupper */
 }
 
 static int
