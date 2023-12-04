@@ -733,13 +733,12 @@ START_TEST(test_metadata_json)
 	/* printf("%s\n", str); */
 	json_decref(json);
 
-	/* TODO (test) Time zones are hardcoded to CST */
 	ck_assert_str_eq(
-	    "[{\"url\":\"rsync://a.b.c/d\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":0,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"},"
-	    "{\"url\":\"rsync://a.b.c/e\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":1},"
-	    "{\"url\":\"rsync://x.y.z/e\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":0,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"},"
-	    "{\"url\":\"https://a/b\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":1,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"},"
-	    "{\"url\":\"https://a/c\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":0,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"}]",
+	    "[{\"url\":\"rsync://a.b.c/d\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"url\":\"rsync://a.b.c/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1},"
+	    "{\"url\":\"rsync://x.y.z/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"url\":\"https://a/b\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"url\":\"https://a/c\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"}]",
 	    str);
 	printf("%s", str);
 	free(str);
