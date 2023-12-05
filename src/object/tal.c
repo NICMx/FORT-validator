@@ -507,6 +507,8 @@ perform_standalone_validation(void)
 	struct db_table *db = NULL;
 	int error, tmperr;
 
+	cache_setup();
+
 	error = init_tmpdir();
 	if (error) {
 		pr_val_err("Cannot initialize the cache's temporal directory: %s",
@@ -550,6 +552,8 @@ perform_standalone_validation(void)
 
 		thread_destroy(thread);
 	}
+
+	cache_teardown();
 
 	/* If one thread has errors, we can't keep the resulting table. */
 	if (error) {

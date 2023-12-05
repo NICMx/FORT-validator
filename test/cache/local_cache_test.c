@@ -712,7 +712,7 @@ START_TEST(test_dots)
 }
 END_TEST
 
-START_TEST(test_metadata_json)
+START_TEST(test_tal_json)
 {
 	json_t *json;
 	char *str;
@@ -728,8 +728,8 @@ START_TEST(test_metadata_json)
 	add_node(cache, NODE("https://a/b", 1, 1, 0));
 	add_node(cache, node("https://a/c", 0, 0, 1, 0, 1));
 
-	json = build_metadata_json(cache);
-	ck_assert_int_eq(0, json_dump_file(json, "tmp/" TAL_FILE "/metadata.json", JSON_COMPACT));
+	json = build_tal_json(cache);
+	ck_assert_int_eq(0, json_dump_file(json, "tmp/" TAL_FILE "/" TAL_METAFILE, JSON_COMPACT));
 
 	str = json_dumps(json, /* JSON_INDENT(4) */ JSON_COMPACT);
 	json_decref(json);
@@ -745,7 +745,7 @@ START_TEST(test_metadata_json)
 
 	cache_reset(cache);
 
-	load_metadata_json(cache);
+	load_tal_json(cache);
 	ck_assert_ptr_ne(NULL, cache->ht);
 
 	validate_cache(0,
@@ -923,8 +923,8 @@ static Suite *thread_pool_suite(void)
 	dot = tcase_create("dot");
 	tcase_add_test(dot, test_dots);
 
-	meta = tcase_create("metadata.json");
-	tcase_add_test(meta, test_metadata_json);
+	meta = tcase_create(TAL_METAFILE);
+	tcase_add_test(meta, test_tal_json);
 
 	recover = tcase_create("recover");
 	tcase_add_test(recover, test_recover);

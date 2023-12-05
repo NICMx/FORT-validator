@@ -6,6 +6,7 @@
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
+#include "configure_ac.h"
 #include "file.h"
 #include "json_util.h"
 #include "log.h"
@@ -40,6 +41,10 @@ struct rpki_cache {
 	time_t startup_ts; /* When we started the last validation */
 };
 
+#define CACHE_METAFILE "cache.json"
+#define TAGNAME_VERSION "fort-version"
+
+#define TAL_METAFILE "tal.json"
 #define TAGNAME_URL "url"
 #define TAGNAME_ATTEMPT_TS "attempt-timestamp"
 #define TAGNAME_ATTEMPT_ERR "attempt-result"
@@ -47,10 +52,106 @@ struct rpki_cache {
 #define TAGNAME_IS_NOTIF "is-rrdp-notification"
 
 static char *
+get_cache_metafile_name(void)
+{
+	struct path_builder pb;
+	int error;
+
+	error = pb_init_cache(&pb, NULL, CACHE_METAFILE);
+	if (error) {
+		pr_op_err("Cannot create path to " CACHE_METAFILE ": %s",
+		    strerror(error));
+		return NULL;
+	}
+
+	return pb.string;
+}
+
+void
+cache_setup(void)
+{
+	char *filename;
+	json_t *root;
+	json_error_t jerror;
+	char const *file_version;
+	int error;
+
+	filename = get_cache_metafile_name();
+	if (filename == NULL)
+		return;
+
+	root = json_load_file(filename, 0, &jerror);
+
+	if (root == NULL) {
+		if (json_error_code(&jerror) == json_error_cannot_open_file)
+			pr_op_debug("%s does not exist.", filename);
+		else
+			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+			    filename, jerror.line, jerror.column, jerror.text);
+		goto invalid_cache;
+	}
+	if (json_typeof(root) != JSON_OBJECT) {
+		pr_op_err("The root tag of %s is not an object.", filename);
+		goto invalid_cache;
+	}
+
+	error = json_get_str(root, TAGNAME_VERSION, &file_version);
+	if (error) {
+		if (error > 0)
+			pr_op_err("%s is missing the " TAGNAME_VERSION " tag.",
+			    filename);
+		goto invalid_cache;
+	}
+
+	if (strcmp(file_version, PACKAGE_VERSION) == 0)
+		goto end;
+
+invalid_cache:
+	pr_op_info("The cache appears to have been built by a different version of Fort. I'm going to clear it, just to be safe.");
+	file_rm_rf(config_get_local_repository());
+
+end:	json_decref(root);
+	free(filename);
+}
+
+void
+cache_teardown(void)
+{
+	static char const * const CONTENT = "{ \"" TAGNAME_VERSION "\": \""
+	    PACKAGE_VERSION "\" }\n";
+
+	char *filename;
+	FILE *file = NULL;
+	int error;
+
+	filename = get_cache_metafile_name();
+	if (filename == NULL)
+		return;
+
+	file = fopen(filename, "w");
+	if (file == NULL)
+		goto fail;
+
+	if (fprintf(file, CONTENT) < 0)
+		goto fail;
+
+	free(filename);
+	fclose(file);
+	return;
+
+fail:
+	error = errno;
+	pr_op_err("Cannot write %s: %s", filename, strerror(error));
+	free(filename);
+	if (file != NULL)
+		fclose(file);
+}
+
+static char *
 get_json_filename(struct rpki_cache *cache)
 {
 	struct path_builder pb;
-	return pb_init_cache(&pb, cache->tal, "metadata.json")
+	return pb_init_cache(&pb, cache->tal, TAL_METAFILE)
 	    ? NULL : pb.string;
 }
 
@@ -134,7 +235,7 @@ add_node(struct rpki_cache *cache, struct cache_node *node)
 }
 
 static void
-load_metadata_json(struct rpki_cache *cache)
+load_tal_json(struct rpki_cache *cache)
 {
 	char *filename;
 	json_t *root;
@@ -143,13 +244,15 @@ load_metadata_json(struct rpki_cache *cache)
 	struct cache_node *node;
 
 	/*
-	 * Note: Loading metadata.json is one of few things Fort can fail at
+	 * Note: Loading TAL_METAFILE is one of few things Fort can fail at
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
 	filename = get_json_filename(cache);
 	if (filename == NULL)
 		return;
+
+	pr_op_debug("Loading %s.", filename);
 
 	root = json_load_file(filename, 0, &jerror);
 
@@ -185,7 +288,7 @@ cache_create(char const *tal)
 	cache->startup_ts = time(NULL);
 	if (cache->startup_ts == (time_t) -1)
 		pr_crit("time(NULL) returned (time_t) -1.");
-	load_metadata_json(cache);
+	load_tal_json(cache);
 	return cache;
 }
 
@@ -221,7 +324,7 @@ cancel:
 }
 
 static json_t *
-build_metadata_json(struct rpki_cache *cache)
+build_tal_json(struct rpki_cache *cache)
 {
 	struct cache_node *node, *tmp;
 	json_t *root, *child;
@@ -245,12 +348,12 @@ build_metadata_json(struct rpki_cache *cache)
 }
 
 static void
-write_metadata_json(struct rpki_cache *cache)
+write_tal_json(struct rpki_cache *cache)
 {
 	char *filename;
 	struct json_t *json;
 
-	json = build_metadata_json(cache);
+	json = build_tal_json(cache);
 	if (json == NULL)
 		return;
 
@@ -736,7 +839,7 @@ delete_unknown_files(struct rpki_cache *cache)
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, cache->tal, "metadata.json");
+	error = pb_init_cache(&pb, cache->tal, TAL_METAFILE);
 	if (error) {
 		pr_op_err("Cannot delete unknown files from %s's cache: %s",
 		    cache->tal, strerror(error));
@@ -799,7 +902,7 @@ cache_destroy(struct rpki_cache *cache)
 	struct cache_node *node, *tmp;
 
 	cache_cleanup(cache);
-	write_metadata_json(cache);
+	write_tal_json(cache);
 
 	HASH_ITER(hh, cache->ht, node, tmp)
 		delete_node(cache, node);

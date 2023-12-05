@@ -151,6 +151,7 @@ file_valid(char const *file_name)
 static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
+	pr_op_debug("Deleting %s.", fpath);
 	return (remove(fpath) != 0) ? errno : 0;
 }
 
