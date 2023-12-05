@@ -23,10 +23,9 @@ cage(struct rpki_uri **uri, struct rpki_uri *notif)
 		return 0;
 	}
 
-	return __uri_create(uri,
-	    tal_get_file_name(validation_tal(state_retrieve())),
-	    UT_CAGED, notif, uri_get_global(*uri),
-	    uri_get_global_len(*uri));
+	return uri_create_caged(uri,
+	    tal_get_file_name(validation_tal(state_retrieve())), notif,
+	    uri_get_global(*uri), uri_get_global_len(*uri));
 }
 
 static int

@@ -44,6 +44,7 @@ struct rpki_cache {
 #define TAGNAME_ATTEMPT_TS "attempt-timestamp"
 #define TAGNAME_ATTEMPT_ERR "attempt-result"
 #define TAGNAME_SUCCESS_TS "success-timestamp"
+#define TAGNAME_IS_NOTIF "is-rrdp-notification"
 
 static char *
 get_json_filename(struct rpki_cache *cache)
@@ -58,6 +59,7 @@ json2node(struct rpki_cache *cache, json_t *json)
 {
 	struct cache_node *node;
 	char const *url;
+	bool is_notif;
 	enum uri_type type;
 	int error;
 
@@ -78,7 +80,16 @@ json2node(struct rpki_cache *cache, json_t *json)
 		pr_op_err("Unknown protocol: %s", url);
 		goto fail;
 	}
-	error = uri_create(&node->url, cache->tal, type, NULL, url);
+
+	error = json_get_bool(json, TAGNAME_IS_NOTIF, &is_notif);
+	if (error < 0)
+		goto fail;
+
+	error = uri_create(&node->url, cache->tal, type, is_notif, NULL, url);
+	if (error) {
+		pr_op_err("Cannot parse '%s' into a URI.", url);
+		goto fail;
+	}
 
 	error = json_get_ts(json, TAGNAME_ATTEMPT_TS, &node->attempt.ts);
 	if (error) {
@@ -191,6 +202,9 @@ node2json(struct cache_node *node)
 
 	if (json_add_str(json, TAGNAME_URL, uri_get_global(node->url)))
 		goto cancel;
+	if (uri_is_notif(node->url))
+		if (json_add_bool(json, TAGNAME_IS_NOTIF, true))
+			goto cancel;
 	if (json_add_date(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
 		goto cancel;
 	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
@@ -315,15 +329,15 @@ get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
 		if (*c == '/') {
 			slashes++;
 			if (slashes == 4)
-				return __uri_create(url, tal, UT_RSYNC, NULL,
-				    guri, c - guri + 1);
+				return __uri_create(url, tal, UT_RSYNC, false,
+				    NULL, guri, c - guri + 1);
 		}
 	}
 
 	if (slashes == 3 && *(c - 1) != '/') {
 		guri2 = pstrdup(guri); /* Remove const */
 		guri2[c - guri] = '/';
-		error = __uri_create(url, tal, UT_RSYNC, NULL, guri2,
+		error = __uri_create(url, tal, UT_RSYNC, false, NULL, guri2,
 		    c - guri + 1);
 		free(guri2);
 		return error;
@@ -604,12 +618,9 @@ static void
 delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
 {
 	struct rpki_uri *cage;
-	int error;
 
-	if (uri_get_type(node->url) == UT_HTTPS) {
-		error = __uri_create(&cage, cache->tal, UT_CAGED, node->url,
-		    "", 0);
-		if (!error) {
+	if (uri_is_notif(node->url)) {
+		if (uri_create_cage(&cage, cache->tal, node->url) == 0) {
 			pr_op_debug("Deleting cage %s.", uri_get_local(cage));
 			file_rm_rf(uri_get_local(cage));
 			uri_refput(cage);
@@ -656,6 +667,7 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 		break;
 	case ENOENT:
 		/* Node exists but file doesn't: Delete node */
+		pr_op_debug("Node exists but file doesn't: %s", path);
 		delete_node_and_cage(cache, node);
 		return;
 	default:
@@ -739,9 +751,10 @@ delete_unknown_files(struct rpki_cache *cache)
 		uri_refget(node->url);
 		uris_add(&dnc, node->url);
 
-		error = __uri_create(&cage, cache->tal, UT_CAGED, node->url,
-		    "", 0);
-		if (error) {
+		if (!uri_is_notif(node->url))
+			continue;
+
+		if (uri_create_cage(&cage, cache->tal, node->url) != 0) {
 			pr_op_err("Cannot generate %s's cage. I'm probably going to end up deleting it from the cache.",
 			    uri_op_get_printable(node->url));
 			continue;
@@ -771,10 +784,12 @@ cache_cleanup(struct rpki_cache *cache)
 	struct cache_node *node, *tmp;
 	time_t last_week;
 
+	pr_op_debug("Cleaning up old abandoned cache files.");
 	last_week = get_days_ago(7);
 	HASH_ITER(hh, cache->ht, node, tmp)
 		cleanup_node(cache, node, last_week);
 
+	pr_op_debug("Cleaning up unknown cache files.");
 	delete_unknown_files(cache);
 }
 

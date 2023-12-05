@@ -55,9 +55,9 @@ add_uri(struct uri_list *uris, char const *tal, char *uri)
 	int error;
 
 	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, tal, UT_RSYNC, NULL, uri);
+		error = uri_create(&new, tal, UT_RSYNC, false, NULL, uri);
 	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, tal, UT_HTTPS, NULL, uri);
+		error = uri_create(&new, tal, UT_HTTPS, false, NULL, uri);
 	else
 		return pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
 	if (error)

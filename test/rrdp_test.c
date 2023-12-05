@@ -24,8 +24,6 @@ MOCK_ABORT_INT(hash_validate_file, struct rpki_uri *uri,
 MOCK_ABORT_INT(relax_ng_parse, const char *path, xml_read_cb cb, void *arg)
 MOCK_ABORT_PTR(state_retrieve, validation, void)
 __MOCK_ABORT(tal_get_file_name, char const *, NULL, struct tal *tal)
-MOCK_ABORT_INT(uri_create, struct rpki_uri **result, char const *tal,
-    enum uri_type type, struct rpki_uri *notif, char const *guri)
 __MOCK_ABORT(uri_get_global, char const *, NULL, struct rpki_uri *uri)
 __MOCK_ABORT(uri_get_local, char const *, NULL, struct rpki_uri *uri)
 __MOCK_ABORT(uri_get_rrdp_workspace, char *, NULL, char const *tal,
