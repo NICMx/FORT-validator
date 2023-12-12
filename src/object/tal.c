@@ -14,7 +14,6 @@
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
-#include "cache/tmp.h"
 #include "crypto/base64.h"
 #include "object/certificate.h"
 #include "rtr/db/vrps.h"
@@ -505,16 +504,10 @@ perform_standalone_validation(void)
 	struct threads_list threads = SLIST_HEAD_INITIALIZER(threads);
 	struct validation_thread *thread;
 	struct db_table *db = NULL;
-	int error, tmperr;
+	int error = 0;
+	int tmperr;
 
 	cache_setup();
-
-	error = init_tmpdir();
-	if (error) {
-		pr_val_err("Cannot initialize the cache's temporal directory: %s",
-		    strerror(error));
-		return NULL;
-	}
 
 	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
 	if (foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,

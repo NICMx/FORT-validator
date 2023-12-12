@@ -1,6 +1,7 @@
 #include "cache/local_cache.h"
 
 #include <ftw.h>
+#include <stdatomic.h>
 #include <time.h>
 
 #include "alloc.h"
@@ -44,6 +45,9 @@ struct rpki_cache {
 #define CACHE_METAFILE "cache.json"
 #define TAGNAME_VERSION "fort-version"
 
+#define CACHEDIR_TAG "CACHEDIR.TAG"
+#define TMPDIR "tmp"
+
 #define TAL_METAFILE "tal.json"
 #define TAGNAME_URL "url"
 #define TAGNAME_ATTEMPT_TS "attempt-timestamp"
@@ -51,24 +55,55 @@ struct rpki_cache {
 #define TAGNAME_SUCCESS_TS "success-timestamp"
 #define TAGNAME_IS_NOTIF "is-rrdp-notification"
 
+static atomic_uint file_counter;
+
 static char *
-get_cache_metafile_name(void)
+get_cache_filename(char const *name, bool fatal)
 {
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, NULL, CACHE_METAFILE);
+	error = pb_init_cache(&pb, NULL, name);
 	if (error) {
-		pr_op_err("Cannot create path to " CACHE_METAFILE ": %s",
-		    strerror(error));
-		return NULL;
+		if (fatal) {
+			pr_crit("Cannot create path to %s: %s", name,
+			    strerror(error));
+		} else {
+			pr_op_err("Cannot create path to %s: %s", name,
+			    strerror(error));
+			return NULL;
+		}
 	}
 
 	return pb.string;
 }
 
-void
-cache_setup(void)
+static int
+write_simple_file(char const *filename, char const *content)
+{
+	FILE *file;
+	int error;
+
+	file = fopen(filename, "w");
+	if (file == NULL)
+		goto fail;
+
+	if (fprintf(file, "%s", content) < 0)
+		goto fail;
+
+	fclose(file);
+	return 0;
+
+fail:
+	error = errno;
+	pr_op_err("Cannot write %s: %s", filename, strerror(error));
+	if (file != NULL)
+		fclose(file);
+	return error;
+}
+
+static void
+init_cache_metafile(void)
 {
 	char *filename;
 	json_t *root;
@@ -76,10 +111,7 @@ cache_setup(void)
 	char const *file_version;
 	int error;
 
-	filename = get_cache_metafile_name();
-	if (filename == NULL)
-		return;
-
+	filename = get_cache_filename(CACHE_METAFILE, true);
 	root = json_load_file(filename, 0, &jerror);
 
 	if (root == NULL) {
@@ -114,41 +146,93 @@ end:	json_decref(root);
 	free(filename);
 }
 
-void
-cache_teardown(void)
+static void
+init_cachedir_tag(void)
 {
-	static char const * const CONTENT = "{ \"" TAGNAME_VERSION "\": \""
-	    PACKAGE_VERSION "\" }\n";
-
 	char *filename;
-	FILE *file = NULL;
-	int error;
 
-	filename = get_cache_metafile_name();
+	filename = get_cache_filename(CACHEDIR_TAG, false);
 	if (filename == NULL)
 		return;
 
-	file = fopen(filename, "w");
-	if (file == NULL)
-		goto fail;
-
-	if (fprintf(file, CONTENT) < 0)
-		goto fail;
+	if (file_exists(filename) == ENOENT)
+		write_simple_file(filename,
+		   "Signature: 8a477f597d28d172789f06886806bc55\n"
+		   "# This file is a cache directory tag created by Fort.\n"
+		   "# For information about cache directory tags, see:\n"
+		   "#	https://bford.info/cachedir/\n");
 
 	free(filename);
-	fclose(file);
-	return;
+}
 
-fail:
-	error = errno;
-	pr_op_err("Cannot write %s: %s", filename, strerror(error));
+static void
+init_tmp_dir(void)
+{
+	char *dirname;
+	int error;
+
+	dirname = get_cache_filename(TMPDIR, true);
+
+	error = mkdir_p(dirname, true);
+	if (error)
+		pr_crit("Cannot create %s: %s", dirname, strerror(error));
+
+	free(dirname);
+}
+
+void
+cache_setup(void)
+{
+	init_cache_metafile();
+	init_cachedir_tag();
+	init_tmp_dir();
+}
+
+void
+cache_teardown(void)
+{
+	char *filename;
+
+	filename = get_cache_filename(CACHE_METAFILE, false);
+	if (filename == NULL)
+		return;
+
+	write_simple_file(filename, "{ \"" TAGNAME_VERSION "\": \""
+	    PACKAGE_VERSION "\" }\n");
 	free(filename);
-	if (file != NULL)
-		fclose(file);
+}
+
+/*
+ * Returns a unique temporary file name in the local cache.
+ *
+ * The file will not be automatically deleted when it is closed or the program
+ * terminates.
+ *
+ * The name of the function is inherited from tmpfile(3).
+ *
+ * The resulting string needs to be released.
+ */
+int
+cache_tmpfile(char **filename)
+{
+	struct path_builder pb;
+	int error;
+
+	error = pb_init_cache(&pb, NULL, TMPDIR);
+	if (error)
+		return error;
+	error = pb_append_u32(&pb, atomic_fetch_add(&file_counter, 1u));
+	if (error) {
+		pb_cleanup(&pb);
+		return error;
+	}
+
+	*filename = pb.string;
+	return 0;
 }
 
 static char *
-get_json_filename(struct rpki_cache *cache)
+get_tal_json_filename(struct rpki_cache *cache)
 {
 	struct path_builder pb;
 	return pb_init_cache(&pb, cache->tal, TAL_METAFILE)
@@ -248,7 +332,7 @@ load_tal_json(struct rpki_cache *cache)
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
-	filename = get_json_filename(cache);
+	filename = get_tal_json_filename(cache);
 	if (filename == NULL)
 		return;
 
@@ -357,7 +441,7 @@ write_tal_json(struct rpki_cache *cache)
 	if (json == NULL)
 		return;
 
-	filename = get_json_filename(cache);
+	filename = get_tal_json_filename(cache);
 	if (filename == NULL)
 		goto end;
 

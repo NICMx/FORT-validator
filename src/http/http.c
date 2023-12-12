@@ -7,8 +7,8 @@
 #include "config.h"
 #include "file.h"
 #include "log.h"
-#include "cache/tmp.h"
 #include "data_structure/uthash.h"
+#include "cache/local_cache.h"
 
 struct http_handler {
 	CURL *curl;
