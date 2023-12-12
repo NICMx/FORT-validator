@@ -22,6 +22,7 @@ MOCK_ABORT_INT(cache_download_alt, struct rpki_cache *cache,
     struct uri_list *uris, bool use_rrdp, uris_dl_cb cb, void *arg)
 MOCK_ABORT_PTR(cache_recover, rpki_uri, struct rpki_cache *cache,
     struct uri_list *uris, bool use_rrdp)
+MOCK_ABORT_VOID(cache_teardown, void)
 MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
     struct rpki_uri *cert_uri)
 MOCK_ABORT_PTR(db_table_create, db_table, void)
@@ -38,7 +39,6 @@ MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
     uint8_t max_length, void *arg)
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
-MOCK_ABORT_INT(init_tmpdir, void)
 MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
 MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 MOCK(state_retrieve, struct validation *, NULL, void)
