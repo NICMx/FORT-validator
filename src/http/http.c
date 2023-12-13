@@ -291,7 +291,6 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	args.file = NULL;
 	setopt_writedata(handler.curl, &args);
 
-	pr_val_info("HTTP GET: %s -> %s", src, dst);
 	res = curl_easy_perform(handler.curl); /* write_callback() */
 	if (args.file != NULL)
 		file_close(args.file);
@@ -363,7 +362,7 @@ do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	unsigned int r;
 	int error;
 
-	pr_val_info("Downloading '%s'.", src);
+	pr_val_debug("Downloading '%s'.", src);
 
 	r = 0;
 	do {
@@ -428,6 +427,8 @@ http_download(struct rpki_uri *uri, bool *changed)
 	if (error)
 		goto end;
 
+	pr_val_info("HTTP GET: %s -> %s", uri_get_global(uri), final_file_name);
+
 	error = do_retries(uri_get_global(uri), tmp_file_name, (curl_off_t)ims,
 	    changed);
 	if (error || !(*changed))
@@ -460,5 +461,6 @@ int
 http_direct_download(char const *remote, char const *dest)
 {
 	bool changed;
+	pr_val_info("HTTP GET: %s -> %s", remote, dest);
 	return http_fetch(remote, dest, 0, &changed);
 }
