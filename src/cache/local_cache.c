@@ -184,8 +184,8 @@ void
 cache_setup(void)
 {
 	init_cache_metafile();
-	init_cachedir_tag();
 	init_tmp_dir();
+	init_cachedir_tag();
 }
 
 void
