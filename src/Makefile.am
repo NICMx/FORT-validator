@@ -45,7 +45,6 @@ fort_SOURCES += types/uri.h types/uri.c
 fort_SOURCES += types/vrp.c types/vrp.h
 
 fort_SOURCES += cache/local_cache.c cache/local_cache.h
-fort_SOURCES += cache/tmp.c cache/tmp.h
 
 fort_SOURCES += config/boolean.c config/boolean.h
 fort_SOURCES += config/filename_format.h config/filename_format.c

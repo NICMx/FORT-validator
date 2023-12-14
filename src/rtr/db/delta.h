@@ -9,9 +9,9 @@ struct deltas *deltas_create(void);
 void deltas_refget(struct deltas *);
 void deltas_refput(struct deltas *);
 
-int deltas_add_roa(struct deltas *, struct vrp const *, int,
+void deltas_add_roa(struct deltas *, struct vrp const *, int,
     char, unsigned int, unsigned int);
-int deltas_add_router_key(struct deltas *, struct router_key const *, int);
+void deltas_add_router_key(struct deltas *, struct router_key const *, int);
 
 bool deltas_is_empty(struct deltas *);
 int deltas_foreach(struct deltas *, delta_vrp_foreach_cb,

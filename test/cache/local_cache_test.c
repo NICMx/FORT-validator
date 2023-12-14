@@ -103,7 +103,7 @@ setup_test(void)
 
 	dl_error = false;
 	cache = cache_create(TAL_FILE);
-	ck_assert_ptr_nonnull(cache);
+	ck_assert_ptr_ne(NULL, cache);
 	SLIST_INIT(&downloaded);
 }
 
@@ -124,7 +124,7 @@ run_cache_download(char const *url, int expected_error,
 	rsync_counter = 0;
 	https_counter = 0;
 
-	ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, NULL, url));
+	ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, false, NULL, url));
 	ck_assert_int_eq(expected_error, cache_download(cache, uri, NULL));
 	ck_assert_uint_eq(rsync_calls, rsync_counter);
 	ck_assert_uint_eq(https_calls, https_counter);
@@ -133,7 +133,8 @@ run_cache_download(char const *url, int expected_error,
 }
 
 static struct cache_node *
-node(char const *url, time_t attempt, int err, bool succeeded, time_t success)
+node(char const *url, time_t attempt, int err, bool succeeded, time_t success,
+    bool is_notif)
 {
 	enum uri_type type;
 	struct cache_node *result;
@@ -146,7 +147,8 @@ node(char const *url, time_t attempt, int err, bool succeeded, time_t success)
 		ck_abort_msg("Bad protocol: %s", url);
 
 	result = pzalloc(sizeof(struct cache_node));
-	ck_assert_int_eq(0, uri_create(&result->url, TAL_FILE, type, NULL, url));
+	ck_assert_int_eq(0, uri_create(&result->url, TAL_FILE, type, is_notif,
+	    NULL, url));
 	result->attempt.ts = attempt;
 	result->attempt.result = err;
 	result->success.happened = succeeded;
@@ -156,7 +158,7 @@ node(char const *url, time_t attempt, int err, bool succeeded, time_t success)
 }
 
 #define NODE(url, err, succeeded, has_file) \
-	node(url, has_file, err, succeeded, 0)
+	node(url, has_file, err, succeeded, 0, 0)
 
 static void
 reset_visiteds(void)
@@ -710,7 +712,7 @@ START_TEST(test_dots)
 }
 END_TEST
 
-START_TEST(test_metadata_json)
+START_TEST(test_tal_json)
 {
 	json_t *json;
 	char *str;
@@ -724,30 +726,27 @@ START_TEST(test_metadata_json)
 	add_node(cache, NODE("rsync://a.b.c/e", 1, 0, 0));
 	add_node(cache, NODE("rsync://x.y.z/e", 0, 1, 0));
 	add_node(cache, NODE("https://a/b", 1, 1, 0));
-	add_node(cache, NODE("https://a/c", 0, 1, 0));
+	add_node(cache, node("https://a/c", 0, 0, 1, 0, 1));
 
-	json = build_metadata_json(cache);
-	ck_assert_int_eq(0, json_dump_file(json, "tmp/" TAL_FILE "/metadata.json", JSON_COMPACT));
+	json = build_tal_json(cache);
+	ck_assert_int_eq(0, json_dump_file(json, "tmp/" TAL_FILE "/" TAL_METAFILE, JSON_COMPACT));
 
 	str = json_dumps(json, /* JSON_INDENT(4) */ JSON_COMPACT);
-	/* printf("%s\n", str); */
 	json_decref(json);
 
-	/* TODO (test) Time zones are hardcoded to CST */
 	ck_assert_str_eq(
-	    "[{\"url\":\"rsync://a.b.c/d\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":0,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"},"
-	    "{\"url\":\"rsync://a.b.c/e\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":1},"
-	    "{\"url\":\"rsync://x.y.z/e\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":0,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"},"
-	    "{\"url\":\"https://a/b\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":1,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"},"
-	    "{\"url\":\"https://a/c\",\"attempt-timestamp\":\"1969-12-31T18:00:00-0600\",\"attempt-result\":0,\"success-timestamp\":\"1969-12-31T18:00:00-0600\"}]",
+	    "[{\"url\":\"rsync://a.b.c/d\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"url\":\"rsync://a.b.c/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1},"
+	    "{\"url\":\"rsync://x.y.z/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"url\":\"https://a/b\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"url\":\"https://a/c\",\"is-rrdp-notification\":true,\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"}]",
 	    str);
-	printf("%s", str);
 	free(str);
 
 	cache_reset(cache);
 
-	load_metadata_json(cache);
-	ck_assert_ptr_nonnull(cache->ht);
+	load_tal_json(cache);
+	ck_assert_ptr_ne(NULL, cache->ht);
 
 	validate_cache(0,
 	    NODE("rsync://a.b.c/d", 0, 1, 0),
@@ -779,7 +778,8 @@ prepare_uri_list(struct uri_list *uris, ...)
 			type = UT_RSYNC;
 		else
 			ck_abort_msg("Bad protocol: %s", str);
-		ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, NULL, str));
+		ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, false,
+		    NULL, str));
 		uris_add(uris, uri);
 	}
 	va_end(args);
@@ -795,7 +795,7 @@ START_TEST(test_recover)
 
 	/* Query on empty database */
 	PREPARE_URI_LIST(&uris, "rsync://a.b.c/d", "https://a.b.c/d");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Only first URI is cached */
@@ -827,7 +827,7 @@ START_TEST(test_recover)
 	run_cache_download("rsync://d/e", 0, 1, 0);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/*
@@ -839,18 +839,18 @@ START_TEST(test_recover)
 	 */
 	cache_reset(cache);
 
-	add_node(cache, node("rsync://a/1", 100, 0, 1, 100));
-	add_node(cache, node("rsync://a/2", 100, 1, 1, 100));
-	add_node(cache, node("rsync://a/3", 200, 0, 1, 100));
-	add_node(cache, node("rsync://a/4", 200, 1, 1, 100));
-	add_node(cache, node("rsync://a/5", 100, 0, 1, 200));
-	add_node(cache, node("rsync://a/6", 100, 1, 1, 200));
-	add_node(cache, node("rsync://b/1", 100, 0, 0, 100));
-	add_node(cache, node("rsync://b/2", 100, 1, 0, 100));
-	add_node(cache, node("rsync://b/3", 200, 0, 0, 100));
-	add_node(cache, node("rsync://b/4", 200, 1, 0, 100));
-	add_node(cache, node("rsync://b/5", 100, 0, 0, 200));
-	add_node(cache, node("rsync://b/6", 100, 1, 0, 200));
+	add_node(cache, node("rsync://a/1", 100, 0, 1, 100, 0));
+	add_node(cache, node("rsync://a/2", 100, 1, 1, 100, 0));
+	add_node(cache, node("rsync://a/3", 200, 0, 1, 100, 0));
+	add_node(cache, node("rsync://a/4", 200, 1, 1, 100, 0));
+	add_node(cache, node("rsync://a/5", 100, 0, 1, 200, 0));
+	add_node(cache, node("rsync://a/6", 100, 1, 1, 200, 0));
+	add_node(cache, node("rsync://b/1", 100, 0, 0, 100, 0));
+	add_node(cache, node("rsync://b/2", 100, 1, 0, 100, 0));
+	add_node(cache, node("rsync://b/3", 200, 0, 0, 100, 0));
+	add_node(cache, node("rsync://b/4", 200, 1, 0, 100, 0));
+	add_node(cache, node("rsync://b/5", 100, 0, 0, 200, 0));
+	add_node(cache, node("rsync://b/6", 100, 1, 0, 200, 0));
 
 	/* Multiple successful caches: Prioritize the most recent one */
 	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://a/3", "rsync://a/5");
@@ -863,7 +863,7 @@ START_TEST(test_recover)
 
 	/* No successful caches: No viable candidates */
 	PREPARE_URI_LIST(&uris, "rsync://b/2", "rsync://b/4", "rsync://b/6");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Status: CNF_SUCCESS is better than 0. */
@@ -884,7 +884,7 @@ START_TEST(test_recover)
 
 	/* Parents of downloaded nodes */
 	PREPARE_URI_LIST(&uris, "rsync://a", "rsync://b");
-	ck_assert_ptr_null(cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
 	uris_cleanup(&uris);
 
 	/* Try them all at the same time */
@@ -923,8 +923,8 @@ static Suite *thread_pool_suite(void)
 	dot = tcase_create("dot");
 	tcase_add_test(dot, test_dots);
 
-	meta = tcase_create("metadata.json");
-	tcase_add_test(meta, test_metadata_json);
+	meta = tcase_create(TAL_METAFILE);
+	tcase_add_test(meta, test_tal_json);
 
 	recover = tcase_create("recover");
 	tcase_add_test(recover, test_recover);

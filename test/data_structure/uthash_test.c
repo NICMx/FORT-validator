@@ -39,10 +39,10 @@ check_table(struct uthash_table *table, unsigned int argcount, ...)
 	for (a = 0; a < argcount; a++) {
 		HASH_FIND_INT(table->nodes, &a, node);
 		if (expected[a]) {
-			ck_assert_ptr_nonnull(node);
+			ck_assert_ptr_ne(NULL, node);
 			ck_assert_int_eq(a, node->key);
 		} else {
-			ck_assert_ptr_null(node);
+			ck_assert_ptr_eq(NULL, node);
 		}
 	}
 
@@ -63,7 +63,7 @@ add_node(struct uthash_table *table, int key)
 	int error;
 
 	new = malloc(sizeof(struct uthash_node));
-	ck_assert_ptr_nonnull(new);
+	ck_assert_ptr_ne(NULL, new);
 
 	memset(new, 0, sizeof(*new));
 	new->key = key;
@@ -88,7 +88,7 @@ clean_table(struct uthash_table *table)
 		free(node);
 	}
 
-	ck_assert_ptr_null(table->nodes);
+	ck_assert_ptr_eq(NULL, table->nodes);
 }
 
 START_TEST(test_replace)
@@ -149,7 +149,7 @@ START_TEST(test_uri)
 	keystrlen = strlen(keystr);
 
 	HASH_FIND(hh, table, keystr, keystrlen, node);
-	ck_assert_ptr_null(node);
+	ck_assert_ptr_eq(NULL, node);
 
 	/* Add a node */
 	node = malloc(sizeof(struct test2_node));
@@ -177,7 +177,7 @@ START_TEST(test_uri)
 	keystrlen = strlen(keystr);
 	node2 = NULL;
 	HASH_FIND(hh, table, keystr, keystrlen, node2);
-	ck_assert_ptr_null(node2);
+	ck_assert_ptr_eq(NULL, node2);
 	free(keystr);
 
 	/* free the hash table contents */

@@ -1,11 +1,13 @@
 #include "cache/local_cache.h"
 
 #include <ftw.h>
+#include <stdatomic.h>
 #include <time.h>
 
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
+#include "configure_ac.h"
 #include "file.h"
 #include "json_util.h"
 #include "log.h"
@@ -40,16 +42,200 @@ struct rpki_cache {
 	time_t startup_ts; /* When we started the last validation */
 };
 
+#define CACHE_METAFILE "cache.json"
+#define TAGNAME_VERSION "fort-version"
+
+#define CACHEDIR_TAG "CACHEDIR.TAG"
+#define TMPDIR "tmp"
+
+#define TAL_METAFILE "tal.json"
 #define TAGNAME_URL "url"
 #define TAGNAME_ATTEMPT_TS "attempt-timestamp"
 #define TAGNAME_ATTEMPT_ERR "attempt-result"
 #define TAGNAME_SUCCESS_TS "success-timestamp"
+#define TAGNAME_IS_NOTIF "is-rrdp-notification"
+
+static atomic_uint file_counter;
 
 static char *
-get_json_filename(struct rpki_cache *cache)
+get_cache_filename(char const *name, bool fatal)
 {
 	struct path_builder pb;
-	return pb_init_cache(&pb, cache->tal, "metadata.json")
+	int error;
+
+	error = pb_init_cache(&pb, NULL, name);
+	if (error) {
+		if (fatal) {
+			pr_crit("Cannot create path to %s: %s", name,
+			    strerror(error));
+		} else {
+			pr_op_err("Cannot create path to %s: %s", name,
+			    strerror(error));
+			return NULL;
+		}
+	}
+
+	return pb.string;
+}
+
+static int
+write_simple_file(char const *filename, char const *content)
+{
+	FILE *file;
+	int error;
+
+	file = fopen(filename, "w");
+	if (file == NULL)
+		goto fail;
+
+	if (fprintf(file, "%s", content) < 0)
+		goto fail;
+
+	fclose(file);
+	return 0;
+
+fail:
+	error = errno;
+	pr_op_err("Cannot write %s: %s", filename, strerror(error));
+	if (file != NULL)
+		fclose(file);
+	return error;
+}
+
+static void
+init_cache_metafile(void)
+{
+	char *filename;
+	json_t *root;
+	json_error_t jerror;
+	char const *file_version;
+	int error;
+
+	filename = get_cache_filename(CACHE_METAFILE, true);
+	root = json_load_file(filename, 0, &jerror);
+
+	if (root == NULL) {
+		if (json_error_code(&jerror) == json_error_cannot_open_file)
+			pr_op_debug("%s does not exist.", filename);
+		else
+			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+			    filename, jerror.line, jerror.column, jerror.text);
+		goto invalid_cache;
+	}
+	if (json_typeof(root) != JSON_OBJECT) {
+		pr_op_err("The root tag of %s is not an object.", filename);
+		goto invalid_cache;
+	}
+
+	error = json_get_str(root, TAGNAME_VERSION, &file_version);
+	if (error) {
+		if (error > 0)
+			pr_op_err("%s is missing the " TAGNAME_VERSION " tag.",
+			    filename);
+		goto invalid_cache;
+	}
+
+	if (strcmp(file_version, PACKAGE_VERSION) == 0)
+		goto end;
+
+invalid_cache:
+	pr_op_info("The cache appears to have been built by a different version of Fort. I'm going to clear it, just to be safe.");
+	file_rm_rf(config_get_local_repository());
+
+end:	json_decref(root);
+	free(filename);
+}
+
+static void
+init_cachedir_tag(void)
+{
+	char *filename;
+
+	filename = get_cache_filename(CACHEDIR_TAG, false);
+	if (filename == NULL)
+		return;
+
+	if (file_exists(filename) == ENOENT)
+		write_simple_file(filename,
+		   "Signature: 8a477f597d28d172789f06886806bc55\n"
+		   "# This file is a cache directory tag created by Fort.\n"
+		   "# For information about cache directory tags, see:\n"
+		   "#	https://bford.info/cachedir/\n");
+
+	free(filename);
+}
+
+static void
+init_tmp_dir(void)
+{
+	char *dirname;
+	int error;
+
+	dirname = get_cache_filename(TMPDIR, true);
+
+	error = mkdir_p(dirname, true);
+	if (error)
+		pr_crit("Cannot create %s: %s", dirname, strerror(error));
+
+	free(dirname);
+}
+
+void
+cache_setup(void)
+{
+	init_cache_metafile();
+	init_tmp_dir();
+	init_cachedir_tag();
+}
+
+void
+cache_teardown(void)
+{
+	char *filename;
+
+	filename = get_cache_filename(CACHE_METAFILE, false);
+	if (filename == NULL)
+		return;
+
+	write_simple_file(filename, "{ \"" TAGNAME_VERSION "\": \""
+	    PACKAGE_VERSION "\" }\n");
+	free(filename);
+}
+
+/*
+ * Returns a unique temporary file name in the local cache.
+ *
+ * The file will not be automatically deleted when it is closed or the program
+ * terminates.
+ *
+ * The name of the function is inherited from tmpfile(3).
+ *
+ * The resulting string needs to be released.
+ */
+int
+cache_tmpfile(char **filename)
+{
+	struct path_builder pb;
+	int error;
+
+	error = pb_init_cache(&pb, NULL, TMPDIR);
+	if (error)
+		return error;
+	error = pb_append_u32(&pb, atomic_fetch_add(&file_counter, 1u));
+	if (error) {
+		pb_cleanup(&pb);
+		return error;
+	}
+
+	*filename = pb.string;
+	return 0;
+}
+
+static char *
+get_tal_json_filename(struct rpki_cache *cache)
+{
+	struct path_builder pb;
+	return pb_init_cache(&pb, cache->tal, TAL_METAFILE)
 	    ? NULL : pb.string;
 }
 
@@ -58,6 +244,7 @@ json2node(struct rpki_cache *cache, json_t *json)
 {
 	struct cache_node *node;
 	char const *url;
+	bool is_notif;
 	enum uri_type type;
 	int error;
 
@@ -78,7 +265,16 @@ json2node(struct rpki_cache *cache, json_t *json)
 		pr_op_err("Unknown protocol: %s", url);
 		goto fail;
 	}
-	error = uri_create(&node->url, cache->tal, type, NULL, url);
+
+	error = json_get_bool(json, TAGNAME_IS_NOTIF, &is_notif);
+	if (error < 0)
+		goto fail;
+
+	error = uri_create(&node->url, cache->tal, type, is_notif, NULL, url);
+	if (error) {
+		pr_op_err("Cannot parse '%s' into a URI.", url);
+		goto fail;
+	}
 
 	error = json_get_ts(json, TAGNAME_ATTEMPT_TS, &node->attempt.ts);
 	if (error) {
@@ -123,7 +319,7 @@ add_node(struct rpki_cache *cache, struct cache_node *node)
 }
 
 static void
-load_metadata_json(struct rpki_cache *cache)
+load_tal_json(struct rpki_cache *cache)
 {
 	char *filename;
 	json_t *root;
@@ -132,13 +328,15 @@ load_metadata_json(struct rpki_cache *cache)
 	struct cache_node *node;
 
 	/*
-	 * Note: Loading metadata.json is one of few things Fort can fail at
+	 * Note: Loading TAL_METAFILE is one of few things Fort can fail at
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
-	filename = get_json_filename(cache);
+	filename = get_tal_json_filename(cache);
 	if (filename == NULL)
 		return;
+
+	pr_op_debug("Loading %s.", filename);
 
 	root = json_load_file(filename, 0, &jerror);
 
@@ -174,7 +372,7 @@ cache_create(char const *tal)
 	cache->startup_ts = time(NULL);
 	if (cache->startup_ts == (time_t) -1)
 		pr_crit("time(NULL) returned (time_t) -1.");
-	load_metadata_json(cache);
+	load_tal_json(cache);
 	return cache;
 }
 
@@ -191,6 +389,9 @@ node2json(struct cache_node *node)
 
 	if (json_add_str(json, TAGNAME_URL, uri_get_global(node->url)))
 		goto cancel;
+	if (uri_is_notif(node->url))
+		if (json_add_bool(json, TAGNAME_IS_NOTIF, true))
+			goto cancel;
 	if (json_add_date(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
 		goto cancel;
 	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
@@ -207,7 +408,7 @@ cancel:
 }
 
 static json_t *
-build_metadata_json(struct rpki_cache *cache)
+build_tal_json(struct rpki_cache *cache)
 {
 	struct cache_node *node, *tmp;
 	json_t *root, *child;
@@ -231,16 +432,16 @@ build_metadata_json(struct rpki_cache *cache)
 }
 
 static void
-write_metadata_json(struct rpki_cache *cache)
+write_tal_json(struct rpki_cache *cache)
 {
 	char *filename;
 	struct json_t *json;
 
-	json = build_metadata_json(cache);
+	json = build_tal_json(cache);
 	if (json == NULL)
 		return;
 
-	filename = get_json_filename(cache);
+	filename = get_tal_json_filename(cache);
 	if (filename == NULL)
 		goto end;
 
@@ -315,15 +516,15 @@ get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
 		if (*c == '/') {
 			slashes++;
 			if (slashes == 4)
-				return __uri_create(url, tal, UT_RSYNC, NULL,
-				    guri, c - guri + 1);
+				return __uri_create(url, tal, UT_RSYNC, false,
+				    NULL, guri, c - guri + 1);
 		}
 	}
 
 	if (slashes == 3 && *(c - 1) != '/') {
 		guri2 = pstrdup(guri); /* Remove const */
 		guri2[c - guri] = '/';
-		error = __uri_create(url, tal, UT_RSYNC, NULL, guri2,
+		error = __uri_create(url, tal, UT_RSYNC, false, NULL, guri2,
 		    c - guri + 1);
 		free(guri2);
 		return error;
@@ -604,12 +805,9 @@ static void
 delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
 {
 	struct rpki_uri *cage;
-	int error;
 
-	if (uri_get_type(node->url) == UT_HTTPS) {
-		error = __uri_create(&cage, cache->tal, UT_CAGED, node->url,
-		    "", 0);
-		if (!error) {
+	if (uri_is_notif(node->url)) {
+		if (uri_create_cage(&cage, cache->tal, node->url) == 0) {
 			pr_op_debug("Deleting cage %s.", uri_get_local(cage));
 			file_rm_rf(uri_get_local(cage));
 			uri_refput(cage);
@@ -656,6 +854,7 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 		break;
 	case ENOENT:
 		/* Node exists but file doesn't: Delete node */
+		pr_op_debug("Node exists but file doesn't: %s", path);
 		delete_node_and_cage(cache, node);
 		return;
 	default:
@@ -724,7 +923,7 @@ delete_unknown_files(struct rpki_cache *cache)
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, cache->tal, "metadata.json");
+	error = pb_init_cache(&pb, cache->tal, TAL_METAFILE);
 	if (error) {
 		pr_op_err("Cannot delete unknown files from %s's cache: %s",
 		    cache->tal, strerror(error));
@@ -739,9 +938,10 @@ delete_unknown_files(struct rpki_cache *cache)
 		uri_refget(node->url);
 		uris_add(&dnc, node->url);
 
-		error = __uri_create(&cage, cache->tal, UT_CAGED, node->url,
-		    "", 0);
-		if (error) {
+		if (!uri_is_notif(node->url))
+			continue;
+
+		if (uri_create_cage(&cage, cache->tal, node->url) != 0) {
 			pr_op_err("Cannot generate %s's cage. I'm probably going to end up deleting it from the cache.",
 			    uri_op_get_printable(node->url));
 			continue;
@@ -771,10 +971,12 @@ cache_cleanup(struct rpki_cache *cache)
 	struct cache_node *node, *tmp;
 	time_t last_week;
 
+	pr_op_debug("Cleaning up old abandoned cache files.");
 	last_week = get_days_ago(7);
 	HASH_ITER(hh, cache->ht, node, tmp)
 		cleanup_node(cache, node, last_week);
 
+	pr_op_debug("Cleaning up unknown cache files.");
 	delete_unknown_files(cache);
 }
 
@@ -784,7 +986,7 @@ cache_destroy(struct rpki_cache *cache)
 	struct cache_node *node, *tmp;
 
 	cache_cleanup(cache);
-	write_metadata_json(cache);
+	write_tal_json(cache);
 
 	HASH_ITER(hh, cache->ht, node, tmp)
 		delete_node(cache, node);

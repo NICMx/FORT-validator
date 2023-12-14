@@ -479,7 +479,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	error = uri_create(&meta->uri,
 	    tal_get_file_name(validation_tal(state_retrieve())),
 	    (notif != NULL) ? UT_CAGED : UT_HTTPS,
-	    notif, (char const *)uri);
+	    false, notif, (char const *)uri);
 	xmlFree(uri);
 	if (error)
 		return error;

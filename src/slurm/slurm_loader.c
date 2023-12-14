@@ -1,5 +1,6 @@
 #include "slurm/slurm_loader.h"
 
+#include <errno.h>
 #include "alloc.h"
 #include "log.h"
 #include "config.h"
@@ -86,6 +87,7 @@ slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 	}
 
 	pr_crit("Unknown addr family type: %u", vrp.addr_fam);
+	return EINVAL; /* Warning shutupper */
 }
 
 static int

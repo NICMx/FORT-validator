@@ -57,6 +57,7 @@ rwlock_read_lock(pthread_rwlock_t *lock)
 	 */
 	pr_crit("pthread_rwlock_rdlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
 	    error);
+	return EINVAL; /* Warning shutupper */
 }
 
 void

@@ -1481,12 +1481,13 @@ end:
  * Create @uri from the @ad
  */
 static int
-uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
+uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type,
+    bool is_notif)
 {
-	ASN1_STRING *asn1_string;
+	ASN1_STRING *asn1str;
 	int ptype;
 
-	asn1_string = GENERAL_NAME_get0_value(ad->location, &ptype);
+	asn1str = GENERAL_NAME_get0_value(ad->location, &ptype);
 
 	/*
 	 * RFC 6487: "This extension MUST have an instance of an
@@ -1524,9 +1525,9 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
 	 * But ask the testers to keep an eye on it anyway.
 	 */
 	return __uri_create(uri,
-	    tal_get_file_name(validation_tal(state_retrieve())), type, NULL,
-	    ASN1_STRING_get0_data(asn1_string),
-	    ASN1_STRING_length(asn1_string));
+	    tal_get_file_name(validation_tal(state_retrieve())), type,
+	    is_notif, NULL,
+	    ASN1_STRING_get0_data(asn1str), ASN1_STRING_length(asn1str));
 }
 
 /**
@@ -1560,7 +1561,8 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == nid) {
-			error = uri_create_ad(&uri, ad, meta->type);
+			error = uri_create_ad(&uri, ad, meta->type,
+			    meta == &RPKI_NOTIFY);
 			switch (error) {
 			case 0:
 				break;

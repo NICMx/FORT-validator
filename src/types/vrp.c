@@ -20,6 +20,7 @@ vrp_equals(struct vrp const *a, struct vrp const *b)
 	}
 
 	pr_crit("Unknown address family: %u", a->addr_fam);
+	return false; /* Warning shutupper */
 }
 
 /* Checks if a's prefix equals or covers b's prefix */
@@ -39,6 +40,7 @@ vrp_prefix_cov(struct vrp const *a, struct vrp const *b)
 	}
 
 	pr_crit("Unknown address family: %u", a->addr_fam);
+	return false; /* Warning shutupper */
 }
 
 int

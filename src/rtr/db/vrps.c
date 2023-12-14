@@ -171,34 +171,6 @@ handle_router_key(unsigned char const *ski, struct asn_range const *asns,
 	return 0;
 }
 
-static int
-__compute_deltas(struct db_table *old_base, struct db_table *new_base,
-    bool *notify_clients, struct deltas **result)
-{
-	int error;
-
-	*result = NULL;
-	if (notify_clients != NULL)
-		*notify_clients = true;
-
-	/* First version of the database = No deltas */
-	if (old_base == NULL)
-		return 0;
-
-	error = compute_deltas(old_base, new_base, result);
-	if (error)
-		return error;
-
-	if (deltas_is_empty(*result)) {
-		if (notify_clients != NULL)
-			*notify_clients = false;
-		deltas_refput(*result);
-		*result = NULL;
-	}
-
-	return 0;
-}
-
 /*
  * High level validator function.
  *
@@ -222,10 +194,11 @@ __vrps_update(bool *changed)
 	struct deltas *new_deltas;
 	int error;
 
-	if (changed)
+	if (changed != NULL)
 		*changed = false;
 	old_base = state.base;
 	new_base = NULL;
+	new_deltas = NULL;
 
 	new_base = perform_standalone_validation();
 	if (new_base == NULL)
@@ -238,45 +211,31 @@ __vrps_update(bool *changed)
 	}
 
 	/*
-	 * At this point, new_base is completely valid. Even if we error out
-	 * later, report the ROAs.
-	 *
 	 * This is done after the validation, not during it, to prevent
 	 * duplicate ROAs.
 	 */
 	output_print_data(new_base);
 
-	error = __compute_deltas(old_base, new_base, changed, &new_deltas);
-	if (error) {
-		/*
-		 * Deltas are nice-to haves. As long as state.base is correct,
-		 * the validator can continue serving the routers.
-		 * (Albeit less efficiently.)
-		 * So drop a warning and keep going.
-		 */
-		pr_op_warn("Deltas could not be computed: %s", strerror(error));
+	if (old_base != NULL) {
+		new_deltas = compute_deltas(old_base, new_base);
+		if (new_deltas == NULL) {
+			db_table_destroy(new_base);
+			return 0;
+		}
 	}
 
 	rwlock_write_lock(&state_lock);
-
 	state.base = new_base;
 	state.serial++;
-	if (new_deltas != NULL) {
+	if (new_deltas != NULL)
 		/* Ownership transferred */
 		darray_add(state.deltas, new_deltas);
-	} else {
-		/*
-		 * If the latest base has no deltas, all existing deltas are
-		 * rendered useless. This is because clients always want to
-		 * reach the latest serial, no matter where they are.
-		 */
-		darray_clear(state.deltas);
-	}
-
 	rwlock_unlock(&state_lock);
 
 	if (old_base != NULL)
 		db_table_destroy(old_base);
+	if (changed != NULL)
+		*changed = true;
 
 	return 0;
 }

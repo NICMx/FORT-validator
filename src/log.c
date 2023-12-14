@@ -264,19 +264,13 @@ log_start(void)
 	if (config_get_val_log_enabled()) {
 		switch (config_get_val_log_output()) {
 		case SYSLOG:
-			pr_op_info("Syslog log output configured; disabling validation logging on standard streams.");
-			pr_op_info("(Validation Logs will be sent to syslog only.)");
 			val_config.fprintf_enabled = false;
 			break;
 		case CONSOLE:
-			pr_op_info("Console log output configured; disabling validation logging on syslog.");
-			pr_op_info("(Validation Logs will be sent to the standard streams only.)");
 			val_config.syslog_enabled = false;
 			break;
 		}
 	} else {
-		pr_op_info("Disabling validation logging on syslog.");
-		pr_op_info("Disabling validation logging on standard streams.");
 		val_config.fprintf_enabled = false;
 		val_config.syslog_enabled = false;
 	}
@@ -284,13 +278,9 @@ log_start(void)
 	if (config_get_op_log_enabled()) {
 		switch (config_get_op_log_output()) {
 		case SYSLOG:
-			pr_op_info("Syslog log output configured; disabling operation logging on standard streams.");
-			pr_op_info("(Operation Logs will be sent to syslog only.)");
 			op_config.fprintf_enabled = false;
 			break;
 		case CONSOLE:
-			pr_op_info("Console log output configured; disabling operation logging on syslog.");
-			pr_op_info("(Operation Logs will be sent to the standard streams only.)");
 			if (val_config.syslog_enabled)
 				op_config.syslog_enabled = false;
 			else
@@ -298,8 +288,6 @@ log_start(void)
 			break;
 		}
 	} else {
-		pr_op_info("Disabling operation logging on syslog.");
-		pr_op_info("Disabling operation logging on standard streams.");
 		op_config.fprintf_enabled = false;
 		if (val_config.syslog_enabled)
 			op_config.syslog_enabled = false;
@@ -446,10 +434,8 @@ __syslog(int level, struct log_config *cfg, const char *format, va_list args)
 {
 	static char msg[MSG_LEN];
 	char const *file_name;
-	struct level const *lvl;
 
 	file_name = fnstack_peek();
-	lvl = level2struct(level);
 
 	lock_mutex();
 
@@ -457,18 +443,16 @@ __syslog(int level, struct log_config *cfg, const char *format, va_list args)
 	vsnprintf(msg, MSG_LEN, format, args);
 	if (file_name != NULL) {
 		if (cfg->prefix != NULL)
-			syslog(level | cfg->facility, "%s [%s]: %s: %s",
-			    lvl->label, cfg->prefix, file_name, msg);
+			syslog(level | cfg->facility, "[%s] %s: %s",
+			    cfg->prefix, file_name, msg);
 		else
-			syslog(level | cfg->facility, "%s: %s: %s",
-			    lvl->label, file_name, msg);
+			syslog(level | cfg->facility, "%s: %s", file_name, msg);
 	} else {
 		if (cfg->prefix != NULL)
-			syslog(level | cfg->facility, "%s [%s]: %s",
-			    lvl->label, cfg->prefix, msg);
+			syslog(level | cfg->facility, "[%s] %s",
+			    cfg->prefix, msg);
 		else
-			syslog(level | cfg->facility, "%s: %s",
-			    lvl->label, msg);
+			syslog(level | cfg->facility, "%s", msg);
 	}
 
 	unlock_mutex();

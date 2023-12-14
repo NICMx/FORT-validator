@@ -271,13 +271,15 @@ check_base(serial_t expected_serial, bool const *expected_base)
 static int
 vrp_add(struct delta_vrp const *delta, void *arg)
 {
-	return deltas_add_roa(arg, &delta->vrp, delta->flags, 'a', 0, 0);
+	deltas_add_roa(arg, &delta->vrp, delta->flags, 'a', 0, 0);
+	return 0;
 }
 
 static int
 rk_add(struct delta_router_key const *delta, void *arg)
 {
-	return deltas_add_router_key(arg, &delta->router_key, delta->flags);
+	deltas_add_router_key(arg, &delta->router_key, delta->flags);
+	return 0;
 }
 
 static void
@@ -289,7 +291,7 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas)
 	array_index i;
 
 	deltas = deltas_create();
-	ck_assert_ptr_nonnull(deltas);
+	ck_assert_ptr_ne(NULL, deltas);
 
 	ck_assert_int_eq(0, vrps_foreach_delta_since(from, &actual_serial,
 	    vrp_add, rk_add, deltas));

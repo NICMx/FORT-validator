@@ -1,6 +1,5 @@
 #include "types/uri.h"
 
-
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
@@ -64,6 +63,7 @@ struct rpki_uri {
 	/* "local_len" is never needed right now. */
 
 	enum uri_type type;
+	bool is_notif; /* Does it point to an RRDP Notification? */
 
 	unsigned int references;
 };
@@ -393,7 +393,7 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
  */
 int
 __uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
-    struct rpki_uri *notif, void const *guri, size_t guri_len)
+    bool is_notif, struct rpki_uri *notif, void const *guri, size_t guri_len)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -407,6 +407,7 @@ __uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
 	}
 
 	uri->type = type;
+	uri->is_notif = is_notif;
 
 	error = autocomplete_local(uri, tal, notif);
 	if (error) {
@@ -419,13 +420,6 @@ __uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
 
 	*result = uri;
 	return 0;
-}
-
-int
-uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
-    struct rpki_uri *notif, char const *guri)
-{
-	return __uri_create(result, tal, type, notif, guri, strlen(guri));
 }
 
 /*
@@ -539,6 +533,12 @@ bool
 uri_is_certificate(struct rpki_uri *uri)
 {
 	return uri_has_extension(uri, ".cer");
+}
+
+bool
+uri_is_notif(struct rpki_uri *uri)
+{
+	return uri->is_notif;
 }
 
 enum uri_type

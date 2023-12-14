@@ -5,6 +5,12 @@
 #include <time.h>
 #include "log.h"
 
+/*
+ * Careful with this; several of the conversion specification characters
+ * documented in the Linux man page are not actually portable.
+ */
+#define JSON_TS_FORMAT "%Y-%m-%dT%H:%M:%SZ"
+
 int
 json_get_str(json_t *parent, char const *name, char const **result)
 {
@@ -114,7 +120,7 @@ json_get_ts(json_t *parent, char const *name, time_t *result)
 		return error;
 
 	memset(&tm, 0, sizeof(tm));
-	consumed = strptime(str, "%FT%T%z", &tm);
+	consumed = strptime(str, JSON_TS_FORMAT, &tm);
 	if (consumed == NULL || (*consumed) != 0)
 		return pr_op_err("String '%s' does not appear to be a timestamp.",
 		    str);
@@ -220,10 +226,10 @@ tt2json(time_t tt, json_t **result)
 	struct tm tmbuffer, *tm;
 
 	memset(&tmbuffer, 0, sizeof(tmbuffer));
-	tm = localtime_r(&tt, &tmbuffer);
+	tm = gmtime_r(&tt, &tmbuffer);
 	if (tm == NULL)
 		return errno;
-	if (strftime(str, sizeof(str) - 1, "%FT%T%z", tm) == 0)
+	if (strftime(str, sizeof(str) - 1, JSON_TS_FORMAT, tm) == 0)
 		return ENOSPC;
 
 	*result = json_string(str);

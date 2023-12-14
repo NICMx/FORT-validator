@@ -14,7 +14,6 @@
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
-#include "cache/tmp.h"
 #include "crypto/base64.h"
 #include "object/certificate.h"
 #include "rtr/db/vrps.h"
@@ -55,9 +54,9 @@ add_uri(struct uri_list *uris, char const *tal, char *uri)
 	int error;
 
 	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, tal, UT_RSYNC, NULL, uri);
+		error = uri_create(&new, tal, UT_RSYNC, false, NULL, uri);
 	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, tal, UT_HTTPS, NULL, uri);
+		error = uri_create(&new, tal, UT_HTTPS, false, NULL, uri);
 	else
 		return pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
 	if (error)
@@ -505,14 +504,10 @@ perform_standalone_validation(void)
 	struct threads_list threads = SLIST_HEAD_INITIALIZER(threads);
 	struct validation_thread *thread;
 	struct db_table *db = NULL;
-	int error, tmperr;
+	int error = 0;
+	int tmperr;
 
-	error = init_tmpdir();
-	if (error) {
-		pr_val_err("Cannot initialize the cache's temporal directory: %s",
-		    strerror(error));
-		return NULL;
-	}
+	cache_setup();
 
 	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
 	if (foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
@@ -550,6 +545,8 @@ perform_standalone_validation(void)
 
 		thread_destroy(thread);
 	}
+
+	cache_teardown();
 
 	/* If one thread has errors, we can't keep the resulting table. */
 	if (error) {
