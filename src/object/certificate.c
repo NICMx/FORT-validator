@@ -160,7 +160,10 @@ validate_serial_number(X509 *cert)
 static int
 validate_signature_algorithm(X509 *cert)
 {
-	int nid = OBJ_obj2nid(X509_get0_tbs_sigalg(cert)->algorithm);
+	const ASN1_OBJECT *obj;
+	int nid;
+	X509_ALGOR_get0(&obj, NULL, NULL, X509_get0_tbs_sigalg(cert));
+	nid = OBJ_obj2nid(obj);
 	return validate_certificate_signature_algorithm(nid, "Certificate");
 }
 
