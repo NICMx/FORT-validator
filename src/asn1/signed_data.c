@@ -58,7 +58,7 @@ static int
 handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
     OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
-	const unsigned char *tmp;
+	const unsigned char *otmp, *tmp;
 	X509 *cert;
 	enum rpki_policy policy;
 	int error;
@@ -78,10 +78,14 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	 * pointer.
 	 */
 	tmp = (const unsigned char *) cert_encoded->buf;
-
+	otmp = tmp;
 	cert = d2i_X509(NULL, &tmp, cert_encoded->size);
 	if (cert == NULL) {
 		error = val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
+		goto end1;
+	}
+	if (tmp != otmp + cert_encoded->size) {
+		error = val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
 		goto end1;
 	}
 
