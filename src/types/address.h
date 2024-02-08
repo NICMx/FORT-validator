@@ -53,6 +53,6 @@ bool ipv6_covered(struct in6_addr const *, uint8_t, struct in6_addr const *);
 
 char const *addr2str4(struct in_addr const *, char *);
 char const *addr2str6(struct in6_addr const *, char *);
-void sockaddr2str(struct sockaddr_storage *, char *buffer);
+bool sockaddr2str(struct sockaddr_storage *, char *buffer);
 
 #endif /* SRC_TYPES_ADDRESS_H_ */

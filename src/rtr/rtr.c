@@ -110,7 +110,7 @@ init_addrinfo(char const *hostname, char const *service,
 
 	memset(&hints, 0 , sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
-	/* hints.ai_socktype = SOCK_DGRAM; */
+	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags |= AI_PASSIVE;
 
 	if (hostname != NULL)
@@ -127,7 +127,25 @@ init_addrinfo(char const *hostname, char const *service,
 	return 0;
 }
 
+static char *
+get_best_printable(struct addrinfo *addr, char const *input_addr)
+{
+	char str[INET6_ADDRSTRLEN];
+
+	if (sockaddr2str((struct sockaddr_storage *) addr->ai_addr, str))
+		return pstrdup(str);
+
+	if (input_addr != NULL)
+		return pstrdup(input_addr);
+
+	/* Failure is fine; this is just a nice-to-have. */
+	return NULL;
+}
+
 /*
+ * We want to listen to all sockets in one thread,
+ * so don't block.
+ *
  * By the way: man 2 poll says
  *
  * > The operation of poll() and ppoll() is not affected by the O_NONBLOCK flag.
@@ -164,92 +182,67 @@ set_nonblock(int fd)
  * from the clients.
  */
 static int
-create_server_socket(char const *input_addr, char const *hostname,
-    char const *service)
+create_server_socket(char const *input_addr, char const *hostname, char const *port)
 {
-	struct addrinfo *addrs;
-	struct addrinfo *addr;
-	unsigned long port;
-	int reuse;
-	int fd;
+	struct addrinfo *ais, *ai;
 	struct rtr_server server;
-	int error;
+	char const *errmsg;
+	static const int yes = 1;
+	int err;
 
-	reuse = 1;
+	err = init_addrinfo(hostname, port, &ais);
+	if (err)
+		return err;
 
-	error = init_addrinfo(hostname, service, &addrs);
-	if (error)
-		return error;
+	for (ai = ais; ai != NULL; ai = ai->ai_next) {
+		server.fd = -1;
+		server.addr = get_best_printable(ai, input_addr);
+		pr_op_info("[%s]:%s: Setting up socket...", server.addr, port);
 
-	if (addrs != NULL)
-		pr_op_info(
-		    "Attempting to bind socket to address '%s', port '%s'.",
-		    (addrs->ai_canonname != NULL) ? addrs->ai_canonname : "any",
-		    service);
-
-	for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-		fd = socket(addr->ai_family, SOCK_STREAM, 0);
-		if (fd < 0) {
-			pr_op_err("socket() failed: %s", strerror(errno));
-			continue;
+		server.fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+		if (server.fd < 0) {
+			err = errno;
+			errmsg = "Unable to create socket";
+			goto fail;
 		}
 
-		/*
-		 * We want to listen to all sockets in one thread,
-		 * so don't block.
-		 */
-		if (set_nonblock(fd) != 0) {
-			close(fd);
-			continue;
+		if ((err = set_nonblock(server.fd)) != 0) {
+			errmsg = "Unable to disable blocking on the socket";
+			goto fail;
 		}
 
-		/* enable SO_REUSEADDR */
-		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
-		    sizeof(int)) < 0) {
-			pr_op_err("setsockopt(SO_REUSEADDR) failed: %s",
-			    strerror(errno));
-			close(fd);
-			continue;
+		if (setsockopt(server.fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+			err = errno;
+			errmsg = "Unable to enable SO_REUSEADDR on the socket";
+			goto fail;
 		}
 
-		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
-			pr_op_err("bind() failed: %s", strerror(errno));
-			close(fd);
-			continue;
+		if (bind(server.fd, ai->ai_addr, ai->ai_addrlen) < 0) {
+			err = errno;
+			errmsg = "Unable to bind the socket";
+			goto fail;
 		}
 
-		if (getsockname(fd, addr->ai_addr, &addr->ai_addrlen) != 0) {
-			error = errno;
-			close(fd);
-			freeaddrinfo(addrs);
-			pr_op_err("getsockname() failed: %s", strerror(error));
-			return error;
+		if (listen(server.fd, config_get_server_queue()) < 0) {
+			err = errno;
+			errmsg = "Unable to start listening on socket";
+			goto fail;
 		}
 
-		port = (unsigned char)(addr->ai_addr->sa_data[0]) << 8;
-		port += (unsigned char)(addr->ai_addr->sa_data[1]);
-		pr_op_info("Success; bound to address '%s', port '%ld'.",
-		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
-		    port);
-		freeaddrinfo(addrs);
-
-		if (listen(fd, config_get_server_queue()) != 0) {
-			error = errno;
-			close(fd);
-			pr_op_err("listen() failure: %s", strerror(error));
-			return error;
-		}
-
-		server.fd = fd;
-		/* Ignore failure; this is just a nice-to-have. */
-		server.addr = (input_addr != NULL) ? pstrdup(input_addr) : NULL;
+		pr_op_info("[%s]:%s: Success.", server.addr, port);
 		server_arraylist_add(&servers, &server);
-
-		return 0; /* Happy path */
 	}
 
-	freeaddrinfo(addrs);
-	return pr_op_err("None of the addrinfo candidates could be bound.");
+	freeaddrinfo(ais);
+	return 0;
+
+fail:
+	pr_op_err("[%s]:%s: %s: %s", server.addr, port, errmsg, strerror(err));
+	if (server.fd != -1)
+		close(server.fd);
+	free(server.addr);
+	freeaddrinfo(ais);
+	return err;
 }
 
 static int
