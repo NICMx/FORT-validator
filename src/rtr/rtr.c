@@ -23,6 +23,15 @@ struct rtr_server {
 	char *addr;
 };
 
+struct server_init_ctx {
+	/* Server binding address string, exactly as received from the user. */
+	char const *input_addr;
+#ifdef __linux__
+	/* Have we already attempted to bind a wildcard address? */
+	bool wildcard_found;
+#endif
+};
+
 static pthread_t server_thread;
 static volatile bool stop_server_thread;
 
@@ -127,6 +136,29 @@ init_addrinfo(char const *hostname, char const *service,
 	return 0;
 }
 
+#ifdef __linux__
+
+static bool
+is_wildcard(struct sockaddr *sa)
+{
+	static const struct in6_addr wildcard6 = { 0 };
+	struct in_addr *addr4;
+	struct in6_addr *addr6;
+
+	switch (sa->sa_family) {
+	case AF_INET:
+		addr4 = &((struct sockaddr_in *) sa)->sin_addr;
+		return addr4->s_addr == 0;
+	case AF_INET6:
+		addr6 = &((struct sockaddr_in6 *) sa)->sin6_addr;
+		return addr6_equals(&wildcard6, addr6);
+	}
+
+	return false;
+}
+
+#endif
+
 static char *
 get_best_printable(struct addrinfo *addr, char const *input_addr)
 {
@@ -182,7 +214,7 @@ set_nonblock(int fd)
  * from the clients.
  */
 static int
-create_server_socket(char const *input_addr, char const *hostname, char const *port)
+create_server_socket(struct server_init_ctx *ctx, char const *hostname, char const *port)
 {
 	struct addrinfo *ais, *ai;
 	struct rtr_server server;
@@ -195,8 +227,19 @@ create_server_socket(char const *input_addr, char const *hostname, char const *p
 		return err;
 
 	for (ai = ais; ai != NULL; ai = ai->ai_next) {
+#ifdef __linux__
+		if (is_wildcard(ai->ai_addr)) {
+			if (ctx->wildcard_found)
+				pr_op_warn("You have more than one wildcard address in server.address, and you're on Linux.\n"
+				    "On Linux, :: implies 0.0.0.0 by default, and you can't bind to 0.0.0.0 twice.\n"
+				    "The socket bind is probably going to fail.\n"
+				    "If you meant to bind to any address on both IPv4 and IPv6, you only need '::'.");
+			ctx->wildcard_found = true;
+		}
+#endif
+
 		server.fd = -1;
-		server.addr = get_best_printable(ai, input_addr);
+		server.addr = get_best_printable(ai, ctx->input_addr);
 		pr_op_info("[%s]:%s: Setting up socket...", server.addr, port);
 
 		server.fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
@@ -246,7 +289,7 @@ fail:
 }
 
 static int
-init_server_fd(char const *input_addr)
+init_server_fd(struct server_init_ctx *ctx)
 {
 	char *address;
 	char *service;
@@ -255,11 +298,11 @@ init_server_fd(char const *input_addr)
 	address = NULL;
 	service = NULL;
 
-	error = parse_address(input_addr, &address, &service);
+	error = parse_address(ctx->input_addr, &address, &service);
 	if (error)
 		return error;
 
-	error = create_server_socket(input_addr, address, service);
+	error = create_server_socket(ctx, address, service);
 
 	free(address);
 	free(service);
@@ -270,6 +313,7 @@ init_server_fd(char const *input_addr)
 static int
 init_server_fds(void)
 {
+	struct server_init_ctx ctx = { 0 };
 	struct string_array const *conf_addrs;
 	unsigned int i;
 	int error;
@@ -277,10 +321,11 @@ init_server_fds(void)
 	conf_addrs = config_get_server_address();
 
 	if (conf_addrs->length == 0)
-		return init_server_fd(NULL);
+		return init_server_fd(&ctx);
 
 	for (i = 0; i < conf_addrs->length; i++) {
-		error = init_server_fd(conf_addrs->array[i]);
+		ctx.input_addr = conf_addrs->array[i];
+		error = init_server_fd(&ctx);
 		if (error)
 			return error; /* Cleanup happens outside */
 	}
