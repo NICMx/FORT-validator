@@ -37,7 +37,8 @@ register_oid(const char *oid, const char *sn, const char *ln)
 
 /**
  * Registers the RPKI-specific OIDs in the SSL library.
- * LibreSSL needs it; not sure about OpenSSL.
+ * Modern libcrypto implementations should have them, but older
+ * versions might not.
  */
 int
 nid_init(void)
