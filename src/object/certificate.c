@@ -510,11 +510,6 @@ certificate_validate_rfc6487(X509 *cert, enum cert_type type)
 	 * quintessential crypto lib implementation, and RFC 5280 is supposedly
 	 * the generic certificate RFC, it's fair to say it does a well enough
 	 * job for all practical purposes.)
-	 *
-	 * But it's obvious that we can't assume that LibreSSL implements RFC
-	 * 6487. It clearly doesn't.
-	 *
-	 * So here we go.
 	 */
 
 	/* rfc6487#section-4.1 */
