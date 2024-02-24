@@ -318,44 +318,74 @@ parse_string(xmlTextReaderPtr reader, char const *attr)
 	return result;
 }
 
+static unsigned int
+hexchar2uint(xmlChar xmlchar)
+{
+	if ('0' <= xmlchar && xmlchar <= '9')
+		return xmlchar - '0';
+	if ('a' <= xmlchar && xmlchar <= 'f')
+		return xmlchar - 'a' + 10;
+	if ('A' <= xmlchar && xmlchar <= 'F')
+		return xmlchar - 'A' + 10;
+	return 32;
+}
+
 static int
-parse_hex_string(xmlTextReaderPtr reader, hash_requirement hr, char const *attr,
+hexstr2sha256(xmlChar *hexstr, unsigned char **result)
+{
+	unsigned char *hash;
+	unsigned int digit;
+	size_t i;
+
+	if (xmlStrlen(hexstr) != 2 * SHA256_DIGEST_LENGTH)
+		return EINVAL;
+
+	hash = pmalloc(SHA256_DIGEST_LENGTH);
+
+	for (i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+		digit = hexchar2uint(hexstr[2 * i]);
+		if (digit > 15)
+			goto fail;
+		hash[i] = digit << 4;
+
+		digit = hexchar2uint(hexstr[2 * i + 1]);
+		if (digit > 15)
+			goto fail;
+		hash[i] |= digit;
+	}
+
+	*result = hash;
+	return 0;
+
+fail:
+	free(hash);
+	return EINVAL;
+}
+
+static int
+parse_hash(xmlTextReaderPtr reader, hash_requirement hr, char const *attr,
     unsigned char **result, size_t *result_len)
 {
-	xmlChar *xml_value;
-	unsigned char *tmp, *ptr;
-	char *xml_cur;
-	char buf[2];
-	size_t tmp_len;
+	xmlChar *xmlattr;
+	int error;
 
-	xml_value = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
-	if (xml_value == NULL)
+	if (hr == HR_IGNORE)
+		return 0;
+
+	xmlattr = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
+	if (xmlattr == NULL)
 		return (hr == HR_MANDATORY)
-		    ? pr_val_err("RRDP file: Couldn't find xml attribute '%s'", attr)
+		    ? pr_val_err("Tag is missing the '%s' attribute.", attr)
 		    : 0;
 
-	/* The rest of the checks are done at the schema */
-	if (xmlStrlen(xml_value) % 2 != 0) {
-		xmlFree(xml_value);
-		return pr_val_err("RRDP file: Attribute %s isn't a valid hex string",
+	error = hexstr2sha256(xmlattr, result);
+
+	xmlFree(xmlattr);
+
+	if (error)
+		return pr_val_err("The '%s' xml attribute does not appear to be a SHA-256 hash.",
 		    attr);
-	}
-
-	tmp_len = xmlStrlen(xml_value) / 2;
-	tmp = pzalloc(tmp_len);
-
-	ptr = tmp;
-	xml_cur = (char *) xml_value;
-	while (ptr - tmp < tmp_len) {
-		memcpy(buf, xml_cur, 2);
-		*ptr = strtol(buf, NULL, 16);
-		xml_cur+=2;
-		ptr++;
-	}
-	xmlFree(xml_value);
-
-	*result = tmp;
-	(*result_len) = tmp_len;
+	*result_len = SHA256_DIGEST_LENGTH;
 	return 0;
 }
 
@@ -487,7 +517,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	if (hr == HR_IGNORE)
 		return 0;
 
-	error = parse_hex_string(reader, hr, RRDP_ATTR_HASH, &meta->hash,
+	error = parse_hash(reader, hr, RRDP_ATTR_HASH, &meta->hash,
 	    &meta->hash_len);
 	if (error) {
 		uri_refput(meta->uri);
