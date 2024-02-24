@@ -242,7 +242,7 @@ cannot_decode(struct extension_metadata const *meta)
  * Otherwise returns error code.
  */
 int
-validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
+validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash, char const *hash_name)
 {
 	X509_PUBKEY *pubkey;
 	const unsigned char *spk;
@@ -290,20 +290,16 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 	if (!ok)
 		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
-	/* Hash the SPK, compare SPK hash with the SKI */
-	if (hash->length < 0 || SIZE_MAX < hash->length) {
-		return pr_val_err("%s length (%d) is out of bounds. (0-%zu)",
-		    ext_ski()->name, hash->length, SIZE_MAX);
-	}
+	/* FIXME the max limit needs to be a lot less than SIZE_MAX. */
 	if (spk_len < 0 || SIZE_MAX < spk_len) {
-		return pr_val_err("Subject Public Key length (%d) is out of bounds. (0-%zu)",
+		return pr_val_err("The Subject Public Key length (%d) is out of bounds. (0-%zu)",
 		    spk_len, SIZE_MAX);
 	}
 
-	error = hash_validate("sha1", hash->data, hash->length, spk, spk_len);
-	if (error) {
+	error = hash_validate(hash_get_sha1(), spk, spk_len, hash->data, hash->length);
+	if (error > 0) {
 		pr_val_err("The Subject Public Key's hash does not match the %s.",
-		    ext_ski()->name);
+		    hash_name);
 	}
 
 	return error;
@@ -339,7 +335,7 @@ handle_aki(X509_EXTENSION *ext, void *arg)
 		goto end;
 	}
 
-	error = validate_public_key_hash(parent, aki->keyid);
+	error = validate_public_key_hash(parent, aki->keyid, "AKI");
 
 end:
 	AUTHORITY_KEYID_free(aki);

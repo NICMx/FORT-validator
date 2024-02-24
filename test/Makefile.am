@@ -26,6 +26,7 @@ check_PROGRAMS  = address.test
 check_PROGRAMS += cache.test
 check_PROGRAMS += db_table.test
 check_PROGRAMS += deltas_array.test
+check_PROGRAMS += hash.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += pb.test
 check_PROGRAMS += pdu_handler.test
@@ -52,6 +53,9 @@ db_table_test_LDADD = ${MY_LDADD}
 
 deltas_array_test_SOURCES = rtr/db/deltas_array_test.c
 deltas_array_test_LDADD = ${MY_LDADD}
+
+hash_test_SOURCES = crypto/hash_test.c
+hash_test_LDADD = ${MY_LDADD}
 
 line_file_test_SOURCES = line_file_test.c
 line_file_test_LDADD = ${MY_LDADD}
@@ -93,9 +97,10 @@ xml_test_SOURCES = xml_test.c
 xml_test_LDADD = ${MY_LDADD} ${XML2_LIBS}
 
 EXTRA_DIST  = mock.c mock.h
-EXTRA_DIST += line_file/core.txt
-EXTRA_DIST += line_file/empty.txt
-EXTRA_DIST += line_file/error.txt
+EXTRA_DIST += resources/lorem-ipsum.txt
+EXTRA_DIST += resources/line_file/core.txt
+EXTRA_DIST += resources/line_file/empty.txt
+EXTRA_DIST += resources/line_file/error.txt
 EXTRA_DIST += rtr/db/rtr_db_mock.c
 EXTRA_DIST += tal/lacnic.tal
 EXTRA_DIST += xml/notification.xml

@@ -30,8 +30,12 @@ struct slurm_bgpsec {
 };
 
 struct slurm_file_csum {
+	/*
+	 * Actual length is SHA256_DIGEST_LENGTH, but the documentation of
+	 * EVP_DigestFinal_ex() doesn't say we can allocate less.
+	 */
 	unsigned char csum[EVP_MAX_MD_SIZE];
-	unsigned int csum_len;
+	size_t csum_len;
 	SLIST_ENTRY(slurm_file_csum) next;
 };
 

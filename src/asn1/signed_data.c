@@ -157,8 +157,9 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 	if (error)
 		return error;
 
-	error = hash_validate_octet_string("sha256", digest, eci->eContent);
-	if (error)
+	error = hash_validate(hash_get_sha256(), eci->eContent->buf,
+	    eci->eContent->size, digest->buf, digest->size);
+	if (error > 0)
 		pr_val_err("The content's hash does not match the Message-Digest Attribute.");
 
 	ASN_STRUCT_FREE(asn_DEF_MessageDigest, digest);

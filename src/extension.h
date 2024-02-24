@@ -44,7 +44,7 @@ int handle_extensions(struct extension_handler *,
     STACK_OF(X509_EXTENSION) const *);
 
 int cannot_decode(struct extension_metadata const *);
-int validate_public_key_hash(X509 *, ASN1_OCTET_STRING *);
+int validate_public_key_hash(X509 *, ASN1_OCTET_STRING *, char const *);
 int handle_aki(X509_EXTENSION *, void *);
 
 #endif /* SRC_EXTENSION_H_ */

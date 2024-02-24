@@ -152,7 +152,8 @@ update_notification_cleanup(struct update_notification *file)
 static int
 validate_hash(struct file_metadata *meta)
 {
-	return hash_validate_file(meta->uri, meta->hash, meta->hash_len);
+	return hash_validate_file(hash_get_sha256(), meta->uri, meta->hash,
+	    meta->hash_len);
 }
 
 /* Left trim @from, setting the result at @result pointer */

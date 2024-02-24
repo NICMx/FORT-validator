@@ -188,6 +188,63 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
+/**
+ * Computes the hash of the file @uri, and compares it to @expected (The
+ * "expected" hash).
+ *
+ * Returns:
+ *   0 if no errors happened and the hashes match, or the hash doesn't match
+ *     but there's an incidence to ignore such error.
+ * < 0 if there was an error that can't be ignored.
+ * > 0 if there was an error but it can be ignored (file not found and there's
+ *     an incidence to ignore this).
+ */
+static int
+hash_validate_mft_file(struct rpki_uri *uri, BIT_STRING_t const *expected)
+{
+	struct hash_algorithm const *algorithm;
+	size_t hash_size;
+	unsigned char actual[EVP_MAX_MD_SIZE];
+	int error;
+
+	algorithm = hash_get_sha256();
+	hash_size = hash_get_size(algorithm);
+
+	if (expected->size != hash_size)
+		return pr_val_err("%s string has bogus size: %zu",
+		    hash_get_name(algorithm), expected->size);
+	if (expected->bits_unused != 0)
+		return pr_val_err("Hash string has unused bits.");
+
+	/*
+	 * TODO (#82) This is atrocious. Implement RFC 9286, and probably reuse
+	 * hash_validate_file().
+	 */
+
+	error = hash_file(algorithm, uri_get_local(uri), actual, NULL);
+	if (error) {
+		if (error == EACCES || error == ENOENT) {
+			/* FIXME .................. */
+			if (incidence(INID_MFT_FILE_NOT_FOUND,
+			    "File '%s' listed at manifest doesn't exist.",
+			    uri_val_get_printable(uri)))
+				return -EINVAL;
+
+			return error;
+		}
+		/* Any other error (crypto, file read) */
+		return ENSURE_NEGATIVE(error);
+	}
+
+	if (memcmp(expected->buf, actual, hash_size) != 0) {
+		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
+		    "File '%s' does not match its manifest hash.",
+		    uri_val_get_printable(uri));
+	}
+
+	return 0;
+}
+
 static int
 build_rpp(struct Manifest *mft, struct rpki_uri *notif,
     struct rpki_uri *mft_uri, struct rpp **pp)

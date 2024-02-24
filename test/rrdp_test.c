@@ -22,8 +22,8 @@ MOCK_ABORT_INT(delete_dir_recursive_bottom_up, char const *path)
 MOCK_ABORT_INT(mkdir_p, char const *path, bool include_basename)
 MOCK_ABORT_VOID(fnstack_pop, void)
 MOCK_ABORT_VOID(fnstack_push_uri, struct rpki_uri *uri)
-MOCK_ABORT_INT(hash_validate_file, struct rpki_uri *uri,
-    unsigned char const *expected, size_t expected_len)
+MOCK_ABORT_INT(hash_validate_file, struct hash_algorithm const *algorithm,
+    struct rpki_uri *uri, unsigned char const *expected, size_t expected_len)
 MOCK_ABORT_INT(relax_ng_parse, const char *path, xml_read_cb cb, void *arg)
 MOCK_ABORT_PTR(state_retrieve, validation, void)
 __MOCK_ABORT(tal_get_file_name, char const *, NULL, struct tal *tal)

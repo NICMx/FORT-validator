@@ -5,6 +5,7 @@
 #include "log.h"
 #include "nid.h"
 #include "thread_var.h"
+#include "crypto/hash.h"
 #include "http/http.h"
 #include "incidence/incidence.h"
 #include "rtr/rtr.h"
@@ -149,9 +150,12 @@ main(int argc, char **argv)
 	error = extension_init();
 	if (error)
 		goto revert_nid;
-	error = http_init();
+	error = hash_setup();
 	if (error)
 		goto revert_nid;
+	error = http_init();
+	if (error)
+		goto revert_hash;
 
 	error = relax_ng_init();
 	if (error)
@@ -178,6 +182,8 @@ revert_relax_ng:
 	relax_ng_cleanup();
 revert_http:
 	http_cleanup();
+revert_hash:
+	hash_teardown();
 revert_nid:
 	nid_destroy();
 revert_config:

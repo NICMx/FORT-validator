@@ -15,7 +15,7 @@ START_TEST(file_line_normal)
 	size_t SENTENCE_LEN;
 	unsigned int i;
 
-	ck_assert_int_eq(lfile_open("line_file/core.txt", &lfile), 0);
+	ck_assert_int_eq(lfile_open("resources/line_file/core.txt", &lfile), 0);
 
 	ck_assert_int_eq(lfile_read(lfile, &string), 0);
 	ck_assert_str_eq(string, "This is a normal line.");
@@ -60,7 +60,7 @@ START_TEST(file_line_empty)
 	struct line_file *lfile;
 	char *string;
 
-	ck_assert_int_eq(lfile_open("line_file/empty.txt", &lfile), 0);
+	ck_assert_int_eq(lfile_open("resources/line_file/empty.txt", &lfile), 0);
 
 	ck_assert_int_eq(lfile_read(lfile, &string), 0);
 	ck_assert(string == NULL);
@@ -74,7 +74,7 @@ START_TEST(file_line_null_chara)
 	struct line_file *lfile;
 	char *string;
 
-	ck_assert_int_eq(lfile_open("line_file/error.txt", &lfile), 0);
+	ck_assert_int_eq(lfile_open("resources/line_file/error.txt", &lfile), 0);
 
 	ck_assert_int_eq(lfile_read(lfile, &string), 0);
 	ck_assert_str_eq(string, "This is a normal line.");

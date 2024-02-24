@@ -1263,7 +1263,7 @@ handle_ski_ca(X509_EXTENSION *ext, void *arg)
 	if (ski == NULL)
 		return cannot_decode(ext_ski());
 
-	error = validate_public_key_hash(arg, ski);
+	error = validate_public_key_hash(arg, ski, "SKI");
 
 	ASN1_OCTET_STRING_free(ski);
 	return error;
@@ -1282,7 +1282,7 @@ handle_ski_ee(X509_EXTENSION *ext, void *arg)
 		return cannot_decode(ext_ski());
 
 	args = arg;
-	error = validate_public_key_hash(args->cert, ski);
+	error = validate_public_key_hash(args->cert, ski, "SKI");
 	if (error)
 		goto end;
 

@@ -132,7 +132,7 @@ __slurm_load_checksums(char const *location, void *arg)
 
 	csum = pmalloc(sizeof(struct slurm_file_csum));
 
-	if (hash_local_file(location, csum->csum, &csum->csum_len) != 0) {
+	if (hash_file(hash_get_sha256(), location, csum->csum, &csum->csum_len) != 0) {
 		free(csum);
 		return pr_op_err("Calculating slurm hash");
 	}
