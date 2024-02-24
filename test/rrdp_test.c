@@ -3,41 +3,72 @@
 #include <stdlib.h>
 
 #include "alloc.c"
+#include "common.c"
+#include "file.c"
 #include "mock.c"
 #include "rrdp.c"
+#include "crypto/base64.c"
+#include "crypto/hash.c"
+#include "data_structure/path_builder.c"
+#include "types/uri.c"
+#include "xml/relax_ng.c"
 
 /* Mocks */
 
-MOCK_ABORT_INT(__uri_create, struct rpki_uri **result, char const *tal,
-    enum uri_type type, bool is_notif, struct rpki_uri *notif, void const *guri,
-    size_t guri_len)
-__MOCK_ABORT(base64_decode, bool, false, char *in, size_t inl,
-    unsigned char **out, size_t *outl)
 MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
     bool *changed)
-MOCK_ABORT_VOID(file_close, FILE *file)
-MOCK_ABORT_INT(file_rm_rf, char const *path)
-MOCK_ABORT_INT(file_write, char const *file_name, FILE **result)
-MOCK_ABORT_INT(delete_dir_recursive_bottom_up, char const *path)
-MOCK_ABORT_INT(mkdir_p, char const *path, bool include_basename)
 MOCK_ABORT_VOID(fnstack_pop, void)
 MOCK_ABORT_VOID(fnstack_push_uri, struct rpki_uri *uri)
-MOCK_ABORT_INT(hash_validate_file, struct hash_algorithm const *algorithm,
-    struct rpki_uri *uri, unsigned char const *expected, size_t expected_len)
-MOCK_ABORT_INT(relax_ng_parse, const char *path, xml_read_cb cb, void *arg)
-MOCK_ABORT_PTR(state_retrieve, validation, void)
-__MOCK_ABORT(tal_get_file_name, char const *, NULL, struct tal *tal)
-__MOCK_ABORT(uri_get_global, char const *, NULL, struct rpki_uri *uri)
-__MOCK_ABORT(uri_get_local, char const *, NULL, struct rpki_uri *uri)
-__MOCK_ABORT(uri_get_rrdp_workspace, char *, NULL, char const *tal,
-    struct rpki_uri *notif)
-MOCK_ABORT_PTR(uri_refget, rpki_uri, struct rpki_uri *uri)
-MOCK_VOID(uri_refput, struct rpki_uri *uri)
-MOCK(uri_val_get_printable, char const *, "uri", struct rpki_uri *uri)
 MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
-MOCK_ABORT_PTR(validation_tal, tal, struct validation *state)
+
+MOCK(state_retrieve, struct validation *, NULL, void)
+MOCK(validation_tal, struct tal *, NULL, struct validation *state)
+MOCK(tal_get_file_name, char const *, "", struct tal *tal)
 
 /* Mocks end */
+
+START_TEST(test_xmlChar_NULL_assumption)
+{
+	xmlChar *xmlstr;
+
+	/*
+	 * The RRDP code relies on xmlChar*s being NULL-terminated.
+	 * But this isn't guaranteed by any contracts. Still, because of
+	 * BAD_CAST, it's very hard to imagine a future in which xmlChar is
+	 * typedef'd into a struct with a length or whatever.
+	 *
+	 * So... instead of complicating RRDP more, I decided to validate the
+	 * assumption in this unit test. If they change the implementation and
+	 * violate the assumption, this should catch it.
+	 *
+	 * For added noise, this also incidentally tests other assumptions about
+	 * xmlChar*s. They're not important.
+	 */
+
+	xmlstr = xmlCharStrdup("Fort");
+	ck_assert_ptr_ne(NULL, xmlstr);
+	ck_assert_uint_eq('F', xmlstr[0]);
+	ck_assert_uint_eq('o', xmlstr[1]);
+	ck_assert_uint_eq('r', xmlstr[2]);
+	ck_assert_uint_eq('t', xmlstr[3]);
+	ck_assert_uint_eq('\0', xmlstr[4]);
+	xmlFree(xmlstr);
+
+	xmlstr = xmlCharStrdup("");
+	ck_assert_ptr_ne(NULL, xmlstr);
+	ck_assert_uint_eq('\0', xmlstr[0]);
+	xmlFree(xmlstr);
+
+	xmlstr = xmlCharStrdup("砦");
+	ck_assert_ptr_ne(NULL, xmlstr);
+	ck_assert_uint_eq(0xe7, xmlstr[0]);
+	ck_assert_uint_eq(0xa0, xmlstr[1]);
+	ck_assert_uint_eq(0xa6, xmlstr[2]);
+	ck_assert_uint_eq('\0', xmlstr[3]);
+	xmlFree(xmlstr);
+
+}
+END_TEST
 
 START_TEST(test_hexstr2sha256)
 {
@@ -181,14 +212,229 @@ START_TEST(test_sort_deltas)
 }
 END_TEST
 
+static void
+validate_aaaa_hash(unsigned char *hash)
+{
+	size_t i;
+	for (i = 0; i < 32; i++)
+		ck_assert_uint_eq(0xaa, hash[i]);
+}
+
+static void
+validate_01234_hash(unsigned char *hash)
+{
+	static unsigned char expected_hash[] = {
+		0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xab, 0xcd,
+		0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xab,
+		0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+		0xab, 0xcd
+	};
+
+	size_t i;
+	for (i = 0; i < 32; i++)
+		ck_assert_uint_eq(expected_hash[i], hash[i]);
+}
+
+START_TEST(test_parse_notification_ok)
+{
+	struct rpki_uri uri = { 0 };
+	struct update_notification notif;
+
+	ck_assert_int_eq(0, relax_ng_init());
+	uri.local = "resources/rrdp/notif-ok.xml";
+	uri.references = 1;
+	ck_assert_int_eq(0, parse_notification(&uri, &notif));
+
+	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
+	ck_assert_str_eq("3", (char const *)notif.session.serial.str);
+
+	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri->global);
+	ck_assert_uint_eq(32, notif.snapshot.hash_len);
+	validate_aaaa_hash(notif.snapshot.hash);
+
+	ck_assert_uint_eq(2, notif.deltas.len);
+
+	ck_assert_str_eq("2", (char const *)notif.deltas.array[0].serial.str);
+	ck_assert_str_eq("https://host/9d-8/2/delta.xml", notif.deltas.array[0].meta.uri->global);
+	ck_assert_uint_eq(32, notif.deltas.array[0].meta.hash_len);
+	validate_01234_hash(notif.deltas.array[0].meta.hash);
+
+	ck_assert_str_eq("3", (char const *)notif.deltas.array[1].serial.str);
+	ck_assert_str_eq("https://host/9d-8/3/delta.xml", notif.deltas.array[1].meta.uri->global);
+	ck_assert_uint_eq(32, notif.deltas.array[1].meta.hash_len);
+	validate_01234_hash(notif.deltas.array[0].meta.hash);
+
+	update_notification_cleanup(&notif);
+	relax_ng_cleanup();
+}
+END_TEST
+
+START_TEST(test_parse_notification_0deltas)
+{
+	struct rpki_uri uri = { 0 };
+	struct update_notification notif;
+
+	ck_assert_int_eq(0, relax_ng_init());
+	uri.local = "resources/rrdp/notif-0deltas.xml";
+	uri.references = 1;
+	ck_assert_int_eq(0, parse_notification(&uri, &notif));
+
+	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
+	ck_assert_str_eq("3", (char const *)notif.session.serial.str);
+
+	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri->global);
+	ck_assert_uint_eq(32, notif.snapshot.hash_len);
+	validate_01234_hash(notif.snapshot.hash);
+
+	ck_assert_uint_eq(0, notif.deltas.len);
+
+	update_notification_cleanup(&notif);
+	relax_ng_cleanup();
+}
+END_TEST
+
+START_TEST(test_parse_notification_large_serial)
+{
+	struct rpki_uri uri = { 0 };
+	struct update_notification notif;
+
+	ck_assert_int_eq(0, relax_ng_init());
+	uri.local = "resources/rrdp/notif-large-serial.xml";
+	uri.references = 1;
+	ck_assert_int_eq(0, parse_notification(&uri, &notif));
+
+	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
+	/*
+	 * This seems to be the largest positive integer libxml2 supports,
+	 * at least by default. It's significantly larger than 2^64.
+	 * It's not as many digits as I was expecting though.
+	 * Maybe research if it's possible to increase it further.
+	 */
+	ck_assert_str_eq("999999999999999999999999", (char const *)notif.session.serial.str);
+
+	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri->global);
+	ck_assert_uint_eq(32, notif.snapshot.hash_len);
+	validate_01234_hash(notif.snapshot.hash);
+
+	ck_assert_uint_eq(0, notif.deltas.len);
+
+	update_notification_cleanup(&notif);
+	relax_ng_cleanup();
+}
+END_TEST
+
+static void
+test_parse_notification_error(char *file)
+{
+	struct rpki_uri uri = { 0 };
+	struct update_notification notif;
+
+	ck_assert_int_eq(0, relax_ng_init());
+	uri.local = file;
+	uri.references = 1;
+	ck_assert_int_eq(-EINVAL, parse_notification(&uri, &notif));
+
+	relax_ng_cleanup();
+}
+
+START_TEST(test_parse_notification_bad_xmlns)
+{
+	test_parse_notification_error("resources/rrdp/notif-bad-xmlns.xml");
+}
+END_TEST
+
+START_TEST(test_parse_notification_bad_session_id)
+{
+	test_parse_notification_error("resources/rrdp/notif-bad-session-id.xml");
+}
+END_TEST
+
+START_TEST(test_parse_notification_bad_serial)
+{
+	test_parse_notification_error("resources/rrdp/notif-bad-serial.xml");
+}
+END_TEST
+
+START_TEST(test_parse_notification_bad_hash)
+{
+	test_parse_notification_error("resources/rrdp/notif-bad-hash.xml");
+}
+END_TEST
+
+START_TEST(test_parse_notification_bad_uri)
+{
+	test_parse_notification_error("resources/rrdp/notif-bad-uri-1.xml");
+	test_parse_notification_error("resources/rrdp/notif-bad-uri-2.xml");
+	/*
+	 * FIXME not rejected.
+	 * Although this might be intended. If curl and rsync can make sense out
+	 * of the space (perhaps by automatically converting it), there would
+	 * perhaps be no real reason to complain here.
+	 * Needs more research.
+	 */
+	/* test_parse_notification_error("resources/rrdp/notif-bad-uri-3.xml"); */
+}
+END_TEST
+
+static BIGNUM *
+BN_two(void)
+{
+	BIGNUM *result = BN_new();
+	ck_assert_ptr_ne(NULL, result);
+	ck_assert_int_eq(1, BN_add_word(result, 2));
+	return result;
+}
+
+START_TEST(test_parse_snapshot_bad_publish)
+{
+	struct update_notification notif = { 0 };
+	struct rpki_uri notif_uri = { 0 };
+	struct rpki_uri snapshot_uri = { 0 };
+
+	ck_assert_int_eq(0, relax_ng_init());
+
+	notif_uri.global = "https://example.com/notification.xml";
+	notif_uri.global_len = strlen(notif_uri.global);
+	notif_uri.local = "cache/example.com/notification.xml";
+	notif_uri.type = UT_HTTPS;
+	notif_uri.is_notif = true;
+	notif_uri.references = 1;
+
+	snapshot_uri.local = "resources/rrdp/snapshot-bad-publish.xml";
+	snapshot_uri.references = 1;
+
+	notif.session.session_id = BAD_CAST "9df4b597-af9e-4dca-bdda-719cce2c4e28";
+	notif.session.serial.str = BAD_CAST "2";
+	notif.session.serial.num = BN_two();
+	notif.snapshot.uri = &snapshot_uri;
+	notif.uri = &notif_uri;
+
+	ck_assert_int_eq(-EINVAL, parse_snapshot(&notif));
+
+	BN_free(notif.session.serial.num);
+
+	relax_ng_cleanup();
+}
+END_TEST
+
 static Suite *xml_load_suite(void)
 {
 	Suite *suite;
 	TCase *misc;
 
 	misc = tcase_create("misc");
+	tcase_add_test(misc, test_xmlChar_NULL_assumption);
 	tcase_add_test(misc, test_hexstr2sha256);
 	tcase_add_test(misc, test_sort_deltas);
+	tcase_add_test(misc, test_parse_notification_ok);
+	tcase_add_test(misc, test_parse_notification_0deltas);
+	tcase_add_test(misc, test_parse_notification_large_serial);
+	tcase_add_test(misc, test_parse_notification_bad_xmlns);
+	tcase_add_test(misc, test_parse_notification_bad_session_id);
+	tcase_add_test(misc, test_parse_notification_bad_serial);
+	tcase_add_test(misc, test_parse_notification_bad_hash);
+	tcase_add_test(misc, test_parse_notification_bad_uri);
+	tcase_add_test(misc, test_parse_snapshot_bad_publish);
 
 	suite = suite_create("RRDP");
 	suite_add_tcase(suite, misc);

@@ -180,6 +180,33 @@ parse_ulong(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 	return 0;
 }
 
+/*
+ * Few notes:
+ *
+ * - From my reading of it, the whole reason (awkward abstraction aside) why
+ *   libxml2 replaces char* with xmlChar* is UTF-8 support. Which isn't really
+ *   useful for us; the RRDP RFC explicitely boils its XMLs' character sets down
+ *   to ASCII.
+ * - I call it "awkward" because I'm not a big fan of the API. The library
+ *   doesn't provide tools to convert them to char*s, and seems to expect us to
+ *   cast them when we know it's safe. However...
+ * - I can't find a contract that states that xmlChar*s are NULL-terminated.
+ *   (Though this is very obvious from the implementation.) However, see the
+ *   test_xmlChar_NULL_assumption unit test.
+ * - The API also doesn't provide a means to retrieve the actual size (in bytes)
+ *   of the xmlChar*, so not relying on the NULL character is difficult.
+ * - libxml2 automatically performs validations defined by the grammar's
+ *   constraints. (At time of writing, you can find the grammar at relax_ng.h.)
+ *   If you're considering adding some sort of string sanitization, check if the
+ *   grammar isn't already doing it for you.
+ * - The grammar already effectively enforces printable ASCII.
+ *
+ * So... until some sort of bug or corner case shows up, it seems you can assume
+ * that the result will be safely-casteable to a dumb char*. (NULL-terminated,
+ * 100% printable ASCII.)
+ *
+ * However, you should still deallocate it with xmlFree().
+ */
 static xmlChar *
 parse_string(xmlTextReaderPtr reader, char const *attr)
 {
@@ -188,13 +215,13 @@ parse_string(xmlTextReaderPtr reader, char const *attr)
 	if (attr == NULL) {
 		result = xmlTextReaderValue(reader);
 		if (result == NULL)
-			pr_val_err("RRDP file: Couldn't find string content from '%s'",
+			pr_val_err("Tag '%s' seems to be empty.",
 			    xmlTextReaderConstLocalName(reader));
 	} else {
 		result = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 		if (result == NULL)
-			pr_val_err("RRDP file: Couldn't find xml attribute '%s' from tag '%s'",
-			    attr, xmlTextReaderConstLocalName(reader));
+			pr_val_err("Tag '%s' is missing attribute '%s'.",
+			    xmlTextReaderConstLocalName(reader), attr);
 	}
 
 	return result;
@@ -718,11 +745,6 @@ static int
 parse_snapshot(struct update_notification *notif)
 {
 	struct rrdp_ctx ctx;
-	int error;
-
-	error = validate_hash(&notif->snapshot);
-	if (error)
-		return error;
 
 	ctx.notif = notif->uri;
 	ctx.session = notif->session;
@@ -754,6 +776,9 @@ handle_snapshot(struct update_notification *notif)
 	 * Same for deltas.
 	 */
 	error = cache_download(validation_cache(state), uri, NULL);
+	if (error)
+		goto end;
+	error = validate_hash(&notif->snapshot);
 	if (error)
 		goto end;
 	error = parse_snapshot(notif);

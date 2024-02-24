@@ -1,0 +1,6 @@
+<snapshot xmlns="http://www.ripe.net/rpki/rrdp" version="1"
+		session_id="9df4b597-af9e-4dca-bdda-719cce2c4e28" serial="2">
+	<publish uri="rsync://rpki.ripe.net/Alice/Bob.cer">
+		Z^XhhbXBsZTE=
+	</publish>
+</snapshot>
