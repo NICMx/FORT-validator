@@ -156,125 +156,6 @@ validate_hash(struct file_metadata *meta)
 	    meta->hash_len);
 }
 
-/* Left trim @from, setting the result at @result pointer */
-static int
-ltrim(char const *from, char const **result, size_t *result_size)
-{
-	char const *start;
-	size_t tmp_size;
-
-	start = from;
-	tmp_size = strlen(from);
-	while (isspace(*start)) {
-		start++;
-		tmp_size--;
-	}
-	if (*start == '\0')
-		return pr_val_err("Invalid base64 encoded string (seems to be empty or full of spaces).");
-
-	*result = start;
-	*result_size = tmp_size;
-	return 0;
-}
-
-/*
- * Get the base64 chars from @content and allocate to @out with lines no greater
- * than 65 chars (including line feed).
- *
- * Why? LibreSSL doesn't like lines greater than 80 chars, so use a common
- * length per line.
- */
-static int
-base64_sanitize(char const *content, char **out)
-{
-#define BUF_SIZE 65
-	char *result;
-	char const *tmp;
-	size_t original_size, new_size;
-	size_t offset, buf_len;
-	int error;
-
-	original_size = 0;
-	error = ltrim(content, &tmp, &original_size);
-	if (error)
-		return error;
-
-	if (original_size <= BUF_SIZE) {
-		*out = pstrdup(content);
-		return 0;
-	}
-
-	new_size = original_size + (original_size / BUF_SIZE);
-	result = pmalloc(new_size + 1);
-
-	offset = 0;
-	while (original_size > 0){
-		buf_len = original_size > BUF_SIZE ? BUF_SIZE : original_size;
-		memcpy(&result[offset], tmp, buf_len);
-		tmp += buf_len;
-		offset += buf_len;
-		original_size -= buf_len;
-
-		if (original_size <= 0)
-			break;
-		result[offset] = '\n';
-		offset++;
-	}
-
-	/* Reallocate to exact size and add nul char */
-	if (offset != new_size + 1)
-		result = prealloc(result, offset + 1);
-
-	result[offset] = '\0';
-	*out = result;
-	return 0;
-#undef BUF_SIZE
-}
-
-static int
-base64_read(char const *content, unsigned char **out, size_t *out_len)
-{
-	BIO *encoded; /* base64 encoded. */
-	unsigned char *result;
-	char *sanitized;
-	size_t alloc_size;
-	size_t result_len;
-	int error;
-
-	sanitized = NULL;
-	error = base64_sanitize(content, &sanitized);
-	if (error)
-		return error;
-
-	encoded = BIO_new_mem_buf(sanitized, -1);
-	if (encoded == NULL) {
-		error = val_crypto_err("BIO_new_mem_buf() returned NULL");
-		goto release_sanitized;
-	}
-
-	alloc_size = EVP_DECODE_LENGTH(strlen(content));
-	result = pmalloc(alloc_size);
-
-	if (!base64_decode(encoded, result, true, alloc_size, &result_len)) {
-		error = val_crypto_err("Cannot decode publish tag's base64.");
-		goto release_result;
-	}
-
-	free(sanitized);
-	BIO_free(encoded);
-
-	(*out) = result;
-	(*out_len) = result_len;
-	return 0;
-
-release_result:
-	free(result);
-	BIO_free(encoded);
-release_sanitized:
-	free(sanitized);
-	return error;
-}
-
 static int
 parse_ulong(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 {
@@ -551,17 +432,17 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	base64_str = parse_string(reader, NULL);
 	if (base64_str == NULL)
 		return -EINVAL;
-	error = base64_read((char const *)base64_str, &tag->content,
-	    &tag->content_len);
+	if (!base64_decode((char *)base64_str, 0, &tag->content, &tag->content_len))
+		error = pr_val_err("Cannot decode publish tag's base64.");
 	xmlFree(base64_str);
 	if (error)
 		return error;
 
 	/* rfc8181#section-2.2 but considering optional hash */
 	if (tag->meta.hash_len > 0)
-		error = validate_hash(&tag->meta);
+		return validate_hash(&tag->meta);
 
-	return error;
+	return 0;
 }
 
 static int

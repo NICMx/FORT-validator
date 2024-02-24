@@ -1,5 +1,6 @@
 #include "object/tal.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <openssl/evp.h>
 #include <sys/queue.h>
@@ -9,7 +10,7 @@
 #include "cert_stack.h"
 #include "common.h"
 #include "config.h"
-#include "line_file.h"
+#include "file.h"
 #include "log.h"
 #include "state.h"
 #include "thread_var.h"
@@ -47,228 +48,94 @@ struct handle_tal_args {
 	struct db_table *db;
 };
 
+static char *
+find_newline(char *str)
+{
+	for (; true; str++) {
+		if (str[0] == '\0')
+			return NULL;
+		if (str[0] == '\n')
+			return str;
+		if (str[0] == '\r' && str[1] == '\n')
+			return str;
+	}
+}
+
+static bool
+is_blank(char const *str)
+{
+	for (; str[0] != '\0'; str++)
+		if (!isspace(str[0]))
+			return false;
+	return true;
+}
+
 static int
-add_uri(struct uri_list *uris, char const *tal, char *uri)
+add_uri(struct tal *tal, char *uri)
 {
 	struct rpki_uri *new = NULL;
 	int error;
 
 	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, tal, UT_RSYNC, false, NULL, uri);
+		error = uri_create(&new, tal->file_name, UT_RSYNC, false, NULL, uri);
 	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, tal, UT_HTTPS, false, NULL, uri);
+		error = uri_create(&new, tal->file_name, UT_HTTPS, false, NULL, uri);
 	else
 		return pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
 	if (error)
 		return error;
 
-	uris_add(uris, new);
+	uris_add(&tal->uris, new);
 	return 0;
 }
 
 static int
-read_uris(struct line_file *lfile, char const *tal, struct uri_list *uris)
+read_content(char *fc /* File Content */, struct tal *tal)
 {
-	char *uri;
+	char *nl; /* New Line */
+	bool cr; /* Carriage return */
 	int error;
 
-	error = lfile_read(lfile, &uri);
-	if (error)
-		return error;
-
-	if (uri == NULL)
-		return pr_op_err("TAL file is empty.");
-	if (strcmp(uri, "") == 0) {
-		free(uri);
-		return pr_op_err("There's no URI in the first line of the TAL.");
-	} else if (strncmp(uri, "#", 1) == 0) {
-		/* More comments expected, or an URI */
-		do {
-			free(uri); /* Ignore the comment */
-			error = lfile_read(lfile, &uri);
-			if (error)
-				return error;
-			if (uri == NULL)
-				return pr_op_err("TAL file ended prematurely. (Expected more comments or an URI list.)");
-			if (strcmp(uri, "") == 0) {
-				free(uri);
-				return pr_op_err("TAL file comments syntax error. (Expected more comments or an URI list.)");
-			}
-			/* Not a comment, probably the URI(s) */
-			if (strncmp(uri, "#", 1) != 0)
-				break;
-		} while (true);
+	/* Comment section */
+	while (fc[0] == '#') {
+		nl = strchr(fc, '\n');
+		if (!nl)
+			goto premature;
+		fc = nl + 1;
 	}
 
+	/* URI section */
 	do {
-		error = add_uri(uris, tal, uri);
-		free(uri); /* Won't be needed anymore */
+		nl = find_newline(fc);
+		if (!nl)
+			goto premature;
+
+		cr = (nl[0] == '\r');
+		nl[0] = '\0';
+		if (is_blank(fc))
+			break;
+
+		error = add_uri(tal, fc);
 		if (error)
 			return error;
 
-		error = lfile_read(lfile, &uri);
-		if (error)
-			return error;
-
-		if (uri == NULL)
-			return pr_op_err("TAL file ended prematurely. (Expected URI list, blank line and public key.)");
-		if (strcmp(uri, "") == 0) {
-			free(uri);
-			return 0; /* Happy path */
-		}
+		fc = nl + cr + 1;
+		if (*fc == '\0')
+			return pr_op_err("The TAL seems to be missing the public key.");
 	} while (true);
-}
 
-static size_t
-get_spki_orig_size(struct line_file *lfile)
-{
-	struct stat st;
-	size_t result;
+	if (tal->uris.len == 0)
+		return pr_op_err("There seems to be an empty/blank line before the end of the URI section.");
 
-	stat(lfile_name(lfile), &st);
-	result = st.st_size - lfile_offset(lfile);
-	return result;
-}
+	/* subjectPublicKeyInfo section */
+	if (!base64_decode(nl + cr + 1, 0, &tal->spki, &tal->spki_len))
+		return pr_op_err("Cannot decode the public key.");
 
-/*
- * Will usually allocate slightly more because of the newlines, but I'm fine
- * with it.
- */
-static size_t
-get_spki_alloc_size(struct line_file *lfile)
-{
-	return EVP_DECODE_LENGTH(get_spki_orig_size(lfile));
-}
-
-static char *
-locate_char(char *str, size_t len, char find)
-{
-	size_t i;
-
-	for (i = 0; i < len; i++)
-		if (str[i] == find)
-			return str + i;
-	return NULL;
-}
-
-/*
- * Get the base64 chars from @lfile and allocate to @out with lines no greater
- * than 65 chars (including line feed).
- *
- * Why? LibreSSL doesn't like lines greater than 80 chars, so use a common
- * length per line.
- */
-static int
-base64_sanitize(struct line_file *lfile, char **out)
-{
-#define BUF_SIZE 65
-	FILE *fd;
-	char *buf, *result, *eol;
-	size_t original_size, new_size;
-	size_t fread_result, offset;
-	int error;
-
-	/*
-	 * lfile_read() isn't called since the lines aren't returned as needed
-	 * "sanitized" (a.k.a. each line with a desired length)
-	 */
-	original_size = get_spki_orig_size(lfile);
-	new_size = original_size + (original_size / BUF_SIZE);
-	result = pmalloc(new_size + 1);
-	buf = pmalloc(BUF_SIZE);
-
-	fd = lfile_fd(lfile);
-	offset = 0;
-	while ((fread_result = fread(buf, 1,
-	    (original_size > BUF_SIZE) ? BUF_SIZE : original_size, fd)) > 0) {
-		error = ferror(lfile_fd(lfile));
-		if (error) {
-			/*
-			 * The manpage doesn't say that the result is an error
-			 * code. It literally doesn't say how to get an error
-			 * code.
-			 */
-			pr_op_err("File reading error. Presumably, the error message is '%s.'",
-			    strerror(error));
-			goto free_result;
-		}
-
-		original_size -= fread_result;
-		eol = locate_char(buf, fread_result, '\n');
-		/* Larger than buffer length, add LF and copy last char */
-		if (eol == NULL) {
-			memcpy(&result[offset], buf, fread_result - 1);
-			offset += fread_result - 1;
-			result[offset] = '\n';
-			result[offset + 1] = buf[fread_result - 1];
-			offset += 2;
-			continue;
-		}
-		/* Copy till last LF */
-		memcpy(&result[offset], buf, eol - buf + 1);
-		offset += eol - buf + 1;
-		if (eol - buf + 1 < fread_result) {
-			/* And add new line with remaining chars */
-			memcpy(&result[offset], eol + 1,
-			    buf + fread_result - 1 - eol);
-			offset += buf + fread_result -1 - eol;
-			result[offset] = '\n';
-			offset++;
-		}
-	}
-	/* Reallocate to exact size and add nul char */
-	if (offset != new_size)
-		result = prealloc(result, offset + 1);
-	free(buf);
-	result[offset] = '\0';
-
-	*out = result;
-	return 0;
-free_result:
-	free(buf);
-	free(result);
-	return error;
-#undef BUF_SIZE
-}
-
-static int
-read_spki(struct line_file *lfile, struct tal *tal)
-{
-	BIO *encoded; /* base64 encoded. */
-	char *tmp;
-	size_t size;
-	int error;
-
-	size = get_spki_alloc_size(lfile);
-	tal->spki = pmalloc(size);
-
-	tmp = NULL;
-	error = base64_sanitize(lfile, &tmp);
-	if (error)
-		goto revert_spki;
-
-	encoded = BIO_new_mem_buf(tmp, -1);
-	if (encoded == NULL) {
-		error = op_crypto_err("BIO_new_mem_buf() returned NULL.");
-		goto revert_tmp;
-	}
-
-	if (!base64_decode(encoded, tal->spki, true, size, &tal->spki_len)) {
-		error = op_crypto_err("Cannot decode SPKI.");
-		goto revert_encoded;
-	}
-
-	free(tmp);
-	BIO_free(encoded);
 	return 0;
 
-revert_encoded:
-	BIO_free(encoded);
-revert_tmp:
-	free(tmp);
-revert_spki:
-	free(tal->spki);
-	return error;
+/* This label requires fc to make sense */
+premature:
+	return pr_op_err("The TAL seems to end prematurely at line '%s'.", fc);
 }
 
 /**
@@ -277,38 +144,29 @@ revert_spki:
 static int
 tal_init(struct tal *tal, char const *file_path)
 {
-	struct line_file *lfile;
 	char const *file_name;
+	struct file_contents file;
 	int error;
 
-	lfile = NULL; /* Warning shutupper */
-	error = lfile_open(file_path, &lfile);
-	if (error) {
-		pr_op_err("Error opening file '%s': %s", file_path,
-		    strerror(abs(error)));
+	error = file_load(file_path, &file, false);
+	if (error)
 		return error;
-	}
 
 	file_name = strrchr(file_path, '/');
 	file_name = (file_name != NULL) ? (file_name + 1) : file_path;
-
 	tal->file_name = file_name;
+
 	uris_init(&tal->uris);
-	error = read_uris(lfile, file_name, &tal->uris);
-	if (error)
-		goto fail;
-	error = read_spki(lfile, tal);
-	if (error)
-		goto fail;
+	error = read_content((char *)file.buffer, tal);
+	if (error) {
+		uris_cleanup(&tal->uris);
+		goto end;
+	}
 
 	tal->cache = cache_create(file_name);
 
-	lfile_close(lfile);
-	return 0;
-
-fail:
-	uris_cleanup(&tal->uris);
-	lfile_close(lfile);
+end:
+	file_free(&file);
 	return error;
 }
 

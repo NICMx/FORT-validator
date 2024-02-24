@@ -1,6 +1,9 @@
-rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer
-https://potato
-rsync://potato
+# Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus eu sapien
+#facilisis, sagittis elit quis, lobortis odio. Morbi feugiat congue bibendum.
+# Vivamus eu quam.
+
+rsync://example.com/rpki/ta.cer
+https://example.com/rpki/ta.cer
 
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqZEzhYK0+PtDOPfub/KR
 c3MeWx3neXx4/wbnJWGbNAtbYqXg3uU5J4HFzPgk/VIppgSKAhlO0H60DRP48by9

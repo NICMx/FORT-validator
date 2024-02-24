@@ -3,109 +3,47 @@
 #include <openssl/buffer.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+
 #include "alloc.h"
+#include "log.h"
 
-/*
- * Reference: openbsd/src/usr.bin/openssl/enc.c
- *
- * @in: The BIO that will stream the base64 encoded string you want to decode.
- * @out: Buffer where this function will write the decoded string.
- * @has_nl: Encoded string has newline char?
- * @out_len: Total allocated size of @out. It's supposed to be the result of
- *     EVP_DECODE_LENGTH(<size of the encoded string>).
- * @out_written: This function will write the actual number of decoded bytes
- *     here.
- *
- * Returns true on success, false on failure. If the caller wants to print
- * errors, do it with the crypto functions. If not, remember to clean
- * libcrypto's error queue somehow.
- *
- * TODO (fine) Callers always do a bunch of boilerplate; refactor.
- */
+/* Simple decode base64 string. Returns true on success, false on failure. */
 bool
-base64_decode(BIO *in, unsigned char *out, bool has_nl, size_t out_len,
-    size_t *out_written)
+base64_decode(char *in, size_t in_len, unsigned char **out, size_t *out_len)
 {
-	BIO *b64;
-	size_t offset = 0;
-	int written = 0;
-	bool success = false;
+	unsigned char *result;
+	EVP_ENCODE_CTX *ctx;
+	int outl;
+	int status;
+
+	if (in_len == 0)
+		in_len = strlen(in);
 
 	/*
-	 * BTW: The libcrypto API is perplexing.
-	 * Peeking at the error stack is the only way I found to figure out
-	 * whether some of the functions error'd.
-	 * But since it's not documented that it's supposed to work this way,
-	 * there's no guarantee that it will catch all errors.
-	 * But it will have to do. It's better than nothing.
+	 * Will usually allocate more because of the newlines,
+	 * but I'm at peace with it.
 	 */
+	result = pmalloc(EVP_DECODE_LENGTH(in_len));
 
-	/* Assume that the caller took care of handling any previous errors. */
-	ERR_clear_error();
+	ctx = EVP_ENCODE_CTX_new();
+	if (ctx == NULL)
+		enomem_panic();
 
-	/*
-	 * BIO_f_base64() cannot fail because it's dead-simple by definition.
-	 * BIO_new() can, and it will lead to NULL. But only *some* errors will
-	 * populate the error stack.
-	 */
-	b64 = BIO_new(BIO_f_base64());
-	if (b64 == NULL)
+	EVP_DecodeInit(ctx);
+
+	status = EVP_DecodeUpdate(ctx, result, &outl, (unsigned char *)in, in_len);
+	if (status == -1)
 		return false;
 
-	/*
-	 * BIO_push() can technically fail through BIO_ctrl(), but it ignores
-	 * the error. This will not cause it to revert the push, so we have to
-	 * do it ourselves.
-	 *
-	 * BTW: I'm assigning the result of BIO_push() to @in (instead of @b64
-	 * or, more logically, throwing it away) because the sample reference in
-	 * enc.c does it that way.
-	 * But the writer of enc.c probably overcomplicated things.
-	 * It shouldn't make a difference. We don't need @in anymore; just
-	 * assume both @b64 and @in now point to the same BIO, which is @b64.
-	 */
-	in = BIO_push(b64, in);
+	*out_len = outl;
 
-	/*
-	 * Should we ignore this error? BIO_ctrl(BIO_CTRL_PUSH) performs some
-	 * "internal, used to signify change" thing, whose importance is
-	 * undefined due to BIO_ctrl()'s callback spaghetti.
-	 * Let's be strict, I guess.
-	 */
-	if (ERR_peek_last_error() != 0)
-		goto end;
+	status = EVP_DecodeFinal(ctx, result + outl, &outl);
+	if (status != 1)
+		return false;
 
-	if (!has_nl)
-		BIO_set_flags(in, BIO_FLAGS_BASE64_NO_NL); /* Cannot fail */
-
-	do {
-		/*
-		 * Do not move this after BIO_read().
-		 * BIO_read() can return negative, which does not necessarily
-		 * imply error, and which ruins the counter.
-		 */
-		offset += written;
-		written = BIO_read(in, out + offset, out_len - offset);
-	} while (written > 0);
-
-	/* BIO_read() can fail. It does not return status. */
-	if (ERR_peek_last_error() != 0)
-		goto end;
-
-	*out_written = offset;
-	success = true;
-
-end:
-	/*
-	 * BIO_pop() can also fail due to BIO_ctrl(), but we will ignore this
-	 * because whatever "signify change" crap happens, it can't possibly be
-	 * damaging enough to prevent us from releasing b64. I hope.
-	 */
-	BIO_pop(b64);
-	/* Returns 0 on failure, but that's only if b64 is NULL. Meaningless. */
-	BIO_free(b64);
-
-	return success;
+	*out = result;
+	*out_len += outl;
+	return true;
 }
 
 /*
@@ -119,10 +57,11 @@ bool
 base64url_decode(char const *str_encoded, unsigned char **result,
     size_t *result_len)
 {
-	BIO *encoded; /* base64 encoded. */
 	char *str_copy;
-	size_t encoded_len, alloc_size, dec_len;
-	int pad, i;
+	size_t encoded_len;
+	size_t pad;
+	size_t i;
+	bool success;
 
 	/*
 	 * Apparently there isn't a base64url decoder, and there isn't
@@ -152,31 +91,10 @@ base64url_decode(char const *str_encoded, unsigned char **result,
 	}
 
 	/* Now decode as regular base64 */
-	encoded =  BIO_new_mem_buf(str_copy, -1);
-	if (encoded == NULL)
-		goto free_copy;
-
-	alloc_size = EVP_DECODE_LENGTH(strlen(str_copy));
-	*result = pzalloc(alloc_size + 1);
-
-	if (!base64_decode(encoded, *result, false, alloc_size, &dec_len))
-		goto free_all;
-
-	if (dec_len == 0)
-		goto free_all;
-
-	*result_len = dec_len;
+	success = base64_decode(str_copy, encoded_len + pad, result, result_len);
 
 	free(str_copy);
-	BIO_free(encoded);
-	return true;
-
-free_all:
-	free(*result);
-	BIO_free(encoded);
-free_copy:
-	free(str_copy);
-	return false;
+	return success;
 }
 
 static char *

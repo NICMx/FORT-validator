@@ -23,11 +23,11 @@ AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS}
 MY_LDADD = ${CHECK_LIBS}
 
 check_PROGRAMS  = address.test
+check_PROGRAMS += base64.test
 check_PROGRAMS += cache.test
 check_PROGRAMS += db_table.test
 check_PROGRAMS += deltas_array.test
 check_PROGRAMS += hash.test
-check_PROGRAMS += line_file.test
 check_PROGRAMS += pb.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += pdu_stream.test
@@ -45,6 +45,9 @@ TESTS = ${check_PROGRAMS}
 address_test_SOURCES = types/address_test.c
 address_test_LDADD = ${MY_LDADD}
 
+base64_test_SOURCES = crypto/base64_test.c
+base64_test_LDADD = ${MY_LDADD}
+
 cache_test_SOURCES = cache/local_cache_test.c
 cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
@@ -56,9 +59,6 @@ deltas_array_test_LDADD = ${MY_LDADD}
 
 hash_test_SOURCES = crypto/hash_test.c
 hash_test_LDADD = ${MY_LDADD}
-
-line_file_test_SOURCES = line_file_test.c
-line_file_test_LDADD = ${MY_LDADD}
 
 pb_test_SOURCES = data_structure/path_builder_test.c
 pb_test_LDADD = ${MY_LDADD}

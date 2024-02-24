@@ -42,7 +42,12 @@ START_TEST(test_hash)
 
 	hash_setup();
 
+	uri.global = "https://example.com/resources/lorem-ipsum.txt";
+	uri.global_len = strlen(uri.global);
 	uri.local = "resources/lorem-ipsum.txt";
+	uri.type = UT_HTTPS;
+	uri.is_notif = false;
+	uri.references = 1;
 
 	ha = hash_get_sha1();
 	ck_assert_uint_eq(20, hash_get_size(ha));

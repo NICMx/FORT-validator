@@ -27,7 +27,7 @@ int file_open(char const *, FILE **, struct stat *);
 int file_write(char const *, FILE **);
 void file_close(FILE *);
 
-int file_load(char const *, struct file_contents *);
+int file_load(char const *, struct file_contents *, bool);
 void file_free(struct file_contents *);
 
 int file_exists(char const *);

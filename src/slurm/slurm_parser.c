@@ -242,7 +242,7 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 		return error;
 
 	if (!base64url_decode(str_encoded, &result->ski, &ski_len))
-		return op_crypto_err("The " SKI " could not be decoded.");
+		return pr_op_err("The " SKI " could not be decoded.");
 
 	/* Validate that's at least 20 octects long */
 	if (ski_len != RK_SKI_LEN) {
@@ -312,7 +312,7 @@ set_router_pub_key(json_t *object, bool is_assertion,
 		return error;
 
 	if (!base64url_decode(encoded, &result->router_public_key, &spk_len))
-		return op_crypto_err("The " ROUTER_PUBLIC_KEY " could not be decoded.");
+		return pr_op_err("The " ROUTER_PUBLIC_KEY " could not be decoded.");
 
 	/*
 	 * Validate that "is the full ASN.1 DER encoding of the

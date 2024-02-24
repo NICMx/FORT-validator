@@ -64,8 +64,11 @@ file_close(FILE *file)
 		pr_val_err("fclose() failed: %s", strerror(errno));
 }
 
+/*
+ * If !is_binary, will append a null character. That's all.
+ */
 int
-file_load(char const *file_name, struct file_contents *fc)
+file_load(char const *file_name, struct file_contents *fc, bool is_binary)
 {
 	FILE *file;
 	struct stat stat;
@@ -77,7 +80,10 @@ file_load(char const *file_name, struct file_contents *fc)
 		return error;
 
 	fc->buffer_size = stat.st_size;
-	fc->buffer = pmalloc(fc->buffer_size);
+	fc->buffer = pmalloc(fc->buffer_size + !is_binary);
+
+	if (!is_binary)
+		fc->buffer[stat.st_size] = '\0';
 
 	fread_result = fread(fc->buffer, 1, fc->buffer_size, file);
 	if (fread_result < fc->buffer_size) {

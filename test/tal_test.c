@@ -5,7 +5,6 @@
 #include "alloc.c"
 #include "common.c"
 #include "file.c"
-#include "line_file.c"
 #include "mock.c"
 #include "data_structure/path_builder.c"
 #include "types/uri.c"
@@ -51,12 +50,11 @@ MOCK(validation_tal, struct tal *, NULL, struct validation *state)
 
 /* Tests */
 
-START_TEST(tal_load_normal)
+static void
+check_spki(struct tal *tal)
 {
-	struct tal tal;
-	unsigned int i;
 	/* Got this by feeding the subjectPublicKeyInfo to `base64 -d`. */
-	unsigned char decoded[] = {
+	static unsigned char spki_raw[] = {
 	    0x30, 0x82, 0x01, 0x22, 0x30, 0x0D, 0x06, 0x09, 0x2A, 0x86, 0x48,
 	    0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01, 0x05, 0x00, 0x03, 0x82, 0x01,
 	    0x0F, 0x00, 0x30, 0x82, 0x01, 0x0A, 0x02, 0x82, 0x01, 0x01, 0x00,
@@ -85,20 +83,69 @@ START_TEST(tal_load_normal)
 	    0xD4, 0x32, 0xB7, 0x11, 0x38, 0x71, 0xCF, 0xF3, 0xA4, 0x0F, 0x64,
 	    0x83, 0x63, 0x0D, 0x02, 0x03, 0x01, 0x00, 0x01
 	};
+	unsigned int i;
 
-	ck_assert_int_eq(tal_init(&tal, "tal/lacnic.tal"), 0);
+	ck_assert_uint_eq(ARRAY_LEN(spki_raw), tal->spki_len);
+	for (i = 0; i < ARRAY_LEN(spki_raw); i++)
+		ck_assert_uint_eq(tal->spki[i], spki_raw[i]);
+}
 
-	ck_assert_uint_eq(tal.uris.len, 3);
-	ck_assert_str_eq(tal.uris.array[0]->global,
-	    "rsync://repository.lacnic.net/rpki/lacnic/rta-lacnic-rpki.cer");
-	ck_assert_str_eq(tal.uris.array[1]->global, "https://potato");
-	ck_assert_str_eq(tal.uris.array[2]->global, "rsync://potato");
+static void
+test_1url(char const *file)
+{
+	struct tal tal;
 
-	ck_assert_uint_eq(ARRAY_LEN(decoded), tal.spki_len);
-	for (i = 0; i < ARRAY_LEN(decoded); i++)
-		ck_assert_uint_eq(tal.spki[i], decoded[i]);
+	ck_assert_int_eq(0, tal_init(&tal, file));
+
+	ck_assert_uint_eq(1, tal.uris.len);
+	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.uris.array[0]->global);
+	check_spki(&tal);
 
 	tal_cleanup(&tal);
+}
+
+START_TEST(test_tal_load_1url)
+{
+	test_1url("resources/tal/1url-lf.tal");
+	test_1url("resources/tal/1url-crlf.tal");
+}
+END_TEST
+
+static void
+test_4urls(char const *file)
+{
+	struct tal tal;
+
+	ck_assert_int_eq(0, tal_init(&tal, file));
+
+	ck_assert_uint_eq(4, tal.uris.len);
+	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.uris.array[0]->global);
+	ck_assert_str_eq("https://example.com/rpki/ta.cer", tal.uris.array[1]->global);
+	ck_assert_str_eq("rsync://www.example.com/potato/ta.cer", tal.uris.array[2]->global);
+	ck_assert_str_eq("https://wx3.example.com/tomato/ta.cer", tal.uris.array[3]->global);
+
+	check_spki(&tal);
+
+	tal_cleanup(&tal);
+}
+
+START_TEST(test_tal_load_4urls)
+{
+	test_4urls("resources/tal/4urls-lf.tal");
+	test_4urls("resources/tal/4urls-crlf.tal");
+	test_4urls("resources/tal/4urls-lf-comment.tal");
+	test_4urls("resources/tal/4urls-lf-comment-utf8.tal");
+}
+END_TEST
+
+START_TEST(test_tal_load_error)
+{
+	struct tal tal;
+
+	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-1.tal"));
+	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-2.tal"));
+	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-3.tal"));
+	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-4.tal"));
 }
 END_TEST
 
@@ -108,7 +155,9 @@ static Suite *tal_load_suite(void)
 	TCase *core;
 
 	core = tcase_create("Core");
-	tcase_add_test(core, tal_load_normal);
+	tcase_add_test(core, test_tal_load_1url);
+	tcase_add_test(core, test_tal_load_4urls);
+	tcase_add_test(core, test_tal_load_error);
 
 	suite = suite_create("tal_load()");
 	suite_add_tcase(suite, core);

@@ -54,7 +54,7 @@ content_info_load(struct rpki_uri *uri, struct ContentInfo **result)
 	struct file_contents fc;
 	int error;
 
-	error = file_load(uri_get_local(uri), &fc);
+	error = file_load(uri_get_local(uri), &fc, true);
 	if (error)
 		return error;
 

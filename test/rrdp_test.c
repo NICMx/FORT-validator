@@ -11,8 +11,8 @@
 MOCK_ABORT_INT(__uri_create, struct rpki_uri **result, char const *tal,
     enum uri_type type, bool is_notif, struct rpki_uri *notif, void const *guri,
     size_t guri_len)
-__MOCK_ABORT(base64_decode, bool, false, BIO *in, unsigned char *out,
-    bool has_nl, size_t out_len, size_t *out_written)
+__MOCK_ABORT(base64_decode, bool, false, char *in, size_t inl,
+    unsigned char **out, size_t *outl)
 MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
     bool *changed)
 MOCK_ABORT_VOID(file_close, FILE *file)

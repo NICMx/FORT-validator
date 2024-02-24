@@ -18,7 +18,6 @@ fort_SOURCES += extension.h extension.c
 fort_SOURCES += file.h file.c
 fort_SOURCES += init.h init.c
 fort_SOURCES += json_util.c json_util.h
-fort_SOURCES += line_file.h line_file.c
 fort_SOURCES += log.h log.c
 fort_SOURCES += nid.h nid.c
 fort_SOURCES += output_printer.h output_printer.c
