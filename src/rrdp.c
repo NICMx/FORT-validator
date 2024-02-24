@@ -34,11 +34,11 @@
 /* These are supposed to be unbounded */
 struct rrdp_serial {
 	BIGNUM *num;
-	xmlChar *str; /* for printing */
+	char *str; /* for printing */
 };
 
 struct rrdp_session {
-	xmlChar *session_id;
+	char *session_id;
 	struct rrdp_serial serial;
 };
 
@@ -104,16 +104,16 @@ serial_cleanup(struct rrdp_serial *serial)
 {
 	BN_free(serial->num);
 	serial->num = NULL;
-	xmlFree(serial->str);
+	free(serial->str);
 	serial->str = NULL;
 }
 
 static void
 session_cleanup(struct rrdp_session *meta)
 {
-	xmlFree(meta->session_id);
+	free(meta->session_id);
 	BN_free(meta->serial.num);
-	xmlFree(meta->serial.str);
+	free(meta->serial.str);
 }
 
 static void
@@ -164,16 +164,14 @@ parse_ulong(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 
 	str = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 	if (str == NULL)
-		return pr_val_err("RRDP file: Couldn't find xml attribute '%s'",
-		    attr);
+		return pr_val_err("Couldn't find xml attribute '%s'", attr);
 
 	errno = 0;
 	*result = strtoul((char const *) str, NULL, 10);
 	error = errno;
 	xmlFree(str);
 	if (error) {
-		pr_val_err("RRDP file: Invalid long value '%s': %s",
-		    str, strerror(error));
+		pr_val_err("Invalid long value '%s': %s", str, strerror(error));
 		return error;
 	}
 
@@ -318,12 +316,16 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 static int
 parse_serial(xmlTextReaderPtr reader, struct rrdp_serial *serial)
 {
-	serial->str = parse_string(reader, RRDP_ATTR_SERIAL);
-	if (serial->str == NULL)
+	xmlChar *xmlserial;
+
+	xmlserial = parse_string(reader, RRDP_ATTR_SERIAL);
+	if (xmlserial == NULL)
 		return EINVAL;
+	serial->str = pstrdup((const char *) xmlserial);
+	xmlFree(xmlserial);
 
 	serial->num = BN_create();
-	if (BN_dec2bn(&serial->num, (char const *) serial->str) == 0)
+	if (BN_dec2bn(&serial->num, serial->str) == 0)
 		goto fail;
 	if (BN_is_negative(serial->num)) {
 		pr_val_err("Serial '%s' is negative.", serial->str);
@@ -340,6 +342,7 @@ fail:
 static int
 parse_session(xmlTextReaderPtr reader, struct rrdp_session *meta)
 {
+	xmlChar *xmlsession;
 	int error;
 
 	/*
@@ -356,13 +359,15 @@ parse_session(xmlTextReaderPtr reader, struct rrdp_session *meta)
 	if (error)
 		return error;
 
-	meta->session_id = parse_string(reader, RRDP_ATTR_SESSION_ID);
-	if (meta->session_id == NULL)
+	xmlsession = parse_string(reader, RRDP_ATTR_SESSION_ID);
+	if (xmlsession == NULL)
 		return EINVAL;
+	meta->session_id = pstrdup((const char *) xmlsession);
+	xmlFree(xmlsession);
 
 	error = parse_serial(reader, &meta->serial);
 	if (error) {
-		xmlFree(meta->session_id);
+		free(meta->session_id);
 		meta->session_id = NULL;
 		return error;
 	}
@@ -380,7 +385,7 @@ validate_session(xmlTextReaderPtr reader, struct rrdp_session *expected)
 	if (error)
 		return error;
 
-	if (xmlStrcmp(expected->session_id, actual.session_id) != 0) {
+	if (strcmp(expected->session_id, actual.session_id) != 0) {
 		error = pr_val_err("File session id [%s] doesn't match notification's session id [%s]",
 		    expected->session_id, actual.session_id);
 		goto end;
@@ -973,7 +978,7 @@ rrdp_update(struct rpki_uri *uri)
 		goto revert_notification;
 	}
 
-	if (xmlStrcmp(old.session_id, new.session.session_id) != 0) {
+	if (strcmp(old.session_id, new.session.session_id) != 0) {
 		pr_val_debug("The Notification's session ID changed.");
 		error = handle_snapshot(&new);
 		goto revert_notification;

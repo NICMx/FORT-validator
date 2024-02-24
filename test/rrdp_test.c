@@ -114,7 +114,7 @@ END_TEST
 
 static int
 __sort_deltas(struct notification_deltas *deltas, unsigned int max_serial,
-   char const *max_serial_str)
+   char *max_serial_str)
 {
 	struct update_notification notif;
 	int error;
@@ -123,7 +123,7 @@ __sort_deltas(struct notification_deltas *deltas, unsigned int max_serial,
 	notif.session.serial.num = BN_create();
 	if (!BN_set_word(notif.session.serial.num, max_serial))
 		ck_abort_msg("BN_set_word() returned zero.");
-	notif.session.serial.str = (unsigned char *) max_serial_str;
+	notif.session.serial.str = max_serial_str;
 
 	error = sort_deltas(&notif);
 
@@ -403,8 +403,8 @@ START_TEST(test_parse_snapshot_bad_publish)
 	snapshot_uri.local = "resources/rrdp/snapshot-bad-publish.xml";
 	snapshot_uri.references = 1;
 
-	notif.session.session_id = BAD_CAST "9df4b597-af9e-4dca-bdda-719cce2c4e28";
-	notif.session.serial.str = BAD_CAST "2";
+	notif.session.session_id = "9df4b597-af9e-4dca-bdda-719cce2c4e28";
+	notif.session.serial.str = "2";
 	notif.session.serial.num = BN_two();
 	notif.snapshot.uri = &snapshot_uri;
 	notif.uri = &notif_uri;
