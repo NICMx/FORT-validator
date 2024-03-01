@@ -422,8 +422,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
 		return -EINVAL;
 	error = uri_create(&meta->uri,
 	    tal_get_file_name(validation_tal(state_retrieve())),
-	    (notif != NULL) ? UT_CAGED : UT_HTTPS,
-	    false, notif, (char const *)uri);
+	    (notif != NULL) ? UT_CAGED : UT_TMP, notif, (char const *)uri);
 	xmlFree(uri);
 	if (error)
 		return error;
@@ -780,7 +779,7 @@ handle_snapshot(struct update_notification *notif)
 	 * Maybe stream it instead.
 	 * Same for deltas.
 	 */
-	error = cache_download(validation_cache(state), uri, NULL);
+	error = cache_download(validation_cache(state), uri, 0, NULL);
 	if (error)
 		goto end;
 	error = validate_hash(&notif->snapshot);
@@ -853,7 +852,7 @@ handle_delta(struct update_notification *notif, struct notification_delta *delta
 	pr_val_debug("Processing delta '%s'.", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = cache_download(validation_cache(state_retrieve()), uri, NULL);
+	error = cache_download(validation_cache(state_retrieve()), uri, 0, NULL);
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta);
@@ -946,6 +945,7 @@ rrdp_update(struct rpki_uri *uri)
 {
 	struct rrdp_session old = { 0 };
 	struct update_notification new;
+	time_t ims;
 	bool changed;
 	int error;
 
@@ -958,7 +958,12 @@ rrdp_update(struct rpki_uri *uri)
 	pr_val_debug("Old session/serial: %s/%s", old.session_id,
 	    old.serial.str);
 
-	error = cache_download(validation_cache(state_retrieve()), uri, &changed);
+	error = file_get_mtim(uri_get_local(uri), &ims);
+	if (error)
+		return error;
+
+	error = cache_download(validation_cache(state_retrieve()), uri,
+	    ims, &changed);
 	if (error)
 		goto end;
 	if (!changed) {

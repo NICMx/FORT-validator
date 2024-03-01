@@ -29,24 +29,6 @@ json_get_str(json_t *parent, char const *name, char const **result)
 	return 0;
 }
 
-int
-json_get_bool(json_t *parent, char const *name, bool *result)
-{
-	json_t *child;
-
-	*result = false;
-
-	child = json_object_get(parent, name);
-	if (child == NULL)
-		return ENOENT;
-
-	if (!json_is_boolean(child))
-		return pr_op_err("Tag '%s' is not a JSON boolean.", name);
-
-	*result = json_boolean_value(child);
-	return 0;
-}
-
 static int
 json_get_int_t(json_t *parent, char const *name, json_int_t *result)
 {
@@ -181,18 +163,6 @@ bool
 json_valid_members_count(json_t *object, size_t expected_size)
 {
 	return json_object_size(object) == expected_size;
-}
-
-int
-json_add_bool(json_t *parent, char const *name, bool value)
-{
-	if (json_object_set_new(parent, name, json_boolean(value)))
-		return pr_op_err(
-		    "Cannot convert %s '%u' to json; unknown cause.",
-		    name, value
-		);
-
-	return 0;
 }
 
 int

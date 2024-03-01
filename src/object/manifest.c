@@ -323,7 +323,7 @@ fail:
 
 /**
  * Validates the manifest pointed by @uri, returns the RPP described by it in
- * @pp. If @rrdp_workspace is true, use the local RRDP repository.
+ * @pp.
  */
 int
 handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)

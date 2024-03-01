@@ -57,6 +57,15 @@ file_rm_rf(char const *file)
 	return ENOENT;
 }
 
+int
+file_rm_f(char const *file)
+{
+	file_rm_rf(file);
+	return 0;
+}
+
+MOCK_ABORT_INT(file_get_mtim, char const *file, time_t *ims)
+
 static int
 pretend_download(struct rpki_uri *uri)
 {
@@ -82,7 +91,7 @@ rsync_download(struct rpki_uri *uri)
 }
 
 int
-http_download(struct rpki_uri *uri, bool *changed)
+http_download(struct rpki_uri *uri, curl_off_t ims, bool *changed)
 {
 	int error;
 	https_counter++;
@@ -115,17 +124,17 @@ run_cache_download(char const *url, int expected_error,
 	enum uri_type type;
 
 	if (str_starts_with(url, "https://"))
-		type = UT_HTTPS;
+		type = UT_TA_HTTP;
 	else if (str_starts_with(url, "rsync://"))
-		type = UT_RSYNC;
+		type = UT_RPP;
 	else
 		ck_abort_msg("Bad protocol: %s", url);
 
 	rsync_counter = 0;
 	https_counter = 0;
 
-	ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, false, NULL, url));
-	ck_assert_int_eq(expected_error, cache_download(cache, uri, NULL));
+	ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, NULL, url));
+	ck_assert_int_eq(expected_error, cache_download(cache, uri, 0, NULL));
 	ck_assert_uint_eq(rsync_calls, rsync_counter);
 	ck_assert_uint_eq(https_calls, https_counter);
 
@@ -140,15 +149,14 @@ node(char const *url, time_t attempt, int err, bool succeeded, time_t success,
 	struct cache_node *result;
 
 	if (str_starts_with(url, "https://"))
-		type = UT_HTTPS;
+		type = is_notif ? UT_NOTIF : UT_TA_HTTP;
 	else if (str_starts_with(url, "rsync://"))
-		type = UT_RSYNC;
+		type = UT_RPP;
 	else
 		ck_abort_msg("Bad protocol: %s", url);
 
 	result = pzalloc(sizeof(struct cache_node));
-	ck_assert_int_eq(0, uri_create(&result->url, TAL_FILE, type, is_notif,
-	    NULL, url));
+	ck_assert_int_eq(0, uri_create(&result->url, TAL_FILE, type, NULL, url));
 	result->attempt.ts = attempt;
 	result->attempt.result = err;
 	result->success.happened = succeeded;
@@ -735,11 +743,11 @@ START_TEST(test_tal_json)
 	json_decref(json);
 
 	ck_assert_str_eq(
-	    "[{\"url\":\"rsync://a.b.c/d\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
-	    "{\"url\":\"rsync://a.b.c/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1},"
-	    "{\"url\":\"rsync://x.y.z/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
-	    "{\"url\":\"https://a/b\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
-	    "{\"url\":\"https://a/c\",\"is-rrdp-notification\":true,\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"}]",
+	    "[{\"type\":\"RPP\",\"url\":\"rsync://a.b.c/d\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"type\":\"RPP\",\"url\":\"rsync://a.b.c/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1},"
+	    "{\"type\":\"RPP\",\"url\":\"rsync://x.y.z/e\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"type\":\"TA (HTTP)\",\"url\":\"https://a/b\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":1,\"success-timestamp\":\"1970-01-01T00:00:00Z\"},"
+	    "{\"type\":\"RRDP Notification\",\"url\":\"https://a/c\",\"attempt-timestamp\":\"1970-01-01T00:00:00Z\",\"attempt-result\":0,\"success-timestamp\":\"1970-01-01T00:00:00Z\"}]",
 	    str);
 	free(str);
 
@@ -773,13 +781,12 @@ prepare_uri_list(struct uri_list *uris, ...)
 	va_start(args, uris);
 	while ((str = va_arg(args, char const *)) != NULL) {
 		if (str_starts_with(str, "https://"))
-			type = UT_HTTPS;
+			type = UT_TA_HTTP;
 		else if (str_starts_with(str, "rsync://"))
-			type = UT_RSYNC;
+			type = UT_RPP;
 		else
 			ck_abort_msg("Bad protocol: %s", str);
-		ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, false,
-		    NULL, str));
+		ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, NULL, str));
 		uris_add(uris, uri);
 	}
 	va_end(args);
@@ -795,7 +802,7 @@ START_TEST(test_recover)
 
 	/* Query on empty database */
 	PREPARE_URI_LIST(&uris, "rsync://a.b.c/d", "https://a.b.c/d");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* Only first URI is cached */
@@ -803,7 +810,7 @@ START_TEST(test_recover)
 	run_cache_download("rsync://a/b/c", 0, 1, 0);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* Only second URI is cached */
@@ -811,7 +818,7 @@ START_TEST(test_recover)
 	run_cache_download("https://d/e", 0, 0, 1);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* Only third URI is cached */
@@ -819,7 +826,7 @@ START_TEST(test_recover)
 	run_cache_download("https://f", 0, 0, 1);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* None was cached */
@@ -827,7 +834,7 @@ START_TEST(test_recover)
 	run_cache_download("rsync://d/e", 0, 1, 0);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/*
@@ -854,21 +861,21 @@ START_TEST(test_recover)
 
 	/* Multiple successful caches: Prioritize the most recent one */
 	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://a/3", "rsync://a/5");
-	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://a/1", "rsync://a/3");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* No successful caches: No viable candidates */
 	PREPARE_URI_LIST(&uris, "rsync://b/2", "rsync://b/4", "rsync://b/6");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* Status: CNF_SUCCESS is better than 0. */
 	PREPARE_URI_LIST(&uris, "rsync://b/1", "rsync://a/1");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/*
@@ -879,12 +886,12 @@ START_TEST(test_recover)
 	 * outdatedness is not that severe.
 	 */
 	PREPARE_URI_LIST(&uris, "rsync://a/2", "rsync://b/2");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* Parents of downloaded nodes */
 	PREPARE_URI_LIST(&uris, "rsync://a", "rsync://b");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	/* Try them all at the same time */
@@ -894,7 +901,7 @@ START_TEST(test_recover)
 	    "rsync://b", "rsync://b/1", "rsync://b/2", "rsync://b/3",
 	    "rsync://b/4", "rsync://b/5", "rsync://b/6",
 	    "rsync://e/1");
-	ck_assert_ptr_eq(uris.array[5], cache_recover(cache, &uris, false));
+	ck_assert_ptr_eq(uris.array[5], cache_recover(cache, &uris));
 	uris_cleanup(&uris);
 
 	cleanup_test();

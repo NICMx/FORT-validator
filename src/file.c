@@ -154,10 +154,53 @@ file_valid(char const *file_name)
 	return true;
 }
 
+int
+file_get_mtim(char const *file, time_t *ims)
+{
+	struct stat meta;
+	int error;
+
+	if (stat(file, &meta) != 0) {
+		error = errno;
+		/*
+		 * This happens to be most convenient for callers,
+		 * because they all want to convert the ims to a curl_off_t ATM.
+		 */
+		*ims = 0;
+		return (error == ENOENT) ? 0 : error;
+	}
+
+#ifdef __APPLE__
+	*ims = meta.st_mtime; /* Seriously, Apple? */
+#else
+	*ims = meta.st_mtim.tv_sec;
+#endif
+	return 0;
+}
+
+/*
+ * Like remove(), but don't care if the file is already deleted.
+ */
+int
+file_rm_f(char const *path)
+{
+	int error;
+
+	errno = 0;
+	if (remove(path) != 0) {
+		error = errno;
+		if (error != ENOENT)
+			return error;
+	}
+
+	return 0;
+}
+
 static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
 	pr_op_debug("Deleting %s.", fpath);
+	errno = 0;
 	return (remove(fpath) != 0) ? errno : 0;
 }
 

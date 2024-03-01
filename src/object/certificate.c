@@ -73,7 +73,7 @@ struct ad_metadata {
 static const struct ad_metadata CA_ISSUERS = {
 	.name = "caIssuers",
 	.ia_name = "AIA",
-	.type = UT_RSYNC,
+	.type = UT_AIA,
 	.type_str = "rsync",
 	.required = true,
 };
@@ -81,7 +81,7 @@ static const struct ad_metadata CA_ISSUERS = {
 static const struct ad_metadata SIGNED_OBJECT = {
 	.name = "signedObject",
 	.ia_name = "SIA",
-	.type = UT_RSYNC,
+	.type = UT_SO,
 	.type_str = "rsync",
 	.required = true,
 };
@@ -89,7 +89,7 @@ static const struct ad_metadata SIGNED_OBJECT = {
 static const struct ad_metadata CA_REPOSITORY = {
 	.name = "caRepository",
 	.ia_name = "SIA",
-	.type = UT_RSYNC,
+	.type = UT_RPP,
 	.type_str = "rsync",
 	.required = false,
 };
@@ -97,7 +97,7 @@ static const struct ad_metadata CA_REPOSITORY = {
 static const struct ad_metadata RPKI_NOTIFY = {
 	.name = "rpkiNotify",
 	.ia_name = "SIA",
-	.type = UT_HTTPS,
+	.type = UT_NOTIF,
 	.type_str = "HTTPS",
 	.required = false,
 };
@@ -105,7 +105,7 @@ static const struct ad_metadata RPKI_NOTIFY = {
 static const struct ad_metadata RPKI_MANIFEST = {
 	.name = "rpkiManifest",
 	.ia_name = "SIA",
-	.type = UT_RSYNC,
+	.type = UT_MFT,
 	.type_str = "rsync",
 	.required = true,
 };
@@ -1523,8 +1523,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type,
 	 * But ask the testers to keep an eye on it anyway.
 	 */
 	return __uri_create(uri,
-	    tal_get_file_name(validation_tal(state_retrieve())), type,
-	    is_notif, NULL,
+	    tal_get_file_name(validation_tal(state_retrieve())), type, NULL,
 	    ASN1_STRING_get0_data(asn1str), ASN1_STRING_length(asn1str));
 }
 
@@ -1941,7 +1940,8 @@ download_rpp(struct sia_uris *uris)
 	}
 
 	cache = validation_cache(state_retrieve());
-	error = cache_download_alt(cache, &uris->rpp, true, retrieve_uri, &uri);
+	error = cache_download_alt(cache, &uris->rpp, UT_NOTIF, UT_RPP,
+	    retrieve_uri, &uri);
 	return error ? NULL : uri;
 }
 
@@ -2034,7 +2034,7 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	cert = NULL; /* Ownership stolen */
 
 	error = handle_manifest(sia_uris.mft,
-	    (uri_get_type(downloaded) == UT_HTTPS) ? downloaded : NULL,
+	    (uri_get_type(downloaded) == UT_NOTIF) ? downloaded : NULL,
 	    &pp);
 	if (error) {
 		x509stack_cancel(validation_certstack(state));

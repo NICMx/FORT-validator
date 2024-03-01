@@ -47,7 +47,7 @@ fetch_url(char const *url)
 	offset += strlen(dest_file);
 	dest[offset] = '\0';
 
-	error = http_direct_download(url, dest);
+	error = http_download_direct(url, dest);
 	if (error) {
 		fprintf(stderr, "Couldn't fetch '%s'.\n", dest);
 		free(dest);

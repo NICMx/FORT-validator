@@ -9,6 +9,8 @@
 #include "types/uri.c"
 #include "crypto/hash.c"
 
+MOCK_ABORT_INT(cache_tmpfile, char **filename)
+
 /* Actually mostly tests libcrypto's sanity, not Fort's. */
 START_TEST(test_hash)
 {
@@ -45,8 +47,7 @@ START_TEST(test_hash)
 	uri.global = "https://example.com/resources/lorem-ipsum.txt";
 	uri.global_len = strlen(uri.global);
 	uri.local = "resources/lorem-ipsum.txt";
-	uri.type = UT_HTTPS;
-	uri.is_notif = false;
+	uri.type = UT_TA_HTTP;
 	uri.references = 1;
 
 	ha = hash_get_sha1();

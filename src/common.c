@@ -238,9 +238,9 @@ dir_exists(char const *path)
 	if (stat(path, &meta) != 0) {
 		error = errno;
 		if (error == ENOENT)
-			return false;
+			return 0;
 		pr_op_err_st("stat() failed: %s", strerror(error));
-		return error;
+		return -error;
 	}
 
 	if (!S_ISDIR(meta.st_mode)) {
@@ -308,31 +308,13 @@ end:
 	return result;
 }
 
-static int
-remove_file(char const *path)
-{
-	int error;
-
-	errno = 0;
-	if (remove(path) != 0) {
-		error = errno;
-		/*
-		pr_val_err("Couldn't delete '%s': %s", path,
-		    strerror(error));
-		 */
-		return error;
-	}
-
-	return 0;
-}
-
 /*
- * Delete parent dirs of @path only if dirs are empty, @path must be a file
- * location and will be deleted first.
+ * Delete @path.
+ * If path's parent is now empty, delete parent as well.
+ * If parent's parent is now empty, delete parent's parent.
+ * And so on.
  *
- * The algorithm is a bit aggressive, but rmdir() won't delete
- * something unless is empty, so in case the dir still has something in
- * it the cycle is finished.
+ * FIXME this should be done by the cache cleaner instead.
  */
 int
 delete_dir_recursive_bottom_up(char const *path)
@@ -342,9 +324,12 @@ delete_dir_recursive_bottom_up(char const *path)
 	size_t config_len;
 	int error;
 
-	error = remove_file(path);
-	if (error)
+	errno = 0;
+	if (remove(path) != 0) {
+		error = errno;
+		pr_val_err("Couldn't delete '%s': %s", path, strerror(error));
 		return error;
+	}
 
 	config_repo = pstrdup(config_get_local_repository());
 

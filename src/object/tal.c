@@ -77,11 +77,11 @@ add_uri(struct tal *tal, char *uri)
 	int error;
 
 	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, tal->file_name, UT_RSYNC, false, NULL, uri);
+		error = uri_create(&new, tal->file_name, UT_TA_RSYNC, NULL, uri);
 	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, tal->file_name, UT_HTTPS, false, NULL, uri);
+		error = uri_create(&new, tal->file_name, UT_TA_HTTP, NULL, uri);
 	else
-		return pr_op_err("TAL has non-RSYNC/HTTPS URI: %s", uri);
+		return pr_op_err("TAL has non-rsync/HTTPS URI: %s", uri);
 	if (error)
 		return error;
 
@@ -303,7 +303,7 @@ do_file_validation(void *arg)
 
 	args.db = db_table_create();
 	thread->error = cache_download_alt(args.tal.cache, &args.tal.uris,
-	    false, __handle_tal_uri, &args);
+	    UT_TA_HTTP, UT_TA_RSYNC, __handle_tal_uri, &args);
 	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);

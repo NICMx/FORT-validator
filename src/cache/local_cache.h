@@ -1,6 +1,7 @@
 #ifndef SRC_CACHE_LOCAL_CACHE_H_
 #define SRC_CACHE_LOCAL_CACHE_H_
 
+#include <curl/curl.h>
 #include "types/uri.h"
 
 struct rpki_cache;
@@ -15,7 +16,7 @@ struct rpki_cache *cache_create(char const *);
 void cache_destroy(struct rpki_cache *);
 
 /* Downloads @uri into the cache */
-int cache_download(struct rpki_cache *, struct rpki_uri *uri, bool *);
+int cache_download(struct rpki_cache *, struct rpki_uri *uri, curl_off_t, bool *);
 
 /*
  * The callback should return
@@ -25,11 +26,11 @@ int cache_download(struct rpki_cache *, struct rpki_uri *uri, bool *);
  * - < 0 on hard errors ("Abandon foreach")
  */
 typedef int (*uris_dl_cb)(struct rpki_uri *, void *);
-int cache_download_alt(struct rpki_cache *, struct uri_list *, bool,
-    uris_dl_cb, void *);
+int cache_download_alt(struct rpki_cache *, struct uri_list *, enum uri_type,
+    enum uri_type, uris_dl_cb, void *);
 
 /* Returns the most recent successfully cached URI of the list */
-struct rpki_uri *cache_recover(struct rpki_cache *, struct uri_list *, bool);
+struct rpki_uri *cache_recover(struct rpki_cache *, struct uri_list *);
 /* Prints the cache in standard output. */
 void cache_print(struct rpki_cache *);
 

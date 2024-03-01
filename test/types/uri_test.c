@@ -18,10 +18,25 @@ MOCK(tal_get_file_name, char const *, "test.tal", struct tal *tal)
 
 MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 
+int
+cache_tmpfile(char **filename)
+{
+	static bool used = false;
+
+	if (used) {
+		ck_abort_msg("cache_tmpfile() called a second time!");
+		return -EINVAL;
+	}
+
+	*filename = pstrdup("tmp/tmp/0");
+	used = true;
+	return 0;
+}
+
 /* Tests */
 
-#define URI_CREATE_HTTP(uri, str) uri_create(&uri, "test.tal", UT_HTTPS, false, NULL, str)
-#define URI_CREATE_RSYNC(uri, str) uri_create(&uri, "test.tal", UT_RSYNC, false, NULL, str)
+#define URI_CREATE_HTTP(uri, str) uri_create(&uri, "test.tal", UT_TA_HTTP, NULL, str)
+#define URI_CREATE(uri, type, str) uri_create(&uri, "test.tal", type, NULL, str)
 
 START_TEST(test_constructor)
 {
@@ -87,7 +102,27 @@ START_TEST(test_constructor)
 
 	ck_assert_int_eq(ENOTHTTPS, URI_CREATE_HTTP(uri, "rsync://a.b.c/d"));
 	ck_assert_int_eq(ENOTHTTPS, URI_CREATE_HTTP(uri, "http://a.b.c/d"));
-	ck_assert_int_eq(ENOTRSYNC, URI_CREATE_RSYNC(uri, "https://a.b.c/d"));
+	ck_assert_int_eq(ENOTRSYNC, URI_CREATE(uri, UT_RPP, "https://a.b.c/d"));
+
+	ck_assert_int_eq(0, URI_CREATE(uri, UT_RPP, "rsync://a.b.c/d"));
+	ck_assert_str_eq("rsync://a.b.c/d", uri_get_global(uri));
+	ck_assert_str_eq("tmp/test.tal/rsync/a.b.c/d", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(0, URI_CREATE(uri, UT_TA_RSYNC, "rsync://a.b.c/d.cer"));
+	ck_assert_str_eq("rsync://a.b.c/d.cer", uri_get_global(uri));
+	ck_assert_str_eq("tmp/test.tal/rsync/a.b.c/d.cer", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(0, URI_CREATE(uri, UT_NOTIF, "https://a.b.c/notification.xml"));
+	ck_assert_str_eq("https://a.b.c/notification.xml", uri_get_global(uri));
+	ck_assert_str_eq("tmp/test.tal/https/a.b.c/notification.xml", uri_get_local(uri));
+	uri_refput(uri);
+
+	ck_assert_int_eq(0, URI_CREATE(uri, UT_TMP, "https://a.b.c/snapshot.xml"));
+	ck_assert_str_eq("https://a.b.c/snapshot.xml", uri_get_global(uri));
+	ck_assert_str_eq("tmp/tmp/0", uri_get_local(uri));
+	uri_refput(uri);
 }
 END_TEST
 
@@ -147,14 +182,14 @@ START_TEST(check_caged)
 {
 	struct rpki_uri *uri;
 
-	ck_assert_int_eq(0, uri_create(&notif, "test.tal", UT_HTTPS, true, NULL, "https://a.b.c/d/e.xml"));
-	ck_assert_int_eq(0, uri_create(&uri, "test.tal", UT_CAGED, false, notif, "rsync://x.y.z/v/w.cer"));
+	ck_assert_int_eq(0, uri_create(&notif, "test.tal", UT_NOTIF, NULL, "https://a.b.c/d/e.xml"));
+	ck_assert_int_eq(0, uri_create(&uri, "test.tal", UT_CAGED, notif, "rsync://x.y.z/v/w.cer"));
 	ck_assert_str_eq("tmp/test.tal/rrdp/a.b.c/d/e.xml/x.y.z/v/w.cer", uri_get_local(uri));
 	uri_refput(uri);
 	uri_refput(notif);
 
-	ck_assert_int_eq(0, uri_create(&notif, "test.tal", UT_HTTPS, true, NULL, "https://a.b.c"));
-	ck_assert_int_eq(0, uri_create(&uri, "test.tal", UT_CAGED, false, notif, "rsync://w"));
+	ck_assert_int_eq(0, uri_create(&notif, "test.tal", UT_NOTIF, NULL, "https://a.b.c"));
+	ck_assert_int_eq(0, uri_create(&uri, "test.tal", UT_CAGED, notif, "rsync://w"));
 	ck_assert_str_eq("tmp/test.tal/rrdp/a.b.c/w", uri_get_local(uri));
 	uri_refput(uri);
 	uri_refput(notif);

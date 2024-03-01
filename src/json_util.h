@@ -24,7 +24,6 @@
  * result < 0: Tag was fatally invalid, outbound param reset, logged
  */
 
-int json_get_bool(json_t *, char const *, bool *);
 int json_get_int(json_t *, char const *, int *);
 int json_get_u32(json_t *, char const *, uint32_t *);
 int json_get_ts(json_t *, char const *, time_t *);
@@ -34,7 +33,6 @@ int json_get_object(json_t *, char const *, json_t **);
 
 bool json_valid_members_count(json_t *, size_t);
 
-int json_add_bool(json_t *, char const *, bool);
 int json_add_int(json_t *, char const *, int);
 int json_add_str(json_t *, char const *, char const *);
 int json_add_date(json_t *, char const *, time_t);

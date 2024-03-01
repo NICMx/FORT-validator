@@ -15,8 +15,23 @@
 
 /* Mocks */
 
+int
+cache_tmpfile(char **filename)
+{
+	static unsigned int file_counter = 0;
+	char *result;
+	int written;
+
+	result = pmalloc(10);
+	written = snprintf(result, 10, "tmp/%u", file_counter);
+	ck_assert(4 < written && written < 10);
+
+	*filename = result;
+	return 0;
+}
+
 MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
-    bool *changed)
+    curl_off_t ims, bool *changed)
 MOCK_ABORT_VOID(fnstack_pop, void)
 MOCK_ABORT_VOID(fnstack_push_uri, struct rpki_uri *uri)
 MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
@@ -242,6 +257,7 @@ START_TEST(test_parse_notification_ok)
 
 	ck_assert_int_eq(0, relax_ng_init());
 	uri.local = "resources/rrdp/notif-ok.xml";
+	uri.type = UT_NOTIF;
 	uri.references = 1;
 	ck_assert_int_eq(0, parse_notification(&uri, &notif));
 
@@ -276,6 +292,7 @@ START_TEST(test_parse_notification_0deltas)
 
 	ck_assert_int_eq(0, relax_ng_init());
 	uri.local = "resources/rrdp/notif-0deltas.xml";
+	uri.type = UT_NOTIF;
 	uri.references = 1;
 	ck_assert_int_eq(0, parse_notification(&uri, &notif));
 
@@ -300,6 +317,7 @@ START_TEST(test_parse_notification_large_serial)
 
 	ck_assert_int_eq(0, relax_ng_init());
 	uri.local = "resources/rrdp/notif-large-serial.xml";
+	uri.type = UT_NOTIF;
 	uri.references = 1;
 	ck_assert_int_eq(0, parse_notification(&uri, &notif));
 
@@ -331,6 +349,7 @@ test_parse_notification_error(char *file)
 
 	ck_assert_int_eq(0, relax_ng_init());
 	uri.local = file;
+	uri.type = UT_NOTIF;
 	uri.references = 1;
 	ck_assert_int_eq(-EINVAL, parse_notification(&uri, &notif));
 
@@ -396,8 +415,7 @@ START_TEST(test_parse_snapshot_bad_publish)
 	notif_uri.global = "https://example.com/notification.xml";
 	notif_uri.global_len = strlen(notif_uri.global);
 	notif_uri.local = "cache/example.com/notification.xml";
-	notif_uri.type = UT_HTTPS;
-	notif_uri.is_notif = true;
+	notif_uri.type = UT_NOTIF;
 	notif_uri.references = 1;
 
 	snapshot_uri.local = "resources/rrdp/snapshot-bad-publish.xml";

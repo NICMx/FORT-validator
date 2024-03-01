@@ -1,7 +1,5 @@
 #include "http/http.h"
 
-#include <curl/curl.h>
-
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
@@ -31,26 +29,6 @@ void
 http_cleanup(void)
 {
 	curl_global_cleanup();
-}
-
-static int
-get_ims(char const *file, time_t *ims)
-{
-	struct stat meta;
-	int error;
-
-	if (stat(file, &meta) != 0) {
-		error = errno;
-		*ims = 0;
-		return (error == ENOENT) ? 0 : error;
-	}
-
-#ifdef __APPLE__
-	*ims = meta.st_mtime; /* Seriously, Apple? */
-#else
-	*ims = meta.st_mtim.tv_sec;
-#endif
-	return 0;
 }
 
 static void
@@ -345,30 +323,42 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 
 	pr_val_debug("HTTP result code: %ld", http_code);
 	error = 0;
-	*changed = true;
+	if (changed != NULL)
+		*changed = true;
 
 end:	http_easy_cleanup(&handler);
 	if (error)
-		remove(dst);
+		file_rm_f(dst);
 	return error;
 }
 
 /*
- * Assumes @dst's parent directory has already been created.
+ * Download @uri->global into @uri->local; HTTP assumed.
+ *
+ * If @changed returns true, the file was downloaded normally.
+ * If @changed returns false, the file has not been modified since @ims.
+ *
+ * @ims can be 0, which means "no epoch."
+ * @changed can be NULL, which means "I don't care."
+ * If @changed is not NULL, initialize it to false.
  */
-static int
-do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
+int
+http_download(struct rpki_uri *uri, curl_off_t ims, bool *changed)
 {
 	unsigned int r;
 	int error;
 
-	pr_val_debug("Downloading '%s'.", src);
+	pr_val_info("HTTP GET: %s -> %s", uri_get_global(uri), uri_get_local(uri));
 
-	r = 0;
-	do {
+	error = mkdir_p(uri_get_local(uri), false);
+	if (error)
+		return error;
+
+	for (r = 0; true; r++) {
 		pr_val_debug("Download attempt #%u...", r + 1);
 
-		error = http_fetch(src, dst, ims, changed);
+		error = http_fetch(uri_get_global(uri), uri_get_local(uri),
+		    ims, changed);
 		switch (error) {
 		case 0:
 			pr_val_debug("Download successful.");
@@ -394,63 +384,7 @@ do_retries(char const *src, char const *dst, curl_off_t ims, bool *changed)
 		 * down; use a thread pool.
 		 */
 		sleep(config_get_http_retry_interval());
-		r++;
-	} while (true);
-}
-
-/*
- * Download @uri->global into @uri->local; HTTP assumed.
- *
- * If @changed returns true, the file was downloaded normally.
- * If @changed returns false, the file already existed and is already its latest
- * version.
- * @changed can be NULL.
- */
-int
-http_download(struct rpki_uri *uri, bool *changed)
-{
-	char *tmp_file_name;
-	char const *final_file_name;
-	time_t ims;
-	bool __changed;
-	int error;
-
-	if (changed == NULL)
-		changed = &__changed;
-	*changed = false;
-
-	error = cache_tmpfile(&tmp_file_name);
-	if (error)
-		return error;
-	final_file_name = uri_get_local(uri);
-	error = get_ims(final_file_name, &ims);
-	if (error)
-		goto end;
-
-	pr_val_info("HTTP GET: %s -> %s", uri_get_global(uri), final_file_name);
-
-	error = do_retries(uri_get_global(uri), tmp_file_name, (curl_off_t)ims,
-	    changed);
-	if (error || !(*changed))
-		goto end;
-
-	error = mkdir_p(final_file_name, false);
-	if (error) {
-		remove(tmp_file_name);
-		goto end;
 	}
-
-	error = rename(tmp_file_name, final_file_name);
-	if (error) {
-		error = errno;
-		pr_val_err("Renaming temporal file from '%s' to '%s': %s",
-		    tmp_file_name, final_file_name, strerror(error));
-		remove(tmp_file_name);
-		goto end;
-	}
-
-end:	free(tmp_file_name);
-	return error;
 }
 
 /*
@@ -458,9 +392,8 @@ end:	free(tmp_file_name);
  * structure is created).
  */
 int
-http_direct_download(char const *remote, char const *dest)
+http_download_direct(char const *src, char const *dst)
 {
-	bool changed;
-	pr_val_info("HTTP GET: %s -> %s", remote, dest);
-	return http_fetch(remote, dest, 0, &changed);
+	pr_val_info("HTTP GET: %s -> %s", src, dst);
+	return http_fetch(src, dst, 0, NULL);
 }

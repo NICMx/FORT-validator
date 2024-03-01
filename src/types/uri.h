@@ -5,29 +5,30 @@
 #include "data_structure/array_list.h"
 
 enum uri_type {
-	/* rsync URL */
-	UT_RSYNC,
-	/* HTTPS URL */
-	UT_HTTPS,
-	/*
-	 * URI (not URL).
-	 * In practice it's always rsync, but it doesn't matter.
-	 */
-	UT_CAGED,
+	UT_TA_RSYNC, /* TAL's TA URL; downloaded via rsync. */
+	UT_TA_HTTP, /* TAL's TA URL; downloaded via HTTP. */
+	UT_RPP, /* caRepository; downloaded via rsync. */
+	UT_NOTIF, /* rpkiNotify; downloaded via HTTP. */
+	UT_TMP, /* Snapshot or delta; Downloaded via HTTP. */
+	UT_CAGED, /* Endangered species. */
+
+	UT_AIA, /* caIssuers. Not downloaded. */
+	UT_SO, /* signedObject. Not downloaded. */
+	UT_MFT, /* rpkiManifest. Not downloaded. */
 };
 
 struct rpki_uri;
 
 int __uri_create(struct rpki_uri **, char const *, enum uri_type,
-    bool, struct rpki_uri *, void const *, size_t);
+    struct rpki_uri *, void const *, size_t);
 int uri_create_mft(struct rpki_uri **, char const *, struct rpki_uri *,
     struct rpki_uri *, IA5String_t *);
 struct rpki_uri *uri_create_cache(char const *);
 
-#define uri_create(uri, tal, type, is_notif, notif, guri) \
-	__uri_create(uri, tal, type, is_notif, notif, guri, strlen(guri))
+#define uri_create(uri, tal, type, notif, guri) \
+	__uri_create(uri, tal, type, notif, guri, strlen(guri))
 #define uri_create_caged(uri, tal, notif, guri, guri_len) \
-	__uri_create(uri, tal, UT_CAGED, false, notif, guri, guri_len)
+	__uri_create(uri, tal, UT_CAGED, notif, guri, guri_len)
 #define uri_create_cage(uri, tal, notif) \
 	uri_create_caged(uri, tal, notif, "", 0)
 
@@ -45,11 +46,8 @@ size_t uri_get_global_len(struct rpki_uri *);
 bool uri_equals(struct rpki_uri *, struct rpki_uri *);
 bool uri_has_extension(struct rpki_uri *, char const *);
 bool uri_is_certificate(struct rpki_uri *);
-bool uri_is_notif(struct rpki_uri *);
 
 enum uri_type uri_get_type(struct rpki_uri *);
-bool uri_is_rsync(struct rpki_uri *);
-bool uri_is_https(struct rpki_uri *);
 
 char const *uri_val_get_printable(struct rpki_uri *);
 char const *uri_op_get_printable(struct rpki_uri *);

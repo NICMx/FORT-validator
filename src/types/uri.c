@@ -8,6 +8,7 @@
 #include "state.h"
 #include "str_token.h"
 #include "thread_var.h"
+#include "cache/local_cache.h"
 #include "config/filename_format.h"
 #include "data_structure/path_builder.h"
 
@@ -63,7 +64,6 @@ struct rpki_uri {
 	/* "local_len" is never needed right now. */
 
 	enum uri_type type;
-	bool is_notif; /* Does it point to an RRDP Notification? */
 
 	unsigned int references;
 };
@@ -376,12 +376,25 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
     struct rpki_uri *notif)
 {
 	switch (uri->type) {
-	case UT_RSYNC:
+	case UT_TA_RSYNC:
+	case UT_RPP:
 		return map_simple(uri, tal, "rsync://", ENOTRSYNC);
-	case UT_HTTPS:
+
+	case UT_TA_HTTP:
+	case UT_NOTIF:
 		return map_simple(uri, tal, "https://", ENOTHTTPS);
+
+	case UT_TMP:
+		return cache_tmpfile(&uri->local);
+
 	case UT_CAGED:
 		return map_caged(uri, tal, notif);
+
+	case UT_AIA:
+	case UT_SO:
+	case UT_MFT:
+		uri->local = NULL;
+		return 0;
 	}
 
 	pr_crit("Unknown URI type: %u", uri->type);
@@ -393,7 +406,7 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
  */
 int
 __uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
-    bool is_notif, struct rpki_uri *notif, void const *guri, size_t guri_len)
+    struct rpki_uri *notif, void const *guri, size_t guri_len)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -407,7 +420,6 @@ __uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
 	}
 
 	uri->type = type;
-	uri->is_notif = is_notif;
 
 	error = autocomplete_local(uri, tal, notif);
 	if (error) {
@@ -441,7 +453,7 @@ uri_create_mft(struct rpki_uri **result, char const *tal,
 		return error;
 	}
 
-	uri->type = (notif == NULL) ? UT_RSYNC : UT_CAGED;
+	uri->type = (notif == NULL) ? UT_RPP : UT_CAGED;
 
 	error = autocomplete_local(uri, tal, notif);
 	if (error) {
@@ -535,28 +547,10 @@ uri_is_certificate(struct rpki_uri *uri)
 	return uri_has_extension(uri, ".cer");
 }
 
-bool
-uri_is_notif(struct rpki_uri *uri)
-{
-	return uri->is_notif;
-}
-
 enum uri_type
 uri_get_type(struct rpki_uri *uri)
 {
 	return uri->type;
-}
-
-bool
-uri_is_rsync(struct rpki_uri *uri)
-{
-	return uri->type == UT_RSYNC;
-}
-
-bool
-uri_is_https(struct rpki_uri *uri)
-{
-	return uri->type == UT_HTTPS;
 }
 
 static char const *

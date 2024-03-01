@@ -16,11 +16,13 @@ MOCK_ABORT_VOID(cache_setup, void)
 MOCK(cache_create, struct rpki_cache *, NULL, char const *tal)
 MOCK_VOID(cache_destroy, struct rpki_cache *cache)
 MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
-    bool *changed)
+    curl_off_t ims, bool *changed)
 MOCK_ABORT_INT(cache_download_alt, struct rpki_cache *cache,
-    struct uri_list *uris, bool use_rrdp, uris_dl_cb cb, void *arg)
+    struct uri_list *uris, enum uri_type http_type, enum uri_type rsync_type,
+    uris_dl_cb cb, void *arg)
 MOCK_ABORT_PTR(cache_recover, rpki_uri, struct rpki_cache *cache,
-    struct uri_list *uris, bool use_rrdp)
+    struct uri_list *uris)
+MOCK_ABORT_INT(cache_tmpfile, char **filename)
 MOCK_ABORT_VOID(cache_teardown, void)
 MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
     struct rpki_uri *cert_uri)
