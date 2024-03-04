@@ -16,7 +16,7 @@ MOCK_ABORT_VOID(cache_setup, void)
 MOCK(cache_create, struct rpki_cache *, NULL, char const *tal)
 MOCK_VOID(cache_destroy, struct rpki_cache *cache)
 MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
-    curl_off_t ims, bool *changed)
+    bool *changed, struct cachefile_notification ***notif)
 MOCK_ABORT_INT(cache_download_alt, struct rpki_cache *cache,
     struct uri_list *uris, enum uri_type http_type, enum uri_type rsync_type,
     uris_dl_cb cb, void *arg)

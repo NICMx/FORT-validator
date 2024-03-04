@@ -868,6 +868,10 @@ Maximum deltas to explode per RRDP session, per iteration.
 .P
 (If the RRDP notification lists more than this amount of unprocessed deltas,
 Fort will reset the session, exploding the snapshot instead.)
+.P
+Per draft-spaghetti-sidrops-rrdp-desynchronization's recommendation, this is
+also the maximum number of delta hashes Fort will remember per RRDP session, to
+detect session desynchronization.
 .RE
 .P
 

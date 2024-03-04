@@ -32,7 +32,6 @@ void file_free(struct file_contents *);
 
 int file_exists(char const *);
 bool file_valid(char const *);
-int file_get_mtim(char const *, time_t *);
 
 int file_rm_f(char const *);
 int file_rm_rf(char const *);

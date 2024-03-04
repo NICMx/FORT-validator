@@ -33,6 +33,8 @@ struct cache_node {
 		time_t ts;
 	} success;
 
+	struct cachefile_notification *notif;
+
 	UT_hash_handle hh; /* Hash table hook */
 };
 
@@ -54,6 +56,7 @@ struct rpki_cache {
 #define TAGNAME_ATTEMPT_TS "attempt-timestamp"
 #define TAGNAME_ATTEMPT_ERR "attempt-result"
 #define TAGNAME_SUCCESS_TS "success-timestamp"
+#define TAGNAME_NOTIF "notification"
 
 #define TYPEVALUE_TA_RSYNC "TA (rsync)"
 #define TYPEVALUE_TA_HTTP "TA (HTTP)"
@@ -226,6 +229,7 @@ cache_tmpfile(char **filename)
 	error = pb_init_cache(&pb, NULL, TMPDIR);
 	if (error)
 		return error;
+
 	error = pb_append_u32(&pb, atomic_fetch_add(&file_counter, 1u));
 	if (error) {
 		pb_cleanup(&pb);
@@ -240,8 +244,7 @@ static char *
 get_tal_json_filename(struct rpki_cache *cache)
 {
 	struct path_builder pb;
-	return pb_init_cache(&pb, cache->tal, TAL_METAFILE)
-	    ? NULL : pb.string;
+	return pb_init_cache(&pb, cache->tal, TAL_METAFILE) ? NULL : pb.string;
 }
 
 static struct cache_node *
@@ -251,6 +254,7 @@ json2node(struct rpki_cache *cache, json_t *json)
 	char const *type_str;
 	enum uri_type type;
 	char const *url;
+	json_t *notif;
 	int error;
 
 	node = pzalloc(sizeof(struct cache_node));
@@ -282,6 +286,22 @@ json2node(struct rpki_cache *cache, json_t *json)
 		goto fail;
 	}
 
+	if (type == UT_NOTIF) {
+		error = json_get_object(json, TAGNAME_NOTIF, &notif);
+		switch (error) {
+		case 0:
+			error = rrdp_json2notif(notif, &node->notif);
+			if (error)
+				goto fail;
+			break;
+		case ENOENT:
+			node->notif = NULL;
+			break;
+		default:
+			goto fail;
+		}
+	}
+
 	error = uri_create(&node->url, cache->tal, type, NULL, url);
 	if (error) {
 		pr_op_err("Cannot parse '%s' into a URI.", url);
@@ -309,22 +329,27 @@ json2node(struct rpki_cache *cache, json_t *json)
 
 fail:
 	uri_refput(node->url);
+	rrdp_notif_free(node->notif);
 	free(node);
 	return NULL;
 }
 
-static struct cache_node*
-find_node(struct rpki_cache *cache, char const *luri)
+static struct cache_node *
+find_node(struct rpki_cache *cache, struct rpki_uri *uri)
 {
+	char const *key;
 	struct cache_node *result;
-	HASH_FIND_STR(cache->ht, luri, result);
+
+	key = uri_get_global(uri);
+	HASH_FIND_STR(cache->ht, key, result);
+
 	return result;
 }
 
 static void
 add_node(struct rpki_cache *cache, struct cache_node *node)
 {
-	char const *key = uri_get_local(node->url);
+	char const *key = uri_get_global(node->url);
 	size_t keylen = strlen(key);
 	HASH_ADD_KEYPTR(hh, cache->ht, key, keylen, node);
 }
@@ -392,6 +417,7 @@ node2json(struct cache_node *node)
 {
 	json_t *json;
 	char const *type;
+	json_t *notification;
 
 	json = json_object();
 	if (json == NULL)
@@ -418,6 +444,13 @@ node2json(struct cache_node *node)
 		goto cancel;
 	if (json_add_str(json, TAGNAME_URL, uri_get_global(node->url)))
 		goto cancel;
+	if (node->notif != NULL) {
+		notification = rrdp_notif2json(node->notif);
+		if (notification == NULL)
+			goto cancel;
+		if (json_add_obj(json, TAGNAME_NOTIF, notification))
+			goto cancel;
+	}
 	if (json_add_date(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
 		goto cancel;
 	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
@@ -601,10 +634,12 @@ cache_check(struct rpki_uri *url)
 
 /**
  * @ims and @changed only on HTTP.
+ * @ims can be zero, which means "no IMS."
+ * @changed can be NULL.
  */
 int
-cache_download(struct rpki_cache *cache, struct rpki_uri *uri,
-    curl_off_t ims, bool *changed)
+cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed,
+    struct cachefile_notification ***notif)
 {
 	struct rpki_uri *url;
 	struct cache_node *node;
@@ -617,15 +652,16 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri,
 	if (error)
 		return error;
 
-	node = find_node(cache, uri_get_local(url));
+	node = find_node(cache, url);
 	if (node != NULL) {
-		uri_refput(url);
-		if (was_recently_downloaded(cache, node))
-			return node->attempt.result;
-		url = node->url;
+		if (was_recently_downloaded(cache, node)) {
+			error = node->attempt.result;
+			goto end;
+		}
 	} else {
 		node = pzalloc(sizeof(struct cache_node));
 		node->url = url;
+		uri_refget(url);
 		add_node(cache, node);
 	}
 
@@ -634,7 +670,7 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri,
 	case UT_NOTIF:
 	case UT_TMP:
 		error = config_get_http_enabled()
-		   ? http_download(url, ims, changed)
+		   ? http_download(url, node->success.ts, changed)
 		   : cache_check(url);
 		break;
 	case UT_TA_RSYNC:
@@ -656,26 +692,25 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri,
 		node->success.ts = node->attempt.ts;
 	}
 
+end:
+	uri_refput(url);
+	if (!error && (notif != NULL))
+		*notif = &node->notif;
 	return error;
 }
 
 static int
 download(struct rpki_cache *cache, struct rpki_uri *uri, uris_dl_cb cb, void *arg)
 {
-	time_t ims = 0;
 	int error;
 
 	pr_val_debug("Trying URL %s...", uri_get_global(uri));
 
 	switch (uri_get_type(uri)) {
 	case UT_TA_HTTP:
-		error = file_get_mtim(uri_get_local(uri), &ims);
-		if (error)
-			break;
-		/* Fall through */
 	case UT_TA_RSYNC:
 	case UT_RPP:
-		error = cache_download(cache, uri, ims, NULL);
+		error = cache_download(cache, uri, NULL, NULL);
 		break;
 	case UT_NOTIF:
 		error = rrdp_update(uri);
@@ -804,7 +839,7 @@ __cache_recover(struct rpki_cache *cache, struct uri_list *uris,
 
 		if (get_url(cursor.uri, cache->tal, &url) != 0)
 			continue;
-		cursor.node = find_node(cache, uri_get_local(url));
+		cursor.node = find_node(cache, url);
 		uri_refput(url);
 		if (cursor.node == NULL)
 			continue;
@@ -847,6 +882,7 @@ delete_node(struct rpki_cache *cache, struct cache_node *node)
 {
 	HASH_DEL(cache->ht, node);
 	uri_refput(node->url);
+	rrdp_notif_free(node->notif);
 	free(node);
 }
 
@@ -892,17 +928,22 @@ get_days_ago(int days)
 static void
 cleanup_tmp(struct rpki_cache *cache, struct cache_node *node)
 {
+	enum uri_type type;
 	char const *path;
 	int error;
 
-	if (uri_get_type(node->url) == UT_TMP) {
-		path = uri_get_local(node->url);
-		pr_op_debug("Deleting temporal file '%s'.", path);
-		error = file_rm_f(path);
-		if (error)
-			pr_op_err("Could not delete '%s': %s", path, strerror(error));
+	type = uri_get_type(node->url);
+	if (type != UT_NOTIF && type != UT_TMP)
+		return;
+
+	path = uri_get_local(node->url);
+	pr_op_debug("Deleting temporal file '%s'.", path);
+	error = file_rm_f(path);
+	if (error)
+		pr_op_err("Could not delete '%s': %s", path, strerror(error));
+
+	if (type != UT_NOTIF)
 		delete_node(cache, node);
-	}
 }
 
 static void
@@ -913,6 +954,9 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 	int error;
 
 	path = uri_get_local(node->url);
+	if (uri_get_type(node->url) == UT_NOTIF)
+		goto skip_file;
+
 	error = file_exists(path);
 	switch (error) {
 	case 0:
@@ -927,6 +971,7 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 		    uri_op_get_printable(node->url), error, strerror(error));
 	}
 
+skip_file:
 	if (!is_node_fresh(node, last_week)) {
 		pr_op_debug("Deleting expired cache element %s.", path);
 		file_rm_rf(path);

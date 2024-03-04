@@ -5,6 +5,7 @@
 #include "alloc.c"
 #include "common.c"
 #include "file.c"
+#include "json_util.c"
 #include "mock.c"
 #include "rrdp.c"
 #include "crypto/base64.c"
@@ -31,7 +32,7 @@ cache_tmpfile(char **filename)
 }
 
 MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
-    curl_off_t ims, bool *changed)
+    bool *changed, struct cachefile_notification ***notif)
 MOCK_ABORT_VOID(fnstack_pop, void)
 MOCK_ABORT_VOID(fnstack_push_uri, struct rpki_uri *uri)
 MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
@@ -42,6 +43,47 @@ MOCK(tal_get_file_name, char const *, "", struct tal *tal)
 MOCK_UINT(config_get_rrdp_delta_threshold, 64, void)
 
 /* Mocks end */
+
+static void
+ck_rrdp_session(char const *session, char const *serial, struct rrdp_session *actual)
+{
+	BIGNUM *bn;
+
+	ck_assert_str_eq(session, actual->session_id);
+	ck_assert_str_eq(serial, actual->serial.str);
+
+	bn = BN_new();
+	ck_assert_ptr_ne(NULL, bn);
+	ck_assert_int_eq(strlen(serial), BN_dec2bn(&bn, serial));
+	ck_assert_int_eq(0, BN_cmp(bn, actual->serial.num));
+	BN_free(bn);
+}
+
+static struct cachefile_notification *
+create_cachefile_notif(char const *session, char const *serial, ...)
+{
+	struct cachefile_notification *notif;
+	struct rrdp_hash *hash;
+	int dh_byte;
+	va_list args;
+
+	notif = pmalloc(sizeof(struct cachefile_notification));
+
+	notif->session.session_id = pstrdup(session);
+	notif->session.serial.str = pstrdup(serial);
+	notif->session.serial.num = NULL; /* Not needed for now. */
+	STAILQ_INIT(&notif->delta_hashes);
+
+	va_start(args, serial);
+	while ((dh_byte = va_arg(args, int)) != 0) {
+		hash = pmalloc(sizeof(struct rrdp_hash));
+		memset(hash->bytes, dh_byte, sizeof(hash->bytes));
+		STAILQ_INSERT_TAIL(&notif->delta_hashes, hash, hook);
+	}
+	va_end(args);
+
+	return notif;
+}
 
 START_TEST(test_xmlChar_NULL_assumption)
 {
@@ -90,38 +132,41 @@ START_TEST(test_hexstr2sha256)
 {
 	char *hex;
 	unsigned char *sha = NULL;
+	size_t sha_len;
 	unsigned int i;
 
 	hex = "01";
-	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha, &sha_len));
 	ck_assert_ptr_eq(NULL, sha);
 
 	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(0, hexstr2sha256((xmlChar *) hex, &sha));
+	sha_len = 0;
+	ck_assert_int_eq(0, hexstr2sha256((xmlChar *) hex, &sha, &sha_len));
 	ck_assert_ptr_ne(NULL, sha);
 	for (i = 0; i < 32; i++)
 		ck_assert_uint_eq(i, sha[i]);
+	ck_assert_uint_eq(32, sha_len);
 	free(sha);
 	sha = NULL;
 
 	hex = "0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha, &sha_len));
 	ck_assert_ptr_eq(NULL, sha);
 
 	hex = " 00102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha, &sha_len));
 	ck_assert_ptr_eq(NULL, sha);
 
 	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha, &sha_len));
 	ck_assert_ptr_eq(NULL, sha);
 
 	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1";
-	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha, &sha_len));
 	ck_assert_ptr_eq(NULL, sha);
 
 	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2";
-	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha, &sha_len));
 	ck_assert_ptr_eq(NULL, sha);
 }
 END_TEST
@@ -147,18 +192,26 @@ __sort_deltas(struct notification_deltas *deltas, unsigned int max_serial,
 	return error;
 }
 
+/* Not really designed to be used with args > END (because of @str). */
 static void
 add_serials(struct notification_deltas *deltas, ...)
 {
 	struct notification_delta delta = { 0 };
-	unsigned long cursor;
+	int cursor;
+	char str[6];
+	int written;
 	va_list vl;
 
 	va_start(vl, deltas);
-	while ((cursor = va_arg(vl, unsigned long)) != END) {
+	while ((cursor = va_arg(vl, int)) != END) {
 		delta.serial.num = BN_create();
 		if (!BN_set_word(delta.serial.num, cursor))
 			ck_abort_msg("BN_set_word() returned zero.");
+
+		written = snprintf(str, sizeof(str), "%d", cursor) < sizeof(str);
+		ck_assert(1 <= written && written <= sizeof(str));
+		delta.serial.str = pstrdup(str);
+
 		notification_deltas_add(deltas, &delta);
 	}
 	va_end(vl);
@@ -188,28 +241,36 @@ START_TEST(test_sort_deltas)
 {
 	struct notification_deltas deltas;
 
+	/* No deltas */
 	notification_deltas_init(&deltas);
 	ck_assert_int_eq(0, __sort_deltas(&deltas, 0, "0"));
 	ck_assert_int_eq(0, __sort_deltas(&deltas, 1, "1"));
 	ck_assert_int_eq(0, __sort_deltas(&deltas, 2, "2"));
 
-	add_serials(&deltas, 0, END);
-	ck_assert_int_eq(0, __sort_deltas(&deltas, 0, "0"));
-	validate_serials(&deltas, 0, END);
+	/* 1 delta */
+	add_serials(&deltas, 2, END);
+	ck_assert_int_eq(0, __sort_deltas(&deltas, 2, "2"));
+	validate_serials(&deltas, 2, END);
 
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 2, "2"));
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 1, "1"));
-
-	add_serials(&deltas, 1, 2, 3, END);
-	ck_assert_int_eq(0, __sort_deltas(&deltas, 3, "3"));
-	validate_serials(&deltas, 0, 1, 2, 3, END);
-
+	/* Delta serial doesn't match session serial */
 	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 4, "4"));
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 2, "2"));
+	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 3, "3"));
+	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 1, "1"));
+	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 0, "0"));
+
+	/* More than 1 delta, already sorted */
+	add_serials(&deltas, 1, 3, 4, END);
+	ck_assert_int_eq(0, __sort_deltas(&deltas, 4, "4"));
+	validate_serials(&deltas, 1, 2, 3, 4, END);
+
+	/* More than 1 delta, they don't match session serial */
+	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 5, "5"));
+	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 3, "3"));
 
 	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
 	notification_deltas_init(&deltas);
 
+	/* More than 1 delta, not already sorted but otherwise functional */
 	add_serials(&deltas, 3, 0, 1, 2, END);
 	ck_assert_int_eq(0, __sort_deltas(&deltas, 3, "3"));
 	validate_serials(&deltas, 0, 1, 2, 3, END);
@@ -217,14 +278,21 @@ START_TEST(test_sort_deltas)
 	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
 	notification_deltas_init(&deltas);
 
+	/* Same, but order completely backwards */
 	add_serials(&deltas, 4, 3, 2, 1, 0, END);
 	ck_assert_int_eq(0, __sort_deltas(&deltas, 4, "4"));
 	validate_serials(&deltas, 0, 1, 2, 3, 4, END);
 
+	/* Same, but deltas don't match session serial */
 	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 5, "5"));
 	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 3, "3"));
 
 	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
+	notification_deltas_init(&deltas);
+
+	/* More than 1 delta, 1 serial missing */
+	add_serials(&deltas, 1, 2, 4, END);
+	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 4, "4"));
 }
 END_TEST
 
@@ -435,27 +503,188 @@ START_TEST(test_parse_snapshot_bad_publish)
 }
 END_TEST
 
+START_TEST(test_2s_simple)
+{
+	struct cachefile_notification *notif;
+	json_t *json, *jdeltas;
+	char const *str;
+
+	notif = create_cachefile_notif("session", "1234", 0);
+
+	json = rrdp_notif2json(notif);
+	ck_assert_ptr_ne(NULL, json);
+
+	rrdp_notif_free(notif);
+	notif = NULL;
+
+	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
+	ck_assert_str_eq("session", str);
+	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SERIAL, &str));
+	ck_assert_str_eq("1234", str);
+	ck_assert_int_eq(ENOENT, json_get_array(json, TAGNAME_DELTAS, &jdeltas));
+
+	ck_assert_int_eq(0, rrdp_json2notif(json, &notif));
+	ck_rrdp_session("session", "1234", &notif->session);
+	ck_assert_uint_eq(true, STAILQ_EMPTY(&notif->delta_hashes));
+
+	json_decref(json);
+	rrdp_notif_free(notif);
+}
+END_TEST
+
+static void
+ck_hash(struct rrdp_hash *hash, unsigned char chara)
+{
+	size_t i;
+	for (i = 0; i < sizeof(hash->bytes); i++)
+		ck_assert_uint_eq(chara, hash->bytes[i]);
+}
+
+START_TEST(test_2s_more)
+{
+	struct cachefile_notification *notif;
+	struct rrdp_hash *hash;
+	json_t *json, *jdeltas;
+	char const *str;
+
+	notif = create_cachefile_notif("session",
+	    "123456789012345678901234567890123456789012",
+	    0xAA, 0xBB, 0xCD, 0);
+
+	json = rrdp_notif2json(notif);
+	ck_assert_ptr_ne(NULL, json);
+
+	rrdp_notif_free(notif);
+	notif = NULL;
+
+	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
+	ck_assert_str_eq("session", str);
+	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SERIAL, &str));
+	ck_assert_str_eq("123456789012345678901234567890123456789012", str);
+	ck_assert_int_eq(0, json_get_array(json, TAGNAME_DELTAS, &jdeltas));
+	ck_assert_uint_eq(3, json_array_size(jdeltas));
+	ck_assert_str_eq("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	    json_string_value(json_array_get(jdeltas, 0)));
+	ck_assert_str_eq("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	    json_string_value(json_array_get(jdeltas, 1)));
+	ck_assert_str_eq("cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+	    json_string_value(json_array_get(jdeltas, 2)));
+
+	ck_assert_int_eq(0, rrdp_json2notif(json, &notif));
+	ck_rrdp_session("session", "123456789012345678901234567890123456789012", &notif->session);
+	hash = STAILQ_FIRST(&notif->delta_hashes);
+	ck_assert_ptr_ne(NULL, hash);
+	ck_hash(hash, 0xAA);
+	hash = STAILQ_NEXT(hash, hook);
+	ck_assert_ptr_ne(NULL, hash);
+	ck_hash(hash, 0xBB);
+	hash = STAILQ_NEXT(hash, hook);
+	ck_assert_ptr_ne(NULL, hash);
+	ck_hash(hash, 0xCD);
+	hash = STAILQ_NEXT(hash, hook);
+	ck_assert_ptr_eq(NULL, hash);
+
+	json_decref(json);
+	rrdp_notif_free(notif);
+}
+END_TEST
+
+void
+ck_json2notif(int expected, char const *json_str)
+{
+	json_t *json;
+	json_error_t error;
+	struct cachefile_notification *notif;
+
+	json = json_loads(json_str, 0, &error);
+	ck_assert_ptr_ne(NULL, json);
+
+	notif = NULL;
+	ck_assert_int_eq(expected, rrdp_json2notif(json, &notif));
+
+	json_decref(json);
+	if (notif == NULL)
+		rrdp_notif_free(notif);
+}
+
+START_TEST(test_2s_errors)
+{
+	struct cachefile_notification notif = { 0 };
+
+	ck_assert_ptr_eq(NULL, rrdp_notif2json(NULL));
+	ck_assert_ptr_eq(NULL, rrdp_notif2json(&notif));
+	notif.session.session_id = "sid";
+	ck_assert_ptr_eq(NULL, rrdp_notif2json(&notif));
+
+	ck_json2notif(ENOENT, "{}");
+	ck_json2notif(0, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":null, \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":null }");
+	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":123, \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":123 }");
+	ck_json2notif(ENOENT, "{ \"" TAGNAME_SESSION "\":\"sss\" }");
+	ck_json2notif(ENOENT, "{ \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2notif(-EINVAL,
+	    "{ \"" TAGNAME_SESSION "\":\"sss\","
+	      "\"" TAGNAME_SERIAL "\":\"123\","
+	      "\"" TAGNAME_DELTAS "\":null }");
+	ck_json2notif(-EINVAL,
+	    "{ \"" TAGNAME_SESSION "\":\"sss\","
+	      "\"" TAGNAME_SERIAL "\":\"123\","
+	      "\"" TAGNAME_DELTAS "\":\"123\" }");
+	ck_json2notif(-EINVAL,
+	    "{ \"" TAGNAME_SESSION "\":\"sss\","
+	      "\"" TAGNAME_SERIAL "\":\"123\","
+	      "\"" TAGNAME_DELTAS "\":{} }");
+	ck_json2notif(0,
+	    "{ \"" TAGNAME_SESSION "\":\"sss\","
+	      "\"" TAGNAME_SERIAL "\":\"123\","
+	      "\"" TAGNAME_DELTAS "\":[] }");
+	ck_json2notif(-EINVAL,
+	    "{ \"" TAGNAME_SESSION "\":\"sss\","
+	      "\"" TAGNAME_SERIAL "\":\"123\","
+	      "\"" TAGNAME_DELTAS "\":[ 1 ] }");
+	ck_json2notif(-EINVAL,
+	    "{ \"" TAGNAME_SESSION "\":\"sss\","
+	      "\"" TAGNAME_SERIAL "\":\"123\","
+	      "\"" TAGNAME_DELTAS "\":[ \"111\" ] }");
+	ck_json2notif(0,
+	    "{ \"" TAGNAME_SESSION "\":\"sss\","
+	      "\"" TAGNAME_SERIAL "\":\"123\","
+	      "\"" TAGNAME_DELTAS "\":[ \"1111111111111111111111111111111111111111111111111111111111111111\" ] }");
+}
+END_TEST
+
 static Suite *xml_load_suite(void)
 {
 	Suite *suite;
-	TCase *misc;
+	TCase *misc, *parse, *cf;
 
 	misc = tcase_create("misc");
 	tcase_add_test(misc, test_xmlChar_NULL_assumption);
 	tcase_add_test(misc, test_hexstr2sha256);
 	tcase_add_test(misc, test_sort_deltas);
-	tcase_add_test(misc, test_parse_notification_ok);
-	tcase_add_test(misc, test_parse_notification_0deltas);
-	tcase_add_test(misc, test_parse_notification_large_serial);
-	tcase_add_test(misc, test_parse_notification_bad_xmlns);
-	tcase_add_test(misc, test_parse_notification_bad_session_id);
-	tcase_add_test(misc, test_parse_notification_bad_serial);
-	tcase_add_test(misc, test_parse_notification_bad_hash);
-	tcase_add_test(misc, test_parse_notification_bad_uri);
-	tcase_add_test(misc, test_parse_snapshot_bad_publish);
+
+	parse = tcase_create("parse");
+	tcase_add_test(parse, test_parse_notification_ok);
+	tcase_add_test(parse, test_parse_notification_0deltas);
+	tcase_add_test(parse, test_parse_notification_large_serial);
+	tcase_add_test(parse, test_parse_notification_bad_xmlns);
+	tcase_add_test(parse, test_parse_notification_bad_session_id);
+	tcase_add_test(parse, test_parse_notification_bad_serial);
+	tcase_add_test(parse, test_parse_notification_bad_hash);
+	tcase_add_test(parse, test_parse_notification_bad_uri);
+	tcase_add_test(parse, test_parse_snapshot_bad_publish);
+
+	cf = tcase_create("cachefile");
+	tcase_add_test(parse, test_2s_simple);
+	tcase_add_test(parse, test_2s_more);
+	tcase_add_test(parse, test_2s_errors);
 
 	suite = suite_create("RRDP");
 	suite_add_tcase(suite, misc);
+	suite_add_tcase(suite, parse);
+	suite_add_tcase(suite, cf);
 
 	return suite;
 }

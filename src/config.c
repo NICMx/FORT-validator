@@ -134,6 +134,11 @@ struct rpki_config {
 		 * (If the RRDP notification lists more than this amount of
 		 * unprocessed deltas, Fort will reset the session, exploding
 		 * the snapshot instead.)
+		 *
+		 * Per draft-spaghetti-sidrops-rrdp-desynchronization's
+		 * recommendation, this is also the maximum number of delta
+		 * hashes Fort will remember per RRDP session, to detect session
+		 * desynchronization.
 		 */
 		unsigned int delta_threshold;
 	} rrdp;

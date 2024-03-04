@@ -21,10 +21,10 @@ MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 int
 cache_tmpfile(char **filename)
 {
-	static bool used = false;
+	static unsigned int used = 1;
 
-	if (used) {
-		ck_abort_msg("cache_tmpfile() called a second time!");
+	if (used > 2) {
+		ck_abort_msg("cache_tmpfile() called a third time!");
 		return -EINVAL;
 	}
 
@@ -116,7 +116,7 @@ START_TEST(test_constructor)
 
 	ck_assert_int_eq(0, URI_CREATE(uri, UT_NOTIF, "https://a.b.c/notification.xml"));
 	ck_assert_str_eq("https://a.b.c/notification.xml", uri_get_global(uri));
-	ck_assert_str_eq("tmp/test.tal/https/a.b.c/notification.xml", uri_get_local(uri));
+	ck_assert_str_eq("tmp/tmp/0", uri_get_local(uri));
 	uri_refput(uri);
 
 	ck_assert_int_eq(0, URI_CREATE(uri, UT_TMP, "https://a.b.c/snapshot.xml"));

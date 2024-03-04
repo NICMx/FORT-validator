@@ -36,5 +36,6 @@ bool json_valid_members_count(json_t *, size_t);
 int json_add_int(json_t *, char const *, int);
 int json_add_str(json_t *, char const *, char const *);
 int json_add_date(json_t *, char const *, time_t);
+int json_add_obj(json_t *, char const *, json_t *);
 
 #endif /* SRC_JSON_UTIL_H_ */

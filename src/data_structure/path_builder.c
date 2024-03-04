@@ -7,8 +7,6 @@
 #include "log.h"
 #include "crypto/hash.h"
 
-#define SHA256_LEN (256 >> 3) /* 256 / 8, bits -> bytes */
-
 /* These are arbitrary; feel free to change them. */
 #ifndef INITIAL_CAPACITY /* Unit tests want to override this */
 #define INITIAL_CAPACITY 128u

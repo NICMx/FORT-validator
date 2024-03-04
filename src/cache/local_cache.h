@@ -1,7 +1,6 @@
 #ifndef SRC_CACHE_LOCAL_CACHE_H_
 #define SRC_CACHE_LOCAL_CACHE_H_
 
-#include <curl/curl.h>
 #include "types/uri.h"
 
 struct rpki_cache;
@@ -15,8 +14,11 @@ struct rpki_cache *cache_create(char const *);
 /* Will destroy the cache object, but not the cache directory itself, obv. */
 void cache_destroy(struct rpki_cache *);
 
+struct cachefile_notification; /* FIXME */
+
 /* Downloads @uri into the cache */
-int cache_download(struct rpki_cache *, struct rpki_uri *uri, curl_off_t, bool *);
+int cache_download(struct rpki_cache *, struct rpki_uri *uri, bool *,
+    struct cachefile_notification ***);
 
 /*
  * The callback should return

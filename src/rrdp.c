@@ -3,11 +3,13 @@
 #include <ctype.h>
 #include <openssl/bn.h>
 #include <openssl/evp.h>
+#include <sys/queue.h>
 
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
+#include "json_util.h"
 #include "log.h"
 #include "thread_var.h"
 #include "cache/local_cache.h"
@@ -35,7 +37,7 @@
 /* These are supposed to be unbounded */
 struct rrdp_serial {
 	BIGNUM *num;
-	char *str; /* for printing */
+	char *str; /* String version of @num. */
 };
 
 struct rrdp_session {
@@ -43,10 +45,9 @@ struct rrdp_session {
 	struct rrdp_serial serial;
 };
 
-/* The hash is sometimes omitted. */
 struct file_metadata {
 	struct rpki_uri *uri;
-	unsigned char *hash;
+	unsigned char *hash; /* Array. Sometimes omitted. */
 	size_t hash_len;
 };
 
@@ -90,6 +91,27 @@ typedef enum {
 	HR_OPTIONAL,
 	HR_IGNORE,
 } hash_requirement;
+
+#define RRDP_HASH_LEN SHA256_DIGEST_LENGTH
+
+struct rrdp_hash {
+	unsigned char bytes[RRDP_HASH_LEN];
+	STAILQ_ENTRY(rrdp_hash) hook;
+};
+
+/*
+ * Subset of the notification that is relevant to the TAL's cachefile.
+ */
+struct cachefile_notification {
+	struct rrdp_session session;
+	/*
+	 * The 1st one contains the hash of the session.serial delta.
+	 * The 2nd one contains the hash of the session.serial - 1 delta.
+	 * The 3rd one contains the hash of the session.serial - 2 delta.
+	 * And so on.
+	 */
+	STAILQ_HEAD(, rrdp_hash) delta_hashes;
+};
 
 static BIGNUM *
 BN_create(void)
@@ -226,6 +248,26 @@ parse_string(xmlTextReaderPtr reader, char const *attr)
 	return result;
 }
 
+static int
+parse_uri(xmlTextReaderPtr reader, struct rpki_uri *notif,
+    struct rpki_uri **result)
+{
+	xmlChar *xmlattr;
+	int error;
+
+	xmlattr = parse_string(reader, RRDP_ATTR_URI);
+	if (xmlattr == NULL)
+		return -EINVAL;
+
+	error = uri_create(result,
+	    tal_get_file_name(validation_tal(state_retrieve())),
+	    (notif != NULL) ? UT_CAGED : UT_TMP,
+	    notif, (char const *)xmlattr);
+
+	xmlFree(xmlattr);
+	return error;
+}
+
 static unsigned int
 hexchar2uint(xmlChar xmlchar)
 {
@@ -239,18 +281,18 @@ hexchar2uint(xmlChar xmlchar)
 }
 
 static int
-hexstr2sha256(xmlChar *hexstr, unsigned char **result)
+hexstr2sha256(xmlChar *hexstr, unsigned char **result, size_t *hash_len)
 {
 	unsigned char *hash;
 	unsigned int digit;
 	size_t i;
 
-	if (xmlStrlen(hexstr) != 2 * SHA256_DIGEST_LENGTH)
+	if (xmlStrlen(hexstr) != 2 * RRDP_HASH_LEN)
 		return EINVAL;
 
-	hash = pmalloc(SHA256_DIGEST_LENGTH);
+	hash = pmalloc(RRDP_HASH_LEN);
 
-	for (i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+	for (i = 0; i < RRDP_HASH_LEN; i++) {
 		digit = hexchar2uint(hexstr[2 * i]);
 		if (digit > 15)
 			goto fail;
@@ -263,6 +305,7 @@ hexstr2sha256(xmlChar *hexstr, unsigned char **result)
 	}
 
 	*result = hash;
+	*hash_len = RRDP_HASH_LEN;
 	return 0;
 
 fail:
@@ -271,7 +314,7 @@ fail:
 }
 
 static int
-parse_hash(xmlTextReaderPtr reader, hash_requirement hr, char const *attr,
+parse_hash(xmlTextReaderPtr reader, hash_requirement hr,
     unsigned char **result, size_t *result_len)
 {
 	xmlChar *xmlattr;
@@ -280,20 +323,18 @@ parse_hash(xmlTextReaderPtr reader, hash_requirement hr, char const *attr,
 	if (hr == HR_IGNORE)
 		return 0;
 
-	xmlattr = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
+	xmlattr = xmlTextReaderGetAttribute(reader, BAD_CAST RRDP_ATTR_HASH);
 	if (xmlattr == NULL)
 		return (hr == HR_MANDATORY)
-		    ? pr_val_err("Tag is missing the '%s' attribute.", attr)
+		    ? pr_val_err("Tag is missing the '" RRDP_ATTR_HASH "' attribute.")
 		    : 0;
 
-	error = hexstr2sha256(xmlattr, result);
+	error = hexstr2sha256(xmlattr, result, result_len);
 
 	xmlFree(xmlattr);
 
 	if (error)
-		return pr_val_err("The '%s' xml attribute does not appear to be a SHA-256 hash.",
-		    attr);
-	*result_len = SHA256_DIGEST_LENGTH;
+		return pr_val_err("The '" RRDP_ATTR_HASH "' xml attribute does not appear to be a SHA-256 hash.");
 	return 0;
 }
 
@@ -413,26 +454,15 @@ static int
 parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
     hash_requirement hr, struct file_metadata *meta)
 {
-	xmlChar *uri;
 	int error;
 
 	memset(meta, 0, sizeof(*meta));
 
-	uri = parse_string(reader, RRDP_ATTR_URI);
-	if (uri == NULL)
-		return -EINVAL;
-	error = uri_create(&meta->uri,
-	    tal_get_file_name(validation_tal(state_retrieve())),
-	    (notif != NULL) ? UT_CAGED : UT_TMP, notif, (char const *)uri);
-	xmlFree(uri);
+	error = parse_uri(reader, notif, &meta->uri);
 	if (error)
 		return error;
 
-	if (hr == HR_IGNORE)
-		return 0;
-
-	error = parse_hash(reader, hr, RRDP_ATTR_HASH, &meta->hash,
-	    &meta->hash_len);
+	error = parse_hash(reader, hr, &meta->hash, &meta->hash_len);
 	if (error) {
 		uri_refput(meta->uri);
 		meta->uri = NULL;
@@ -471,10 +501,7 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 		return error;
 
 	/* rfc8181#section-2.2 but considering optional hash */
-	if (tag->meta.hash_len > 0)
-		return validate_hash(&tag->meta);
-
-	return 0;
+	return (tag->meta.hash != NULL) ? validate_hash(&tag->meta) : 0;
 }
 
 static int
@@ -759,6 +786,41 @@ parse_snapshot(struct update_notification *notif)
 }
 
 static int
+validate_session_desync(struct cachefile_notification *old_notif,
+    struct update_notification *new_notif)
+{
+	struct rrdp_hash *old_delta;
+	struct file_metadata *new_delta;
+	size_t i;
+	size_t delta_threshold;
+
+	if (strcmp(old_notif->session.session_id, new_notif->session.session_id) != 0) {
+		pr_val_debug("The Notification's session ID changed.");
+		return EINVAL;
+	}
+
+	old_delta = STAILQ_FIRST(&old_notif->delta_hashes);
+	delta_threshold = config_get_rrdp_delta_threshold();
+
+	for (i = 0; i < delta_threshold; i++) {
+		if (old_delta == NULL)
+			return 0; /* Cache has few deltas */
+		if (i >= new_notif->deltas.len)
+			return 0; /* Notification has few deltas */
+
+		new_delta = &new_notif->deltas.array[i].meta;
+		if (memcmp(old_delta->bytes, new_delta->hash, RRDP_HASH_LEN) != 0) {
+			pr_val_debug("Notification delta hash does not match cached delta hash; RRDP session desynchronization detected.");
+			return EINVAL;
+		}
+
+		old_delta = STAILQ_NEXT(old_delta, hook);
+	}
+
+	return 0; /* First $delta_threshold delta hashes match */
+}
+
+static int
 handle_snapshot(struct update_notification *notif)
 {
 	struct validation *state;
@@ -780,7 +842,7 @@ handle_snapshot(struct update_notification *notif)
 	 * Maybe stream it instead.
 	 * Same for deltas.
 	 */
-	error = cache_download(validation_cache(state), uri, 0, NULL);
+	error = cache_download(validation_cache(state), uri, NULL, NULL);
 	if (error)
 		goto end;
 	error = validate_hash(&notif->snapshot);
@@ -853,7 +915,7 @@ handle_delta(struct update_notification *notif, struct notification_delta *delta
 	pr_val_debug("Processing delta '%s'.", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
-	error = cache_download(validation_cache(state_retrieve()), uri, 0, NULL);
+	error = cache_download(validation_cache(state_retrieve()), uri, NULL, NULL);
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta);
@@ -872,7 +934,6 @@ handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
 	array_index d;
 	int error;
 
-	/* No elements, send error so that the snapshot is processed */
 	if (notif->deltas.len == 0) {
 		pr_val_warn("There's no delta list to process.");
 		return -ENOENT;
@@ -907,30 +968,84 @@ handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
 	return 0;
 }
 
-static int
-get_metadata(struct rpki_uri *uri, struct rrdp_session *result)
+static void
+init_notif(struct update_notification *new, struct cachefile_notification *old)
 {
-	struct stat st;
-	struct update_notification notification;
-	int error;
+	size_t dn;
+	size_t i;
+	struct rrdp_hash *hash;
 
-	if (stat(uri_get_local(uri), &st) != 0) {
-		error = errno;
-		return (error == ENOENT) ? 0 : error;
+	old->session = new->session;
+	memset(&new->session, 0, sizeof(new->session));
+	STAILQ_INIT(&old->delta_hashes);
+
+	dn = config_get_rrdp_delta_threshold();
+	if (new->deltas.len < dn)
+		dn = new->deltas.len;
+
+	for (i = 0; i < dn; i++) {
+		hash = pmalloc(sizeof(struct rrdp_hash));
+		memcpy(hash->bytes, new->deltas.array[i].meta.hash, RRDP_HASH_LEN);
+		STAILQ_INSERT_TAIL(&old->delta_hashes, hash, hook);
+	}
+}
+
+static void
+drop_notif(struct cachefile_notification *notif)
+{
+	struct rrdp_hash *hash;
+
+	session_cleanup(&notif->session);
+	while (!STAILQ_EMPTY(&notif->delta_hashes)) {
+		hash = STAILQ_FIRST(&notif->delta_hashes);
+		STAILQ_REMOVE_HEAD(&notif->delta_hashes, hook);
+		free(hash);
+	}
+}
+
+static void
+update_notif(struct update_notification *new, struct cachefile_notification *old)
+{
+	BIGNUM *delta_bn;
+	BN_ULONG delta;
+	size_t d, dn;
+	struct rrdp_hash *hash;
+
+	delta_bn = BN_new();
+	if (!BN_sub(delta_bn, new->session.serial.num, old->session.serial.num)) {
+		// FIXME
+	}
+	if (BN_is_negative(delta_bn)) {
+		// FIXME
 	}
 
-	/*
-	 * TODO (fine) optimize by not reading everything,
-	 * or maybe keep it if it doesn't change.
-	 */
-	error = parse_notification(uri, &notification);
-	if (error)
-		return error;
+	delta = BN_get_word(delta_bn);
+	if (delta > new->deltas.len) {
+		// FIXME
+	}
 
-	*result = notification.session;
-	memset(&notification.session, 0, sizeof(notification.session));
-	update_notification_cleanup(&notification);
-	return 0;
+	BN_free(old->session.serial.num);
+	free(old->session.serial.str);
+	old->session.serial = new->session.serial;
+	new->session.serial.num = NULL;
+	new->session.serial.str = NULL;
+
+	dn = delta;
+	STAILQ_FOREACH(hash, &old->delta_hashes, hook)
+		dn++;
+
+	for (d = new->deltas.len - delta; d < new->deltas.len; d++) {
+		hash = pmalloc(sizeof(struct rrdp_hash));
+		memcpy(hash->bytes, new->deltas.array[d].meta.hash, RRDP_HASH_LEN);
+		STAILQ_INSERT_TAIL(&old->delta_hashes, hash, hook);
+	}
+
+	while (dn > config_get_rrdp_delta_threshold()) {
+		hash = STAILQ_FIRST(&old->delta_hashes);
+		STAILQ_REMOVE_HEAD(&old->delta_hashes, hook);
+		free(hash);
+		dn--;
+	}
 }
 
 /*
@@ -943,27 +1058,16 @@ get_metadata(struct rpki_uri *uri, struct rrdp_session *result)
 int
 rrdp_update(struct rpki_uri *uri)
 {
-	struct rrdp_session old = { 0 };
+	struct cachefile_notification **__old, *old;
 	struct update_notification new;
-	time_t ims;
 	bool changed;
 	int error;
 
 	fnstack_push_uri(uri);
 	pr_val_debug("Processing notification.");
 
-	error = get_metadata(uri, &old);
-	if (error)
-		goto end;
-	pr_val_debug("Old session/serial: %s/%s", old.session_id,
-	    old.serial.str);
-
-	error = file_get_mtim(uri_get_local(uri), &ims);
-	if (error)
-		return error;
-
 	error = cache_download(validation_cache(state_retrieve()), uri,
-	    ims, &changed);
+	    &changed, &__old);
 	if (error)
 		goto end;
 	if (!changed) {
@@ -977,24 +1081,41 @@ rrdp_update(struct rpki_uri *uri)
 	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
 	    new.session.serial.str);
 
-	if (old.session_id == NULL || old.serial.num == NULL) {
+	old = *__old;
+	if (old == NULL) {
 		pr_val_debug("This is a new Notification.");
 		error = handle_snapshot(&new);
+		if (!error) {
+			*__old = pmalloc(sizeof(struct cachefile_notification));
+			init_notif(&new, *__old);
+		}
 		goto revert_notification;
 	}
 
-	if (strcmp(old.session_id, new.session.session_id) != 0) {
-		pr_val_debug("The Notification's session ID changed.");
+	error = validate_session_desync(old, &new);
+	if (error) {
+		pr_val_debug("Falling back to snapshot.");
 		error = handle_snapshot(&new);
+		if (!error) {
+			drop_notif(old);
+			init_notif(&new, old);
+		}
 		goto revert_notification;
 	}
 
-	if (BN_cmp(old.serial.num, new.session.serial.num) != 0) {
+	if (BN_cmp(old->session.serial.num, new.session.serial.num) != 0) {
 		pr_val_debug("The Notification's serial changed.");
-		error = handle_deltas(&new, &old.serial);
-		if (error) {
+		error = handle_deltas(&new, &old->session.serial);
+		if (!error) {
+			update_notif(&new, old);
+		} else {
+			/* Error msg already printed. */
 			pr_val_debug("Falling back to snapshot.");
 			error = handle_snapshot(&new);
+			if (!error) {
+				drop_notif(old);
+				init_notif(&new, old);
+			}
 		}
 		goto revert_notification;
 	}
@@ -1004,7 +1125,210 @@ rrdp_update(struct rpki_uri *uri)
 revert_notification:
 	update_notification_cleanup(&new);
 end:
-	session_cleanup(&old);
 	fnstack_pop();
 	return error;
+}
+
+#define TAGNAME_SESSION "session_id"
+#define TAGNAME_SERIAL "serial"
+#define TAGNAME_DELTAS "deltas"
+
+/* binary to char */
+static char
+hash_b2c(unsigned char bin)
+{
+	bin &= 0xF;
+	return (bin < 10) ? (bin + '0') : (bin + 'a' - 10);
+}
+
+json_t *
+rrdp_notif2json(struct cachefile_notification *notif)
+{
+	json_t *json;
+	json_t *deltas;
+	char hash_str[2 * RRDP_HASH_LEN + 1];
+	struct rrdp_hash *hash;
+	size_t i;
+
+	if (notif == NULL)
+		return NULL;
+
+	json = json_object();
+	if (json == NULL)
+		enomem_panic();
+
+	if (json_add_str(json, TAGNAME_SESSION, notif->session.session_id))
+		goto fail;
+	if (json_add_str(json, TAGNAME_SERIAL, notif->session.serial.str))
+		goto fail;
+
+	if (STAILQ_EMPTY(&notif->delta_hashes))
+		return json; /* Happy path, but unlikely. */
+
+	deltas = json_array();
+	if (deltas == NULL)
+		enomem_panic();
+	if (json_add_obj(json, TAGNAME_DELTAS, deltas))
+		goto fail;
+
+	hash_str[2 * RRDP_HASH_LEN] = '\0';
+	STAILQ_FOREACH(hash, &notif->delta_hashes, hook) {
+		for (i = 0; i < RRDP_HASH_LEN; i++) {
+			hash_str[2 * i    ] = hash_b2c(hash->bytes[i] >> 4);
+			hash_str[2 * i + 1] = hash_b2c(hash->bytes[i]     );
+		}
+		if (json_array_append(deltas, json_string(hash_str)))
+			goto fail;
+	}
+
+	return json;
+
+fail:
+	json_decref(json);
+	return NULL;
+}
+
+static char
+hash_c2b(char chara)
+{
+	if ('a' <= chara && chara <= 'f')
+		return chara - 'a' + 10;
+	if ('A' <= chara && chara <= 'F')
+		return chara - 'A' + 10;
+	if ('0' <= chara && chara <= '9')
+		return chara - '0';
+	return -1;
+}
+
+static int
+json2dh(json_t *json, struct rrdp_hash **result)
+{
+	char const *src;
+	size_t srclen;
+	struct rrdp_hash *dst;
+	char digit;
+	size_t i;
+
+	src = json_string_value(json);
+	if (src == NULL)
+		return pr_op_err("Hash is not a string.");
+
+	srclen = strlen(src);
+	if (srclen != 2 * RRDP_HASH_LEN)
+		return pr_op_err("Hash is not %d characters long.", 2 * RRDP_HASH_LEN);
+
+	dst = pmalloc(sizeof(struct rrdp_hash));
+	for (i = 0; i < RRDP_HASH_LEN; i++) {
+		digit = hash_c2b(src[2 * i]);
+		if (digit == -1)
+			goto bad_char;
+		dst->bytes[i] = digit << 4;
+		digit = hash_c2b(src[2 * i + 1]);
+		if (digit == -1)
+			goto bad_char;
+		dst->bytes[i] |= digit;
+	}
+
+	*result = dst;
+	return 0;
+
+bad_char:
+	free(dst);
+	return pr_op_err("Invalid characters in hash: %c%c", src[2 * i], src[2 * i] + 1);
+}
+
+static void
+clear_delta_hashes(struct cachefile_notification *notif)
+{
+	struct rrdp_hash *hash;
+
+	while (!STAILQ_EMPTY(&notif->delta_hashes)) {
+		hash = STAILQ_FIRST(&notif->delta_hashes);
+		STAILQ_REMOVE_HEAD(&notif->delta_hashes, hook);
+		free(hash);
+	}
+}
+
+int
+rrdp_json2notif(json_t *json, struct cachefile_notification **result)
+{
+	struct cachefile_notification *notif;
+	char const *str;
+	json_t *jdeltas;
+	size_t d, dn;
+	struct rrdp_hash *hash;
+	int error;
+
+	notif = pzalloc(sizeof(struct cachefile_notification));
+	STAILQ_INIT(&notif->delta_hashes);
+
+	error = json_get_str(json, TAGNAME_SESSION, &str);
+	if (error) {
+		if (error > 0)
+			pr_op_err("Node is missing the '" TAGNAME_SESSION "' tag.");
+		goto revert_notif;
+	}
+	notif->session.session_id = pstrdup(str);
+
+	error = json_get_str(json, TAGNAME_SERIAL, &str);
+	if (error) {
+		if (error > 0)
+			pr_op_err("Node is missing the '" TAGNAME_SERIAL "' tag.");
+		goto revert_session;
+	}
+	notif->session.serial.str = pstrdup(str);
+
+	notif->session.serial.num = BN_new();
+	if (notif->session.serial.num == NULL)
+		enomem_panic();
+	if (!BN_dec2bn(&notif->session.serial.num, notif->session.serial.str)) {
+		error = pr_op_err("Not a serial number: %s", notif->session.serial.str);
+		goto revert_serial;
+	}
+
+	error = json_get_array(json, TAGNAME_DELTAS, &jdeltas);
+	if (error) {
+		if (error > 0)
+			goto success;
+		goto revert_serial;
+	}
+
+	dn = json_array_size(jdeltas);
+	if (dn == 0)
+		goto success;
+	if (dn > config_get_rrdp_delta_threshold())
+		dn = config_get_rrdp_delta_threshold();
+
+	for (d = 0; d < dn; d++) {
+		error = json2dh(json_array_get(jdeltas, d), &hash);
+		if (error)
+			goto revert_deltas;
+		STAILQ_INSERT_TAIL(&notif->delta_hashes, hash, hook);
+	}
+
+success:
+	*result = notif;
+	return 0;
+
+revert_deltas:
+	clear_delta_hashes(notif);
+revert_serial:
+	BN_free(notif->session.serial.num);
+	free(notif->session.serial.str);
+revert_session:
+	free(notif->session.session_id);
+revert_notif:
+	free(notif);
+	return error;
+}
+
+void
+rrdp_notif_free(struct cachefile_notification *notif)
+{
+	if (notif == NULL)
+		return;
+
+	session_cleanup(&notif->session);
+	clear_delta_hashes(notif);
+	free(notif);
 }

@@ -1937,7 +1937,6 @@ static struct rpki_uri *
 download_rpp(struct sia_uris *uris)
 {
 	struct rpki_uri *uri;
-	struct rpki_cache *cache;
 	int error;
 
 	if (uris->rpp.len == 0) {
@@ -1945,9 +1944,8 @@ download_rpp(struct sia_uris *uris)
 		return NULL;
 	}
 
-	cache = validation_cache(state_retrieve());
-	error = cache_download_alt(cache, &uris->rpp, UT_NOTIF, UT_RPP,
-	    retrieve_uri, &uri);
+	error = cache_download_alt(validation_cache(state_retrieve()),
+	    &uris->rpp, UT_NOTIF, UT_RPP, retrieve_uri, &uri);
 	return error ? NULL : uri;
 }
 

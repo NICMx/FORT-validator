@@ -415,12 +415,13 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
 	switch (uri->type) {
 	case UT_TA_RSYNC:
 	case UT_RPP:
+	case UT_MFT:
 		return map_simple(uri, tal, "rsync");
 
 	case UT_TA_HTTP:
-	case UT_NOTIF:
 		return map_simple(uri, tal, "https");
 
+	case UT_NOTIF:
 	case UT_TMP:
 		return cache_tmpfile(&uri->local);
 
@@ -429,7 +430,6 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
 
 	case UT_AIA:
 	case UT_SO:
-	case UT_MFT:
 		uri->local = NULL;
 		return 0;
 	}

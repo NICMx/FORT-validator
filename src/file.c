@@ -154,30 +154,6 @@ file_valid(char const *file_name)
 	return true;
 }
 
-int
-file_get_mtim(char const *file, time_t *ims)
-{
-	struct stat meta;
-	int error;
-
-	if (stat(file, &meta) != 0) {
-		error = errno;
-		/*
-		 * This happens to be most convenient for callers,
-		 * because they all want to convert the ims to a curl_off_t ATM.
-		 */
-		*ims = 0;
-		return (error == ENOENT) ? 0 : error;
-	}
-
-#ifdef __APPLE__
-	*ims = meta.st_mtime; /* Seriously, Apple? */
-#else
-	*ims = meta.st_mtim.tv_sec;
-#endif
-	return 0;
-}
-
 /*
  * Like remove(), but don't care if the file is already deleted.
  */

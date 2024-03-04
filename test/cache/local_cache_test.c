@@ -102,6 +102,9 @@ http_download(struct rpki_uri *uri, curl_off_t ims, bool *changed)
 }
 
 MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
+__MOCK_ABORT(rrdp_notif2json, json_t *, NULL, struct cachefile_notification *notif)
+MOCK_VOID(rrdp_notif_free, struct cachefile_notification *notif)
+MOCK_ABORT_INT(rrdp_json2notif, json_t *json, struct cachefile_notification **result)
 
 /* Helpers */
 
@@ -134,7 +137,7 @@ run_cache_download(char const *url, int expected_error,
 	https_counter = 0;
 
 	ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, NULL, url));
-	ck_assert_int_eq(expected_error, cache_download(cache, uri, 0, NULL));
+	ck_assert_int_eq(expected_error, cache_download(cache, uri, NULL, NULL));
 	ck_assert_uint_eq(rsync_calls, rsync_counter);
 	ck_assert_uint_eq(https_calls, https_counter);
 

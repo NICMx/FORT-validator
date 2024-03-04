@@ -227,3 +227,11 @@ json_add_date(json_t *parent, char const *name, time_t value)
 
 	return 0;
 }
+
+int json_add_obj(json_t *parent, char const *name, json_t *value)
+{
+	if (json_object_set_new(parent, name, value))
+		return pr_op_err("Cannot add '%s' to json; unknown cause.", name);
+
+	return 0;
+}

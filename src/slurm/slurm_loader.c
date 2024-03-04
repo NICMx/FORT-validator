@@ -1,6 +1,8 @@
 #include "slurm/slurm_loader.h"
 
 #include <errno.h>
+#include <openssl/sha.h>
+
 #include "alloc.h"
 #include "log.h"
 #include "config.h"
@@ -185,12 +187,7 @@ are_csum_lists_equals(struct slurm_csum_list *new_list,
 
 	SLIST_FOREACH(newcsum, new_list, next) {
 		SLIST_FOREACH(old, old_list, next) {
-
-			if (newcsum->csum_len != old->csum_len)
-				continue;
-
-			if (memcmp(newcsum->csum, old->csum,
-			    newcsum->csum_len) == 0) {
+			if (memcmp(newcsum->csum, old->csum, SHA256_DIGEST_LENGTH) == 0) {
 				found = true;
 				break;
 			}
