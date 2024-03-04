@@ -40,6 +40,7 @@ long config_get_http_low_speed_limit(void);
 long config_get_http_low_speed_time(void);
 long config_get_http_max_file_size(void);
 char const *config_get_http_ca_path(void);
+unsigned int config_get_rrdp_delta_threshold(void);
 bool config_get_rsync_enabled(void);
 unsigned int config_get_rsync_priority(void);
 unsigned int config_get_rsync_retry_count(void);

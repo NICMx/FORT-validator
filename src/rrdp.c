@@ -6,6 +6,7 @@
 
 #include "alloc.h"
 #include "common.h"
+#include "config.h"
 #include "file.h"
 #include "log.h"
 #include "thread_var.h"
@@ -893,8 +894,7 @@ handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
 	}
 	diff = BN_get_word(diff_bn);
 	BN_free(diff_bn);
-	/* TODO (fine) 64 may be too much; optimize it. */
-	if (diff > 64ul || diff > notif->deltas.len)
+	if (diff > config_get_rrdp_delta_threshold() || diff > notif->deltas.len)
 		return pr_val_err("Cached RPP is too old. (Cached serial: %s; current serial: %s)",
 		    serial->str, notif->session.serial.str);
 

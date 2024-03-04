@@ -128,6 +128,17 @@ struct rpki_config {
 	} http;
 
 	struct {
+		/*
+		 * Maximum deltas to explode per RRDP session, per iteration.
+		 *
+		 * (If the RRDP notification lists more than this amount of
+		 * unprocessed deltas, Fort will reset the session, exploding
+		 * the snapshot instead.)
+		 */
+		unsigned int delta_threshold;
+	} rrdp;
+
+	struct {
 		/** Enables operation logs **/
 		bool enabled;
 		/** String tag to identify operation logs **/
@@ -582,6 +593,18 @@ static const struct option_field options[] = {
 		.json_null_allowed = false,
 	},
 
+	/* RRDP */
+	{
+		.id = 10000,
+		.name = "rrdp.delta-threshold",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rrdp.delta_threshold),
+		.doc = "Maximum deltas to explode per RRDP session, per iteration. "
+		       "(Fall back to snapshot if threshold exceeded.)",
+		.min = 1,
+		.max = 128,
+	},
+
 	/* Logging fields */
 	{
 		.id = 4000,
@@ -949,6 +972,9 @@ set_default_values(void)
 	rpki_config.http.low_speed_time = 10;
 	rpki_config.http.max_file_size = 1000000000;
 	rpki_config.http.ca_path = NULL; /* Use system default */
+
+	/* TODO (fine) 64 may be too much; optimize it. */
+	rpki_config.rrdp.delta_threshold = 64;
 
 	rpki_config.log.enabled = true;
 	rpki_config.log.tag = NULL;
@@ -1421,6 +1447,12 @@ char const *
 config_get_http_ca_path(void)
 {
 	return rpki_config.http.ca_path;
+}
+
+unsigned int
+config_get_rrdp_delta_threshold(void)
+{
+	return rpki_config.rrdp.delta_threshold;
 }
 
 char const *

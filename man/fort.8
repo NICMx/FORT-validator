@@ -862,6 +862,15 @@ By default, the path has a NULL value.
 .RE
 .P
 
+.B \-\-rrdp.delta-threshold=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum deltas to explode per RRDP session, per iteration.
+.P
+(If the RRDP notification lists more than this amount of unprocessed deltas,
+Fort will reset the session, exploding the snapshot instead.)
+.RE
+.P
+
 .B \-\-rsync.enabled=\fItrue\fR|\fIfalse\fR
 .RS 4
 Enables RSYNC requests.

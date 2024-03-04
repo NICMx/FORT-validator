@@ -39,6 +39,7 @@ MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
 MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK(validation_tal, struct tal *, NULL, struct validation *state)
 MOCK(tal_get_file_name, char const *, "", struct tal *tal)
+MOCK_UINT(config_get_rrdp_delta_threshold, 64, void)
 
 /* Mocks end */
 
