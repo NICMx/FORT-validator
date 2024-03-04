@@ -413,7 +413,6 @@ START_TEST(test_parse_snapshot_bad_publish)
 	ck_assert_int_eq(0, relax_ng_init());
 
 	notif_uri.global = "https://example.com/notification.xml";
-	notif_uri.global_len = strlen(notif_uri.global);
 	notif_uri.local = "cache/example.com/notification.xml";
 	notif_uri.type = UT_NOTIF;
 	notif_uri.references = 1;

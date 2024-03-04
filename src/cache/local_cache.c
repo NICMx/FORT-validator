@@ -482,15 +482,12 @@ static int
 get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
 {
 	char const *guri, *c;
-	char *guri2;
+	char *gcopy;
 	unsigned int slashes;
 	int error;
 
-	if (uri_get_type(uri) != UT_RPP) {
-		uri_refget(uri);
-		*url = uri;
-		return 0;
-	}
+	if (uri_get_type(uri) != UT_RPP)
+		goto reuse_uri;
 
 	/*
 	 * Careful with this code. rsync(1):
@@ -534,6 +531,9 @@ get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
 	 * But note: This only works if we're synchronizing a directory.
 	 * But this is fine, because this hack stacks with the minimum common
 	 * path performance hack.
+	 *
+	 * Minimum common path performance hack: rsync the rsync module root,
+	 * not every RPP separately. The former is much faster.
 	 */
 
 	guri = uri_get_global(uri);
@@ -541,27 +541,35 @@ get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
 	for (c = guri; *c != '\0'; c++) {
 		if (*c == '/') {
 			slashes++;
-			if (slashes == 4)
-				return __uri_create(url, tal, UT_RPP,
-				    NULL, guri, c - guri + 1);
+			if (slashes == 4) {
+				if (c[1] == '\0')
+					goto reuse_uri;
+				gcopy = pstrndup(guri, c - guri + 1);
+				goto gcopy2url;
+			}
 		}
 	}
 
-	if (slashes == 3 && *(c - 1) != '/') {
-		guri2 = pstrdup(guri); /* Remove const */
-		guri2[c - guri] = '/';
-		error = __uri_create(url, tal, UT_RPP, NULL, guri2,
-		    c - guri + 1);
-		free(guri2);
-		return error;
+	if (slashes == 3 && c[-1] != '/') {
+		gcopy = pmalloc(c - guri + 2);
+		memcpy(gcopy, guri, c - guri);
+		gcopy[c - guri] = '/';
+		gcopy[c - guri + 1] = '\0';
+		goto gcopy2url;
 	}
 
-	/*
-	 * Minimum common path performance hack: rsync the rsync module root,
-	 * not every RPP separately. The former is much faster.
-	 */
 	return pr_val_err("Can't rsync URL '%s': The URL seems to be missing a domain or rsync module.",
 	    guri);
+
+reuse_uri:
+	uri_refget(uri);
+	*url = uri;
+	return 0;
+
+gcopy2url:
+	error = uri_create(url, tal, UT_RPP, NULL, gcopy);
+	free(gcopy);
+	return error;
 }
 
 static bool

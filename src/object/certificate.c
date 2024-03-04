@@ -1479,11 +1479,12 @@ end:
  * Create @uri from the @ad
  */
 static int
-uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type,
-    bool is_notif)
+uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
 {
 	ASN1_STRING *asn1str;
+	char *str;
 	int ptype;
+	int error;
 
 	asn1str = GENERAL_NAME_get0_value(ad->location, &ptype);
 
@@ -1513,7 +1514,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type,
 	/*
 	 * GEN_URI signals an IA5String.
 	 * IA5String is a subset of ASCII, so this cast is safe.
-	 * No guarantees of a NULL chara, though.
+	 * No guarantees of a NULL chara though, which is why we need a dup.
 	 *
 	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
 	 * somehow converted into URI form. I don't think that's an issue
@@ -1522,9 +1523,15 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type,
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
 	 */
-	return __uri_create(uri,
-	    tal_get_file_name(validation_tal(state_retrieve())), type, NULL,
-	    ASN1_STRING_get0_data(asn1str), ASN1_STRING_length(asn1str));
+	str = pstrndup((char const *)ASN1_STRING_get0_data(asn1str),
+	    ASN1_STRING_length(asn1str));
+
+	error = uri_create(uri,
+	    tal_get_file_name(validation_tal(state_retrieve())),
+	    type, NULL, str);
+
+	free(str);
+	return error;
 }
 
 /**
@@ -1558,8 +1565,7 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == nid) {
-			error = uri_create_ad(&uri, ad, meta->type,
-			    meta == &RPKI_NOTIFY);
+			error = uri_create_ad(&uri, ad, meta->type);
 			switch (error) {
 			case 0:
 				break;

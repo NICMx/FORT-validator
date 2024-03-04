@@ -20,5 +20,6 @@ void *prealloc(void *ptr, size_t size);
 
 /* strdup(), but panic on allocation failure. */
 char *pstrdup(char const *s);
+char *pstrndup(char const *s, size_t size);
 
 #endif /* SRC_ALLOC_H_ */

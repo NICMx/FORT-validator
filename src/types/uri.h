@@ -19,18 +19,16 @@ enum uri_type {
 
 struct rpki_uri;
 
-int __uri_create(struct rpki_uri **, char const *, enum uri_type,
-    struct rpki_uri *, void const *, size_t);
+int uri_create(struct rpki_uri **, char const *, enum uri_type,
+    struct rpki_uri *, char const *);
 int uri_create_mft(struct rpki_uri **, char const *, struct rpki_uri *,
     struct rpki_uri *, IA5String_t *);
 struct rpki_uri *uri_create_cache(char const *);
 
-#define uri_create(uri, tal, type, notif, guri) \
-	__uri_create(uri, tal, type, notif, guri, strlen(guri))
-#define uri_create_caged(uri, tal, notif, guri, guri_len) \
-	__uri_create(uri, tal, UT_CAGED, notif, guri, guri_len)
+#define uri_create_caged(uri, tal, notif, guri) \
+	uri_create(uri, tal, UT_CAGED, notif, guri)
 #define uri_create_cage(uri, tal, notif) \
-	uri_create_caged(uri, tal, notif, "", 0)
+	uri_create_caged(uri, tal, notif, NULL)
 
 struct rpki_uri *uri_refget(struct rpki_uri *);
 void uri_refput(struct rpki_uri *);
@@ -41,7 +39,6 @@ void uri_refput(struct rpki_uri *);
  */
 char const *uri_get_global(struct rpki_uri *);
 char const *uri_get_local(struct rpki_uri *);
-size_t uri_get_global_len(struct rpki_uri *);
 
 bool uri_equals(struct rpki_uri *, struct rpki_uri *);
 bool uri_has_extension(struct rpki_uri *, char const *);

@@ -56,7 +56,7 @@ START_TEST(test_constructor)
 	uri_refput(uri);
 
 	ck_assert_int_eq(0, URI_CREATE_HTTP(uri, "https://a.b.c/"));
-	ck_assert_str_eq("https://a.b.c/", uri_get_global(uri));
+	ck_assert_str_eq("https://a.b.c", uri_get_global(uri));
 	ck_assert_str_eq("tmp/test.tal/https/a.b.c", uri_get_local(uri));
 	uri_refput(uri);
 
@@ -71,22 +71,22 @@ START_TEST(test_constructor)
 	uri_refput(uri);
 
 	ck_assert_int_eq(0, URI_CREATE_HTTP(uri, "https://a.b.c/d/.."));
-	ck_assert_str_eq("https://a.b.c/d/..", uri_get_global(uri));
+	ck_assert_str_eq("https://a.b.c", uri_get_global(uri));
 	ck_assert_str_eq("tmp/test.tal/https/a.b.c", uri_get_local(uri));
 	uri_refput(uri);
 
 	ck_assert_int_eq(0, URI_CREATE_HTTP(uri, "https://a.b.c/."));
-	ck_assert_str_eq("https://a.b.c/.", uri_get_global(uri));
+	ck_assert_str_eq("https://a.b.c", uri_get_global(uri));
 	ck_assert_str_eq("tmp/test.tal/https/a.b.c", uri_get_local(uri));
 	uri_refput(uri);
 
 	ck_assert_int_eq(0, URI_CREATE_HTTP(uri, "https://a.b.c/././d/././e/./."));
-	ck_assert_str_eq("https://a.b.c/././d/././e/./.", uri_get_global(uri));
+	ck_assert_str_eq("https://a.b.c/d/e", uri_get_global(uri));
 	ck_assert_str_eq("tmp/test.tal/https/a.b.c/d/e", uri_get_local(uri));
 	uri_refput(uri);
 
 	ck_assert_int_eq(0, URI_CREATE_HTTP(uri, "https://a.b.c/a/b/.././.."));
-	ck_assert_str_eq("https://a.b.c/a/b/.././..", uri_get_global(uri));
+	ck_assert_str_eq("https://a.b.c", uri_get_global(uri));
 	ck_assert_str_eq("tmp/test.tal/https/a.b.c", uri_get_local(uri));
 	uri_refput(uri);
 

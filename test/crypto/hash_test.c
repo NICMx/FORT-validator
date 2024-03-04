@@ -45,7 +45,6 @@ START_TEST(test_hash)
 	hash_setup();
 
 	uri.global = "https://example.com/resources/lorem-ipsum.txt";
-	uri.global_len = strlen(uri.global);
 	uri.local = "resources/lorem-ipsum.txt";
 	uri.type = UT_TA_HTTP;
 	uri.references = 1;

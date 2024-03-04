@@ -35,8 +35,6 @@ struct rpki_uri {
 	 * non-ASCII characters.
 	 */
 	char *global;
-	/** Length of @global. */
-	size_t global_len;
 
 	/**
 	 * "Local URI".
@@ -107,27 +105,65 @@ validate_url_character(int character)
 	    : pr_val_err("URL has non-printable character code '%d'.", character);
 }
 
+static int append_guri(struct path_builder *, char const *, char const *,
+    int, bool);
+
 /**
- * Initializes @uri->global* by cloning @str.
- * This function does not assume that @str is null-terminated.
+ * Initializes @uri->global by building a normalized version of @str.
  */
 static int
-str2global(char const *str, size_t str_len, struct rpki_uri *uri)
+str2global(char const *str, struct rpki_uri *uri)
 {
-	int error;
-	size_t i;
+#define SCHEMA_LEN 8 /* strlen("rsync://"), strlen("https://") */
 
-	for (i = 0; i < str_len; i++) {
-		error = validate_url_character(str[i]);
+	char const *s;
+	char const *pfx;
+	int error;
+	struct path_builder pb;
+
+	if (str == NULL){
+		uri->global = NULL;
+		return 0;
+	}
+
+	for (s = str; s[0] != '\0'; s++) {
+		error = validate_url_character(s[0]);
 		if (error)
 			return error;
 	}
 
-	uri->global = pmalloc(str_len + 1);
-	strncpy(uri->global, str, str_len);
-	uri->global[str_len] = '\0';
-	uri->global_len = str_len;
+	pfx = NULL;
+	error = 0;
 
+	switch (uri->type) {
+	case UT_TA_RSYNC:
+	case UT_RPP:
+	case UT_CAGED:
+	case UT_AIA:
+	case UT_SO:
+	case UT_MFT:
+		pfx = "rsync://";
+		error = ENOTRSYNC;
+		break;
+	case UT_TA_HTTP:
+	case UT_NOTIF:
+	case UT_TMP:
+		pfx = "https://";
+		error = ENOTHTTPS;
+		break;
+	}
+
+	if (pfx == NULL)
+		pr_crit("Unknown URI type: %u", uri->type);
+
+	__pb_init(&pb, SCHEMA_LEN - 1);
+	error = append_guri(&pb, str, pfx, error, true);
+	if (error) {
+		pb_cleanup(&pb);
+		return error;
+	}
+
+	uri->global = strncpy(pb.string, str, SCHEMA_LEN);
 	return 0;
 }
 
@@ -207,7 +243,6 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	joined[dir_len + ia5->size] = '\0';
 
 	uri->global = joined;
-	uri->global_len = dir_len + ia5->size;
 	return 0;
 }
 
@@ -315,9 +350,10 @@ get_rrdp_workspace(struct path_builder *pb, char const *tal,
 	if (error)
 		return error;
 
-	error = append_guri(pb, notif->global, "https://", ENOTHTTPS, true);
+	error = pb_append(pb, &notif->global[SCHEMA_LEN]);
 	if (error)
 		pb_cleanup(pb);
+
 	return error;
 }
 
@@ -325,16 +361,16 @@ get_rrdp_workspace(struct path_builder *pb, char const *tal,
  * Maps "rsync://a.b.c/d/e.cer" into "<local-repository>/rsync/a.b.c/d/e.cer".
  */
 static int
-map_simple(struct rpki_uri *uri, char const *tal, char const *gprefix, int err)
+map_simple(struct rpki_uri *uri, char const *tal, char const *subdir)
 {
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, tal, NULL);
+	error = pb_init_cache(&pb, tal, subdir);
 	if (error)
 		return error;
 
-	error = append_guri(&pb, uri->global, gprefix, err, false);
+	error = pb_append(&pb, &uri->global[SCHEMA_LEN]);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;
@@ -358,16 +394,17 @@ map_caged(struct rpki_uri *uri, char const *tal, struct rpki_uri *notif)
 	if (error)
 		return error;
 
-	if (uri->global[0] == '\0')
-		goto end; /* Caller is only interested in the cage. */
+	if (uri->global == NULL)
+		goto success; /* Caller is only interested in the cage. */
 
-	error = append_guri(&pb, uri->global, "rsync://", ENOTRSYNC, true);
+	error = pb_append(&pb, &uri->global[SCHEMA_LEN]);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;
 	}
 
-end:	uri->local = pb.string;
+success:
+	uri->local = pb.string;
 	return 0;
 }
 
@@ -378,11 +415,11 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
 	switch (uri->type) {
 	case UT_TA_RSYNC:
 	case UT_RPP:
-		return map_simple(uri, tal, "rsync://", ENOTRSYNC);
+		return map_simple(uri, tal, "rsync");
 
 	case UT_TA_HTTP:
 	case UT_NOTIF:
-		return map_simple(uri, tal, "https://", ENOTHTTPS);
+		return map_simple(uri, tal, "https");
 
 	case UT_TMP:
 		return cache_tmpfile(&uri->local);
@@ -403,23 +440,25 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
 /*
  * I think the reason why @guri is not a char * is to convey that it doesn't
  * need to be NULL terminated, but I'm not sure.
+ *
+ * FIXME callers now need to ensure @guri is NULL-terminated.
  */
 int
-__uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
-    struct rpki_uri *notif, void const *guri, size_t guri_len)
+uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
+    struct rpki_uri *notif, char const *guri)
 {
 	struct rpki_uri *uri;
 	int error;
 
 	uri = pmalloc(sizeof(struct rpki_uri));
+	uri->type = type;
+	uri->references = 1;
 
-	error = str2global(guri, guri_len, uri);
+	error = str2global(guri, uri);
 	if (error) {
 		free(uri);
 		return error;
 	}
-
-	uri->type = type;
 
 	error = autocomplete_local(uri, tal, notif);
 	if (error) {
@@ -427,8 +466,6 @@ __uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
 		free(uri);
 		return error;
 	}
-
-	uri->references = 1;
 
 	*result = uri;
 	return 0;
@@ -446,6 +483,8 @@ uri_create_mft(struct rpki_uri **result, char const *tal,
 	int error;
 
 	uri = pmalloc(sizeof(struct rpki_uri));
+	uri->type = (notif == NULL) ? UT_RPP : UT_CAGED;
+	uri->references = 1;
 
 	error = ia5str2global(uri, mft->global, ia5);
 	if (error) {
@@ -453,16 +492,12 @@ uri_create_mft(struct rpki_uri **result, char const *tal,
 		return error;
 	}
 
-	uri->type = (notif == NULL) ? UT_RPP : UT_CAGED;
-
 	error = autocomplete_local(uri, tal, notif);
 	if (error) {
 		free(uri->global);
 		free(uri);
 		return error;
 	}
-
-	uri->references = 1;
 
 	*result = uri;
 	return 0;
@@ -514,12 +549,6 @@ uri_get_local(struct rpki_uri *uri)
 	return uri->local;
 }
 
-size_t
-uri_get_global_len(struct rpki_uri *uri)
-{
-	return uri->global_len;
-}
-
 bool
 uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
 {
@@ -530,14 +559,17 @@ uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
 bool
 uri_has_extension(struct rpki_uri *uri, char const *ext)
 {
+	size_t uri_len;
 	size_t ext_len;
 	int cmp;
 
+	uri_len = strlen(uri->global);
 	ext_len = strlen(ext);
-	if (uri->global_len < ext_len)
+
+	if (uri_len < ext_len)
 		return false;
 
-	cmp = strncmp(uri->global + uri->global_len - ext_len, ext, ext_len);
+	cmp = strncmp(uri->global + uri_len - ext_len, ext, ext_len);
 	return cmp == 0;
 }
 

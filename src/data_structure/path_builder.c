@@ -15,12 +15,13 @@
 #endif
 #define MAX_CAPACITY 4096u
 
+/* @reserve needs to be < INITIAL_CAPACITY. */
 void
-pb_init(struct path_builder *pb)
+__pb_init(struct path_builder *pb, size_t reserve)
 {
 	pb->string = pmalloc(INITIAL_CAPACITY);
-	pb->string[0] = 0;
-	pb->len = 0;
+	pb->string[reserve] = 0;
+	pb->len = reserve;
 	pb->capacity = INITIAL_CAPACITY;
 }
 
