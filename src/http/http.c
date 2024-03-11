@@ -131,9 +131,6 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 
 	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
-	setopt_long(result, CURLOPT_FOLLOWLOCATION, 1);
-	setopt_long(result, CURLOPT_MAXREDIRS, config_get_max_redirs());
-
 	setopt_long(result, CURLOPT_CONNECTTIMEOUT,
 	    config_get_http_connect_timeout());
 	setopt_long(result, CURLOPT_TIMEOUT,
@@ -197,7 +194,7 @@ curl_err_string(struct http_handler *handler, CURLcode res)
 }
 
 static int
-validate_file_size(char const *uri, struct write_callback_arg *args)
+validate_file_size(struct write_callback_arg *args)
 {
 	float ratio;
 
@@ -254,72 +251,107 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	struct write_callback_arg args;
 	CURLcode res;
 	long http_code;
+	char *redirect;
+	unsigned int r;
 	int error;
 
 	error = http_easy_init(&handler, ims);
 	if (error)
 		return error;
 
-	handler.errbuf[0] = 0;
-	setopt_str(handler.curl, CURLOPT_URL, src);
+	redirect = NULL;
+	r = 0;
 
-	args.total_bytes = 0;
-	args.error = 0;
-	args.file_name = dst;
-	args.file = NULL;
-	setopt_writedata(handler.curl, &args);
+	do {
+		handler.errbuf[0] = 0;
+		setopt_str(handler.curl, CURLOPT_URL, (redirect != NULL) ? redirect : src);
 
-	res = curl_easy_perform(handler.curl); /* write_callback() */
-	if (args.file != NULL)
-		file_close(args.file);
-	pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
+		args.total_bytes = 0;
+		args.error = 0;
+		args.file_name = dst;
+		args.file = NULL;
+		setopt_writedata(handler.curl, &args);
 
-	args.error = validate_file_size(src, &args);
-	if (args.error) {
-		error = args.error;
-		goto end;
-	}
+		res = curl_easy_perform(handler.curl); /* write_callback() */
+		if (args.file != NULL)
+			file_close(args.file);
+		pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
 
-	args.error = get_http_response_code(&handler, &http_code, src);
-	if (args.error) {
-		error = args.error;
-		goto end;
-	}
-
-	if (res != CURLE_OK) {
-		pr_val_err("Error requesting URL: %s. (HTTP code: %ld)",
-		    curl_err_string(&handler, res), http_code);
-
-		switch (res) {
-		case CURLE_FILESIZE_EXCEEDED:
-			error = -EFBIG; /* Do not retry */
+		args.error = validate_file_size(&args);
+		if (args.error) {
+			error = args.error;
 			goto end;
-		case CURLE_OPERATION_TIMEDOUT:
-		case CURLE_COULDNT_RESOLVE_HOST:
-		case CURLE_COULDNT_RESOLVE_PROXY:
-		case CURLE_FTP_ACCEPT_TIMEOUT:
-			error = EAGAIN; /* Retry */
+		}
+
+		args.error = get_http_response_code(&handler, &http_code, src);
+		if (args.error) {
+			error = args.error;
 			goto end;
-		case CURLE_TOO_MANY_REDIRECTS:
-			error = -EINVAL;
-			goto end;
-		default:
+		}
+
+		if (res != CURLE_OK) {
+			pr_val_err("Error requesting URL: %s. (HTTP code: %ld)",
+			    curl_err_string(&handler, res), http_code);
+
+			switch (res) {
+			case CURLE_FILESIZE_EXCEEDED:
+				error = -EFBIG; /* Do not retry */
+				goto end;
+			case CURLE_OPERATION_TIMEDOUT:
+			case CURLE_COULDNT_RESOLVE_HOST:
+			case CURLE_COULDNT_RESOLVE_PROXY:
+			case CURLE_FTP_ACCEPT_TIMEOUT:
+				error = EAGAIN; /* Retry */
+				goto end;
+			default:
+				error = handle_http_response_code(http_code);
+				goto end;
+			}
+		}
+
+		if (http_code >= 400 || http_code == 204) {
+			pr_val_err("HTTP result code: %ld", http_code);
 			error = handle_http_response_code(http_code);
 			goto end;
 		}
-	}
+		if (http_code == 304) {
+			/* Write callback not called, no file to remove. */
+			pr_val_debug("Not modified.");
+			error = 0;
+			goto end;
+		}
 
-	if (http_code >= 400 || http_code == 204) {
-		pr_val_err("HTTP result code: %ld", http_code);
-		error = handle_http_response_code(http_code);
-		goto end;
-	}
-	if (http_code == 304) {
-		/* Write callback not called, no file to remove. */
-		pr_val_debug("Not modified.");
-		error = 0;
-		goto end;
-	}
+		if (redirect != NULL) {
+			free(redirect);
+			redirect = NULL;
+		}
+
+		res = curl_easy_getinfo(handler.curl, CURLINFO_REDIRECT_URL, &redirect);
+		if (res != CURLE_OK) {
+			error = pr_op_err("curl_easy_getinfo(CURLINFO_REDIRECT_URL) returned %u.", res);
+			redirect = NULL;
+			goto end;
+		}
+
+		if (redirect == NULL)
+			break;
+		if (!str_same_origin(src, redirect)) {
+			error = pr_val_err("%s is redirecting to %s; disallowing because of different origin.",
+			   src, redirect);
+			redirect = NULL;
+			goto end;
+		}
+
+		r++;
+		if (r > config_get_max_redirs()) {
+			error = pr_val_err("Too many redirects.");
+			redirect = NULL;
+			goto end;
+		}
+
+		/* The original redirect is destroyed during the next curl_easy_perform(). */
+		redirect = pstrdup(redirect);
+	} while (true);
 
 	pr_val_debug("HTTP result code: %ld", http_code);
 	error = 0;
@@ -329,6 +361,8 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 end:	http_easy_cleanup(&handler);
 	if (error)
 		file_rm_f(dst);
+	if (redirect != NULL)
+		free(redirect);
 	return error;
 }
 

@@ -196,35 +196,25 @@ START_TEST(check_caged)
 }
 END_TEST
 
-static bool
-same_origin(char *g1, char *g2)
-{
-	struct rpki_uri u1 = { .type = UT_NOTIF, .references = 1 };
-	struct rpki_uri u2 = { .type = UT_TMP,   .references = 1 };
-	u1.global = g1;
-	u2.global = g2;
-	return uri_same_origin(&u1, &u2);
-}
-
 START_TEST(test_same_origin)
 {
-	ck_assert_int_eq(true,	same_origin("https://a.b.c/d/e/f",	"https://a.b.c/g/h/i"));
-	ck_assert_int_eq(false,	same_origin("https://a.b.cc/d/e/f",	"https://a.b.c/g/h/i"));
-	ck_assert_int_eq(false,	same_origin("https://a.b.c/d/e/f",	"https://a.b.cc/g/h/i"));
-	ck_assert_int_eq(true,	same_origin("https://a.b.c",		"https://a.b.c"));
-	ck_assert_int_eq(true,	same_origin("https://a.b.c/",		"https://a.b.c"));
-	ck_assert_int_eq(true,	same_origin("https://a.b.c",		"https://a.b.c/"));
-	ck_assert_int_eq(true,	same_origin("https://",			"https://"));
-	ck_assert_int_eq(false,	same_origin("https://",			"https://a"));
-	ck_assert_int_eq(false,	same_origin("https://a",		"https://b"));
+	ck_assert_int_eq(true,	str_same_origin("https://a.b.c/d/e/f",	"https://a.b.c/g/h/i"));
+	ck_assert_int_eq(false,	str_same_origin("https://a.b.cc/d/e/f",	"https://a.b.c/g/h/i"));
+	ck_assert_int_eq(false,	str_same_origin("https://a.b.c/d/e/f",	"https://a.b.cc/g/h/i"));
+	ck_assert_int_eq(true,	str_same_origin("https://a.b.c",	"https://a.b.c"));
+	ck_assert_int_eq(true,	str_same_origin("https://a.b.c/",	"https://a.b.c"));
+	ck_assert_int_eq(true,	str_same_origin("https://a.b.c",	"https://a.b.c/"));
+	ck_assert_int_eq(true,	str_same_origin("https://",		"https://"));
+	ck_assert_int_eq(false,	str_same_origin("https://",		"https://a"));
+	ck_assert_int_eq(false,	str_same_origin("https://a",		"https://b"));
 
 	/* Undefined, but manhandle the code anyway */
-	ck_assert_int_eq(false,	same_origin("",				""));
-	ck_assert_int_eq(false,	same_origin("ht",			"ht"));
-	ck_assert_int_eq(false,	same_origin("https:",			"https:"));
-	ck_assert_int_eq(false,	same_origin("https:/",			"https:/"));
-	ck_assert_int_eq(false,	same_origin("https:/a",			"https:/a"));
-	ck_assert_int_eq(true,	same_origin("https:/a/",		"https:/a/"));
+	ck_assert_int_eq(false,	str_same_origin("",			""));
+	ck_assert_int_eq(false,	str_same_origin("ht",			"ht"));
+	ck_assert_int_eq(false,	str_same_origin("https:",		"https:"));
+	ck_assert_int_eq(false,	str_same_origin("https:/",		"https:/"));
+	ck_assert_int_eq(false,	str_same_origin("https:/a",		"https:/a"));
+	ck_assert_int_eq(true,	str_same_origin("https:/a/",		"https:/a/"));
 }
 END_TEST
 

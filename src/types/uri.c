@@ -530,15 +530,11 @@ uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
 }
 
 bool
-uri_same_origin(struct rpki_uri *u1, struct rpki_uri *u2)
+str_same_origin(char const *g1, char const *g2)
 {
-	char const *g1, *g2;
 	size_t c, slashes;
 
-	g1 = u1->global;
-	g2 = u2->global;
 	slashes = 0;
-
 	for (c = 0; g1[c] == g2[c]; c++) {
 		switch (g1[c]) {
 		case '/':
@@ -557,6 +553,12 @@ uri_same_origin(struct rpki_uri *u1, struct rpki_uri *u2)
 		return (slashes == 2) && g1[c] == '/';
 
 	return false;
+}
+
+bool
+uri_same_origin(struct rpki_uri *u1, struct rpki_uri *u2)
+{
+	return str_same_origin(u1->global, u2->global);
 }
 
 /* @ext must include the period. */
