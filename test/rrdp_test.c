@@ -40,7 +40,7 @@ MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
 MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK(validation_tal, struct tal *, NULL, struct validation *state)
 MOCK(tal_get_file_name, char const *, "", struct tal *tal)
-MOCK_UINT(config_get_rrdp_delta_threshold, 64, void)
+MOCK_UINT(config_get_rrdp_delta_threshold, 5, void)
 
 /* Mocks end */
 
@@ -318,6 +318,145 @@ validate_01234_hash(unsigned char *hash)
 	for (i = 0; i < 32; i++)
 		ck_assert_uint_eq(expected_hash[i], hash[i]);
 }
+
+static void
+init_serial(struct rrdp_serial *serial, unsigned long num)
+{
+	char *tmp;
+
+	serial->num = BN_create();
+	ck_assert_int_eq(1, BN_add_word(serial->num, num));
+
+	tmp = BN_bn2dec(serial->num);
+	ck_assert_ptr_ne(NULL, tmp);
+	serial->str = pstrdup(tmp);
+	OPENSSL_free(tmp);
+}
+
+static void
+init_rrdp_session(struct rrdp_session *session, unsigned long serial)
+{
+	session->session_id = pstrdup("session");
+	init_serial(&session->serial, serial);
+}
+
+static void
+init_cachefile_notif(struct cachefile_notification **result, unsigned long serial, ...)
+{
+	struct cachefile_notification *notif;
+	va_list args;
+	int hash_byte;
+	struct rrdp_hash *hash;
+	size_t i;
+
+	notif = pmalloc(sizeof(struct cachefile_notification));
+	*result = notif;
+
+	init_rrdp_session(&notif->session, serial);
+	STAILQ_INIT(&notif->delta_hashes);
+
+	va_start(args, serial);
+	while ((hash_byte = va_arg(args, int)) >= 0) {
+		hash = pmalloc(sizeof(struct rrdp_hash));
+		for (i = 0; i < RRDP_HASH_LEN; i++)
+			hash->bytes[i] = hash_byte;
+		STAILQ_INSERT_TAIL(&notif->delta_hashes, hash, hook);
+	}
+	va_end(args);
+}
+
+static void
+init_regular_notif(struct update_notification *notif, unsigned long serial, ...)
+{
+	va_list args;
+	int hash_byte;
+	struct notification_delta delta;
+	size_t i;
+
+	memset(notif, 0, sizeof(*notif));
+	init_rrdp_session(&notif->session, serial);
+	notification_deltas_init(&notif->deltas);
+
+	va_start(args, serial);
+	while ((hash_byte = va_arg(args, int)) >= 0) {
+		init_serial(&delta.serial, serial--);
+		delta.meta.uri = NULL; /* Not needed for now */
+		delta.meta.hash = pmalloc(RRDP_HASH_LEN);
+		for (i = 0; i < RRDP_HASH_LEN; i++)
+			delta.meta.hash[i] = hash_byte;
+		delta.meta.hash_len = RRDP_HASH_LEN;
+		notification_deltas_add(&notif->deltas, &delta);
+	}
+	va_end(args);
+}
+
+static void
+validate_cachefile_notif(struct cachefile_notification *notif, unsigned long __serial, ...)
+{
+	struct rrdp_serial serial;
+	va_list args;
+	int hash_byte;
+	struct rrdp_hash *hash;
+	size_t i;
+
+	ck_assert_str_eq("session", notif->session.session_id);
+	init_serial(&serial, __serial);
+	ck_assert_str_eq(serial.str, notif->session.serial.str);
+	ck_assert_int_eq(0, BN_cmp(serial.num, notif->session.serial.num));
+	serial_cleanup(&serial);
+
+	hash = STAILQ_FIRST(&notif->delta_hashes);
+
+	va_start(args, __serial);
+	while ((hash_byte = va_arg(args, int)) >= 0) {
+		ck_assert_ptr_ne(NULL, hash);
+		for (i = 0; i < RRDP_HASH_LEN; i++)
+			ck_assert_int_eq(hash_byte, hash->bytes[i]);
+		hash = STAILQ_NEXT(hash, hook);
+	}
+	va_end(args);
+
+	ck_assert_ptr_eq(NULL, hash);
+
+	rrdp_notif_free(notif);
+}
+
+START_TEST(test_update_notif)
+{
+	struct cachefile_notification *old;
+	struct update_notification new;
+
+	/* No changes */
+	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_regular_notif(&new, 5555, 1, 2, 3, -1);
+	ck_assert_int_eq(0, update_notif(old, &new));
+	validate_cachefile_notif(old, 5555, 1, 2, 3, -1);
+
+	/* Add a few serials */
+	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_regular_notif(&new, 5557, 3, 4, 5, -1);
+	ck_assert_int_eq(0, update_notif(old, &new));
+	validate_cachefile_notif(old, 5557, 1, 2, 3, 4, 5, -1);
+
+	/* Add serials, delta threshold exceeded */
+	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_regular_notif(&new, 5558, 3, 4, 5, 6, -1);
+	ck_assert_int_eq(0, update_notif(old, &new));
+	validate_cachefile_notif(old, 5558, 2, 3, 4, 5, 6, -1);
+
+	/* All new serials, but no hashes skipped */
+	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_regular_notif(&new, 5557, 4, 5, -1);
+	ck_assert_int_eq(0, update_notif(old, &new));
+	validate_cachefile_notif(old, 5557, 1, 2, 3, 4, 5, -1);
+
+	/* 2 previous tests combined */
+	init_cachefile_notif(&old, 5555, 1, 2, 3, 4, 5, -1);
+	init_regular_notif(&new, 5560, 6, 7, 8, 9, 10, -1);
+	ck_assert_int_eq(0, update_notif(old, &new));
+	validate_cachefile_notif(old, 5560, 6, 7, 8, 9, 10, -1);
+}
+END_TEST
 
 START_TEST(test_parse_notification_ok)
 {
@@ -664,6 +803,7 @@ static Suite *xml_load_suite(void)
 	tcase_add_test(misc, test_xmlChar_NULL_assumption);
 	tcase_add_test(misc, test_hexstr2sha256);
 	tcase_add_test(misc, test_sort_deltas);
+	tcase_add_test(misc, test_update_notif);
 
 	parse = tcase_create("parse");
 	tcase_add_test(parse, test_parse_notification_ok);

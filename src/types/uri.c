@@ -13,57 +13,37 @@
 #include "data_structure/path_builder.h"
 
 /**
- * Design notes:
- *
- * Because we need to generate @local from @global, @global's allowed character
- * set must be a subset of @local. Because this is Unix, @local must never
- * contain NULL (except as a terminating character). Therefore, even though IA5
- * allows NULL, @global won't.
- *
- * Because we will simply embed @global (minus "rsync://") into @local, @local's
- * encoding must be IA5-compatible. In other words, UTF-16 and UTF-32 are out of
- * the question.
- *
  * Aside from the reference counter, instances are meant to be immutable.
+ *
+ * TODO (fine) Needs rebranding. AFAIK, RPKI does not impose significant
+ * restrictions to regular URIs (except for schema, I guess), "global URI" is
+ * pretty much tautologic, and "local URI" is a misnomer. (Because it doesn't
+ * have anything to do with 'interpretation is independent of access'.)
+ * I can't even remember if this nomenclature made sense at some point.
+ * It's more of a mapping than a URI.
+ *
+ * TODO (fine) Also, this structure is so intertwined with the cache module,
+ * nowadays it feels like it should be moved there.
  */
 struct rpki_uri {
 	/**
 	 * "Global URI".
 	 * The one that always starts with "rsync://" or "https://".
-	 *
-	 * These things are IA5-encoded, which means you're not bound to get
-	 * non-ASCII characters.
+	 * Normalized, ASCII-only, NULL-terminated.
 	 */
 	char *global;
 
 	/**
 	 * "Local URI".
 	 * The file pointed by @global, but cached in the local filesystem.
-	 *
-	 * I can't find a standard that defines this, but lots of complaints on
-	 * the Internet imply that Unix file paths are specifically meant to be
-	 * C strings.
-	 *
-	 * So just to clarify: This is a string that permits all characters,
-	 * printable or otherwise, except \0. (Because that's the terminating
-	 * character.)
-	 *
-	 * Even though it might contain characters that are non-printable
-	 * according to ASCII, we assume that we can just dump it into the
-	 * output without trouble, because the input should have the same
-	 * encoding as the output.
-	 *
-	 * Technically, "global" URI "https://a.b.c/d/..///./d" is not the same
-	 * identifier as "https://a.b.c/d", but since we're supposed to download
-	 * to a filesystem where "https/a.b.c/d" is the same file as
-	 * "https/a.b.c/d/..///./d", @local will always be normalized.
+	 * Normalized, ASCII-only, NULL-terminated.
+	 * Sometimes NULL, depending on @type.
 	 */
 	char *local;
-	/* "local_len" is never needed right now. */
 
 	enum uri_type type;
 
-	unsigned int references;
+	unsigned int references; /* Reference counter */
 };
 
 /*
@@ -437,12 +417,6 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
 	pr_crit("Unknown URI type: %u", uri->type);
 }
 
-/*
- * I think the reason why @guri is not a char * is to convey that it doesn't
- * need to be NULL terminated, but I'm not sure.
- *
- * FIXME callers now need to ensure @guri is NULL-terminated.
- */
 int
 uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
     struct rpki_uri *notif, char const *guri)

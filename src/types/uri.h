@@ -4,17 +4,47 @@
 #include "asn1/asn1c/IA5String.h"
 #include "data_structure/array_list.h"
 
+/*
+ * "Long" time = seven days.
+ * Currently hardcoded, but queued for tweakability.
+ */
 enum uri_type {
-	UT_TA_RSYNC, /* TAL's TA URL; downloaded via rsync. */
-	UT_TA_HTTP, /* TAL's TA URL; downloaded via HTTP. */
-	UT_RPP, /* caRepository; downloaded via rsync. */
-	UT_NOTIF, /* rpkiNotify; downloaded via HTTP. */
-	UT_TMP, /* Snapshot or delta; Downloaded via HTTP. */
-	UT_CAGED, /* Endangered species. */
+	/*
+	 * TAL's TA URL.
+	 * The file is cached until it's untraversed for a "long" time.
+	 */
+	UT_TA_RSYNC,
+	UT_TA_HTTP,
 
-	UT_AIA, /* caIssuers. Not downloaded. */
-	UT_SO, /* signedObject. Not downloaded. */
-	UT_MFT, /* rpkiManifest. Not downloaded. */
+	/*
+	 * (rsync) Repository Publication Point. RFC 6481.
+	 * The directory is cached until it's untraversed for a "long" time.
+	 */
+	UT_RPP,
+
+	/*
+	 * An RRDP notification file; downloaded via HTTP.
+	 * The file itself is not cached, but we preserve a handful of metadata
+	 * that is needed in subsequent iterations.
+	 * The metadata is cached until it's untraversed for a "long" time.
+	 */
+	UT_NOTIF,
+
+	/*
+	 * RRDP Snapshot or Delta; downloaded via HTTP.
+	 * The file itself is not cached, but we preserve some small metadata.
+	 * The metadata is destroyed once the iteration finishes.
+	 */
+	UT_TMP,
+
+	/*
+	 * Endangered species; bound to be removed once RFC 9286 is implemented.
+	 */
+	UT_CAGED,
+
+	UT_AIA, /* caIssuers. Not directly downloaded. */
+	UT_SO, /* signedObject. Not directly downloaded. */
+	UT_MFT, /* rpkiManifest. Not directly downloaded. */
 };
 
 struct rpki_uri;

@@ -164,12 +164,18 @@ update_notification_init(struct update_notification *notif,
 }
 
 static void
-update_notification_cleanup(struct update_notification *file)
+__update_notification_cleanup(struct update_notification *notif)
 {
-	metadata_cleanup(&file->snapshot);
-	session_cleanup(&file->session);
-	notification_deltas_cleanup(&file->deltas, notification_delta_cleanup);
-	uri_refput(file->uri);
+	metadata_cleanup(&notif->snapshot);
+	notification_deltas_cleanup(&notif->deltas, notification_delta_cleanup);
+	uri_refput(notif->uri);
+}
+
+static void
+update_notification_cleanup(struct update_notification *notif)
+{
+	session_cleanup(&notif->session);
+	__update_notification_cleanup(notif);
 }
 
 static int
@@ -968,15 +974,18 @@ handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
 	return 0;
 }
 
+/*
+ * Initializes @old by extracting relevant data from @new.
+ * Consumes @new.
+ */
 static void
-init_notif(struct update_notification *new, struct cachefile_notification *old)
+init_notif(struct cachefile_notification *old, struct update_notification *new)
 {
 	size_t dn;
 	size_t i;
 	struct rrdp_hash *hash;
 
 	old->session = new->session;
-	memset(&new->session, 0, sizeof(new->session));
 	STAILQ_INIT(&old->delta_hashes);
 
 	dn = config_get_rrdp_delta_threshold();
@@ -988,6 +997,8 @@ init_notif(struct update_notification *new, struct cachefile_notification *old)
 		memcpy(hash->bytes, new->deltas.array[i].meta.hash, RRDP_HASH_LEN);
 		STAILQ_INSERT_TAIL(&old->delta_hashes, hash, hook);
 	}
+
+	__update_notification_cleanup(new);
 }
 
 static void
@@ -1003,38 +1014,42 @@ drop_notif(struct cachefile_notification *notif)
 	}
 }
 
-static void
-update_notif(struct update_notification *new, struct cachefile_notification *old)
+/*
+ * Updates @old with the new information carried by @new.
+ * Consumes @new on success.
+ */
+static int
+update_notif(struct cachefile_notification *old, struct update_notification *new)
 {
-	BIGNUM *delta_bn;
-	BN_ULONG delta;
-	size_t d, dn;
+	BIGNUM *diff_bn;
+	BN_ULONG diff; /* difference between the old and new serials */
+	size_t d, dn; /* delta counter, delta "num" (total) */
 	struct rrdp_hash *hash;
 
-	delta_bn = BN_new();
-	if (!BN_sub(delta_bn, new->session.serial.num, old->session.serial.num)) {
-		// FIXME
-	}
-	if (BN_is_negative(delta_bn)) {
-		// FIXME
-	}
+	diff_bn = BN_create();
+	if (!BN_sub(diff_bn, new->session.serial.num, old->session.serial.num))
+		return val_crypto_err("OUCH! libcrypto cannot subtract %s - %s",
+		    new->session.serial.str, old->session.serial.str);
+	if (BN_is_negative(diff_bn))
+		/* The validation was the BN_cmp() in the caller. */
+		pr_crit("%s - %s < 0 despite validations.",
+		    new->session.serial.str, old->session.serial.str);
 
-	delta = BN_get_word(delta_bn);
-	if (delta > new->deltas.len) {
-		// FIXME
-	}
+	diff = BN_get_word(diff_bn);
+	if (diff > new->deltas.len)
+		/* Should be <= because it was already compared to the delta threshold. */
+		pr_crit("%lu > %zu despite validations.",
+		    diff, new->deltas.len);
 
 	BN_free(old->session.serial.num);
 	free(old->session.serial.str);
 	old->session.serial = new->session.serial;
-	new->session.serial.num = NULL;
-	new->session.serial.str = NULL;
 
-	dn = delta;
+	dn = diff;
 	STAILQ_FOREACH(hash, &old->delta_hashes, hook)
 		dn++;
 
-	for (d = new->deltas.len - delta; d < new->deltas.len; d++) {
+	for (d = new->deltas.len - diff; d < new->deltas.len; d++) {
 		hash = pmalloc(sizeof(struct rrdp_hash));
 		memcpy(hash->bytes, new->deltas.array[d].meta.hash, RRDP_HASH_LEN);
 		STAILQ_INSERT_TAIL(&old->delta_hashes, hash, hook);
@@ -1046,6 +1061,10 @@ update_notif(struct update_notification *new, struct cachefile_notification *old
 		free(hash);
 		dn--;
 	}
+
+	free(new->session.session_id);
+	__update_notification_cleanup(new);
+	return 0;
 }
 
 /*
@@ -1058,16 +1077,17 @@ update_notif(struct update_notification *new, struct cachefile_notification *old
 int
 rrdp_update(struct rpki_uri *uri)
 {
-	struct cachefile_notification **__old, *old;
+	struct cachefile_notification **cached, *old;
 	struct update_notification new;
 	bool changed;
+	int serial_cmp;
 	int error;
 
 	fnstack_push_uri(uri);
 	pr_val_debug("Processing notification.");
 
 	error = cache_download(validation_cache(state_retrieve()), uri,
-	    &changed, &__old);
+	    &changed, &cached);
 	if (error)
 		goto end;
 	if (!changed) {
@@ -1081,49 +1101,63 @@ rrdp_update(struct rpki_uri *uri)
 	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
 	    new.session.serial.str);
 
-	old = *__old;
+	old = *cached;
 	if (old == NULL) {
 		pr_val_debug("This is a new Notification.");
 		error = handle_snapshot(&new);
-		if (!error) {
-			*__old = pmalloc(sizeof(struct cachefile_notification));
-			init_notif(&new, *__old);
-		}
-		goto revert_notification;
+		if (error)
+			goto clean_notif;
+
+		*cached = pmalloc(sizeof(struct cachefile_notification));
+		init_notif(*cached, &new);
+		goto end;
 	}
 
-	error = validate_session_desync(old, &new);
-	if (error) {
-		pr_val_debug("Falling back to snapshot.");
-		error = handle_snapshot(&new);
-		if (!error) {
-			drop_notif(old);
-			init_notif(&new, old);
-		}
-		goto revert_notification;
-	}
-
-	if (BN_cmp(old->session.serial.num, new.session.serial.num) != 0) {
+	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
+	if (serial_cmp < 0) {
 		pr_val_debug("The Notification's serial changed.");
+		error = validate_session_desync(old, &new);
+		if (error)
+			goto snapshot_fallback;
 		error = handle_deltas(&new, &old->session.serial);
-		if (!error) {
-			update_notif(&new, old);
-		} else {
-			/* Error msg already printed. */
-			pr_val_debug("Falling back to snapshot.");
-			error = handle_snapshot(&new);
-			if (!error) {
-				drop_notif(old);
-				init_notif(&new, old);
-			}
-		}
-		goto revert_notification;
+		if (error)
+			goto snapshot_fallback;
+		error = update_notif(old, &new);
+		if (!error)
+			goto end;
+		/*
+		 * The files are exploded and usable, but @cached is not
+		 * updatable. So drop and create it anew.
+		 * We might lose some delta hashes, but it's better than
+		 * re-snapshotting the next time the notification changes.
+		 * Not sure if it matters. This looks so unlikely, it's
+		 * practically dead code.
+		 */
+		goto reset_notif;
+
+	} else if (serial_cmp > 0) {
+		pr_val_debug("Cached serial is higher than notification serial.");
+		goto snapshot_fallback;
+
+	} else {
+		pr_val_debug("The Notification changed, but the session ID and serial didn't, and no session desync was detected.");
+		goto clean_notif;
 	}
 
-	pr_val_debug("The Notification changed, but the session ID and serial didn't.");
+snapshot_fallback:
+	pr_val_debug("Falling back to snapshot.");
+	error = handle_snapshot(&new);
+	if (error)
+		goto clean_notif;
 
-revert_notification:
+reset_notif:
+	drop_notif(old);
+	init_notif(old, &new);
+	goto end;
+
+clean_notif:
 	update_notification_cleanup(&new);
+
 end:
 	fnstack_pop();
 	return error;
@@ -1278,9 +1312,7 @@ rrdp_json2notif(json_t *json, struct cachefile_notification **result)
 	}
 	notif->session.serial.str = pstrdup(str);
 
-	notif->session.serial.num = BN_new();
-	if (notif->session.serial.num == NULL)
-		enomem_panic();
+	notif->session.serial.num = BN_create();
 	if (!BN_dec2bn(&notif->session.serial.num, notif->session.serial.str)) {
 		error = pr_op_err("Not a serial number: %s", notif->session.serial.str);
 		goto revert_serial;
