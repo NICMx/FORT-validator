@@ -458,15 +458,24 @@ START_TEST(test_update_notif)
 }
 END_TEST
 
+static void
+init_uri(struct rpki_uri *uri, char *global, char *local, enum uri_type type)
+{
+	uri->global = global;
+	uri->local = local;
+	uri->type = type;
+	uri->references = 1;
+}
+
+#define init_notif_uri(u, g, l) init_uri(u, g, l, UT_NOTIF)
+
 START_TEST(test_parse_notification_ok)
 {
-	struct rpki_uri uri = { 0 };
+	struct rpki_uri uri;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	uri.local = "resources/rrdp/notif-ok.xml";
-	uri.type = UT_NOTIF;
-	uri.references = 1;
+	init_notif_uri(&uri, "https://host/notification.xml", "resources/rrdp/notif-ok.xml");
 	ck_assert_int_eq(0, parse_notification(&uri, &notif));
 
 	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
@@ -495,13 +504,11 @@ END_TEST
 
 START_TEST(test_parse_notification_0deltas)
 {
-	struct rpki_uri uri = { 0 };
+	struct rpki_uri uri;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	uri.local = "resources/rrdp/notif-0deltas.xml";
-	uri.type = UT_NOTIF;
-	uri.references = 1;
+	init_notif_uri(&uri, "https://host/notification.xml", "resources/rrdp/notif-0deltas.xml");
 	ck_assert_int_eq(0, parse_notification(&uri, &notif));
 
 	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
@@ -520,13 +527,11 @@ END_TEST
 
 START_TEST(test_parse_notification_large_serial)
 {
-	struct rpki_uri uri = { 0 };
+	struct rpki_uri uri;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	uri.local = "resources/rrdp/notif-large-serial.xml";
-	uri.type = UT_NOTIF;
-	uri.references = 1;
+	init_notif_uri(&uri, "https://host/notification.xml", "resources/rrdp/notif-large-serial.xml");
 	ck_assert_int_eq(0, parse_notification(&uri, &notif));
 
 	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
@@ -552,13 +557,11 @@ END_TEST
 static void
 test_parse_notification_error(char *file)
 {
-	struct rpki_uri uri = { 0 };
+	struct rpki_uri uri;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	uri.local = file;
-	uri.type = UT_NOTIF;
-	uri.references = 1;
+	init_notif_uri(&uri, "https://host/notification.xml", file);
 	ck_assert_int_eq(-EINVAL, parse_notification(&uri, &notif));
 
 	relax_ng_cleanup();
@@ -620,13 +623,8 @@ START_TEST(test_parse_snapshot_bad_publish)
 
 	ck_assert_int_eq(0, relax_ng_init());
 
-	notif_uri.global = "https://example.com/notification.xml";
-	notif_uri.local = "cache/example.com/notification.xml";
-	notif_uri.type = UT_NOTIF;
-	notif_uri.references = 1;
-
-	snapshot_uri.local = "resources/rrdp/snapshot-bad-publish.xml";
-	snapshot_uri.references = 1;
+	init_notif_uri(&notif_uri, "https://example.com/notification.xml", "cache/example.com/notification.xml");
+	init_uri(&snapshot_uri, "https://example.com/snapshot.xml", "resources/rrdp/snapshot-bad-publish.xml", UT_TMP);
 
 	notif.session.session_id = "9df4b597-af9e-4dca-bdda-719cce2c4e28";
 	notif.session.serial.str = "2";

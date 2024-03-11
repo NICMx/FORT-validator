@@ -71,6 +71,7 @@ char const *uri_get_global(struct rpki_uri *);
 char const *uri_get_local(struct rpki_uri *);
 
 bool uri_equals(struct rpki_uri *, struct rpki_uri *);
+bool uri_same_origin(struct rpki_uri *, struct rpki_uri *);
 bool uri_has_extension(struct rpki_uri *, char const *);
 bool uri_is_certificate(struct rpki_uri *);
 

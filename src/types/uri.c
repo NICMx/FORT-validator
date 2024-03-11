@@ -529,6 +529,36 @@ uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
 	return strcmp(u1->global, u2->global) == 0;
 }
 
+bool
+uri_same_origin(struct rpki_uri *u1, struct rpki_uri *u2)
+{
+	char const *g1, *g2;
+	size_t c, slashes;
+
+	g1 = u1->global;
+	g2 = u2->global;
+	slashes = 0;
+
+	for (c = 0; g1[c] == g2[c]; c++) {
+		switch (g1[c]) {
+		case '/':
+			slashes++;
+			if (slashes == 3)
+				return true;
+			break;
+		case '\0':
+			return slashes == 2;
+		}
+	}
+
+	if (g1[c] == '\0')
+		return (slashes == 2) && g2[c] == '/';
+	if (g2[c] == '\0')
+		return (slashes == 2) && g1[c] == '/';
+
+	return false;
+}
+
 /* @ext must include the period. */
 bool
 uri_has_extension(struct rpki_uri *uri, char const *ext)
