@@ -114,9 +114,8 @@ include asn1/asn1c/Makefile.include
 fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 
 fort_CFLAGS  = -Wall -Wpedantic
-# Feel free to temporarily remove this one if you're not using gcc 7.3.0.
 #fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=c99 -D_POSIX_C_SOURCE=200809 -D_XOPEN_SOURCE=700
+fort_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
 fort_CFLAGS += -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
 if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED
@@ -127,9 +126,6 @@ fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS}
 # I'm tired of scrolling up, but feel free to comment this out.
 GCC_WARNS  = -fmax-errors=1
 
-# Please ready some arguments if you want to permanently remove some of these
-# flags. I gave a quick read to the documentation of all of these warnings, and
-# generally liked each of them.
 GCC_WARNS += -pedantic-errors -Waddress -Walloc-zero -Walloca
 GCC_WARNS += -Wno-aggressive-loop-optimizations -Warray-bounds=2 -Wbool-compare
 GCC_WARNS += -Wbool-operation -Wno-builtin-declaration-mismatch -Wcast-align

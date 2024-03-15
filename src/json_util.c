@@ -10,6 +10,7 @@
  * documented in the Linux man page are not actually portable.
  */
 #define JSON_TS_FORMAT "%Y-%m-%dT%H:%M:%SZ"
+#define JSON_TS_LEN 21 /* strlen("YYYY-mm-ddTHH:MM:SSZ") + 1 */
 
 int
 json_get_str(json_t *parent, char const *name, char const **result)
@@ -105,34 +106,41 @@ json_get_u32(json_t *parent, char const *name, uint32_t *result)
 	return 0;
 }
 
-int
-json_get_ts(json_t *parent, char const *name, time_t *result)
+static int
+str2tt(char const *str, time_t *tt)
 {
-	char const *str, *consumed;
+	char const *consumed;
 	struct tm tm;
 	time_t time;
 	int error;
-
-	*result = 0;
-
-	error = json_get_str(parent, name, &str);
-	if (error)
-		return error;
 
 	memset(&tm, 0, sizeof(tm));
 	consumed = strptime(str, JSON_TS_FORMAT, &tm);
 	if (consumed == NULL || (*consumed) != 0)
 		return pr_op_err("String '%s' does not appear to be a timestamp.",
 		    str);
-	time = mktime(&tm);
+	time = timegm(&tm);
 	if (time == ((time_t) -1)) {
 		error = errno;
 		return pr_op_err("String '%s' does not appear to be a timestamp: %s",
 		    str, strerror(error));
 	}
 
-	*result = time;
+	*tt = time;
 	return 0;
+}
+
+int
+json_get_ts(json_t *parent, char const *name, time_t *result)
+{
+	char const *str;
+	int error;
+
+	error = json_get_str(parent, name, &str);
+	if (error)
+		return error;
+
+	return str2tt(str, result);
 }
 
 int
@@ -220,36 +228,34 @@ json_add_str(json_t *parent, char const *name, char const *value)
 }
 
 static int
-tt2json(time_t tt, json_t **result)
+tt2str(time_t tt, char *str)
 {
-	char str[32];
 	struct tm tmbuffer, *tm;
 
 	memset(&tmbuffer, 0, sizeof(tmbuffer));
 	tm = gmtime_r(&tt, &tmbuffer);
 	if (tm == NULL)
 		return errno;
-	if (strftime(str, sizeof(str) - 1, JSON_TS_FORMAT, tm) == 0)
+	if (strftime(str, JSON_TS_LEN, JSON_TS_FORMAT, tm) == 0)
 		return ENOSPC;
 
-	*result = json_string(str);
 	return 0;
 }
 
 int
-json_add_date(json_t *parent, char const *name, time_t value)
+json_add_ts(json_t *parent, char const *name, time_t value)
 {
-	json_t *date = NULL;
+	char str[JSON_TS_LEN];
 	int error;
 
-	error = tt2json(value, &date);
+	error = tt2str(value, str);
 	if (error) {
 		pr_op_err("Cannot convert timestamp '%s' to json: %s",
 		    name, strerror(error));
 		return error;
 	}
 
-	if (json_object_set_new(parent, name, date))
+	if (json_object_set_new(parent, name, json_string(str)))
 		return pr_op_err(
 		    "Cannot convert timestamp '%s' to json; unknown cause.",
 		    name

@@ -392,12 +392,12 @@ node2json(struct cache_node *node)
 	if (uri_is_notif(node->url))
 		if (json_add_bool(json, TAGNAME_IS_NOTIF, true))
 			goto cancel;
-	if (json_add_date(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
+	if (json_add_ts(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
 		goto cancel;
 	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
 		goto cancel;
 	if (node->success.happened)
-		if (json_add_date(json, TAGNAME_SUCCESS_TS, node->success.ts))
+		if (json_add_ts(json, TAGNAME_SUCCESS_TS, node->success.ts))
 			goto cancel;
 
 	return json;
