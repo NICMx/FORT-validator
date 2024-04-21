@@ -19,7 +19,6 @@ asn_TYPE_operation_t asn_OP_BOOLEAN = {
 	BOOLEAN_decode_ber,
 	BOOLEAN_encode_der,
 	BOOLEAN_encode_xer,
-	BOOLEAN_random_fill,
 	0	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_BOOLEAN = {
@@ -219,39 +218,4 @@ BOOLEAN_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
     } else {
         return 1;
     }
-}
-
-asn_random_fill_result_t
-BOOLEAN_random_fill(const asn_TYPE_descriptor_t *td, void **sptr,
-                    const asn_encoding_constraints_t *constraints,
-                    size_t max_length) {
-    asn_random_fill_result_t result_ok = {ARFILL_OK, 1};
-    asn_random_fill_result_t result_failed = {ARFILL_FAILED, 0};
-    asn_random_fill_result_t result_skipped = {ARFILL_SKIPPED, 0};
-    BOOLEAN_t *st = *sptr;
-
-    if(max_length == 0) return result_skipped;
-
-    if(st == NULL) {
-        st = (BOOLEAN_t *)(*sptr = CALLOC(1, sizeof(*st)));
-        if(st == NULL) {
-            return result_failed;
-        }
-    }
-
-    /* Simulate booleans that are sloppily set and biased. */
-    switch(asn_random_between(0, 7)) {
-    case 0:
-    case 1:
-    case 2:
-        *st = 0; break;
-    case 3: *st = -1; break;
-    case 4: *st = 1; break;
-    case 5: *st = INT_MIN; break;
-    case 6: *st = INT_MAX; break;
-    default:
-        *st = asn_random_between(INT_MIN, INT_MAX);
-        break;
-    }
-    return result_ok;
 }

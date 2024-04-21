@@ -175,6 +175,5 @@ asn_TYPE_operation_t asn_OP_SEQUENCE_OF = {
 	SEQUENCE_OF_decode_ber,
 	SEQUENCE_OF_encode_der,
 	SEQUENCE_OF_encode_xer,
-	SEQUENCE_OF_random_fill,
 	0	/* Use generic outmost tag fetcher */
 };

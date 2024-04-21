@@ -261,10 +261,6 @@ asn_encode_internal(const asn_codec_ctx_t *opt_codec_ctx,
         }
         break;
 
-    case ATS_RANDOM:
-        errno = ENOENT; /* Randomization doesn't make sense on output. */
-        ASN__ENCODE_FAILED;
-
     case ATS_BER:
         /* BER is a superset of DER. */
         /* Fall through. */
@@ -309,19 +305,6 @@ asn_decode(const asn_codec_ctx_t *opt_codec_ctx,
     default:
         errno = ENOENT;
         ASN__DECODE_FAILED;
-
-    case ATS_RANDOM:
-        if(!td->op->random_fill) {
-            ASN__DECODE_FAILED;
-        } else {
-            if(asn_random_fill(td, sptr, 16000) == 0) {
-                asn_dec_rval_t ret = {RC_OK, 0};
-                return ret;
-            } else {
-                ASN__DECODE_FAILED;
-            }
-        }
-        break;
 
     case ATS_DER:
     case ATS_BER:

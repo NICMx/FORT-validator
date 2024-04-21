@@ -24,7 +24,6 @@ asn_struct_print_f BIT_STRING_print;	/* Human-readable output */
 asn_struct_compare_f BIT_STRING_compare;
 asn_constr_check_f BIT_STRING_constraint;
 xer_type_encoder_f BIT_STRING_encode_xer;
-asn_random_fill_f  BIT_STRING_random_fill;
 
 #define BIT_STRING_free              OCTET_STRING_free
 #define BIT_STRING_decode_ber        OCTET_STRING_decode_ber

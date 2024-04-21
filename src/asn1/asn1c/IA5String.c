@@ -19,7 +19,6 @@ asn_TYPE_operation_t asn_OP_IA5String = {
 	OCTET_STRING_decode_ber,    /* Implemented in terms of OCTET STRING */
 	OCTET_STRING_encode_der,
 	OCTET_STRING_encode_xer_utf8,
-	OCTET_STRING_random_fill,
 	0	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_IA5String = {

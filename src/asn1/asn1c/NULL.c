@@ -19,7 +19,6 @@ asn_TYPE_operation_t asn_OP_NULL = {
 	NULL_decode_ber,
 	NULL_encode_der,	/* Special handling of DER encoding */
 	NULL_encode_xer,
-	NULL_random_fill,
 	0	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_NULL = {
@@ -145,28 +144,4 @@ NULL_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 	} else {
 		return (cb("<absent>", 8, app_key) < 0) ? -1 : 0;
 	}
-}
-
-asn_random_fill_result_t
-NULL_random_fill(const asn_TYPE_descriptor_t *td, void **sptr,
-                    const asn_encoding_constraints_t *constr,
-                    size_t max_length) {
-    asn_random_fill_result_t result_ok = {ARFILL_OK, 1};
-    asn_random_fill_result_t result_failed = {ARFILL_FAILED, 0};
-    asn_random_fill_result_t result_skipped = {ARFILL_SKIPPED, 0};
-    NULL_t *st = *sptr;
-
-    (void)td;
-    (void)constr;
-
-    if(max_length == 0) return result_skipped;
-
-    if(st == NULL) {
-        st = (NULL_t *)(*sptr = CALLOC(1, sizeof(*st)));
-        if(st == NULL) {
-            return result_failed;
-        }
-    }
-
-    return result_ok;
 }

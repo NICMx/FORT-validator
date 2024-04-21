@@ -19,7 +19,6 @@ asn_struct_compare_f GeneralizedTime_compare;
 asn_constr_check_f GeneralizedTime_constraint;
 der_type_encoder_f GeneralizedTime_encode_der;
 xer_type_encoder_f GeneralizedTime_encode_xer;
-asn_random_fill_f  GeneralizedTime_random_fill;
 
 #define GeneralizedTime_free           OCTET_STRING_free
 #define GeneralizedTime_decode_ber     OCTET_STRING_decode_ber

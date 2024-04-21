@@ -14,7 +14,6 @@ asn_TYPE_operation_t asn_OP_OPEN_TYPE = {
 	OPEN_TYPE_decode_ber,
 	OPEN_TYPE_encode_der,
 	OPEN_TYPE_encode_xer,
-	0,  /* Random fill is not supported for open type */
 	0,	/* Use generic outmost tag fetcher */
 };
 

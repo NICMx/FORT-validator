@@ -33,7 +33,6 @@ ber_type_decoder_f OCTET_STRING_decode_ber;
 der_type_encoder_f OCTET_STRING_encode_der;
 xer_type_encoder_f OCTET_STRING_encode_xer;
 xer_type_encoder_f OCTET_STRING_encode_xer_utf8;
-asn_random_fill_f  OCTET_STRING_random_fill;
 
 #define OCTET_STRING_constraint  asn_generic_no_constraint
 
@@ -84,9 +83,5 @@ typedef struct asn_OCTET_STRING_specifics_s {
 } asn_OCTET_STRING_specifics_t;
 
 extern asn_OCTET_STRING_specifics_t asn_SPC_OCTET_STRING_specs;
-
-size_t OCTET_STRING_random_length_constrained(
-    const asn_TYPE_descriptor_t *, const asn_encoding_constraints_t *,
-    size_t max_length);
 
 #endif	/* _OCTET_STRING_H_ */

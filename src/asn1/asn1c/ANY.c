@@ -19,7 +19,6 @@ asn_TYPE_operation_t asn_OP_ANY = {
 	OCTET_STRING_decode_ber,
 	OCTET_STRING_encode_der,
 	ANY_encode_xer,
-	0,	/* Random fill is not defined for ANY type */
 	0	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_ANY = {
