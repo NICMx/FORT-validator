@@ -13,7 +13,6 @@ SignedAttributes_encode_json(const struct asn_TYPE_descriptor_s *td,
 {
 	json_t *result;
 	const asn_anonymous_set_ *list;
-	asn_TYPE_descriptor_t *type;
 	int i;
 
 	if (!sptr)
@@ -24,7 +23,7 @@ SignedAttributes_encode_json(const struct asn_TYPE_descriptor_s *td,
 		return NULL;
 
 	list = _A_CSET_FROM_VOID(sptr);
-	type = &asn_DEF_CMSAttribute;
+	td = &asn_DEF_CMSAttribute;
 
 	for (i = 0; i < list->count; i++) {
 		CMSAttribute_t *attr;
@@ -33,7 +32,7 @@ SignedAttributes_encode_json(const struct asn_TYPE_descriptor_s *td,
 		char const *key;
 
 		attr = list->array[i];
-		node = type->op->json_encoder(type, attr);
+		node = td->op->json_encoder(td, attr);
 		if (node == NULL)
 			goto fail;
 

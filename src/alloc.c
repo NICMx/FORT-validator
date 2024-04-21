@@ -60,3 +60,15 @@ pstrdup(const char *s)
 
 	return result;
 }
+
+char *
+pstrndup(const char *s, size_t n)
+{
+	char *result;
+
+	result = strndup(s, n);
+	if (result == NULL)
+		enomem_panic();
+
+	return result;
+}

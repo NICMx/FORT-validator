@@ -6,6 +6,49 @@
  */
 
 #include "asn1/asn1c/CertificateSet.h"
+#include "asn1/asn1c/Certificate.h"
+
+static json_t *
+CertificateSet_encode_json(const struct asn_TYPE_descriptor_s *td,
+    const void *sptr)
+{
+	json_t *result;
+	const asn_anonymous_set_ *list;
+	int i;
+
+	if (!sptr)
+		return json_null();
+
+	result = json_array();
+	if (result == NULL)
+		return NULL;
+
+	list = _A_CSET_FROM_VOID(sptr);
+
+	for (i = 0; i < list->count; i++) {
+		json_t *node = Certificate_encode_json(list->array[i]);
+		if (node == NULL)
+			goto fail;
+		if (json_array_append_new(result, node) < 0)
+			goto fail;
+	}
+
+	return result;
+
+fail:	json_decref(result);
+	return NULL;
+}
+
+asn_TYPE_operation_t asn_OP_CertificateSet = {
+	SET_OF_free,
+	SET_OF_print,
+	SET_OF_compare,
+	SET_OF_decode_ber,
+	SET_OF_encode_der,
+	CertificateSet_encode_json,
+	SET_OF_encode_xer,
+	0	/* Use generic outmost tag fetcher */
+};
 
 asn_TYPE_member_t asn_MBR_CertificateSet_1[] = {
 	{ ATF_ANY_TYPE | ATF_POINTER, 0, 0,
@@ -29,7 +72,7 @@ asn_SET_OF_specifics_t asn_SPC_CertificateSet_specs_1 = {
 asn_TYPE_descriptor_t asn_DEF_CertificateSet = {
 	"CertificateSet",
 	"CertificateSet",
-	&asn_OP_SET_OF,
+	&asn_OP_CertificateSet,
 	asn_DEF_CertificateSet_tags_1,
 	sizeof(asn_DEF_CertificateSet_tags_1)
 		/sizeof(asn_DEF_CertificateSet_tags_1[0]), /* 1 */

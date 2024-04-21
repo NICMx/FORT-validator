@@ -14,6 +14,20 @@ str_starts_with(char const *str, char const *prefix)
 	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
 
+bool
+str_ends_with(char const *str, char const *suffix)
+{
+	size_t str_len;
+	size_t suffix_len;
+
+	str_len = strlen(str);
+	suffix_len = strlen(suffix);
+	if (str_len < suffix_len)
+		return false;
+
+	return strncmp(str + str_len - suffix_len, suffix, suffix_len) == 0;
+}
+
 void
 panic_on_fail(int error, char const *function_name)
 {
