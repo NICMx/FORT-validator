@@ -49,12 +49,12 @@ decode(struct file_contents *fc, struct ContentInfo **result)
 }
 
 int
-content_info_load(struct rpki_uri *uri, struct ContentInfo **result)
+content_info_load(char const *file, struct ContentInfo **result)
 {
 	struct file_contents fc;
 	int error;
 
-	error = file_load(uri_get_local(uri), &fc);
+	error = file_load(file, &fc);
 	if (error)
 		return error;
 

@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <errno.h>
 
+#include "alloc.h"
+
 /*
  * OCTET STRING basic type description.
  */
@@ -27,6 +29,7 @@ asn_TYPE_operation_t asn_OP_OCTET_STRING = {
 	OCTET_STRING_compare,
 	OCTET_STRING_decode_ber,
 	OCTET_STRING_encode_der,
+	OCTET_STRING_encode_json,
 	OCTET_STRING_encode_xer,
 	0	/* Use generic outmost tag fetcher */
 };
@@ -576,6 +579,37 @@ OCTET_STRING_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 	ASN__ENCODED_OK(er);
 cb_failed:
 	ASN__ENCODE_FAILED;
+}
+
+json_t *
+OCTET_STRING_encode_json(const struct asn_TYPE_descriptor_s *td,
+			 const void *sptr)
+{
+	static const char * const H2C = "0123456789abcdef";
+	const OCTET_STRING_t *os = sptr;
+	uint8_t *buf, *end;
+	char *result, *r;
+
+	result = pmalloc(2 * os->size + 1);
+
+	buf = os->buf;
+	end = buf + os->size;
+	r = result;
+	for (; buf < end; buf++) {
+		*r++ = H2C[(*buf >> 4) & 0x0F];
+		*r++ = H2C[(*buf     ) & 0x0F];
+	}
+	*r = '\0';
+
+	return json_string(result);
+}
+
+json_t *
+OCTET_STRING_encode_json_utf8(const struct asn_TYPE_descriptor_s *td,
+			 const void *sptr)
+{
+	const OCTET_STRING_t *os = sptr;
+	return json_stringn((char const *) os->buf, os->size);
 }
 
 asn_enc_rval_t

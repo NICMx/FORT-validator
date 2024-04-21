@@ -33,6 +33,7 @@ typedef struct asn_struct_ctx_s {
 #include "asn1/asn1c/ber_decoder.h"	/* Basic Encoding Rules decoder */
 #include "asn1/asn1c/der_encoder.h"	/* Distinguished Encoding Rules encoder */
 #include "asn1/asn1c/xer_encoder.h"	/* Encoder into XER (XML, text) */
+#include "asn1/asn1c/json_encoder.h"	/* Encoder into JSON */
 #include "asn1/asn1c/constraints.h"	/* Subtype constraints support */
 
 /*
@@ -130,6 +131,7 @@ typedef struct asn_TYPE_operation_s {
     asn_struct_compare_f *compare_struct; /* Compare two structures */
     ber_type_decoder_f *ber_decoder;      /* Generic BER decoder */
     der_type_encoder_f *der_encoder;      /* Canonical DER encoder */
+    json_type_encoder_f *json_encoder;
     xer_type_encoder_f *xer_encoder;      /* [Canonical] XER encoder */
     asn_outmost_tag_f *outmost_tag;       /* <optional, internal> */
 } asn_TYPE_operation_t;
@@ -226,5 +228,7 @@ typedef struct asn_TYPE_tag2member_s {
 int asn_fprint(FILE *stream, /* Destination stream descriptor */
                const asn_TYPE_descriptor_t *td, /* ASN.1 type descriptor */
                const void *struct_ptr);         /* Structure to be printed */
+
+void const *get_member(const void *sptr, asn_TYPE_member_t const *elm);
 
 #endif	/* _CONSTR_TYPE_H_ */

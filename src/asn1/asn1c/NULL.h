@@ -21,6 +21,7 @@ asn_struct_print_f NULL_print;
 asn_struct_compare_f NULL_compare;
 ber_type_decoder_f NULL_decode_ber;
 der_type_encoder_f NULL_encode_der;
+json_type_encoder_f NULL_encode_json;
 xer_type_encoder_f NULL_encode_xer;
 
 #define NULL_constraint	asn_generic_no_constraint

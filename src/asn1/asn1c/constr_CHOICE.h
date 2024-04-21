@@ -37,6 +37,7 @@ asn_struct_compare_f CHOICE_compare;
 asn_constr_check_f CHOICE_constraint;
 ber_type_decoder_f CHOICE_decode_ber;
 der_type_encoder_f CHOICE_encode_der;
+json_type_encoder_f CHOICE_encode_json;
 xer_type_encoder_f CHOICE_encode_xer;
 asn_outmost_tag_f CHOICE_outmost_tag;
 extern asn_TYPE_operation_t asn_OP_CHOICE;

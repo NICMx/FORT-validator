@@ -7,6 +7,94 @@
 
 #include "asn1/asn1c/EncapsulatedContentInfo.h"
 
+#include "asn1/asn1c/Manifest.h"
+#include "asn1/asn1c/RouteOriginAttestation.h"
+
+static json_t *
+econtent2json(asn_TYPE_descriptor_t const *td, OCTET_STRING_t *eContent)
+{
+	void *decoded;
+	asn_dec_rval_t rval;
+	json_t *content;
+
+	decoded = NULL;
+	rval = ber_decode(NULL, td, &decoded, eContent->buf, eContent->size);
+	if (rval.code != RC_OK)
+		return NULL;
+
+	content = td->op->json_encoder(td, decoded);
+
+	ASN_STRUCT_FREE(*td, decoded);
+	return content;
+}
+
+json_t *
+EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
+    const void *sptr)
+{
+	struct EncapsulatedContentInfo const *eci = sptr;
+	json_t *parent;
+	json_t *content_type;
+	json_t *content;
+
+	if (!eci)
+		return json_null();
+
+	parent = json_object();
+	if (parent == NULL)
+		return NULL;
+
+	td = &asn_DEF_ContentType;
+	content_type = td->op->json_encoder(td, &eci->eContentType);
+	if (content_type == NULL)
+		goto fail;
+	if (json_object_set_new(parent, td->name, content_type))
+		goto fail;
+
+	if (OBJECT_IDENTIFIER_is_mft(&eci->eContentType)) {
+		td = &asn_DEF_Manifest;
+		content = econtent2json(td, eci->eContent);
+
+	} else if (OBJECT_IDENTIFIER_is_roa(&eci->eContentType)) {
+		td = &asn_DEF_RouteOriginAttestation;
+		content = econtent2json(td, eci->eContent);
+
+	} else if (OBJECT_IDENTIFIER_is_gbr(&eci->eContentType)) {
+		td = &asn_DEF_OCTET_STRING;
+		content = OCTET_STRING_encode_json_utf8(td, eci->eContent);
+
+	} else {
+//		printf("===========================\n");
+//		for (ret = 0; ret < eci->eContentType.size; ret++)
+//			printf("%u ", eci->eContentType.buf[ret]);
+//		printf("\n==========================\n");
+
+		td = &asn_DEF_OCTET_STRING;
+		content = td->op->json_encoder(td, eci->eContent);
+	}
+
+	if (content == NULL)
+		goto fail;
+	if (json_object_set_new(parent, td->name, content))
+		goto fail;
+
+	return parent;
+
+fail:	json_decref(parent);
+	return NULL;
+}
+
+asn_TYPE_operation_t asn_OP_EncapsulatedContentInfo = {
+	SEQUENCE_free,
+	SEQUENCE_print,
+	SEQUENCE_compare,
+	SEQUENCE_decode_ber,
+	SEQUENCE_encode_der,
+	EncapsulatedContentInfo_encode_json,
+	SEQUENCE_encode_xer,
+	0	/* Use generic outmost tag fetcher */
+};
+
 asn_TYPE_member_t asn_MBR_EncapsulatedContentInfo_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct EncapsulatedContentInfo, eContentType),
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
@@ -44,7 +132,7 @@ asn_SEQUENCE_specifics_t asn_SPC_EncapsulatedContentInfo_specs_1 = {
 asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfo = {
 	"EncapsulatedContentInfo",
 	"EncapsulatedContentInfo",
-	&asn_OP_SEQUENCE,
+	&asn_OP_EncapsulatedContentInfo,
 	asn_DEF_EncapsulatedContentInfo_tags_1,
 	sizeof(asn_DEF_EncapsulatedContentInfo_tags_1)
 		/sizeof(asn_DEF_EncapsulatedContentInfo_tags_1[0]), /* 1 */

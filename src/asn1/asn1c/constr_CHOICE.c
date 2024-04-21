@@ -397,20 +397,16 @@ CHOICE_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 	 * Seek over the present member of the structure.
 	 */
 	elm = &td->elements[present-1];
-	if(elm->flags & ATF_POINTER) {
-        memb_ptr =
-            *(const void *const *)((const char *)sptr + elm->memb_offset);
-        if(memb_ptr == 0) {
-			if(elm->optional) {
-				erval.encoded = 0;
-				ASN__ENCODED_OK(erval);
-			}
-			/* Mandatory element absent */
-			ASN__ENCODE_FAILED;
+
+	memb_ptr = get_member(sptr, elm);
+	if (memb_ptr == NULL) {
+		if(elm->optional) {
+			erval.encoded = 0;
+			ASN__ENCODED_OK(erval);
 		}
-	} else {
-        memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
-    }
+		/* Mandatory element absent */
+		ASN__ENCODE_FAILED;
+	}
 
 	/*
 	 * If the CHOICE itself is tagged EXPLICIT:
@@ -468,17 +464,8 @@ CHOICE_outmost_tag(const asn_TYPE_descriptor_t *td, const void *ptr, int tag_mod
 
 	if(present > 0 && present <= td->elements_count) {
 		const asn_TYPE_member_t *elm = &td->elements[present-1];
-		const void *memb_ptr;
 
-		if(elm->flags & ATF_POINTER) {
-			memb_ptr = *(const void * const *)
-					((const char *)ptr + elm->memb_offset);
-		} else {
-			memb_ptr = (const void *)
-					((const char *)ptr + elm->memb_offset);
-		}
-
-		return asn_TYPE_outmost_tag(elm->type, memb_ptr,
+		return asn_TYPE_outmost_tag(elm->type, get_member(ptr, elm),
 			elm->tag_mode, elm->tag);
 	} else {
 		return (ber_tlv_tag_t)-1;
@@ -507,18 +494,14 @@ CHOICE_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
 		asn_TYPE_member_t *elm = &td->elements[present-1];
 		const void *memb_ptr;
 
-		if(elm->flags & ATF_POINTER) {
-			memb_ptr = *(const void * const *)((const char *)sptr + elm->memb_offset);
-			if(!memb_ptr) {
-				if(elm->optional)
-					return 0;
-				ASN__CTFAIL(app_key, td, sptr,
-					"%s: mandatory CHOICE element %s absent (%s:%d)",
-					td->name, elm->name, __FILE__, __LINE__);
-				return -1;
-			}
-		} else {
-			memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
+		memb_ptr = get_member(sptr, elm);
+		if (memb_ptr == NULL) {
+			if(elm->optional)
+				return 0;
+			ASN__CTFAIL(app_key, td, sptr,
+				"%s: mandatory CHOICE element %s absent (%s:%d)",
+				td->name, elm->name, __FILE__, __LINE__);
+			return -1;
 		}
 
 		if(elm->encoding_constraints.general_constraints) {
@@ -534,6 +517,33 @@ CHOICE_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
 			td->name, __FILE__, __LINE__);
 		return -1;
 	}
+}
+
+json_t *
+CHOICE_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
+{
+	const asn_CHOICE_specifics_t *specs = (const asn_CHOICE_specifics_t *)td->specifics;
+	unsigned present;
+	asn_TYPE_member_t *elm;
+	const void *memb_ptr;
+
+	if (!sptr)
+		return json_null();
+
+	/* Figure out which CHOICE element is encoded. */
+	present = _fetch_present_idx(sptr, specs->pres_offset, specs->pres_size);
+
+	if (present <= 0 || td->elements_count < present)
+		return json_null();
+
+	/* Print that element. */
+	elm = &td->elements[present-1];
+
+	memb_ptr = get_member(sptr, elm);
+	if (memb_ptr == NULL)
+		return json_null();
+
+	return elm->type->op->json_encoder(elm->type, memb_ptr);
 }
 
 asn_enc_rval_t
@@ -562,15 +572,11 @@ CHOICE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		const char *mname = elm->name;
 		unsigned int mlen = strlen(mname);
 
-		if(elm->flags & ATF_POINTER) {
-            memb_ptr =
-                *(const void *const *)((const char *)sptr + elm->memb_offset);
-            if(!memb_ptr) ASN__ENCODE_FAILED;
-		} else {
-            memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
-        }
+		memb_ptr = get_member(sptr, elm);
+		if (!memb_ptr)
+			ASN__ENCODE_FAILED;
 
-        er.encoded = 0;
+		er.encoded = 0;
 
 		if(!(flags & XER_F_CANONICAL)) ASN__TEXT_INDENT(1, ilevel);
 		ASN__CALLBACK3("<", 1, mname, mlen, ">", 1);
@@ -610,12 +616,9 @@ CHOICE_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		asn_TYPE_member_t *elm = &td->elements[present-1];
 		const void *memb_ptr;
 
-		if(elm->flags & ATF_POINTER) {
-			memb_ptr = *(const void * const *)((const char *)sptr + elm->memb_offset);
-			if(!memb_ptr) return (cb("<absent>", 8, app_key) < 0) ? -1 : 0;
-		} else {
-			memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
-		}
+		memb_ptr = get_member(sptr, elm);
+		if (!memb_ptr)
+			return (cb("<absent>", 8, app_key) < 0) ? -1 : 0;
 
 		/* Print member's name and stuff */
 		if(0) {
@@ -751,12 +754,7 @@ _get_member_ptr(const asn_TYPE_descriptor_t *td, const void *sptr,
         asn_TYPE_member_t *const elm = &td->elements[present - 1];
         const void *memb_ptr;
 
-		if(elm->flags & ATF_POINTER) {
-            memb_ptr =
-                *(const void *const *)((const char *)sptr + elm->memb_offset);
-        } else {
-            memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
-        }
+        memb_ptr = get_member(sptr, elm);
         *elm_ptr = elm;
         return memb_ptr;
     } else {
@@ -843,6 +841,7 @@ asn_TYPE_operation_t asn_OP_CHOICE = {
 	CHOICE_compare,
 	CHOICE_decode_ber,
 	CHOICE_encode_der,
+	CHOICE_encode_json,
 	CHOICE_encode_xer,
 	CHOICE_outmost_tag
 };

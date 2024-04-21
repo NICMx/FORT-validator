@@ -7,6 +7,58 @@
 
 #include "asn1/asn1c/SignedAttributes.h"
 
+static json_t *
+SignedAttributes_encode_json(const struct asn_TYPE_descriptor_s *td,
+    const void *sptr)
+{
+	json_t *result;
+	const asn_anonymous_set_ *list;
+	asn_TYPE_descriptor_t *type;
+	int i;
+
+	if (!sptr)
+		return json_null();
+
+	result = json_object();
+	if (result == NULL)
+		return NULL;
+
+	list = _A_CSET_FROM_VOID(sptr);
+	type = &asn_DEF_CMSAttribute;
+
+	for (i = 0; i < list->count; i++) {
+		CMSAttribute_t *attr;
+		json_t *node;
+		char buf[OID_STR_MAXLEN];
+		char const *key;
+
+		attr = list->array[i];
+		node = type->op->json_encoder(type, attr);
+		if (node == NULL)
+			goto fail;
+
+		key = OBJECT_IDENTIFIER_to_string(&attr->attrType, buf);
+		if (json_object_set_new(result, key, node) < 0)
+			goto fail;
+	}
+
+	return result;
+
+fail:	json_decref(result);
+	return NULL;
+}
+
+asn_TYPE_operation_t asn_OP_SignedAttributes = {
+	SET_OF_free,
+	SET_OF_print,
+	SET_OF_compare,
+	SET_OF_decode_ber,
+	SET_OF_encode_der,
+	SignedAttributes_encode_json,
+	SET_OF_encode_xer,
+	0	/* Use generic outmost tag fetcher */
+};
+
 asn_TYPE_member_t asn_MBR_SignedAttributes_1[] = {
 	{ ATF_POINTER, 0, 0,
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
@@ -29,7 +81,7 @@ asn_SET_OF_specifics_t asn_SPC_SignedAttributes_specs_1 = {
 asn_TYPE_descriptor_t asn_DEF_SignedAttributes = {
 	"SignedAttributes",
 	"SignedAttributes",
-	&asn_OP_SET_OF,
+	&asn_OP_SignedAttributes,
 	asn_DEF_SignedAttributes_tags_1,
 	sizeof(asn_DEF_SignedAttributes_tags_1)
 		/sizeof(asn_DEF_SignedAttributes_tags_1[0]), /* 1 */

@@ -7,6 +7,84 @@
 
 #include "asn1/asn1c/ContentInfo.h"
 
+#include "asn1/asn1c/SignedData.h"
+
+json_t *
+content2json(const asn_TYPE_descriptor_t *td, ANY_t const *ber)
+{
+	void *decoded;
+	asn_dec_rval_t rval;
+	json_t *content;
+
+	decoded = NULL;
+	rval = ber_decode(NULL, td, &decoded, ber->buf, ber->size);
+	if (rval.code != RC_OK)
+		return NULL;
+
+	content = td->op->json_encoder(td, decoded);
+
+	ASN_STRUCT_FREE(*td, decoded);
+	return content;
+}
+
+json_t *
+ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
+{
+	struct ContentInfo const *ci = sptr;
+	json_t *parent;
+	json_t *content_type;
+	json_t *content;
+
+	if (!ci)
+		return json_null();
+
+	parent = json_object();
+	if (parent == NULL)
+		return NULL;
+
+	td = &asn_DEF_ContentType;
+	content_type = td->op->json_encoder(td, &ci->contentType);
+	if (content_type == NULL)
+		goto fail;
+	if (json_object_set_new(parent, td->name, content_type))
+		goto fail;
+
+	if (OBJECT_IDENTIFIER_is_SignedData(&ci->contentType)) {
+		td = &asn_DEF_SignedData;
+		content = content2json(td, &ci->content);
+
+	} else {
+//		printf("===========================\n");
+//		for (ret = 0; ret < ci->contentType.size; ret++)
+//			printf("%u ", ci->contentType.buf[ret]);
+//		printf("\n==========================\n");
+
+		td = &asn_DEF_ANY;
+		content = td->op->json_encoder(td, &ci->content);
+	}
+
+	if (content == NULL)
+		goto fail;
+	if (json_object_set_new(parent, td->name, content))
+		goto fail;
+
+	return parent;
+
+fail:	json_decref(parent);
+	return NULL;
+}
+
+asn_TYPE_operation_t asn_OP_ContentInfo = {
+	SEQUENCE_free,
+	SEQUENCE_print,
+	SEQUENCE_compare,
+	SEQUENCE_decode_ber,
+	SEQUENCE_encode_der,
+	ContentInfo_encode_json,
+	SEQUENCE_encode_xer,
+	0	/* Use generic outmost tag fetcher */
+};
+
 static asn_TYPE_member_t asn_MBR_ContentInfo_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct ContentInfo, contentType),
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
@@ -44,7 +122,7 @@ static asn_SEQUENCE_specifics_t asn_SPC_ContentInfo_specs_1 = {
 asn_TYPE_descriptor_t asn_DEF_ContentInfo = {
 	"ContentInfo",
 	"ContentInfo",
-	&asn_OP_SEQUENCE,
+	&asn_OP_ContentInfo,
 	asn_DEF_ContentInfo_tags_1,
 	sizeof(asn_DEF_ContentInfo_tags_1)
 		/sizeof(asn_DEF_ContentInfo_tags_1[0]), /* 1 */

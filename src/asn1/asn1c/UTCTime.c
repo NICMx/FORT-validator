@@ -26,6 +26,7 @@ asn_TYPE_operation_t asn_OP_UTCTime = {
 	UTCTime_compare,
 	OCTET_STRING_decode_ber,    /* Implemented in terms of OCTET STRING */
 	OCTET_STRING_encode_der,    /* Implemented in terms of OCTET STRING */
+	UTCTime_encode_json,
 	UTCTime_encode_xer,
 	0	/* Use generic outmost tag fetcher */
 };
@@ -97,31 +98,48 @@ UTCTime_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
 
 #endif	/* ASN___INTERNAL_TEST_MODE */
 
+static int
+UTCTime2str(const UTCTime_t *st, char *str)
+{
+	struct tm tm;
+
+	if (asn_UT2time(st, &tm) != 0)
+		return -1;
+
+	return asn_tm2str(&tm, str);
+}
+
 int
 UTCTime_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
-              asn_app_consume_bytes_f *cb, void *app_key) {
-    const UTCTime_t *st = (const UTCTime_t *)sptr;
+    asn_app_consume_bytes_f *cb, void *app_key)
+{
+	const UTCTime_t *st = (const UTCTime_t *)sptr;
+	char buf[ASN_TM_STR_MAXLEN];
+	int ret;
 
-	(void)td;	/* Unused argument */
-	(void)ilevel;	/* Unused argument */
-
-	if(st && st->buf) {
-		char buf[32];
-		struct tm tm;
-		int ret;
-
-		if(asn_UT2time(st, &tm) != 0)
-			return (cb("<bad-value>", 11, app_key) < 0) ? -1 : 0;
-
-		ret = snprintf(buf, sizeof(buf),
-			"%04d-%02d-%02d %02d:%02d:%02d (GMT)",
-			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-			tm.tm_hour, tm.tm_min, tm.tm_sec);
-		assert(ret > 0 && ret < (int)sizeof(buf));
-		return (cb(buf, ret, app_key) < 0) ? -1 : 0;
-	} else {
+	if (st == NULL || st->buf == NULL)
 		return (cb("<absent>", 8, app_key) < 0) ? -1 : 0;
-	}
+
+	ret = UTCTime2str(st, buf);
+	if (ret < 0)
+		return (cb("<bad-value>", 11, app_key) < 0) ? -1 : 0;
+
+	return (cb(buf, ret, app_key) < 0) ? -1 : 0;
+}
+
+json_t *
+UTCTime_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
+{
+	const UTCTime_t *st = (const UTCTime_t *)sptr;
+	char buf[ASN_TM_STR_MAXLEN];
+
+	if (st == NULL || st->buf == NULL)
+		return json_null();
+
+	if (UTCTime2str(st, buf) < 0)
+		return NULL;
+
+	return json_string(buf);
 }
 
 time_t

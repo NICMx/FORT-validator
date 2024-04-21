@@ -18,6 +18,7 @@ asn_struct_print_f GeneralizedTime_print;
 asn_struct_compare_f GeneralizedTime_compare;
 asn_constr_check_f GeneralizedTime_constraint;
 der_type_encoder_f GeneralizedTime_encode_der;
+json_type_encoder_f GeneralizedTime_encode_json;
 xer_type_encoder_f GeneralizedTime_encode_xer;
 
 #define GeneralizedTime_free           OCTET_STRING_free
@@ -26,6 +27,10 @@ xer_type_encoder_f GeneralizedTime_encode_xer;
 /***********************
  * Some handy helpers. *
  ***********************/
+
+#define ASN_TM_STR_MAXLEN 21
+
+int asn_tm2str(struct tm *tm, char *str);
 
 /*
  * Convert a GeneralizedTime structure into time_t

@@ -22,6 +22,7 @@ asn_TYPE_operation_t asn_OP_OBJECT_IDENTIFIER = {
 	OCTET_STRING_compare,   /* Implemented in terms of a string comparison */
 	ber_decode_primitive,
 	der_encode_primitive,
+	OBJECT_IDENTIFIER_encode_json,
 	OBJECT_IDENTIFIER_encode_xer,
 	0	/* Use generic outmost tag fetcher */
 };
@@ -208,6 +209,85 @@ OBJECT_IDENTIFIER_print(const asn_TYPE_descriptor_t *td, const void *sptr,
     }
 
     return (cb(" }", 2, app_key) < 0) ? -1 : 0;
+}
+
+struct string_buffer {
+	char *buf;
+	size_t len;
+};
+
+static int
+bytes2str(const void *addend, size_t addlen, void *arg)
+{
+	struct string_buffer *buffer = arg;
+
+	if (buffer->len + addlen + 1 > OID_STR_MAXLEN)
+		return -ENOSPC;
+
+	strncpy(buffer->buf + buffer->len, addend, addlen);
+	buffer->len += addlen;
+	return 0;
+}
+
+static char *
+OBJECT_IDENTIFIER_to_literal(OBJECT_IDENTIFIER_t const *oid, char *buf)
+{
+	struct string_buffer buffer;
+
+	buffer.buf = buf;
+	buffer.len = 0;
+
+	if (OBJECT_IDENTIFIER__dump_body(oid, bytes2str, &buffer) < 0)
+		return NULL;
+
+	buffer.buf[buffer.len] = '\0';
+	return buf;
+}
+
+char const *
+OBJECT_IDENTIFIER_to_string(OBJECT_IDENTIFIER_t const *oid, char *buf)
+{
+//	printf("\n===========================\n");
+//	for (ret = 0; ret < st->size; ret++)
+//		printf("%u ", st->buf[ret]);
+//	printf("\n===========================\n");
+
+	if (!oid || !oid->buf)
+		return NULL;
+	if (OBJECT_IDENTIFIER_is_rsaEncryption(oid))
+		return "rsaEncryption";
+	if (OBJECT_IDENTIFIER_is_sha256WithRSAEncryption(oid))
+		return "sha256WithRSAEncryption";
+	if (OBJECT_IDENTIFIER_is_SignedData(oid))
+		return "signedData";
+	if (OBJECT_IDENTIFIER_is_ContentType(oid))
+		return "Content-Type";
+	if (OBJECT_IDENTIFIER_is_MessageDigest(oid))
+		return "Message-Digest";
+	if (OBJECT_IDENTIFIER_is_SigningTime(oid))
+		return "Signing-Time";
+	if (OBJECT_IDENTIFIER_is_roa(oid))
+		return "ROA";
+	if (OBJECT_IDENTIFIER_is_mft(oid))
+		return "Manifest";
+	if (OBJECT_IDENTIFIER_is_gbr(oid))
+		return "Ghostbusters";
+	if (OBJECT_IDENTIFIER_is_sha256(oid))
+		return "sha256";
+
+	return OBJECT_IDENTIFIER_to_literal(oid, buf);
+}
+
+json_t *
+OBJECT_IDENTIFIER_encode_json(const struct asn_TYPE_descriptor_s *td,
+    const void *sptr)
+{
+	const OBJECT_IDENTIFIER_t *oid = (const OBJECT_IDENTIFIER_t *)sptr;
+	char buf[OID_STR_MAXLEN];
+	char const *string;
+
+	string = OBJECT_IDENTIFIER_to_string(oid, buf);
+	return (string != NULL) ? json_string(string) : NULL;
 }
 
 ssize_t
@@ -507,4 +587,98 @@ OBJECT_IDENTIFIER_parse_arcs(const char *oid_text, ssize_t oid_txt_length,
 
 	errno = EINVAL;	/* Broken OID */
 	return -1;
+}
+
+static bool
+is_raw(OBJECT_IDENTIFIER_t const *oid, unsigned char const *raw, size_t size)
+{
+	return (oid->size == size) && memcmp(oid->buf, raw, size) == 0;
+}
+
+bool
+OBJECT_IDENTIFIER_is_rsaEncryption(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 1, 1
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_sha256WithRSAEncryption(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 1, 11
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_SignedData(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 7, 2
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_ContentType(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 9, 3
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_MessageDigest(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 9, 4
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_SigningTime(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 9, 5
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_roa(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 9, 16, 1, 24
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_mft(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 9, 16, 1, 26
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_gbr(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = {
+	    42, 134, 72, 134, 247, 13, 1, 9, 16, 1, 35
+	};
+	return is_raw(oid, RAW, sizeof(RAW));
+}
+
+bool
+OBJECT_IDENTIFIER_is_sha256(OBJECT_IDENTIFIER_t const *oid)
+{
+	static const unsigned char RAW[] = { 96, 134, 72, 1, 101, 3, 4, 2, 1 };
+	return is_raw(oid, RAW, sizeof(RAW));
 }

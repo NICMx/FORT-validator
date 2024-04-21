@@ -43,7 +43,7 @@ struct rpki_config {
 	unsigned int maximum_certificate_depth;
 	/** File or directory where the .slurm file(s) is(are) located */
 	char *slurm;
-	/* Run as RTR server or standalone validation */
+	/* */
 	enum mode mode;
 	/*
 	 * Disable outgoing requests (currently rsync and http supported), if
@@ -192,6 +192,8 @@ struct rpki_config {
 			unsigned int max; /* Deprecated */
 		} validation;
 	} thread_pool;
+
+	char *payload;
 };
 
 static void print_usage(FILE *, bool);
@@ -988,6 +990,15 @@ valid_output_file(char const *path)
 static int
 validate_config(void)
 {
+	if (rpki_config.mode == PRINT_FILE)
+		return (rpki_config.payload == NULL)
+		    ? pr_op_err("Missing file name.")
+		    : 0;
+
+	if (rpki_config.payload != NULL)
+		return pr_op_err("I don't know what '%s' is.",
+		    rpki_config.payload);
+
 	if (rpki_config.tal == NULL)
 		return pr_op_err("The TAL(s) location (--tal) is mandatory.");
 
@@ -1098,14 +1109,8 @@ handle_flags_config(int argc, char **argv)
 			goto end;
 	}
 
-	/*
-	 * This triggers when the user runs something like `fort help` instead
-	 * of `fort --help`. This program does not have unflagged payload.
-	 */
-	if (optind < argc) {
-		error = pr_op_err("I don't know what '%s' is.", argv[optind]);
-		goto end;
-	}
+	if (optind < argc)
+		rpki_config.payload = pstrdup(argv[optind]);
 
 	error = validate_config();
 	if (error)
@@ -1453,6 +1458,12 @@ config_get_thread_pool_server_max(void)
 	return rpki_config.thread_pool.server.max;
 }
 
+char const *
+config_get_payload(void)
+{
+	return rpki_config.payload;
+}
+
 void
 config_set_rsync_enabled(bool value)
 {
@@ -1473,4 +1484,5 @@ free_rpki_config(void)
 	FOREACH_OPTION(options, option, 0xFFFF)
 		if (is_rpki_config_field(option) && option->type->free != NULL)
 			option->type->free(get_rpki_config_field(option));
+	free(rpki_config.payload);
 }

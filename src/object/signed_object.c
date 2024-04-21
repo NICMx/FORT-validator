@@ -8,7 +8,7 @@ signed_object_decode(struct signed_object *sobj, struct rpki_uri *uri)
 {
 	int error;
 
-	error = content_info_load(uri, &sobj->cinfo);
+	error = content_info_load(uri_get_local(uri), &sobj->cinfo);
 	if (error)
 		return error;
 

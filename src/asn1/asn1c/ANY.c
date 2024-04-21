@@ -18,6 +18,7 @@ asn_TYPE_operation_t asn_OP_ANY = {
 	OCTET_STRING_compare,
 	OCTET_STRING_decode_ber,
 	OCTET_STRING_encode_der,
+	OCTET_STRING_encode_json,
 	ANY_encode_xer,
 	0	/* Use generic outmost tag fetcher */
 };

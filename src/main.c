@@ -7,6 +7,7 @@
 #include "thread_var.h"
 #include "http/http.h"
 #include "incidence/incidence.h"
+#include "print_file.h"
 #include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
 #include "xml/relax_ng.h"
@@ -168,6 +169,9 @@ main(int argc, char **argv)
 		break;
 	case SERVER:
 		error = fort_server();
+		break;
+	case PRINT_FILE:
+		error = print_file();
 		break;
 	}
 

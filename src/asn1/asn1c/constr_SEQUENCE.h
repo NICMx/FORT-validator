@@ -38,6 +38,7 @@ asn_struct_compare_f SEQUENCE_compare;
 asn_constr_check_f SEQUENCE_constraint;
 ber_type_decoder_f SEQUENCE_decode_ber;
 der_type_encoder_f SEQUENCE_encode_der;
+json_type_encoder_f SEQUENCE_encode_json;
 xer_type_encoder_f SEQUENCE_encode_xer;
 extern asn_TYPE_operation_t asn_OP_SEQUENCE;
 

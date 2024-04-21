@@ -489,6 +489,38 @@ SET_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
     }
 }
 
+json_t *
+SET_OF_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
+{
+	json_t *result;
+	const asn_anonymous_set_ *list;
+	asn_TYPE_descriptor_t *type;
+	int i;
+
+	if (!sptr)
+		return json_null();
+
+	result = json_array();
+	if (result == NULL)
+		return NULL;
+
+	list = _A_CSET_FROM_VOID(sptr);
+	type = td->elements->type;
+
+	for (i = 0; i < list->count; i++) {
+		json_t *node = type->op->json_encoder(type, list->array[i]);
+		if (node == NULL)
+			goto fail;
+		if (json_array_append_new(result, node) < 0)
+			goto fail;
+	}
+
+	return result;
+
+fail:	json_decref(result);
+	return NULL;
+}
+
 typedef struct xer_tmp_enc_s {
 	void *buffer;
 	size_t offset;
@@ -821,6 +853,7 @@ asn_TYPE_operation_t asn_OP_SET_OF = {
 	SET_OF_compare,
 	SET_OF_decode_ber,
 	SET_OF_encode_der,
+	SET_OF_encode_json,
 	SET_OF_encode_xer,
 	0	/* Use generic outmost tag fetcher */
 };

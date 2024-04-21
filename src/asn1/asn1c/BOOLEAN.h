@@ -22,6 +22,7 @@ asn_struct_print_f BOOLEAN_print;
 asn_struct_compare_f BOOLEAN_compare;
 ber_type_decoder_f BOOLEAN_decode_ber;
 der_type_encoder_f BOOLEAN_encode_der;
+json_type_encoder_f BOOLEAN_encode_json;
 xer_type_encoder_f BOOLEAN_encode_xer;
 
 #define BOOLEAN_constraint     asn_generic_no_constraint

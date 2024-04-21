@@ -5,6 +5,7 @@
 #ifndef	_OBJECT_IDENTIFIER_H_
 #define	_OBJECT_IDENTIFIER_H_
 
+#include <stdbool.h>
 #include "asn1/asn1c/asn_application.h"
 #include "asn1/asn1c/asn_codecs_prim.h"
 #include "asn1/asn1c/OCTET_STRING.h"
@@ -20,6 +21,7 @@ extern asn_TYPE_operation_t asn_OP_OBJECT_IDENTIFIER;
 asn_struct_print_f OBJECT_IDENTIFIER_print;
 asn_constr_check_f OBJECT_IDENTIFIER_constraint;
 der_type_encoder_f OBJECT_IDENTIFIER_encode_der;
+json_type_encoder_f OBJECT_IDENTIFIER_encode_json;
 xer_type_encoder_f OBJECT_IDENTIFIER_encode_xer;
 
 #define OBJECT_IDENTIFIER_free           ASN__PRIMITIVE_TYPE_free
@@ -30,6 +32,9 @@ xer_type_encoder_f OBJECT_IDENTIFIER_encode_xer;
 /**********************************
  * Some handy conversion routines *
  **********************************/
+
+#define OID_STR_MAXLEN 64 /* Null char included */
+char const *OBJECT_IDENTIFIER_to_string(OBJECT_IDENTIFIER_t const *, char *);
 
 /*
  * This function fills an (arcs) array with OBJECT IDENTIFIER arcs
@@ -136,5 +141,16 @@ ssize_t OBJECT_IDENTIFIER_get_single_arc(const uint8_t *arcbuf,
  */
 ssize_t OBJECT_IDENTIFIER_set_single_arc(uint8_t *arcbuf, size_t arcbuf_len,
                                          asn_oid_arc_t arc_value);
+
+bool OBJECT_IDENTIFIER_is_rsaEncryption(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_sha256WithRSAEncryption(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_SignedData(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_ContentType(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_MessageDigest(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_SigningTime(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_roa(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_mft(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_gbr(OBJECT_IDENTIFIER_t const *oid);
+bool OBJECT_IDENTIFIER_is_sha256(OBJECT_IDENTIFIER_t const *oid);
 
 #endif	/* _OBJECT_IDENTIFIER_H_ */

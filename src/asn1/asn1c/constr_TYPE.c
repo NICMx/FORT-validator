@@ -75,7 +75,16 @@ void ASN_DEBUG_f(const char *fmt, ...);
 void ASN_DEBUG_f(const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
+	fprintf(stderr, "\x1B[32m");
 	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, "\n");
+	fprintf(stderr, "\x1B[0m\n");
 	va_end(ap);
+}
+
+void const *
+get_member(const void *sptr, asn_TYPE_member_t const *elm)
+{
+	return (elm->flags & ATF_POINTER)
+	    ? (*(const void * const *)((const char *)sptr + elm->memb_offset))
+	    : ((const void *)((const char *)sptr + elm->memb_offset));
 }

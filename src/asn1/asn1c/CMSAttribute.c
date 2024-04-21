@@ -7,6 +7,73 @@
 
 #include "asn1/asn1c/CMSAttribute.h"
 
+#include "asn1/asn1c/ContentType.h"
+#include "asn1/asn1c/MessageDigest.h"
+#include "asn1/asn1c/SigningTime.h"
+
+static json_t *
+attr2json(asn_TYPE_descriptor_t const *td, struct CMSAttribute const *cattr)
+{
+	json_t *array, *node;
+	CMSAttributeValue_t *ber;
+	void *attr;
+	int i;
+	asn_dec_rval_t rval;
+
+	array = json_array();
+	if (array == NULL)
+		return NULL;
+
+	for (i = 0; i < cattr->attrValues.list.count; i++) {
+		ber = cattr->attrValues.list.array[i];
+		attr = NULL;
+
+		rval = ber_decode(NULL, td, &attr, ber->buf, ber->size);
+		if (rval.code != RC_OK)
+			goto fail;
+
+		node = td->op->json_encoder(td, attr);
+
+		ASN_STRUCT_FREE(*td, attr);
+
+		if (json_array_append_new(array, node) < 0)
+			goto fail;
+	}
+
+	return array;
+
+fail:	json_decref(array);
+	return NULL;
+}
+
+json_t *
+CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
+{
+	struct CMSAttribute const *cattr = sptr;
+
+	if (!cattr)
+		return json_null();
+	if (OBJECT_IDENTIFIER_is_ContentType(&cattr->attrType))
+		return attr2json(&asn_DEF_ContentType, cattr);
+	if (OBJECT_IDENTIFIER_is_MessageDigest(&cattr->attrType))
+		return attr2json(&asn_DEF_MessageDigest, cattr);
+	if (OBJECT_IDENTIFIER_is_SigningTime(&cattr->attrType))
+		return attr2json(&asn_DEF_SigningTime, cattr);
+
+	return SEQUENCE_encode_json(td, sptr);
+}
+
+asn_TYPE_operation_t asn_OP_CMSAttribute = {
+	SEQUENCE_free,
+	SEQUENCE_print,
+	SEQUENCE_compare,
+	SEQUENCE_decode_ber,
+	SEQUENCE_encode_der,
+	CMSAttribute_encode_json,
+	SEQUENCE_encode_xer,
+	0	/* Use generic outmost tag fetcher */
+};
+
 static asn_TYPE_member_t asn_MBR_attrValues_3[] = {
 	{ ATF_ANY_TYPE | ATF_POINTER, 0, 0,
 		-1 /* Ambiguous tag (ANY?) */,
@@ -80,7 +147,7 @@ asn_SEQUENCE_specifics_t asn_SPC_CMSAttribute_specs_1 = {
 asn_TYPE_descriptor_t asn_DEF_CMSAttribute = {
 	"CMSAttribute",
 	"CMSAttribute",
-	&asn_OP_SEQUENCE,
+	&asn_OP_CMSAttribute,
 	asn_DEF_CMSAttribute_tags_1,
 	sizeof(asn_DEF_CMSAttribute_tags_1)
 		/sizeof(asn_DEF_CMSAttribute_tags_1[0]), /* 1 */

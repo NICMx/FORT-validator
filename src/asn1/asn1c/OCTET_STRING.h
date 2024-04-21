@@ -31,6 +31,8 @@ asn_struct_print_f OCTET_STRING_print_utf8;
 asn_struct_compare_f OCTET_STRING_compare;
 ber_type_decoder_f OCTET_STRING_decode_ber;
 der_type_encoder_f OCTET_STRING_encode_der;
+json_type_encoder_f OCTET_STRING_encode_json;
+json_type_encoder_f OCTET_STRING_encode_json_utf8;
 xer_type_encoder_f OCTET_STRING_encode_xer;
 xer_type_encoder_f OCTET_STRING_encode_xer_utf8;
 

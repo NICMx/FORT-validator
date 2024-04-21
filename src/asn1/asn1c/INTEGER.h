@@ -37,6 +37,7 @@ typedef struct asn_INTEGER_specifics_s {
 asn_struct_print_f INTEGER_print;
 asn_struct_compare_f INTEGER_compare;
 der_type_encoder_f INTEGER_encode_der;
+json_type_encoder_f INTEGER_encode_json;
 xer_type_encoder_f INTEGER_encode_xer;
 
 /***********************************

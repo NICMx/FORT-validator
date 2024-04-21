@@ -58,6 +58,7 @@ asn_TYPE_operation_t asn_OP_GeneralizedTime = {
 	GeneralizedTime_compare,
 	OCTET_STRING_decode_ber,    /* Implemented in terms of OCTET STRING */
 	GeneralizedTime_encode_der,
+	GeneralizedTime_encode_json,
 	GeneralizedTime_encode_xer,
 	0	/* Use generic outmost tag fetcher */
 };
@@ -77,6 +78,17 @@ asn_TYPE_descriptor_t asn_DEF_GeneralizedTime = {
 };
 
 #endif	/* ASN___INTERNAL_TEST_MODE */
+
+static int
+GeneralizedTime2str(const GeneralizedTime_t *st, char *str)
+{
+	struct tm tm;
+
+	if (asn_GT2time(st, &tm) != 0)
+		return -1;
+
+	return asn_tm2str(&tm, str);
+}
 
 /*
  * Check that the time looks like the time.
@@ -124,6 +136,21 @@ GeneralizedTime_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
     return erval;
 }
 
+json_t *
+GeneralizedTime_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
+{
+	const GeneralizedTime_t *st = (const GeneralizedTime_t *)sptr;
+	char buf[ASN_TM_STR_MAXLEN];
+
+	if (st == NULL || st->buf == NULL)
+		return json_null();
+
+	if (GeneralizedTime2str(st, buf) < 0)
+		return NULL;
+
+	return json_string(buf);
+}
+
 #ifndef	ASN___INTERNAL_TEST_MODE
 
 asn_enc_rval_t
@@ -157,29 +184,35 @@ GeneralizedTime_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
 
 int
 GeneralizedTime_print(const asn_TYPE_descriptor_t *td, const void *sptr,
-                      int ilevel, asn_app_consume_bytes_f *cb, void *app_key) {
-    const GeneralizedTime_t *st = (const GeneralizedTime_t *)sptr;
+    int ilevel, asn_app_consume_bytes_f *cb, void *app_key)
+{
+	const GeneralizedTime_t *st = (const GeneralizedTime_t *)sptr;
+	char buf[ASN_TM_STR_MAXLEN];
+	int ret;
 
-	(void)td;	/* Unused argument */
-	(void)ilevel;	/* Unused argument */
-
-	if(st && st->buf) {
-		char buf[32];
-		struct tm tm;
-		int ret;
-
-		if(asn_GT2time(st, &tm) != 0)
-			return (cb("<bad-value>", 11, app_key) < 0) ? -1 : 0;
-
-		ret = snprintf(buf, sizeof(buf),
-			"%04d-%02d-%02d %02d:%02d:%02d (GMT)",
-			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-			tm.tm_hour, tm.tm_min, tm.tm_sec);
-		assert(ret > 0 && ret < (int)sizeof(buf));
-		return (cb(buf, ret, app_key) < 0) ? -1 : 0;
-	} else {
+	if (st == NULL || st->buf == NULL)
 		return (cb("<absent>", 8, app_key) < 0) ? -1 : 0;
-	}
+
+	ret = GeneralizedTime2str(st, buf);
+	if (ret < 0)
+		return (cb("<bad-value>", 11, app_key) < 0) ? -1 : 0;
+
+	return (cb(buf, ret, app_key) < 0) ? -1 : 0;
+}
+
+/* Returns string length (ASN_TM_STR_MAXLEN - 1); no errors possible. */
+int
+asn_tm2str(struct tm *tm, char *str)
+{
+	int ret;
+
+	ret = snprintf(str, ASN_TM_STR_MAXLEN,
+		"%04d-%02d-%02dT%02d:%02d:%02dZ",
+		tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+		tm->tm_hour, tm->tm_min, tm->tm_sec);
+	assert(ret == ASN_TM_STR_MAXLEN - 1);
+
+	return ret;
 }
 
 int

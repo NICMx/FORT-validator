@@ -611,6 +611,43 @@ SEQUENCE_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 	ASN__ENCODED_OK(erval);
 }
 
+json_t *
+SEQUENCE_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
+{
+	json_t *parent, *child;
+	size_t c;
+
+	if (!sptr)
+		return json_null();
+
+	parent = json_object();
+	if (parent == NULL)
+		return NULL;
+
+	for (c = 0; c < td->elements_count; c++) {
+		asn_TYPE_member_t *elm = &td->elements[c];
+		const void *memb_ptr;
+
+		memb_ptr = get_member(sptr, elm);
+		if (!memb_ptr) {
+			if (elm->optional)
+				continue;
+			/* Fall through */
+		}
+
+		child = elm->type->op->json_encoder(elm->type, memb_ptr);
+		if (child == NULL)
+			goto fail;
+		if (json_object_set_new(parent, elm->name, child))
+			goto fail;
+	}
+
+	return parent;
+
+fail:	json_decref(parent);
+	return NULL;
+}
+
 asn_enc_rval_t
 SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
                     int ilevel, enum xer_encoder_flags_e flags,
@@ -632,9 +669,7 @@ SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
         const char *mname = elm->name;
         unsigned int mlen = strlen(mname);
 
-        if(elm->flags & ATF_POINTER) {
-            memb_ptr =
-                *(const void *const *)((const char *)sptr + elm->memb_offset);
+        memb_ptr = get_member(sptr, elm);
             if(!memb_ptr) {
                 assert(tmp_def_val == 0);
                 if(elm->default_value_set) {
@@ -651,9 +686,6 @@ SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
                     ASN__ENCODE_FAILED;
                 }
             }
-        } else {
-            memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
-        }
 
         if(!xcan) ASN__TEXT_INDENT(1, ilevel);
         ASN__CALLBACK3("<", 1, mname, mlen, ">", 1);
@@ -696,15 +728,12 @@ SEQUENCE_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		asn_TYPE_member_t *elm = &td->elements[edx];
 		const void *memb_ptr;
 
-		if(elm->flags & ATF_POINTER) {
-			memb_ptr = *(const void * const *)((const char *)sptr + elm->memb_offset);
-			if(!memb_ptr) {
-				if(elm->optional) continue;
-				/* Print <absent> line */
-				/* Fall through */
-			}
-		} else {
-			memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
+		memb_ptr = get_member(sptr, elm);
+		if (!memb_ptr) {
+			if(elm->optional)
+				continue;
+			/* Print <absent> line */
+			/* Fall through */
 		}
 
 		/* Indentation */
@@ -790,18 +819,14 @@ SEQUENCE_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
 		asn_TYPE_member_t *elm = &td->elements[edx];
 		const void *memb_ptr;
 
-		if(elm->flags & ATF_POINTER) {
-			memb_ptr = *(const void * const *)((const char *)sptr + elm->memb_offset);
-			if(!memb_ptr) {
-				if(elm->optional)
-					continue;
-				ASN__CTFAIL(app_key, td, sptr,
-				"%s: mandatory element %s absent (%s:%d)",
-				td->name, elm->name, __FILE__, __LINE__);
-				return -1;
-			}
-		} else {
-			memb_ptr = (const void *)((const char *)sptr + elm->memb_offset);
+		memb_ptr = get_member(sptr, elm);
+		if (!memb_ptr) {
+			if(elm->optional)
+				continue;
+			ASN__CTFAIL(app_key, td, sptr,
+			"%s: mandatory element %s absent (%s:%d)",
+			td->name, elm->name, __FILE__, __LINE__);
+			return -1;
 		}
 
 		if(elm->encoding_constraints.general_constraints) {
@@ -867,6 +892,7 @@ asn_TYPE_operation_t asn_OP_SEQUENCE = {
 	SEQUENCE_compare,
 	SEQUENCE_decode_ber,
 	SEQUENCE_encode_der,
+	SEQUENCE_encode_json,
 	SEQUENCE_encode_xer,
 	0	/* Use generic outmost tag fetcher */
 };

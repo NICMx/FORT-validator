@@ -22,6 +22,7 @@ fort_SOURCES += line_file.h line_file.c
 fort_SOURCES += log.h log.c
 fort_SOURCES += nid.h nid.c
 fort_SOURCES += output_printer.h output_printer.c
+fort_SOURCES += print_file.h print_file.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
 fort_SOURCES += rrdp.h rrdp.c
@@ -108,8 +109,6 @@ fort_SOURCES += thread/thread_pool.c thread/thread_pool.h
 
 fort_SOURCES += xml/relax_ng.c xml/relax_ng.h
 
-# I'm placing these at the end because they rarely change, and I want warnings
-# to appear as soon as possible.
 include asn1/asn1c/Makefile.include
 fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 

@@ -13,6 +13,7 @@
 #define OPEN_TYPE_constraint CHOICE_constraint
 #define OPEN_TYPE_decode_ber NULL
 #define OPEN_TYPE_encode_der CHOICE_encode_der
+#define OPEN_TYPE_encode_json CHOICE_encode_json
 #define OPEN_TYPE_encode_xer CHOICE_encode_xer
 
 extern asn_TYPE_operation_t asn_OP_OPEN_TYPE;
