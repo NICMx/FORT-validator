@@ -227,7 +227,6 @@ asn_encode_internal(const asn_codec_ctx_t *opt_codec_ctx,
                     const asn_TYPE_descriptor_t *td, const void *sptr,
                     asn_app_consume_bytes_f *callback, void *callback_key) {
     asn_enc_rval_t er;
-    enum xer_encoder_flags_e xer_flags = XER_F_CANONICAL;
 
     (void)opt_codec_ctx; /* Parameters are not checked on encode yet. */
 
@@ -288,27 +287,6 @@ asn_encode_internal(const asn_codec_ctx_t *opt_codec_ctx,
         errno = ENOENT; /* Transfer syntax is not defined for any type. */
         ASN__ENCODE_FAILED;
 
-    case ATS_BASIC_XER:
-        /* CANONICAL-XER is a superset of BASIC-XER. */
-        xer_flags &= ~XER_F_CANONICAL;
-        xer_flags |= XER_F_BASIC;
-        /* Fall through. */
-    case ATS_CANONICAL_XER:
-        if(td->op->xer_encoder) {
-            er = xer_encode(td, sptr, xer_flags, callback, callback_key);
-            if(er.encoded == -1) {
-                if(er.failed_type && er.failed_type->op->xer_encoder) {
-                    errno = EBADF;  /* Structure has incorrect form. */
-                } else {
-                    errno = ENOENT; /* XER is not defined for this type. */
-                }
-            }
-        } else {
-            errno = ENOENT; /* Transfer syntax is not defined for this type. */
-            ASN__ENCODE_FAILED;
-        }
-        break;
-
     default:
         errno = ENOENT;
         ASN__ENCODE_FAILED;
@@ -348,9 +326,5 @@ asn_decode(const asn_codec_ctx_t *opt_codec_ctx,
     case ATS_DER:
     case ATS_BER:
         return ber_decode(opt_codec_ctx, td, sptr, buffer, size);
-
-    case ATS_BASIC_XER:
-    case ATS_CANONICAL_XER:
-        return xer_decode(opt_codec_ctx, td, sptr, buffer, size);
     }
 }

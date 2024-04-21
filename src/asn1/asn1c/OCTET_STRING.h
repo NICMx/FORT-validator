@@ -35,15 +35,11 @@ asn_struct_print_f OCTET_STRING_print_utf8;
 asn_struct_compare_f OCTET_STRING_compare;
 ber_type_decoder_f OCTET_STRING_decode_ber;
 der_type_encoder_f OCTET_STRING_encode_der;
-xer_type_decoder_f OCTET_STRING_decode_xer_hex;		/* Hexadecimal */
-xer_type_decoder_f OCTET_STRING_decode_xer_binary;	/* 01010111010 */
-xer_type_decoder_f OCTET_STRING_decode_xer_utf8;	/* ASCII/UTF-8 */
 xer_type_encoder_f OCTET_STRING_encode_xer;
 xer_type_encoder_f OCTET_STRING_encode_xer_utf8;
 asn_random_fill_f  OCTET_STRING_random_fill;
 
 #define OCTET_STRING_constraint  asn_generic_no_constraint
-#define OCTET_STRING_decode_xer  OCTET_STRING_decode_xer_hex
 
 /******************************
  * Handy conversion routines. *

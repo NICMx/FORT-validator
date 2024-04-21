@@ -36,13 +36,6 @@ enum asn_transfer_syntax {
     ATS_BER,
     ATS_DER,
     ATS_CER, /* Only decoding is supported */
-    /*
-     * X.693:
-     * XER: XML Encoding Rules.
-     * CANONICAL-XER is a more strict variant of BASIC-XER.
-     */
-    ATS_BASIC_XER,
-    ATS_CANONICAL_XER
 };
 
 /*

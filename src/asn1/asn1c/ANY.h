@@ -34,7 +34,6 @@ xer_type_encoder_f ANY_encode_xer;
 #define ANY_constraint   asn_generic_no_constraint
 #define ANY_decode_ber   OCTET_STRING_decode_ber
 #define ANY_encode_der   OCTET_STRING_encode_der
-#define ANY_decode_xer   OCTET_STRING_decode_xer_hex
 
 /******************************
  * Handy conversion routines. *

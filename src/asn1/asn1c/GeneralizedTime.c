@@ -58,7 +58,6 @@ asn_TYPE_operation_t asn_OP_GeneralizedTime = {
 	GeneralizedTime_compare,
 	OCTET_STRING_decode_ber,    /* Implemented in terms of OCTET STRING */
 	GeneralizedTime_encode_der,
-	OCTET_STRING_decode_xer_utf8,
 	GeneralizedTime_encode_xer,
 	GeneralizedTime_random_fill,
 	0	/* Use generic outmost tag fetcher */

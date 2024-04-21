@@ -28,7 +28,6 @@ asn_struct_print_f DigestAlgorithmIdentifier_print;
 asn_constr_check_f DigestAlgorithmIdentifier_constraint;
 ber_type_decoder_f DigestAlgorithmIdentifier_decode_ber;
 der_type_encoder_f DigestAlgorithmIdentifier_encode_der;
-xer_type_decoder_f DigestAlgorithmIdentifier_decode_xer;
 xer_type_encoder_f DigestAlgorithmIdentifier_encode_xer;
 
 #ifdef __cplusplus

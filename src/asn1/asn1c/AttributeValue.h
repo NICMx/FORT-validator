@@ -28,7 +28,6 @@ asn_struct_print_f AttributeValue_print;
 asn_constr_check_f AttributeValue_constraint;
 ber_type_decoder_f AttributeValue_decode_ber;
 der_type_encoder_f AttributeValue_encode_der;
-xer_type_decoder_f AttributeValue_decode_xer;
 xer_type_encoder_f AttributeValue_encode_xer;
 
 #ifdef __cplusplus

@@ -26,7 +26,6 @@ asn_struct_print_f BOOLEAN_print;
 asn_struct_compare_f BOOLEAN_compare;
 ber_type_decoder_f BOOLEAN_decode_ber;
 der_type_encoder_f BOOLEAN_encode_der;
-xer_type_decoder_f BOOLEAN_decode_xer;
 xer_type_encoder_f BOOLEAN_encode_xer;
 asn_random_fill_f  BOOLEAN_random_fill;
 

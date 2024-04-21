@@ -33,7 +33,6 @@ asn_random_fill_f  BIT_STRING_random_fill;
 #define BIT_STRING_free              OCTET_STRING_free
 #define BIT_STRING_decode_ber        OCTET_STRING_decode_ber
 #define BIT_STRING_encode_der        OCTET_STRING_encode_der
-#define BIT_STRING_decode_xer        OCTET_STRING_decode_xer_binary
 
 #ifdef __cplusplus
 }

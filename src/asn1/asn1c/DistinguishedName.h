@@ -28,7 +28,6 @@ asn_struct_print_f DistinguishedName_print;
 asn_constr_check_f DistinguishedName_constraint;
 ber_type_decoder_f DistinguishedName_decode_ber;
 der_type_encoder_f DistinguishedName_encode_der;
-xer_type_decoder_f DistinguishedName_decode_xer;
 xer_type_encoder_f DistinguishedName_encode_xer;
 
 #ifdef __cplusplus

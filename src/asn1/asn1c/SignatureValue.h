@@ -28,7 +28,6 @@ asn_struct_print_f SignatureValue_print;
 asn_constr_check_f SignatureValue_constraint;
 ber_type_decoder_f SignatureValue_decode_ber;
 der_type_encoder_f SignatureValue_encode_der;
-xer_type_decoder_f SignatureValue_decode_xer;
 xer_type_encoder_f SignatureValue_encode_xer;
 
 #ifdef __cplusplus

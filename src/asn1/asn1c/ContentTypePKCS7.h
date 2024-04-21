@@ -28,7 +28,6 @@ asn_struct_print_f ContentTypePKCS7_print;
 asn_constr_check_f ContentTypePKCS7_constraint;
 ber_type_decoder_f ContentTypePKCS7_decode_ber;
 der_type_encoder_f ContentTypePKCS7_encode_der;
-xer_type_decoder_f ContentTypePKCS7_decode_xer;
 xer_type_encoder_f ContentTypePKCS7_encode_xer;
 
 #ifdef __cplusplus

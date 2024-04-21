@@ -28,7 +28,6 @@ asn_struct_print_f SignatureAlgorithmIdentifier_print;
 asn_constr_check_f SignatureAlgorithmIdentifier_constraint;
 ber_type_decoder_f SignatureAlgorithmIdentifier_decode_ber;
 der_type_encoder_f SignatureAlgorithmIdentifier_encode_der;
-xer_type_decoder_f SignatureAlgorithmIdentifier_decode_xer;
 xer_type_encoder_f SignatureAlgorithmIdentifier_encode_xer;
 
 #ifdef __cplusplus

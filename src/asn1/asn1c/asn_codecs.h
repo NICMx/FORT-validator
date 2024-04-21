@@ -26,7 +26,7 @@ struct asn_TYPE_descriptor_s;	/* Forward declaration */
  *   function pointers of the asn_TYPE_descriptor_t directly,
  *   this structure must be ALLOCATED ON THE STACK!
  *   If you can't always satisfy this requirement, use ber_decode()
- *   and xer_decode() functions instead.
+ *   instead.
  */
 typedef struct asn_codec_ctx_s {
 	/*
@@ -79,7 +79,7 @@ typedef struct asn_enc_rval_s {
 } while(0)
 
 /*
- * Type of the return value of the decoding functions (ber_decode, xer_decode)
+ * Type of the return value of the decoding functions (ber_decode, <deleted>)
  * 
  * Please note that the number of consumed bytes is ALWAYS meaningful,
  * even if code==RC_FAIL. This is to indicate the number of successfully

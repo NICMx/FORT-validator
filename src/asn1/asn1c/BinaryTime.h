@@ -28,7 +28,6 @@ asn_struct_print_f BinaryTime_print;
 asn_constr_check_f BinaryTime_constraint;
 ber_type_decoder_f BinaryTime_decode_ber;
 der_type_encoder_f BinaryTime_encode_der;
-xer_type_decoder_f BinaryTime_decode_xer;
 xer_type_encoder_f BinaryTime_encode_xer;
 
 #ifdef __cplusplus

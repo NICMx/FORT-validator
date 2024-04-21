@@ -28,7 +28,6 @@ asn_struct_print_f IPAddress_print;
 asn_constr_check_f IPAddress_constraint;
 ber_type_decoder_f IPAddress_decode_ber;
 der_type_encoder_f IPAddress_encode_der;
-xer_type_decoder_f IPAddress_decode_xer;
 xer_type_encoder_f IPAddress_encode_xer;
 
 #ifdef __cplusplus

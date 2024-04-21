@@ -28,7 +28,6 @@ asn_struct_print_f AttributeType_print;
 asn_constr_check_f AttributeType_constraint;
 ber_type_decoder_f AttributeType_decode_ber;
 der_type_encoder_f AttributeType_encode_der;
-xer_type_decoder_f AttributeType_decode_xer;
 xer_type_encoder_f AttributeType_encode_xer;
 
 #ifdef __cplusplus

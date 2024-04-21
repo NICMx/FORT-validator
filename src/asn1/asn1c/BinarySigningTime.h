@@ -28,7 +28,6 @@ asn_struct_print_f BinarySigningTime_print;
 asn_constr_check_f BinarySigningTime_constraint;
 ber_type_decoder_f BinarySigningTime_decode_ber;
 der_type_encoder_f BinarySigningTime_encode_der;
-xer_type_decoder_f BinarySigningTime_decode_xer;
 xer_type_encoder_f BinarySigningTime_encode_xer;
 
 #ifdef __cplusplus

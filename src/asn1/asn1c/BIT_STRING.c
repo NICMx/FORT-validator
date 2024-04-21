@@ -26,7 +26,6 @@ asn_TYPE_operation_t asn_OP_BIT_STRING = {
 	BIT_STRING_compare,
 	OCTET_STRING_decode_ber,   /* Implemented in terms of OCTET STRING */
 	OCTET_STRING_encode_der,   /* Implemented in terms of OCTET STRING */
-	OCTET_STRING_decode_xer_binary,
 	BIT_STRING_encode_xer,
 	BIT_STRING_random_fill,
 	0	/* Use generic outmost tag fetcher */

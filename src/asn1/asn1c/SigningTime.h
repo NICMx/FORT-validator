@@ -28,7 +28,6 @@ asn_struct_print_f SigningTime_print;
 asn_constr_check_f SigningTime_constraint;
 ber_type_decoder_f SigningTime_decode_ber;
 der_type_encoder_f SigningTime_encode_der;
-xer_type_decoder_f SigningTime_decode_xer;
 xer_type_encoder_f SigningTime_encode_xer;
 
 #ifdef __cplusplus

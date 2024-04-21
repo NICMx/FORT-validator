@@ -28,7 +28,6 @@ asn_struct_print_f ContentType_print;
 asn_constr_check_f ContentType_constraint;
 ber_type_decoder_f ContentType_decode_ber;
 der_type_encoder_f ContentType_encode_der;
-xer_type_decoder_f ContentType_decode_xer;
 xer_type_encoder_f ContentType_encode_xer;
 
 #ifdef __cplusplus

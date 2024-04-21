@@ -38,7 +38,6 @@ asn_struct_print_f CMSVersion_print;
 asn_constr_check_f CMSVersion_constraint;
 ber_type_decoder_f CMSVersion_decode_ber;
 der_type_encoder_f CMSVersion_encode_der;
-xer_type_decoder_f CMSVersion_decode_xer;
 xer_type_encoder_f CMSVersion_encode_xer;
 
 #ifdef __cplusplus

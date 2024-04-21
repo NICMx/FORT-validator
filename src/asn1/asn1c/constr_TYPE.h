@@ -36,7 +36,6 @@ typedef struct asn_struct_ctx_s {
 
 #include "asn1/asn1c/ber_decoder.h"	/* Basic Encoding Rules decoder */
 #include "asn1/asn1c/der_encoder.h"	/* Distinguished Encoding Rules encoder */
-#include "asn1/asn1c/xer_decoder.h"	/* Decoder of XER (XML, text) */
 #include "asn1/asn1c/xer_encoder.h"	/* Encoder into XER (XML, text) */
 #include "asn1/asn1c/constraints.h"	/* Subtype constraints support */
 #include "asn1/asn1c/asn_random_fill.h"	/* Random structures support */
@@ -136,7 +135,6 @@ typedef struct asn_TYPE_operation_s {
     asn_struct_compare_f *compare_struct; /* Compare two structures */
     ber_type_decoder_f *ber_decoder;      /* Generic BER decoder */
     der_type_encoder_f *der_encoder;      /* Canonical DER encoder */
-    xer_type_decoder_f *xer_decoder;      /* Generic XER decoder */
     xer_type_encoder_f *xer_encoder;      /* [Canonical] XER encoder */
     asn_random_fill_f *random_fill;       /* Initialize with a random value */
     asn_outmost_tag_f *outmost_tag;       /* <optional, internal> */

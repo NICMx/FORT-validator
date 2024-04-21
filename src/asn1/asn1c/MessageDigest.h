@@ -28,7 +28,6 @@ asn_struct_print_f MessageDigest_print;
 asn_constr_check_f MessageDigest_constraint;
 ber_type_decoder_f MessageDigest_decode_ber;
 der_type_encoder_f MessageDigest_encode_der;
-xer_type_decoder_f MessageDigest_decode_xer;
 xer_type_encoder_f MessageDigest_encode_xer;
 
 #ifdef __cplusplus

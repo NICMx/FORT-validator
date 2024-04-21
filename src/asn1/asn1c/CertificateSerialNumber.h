@@ -28,7 +28,6 @@ asn_struct_print_f CertificateSerialNumber_print;
 asn_constr_check_f CertificateSerialNumber_constraint;
 ber_type_decoder_f CertificateSerialNumber_decode_ber;
 der_type_encoder_f CertificateSerialNumber_encode_der;
-xer_type_decoder_f CertificateSerialNumber_decode_xer;
 xer_type_encoder_f CertificateSerialNumber_encode_xer;
 
 #ifdef __cplusplus

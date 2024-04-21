@@ -18,7 +18,6 @@ asn_TYPE_operation_t asn_OP_BOOLEAN = {
 	BOOLEAN_compare,
 	BOOLEAN_decode_ber,
 	BOOLEAN_encode_der,
-	BOOLEAN_decode_xer,
 	BOOLEAN_encode_xer,
 	BOOLEAN_random_fill,
 	0	/* Use generic outmost tag fetcher */
@@ -131,50 +130,6 @@ BOOLEAN_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 	erval.encoded += 1;
 
 	ASN__ENCODED_OK(erval);
-}
-
-
-/*
- * Decode the chunk of XML text encoding INTEGER.
- */
-static enum xer_pbd_rval
-BOOLEAN__xer_body_decode(const asn_TYPE_descriptor_t *td, void *sptr,
-                         const void *chunk_buf, size_t chunk_size) {
-    BOOLEAN_t *st = (BOOLEAN_t *)sptr;
-	const char *p = (const char *)chunk_buf;
-
-	(void)td;
-
-	if(chunk_size && p[0] == 0x3c /* '<' */) {
-		switch(xer_check_tag(chunk_buf, chunk_size, "false")) {
-		case XCT_BOTH:
-			/* "<false/>" */
-			*st = 0;
-			break;
-		case XCT_UNKNOWN_BO:
-			if(xer_check_tag(chunk_buf, chunk_size, "true")
-					!= XCT_BOTH)
-				return XPBD_BROKEN_ENCODING;
-			/* "<true/>" */
-			*st = 1;	/* Or 0xff as in DER?.. */
-			break;
-		default:
-			return XPBD_BROKEN_ENCODING;
-		}
-		return XPBD_BODY_CONSUMED;
-	} else {
-		return XPBD_BROKEN_ENCODING;
-	}
-}
-
-
-asn_dec_rval_t
-BOOLEAN_decode_xer(const asn_codec_ctx_t *opt_codec_ctx,
-                   const asn_TYPE_descriptor_t *td, void **sptr,
-                   const char *opt_mname, const void *buf_ptr, size_t size) {
-    return xer_decode_primitive(opt_codec_ctx, td,
-		sptr, sizeof(BOOLEAN_t), opt_mname, buf_ptr, size,
-		BOOLEAN__xer_body_decode);
 }
 
 asn_enc_rval_t
