@@ -8,10 +8,6 @@
 #include "asn1/asn1c/asn_application.h"
 #include "asn1/asn1c/asn_codecs_prim.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef ASN__PRIMITIVE_TYPE_t INTEGER_t;
 
 extern asn_TYPE_descriptor_t asn_DEF_INTEGER;
@@ -91,9 +87,5 @@ enum asn_strtox_result_e asn_strtoumax_lim(const char *str, const char **end,
  */
 const asn_INTEGER_enum_map_t *INTEGER_map_value2enum(
     const asn_INTEGER_specifics_t *specs, long value);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _INTEGER_H_ */

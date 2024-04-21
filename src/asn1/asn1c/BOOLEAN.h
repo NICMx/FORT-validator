@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*
  * The underlying integer may contain various values, but everything
  * non-zero is capped to 0xff by the DER encoder. The BER decoder may
@@ -30,9 +26,5 @@ xer_type_encoder_f BOOLEAN_encode_xer;
 asn_random_fill_f  BOOLEAN_random_fill;
 
 #define BOOLEAN_constraint     asn_generic_no_constraint
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _BOOLEAN_H_ */

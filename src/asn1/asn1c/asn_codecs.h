@@ -13,10 +13,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct asn_TYPE_descriptor_s;	/* Forward declaration */
 
 /*
@@ -108,9 +104,5 @@ typedef struct asn_dec_rval_s {
 	tmp_error.consumed = 0;					\
 	return tmp_error;					\
 } while(0)
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* ASN_CODECS_H */

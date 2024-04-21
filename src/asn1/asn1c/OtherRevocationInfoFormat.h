@@ -16,10 +16,6 @@
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* OtherRevocationInfoFormat */
 typedef struct OtherRevocationInfoFormat {
 	OBJECT_IDENTIFIER_t	 otherRevInfoFormat;
@@ -33,10 +29,6 @@ typedef struct OtherRevocationInfoFormat {
 extern asn_TYPE_descriptor_t asn_DEF_OtherRevocationInfoFormat;
 extern asn_SEQUENCE_specifics_t asn_SPC_OtherRevocationInfoFormat_specs_1;
 extern asn_TYPE_member_t asn_MBR_OtherRevocationInfoFormat_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _OtherRevocationInfoFormat_H_ */
 #include "asn1/asn1c/asn_internal.h"

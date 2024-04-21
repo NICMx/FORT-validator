@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_system.h"		/* Platform-dependent types */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct asn_TYPE_descriptor_s;		/* Forward declaration */
 
 /*
@@ -54,9 +50,5 @@ asn_constr_check_f asn_generic_unknown_constraint; /* Not fully supported */
  * Invoke the callback with a complete error message.
  */
 #define	ASN__CTFAIL	if(ctfailcb) ctfailcb
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* ASN1_CONSTRAINTS_VALIDATOR_H */

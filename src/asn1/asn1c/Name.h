@@ -15,10 +15,6 @@
 #include "asn1/asn1c/RDNSequence.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Dependencies */
 typedef enum Name_PR {
 	Name_PR_NOTHING,	/* No components present */
@@ -40,10 +36,6 @@ typedef struct Name {
 extern asn_TYPE_descriptor_t asn_DEF_Name;
 extern asn_CHOICE_specifics_t asn_SPC_Name_specs_1;
 extern asn_TYPE_member_t asn_MBR_Name_1[1];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _Name_H_ */
 #include "asn1/asn1c/asn_internal.h"

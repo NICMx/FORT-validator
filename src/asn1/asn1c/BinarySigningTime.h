@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/BinaryTime.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* BinarySigningTime */
 typedef BinaryTime_t	 BinarySigningTime_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f BinarySigningTime_constraint;
 ber_type_decoder_f BinarySigningTime_decode_ber;
 der_type_encoder_f BinarySigningTime_encode_der;
 xer_type_encoder_f BinarySigningTime_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _BinarySigningTime_H_ */
 #include "asn1/asn1c/asn_internal.h"

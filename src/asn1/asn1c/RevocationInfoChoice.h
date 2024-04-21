@@ -16,10 +16,6 @@
 #include "asn1/asn1c/OtherRevocationInfoFormat.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Dependencies */
 typedef enum RevocationInfoChoice_PR {
 	RevocationInfoChoice_PR_NOTHING,	/* No components present */
@@ -43,10 +39,6 @@ typedef struct RevocationInfoChoice {
 extern asn_TYPE_descriptor_t asn_DEF_RevocationInfoChoice;
 extern asn_CHOICE_specifics_t asn_SPC_RevocationInfoChoice_specs_1;
 extern asn_TYPE_member_t asn_MBR_RevocationInfoChoice_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _RevocationInfoChoice_H_ */
 #include "asn1/asn1c/asn_internal.h"

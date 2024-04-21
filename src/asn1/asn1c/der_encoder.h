@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct asn_TYPE_descriptor_s;	/* Forward declaration */
 
 /*
@@ -60,9 +56,5 @@ ssize_t der_write_tags(const struct asn_TYPE_descriptor_s *type_descriptor,
                        ber_tlv_tag_t tag,
                        asn_app_consume_bytes_f *consume_bytes_cb,
                        void *app_key);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _DER_ENCODER_H_ */

@@ -17,10 +17,6 @@
 #include "asn1/asn1c/BIT_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* CertificateList */
 typedef struct CertificateList {
 	TBSCertList_t	 tbsCertList;
@@ -35,10 +31,6 @@ typedef struct CertificateList {
 extern asn_TYPE_descriptor_t asn_DEF_CertificateList;
 extern asn_SEQUENCE_specifics_t asn_SPC_CertificateList_specs_1;
 extern asn_TYPE_member_t asn_MBR_CertificateList_1[3];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _CertificateList_H_ */
 #include "asn1/asn1c/asn_internal.h"

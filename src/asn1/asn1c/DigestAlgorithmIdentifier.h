@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/AlgorithmIdentifier.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* DigestAlgorithmIdentifier */
 typedef AlgorithmIdentifier_t	 DigestAlgorithmIdentifier_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f DigestAlgorithmIdentifier_constraint;
 ber_type_decoder_f DigestAlgorithmIdentifier_decode_ber;
 der_type_encoder_f DigestAlgorithmIdentifier_encode_der;
 xer_type_encoder_f DigestAlgorithmIdentifier_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _DigestAlgorithmIdentifier_H_ */
 #include "asn1/asn1c/asn_internal.h"

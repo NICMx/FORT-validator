@@ -19,10 +19,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Forward declarations */
 struct FileAndHash;
 
@@ -46,10 +42,6 @@ typedef struct Manifest {
 
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_Manifest;
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/FileAndHash.h"

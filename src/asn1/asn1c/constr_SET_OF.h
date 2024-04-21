@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct asn_SET_OF_specifics_s {
     /*
      * Target structure description.
@@ -34,9 +30,5 @@ der_type_encoder_f SET_OF_encode_der;
 xer_type_encoder_f SET_OF_encode_xer;
 asn_random_fill_f  SET_OF_random_fill;
 extern asn_TYPE_operation_t asn_OP_SET_OF;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* CONSTR_SET_OF_H */

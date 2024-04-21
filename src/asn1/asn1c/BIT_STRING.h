@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/OCTET_STRING.h"	/* Some help from OCTET STRING */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct BIT_STRING_s {
 	uint8_t *buf;	/* BIT STRING body */
 	size_t size;	/* Size of the above buffer */
@@ -33,9 +29,5 @@ asn_random_fill_f  BIT_STRING_random_fill;
 #define BIT_STRING_free              OCTET_STRING_free
 #define BIT_STRING_decode_ber        OCTET_STRING_decode_ber
 #define BIT_STRING_encode_der        OCTET_STRING_encode_der
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _BIT_STRING_H_ */

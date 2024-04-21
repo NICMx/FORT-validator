@@ -17,10 +17,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Forward declarations */
 struct ROAIPAddress;
 
@@ -42,10 +38,6 @@ typedef struct ROAIPAddressFamily {
 extern asn_TYPE_descriptor_t asn_DEF_ROAIPAddressFamily;
 extern asn_SEQUENCE_specifics_t asn_SPC_ROAIPAddressFamily_specs_1;
 extern asn_TYPE_member_t asn_MBR_ROAIPAddressFamily_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/ROAIPAddress.h"

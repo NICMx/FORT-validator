@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*
  * The value of the NULL type is meaningless.
  * Use the BOOLEAN type if you need to carry true/false semantics.
@@ -29,9 +25,5 @@ xer_type_encoder_f NULL_encode_xer;
 asn_random_fill_f  NULL_random_fill;
 
 #define NULL_constraint	asn_generic_no_constraint
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* NULL_H */

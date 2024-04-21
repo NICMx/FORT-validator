@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct asn_CHOICE_specifics_s {
 	/*
 	 * Target structure description.
@@ -61,9 +57,5 @@ unsigned CHOICE_variant_get_presence(const asn_TYPE_descriptor_t *td,
  */
 int CHOICE_variant_set_presence(const asn_TYPE_descriptor_t *td,
                                 void *structure_ptr, unsigned present);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _CONSTR_CHOICE_H_ */

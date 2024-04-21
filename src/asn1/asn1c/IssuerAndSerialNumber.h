@@ -16,10 +16,6 @@
 #include "asn1/asn1c/CertificateSerialNumber.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* IssuerAndSerialNumber */
 typedef struct IssuerAndSerialNumber {
 	Name_t	 issuer;
@@ -33,10 +29,6 @@ typedef struct IssuerAndSerialNumber {
 extern asn_TYPE_descriptor_t asn_DEF_IssuerAndSerialNumber;
 extern asn_SEQUENCE_specifics_t asn_SPC_IssuerAndSerialNumber_specs_1;
 extern asn_TYPE_member_t asn_MBR_IssuerAndSerialNumber_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _IssuerAndSerialNumber_H_ */
 #include "asn1/asn1c/asn_internal.h"

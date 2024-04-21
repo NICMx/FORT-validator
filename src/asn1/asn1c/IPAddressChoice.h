@@ -17,10 +17,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Dependencies */
 typedef enum IPAddressChoice_PR {
 	IPAddressChoice_PR_NOTHING,	/* No components present */
@@ -52,10 +48,6 @@ typedef struct IPAddressChoice {
 extern asn_TYPE_descriptor_t asn_DEF_IPAddressChoice;
 extern asn_CHOICE_specifics_t asn_SPC_IPAddressChoice_specs_1;
 extern asn_TYPE_member_t asn_MBR_IPAddressChoice_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/IPAddressOrRange.h"

@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/INTEGER.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* ASId */
 typedef INTEGER_t	 ASId_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f ASId_constraint;
 ber_type_decoder_f ASId_decode_ber;
 der_type_encoder_f ASId_encode_der;
 xer_type_encoder_f ASId_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _ASId_H_ */
 #include "asn1/asn1c/asn_internal.h"

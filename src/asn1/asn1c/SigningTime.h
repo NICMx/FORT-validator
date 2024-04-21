@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/Time.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* SigningTime */
 typedef Time_t	 SigningTime_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f SigningTime_constraint;
 ber_type_decoder_f SigningTime_decode_ber;
 der_type_encoder_f SigningTime_encode_der;
 xer_type_encoder_f SigningTime_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _SigningTime_H_ */
 #include "asn1/asn1c/asn_internal.h"

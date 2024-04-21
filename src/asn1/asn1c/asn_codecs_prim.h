@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ASN__PRIMITIVE_TYPE_s {
     uint8_t *buf;   /* Buffer with consecutive primitive encoding bytes */
     size_t size;    /* Size of the buffer */
@@ -19,9 +15,5 @@ typedef struct ASN__PRIMITIVE_TYPE_s {
 asn_struct_free_f ASN__PRIMITIVE_TYPE_free;
 ber_type_decoder_f ber_decode_primitive;
 der_type_encoder_f der_encode_primitive;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* ASN_CODECS_PRIM_H */

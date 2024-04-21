@@ -19,10 +19,6 @@
 #include "asn1/asn1c/SignatureValue.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Forward declarations */
 struct SignedAttributes;
 struct UnsignedAttributes;
@@ -45,10 +41,6 @@ typedef struct SignerInfo {
 extern asn_TYPE_descriptor_t asn_DEF_SignerInfo;
 extern asn_SEQUENCE_specifics_t asn_SPC_SignerInfo_specs_1;
 extern asn_TYPE_member_t asn_MBR_SignerInfo_1[7];
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/SignedAttributes.h"

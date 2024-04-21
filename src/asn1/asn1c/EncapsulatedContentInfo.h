@@ -16,10 +16,6 @@
 #include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* EncapsulatedContentInfo */
 typedef struct EncapsulatedContentInfo {
 	ContentType_t	 eContentType;
@@ -33,10 +29,6 @@ typedef struct EncapsulatedContentInfo {
 extern asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfo;
 extern asn_SEQUENCE_specifics_t asn_SPC_EncapsulatedContentInfo_specs_1;
 extern asn_TYPE_member_t asn_MBR_EncapsulatedContentInfo_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _EncapsulatedContentInfo_H_ */
 #include "asn1/asn1c/asn_internal.h"

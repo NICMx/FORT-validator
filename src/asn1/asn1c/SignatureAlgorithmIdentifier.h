@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/AlgorithmIdentifier.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* SignatureAlgorithmIdentifier */
 typedef AlgorithmIdentifier_t	 SignatureAlgorithmIdentifier_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f SignatureAlgorithmIdentifier_constraint;
 ber_type_decoder_f SignatureAlgorithmIdentifier_decode_ber;
 der_type_encoder_f SignatureAlgorithmIdentifier_encode_der;
 xer_type_encoder_f SignatureAlgorithmIdentifier_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _SignatureAlgorithmIdentifier_H_ */
 #include "asn1/asn1c/asn_internal.h"

@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/BIT_STRING.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* IPAddress */
 typedef BIT_STRING_t	 IPAddress_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f IPAddress_constraint;
 ber_type_decoder_f IPAddress_decode_ber;
 der_type_encoder_f IPAddress_encode_der;
 xer_type_encoder_f IPAddress_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _IPAddress_H_ */
 #include "asn1/asn1c/asn_internal.h"

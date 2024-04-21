@@ -15,10 +15,6 @@
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Forward declarations */
 struct SignerInfo;
 
@@ -34,10 +30,6 @@ typedef struct SignerInfos {
 extern asn_TYPE_descriptor_t asn_DEF_SignerInfos;
 extern asn_SET_OF_specifics_t asn_SPC_SignerInfos_specs_1;
 extern asn_TYPE_member_t asn_MBR_SignerInfos_1[1];
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/SignerInfo.h"

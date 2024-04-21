@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/INTEGER.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* CertificateSerialNumber */
 typedef INTEGER_t	 CertificateSerialNumber_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f CertificateSerialNumber_constraint;
 ber_type_decoder_f CertificateSerialNumber_decode_ber;
 der_type_encoder_f CertificateSerialNumber_encode_der;
 xer_type_encoder_f CertificateSerialNumber_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _CertificateSerialNumber_H_ */
 #include "asn1/asn1c/asn_internal.h"

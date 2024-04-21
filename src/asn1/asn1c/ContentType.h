@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* ContentType */
 typedef OBJECT_IDENTIFIER_t	 ContentType_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f ContentType_constraint;
 ber_type_decoder_f ContentType_decode_ber;
 der_type_encoder_f ContentType_encode_der;
 xer_type_encoder_f ContentType_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _ContentType_H_ */
 #include "asn1/asn1c/asn_internal.h"

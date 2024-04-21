@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct asn_SEQUENCE_specifics_s {
 	/*
 	 * Target structure description.
@@ -45,9 +41,5 @@ der_type_encoder_f SEQUENCE_encode_der;
 xer_type_encoder_f SEQUENCE_encode_xer;
 asn_random_fill_f  SEQUENCE_random_fill;
 extern asn_TYPE_operation_t asn_OP_SEQUENCE;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _CONSTR_SEQUENCE_H_ */

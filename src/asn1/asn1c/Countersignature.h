@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/SignerInfo.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Countersignature */
 typedef SignerInfo_t	 Countersignature_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f Countersignature_constraint;
 ber_type_decoder_f Countersignature_decode_ber;
 der_type_encoder_f Countersignature_encode_der;
 xer_type_encoder_f Countersignature_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _Countersignature_H_ */
 #include "asn1/asn1c/asn_internal.h"

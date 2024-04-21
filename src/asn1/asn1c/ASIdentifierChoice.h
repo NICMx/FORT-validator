@@ -17,10 +17,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_CHOICE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Dependencies */
 typedef enum ASIdentifierChoice_PR {
 	ASIdentifierChoice_PR_NOTHING,	/* No components present */
@@ -52,10 +48,6 @@ typedef struct ASIdentifierChoice {
 extern asn_TYPE_descriptor_t asn_DEF_ASIdentifierChoice;
 extern asn_CHOICE_specifics_t asn_SPC_ASIdentifierChoice_specs_1;
 extern asn_TYPE_member_t asn_MBR_ASIdentifierChoice_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/ASIdOrRange.h"

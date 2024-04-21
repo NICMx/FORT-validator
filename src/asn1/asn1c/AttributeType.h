@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* AttributeType */
 typedef OBJECT_IDENTIFIER_t	 AttributeType_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f AttributeType_constraint;
 ber_type_decoder_f AttributeType_decode_ber;
 der_type_encoder_f AttributeType_encode_der;
 xer_type_encoder_f AttributeType_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _AttributeType_H_ */
 #include "asn1/asn1c/asn_internal.h"

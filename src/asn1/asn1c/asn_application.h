@@ -11,10 +11,6 @@
 #include "asn1/asn1c/asn_system.h"	/* for platform-dependent types */
 #include "asn1/asn1c/asn_codecs.h"	/* for ASN.1 codecs specifics */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*
  * A selection of ASN.1 Transfer Syntaxes to use with generalized
  * encoders and decoders declared further in this .h file.
@@ -136,11 +132,6 @@ typedef void (asn_app_constraint_failed_f)(void *application_specific_key,
 	const struct asn_TYPE_descriptor_s *type_descriptor_which_failed,
 	const void *structure_which_failed_ptr,
 	const char *error_message_format, ...) CC_PRINTFLIKE(4, 5);
-
-
-#ifdef __cplusplus
-}
-#endif
 
 #include "asn1/asn1c/constr_TYPE.h"	/* for asn_TYPE_descriptor_t */
 

@@ -16,10 +16,6 @@
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* ContentInfo */
 typedef struct ContentInfo {
 	ContentType_t	 contentType;
@@ -31,10 +27,6 @@ typedef struct ContentInfo {
 
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_ContentInfo;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _ContentInfo_H_ */
 #include "asn1/asn1c/asn_internal.h"

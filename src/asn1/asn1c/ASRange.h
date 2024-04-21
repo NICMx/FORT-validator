@@ -15,10 +15,6 @@
 #include "asn1/asn1c/ASId.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* ASRange */
 typedef struct ASRange {
 	ASId_t	 min;
@@ -32,10 +28,6 @@ typedef struct ASRange {
 extern asn_TYPE_descriptor_t asn_DEF_ASRange;
 extern asn_SEQUENCE_specifics_t asn_SPC_ASRange_specs_1;
 extern asn_TYPE_member_t asn_MBR_ASRange_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _ASRange_H_ */
 #include "asn1/asn1c/asn_internal.h"

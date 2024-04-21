@@ -7,10 +7,6 @@
 
 #include "asn1/asn1c/asn_application.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define OPEN_TYPE_free CHOICE_free
 #define OPEN_TYPE_print CHOICE_print
 #define OPEN_TYPE_compare CHOICE_compare
@@ -30,9 +26,5 @@ asn_dec_rval_t OPEN_TYPE_ber_get(const asn_codec_ctx_t *opt_codec_ctx,
                                  void *parent_structure,
                                  const asn_TYPE_member_t *element,
                                  const void *ptr, size_t size);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* ASN_OPEN_TYPE_H */

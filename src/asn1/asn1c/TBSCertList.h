@@ -21,10 +21,6 @@
 #include "asn1/asn1c/constr_SEQUENCE.h"
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Forward declarations */
 struct Time;
 struct Extensions;
@@ -62,10 +58,6 @@ typedef struct TBSCertList {
 extern asn_TYPE_descriptor_t asn_DEF_TBSCertList;
 extern asn_SEQUENCE_specifics_t asn_SPC_TBSCertList_specs_1;
 extern asn_TYPE_member_t asn_MBR_TBSCertList_1[7];
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/Time.h"

@@ -14,10 +14,6 @@
 /* Including external dependencies */
 #include "asn1/asn1c/RDNSequence.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* DistinguishedName */
 typedef RDNSequence_t	 DistinguishedName_t;
 
@@ -29,10 +25,6 @@ asn_constr_check_f DistinguishedName_constraint;
 ber_type_decoder_f DistinguishedName_decode_ber;
 der_type_encoder_f DistinguishedName_encode_der;
 xer_type_encoder_f DistinguishedName_encode_xer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _DistinguishedName_H_ */
 #include "asn1/asn1c/asn_internal.h"

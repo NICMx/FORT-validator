@@ -12,10 +12,6 @@
 #endif
 #include "asn1/asn1c/asn_application.h"	/* Application-visible API */
 
-#ifdef	__cplusplus
-extern "C" {
-#endif
-
 /* Environment version might be used to avoid running with the old library */
 #define	ASN1C_ENVIRONMENT_VERSION	923	/* Compile-time version */
 int get_asn1c_environment_version(void);	/* Run-time version */
@@ -140,9 +136,5 @@ ASN__STACK_OVERFLOW_CHECK(const asn_codec_ctx_t *ctx) {
 	}
 	return 0;
 }
-
-#ifdef	__cplusplus
-}
-#endif
 
 #endif	/* ASN_INTERNAL_H */

@@ -18,10 +18,6 @@
 #include "asn1/asn1c/SignerInfos.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Forward declarations */
 struct CertificateSet;
 struct RevocationInfoChoices;
@@ -41,10 +37,6 @@ typedef struct SignedData {
 
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_SignedData;
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/CertificateSet.h"

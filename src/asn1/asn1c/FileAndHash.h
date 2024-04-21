@@ -16,10 +16,6 @@
 #include "asn1/asn1c/BIT_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* FileAndHash */
 typedef struct FileAndHash {
 	IA5String_t	 file;
@@ -33,10 +29,6 @@ typedef struct FileAndHash {
 extern asn_TYPE_descriptor_t asn_DEF_FileAndHash;
 extern asn_SEQUENCE_specifics_t asn_SPC_FileAndHash_specs_1;
 extern asn_TYPE_member_t asn_MBR_FileAndHash_1[2];
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _FileAndHash_H_ */
 #include "asn1/asn1c/asn_internal.h"

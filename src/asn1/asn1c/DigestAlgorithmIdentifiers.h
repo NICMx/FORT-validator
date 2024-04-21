@@ -15,10 +15,6 @@
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Forward declarations */
 struct DigestAlgorithmIdentifier;
 
@@ -34,10 +30,6 @@ typedef struct DigestAlgorithmIdentifiers {
 extern asn_TYPE_descriptor_t asn_DEF_DigestAlgorithmIdentifiers;
 extern asn_SET_OF_specifics_t asn_SPC_DigestAlgorithmIdentifiers_specs_1;
 extern asn_TYPE_member_t asn_MBR_DigestAlgorithmIdentifiers_1[1];
-
-#ifdef __cplusplus
-}
-#endif
 
 /* Referred external types */
 #include "asn1/asn1c/DigestAlgorithmIdentifier.h"

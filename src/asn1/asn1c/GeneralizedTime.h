@@ -9,10 +9,6 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef OCTET_STRING_t GeneralizedTime_t;  /* Implemented via OCTET STRING */
 
 extern asn_TYPE_descriptor_t asn_DEF_GeneralizedTime;
@@ -66,9 +62,5 @@ GeneralizedTime_t *asn_time2GT(GeneralizedTime_t *_optional_gt,
 	const struct tm *);
 GeneralizedTime_t *asn_time2GT_frac(GeneralizedTime_t *_optional_gt,
 	const struct tm *, int frac_value, int frac_digits);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _GeneralizedTime_H_ */
