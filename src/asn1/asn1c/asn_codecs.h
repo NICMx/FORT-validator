@@ -25,8 +25,8 @@ struct asn_TYPE_descriptor_s;	/* Forward declaration */
  * WARNING: if max_stack_size member is set, and you are calling the
  *   function pointers of the asn_TYPE_descriptor_t directly,
  *   this structure must be ALLOCATED ON THE STACK!
- *   If you can't always satisfy this requirement, use ber_decode(),
- *   xer_decode() and uper_decode() functions instead.
+ *   If you can't always satisfy this requirement, use ber_decode()
+ *   and xer_decode() functions instead.
  */
 typedef struct asn_codec_ctx_s {
 	/*

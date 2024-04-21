@@ -30,8 +30,6 @@ ber_type_decoder_f DistinguishedName_decode_ber;
 der_type_encoder_f DistinguishedName_encode_der;
 xer_type_decoder_f DistinguishedName_decode_xer;
 xer_type_encoder_f DistinguishedName_encode_xer;
-oer_type_decoder_f DistinguishedName_decode_oer;
-oer_type_encoder_f DistinguishedName_encode_oer;
 
 #ifdef __cplusplus
 }

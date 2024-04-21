@@ -30,8 +30,6 @@ ber_type_decoder_f SignatureValue_decode_ber;
 der_type_encoder_f SignatureValue_encode_der;
 xer_type_decoder_f SignatureValue_decode_xer;
 xer_type_encoder_f SignatureValue_encode_xer;
-oer_type_decoder_f SignatureValue_decode_oer;
-oer_type_encoder_f SignatureValue_encode_oer;
 
 #ifdef __cplusplus
 }

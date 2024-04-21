@@ -59,7 +59,6 @@ asn_TYPE_member_t asn_MBR_Extension_1[] = {
 		"extnValue"
 		},
 };
-static const int asn_MAP_Extension_oms_1[] = { 1 };
 static const ber_tlv_tag_t asn_DEF_Extension_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -73,8 +72,6 @@ asn_SEQUENCE_specifics_t asn_SPC_Extension_specs_1 = {
 	offsetof(struct Extension, _asn_ctx),
 	asn_MAP_Extension_tag2el_1,
 	3,	/* Count of tags in the map */
-	asn_MAP_Extension_oms_1,	/* Optional members */
-	1, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_Extension = {

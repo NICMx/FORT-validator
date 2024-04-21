@@ -30,8 +30,6 @@ ber_type_decoder_f ASId_decode_ber;
 der_type_encoder_f ASId_encode_der;
 xer_type_decoder_f ASId_decode_xer;
 xer_type_encoder_f ASId_encode_xer;
-oer_type_decoder_f ASId_decode_oer;
-oer_type_encoder_f ASId_encode_oer;
 
 #ifdef __cplusplus
 }

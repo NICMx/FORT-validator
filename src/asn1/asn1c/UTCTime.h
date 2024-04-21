@@ -28,8 +28,6 @@ asn_random_fill_f  UTCTime_random_fill;
 #define UTCTime_decode_ber   OCTET_STRING_decode_ber
 #define UTCTime_encode_der   OCTET_STRING_encode_der
 #define UTCTime_decode_xer   OCTET_STRING_decode_xer_utf8
-#define UTCTime_decode_uper  OCTET_STRING_decode_uper
-#define UTCTime_encode_uper  OCTET_STRING_encode_uper
 
 /***********************
  * Some handy helpers. *

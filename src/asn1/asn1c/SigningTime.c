@@ -11,9 +11,6 @@
  * This type is implemented using Time,
  * so here we adjust the DEF accordingly.
  */
-static asn_oer_constraints_t asn_OER_type_SigningTime_constr_1 CC_NOTUSED = {
-	{ 0, 0 },
-	-1};
 asn_TYPE_descriptor_t asn_DEF_SigningTime = {
 	"SigningTime",
 	"SigningTime",

@@ -24,20 +24,6 @@ asn_TYPE_operation_t asn_OP_OBJECT_IDENTIFIER = {
 	der_encode_primitive,
 	OBJECT_IDENTIFIER_decode_xer,
 	OBJECT_IDENTIFIER_encode_xer,
-#ifdef	ASN_DISABLE_OER_SUPPORT
-	0,
-	0,
-#else
-	OBJECT_IDENTIFIER_decode_oer,
-	OBJECT_IDENTIFIER_encode_oer,
-#endif  /* ASN_DISABLE_OER_SUPPORT */
-#ifdef	ASN_DISABLE_PER_SUPPORT
-	0,
-	0,
-#else
-	OCTET_STRING_decode_uper,
-	OCTET_STRING_encode_uper,
-#endif	/* ASN_DISABLE_PER_SUPPORT */
 	OBJECT_IDENTIFIER_random_fill,
 	0	/* Use generic outmost tag fetcher */
 };

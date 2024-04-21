@@ -30,8 +30,6 @@ ber_type_decoder_f DigestAlgorithmIdentifier_decode_ber;
 der_type_encoder_f DigestAlgorithmIdentifier_encode_der;
 xer_type_decoder_f DigestAlgorithmIdentifier_decode_xer;
 xer_type_encoder_f DigestAlgorithmIdentifier_encode_xer;
-oer_type_decoder_f DigestAlgorithmIdentifier_decode_oer;
-oer_type_encoder_f DigestAlgorithmIdentifier_encode_oer;
 
 #ifdef __cplusplus
 }

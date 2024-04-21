@@ -23,9 +23,6 @@ struct asn_encoding_constraints_s;
  * ARGUMENTS:
  *  (max_length)        - See (approx_max_length_limit).
  *  (memb_constraints)  - Member constraints, if exist.
- *                        The type can be constrained differently according
- *                        to PER and OER specifications, so we find a value
- *                        at the intersection of these constraints.
  * In case the return differs from ARFILL_OK, the (struct_ptr) contents
  * and (current_length) value remain in their original state.
  */

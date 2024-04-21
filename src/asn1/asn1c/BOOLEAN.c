@@ -20,20 +20,6 @@ asn_TYPE_operation_t asn_OP_BOOLEAN = {
 	BOOLEAN_encode_der,
 	BOOLEAN_decode_xer,
 	BOOLEAN_encode_xer,
-#ifdef	ASN_DISABLE_OER_SUPPORT
-	0,
-	0,
-#else
-	BOOLEAN_decode_oer,
-	BOOLEAN_encode_oer,
-#endif  /* ASN_DISABLE_OER_SUPPORT */
-#ifdef	ASN_DISABLE_PER_SUPPORT
-	0,
-	0,
-#else
-	BOOLEAN_decode_uper,	/* Unaligned PER decoder */
-	BOOLEAN_encode_uper,	/* Unaligned PER encoder */
-#endif	/* ASN_DISABLE_PER_SUPPORT */
 	BOOLEAN_random_fill,
 	0	/* Use generic outmost tag fetcher */
 };
@@ -257,114 +243,6 @@ BOOLEAN_free(const asn_TYPE_descriptor_t *td, void *ptr,
     }
 }
 
-#ifndef ASN_DISABLE_PER_SUPPORT
-
-asn_dec_rval_t
-BOOLEAN_decode_uper(const asn_codec_ctx_t *opt_codec_ctx,
-                    const asn_TYPE_descriptor_t *td,
-                    const asn_per_constraints_t *constraints, void **sptr,
-                    asn_per_data_t *pd) {
-    asn_dec_rval_t rv;
-	BOOLEAN_t *st = (BOOLEAN_t *)*sptr;
-
-	(void)opt_codec_ctx;
-    (void)td;
-	(void)constraints;
-
-	if(!st) {
-		st = (BOOLEAN_t *)(*sptr = MALLOC(sizeof(*st)));
-		if(!st) ASN__DECODE_FAILED;
-	}
-
-	/*
-	 * Extract a single bit
-	 */
-	switch(per_get_few_bits(pd, 1)) {
-	case 1: *st = 1; break;
-	case 0: *st = 0; break;
-	case -1: default: ASN__DECODE_STARVED;
-	}
-
-	ASN_DEBUG("%s decoded as %s", td->name, *st ? "TRUE" : "FALSE");
-
-	rv.code = RC_OK;
-	rv.consumed = 1;
-	return rv;
-}
-
-
-asn_enc_rval_t
-BOOLEAN_encode_uper(const asn_TYPE_descriptor_t *td,
-                    const asn_per_constraints_t *constraints, const void *sptr,
-                    asn_per_outp_t *po) {
-    const BOOLEAN_t *st = (const BOOLEAN_t *)sptr;
-	asn_enc_rval_t er = { 0, 0, 0 };
-
-	(void)constraints;
-
-	if(!st) ASN__ENCODE_FAILED;
-
-	if(per_put_few_bits(po, *st ? 1 : 0, 1))
-		ASN__ENCODE_FAILED;
-
-	ASN__ENCODED_OK(er);
-}
-
-#endif /* ASN_DISABLE_PER_SUPPORT */
-
-#ifndef  ASN_DISABLE_OER_SUPPORT
-
-/*
- * Encode as Canonical OER.
- */
-asn_enc_rval_t
-BOOLEAN_encode_oer(const asn_TYPE_descriptor_t *td,
-                   const asn_oer_constraints_t *constraints, const void *sptr,
-                   asn_app_consume_bytes_f *cb, void *app_key) {
-    asn_enc_rval_t er = { 1, 0, 0 };
-    const BOOLEAN_t *st = sptr;
-    uint8_t bool_value = *st ? 0xff : 0; /* 0xff mandated by OER */
-
-    (void)td;
-    (void)constraints;  /* Constraints are unused in OER */
-
-    if(cb(&bool_value, 1, app_key) < 0) {
-        ASN__ENCODE_FAILED;
-    } else {
-        ASN__ENCODED_OK(er);
-    }
-}
-
-asn_dec_rval_t
-BOOLEAN_decode_oer(const asn_codec_ctx_t *opt_codec_ctx,
-                   const asn_TYPE_descriptor_t *td,
-                   const asn_oer_constraints_t *constraints, void **sptr,
-                   const void *ptr, size_t size) {
-    asn_dec_rval_t ok = {RC_OK, 1};
-    BOOLEAN_t *st;
-
-    (void)opt_codec_ctx;
-    (void)td;
-    (void)constraints; /* Constraints are unused in OER */
-
-    if(size < 1) {
-        ASN__DECODE_STARVED;
-    }
-
-    if(!(st = *sptr)) {
-        st = (BOOLEAN_t *)(*sptr = CALLOC(1, sizeof(*st)));
-        if(!st) ASN__DECODE_FAILED;
-    }
-
-    *st = *(const uint8_t *)ptr;
-
-    return ok;
-}
-
-
-
-#endif
-
 int
 BOOLEAN_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
                 const void *bptr) {
@@ -403,16 +281,6 @@ BOOLEAN_random_fill(const asn_TYPE_descriptor_t *td, void **sptr,
         st = (BOOLEAN_t *)(*sptr = CALLOC(1, sizeof(*st)));
         if(st == NULL) {
             return result_failed;
-        }
-    }
-
-    if(!constraints || !constraints->per_constraints)
-        constraints = &td->encoding_constraints;
-    if(constraints->per_constraints) {
-        const asn_per_constraint_t *pc = &constraints->per_constraints->value;
-        if(pc->flags & APC_CONSTRAINED) {
-            *st = asn_random_between(pc->lower_bound, pc->upper_bound);
-            return result_ok;
         }
     }
 

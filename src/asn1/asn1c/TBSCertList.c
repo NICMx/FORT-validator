@@ -36,7 +36,6 @@ static asn_TYPE_member_t asn_MBR_Member_8[] = {
 		"crlEntryExtensions"
 		},
 };
-static const int asn_MAP_Member_oms_8[] = { 2 };
 static const ber_tlv_tag_t asn_DEF_Member_tags_8[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -51,8 +50,6 @@ static asn_SEQUENCE_specifics_t asn_SPC_Member_specs_8 = {
 	offsetof(struct TBSCertList__revokedCertificates__Member, _asn_ctx),
 	asn_MAP_Member_tag2el_8,
 	4,	/* Count of tags in the map */
-	asn_MAP_Member_oms_8,	/* Optional members */
-	1, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 static /* Use -fall-defs-global to expose */
@@ -173,7 +170,6 @@ asn_TYPE_member_t asn_MBR_TBSCertList_1[] = {
 		"crlExtensions"
 		},
 };
-static const int asn_MAP_TBSCertList_oms_1[] = { 0, 4, 5, 6 };
 static const ber_tlv_tag_t asn_DEF_TBSCertList_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -193,8 +189,6 @@ asn_SEQUENCE_specifics_t asn_SPC_TBSCertList_specs_1 = {
 	offsetof(struct TBSCertList, _asn_ctx),
 	asn_MAP_TBSCertList_tag2el_1,
 	9,	/* Count of tags in the map */
-	asn_MAP_TBSCertList_oms_1,	/* Optional members */
-	4, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_TBSCertList = {

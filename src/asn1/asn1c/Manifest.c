@@ -53,15 +53,6 @@ memb_fileList_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
 	return td->encoding_constraints.general_constraints(td, sptr, ctfailcb, app_key);
 }
 
-static asn_oer_constraints_t asn_OER_type_fileList_constr_7 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(0..MAX)) */};
-static asn_oer_constraints_t asn_OER_memb_manifestNumber_constr_3 CC_NOTUSED = {
-	{ 0, 1 }	/* (0..MAX) */,
-	-1};
-static asn_oer_constraints_t asn_OER_memb_fileList_constr_7 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(0..MAX)) */};
 static int asn_DFL_2_cmp_0(const void *sptr) {
 	const INTEGER_t *st = sptr;
 	
@@ -116,7 +107,7 @@ asn_TYPE_descriptor_t asn_DEF_fileList_7 = {
 	asn_DEF_fileList_tags_7,	/* Same as above */
 	sizeof(asn_DEF_fileList_tags_7)
 		/sizeof(asn_DEF_fileList_tags_7[0]), /* 1 */
-	{ &asn_OER_type_fileList_constr_7, 0, SEQUENCE_OF_constraint },
+	{ NULL, 0, SEQUENCE_OF_constraint },
 	asn_MBR_fileList_7,
 	1,	/* Single element */
 	&asn_SPC_fileList_specs_7	/* Additional specs */
@@ -138,7 +129,7 @@ static asn_TYPE_member_t asn_MBR_Manifest_1[] = {
 		0,
 		&asn_DEF_INTEGER,
 		0,
-		{ &asn_OER_memb_manifestNumber_constr_3, 0,  memb_manifestNumber_constraint_1 },
+		{ NULL, 0,  memb_manifestNumber_constraint_1 },
 		0, 0, /* No default value */
 		"manifestNumber"
 		},
@@ -174,12 +165,11 @@ static asn_TYPE_member_t asn_MBR_Manifest_1[] = {
 		0,
 		&asn_DEF_fileList_7,
 		0,
-		{ &asn_OER_memb_fileList_constr_7, 0,  memb_fileList_constraint_1 },
+		{ NULL, 0,  memb_fileList_constraint_1 },
 		0, 0, /* No default value */
 		"fileList"
 		},
 };
-static const int asn_MAP_Manifest_oms_1[] = { 0 };
 static const ber_tlv_tag_t asn_DEF_Manifest_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -196,8 +186,6 @@ static asn_SEQUENCE_specifics_t asn_SPC_Manifest_specs_1 = {
 	offsetof(struct Manifest, _asn_ctx),
 	asn_MAP_Manifest_tag2el_1,
 	6,	/* Count of tags in the map */
-	asn_MAP_Manifest_oms_1,	/* Optional members */
-	1, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_Manifest = {

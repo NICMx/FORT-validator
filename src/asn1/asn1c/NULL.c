@@ -20,20 +20,6 @@ asn_TYPE_operation_t asn_OP_NULL = {
 	NULL_encode_der,	/* Special handling of DER encoding */
 	NULL_decode_xer,
 	NULL_encode_xer,
-#ifdef	ASN_DISABLE_OER_SUPPORT
-	0,
-	0,
-#else
-	NULL_decode_oer,
-	NULL_encode_oer,
-#endif  /* ASN_DISABLE_OER_SUPPORT */
-#ifdef	ASN_DISABLE_PER_SUPPORT
-	0,
-	0,
-#else
-	NULL_decode_uper,	/* Unaligned PER decoder */
-	NULL_encode_uper,	/* Unaligned PER encoder */
-#endif	/* ASN_DISABLE_PER_SUPPORT */
 	NULL_random_fill,
 	0	/* Use generic outmost tag fetcher */
 };
@@ -187,100 +173,6 @@ NULL_print(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		return (cb("<absent>", 8, app_key) < 0) ? -1 : 0;
 	}
 }
-
-#ifndef ASN_DISABLE_OER_SUPPORT
-
-asn_dec_rval_t
-NULL_decode_oer(const asn_codec_ctx_t *opt_codec_ctx,
-                const asn_TYPE_descriptor_t *td,
-                const asn_oer_constraints_t *constraints, void **sptr,
-                const void *ptr, size_t size) {
-    asn_dec_rval_t rv = {RC_OK, 0};
-    (void)opt_codec_ctx;
-    (void)td;
-    (void)constraints;
-    (void)ptr;
-    (void)size;
-
-    if(!*sptr) {
-        *sptr = MALLOC(sizeof(NULL_t));
-        if(*sptr) {
-            *(NULL_t *)*sptr = 0;
-        } else {
-            ASN__DECODE_FAILED;
-        }
-    }
-
-    return rv;
-}
-
-asn_enc_rval_t
-NULL_encode_oer(const asn_TYPE_descriptor_t *td,
-                const asn_oer_constraints_t *constraints, const void *sptr,
-                asn_app_consume_bytes_f *cb, void *app_key) {
-    asn_enc_rval_t er;
-
-    (void)td;
-    (void)sptr;
-    (void)constraints;
-    (void)cb;
-    (void)app_key;
-
-    er.encoded = 0; /* Encoding in 0 bytes. */
-
-    ASN__ENCODED_OK(er);
-}
-
-#endif /* ASN_DISABLE_OER_SUPPORT */
-
-#ifndef ASN_DISABLE_PER_SUPPORT
-
-asn_dec_rval_t
-NULL_decode_uper(const asn_codec_ctx_t *opt_codec_ctx,
-                 const asn_TYPE_descriptor_t *td,
-                 const asn_per_constraints_t *constraints, void **sptr,
-                 asn_per_data_t *pd) {
-    asn_dec_rval_t rv;
-
-	(void)opt_codec_ctx;
-	(void)td;
-	(void)constraints;
-	(void)pd;
-
-	if(!*sptr) {
-		*sptr = MALLOC(sizeof(NULL_t));
-		if(*sptr) {
-			*(NULL_t *)*sptr = 0;
-		} else {
-			ASN__DECODE_FAILED;
-		}
-	}
-
-	/*
-	 * NULL type does not have content octets.
-	 */
-
-	rv.code = RC_OK;
-	rv.consumed = 0;
-	return rv;
-}
-
-asn_enc_rval_t
-NULL_encode_uper(const asn_TYPE_descriptor_t *td,
-                 const asn_per_constraints_t *constraints, const void *sptr,
-                 asn_per_outp_t *po) {
-    asn_enc_rval_t er;
-
-	(void)td;
-	(void)constraints;
-	(void)sptr;
-	(void)po;
-
-	er.encoded = 0;
-	ASN__ENCODED_OK(er);
-}
-
-#endif  /* ASN_DISABLE_PER_SUPPORT */
 
 asn_random_fill_result_t
 NULL_random_fill(const asn_TYPE_descriptor_t *td, void **sptr,

@@ -28,8 +28,6 @@ asn_constr_check_f IA5String_constraint;
 #define IA5String_encode_der    OCTET_STRING_encode_der
 #define IA5String_decode_xer    OCTET_STRING_decode_xer_utf8
 #define IA5String_encode_xer    OCTET_STRING_encode_xer_utf8
-#define IA5String_decode_uper   OCTET_STRING_decode_uper
-#define IA5String_encode_uper   OCTET_STRING_encode_uper
 
 #ifdef __cplusplus
 }

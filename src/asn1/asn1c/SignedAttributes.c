@@ -7,9 +7,6 @@
 
 #include "asn1/asn1c/SignedAttributes.h"
 
-static asn_oer_constraints_t asn_OER_type_SignedAttributes_constr_1 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(1..MAX)) */};
 asn_TYPE_member_t asn_MBR_SignedAttributes_1[] = {
 	{ ATF_POINTER, 0, 0,
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
@@ -39,7 +36,7 @@ asn_TYPE_descriptor_t asn_DEF_SignedAttributes = {
 	asn_DEF_SignedAttributes_tags_1,	/* Same as above */
 	sizeof(asn_DEF_SignedAttributes_tags_1)
 		/sizeof(asn_DEF_SignedAttributes_tags_1[0]), /* 1 */
-	{ &asn_OER_type_SignedAttributes_constr_1, 0, SET_OF_constraint },
+	{ NULL, 0, SET_OF_constraint },
 	asn_MBR_SignedAttributes_1,
 	1,	/* Single element */
 	&asn_SPC_SignedAttributes_specs_1	/* Additional specs */

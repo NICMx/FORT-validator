@@ -72,7 +72,6 @@ asn_TYPE_member_t asn_MBR_SignerInfo_1[] = {
 		"unsignedAttrs"
 		},
 };
-static const int asn_MAP_SignerInfo_oms_1[] = { 3, 6 };
 static const ber_tlv_tag_t asn_DEF_SignerInfo_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -91,8 +90,6 @@ asn_SEQUENCE_specifics_t asn_SPC_SignerInfo_specs_1 = {
 	offsetof(struct SignerInfo, _asn_ctx),
 	asn_MAP_SignerInfo_tag2el_1,
 	8,	/* Count of tags in the map */
-	asn_MAP_SignerInfo_oms_1,	/* Optional members */
-	2, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_SignerInfo = {

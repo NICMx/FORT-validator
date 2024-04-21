@@ -38,19 +38,8 @@ typedef struct asn_struct_ctx_s {
 #include "asn1/asn1c/der_encoder.h"	/* Distinguished Encoding Rules encoder */
 #include "asn1/asn1c/xer_decoder.h"	/* Decoder of XER (XML, text) */
 #include "asn1/asn1c/xer_encoder.h"	/* Encoder into XER (XML, text) */
-#include "asn1/asn1c/per_decoder.h"	/* Packet Encoding Rules decoder */
-#include "asn1/asn1c/per_encoder.h"	/* Packet Encoding Rules encoder */
 #include "asn1/asn1c/constraints.h"	/* Subtype constraints support */
 #include "asn1/asn1c/asn_random_fill.h"	/* Random structures support */
-
-#ifdef  ASN_DISABLE_OER_SUPPORT
-typedef void (oer_type_decoder_f)(void);
-typedef void (oer_type_encoder_f)(void);
-typedef void asn_oer_constraints_t;
-#else
-#include "asn1/asn1c/oer_decoder.h"	/* Octet Encoding Rules encoder */
-#include "asn1/asn1c/oer_encoder.h"	/* Octet Encoding Rules encoder */
-#endif
 
 /*
  * Free the structure according to its specification.
@@ -149,20 +138,13 @@ typedef struct asn_TYPE_operation_s {
     der_type_encoder_f *der_encoder;      /* Canonical DER encoder */
     xer_type_decoder_f *xer_decoder;      /* Generic XER decoder */
     xer_type_encoder_f *xer_encoder;      /* [Canonical] XER encoder */
-    oer_type_decoder_f *oer_decoder;      /* Generic OER decoder */
-    oer_type_encoder_f *oer_encoder;      /* Canonical OER encoder */
-    per_type_decoder_f *uper_decoder;     /* Unaligned PER decoder */
-    per_type_encoder_f *uper_encoder;     /* Unaligned PER encoder */
     asn_random_fill_f *random_fill;       /* Initialize with a random value */
     asn_outmost_tag_f *outmost_tag;       /* <optional, internal> */
 } asn_TYPE_operation_t;
 
-/*
- * A constraints tuple specifying both the OER and PER constraints.
- */
 typedef struct asn_encoding_constraints_s {
-    const struct asn_oer_constraints_s *oer_constraints;
-    const struct asn_per_constraints_s *per_constraints;
+    const int *oer_constraints; /* Removed */
+    const int *per_constraints; /* Removed */
     asn_constr_check_f *general_constraints;
 } asn_encoding_constraints_t;
 
@@ -191,7 +173,7 @@ typedef struct asn_TYPE_descriptor_s {
     const ber_tlv_tag_t *all_tags;  /* Every tag for BER/containment */
     unsigned all_tags_count;        /* Number of tags */
 
-    /* OER, PER, and general constraints */
+    /* Constraints */
     asn_encoding_constraints_t encoding_constraints;
 
     /*

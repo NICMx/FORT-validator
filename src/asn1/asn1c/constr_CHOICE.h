@@ -26,10 +26,6 @@ typedef struct asn_CHOICE_specifics_s {
 	const asn_TYPE_tag2member_t *tag2el;
 	unsigned tag2el_count;
 
-	/* Canonical ordering of CHOICE elements, for PER */
-	const unsigned *to_canonical_order;
-	const unsigned *from_canonical_order;
-
 	/*
 	 * Extensions-related stuff.
 	 */
@@ -47,10 +43,6 @@ ber_type_decoder_f CHOICE_decode_ber;
 der_type_encoder_f CHOICE_encode_der;
 xer_type_decoder_f CHOICE_decode_xer;
 xer_type_encoder_f CHOICE_encode_xer;
-oer_type_decoder_f CHOICE_decode_oer;
-oer_type_encoder_f CHOICE_encode_oer;
-per_type_decoder_f CHOICE_decode_uper;
-per_type_encoder_f CHOICE_encode_uper;
 asn_outmost_tag_f CHOICE_outmost_tag;
 asn_random_fill_f CHOICE_random_fill;
 extern asn_TYPE_operation_t asn_OP_CHOICE;

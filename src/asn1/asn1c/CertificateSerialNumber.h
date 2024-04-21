@@ -30,8 +30,6 @@ ber_type_decoder_f CertificateSerialNumber_decode_ber;
 der_type_encoder_f CertificateSerialNumber_encode_der;
 xer_type_decoder_f CertificateSerialNumber_decode_xer;
 xer_type_encoder_f CertificateSerialNumber_encode_xer;
-oer_type_decoder_f CertificateSerialNumber_decode_oer;
-oer_type_encoder_f CertificateSerialNumber_encode_oer;
 
 #ifdef __cplusplus
 }

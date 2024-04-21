@@ -38,7 +38,6 @@ asn_SEQUENCE_specifics_t asn_SPC_AttributeTypeAndValue_specs_1 = {
 	offsetof(struct AttributeTypeAndValue, _asn_ctx),
 	asn_MAP_AttributeTypeAndValue_tag2el_1,
 	1,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_AttributeTypeAndValue = {

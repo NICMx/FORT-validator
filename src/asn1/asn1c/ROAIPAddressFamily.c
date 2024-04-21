@@ -59,15 +59,6 @@ memb_addresses_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
 	}
 }
 
-static asn_oer_constraints_t asn_OER_type_addresses_constr_3 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(1..MAX)) */};
-static asn_oer_constraints_t asn_OER_memb_addressFamily_constr_2 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(2..3)) */};
-static asn_oer_constraints_t asn_OER_memb_addresses_constr_3 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(1..MAX)) */};
 static asn_TYPE_member_t asn_MBR_addresses_3[] = {
 	{ ATF_POINTER, 0, 0,
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
@@ -98,7 +89,7 @@ asn_TYPE_descriptor_t asn_DEF_addresses_3 = {
 	asn_DEF_addresses_tags_3,	/* Same as above */
 	sizeof(asn_DEF_addresses_tags_3)
 		/sizeof(asn_DEF_addresses_tags_3[0]), /* 1 */
-	{ &asn_OER_type_addresses_constr_3, 0, SEQUENCE_OF_constraint },
+	{ NULL, 0, SEQUENCE_OF_constraint },
 	asn_MBR_addresses_3,
 	1,	/* Single element */
 	&asn_SPC_addresses_specs_3	/* Additional specs */
@@ -110,7 +101,7 @@ asn_TYPE_member_t asn_MBR_ROAIPAddressFamily_1[] = {
 		0,
 		&asn_DEF_OCTET_STRING,
 		0,
-		{ &asn_OER_memb_addressFamily_constr_2, 0,  memb_addressFamily_constraint_1 },
+		{ NULL, 0,  memb_addressFamily_constraint_1 },
 		0, 0, /* No default value */
 		"addressFamily"
 		},
@@ -119,7 +110,7 @@ asn_TYPE_member_t asn_MBR_ROAIPAddressFamily_1[] = {
 		0,
 		&asn_DEF_addresses_3,
 		0,
-		{ &asn_OER_memb_addresses_constr_3, 0,  memb_addresses_constraint_1 },
+		{ NULL, 0,  memb_addresses_constraint_1 },
 		0, 0, /* No default value */
 		"addresses"
 		},
@@ -136,7 +127,6 @@ asn_SEQUENCE_specifics_t asn_SPC_ROAIPAddressFamily_specs_1 = {
 	offsetof(struct ROAIPAddressFamily, _asn_ctx),
 	asn_MAP_ROAIPAddressFamily_tag2el_1,
 	2,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_ROAIPAddressFamily = {

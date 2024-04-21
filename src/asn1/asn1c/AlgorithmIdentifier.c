@@ -27,7 +27,6 @@ asn_TYPE_member_t asn_MBR_AlgorithmIdentifier_1[] = {
 		"parameters"
 		},
 };
-static const int asn_MAP_AlgorithmIdentifier_oms_1[] = { 1 };
 static const ber_tlv_tag_t asn_DEF_AlgorithmIdentifier_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -39,8 +38,6 @@ asn_SEQUENCE_specifics_t asn_SPC_AlgorithmIdentifier_specs_1 = {
 	offsetof(struct AlgorithmIdentifier, _asn_ctx),
 	asn_MAP_AlgorithmIdentifier_tag2el_1,
 	1,	/* Count of tags in the map */
-	asn_MAP_AlgorithmIdentifier_oms_1,	/* Optional members */
-	1, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_AlgorithmIdentifier = {

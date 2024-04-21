@@ -7,9 +7,6 @@
 
 #include "asn1/asn1c/IPAddressChoice.h"
 
-static asn_oer_constraints_t asn_OER_type_IPAddressChoice_constr_1 CC_NOTUSED = {
-	{ 0, 0 },
-	-1};
 static asn_TYPE_member_t asn_MBR_addressesOrRanges_3[] = {
 	{ ATF_POINTER, 0, 0,
 		-1 /* Ambiguous tag (CHOICE?) */,
@@ -77,7 +74,6 @@ asn_CHOICE_specifics_t asn_SPC_IPAddressChoice_specs_1 = {
 	sizeof(((struct IPAddressChoice *)0)->present),
 	asn_MAP_IPAddressChoice_tag2el_1,
 	2,	/* Count of tags in the map */
-	0, 0,
 	-1	/* Extensions start */
 };
 asn_TYPE_descriptor_t asn_DEF_IPAddressChoice = {
@@ -88,7 +84,7 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressChoice = {
 	0,	/* No effective tags (count) */
 	0,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ &asn_OER_type_IPAddressChoice_constr_1, 0, CHOICE_constraint },
+	{ NULL, 0, CHOICE_constraint },
 	asn_MBR_IPAddressChoice_1,
 	2,	/* Elements count */
 	&asn_SPC_IPAddressChoice_specs_1	/* Additional specs */

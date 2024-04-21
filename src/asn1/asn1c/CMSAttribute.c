@@ -75,7 +75,6 @@ asn_SEQUENCE_specifics_t asn_SPC_CMSAttribute_specs_1 = {
 	offsetof(struct CMSAttribute, _asn_ctx),
 	asn_MAP_CMSAttribute_tag2el_1,
 	2,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_CMSAttribute = {

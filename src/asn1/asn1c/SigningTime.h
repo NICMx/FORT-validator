@@ -30,8 +30,6 @@ ber_type_decoder_f SigningTime_decode_ber;
 der_type_encoder_f SigningTime_encode_der;
 xer_type_decoder_f SigningTime_decode_xer;
 xer_type_encoder_f SigningTime_encode_xer;
-oer_type_decoder_f SigningTime_decode_oer;
-oer_type_encoder_f SigningTime_encode_oer;
 
 #ifdef __cplusplus
 }

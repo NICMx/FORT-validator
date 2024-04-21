@@ -63,7 +63,6 @@ static asn_TYPE_member_t asn_MBR_SignedData_1[] = {
 		"signerInfos"
 		},
 };
-static const int asn_MAP_SignedData_oms_1[] = { 3, 4 };
 static const ber_tlv_tag_t asn_DEF_SignedData_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -80,8 +79,6 @@ static asn_SEQUENCE_specifics_t asn_SPC_SignedData_specs_1 = {
 	offsetof(struct SignedData, _asn_ctx),
 	asn_MAP_SignedData_tag2el_1,
 	6,	/* Count of tags in the map */
-	asn_MAP_SignedData_oms_1,	/* Optional members */
-	2, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_SignedData = {

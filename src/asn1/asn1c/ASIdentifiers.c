@@ -27,7 +27,6 @@ static asn_TYPE_member_t asn_MBR_ASIdentifiers_1[] = {
 		"rdi"
 		},
 };
-static const int asn_MAP_ASIdentifiers_oms_1[] = { 0, 1 };
 static const ber_tlv_tag_t asn_DEF_ASIdentifiers_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -40,8 +39,6 @@ static asn_SEQUENCE_specifics_t asn_SPC_ASIdentifiers_specs_1 = {
 	offsetof(struct ASIdentifiers, _asn_ctx),
 	asn_MAP_ASIdentifiers_tag2el_1,
 	2,	/* Count of tags in the map */
-	asn_MAP_ASIdentifiers_oms_1,	/* Optional members */
-	2, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_ASIdentifiers = {

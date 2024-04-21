@@ -33,16 +33,13 @@ memb_addressFamily_constraint_1(const asn_TYPE_descriptor_t *td, const void *spt
 	}
 }
 
-static asn_oer_constraints_t asn_OER_memb_addressFamily_constr_2 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(2..3)) */};
 asn_TYPE_member_t asn_MBR_IPAddressFamily_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct IPAddressFamily, addressFamily),
 		(ASN_TAG_CLASS_UNIVERSAL | (4 << 2)),
 		0,
 		&asn_DEF_OCTET_STRING,
 		0,
-		{ &asn_OER_memb_addressFamily_constr_2, 0,  memb_addressFamily_constraint_1 },
+		{ NULL, 0,  memb_addressFamily_constraint_1 },
 		0, 0, /* No default value */
 		"addressFamily"
 		},
@@ -69,7 +66,6 @@ asn_SEQUENCE_specifics_t asn_SPC_IPAddressFamily_specs_1 = {
 	offsetof(struct IPAddressFamily, _asn_ctx),
 	asn_MAP_IPAddressFamily_tag2el_1,
 	3,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_IPAddressFamily = {

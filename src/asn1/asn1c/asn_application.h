@@ -37,21 +37,6 @@ enum asn_transfer_syntax {
     ATS_DER,
     ATS_CER, /* Only decoding is supported */
     /*
-     * X.696:
-     * OER: Octet Encoding Rules.
-     * CANONICAL-OER is a more strict variant of BASIC-OER.
-     */
-    ATS_BASIC_OER,
-    ATS_CANONICAL_OER,
-    /*
-     * X.691:
-     * PER: Packed Encoding Rules.
-     * CANONICAL-PER is a more strict variant of BASIC-PER.
-     * NOTE: Produces or consumes a complete encoding (X.691 (08/2015) #11.1).
-     */
-    ATS_UNALIGNED_BASIC_PER,
-    ATS_UNALIGNED_CANONICAL_PER,
-    /*
      * X.693:
      * XER: XML Encoding Rules.
      * CANONICAL-XER is a more strict variant of BASIC-XER.
