@@ -1,7 +1,7 @@
 #ifndef SRC_EXTENSION_H_
 #define SRC_EXTENSION_H_
 
-#include <openssl/asn1.h>
+#include <jansson.h>
 #include <openssl/safestack.h>
 #include <openssl/x509.h>
 #include <stdbool.h>
@@ -10,6 +10,8 @@ struct extension_metadata {
 	char const *name;
 	int nid;
 	bool critical;
+	json_t *(*to_json)(void const *);
+	void (*destructor)(void *); /* TODO use this more */
 };
 
 struct extension_handler {
@@ -39,6 +41,8 @@ struct extension_metadata const *ext_ir2(void);
 struct extension_metadata const *ext_ar2(void);
 struct extension_metadata const *ext_cn(void);
 struct extension_metadata const *ext_eku(void);
+
+struct extension_metadata const **ext_metadatas(void);
 
 int handle_extensions(struct extension_handler *,
     STACK_OF(X509_EXTENSION) const *);

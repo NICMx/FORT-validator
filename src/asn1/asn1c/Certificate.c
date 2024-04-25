@@ -3,106 +3,8 @@
 #include <openssl/x509v3.h>
 #include <openssl/pem.h>
 #include "alloc.h"
-
-/* Swallows @bio. */
-static json_t *
-bio2json(BIO *bio)
-{
-	BUF_MEM *buffer;
-	json_t *json;
-
-	json = (BIO_get_mem_ptr(bio, &buffer) > 0)
-	    ? json_stringn(buffer->data, buffer->length)
-	    : NULL;
-
-	BIO_free_all(bio);
-	return json;
-}
-
-/* Swallows @bio. */
-static char *
-bio2str(BIO *bio)
-{
-	BUF_MEM *buffer;
-	char *str;
-
-	str = (BIO_get_mem_ptr(bio, &buffer) > 0)
-	    ? pstrndup(buffer->data, buffer->length)
-	    : NULL;
-
-	BIO_free_all(bio);
-	return str;
-}
-
-static json_t *
-asn1int2json(ASN1_INTEGER const *asn1int)
-{
-	BIGNUM *bignum;
-	char *str;
-	json_t *json;
-
-	if (asn1int == NULL)
-		return NULL;
-
-	bignum = ASN1_INTEGER_to_BN(asn1int, NULL);
-	str = BN_bn2hex(bignum);
-
-	json = json_string(str);
-
-	OPENSSL_free(str);
-	BN_free(bignum);
-
-	return json;
-}
-
-static json_t *
-name2json(X509_NAME const *name)
-{
-	json_t *root;
-	json_t *child;
-	int i;
-
-	root = json_object();
-	if (root == NULL)
-		return NULL;
-
-	for (i = 0; i < X509_NAME_entry_count(name); i++) {
-		X509_NAME_ENTRY *entry;
-		int nid;
-		const ASN1_STRING *data;
-
-		entry = X509_NAME_get_entry(name, i);
-		nid = OBJ_obj2nid(X509_NAME_ENTRY_get_object(entry));
-
-		data = X509_NAME_ENTRY_get_data(entry);
-		if (data == NULL)
-			goto fail;
-		child = json_stringn((char *)data->data, data->length);
-
-		if (json_object_set_new(root, OBJ_nid2ln(nid), child) < 0)
-			goto fail;
-	}
-
-	return root;
-
-fail:	json_decref(root);
-	return NULL;
-}
-
-static json_t *
-asn1time2json(ASN1_TIME const *time)
-{
-	BIO *bio = BIO_new(BIO_s_mem());
-	if (bio == NULL)
-		return NULL;
-
-	if (!ASN1_TIME_print_ex(bio, time, ASN1_DTFLGS_ISO8601)) {
-		BIO_free_all(bio);
-		return NULL;
-	}
-
-	return bio2json(bio);
-}
+#include "extension.h"
+#include "libcrypto_util.h"
 
 static json_t *
 validity2json(X509 *x)
@@ -170,39 +72,11 @@ fail:	json_decref(root);
 }
 
 static json_t *
-bitstr2json(ASN1_BIT_STRING const *bitstr)
-{
-	BIO *bio;
-	unsigned char *data;
-	int length;
-	int i;
-
-	if (bitstr == NULL)
-		return json_null();
-
-	bio = BIO_new(BIO_s_mem());
-	if (bio == NULL)
-		return NULL;
-
-	data = bitstr->data;
-	length = bitstr->length;
-
-	for (i = 0; i < length; i++) {
-		if (BIO_printf(bio, "%02x", data[i]) <= 0) {
-			BIO_free_all(bio);
-			return NULL;
-		}
-	}
-
-	return bio2json(bio);
-}
-
-static json_t *
 iuid2json(X509 const *x)
 {
 	const ASN1_BIT_STRING *iuid;
 	X509_get0_uids(x, &iuid, NULL);
-	return bitstr2json(iuid);
+	return asn1str2json(iuid);
 }
 
 static json_t *
@@ -210,7 +84,60 @@ suid2json(X509 const *x)
 {
 	const ASN1_BIT_STRING *suid;
 	X509_get0_uids(x, NULL, &suid);
-	return bitstr2json(suid);
+	return asn1str2json(suid);
+}
+
+static json_t *
+ext2json_known(struct extension_metadata const *meta, X509_EXTENSION *ext)
+{
+	void *decoded;
+	json_t *json;
+
+	decoded = X509V3_EXT_d2i(ext);
+	if (decoded == NULL)
+		return NULL;
+
+	json = meta->to_json(decoded);
+
+	meta->destructor(decoded);
+	return json;
+}
+
+static json_t *
+ext2json_unknown(X509_EXTENSION *ext)
+{
+	BIO *bio = BIO_new(BIO_s_mem());
+	if (bio == NULL)
+		return NULL;
+
+	/* TODO Those flags are kinda interesting */
+	if (!X509V3_EXT_print(bio, ext, 0, 0)) {
+		BIO_free_all(bio);
+		return NULL;
+	}
+
+	return bio2json(bio);
+}
+
+static json_t *
+ext2json(X509_EXTENSION *ext)
+{
+	struct extension_metadata const **array, *meta;
+	int nid;
+
+	array = ext_metadatas();
+	nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
+
+	for (meta = *array; meta != NULL; array++, meta = *array) {
+		if (meta->nid == nid) {
+			if (meta->to_json != NULL)
+				return ext2json_known(meta, ext);
+			else
+				break;
+		}
+	}
+
+	return ext2json_unknown(ext);
 }
 
 static json_t *
@@ -254,17 +181,8 @@ exts2json(const STACK_OF(X509_EXTENSION) *exts)
 		/* Child 1: Critical */
 		if (json_object_set_new(node, "critical", X509_EXTENSION_get_critical(ex) ? json_true() : json_false()) < 0)
 			goto fail;
-
 		/* Child 2: Value */
-		bio = BIO_new(BIO_s_mem());
-		if (bio == NULL)
-			goto fail;
-		/* TODO Those flags are kinda interesting */
-		if (!X509V3_EXT_print(bio, ex, 0, 0)) {
-			BIO_free_all(bio);
-			goto fail;
-		}
-		if (json_object_set_new(node, "value", bio2json(bio)) < 0)
+		if (json_object_set_new(node, "value", ext2json(ex)))
 			goto fail;
 	}
 
@@ -287,7 +205,7 @@ tbsCert2json(X509 *x)
 		goto fail;
 	if (json_object_set_new(tbsCert, "serialNumber", asn1int2json(X509_get0_serialNumber(x))) < 0)
 		goto fail;
-	if (json_object_set_new(tbsCert, "signature", json_string(OBJ_nid2ln(X509_get_signature_nid(x)))) < 0)
+	if (json_object_set_new(tbsCert, "signature", json_string(OBJ_nid2sn(X509_get_signature_nid(x)))) < 0)
 		goto fail;
 	if (json_object_set_new(tbsCert, "issuer", name2json(X509_get_issuer_name(x))) < 0)
 		goto fail;
@@ -320,7 +238,7 @@ sigAlgorithm2json(X509 *cert)
 	X509_get0_signature(NULL, &palg, cert);
 	X509_ALGOR_get0(&paobj, NULL, NULL, palg);
 
-	return json_string(OBJ_nid2ln(OBJ_obj2nid(paobj)));
+	return oid2json(paobj);
 }
 
 static json_t *
@@ -328,7 +246,7 @@ sigValue2json(X509 *cert)
 {
 	const ASN1_BIT_STRING *signature;
 	X509_get0_signature(&signature, NULL, cert);
-	return bitstr2json(signature);
+	return asn1str2json(signature);
 }
 
 static json_t *
@@ -359,6 +277,7 @@ Certificate_encode_json(ANY_t *ber)
 {
 	const unsigned char *tmp;
 	X509 *cert;
+	json_t *root;
 
 	/*
 	 * "If the call is successful *in is incremented to the byte following
@@ -372,7 +291,7 @@ Certificate_encode_json(ANY_t *ber)
 	if (cert == NULL)
 		return NULL;
 
-	json_t *root = x509_to_json(cert);
+	root = x509_to_json(cert);
 	if (root == NULL)
 		goto fail;
 
