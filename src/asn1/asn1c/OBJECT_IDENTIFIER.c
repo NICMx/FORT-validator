@@ -595,6 +595,7 @@ is_raw(OBJECT_IDENTIFIER_t const *oid, unsigned char const *raw, size_t size)
 	return (oid->size == size) && memcmp(oid->buf, raw, size) == 0;
 }
 
+/* FIXME ber_decode_primitive() */
 bool
 OBJECT_IDENTIFIER_is_rsaEncryption(OBJECT_IDENTIFIER_t const *oid)
 {

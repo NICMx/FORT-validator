@@ -165,7 +165,7 @@ fail:	json_decref(root);
 }
 
 json_t *
-Certificate_encode_json(ANY_t *ber)
+Certificate_any2json(ANY_t *ber)
 {
 	const unsigned char *tmp;
 	X509 *cert;
@@ -180,6 +180,22 @@ Certificate_encode_json(ANY_t *ber)
 	tmp = (const unsigned char *) ber->buf;
 
 	cert = d2i_X509(NULL, &tmp, ber->size);
+	if (cert == NULL)
+		return NULL;
+
+	root = x509_to_json(cert);
+
+	X509_free(cert);
+	return root;
+}
+
+json_t *
+Certificate_file2json(FILE *file)
+{
+	X509 *cert;
+	json_t *root;
+
+	cert = d2i_X509_fp(file, NULL);
 	if (cert == NULL)
 		return NULL;
 

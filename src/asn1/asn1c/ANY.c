@@ -121,6 +121,7 @@ ANY_new_fromType(asn_TYPE_descriptor_t *td, void *sptr) {
 	}
 }
 
+/* FIXME use this more. */
 int
 ANY_to_type(ANY_t *st, asn_TYPE_descriptor_t *td, void **struct_ptr) {
 	asn_dec_rval_t rval;

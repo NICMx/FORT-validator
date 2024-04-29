@@ -26,7 +26,7 @@ CertificateSet_encode_json(const struct asn_TYPE_descriptor_s *td,
 	list = _A_CSET_FROM_VOID(sptr);
 
 	for (i = 0; i < list->count; i++) {
-		json_t *node = Certificate_encode_json(list->array[i]);
+		json_t *node = Certificate_any2json(list->array[i]);
 		if (node == NULL)
 			goto fail;
 		if (json_array_append_new(result, node) < 0)

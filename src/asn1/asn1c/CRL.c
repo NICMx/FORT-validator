@@ -108,13 +108,12 @@ fail:	json_decref(root);
 }
 
 json_t *
-CRL_encode_json(ANY_t *ber)
+CRL_file2json(FILE *file)
 {
-	const unsigned char *tmp = (const unsigned char *) ber->buf;
 	X509_CRL *crl;
 	json_t *root;
 
-	crl = d2i_X509_CRL(NULL, &tmp, ber->size);
+	crl = d2i_X509_CRL_fp(file, NULL);
 	if (crl == NULL)
 		return NULL;
 
