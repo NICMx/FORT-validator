@@ -15,5 +15,6 @@ json_t *asn1time2json(ASN1_TIME const *);
 json_t *name2json(X509_NAME const *);
 json_t *gn2json(GENERAL_NAME const *);
 json_t *gns2json(GENERAL_NAMES const *);
+json_t *exts2json(const STACK_OF(X509_EXTENSION) *);
 
 #endif /* SRC_LIBCRYPTO_UTIL_H_ */

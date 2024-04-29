@@ -49,6 +49,7 @@ ASN_MODULE_SRCS=	\
 	asn1/asn1c/OtherRevocationInfoFormat.c	\
 	asn1/asn1c/Certificate.c	\
 	asn1/asn1c/CertificateSet.c	\
+	asn1/asn1c/CRL.c	\
 	asn1/asn1c/IssuerAndSerialNumber.c	\
 	asn1/asn1c/CMSVersion.c	\
 	asn1/asn1c/MessageDigest.c	\
@@ -113,6 +114,7 @@ ASN_MODULE_HDRS=	\
 	asn1/asn1c/OtherRevocationInfoFormat.h	\
 	asn1/asn1c/Certificate.h	\
 	asn1/asn1c/CertificateSet.h	\
+	asn1/asn1c/CRL.h	\
 	asn1/asn1c/IssuerAndSerialNumber.h	\
 	asn1/asn1c/CMSVersion.h	\
 	asn1/asn1c/MessageDigest.h	\

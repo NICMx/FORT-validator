@@ -660,16 +660,59 @@ static struct extension_metadata AR2 = {
 	ir_destroy,
 };
 
+static json_t *
+cn2json(void const *ext)
+{
+	return asn1int2json(ext);
+}
+
+static void
+cn_destroy(void *cn)
+{
+	ASN1_INTEGER_free(cn);
+}
+
 static const struct extension_metadata CN = {
 	"CRL Number",
 	NID_crl_number,
 	false,
+	cn2json,
+	cn_destroy,
 };
+
+static json_t *
+eku2json(void const *ext)
+{
+	EXTENDED_KEY_USAGE const *eku = ext;
+	json_t *root;
+	int i;
+
+	root = json_array();
+	if (root == NULL)
+		return root;
+
+	for (i = 0; i < sk_ASN1_OBJECT_num(eku); i++)
+		if (json_array_append_new(root, oid2json(sk_ASN1_OBJECT_value(eku, i))) < 0)
+			goto fail;
+
+	return root;
+
+fail:	json_decref(root);
+	return NULL;
+}
+
+static void
+eku_destroy(void *eku)
+{
+	EXTENDED_KEY_USAGE_free(eku);
+}
 
 static const struct extension_metadata EKU = {
 	"Extended Key Usage",
 	NID_ext_key_usage,
 	false,
+	eku2json,
+	eku_destroy,
 };
 
 int extension_init(void)
