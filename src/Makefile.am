@@ -49,6 +49,7 @@ fort_SOURCES += types/vrp.c types/vrp.h
 fort_SOURCES += cache/local_cache.c cache/local_cache.h
 
 fort_SOURCES += config/boolean.c config/boolean.h
+fort_SOURCES += config/file_type.h config/file_type.c
 fort_SOURCES += config/filename_format.h config/filename_format.c
 fort_SOURCES += config/log_conf.h config/log_conf.c
 fort_SOURCES += config/mode.c config/mode.h

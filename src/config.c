@@ -193,6 +193,7 @@ struct rpki_config {
 		} validation;
 	} thread_pool;
 
+	enum file_type ft;
 	char *payload;
 };
 
@@ -767,6 +768,13 @@ static const struct option_field options[] = {
 		.max = 100,
 	},
 
+	{
+		.id = 13000,
+		.name = "file-type",
+		.type = &gt_file_type,
+		.offset = offsetof(struct rpki_config, ft),
+		.doc = "Parser for --mode=print",
+	},
 	{ 0 },
 };
 
@@ -1456,6 +1464,12 @@ unsigned int
 config_get_thread_pool_server_max(void)
 {
 	return rpki_config.thread_pool.server.max;
+}
+
+enum file_type
+config_get_file_type(void)
+{
+	return rpki_config.ft;
 }
 
 char const *

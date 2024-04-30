@@ -9,13 +9,6 @@
 #include "asn1/asn1c/Certificate.h"
 #include "asn1/asn1c/CRL.h"
 
-enum file_type {
-	FT_UNKNOWN,
-	FT_SIGNED_OBJECT,
-	FT_CERTIFICATE,
-	FT_CRL,
-};
-
 #define HDRSIZE 32
 
 static unsigned char *
@@ -52,45 +45,48 @@ guess_file_type(FILE *file)
 	unsigned char buf[HDRSIZE];
 	unsigned char *ptr;
 
+	if (config_get_file_type() != FT_UNK)
+		return config_get_file_type();
+
 	if (fread(buf, 1, HDRSIZE, file) != HDRSIZE) {
 		pr_op_debug("File is too small or generic IO error.");
-		return FT_UNKNOWN;
+		return FT_UNK;
 	}
 	rewind(file);
 
 	if (buf[0] != 0x30) {
 		pr_op_debug("File doesn't start with a SEQUENCE.");
-		return FT_UNKNOWN;
+		return FT_UNK;
 	}
 	ptr = skip_sequence(buf, buf + 1);
 	if (ptr == NULL) {
 		pr_op_debug("Cannot skip first sequence length.");
-		return FT_UNKNOWN;
+		return FT_UNK;
 	}
 
 	if (*ptr == 0x06) {
 		pr_op_debug("SEQ containing OID.");
-		return FT_SIGNED_OBJECT;
+		return FT_ROA; /* Same parser for mfts and gbrs */
 	}
 	if (*ptr != 0x30) {
 		pr_op_debug("SEQ containing unexpected: 0x%x", *ptr);
-		return FT_UNKNOWN;
+		return FT_UNK;
 	}
 
 	ptr = skip_sequence(buf, ptr + 1);
 	if (ptr == NULL) {
 		pr_op_debug("Cannot skip second sequence length.");
-		return FT_UNKNOWN;
+		return FT_UNK;
 	}
 	ptr = skip_integer(buf, ptr + 1);
 	if (ptr == NULL) {
 		pr_op_debug("Cannot skip version number.");
-		return FT_UNKNOWN;
+		return FT_UNK;
 	}
 
 	if (*ptr == 0x02) {
 		pr_op_debug("SEQ containing SEQ containing (INT, INT).");
-		return FT_CERTIFICATE;
+		return FT_CER;
 	}
 	if (*ptr == 0x30) {
 		pr_op_debug("SEQ containing SEQ containing (INT, SEQ).");
@@ -98,7 +94,7 @@ guess_file_type(FILE *file)
 	}
 
 	pr_op_debug("SEQ containing SEQ containing unexpected: 0x%x", *ptr);
-	return FT_UNKNOWN;
+	return FT_UNK;
 }
 
 static struct ContentInfo *
@@ -178,13 +174,15 @@ print_file(void)
 		return pr_op_err("Cannot open file: %s", strerror(errno));
 
 	switch (guess_file_type(file)) {
-	case FT_UNKNOWN:
+	case FT_UNK:
 		error = pr_op_err("Unrecognized file type.");
 		break;
-	case FT_SIGNED_OBJECT:
+	case FT_ROA:
+	case FT_MFT:
+	case FT_GBR:
 		json = asn1c2json(file);
 		break;
-	case FT_CERTIFICATE:
+	case FT_CER:
 		json = Certificate_file2json(file);
 		break;
 	case FT_CRL:
