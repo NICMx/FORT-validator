@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <openssl/asn1.h>
+#include <openssl/opensslv.h>
 
 #include "alloc.h"
 #include "extension.h"
@@ -90,6 +91,7 @@ json_t *
 asn1time2json(ASN1_TIME const *time)
 {
 	BIO *bio;
+	int success;
 
 	if (time == NULL)
 		return json_null();
@@ -98,7 +100,12 @@ asn1time2json(ASN1_TIME const *time)
 	if (bio == NULL)
 		return NULL;
 
-	if (!ASN1_TIME_print_ex(bio, time, ASN1_DTFLGS_ISO8601)) {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	success = ASN1_TIME_print_ex(bio, time, ASN1_DTFLGS_ISO8601);
+#else
+	success = ASN1_TIME_print(bio, time); /* Kill me */
+#endif
+	if (!success) {
 		BIO_free_all(bio);
 		return NULL;
 	}

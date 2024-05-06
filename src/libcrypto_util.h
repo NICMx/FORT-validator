@@ -4,7 +4,7 @@
 #include <jansson.h>
 #include <openssl/asn1.h>
 #include <openssl/bio.h>
-#include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 char *bio2str(BIO *);
 json_t *bio2json(BIO *);
