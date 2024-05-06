@@ -989,12 +989,6 @@ set_default_values(void)
 	rpki_config.thread_pool.validation.max = 5;
 }
 
-static bool
-valid_output_file(char const *path)
-{
-	return strcmp(path, "-") == 0 || file_valid(path);
-}
-
 static int
 validate_config(void)
 {
@@ -1023,14 +1017,6 @@ validate_config(void)
 	    rpki_config.server.interval.expire <
 	    rpki_config.server.interval.retry)
 		return pr_op_err("Expire interval must be greater than refresh and retry intervals");
-
-	if (rpki_config.output.roa != NULL &&
-	    !valid_output_file(rpki_config.output.roa))
-		return pr_op_err("Invalid output.roa file.");
-
-	if (rpki_config.output.bgpsec != NULL &&
-	    !valid_output_file(rpki_config.output.bgpsec))
-		return pr_op_err("Invalid output.bgpsec file.");
 
 	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm, true))
 		return pr_op_err("Invalid slurm location.");

@@ -127,27 +127,6 @@ file_exists(char const *path)
 	return (stat(path, &meta) == 0) ? 0 : errno;
 }
 
-/*
- * Validate @file_name, if it doesn't exist, this function will create it and
- * close it.
- */
-bool
-file_valid(char const *file_name)
-{
-	FILE *tmp;
-	int error;
-
-	if (file_name == NULL)
-		return false;
-
-	error = file_write(file_name, "w", &tmp);
-	if (error)
-		return false;
-
-	file_close(tmp);
-	return true;
-}
-
 static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
