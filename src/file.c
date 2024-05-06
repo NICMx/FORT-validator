@@ -39,12 +39,12 @@ fail:
 }
 
 int
-file_write(char const *file_name, FILE **result)
+file_write(char const *file_name, char const *mode, FILE **result)
 {
 	FILE *file;
 	int error;
 
-	file = fopen(file_name, "wb");
+	file = fopen(file_name, mode);
 	if (file == NULL) {
 		error = errno;
 		pr_val_err("Could not open file '%s': %s", file_name,
@@ -140,7 +140,7 @@ file_valid(char const *file_name)
 	if (file_name == NULL)
 		return false;
 
-	error = file_write(file_name, &tmp);
+	error = file_write(file_name, "w", &tmp);
 	if (error)
 		return false;
 

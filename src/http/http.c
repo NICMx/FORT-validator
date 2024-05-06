@@ -108,7 +108,7 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
 	}
 
 	if (arg->file == NULL) {
-		arg->error = file_write(arg->file_name, &arg->file);
+		arg->error = file_write(arg->file_name, "wb", &arg->file);
 		if (arg->error)
 			return 0;
 	}

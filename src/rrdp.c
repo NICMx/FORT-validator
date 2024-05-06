@@ -587,7 +587,7 @@ write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 	if (error)
 		return error;
 
-	error = file_write(uri_get_local(uri), &out);
+	error = file_write(uri_get_local(uri), "wb", &out);
 	if (error)
 		return error;
 

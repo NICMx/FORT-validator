@@ -31,7 +31,7 @@ load_output_file(char const *output, FILE **result, bool *fopen)
 		return 0;
 	}
 
-	error = file_write(output, &tmp);
+	error = file_write(output, "w", &tmp);
 	if (error) {
 		*result = NULL;
 		return error;
