@@ -169,9 +169,13 @@ print_file(void)
 	json_t *json = NULL;
 	int error = 0;
 
-	file = fopen(filename, "rb");
-	if (file == NULL)
-		return pr_op_err("Cannot open file: %s", strerror(errno));
+	if (filename == NULL || strcmp(filename, "-") == 0) {
+		file = stdin;
+	} else {
+		file = fopen(filename, "rb");
+		if (file == NULL)
+			return pr_op_err("Cannot open file: %s", strerror(errno));
+	}
 
 	switch (guess_file_type(file)) {
 	case FT_UNK:
@@ -190,7 +194,8 @@ print_file(void)
 		break;
 	}
 
-	fclose(file);
+	if (file != stdin)
+		fclose(file);
 	if (error)
 		return error;
 	if (json == NULL)

@@ -993,9 +993,7 @@ static int
 validate_config(void)
 {
 	if (rpki_config.mode == PRINT_FILE)
-		return (rpki_config.payload == NULL)
-		    ? pr_op_err("Missing file name.")
-		    : 0;
+		return 0;
 
 	if (rpki_config.payload != NULL)
 		return pr_op_err("I don't know what '%s' is.",
