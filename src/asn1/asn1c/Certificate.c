@@ -190,12 +190,12 @@ Certificate_any2json(ANY_t *ber)
 }
 
 json_t *
-Certificate_file2json(FILE *file)
+Certificate_bio2json(BIO *bio)
 {
 	X509 *cert;
 	json_t *root;
 
-	cert = d2i_X509_fp(file, NULL);
+	cert = d2i_X509_bio(bio, NULL);
 	if (cert == NULL)
 		return NULL;
 

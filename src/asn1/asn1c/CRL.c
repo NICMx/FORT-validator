@@ -108,12 +108,12 @@ fail:	json_decref(root);
 }
 
 json_t *
-CRL_file2json(FILE *file)
+CRL_bio2json(BIO *bio)
 {
 	X509_CRL *crl;
 	json_t *root;
 
-	crl = d2i_X509_CRL_fp(file, NULL);
+	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL)
 		return NULL;
 

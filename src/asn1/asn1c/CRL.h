@@ -1,9 +1,9 @@
 #ifndef SRC_ASN1_ASN1C_CRL_H_
 #define SRC_ASN1_ASN1C_CRL_H_
 
-#include <stdio.h>
 #include <jansson.h>
+#include <openssl/bio.h>
 
-json_t *CRL_file2json(FILE *);
+json_t *CRL_bio2json(BIO *bio);
 
 #endif /* SRC_ASN1_ASN1C_CRL_H_ */

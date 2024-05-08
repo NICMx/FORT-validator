@@ -61,23 +61,16 @@ AddrBlock2json(struct ROAIPAddressFamily const *riaf, char const *ipname,
     json_t *(*pref2json)(struct ROAIPAddress *))
 {
 	json_t *root;
-	json_t *family, *addresses;
+	json_t *addrs;
 	int i;
 
 	root = json_object();
 	if (root == NULL)
 		return NULL;
 
-	family = json_string(ipname);
-	if (family == NULL)
+	if (json_object_set_new(root, "addressFamily", json_string(ipname)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "addressFamily", family) < 0)
-		goto fail;
-
-	addresses = json_array();
-	if (addresses == NULL)
-		goto fail;
-	if (json_object_set_new(root, "addresses", addresses) < 0)
+	if (json_object_set_new(root, "addresses", addrs = json_array()) < 0)
 		goto fail;
 
 	for (i = 0; i < riaf->addresses.list.count; i++) {
@@ -85,14 +78,10 @@ AddrBlock2json(struct ROAIPAddressFamily const *riaf, char const *ipname,
 		json_t *prefix, *maxlen;
 
 		prefix = pref2json(src);
-		if (prefix == NULL)
-			goto fail;
-		if (json_array_append_new(addresses, prefix))
+		if (json_array_append_new(addrs, prefix))
 			goto fail;
 
 		maxlen = asn_DEF_INTEGER.op->json_encoder(&asn_DEF_INTEGER, src->maxLength);
-		if (maxlen == NULL)
-			goto fail;
 		if (json_object_set_new(prefix, "maxLength", maxlen))
 			goto fail;
 	}

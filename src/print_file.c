@@ -8,6 +8,7 @@
 #include "asn1/content_info.h"
 #include "asn1/asn1c/Certificate.h"
 #include "asn1/asn1c/CRL.h"
+#include "types/bio_seq.h"
 
 #define HDRSIZE 32
 
@@ -31,34 +32,33 @@ skip_integer(unsigned char *buf, unsigned char *cursor)
 	ssize_t len_len;
 
 	len_len = ber_fetch_length(0, cursor, HDRSIZE - (cursor - buf), &len);
-	if (len_len <= 0) {
-		pr_op_debug("aoe");
+	if (len_len <= 0)
 		return NULL;
-	}
 	cursor += len_len + len;
 	return (cursor <= (buf + HDRSIZE)) ? cursor : NULL;
 }
 
 static int
-guess_file_type(FILE *file)
+guess_file_type(BIO **bio, unsigned char *hdrbuf)
 {
-	unsigned char buf[HDRSIZE];
 	unsigned char *ptr;
+	size_t consumed;
 
 	if (config_get_file_type() != FT_UNK)
 		return config_get_file_type();
 
-	if (fread(buf, 1, HDRSIZE, file) != HDRSIZE) {
-		pr_op_debug("File is too small or generic IO error.");
-		return FT_UNK;
-	}
-	rewind(file);
+	if (!BIO_read_ex(*bio, hdrbuf, HDRSIZE, &consumed))
+		return op_crypto_err("Cannot guess file type; IO error.");
 
-	if (buf[0] != 0x30) {
+	*bio = BIO_new_seq(BIO_new_mem_buf(hdrbuf, consumed), *bio);
+	if ((*bio) == NULL)
+		return op_crypto_err("BIO_new_seq() returned NULL.");
+
+	if (hdrbuf[0] != 0x30) {
 		pr_op_debug("File doesn't start with a SEQUENCE.");
 		return FT_UNK;
 	}
-	ptr = skip_sequence(buf, buf + 1);
+	ptr = skip_sequence(hdrbuf, hdrbuf + 1);
 	if (ptr == NULL) {
 		pr_op_debug("Cannot skip first sequence length.");
 		return FT_UNK;
@@ -73,12 +73,12 @@ guess_file_type(FILE *file)
 		return FT_UNK;
 	}
 
-	ptr = skip_sequence(buf, ptr + 1);
+	ptr = skip_sequence(hdrbuf, ptr + 1);
 	if (ptr == NULL) {
 		pr_op_debug("Cannot skip second sequence length.");
 		return FT_UNK;
 	}
-	ptr = skip_integer(buf, ptr + 1);
+	ptr = skip_integer(hdrbuf, ptr + 1);
 	if (ptr == NULL) {
 		pr_op_debug("Cannot skip version number.");
 		return FT_UNK;
@@ -98,44 +98,37 @@ guess_file_type(FILE *file)
 }
 
 static struct ContentInfo *
-file2ci(FILE *file)
+bio2ci(BIO *bio)
 {
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 	struct ContentInfo *ci = NULL;
 	unsigned char buffer[BUFFER_SIZE];
 	size_t consumed;
-	bool eof;
+//	bool eof;
 	asn_dec_rval_t res;
 
-	eof = false;
+//	eof = false;
 	do {
-		consumed = fread(buffer, 1, BUFFER_SIZE, file);
-		if (consumed < BUFFER_SIZE) {
-			if (feof(file)) {
-				eof = true;
-			} else if (ferror(file)) {
-				pr_op_err("ferror.");
-				return NULL;
-			} else {
-				pr_op_err("?");
-				return NULL;
-			}
+		if (!BIO_read_ex(bio, buffer, BUFFER_SIZE, &consumed)) {
+			op_crypto_err("IO error.");
+			return NULL;
 		}
 
-		res = ber_decode(NULL, &asn_DEF_ContentInfo, (void **)&ci, buffer, consumed);
+		res = ber_decode(NULL, &asn_DEF_ContentInfo, (void **)&ci,
+				 buffer, consumed);
 		pr_op_debug("Consumed: %zu", res.consumed);
 
 		switch (res.code) {
 		case RC_OK:
-			if (!eof)
-				pr_op_warn("File has trailing bytes.");
+//			if (!buf->eof)
+//				pr_op_warn("File has trailing bytes.");
 			return ci;
 
 		case RC_WMORE:
-			if (eof) {
-				pr_op_err("File ended prematurely.");
-				return NULL;
-			}
+//			if (buf->eof) {
+//				pr_op_err("File ended prematurely.");
+//				return NULL;
+//			}
 			break;
 
 		case RC_FAIL:
@@ -146,12 +139,12 @@ file2ci(FILE *file)
 }
 
 static json_t *
-asn1c2json(FILE *file)
+asn1c2json(BIO *bio)
 {
 	struct ContentInfo *ci;
 	json_t *json;
 
-	ci = file2ci(file);
+	ci = bio2ci(bio);
 	if (ci == NULL)
 		return NULL;
 
@@ -161,43 +154,41 @@ asn1c2json(FILE *file)
 	return json;
 }
 
-int
-print_file(void)
+static int
+__print_file(void)
 {
-	char const *filename = config_get_payload();
-	FILE *file;
+	char const *filename;
+	BIO *bio;
+	unsigned char hdrbuf[HDRSIZE];
 	json_t *json = NULL;
-	int error = 0;
+	int error;
 
-	if (filename == NULL || strcmp(filename, "-") == 0) {
-		file = stdin;
-	} else {
-		file = fopen(filename, "rb");
-		if (file == NULL)
-			return pr_op_err("Cannot open file: %s", strerror(errno));
-	}
+	filename = config_get_payload();
+	bio = (filename == NULL || strcmp(filename, "-") == 0)
+	    ? BIO_new_fp(stdin, BIO_NOCLOSE)
+	    : BIO_new_file(filename, "rb");
+	if (bio == NULL)
+		return pr_op_err("BIO_new_*() returned NULL.");
 
-	switch (guess_file_type(file)) {
+	switch (guess_file_type(&bio, hdrbuf)) {
 	case FT_UNK:
-		error = pr_op_err("Unrecognized file type.");
-		break;
+		BIO_free_all(bio);
+		return pr_op_err("Unrecognized file type.");
+
 	case FT_ROA:
 	case FT_MFT:
 	case FT_GBR:
-		json = asn1c2json(file);
+		json = asn1c2json(bio);
 		break;
 	case FT_CER:
-		json = Certificate_file2json(file);
+		json = Certificate_bio2json(bio);
 		break;
 	case FT_CRL:
-		json = CRL_file2json(file);
+		json = CRL_bio2json(bio);
 		break;
 	}
 
-	if (file != stdin)
-		fclose(file);
-	if (error)
-		return error;
+	BIO_free_all(bio);
 	if (json == NULL)
 		return pr_op_err("Unable to parse.");
 
@@ -208,11 +199,27 @@ print_file(void)
 			pr_op_err("Error writing JSON to file: %s", strerror(error));
 		else
 			pr_op_err("Unknown error writing JSON to file.");
-		goto end;
+
+	} else {
+		error = 0;
+		printf("\n");
 	}
 
-	error = 0;
-	printf("\n");
-end:	json_decref(json);
+	json_decref(json);
+	return error;
+}
+
+int
+print_file(void)
+{
+	int error;
+
+	error = bioseq_setup();
+	if (error)
+		return error;
+
+	error = __print_file();
+
+	bioseq_teardown();
 	return error;
 }

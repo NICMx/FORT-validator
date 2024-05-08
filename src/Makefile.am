@@ -40,6 +40,7 @@ fort_SOURCES += asn1/oid.h asn1/oid.c
 fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
 
 fort_SOURCES += types/address.h types/address.c
+fort_SOURCES += types/bio_seq.c types/bio_seq.h
 fort_SOURCES += types/delta.c types/delta.h
 fort_SOURCES += types/router_key.c types/router_key.h
 fort_SOURCES += types/serial.h types/serial.c
