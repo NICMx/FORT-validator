@@ -125,23 +125,23 @@ ku2json(void const *ext)
 	if (root == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "digitalSignature", json_boolean(ku->data[0] & 0x80u)) < 0)
+	if (json_object_set_new(root, "digitalSignature", json_boolean(data[0] & 0x80u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "contentCommitment", json_boolean(ku->data[0] & 0x40u)) < 0)
+	if (json_object_set_new(root, "contentCommitment", json_boolean(data[0] & 0x40u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "keyEncipherment", json_boolean(ku->data[0] & 0x20u)) < 0)
+	if (json_object_set_new(root, "keyEncipherment", json_boolean(data[0] & 0x20u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "dataEncipherment", json_boolean(ku->data[0] & 0x10u)) < 0)
+	if (json_object_set_new(root, "dataEncipherment", json_boolean(data[0] & 0x10u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "keyAgreement", json_boolean(ku->data[0] & 0x08u)) < 0)
+	if (json_object_set_new(root, "keyAgreement", json_boolean(data[0] & 0x08u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "keyCertSign", json_boolean(ku->data[0] & 0x04u)) < 0)
+	if (json_object_set_new(root, "keyCertSign", json_boolean(data[0] & 0x04u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "cRLSign", json_boolean(ku->data[0] & 0x02u)) < 0)
+	if (json_object_set_new(root, "cRLSign", json_boolean(data[0] & 0x02u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "encipherOnly", json_boolean(ku->data[0] & 0x01u)) < 0)
+	if (json_object_set_new(root, "encipherOnly", json_boolean(data[0] & 0x01u)) < 0)
 		goto fail;
-	if (json_object_set_new(root, "decipherOnly", json_boolean(ku->data[1] & 0x80u)) < 0)
+	if (json_object_set_new(root, "decipherOnly", json_boolean(data[1] & 0x80u)) < 0)
 		goto fail;
 
 	return root;

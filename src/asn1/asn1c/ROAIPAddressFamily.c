@@ -10,7 +10,7 @@
 #include "types/address.h"
 
 static json_t *
-prefix2json(char *prefix, uint8_t length)
+prefix2json(char const *prefix, uint8_t length)
 {
 	json_t *root;
 
@@ -87,7 +87,7 @@ AddrBlock2json(struct ROAIPAddressFamily const *riaf, char const *ipname,
 		prefix = pref2json(src);
 		if (prefix == NULL)
 			goto fail;
-		if (json_array_append(addresses, prefix))
+		if (json_array_append_new(addresses, prefix))
 			goto fail;
 
 		maxlen = asn_DEF_INTEGER.op->json_encoder(&asn_DEF_INTEGER, src->maxLength);

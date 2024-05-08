@@ -246,7 +246,9 @@ exts2json(const STACK_OF(X509_EXTENSION) *exts)
 {
 	json_t *root;
 	BIO *bio;
+	char *name;
 	int i;
+	int ret;
 
 	if (sk_X509_EXTENSION_num(exts) <= 0)
 		return json_null();
@@ -269,14 +271,12 @@ exts2json(const STACK_OF(X509_EXTENSION) *exts)
 			BIO_free_all(bio);
 			goto fail;
 		}
+		name = bio2str(bio);
 
 		/* Create node, add to parent */
-		node = json_object();
-		if (node == NULL) {
-			BIO_free_all(bio);
-			goto fail;
-		}
-		if (json_object_set_new(root, bio2str(bio), node) < 0)
+		ret = json_object_set_new(root, name, node = json_object());
+		free(name);
+		if (ret < 0)
 			goto fail;
 
 		/* Child 1: Critical */

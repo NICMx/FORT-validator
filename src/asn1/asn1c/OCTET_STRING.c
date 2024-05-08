@@ -589,8 +589,9 @@ OCTET_STRING_encode_json(const struct asn_TYPE_descriptor_s *td,
 	const OCTET_STRING_t *os = sptr;
 	uint8_t *buf, *end;
 	char *result, *r;
+	json_t *json;
 
-	result = pmalloc(2 * os->size + 1);
+	result = pmalloc(2 * os->size);
 
 	buf = os->buf;
 	end = buf + os->size;
@@ -599,9 +600,11 @@ OCTET_STRING_encode_json(const struct asn_TYPE_descriptor_s *td,
 		*r++ = H2C[(*buf >> 4) & 0x0F];
 		*r++ = H2C[(*buf     ) & 0x0F];
 	}
-	*r = '\0';
 
-	return json_string(result);
+	json = json_stringn(result, 2 * os->size);
+
+	free(result);
+	return json;
 }
 
 json_t *

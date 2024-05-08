@@ -17,7 +17,7 @@ typedef ssize_t ber_tlv_len_t;
 
 /*
  * This function tries to fetch the length of the BER TLV value and place it
- * in *len_r.
+ * in *len_r. bufptr has to point to the TLV's length field, not the TLV.
  * RETURN VALUES:
  *	 0:	More data expected than bufptr contains.
  *	-1:	Fatal error deciphering length.
