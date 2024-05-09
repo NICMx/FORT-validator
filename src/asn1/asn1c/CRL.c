@@ -18,7 +18,7 @@ revokedCerts2json(X509_CRL *crl)
 		return NULL;
 
 	for (r = 0; r < sk_X509_REVOKED_num(revokeds); r++) {
-		rv = sk_X509_REVOKED_value(revokeds, 0);
+		rv = sk_X509_REVOKED_value(revokeds, r);
 		if (json_array_append_new(root, child = json_object()) < 0)
 			goto fail;
 		if (json_object_set_new(child, "userCertificate", asn1int2json(X509_REVOKED_get0_serialNumber(rv))) < 0)

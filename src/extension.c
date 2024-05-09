@@ -216,7 +216,7 @@ cdp2json(void const *ext)
 		return NULL;
 
 	for (d = 0; d < sk_DIST_POINT_num(crldp); d++) {
-		dp = sk_DIST_POINT_value(crldp, 0);
+		dp = sk_DIST_POINT_value(crldp, d);
 		if (json_array_append_new(root, child = json_object()) < 0)
 			goto fail;
 		if (json_object_set_new(child, "distributionPoint", dpname2json(dp->distpoint)) < 0)
