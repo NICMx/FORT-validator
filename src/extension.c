@@ -165,13 +165,42 @@ static const struct extension_metadata KU = {
 };
 
 static json_t *
+rdn2json(STACK_OF(X509_NAME_ENTRY) *rdn)
+{
+	json_t *root;
+	json_t *child;
+	X509_NAME_ENTRY *name;
+	int n;
+
+	root = json_array();
+	if (root == NULL)
+		return NULL;
+
+	for (n = 0; n < sk_X509_NAME_ENTRY_num(rdn); n++) {
+		if (json_array_append_new(root, child = json_object()))
+			goto fail;
+
+		name = sk_X509_NAME_ENTRY_value(rdn, n);
+		if (json_object_set_new(child, "type", oid2json(X509_NAME_ENTRY_get_object(name))))
+			goto fail;
+		if (json_object_set_new(child, "value", asn1str2json(X509_NAME_ENTRY_get_data(name))))
+			goto fail;
+	}
+
+	return root;
+
+fail:	json_decref(root);
+	return NULL;
+}
+
+static json_t *
 dpname2json(DIST_POINT_NAME const *dpn)
 {
 	if (dpn == NULL)
 		return json_null();
-	if (dpn->type) /* if relativename */
-		return name2json(dpn->dpname);
-	return gns2json(dpn->name.fullname);
+	return (dpn->type)
+	    ? rdn2json(dpn->name.relativename)
+	    : gns2json(dpn->name.fullname);
 }
 
 static json_t *
@@ -349,7 +378,7 @@ cp2json(void const *ext)
 		return NULL;
 
 	for (i = 0; i < sk_POLICYINFO_num(cp); i++)
-		if (json_array_append_new(root, pi2json(sk_POLICYINFO_value(cp, i))) < 0)
+		if (json_array_append_new(root, pi2json(sk_POLICYINFO_value(cp, i))))
 			goto fail;
 
 	return root;
@@ -378,7 +407,8 @@ p2json(ASN1_BIT_STRING const *ap, int af)
 	unsigned char bin[16];
 	char str[INET6_ADDRSTRLEN];
 	unsigned int length;
-	json_t *root;
+	char full[INET6_ADDRSTRLEN + 4];
+	int written;
 
 	if (ap == NULL)
 		return json_null();
@@ -392,18 +422,8 @@ p2json(ASN1_BIT_STRING const *ap, int af)
 	if (ap->flags & ASN1_STRING_FLAG_BITS_LEFT)
 		length -= ap->flags & 7;
 
-	root = json_object();
-	if (root == NULL)
-		return NULL;
-	if (json_object_set_new(root, "address", json_string(str)) < 0)
-		goto fail;
-	if (json_object_set_new(root, "length", json_integer(length)) < 0)
-		goto fail;
-
-	return root;
-
-fail:	json_decref(root);
-	return NULL;
+	written = snprintf(full, INET6_ADDRSTRLEN + 4, "%s/%u", str, length);
+	return json_stringn(full, written);
 }
 
 static json_t *
@@ -447,7 +467,7 @@ iac2json(IPAddressChoice const *iac, int af)
 		if (root == NULL)
 			goto fail;
 		for (i = 0; i < sk_IPAddressOrRange_num(iaor); i++)
-			if (json_array_append_new(root, iaor2json(sk_IPAddressOrRange_value(iaor, i), af)) < 0)
+			if (json_array_append_new(root, iaor2json(sk_IPAddressOrRange_value(iaor, i), af)))
 				goto fail;
 		return root;
 	}
@@ -510,7 +530,7 @@ ir2json(void const *ext)
 		return NULL;
 
 	for (i = 0; i < sk_IPAddressFamily_num(iafs); i++)
-		if (json_array_append_new(root, iaf2json(sk_IPAddressFamily_value(iafs, i))) < 0)
+		if (json_array_append_new(root, iaf2json(sk_IPAddressFamily_value(iafs, i))))
 			goto fail;
 
 	return root;

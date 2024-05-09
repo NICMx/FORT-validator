@@ -44,9 +44,7 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 
 	td = &asn_DEF_ContentType;
 	content_type = td->op->json_encoder(td, &ci->contentType);
-	if (content_type == NULL)
-		goto fail;
-	if (json_object_set_new(parent, td->name, content_type))
+	if (json_object_set_new(parent, "contentType", content_type))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_SignedData(&ci->contentType)) {
@@ -65,7 +63,7 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 
 	if (content == NULL)
 		goto fail;
-	if (json_object_set_new(parent, td->name, content))
+	if (json_object_set_new(parent, "content", content))
 		goto fail;
 
 	return parent;

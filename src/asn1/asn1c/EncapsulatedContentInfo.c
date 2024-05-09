@@ -48,7 +48,7 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 	content_type = td->op->json_encoder(td, &eci->eContentType);
 	if (content_type == NULL)
 		goto fail;
-	if (json_object_set_new(parent, td->name, content_type))
+	if (json_object_set_new(parent, "eContentType", content_type))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_mft(&eci->eContentType)) {
@@ -75,7 +75,7 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 
 	if (content == NULL)
 		goto fail;
-	if (json_object_set_new(parent, td->name, content))
+	if (json_object_set_new(parent, "eContent", content))
 		goto fail;
 
 	return parent;

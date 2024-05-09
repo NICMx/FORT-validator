@@ -12,55 +12,60 @@
 #include "asn1/asn1c/SigningTime.h"
 
 static json_t *
-attr2json(asn_TYPE_descriptor_t const *td, struct CMSAttribute const *cattr)
+attr2json(asn_TYPE_descriptor_t const *td, CMSAttributeValue_t const *ber)
 {
-	json_t *array, *node;
-	CMSAttributeValue_t *ber;
 	void *attr;
-	int i;
 	asn_dec_rval_t rval;
+	json_t *json;
 
-	array = json_array();
-	if (array == NULL)
-		return NULL;
+	attr = NULL;
+	rval = ber_decode(NULL, td, &attr, ber->buf, ber->size);
+	if (rval.code != RC_OK)
+		return NULL; /* TODO release attr? */
 
-	for (i = 0; i < cattr->attrValues.list.count; i++) {
-		ber = cattr->attrValues.list.array[i];
-		attr = NULL;
+	json = td->op->json_encoder(td, attr);
 
-		rval = ber_decode(NULL, td, &attr, ber->buf, ber->size);
-		if (rval.code != RC_OK)
-			goto fail;
-
-		node = td->op->json_encoder(td, attr);
-
-		ASN_STRUCT_FREE(*td, attr);
-
-		if (json_array_append_new(array, node) < 0)
-			goto fail;
-	}
-
-	return array;
-
-fail:	json_decref(array);
-	return NULL;
+	ASN_STRUCT_FREE(*td, attr);
+	return json;
 }
 
 json_t *
 CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 {
 	struct CMSAttribute const *cattr = sptr;
+	json_t *root;
+	json_t *attrValues;
+	int a;
 
 	if (!cattr)
 		return json_null();
-	if (OBJECT_IDENTIFIER_is_ContentType(&cattr->attrType))
-		return attr2json(&asn_DEF_ContentType, cattr);
-	if (OBJECT_IDENTIFIER_is_MessageDigest(&cattr->attrType))
-		return attr2json(&asn_DEF_MessageDigest, cattr);
-	if (OBJECT_IDENTIFIER_is_SigningTime(&cattr->attrType))
-		return attr2json(&asn_DEF_SigningTime, cattr);
 
-	return SEQUENCE_encode_json(td, sptr);
+	root = json_object();
+	if (root == NULL)
+		return NULL;
+
+	if (json_object_set_new(root, "attrType", OBJECT_IDENTIFIER_encode_json(NULL, &cattr->attrType)))
+		goto fail;
+	if (json_object_set_new(root, "attrValues", attrValues = json_array()))
+		goto fail;
+
+	if (OBJECT_IDENTIFIER_is_ContentType(&cattr->attrType))
+		td = &asn_DEF_ContentType;
+	else if (OBJECT_IDENTIFIER_is_MessageDigest(&cattr->attrType))
+		td = &asn_DEF_MessageDigest;
+	else if (OBJECT_IDENTIFIER_is_SigningTime(&cattr->attrType))
+		td = &asn_DEF_SigningTime;
+	else
+		td = &asn_DEF_ANY;
+
+	for (a = 0; a < cattr->attrValues.list.count; a++)
+		if (json_array_append_new(attrValues, attr2json(td, cattr->attrValues.list.array[a])))
+			goto fail;
+
+	return root;
+
+fail:	json_decref(root);
+	return NULL;
 }
 
 asn_TYPE_operation_t asn_OP_CMSAttribute = {
