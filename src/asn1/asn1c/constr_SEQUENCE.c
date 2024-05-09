@@ -614,7 +614,8 @@ SEQUENCE_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 json_t *
 SEQUENCE_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 {
-	json_t *parent, *child;
+	json_t *parent;
+	json_t *child;
 	size_t c;
 
 	if (!sptr)
@@ -636,8 +637,6 @@ SEQUENCE_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 		}
 
 		child = elm->type->op->json_encoder(elm->type, memb_ptr);
-		if (child == NULL)
-			goto fail;
 		if (json_object_set_new(parent, elm->name, child))
 			goto fail;
 	}

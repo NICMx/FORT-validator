@@ -9,7 +9,9 @@ static json_t *
 revokedCerts2json(X509_CRL *crl)
 {
 	STACK_OF(X509_REVOKED) *revokeds = X509_CRL_get_REVOKED(crl);
-	json_t *root, *child;
+	json_t *root;
+	json_t *parent;
+	json_t *child;
 	X509_REVOKED *rv;
 	int r;
 
@@ -19,13 +21,18 @@ revokedCerts2json(X509_CRL *crl)
 
 	for (r = 0; r < sk_X509_REVOKED_num(revokeds); r++) {
 		rv = sk_X509_REVOKED_value(revokeds, r);
-		if (json_array_append_new(root, child = json_object()) < 0)
+
+		if (json_array_append_new(root, parent = json_object()))
 			goto fail;
-		if (json_object_set_new(child, "userCertificate", asn1int2json(X509_REVOKED_get0_serialNumber(rv))) < 0)
+
+		child = asn1int2json(X509_REVOKED_get0_serialNumber(rv));
+		if (json_object_set_new(parent, "userCertificate", child))
 			goto fail;
-		if (json_object_set_new(child, "revocationDate", asn1time2json(X509_REVOKED_get0_revocationDate(rv))) < 0)
+		child = asn1time2json(X509_REVOKED_get0_revocationDate(rv));
+		if (json_object_set_new(parent, "revocationDate", child))
 			goto fail;
-		if (json_object_set_new(child, "crlEntryExtensions", exts2json(X509_REVOKED_get0_extensions(rv))) < 0)
+		child = exts2json(X509_REVOKED_get0_extensions(rv));
+		if (json_object_set_new(parent, "crlEntryExtensions", child))
 			goto fail;
 	}
 
@@ -38,30 +45,38 @@ fail:	json_decref(root);
 static json_t *
 tbsCertList2json(X509_CRL *crl)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "version", json_integer(X509_CRL_get_version(crl))) < 0)
+	child = json_integer(X509_CRL_get_version(crl));
+	if (json_object_set_new(parent, "version", child))
 		goto fail;
-	if (json_object_set_new(root, "signature", json_string(OBJ_nid2sn(X509_CRL_get_signature_nid(crl)))) < 0)
+	child = json_string(OBJ_nid2sn(X509_CRL_get_signature_nid(crl)));
+	if (json_object_set_new(parent, "signature", child))
 		goto fail;
-	if (json_object_set_new(root, "issuer", name2json(X509_CRL_get_issuer(crl))) < 0)
+	child = name2json(X509_CRL_get_issuer(crl));
+	if (json_object_set_new(parent, "issuer", child))
 		goto fail;
-	if (json_object_set_new(root, "thisUpdate", asn1time2json(X509_CRL_get0_lastUpdate(crl))) < 0)
+	child = asn1time2json(X509_CRL_get0_lastUpdate(crl));
+	if (json_object_set_new(parent, "thisUpdate", child))
 		goto fail;
-	if (json_object_set_new(root, "nextUpdate", asn1time2json(X509_CRL_get0_nextUpdate(crl))) < 0)
+	child = asn1time2json(X509_CRL_get0_nextUpdate(crl));
+	if (json_object_set_new(parent, "nextUpdate", child))
 		goto fail;
-	if (json_object_set_new(root, "revokedCertificates", revokedCerts2json(crl)) < 0)
+	child = revokedCerts2json(crl);
+	if (json_object_set_new(parent, "revokedCertificates", child))
 		goto fail;
-	if (json_object_set_new(root, "crlExtensions", exts2json(X509_CRL_get0_extensions(crl))) < 0)
+	child = exts2json(X509_CRL_get0_extensions(crl));
+	if (json_object_set_new(parent, "crlExtensions", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -88,22 +103,26 @@ sigValue2json(X509_CRL *crl)
 static json_t *
 crl2json(X509_CRL *crl)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "tbsCertList", tbsCertList2json(crl)) < 0)
+	child = tbsCertList2json(crl);
+	if (json_object_set_new(parent, "tbsCertList", child))
 		goto fail;
-	if (json_object_set_new(root, "signatureAlgorithm", sigAlgorithm2json(crl)) < 0)
+	child = sigAlgorithm2json(crl);
+	if (json_object_set_new(parent, "signatureAlgorithm", child))
 		goto fail;
-	if (json_object_set_new(root, "signatureValue", sigValue2json(crl)) < 0)
+	child = sigValue2json(crl);
+	if (json_object_set_new(parent, "signatureValue", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -111,14 +130,14 @@ json_t *
 CRL_bio2json(BIO *bio)
 {
 	X509_CRL *crl;
-	json_t *root;
+	json_t *json;
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL)
 		return NULL;
 
-	root = crl2json(crl);
+	json = crl2json(crl);
 
 	X509_CRL_free(crl);
-	return root;
+	return json;
 }

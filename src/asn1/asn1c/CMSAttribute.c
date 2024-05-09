@@ -34,7 +34,8 @@ CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 {
 	struct CMSAttribute const *cattr = sptr;
 	json_t *root;
-	json_t *attrValues;
+	json_t *array;
+	json_t *tmp;
 	int a;
 
 	if (!cattr)
@@ -44,9 +45,10 @@ CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	if (root == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "attrType", OBJECT_IDENTIFIER_encode_json(NULL, &cattr->attrType)))
+	tmp = OBJECT_IDENTIFIER_encode_json(NULL, &cattr->attrType);
+	if (json_object_set_new(root, "attrType", tmp))
 		goto fail;
-	if (json_object_set_new(root, "attrValues", attrValues = json_array()))
+	if (json_object_set_new(root, "attrValues", array = json_array()))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_ContentType(&cattr->attrType))
@@ -58,9 +60,11 @@ CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	else
 		td = &asn_DEF_ANY;
 
-	for (a = 0; a < cattr->attrValues.list.count; a++)
-		if (json_array_append_new(attrValues, attr2json(td, cattr->attrValues.list.array[a])))
+	for (a = 0; a < cattr->attrValues.list.count; a++) {
+		tmp = attr2json(td, cattr->attrValues.list.array[a]);
+		if (json_array_append_new(array, tmp))
 			goto fail;
+	}
 
 	return root;
 

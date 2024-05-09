@@ -8,20 +8,23 @@
 static json_t *
 validity2json(X509 *x)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "notBefore", asn1time2json(X509_get0_notBefore(x))) < 0)
+	child = asn1time2json(X509_get0_notBefore(x));
+	if (json_object_set_new(parent, "notBefore", child))
 		goto fail;
-	if (json_object_set_new(root, "notAfter", asn1time2json(X509_get0_notAfter(x))) < 0)
+	child = asn1time2json(X509_get0_notAfter(x));
+	if (json_object_set_new(parent, "notAfter", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -89,36 +92,47 @@ suid2json(X509 const *x)
 static json_t *
 tbsCert2json(X509 *x)
 {
-	json_t *tbsCert;
+	json_t *parent;
+	json_t *child;
 
-	tbsCert = json_object();
-	if (tbsCert == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(tbsCert, "version", json_integer(X509_get_version(x))) < 0)
+	child = json_integer(X509_get_version(x));
+	if (json_object_set_new(parent, "version", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "serialNumber", asn1int2json(X509_get0_serialNumber(x))) < 0)
+	child = asn1int2json(X509_get0_serialNumber(x));
+	if (json_object_set_new(parent, "serialNumber", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "signature", json_string(OBJ_nid2sn(X509_get_signature_nid(x)))) < 0)
+	child = json_string(OBJ_nid2sn(X509_get_signature_nid(x)));
+	if (json_object_set_new(parent, "signature", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "issuer", name2json(X509_get_issuer_name(x))) < 0)
+	child = name2json(X509_get_issuer_name(x));
+	if (json_object_set_new(parent, "issuer", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "validity", validity2json(x)) < 0)
+	child = validity2json(x);
+	if (json_object_set_new(parent, "validity", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "subject", name2json(X509_get_subject_name(x))) < 0)
+	child = name2json(X509_get_subject_name(x));
+	if (json_object_set_new(parent, "subject", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "subjectPublicKeyInfo", pk2json(x)) < 0)
+	child = pk2json(x);
+	if (json_object_set_new(parent, "subjectPublicKeyInfo", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "issuerUniqueID", iuid2json(x)) < 0)
+	child = iuid2json(x);
+	if (json_object_set_new(parent, "issuerUniqueID", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "subjectUniqueID", suid2json(x)) < 0)
+	child = suid2json(x);
+	if (json_object_set_new(parent, "subjectUniqueID", child))
 		goto fail;
-	if (json_object_set_new(tbsCert, "extensions", exts2json(X509_get0_extensions(x))) < 0)
+	child = exts2json(X509_get0_extensions(x));
+	if (json_object_set_new(parent, "extensions", child))
 		goto fail;
 
-	return tbsCert;
+	return parent;
 
-fail:	json_decref(tbsCert);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -145,22 +159,26 @@ sigValue2json(X509 *cert)
 static json_t *
 x509_to_json(X509 *x)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "tbsCertificate", tbsCert2json(x)) < 0)
+	child = tbsCert2json(x);
+	if (json_object_set_new(parent, "tbsCertificate", child))
 		goto fail;
-	if (json_object_set_new(root, "signatureAlgorithm", sigAlgorithm2json(x)) < 0)
+	child = sigAlgorithm2json(x);
+	if (json_object_set_new(parent, "signatureAlgorithm", child))
 		goto fail;
-	if (json_object_set_new(root, "signatureValue", sigValue2json(x)) < 0)
+	child = sigValue2json(x);
+	if (json_object_set_new(parent, "signatureValue", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -169,7 +187,7 @@ Certificate_any2json(ANY_t *ber)
 {
 	const unsigned char *tmp;
 	X509 *cert;
-	json_t *root;
+	json_t *json;
 
 	/*
 	 * "If the call is successful *in is incremented to the byte following
@@ -183,24 +201,24 @@ Certificate_any2json(ANY_t *ber)
 	if (cert == NULL)
 		return NULL;
 
-	root = x509_to_json(cert);
+	json = x509_to_json(cert);
 
 	X509_free(cert);
-	return root;
+	return json;
 }
 
 json_t *
 Certificate_bio2json(BIO *bio)
 {
 	X509 *cert;
-	json_t *root;
+	json_t *json;
 
 	cert = d2i_X509_bio(bio, NULL);
 	if (cert == NULL)
 		return NULL;
 
-	root = x509_to_json(cert);
+	json = x509_to_json(cert);
 
 	X509_free(cert);
-	return root;
+	return json;
 }

@@ -21,20 +21,23 @@ static json_t *
 bc2json(void const *ext)
 {
 	BASIC_CONSTRAINTS const *bc = ext;
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "cA", json_boolean(bc->ca)) < 0)
+	child = json_boolean(bc->ca);
+	if (json_object_set_new(parent, "cA", child))
 		goto fail;
-	if (json_object_set_new(root, "pathLenConstraint", asn1int2json(bc->pathlen)) < 0)
+	child = asn1int2json(bc->pathlen);
+	if (json_object_set_new(parent, "pathLenConstraint", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -76,22 +79,26 @@ static json_t *
 aki2json(void const *ext)
 {
 	AUTHORITY_KEYID const *aki = ext;
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "keyIdentifier", asn1str2json(aki->keyid)) < 0)
+	child = asn1str2json(aki->keyid);
+	if (json_object_set_new(parent, "keyIdentifier", child))
 		goto fail;
-	if (json_object_set_new(root, "authorityCertIssuer", unimplemented(aki->issuer)) < 0)
+	child = unimplemented(aki->issuer);
+	if (json_object_set_new(parent, "authorityCertIssuer", child))
 		goto fail;
-	if (json_object_set_new(root, "authorityCertSerialNumber", asn1int2json(aki->serial)) < 0)
+	child = asn1int2json(aki->serial);
+	if (json_object_set_new(parent, "authorityCertSerialNumber", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -114,39 +121,49 @@ ku2json(void const *ext)
 {
 	ASN1_BIT_STRING const *ku = ext;
 	unsigned char data[2];
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
 	if (ku->length < 1 || 2 < ku->length)
 		return NULL;
 	memset(data, 0, sizeof(data));
 	memcpy(data, ku->data, ku->length);
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "digitalSignature", json_boolean(data[0] & 0x80u)) < 0)
+	child = json_boolean(data[0] & 0x80u);
+	if (json_object_set_new(parent, "digitalSignature", child))
 		goto fail;
-	if (json_object_set_new(root, "contentCommitment", json_boolean(data[0] & 0x40u)) < 0)
+	child = json_boolean(data[0] & 0x40u);
+	if (json_object_set_new(parent, "contentCommitment", child))
 		goto fail;
-	if (json_object_set_new(root, "keyEncipherment", json_boolean(data[0] & 0x20u)) < 0)
+	child = json_boolean(data[0] & 0x20u);
+	if (json_object_set_new(parent, "keyEncipherment", child))
 		goto fail;
-	if (json_object_set_new(root, "dataEncipherment", json_boolean(data[0] & 0x10u)) < 0)
+	child = json_boolean(data[0] & 0x10u);
+	if (json_object_set_new(parent, "dataEncipherment", child))
 		goto fail;
-	if (json_object_set_new(root, "keyAgreement", json_boolean(data[0] & 0x08u)) < 0)
+	child = json_boolean(data[0] & 0x08u);
+	if (json_object_set_new(parent, "keyAgreement", child))
 		goto fail;
-	if (json_object_set_new(root, "keyCertSign", json_boolean(data[0] & 0x04u)) < 0)
+	child = json_boolean(data[0] & 0x04u);
+	if (json_object_set_new(parent, "keyCertSign", child))
 		goto fail;
-	if (json_object_set_new(root, "cRLSign", json_boolean(data[0] & 0x02u)) < 0)
+	child = json_boolean(data[0] & 0x02u);
+	if (json_object_set_new(parent, "cRLSign", child))
 		goto fail;
-	if (json_object_set_new(root, "encipherOnly", json_boolean(data[0] & 0x01u)) < 0)
+	child = json_boolean(data[0] & 0x01u);
+	if (json_object_set_new(parent, "encipherOnly", child))
 		goto fail;
-	if (json_object_set_new(root, "decipherOnly", json_boolean(data[1] & 0x80u)) < 0)
+	child = json_boolean(data[1] & 0x80u);
+	if (json_object_set_new(parent, "decipherOnly", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -168,6 +185,7 @@ static json_t *
 rdn2json(STACK_OF(X509_NAME_ENTRY) *rdn)
 {
 	json_t *root;
+	json_t *parent;
 	json_t *child;
 	X509_NAME_ENTRY *name;
 	int n;
@@ -177,13 +195,16 @@ rdn2json(STACK_OF(X509_NAME_ENTRY) *rdn)
 		return NULL;
 
 	for (n = 0; n < sk_X509_NAME_ENTRY_num(rdn); n++) {
-		if (json_array_append_new(root, child = json_object()))
+		name = sk_X509_NAME_ENTRY_value(rdn, n);
+
+		if (json_array_append_new(root, parent = json_object()))
 			goto fail;
 
-		name = sk_X509_NAME_ENTRY_value(rdn, n);
-		if (json_object_set_new(child, "type", oid2json(X509_NAME_ENTRY_get_object(name))))
+		child = oid2json(X509_NAME_ENTRY_get_object(name));
+		if (json_object_set_new(parent, "type", child))
 			goto fail;
-		if (json_object_set_new(child, "value", asn1str2json(X509_NAME_ENTRY_get_data(name))))
+		child = asn1str2json(X509_NAME_ENTRY_get_data(name));
+		if (json_object_set_new(parent, "value", child))
 			goto fail;
 	}
 
@@ -207,7 +228,9 @@ static json_t *
 cdp2json(void const *ext)
 {
 	STACK_OF(DIST_POINT) const *crldp = ext;
-	json_t *root, *child;
+	json_t *root;
+	json_t *parent;
+	json_t *child;
 	DIST_POINT *dp;
 	int d;
 
@@ -217,13 +240,18 @@ cdp2json(void const *ext)
 
 	for (d = 0; d < sk_DIST_POINT_num(crldp); d++) {
 		dp = sk_DIST_POINT_value(crldp, d);
-		if (json_array_append_new(root, child = json_object()) < 0)
+
+		if (json_array_append_new(root, parent = json_object()))
 			goto fail;
-		if (json_object_set_new(child, "distributionPoint", dpname2json(dp->distpoint)) < 0)
+
+		child = dpname2json(dp->distpoint);
+		if (json_object_set_new(parent, "distributionPoint", child))
 			goto fail;
-		if (json_object_set_new(child, "reasons", unimplemented(dp->reasons)) < 0)
+		child = unimplemented(dp->reasons);
+		if (json_object_set_new(parent, "reasons", child))
 			goto fail;
-		if (json_object_set_new(child, "cRLIssuer", gns2json(dp->CRLissuer)) < 0)
+		child = gns2json(dp->CRLissuer);
+		if (json_object_set_new(parent, "cRLIssuer", child))
 			goto fail;
 	}
 
@@ -252,7 +280,9 @@ aia2json(void const *ext)
 {
 	AUTHORITY_INFO_ACCESS const *ia = ext;
 	ACCESS_DESCRIPTION *ad;
-	json_t *root, *child;
+	json_t *root;
+	json_t *parent;
+	json_t *child;
 	int i;
 
 	root = json_array();
@@ -261,11 +291,15 @@ aia2json(void const *ext)
 
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
-		if (json_array_append_new(root, child = json_object()) < 0)
+
+		if (json_array_append_new(root, parent = json_object()))
 			goto fail;
-		if (json_object_set_new(child, "accessMethod", oid2json(ad->method)) < 0)
+
+		child = oid2json(ad->method);
+		if (json_object_set_new(parent, "accessMethod", child))
 			goto fail;
-		if (json_object_set_new(child, "accessLocation", gn2json(ad->location)) < 0)
+		child = gn2json(ad->location);
+		if (json_object_set_new(parent, "accessLocation", child))
 			goto fail;
 	}
 
@@ -300,69 +334,78 @@ static const struct extension_metadata SIA = {
 static json_t *
 pq2json(POLICYQUALINFO const *pqi)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
 	if (pqi == NULL)
 		return json_null();
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "policyQualifierId", oid2json(pqi->pqualid)) < 0)
+	child = oid2json(pqi->pqualid);
+	if (json_object_set_new(parent, "policyQualifierId", child))
 		goto fail;
-	if (json_object_set_new(root, "qualifier", unimplemented(&pqi->d)) < 0)
+	child = unimplemented(&pqi->d);
+	if (json_object_set_new(parent, "qualifier", child))
 		goto fail;
 
 	return NULL;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
 static json_t *
 pqs2json(STACK_OF(POLICYQUALINFO) const *pqs)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 	int i;
 
 	if (pqs == NULL)
 		return json_null();
 
-	root = json_array();
-	if (root == NULL)
+	parent = json_array();
+	if (parent == NULL)
 		return NULL;
 
-	for (i = 0; i < sk_POLICYQUALINFO_num(pqs); i++)
-		if (json_array_append_new(root, pq2json(sk_POLICYQUALINFO_value(pqs, i))) < 0)
+	for (i = 0; i < sk_POLICYQUALINFO_num(pqs); i++) {
+		child = pq2json(sk_POLICYQUALINFO_value(pqs, i));
+		if (json_array_append_new(parent, child))
 			goto fail;
+	}
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
 static json_t *
 pi2json(POLICYINFO const *pi)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 
 	if (pi == NULL)
 		return json_null();
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "policyIdentifier", oid2json(pi->policyid)) < 0)
+	child = oid2json(pi->policyid);
+	if (json_object_set_new(parent, "policyIdentifier", child))
 		goto fail;
-	if (json_object_set_new(root, "policyQualifiers", pqs2json(pi->qualifiers)) < 0)
+	child = pqs2json(pi->qualifiers);
+	if (json_object_set_new(parent, "policyQualifiers", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -370,20 +413,23 @@ static json_t *
 cp2json(void const *ext)
 {
 	CERTIFICATEPOLICIES const *cp = ext;
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 	int i;
 
-	root = json_array();
-	if (root == NULL)
+	parent = json_array();
+	if (parent == NULL)
 		return NULL;
 
-	for (i = 0; i < sk_POLICYINFO_num(cp); i++)
-		if (json_array_append_new(root, pi2json(sk_POLICYINFO_value(cp, i))))
+	for (i = 0; i < sk_POLICYINFO_num(cp); i++) {
+		child = pi2json(sk_POLICYINFO_value(cp, i));
+		if (json_array_append_new(parent, child))
 			goto fail;
+	}
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -429,8 +475,6 @@ p2json(ASN1_BIT_STRING const *ap, int af)
 static json_t *
 iaor2json(IPAddressOrRange const *iaor, int af)
 {
-	json_t *root;
-
 	if (iaor == NULL)
 		return json_null();
 
@@ -441,47 +485,56 @@ iaor2json(IPAddressOrRange const *iaor, int af)
 		return unimplemented(iaor->u.addressRange);
 	}
 
-	json_decref(root);
+	return NULL;
+}
+
+static json_t *
+iaors2json(IPAddressOrRanges *iaor, int af)
+{
+	json_t *parent;
+	json_t *child;
+	int i;
+
+	if (iaor == NULL)
+		return json_null();
+
+	parent = json_array();
+	if (parent == NULL)
+		return NULL;
+
+	for (i = 0; i < sk_IPAddressOrRange_num(iaor); i++) {
+		child = iaor2json(sk_IPAddressOrRange_value(iaor, i), af);
+		if (json_array_append_new(parent, child))
+			goto fail;
+	}
+
+	return parent;
+
+fail:	json_decref(parent);
 	return NULL;
 }
 
 static json_t *
 iac2json(IPAddressChoice const *iac, int af)
 {
-	json_t *root;
-	IPAddressOrRanges *iaor;
-	int i;
-
 	if (iac == NULL)
 		return json_null();
 
 	switch (iac->type) {
 	case IPAddressChoice_inherit:
 		return json_string("inherit");
-
 	case IPAddressChoice_addressesOrRanges:
-		iaor = iac->u.addressesOrRanges;
-		if (iaor == NULL)
-			return json_null();
-		root = json_array();
-		if (root == NULL)
-			goto fail;
-		for (i = 0; i < sk_IPAddressOrRange_num(iaor); i++)
-			if (json_array_append_new(root, iaor2json(sk_IPAddressOrRange_value(iaor, i), af)))
-				goto fail;
-		return root;
+		return iaors2json(iac->u.addressesOrRanges, af);
 	}
 
-	return NULL;
-
-fail:	json_decref(root);
 	return NULL;
 }
 
 static json_t *
 iaf2json(IPAddressFamily const *iaf)
 {
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 	ASN1_OCTET_STRING *af;
 	char const *family;
 	int afid;
@@ -489,8 +542,8 @@ iaf2json(IPAddressFamily const *iaf)
 	if (iaf == NULL)
 		return json_null();
 
-	root = json_object();
-	if (root == NULL)
+	parent = json_object();
+	if (parent == NULL)
 		return NULL;
 
 	af = iaf->addressFamily;
@@ -507,14 +560,16 @@ iaf2json(IPAddressFamily const *iaf)
 		goto fail;
 	}
 
-	if (json_object_set_new(root, "addressFamily", json_string(family)) < 0)
+	child = json_string(family);
+	if (json_object_set_new(parent, "addressFamily", child))
 		goto fail;
-	if (json_object_set_new(root, "ipAddressChoice", iac2json(iaf->ipAddressChoice, afid)) < 0)
+	child = iac2json(iaf->ipAddressChoice, afid);
+	if (json_object_set_new(parent, "ipAddressChoice", child))
 		goto fail;
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -522,20 +577,23 @@ static json_t *
 ir2json(void const *ext)
 {
 	STACK_OF(IPAddressFamily) const *iafs = ext;
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 	int i;
 
-	root = json_array();
-	if (root == NULL)
+	parent = json_array();
+	if (parent == NULL)
 		return NULL;
 
-	for (i = 0; i < sk_IPAddressFamily_num(iafs); i++)
-		if (json_array_append_new(root, iaf2json(sk_IPAddressFamily_value(iafs, i))))
+	for (i = 0; i < sk_IPAddressFamily_num(iafs); i++) {
+		child = iaf2json(sk_IPAddressFamily_value(iafs, i));
+		if (json_array_append_new(parent, child))
 			goto fail;
+	}
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 
@@ -564,9 +622,9 @@ asr2json(ASRange const *range)
 	root = json_object();
 	if (root == NULL)
 		return NULL;
-	if (json_object_set_new(root, "min", asn1int2json(range->min)) < 0)
+	if (json_object_set_new(root, "min", asn1int2json(range->min)))
 		goto fail;
-	if (json_object_set_new(root, "max", asn1int2json(range->max)) < 0)
+	if (json_object_set_new(root, "max", asn1int2json(range->max)))
 		goto fail;
 
 	return root;
@@ -578,8 +636,6 @@ fail:	json_decref(root);
 static json_t *
 aor2json(ASIdOrRange const *aor)
 {
-	json_t *root;
-
 	if (aor == NULL)
 		return json_null();
 
@@ -590,40 +646,47 @@ aor2json(ASIdOrRange const *aor)
 		return asr2json(aor->u.range);
 	}
 
-	json_decref(root);
+	return NULL;
+}
+
+static json_t *
+aior2json(ASIdOrRanges *aior)
+{
+	json_t *parent;
+	json_t *child;
+	int i;
+
+	if (aior == NULL)
+		return json_null();
+
+	parent = json_array();
+	if (parent == NULL)
+		return NULL;
+
+	for (i = 0; i < sk_ASIdOrRange_num(aior); i++) {
+		child = aor2json(sk_ASIdOrRange_value(aior, i));
+		if (json_array_append_new(parent, child))
+			goto fail;
+	}
+	return parent;
+
+fail:	json_decref(parent);
 	return NULL;
 }
 
 static json_t *
 asidc2json(ASIdentifierChoice const *asidc)
 {
-	json_t *root;
-	ASIdOrRanges *iaor;
-	int i;
-
 	if (asidc == NULL)
 		return json_null();
 
 	switch (asidc->type) {
 	case ASIdentifierChoice_inherit:
 		return json_string("inherit");
-
 	case ASIdentifierChoice_asIdsOrRanges:
-		iaor = asidc->u.asIdsOrRanges;
-		if (iaor == NULL)
-			return json_null();
-		root = json_array();
-		if (root == NULL)
-			goto fail;
-		for (i = 0; i < sk_ASIdOrRange_num(iaor); i++)
-			if (json_array_append_new(root, aor2json(sk_ASIdOrRange_value(iaor, i))) < 0)
-				goto fail;
-		return root;
+		return aior2json(asidc->u.asIdsOrRanges);
 	}
 
-	return NULL;
-
-fail:	json_decref(root);
 	return NULL;
 }
 
@@ -639,9 +702,9 @@ ar2json(void const *ext)
 	root = json_object();
 	if (root == NULL)
 		return NULL;
-	if (json_object_set_new(root, "asnum", asidc2json(asid->asnum)) < 0)
+	if (json_object_set_new(root, "asnum", asidc2json(asid->asnum)))
 		goto fail;
-	if (json_object_set_new(root, "rdi", asidc2json(asid->rdi)) < 0)
+	if (json_object_set_new(root, "rdi", asidc2json(asid->rdi)))
 		goto fail;
 
 	return root;
@@ -704,20 +767,23 @@ static json_t *
 eku2json(void const *ext)
 {
 	EXTENDED_KEY_USAGE const *eku = ext;
-	json_t *root;
+	json_t *parent;
+	json_t *child;
 	int i;
 
-	root = json_array();
-	if (root == NULL)
-		return root;
+	parent = json_array();
+	if (parent == NULL)
+		return parent;
 
-	for (i = 0; i < sk_ASN1_OBJECT_num(eku); i++)
-		if (json_array_append_new(root, oid2json(sk_ASN1_OBJECT_value(eku, i))) < 0)
+	for (i = 0; i < sk_ASN1_OBJECT_num(eku); i++) {
+		child = oid2json(sk_ASN1_OBJECT_value(eku, i));
+		if (json_array_append_new(parent, child))
 			goto fail;
+	}
 
-	return root;
+	return parent;
 
-fail:	json_decref(root);
+fail:	json_decref(parent);
 	return NULL;
 }
 

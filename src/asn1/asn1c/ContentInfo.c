@@ -32,8 +32,7 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 {
 	struct ContentInfo const *ci = sptr;
 	json_t *parent;
-	json_t *content_type;
-	json_t *content;
+	json_t *child;
 
 	if (!ci)
 		return json_null();
@@ -43,27 +42,18 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 		return NULL;
 
 	td = &asn_DEF_ContentType;
-	content_type = td->op->json_encoder(td, &ci->contentType);
-	if (json_object_set_new(parent, "contentType", content_type))
+	child = td->op->json_encoder(td, &ci->contentType);
+	if (json_object_set_new(parent, "contentType", child))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_SignedData(&ci->contentType)) {
 		td = &asn_DEF_SignedData;
-		content = content2json(td, &ci->content);
-
+		child = content2json(td, &ci->content);
 	} else {
-//		printf("===========================\n");
-//		for (ret = 0; ret < ci->contentType.size; ret++)
-//			printf("%u ", ci->contentType.buf[ret]);
-//		printf("\n==========================\n");
-
 		td = &asn_DEF_ANY;
-		content = td->op->json_encoder(td, &ci->content);
+		child = td->op->json_encoder(td, &ci->content);
 	}
-
-	if (content == NULL)
-		goto fail;
-	if (json_object_set_new(parent, "content", content))
+	if (json_object_set_new(parent, "content", child))
 		goto fail;
 
 	return parent;

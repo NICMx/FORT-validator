@@ -419,8 +419,6 @@ build_tal_json(struct rpki_cache *cache)
 
 	HASH_ITER(hh, cache->ht, node, tmp) {
 		child = node2json(node);
-		if (child == NULL)
-			continue;
 		if (json_array_append_new(root, child)) {
 			pr_op_err("Cannot push %s json node into json root; unknown cause.",
 			    uri_op_get_printable(node->url));

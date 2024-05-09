@@ -34,8 +34,7 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 {
 	struct EncapsulatedContentInfo const *eci = sptr;
 	json_t *parent;
-	json_t *content_type;
-	json_t *content;
+	json_t *child;
 
 	if (!eci)
 		return json_null();
@@ -45,37 +44,24 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 		return NULL;
 
 	td = &asn_DEF_ContentType;
-	content_type = td->op->json_encoder(td, &eci->eContentType);
-	if (content_type == NULL)
-		goto fail;
-	if (json_object_set_new(parent, "eContentType", content_type))
+	child = td->op->json_encoder(td, &eci->eContentType);
+	if (json_object_set_new(parent, "eContentType", child))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_mft(&eci->eContentType)) {
 		td = &asn_DEF_Manifest;
-		content = econtent2json(td, eci->eContent);
-
+		child = econtent2json(td, eci->eContent);
 	} else if (OBJECT_IDENTIFIER_is_roa(&eci->eContentType)) {
 		td = &asn_DEF_RouteOriginAttestation;
-		content = econtent2json(td, eci->eContent);
-
+		child = econtent2json(td, eci->eContent);
 	} else if (OBJECT_IDENTIFIER_is_gbr(&eci->eContentType)) {
 		td = &asn_DEF_OCTET_STRING;
-		content = OCTET_STRING_encode_json_utf8(td, eci->eContent);
-
+		child = OCTET_STRING_encode_json_utf8(td, eci->eContent);
 	} else {
-//		printf("===========================\n");
-//		for (ret = 0; ret < eci->eContentType.size; ret++)
-//			printf("%u ", eci->eContentType.buf[ret]);
-//		printf("\n==========================\n");
-
 		td = &asn_DEF_OCTET_STRING;
-		content = td->op->json_encoder(td, eci->eContent);
+		child = td->op->json_encoder(td, eci->eContent);
 	}
-
-	if (content == NULL)
-		goto fail;
-	if (json_object_set_new(parent, "eContent", content))
+	if (json_object_set_new(parent, "eContent", child))
 		goto fail;
 
 	return parent;

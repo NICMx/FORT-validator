@@ -492,7 +492,8 @@ SET_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 json_t *
 SET_OF_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 {
-	json_t *result;
+	json_t *parent;
+	json_t *child;
 	const asn_anonymous_set_ *list;
 	asn_TYPE_descriptor_t *type;
 	int i;
@@ -500,24 +501,22 @@ SET_OF_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 	if (!sptr)
 		return json_null();
 
-	result = json_array();
-	if (result == NULL)
+	parent = json_array();
+	if (parent == NULL)
 		return NULL;
 
 	list = _A_CSET_FROM_VOID(sptr);
 	type = td->elements->type;
 
 	for (i = 0; i < list->count; i++) {
-		json_t *node = type->op->json_encoder(type, list->array[i]);
-		if (node == NULL)
-			goto fail;
-		if (json_array_append_new(result, node) < 0)
+		child = type->op->json_encoder(type, list->array[i]);
+		if (json_array_append_new(parent, child))
 			goto fail;
 	}
 
-	return result;
+	return parent;
 
-fail:	json_decref(result);
+fail:	json_decref(parent);
 	return NULL;
 }
 
