@@ -34,9 +34,6 @@
 #include "object/signed_object.h"
 #include "cache/local_cache.h"
 
-/* Just to prevent some line breaking. */
-#define GN_URI uniformResourceIdentifier
-
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
  * The SIA's d2i function, therefore, returns AIAs.
@@ -1186,12 +1183,6 @@ is_rsync(ASN1_IA5STRING *uri)
 	    : false;
 }
 
-static bool
-is_rsync_uri(GENERAL_NAME *name)
-{
-	return name->type == GEN_URI && is_rsync(name->d.GN_URI);
-}
-
 static int
 handle_rpkiManifest(struct rpki_uri *uri, void *arg)
 {
@@ -1400,8 +1391,10 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	DIST_POINT *dp;
 	GENERAL_NAMES *names;
 	GENERAL_NAME *name;
+	ASN1_IA5STRING *str;
 	int i;
-	int error = 0;
+	int type;
+	int error;
 	char const *error_msg;
 
 	crldp = X509V3_EXT_d2i(ext);
@@ -1445,7 +1438,8 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	names = dp->distpoint->name.fullname;
 	for (i = 0; i < sk_GENERAL_NAME_num(names); i++) {
 		name = sk_GENERAL_NAME_value(names, i);
-		if (is_rsync_uri(name)) {
+		str = GENERAL_NAME_get0_value(name, &type);
+		if (type == GEN_URI && is_rsync(str)) {
 			/*
 			 * Since we're parsing and validating the manifest's CRL
 			 * at some point, I think that all we need to do now is
@@ -1460,7 +1454,7 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 			 * So we will store the URI in @refs, and validate it
 			 * later.
 			 */
-			error = ia5s2string(name->d.GN_URI, &refs->crldp);
+			error = ia5s2string(str, &refs->crldp);
 			goto end;
 		}
 	}

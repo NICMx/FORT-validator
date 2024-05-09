@@ -164,7 +164,7 @@ gn2json(GENERAL_NAME const *gn)
 	if (gn == NULL)
 		return json_null();
 
-	str = GENERAL_NAME_get0_value(gn, &type); // FIXME open call hierarchy FIXME getter review
+	str = GENERAL_NAME_get0_value(gn, &type);
 	return (type == GEN_URI)
 	    ? json_stringn((char const *)str->data, str->length)
 	    : json_string("<Not implemented for now>");
