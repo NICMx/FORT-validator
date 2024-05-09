@@ -14,17 +14,15 @@ content2json(const asn_TYPE_descriptor_t *td, ANY_t const *ber)
 {
 	void *decoded;
 	asn_dec_rval_t rval;
-	json_t *content;
+	json_t *json;
 
 	decoded = NULL;
 	rval = ber_decode(NULL, td, &decoded, ber->buf, ber->size);
-	if (rval.code != RC_OK)
-		return NULL;
 
-	content = td->op->json_encoder(td, decoded);
+	json = (rval.code == RC_OK) ? td->op->json_encoder(td, decoded) : NULL;
 
 	ASN_STRUCT_FREE(*td, decoded);
-	return content;
+	return json;
 }
 
 json_t *

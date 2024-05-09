@@ -20,10 +20,8 @@ attr2json(asn_TYPE_descriptor_t const *td, CMSAttributeValue_t const *ber)
 
 	attr = NULL;
 	rval = ber_decode(NULL, td, &attr, ber->buf, ber->size);
-	if (rval.code != RC_OK)
-		return NULL; /* TODO release attr? */
 
-	json = td->op->json_encoder(td, attr);
+	json = (rval.code == RC_OK) ? td->op->json_encoder(td, attr) : NULL;
 
 	ASN_STRUCT_FREE(*td, attr);
 	return json;

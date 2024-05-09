@@ -111,7 +111,7 @@ bio2ci(BIO *bio)
 	do {
 		if (!BIO_read_ex(bio, buffer, BUFFER_SIZE, &consumed)) {
 			op_crypto_err("IO error.");
-			return NULL;
+			goto fail;
 		}
 
 		res = ber_decode(NULL, &asn_DEF_ContentInfo, (void **)&ci,
@@ -133,9 +133,12 @@ bio2ci(BIO *bio)
 
 		case RC_FAIL:
 			pr_op_err("Unsuccessful parse.");
-			return NULL;
+			goto fail;
 		}
 	} while (true);
+
+fail:	ASN_STRUCT_FREE(asn_DEF_ContentInfo, ci);
+	return NULL;
 }
 
 static json_t *
