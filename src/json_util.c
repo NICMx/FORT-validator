@@ -263,3 +263,81 @@ json_add_ts(json_t *parent, char const *name, time_t value)
 
 	return 0;
 }
+
+#define OOM_PFX " Likely out of memory (but there is no contract)."
+
+json_t *
+json_obj_new(void)
+{
+	json_t *json = json_object();
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON object." OOM_PFX);
+	return json;
+}
+
+json_t *
+json_array_new(void)
+{
+	json_t *json = json_array();
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON array." OOM_PFX);
+	return json;
+}
+
+json_t *
+json_int_new(json_int_t value)
+{
+	json_t *json = json_integer(value);
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON integer '%lld'."
+			     OOM_PFX, value);
+	return json;
+}
+
+json_t *
+json_str_new(const char *value)
+{
+	json_t *json = json_string(value);
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON string '%s'." OOM_PFX, value);
+	return json;
+}
+
+json_t *
+json_strn_new(const char *value, size_t len)
+{
+	json_t *json = json_stringn(value, len);
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON string '%.*s'."
+			     OOM_PFX, (int)len, value);
+	return json;
+}
+
+int
+json_object_add(json_t *parent, char const *name, json_t *value)
+{
+	int res;
+
+	if (value == NULL)
+		return -1; /* Already messaged */
+
+	res = json_object_set_new(parent, name, value);
+	if (res == -1)
+		pr_op_err_st("Cannot add JSON '%s' to parent; unknown error.",
+			     name);
+	return res;
+}
+
+int
+json_array_add(json_t *array, json_t *node)
+{
+	int res;
+
+	if (node == NULL)
+		return -1; /* Already messaged */
+
+	res = json_array_append_new(array, node);
+	if (res == -1)
+		pr_op_err_st("Cannot add JSON node to array; unknown error.");
+	return res;
+}

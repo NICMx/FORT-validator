@@ -381,11 +381,9 @@ node2json(struct cache_node *node)
 {
 	json_t *json;
 
-	json = json_object();
-	if (json == NULL) {
-		pr_op_err("json object allocation failure.");
+	json = json_obj_new();
+	if (json == NULL)
 		return NULL;
-	}
 
 	if (json_add_str(json, TAGNAME_URL, uri_get_global(node->url)))
 		goto cancel;
@@ -413,13 +411,13 @@ build_tal_json(struct rpki_cache *cache)
 	struct cache_node *node, *tmp;
 	json_t *root, *child;
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
-		enomem_panic();
+		return NULL;
 
 	HASH_ITER(hh, cache->ht, node, tmp) {
 		child = node2json(node);
-		if (json_array_append_new(root, child)) {
+		if (child != NULL && json_array_append_new(root, child)) {
 			pr_op_err("Cannot push %s json node into json root; unknown cause.",
 			    uri_op_get_printable(node->url));
 			continue;
@@ -436,8 +434,10 @@ write_tal_json(struct rpki_cache *cache)
 	struct json_t *json;
 
 	json = build_tal_json(cache);
-	if (json == NULL)
+	if (json == NULL) {
+		pr_op_err("Unable to cache TAL's metadata; JSON conversion failed.");
 		return;
+	}
 
 	filename = get_tal_json_filename(cache);
 	if (filename == NULL)

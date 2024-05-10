@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/ContentInfo.h"
 
+#include "json_util.h"
 #include "asn1/asn1c/SignedData.h"
 
 json_t *
@@ -35,13 +36,13 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	if (!ci)
 		return json_null();
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	td = &asn_DEF_ContentType;
 	child = td->op->json_encoder(td, &ci->contentType);
-	if (json_object_set_new(parent, "contentType", child))
+	if (json_object_add(parent, "contentType", child))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_SignedData(&ci->contentType)) {
@@ -51,7 +52,7 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 		td = &asn_DEF_ANY;
 		child = td->op->json_encoder(td, &ci->content);
 	}
-	if (json_object_set_new(parent, "content", child))
+	if (json_object_add(parent, "content", child))
 		goto fail;
 
 	return parent;

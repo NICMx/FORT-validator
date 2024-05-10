@@ -6,6 +6,7 @@
 
 #include "alloc.h"
 #include "extension.h"
+#include "json_util.h"
 
 /* Swallows @bio. */
 char *
@@ -30,7 +31,7 @@ bio2json(BIO *bio)
 	json_t *json;
 
 	json = (BIO_get_mem_ptr(bio, &buffer) > 0)
-	    ? json_stringn(buffer->data, buffer->length)
+	    ? json_strn_new(buffer->data, buffer->length)
 	    : NULL;
 
 	BIO_free_all(bio);
@@ -40,7 +41,7 @@ bio2json(BIO *bio)
 json_t *
 oid2json(ASN1_OBJECT const *oid)
 {
-	return oid ? json_string(OBJ_nid2sn(OBJ_obj2nid(oid))) : json_null();
+	return oid ? json_str_new(OBJ_nid2sn(OBJ_obj2nid(oid))) : json_null();
 }
 
 json_t *
@@ -56,7 +57,7 @@ asn1int2json(ASN1_INTEGER const *asn1int)
 	bignum = ASN1_INTEGER_to_BN(asn1int, NULL);
 	str = BN_bn2hex(bignum);
 
-	json = json_string(str);
+	json = json_str_new(str);
 
 	OPENSSL_free(str);
 	BN_free(bignum);
@@ -126,26 +127,26 @@ name2json(X509_NAME const *name)
 	if (name == NULL)
 		return json_null();
 
-	root = json_object();
+	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
-	if (json_object_set_new(root, "rdnSequence", rdnSeq = json_array()))
+	if (json_object_add(root, "rdnSequence", rdnSeq = json_array_new()))
 		goto fail;
 
 	for (i = 0; i < X509_NAME_entry_count(name); i++) {
-		if (json_array_append_new(rdnSeq, typeval = json_object()))
+		if (json_array_add(rdnSeq, typeval = json_obj_new()))
 			goto fail;
 
 		entry = X509_NAME_get_entry(name, i);
 		nid = OBJ_obj2nid(X509_NAME_ENTRY_get_object(entry));
 		data = X509_NAME_ENTRY_get_data(entry);
 
-		child = json_string(OBJ_nid2ln(nid));
-		if (json_object_set_new(typeval, "type", child))
+		child = json_str_new(OBJ_nid2ln(nid));
+		if (json_object_add(typeval, "type", child))
 			goto fail;
 
-		child = json_stringn((char *)data->data, data->length);
-		if (json_object_set_new(typeval, "value", child))
+		child = json_strn_new((char *)data->data, data->length);
+		if (json_object_add(typeval, "value", child))
 			goto fail;
 	}
 
@@ -166,8 +167,8 @@ gn2json(GENERAL_NAME const *gn)
 
 	str = GENERAL_NAME_get0_value(gn, &type);
 	return (type == GEN_URI)
-	    ? json_stringn((char const *)str->data, str->length)
-	    : json_string("<Not implemented for now>");
+	    ? json_strn_new((char const *)str->data, str->length)
+	    : json_str_new("<Not implemented for now>");
 }
 
 json_t *
@@ -180,13 +181,13 @@ gns2json(GENERAL_NAMES const *gns)
 	if (gns == NULL)
 		return json_null();
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
 	for (n = 0; n < sk_GENERAL_NAME_num(gns); n++) {
 		child = gn2json(sk_GENERAL_NAME_value(gns, n));
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 
@@ -263,12 +264,12 @@ exts2json(const STACK_OF(X509_EXTENSION) *exts)
 	if (sk_X509_EXTENSION_num(exts) <= 0)
 		return json_null();
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
 		return NULL;
 
 	for (i = 0; i < sk_X509_EXTENSION_num(exts); i++) {
-		if (json_array_append_new(root, parent = json_object()))
+		if (json_array_add(root, parent = json_obj_new()))
 			goto fail;
 
 		ex = sk_X509_EXTENSION_value(exts, i);
@@ -283,16 +284,16 @@ exts2json(const STACK_OF(X509_EXTENSION) *exts)
 		}
 
 		name = bio2str(bio);
-		child = json_string(name);
+		child = json_str_new(name);
 		free(name);
 
-		if (json_object_set_new(parent, "extnID", child))
+		if (json_object_add(parent, "extnID", child))
 			goto fail;
 		child = json_boolean(X509_EXTENSION_get_critical(ex));
-		if (json_object_set_new(parent, "critical", child))
+		if (json_object_add(parent, "critical", child))
 			goto fail;
 		child = ext2json(ex);
-		if (json_object_set_new(parent, "extnValue", child))
+		if (json_object_add(parent, "extnValue", child))
 			goto fail;
 	}
 

@@ -4,10 +4,11 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include <assert.h>
-
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_SET_OF.h"
+
+#include <assert.h>
+#include "json_util.h"
 #include "asn1/asn1c/asn_SET_OF.h"
 
 /*
@@ -501,7 +502,7 @@ SET_OF_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 	if (!sptr)
 		return json_null();
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
@@ -510,7 +511,7 @@ SET_OF_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 
 	for (i = 0; i < list->count; i++) {
 		child = type->op->json_encoder(type, list->array[i]);
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 

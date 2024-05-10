@@ -3,8 +3,10 @@
 #include <openssl/asn1t.h>
 #include <openssl/objects.h>
 #include <openssl/x509v3.h>
+
 #include "cert_stack.h"
 #include "common.h"
+#include "json_util.h"
 #include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"
@@ -14,7 +16,7 @@
 static json_t *
 unimplemented(void const *arg)
 {
-	return arg ? json_string("<Not implemented for now>") : json_null();
+	return arg ? json_str_new("<Not implemented for now>") : json_null();
 }
 
 static json_t *
@@ -24,15 +26,15 @@ bc2json(void const *ext)
 	json_t *parent;
 	json_t *child;
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = json_boolean(bc->ca);
-	if (json_object_set_new(parent, "cA", child))
+	if (json_object_add(parent, "cA", child))
 		goto fail;
 	child = asn1int2json(bc->pathlen);
-	if (json_object_set_new(parent, "pathLenConstraint", child))
+	if (json_object_add(parent, "pathLenConstraint", child))
 		goto fail;
 
 	return parent;
@@ -82,18 +84,18 @@ aki2json(void const *ext)
 	json_t *parent;
 	json_t *child;
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = asn1str2json(aki->keyid);
-	if (json_object_set_new(parent, "keyIdentifier", child))
+	if (json_object_add(parent, "keyIdentifier", child))
 		goto fail;
 	child = unimplemented(aki->issuer);
-	if (json_object_set_new(parent, "authorityCertIssuer", child))
+	if (json_object_add(parent, "authorityCertIssuer", child))
 		goto fail;
 	child = asn1int2json(aki->serial);
-	if (json_object_set_new(parent, "authorityCertSerialNumber", child))
+	if (json_object_add(parent, "authorityCertSerialNumber", child))
 		goto fail;
 
 	return parent;
@@ -129,36 +131,36 @@ ku2json(void const *ext)
 	memset(data, 0, sizeof(data));
 	memcpy(data, ku->data, ku->length);
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = json_boolean(data[0] & 0x80u);
-	if (json_object_set_new(parent, "digitalSignature", child))
+	if (json_object_add(parent, "digitalSignature", child))
 		goto fail;
 	child = json_boolean(data[0] & 0x40u);
-	if (json_object_set_new(parent, "contentCommitment", child))
+	if (json_object_add(parent, "contentCommitment", child))
 		goto fail;
 	child = json_boolean(data[0] & 0x20u);
-	if (json_object_set_new(parent, "keyEncipherment", child))
+	if (json_object_add(parent, "keyEncipherment", child))
 		goto fail;
 	child = json_boolean(data[0] & 0x10u);
-	if (json_object_set_new(parent, "dataEncipherment", child))
+	if (json_object_add(parent, "dataEncipherment", child))
 		goto fail;
 	child = json_boolean(data[0] & 0x08u);
-	if (json_object_set_new(parent, "keyAgreement", child))
+	if (json_object_add(parent, "keyAgreement", child))
 		goto fail;
 	child = json_boolean(data[0] & 0x04u);
-	if (json_object_set_new(parent, "keyCertSign", child))
+	if (json_object_add(parent, "keyCertSign", child))
 		goto fail;
 	child = json_boolean(data[0] & 0x02u);
-	if (json_object_set_new(parent, "cRLSign", child))
+	if (json_object_add(parent, "cRLSign", child))
 		goto fail;
 	child = json_boolean(data[0] & 0x01u);
-	if (json_object_set_new(parent, "encipherOnly", child))
+	if (json_object_add(parent, "encipherOnly", child))
 		goto fail;
 	child = json_boolean(data[1] & 0x80u);
-	if (json_object_set_new(parent, "decipherOnly", child))
+	if (json_object_add(parent, "decipherOnly", child))
 		goto fail;
 
 	return parent;
@@ -190,21 +192,21 @@ rdn2json(STACK_OF(X509_NAME_ENTRY) *rdn)
 	X509_NAME_ENTRY *name;
 	int n;
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
 		return NULL;
 
 	for (n = 0; n < sk_X509_NAME_ENTRY_num(rdn); n++) {
 		name = sk_X509_NAME_ENTRY_value(rdn, n);
 
-		if (json_array_append_new(root, parent = json_object()))
+		if (json_array_add(root, parent = json_obj_new()))
 			goto fail;
 
 		child = oid2json(X509_NAME_ENTRY_get_object(name));
-		if (json_object_set_new(parent, "type", child))
+		if (json_object_add(parent, "type", child))
 			goto fail;
 		child = asn1str2json(X509_NAME_ENTRY_get_data(name));
-		if (json_object_set_new(parent, "value", child))
+		if (json_object_add(parent, "value", child))
 			goto fail;
 	}
 
@@ -234,24 +236,24 @@ cdp2json(void const *ext)
 	DIST_POINT *dp;
 	int d;
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
 		return NULL;
 
 	for (d = 0; d < sk_DIST_POINT_num(crldp); d++) {
 		dp = sk_DIST_POINT_value(crldp, d);
 
-		if (json_array_append_new(root, parent = json_object()))
+		if (json_array_add(root, parent = json_obj_new()))
 			goto fail;
 
 		child = dpname2json(dp->distpoint);
-		if (json_object_set_new(parent, "distributionPoint", child))
+		if (json_object_add(parent, "distributionPoint", child))
 			goto fail;
 		child = unimplemented(dp->reasons);
-		if (json_object_set_new(parent, "reasons", child))
+		if (json_object_add(parent, "reasons", child))
 			goto fail;
 		child = gns2json(dp->CRLissuer);
-		if (json_object_set_new(parent, "cRLIssuer", child))
+		if (json_object_add(parent, "cRLIssuer", child))
 			goto fail;
 	}
 
@@ -285,21 +287,21 @@ aia2json(void const *ext)
 	json_t *child;
 	int i;
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
 		return NULL;
 
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 
-		if (json_array_append_new(root, parent = json_object()))
+		if (json_array_add(root, parent = json_obj_new()))
 			goto fail;
 
 		child = oid2json(ad->method);
-		if (json_object_set_new(parent, "accessMethod", child))
+		if (json_object_add(parent, "accessMethod", child))
 			goto fail;
 		child = gn2json(ad->location);
-		if (json_object_set_new(parent, "accessLocation", child))
+		if (json_object_add(parent, "accessLocation", child))
 			goto fail;
 	}
 
@@ -340,15 +342,15 @@ pq2json(POLICYQUALINFO const *pqi)
 	if (pqi == NULL)
 		return json_null();
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = oid2json(pqi->pqualid);
-	if (json_object_set_new(parent, "policyQualifierId", child))
+	if (json_object_add(parent, "policyQualifierId", child))
 		goto fail;
 	child = unimplemented(&pqi->d);
-	if (json_object_set_new(parent, "qualifier", child))
+	if (json_object_add(parent, "qualifier", child))
 		goto fail;
 
 	return NULL;
@@ -367,13 +369,13 @@ pqs2json(STACK_OF(POLICYQUALINFO) const *pqs)
 	if (pqs == NULL)
 		return json_null();
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
 	for (i = 0; i < sk_POLICYQUALINFO_num(pqs); i++) {
 		child = pq2json(sk_POLICYQUALINFO_value(pqs, i));
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 
@@ -392,15 +394,15 @@ pi2json(POLICYINFO const *pi)
 	if (pi == NULL)
 		return json_null();
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = oid2json(pi->policyid);
-	if (json_object_set_new(parent, "policyIdentifier", child))
+	if (json_object_add(parent, "policyIdentifier", child))
 		goto fail;
 	child = pqs2json(pi->qualifiers);
-	if (json_object_set_new(parent, "policyQualifiers", child))
+	if (json_object_add(parent, "policyQualifiers", child))
 		goto fail;
 
 	return parent;
@@ -417,13 +419,13 @@ cp2json(void const *ext)
 	json_t *child;
 	int i;
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
 	for (i = 0; i < sk_POLICYINFO_num(cp); i++) {
 		child = pi2json(sk_POLICYINFO_value(cp, i));
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 
@@ -469,7 +471,7 @@ p2json(ASN1_BIT_STRING const *ap, int af)
 		length -= ap->flags & 7;
 
 	written = snprintf(full, INET6_ADDRSTRLEN + 4, "%s/%u", str, length);
-	return json_stringn(full, written);
+	return json_strn_new(full, written);
 }
 
 static json_t *
@@ -498,13 +500,13 @@ iaors2json(IPAddressOrRanges *iaor, int af)
 	if (iaor == NULL)
 		return json_null();
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
 	for (i = 0; i < sk_IPAddressOrRange_num(iaor); i++) {
 		child = iaor2json(sk_IPAddressOrRange_value(iaor, i), af);
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 
@@ -522,7 +524,7 @@ iac2json(IPAddressChoice const *iac, int af)
 
 	switch (iac->type) {
 	case IPAddressChoice_inherit:
-		return json_string("inherit");
+		return json_str_new("inherit");
 	case IPAddressChoice_addressesOrRanges:
 		return iaors2json(iac->u.addressesOrRanges, af);
 	}
@@ -542,7 +544,7 @@ iaf2json(IPAddressFamily const *iaf)
 	if (iaf == NULL)
 		return json_null();
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
@@ -560,11 +562,11 @@ iaf2json(IPAddressFamily const *iaf)
 		goto fail;
 	}
 
-	child = json_string(family);
-	if (json_object_set_new(parent, "addressFamily", child))
+	child = json_str_new(family);
+	if (json_object_add(parent, "addressFamily", child))
 		goto fail;
 	child = iac2json(iaf->ipAddressChoice, afid);
-	if (json_object_set_new(parent, "ipAddressChoice", child))
+	if (json_object_add(parent, "ipAddressChoice", child))
 		goto fail;
 
 	return parent;
@@ -581,13 +583,13 @@ ir2json(void const *ext)
 	json_t *child;
 	int i;
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
 	for (i = 0; i < sk_IPAddressFamily_num(iafs); i++) {
 		child = iaf2json(sk_IPAddressFamily_value(iafs, i));
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 
@@ -619,12 +621,12 @@ asr2json(ASRange const *range)
 	if (range == NULL)
 		return json_null();
 
-	root = json_object();
+	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
-	if (json_object_set_new(root, "min", asn1int2json(range->min)))
+	if (json_object_add(root, "min", asn1int2json(range->min)))
 		goto fail;
-	if (json_object_set_new(root, "max", asn1int2json(range->max)))
+	if (json_object_add(root, "max", asn1int2json(range->max)))
 		goto fail;
 
 	return root;
@@ -659,13 +661,13 @@ aior2json(ASIdOrRanges *aior)
 	if (aior == NULL)
 		return json_null();
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
 	for (i = 0; i < sk_ASIdOrRange_num(aior); i++) {
 		child = aor2json(sk_ASIdOrRange_value(aior, i));
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 	return parent;
@@ -682,7 +684,7 @@ asidc2json(ASIdentifierChoice const *asidc)
 
 	switch (asidc->type) {
 	case ASIdentifierChoice_inherit:
-		return json_string("inherit");
+		return json_str_new("inherit");
 	case ASIdentifierChoice_asIdsOrRanges:
 		return aior2json(asidc->u.asIdsOrRanges);
 	}
@@ -699,12 +701,12 @@ ar2json(void const *ext)
 	if (asid == NULL)
 		return json_null();
 
-	root = json_object();
+	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
-	if (json_object_set_new(root, "asnum", asidc2json(asid->asnum)))
+	if (json_object_add(root, "asnum", asidc2json(asid->asnum)))
 		goto fail;
-	if (json_object_set_new(root, "rdi", asidc2json(asid->rdi)))
+	if (json_object_add(root, "rdi", asidc2json(asid->rdi)))
 		goto fail;
 
 	return root;
@@ -771,13 +773,13 @@ eku2json(void const *ext)
 	json_t *child;
 	int i;
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return parent;
 
 	for (i = 0; i < sk_ASN1_OBJECT_num(eku); i++) {
 		child = oid2json(sk_ASN1_OBJECT_value(eku, i));
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 

@@ -4,10 +4,11 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include <assert.h>
-
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
+
+#include <assert.h>
+#include "json_util.h"
 #include "asn1/asn1c/OPEN_TYPE.h"
 
 /*
@@ -621,7 +622,7 @@ SEQUENCE_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 	if (!sptr)
 		return json_null();
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
@@ -637,7 +638,7 @@ SEQUENCE_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 		}
 
 		child = elm->type->op->json_encoder(elm->type, memb_ptr);
-		if (json_object_set_new(parent, elm->name, child))
+		if (json_object_add(parent, elm->name, child))
 			goto fail;
 	}
 

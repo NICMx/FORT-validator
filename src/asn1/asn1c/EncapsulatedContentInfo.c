@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/EncapsulatedContentInfo.h"
 
+#include "json_util.h"
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/asn1c/RouteOriginAttestation.h"
 
@@ -37,13 +38,13 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 	if (!eci)
 		return json_null();
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	td = &asn_DEF_ContentType;
 	child = td->op->json_encoder(td, &eci->eContentType);
-	if (json_object_set_new(parent, "eContentType", child))
+	if (json_object_add(parent, "eContentType", child))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_mft(&eci->eContentType)) {
@@ -59,7 +60,7 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 		td = &asn_DEF_OCTET_STRING;
 		child = td->op->json_encoder(td, eci->eContent);
 	}
-	if (json_object_set_new(parent, "eContent", child))
+	if (json_object_add(parent, "eContent", child))
 		goto fail;
 
 	return parent;

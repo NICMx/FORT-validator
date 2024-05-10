@@ -136,11 +136,7 @@ json_t *
 BOOLEAN_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 {
 	const BOOLEAN_t *st = (const BOOLEAN_t *)sptr;
-
-	if (st == NULL)
-		return json_null();
-
-	return (*st) ? json_true() : json_false();
+	return (st != NULL) ? json_boolean(*st) : json_null();
 }
 
 asn_enc_rval_t

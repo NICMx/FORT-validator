@@ -5,9 +5,12 @@
  */
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/INTEGER.h"
-#include "asn1/asn1c/asn_codecs_prim.h"	/* Encoder and decoder of a primitive type */
+
 #include <assert.h>
 #include <errno.h>
+
+#include "json_util.h"
+#include "asn1/asn1c/asn_codecs_prim.h"	/* Encoder and decoder of a primitive type */
 
 /*
  * INTEGER basic type description.
@@ -232,12 +235,12 @@ INTEGER_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 	if (specs && specs->field_unsigned) {
 		if (asn_INTEGER2umax(st, &uint) < 0)
 			return NULL;
-		return json_integer(uint);
+		return json_int_new(uint);
 
 	} else {
 		if (asn_INTEGER2imax(st, &sint) < 0)
 			return NULL;
-		return json_integer(sint);
+		return json_int_new(sint);
 	}
 }
 

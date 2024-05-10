@@ -5,11 +5,13 @@
  */
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/BIT_STRING.h"	/* for .bits_unused member */
+
 #include <assert.h>
 #include <errno.h>
 
 #include "alloc.h"
+#include "json_util.h"
+#include "asn1/asn1c/BIT_STRING.h"	/* for .bits_unused member */
 
 /*
  * OCTET STRING basic type description.
@@ -601,7 +603,7 @@ OCTET_STRING_encode_json(const struct asn_TYPE_descriptor_s *td,
 		*r++ = H2C[(*buf     ) & 0x0F];
 	}
 
-	json = json_stringn(result, 2 * os->size);
+	json = json_strn_new(result, 2 * os->size);
 
 	free(result);
 	return json;
@@ -612,7 +614,7 @@ OCTET_STRING_encode_json_utf8(const struct asn_TYPE_descriptor_s *td,
 			 const void *sptr)
 {
 	const OCTET_STRING_t *os = sptr;
-	return json_stringn((char const *) os->buf, os->size);
+	return json_strn_new((char const *) os->buf, os->size);
 }
 
 asn_enc_rval_t

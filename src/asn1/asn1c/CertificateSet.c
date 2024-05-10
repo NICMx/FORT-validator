@@ -6,6 +6,8 @@
  */
 
 #include "asn1/asn1c/CertificateSet.h"
+
+#include "json_util.h"
 #include "asn1/asn1c/Certificate.h"
 
 static json_t *
@@ -20,7 +22,7 @@ CertificateSet_encode_json(const struct asn_TYPE_descriptor_s *td,
 	if (!sptr)
 		return json_null();
 
-	parent = json_array();
+	parent = json_array_new();
 	if (parent == NULL)
 		return NULL;
 
@@ -28,7 +30,7 @@ CertificateSet_encode_json(const struct asn_TYPE_descriptor_s *td,
 
 	for (i = 0; i < list->count; i++) {
 		child = Certificate_any2json(list->array[i]);
-		if (json_array_append_new(parent, child))
+		if (json_array_add(parent, child))
 			goto fail;
 	}
 

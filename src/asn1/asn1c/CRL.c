@@ -2,7 +2,9 @@
 
 #include <openssl/x509v3.h>
 #include <openssl/pem.h>
+
 #include "extension.h"
+#include "json_util.h"
 #include "libcrypto_util.h"
 
 static json_t *
@@ -15,24 +17,24 @@ revokedCerts2json(X509_CRL *crl)
 	X509_REVOKED *rv;
 	int r;
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
 		return NULL;
 
 	for (r = 0; r < sk_X509_REVOKED_num(revokeds); r++) {
 		rv = sk_X509_REVOKED_value(revokeds, r);
 
-		if (json_array_append_new(root, parent = json_object()))
+		if (json_array_add(root, parent = json_obj_new()))
 			goto fail;
 
 		child = asn1int2json(X509_REVOKED_get0_serialNumber(rv));
-		if (json_object_set_new(parent, "userCertificate", child))
+		if (json_object_add(parent, "userCertificate", child))
 			goto fail;
 		child = asn1time2json(X509_REVOKED_get0_revocationDate(rv));
-		if (json_object_set_new(parent, "revocationDate", child))
+		if (json_object_add(parent, "revocationDate", child))
 			goto fail;
 		child = exts2json(X509_REVOKED_get0_extensions(rv));
-		if (json_object_set_new(parent, "crlEntryExtensions", child))
+		if (json_object_add(parent, "crlEntryExtensions", child))
 			goto fail;
 	}
 
@@ -48,30 +50,30 @@ tbsCertList2json(X509_CRL *crl)
 	json_t *parent;
 	json_t *child;
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
-	child = json_integer(X509_CRL_get_version(crl));
-	if (json_object_set_new(parent, "version", child))
+	child = json_int_new(X509_CRL_get_version(crl));
+	if (json_object_add(parent, "version", child))
 		goto fail;
-	child = json_string(OBJ_nid2sn(X509_CRL_get_signature_nid(crl)));
-	if (json_object_set_new(parent, "signature", child))
+	child = json_str_new(OBJ_nid2sn(X509_CRL_get_signature_nid(crl)));
+	if (json_object_add(parent, "signature", child))
 		goto fail;
 	child = name2json(X509_CRL_get_issuer(crl));
-	if (json_object_set_new(parent, "issuer", child))
+	if (json_object_add(parent, "issuer", child))
 		goto fail;
 	child = asn1time2json(X509_CRL_get0_lastUpdate(crl));
-	if (json_object_set_new(parent, "thisUpdate", child))
+	if (json_object_add(parent, "thisUpdate", child))
 		goto fail;
 	child = asn1time2json(X509_CRL_get0_nextUpdate(crl));
-	if (json_object_set_new(parent, "nextUpdate", child))
+	if (json_object_add(parent, "nextUpdate", child))
 		goto fail;
 	child = revokedCerts2json(crl);
-	if (json_object_set_new(parent, "revokedCertificates", child))
+	if (json_object_add(parent, "revokedCertificates", child))
 		goto fail;
 	child = exts2json(X509_CRL_get0_extensions(crl));
-	if (json_object_set_new(parent, "crlExtensions", child))
+	if (json_object_add(parent, "crlExtensions", child))
 		goto fail;
 
 	return parent;
@@ -106,18 +108,18 @@ crl2json(X509_CRL *crl)
 	json_t *parent;
 	json_t *child;
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = tbsCertList2json(crl);
-	if (json_object_set_new(parent, "tbsCertList", child))
+	if (json_object_add(parent, "tbsCertList", child))
 		goto fail;
 	child = sigAlgorithm2json(crl);
-	if (json_object_set_new(parent, "signatureAlgorithm", child))
+	if (json_object_add(parent, "signatureAlgorithm", child))
 		goto fail;
 	child = sigValue2json(crl);
-	if (json_object_set_new(parent, "signatureValue", child))
+	if (json_object_add(parent, "signatureValue", child))
 		goto fail;
 
 	return parent;

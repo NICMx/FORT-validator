@@ -11,6 +11,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include "json_util.h"
 
 #define	ATZVARS do {							\
 	char tzoldbuf[64];						\
@@ -148,7 +149,7 @@ GeneralizedTime_encode_json(const struct asn_TYPE_descriptor_s *td, const void *
 	if (GeneralizedTime2str(st, buf) < 0)
 		return NULL;
 
-	return json_string(buf);
+	return json_str_new(buf);
 }
 
 #ifndef	ASN___INTERNAL_TEST_MODE

@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/CMSAttribute.h"
 
+#include "json_util.h"
 #include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SigningTime.h"
@@ -39,14 +40,14 @@ CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	if (!cattr)
 		return json_null();
 
-	root = json_object();
+	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
 
 	tmp = OBJECT_IDENTIFIER_encode_json(NULL, &cattr->attrType);
-	if (json_object_set_new(root, "attrType", tmp))
+	if (json_object_add(root, "attrType", tmp))
 		goto fail;
-	if (json_object_set_new(root, "attrValues", array = json_array()))
+	if (json_object_add(root, "attrValues", array = json_array_new()))
 		goto fail;
 
 	if (OBJECT_IDENTIFIER_is_ContentType(&cattr->attrType))
@@ -60,7 +61,7 @@ CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 
 	for (a = 0; a < cattr->attrValues.list.count; a++) {
 		tmp = attr2json(td, cattr->attrValues.list.array[a]);
-		if (json_array_append_new(array, tmp))
+		if (json_array_add(array, tmp))
 			goto fail;
 	}
 

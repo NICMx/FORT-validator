@@ -4,11 +4,14 @@
  */
 
 #include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "asn1/asn1c/OCTET_STRING.h"
+
 #include <assert.h>
 #include <errno.h>
+
+#include "json_util.h"
+#include "asn1/asn1c/INTEGER.h"
+#include "asn1/asn1c/OCTET_STRING.h"
 
 /*
  * OBJECT IDENTIFIER basic type description.
@@ -287,7 +290,7 @@ OBJECT_IDENTIFIER_encode_json(const struct asn_TYPE_descriptor_s *td,
 	char const *string;
 
 	string = OBJECT_IDENTIFIER_to_string(oid, buf);
-	return (string != NULL) ? json_string(string) : NULL;
+	return (string != NULL) ? json_str_new(string) : NULL;
 }
 
 ssize_t

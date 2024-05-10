@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/ROAIPAddressFamily.h"
 
+#include "json_util.h"
 #include "types/address.h"
 
 static json_t *
@@ -14,12 +15,12 @@ prefix2json(char const *prefix, uint8_t length)
 {
 	json_t *root;
 
-	root = json_object();
+	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
-	if (json_object_set_new(root, "prefix", json_string(prefix)))
+	if (json_object_add(root, "prefix", json_str_new(prefix)))
 		goto fail;
-	if (json_object_set_new(root, "length", json_integer(length)))
+	if (json_object_add(root, "length", json_int_new(length)))
 		goto fail;
 
 	return root;
@@ -65,25 +66,25 @@ AddrBlock2json(struct ROAIPAddressFamily const *riaf, char const *ipname,
 	struct ROAIPAddress *src;
 	int i;
 
-	root = json_object();
+	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
 
-	if (json_object_set_new(root, "addressFamily", json_string(ipname)))
+	if (json_object_add(root, "addressFamily", json_str_new(ipname)))
 		goto fail;
-	if (json_object_set_new(root, "addresses", addrs = json_array()))
+	if (json_object_add(root, "addresses", addrs = json_array_new()))
 		goto fail;
 
 	for (i = 0; i < riaf->addresses.list.count; i++) {
 		src = riaf->addresses.list.array[i];
 
 		pfx = pref2json(src);
-		if (json_array_append_new(addrs, pfx))
+		if (json_array_add(addrs, pfx))
 			goto fail;
 
 		maxlen = asn_DEF_INTEGER.op->json_encoder(&asn_DEF_INTEGER,
 							  src->maxLength);
-		if (json_object_set_new(pfx, "maxLength", maxlen))
+		if (json_object_add(pfx, "maxLength", maxlen))
 			goto fail;
 	}
 

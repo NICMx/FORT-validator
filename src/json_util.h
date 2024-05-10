@@ -39,4 +39,12 @@ int json_add_int(json_t *, char const *, int);
 int json_add_str(json_t *, char const *, char const *);
 int json_add_ts(json_t *, char const *, time_t);
 
+json_t *json_obj_new(void);
+json_t *json_array_new(void);
+json_t *json_int_new(json_int_t);
+json_t *json_str_new(const char *);
+json_t *json_strn_new(const char *, size_t);
+int json_object_add(json_t *, char const *, json_t *);
+int json_array_add(json_t *, json_t *);
+
 #endif /* SRC_JSON_UTIL_H_ */

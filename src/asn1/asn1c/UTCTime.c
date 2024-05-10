@@ -5,10 +5,12 @@
 
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/UTCTime.h"
-#include "asn1/asn1c/GeneralizedTime.h"
 
 #include <assert.h>
 #include <errno.h>
+
+#include "json_util.h"
+#include "asn1/asn1c/GeneralizedTime.h"
 
 #ifndef	ASN___INTERNAL_TEST_MODE
 
@@ -139,7 +141,7 @@ UTCTime_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	if (UTCTime2str(st, buf) < 0)
 		return NULL;
 
-	return json_string(buf);
+	return json_str_new(buf);
 }
 
 time_t

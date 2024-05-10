@@ -2,7 +2,9 @@
 
 #include <openssl/x509v3.h>
 #include <openssl/pem.h>
+
 #include "extension.h"
+#include "json_util.h"
 #include "libcrypto_util.h"
 
 static json_t *
@@ -11,15 +13,15 @@ validity2json(X509 *x)
 	json_t *parent;
 	json_t *child;
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = asn1time2json(X509_get0_notBefore(x));
-	if (json_object_set_new(parent, "notBefore", child))
+	if (json_object_add(parent, "notBefore", child))
 		goto fail;
 	child = asn1time2json(X509_get0_notAfter(x));
-	if (json_object_set_new(parent, "notAfter", child))
+	if (json_object_add(parent, "notAfter", child))
 		goto fail;
 
 	return parent;
@@ -36,7 +38,7 @@ pk2json(X509 const *x)
 	EVP_PKEY *pkey;
 	BIO *bio;
 
-	root = json_object();
+	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
 
@@ -50,7 +52,7 @@ pk2json(X509 const *x)
 		BIO_free_all(bio);
 		goto fail;
 	}
-	if (json_object_set_new(root, "algorithm", bio2json(bio)))
+	if (json_object_add(root, "algorithm", bio2json(bio)))
 		goto fail;
 
 	/* Actual pk */
@@ -64,7 +66,7 @@ pk2json(X509 const *x)
 		BIO_free_all(bio);
 		goto fail;
 	}
-	if (json_object_set_new(root, "subjectPublicKey", bio2json(bio)))
+	if (json_object_add(root, "subjectPublicKey", bio2json(bio)))
 		goto fail;
 
 	return root;
@@ -95,39 +97,39 @@ tbsCert2json(X509 *x)
 	json_t *parent;
 	json_t *child;
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
-	child = json_integer(X509_get_version(x));
-	if (json_object_set_new(parent, "version", child))
+	child = json_int_new(X509_get_version(x));
+	if (json_object_add(parent, "version", child))
 		goto fail;
 	child = asn1int2json(X509_get0_serialNumber(x));
-	if (json_object_set_new(parent, "serialNumber", child))
+	if (json_object_add(parent, "serialNumber", child))
 		goto fail;
-	child = json_string(OBJ_nid2sn(X509_get_signature_nid(x)));
-	if (json_object_set_new(parent, "signature", child))
+	child = json_str_new(OBJ_nid2sn(X509_get_signature_nid(x)));
+	if (json_object_add(parent, "signature", child))
 		goto fail;
 	child = name2json(X509_get_issuer_name(x));
-	if (json_object_set_new(parent, "issuer", child))
+	if (json_object_add(parent, "issuer", child))
 		goto fail;
 	child = validity2json(x);
-	if (json_object_set_new(parent, "validity", child))
+	if (json_object_add(parent, "validity", child))
 		goto fail;
 	child = name2json(X509_get_subject_name(x));
-	if (json_object_set_new(parent, "subject", child))
+	if (json_object_add(parent, "subject", child))
 		goto fail;
 	child = pk2json(x);
-	if (json_object_set_new(parent, "subjectPublicKeyInfo", child))
+	if (json_object_add(parent, "subjectPublicKeyInfo", child))
 		goto fail;
 	child = iuid2json(x);
-	if (json_object_set_new(parent, "issuerUniqueID", child))
+	if (json_object_add(parent, "issuerUniqueID", child))
 		goto fail;
 	child = suid2json(x);
-	if (json_object_set_new(parent, "subjectUniqueID", child))
+	if (json_object_add(parent, "subjectUniqueID", child))
 		goto fail;
 	child = exts2json(X509_get0_extensions(x));
-	if (json_object_set_new(parent, "extensions", child))
+	if (json_object_add(parent, "extensions", child))
 		goto fail;
 
 	return parent;
@@ -162,18 +164,18 @@ x509_to_json(X509 *x)
 	json_t *parent;
 	json_t *child;
 
-	parent = json_object();
+	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
 	child = tbsCert2json(x);
-	if (json_object_set_new(parent, "tbsCertificate", child))
+	if (json_object_add(parent, "tbsCertificate", child))
 		goto fail;
 	child = sigAlgorithm2json(x);
-	if (json_object_set_new(parent, "signatureAlgorithm", child))
+	if (json_object_add(parent, "signatureAlgorithm", child))
 		goto fail;
 	child = sigValue2json(x);
-	if (json_object_set_new(parent, "signatureValue", child))
+	if (json_object_add(parent, "signatureValue", child))
 		goto fail;
 
 	return parent;
