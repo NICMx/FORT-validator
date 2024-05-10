@@ -595,7 +595,7 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed)
 	switch (uri_get_type(url)) {
 	case UT_RSYNC:
 		error = config_get_rsync_enabled()
-		    ? rsync_download(url)
+		    ? rsync_download(uri_get_global(url), uri_get_local(url), true)
 		    : cache_check(url);
 		break;
 	case UT_HTTPS:

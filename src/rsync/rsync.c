@@ -43,7 +43,7 @@ release_args(char **args, unsigned int size)
 }
 
 static void
-prepare_rsync(struct rpki_uri *uri, char ***args, size_t *args_len)
+prepare_rsync(char const *src, char const *dst, char ***args, size_t *args_len)
 {
 	struct string_array const *config_args;
 	char **copy_args;
@@ -65,9 +65,9 @@ prepare_rsync(struct rpki_uri *uri, char ***args, size_t *args_len)
 
 	for (i = 0; i < config_args->length; i++) {
 		if (strcmp(config_args->array[i], "$REMOTE") == 0)
-			copy_args[i + 1] = pstrdup(uri_get_global(uri));
+			copy_args[i + 1] = pstrdup(src);
 		else if (strcmp(config_args->array[i], "$LOCAL") == 0)
-			copy_args[i + 1] = pstrdup(uri_get_local(uri));
+			copy_args[i + 1] = pstrdup(dst);
 		else
 			copy_args[i + 1] = pstrdup(config_args->array[i]);
 	}
@@ -203,10 +203,11 @@ read_pipes(int fds[2][2])
 }
 
 /*
- * Downloads the @uri->global file into the @uri->local path.
+ * Downloads @src @dst. @src is supposed to be an rsync URL, and @dst is
+ * supposed to be a filesystem path.
  */
 int
-rsync_download(struct rpki_uri *uri)
+rsync_download(char const *src, char const *dst, bool is_directory)
 {
 	char **args;
 	size_t args_len;
@@ -221,16 +222,16 @@ rsync_download(struct rpki_uri *uri)
 	/* Prepare everything for the child exec */
 	args = NULL;
 	args_len = 0;
-	prepare_rsync(uri, &args, &args_len);
+	prepare_rsync(src, dst, &args, &args_len);
 
-	pr_val_info("rsync: %s", uri_get_global(uri));
+	pr_val_info("rsync: %s", src);
 	if (log_val_enabled(LOG_DEBUG)) {
 		pr_val_debug("Executing rsync:");
 		for (i = 0; i < args_len + 1; i++)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	error = mkdir_p(uri_get_local(uri), true);
+	error = mkdir_p(dst, is_directory);
 	if (error)
 		goto release_args;
 
@@ -300,12 +301,12 @@ rsync_download(struct rpki_uri *uri)
 			if (retries == config_get_rsync_retry_count()) {
 				if (retries > 0)
 					pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
-					    retries, uri_get_global(uri));
+					    retries, src);
 				error = EIO;
 				goto release_args;
 			}
 			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
-			    uri_get_global(uri),
+			    src,
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
 			retries++;
