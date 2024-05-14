@@ -20,22 +20,18 @@ static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 void
-signed_object_args_init(struct signed_object_args *args,
-    struct rpki_uri *uri,
-    STACK_OF(X509_CRL) *crls,
-    bool force_inherit)
+eecert_init(struct ee_cert *ee, STACK_OF(X509_CRL) *crls, bool force_inherit)
 {
-	args->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
-	args->uri = uri;
-	args->crls = crls;
-	memset(&args->refs, 0, sizeof(args->refs));
+	ee->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
+	ee->crls = crls;
+	memset(&ee->refs, 0, sizeof(ee->refs));
 }
 
 void
-signed_object_args_cleanup(struct signed_object_args *args)
+eecert_cleanup(struct ee_cert *ee)
 {
-	resources_destroy(args->res);
-	refs_cleanup(&args->refs);
+	resources_destroy(ee->res);
+	refs_cleanup(&ee->refs);
 }
 
 static int
@@ -55,7 +51,7 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 }
 
 static int
-handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
+handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
     OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
 	const unsigned char *otmp, *tmp;
@@ -91,25 +87,25 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 
 	x509_name_pr_debug("Issuer", X509_get_issuer_name(cert));
 
-	error = certificate_validate_chain(cert, args->crls);
+	error = certificate_validate_chain(cert, ee->crls);
 	if (error)
 		goto end2;
 	error = certificate_validate_rfc6487(cert, CERTYPE_EE);
 	if (error)
 		goto end2;
-	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
+	error = certificate_validate_extensions_ee(cert, sid, &ee->refs,
 	    &policy);
 	if (error)
 		goto end2;
-	error = certificate_validate_aia(args->refs.caIssuers, cert);
+	error = certificate_validate_aia(ee->refs.caIssuers, cert);
 	if (error)
 		goto end2;
 	error = certificate_validate_signature(cert, signedData, signature);
 	if (error)
 		goto end2;
 
-	resources_set_policy(args->res, policy);
-	error = certificate_get_resources(cert, args->res, CERTYPE_EE);
+	resources_set_policy(ee->res, policy);
+	error = certificate_get_resources(cert, ee->res, CERTYPE_EE);
 	if (error)
 		goto end2;
 
@@ -259,9 +255,9 @@ illegal_attrType:
 	return -EINVAL;
 }
 
-static int
-validate(struct SignedData *sdata, ANY_t *sdata_encoded,
-    struct signed_object_args *args)
+int
+signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
+		     struct ee_cert *ee)
 {
 	struct SignerInfo *sinfo;
 	OCTET_STRING_t *sid = NULL;
@@ -387,7 +383,7 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 	}
 
 	error = handle_sdata_certificate(sdata->certificates->list.array[0],
-	    args, sid, sdata_encoded, &sinfo->signature);
+	    ee, sid, encoded, &sinfo->signature);
 	if (error)
 		return error;
 
@@ -446,36 +442,18 @@ release_sdata:
 }
 
 int
-signed_data_decode(struct signed_data *sdata, ANY_t *coded)
+signed_data_decode(ANY_t *encoded, struct SignedData **decoded)
 {
 	int error;
 
-	sdata->encoded = coded;
-
-	error = asn1_decode_any(coded, &asn_DEF_SignedData,
-	    (void **) &sdata->decoded, false, false);
+	error = asn1_decode_any(encoded, &asn_DEF_SignedData,
+	    (void **) decoded, false, false);
 	if (error) {
 		/* Try to decode as PKCS content (RFC 5652 section 5.2.1) */
-		error = signed_data_decode_pkcs7(coded, &sdata->decoded);
+		error = signed_data_decode_pkcs7(encoded, decoded);
 	}
 
 	return error;
-}
-
-int
-signed_data_validate(struct signed_data *sdata, struct signed_object_args *args)
-{
-	/*
-	 * TODO (fine) maybe collapse this wrapper,
-	 * since there's no point to it anymore.
-	 */
-	return validate(sdata->decoded, sdata->encoded, args);
-}
-
-void
-signed_data_cleanup(struct signed_data *sdata)
-{
-	ASN_STRUCT_FREE(asn_DEF_SignedData, sdata->decoded);
 }
 
 /* Caller must free *@result. */

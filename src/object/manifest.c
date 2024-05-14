@@ -32,7 +32,7 @@ static int
 decode_manifest(struct signed_object *sobj, struct Manifest **result)
 {
 	return asn1_decode_octet_string(
-		sobj->sdata.decoded->encapContentInfo.eContent,
+		sobj->sdata->encapContentInfo.eContent,
 		&asn_DEF_Manifest,
 		(void **) result,
 		true,
@@ -274,7 +274,7 @@ handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
 	struct signed_object sobj;
-	struct signed_object_args sobj_args;
+	struct ee_cert ee;
 	struct Manifest *mft;
 	STACK_OF(X509_CRL) *crl;
 	int error;
@@ -303,25 +303,25 @@ handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)
 	error = rpp_crl(*pp, &crl);
 	if (error)
 		goto revert_rpp;
-	signed_object_args_init(&sobj_args, uri, crl, false);
+	eecert_init(&ee, crl, false);
 
 	/* Validate everything */
-	error = signed_object_validate(&sobj, &arcs, &sobj_args);
+	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
 		goto revert_args;
 	error = validate_manifest(mft);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&sobj_args.refs, *pp, uri);
+	error = refs_validate_ee(&ee.refs, *pp, uri);
 	if (error)
 		goto revert_args;
 
 	/* Success */
-	signed_object_args_cleanup(&sobj_args);
+	eecert_cleanup(&ee);
 	goto revert_manifest;
 
 revert_args:
-	signed_object_args_cleanup(&sobj_args);
+	eecert_cleanup(&ee);
 revert_rpp:
 	rpp_refput(*pp);
 revert_manifest:

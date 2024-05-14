@@ -7,37 +7,23 @@
 #include "asn1/asn1c/SignedData.h"
 #include "object/certificate.h"
 
-/*
- * This only exists to reduce argument lists.
- * TODO (fine) rename to signed_data_args, since it has nothing to do with
- * signed objects anymore.
- */
-struct signed_object_args {
-	/** Location of the signed object. */
-	struct rpki_uri *uri;
-	/** CRL that might or might not revoke the embedded certificate. */
+struct ee_cert {
+	/** CRL that might or might not revoke the EE certificate. */
 	STACK_OF(X509_CRL) *crls;
-	/** A copy of the resources carried by the embedded certificate. */
+	/** A copy of the resources carried by the EE certificate. */
 	struct resources *res;
 	/**
-	 * A bunch of URLs found in the embedded certificate's extensions,
+	 * A bunch of URLs found in the EE certificate's extensions,
 	 * recorded for future validation.
 	 */
 	struct certificate_refs refs;
 };
 
-void signed_object_args_init(struct signed_object_args *, struct rpki_uri *,
-    STACK_OF(X509_CRL) *, bool);
-void signed_object_args_cleanup(struct signed_object_args *);
+void eecert_init(struct ee_cert *, STACK_OF(X509_CRL) *, bool);
+void eecert_cleanup(struct ee_cert *);
 
-struct signed_data {
-	ANY_t *encoded;
-	struct SignedData *decoded;
-};
-
-int signed_data_decode(struct signed_data *, ANY_t *);
-int signed_data_validate(struct signed_data *, struct signed_object_args *);
-void signed_data_cleanup(struct signed_data *);
+int signed_data_decode(ANY_t *, struct SignedData **);
+int signed_data_validate(ANY_t *, struct SignedData *, struct ee_cert *);
 
 int get_content_type_attr(struct SignedData *, OBJECT_IDENTIFIER_t **);
 

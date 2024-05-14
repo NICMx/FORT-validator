@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/EncapsulatedContentInfo.h"
 
+#include "nid.h"
 #include "json_util.h"
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/asn1c/RouteOriginAttestation.h"
@@ -34,6 +35,7 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 	struct EncapsulatedContentInfo const *eci = sptr;
 	json_t *parent;
 	json_t *child;
+	int nid;
 
 	if (!eci)
 		return json_null();
@@ -47,19 +49,21 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 	if (json_object_add(parent, "eContentType", child))
 		goto fail;
 
-	if (OBJECT_IDENTIFIER_is_mft(&eci->eContentType)) {
+	nid = OBJECT_IDENTIFIER_to_nid(&eci->eContentType);
+	if (nid == nid_ct_mft()) {
 		td = &asn_DEF_Manifest;
 		child = econtent2json(td, eci->eContent);
-	} else if (OBJECT_IDENTIFIER_is_roa(&eci->eContentType)) {
+	} else if (nid == nid_ct_roa()) {
 		td = &asn_DEF_RouteOriginAttestation;
 		child = econtent2json(td, eci->eContent);
-	} else if (OBJECT_IDENTIFIER_is_gbr(&eci->eContentType)) {
+	} else if (nid == nid_ct_gbr()) {
 		td = &asn_DEF_OCTET_STRING;
 		child = OCTET_STRING_encode_json_utf8(td, eci->eContent);
 	} else {
 		td = &asn_DEF_OCTET_STRING;
 		child = td->op->json_encoder(td, eci->eContent);
 	}
+
 	if (json_object_add(parent, "eContent", child))
 		goto fail;
 

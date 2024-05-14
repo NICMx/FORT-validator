@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/CMSAttribute.h"
 
+#include <openssl/objects.h>
 #include "json_util.h"
 #include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/MessageDigest.h"
@@ -50,14 +51,20 @@ CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	if (json_object_add(root, "attrValues", array = json_array_new()))
 		goto fail;
 
-	if (OBJECT_IDENTIFIER_is_ContentType(&cattr->attrType))
+	switch (OBJECT_IDENTIFIER_to_nid(&cattr->attrType)) {
+	case NID_pkcs9_contentType:
 		td = &asn_DEF_ContentType;
-	else if (OBJECT_IDENTIFIER_is_MessageDigest(&cattr->attrType))
+		break;
+	case NID_pkcs9_messageDigest:
 		td = &asn_DEF_MessageDigest;
-	else if (OBJECT_IDENTIFIER_is_SigningTime(&cattr->attrType))
+		break;
+	case NID_pkcs9_signingTime:
 		td = &asn_DEF_SigningTime;
-	else
+		break;
+	default:
 		td = &asn_DEF_ANY;
+		break;
+	}
 
 	for (a = 0; a < cattr->attrValues.list.count; a++) {
 		tmp = attr2json(td, cattr->attrValues.list.array[a]);

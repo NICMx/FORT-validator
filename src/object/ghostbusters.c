@@ -10,7 +10,7 @@ static int
 handle_vcard(struct signed_object *sobj)
 {
 	return handle_ghostbusters_vcard(
-		sobj->sdata.decoded->encapContentInfo.eContent
+		sobj->sdata->encapContentInfo.eContent
 	);
 }
 
@@ -20,7 +20,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	static OID oid = OID_GHOSTBUSTERS;
 	struct oid_arcs arcs = OID2ARCS("ghostbusters", oid);
 	struct signed_object sobj;
-	struct signed_object_args sobj_args;
+	struct ee_cert ee;
 	STACK_OF(X509_CRL) *crl;
 	int error;
 
@@ -37,19 +37,19 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_sobj;
-	signed_object_args_init(&sobj_args, uri, crl, true);
+	eecert_init(&ee, crl, true);
 
 	/* Validate everything */
-	error = signed_object_validate(&sobj, &arcs, &sobj_args);
+	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
 		goto revert_args;
 	error = handle_vcard(&sobj);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
+	error = refs_validate_ee(&ee.refs, pp, uri);
 
 revert_args:
-	signed_object_args_cleanup(&sobj_args);
+	eecert_cleanup(&ee);
 revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:

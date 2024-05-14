@@ -12,7 +12,7 @@ static int
 decode_roa(struct signed_object *sobj, struct RouteOriginAttestation **result)
 {
 	return asn1_decode_octet_string(
-		sobj->sdata.decoded->encapContentInfo.eContent,
+		sobj->sdata->encapContentInfo.eContent,
 		&asn_DEF_RouteOriginAttestation,
 		(void **) result,
 		true,
@@ -253,7 +253,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
 	struct signed_object sobj;
-	struct signed_object_args sobj_args;
+	struct ee_cert ee;
 	struct RouteOriginAttestation *roa;
 	STACK_OF(X509_CRL) *crl;
 	int error;
@@ -274,19 +274,19 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_roa;
-	signed_object_args_init(&sobj_args, uri, crl, false);
+	eecert_init(&ee, crl, false);
 
 	/* Validate and handle everything */
-	error = signed_object_validate(&sobj, &arcs, &sobj_args);
+	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
 		goto revert_args;
-	error = __handle_roa(roa, sobj_args.res);
+	error = __handle_roa(roa, ee.res);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&sobj_args.refs, pp, sobj_args.uri);
+	error = refs_validate_ee(&ee.refs, pp, uri);
 
 revert_args:
-	signed_object_args_cleanup(&sobj_args);
+	eecert_cleanup(&ee);
 revert_roa:
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
 revert_sobj:

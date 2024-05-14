@@ -33,6 +33,8 @@ xer_type_encoder_f OBJECT_IDENTIFIER_encode_xer;
  * Some handy conversion routines *
  **********************************/
 
+int OBJECT_IDENTIFIER_to_nid(OBJECT_IDENTIFIER_t const *);
+
 #define OID_STR_MAXLEN 64 /* Null char included */
 char const *OBJECT_IDENTIFIER_to_string(OBJECT_IDENTIFIER_t const *, char *);
 
@@ -141,16 +143,5 @@ ssize_t OBJECT_IDENTIFIER_get_single_arc(const uint8_t *arcbuf,
  */
 ssize_t OBJECT_IDENTIFIER_set_single_arc(uint8_t *arcbuf, size_t arcbuf_len,
                                          asn_oid_arc_t arc_value);
-
-bool OBJECT_IDENTIFIER_is_rsaEncryption(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_sha256WithRSAEncryption(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_SignedData(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_ContentType(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_MessageDigest(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_SigningTime(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_roa(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_mft(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_gbr(OBJECT_IDENTIFIER_t const *oid);
-bool OBJECT_IDENTIFIER_is_sha256(OBJECT_IDENTIFIER_t const *oid);
 
 #endif	/* _OBJECT_IDENTIFIER_H_ */

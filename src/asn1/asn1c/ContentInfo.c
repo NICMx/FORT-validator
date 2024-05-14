@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/ContentInfo.h"
 
+#include <openssl/objects.h>
 #include "json_util.h"
 #include "asn1/asn1c/SignedData.h"
 
@@ -45,7 +46,7 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	if (json_object_add(parent, "contentType", child))
 		goto fail;
 
-	if (OBJECT_IDENTIFIER_is_SignedData(&ci->contentType)) {
+	if (OBJECT_IDENTIFIER_to_nid(&ci->contentType) == NID_pkcs7_signed) {
 		td = &asn_DEF_SignedData;
 		child = content2json(td, &ci->content);
 	} else {

@@ -1641,13 +1641,13 @@ handle_sia_ca(X509_EXTENSION *ext, void *arg)
 		goto end;
 
 	/* RRDP */
-	error = handle_ad(nid_rpkiNotify(), &RPKI_NOTIFY, sia,
+	error = handle_ad(nid_ad_notify(), &RPKI_NOTIFY, sia,
 	    handle_rpkiNotify, uris);
 	if (error)
 		goto end;
 
 	/* Manifest */
-	error = handle_ad(nid_rpkiManifest(), &RPKI_MANIFEST, sia,
+	error = handle_ad(nid_ad_mft(), &RPKI_MANIFEST, sia,
 	    handle_rpkiManifest, uris);
 
 end:
@@ -1665,7 +1665,7 @@ handle_sia_ee(X509_EXTENSION *ext, void *arg)
 	if (sia == NULL)
 		return cannot_decode(ext_sia());
 
-	error = handle_ad(nid_signedObject(), &SIGNED_OBJECT, sia,
+	error = handle_ad(nid_ad_so(), &SIGNED_OBJECT, sia,
 	    handle_signedObject, arg);
 
 	AUTHORITY_INFO_ACCESS_free(sia);
