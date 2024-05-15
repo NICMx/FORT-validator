@@ -199,10 +199,8 @@ bio2ci(BIO *bio)
 	struct ContentInfo *ci = NULL;
 	unsigned char buffer[BUFFER_SIZE];
 	size_t consumed;
-//	bool eof;
 	asn_dec_rval_t res;
 
-//	eof = false;
 	do {
 		if (!BIO_read_ex(bio, buffer, BUFFER_SIZE, &consumed)) {
 			op_crypto_err("IO error.");
@@ -215,15 +213,9 @@ bio2ci(BIO *bio)
 
 		switch (res.code) {
 		case RC_OK:
-//			if (!buf->eof)
-//				pr_op_warn("File has trailing bytes.");
 			return ci;
 
 		case RC_WMORE:
-//			if (buf->eof) {
-//				pr_op_err("File ended prematurely.");
-//				return NULL;
-//			}
 			break;
 
 		case RC_FAIL:

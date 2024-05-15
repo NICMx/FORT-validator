@@ -216,17 +216,7 @@ ext2json_known(struct extension_metadata const *meta, X509_EXTENSION *ext)
 static json_t *
 ext2json_unknown(X509_EXTENSION *ext)
 {
-	BIO *bio = BIO_new(BIO_s_mem());
-	if (bio == NULL)
-		return NULL;
-
-	/* TODO Those flags are kinda interesting */
-	if (!X509V3_EXT_print(bio, ext, 0, 0)) {
-		BIO_free_all(bio);
-		return NULL;
-	}
-
-	return bio2json(bio);
+	return asn1str2json(X509_EXTENSION_get_data(ext));
 }
 
 static json_t *
