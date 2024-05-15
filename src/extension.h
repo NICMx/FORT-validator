@@ -11,14 +11,14 @@ struct extension_metadata {
 	int nid;
 	bool critical;
 	json_t *(*to_json)(void const *);
-	void (*destructor)(void *); /* TODO use this more */
+	void (*destructor)(void *);
 };
 
 struct extension_handler {
 	struct extension_metadata const *meta;
 	bool mandatory;
 
-	int (*cb)(X509_EXTENSION *, void *);
+	int (*cb)(void *, void *);
 	void *arg;
 
 	/* For internal use */
@@ -49,6 +49,6 @@ int handle_extensions(struct extension_handler *,
 
 int cannot_decode(struct extension_metadata const *);
 int validate_public_key_hash(X509 *, ASN1_OCTET_STRING *);
-int handle_aki(X509_EXTENSION *, void *);
+int handle_aki(void *, void *);
 
 #endif /* SRC_EXTENSION_H_ */

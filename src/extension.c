@@ -840,8 +840,10 @@ ext_metadatas(void)
 static int
 handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 {
-	struct extension_handler *handler;
 	int nid;
+	struct extension_handler *handler;
+	void *decoded;
+	int error;
 
 	nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
 
@@ -859,7 +861,17 @@ handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 					goto critical;
 			}
 
-			return handler->cb(ext, handler->arg);
+			if (handler->cb == NULL)
+				return 0; /* Nothing to validate, for now. */
+
+			decoded = X509V3_EXT_d2i(ext);
+			if (decoded == NULL)
+				return cannot_decode(handler->meta);
+
+			error = handler->cb(decoded, handler->arg);
+
+			handler->meta->destructor(decoded);
+			return error;
 		}
 	}
 
@@ -988,38 +1000,23 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 }
 
 int
-handle_aki(X509_EXTENSION *ext, void *arg)
+handle_aki(void *ext, void *arg)
 {
-	AUTHORITY_KEYID *aki;
-	struct validation *state;
+	AUTHORITY_KEYID *aki = ext;
 	X509 *parent;
-	int error;
-
-	aki = X509V3_EXT_d2i(ext);
-	if (aki == NULL)
-		return cannot_decode(ext_aki());
 
 	if (aki->issuer != NULL) {
-		error = pr_val_err("%s extension contains an authorityCertIssuer.",
+		return pr_val_err("%s extension contains an authorityCertIssuer.",
 		    ext_aki()->name);
-		goto end;
 	}
 	if (aki->serial != NULL) {
-		error = pr_val_err("%s extension contains an authorityCertSerialNumber.",
+		return pr_val_err("%s extension contains an authorityCertSerialNumber.",
 		    ext_aki()->name);
-		goto end;
 	}
 
-	state = state_retrieve();
-	parent = x509stack_peek(validation_certstack(state));
-	if (parent == NULL) {
-		error = pr_val_err("Certificate has no parent.");
-		goto end;
-	}
+	parent = x509stack_peek(validation_certstack(state_retrieve()));
+	if (parent == NULL)
+		return pr_val_err("Certificate has no parent.");
 
-	error = validate_public_key_hash(parent, aki->keyid);
-
-end:
-	AUTHORITY_KEYID_free(aki);
-	return error;
+	return validate_public_key_hash(parent, aki->keyid);
 }
