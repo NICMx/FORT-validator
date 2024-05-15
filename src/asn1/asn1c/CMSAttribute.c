@@ -13,22 +13,6 @@
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SigningTime.h"
 
-static json_t *
-attr2json(asn_TYPE_descriptor_t const *td, CMSAttributeValue_t const *ber)
-{
-	void *attr;
-	asn_dec_rval_t rval;
-	json_t *json;
-
-	attr = NULL;
-	rval = ber_decode(td, &attr, ber->buf, ber->size);
-
-	json = (rval.code == RC_OK) ? td->op->json_encoder(td, attr) : NULL;
-
-	ASN_STRUCT_FREE(*td, attr);
-	return json;
-}
-
 json_t *
 CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 {
@@ -67,7 +51,7 @@ CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 	}
 
 	for (a = 0; a < cattr->attrValues.list.count; a++) {
-		tmp = attr2json(td, cattr->attrValues.list.array[a]);
+		tmp = ANY_to_json(td, cattr->attrValues.list.array[a]);
 		if (json_array_add(array, tmp))
 			goto fail;
 	}

@@ -64,6 +64,9 @@ int OCTET_STRING_fromBuf(OCTET_STRING_t *s, const char *str, int size);
 OCTET_STRING_t *OCTET_STRING_new_fromBuf(const asn_TYPE_descriptor_t *td,
                                          const char *str, int size);
 
+json_t *OCTET_STRING_to_json(const asn_TYPE_descriptor_t *,
+			     OCTET_STRING_t const *);
+
 /****************************
  * Internally useful stuff. *
  ****************************/

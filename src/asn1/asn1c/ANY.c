@@ -121,7 +121,6 @@ ANY_new_fromType(asn_TYPE_descriptor_t *td, void *sptr) {
 	}
 }
 
-/* FIXME use this more. */
 int
 ANY_to_type(ANY_t *st, asn_TYPE_descriptor_t *td, void **struct_ptr) {
 	asn_dec_rval_t rval;
@@ -165,4 +164,10 @@ static int ANY__consume_bytes(const void *buffer, size_t size, void *key) {
 	assert(arg->offset < arg->size);
 
 	return 0;
+}
+
+json_t *
+ANY_to_json(const asn_TYPE_descriptor_t *td, ANY_t const *ber)
+{
+	return ber2json(td, ber->buf, ber->size);
 }

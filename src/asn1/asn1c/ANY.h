@@ -46,4 +46,6 @@ int ANY_to_type(ANY_t *, asn_TYPE_descriptor_t *td, void **struct_ptr);
 #define	ANY_new_fromBuf(buf, size)	OCTET_STRING_new_fromBuf(	\
 						&asn_DEF_ANY, (buf), (size))
 
+json_t *ANY_to_json(const asn_TYPE_descriptor_t *, ANY_t const *);
+
 #endif	/* ASN_TYPE_ANY_H */

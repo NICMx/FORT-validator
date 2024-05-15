@@ -941,6 +941,12 @@ OCTET_STRING_new_fromBuf(const asn_TYPE_descriptor_t *td, const char *str,
 	return st;
 }
 
+json_t *
+OCTET_STRING_to_json(const asn_TYPE_descriptor_t *td, OCTET_STRING_t const *ber)
+{
+	return ber2json(td, ber->buf, ber->size);
+}
+
 /*
  * Lexicographically compare the common prefix of both strings,
  * and if it is the same return -1 for the smallest string.

@@ -12,22 +12,6 @@
 #include "asn1/asn1c/SignedData.h"
 
 json_t *
-content2json(const asn_TYPE_descriptor_t *td, ANY_t const *ber)
-{
-	void *decoded;
-	asn_dec_rval_t rval;
-	json_t *json;
-
-	decoded = NULL;
-	rval = ber_decode(td, &decoded, ber->buf, ber->size);
-
-	json = (rval.code == RC_OK) ? td->op->json_encoder(td, decoded) : NULL;
-
-	ASN_STRUCT_FREE(*td, decoded);
-	return json;
-}
-
-json_t *
 ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 {
 	struct ContentInfo const *ci = sptr;
@@ -48,7 +32,7 @@ ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 
 	if (OBJECT_IDENTIFIER_to_nid(&ci->contentType) == NID_pkcs7_signed) {
 		td = &asn_DEF_SignedData;
-		child = content2json(td, &ci->content);
+		child = ANY_to_json(td, &ci->content);
 	} else {
 		td = &asn_DEF_ANY;
 		child = td->op->json_encoder(td, &ci->content);

@@ -12,22 +12,6 @@
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/asn1c/RouteOriginAttestation.h"
 
-static json_t *
-econtent2json(asn_TYPE_descriptor_t const *td, OCTET_STRING_t *eContent)
-{
-	void *decoded;
-	asn_dec_rval_t rval;
-	json_t *json;
-
-	decoded = NULL;
-	rval = ber_decode(td, &decoded, eContent->buf, eContent->size);
-
-	json = (rval.code == RC_OK) ? td->op->json_encoder(td, decoded) : NULL;
-
-	ASN_STRUCT_FREE(*td, decoded);
-	return json;
-}
-
 json_t *
 EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
     const void *sptr)
@@ -52,10 +36,10 @@ EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
 	nid = OBJECT_IDENTIFIER_to_nid(&eci->eContentType);
 	if (nid == nid_ct_mft()) {
 		td = &asn_DEF_Manifest;
-		child = econtent2json(td, eci->eContent);
+		child = OCTET_STRING_to_json(td, eci->eContent);
 	} else if (nid == nid_ct_roa()) {
 		td = &asn_DEF_RouteOriginAttestation;
-		child = econtent2json(td, eci->eContent);
+		child = OCTET_STRING_to_json(td, eci->eContent);
 	} else if (nid == nid_ct_gbr()) {
 		td = &asn_DEF_OCTET_STRING;
 		child = OCTET_STRING_encode_json_utf8(td, eci->eContent);
