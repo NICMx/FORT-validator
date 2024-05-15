@@ -1,7 +1,6 @@
 #include "asn1/decode.h"
 
 #include "common.h"
-#include "config.h"
 #include "log.h"
 #include "incidence/incidence.h"
 
@@ -36,15 +35,12 @@ int
 asn1_decode(const void *buffer, size_t buffer_size,
     asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
-	asn_codec_ctx_t s_codec_ctx;
 	asn_dec_rval_t rval;
 	int error;
 
 	*result = NULL;
-	s_codec_ctx.max_stack_size = config_get_asn1_decode_max_stack();
 
-	rval = ber_decode(&s_codec_ctx, descriptor, result, buffer,
-	    buffer_size);
+	rval = ber_decode(descriptor, result, buffer, buffer_size);
 	if (rval.code != RC_OK) {
 		/* Must free partial object according to API contracts. */
 		ASN_STRUCT_FREE(*descriptor, *result);

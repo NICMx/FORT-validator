@@ -19,7 +19,6 @@ struct asn_codec_ctx_s;		/* Forward declaration */
  * which is compliant with ber_decode().
  */
 asn_dec_rval_t ber_decode(
-    const struct asn_codec_ctx_s *opt_codec_ctx,
     const struct asn_TYPE_descriptor_s *type_descriptor,
     void **struct_ptr,  /* Pointer to a target structure's pointer */
     const void *buffer, /* Data to be decoded */

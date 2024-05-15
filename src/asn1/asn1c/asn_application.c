@@ -290,24 +290,3 @@ asn_encode_internal(const asn_codec_ctx_t *opt_codec_ctx,
 
     return er;
 }
-
-asn_dec_rval_t
-asn_decode(const asn_codec_ctx_t *opt_codec_ctx,
-           enum asn_transfer_syntax syntax, const asn_TYPE_descriptor_t *td,
-           void **sptr, const void *buffer, size_t size) {
-    if(!td || !td->op || !sptr || (size && !buffer)) {
-        ASN__DECODE_FAILED;
-    }
-
-    switch(syntax) {
-    case ATS_CER:
-    case ATS_NONSTANDARD_PLAINTEXT:
-    default:
-        errno = ENOENT;
-        ASN__DECODE_FAILED;
-
-    case ATS_DER:
-    case ATS_BER:
-        return ber_decode(opt_codec_ctx, td, sptr, buffer, size);
-    }
-}

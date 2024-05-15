@@ -35,6 +35,24 @@ typedef struct asn_codec_ctx_s {
 	 * A value from getrlimit(RLIMIT_STACK) may be used to initialize
 	 * this variable. Be careful in multithreaded environments, as the
 	 * stack size is rather limited.
+	 *
+	 * 2024-05-15: None of the RPKI objects employ recursive structures, and
+	 * they're all somewhat shallow. So this feature seems to be clutter.
+	 *
+	 * In my test environment, the highest effective ASN1 stack size
+	 * reported in a full run was 1296. Fort defaults
+	 * `--asn1-decode-max-stack` to 4096. The asn1c default recommended
+	 * maximum was 30000. My soft getrlimit(RLIMIT_STACK) is 8192...
+	 * I don't feel threatened by these numbers.
+	 *
+	 * Also, this seems naive. The "ASN1 stack size" isn't really comparable
+	 * to RLIMIT_STACK to begin with.
+	 *
+	 * TODO (fine) Consider (from worst to best)
+	 * - switching `--asn1-decode-max-stack` to getrlimit(RLIMIT_STACK),
+	 * - drop this feature altogether,
+	 * - or replace it with a gcc -fstack-usage analysis/monitor. (See
+	 *   https://stackoverflow.com/a/74769668/1735458.)
 	 */
 	size_t  max_stack_size; /* 0 disables stack bounds checking */
 } asn_codec_ctx_t;

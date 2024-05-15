@@ -20,7 +20,7 @@ econtent2json(asn_TYPE_descriptor_t const *td, OCTET_STRING_t *eContent)
 	json_t *json;
 
 	decoded = NULL;
-	rval = ber_decode(NULL, td, &decoded, eContent->buf, eContent->size);
+	rval = ber_decode(td, &decoded, eContent->buf, eContent->size);
 
 	json = (rval.code == RC_OK) ? td->op->json_encoder(td, decoded) : NULL;
 

@@ -138,7 +138,7 @@ ANY_to_type(ANY_t *st, asn_TYPE_descriptor_t *td, void **struct_ptr) {
 		return 0;
 	}
 
-	rval = ber_decode(0, td, (void **)&newst, st->buf, st->size);
+	rval = ber_decode(td, (void **)&newst, st->buf, st->size);
 	if(rval.code == RC_OK) {
 		*struct_ptr = newst;
 		return 0;

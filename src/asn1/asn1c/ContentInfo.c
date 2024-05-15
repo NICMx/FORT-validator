@@ -19,7 +19,7 @@ content2json(const asn_TYPE_descriptor_t *td, ANY_t const *ber)
 	json_t *json;
 
 	decoded = NULL;
-	rval = ber_decode(NULL, td, &decoded, ber->buf, ber->size);
+	rval = ber_decode(td, &decoded, ber->buf, ber->size);
 
 	json = (rval.code == RC_OK) ? td->op->json_encoder(td, decoded) : NULL;
 

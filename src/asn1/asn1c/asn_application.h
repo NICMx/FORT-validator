@@ -107,18 +107,6 @@ asn_enc_rval_t asn_encode(
 
 
 /*
- * A generic decoder for any supported transfer syntax.
- */
-asn_dec_rval_t asn_decode(
-    const asn_codec_ctx_t *opt_codec_parameters, enum asn_transfer_syntax,
-    const struct asn_TYPE_descriptor_s *type_to_decode,
-    void **structure_ptr, /* Pointer to a target structure's pointer */
-    const void *buffer,   /* Data to be decoded */
-    size_t size           /* Size of that buffer */
-);
-
-
-/*
  * A callback of this type is called whenever constraint validation fails
  * on some ASN.1 type. See "constraints.h" for more details on constraint
  * validation.

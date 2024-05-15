@@ -21,7 +21,7 @@ attr2json(asn_TYPE_descriptor_t const *td, CMSAttributeValue_t const *ber)
 	json_t *json;
 
 	attr = NULL;
-	rval = ber_decode(NULL, td, &attr, ber->buf, ber->size);
+	rval = ber_decode(td, &attr, ber->buf, ber->size);
 
 	json = (rval.code == RC_OK) ? td->op->json_encoder(td, attr) : NULL;
 

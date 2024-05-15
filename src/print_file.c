@@ -209,7 +209,7 @@ bio2ci(BIO *bio)
 			goto fail;
 		}
 
-		res = ber_decode(NULL, &asn_DEF_ContentInfo, (void **)&ci,
+		res = ber_decode(&asn_DEF_ContentInfo, (void **)&ci,
 				 buffer, consumed);
 		pr_op_debug("Consumed: %zu", res.consumed);
 
