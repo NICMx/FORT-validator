@@ -15,8 +15,7 @@ decode_roa(struct signed_object *sobj, struct RouteOriginAttestation **result)
 		sobj->sdata->encapContentInfo.eContent,
 		&asn_DEF_RouteOriginAttestation,
 		(void **) result,
-		true,
-		false
+		true
 	);
 }
 

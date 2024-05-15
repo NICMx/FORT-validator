@@ -32,58 +32,9 @@ validate(asn_TYPE_descriptor_t const *descriptor, void *result, bool log)
 	return 0;
 }
 
-static int
-der_coder(const void *buf, size_t size, void *app_key)
-{
-	struct ber_data *data = app_key;
-
-	if (data->consumed + size > data->src_size) {
-		pr_val_debug("DER encoding will consume more bytes than expected (expected %lu, will get %lu)",
-		    data->consumed + size, data->src_size);
-		return -1;
-	}
-
-	if (memcmp(data->src + data->consumed, buf, size) != 0)
-		return -1;
-
-	data->consumed += size;
-	return 0;
-}
-
-/*
- * TODO (performance) This isn't efficient, consider implement DER decoding
- * or something better.
- */
-static int
-validate_der(size_t ber_consumed, asn_TYPE_descriptor_t const *descriptor,
-    const void *original, void *result)
-{
-	struct ber_data data;
-	asn_enc_rval_t eval;
-
-	data.src = (unsigned char *) original;
-	data.src_size = ber_consumed;
-	data.consumed = 0;
-
-	eval = der_encode(descriptor, result, der_coder, &data);
-	if (eval.encoded == -1)
-		return incidence(INID_OBJ_NOT_DER,
-		    "'%s' isn't DER encoded", eval.failed_type->name);
-
-	if (ber_consumed != eval.encoded) {
-		pr_val_debug("DER encoding consumed less bytes than expected (expected %lu, got %lu)",
-		    ber_consumed, eval.encoded);
-		return incidence(INID_OBJ_NOT_DER, "'%s' isn't DER encoded",
-		    descriptor->name);
-	}
-
-	return 0;
-}
-
 int
 asn1_decode(const void *buffer, size_t buffer_size,
-    asn_TYPE_descriptor_t const *descriptor, void **result, bool log,
-    bool dec_as_der)
+    asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
 	asn_codec_ctx_t s_codec_ctx;
 	asn_dec_rval_t rval;
@@ -103,17 +54,6 @@ asn1_decode(const void *buffer, size_t buffer_size,
 		        rval.code, rval.consumed));
 	}
 
-	/* Validate DER encoding, only if wanted and incidence isn't ignored */
-	if (dec_as_der &&
-	    incidence_get_action(INID_OBJ_NOT_DER) != INAC_IGNORE) {
-		error = validate_der(rval.consumed, descriptor, buffer,
-		    *result);
-		if (error) {
-			ASN_STRUCT_FREE(*descriptor, *result);
-			return error;
-		}
-	}
-
 	error = validate(descriptor, *result, log);
 	if (error) {
 		ASN_STRUCT_FREE(*descriptor, *result);
@@ -125,19 +65,16 @@ asn1_decode(const void *buffer, size_t buffer_size,
 
 int
 asn1_decode_any(ANY_t *any, asn_TYPE_descriptor_t const *descriptor,
-    void **result, bool log, bool dec_as_der)
+    void **result, bool log)
 {
-	return asn1_decode(any->buf, any->size, descriptor, result, log,
-	    dec_as_der);
+	return asn1_decode(any->buf, any->size, descriptor, result, log);
 }
 
 int
 asn1_decode_octet_string(OCTET_STRING_t *string,
-    asn_TYPE_descriptor_t const *descriptor, void **result, bool log,
-    bool dec_as_der)
+    asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
-	return asn1_decode(string->buf, string->size, descriptor, result, log,
-	    dec_as_der);
+	return asn1_decode(string->buf, string->size, descriptor, result, log);
 }
 
 /*
@@ -147,9 +84,7 @@ asn1_decode_octet_string(OCTET_STRING_t *string,
  */
 int
 asn1_decode_fc(struct file_contents *fc,
-    asn_TYPE_descriptor_t const *descriptor, void **result, bool log,
-    bool dec_as_der)
+    asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
-	return asn1_decode(fc->buffer, fc->buffer_size, descriptor, result,
-	    log, dec_as_der);
+	return asn1_decode(fc->buffer, fc->buffer_size, descriptor, result, log);
 }

@@ -32,11 +32,12 @@ decode(struct file_contents *fc, struct ContentInfo **result)
 	struct ContentInfo *cinfo;
 	int error;
 
-	/* Validate DER encoding rfc6488#section3 bullet 1.l */
 	error = asn1_decode_fc(fc, &asn_DEF_ContentInfo, (void **) &cinfo,
-	    true, true);
+	    true);
 	if (error)
 		return error;
+
+	/* TODO (asn1c) rfc6488#3.1.l: Validate DER encoding */
 
 	error = validate(cinfo);
 	if (error) {

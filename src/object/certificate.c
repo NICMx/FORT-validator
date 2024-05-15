@@ -1025,7 +1025,7 @@ handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
 
 	string = X509_EXTENSION_get_data(ext);
 	error = asn1_decode(string->data, string->length, &asn_DEF_IPAddrBlocks,
-	    (void **) &blocks, true, false);
+	    (void **) &blocks, true);
 	if (error)
 		return error;
 
@@ -1073,7 +1073,7 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
 
 	string = X509_EXTENSION_get_data(ext);
 	error = asn1_decode(string->data, string->length,
-	    &asn_DEF_ASIdentifiers, (void **) &ids, true, false);
+	    &asn_DEF_ASIdentifiers, (void **) &ids, true);
 	if (error)
 		return error;
 
