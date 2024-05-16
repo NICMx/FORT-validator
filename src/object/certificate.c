@@ -451,7 +451,6 @@ validate_public_key(X509 *cert, enum cert_type type)
 {
 	X509_PUBKEY *pubkey;
 	X509_ALGOR *pa;
-	ASN1_OBJECT *alg;
 	int ok;
 	int error;
 
@@ -460,8 +459,7 @@ validate_public_key(X509 *cert, enum cert_type type)
 	if (pubkey == NULL)
 		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
-	/* TODO not validating @alg? */
-	ok = X509_PUBKEY_get0_param(&alg, NULL, NULL, &pa, pubkey);
+	ok = X509_PUBKEY_get0_param(NULL, NULL, NULL, &pa, pubkey);
 	if (!ok)
 		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
