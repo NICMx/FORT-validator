@@ -20,7 +20,7 @@ RUN ./configure && make && make install
 FROM alpine:latest
 
 # Install dependencies
-RUN apk --update --no-cache add openssl jansson rsync tini libxml2 libcurl
+RUN apk --update --no-cache add openssl jansson rsync tini libxml2 libcurl rtrlib
 
 # Install FORT
 COPY --from=builder /usr/local/bin/fort /usr/local/bin/fort
