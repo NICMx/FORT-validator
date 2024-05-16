@@ -1,7 +1,6 @@
 #include "asn1/asn1c/Certificate.h"
 
 #include <openssl/x509v3.h>
-#include <openssl/pem.h>
 
 #include "extension.h"
 #include "json_util.h"
@@ -34,39 +33,25 @@ static json_t *
 pk2json(X509 const *x)
 {
 	json_t *root;
-	ASN1_OBJECT *xpoid;
-	EVP_PKEY *pkey;
-	BIO *bio;
+	json_t *child;
+	X509_PUBKEY *pubkey;
+	ASN1_OBJECT *oid;
 
 	root = json_obj_new();
 	if (root == NULL)
 		return NULL;
 
-	/* algorithm */
-	if (!X509_PUBKEY_get0_param(&xpoid, NULL, NULL, NULL, X509_get_X509_PUBKEY(x)))
+	pubkey = X509_get_X509_PUBKEY(x);
+	if (pubkey == NULL)
 		goto fail;
-	bio = BIO_new(BIO_s_mem());
-	if (bio == NULL)
-		goto fail;
-	if (i2a_ASN1_OBJECT(bio, xpoid) <= 0) {
-		BIO_free_all(bio);
-		goto fail;
-	}
-	if (json_object_add(root, "algorithm", bio2json(bio)))
+	if (!X509_PUBKEY_get0_param(&oid, NULL, NULL, NULL, pubkey))
 		goto fail;
 
-	/* Actual pk */
-	pkey = X509_get0_pubkey(x);
-	if (pkey == NULL)
+	child = oid2json(oid);
+	if (json_object_add(root, "algorithm", child))
 		goto fail;
-	bio = BIO_new(BIO_s_mem());
-	if (bio == NULL)
-		goto fail;
-	if (PEM_write_bio_PUBKEY(bio, pkey) <= 0) {
-		BIO_free_all(bio);
-		goto fail;
-	}
-	if (json_object_add(root, "subjectPublicKey", bio2json(bio)))
+	child = pubkey2json(X509_PUBKEY_get0(pubkey));
+	if (json_object_add(root, "subjectPublicKey", child))
 		goto fail;
 
 	return root;

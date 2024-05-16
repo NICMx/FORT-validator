@@ -3,28 +3,15 @@
 #include <stdlib.h>
 #include <openssl/asn1.h>
 #include <openssl/opensslv.h>
+#include <openssl/pem.h>
 
 #include "alloc.h"
 #include "extension.h"
 #include "json_util.h"
+#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 /* Swallows @bio. */
-char *
-bio2str(BIO *bio)
-{
-	BUF_MEM *buffer;
-	char *str;
-
-	str = (BIO_get_mem_ptr(bio, &buffer) > 0)
-	    ? pstrndup(buffer->data, buffer->length)
-	    : NULL;
-
-	BIO_free_all(bio);
-	return str;
-}
-
-/* Swallows @bio. */
-json_t *
+static json_t *
 bio2json(BIO *bio)
 {
 	BUF_MEM *buffer;
@@ -41,7 +28,10 @@ bio2json(BIO *bio)
 json_t *
 oid2json(ASN1_OBJECT const *oid)
 {
-	return oid ? json_str_new(OBJ_nid2sn(OBJ_obj2nid(oid))) : json_null();
+	char buf[OID_STR_MAXLEN];
+	return (oid != NULL)
+	     ? json_strn_new(buf, OBJ_obj2txt(buf, OID_STR_MAXLEN, oid, 0))
+	     : json_null();
 }
 
 json_t *
@@ -197,6 +187,25 @@ fail:	json_decref(parent);
 	return NULL;
 }
 
+json_t *
+pubkey2json(EVP_PKEY *pubkey)
+{
+	BIO *bio;
+
+	if (pubkey == NULL)
+		return NULL;
+
+	bio = BIO_new(BIO_s_mem());
+	if (bio == NULL)
+		return NULL;
+	if (PEM_write_bio_PUBKEY(bio, pubkey) <= 0) {
+		BIO_free_all(bio);
+		return NULL;
+	}
+
+	return bio2json(bio);
+}
+
 static json_t *
 ext2json_known(struct extension_metadata const *meta, X509_EXTENSION *ext)
 {
@@ -247,8 +256,6 @@ exts2json(const STACK_OF(X509_EXTENSION) *exts)
 	json_t *parent;
 	json_t *child;
 	X509_EXTENSION *ex;
-	BIO *bio;
-	char *name;
 	int i;
 
 	if (sk_X509_EXTENSION_num(exts) <= 0)
@@ -264,19 +271,7 @@ exts2json(const STACK_OF(X509_EXTENSION) *exts)
 
 		ex = sk_X509_EXTENSION_value(exts, i);
 
-		/* Get the extension name */
-		bio = BIO_new(BIO_s_mem());
-		if (bio == NULL)
-			goto fail;
-		if (i2a_ASN1_OBJECT(bio, X509_EXTENSION_get_object(ex)) <= 0) {
-			BIO_free_all(bio);
-			goto fail;
-		}
-
-		name = bio2str(bio);
-		child = json_str_new(name);
-		free(name);
-
+		child = oid2json(X509_EXTENSION_get_object(ex));
 		if (json_object_add(parent, "extnID", child))
 			goto fail;
 		child = json_boolean(X509_EXTENSION_get_critical(ex));
