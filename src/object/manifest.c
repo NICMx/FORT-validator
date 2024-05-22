@@ -1,18 +1,18 @@
 #include "object/manifest.h"
 
 #include "algorithm.h"
-#include "common.h"
-#include "log.h"
-#include "thread_var.h"
-#include "asn1/decode.h"
-#include "asn1/oid.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 #include "asn1/asn1c/Manifest.h"
+#include "asn1/decode.h"
+#include "asn1/oid.h"
+#include "common.h"
 #include "crypto/hash.h"
+#include "log.h"
 #include "object/certificate.h"
 #include "object/crl.h"
 #include "object/roa.h"
 #include "object/signed_object.h"
+#include "thread_var.h"
 
 static int
 cage(struct rpki_uri **uri, struct rpki_uri *notif)

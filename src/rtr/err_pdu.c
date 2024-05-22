@@ -1,9 +1,10 @@
 #include "rtr/err_pdu.h"
 
 #include <errno.h>
+
 #include "alloc.h"
-#include "rtr/pdu_sender.h"
 #include "log.h"
+#include "rtr/pdu_sender.h"
 
 typedef enum rtr_error_code {
 	ERR_PDU_CORRUPT_DATA			= 0,

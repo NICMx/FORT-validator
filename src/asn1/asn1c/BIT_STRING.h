@@ -5,7 +5,7 @@
 #ifndef	_BIT_STRING_H_
 #define	_BIT_STRING_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"	/* Some help from OCTET STRING */
+#include "asn1/asn1c/OCTET_STRING.h"
 
 typedef struct BIT_STRING_s {
 	uint8_t *buf;	/* BIT STRING body */

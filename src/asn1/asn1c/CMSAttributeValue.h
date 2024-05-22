@@ -8,11 +8,8 @@
 #ifndef	_CMSAttributeValue_H_
 #define	_CMSAttributeValue_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/ANY.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* CMSAttributeValue */
 typedef ANY_t	 CMSAttributeValue_t;
@@ -27,4 +24,3 @@ der_type_encoder_f CMSAttributeValue_encode_der;
 xer_type_encoder_f CMSAttributeValue_encode_xer;
 
 #endif	/* _CMSAttributeValue_H_ */
-#include "asn1/asn1c/asn_internal.h"

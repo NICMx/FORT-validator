@@ -8,11 +8,8 @@
 #ifndef	_DistinguishedName_H_
 #define	_DistinguishedName_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/RDNSequence.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* DistinguishedName */
 typedef RDNSequence_t	 DistinguishedName_t;
@@ -27,4 +24,3 @@ der_type_encoder_f DistinguishedName_encode_der;
 xer_type_encoder_f DistinguishedName_encode_xer;
 
 #endif	/* _DistinguishedName_H_ */
-#include "asn1/asn1c/asn_internal.h"

@@ -7,17 +7,17 @@
 
 #include "alloc.h"
 #include "common.h"
+#include "config/boolean.h"
+#include "config/incidences.h"
+#include "config/str.h"
+#include "config/uint.h"
+#include "config/work_offline.h"
 #include "configure_ac.h"
 #include "daemon.h"
 #include "file.h"
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
-#include "config/boolean.h"
-#include "config/incidences.h"
-#include "config/str.h"
-#include "config/uint.h"
-#include "config/work_offline.h"
 
 /**
  * To add a member to this structure,

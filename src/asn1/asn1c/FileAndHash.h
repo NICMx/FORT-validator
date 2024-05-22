@@ -8,13 +8,10 @@
 #ifndef	_FileAndHash_H_
 #define	_FileAndHash_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/IA5String.h"
 #include "asn1/asn1c/BIT_STRING.h"
+#include "asn1/asn1c/IA5String.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* FileAndHash */
 typedef struct FileAndHash {
@@ -31,4 +28,3 @@ extern asn_SEQUENCE_specifics_t asn_SPC_FileAndHash_specs_1;
 extern asn_TYPE_member_t asn_MBR_FileAndHash_1[2];
 
 #endif	/* _FileAndHash_H_ */
-#include "asn1/asn1c/asn_internal.h"

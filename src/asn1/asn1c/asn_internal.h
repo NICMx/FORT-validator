@@ -10,7 +10,7 @@
 #ifndef __EXTENSIONS__
 #define __EXTENSIONS__          /* for Sun */
 #endif
-#include "asn1/asn1c/asn_application.h"	/* Application-visible API */
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Environment version might be used to avoid running with the old library */
 #define	ASN1C_ENVIRONMENT_VERSION	923	/* Compile-time version */

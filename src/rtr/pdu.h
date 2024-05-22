@@ -1,9 +1,16 @@
 #ifndef RTR_PDU_H_
 #define RTR_PDU_H_
 
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
+
 #include "common.h"
-#include "types/router_key.h"
 #include "rtr/rtr.h"
+#include "types/router_key.h"
 
 enum rtr_version {
 	RTR_V0			= 0,

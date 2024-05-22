@@ -6,18 +6,18 @@
 #include <time.h>
 
 #include "alloc.h"
+#include "cache/local_cache.h"
 #include "cert_stack.h"
 #include "common.h"
 #include "config.h"
+#include "crypto/base64.h"
 #include "line_file.h"
 #include "log.h"
+#include "object/certificate.h"
+#include "rtr/db/vrps.h"
 #include "state.h"
 #include "thread_var.h"
 #include "validation_handler.h"
-#include "crypto/base64.h"
-#include "object/certificate.h"
-#include "rtr/db/vrps.h"
-#include "cache/local_cache.h"
 
 typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
 

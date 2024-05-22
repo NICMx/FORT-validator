@@ -2,14 +2,14 @@
 
 #include "config.h"
 #include "extension.h"
-#include "log.h"
-#include "nid.h"
-#include "thread_var.h"
 #include "http/http.h"
 #include "incidence/incidence.h"
+#include "log.h"
+#include "nid.h"
 #include "print_file.h"
-#include "rtr/rtr.h"
 #include "rtr/db/vrps.h"
+#include "rtr/rtr.h"
+#include "thread_var.h"
 #include "xml/relax_ng.h"
 
 static int

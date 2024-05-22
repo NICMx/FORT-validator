@@ -7,11 +7,12 @@
 
 #include "asn1/asn1c/CMSAttribute.h"
 
-#include <openssl/objects.h>
-#include "json_util.h"
+#include <openssl/obj_mac.h>
+
 #include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SigningTime.h"
+#include "json_util.h"
 
 json_t *
 CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)

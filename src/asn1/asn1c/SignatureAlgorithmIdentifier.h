@@ -8,11 +8,8 @@
 #ifndef	_SignatureAlgorithmIdentifier_H_
 #define	_SignatureAlgorithmIdentifier_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/AlgorithmIdentifier.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* SignatureAlgorithmIdentifier */
 typedef AlgorithmIdentifier_t	 SignatureAlgorithmIdentifier_t;
@@ -27,4 +24,3 @@ der_type_encoder_f SignatureAlgorithmIdentifier_encode_der;
 xer_type_encoder_f SignatureAlgorithmIdentifier_encode_xer;
 
 #endif	/* _SignatureAlgorithmIdentifier_H_ */
-#include "asn1/asn1c/asn_internal.h"

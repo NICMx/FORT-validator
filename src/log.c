@@ -1,10 +1,9 @@
 #include "log.h"
 
+#include <errno.h>
 #ifdef BACKTRACE_ENABLED
 #include <execinfo.h>
 #endif
-
-#include <errno.h>
 #include <openssl/err.h>
 #include <pthread.h>
 #include <signal.h>

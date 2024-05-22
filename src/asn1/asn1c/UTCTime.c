@@ -3,14 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/UTCTime.h"
 
 #include <assert.h>
 #include <errno.h>
 
-#include "json_util.h"
 #include "asn1/asn1c/GeneralizedTime.h"
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/xer_encoder.h"
+#include "json_util.h"
 
 #ifndef	ASN___INTERNAL_TEST_MODE
 
@@ -74,7 +75,7 @@ UTCTime_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
 
 asn_enc_rval_t
 UTCTime_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
-                   int ilevel, enum xer_encoder_flags_e flags,
+                   int ilevel, int flags,
                    asn_app_consume_bytes_f *cb, void *app_key) {
     if(flags & XER_F_CANONICAL) {
 		asn_enc_rval_t rv;

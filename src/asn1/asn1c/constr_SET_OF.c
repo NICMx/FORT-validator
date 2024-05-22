@@ -4,12 +4,17 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_SET_OF.h"
 
 #include <assert.h>
-#include "json_util.h"
+
 #include "asn1/asn1c/asn_SET_OF.h"
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/constraints.h"
+#include "asn1/asn1c/der_encoder.h"
+#include "asn1/asn1c/xer_encoder.h"
+#include "json_util.h"
 
 /*
  * Number of bytes left for this structure.
@@ -560,7 +565,7 @@ SET_OF_xer_order(const void *aptr, const void *bptr) {
 
 asn_enc_rval_t
 SET_OF_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
-                  enum xer_encoder_flags_e flags, asn_app_consume_bytes_f *cb,
+                  int flags, asn_app_consume_bytes_f *cb,
                   void *app_key) {
     asn_enc_rval_t er;
 	const asn_SET_OF_specifics_t *specs = (const asn_SET_OF_specifics_t *)td->specifics;

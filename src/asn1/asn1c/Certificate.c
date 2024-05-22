@@ -1,6 +1,6 @@
 #include "asn1/asn1c/Certificate.h"
 
-#include <openssl/x509v3.h>
+#include <openssl/objects.h>
 
 #include "extension.h"
 #include "json_util.h"

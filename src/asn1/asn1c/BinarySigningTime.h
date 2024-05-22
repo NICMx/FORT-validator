@@ -8,11 +8,8 @@
 #ifndef	_BinarySigningTime_H_
 #define	_BinarySigningTime_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/BinaryTime.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* BinarySigningTime */
 typedef BinaryTime_t	 BinarySigningTime_t;
@@ -27,4 +24,3 @@ der_type_encoder_f BinarySigningTime_encode_der;
 xer_type_encoder_f BinarySigningTime_encode_xer;
 
 #endif	/* _BinarySigningTime_H_ */
-#include "asn1/asn1c/asn_internal.h"

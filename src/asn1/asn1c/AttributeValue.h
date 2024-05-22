@@ -8,11 +8,8 @@
 #ifndef	_AttributeValue_H_
 #define	_AttributeValue_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/ANY.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* AttributeValue */
 typedef ANY_t	 AttributeValue_t;
@@ -27,4 +24,3 @@ der_type_encoder_f AttributeValue_encode_der;
 xer_type_encoder_f AttributeValue_encode_xer;
 
 #endif	/* _AttributeValue_H_ */
-#include "asn1/asn1c/asn_internal.h"

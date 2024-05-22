@@ -2,9 +2,13 @@
  * Copyright (c) 2003, 2005 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/asn_codecs_prim.h"
 #include "asn1/asn1c/NULL.h"
+
+#include "asn1/asn1c/asn_codecs_prim.h"
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/constraints.h"
+#include "asn1/asn1c/der_encoder.h"
 
 /*
  * NULL basic type description.
@@ -116,7 +120,7 @@ NULL_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
 
 asn_enc_rval_t
 NULL_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
-                enum xer_encoder_flags_e flags, asn_app_consume_bytes_f *cb,
+                int flags, asn_app_consume_bytes_f *cb,
                 void *app_key) {
     asn_enc_rval_t er;
 

@@ -5,8 +5,8 @@
 #ifndef	_CONSTR_SEQUENCE_OF_H_
 #define	_CONSTR_SEQUENCE_OF_H_
 
-#include "asn1/asn1c/asn_application.h"
-#include "asn1/asn1c/constr_SET_OF.h"		/* Implemented using SET OF */
+#include "asn1/asn1c/constr_SET_OF.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /*
  * A set specialized functions dealing with the SEQUENCE OF type.

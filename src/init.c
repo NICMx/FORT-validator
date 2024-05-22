@@ -2,8 +2,8 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "log.h"
 #include "http/http.h"
+#include "log.h"
 
 static int
 fetch_url(char const *url)

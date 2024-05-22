@@ -4,8 +4,8 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "log.h"
 #include "crypto/hash.h"
+#include "log.h"
 
 #define SHA256_LEN (256 >> 3) /* 256 / 8, bits -> bytes */
 

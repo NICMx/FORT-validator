@@ -1,6 +1,7 @@
 #include "nid.h"
 
 #include <errno.h>
+#include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
 #include "log.h"

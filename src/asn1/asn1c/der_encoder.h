@@ -5,7 +5,7 @@
 #ifndef	_DER_ENCODER_H_
 #define	_DER_ENCODER_H_
 
-#include "asn1/asn1c/asn_application.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 struct asn_TYPE_descriptor_s;	/* Forward declaration */
 
@@ -29,18 +29,6 @@ asn_enc_rval_t der_encode_to_buffer(
     void *buffer,           /* Pre-allocated buffer */
     size_t buffer_size      /* Initial buffer size (maximum) */
 );
-
-/*
- * Type of the generic DER encoder.
- */
-typedef asn_enc_rval_t(der_type_encoder_f)(
-    const struct asn_TYPE_descriptor_s *type_descriptor,
-    const void *struct_ptr, /* Structure to be encoded */
-    int tag_mode,           /* {-1,0,1}: IMPLICIT, no, EXPLICIT */
-    ber_tlv_tag_t tag, asn_app_consume_bytes_f *consume_bytes_cb, /* Callback */
-    void *app_key /* Arbitrary callback argument */
-);
-
 
 /*******************************
  * INTERNALLY USEFUL FUNCTIONS *

@@ -3,8 +3,8 @@
 
 /* This is RFC 8630. */
 
-#include "types/uri.h"
 #include "rtr/db/db_table.h"
+#include "types/uri.h"
 
 struct tal;
 

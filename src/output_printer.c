@@ -2,9 +2,9 @@
 
 #include "common.h"
 #include "config.h"
+#include "crypto/base64.h"
 #include "file.h"
 #include "log.h"
-#include "crypto/base64.h"
 #include "types/vrp.h"
 
 typedef struct json_out {

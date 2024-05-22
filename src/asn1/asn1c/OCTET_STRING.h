@@ -5,7 +5,8 @@
 #ifndef	_OCTET_STRING_H_
 #define	_OCTET_STRING_H_
 
-#include "asn1/asn1c/asn_application.h"
+#include "asn1/asn1c/constr_TYPE.h"
+#include "asn1/asn1c/constraints.h"
 
 /*
  * Note: Though this sometimes represents an actual string, I don't see any

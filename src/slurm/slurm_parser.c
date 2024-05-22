@@ -3,14 +3,14 @@
 #include <errno.h>
 #include <openssl/asn1.h>
 
-#include "crypto/base64.h"
 #include "algorithm.h"
 #include "alloc.h"
+#include "crypto/base64.h"
 #include "json_util.h"
 #include "log.h"
+#include "slurm/db_slurm.h"
 #include "types/address.h"
 #include "types/router_key.h"
-#include "slurm/db_slurm.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"

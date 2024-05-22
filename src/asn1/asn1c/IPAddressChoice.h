@@ -8,14 +8,12 @@
 #ifndef	_IPAddressChoice_H_
 #define	_IPAddressChoice_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
+#include "asn1/asn1c/IPAddressOrRange.h"
 #include "asn1/asn1c/NULL.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_CHOICE.h"
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum IPAddressChoice_PR {
@@ -49,8 +47,4 @@ extern asn_TYPE_descriptor_t asn_DEF_IPAddressChoice;
 extern asn_CHOICE_specifics_t asn_SPC_IPAddressChoice_specs_1;
 extern asn_TYPE_member_t asn_MBR_IPAddressChoice_1[2];
 
-/* Referred external types */
-#include "asn1/asn1c/IPAddressOrRange.h"
-
 #endif	/* _IPAddressChoice_H_ */
-#include "asn1/asn1c/asn_internal.h"

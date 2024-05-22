@@ -3,8 +3,8 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_tlv_tag.h"
+
 #include <errno.h>
 
 ssize_t

@@ -2,37 +2,37 @@
 
 #include <openssl/asn1t.h>
 #include <openssl/bio.h>
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/core_names.h>
+#endif
 #include <openssl/evp.h>
+#include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
 #include <openssl/x509v3.h>
 #include <syslog.h>
 
-#if OPENSSL_VERSION_MAJOR >= 3
-#include <openssl/core_names.h>
-#endif
-
 #include "algorithm.h"
 #include "alloc.h"
+#include "asn1/asn1c/IPAddrBlocks.h"
+#include "asn1/decode.h"
+#include "asn1/oid.h"
+#include "cache/local_cache.h"
 #include "cert_stack.h"
 #include "config.h"
+#include "crypto/hash.h"
+#include "data_structure/array_list.h"
 #include "extension.h"
+#include "incidence/incidence.h"
 #include "log.h"
 #include "nid.h"
+#include "object/bgpsec.h"
+#include "object/manifest.h"
+#include "object/name.h"
+#include "object/signed_object.h"
 #include "rrdp.h"
 #include "str_token.h"
 #include "thread_var.h"
-#include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "asn1/asn1c/IPAddrBlocks.h"
-#include "crypto/hash.h"
-#include "data_structure/array_list.h"
-#include "incidence/incidence.h"
-#include "object/bgpsec.h"
-#include "object/name.h"
-#include "object/manifest.h"
-#include "object/signed_object.h"
-#include "cache/local_cache.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.

@@ -1,17 +1,17 @@
 #include "extension.h"
 
 #include <openssl/asn1t.h>
+#include <openssl/obj_mac.h>
 #include <openssl/objects.h>
-#include <openssl/x509v3.h>
 
 #include "cert_stack.h"
 #include "common.h"
+#include "crypto/hash.h"
 #include "json_util.h"
 #include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"
 #include "thread_var.h"
-#include "crypto/hash.h"
 
 static json_t *
 unimplemented(void const *arg)

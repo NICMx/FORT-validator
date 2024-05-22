@@ -1,7 +1,7 @@
 #include "types/bio_seq.h"
 
-#include "log.h"
 #include "alloc.h"
+#include "log.h"
 
 static BIO_METHOD *method;
 

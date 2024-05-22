@@ -1,7 +1,6 @@
 #include "asn1/asn1c/CRL.h"
 
-#include <openssl/x509v3.h>
-#include <openssl/pem.h>
+#include <openssl/objects.h>
 
 #include "extension.h"
 #include "json_util.h"

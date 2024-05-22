@@ -8,13 +8,10 @@
 #ifndef	_ContentInfo_H_
 #define	_ContentInfo_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/ANY.h"
+#include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* ContentInfo */
 typedef struct ContentInfo {
@@ -29,4 +26,3 @@ typedef struct ContentInfo {
 extern asn_TYPE_descriptor_t asn_DEF_ContentInfo;
 
 #endif	/* _ContentInfo_H_ */
-#include "asn1/asn1c/asn_internal.h"

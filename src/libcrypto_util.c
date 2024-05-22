@@ -1,14 +1,16 @@
 #include "libcrypto_util.h"
 
-#include <stdlib.h>
-#include <openssl/asn1.h>
-#include <openssl/opensslv.h>
+#include <openssl/bio.h>
+#include <openssl/bn.h>
+#include <openssl/buffer.h>
+#include <openssl/objects.h>
 #include <openssl/pem.h>
+#include <time.h>
 
 #include "alloc.h"
+#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "extension.h"
 #include "json_util.h"
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 /* Swallows @bio. */
 static json_t *
@@ -147,7 +149,7 @@ fail:	json_decref(root);
 }
 
 json_t *
-gn2json(GENERAL_NAME const *gn)
+gn2json(GENERAL_NAME *gn)
 {
 	ASN1_IA5STRING *str;
 	int type;

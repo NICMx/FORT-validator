@@ -6,11 +6,13 @@
 #define	_REENTRANT			/* for Sun */
 #define __EXTENSIONS__                  /* for Sun */
 
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 
 #include <assert.h>
 #include <errno.h>
+
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/xer_encoder.h"
 #include "json_util.h"
 
 #define	ATZVARS do {							\
@@ -156,7 +158,7 @@ GeneralizedTime_encode_json(const struct asn_TYPE_descriptor_s *td, const void *
 
 asn_enc_rval_t
 GeneralizedTime_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
-                           int ilevel, enum xer_encoder_flags_e flags,
+                           int ilevel, int flags,
                            asn_app_consume_bytes_f *cb, void *app_key) {
     if(flags & XER_F_CANONICAL) {
 		GeneralizedTime_t *gt;

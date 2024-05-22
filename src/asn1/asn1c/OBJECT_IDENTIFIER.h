@@ -5,10 +5,11 @@
 #ifndef	_OBJECT_IDENTIFIER_H_
 #define	_OBJECT_IDENTIFIER_H_
 
-#include <stdbool.h>
-#include "asn1/asn1c/asn_application.h"
-#include "asn1/asn1c/asn_codecs_prim.h"
+#include <netdb.h>
+
 #include "asn1/asn1c/OCTET_STRING.h"
+#include "asn1/asn1c/asn_codecs_prim.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 typedef uint32_t asn_oid_arc_t;
 #define ASN_OID_ARC_MAX (~((asn_oid_arc_t)0))

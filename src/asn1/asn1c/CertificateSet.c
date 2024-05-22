@@ -7,8 +7,8 @@
 
 #include "asn1/asn1c/CertificateSet.h"
 
-#include "json_util.h"
 #include "asn1/asn1c/Certificate.h"
+#include "json_util.h"
 
 static json_t *
 CertificateSet_encode_json(const struct asn_TYPE_descriptor_s *td,

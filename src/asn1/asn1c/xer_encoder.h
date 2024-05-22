@@ -5,7 +5,7 @@
 #ifndef	_XER_ENCODER_H_
 #define	_XER_ENCODER_H_
 
-#include "asn1/asn1c/asn_application.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 struct asn_TYPE_descriptor_s;	/* Forward declaration */
 
@@ -37,17 +37,5 @@ asn_enc_rval_t xer_encode(const struct asn_TYPE_descriptor_s *type_descriptor,
  */
 int xer_fprint(FILE *stream, const struct asn_TYPE_descriptor_s *td,
                const void *struct_ptr);
-
-/*
- * Type of the generic XER encoder.
- */
-typedef asn_enc_rval_t(xer_type_encoder_f)(
-    const struct asn_TYPE_descriptor_s *type_descriptor,
-    const void *struct_ptr, /* Structure to be encoded */
-    int ilevel,             /* Level of indentation */
-    enum xer_encoder_flags_e xer_flags,
-    asn_app_consume_bytes_f *consume_bytes_cb, /* Callback */
-    void *app_key                              /* Arbitrary callback argument */
-);
 
 #endif	/* _XER_ENCODER_H_ */

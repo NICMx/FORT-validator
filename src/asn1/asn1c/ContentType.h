@@ -8,11 +8,8 @@
 #ifndef	_ContentType_H_
 #define	_ContentType_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* ContentType */
 typedef OBJECT_IDENTIFIER_t	 ContentType_t;
@@ -27,4 +24,3 @@ der_type_encoder_f ContentType_encode_der;
 xer_type_encoder_f ContentType_encode_xer;
 
 #endif	/* _ContentType_H_ */
-#include "asn1/asn1c/asn_internal.h"

@@ -1,8 +1,8 @@
 #ifndef SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 #define SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 
-#include "log.h"
 #include "data_structure/common.h"
+#include "log.h"
 
 #define DEFINE_ARRAY_LIST_STRUCT(name, elem_type)			\
 	struct name {							\

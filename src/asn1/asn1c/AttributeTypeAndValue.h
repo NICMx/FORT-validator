@@ -8,13 +8,10 @@
 #ifndef	_AttributeTypeAndValue_H_
 #define	_AttributeTypeAndValue_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/AttributeType.h"
 #include "asn1/asn1c/AttributeValue.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* AttributeTypeAndValue */
 typedef struct AttributeTypeAndValue {
@@ -31,4 +28,3 @@ extern asn_SEQUENCE_specifics_t asn_SPC_AttributeTypeAndValue_specs_1;
 extern asn_TYPE_member_t asn_MBR_AttributeTypeAndValue_1[2];
 
 #endif	/* _AttributeTypeAndValue_H_ */
-#include "asn1/asn1c/asn_internal.h"

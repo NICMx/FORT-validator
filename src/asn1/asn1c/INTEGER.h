@@ -5,8 +5,9 @@
 #ifndef	_INTEGER_H_
 #define	_INTEGER_H_
 
-#include "asn1/asn1c/asn_application.h"
 #include "asn1/asn1c/asn_codecs_prim.h"
+#include "asn1/asn1c/constr_TYPE.h"
+#include "asn1/asn1c/constraints.h"
 
 typedef ASN__PRIMITIVE_TYPE_t INTEGER_t;
 

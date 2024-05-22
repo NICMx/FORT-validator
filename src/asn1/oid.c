@@ -1,9 +1,9 @@
 #include "asn1/oid.h"
 
 #include "alloc.h"
+#include "asn1/decode.h"
 #include "common.h"
 #include "log.h"
-#include "asn1/decode.h"
 
 void
 free_arcs(struct oid_arcs *arcs)

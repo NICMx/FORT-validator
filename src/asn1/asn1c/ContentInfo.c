@@ -7,9 +7,10 @@
 
 #include "asn1/asn1c/ContentInfo.h"
 
-#include <openssl/objects.h>
-#include "json_util.h"
+#include <openssl/obj_mac.h>
+
 #include "asn1/asn1c/SignedData.h"
+#include "json_util.h"
 
 json_t *
 ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)

@@ -1,6 +1,8 @@
 #ifndef SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 #define SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 
+#include <netdb.h>
+
 #include "types/uri.h"
 
 struct path_builder {

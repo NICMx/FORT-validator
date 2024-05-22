@@ -3,15 +3,19 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/OCTET_STRING.h"
 
 #include <assert.h>
 #include <errno.h>
 
 #include "alloc.h"
+#include "asn1/asn1c/BIT_STRING.h"
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/der_encoder.h"
+#include "asn1/asn1c/json_encoder.h"
+#include "asn1/asn1c/xer_encoder.h"
 #include "json_util.h"
-#include "asn1/asn1c/BIT_STRING.h"	/* for .bits_unused member */
 
 /*
  * OCTET STRING basic type description.
@@ -619,7 +623,7 @@ OCTET_STRING_encode_json_utf8(const struct asn_TYPE_descriptor_s *td,
 
 asn_enc_rval_t
 OCTET_STRING_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
-                        int ilevel, enum xer_encoder_flags_e flags,
+                        int ilevel, int flags,
                         asn_app_consume_bytes_f *cb, void *app_key) {
     const char * const h2c = "0123456789ABCDEF";
 	const OCTET_STRING_t *st = (const OCTET_STRING_t *)sptr;
@@ -731,7 +735,7 @@ static const struct OCTET_STRING__xer_escape_table_s {
 
 asn_enc_rval_t
 OCTET_STRING_encode_xer_utf8(const asn_TYPE_descriptor_t *td, const void *sptr,
-                             int ilevel, enum xer_encoder_flags_e flags,
+                             int ilevel, int flags,
                              asn_app_consume_bytes_f *cb, void *app_key) {
     const OCTET_STRING_t *st = (const OCTET_STRING_t *)sptr;
 	asn_enc_rval_t er;

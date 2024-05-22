@@ -1,8 +1,8 @@
 #ifndef SRC_HASH_H_
 #define SRC_HASH_H_
 
-#include "types/uri.h"
 #include "asn1/asn1c/BIT_STRING.h"
+#include "types/uri.h"
 
 int hash_validate_mft_file(struct rpki_uri *uri, BIT_STRING_t const *);
 int hash_validate_file(struct rpki_uri *, unsigned char const *, size_t);

@@ -8,12 +8,9 @@
 #ifndef	_ASRange_H_
 #define	_ASRange_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/ASId.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* ASRange */
 typedef struct ASRange {
@@ -30,4 +27,3 @@ extern asn_SEQUENCE_specifics_t asn_SPC_ASRange_specs_1;
 extern asn_TYPE_member_t asn_MBR_ASRange_1[2];
 
 #endif	/* _ASRange_H_ */
-#include "asn1/asn1c/asn_internal.h"

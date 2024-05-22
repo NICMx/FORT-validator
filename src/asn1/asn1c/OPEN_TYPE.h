@@ -5,7 +5,7 @@
 #ifndef ASN_OPEN_TYPE_H
 #define ASN_OPEN_TYPE_H
 
-#include "asn1/asn1c/asn_application.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 #define OPEN_TYPE_free CHOICE_free
 #define OPEN_TYPE_print CHOICE_print

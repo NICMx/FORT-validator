@@ -11,6 +11,9 @@
 #ifndef	_CONSTR_TYPE_H_
 #define	_CONSTR_TYPE_H_
 
+#include <jansson.h>
+
+#include "asn1/asn1c/asn_system.h"
 #include "asn1/asn1c/ber_tlv_length.h"
 #include "asn1/asn1c/ber_tlv_tag.h"
 
@@ -29,12 +32,6 @@ typedef struct asn_struct_ctx_s {
 	void *ptr;		/* Decoder-specific stuff (stack elements) */
 	ber_tlv_len_t left;	/* Number of bytes left, -1 for indefinite */
 } asn_struct_ctx_t;
-
-#include "asn1/asn1c/ber_decoder.h"	/* Basic Encoding Rules decoder */
-#include "asn1/asn1c/der_encoder.h"	/* Distinguished Encoding Rules encoder */
-#include "asn1/asn1c/xer_encoder.h"	/* Encoder into XER (XML, text) */
-#include "asn1/asn1c/json_encoder.h"	/* Encoder into JSON */
-#include "asn1/asn1c/constraints.h"	/* Subtype constraints support */
 
 /*
  * Free the structure according to its specification.
@@ -78,6 +75,16 @@ typedef void (asn_struct_free_f)(
     (asn_DEF).op->free_struct(&(asn_DEF), (ptr), ASFM_FREE_UNDERLYING)
 
 /*
+ * Generic type of an application-defined callback to return various
+ * types of data to the application.
+ * EXPECTED RETURN VALUES:
+ *  -1: Failed to consume bytes. Abort the mission.
+ * Non-negative return values indicate success, and ignored.
+ */
+typedef int(asn_app_consume_bytes_f)(const void *buffer, size_t size,
+                                     void *application_specific_key);
+
+/*
  * Print the structure according to its specification.
  */
 typedef int(asn_struct_print_f)(
@@ -97,6 +104,37 @@ typedef int (asn_struct_compare_f)(
 		const void *struct_A,
 		const void *struct_B);
 
+/* Decodes a BER byte stream into a structure. */
+typedef asn_dec_rval_t(ber_type_decoder_f)(
+    const struct asn_codec_ctx_s *opt_codec_ctx,
+    const struct asn_TYPE_descriptor_s *type_descriptor, void **struct_ptr,
+    const void *buf_ptr, size_t size, int tag_mode);
+
+/* Encodes a structure into a DER byte stream. */
+typedef asn_enc_rval_t(der_type_encoder_f)(
+    const struct asn_TYPE_descriptor_s *type_descriptor,
+    const void *struct_ptr, /* Structure to be encoded */
+    int tag_mode,           /* {-1,0,1}: IMPLICIT, no, EXPLICIT */
+    ber_tlv_tag_t tag, asn_app_consume_bytes_f *consume_bytes_cb, /* Callback */
+    void *app_key /* Arbitrary callback argument */
+);
+
+/* Encodes a structure into a JSON. */
+typedef json_t *(json_type_encoder_f)(
+    const struct asn_TYPE_descriptor_s *type_descriptor,
+    const void *struct_ptr /* Structure to be encoded */
+);
+
+/* Encodes a structure into an XML stream. */
+typedef asn_enc_rval_t(xer_type_encoder_f)(
+    const struct asn_TYPE_descriptor_s *type_descriptor,
+    const void *struct_ptr, /* Structure to be encoded */
+    int ilevel,             /* Level of indentation */
+    int xer_flags,          /* enum xer_encoder_flags_e */
+    asn_app_consume_bytes_f *consume_bytes_cb, /* Callback */
+    void *app_key                              /* Arbitrary callback argument */
+);
+
 /*
  * Return the outmost tag of the type.
  * If the type is untagged CHOICE, the dynamic operation is performed.
@@ -108,6 +146,29 @@ typedef ber_tlv_tag_t (asn_outmost_tag_f)(
 		const void *struct_ptr, int tag_mode, ber_tlv_tag_t tag);
 /* The instance of the above function type; used internally. */
 asn_outmost_tag_f asn_TYPE_outmost_tag;
+
+/*
+ * A callback of this type is called whenever constraint validation fails
+ * on some ASN.1 type. See "constraints.h" for more details on constraint
+ * validation.
+ * This callback specifies a descriptor of the ASN.1 type which failed
+ * the constraint check, as well as human readable message on what
+ * particular constraint has failed.
+ */
+typedef void (asn_app_constraint_failed_f)(void *application_specific_key,
+	const struct asn_TYPE_descriptor_s *type_descriptor_which_failed,
+	const void *structure_which_failed_ptr,
+	const char *error_message_format, ...) CC_PRINTFLIKE(4, 5);
+
+/*
+ * Generic type for constraint checking callback,
+ * associated with every type descriptor.
+ */
+typedef int(asn_constr_check_f)(
+    const struct asn_TYPE_descriptor_s *type_descriptor, const void *struct_ptr,
+    asn_app_constraint_failed_f *optional_callback, /* Log the error */
+    void *optional_app_key /* Opaque key passed to a callback */
+);
 
 /*
  * Fetch the desired type of the Open Type based on the

@@ -5,7 +5,7 @@
 #ifndef	ASN_CODECS_PRIM_H
 #define	ASN_CODECS_PRIM_H
 
-#include "asn1/asn1c/asn_application.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 typedef struct ASN__PRIMITIVE_TYPE_s {
     uint8_t *buf;   /* Buffer with consecutive primitive encoding bytes */

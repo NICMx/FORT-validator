@@ -2,6 +2,7 @@
 #define SRC_EXTENSION_H_
 
 #include <jansson.h>
+#include <openssl/asn1.h>
 #include <openssl/safestack.h>
 #include <openssl/x509.h>
 #include <stdbool.h>

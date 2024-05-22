@@ -8,12 +8,9 @@
 #ifndef	_Name_H_
 #define	_Name_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/RDNSequence.h"
 #include "asn1/asn1c/constr_CHOICE.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum Name_PR {
@@ -38,4 +35,3 @@ extern asn_CHOICE_specifics_t asn_SPC_Name_specs_1;
 extern asn_TYPE_member_t asn_MBR_Name_1[1];
 
 #endif	/* _Name_H_ */
-#include "asn1/asn1c/asn_internal.h"

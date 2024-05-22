@@ -1,10 +1,10 @@
 #include "object/ghostbusters.h"
 
-#include "log.h"
-#include "thread_var.h"
 #include "asn1/oid.h"
+#include "log.h"
 #include "object/signed_object.h"
 #include "object/vcard.h"
+#include "thread_var.h"
 
 static int
 handle_vcard(struct signed_object *sobj)

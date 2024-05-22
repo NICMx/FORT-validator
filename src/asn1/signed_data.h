@@ -3,9 +3,9 @@
 
 /* Some wrappers for asn1/asn1c/SignedData.h. */
 
-#include "resource.h"
 #include "asn1/asn1c/SignedData.h"
 #include "object/certificate.h"
+#include "resource.h"
 
 struct ee_cert {
 	/** CRL that might or might not revoke the EE certificate. */

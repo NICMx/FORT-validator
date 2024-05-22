@@ -3,12 +3,12 @@
 #include <curl/curl.h>
 
 #include "alloc.h"
+#include "cache/local_cache.h"
 #include "common.h"
 #include "config.h"
+#include "data_structure/uthash.h"
 #include "file.h"
 #include "log.h"
-#include "data_structure/uthash.h"
-#include "cache/local_cache.h"
 
 struct http_handler {
 	CURL *curl;

@@ -4,12 +4,17 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #include <assert.h>
-#include "json_util.h"
+
 #include "asn1/asn1c/OPEN_TYPE.h"
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/constraints.h"
+#include "asn1/asn1c/der_encoder.h"
+#include "asn1/asn1c/xer_encoder.h"
+#include "json_util.h"
 
 /*
  * Number of bytes left for this structure.
@@ -650,7 +655,7 @@ fail:	json_decref(parent);
 
 asn_enc_rval_t
 SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
-                    int ilevel, enum xer_encoder_flags_e flags,
+                    int ilevel, int flags,
                     asn_app_consume_bytes_f *cb, void *app_key) {
     asn_enc_rval_t er;
     int xcan = (flags & XER_F_CANONICAL);

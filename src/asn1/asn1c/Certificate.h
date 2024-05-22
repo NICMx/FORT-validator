@@ -1,8 +1,8 @@
 #ifndef SRC_ASN1_ASN1C_CERTIFICATE_H_
 #define SRC_ASN1_ASN1C_CERTIFICATE_H_
 
-#include <jansson.h>
 #include <openssl/bio.h>
+
 #include "asn1/asn1c/ANY.h"
 
 json_t *Certificate_any2json(ANY_t *);

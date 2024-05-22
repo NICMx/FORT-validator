@@ -1,11 +1,12 @@
 #include "slurm/slurm_loader.h"
 
 #include <errno.h>
+
 #include "alloc.h"
-#include "log.h"
-#include "config.h"
 #include "common.h"
+#include "config.h"
 #include "crypto/hash.h"
+#include "log.h"
 #include "slurm/slurm_parser.h"
 
 #define SLURM_FILE_EXTENSION	".slurm"

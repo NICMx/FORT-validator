@@ -1,12 +1,12 @@
 #include "object/roa.h"
 
-#include "config.h"
-#include "log.h"
-#include "thread_var.h"
+#include "asn1/asn1c/RouteOriginAttestation.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
-#include "asn1/asn1c/RouteOriginAttestation.h"
+#include "config.h"
+#include "log.h"
 #include "object/signed_object.h"
+#include "thread_var.h"
 
 static int
 decode_roa(struct signed_object *sobj, struct RouteOriginAttestation **result)

@@ -5,13 +5,7 @@
 #ifndef	_BER_TLV_LENGTH_H_
 #define	_BER_TLV_LENGTH_H_
 
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include "asn1/asn1c/asn_codecs.h"
 
 typedef ssize_t ber_tlv_len_t;
 

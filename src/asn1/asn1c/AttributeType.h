@@ -8,11 +8,8 @@
 #ifndef	_AttributeType_H_
 #define	_AttributeType_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* AttributeType */
 typedef OBJECT_IDENTIFIER_t	 AttributeType_t;
@@ -27,4 +24,3 @@ der_type_encoder_f AttributeType_encode_der;
 xer_type_encoder_f AttributeType_encode_xer;
 
 #endif	/* _AttributeType_H_ */
-#include "asn1/asn1c/asn_internal.h"

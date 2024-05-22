@@ -1,9 +1,10 @@
 #include "rtr/db/delta.h"
 
 #include <stdatomic.h>
+
 #include "alloc.h"
-#include "types/address.h"
 #include "data_structure/array_list.h"
+#include "types/address.h"
 
 struct delta_v4 {
 	uint32_t as;

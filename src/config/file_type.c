@@ -2,8 +2,8 @@
 
 #include <getopt.h>
 
-#include "log.h"
 #include "config/str.h"
+#include "log.h"
 
 #define VALUE_ROA	"roa"
 #define VALUE_MFT	"mft"

@@ -1,7 +1,7 @@
 #include "object/signed_object.h"
 
-#include "log.h"
 #include "asn1/content_info.h"
+#include "log.h"
 
 int
 signed_object_decode(struct signed_object *sobj, struct rpki_uri *uri)

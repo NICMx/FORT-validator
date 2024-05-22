@@ -3,11 +3,12 @@
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <syslog.h>
+
 #include "algorithm.h"
 #include "extension.h"
 #include "log.h"
-#include "thread_var.h"
 #include "object/name.h"
+#include "thread_var.h"
 
 static int
 __crl_load(struct rpki_uri *uri, X509_CRL **result)

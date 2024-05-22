@@ -5,9 +5,10 @@
 #ifndef	_UTCTime_H_
 #define	_UTCTime_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"
 #include <sys/stat.h>
 #include <time.h>
+
+#include "asn1/asn1c/OCTET_STRING.h"
 
 typedef OCTET_STRING_t UTCTime_t;  /* Implemented via OCTET STRING */
 

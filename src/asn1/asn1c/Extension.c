@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/Extension.h"
 
+#include "asn1/asn1c/asn_internal.h"
+
 static int asn_DFL_3_cmp_0(const void *sptr) {
 	const BOOLEAN_t *st = sptr;
 	

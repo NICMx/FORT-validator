@@ -3,16 +3,18 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 #include <assert.h>
 #include <errno.h>
+#include <openssl/asn1.h>
+#include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
-#include "json_util.h"
 #include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/OCTET_STRING.h"
+#include "asn1/asn1c/asn_internal.h"
+#include "json_util.h"
 
 /*
  * OBJECT IDENTIFIER basic type description.
@@ -174,7 +176,7 @@ OBJECT_IDENTIFIER__dump_body(const OBJECT_IDENTIFIER_t *st,
 
 asn_enc_rval_t
 OBJECT_IDENTIFIER_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
-                             int ilevel, enum xer_encoder_flags_e flags,
+                             int ilevel, int flags,
                              asn_app_consume_bytes_f *cb, void *app_key) {
     const OBJECT_IDENTIFIER_t *st = (const OBJECT_IDENTIFIER_t *)sptr;
 	asn_enc_rval_t er;

@@ -2,8 +2,8 @@
 
 #include "alloc.h"
 #include "log.h"
-#include "validation_handler.h"
 #include "object/certificate.h"
+#include "validation_handler.h"
 
 struct resource_params {
 	unsigned char const *ski;

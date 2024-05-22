@@ -2,10 +2,16 @@
  * Copyright (c) 2004-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ANY.h"
+
 #include <assert.h>
 #include <errno.h>
+
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/der_encoder.h"
+#include "asn1/asn1c/json_encoder.h"
+#include "asn1/asn1c/xer_encoder.h"
 
 asn_OCTET_STRING_specifics_t asn_SPC_ANY_specs = {
 	sizeof(ANY_t),
@@ -43,7 +49,7 @@ asn_TYPE_descriptor_t asn_DEF_ANY = {
 
 asn_enc_rval_t
 ANY_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
-               enum xer_encoder_flags_e flags, asn_app_consume_bytes_f *cb,
+               int flags, asn_app_consume_bytes_f *cb,
                void *app_key) {
     if(flags & XER_F_CANONICAL) {
 		/*

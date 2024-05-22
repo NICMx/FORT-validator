@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/Manifest.h"
 
+#include "asn1/asn1c/asn_internal.h"
+
 static int
 memb_manifestNumber_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
 			asn_app_constraint_failed_f *ctfailcb, void *app_key) {

@@ -8,16 +8,14 @@
 #ifndef	_Manifest_H_
 #define	_Manifest_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/INTEGER.h"
+#include "asn1/asn1c/FileAndHash.h"
 #include "asn1/asn1c/GeneralizedTime.h"
+#include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Forward declarations */
 struct FileAndHash;
@@ -43,8 +41,4 @@ typedef struct Manifest {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_Manifest;
 
-/* Referred external types */
-#include "asn1/asn1c/FileAndHash.h"
-
 #endif	/* _Manifest_H_ */
-#include "asn1/asn1c/asn_internal.h"

@@ -3,11 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+#include "asn1/asn1c/BIT_STRING.h"
+
 #include <assert.h>
 
 #include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/BIT_STRING.h"
-#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/xer_encoder.h"
 
 /*
  * BIT STRING basic type description.
@@ -78,7 +79,7 @@ static const char *_bit_pattern[16] = {
 
 asn_enc_rval_t
 BIT_STRING_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
-                      int ilevel, enum xer_encoder_flags_e flags,
+                      int ilevel, int flags,
                       asn_app_consume_bytes_f *cb, void *app_key) {
     asn_enc_rval_t er;
 	char scratch[128];

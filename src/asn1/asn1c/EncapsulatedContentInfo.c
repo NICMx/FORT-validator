@@ -7,10 +7,10 @@
 
 #include "asn1/asn1c/EncapsulatedContentInfo.h"
 
-#include "nid.h"
-#include "json_util.h"
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/asn1c/RouteOriginAttestation.h"
+#include "json_util.h"
+#include "nid.h"
 
 json_t *
 EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,

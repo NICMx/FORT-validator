@@ -3,8 +3,8 @@
 #include <ftw.h>
 
 #include "alloc.h"
-#include "log.h"
 #include "data_structure/uthash.h"
+#include "log.h"
 
 int
 file_open(char const *file_name, FILE **result, struct stat *stat)

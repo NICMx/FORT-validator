@@ -6,7 +6,7 @@
 #ifndef	ASN_IOC_H
 #define	ASN_IOC_H
 
-#include "asn1/asn1c/asn_system.h"		/* Platform-specific types */
+#include "asn1/asn1c/asn_system.h"
 
 struct asn_TYPE_descriptor_s;
 struct asn_ioc_cell_s;

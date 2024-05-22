@@ -8,11 +8,8 @@
 #ifndef	_ContentTypePKCS7_H_
 #define	_ContentTypePKCS7_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/OCTET_STRING.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* ContentTypePKCS7 */
 typedef OCTET_STRING_t	 ContentTypePKCS7_t;
@@ -27,4 +24,3 @@ der_type_encoder_f ContentTypePKCS7_encode_der;
 xer_type_encoder_f ContentTypePKCS7_encode_xer;
 
 #endif	/* _ContentTypePKCS7_H_ */
-#include "asn1/asn1c/asn_internal.h"

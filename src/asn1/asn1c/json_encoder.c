@@ -1,6 +1,7 @@
 #include "asn1/asn1c/json_encoder.h"
 
 #include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
 
 json_t *
 json_encode(const asn_TYPE_descriptor_t *td, const void *sptr)
