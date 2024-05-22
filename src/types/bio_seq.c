@@ -11,21 +11,22 @@ struct bioseq_priv {
 };
 
 static int
-bioseq_read_ex(BIO *bio, char *data, size_t len, size_t *consumed)
+bioseq_read(BIO *bio, char *data, int len)
 {
 	struct bioseq_priv *priv = BIO_get_data(bio);
 	int res;
 
 	if (priv->prefix != NULL) {
-		res = BIO_read_ex(priv->prefix, data, len, consumed);
-		if (res == 1 && BIO_eof(priv->prefix)) {
+		res = BIO_read(priv->prefix, data, len);
+		if (BIO_eof(priv->prefix) || res <= 0) {
 			BIO_free_all(priv->prefix);
 			priv->prefix = NULL;
+			return res;
 		}
 		return res;
 	}
 
-	return BIO_read_ex(priv->suffix, data, len, consumed);
+	return BIO_read(priv->suffix, data, len);
 }
 
 static int
@@ -60,7 +61,7 @@ bioseq_setup(void)
 	if (method == NULL)
 		return op_crypto_err("BIO_meth_new() returned NULL.");
 
-	if (!BIO_meth_set_read_ex(method, bioseq_read_ex) ||
+	if (!BIO_meth_set_read(method, bioseq_read) ||
 	    !BIO_meth_set_destroy(method, bioseq_destroy)) {
 		BIO_meth_free(method);
 		method = NULL;

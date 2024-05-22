@@ -136,15 +136,16 @@ static int
 guess_file_type(BIO **bio, unsigned char *hdrbuf)
 {
 	unsigned char *ptr;
-	size_t consumed;
+	int res;
 
 	if (config_get_file_type() != FT_UNK)
 		return config_get_file_type();
 
-	if (!BIO_read_ex(*bio, hdrbuf, HDRSIZE, &consumed))
+	res = BIO_read(*bio, hdrbuf, HDRSIZE);
+	if (res <= 0)
 		return op_crypto_err("Cannot guess file type; IO error.");
 
-	*bio = BIO_new_seq(BIO_new_mem_buf(hdrbuf, consumed), *bio);
+	*bio = BIO_new_seq(BIO_new_mem_buf(hdrbuf, res), *bio);
 	if ((*bio) == NULL)
 		return op_crypto_err("BIO_new_seq() returned NULL.");
 
@@ -197,20 +198,21 @@ bio2ci(BIO *bio)
 #define BUFFER_SIZE 4096
 	struct ContentInfo *ci = NULL;
 	unsigned char buffer[BUFFER_SIZE];
-	size_t consumed;
-	asn_dec_rval_t res;
+	int res1;
+	asn_dec_rval_t res2;
 
 	do {
-		if (!BIO_read_ex(bio, buffer, BUFFER_SIZE, &consumed)) {
+		res1 = BIO_read(bio, buffer, BUFFER_SIZE);
+		if (res1 <= 0) {
 			op_crypto_err("IO error.");
 			goto fail;
 		}
 
-		res = ber_decode(&asn_DEF_ContentInfo, (void **)&ci,
-				 buffer, consumed);
-		pr_op_debug("Consumed: %zu", res.consumed);
+		res2 = ber_decode(&asn_DEF_ContentInfo, (void **)&ci,
+				  buffer, res1);
+		pr_op_debug("Consumed: %zu", res2.consumed);
 
-		switch (res.code) {
+		switch (res2.code) {
 		case RC_OK:
 			return ci;
 
