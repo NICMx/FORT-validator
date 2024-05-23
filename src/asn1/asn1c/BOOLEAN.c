@@ -24,7 +24,7 @@ asn_TYPE_operation_t asn_OP_BOOLEAN = {
 	BOOLEAN_encode_der,
 	BOOLEAN_encode_json,
 	BOOLEAN_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_BOOLEAN = {
 	"BOOLEAN",
@@ -34,9 +34,9 @@ asn_TYPE_descriptor_t asn_DEF_BOOLEAN = {
 	sizeof(asn_DEF_BOOLEAN_tags) / sizeof(asn_DEF_BOOLEAN_tags[0]),
 	asn_DEF_BOOLEAN_tags,	/* Same as above */
 	sizeof(asn_DEF_BOOLEAN_tags) / sizeof(asn_DEF_BOOLEAN_tags[0]),
-	{ 0, 0, asn_generic_no_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, asn_generic_no_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 /*
@@ -66,8 +66,8 @@ BOOLEAN_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 	/*
 	 * Check tags.
 	 */
-	rval = ber_check_tags(opt_codec_ctx, td, 0, buf_ptr, size,
-		tag_mode, 0, &length, 0);
+	rval = ber_check_tags(opt_codec_ctx, td, NULL, buf_ptr, size,
+		tag_mode, 0, &length, NULL);
 	if(rval.code != RC_OK)
 		return rval;
 
@@ -147,7 +147,7 @@ asn_enc_rval_t
 BOOLEAN_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
 	int ilevel, int flags, asn_app_consume_bytes_f *cb, void *app_key) {
 	const BOOLEAN_t *st = (const BOOLEAN_t *)sptr;
-	asn_enc_rval_t er = {0, 0, 0};
+	asn_enc_rval_t er = {0, NULL, NULL};
 
 	(void)ilevel;
 	(void)flags;

@@ -19,7 +19,7 @@ asn_TYPE_operation_t asn_OP_IA5String = {
 	OCTET_STRING_encode_der,
 	OCTET_STRING_encode_json_utf8,
 	OCTET_STRING_encode_xer_utf8,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_IA5String = {
 	"IA5String",
@@ -31,9 +31,9 @@ asn_TYPE_descriptor_t asn_DEF_IA5String = {
 	asn_DEF_IA5String_tags,
 	sizeof(asn_DEF_IA5String_tags)
 	  / sizeof(asn_DEF_IA5String_tags[0]),
-	{ 0, NULL, IA5String_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, IA5String_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 int

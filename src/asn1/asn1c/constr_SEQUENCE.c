@@ -143,9 +143,9 @@ SEQUENCE_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 	/*
 	 * Create the target structure if it is not present already.
 	 */
-	if(st == 0) {
+	if(st == NULL) {
 		st = *struct_ptr = CALLOC(1, specs->struct_size);
-		if(st == 0) {
+		if(st == NULL) {
 			RETURN(RC_FAIL);
 		}
 	}
@@ -167,7 +167,7 @@ SEQUENCE_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 		 */
 
 		rval = ber_check_tags(opt_codec_ctx, td, ctx, ptr, size,
-			tag_mode, 1, &ctx->left, 0);
+			tag_mode, 1, &ctx->left, NULL);
 		if(rval.code != RC_OK) {
 			ASN_DEBUG("%s tagging check failed: %d",
 				td->name, rval.code);
@@ -319,7 +319,7 @@ SEQUENCE_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 				specs->tag2el, specs->tag2el_count,
 				sizeof(specs->tag2el[0]), _t2e_cmp);
 			if(t2m) {
-				const asn_TYPE_tag2member_t *best = 0;
+				const asn_TYPE_tag2member_t *best = NULL;
 				const asn_TYPE_tag2member_t *t2m_f, *t2m_l;
 				size_t edx_max = edx + elements[edx].optional;
 				/*
@@ -558,7 +558,7 @@ SEQUENCE_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 
 		erval = elm->type->op->der_encoder(elm->type, *memb_ptr2,
 			elm->tag_mode, elm->tag,
-			0, 0);
+			NULL, NULL);
 		if(erval.encoded == -1)
 			return erval;
 		computed_size += erval.encoded;
@@ -659,8 +659,8 @@ SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
                     asn_app_consume_bytes_f *cb, void *app_key) {
     asn_enc_rval_t er;
     int xcan = (flags & XER_F_CANONICAL);
-    asn_TYPE_descriptor_t *tmp_def_val_td = 0;
-    void *tmp_def_val = 0;
+    asn_TYPE_descriptor_t *tmp_def_val_td = NULL;
+    void *tmp_def_val = NULL;
 	size_t edx;
 
     if(!sptr) ASN__ENCODE_FAILED;
@@ -676,7 +676,7 @@ SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
 
         memb_ptr = get_member(sptr, elm);
             if(!memb_ptr) {
-                assert(tmp_def_val == 0);
+                assert(tmp_def_val == NULL);
                 if(elm->default_value_set) {
                     if(elm->default_value_set(&tmp_def_val)) {
                         ASN__ENCODE_FAILED;
@@ -700,7 +700,7 @@ SEQUENCE_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
                                            flags, cb, app_key);
         if(tmp_def_val) {
             ASN_STRUCT_FREE(*tmp_def_val_td, tmp_def_val);
-            tmp_def_val = 0;
+            tmp_def_val = NULL;
         }
         if(tmper.encoded == -1) return tmper;
         er.encoded += tmper.encoded;
@@ -899,5 +899,5 @@ asn_TYPE_operation_t asn_OP_SEQUENCE = {
 	SEQUENCE_encode_der,
 	SEQUENCE_encode_json,
 	SEQUENCE_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };

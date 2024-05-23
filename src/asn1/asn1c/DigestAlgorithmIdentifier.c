@@ -24,7 +24,7 @@ asn_TYPE_descriptor_t asn_DEF_DigestAlgorithmIdentifier = {
 	asn_DEF_DigestAlgorithmIdentifier_tags_1,	/* Same as above */
 	sizeof(asn_DEF_DigestAlgorithmIdentifier_tags_1)
 		/sizeof(asn_DEF_DigestAlgorithmIdentifier_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_AlgorithmIdentifier_1,
 	2,	/* Elements count */
 	&asn_SPC_AlgorithmIdentifier_specs_1	/* Additional specs */

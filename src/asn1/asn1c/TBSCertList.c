@@ -12,27 +12,27 @@ static asn_TYPE_member_t asn_MBR_Member_8[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_CertificateSerialNumber,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"userCertificate"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct TBSCertList__revokedCertificates__Member, revocationDate),
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_Time,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"revocationDate"
 		},
 	{ ATF_POINTER, 1, offsetof(struct TBSCertList__revokedCertificates__Member, crlEntryExtensions),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_Extensions,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"crlEntryExtensions"
 		},
 };
@@ -63,7 +63,7 @@ asn_TYPE_descriptor_t asn_DEF_Member_8 = {
 	asn_DEF_Member_tags_8,	/* Same as above */
 	sizeof(asn_DEF_Member_tags_8)
 		/sizeof(asn_DEF_Member_tags_8[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_Member_8,
 	3,	/* Elements count */
 	&asn_SPC_Member_specs_8	/* Additional specs */
@@ -74,9 +74,9 @@ static asn_TYPE_member_t asn_MBR_revokedCertificates_7[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_Member_8,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -99,7 +99,7 @@ asn_TYPE_descriptor_t asn_DEF_revokedCertificates_7 = {
 	asn_DEF_revokedCertificates_tags_7,	/* Same as above */
 	sizeof(asn_DEF_revokedCertificates_tags_7)
 		/sizeof(asn_DEF_revokedCertificates_tags_7[0]), /* 1 */
-	{ 0, 0, SEQUENCE_OF_constraint },
+	{ NULL, NULL, SEQUENCE_OF_constraint },
 	asn_MBR_revokedCertificates_7,
 	1,	/* Single element */
 	&asn_SPC_revokedCertificates_specs_7	/* Additional specs */
@@ -110,63 +110,63 @@ asn_TYPE_member_t asn_MBR_TBSCertList_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_Version,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"version"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct TBSCertList, signature),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_AlgorithmIdentifier,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"signature"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct TBSCertList, issuer),
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_Name,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"issuer"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct TBSCertList, thisUpdate),
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_Time,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"thisUpdate"
 		},
 	{ ATF_POINTER, 3, offsetof(struct TBSCertList, nextUpdate),
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_Time,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"nextUpdate"
 		},
 	{ ATF_POINTER, 2, offsetof(struct TBSCertList, revokedCertificates),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_revokedCertificates_7,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"revokedCertificates"
 		},
 	{ ATF_POINTER, 1, offsetof(struct TBSCertList, crlExtensions),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_Extensions,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"crlExtensions"
 		},
 };
@@ -201,7 +201,7 @@ asn_TYPE_descriptor_t asn_DEF_TBSCertList = {
 	asn_DEF_TBSCertList_tags_1,	/* Same as above */
 	sizeof(asn_DEF_TBSCertList_tags_1)
 		/sizeof(asn_DEF_TBSCertList_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_TBSCertList_1,
 	7,	/* Elements count */
 	&asn_SPC_TBSCertList_specs_1	/* Additional specs */

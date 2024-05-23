@@ -24,7 +24,7 @@ asn_TYPE_operation_t asn_OP_NULL = {
 	NULL_encode_der,	/* Special handling of DER encoding */
 	NULL_encode_json,
 	NULL_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_NULL = {
 	"NULL",
@@ -34,9 +34,9 @@ asn_TYPE_descriptor_t asn_DEF_NULL = {
 	sizeof(asn_DEF_NULL_tags) / sizeof(asn_DEF_NULL_tags[0]),
 	asn_DEF_NULL_tags,	/* Same as above */
 	sizeof(asn_DEF_NULL_tags) / sizeof(asn_DEF_NULL_tags[0]),
-	{ 0, 0, asn_generic_no_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, asn_generic_no_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 void
@@ -81,8 +81,8 @@ NULL_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
     /*
      * Check tags.
      */
-    rval = ber_check_tags(opt_codec_ctx, td, 0, buf_ptr, size, tag_mode, 0,
-                          &length, 0);
+    rval = ber_check_tags(opt_codec_ctx, td, NULL, buf_ptr, size, tag_mode, 0,
+                          &length, NULL);
     if(rval.code != RC_OK) {
         return rval;
     }

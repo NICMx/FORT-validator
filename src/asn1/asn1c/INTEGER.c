@@ -26,7 +26,7 @@ asn_TYPE_operation_t asn_OP_INTEGER = {
 	INTEGER_encode_der,
 	INTEGER_encode_json,
 	INTEGER_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_INTEGER = {
 	"INTEGER",
@@ -36,9 +36,9 @@ asn_TYPE_descriptor_t asn_DEF_INTEGER = {
 	sizeof(asn_DEF_INTEGER_tags) / sizeof(asn_DEF_INTEGER_tags[0]),
 	asn_DEF_INTEGER_tags,	/* Same as above */
 	sizeof(asn_DEF_INTEGER_tags) / sizeof(asn_DEF_INTEGER_tags[0]),
-	{ 0, 0, asn_generic_no_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, asn_generic_no_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 /*
@@ -130,7 +130,7 @@ INTEGER__dump(const asn_TYPE_descriptor_t *td, const INTEGER_t *st, asn_app_cons
 	if(ret == 0) {
 		const asn_INTEGER_enum_map_t *el;
 		el = (value >= 0 || !specs || !specs->field_unsigned)
-			? INTEGER_map_value2enum(specs, value) : 0;
+			? INTEGER_map_value2enum(specs, value) : NULL;
 		if(el) {
 			if(plainOrXER == 0)
 				return asn__format_to_callback(cb, app_key,
@@ -215,7 +215,7 @@ INTEGER__compar_value2enum(const void *kp, const void *am) {
 const asn_INTEGER_enum_map_t *
 INTEGER_map_value2enum(const asn_INTEGER_specifics_t *specs, long value) {
 	int count = specs ? specs->map_count : 0;
-	if(!count) return 0;
+	if(!count) return NULL;
 	return (asn_INTEGER_enum_map_t *)bsearch(&value, specs->value2enum,
 		count, sizeof(specs->value2enum[0]),
 		INTEGER__compar_value2enum);

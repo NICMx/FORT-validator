@@ -84,9 +84,9 @@ static asn_TYPE_member_t asn_MBR_fileList_7[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_FileAndHash,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -109,7 +109,7 @@ asn_TYPE_descriptor_t asn_DEF_fileList_7 = {
 	asn_DEF_fileList_tags_7,	/* Same as above */
 	sizeof(asn_DEF_fileList_tags_7)
 		/sizeof(asn_DEF_fileList_tags_7[0]), /* 1 */
-	{ NULL, 0, SEQUENCE_OF_constraint },
+	{ NULL, NULL, SEQUENCE_OF_constraint },
 	asn_MBR_fileList_7,
 	1,	/* Single element */
 	&asn_SPC_fileList_specs_7	/* Additional specs */
@@ -120,8 +120,8 @@ static asn_TYPE_member_t asn_MBR_Manifest_1[] = {
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_INTEGER,
-		0,
-		{ 0, 0, 0 },
+		NULL,
+		{ NULL, NULL, NULL },
 		&asn_DFL_2_cmp_0,	/* Compare DEFAULT 0 */
 		&asn_DFL_2_set_0,	/* Set DEFAULT 0 */
 		"version"
@@ -130,45 +130,45 @@ static asn_TYPE_member_t asn_MBR_Manifest_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_INTEGER,
-		0,
-		{ NULL, 0,  memb_manifestNumber_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_manifestNumber_constraint_1 },
+		NULL, NULL, /* No default value */
 		"manifestNumber"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, thisUpdate),
 		(ASN_TAG_CLASS_UNIVERSAL | (24 << 2)),
 		0,
 		&asn_DEF_GeneralizedTime,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"thisUpdate"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, nextUpdate),
 		(ASN_TAG_CLASS_UNIVERSAL | (24 << 2)),
 		0,
 		&asn_DEF_GeneralizedTime,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"nextUpdate"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, fileHashAlg),
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_OBJECT_IDENTIFIER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"fileHashAlg"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, fileList),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_fileList_7,
-		0,
-		{ NULL, 0,  memb_fileList_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_fileList_constraint_1 },
+		NULL, NULL, /* No default value */
 		"fileList"
 		},
 };
@@ -200,7 +200,7 @@ asn_TYPE_descriptor_t asn_DEF_Manifest = {
 	asn_DEF_Manifest_tags_1,	/* Same as above */
 	sizeof(asn_DEF_Manifest_tags_1)
 		/sizeof(asn_DEF_Manifest_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_Manifest_1,
 	6,	/* Elements count */
 	&asn_SPC_Manifest_specs_1	/* Additional specs */

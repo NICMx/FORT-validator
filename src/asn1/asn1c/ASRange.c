@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_ASRange_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_ASId,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"min"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct ASRange, max),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_ASId,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"max"
 		},
 };
@@ -51,7 +51,7 @@ asn_TYPE_descriptor_t asn_DEF_ASRange = {
 	asn_DEF_ASRange_tags_1,	/* Same as above */
 	sizeof(asn_DEF_ASRange_tags_1)
 		/sizeof(asn_DEF_ASRange_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_ASRange_1,
 	2,	/* Elements count */
 	&asn_SPC_ASRange_specs_1	/* Additional specs */

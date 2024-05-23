@@ -12,27 +12,27 @@ asn_TYPE_member_t asn_MBR_CertificateList_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_TBSCertList,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"tbsCertList"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct CertificateList, signatureAlgorithm),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_AlgorithmIdentifier,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"signatureAlgorithm"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct CertificateList, signature),
 		(ASN_TAG_CLASS_UNIVERSAL | (3 << 2)),
 		0,
 		&asn_DEF_BIT_STRING,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"signature"
 		},
 };
@@ -61,7 +61,7 @@ asn_TYPE_descriptor_t asn_DEF_CertificateList = {
 	asn_DEF_CertificateList_tags_1,	/* Same as above */
 	sizeof(asn_DEF_CertificateList_tags_1)
 		/sizeof(asn_DEF_CertificateList_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_CertificateList_1,
 	3,	/* Elements count */
 	&asn_SPC_CertificateList_specs_1	/* Additional specs */

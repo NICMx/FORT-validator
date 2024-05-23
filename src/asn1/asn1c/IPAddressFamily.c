@@ -38,18 +38,18 @@ asn_TYPE_member_t asn_MBR_IPAddressFamily_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (4 << 2)),
 		0,
 		&asn_DEF_OCTET_STRING,
-		0,
-		{ NULL, 0,  memb_addressFamily_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_addressFamily_constraint_1 },
+		NULL, NULL, /* No default value */
 		"addressFamily"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct IPAddressFamily, ipAddressChoice),
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_IPAddressChoice,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"ipAddressChoice"
 		},
 };
@@ -78,7 +78,7 @@ asn_TYPE_descriptor_t asn_DEF_IPAddressFamily = {
 	asn_DEF_IPAddressFamily_tags_1,	/* Same as above */
 	sizeof(asn_DEF_IPAddressFamily_tags_1)
 		/sizeof(asn_DEF_IPAddressFamily_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_IPAddressFamily_1,
 	2,	/* Elements count */
 	&asn_SPC_IPAddressFamily_specs_1	/* Additional specs */

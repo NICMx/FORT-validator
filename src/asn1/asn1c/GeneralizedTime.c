@@ -63,7 +63,7 @@ asn_TYPE_operation_t asn_OP_GeneralizedTime = {
 	GeneralizedTime_encode_der,
 	GeneralizedTime_encode_json,
 	GeneralizedTime_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_GeneralizedTime = {
 	"GeneralizedTime",
@@ -75,9 +75,9 @@ asn_TYPE_descriptor_t asn_DEF_GeneralizedTime = {
 	asn_DEF_GeneralizedTime_tags,
 	sizeof(asn_DEF_GeneralizedTime_tags)
 	  / sizeof(asn_DEF_GeneralizedTime_tags[0]),
-	{ 0, NULL, GeneralizedTime_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, GeneralizedTime_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 #endif	/* ASN___INTERNAL_TEST_MODE */
@@ -129,7 +129,7 @@ GeneralizedTime_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 		ASN__ENCODE_FAILED;
     }
 
-    st = asn_time2GT_frac(0, &tm, fv, fd); /* Save time */
+    st = asn_time2GT_frac(NULL, &tm, fv, fd); /* Save time */
     if(!st) ASN__ENCODE_FAILED;               /* Memory allocation failure. */
 
     erval = OCTET_STRING_encode_der(td, st, tag_mode, tag, cb, app_key);
@@ -170,7 +170,7 @@ GeneralizedTime_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
 					&fv, &fd, &tm) != 0)
 			ASN__ENCODE_FAILED;
 
-		gt = asn_time2GT_frac(0, &tm, fv, fd);
+		gt = asn_time2GT_frac(NULL, &tm, fv, fd);
 		if(!gt) ASN__ENCODE_FAILED;
 	
 		rv = OCTET_STRING_encode_xer_utf8(td, sptr, ilevel, flags,
@@ -220,7 +220,7 @@ asn_tm2str(struct tm *tm, char *str)
 
 int
 asn_GT2time(const GeneralizedTime_t *st, struct tm *ret_tm) {
-	return asn_GT2time_frac(st, 0, 0, ret_tm);
+	return asn_GT2time_frac(st, NULL, NULL, ret_tm);
 }
 
 time_t
@@ -231,7 +231,7 @@ asn_GT2time_prec(const GeneralizedTime_t *st, int *frac_value, int frac_digits, 
 	if(frac_value)
 		tloc = asn_GT2time_frac(st, &fv, &fd, ret_tm);
 	else
-		return asn_GT2time_frac(st, 0, 0, ret_tm);
+		return asn_GT2time_frac(st, NULL, NULL, ret_tm);
 	if(fd == 0 || frac_digits <= 0) {
 		*frac_value = 0;
 	} else {
@@ -438,12 +438,12 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *tm, int frac_value,
 	/* Check arguments */
 	if(!tm) {
 		errno = EINVAL;
-		return 0;
+		return NULL;
 	}
 
 	/* Pre-allocate a buffer of sufficient yet small length */
 	buf = (char *)MALLOC(buf_size);
-	if(!buf) return 0;
+	if(!buf) return NULL;
 
 	size = snprintf(buf, buf_size, "%04d%02d%02d%02d%02d%02d",
 		tm->tm_year + 1900,
@@ -457,7 +457,7 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *tm, int frac_value,
 		/* Could be assert(size == 14); */
 		FREEMEM(buf);
 		errno = EINVAL;
-		return 0;
+		return NULL;
 	}
 
 	p = buf + size;
@@ -481,7 +481,7 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *tm, int frac_value,
 
 		do {
 			int digit = frac_value / fbase;
-			if(digit > 9) { z = 0; break; }
+			if(digit > 9) { z = NULL; break; }
 			*z++ = digit + 0x30;
 			frac_value %= fbase;
 			fbase /= 10;
@@ -502,7 +502,7 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *tm, int frac_value,
 			FREEMEM(opt_gt->buf);
 	} else {
 		opt_gt = (GeneralizedTime_t *)CALLOC(1, sizeof *opt_gt);
-		if(!opt_gt) { FREEMEM(buf); return 0; }
+		if(!opt_gt) { FREEMEM(buf); return NULL; }
 	}
 
 	opt_gt->buf = (unsigned char *)buf;
@@ -530,10 +530,10 @@ GeneralizedTime_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
         time_t at, bt;
 
         errno = EPERM;
-        at = asn_GT2time_frac(a, &afrac_value, &afrac_digits, 0);
+        at = asn_GT2time_frac(a, &afrac_value, &afrac_digits, NULL);
         aerr = errno;
         errno = EPERM;
-        bt = asn_GT2time_frac(b, &bfrac_value, &bfrac_digits, 0);
+        bt = asn_GT2time_frac(b, &bfrac_value, &bfrac_digits, NULL);
         berr = errno;
 
         if(at == -1 && aerr != EPERM) {

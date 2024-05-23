@@ -100,9 +100,9 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 	/*
 	 * Create the target structure if it is not present already.
 	 */
-	if(st == 0) {
+	if(st == NULL) {
 		st = *struct_ptr = CALLOC(1, specs->struct_size);
-		if(st == 0) {
+		if(st == NULL) {
 			RETURN(RC_FAIL);
 		}
 	}
@@ -124,7 +124,7 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 		 */
 
 		rval = ber_check_tags(opt_codec_ctx, td, ctx, ptr, size,
-			tag_mode, 1, &ctx->left, 0);
+			tag_mode, 1, &ctx->left, NULL);
 		if(rval.code != RC_OK) {
 			ASN_DEBUG("%s tagging check failed: %d",
 				td->name, rval.code);
@@ -227,7 +227,7 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 				if(ASN_SET_ADD(list, ctx->ptr) != 0)
 					RETURN(RC_FAIL);
 				else
-					ctx->ptr = 0;
+					ctx->ptr = NULL;
 			}
 			break;
 		case RC_WMORE: /* More data expected */
@@ -238,7 +238,7 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 			/* Fall through */
 		case RC_FAIL: /* Fatal error */
 			ASN_STRUCT_FREE(*elm->type, ctx->ptr);
-			ctx->ptr = 0;
+			ctx->ptr = NULL;
 			RETURN(RC_FAIL);
 		} /* switch(rval) */
 		
@@ -438,7 +438,7 @@ SET_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
         if(!memb_ptr) ASN__ENCODE_FAILED;
 
         erval =
-            elm->type->op->der_encoder(elm->type, memb_ptr, 0, elm->tag, 0, 0);
+            elm->type->op->der_encoder(elm->type, memb_ptr, 0, elm->tag, NULL, NULL);
         if(erval.encoded == -1) return erval;
         computed_size += erval.encoded;
 	}
@@ -572,10 +572,10 @@ SET_OF_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 	const asn_TYPE_member_t *elm = td->elements;
     const asn_anonymous_set_ *list = _A_CSET_FROM_VOID(sptr);
     const char *mname = specs->as_XMLValueList
-		? 0 : ((*elm->name) ? elm->name : elm->type->xml_tag);
+		? NULL : ((*elm->name) ? elm->name : elm->type->xml_tag);
 	size_t mlen = mname ? strlen(mname) : 0;
 	int xcan = (flags & XER_F_CANONICAL);
-	xer_tmp_enc_t *encs = 0;
+	xer_tmp_enc_t *encs = NULL;
 	size_t encs_count = 0;
 	void *original_app_key = app_key;
 	asn_app_consume_bytes_f *original_cb = cb;
@@ -642,7 +642,7 @@ SET_OF_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		for(; enc < end; enc++) {
 			ASN__CALLBACK(enc->buffer, enc->offset);
 			FREEMEM(enc->buffer);
-			enc->buffer = 0;
+			enc->buffer = NULL;
 			control_size += enc->offset;
 		}
 		assert(control_size == er.encoded);
@@ -721,7 +721,7 @@ SET_OF_free(const asn_TYPE_descriptor_t *td, void *ptr,
 		ctx = (asn_struct_ctx_t *)((char *)ptr + specs->ctx_offset);
 		if(ctx->ptr) {
 			ASN_STRUCT_FREE(*elm->type, ctx->ptr);
-			ctx->ptr = 0;
+			ctx->ptr = NULL;
 		}
 
         switch(method) {
@@ -860,5 +860,5 @@ asn_TYPE_operation_t asn_OP_SET_OF = {
 	SET_OF_encode_der,
 	SET_OF_encode_json,
 	SET_OF_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };

@@ -12,9 +12,9 @@ static asn_TYPE_member_t asn_MBR_asIdsOrRanges_3[] = {
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_ASIdOrRange,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -37,7 +37,7 @@ asn_TYPE_descriptor_t asn_DEF_asIdsOrRanges_3 = {
 	asn_DEF_asIdsOrRanges_tags_3,	/* Same as above */
 	sizeof(asn_DEF_asIdsOrRanges_tags_3)
 		/sizeof(asn_DEF_asIdsOrRanges_tags_3[0]), /* 1 */
-	{ 0, 0, SEQUENCE_OF_constraint },
+	{ NULL, NULL, SEQUENCE_OF_constraint },
 	asn_MBR_asIdsOrRanges_3,
 	1,	/* Single element */
 	&asn_SPC_asIdsOrRanges_specs_3	/* Additional specs */
@@ -48,18 +48,18 @@ asn_TYPE_member_t asn_MBR_ASIdentifierChoice_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (5 << 2)),
 		0,
 		&asn_DEF_NULL,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"inherit"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct ASIdentifierChoice, choice.asIdsOrRanges),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_asIdsOrRanges_3,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"asIdsOrRanges"
 		},
 };
@@ -80,11 +80,11 @@ asn_TYPE_descriptor_t asn_DEF_ASIdentifierChoice = {
 	"ASIdentifierChoice",
 	"ASIdentifierChoice",
 	&asn_OP_CHOICE,
-	0,	/* No effective tags (pointer) */
+	NULL,	/* No effective tags (pointer) */
 	0,	/* No effective tags (count) */
-	0,	/* No tags (pointer) */
+	NULL,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ NULL, 0, CHOICE_constraint },
+	{ NULL, NULL, CHOICE_constraint },
 	asn_MBR_ASIdentifierChoice_1,
 	2,	/* Elements count */
 	&asn_SPC_ASIdentifierChoice_specs_1	/* Additional specs */

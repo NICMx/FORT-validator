@@ -36,8 +36,8 @@ ber_decode_primitive(const asn_codec_ctx_t *opt_codec_ctx,
 	/*
 	 * Check tags and extract value length.
 	 */
-	rval = ber_check_tags(opt_codec_ctx, td, 0, buf_ptr, size,
-			tag_mode, 0, &length, 0);
+	rval = ber_check_tags(opt_codec_ctx, td, NULL, buf_ptr, size,
+			tag_mode, 0, &length, NULL);
 	if(rval.code != RC_OK)
 		return rval;
 

@@ -14,7 +14,7 @@
 #include "asn1/asn1c/SigningTime.h"
 #include "json_util.h"
 
-json_t *
+static json_t *
 CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 {
 	struct CMSAttribute const *cattr = sptr;
@@ -63,7 +63,7 @@ fail:	json_decref(root);
 	return NULL;
 }
 
-asn_TYPE_operation_t asn_OP_CMSAttribute = {
+static asn_TYPE_operation_t asn_OP_CMSAttribute = {
 	SEQUENCE_free,
 	SEQUENCE_print,
 	SEQUENCE_compare,
@@ -71,7 +71,7 @@ asn_TYPE_operation_t asn_OP_CMSAttribute = {
 	SEQUENCE_encode_der,
 	CMSAttribute_encode_json,
 	SEQUENCE_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 
 static asn_TYPE_member_t asn_MBR_attrValues_3[] = {
@@ -79,9 +79,9 @@ static asn_TYPE_member_t asn_MBR_attrValues_3[] = {
 		-1 /* Ambiguous tag (ANY?) */,
 		0,
 		&asn_DEF_CMSAttributeValue,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -104,7 +104,7 @@ asn_TYPE_descriptor_t asn_DEF_attrValues_3 = {
 	asn_DEF_attrValues_tags_3,	/* Same as above */
 	sizeof(asn_DEF_attrValues_tags_3)
 		/sizeof(asn_DEF_attrValues_tags_3[0]), /* 1 */
-	{ 0, 0, SET_OF_constraint },
+	{ NULL, NULL, SET_OF_constraint },
 	asn_MBR_attrValues_3,
 	1,	/* Single element */
 	&asn_SPC_attrValues_specs_3	/* Additional specs */
@@ -115,18 +115,18 @@ asn_TYPE_member_t asn_MBR_CMSAttribute_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_OBJECT_IDENTIFIER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"attrType"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct CMSAttribute, attrValues),
 		(ASN_TAG_CLASS_UNIVERSAL | (17 << 2)),
 		0,
 		&asn_DEF_attrValues_3,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"attrValues"
 		},
 };
@@ -154,7 +154,7 @@ asn_TYPE_descriptor_t asn_DEF_CMSAttribute = {
 	asn_DEF_CMSAttribute_tags_1,	/* Same as above */
 	sizeof(asn_DEF_CMSAttribute_tags_1)
 		/sizeof(asn_DEF_CMSAttribute_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_CMSAttribute_1,
 	2,	/* Elements count */
 	&asn_SPC_CMSAttribute_specs_1	/* Additional specs */

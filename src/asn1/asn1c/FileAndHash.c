@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_FileAndHash_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (22 << 2)),
 		0,
 		&asn_DEF_IA5String,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"file"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct FileAndHash, hash),
 		(ASN_TAG_CLASS_UNIVERSAL | (3 << 2)),
 		0,
 		&asn_DEF_BIT_STRING,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"hash"
 		},
 };
@@ -51,7 +51,7 @@ asn_TYPE_descriptor_t asn_DEF_FileAndHash = {
 	asn_DEF_FileAndHash_tags_1,	/* Same as above */
 	sizeof(asn_DEF_FileAndHash_tags_1)
 		/sizeof(asn_DEF_FileAndHash_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_FileAndHash_1,
 	2,	/* Elements count */
 	&asn_SPC_FileAndHash_specs_1	/* Additional specs */

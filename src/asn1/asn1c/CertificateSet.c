@@ -40,7 +40,7 @@ fail:	json_decref(parent);
 	return NULL;
 }
 
-asn_TYPE_operation_t asn_OP_CertificateSet = {
+static asn_TYPE_operation_t asn_OP_CertificateSet = {
 	SET_OF_free,
 	SET_OF_print,
 	SET_OF_compare,
@@ -48,7 +48,7 @@ asn_TYPE_operation_t asn_OP_CertificateSet = {
 	SET_OF_encode_der,
 	CertificateSet_encode_json,
 	SET_OF_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 
 asn_TYPE_member_t asn_MBR_CertificateSet_1[] = {
@@ -56,9 +56,9 @@ asn_TYPE_member_t asn_MBR_CertificateSet_1[] = {
 		-1 /* Ambiguous tag (ANY?) */,
 		0,
 		&asn_DEF_ANY,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -80,7 +80,7 @@ asn_TYPE_descriptor_t asn_DEF_CertificateSet = {
 	asn_DEF_CertificateSet_tags_1,	/* Same as above */
 	sizeof(asn_DEF_CertificateSet_tags_1)
 		/sizeof(asn_DEF_CertificateSet_tags_1[0]), /* 1 */
-	{ 0, 0, SET_OF_constraint },
+	{ NULL, NULL, SET_OF_constraint },
 	asn_MBR_CertificateSet_1,
 	1,	/* Single element */
 	&asn_SPC_CertificateSet_specs_1	/* Additional specs */

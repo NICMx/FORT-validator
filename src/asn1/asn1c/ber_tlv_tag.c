@@ -75,7 +75,7 @@ ber_tlv_tag_fwrite(ber_tlv_tag_t tag, FILE *f) {
 
 ssize_t
 ber_tlv_tag_snprint(ber_tlv_tag_t tag, char *buf, size_t size) {
-	const char *type = 0;
+	const char *type = NULL;
 	int ret;
 
 	switch(tag & 0x3) {

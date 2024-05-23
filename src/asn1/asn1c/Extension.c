@@ -36,17 +36,17 @@ asn_TYPE_member_t asn_MBR_Extension_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_OBJECT_IDENTIFIER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"extnID"
 		},
 	{ ATF_NOFLAGS, 1, offsetof(struct Extension, critical),
 		(ASN_TAG_CLASS_UNIVERSAL | (1 << 2)),
 		0,
 		&asn_DEF_BOOLEAN,
-		0,
-		{ 0, 0, 0 },
+		NULL,
+		{ NULL, NULL, NULL },
 		&asn_DFL_3_cmp_0,	/* Compare DEFAULT 0 */
 		&asn_DFL_3_set_0,	/* Set DEFAULT 0 */
 		"critical"
@@ -55,9 +55,9 @@ asn_TYPE_member_t asn_MBR_Extension_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (4 << 2)),
 		0,
 		&asn_DEF_OCTET_STRING,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"extnValue"
 		},
 };
@@ -86,7 +86,7 @@ asn_TYPE_descriptor_t asn_DEF_Extension = {
 	asn_DEF_Extension_tags_1,	/* Same as above */
 	sizeof(asn_DEF_Extension_tags_1)
 		/sizeof(asn_DEF_Extension_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_Extension_1,
 	3,	/* Elements count */
 	&asn_SPC_Extension_specs_1	/* Additional specs */

@@ -37,7 +37,7 @@ asn_TYPE_operation_t asn_OP_OCTET_STRING = {
 	OCTET_STRING_encode_der,
 	OCTET_STRING_encode_json,
 	OCTET_STRING_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_OCTET_STRING = {
 	"OCTET STRING",		/* Canonical name */
@@ -49,8 +49,8 @@ asn_TYPE_descriptor_t asn_DEF_OCTET_STRING = {
 	asn_DEF_OCTET_STRING_tags,	/* Same as above */
 	sizeof(asn_DEF_OCTET_STRING_tags)
 	  / sizeof(asn_DEF_OCTET_STRING_tags[0]),
-	{ 0, 0, asn_generic_no_constraint },
-	0, 0,	/* No members */
+	{ NULL, NULL, asn_generic_no_constraint },
+	NULL, 0,	/* No members */
 	&asn_SPC_OCTET_STRING_specs
 };
 
@@ -182,7 +182,7 @@ OCTET_STRING_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 	asn_struct_ctx_t *ctx;
 	ssize_t consumed_myself = 0;
 	struct _stack *stck;		/* Expectations stack structure */
-	struct _stack_el *sel = 0;	/* Stack element */
+	struct _stack_el *sel = NULL;	/* Stack element */
 	int tlv_constr;
 	enum asn_OS_Subvariant type_variant = specs->subvariant;
 
@@ -271,7 +271,7 @@ OCTET_STRING_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 				tlv_constr = 1;
 				continue;
 			} else {
-				sel = stck->cur_ptr = 0;
+				sel = stck->cur_ptr = NULL;
 				break;	/* Nothing to wait */
 			}
 		}
@@ -717,19 +717,21 @@ static const struct OCTET_STRING__xer_escape_table_s {
 	OSXET("\074\151\163\063\057\076"),	/* <is3/> */
 	OSXET("\074\151\163\062\057\076"),	/* <is2/> */
 	OSXET("\074\151\163\061\057\076"),	/* <is1/> */
-	{ 0, 0 },	/* " " */
-	{ 0, 0 },	/* ! */
-	{ 0, 0 },	/* \" */
-	{ 0, 0 },	/* # */
-	{ 0, 0 },	/* $ */
-	{ 0, 0 },	/* % */
+	{ NULL, 0 },	/* " " */
+	{ NULL, 0 },	/* ! */
+	{ NULL, 0 },	/* \" */
+	{ NULL, 0 },	/* # */
+	{ NULL, 0 },	/* $ */
+	{ NULL, 0 },	/* % */
 	OSXET("\046\141\155\160\073"),	/* &amp; */
-	{ 0, 0 },	/* ' */
-	{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}, /* ()*+,-./ */
-	{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0},{0,0}, /* 01234567 */
-	{0,0},{0,0},{0,0},{0,0},			 /* 89:; */
-	OSXET("\046\154\164\073"),	/* &lt; */
-	{ 0, 0 },	/* = */
+	{ NULL, 0 },	/* ' */
+	{NULL,0},{NULL,0},{NULL,0},{NULL,0},	/* ()*+ */
+	{NULL,0},{NULL,0},{NULL,0},{NULL,0},	/* ,-./ */
+	{NULL,0},{NULL,0},{NULL,0},{NULL,0},	/* 0123 */
+	{NULL,0},{NULL,0},{NULL,0},{NULL,0},	/* 4567 */
+	{NULL,0},{NULL,0},{NULL,0},{NULL,0},	/* 89:; */
+	OSXET("\046\154\164\073"),		/* &lt; */
+	{ NULL, 0 },	/* = */
 	OSXET("\046\147\164\073"),	/* &gt; */
 };
 
@@ -856,7 +858,7 @@ OCTET_STRING_free(const asn_TYPE_descriptor_t *td, void *sptr,
 
 	if(st->buf) {
 		FREEMEM(st->buf);
-		st->buf = 0;
+		st->buf = NULL;
 	}
 
 	/*
@@ -895,7 +897,7 @@ int
 OCTET_STRING_fromBuf(OCTET_STRING_t *st, const char *str, int len) {
 	void *buf;
 
-	if(st == 0 || (str == 0 && len)) {
+	if(st == NULL || (str == NULL && len)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -905,7 +907,7 @@ OCTET_STRING_fromBuf(OCTET_STRING_t *st, const char *str, int len) {
 	 */
 	if(str == NULL) {
 		FREEMEM(st->buf);
-		st->buf = 0;
+		st->buf = NULL;
 		st->size = 0;
 		return 0;
 	}

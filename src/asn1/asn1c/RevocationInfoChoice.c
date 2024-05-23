@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_RevocationInfoChoice_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_CertificateList,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"crl"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct RevocationInfoChoice, choice.other),
 		(ASN_TAG_CLASS_CONTEXT | (1 << 2)),
 		-1,	/* IMPLICIT tag at current level */
 		&asn_DEF_OtherRevocationInfoFormat,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"other"
 		},
 };
@@ -44,11 +44,11 @@ asn_TYPE_descriptor_t asn_DEF_RevocationInfoChoice = {
 	"RevocationInfoChoice",
 	"RevocationInfoChoice",
 	&asn_OP_CHOICE,
-	0,	/* No effective tags (pointer) */
+	NULL,	/* No effective tags (pointer) */
 	0,	/* No effective tags (count) */
-	0,	/* No tags (pointer) */
+	NULL,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ NULL, 0, CHOICE_constraint },
+	{ NULL, NULL, CHOICE_constraint },
 	asn_MBR_RevocationInfoChoice_1,
 	2,	/* Elements count */
 	&asn_SPC_RevocationInfoChoice_specs_1	/* Additional specs */

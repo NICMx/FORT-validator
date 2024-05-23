@@ -12,18 +12,18 @@ static asn_TYPE_member_t asn_MBR_ASIdentifiers_1[] = {
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_ASIdentifierChoice,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"asnum"
 		},
 	{ ATF_POINTER, 1, offsetof(struct ASIdentifiers, rdi),
 		(ASN_TAG_CLASS_CONTEXT | (1 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_ASIdentifierChoice,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"rdi"
 		},
 };
@@ -51,7 +51,7 @@ asn_TYPE_descriptor_t asn_DEF_ASIdentifiers = {
 	asn_DEF_ASIdentifiers_tags_1,	/* Same as above */
 	sizeof(asn_DEF_ASIdentifiers_tags_1)
 		/sizeof(asn_DEF_ASIdentifiers_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_ASIdentifiers_1,
 	2,	/* Elements count */
 	&asn_SPC_ASIdentifiers_specs_1	/* Additional specs */

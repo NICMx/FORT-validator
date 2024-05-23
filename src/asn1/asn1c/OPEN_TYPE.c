@@ -15,7 +15,7 @@ asn_TYPE_operation_t asn_OP_OPEN_TYPE = {
 	OPEN_TYPE_encode_der,
 	OPEN_TYPE_encode_json,
 	OPEN_TYPE_encode_xer,
-	0,	/* Use generic outmost tag fetcher */
+	NULL,	/* Use generic outmost tag fetcher */
 };
 
 #undef  ADVANCE

@@ -12,9 +12,9 @@ asn_TYPE_member_t asn_MBR_Name_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_RDNSequence,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"rdnSequence"
 		},
 };
@@ -34,11 +34,11 @@ asn_TYPE_descriptor_t asn_DEF_Name = {
 	"Name",
 	"Name",
 	&asn_OP_CHOICE,
-	0,	/* No effective tags (pointer) */
+	NULL,	/* No effective tags (pointer) */
 	0,	/* No effective tags (count) */
-	0,	/* No tags (pointer) */
+	NULL,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ NULL, 0, CHOICE_constraint },
+	{ NULL, NULL, CHOICE_constraint },
 	asn_MBR_Name_1,
 	1,	/* Elements count */
 	&asn_SPC_Name_specs_1	/* Additional specs */

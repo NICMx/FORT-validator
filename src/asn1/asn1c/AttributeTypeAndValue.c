@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_AttributeTypeAndValue_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_AttributeType,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"type"
 		},
 	{ ATF_ANY_TYPE | ATF_NOFLAGS, 0, offsetof(struct AttributeTypeAndValue, value),
 		-1 /* Ambiguous tag (ANY?) */,
 		0,
 		&asn_DEF_AttributeValue,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"value"
 		},
 };
@@ -50,7 +50,7 @@ asn_TYPE_descriptor_t asn_DEF_AttributeTypeAndValue = {
 	asn_DEF_AttributeTypeAndValue_tags_1,	/* Same as above */
 	sizeof(asn_DEF_AttributeTypeAndValue_tags_1)
 		/sizeof(asn_DEF_AttributeTypeAndValue_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_AttributeTypeAndValue_1,
 	2,	/* Elements count */
 	&asn_SPC_AttributeTypeAndValue_specs_1	/* Additional specs */

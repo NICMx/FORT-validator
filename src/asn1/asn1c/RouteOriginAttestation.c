@@ -64,9 +64,9 @@ static asn_TYPE_member_t asn_MBR_ipAddrBlocks_4[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_ROAIPAddressFamily,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -89,7 +89,7 @@ asn_TYPE_descriptor_t asn_DEF_ipAddrBlocks_4 = {
 	asn_DEF_ipAddrBlocks_tags_4,	/* Same as above */
 	sizeof(asn_DEF_ipAddrBlocks_tags_4)
 		/sizeof(asn_DEF_ipAddrBlocks_tags_4[0]), /* 1 */
-	{ NULL, 0, SEQUENCE_OF_constraint },
+	{ NULL, NULL, SEQUENCE_OF_constraint },
 	asn_MBR_ipAddrBlocks_4,
 	1,	/* Single element */
 	&asn_SPC_ipAddrBlocks_specs_4	/* Additional specs */
@@ -100,8 +100,8 @@ static asn_TYPE_member_t asn_MBR_RouteOriginAttestation_1[] = {
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_INTEGER,
-		0,
-		{ 0, 0, 0 },
+		NULL,
+		{ NULL, NULL, NULL },
 		&asn_DFL_2_cmp_0,	/* Compare DEFAULT 0 */
 		&asn_DFL_2_set_0,	/* Set DEFAULT 0 */
 		"version"
@@ -110,18 +110,18 @@ static asn_TYPE_member_t asn_MBR_RouteOriginAttestation_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_ASId,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"asId"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct RouteOriginAttestation, ipAddrBlocks),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_ipAddrBlocks_4,
-		0,
-		{ NULL, 0,  memb_ipAddrBlocks_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_ipAddrBlocks_constraint_1 },
+		NULL, NULL, /* No default value */
 		"ipAddrBlocks"
 		},
 };
@@ -150,7 +150,7 @@ asn_TYPE_descriptor_t asn_DEF_RouteOriginAttestation = {
 	asn_DEF_RouteOriginAttestation_tags_1,	/* Same as above */
 	sizeof(asn_DEF_RouteOriginAttestation_tags_1)
 		/sizeof(asn_DEF_RouteOriginAttestation_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_RouteOriginAttestation_1,
 	3,	/* Elements count */
 	&asn_SPC_RouteOriginAttestation_specs_1	/* Additional specs */

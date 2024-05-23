@@ -15,7 +15,7 @@ int
 asn_set_add(void *asn_set_of_x, void *ptr) {
 	asn_anonymous_set_ *as = _A_SET_FROM_VOID(asn_set_of_x);
 
-	if(as == 0 || ptr == 0) {
+	if(as == NULL || ptr == NULL) {
 		errno = EINVAL;		/* Invalid arguments */
 		return -1;
 	}
@@ -53,7 +53,7 @@ asn_set_del(void *asn_set_of_x, int number, int _do_free) {
 		if(_do_free && as->free) {
 			ptr = as->array[number];
 		} else {
-			ptr = 0;
+			ptr = NULL;
 		}
 
 		as->array[number] = as->array[--as->count];
@@ -80,7 +80,7 @@ asn_set_empty(void *asn_set_of_x) {
 					as->free(as->array[as->count]);
 			}
 			FREEMEM(as->array);
-			as->array = 0;
+			as->array = NULL;
 		}
 		as->count = 0;
 		as->size = 0;

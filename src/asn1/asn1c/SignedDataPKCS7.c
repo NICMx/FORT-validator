@@ -12,54 +12,54 @@ static asn_TYPE_member_t asn_MBR_SignedDataPKCS7_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_CMSVersion,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"version"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignedDataPKCS7, digestAlgorithms),
 		(ASN_TAG_CLASS_UNIVERSAL | (17 << 2)),
 		0,
 		&asn_DEF_DigestAlgorithmIdentifiers,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"digestAlgorithms"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignedDataPKCS7, encapContentInfo),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_EncapsulatedContentInfoPKCS7,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"encapContentInfo"
 		},
 	{ ATF_POINTER, 2, offsetof(struct SignedDataPKCS7, certificates),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		-1,	/* IMPLICIT tag at current level */
 		&asn_DEF_CertificateSet,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"certificates"
 		},
 	{ ATF_POINTER, 1, offsetof(struct SignedDataPKCS7, crls),
 		(ASN_TAG_CLASS_CONTEXT | (1 << 2)),
 		-1,	/* IMPLICIT tag at current level */
 		&asn_DEF_RevocationInfoChoices,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"crls"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignedDataPKCS7, signerInfos),
 		(ASN_TAG_CLASS_UNIVERSAL | (17 << 2)),
 		0,
 		&asn_DEF_SignerInfos,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"signerInfos"
 		},
 };
@@ -91,7 +91,7 @@ asn_TYPE_descriptor_t asn_DEF_SignedDataPKCS7 = {
 	asn_DEF_SignedDataPKCS7_tags_1,	/* Same as above */
 	sizeof(asn_DEF_SignedDataPKCS7_tags_1)
 		/sizeof(asn_DEF_SignedDataPKCS7_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_SignedDataPKCS7_1,
 	6,	/* Elements count */
 	&asn_SPC_SignedDataPKCS7_specs_1	/* Additional specs */

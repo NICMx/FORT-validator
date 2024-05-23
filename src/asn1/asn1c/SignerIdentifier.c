@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_SignerIdentifier_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_IssuerAndSerialNumber,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"issuerAndSerialNumber"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignerIdentifier, choice.subjectKeyIdentifier),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		-1,	/* IMPLICIT tag at current level */
 		&asn_DEF_CMSSubjectKeyIdentifier,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"subjectKeyIdentifier"
 		},
 };
@@ -44,11 +44,11 @@ asn_TYPE_descriptor_t asn_DEF_SignerIdentifier = {
 	"SignerIdentifier",
 	"SignerIdentifier",
 	&asn_OP_CHOICE,
-	0,	/* No effective tags (pointer) */
+	NULL,	/* No effective tags (pointer) */
 	0,	/* No effective tags (count) */
-	0,	/* No tags (pointer) */
+	NULL,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ NULL, 0, CHOICE_constraint },
+	{ NULL, NULL, CHOICE_constraint },
 	asn_MBR_SignerIdentifier_1,
 	2,	/* Elements count */
 	&asn_SPC_SignerIdentifier_specs_1	/* Additional specs */

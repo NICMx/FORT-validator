@@ -34,7 +34,7 @@ SEQUENCE_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *ptr,
 		if(!memb_ptr) continue;
 		erval = elm->type->op->der_encoder(elm->type, memb_ptr,
 			0, elm->tag,
-			0, 0);
+			NULL, NULL);
 		if(erval.encoded == -1)
 			return erval;
 		computed_size += erval.encoded;
@@ -83,8 +83,8 @@ SEQUENCE_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *ptr,
 		erval.structure_ptr = ptr;
 	} else {
 		erval.encoded = computed_size;
-		erval.structure_ptr = 0;
-		erval.failed_type = 0;
+		erval.structure_ptr = NULL;
+		erval.failed_type = NULL;
 	}
 
 	return erval;
@@ -99,7 +99,7 @@ SEQUENCE_OF_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
     const asn_TYPE_member_t *elm = td->elements;
     const asn_anonymous_sequence_ *list = _A_CSEQUENCE_FROM_VOID(sptr);
     const char *mname = specs->as_XMLValueList
-                            ? 0
+                            ? NULL
                             : ((*elm->name) ? elm->name : elm->type->xml_tag);
     size_t mlen = mname ? strlen(mname) : 0;
     int xcan = (flags & XER_F_CANONICAL);
@@ -179,5 +179,5 @@ asn_TYPE_operation_t asn_OP_SEQUENCE_OF = {
 	SEQUENCE_OF_encode_der,
 	SEQUENCE_OF_encode_json,
 	SEQUENCE_OF_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };

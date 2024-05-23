@@ -15,11 +15,11 @@ asn_TYPE_descriptor_t asn_DEF_SigningTime = {
 	"SigningTime",
 	"SigningTime",
 	&asn_OP_CHOICE,
-	0,	/* No effective tags (pointer) */
+	NULL,	/* No effective tags (pointer) */
 	0,	/* No effective tags (count) */
-	0,	/* No tags (pointer) */
+	NULL,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ 0, 0, CHOICE_constraint },
+	{ NULL, NULL, CHOICE_constraint },
 	asn_MBR_Time_1,
 	2,	/* Elements count */
 	&asn_SPC_Time_specs_1	/* Additional specs */

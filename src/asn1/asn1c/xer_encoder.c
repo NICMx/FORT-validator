@@ -13,7 +13,7 @@ asn_enc_rval_t
 xer_encode(const asn_TYPE_descriptor_t *td, const void *sptr,
            enum xer_encoder_flags_e xer_flags, asn_app_consume_bytes_f *cb,
            void *app_key) {
-    asn_enc_rval_t er = {0, 0, 0};
+	asn_enc_rval_t er = { 0 };
 	asn_enc_rval_t tmper;
 	const char *mname;
 	size_t mlen;

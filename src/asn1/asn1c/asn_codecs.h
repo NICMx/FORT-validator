@@ -87,8 +87,8 @@ typedef struct asn_enc_rval_s {
 	return tmp_error;					\
 } while(0)
 #define	ASN__ENCODED_OK(rval) do {				\
-	rval.structure_ptr = 0;					\
-	rval.failed_type = 0;					\
+	rval.structure_ptr = NULL;				\
+	rval.failed_type = NULL;				\
 	return rval;						\
 } while(0)
 

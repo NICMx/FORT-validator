@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_IssuerAndSerialNumber_1[] = {
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_Name,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"issuer"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct IssuerAndSerialNumber, serialNumber),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_CertificateSerialNumber,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"serialNumber"
 		},
 };
@@ -51,7 +51,7 @@ asn_TYPE_descriptor_t asn_DEF_IssuerAndSerialNumber = {
 	asn_DEF_IssuerAndSerialNumber_tags_1,	/* Same as above */
 	sizeof(asn_DEF_IssuerAndSerialNumber_tags_1)
 		/sizeof(asn_DEF_IssuerAndSerialNumber_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_IssuerAndSerialNumber_1,
 	2,	/* Elements count */
 	&asn_SPC_IssuerAndSerialNumber_specs_1	/* Additional specs */

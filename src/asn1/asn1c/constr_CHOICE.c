@@ -135,9 +135,9 @@ CHOICE_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 	/*
 	 * Create the target structure if it is not present already.
 	 */
-	if(st == 0) {
+	if(st == NULL) {
 		st = *struct_ptr = CALLOC(1, specs->struct_size);
-		if(st == 0) {
+		if(st == NULL) {
 			RETURN(RC_FAIL);
 		}
 	}
@@ -160,7 +160,7 @@ CHOICE_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 
 		if(tag_mode || td->tags_count) {
 			rval = ber_check_tags(opt_codec_ctx, td, ctx, ptr, size,
-				tag_mode, -1, &ctx->left, 0);
+				tag_mode, -1, &ctx->left, NULL);
 			if(rval.code != RC_OK) {
 				ASN_DEBUG("%s tagging check failed: %d",
 					td->name, rval.code);
@@ -425,7 +425,7 @@ CHOICE_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
 
 		/* Encode member with its tag */
 		erval = elm->type->op->der_encoder(elm->type, memb_ptr,
-			elm->tag_mode, elm->tag, 0, 0);
+			elm->tag_mode, elm->tag, NULL, NULL);
 		if(erval.encoded == -1)
 			return erval;
 

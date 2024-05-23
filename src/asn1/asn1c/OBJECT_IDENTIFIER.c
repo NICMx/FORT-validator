@@ -30,7 +30,7 @@ asn_TYPE_operation_t asn_OP_OBJECT_IDENTIFIER = {
 	der_encode_primitive,
 	OBJECT_IDENTIFIER_encode_json,
 	OBJECT_IDENTIFIER_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_OBJECT_IDENTIFIER = {
 	"OBJECT IDENTIFIER",
@@ -42,9 +42,9 @@ asn_TYPE_descriptor_t asn_DEF_OBJECT_IDENTIFIER = {
 	asn_DEF_OBJECT_IDENTIFIER_tags,	/* Same as above */
 	sizeof(asn_DEF_OBJECT_IDENTIFIER_tags)
 	    / sizeof(asn_DEF_OBJECT_IDENTIFIER_tags[0]),
-	{ 0, 0, OBJECT_IDENTIFIER_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, OBJECT_IDENTIFIER_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 int

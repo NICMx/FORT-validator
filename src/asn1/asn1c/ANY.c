@@ -26,15 +26,15 @@ asn_TYPE_operation_t asn_OP_ANY = {
 	OCTET_STRING_encode_der,
 	OCTET_STRING_encode_json,
 	ANY_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_ANY = {
 	"ANY",
 	"ANY",
 	&asn_OP_ANY,
-	0, 0, 0, 0,
-	{ 0, 0, asn_generic_no_constraint },	/* No constraints */
-	0, 0,	/* No members */
+	NULL, 0, NULL, 0,
+	{ NULL, NULL, asn_generic_no_constraint },	/* No constraints */
+	NULL, 0,	/* No members */
 	&asn_SPC_ANY_specs,
 };
 
@@ -87,7 +87,7 @@ ANY_fromType(ANY_t *st, asn_TYPE_descriptor_t *td, void *sptr) {
 	}
 
 	arg.offset = arg.size = 0;
-	arg.buffer = 0;
+	arg.buffer = NULL;
 
 	erval = der_encode(td, sptr, ANY__consume_bytes, &arg);
 	if(erval.encoded == -1) {
@@ -110,12 +110,12 @@ ANY_new_fromType(asn_TYPE_descriptor_t *td, void *sptr) {
 
 	if(!td || !sptr) {
 		errno = EINVAL;
-		return 0;
+		return NULL;
 	}
 
 	memset(&tmp, 0, sizeof(tmp));
 
-	if(ANY_fromType(&tmp, td, sptr)) return 0;
+	if(ANY_fromType(&tmp, td, sptr)) return NULL;
 
 	st = (ANY_t *)CALLOC(1, sizeof(ANY_t));
 	if(st) {
@@ -123,21 +123,21 @@ ANY_new_fromType(asn_TYPE_descriptor_t *td, void *sptr) {
 		return st;
 	} else {
 		FREEMEM(tmp.buf);
-		return 0;
+		return NULL;
 	}
 }
 
 int
 ANY_to_type(ANY_t *st, asn_TYPE_descriptor_t *td, void **struct_ptr) {
 	asn_dec_rval_t rval;
-	void *newst = 0;
+	void *newst = NULL;
 
 	if(!st || !td || !struct_ptr) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if(st->buf == 0) {
+	if(st->buf == NULL) {
 		/* Nothing to convert, make it empty. */
 		*struct_ptr = (void *)0;
 		return 0;

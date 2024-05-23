@@ -31,7 +31,7 @@ asn_TYPE_operation_t asn_OP_UTCTime = {
 	OCTET_STRING_encode_der,    /* Implemented in terms of OCTET STRING */
 	UTCTime_encode_json,
 	UTCTime_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_UTCTime = {
 	"UTCTime",
@@ -43,9 +43,9 @@ asn_TYPE_descriptor_t asn_DEF_UTCTime = {
 	asn_DEF_UTCTime_tags,
 	sizeof(asn_DEF_UTCTime_tags)
 	  / sizeof(asn_DEF_UTCTime_tags[0]),
-	{ 0, NULL, UTCTime_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, UTCTime_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 #endif	/* ASN___INTERNAL_TEST_MODE */
@@ -62,7 +62,7 @@ UTCTime_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
     fprintf(stderr, "UTCTime_constraint() is not implemented for now.\n");
     abort();
 
-	if(asn_UT2time(st, 0) != 0) {
+	if(asn_UT2time(st, NULL) != 0) {
         ASN__CTFAIL(app_key, td, sptr, "%s: Invalid time format: %s (%s:%d)",
                     td->name, strerror(errno), __FILE__, __LINE__);
         return -1;
@@ -86,7 +86,7 @@ UTCTime_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr,
 			ASN__ENCODE_FAILED;
 
 		/* Fractions are not allowed in UTCTime */
-		ut = asn_time2UT(0, &tm);
+		ut = asn_time2UT(NULL, &tm);
 		if(!ut) ASN__ENCODE_FAILED;
 
 		rv = OCTET_STRING_encode_xer_utf8(td, sptr, ilevel, flags,
@@ -177,7 +177,7 @@ asn_time2UT(UTCTime_t *opt_ut, const struct tm *tm) {
 	GeneralizedTime_t *gt = (GeneralizedTime_t *)opt_ut;
 
 	gt = asn_time2GT(gt, tm);
-	if(gt == 0) return 0;
+	if(gt == NULL) return NULL;
 
 	assert(gt->size >= 2);
 	gt->size -= 2;
@@ -203,10 +203,10 @@ UTCTime_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
         int aerr, berr;
 
         errno = EPERM;
-        at = asn_UT2time(a, 0);
+        at = asn_UT2time(a, NULL);
         aerr = errno;
         errno = EPERM;
-        bt = asn_UT2time(b, 0);
+        bt = asn_UT2time(b, NULL);
         berr = errno;
 
         if(at == -1 && aerr != EPERM) {

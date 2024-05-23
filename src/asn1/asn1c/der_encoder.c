@@ -134,7 +134,7 @@ der_write_tags(const asn_TYPE_descriptor_t *sd, size_t struct_length,
 	 */
 	overall_length = struct_length;
 	for(i = tags_count - 1; i >= 0; --i) {
-		lens[i] = der_write_TL(tags[i], overall_length, 0, 0, 0);
+		lens[i] = der_write_TL(tags[i], overall_length, NULL, NULL, 0);
 		if(lens[i] == -1) return -1;
 		overall_length += lens[i];
 		lens[i] = overall_length - lens[i];

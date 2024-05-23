@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_ROAIPAddress_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (3 << 2)),
 		0,
 		&asn_DEF_IPAddress,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"address"
 		},
 	{ ATF_POINTER, 1, offsetof(struct ROAIPAddress, maxLength),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_INTEGER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"maxLength"
 		},
 };
@@ -51,7 +51,7 @@ asn_TYPE_descriptor_t asn_DEF_ROAIPAddress = {
 	asn_DEF_ROAIPAddress_tags_1,	/* Same as above */
 	sizeof(asn_DEF_ROAIPAddress_tags_1)
 		/sizeof(asn_DEF_ROAIPAddress_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_ROAIPAddress_1,
 	2,	/* Elements count */
 	&asn_SPC_ROAIPAddress_specs_1	/* Additional specs */

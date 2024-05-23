@@ -12,7 +12,7 @@
 #include "json_util.h"
 #include "nid.h"
 
-json_t *
+static json_t *
 EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
     const void *sptr)
 {
@@ -57,7 +57,7 @@ fail:	json_decref(parent);
 	return NULL;
 }
 
-asn_TYPE_operation_t asn_OP_EncapsulatedContentInfo = {
+static asn_TYPE_operation_t asn_OP_EncapsulatedContentInfo = {
 	SEQUENCE_free,
 	SEQUENCE_print,
 	SEQUENCE_compare,
@@ -65,7 +65,7 @@ asn_TYPE_operation_t asn_OP_EncapsulatedContentInfo = {
 	SEQUENCE_encode_der,
 	EncapsulatedContentInfo_encode_json,
 	SEQUENCE_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 
 asn_TYPE_member_t asn_MBR_EncapsulatedContentInfo_1[] = {
@@ -73,18 +73,18 @@ asn_TYPE_member_t asn_MBR_EncapsulatedContentInfo_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_ContentType,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"eContentType"
 		},
 	{ ATF_POINTER, 1, offsetof(struct EncapsulatedContentInfo, eContent),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_OCTET_STRING,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"eContent"
 		},
 };
@@ -112,7 +112,7 @@ asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfo = {
 	asn_DEF_EncapsulatedContentInfo_tags_1,	/* Same as above */
 	sizeof(asn_DEF_EncapsulatedContentInfo_tags_1)
 		/sizeof(asn_DEF_EncapsulatedContentInfo_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_EncapsulatedContentInfo_1,
 	2,	/* Elements count */
 	&asn_SPC_EncapsulatedContentInfo_specs_1	/* Additional specs */

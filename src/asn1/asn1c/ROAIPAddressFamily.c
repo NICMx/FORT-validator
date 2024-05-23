@@ -94,7 +94,7 @@ fail:	json_decref(root);
 	return NULL;
 }
 
-json_t *
+static json_t *
 ROAIPAddressFamily_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
 {
 	struct ROAIPAddressFamily const *riaf = sptr;
@@ -112,7 +112,7 @@ ROAIPAddressFamily_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr
 	return SEQUENCE_encode_json(td, sptr);
 }
 
-asn_TYPE_operation_t asn_OP_ROAIPAddressFamily = {
+static asn_TYPE_operation_t asn_OP_ROAIPAddressFamily = {
 	SEQUENCE_free,
 	SEQUENCE_print,
 	SEQUENCE_compare,
@@ -120,7 +120,7 @@ asn_TYPE_operation_t asn_OP_ROAIPAddressFamily = {
 	SEQUENCE_encode_der,
 	ROAIPAddressFamily_encode_json,
 	SEQUENCE_encode_xer,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 
 static int
@@ -180,9 +180,9 @@ static asn_TYPE_member_t asn_MBR_addresses_3[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_ROAIPAddress,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -205,7 +205,7 @@ asn_TYPE_descriptor_t asn_DEF_addresses_3 = {
 	asn_DEF_addresses_tags_3,	/* Same as above */
 	sizeof(asn_DEF_addresses_tags_3)
 		/sizeof(asn_DEF_addresses_tags_3[0]), /* 1 */
-	{ NULL, 0, SEQUENCE_OF_constraint },
+	{ NULL, NULL, SEQUENCE_OF_constraint },
 	asn_MBR_addresses_3,
 	1,	/* Single element */
 	&asn_SPC_addresses_specs_3	/* Additional specs */
@@ -216,18 +216,18 @@ asn_TYPE_member_t asn_MBR_ROAIPAddressFamily_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (4 << 2)),
 		0,
 		&asn_DEF_OCTET_STRING,
-		0,
-		{ NULL, 0,  memb_addressFamily_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_addressFamily_constraint_1 },
+		NULL, NULL, /* No default value */
 		"addressFamily"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct ROAIPAddressFamily, addresses),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_addresses_3,
-		0,
-		{ NULL, 0,  memb_addresses_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_addresses_constraint_1 },
+		NULL, NULL, /* No default value */
 		"addresses"
 		},
 };
@@ -255,7 +255,7 @@ asn_TYPE_descriptor_t asn_DEF_ROAIPAddressFamily = {
 	asn_DEF_ROAIPAddressFamily_tags_1,	/* Same as above */
 	sizeof(asn_DEF_ROAIPAddressFamily_tags_1)
 		/sizeof(asn_DEF_ROAIPAddressFamily_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_ROAIPAddressFamily_1,
 	2,	/* Elements count */
 	&asn_SPC_ROAIPAddressFamily_specs_1	/* Additional specs */

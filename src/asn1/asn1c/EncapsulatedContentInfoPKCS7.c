@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_EncapsulatedContentInfoPKCS7_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_ContentType,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"eContentType"
 		},
 	{ ATF_POINTER, 1, offsetof(struct EncapsulatedContentInfoPKCS7, eContent),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_ANY,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"eContent"
 		},
 };
@@ -51,7 +51,7 @@ asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfoPKCS7 = {
 	asn_DEF_EncapsulatedContentInfoPKCS7_tags_1,	/* Same as above */
 	sizeof(asn_DEF_EncapsulatedContentInfoPKCS7_tags_1)
 		/sizeof(asn_DEF_EncapsulatedContentInfoPKCS7_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_EncapsulatedContentInfoPKCS7_1,
 	2,	/* Elements count */
 	&asn_SPC_EncapsulatedContentInfoPKCS7_specs_1	/* Additional specs */
