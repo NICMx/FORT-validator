@@ -319,22 +319,26 @@ See more about SLURM configuration at FORT's web docs.
 .RE
 .P
 
-.B \-\-mode=(\fIserver\fR|\fIstandalone\fR)
+.B \-\-mode=(\fIserver\fR|\fIstandalone\fR|\fIprint\fR)
 .RS 4
-Commands the way FORT executes the validation, its possible values are:
+Operation mode.
 .P
-.I server
+.I server \fR(Default)\fI
 .RS 4
-Enable the RTR server using the \fIserver.*\fR arguments.
+Perform validation cycles in perpetuity. (See \fB--server.interval.validation\fR).
+Also, serve resulting VRPs through RTR. (See \fB--server.*\fR.)
 .RE
 .P
 .I standalone
 .RS 4
-Disable the RTR server, the configuration options \fIserver.*\fR are ignored
-and FORT performs an in-place standalone validation.
+Perform single validation cycle, then exit.
 .RE
 .P
-By default, the mode is \fIserver\fR.
+.I print
+.RS 4
+Print a Certificate, CRL or Signed Object (ROA, Manifest or Ghostbusters) in
+standard output.
+.RE
 .RE
 .P
 

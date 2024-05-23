@@ -88,7 +88,7 @@ description: Guide to use arguments of FORT Validator.
 	[--local-repository=<directory>]
 	[--maximum-certificate-depth=<unsigned integer>]
 	[--slurm=<file>|<directory>]
-	[--mode=server|standalone]
+	[--mode=server|standalone|print]
 	[--work-offline=true|false]
 	[--daemon=true|false]
 	[--server.address=<sequence of strings>]
@@ -334,13 +334,15 @@ Fort's tree traversal is actually iterative (not recursive), so there should be 
 
 ### `--mode`
 
-- **Type:** Enumeration (`server`, `standalone`)
+- **Type:** Enumeration (`server`, `standalone`, `print`)
 - **Availability:** `argv` and JSON
 - **Default:** `server`
 
 In `server` mode, Fort runs endlessly, performing RPKI validation cycles [repeatedly](#--serverintervalvalidation). In parallel, it also starts an [RTR server](#--serveraddress) that will perpetually serve the validation results to upcoming RTR clients. (Which are usually routers.)
 
 In `standalone` mode, Fort simply performs one immediate RPKI validation, then exits. This mode is usually coupled with [`--output.roa`](#--outputroa).
+
+`print` translates an RPKI object to JSON, and dumps it on standard output. See [`mode=print`](mode-print.html).
 
 ### `--server.address`
 
