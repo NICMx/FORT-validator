@@ -82,7 +82,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
 	}
 	if (tmp != otmp + cert_encoded->size) {
 		error = val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
-		goto end1;
+		goto end2;
 	}
 
 	x509_name_pr_debug("Issuer", X509_get_issuer_name(cert));

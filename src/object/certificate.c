@@ -242,6 +242,35 @@ validate_subject(X509 *cert)
 	return error;
 }
 
+static X509_PUBKEY *
+decode_spki(struct tal *tal)
+{
+	X509_PUBKEY *spki = NULL;
+	unsigned char const *origin, *cursor;
+	size_t len;
+
+	fnstack_push(tal_get_file_name(tal));
+	tal_get_spki(tal, &origin, &len);
+	cursor = origin;
+	spki = d2i_X509_PUBKEY(NULL, &cursor, len);
+
+	if (spki == NULL) {
+		op_crypto_err("The public key cannot be decoded.");
+		goto fail;
+	}
+	if (cursor != origin + len) {
+		X509_PUBKEY_free(spki);
+		op_crypto_err("The public key contains trailing garbage.");
+		goto fail;
+	}
+
+	fnstack_pop();
+	return spki;
+
+fail:	fnstack_pop();
+	return NULL;
+}
+
 static int
 root_different_alg_err(void)
 {
@@ -259,10 +288,7 @@ validate_spki(X509_PUBKEY *cert_spki)
 {
 	struct validation *state;
 	struct tal *tal;
-
 	X509_PUBKEY *tal_spki;
-	unsigned char const *_tal_spki;
-	size_t _tal_spki_len;
 
 	state = state_retrieve();
 
@@ -288,29 +314,20 @@ validate_spki(X509_PUBKEY *cert_spki)
 	 * Reminder: "X509_PUBKEY" and "Subject Public Key Info" are synonyms.
 	 */
 
-	fnstack_push(tal_get_file_name(tal));
-	tal_get_spki(tal, &_tal_spki, &_tal_spki_len);
-	tal_spki = d2i_X509_PUBKEY(NULL, &_tal_spki, _tal_spki_len);
-	fnstack_pop();
-
-	if (tal_spki == NULL) {
-		op_crypto_err("The TAL's public key cannot be decoded");
-		goto fail1;
-	}
+	tal_spki = decode_spki(tal);
+	if (tal_spki == NULL)
+		return -EINVAL;
 
 	if (spki_cmp(tal_spki, cert_spki, root_different_alg_err,
-	    root_different_pk_err) != 0)
-		goto fail2;
+	    root_different_pk_err) != 0) {
+		X509_PUBKEY_free(tal_spki);
+		validation_pubkey_invalid(state);
+		return -EINVAL;
+	}
 
 	X509_PUBKEY_free(tal_spki);
 	validation_pubkey_valid(state);
 	return 0;
-
-fail2:
-	X509_PUBKEY_free(tal_spki);
-fail1:
-	validation_pubkey_invalid(state);
-	return -EINVAL;
 }
 
 /*

@@ -5,6 +5,7 @@
 #include "extension.h"
 #include "json_util.h"
 #include "libcrypto_util.h"
+#include "log.h"
 
 static json_t *
 validity2json(X509 *x)
@@ -172,7 +173,7 @@ fail:	json_decref(parent);
 json_t *
 Certificate_any2json(ANY_t *ber)
 {
-	const unsigned char *tmp;
+	unsigned char const *origin, *cursor;
 	X509 *cert;
 	json_t *json;
 
@@ -182,11 +183,14 @@ Certificate_any2json(ANY_t *ber)
 	 * (https://www.openssl.org/docs/man1.0.2/crypto/d2i_X509_fp.html)
 	 * We don't want @ber->buf modified, so use a dummy pointer.
 	 */
-	tmp = (const unsigned char *) ber->buf;
+	origin = (unsigned char const *) ber->buf;
+	cursor = origin;
 
-	cert = d2i_X509(NULL, &tmp, ber->size);
+	cert = d2i_X509(NULL, &cursor, ber->size);
 	if (cert == NULL)
 		return NULL;
+	if (cursor != origin + ber->size)
+		pr_op_warn("There's trailing garbage after one of the certificates.");
 
 	json = x509_to_json(cert);
 
