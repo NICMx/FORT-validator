@@ -911,6 +911,13 @@ set_default_values(void)
 		"$REMOTE", "$LOCAL",
 	};
 	static char const *flat_rsync_args[] = { "<deprecated>" };
+	static char const *addrs[] = {
+#ifdef __linux__
+		"::"
+#else
+		"0.0.0.0", "::"
+#endif
+	};
 
 	/*
 	 * Values that might need to be freed WILL be freed, so use heap
@@ -926,7 +933,7 @@ set_default_values(void)
 	rpki_config.work_offline = false;
 	rpki_config.daemon = false;
 
-	string_array_init(&rpki_config.server.address, NULL, 0);
+	string_array_init(&rpki_config.server.address, addrs, ARRAY_LEN(addrs));
 	rpki_config.server.port = pstrdup("323");
 	rpki_config.server.backlog = SOMAXCONN;
 	rpki_config.server.interval.validation = 3600;

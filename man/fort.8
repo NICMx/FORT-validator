@@ -340,29 +340,35 @@ By default, the mode is \fIserver\fR.
 
 .B \-\-server.address=\fINODE(S)\fR
 .RS 4
-List of hostnames or numeric host addresses the RTR server will be bound to.
-Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
+List of hostnames or numeric host addresses the RTR server will be bound to. Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
 .P
-The list of addresses must be comma sepparated, and each address must have the
-following format: \fB<address>[#<port>]\fR. Note that the port is optional; in
-case that a port isn't specified, the value of \fI--server.port\fR will be
-utilized with the corresponding address.
+The address list must be comma-separated, and each address must have the following format: \fB<address>[#<port>]\fR. The port defaults to \fI--server.port\fR.
 .P
-Here are some examples of valid values for this argument:
+Here are some examples:
 .br
-- \fI--server.address="localhost"\fR: will bind to 'localhost' and the
-configured port at \fI--server.port\fR.
+- \fI--server.address="localhost"\fR: Bind to localhost, port \fI--server.port\fR.
 .br
-- \fI--server.address="localhost,::1#8324"\fR: same as the previous example,
-and also will bind to IPv6 address '::1' at the port '8324'.
+- \fI--server.address="localhost, ::1#8324"\fR: Same as above, and also bind to \fI[::1]:8324\fR.
 .br
-- \fI--server.address="localhost#8323,::1#8324"\fR: will bind to 'localhost' at
-port '8323', and to '::1' port '8324'. The value of \fI--server.port\fR isn't
-utilized.
+- \fI--server.address="localhost#8323, ::1#8324"\fR: Bind to \fIlocalhost\fR on port 8323, and to \fI[::1]:8324\fR. (\fI--server.port\fR is ignored.)
 .P
-If this field is omitted, FORT will attempt to bind the server using the IP
-address \fIINADDR_ANY\fR (for an IPv4 address) or \fIIN6ADDR_ANY_INIT\fR (for
-an IPv6 address). See \fBgetaddrinfo(3)\fR.
+Use wildcards to bind to all available addresses. Note that, for historical reasons, Linux is a bit strange:
+.P
+BSDs:
+.P
+- \fI0.0.0.0\fR : Bind to all available IPv4 addresses
+.br
+- \fI::\fR : Bind to all available IPv6 addresses
+.br
+- \fI0.0.0.0, ::\fR : Bind to all available IPv4 and IPv6 addresses
+.P
+Linux:
+.P
+- \fI0.0.0.0\fR : Bind to all available IPv4 addresses
+.br
+- \fI::\fR : Bind to all available IPv4 and IPv6 addresses
+.br
+- \fI0.0.0.0, ::\fR : Error
 .RE
 .P
 

@@ -346,18 +346,24 @@ In `standalone` mode, Fort simply performs one immediate RPKI validation, then e
 
 - **Type:** String array
 - **Availability:** `argv` and JSON
-- **Default:** `NULL`
+- **Default:** On Linux, `::`. On everything else, `0.0.0.0, ::`.
 
 List of hostnames or numeric host addresses the RTR server will be bound to. Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
 
 The address list must be comma-separated, and each address must have the following format: `<address>[#<port>]`. The port defaults to [`--server.port`](#--serverport).
 
 Here are some examples:
-- `--server.address="localhost"`: Bind to 'localhost', port [`--server.port`](#--serverport).
-- `--server.address="localhost, ::1#8324"`: Same as above, and also bind to IPv6 address '::1', port '8324'.
-- `--server.address="localhost#8323, ::1#8324"`: Bind to 'localhost' at port '8323', and to '::1' port '8324'. [`--server.port`](#--serverport) is ignored.
+- `--server.address="localhost"`: Bind to `localhost`, port [`--server.port`](#--serverport).
+- `--server.address="localhost, ::1#8324"`: Same as above, and also bind to `[::1]:8324`.
+- `--server.address="localhost#8323, ::1#8324"`: Bind to `localhost` on port 8323, and to `[::1]:8324`. ([`--server.port`](#--serverport) is ignored.)
 
-If this field is omitted, the server will accept connections on any of the host's network addresses.
+Use wildcards to bind to all available addresses. Note that, for historical reasons, Linux is a bit strange:
+
+| `--server.address` | Meaning on the BSDs | Meaning on Linux |
+|--------------------|---------------------|------------------|
+| `0.0.0.0` | Bind to all available IPv4 addresses | Bind to all available IPv4 addresses |
+| `::` | Bind to all available IPv6 addresses | Bind to all available IPv4 and IPv6 addresses |
+| `0.0.0.0, ::` | Bind to all available IPv4 and IPv6 addresses | Error |
 
 ### `--server.port`
 
