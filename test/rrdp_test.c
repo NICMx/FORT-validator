@@ -17,7 +17,8 @@ MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
     bool *changed)
 MOCK_ABORT_VOID(file_close, FILE *file)
 MOCK_ABORT_INT(file_rm_rf, char const *path)
-MOCK_ABORT_INT(file_write, char const *file_name, FILE **result)
+MOCK_ABORT_INT(file_write, char const *file_name, char const *mode,
+	       FILE **result)
 MOCK_ABORT_INT(delete_dir_recursive_bottom_up, char const *path)
 MOCK_ABORT_INT(mkdir_p, char const *path, bool include_basename)
 MOCK_ABORT_VOID(fnstack_pop, void)
