@@ -50,25 +50,10 @@ fort_server(void)
 	rtr_notify();
 
 	/*
-	 * According to some past experience I can't find anymore, there's at
-	 * least one brand of router that misunderstands RTR "No Data Available
-	 * [yet];" it thinks it's a fatal error.
-	 *
-	 * I don't know if the problem persists, I can't find the bug report
-	 * anymore, and given that I've patched several RTR errors since, I'm
-	 * questioning whether it was a problem in the first place.
-	 *
-	 * Tentatively tell the admin to start those routers now. This is
-	 * ridiculous on several levels however, and I'm half a mind to delete
-	 * this notification.
-	 *
-	 * This message was born in 38e256cb, and I've decided to downgrade and
-	 * reword it in the hopes of triggering complaints if someone's still
-	 * using it.
-	 *
-	 * TODO (fine) If nobody complaints, remove in a few months.
+	 * See issue #133.
+	 * TODO (#50) Remove this message once the stats server is implemented.
 	 */
-	pr_op_info("Main loop: Ready for routers.");
+	pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
 
 	do {
 		pr_op_info("Main loop: Sleeping.");
