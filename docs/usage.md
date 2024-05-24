@@ -943,12 +943,11 @@ The configuration options are mostly the same as the ones from the `argv` interf
 <pre><code>{
 	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
 	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository",
-	"<a href="#--work-offline">work-offline</a>": false,
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
-	"<a href="#--mode">mode</a>": "server",
-	"<a href="#--daemon">daemon</a>": false,
 	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
-	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
+	"<a href="#--mode">mode</a>": "server",
+	"<a href="#--work-offline">work-offline</a>": false,
+	"<a href="#--daemon">daemon</a>": false,
 
 	"server": {
 		"<a href="#--serveraddress">address</a>": [
@@ -966,43 +965,6 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"deltas": {
 			"<a href="#--serverdeltaslifetime">lifetime</a>": 2
 		}
-	},
-
-	"log": {
-		"<a href="#--logenabled">enabled</a>": true,
-		"<a href="#--logoutput">output</a>": "console",
-		"<a href="#--loglevel">level</a>": "info",
-		"<a href="#--logtag">tag</a>": "Operation",
-		"<a href="#--logfacility">facility</a>": "daemon",
-		"<a href="#--logfile-name-format">file-name-format</a>": "global-url",
-		"<a href="#--logcolor-output">color-output</a>": false
-	},
-
-	"validation-log": {
-		"<a href="#--validation-logenabled">enabled</a>": false,
-		"<a href="#--validation-logoutput">output</a>": "console",
-		"<a href="#--validation-loglevel">level</a>": "warning",
-		"<a href="#--validation-logtag">tag</a>": "Validation",
-		"<a href="#--validation-logfacility">facility</a>": "daemon",
-		"<a href="#--validation-logfile-name-format">file-name-format</a>": "global-url",
-		"<a href="#--validation-logcolor-output">color-output</a>": false
-	},
-
-	"http": {
-		"<a href="#--httpenabled">enabled</a>": true,
-		"<a href="#--httppriority">priority</a>": 60,
-		"retry": {
-			"<a href="#--httpretrycount">count</a>": 1,
-			"<a href="#--httpretryinterval">interval</a>": 4
-		},
-		"<a href="#--httpuser-agent">user-agent</a>": "{{ page.command }}/{{ site.fort-latest-version }}",
-		"<a href="#--httpconnect-timeout">max-redirs</a>": 10,
-		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
-		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
-		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
-		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
-		"<a href="#--httpmax-file-size">max-file-size</a>": 1000000000,
-		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
 	},
 
 	"rsync": {
@@ -1032,28 +994,60 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		]
 	},
 
+	"http": {
+		"<a href="#--httpenabled">enabled</a>": true,
+		"<a href="#--httppriority">priority</a>": 60,
+		"retry": {
+			"<a href="#--httpretrycount">count</a>": 1,
+			"<a href="#--httpretryinterval">interval</a>": 4
+		},
+		"<a href="#--httpuser-agent">user-agent</a>": "fort/1.6.2",
+		"<a href="#--httpmax-redirs">max-redirs</a>": 10,
+		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
+		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
+		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
+		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
+		"<a href="#--httpmax-file-size">max-file-size</a>": 1000000000,
+		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
+	},
+
+	"log": {
+		"<a href="#--logenabled">enabled</a>": true,
+		"<a href="#--logoutput">output</a>": "console",
+		"<a href="#--loglevel">level</a>": "info",
+		"<a href="#--logtag">tag</a>": "Operation",
+		"<a href="#--logfacility">facility</a>": "daemon",
+		"<a href="#--logfile-name-format">file-name-format</a>": "global-url",
+		"<a href="#--logcolor-output">color-output</a>": false
+	},
+
+	"validation-log": {
+		"<a href="#--validation-logenabled">enabled</a>": false,
+		"<a href="#--validation-logoutput">output</a>": "console",
+		"<a href="#--validation-loglevel">level</a>": "warning",
+		"<a href="#--validation-logtag">tag</a>": "Validation",
+		"<a href="#--validation-logfacility">facility</a>": "daemon",
+		"<a href="#--validation-logfile-name-format">file-name-format</a>": "global-url",
+		"<a href="#--validation-logcolor-output">color-output</a>": false
+	},
+
 	"<a href="#incidences">incidences</a>": [
 		{
 			"name": "incid-hashalg-has-params",
 			"action": "ignore"
-		},
-		{
+		}, {
 			"name": "incid-obj-not-der-encoded",
 			"action": "ignore"
-		},
-		{
+		}, {
 			"name": "incid-file-at-mft-not-found",
 			"action": "error"
-		},
-		{
+		}, {
 			"name": "incid-file-at-mft-hash-not-match",
 			"action": "error"
-		},
-		{
+		}, {
 			"name": "incid-mft-stale",
 			"action": "error"
-		},
-		{
+		}, {
 			"name": "incid-crl-stale",
 			"action": "error"
 		}
@@ -1064,6 +1058,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv",
 		"<a href="#--outputformat">format</a>": "csv"
 	},
+
+	"<a href="#--asn1-decode-max-stack">asn1-decode-max-stack</a>": 4096,
 
 	"thread-pool": {
 		"server": {
