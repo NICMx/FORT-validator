@@ -1,10 +1,14 @@
 #include "nid.h"
 
 #include <errno.h>
+#include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
 #include "log.h"
 
+static int ct_roa_nid;
+static int ct_mft_nid;
+static int ct_gbr_nid;
 static int rpki_manifest_nid;
 static int signed_object_nid;
 static int rpki_notify_nid;
@@ -37,11 +41,30 @@ register_oid(const char *oid, const char *sn, const char *ln)
 
 /**
  * Registers the RPKI-specific OIDs in the SSL library.
- * LibreSSL needs it; not sure about OpenSSL.
+ * Modern libcrypto implementations should have them, but older
+ * versions might not.
  */
 int
 nid_init(void)
 {
+	ct_roa_nid = register_oid("1.2.840.113549.1.9.16.1.24",
+	    "id-ct-routeOriginAuthz",
+	    "RPKI ROA (Content type)");
+	if (ct_roa_nid == 0)
+		return -EINVAL;
+
+	ct_mft_nid = register_oid("1.2.840.113549.1.9.16.1.26",
+	    "id-ct-rpkiManifest",
+	    "RPKI Manifest (Content type)");
+	if (ct_mft_nid == 0)
+		return -EINVAL;
+
+	ct_gbr_nid = register_oid("1.2.840.113549.1.9.16.1.35",
+	    "id-ct-rpkiGhostbusters",
+	    "RPKI Ghostbusters (Content type)");
+	if (ct_gbr_nid == 0)
+		return -EINVAL;
+
 	rpki_manifest_nid = register_oid("1.3.6.1.5.5.7.48.10",
 	    "rpkiManifest",
 	    "RPKI Manifest (RFC 6487)");
@@ -99,42 +122,68 @@ nid_destroy(void)
 	OBJ_cleanup();
 }
 
-int nid_rpkiManifest(void)
+int
+nid_ct_roa(void)
+{
+	return ct_roa_nid;
+}
+
+int
+nid_ct_mft(void)
+{
+	return ct_mft_nid;
+}
+
+int
+nid_ct_gbr(void)
+{
+	return ct_gbr_nid;
+}
+
+int
+nid_ad_mft(void)
 {
 	return rpki_manifest_nid;
 }
 
-int nid_signedObject(void)
+int
+nid_ad_so(void)
 {
 	return signed_object_nid;
 }
 
-int nid_rpkiNotify(void)
+int
+nid_ad_notify(void)
 {
 	return rpki_notify_nid;
 }
 
-int nid_certPolicyRpki(void)
+int
+nid_certPolicyRpki(void)
 {
 	return cert_policy_rpki_nid;
 }
 
-int nid_certPolicyRpkiV2(void)
+int
+nid_certPolicyRpkiV2(void)
 {
 	return cert_policy_rpki_v2_nid;
 }
 
-int nid_ipAddrBlocksv2(void)
+int
+nid_ipAddrBlocksv2(void)
 {
 	return ip_addr_blocks_v2_nid;
 }
 
-int nid_autonomousSysIdsv2(void)
+int
+nid_autonomousSysIdsv2(void)
 {
 	return autonomous_sys_ids_v2_nid;
 }
 
-int nid_bgpsecRouter(void)
+int
+nid_bgpsecRouter(void)
 {
 	return bgpsec_router_nid;
 }

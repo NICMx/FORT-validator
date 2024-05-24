@@ -8,14 +8,14 @@
 #include "common.h"
 #include "config.h"
 #include "configure_ac.h"
-#include "file.h"
-#include "json_util.h"
-#include "log.h"
-#include "rrdp.h"
 #include "data_structure/array_list.h"
 #include "data_structure/path_builder.h"
 #include "data_structure/uthash.h"
+#include "file.h"
 #include "http/http.h"
+#include "json_util.h"
+#include "log.h"
+#include "rrdp.h"
 #include "rsync/rsync.h"
 
 struct cache_node {
@@ -381,23 +381,21 @@ node2json(struct cache_node *node)
 {
 	json_t *json;
 
-	json = json_object();
-	if (json == NULL) {
-		pr_op_err("json object allocation failure.");
+	json = json_obj_new();
+	if (json == NULL)
 		return NULL;
-	}
 
 	if (json_add_str(json, TAGNAME_URL, uri_get_global(node->url)))
 		goto cancel;
 	if (uri_is_notif(node->url))
 		if (json_add_bool(json, TAGNAME_IS_NOTIF, true))
 			goto cancel;
-	if (json_add_date(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
+	if (json_add_ts(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
 		goto cancel;
 	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
 		goto cancel;
 	if (node->success.happened)
-		if (json_add_date(json, TAGNAME_SUCCESS_TS, node->success.ts))
+		if (json_add_ts(json, TAGNAME_SUCCESS_TS, node->success.ts))
 			goto cancel;
 
 	return json;
@@ -413,15 +411,13 @@ build_tal_json(struct rpki_cache *cache)
 	struct cache_node *node, *tmp;
 	json_t *root, *child;
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
-		enomem_panic();
+		return NULL;
 
 	HASH_ITER(hh, cache->ht, node, tmp) {
 		child = node2json(node);
-		if (child == NULL)
-			continue;
-		if (json_array_append_new(root, child)) {
+		if (child != NULL && json_array_append_new(root, child)) {
 			pr_op_err("Cannot push %s json node into json root; unknown cause.",
 			    uri_op_get_printable(node->url));
 			continue;
@@ -438,8 +434,10 @@ write_tal_json(struct rpki_cache *cache)
 	struct json_t *json;
 
 	json = build_tal_json(cache);
-	if (json == NULL)
+	if (json == NULL) {
+		pr_op_err("Unable to cache TAL's metadata; JSON conversion failed.");
 		return;
+	}
 
 	filename = get_tal_json_filename(cache);
 	if (filename == NULL)
@@ -597,7 +595,7 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed)
 	switch (uri_get_type(url)) {
 	case UT_RSYNC:
 		error = config_get_rsync_enabled()
-		    ? rsync_download(url)
+		    ? rsync_download(uri_get_global(url), uri_get_local(url), true)
 		    : cache_check(url);
 		break;
 	case UT_HTTPS:

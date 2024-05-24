@@ -4,8 +4,8 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "log.h"
 #include "config/types.h"
+#include "log.h"
 
 static json_t *
 find_json(struct json_t *root, char const *full_name)

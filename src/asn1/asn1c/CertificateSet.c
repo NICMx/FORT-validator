@@ -7,14 +7,58 @@
 
 #include "asn1/asn1c/CertificateSet.h"
 
+#include "asn1/asn1c/Certificate.h"
+#include "json_util.h"
+
+static json_t *
+CertificateSet_encode_json(const struct asn_TYPE_descriptor_s *td,
+    const void *sptr)
+{
+	json_t *parent;
+	json_t *child;
+	const asn_anonymous_set_ *list;
+	int i;
+
+	if (!sptr)
+		return json_null();
+
+	parent = json_array_new();
+	if (parent == NULL)
+		return NULL;
+
+	list = _A_CSET_FROM_VOID(sptr);
+
+	for (i = 0; i < list->count; i++) {
+		child = Certificate_any2json(list->array[i]);
+		if (json_array_add(parent, child))
+			goto fail;
+	}
+
+	return parent;
+
+fail:	json_decref(parent);
+	return NULL;
+}
+
+static asn_TYPE_operation_t asn_OP_CertificateSet = {
+	SET_OF_free,
+	SET_OF_print,
+	SET_OF_compare,
+	SET_OF_decode_ber,
+	SET_OF_encode_der,
+	CertificateSet_encode_json,
+	SET_OF_encode_xer,
+	NULL	/* Use generic outmost tag fetcher */
+};
+
 asn_TYPE_member_t asn_MBR_CertificateSet_1[] = {
 	{ ATF_ANY_TYPE | ATF_POINTER, 0, 0,
 		-1 /* Ambiguous tag (ANY?) */,
 		0,
 		&asn_DEF_ANY,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -29,14 +73,14 @@ asn_SET_OF_specifics_t asn_SPC_CertificateSet_specs_1 = {
 asn_TYPE_descriptor_t asn_DEF_CertificateSet = {
 	"CertificateSet",
 	"CertificateSet",
-	&asn_OP_SET_OF,
+	&asn_OP_CertificateSet,
 	asn_DEF_CertificateSet_tags_1,
 	sizeof(asn_DEF_CertificateSet_tags_1)
 		/sizeof(asn_DEF_CertificateSet_tags_1[0]), /* 1 */
 	asn_DEF_CertificateSet_tags_1,	/* Same as above */
 	sizeof(asn_DEF_CertificateSet_tags_1)
 		/sizeof(asn_DEF_CertificateSet_tags_1[0]), /* 1 */
-	{ 0, 0, SET_OF_constraint },
+	{ NULL, NULL, SET_OF_constraint },
 	asn_MBR_CertificateSet_1,
 	1,	/* Single element */
 	&asn_SPC_CertificateSet_specs_1	/* Additional specs */

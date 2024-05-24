@@ -8,8 +8,8 @@
  */
 
 #include "as_number.h"
-#include "types/address.h"
 #include "rtr/db/deltas_array.h"
+#include "types/address.h"
 
 int vrps_init(void);
 void vrps_destroy(void);

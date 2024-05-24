@@ -8,17 +8,10 @@
 #ifndef	_IPAddressFamily_H_
 #define	_IPAddressFamily_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/IPAddressChoice.h"
+#include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* IPAddressFamily */
 typedef struct IPAddressFamily {
@@ -34,9 +27,4 @@ extern asn_TYPE_descriptor_t asn_DEF_IPAddressFamily;
 extern asn_SEQUENCE_specifics_t asn_SPC_IPAddressFamily_specs_1;
 extern asn_TYPE_member_t asn_MBR_IPAddressFamily_1[2];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _IPAddressFamily_H_ */
-#include "asn1/asn1c/asn_internal.h"

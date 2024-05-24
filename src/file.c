@@ -3,8 +3,8 @@
 #include <ftw.h>
 
 #include "alloc.h"
-#include "log.h"
 #include "data_structure/uthash.h"
+#include "log.h"
 
 int
 file_open(char const *file_name, FILE **result, struct stat *stat)
@@ -39,12 +39,12 @@ fail:
 }
 
 int
-file_write(char const *file_name, FILE **result)
+file_write(char const *file_name, char const *mode, FILE **result)
 {
 	FILE *file;
 	int error;
 
-	file = fopen(file_name, "wb");
+	file = fopen(file_name, mode);
 	if (file == NULL) {
 		error = errno;
 		pr_val_err("Could not open file '%s': %s", file_name,
@@ -125,27 +125,6 @@ file_exists(char const *path)
 {
 	struct stat meta;
 	return (stat(path, &meta) == 0) ? 0 : errno;
-}
-
-/*
- * Validate @file_name, if it doesn't exist, this function will create it and
- * close it.
- */
-bool
-file_valid(char const *file_name)
-{
-	FILE *tmp;
-	int error;
-
-	if (file_name == NULL)
-		return false;
-
-	error = file_write(file_name, &tmp);
-	if (error)
-		return false;
-
-	file_close(tmp);
-	return true;
 }
 
 static int

@@ -8,22 +8,16 @@
 #ifndef	_TBSCertList_H_
 #define	_TBSCertList_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/Version.h"
 #include "asn1/asn1c/AlgorithmIdentifier.h"
+#include "asn1/asn1c/CertificateSerialNumber.h"
+#include "asn1/asn1c/Extensions.h"
 #include "asn1/asn1c/Name.h"
 #include "asn1/asn1c/Time.h"
+#include "asn1/asn1c/Version.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/CertificateSerialNumber.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Forward declarations */
 struct Time;
@@ -63,13 +57,4 @@ extern asn_TYPE_descriptor_t asn_DEF_TBSCertList;
 extern asn_SEQUENCE_specifics_t asn_SPC_TBSCertList_specs_1;
 extern asn_TYPE_member_t asn_MBR_TBSCertList_1[7];
 
-#ifdef __cplusplus
-}
-#endif
-
-/* Referred external types */
-#include "asn1/asn1c/Time.h"
-#include "asn1/asn1c/Extensions.h"
-
 #endif	/* _TBSCertList_H_ */
-#include "asn1/asn1c/asn_internal.h"

@@ -1,10 +1,11 @@
 #include "incidence/incidence.h"
 
 #include <assert.h>
+
 #include "common.h"
+#include "data_structure/common.h"
 #include "json_util.h"
 #include "log.h"
-#include "data_structure/common.h"
 
 struct incidence {
 	const enum incidence_id id;

@@ -8,15 +8,8 @@
 #ifndef	_CMSVersion_H_
 #define	_CMSVersion_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/INTEGER.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum CMSVersion {
@@ -38,14 +31,6 @@ asn_struct_print_f CMSVersion_print;
 asn_constr_check_f CMSVersion_constraint;
 ber_type_decoder_f CMSVersion_decode_ber;
 der_type_encoder_f CMSVersion_encode_der;
-xer_type_decoder_f CMSVersion_decode_xer;
 xer_type_encoder_f CMSVersion_encode_xer;
-oer_type_decoder_f CMSVersion_decode_oer;
-oer_type_encoder_f CMSVersion_encode_oer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _CMSVersion_H_ */
-#include "asn1/asn1c/asn_internal.h"

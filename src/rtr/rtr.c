@@ -6,21 +6,30 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "types/address.h"
 #include "data_structure/array_list.h"
+#include "rtr/db/vrps.h"
 #include "rtr/err_pdu.h"
 #include "rtr/pdu.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
 #include "rtr/pdu_stream.h"
-#include "rtr/db/vrps.h"
 #include "thread/thread_pool.h"
+#include "types/address.h"
 #include "types/serial.h"
 
 struct rtr_server {
 	int fd;
 	/* Printable address to which the server was bound. */
 	char *addr;
+};
+
+struct server_init_ctx {
+	/* Server binding address string, exactly as received from the user. */
+	char const *input_addr;
+#ifdef __linux__
+	/* Have we already attempted to bind a wildcard address? */
+	bool wildcard_found;
+#endif
 };
 
 static pthread_t server_thread;
@@ -105,14 +114,12 @@ static int
 init_addrinfo(char const *hostname, char const *service,
     struct addrinfo **result)
 {
-	char *tmp;
 	struct addrinfo hints;
-	unsigned long parsed, port;
 	int error;
 
 	memset(&hints, 0 , sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
-	/* hints.ai_socktype = SOCK_DGRAM; */
+	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags |= AI_PASSIVE;
 
 	if (hostname != NULL)
@@ -126,30 +133,51 @@ init_addrinfo(char const *hostname, char const *service,
 		return error;
 	}
 
-	errno = 0;
-	parsed = strtoul(service, &tmp, 10);
-	if (errno || *tmp != '\0')
-		return 0; /* Ok, not a number */
-
-	/*
-	 * 'getaddrinfo' isn't very strict validating the service when a port
-	 * number is indicated. If a port larger than the max (65535) is
-	 * received, the 16 rightmost bits are utilized as the port and set at
-	 * the addrinfo returned.
-	 *
-	 * So, a manual validation is implemented. Port is actually a uint16_t,
-	 * so read what's necessary and compare using the same data type.
-	 */
-	port = (unsigned char)((*result)->ai_addr->sa_data[0]) << 8;
-	port += (unsigned char)((*result)->ai_addr->sa_data[1]);
-	if (parsed != port)
-		return pr_op_err("Service port %s is out of range (max value is %d)",
-		    service, USHRT_MAX);
-
 	return 0;
 }
 
+#ifdef __linux__
+
+static bool
+is_wildcard(struct sockaddr *sa)
+{
+	static const struct in6_addr wildcard6 = { 0 };
+	struct in_addr *addr4;
+	struct in6_addr *addr6;
+
+	switch (sa->sa_family) {
+	case AF_INET:
+		addr4 = &((struct sockaddr_in *) sa)->sin_addr;
+		return addr4->s_addr == 0;
+	case AF_INET6:
+		addr6 = &((struct sockaddr_in6 *) sa)->sin6_addr;
+		return addr6_equals(&wildcard6, addr6);
+	}
+
+	return false;
+}
+
+#endif
+
+static char *
+get_best_printable(struct addrinfo *addr, char const *input_addr)
+{
+	char str[INET6_ADDRSTRLEN];
+
+	if (sockaddr2str((struct sockaddr_storage *) addr->ai_addr, str))
+		return pstrdup(str);
+
+	if (input_addr != NULL)
+		return pstrdup(input_addr);
+
+	/* Failure is fine; this is just a nice-to-have. */
+	return NULL;
+}
+
 /*
+ * We want to listen to all sockets in one thread,
+ * so don't block.
+ *
  * By the way: man 2 poll says
  *
  * > The operation of poll() and ppoll() is not affected by the O_NONBLOCK flag.
@@ -186,96 +214,82 @@ set_nonblock(int fd)
  * from the clients.
  */
 static int
-create_server_socket(char const *input_addr, char const *hostname,
-    char const *service)
+create_server_socket(struct server_init_ctx *ctx, char const *hostname, char const *port)
 {
-	struct addrinfo *addrs;
-	struct addrinfo *addr;
-	unsigned long port;
-	int reuse;
-	int fd;
+	struct addrinfo *ais, *ai;
 	struct rtr_server server;
-	int error;
+	char const *errmsg;
+	static const int yes = 1;
+	int err;
 
-	reuse = 1;
+	err = init_addrinfo(hostname, port, &ais);
+	if (err)
+		return err;
 
-	error = init_addrinfo(hostname, service, &addrs);
-	if (error)
-		return error;
+	for (ai = ais; ai != NULL; ai = ai->ai_next) {
+#ifdef __linux__
+		if (is_wildcard(ai->ai_addr)) {
+			if (ctx->wildcard_found)
+				pr_op_warn("You have more than one wildcard address in server.address, and you're on Linux.\n"
+				    "On Linux, :: implies 0.0.0.0 by default, and you can't bind to 0.0.0.0 twice.\n"
+				    "The socket bind is probably going to fail.\n"
+				    "If you meant to bind to any address on both IPv4 and IPv6, you only need '::'.");
+			ctx->wildcard_found = true;
+		}
+#endif
 
-	if (addrs != NULL)
-		pr_op_info(
-		    "Attempting to bind socket to address '%s', port '%s'.",
-		    (addrs->ai_canonname != NULL) ? addrs->ai_canonname : "any",
-		    service);
+		server.fd = -1;
+		server.addr = get_best_printable(ai, ctx->input_addr);
+		pr_op_info("[%s]:%s: Setting up socket...", server.addr, port);
 
-	for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-		fd = socket(addr->ai_family, SOCK_STREAM, 0);
-		if (fd < 0) {
-			pr_op_err("socket() failed: %s", strerror(errno));
-			continue;
+		server.fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+		if (server.fd < 0) {
+			err = errno;
+			errmsg = "Unable to create socket";
+			goto fail;
 		}
 
-		/*
-		 * We want to listen to all sockets in one thread,
-		 * so don't block.
-		 */
-		if (set_nonblock(fd) != 0) {
-			close(fd);
-			continue;
+		if ((err = set_nonblock(server.fd)) != 0) {
+			errmsg = "Unable to disable blocking on the socket";
+			goto fail;
 		}
 
-		/* enable SO_REUSEADDR */
-		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse,
-		    sizeof(int)) < 0) {
-			pr_op_err("setsockopt(SO_REUSEADDR) failed: %s",
-			    strerror(errno));
-			close(fd);
-			continue;
+		if (setsockopt(server.fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+			err = errno;
+			errmsg = "Unable to enable SO_REUSEADDR on the socket";
+			goto fail;
 		}
 
-		if (bind(fd, addr->ai_addr, addr->ai_addrlen) < 0) {
-			pr_op_err("bind() failed: %s", strerror(errno));
-			close(fd);
-			continue;
+		if (bind(server.fd, ai->ai_addr, ai->ai_addrlen) < 0) {
+			err = errno;
+			errmsg = "Unable to bind the socket";
+			goto fail;
 		}
 
-		if (getsockname(fd, addr->ai_addr, &addr->ai_addrlen) != 0) {
-			error = errno;
-			close(fd);
-			freeaddrinfo(addrs);
-			pr_op_err("getsockname() failed: %s", strerror(error));
-			return error;
+		if (listen(server.fd, config_get_server_queue()) < 0) {
+			err = errno;
+			errmsg = "Unable to start listening on socket";
+			goto fail;
 		}
 
-		port = (unsigned char)(addr->ai_addr->sa_data[0]) << 8;
-		port += (unsigned char)(addr->ai_addr->sa_data[1]);
-		pr_op_info("Success; bound to address '%s', port '%ld'.",
-		    (addr->ai_canonname != NULL) ? addr->ai_canonname : "any",
-		    port);
-		freeaddrinfo(addrs);
-
-		if (listen(fd, config_get_server_queue()) != 0) {
-			error = errno;
-			close(fd);
-			pr_op_err("listen() failure: %s", strerror(error));
-			return error;
-		}
-
-		server.fd = fd;
-		/* Ignore failure; this is just a nice-to-have. */
-		server.addr = (input_addr != NULL) ? pstrdup(input_addr) : NULL;
+		pr_op_info("[%s]:%s: Success.", server.addr, port);
 		server_arraylist_add(&servers, &server);
-
-		return 0; /* Happy path */
 	}
 
-	freeaddrinfo(addrs);
-	return pr_op_err("None of the addrinfo candidates could be bound.");
+	freeaddrinfo(ais);
+	return 0;
+
+fail:
+	pr_op_err("[%s]:%s: %s: %s", server.addr, port, errmsg, strerror(err));
+	if (server.fd != -1)
+		close(server.fd);
+	free(server.addr);
+	freeaddrinfo(ais);
+	return err;
 }
 
 static int
-init_server_fd(char const *input_addr)
+init_server_fd(struct server_init_ctx *ctx)
 {
 	char *address;
 	char *service;
@@ -284,11 +298,11 @@ init_server_fd(char const *input_addr)
 	address = NULL;
 	service = NULL;
 
-	error = parse_address(input_addr, &address, &service);
+	error = parse_address(ctx->input_addr, &address, &service);
 	if (error)
 		return error;
 
-	error = create_server_socket(input_addr, address, service);
+	error = create_server_socket(ctx, address, service);
 
 	free(address);
 	free(service);
@@ -299,6 +313,7 @@ init_server_fd(char const *input_addr)
 static int
 init_server_fds(void)
 {
+	struct server_init_ctx ctx = { 0 };
 	struct string_array const *conf_addrs;
 	unsigned int i;
 	int error;
@@ -306,10 +321,11 @@ init_server_fds(void)
 	conf_addrs = config_get_server_address();
 
 	if (conf_addrs->length == 0)
-		return init_server_fd(NULL);
+		return init_server_fd(&ctx);
 
 	for (i = 0; i < conf_addrs->length; i++) {
-		error = init_server_fd(conf_addrs->array[i]);
+		ctx.input_addr = conf_addrs->array[i];
+		error = init_server_fd(&ctx);
 		if (error)
 			return error; /* Cleanup happens outside */
 	}

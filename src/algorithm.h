@@ -2,6 +2,7 @@
 #define SRC_ALGORITHM_H_
 
 #include <openssl/x509.h>
+
 #include "asn1/asn1c/AlgorithmIdentifier.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 

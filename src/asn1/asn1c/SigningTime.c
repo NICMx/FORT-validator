@@ -11,18 +11,15 @@
  * This type is implemented using Time,
  * so here we adjust the DEF accordingly.
  */
-static asn_oer_constraints_t asn_OER_type_SigningTime_constr_1 CC_NOTUSED = {
-	{ 0, 0 },
-	-1};
 asn_TYPE_descriptor_t asn_DEF_SigningTime = {
 	"SigningTime",
 	"SigningTime",
 	&asn_OP_CHOICE,
-	0,	/* No effective tags (pointer) */
+	NULL,	/* No effective tags (pointer) */
 	0,	/* No effective tags (count) */
-	0,	/* No tags (pointer) */
+	NULL,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ 0, 0, CHOICE_constraint },
+	{ NULL, NULL, CHOICE_constraint },
 	asn_MBR_Time_1,
 	2,	/* Elements count */
 	&asn_SPC_Time_specs_1	/* Additional specs */

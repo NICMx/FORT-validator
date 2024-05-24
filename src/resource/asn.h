@@ -2,6 +2,7 @@
 #define SRC_RESOURCE_ASN_H_
 
 #include <stdbool.h>
+
 #include "as_number.h"
 #include "asn1/asn1c/ASId.h"
 

@@ -2,9 +2,10 @@
 #define SRC_CERT_STACK_H_
 
 #include <openssl/bn.h>
-#include "resource.h"
+
 #include "object/certificate.h"
 #include "object/name.h"
+#include "resource.h"
 #include "types/uri.h"
 
 /*

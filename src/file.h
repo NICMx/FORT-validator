@@ -3,7 +3,6 @@
 
 #include <dirent.h>
 #include <errno.h>
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,14 +23,13 @@ struct file_contents {
 };
 
 int file_open(char const *, FILE **, struct stat *);
-int file_write(char const *, FILE **);
+int file_write(char const *, char const *, FILE **);
 void file_close(FILE *);
 
 int file_load(char const *, struct file_contents *);
 void file_free(struct file_contents *);
 
 int file_exists(char const *);
-bool file_valid(char const *);
 
 int file_rm_rf(char const *);
 

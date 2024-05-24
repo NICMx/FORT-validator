@@ -5,11 +5,11 @@
 #include "alloc.h"
 #include "cert_stack.h"
 #include "log.h"
+#include "resource/ip4.h"
+#include "resource/ip6.h"
 #include "sorted_array.h"
 #include "thread_var.h"
 #include "types/address.h"
-#include "resource/ip4.h"
-#include "resource/ip6.h"
 
 /* The resources we extracted from one certificate. */
 struct resources {

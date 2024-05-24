@@ -3,8 +3,9 @@
 
 #include <openssl/evp.h>
 #include <sys/queue.h>
-#include "types/vrp.h"
+
 #include "types/router_key.h"
+#include "types/vrp.h"
 
 /* Flags to get data from structs */
 #define SLURM_COM_FLAG_NONE		0x00

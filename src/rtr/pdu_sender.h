@@ -1,9 +1,9 @@
 #ifndef SRC_RTR_PDU_SENDER_H_
 #define SRC_RTR_PDU_SENDER_H_
 
+#include "rtr/db/vrps.h"
 #include "rtr/pdu.h"
 #include "types/router_key.h"
-#include "rtr/db/vrps.h"
 
 int send_serial_notify_pdu(int, uint8_t, serial_t);
 int send_cache_reset_pdu(int, uint8_t);

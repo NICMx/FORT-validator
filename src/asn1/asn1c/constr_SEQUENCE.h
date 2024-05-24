@@ -5,11 +5,7 @@
 #ifndef	_CONSTR_SEQUENCE_H_
 #define	_CONSTR_SEQUENCE_H_
 
-#include "asn1/asn1c/asn_application.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 typedef struct asn_SEQUENCE_specifics_s {
 	/*
@@ -23,14 +19,6 @@ typedef struct asn_SEQUENCE_specifics_s {
 	 */
 	const asn_TYPE_tag2member_t *tag2el;
 	unsigned tag2el_count;
-
-	/*
-	 * Optional members of the extensions root (roms) or additions (aoms).
-	 * Meaningful for PER.
-	 */
-	const int *oms;         /* Optional MemberS */
-	unsigned roms_count;    /* Root optional members count */
-	unsigned aoms_count;    /* Additions optional members count */
 
 	/*
 	 * Description of an extensions group.
@@ -50,17 +38,8 @@ asn_struct_compare_f SEQUENCE_compare;
 asn_constr_check_f SEQUENCE_constraint;
 ber_type_decoder_f SEQUENCE_decode_ber;
 der_type_encoder_f SEQUENCE_encode_der;
-xer_type_decoder_f SEQUENCE_decode_xer;
+json_type_encoder_f SEQUENCE_encode_json;
 xer_type_encoder_f SEQUENCE_encode_xer;
-oer_type_decoder_f SEQUENCE_decode_oer;
-oer_type_encoder_f SEQUENCE_encode_oer;
-per_type_decoder_f SEQUENCE_decode_uper;
-per_type_encoder_f SEQUENCE_encode_uper;
-asn_random_fill_f  SEQUENCE_random_fill;
 extern asn_TYPE_operation_t asn_OP_SEQUENCE;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _CONSTR_SEQUENCE_H_ */

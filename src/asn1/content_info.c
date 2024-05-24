@@ -1,10 +1,10 @@
 #include "asn1/content_info.h"
 
+#include "asn1/asn1c/ContentType.h"
+#include "asn1/decode.h"
+#include "asn1/oid.h"
 #include "file.h"
 #include "log.h"
-#include "asn1/oid.h"
-#include "asn1/decode.h"
-#include "asn1/asn1c/ContentType.h"
 
 static int
 validate(struct ContentInfo *info)
@@ -32,11 +32,12 @@ decode(struct file_contents *fc, struct ContentInfo **result)
 	struct ContentInfo *cinfo;
 	int error;
 
-	/* Validate DER encoding rfc6488#section3 bullet 1.l */
 	error = asn1_decode_fc(fc, &asn_DEF_ContentInfo, (void **) &cinfo,
-	    true, true);
+	    true);
 	if (error)
 		return error;
+
+	/* TODO (asn1c) rfc6488#3.1.l: Validate DER encoding */
 
 	error = validate(cinfo);
 	if (error) {
@@ -49,12 +50,12 @@ decode(struct file_contents *fc, struct ContentInfo **result)
 }
 
 int
-content_info_load(struct rpki_uri *uri, struct ContentInfo **result)
+content_info_load(char const *file, struct ContentInfo **result)
 {
 	struct file_contents fc;
 	int error;
 
-	error = file_load(uri_get_local(uri), &fc);
+	error = file_load(file, &fc);
 	if (error)
 		return error;
 

@@ -3,14 +3,14 @@
 #include <errno.h>
 #include <openssl/asn1.h>
 
-#include "crypto/base64.h"
 #include "algorithm.h"
 #include "alloc.h"
+#include "crypto/base64.h"
 #include "json_util.h"
 #include "log.h"
+#include "slurm/db_slurm.h"
 #include "types/address.h"
 #include "types/router_key.h"
-#include "slurm/db_slurm.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"
@@ -262,17 +262,23 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 static int
 validate_router_spki(unsigned char *data, size_t len)
 {
-	unsigned char const *tmp;
+	unsigned char const *origin, *cursor;
 	X509_PUBKEY *spki;
 	X509_ALGOR *pa;
 	ASN1_OBJECT *alg;
 	int ok;
 	int error;
 
-	tmp = data;
-	spki = d2i_X509_PUBKEY(NULL, &tmp, len);
+	origin = data;
+	cursor = origin;
+
+	spki = d2i_X509_PUBKEY(NULL, &cursor, len);
 	if (spki == NULL)
 		return op_crypto_err("Not a valid router public key");
+	if (cursor != origin + len) {
+		X509_PUBKEY_free(spki);
+		return op_crypto_err("Router public key contains trailing garbage.");
+	}
 
 	ok = X509_PUBKEY_get0_param(&alg, NULL, NULL, &pa, spki);
 	if (!ok) {

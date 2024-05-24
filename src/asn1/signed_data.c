@@ -2,17 +2,17 @@
 
 #include "algorithm.h"
 #include "alloc.h"
-#include "config.h"
-#include "log.h"
-#include "asn1/oid.h"
-#include "thread_var.h"
-#include "asn1/decode.h"
 #include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/ContentTypePKCS7.h"
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SignedDataPKCS7.h"
+#include "asn1/decode.h"
+#include "asn1/oid.h"
+#include "config.h"
 #include "crypto/hash.h"
+#include "log.h"
 #include "object/certificate.h"
+#include "thread_var.h"
 
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
@@ -20,22 +20,18 @@ static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 void
-signed_object_args_init(struct signed_object_args *args,
-    struct rpki_uri *uri,
-    STACK_OF(X509_CRL) *crls,
-    bool force_inherit)
+eecert_init(struct ee_cert *ee, STACK_OF(X509_CRL) *crls, bool force_inherit)
 {
-	args->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
-	args->uri = uri;
-	args->crls = crls;
-	memset(&args->refs, 0, sizeof(args->refs));
+	ee->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
+	ee->crls = crls;
+	memset(&ee->refs, 0, sizeof(ee->refs));
 }
 
 void
-signed_object_args_cleanup(struct signed_object_args *args)
+eecert_cleanup(struct ee_cert *ee)
 {
-	resources_destroy(args->res);
-	refs_cleanup(&args->refs);
+	resources_destroy(ee->res);
+	refs_cleanup(&ee->refs);
 }
 
 static int
@@ -55,10 +51,10 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 }
 
 static int
-handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
+handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
     OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
-	const unsigned char *tmp;
+	const unsigned char *otmp, *tmp;
 	X509 *cert;
 	enum rpki_policy policy;
 	int error;
@@ -78,34 +74,38 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct signed_object_args *args,
 	 * pointer.
 	 */
 	tmp = (const unsigned char *) cert_encoded->buf;
-
+	otmp = tmp;
 	cert = d2i_X509(NULL, &tmp, cert_encoded->size);
 	if (cert == NULL) {
 		error = val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
 		goto end1;
 	}
+	if (tmp != otmp + cert_encoded->size) {
+		error = val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
+		goto end2;
+	}
 
 	x509_name_pr_debug("Issuer", X509_get_issuer_name(cert));
 
-	error = certificate_validate_chain(cert, args->crls);
+	error = certificate_validate_chain(cert, ee->crls);
 	if (error)
 		goto end2;
 	error = certificate_validate_rfc6487(cert, CERTYPE_EE);
 	if (error)
 		goto end2;
-	error = certificate_validate_extensions_ee(cert, sid, &args->refs,
+	error = certificate_validate_extensions_ee(cert, sid, &ee->refs,
 	    &policy);
 	if (error)
 		goto end2;
-	error = certificate_validate_aia(args->refs.caIssuers, cert);
+	error = certificate_validate_aia(ee->refs.caIssuers, cert);
 	if (error)
 		goto end2;
 	error = certificate_validate_signature(cert, signedData, signature);
 	if (error)
 		goto end2;
 
-	resources_set_policy(args->res, policy);
-	error = certificate_get_resources(cert, args->res, CERTYPE_EE);
+	resources_set_policy(ee->res, policy);
+	error = certificate_get_resources(cert, ee->res, CERTYPE_EE);
 	if (error)
 		goto end2;
 
@@ -126,7 +126,7 @@ validate_content_type_attribute(CMSAttributeValue_t *value,
 	int error;
 
 	error = asn1_decode_any(value, &asn_DEF_OBJECT_IDENTIFIER,
-	    (void **) &attrValues, true, false);
+	    (void **) &attrValues, true);
 	if (error)
 		return error;
 	eContentType = &eci->eContentType;
@@ -149,7 +149,7 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 		return pr_val_err("There's no content being signed.");
 
 	error = asn1_decode_any(value, &asn_DEF_MessageDigest,
-	    (void **) &digest, true, false);
+	    (void **) &digest, true);
 	if (error)
 		return error;
 
@@ -255,9 +255,9 @@ illegal_attrType:
 	return -EINVAL;
 }
 
-static int
-validate(struct SignedData *sdata, ANY_t *sdata_encoded,
-    struct signed_object_args *args)
+int
+signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
+		     struct ee_cert *ee)
 {
 	struct SignerInfo *sinfo;
 	OCTET_STRING_t *sid = NULL;
@@ -383,7 +383,7 @@ validate(struct SignedData *sdata, ANY_t *sdata_encoded,
 	}
 
 	error = handle_sdata_certificate(sdata->certificates->list.array[0],
-	    args, sid, sdata_encoded, &sinfo->signature);
+	    ee, sid, encoded, &sinfo->signature);
 	if (error)
 		return error;
 
@@ -406,7 +406,7 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 	int error;
 
 	error = asn1_decode_any(coded, &asn_DEF_SignedDataPKCS7,
-	    (void **) &sdata_pkcs7, true, false);
+	    (void **) &sdata_pkcs7, true);
 	if (error)
 		return error;
 
@@ -415,7 +415,7 @@ signed_data_decode_pkcs7(ANY_t *coded, struct SignedData **result)
 	/* Parse content as OCTET STRING */
 	error = asn1_decode_any(sdata_pkcs7->encapContentInfo.eContent,
 	    &asn_DEF_ContentTypePKCS7,
-	    (void **) &sdata->encapContentInfo.eContent, true, false);
+	    (void **) &sdata->encapContentInfo.eContent, true);
 	if (error)
 		goto release_sdata;
 
@@ -442,36 +442,18 @@ release_sdata:
 }
 
 int
-signed_data_decode(struct signed_data *sdata, ANY_t *coded)
+signed_data_decode(ANY_t *encoded, struct SignedData **decoded)
 {
 	int error;
 
-	sdata->encoded = coded;
-
-	error = asn1_decode_any(coded, &asn_DEF_SignedData,
-	    (void **) &sdata->decoded, false, false);
+	error = asn1_decode_any(encoded, &asn_DEF_SignedData,
+	    (void **) decoded, false);
 	if (error) {
 		/* Try to decode as PKCS content (RFC 5652 section 5.2.1) */
-		error = signed_data_decode_pkcs7(coded, &sdata->decoded);
+		error = signed_data_decode_pkcs7(encoded, decoded);
 	}
 
 	return error;
-}
-
-int
-signed_data_validate(struct signed_data *sdata, struct signed_object_args *args)
-{
-	/*
-	 * TODO (fine) maybe collapse this wrapper,
-	 * since there's no point to it anymore.
-	 */
-	return validate(sdata->decoded, sdata->encoded, args);
-}
-
-void
-signed_data_cleanup(struct signed_data *sdata)
-{
-	ASN_STRUCT_FREE(asn_DEF_SignedData, sdata->decoded);
 }
 
 /* Caller must free *@result. */
@@ -512,7 +494,7 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 				return -EINVAL;
 			return asn1_decode_any(attr->attrValues.list.array[0],
 			    &asn_DEF_OBJECT_IDENTIFIER,
-			    (void **) result, true, false);
+			    (void **) result, true);
 		}
 	}
 

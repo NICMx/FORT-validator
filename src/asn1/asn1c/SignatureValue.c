@@ -24,7 +24,7 @@ asn_TYPE_descriptor_t asn_DEF_SignatureValue = {
 	asn_DEF_SignatureValue_tags_1,	/* Same as above */
 	sizeof(asn_DEF_SignatureValue_tags_1)
 		/sizeof(asn_DEF_SignatureValue_tags_1[0]), /* 1 */
-	{ 0, 0, OCTET_STRING_constraint },
-	0, 0,	/* No members */
+	{ NULL, NULL, OCTET_STRING_constraint },
+	NULL, 0,	/* No members */
 	&asn_SPC_OCTET_STRING_specs	/* Additional specs */
 };

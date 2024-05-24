@@ -2,10 +2,16 @@
  * Copyright (c) 2004-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ANY.h"
+
 #include <assert.h>
 #include <errno.h>
+
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/der_encoder.h"
+#include "asn1/asn1c/json_encoder.h"
+#include "asn1/asn1c/xer_encoder.h"
 
 asn_OCTET_STRING_specifics_t asn_SPC_ANY_specs = {
 	sizeof(ANY_t),
@@ -18,31 +24,17 @@ asn_TYPE_operation_t asn_OP_ANY = {
 	OCTET_STRING_compare,
 	OCTET_STRING_decode_ber,
 	OCTET_STRING_encode_der,
-	OCTET_STRING_decode_xer_hex,
+	OCTET_STRING_encode_json,
 	ANY_encode_xer,
-#ifdef	ASN_DISABLE_OER_SUPPORT
-	0,
-	0,
-#else
-	0,
-	0,
-#endif  /* ASN_DISABLE_OER_SUPPORT */
-#ifdef	ASN_DISABLE_PER_SUPPORT
-	0, 0,
-#else
-	ANY_decode_uper,
-	ANY_encode_uper,
-#endif  /* ASN_DISABLE_PER_SUPPORT */
-	0,	/* Random fill is not defined for ANY type */
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_ANY = {
 	"ANY",
 	"ANY",
 	&asn_OP_ANY,
-	0, 0, 0, 0,
-	{ 0, 0, asn_generic_no_constraint },	/* No constraints */
-	0, 0,	/* No members */
+	NULL, 0, NULL, 0,
+	{ NULL, NULL, asn_generic_no_constraint },	/* No constraints */
+	NULL, 0,	/* No members */
 	&asn_SPC_ANY_specs,
 };
 
@@ -57,7 +49,7 @@ asn_TYPE_descriptor_t asn_DEF_ANY = {
 
 asn_enc_rval_t
 ANY_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
-               enum xer_encoder_flags_e flags, asn_app_consume_bytes_f *cb,
+               int flags, asn_app_consume_bytes_f *cb,
                void *app_key) {
     if(flags & XER_F_CANONICAL) {
 		/*
@@ -95,7 +87,7 @@ ANY_fromType(ANY_t *st, asn_TYPE_descriptor_t *td, void *sptr) {
 	}
 
 	arg.offset = arg.size = 0;
-	arg.buffer = 0;
+	arg.buffer = NULL;
 
 	erval = der_encode(td, sptr, ANY__consume_bytes, &arg);
 	if(erval.encoded == -1) {
@@ -118,12 +110,12 @@ ANY_new_fromType(asn_TYPE_descriptor_t *td, void *sptr) {
 
 	if(!td || !sptr) {
 		errno = EINVAL;
-		return 0;
+		return NULL;
 	}
 
 	memset(&tmp, 0, sizeof(tmp));
 
-	if(ANY_fromType(&tmp, td, sptr)) return 0;
+	if(ANY_fromType(&tmp, td, sptr)) return NULL;
 
 	st = (ANY_t *)CALLOC(1, sizeof(ANY_t));
 	if(st) {
@@ -131,27 +123,27 @@ ANY_new_fromType(asn_TYPE_descriptor_t *td, void *sptr) {
 		return st;
 	} else {
 		FREEMEM(tmp.buf);
-		return 0;
+		return NULL;
 	}
 }
 
 int
 ANY_to_type(ANY_t *st, asn_TYPE_descriptor_t *td, void **struct_ptr) {
 	asn_dec_rval_t rval;
-	void *newst = 0;
+	void *newst = NULL;
 
 	if(!st || !td || !struct_ptr) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if(st->buf == 0) {
+	if(st->buf == NULL) {
 		/* Nothing to convert, make it empty. */
 		*struct_ptr = (void *)0;
 		return 0;
 	}
 
-	rval = ber_decode(0, td, (void **)&newst, st->buf, st->size);
+	rval = ber_decode(td, (void **)&newst, st->buf, st->size);
 	if(rval.code == RC_OK) {
 		*struct_ptr = newst;
 		return 0;
@@ -180,98 +172,8 @@ static int ANY__consume_bytes(const void *buffer, size_t size, void *key) {
 	return 0;
 }
 
-#ifndef ASN_DISABLE_PER_SUPPORT
-
-asn_dec_rval_t
-ANY_decode_uper(const asn_codec_ctx_t *opt_codec_ctx,
-                const asn_TYPE_descriptor_t *td,
-                const asn_per_constraints_t *constraints, void **sptr,
-                asn_per_data_t *pd) {
-    const asn_OCTET_STRING_specifics_t *specs =
-        td->specifics ? (const asn_OCTET_STRING_specifics_t *)td->specifics
-                      : &asn_SPC_ANY_specs;
-    size_t consumed_myself = 0;
-    int repeat;
-    ANY_t *st = (ANY_t *)*sptr;
-
-    (void)opt_codec_ctx;
-    (void)constraints;
-
-    /*
-     * Allocate the structure.
-     */
-    if(!st) {
-        st = (ANY_t *)(*sptr = CALLOC(1, specs->struct_size));
-        if(!st) RETURN(RC_FAIL);
-    }
-
-    ASN_DEBUG("PER Decoding ANY type");
-
-
-    st->size = 0;
-    do {
-        ssize_t raw_len;
-        ssize_t len_bytes;
-        ssize_t len_bits;
-        void *p;
-        int ret;
-
-        /* Get the PER length */
-        raw_len = uper_get_length(pd, -1, 0, &repeat);
-        if(raw_len < 0) RETURN(RC_WMORE);
-        if(raw_len == 0 && st->buf) break;
-
-        ASN_DEBUG("Got PER length len %" ASN_PRI_SIZE ", %s (%s)", raw_len,
-                  repeat ? "repeat" : "once", td->name);
-        len_bytes = raw_len;
-        len_bits = len_bytes * 8;
-
-        p = REALLOC(st->buf, st->size + len_bytes + 1);
-        if(!p) RETURN(RC_FAIL);
-        st->buf = (uint8_t *)p;
-
-        ret = per_get_many_bits(pd, &st->buf[st->size], 0, len_bits);
-        if(ret < 0) RETURN(RC_WMORE);
-        consumed_myself += len_bits;
-        st->size += len_bytes;
-    } while(repeat);
-    st->buf[st->size] = 0; /* nul-terminate */
-
-    RETURN(RC_OK);
+json_t *
+ANY_to_json(const asn_TYPE_descriptor_t *td, ANY_t const *ber)
+{
+	return ber2json(td, ber->buf, ber->size);
 }
-
-asn_enc_rval_t
-ANY_encode_uper(const asn_TYPE_descriptor_t *td,
-                const asn_per_constraints_t *constraints, const void *sptr,
-                asn_per_outp_t *po) {
-    const ANY_t *st = (const ANY_t *)sptr;
-    asn_enc_rval_t er = {0, 0, 0};
-    const uint8_t *buf;
-    size_t size;
-    int ret;
-
-    (void)constraints;
-
-    if(!st || (!st->buf && st->size)) ASN__ENCODE_FAILED;
-
-    buf = st->buf;
-    size = st->size;
-    do {
-        int need_eom = 0;
-        ssize_t may_save = uper_put_length(po, size, &need_eom);
-        if(may_save < 0) ASN__ENCODE_FAILED;
-
-        ret = per_put_many_bits(po, buf, may_save * 8);
-        if(ret) ASN__ENCODE_FAILED;
-
-        buf += may_save;
-        size -= may_save;
-        assert(!(may_save & 0x07) || !size);
-        if(need_eom && uper_put_length(po, 0, 0))
-            ASN__ENCODE_FAILED; /* End of Message length */
-    } while(size);
-
-    ASN__ENCODED_OK(er);
-}
-
-#endif /* ASN_DISABLE_PER_SUPPORT */

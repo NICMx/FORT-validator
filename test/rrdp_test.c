@@ -17,7 +17,8 @@ MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
     bool *changed)
 MOCK_ABORT_VOID(file_close, FILE *file)
 MOCK_ABORT_INT(file_rm_rf, char const *path)
-MOCK_ABORT_INT(file_write, char const *file_name, FILE **result)
+MOCK_ABORT_INT(file_write, char const *file_name, char const *mode,
+	       FILE **result)
 MOCK_ABORT_INT(delete_dir_recursive_bottom_up, char const *path)
 MOCK_ABORT_INT(mkdir_p, char const *path, bool include_basename)
 MOCK_ABORT_VOID(fnstack_pop, void)
@@ -38,6 +39,46 @@ MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
 MOCK_ABORT_PTR(validation_tal, tal, struct validation *state)
 
 /* Mocks end */
+
+START_TEST(test_hexstr2sha256)
+{
+	char *hex;
+	unsigned char *sha = NULL;
+	unsigned int i;
+
+	hex = "01";
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_ptr_eq(NULL, sha);
+
+	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(0, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_ptr_ne(NULL, sha);
+	for (i = 0; i < 32; i++)
+		ck_assert_uint_eq(i, sha[i]);
+	free(sha);
+	sha = NULL;
+
+	hex = "0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_ptr_eq(NULL, sha);
+
+	hex = " 00102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_ptr_eq(NULL, sha);
+
+	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_ptr_eq(NULL, sha);
+
+	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1";
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_ptr_eq(NULL, sha);
+
+	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2";
+	ck_assert_int_eq(EINVAL, hexstr2sha256((xmlChar *) hex, &sha));
+	ck_assert_ptr_eq(NULL, sha);
+}
+END_TEST
 
 #define END 0xFFFF
 
@@ -144,13 +185,14 @@ END_TEST
 static Suite *xml_load_suite(void)
 {
 	Suite *suite;
-	TCase *validate;
+	TCase *misc;
 
-	validate = tcase_create("Validate");
-	tcase_add_test(validate, test_sort_deltas);
+	misc = tcase_create("misc");
+	tcase_add_test(misc, test_hexstr2sha256);
+	tcase_add_test(misc, test_sort_deltas);
 
-	suite = suite_create("xml_test()");
-	suite_add_tcase(suite, validate);
+	suite = suite_create("RRDP");
+	suite_add_tcase(suite, misc);
 
 	return suite;
 }

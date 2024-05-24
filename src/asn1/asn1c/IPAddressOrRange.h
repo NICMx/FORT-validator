@@ -8,17 +8,10 @@
 #ifndef	_IPAddressOrRange_H_
 #define	_IPAddressOrRange_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/IPAddressRange.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum IPAddressOrRange_PR {
@@ -44,9 +37,4 @@ extern asn_TYPE_descriptor_t asn_DEF_IPAddressOrRange;
 extern asn_CHOICE_specifics_t asn_SPC_IPAddressOrRange_specs_1;
 extern asn_TYPE_member_t asn_MBR_IPAddressOrRange_1[2];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _IPAddressOrRange_H_ */
-#include "asn1/asn1c/asn_internal.h"

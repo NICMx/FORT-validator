@@ -1,13 +1,12 @@
 ---
 title: Home
-descrption: FORT validator is an RPKI Relying Party, a tool offered as part of the FORT project. It performs the validation of the entire RPKI repository and serves the resulting ROAs for easy access by your routers.
 ---
 
 # {{ page.title }}
 
 ## Introduction
 
-The FORT validator is an MIT-licensed RPKI Relying Party, offered as part of the [FORT project](https://www.fortproject.net/). It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers.
+FORT validator is an MIT-licensed RPKI Relying Party, offered as part of the [FORT project](https://www.fortproject.net/). It is a service that performs the validation of the entire RPKI repository, and which serves the resulting ROAs for easy access by your routers.
 
 ## Status
 

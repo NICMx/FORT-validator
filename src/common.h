@@ -26,6 +26,7 @@
 #define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
 
 bool str_starts_with(char const *, char const *);
+bool str_ends_with(char const *, char const *);
 
 void panic_on_fail(int, char const *);
 

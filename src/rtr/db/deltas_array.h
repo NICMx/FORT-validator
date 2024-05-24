@@ -1,8 +1,8 @@
 #ifndef SRC_RTR_DB_DELTAS_ARRAY_H_
 #define SRC_RTR_DB_DELTAS_ARRAY_H_
 
-#include "types/serial.h"
 #include "rtr/db/delta.h"
+#include "types/serial.h"
 
 struct deltas_array;
 

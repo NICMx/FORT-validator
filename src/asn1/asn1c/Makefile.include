@@ -47,7 +47,9 @@ ASN_MODULE_SRCS=	\
 	asn1/asn1c/RevocationInfoChoices.c	\
 	asn1/asn1c/RevocationInfoChoice.c	\
 	asn1/asn1c/OtherRevocationInfoFormat.c	\
+	asn1/asn1c/Certificate.c	\
 	asn1/asn1c/CertificateSet.c	\
+	asn1/asn1c/CRL.c	\
 	asn1/asn1c/IssuerAndSerialNumber.c	\
 	asn1/asn1c/CMSVersion.c	\
 	asn1/asn1c/MessageDigest.c	\
@@ -110,7 +112,9 @@ ASN_MODULE_HDRS=	\
 	asn1/asn1c/RevocationInfoChoices.h	\
 	asn1/asn1c/RevocationInfoChoice.h	\
 	asn1/asn1c/OtherRevocationInfoFormat.h	\
+	asn1/asn1c/Certificate.h	\
 	asn1/asn1c/CertificateSet.h	\
+	asn1/asn1c/CRL.h	\
 	asn1/asn1c/IssuerAndSerialNumber.h	\
 	asn1/asn1c/CMSVersion.h	\
 	asn1/asn1c/MessageDigest.h	\
@@ -155,17 +159,11 @@ ASN_MODULE_HDRS+=asn1/asn1c/constr_SEQUENCE_OF.h
 ASN_MODULE_SRCS+=asn1/asn1c/constr_SEQUENCE_OF.c
 ASN_MODULE_HDRS+=asn1/asn1c/constr_SET_OF.h
 ASN_MODULE_SRCS+=asn1/asn1c/constr_SET_OF.c
-ASN_MODULE_HDRS+=asn1/asn1c/asn_application.h
-ASN_MODULE_SRCS+=asn1/asn1c/asn_application.c
 ASN_MODULE_HDRS+=asn1/asn1c/asn_ioc.h
 ASN_MODULE_HDRS+=asn1/asn1c/asn_system.h
 ASN_MODULE_HDRS+=asn1/asn1c/asn_codecs.h
 ASN_MODULE_HDRS+=asn1/asn1c/asn_internal.h
 ASN_MODULE_SRCS+=asn1/asn1c/asn_internal.c
-ASN_MODULE_HDRS+=asn1/asn1c/asn_random_fill.h
-ASN_MODULE_SRCS+=asn1/asn1c/asn_random_fill.c
-ASN_MODULE_HDRS+=asn1/asn1c/asn_bit_data.h
-ASN_MODULE_SRCS+=asn1/asn1c/asn_bit_data.c
 ASN_MODULE_SRCS+=asn1/asn1c/OCTET_STRING.c
 ASN_MODULE_HDRS+=asn1/asn1c/BIT_STRING.h
 ASN_MODULE_SRCS+=asn1/asn1c/BIT_STRING.c
@@ -183,32 +181,7 @@ ASN_MODULE_HDRS+=asn1/asn1c/constr_TYPE.h
 ASN_MODULE_SRCS+=asn1/asn1c/constr_TYPE.c
 ASN_MODULE_HDRS+=asn1/asn1c/constraints.h
 ASN_MODULE_SRCS+=asn1/asn1c/constraints.c
-ASN_MODULE_HDRS+=asn1/asn1c/xer_support.h
-ASN_MODULE_SRCS+=asn1/asn1c/xer_support.c
-ASN_MODULE_HDRS+=asn1/asn1c/xer_decoder.h
-ASN_MODULE_SRCS+=asn1/asn1c/xer_decoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/json_encoder.c
+ASN_MODULE_HDRS+=asn1/asn1c/json_encoder.h
 ASN_MODULE_HDRS+=asn1/asn1c/xer_encoder.h
 ASN_MODULE_SRCS+=asn1/asn1c/xer_encoder.c
-ASN_MODULE_HDRS+=asn1/asn1c/per_support.h
-ASN_MODULE_SRCS+=asn1/asn1c/per_support.c
-ASN_MODULE_HDRS+=asn1/asn1c/per_decoder.h
-ASN_MODULE_SRCS+=asn1/asn1c/per_decoder.c
-ASN_MODULE_HDRS+=asn1/asn1c/per_encoder.h
-ASN_MODULE_SRCS+=asn1/asn1c/per_encoder.c
-ASN_MODULE_HDRS+=asn1/asn1c/per_opentype.h
-ASN_MODULE_SRCS+=asn1/asn1c/per_opentype.c
-ASN_MODULE_HDRS+=asn1/asn1c/oer_decoder.h
-ASN_MODULE_HDRS+=asn1/asn1c/oer_encoder.h
-ASN_MODULE_HDRS+=asn1/asn1c/oer_support.h
-ASN_MODULE_SRCS+=asn1/asn1c/oer_decoder.c
-ASN_MODULE_SRCS+=asn1/asn1c/oer_encoder.c
-ASN_MODULE_SRCS+=asn1/asn1c/oer_support.c
-ASN_MODULE_SRCS+=asn1/asn1c/OPEN_TYPE_oer.c
-ASN_MODULE_SRCS+=asn1/asn1c/INTEGER_oer.c
-ASN_MODULE_SRCS+=asn1/asn1c/BIT_STRING_oer.c
-ASN_MODULE_SRCS+=asn1/asn1c/OCTET_STRING_oer.c
-ASN_MODULE_SRCS+=asn1/asn1c/constr_CHOICE_oer.c
-ASN_MODULE_SRCS+=asn1/asn1c/constr_SEQUENCE_oer.c
-ASN_MODULE_SRCS+=asn1/asn1c/constr_SET_OF_oer.c
-
-ASN_MODULE_CFLAGS=-DASN_DISABLE_PER_SUPPORT 

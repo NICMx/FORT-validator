@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/Manifest.h"
 
+#include "asn1/asn1c/asn_internal.h"
+
 static int
 memb_manifestNumber_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
 			asn_app_constraint_failed_f *ctfailcb, void *app_key) {
@@ -53,15 +55,6 @@ memb_fileList_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
 	return td->encoding_constraints.general_constraints(td, sptr, ctfailcb, app_key);
 }
 
-static asn_oer_constraints_t asn_OER_type_fileList_constr_7 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(0..MAX)) */};
-static asn_oer_constraints_t asn_OER_memb_manifestNumber_constr_3 CC_NOTUSED = {
-	{ 0, 1 }	/* (0..MAX) */,
-	-1};
-static asn_oer_constraints_t asn_OER_memb_fileList_constr_7 CC_NOTUSED = {
-	{ 0, 0 },
-	-1	/* (SIZE(0..MAX)) */};
 static int asn_DFL_2_cmp_0(const void *sptr) {
 	const INTEGER_t *st = sptr;
 	
@@ -91,9 +84,9 @@ static asn_TYPE_member_t asn_MBR_fileList_7[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_FileAndHash,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -116,7 +109,7 @@ asn_TYPE_descriptor_t asn_DEF_fileList_7 = {
 	asn_DEF_fileList_tags_7,	/* Same as above */
 	sizeof(asn_DEF_fileList_tags_7)
 		/sizeof(asn_DEF_fileList_tags_7[0]), /* 1 */
-	{ &asn_OER_type_fileList_constr_7, 0, SEQUENCE_OF_constraint },
+	{ NULL, NULL, SEQUENCE_OF_constraint },
 	asn_MBR_fileList_7,
 	1,	/* Single element */
 	&asn_SPC_fileList_specs_7	/* Additional specs */
@@ -127,8 +120,8 @@ static asn_TYPE_member_t asn_MBR_Manifest_1[] = {
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_INTEGER,
-		0,
-		{ 0, 0, 0 },
+		NULL,
+		{ NULL, NULL, NULL },
 		&asn_DFL_2_cmp_0,	/* Compare DEFAULT 0 */
 		&asn_DFL_2_set_0,	/* Set DEFAULT 0 */
 		"version"
@@ -137,49 +130,48 @@ static asn_TYPE_member_t asn_MBR_Manifest_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_INTEGER,
-		0,
-		{ &asn_OER_memb_manifestNumber_constr_3, 0,  memb_manifestNumber_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_manifestNumber_constraint_1 },
+		NULL, NULL, /* No default value */
 		"manifestNumber"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, thisUpdate),
 		(ASN_TAG_CLASS_UNIVERSAL | (24 << 2)),
 		0,
 		&asn_DEF_GeneralizedTime,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"thisUpdate"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, nextUpdate),
 		(ASN_TAG_CLASS_UNIVERSAL | (24 << 2)),
 		0,
 		&asn_DEF_GeneralizedTime,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"nextUpdate"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, fileHashAlg),
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_OBJECT_IDENTIFIER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"fileHashAlg"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct Manifest, fileList),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_fileList_7,
-		0,
-		{ &asn_OER_memb_fileList_constr_7, 0,  memb_fileList_constraint_1 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL,  memb_fileList_constraint_1 },
+		NULL, NULL, /* No default value */
 		"fileList"
 		},
 };
-static const int asn_MAP_Manifest_oms_1[] = { 0 };
 static const ber_tlv_tag_t asn_DEF_Manifest_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -196,8 +188,6 @@ static asn_SEQUENCE_specifics_t asn_SPC_Manifest_specs_1 = {
 	offsetof(struct Manifest, _asn_ctx),
 	asn_MAP_Manifest_tag2el_1,
 	6,	/* Count of tags in the map */
-	asn_MAP_Manifest_oms_1,	/* Optional members */
-	1, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_Manifest = {
@@ -210,7 +200,7 @@ asn_TYPE_descriptor_t asn_DEF_Manifest = {
 	asn_DEF_Manifest_tags_1,	/* Same as above */
 	sizeof(asn_DEF_Manifest_tags_1)
 		/sizeof(asn_DEF_Manifest_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_Manifest_1,
 	6,	/* Elements count */
 	&asn_SPC_Manifest_specs_1	/* Additional specs */

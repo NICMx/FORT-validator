@@ -8,15 +8,8 @@
 #ifndef	_MessageDigest_H_
 #define	_MessageDigest_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/OCTET_STRING.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* MessageDigest */
 typedef OCTET_STRING_t	 MessageDigest_t;
@@ -28,14 +21,6 @@ asn_struct_print_f MessageDigest_print;
 asn_constr_check_f MessageDigest_constraint;
 ber_type_decoder_f MessageDigest_decode_ber;
 der_type_encoder_f MessageDigest_encode_der;
-xer_type_decoder_f MessageDigest_decode_xer;
 xer_type_encoder_f MessageDigest_encode_xer;
-oer_type_decoder_f MessageDigest_decode_oer;
-oer_type_encoder_f MessageDigest_encode_oer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _MessageDigest_H_ */
-#include "asn1/asn1c/asn_internal.h"

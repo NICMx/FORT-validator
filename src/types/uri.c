@@ -3,13 +3,13 @@
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
+#include "config/filename_format.h"
+#include "data_structure/path_builder.h"
 #include "log.h"
 #include "rrdp.h"
 #include "state.h"
 #include "str_token.h"
 #include "thread_var.h"
-#include "config/filename_format.h"
-#include "data_structure/path_builder.h"
 
 /**
  * Design notes:
@@ -518,15 +518,7 @@ uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
 bool
 uri_has_extension(struct rpki_uri *uri, char const *ext)
 {
-	size_t ext_len;
-	int cmp;
-
-	ext_len = strlen(ext);
-	if (uri->global_len < ext_len)
-		return false;
-
-	cmp = strncmp(uri->global + uri->global_len - ext_len, ext, ext_len);
-	return cmp == 0;
+	return str_ends_with(uri->global, ext);
 }
 
 bool

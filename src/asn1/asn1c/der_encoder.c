@@ -2,8 +2,11 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/der_encoder.h"
+
 #include <assert.h>
+
+#include "asn1/asn1c/asn_internal.h"
 
 static ssize_t der_write_TL(ber_tlv_tag_t tag, ber_tlv_len_t len,
 	asn_app_consume_bytes_f *cb, void *app_key, int constructed);
@@ -131,7 +134,7 @@ der_write_tags(const asn_TYPE_descriptor_t *sd, size_t struct_length,
 	 */
 	overall_length = struct_length;
 	for(i = tags_count - 1; i >= 0; --i) {
-		lens[i] = der_write_TL(tags[i], overall_length, 0, 0, 0);
+		lens[i] = der_write_TL(tags[i], overall_length, NULL, NULL, 0);
 		if(lens[i] == -1) return -1;
 		overall_length += lens[i];
 		lens[i] = overall_length - lens[i];

@@ -5,11 +5,7 @@
 #ifndef	ASN_TYPE_NULL_H
 #define	ASN_TYPE_NULL_H
 
-#include "asn1/asn1c/asn_application.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /*
  * The value of the NULL type is meaningless.
@@ -25,18 +21,9 @@ asn_struct_print_f NULL_print;
 asn_struct_compare_f NULL_compare;
 ber_type_decoder_f NULL_decode_ber;
 der_type_encoder_f NULL_encode_der;
-xer_type_decoder_f NULL_decode_xer;
+json_type_encoder_f NULL_encode_json;
 xer_type_encoder_f NULL_encode_xer;
-oer_type_decoder_f NULL_decode_oer;
-oer_type_encoder_f NULL_encode_oer;
-per_type_decoder_f NULL_decode_uper;
-per_type_encoder_f NULL_encode_uper;
-asn_random_fill_f  NULL_random_fill;
 
 #define NULL_constraint	asn_generic_no_constraint
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* NULL_H */

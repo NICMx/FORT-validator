@@ -1,6 +1,6 @@
 #--- Alpine build container ---
 FROM alpine:latest AS builder
-ARG FORT_VERSION=1.6.0
+ARG FORT_VERSION=1.6.1
 
 # Install compiler and dependencies
 RUN apk --update --no-cache add build-base autoconf automake pkgconfig jansson-dev check-dev \
@@ -20,7 +20,7 @@ RUN ./configure && make && make install
 FROM alpine:latest
 
 # Install dependencies
-RUN apk --update --no-cache add openssl jansson rsync tini libxml2 libcurl
+RUN apk --update --no-cache add openssl jansson rsync tini libxml2 libcurl rtrlib
 
 # Install FORT
 COPY --from=builder /usr/local/bin/fort /usr/local/bin/fort

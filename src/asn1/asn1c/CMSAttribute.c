@@ -7,14 +7,81 @@
 
 #include "asn1/asn1c/CMSAttribute.h"
 
+#include <openssl/obj_mac.h>
+
+#include "asn1/asn1c/ContentType.h"
+#include "asn1/asn1c/MessageDigest.h"
+#include "asn1/asn1c/SigningTime.h"
+#include "json_util.h"
+
+static json_t *
+CMSAttribute_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
+{
+	struct CMSAttribute const *cattr = sptr;
+	json_t *root;
+	json_t *array;
+	json_t *tmp;
+	int a;
+
+	if (!cattr)
+		return json_null();
+
+	root = json_obj_new();
+	if (root == NULL)
+		return NULL;
+
+	tmp = OBJECT_IDENTIFIER_encode_json(NULL, &cattr->attrType);
+	if (json_object_add(root, "attrType", tmp))
+		goto fail;
+	if (json_object_add(root, "attrValues", array = json_array_new()))
+		goto fail;
+
+	switch (OBJECT_IDENTIFIER_to_nid(&cattr->attrType)) {
+	case NID_pkcs9_contentType:
+		td = &asn_DEF_ContentType;
+		break;
+	case NID_pkcs9_messageDigest:
+		td = &asn_DEF_MessageDigest;
+		break;
+	case NID_pkcs9_signingTime:
+		td = &asn_DEF_SigningTime;
+		break;
+	default:
+		td = &asn_DEF_ANY;
+		break;
+	}
+
+	for (a = 0; a < cattr->attrValues.list.count; a++) {
+		tmp = ANY_to_json(td, cattr->attrValues.list.array[a]);
+		if (json_array_add(array, tmp))
+			goto fail;
+	}
+
+	return root;
+
+fail:	json_decref(root);
+	return NULL;
+}
+
+static asn_TYPE_operation_t asn_OP_CMSAttribute = {
+	SEQUENCE_free,
+	SEQUENCE_print,
+	SEQUENCE_compare,
+	SEQUENCE_decode_ber,
+	SEQUENCE_encode_der,
+	CMSAttribute_encode_json,
+	SEQUENCE_encode_xer,
+	NULL	/* Use generic outmost tag fetcher */
+};
+
 static asn_TYPE_member_t asn_MBR_attrValues_3[] = {
 	{ ATF_ANY_TYPE | ATF_POINTER, 0, 0,
 		-1 /* Ambiguous tag (ANY?) */,
 		0,
 		&asn_DEF_CMSAttributeValue,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -37,7 +104,7 @@ asn_TYPE_descriptor_t asn_DEF_attrValues_3 = {
 	asn_DEF_attrValues_tags_3,	/* Same as above */
 	sizeof(asn_DEF_attrValues_tags_3)
 		/sizeof(asn_DEF_attrValues_tags_3[0]), /* 1 */
-	{ 0, 0, SET_OF_constraint },
+	{ NULL, NULL, SET_OF_constraint },
 	asn_MBR_attrValues_3,
 	1,	/* Single element */
 	&asn_SPC_attrValues_specs_3	/* Additional specs */
@@ -48,18 +115,18 @@ asn_TYPE_member_t asn_MBR_CMSAttribute_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_OBJECT_IDENTIFIER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"attrType"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct CMSAttribute, attrValues),
 		(ASN_TAG_CLASS_UNIVERSAL | (17 << 2)),
 		0,
 		&asn_DEF_attrValues_3,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"attrValues"
 		},
 };
@@ -75,20 +142,19 @@ asn_SEQUENCE_specifics_t asn_SPC_CMSAttribute_specs_1 = {
 	offsetof(struct CMSAttribute, _asn_ctx),
 	asn_MAP_CMSAttribute_tag2el_1,
 	2,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_CMSAttribute = {
 	"CMSAttribute",
 	"CMSAttribute",
-	&asn_OP_SEQUENCE,
+	&asn_OP_CMSAttribute,
 	asn_DEF_CMSAttribute_tags_1,
 	sizeof(asn_DEF_CMSAttribute_tags_1)
 		/sizeof(asn_DEF_CMSAttribute_tags_1[0]), /* 1 */
 	asn_DEF_CMSAttribute_tags_1,	/* Same as above */
 	sizeof(asn_DEF_CMSAttribute_tags_1)
 		/sizeof(asn_DEF_CMSAttribute_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_CMSAttribute_1,
 	2,	/* Elements count */
 	&asn_SPC_CMSAttribute_specs_1	/* Additional specs */

@@ -13,10 +13,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct asn_TYPE_descriptor_s;	/* Forward declaration */
 
 /*
@@ -25,8 +21,8 @@ struct asn_TYPE_descriptor_s;	/* Forward declaration */
  * WARNING: if max_stack_size member is set, and you are calling the
  *   function pointers of the asn_TYPE_descriptor_t directly,
  *   this structure must be ALLOCATED ON THE STACK!
- *   If you can't always satisfy this requirement, use ber_decode(),
- *   xer_decode() and uper_decode() functions instead.
+ *   If you can't always satisfy this requirement, use ber_decode()
+ *   instead.
  */
 typedef struct asn_codec_ctx_s {
 	/*
@@ -39,6 +35,24 @@ typedef struct asn_codec_ctx_s {
 	 * A value from getrlimit(RLIMIT_STACK) may be used to initialize
 	 * this variable. Be careful in multithreaded environments, as the
 	 * stack size is rather limited.
+	 *
+	 * 2024-05-15: None of the RPKI objects employ recursive structures, and
+	 * they're all somewhat shallow. So this feature seems to be clutter.
+	 *
+	 * In my test environment, the highest effective ASN1 stack size
+	 * reported in a full run was 1296. Fort defaults
+	 * `--asn1-decode-max-stack` to 4096. The asn1c default recommended
+	 * maximum was 30000. My soft getrlimit(RLIMIT_STACK) is 8192...
+	 * I don't feel threatened by these numbers.
+	 *
+	 * Also, this seems naive. The "ASN1 stack size" isn't really comparable
+	 * to RLIMIT_STACK to begin with.
+	 *
+	 * TODO (fine) Consider (from worst to best)
+	 * - switching `--asn1-decode-max-stack` to getrlimit(RLIMIT_STACK),
+	 * - drop this feature altogether,
+	 * - or replace it with a gcc -fstack-usage analysis/monitor. (See
+	 *   https://stackoverflow.com/a/74769668/1735458.)
 	 */
 	size_t  max_stack_size; /* 0 disables stack bounds checking */
 } asn_codec_ctx_t;
@@ -73,13 +87,13 @@ typedef struct asn_enc_rval_s {
 	return tmp_error;					\
 } while(0)
 #define	ASN__ENCODED_OK(rval) do {				\
-	rval.structure_ptr = 0;					\
-	rval.failed_type = 0;					\
+	rval.structure_ptr = NULL;				\
+	rval.failed_type = NULL;				\
 	return rval;						\
 } while(0)
 
 /*
- * Type of the return value of the decoding functions (ber_decode, xer_decode)
+ * Type of the return value of the decoding functions (ber_decode, <deleted>)
  * 
  * Please note that the number of consumed bytes is ALWAYS meaningful,
  * even if code==RC_FAIL. This is to indicate the number of successfully
@@ -108,9 +122,5 @@ typedef struct asn_dec_rval_s {
 	tmp_error.consumed = 0;					\
 	return tmp_error;					\
 } while(0)
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* ASN_CODECS_H */

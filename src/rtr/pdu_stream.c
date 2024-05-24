@@ -2,10 +2,10 @@
 
 #include <errno.h>
 
-#include "log.h"
 #include "alloc.h"
-#include "rtr/pdu.h"
+#include "log.h"
 #include "rtr/err_pdu.h"
+#include "rtr/pdu.h"
 
 enum buffer_state {
 	/* We've read all available bytes for now. */
@@ -274,7 +274,9 @@ validate_rtr_version(struct pdu_stream *stream, struct pdu_header *header,
 
 unsupported:
 	return err_pdu_send_unsupported_proto_version(
-		stream->fd, stream->rtr_version, request,
+		stream->fd,
+		(stream->rtr_version != -1) ? stream->rtr_version : RTR_V1,
+		request,
 		"The maximum supported RTR version is 1."
 	);
 

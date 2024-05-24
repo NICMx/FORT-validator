@@ -5,11 +5,8 @@
 #ifndef ASN_TYPE_ANY_H
 #define ASN_TYPE_ANY_H
 
-#include "asn1/asn1c/OCTET_STRING.h"	/* Implemented via OCTET STRING type */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/OCTET_STRING.h"
+#include "asn1/asn1c/constraints.h"
 
 typedef struct ANY {
 	uint8_t *buf;	/* BER-encoded ANY contents */
@@ -27,8 +24,6 @@ asn_struct_print_f ANY_print;
 ber_type_decoder_f ANY_decode_ber;
 der_type_encoder_f ANY_encode_der;
 xer_type_encoder_f ANY_encode_xer;
-per_type_decoder_f ANY_decode_uper;
-per_type_encoder_f ANY_encode_uper;
 
 #define ANY_free         OCTET_STRING_free
 #define ANY_print        OCTET_STRING_print
@@ -36,7 +31,6 @@ per_type_encoder_f ANY_encode_uper;
 #define ANY_constraint   asn_generic_no_constraint
 #define ANY_decode_ber   OCTET_STRING_decode_ber
 #define ANY_encode_der   OCTET_STRING_encode_der
-#define ANY_decode_xer   OCTET_STRING_decode_xer_hex
 
 /******************************
  * Handy conversion routines. *
@@ -53,8 +47,6 @@ int ANY_to_type(ANY_t *, asn_TYPE_descriptor_t *td, void **struct_ptr);
 #define	ANY_new_fromBuf(buf, size)	OCTET_STRING_new_fromBuf(	\
 						&asn_DEF_ANY, (buf), (size))
 
-#ifdef __cplusplus
-}
-#endif
+json_t *ANY_to_json(const asn_TYPE_descriptor_t *, ANY_t const *);
 
 #endif	/* ASN_TYPE_ANY_H */

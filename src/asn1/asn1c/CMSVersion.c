@@ -24,7 +24,7 @@ asn_TYPE_descriptor_t asn_DEF_CMSVersion = {
 	asn_DEF_CMSVersion_tags_1,	/* Same as above */
 	sizeof(asn_DEF_CMSVersion_tags_1)
 		/sizeof(asn_DEF_CMSVersion_tags_1[0]), /* 1 */
-	{ 0, 0, INTEGER_constraint },
-	0, 0,	/* Defined elsewhere */
-	0	/* No specifics */
+	{ NULL, NULL, INTEGER_constraint },
+	NULL, 0,	/* Defined elsewhere */
+	NULL	/* No specifics */
 };

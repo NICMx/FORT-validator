@@ -1,9 +1,9 @@
 #ifndef SRC_OID_H_
 #define SRC_OID_H_
 
-#include "common.h"
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "common.h"
 
 /* These objects are expected to live on the stack. */
 struct oid_arcs {

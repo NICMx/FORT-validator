@@ -3,12 +3,12 @@
 #include <curl/curl.h>
 
 #include "alloc.h"
+#include "cache/local_cache.h"
 #include "common.h"
 #include "config.h"
+#include "data_structure/uthash.h"
 #include "file.h"
 #include "log.h"
-#include "data_structure/uthash.h"
-#include "cache/local_cache.h"
 
 struct http_handler {
 	CURL *curl;
@@ -108,7 +108,7 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
 	}
 
 	if (arg->file == NULL) {
-		arg->error = file_write(arg->file_name, &arg->file);
+		arg->error = file_write(arg->file_name, "wb", &arg->file);
 		if (arg->error)
 			return 0;
 	}

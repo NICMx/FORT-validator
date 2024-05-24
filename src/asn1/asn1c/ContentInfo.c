@@ -7,23 +7,74 @@
 
 #include "asn1/asn1c/ContentInfo.h"
 
+#include <openssl/obj_mac.h>
+
+#include "asn1/asn1c/SignedData.h"
+#include "json_util.h"
+
+static json_t *
+ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)
+{
+	struct ContentInfo const *ci = sptr;
+	json_t *parent;
+	json_t *child;
+
+	if (!ci)
+		return json_null();
+
+	parent = json_obj_new();
+	if (parent == NULL)
+		return NULL;
+
+	td = &asn_DEF_ContentType;
+	child = td->op->json_encoder(td, &ci->contentType);
+	if (json_object_add(parent, "contentType", child))
+		goto fail;
+
+	if (OBJECT_IDENTIFIER_to_nid(&ci->contentType) == NID_pkcs7_signed) {
+		td = &asn_DEF_SignedData;
+		child = ANY_to_json(td, &ci->content);
+	} else {
+		td = &asn_DEF_ANY;
+		child = td->op->json_encoder(td, &ci->content);
+	}
+	if (json_object_add(parent, "content", child))
+		goto fail;
+
+	return parent;
+
+fail:	json_decref(parent);
+	return NULL;
+}
+
+static asn_TYPE_operation_t asn_OP_ContentInfo = {
+	SEQUENCE_free,
+	SEQUENCE_print,
+	SEQUENCE_compare,
+	SEQUENCE_decode_ber,
+	SEQUENCE_encode_der,
+	ContentInfo_encode_json,
+	SEQUENCE_encode_xer,
+	NULL	/* Use generic outmost tag fetcher */
+};
+
 static asn_TYPE_member_t asn_MBR_ContentInfo_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct ContentInfo, contentType),
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_ContentType,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"contentType"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct ContentInfo, content),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_ANY,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"content"
 		},
 };
@@ -39,20 +90,19 @@ static asn_SEQUENCE_specifics_t asn_SPC_ContentInfo_specs_1 = {
 	offsetof(struct ContentInfo, _asn_ctx),
 	asn_MAP_ContentInfo_tag2el_1,
 	2,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_ContentInfo = {
 	"ContentInfo",
 	"ContentInfo",
-	&asn_OP_SEQUENCE,
+	&asn_OP_ContentInfo,
 	asn_DEF_ContentInfo_tags_1,
 	sizeof(asn_DEF_ContentInfo_tags_1)
 		/sizeof(asn_DEF_ContentInfo_tags_1[0]), /* 1 */
 	asn_DEF_ContentInfo_tags_1,	/* Same as above */
 	sizeof(asn_DEF_ContentInfo_tags_1)
 		/sizeof(asn_DEF_ContentInfo_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_ContentInfo_1,
 	2,	/* Elements count */
 	&asn_SPC_ContentInfo_specs_1	/* Additional specs */

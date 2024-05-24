@@ -2,8 +2,8 @@
 
 #include <getopt.h>
 
-#include "log.h"
 #include "config/str.h"
+#include "log.h"
 
 #define OFM_VALUE_CSV  "csv"
 #define OFM_VALUE_JSON "json"

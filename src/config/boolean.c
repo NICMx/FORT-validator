@@ -1,6 +1,7 @@
 #include "config/boolean.h"
 
 #include <getopt.h>
+
 #include "log.h"
 
 #define DEREFERENCE(void_value) (*((bool *) void_value))

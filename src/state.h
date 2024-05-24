@@ -1,8 +1,8 @@
 #ifndef SRC_STATE_H_
 #define SRC_STATE_H_
 
-#include "validation_handler.h"
 #include "object/tal.h"
+#include "validation_handler.h"
 
 struct validation;
 

@@ -6,15 +6,6 @@
 #define	ASN_SET_OF_H
 #include <stdlib.h>
 
-#ifdef __cplusplus
-#define A_SET_OF(type)                   \
-    struct {                             \
-        type **array;                    \
-        int count; /* Meaningful size */ \
-        int size;  /* Allocated size */  \
-        void (*free)(decltype(*array));  \
-    }
-#else   /* C */
 #define A_SET_OF(type)                   \
     struct {                             \
         type **array;                    \
@@ -22,11 +13,6 @@
         int size;  /* Allocated size */  \
         void (*free)(type *);    \
     }
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define	ASN_SET_ADD(headptr, ptr)		\
 	asn_set_add((headptr), (ptr))
@@ -65,9 +51,5 @@ void asn_set_empty(void *asn_set_of_x);
 typedef A_SET_OF(void) asn_anonymous_set_;
 #define _A_SET_FROM_VOID(ptr)		((asn_anonymous_set_ *)(ptr))
 #define _A_CSET_FROM_VOID(ptr)		((const asn_anonymous_set_ *)(ptr))
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* ASN_SET_OF_H */

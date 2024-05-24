@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_IssuerAndSerialNumber_1[] = {
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_Name,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"issuer"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct IssuerAndSerialNumber, serialNumber),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_CertificateSerialNumber,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"serialNumber"
 		},
 };
@@ -39,7 +39,6 @@ asn_SEQUENCE_specifics_t asn_SPC_IssuerAndSerialNumber_specs_1 = {
 	offsetof(struct IssuerAndSerialNumber, _asn_ctx),
 	asn_MAP_IssuerAndSerialNumber_tag2el_1,
 	2,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_IssuerAndSerialNumber = {
@@ -52,7 +51,7 @@ asn_TYPE_descriptor_t asn_DEF_IssuerAndSerialNumber = {
 	asn_DEF_IssuerAndSerialNumber_tags_1,	/* Same as above */
 	sizeof(asn_DEF_IssuerAndSerialNumber_tags_1)
 		/sizeof(asn_DEF_IssuerAndSerialNumber_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_IssuerAndSerialNumber_1,
 	2,	/* Elements count */
 	&asn_SPC_IssuerAndSerialNumber_specs_1	/* Additional specs */

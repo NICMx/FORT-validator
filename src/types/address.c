@@ -530,7 +530,7 @@ addr2str6(struct in6_addr const *addr, char *buffer)
 /**
  * buffer must length INET6_ADDRSTRLEN.
  */
-void
+bool
 sockaddr2str(struct sockaddr_storage *sockaddr, char *buffer)
 {
 	void *addr = NULL;
@@ -538,7 +538,7 @@ sockaddr2str(struct sockaddr_storage *sockaddr, char *buffer)
 
 	if (sockaddr == NULL) {
 		strcpy(buffer, "(null)");
-		return;
+		return false;
 	}
 
 	switch (sockaddr->ss_family) {
@@ -550,10 +550,14 @@ sockaddr2str(struct sockaddr_storage *sockaddr, char *buffer)
 		break;
 	default:
 		strcpy(buffer, "(protocol unknown)");
-		return;
+		return false;
 	}
 
 	str = inet_ntop(sockaddr->ss_family, addr, buffer, INET6_ADDRSTRLEN);
-	if (str == NULL)
+	if (str == NULL) {
 		strcpy(buffer, "(unprintable address)");
+		return false;
+	}
+
+	return true;
 }

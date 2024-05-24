@@ -5,11 +5,7 @@
 #ifndef	_CONSTR_CHOICE_H_
 #define	_CONSTR_CHOICE_H_
 
-#include "asn1/asn1c/asn_application.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 typedef struct asn_CHOICE_specifics_s {
 	/*
@@ -26,10 +22,6 @@ typedef struct asn_CHOICE_specifics_s {
 	const asn_TYPE_tag2member_t *tag2el;
 	unsigned tag2el_count;
 
-	/* Canonical ordering of CHOICE elements, for PER */
-	const unsigned *to_canonical_order;
-	const unsigned *from_canonical_order;
-
 	/*
 	 * Extensions-related stuff.
 	 */
@@ -45,14 +37,9 @@ asn_struct_compare_f CHOICE_compare;
 asn_constr_check_f CHOICE_constraint;
 ber_type_decoder_f CHOICE_decode_ber;
 der_type_encoder_f CHOICE_encode_der;
-xer_type_decoder_f CHOICE_decode_xer;
+json_type_encoder_f CHOICE_encode_json;
 xer_type_encoder_f CHOICE_encode_xer;
-oer_type_decoder_f CHOICE_decode_oer;
-oer_type_encoder_f CHOICE_encode_oer;
-per_type_decoder_f CHOICE_decode_uper;
-per_type_encoder_f CHOICE_encode_uper;
 asn_outmost_tag_f CHOICE_outmost_tag;
-asn_random_fill_f CHOICE_random_fill;
 extern asn_TYPE_operation_t asn_OP_CHOICE;
 
 /*
@@ -70,9 +57,5 @@ unsigned CHOICE_variant_get_presence(const asn_TYPE_descriptor_t *td,
  */
 int CHOICE_variant_set_presence(const asn_TYPE_descriptor_t *td,
                                 void *structure_ptr, unsigned present);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _CONSTR_CHOICE_H_ */
