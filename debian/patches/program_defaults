@@ -1,8 +1,9 @@
-Description: Mimic patches from Marco D'itri debian packaging
- These are almost the same updates from fort-validator package, trying to
- simplify the migration from this package to that package.
+Description: Changes two configuration defaults to better match the
+ Debian environment.
 Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
 Forwarded: not-needed
+diff --git a/man/fort.8 b/man/fort.8
+index 803a65f..13bfd7d 100644
 --- a/man/fort.8
 +++ b/man/fort.8
 @@ -211,6 +211,8 @@ The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
@@ -23,69 +24,11 @@ Forwarded: not-needed
  .RE
  .P
  
-@@ -1135,27 +1137,27 @@ Deprecated; does nothing.
- .P
- 
- .SH EXAMPLES
--.B fort \-\-init-tals \-\-tal=/tmp/tal
-+.B fort \-\-init-tals \-\-tal=/etc/tals
- .RS 4
- Download the 5 RIR TALs into the /tmp/tal directory.
- .RE
- .P
- 
--.B fort \-t /tmp/tal \-r /tmp/repository \-\-server.port=9323
-+.B fort \-t /etc/tals \-r /var/lib/fort \-\-server.port=9323
- .RS 4
- Run FORT with all the default values, using a custom TALs directory, a
- custom repository directory as well, and binding the RTR server to port 9323.
- .RE
- .P
- 
--.B fort \-t /tmp/tal \-r /tmp/repository \-\-mode=standalone \-\-output.roa=-
-+.B fort \-t /etc/tals \-r /var/lib/fort \-\-mode=standalone \-\-output.roa=-
- .RS 4
- Run FORT as standalone and output ROAs CSV to the console.
- .RE
- .P
- 
- .nf
--\fBfort \-t /tmp/tal \-r /tmp/repository \\
-+\fBfort \-t /etc/tals \-r /var/lib/fort \\
-      \-\-mode=standalone \\
-      \-\-slurm=/tmp/myslurm.slurm\fR
- .fi
-@@ -1171,7 +1173,7 @@ Run FORT using the JSON configuration file \fIconf.json\fR.
- .P
- 
- .nf
--\fBfort \-t /tmp/tal \-r /tmp/repository \\
-+\fBfort \-t /etc/tals \-r /var/lib/fort \\
-      \-\-server.address=::1 \-\-server.port=9323 \\
-      \-\-server.interval.validation=1800 \\
-      \-\-output.roa=/tmp/roas.csv\fR
-@@ -1188,13 +1190,14 @@ This is an example of a valid JSON configuration file with all its members set
- to a specific value:
- .nf
- {
--  "tal": "/tmp/fort/tal/",
--  "local-repository": "/tmp/fort/repository",
-+  "tal": "/etc/tals/",
-+  "local-repository": "/var/lib/fort/",
-   "work-offline": false,
-   "maximum-certificate-depth": 32,
-   "mode": "server",
-   "daemon": false,
-   "slurm": "/tmp/fort/test.slurm",
-+  "slurm": "/etc/fort/slurm/",
-   "asn1-decode-max-stack": 4096,
- 
-   "server": {
 diff --git a/src/config.c b/src/config.c
-index de54d90..14a33b9 100644
+index eb3e84b..4380dbb 100644
 --- a/src/config.c
 +++ b/src/config.c
-@@ -907,8 +907,8 @@ set_default_values(void)
+@@ -924,8 +924,8 @@ set_default_values(void)
  	 * duplicates.
  	 */
  
