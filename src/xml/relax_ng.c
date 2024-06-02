@@ -38,12 +38,7 @@ relax_ng_log_warn(void *ctx, const char *msg, ...)
 static void
 relax_ng_log_str_err(void *userData, const xmlError *error)
 {
-	char *ptr;
-
-	ptr = error->message;
-	if (ptr[strlen(ptr) - 1] == '\n')
-		ptr[strlen(ptr) - 1] = '\0';
-	pr_val_err("%s (at line %d)", ptr, error->line);
+	pr_val_err("%s (at line %d)", error->message, error->line);
 }
 
 /* Initialize global schema to parse RRDP files */
