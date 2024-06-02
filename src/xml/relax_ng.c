@@ -36,7 +36,7 @@ relax_ng_log_warn(void *ctx, const char *msg, ...)
 }
 
 static void
-relax_ng_log_str_err(void *userData, xmlErrorPtr error)
+relax_ng_log_str_err(void *userData, const xmlError *error)
 {
 	char *ptr;
 
