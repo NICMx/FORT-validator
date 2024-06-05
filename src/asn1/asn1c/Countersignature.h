@@ -8,15 +8,8 @@
 #ifndef	_Countersignature_H_
 #define	_Countersignature_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/SignerInfo.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Countersignature */
 typedef SignerInfo_t	 Countersignature_t;
@@ -28,14 +21,6 @@ asn_struct_print_f Countersignature_print;
 asn_constr_check_f Countersignature_constraint;
 ber_type_decoder_f Countersignature_decode_ber;
 der_type_encoder_f Countersignature_encode_der;
-xer_type_decoder_f Countersignature_decode_xer;
 xer_type_encoder_f Countersignature_encode_xer;
-oer_type_decoder_f Countersignature_decode_oer;
-oer_type_encoder_f Countersignature_encode_oer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _Countersignature_H_ */
-#include "asn1/asn1c/asn_internal.h"

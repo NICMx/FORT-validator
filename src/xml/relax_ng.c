@@ -35,15 +35,17 @@ relax_ng_log_warn(void *ctx, const char *msg, ...)
 	VLOG_MSG(warn)
 }
 
-static void
-relax_ng_log_str_err(void *userData, xmlErrorPtr error)
-{
-	char *ptr;
+/* Signature changed at libxml2 commit 61034116d0a3c8b295c6137956adc3ae55720. */
+#if LIBXML_VERSION >= 21200
+#define XMLERROR_PARAMTYPE const xmlError *
+#else
+#define XMLERROR_PARAMTYPE xmlErrorPtr
+#endif
 
-	ptr = error->message;
-	if (ptr[strlen(ptr) - 1] == '\n')
-		ptr[strlen(ptr) - 1] = '\0';
-	pr_val_err("%s (at line %d)", ptr, error->line);
+static void
+relax_ng_log_str_err(void *userData, XMLERROR_PARAMTYPE error)
+{
+	pr_val_err("%s (at line %d)", error->message, error->line);
 }
 
 /* Initialize global schema to parse RRDP files */

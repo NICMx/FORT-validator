@@ -12,18 +12,18 @@ asn_TYPE_member_t asn_MBR_OtherRevocationInfoFormat_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_OBJECT_IDENTIFIER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"otherRevInfoFormat"
 		},
 	{ ATF_ANY_TYPE | ATF_NOFLAGS, 0, offsetof(struct OtherRevocationInfoFormat, otherRevInfo),
 		-1 /* Ambiguous tag (ANY?) */,
 		0,
 		&asn_DEF_ANY,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"otherRevInfo"
 		},
 };
@@ -38,7 +38,6 @@ asn_SEQUENCE_specifics_t asn_SPC_OtherRevocationInfoFormat_specs_1 = {
 	offsetof(struct OtherRevocationInfoFormat, _asn_ctx),
 	asn_MAP_OtherRevocationInfoFormat_tag2el_1,
 	1,	/* Count of tags in the map */
-	0, 0, 0,	/* Optional elements (not needed) */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_OtherRevocationInfoFormat = {
@@ -51,7 +50,7 @@ asn_TYPE_descriptor_t asn_DEF_OtherRevocationInfoFormat = {
 	asn_DEF_OtherRevocationInfoFormat_tags_1,	/* Same as above */
 	sizeof(asn_DEF_OtherRevocationInfoFormat_tags_1)
 		/sizeof(asn_DEF_OtherRevocationInfoFormat_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_OtherRevocationInfoFormat_1,
 	2,	/* Elements count */
 	&asn_SPC_OtherRevocationInfoFormat_specs_1	/* Additional specs */

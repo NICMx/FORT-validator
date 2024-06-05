@@ -1,8 +1,10 @@
 #ifndef SRC_TYPES_ADDRESS_H_
 #define SRC_TYPES_ADDRESS_H_
 
+#include <netdb.h>
 #include <stdbool.h>
 #include <sys/socket.h>
+
 #include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/IPAddressRange.h"
 

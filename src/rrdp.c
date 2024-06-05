@@ -534,7 +534,7 @@ write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 	if (error)
 		return error;
 
-	error = file_write(uri_get_local(uri), &out);
+	error = file_write(uri_get_local(uri), "wb", &out);
 	if (error)
 		return error;
 
@@ -1222,7 +1222,7 @@ rrdp_notif2json(struct cachefile_notification *notif)
 	deltas = json_array();
 	if (deltas == NULL)
 		enomem_panic();
-	if (json_add_obj(json, TAGNAME_DELTAS, deltas))
+	if (json_object_add(json, TAGNAME_DELTAS, deltas))
 		goto fail;
 
 	hash_str[2 * RRDP_HASH_LEN] = '\0';

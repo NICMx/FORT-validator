@@ -6,14 +6,14 @@
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
-#include "output_printer.h"
-#include "validation_handler.h"
-#include "types/router_key.h"
 #include "data_structure/array_list.h"
 #include "object/tal.h"
-#include "rtr/rtr.h"
+#include "output_printer.h"
 #include "rtr/db/db_table.h"
+#include "rtr/rtr.h"
 #include "slurm/slurm_loader.h"
+#include "types/router_key.h"
+#include "validation_handler.h"
 
 struct vrp_node {
 	struct delta_vrp delta;

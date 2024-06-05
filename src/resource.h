@@ -1,10 +1,10 @@
 #ifndef SRC_RESOURCE_H_
 #define SRC_RESOURCE_H_
 
-#include "resource/asn.h"
-#include "types/address.h"
 #include "asn1/asn1c/ASIdentifiers.h"
 #include "asn1/asn1c/IPAddressFamily.h"
+#include "resource/asn.h"
+#include "types/address.h"
 
 enum rpki_policy {
 	/**

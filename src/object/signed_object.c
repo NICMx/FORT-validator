@@ -1,18 +1,18 @@
 #include "object/signed_object.h"
 
-#include "log.h"
 #include "asn1/content_info.h"
+#include "log.h"
 
 int
 signed_object_decode(struct signed_object *sobj, struct rpki_uri *uri)
 {
 	int error;
 
-	error = content_info_load(uri, &sobj->cinfo);
+	error = content_info_load(uri_get_local(uri), &sobj->cinfo);
 	if (error)
 		return error;
 
-	error = signed_data_decode(&sobj->sdata, &sobj->cinfo->content);
+	error = signed_data_decode(&sobj->cinfo->content, &sobj->sdata);
 	if (error) {
 		content_info_free(sobj->cinfo);
 		return error;
@@ -68,29 +68,29 @@ validate_content_type(struct SignedData *sdata, struct oid_arcs const *oid)
 
 int
 signed_object_validate(struct signed_object *sobj, struct oid_arcs const *oid,
-    struct signed_object_args *args)
+    struct ee_cert *ee)
 {
 	int error;
 
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.1 */
 	/* rfc6486#section-4.4.1 */
-	error = validate_eContentType(sobj->sdata.decoded, oid);
+	error = validate_eContentType(sobj->sdata, oid);
 	if (error)
 		return error;
 
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.3 */
-	error = validate_content_type(sobj->sdata.decoded, oid);
+	error = validate_content_type(sobj->sdata, oid);
 	if (error)
 		return error;
 
-	return signed_data_validate(&sobj->sdata, args);
+	return signed_data_validate(&sobj->cinfo->content, sobj->sdata, ee);
 }
 
 void
 signed_object_cleanup(struct signed_object *sobj)
 {
 	content_info_free(sobj->cinfo);
-	signed_data_cleanup(&sobj->sdata);
+	ASN_STRUCT_FREE(asn_DEF_SignedData, sobj->sdata);
 }

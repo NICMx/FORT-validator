@@ -67,27 +67,27 @@ file_rm_f(char const *file)
 MOCK_ABORT_INT(file_get_mtim, char const *file, time_t *ims)
 
 static int
-pretend_download(struct rpki_uri *uri)
+pretend_download(char const *local)
 {
 	struct downloaded_path *dl;
 
 	if (dl_error)
 		return -EINVAL;
-	if (file_exists(uri_get_local(uri)) == 0)
+	if (file_exists(local) == 0)
 		return 0;
 
 	dl = pmalloc(sizeof(struct downloaded_path));
-	dl->path = pstrdup(uri_get_local(uri));
+	dl->path = pstrdup(local);
 	dl->visited = false;
 	SLIST_INSERT_HEAD(&downloaded, dl, hook);
 	return 0;
 }
 
 int
-rsync_download(struct rpki_uri *uri)
+rsync_download(char const *src, char const *dst, bool is_directory)
 {
 	rsync_counter++;
-	return pretend_download(uri);
+	return pretend_download(dst);
 }
 
 int
@@ -95,7 +95,7 @@ http_download(struct rpki_uri *uri, curl_off_t ims, bool *changed)
 {
 	int error;
 	https_counter++;
-	error = pretend_download(uri);
+	error = pretend_download(uri_get_local(uri));
 	if (changed != NULL)
 		*changed = error ? false : true;
 	return error;

@@ -8,17 +8,10 @@
 #ifndef	_ROAIPAddress_H_
 #define	_ROAIPAddress_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/INTEGER.h"
+#include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* ROAIPAddress */
 typedef struct ROAIPAddress {
@@ -34,9 +27,4 @@ extern asn_TYPE_descriptor_t asn_DEF_ROAIPAddress;
 extern asn_SEQUENCE_specifics_t asn_SPC_ROAIPAddress_specs_1;
 extern asn_TYPE_member_t asn_MBR_ROAIPAddress_1[2];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _ROAIPAddress_H_ */
-#include "asn1/asn1c/asn_internal.h"

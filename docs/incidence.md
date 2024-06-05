@@ -98,20 +98,7 @@ This only applies to digest parameters that have been defined as NULL objects; a
 - **Name:** `incid-obj-not-der-encoded`
 - **Default action:** `ignore`
 
-
-[RFC 6488](https://tools.ietf.org/html/rfc6488) mandates that all signed objects must be DER-encoded (see [section 3](https://tools.ietf.org/html/rfc6488#section-3)):
-
-```
-      l.  The signed object is DER encoded.
-```
-
-Altough this is mandatory, quite a few signed objects in the global RPKI ignore this rule and are simply BER-encoded.
-
-If not `ignore`d, FORT will report this incidence with the following error message at the validation log:
-
-```
-<log level>: <offending file name>: '<object>' isn't DER encoded
-```
+Deprecated. `incid-obj-not-der-encoded` does nothing as of Fort 1.6.2.
 
 ### File listed at manifest doesn't exist
 

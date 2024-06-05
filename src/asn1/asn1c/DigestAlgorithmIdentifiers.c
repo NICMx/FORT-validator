@@ -12,9 +12,9 @@ asn_TYPE_member_t asn_MBR_DigestAlgorithmIdentifiers_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_DigestAlgorithmIdentifier,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		""
 		},
 };
@@ -36,7 +36,7 @@ asn_TYPE_descriptor_t asn_DEF_DigestAlgorithmIdentifiers = {
 	asn_DEF_DigestAlgorithmIdentifiers_tags_1,	/* Same as above */
 	sizeof(asn_DEF_DigestAlgorithmIdentifiers_tags_1)
 		/sizeof(asn_DEF_DigestAlgorithmIdentifiers_tags_1[0]), /* 1 */
-	{ 0, 0, SET_OF_constraint },
+	{ NULL, NULL, SET_OF_constraint },
 	asn_MBR_DigestAlgorithmIdentifiers_1,
 	1,	/* Single element */
 	&asn_SPC_DigestAlgorithmIdentifiers_specs_1	/* Additional specs */

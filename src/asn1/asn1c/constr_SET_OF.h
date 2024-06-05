@@ -5,11 +5,7 @@
 #ifndef	CONSTR_SET_OF_H
 #define	CONSTR_SET_OF_H
 
-#include "asn1/asn1c/asn_application.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 typedef struct asn_SET_OF_specifics_s {
     /*
@@ -31,17 +27,8 @@ asn_struct_compare_f SET_OF_compare;
 asn_constr_check_f SET_OF_constraint;
 ber_type_decoder_f SET_OF_decode_ber;
 der_type_encoder_f SET_OF_encode_der;
-xer_type_decoder_f SET_OF_decode_xer;
+json_type_encoder_f SET_OF_encode_json;
 xer_type_encoder_f SET_OF_encode_xer;
-oer_type_decoder_f SET_OF_decode_oer;
-oer_type_encoder_f SET_OF_encode_oer;
-per_type_decoder_f SET_OF_decode_uper;
-per_type_encoder_f SET_OF_encode_uper;
-asn_random_fill_f  SET_OF_random_fill;
 extern asn_TYPE_operation_t asn_OP_SET_OF;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* CONSTR_SET_OF_H */

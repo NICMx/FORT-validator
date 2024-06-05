@@ -13,40 +13,45 @@ Fort is an MIT-licensed RPKI Relying Party. It is a service that downloads the R
 
 The Validator is a timer that, [every once in a while](usage.html#--serverintervalvalidation), resynchronizes its [local cache of the RPKI Repository](usage.html#--local-repository), validates the resulting [certificate chains](intro-rpki.html) and stores the resulting valid ROAs in memory. The RTR [Server](usage.html#--serveraddress) (which is part of the same binary) delivers these ROAs to any requesting routers.
 
-Fort is a command-line application intended for UNIX operating systems, written in C. (It requires a compiler that supports `-std=gnu11`.)
+Fort is a command-line application intended for UNIX operating systems, written in C.
 
-## Standards Compliance 
+## Roadmap
 
-Further information can be found in the subsections below.
+<!-- Remember to remove issues 59 and 60 during import -->
 
-| RFC                                                                        | Implemented |
-|----------------------------------------------------------------------------|-------------|
-| [3779](https://tools.ietf.org/html/rfc3779) (IP & AS Extensions)           | 100%        |
-| [6350](https://tools.ietf.org/html/rfc6350) (vCard)                        | 0%          |
-| [6482](https://tools.ietf.org/html/rfc6482) (ROA)                          | 100%        |
-| [6486](https://tools.ietf.org/html/rfc6486) (Manifests)                    | 100%        |
-| [6487](https://tools.ietf.org/html/rfc6487) (Resource Certificates & CRLs) | 100%        |
-| [6488](https://tools.ietf.org/html/rfc6488) (Signed Objects)               | 100%        |
-| [6493](https://tools.ietf.org/html/rfc6493) (Ghostbusters)                 | 100%        |
-| [6810](https://tools.ietf.org/html/rfc6810) (RTR Version 0)                | 100%        |
-| [7318](https://tools.ietf.org/html/rfc7318) (Policy Qualifiers)            | 100%        |
-| [7935](https://tools.ietf.org/html/rfc7935) (RPKI algorithms)              | 100%        |
-| [8182](https://tools.ietf.org/html/rfc8182) (RRDP)                         | 100%        |
-| [8209](https://tools.ietf.org/html/rfc8209) (BGPSec Certificates)          | 0% (This code was [disabled](https://github.com/NICMx/FORT-validator/issues/58#issuecomment-941977925) in version 1.5.2) |
-| [8210](https://tools.ietf.org/html/rfc8210) (RTR Version 1)                | 100%        |
-| [8360](https://tools.ietf.org/html/rfc8360) (Validation Reconsidered)      | 100%        |
-| [8416](https://tools.ietf.org/html/rfc8416) (SLURM)                        | 100%        |
-| [8608](https://tools.ietf.org/html/rfc8608) (BGPsec algorithms)            | 100%        |
-| [8630](https://tools.ietf.org/html/rfc8630) (TALs with HTTPS URIs)         | 100%        |
+| Issue | Title | Urgency | Due release |
+|-------|-------|---------|-------------|
+| [issue122](https://github.com/NICMx/FORT-validator/issues/122) | New invocation mode: Decode and print RPKI file in standard output | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/11">1.6.2</a> |
+| [issue82](https://github.com/NICMx/FORT-validator/issues/82) | Reach 100% RFC 9286 compliance | <span class="urgency-critical">Critical</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.6.3</a> |
+| [issue112](https://github.com/NICMx/FORT-validator/issues/112) | Enforce same origin for RRDP files | <span class="urgency-high">High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.6.3</a> |
+| [issue113](https://github.com/NICMx/FORT-validator/issues/113) | Detect and properly respond to subtler RRDP session desynchronization | <span class="urgency-medium">Medium</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.6.3</a> |
+| [issue114](https://github.com/NICMx/FORT-validator/issues/114) | Support automatic TA key rollover | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/13">1.6.4</a> |
+| [issue50](https://github.com/NICMx/FORT-validator/issues/50) | Provide prometheus endpoint | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/14">1.6.5</a> |
+| [issue58](https://github.com/NICMx/FORT-validator/issues/58) | Fort's validation produces no router keys | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/15">1.6.6</a> |
+| [issue74](https://github.com/NICMx/FORT-validator/issues/74) | Kill rsync if a timeout is exceeded | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/16">1.6.7</a> |
+| [issue116](https://github.com/NICMx/FORT-validator/issues/116) | SLURM review | <span class="urgency-high">High</span> | - |
+| [issue118](https://github.com/NICMx/FORT-validator/issues/118) | Implement validation re-reconsidered | <span class="urgency-high">High</span> | - |
+| [issue119](https://github.com/NICMx/FORT-validator/issues/119) | Review IRIs to file names transition | <span class="urgency-high">High</span> | - |
+| [issue120](https://github.com/NICMx/FORT-validator/issues/120) | Error messages review | <span class="urgency-high">High</span> | - |
+| [issue121](https://github.com/NICMx/FORT-validator/issues/121) | Refactor validation and operation logging | <span class="urgency-high">High</span> | - |
+| [issue72](https://github.com/NICMx/FORT-validator/issues/72) | Encrypt RTR | <span class="urgency-medium">Medium</span> | - |
+| [issue73](https://github.com/NICMx/FORT-validator/issues/73) | Minimize probability of RTR session ID and serial reuse | <span class="urgency-medium">Medium</span> | - |
+| [issue90](https://github.com/NICMx/FORT-validator/issues/90) | Add "metadata" section to json output | <span class="urgency-medium">Medium</span> | - |
+| [issue91](https://github.com/NICMx/FORT-validator/issues/91) | Add "ta" field to ROAs in json output | <span class="urgency-medium">Medium</span> | - |
+| [issue97](https://github.com/NICMx/FORT-validator/issues/97) | Add "incidence" fields for every nonfatal RFC incompliance | <span class="urgency-medium">Medium</span> | - |
+| [issue117](https://github.com/NICMx/FORT-validator/issues/117) | Warn on maxLength defined on SLURM | <span class="urgency-medium">Medium</span> | - |
+| [issue124](https://github.com/NICMx/FORT-validator/issues/124) | Atomize output files (`--output.roa` and `--output.bgpsec`) | <span class="urgency-medium">Medium</span> | - |
+| [issue125](https://github.com/NICMx/FORT-validator/issues/125) | ASN.1 review | <span class="urgency-medium">Medium</span> | - |
+| [issue126](https://github.com/NICMx/FORT-validator/issues/126) | Exhaustive URL validation | <span class="urgency-medium">Medium</span> | - |
+| [issue127](https://github.com/NICMx/FORT-validator/issues/127) | Stream RRDP files | <span class="urgency-medium">Medium</span> | - |
+| [issue128](https://github.com/NICMx/FORT-validator/issues/128) | Reuse TCP connections for HTTP requests to same server | <span class="urgency-medium">Medium</span> | - |
+| [issue129](https://github.com/NICMx/FORT-validator/issues/129) | Rethink the thread pools | <span class="urgency-medium">Medium</span> | - |
+| [issue130](https://github.com/NICMx/FORT-validator/issues/130) | Improve documentation | <span class="urgency-medium">Medium</span> | - |
+| [issue40](https://github.com/NICMx/FORT-validator/issues/40) | failure scenarios, monitoring and glibc recommendations | <span class="urgency-low">Low</span> | - |
+| [issue42](https://github.com/NICMx/FORT-validator/issues/42) | reload feature: restart validation on SIGHUP | <span class="urgency-low">Low</span> | - |
+| [issue70](https://github.com/NICMx/FORT-validator/issues/70) | Do a quick temporary offline validation to prevent `No Data Available` | <span class="urgency-low">Low</span> | - |
+| [issue123](https://github.com/NICMx/FORT-validator/issues/123) | New invocation mode: Validate single file | <span class="urgency-low">Low</span> | - |
+| [issue131](https://github.com/NICMx/FORT-validator/issues/131) | Implement vCard validation | <span class="urgency-low">Low</span> | - |
+| [issue132](https://github.com/NICMx/FORT-validator/issues/132) | Implement RTRv2 | <span class="urgency-low">Low</span> | - |
+| [issue134](https://github.com/NICMx/FORT-validator/issues/134) | Implement draft-ietf-sidrops-cms-signing-time | <span class="urgency-low">Low</span> | - |
 
-### RFC 6350 (vCard)
-
-The vCard format is only used by Ghostbusters records. 6350 defines the basic vCard format, while 6493 defines additional requirements for Ghostbusters-specific vCard.
-
-The specific validations have been implemented, while the basic ones have not.
-
-## TO-DO
-
-- Reach 100% RFC compliance
-- Trigger revalidation and SLURM reload on SIGHUP.
-- Configurable origin address for outgoing requests.

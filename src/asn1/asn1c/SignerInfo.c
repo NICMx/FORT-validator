@@ -12,67 +12,66 @@ asn_TYPE_member_t asn_MBR_SignerInfo_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_CMSVersion,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"version"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignerInfo, sid),
 		-1 /* Ambiguous tag (CHOICE?) */,
 		0,
 		&asn_DEF_SignerIdentifier,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"sid"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignerInfo, digestAlgorithm),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_DigestAlgorithmIdentifier,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"digestAlgorithm"
 		},
 	{ ATF_POINTER, 1, offsetof(struct SignerInfo, signedAttrs),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		-1,	/* IMPLICIT tag at current level */
 		&asn_DEF_SignedAttributes,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"signedAttrs"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignerInfo, signatureAlgorithm),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_SignatureAlgorithmIdentifier,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"signatureAlgorithm"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct SignerInfo, signature),
 		(ASN_TAG_CLASS_UNIVERSAL | (4 << 2)),
 		0,
 		&asn_DEF_SignatureValue,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"signature"
 		},
 	{ ATF_POINTER, 1, offsetof(struct SignerInfo, unsignedAttrs),
 		(ASN_TAG_CLASS_CONTEXT | (1 << 2)),
 		-1,	/* IMPLICIT tag at current level */
 		&asn_DEF_UnsignedAttributes,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"unsignedAttrs"
 		},
 };
-static const int asn_MAP_SignerInfo_oms_1[] = { 3, 6 };
 static const ber_tlv_tag_t asn_DEF_SignerInfo_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -91,8 +90,6 @@ asn_SEQUENCE_specifics_t asn_SPC_SignerInfo_specs_1 = {
 	offsetof(struct SignerInfo, _asn_ctx),
 	asn_MAP_SignerInfo_tag2el_1,
 	8,	/* Count of tags in the map */
-	asn_MAP_SignerInfo_oms_1,	/* Optional members */
-	2, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_SignerInfo = {
@@ -105,7 +102,7 @@ asn_TYPE_descriptor_t asn_DEF_SignerInfo = {
 	asn_DEF_SignerInfo_tags_1,	/* Same as above */
 	sizeof(asn_DEF_SignerInfo_tags_1)
 		/sizeof(asn_DEF_SignerInfo_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_SignerInfo_1,
 	7,	/* Elements count */
 	&asn_SPC_SignerInfo_specs_1	/* Additional specs */

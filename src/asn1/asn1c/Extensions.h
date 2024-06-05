@@ -8,16 +8,10 @@
 #ifndef	_Extensions_H_
 #define	_Extensions_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
+#include "asn1/asn1c/Extension.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Forward declarations */
 struct Extension;
@@ -35,12 +29,4 @@ extern asn_TYPE_descriptor_t asn_DEF_Extensions;
 extern asn_SET_OF_specifics_t asn_SPC_Extensions_specs_1;
 extern asn_TYPE_member_t asn_MBR_Extensions_1[1];
 
-#ifdef __cplusplus
-}
-#endif
-
-/* Referred external types */
-#include "asn1/asn1c/Extension.h"
-
 #endif	/* _Extensions_H_ */
-#include "asn1/asn1c/asn_internal.h"

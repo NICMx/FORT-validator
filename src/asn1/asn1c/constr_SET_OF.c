@@ -4,11 +4,17 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+#include "asn1/asn1c/constr_SET_OF.h"
+
 #include <assert.h>
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/constr_SET_OF.h"
 #include "asn1/asn1c/asn_SET_OF.h"
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/constraints.h"
+#include "asn1/asn1c/der_encoder.h"
+#include "asn1/asn1c/xer_encoder.h"
+#include "json_util.h"
 
 /*
  * Number of bytes left for this structure.
@@ -94,9 +100,9 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 	/*
 	 * Create the target structure if it is not present already.
 	 */
-	if(st == 0) {
+	if(st == NULL) {
 		st = *struct_ptr = CALLOC(1, specs->struct_size);
-		if(st == 0) {
+		if(st == NULL) {
 			RETURN(RC_FAIL);
 		}
 	}
@@ -118,7 +124,7 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 		 */
 
 		rval = ber_check_tags(opt_codec_ctx, td, ctx, ptr, size,
-			tag_mode, 1, &ctx->left, 0);
+			tag_mode, 1, &ctx->left, NULL);
 		if(rval.code != RC_OK) {
 			ASN_DEBUG("%s tagging check failed: %d",
 				td->name, rval.code);
@@ -221,7 +227,7 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 				if(ASN_SET_ADD(list, ctx->ptr) != 0)
 					RETURN(RC_FAIL);
 				else
-					ctx->ptr = 0;
+					ctx->ptr = NULL;
 			}
 			break;
 		case RC_WMORE: /* More data expected */
@@ -232,7 +238,7 @@ SET_OF_decode_ber(const asn_codec_ctx_t *opt_codec_ctx,
 			/* Fall through */
 		case RC_FAIL: /* Fatal error */
 			ASN_STRUCT_FREE(*elm->type, ctx->ptr);
-			ctx->ptr = 0;
+			ctx->ptr = NULL;
 			RETURN(RC_FAIL);
 		} /* switch(rval) */
 		
@@ -352,7 +358,6 @@ SET_OF__encode_sorted_free(struct _el_buffer *el_buf, size_t count) {
 
 enum SET_OF__encode_method {
     SOES_DER,   /* Distinguished Encoding Rules */
-    SOES_CUPER  /* Canonical Unaligned Packed Encoding Rules */
 };
 
 static struct _el_buffer *
@@ -385,16 +390,6 @@ SET_OF__encode_sorted(const asn_TYPE_member_t *elm,
         case SOES_DER:
             erval = elm->type->op->der_encoder(elm->type, memb_ptr, 0, elm->tag,
                                                _el_addbytes, encoding_el);
-            break;
-        case SOES_CUPER:
-            erval = uper_encode(elm->type,
-                                elm->encoding_constraints.per_constraints,
-                                memb_ptr, _el_addbytes, encoding_el);
-            if(erval.encoded != -1) {
-                size_t extra_bits = erval.encoded % 8;
-                assert(encoding_el->length == (size_t)(erval.encoded + 7) / 8);
-                encoding_el->bits_unused = (8 - extra_bits) & 0x7;
-            }
             break;
         default:
             assert(!"Unreachable");
@@ -443,7 +438,7 @@ SET_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
         if(!memb_ptr) ASN__ENCODE_FAILED;
 
         erval =
-            elm->type->op->der_encoder(elm->type, memb_ptr, 0, elm->tag, 0, 0);
+            elm->type->op->der_encoder(elm->type, memb_ptr, 0, elm->tag, NULL, NULL);
         if(erval.encoded == -1) return erval;
         computed_size += erval.encoded;
 	}
@@ -500,164 +495,36 @@ SET_OF_encode_der(const asn_TYPE_descriptor_t *td, const void *sptr,
     }
 }
 
-#undef	XER_ADVANCE
-#define	XER_ADVANCE(num_bytes)	do {			\
-		size_t num = num_bytes;			\
-		buf_ptr = ((const char *)buf_ptr) + num;\
-		size -= num;				\
-		consumed_myself += num;			\
-	} while(0)
+json_t *
+SET_OF_encode_json(const struct asn_TYPE_descriptor_s *td, const void *sptr)
+{
+	json_t *parent;
+	json_t *child;
+	const asn_anonymous_set_ *list;
+	asn_TYPE_descriptor_t *type;
+	int i;
 
-/*
- * Decode the XER (XML) data.
- */
-asn_dec_rval_t
-SET_OF_decode_xer(const asn_codec_ctx_t *opt_codec_ctx,
-                  const asn_TYPE_descriptor_t *td, void **struct_ptr,
-                  const char *opt_mname, const void *buf_ptr, size_t size) {
-    /*
-	 * Bring closer parts of structure description.
-	 */
-	const asn_SET_OF_specifics_t *specs = (const asn_SET_OF_specifics_t *)td->specifics;
-	const asn_TYPE_member_t *element = td->elements;
-	const char *elm_tag;
-	const char *xml_tag = opt_mname ? opt_mname : td->xml_tag;
+	if (!sptr)
+		return json_null();
 
-	/*
-	 * ... and parts of the structure being constructed.
-	 */
-	void *st = *struct_ptr;	/* Target structure. */
-	asn_struct_ctx_t *ctx;	/* Decoder context */
+	parent = json_array_new();
+	if (parent == NULL)
+		return NULL;
 
-	asn_dec_rval_t rval;		/* Return value from a decoder */
-	ssize_t consumed_myself = 0;	/* Consumed bytes from ptr */
+	list = _A_CSET_FROM_VOID(sptr);
+	type = td->elements->type;
 
-	/*
-	 * Create the target structure if it is not present already.
-	 */
-	if(st == 0) {
-		st = *struct_ptr = CALLOC(1, specs->struct_size);
-		if(st == 0) RETURN(RC_FAIL);
+	for (i = 0; i < list->count; i++) {
+		child = type->op->json_encoder(type, list->array[i]);
+		if (json_array_add(parent, child))
+			goto fail;
 	}
 
-	/* Which tag is expected for the downstream */
-	if(specs->as_XMLValueList) {
-		elm_tag = (specs->as_XMLValueList == 1) ? 0 : "";
-	} else {
-		elm_tag = (*element->name)
-				? element->name : element->type->xml_tag;
-	}
+	return parent;
 
-	/*
-	 * Restore parsing context.
-	 */
-	ctx = (asn_struct_ctx_t *)((char *)st + specs->ctx_offset);
-
-	/*
-	 * Phases of XER/XML processing:
-	 * Phase 0: Check that the opening tag matches our expectations.
-	 * Phase 1: Processing body and reacting on closing tag.
-	 * Phase 2: Processing inner type.
-	 */
-	for(; ctx->phase <= 2;) {
-		pxer_chunk_type_e ch_type;	/* XER chunk type */
-		ssize_t ch_size;		/* Chunk size */
-		xer_check_tag_e tcv;		/* Tag check value */
-
-		/*
-		 * Go inside the inner member of a set.
-		 */
-		if(ctx->phase == 2) {
-			asn_dec_rval_t tmprval;
-
-			/* Invoke the inner type decoder, m.b. multiple times */
-			ASN_DEBUG("XER/SET OF element [%s]", elm_tag);
-			tmprval = element->type->op->xer_decoder(opt_codec_ctx,
-					element->type, &ctx->ptr, elm_tag,
-					buf_ptr, size);
-			if(tmprval.code == RC_OK) {
-				asn_anonymous_set_ *list = _A_SET_FROM_VOID(st);
-				if(ASN_SET_ADD(list, ctx->ptr) != 0)
-					RETURN(RC_FAIL);
-				ctx->ptr = 0;
-				XER_ADVANCE(tmprval.consumed);
-			} else {
-				XER_ADVANCE(tmprval.consumed);
-				RETURN(tmprval.code);
-			}
-			ctx->phase = 1;	/* Back to body processing */
-			ASN_DEBUG("XER/SET OF phase => %d", ctx->phase);
-			/* Fall through */
-		}
-
-		/*
-		 * Get the next part of the XML stream.
-		 */
-		ch_size = xer_next_token(&ctx->context,
-			buf_ptr, size, &ch_type);
-		if(ch_size == -1) {
-            RETURN(RC_FAIL);
-        } else {
-			switch(ch_type) {
-            case PXER_WMORE:
-                RETURN(RC_WMORE);
-			case PXER_COMMENT:	/* Got XML comment */
-			case PXER_TEXT:		/* Ignore free-standing text */
-				XER_ADVANCE(ch_size);	/* Skip silently */
-				continue;
-			case PXER_TAG:
-				break;	/* Check the rest down there */
-			}
-		}
-
-		tcv = xer_check_tag(buf_ptr, ch_size, xml_tag);
-		ASN_DEBUG("XER/SET OF: tcv = %d, ph=%d t=%s",
-			tcv, ctx->phase, xml_tag);
-		switch(tcv) {
-		case XCT_CLOSING:
-			if(ctx->phase == 0) break;
-			ctx->phase = 0;
-			/* Fall through */
-		case XCT_BOTH:
-			if(ctx->phase == 0) {
-				/* No more things to decode */
-				XER_ADVANCE(ch_size);
-				ctx->phase = 3;	/* Phase out */
-				RETURN(RC_OK);
-			}
-			/* Fall through */
-		case XCT_OPENING:
-			if(ctx->phase == 0) {
-				XER_ADVANCE(ch_size);
-				ctx->phase = 1;	/* Processing body phase */
-				continue;
-			}
-			/* Fall through */
-		case XCT_UNKNOWN_OP:
-		case XCT_UNKNOWN_BO:
-
-			ASN_DEBUG("XER/SET OF: tcv=%d, ph=%d", tcv, ctx->phase);
-			if(ctx->phase == 1) {
-				/*
-				 * Process a single possible member.
-				 */
-				ctx->phase = 2;
-				continue;
-			}
-			/* Fall through */
-		default:
-			break;
-		}
-
-		ASN_DEBUG("Unexpected XML tag in SET OF");
-		break;
-	}
-
-	ctx->phase = 3;	/* "Phase out" on hard failure */
-	RETURN(RC_FAIL);
+fail:	json_decref(parent);
+	return NULL;
 }
-
-
 
 typedef struct xer_tmp_enc_s {
 	void *buffer;
@@ -698,17 +565,17 @@ SET_OF_xer_order(const void *aptr, const void *bptr) {
 
 asn_enc_rval_t
 SET_OF_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
-                  enum xer_encoder_flags_e flags, asn_app_consume_bytes_f *cb,
+                  int flags, asn_app_consume_bytes_f *cb,
                   void *app_key) {
     asn_enc_rval_t er;
 	const asn_SET_OF_specifics_t *specs = (const asn_SET_OF_specifics_t *)td->specifics;
 	const asn_TYPE_member_t *elm = td->elements;
     const asn_anonymous_set_ *list = _A_CSET_FROM_VOID(sptr);
     const char *mname = specs->as_XMLValueList
-		? 0 : ((*elm->name) ? elm->name : elm->type->xml_tag);
+		? NULL : ((*elm->name) ? elm->name : elm->type->xml_tag);
 	size_t mlen = mname ? strlen(mname) : 0;
 	int xcan = (flags & XER_F_CANONICAL);
-	xer_tmp_enc_t *encs = 0;
+	xer_tmp_enc_t *encs = NULL;
 	size_t encs_count = 0;
 	void *original_app_key = app_key;
 	asn_app_consume_bytes_f *original_cb = cb;
@@ -775,7 +642,7 @@ SET_OF_encode_xer(const asn_TYPE_descriptor_t *td, const void *sptr, int ilevel,
 		for(; enc < end; enc++) {
 			ASN__CALLBACK(enc->buffer, enc->offset);
 			FREEMEM(enc->buffer);
-			enc->buffer = 0;
+			enc->buffer = NULL;
 			control_size += enc->offset;
 		}
 		assert(control_size == er.encoded);
@@ -854,7 +721,7 @@ SET_OF_free(const asn_TYPE_descriptor_t *td, void *ptr,
 		ctx = (asn_struct_ctx_t *)((char *)ptr + specs->ctx_offset);
 		if(ctx->ptr) {
 			ASN_STRUCT_FREE(*elm->type, ctx->ptr);
-			ctx->ptr = 0;
+			ctx->ptr = NULL;
 		}
 
         switch(method) {
@@ -904,204 +771,6 @@ SET_OF_constraint(const asn_TYPE_descriptor_t *td, const void *sptr,
 
 	return 0;
 }
-
-#ifndef ASN_DISABLE_PER_SUPPORT
-
-asn_dec_rval_t
-SET_OF_decode_uper(const asn_codec_ctx_t *opt_codec_ctx,
-                   const asn_TYPE_descriptor_t *td,
-                   const asn_per_constraints_t *constraints, void **sptr,
-                   asn_per_data_t *pd) {
-    asn_dec_rval_t rv;
-	const asn_SET_OF_specifics_t *specs = (const asn_SET_OF_specifics_t *)td->specifics;
-    const asn_TYPE_member_t *elm = td->elements; /* Single one */
-    void *st = *sptr;
-	asn_anonymous_set_ *list;
-	const asn_per_constraint_t *ct;
-	int repeat = 0;
-	ssize_t nelems;
-
-	if(ASN__STACK_OVERFLOW_CHECK(opt_codec_ctx))
-		ASN__DECODE_FAILED;
-
-	/*
-	 * Create the target structure if it is not present already.
-	 */
-	if(!st) {
-		st = *sptr = CALLOC(1, specs->struct_size);
-		if(!st) ASN__DECODE_FAILED;
-	}                                                                       
-	list = _A_SET_FROM_VOID(st);
-
-	/* Figure out which constraints to use */
-	if(constraints) ct = &constraints->size;
-	else if(td->encoding_constraints.per_constraints)
-		ct = &td->encoding_constraints.per_constraints->size;
-	else ct = 0;
-
-	if(ct && ct->flags & APC_EXTENSIBLE) {
-		int value = per_get_few_bits(pd, 1);
-		if(value < 0) ASN__DECODE_STARVED;
-		if(value) ct = 0;	/* Not restricted! */
-	}
-
-	if(ct && ct->effective_bits >= 0) {
-		/* X.691, #19.5: No length determinant */
-		nelems = per_get_few_bits(pd, ct->effective_bits);
-		ASN_DEBUG("Preparing to fetch %ld+%ld elements from %s",
-			(long)nelems, ct->lower_bound, td->name);
-		if(nelems < 0)  ASN__DECODE_STARVED;
-		nelems += ct->lower_bound;
-	} else {
-		nelems = -1;
-	}
-
-	do {
-		int i;
-		if(nelems < 0) {
-			nelems = uper_get_length(pd, -1, 0, &repeat);
-            ASN_DEBUG("Got to decode %" ASN_PRI_SSIZE " elements (eff %d)",
-                      nelems, (int)(ct ? ct->effective_bits : -1));
-            if(nelems < 0) ASN__DECODE_STARVED;
-		}
-
-		for(i = 0; i < nelems; i++) {
-			void *ptr = 0;
-			ASN_DEBUG("SET OF %s decoding", elm->type->name);
-			rv = elm->type->op->uper_decoder(opt_codec_ctx, elm->type,
-				elm->encoding_constraints.per_constraints, &ptr, pd);
-			ASN_DEBUG("%s SET OF %s decoded %d, %p",
-				td->name, elm->type->name, rv.code, ptr);
-			if(rv.code == RC_OK) {
-				if(ASN_SET_ADD(list, ptr) == 0) {
-                    if(rv.consumed == 0 && nelems > 200) {
-                        /* Protect from SET OF NULL compression bombs. */
-                        ASN__DECODE_FAILED;
-                    }
-					continue;
-                }
-				ASN_DEBUG("Failed to add element into %s",
-					td->name);
-				/* Fall through */
-				rv.code = RC_FAIL;
-			} else {
-				ASN_DEBUG("Failed decoding %s of %s (SET OF)",
-					elm->type->name, td->name);
-			}
-			if(ptr) ASN_STRUCT_FREE(*elm->type, ptr);
-			return rv;
-		}
-
-		nelems = -1;	/* Allow uper_get_length() */
-	} while(repeat);
-
-	ASN_DEBUG("Decoded %s as SET OF", td->name);
-
-	rv.code = RC_OK;
-	rv.consumed = 0;
-	return rv;
-}
-
-asn_enc_rval_t
-SET_OF_encode_uper(const asn_TYPE_descriptor_t *td,
-                   const asn_per_constraints_t *constraints, const void *sptr,
-                   asn_per_outp_t *po) {
-    const asn_anonymous_set_ *list;
-    const asn_per_constraint_t *ct;
-    const asn_TYPE_member_t *elm = td->elements;
-    struct _el_buffer *encoded_els;
-    asn_enc_rval_t er;
-    size_t encoded_edx;
-
-    if(!sptr) ASN__ENCODE_FAILED;
-
-    list = _A_CSET_FROM_VOID(sptr);
-
-    er.encoded = 0;
-
-    ASN_DEBUG("Encoding %s as SEQUENCE OF (%d)", td->name, list->count);
-
-    if(constraints) ct = &constraints->size;
-    else if(td->encoding_constraints.per_constraints)
-        ct = &td->encoding_constraints.per_constraints->size;
-    else ct = 0;
-
-    /* If extensible constraint, check if size is in root */
-    if(ct) {
-        int not_in_root =
-            (list->count < ct->lower_bound || list->count > ct->upper_bound);
-        ASN_DEBUG("lb %ld ub %ld %s", ct->lower_bound, ct->upper_bound,
-                  ct->flags & APC_EXTENSIBLE ? "ext" : "fix");
-        if(ct->flags & APC_EXTENSIBLE) {
-            /* Declare whether size is in extension root */
-            if(per_put_few_bits(po, not_in_root, 1)) ASN__ENCODE_FAILED;
-            if(not_in_root) ct = 0;
-        } else if(not_in_root && ct->effective_bits >= 0) {
-            ASN__ENCODE_FAILED;
-        }
-
-    }
-
-    if(ct && ct->effective_bits >= 0) {
-        /* X.691, #19.5: No length determinant */
-        if(per_put_few_bits(po, list->count - ct->lower_bound,
-                            ct->effective_bits))
-            ASN__ENCODE_FAILED;
-    } else if(list->count == 0) {
-        /* When the list is empty add only the length determinant
-         * X.691, #20.6 and #11.9.4.1
-         */
-        if (uper_put_length(po, 0, 0)) {
-            ASN__ENCODE_FAILED;
-        }
-        ASN__ENCODED_OK(er);
-    }
-
-
-    /*
-     * Canonical UPER #22.1 mandates dynamic sorting of the SET OF elements
-     * according to their encodings. Build an array of the encoded elements.
-     */
-    encoded_els = SET_OF__encode_sorted(elm, list, SOES_CUPER);
-
-    for(encoded_edx = 0; (ssize_t)encoded_edx < list->count;) {
-        ssize_t may_encode;
-        size_t edx;
-        int need_eom = 0;
-
-        if(ct && ct->effective_bits >= 0) {
-            may_encode = list->count;
-        } else {
-            may_encode =
-                uper_put_length(po, list->count - encoded_edx, &need_eom);
-            if(may_encode < 0) ASN__ENCODE_FAILED;
-        }
-
-        for(edx = encoded_edx; edx < encoded_edx + may_encode; edx++) {
-            const struct _el_buffer *el = &encoded_els[edx];
-            if(asn_put_many_bits(po, el->buf,
-                                 (8 * el->length) - el->bits_unused) < 0) {
-                break;
-            }
-        }
-
-        if(need_eom && uper_put_length(po, 0, 0))
-            ASN__ENCODE_FAILED; /* End of Message length */
-
-        encoded_edx += may_encode;
-    }
-
-    SET_OF__encode_sorted_free(encoded_els, list->count);
-
-    if((ssize_t)encoded_edx == list->count) {
-        ASN__ENCODED_OK(er);
-    } else {
-        ASN__ENCODE_FAILED;
-    }
-}
-
-
-#endif  /* ASN_DISABLE_PER_SUPPORT */
 
 struct comparable_ptr {
     const asn_TYPE_descriptor_t *td;
@@ -1189,162 +858,7 @@ asn_TYPE_operation_t asn_OP_SET_OF = {
 	SET_OF_compare,
 	SET_OF_decode_ber,
 	SET_OF_encode_der,
-	SET_OF_decode_xer,
+	SET_OF_encode_json,
 	SET_OF_encode_xer,
-#ifdef ASN_DISABLE_OER_SUPPORT
-	0,
-	0,
-#else
-	SET_OF_decode_oer,
-	SET_OF_encode_oer,
-#endif
-#ifdef ASN_DISABLE_PER_SUPPORT
-	0,
-	0,
-#else
-	SET_OF_decode_uper,
-	SET_OF_encode_uper,
-#endif /* ASN_DISABLE_PER_SUPPORT */
-	SET_OF_random_fill,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
-
-
-asn_random_fill_result_t
-SET_OF_random_fill(const asn_TYPE_descriptor_t *td, void **sptr,
-                   const asn_encoding_constraints_t *constraints,
-                   size_t max_length) {
-    const asn_SET_OF_specifics_t *specs =
-        (const asn_SET_OF_specifics_t *)td->specifics;
-    asn_random_fill_result_t res_ok = {ARFILL_OK, 0};
-    asn_random_fill_result_t result_failed = {ARFILL_FAILED, 0};
-    asn_random_fill_result_t result_skipped = {ARFILL_SKIPPED, 0};
-    const asn_TYPE_member_t *elm = td->elements;
-    void *st = *sptr;
-    long max_elements = 5;
-    long slb = 0;   /* Lower size bound */
-    long sub = 0;   /* Upper size bound */
-    size_t rnd_len;
-
-    if(max_length == 0) return result_skipped;
-
-    if(st == NULL) {
-        st = (*sptr = CALLOC(1, specs->struct_size));
-        if(st == NULL) {
-            return result_failed;
-        }
-    }
-
-    switch(asn_random_between(0, 6)) {
-    case 0: max_elements = 0; break;
-    case 1: max_elements = 1; break;
-    case 2: max_elements = 5; break;
-    case 3: max_elements = max_length; break;
-    case 4: max_elements = max_length / 2; break;
-    case 5: max_elements = max_length / 4; break;
-    default: break;
-    }
-    sub = slb + max_elements;
-
-    if(!constraints || !constraints->per_constraints)
-        constraints = &td->encoding_constraints;
-    if(constraints->per_constraints) {
-        const asn_per_constraint_t *pc = &constraints->per_constraints->size;
-        if(pc->flags & APC_SEMI_CONSTRAINED) {
-            slb = pc->lower_bound;
-            sub = pc->lower_bound + max_elements;
-        } else if(pc->flags & APC_CONSTRAINED) {
-            slb = pc->lower_bound;
-            sub = pc->upper_bound;
-            if(sub - slb > max_elements) sub = slb + max_elements;
-        }
-    }
-
-    /* Bias towards edges of allowed space */
-    switch(asn_random_between(-1, 4)) {
-    default:
-    case -1:
-        /* Prepare lengths somewhat outside of constrained range. */
-        if(constraints->per_constraints
-           && (constraints->per_constraints->size.flags & APC_EXTENSIBLE)) {
-            switch(asn_random_between(0, 5)) {
-            default:
-            case 0:
-                rnd_len = 0;
-                break;
-            case 1:
-                if(slb > 0) {
-                    rnd_len = slb - 1;
-                } else {
-                    rnd_len = 0;
-                }
-                break;
-            case 2:
-                rnd_len = asn_random_between(0, slb);
-                break;
-            case 3:
-                if(sub < (ssize_t)max_length) {
-                    rnd_len = sub + 1;
-                } else {
-                    rnd_len = max_length;
-                }
-                break;
-            case 4:
-                if(sub < (ssize_t)max_length) {
-                    rnd_len = asn_random_between(sub + 1, max_length);
-                } else {
-                    rnd_len = max_length;
-                }
-                break;
-            case 5:
-                rnd_len = max_length;
-                break;
-            }
-            break;
-        }
-        /* Fall through */
-    case 0:
-        rnd_len = asn_random_between(slb, sub);
-        break;
-    case 1:
-        if(slb < sub) {
-            rnd_len = asn_random_between(slb + 1, sub);
-            break;
-        }
-        /* Fall through */
-    case 2:
-        rnd_len = asn_random_between(slb, slb);
-        break;
-    case 3:
-        if(slb < sub) {
-            rnd_len = asn_random_between(slb, sub - 1);
-            break;
-        }
-        /* Fall through */
-    case 4:
-        rnd_len = asn_random_between(sub, sub);
-        break;
-    }
-
-    for(; rnd_len > 0; rnd_len--) {
-        asn_anonymous_set_ *list = _A_SET_FROM_VOID(st);
-        void *ptr = 0;
-        asn_random_fill_result_t tmpres = elm->type->op->random_fill(
-            elm->type, &ptr, &elm->encoding_constraints,
-            (max_length > res_ok.length ? max_length - res_ok.length : 0)
-                / rnd_len);
-        switch(tmpres.code) {
-        case ARFILL_OK:
-            ASN_SET_ADD(list, ptr);
-            res_ok.length += tmpres.length;
-            break;
-        case ARFILL_SKIPPED:
-            break;
-        case ARFILL_FAILED:
-            assert(ptr == 0);
-            return tmpres;
-        }
-    }
-
-    return res_ok;
-}

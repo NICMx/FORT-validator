@@ -8,18 +8,11 @@
 #ifndef	_Extension_H_
 #define	_Extension_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "asn1/asn1c/BOOLEAN.h"
+#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Extension */
 typedef struct Extension {
@@ -36,9 +29,4 @@ extern asn_TYPE_descriptor_t asn_DEF_Extension;
 extern asn_SEQUENCE_specifics_t asn_SPC_Extension_specs_1;
 extern asn_TYPE_member_t asn_MBR_Extension_1[3];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _Extension_H_ */
-#include "asn1/asn1c/asn_internal.h"

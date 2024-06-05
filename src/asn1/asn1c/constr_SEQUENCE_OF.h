@@ -5,12 +5,8 @@
 #ifndef	_CONSTR_SEQUENCE_OF_H_
 #define	_CONSTR_SEQUENCE_OF_H_
 
-#include "asn1/asn1c/asn_application.h"
-#include "asn1/asn1c/constr_SET_OF.h"		/* Implemented using SET OF */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_SET_OF.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 /*
  * A set specialized functions dealing with the SEQUENCE OF type.
@@ -19,21 +15,12 @@ extern "C" {
 asn_struct_compare_f SEQUENCE_OF_compare;
 der_type_encoder_f SEQUENCE_OF_encode_der;
 xer_type_encoder_f SEQUENCE_OF_encode_xer;
-per_type_encoder_f SEQUENCE_OF_encode_uper;
 extern asn_TYPE_operation_t asn_OP_SEQUENCE_OF;
 
 #define	SEQUENCE_OF_free	SET_OF_free
 #define	SEQUENCE_OF_print	SET_OF_print
 #define	SEQUENCE_OF_constraint	SET_OF_constraint
 #define	SEQUENCE_OF_decode_ber	SET_OF_decode_ber
-#define	SEQUENCE_OF_decode_xer	SET_OF_decode_xer
-#define	SEQUENCE_OF_decode_uper	SET_OF_decode_uper
-#define	SEQUENCE_OF_decode_oer  SET_OF_decode_oer
-#define	SEQUENCE_OF_encode_oer  SET_OF_encode_oer
-#define	SEQUENCE_OF_random_fill SET_OF_random_fill
-
-#ifdef __cplusplus
-}
-#endif
+#define	SEQUENCE_OF_encode_json	SET_OF_encode_json
 
 #endif	/* _CONSTR_SET_OF_H_ */

@@ -7,17 +7,17 @@
 
 #include "alloc.h"
 #include "common.h"
+#include "config/boolean.h"
+#include "config/incidences.h"
+#include "config/str.h"
+#include "config/uint.h"
+#include "config/work_offline.h"
 #include "configure_ac.h"
 #include "daemon.h"
 #include "file.h"
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
-#include "config/boolean.h"
-#include "config/incidences.h"
-#include "config/str.h"
-#include "config/uint.h"
-#include "config/work_offline.h"
 
 /**
  * To add a member to this structure,
@@ -43,7 +43,7 @@ struct rpki_config {
 	unsigned int maximum_certificate_depth;
 	/** File or directory where the .slurm file(s) is(are) located */
 	char *slurm;
-	/* Run as RTR server or standalone validation */
+	/* */
 	enum mode mode;
 	/*
 	 * Disable outgoing requests (currently rsync and http supported), if
@@ -208,6 +208,9 @@ struct rpki_config {
 			unsigned int max; /* Deprecated */
 		} validation;
 	} thread_pool;
+
+	enum file_type ft;
+	char *payload;
 };
 
 static void print_usage(FILE *, bool);
@@ -793,6 +796,13 @@ static const struct option_field options[] = {
 		.max = 100,
 	},
 
+	{
+		.id = 13000,
+		.name = "file-type",
+		.type = &gt_file_type,
+		.offset = offsetof(struct rpki_config, ft),
+		.doc = "Parser for --mode=print",
+	},
 	{ 0 },
 };
 
@@ -929,6 +939,13 @@ set_default_values(void)
 		"$REMOTE", "$LOCAL",
 	};
 	static char const *flat_rsync_args[] = { "<deprecated>" };
+	static char const *addrs[] = {
+#ifdef __linux__
+		"::"
+#else
+		"0.0.0.0", "::"
+#endif
+	};
 
 	/*
 	 * Values that might need to be freed WILL be freed, so use heap
@@ -944,7 +961,7 @@ set_default_values(void)
 	rpki_config.work_offline = false;
 	rpki_config.daemon = false;
 
-	string_array_init(&rpki_config.server.address, NULL, 0);
+	string_array_init(&rpki_config.server.address, addrs, ARRAY_LEN(addrs));
 	rpki_config.server.port = pstrdup("323");
 	rpki_config.server.backlog = SOMAXCONN;
 	rpki_config.server.interval.validation = 3600;
@@ -1010,15 +1027,16 @@ set_default_values(void)
 	rpki_config.thread_pool.validation.max = 5;
 }
 
-static bool
-valid_output_file(char const *path)
-{
-	return strcmp(path, "-") == 0 || file_valid(path);
-}
-
 static int
 validate_config(void)
 {
+	if (rpki_config.mode == PRINT_FILE)
+		return 0;
+
+	if (rpki_config.payload != NULL)
+		return pr_op_err("I don't know what '%s' is.",
+		    rpki_config.payload);
+
 	if (rpki_config.tal == NULL)
 		return pr_op_err("The TAL(s) location (--tal) is mandatory.");
 
@@ -1035,14 +1053,6 @@ validate_config(void)
 	    rpki_config.server.interval.expire <
 	    rpki_config.server.interval.retry)
 		return pr_op_err("Expire interval must be greater than refresh and retry intervals");
-
-	if (rpki_config.output.roa != NULL &&
-	    !valid_output_file(rpki_config.output.roa))
-		return pr_op_err("Invalid output.roa file.");
-
-	if (rpki_config.output.bgpsec != NULL &&
-	    !valid_output_file(rpki_config.output.bgpsec))
-		return pr_op_err("Invalid output.bgpsec file.");
 
 	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm, true))
 		return pr_op_err("Invalid slurm location.");
@@ -1129,14 +1139,8 @@ handle_flags_config(int argc, char **argv)
 			goto end;
 	}
 
-	/*
-	 * This triggers when the user runs something like `fort help` instead
-	 * of `fort --help`. This program does not have unflagged payload.
-	 */
-	if (optind < argc) {
-		error = pr_op_err("I don't know what '%s' is.", argv[optind]);
-		goto end;
-	}
+	if (optind < argc)
+		rpki_config.payload = pstrdup(argv[optind]);
 
 	error = validate_config();
 	if (error)
@@ -1490,6 +1494,18 @@ config_get_thread_pool_server_max(void)
 	return rpki_config.thread_pool.server.max;
 }
 
+enum file_type
+config_get_file_type(void)
+{
+	return rpki_config.ft;
+}
+
+char const *
+config_get_payload(void)
+{
+	return rpki_config.payload;
+}
+
 void
 config_set_rsync_enabled(bool value)
 {
@@ -1510,4 +1526,5 @@ free_rpki_config(void)
 	FOREACH_OPTION(options, option, 0xFFFF)
 		if (is_rpki_config_field(option) && option->type->free != NULL)
 			option->type->free(get_rpki_config_field(option));
+	free(rpki_config.payload);
 }

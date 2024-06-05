@@ -8,15 +8,8 @@
 #ifndef	_IPAddress_H_
 #define	_IPAddress_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/BIT_STRING.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* IPAddress */
 typedef BIT_STRING_t	 IPAddress_t;
@@ -28,14 +21,6 @@ asn_struct_print_f IPAddress_print;
 asn_constr_check_f IPAddress_constraint;
 ber_type_decoder_f IPAddress_decode_ber;
 der_type_encoder_f IPAddress_encode_der;
-xer_type_decoder_f IPAddress_decode_xer;
 xer_type_encoder_f IPAddress_encode_xer;
-oer_type_decoder_f IPAddress_decode_oer;
-oer_type_encoder_f IPAddress_encode_oer;
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _IPAddress_H_ */
-#include "asn1/asn1c/asn_internal.h"

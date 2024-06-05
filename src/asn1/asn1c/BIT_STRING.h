@@ -5,11 +5,7 @@
 #ifndef	_BIT_STRING_H_
 #define	_BIT_STRING_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"	/* Some help from OCTET STRING */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/OCTET_STRING.h"
 
 typedef struct BIT_STRING_s {
 	uint8_t *buf;	/* BIT STRING body */
@@ -28,19 +24,9 @@ asn_struct_print_f BIT_STRING_print;	/* Human-readable output */
 asn_struct_compare_f BIT_STRING_compare;
 asn_constr_check_f BIT_STRING_constraint;
 xer_type_encoder_f BIT_STRING_encode_xer;
-oer_type_decoder_f BIT_STRING_decode_oer;
-oer_type_encoder_f BIT_STRING_encode_oer;
-per_type_decoder_f BIT_STRING_decode_uper;
-per_type_encoder_f BIT_STRING_encode_uper;
-asn_random_fill_f  BIT_STRING_random_fill;
 
 #define BIT_STRING_free              OCTET_STRING_free
 #define BIT_STRING_decode_ber        OCTET_STRING_decode_ber
 #define BIT_STRING_encode_der        OCTET_STRING_encode_der
-#define BIT_STRING_decode_xer        OCTET_STRING_decode_xer_binary
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _BIT_STRING_H_ */

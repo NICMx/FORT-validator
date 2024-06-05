@@ -2,10 +2,12 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constr_TYPE.h"
+
 #include <errno.h>
 #include <stdarg.h>
+
+#include "asn1/asn1c/asn_internal.h"
 
 /*
  * Version of the ASN.1 infrastructure shipped with compiler.
@@ -75,7 +77,16 @@ void ASN_DEBUG_f(const char *fmt, ...);
 void ASN_DEBUG_f(const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
+	fprintf(stderr, "\x1B[32m");
 	vfprintf(stderr, fmt, ap);
-	fprintf(stderr, "\n");
+	fprintf(stderr, "\x1B[0m\n");
 	va_end(ap);
+}
+
+void const *
+get_member(const void *sptr, asn_TYPE_member_t const *elm)
+{
+	return (elm->flags & ATF_POINTER)
+	    ? (*(const void * const *)((const char *)sptr + elm->memb_offset))
+	    : ((const void *)((const char *)sptr + elm->memb_offset));
 }

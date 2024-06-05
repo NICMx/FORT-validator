@@ -1,8 +1,8 @@
 #ifndef SRC_RSYNC_RSYNC_H_
 #define SRC_RSYNC_RSYNC_H_
 
-#include "types/uri.h"
+#include <stdbool.h>
 
-int rsync_download(struct rpki_uri *);
+int rsync_download(char const *, char const *, bool);
 
 #endif /* SRC_RSYNC_RSYNC_H_ */

@@ -8,17 +8,10 @@
 #ifndef	_Time_H_
 #define	_Time_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/UTCTime.h"
 #include "asn1/asn1c/GeneralizedTime.h"
+#include "asn1/asn1c/UTCTime.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum Time_PR {
@@ -44,9 +37,4 @@ extern asn_TYPE_descriptor_t asn_DEF_Time;
 extern asn_CHOICE_specifics_t asn_SPC_Time_specs_1;
 extern asn_TYPE_member_t asn_MBR_Time_1[2];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _Time_H_ */
-#include "asn1/asn1c/asn_internal.h"

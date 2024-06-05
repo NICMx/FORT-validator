@@ -8,16 +8,10 @@
 #ifndef	_SignerInfos_H_
 #define	_SignerInfos_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
+#include "asn1/asn1c/SignerInfo.h"
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Forward declarations */
 struct SignerInfo;
@@ -35,12 +29,4 @@ extern asn_TYPE_descriptor_t asn_DEF_SignerInfos;
 extern asn_SET_OF_specifics_t asn_SPC_SignerInfos_specs_1;
 extern asn_TYPE_member_t asn_MBR_SignerInfos_1[1];
 
-#ifdef __cplusplus
-}
-#endif
-
-/* Referred external types */
-#include "asn1/asn1c/SignerInfo.h"
-
 #endif	/* _SignerInfos_H_ */
-#include "asn1/asn1c/asn_internal.h"

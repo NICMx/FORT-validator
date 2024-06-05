@@ -7,27 +7,87 @@
 
 #include "asn1/asn1c/EncapsulatedContentInfo.h"
 
+#include "asn1/asn1c/Manifest.h"
+#include "asn1/asn1c/RouteOriginAttestation.h"
+#include "json_util.h"
+#include "nid.h"
+
+static json_t *
+EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,
+    const void *sptr)
+{
+	struct EncapsulatedContentInfo const *eci = sptr;
+	json_t *parent;
+	json_t *child;
+	int nid;
+
+	if (!eci)
+		return json_null();
+
+	parent = json_obj_new();
+	if (parent == NULL)
+		return NULL;
+
+	td = &asn_DEF_ContentType;
+	child = td->op->json_encoder(td, &eci->eContentType);
+	if (json_object_add(parent, "eContentType", child))
+		goto fail;
+
+	nid = OBJECT_IDENTIFIER_to_nid(&eci->eContentType);
+	if (nid == nid_ct_mft()) {
+		td = &asn_DEF_Manifest;
+		child = OCTET_STRING_to_json(td, eci->eContent);
+	} else if (nid == nid_ct_roa()) {
+		td = &asn_DEF_RouteOriginAttestation;
+		child = OCTET_STRING_to_json(td, eci->eContent);
+	} else if (nid == nid_ct_gbr()) {
+		td = &asn_DEF_OCTET_STRING;
+		child = OCTET_STRING_encode_json_utf8(td, eci->eContent);
+	} else {
+		td = &asn_DEF_OCTET_STRING;
+		child = td->op->json_encoder(td, eci->eContent);
+	}
+
+	if (json_object_add(parent, "eContent", child))
+		goto fail;
+
+	return parent;
+
+fail:	json_decref(parent);
+	return NULL;
+}
+
+static asn_TYPE_operation_t asn_OP_EncapsulatedContentInfo = {
+	SEQUENCE_free,
+	SEQUENCE_print,
+	SEQUENCE_compare,
+	SEQUENCE_decode_ber,
+	SEQUENCE_encode_der,
+	EncapsulatedContentInfo_encode_json,
+	SEQUENCE_encode_xer,
+	NULL	/* Use generic outmost tag fetcher */
+};
+
 asn_TYPE_member_t asn_MBR_EncapsulatedContentInfo_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct EncapsulatedContentInfo, eContentType),
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_ContentType,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"eContentType"
 		},
 	{ ATF_POINTER, 1, offsetof(struct EncapsulatedContentInfo, eContent),
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_OCTET_STRING,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"eContent"
 		},
 };
-static const int asn_MAP_EncapsulatedContentInfo_oms_1[] = { 1 };
 static const ber_tlv_tag_t asn_DEF_EncapsulatedContentInfo_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -40,21 +100,19 @@ asn_SEQUENCE_specifics_t asn_SPC_EncapsulatedContentInfo_specs_1 = {
 	offsetof(struct EncapsulatedContentInfo, _asn_ctx),
 	asn_MAP_EncapsulatedContentInfo_tag2el_1,
 	2,	/* Count of tags in the map */
-	asn_MAP_EncapsulatedContentInfo_oms_1,	/* Optional members */
-	1, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfo = {
 	"EncapsulatedContentInfo",
 	"EncapsulatedContentInfo",
-	&asn_OP_SEQUENCE,
+	&asn_OP_EncapsulatedContentInfo,
 	asn_DEF_EncapsulatedContentInfo_tags_1,
 	sizeof(asn_DEF_EncapsulatedContentInfo_tags_1)
 		/sizeof(asn_DEF_EncapsulatedContentInfo_tags_1[0]), /* 1 */
 	asn_DEF_EncapsulatedContentInfo_tags_1,	/* Same as above */
 	sizeof(asn_DEF_EncapsulatedContentInfo_tags_1)
 		/sizeof(asn_DEF_EncapsulatedContentInfo_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_EncapsulatedContentInfo_1,
 	2,	/* Elements count */
 	&asn_SPC_EncapsulatedContentInfo_specs_1	/* Additional specs */

@@ -2,7 +2,6 @@
  * Copyright (c) 2003 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/IA5String.h"
 
 /*
@@ -12,35 +11,15 @@ static const ber_tlv_tag_t asn_DEF_IA5String_tags[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (22 << 2)),	/* [UNIVERSAL 22] IMPLICIT ...*/
 	(ASN_TAG_CLASS_UNIVERSAL | (4 << 2))	/* ... OCTET STRING */
 };
-static asn_per_constraints_t asn_DEF_IA5String_per_constraints = {
-	{ APC_CONSTRAINED, 7, 7, 0, 0x7f },	/* Value */
-	{ APC_SEMI_CONSTRAINED, -1, -1, 0, 0 },	/* Size */
-	0, 0
-};
 asn_TYPE_operation_t asn_OP_IA5String = {
 	OCTET_STRING_free,
 	OCTET_STRING_print_utf8,	/* ASCII subset */
 	OCTET_STRING_compare,
 	OCTET_STRING_decode_ber,    /* Implemented in terms of OCTET STRING */
 	OCTET_STRING_encode_der,
-	OCTET_STRING_decode_xer_utf8,
+	OCTET_STRING_encode_json_utf8,
 	OCTET_STRING_encode_xer_utf8,
-#ifdef	ASN_DISABLE_OER_SUPPORT
-	0,
-	0,
-#else
-	OCTET_STRING_decode_oer,
-	OCTET_STRING_encode_oer,
-#endif  /* ASN_DISABLE_OER_SUPPORT */
-#ifdef	ASN_DISABLE_PER_SUPPORT
-	0,
-	0,
-#else
-	OCTET_STRING_decode_uper,
-	OCTET_STRING_encode_uper,
-#endif	/* ASN_DISABLE_PER_SUPPORT */
-	OCTET_STRING_random_fill,
-	0	/* Use generic outmost tag fetcher */
+	NULL	/* Use generic outmost tag fetcher */
 };
 asn_TYPE_descriptor_t asn_DEF_IA5String = {
 	"IA5String",
@@ -52,9 +31,9 @@ asn_TYPE_descriptor_t asn_DEF_IA5String = {
 	asn_DEF_IA5String_tags,
 	sizeof(asn_DEF_IA5String_tags)
 	  / sizeof(asn_DEF_IA5String_tags[0]),
-	{ 0, &asn_DEF_IA5String_per_constraints, IA5String_constraint },
-	0, 0,	/* No members */
-	0	/* No specifics */
+	{ NULL, NULL, IA5String_constraint },
+	NULL, 0,	/* No members */
+	NULL	/* No specifics */
 };
 
 int

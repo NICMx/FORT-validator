@@ -419,9 +419,9 @@ node2json(struct cache_node *node)
 	char const *type;
 	json_t *notification;
 
-	json = json_object();
+	json = json_obj_new();
 	if (json == NULL)
-		enomem_panic();
+		return NULL;
 
 	switch (uri_get_type(node->url)) {
 	case UT_TA_RSYNC:
@@ -446,17 +446,15 @@ node2json(struct cache_node *node)
 		goto cancel;
 	if (node->notif != NULL) {
 		notification = rrdp_notif2json(node->notif);
-		if (notification == NULL)
-			goto cancel;
-		if (json_add_obj(json, TAGNAME_NOTIF, notification))
+		if (json_object_add(json, TAGNAME_NOTIF, notification))
 			goto cancel;
 	}
-	if (json_add_date(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
+	if (json_add_ts(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
 		goto cancel;
 	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
 		goto cancel;
 	if (node->success.happened)
-		if (json_add_date(json, TAGNAME_SUCCESS_TS, node->success.ts))
+		if (json_add_ts(json, TAGNAME_SUCCESS_TS, node->success.ts))
 			goto cancel;
 
 	return json;
@@ -472,15 +470,13 @@ build_tal_json(struct rpki_cache *cache)
 	struct cache_node *node, *tmp;
 	json_t *root, *child;
 
-	root = json_array();
+	root = json_array_new();
 	if (root == NULL)
-		enomem_panic();
+		return NULL;
 
 	HASH_ITER(hh, cache->ht, node, tmp) {
 		child = node2json(node);
-		if (child == NULL)
-			continue;
-		if (json_array_append_new(root, child)) {
+		if (child != NULL && json_array_append_new(root, child)) {
 			pr_op_err("Cannot push %s json node into json root; unknown cause.",
 			    uri_op_get_printable(node->url));
 			continue;
@@ -676,7 +672,7 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed,
 	case UT_TA_RSYNC:
 	case UT_RPP:
 		error = config_get_rsync_enabled()
-		    ? rsync_download(url)
+		    ? rsync_download(uri_get_global(url), uri_get_local(url), true)
 		    : cache_check(url);
 		break;
 	default:

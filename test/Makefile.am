@@ -14,13 +14,13 @@ if USE_TESTS
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
 AM_CFLAGS =  -pedantic -Wall
 #AM_CFLAGS += -Wno-unused
-AM_CFLAGS += -std=c99 -D_POSIX_C_SOURCE=200809 -D_XOPEN_SOURCE=700
-AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS}
+AM_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
+AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}
 # Reminder: As opposed to AM_CFLAGS, "AM_LDADD" is not idiomatic automake, and
 # autotools will even reprehend us if we declare it. Therefore, I came up with
 # "my" own "ldadd". Unlike AM_CFLAGS, it needs to be manually added to every
 # target.
-MY_LDADD = ${CHECK_LIBS}
+MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
 
 check_PROGRAMS  = address.test
 check_PROGRAMS += base64.test
@@ -28,6 +28,7 @@ check_PROGRAMS += cache.test
 check_PROGRAMS += db_table.test
 check_PROGRAMS += deltas_array.test
 check_PROGRAMS += hash.test
+check_PROGRAMS += json.test
 check_PROGRAMS += pb.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += pdu_stream.test
@@ -59,6 +60,9 @@ deltas_array_test_LDADD = ${MY_LDADD}
 
 hash_test_SOURCES = crypto/hash_test.c
 hash_test_LDADD = ${MY_LDADD}
+
+json_test_SOURCES = json_util_test.c
+json_test_LDADD = ${MY_LDADD}
 
 pb_test_SOURCES = data_structure/path_builder_test.c
 pb_test_LDADD = ${MY_LDADD}
@@ -98,9 +102,6 @@ xml_test_LDADD = ${MY_LDADD} ${XML2_LIBS}
 
 EXTRA_DIST  = mock.c mock.h
 EXTRA_DIST += resources/lorem-ipsum.txt
-EXTRA_DIST += resources/line_file/core.txt
-EXTRA_DIST += resources/line_file/empty.txt
-EXTRA_DIST += resources/line_file/error.txt
 EXTRA_DIST += rtr/db/rtr_db_mock.c
 EXTRA_DIST += tal/lacnic.tal
 EXTRA_DIST += xml/notification.xml

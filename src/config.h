@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <stdint.h>
 
+#include "config/file_type.h"
 #include "config/filename_format.h"
 #include "config/log_conf.h"
 #include "config/mode.h"
@@ -56,6 +57,8 @@ char const *config_get_output_bgpsec(void);
 enum output_format config_get_output_format(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_thread_pool_server_max(void);
+enum file_type config_get_file_type(void);
+char const *config_get_payload(void);
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);

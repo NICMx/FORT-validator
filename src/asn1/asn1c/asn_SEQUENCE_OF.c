@@ -2,8 +2,12 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
+
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 typedef A_SEQUENCE_OF(void) asn_sequence;
 
@@ -21,7 +25,7 @@ asn_sequence_del(void *asn_sequence_of_x, int number, int _do_free) {
 		if(_do_free && as->free) {
 			ptr = as->array[number];
 		} else {
-			ptr = 0;
+			ptr = NULL;
 		}
 
 		/*

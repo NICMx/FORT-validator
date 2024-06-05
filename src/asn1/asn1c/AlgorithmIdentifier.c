@@ -12,22 +12,21 @@ asn_TYPE_member_t asn_MBR_AlgorithmIdentifier_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (6 << 2)),
 		0,
 		&asn_DEF_OBJECT_IDENTIFIER,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"algorithm"
 		},
 	{ ATF_ANY_TYPE | ATF_POINTER, 1, offsetof(struct AlgorithmIdentifier, parameters),
 		-1 /* Ambiguous tag (ANY?) */,
 		0,
 		&asn_DEF_ANY,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"parameters"
 		},
 };
-static const int asn_MAP_AlgorithmIdentifier_oms_1[] = { 1 };
 static const ber_tlv_tag_t asn_DEF_AlgorithmIdentifier_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
@@ -39,8 +38,6 @@ asn_SEQUENCE_specifics_t asn_SPC_AlgorithmIdentifier_specs_1 = {
 	offsetof(struct AlgorithmIdentifier, _asn_ctx),
 	asn_MAP_AlgorithmIdentifier_tag2el_1,
 	1,	/* Count of tags in the map */
-	asn_MAP_AlgorithmIdentifier_oms_1,	/* Optional members */
-	1, 0,	/* Root/Additions */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_AlgorithmIdentifier = {
@@ -53,7 +50,7 @@ asn_TYPE_descriptor_t asn_DEF_AlgorithmIdentifier = {
 	asn_DEF_AlgorithmIdentifier_tags_1,	/* Same as above */
 	sizeof(asn_DEF_AlgorithmIdentifier_tags_1)
 		/sizeof(asn_DEF_AlgorithmIdentifier_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_AlgorithmIdentifier_1,
 	2,	/* Elements count */
 	&asn_SPC_AlgorithmIdentifier_specs_1	/* Additional specs */

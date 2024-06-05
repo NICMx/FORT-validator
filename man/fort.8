@@ -1,4 +1,4 @@
-.TH fort 8 "2023-12-15" "v1.6.1" "FORT validator"
+.TH fort 8 "2024-05-24" "v1.6.2" "FORT validator"
 
 .SH NAME
 fort \- RPKI validator and RTR server
@@ -18,19 +18,19 @@ fort \- RPKI validator and RTR server
 
 .SH DESCRIPTION
 
-Fort is an RPKI "Relying Party" (RP). It's an artifact that validates Route
-Origin Attestations (ROAs) and BGPsec Router Keys, by way of a Public Key
+Fort is an RPKI "Relying Party" (RP), an artifact that validates Route
+Origin Attestations (ROAs) by way of a Public Key
 Infrastructure (PKI). ROAs are employed by routers, to verify BGP routing
 attestations.
 .P
-The main validation input is one or more Trust Anchor Locator (TAL) files
+Its main input is one or more Trust Anchor Locator (TAL) files
 (\fI--tal\fR), which point to the RPKI Trust Anchors (ie. root certificates).
 Fort downloads all the resources governed by the trust anchors into a local
 cache (\fI--local-repository\fR), and proceeds to validate their entirety. The
-output of the validation is a set of trusted ROAs and Router Keys, which are
-printed to files (\fI--output.roa\fR and \fI--output.bgpsec\fR) and/or served to
+output of the validation is a set of VRPs (Validated ROA Payloads), which are
+served to
 routers (\fI--mode=server\fR, \fI--server.address\fR, \fI--server.port\fR)
-through the RTR protocol (version 0 or 1).
+through the RTR protocol (RFC 6810).
 
 .SH OPTIONS
 .TP
@@ -319,50 +319,60 @@ See more about SLURM configuration at FORT's web docs.
 .RE
 .P
 
-.B \-\-mode=(\fIserver\fR|\fIstandalone\fR)
+.B \-\-mode=(\fIserver\fR|\fIstandalone\fR|\fIprint\fR)
 .RS 4
-Commands the way FORT executes the validation, its possible values are:
+Operation mode.
 .P
-.I server
+.I server \fR(Default)\fI
 .RS 4
-Enable the RTR server using the \fIserver.*\fR arguments.
+Perform validation cycles in perpetuity. (See \fB--server.interval.validation\fR).
+Also, serve resulting VRPs through RTR. (See \fB--server.*\fR.)
 .RE
 .P
 .I standalone
 .RS 4
-Disable the RTR server, the configuration options \fIserver.*\fR are ignored
-and FORT performs an in-place standalone validation.
+Perform single validation cycle, then exit.
 .RE
 .P
-By default, the mode is \fIserver\fR.
+.I print
+.RS 4
+Print a Certificate, CRL or Signed Object (ROA, Manifest or Ghostbusters) in
+standard output.
+.RE
 .RE
 .P
 
 .B \-\-server.address=\fINODE(S)\fR
 .RS 4
-List of hostnames or numeric host addresses the RTR server will be bound to.
-Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
+List of hostnames or numeric host addresses the RTR server will be bound to. Must resolve to (or be) bindable IP addresses. IPv4 and IPv6 are supported.
 .P
-The list of addresses must be comma sepparated, and each address must have the
-following format: \fB<address>[#<port>]\fR. Note that the port is optional; in
-case that a port isn't specified, the value of \fI--server.port\fR will be
-utilized with the corresponding address.
+The address list must be comma-separated, and each address must have the following format: \fB<address>[#<port>]\fR. The port defaults to \fI--server.port\fR.
 .P
-Here are some examples of valid values for this argument:
+Here are some examples:
 .br
-- \fI--server.address="localhost"\fR: will bind to 'localhost' and the
-configured port at \fI--server.port\fR.
+- \fI--server.address="localhost"\fR: Bind to localhost, port \fI--server.port\fR.
 .br
-- \fI--server.address="localhost,::1#8324"\fR: same as the previous example,
-and also will bind to IPv6 address '::1' at the port '8324'.
+- \fI--server.address="localhost, ::1#8324"\fR: Same as above, and also bind to \fI[::1]:8324\fR.
 .br
-- \fI--server.address="localhost#8323,::1#8324"\fR: will bind to 'localhost' at
-port '8323', and to '::1' port '8324'. The value of \fI--server.port\fR isn't
-utilized.
+- \fI--server.address="localhost#8323, ::1#8324"\fR: Bind to \fIlocalhost\fR on port 8323, and to \fI[::1]:8324\fR. (\fI--server.port\fR is ignored.)
 .P
-If this field is omitted, FORT will attempt to bind the server using the IP
-address \fIINADDR_ANY\fR (for an IPv4 address) or \fIIN6ADDR_ANY_INIT\fR (for
-an IPv6 address). See \fBgetaddrinfo(3)\fR.
+Use wildcards to bind to all available addresses. Note that, for historical reasons, Linux is a bit strange:
+.P
+BSDs:
+.P
+- \fI0.0.0.0\fR : Bind to all available IPv4 addresses
+.br
+- \fI::\fR : Bind to all available IPv6 addresses
+.br
+- \fI0.0.0.0, ::\fR : Bind to all available IPv4 and IPv6 addresses
+.P
+Linux:
+.P
+- \fI0.0.0.0\fR : Bind to all available IPv4 addresses
+.br
+- \fI::\fR : Bind to all available IPv4 and IPv6 addresses
+.br
+- \fI0.0.0.0, ::\fR : Error
 .RE
 .P
 
@@ -1203,12 +1213,11 @@ to a specific value:
 {
   "tal": "/tmp/fort/tal/",
   "local-repository": "/tmp/fort/repository",
-  "work-offline": false,
   "maximum-certificate-depth": 32,
-  "mode": "server",
-  "daemon": false,
   "slurm": "/tmp/fort/test.slurm",
-  "asn1-decode-max-stack": 4096,
+  "mode": "server",
+  "work-offline": false,
+  "daemon": false,
 
   "server": {
     "address": [
@@ -1226,43 +1235,6 @@ to a specific value:
     "deltas": {
       "lifetime": 2
     }
-  },
-
-  "log": {
-    "enabled": true,
-    "output": "console",
-    "level": "info",
-    "tag": "Operation",
-    "facility": "daemon",
-    "file-name-format": "global-url",
-    "color-output": false
-  },
-
-  "validation-log": {
-    "enabled": false,
-    "output": "console",
-    "level": "warning",
-    "tag": "Validation",
-    "facility": "daemon",
-    "file-name-format": "global-url",
-    "color-output": false
-  },
-
-  "http": {
-    "enabled": true,
-    "priority": 60,
-    "retry": {
-      "count": 1,
-      "interval": 4
-    },
-    "user-agent": "fort/1.6.0",
-    "max-redirs": 10,
-    "connect-timeout": 30,
-    "transfer-timeout": 0,
-    "low-speed-limit": 100000,
-    "low-speed-time": 10,
-    "max-file-size": 1000000000,
-    "ca-path": "/usr/local/ssl/certs"
   },
 
   "rsync": {
@@ -1292,28 +1264,60 @@ to a specific value:
     ]
   },
 
+  "http": {
+    "enabled": true,
+    "priority": 60,
+    "retry": {
+      "count": 1,
+      "interval": 4
+    },
+    "user-agent": "fort/1.6.2",
+    "max-redirs": 10,
+    "connect-timeout": 30,
+    "transfer-timeout": 0,
+    "low-speed-limit": 100000,
+    "low-speed-time": 10,
+    "max-file-size": 1000000000,
+    "ca-path": "/usr/local/ssl/certs"
+  },
+
+  "log": {
+    "enabled": true,
+    "output": "console",
+    "level": "info",
+    "tag": "Operation",
+    "facility": "daemon",
+    "file-name-format": "global-url",
+    "color-output": false
+  },
+
+  "validation-log": {
+    "enabled": false,
+    "output": "console",
+    "level": "warning",
+    "tag": "Validation",
+    "facility": "daemon",
+    "file-name-format": "global-url",
+    "color-output": false
+  },
+
   "incidences": [
     {
       "name": "incid-hashalg-has-params",
       "action": "ignore"
-    },
-    {
+    }, {
       "name": "incid-obj-not-der-encoded",
       "action": "ignore"
-    },
-    {
+    }, {
       "name": "incid-file-at-mft-not-found",
       "action": "error"
-    },
-    {
+    }, {
       "name": "incid-file-at-mft-hash-not-match",
       "action": "error"
-    },
-    {
+    }, {
       "name": "incid-mft-stale",
       "action": "error"
-    },
-    {
+    }, {
       "name": "incid-crl-stale",
       "action": "error"
     }
@@ -1324,6 +1328,8 @@ to a specific value:
     "bgpsec": "/tmp/fort/bgpsec.csv",
     "format": "csv"
   },
+
+  "asn1-decode-max-stack": 4096,
 
   "thread-pool": {
     "server": {

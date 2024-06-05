@@ -8,17 +8,10 @@
 #ifndef	_CertificateSet_H_
 #define	_CertificateSet_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* CertificateSet */
 typedef struct CertificateSet {
@@ -33,9 +26,4 @@ extern asn_TYPE_descriptor_t asn_DEF_CertificateSet;
 extern asn_SET_OF_specifics_t asn_SPC_CertificateSet_specs_1;
 extern asn_TYPE_member_t asn_MBR_CertificateSet_1[1];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _CertificateSet_H_ */
-#include "asn1/asn1c/asn_internal.h"

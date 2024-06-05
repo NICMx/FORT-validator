@@ -8,17 +8,10 @@
 #ifndef	_ASIdOrRange_H_
 #define	_ASIdOrRange_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
 #include "asn1/asn1c/ASId.h"
 #include "asn1/asn1c/ASRange.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum ASIdOrRange_PR {
@@ -44,9 +37,4 @@ extern asn_TYPE_descriptor_t asn_DEF_ASIdOrRange;
 extern asn_CHOICE_specifics_t asn_SPC_ASIdOrRange_specs_1;
 extern asn_TYPE_member_t asn_MBR_ASIdOrRange_1[2];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _ASIdOrRange_H_ */
-#include "asn1/asn1c/asn_internal.h"

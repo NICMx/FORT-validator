@@ -5,11 +5,7 @@
 #ifndef	_BER_DECODER_H_
 #define	_BER_DECODER_H_
 
-#include "asn1/asn1c/asn_application.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 struct asn_TYPE_descriptor_s;	/* Forward declaration */
 struct asn_codec_ctx_s;		/* Forward declaration */
@@ -23,20 +19,11 @@ struct asn_codec_ctx_s;		/* Forward declaration */
  * which is compliant with ber_decode().
  */
 asn_dec_rval_t ber_decode(
-    const struct asn_codec_ctx_s *opt_codec_ctx,
     const struct asn_TYPE_descriptor_s *type_descriptor,
     void **struct_ptr,  /* Pointer to a target structure's pointer */
     const void *buffer, /* Data to be decoded */
     size_t size         /* Size of that buffer */
 );
-
-/*
- * Type of generic function which decodes the byte stream into the structure.
- */
-typedef asn_dec_rval_t(ber_type_decoder_f)(
-    const struct asn_codec_ctx_s *opt_codec_ctx,
-    const struct asn_TYPE_descriptor_s *type_descriptor, void **struct_ptr,
-    const void *buf_ptr, size_t size, int tag_mode);
 
 /*******************************
  * INTERNALLY USEFUL FUNCTIONS *
@@ -58,9 +45,5 @@ asn_dec_rval_t ber_check_tags(
     int last_tag_form, /* {-1,0:1}: any, primitive, constr */
     ber_tlv_len_t *last_length, int *opt_tlv_form /* optional tag form */
 );
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _BER_DECODER_H_ */

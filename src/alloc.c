@@ -62,11 +62,11 @@ pstrdup(const char *s)
 }
 
 char *
-pstrndup(char const *s, size_t size)
+pstrndup(char const *s, size_t n)
 {
 	char *result;
 
-	result = strndup(s, size);
+	result = strndup(s, n);
 	if (result == NULL)
 		enomem_panic();
 

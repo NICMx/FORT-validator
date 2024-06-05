@@ -5,13 +5,11 @@
 #ifndef	_OBJECT_IDENTIFIER_H_
 #define	_OBJECT_IDENTIFIER_H_
 
-#include "asn1/asn1c/asn_application.h"
-#include "asn1/asn1c/asn_codecs_prim.h"
-#include "asn1/asn1c/OCTET_STRING.h"
+#include <netdb.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/OCTET_STRING.h"
+#include "asn1/asn1c/asn_codecs_prim.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 typedef uint32_t asn_oid_arc_t;
 #define ASN_OID_ARC_MAX (~((asn_oid_arc_t)0))
@@ -24,22 +22,22 @@ extern asn_TYPE_operation_t asn_OP_OBJECT_IDENTIFIER;
 asn_struct_print_f OBJECT_IDENTIFIER_print;
 asn_constr_check_f OBJECT_IDENTIFIER_constraint;
 der_type_encoder_f OBJECT_IDENTIFIER_encode_der;
-xer_type_decoder_f OBJECT_IDENTIFIER_decode_xer;
+json_type_encoder_f OBJECT_IDENTIFIER_encode_json;
 xer_type_encoder_f OBJECT_IDENTIFIER_encode_xer;
-asn_random_fill_f  OBJECT_IDENTIFIER_random_fill;
 
 #define OBJECT_IDENTIFIER_free           ASN__PRIMITIVE_TYPE_free
 #define OBJECT_IDENTIFIER_compare        OCTET_STRING_compare
 #define OBJECT_IDENTIFIER_decode_ber     ber_decode_primitive
 #define OBJECT_IDENTIFIER_encode_der     der_encode_primitive
-#define OBJECT_IDENTIFIER_decode_oer     oer_decode_primitive
-#define OBJECT_IDENTIFIER_encode_oer     oer_encode_primitive
-#define OBJECT_IDENTIFIER_decode_uper    OCTET_STRING_decode_uper
-#define OBJECT_IDENTIFIER_encode_uper    OCTET_STRING_encode_uper
 
 /**********************************
  * Some handy conversion routines *
  **********************************/
+
+int OBJECT_IDENTIFIER_to_nid(OBJECT_IDENTIFIER_t const *);
+
+#define OID_STR_MAXLEN 64 /* Null char included */
+char const *OBJECT_IDENTIFIER_to_string(OBJECT_IDENTIFIER_t const *, char *);
 
 /*
  * This function fills an (arcs) array with OBJECT IDENTIFIER arcs
@@ -146,9 +144,5 @@ ssize_t OBJECT_IDENTIFIER_get_single_arc(const uint8_t *arcbuf,
  */
 ssize_t OBJECT_IDENTIFIER_set_single_arc(uint8_t *arcbuf, size_t arcbuf_len,
                                          asn_oid_arc_t arc_value);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _OBJECT_IDENTIFIER_H_ */

@@ -1,5 +1,5 @@
-#include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/constraints.h"
+
 #include <stdarg.h>
 
 int
@@ -80,8 +80,8 @@ asn_check_constraints(const asn_TYPE_descriptor_t *type_descriptor,
     struct errbufDesc arg;
     int ret;
 
-    arg.failed_type = 0;
-    arg.failed_struct_ptr = 0;
+    arg.failed_type = NULL;
+    arg.failed_struct_ptr = NULL;
     arg.errbuf = errbuf;
     arg.errlen = errlen ? *errlen : 0;
 

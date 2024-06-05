@@ -565,18 +565,7 @@ uri_same_origin(struct rpki_uri *u1, struct rpki_uri *u2)
 bool
 uri_has_extension(struct rpki_uri *uri, char const *ext)
 {
-	size_t uri_len;
-	size_t ext_len;
-	int cmp;
-
-	uri_len = strlen(uri->global);
-	ext_len = strlen(ext);
-
-	if (uri_len < ext_len)
-		return false;
-
-	cmp = strncmp(uri->global + uri_len - ext_len, ext, ext_len);
-	return cmp == 0;
+	return str_ends_with(uri->global, ext);
 }
 
 bool

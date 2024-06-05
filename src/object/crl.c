@@ -3,11 +3,12 @@
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <syslog.h>
+
 #include "algorithm.h"
 #include "extension.h"
 #include "log.h"
-#include "thread_var.h"
 #include "object/name.h"
+#include "thread_var.h"
 
 static int
 __crl_load(struct rpki_uri *uri, X509_CRL **result)
@@ -102,7 +103,7 @@ validate_revoked(X509_CRL *crl)
 }
 
 static int
-handle_crlnum(X509_EXTENSION *ext, void *arg)
+handle_crlnum(void *ext, void *arg)
 {
 	/*
 	 * We're allowing only one CRL per RPP, so there's nothing to do here I
@@ -115,7 +116,7 @@ static int
 validate_extensions(X509_CRL *crl)
 {
 	struct extension_handler handlers[] = {
-	   /* ext   reqd   handler        arg */
+	   /* ext        reqd   handler        arg */
 	    { ext_aki(), true,  handle_aki,              },
 	    { ext_cn(),  true,  handle_crlnum,           },
 	    { NULL },

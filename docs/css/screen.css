@@ -545,3 +545,20 @@ div.highlighter-rouge{
 table {
 	margin-bottom: 1rem;
 }
+
+.urgency-low {
+	color: cyan;
+}
+.urgency-medium {
+	color: yellow;
+}
+.urgency-high {
+	color: orange;
+}
+.urgency-very-high {
+	color: red;
+}
+.urgency-critical {
+	color: magenta;
+	font-weight: bold;
+}

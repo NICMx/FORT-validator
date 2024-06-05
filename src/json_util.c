@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <time.h>
+
 #include "log.h"
 
 /*
@@ -10,6 +11,7 @@
  * documented in the Linux man page are not actually portable.
  */
 #define JSON_TS_FORMAT "%Y-%m-%dT%H:%M:%SZ"
+#define JSON_TS_LEN 21 /* strlen("YYYY-mm-ddTHH:MM:SSZ") + 1 */
 
 int
 json_get_str(json_t *parent, char const *name, char const **result)
@@ -87,34 +89,41 @@ json_get_u32(json_t *parent, char const *name, uint32_t *result)
 	return 0;
 }
 
-int
-json_get_ts(json_t *parent, char const *name, time_t *result)
+static int
+str2tt(char const *str, time_t *tt)
 {
-	char const *str, *consumed;
+	char const *consumed;
 	struct tm tm;
 	time_t time;
 	int error;
-
-	*result = 0;
-
-	error = json_get_str(parent, name, &str);
-	if (error)
-		return error;
 
 	memset(&tm, 0, sizeof(tm));
 	consumed = strptime(str, JSON_TS_FORMAT, &tm);
 	if (consumed == NULL || (*consumed) != 0)
 		return pr_op_err("String '%s' does not appear to be a timestamp.",
 		    str);
-	time = mktime(&tm);
+	time = timegm(&tm);
 	if (time == ((time_t) -1)) {
 		error = errno;
 		return pr_op_err("String '%s' does not appear to be a timestamp: %s",
 		    str, strerror(error));
 	}
 
-	*result = time;
+	*tt = time;
 	return 0;
+}
+
+int
+json_get_ts(json_t *parent, char const *name, time_t *result)
+{
+	char const *str;
+	int error;
+
+	error = json_get_str(parent, name, &str);
+	if (error)
+		return error;
+
+	return str2tt(str, result);
 }
 
 int
@@ -190,36 +199,34 @@ json_add_str(json_t *parent, char const *name, char const *value)
 }
 
 static int
-tt2json(time_t tt, json_t **result)
+tt2str(time_t tt, char *str)
 {
-	char str[32];
 	struct tm tmbuffer, *tm;
 
 	memset(&tmbuffer, 0, sizeof(tmbuffer));
 	tm = gmtime_r(&tt, &tmbuffer);
 	if (tm == NULL)
 		return errno;
-	if (strftime(str, sizeof(str) - 1, JSON_TS_FORMAT, tm) == 0)
+	if (strftime(str, JSON_TS_LEN, JSON_TS_FORMAT, tm) == 0)
 		return ENOSPC;
 
-	*result = json_string(str);
 	return 0;
 }
 
 int
-json_add_date(json_t *parent, char const *name, time_t value)
+json_add_ts(json_t *parent, char const *name, time_t value)
 {
-	json_t *date = NULL;
+	char str[JSON_TS_LEN];
 	int error;
 
-	error = tt2json(value, &date);
+	error = tt2str(value, str);
 	if (error) {
 		pr_op_err("Cannot convert timestamp '%s' to json: %s",
 		    name, strerror(error));
 		return error;
 	}
 
-	if (json_object_set_new(parent, name, date))
+	if (json_object_set_new(parent, name, json_string(str)))
 		return pr_op_err(
 		    "Cannot convert timestamp '%s' to json; unknown cause.",
 		    name
@@ -228,10 +235,80 @@ json_add_date(json_t *parent, char const *name, time_t value)
 	return 0;
 }
 
-int json_add_obj(json_t *parent, char const *name, json_t *value)
-{
-	if (json_object_set_new(parent, name, value))
-		return pr_op_err("Cannot add '%s' to json; unknown cause.", name);
+#define OOM_PFX " Likely out of memory (but there is no contract)."
 
-	return 0;
+json_t *
+json_obj_new(void)
+{
+	json_t *json = json_object();
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON object." OOM_PFX);
+	return json;
+}
+
+json_t *
+json_array_new(void)
+{
+	json_t *json = json_array();
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON array." OOM_PFX);
+	return json;
+}
+
+json_t *
+json_int_new(json_int_t value)
+{
+	json_t *json = json_integer(value);
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON integer '%lld'."
+			     OOM_PFX, value);
+	return json;
+}
+
+json_t *
+json_str_new(const char *value)
+{
+	json_t *json = json_string(value);
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON string '%s'." OOM_PFX, value);
+	return json;
+}
+
+json_t *
+json_strn_new(const char *value, size_t len)
+{
+	json_t *json = json_stringn(value, len);
+	if (json == NULL)
+		pr_op_err_st("Cannot create JSON string '%.*s'."
+			     OOM_PFX, (int)len, value);
+	return json;
+}
+
+int
+json_object_add(json_t *parent, char const *name, json_t *value)
+{
+	int res;
+
+	if (value == NULL)
+		return -1; /* Already messaged */
+
+	res = json_object_set_new(parent, name, value);
+	if (res == -1)
+		pr_op_err_st("Cannot add JSON '%s' to parent; unknown error.",
+			     name);
+	return res;
+}
+
+int
+json_array_add(json_t *array, json_t *node)
+{
+	int res;
+
+	if (node == NULL)
+		return -1; /* Already messaged */
+
+	res = json_array_append_new(array, node);
+	if (res == -1)
+		pr_op_err_st("Cannot add JSON node to array; unknown error.");
+	return res;
 }

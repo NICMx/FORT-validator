@@ -7,26 +7,23 @@
 
 #include "asn1/asn1c/ASIdOrRange.h"
 
-static asn_oer_constraints_t asn_OER_type_ASIdOrRange_constr_1 CC_NOTUSED = {
-	{ 0, 0 },
-	-1};
 asn_TYPE_member_t asn_MBR_ASIdOrRange_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct ASIdOrRange, choice.id),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_ASId,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"id"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct ASIdOrRange, choice.range),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_ASRange,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"range"
 		},
 };
@@ -41,18 +38,17 @@ asn_CHOICE_specifics_t asn_SPC_ASIdOrRange_specs_1 = {
 	sizeof(((struct ASIdOrRange *)0)->present),
 	asn_MAP_ASIdOrRange_tag2el_1,
 	2,	/* Count of tags in the map */
-	0, 0,
 	-1	/* Extensions start */
 };
 asn_TYPE_descriptor_t asn_DEF_ASIdOrRange = {
 	"ASIdOrRange",
 	"ASIdOrRange",
 	&asn_OP_CHOICE,
-	0,	/* No effective tags (pointer) */
+	NULL,	/* No effective tags (pointer) */
 	0,	/* No effective tags (count) */
-	0,	/* No tags (pointer) */
+	NULL,	/* No tags (pointer) */
 	0,	/* No tags (count) */
-	{ &asn_OER_type_ASIdOrRange_constr_1, 0, CHOICE_constraint },
+	{ NULL, NULL, CHOICE_constraint },
 	asn_MBR_ASIdOrRange_1,
 	2,	/* Elements count */
 	&asn_SPC_ASIdOrRange_specs_1	/* Additional specs */

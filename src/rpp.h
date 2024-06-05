@@ -3,6 +3,7 @@
 
 #include <openssl/safestack.h>
 #include <openssl/x509.h>
+
 #include "types/uri.h"
 
 struct rpp;

@@ -4,8 +4,8 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "log.h"
 #include "crypto/hash.h"
+#include "log.h"
 
 /* These are arbitrary; feel free to change them. */
 #ifndef INITIAL_CAPACITY /* Unit tests want to override this */

@@ -2,40 +2,37 @@
 
 #include <openssl/asn1t.h>
 #include <openssl/bio.h>
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/core_names.h>
+#endif
 #include <openssl/evp.h>
+#include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
 #include <openssl/x509v3.h>
 #include <syslog.h>
 
-#if OPENSSL_VERSION_MAJOR >= 3
-#include <openssl/core_names.h>
-#endif
-
 #include "algorithm.h"
 #include "alloc.h"
+#include "asn1/asn1c/IPAddrBlocks.h"
+#include "asn1/decode.h"
+#include "asn1/oid.h"
+#include "cache/local_cache.h"
 #include "cert_stack.h"
 #include "config.h"
+#include "crypto/hash.h"
+#include "data_structure/array_list.h"
 #include "extension.h"
+#include "incidence/incidence.h"
 #include "log.h"
 #include "nid.h"
+#include "object/bgpsec.h"
+#include "object/manifest.h"
+#include "object/name.h"
+#include "object/signed_object.h"
 #include "rrdp.h"
 #include "str_token.h"
 #include "thread_var.h"
-#include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "asn1/asn1c/IPAddrBlocks.h"
-#include "crypto/hash.h"
-#include "data_structure/array_list.h"
-#include "incidence/incidence.h"
-#include "object/bgpsec.h"
-#include "object/name.h"
-#include "object/manifest.h"
-#include "object/signed_object.h"
-#include "cache/local_cache.h"
-
-/* Just to prevent some line breaking. */
-#define GN_URI uniformResourceIdentifier
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -245,6 +242,35 @@ validate_subject(X509 *cert)
 	return error;
 }
 
+static X509_PUBKEY *
+decode_spki(struct tal *tal)
+{
+	X509_PUBKEY *spki = NULL;
+	unsigned char const *origin, *cursor;
+	size_t len;
+
+	fnstack_push(tal_get_file_name(tal));
+	tal_get_spki(tal, &origin, &len);
+	cursor = origin;
+	spki = d2i_X509_PUBKEY(NULL, &cursor, len);
+
+	if (spki == NULL) {
+		op_crypto_err("The public key cannot be decoded.");
+		goto fail;
+	}
+	if (cursor != origin + len) {
+		X509_PUBKEY_free(spki);
+		op_crypto_err("The public key contains trailing garbage.");
+		goto fail;
+	}
+
+	fnstack_pop();
+	return spki;
+
+fail:	fnstack_pop();
+	return NULL;
+}
+
 static int
 root_different_alg_err(void)
 {
@@ -262,10 +288,7 @@ validate_spki(X509_PUBKEY *cert_spki)
 {
 	struct validation *state;
 	struct tal *tal;
-
 	X509_PUBKEY *tal_spki;
-	unsigned char const *_tal_spki;
-	size_t _tal_spki_len;
 
 	state = state_retrieve();
 
@@ -291,29 +314,20 @@ validate_spki(X509_PUBKEY *cert_spki)
 	 * Reminder: "X509_PUBKEY" and "Subject Public Key Info" are synonyms.
 	 */
 
-	fnstack_push(tal_get_file_name(tal));
-	tal_get_spki(tal, &_tal_spki, &_tal_spki_len);
-	tal_spki = d2i_X509_PUBKEY(NULL, &_tal_spki, _tal_spki_len);
-	fnstack_pop();
-
-	if (tal_spki == NULL) {
-		op_crypto_err("The TAL's public key cannot be decoded");
-		goto fail1;
-	}
+	tal_spki = decode_spki(tal);
+	if (tal_spki == NULL)
+		return -EINVAL;
 
 	if (spki_cmp(tal_spki, cert_spki, root_different_alg_err,
-	    root_different_pk_err) != 0)
-		goto fail2;
+	    root_different_pk_err) != 0) {
+		X509_PUBKEY_free(tal_spki);
+		validation_pubkey_invalid(state);
+		return -EINVAL;
+	}
 
 	X509_PUBKEY_free(tal_spki);
 	validation_pubkey_valid(state);
 	return 0;
-
-fail2:
-	X509_PUBKEY_free(tal_spki);
-fail1:
-	validation_pubkey_invalid(state);
-	return -EINVAL;
 }
 
 /*
@@ -454,7 +468,6 @@ validate_public_key(X509 *cert, enum cert_type type)
 {
 	X509_PUBKEY *pubkey;
 	X509_ALGOR *pa;
-	ASN1_OBJECT *alg;
 	int ok;
 	int error;
 
@@ -463,7 +476,7 @@ validate_public_key(X509 *cert, enum cert_type type)
 	if (pubkey == NULL)
 		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
-	ok = X509_PUBKEY_get0_param(&alg, NULL, NULL, &pa, pubkey);
+	ok = X509_PUBKEY_get0_param(NULL, NULL, NULL, &pa, pubkey);
 	if (!ok)
 		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
@@ -1027,7 +1040,7 @@ handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
 
 	string = X509_EXTENSION_get_data(ext);
 	error = asn1_decode(string->data, string->length, &asn_DEF_IPAddrBlocks,
-	    (void **) &blocks, true, false);
+	    (void **) &blocks, true);
 	if (error)
 		return error;
 
@@ -1075,7 +1088,7 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
 
 	string = X509_EXTENSION_get_data(ext);
 	error = asn1_decode(string->data, string->length,
-	    &asn_DEF_ASIdentifiers, (void **) &ids, true, false);
+	    &asn_DEF_ASIdentifiers, (void **) &ids, true);
 	if (error)
 		return error;
 
@@ -1185,12 +1198,6 @@ is_rsync(ASN1_IA5STRING *uri)
 	    : false;
 }
 
-static bool
-is_rsync_uri(GENERAL_NAME *name)
-{
-	return name->type == GEN_URI && is_rsync(name->d.GN_URI);
-}
-
 static int
 handle_rpkiManifest(struct rpki_uri *uri, void *arg)
 {
@@ -1229,14 +1236,9 @@ handle_signedObject(struct rpki_uri *uri, void *arg)
 }
 
 static int
-handle_bc(X509_EXTENSION *ext, void *arg)
+handle_bc(void *ext, void *arg)
 {
-	BASIC_CONSTRAINTS *bc;
-	int error;
-
-	bc = X509V3_EXT_d2i(ext);
-	if (bc == NULL)
-		return cannot_decode(ext_bc());
+	BASIC_CONSTRAINTS *bc = ext;
 
 	/*
 	 * 'The issuer determines whether the "cA" boolean is set.'
@@ -1244,102 +1246,70 @@ handle_bc(X509_EXTENSION *ext, void *arg)
 	 * Well, libcrypto should do the RFC 5280 thing with it anyway.
 	 */
 
-	error = (bc->pathlen == NULL)
+	return (bc->pathlen == NULL)
 	    ? 0
 	    : pr_val_err("%s extension contains a Path Length Constraint.",
 	          ext_bc()->name);
-
-	BASIC_CONSTRAINTS_free(bc);
-	return error;
 }
 
 static int
-handle_ski_ca(X509_EXTENSION *ext, void *arg)
+handle_ski_ca(void *ext, void *arg)
 {
-	ASN1_OCTET_STRING *ski;
-	int error;
-
-	ski = X509V3_EXT_d2i(ext);
-	if (ski == NULL)
-		return cannot_decode(ext_ski());
-
-	error = validate_public_key_hash(arg, ski, "SKI");
-
-	ASN1_OCTET_STRING_free(ski);
-	return error;
+	return validate_public_key_hash(arg, ext, "SKI");
 }
 
 static int
-handle_ski_ee(X509_EXTENSION *ext, void *arg)
+handle_ski_ee(void *ext, void *arg)
 {
-	struct ski_arguments *args;
-	ASN1_OCTET_STRING *ski;
+	ASN1_OCTET_STRING *ski = ext;
+	struct ski_arguments *args = arg;
 	OCTET_STRING_t *sid;
 	int error;
 
-	ski = X509V3_EXT_d2i(ext);
-	if (ski == NULL)
-		return cannot_decode(ext_ski());
-
-	args = arg;
 	error = validate_public_key_hash(args->cert, ski, "SKI");
 	if (error)
-		goto end;
+		return error;
 
 	/* rfc6488#section-2.1.6.2 */
 	/* rfc6488#section-3.1.c 2/2 */
 	sid = args->sid;
 	if (ski->length != sid->size
 	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
-		error = pr_val_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
+		return pr_val_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
 	}
 
-end:
-	ASN1_OCTET_STRING_free(ski);
-	return error;
+	return 0;
 }
 
 static int
-handle_aki_ta(X509_EXTENSION *ext, void *arg)
+handle_aki_ta(void *ext, void *arg)
 {
-	struct AUTHORITY_KEYID_st *aki;
+	struct AUTHORITY_KEYID_st *aki = ext;
 	ASN1_OCTET_STRING *ski;
 	int error;
 
-	aki = X509V3_EXT_d2i(ext);
-	if (aki == NULL)
-		return cannot_decode(ext_aki());
 	if (aki->keyid == NULL) {
-		error = pr_val_err("The '%s' extension lacks a keyIdentifier.",
+		return pr_val_err("The '%s' extension lacks a keyIdentifier.",
 		    ext_aki()->name);
-		goto revert_aki;
 	}
 
 	ski = X509_get_ext_d2i(arg, NID_subject_key_identifier, NULL, NULL);
 	if (ski == NULL) {
 		pr_val_err("Certificate lacks the '%s' extension.",
 		    ext_ski()->name);
-		error = -ESRCH;
-		goto revert_aki;
+		return -ESRCH;
 	}
 
-	if (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0) {
-		error = pr_val_err("The '%s' does not equal the '%s'.",
-		    ext_aki()->name, ext_ski()->name);
-		goto revert_ski;
-	}
+	error = (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0)
+	      ? pr_val_err("The '%s' does not equal the '%s'.", ext_aki()->name, ext_ski()->name)
+	      : 0;
 
-	error = 0;
-
-revert_ski:
 	ASN1_BIT_STRING_free(ski);
-revert_aki:
-	AUTHORITY_KEYID_free(aki);
 	return error;
 }
 
 static int
-handle_ku(X509_EXTENSION *ext, unsigned char byte1)
+handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 {
 	/*
 	 * About the key usage string: At time of writing, it's 9 bits long.
@@ -1347,70 +1317,56 @@ handle_ku(X509_EXTENSION *ext, unsigned char byte1)
 	 * This implementation assumes that the ninth bit should always be zero.
 	 */
 
-	ASN1_BIT_STRING *ku;
 	unsigned char data[2];
-	int error = 0;
-
-	ku = X509V3_EXT_d2i(ext);
-	if (ku == NULL)
-		return cannot_decode(ext_ku());
 
 	if (ku->length == 0) {
-		error = pr_val_err("%s bit string has no enabled bits.",
+		return pr_val_err("%s bit string has no enabled bits.",
 		    ext_ku()->name);
-		goto end;
 	}
 
 	memset(data, 0, sizeof(data));
 	memcpy(data, ku->data, ku->length);
 
 	if (ku->data[0] != byte1) {
-		error = pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
+		return pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
 		    !!(ku->data[0] & 0x80u), !!(ku->data[0] & 0x40u),
 		    !!(ku->data[0] & 0x20u), !!(ku->data[0] & 0x10u),
 		    !!(ku->data[0] & 0x08u), !!(ku->data[0] & 0x04u),
 		    !!(ku->data[0] & 0x02u), !!(ku->data[0] & 0x01u),
 		    !!(ku->data[1] & 0x80u));
-		goto end;
 	}
 
-end:
-	ASN1_BIT_STRING_free(ku);
-	return error;
+	return 0;
 }
 
 static int
-handle_ku_ca(X509_EXTENSION *ext, void *arg)
+handle_ku_ca(void *ext, void *arg)
 {
 	return handle_ku(ext, 0x06);
 }
 
 static int
-handle_ku_ee(X509_EXTENSION *ext, void *arg)
+handle_ku_ee(void *ext, void *arg)
 {
 	return handle_ku(ext, 0x80);
 }
 
 static int
-handle_cdp(X509_EXTENSION *ext, void *arg)
+handle_cdp(void *ext, void *arg)
 {
+	STACK_OF(DIST_POINT) *crldp = ext;
 	struct certificate_refs *refs = arg;
-	STACK_OF(DIST_POINT) *crldp;
 	DIST_POINT *dp;
 	GENERAL_NAMES *names;
 	GENERAL_NAME *name;
+	ASN1_IA5STRING *str;
 	int i;
-	int error = 0;
+	int type;
 	char const *error_msg;
 
-	crldp = X509V3_EXT_d2i(ext);
-	if (crldp == NULL)
-		return cannot_decode(ext_cdp());
-
 	if (sk_DIST_POINT_num(crldp) != 1) {
-		error = pr_val_err("The %s extension has %d distribution points. (1 expected)",
+		return pr_val_err("The %s extension has %d distribution points. (1 expected)",
 		    ext_cdp()->name, sk_DIST_POINT_num(crldp));
-		goto end;
 	}
 
 	dp = sk_DIST_POINT_value(crldp, 0);
@@ -1444,7 +1400,8 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 	names = dp->distpoint->name.fullname;
 	for (i = 0; i < sk_GENERAL_NAME_num(names); i++) {
 		name = sk_GENERAL_NAME_value(names, i);
-		if (is_rsync_uri(name)) {
+		str = GENERAL_NAME_get0_value(name, &type);
+		if (type == GEN_URI && is_rsync(str)) {
 			/*
 			 * Since we're parsing and validating the manifest's CRL
 			 * at some point, I think that all we need to do now is
@@ -1459,20 +1416,15 @@ handle_cdp(X509_EXTENSION *ext, void *arg)
 			 * So we will store the URI in @refs, and validate it
 			 * later.
 			 */
-			error = ia5s2string(name->d.GN_URI, &refs->crldp);
-			goto end;
+			return ia5s2string(str, &refs->crldp);
 		}
 	}
 
 	error_msg = "lacks an RSYNC URI";
 
 dist_point_error:
-	error = pr_val_err("The %s extension's distribution point %s.",
+	return pr_val_err("The %s extension's distribution point %s.",
 	    ext_cdp()->name, error_msg);
-
-end:
-	sk_DIST_POINT_pop_free(crldp, DIST_POINT_free);
-	return error;
 }
 
 /*
@@ -1617,89 +1569,55 @@ handle_caIssuers(struct rpki_uri *uri, void *arg)
 }
 
 static int
-handle_aia(X509_EXTENSION *ext, void *arg)
+handle_aia(void *ext, void *arg)
 {
-	AUTHORITY_INFO_ACCESS *aia;
-	int error;
-
-	aia = X509V3_EXT_d2i(ext);
-	if (aia == NULL)
-		return cannot_decode(ext_aia());
-
-	error = handle_ad(NID_ad_ca_issuers, &CA_ISSUERS, aia, handle_caIssuers,
-	    arg);
-
-	AUTHORITY_INFO_ACCESS_free(aia);
-	return error;
+	return handle_ad(NID_ad_ca_issuers, &CA_ISSUERS, ext,
+	    handle_caIssuers, arg);
 }
 
 static int
-handle_sia_ca(X509_EXTENSION *ext, void *arg)
+handle_sia_ca(void *ext, void *arg)
 {
-	SIGNATURE_INFO_ACCESS *sia;
+	SIGNATURE_INFO_ACCESS *sia = ext;
 	struct sia_uris *uris = arg;
 	int error;
-
-	sia = X509V3_EXT_d2i(ext);
-	if (sia == NULL)
-		return cannot_decode(ext_sia());
 
 	/* rsync */
 	error = handle_ad(NID_caRepository, &CA_REPOSITORY, sia,
 	    handle_caRepository, uris);
 	if (error)
-		goto end;
+		return error;
 
 	/* RRDP */
-	error = handle_ad(nid_rpkiNotify(), &RPKI_NOTIFY, sia,
+	error = handle_ad(nid_ad_notify(), &RPKI_NOTIFY, sia,
 	    handle_rpkiNotify, uris);
 	if (error)
-		goto end;
+		return error;
 
 	/* Manifest */
-	error = handle_ad(nid_rpkiManifest(), &RPKI_MANIFEST, sia,
+	return handle_ad(nid_ad_mft(), &RPKI_MANIFEST, sia,
 	    handle_rpkiManifest, uris);
-
-end:
-	AUTHORITY_INFO_ACCESS_free(sia);
-	return error;
 }
 
 static int
-handle_sia_ee(X509_EXTENSION *ext, void *arg)
+handle_sia_ee(void *ext, void *arg)
 {
-	SIGNATURE_INFO_ACCESS *sia;
-	int error;
-
-	sia = X509V3_EXT_d2i(ext);
-	if (sia == NULL)
-		return cannot_decode(ext_sia());
-
-	error = handle_ad(nid_signedObject(), &SIGNED_OBJECT, sia,
+	return handle_ad(nid_ad_so(), &SIGNED_OBJECT, ext,
 	    handle_signedObject, arg);
-
-	AUTHORITY_INFO_ACCESS_free(sia);
-	return error;
 }
 
 static int
-handle_cp(X509_EXTENSION *ext, void *arg)
+handle_cp(void *ext, void *arg)
 {
+	CERTIFICATEPOLICIES *cp = ext;
 	enum rpki_policy *policy = arg;
-	CERTIFICATEPOLICIES *cp;
 	POLICYINFO *pi;
 	POLICYQUALINFO *pqi;
-	int error, nid_cp, nid_qt_cps, pqi_num;
-
-	error = 0;
-	cp = X509V3_EXT_d2i(ext);
-	if (cp == NULL)
-		return cannot_decode(ext_cp());
+	int nid_cp, nid_qt_cps, pqi_num;
 
 	if (sk_POLICYINFO_num(cp) != 1) {
-		error = pr_val_err("The %s extension has %d policy information's. (1 expected)",
+		return pr_val_err("The %s extension has %d policy information's. (1 expected)",
 		    ext_cp()->name, sk_POLICYINFO_num(cp));
-		goto end;
 	}
 
 	/* rfc7318#section-2 and consider rfc8360#section-4.2.1 */
@@ -1713,44 +1631,27 @@ handle_cp(X509_EXTENSION *ext, void *arg)
 		if (policy != NULL)
 			*policy = RPKI_POLICY_RFC8360;
 	} else {
-		error = pr_val_err("Invalid certificate policy OID, isn't 'id-cp-ipAddr-asNumber' nor 'id-cp-ipAddr-asNumber-v2'");
-		goto end;
+		return pr_val_err("Invalid certificate policy OID, isn't 'id-cp-ipAddr-asNumber' nor 'id-cp-ipAddr-asNumber-v2'");
 	}
 
 	/* Exactly one policy qualifier MAY be included (so none is also valid) */
 	if (pi->qualifiers == NULL)
-		goto end;
+		return 0;
 
 	pqi_num = sk_POLICYQUALINFO_num(pi->qualifiers);
 	if (pqi_num == 0)
-		goto end;
+		return 0;
 	if (pqi_num != 1) {
-		error = pr_val_err("The %s extension has %d policy qualifiers. (none or only 1 expected)",
+		return pr_val_err("The %s extension has %d policy qualifiers. (none or only 1 expected)",
 		    ext_cp()->name, pqi_num);
-		goto end;
 	}
 
 	pqi = sk_POLICYQUALINFO_value(pi->qualifiers, 0);
 	nid_qt_cps = OBJ_obj2nid(pqi->pqualid);
-	if (nid_qt_cps != NID_id_qt_cps) {
-		error = pr_val_err("Policy qualifier ID isn't Certification Practice Statement (CPS)");
-		goto end;
-	}
-end:
-	CERTIFICATEPOLICIES_free(cp);
-	return error;
-}
+	if (nid_qt_cps != NID_id_qt_cps)
+		return pr_val_err("Policy qualifier ID isn't Certification Practice Statement (CPS)");
 
-static int
-handle_ir(X509_EXTENSION *ext, void *arg)
-{
-	return 0; /* Handled in certificate_get_resources(). */
-}
-
-static int
-handle_ar(X509_EXTENSION *ext, void *arg)
-{
-	return 0; /* Handled in certificate_get_resources(). */
+	return 0;
 }
 
 /**
@@ -1771,10 +1672,11 @@ certificate_validate_extensions_ta(X509 *cert, struct sia_uris *sia_uris,
 	    { ext_ku(),  true,  handle_ku_ca,            },
 	    { ext_sia(), true,  handle_sia_ca, sia_uris  },
 	    { ext_cp(),  true,  handle_cp,     policy    },
-	    { ext_ir(),  false, handle_ir,               },
-	    { ext_ar(),  false, handle_ar,               },
-	    { ext_ir2(), false, handle_ir,               },
-	    { ext_ar2(), false, handle_ar,               },
+	    /* These are handled by certificate_get_resources(). */
+	    { ext_ir(),  false,                          },
+	    { ext_ar(),  false,                          },
+	    { ext_ir2(), false,                          },
+	    { ext_ar2(), false,                          },
 	    { NULL },
 	};
 
@@ -1805,10 +1707,10 @@ certificate_validate_extensions_ca(X509 *cert, struct sia_uris *sia_uris,
 	    { ext_aia(), true,  handle_aia,    &refs     },
 	    { ext_sia(), true,  handle_sia_ca, sia_uris  },
 	    { ext_cp(),  true,  handle_cp,     policy    },
-	    { ext_ir(),  false, handle_ir,               },
-	    { ext_ar(),  false, handle_ar,               },
-	    { ext_ir2(), false, handle_ir,               },
-	    { ext_ar2(), false, handle_ar,               },
+	    { ext_ir(),  false,                          },
+	    { ext_ar(),  false,                          },
+	    { ext_ir2(), false,                          },
+	    { ext_ar2(), false,                          },
 	    { NULL },
 	};
 	int error;
@@ -1840,10 +1742,10 @@ certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
 	    { ext_aia(), true,  handle_aia,    refs      },
 	    { ext_sia(), true,  handle_sia_ee, refs      },
 	    { ext_cp(),  true,  handle_cp,     policy    },
-	    { ext_ir(),  false, handle_ir,               },
-	    { ext_ar(),  false, handle_ar,               },
-	    { ext_ir2(), false, handle_ir,               },
-	    { ext_ar2(), false, handle_ar,               },
+	    { ext_ir(),  false,                          },
+	    { ext_ar(),  false,                          },
+	    { ext_ir2(), false,                          },
+	    { ext_ar2(), false,                          },
 	    { NULL },
 	};
 

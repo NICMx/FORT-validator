@@ -8,17 +8,10 @@
 #ifndef	_EncapsulatedContentInfoPKCS7_H_
 #define	_EncapsulatedContentInfoPKCS7_H_
 
-
-#include "asn1/asn1c/asn_application.h"
-
-/* Including external dependencies */
-#include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/ANY.h"
+#include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_TYPE.h"
 
 /* EncapsulatedContentInfoPKCS7 */
 typedef struct EncapsulatedContentInfoPKCS7 {
@@ -34,9 +27,4 @@ extern asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfoPKCS7;
 extern asn_SEQUENCE_specifics_t asn_SPC_EncapsulatedContentInfoPKCS7_specs_1;
 extern asn_TYPE_member_t asn_MBR_EncapsulatedContentInfoPKCS7_1[2];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _EncapsulatedContentInfoPKCS7_H_ */
-#include "asn1/asn1c/asn_internal.h"

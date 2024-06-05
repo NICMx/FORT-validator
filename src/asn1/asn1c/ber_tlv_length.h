@@ -5,23 +5,13 @@
 #ifndef	_BER_TLV_LENGTH_H_
 #define	_BER_TLV_LENGTH_H_
 
-#include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/asn_codecs.h"
 
 typedef ssize_t ber_tlv_len_t;
 
 /*
  * This function tries to fetch the length of the BER TLV value and place it
- * in *len_r.
+ * in *len_r. bufptr has to point to the TLV's length field, not the TLV.
  * RETURN VALUES:
  *	 0:	More data expected than bufptr contains.
  *	-1:	Fatal error deciphering length.
@@ -50,9 +40,5 @@ ssize_t ber_skip_length(
  * against the supplied buffer's size.
  */
 size_t der_tlv_length_serialize(ber_tlv_len_t len, void *bufptr, size_t size);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* _BER_TLV_LENGTH_H_ */

@@ -5,11 +5,8 @@
 #ifndef	ASN1_CONSTRAINTS_VALIDATOR_H
 #define	ASN1_CONSTRAINTS_VALIDATOR_H
 
-#include "asn1/asn1c/asn_system.h"		/* Platform-dependent types */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/asn_system.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
 struct asn_TYPE_descriptor_s;		/* Forward declaration */
 
@@ -32,17 +29,6 @@ int asn_check_constraints(
     size_t *errlen          /* Length of the error description */
 );
 
-
-/*
- * Generic type for constraint checking callback,
- * associated with every type descriptor.
- */
-typedef int(asn_constr_check_f)(
-    const struct asn_TYPE_descriptor_s *type_descriptor, const void *struct_ptr,
-    asn_app_constraint_failed_f *optional_callback, /* Log the error */
-    void *optional_app_key /* Opaque key passed to a callback */
-);
-
 /*******************************
  * INTERNALLY USEFUL FUNCTIONS *
  *******************************/
@@ -54,9 +40,5 @@ asn_constr_check_f asn_generic_unknown_constraint; /* Not fully supported */
  * Invoke the callback with a complete error message.
  */
 #define	ASN__CTFAIL	if(ctfailcb) ctfailcb
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif	/* ASN1_CONSTRAINTS_VALIDATOR_H */
