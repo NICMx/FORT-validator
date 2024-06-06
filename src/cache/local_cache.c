@@ -39,7 +39,6 @@ struct cache_node {
 };
 
 struct rpki_cache {
-	char *tal;
 	struct cache_node *ht;
 	time_t startup_ts; /* When we started the last validation */
 };
@@ -71,7 +70,7 @@ get_cache_filename(char const *name, bool fatal)
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, NULL, name);
+	error = pb_init_cache(&pb, name);
 	if (error) {
 		if (fatal) {
 			pr_crit("Cannot create path to %s: %s", name,
@@ -226,7 +225,7 @@ cache_tmpfile(char **filename)
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, NULL, TMPDIR);
+	error = pb_init_cache(&pb, TMPDIR);
 	if (error)
 		return error;
 
@@ -241,14 +240,14 @@ cache_tmpfile(char **filename)
 }
 
 static char *
-get_tal_json_filename(struct rpki_cache *cache)
+get_tal_json_filename(void)
 {
 	struct path_builder pb;
-	return pb_init_cache(&pb, cache->tal, TAL_METAFILE) ? NULL : pb.string;
+	return pb_init_cache(&pb, TAL_METAFILE) ? NULL : pb.string;
 }
 
 static struct cache_node *
-json2node(struct rpki_cache *cache, json_t *json)
+json2node(json_t *json)
 {
 	struct cache_node *node;
 	char const *type_str;
@@ -302,7 +301,7 @@ json2node(struct rpki_cache *cache, json_t *json)
 		}
 	}
 
-	error = uri_create(&node->url, cache->tal, type, NULL, url);
+	error = uri_create(&node->url, type, NULL, url);
 	if (error) {
 		pr_op_err("Cannot parse '%s' into a URI.", url);
 		goto fail;
@@ -368,7 +367,7 @@ load_tal_json(struct rpki_cache *cache)
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
-	filename = get_tal_json_filename(cache);
+	filename = get_tal_json_filename();
 	if (filename == NULL)
 		return;
 
@@ -390,7 +389,7 @@ load_tal_json(struct rpki_cache *cache)
 	}
 
 	for (n = 0; n < json_array_size(root); n++) {
-		node = json2node(cache, json_array_get(root, n));
+		node = json2node(json_array_get(root, n));
 		if (node != NULL)
 			add_node(cache, node);
 	}
@@ -400,11 +399,10 @@ end:	json_decref(root);
 }
 
 struct rpki_cache *
-cache_create(char const *tal)
+cache_create(void)
 {
 	struct rpki_cache *cache;
 	cache = pzalloc(sizeof(struct rpki_cache));
-	cache->tal = pstrdup(tal);
 	cache->startup_ts = time(NULL);
 	if (cache->startup_ts == (time_t) -1)
 		pr_crit("time(NULL) returned (time_t) -1.");
@@ -496,7 +494,7 @@ write_tal_json(struct rpki_cache *cache)
 	if (json == NULL)
 		return;
 
-	filename = get_tal_json_filename(cache);
+	filename = get_tal_json_filename();
 	if (filename == NULL)
 		goto end;
 
@@ -508,7 +506,7 @@ end:	json_decref(json);
 }
 
 static int
-get_url(struct rpki_uri *uri, const char *tal, struct rpki_uri **url)
+get_url(struct rpki_uri *uri, struct rpki_uri **url)
 {
 	char const *guri, *c;
 	char *gcopy;
@@ -596,7 +594,7 @@ reuse_uri:
 	return 0;
 
 gcopy2url:
-	error = uri_create(url, tal, UT_RPP, NULL, gcopy);
+	error = uri_create(url, UT_RPP, NULL, gcopy);
 	free(gcopy);
 	return error;
 }
@@ -644,7 +642,7 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed,
 	if (changed != NULL)
 		*changed = false;
 
-	error = get_url(uri, cache->tal, &url);
+	error = get_url(uri, &url);
 	if (error)
 		return error;
 
@@ -833,7 +831,7 @@ __cache_recover(struct rpki_cache *cache, struct uri_list *uris,
 	ARRAYLIST_FOREACH(uris, uri) {
 		cursor.uri = *uri;
 
-		if (get_url(cursor.uri, cache->tal, &url) != 0)
+		if (get_url(cursor.uri, &url) != 0)
 			continue;
 		cursor.node = find_node(cache, url);
 		uri_refput(url);
@@ -888,7 +886,7 @@ delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
 	struct rpki_uri *cage;
 
 	if (uri_get_type(node->url) == UT_NOTIF) {
-		if (uri_create_cage(&cage, cache->tal, node->url) == 0) {
+		if (uri_create_cage(&cage, node->url) == 0) {
 			pr_op_debug("Deleting cage %s.", uri_get_local(cage));
 			file_rm_rf(uri_get_local(cage));
 			uri_refput(cage);
@@ -1024,6 +1022,10 @@ delete_if_unknown(const char *fpath, const struct stat *sb, int typeflag,
 	return 0;
 }
 
+/*
+ * FIXME this needs to account I'm merging the TAL directories.
+ * It might already work.
+ */
 static void
 delete_unknown_files(struct rpki_cache *cache)
 {
@@ -1032,10 +1034,10 @@ delete_unknown_files(struct rpki_cache *cache)
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, cache->tal, TAL_METAFILE);
+	error = pb_init_cache(&pb, TAL_METAFILE);
 	if (error) {
-		pr_op_err("Cannot delete unknown files from %s's cache: %s",
-		    cache->tal, strerror(error));
+		pr_op_err("Cannot delete unknown files from the cache: %s",
+		    strerror(error));
 		return;
 	}
 
@@ -1050,7 +1052,7 @@ delete_unknown_files(struct rpki_cache *cache)
 		if (uri_get_type(node->url) != UT_NOTIF)
 			continue;
 
-		if (uri_create_cage(&cage, cache->tal, node->url) != 0) {
+		if (uri_create_cage(&cage, node->url) != 0) {
 			pr_op_err("Cannot generate %s's cage. I'm probably going to end up deleting it from the cache.",
 			    uri_op_get_printable(node->url));
 			continue;
@@ -1103,6 +1105,5 @@ cache_destroy(struct rpki_cache *cache)
 
 	HASH_ITER(hh, cache->ht, node, tmp)
 		delete_node(cache, node);
-	free(cache->tal);
 	free(cache);
 }

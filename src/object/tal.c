@@ -77,9 +77,9 @@ add_uri(struct tal *tal, char *uri)
 	int error;
 
 	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, tal->file_name, UT_TA_RSYNC, NULL, uri);
+		error = uri_create(&new, UT_TA_RSYNC, NULL, uri);
 	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, tal->file_name, UT_TA_HTTP, NULL, uri);
+		error = uri_create(&new, UT_TA_HTTP, NULL, uri);
 	else
 		return pr_op_err("TAL has non-rsync/HTTPS URI: %s", uri);
 	if (error)
@@ -163,7 +163,7 @@ tal_init(struct tal *tal, char const *file_path)
 		goto end;
 	}
 
-	tal->cache = cache_create(file_name);
+	tal->cache = cache_create();
 
 end:
 	file_free(&file);

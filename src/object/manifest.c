@@ -23,9 +23,7 @@ cage(struct rpki_uri **uri, struct rpki_uri *notif)
 		return 0;
 	}
 
-	return uri_create_caged(uri,
-	    tal_get_file_name(validation_tal(state_retrieve())), notif,
-	    uri_get_global(*uri));
+	return uri_create_caged(uri, notif, uri_get_global(*uri));
 }
 
 static int
@@ -248,7 +246,6 @@ static int
 build_rpp(struct Manifest *mft, struct rpki_uri *notif,
     struct rpki_uri *mft_uri, struct rpp **pp)
 {
-	char const *tal;
 	int i;
 	struct FileAndHash *fah;
 	struct rpki_uri *uri;
@@ -256,12 +253,10 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 
 	*pp = rpp_create();
 
-	tal = tal_get_file_name(validation_tal(state_retrieve()));
-
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
 
-		error = uri_create_mft(&uri, tal, notif, mft_uri, &fah->file);
+		error = uri_create_mft(&uri, notif, mft_uri, &fah->file);
 		/*
 		 * Not handling ENOTRSYNC is fine because the manifest URL
 		 * should have been RSYNC. Something went wrong if an RSYNC URL

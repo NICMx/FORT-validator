@@ -15,8 +15,6 @@
 
 /* Mocks */
 
-#define TAL_FILE "test.tal"
-
 static struct rpki_cache *cache;
 
 static bool dl_error; /* Download should return error? */
@@ -114,7 +112,7 @@ setup_test(void)
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
 
 	dl_error = false;
-	cache = cache_create(TAL_FILE);
+	cache = cache_create();
 	ck_assert_ptr_ne(NULL, cache);
 	SLIST_INIT(&downloaded);
 }
@@ -136,7 +134,7 @@ run_cache_download(char const *url, int expected_error,
 	rsync_counter = 0;
 	https_counter = 0;
 
-	ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, NULL, url));
+	ck_assert_int_eq(0, uri_create(&uri, type, NULL, url));
 	ck_assert_int_eq(expected_error, cache_download(cache, uri, NULL, NULL));
 	ck_assert_uint_eq(rsync_calls, rsync_counter);
 	ck_assert_uint_eq(https_calls, https_counter);
@@ -159,7 +157,7 @@ node(char const *url, time_t attempt, int err, bool succeeded, time_t success,
 		ck_abort_msg("Bad protocol: %s", url);
 
 	result = pzalloc(sizeof(struct cache_node));
-	ck_assert_int_eq(0, uri_create(&result->url, TAL_FILE, type, NULL, url));
+	ck_assert_int_eq(0, uri_create(&result->url, type, NULL, url));
 	result->attempt.ts = attempt;
 	result->attempt.result = err;
 	result->success.happened = succeeded;
@@ -492,7 +490,7 @@ START_TEST(test_cache_cleanup_rsync)
 		NODE("rsync://a.b.c/e/", 0, 1, true),
 		NODE("rsync://a.b.c/f/", 0, 1, true),
 		NULL);
-	ck_assert_int_eq(0, file_rm_rf("tmp/" TAL_FILE "/rsync/a.b.c/f"));
+	ck_assert_int_eq(0, file_rm_rf("tmp/rsync/a.b.c/f"));
 	cache_cleanup(cache);
 	validate_cache(0, NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
 
@@ -652,7 +650,7 @@ START_TEST(test_cache_cleanup_https)
 	    NODE("https://a.b.c/e", 0, 1, 1),
 	    NODE("https://a.b.c/f/g/h", 0, 1, 1),
 	    NULL);
-	ck_assert_int_eq(0, file_rm_rf("tmp/" TAL_FILE "/https/a.b.c/f/g/h"));
+	ck_assert_int_eq(0, file_rm_rf("tmp/https/a.b.c/f/g/h"));
 	cache_cleanup(cache);
 	validate_cache(0, NODE("https://a.b.c/e", 0, 1, 1), NULL);
 
@@ -731,7 +729,7 @@ START_TEST(test_tal_json)
 	setup_test();
 
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	ck_assert_int_eq(0, system("mkdir -p tmp/" TAL_FILE));
+	ck_assert_int_eq(0, system("mkdir -p tmp"));
 
 	add_node(cache, NODE("rsync://a.b.c/d", 0, 1, 0));
 	add_node(cache, NODE("rsync://a.b.c/e", 1, 0, 0));
@@ -740,7 +738,7 @@ START_TEST(test_tal_json)
 	add_node(cache, node("https://a/c", 0, 0, 1, 0, 1));
 
 	json = build_tal_json(cache);
-	ck_assert_int_eq(0, json_dump_file(json, "tmp/" TAL_FILE "/" TAL_METAFILE, JSON_COMPACT));
+	ck_assert_int_eq(0, json_dump_file(json, "tmp/" TAL_METAFILE, JSON_COMPACT));
 
 	str = json_dumps(json, /* JSON_INDENT(4) */ JSON_COMPACT);
 	json_decref(json);
@@ -789,7 +787,7 @@ prepare_uri_list(struct uri_list *uris, ...)
 			type = UT_RPP;
 		else
 			ck_abort_msg("Bad protocol: %s", str);
-		ck_assert_int_eq(0, uri_create(&uri, TAL_FILE, type, NULL, str));
+		ck_assert_int_eq(0, uri_create(&uri, type, NULL, str));
 		uris_add(uris, uri);
 	}
 	va_end(args);

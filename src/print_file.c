@@ -65,20 +65,15 @@ end:	pb_cleanup(&pb);
 static BIO *
 rsync2bio_cache(char const *src)
 {
-	char const *tal;
-	struct rpki_uri *uri;
+	struct rpki_uri *uri = NULL;
 	BIO *bio;
 	int error;
-
-	tal = strrchr(config_get_tal(), '/');
-	tal = (tal != NULL) ? (tal + 1) : config_get_tal();
-	uri = NULL;
 
 	/*
 	 * TODO (#82) maybe rename UT_TA_RSYNC into single rsync.
 	 * If applies and it's going to survive.
 	 */
-	error = uri_create(&uri, tal, UT_TA_RSYNC, NULL, src);
+	error = uri_create(&uri, UT_TA_RSYNC, NULL, src);
 	if (error) {
 		pr_op_err("Unparseable rsync URI: %s", strerror(abs(error)));
 		return NULL;

@@ -10,7 +10,7 @@ void cache_teardown(void);
 
 int cache_tmpfile(char **);
 
-struct rpki_cache *cache_create(char const *);
+struct rpki_cache *cache_create(void);
 /* Will destroy the cache object, but not the cache directory itself, obv. */
 void cache_destroy(struct rpki_cache *);
 

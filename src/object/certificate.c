@@ -1478,9 +1478,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
 	str = pstrndup((char const *)ASN1_STRING_get0_data(asn1str),
 	    ASN1_STRING_length(asn1str));
 
-	error = uri_create(uri,
-	    tal_get_file_name(validation_tal(state_retrieve())),
-	    type, NULL, str);
+	error = uri_create(uri, type, NULL, str);
 
 	free(str);
 	return error;

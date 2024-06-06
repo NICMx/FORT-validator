@@ -24,7 +24,7 @@ __pb_init(struct path_builder *pb, size_t reserve)
 }
 
 int
-pb_init_cache(struct path_builder *pb, char const *tal, char const *subdir)
+pb_init_cache(struct path_builder *pb, char const *subdir)
 {
 	int error;
 
@@ -33,11 +33,6 @@ pb_init_cache(struct path_builder *pb, char const *tal, char const *subdir)
 	error = pb_append(pb, config_get_local_repository());
 	if (error)
 		goto cancel;
-	if (tal != NULL) {
-		error = pb_append(pb, tal);
-		if (error)
-			goto cancel;
-	}
 	error = pb_append(pb, subdir);
 	if (error)
 		goto cancel;

@@ -321,12 +321,11 @@ append_guri(struct path_builder *pb, char const *guri, char const *gprefix,
 }
 
 static int
-get_rrdp_workspace(struct path_builder *pb, char const *tal,
-    struct rpki_uri *notif)
+get_rrdp_workspace(struct path_builder *pb, struct rpki_uri *notif)
 {
 	int error;
 
-	error = pb_init_cache(pb, tal, "rrdp");
+	error = pb_init_cache(pb, "rrdp");
 	if (error)
 		return error;
 
@@ -341,12 +340,12 @@ get_rrdp_workspace(struct path_builder *pb, char const *tal,
  * Maps "rsync://a.b.c/d/e.cer" into "<local-repository>/rsync/a.b.c/d/e.cer".
  */
 static int
-map_simple(struct rpki_uri *uri, char const *tal, char const *subdir)
+map_simple(struct rpki_uri *uri, char const *subdir)
 {
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, tal, subdir);
+	error = pb_init_cache(&pb, subdir);
 	if (error)
 		return error;
 
@@ -365,12 +364,12 @@ map_simple(struct rpki_uri *uri, char const *tal, char const *subdir)
  * "<local-repository>/rrdp/<notification-path>/a.b.c/d/e.cer".
  */
 static int
-map_caged(struct rpki_uri *uri, char const *tal, struct rpki_uri *notif)
+map_caged(struct rpki_uri *uri, struct rpki_uri *notif)
 {
 	struct path_builder pb;
 	int error;
 
-	error = get_rrdp_workspace(&pb, tal, notif);
+	error = get_rrdp_workspace(&pb, notif);
 	if (error)
 		return error;
 
@@ -389,24 +388,23 @@ success:
 }
 
 static int
-autocomplete_local(struct rpki_uri *uri, char const *tal,
-    struct rpki_uri *notif)
+autocomplete_local(struct rpki_uri *uri, struct rpki_uri *notif)
 {
 	switch (uri->type) {
 	case UT_TA_RSYNC:
 	case UT_RPP:
 	case UT_MFT:
-		return map_simple(uri, tal, "rsync");
+		return map_simple(uri, "rsync");
 
 	case UT_TA_HTTP:
-		return map_simple(uri, tal, "https");
+		return map_simple(uri, "https");
 
 	case UT_NOTIF:
 	case UT_TMP:
 		return cache_tmpfile(&uri->local);
 
 	case UT_CAGED:
-		return map_caged(uri, tal, notif);
+		return map_caged(uri, notif);
 
 	case UT_AIA:
 	case UT_SO:
@@ -418,8 +416,8 @@ autocomplete_local(struct rpki_uri *uri, char const *tal,
 }
 
 int
-uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
-    struct rpki_uri *notif, char const *guri)
+uri_create(struct rpki_uri **result, enum uri_type type, struct rpki_uri *notif,
+	   char const *guri)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -434,7 +432,7 @@ uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
 		return error;
 	}
 
-	error = autocomplete_local(uri, tal, notif);
+	error = autocomplete_local(uri, notif);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -450,8 +448,8 @@ uri_create(struct rpki_uri **result, char const *tal, enum uri_type type,
  * names. This function will infer the rest of the URL.
  */
 int
-uri_create_mft(struct rpki_uri **result, char const *tal,
-    struct rpki_uri *notif, struct rpki_uri *mft, IA5String_t *ia5)
+uri_create_mft(struct rpki_uri **result, struct rpki_uri *notif,
+	       struct rpki_uri *mft, IA5String_t *ia5)
 {
 	struct rpki_uri *uri;
 	int error;
@@ -466,7 +464,7 @@ uri_create_mft(struct rpki_uri **result, char const *tal,
 		return error;
 	}
 
-	error = autocomplete_local(uri, tal, notif);
+	error = autocomplete_local(uri, notif);
 	if (error) {
 		free(uri->global);
 		free(uri);
@@ -622,10 +620,10 @@ uri_op_get_printable(struct rpki_uri *uri)
 }
 
 char *
-uri_get_rrdp_workspace(char const *tal, struct rpki_uri *notif)
+uri_get_rrdp_workspace(struct rpki_uri *notif)
 {
 	struct path_builder pb;
-	return (get_rrdp_workspace(&pb, tal, notif) == 0) ? pb.string : NULL;
+	return (get_rrdp_workspace(&pb, notif) == 0) ? pb.string : NULL;
 }
 
 DEFINE_ARRAY_LIST_FUNCTIONS(uri_list, struct rpki_uri *, static)

@@ -265,10 +265,8 @@ parse_uri(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	if (xmlattr == NULL)
 		return -EINVAL;
 
-	error = uri_create(result,
-	    tal_get_file_name(validation_tal(state_retrieve())),
-	    (notif != NULL) ? UT_CAGED : UT_TMP,
-	    notif, (char const *)xmlattr);
+	error = uri_create(result, (notif != NULL) ? UT_CAGED : UT_TMP, notif,
+			   (char const *)xmlattr);
 
 	xmlFree(xmlattr);
 	return error;
@@ -763,9 +761,9 @@ parse_notification(struct rpki_uri *uri, struct update_notification *result)
 }
 
 static void
-delete_rpp(char const *tal, struct rpki_uri *notif)
+delete_rpp(struct rpki_uri *notif)
 {
-	char *path = uri_get_rrdp_workspace(tal, notif);
+	char *path = uri_get_rrdp_workspace(notif);
 	pr_val_debug("Snapshot: Deleting cached RPP '%s'.", path);
 	file_rm_rf(path);
 	free(path);
@@ -849,13 +847,10 @@ validate_session_desync(struct cachefile_notification *old_notif,
 static int
 handle_snapshot(struct update_notification *notif)
 {
-	struct validation *state;
 	struct rpki_uri *uri;
 	int error;
 
-	state = state_retrieve();
-
-	delete_rpp(tal_get_file_name(validation_tal(state)), notif->uri);
+	delete_rpp(notif->uri);
 
 	uri = notif->snapshot.uri;
 
@@ -868,7 +863,8 @@ handle_snapshot(struct update_notification *notif)
 	 * Maybe stream it instead.
 	 * Same for deltas.
 	 */
-	error = cache_download(validation_cache(state), uri, NULL, NULL);
+	error = cache_download(validation_cache(state_retrieve()), uri, NULL,
+			       NULL);
 	if (error)
 		goto end;
 	error = validate_hash(&notif->snapshot);
