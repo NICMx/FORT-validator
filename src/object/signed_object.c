@@ -4,11 +4,11 @@
 #include "log.h"
 
 int
-signed_object_decode(struct signed_object *sobj, struct rpki_uri *uri)
+signed_object_decode(struct signed_object *sobj, struct cache_mapping *map)
 {
 	int error;
 
-	error = content_info_load(uri_get_local(uri), &sobj->cinfo);
+	error = content_info_load(map_get_path(map), &sobj->cinfo);
 	if (error)
 		return error;
 

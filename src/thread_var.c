@@ -160,13 +160,13 @@ fnstack_push(char const *file)
 /**
  * See fnstack_push().
  *
- * This function cannot claim a reference for @uri, so @uri will have to outlive
+ * This function cannot claim a reference for @map, so @map will have to outlive
  * the push/pop.
  */
 void
-fnstack_push_uri(struct rpki_uri *uri)
+fnstack_push_map(struct cache_mapping *map)
 {
-	fnstack_push(uri_val_get_printable(uri));
+	fnstack_push(map_val_get_printable(map));
 }
 
 /* Returns the file name on the top of the file name stack. */

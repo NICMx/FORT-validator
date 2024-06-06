@@ -6,7 +6,7 @@
 #include "file.c"
 #include "mock.c"
 #include "data_structure/path_builder.c"
-#include "types/uri.c"
+#include "types/map.c"
 #include "crypto/hash.c"
 
 MOCK_ABORT_INT(cache_tmpfile, char **filename)
@@ -40,14 +40,14 @@ START_TEST(test_hash)
 	struct hash_algorithm const *ha;
 	char const *name;
 	char const *input = "Fort";
-	struct rpki_uri uri = { 0 };
+	struct cache_mapping map = { 0 };
 
 	hash_setup();
 
-	uri.global = "https://example.com/resources/lorem-ipsum.txt";
-	uri.local = "resources/lorem-ipsum.txt";
-	uri.type = UT_TA_HTTP;
-	uri.references = 1;
+	map.url = "https://example.com/resources/lorem-ipsum.txt";
+	map.path = "resources/lorem-ipsum.txt";
+	map.type = MAP_TA_HTTP;
+	map.references = 1;
 
 	ha = hash_get_sha1();
 	ck_assert_uint_eq(20, hash_get_size(ha));
@@ -59,10 +59,10 @@ START_TEST(test_hash)
 	FORT_SHA1[1] = 1;
 	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA1, sizeof(FORT_SHA1)));
 
-	ck_assert_int_eq(0, hash_validate_file(ha, &uri, FILE_SHA1, sizeof(FILE_SHA1)));
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &uri, FILE_SHA1, sizeof(FILE_SHA1) - 10));
+	ck_assert_int_eq(0, hash_validate_file(ha, &map, FILE_SHA1, sizeof(FILE_SHA1)));
+	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &map, FILE_SHA1, sizeof(FILE_SHA1) - 10));
 	FILE_SHA1[19] = 0;
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &uri, FILE_SHA1, sizeof(FILE_SHA1)));
+	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &map, FILE_SHA1, sizeof(FILE_SHA1)));
 
 	ha = hash_get_sha256();
 	ck_assert_uint_eq(32, hash_get_size(ha));
@@ -74,10 +74,10 @@ START_TEST(test_hash)
 	FORT_SHA256[10] = 0;
 	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA256, sizeof(FORT_SHA256)));
 
-	ck_assert_int_eq(0, hash_validate_file(ha, &uri, FILE_SHA256, sizeof(FILE_SHA256)));
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &uri, FILE_SHA256, sizeof(FILE_SHA256) - 1));
+	ck_assert_int_eq(0, hash_validate_file(ha, &map, FILE_SHA256, sizeof(FILE_SHA256)));
+	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &map, FILE_SHA256, sizeof(FILE_SHA256) - 1));
 	FILE_SHA256[31] = 10;
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &uri, FILE_SHA256, sizeof(FILE_SHA256)));
+	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, &map, FILE_SHA256, sizeof(FILE_SHA256)));
 
 	hash_teardown();
 }

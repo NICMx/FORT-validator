@@ -15,15 +15,15 @@
 #include "thread_var.h"
 
 static int
-cage(struct rpki_uri **uri, struct rpki_uri *notif)
+cage(struct cache_mapping **map, struct cache_mapping *notif)
 {
 	if (notif == NULL) {
 		/* No need to cage */
-		uri_refget(*uri);
+		map_refget(*map);
 		return 0;
 	}
 
-	return uri_create_caged(uri, notif, uri_get_global(*uri));
+	return map_create_caged(map, notif, map_get_url(*map));
 }
 
 static int
@@ -186,7 +186,7 @@ validate_manifest(struct Manifest *manifest)
 }
 
 /**
- * Computes the hash of the file @uri, and compares it to @expected (The
+ * Computes the hash of the file @map, and compares it to @expected (The
  * "expected" hash).
  *
  * Returns:
@@ -197,7 +197,7 @@ validate_manifest(struct Manifest *manifest)
  *     an incidence to ignore this).
  */
 static int
-hash_validate_mft_file(struct rpki_uri *uri, BIT_STRING_t const *expected)
+hash_validate_mft_file(struct cache_mapping *map, BIT_STRING_t const *expected)
 {
 	struct hash_algorithm const *algorithm;
 	size_t hash_size;
@@ -218,13 +218,13 @@ hash_validate_mft_file(struct rpki_uri *uri, BIT_STRING_t const *expected)
 	 * hash_validate_file().
 	 */
 
-	error = hash_file(algorithm, uri_get_local(uri), actual, NULL);
+	error = hash_file(algorithm, map_get_path(map), actual, NULL);
 	if (error) {
 		if (error == EACCES || error == ENOENT) {
 			/* FIXME .................. */
 			if (incidence(INID_MFT_FILE_NOT_FOUND,
 			    "File '%s' listed at manifest doesn't exist.",
-			    uri_val_get_printable(uri)))
+			    map_val_get_printable(map)))
 				return -EINVAL;
 
 			return error;
@@ -236,19 +236,19 @@ hash_validate_mft_file(struct rpki_uri *uri, BIT_STRING_t const *expected)
 	if (memcmp(expected->buf, actual, hash_size) != 0) {
 		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
 		    "File '%s' does not match its manifest hash.",
-		    uri_val_get_printable(uri));
+		    map_val_get_printable(map));
 	}
 
 	return 0;
 }
 
 static int
-build_rpp(struct Manifest *mft, struct rpki_uri *notif,
-    struct rpki_uri *mft_uri, struct rpp **pp)
+build_rpp(struct Manifest *mft, struct cache_mapping *notif,
+    struct cache_mapping *mft_map, struct rpp **pp)
 {
 	int i;
 	struct FileAndHash *fah;
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	int error;
 
 	*pp = rpp_create();
@@ -256,7 +256,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
 
-		error = uri_create_mft(&uri, notif, mft_uri, &fah->file);
+		error = map_create_mft(&map, notif, mft_map, &fah->file);
 		/*
 		 * Not handling ENOTRSYNC is fine because the manifest URL
 		 * should have been RSYNC. Something went wrong if an RSYNC URL
@@ -275,29 +275,29 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 		 * - Positive value: file doesn't exist and keep validating
 		 *   manifest.
 		 */
-		error = hash_validate_mft_file(uri, &fah->hash);
+		error = hash_validate_mft_file(map, &fah->hash);
 		if (error < 0) {
-			uri_refput(uri);
+			map_refput(map);
 			goto fail;
 		}
 		if (error > 0) {
-			uri_refput(uri);
+			map_refput(map);
 			continue;
 		}
 
-		if (uri_has_extension(uri, ".cer"))
-			rpp_add_cert(*pp, uri);
-		else if (uri_has_extension(uri, ".roa"))
-			rpp_add_roa(*pp, uri);
-		else if (uri_has_extension(uri, ".crl"))
-			error = rpp_add_crl(*pp, uri);
-		else if (uri_has_extension(uri, ".gbr"))
-			rpp_add_ghostbusters(*pp, uri);
+		if (map_has_extension(map, ".cer"))
+			rpp_add_cert(*pp, map);
+		else if (map_has_extension(map, ".roa"))
+			rpp_add_roa(*pp, map);
+		else if (map_has_extension(map, ".crl"))
+			error = rpp_add_crl(*pp, map);
+		else if (map_has_extension(map, ".gbr"))
+			rpp_add_ghostbusters(*pp, map);
 		else
-			uri_refput(uri); /* ignore it. */
+			map_refput(map); /* ignore it. */
 
 		if (error) {
-			uri_refput(uri);
+			map_refput(map);
 			goto fail;
 		} /* Otherwise ownership was transferred to @pp. */
 	}
@@ -316,11 +316,12 @@ fail:
 }
 
 /**
- * Validates the manifest pointed by @uri, returns the RPP described by it in
+ * Validates the manifest pointed by @map, returns the RPP described by it in
  * @pp.
  */
 int
-handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)
+handle_manifest(struct cache_mapping *map, struct cache_mapping *notif,
+    struct rpp **pp)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
@@ -331,14 +332,14 @@ handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)
 	int error;
 
 	/* Prepare */
-	error = cage(&uri, notif); /* ref++ */
+	error = cage(&map, notif); /* ref++ */
 	if (error)
 		return error;
-	pr_val_debug("Manifest '%s' {", uri_val_get_printable(uri));
-	fnstack_push_uri(uri);
+	pr_val_debug("Manifest '%s' {", map_val_get_printable(map));
+	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, uri);
+	error = signed_object_decode(&sobj, map);
 	if (error)
 		goto revert_log;
 	error = decode_manifest(&sobj, &mft);
@@ -346,7 +347,7 @@ handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)
 		goto revert_sobj;
 
 	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, notif, uri, pp);
+	error = build_rpp(mft, notif, map, pp);
 	if (error)
 		goto revert_manifest;
 
@@ -363,7 +364,7 @@ handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)
 	error = validate_manifest(mft);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&ee.refs, *pp, uri);
+	error = refs_validate_ee(&ee.refs, *pp, map);
 	if (error)
 		goto revert_args;
 
@@ -382,6 +383,6 @@ revert_sobj:
 revert_log:
 	pr_val_debug("}");
 	fnstack_pop();
-	uri_refput(uri); /* ref-- */
+	map_refput(map); /* ref-- */
 	return error;
 }

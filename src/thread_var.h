@@ -12,7 +12,7 @@ void fnstack_init(void);
 void fnstack_cleanup(void);
 
 void fnstack_push(char const *);
-void fnstack_push_uri(struct rpki_uri *);
+void fnstack_push_map(struct cache_mapping *);
 char const *fnstack_peek(void);
 void fnstack_pop(void);
 

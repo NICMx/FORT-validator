@@ -9,19 +9,19 @@
 #include "object/ghostbusters.h"
 #include "object/roa.h"
 #include "thread_var.h"
-#include "types/uri.h"
+#include "types/map.h"
 
 /** A Repository Publication Point (RFC 6481), as described by some manifest. */
 struct rpp {
-	struct uri_list certs; /* Certificates */
+	struct map_list certs; /* Certificates */
 
 	/*
-	 * uri NULL implies stack NULL and error 0.
-	 * If uri is set, stack might or might not be set.
-	 * error is only relevant when uri is set and stack is unset.
+	 * map NULL implies stack NULL and error 0.
+	 * If map is set, stack might or might not be set.
+	 * error is only relevant when map is set and stack is unset.
 	 */
 	struct { /* Certificate Revocation List */
-		struct rpki_uri *uri;
+		struct cache_mapping *map;
 		/*
 		 * CRL in libcrypto-friendly form.
 		 * Initialized lazily; access via rpp_crl().
@@ -37,9 +37,9 @@ struct rpp {
 
 	/* The Manifest is not needed for now. */
 
-	struct uri_list roas; /* Route Origin Attestations */
+	struct map_list roas; /* Route Origin Attestations */
 
-	struct uri_list ghostbusters;
+	struct map_list ghostbusters;
 
 	/*
 	 * Note that the reference counting functions are not prepared for
@@ -55,12 +55,12 @@ rpp_create(void)
 
 	result = pmalloc(sizeof(struct rpp));
 
-	uris_init(&result->certs);
-	result->crl.uri = NULL;
+	maps_init(&result->certs);
+	result->crl.map = NULL;
 	result->crl.stack = NULL;
 	result->crl.error = 0;
-	uris_init(&result->roas);
-	uris_init(&result->ghostbusters);
+	maps_init(&result->roas);
+	maps_init(&result->ghostbusters);
 	result->references = 1;
 
 	return result;
@@ -77,54 +77,54 @@ rpp_refput(struct rpp *pp)
 {
 	pp->references--;
 	if (pp->references == 0) {
-		uris_cleanup(&pp->certs);
-		if (pp->crl.uri != NULL)
-			uri_refput(pp->crl.uri);
+		maps_cleanup(&pp->certs);
+		if (pp->crl.map != NULL)
+			map_refput(pp->crl.map);
 		if (pp->crl.stack != NULL)
 			sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
-		uris_cleanup(&pp->roas);
-		uris_cleanup(&pp->ghostbusters);
+		maps_cleanup(&pp->roas);
+		maps_cleanup(&pp->ghostbusters);
 		free(pp);
 	}
 }
 
-/** Steals ownership of @uri. */
+/** Steals ownership of @map. */
 void
-rpp_add_cert(struct rpp *pp, struct rpki_uri *uri)
+rpp_add_cert(struct rpp *pp, struct cache_mapping *map)
 {
-	uris_add(&pp->certs, uri);
+	maps_add(&pp->certs, map);
 }
 
-/** Steals ownership of @uri. */
+/** Steals ownership of @map. */
 void
-rpp_add_roa(struct rpp *pp, struct rpki_uri *uri)
+rpp_add_roa(struct rpp *pp, struct cache_mapping *map)
 {
-	uris_add(&pp->roas, uri);
+	maps_add(&pp->roas, map);
 }
 
-/** Steals ownership of @uri. */
+/** Steals ownership of @map. */
 void
-rpp_add_ghostbusters(struct rpp *pp, struct rpki_uri *uri)
+rpp_add_ghostbusters(struct rpp *pp, struct cache_mapping *map)
 {
-	uris_add(&pp->ghostbusters, uri);
+	maps_add(&pp->ghostbusters, map);
 }
 
-/** Steals ownership of @uri. */
+/** Steals ownership of @map. */
 int
-rpp_add_crl(struct rpp *pp, struct rpki_uri *uri)
+rpp_add_crl(struct rpp *pp, struct cache_mapping *map)
 {
 	/* rfc6481#section-2.2 */
-	if (pp->crl.uri)
+	if (pp->crl.map)
 		return pr_val_err("Repository Publication Point has more than one CRL.");
 
-	pp->crl.uri = uri;
+	pp->crl.map = map;
 	return 0;
 }
 
-struct rpki_uri *
+struct cache_mapping *
 rpp_get_crl(struct rpp const *pp)
 {
-	return pp->crl.uri;
+	return pp->crl.map;
 }
 
 static int
@@ -134,9 +134,9 @@ add_crl_to_stack(struct rpp *pp, STACK_OF(X509_CRL) *crls)
 	int error;
 	int idx;
 
-	fnstack_push_uri(pp->crl.uri);
+	fnstack_push_map(pp->crl.map);
 
-	error = crl_load(pp->crl.uri, &crl);
+	error = crl_load(pp->crl.map, &crl);
 	if (error)
 		goto end;
 
@@ -169,7 +169,7 @@ rpp_crl(struct rpp *pp, STACK_OF(X509_CRL) **result)
 		*result = NULL;
 		return 0;
 	}
-	if (pp->crl.uri == NULL) {
+	if (pp->crl.map == NULL) {
 		/* rpp_crl() assumes the rpp has been populated already. */
 		pr_crit("RPP lacks a CRL.");
 	}
@@ -219,7 +219,7 @@ __cert_traverse(struct rpp *pp)
 	 * intuitive.
 	 */
 	for (i = pp->certs.len - 1; i >= 0; i--) {
-		deferred.uri = pp->certs.array[i];
+		deferred.map = pp->certs.array[i];
 		deferstack_push(certstack, &deferred);
 	}
 
@@ -232,7 +232,7 @@ __cert_traverse(struct rpp *pp)
 void
 rpp_traverse(struct rpp *pp)
 {
-	struct rpki_uri **uri;
+	struct cache_mapping **map;
 
 	/*
 	 * A subtree should not invalidate the rest of the tree, so error codes
@@ -249,13 +249,13 @@ rpp_traverse(struct rpp *pp)
 	__cert_traverse(pp);
 
 	/* Validate ROAs, apply validation_handler on them. */
-	ARRAYLIST_FOREACH(&pp->roas, uri)
-		roa_traverse(*uri, pp);
+	ARRAYLIST_FOREACH(&pp->roas, map)
+		roa_traverse(*map, pp);
 
 	/*
 	 * We don't do much with the ghostbusters right now.
 	 * Just validate them.
 	 */
-	ARRAYLIST_FOREACH(&pp->ghostbusters, uri)
-		ghostbusters_traverse(*uri, pp);
+	ARRAYLIST_FOREACH(&pp->ghostbusters, map)
+		ghostbusters_traverse(*map, pp);
 }

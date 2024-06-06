@@ -1,4 +1,4 @@
-#include "types/uri.h"
+#include "types/map.h"
 
 #include "alloc.h"
 #include "common.h"
@@ -15,33 +15,24 @@
 /**
  * Aside from the reference counter, instances are meant to be immutable.
  *
- * TODO (fine) Needs rebranding. AFAIK, RPKI does not impose significant
- * restrictions to regular URIs (except for schema, I guess), "global URI" is
- * pretty much tautologic, and "local URI" is a misnomer. (Because it doesn't
- * have anything to do with 'interpretation is independent of access'.)
- * I can't even remember if this nomenclature made sense at some point.
- * It's more of a mapping than a URI.
- *
- * TODO (fine) Also, this structure is so intertwined with the cache module,
+ * TODO (fine) This structure is so intertwined with the cache module,
  * nowadays it feels like it should be moved there.
  */
-struct rpki_uri {
+struct cache_mapping {
 	/**
-	 * "Global URI".
 	 * The one that always starts with "rsync://" or "https://".
 	 * Normalized, ASCII-only, NULL-terminated.
 	 */
-	char *global;
+	char *url;
 
 	/**
-	 * "Local URI".
-	 * The file pointed by @global, but cached in the local filesystem.
+	 * Cache location where we downloaded the file.
 	 * Normalized, ASCII-only, NULL-terminated.
 	 * Sometimes NULL, depending on @type.
 	 */
-	char *local;
+	char *path;
 
-	enum uri_type type;
+	enum map_type type;
 
 	unsigned int references; /* Reference counter */
 };
@@ -61,8 +52,7 @@ validate_url_character(int character)
 	 * checking legal characters, anyway.
 	 *
 	 * What I really need this validation for is ensure that we won't get
-	 * any trouble later, when we attempt to convert the global URI to a
-	 * local file.
+	 * any trouble later, when we attempt to map the URL to a path.
 	 *
 	 * Sample trouble: Getting UTF-8 characters. Why are they trouble?
 	 * Because we don't have any guarantees that the system's file name
@@ -85,14 +75,13 @@ validate_url_character(int character)
 	    : pr_val_err("URL has non-printable character code '%d'.", character);
 }
 
-static int append_guri(struct path_builder *, char const *, char const *,
-    int, bool);
+static int normalize_url(struct path_builder *, char const *, char const *, int);
 
 /**
- * Initializes @uri->global by building a normalized version of @str.
+ * Initializes @map->url by building a normalized version of @str.
  */
 static int
-str2global(char const *str, struct rpki_uri *uri)
+init_url(struct cache_mapping *map, char const *str)
 {
 #define SCHEMA_LEN 8 /* strlen("rsync://"), strlen("https://") */
 
@@ -102,7 +91,7 @@ str2global(char const *str, struct rpki_uri *uri)
 	struct path_builder pb;
 
 	if (str == NULL){
-		uri->global = NULL;
+		map->url = NULL;
 		return 0;
 	}
 
@@ -115,35 +104,35 @@ str2global(char const *str, struct rpki_uri *uri)
 	pfx = NULL;
 	error = 0;
 
-	switch (uri->type) {
-	case UT_TA_RSYNC:
-	case UT_RPP:
-	case UT_CAGED:
-	case UT_AIA:
-	case UT_SO:
-	case UT_MFT:
+	switch (map->type) {
+	case MAP_TA_RSYNC:
+	case MAP_RPP:
+	case MAP_CAGED:
+	case MAP_AIA:
+	case MAP_SO:
+	case MAP_MFT:
 		pfx = "rsync://";
 		error = ENOTRSYNC;
 		break;
-	case UT_TA_HTTP:
-	case UT_NOTIF:
-	case UT_TMP:
+	case MAP_TA_HTTP:
+	case MAP_NOTIF:
+	case MAP_TMP:
 		pfx = "https://";
 		error = ENOTHTTPS;
 		break;
 	}
 
 	if (pfx == NULL)
-		pr_crit("Unknown URI type: %u", uri->type);
+		pr_crit("Unknown mapping type: %u", map->type);
 
 	__pb_init(&pb, SCHEMA_LEN - 1);
-	error = append_guri(&pb, str, pfx, error, true);
+	error = normalize_url(&pb, str, pfx, error);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;
 	}
 
-	uri->global = strncpy(pb.string, str, SCHEMA_LEN);
+	map->url = strncpy(pb.string, str, SCHEMA_LEN);
 	return 0;
 }
 
@@ -185,16 +174,15 @@ validate_mft_file(IA5String_t *ia5)
 }
 
 /**
- * Initializes @uri->global given manifest path @mft and its referenced file
- * @ia5.
+ * Initializes @map->url given manifest path @mft and its referenced file @ia5.
  *
- * ie. if @mft is "rsync://a/b/c.mft" and @ia5 is "d.cer", @uri->global will
- * be "rsync://a/b/d.cer".
+ * ie. if @mft is "rsync://a/b/c.mft" and @ia5 is "d.cer", @map->url will be
+ * "rsync://a/b/d.cer".
  *
- * Assumes that @mft is a "global" URL. (ie. extracted from rpki_uri.global.)
+ * Assumes @mft is already normalized.
  */
 static int
-ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
+ia5str2url(struct cache_mapping *map, char const *mft, IA5String_t *ia5)
 {
 	char *joined;
 	char const *slash_pos;
@@ -222,7 +210,7 @@ ia5str2global(struct rpki_uri *uri, char const *mft, IA5String_t *ia5)
 	strncpy(joined + dir_len, (char *) ia5->buf, ia5->size);
 	joined[dir_len + ia5->size] = '\0';
 
-	uri->global = joined;
+	map->url = joined;
 	return 0;
 }
 
@@ -263,37 +251,31 @@ path_is_dotdots(struct path_parser *parser)
 }
 
 static int
-append_guri(struct path_builder *pb, char const *guri, char const *gprefix,
-    int err, bool skip_schema)
+normalize_url(struct path_builder *pb, char const *url, char const *pfx,
+    int errnot)
 {
 	struct path_parser parser;
 	size_t dot_dot_limit;
 	int error;
 
 	/* Schema */
-	if (!str_starts_with(guri, gprefix)) {
-		pr_val_err("URI '%s' does not begin with '%s'.", guri, gprefix);
-		return err;
-	}
-
-	if (!skip_schema) {
-		error = pb_appendn(pb, guri, 5);
-		if (error)
-			return error;
+	if (!str_starts_with(url, pfx)) {
+		pr_val_err("URL '%s' does not begin with '%s'.", url, pfx);
+		return errnot;
 	}
 
 	/* Domain */
-	parser.slash = guri + 7;
+	parser.slash = url + 7;
 	if (!path_next(&parser))
-		return pr_val_err("URI '%s' seems to lack a domain.", guri);
+		return pr_val_err("URL '%s' seems to lack a domain.", url);
 	if (path_is_dot(&parser)) {
 		/* Dumping files to the cache root is unsafe. */
-		return pr_val_err("URI '%s' employs the root domain. This is not really cacheable, so I'm going to distrust it.",
-		    guri);
+		return pr_val_err("URL '%s' employs the root domain. This is not really cacheable, so I'm going to distrust it.",
+		    url);
 	}
 	if (path_is_dotdots(&parser)) {
-		return pr_val_err("URI '%s' seems to be dot-dotting past its own schema.",
-		    guri);
+		return pr_val_err("URL '%s' seems to be dot-dotting past its own schema.",
+		    url);
 	}
 	error = pb_appendn(pb, parser.token, parser.len);
 	if (error)
@@ -307,8 +289,8 @@ append_guri(struct path_builder *pb, char const *guri, char const *gprefix,
 			if (error)
 				return error;
 			if (pb->len < dot_dot_limit) {
-				return pr_val_err("URI '%s' seems to be dot-dotting past its own domain.",
-				    guri);
+				return pr_val_err("URL '%s' seems to be dot-dotting past its own domain.",
+				    url);
 			}
 		} else if (!path_is_dot(&parser)) {
 			error = pb_appendn(pb, parser.token, parser.len);
@@ -321,7 +303,7 @@ append_guri(struct path_builder *pb, char const *guri, char const *gprefix,
 }
 
 static int
-get_rrdp_workspace(struct path_builder *pb, struct rpki_uri *notif)
+get_rrdp_workspace(struct path_builder *pb, struct cache_mapping *notif)
 {
 	int error;
 
@@ -329,7 +311,7 @@ get_rrdp_workspace(struct path_builder *pb, struct rpki_uri *notif)
 	if (error)
 		return error;
 
-	error = pb_append(pb, &notif->global[SCHEMA_LEN]);
+	error = pb_append(pb, &notif->url[SCHEMA_LEN]);
 	if (error)
 		pb_cleanup(pb);
 
@@ -340,7 +322,7 @@ get_rrdp_workspace(struct path_builder *pb, struct rpki_uri *notif)
  * Maps "rsync://a.b.c/d/e.cer" into "<local-repository>/rsync/a.b.c/d/e.cer".
  */
 static int
-map_simple(struct rpki_uri *uri, char const *subdir)
+map_simple(struct cache_mapping *map, char const *subdir)
 {
 	struct path_builder pb;
 	int error;
@@ -349,13 +331,13 @@ map_simple(struct rpki_uri *uri, char const *subdir)
 	if (error)
 		return error;
 
-	error = pb_append(&pb, &uri->global[SCHEMA_LEN]);
+	error = pb_append(&pb, &map->url[SCHEMA_LEN]);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;
 	}
 
-	uri->local = pb.string;
+	map->path = pb.string;
 	return 0;
 }
 
@@ -364,7 +346,7 @@ map_simple(struct rpki_uri *uri, char const *subdir)
  * "<local-repository>/rrdp/<notification-path>/a.b.c/d/e.cer".
  */
 static int
-map_caged(struct rpki_uri *uri, struct rpki_uri *notif)
+map_caged(struct cache_mapping *map, struct cache_mapping *notif)
 {
 	struct path_builder pb;
 	int error;
@@ -373,73 +355,73 @@ map_caged(struct rpki_uri *uri, struct rpki_uri *notif)
 	if (error)
 		return error;
 
-	if (uri->global == NULL)
+	if (map->url == NULL)
 		goto success; /* Caller is only interested in the cage. */
 
-	error = pb_append(&pb, &uri->global[SCHEMA_LEN]);
+	error = pb_append(&pb, &map->url[SCHEMA_LEN]);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;
 	}
 
 success:
-	uri->local = pb.string;
+	map->path = pb.string;
 	return 0;
 }
 
 static int
-autocomplete_local(struct rpki_uri *uri, struct rpki_uri *notif)
+init_path(struct cache_mapping *map, struct cache_mapping *notif)
 {
-	switch (uri->type) {
-	case UT_TA_RSYNC:
-	case UT_RPP:
-	case UT_MFT:
-		return map_simple(uri, "rsync");
+	switch (map->type) {
+	case MAP_TA_RSYNC:
+	case MAP_RPP:
+	case MAP_MFT:
+		return map_simple(map, "rsync");
 
-	case UT_TA_HTTP:
-		return map_simple(uri, "https");
+	case MAP_TA_HTTP:
+		return map_simple(map, "https");
 
-	case UT_NOTIF:
-	case UT_TMP:
-		return cache_tmpfile(&uri->local);
+	case MAP_NOTIF:
+	case MAP_TMP:
+		return cache_tmpfile(&map->path);
 
-	case UT_CAGED:
-		return map_caged(uri, notif);
+	case MAP_CAGED:
+		return map_caged(map, notif);
 
-	case UT_AIA:
-	case UT_SO:
-		uri->local = NULL;
+	case MAP_AIA:
+	case MAP_SO:
+		map->path = NULL;
 		return 0;
 	}
 
-	pr_crit("Unknown URI type: %u", uri->type);
+	pr_crit("Unknown URL type: %u", map->type);
 }
 
 int
-uri_create(struct rpki_uri **result, enum uri_type type, struct rpki_uri *notif,
-	   char const *guri)
+map_create(struct cache_mapping **result, enum map_type type,
+    struct cache_mapping *notif, char const *url)
 {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	int error;
 
-	uri = pmalloc(sizeof(struct rpki_uri));
-	uri->type = type;
-	uri->references = 1;
+	map = pmalloc(sizeof(struct cache_mapping));
+	map->type = type;
+	map->references = 1;
 
-	error = str2global(guri, uri);
+	error = init_url(map, url);
 	if (error) {
-		free(uri);
+		free(map);
 		return error;
 	}
 
-	error = autocomplete_local(uri, notif);
+	error = init_path(map, notif);
 	if (error) {
-		free(uri->global);
-		free(uri);
+		free(map->url);
+		free(map);
 		return error;
 	}
 
-	*result = uri;
+	*result = map;
 	return 0;
 }
 
@@ -448,93 +430,93 @@ uri_create(struct rpki_uri **result, enum uri_type type, struct rpki_uri *notif,
  * names. This function will infer the rest of the URL.
  */
 int
-uri_create_mft(struct rpki_uri **result, struct rpki_uri *notif,
-	       struct rpki_uri *mft, IA5String_t *ia5)
+map_create_mft(struct cache_mapping **result, struct cache_mapping *notif,
+	       struct cache_mapping *mft, IA5String_t *ia5)
 {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	int error;
 
-	uri = pmalloc(sizeof(struct rpki_uri));
-	uri->type = (notif == NULL) ? UT_RPP : UT_CAGED;
-	uri->references = 1;
+	map = pmalloc(sizeof(struct cache_mapping));
+	map->type = (notif == NULL) ? MAP_RPP : MAP_CAGED;
+	map->references = 1;
 
-	error = ia5str2global(uri, mft->global, ia5);
+	error = ia5str2url(map, mft->url, ia5);
 	if (error) {
-		free(uri);
+		free(map);
 		return error;
 	}
 
-	error = autocomplete_local(uri, notif);
+	error = init_path(map, notif);
 	if (error) {
-		free(uri->global);
-		free(uri);
+		free(map->url);
+		free(map);
 		return error;
 	}
 
-	*result = uri;
+	*result = map;
 	return 0;
 }
 
-/* Cache-only; global URI and type are meaningless. */
-struct rpki_uri *
-uri_create_cache(char const *path)
+/* Cache-only; url and type are meaningless. */
+struct cache_mapping *
+map_create_cache(char const *path)
 {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 
-	uri = pzalloc(sizeof(struct rpki_uri));
-	uri->local = pstrdup(path);
-	uri->references = 1;
+	map = pzalloc(sizeof(struct cache_mapping));
+	map->path = pstrdup(path);
+	map->references = 1;
 
-	return uri;
+	return map;
 }
 
-struct rpki_uri *
-uri_refget(struct rpki_uri *uri)
+struct cache_mapping *
+map_refget(struct cache_mapping *map)
 {
-	uri->references++;
-	return uri;
+	map->references++;
+	return map;
 }
 
 void
-uri_refput(struct rpki_uri *uri)
+map_refput(struct cache_mapping *map)
 {
-	if (uri == NULL)
+	if (map == NULL)
 		return;
 
-	uri->references--;
-	if (uri->references == 0) {
-		free(uri->global);
-		free(uri->local);
-		free(uri);
+	map->references--;
+	if (map->references == 0) {
+		free(map->url);
+		free(map->path);
+		free(map);
 	}
 }
 
 char const *
-uri_get_global(struct rpki_uri *uri)
+map_get_url(struct cache_mapping *map)
 {
-	return uri->global;
+	return map->url;
 }
 
 char const *
-uri_get_local(struct rpki_uri *uri)
+map_get_path(struct cache_mapping *map)
 {
-	return uri->local;
+	return map->path;
 }
 
 bool
-uri_equals(struct rpki_uri *u1, struct rpki_uri *u2)
+map_equals(struct cache_mapping *m1, struct cache_mapping *m2)
 {
-	return strcmp(u1->global, u2->global) == 0;
+	return strcmp(m1->url, m2->url) == 0;
 }
 
 bool
-str_same_origin(char const *g1, char const *g2)
+str_same_origin(char const *url1, char const *url2)
 {
 	size_t c, slashes;
 
 	slashes = 0;
-	for (c = 0; g1[c] == g2[c]; c++) {
-		switch (g1[c]) {
+	for (c = 0; url1[c] == url2[c]; c++) {
+		switch (url1[c]) {
 		case '/':
 			slashes++;
 			if (slashes == 3)
@@ -545,37 +527,37 @@ str_same_origin(char const *g1, char const *g2)
 		}
 	}
 
-	if (g1[c] == '\0')
-		return (slashes == 2) && g2[c] == '/';
-	if (g2[c] == '\0')
-		return (slashes == 2) && g1[c] == '/';
+	if (url1[c] == '\0')
+		return (slashes == 2) && url2[c] == '/';
+	if (url2[c] == '\0')
+		return (slashes == 2) && url1[c] == '/';
 
 	return false;
 }
 
 bool
-uri_same_origin(struct rpki_uri *u1, struct rpki_uri *u2)
+map_same_origin(struct cache_mapping *m1, struct cache_mapping *m2)
 {
-	return str_same_origin(u1->global, u2->global);
+	return str_same_origin(m1->url, m2->url);
 }
 
 /* @ext must include the period. */
 bool
-uri_has_extension(struct rpki_uri *uri, char const *ext)
+map_has_extension(struct cache_mapping *map, char const *ext)
 {
-	return str_ends_with(uri->global, ext);
+	return str_ends_with(map->url, ext);
 }
 
 bool
-uri_is_certificate(struct rpki_uri *uri)
+map_is_certificate(struct cache_mapping *map)
 {
-	return uri_has_extension(uri, ".cer");
+	return map_has_extension(map, ".cer");
 }
 
-enum uri_type
-uri_get_type(struct rpki_uri *uri)
+enum map_type
+map_get_type(struct cache_mapping *map)
 {
-	return uri->type;
+	return map->type;
 }
 
 static char const *
@@ -586,15 +568,15 @@ get_filename(char const *file_path)
 }
 
 static char const *
-uri_get_printable(struct rpki_uri *uri, enum filename_format format)
+map_get_printable(struct cache_mapping *map, enum filename_format format)
 {
 	switch (format) {
 	case FNF_GLOBAL:
-		return uri->global;
+		return map->url;
 	case FNF_LOCAL:
-		return uri->local;
+		return map->path;
 	case FNF_NAME:
-		return get_filename(uri->global);
+		return get_filename(map->url);
 	}
 
 	pr_crit("Unknown file name format: %u", format);
@@ -602,53 +584,53 @@ uri_get_printable(struct rpki_uri *uri, enum filename_format format)
 }
 
 char const *
-uri_val_get_printable(struct rpki_uri *uri)
+map_val_get_printable(struct cache_mapping *map)
 {
 	enum filename_format format;
 
 	format = config_get_val_log_filename_format();
-	return uri_get_printable(uri, format);
+	return map_get_printable(map, format);
 }
 
 char const *
-uri_op_get_printable(struct rpki_uri *uri)
+map_op_get_printable(struct cache_mapping *map)
 {
 	enum filename_format format;
 
 	format = config_get_op_log_filename_format();
-	return uri_get_printable(uri, format);
+	return map_get_printable(map, format);
 }
 
 char *
-uri_get_rrdp_workspace(struct rpki_uri *notif)
+map_get_rrdp_workspace(struct cache_mapping *notif)
 {
 	struct path_builder pb;
 	return (get_rrdp_workspace(&pb, notif) == 0) ? pb.string : NULL;
 }
 
-DEFINE_ARRAY_LIST_FUNCTIONS(uri_list, struct rpki_uri *, static)
+DEFINE_ARRAY_LIST_FUNCTIONS(map_list, struct cache_mapping *, static)
 
 void
-uris_init(struct uri_list *uris)
+maps_init(struct map_list *maps)
 {
-	uri_list_init(uris);
+	map_list_init(maps);
 }
 
 static void
-__uri_refput(struct rpki_uri **uri)
+__map_refput(struct cache_mapping **map)
 {
-	uri_refput(*uri);
+	map_refput(*map);
 }
 
 void
-uris_cleanup(struct uri_list *uris)
+maps_cleanup(struct map_list *maps)
 {
-	uri_list_cleanup(uris, __uri_refput);
+	map_list_cleanup(maps, __map_refput);
 }
 
-/* Swallows @uri. */
+/* Swallows @map. */
 void
-uris_add(struct uri_list *uris, struct rpki_uri *uri)
+maps_add(struct map_list *maps, struct cache_mapping *map)
 {
-	uri_list_add(uris, &uri);
+	map_list_add(maps, &map);
 }

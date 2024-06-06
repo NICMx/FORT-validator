@@ -247,7 +247,7 @@ end_error:
 }
 
 int
-roa_traverse(struct rpki_uri *uri, struct rpp *pp)
+roa_traverse(struct cache_mapping *map, struct rpp *pp)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
@@ -258,11 +258,11 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	int error;
 
 	/* Prepare */
-	pr_val_debug("ROA '%s' {", uri_val_get_printable(uri));
-	fnstack_push_uri(uri);
+	pr_val_debug("ROA '%s' {", map_val_get_printable(map));
+	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, uri);
+	error = signed_object_decode(&sobj, map);
 	if (error)
 		goto revert_log;
 	error = decode_roa(&sobj, &roa);
@@ -282,7 +282,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = __handle_roa(roa, ee.res);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&ee.refs, pp, uri);
+	error = refs_validate_ee(&ee.refs, pp, map);
 
 revert_args:
 	eecert_cleanup(&ee);

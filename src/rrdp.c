@@ -46,7 +46,7 @@ struct rrdp_session {
 };
 
 struct file_metadata {
-	struct rpki_uri *uri;
+	struct cache_mapping *uri;
 	unsigned char *hash; /* Array. Sometimes omitted. */
 	size_t hash_len;
 };
@@ -65,7 +65,7 @@ struct update_notification {
 	struct rrdp_session session;
 	struct file_metadata snapshot;
 	struct notification_deltas deltas;
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 };
 
 /* A deserialized <publish> tag, from a snapshot or delta. */
@@ -82,7 +82,7 @@ struct withdraw {
 
 /* Helpful context while reading a snapshot or delta. */
 struct rrdp_ctx {
-	struct rpki_uri *notif;
+	struct cache_mapping *notif;
 	struct rrdp_session session;
 };
 
@@ -143,7 +143,7 @@ static void
 metadata_cleanup(struct file_metadata *meta)
 {
 	free(meta->hash);
-	uri_refput(meta->uri);
+	map_refput(meta->uri);
 }
 
 static void
@@ -155,12 +155,12 @@ notification_delta_cleanup(struct notification_delta *delta)
 
 static void
 update_notification_init(struct update_notification *notif,
-    struct rpki_uri *uri)
+    struct cache_mapping *map)
 {
 	memset(&notif->session, 0, sizeof(notif->session));
 	memset(&notif->snapshot, 0, sizeof(notif->snapshot));
 	notification_deltas_init(&notif->deltas);
-	notif->uri = uri_refget(uri);
+	notif->map = map_refget(map);
 }
 
 static void
@@ -168,7 +168,7 @@ __update_notification_cleanup(struct update_notification *notif)
 {
 	metadata_cleanup(&notif->snapshot);
 	notification_deltas_cleanup(&notif->deltas, notification_delta_cleanup);
-	uri_refput(notif->uri);
+	map_refput(notif->map);
 }
 
 static void
@@ -255,8 +255,8 @@ parse_string(xmlTextReaderPtr reader, char const *attr)
 }
 
 static int
-parse_uri(xmlTextReaderPtr reader, struct rpki_uri *notif,
-    struct rpki_uri **result)
+parse_uri(xmlTextReaderPtr reader, struct cache_mapping *notif,
+    struct cache_mapping **result)
 {
 	xmlChar *xmlattr;
 	int error;
@@ -265,7 +265,7 @@ parse_uri(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	if (xmlattr == NULL)
 		return -EINVAL;
 
-	error = uri_create(result, (notif != NULL) ? UT_CAGED : UT_TMP, notif,
+	error = map_create(result, (notif != NULL) ? MAP_CAGED : MAP_TMP, notif,
 			   (char const *)xmlattr);
 
 	xmlFree(xmlattr);
@@ -455,7 +455,7 @@ end:
  * 2. "hash" (optional, depending on @hr)
  */
 static int
-parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
+parse_file_metadata(xmlTextReaderPtr reader, struct cache_mapping *notif,
     hash_requirement hr, struct file_metadata *meta)
 {
 	int error;
@@ -468,7 +468,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
 
 	error = parse_hash(reader, hr, &meta->hash, &meta->hash_len);
 	if (error) {
-		uri_refput(meta->uri);
+		map_refput(meta->uri);
 		meta->uri = NULL;
 		return error;
 	}
@@ -477,7 +477,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
 }
 
 static int
-parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
+parse_publish(xmlTextReaderPtr reader, struct cache_mapping *notif,
     hash_requirement hr, struct publish *tag)
 {
 	xmlChar *base64_str;
@@ -491,7 +491,7 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	if (xmlTextReaderRead(reader) != 1) {
 		return pr_val_err(
 		    "Couldn't read publish content of element '%s'",
-		    uri_get_global(tag->meta.uri)
+		    map_get_url(tag->meta.uri)
 		);
 	}
 
@@ -509,7 +509,7 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 }
 
 static int
-parse_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif,
+parse_withdraw(xmlTextReaderPtr reader, struct cache_mapping *notif,
     struct withdraw *tag)
 {
 	int error;
@@ -522,17 +522,17 @@ parse_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif,
 }
 
 static int
-write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
+write_file(struct cache_mapping *map, unsigned char *content, size_t content_len)
 {
 	FILE *out;
 	size_t written;
 	int error;
 
-	error = mkdir_p(uri_get_local(uri), false);
+	error = mkdir_p(map_get_path(map), false);
 	if (error)
 		return error;
 
-	error = file_write(uri_get_local(uri), "wb", &out);
+	error = file_write(map_get_path(map), "wb", &out);
 	if (error)
 		return error;
 
@@ -542,7 +542,7 @@ write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 	if (written != content_len) {
 		return pr_val_err(
 		    "Couldn't write file '%s' (error code not available)",
-		    uri_get_local(uri)
+		    map_get_path(map)
 		);
 	}
 
@@ -551,14 +551,14 @@ write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 
 /* Remove a local file and its directory tree (if empty) */
 static int
-delete_file(struct rpki_uri *uri)
+delete_file(struct cache_mapping *map)
 {
 	/* Delete parent dirs only if empty. */
-	return delete_dir_recursive_bottom_up(uri_get_local(uri));
+	return delete_dir_recursive_bottom_up(map_get_path(map));
 }
 
 static int
-handle_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
+handle_publish(xmlTextReaderPtr reader, struct cache_mapping *notif,
     hash_requirement hr)
 {
 	struct publish tag = { 0 };
@@ -574,7 +574,7 @@ handle_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 }
 
 static int
-handle_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif)
+handle_withdraw(xmlTextReaderPtr reader, struct cache_mapping *notif)
 {
 	struct withdraw tag = { 0 };
 	int error;
@@ -597,9 +597,9 @@ parse_notification_snapshot(xmlTextReaderPtr reader,
 	if (error)
 		return error;
 
-	if (!uri_same_origin(notif->uri, notif->snapshot.uri))
+	if (!map_same_origin(notif->map, notif->snapshot.uri))
 		return pr_val_err("Notification %s and Snapshot %s are not hosted by the same origin.",
-		    uri_get_global(notif->uri), uri_get_global(notif->snapshot.uri));
+		    map_get_url(notif->map), map_get_url(notif->snapshot.uri));
 
 	return 0;
 }
@@ -621,9 +621,9 @@ parse_notification_delta(xmlTextReaderPtr reader,
 		return error;
 	}
 
-	if (!uri_same_origin(notif->uri, delta.meta.uri))
+	if (!map_same_origin(notif->map, delta.meta.uri))
 		return pr_val_err("Notification %s and Delta %s are not hosted by the same origin.",
-		    uri_get_global(notif->uri), uri_get_global(delta.meta.uri));
+		    map_get_url(notif->map), map_get_url(delta.meta.uri));
 
 	notification_deltas_add(&notif->deltas, &delta);
 	return 0;
@@ -747,13 +747,13 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_notification(struct rpki_uri *uri, struct update_notification *result)
+parse_notification(struct cache_mapping *map, struct update_notification *result)
 {
 	int error;
 
-	update_notification_init(result, uri);
+	update_notification_init(result, map);
 
-	error = relax_ng_parse(uri_get_local(uri), xml_read_notif, result);
+	error = relax_ng_parse(map_get_path(map), xml_read_notif, result);
 	if (error)
 		update_notification_cleanup(result);
 
@@ -761,9 +761,9 @@ parse_notification(struct rpki_uri *uri, struct update_notification *result)
 }
 
 static void
-delete_rpp(struct rpki_uri *notif)
+delete_rpp(struct cache_mapping *notif)
 {
-	char *path = uri_get_rrdp_workspace(notif);
+	char *path = map_get_rrdp_workspace(notif);
 	pr_val_debug("Snapshot: Deleting cached RPP '%s'.", path);
 	file_rm_rf(path);
 	free(path);
@@ -802,10 +802,10 @@ parse_snapshot(struct update_notification *notif)
 {
 	struct rrdp_ctx ctx;
 
-	ctx.notif = notif->uri;
+	ctx.notif = notif->map;
 	ctx.session = notif->session;
 
-	return relax_ng_parse(uri_get_local(notif->snapshot.uri),
+	return relax_ng_parse(map_get_path(notif->snapshot.uri),
 	    xml_read_snapshot, &ctx);
 }
 
@@ -847,15 +847,15 @@ validate_session_desync(struct cachefile_notification *old_notif,
 static int
 handle_snapshot(struct update_notification *notif)
 {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	int error;
 
-	delete_rpp(notif->uri);
+	delete_rpp(notif->map);
 
-	uri = notif->snapshot.uri;
+	map = notif->snapshot.uri;
 
-	pr_val_debug("Processing snapshot '%s'.", uri_val_get_printable(uri));
-	fnstack_push_uri(uri);
+	pr_val_debug("Processing snapshot '%s'.", map_val_get_printable(map));
+	fnstack_push_map(map);
 
 	/*
 	 * TODO (performance) Is there a point in caching the snapshot?
@@ -863,7 +863,7 @@ handle_snapshot(struct update_notification *notif)
 	 * Maybe stream it instead.
 	 * Same for deltas.
 	 */
-	error = cache_download(validation_cache(state_retrieve()), uri, NULL,
+	error = cache_download(validation_cache(state_retrieve()), map, NULL,
 			       NULL);
 	if (error)
 		goto end;
@@ -871,7 +871,7 @@ handle_snapshot(struct update_notification *notif)
 	if (error)
 		goto end;
 	error = parse_snapshot(notif);
-	delete_file(uri);
+	delete_file(map);
 
 end:
 	fnstack_pop();
@@ -918,30 +918,30 @@ parse_delta(struct update_notification *notif, struct notification_delta *delta)
 	if (error)
 		return error;
 
-	ctx.notif = notif->uri;
+	ctx.notif = notif->map;
 	ctx.session.session_id = notif->session.session_id;
 	ctx.session.serial = delta->serial;
 
-	return relax_ng_parse(uri_get_local(delta->meta.uri), xml_read_delta,
+	return relax_ng_parse(map_get_path(delta->meta.uri), xml_read_delta,
 	    &ctx);
 }
 
 static int
 handle_delta(struct update_notification *notif, struct notification_delta *delta)
 {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	int error;
 
-	uri = delta->meta.uri;
+	map = delta->meta.uri;
 
-	pr_val_debug("Processing delta '%s'.", uri_val_get_printable(uri));
-	fnstack_push_uri(uri);
+	pr_val_debug("Processing delta '%s'.", map_val_get_printable(map));
+	fnstack_push_map(map);
 
-	error = cache_download(validation_cache(state_retrieve()), uri, NULL, NULL);
+	error = cache_download(validation_cache(state_retrieve()), map, NULL, NULL);
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta);
-	delete_file(uri);
+	delete_file(map);
 
 end:
 	fnstack_pop();
@@ -1084,14 +1084,14 @@ update_notif(struct cachefile_notification *old, struct update_notification *new
 }
 
 /*
- * Downloads the Update Notification pointed by @uri, and updates the cache
+ * Downloads the Update Notification pointed by @map, and updates the cache
  * accordingly.
  *
  * "Updates the cache accordingly" means it downloads the missing deltas or
  * snapshot, and explodes them into the corresponding RPP's local directory.
  */
 int
-rrdp_update(struct rpki_uri *uri)
+rrdp_update(struct cache_mapping *map)
 {
 	struct cachefile_notification **cached, *old;
 	struct update_notification new;
@@ -1099,10 +1099,10 @@ rrdp_update(struct rpki_uri *uri)
 	int serial_cmp;
 	int error;
 
-	fnstack_push_uri(uri);
+	fnstack_push_map(map);
 	pr_val_debug("Processing notification.");
 
-	error = cache_download(validation_cache(state_retrieve()), uri,
+	error = cache_download(validation_cache(state_retrieve()), map,
 	    &changed, &cached);
 	if (error)
 		goto end;
@@ -1111,7 +1111,7 @@ rrdp_update(struct rpki_uri *uri)
 		goto end;
 	}
 
-	error = parse_notification(uri, &new);
+	error = parse_notification(map, &new);
 	if (error)
 		goto end;
 	pr_val_debug("New session/serial: %s/%s", new.session.session_id,

@@ -4,7 +4,7 @@
 #include <openssl/safestack.h>
 #include <openssl/x509.h>
 
-#include "types/uri.h"
+#include "types/map.h"
 
 struct rpp;
 
@@ -12,12 +12,12 @@ struct rpp *rpp_create(void);
 void rpp_refget(struct rpp *pp);
 void rpp_refput(struct rpp *pp);
 
-void rpp_add_cert(struct rpp *, struct rpki_uri *);
-int rpp_add_crl(struct rpp *, struct rpki_uri *);
-void rpp_add_roa(struct rpp *, struct rpki_uri *);
-void rpp_add_ghostbusters(struct rpp *, struct rpki_uri *);
+void rpp_add_cert(struct rpp *, struct cache_mapping *);
+int rpp_add_crl(struct rpp *, struct cache_mapping *);
+void rpp_add_roa(struct rpp *, struct cache_mapping *);
+void rpp_add_ghostbusters(struct rpp *, struct cache_mapping *);
 
-struct rpki_uri *rpp_get_crl(struct rpp const *);
+struct cache_mapping *rpp_get_crl(struct rpp const *);
 int rpp_crl(struct rpp *, STACK_OF(X509_CRL) **);
 
 void rpp_traverse(struct rpp *);

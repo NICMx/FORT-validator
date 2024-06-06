@@ -3,7 +3,7 @@
 
 #include <netdb.h>
 
-#include "types/uri.h"
+#include "types/map.h"
 
 struct path_builder {
 	char *string;

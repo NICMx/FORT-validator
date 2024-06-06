@@ -15,7 +15,7 @@ handle_vcard(struct signed_object *sobj)
 }
 
 int
-ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
+ghostbusters_traverse(struct cache_mapping *map, struct rpp *pp)
 {
 	static OID oid = OID_GHOSTBUSTERS;
 	struct oid_arcs arcs = OID2ARCS("ghostbusters", oid);
@@ -25,11 +25,11 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	int error;
 
 	/* Prepare */
-	pr_val_debug("Ghostbusters '%s' {", uri_val_get_printable(uri));
-	fnstack_push_uri(uri);
+	pr_val_debug("Ghostbusters '%s' {", map_val_get_printable(map));
+	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, uri);
+	error = signed_object_decode(&sobj, map);
 	if (error)
 		goto revert_log;
 
@@ -46,7 +46,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = handle_vcard(&sobj);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&ee.refs, pp, uri);
+	error = refs_validate_ee(&ee.refs, pp, map);
 
 revert_args:
 	eecert_cleanup(&ee);

@@ -19,7 +19,7 @@
 #include "rsync/rsync.h"
 
 struct cache_node {
-	struct rpki_uri *url;
+	struct cache_mapping *map;
 
 	struct {
 		time_t ts; /* Last download attempt's timestamp */
@@ -251,7 +251,7 @@ json2node(json_t *json)
 {
 	struct cache_node *node;
 	char const *type_str;
-	enum uri_type type;
+	enum map_type type;
 	char const *url;
 	json_t *notif;
 	int error;
@@ -266,13 +266,13 @@ json2node(json_t *json)
 	}
 
 	if (strcmp(type_str, TYPEVALUE_TA_RSYNC) == 0)
-		type = UT_TA_RSYNC;
+		type = MAP_TA_RSYNC;
 	else if (strcmp(type_str, TYPEVALUE_TA_HTTP) == 0)
-		type = UT_TA_HTTP;
+		type = MAP_TA_HTTP;
 	else if (strcmp(type_str, TYPEVALUE_RPP) == 0)
-		type = UT_RPP;
+		type = MAP_RPP;
 	else if (strcmp(type_str, TYPEVALUE_NOTIF) == 0)
-		type = UT_NOTIF;
+		type = MAP_NOTIF;
 	else {
 		pr_op_err("Unknown node type: %s", type_str);
 		goto fail;
@@ -285,7 +285,7 @@ json2node(json_t *json)
 		goto fail;
 	}
 
-	if (type == UT_NOTIF) {
+	if (type == MAP_NOTIF) {
 		error = json_get_object(json, TAGNAME_NOTIF, &notif);
 		switch (error) {
 		case 0:
@@ -301,7 +301,7 @@ json2node(json_t *json)
 		}
 	}
 
-	error = uri_create(&node->url, type, NULL, url);
+	error = map_create(&node->map, type, NULL, url);
 	if (error) {
 		pr_op_err("Cannot parse '%s' into a URI.", url);
 		goto fail;
@@ -327,19 +327,19 @@ json2node(json_t *json)
 	return node;
 
 fail:
-	uri_refput(node->url);
+	map_refput(node->map);
 	rrdp_notif_free(node->notif);
 	free(node);
 	return NULL;
 }
 
 static struct cache_node *
-find_node(struct rpki_cache *cache, struct rpki_uri *uri)
+find_node(struct rpki_cache *cache, struct cache_mapping *map)
 {
 	char const *key;
 	struct cache_node *result;
 
-	key = uri_get_global(uri);
+	key = map_get_url(map);
 	HASH_FIND_STR(cache->ht, key, result);
 
 	return result;
@@ -348,7 +348,7 @@ find_node(struct rpki_cache *cache, struct rpki_uri *uri)
 static void
 add_node(struct rpki_cache *cache, struct cache_node *node)
 {
-	char const *key = uri_get_global(node->url);
+	char const *key = map_get_url(node->map);
 	size_t keylen = strlen(key);
 	HASH_ADD_KEYPTR(hh, cache->ht, key, keylen, node);
 }
@@ -421,17 +421,17 @@ node2json(struct cache_node *node)
 	if (json == NULL)
 		return NULL;
 
-	switch (uri_get_type(node->url)) {
-	case UT_TA_RSYNC:
+	switch (map_get_type(node->map)) {
+	case MAP_TA_RSYNC:
 		type = TYPEVALUE_TA_RSYNC;
 		break;
-	case UT_TA_HTTP:
+	case MAP_TA_HTTP:
 		type = TYPEVALUE_TA_HTTP;
 		break;
-	case UT_RPP:
+	case MAP_RPP:
 		type = TYPEVALUE_RPP;
 		break;
-	case UT_NOTIF:
+	case MAP_NOTIF:
 		type = TYPEVALUE_NOTIF;
 		break;
 	default:
@@ -440,7 +440,7 @@ node2json(struct cache_node *node)
 
 	if (json_add_str(json, TAGNAME_TYPE, type))
 		goto cancel;
-	if (json_add_str(json, TAGNAME_URL, uri_get_global(node->url)))
+	if (json_add_str(json, TAGNAME_URL, map_get_url(node->map)))
 		goto cancel;
 	if (node->notif != NULL) {
 		notification = rrdp_notif2json(node->notif);
@@ -476,7 +476,7 @@ build_tal_json(struct rpki_cache *cache)
 		child = node2json(node);
 		if (child != NULL && json_array_append_new(root, child)) {
 			pr_op_err("Cannot push %s json node into json root; unknown cause.",
-			    uri_op_get_printable(node->url));
+			    map_op_get_printable(node->map));
 			continue;
 		}
 	}
@@ -506,15 +506,15 @@ end:	json_decref(json);
 }
 
 static int
-get_url(struct rpki_uri *uri, struct rpki_uri **url)
+fix_url(struct cache_mapping *map, struct cache_mapping **result)
 {
-	char const *guri, *c;
-	char *gcopy;
+	char const *url, *c;
+	char *dup;
 	unsigned int slashes;
 	int error;
 
-	if (uri_get_type(uri) != UT_RPP)
-		goto reuse_uri;
+	if (map_get_type(map) != MAP_RPP)
+		goto reuse_mapping;
 
 	/*
 	 * Careful with this code. rsync(1):
@@ -563,39 +563,39 @@ get_url(struct rpki_uri *uri, struct rpki_uri **url)
 	 * not every RPP separately. The former is much faster.
 	 */
 
-	guri = uri_get_global(uri);
+	url = map_get_url(map);
 	slashes = 0;
-	for (c = guri; *c != '\0'; c++) {
+	for (c = url; *c != '\0'; c++) {
 		if (*c == '/') {
 			slashes++;
 			if (slashes == 4) {
 				if (c[1] == '\0')
-					goto reuse_uri;
-				gcopy = pstrndup(guri, c - guri + 1);
-				goto gcopy2url;
+					goto reuse_mapping;
+				dup = pstrndup(url, c - url + 1);
+				goto dup2url;
 			}
 		}
 	}
 
 	if (slashes == 3 && c[-1] != '/') {
-		gcopy = pmalloc(c - guri + 2);
-		memcpy(gcopy, guri, c - guri);
-		gcopy[c - guri] = '/';
-		gcopy[c - guri + 1] = '\0';
-		goto gcopy2url;
+		dup = pmalloc(c - url + 2);
+		memcpy(dup, url, c - url);
+		dup[c - url] = '/';
+		dup[c - url + 1] = '\0';
+		goto dup2url;
 	}
 
 	return pr_val_err("Can't rsync URL '%s': The URL seems to be missing a domain or rsync module.",
-	    guri);
+	    url);
 
-reuse_uri:
-	uri_refget(uri);
-	*url = uri;
+reuse_mapping:
+	map_refget(map);
+	*result = map;
 	return 0;
 
-gcopy2url:
-	error = uri_create(url, UT_RPP, NULL, gcopy);
-	free(gcopy);
+dup2url:
+	error = map_create(result, MAP_RPP, NULL, dup);
+	free(dup);
 	return error;
 }
 
@@ -606,11 +606,11 @@ was_recently_downloaded(struct rpki_cache *cache, struct cache_node *node)
 }
 
 static int
-cache_check(struct rpki_uri *url)
+cache_check(struct cache_mapping *url)
 {
 	int error;
 
-	error = file_exists(uri_get_local(url));
+	error = file_exists(map_get_path(url));
 	switch (error) {
 	case 0:
 		pr_val_debug("Offline mode, file is cached.");
@@ -632,21 +632,21 @@ cache_check(struct rpki_uri *url)
  * @changed can be NULL.
  */
 int
-cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed,
-    struct cachefile_notification ***notif)
+cache_download(struct rpki_cache *cache, struct cache_mapping *map,
+    bool *changed, struct cachefile_notification ***notif)
 {
-	struct rpki_uri *url;
+	struct cache_mapping *map2;
 	struct cache_node *node;
 	int error;
 
 	if (changed != NULL)
 		*changed = false;
 
-	error = get_url(uri, &url);
+	error = fix_url(map, &map2);
 	if (error)
 		return error;
 
-	node = find_node(cache, url);
+	node = find_node(cache, map2);
 	if (node != NULL) {
 		if (was_recently_downloaded(cache, node)) {
 			error = node->attempt.result;
@@ -654,27 +654,27 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed,
 		}
 	} else {
 		node = pzalloc(sizeof(struct cache_node));
-		node->url = url;
-		uri_refget(url);
+		node->map = map2;
+		map_refget(map2);
 		add_node(cache, node);
 	}
 
-	switch (uri_get_type(url)) {
-	case UT_TA_HTTP:
-	case UT_NOTIF:
-	case UT_TMP:
+	switch (map_get_type(map2)) {
+	case MAP_TA_HTTP:
+	case MAP_NOTIF:
+	case MAP_TMP:
 		error = config_get_http_enabled()
-		   ? http_download(url, node->success.ts, changed)
-		   : cache_check(url);
+		   ? http_download(map2, node->success.ts, changed)
+		   : cache_check(map2);
 		break;
-	case UT_TA_RSYNC:
-	case UT_RPP:
+	case MAP_TA_RSYNC:
+	case MAP_RPP:
 		error = config_get_rsync_enabled()
-		    ? rsync_download(uri_get_global(url), uri_get_local(url), true)
-		    : cache_check(url);
+		    ? rsync_download(map_get_url(map2), map_get_path(map2), true)
+		    : cache_check(map2);
 		break;
 	default:
-		pr_crit("URI type not downloadable: %d", uri_get_type(url));
+		pr_crit("Mapping type not downloadable: %d", map_get_type(map2));
 	}
 
 	node->attempt.ts = time(NULL);
@@ -687,45 +687,47 @@ cache_download(struct rpki_cache *cache, struct rpki_uri *uri, bool *changed,
 	}
 
 end:
-	uri_refput(url);
+	map_refput(map2);
 	if (!error && (notif != NULL))
 		*notif = &node->notif;
 	return error;
 }
 
 static int
-download(struct rpki_cache *cache, struct rpki_uri *uri, uris_dl_cb cb, void *arg)
+download(struct rpki_cache *cache, struct cache_mapping *map, maps_dl_cb cb,
+    void *arg)
 {
 	int error;
 
-	pr_val_debug("Trying URL %s...", uri_get_global(uri));
+	pr_val_debug("Trying URL %s...", map_get_url(map));
 
-	switch (uri_get_type(uri)) {
-	case UT_TA_HTTP:
-	case UT_TA_RSYNC:
-	case UT_RPP:
-		error = cache_download(cache, uri, NULL, NULL);
+	switch (map_get_type(map)) {
+	case MAP_TA_HTTP:
+	case MAP_TA_RSYNC:
+	case MAP_RPP:
+		error = cache_download(cache, map, NULL, NULL);
 		break;
-	case UT_NOTIF:
-		error = rrdp_update(uri);
+	case MAP_NOTIF:
+		error = rrdp_update(map);
 		break;
 	default:
-		pr_crit("URI type is not a legal alt candidate: %u", uri_get_type(uri));
+		pr_crit("Mapping type is not a legal alt candidate: %u",
+		    map_get_type(map));
 	}
 
-	return error ? 1 : cb(uri, arg);
+	return error ? 1 : cb(map, arg);
 }
 
 static int
-download_uris(struct rpki_cache *cache, struct uri_list *uris,
-    enum uri_type type, uris_dl_cb cb, void *arg)
+download_maps(struct rpki_cache *cache, struct map_list *maps,
+    enum map_type type, maps_dl_cb cb, void *arg)
 {
-	struct rpki_uri **uri;
+	struct cache_mapping **map;
 	int error;
 
-	ARRAYLIST_FOREACH(uris, uri) {
-		if (uri_get_type(*uri) == type) {
-			error = download(cache, *uri, cb, arg);
+	ARRAYLIST_FOREACH(maps, map) {
+		if (map_get_type(*map) == type) {
+			error = download(cache, *map, cb, arg);
 			if (error <= 0)
 				return error;
 		}
@@ -735,11 +737,10 @@ download_uris(struct rpki_cache *cache, struct uri_list *uris,
 }
 
 /**
- * Assumes all the URIs are URLs, and represent different ways to access the
- * same content.
+ * Assumes the mappings represent different ways to access the same content.
  *
  * Sequentially (in the order dictated by their priorities) attempts to update
- * (in the cache) the content pointed by each URL.
+ * (in the cache) the content pointed by each mapping's URL.
  * If a download succeeds, calls cb on it. If cb succeeds, returns without
  * trying more URLs.
  *
@@ -747,38 +748,38 @@ download_uris(struct rpki_cache *cache, struct uri_list *uris,
  * that's already cached, and callbacks it.
  */
 int
-cache_download_alt(struct rpki_cache *cache, struct uri_list *uris,
-    enum uri_type http_type, enum uri_type rsync_type, uris_dl_cb cb, void *arg)
+cache_download_alt(struct rpki_cache *cache, struct map_list *maps,
+    enum map_type http_type, enum map_type rsync_type, maps_dl_cb cb, void *arg)
 {
-	struct rpki_uri **cursor, *uri;
+	struct cache_mapping **cursor, *map;
 	int error;
 
 	if (config_get_http_priority() > config_get_rsync_priority()) {
-		error = download_uris(cache, uris, http_type, cb, arg);
+		error = download_maps(cache, maps, http_type, cb, arg);
 		if (error <= 0)
 			return error;
-		error = download_uris(cache, uris, rsync_type, cb, arg);
+		error = download_maps(cache, maps, rsync_type, cb, arg);
 		if (error <= 0)
 			return error;
 
 	} else if (config_get_http_priority() < config_get_rsync_priority()) {
-		error = download_uris(cache, uris, rsync_type, cb, arg);
+		error = download_maps(cache, maps, rsync_type, cb, arg);
 		if (error <= 0)
 			return error;
-		error = download_uris(cache, uris, http_type, cb, arg);
+		error = download_maps(cache, maps, http_type, cb, arg);
 		if (error <= 0)
 			return error;
 
 	} else {
-		ARRAYLIST_FOREACH(uris, cursor) {
+		ARRAYLIST_FOREACH(maps, cursor) {
 			error = download(cache, *cursor, cb, arg);
 			if (error <= 0)
 				return error;
 		}
 	}
 
-	uri = cache_recover(cache, uris);
-	return (uri != NULL) ? cb(uri, arg) : ESRCH;
+	map = cache_recover(cache, maps);
+	return (map != NULL) ? cb(map, arg) : ESRCH;
 }
 
 /*
@@ -814,27 +815,27 @@ choose_better(struct cache_node *old, struct cache_node *new)
 	return (difftime(old->success.ts, new->success.ts) < 0) ? new : old;
 }
 
-struct uri_and_node {
-	struct rpki_uri *uri;
+struct map_and_node {
+	struct cache_mapping *map;
 	struct cache_node *node;
 };
 
 /* Separated because of unit tests. */
 static void
-__cache_recover(struct rpki_cache *cache, struct uri_list *uris,
-    struct uri_and_node *best)
+__cache_recover(struct rpki_cache *cache, struct map_list *maps,
+    struct map_and_node *best)
 {
-	struct rpki_uri **uri;
-	struct rpki_uri *url;
-	struct uri_and_node cursor;
+	struct cache_mapping **map;
+	struct cache_mapping *fixed;
+	struct map_and_node cursor;
 
-	ARRAYLIST_FOREACH(uris, uri) {
-		cursor.uri = *uri;
+	ARRAYLIST_FOREACH(maps, map) {
+		cursor.map = *map;
 
-		if (get_url(cursor.uri, &url) != 0)
+		if (fix_url(cursor.map, &fixed) != 0)
 			continue;
-		cursor.node = find_node(cache, url);
-		uri_refput(url);
+		cursor.node = find_node(cache, fixed);
+		map_refput(fixed);
 		if (cursor.node == NULL)
 			continue;
 
@@ -843,12 +844,12 @@ __cache_recover(struct rpki_cache *cache, struct uri_list *uris,
 	}
 }
 
-struct rpki_uri *
-cache_recover(struct rpki_cache *cache, struct uri_list *uris)
+struct cache_mapping *
+cache_recover(struct rpki_cache *cache, struct map_list *maps)
 {
-	struct uri_and_node best = { 0 };
-	__cache_recover(cache, uris, &best);
-	return best.uri;
+	struct map_and_node best = { 0 };
+	__cache_recover(cache, maps, &best);
+	return best.map;
 }
 
 void
@@ -858,8 +859,8 @@ cache_print(struct rpki_cache *cache)
 
 	HASH_ITER(hh, cache->ht, node, tmp)
 		printf("- %s (%s): %ssuccess error:%d\n",
-		    uri_get_local(node->url),
-		    uri_get_global(node->url),
+		    map_get_path(node->map),
+		    map_get_url(node->map),
 		    node->success.happened ? "" : "!",
 		    node->attempt.result);
 }
@@ -875,7 +876,7 @@ static void
 delete_node(struct rpki_cache *cache, struct cache_node *node)
 {
 	HASH_DEL(cache->ht, node);
-	uri_refput(node->url);
+	map_refput(node->map);
 	rrdp_notif_free(node->notif);
 	free(node);
 }
@@ -883,13 +884,13 @@ delete_node(struct rpki_cache *cache, struct cache_node *node)
 static void
 delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
 {
-	struct rpki_uri *cage;
+	struct cache_mapping *cage;
 
-	if (uri_get_type(node->url) == UT_NOTIF) {
-		if (uri_create_cage(&cage, node->url) == 0) {
-			pr_op_debug("Deleting cage %s.", uri_get_local(cage));
-			file_rm_rf(uri_get_local(cage));
-			uri_refput(cage);
+	if (map_get_type(node->map) == MAP_NOTIF) {
+		if (map_create_cage(&cage, node->map) == 0) {
+			pr_op_debug("Deleting cage %s.", map_get_path(cage));
+			file_rm_rf(map_get_path(cage));
+			map_refput(cage);
 		}
 	}
 
@@ -922,21 +923,21 @@ get_days_ago(int days)
 static void
 cleanup_tmp(struct rpki_cache *cache, struct cache_node *node)
 {
-	enum uri_type type;
+	enum map_type type;
 	char const *path;
 	int error;
 
-	type = uri_get_type(node->url);
-	if (type != UT_NOTIF && type != UT_TMP)
+	type = map_get_type(node->map);
+	if (type != MAP_NOTIF && type != MAP_TMP)
 		return;
 
-	path = uri_get_local(node->url);
+	path = map_get_path(node->map);
 	pr_op_debug("Deleting temporal file '%s'.", path);
 	error = file_rm_f(path);
 	if (error)
 		pr_op_err("Could not delete '%s': %s", path, strerror(error));
 
-	if (type != UT_NOTIF)
+	if (type != MAP_NOTIF)
 		delete_node(cache, node);
 }
 
@@ -947,8 +948,8 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 	char const *path;
 	int error;
 
-	path = uri_get_local(node->url);
-	if (uri_get_type(node->url) == UT_NOTIF)
+	path = map_get_path(node->map);
+	if (map_get_type(node->map) == MAP_NOTIF)
 		goto skip_file;
 
 	error = file_exists(path);
@@ -962,7 +963,7 @@ cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 		return;
 	default:
 		pr_op_err("Trouble cleaning '%s'; stat() returned errno %d: %s",
-		    uri_op_get_printable(node->url), error, strerror(error));
+		    map_op_get_printable(node->map), error, strerror(error));
 	}
 
 skip_file:
@@ -974,27 +975,27 @@ skip_file:
 }
 
 /*
- * "Do not clean." List of URIs that should not be deleted from the cache.
+ * "Do not clean." List of mappings that should not be deleted from the cache.
  * Global because nftw doesn't have a generic argument.
  */
-static struct uri_list dnc;
+static struct map_list dnc;
 static pthread_mutex_t dnc_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static bool
 is_cached(char const *_fpath)
 {
-	struct rpki_uri **node;
+	struct cache_mapping **node;
 	char const *fpath, *npath;
 	size_t c;
 
 	/*
 	 * This relies on paths being normalized, which is currently done by the
-	 * URI constructors.
+	 * struct cache_mapping constructors.
 	 */
 
 	ARRAYLIST_FOREACH(&dnc, node) {
 		fpath = _fpath;
-		npath = uri_get_local(*node);
+		npath = map_get_path(*node);
 
 		for (c = 0; fpath[c] == npath[c]; c++)
 			if (fpath[c] == '\0')
@@ -1030,7 +1031,7 @@ static void
 delete_unknown_files(struct rpki_cache *cache)
 {
 	struct cache_node *node, *tmp;
-	struct rpki_uri *cage;
+	struct cache_mapping *cage;
 	struct path_builder pb;
 	int error;
 
@@ -1042,22 +1043,22 @@ delete_unknown_files(struct rpki_cache *cache)
 	}
 
 	mutex_lock(&dnc_lock);
-	uris_init(&dnc);
+	maps_init(&dnc);
 
-	uris_add(&dnc, uri_create_cache(pb.string));
+	maps_add(&dnc, map_create_cache(pb.string));
 	HASH_ITER(hh, cache->ht, node, tmp) {
-		uri_refget(node->url);
-		uris_add(&dnc, node->url);
+		map_refget(node->map);
+		maps_add(&dnc, node->map);
 
-		if (uri_get_type(node->url) != UT_NOTIF)
+		if (map_get_type(node->map) != MAP_NOTIF)
 			continue;
 
-		if (uri_create_cage(&cage, node->url) != 0) {
+		if (map_create_cage(&cage, node->map) != 0) {
 			pr_op_err("Cannot generate %s's cage. I'm probably going to end up deleting it from the cache.",
-			    uri_op_get_printable(node->url));
+			    map_op_get_printable(node->map));
 			continue;
 		}
-		uris_add(&dnc, cage);
+		maps_add(&dnc, cage);
 	}
 
 	pb_pop(&pb, true);
@@ -1067,7 +1068,7 @@ delete_unknown_files(struct rpki_cache *cache)
 		pr_op_warn("The cache cleanup ended prematurely with error code %d (%s)",
 		    error, strerror(error));
 
-	uris_cleanup(&dnc);
+	maps_cleanup(&dnc);
 	mutex_unlock(&dnc_lock);
 
 	pb_cleanup(&pb);

@@ -11,7 +11,7 @@
 #include "thread_var.h"
 
 static int
-__crl_load(struct rpki_uri *uri, X509_CRL **result)
+__crl_load(struct cache_mapping *map, X509_CRL **result)
 {
 	X509_CRL *crl;
 	BIO *bio;
@@ -20,16 +20,16 @@ __crl_load(struct rpki_uri *uri, X509_CRL **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, uri_get_local(uri)) <= 0) {
+	if (BIO_read_filename(bio, map_get_path(map)) <= 0) {
 		error = val_crypto_err("Error reading CRL '%s'",
-		    uri_val_get_printable(uri));
+		    map_val_get_printable(map));
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
 		error = val_crypto_err("Error parsing CRL '%s'",
-		    uri_val_get_printable(uri));
+		    map_val_get_printable(map));
 		goto end;
 	}
 
@@ -152,13 +152,13 @@ crl_validate(X509_CRL *crl)
 }
 
 int
-crl_load(struct rpki_uri *uri, X509_CRL **result)
+crl_load(struct cache_mapping *map, X509_CRL **result)
 {
 	int error;
 
-	pr_val_debug("CRL '%s' {", uri_val_get_printable(uri));
+	pr_val_debug("CRL '%s' {", map_val_get_printable(map));
 
-	error = __crl_load(uri, result);
+	error = __crl_load(map, result);
 	if (error)
 		goto end;
 

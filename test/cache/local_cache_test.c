@@ -11,7 +11,7 @@
 #include "json_util.c"
 #include "mock.c"
 #include "data_structure/path_builder.c"
-#include "types/uri.c"
+#include "types/map.c"
 
 /* Mocks */
 
@@ -89,17 +89,17 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 }
 
 int
-http_download(struct rpki_uri *uri, curl_off_t ims, bool *changed)
+http_download(struct cache_mapping *map, curl_off_t ims, bool *changed)
 {
 	int error;
 	https_counter++;
-	error = pretend_download(uri_get_local(uri));
+	error = pretend_download(map_get_path(map));
 	if (changed != NULL)
 		*changed = error ? false : true;
 	return error;
 }
 
-MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
+MOCK_ABORT_INT(rrdp_update, struct cache_mapping *map)
 __MOCK_ABORT(rrdp_notif2json, json_t *, NULL, struct cachefile_notification *notif)
 MOCK_VOID(rrdp_notif_free, struct cachefile_notification *notif)
 MOCK_ABORT_INT(rrdp_json2notif, json_t *json, struct cachefile_notification **result)
@@ -121,43 +121,43 @@ static void
 run_cache_download(char const *url, int expected_error,
     unsigned int rsync_calls, unsigned int https_calls)
 {
-	struct rpki_uri *uri;
-	enum uri_type type;
+	struct cache_mapping *map;
+	enum map_type type;
 
 	if (str_starts_with(url, "https://"))
-		type = UT_TA_HTTP;
+		type = MAP_TA_HTTP;
 	else if (str_starts_with(url, "rsync://"))
-		type = UT_RPP;
+		type = MAP_RPP;
 	else
 		ck_abort_msg("Bad protocol: %s", url);
 
 	rsync_counter = 0;
 	https_counter = 0;
 
-	ck_assert_int_eq(0, uri_create(&uri, type, NULL, url));
-	ck_assert_int_eq(expected_error, cache_download(cache, uri, NULL, NULL));
+	ck_assert_int_eq(0, map_create(&map, type, NULL, url));
+	ck_assert_int_eq(expected_error, cache_download(cache, map, NULL, NULL));
 	ck_assert_uint_eq(rsync_calls, rsync_counter);
 	ck_assert_uint_eq(https_calls, https_counter);
 
-	uri_refput(uri);
+	map_refput(map);
 }
 
 static struct cache_node *
 node(char const *url, time_t attempt, int err, bool succeeded, time_t success,
     bool is_notif)
 {
-	enum uri_type type;
+	enum map_type type;
 	struct cache_node *result;
 
 	if (str_starts_with(url, "https://"))
-		type = is_notif ? UT_NOTIF : UT_TA_HTTP;
+		type = is_notif ? MAP_NOTIF : MAP_TA_HTTP;
 	else if (str_starts_with(url, "rsync://"))
-		type = UT_RPP;
+		type = MAP_RPP;
 	else
 		ck_abort_msg("Bad protocol: %s", url);
 
 	result = pzalloc(sizeof(struct cache_node));
-	ck_assert_int_eq(0, uri_create(&result->url, type, NULL, url));
+	ck_assert_int_eq(0, map_create(&result->map, type, NULL, url));
 	result->attempt.ts = attempt;
 	result->attempt.result = err;
 	result->success.happened = succeeded;
@@ -183,7 +183,7 @@ find_downloaded_path(struct cache_node *node)
 	struct downloaded_path *path;
 
 	SLIST_FOREACH(path, &downloaded, hook)
-		if (strcmp(uri_get_local(node->url), path->path) == 0) {
+		if (strcmp(map_get_path(node->map), path->path) == 0) {
 			if (path->visited)
 				return NULL;
 			else {
@@ -212,7 +212,7 @@ validate_node(struct cache_node *expected, struct cache_node *actual)
 		return;
 	}
 
-	ck_assert_str_eq(uri_get_global(expected->url), uri_get_global(actual->url));
+	ck_assert_str_eq(map_get_url(expected->map), map_get_url(actual->map));
 	/* ck_assert_int_eq(expected->attempt.ts, actual->attempt.ts); */
 	ck_assert_int_eq(expected->attempt.result, actual->attempt.result);
 	ck_assert_int_eq(expected->success.happened, actual->success.happened);
@@ -234,10 +234,10 @@ validate_cache(int trash, ...)
 	va_start(args, trash);
 	while ((e = va_arg(args, struct cache_node *)) != NULL) {
 		printf("- %s %s error:%u success:%u\n",
-		    uri_get_global(e->url), uri_get_local(e->url),
+		    map_get_url(e->map), map_get_path(e->map),
 		    e->attempt.result, e->success.happened);
 
-		key = uri_get_global(e->url);
+		key = map_get_url(e->map);
 		HASH_ADD_KEYPTR(hh, expected, key, strlen(key), e);
 	}
 	va_end(args);
@@ -246,7 +246,7 @@ validate_cache(int trash, ...)
 	printf("Actual nodes:\n");
 	HASH_ITER(hh, cache->ht, a, tmp)
 		printf("- %s %s attempt:%u success:%u\n",
-		    uri_get_global(a->url), uri_get_local(a->url),
+		    map_get_url(a->map), map_get_path(a->map),
 		    a->attempt.result, a->success.happened);
 	printf("\n");
 
@@ -263,7 +263,7 @@ validate_cache(int trash, ...)
 		if (e->attempt.ts) { /* "if should have cache file" */
 			if (path == NULL)
 				ck_abort_msg("Cached file is missing: %s",
-				    uri_get_local(e->url));
+				    map_get_path(e->map));
 			path->visited = true;
 		} else {
 			if (path != NULL) {
@@ -277,7 +277,7 @@ validate_cache(int trash, ...)
 
 	/* Compare expected and actual */
 	HASH_ITER(hh, cache->ht, a, tmp) {
-		key = uri_get_global(a->url);
+		key = map_get_url(a->map);
 		HASH_FIND_STR(expected, key, e);
 		if (e == NULL)
 			ck_abort_msg("Unexpected actual: %s", key);
@@ -285,13 +285,13 @@ validate_cache(int trash, ...)
 		validate_node(e, a);
 
 		HASH_DEL(expected, e);
-		uri_refput(e->url);
+		map_refput(e->map);
 		free(e);
 	}
 
 	if (HASH_COUNT(expected) != 0)
 		ck_abort_msg("Actual node is mising: %s",
-		    uri_get_global(expected->url));
+		    map_get_url(expected->map));
 }
 
 static void
@@ -770,73 +770,73 @@ START_TEST(test_tal_json)
 END_TEST
 
 static void
-prepare_uri_list(struct uri_list *uris, ...)
+prepare_map_list(struct map_list *maps, ...)
 {
 	char const *str;
-	enum uri_type type;
-	struct rpki_uri *uri;
+	enum map_type type;
+	struct cache_mapping *map;
 	va_list args;
 
-	uris_init(uris);
+	maps_init(maps);
 
-	va_start(args, uris);
+	va_start(args, maps);
 	while ((str = va_arg(args, char const *)) != NULL) {
 		if (str_starts_with(str, "https://"))
-			type = UT_TA_HTTP;
+			type = MAP_TA_HTTP;
 		else if (str_starts_with(str, "rsync://"))
-			type = UT_RPP;
+			type = MAP_RPP;
 		else
 			ck_abort_msg("Bad protocol: %s", str);
-		ck_assert_int_eq(0, uri_create(&uri, type, NULL, str));
-		uris_add(uris, uri);
+		ck_assert_int_eq(0, map_create(&map, type, NULL, str));
+		maps_add(maps, map);
 	}
 	va_end(args);
 }
 
-#define PREPARE_URI_LIST(uris, ...) prepare_uri_list(uris, ##__VA_ARGS__, NULL)
+#define PREPARE_MAP_LIST(maps, ...) prepare_map_list(maps, ##__VA_ARGS__, NULL)
 
 START_TEST(test_recover)
 {
-	struct uri_list uris;
+	struct map_list maps;
 
 	setup_test();
 
 	/* Query on empty database */
-	PREPARE_URI_LIST(&uris, "rsync://a.b.c/d", "https://a.b.c/d");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a.b.c/d", "https://a.b.c/d");
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* Only first URI is cached */
 	cache_reset(cache);
 	run_cache_download("rsync://a/b/c", 0, 1, 0);
 
-	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_eq(maps.array[0], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* Only second URI is cached */
 	cache_reset(cache);
 	run_cache_download("https://d/e", 0, 0, 1);
 
-	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_eq(maps.array[1], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* Only third URI is cached */
 	cache_reset(cache);
 	run_cache_download("https://f", 0, 0, 1);
 
-	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_eq(maps.array[2], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* None was cached */
 	cache_reset(cache);
 	run_cache_download("rsync://d/e", 0, 1, 0);
 
-	PREPARE_URI_LIST(&uris, "rsync://a/b/c", "https://d/e", "https://f");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a/b/c", "https://d/e", "https://f");
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/*
 	 * At present, cache_recover() can only be called after all of a
@@ -861,23 +861,23 @@ START_TEST(test_recover)
 	add_node(cache, node("rsync://b/6", 100, 1, 0, 200, 0));
 
 	/* Multiple successful caches: Prioritize the most recent one */
-	PREPARE_URI_LIST(&uris, "rsync://a/1", "rsync://a/3", "rsync://a/5");
-	ck_assert_ptr_eq(uris.array[2], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a/1", "rsync://a/3", "rsync://a/5");
+	ck_assert_ptr_eq(maps.array[2], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
-	PREPARE_URI_LIST(&uris, "rsync://a/5", "rsync://a/1", "rsync://a/3");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a/5", "rsync://a/1", "rsync://a/3");
+	ck_assert_ptr_eq(maps.array[0], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* No successful caches: No viable candidates */
-	PREPARE_URI_LIST(&uris, "rsync://b/2", "rsync://b/4", "rsync://b/6");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://b/2", "rsync://b/4", "rsync://b/6");
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* Status: CNF_SUCCESS is better than 0. */
-	PREPARE_URI_LIST(&uris, "rsync://b/1", "rsync://a/1");
-	ck_assert_ptr_eq(uris.array[1], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://b/1", "rsync://a/1");
+	ck_assert_ptr_eq(maps.array[1], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/*
 	 * If CNF_SUCCESS && error, Fort will probably run into a problem
@@ -886,24 +886,24 @@ START_TEST(test_recover)
 	 * But it should still TRY to read it, as there's a chance the
 	 * outdatedness is not that severe.
 	 */
-	PREPARE_URI_LIST(&uris, "rsync://a/2", "rsync://b/2");
-	ck_assert_ptr_eq(uris.array[0], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a/2", "rsync://b/2");
+	ck_assert_ptr_eq(maps.array[0], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* Parents of downloaded nodes */
-	PREPARE_URI_LIST(&uris, "rsync://a", "rsync://b");
-	ck_assert_ptr_eq(NULL, cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	PREPARE_MAP_LIST(&maps, "rsync://a", "rsync://b");
+	ck_assert_ptr_eq(NULL, cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	/* Try them all at the same time */
-	PREPARE_URI_LIST(&uris,
+	PREPARE_MAP_LIST(&maps,
 	    "rsync://a", "rsync://a/1", "rsync://a/2", "rsync://a/3",
 	    "rsync://a/4", "rsync://a/5", "rsync://a/6",
 	    "rsync://b", "rsync://b/1", "rsync://b/2", "rsync://b/3",
 	    "rsync://b/4", "rsync://b/5", "rsync://b/6",
 	    "rsync://e/1");
-	ck_assert_ptr_eq(uris.array[5], cache_recover(cache, &uris));
-	uris_cleanup(&uris);
+	ck_assert_ptr_eq(maps.array[5], cache_recover(cache, &maps));
+	maps_cleanup(&maps);
 
 	cleanup_test();
 }

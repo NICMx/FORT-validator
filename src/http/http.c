@@ -367,7 +367,7 @@ end:	http_easy_cleanup(&handler);
 }
 
 /*
- * Download @uri->global into @uri->local; HTTP assumed.
+ * Download @map->url into @map->path; HTTP assumed.
  *
  * If @changed returns true, the file was downloaded normally.
  * If @changed returns false, the file has not been modified since @ims.
@@ -377,21 +377,21 @@ end:	http_easy_cleanup(&handler);
  * If @changed is not NULL, initialize it to false.
  */
 int
-http_download(struct rpki_uri *uri, curl_off_t ims, bool *changed)
+http_download(struct cache_mapping *map, curl_off_t ims, bool *changed)
 {
 	unsigned int r;
 	int error;
 
-	pr_val_info("HTTP GET: %s -> %s", uri_get_global(uri), uri_get_local(uri));
+	pr_val_info("HTTP GET: %s -> %s", map_get_url(map), map_get_path(map));
 
-	error = mkdir_p(uri_get_local(uri), false);
+	error = mkdir_p(map_get_path(map), false);
 	if (error)
 		return error;
 
 	for (r = 0; true; r++) {
 		pr_val_debug("Download attempt #%u...", r + 1);
 
-		error = http_fetch(uri_get_global(uri), uri_get_local(uri),
+		error = http_fetch(map_get_url(map), map_get_path(map),
 		    ims, changed);
 		switch (error) {
 		case 0:

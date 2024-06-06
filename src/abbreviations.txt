@@ -12,7 +12,6 @@ dl: download
 eof: end of file
 err: error
 fd: File Descriptor (see `man 2 accept`)
-guri: global URI
 hdr: header
 hh: hash (table) hook
 ht: hash table

@@ -20,11 +20,11 @@
 #include "rtr/db/vrps.h"
 #include "cache/local_cache.h"
 
-typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
+typedef int (*foreach_map_cb)(struct tal *, struct cache_mapping *, void *);
 
 struct tal {
 	char const *file_name;
-	struct uri_list uris;
+	struct map_list maps;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
 
@@ -71,21 +71,21 @@ is_blank(char const *str)
 }
 
 static int
-add_uri(struct tal *tal, char *uri)
+add_url(struct tal *tal, char *url)
 {
-	struct rpki_uri *new = NULL;
+	struct cache_mapping *new = NULL;
 	int error;
 
-	if (str_starts_with(uri, "rsync://"))
-		error = uri_create(&new, UT_TA_RSYNC, NULL, uri);
-	else if (str_starts_with(uri, "https://"))
-		error = uri_create(&new, UT_TA_HTTP, NULL, uri);
+	if (str_starts_with(url, "rsync://"))
+		error = map_create(&new, MAP_TA_RSYNC, NULL, url);
+	else if (str_starts_with(url, "https://"))
+		error = map_create(&new, MAP_TA_HTTP, NULL, url);
 	else
-		return pr_op_err("TAL has non-rsync/HTTPS URI: %s", uri);
+		return pr_op_err("TAL has non-rsync/HTTPS URI: %s", url);
 	if (error)
 		return error;
 
-	uris_add(&tal->uris, new);
+	maps_add(&tal->maps, new);
 	return 0;
 }
 
@@ -115,7 +115,7 @@ read_content(char *fc /* File Content */, struct tal *tal)
 		if (is_blank(fc))
 			break;
 
-		error = add_uri(tal, fc);
+		error = add_url(tal, fc);
 		if (error)
 			return error;
 
@@ -124,7 +124,7 @@ read_content(char *fc /* File Content */, struct tal *tal)
 			return pr_op_err("The TAL seems to be missing the public key.");
 	} while (true);
 
-	if (tal->uris.len == 0)
+	if (tal->maps.len == 0)
 		return pr_op_err("There seems to be an empty/blank line before the end of the URI section.");
 
 	/* subjectPublicKeyInfo section */
@@ -156,10 +156,10 @@ tal_init(struct tal *tal, char const *file_path)
 	file_name = (file_name != NULL) ? (file_name + 1) : file_path;
 	tal->file_name = file_name;
 
-	uris_init(&tal->uris);
+	maps_init(&tal->maps);
 	error = read_content((char *)file.buffer, tal);
 	if (error) {
-		uris_cleanup(&tal->uris);
+		maps_cleanup(&tal->maps);
 		goto end;
 	}
 
@@ -175,7 +175,7 @@ tal_cleanup(struct tal *tal)
 {
 	cache_destroy(tal->cache);
 	free(tal->spki);
-	uris_cleanup(&tal->uris);
+	maps_cleanup(&tal->maps);
 }
 
 char const *
@@ -198,11 +198,11 @@ tal_get_cache(struct tal *tal)
 }
 
 /**
- * Performs the whole validation walkthrough on uri @uri, which is assumed to
- * have been extracted from TAL @tal.
+ * Performs the whole validation walkthrough on the @map mapping, which is
+ * assumed to have been extracted from TAL @tal.
  */
 static int
-handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
+handle_tal_map(struct tal *tal, struct cache_mapping *map, struct db_table *db)
 {
 	struct validation_handler validation_handler;
 	struct validation *state;
@@ -210,7 +210,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 	struct deferred_cert deferred;
 	int error;
 
-	pr_val_debug("TAL URI '%s' {", uri_val_get_printable(uri));
+	pr_val_debug("TAL URI '%s' {", map_val_get_printable(map));
 
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
@@ -221,15 +221,15 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	if (!uri_is_certificate(uri)) {
+	if (!map_is_certificate(map)) {
 		pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
-		    uri_op_get_printable(uri));
+		    map_op_get_printable(map));
 		error = EINVAL;
 		goto end;
 	}
 
 	/* Handle root certificate. */
-	error = certificate_traverse(NULL, uri);
+	error = certificate_traverse(NULL, map);
 	if (error) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:
@@ -267,9 +267,9 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 		 * Ignore result code; remaining certificates are unrelated,
 		 * so they should not be affected.
 		 */
-		certificate_traverse(deferred.pp, deferred.uri);
+		certificate_traverse(deferred.pp, deferred.map);
 
-		uri_refput(deferred.uri);
+		map_refput(deferred.map);
 		rpp_refput(deferred.pp);
 	} while (true);
 
@@ -279,10 +279,10 @@ end:	validation_destroy(state);
 }
 
 static int
-__handle_tal_uri(struct rpki_uri *uri, void *arg)
+__handle_tal_map(struct cache_mapping *map, void *arg)
 {
 	struct handle_tal_args *args = arg;
-	return handle_tal_uri(&args->tal, uri, args->db);
+	return handle_tal_map(&args->tal, map, args->db);
 }
 
 static void *
@@ -302,8 +302,8 @@ do_file_validation(void *arg)
 		goto end;
 
 	args.db = db_table_create();
-	thread->error = cache_download_alt(args.tal.cache, &args.tal.uris,
-	    UT_TA_HTTP, UT_TA_RSYNC, __handle_tal_uri, &args);
+	thread->error = cache_download_alt(args.tal.cache, &args.tal.maps,
+	    MAP_TA_HTTP, MAP_TA_RSYNC, __handle_tal_map, &args);
 	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);

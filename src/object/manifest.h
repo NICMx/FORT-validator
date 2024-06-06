@@ -3,6 +3,6 @@
 
 #include "rpp.h"
 
-int handle_manifest(struct rpki_uri *, struct rpki_uri *, struct rpp **);
+int handle_manifest(struct cache_mapping *, struct cache_mapping *, struct rpp **);
 
 #endif /* SRC_OBJECT_MANIFEST_H_ */

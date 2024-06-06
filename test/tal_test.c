@@ -7,7 +7,7 @@
 #include "file.c"
 #include "mock.c"
 #include "data_structure/path_builder.c"
-#include "types/uri.c"
+#include "types/map.c"
 #include "crypto/base64.c"
 
 /* Mocks */
@@ -15,17 +15,18 @@
 MOCK_ABORT_VOID(cache_setup, void)
 MOCK(cache_create, struct rpki_cache *, NULL, void)
 MOCK_VOID(cache_destroy, struct rpki_cache *cache)
-MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
-    bool *changed, struct cachefile_notification ***notif)
+MOCK_ABORT_INT(cache_download, struct rpki_cache *cache,
+    struct cache_mapping *map, bool *changed,
+    struct cachefile_notification ***notif)
 MOCK_ABORT_INT(cache_download_alt, struct rpki_cache *cache,
-    struct uri_list *uris, enum uri_type http_type, enum uri_type rsync_type,
-    uris_dl_cb cb, void *arg)
-MOCK_ABORT_PTR(cache_recover, rpki_uri, struct rpki_cache *cache,
-    struct uri_list *uris)
+    struct map_list *maps, enum map_type http_type, enum map_type rsync_type,
+    maps_dl_cb cb, void *arg)
+MOCK_ABORT_PTR(cache_recover, cache_mapping, struct rpki_cache *cache,
+    struct map_list *maps)
 MOCK_ABORT_INT(cache_tmpfile, char **filename)
 MOCK_ABORT_VOID(cache_teardown, void)
 MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
-    struct rpki_uri *cert_uri)
+    struct cache_mapping *cert_map)
 MOCK_ABORT_PTR(db_table_create, db_table, void)
 MOCK_VOID(db_table_destroy, struct db_table *table)
 MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
@@ -41,7 +42,7 @@ MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
 MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
-MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
+MOCK_ABORT_INT(rrdp_update, struct cache_mapping *map)
 MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
 MOCK_ABORT_VOID(validation_destroy, struct validation *state)
@@ -99,8 +100,8 @@ test_1url(char const *file)
 
 	ck_assert_int_eq(0, tal_init(&tal, file));
 
-	ck_assert_uint_eq(1, tal.uris.len);
-	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.uris.array[0]->global);
+	ck_assert_uint_eq(1, tal.maps.len);
+	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.maps.array[0]->url);
 	check_spki(&tal);
 
 	tal_cleanup(&tal);
@@ -120,11 +121,11 @@ test_4urls(char const *file)
 
 	ck_assert_int_eq(0, tal_init(&tal, file));
 
-	ck_assert_uint_eq(4, tal.uris.len);
-	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.uris.array[0]->global);
-	ck_assert_str_eq("https://example.com/rpki/ta.cer", tal.uris.array[1]->global);
-	ck_assert_str_eq("rsync://www.example.com/potato/ta.cer", tal.uris.array[2]->global);
-	ck_assert_str_eq("https://wx3.example.com/tomato/ta.cer", tal.uris.array[3]->global);
+	ck_assert_uint_eq(4, tal.maps.len);
+	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.maps.array[0]->url);
+	ck_assert_str_eq("https://example.com/rpki/ta.cer", tal.maps.array[1]->url);
+	ck_assert_str_eq("rsync://www.example.com/potato/ta.cer", tal.maps.array[2]->url);
+	ck_assert_str_eq("https://wx3.example.com/tomato/ta.cer", tal.maps.array[3]->url);
 
 	check_spki(&tal);
 

@@ -119,13 +119,13 @@ START_TEST(test_replace)
 END_TEST
 
 /*
- * To assure myself I can hash nodes using an rpki_uri's global field as key.
+ * To assure myself I can hash nodes using an cache_mapping's url field as key.
  * (Given that they're private.)
  *
  * ie. Neither the node nor the key contains the key, but the key points to it
  * somewhere else.
  */
-START_TEST(test_uri)
+START_TEST(test_map)
 {
 	struct test2_key {
 		char *outer_string;
@@ -193,17 +193,17 @@ END_TEST
 static Suite *pdu_suite(void)
 {
 	Suite *suite;
-	TCase *core, *uri;
+	TCase *core, *map;
 
 	core = tcase_create("simple");
 	tcase_add_test(core, test_replace);
 
-	uri = tcase_create("uri");
-	tcase_add_test(uri, test_uri);
+	map = tcase_create("map");
+	tcase_add_test(map, test_map);
 
 	suite = suite_create("uthash");
 	suite_add_tcase(suite, core);
-	suite_add_tcase(suite, uri);
+	suite_add_tcase(suite, map);
 	return suite;
 }
 

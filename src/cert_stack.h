@@ -6,7 +6,7 @@
 #include "object/certificate.h"
 #include "object/name.h"
 #include "resource.h"
-#include "types/uri.h"
+#include "types/map.h"
 
 /*
  * One certificate stack is allocated per validation cycle, and it is used
@@ -31,7 +31,7 @@
 struct cert_stack;
 
 struct deferred_cert {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	struct rpp *pp;
 };
 
@@ -42,11 +42,11 @@ void deferstack_push(struct cert_stack *, struct deferred_cert *cert);
 int deferstack_pop(struct cert_stack *, struct deferred_cert *cert);
 bool deferstack_is_empty(struct cert_stack *);
 
-int x509stack_push(struct cert_stack *, struct rpki_uri *, X509 *,
+int x509stack_push(struct cert_stack *, struct cache_mapping *, X509 *,
     enum rpki_policy, enum cert_type);
 void x509stack_cancel(struct cert_stack *);
 X509 *x509stack_peek(struct cert_stack *);
-struct rpki_uri *x509stack_peek_uri(struct cert_stack *);
+struct cache_mapping *x509stack_peek_map(struct cert_stack *);
 struct resources *x509stack_peek_resources(struct cert_stack *);
 void x509stack_store_serial(struct cert_stack *, BIGNUM *);
 typedef int (*subject_pk_check_cb)(bool *, char const *, void *);

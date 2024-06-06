@@ -12,7 +12,7 @@
 #include "log.h"
 #include "rsync/rsync.h"
 #include "types/bio_seq.h"
-#include "types/uri.h"
+#include "types/map.h"
 
 #define HDRSIZE 32
 
@@ -65,23 +65,23 @@ end:	pb_cleanup(&pb);
 static BIO *
 rsync2bio_cache(char const *src)
 {
-	struct rpki_uri *uri = NULL;
+	struct cache_mapping *map = NULL;
 	BIO *bio;
 	int error;
 
 	/*
-	 * TODO (#82) maybe rename UT_TA_RSYNC into single rsync.
+	 * TODO (#82) maybe rename MAP_TA_RSYNC into single rsync.
 	 * If applies and it's going to survive.
 	 */
-	error = uri_create(&uri, UT_TA_RSYNC, NULL, src);
+	error = map_create(&map, MAP_TA_RSYNC, NULL, src);
 	if (error) {
 		pr_op_err("Unparseable rsync URI: %s", strerror(abs(error)));
 		return NULL;
 	}
 
-	bio = __rsync2bio(uri_get_global(uri), uri_get_local(uri));
+	bio = __rsync2bio(map_get_url(map), map_get_path(map));
 
-	uri_refput(uri);
+	map_refput(map);
 	return bio;
 }
 

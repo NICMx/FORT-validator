@@ -282,23 +282,23 @@ create_dir(char const *path)
 	return 0;
 }
 
-/* mkdir -p $path */
+/* mkdir -p $_path */
 int
-mkdir_p(char const *path, bool include_basename)
+mkdir_p(char const *_path, bool include_basename)
 {
-	char *localuri, *last_slash;
+	char *path, *last_slash;
 	int i, result = 0;
 
-	localuri = pstrdup(path); /* Remove const */
+	path = pstrdup(_path); /* Remove const */
 
 	if (!include_basename) {
-		last_slash = strrchr(localuri, '/');
+		last_slash = strrchr(path, '/');
 		if (last_slash == NULL)
 			goto end;
 		*last_slash = '\0';
 	}
 
-	result = dir_exists(localuri); /* short circuit */
+	result = dir_exists(path); /* short circuit */
 	if (result > 0) {
 		result = 0;
 		goto end;
@@ -306,19 +306,19 @@ mkdir_p(char const *path, bool include_basename)
 		goto end;
 	}
 
-	for (i = 1; localuri[i] != '\0'; i++) {
-		if (localuri[i] == '/') {
-			localuri[i] = '\0';
-			result = create_dir(localuri);
-			localuri[i] = '/';
+	for (i = 1; path[i] != '\0'; i++) {
+		if (path[i] == '/') {
+			path[i] = '\0';
+			result = create_dir(path);
+			path[i] = '/';
 			if (result != 0)
 				goto end; /* error msg already printed */
 		}
 	}
-	result = create_dir(localuri);
+	result = create_dir(path);
 
 end:
-	free(localuri);
+	free(path);
 	return result;
 }
 

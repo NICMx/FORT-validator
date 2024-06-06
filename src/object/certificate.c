@@ -47,8 +47,8 @@ struct ski_arguments {
 };
 
 struct sia_uris {
-	struct uri_list rpp;
-	struct rpki_uri *mft;
+	struct map_list rpp;
+	struct cache_mapping *mft;
 };
 
 struct bgpsec_ski {
@@ -62,7 +62,7 @@ typedef int (access_method_exec)(struct sia_uris *);
 struct ad_metadata {
 	char const *name;
 	char const *ia_name;
-	enum uri_type type;
+	enum map_type type;
 	char const *type_str;
 	bool required;
 };
@@ -70,7 +70,7 @@ struct ad_metadata {
 static const struct ad_metadata CA_ISSUERS = {
 	.name = "caIssuers",
 	.ia_name = "AIA",
-	.type = UT_AIA,
+	.type = MAP_AIA,
 	.type_str = "rsync",
 	.required = true,
 };
@@ -78,7 +78,7 @@ static const struct ad_metadata CA_ISSUERS = {
 static const struct ad_metadata SIGNED_OBJECT = {
 	.name = "signedObject",
 	.ia_name = "SIA",
-	.type = UT_SO,
+	.type = MAP_SO,
 	.type_str = "rsync",
 	.required = true,
 };
@@ -86,7 +86,7 @@ static const struct ad_metadata SIGNED_OBJECT = {
 static const struct ad_metadata CA_REPOSITORY = {
 	.name = "caRepository",
 	.ia_name = "SIA",
-	.type = UT_RPP,
+	.type = MAP_RPP,
 	.type_str = "rsync",
 	.required = false,
 };
@@ -94,7 +94,7 @@ static const struct ad_metadata CA_REPOSITORY = {
 static const struct ad_metadata RPKI_NOTIFY = {
 	.name = "rpkiNotify",
 	.ia_name = "SIA",
-	.type = UT_NOTIF,
+	.type = MAP_NOTIF,
 	.type_str = "HTTPS",
 	.required = false,
 };
@@ -102,7 +102,7 @@ static const struct ad_metadata RPKI_NOTIFY = {
 static const struct ad_metadata RPKI_MANIFEST = {
 	.name = "rpkiManifest",
 	.ia_name = "SIA",
-	.type = UT_MFT,
+	.type = MAP_MFT,
 	.type_str = "rsync",
 	.required = true,
 };
@@ -110,15 +110,15 @@ static const struct ad_metadata RPKI_MANIFEST = {
 static void
 sia_uris_init(struct sia_uris *uris)
 {
-	uris_init(&uris->rpp);
+	maps_init(&uris->rpp);
 	uris->mft = NULL;
 }
 
 static void
 sia_uris_cleanup(struct sia_uris *uris)
 {
-	uris_cleanup(&uris->rpp);
-	uri_refput(uris->mft);
+	maps_cleanup(&uris->rpp);
+	map_refput(uris->mft);
 }
 
 static void
@@ -807,7 +807,7 @@ end:
 }
 
 static int
-certificate_load(struct rpki_uri *uri, X509 **result)
+certificate_load(struct cache_mapping *map, X509 **result)
 {
 	X509 *cert = NULL;
 	BIO *bio;
@@ -818,7 +818,7 @@ certificate_load(struct rpki_uri *uri, X509 **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, uri_get_local(uri)) <= 0) {
+	if (BIO_read_filename(bio, map_get_path(map)) <= 0) {
 		error = val_crypto_err("Error reading certificate");
 		goto end;
 	}
@@ -1199,39 +1199,39 @@ is_rsync(ASN1_IA5STRING *uri)
 }
 
 static int
-handle_rpkiManifest(struct rpki_uri *uri, void *arg)
+handle_rpkiManifest(struct cache_mapping *map, void *arg)
 {
 	struct sia_uris *uris = arg;
-	uris->mft = uri_refget(uri);
+	uris->mft = map_refget(map);
 	return 0;
 }
 
 static int
-handle_caRepository(struct rpki_uri *uri, void *arg)
+handle_caRepository(struct cache_mapping *map, void *arg)
 {
 	struct sia_uris *uris = arg;
-	pr_val_debug("caRepository: %s", uri_val_get_printable(uri));
-	uris_add(&uris->rpp, uri);
-	uri_refget(uri);
+	pr_val_debug("caRepository: %s", map_val_get_printable(map));
+	maps_add(&uris->rpp, map);
+	map_refget(map);
 	return 0;
 }
 
 static int
-handle_rpkiNotify(struct rpki_uri *uri, void *arg)
+handle_rpkiNotify(struct cache_mapping *map, void *arg)
 {
 	struct sia_uris *uris = arg;
-	pr_val_debug("rpkiNotify: %s", uri_val_get_printable(uri));
-	uris_add(&uris->rpp, uri);
-	uri_refget(uri);
+	pr_val_debug("rpkiNotify: %s", map_val_get_printable(map));
+	maps_add(&uris->rpp, map);
+	map_refget(map);
 	return 0;
 }
 
 static int
-handle_signedObject(struct rpki_uri *uri, void *arg)
+handle_signedObject(struct cache_mapping *map, void *arg)
 {
 	struct certificate_refs *refs = arg;
-	pr_val_debug("signedObject: %s", uri_val_get_printable(uri));
-	refs->signedObject = uri_refget(uri);
+	pr_val_debug("signedObject: %s", map_val_get_printable(map));
+	refs->signedObject = map_refget(map);
 	return 0;
 }
 
@@ -1428,10 +1428,11 @@ dist_point_error:
 }
 
 /*
- * Create @uri from the @ad
+ * Create @map from the @ad
  */
 static int
-uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
+map_create_ad(struct cache_mapping **map, ACCESS_DESCRIPTION *ad,
+    enum map_type type)
 {
 	ASN1_STRING *asn1str;
 	char *str;
@@ -1455,8 +1456,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
 	 * URIs.
 	 *
 	 * Also, nobody seems to be using the other types, and handling them
-	 * would be a titanic pain in the ass. So this is what I'm committing
-	 * to.
+	 * would be a titanic pain. So this is what I'm committing to.
 	 */
 	if (ptype != GEN_URI) {
 		pr_val_err("Unknown GENERAL_NAME type: %d", ptype);
@@ -1478,7 +1478,7 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
 	str = pstrndup((char const *)ASN1_STRING_get0_data(asn1str),
 	    ASN1_STRING_length(asn1str));
 
-	error = uri_create(uri, type, NULL, str);
+	error = map_create(map, type, NULL, str);
 
 	free(str);
 	return error;
@@ -1503,10 +1503,10 @@ uri_create_ad(struct rpki_uri **uri, ACCESS_DESCRIPTION *ad, enum uri_type type)
  */
 static int
 handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
-    int (*cb)(struct rpki_uri *, void *), void *arg)
+    int (*cb)(struct cache_mapping *, void *), void *arg)
 {
 	ACCESS_DESCRIPTION *ad;
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	bool found;
 	unsigned int i;
 	int error;
@@ -1515,7 +1515,7 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == nid) {
-			error = uri_create_ad(&uri, ad, meta->type);
+			error = map_create_ad(&map, ad, meta->type);
 			switch (error) {
 			case 0:
 				break;
@@ -1528,18 +1528,18 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 			}
 
 			if (found) {
-				uri_refput(uri);
+				map_refput(map);
 				return pr_val_err("Extension '%s' has multiple '%s' %s URIs.",
 				    meta->ia_name, meta->name, meta->type_str);
 			}
 
-			error = cb(uri, arg);
+			error = cb(map, arg);
 			if (error) {
-				uri_refput(uri);
+				map_refput(map);
 				return error;
 			}
 
-			uri_refput(uri);
+			map_refput(map);
 			found = true;
 		}
 	}
@@ -1554,7 +1554,7 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 }
 
 static int
-handle_caIssuers(struct rpki_uri *uri, void *arg)
+handle_caIssuers(struct cache_mapping *map, void *arg)
 {
 	struct certificate_refs *refs = arg;
 	/*
@@ -1562,7 +1562,7 @@ handle_caIssuers(struct rpki_uri *uri, void *arg)
 	 * over here is too much trouble, so do the handle_cdp()
 	 * hack.
 	 */
-	refs->caIssuers = uri_refget(uri);
+	refs->caIssuers = map_refget(map);
 	return 0;
 }
 
@@ -1654,9 +1654,6 @@ handle_cp(void *ext, void *arg)
 
 /**
  * Validates the certificate extensions, Trust Anchor style.
- *
- * Depending on the Access Description preference at SIA, the rpki_uri's at
- * @sia_uris will be allocated.
  */
 static int
 certificate_validate_extensions_ta(X509 *cert, struct sia_uris *sia_uris,
@@ -1685,8 +1682,6 @@ certificate_validate_extensions_ta(X509 *cert, struct sia_uris *sia_uris,
  * Validates the certificate extensions, (intermediate) Certificate Authority
  * style.
  *
- * Depending on the Access Description preference at SIA, the rpki_uri's at
- * @sia_uris will be allocated.
  * Also initializes the fourth argument with the references found in the
  * extensions.
  */
@@ -1815,7 +1810,7 @@ err:
 }
 
 int
-certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
+certificate_validate_aia(struct cache_mapping *caIssuers, X509 *cert)
 {
 	/*
 	 * FIXME Compare the AIA to the parent's URI.
@@ -1826,17 +1821,17 @@ certificate_validate_aia(struct rpki_uri *caIssuers, X509 *cert)
 }
 
 static int
-retrieve_uri(struct rpki_uri *uri, void *arg)
+retrieve_mapping(struct cache_mapping *map, void *arg)
 {
-	struct rpki_uri **result = arg;
-	*result = uri;
+	struct cache_mapping **result = arg;
+	*result = map;
 	return 0;
 }
 
-static struct rpki_uri *
+static struct cache_mapping *
 download_rpp(struct sia_uris *uris)
 {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	int error;
 
 	if (uris->rpp.len == 0) {
@@ -1845,20 +1840,20 @@ download_rpp(struct sia_uris *uris)
 	}
 
 	error = cache_download_alt(validation_cache(state_retrieve()),
-	    &uris->rpp, UT_NOTIF, UT_RPP, retrieve_uri, &uri);
-	return error ? NULL : uri;
+	    &uris->rpp, MAP_NOTIF, MAP_RPP, retrieve_mapping, &map);
+	return error ? NULL : map;
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */
 int
-certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
+certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 {
 	struct validation *state;
 	int total_parents;
 	STACK_OF(X509_CRL) *rpp_parent_crl;
 	X509 *cert;
 	struct sia_uris sia_uris;
-	struct rpki_uri *downloaded;
+	struct cache_mapping *downloaded;
 	enum rpki_policy policy;
 	enum cert_type certype;
 	struct rpp *pp;
@@ -1873,19 +1868,19 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 	/* Debug cert type */
 	if (rpp_parent == NULL)
 		pr_val_debug("TA Certificate '%s' {",
-		    uri_val_get_printable(cert_uri));
+		    map_val_get_printable(cert_map));
 	else
 		pr_val_debug("Certificate '%s' {",
-		    uri_val_get_printable(cert_uri));
+		    map_val_get_printable(cert_map));
 
-	fnstack_push_uri(cert_uri);
+	fnstack_push_map(cert_map);
 
 	error = rpp_crl(rpp_parent, &rpp_parent_crl);
 	if (error)
 		goto revert_fnstack_and_debug;
 
 	/* -- Validate the certificate (@cert) -- */
-	error = certificate_load(cert_uri, &cert);
+	error = certificate_load(cert_map, &cert);
 	if (error)
 		goto revert_fnstack_and_debug;
 	error = certificate_validate_chain(cert, rpp_parent_crl);
@@ -1931,14 +1926,14 @@ certificate_traverse(struct rpp *rpp_parent, struct rpki_uri *cert_uri)
 		goto revert_uris;
 	}
 
-	error = x509stack_push(validation_certstack(state), cert_uri, cert,
+	error = x509stack_push(validation_certstack(state), cert_map, cert,
 	    policy, certype);
 	if (error)
 		goto revert_uris;
 	cert = NULL; /* Ownership stolen */
 
 	error = handle_manifest(sia_uris.mft,
-	    (uri_get_type(downloaded) == UT_NOTIF) ? downloaded : NULL,
+	    (map_get_type(downloaded) == MAP_NOTIF) ? downloaded : NULL,
 	    &pp);
 	if (error) {
 		x509stack_cancel(validation_certstack(state));

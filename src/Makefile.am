@@ -43,7 +43,7 @@ fort_SOURCES += types/bio_seq.c types/bio_seq.h
 fort_SOURCES += types/delta.c types/delta.h
 fort_SOURCES += types/router_key.c types/router_key.h
 fort_SOURCES += types/serial.h types/serial.c
-fort_SOURCES += types/uri.h types/uri.c
+fort_SOURCES += types/map.h types/map.c
 fort_SOURCES += types/vrp.c types/vrp.h
 
 fort_SOURCES += cache/local_cache.c cache/local_cache.h

@@ -31,6 +31,4 @@ char *validation_get_ip_buffer2(struct validation *);
 struct validation_handler const *
 validation_get_validation_handler(struct validation *);
 
-struct db_rrdp_uri *validation_get_rrdp_uris(struct validation *);
-
 #endif /* SRC_STATE_H_ */

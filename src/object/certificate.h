@@ -6,7 +6,7 @@
 #include "certificate_refs.h"
 #include "resource.h"
 #include "rpp.h"
-#include "types/uri.h"
+#include "types/map.h"
 
 /* Certificate types in the RPKI */
 enum cert_type {
@@ -55,8 +55,8 @@ int certificate_validate_extensions_bgpsec(X509 *, unsigned char **,
  * Specific validation of AIA (rfc6487#section-4.8.7) extension, public so that
  * CAs and EEs can access it.
  */
-int certificate_validate_aia(struct rpki_uri *, X509 *);
+int certificate_validate_aia(struct cache_mapping *, X509 *);
 
-int certificate_traverse(struct rpp *, struct rpki_uri *);
+int certificate_traverse(struct rpp *, struct cache_mapping *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

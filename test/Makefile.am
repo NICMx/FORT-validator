@@ -36,7 +36,7 @@ check_PROGRAMS += rrdp.test
 check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
 check_PROGRAMS += thread_pool.test
-check_PROGRAMS += uri.test
+check_PROGRAMS += map.test
 check_PROGRAMS += uthash.test
 check_PROGRAMS += vcard.test
 check_PROGRAMS += vrps.test
@@ -85,8 +85,8 @@ tal_test_LDADD = ${MY_LDADD}
 thread_pool_test_SOURCES = thread_pool_test.c
 thread_pool_test_LDADD = ${MY_LDADD}
 
-uri_test_SOURCES = types/uri_test.c
-uri_test_LDADD = ${MY_LDADD}
+map_test_SOURCES = types/map_test.c
+map_test_LDADD = ${MY_LDADD}
 
 uthash_test_SOURCES = data_structure/uthash_test.c
 uthash_test_LDADD = ${MY_LDADD}

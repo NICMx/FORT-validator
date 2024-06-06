@@ -41,7 +41,7 @@ STATIC_ARRAY_LIST(serial_numbers, struct serial_number)
  * Cached certificate data.
  */
 struct metadata_node {
-	struct rpki_uri *uri;
+	struct cache_mapping *map;
 	struct resources *resources;
 	/*
 	 * Serial numbers of the children.
@@ -120,7 +120,7 @@ defer_destroy(struct defer_node *defer)
 	case DNT_SEPARATOR:
 		break;
 	case DNT_CERT:
-		uri_refput(defer->deferred.uri);
+		map_refput(defer->deferred.map);
 		rpp_refput(defer->deferred.pp);
 		break;
 	}
@@ -138,7 +138,7 @@ serial_cleanup(struct serial_number *serial)
 static void
 meta_destroy(struct metadata_node *meta)
 {
-	uri_refput(meta->uri);
+	map_refput(meta->map);
 	resources_destroy(meta->resources);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	free(meta);
@@ -184,7 +184,7 @@ deferstack_push(struct cert_stack *stack, struct deferred_cert *deferred)
 
 	node->type = DNT_CERT;
 	node->deferred = *deferred;
-	uri_refget(deferred->uri);
+	map_refget(deferred->map);
 	rpp_refget(deferred->pp);
 	SLIST_INSERT_HEAD(&stack->defers, node, next);
 }
@@ -228,7 +228,7 @@ again:	node = SLIST_FIRST(&stack->defers);
 	}
 
 	*result = node->deferred;
-	uri_refget(node->deferred.uri);
+	map_refget(node->deferred.map);
 	rpp_refget(node->deferred.pp);
 
 	SLIST_REMOVE_HEAD(&stack->defers, next);
@@ -288,7 +288,7 @@ create_separator(void)
 
 /** Steals ownership of @x509 on success. */
 int
-x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
+x509stack_push(struct cert_stack *stack, struct cache_mapping *map, X509 *x509,
     enum rpki_policy policy, enum cert_type type)
 {
 	struct metadata_node *meta;
@@ -298,7 +298,7 @@ x509stack_push(struct cert_stack *stack, struct rpki_uri *uri, X509 *x509,
 
 	meta = pmalloc(sizeof(struct metadata_node));
 
-	meta->uri = uri_refget(uri);
+	meta->map = map_refget(map);
 	serial_numbers_init(&meta->serials);
 
 	error = init_resources(x509, policy, type, &meta->resources);
@@ -324,7 +324,7 @@ destroy_separator:
 	resources_destroy(meta->resources);
 cleanup_serial:
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
-	uri_refput(meta->uri);
+	map_refput(meta->map);
 	free(meta);
 	return error;
 }
@@ -357,11 +357,11 @@ x509stack_peek(struct cert_stack *stack)
 }
 
 /** Does not grab reference. */
-struct rpki_uri *
-x509stack_peek_uri(struct cert_stack *stack)
+struct cache_mapping *
+x509stack_peek_map(struct cert_stack *stack)
 {
 	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
-	return (meta != NULL) ? meta->uri : NULL;
+	return (meta != NULL) ? meta->map : NULL;
 }
 
 struct resources *

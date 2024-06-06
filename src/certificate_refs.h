@@ -28,18 +28,18 @@ struct certificate_refs {
 	 * AIA's caIssuers. Non-TA certificates only.
 	 * RFC 6487, section 4.8.7.
 	 */
-	struct rpki_uri *caIssuers;
+	struct cache_mapping *caIssuers;
 	/**
 	 * SIA's signedObject. EE certificates only.
 	 * RFC 6487, section 4.8.8.2.
 	 */
-	struct rpki_uri *signedObject;
+	struct cache_mapping *signedObject;
 };
 
 void refs_init(struct certificate_refs *);
 void refs_cleanup(struct certificate_refs *);
 int refs_validate_ca(struct certificate_refs *, struct rpp const *);
 int refs_validate_ee(struct certificate_refs *, struct rpp const *,
-    struct rpki_uri *);
+    struct cache_mapping *);
 
 #endif /* SRC_CERTIFICATE_REFS_H_ */
