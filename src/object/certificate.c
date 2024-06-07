@@ -467,6 +467,7 @@ static int
 validate_public_key(X509 *cert, enum cert_type type)
 {
 	X509_PUBKEY *pubkey;
+	EVP_PKEY *evppkey;
 	X509_ALGOR *pa;
 	int ok;
 	int error;
@@ -507,6 +508,10 @@ validate_public_key(X509 *cert, enum cert_type type)
 		error = validate_spki(pubkey);
 		if (error)
 			return error;
+		if ((evppkey = X509_get0_pubkey(cert)) == NULL)
+			return val_crypto_err("X509_get0_pubkey() returned NULL");
+		if (X509_verify(cert, evppkey) != 1)
+			return -EINVAL;
 	}
 
 	return 0;
