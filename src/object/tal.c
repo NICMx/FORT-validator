@@ -24,7 +24,7 @@ typedef int (*foreach_map_cb)(struct tal *, struct cache_mapping *, void *);
 
 struct tal {
 	char const *file_name;
-	struct map_list maps;
+	struct strlist urls;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
 
@@ -71,30 +71,10 @@ is_blank(char const *str)
 }
 
 static int
-add_url(struct tal *tal, char *url)
-{
-	struct cache_mapping *new = NULL;
-	int error;
-
-	if (str_starts_with(url, "rsync://"))
-		error = map_create(&new, MAP_TA_RSYNC, NULL, url);
-	else if (str_starts_with(url, "https://"))
-		error = map_create(&new, MAP_TA_HTTP, NULL, url);
-	else
-		return pr_op_err("TAL has non-rsync/HTTPS URI: %s", url);
-	if (error)
-		return error;
-
-	maps_add(&tal->maps, new);
-	return 0;
-}
-
-static int
 read_content(char *fc /* File Content */, struct tal *tal)
 {
 	char *nl; /* New Line */
 	bool cr; /* Carriage return */
-	int error;
 
 	/* Comment section */
 	while (fc[0] == '#') {
@@ -115,16 +95,15 @@ read_content(char *fc /* File Content */, struct tal *tal)
 		if (is_blank(fc))
 			break;
 
-		error = add_url(tal, fc);
-		if (error)
-			return error;
+		// XXX no longer validating schema
+		strlist_add(&tal->urls, pstrdup(fc));
 
 		fc = nl + cr + 1;
 		if (*fc == '\0')
 			return pr_op_err("The TAL seems to be missing the public key.");
 	} while (true);
 
-	if (tal->maps.len == 0)
+	if (tal->urls.len == 0)
 		return pr_op_err("There seems to be an empty/blank line before the end of the URI section.");
 
 	/* subjectPublicKeyInfo section */
@@ -156,10 +135,10 @@ tal_init(struct tal *tal, char const *file_path)
 	file_name = (file_name != NULL) ? (file_name + 1) : file_path;
 	tal->file_name = file_name;
 
-	maps_init(&tal->maps);
+	strlist_init(&tal->urls);
 	error = read_content((char *)file.buffer, tal);
 	if (error) {
-		maps_cleanup(&tal->maps);
+		strlist_cleanup(&tal->urls);
 		goto end;
 	}
 
@@ -175,7 +154,7 @@ tal_cleanup(struct tal *tal)
 {
 	cache_destroy(tal->cache);
 	free(tal->spki);
-	maps_cleanup(&tal->maps);
+	strlist_cleanup(&tal->urls);
 }
 
 char const *
@@ -221,7 +200,7 @@ handle_tal_map(struct tal *tal, struct cache_mapping *map, struct db_table *db)
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	if (!map_is_certificate(map)) {
+	if (!map_has_extension(map, ".cer")) {
 		pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
 		    map_op_get_printable(map));
 		error = EINVAL;
@@ -302,8 +281,8 @@ do_file_validation(void *arg)
 		goto end;
 
 	args.db = db_table_create();
-	thread->error = cache_download_alt(args.tal.cache, &args.tal.maps,
-	    MAP_TA_HTTP, MAP_TA_RSYNC, __handle_tal_map, &args);
+	thread->error = cache_download_alt(args.tal.cache, &args.tal.urls,
+	    MAP_HTTP, __handle_tal_map, &args);
 	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);

@@ -32,8 +32,11 @@ void file_free(struct file_contents *);
 
 int file_exists(char const *);
 
+int file_merge_into(char const *, char const *);
 int file_rm_f(char const *);
 int file_rm_rf(char const *);
+
+char *join_paths(char const *, char const *);
 
 /*
  * Remember that this API is awkward:

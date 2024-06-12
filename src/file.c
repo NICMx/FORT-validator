@@ -1,6 +1,8 @@
 #include "file.h"
 
+#include <fcntl.h>
 #include <ftw.h>
+#include <sys/stat.h>
 
 #include "alloc.h"
 #include "log.h"
@@ -133,6 +135,53 @@ file_exists(char const *path)
 	return (stat(path, &meta) == 0) ? 0 : errno;
 }
 
+/* strlen("cache/tmp/123"), ie. 13 */
+static size_t src_offset;
+/* cache/rsync/a.b.c/d/e */
+static char const *merge_dst;
+
+/* Moves cache/tmp/123/z into cache/rsync/a.b.c/d/e/z. */
+static int
+merge_into(const char *src, const struct stat *st, int typeflag,
+    struct FTW *ftw)
+{
+	char *dst;
+	struct timespec times[2];
+
+	dst = join_paths(merge_dst, &src[src_offset]);
+
+	if (S_ISDIR(st->st_mode)) {
+		mkdir(dst, st->st_mode); /* XXX catch error */
+
+		times[0] = st->st_atim;
+		times[1] = st->st_mtim;
+		utimensat(AT_FDCWD, dst, times, AT_SYMLINK_NOFOLLOW); /* XXX catch error */
+	} else {
+		rename(src, dst); /* XXX catch error */
+	}
+
+	free(dst);
+	return 0;
+}
+
+/*
+ * Move all the files contained in @src to @dst, overwriting when necessary,
+ * not touching files that exist in @dst but not in @src.
+ *
+ * Both directories have to already exist.
+ *
+ * @src: cache/tmp/123
+ * @dst: cache/rsync/a.b.c/d/e
+ */
+int
+file_merge_into(char const *src, char const *dst)
+{
+	src_offset = strlen(src);
+	merge_dst = dst;
+	/* TODO (performance) optimize that 32 */
+	return nftw(src, merge_into, 32, FTW_PHYS);
+}
+
 /*
  * Like remove(), but don't care if the file is already deleted.
  */
@@ -165,4 +214,22 @@ file_rm_rf(char const *path)
 {
 	/* TODO (performance) optimize that 32 */
 	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
+}
+
+/* Cannot return NULL. */
+char *
+join_paths(char const *path1, char const *path2)
+{
+	size_t n;
+	char *result;
+	int written;
+
+	n = strlen(path1) + strlen(path2) + 2;
+	result = pmalloc(n);
+
+	written = snprintf(result, n, "%s/%s", path1, path2);
+	if (written != n - 1)
+		pr_crit("join_paths: %zu %d %s %s", n, written, path1, path2);
+
+	return result;
 }

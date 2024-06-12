@@ -1,5 +1,7 @@
 #include "types/map.h"
 
+#include <errno.h>
+
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
@@ -83,8 +85,6 @@ static int normalize_url(struct path_builder *, char const *, char const *, int)
 static int
 init_url(struct cache_mapping *map, char const *str)
 {
-#define SCHEMA_LEN 8 /* strlen("rsync://"), strlen("https://") */
-
 	char const *s;
 	char const *pfx;
 	int error;
@@ -105,16 +105,11 @@ init_url(struct cache_mapping *map, char const *str)
 	error = 0;
 
 	switch (map->type) {
-	case MAP_TA_RSYNC:
-	case MAP_RPP:
-	case MAP_CAGED:
-	case MAP_AIA:
-	case MAP_SO:
-	case MAP_MFT:
+	case MAP_RSYNC:
 		pfx = "rsync://";
 		error = ENOTRSYNC;
 		break;
-	case MAP_TA_HTTP:
+	case MAP_HTTP:
 	case MAP_NOTIF:
 	case MAP_TMP:
 		pfx = "https://";
@@ -125,92 +120,14 @@ init_url(struct cache_mapping *map, char const *str)
 	if (pfx == NULL)
 		pr_crit("Unknown mapping type: %u", map->type);
 
-	__pb_init(&pb, SCHEMA_LEN - 1);
+	__pb_init(&pb, RPKI_SCHEMA_LEN - 1);
 	error = normalize_url(&pb, str, pfx, error);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;
 	}
 
-	map->url = strncpy(pb.string, str, SCHEMA_LEN);
-	return 0;
-}
-
-static bool
-is_valid_mft_file_chara(uint8_t chara)
-{
-	return ('a' <= chara && chara <= 'z')
-	    || ('A' <= chara && chara <= 'Z')
-	    || ('0' <= chara && chara <= '9')
-	    || (chara == '-')
-	    || (chara == '_');
-}
-
-/* RFC 6486bis, section 4.2.2 */
-static int
-validate_mft_file(IA5String_t *ia5)
-{
-	size_t dot;
-	size_t i;
-
-	if (ia5->size < 5)
-		return pr_val_err("File name is too short (%zu < 5).", ia5->size);
-	dot = ia5->size - 4;
-	if (ia5->buf[dot] != '.')
-		return pr_val_err("File name seems to lack a three-letter extension.");
-
-	for (i = 0; i < ia5->size; i++) {
-		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i])) {
-			return pr_val_err("File name contains illegal character #%u",
-			    ia5->buf[i]);
-		}
-	}
-
-	/*
-	 * Actual extension doesn't matter; if there's no handler,
-	 * we'll naturally ignore the file.
-	 */
-	return 0;
-}
-
-/**
- * Initializes @map->url given manifest path @mft and its referenced file @ia5.
- *
- * ie. if @mft is "rsync://a/b/c.mft" and @ia5 is "d.cer", @map->url will be
- * "rsync://a/b/d.cer".
- *
- * Assumes @mft is already normalized.
- */
-static int
-ia5str2url(struct cache_mapping *map, char const *mft, IA5String_t *ia5)
-{
-	char *joined;
-	char const *slash_pos;
-	int dir_len;
-	int error;
-
-	/*
-	 * IA5String is a subset of ASCII. However, IA5String_t doesn't seem to
-	 * be guaranteed to be NULL-terminated.
-	 * `(char *) ia5->buf` is fair, but `strlen(ia5->buf)` is not.
-	 */
-
-	error = validate_mft_file(ia5);
-	if (error)
-		return error;
-
-	slash_pos = strrchr(mft, '/');
-	if (slash_pos == NULL)
-		return pr_val_err("Manifest URL '%s' contains no slashes.", mft);
-
-	dir_len = (slash_pos + 1) - mft;
-	joined = pmalloc(dir_len + ia5->size + 1);
-
-	strncpy(joined, mft, dir_len);
-	strncpy(joined + dir_len, (char *) ia5->buf, ia5->size);
-	joined[dir_len + ia5->size] = '\0';
-
-	map->url = joined;
+	map->url = strncpy(pb.string, str, RPKI_SCHEMA_LEN);
 	return 0;
 }
 
@@ -302,22 +219,6 @@ normalize_url(struct path_builder *pb, char const *url, char const *pfx,
 	return 0;
 }
 
-static int
-get_rrdp_workspace(struct path_builder *pb, struct cache_mapping *notif)
-{
-	int error;
-
-	error = pb_init_cache(pb, "rrdp");
-	if (error)
-		return error;
-
-	error = pb_append(pb, &notif->url[SCHEMA_LEN]);
-	if (error)
-		pb_cleanup(pb);
-
-	return error;
-}
-
 /*
  * Maps "rsync://a.b.c/d/e.cer" into "<local-repository>/rsync/a.b.c/d/e.cer".
  */
@@ -341,65 +242,27 @@ map_simple(struct cache_mapping *map, char const *subdir)
 	return 0;
 }
 
-/*
- * Maps "rsync://a.b.c/d/e.cer" into
- * "<local-repository>/rrdp/<notification-path>/a.b.c/d/e.cer".
- */
 static int
-map_caged(struct cache_mapping *map, struct cache_mapping *notif)
-{
-	struct path_builder pb;
-	int error;
-
-	error = get_rrdp_workspace(&pb, notif);
-	if (error)
-		return error;
-
-	if (map->url == NULL)
-		goto success; /* Caller is only interested in the cage. */
-
-	error = pb_append(&pb, &map->url[SCHEMA_LEN]);
-	if (error) {
-		pb_cleanup(&pb);
-		return error;
-	}
-
-success:
-	map->path = pb.string;
-	return 0;
-}
-
-static int
-init_path(struct cache_mapping *map, struct cache_mapping *notif)
+init_path(struct cache_mapping *map)
 {
 	switch (map->type) {
-	case MAP_TA_RSYNC:
-	case MAP_RPP:
-	case MAP_MFT:
+	case MAP_RSYNC:
 		return map_simple(map, "rsync");
 
-	case MAP_TA_HTTP:
+	case MAP_HTTP:
 		return map_simple(map, "https");
 
 	case MAP_NOTIF:
 	case MAP_TMP:
 		return cache_tmpfile(&map->path);
-
-	case MAP_CAGED:
-		return map_caged(map, notif);
-
-	case MAP_AIA:
-	case MAP_SO:
-		map->path = NULL;
-		return 0;
 	}
 
 	pr_crit("Unknown URL type: %u", map->type);
+	return -EINVAL; /* Unreachable */
 }
 
 int
-map_create(struct cache_mapping **result, enum map_type type,
-    struct cache_mapping *notif, char const *url)
+map_create(struct cache_mapping **result, enum map_type type, char const *url)
 {
 	struct cache_mapping *map;
 	int error;
@@ -414,39 +277,7 @@ map_create(struct cache_mapping **result, enum map_type type,
 		return error;
 	}
 
-	error = init_path(map, notif);
-	if (error) {
-		free(map->url);
-		free(map);
-		return error;
-	}
-
-	*result = map;
-	return 0;
-}
-
-/*
- * Manifest fileList entries are a little special in that they're just file
- * names. This function will infer the rest of the URL.
- */
-int
-map_create_mft(struct cache_mapping **result, struct cache_mapping *notif,
-	       struct cache_mapping *mft, IA5String_t *ia5)
-{
-	struct cache_mapping *map;
-	int error;
-
-	map = pmalloc(sizeof(struct cache_mapping));
-	map->type = (notif == NULL) ? MAP_RPP : MAP_CAGED;
-	map->references = 1;
-
-	error = ia5str2url(map, mft->url, ia5);
-	if (error) {
-		free(map);
-		return error;
-	}
-
-	error = init_path(map, notif);
+	error = init_path(map);
 	if (error) {
 		free(map->url);
 		free(map);
@@ -535,23 +366,11 @@ str_same_origin(char const *url1, char const *url2)
 	return false;
 }
 
-bool
-map_same_origin(struct cache_mapping *m1, struct cache_mapping *m2)
-{
-	return str_same_origin(m1->url, m2->url);
-}
-
 /* @ext must include the period. */
 bool
 map_has_extension(struct cache_mapping *map, char const *ext)
 {
 	return str_ends_with(map->url, ext);
-}
-
-bool
-map_is_certificate(struct cache_mapping *map)
-{
-	return map_has_extension(map, ".cer");
 }
 
 enum map_type
@@ -599,13 +418,6 @@ map_op_get_printable(struct cache_mapping *map)
 
 	format = config_get_op_log_filename_format();
 	return map_get_printable(map, format);
-}
-
-char *
-map_get_rrdp_workspace(struct cache_mapping *notif)
-{
-	struct path_builder pb;
-	return (get_rrdp_workspace(&pb, notif) == 0) ? pb.string : NULL;
 }
 
 DEFINE_ARRAY_LIST_FUNCTIONS(map_list, struct cache_mapping *, static)

@@ -65,23 +65,18 @@ end:	pb_cleanup(&pb);
 static BIO *
 rsync2bio_cache(char const *src)
 {
-	struct cache_mapping *map = NULL;
+	char *dst;
 	BIO *bio;
-	int error;
 
-	/*
-	 * TODO (#82) maybe rename MAP_TA_RSYNC into single rsync.
-	 * If applies and it's going to survive.
-	 */
-	error = map_create(&map, MAP_TA_RSYNC, NULL, src);
-	if (error) {
-		pr_op_err("Unparseable rsync URI: %s", strerror(abs(error)));
+	dst = url2path(src);
+	if (!dst) {
+		pr_op_err("Unparseable rsync URI.");
 		return NULL;
 	}
 
-	bio = __rsync2bio(map_get_url(map), map_get_path(map));
+	bio = __rsync2bio(src, dst);
 
-	map_refput(map);
+	free(dst);
 	return bio;
 }
 

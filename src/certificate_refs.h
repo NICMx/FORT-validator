@@ -28,12 +28,12 @@ struct certificate_refs {
 	 * AIA's caIssuers. Non-TA certificates only.
 	 * RFC 6487, section 4.8.7.
 	 */
-	struct cache_mapping *caIssuers;
+	char *caIssuers;
 	/**
 	 * SIA's signedObject. EE certificates only.
 	 * RFC 6487, section 4.8.8.2.
 	 */
-	struct cache_mapping *signedObject;
+	char *signedObject;
 };
 
 void refs_init(struct certificate_refs *);

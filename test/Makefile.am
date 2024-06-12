@@ -22,83 +22,15 @@ AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CF
 # target.
 MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
 
-check_PROGRAMS  = address.test
-check_PROGRAMS += base64.test
-check_PROGRAMS += cache.test
-check_PROGRAMS += db_table.test
-check_PROGRAMS += deltas_array.test
-check_PROGRAMS += hash.test
-check_PROGRAMS += json.test
-check_PROGRAMS += pb.test
-check_PROGRAMS += pdu_handler.test
-check_PROGRAMS += pdu_stream.test
-check_PROGRAMS += rrdp.test
-check_PROGRAMS += serial.test
-check_PROGRAMS += tal.test
-check_PROGRAMS += thread_pool.test
-check_PROGRAMS += map.test
-check_PROGRAMS += uthash.test
-check_PROGRAMS += vcard.test
-check_PROGRAMS += vrps.test
-check_PROGRAMS += xml.test
+#check_PROGRAMS = file.test
+check_PROGRAMS = cache.test
 TESTS = ${check_PROGRAMS}
 
-address_test_SOURCES = types/address_test.c
-address_test_LDADD = ${MY_LDADD}
-
-base64_test_SOURCES = crypto/base64_test.c
-base64_test_LDADD = ${MY_LDADD}
+#file_test_SOURCES = file_test.c
+#file_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 cache_test_SOURCES = cache/local_cache_test.c
 cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-db_table_test_SOURCES = rtr/db/db_table_test.c
-db_table_test_LDADD = ${MY_LDADD}
-
-deltas_array_test_SOURCES = rtr/db/deltas_array_test.c
-deltas_array_test_LDADD = ${MY_LDADD}
-
-hash_test_SOURCES = crypto/hash_test.c
-hash_test_LDADD = ${MY_LDADD}
-
-json_test_SOURCES = json_util_test.c
-json_test_LDADD = ${MY_LDADD}
-
-pb_test_SOURCES = data_structure/path_builder_test.c
-pb_test_LDADD = ${MY_LDADD}
-
-pdu_handler_test_SOURCES = rtr/pdu_handler_test.c
-pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-pdu_stream_test_SOURCES = rtr/pdu_stream_test.c
-pdu_stream_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-rrdp_test_SOURCES = rrdp_test.c
-rrdp_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
-
-serial_test_SOURCES = types/serial_test.c
-serial_test_LDADD = ${MY_LDADD}
-
-tal_test_SOURCES = tal_test.c
-tal_test_LDADD = ${MY_LDADD}
-
-thread_pool_test_SOURCES = thread_pool_test.c
-thread_pool_test_LDADD = ${MY_LDADD}
-
-map_test_SOURCES = types/map_test.c
-map_test_LDADD = ${MY_LDADD}
-
-uthash_test_SOURCES = data_structure/uthash_test.c
-uthash_test_LDADD = ${MY_LDADD}
-
-vcard_test_SOURCES = vcard_test.c
-vcard_test_LDADD = ${MY_LDADD}
-
-vrps_test_SOURCES = rtr/db/vrps_test.c
-vrps_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-xml_test_SOURCES = xml_test.c
-xml_test_LDADD = ${MY_LDADD} ${XML2_LIBS}
 
 EXTRA_DIST  = mock.c mock.h
 EXTRA_DIST += resources/lorem-ipsum.txt

@@ -55,7 +55,7 @@ int certificate_validate_extensions_bgpsec(X509 *, unsigned char **,
  * Specific validation of AIA (rfc6487#section-4.8.7) extension, public so that
  * CAs and EEs can access it.
  */
-int certificate_validate_aia(struct cache_mapping *, X509 *);
+int certificate_validate_aia(char const *, X509 *);
 
 int certificate_traverse(struct rpp *, struct cache_mapping *);
 

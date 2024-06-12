@@ -1,11 +1,12 @@
 #ifndef SRC_RRDP_H_
 #define SRC_RRDP_H_
 
-#include "types/map.h"
+#include <jansson.h>
 
 struct cachefile_notification;
+struct cache_node;
 
-int rrdp_update(struct cache_mapping *);
+int rrdp_update(char const *, struct cache_node *);
 
 json_t *rrdp_notif2json(struct cachefile_notification *);
 int rrdp_json2notif(json_t *, struct cachefile_notification **);

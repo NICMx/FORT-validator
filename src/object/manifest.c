@@ -1,5 +1,6 @@
 #include "object/manifest.h"
 
+#include "alloc.h"
 #include "algorithm.h"
 #include "asn1/asn1c/GeneralizedTime.h"
 #include "asn1/asn1c/Manifest.h"
@@ -13,18 +14,6 @@
 #include "object/roa.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
-
-static int
-cage(struct cache_mapping **map, struct cache_mapping *notif)
-{
-	if (notif == NULL) {
-		/* No need to cage */
-		map_refget(*map);
-		return 0;
-	}
-
-	return map_create_caged(map, notif, map_get_url(*map));
-}
 
 static int
 decode_manifest(struct signed_object *sobj, struct Manifest **result)
@@ -185,6 +174,43 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
+static bool
+is_valid_mft_file_chara(uint8_t chara)
+{
+	return ('a' <= chara && chara <= 'z')
+	    || ('A' <= chara && chara <= 'Z')
+	    || ('0' <= chara && chara <= '9')
+	    || (chara == '-')
+	    || (chara == '_');
+}
+
+/* RFC 6486bis, section 4.2.2 */
+static int
+validate_mft_file(IA5String_t *ia5)
+{
+	size_t dot;
+	size_t i;
+
+	if (ia5->size < 5)
+		return pr_val_err("File name is too short (%zu < 5).", ia5->size);
+	dot = ia5->size - 4;
+	if (ia5->buf[dot] != '.')
+		return pr_val_err("File name seems to lack a three-letter extension.");
+
+	for (i = 0; i < ia5->size; i++) {
+		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i])) {
+			return pr_val_err("File name contains illegal character #%u",
+			    ia5->buf[i]);
+		}
+	}
+
+	/*
+	 * Actual extension doesn't matter; if there's no handler,
+	 * we'll naturally ignore the file.
+	 */
+	return 0;
+}
+
 /**
  * Computes the hash of the file @map, and compares it to @expected (The
  * "expected" hash).
@@ -243,29 +269,53 @@ hash_validate_mft_file(struct cache_mapping *map, BIT_STRING_t const *expected)
 }
 
 static int
-build_rpp(struct Manifest *mft, struct cache_mapping *notif,
-    struct cache_mapping *mft_map, struct rpp **pp)
+build_rpp(struct Manifest *mft, char const *mft_url, struct rpp **pp)
 {
+	char *path, *slash;
+	size_t path_len;
 	int i;
 	struct FileAndHash *fah;
+	char *file;
+	size_t file_len;
+	int written;
 	struct cache_mapping *map;
 	int error;
 
 	*pp = rpp_create();
 
+	slash = strrchr(mft_url, '/');
+	if (!slash)
+		; // XXX
+	path_len = slash - mft_url;
+	path = pstrndup(mft_url, path_len);
+
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
 
-		error = map_create_mft(&map, notif, mft_map, &fah->file);
 		/*
-		 * Not handling ENOTRSYNC is fine because the manifest URL
-		 * should have been RSYNC. Something went wrong if an RSYNC URL
-		 * plus a relative path is not RSYNC.
+		 * IA5String is a subset of ASCII. However, IA5String_t doesn't
+		 * seem to be guaranteed to be NULL-terminated.
+		 * `(char *) ia5->buf` is fair, but `strlen(ia5->buf)` is not.
 		 */
+
+		error = validate_mft_file(&fah->file);
 		if (error)
-			goto fail;
+			; // XXX
+
+		file_len = path_len + fah->file.size + 2;
+		file = pmalloc(file_len);
+		written = snprintf(file, file_len, "%s/%.*s", path,
+		    (int)fah->file.size, fah->file.buf);
+		if (written >= file_len)
+			; // XXX
+
+		map = create_map(file); /* Needs to swallow @file. */
+		if (!map)
+			; // XXX
 
 		/*
+		 * XXX I think this should be moved somewhere else.
+		 *
 		 * Expect:
 		 * - Negative value: an error not to be ignored, the whole
 		 *   manifest will be discarded.
@@ -316,13 +366,13 @@ fail:
 }
 
 /**
- * Validates the manifest pointed by @map, returns the RPP described by it in
+ * Validates the manifest pointed by @uri, returns the RPP described by it in
  * @pp.
  */
 int
-handle_manifest(struct cache_mapping *map, struct cache_mapping *notif,
-    struct rpp **pp)
+handle_manifest(char const *uri, struct rpp **pp)
 {
+	struct cache_mapping *map;
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
 	struct signed_object sobj;
@@ -331,10 +381,11 @@ handle_manifest(struct cache_mapping *map, struct cache_mapping *notif,
 	STACK_OF(X509_CRL) *crl;
 	int error;
 
+	map = create_map(uri);
+	if (!map)
+		return -EINVAL; /* XXX msg */
+
 	/* Prepare */
-	error = cage(&map, notif); /* ref++ */
-	if (error)
-		return error;
 	pr_val_debug("Manifest '%s' {", map_val_get_printable(map));
 	fnstack_push_map(map);
 
@@ -347,7 +398,7 @@ handle_manifest(struct cache_mapping *map, struct cache_mapping *notif,
 		goto revert_sobj;
 
 	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, notif, map, pp);
+	error = build_rpp(mft, uri, pp);
 	if (error)
 		goto revert_manifest;
 
@@ -383,6 +434,6 @@ revert_sobj:
 revert_log:
 	pr_val_debug("}");
 	fnstack_pop();
-	map_refput(map); /* ref-- */
+	map_refput(map);
 	return error;
 }

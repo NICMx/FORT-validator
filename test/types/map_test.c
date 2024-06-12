@@ -35,8 +35,8 @@ cache_tmpfile(char **filename)
 
 /* Tests */
 
-#define MAP_CREATE_HTTP(map, str) map_create(&map, MAP_TA_HTTP, NULL, str)
-#define MAP_CREATE(map, type, str) map_create(&map, type, NULL, str)
+#define MAP_CREATE_HTTP(map, str) map_create(&map, MAP_TA_HTTP, str)
+#define MAP_CREATE(map, type, str) map_create(&map, type, str)
 
 START_TEST(test_constructor)
 {
@@ -102,14 +102,14 @@ START_TEST(test_constructor)
 
 	ck_assert_int_eq(ENOTHTTPS, MAP_CREATE_HTTP(map, "rsync://a.b.c/d"));
 	ck_assert_int_eq(ENOTHTTPS, MAP_CREATE_HTTP(map, "http://a.b.c/d"));
-	ck_assert_int_eq(ENOTRSYNC, MAP_CREATE(map, MAP_RPP, "https://a.b.c/d"));
+	ck_assert_int_eq(ENOTRSYNC, MAP_CREATE(map, MAP_RSYNC, "https://a.b.c/d"));
 
-	ck_assert_int_eq(0, MAP_CREATE(map, MAP_RPP, "rsync://a.b.c/d"));
+	ck_assert_int_eq(0, MAP_CREATE(map, MAP_RSYNC, "rsync://a.b.c/d"));
 	ck_assert_str_eq("rsync://a.b.c/d", map_get_url(map));
 	ck_assert_str_eq("tmp/rsync/a.b.c/d", map_get_path(map));
 	map_refput(map);
 
-	ck_assert_int_eq(0, MAP_CREATE(map, MAP_TA_RSYNC, "rsync://a.b.c/d.cer"));
+	ck_assert_int_eq(0, MAP_CREATE(map, MAP_RSYNC, "rsync://a.b.c/d.cer"));
 	ck_assert_str_eq("rsync://a.b.c/d.cer", map_get_url(map));
 	ck_assert_str_eq("tmp/rsync/a.b.c/d.cer", map_get_path(map));
 	map_refput(map);
@@ -182,13 +182,13 @@ START_TEST(check_caged)
 {
 	struct cache_mapping *map;
 
-	ck_assert_int_eq(0, map_create(&notif, MAP_NOTIF, NULL, "https://a.b.c/d/e.xml"));
+	ck_assert_int_eq(0, map_create(&notif, MAP_NOTIF, "https://a.b.c/d/e.xml"));
 	ck_assert_int_eq(0, map_create(&map, MAP_CAGED, notif, "rsync://x.y.z/v/w.cer"));
 	ck_assert_str_eq("tmp/rrdp/a.b.c/d/e.xml/x.y.z/v/w.cer", map_get_path(map));
 	map_refput(map);
 	map_refput(notif);
 
-	ck_assert_int_eq(0, map_create(&notif, MAP_NOTIF, NULL, "https://a.b.c"));
+	ck_assert_int_eq(0, map_create(&notif, MAP_NOTIF, "https://a.b.c"));
 	ck_assert_int_eq(0, map_create(&map, MAP_CAGED, notif, "rsync://w"));
 	ck_assert_str_eq("tmp/rrdp/a.b.c/w", map_get_path(map));
 	map_refput(map);

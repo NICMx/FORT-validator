@@ -1,3 +1,10 @@
+/*
+ * Current design notes:
+ *
+ * - We only need to keep nodes for the rsync root.
+ * - The tree traverse only needs to touch files.
+ */
+
 #include "cache/local_cache.h"
 
 #include <ftw.h>
@@ -17,31 +24,62 @@
 #include "data_structure/uthash.h"
 #include "http/http.h"
 #include "rsync/rsync.h"
+#include "types/str.h"
+
+/* XXX force RRDP if one RPP fails to validate by rsync? */
+
+struct cached_file {
+	char *url;
+	char *path;
+	UT_hash_handle hh; /* Hash table hook */
+};
+
+struct cached_rpp {
+	struct cached_file *ht;
+};
+
+#define CNF_RSYNC		(1 << 0)
+/* Was it downloaded during the current cycle? */
+#define CNF_DOWNLOADED		(1 << 1)
+/* Was it read during the current cycle? */
+#define CNF_TOUCHED		(1 << 2)
+/*
+ * Did it validate successfully (at least once) during the current cycle?
+ * (It's technically possible for two different repositories to map to the same
+ * cache node. One of them is likely going to fail validation.)
+ */
+#define CNF_VALIDATED		(1 << 3)
+/* Withdrawn by RRDP? */
+#define CNF_WITHDRAWN		(1 << 4)
 
 struct cache_node {
-	struct cache_mapping *map;
+	char const *name; /* Points to the last component of @url */
+	char *url;
+	int flags;
+	/* Last successful download time, or zero */
+	time_t mtim;
+	/*
+	 * If flags & CNF_DOWNLOADED, path to the temporal directory where we
+	 * downloaded the latest refresh.
+	 * (See --compare-dest at rsync(1). RRDP is basically the same.)
+	 * Otherwise undefined.
+	 */
+	char *tmpdir;
 
-	struct {
-		time_t ts; /* Last download attempt's timestamp */
-		int result; /* Last download attempt's result status code */
-	} attempt;
-
-	struct {
-		/* Has a download attempt ever been successful? */
-		bool happened;
-		/* Last successful download timestamp. (Only if @happened.) */
-		time_t ts;
-	} success;
-
-	struct cachefile_notification *notif;
+	/* Tree parent. Only defined during cleanup. */
+	struct cache_node *parent;
+	/* Tree children. */
+	struct cache_node *children;
 
 	UT_hash_handle hh; /* Hash table hook */
 };
 
-struct rpki_cache {
-	struct cache_node *ht;
-	time_t startup_ts; /* When we started the last validation */
-};
+static struct rpki_cache {
+	struct cache_node root; /* It's a tree. */
+//	time_t startup_ts; /* When we started the last validation */
+} cache;
+
+static atomic_uint file_counter;
 
 #define CACHE_METAFILE "cache.json"
 #define TAGNAME_VERSION "fort-version"
@@ -57,12 +95,9 @@ struct rpki_cache {
 #define TAGNAME_SUCCESS_TS "success-timestamp"
 #define TAGNAME_NOTIF "notification"
 
-#define TYPEVALUE_TA_RSYNC "TA (rsync)"
 #define TYPEVALUE_TA_HTTP "TA (HTTP)"
 #define TYPEVALUE_RPP "RPP"
 #define TYPEVALUE_NOTIF "RRDP Notification"
-
-static atomic_uint file_counter;
 
 static char *
 get_cache_filename(char const *name, bool fatal)
@@ -210,7 +245,8 @@ cache_teardown(void)
 }
 
 /*
- * Returns a unique temporary file name in the local cache.
+ * Returns a unique temporary file name in the local cache. Note, it's a name,
+ * and it's pretty much reserved. The file itself will not be created.
  *
  * The file will not be automatically deleted when it is closed or the program
  * terminates.
@@ -249,108 +285,86 @@ get_tal_json_filename(void)
 static struct cache_node *
 json2node(json_t *json)
 {
-	struct cache_node *node;
-	char const *type_str;
-	enum map_type type;
-	char const *url;
-	json_t *notif;
-	int error;
-
-	node = pzalloc(sizeof(struct cache_node));
-
-	error = json_get_str(json, TAGNAME_TYPE, &type_str);
-	if (error) {
-		if (error > 0)
-			pr_op_err("Node is missing the '" TAGNAME_TYPE "' tag.");
-		goto fail;
-	}
-
-	if (strcmp(type_str, TYPEVALUE_TA_RSYNC) == 0)
-		type = MAP_TA_RSYNC;
-	else if (strcmp(type_str, TYPEVALUE_TA_HTTP) == 0)
-		type = MAP_TA_HTTP;
-	else if (strcmp(type_str, TYPEVALUE_RPP) == 0)
-		type = MAP_RPP;
-	else if (strcmp(type_str, TYPEVALUE_NOTIF) == 0)
-		type = MAP_NOTIF;
-	else {
-		pr_op_err("Unknown node type: %s", type_str);
-		goto fail;
-	}
-
-	error = json_get_str(json, TAGNAME_URL, &url);
-	if (error) {
-		if (error > 0)
-			pr_op_err("Node is missing the '" TAGNAME_URL "' tag.");
-		goto fail;
-	}
-
-	if (type == MAP_NOTIF) {
-		error = json_get_object(json, TAGNAME_NOTIF, &notif);
-		switch (error) {
-		case 0:
-			error = rrdp_json2notif(notif, &node->notif);
-			if (error)
-				goto fail;
-			break;
-		case ENOENT:
-			node->notif = NULL;
-			break;
-		default:
-			goto fail;
-		}
-	}
-
-	error = map_create(&node->map, type, NULL, url);
-	if (error) {
-		pr_op_err("Cannot parse '%s' into a URI.", url);
-		goto fail;
-	}
-
-	error = json_get_ts(json, TAGNAME_ATTEMPT_TS, &node->attempt.ts);
-	if (error) {
-		if (error > 0)
-			pr_op_err("Node '%s' is missing the '"
-			    TAGNAME_ATTEMPT_TS "' tag.", url);
-		goto fail;
-	}
-
-	if (json_get_int(json, TAGNAME_ATTEMPT_ERR, &node->attempt.result) < 0)
-		goto fail;
-
-	error = json_get_ts(json, TAGNAME_SUCCESS_TS, &node->success.ts);
-	if (error < 0)
-		goto fail;
-	node->success.happened = (error == 0);
-
-	pr_op_debug("Node '%s' loaded successfully.", url);
-	return node;
-
-fail:
-	map_refput(node->map);
-	rrdp_notif_free(node->notif);
-	free(node);
+//	struct cache_node *node;
+//	char const *type_str;
+//	enum map_type type;
+//	char const *url;
+//	json_t *notif;
+//	int error;
+//
+//	node = pzalloc(sizeof(struct cache_node));
+//
+//	error = json_get_str(json, TAGNAME_TYPE, &type_str);
+//	if (error) {
+//		if (error > 0)
+//			pr_op_err("Node is missing the '" TAGNAME_TYPE "' tag.");
+//		goto fail;
+//	}
+//
+//	if (strcmp(type_str, TYPEVALUE_TA_HTTP) == 0)
+//		type = MAP_HTTP;
+//	else if (strcmp(type_str, TYPEVALUE_RPP) == 0)
+//		type = MAP_RSYNC;
+//	else if (strcmp(type_str, TYPEVALUE_NOTIF) == 0)
+//		type = MAP_NOTIF;
+//	else {
+//		pr_op_err("Unknown node type: %s", type_str);
+//		goto fail;
+//	}
+//
+//	error = json_get_str(json, TAGNAME_URL, &url);
+//	if (error) {
+//		if (error > 0)
+//			pr_op_err("Node is missing the '" TAGNAME_URL "' tag.");
+//		goto fail;
+//	}
+//
+//	if (type == MAP_NOTIF) {
+//		error = json_get_object(json, TAGNAME_NOTIF, &notif);
+//		switch (error) {
+//		case 0:
+//			error = rrdp_json2notif(notif, &node->notif);
+//			if (error)
+//				goto fail;
+//			break;
+//		case ENOENT:
+//			node->notif = NULL;
+//			break;
+//		default:
+//			goto fail;
+//		}
+//	}
+//
+//	error = map_create(&node->map, type, url);
+//	if (error) {
+//		pr_op_err("Cannot parse '%s' into a URI.", url);
+//		goto fail;
+//	}
+//
+//	error = json_get_ts(json, TAGNAME_ATTEMPT_TS, &node->attempt.ts);
+//	if (error) {
+//		if (error > 0)
+//			pr_op_err("Node '%s' is missing the '"
+//			    TAGNAME_ATTEMPT_TS "' tag.", url);
+//		goto fail;
+//	}
+//
+//	if (json_get_int(json, TAGNAME_ATTEMPT_ERR, &node->attempt.result) < 0)
+//		goto fail;
+//
+//	error = json_get_ts(json, TAGNAME_SUCCESS_TS, &node->success.ts);
+//	if (error < 0)
+//		goto fail;
+//	node->success.happened = (error == 0);
+//
+//	pr_op_debug("Node '%s' loaded successfully.", url);
+//	return node;
+//
+//fail:
+//	map_refput(node->map);
+//	rrdp_notif_free(node->notif);
+//	free(node);
 	return NULL;
-}
-
-static struct cache_node *
-find_node(struct rpki_cache *cache, struct cache_mapping *map)
-{
-	char const *key;
-	struct cache_node *result;
-
-	key = map_get_url(map);
-	HASH_FIND_STR(cache->ht, key, result);
-
-	return result;
-}
-
-static void
-add_node(struct rpki_cache *cache, struct cache_node *node)
-{
-	char const *key = map_get_url(node->map);
-	size_t keylen = strlen(key);
-	HASH_ADD_KEYPTR(hh, cache->ht, key, keylen, node);
 }
 
 static void
@@ -413,75 +427,72 @@ cache_create(void)
 static json_t *
 node2json(struct cache_node *node)
 {
-	json_t *json;
-	char const *type;
-	json_t *notification;
-
-	json = json_obj_new();
-	if (json == NULL)
-		return NULL;
-
-	switch (map_get_type(node->map)) {
-	case MAP_TA_RSYNC:
-		type = TYPEVALUE_TA_RSYNC;
-		break;
-	case MAP_TA_HTTP:
-		type = TYPEVALUE_TA_HTTP;
-		break;
-	case MAP_RPP:
-		type = TYPEVALUE_RPP;
-		break;
-	case MAP_NOTIF:
-		type = TYPEVALUE_NOTIF;
-		break;
-	default:
-		goto cancel;
-	}
-
-	if (json_add_str(json, TAGNAME_TYPE, type))
-		goto cancel;
-	if (json_add_str(json, TAGNAME_URL, map_get_url(node->map)))
-		goto cancel;
-	if (node->notif != NULL) {
-		notification = rrdp_notif2json(node->notif);
-		if (json_object_add(json, TAGNAME_NOTIF, notification))
-			goto cancel;
-	}
-	if (json_add_ts(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
-		goto cancel;
-	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
-		goto cancel;
-	if (node->success.happened)
-		if (json_add_ts(json, TAGNAME_SUCCESS_TS, node->success.ts))
-			goto cancel;
-
-	return json;
-
-cancel:
-	json_decref(json);
+//	json_t *json;
+//	char const *type;
+//	json_t *notification;
+//
+//	json = json_obj_new();
+//	if (json == NULL)
+//		return NULL;
+//
+//	switch (map_get_type(node->map)) {
+//	case MAP_HTTP:
+//		type = TYPEVALUE_TA_HTTP;
+//		break;
+//	case MAP_RSYNC:
+//		type = TYPEVALUE_RPP;
+//		break;
+//	case MAP_NOTIF:
+//		type = TYPEVALUE_NOTIF;
+//		break;
+//	default:
+//		goto cancel;
+//	}
+//
+//	if (json_add_str(json, TAGNAME_TYPE, type))
+//		goto cancel;
+//	if (json_add_str(json, TAGNAME_URL, map_get_url(node->map)))
+//		goto cancel;
+//	if (node->notif != NULL) {
+//		notification = rrdp_notif2json(node->notif);
+//		if (json_object_add(json, TAGNAME_NOTIF, notification))
+//			goto cancel;
+//	}
+//	if (json_add_ts(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
+//		goto cancel;
+//	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
+//		goto cancel;
+//	if (node->success.happened)
+//		if (json_add_ts(json, TAGNAME_SUCCESS_TS, node->success.ts))
+//			goto cancel;
+//
+//	return json;
+//
+//cancel:
+//	json_decref(json);
 	return NULL;
 }
 
 static json_t *
 build_tal_json(struct rpki_cache *cache)
 {
-	struct cache_node *node, *tmp;
-	json_t *root, *child;
-
-	root = json_array_new();
-	if (root == NULL)
+//	struct cache_node *node, *tmp;
+//	json_t *root, *child;
+//
+//	root = json_array_new();
+//	if (root == NULL)
 		return NULL;
 
-	HASH_ITER(hh, cache->ht, node, tmp) {
-		child = node2json(node);
-		if (child != NULL && json_array_append_new(root, child)) {
-			pr_op_err("Cannot push %s json node into json root; unknown cause.",
-			    map_op_get_printable(node->map));
-			continue;
-		}
-	}
-
-	return root;
+//	HASH_ITER(hh, cache->ht, node, tmp) {
+//		child = node2json(node);
+//		if (child != NULL && json_array_append_new(root, child)) {
+//			pr_op_err("Cannot push %s json node into json root; unknown cause.",
+//			    map_op_get_printable(node->map));
+//			continue;
+//		}
+//	}
+//
+//	return root;
 }
 
 static void
@@ -505,16 +516,97 @@ end:	json_decref(json);
 	free(filename);
 }
 
-static int
-fix_url(struct cache_mapping *map, struct cache_mapping **result)
+/*
+ * Returns perfect match. (Even if it needs to create it.)
+ * Always consumes @path.
+ *
+ * Unit Test (perfect match):
+ * 	root
+ * 		a
+ * 			b
+ * 			c
+ * - Find c
+ * - Find a
+ * - Find a/b
+ * - Find a/b/c
+ * - Find a/b/c/d
+ */
+static struct cache_node *
+find_node(char *path, int flags)
 {
-	char const *url, *c;
+	struct cache_node *node, *child;
+	char *nm, *sp; /* name, saveptr */
+	size_t keylen;
+
+	node = &cache.root;
+	nm = strtok_r(path + RPKI_SCHEMA_LEN, "/", &sp); // XXX
+
+	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
+		keylen = strlen(nm);
+		HASH_FIND(hh, node->children, nm, keylen, child);
+		if (child == NULL)
+			goto create_children;
+		node = child;
+		sp[-1] = '/'; /* XXX this will need a compliance unit test */
+	}
+
+	goto end;
+
+create_children:
+	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
+		child = pmalloc(sizeof(struct cache_node));
+		child->url = pstrdup(path);
+		child->name = strrchr(child->url, '/') + 1; // XXX
+		child->flags = flags;
+
+		keylen = strlen(nm);
+		HASH_ADD_KEYPTR(hh, node->children, child->name, keylen, child);
+
+		node = child;
+		sp[-1] = '/';
+	}
+
+end:	free(path);
+	return node;
+}
+
+/*
+ * Returns perfect match or NULL. @msm will point to the Most Specific Match.
+ * Always consumes @path.
+ */
+static struct cache_node *
+find_msm(char *path, struct cache_node **msm)
+{
+	struct cache_node *node, *child;
+	char *nm, *sp; /* name, saveptr */
+	size_t keylen;
+
+	*msm = NULL;
+	node = &cache.root;
+	nm = strtok_r(path + RPKI_SCHEMA_LEN, "/", &sp); // XXX
+
+	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
+		keylen = strlen(nm);
+		HASH_FIND(hh, node->children, nm, keylen, child);
+		if (child == NULL) {
+			free(path);
+			*msm = node;
+			return NULL;
+		}
+		node = child;
+	}
+
+	free(path);
+	*msm = node;
+	return node;
+}
+
+static char *
+get_rsync_module(char const *url)
+{
+	char const *c;
 	char *dup;
 	unsigned int slashes;
-	int error;
-
-	if (map_get_type(map) != MAP_RPP)
-		goto reuse_mapping;
 
 	/*
 	 * Careful with this code. rsync(1):
@@ -563,17 +655,13 @@ fix_url(struct cache_mapping *map, struct cache_mapping **result)
 	 * not every RPP separately. The former is much faster.
 	 */
 
-	url = map_get_url(map);
 	slashes = 0;
 	for (c = url; *c != '\0'; c++) {
 		if (*c == '/') {
 			slashes++;
-			if (slashes == 4) {
-				if (c[1] == '\0')
-					goto reuse_mapping;
-				dup = pstrndup(url, c - url + 1);
-				goto dup2url;
-			}
+			if (slashes == 4)
+				/* XXX test the if I rm'd here */
+				return pstrndup(url, c - url + 1);
 		}
 	}
 
@@ -582,165 +670,225 @@ fix_url(struct cache_mapping *map, struct cache_mapping **result)
 		memcpy(dup, url, c - url);
 		dup[c - url] = '/';
 		dup[c - url + 1] = '\0';
-		goto dup2url;
+		return dup;
 	}
 
-	return pr_val_err("Can't rsync URL '%s': The URL seems to be missing a domain or rsync module.",
+	pr_val_err("Can't rsync URL '%s': The URL seems to be missing a domain or rsync module.",
 	    url);
-
-reuse_mapping:
-	map_refget(map);
-	*result = map;
-	return 0;
-
-dup2url:
-	error = map_create(result, MAP_RPP, NULL, dup);
-	free(dup);
-	return error;
-}
-
-static bool
-was_recently_downloaded(struct rpki_cache *cache, struct cache_node *node)
-{
-	return difftime(cache->startup_ts, node->attempt.ts) <= 0;
+	return NULL;
 }
 
 static int
-cache_check(struct cache_mapping *url)
+dl_rsync(struct cache_node *node)
 {
+	char *path;
 	int error;
 
-	error = file_exists(map_get_path(url));
-	switch (error) {
-	case 0:
-		pr_val_debug("Offline mode, file is cached.");
-		break;
-	case ENOENT:
-		pr_val_debug("Offline mode, file is not cached.");
-		break;
-	default:
-		pr_val_debug("Offline mode, unknown result %d (%s)",
-		    error, strerror(error));
+	if (!config_get_rsync_enabled()) {
+		pr_val_debug("rsync is disabled.");
+		return 1;
 	}
 
-	return error;
-}
-
-/**
- * @ims and @changed only on HTTP.
- * @ims can be zero, which means "no IMS."
- * @changed can be NULL.
- */
-int
-cache_download(struct rpki_cache *cache, struct cache_mapping *map,
-    bool *changed, struct cachefile_notification ***notif)
-{
-	struct cache_mapping *map2;
-	struct cache_node *node;
-	int error;
-
-	if (changed != NULL)
-		*changed = false;
-
-	error = fix_url(map, &map2);
+	error = cache_tmpfile(&path);
 	if (error)
 		return error;
 
-	node = find_node(cache, map2);
-	if (node != NULL) {
-		if (was_recently_downloaded(cache, node)) {
-			error = node->attempt.result;
-			goto end;
-		}
-	} else {
-		node = pzalloc(sizeof(struct cache_node));
-		node->map = map2;
-		map_refget(map2);
-		add_node(cache, node);
-	}
+	/*
+	 * XXX the slow (-p) version is unlikely to be necessary.
+	 * Maybe this function should also short-circuit by parent.
+	 */
+	error = mkdir_p(path, true);
+	if (error)
+		goto cancel;
 
-	switch (map_get_type(map2)) {
-	case MAP_TA_HTTP:
-	case MAP_NOTIF:
-	case MAP_TMP:
-		error = config_get_http_enabled()
-		   ? http_download(map2, node->success.ts, changed)
-		   : cache_check(map2);
-		break;
-	case MAP_TA_RSYNC:
-	case MAP_RPP:
-		error = config_get_rsync_enabled()
-		    ? rsync_download(map_get_url(map2), map_get_path(map2), true)
-		    : cache_check(map2);
-		break;
-	default:
-		pr_crit("Mapping type not downloadable: %d", map_get_type(map2));
-	}
+	// XXX looks like the third argument is redundant now.
+	error = rsync_download(node->url, path, true);
+	if (error)
+		goto cancel;
 
-	node->attempt.ts = time(NULL);
-	if (node->attempt.ts == (time_t) -1)
-		pr_crit("time(NULL) returned (time_t) -1");
-	node->attempt.result = error;
-	if (!error) {
-		node->success.happened = true;
-		node->success.ts = node->attempt.ts;
-	}
+	node->flags |= CNF_DOWNLOADED;
+	node->mtim = time(NULL); // XXX catch -1
+	node->tmpdir = path;
+	return 0;
 
-end:
-	map_refput(map2);
-	if (!error && (notif != NULL))
-		*notif = &node->notif;
+cancel:	free(path);
 	return error;
 }
 
 static int
-download(struct rpki_cache *cache, struct cache_mapping *map, maps_dl_cb cb,
-    void *arg)
+dl_http(struct cache_node *node)
 {
+	char *path;
+	bool changed;
 	int error;
 
-	pr_val_debug("Trying URL %s...", map_get_url(map));
-
-	switch (map_get_type(map)) {
-	case MAP_TA_HTTP:
-	case MAP_TA_RSYNC:
-	case MAP_RPP:
-		error = cache_download(cache, map, NULL, NULL);
-		break;
-	case MAP_NOTIF:
-		error = rrdp_update(map);
-		break;
-	default:
-		pr_crit("Mapping type is not a legal alt candidate: %u",
-		    map_get_type(map));
+	if (!config_get_http_enabled()) {
+		pr_val_debug("HTTP is disabled.");
+		return 1;
 	}
 
-	return error ? 1 : cb(map, arg);
+	error = cache_tmpfile(&path);
+	if (error)
+		return error;
+
+	error = http_download(node->url, path, node->mtim, &changed);
+	if (error) {
+		free(path);
+		return error;
+	}
+
+	node->flags |= CNF_DOWNLOADED;
+	if (changed)
+		node->mtim = time(NULL); // XXX catch -1
+	node->tmpdir = path;
+	return 0;
 }
 
 static int
-download_maps(struct rpki_cache *cache, struct map_list *maps,
-    enum map_type type, maps_dl_cb cb, void *arg)
+dl_rrdp(struct cache_node *node)
 {
-	struct cache_mapping **map;
+	char *path;
 	int error;
 
-	ARRAYLIST_FOREACH(maps, map) {
-		if (map_get_type(*map) == type) {
-			error = download(cache, *map, cb, arg);
-			if (error <= 0)
-				return error;
+	if (!config_get_http_enabled()) {
+		pr_val_debug("HTTP is disabled.");
+		return 1;
+	}
+
+	error = cache_tmpfile(&path);
+	if (error)
+		return error;
+
+	// XXX needs to add all files to node.
+	// Probably also update node itself.
+	error = rrdp_update(path, node);
+	if (error) {
+		free(path);
+		return error;
+	}
+
+	node->flags |= CNF_DOWNLOADED;
+	node->mtim = time(NULL); // XXX catch -1
+	node->tmpdir = path;
+	return 0;
+}
+
+static int
+download(struct cache_mapping *map, struct cache_node *node)
+{
+	switch (map_get_type(map)) {
+	case MAP_RSYNC:
+		return dl_rsync(node);
+	case MAP_HTTP:
+	case MAP_TMP:
+		return dl_http(node);
+	case MAP_NOTIF:
+		return dl_rrdp(node);
+	}
+
+	pr_crit("Unreachable.");
+	return -EINVAL; /* Warning shutupper */
+}
+
+/*
+ * XXX review result sign
+ */
+static int
+try_url(struct cache_mapping *map, bool online, maps_dl_cb cb, void *arg)
+{
+	bool is_rsync;
+	char *url;
+	struct cache_node *node;
+	int error;
+
+	// XXX if RRDP, @map needs to be unwrapped...
+
+	is_rsync = map_get_type(map) == MAP_RSYNC;
+	url = is_rsync
+	    ? get_rsync_module(map_get_url(map))
+	    : pstrdup(map_get_url(map));
+	if (!url)
+		return -EINVAL;
+
+	pr_val_debug("Trying RPP URL %s...", url);
+
+	/* XXX mutex */
+	node = find_node(url, is_rsync ? CNF_RSYNC : 0);
+
+	if (online && !(node->flags & CNF_DOWNLOADED)) {
+		error = download(map, node);
+		if (error) {
+			pr_val_debug("RPP refresh failed.");
+			return error;
 		}
+	}
+
+	error = cb(node, arg);
+	if (error) {
+		pr_val_debug("RPP validation failed.");
+		return error;
+	}
+
+	/* XXX commit the files (later, during cleanup) */
+	pr_val_debug("RPP downloaded and validated successfully.");
+	return 0;
+}
+
+static int
+download_maps(struct map_list *maps, bool online, enum map_type type,
+    maps_dl_cb cb, void *arg)
+{
+	struct cache_mapping **_map, *map;
+	int error;
+
+	ARRAYLIST_FOREACH(maps, _map) {
+		map = *_map;
+
+		if ((map_get_type(map) & type) != type)
+			continue;
+
+		error = try_url(map, online, cb, arg);
+		if (error <= 0)
+			return error;
 	}
 
 	return 1;
 }
 
+static int
+try_alts(struct map_list *maps, bool online, maps_dl_cb cb, void *arg)
+{
+	struct cache_mapping **cursor;
+	int error;
+
+	/* XXX during cleanup, always preserve only one? */
+	if (config_get_http_priority() > config_get_rsync_priority()) {
+		error = download_maps(maps, online, MAP_HTTP, cb, arg);
+		if (error <= 0)
+			return error;
+		return download_maps(maps, online, MAP_RSYNC, cb, arg);
+
+	} else if (config_get_http_priority() < config_get_rsync_priority()) {
+		error = download_maps(maps, online, MAP_RSYNC, cb, arg);
+		if (error <= 0)
+			return error;
+		return download_maps(maps, online, MAP_HTTP, cb, arg);
+
+	} else {
+		ARRAYLIST_FOREACH(maps, cursor) {
+			error = try_url(*cursor, online, cb, arg);
+			if (error <= 0)
+				return error;
+		}
+		return 1;
+	}
+}
+
 /**
- * Assumes the mappings represent different ways to access the same content.
+ * Assumes the URIs represent different ways to access the same content.
  *
  * Sequentially (in the order dictated by their priorities) attempts to update
- * (in the cache) the content pointed by each mapping's URL.
+ * (in the cache) the content pointed by each URL.
  * If a download succeeds, calls cb on it. If cb succeeds, returns without
  * trying more URLs.
  *
@@ -748,330 +896,365 @@ download_maps(struct rpki_cache *cache, struct map_list *maps,
  * that's already cached, and callbacks it.
  */
 int
-cache_download_alt(struct rpki_cache *cache, struct map_list *maps,
-    enum map_type http_type, enum map_type rsync_type, maps_dl_cb cb, void *arg)
+cache_download_alt(struct map_list *maps, maps_dl_cb cb, void *arg)
 {
-	struct cache_mapping **cursor, *map;
 	int error;
 
-	if (config_get_http_priority() > config_get_rsync_priority()) {
-		error = download_maps(cache, maps, http_type, cb, arg);
-		if (error <= 0)
-			return error;
-		error = download_maps(cache, maps, rsync_type, cb, arg);
-		if (error <= 0)
-			return error;
+	error = try_alts(maps, true, cb, arg);
+	if (error)
+		error = try_alts(maps, false, cb, arg);
 
-	} else if (config_get_http_priority() < config_get_rsync_priority()) {
-		error = download_maps(cache, maps, rsync_type, cb, arg);
-		if (error <= 0)
-			return error;
-		error = download_maps(cache, maps, http_type, cb, arg);
-		if (error <= 0)
-			return error;
-
-	} else {
-		ARRAYLIST_FOREACH(maps, cursor) {
-			error = download(cache, *cursor, cb, arg);
-			if (error <= 0)
-				return error;
-		}
-	}
-
-	map = cache_recover(cache, maps);
-	return (map != NULL) ? cb(map, arg) : ESRCH;
+	return error;
 }
 
-/*
- * Highest to lowest priority:
- *
- * 1. Recent Success: !error, CNF_SUCCESS, high ts_success.
- * 2. Old Success: !error, CNF_SUCCESS, low ts_success.
- * 3. Previous Recent Success: error, CNF_SUCCESS, high ts_success.
- * 4. Previous Old Success: error, CNF_SUCCESS, old ts_success.
- * 5. No Success: !CNF_SUCCESS (completely unviable)
- */
-static struct cache_node *
-choose_better(struct cache_node *old, struct cache_node *new)
-{
-	if (!new->success.happened)
-		return old;
-	if (old == NULL)
-		return new;
-
-	/*
-	 * We're gonna have to get subjective here.
-	 * Should we prioritize a candidate that was successfully downloaded a
-	 * long time ago (with no retries since), or one that failed recently?
-	 * Both are terrible, but returning something is still better than
-	 * returning nothing, because the validator might manage to salvage
-	 * remnant cached ROAs that haven't expired yet.
-	 */
-
-	if (old->attempt.result && !new->attempt.result)
-		return new;
-	if (!old->attempt.result && new->attempt.result)
-		return old;
-	return (difftime(old->success.ts, new->success.ts) < 0) ? new : old;
-}
-
-struct map_and_node {
-	struct cache_mapping *map;
-	struct cache_node *node;
-};
-
-/* Separated because of unit tests. */
 static void
-__cache_recover(struct rpki_cache *cache, struct map_list *maps,
-    struct map_and_node *best)
+print_node(struct cache_node *node, unsigned int tabs)
 {
-	struct cache_mapping **map;
-	struct cache_mapping *fixed;
-	struct map_and_node cursor;
+	struct cache_node *child, *tmp;
+	unsigned int i;
 
-	ARRAYLIST_FOREACH(maps, map) {
-		cursor.map = *map;
+	for (i = 0; i < tabs; i++)
+		printf("\t");
 
-		if (fix_url(cursor.map, &fixed) != 0)
-			continue;
-		cursor.node = find_node(cache, fixed);
-		map_refput(fixed);
-		if (cursor.node == NULL)
-			continue;
+	printf("%s ", node->name);
+	printf("%s", (node->flags & CNF_RSYNC) ? "RSYNC " : "");
+	printf("%s", (node->flags & CNF_DOWNLOADED) ? "DL " : "");
+	printf("%s", (node->flags & CNF_TOUCHED) ? "Touched " : "");
+	printf("%s", (node->flags & CNF_VALIDATED) ? "Valid " : "");
+	printf("%s\n", (node->flags & CNF_WITHDRAWN) ? "Withdrawn " : "");
 
-		if (choose_better(best->node, cursor.node) == cursor.node)
-			*best = cursor;
-	}
+	HASH_ITER(hh, node->children, child, tmp)
+		print_node(child, tabs + 1);
 }
 
-struct cache_mapping *
-cache_recover(struct rpki_cache *cache, struct map_list *maps)
-{
-	struct map_and_node best = { 0 };
-	__cache_recover(cache, maps, &best);
-	return best.map;
-}
-
+/* Recursive; tests only. */
 void
 cache_print(struct rpki_cache *cache)
 {
-	struct cache_node *node, *tmp;
-
-	HASH_ITER(hh, cache->ht, node, tmp)
-		printf("- %s (%s): %ssuccess error:%d\n",
-		    map_get_path(node->map),
-		    map_get_url(node->map),
-		    node->success.happened ? "" : "!",
-		    node->attempt.result);
+	print_node(&cache->root, 0);
 }
 
-static bool
-is_node_fresh(struct cache_node *node, time_t epoch)
-{
-	/* TODO This is a startup; probably complicate this. */
-	return difftime(epoch, node->attempt.ts) < 0;
-}
+#ifdef UNIT_TESTING
+static void __delete_node_cb(struct cache_node const *);
+#endif
 
 static void
-delete_node(struct rpki_cache *cache, struct cache_node *node)
+__delete_node(struct cache_node *node)
 {
-	HASH_DEL(cache->ht, node);
-	map_refput(node->map);
-	rrdp_notif_free(node->notif);
+#ifdef UNIT_TESTING
+	__delete_node_cb(node);
+#endif
+
+	if (node->parent != NULL)
+		HASH_DEL(node->parent->children, node);
+	free(node->url);
+	free(node->tmpdir);
 	free(node);
 }
 
+/*
+ * Caveats:
+ *
+ * - node->parent has to be set.
+ * - Don't use this on the root.
+ */
 static void
-delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
+delete_node(struct cache_node *node)
 {
-	struct cache_mapping *cage;
+	struct cache_node *parent;
 
-	if (map_get_type(node->map) == MAP_NOTIF) {
-		if (map_create_cage(&cage, node->map) == 0) {
-			pr_op_debug("Deleting cage %s.", map_get_path(cage));
-			file_rm_rf(map_get_path(cage));
-			map_refput(cage);
+	parent = node->parent;
+	if (parent != NULL) {
+		HASH_DEL(parent->children, node);
+		node->parent = NULL;
+	}
+
+	do {
+		while (node->children) {
+			node->children->parent = node;
+			node = node->children;
 		}
-	}
 
-	delete_node(cache, node);
+		parent = node->parent;
+		__delete_node(node);
+		node = parent;
+	} while (node != NULL);
 }
 
-static time_t
-get_days_ago(int days)
+/* Preorder. @cb returns whether the children should be traversed. */
+static int
+traverse_cache(bool (*cb)(struct cache_node *, char const *))
 {
-	time_t tt_now, last_week;
-	struct tm tm;
+	struct cache_node *iter_start;
+	struct cache_node *parent, *child;
+	struct cache_node *tmp;
+	struct path_builder pb;
 	int error;
 
-	tt_now = time(NULL);
-	if (tt_now == (time_t) -1)
-		pr_crit("time(NULL) returned (time_t) -1.");
-	if (localtime_r(&tt_now, &tm) == NULL) {
-		error = errno;
-		pr_crit("localtime_r(tt, &tm) returned error: %s",
-		    strerror(error));
-	}
-	tm.tm_mday -= days;
-	last_week = mktime(&tm);
-	if (last_week == (time_t) -1)
-		pr_crit("mktime(tm) returned (time_t) -1.");
+	pb_init(&pb);
 
-	return last_week;
-}
-
-static void
-cleanup_tmp(struct rpki_cache *cache, struct cache_node *node)
-{
-	enum map_type type;
-	char const *path;
-	int error;
-
-	type = map_get_type(node->map);
-	if (type != MAP_NOTIF && type != MAP_TMP)
-		return;
-
-	path = map_get_path(node->map);
-	pr_op_debug("Deleting temporal file '%s'.", path);
-	error = file_rm_f(path);
+	error = pb_append(&pb, cache.root.name);
 	if (error)
-		pr_op_err("Could not delete '%s': %s", path, strerror(error));
+		goto end;
 
-	if (type != MAP_NOTIF)
-		delete_node(cache, node);
-}
+	parent = &cache.root;
+	iter_start = parent->children;
+	if (iter_start == NULL)
+		goto end;
 
-static void
-cleanup_node(struct rpki_cache *cache, struct cache_node *node,
-    time_t last_week)
-{
-	char const *path;
-	int error;
+reloop:	/* iter_start must not be NULL */
+	HASH_ITER(hh, iter_start, child, tmp) {
+		error = pb_append(&pb, child->name);
+		if (error)
+			goto end;
 
-	path = map_get_path(node->map);
-	if (map_get_type(node->map) == MAP_NOTIF)
-		goto skip_file;
+		child->parent = parent;
+		if (cb(child, pb.string) && (child->children != NULL)) {
+			parent = child;
+			iter_start = parent->children;
+			goto reloop;
+		}
 
-	error = file_exists(path);
-	switch (error) {
-	case 0:
-		break;
-	case ENOENT:
-		/* Node exists but file doesn't: Delete node */
-		pr_op_debug("Node exists but file doesn't: %s", path);
-		delete_node_and_cage(cache, node);
-		return;
-	default:
-		pr_op_err("Trouble cleaning '%s'; stat() returned errno %d: %s",
-		    map_op_get_printable(node->map), error, strerror(error));
+		pb_pop(&pb, true);
 	}
 
-skip_file:
-	if (!is_node_fresh(node, last_week)) {
-		pr_op_debug("Deleting expired cache element %s.", path);
-		file_rm_rf(path);
-		delete_node_and_cage(cache, node);
-	}
+	parent = iter_start->parent;
+	do {
+		if (parent == NULL)
+			goto end;
+		pb_pop(&pb, true);
+		iter_start = parent->hh.next;
+		parent = parent->parent;
+	} while (iter_start == NULL);
+
+	goto reloop;
+
+end:	pb_cleanup(&pb);
+	return error;
 }
 
 /*
- * "Do not clean." List of mappings that should not be deleted from the cache.
- * Global because nftw doesn't have a generic argument.
+ * XXX this needs to be hit only by files now
+ * XXX result is redundant
  */
-static struct map_list dnc;
-static pthread_mutex_t dnc_lock = PTHREAD_MUTEX_INITIALIZER;
-
 static bool
-is_cached(char const *_fpath)
+commit_rpp_delta(struct cache_node *node, char const *path)
 {
-	struct cache_mapping **node;
-	char const *fpath, *npath;
-	size_t c;
+	if (node->tmpdir == NULL)
+		return true; /* Not updated */
 
-	/*
-	 * This relies on paths being normalized, which is currently done by the
-	 * struct cache_mapping constructors.
-	 */
+	if (node->flags & CNF_VALIDATED)
+		/* XXX nftw() no longer needed; rename() is enough */
+		file_merge_into(node->tmpdir, path);
+	else
+		/* XXX same; just do remove(). */
+		/* XXX and rename "tmpdir" into "tmp". */
+		file_rm_f(node->tmpdir);
 
-	ARRAYLIST_FOREACH(&dnc, node) {
-		fpath = _fpath;
-		npath = map_get_path(*node);
-
-		for (c = 0; fpath[c] == npath[c]; c++)
-			if (fpath[c] == '\0')
-				return true;
-		if (fpath[c] == '\0' && npath[c] == '/')
-			return true;
-		if (npath[c] == '\0' && fpath[c] == '/')
-			return true;
-	}
-
-	return false;
+	free(node->tmpdir);
+	node->tmpdir = NULL;
+	return true;
 }
 
+//static bool
+//is_node_fresh(struct cache_node *node, time_t epoch)
+//{
+//	/* TODO This is a startup; probably complicate this. */
+//	return difftime(epoch, node->attempt.ts) < 0;
+//}
+//
+//static void
+//delete_node(struct rpki_cache *cache, struct cache_node *node)
+//{
+//	HASH_DEL(cache->ht, node);
+//	map_refput(node->map);
+//	rrdp_notif_free(node->notif);
+//	free(node);
+//}
+//
+//static void
+//delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
+//{
+//	struct cache_mapping *cage;
+//
+//	if (map_get_type(node->map) == MAP_NOTIF) {
+//		if (map_create_cage(&cage, node->map) == 0) {
+//			pr_op_debug("Deleting cage %s.", map_get_path(cage));
+//			file_rm_rf(map_get_path(cage));
+//			map_refput(cage);
+//		}
+//	}
+//
+//	delete_node(cache, node);
+//}
+//
+//static time_t
+//get_days_ago(int days)
+//{
+//	time_t tt_now, last_week;
+//	struct tm tm;
+//	int error;
+//
+//	tt_now = time(NULL);
+//	if (tt_now == (time_t) -1)
+//		pr_crit("time(NULL) returned (time_t) -1.");
+//	if (localtime_r(&tt_now, &tm) == NULL) {
+//		error = errno;
+//		pr_crit("localtime_r(tt, &tm) returned error: %s",
+//		    strerror(error));
+//	}
+//	tm.tm_mday -= days;
+//	last_week = mktime(&tm);
+//	if (last_week == (time_t) -1)
+//		pr_crit("mktime(tm) returned (time_t) -1.");
+//
+//	return last_week;
+//}
+//
+//static void
+//cleanup_tmp(struct rpki_cache *cache, struct cache_node *node)
+//{
+//	enum map_type type;
+//	char const *path;
+//	int error;
+//
+//	type = map_get_type(node->map);
+//	if (type != MAP_NOTIF && type != MAP_TMP)
+//		return;
+//
+//	path = map_get_path(node->map);
+//	pr_op_debug("Deleting temporal file '%s'.", path);
+//	error = file_rm_f(path);
+//	if (error)
+//		pr_op_err("Could not delete '%s': %s", path, strerror(error));
+//
+//	if (type != MAP_NOTIF)
+//		delete_node(cache, node);
+//}
+//
+//static void
+//cleanup_node(struct rpki_cache *cache, struct cache_node *node,
+//    time_t last_week)
+//{
+//	char const *path;
+//	int error;
+//
+//	path = map_get_path(node->map);
+//	if (map_get_type(node->map) == MAP_NOTIF)
+//		goto skip_file;
+//
+//	error = file_exists(path);
+//	switch (error) {
+//	case 0:
+//		break;
+//	case ENOENT:
+//		/* Node exists but file doesn't: Delete node */
+//		pr_op_debug("Node exists but file doesn't: %s", path);
+//		delete_node_and_cage(cache, node);
+//		return;
+//	default:
+//		pr_op_err("Trouble cleaning '%s'; stat() returned errno %d: %s",
+//		    map_op_get_printable(node->map), error, strerror(error));
+//	}
+//
+//skip_file:
+//	if (!is_node_fresh(node, last_week)) {
+//		pr_op_debug("Deleting expired cache element %s.", path);
+//		file_rm_rf(path);
+//		delete_node_and_cage(cache, node);
+//	}
+//}
+//
+///*
+// * "Do not clean." List of mappings that should not be deleted from the cache.
+// * Global because nftw doesn't have a generic argument.
+// */
+//static struct map_list dnc;
+//static pthread_mutex_t dnc_lock = PTHREAD_MUTEX_INITIALIZER;
+//
+//static bool
+//is_cached(char const *_fpath)
+//{
+//	struct cache_mapping **node;
+//	char const *fpath, *npath;
+//	size_t c;
+//
+//	/*
+//	 * This relies on paths being normalized, which is currently done by the
+//	 * struct cache_mapping constructors.
+//	 */
+//
+//	ARRAYLIST_FOREACH(&dnc, node) {
+//		fpath = _fpath;
+//		npath = map_get_path(*node);
+//
+//		for (c = 0; fpath[c] == npath[c]; c++)
+//			if (fpath[c] == '\0')
+//				return true;
+//		if (fpath[c] == '\0' && npath[c] == '/')
+//			return true;
+//		if (npath[c] == '\0' && fpath[c] == '/')
+//			return true;
+//	}
+//
+//	return false;
+//}
+
 static int
-delete_if_unknown(const char *fpath, const struct stat *sb, int typeflag,
+__remove_abandoned(const char *path, const struct stat *st, int typeflag,
     struct FTW *ftw)
 {
-	if (!is_cached(fpath)) {
-		pr_op_debug("Deleting untracked file or directory %s.", fpath);
-		errno = 0;
-		if (remove(fpath) != 0)
-			pr_op_err("Cannot delete '%s': %s", fpath, strerror(errno));
+	struct cache_node *pm; /* Perfect Match */
+	struct cache_node *msm; /* Most Specific Match */
+	struct timespec now;
+
+	/* XXX node->parent has to be set */
+	pm = find_msm(pstrdup(path), &msm);
+	if (!pm && !(msm->flags & CNF_RSYNC))
+		goto unknown; /* The traversal is depth-first */
+
+	if (S_ISDIR(st->st_mode)) {
+		/*
+		 * rmdir() fails if the directory is not empty.
+		 * This will happen most of the time.
+		 */
+		if (rmdir(path) == 0)
+			delete_node(pm);
+		else if (errno == ENOENT)
+			delete_node(pm);
+
+	} else if (S_ISREG(st->st_mode)) {
+		if (pm->flags & (CNF_RSYNC | CNF_WITHDRAWN)) {
+			clock_gettime(CLOCK_REALTIME, &now); // XXX
+			if (now.tv_sec - st->st_atim.tv_sec > cfg_cache_threshold())
+				goto abandoned;
+		}
+
+	} else {
+		goto abandoned;
 	}
 
+	return 0;
+
+abandoned:
+	if (pm)
+		delete_node(pm);
+unknown:
+	remove(path); // XXX
 	return 0;
 }
 
 /*
- * FIXME this needs to account I'm merging the TAL directories.
- * It might already work.
+ * Note: It'll probably be healthy if touched nodes also touch their parents.
+ * You don't always need to go up all the way to the root.
+ * But I'm afraid this will hit the mutexes.
  */
 static void
-delete_unknown_files(struct rpki_cache *cache)
+remove_abandoned(void)
 {
-	struct cache_node *node, *tmp;
-	struct cache_mapping *cage;
-	struct path_builder pb;
-	int error;
-
-	error = pb_init_cache(&pb, TAL_METAFILE);
-	if (error) {
-		pr_op_err("Cannot delete unknown files from the cache: %s",
-		    strerror(error));
-		return;
-	}
-
-	mutex_lock(&dnc_lock);
-	maps_init(&dnc);
-
-	maps_add(&dnc, map_create_cache(pb.string));
-	HASH_ITER(hh, cache->ht, node, tmp) {
-		map_refget(node->map);
-		maps_add(&dnc, node->map);
-
-		if (map_get_type(node->map) != MAP_NOTIF)
-			continue;
-
-		if (map_create_cage(&cage, node->map) != 0) {
-			pr_op_err("Cannot generate %s's cage. I'm probably going to end up deleting it from the cache.",
-			    map_op_get_printable(node->map));
-			continue;
-		}
-		maps_add(&dnc, cage);
-	}
-
-	pb_pop(&pb, true);
-	/* TODO (performance) optimize that 32 */
-	error = nftw(pb.string, delete_if_unknown, 32, FTW_PHYS);
-	if (error)
-		pr_op_warn("The cache cleanup ended prematurely with error code %d (%s)",
-		    error, strerror(error));
-
-	maps_cleanup(&dnc);
-	mutex_unlock(&dnc_lock);
-
-	pb_cleanup(&pb);
+	char *root = join_paths(config_get_local_repository(), "rsync");
+	nftw(root, __remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
+	free(root);
 }
 
 /*
@@ -1080,31 +1263,31 @@ delete_unknown_files(struct rpki_cache *cache)
 static void
 cache_cleanup(struct rpki_cache *cache)
 {
-	struct cache_node *node, *tmp;
-	time_t last_week;
+//	struct cache_node *node, *tmp;
+//	time_t last_week;
 
-	pr_op_debug("Cleaning up temporal files.");
-	HASH_ITER(hh, cache->ht, node, tmp)
-		cleanup_tmp(cache, node);
+	pr_op_debug("Committing successful RPPs.");
+	traverse_cache(commit_rpp_delta);
 
-	pr_op_debug("Cleaning up old abandoned cache files.");
-	last_week = get_days_ago(7);
-	HASH_ITER(hh, cache->ht, node, tmp)
-		cleanup_node(cache, node, last_week);
+//	pr_op_debug("Cleaning up temporal files.");
+//	HASH_ITER(hh, cache->ht, node, tmp)
+//		cleanup_tmp(cache, node);
 
-	pr_op_debug("Cleaning up unknown cache files.");
-	delete_unknown_files(cache);
+	pr_op_debug("Cleaning up old abandoned and unknown cache files.");
+	remove_abandoned();
+
+	/* XXX delete nodes for which no file exists? */
 }
 
-void
-cache_destroy(struct rpki_cache *cache)
-{
-	struct cache_node *node, *tmp;
-
-	cache_cleanup(cache);
-	write_tal_json(cache);
-
-	HASH_ITER(hh, cache->ht, node, tmp)
-		delete_node(cache, node);
-	free(cache);
-}
+//void
+//cache_destroy(struct rpki_cache *cache)
+//{
+//	struct cache_node *node, *tmp;
+//
+//	cache_cleanup(cache);
+//	write_tal_json(cache);
+//
+//	HASH_ITER(hh, cache->ht, node, tmp)
+//		delete_node(cache, node);
+//	free(cache);
+//}

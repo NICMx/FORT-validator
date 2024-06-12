@@ -367,7 +367,7 @@ end:	http_easy_cleanup(&handler);
 }
 
 /*
- * Download @map->url into @map->path; HTTP assumed.
+ * Download @url into @path; HTTP assumed.
  *
  * If @changed returns true, the file was downloaded normally.
  * If @changed returns false, the file has not been modified since @ims.
@@ -377,22 +377,22 @@ end:	http_easy_cleanup(&handler);
  * If @changed is not NULL, initialize it to false.
  */
 int
-http_download(struct cache_mapping *map, curl_off_t ims, bool *changed)
+http_download(char const *url, char const *path, curl_off_t ims, bool *changed)
 {
 	unsigned int r;
 	int error;
 
-	pr_val_info("HTTP GET: %s -> %s", map_get_url(map), map_get_path(map));
+	pr_val_info("HTTP GET: %s -> %s", url, path);
 
-	error = mkdir_p(map_get_path(map), false);
+	/* XXX might not be needed anymore */
+	error = mkdir_p(path, false);
 	if (error)
 		return error;
 
 	for (r = 0; true; r++) {
 		pr_val_debug("Download attempt #%u...", r + 1);
 
-		error = http_fetch(map_get_url(map), map_get_path(map),
-		    ims, changed);
+		error = http_fetch(url, path, ims, changed);
 		switch (error) {
 		case 0:
 			pr_val_debug("Download successful.");

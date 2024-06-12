@@ -14,9 +14,9 @@ refs_cleanup(struct certificate_refs *refs)
 {
 	free(refs->crldp);
 	if (refs->caIssuers != NULL)
-		map_refput(refs->caIssuers);
+		free(refs->caIssuers);
 	if (refs->signedObject != NULL)
-		map_refput(refs->signedObject);
+		free(refs->signedObject);
 }
 
 static int
@@ -46,10 +46,10 @@ validate_signedObject(struct certificate_refs *refs,
 	if (refs->signedObject == NULL)
 		pr_crit("Certificate's signedObject was not recorded.");
 
-	if (!map_equals(refs->signedObject, signedObject_map)) {
+	/* XXX the left one is no longer normalized */
+	if (strcmp(refs->signedObject, map_get_url(signedObject_map)) != 0) {
 		return pr_val_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
-		    map_val_get_printable(refs->signedObject),
-		    map_val_get_printable(signedObject_map));
+		    refs->signedObject, map_get_url(signedObject_map));
 	}
 
 	return 0;
@@ -73,7 +73,7 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
 
 	if (refs->signedObject != NULL)
 		pr_crit("CA summary has a signedObject ('%s').",
-		    map_op_get_printable(refs->signedObject));
+		    refs->signedObject);
 
 	return 0;
 }

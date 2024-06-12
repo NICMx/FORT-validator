@@ -31,6 +31,7 @@ char const *config_get_slurm(void);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);
+time_t cfg_cache_threshold(void);
 unsigned int config_get_max_cert_depth(void);
 enum mode config_get_mode(void);
 char const *config_get_http_user_agent(void);

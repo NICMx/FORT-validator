@@ -46,7 +46,7 @@ START_TEST(test_hash)
 
 	map.url = "https://example.com/resources/lorem-ipsum.txt";
 	map.path = "resources/lorem-ipsum.txt";
-	map.type = MAP_TA_HTTP;
+	map.type = MAP_HTTP;
 	map.references = 1;
 
 	ha = hash_get_sha1();

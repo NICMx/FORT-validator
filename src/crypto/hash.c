@@ -156,15 +156,14 @@ end:
 }
 
 int
-hash_validate_file(struct hash_algorithm const *algorithm,
-    struct cache_mapping *map, unsigned char const *expected,
-    size_t expected_len)
+hash_validate_file(struct hash_algorithm const *algorithm, char const *path,
+    unsigned char const *expected, size_t expected_len)
 {
 	unsigned char actual[EVP_MAX_MD_SIZE];
 	size_t actual_len;
 	int error;
 
-	error = hash_file(algorithm, map_get_path(map), actual, &actual_len);
+	error = hash_file(algorithm, path, actual, &actual_len);
 	if (error)
 		return error;
 
@@ -176,8 +175,7 @@ hash_validate_file(struct hash_algorithm const *algorithm,
 	return 0;
 
 fail:
-	return pr_val_err("File '%s' does not match its expected hash.",
-	    map_val_get_printable(map));
+	return pr_val_err("File '%s' does not match its expected hash.", path);
 }
 
 static int

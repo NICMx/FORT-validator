@@ -2,7 +2,6 @@
 #define SRC_HASH_H_
 
 #include <openssl/evp.h>
-#include "types/map.h"
 
 struct hash_algorithm;
 
@@ -15,7 +14,7 @@ struct hash_algorithm const *hash_get_sha256(void);
 int hash_file(struct hash_algorithm const *, char const *, unsigned char *,
     size_t *);
 
-int hash_validate_file(struct hash_algorithm const *, struct cache_mapping *,
+int hash_validate_file(struct hash_algorithm const *, char const *,
     unsigned char const *, size_t);
 int hash_validate(struct hash_algorithm const *, unsigned char const *, size_t,
     unsigned char const *, size_t);
