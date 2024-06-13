@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "object/manifest.h"
 
 #include "algorithm.h"
@@ -192,14 +194,23 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
     struct rpki_uri *mft_uri, struct rpp **pp)
 {
 	char const *tal;
-	int i;
-	struct FileAndHash *fah;
+	int i, j;
+	struct FileAndHash *fah, *tmpfah;
 	struct rpki_uri *uri;
 	int error;
 
 	*pp = rpp_create();
 
 	tal = tal_get_file_name(validation_tal(state_retrieve()));
+
+	/* Fisher-Yates shuffle with modulo bias */
+	srand(time(NULL) ^ getpid());
+	for (i = 0; i < mft->fileList.list.count; i++) {
+		j = rand() % mft->fileList.list.count;
+		tmpfah = mft->fileList.list.array[j];
+		mft->fileList.list.array[j] = mft->fileList.list.array[i];
+		mft->fileList.list.array[i] = tmpfah;
+	}
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
