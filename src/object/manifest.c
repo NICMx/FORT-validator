@@ -198,15 +198,18 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 	struct FileAndHash *fah, *tmpfah;
 	struct rpki_uri *uri;
 	int error;
+	unsigned int rnd;
+
+	rnd = time(NULL) ^ getpid();
 
 	*pp = rpp_create();
 
 	tal = tal_get_file_name(validation_tal(state_retrieve()));
 
 	/* Fisher-Yates shuffle with modulo bias */
-	srand(time(NULL) ^ getpid());
 	for (i = 0; i < mft->fileList.list.count - 1; i++) {
-		j = i + rand() % (mft->fileList.list.count - i);
+		rnd = rand_r(&rnd);
+		j = i + rnd % (mft->fileList.list.count - i);
 		tmpfah = mft->fileList.list.array[j];
 		mft->fileList.list.array[j] = mft->fileList.list.array[i];
 		mft->fileList.list.array[i] = tmpfah;
