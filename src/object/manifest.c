@@ -205,8 +205,8 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 
 	/* Fisher-Yates shuffle with modulo bias */
 	srand(time(NULL) ^ getpid());
-	for (i = 0; i < mft->fileList.list.count; i++) {
-		j = rand() % mft->fileList.list.count;
+	for (i = 0; i < mft->fileList.list.count - 1; i++) {
+		j = i + rand() % (mft->fileList.list.count - i);
 		tmpfah = mft->fileList.list.array[j];
 		mft->fileList.list.array[j] = mft->fileList.list.array[i];
 		mft->fileList.list.array[i] = tmpfah;
