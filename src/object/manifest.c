@@ -194,13 +194,13 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
     struct rpki_uri *mft_uri, struct rpp **pp)
 {
 	char const *tal;
-	int i, j;
+	unsigned int i, j;
 	struct FileAndHash *fah, *tmpfah;
 	struct rpki_uri *uri;
 	int error;
-	unsigned int rnd;
+	unsigned int seed, rnd;
 
-	rnd = time(NULL) ^ getpid();
+	seed = time(NULL) ^ getpid();
 
 	*pp = rpp_create();
 
@@ -208,7 +208,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 
 	/* Fisher-Yates shuffle with modulo bias */
 	for (i = 0; i < mft->fileList.list.count - 1; i++) {
-		rnd = rand_r(&rnd);
+		rnd = rand_r(&seed);
 		j = i + rnd % (mft->fileList.list.count - i);
 		tmpfah = mft->fileList.list.array[j];
 		mft->fileList.list.array[j] = mft->fileList.list.array[i];
