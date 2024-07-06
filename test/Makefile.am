@@ -23,14 +23,18 @@ AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CF
 MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
 
 #check_PROGRAMS = file.test
-check_PROGRAMS = cache.test
+#check_PROGRAMS  = cache.test
+check_PROGRAMS = cachent.test
 TESTS = ${check_PROGRAMS}
 
 #file_test_SOURCES = file_test.c
 #file_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
-cache_test_SOURCES = cache/local_cache_test.c
-cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
+#cache_test_SOURCES = cache/local_cache_test.c
+#cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
+
+cachent_test_SOURCES = cache/cachent_test.c
+cachent_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 EXTRA_DIST  = mock.c mock.h
 EXTRA_DIST += resources/lorem-ipsum.txt

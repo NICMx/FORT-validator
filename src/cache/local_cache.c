@@ -38,44 +38,9 @@ struct cached_rpp {
 	struct cached_file *ht;
 };
 
-#define CNF_RSYNC		(1 << 0)
-/* Was it downloaded during the current cycle? */
-#define CNF_DOWNLOADED		(1 << 1)
-/* Was it read during the current cycle? */
-#define CNF_TOUCHED		(1 << 2)
-/*
- * Did it validate successfully (at least once) during the current cycle?
- * (It's technically possible for two different repositories to map to the same
- * cache node. One of them is likely going to fail validation.)
- */
-#define CNF_VALIDATED		(1 << 3)
-/* Withdrawn by RRDP? */
-#define CNF_WITHDRAWN		(1 << 4)
-
-struct cache_node {
-	char const *name; /* Points to the last component of @url */
-	char *url;
-	int flags;
-	/* Last successful download time, or zero */
-	time_t mtim;
-	/*
-	 * If flags & CNF_DOWNLOADED, path to the temporal directory where we
-	 * downloaded the latest refresh.
-	 * (See --compare-dest at rsync(1). RRDP is basically the same.)
-	 * Otherwise undefined.
-	 */
-	char *tmpdir;
-
-	/* Tree parent. Only defined during cleanup. */
-	struct cache_node *parent;
-	/* Tree children. */
-	struct cache_node *children;
-
-	UT_hash_handle hh; /* Hash table hook */
-};
-
 static struct rpki_cache {
-	struct cache_node root; /* It's a tree. */
+	struct cache_node *https;
+	struct cache_node *rsync;
 //	time_t startup_ts; /* When we started the last validation */
 } cache;
 
@@ -517,60 +482,6 @@ end:	json_decref(json);
 }
 
 /*
- * Returns perfect match. (Even if it needs to create it.)
- * Always consumes @path.
- *
- * Unit Test (perfect match):
- * 	root
- * 		a
- * 			b
- * 			c
- * - Find c
- * - Find a
- * - Find a/b
- * - Find a/b/c
- * - Find a/b/c/d
- */
-static struct cache_node *
-find_node(char *path, int flags)
-{
-	struct cache_node *node, *child;
-	char *nm, *sp; /* name, saveptr */
-	size_t keylen;
-
-	node = &cache.root;
-	nm = strtok_r(path + RPKI_SCHEMA_LEN, "/", &sp); // XXX
-
-	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
-		keylen = strlen(nm);
-		HASH_FIND(hh, node->children, nm, keylen, child);
-		if (child == NULL)
-			goto create_children;
-		node = child;
-		sp[-1] = '/'; /* XXX this will need a compliance unit test */
-	}
-
-	goto end;
-
-create_children:
-	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
-		child = pmalloc(sizeof(struct cache_node));
-		child->url = pstrdup(path);
-		child->name = strrchr(child->url, '/') + 1; // XXX
-		child->flags = flags;
-
-		keylen = strlen(nm);
-		HASH_ADD_KEYPTR(hh, node->children, child->name, keylen, child);
-
-		node = child;
-		sp[-1] = '/';
-	}
-
-end:	free(path);
-	return node;
-}
-
-/*
  * Returns perfect match or NULL. @msm will point to the Most Specific Match.
  * Always consumes @path.
  */
@@ -582,7 +493,7 @@ find_msm(char *path, struct cache_node **msm)
 	size_t keylen;
 
 	*msm = NULL;
-	node = &cache.root;
+	node = cache.root;
 	nm = strtok_r(path + RPKI_SCHEMA_LEN, "/", &sp); // XXX
 
 	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
@@ -601,86 +512,10 @@ find_msm(char *path, struct cache_node **msm)
 	return node;
 }
 
-static char *
-get_rsync_module(char const *url)
-{
-	char const *c;
-	char *dup;
-	unsigned int slashes;
-
-	/*
-	 * Careful with this code. rsync(1):
-	 *
-	 * > A trailing slash on the source changes this behavior to avoid
-	 * > creating an additional directory level at the destination. You can
-	 * > think of a trailing / on a source as meaning "copy the contents of
-	 * > this directory" as opposed to "copy the directory by name", but in
-	 * > both cases the attributes of the containing directory are
-	 * > transferred to the containing directory on the destination. In
-	 * > other words, each of the following commands copies the files in the
-	 * > same way, including their setting of the attributes of /dest/foo:
-	 * >
-	 * >     rsync -av /src/foo  /dest
-	 * >     rsync -av /src/foo/ /dest/foo
-	 *
-	 * This quirk does not behave consistently. In practice, if you rsync
-	 * at the module level, rsync servers behave as if the trailing slash
-	 * always existed.
-	 *
-	 * ie. the two following rsyncs behave identically:
-	 *
-	 * 	rsync -rtz rsync://repository.lacnic.net/rpki  potatoes
-	 * 		(Copies the content of rpki to potatoes.)
-	 * 	rsync -rtz rsync://repository.lacnic.net/rpki/ potatoes
-	 * 		(Copies the content of rpki to potatoes.)
-	 *
-	 * Even though the following do not:
-	 *
-	 * 	rsync -rtz rsync://repository.lacnic.net/rpki/lacnic  potatoes
-	 * 		(Copies lacnic to potatoes.)
-	 * 	rsync -rtz rsync://repository.lacnic.net/rpki/lacnic/ potatoes
-	 * 		(Copies the content of lacnic to potatoes.)
-	 *
-	 * This is important to us, because an inconsistent missing directory
-	 * component will screw our URLs-to-cache mappings.
-	 *
-	 * My solution is to add the slash myself. That's all I can do to force
-	 * it to behave consistently, it seems.
-	 *
-	 * But note: This only works if we're synchronizing a directory.
-	 * But this is fine, because this hack stacks with the minimum common
-	 * path performance hack.
-	 *
-	 * Minimum common path performance hack: rsync the rsync module root,
-	 * not every RPP separately. The former is much faster.
-	 */
-
-	slashes = 0;
-	for (c = url; *c != '\0'; c++) {
-		if (*c == '/') {
-			slashes++;
-			if (slashes == 4)
-				/* XXX test the if I rm'd here */
-				return pstrndup(url, c - url + 1);
-		}
-	}
-
-	if (slashes == 3 && c[-1] != '/') {
-		dup = pmalloc(c - url + 2);
-		memcpy(dup, url, c - url);
-		dup[c - url] = '/';
-		dup[c - url + 1] = '\0';
-		return dup;
-	}
-
-	pr_val_err("Can't rsync URL '%s': The URL seems to be missing a domain or rsync module.",
-	    url);
-	return NULL;
-}
-
 static int
-dl_rsync(struct cache_node *node)
+dl_rsync(char const *uri, struct cache_node *node)
 {
+	struct cache_node *module;
 	char *path;
 	int error;
 
@@ -688,6 +523,11 @@ dl_rsync(struct cache_node *node)
 		pr_val_debug("rsync is disabled.");
 		return 1;
 	}
+
+	/* XXX this is probably wrong; get the real module. */
+	module = node;
+	while (module->parent != NULL)
+		module = module->parent;
 
 	error = cache_tmpfile(&path);
 	if (error)
@@ -702,13 +542,20 @@ dl_rsync(struct cache_node *node)
 		goto cancel;
 
 	// XXX looks like the third argument is redundant now.
-	error = rsync_download(node->url, path, true);
+	error = rsync_download(module->url, path, true);
 	if (error)
 		goto cancel;
 
-	node->flags |= CNF_DOWNLOADED;
-	node->mtim = time(NULL); // XXX catch -1
-	node->tmpdir = path;
+	module->flags |= CNF_DOWNLOADED;
+	module->mtim = time(NULL); // XXX catch -1
+	module->tmpdir = path;
+
+	while (node != NULL) {
+		node->flags |= CNF_DOWNLOADED;
+		node->mtim = module->mtim;
+		node = node->parent;
+	}
+
 	return 0;
 
 cancel:	free(path);
@@ -718,72 +565,41 @@ cancel:	free(path);
 static int
 dl_http(struct cache_node *node)
 {
-	char *path;
-	bool changed;
-	int error;
-
 	if (!config_get_http_enabled()) {
 		pr_val_debug("HTTP is disabled.");
 		return 1;
 	}
 
-	error = cache_tmpfile(&path);
-	if (error)
-		return error;
-
-	error = http_download(node->url, path, node->mtim, &changed);
-	if (error) {
-		free(path);
-		return error;
-	}
-
-	node->flags |= CNF_DOWNLOADED;
-	if (changed)
-		node->mtim = time(NULL); // XXX catch -1
-	node->tmpdir = path;
-	return 0;
+	return http_download_cache_node(node);
 }
 
 static int
-dl_rrdp(struct cache_node *node)
+dl_rrdp(char const *notif_url, struct cache_node *mft)
 {
-	char *path;
-	int error;
-
 	if (!config_get_http_enabled()) {
 		pr_val_debug("HTTP is disabled.");
 		return 1;
 	}
 
-	error = cache_tmpfile(&path);
-	if (error)
-		return error;
+	// XXX needs to add all files to node. Probably also update node itself.
+	// XXX maybe pr_crit() on !mft->parent?
+	return rrdp_update(cachent_provide(cache.https, notif_url), mft->parent);
 
-	// XXX needs to add all files to node.
-	// Probably also update node itself.
-	error = rrdp_update(path, node);
-	if (error) {
-		free(path);
-		return error;
-	}
-
-	node->flags |= CNF_DOWNLOADED;
-	node->mtim = time(NULL); // XXX catch -1
-	node->tmpdir = path;
-	return 0;
+//	node->flags |= CNF_DOWNLOADED;
+//	node->mtim = time(NULL); // XXX catch -1
+//	node->tmpdir = path;
 }
 
 static int
-download(struct cache_mapping *map, struct cache_node *node)
+download(char const *uri, enum map_type type, struct cache_node *mft)
 {
-	switch (map_get_type(map)) {
+	switch (type) {
 	case MAP_RSYNC:
-		return dl_rsync(node);
+		return dl_rsync(uri, mft);
 	case MAP_HTTP:
-	case MAP_TMP:
-		return dl_http(node);
+		return dl_http(mft);
 	case MAP_NOTIF:
-		return dl_rrdp(node);
+		return dl_rrdp(uri, mft);
 	}
 
 	pr_crit("Unreachable.");
@@ -794,36 +610,22 @@ download(struct cache_mapping *map, struct cache_node *node)
  * XXX review result sign
  */
 static int
-try_url(struct cache_mapping *map, bool online, maps_dl_cb cb, void *arg)
+try_uri(struct cache_node *mft, char const *uri, enum map_type type,
+    bool online, maps_dl_cb cb, void *arg)
 {
-	bool is_rsync;
-	char *url;
-	struct cache_node *node;
 	int error;
 
-	// XXX if RRDP, @map needs to be unwrapped...
+	pr_val_debug("Trying %s...", uri);
 
-	is_rsync = map_get_type(map) == MAP_RSYNC;
-	url = is_rsync
-	    ? get_rsync_module(map_get_url(map))
-	    : pstrdup(map_get_url(map));
-	if (!url)
-		return -EINVAL;
-
-	pr_val_debug("Trying RPP URL %s...", url);
-
-	/* XXX mutex */
-	node = find_node(url, is_rsync ? CNF_RSYNC : 0);
-
-	if (online && !(node->flags & CNF_DOWNLOADED)) {
-		error = download(map, node);
+	if (online) {
+		error = download(uri, type, mft);
 		if (error) {
 			pr_val_debug("RPP refresh failed.");
 			return error;
 		}
 	}
 
-	error = cb(node, arg);
+	error = cb(mft, arg);
 	if (error) {
 		pr_val_debug("RPP validation failed.");
 		return error;
@@ -832,56 +634,6 @@ try_url(struct cache_mapping *map, bool online, maps_dl_cb cb, void *arg)
 	/* XXX commit the files (later, during cleanup) */
 	pr_val_debug("RPP downloaded and validated successfully.");
 	return 0;
-}
-
-static int
-download_maps(struct map_list *maps, bool online, enum map_type type,
-    maps_dl_cb cb, void *arg)
-{
-	struct cache_mapping **_map, *map;
-	int error;
-
-	ARRAYLIST_FOREACH(maps, _map) {
-		map = *_map;
-
-		if ((map_get_type(map) & type) != type)
-			continue;
-
-		error = try_url(map, online, cb, arg);
-		if (error <= 0)
-			return error;
-	}
-
-	return 1;
-}
-
-static int
-try_alts(struct map_list *maps, bool online, maps_dl_cb cb, void *arg)
-{
-	struct cache_mapping **cursor;
-	int error;
-
-	/* XXX during cleanup, always preserve only one? */
-	if (config_get_http_priority() > config_get_rsync_priority()) {
-		error = download_maps(maps, online, MAP_HTTP, cb, arg);
-		if (error <= 0)
-			return error;
-		return download_maps(maps, online, MAP_RSYNC, cb, arg);
-
-	} else if (config_get_http_priority() < config_get_rsync_priority()) {
-		error = download_maps(maps, online, MAP_RSYNC, cb, arg);
-		if (error <= 0)
-			return error;
-		return download_maps(maps, online, MAP_HTTP, cb, arg);
-
-	} else {
-		ARRAYLIST_FOREACH(maps, cursor) {
-			error = try_url(*cursor, online, cb, arg);
-			if (error <= 0)
-				return error;
-		}
-		return 1;
-	}
 }
 
 /**
@@ -896,140 +648,33 @@ try_alts(struct map_list *maps, bool online, maps_dl_cb cb, void *arg)
  * that's already cached, and callbacks it.
  */
 int
-cache_download_alt(struct map_list *maps, maps_dl_cb cb, void *arg)
+cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 {
-	int error;
+	struct cache_node *mft;
+	int online;
+	char **uri;
+	int error = 0;
 
-	error = try_alts(maps, true, cb, arg);
-	if (error)
-		error = try_alts(maps, false, cb, arg);
+	/* XXX mutex */
+	/* XXX if parent is downloaded, child is downloaded. */
+	mft = cachent_provide(cache.rsync, uris->rpkiManifest);
 
-	return error;
-}
+	if (mft->flags & CNF_DOWNLOADED)
+		return cb(mft, arg);
 
-static void
-print_node(struct cache_node *node, unsigned int tabs)
-{
-	struct cache_node *child, *tmp;
-	unsigned int i;
-
-	for (i = 0; i < tabs; i++)
-		printf("\t");
-
-	printf("%s ", node->name);
-	printf("%s", (node->flags & CNF_RSYNC) ? "RSYNC " : "");
-	printf("%s", (node->flags & CNF_DOWNLOADED) ? "DL " : "");
-	printf("%s", (node->flags & CNF_TOUCHED) ? "Touched " : "");
-	printf("%s", (node->flags & CNF_VALIDATED) ? "Valid " : "");
-	printf("%s\n", (node->flags & CNF_WITHDRAWN) ? "Withdrawn " : "");
-
-	HASH_ITER(hh, node->children, child, tmp)
-		print_node(child, tabs + 1);
-}
-
-/* Recursive; tests only. */
-void
-cache_print(struct rpki_cache *cache)
-{
-	print_node(&cache->root, 0);
-}
-
-#ifdef UNIT_TESTING
-static void __delete_node_cb(struct cache_node const *);
-#endif
-
-static void
-__delete_node(struct cache_node *node)
-{
-#ifdef UNIT_TESTING
-	__delete_node_cb(node);
-#endif
-
-	if (node->parent != NULL)
-		HASH_DEL(node->parent->children, node);
-	free(node->url);
-	free(node->tmpdir);
-	free(node);
-}
-
-/*
- * Caveats:
- *
- * - node->parent has to be set.
- * - Don't use this on the root.
- */
-static void
-delete_node(struct cache_node *node)
-{
-	struct cache_node *parent;
-
-	parent = node->parent;
-	if (parent != NULL) {
-		HASH_DEL(parent->children, node);
-		node->parent = NULL;
+	for (online = 1; online >= 0; online--) {
+		ARRAYLIST_FOREACH(&uris->rpkiNotify, uri) {
+			error = try_uri(mft, *uri, MAP_NOTIF, online, cb, arg);
+			if (error <= 0)
+				return error;
+		}
+		ARRAYLIST_FOREACH(&uris->caRepository, uri) {
+			error = try_uri(mft, *uri, MAP_RSYNC, online, cb, arg);
+			if (error <= 0)
+				return error;
+		}
 	}
 
-	do {
-		while (node->children) {
-			node->children->parent = node;
-			node = node->children;
-		}
-
-		parent = node->parent;
-		__delete_node(node);
-		node = parent;
-	} while (node != NULL);
-}
-
-/* Preorder. @cb returns whether the children should be traversed. */
-static int
-traverse_cache(bool (*cb)(struct cache_node *, char const *))
-{
-	struct cache_node *iter_start;
-	struct cache_node *parent, *child;
-	struct cache_node *tmp;
-	struct path_builder pb;
-	int error;
-
-	pb_init(&pb);
-
-	error = pb_append(&pb, cache.root.name);
-	if (error)
-		goto end;
-
-	parent = &cache.root;
-	iter_start = parent->children;
-	if (iter_start == NULL)
-		goto end;
-
-reloop:	/* iter_start must not be NULL */
-	HASH_ITER(hh, iter_start, child, tmp) {
-		error = pb_append(&pb, child->name);
-		if (error)
-			goto end;
-
-		child->parent = parent;
-		if (cb(child, pb.string) && (child->children != NULL)) {
-			parent = child;
-			iter_start = parent->children;
-			goto reloop;
-		}
-
-		pb_pop(&pb, true);
-	}
-
-	parent = iter_start->parent;
-	do {
-		if (parent == NULL)
-			goto end;
-		pb_pop(&pb, true);
-		iter_start = parent->hh.next;
-		parent = parent->parent;
-	} while (iter_start == NULL);
-
-	goto reloop;
-
-end:	pb_cleanup(&pb);
 	return error;
 }
 
@@ -1219,9 +864,9 @@ __remove_abandoned(const char *path, const struct stat *st, int typeflag,
 		 * This will happen most of the time.
 		 */
 		if (rmdir(path) == 0)
-			delete_node(pm);
+			cachent_delete(pm);
 		else if (errno == ENOENT)
-			delete_node(pm);
+			cachent_delete(pm);
 
 	} else if (S_ISREG(st->st_mode)) {
 		if (pm->flags & (CNF_RSYNC | CNF_WITHDRAWN)) {
@@ -1238,7 +883,7 @@ __remove_abandoned(const char *path, const struct stat *st, int typeflag,
 
 abandoned:
 	if (pm)
-		delete_node(pm);
+		cachent_delete(pm);
 unknown:
 	remove(path); // XXX
 	return 0;
@@ -1261,13 +906,14 @@ remove_abandoned(void)
  * Deletes unknown and old untraversed cached files, writes metadata into XML.
  */
 static void
-cache_cleanup(struct rpki_cache *cache)
+cache_cleanup(void)
 {
 //	struct cache_node *node, *tmp;
 //	time_t last_week;
 
 	pr_op_debug("Committing successful RPPs.");
-	traverse_cache(commit_rpp_delta);
+	cachent_traverse(cache.rsync, commit_rpp_delta);
+	cachent_traverse(cache.https, commit_rpp_delta);
 
 //	pr_op_debug("Cleaning up temporal files.");
 //	HASH_ITER(hh, cache->ht, node, tmp)
@@ -1280,11 +926,9 @@ cache_cleanup(struct rpki_cache *cache)
 }
 
 //void
-//cache_destroy(struct rpki_cache *cache)
+//cache_destroy(void)
 //{
-//	struct cache_node *node, *tmp;
-//
-//	cache_cleanup(cache);
+//	cache_cleanup();
 //	write_tal_json(cache);
 //
 //	HASH_ITER(hh, cache->ht, node, tmp)

@@ -4,7 +4,10 @@ LDFLAGS_DEBUG = -rdynamic
 
 bin_PROGRAMS = fort
 
+fort_SOURCES = alloc.c alloc.h
+fort_SOURCES += cache/cachent.c cache/cachent.h
 fort_SOURCES += cache/local_cache.c cache/local_cache.h
+fort_SOURCES += log.c log.h
 
 fort_CFLAGS  = -Wall -Wpedantic -Werror
 #fort_CFLAGS += $(GCC_WARNS)

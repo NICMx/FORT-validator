@@ -24,13 +24,6 @@ enum map_type {
 	 * The metadata is cached until it's untraversed for a "long" time.
 	 */
 	MAP_NOTIF = (MAP_HTTP | (1 << 2)),
-
-	/*
-	 * RRDP Snapshot or Delta; downloaded via HTTP.
-	 * The file itself is not cached, but we preserve some small metadata.
-	 * The metadata is destroyed once the iteration finishes.
-	 */
-	MAP_TMP = (MAP_HTTP | (1 << 3)),
 };
 
 struct cache_mapping;

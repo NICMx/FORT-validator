@@ -27,8 +27,6 @@ struct tal {
 	struct strlist urls;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
-
-	struct rpki_cache *cache;
 };
 
 struct validation_thread {
@@ -137,14 +135,9 @@ tal_init(struct tal *tal, char const *file_path)
 
 	strlist_init(&tal->urls);
 	error = read_content((char *)file.buffer, tal);
-	if (error) {
+	if (error)
 		strlist_cleanup(&tal->urls);
-		goto end;
-	}
 
-	tal->cache = cache_create();
-
-end:
 	file_free(&file);
 	return error;
 }
@@ -152,7 +145,6 @@ end:
 static void
 tal_cleanup(struct tal *tal)
 {
-	cache_destroy(tal->cache);
 	free(tal->spki);
 	strlist_cleanup(&tal->urls);
 }
@@ -168,12 +160,6 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 {
 	*buffer = tal->spki;
 	*len = tal->spki_len;
-}
-
-struct rpki_cache *
-tal_get_cache(struct tal *tal)
-{
-	return tal->cache;
 }
 
 /**
@@ -281,8 +267,8 @@ do_file_validation(void *arg)
 		goto end;
 
 	args.db = db_table_create();
-	thread->error = cache_download_alt(args.tal.cache, &args.tal.urls,
-	    MAP_HTTP, __handle_tal_map, &args);
+	thread->error = cache_download_alt(&args.tal.urls, MAP_HTTP,
+	    __handle_tal_map, &args);
 	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);

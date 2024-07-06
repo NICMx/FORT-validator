@@ -46,11 +46,6 @@ struct ski_arguments {
 	OCTET_STRING_t *sid;
 };
 
-struct sia_uris {
-	struct strlist rpp;
-	char *mft;
-};
-
 struct bgpsec_ski {
 	X509 *cert;
 	unsigned char **ski_data;
@@ -104,15 +99,17 @@ static const struct ad_metadata RPKI_MANIFEST = {
 static void
 sia_uris_init(struct sia_uris *uris)
 {
-	strlist_init(&uris->rpp);
-	uris->mft = NULL;
+	strlist_init(&uris->caRepository);
+	strlist_init(&uris->rpkiNotify);
+	uris->rpkiManifest = NULL;
 }
 
 static void
 sia_uris_cleanup(struct sia_uris *uris)
 {
-	strlist_cleanup(&uris->rpp);
-	free(uris->mft);
+	strlist_cleanup(&uris->caRepository);
+	strlist_cleanup(&uris->rpkiNotify);
+	free(uris->rpkiManifest);
 }
 
 static void
@@ -1196,7 +1193,7 @@ static void
 handle_rpkiManifest(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
-	uris->mft = uri;
+	uris->rpkiManifest = uri;
 }
 
 static void
@@ -1204,7 +1201,7 @@ handle_caRepository(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
 	pr_val_debug("caRepository: %s", uri);
-	strlist_add(&uris->rpp, uri);
+	strlist_add(&uris->caRepository, uri);
 }
 
 static void
@@ -1212,7 +1209,7 @@ handle_rpkiNotify(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
 	pr_val_debug("rpkiNotify: %s", uri);
-	strlist_add(&uris->rpp, uri);
+	strlist_add(&uris->rpkiNotify, uri);
 }
 
 static void
@@ -1805,11 +1802,10 @@ certificate_validate_aia(char const *caIssuers, X509 *cert)
 static int
 download_rpp(struct sia_uris *uris)
 {
-	if (uris->rpp.len == 0)
+	if (uris->caRepository.len == 0 && uris->rpkiNotify.len == 0)
 		return pr_val_err("SIA lacks both caRepository and rpkiNotify.");
 
-	return cache_download_alt(validation_cache(state_retrieve()),
-	    &uris->rpp, MAP_NOTIF, NULL, NULL);
+	return cache_download_alt(uris, MAP_NOTIF, NULL, NULL);
 }
 
 /** Boilerplate code for CA certificate validation and recursive traversal. */
@@ -1897,7 +1893,7 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 		goto revert_uris;
 	cert = NULL; /* Ownership stolen */
 
-	error = handle_manifest(sia_uris.mft, &pp);
+	error = handle_manifest(sia_uris.rpkiManifest, &pp);
 	if (error) {
 		x509stack_cancel(validation_certstack(state));
 		goto revert_uris;

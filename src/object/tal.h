@@ -10,7 +10,6 @@ struct tal;
 
 char const *tal_get_file_name(struct tal *);
 void tal_get_spki(struct tal *, unsigned char const **, size_t *);
-struct rpki_cache *tal_get_cache(struct tal *);
 
 struct db_table *perform_standalone_validation(void);
 

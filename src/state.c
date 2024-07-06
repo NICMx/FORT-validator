@@ -143,12 +143,6 @@ validation_tal(struct validation *state)
 	return (state != NULL) ? state->tal : NULL;
 }
 
-struct rpki_cache *
-validation_cache(struct validation *state)
-{
-	return tal_get_cache(state->tal);
-}
-
 X509_STORE *
 validation_store(struct validation *state)
 {

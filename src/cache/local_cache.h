@@ -3,8 +3,7 @@
 
 #include "types/map.h"
 #include "types/str.h"
-
-#define RPKI_SCHEMA_LEN 8 /* strlen("rsync://"), strlen("https://") */
+#include "cache/cachent.h"
 
 struct rpki_cache;
 struct cache_node;
@@ -16,7 +15,13 @@ int cache_tmpfile(char **);
 
 struct rpki_cache *cache_create(void);
 /* Will destroy the cache object, but not the cache directory itself, obv. */
-void cache_destroy(struct rpki_cache *);
+void cache_destroy(void);
+
+struct sia_uris {
+	struct strlist caRepository; /* rsync RPPs */
+	struct strlist rpkiNotify; /* RRDP Notifications */
+	char *rpkiManifest;
+};
 
 /*
  * The callback should return
@@ -28,7 +33,7 @@ void cache_destroy(struct rpki_cache *);
  * XXX rename
  */
 typedef int (*maps_dl_cb)(struct cache_node *, void *);
-int cache_download_alt(struct map_list *, maps_dl_cb, void *);
+int cache_download_alt(struct sia_uris *, maps_dl_cb, void *);
 
 /* Prints the cache in standard output. */
 void cache_print(struct rpki_cache *);

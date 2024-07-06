@@ -13,6 +13,7 @@
 #include "log.h"
 #include "thread_var.h"
 #include "http/http.h"
+#include "cache/cache_entity.h"
 #include "crypto/base64.h"
 #include "crypto/hash.h"
 #include "xml/relax_ng.h"
@@ -73,8 +74,6 @@ struct publish {
 	struct file_metadata meta;
 	unsigned char *content;
 	size_t content_len;
-
-	char *path;
 };
 
 /* A deserialized <withdraw> tag, from a delta. */
@@ -84,6 +83,7 @@ struct withdraw {
 	char *path;
 };
 
+// XXX delete?
 typedef enum {
 	HR_MANDATORY,
 	HR_OPTIONAL,
@@ -109,6 +109,11 @@ struct cachefile_notification {
 	 * And so on.
 	 */
 	STAILQ_HEAD(, rrdp_hash) delta_hashes;
+};
+
+struct parser_args {
+	struct rrdp_session *session;
+	struct cache_node *rpp;
 };
 
 static BIGNUM *
@@ -312,25 +317,18 @@ fail:
 }
 
 static int
-parse_hash(xmlTextReaderPtr reader, hash_requirement hr,
-    unsigned char **result, size_t *result_len)
+parse_hash(xmlTextReaderPtr reader, unsigned char **result, size_t *result_len)
 {
 	xmlChar *xmlattr;
 	int error;
 
-	if (hr == HR_IGNORE)
-		return 0;
-
 	xmlattr = xmlTextReaderGetAttribute(reader, BAD_CAST RRDP_ATTR_HASH);
 	if (xmlattr == NULL)
-		return (hr == HR_MANDATORY)
-		    ? pr_val_err("Tag is missing the '" RRDP_ATTR_HASH "' attribute.")
-		    : 0;
+		return 0;
 
 	error = hexstr2sha256(xmlattr, result, result_len);
 
 	xmlFree(xmlattr);
-
 	if (error)
 		return pr_val_err("The '" RRDP_ATTR_HASH "' xml attribute does not appear to be a SHA-256 hash.");
 	return 0;
@@ -449,8 +447,7 @@ end:
  * 2. "hash" (optional, depending on @hr)
  */
 static int
-parse_file_metadata(xmlTextReaderPtr reader, hash_requirement hr,
-    struct file_metadata *meta)
+parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 {
 	int error;
 
@@ -460,7 +457,7 @@ parse_file_metadata(xmlTextReaderPtr reader, hash_requirement hr,
 	if (meta->uri == NULL)
 		return -EINVAL;
 
-	error = parse_hash(reader, hr, &meta->hash, &meta->hash_len);
+	error = parse_hash(reader, &meta->hash, &meta->hash_len);
 	if (error) {
 		free(meta->uri);
 		meta->uri = NULL;
@@ -471,12 +468,12 @@ parse_file_metadata(xmlTextReaderPtr reader, hash_requirement hr,
 }
 
 static int
-parse_publish(xmlTextReaderPtr reader, hash_requirement hr, struct publish *tag)
+parse_publish(xmlTextReaderPtr reader, struct publish *tag)
 {
 	xmlChar *base64_str;
 	int error;
 
-	error = parse_file_metadata(reader, hr, &tag->meta);
+	error = parse_file_metadata(reader, &tag->meta);
 	if (error)
 		return error;
 
@@ -494,17 +491,8 @@ parse_publish(xmlTextReaderPtr reader, hash_requirement hr, struct publish *tag)
 	if (!base64_decode((char *)base64_str, 0, &tag->content, &tag->content_len))
 		error = pr_val_err("Cannot decode publish tag's base64.");
 	xmlFree(base64_str);
-	if (error)
-		return error;
 
-	tag->path = url2path(tag->meta.uri);
-	if (tag->path == NULL)
-		return -EINVAL;
-
-	/* rfc8181#section-2.2 but considering optional hash */
-	return (tag->meta.hash != NULL)
-	    ? validate_hash(&tag->meta, tag->path)
-	    : 0;
+	return error;
 }
 
 static int
@@ -559,20 +547,47 @@ delete_file(char const *path)
 }
 
 static int
-handle_publish(xmlTextReaderPtr reader, hash_requirement hr)
+handle_publish(xmlTextReaderPtr reader, struct cache_node *rpp)
 {
 	struct publish tag = { 0 };
+	struct cache_node *node;
 	int error;
 
-	error = parse_publish(reader, hr, &tag);
+	error = parse_publish(reader, &tag);
 	if (error)
 		return error;
 
-	error = write_file(tag.path, tag.content, tag.content_len);
+	node = cachent_provide(rpp, tag->meta.uri);
+	if (!node) {
+		error = pr_val_err("Malicious RRDP: <publish> is attempting to create file '%s' outside of its publication point '%s'.",
+		    tag->meta.uri, rpp->url);
+		goto end;
+	}
 
-	metadata_cleanup(&tag.meta);
+	/* rfc8181#section-2.2 */
+	if (node->flags & CNF_CACHED) {
+		if (tag->meta.hash == NULL) {
+			// XXX watch out for this in the log before release
+			error = pr_val_err("RRDP desync: <publish> is attempting to create '%s', but the file is already cached.",
+			    tag->meta.uri);
+			goto end;
+		}
+
+		error = validate_hash(&tag->meta, cachent_path(node));
+		if (error)
+			goto end;
+
+	} else if (tag->meta.hash != NULL) {
+		// XXX watch out for this in the log before release
+		error = pr_val_err("RRDP desync: <publish> is attempting to overwrite '%s', but the file is absent in the cache.",
+		    tag->meta.uri);
+		goto end;
+	}
+
+	error = write_file(node->tmpdir, tag.content, tag.content_len);
+
+end:	metadata_cleanup(&tag.meta);
 	free(tag.content);
-	free(tag.path);
 	return error;
 }
 
@@ -753,14 +768,13 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_notification(char const *url, char const *path,
-    struct update_notification *result)
+parse_notification(struct cache_node *node, struct update_notification *result)
 {
 	int error;
 
-	update_notification_init(result, url);
+	update_notification_init(result, node->url);
 
-	error = relax_ng_parse(path, xml_read_notif, result);
+	error = relax_ng_parse(node->tmpdir, xml_read_notif, result);
 	if (error)
 		update_notification_cleanup(result);
 
@@ -768,8 +782,9 @@ parse_notification(char const *url, char const *path,
 }
 
 static int
-xml_read_snapshot(xmlTextReaderPtr reader, void *session)
+xml_read_snapshot(xmlTextReaderPtr reader, void *_args)
 {
+	struct parser_args *args = _args;
 	xmlReaderTypes type;
 	xmlChar const *name;
 	int error;
@@ -779,9 +794,9 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *session)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = handle_publish(reader, HR_IGNORE);
+			error = handle_publish(reader, args->rpp);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
-			error = validate_session(reader, session);
+			error = validate_session(reader, args->session);
 		else
 			return pr_val_err("Unexpected '%s' element", name);
 		if (error)
@@ -795,9 +810,11 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *session)
 }
 
 static int
-parse_snapshot(struct update_notification *notif, char const *path)
+parse_snapshot(struct update_notification *notif, char const *path,
+    struct cache_node *rpp)
 {
-	return relax_ng_parse(path, xml_read_snapshot, &notif->session);
+	struct parser_args args = { .session = &notif->session, .rpp = rpp };
+	return relax_ng_parse(path, xml_read_snapshot, &args);
 }
 
 static int
@@ -836,7 +853,7 @@ validate_session_desync(struct cachefile_notification *old_notif,
 }
 
 static int
-handle_snapshot(struct update_notification *notif)
+handle_snapshot(struct update_notification *notif, struct cache_node *rpp)
 {
 	char const *url = notif->snapshot.uri;
 	char *path;
@@ -851,15 +868,15 @@ handle_snapshot(struct update_notification *notif)
 	 * TODO (performance) Is there a point in caching the snapshot?
 	 * Especially considering we delete it 4 lines afterwards.
 	 * Maybe stream it instead.
-	 * Same for deltas.
+	 * Same for the notification and deltas.
 	 */
-	error = http_download_tmp(url, &path, NULL, NULL);
+	error = http_download_tmp(url, &path, 0, NULL);
 	if (error)
 		goto end1;
 	error = validate_hash(&notif->snapshot, path);
 	if (error)
 		goto end2;
-	error = parse_snapshot(notif, path);
+	error = parse_snapshot(notif, path, rpp);
 	delete_file(path);
 
 end2:	free(path);
@@ -879,7 +896,7 @@ xml_read_delta(xmlTextReaderPtr reader, void *session)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = handle_publish(reader, HR_OPTIONAL);
+			error = handle_publish(reader);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
 			error = handle_withdraw(reader);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
@@ -1070,51 +1087,51 @@ update_notif(struct cachefile_notification *old, struct update_notification *new
 }
 
 /*
- * Downloads the Update Notification pointed by @url, and updates the cache
- * accordingly.
+ * Downloads the Update Notification @notif, and updates the cache accordingly.
  *
  * "Updates the cache accordingly" means it downloads the missing deltas or
- * snapshot, and explodes them into the corresponding RPP's local directory.
+ * snapshot, and explodes them into @rpp's tmp directory.
  */
 int
-rrdp_update(char const *notif_url, struct cache_node *node)
+rrdp_update(struct cache_node *notif, struct cache_node *rpp)
 {
 	char *path = NULL;
-	struct cachefile_notification **cached, *old;
+	struct cachefile_notification *old;
 	struct update_notification new;
-	bool changed;
 	int serial_cmp;
 	int error;
 
-	fnstack_push(notif_url);
+	fnstack_push(notif->url);
 	pr_val_debug("Processing notification.");
 
-	error = http_download_tmp(notif_url, &path, &changed, &cached);
+	error = http_download_cache_node(notif);
 	if (error)
 		goto end;
-	if (!changed) {
+
+	if (!(notif->flags & CNF_CHANGED)) {
 		pr_val_debug("The Notification has not changed.");
+		rpp->flags |= CNF_DOWNLOADED; /* Success */
 		goto end;
 	}
 
-	error = parse_notification(notif_url, path, &new);
+	error = parse_notification(notif, &new);
 	if (error)
 		goto end;
 	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
 	    new.session.serial.str);
 
-	old = *cached;
-	if (old == NULL) {
+	if (!(notif->flags & CNF_NOTIFICATION)) {
 		pr_val_debug("This is a new Notification.");
-		error = handle_snapshot(&new);
+		error = handle_snapshot(&new, rpp);
 		if (error)
 			goto clean_notif;
 
-		*cached = pmalloc(sizeof(struct cachefile_notification));
-		init_notif(*cached, &new);
+		notif->flags |= CNF_NOTIFICATION;
+		init_notif(&notif->notif, &new);
 		goto end;
 	}
 
+	old = &notif->notif;
 	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
 	if (serial_cmp < 0) {
 		pr_val_debug("The Notification's serial changed.");

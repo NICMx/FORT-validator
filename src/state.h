@@ -11,7 +11,6 @@ int validation_prepare(struct validation **, struct tal *,
 void validation_destroy(struct validation *);
 
 struct tal *validation_tal(struct validation *);
-struct rpki_cache *validation_cache(struct validation *);
 X509_STORE *validation_store(struct validation *);
 struct cert_stack *validation_certstack(struct validation *);
 

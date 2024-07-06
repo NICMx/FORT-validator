@@ -111,7 +111,6 @@ init_url(struct cache_mapping *map, char const *str)
 		break;
 	case MAP_HTTP:
 	case MAP_NOTIF:
-	case MAP_TMP:
 		pfx = "https://";
 		error = ENOTHTTPS;
 		break;
@@ -248,12 +247,9 @@ init_path(struct cache_mapping *map)
 	switch (map->type) {
 	case MAP_RSYNC:
 		return map_simple(map, "rsync");
-
 	case MAP_HTTP:
 		return map_simple(map, "https");
-
 	case MAP_NOTIF:
-	case MAP_TMP:
 		return cache_tmpfile(&map->path);
 	}
 

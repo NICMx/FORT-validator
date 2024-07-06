@@ -451,6 +451,7 @@ static const struct option_field options[] = {
 		.doc = "rsync's priority for repository file fetching. Higher value means higher priority.",
 		.min = 0,
 		.max = 100,
+		/* XXX deprecated? */
 	}, {
 		.id = 3002,
 		.name = "rsync.strategy",
@@ -520,6 +521,7 @@ static const struct option_field options[] = {
 		.doc = "HTTP's priority for repository file fetching. Higher value means higher priority.",
 		.min = 0,
 		.max = 100,
+		/* XXX deprecated? */
 	}, {
 		.id = 9002,
 		.name = "http.retry.count",
