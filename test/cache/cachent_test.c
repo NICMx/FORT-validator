@@ -2,6 +2,7 @@
 
 #include "alloc.c"
 #include "cache/cachent.c"
+#include "cache/common.c"
 #include "data_structure/path_builder.c"
 #include "mock.c"
 
@@ -12,28 +13,6 @@ static void
 __delete_node_cb(struct cache_node const *node)
 {
 	strcpy(deleted[dn++], node->name);
-}
-
-static struct cache_node *
-node(char const *name, int flags, ...)
-{
-	struct cache_node *result;
-	struct cache_node *child;
-	va_list args;
-
-	result = pzalloc(sizeof(struct cache_node));
-	result->name = pstrdup(name);
-	result->flags = flags;
-
-	va_start(args, flags);
-	while ((child = va_arg(args, struct cache_node *)) != NULL) {
-		HASH_ADD_KEYPTR(hh, result->children, child->name,
-		    strlen(child->name), child);
-		child->parent = result;
-	}
-	va_end(args);
-
-	return result;
 }
 
 START_TEST(test_delete)
@@ -274,8 +253,14 @@ START_TEST(test_provide)
 {
 	struct cache_node *rsync, *abc, *d, *e, *f, *g, *h, *ee;
 
-	/* Create tree from nothing */
-	e = cachent_provide(NULL, "rsync://a.b.c/d/e");
+	rsync = cachent_create_root("rsync:");
+	ck_assert_ptr_ne(NULL, rsync);
+	ck_assert_ptr_eq(NULL, rsync->parent);
+	ck_assert_str_eq("rsync:", rsync->url);
+	ck_assert_str_eq("rsync:", rsync->name);
+
+	/* Create branch chain from root */
+	e = cachent_provide(rsync, "rsync://a.b.c/d/e");
 	ck_assert_ptr_ne(NULL, e);
 	ck_assert_str_eq("rsync://a.b.c/d/e", e->url);
 	ck_assert_str_eq("e", e->name);
@@ -290,11 +275,7 @@ START_TEST(test_provide)
 	ck_assert_str_eq("rsync://a.b.c", abc->url);
 	ck_assert_str_eq("a.b.c", abc->name);
 
-	rsync = abc->parent;
-	ck_assert_ptr_ne(NULL, rsync);
-	ck_assert_ptr_eq(NULL, rsync->parent);
-	ck_assert_str_eq("rsync:", rsync->url);
-	ck_assert_str_eq("rsync:", rsync->name);
+	ck_assert_ptr_eq(rsync, abc->parent);
 
 	/* Find leaf from root */
 	ck_assert_ptr_eq(e, cachent_provide(rsync, "rsync://a.b.c/d/e"));

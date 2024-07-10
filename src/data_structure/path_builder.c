@@ -13,6 +13,33 @@
 #endif
 #define MAX_CAPACITY 4096u
 
+static bool
+is_delimiter(char chara)
+{
+	return chara == '/' || chara == '\0';
+}
+
+void
+token_init(struct tokenizer *tkn, char const *str)
+{
+	tkn->str = str;
+	tkn->len = 0;
+}
+
+/* Like strtok_r(), but doesn't corrupt the string. */
+bool
+token_next(struct tokenizer *tkn)
+{
+	tkn->str += tkn->len;
+	while (tkn->str[0] == '/')
+		tkn->str++;
+	if (tkn->str[0] == '\0')
+		return false;
+	for (tkn->len = 1; !is_delimiter(tkn->str[tkn->len]); tkn->len++)
+		;
+	return true;
+}
+
 /* @reserve needs to be < INITIAL_CAPACITY. */
 void
 __pb_init(struct path_builder *pb, size_t reserve)
@@ -187,4 +214,22 @@ void
 pb_cleanup(struct path_builder *pb)
 {
 	free(pb->string);
+}
+
+/* Cannot return NULL. */
+char *
+join_paths(char const *path1, char const *path2)
+{
+	size_t n;
+	char *result;
+	int written;
+
+	n = strlen(path1) + strlen(path2) + 2;
+	result = pmalloc(n);
+
+	written = snprintf(result, n, "%s/%s", path1, path2);
+	if (written != n - 1)
+		pr_crit("join_paths: %zu %d %s %s", n, written, path1, path2);
+
+	return result;
 }

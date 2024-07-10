@@ -5,6 +5,19 @@
 #include "data_structure/common.h"
 #include "data_structure/path_builder.h"
 
+/* @schema must contain a colon suffix, otherwise lookups won't work */
+struct cache_node *
+cachent_create_root(char const *schema)
+{
+	struct cache_node *root;
+
+	root = pzalloc(sizeof(struct cache_node));
+	root->url = pstrdup(schema);
+	root->name = root->url;
+
+	return root;
+}
+
 /* Preorder. @cb returns whether the children should be traversed. */
 int
 cachent_traverse(struct cache_node *root,
@@ -66,38 +79,6 @@ end:	pb_cleanup(&pb);
 	return error;
 }
 
-struct tokenizer {
-	char const *str;
-	size_t len;
-};
-
-static bool
-is_delimiter(char chara)
-{
-	return chara == '/' || chara == '\0';
-}
-
-static void
-token_init(struct tokenizer *tkn, char const *str)
-{
-	tkn->str = str;
-	tkn->len = 0;
-}
-
-/* Like strtok_r(), but doesn't corrupt the string. */
-static bool
-token_next(struct tokenizer *tkn)
-{
-	tkn->str += tkn->len;
-	while (tkn->str[0] == '/')
-		tkn->str++;
-	if (tkn->str[0] == '\0')
-		return false;
-	for (tkn->len = 1; !is_delimiter(tkn->str[tkn->len]); tkn->len++)
-		;
-	return true;
-}
-
 static char *
 path_rewind(char const *root, char *cursor)
 {
@@ -148,34 +129,30 @@ fail:	free(normal);
 	return NULL;
 }
 
+/* Get or create parent's child. */
 static struct cache_node *
 provide(struct cache_node *parent, char const *url,
     char const *name, size_t namelen)
 {
 	struct cache_node *child;
 
-	if (parent != NULL) {
-		HASH_FIND(hh, parent->children, name, namelen, child);
-		if (child != NULL)
-			return child;
-	}
+	HASH_FIND(hh, parent->children, name, namelen, child);
+	if (child != NULL)
+		return child;
 
 	child = pzalloc(sizeof(struct cache_node));
 	child->url = pstrndup(url, name - url + namelen);
 	child->name = child->url + (name - url);
 	child->parent = parent;
-	if (parent != NULL)
-		HASH_ADD_KEYPTR(hh, parent->children, child->name,
-		    namelen, child);
-
+	HASH_ADD_KEYPTR(hh, parent->children, child->name, namelen, child);
 	return child;
 }
 
 /*
- * Find and return. If not found, create and return.
+ * Get or create ancestor's descendant.
  *
  * Suppose @url is "rsync://a.b.c/d/e/f.cer": @ancestor has to be either
- * NULL, "rsync", "rsync://a.b.c", "rsync://a.b.c/d", "rsync://a.b.c/d/e" or
+ * "rsync:", "rsync://a.b.c", "rsync://a.b.c/d", "rsync://a.b.c/d/e" or
  * "rsync://a.b.c/d/e/f.cer".
  *
  * Returns NULL if @ancestor doesn't match @url.
@@ -190,20 +167,18 @@ struct cache_node *
 cachent_provide(struct cache_node *ancestor, char const *url)
 {
 	char *normal;
-	array_index i = 0;
+	array_index i;
 	struct tokenizer tkn;
 
 	normal = normalize(url);
 	if (!normal)
 		return NULL;
 
-	if (ancestor != NULL) {
-		for (; ancestor->url[i] != 0; i++)
-			if (ancestor->url[i] != normal[i])
-				goto fail;
-		if (!is_delimiter(normal[i]))
+	for (i = 0; ancestor->url[i] != 0; i++)
+		if (ancestor->url[i] != normal[i])
 			goto fail;
-	}
+	if (normal[i] != '/' && normal[i] != '\0')
+		goto fail;
 
 	token_init(&tkn, normal + i);
 	while (token_next(&tkn))
@@ -257,7 +232,7 @@ cachent_delete(struct cache_node *node)
 	} while (node != NULL);
 }
 
-void
+static void
 print_node(struct cache_node *node, unsigned int tabs)
 {
 	unsigned int i;
@@ -268,9 +243,9 @@ print_node(struct cache_node *node, unsigned int tabs)
 
 	printf("%s ", node->name);
 	printf("%s", (node->flags & CNF_RSYNC) ? "RSYNC " : "");
-	printf("%s", (node->flags & CNF_DOWNLOADED) ? "DL " : "");
+	printf("%s", (node->flags & CNF_FRESH) ? "Fresh " : "");
 	printf("%s", (node->flags & CNF_TOUCHED) ? "Touched " : "");
-	printf("%s", (node->flags & CNF_VALIDATED) ? "Valid " : "");
+	printf("%s", (node->flags & CNF_VALID) ? "Valid " : "");
 	printf("%s\n", (node->flags & CNF_WITHDRAWN) ? "Withdrawn " : "");
 
 	HASH_ITER(hh, node->children, child, tmp)

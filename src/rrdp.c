@@ -1110,7 +1110,7 @@ rrdp_update(struct cache_node *notif, struct cache_node *rpp)
 
 	if (!(notif->flags & CNF_CHANGED)) {
 		pr_val_debug("The Notification has not changed.");
-		rpp->flags |= CNF_DOWNLOADED; /* Success */
+		rpp->flags |= CNF_FRESH; /* Success */
 		goto end;
 	}
 

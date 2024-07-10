@@ -1,27 +1,26 @@
 #ifndef SRC_CACHE_LOCAL_CACHE_H_
 #define SRC_CACHE_LOCAL_CACHE_H_
 
-#include "types/map.h"
-#include "types/str.h"
 #include "cache/cachent.h"
+#include "types/str.h"
 
-struct rpki_cache;
-struct cache_node;
+void cache_setup(void);		/* Init this module */
+void cache_teardown(void);	/* Destroy this module */
 
-void cache_setup(void);
-void cache_teardown(void);
+int cache_tmpfile(char **);	/* Return new unique path in <cache>/tmp/ */
 
-int cache_tmpfile(char **);
-
-struct rpki_cache *cache_create(void);
-/* Will destroy the cache object, but not the cache directory itself, obv. */
-void cache_destroy(void);
+void cache_prepare(void);	/* Prepare cache for new validation cycle */
+void cache_commit(void);	/* Finish successful validation cycle */
+/* XXX Huh. Looks like this could use a cache_rollback() */
 
 struct sia_uris {
 	struct strlist caRepository; /* rsync RPPs */
 	struct strlist rpkiNotify; /* RRDP Notifications */
 	char *rpkiManifest;
 };
+
+void sias_init(struct sia_uris *);
+void sias_cleanup(struct sia_uris *);
 
 /*
  * The callback should return
@@ -35,7 +34,6 @@ struct sia_uris {
 typedef int (*maps_dl_cb)(struct cache_node *, void *);
 int cache_download_alt(struct sia_uris *, maps_dl_cb, void *);
 
-/* Prints the cache in standard output. */
-void cache_print(struct rpki_cache *);
+void cache_print(void); /* Dump cache in stdout. Recursive; tests only */
 
 #endif /* SRC_CACHE_LOCAL_CACHE_H_ */

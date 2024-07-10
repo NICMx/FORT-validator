@@ -1,9 +1,17 @@
 #ifndef SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 #define SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 
+#include <stdbool.h>
 #include <netdb.h>
 
-#include "types/map.h"
+// XXX rename
+struct tokenizer {
+	char const *str;
+	size_t len;
+};
+
+void token_init(struct tokenizer *, char const *);
+bool token_next(struct tokenizer *tkn);
 
 struct path_builder {
 	char *string;
@@ -29,5 +37,7 @@ int pb_pop(struct path_builder *, bool);
 void pb_reverse(struct path_builder *);
 
 void pb_cleanup(struct path_builder *);
+
+char *join_paths(char const *, char const *);
 
 #endif /* SRC_DATA_STRUCTURE_PATH_BUILDER_H_ */

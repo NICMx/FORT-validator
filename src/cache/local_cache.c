@@ -39,8 +39,8 @@ struct cached_rpp {
 };
 
 static struct rpki_cache {
-	struct cache_node *https;
 	struct cache_node *rsync;
+	struct cache_node *https;
 //	time_t startup_ts; /* When we started the last validation */
 } cache;
 
@@ -112,45 +112,45 @@ fail:
 static void
 init_cache_metafile(void)
 {
-	char *filename;
-	json_t *root;
-	json_error_t jerror;
-	char const *file_version;
-	int error;
-
-	filename = get_cache_filename(CACHE_METAFILE, true);
-	root = json_load_file(filename, 0, &jerror);
-
-	if (root == NULL) {
-		if (json_error_code(&jerror) == json_error_cannot_open_file)
-			pr_op_debug("%s does not exist.", filename);
-		else
-			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-			    filename, jerror.line, jerror.column, jerror.text);
-		goto invalid_cache;
-	}
-	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_err("The root tag of %s is not an object.", filename);
-		goto invalid_cache;
-	}
-
-	error = json_get_str(root, TAGNAME_VERSION, &file_version);
-	if (error) {
-		if (error > 0)
-			pr_op_err("%s is missing the " TAGNAME_VERSION " tag.",
-			    filename);
-		goto invalid_cache;
-	}
-
-	if (strcmp(file_version, PACKAGE_VERSION) == 0)
-		goto end;
-
-invalid_cache:
-	pr_op_info("The cache appears to have been built by a different version of Fort. I'm going to clear it, just to be safe.");
-	file_rm_rf(config_get_local_repository());
-
-end:	json_decref(root);
-	free(filename);
+//	char *filename;
+//	json_t *root;
+//	json_error_t jerror;
+//	char const *file_version;
+//	int error;
+//
+//	filename = get_cache_filename(CACHE_METAFILE, true);
+//	root = json_load_file(filename, 0, &jerror);
+//
+//	if (root == NULL) {
+//		if (json_error_code(&jerror) == json_error_cannot_open_file)
+//			pr_op_debug("%s does not exist.", filename);
+//		else
+//			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+//			    filename, jerror.line, jerror.column, jerror.text);
+//		goto invalid_cache;
+//	}
+//	if (json_typeof(root) != JSON_OBJECT) {
+//		pr_op_err("The root tag of %s is not an object.", filename);
+//		goto invalid_cache;
+//	}
+//
+//	error = json_get_str(root, TAGNAME_VERSION, &file_version);
+//	if (error) {
+//		if (error > 0)
+//			pr_op_err("%s is missing the " TAGNAME_VERSION " tag.",
+//			    filename);
+//		goto invalid_cache;
+//	}
+//
+//	if (strcmp(file_version, PACKAGE_VERSION) == 0)
+//		goto end;
+//
+//invalid_cache:
+//	pr_op_info("The cache appears to have been built by a different version of Fort. I'm going to clear it, just to be safe.");
+//	file_rm_rf(config_get_local_repository());
+//
+//end:	json_decref(root);
+//	free(filename);
 }
 
 static void
@@ -180,8 +180,8 @@ init_tmp_dir(void)
 
 	dirname = get_cache_filename(TMPDIR, true);
 
-	error = mkdir_p(dirname, true);
-	if (error)
+	error = mkdir(dirname, true);
+	if (error != EEXIST)
 		pr_crit("Cannot create %s: %s", dirname, strerror(error));
 
 	free(dirname);
@@ -333,60 +333,58 @@ json2node(json_t *json)
 }
 
 static void
-load_tal_json(struct rpki_cache *cache)
+load_tal_json(void)
 {
-	char *filename;
-	json_t *root;
-	json_error_t jerror;
-	size_t n;
-	struct cache_node *node;
+	cache.rsync = cachent_create_root("rsync:");
+	cache.https = cachent_create_root("https:");
 
-	/*
-	 * Note: Loading TAL_METAFILE is one of few things Fort can fail at
-	 * without killing itself. It's just a cache of a cache.
-	 */
-
-	filename = get_tal_json_filename();
-	if (filename == NULL)
-		return;
-
-	pr_op_debug("Loading %s.", filename);
-
-	root = json_load_file(filename, 0, &jerror);
-
-	if (root == NULL) {
-		if (json_error_code(&jerror) == json_error_cannot_open_file)
-			pr_op_debug("%s does not exist.", filename);
-		else
-			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-			    filename, jerror.line, jerror.column, jerror.text);
-		goto end;
-	}
-	if (json_typeof(root) != JSON_ARRAY) {
-		pr_op_err("The root tag of %s is not an array.", filename);
-		goto end;
-	}
-
-	for (n = 0; n < json_array_size(root); n++) {
-		node = json2node(json_array_get(root, n));
-		if (node != NULL)
-			add_node(cache, node);
-	}
-
-end:	json_decref(root);
-	free(filename);
+//	char *filename;
+//	json_t *root;
+//	json_error_t jerror;
+//	size_t n;
+//	struct cache_node *node;
+//
+//	/*
+//	 * Note: Loading TAL_METAFILE is one of few things Fort can fail at
+//	 * without killing itself. It's just a cache of a cache.
+//	 */
+//
+//	filename = get_tal_json_filename();
+//	if (filename == NULL)
+//		return;
+//
+//	pr_op_debug("Loading %s.", filename);
+//
+//	root = json_load_file(filename, 0, &jerror);
+//
+//	if (root == NULL) {
+//		if (json_error_code(&jerror) == json_error_cannot_open_file)
+//			pr_op_debug("%s does not exist.", filename);
+//		else
+//			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+//			    filename, jerror.line, jerror.column, jerror.text);
+//		goto end;
+//	}
+//	if (json_typeof(root) != JSON_ARRAY) {
+//		pr_op_err("The root tag of %s is not an array.", filename);
+//		goto end;
+//	}
+//
+//	for (n = 0; n < json_array_size(root); n++) {
+//		node = json2node(json_array_get(root, n));
+//		if (node != NULL)
+//			add_node(cache, node);
+//	}
+//
+//end:	json_decref(root);
+//	free(filename);
 }
 
-struct rpki_cache *
-cache_create(void)
+void
+cache_prepare(void)
 {
-	struct rpki_cache *cache;
-	cache = pzalloc(sizeof(struct rpki_cache));
-	cache->startup_ts = time(NULL);
-	if (cache->startup_ts == (time_t) -1)
-		pr_crit("time(NULL) returned (time_t) -1.");
-	load_tal_json(cache);
-	return cache;
+	memset(&cache, 0, sizeof(cache));
+	load_tal_json();
 }
 
 static json_t *
@@ -461,24 +459,24 @@ build_tal_json(struct rpki_cache *cache)
 }
 
 static void
-write_tal_json(struct rpki_cache *cache)
+write_tal_json(void)
 {
-	char *filename;
-	struct json_t *json;
-
-	json = build_tal_json(cache);
-	if (json == NULL)
-		return;
-
-	filename = get_tal_json_filename();
-	if (filename == NULL)
-		goto end;
-
-	if (json_dump_file(json, filename, JSON_INDENT(2)))
-		pr_op_err("Unable to write %s; unknown cause.", filename);
-
-end:	json_decref(json);
-	free(filename);
+//	char *filename;
+//	struct json_t *json;
+//
+//	json = build_tal_json(cache);
+//	if (json == NULL)
+//		return;
+//
+//	filename = get_tal_json_filename();
+//	if (filename == NULL)
+//		goto end;
+//
+//	if (json_dump_file(json, filename, JSON_INDENT(2)))
+//		pr_op_err("Unable to write %s; unknown cause.", filename);
+//
+//end:	json_decref(json);
+//	free(filename);
 }
 
 /*
@@ -486,14 +484,14 @@ end:	json_decref(json);
  * Always consumes @path.
  */
 static struct cache_node *
-find_msm(char *path, struct cache_node **msm)
+find_msm(struct cache_node *root, char *path, struct cache_node **msm)
 {
 	struct cache_node *node, *child;
 	char *nm, *sp; /* name, saveptr */
 	size_t keylen;
 
 	*msm = NULL;
-	node = cache.root;
+	node = root;
 	nm = strtok_r(path + RPKI_SCHEMA_LEN, "/", &sp); // XXX
 
 	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
@@ -533,25 +531,17 @@ dl_rsync(char const *uri, struct cache_node *node)
 	if (error)
 		return error;
 
-	/*
-	 * XXX the slow (-p) version is unlikely to be necessary.
-	 * Maybe this function should also short-circuit by parent.
-	 */
-	error = mkdir_p(path, true);
-	if (error)
-		goto cancel;
-
 	// XXX looks like the third argument is redundant now.
 	error = rsync_download(module->url, path, true);
 	if (error)
 		goto cancel;
 
-	module->flags |= CNF_DOWNLOADED;
+	module->flags |= CNF_FRESH;
 	module->mtim = time(NULL); // XXX catch -1
 	module->tmpdir = path;
 
 	while (node != NULL) {
-		node->flags |= CNF_DOWNLOADED;
+		node->flags |= CNF_FRESH;
 		node->mtim = module->mtim;
 		node = node->parent;
 	}
@@ -585,7 +575,7 @@ dl_rrdp(char const *notif_url, struct cache_node *mft)
 	// XXX maybe pr_crit() on !mft->parent?
 	return rrdp_update(cachent_provide(cache.https, notif_url), mft->parent);
 
-//	node->flags |= CNF_DOWNLOADED;
+//	node->flags |= CNF_FRESH;
 //	node->mtim = time(NULL); // XXX catch -1
 //	node->tmpdir = path;
 }
@@ -659,7 +649,7 @@ cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 	/* XXX if parent is downloaded, child is downloaded. */
 	mft = cachent_provide(cache.rsync, uris->rpkiManifest);
 
-	if (mft->flags & CNF_DOWNLOADED)
+	if (mft->flags & CNF_FRESH)
 		return cb(mft, arg);
 
 	for (online = 1; online >= 0; online--) {
@@ -678,6 +668,13 @@ cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 	return error;
 }
 
+void
+cache_print(void)
+{
+	cachent_print(cache.rsync);
+	cachent_print(cache.https);
+}
+
 /*
  * XXX this needs to be hit only by files now
  * XXX result is redundant
@@ -688,9 +685,8 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 	if (node->tmpdir == NULL)
 		return true; /* Not updated */
 
-	if (node->flags & CNF_VALIDATED)
-		/* XXX nftw() no longer needed; rename() is enough */
-		file_merge_into(node->tmpdir, path);
+	if (node->flags & CNF_VALID)
+		rename(node->tmpdir, path); // XXX
 	else
 		/* XXX same; just do remove(). */
 		/* XXX and rename "tmpdir" into "tmp". */
@@ -845,16 +841,18 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 //	return false;
 //}
 
+static struct cache_node *nftw_root;
+
 static int
-__remove_abandoned(const char *path, const struct stat *st, int typeflag,
-    struct FTW *ftw)
+nftw_remove_abandoned(const char *path, const struct stat *st,
+    int typeflag, struct FTW *ftw)
 {
 	struct cache_node *pm; /* Perfect Match */
 	struct cache_node *msm; /* Most Specific Match */
 	struct timespec now;
 
 	/* XXX node->parent has to be set */
-	pm = find_msm(pstrdup(path), &msm);
+	pm = find_msm(nftw_root, pstrdup(path), &msm);
 	if (!pm && !(msm->flags & CNF_RSYNC))
 		goto unknown; /* The traversal is depth-first */
 
@@ -897,16 +895,26 @@ unknown:
 static void
 remove_abandoned(void)
 {
-	char *root = join_paths(config_get_local_repository(), "rsync");
-	nftw(root, __remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
-	free(root);
+	char *rootpath;
+
+	rootpath = join_paths(config_get_local_repository(), "rsync");
+
+	nftw_root = cache.rsync;
+	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
+
+	strcpy(rootpath + strlen(rootpath) - 5, "https");
+
+	nftw_root = cache.https;
+	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
+
+	free(rootpath);
 }
 
 /*
  * Deletes unknown and old untraversed cached files, writes metadata into XML.
  */
 static void
-cache_cleanup(void)
+cleanup_cache(void)
 {
 //	struct cache_node *node, *tmp;
 //	time_t last_week;
@@ -925,13 +933,27 @@ cache_cleanup(void)
 	/* XXX delete nodes for which no file exists? */
 }
 
-//void
-//cache_destroy(void)
-//{
-//	cache_cleanup();
-//	write_tal_json(cache);
-//
-//	HASH_ITER(hh, cache->ht, node, tmp)
-//		delete_node(cache, node);
-//	free(cache);
-//}
+void
+cache_commit(void)
+{
+	cleanup_cache();
+	write_tal_json();
+	cachent_delete(cache.rsync);
+	cachent_delete(cache.https);
+}
+
+void
+sias_init(struct sia_uris *sias)
+{
+	strlist_init(&sias->caRepository);
+	strlist_init(&sias->rpkiNotify);
+	sias->rpkiManifest = NULL;
+}
+
+void
+sias_cleanup(struct sia_uris *sias)
+{
+	strlist_cleanup(&sias->caRepository);
+	strlist_cleanup(&sias->rpkiNotify);
+	free(sias->rpkiManifest);
+}

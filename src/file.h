@@ -36,7 +36,7 @@ int file_merge_into(char const *, char const *);
 int file_rm_f(char const *);
 int file_rm_rf(char const *);
 
-char *join_paths(char const *, char const *);
+int mkdir_p(char const *, bool);
 
 /*
  * Remember that this API is awkward:

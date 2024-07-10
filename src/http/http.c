@@ -461,7 +461,7 @@ http_download_cache_node(struct cache_node *node)
 	if (error)
 		return error;
 
-	node->flags |= CNF_DOWNLOADED; // XXX on notification, preserve node but not file
+	node->flags |= CNF_FRESH; // XXX on notification, preserve node but not file
 	if (changed) {
 		node->flags |= CNF_CHANGED;
 		node->mtim = time(NULL); // XXX catch -1

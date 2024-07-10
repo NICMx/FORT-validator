@@ -12,8 +12,8 @@
 #define CNF_RSYNC		(1 << 0)
 /* Do we have a copy in the cache? */
 #define CNF_CACHED		(1 << 1)
-/* Was it downloaded during the current cycle? XXX Probably rename to "FRESH" */
-#define CNF_DOWNLOADED		(1 << 2)
+/* Was it downloaded during the current cycle? */
+#define CNF_FRESH		(1 << 2)
 /* Did it change between the previous cycle and the current one? */
 #define CNF_CHANGED		(1 << 3)
 /* Was it read during the current cycle? */
@@ -23,7 +23,7 @@
  * (It's technically possible for two different repositories to map to the same
  * cache node. One of them is likely going to fail validation.)
  */
-#define CNF_VALIDATED		(1 << 5)
+#define CNF_VALID		(1 << 5)
 /* Is the node an RRDP Update Notification? */
 #define CNF_NOTIFICATION	(1 << 6)
 /* Withdrawn by RRDP? */
@@ -37,7 +37,7 @@ struct cache_node {
 	/* Last successful download time, or zero */
 	time_t mtim;
 	/*
-	 * If flags & CNF_DOWNLOADED, path to the temporal directory where we
+	 * If flags & CNF_FRESH, path to the temporal directory where we
 	 * downloaded the latest refresh.
 	 * (See --compare-dest at rsync(1). RRDP is basically the same.)
 	 * Otherwise undefined.
@@ -56,6 +56,8 @@ struct cache_node {
 
 	UT_hash_handle hh; /* Hash table hook */
 };
+
+struct cache_node *cachent_create_root(char const *);
 
 int cachent_traverse(struct cache_node *,
     bool (*cb)(struct cache_node *, char const *));

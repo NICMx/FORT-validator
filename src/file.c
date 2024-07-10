@@ -6,6 +6,7 @@
 
 #include "alloc.h"
 #include "log.h"
+#include "data_structure/path_builder.h"
 #include "data_structure/uthash.h"
 
 int
@@ -135,53 +136,6 @@ file_exists(char const *path)
 	return (stat(path, &meta) == 0) ? 0 : errno;
 }
 
-/* strlen("cache/tmp/123"), ie. 13 */
-static size_t src_offset;
-/* cache/rsync/a.b.c/d/e */
-static char const *merge_dst;
-
-/* Moves cache/tmp/123/z into cache/rsync/a.b.c/d/e/z. */
-static int
-merge_into(const char *src, const struct stat *st, int typeflag,
-    struct FTW *ftw)
-{
-	char *dst;
-	struct timespec times[2];
-
-	dst = join_paths(merge_dst, &src[src_offset]);
-
-	if (S_ISDIR(st->st_mode)) {
-		mkdir(dst, st->st_mode); /* XXX catch error */
-
-		times[0] = st->st_atim;
-		times[1] = st->st_mtim;
-		utimensat(AT_FDCWD, dst, times, AT_SYMLINK_NOFOLLOW); /* XXX catch error */
-	} else {
-		rename(src, dst); /* XXX catch error */
-	}
-
-	free(dst);
-	return 0;
-}
-
-/*
- * Move all the files contained in @src to @dst, overwriting when necessary,
- * not touching files that exist in @dst but not in @src.
- *
- * Both directories have to already exist.
- *
- * @src: cache/tmp/123
- * @dst: cache/rsync/a.b.c/d/e
- */
-int
-file_merge_into(char const *src, char const *dst)
-{
-	src_offset = strlen(src);
-	merge_dst = dst;
-	/* TODO (performance) optimize that 32 */
-	return nftw(src, merge_into, 32, FTW_PHYS);
-}
-
 /*
  * Like remove(), but don't care if the file is already deleted.
  */
@@ -216,20 +170,87 @@ file_rm_rf(char const *path)
 	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
 }
 
-/* Cannot return NULL. */
-char *
-join_paths(char const *path1, char const *path2)
+/*
+ * > 0: exists
+ * = 0: !exists
+ * < 0: error
+ */
+static int
+dir_exists(char const *path)
 {
-	size_t n;
-	char *result;
-	int written;
+	struct stat meta;
+	int error;
 
-	n = strlen(path1) + strlen(path2) + 2;
-	result = pmalloc(n);
+	if (stat(path, &meta) != 0) {
+		error = errno;
+		if (error == ENOENT)
+			return 0;
+		pr_op_err_st("stat() failed: %s", strerror(error));
+		return -error;
+	}
 
-	written = snprintf(result, n, "%s/%s", path1, path2);
-	if (written != n - 1)
-		pr_crit("join_paths: %zu %d %s %s", n, written, path1, path2);
+	if (!S_ISDIR(meta.st_mode)) {
+		return pr_op_err_st("Path '%s' exists and is not a directory.",
+		    path);
+	}
 
+	return 1;
+}
+
+static int
+ensure_dir(char const *path)
+{
+	int error;
+
+	if (mkdir(path, 0777) != 0) {
+		error = errno;
+		if (error != EEXIST) {
+			pr_op_err_st("Error while making directory '%s': %s",
+			    path, strerror(error));
+			return error;
+		}
+	}
+
+	return 0;
+}
+
+/* mkdir -p $_path */
+/* XXX Maybe also short-circuit by parent? */
+int
+mkdir_p(char const *_path, bool include_basename)
+{
+	char *path, *last_slash;
+	int i, result = 0;
+
+	path = pstrdup(_path); /* Remove const */
+
+	if (!include_basename) {
+		last_slash = strrchr(path, '/');
+		if (last_slash == NULL)
+			goto end;
+		*last_slash = '\0';
+	}
+
+	result = dir_exists(path); /* short circuit */
+	if (result > 0) {
+		result = 0;
+		goto end;
+	} else if (result < 0) {
+		goto end;
+	}
+
+	for (i = 1; path[i] != '\0'; i++) {
+		if (path[i] == '/') {
+			path[i] = '\0';
+			result = ensure_dir(path);
+			path[i] = '/';
+			if (result != 0)
+				goto end; /* error msg already printed */
+		}
+	}
+	result = ensure_dir(path);
+
+end:
+	free(path);
 	return result;
 }

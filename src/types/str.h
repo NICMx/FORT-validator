@@ -7,6 +7,6 @@ DEFINE_ARRAY_LIST_STRUCT(strlist, char *);
 
 void strlist_init(struct strlist *);
 void strlist_cleanup(struct strlist *);
-void strlist_add(struct strlist *list, char *elem);
+void strlist_add(struct strlist *, char *);
 
 #endif /* SRC_TYPES_STR_H_ */
