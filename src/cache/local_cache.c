@@ -25,6 +25,7 @@
 #include "http/http.h"
 #include "rsync/rsync.h"
 #include "types/str.h"
+#include "types/url.h"
 
 /* XXX force RRDP if one RPP fails to validate by rsync? */
 
@@ -510,10 +511,48 @@ find_msm(struct cache_node *root, char *path, struct cache_node **msm)
 	return node;
 }
 
-static int
-dl_rsync(char const *uri, struct cache_node *node)
+/*
+ * The "rsync module" is the component immediately after the domain.
+ *
+ * get_rsync_module(rsync://a.b.c/d/e/f/potato.mft) = d
+ */
+static struct cache_node *
+get_rsync_module(struct cache_node *node)
 {
-	struct cache_node *module;
+	struct cache_node *gp; /* Grandparent */
+
+	if (!node || !node->parent || !node->parent->parent)
+		return NULL;
+
+	for (gp = node->parent->parent; gp->parent != NULL; gp = gp->parent)
+		node = node->parent;
+	return node;
+}
+
+static struct cache_node *
+get_rsync_rpp(char const *caRepository, struct cache_node *rpkiManifest)
+{
+	struct cache_node *node;
+	char *normal;
+
+	normal = url_normalize(caRepository);
+	if (normal == NULL)
+		return NULL;
+
+	for (node = rpkiManifest; node != NULL; node = node->parent)
+		if (strcmp(node->url, normal) == 0) {
+			free(normal);
+			return node;
+		}
+
+	free(normal);
+	return NULL;
+}
+
+static int
+dl_rsync(char const *caRepository, struct cache_node *mft)
+{
+	struct cache_node *module, *node;
 	char *path;
 	int error;
 
@@ -522,10 +561,14 @@ dl_rsync(char const *uri, struct cache_node *node)
 		return 1;
 	}
 
-	/* XXX this is probably wrong; get the real module. */
-	module = node;
-	while (module->parent != NULL)
-		module = module->parent;
+	module = get_rsync_module(mft);
+	if (module == NULL) {
+		return -EINVAL; // XXX
+	}
+	mft->rpp = get_rsync_rpp(caRepository, mft);
+	if (!mft->rpp)
+		return pr_val_err("Manifest '%s' does not seem to be inside its publication point '%s'.",
+		    mft->url, caRepository);
 
 	error = cache_tmpfile(&path);
 	if (error)
@@ -533,23 +576,26 @@ dl_rsync(char const *uri, struct cache_node *node)
 
 	// XXX looks like the third argument is redundant now.
 	error = rsync_download(module->url, path, true);
-	if (error)
-		goto cancel;
+	if (error) {
+		free(path);
+		return error;
+	}
 
-	module->flags |= CNF_FRESH;
+	module->flags |= CNF_RSYNC | CNF_CACHED | CNF_FRESH;
 	module->mtim = time(NULL); // XXX catch -1
 	module->tmpdir = path;
 
-	while (node != NULL) {
-		node->flags |= CNF_FRESH;
+	for (node = mft; node != module; node = node->parent) {
+		node->flags |= RSYNC_INHERIT;
 		node->mtim = module->mtim;
-		node = node->parent;
+		if (mft) {
+			node->rpp = mft->rpp;
+			if (node == mft->rpp)
+				mft = NULL;
+		}
 	}
 
 	return 0;
-
-cancel:	free(path);
-	return error;
 }
 
 static int
@@ -598,6 +644,8 @@ download(char const *uri, enum map_type type, struct cache_node *mft)
 
 /*
  * XXX review result sign
+ *
+ * uri is a rpkiNotify or a caRepository.
  */
 static int
 try_uri(struct cache_node *mft, char const *uri, enum map_type type,
@@ -615,7 +663,7 @@ try_uri(struct cache_node *mft, char const *uri, enum map_type type,
 		}
 	}
 
-	error = cb(mft, arg);
+	error = cb(mft->rpp, arg);
 	if (error) {
 		pr_val_debug("RPP validation failed.");
 		return error;
@@ -642,7 +690,6 @@ cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 {
 	struct cache_node *mft;
 	int online;
-	char **uri;
 	int error = 0;
 
 	/* XXX mutex */
@@ -650,19 +697,19 @@ cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 	mft = cachent_provide(cache.rsync, uris->rpkiManifest);
 
 	if (mft->flags & CNF_FRESH)
-		return cb(mft, arg);
+		return cb(mft->rpp, arg); // XXX can rpp be NULL?
 
 	for (online = 1; online >= 0; online--) {
-		ARRAYLIST_FOREACH(&uris->rpkiNotify, uri) {
-			error = try_uri(mft, *uri, MAP_NOTIF, online, cb, arg);
+		if (uris->rpkiNotify) {
+			error = try_uri(mft, uris->rpkiNotify, MAP_NOTIF,
+			    online, cb, arg);
 			if (error <= 0)
 				return error;
 		}
-		ARRAYLIST_FOREACH(&uris->caRepository, uri) {
-			error = try_uri(mft, *uri, MAP_RSYNC, online, cb, arg);
-			if (error <= 0)
-				return error;
-		}
+		error = try_uri(mft, uris->caRepository, MAP_RSYNC,
+		    online, cb, arg);
+		if (error <= 0)
+			return error;
 	}
 
 	return error;
@@ -945,15 +992,13 @@ cache_commit(void)
 void
 sias_init(struct sia_uris *sias)
 {
-	strlist_init(&sias->caRepository);
-	strlist_init(&sias->rpkiNotify);
-	sias->rpkiManifest = NULL;
+	memset(sias, 0, sizeof(*sias));
 }
 
 void
 sias_cleanup(struct sia_uris *sias)
 {
-	strlist_cleanup(&sias->caRepository);
-	strlist_cleanup(&sias->rpkiNotify);
+	free(sias->caRepository);
+	free(sias->rpkiNotify);
 	free(sias->rpkiManifest);
 }

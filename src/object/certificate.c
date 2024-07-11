@@ -97,22 +97,6 @@ static const struct ad_metadata RPKI_MANIFEST = {
 };
 
 static void
-sia_uris_init(struct sia_uris *uris)
-{
-	strlist_init(&uris->caRepository);
-	strlist_init(&uris->rpkiNotify);
-	uris->rpkiManifest = NULL;
-}
-
-static void
-sia_uris_cleanup(struct sia_uris *uris)
-{
-	strlist_cleanup(&uris->caRepository);
-	strlist_cleanup(&uris->rpkiNotify);
-	free(uris->rpkiManifest);
-}
-
-static void
 debug_serial_number(BIGNUM *number)
 {
 	char *number_str;
@@ -1193,23 +1177,45 @@ static void
 handle_rpkiManifest(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
-	uris->rpkiManifest = uri;
+
+	pr_val_debug("rpkiManifest: %s", uri);
+
+	if (uris->rpkiManifest != NULL) {
+		pr_val_warn("Ignoring additional rpkiManifest: %s", uri);
+		free(uri);
+	} else {
+		uris->rpkiManifest = uri;
+	}
 }
 
 static void
 handle_caRepository(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
+
 	pr_val_debug("caRepository: %s", uri);
-	strlist_add(&uris->caRepository, uri);
+
+	if (uris->caRepository != NULL) {
+		pr_val_warn("Ignoring additional caRepository: %s", uri);
+		free(uri);
+	} else {
+		uris->caRepository = uri;
+	}
 }
 
 static void
 handle_rpkiNotify(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
+
 	pr_val_debug("rpkiNotify: %s", uri);
-	strlist_add(&uris->rpkiNotify, uri);
+
+	if (uris->rpkiNotify != NULL) {
+		pr_val_warn("Ignoring additional rpkiNotify: %s", uri);
+		free(uri);
+	} else {
+		uris->rpkiNotify = uri;
+	}
 }
 
 static void
@@ -1217,6 +1223,7 @@ handle_signedObject(char *uri, void *arg)
 {
 	struct certificate_refs *refs = arg;
 	pr_val_debug("signedObject: %s", uri);
+	// XXX Maybe it's time to review this API.
 	refs->signedObject = uri;
 }
 
@@ -1799,15 +1806,6 @@ certificate_validate_aia(char const *caIssuers, X509 *cert)
 	return 0;
 }
 
-static int
-download_rpp(struct sia_uris *uris)
-{
-	if (uris->caRepository.len == 0 && uris->rpkiNotify.len == 0)
-		return pr_val_err("SIA lacks both caRepository and rpkiNotify.");
-
-	return cache_download_alt(uris, MAP_NOTIF, NULL, NULL);
-}
-
 /** Boilerplate code for CA certificate validation and recursive traversal. */
 int
 certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
@@ -1883,7 +1881,7 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	if (error)
 		goto revert_uris;
 
-	error = download_rpp(&sia_uris);
+	error = cache_download_alt(&sia_uris, MAP_NOTIF, NULL, NULL);
 	if (error)
 		goto revert_uris;
 
@@ -1904,7 +1902,7 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	rpp_refput(pp);
 
 revert_uris:
-	sia_uris_cleanup(&sia_uris);
+	sias_cleanup(&sia_uris);
 revert_cert:
 	if (cert != NULL)
 		X509_free(cert);

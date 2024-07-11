@@ -22,9 +22,13 @@ AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CF
 # target.
 MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
 
-check_PROGRAMS  = cachent.test
+check_PROGRAMS  = url.test
+#check_PROGRAMS += cachent.test
 check_PROGRAMS += cache.test
 TESTS = ${check_PROGRAMS}
+
+url_test_SOURCES = types/url_test.c
+url_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 cache_test_SOURCES = cache/local_cache_test.c
 cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}

@@ -3,18 +3,26 @@
 
 /* CACHE ENTity, CACHE elemENT, CACHE componENT */
 
+#include <stdbool.h>
 #include "data_structure/uthash.h"
-
-#define RPKI_SCHEMA_LEN 8 /* strlen("rsync://"), strlen("https://") */
 
 /* XXX rename "touched" and "validated" into "preserve"? */
 
 #define CNF_RSYNC		(1 << 0)
-/* Do we have a copy in the cache? */
+/*
+ * Do we have a (full) copy in the cache?
+ * If disabled, we don't know (because an ancestor was recursively rsync'd).
+ */
 #define CNF_CACHED		(1 << 1)
-/* Was it downloaded during the current cycle? */
+/*
+ * Was it (allegedly) downloaded during the current cycle?
+ * "Allegedly" because we might have rsync'd an ancestor.
+ */
 #define CNF_FRESH		(1 << 2)
-/* Did it change between the previous cycle and the current one? */
+/*
+ * Did it change between the previous cycle and the current one?
+ * (This is HTTP and RRDP only; rsync doesn't tell us.)
+ */
 #define CNF_CHANGED		(1 << 3)
 /* Was it read during the current cycle? */
 #define CNF_TOUCHED		(1 << 4)
@@ -28,6 +36,12 @@
 #define CNF_NOTIFICATION	(1 << 6)
 /* Withdrawn by RRDP? */
 #define CNF_WITHDRAWN		(1 << 7)
+
+/*
+ * Flags for children of downloaded rsync nodes that should be cleaned later.
+ * (FRESH prevents redownload.)
+ */
+#define RSYNC_INHERIT		(CNF_RSYNC | CNF_FRESH)
 
 // XXX rename to cache_entity or cachent
 struct cache_node {
@@ -45,6 +59,8 @@ struct cache_node {
 	 * XXX this is not always a directory; rename to "tmppath"
 	 */
 	char *tmpdir;
+
+	struct cache_node *rpp; // XXX delete?
 
 	/* Only if flags & CNF_NOTIFICATION. */
 //	struct cachefile_notification notif;

@@ -3,6 +3,7 @@
 
 #include "data_structure/array_list.h"
 
+/* XXX delete? */
 DEFINE_ARRAY_LIST_STRUCT(strlist, char *);
 
 void strlist_init(struct strlist *);

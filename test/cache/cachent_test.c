@@ -5,6 +5,7 @@
 #include "cache/common.c"
 #include "data_structure/path_builder.c"
 #include "mock.c"
+#include "types/url.c"
 
 static char deleted[16][5];
 static unsigned int dn;
@@ -222,33 +223,6 @@ START_TEST(test_traverse)
 }
 END_TEST
 
-#define TEST_NORMALIZE(dirty, clean)					\
-	normal = normalize(dirty);					\
-	ck_assert_str_eq(clean, normal);				\
-	free(normal)
-
-START_TEST(test_normalize)
-{
-	char *normal;
-
-	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c");
-	TEST_NORMALIZE("rsync://a.b.c/", "rsync://a.b.c");
-	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c");
-	TEST_NORMALIZE("rsync://a.b.c/d/e", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/./e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/../d/../d/e/", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/../x/y/z", "rsync://x/y/z");
-	TEST_NORMALIZE("rsync://x//y/z/../../../m/./n/o", "rsync://m/n/o");
-	ck_assert_ptr_eq(NULL, normalize("rsync://"));
-	ck_assert_ptr_eq(NULL, normalize("rsync://.."));
-	ck_assert_ptr_eq(NULL, normalize("rsync://a.b.c/.."));
-	ck_assert_ptr_eq(NULL, normalize("rsync://a.b.c/d/e/../../.."));
-	ck_assert_ptr_eq(NULL, normalize("abcde://a.b.c/d"));
-}
-END_TEST
-
 START_TEST(test_provide)
 {
 	struct cache_node *rsync, *abc, *d, *e, *f, *g, *h, *ee;
@@ -342,7 +316,6 @@ static Suite *thread_pool_suite(void)
 	tcase_add_test(traverses, test_traverse);
 
 	provide = tcase_create("provide");
-	tcase_add_test(provide, test_normalize);
 	tcase_add_test(provide, test_provide);
 
 	suite = suite_create("cachent");

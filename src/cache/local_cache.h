@@ -2,7 +2,6 @@
 #define SRC_CACHE_LOCAL_CACHE_H_
 
 #include "cache/cachent.h"
-#include "types/str.h"
 
 void cache_setup(void);		/* Init this module */
 void cache_teardown(void);	/* Destroy this module */
@@ -14,8 +13,8 @@ void cache_commit(void);	/* Finish successful validation cycle */
 /* XXX Huh. Looks like this could use a cache_rollback() */
 
 struct sia_uris {
-	struct strlist caRepository; /* rsync RPPs */
-	struct strlist rpkiNotify; /* RRDP Notifications */
+	char *caRepository;	/* RPP cage */
+	char *rpkiNotify;	/* RRDP Notification */
 	char *rpkiManifest;
 };
 
@@ -31,7 +30,7 @@ void sias_cleanup(struct sia_uris *);
  *
  * XXX rename
  */
-typedef int (*maps_dl_cb)(struct cache_node *, void *);
+typedef int (*maps_dl_cb)(struct cache_node *rpp, void *arg);
 int cache_download_alt(struct sia_uris *, maps_dl_cb, void *);
 
 void cache_print(void); /* Dump cache in stdout. Recursive; tests only */

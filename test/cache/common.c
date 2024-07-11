@@ -5,7 +5,7 @@
 #include "data_structure/uthash.h"
 
 struct cache_node *
-node(char const *url, int flags, ...)
+node(char const *url, int flags, char const *tmpdir, ...)
 {
 	struct cache_node *result;
 	struct cache_node *child;
@@ -17,8 +17,9 @@ node(char const *url, int flags, ...)
 	slash = strrchr(url, '/');
 	result->name = slash ? (slash + 1) : result->url;
 	result->flags = flags;
+	result->tmpdir = tmpdir ? pstrdup(tmpdir) : NULL;
 
-	va_start(args, flags);
+	va_start(args, tmpdir);
 	while ((child = va_arg(args, struct cache_node *)) != NULL) {
 		HASH_ADD_KEYPTR(hh, result->children, child->name,
 		    strlen(child->name), child);

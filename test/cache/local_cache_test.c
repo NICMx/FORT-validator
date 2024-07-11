@@ -6,7 +6,7 @@
 #include <check.h>
 //#include <stdarg.h>
 #include <sys/queue.h>
-//
+
 #include "alloc.c"
 //#include "json_util.c"
 #include "mock.c"
@@ -15,7 +15,7 @@
 #include "cache/local_cache.c"
 #include "data_structure/path_builder.c"
 #include "types/str.c"
-//#include "types/map.c"
+#include "types/url.c"
 
 /* Mocks */
 
@@ -127,6 +127,8 @@ setup_test(void)
 static int
 okay(struct cache_node *node, void *arg)
 {
+	// XXX ensure the rsync and RRDP codes do this
+	node->flags |= CNF_VALID;
 	return 0;
 }
 
@@ -136,8 +138,8 @@ run_dl_rsync(char const *caRepository, char const *rpkiManifest,
 {
 	static struct sia_uris sias;
 
-	sias_init(&sias);
-	strlist_add(&sias.caRepository, pstrdup(caRepository));
+	sias.caRepository = pstrdup(caRepository);
+	sias.rpkiNotify = NULL;
 	sias.rpkiManifest = pstrdup(rpkiManifest);
 
 	rsync_counter = 0;
@@ -162,13 +164,17 @@ find_downloaded_path(struct cache_node *node)
 {
 	struct downloaded_path *path;
 
-	SLIST_FOREACH(path, &downloaded, hook)
+	if (!node->tmpdir)
+		return NULL;
+
+	SLIST_FOREACH(path, &downloaded, hook) {
 		if (strcmp(node->tmpdir, path->path) == 0) {
 			if (path->visited)
 				ck_abort_msg("Looked up twice: %s", path->path);
 			path->visited = true;
 			return path;
 		}
+	}
 
 	return NULL;
 }
@@ -179,14 +185,14 @@ check_path(struct cache_node *node, char const *_)
 	struct downloaded_path *path;
 
 	path = find_downloaded_path(node);
-	if (node->flags & CNF_CACHED) {
+	if (node->tmpdir) {
 		if (path == NULL)
 			ck_abort_msg("Cached file is missing: %s",
 			    node->tmpdir);
 	} else {
 		if (path != NULL)
 			ck_abort_msg("Cached file should not exist: %s",
-			    node->tmpdir);
+			    path->path);
 	}
 
 	return true;
@@ -259,7 +265,7 @@ ck_assert_cachent_eq(struct cache_node *expected, struct cache_node *actual)
 }
 
 static void
-validate_cache(struct cache_node *rsync, struct cache_node *https)
+ck_cache(struct cache_node *rsync, struct cache_node *https)
 {
 	struct downloaded_path *path;
 
@@ -288,6 +294,9 @@ validate_cache(struct cache_node *rsync, struct cache_node *https)
 	/* Compare expected and actual */
 	ck_assert_cachent_eq(rsync, cache.rsync);
 	ck_assert_cachent_eq(https, cache.https);
+
+	cachent_delete(rsync);
+	cachent_delete(https);
 }
 
 //static void
@@ -329,44 +338,83 @@ cleanup_test(void)
 
 START_TEST(test_cache_download_rsync)
 {
-	int flags = CNF_CACHED | CNF_FRESH | CNF_VALID;
+	static const int SUCCESS = CNF_RSYNC | CNF_CACHED | CNF_FRESH | CNF_VALID;
 
 	setup_test();
 
 	run_dl_rsync("rsync://a.b.c/d", "rsync://a.b.c/d/mft", 0, 1);
-	validate_cache(
-		node("rsync:", flags,
-			node("rsync://a.b.c", flags,
-				node("rsync://a.b.c/d", flags, NULL)),
+	ck_cache(
+		node("rsync:", 0, NULL,
+			node("rsync://a.b.c", 0, NULL,
+				node("rsync://a.b.c/d", SUCCESS, "tmp/tmp/0",
+					node("rsync://a.b.c/d/mft", RSYNC_INHERIT, NULL, NULL),
+					NULL),
+				NULL),
 			NULL),
-		node("https:", 0, NULL));
+		node("https:", 0, NULL, NULL));
 
-//	/* Redownload same file, nothing should happen */
-//	run_dl_rsync("rsync://a.b.c/d", "rsync://a.b.c/d/mft", 0, 0);
-//	validate_cache(0, NODE("rsync://a.b.c/d/", 0, 1, true), NULL);
-//
-//	/*
-//	 * rsyncs are recursive, which means if we've been recently asked to
-//	 * download d, we needn't bother redownloading d/e.
-//	 */
-//	run_dl_rsync("rsync://a.b.c/d/e", "rsync://a.b.c/d/e/mft", 0, 0);
-//	validate_cache(0, NODE("rsync://a.b.c/d/", 0, 1, true), NULL);
-//
-//	/*
-//	 * rsyncs get truncated, because it results in much faster
-//	 * synchronization in practice.
-//	 * This is not defined in any RFCs; it's an effective standard,
-//	 * and there would be consequences for violating it.
-//	 */
-//	run_dl_rsync("rsync://x.y.z/m/n/o", "rsync://x.y.z/m/n/o/mft", 0, 1);
-//	validate_cache(0,
-//	    NODE("rsync://a.b.c/d/", 0, 1, true),
-//	    NODE("rsync://x.y.z/m/", 0, 1, true),
-//	    NULL);
-//
+	/* Redownload same file, nothing should happen */
+	run_dl_rsync("rsync://a.b.c/d", "rsync://a.b.c/d/mft", 0, 0);
+	ck_cache(
+		node("rsync:", 0, NULL,
+			node("rsync://a.b.c", 0, NULL,
+				node("rsync://a.b.c/d", SUCCESS, "tmp/tmp/0",
+					node("rsync://a.b.c/d/mft", RSYNC_INHERIT, NULL, NULL),
+					NULL),
+				NULL),
+			NULL),
+		node("https:", 0, NULL, NULL));
+
+	/*
+	 * rsyncs are recursive, which means if we've been recently asked to
+	 * download d, we needn't bother redownloading d/e.
+	 */
+	run_dl_rsync("rsync://a.b.c/d/e", "rsync://a.b.c/d/e/mft", 0, 0);
+	ck_cache(
+		node("rsync:", 0, NULL,
+			node("rsync://a.b.c", 0, NULL,
+				node("rsync://a.b.c/d", SUCCESS, "tmp/tmp/0",
+					node("rsync://a.b.c/d/e", RSYNC_INHERIT, NULL,
+						node("rsync://a.b.c/d/e/mft", RSYNC_INHERIT, NULL, NULL),
+						NULL),
+					node("rsync://a.b.c/d/mft", RSYNC_INHERIT, NULL, NULL),
+					NULL),
+				NULL),
+			NULL),
+		node("https:", 0, NULL, NULL));
+
+	/*
+	 * rsyncs get truncated, because it results in much faster
+	 * synchronization in practice.
+	 * This is not defined in any RFCs; it's an effective standard,
+	 * and there would be consequences for violating it.
+	 */
+	run_dl_rsync("rsync://x.y.z/m/n/o", "rsync://x.y.z/m/n/o/mft", 0, 1);
+	ck_cache(
+		node("rsync:", 0, NULL,
+			node("rsync://a.b.c", 0, NULL,
+				node("rsync://a.b.c/d", SUCCESS, "tmp/tmp/0",
+					node("rsync://a.b.c/d/e", RSYNC_INHERIT, NULL,
+						node("rsync://a.b.c/d/e/mft", RSYNC_INHERIT, NULL, NULL),
+						NULL),
+					node("rsync://a.b.c/d/mft", RSYNC_INHERIT, NULL, NULL),
+					NULL),
+				NULL),
+			node("rsync://x.y.z", 0, NULL,
+				node("rsync://x.y.z/m", SUCCESS, "tmp/tmp/1",
+					node("rsync://x.y.z/m/n", RSYNC_INHERIT, NULL,
+						node("rsync://x.y.z/m/n/o", RSYNC_INHERIT, NULL,
+							node("rsync://x.y.z/m/n/o/mft", RSYNC_INHERIT, NULL, NULL),
+							NULL),
+						NULL),
+					NULL),
+				NULL),
+			NULL),
+		node("https:", 0, NULL, NULL));
+
 //	/* Sibling */
 //	run_dl_rsync("rsync://a.b.c/e/f", "rsync://a.b.c/e/f/mft", 0, 1);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("rsync://a.b.c/d/", 0, 1, true),
 //	    NODE("rsync://a.b.c/e/", 0, 1, true),
 //	    NODE("rsync://x.y.z/m/", 0, 1, true),
@@ -384,7 +432,7 @@ END_TEST
 //	run_cache_download("rsync://a.b.c/d", 0, 1, 0);
 //	dl_error = true;
 //	run_cache_download("rsync://a.b.c/e", -EINVAL, 1, 0);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("rsync://a.b.c/d/", 0, 1, true),
 //	    NODE("rsync://a.b.c/e/", -EINVAL, 0, false),
 //	    NULL);
@@ -392,14 +440,14 @@ END_TEST
 //	/* Regardless of error, not reattempted because same iteration */
 //	dl_error = true;
 //	run_cache_download("rsync://a.b.c/e", -EINVAL, 0, 0);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("rsync://a.b.c/d/", 0, 1, true),
 //	    NODE("rsync://a.b.c/e/", -EINVAL, 0, false),
 //	    NULL);
 //
 //	dl_error = false;
 //	run_cache_download("rsync://a.b.c/e", -EINVAL, 0, 0);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("rsync://a.b.c/d/", 0, 1, true),
 //	    NODE("rsync://a.b.c/e/", -EINVAL, 0, false),
 //	    NULL);
@@ -420,7 +468,7 @@ END_TEST
 //	run_cache_download("rsync://a.b.c/d", 0, 1, 0);
 //	run_cache_download("rsync://a.b.c/e", 0, 1, 0);
 //	cache_cleanup(cache);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("rsync://a.b.c/d/", 0, 1, true),
 //	    NODE("rsync://a.b.c/e/", 0, 1, true),
 //	    NULL);
@@ -430,7 +478,7 @@ END_TEST
 //	run_cache_download("rsync://a.b.c/d", 0, 1, 0);
 //	run_cache_download("rsync://a.b.c/e", 0, 1, 0);
 //	cache_cleanup(cache);
-//	validate_cache(0,
+//	ck_cache(
 //		NODE("rsync://a.b.c/d/", 0, 1, true),
 //		NODE("rsync://a.b.c/e/", 0, 1, true),
 //		NULL);
@@ -441,7 +489,7 @@ END_TEST
 //	run_cache_download("rsync://a.b.c/e", 0, 1, 0);
 //	run_cache_download("rsync://a.b.c/f", 0, 1, 0);
 //	cache_cleanup(cache);
-//	validate_cache(0,
+//	ck_cache(
 //		NODE("rsync://a.b.c/d/", 0, 1, true),
 //		NODE("rsync://a.b.c/e/", 0, 1, true),
 //		NODE("rsync://a.b.c/f/", 0, 1, true),
@@ -450,7 +498,7 @@ END_TEST
 //	/* Nodes don't get updated, but they're still too young. */
 //	new_iteration(false);
 //	cache_cleanup(cache);
-//	validate_cache(0,
+//	ck_cache(
 //		NODE("rsync://a.b.c/d/", 0, 1, true),
 //		NODE("rsync://a.b.c/e/", 0, 1, true),
 //		NODE("rsync://a.b.c/f/", 0, 1, true),
@@ -460,42 +508,42 @@ END_TEST
 //	new_iteration(true);
 //	run_cache_download("rsync://a.b.c/d", 0, 1, 0);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("rsync://a.b.c/d/", 0, 1, true), NULL);
+//	ck_cache(NODE("rsync://a.b.c/d/", 0, 1, true), NULL);
 //
 //	/* Remove old branch and add sibling at the same time */
 //	new_iteration(true);
 //	run_cache_download("rsync://a.b.c/e", 0, 1, 0);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
+//	ck_cache(NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
 //
 //	/* Try child */
 //	new_iteration(true);
 //	run_cache_download("rsync://a.b.c/e/f/g", 0, 1, 0);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
+//	ck_cache(NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
 //
 //	/* Parent again */
 //	new_iteration(true);
 //	run_cache_download("rsync://a.b.c/e", 0, 1, 0);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
+//	ck_cache(NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
 //
 //	/* Empty the tree */
 //	new_iteration(true);
 //	cache_cleanup(cache);
-//	validate_cache(0, NULL);
+//	ck_cache(NULL);
 //
 //	/* Node exists, but file doesn't */
 //	new_iteration(true);
 //	run_cache_download("rsync://a.b.c/e", 0, 1, 0);
 //	run_cache_download("rsync://a.b.c/f", 0, 1, 0);
-//	validate_cache(0,
+//	ck_cache(
 //		NODE("rsync://a.b.c/e/", 0, 1, true),
 //		NODE("rsync://a.b.c/f/", 0, 1, true),
 //		NULL);
 //	ck_assert_int_eq(0, file_rm_rf("tmp/rsync/a.b.c/f"));
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
+//	ck_cache(NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
 //
 //	cleanup_test();
 //}
@@ -510,14 +558,14 @@ END_TEST
 //	run_cache_download("rsync://a.b.c/d", 0, 1, 0);
 //	dl_error = true;
 //	run_cache_download("rsync://a.b.c/e", -EINVAL, 1, 0);
-//	validate_cache(0,
+//	ck_cache(
 //		NODE("rsync://a.b.c/d/", 0, 1, true),
 //		NODE("rsync://a.b.c/e/", -EINVAL, 0, false),
 //		NULL);
 //
 //	/* Node gets deleted because cached file doesn't exist */
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("rsync://a.b.c/d/", 0, 1, true), NULL);
+//	ck_cache(NODE("rsync://a.b.c/d/", 0, 1, true), NULL);
 //
 //	/*
 //	 * Node and file do not get deleted, because the failure is still not
@@ -527,12 +575,12 @@ END_TEST
 //	new_iteration(false);
 //	dl_error = true;
 //	run_cache_download("rsync://a.b.c/d", -EINVAL, 1, 0);
-//	validate_cache(0, NODE("rsync://a.b.c/d/", -EINVAL, 1, true), NULL);
+//	ck_cache(NODE("rsync://a.b.c/d/", -EINVAL, 1, true), NULL);
 //
 //	/* Error is old; gets deleted */
 //	new_iteration(true);
 //	cache_cleanup(cache);
-//	validate_cache(0, NULL);
+//	ck_cache(NULL);
 //
 //	cleanup_test();
 //}
@@ -544,18 +592,18 @@ END_TEST
 //
 //	/* Download *file* e. */
 //	run_cache_download("https://a.b.c/d/e", 0, 0, 1);
-//	validate_cache(0, NODE("https://a.b.c/d/e", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/d/e", 0, 1, 1), NULL);
 //
 //	/* Download something else 1 */
 //	run_cache_download("https://a.b.c/e", 0, 0, 1);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/d/e", 0, 1, 1),
 //	    NODE("https://a.b.c/e", 0, 1, 1),
 //	    NULL);
 //
 //	/* Download something else 2 */
 //	run_cache_download("https://x.y.z/e", 0, 0, 1);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/d/e", 0, 1, 1),
 //	    NODE("https://a.b.c/e", 0, 1, 1),
 //	    NODE("https://x.y.z/e", 0, 1, 1),
@@ -573,7 +621,7 @@ END_TEST
 //	run_cache_download("https://a.b.c/d", 0, 0, 1);
 //	dl_error = true;
 //	run_cache_download("https://a.b.c/e", -EINVAL, 0, 1);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/d", 0, 1, 1),
 //	    NODE("https://a.b.c/e", -EINVAL, 0, 0),
 //	    NULL);
@@ -583,7 +631,7 @@ END_TEST
 //	run_cache_download("https://a.b.c/d", 0, 0, 0);
 //	dl_error = false;
 //	run_cache_download("https://a.b.c/e", -EINVAL, 0, 0);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/d", 0, 1, 1),
 //	    NODE("https://a.b.c/e", -EINVAL, 0, 0),
 //	    NULL);
@@ -601,7 +649,7 @@ END_TEST
 //	run_cache_download("https://a.b.c/d", 0, 0, 1);
 //	run_cache_download("https://a.b.c/e", 0, 0, 1);
 //	cache_cleanup(cache);
-//	validate_cache(0,
+//	ck_cache(
 //		NODE("https://a.b.c/d", 0, 1, 1),
 //		NODE("https://a.b.c/e", 0, 1, 1),
 //		NULL);
@@ -610,19 +658,19 @@ END_TEST
 //	new_iteration(true);
 //	run_cache_download("https://a.b.c/d", 0, 0, 1);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("https://a.b.c/d", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/d", 0, 1, 1), NULL);
 //
 //	/* Change the one branch */
 //	new_iteration(true);
 //	run_cache_download("https://a.b.c/e", 0, 0, 1);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("https://a.b.c/e", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/e", 0, 1, 1), NULL);
 //
 //	/* Add a child to the same branch, do not update the old one */
 //	new_iteration(true);
 //	run_cache_download("https://a.b.c/e/f/g", 0, 0, 1);
 //	cache_cleanup(cache);
-//	validate_cache(0,
+//	ck_cache(
 //		NODE("https://a.b.c/e/f/g", 0, 1, 1), NULL);
 //
 //	/*
@@ -632,30 +680,30 @@ END_TEST
 //	new_iteration(true);
 //	run_cache_download("https://a.b.c/e/f", 0, 0, 1);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("https://a.b.c/e/f", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/e/f", 0, 1, 1), NULL);
 //
 //	/* Do it again. */
 //	new_iteration(true);
 //	run_cache_download("https://a.b.c/e", 0, 0, 1);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("https://a.b.c/e", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/e", 0, 1, 1), NULL);
 //
 //	/* Empty the tree */
 //	new_iteration(true);
 //	cache_cleanup(cache);
-//	validate_cache(0, NULL);
+//	ck_cache(NULL);
 //
 //	/* Node exists, but file doesn't */
 //	new_iteration(true);
 //	run_cache_download("https://a.b.c/e", 0, 0, 1);
 //	run_cache_download("https://a.b.c/f/g/h", 0, 0, 1);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/e", 0, 1, 1),
 //	    NODE("https://a.b.c/f/g/h", 0, 1, 1),
 //	    NULL);
 //	ck_assert_int_eq(0, file_rm_rf("tmp/https/a.b.c/f/g/h"));
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("https://a.b.c/e", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/e", 0, 1, 1), NULL);
 //
 //	cleanup_test();
 //}
@@ -670,14 +718,14 @@ END_TEST
 //	run_cache_download("https://a.b.c/d", 0, 0, 1);
 //	dl_error = true;
 //	run_cache_download("https://a.b.c/e", -EINVAL, 0, 1);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/d", 0, 1, 1),
 //	    NODE("https://a.b.c/e", -EINVAL, 0, 0),
 //	    NULL);
 //
 //	/* Deleted because file ENOENT. */
 //	cache_cleanup(cache);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/d", 0, 1, 1),
 //	    NULL);
 //
@@ -685,17 +733,17 @@ END_TEST
 //	new_iteration(false);
 //	dl_error = true;
 //	run_cache_download("https://a.b.c/d", -EINVAL, 0, 1);
-//	validate_cache(0, NODE("https://a.b.c/d", -EINVAL, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/d", -EINVAL, 1, 1), NULL);
 //
 //	/* Not deleted, because not old */
 //	new_iteration(false);
 //	cache_cleanup(cache);
-//	validate_cache(0, NODE("https://a.b.c/d", -EINVAL, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/d", -EINVAL, 1, 1), NULL);
 //
 //	/* Become old */
 //	new_iteration(true);
 //	cache_cleanup(cache);
-//	validate_cache(0, NULL);
+//	ck_cache(NULL);
 //
 //	cleanup_test();
 //}
@@ -706,16 +754,16 @@ START_TEST(test_dots)
 //	setup_test();
 //
 //	run_cache_download("https://a.b.c/d", 0, 0, 1);
-//	validate_cache(0, NODE("https://a.b.c/d", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/d", 0, 1, 1), NULL);
 //
 //	run_cache_download("https://a.b.c/d/.", 0, 0, 0);
-//	validate_cache(0, NODE("https://a.b.c/d", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/d", 0, 1, 1), NULL);
 //
 //	run_cache_download("https://a.b.c/d/e/..", 0, 0, 0);
-//	validate_cache(0, NODE("https://a.b.c/d", 0, 1, 1), NULL);
+//	ck_cache(NODE("https://a.b.c/d", 0, 1, 1), NULL);
 //
 //	run_cache_download("https://a.b.c/./d/../e", 0, 0, 1);
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("https://a.b.c/d", 0, 1, 1),
 //	    NODE("https://a.b.c/./d/../e", 0, 1, 1),
 //	    NULL);
@@ -760,7 +808,7 @@ END_TEST
 //	load_tal_json(cache);
 //	ck_assert_ptr_ne(NULL, cache->ht);
 //
-//	validate_cache(0,
+//	ck_cache(
 //	    NODE("rsync://a.b.c/d", 0, 1, 0),
 //	    NODE("rsync://a.b.c/e", 1, 0, 0),
 //	    NODE("rsync://x.y.z/e", 0, 1, 0),

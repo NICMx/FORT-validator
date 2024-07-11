@@ -4,6 +4,7 @@
 #include "config.h"
 #include "data_structure/common.h"
 #include "data_structure/path_builder.h"
+#include "types/url.h"
 
 /* @schema must contain a colon suffix, otherwise lookups won't work */
 struct cache_node *
@@ -79,56 +80,6 @@ end:	pb_cleanup(&pb);
 	return error;
 }
 
-static char *
-path_rewind(char const *root, char *cursor)
-{
-	for (cursor -= 2; root <= cursor; cursor--)
-		if (*cursor == '/')
-			return cursor + 1;
-	return NULL;
-}
-
-/* Collapses '//' (after the schema), '.' and '..'. */
-static char *
-normalize(char const *url)
-{
-	char *normal, *dst, *root;
-	struct tokenizer tkn;
-
-	if (strncmp(url, "rsync://", RPKI_SCHEMA_LEN) &&
-	    strncmp(url, "https://", RPKI_SCHEMA_LEN))
-		return NULL;
-
-	normal = pstrdup(url);
-	dst = normal + RPKI_SCHEMA_LEN;
-	root = dst - 1;
-	token_init(&tkn, url + RPKI_SCHEMA_LEN);
-
-	while (token_next(&tkn)) {
-		if (tkn.len == 1 && tkn.str[0] == '.')
-			continue;
-		if (tkn.len == 2 && tkn.str[0] == '.' && tkn.str[1] == '.') {
-			dst = path_rewind(root, dst);
-			if (!dst)
-				goto fail;
-			continue;
-		}
-		strncpy(dst, tkn.str, tkn.len);
-		dst[tkn.len] = '/';
-		dst += tkn.len + 1;
-	}
-
-	/* Reject URL if there's nothing after the schema. Maybe unnecessary. */
-	if (dst == normal + RPKI_SCHEMA_LEN)
-		goto fail;
-
-	dst[-1] = '\0';
-	return normal;
-
-fail:	free(normal);
-	return NULL;
-}
-
 /* Get or create parent's child. */
 static struct cache_node *
 provide(struct cache_node *parent, char const *url,
@@ -143,6 +94,8 @@ provide(struct cache_node *parent, char const *url,
 	child = pzalloc(sizeof(struct cache_node));
 	child->url = pstrndup(url, name - url + namelen);
 	child->name = child->url + (name - url);
+	if (parent->flags & RSYNC_INHERIT)
+		child->flags = RSYNC_INHERIT;
 	child->parent = parent;
 	HASH_ADD_KEYPTR(hh, parent->children, child->name, namelen, child);
 	return child;
@@ -170,7 +123,7 @@ cachent_provide(struct cache_node *ancestor, char const *url)
 	array_index i;
 	struct tokenizer tkn;
 
-	normal = normalize(url);
+	normal = url_normalize(url);
 	if (!normal)
 		return NULL;
 
@@ -241,13 +194,18 @@ print_node(struct cache_node *node, unsigned int tabs)
 	for (i = 0; i < tabs; i++)
 		printf("\t");
 
-	printf("%s ", node->name);
-	printf("%s", (node->flags & CNF_RSYNC) ? "RSYNC " : "");
-	printf("%s", (node->flags & CNF_FRESH) ? "Fresh " : "");
-	printf("%s", (node->flags & CNF_TOUCHED) ? "Touched " : "");
-	printf("%s", (node->flags & CNF_VALID) ? "Valid " : "");
-	printf("%s\n", (node->flags & CNF_WITHDRAWN) ? "Withdrawn " : "");
+	printf("%s -- ", node->name);
+	printf("%s", (node->flags & CNF_RSYNC) ? "rsync " : "");
+	printf("%s", (node->flags & CNF_CACHED) ? "cached " : "");
+	printf("%s", (node->flags & CNF_FRESH) ? "fresh " : "");
+	printf("%s", (node->flags & CNF_CHANGED) ? "changed " : "");
+	printf("%s", (node->flags & CNF_TOUCHED) ? "touched " : "");
+	printf("%s", (node->flags & CNF_VALID) ? "valid " : "");
+	printf("%s", (node->flags & CNF_NOTIFICATION) ? "notification " : "");
+	printf("%s", (node->flags & CNF_WITHDRAWN) ? "withdrawn " : "");
+	printf(" -- %s", node->tmpdir);
 
+	printf("\n");
 	HASH_ITER(hh, node->children, child, tmp)
 		print_node(child, tabs + 1);
 }

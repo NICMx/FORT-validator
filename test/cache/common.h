@@ -3,6 +3,6 @@
 
 #include "cache/cachent.h"
 
-struct cache_node *node(char const *, int , ...);
+struct cache_node *node(char const *, int , char const *, ...);
 
 #endif /* TEST_CACHE_COMMON_H_ */
