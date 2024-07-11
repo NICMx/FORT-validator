@@ -2,7 +2,7 @@
 
 #include "alloc.c"
 #include "cache/cachent.c"
-#include "cache/common.c"
+#include "cache/util.c"
 #include "data_structure/path_builder.c"
 #include "mock.c"
 #include "types/url.c"
@@ -20,14 +20,14 @@ START_TEST(test_delete)
 {
 	struct cache_node *root, *a, *b;
 
-	a = node("a", 0, NULL);
+	a = unode("a", NULL);
 	dn = 0;
 	cachent_delete(a);
 	ck_assert_uint_eq(1, dn);
 	ck_assert_str_eq("a", deleted[0]);
 
-	a = node("a", 0, NULL);
-	root = node("root", 0, a, NULL);
+	a = unode("a", NULL);
+	root = unode("root", a, NULL);
 	dn = 0;
 	cachent_delete(a);
 	ck_assert_ptr_eq(NULL, root->children);
@@ -39,23 +39,23 @@ START_TEST(test_delete)
 	ck_assert_uint_eq(1, dn);
 	ck_assert_str_eq("root", deleted[0]);
 
-	b = node("b", 0,
-			node("c", 0, NULL),
-			node("d", 0, NULL),
-			node("e", 0, NULL),
-			node("f", 0, NULL), NULL);
-	a = node("a", 0,
+	b = unode("b",
+			unode("c", NULL),
+			unode("d", NULL),
+			unode("e", NULL),
+			unode("f", NULL), NULL);
+	a = unode("a",
 		b,
-		node("g", 0,
-			node("h", 0,
-				node("i", 0, NULL), NULL),
-			node("j", 0,
-				node("k", 0, NULL), NULL),
-			node("l", 0,
-				node("m", 0, NULL), NULL),
-			node("n", 0,
-				node("o", 0, NULL), NULL), NULL), NULL);
-	root = node("root", 0, a, NULL);
+		unode("g",
+			unode("h",
+				unode("i", NULL), NULL),
+			unode("j",
+				unode("k", NULL), NULL),
+			unode("l",
+				unode("m", NULL), NULL),
+			unode("n",
+				unode("o", NULL), NULL), NULL), NULL);
+	root = unode("root", a, NULL);
 
 	dn = 0;
 	cachent_delete(b);
@@ -124,36 +124,36 @@ START_TEST(test_traverse)
 	root = NULL;
 	ck_traverse(root, NULL);
 
-	root =	node("a", 0, NULL);
+	root =	unode("a", NULL);
 	ck_traverse(root, "tmp/a", NULL);
 
-	root =	node("a", 0,
-			node("b", 0, NULL), NULL);
+	root =	unode("a",
+			unode("b", NULL), NULL);
 	ck_traverse(root, "tmp/a", "tmp/a/b", NULL);
 
-	root =	node("a", 0,
-			node("b", 0,
-				node("c", 0, NULL), NULL), NULL);
+	root =	unode("a",
+			unode("b",
+				unode("c", NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/a",
 		"tmp/a/b",
 		"tmp/a/b/c", NULL);
 
-	root =	node("a", 0,
-			node("b", 0,
-				node("c", 0, NULL),
-				node("d", 0, NULL), NULL), NULL);
+	root =	unode("a",
+			unode("b",
+				unode("c", NULL),
+				unode("d", NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/a",
 		"tmp/a/b",
 		"tmp/a/b/c",
 		"tmp/a/b/d", NULL);
 
-	root =	node("a", 0,
-			node("b", 0,
-				node("c", 0, NULL),
-				node("d", 0, NULL), NULL),
-			node("e", 0, NULL), NULL);
+	root =	unode("a",
+			unode("b",
+				unode("c", NULL),
+				unode("d", NULL), NULL),
+			unode("e", NULL), NULL);
 	ck_traverse(root,
 		"tmp/a",
 		"tmp/a/b",
@@ -161,11 +161,11 @@ START_TEST(test_traverse)
 		"tmp/a/b/d",
 		"tmp/a/e", NULL);
 
-	root =	node("a", 0,
-			node("b", 0, NULL),
-			node("c", 0,
-				node("d", 0, NULL),
-				node("e", 0, NULL), NULL), NULL);
+	root =	unode("a",
+			unode("b", NULL),
+			unode("c",
+				unode("d", NULL),
+				unode("e", NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/a",
 		"tmp/a/b",
@@ -173,13 +173,13 @@ START_TEST(test_traverse)
 		"tmp/a/c/d",
 		"tmp/a/c/e", NULL);
 
-	root =	node("a", 0,
-			node("b", 0,
-				node("c", 0, NULL),
-				node("d", 0, NULL), NULL),
-			node("e", 0,
-				node("f", 0, NULL),
-				node("g", 0, NULL), NULL), NULL);
+	root =	unode("a",
+			unode("b",
+				unode("c", NULL),
+				unode("d", NULL), NULL),
+			unode("e",
+				unode("f", NULL),
+				unode("g", NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/a",
 		"tmp/a/b",
@@ -189,21 +189,21 @@ START_TEST(test_traverse)
 		"tmp/a/e/f",
 		"tmp/a/e/g", NULL);
 
-	root =	node("a", 0,
-			node("b", 0,
-				node("c", 0, NULL),
-				node("d", 0, NULL),
-				node("e", 0, NULL),
-				node("f", 0, NULL), NULL),
-			node("g", 0,
-				node("h", 0,
-					node("i", 0, NULL), NULL),
-				node("j", 0,
-					node("k", 0, NULL), NULL),
-				node("l", 0,
-					node("m", 0, NULL), NULL),
-				node("n", 0,
-					node("o", 0, NULL), NULL), NULL), NULL);
+	root =	unode("a",
+			unode("b",
+				unode("c", NULL),
+				unode("d", NULL),
+				unode("e", NULL),
+				unode("f", NULL), NULL),
+			unode("g",
+				unode("h",
+					unode("i", NULL), NULL),
+				unode("j",
+					unode("k", NULL), NULL),
+				unode("l",
+					unode("m", NULL), NULL),
+				unode("n",
+					unode("o", NULL), NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/a",
 		"tmp/a/b",

@@ -3,6 +3,7 @@
  *
  * - We only need to keep nodes for the rsync root.
  * - The tree traverse only needs to touch files.
+ * - RRDP needs caging.
  */
 
 #include "cache/local_cache.h"
@@ -241,16 +242,16 @@ cache_tmpfile(char **filename)
 	return 0;
 }
 
-static char *
-get_tal_json_filename(void)
-{
-	struct path_builder pb;
-	return pb_init_cache(&pb, TAL_METAFILE) ? NULL : pb.string;
-}
-
-static struct cache_node *
-json2node(json_t *json)
-{
+//static char *
+//get_tal_json_filename(void)
+//{
+//	struct path_builder pb;
+//	return pb_init_cache(&pb, TAL_METAFILE) ? NULL : pb.string;
+//}
+//
+//static struct cache_node *
+//json2node(json_t *json)
+//{
 //	struct cache_node *node;
 //	char const *type_str;
 //	enum map_type type;
@@ -330,8 +331,8 @@ json2node(json_t *json)
 //	map_refput(node->map);
 //	rrdp_notif_free(node->notif);
 //	free(node);
-	return NULL;
-}
+//	return NULL;
+//}
 
 static void
 load_tal_json(void)
@@ -388,9 +389,9 @@ cache_prepare(void)
 	load_tal_json();
 }
 
-static json_t *
-node2json(struct cache_node *node)
-{
+//static json_t *
+//node2json(struct cache_node *node)
+//{
 //	json_t *json;
 //	char const *type;
 //	json_t *notification;
@@ -434,19 +435,19 @@ node2json(struct cache_node *node)
 //
 //cancel:
 //	json_decref(json);
-	return NULL;
-}
-
-static json_t *
-build_tal_json(struct rpki_cache *cache)
-{
+//	return NULL;
+//}
+//
+//static json_t *
+//build_tal_json(struct rpki_cache *cache)
+//{
 //	struct cache_node *node, *tmp;
 //	json_t *root, *child;
 //
 //	root = json_array_new();
 //	if (root == NULL)
-		return NULL;
-
+//		return NULL;
+//
 //	HASH_ITER(hh, cache->ht, node, tmp) {
 //		child = node2json(node);
 //		if (child != NULL && json_array_append_new(root, child)) {
@@ -457,7 +458,7 @@ build_tal_json(struct rpki_cache *cache)
 //	}
 //
 //	return root;
-}
+//}
 
 static void
 write_tal_json(void)
@@ -529,28 +530,28 @@ get_rsync_module(struct cache_node *node)
 	return node;
 }
 
-static struct cache_node *
-get_rsync_rpp(char const *caRepository, struct cache_node *rpkiManifest)
+static int
+dl_rrdp(struct cache_node *rpp)
 {
-	struct cache_node *node;
-	char *normal;
+	int error;
 
-	normal = url_normalize(caRepository);
-	if (normal == NULL)
-		return NULL;
+	if (!config_get_http_enabled()) {
+		pr_val_debug("HTTP is disabled.");
+		return 1;
+	}
 
-	for (node = rpkiManifest; node != NULL; node = node->parent)
-		if (strcmp(node->url, normal) == 0) {
-			free(normal);
-			return node;
-		}
+	// XXX needs to add all files to node.
+	// Probably also update node itself.
+	// XXX maybe pr_crit() on !mft->parent?
+	error = rrdp_update(rpp);
+	if (error)
+		pr_val_debug("RRDP RPP: Failed refresh.");
 
-	free(normal);
-	return NULL;
+	return error;
 }
 
 static int
-dl_rsync(char const *caRepository, struct cache_node *mft)
+dl_rsync(struct cache_node *rpp)
 {
 	struct cache_node *module, *node;
 	char *path;
@@ -561,14 +562,9 @@ dl_rsync(char const *caRepository, struct cache_node *mft)
 		return 1;
 	}
 
-	module = get_rsync_module(mft);
-	if (module == NULL) {
+	module = get_rsync_module(rpp);
+	if (module == NULL)
 		return -EINVAL; // XXX
-	}
-	mft->rpp = get_rsync_rpp(caRepository, mft);
-	if (!mft->rpp)
-		return pr_val_err("Manifest '%s' does not seem to be inside its publication point '%s'.",
-		    mft->url, caRepository);
 
 	error = cache_tmpfile(&path);
 	if (error)
@@ -585,19 +581,15 @@ dl_rsync(char const *caRepository, struct cache_node *mft)
 	module->mtim = time(NULL); // XXX catch -1
 	module->tmpdir = path;
 
-	for (node = mft; node != module; node = node->parent) {
+	for (node = rpp; node != module; node = node->parent) {
 		node->flags |= RSYNC_INHERIT;
 		node->mtim = module->mtim;
-		if (mft) {
-			node->rpp = mft->rpp;
-			if (node == mft->rpp)
-				mft = NULL;
-		}
 	}
 
 	return 0;
 }
 
+/*
 static int
 dl_http(struct cache_node *node)
 {
@@ -608,73 +600,51 @@ dl_http(struct cache_node *node)
 
 	return http_download_cache_node(node);
 }
+*/
 
+/* @uri is either a caRepository or a rpkiNotify */
 static int
-dl_rrdp(char const *notif_url, struct cache_node *mft)
+try_uri(char const *uri, int (*download)(struct cache_node *),
+    maps_dl_cb validate, void *arg)
 {
-	if (!config_get_http_enabled()) {
-		pr_val_debug("HTTP is disabled.");
-		return 1;
-	}
-
-	// XXX needs to add all files to node. Probably also update node itself.
-	// XXX maybe pr_crit() on !mft->parent?
-	return rrdp_update(cachent_provide(cache.https, notif_url), mft->parent);
-
-//	node->flags |= CNF_FRESH;
-//	node->mtim = time(NULL); // XXX catch -1
-//	node->tmpdir = path;
-}
-
-static int
-download(char const *uri, enum map_type type, struct cache_node *mft)
-{
-	switch (type) {
-	case MAP_RSYNC:
-		return dl_rsync(uri, mft);
-	case MAP_HTTP:
-		return dl_http(mft);
-	case MAP_NOTIF:
-		return dl_rrdp(uri, mft);
-	}
-
-	pr_crit("Unreachable.");
-	return -EINVAL; /* Warning shutupper */
-}
-
-/*
- * XXX review result sign
- *
- * uri is a rpkiNotify or a caRepository.
- */
-static int
-try_uri(struct cache_node *mft, char const *uri, enum map_type type,
-    bool online, maps_dl_cb cb, void *arg)
-{
+	struct cache_node *rpp;
 	int error;
 
-	pr_val_debug("Trying %s...", uri);
+	if (!uri)
+		return 1; /* Protocol unavailable; ignore */
 
-	if (online) {
-		error = download(uri, type, mft);
-		if (error) {
-			pr_val_debug("RPP refresh failed.");
-			return error;
+	pr_val_debug("Trying %s (%s)...", uri, download ? "online" : "offline");
+
+	rpp = cachent_provide(cache.rsync, uri);
+	if (!rpp)
+		return pr_val_err("Malformed URL: %s", uri);
+
+	if (download != NULL) {
+		if (rpp->flags & CNF_FRESH) {
+			if (rpp->dlerr)
+				return rpp->dlerr;
+		} else {
+			rpp->flags |= CNF_FRESH;
+			error = rpp->dlerr = download(rpp);
+			if (error)
+				return error;
 		}
 	}
 
-	error = cb(mft->rpp, arg);
+	error = validate(rpp, arg);
 	if (error) {
 		pr_val_debug("RPP validation failed.");
 		return error;
 	}
 
 	/* XXX commit the files (later, during cleanup) */
-	pr_val_debug("RPP downloaded and validated successfully.");
+	pr_val_debug("RPP validated successfully.");
 	return 0;
 }
 
 /**
+ * XXX outdated comment
+ *
  * Assumes the URIs represent different ways to access the same content.
  *
  * Sequentially (in the order dictated by their priorities) attempts to update
@@ -688,31 +658,32 @@ try_uri(struct cache_node *mft, char const *uri, enum map_type type,
 int
 cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 {
-	struct cache_node *mft;
-	int online;
-	int error = 0;
+	int error;
+
+	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
 
 	/* XXX mutex */
-	/* XXX if parent is downloaded, child is downloaded. */
-	mft = cachent_provide(cache.rsync, uris->rpkiManifest);
+//	/* XXX if parent is downloaded, child is downloaded. */
+//	mft = cachent_provide(cache.rsync, uris->rpkiManifest);
+//
+//	if (mft->flags & CNF_FRESH)
+//		return cb(mft->rpp, arg); // XXX can rpp be NULL?
 
-	if (mft->flags & CNF_FRESH)
-		return cb(mft->rpp, arg); // XXX can rpp be NULL?
+	/* Online attempts */
+	// XXX review result signs
+	// XXX normalize rpkiNotify & caRepository?
+	error = try_uri(uris->rpkiNotify, dl_rrdp, cb, arg);
+	if (error <= 0)
+		return error;
+	error = try_uri(uris->caRepository, dl_rsync, cb, arg);
+	if (error <= 0)
+		return error;
 
-	for (online = 1; online >= 0; online--) {
-		if (uris->rpkiNotify) {
-			error = try_uri(mft, uris->rpkiNotify, MAP_NOTIF,
-			    online, cb, arg);
-			if (error <= 0)
-				return error;
-		}
-		error = try_uri(mft, uris->caRepository, MAP_RSYNC,
-		    online, cb, arg);
-		if (error <= 0)
-			return error;
-	}
-
-	return error;
+	/* Offline attempts */
+	error = try_uri(uris->rpkiNotify, NULL, cb, arg);
+	if (error <= 0)
+		return error;
+	return try_uri(uris->caRepository, NULL, cb, arg);
 }
 
 void
@@ -729,6 +700,8 @@ cache_print(void)
 static bool
 commit_rpp_delta(struct cache_node *node, char const *path)
 {
+	PR_DEBUG_MSG("Commiting %s", node->url);
+
 	if (node->tmpdir == NULL)
 		return true; /* Not updated */
 
@@ -775,30 +748,30 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 //
 //	delete_node(cache, node);
 //}
-//
-//static time_t
-//get_days_ago(int days)
-//{
-//	time_t tt_now, last_week;
-//	struct tm tm;
-//	int error;
-//
-//	tt_now = time(NULL);
-//	if (tt_now == (time_t) -1)
-//		pr_crit("time(NULL) returned (time_t) -1.");
-//	if (localtime_r(&tt_now, &tm) == NULL) {
-//		error = errno;
-//		pr_crit("localtime_r(tt, &tm) returned error: %s",
-//		    strerror(error));
-//	}
-//	tm.tm_mday -= days;
-//	last_week = mktime(&tm);
-//	if (last_week == (time_t) -1)
-//		pr_crit("mktime(tm) returned (time_t) -1.");
-//
-//	return last_week;
-//}
-//
+
+static time_t
+get_days_ago(int days)
+{
+	time_t tt_now, last_week;
+	struct tm tm;
+	int error;
+
+	tt_now = time(NULL);
+	if (tt_now == (time_t) -1)
+		pr_crit("time(NULL) returned (time_t) -1.");
+	if (localtime_r(&tt_now, &tm) == NULL) {
+		error = errno;
+		pr_crit("localtime_r(tt, &tm) returned error: %s",
+		    strerror(error));
+	}
+	tm.tm_mday -= days;
+	last_week = mktime(&tm);
+	if (last_week == (time_t) -1)
+		pr_crit("mktime(tm) returned (time_t) -1.");
+
+	return last_week;
+}
+
 //static void
 //cleanup_tmp(struct rpki_cache *cache, struct cache_node *node)
 //{
@@ -897,6 +870,8 @@ nftw_remove_abandoned(const char *path, const struct stat *st,
 	struct cache_node *pm; /* Perfect Match */
 	struct cache_node *msm; /* Most Specific Match */
 	struct timespec now;
+
+	PR_DEBUG_MSG("Removing potentially abandoned %s", path);
 
 	/* XXX node->parent has to be set */
 	pm = find_msm(nftw_root, pstrdup(path), &msm);

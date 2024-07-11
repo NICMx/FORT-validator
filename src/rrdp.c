@@ -1093,7 +1093,7 @@ update_notif(struct cachefile_notification *old, struct update_notification *new
  * snapshot, and explodes them into @rpp's tmp directory.
  */
 int
-rrdp_update(struct cache_node *notif, struct cache_node *rpp)
+rrdp_update(struct cache_node *notif)
 {
 	char *path = NULL;
 	struct cachefile_notification *old;

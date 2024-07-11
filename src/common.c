@@ -239,6 +239,91 @@ valid_file_or_dir(char const *location, bool check_file)
 }
 
 /*
+ * > 0: exists
+ * = 0: !exists
+ * < 0: error
+ */
+static int
+dir_exists(char const *path)
+{
+	struct stat meta;
+	int error;
+
+	if (stat(path, &meta) != 0) {
+		error = errno;
+		if (error == ENOENT)
+			return 0;
+		pr_op_err_st("stat() failed: %s", strerror(error));
+		return -error;
+	}
+
+	if (!S_ISDIR(meta.st_mode)) {
+		return pr_op_err_st("Path '%s' exists and is not a directory.",
+		    path);
+	}
+
+	return 1;
+}
+
+static int
+ensure_dir(char const *path)
+{
+	int error;
+
+	if (mkdir(path, 0777) != 0) {
+		error = errno;
+		if (error != EEXIST) {
+			pr_op_err_st("Error while making directory '%s': %s",
+			    path, strerror(error));
+			return error;
+		}
+	}
+
+	return 0;
+}
+
+/* mkdir -p $_path */
+/* XXX Maybe also short-circuit by parent? */
+int
+mkdir_p(char const *_path, bool include_basename)
+{
+	char *path, *last_slash;
+	int i, result = 0;
+
+	path = pstrdup(_path); /* Remove const */
+
+	if (!include_basename) {
+		last_slash = strrchr(path, '/');
+		if (last_slash == NULL)
+			goto end;
+		*last_slash = '\0';
+	}
+
+	result = dir_exists(path); /* short circuit */
+	if (result > 0) {
+		result = 0;
+		goto end;
+	} else if (result < 0) {
+		goto end;
+	}
+
+	for (i = 1; path[i] != '\0'; i++) {
+		if (path[i] == '/') {
+			path[i] = '\0';
+			result = ensure_dir(path);
+			path[i] = '/';
+			if (result != 0)
+				goto end; /* error msg already printed */
+		}
+	}
+	result = ensure_dir(path);
+
+end:
+	free(path);
+	return result;
+}
+
+/*
  * Delete @path.
  * If path's parent is now empty, delete parent as well.
  * If parent's parent is now empty, delete parent's parent.

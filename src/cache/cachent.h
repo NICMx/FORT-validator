@@ -8,6 +8,7 @@
 
 /* XXX rename "touched" and "validated" into "preserve"? */
 
+// XXX trees now separated; consider removing this flag
 #define CNF_RSYNC		(1 << 0)
 /*
  * Do we have a (full) copy in the cache?
@@ -45,11 +46,13 @@
 
 // XXX rename to cache_entity or cachent
 struct cache_node {
-	char const *name; /* Points to the last component of @url */
+	char const *name;	/* Points to the last component of @url XXX redundant */
 	char *url;
 	int flags;
-	/* Last successful download time, or zero */
-	time_t mtim;
+
+	int dlerr;		/* Result code of recent download attempt */
+	time_t mtim;		/* Last successful download time, or zero */
+
 	/*
 	 * If flags & CNF_FRESH, path to the temporal directory where we
 	 * downloaded the latest refresh.
@@ -60,17 +63,13 @@ struct cache_node {
 	 */
 	char *tmpdir;
 
-	struct cache_node *rpp; // XXX delete?
-
-	/* Only if flags & CNF_NOTIFICATION. */
+	/* Only if flags & CNF_NOTIFICATION */
 //	struct cachefile_notification notif;
 
-	/* Tree parent. Only defined during cleanup. */
-	struct cache_node *parent;
-	/* Tree children. */
-	struct cache_node *children;
+	struct cache_node *parent;	/* Tree parent */
+	struct cache_node *children;	/* Tree children */
 
-	UT_hash_handle hh; /* Hash table hook */
+	UT_hash_handle hh;		/* Hash table hook */
 };
 
 struct cache_node *cachent_create_root(char const *);
