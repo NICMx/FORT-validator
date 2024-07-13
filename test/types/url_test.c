@@ -15,16 +15,16 @@ START_TEST(test_normalize)
 {
 	char *normal;
 
-	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c");
-	TEST_NORMALIZE("rsync://a.b.c/", "rsync://a.b.c");
-	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c");
-	TEST_NORMALIZE("rsync://a.b.c/d/e", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/./e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/../d/../d/e/", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/../x/y/z", "rsync://x/y/z");
-	TEST_NORMALIZE("rsync://x//y/z/../../../m/./n/o", "rsync://m/n/o");
+	TEST_NORMALIZE("rsync://a.b.c", "rsync/a.b.c");
+	TEST_NORMALIZE("rsync://a.b.c/", "rsync/a.b.c");
+	TEST_NORMALIZE("rsync://a.b.c//////", "rsync/a.b.c");
+	TEST_NORMALIZE("rsync://a.b.c/d/e", "rsync/a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync/a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync/a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/d/./e/.", "rsync/a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/d/../d/../d/e/", "rsync/a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/../x/y/z", "rsync/x/y/z");
+	TEST_NORMALIZE("rsync://x//y/z/../../../m/./n/o", "rsync/m/n/o");
 	ck_assert_ptr_eq(NULL, url_normalize("rsync://"));
 	ck_assert_ptr_eq(NULL, url_normalize("rsync://.."));
 	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.b.c/.."));

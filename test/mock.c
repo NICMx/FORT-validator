@@ -16,8 +16,8 @@
 MOCK_TRUE(log_val_enabled, unsigned int l)
 MOCK_TRUE(log_op_enabled, unsigned int l)
 
-/* CFLAGS=-DPRINT_PRS make check */
-#ifdef PRINT_PRS
+///* CFLAGS=-DPRINT_PRS make check */
+//#ifdef PRINT_PRS
 #define MOCK_PRINT							\
 	do {								\
 		va_list args;						\
@@ -26,9 +26,9 @@ MOCK_TRUE(log_op_enabled, unsigned int l)
 		va_end(args);						\
 		printf("\n");						\
 	} while (0)
-#else
-#define MOCK_PRINT
-#endif
+//#else
+//#define MOCK_PRINT
+//#endif
 
 #define MOCK_VOID_PRINT(name)						\
 	void								\

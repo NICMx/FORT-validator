@@ -6,7 +6,6 @@
 #include "data_structure/path_builder.h"
 #include "types/url.h"
 
-/* @schema must contain a colon suffix, otherwise lookups won't work */
 struct cache_node *
 cachent_create_root(char const *schema)
 {
@@ -80,6 +79,45 @@ end:	pb_cleanup(&pb);
 	return error;
 }
 
+static struct cache_node *
+find_child(struct cache_node *parent, char const *name, size_t namelen)
+{
+	struct cache_node *child;
+	HASH_FIND(hh, parent->children, name, namelen, child);
+	return child;
+}
+
+/*
+ * Returns perfect match or NULL. @msm will point to the Most Specific Match.
+ * Assumes @path is normalized.
+ * XXX if root doesn't match path, will return garbage
+ */
+struct cache_node *
+cachent_find(struct cache_node *root, char const *path, struct cache_node **msm)
+{
+	struct tokenizer tkn;
+	struct cache_node *parent;
+	struct cache_node *child;
+
+	token_init(&tkn, path);
+
+	if (!token_next(&tkn) || strncmp(root->name, tkn.str, tkn.len) != 0) {
+		*msm = NULL;
+		return NULL;
+	}
+
+	for (parent = child = root; token_next(&tkn); parent = child) {
+		child = find_child(parent, tkn.str, tkn.len);
+		if (!child) {
+			*msm = parent;
+			return NULL;
+		}
+	}
+
+	*msm = parent;
+	return child;
+}
+
 /* Get or create parent's child. */
 static struct cache_node *
 provide(struct cache_node *parent, char const *url,
@@ -87,15 +125,17 @@ provide(struct cache_node *parent, char const *url,
 {
 	struct cache_node *child;
 
-	HASH_FIND(hh, parent->children, name, namelen, child);
+	child = find_child(parent, name, namelen);
 	if (child != NULL)
 		return child;
 
 	child = pzalloc(sizeof(struct cache_node));
 	child->url = pstrndup(url, name - url + namelen);
 	child->name = child->url + (name - url);
-	if (parent->flags & RSYNC_INHERIT)
+	if ((parent->flags & RSYNC_INHERIT) == RSYNC_INHERIT) {
+		PR_DEBUG_MSG("parent %s has inherit; setting on %s.", parent->name, child->name);
 		child->flags = RSYNC_INHERIT;
+	}
 	child->parent = parent;
 	HASH_ADD_KEYPTR(hh, parent->children, child->name, namelen, child);
 	return child;
@@ -213,5 +253,6 @@ print_node(struct cache_node *node, unsigned int tabs)
 void
 cachent_print(struct cache_node *node)
 {
-	print_node(node, 0);
+	if (node)
+		print_node(node, 0);
 }

@@ -518,7 +518,7 @@ write_file(char const *path, unsigned char *content, size_t content_len)
 	size_t written;
 	int error;
 
-	error = mkdir_p(path, false);
+	error = mkdir_p(path, false, 0777);
 	if (error)
 		return error;
 

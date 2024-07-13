@@ -337,8 +337,8 @@ cache_tmpfile(char **filename)
 static void
 load_tal_json(void)
 {
-	cache.rsync = cachent_create_root("rsync:");
-	cache.https = cachent_create_root("https:");
+	cache.rsync = cachent_create_root("rsync");
+	cache.https = cachent_create_root("https");
 
 //	char *filename;
 //	json_t *root;
@@ -482,37 +482,6 @@ write_tal_json(void)
 }
 
 /*
- * Returns perfect match or NULL. @msm will point to the Most Specific Match.
- * Always consumes @path.
- */
-static struct cache_node *
-find_msm(struct cache_node *root, char *path, struct cache_node **msm)
-{
-	struct cache_node *node, *child;
-	char *nm, *sp; /* name, saveptr */
-	size_t keylen;
-
-	*msm = NULL;
-	node = root;
-	nm = strtok_r(path + RPKI_SCHEMA_LEN, "/", &sp); // XXX
-
-	for (; nm; nm = strtok_r(NULL, "/", &sp)) {
-		keylen = strlen(nm);
-		HASH_FIND(hh, node->children, nm, keylen, child);
-		if (child == NULL) {
-			free(path);
-			*msm = node;
-			return NULL;
-		}
-		node = child;
-	}
-
-	free(path);
-	*msm = node;
-	return node;
-}
-
-/*
  * The "rsync module" is the component immediately after the domain.
  *
  * get_rsync_module(rsync://a.b.c/d/e/f/potato.mft) = d
@@ -620,10 +589,13 @@ try_uri(char const *uri, int (*download)(struct cache_node *),
 		return pr_val_err("Malformed URL: %s", uri);
 
 	if (download != NULL) {
+		PR_DEBUG;
 		if (rpp->flags & CNF_FRESH) {
+			PR_DEBUG_MSG("%s is fresh.", rpp->url);
 			if (rpp->dlerr)
 				return rpp->dlerr;
 		} else {
+			PR_DEBUG;
 			rpp->flags |= CNF_FRESH;
 			error = rpp->dlerr = download(rpp);
 			if (error)
@@ -700,17 +672,22 @@ cache_print(void)
 static bool
 commit_rpp_delta(struct cache_node *node, char const *path)
 {
+	int error;
+
 	PR_DEBUG_MSG("Commiting %s", node->url);
 
 	if (node->tmpdir == NULL)
 		return true; /* Not updated */
 
-	if (node->flags & CNF_VALID)
-		rename(node->tmpdir, path); // XXX
-	else
+	if (node->flags & CNF_VALID) {
+		error = file_merge_into(node->tmpdir, path);
+		if (error)
+			printf("rename errno: %d\n", error); // XXX
+	} else {
 		/* XXX same; just do remove(). */
 		/* XXX and rename "tmpdir" into "tmp". */
 		file_rm_f(node->tmpdir);
+	}
 
 	free(node->tmpdir);
 	node->tmpdir = NULL;
@@ -772,27 +749,24 @@ get_days_ago(int days)
 	return last_week;
 }
 
-//static void
-//cleanup_tmp(struct rpki_cache *cache, struct cache_node *node)
-//{
-//	enum map_type type;
-//	char const *path;
-//	int error;
-//
-//	type = map_get_type(node->map);
-//	if (type != MAP_NOTIF && type != MAP_TMP)
-//		return;
-//
-//	path = map_get_path(node->map);
-//	pr_op_debug("Deleting temporal file '%s'.", path);
-//	error = file_rm_f(path);
-//	if (error)
-//		pr_op_err("Could not delete '%s': %s", path, strerror(error));
-//
-//	if (type != MAP_NOTIF)
-//		delete_node(cache, node);
-//}
-//
+static int
+rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
+{
+	if (remove(fpath))
+		pr_op_warn("Can't remove %s: %s", fpath, strerror(errno));
+	return 0;
+}
+
+static void
+cleanup_tmp(void)
+{
+	char *tmpdir = get_cache_filename(TMPDIR, true);
+	if (nftw(tmpdir, rmf, 32, FTW_DEPTH | FTW_PHYS))
+		pr_op_warn("Cannot empty the cache's tmp directory: %s",
+		    strerror(errno));
+	free(tmpdir);
+}
+
 //static void
 //cleanup_node(struct rpki_cache *cache, struct cache_node *node,
 //    time_t last_week)
@@ -867,45 +841,72 @@ static int
 nftw_remove_abandoned(const char *path, const struct stat *st,
     int typeflag, struct FTW *ftw)
 {
+	char const *lookup;
 	struct cache_node *pm; /* Perfect Match */
 	struct cache_node *msm; /* Most Specific Match */
 	struct timespec now;
 
-	PR_DEBUG_MSG("Removing potentially abandoned %s", path);
+	// XXX
+	lookup = path + strlen(config_get_local_repository());
+	while (lookup[0] == '/')
+		lookup++;
+	PR_DEBUG_MSG("Removing if abandoned: %s", lookup);
 
-	/* XXX node->parent has to be set */
-	pm = find_msm(nftw_root, pstrdup(path), &msm);
-	if (!pm && !(msm->flags & CNF_RSYNC))
+	pm = cachent_find(nftw_root, lookup, &msm);
+	if (pm == cache.rsync || pm == cache.https) {
+		PR_DEBUG_MSG("%s", "Root; skipping.");
+		return 0;
+	}
+	if (!msm) {
+		PR_DEBUG_MSG("%s", "Not matched by the tree.");
+		goto unknown;
+	}
+	if (!pm && !(msm->flags & CNF_RSYNC)) {
+		PR_DEBUG_MSG("%s", "Unknown.");
 		goto unknown; /* The traversal is depth-first */
+	}
 
 	if (S_ISDIR(st->st_mode)) {
 		/*
 		 * rmdir() fails if the directory is not empty.
 		 * This will happen most of the time.
 		 */
-		if (rmdir(path) == 0)
+		if (rmdir(path) == 0) {
+			PR_DEBUG_MSG("%s", "Directory deleted; purging node.");
 			cachent_delete(pm);
-		else if (errno == ENOENT)
+		} else if (errno == ENOENT) {
+			PR_DEBUG_MSG("%s", "Directory does not exist; purging node.");
 			cachent_delete(pm);
+		} else {
+			PR_DEBUG_MSG("%s", "Directory exists and has contents; skipping.");
+		}
 
 	} else if (S_ISREG(st->st_mode)) {
-		if (pm->flags & (CNF_RSYNC | CNF_WITHDRAWN)) {
+		if ((msm->flags & CNF_RSYNC) || !pm || (pm->flags & CNF_WITHDRAWN)) {
 			clock_gettime(CLOCK_REALTIME, &now); // XXX
-			if (now.tv_sec - st->st_atim.tv_sec > cfg_cache_threshold())
+			PR_DEBUG_MSG("%ld > %ld", now.tv_sec - st->st_atim.tv_sec, cfg_cache_threshold());
+			if (now.tv_sec - st->st_atim.tv_sec > cfg_cache_threshold()) {
+				PR_DEBUG_MSG("%s", "Too old.");
 				goto abandoned;
+			}
+			PR_DEBUG_MSG("%s", "Young; preserving.");
 		}
 
 	} else {
+		PR_DEBUG_MSG("%s", "Unknown type.");
 		goto abandoned;
 	}
 
 	return 0;
 
 abandoned:
+	PR_DEBUG;
 	if (pm)
 		cachent_delete(pm);
 unknown:
-	remove(path); // XXX
+	PR_DEBUG;
+	if (remove(path))
+		PR_DEBUG_MSG("remove(): %s", strerror(errno)); // XXX
 	return 0;
 }
 
@@ -922,11 +923,13 @@ remove_abandoned(void)
 	rootpath = join_paths(config_get_local_repository(), "rsync");
 
 	nftw_root = cache.rsync;
+	PR_DEBUG_MSG("nftw(%s)", rootpath);
 	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
 
 	strcpy(rootpath + strlen(rootpath) - 5, "https");
 
 	nftw_root = cache.https;
+	PR_DEBUG_MSG("nftw(%s)", rootpath);
 	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
 
 	free(rootpath);
@@ -938,16 +941,12 @@ remove_abandoned(void)
 static void
 cleanup_cache(void)
 {
-//	struct cache_node *node, *tmp;
-//	time_t last_week;
-
 	pr_op_debug("Committing successful RPPs.");
 	cachent_traverse(cache.rsync, commit_rpp_delta);
 	cachent_traverse(cache.https, commit_rpp_delta);
 
-//	pr_op_debug("Cleaning up temporal files.");
-//	HASH_ITER(hh, cache->ht, node, tmp)
-//		cleanup_tmp(cache, node);
+	pr_op_debug("Cleaning up temporal files.");
+	cleanup_tmp();
 
 	pr_op_debug("Cleaning up old abandoned and unknown cache files.");
 	remove_abandoned();

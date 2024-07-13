@@ -47,7 +47,7 @@
 // XXX rename to cache_entity or cachent
 struct cache_node {
 	char const *name;	/* Points to the last component of @url XXX redundant */
-	char *url;
+	char *url;		/* Normalized */
 	int flags;
 
 	int dlerr;		/* Result code of recent download attempt */
@@ -77,6 +77,8 @@ struct cache_node *cachent_create_root(char const *);
 int cachent_traverse(struct cache_node *,
     bool (*cb)(struct cache_node *, char const *));
 
+struct cache_node *cachent_find(struct cache_node *, char const *,
+    struct cache_node **);
 struct cache_node *cachent_provide(struct cache_node *, char const *);
 void cachent_delete(struct cache_node *);
 

@@ -227,26 +227,26 @@ START_TEST(test_provide)
 {
 	struct cache_node *rsync, *abc, *d, *e, *f, *g, *h, *ee;
 
-	rsync = cachent_create_root("rsync:");
+	rsync = cachent_create_root("rsync");
 	ck_assert_ptr_ne(NULL, rsync);
 	ck_assert_ptr_eq(NULL, rsync->parent);
-	ck_assert_str_eq("rsync:", rsync->url);
-	ck_assert_str_eq("rsync:", rsync->name);
+	ck_assert_str_eq("rsync", rsync->url);
+	ck_assert_str_eq("rsync", rsync->name);
 
 	/* Create branch chain from root */
 	e = cachent_provide(rsync, "rsync://a.b.c/d/e");
 	ck_assert_ptr_ne(NULL, e);
-	ck_assert_str_eq("rsync://a.b.c/d/e", e->url);
+	ck_assert_str_eq("rsync/a.b.c/d/e", e->url);
 	ck_assert_str_eq("e", e->name);
 
 	d = e->parent;
 	ck_assert_ptr_ne(NULL, d);
-	ck_assert_str_eq("rsync://a.b.c/d", d->url);
+	ck_assert_str_eq("rsync/a.b.c/d", d->url);
 	ck_assert_str_eq("d", d->name);
 
 	abc = d->parent;
 	ck_assert_ptr_ne(NULL, abc);
-	ck_assert_str_eq("rsync://a.b.c", abc->url);
+	ck_assert_str_eq("rsync/a.b.c", abc->url);
 	ck_assert_str_eq("a.b.c", abc->name);
 
 	ck_assert_ptr_eq(rsync, abc->parent);
@@ -273,26 +273,26 @@ START_TEST(test_provide)
 	f = cachent_provide(rsync, "rsync://a.b.c/f");
 	ck_assert_ptr_ne(NULL, f);
 	ck_assert_ptr_eq(abc, f->parent);
-	ck_assert_str_eq("rsync://a.b.c/f", f->url);
+	ck_assert_str_eq("rsync/a.b.c/f", f->url);
 	ck_assert_str_eq("f", f->name);
 
 	/* Create more than one descendant from root */
 	h = cachent_provide(rsync, "rsync://a.b.c/f/g/h");
 	ck_assert_ptr_ne(NULL, h);
-	ck_assert_str_eq("rsync://a.b.c/f/g/h", h->url);
+	ck_assert_str_eq("rsync/a.b.c/f/g/h", h->url);
 	ck_assert_str_eq("h", h->name);
 
 	g = h->parent;
 	ck_assert_ptr_ne(NULL, g);
 	ck_assert_ptr_eq(f, g->parent);
-	ck_assert_str_eq("rsync://a.b.c/f/g", g->url);
+	ck_assert_str_eq("rsync/a.b.c/f/g", g->url);
 	ck_assert_str_eq("g", g->name);
 
 	/* Try to create a conflict by prefix */
 	ee = cachent_provide(rsync, "rsync://a.b.c/d/ee");
 	ck_assert_ptr_ne(e, ee);
 	ck_assert_ptr_eq(d, ee->parent);
-	ck_assert_str_eq("rsync://a.b.c/d/ee", ee->url);
+	ck_assert_str_eq("rsync/a.b.c/d/ee", ee->url);
 	ck_assert_str_eq("ee", ee->name);
 	ck_assert_ptr_eq(e, cachent_provide(abc, "rsync://a.b.c/d/e"));
 	ck_assert_ptr_eq(ee, cachent_provide(abc, "rsync://a.b.c/d/ee"));

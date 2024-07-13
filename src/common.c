@@ -266,11 +266,11 @@ dir_exists(char const *path)
 }
 
 static int
-ensure_dir(char const *path)
+ensure_dir(char const *path, mode_t mode)
 {
 	int error;
 
-	if (mkdir(path, 0777) != 0) {
+	if (mkdir(path, mode) != 0) {
 		error = errno;
 		if (error != EEXIST) {
 			pr_op_err_st("Error while making directory '%s': %s",
@@ -285,7 +285,7 @@ ensure_dir(char const *path)
 /* mkdir -p $_path */
 /* XXX Maybe also short-circuit by parent? */
 int
-mkdir_p(char const *_path, bool include_basename)
+mkdir_p(char const *_path, bool include_basename, mode_t mode)
 {
 	char *path, *last_slash;
 	int i, result = 0;
@@ -310,13 +310,13 @@ mkdir_p(char const *_path, bool include_basename)
 	for (i = 1; path[i] != '\0'; i++) {
 		if (path[i] == '/') {
 			path[i] = '\0';
-			result = ensure_dir(path);
+			result = ensure_dir(path, mode);
 			path[i] = '/';
 			if (result != 0)
 				goto end; /* error msg already printed */
 		}
 	}
-	result = ensure_dir(path);
+	result = ensure_dir(path, mode);
 
 end:
 	free(path);

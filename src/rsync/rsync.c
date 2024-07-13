@@ -231,7 +231,7 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	error = mkdir_p(dst, is_directory);
+	error = mkdir_p(dst, is_directory, 0777);
 	if (error)
 		goto release_args;
 
