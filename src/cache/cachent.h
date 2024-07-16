@@ -41,6 +41,7 @@
 /*
  * Flags for children of downloaded rsync nodes that should be cleaned later.
  * (FRESH prevents redownload.)
+ * XXX useful?
  */
 #define RSYNC_INHERIT		(CNF_RSYNC | CNF_FRESH)
 

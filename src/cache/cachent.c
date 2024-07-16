@@ -132,10 +132,8 @@ provide(struct cache_node *parent, char const *url,
 	child = pzalloc(sizeof(struct cache_node));
 	child->url = pstrndup(url, name - url + namelen);
 	child->name = child->url + (name - url);
-	if ((parent->flags & RSYNC_INHERIT) == RSYNC_INHERIT) {
-		PR_DEBUG_MSG("parent %s has inherit; setting on %s.", parent->name, child->name);
+	if ((parent->flags & RSYNC_INHERIT) == RSYNC_INHERIT)
 		child->flags = RSYNC_INHERIT;
-	}
 	child->parent = parent;
 	HASH_ADD_KEYPTR(hh, parent->children, child->name, namelen, child);
 	return child;

@@ -589,13 +589,10 @@ try_uri(char const *uri, int (*download)(struct cache_node *),
 		return pr_val_err("Malformed URL: %s", uri);
 
 	if (download != NULL) {
-		PR_DEBUG;
 		if (rpp->flags & CNF_FRESH) {
-			PR_DEBUG_MSG("%s is fresh.", rpp->url);
 			if (rpp->dlerr)
 				return rpp->dlerr;
 		} else {
-			PR_DEBUG;
 			rpp->flags |= CNF_FRESH;
 			error = rpp->dlerr = download(rpp);
 			if (error)
@@ -674,18 +671,26 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 {
 	int error;
 
-	PR_DEBUG_MSG("Commiting %s", node->url);
+	pr_op_debug("Commiting %s", node->url);
 
-	if (node->tmpdir == NULL)
-		return true; /* Not updated */
+	if (node == cache.rsync || node == cache.https) {
+		pr_op_debug("Root; nothing to commit.");
+		return true;
+	}
+
+	if (node->tmpdir == NULL) {
+		pr_op_debug("Not changed; nothing to commit.");
+		return true;
+	}
 
 	if (node->flags & CNF_VALID) {
+		pr_op_debug("Validation successful; committing.");
 		error = file_merge_into(node->tmpdir, path);
 		if (error)
 			printf("rename errno: %d\n", error); // XXX
 	} else {
+		pr_op_debug("Validation unsuccessful; rollbacking.");
 		/* XXX same; just do remove(). */
-		/* XXX and rename "tmpdir" into "tmp". */
 		file_rm_f(node->tmpdir);
 	}
 
@@ -754,6 +759,8 @@ rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
 	if (remove(fpath))
 		pr_op_warn("Can't remove %s: %s", fpath, strerror(errno));
+	else
+		pr_op_debug("Removed %s.", fpath);
 	return 0;
 }
 
@@ -850,19 +857,19 @@ nftw_remove_abandoned(const char *path, const struct stat *st,
 	lookup = path + strlen(config_get_local_repository());
 	while (lookup[0] == '/')
 		lookup++;
-	PR_DEBUG_MSG("Removing if abandoned: %s", lookup);
+	pr_op_debug("Removing if abandoned: %s", lookup);
 
 	pm = cachent_find(nftw_root, lookup, &msm);
 	if (pm == cache.rsync || pm == cache.https) {
-		PR_DEBUG_MSG("%s", "Root; skipping.");
+		pr_op_debug("Root; skipping.");
 		return 0;
 	}
 	if (!msm) {
-		PR_DEBUG_MSG("%s", "Not matched by the tree.");
+		pr_op_debug("Not matched by the tree; unknown.");
 		goto unknown;
 	}
 	if (!pm && !(msm->flags & CNF_RSYNC)) {
-		PR_DEBUG_MSG("%s", "Unknown.");
+		pr_op_debug("RRDP and no perfect match; unknown.");
 		goto unknown; /* The traversal is depth-first */
 	}
 
@@ -872,13 +879,13 @@ nftw_remove_abandoned(const char *path, const struct stat *st,
 		 * This will happen most of the time.
 		 */
 		if (rmdir(path) == 0) {
-			PR_DEBUG_MSG("%s", "Directory deleted; purging node.");
+			pr_op_debug("Directory empty; purging node.");
 			cachent_delete(pm);
 		} else if (errno == ENOENT) {
-			PR_DEBUG_MSG("%s", "Directory does not exist; purging node.");
+			pr_op_debug("Directory does not exist; purging node.");
 			cachent_delete(pm);
 		} else {
-			PR_DEBUG_MSG("%s", "Directory exists and has contents; skipping.");
+			pr_op_debug("Directory exists and has contents; preserving.");
 		}
 
 	} else if (S_ISREG(st->st_mode)) {
@@ -886,25 +893,23 @@ nftw_remove_abandoned(const char *path, const struct stat *st,
 			clock_gettime(CLOCK_REALTIME, &now); // XXX
 			PR_DEBUG_MSG("%ld > %ld", now.tv_sec - st->st_atim.tv_sec, cfg_cache_threshold());
 			if (now.tv_sec - st->st_atim.tv_sec > cfg_cache_threshold()) {
-				PR_DEBUG_MSG("%s", "Too old.");
+				pr_op_debug("Too old; abandoned.");
 				goto abandoned;
 			}
-			PR_DEBUG_MSG("%s", "Young; preserving.");
+			pr_op_debug("Still young; preserving.");
 		}
 
 	} else {
-		PR_DEBUG_MSG("%s", "Unknown type.");
+		pr_op_debug("Unknown type; abandoned.");
 		goto abandoned;
 	}
 
 	return 0;
 
 abandoned:
-	PR_DEBUG;
 	if (pm)
 		cachent_delete(pm);
 unknown:
-	PR_DEBUG;
 	if (remove(path))
 		PR_DEBUG_MSG("remove(): %s", strerror(errno)); // XXX
 	return 0;
@@ -923,16 +928,41 @@ remove_abandoned(void)
 	rootpath = join_paths(config_get_local_repository(), "rsync");
 
 	nftw_root = cache.rsync;
-	PR_DEBUG_MSG("nftw(%s)", rootpath);
 	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
 
 	strcpy(rootpath + strlen(rootpath) - 5, "https");
 
 	nftw_root = cache.https;
-	PR_DEBUG_MSG("nftw(%s)", rootpath);
 	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
 
 	free(rootpath);
+}
+
+static void
+remove_leftover_nodes(void)
+{
+	struct cache_node *domain, *tmp1;
+	struct cache_node *module, *tmp2;
+	struct cache_node *child, *tmp3;
+
+	HASH_ITER(hh, cache.rsync->children, domain, tmp1)
+		HASH_ITER(hh, domain->children, module, tmp2)
+			HASH_ITER(hh, module->children, child, tmp3) {
+				pr_op_debug("Removing leftover: %s", child->url);
+				cachent_delete(child);
+			}
+}
+
+static bool
+remove_orphaned(struct cache_node *node, char const *path)
+{
+	if (file_exists(path) == ENOENT) {
+		pr_op_debug("Missing file; deleting node: %s", path);
+		cachent_delete(node);
+		return false;
+	}
+
+	return true;
 }
 
 /*
@@ -950,6 +980,11 @@ cleanup_cache(void)
 
 	pr_op_debug("Cleaning up old abandoned and unknown cache files.");
 	remove_abandoned();
+
+	pr_op_debug("Cleaning up leftover nodes.");
+	remove_leftover_nodes();
+	cachent_traverse(cache.rsync, remove_orphaned);
+	cachent_traverse(cache.https, remove_orphaned);
 
 	/* XXX delete nodes for which no file exists? */
 }
