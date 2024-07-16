@@ -30,6 +30,8 @@
 
 /* XXX force RRDP if one RPP fails to validate by rsync? */
 
+typedef int (*dl_cb)(struct cache_node *rpp);
+
 struct cached_file {
 	char *url;
 	char *path;
@@ -558,23 +560,41 @@ dl_rsync(struct cache_node *rpp)
 	return 0;
 }
 
-/*
 static int
 dl_http(struct cache_node *node)
 {
+	char *path;
+	bool changed;
+	int error;
+
 	if (!config_get_http_enabled()) {
 		pr_val_debug("HTTP is disabled.");
 		return 1;
 	}
 
-	return http_download_cache_node(node);
+	error = cache_tmpfile(&path);
+	if (error)
+		return error;
+
+	error = http_download(node->url, path, node->mtim, &changed);
+	if (error) {
+		free(path);
+		return error;
+	}
+
+	node->flags |= CNF_CACHED | CNF_FRESH; // XXX on notification, preserve node but not file
+	if (changed) {
+		node->flags |= CNF_CHANGED;
+		node->mtim = time(NULL); // XXX catch -1
+	}
+	node->tmpdir = path;
+	return 0;
 }
-*/
 
 /* @uri is either a caRepository or a rpkiNotify */
 static int
-try_uri(char const *uri, int (*download)(struct cache_node *),
-    maps_dl_cb validate, void *arg)
+try_uri(char const *uri, struct cache_node *root,
+    dl_cb download, maps_dl_cb validate, void *arg)
 {
 	struct cache_node *rpp;
 	int error;
@@ -584,7 +604,7 @@ try_uri(char const *uri, int (*download)(struct cache_node *),
 
 	pr_val_debug("Trying %s (%s)...", uri, download ? "online" : "offline");
 
-	rpp = cachent_provide(cache.rsync, uri);
+	rpp = cachent_provide(root, uri);
 	if (!rpp)
 		return pr_val_err("Malformed URL: %s", uri);
 
@@ -606,9 +626,49 @@ try_uri(char const *uri, int (*download)(struct cache_node *),
 		return error;
 	}
 
-	/* XXX commit the files (later, during cleanup) */
 	pr_val_debug("RPP validated successfully.");
 	return 0;
+}
+
+static int
+try_uris(struct strlist *uris, struct cache_node *root,
+    char const *prefix, dl_cb dl, maps_dl_cb cb, void *arg)
+{
+	char **str;
+	int error;
+
+	ARRAYLIST_FOREACH(uris, str)
+		if (str_starts_with(*str, prefix)) {
+			error = try_uri(*str, root, dl, cb, arg);
+			if (error <= 0)
+				return error;
+		}
+
+	return 1;
+}
+
+int
+cache_download_uri(struct strlist *uris, maps_dl_cb cb, void *arg)
+{
+	char **_str, *str;
+	int error;
+
+	// XXX mutex
+	// XXX review result signs
+
+	/* Online attempts */
+	error = try_uris(uris, cache.https, "https://", dl_http, cb, arg);
+	if (error <= 0)
+		return error;
+	error = try_uris(uris, cache.rsync, "rsync://", dl_rsync, cb, arg);
+	if (error <= 0)
+		return error;
+
+	/* Offline attempts */
+	error = try_uris(uris, cache.https, "https://", NULL, cb, arg);
+	if (error <= 0)
+		return error;
+	return try_uris(uris, cache.rsync, "rsync://", NULL, cb, arg);
 }
 
 /**
@@ -630,29 +690,23 @@ cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 	int error;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
-
 	/* XXX mutex */
-//	/* XXX if parent is downloaded, child is downloaded. */
-//	mft = cachent_provide(cache.rsync, uris->rpkiManifest);
-//
-//	if (mft->flags & CNF_FRESH)
-//		return cb(mft->rpp, arg); // XXX can rpp be NULL?
 
 	/* Online attempts */
 	// XXX review result signs
 	// XXX normalize rpkiNotify & caRepository?
-	error = try_uri(uris->rpkiNotify, dl_rrdp, cb, arg);
+	error = try_uri(uris->rpkiNotify, cache.https, dl_rrdp, cb, arg);
 	if (error <= 0)
 		return error;
-	error = try_uri(uris->caRepository, dl_rsync, cb, arg);
+	error = try_uri(uris->caRepository, cache.rsync, dl_rsync, cb, arg);
 	if (error <= 0)
 		return error;
 
 	/* Offline attempts */
-	error = try_uri(uris->rpkiNotify, NULL, cb, arg);
+	error = try_uri(uris->rpkiNotify, cache.https, NULL, cb, arg);
 	if (error <= 0)
 		return error;
-	return try_uri(uris->caRepository, NULL, cb, arg);
+	return try_uri(uris->caRepository, cache.rsync, NULL, cb, arg);
 }
 
 void
@@ -889,15 +943,15 @@ nftw_remove_abandoned(const char *path, const struct stat *st,
 		}
 
 	} else if (S_ISREG(st->st_mode)) {
-		if ((msm->flags & CNF_RSYNC) || !pm || (pm->flags & CNF_WITHDRAWN)) {
-			clock_gettime(CLOCK_REALTIME, &now); // XXX
-			PR_DEBUG_MSG("%ld > %ld", now.tv_sec - st->st_atim.tv_sec, cfg_cache_threshold());
-			if (now.tv_sec - st->st_atim.tv_sec > cfg_cache_threshold()) {
-				pr_op_debug("Too old; abandoned.");
-				goto abandoned;
-			}
-			pr_op_debug("Still young; preserving.");
+
+//		if ((msm->flags & CNF_RSYNC) || !pm || (pm->flags & CNF_WITHDRAWN))
+		clock_gettime(CLOCK_REALTIME, &now); // XXX
+		PR_DEBUG_MSG("%ld > %ld", now.tv_sec - st->st_atim.tv_sec, cfg_cache_threshold());
+		if (now.tv_sec - st->st_atim.tv_sec > cfg_cache_threshold()) {
+			pr_op_debug("Too old; abandoned.");
+			goto abandoned;
 		}
+		pr_op_debug("Still young; preserving.");
 
 	} else {
 		pr_op_debug("Unknown type; abandoned.");
@@ -981,12 +1035,10 @@ cleanup_cache(void)
 	pr_op_debug("Cleaning up old abandoned and unknown cache files.");
 	remove_abandoned();
 
-	pr_op_debug("Cleaning up leftover nodes.");
+	pr_op_debug("Cleaning up orphaned nodes.");
 	remove_leftover_nodes();
 	cachent_traverse(cache.rsync, remove_orphaned);
 	cachent_traverse(cache.https, remove_orphaned);
-
-	/* XXX delete nodes for which no file exists? */
 }
 
 void

@@ -12,7 +12,7 @@ if USE_TESTS
 # <mumble>_CFLAGS is not defined.
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
-AM_CFLAGS =  -pedantic -Wall
+AM_CFLAGS =  -pedantic -Wall -Wno-unused
 #AM_CFLAGS += -Wno-unused
 AM_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
 AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}

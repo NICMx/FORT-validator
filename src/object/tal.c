@@ -267,7 +267,7 @@ do_file_validation(void *arg)
 		goto end;
 
 	args.db = db_table_create();
-	thread->error = cache_download_alt(&args.tal.urls, MAP_HTTP,
+	thread->error = cache_download_urls(&args.tal.urls,
 	    __handle_tal_map, &args);
 	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",

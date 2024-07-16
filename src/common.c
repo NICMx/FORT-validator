@@ -238,31 +238,16 @@ valid_file_or_dir(char const *location, bool check_file)
 	return result;
 }
 
-/*
- * > 0: exists
- * = 0: !exists
- * < 0: error
- */
 static int
-dir_exists(char const *path)
+stat_dir(char const *path)
 {
 	struct stat meta;
-	int error;
 
-	if (stat(path, &meta) != 0) {
-		error = errno;
-		if (error == ENOENT)
-			return 0;
-		pr_op_err_st("stat() failed: %s", strerror(error));
-		return -error;
-	}
-
-	if (!S_ISDIR(meta.st_mode)) {
-		return pr_op_err_st("Path '%s' exists and is not a directory.",
-		    path);
-	}
-
-	return 1;
+	if (stat(path, &meta) != 0)
+		return errno;
+	if (!S_ISDIR(meta.st_mode))
+		return ENOTDIR;
+	return 0;
 }
 
 static int
@@ -270,13 +255,17 @@ ensure_dir(char const *path, mode_t mode)
 {
 	int error;
 
-	if (mkdir(path, mode) != 0) {
+	/*
+	 * Perplexingly, mkdir() returns EEXIST instead of ENOTDIR when the
+	 * path actually refers to a file.
+	 * So it looks like this stat() is unavoidable.
+	 */
+	if (stat_dir(path) == ENOTDIR && remove(path))
+		return errno;
+
+	if (mkdir(path, mode)) {
 		error = errno;
-		if (error != EEXIST) {
-			pr_op_err_st("Error while making directory '%s': %s",
-			    path, strerror(error));
-			return error;
-		}
+		return (error == EEXIST) ? 0 : error;
 	}
 
 	return 0;
@@ -299,27 +288,33 @@ mkdir_p(char const *_path, bool include_basename, mode_t mode)
 		*last_slash = '\0';
 	}
 
-	result = dir_exists(path); /* short circuit */
-	if (result > 0) {
-		result = 0;
-		goto end;
-	} else if (result < 0) {
+	result = stat_dir(path); /* short circuit */
+	if (result == 0)
+		goto end; /* Already exists */
+	if (result != ENOENT && result != ENOTDIR) {
+		pr_op_err_st("Error during stat(%s): %s",
+		    path, strerror(result));
 		goto end;
 	}
+
+	if (result == ENOTDIR)
+		pr_op_err_st("stack tracing...");
 
 	for (i = 1; path[i] != '\0'; i++) {
 		if (path[i] == '/') {
 			path[i] = '\0';
 			result = ensure_dir(path, mode);
 			path[i] = '/';
-			if (result != 0)
-				goto end; /* error msg already printed */
+			if (result != 0) {
+				pr_op_err_st("Error during mkdir(%s): %s",
+				    path, strerror(result));
+				goto end;
+			}
 		}
 	}
 	result = ensure_dir(path, mode);
 
-end:
-	free(path);
+end:	free(path);
 	return result;
 }
 

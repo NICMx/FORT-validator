@@ -2,6 +2,7 @@
 #define SRC_CACHE_LOCAL_CACHE_H_
 
 #include "cache/cachent.h"
+#include "types/str.h"
 
 void cache_setup(void);		/* Init this module */
 void cache_teardown(void);	/* Destroy this module */
@@ -31,6 +32,7 @@ void sias_cleanup(struct sia_uris *);
  * XXX rename
  */
 typedef int (*maps_dl_cb)(struct cache_node *rpp, void *arg);
+int cache_download_uri(struct strlist *, maps_dl_cb, void *);
 int cache_download_alt(struct sia_uris *, maps_dl_cb, void *);
 
 void cache_print(void); /* Dump cache in stdout. Recursive; tests only */

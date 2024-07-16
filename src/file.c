@@ -176,7 +176,7 @@ end:	free(dst);
  * Move all the files contained in @src to @dst, overwriting when necessary,
  * not touching files that exist in @dst but not in @src.
  *
- * Both directories have to already exist.
+ * @src must exist.
  *
  * @src: cache/tmp/123
  * @dst: cache/rsync/a.b.c/d/e
@@ -184,6 +184,12 @@ end:	free(dst);
 int
 file_merge_into(char const *src, char const *dst)
 {
+	int error;
+
+	error = mkdir_p(dst, false, 0777);
+	if (error)
+		return error;
+
 	src_offset = strlen(src);
 	merge_dst = dst;
 	/* TODO (performance) optimize that 32 */

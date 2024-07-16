@@ -224,6 +224,12 @@ join_paths(char const *path1, char const *path2)
 	char *result;
 	int written;
 
+	// XXX needed?
+	if (path1[0] == 0)
+		return pstrdup(path2);
+	if (path2[0] == 0)
+		return pstrdup(path1);
+
 	n = strlen(path1) + strlen(path2) + 2;
 	result = pmalloc(n);
 
