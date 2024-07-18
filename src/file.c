@@ -152,7 +152,7 @@ merge_into(const char *src, const struct stat *st, int typeflag,
 	dst = join_paths(merge_dst, &src[src_offset]);
 
 	if (S_ISDIR(st->st_mode)) {
-		PR_DEBUG_MSG("mkdir -p %s", dst);
+		pr_op_debug("mkdir -p %s", dst);
 		if (mkdir_p(dst, true, st->st_mode)) {
 			PR_DEBUG_MSG("Failed: %s", strerror(errno));
 			goto end;
@@ -163,9 +163,16 @@ merge_into(const char *src, const struct stat *st, int typeflag,
 		if (utimensat(AT_FDCWD, dst, times, AT_SYMLINK_NOFOLLOW))
 			PR_DEBUG_MSG("utimensat: %s", strerror(errno));
 	} else {
-		PR_DEBUG_MSG("rename: %s -> %s", src, dst);
-		if (rename(src, dst))
-			PR_DEBUG_MSG("rename: %s", strerror(errno));
+		pr_op_debug("rename: %s -> %s", src, dst);
+		if (rename(src, dst)) {
+			if (errno == EISDIR) {
+				/* XXX stacked nftw()s */
+				if (file_rm_rf(dst) != 0)
+					PR_DEBUG_MSG("%s", "AAAAAAAAAAA");
+				if (rename(src, dst))
+					PR_DEBUG_MSG("rename: %s", strerror(errno));
+			}
+		}
 	}
 
 end:	free(dst);

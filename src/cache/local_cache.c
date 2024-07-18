@@ -716,6 +716,21 @@ cache_print(void)
 	cachent_print(cache.https);
 }
 
+static void
+prune_rsync(void)
+{
+	struct cache_node *domain, *tmp1;
+	struct cache_node *module, *tmp2;
+	struct cache_node *child, *tmp3;
+
+	HASH_ITER(hh, cache.rsync->children, domain, tmp1)
+		HASH_ITER(hh, domain->children, module, tmp2)
+			HASH_ITER(hh, module->children, child, tmp3) {
+				pr_op_debug("Removing leftover: %s", child->url);
+				cachent_delete(child);
+			}
+}
+
 /*
  * XXX this needs to be hit only by files now
  * XXX result is redundant
@@ -723,18 +738,24 @@ cache_print(void)
 static bool
 commit_rpp_delta(struct cache_node *node, char const *path)
 {
+	struct cache_node *child, *tmp;
 	int error;
 
 	pr_op_debug("Commiting %s", node->url);
 
 	if (node == cache.rsync || node == cache.https) {
 		pr_op_debug("Root; nothing to commit.");
-		return true;
+		goto branch;
 	}
 
 	if (node->tmpdir == NULL) {
-		pr_op_debug("Not changed; nothing to commit.");
-		return true;
+		if (node->children) {
+			pr_op_debug("Branch.");
+			goto branch;
+		} else {
+			pr_op_debug("Not changed; nothing to commit.");
+			return true;
+		}
 	}
 
 	if (node->flags & CNF_VALID) {
@@ -742,14 +763,24 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 		error = file_merge_into(node->tmpdir, path);
 		if (error)
 			printf("rename errno: %d\n", error); // XXX
+		/* XXX Think more about the implications of this. */
+		HASH_ITER(hh, node->children, child, tmp)
+			cachent_delete(child);
 	} else {
 		pr_op_debug("Validation unsuccessful; rollbacking.");
-		/* XXX same; just do remove(). */
+		/* XXX just do remove()? */
 		file_rm_f(node->tmpdir);
 	}
 
 	free(node->tmpdir);
 	node->tmpdir = NULL;
+	return true;
+
+branch:	node->flags = 0;
+	if (node->tmpdir) {
+		free(node->tmpdir);
+		node->tmpdir = NULL;
+	}
 	return true;
 }
 
@@ -992,21 +1023,6 @@ remove_abandoned(void)
 	free(rootpath);
 }
 
-static void
-remove_leftover_nodes(void)
-{
-	struct cache_node *domain, *tmp1;
-	struct cache_node *module, *tmp2;
-	struct cache_node *child, *tmp3;
-
-	HASH_ITER(hh, cache.rsync->children, domain, tmp1)
-		HASH_ITER(hh, domain->children, module, tmp2)
-			HASH_ITER(hh, module->children, child, tmp3) {
-				pr_op_debug("Removing leftover: %s", child->url);
-				cachent_delete(child);
-			}
-}
-
 static bool
 remove_orphaned(struct cache_node *node, char const *path)
 {
@@ -1025,6 +1041,9 @@ remove_orphaned(struct cache_node *node, char const *path)
 static void
 cleanup_cache(void)
 {
+	pr_op_debug("Ditching redundant rsync nodes.");
+	prune_rsync();
+
 	pr_op_debug("Committing successful RPPs.");
 	cachent_traverse(cache.rsync, commit_rpp_delta);
 	cachent_traverse(cache.https, commit_rpp_delta);
@@ -1036,7 +1055,6 @@ cleanup_cache(void)
 	remove_abandoned();
 
 	pr_op_debug("Cleaning up orphaned nodes.");
-	remove_leftover_nodes();
 	cachent_traverse(cache.rsync, remove_orphaned);
 	cachent_traverse(cache.https, remove_orphaned);
 }

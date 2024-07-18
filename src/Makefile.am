@@ -1,7 +1,3 @@
-# Comment these out during releases.
-# Also increase optimization I guess (-O0 -> -On)
-LDFLAGS_DEBUG = -rdynamic
-
 bin_PROGRAMS = fort
 
 fort_SOURCES = alloc.c alloc.h
@@ -15,8 +11,8 @@ fort_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
 fort_CFLAGS += -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
 if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED
+fort_LDFLAGS = -rdynamic
 endif
-fort_LDFLAGS = $(LDFLAGS_DEBUG)
 fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.

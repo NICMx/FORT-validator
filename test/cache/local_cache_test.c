@@ -308,7 +308,7 @@ cleanup_test(void)
 {
 	dl_error = 0;
 	cache_commit();
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
+//	ck_assert_int_eq(0, system("rm -rf tmp/"));
 }
 
 /* Tests */
@@ -700,7 +700,6 @@ START_TEST(test_cache_cleanup_https)
 
 	/* Add a child to the same branch, do not update the old one */
 	new_iteration(true);
-	PR_DEBUG;
 	run_dl_https("https://a.b.c/e/f/g", 0, 1);
 	run_cleanup();
 	ck_cache_https(
@@ -710,37 +709,95 @@ START_TEST(test_cache_cleanup_https)
 					unode("https/a.b.c/e/f",
 						ufnode("https/a.b.c/e/f/g", HFULL, NULL), NULL), NULL), NULL), NULL));
 
-//	/*
-//	 * Download parent, do not update child.
-//	 * Children need to die, because parent is now a file.
-//	 */
-//	new_iteration(true);
-//	run_dl_https("https://a.b.c/e/f", 0, 1);
-//	run_cleanup();
-//	ck_cache(NODE("https://a.b.c/e/f", 0, 1, 1), NULL);
-//
-//	/* Do it again. */
-//	new_iteration(true);
-//	run_dl_https("https://a.b.c/e", 0, 1);
-//	run_cleanup();
-//	ck_cache(NODE("https://a.b.c/e", 0, 1, 1), NULL);
-//
-//	/* Empty the tree */
-//	new_iteration(true);
-//	run_cleanup();
-//	ck_cache(NULL);
-//
-//	/* Node exists, but file doesn't */
-//	new_iteration(true);
-//	run_dl_https("https://a.b.c/e", 0, 1);
-//	run_dl_https("https://a.b.c/f/g/h", 0, 1);
-//	ck_cache(
-//	    NODE("https://a.b.c/e", 0, 1, 1),
-//	    NODE("https://a.b.c/f/g/h", 0, 1, 1),
-//	    NULL);
-//	ck_assert_int_eq(0, file_rm_rf("tmp/https/a.b.c/f/g/h"));
-//	run_cleanup();
-//	ck_cache(NODE("https://a.b.c/e", 0, 1, 1), NULL);
+	/*
+	 * Download parent, do not update child.
+	 * Children need to die, because parent is now a file.
+	 */
+	new_iteration(true);
+	run_dl_https("https://a.b.c/e/f", 0, 1);
+	run_cleanup();
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				unode("https/a.b.c/e",
+					ufnode("https/a.b.c/e/f", HFULL, NULL), NULL), NULL), NULL));
+
+	/* Do it again. */
+	new_iteration(true);
+	run_dl_https("https://a.b.c/e", 0, 1);
+	run_cleanup();
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				ufnode("https/a.b.c/e", HFULL, NULL), NULL), NULL));
+
+
+	/* Empty the tree */
+	new_iteration(true);
+	run_cleanup();
+	ck_cache_https(unode("https", NULL));
+
+	/* Node exists, but file doesn't */
+	new_iteration(true);
+	run_dl_https("https://a.b.c/e", 0, 1);
+	run_dl_https("https://a.b.c/f/g/h", 0, 1);
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				uftnode("https/a.b.c/e", HFULL, "tmp/tmp/7", NULL),
+				unode("https/a.b.c/f",
+					unode("https/a.b.c/f/g",
+						uftnode("https/a.b.c/f/g/h", HFULL, "tmp/tmp/8", NULL), NULL), NULL), NULL), NULL));
+	run_cleanup(); /* Move from tmp/tmp to tmp/https */
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				ufnode("https/a.b.c/e", HFULL, NULL),
+				unode("https/a.b.c/f",
+					unode("https/a.b.c/f/g",
+						ufnode("https/a.b.c/f/g/h", HFULL, NULL), NULL), NULL), NULL), NULL));
+	ck_assert_int_eq(0, file_rm_rf("tmp/https/a.b.c/f/g/h"));
+	run_cleanup(); /* Actual test */
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				ufnode("https/a.b.c/e", HFULL, NULL), NULL), NULL));
+
+	/* Temporal version disappears before we get a commit */
+	new_iteration(true);
+	run_dl_https("https://a.b.c/e", 0, 1);
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				uftnode("https/a.b.c/e", HFULL, "tmp/tmp/9", NULL), NULL), NULL));
+	ck_assert_int_eq(0, file_rm_rf("tmp/tmp/9"));
+	run_cleanup();
+	ck_cache_https(unode("https", NULL));
+
+	/* Temporal version disappears after we get a commit */
+	new_iteration(true);
+	run_dl_https("https://a.b.c/e", 0, 1);
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				uftnode("https/a.b.c/e", HFULL, "tmp/tmp/A", NULL), NULL), NULL));
+	run_cleanup(); /* Commit */
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				ufnode("https/a.b.c/e", HFULL, NULL, NULL), NULL), NULL));
+	new_iteration(false);
+	run_dl_https("https://a.b.c/e", 0, 1);
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				uftnode("https/a.b.c/e", HFULL, "tmp/tmp/B", NULL), NULL), NULL));
+	ck_assert_int_eq(0, file_rm_rf("tmp/tmp/B"));
+	run_cleanup();
+	ck_cache_https(
+		unode("https",
+			unode("https/a.b.c",
+				ufnode("https/a.b.c/e", HFULL, NULL), NULL), NULL));
 
 	cleanup_test();
 }
