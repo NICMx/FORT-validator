@@ -7,76 +7,57 @@
 #include "types/url.h"
 
 struct cache_node *
-cachent_create_root(char const *schema)
+cachent_create_root(bool https)
 {
 	struct cache_node *root;
 
 	root = pzalloc(sizeof(struct cache_node));
-	root->url = pstrdup(schema);
-	root->name = root->url;
+	root->url = pstrdup(https ? "https://" : "rsync://");
+	root->path = join_paths(config_get_local_repository(),
+	   https ? "https" : "rsync");
+	root->name = strrchr(root->path, '/') + 1;
 
 	return root;
 }
 
 /* Preorder. @cb returns whether the children should be traversed. */
 int
-cachent_traverse(struct cache_node *root,
-    bool (*cb)(struct cache_node *, char const *))
+cachent_traverse(struct cache_node *root, bool (*cb)(struct cache_node *))
 {
 	struct cache_node *iter_start;
 	struct cache_node *parent, *child;
 	struct cache_node *tmp;
-	struct path_builder pb;
 	int error;
 
 	if (!root)
 		return 0;
 
-	pb_init(&pb);
-
-	error = pb_append(&pb, config_get_local_repository());
-	if (error)
-		goto end;
-
-	error = pb_append(&pb, root->name);
-	if (error)
-		goto end;
-	if (!cb(root, pb.string))
-		goto end;
+	if (!cb(root))
+		return error;
 
 	parent = root;
 	iter_start = parent->children;
 	if (iter_start == NULL)
-		goto end;
+		return error;
 
 reloop:	/* iter_start must not be NULL */
 	HASH_ITER(hh, iter_start, child, tmp) {
-		error = pb_append(&pb, child->name);
-		if (error)
-			goto end;
-
-		if (cb(child, pb.string) && (child->children != NULL)) {
+		if (cb(child) && (child->children != NULL)) {
 			parent = child;
 			iter_start = parent->children;
 			goto reloop;
 		}
-
-		pb_pop(&pb, true);
 	}
 
 	parent = iter_start->parent;
 	do {
 		if (parent == NULL)
-			goto end;
-		pb_pop(&pb, true);
+			return error;
 		iter_start = parent->hh.next;
 		parent = parent->parent;
 	} while (iter_start == NULL);
 
 	goto reloop;
-
-end:	pb_cleanup(&pb);
-	return error;
 }
 
 static struct cache_node *
@@ -124,6 +105,7 @@ provide(struct cache_node *parent, char const *url,
     char const *name, size_t namelen)
 {
 	struct cache_node *child;
+	size_t pathlen;
 
 	child = find_child(parent, name, namelen);
 	if (child != NULL)
@@ -131,6 +113,12 @@ provide(struct cache_node *parent, char const *url,
 
 	child = pzalloc(sizeof(struct cache_node));
 	child->url = pstrndup(url, name - url + namelen);
+
+	pathlen = strlen(parent->path) + namelen + 2;
+	child->path = pmalloc(pathlen);
+	if (snprintf(child->path, pathlen, "%s/%.*s", parent->path, (int)namelen, name) >= pathlen)
+		pr_crit("aaaaaa"); // XXX
+
 	child->name = child->url + (name - url);
 	if ((parent->flags & RSYNC_INHERIT) == RSYNC_INHERIT)
 		child->flags = RSYNC_INHERIT;
@@ -168,7 +156,7 @@ cachent_provide(struct cache_node *ancestor, char const *url)
 	for (i = 0; ancestor->url[i] != 0; i++)
 		if (ancestor->url[i] != normal[i])
 			goto fail;
-	if (normal[i] != '/' && normal[i] != '\0')
+	if (i != RPKI_SCHEMA_LEN && normal[i] != '/' && normal[i] != '\0')
 		goto fail;
 
 	token_init(&tkn, normal + i);
@@ -185,9 +173,11 @@ fail:	free(normal);
 static void __delete_node_cb(struct cache_node const *);
 #endif
 
-static void
+static int
 __delete_node(struct cache_node *node)
 {
+	int valid = node->flags & CNF_VALID;
+
 #ifdef UNIT_TESTING
 	__delete_node_cb(node);
 #endif
@@ -195,17 +185,23 @@ __delete_node(struct cache_node *node)
 	if (node->parent != NULL)
 		HASH_DEL(node->parent->children, node);
 	free(node->url);
-	free(node->tmpdir);
+	free(node->path);
+	free(node->tmppath);
 	free(node);
+
+	return valid;
 }
 
-void
+int
 cachent_delete(struct cache_node *node)
 {
 	struct cache_node *parent;
+	int valid;
 
 	if (!node)
-		return;
+		return 0;
+
+	valid = node->flags & CNF_VALID;
 
 	parent = node->parent;
 	if (parent != NULL) {
@@ -218,9 +214,11 @@ cachent_delete(struct cache_node *node)
 			node = node->children;
 
 		parent = node->parent;
-		__delete_node(node);
+		valid |= __delete_node(node);
 		node = parent;
 	} while (node != NULL);
+
+	return valid;
 }
 
 static void
@@ -241,7 +239,7 @@ print_node(struct cache_node *node, unsigned int tabs)
 	printf("%s", (node->flags & CNF_VALID) ? "valid " : "");
 	printf("%s", (node->flags & CNF_NOTIFICATION) ? "notification " : "");
 	printf("%s", (node->flags & CNF_WITHDRAWN) ? "withdrawn " : "");
-	printf(" -- %s", node->tmpdir);
+	printf(" -- %s", node->tmppath);
 
 	printf("\n");
 	HASH_ITER(hh, node->children, child, tmp)

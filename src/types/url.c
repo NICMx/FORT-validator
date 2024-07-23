@@ -13,14 +13,14 @@ path_rewind(char const *root, char *cursor)
 }
 
 /*
- * Collapses '//', '.' and '..'. Also removes the colon from the schema.
+ * Collapses '//' (except from the schema), '.' and '..'.
  *
- * "rsync://a.b/./c//.././/d/." -> "rsync/a.b/d"
+ * "rsync://a.b/./c//.././/d/." -> "rsync://a.b/d"
  */
 char *
 url_normalize(char const *url)
 {
-	char *normal, *dst, *root;
+	char *normal, *dst;
 	struct tokenizer tkn;
 
 	if (strncmp(url, "rsync://", RPKI_SCHEMA_LEN) &&
@@ -28,16 +28,14 @@ url_normalize(char const *url)
 		return NULL;
 
 	normal = pstrdup(url);
-	root = normal + 5;
-	*root = '/';
-	dst = root + 1;
+	dst = normal + RPKI_SCHEMA_LEN;
 	token_init(&tkn, url + RPKI_SCHEMA_LEN);
 
 	while (token_next(&tkn)) {
 		if (tkn.len == 1 && tkn.str[0] == '.')
 			continue;
 		if (tkn.len == 2 && tkn.str[0] == '.' && tkn.str[1] == '.') {
-			dst = path_rewind(root, dst);
+			dst = path_rewind(normal + RPKI_SCHEMA_LEN, dst);
 			if (!dst)
 				goto fail;
 			continue;
@@ -48,7 +46,7 @@ url_normalize(char const *url)
 	}
 
 	/* Reject URL if there's nothing after the schema. Maybe unnecessary. */
-	if (dst == root + 1)
+	if (dst == normal + RPKI_SCHEMA_LEN)
 		goto fail;
 
 	dst[-1] = '\0';

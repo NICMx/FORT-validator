@@ -88,10 +88,7 @@ struct rpki_config {
 			unsigned int interval;
 		} retry;
 		char *program;
-		struct {
-			struct string_array flat; /* Deprecated */
-			struct string_array recursive;
-		} args;
+		struct string_array args;
 	} rsync;
 
 	struct {
@@ -489,20 +486,17 @@ static const struct option_field options[] = {
 		.id = 3006,
 		.name = "rsync.arguments-recursive",
 		.type = &gt_string_array,
-		.offset = offsetof(struct rpki_config, rsync.args.recursive),
-		.doc = "RSYNC program arguments",
+		.offset = offsetof(struct rpki_config, rsync.args),
+		.doc = "Deprecated; does nothing.",
 		.availability = AVAILABILITY_JSON,
-		/* Unlimited */
-		.max = 0,
+		.deprecated = true,
 	}, {
 		.id = 3007,
 		.name = "rsync.arguments-flat",
 		.type = &gt_string_array,
-		.offset = offsetof(struct rpki_config, rsync.args.flat),
+		.offset = offsetof(struct rpki_config, rsync.args),
 		.doc = "Deprecated; does nothing.",
 		.availability = AVAILABILITY_JSON,
-		/* Unlimited */
-		.max = 0,
 		.deprecated = true,
 	},
 
@@ -929,18 +923,7 @@ print_config(void)
 static void
 set_default_values(void)
 {
-	static char const *recursive_rsync_args[] = {
-		"-rtz", "--delete", "--omit-dir-times",
-
-		"--contimeout=20", "--max-size=20MB", "--timeout=15",
-
-		"--include=*/", "--include=*.cer", "--include=*.crl",
-		"--include=*.gbr", "--include=*.mft", "--include=*.roa",
-		"--exclude=*",
-
-		"$REMOTE", "$LOCAL",
-	};
-	static char const *flat_rsync_args[] = { "<deprecated>" };
+	static char const *trash[] = { "<deprecated>" };
 	static char const *addrs[] = {
 #ifdef __linux__
 		"::"
@@ -978,10 +961,7 @@ set_default_values(void)
 	rpki_config.rsync.retry.count = 1;
 	rpki_config.rsync.retry.interval = 4;
 	rpki_config.rsync.program = pstrdup("rsync");
-	string_array_init(&rpki_config.rsync.args.flat,
-	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
-	string_array_init(&rpki_config.rsync.args.recursive,
-	    recursive_rsync_args, ARRAY_LEN(recursive_rsync_args));
+	string_array_init(&rpki_config.rsync.args, trash, ARRAY_LEN(trash));
 
 	rpki_config.http.enabled = true;
 	/* Higher priority than rsync by default */
@@ -1380,12 +1360,6 @@ char *
 config_get_rsync_program(void)
 {
 	return rpki_config.rsync.program;
-}
-
-struct string_array const *
-config_get_rsync_args(void)
-{
-	return &rpki_config.rsync.args.recursive;
 }
 
 bool

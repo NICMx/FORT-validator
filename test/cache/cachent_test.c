@@ -7,7 +7,7 @@
 #include "mock.c"
 #include "types/url.c"
 
-static char deleted[16][5];
+static char deleted[16][6];
 static unsigned int dn;
 
 static void
@@ -20,14 +20,14 @@ START_TEST(test_delete)
 {
 	struct cache_node *root, *a, *b;
 
-	a = unode("a", NULL);
+	a = runode("a", NULL);
 	dn = 0;
 	cachent_delete(a);
 	ck_assert_uint_eq(1, dn);
 	ck_assert_str_eq("a", deleted[0]);
 
-	a = unode("a", NULL);
-	root = unode("root", a, NULL);
+	a = runode("a", NULL);
+	root = runode("", a, NULL);
 	dn = 0;
 	cachent_delete(a);
 	ck_assert_ptr_eq(NULL, root->children);
@@ -37,25 +37,25 @@ START_TEST(test_delete)
 	dn = 0;
 	cachent_delete(root);
 	ck_assert_uint_eq(1, dn);
-	ck_assert_str_eq("root", deleted[0]);
+	ck_assert_str_eq("rsync", deleted[0]);
 
-	b = unode("b",
-			unode("c", NULL),
-			unode("d", NULL),
-			unode("e", NULL),
-			unode("f", NULL), NULL);
-	a = unode("a",
+	b = runode("a/b",
+		runode("a/b/c", NULL),
+		runode("a/b/d", NULL),
+		runode("a/b/e", NULL),
+		runode("a/b/f", NULL), NULL);
+	a = runode("a",
 		b,
-		unode("g",
-			unode("h",
-				unode("i", NULL), NULL),
-			unode("j",
-				unode("k", NULL), NULL),
-			unode("l",
-				unode("m", NULL), NULL),
-			unode("n",
-				unode("o", NULL), NULL), NULL), NULL);
-	root = unode("root", a, NULL);
+		runode("a/g",
+			runode("a/g/h",
+				runode("a/g/h/i", NULL), NULL),
+			runode("a/g/j",
+				runode("a/g/j/k", NULL), NULL),
+			runode("a/g/l",
+				runode("a/g/l/m", NULL), NULL),
+			runode("a/g/n",
+				runode("a/g/n/o", NULL), NULL), NULL), NULL);
+	root = runode("", a, NULL);
 
 	dn = 0;
 	cachent_delete(b);
@@ -83,7 +83,7 @@ START_TEST(test_delete)
 	dn = 0;
 	cachent_delete(root);
 	ck_assert_uint_eq(1, dn);
-	ck_assert_str_eq("root", deleted[0]);
+	ck_assert_str_eq("rsync", deleted[0]);
 }
 END_TEST
 
@@ -91,9 +91,9 @@ static char const *expected[32];
 static unsigned int e;
 
 static bool
-ck_traverse_cb(struct cache_node *node, char const *path)
+ck_traverse_cb(struct cache_node *node)
 {
-	ck_assert_str_eq(expected[e++], path);
+	ck_assert_str_eq(expected[e++], node->path);
 	return true;
 }
 
@@ -124,102 +124,102 @@ START_TEST(test_traverse)
 	root = NULL;
 	ck_traverse(root, NULL);
 
-	root =	unode("a", NULL);
-	ck_traverse(root, "tmp/a", NULL);
+	root =	runode("a", NULL);
+	ck_traverse(root, "tmp/rsync/a", NULL);
 
-	root =	unode("a",
-			unode("b", NULL), NULL);
-	ck_traverse(root, "tmp/a", "tmp/a/b", NULL);
+	root =	runode("a",
+			runode("a/b", NULL), NULL);
+	ck_traverse(root, "tmp/rsync/a", "tmp/rsync/a/b", NULL);
 
-	root =	unode("a",
-			unode("b",
-				unode("c", NULL), NULL), NULL);
+	root =	runode("a",
+			runode("a/b",
+				runode("a/b/c", NULL), NULL), NULL);
 	ck_traverse(root,
-		"tmp/a",
-		"tmp/a/b",
-		"tmp/a/b/c", NULL);
+		"tmp/rsync/a",
+		"tmp/rsync/a/b",
+		"tmp/rsync/a/b/c", NULL);
 
-	root =	unode("a",
-			unode("b",
-				unode("c", NULL),
-				unode("d", NULL), NULL), NULL);
+	root =	runode("a",
+			runode("a/b",
+				runode("a/b/c", NULL),
+				runode("a/b/d", NULL), NULL), NULL);
 	ck_traverse(root,
-		"tmp/a",
-		"tmp/a/b",
-		"tmp/a/b/c",
-		"tmp/a/b/d", NULL);
+		"tmp/rsync/a",
+		"tmp/rsync/a/b",
+		"tmp/rsync/a/b/c",
+		"tmp/rsync/a/b/d", NULL);
 
-	root =	unode("a",
-			unode("b",
-				unode("c", NULL),
-				unode("d", NULL), NULL),
-			unode("e", NULL), NULL);
+	root =	runode("a",
+			runode("a/b",
+				runode("a/b/c", NULL),
+				runode("a/b/d", NULL), NULL),
+			runode("a/e", NULL), NULL);
 	ck_traverse(root,
-		"tmp/a",
-		"tmp/a/b",
-		"tmp/a/b/c",
-		"tmp/a/b/d",
-		"tmp/a/e", NULL);
+		"tmp/rsync/a",
+		"tmp/rsync/a/b",
+		"tmp/rsync/a/b/c",
+		"tmp/rsync/a/b/d",
+		"tmp/rsync/a/e", NULL);
 
-	root =	unode("a",
-			unode("b", NULL),
-			unode("c",
-				unode("d", NULL),
-				unode("e", NULL), NULL), NULL);
+	root =	runode("a",
+			runode("a/b", NULL),
+			runode("a/c",
+				runode("a/c/d", NULL),
+				runode("a/c/e", NULL), NULL), NULL);
 	ck_traverse(root,
-		"tmp/a",
-		"tmp/a/b",
-		"tmp/a/c",
-		"tmp/a/c/d",
-		"tmp/a/c/e", NULL);
+		"tmp/rsync/a",
+		"tmp/rsync/a/b",
+		"tmp/rsync/a/c",
+		"tmp/rsync/a/c/d",
+		"tmp/rsync/a/c/e", NULL);
 
-	root =	unode("a",
-			unode("b",
-				unode("c", NULL),
-				unode("d", NULL), NULL),
-			unode("e",
-				unode("f", NULL),
-				unode("g", NULL), NULL), NULL);
+	root =	runode("a",
+			runode("a/b",
+				runode("a/b/c", NULL),
+				runode("a/b/d", NULL), NULL),
+			runode("a/e",
+				runode("a/e/f", NULL),
+				runode("a/e/g", NULL), NULL), NULL);
 	ck_traverse(root,
-		"tmp/a",
-		"tmp/a/b",
-		"tmp/a/b/c",
-		"tmp/a/b/d",
-		"tmp/a/e",
-		"tmp/a/e/f",
-		"tmp/a/e/g", NULL);
+		"tmp/rsync/a",
+		"tmp/rsync/a/b",
+		"tmp/rsync/a/b/c",
+		"tmp/rsync/a/b/d",
+		"tmp/rsync/a/e",
+		"tmp/rsync/a/e/f",
+		"tmp/rsync/a/e/g", NULL);
 
-	root =	unode("a",
-			unode("b",
-				unode("c", NULL),
-				unode("d", NULL),
-				unode("e", NULL),
-				unode("f", NULL), NULL),
-			unode("g",
-				unode("h",
-					unode("i", NULL), NULL),
-				unode("j",
-					unode("k", NULL), NULL),
-				unode("l",
-					unode("m", NULL), NULL),
-				unode("n",
-					unode("o", NULL), NULL), NULL), NULL);
+	root =	runode("a",
+			runode("a/b",
+				runode("a/b/c", NULL),
+				runode("a/b/d", NULL),
+				runode("a/b/e", NULL),
+				runode("a/b/f", NULL), NULL),
+			runode("a/g",
+				runode("a/g/h",
+					runode("a/g/h/i", NULL), NULL),
+				runode("a/g/j",
+					runode("a/g/j/k", NULL), NULL),
+				runode("a/g/l",
+					runode("a/g/l/m", NULL), NULL),
+				runode("a/g/n",
+					runode("a/g/n/o", NULL), NULL), NULL), NULL);
 	ck_traverse(root,
-		"tmp/a",
-		"tmp/a/b",
-		"tmp/a/b/c",
-		"tmp/a/b/d",
-		"tmp/a/b/e",
-		"tmp/a/b/f",
-		"tmp/a/g",
-		"tmp/a/g/h",
-		"tmp/a/g/h/i",
-		"tmp/a/g/j",
-		"tmp/a/g/j/k",
-		"tmp/a/g/l",
-		"tmp/a/g/l/m",
-		"tmp/a/g/n",
-		"tmp/a/g/n/o", NULL);
+		"tmp/rsync/a",
+		"tmp/rsync/a/b",
+		"tmp/rsync/a/b/c",
+		"tmp/rsync/a/b/d",
+		"tmp/rsync/a/b/e",
+		"tmp/rsync/a/b/f",
+		"tmp/rsync/a/g",
+		"tmp/rsync/a/g/h",
+		"tmp/rsync/a/g/h/i",
+		"tmp/rsync/a/g/j",
+		"tmp/rsync/a/g/j/k",
+		"tmp/rsync/a/g/l",
+		"tmp/rsync/a/g/l/m",
+		"tmp/rsync/a/g/n",
+		"tmp/rsync/a/g/n/o", NULL);
 }
 END_TEST
 
@@ -227,26 +227,30 @@ START_TEST(test_provide)
 {
 	struct cache_node *rsync, *abc, *d, *e, *f, *g, *h, *ee;
 
-	rsync = cachent_create_root("rsync");
+	rsync = cachent_create_root(false);
 	ck_assert_ptr_ne(NULL, rsync);
 	ck_assert_ptr_eq(NULL, rsync->parent);
-	ck_assert_str_eq("rsync", rsync->url);
+	ck_assert_str_eq("rsync://", rsync->url);
+	ck_assert_str_eq("tmp/rsync", rsync->path);
 	ck_assert_str_eq("rsync", rsync->name);
 
 	/* Create branch chain from root */
 	e = cachent_provide(rsync, "rsync://a.b.c/d/e");
 	ck_assert_ptr_ne(NULL, e);
-	ck_assert_str_eq("rsync/a.b.c/d/e", e->url);
+	ck_assert_str_eq("rsync://a.b.c/d/e", e->url);
+	ck_assert_str_eq("tmp/rsync/a.b.c/d/e", e->path);
 	ck_assert_str_eq("e", e->name);
 
 	d = e->parent;
 	ck_assert_ptr_ne(NULL, d);
-	ck_assert_str_eq("rsync/a.b.c/d", d->url);
+	ck_assert_str_eq("rsync://a.b.c/d", d->url);
+	ck_assert_str_eq("tmp/rsync/a.b.c/d", d->path);
 	ck_assert_str_eq("d", d->name);
 
 	abc = d->parent;
 	ck_assert_ptr_ne(NULL, abc);
-	ck_assert_str_eq("rsync/a.b.c", abc->url);
+	ck_assert_str_eq("rsync://a.b.c", abc->url);
+	ck_assert_str_eq("tmp/rsync/a.b.c", abc->path);
 	ck_assert_str_eq("a.b.c", abc->name);
 
 	ck_assert_ptr_eq(rsync, abc->parent);
@@ -267,32 +271,36 @@ START_TEST(test_provide)
 	/* Some not normalized noise */
 	ck_assert_ptr_eq(e, cachent_provide(e, "rsync://a.b.c/d/e////"));
 	ck_assert_ptr_eq(e, cachent_provide(e, "rsync://a.b.c///d/./e//"));
-	ck_assert_ptr_eq(e, cachent_provide(e, "rsync://a/../z/../a.b.c/d/e/"));
+	ck_assert_ptr_eq(e, cachent_provide(e, "rsync://a.b.c/d/f/../e/"));
 
 	/* Create sibling from root */
 	f = cachent_provide(rsync, "rsync://a.b.c/f");
 	ck_assert_ptr_ne(NULL, f);
 	ck_assert_ptr_eq(abc, f->parent);
-	ck_assert_str_eq("rsync/a.b.c/f", f->url);
+	ck_assert_str_eq("rsync://a.b.c/f", f->url);
+	ck_assert_str_eq("tmp/rsync/a.b.c/f", f->path);
 	ck_assert_str_eq("f", f->name);
 
 	/* Create more than one descendant from root */
 	h = cachent_provide(rsync, "rsync://a.b.c/f/g/h");
 	ck_assert_ptr_ne(NULL, h);
-	ck_assert_str_eq("rsync/a.b.c/f/g/h", h->url);
+	ck_assert_str_eq("rsync://a.b.c/f/g/h", h->url);
+	ck_assert_str_eq("tmp/rsync/a.b.c/f/g/h", h->path);
 	ck_assert_str_eq("h", h->name);
 
 	g = h->parent;
 	ck_assert_ptr_ne(NULL, g);
 	ck_assert_ptr_eq(f, g->parent);
-	ck_assert_str_eq("rsync/a.b.c/f/g", g->url);
+	ck_assert_str_eq("rsync://a.b.c/f/g", g->url);
+	ck_assert_str_eq("tmp/rsync/a.b.c/f/g", g->path);
 	ck_assert_str_eq("g", g->name);
 
 	/* Try to create a conflict by prefix */
 	ee = cachent_provide(rsync, "rsync://a.b.c/d/ee");
 	ck_assert_ptr_ne(e, ee);
 	ck_assert_ptr_eq(d, ee->parent);
-	ck_assert_str_eq("rsync/a.b.c/d/ee", ee->url);
+	ck_assert_str_eq("rsync://a.b.c/d/ee", ee->url);
+	ck_assert_str_eq("tmp/rsync/a.b.c/d/ee", ee->path);
 	ck_assert_str_eq("ee", ee->name);
 	ck_assert_ptr_eq(e, cachent_provide(abc, "rsync://a.b.c/d/e"));
 	ck_assert_ptr_eq(ee, cachent_provide(abc, "rsync://a.b.c/d/ee"));

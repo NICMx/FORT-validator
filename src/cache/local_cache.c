@@ -339,8 +339,8 @@ cache_tmpfile(char **filename)
 static void
 load_tal_json(void)
 {
-	cache.rsync = cachent_create_root("rsync");
-	cache.https = cachent_create_root("https");
+	cache.rsync = cachent_create_root(false);
+	cache.https = cachent_create_root(true);
 
 //	char *filename;
 //	json_t *root;
@@ -525,7 +525,7 @@ static int
 dl_rsync(struct cache_node *rpp)
 {
 	struct cache_node *module, *node;
-	char *path;
+	char *tmppath;
 	int error;
 
 	if (!config_get_rsync_enabled()) {
@@ -537,20 +537,20 @@ dl_rsync(struct cache_node *rpp)
 	if (module == NULL)
 		return -EINVAL; // XXX
 
-	error = cache_tmpfile(&path);
+	error = cache_tmpfile(&tmppath);
 	if (error)
 		return error;
 
-	// XXX looks like the third argument is redundant now.
-	error = rsync_download(module->url, path, true);
+	error = rsync_download(module->url, tmppath,
+	    (module->flags & CNF_CACHED) ? module->path : NULL);
 	if (error) {
-		free(path);
+		free(tmppath);
 		return error;
 	}
 
 	module->flags |= CNF_RSYNC | CNF_CACHED | CNF_FRESH;
 	module->mtim = time(NULL); // XXX catch -1
-	module->tmpdir = path;
+	module->tmppath = tmppath;
 
 	for (node = rpp; node != module; node = node->parent) {
 		node->flags |= RSYNC_INHERIT;
@@ -563,7 +563,7 @@ dl_rsync(struct cache_node *rpp)
 static int
 dl_http(struct cache_node *node)
 {
-	char *path;
+	char *tmppath;
 	bool changed;
 	int error;
 
@@ -572,13 +572,13 @@ dl_http(struct cache_node *node)
 		return 1;
 	}
 
-	error = cache_tmpfile(&path);
+	error = cache_tmpfile(&tmppath);
 	if (error)
 		return error;
 
-	error = http_download(node->url, path, node->mtim, &changed);
+	error = http_download(node->url, tmppath, node->mtim, &changed);
 	if (error) {
-		free(path);
+		free(tmppath);
 		return error;
 	}
 
@@ -587,7 +587,7 @@ dl_http(struct cache_node *node)
 		node->flags |= CNF_CHANGED;
 		node->mtim = time(NULL); // XXX catch -1
 	}
-	node->tmpdir = path;
+	node->tmppath = tmppath;
 	return 0;
 }
 
@@ -727,7 +727,7 @@ prune_rsync(void)
 		HASH_ITER(hh, domain->children, module, tmp2)
 			HASH_ITER(hh, module->children, child, tmp3) {
 				pr_op_debug("Removing leftover: %s", child->url);
-				cachent_delete(child);
+				module->flags |= cachent_delete(child);
 			}
 }
 
@@ -736,7 +736,7 @@ prune_rsync(void)
  * XXX result is redundant
  */
 static bool
-commit_rpp_delta(struct cache_node *node, char const *path)
+commit_rpp_delta(struct cache_node *node)
 {
 	struct cache_node *child, *tmp;
 	int error;
@@ -748,7 +748,7 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 		goto branch;
 	}
 
-	if (node->tmpdir == NULL) {
+	if (node->tmppath == NULL) {
 		if (node->children) {
 			pr_op_debug("Branch.");
 			goto branch;
@@ -760,7 +760,7 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 
 	if (node->flags & CNF_VALID) {
 		pr_op_debug("Validation successful; committing.");
-		error = file_merge_into(node->tmpdir, path);
+		error = file_merge_into(node->tmppath, node->path);
 		if (error)
 			printf("rename errno: %d\n", error); // XXX
 		/* XXX Think more about the implications of this. */
@@ -769,17 +769,17 @@ commit_rpp_delta(struct cache_node *node, char const *path)
 	} else {
 		pr_op_debug("Validation unsuccessful; rollbacking.");
 		/* XXX just do remove()? */
-		file_rm_f(node->tmpdir);
+		file_rm_f(node->tmppath);
 	}
 
-	free(node->tmpdir);
-	node->tmpdir = NULL;
+	free(node->tmppath);
+	node->tmppath = NULL;
 	return true;
 
 branch:	node->flags = 0;
-	if (node->tmpdir) {
-		free(node->tmpdir);
-		node->tmpdir = NULL;
+	if (node->tmppath) {
+		free(node->tmppath);
+		node->tmppath = NULL;
 	}
 	return true;
 }
@@ -1024,10 +1024,10 @@ remove_abandoned(void)
 }
 
 static bool
-remove_orphaned(struct cache_node *node, char const *path)
+remove_orphaned(struct cache_node *node)
 {
-	if (file_exists(path) == ENOENT) {
-		pr_op_debug("Missing file; deleting node: %s", path);
+	if (file_exists(node->path) == ENOENT) {
+		pr_op_debug("Missing file; deleting node: %s", node->path);
 		cachent_delete(node);
 		return false;
 	}

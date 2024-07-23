@@ -48,7 +48,6 @@ unsigned int config_get_rsync_priority(void);
 unsigned int config_get_rsync_retry_count(void);
 unsigned int config_get_rsync_retry_interval(void);
 char *config_get_rsync_program(void);
-struct string_array const *config_get_rsync_args(void);
 bool config_get_http_enabled(void);
 unsigned int config_get_http_priority(void);
 unsigned int config_get_http_retry_count(void);

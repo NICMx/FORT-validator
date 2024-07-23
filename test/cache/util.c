@@ -3,19 +3,27 @@
 #include <string.h>
 #include "data_structure/uthash.h"
 
-struct cache_node *
-vnode(char const *url, int flags, char const *tmpdir, va_list children)
+static struct cache_node *
+node(char const *schema, char const *path, int flags, char const *tmpdir,
+    va_list children)
 {
 	struct cache_node *result;
 	struct cache_node *child;
+	char buffer[64];
 	char const *slash;
 
 	result = pzalloc(sizeof(struct cache_node));
-	result->url = pstrdup(url);
-	slash = strrchr(url, '/');
-	result->name = slash ? (slash + 1) : result->url;
+
+	ck_assert(snprintf(buffer, 64, "%s://%s", schema, path) < 64);
+	result->url = pstrdup(buffer);
+	slash = (path[0] == 0) ? "" : "/";
+	ck_assert(snprintf(buffer, 64, "tmp/%s%s%s", schema, slash, path) < 64);
+	result->path = pstrdup(buffer);
+
+	result->name = strrchr(result->path, '/') + 1;
+	ck_assert_ptr_ne(NULL, result->name);
 	result->flags = flags;
-	result->tmpdir = tmpdir ? pstrdup(tmpdir) : NULL;
+	result->tmppath = tmpdir ? pstrdup(tmpdir) : NULL;
 
 	while ((child = va_arg(children, struct cache_node *)) != NULL) {
 		HASH_ADD_KEYPTR(hh, result->children, child->name,
@@ -27,39 +35,78 @@ vnode(char const *url, int flags, char const *tmpdir, va_list children)
 }
 
 struct cache_node *
-uftnode(char const *url, int flags, char const *tmpdir, ...)
+ruftnode(char const *path, int flags, char const *tmpdir, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, tmpdir);
-	result = vnode(url, flags, tmpdir, children);
+	result = node("rsync", path, flags, tmpdir, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-ufnode(char const *url, int flags, ...)
+rufnode(char const *path, int flags, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, flags);
-	result = vnode(url, flags, NULL, children);
+	result = node("rsync", path, flags, NULL, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-unode(char const *url, ...)
+runode(char const *path, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
-	va_start(children, url);
-	result = vnode(url, 0, NULL, children);
+	va_start(children, path);
+	result = node("rsync", path, 0, NULL, children);
+	va_end(children);
+
+	return result;
+}
+
+struct cache_node *
+huftnode(char const *path, int flags, char const *tmpdir, ...)
+{
+	struct cache_node *result;
+	va_list children;
+
+	va_start(children, tmpdir);
+	result = node("https", path, flags, tmpdir, children);
+	va_end(children);
+
+	return result;
+}
+
+struct cache_node *
+hufnode(char const *path, int flags, ...)
+{
+	struct cache_node *result;
+	va_list children;
+
+	va_start(children, flags);
+	result = node("https", path, flags, NULL, children);
+	va_end(children);
+
+	return result;
+}
+
+struct cache_node *
+hunode(char const *path, ...)
+{
+	struct cache_node *result;
+	va_list children;
+
+	va_start(children, path);
+	result = node("https", path, 0, NULL, children);
 	va_end(children);
 
 	return result;

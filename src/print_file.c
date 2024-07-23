@@ -21,7 +21,8 @@ __rsync2bio(char const *src, char const *dst)
 {
 	int error;
 
-	error = rsync_download(src, dst, false);
+	// XXX use the cache
+	error = rsync_download(src, dst, NULL);
 	if (error) {
 		pr_op_err("rysnc download failed: %s", strerror(abs(error)));
 		return NULL;

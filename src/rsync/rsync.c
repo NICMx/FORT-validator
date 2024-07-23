@@ -32,48 +32,34 @@ duplicate_fds(int fds[2][2])
 }
 
 static void
-release_args(char **args, unsigned int size)
+prepare_rsync(char *args, char const *src, char const *dst, char const *cmpdst)
 {
-	unsigned int i;
+	size_t i = 0;
 
-	/* args[0] wasn't allocated */
-	for (i = 1; i < size + 1; i++)
-		free(args[i]);
-	free(args);
-}
-
-static void
-prepare_rsync(char const *src, char const *dst, char ***args, size_t *args_len)
-{
-	struct string_array const *config_args;
-	char **copy_args;
-	unsigned int i;
-
-	config_args = config_get_rsync_args();
-	/*
-	 * We need to work on a copy, because the config args are immutable,
-	 * and we need to add the program name (for some reason) and NULL
-	 * elements, and replace $REMOTE and $LOCAL.
-	 */
-	copy_args = pcalloc(config_args->length + 2, sizeof(char *));
-
-	copy_args[0] = config_get_rsync_program();
-	copy_args[config_args->length + 1] = NULL;
-
-	memcpy(copy_args + 1, config_args->array,
-	    config_args->length * sizeof(char *));
-
-	for (i = 0; i < config_args->length; i++) {
-		if (strcmp(config_args->array[i], "$REMOTE") == 0)
-			copy_args[i + 1] = pstrdup(src);
-		else if (strcmp(config_args->array[i], "$LOCAL") == 0)
-			copy_args[i + 1] = pstrdup(dst);
-		else
-			copy_args[i + 1] = pstrdup(config_args->array[i]);
+	/* XXX review */
+	args[i++] = config_get_rsync_program();
+	args[i++] = "-rtz";
+	args[i++] = "--omit-dir-times";
+	args[i++] = "--contimeout";
+	args[i++] = "20";
+	args[i++] = "--max-size";
+	args[i++] = "20MB";
+	args[i++] = "--timeout";
+	args[i++] = "15";
+	args[i++] = "--include=*/";
+	args[i++] = "--include=*.cer";
+	args[i++] = "--include=*.crl";
+	args[i++] = "--include=*.gbr";
+	args[i++] = "--include=*.mft";
+	args[i++] = "--include=*.roa";
+	args[i++] = "--exclude=*";
+	if (cmpdst) {
+		args[i++] = "--compare-dest";
+		args[i++] = cmpdst;
 	}
-
-	*args = copy_args;
-	*args_len = config_args->length;
+	args[i++] = src;
+	args[i++] = dst;
+	args[i++] = NULL;
 }
 
 __dead static void
@@ -202,15 +188,11 @@ read_pipes(int fds[2][2])
 	return read_pipe(fds, 1);
 }
 
-/*
- * Downloads @src @dst. @src is supposed to be an rsync URL, and @dst is
- * supposed to be a filesystem path.
- */
+/* rsync [--compare-dest @cmpdst] @src @dst */
 int
-rsync_download(char const *src, char const *dst, bool is_directory)
+rsync_download(char const *src, char const *dst, char const *cmpdst)
 {
-	char **args;
-	size_t args_len;
+	char *args[32];
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	int fork_fds[2][2];
 	pid_t child_pid;
@@ -220,20 +202,18 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 	int error;
 
 	/* Prepare everything for the child exec */
-	args = NULL;
-	args_len = 0;
-	prepare_rsync(src, dst, &args, &args_len);
+	prepare_rsync(&args, src, dst, cmpdst);
 
 	pr_val_info("rsync: %s", src);
 	if (log_val_enabled(LOG_DEBUG)) {
 		pr_val_debug("Executing rsync:");
-		for (i = 0; i < args_len + 1; i++)
+		for (i = 0; args[i] != NULL; i++)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	error = mkdir_p(dst, is_directory, 0777);
+	error = mkdir_p(dst, true, 0777);
 	if (error)
-		goto release_args;
+		return error;
 
 	retries = 0;
 	do {
@@ -241,7 +221,7 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 
 		error = create_pipes(fork_fds);
 		if (error)
-			goto release_args;
+			return error;
 
 		/* Flush output (avoid locks between father and child) */
 		log_flush();
@@ -270,7 +250,7 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 			close(fork_fds[1][0]);
 			close(fork_fds[0][1]);
 			close(fork_fds[1][1]);
-			goto release_args;
+			return error;
 		}
 
 		/* This code is run by us. */
@@ -286,7 +266,7 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 				    error, strerror(error));
 				if (child_status > 0)
 					break;
-				goto release_args;
+				return error;
 			}
 		} while (0);
 
@@ -296,14 +276,13 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 			pr_val_debug("The rsync sub-process terminated with error code %d.",
 			    error);
 			if (!error)
-				goto release_args;
+				return 0;
 
 			if (retries == config_get_rsync_retry_count()) {
 				if (retries > 0)
 					pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
 					    retries, src);
-				error = EIO;
-				goto release_args;
+				return EIO;
 			}
 			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
 			    src,
@@ -315,8 +294,6 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 		}
 		break;
 	} while (true);
-
-	release_args(args, args_len);
 
 	if (WIFSIGNALED(child_status)) {
 		switch (WTERMSIG(child_status)) {
@@ -339,8 +316,4 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 
 	pr_op_err_st("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
 	return -EINVAL;
-release_args:
-	/* The happy path also falls here */
-	release_args(args, args_len);
-	return error;
 }

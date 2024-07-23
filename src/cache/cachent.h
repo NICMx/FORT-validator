@@ -31,6 +31,8 @@
  * Did it validate successfully (at least once) during the current cycle?
  * (It's technically possible for two different repositories to map to the same
  * cache node. One of them is likely going to fail validation.)
+ * This only refers to the tmp path; The final path, if it exists, always
+ * contains valid objects (until expiration).
  */
 #define CNF_VALID		(1 << 5)
 /* Is the node an RRDP Update Notification? */
@@ -47,24 +49,23 @@
 
 // XXX rename to cache_entity or cachent
 struct cache_node {
-	char const *name;	/* Points to the last component of @url XXX redundant */
-	char *url;		/* Normalized */
-	int flags;
+	char *url;		/* rsync://a.b.c/d/e (normalized) */
+	char *path;		/* path/to/cache/rsync/a.b.c/d/e */
+	char const *name;	/* Points to the last component of @url or @path XXX redundant */
+	int flags;		/* CNF_* */
 
 	int dlerr;		/* Result code of recent download attempt */
 	time_t mtim;		/* Last successful download time, or zero */
 
 	/*
-	 * If flags & CNF_FRESH, path to the temporal directory where we
-	 * downloaded the latest refresh.
+	 * If download attempted, path to the temporal directory where the
+	 * refresh was dumped.
 	 * (See --compare-dest at rsync(1). RRDP is basically the same.)
-	 * Otherwise undefined.
-	 *
-	 * XXX this is not always a directory; rename to "tmppath"
+	 * Otherwise NULL.
 	 */
-	char *tmpdir;
+	char *tmppath;		/* path/to/cache/tmp/1234 */
 
-	/* Only if flags & CNF_NOTIFICATION */
+//	/* Only if flags & CNF_NOTIFICATION */
 //	struct cachefile_notification notif;
 
 	struct cache_node *parent;	/* Tree parent */
@@ -73,15 +74,14 @@ struct cache_node {
 	UT_hash_handle hh;		/* Hash table hook */
 };
 
-struct cache_node *cachent_create_root(char const *);
+struct cache_node *cachent_create_root(bool);
 
-int cachent_traverse(struct cache_node *,
-    bool (*cb)(struct cache_node *, char const *));
+int cachent_traverse(struct cache_node *, bool (*cb)(struct cache_node *));
 
 struct cache_node *cachent_find(struct cache_node *, char const *,
     struct cache_node **);
 struct cache_node *cachent_provide(struct cache_node *, char const *);
-void cachent_delete(struct cache_node *);
+int cachent_delete(struct cache_node *);
 
 /* Recursive; tests only. */
 void cachent_print(struct cache_node *);

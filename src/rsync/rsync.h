@@ -1,8 +1,6 @@
 #ifndef SRC_RSYNC_RSYNC_H_
 #define SRC_RSYNC_RSYNC_H_
 
-#include <stdbool.h>
-
-int rsync_download(char const *, char const *, bool);
+int rsync_download(char const *, char const *, char const *);
 
 #endif /* SRC_RSYNC_RSYNC_H_ */

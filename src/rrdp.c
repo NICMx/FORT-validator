@@ -13,7 +13,7 @@
 #include "log.h"
 #include "thread_var.h"
 #include "http/http.h"
-#include "cache/cache_entity.h"
+#include "cache/cachent.h"
 #include "crypto/base64.h"
 #include "crypto/hash.h"
 #include "xml/relax_ng.h"
@@ -768,13 +768,13 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_notification(struct cache_node *node, struct update_notification *result)
+parse_notification(struct cache_node *notif, struct update_notification *result)
 {
 	int error;
 
-	update_notification_init(result, node->url);
+	update_notification_init(result, notif->url);
 
-	error = relax_ng_parse(node->tmpdir, xml_read_notif, result);
+	error = relax_ng_parse(notif->tmppath, xml_read_notif, result);
 	if (error)
 		update_notification_cleanup(result);
 
@@ -1086,6 +1086,34 @@ update_notif(struct cachefile_notification *old, struct update_notification *new
 	return 0;
 }
 
+static int
+dl_notif(struct cache_node *notif)
+{
+	char *tmppath;
+	bool changed;
+	int error;
+
+	error = cache_tmpfile(&tmppath);
+	if (error)
+		return error;
+
+	error = http_download(notif->url, tmppath, notif->mtim, &changed);
+	if (error) {
+		free(tmppath);
+		return error;
+	}
+
+	// XXX notif->flags |= CNF_CACHED | CNF_FRESH;
+	if (changed) {
+		notif->mtim = time(NULL); // XXX
+		notif->tmppath = tmppath;
+	} else {
+		free(tmppath);
+	}
+
+	return 0;
+}
+
 /*
  * Downloads the Update Notification @notif, and updates the cache accordingly.
  *
@@ -1095,7 +1123,6 @@ update_notif(struct cachefile_notification *old, struct update_notification *new
 int
 rrdp_update(struct cache_node *notif)
 {
-	char *path = NULL;
 	struct cachefile_notification *old;
 	struct update_notification new;
 	int serial_cmp;
@@ -1104,25 +1131,37 @@ rrdp_update(struct cache_node *notif)
 	fnstack_push(notif->url);
 	pr_val_debug("Processing notification.");
 
-	error = http_download_cache_node(notif);
+	///////////////////////////////////////////////////////////////////////
+
+	error = dl_notif(notif);
 	if (error)
 		goto end;
 
-	if (!(notif->flags & CNF_CHANGED)) {
+	if (!notif->tmppath) {
 		pr_val_debug("The Notification has not changed.");
-		rpp->flags |= CNF_FRESH; /* Success */
 		goto end;
 	}
 
 	error = parse_notification(notif, &new);
 	if (error)
 		goto end;
+
+	remove(notif->tmppath); // XXX
+	if (mkdir(notif->tmppath) == -1) {
+		error = errno;
+		pr_val_err("Can't create notification's temporal directory: %s",
+		    strerror(error));
+		goto clean_notif;
+	}
+
+	///////////////////////////////////////////////////////////////////////
+
 	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
 	    new.session.serial.str);
 
 	if (!(notif->flags & CNF_NOTIFICATION)) {
 		pr_val_debug("This is a new Notification.");
-		error = handle_snapshot(&new, rpp);
+		error = handle_snapshot(&new, notif);
 		if (error)
 			goto clean_notif;
 
@@ -1178,7 +1217,6 @@ clean_notif:
 	update_notification_cleanup(&new);
 
 end:
-	free(path);
 	fnstack_pop();
 	return error;
 }
