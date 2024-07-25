@@ -685,7 +685,7 @@ cache_download_uri(struct strlist *uris, maps_dl_cb cb, void *arg)
  * that's already cached, and callbacks it.
  */
 int
-cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
+cache_download_alt(struct sia_uris *sias, maps_dl_cb cb, void *arg)
 {
 	int error;
 
@@ -695,18 +695,18 @@ cache_download_alt(struct sia_uris *uris, maps_dl_cb cb, void *arg)
 	/* Online attempts */
 	// XXX review result signs
 	// XXX normalize rpkiNotify & caRepository?
-	error = try_uri(uris->rpkiNotify, cache.https, dl_rrdp, cb, arg);
+	error = try_uri(sias->rpkiNotify, cache.https, dl_rrdp, cb, arg);
 	if (error <= 0)
 		return error;
-	error = try_uri(uris->caRepository, cache.rsync, dl_rsync, cb, arg);
+	error = try_uri(sias->caRepository, cache.rsync, dl_rsync, cb, arg);
 	if (error <= 0)
 		return error;
 
 	/* Offline attempts */
-	error = try_uri(uris->rpkiNotify, cache.https, NULL, cb, arg);
+	error = try_uri(sias->rpkiNotify, cache.https, NULL, cb, arg);
 	if (error <= 0)
 		return error;
-	return try_uri(uris->caRepository, cache.rsync, NULL, cb, arg);
+	return try_uri(sias->caRepository, cache.rsync, NULL, cb, arg);
 }
 
 void

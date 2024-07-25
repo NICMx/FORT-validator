@@ -65,8 +65,8 @@ struct cache_node {
 	 */
 	char *tmppath;		/* path/to/cache/tmp/1234 */
 
-//	/* Only if flags & CNF_NOTIFICATION */
-//	struct cachefile_notification notif;
+	/* Only if flags & CNF_NOTIFICATION */
+	struct cachefile_notification notif;
 
 	struct cache_node *parent;	/* Tree parent */
 	struct cache_node *children;	/* Tree children */

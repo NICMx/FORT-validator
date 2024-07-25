@@ -557,6 +557,9 @@ handle_publish(xmlTextReaderPtr reader, struct cache_node *rpp)
 	if (error)
 		return error;
 
+	// XXX 1st argument is a bit hairy.
+	// Also, not going to pass URL validation.
+	// Also, children need to inherit temporal directory.
 	node = cachent_provide(rpp, tag->meta.uri);
 	if (!node) {
 		error = pr_val_err("Malicious RRDP: <publish> is attempting to create file '%s' outside of its publication point '%s'.",
@@ -573,7 +576,7 @@ handle_publish(xmlTextReaderPtr reader, struct cache_node *rpp)
 			goto end;
 		}
 
-		error = validate_hash(&tag->meta, cachent_path(node));
+		error = validate_hash(&tag->meta, node->path);
 		if (error)
 			goto end;
 
@@ -584,7 +587,7 @@ handle_publish(xmlTextReaderPtr reader, struct cache_node *rpp)
 		goto end;
 	}
 
-	error = write_file(node->tmpdir, tag.content, tag.content_len);
+	error = write_file(node->tmppath, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
 	free(tag.content);
@@ -782,9 +785,9 @@ parse_notification(struct cache_node *notif, struct update_notification *result)
 }
 
 static int
-xml_read_snapshot(xmlTextReaderPtr reader, void *_args)
+xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 {
-	struct parser_args *args = _args;
+	struct parser_args *args = arg;
 	xmlReaderTypes type;
 	xmlChar const *name;
 	int error;
@@ -885,8 +888,9 @@ end1:	fnstack_pop();
 }
 
 static int
-xml_read_delta(xmlTextReaderPtr reader, void *session)
+xml_read_delta(xmlTextReaderPtr reader, void *arg)
 {
+	struct parser_args *args = arg;
 	xmlReaderTypes type;
 	xmlChar const *name;
 	int error;
@@ -896,11 +900,11 @@ xml_read_delta(xmlTextReaderPtr reader, void *session)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = handle_publish(reader);
+			error = handle_publish(reader, args->rpp);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
-			error = handle_withdraw(reader);
+			error = handle_withdraw(reader, args->rpp);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
-			error = validate_session(reader, session);
+			error = validate_session(reader, args->session);
 		else
 			return pr_val_err("Unexpected '%s' element", name);
 		if (error)
@@ -915,8 +919,9 @@ xml_read_delta(xmlTextReaderPtr reader, void *session)
 
 static int
 parse_delta(struct update_notification *notif, struct notification_delta *delta,
-    char const *path)
+    char const *path, struct cache_node *node)
 {
+	struct parser_args args;
 	struct rrdp_session session;
 	int error;
 
@@ -926,12 +931,15 @@ parse_delta(struct update_notification *notif, struct notification_delta *delta,
 
 	session.session_id = notif->session.session_id;
 	session.serial = delta->serial;
+	args.session = &session;
+	args.rpp = node;
 
-	return relax_ng_parse(path, xml_read_delta, &session);
+	return relax_ng_parse(path, xml_read_delta, &args);
 }
 
 static int
-handle_delta(struct update_notification *notif, struct notification_delta *delta)
+handle_delta(struct update_notification *notif,
+    struct notification_delta *delta, struct cache_node *node)
 {
 	char const *url = delta->meta.uri;
 	char *path;
@@ -943,7 +951,7 @@ handle_delta(struct update_notification *notif, struct notification_delta *delta
 	error = http_download_tmp(url, &path, NULL, NULL);
 	if (error)
 		goto end;
-	error = parse_delta(notif, delta, path);
+	error = parse_delta(notif, delta, path, node);
 	delete_file(path);
 
 	free(path);
@@ -952,8 +960,10 @@ end:	fnstack_pop();
 }
 
 static int
-handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
+handle_deltas(struct update_notification *notif, struct cache_node *node)
 {
+	struct rrdp_serial *old;
+	struct rrdp_serial *new;
 	BIGNUM *diff_bn;
 	BN_ULONG diff;
 	array_index d;
@@ -964,28 +974,30 @@ handle_deltas(struct update_notification *notif, struct rrdp_serial *serial)
 		return -ENOENT;
 	}
 
-	pr_val_debug("Handling RRDP delta serials %s-%s.", serial->str,
-	    notif->session.serial.str);
+	old = &node->notif->session.serial;
+	new = &notif->session.serial;
+
+	pr_val_debug("Handling RRDP delta serials %s-%s.", old->str, new->str);
 
 	diff_bn = BN_create();
-	if (!BN_sub(diff_bn, notif->session.serial.num, serial->num)) {
+	if (!BN_sub(diff_bn, new->num, old->num)) {
 		BN_free(diff_bn);
 		return pr_val_err("Could not subtract %s - %s; unknown cause.",
-		    notif->session.serial.str, serial->str);
+		    new->str, old->str);
 	}
 	if (BN_is_negative(diff_bn)) {
 		BN_free(diff_bn);
 		return pr_val_err("Cached delta's serial [%s] is larger than Notification's current serial [%s].",
-		    serial->str, notif->session.serial.str);
+		   old->str, new->str);
 	}
 	diff = BN_get_word(diff_bn);
 	BN_free(diff_bn);
 	if (diff > config_get_rrdp_delta_threshold() || diff > notif->deltas.len)
 		return pr_val_err("Cached RPP is too old. (Cached serial: %s; current serial: %s)",
-		    serial->str, notif->session.serial.str);
+		    old->str, new->str);
 
 	for (d = notif->deltas.len - diff; d < notif->deltas.len; d++) {
-		error = handle_delta(notif, &notif->deltas.array[d]);
+		error = handle_delta(notif, &notif->deltas.array[d], node);
 		if (error)
 			return error;
 	}
@@ -1177,7 +1189,7 @@ rrdp_update(struct cache_node *notif)
 		error = validate_session_desync(old, &new);
 		if (error)
 			goto snapshot_fallback;
-		error = handle_deltas(&new, &old->session.serial);
+		error = handle_deltas(&new, notif);
 		if (error)
 			goto snapshot_fallback;
 		error = update_notif(old, &new);

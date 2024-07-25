@@ -7,6 +7,7 @@ addr6: IPv6 address
 be: Big Endian
 cert: certificate
 certstack: certificate stack
+ck: check (test assertion, inherited from the unit test framework)
 db: database
 dl: download
 eof: end of file
