@@ -336,32 +336,6 @@ map_equals(struct cache_mapping *m1, struct cache_mapping *m2)
 	return strcmp(m1->url, m2->url) == 0;
 }
 
-bool
-str_same_origin(char const *url1, char const *url2)
-{
-	size_t c, slashes;
-
-	slashes = 0;
-	for (c = 0; url1[c] == url2[c]; c++) {
-		switch (url1[c]) {
-		case '/':
-			slashes++;
-			if (slashes == 3)
-				return true;
-			break;
-		case '\0':
-			return slashes == 2;
-		}
-	}
-
-	if (url1[c] == '\0')
-		return (slashes == 2) && url2[c] == '/';
-	if (url2[c] == '\0')
-		return (slashes == 2) && url1[c] == '/';
-
-	return false;
-}
-
 /* @ext must include the period. */
 bool
 map_has_extension(struct cache_mapping *map, char const *ext)

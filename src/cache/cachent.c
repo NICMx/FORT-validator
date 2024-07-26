@@ -4,6 +4,7 @@
 #include "config.h"
 #include "data_structure/common.h"
 #include "data_structure/path_builder.h"
+#include "log.h"
 #include "types/url.h"
 
 struct cache_node *
@@ -99,13 +100,26 @@ cachent_find(struct cache_node *root, char const *path, struct cache_node **msm)
 	return child;
 }
 
+static char *
+inherit_path(char const *parent, char const *name, size_t nlen)
+{
+	char *child;
+	size_t clen;
+
+	clen = strlen(parent) + nlen + 2;
+	child = pmalloc(clen);
+	if (snprintf(child, clen, "%s/%.*s", parent, (int)nlen, name) >= clen)
+		pr_crit("aaaaaa"); // XXX
+
+	return child;
+}
+
 /* Get or create parent's child. */
 static struct cache_node *
 provide(struct cache_node *parent, char const *url,
     char const *name, size_t namelen)
 {
 	struct cache_node *child;
-	size_t pathlen;
 
 	child = find_child(parent, name, namelen);
 	if (child != NULL)
@@ -113,17 +127,15 @@ provide(struct cache_node *parent, char const *url,
 
 	child = pzalloc(sizeof(struct cache_node));
 	child->url = pstrndup(url, name - url + namelen);
-
-	pathlen = strlen(parent->path) + namelen + 2;
-	child->path = pmalloc(pathlen);
-	if (snprintf(child->path, pathlen, "%s/%.*s", parent->path, (int)namelen, name) >= pathlen)
-		pr_crit("aaaaaa"); // XXX
-
+	child->path = inherit_path(parent->path, name, namelen);
 	child->name = child->url + (name - url);
 	if ((parent->flags & RSYNC_INHERIT) == RSYNC_INHERIT)
 		child->flags = RSYNC_INHERIT;
+	if (parent->tmppath && !(parent->flags & CNF_RSYNC))
+		child->tmppath = inherit_path(parent->tmppath, name, namelen);
 	child->parent = parent;
 	HASH_ADD_KEYPTR(hh, parent->children, child->name, namelen, child);
+
 	return child;
 }
 

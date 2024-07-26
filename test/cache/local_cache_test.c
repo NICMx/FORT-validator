@@ -22,12 +22,6 @@ static unsigned int rsync_counter; /* Times the rsync function was called */
 static unsigned int https_counter; /* Times the https function was called */
 static int dl_error;
 
-static void
-__delete_node_cb(struct cache_node const *node)
-{
-	/* Nothing */
-}
-
 int
 rsync_download(char const *src, char const *dst, char const *cmpdir)
 {
@@ -72,6 +66,7 @@ __MOCK_ABORT(rrdp_notif2json, json_t *, NULL, struct cachefile_notification *not
 MOCK_VOID(rrdp_notif_free, struct cachefile_notification *notif)
 MOCK_ABORT_INT(rrdp_json2notif, json_t *json, struct cachefile_notification **result)
 MOCK(cfg_cache_threshold, time_t, 60 * 60 * 24 * 7, void)
+MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 
 /* Helpers */
 
@@ -250,6 +245,29 @@ static void
 ck_cache_https(struct cache_node *https)
 {
 	ck_cache(runode("", NULL), https);
+}
+
+static time_t
+get_days_ago(int days)
+{
+	time_t tt_now, last_week;
+	struct tm tm;
+	int error;
+
+	tt_now = time(NULL);
+	if (tt_now == (time_t) -1)
+		pr_crit("time(NULL) returned (time_t) -1.");
+	if (localtime_r(&tt_now, &tm) == NULL) {
+		error = errno;
+		pr_crit("localtime_r(tt, &tm) returned error: %s",
+		    strerror(error));
+	}
+	tm.tm_mday -= days;
+	last_week = mktime(&tm);
+	if (last_week == (time_t) -1)
+		pr_crit("mktime(tm) returned (time_t) -1.");
+
+	return last_week;
 }
 
 static time_t epoch;

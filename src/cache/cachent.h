@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include "data_structure/uthash.h"
+#include "rrdp.h"
 
 /* XXX rename "touched" and "validated" into "preserve"? */
 

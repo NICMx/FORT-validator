@@ -28,7 +28,6 @@ enum map_type {
 
 struct cache_mapping;
 
-char *url2path(char const *);
 struct cache_mapping *create_map(char const *);
 
 struct cache_mapping *map_refget(struct cache_mapping *);
@@ -41,7 +40,6 @@ void map_refput(struct cache_mapping *);
 char const *map_get_url(struct cache_mapping *);
 char const *map_get_path(struct cache_mapping *);
 
-bool str_same_origin(char const *, char const *);
 bool map_has_extension(struct cache_mapping *, char const *);
 
 enum map_type map_get_type(struct cache_mapping *);

@@ -36,16 +36,39 @@ START_TEST(test_normalize)
 }
 END_TEST
 
+START_TEST(test_same_origin)
+{
+	ck_assert_int_eq(true,	url_same_origin("https://a.b.c/d/e/f",	"https://a.b.c/g/h/i"));
+	ck_assert_int_eq(false,	url_same_origin("https://a.b.cc/d/e/f",	"https://a.b.c/g/h/i"));
+	ck_assert_int_eq(false,	url_same_origin("https://a.b.c/d/e/f",	"https://a.b.cc/g/h/i"));
+	ck_assert_int_eq(true,	url_same_origin("https://a.b.c",	"https://a.b.c"));
+	ck_assert_int_eq(true,	url_same_origin("https://a.b.c/",	"https://a.b.c"));
+	ck_assert_int_eq(true,	url_same_origin("https://a.b.c",	"https://a.b.c/"));
+	ck_assert_int_eq(true,	url_same_origin("https://",		"https://"));
+	ck_assert_int_eq(false,	url_same_origin("https://",		"https://a"));
+	ck_assert_int_eq(false,	url_same_origin("https://a",		"https://b"));
+
+	/* Undefined, but manhandle the code anyway */
+	ck_assert_int_eq(false,	url_same_origin("",			""));
+	ck_assert_int_eq(false,	url_same_origin("ht",			"ht"));
+	ck_assert_int_eq(false,	url_same_origin("https:",		"https:"));
+	ck_assert_int_eq(false,	url_same_origin("https:/",		"https:/"));
+	ck_assert_int_eq(false,	url_same_origin("https:/a",		"https:/a"));
+	ck_assert_int_eq(true,	url_same_origin("https:/a/",		"https:/a/"));
+}
+END_TEST
+
 static Suite *thread_pool_suite(void)
 {
 	Suite *suite;
-	TCase *normalize;
+	TCase *misc;
 
-	normalize = tcase_create("normalize");
-	tcase_add_test(normalize, test_normalize);
+	misc = tcase_create("misc");
+	tcase_add_test(misc, test_normalize);
+	tcase_add_test(misc, test_same_origin);
 
 	suite = suite_create("url");
-	suite_add_tcase(suite, normalize);
+	suite_add_tcase(suite, misc);
 
 	return suite;
 }

@@ -650,7 +650,6 @@ try_uris(struct strlist *uris, struct cache_node *root,
 int
 cache_download_uri(struct strlist *uris, maps_dl_cb cb, void *arg)
 {
-	char **_str, *str;
 	int error;
 
 	// XXX mutex
@@ -815,29 +814,6 @@ branch:	node->flags = 0;
 //
 //	delete_node(cache, node);
 //}
-
-static time_t
-get_days_ago(int days)
-{
-	time_t tt_now, last_week;
-	struct tm tm;
-	int error;
-
-	tt_now = time(NULL);
-	if (tt_now == (time_t) -1)
-		pr_crit("time(NULL) returned (time_t) -1.");
-	if (localtime_r(&tt_now, &tm) == NULL) {
-		error = errno;
-		pr_crit("localtime_r(tt, &tm) returned error: %s",
-		    strerror(error));
-	}
-	tm.tm_mday -= days;
-	last_week = mktime(&tm);
-	if (last_week == (time_t) -1)
-		pr_crit("mktime(tm) returned (time_t) -1.");
-
-	return last_week;
-}
 
 static int
 rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)

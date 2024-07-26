@@ -1,11 +1,10 @@
 #include "rrdp.h"
 
 #include <ctype.h>
-#include <openssl/bn.h>
 #include <openssl/evp.h>
-#include <sys/queue.h>
 
 #include "alloc.h"
+#include "cache/local_cache.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
@@ -16,6 +15,7 @@
 #include "cache/cachent.h"
 #include "crypto/base64.h"
 #include "crypto/hash.h"
+#include "types/url.h"
 #include "xml/relax_ng.h"
 
 /* RRDP's XML namespace */
@@ -34,17 +34,6 @@
 #define RRDP_ATTR_SERIAL	"serial"
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
-
-/* These are supposed to be unbounded */
-struct rrdp_serial {
-	BIGNUM *num;
-	char *str; /* String version of @num. */
-};
-
-struct rrdp_session {
-	char *session_id;
-	struct rrdp_serial serial;
-};
 
 struct file_metadata {
 	char *uri;
@@ -79,36 +68,6 @@ struct publish {
 /* A deserialized <withdraw> tag, from a delta. */
 struct withdraw {
 	struct file_metadata meta;
-
-	char *path;
-};
-
-// XXX delete?
-typedef enum {
-	HR_MANDATORY,
-	HR_OPTIONAL,
-	HR_IGNORE,
-} hash_requirement;
-
-#define RRDP_HASH_LEN SHA256_DIGEST_LENGTH
-
-struct rrdp_hash {
-	unsigned char bytes[RRDP_HASH_LEN];
-	STAILQ_ENTRY(rrdp_hash) hook;
-};
-
-/*
- * Subset of the notification that is relevant to the TAL's cachefile.
- */
-struct cachefile_notification {
-	struct rrdp_session session;
-	/*
-	 * The 1st one contains the hash of the session.serial delta.
-	 * The 2nd one contains the hash of the session.serial - 1 delta.
-	 * The 3rd one contains the hash of the session.serial - 2 delta.
-	 * And so on.
-	 */
-	STAILQ_HEAD(, rrdp_hash) delta_hashes;
 };
 
 struct parser_args {
@@ -467,6 +426,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 	return 0;
 }
 
+/* Does not clean @tag on failure. */
 static int
 parse_publish(xmlTextReaderPtr reader, struct publish *tag)
 {
@@ -478,12 +438,11 @@ parse_publish(xmlTextReaderPtr reader, struct publish *tag)
 		return error;
 
 	/* Read the text */
-	if (xmlTextReaderRead(reader) != 1) {
+	if (xmlTextReaderRead(reader) != 1)
 		return pr_val_err(
 		    "Couldn't read publish content of element '%s'",
 		    tag->meta.uri
 		);
-	}
 
 	base64_str = parse_string(reader, NULL);
 	if (base64_str == NULL)
@@ -495,45 +454,19 @@ parse_publish(xmlTextReaderPtr reader, struct publish *tag)
 	return error;
 }
 
+/* Does not clean @tag on failure. */
 static int
 parse_withdraw(xmlTextReaderPtr reader, struct withdraw *tag)
 {
 	int error;
 
-	error = parse_file_metadata(reader, HR_MANDATORY, &tag->meta);
+	error = parse_file_metadata(reader, &tag->meta);
 	if (error)
 		return error;
 
-	tag->path = url2path(tag->meta.uri);
-	if (tag->path == NULL)
-		return -EINVAL;
-
-	return validate_hash(&tag->meta, tag->path);
-}
-
-static int
-write_file(char const *path, unsigned char *content, size_t content_len)
-{
-	FILE *out;
-	size_t written;
-	int error;
-
-	error = mkdir_p(path, false, 0777);
-	if (error)
-		return error;
-
-	error = file_write(path, "wb", &out);
-	if (error)
-		return error;
-
-	written = fwrite(content, sizeof(unsigned char), content_len, out);
-	file_close(out);
-
-	if (written != content_len)
-		return pr_val_err(
-		    "Couldn't write file '%s' (error code not available)",
-		    path
-		);
+	if (!tag->meta.hash)
+		return pr_val_err("Withdraw '%s' is missing a hash.",
+		    tag->meta.uri);
 
 	return 0;
 }
@@ -555,39 +488,37 @@ handle_publish(xmlTextReaderPtr reader, struct cache_node *rpp)
 
 	error = parse_publish(reader, &tag);
 	if (error)
-		return error;
+		goto end;
 
-	// XXX 1st argument is a bit hairy.
-	// Also, not going to pass URL validation.
-	// Also, children need to inherit temporal directory.
-	node = cachent_provide(rpp, tag->meta.uri);
+	// XXX Not going to pass URL validation.
+	node = cachent_provide(rpp, tag.meta.uri);
 	if (!node) {
-		error = pr_val_err("Malicious RRDP: <publish> is attempting to create file '%s' outside of its publication point '%s'.",
-		    tag->meta.uri, rpp->url);
+		error = pr_val_err("Broken RRDP: <publish> is attempting to create file '%s' outside of its publication point '%s'.",
+		    tag.meta.uri, rpp->url);
 		goto end;
 	}
 
 	/* rfc8181#section-2.2 */
 	if (node->flags & CNF_CACHED) {
-		if (tag->meta.hash == NULL) {
+		if (tag.meta.hash == NULL) {
 			// XXX watch out for this in the log before release
 			error = pr_val_err("RRDP desync: <publish> is attempting to create '%s', but the file is already cached.",
-			    tag->meta.uri);
+			    tag.meta.uri);
 			goto end;
 		}
 
-		error = validate_hash(&tag->meta, node->path);
+		error = validate_hash(&tag.meta, node->path);
 		if (error)
 			goto end;
 
-	} else if (tag->meta.hash != NULL) {
+	} else if (tag.meta.hash != NULL) {
 		// XXX watch out for this in the log before release
 		error = pr_val_err("RRDP desync: <publish> is attempting to overwrite '%s', but the file is absent in the cache.",
-		    tag->meta.uri);
+		    tag.meta.uri);
 		goto end;
 	}
 
-	error = write_file(node->tmppath, tag.content, tag.content_len);
+	error = file_write_full(node->tmppath, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
 	free(tag.content);
@@ -595,19 +526,42 @@ end:	metadata_cleanup(&tag.meta);
 }
 
 static int
-handle_withdraw(xmlTextReaderPtr reader)
+handle_withdraw(xmlTextReaderPtr reader, struct cache_node *rpp)
 {
 	struct withdraw tag = { 0 };
+	struct cache_node *node;
 	int error;
 
 	error = parse_withdraw(reader, &tag);
 	if (error)
-		return error;
+		goto end;
 
-	error = delete_file(tag.path);
+	// XXX Not going to pass URL validation.
+	node = cachent_provide(rpp, tag.meta.uri);
+	if (!node) {
+		error = pr_val_err("Broken RRDP: <withdraw> is attempting to delete file '%s' outside of its publication point '%s'.",
+		    tag.meta.uri, rpp->url);
+		goto end;
+	}
 
-	metadata_cleanup(&tag.meta);
-	free(tag.path);
+	/*
+	 * XXX CNF_CACHED's comment suggests I should check parents,
+	 * but this is not rsync.
+	 */
+	if (!(node->flags & CNF_CACHED)) {
+		/* XXX May want to query the actualy filesystem, to be sure */
+		error = pr_val_err("RRDP desync: <withdraw> is attempting to delete file '%s', but it doesn't appear to exist.",
+		    tag.meta.uri);
+		goto end;
+	}
+
+	error = validate_hash(&tag.meta, node->path);
+	if (error)
+		goto end;
+
+	node->flags |= CNF_WITHDRAWN;
+
+end:	metadata_cleanup(&tag.meta);
 	return error;
 }
 
@@ -617,12 +571,16 @@ parse_notification_snapshot(xmlTextReaderPtr reader,
 {
 	int error;
 
-	error = parse_file_metadata(reader, HR_MANDATORY, &notif->snapshot);
+	error = parse_file_metadata(reader, &notif->snapshot);
 	if (error)
 		return error;
 
-	if (!str_same_origin(notif->url, notif->snapshot.uri))
-		return pr_val_err("Notification %s and Snapshot %s are not hosted by the same origin.",
+	if (!notif->snapshot.hash)
+		return pr_val_err("Snapshot '%s' is missing a hash.",
+		    notif->snapshot.uri);
+
+	if (!url_same_origin(notif->url, notif->snapshot.uri))
+		return pr_val_err("Notification '%s' and Snapshot '%s' are not hosted by the same origin.",
 		    notif->url, notif->snapshot.uri);
 
 	return 0;
@@ -632,25 +590,35 @@ static int
 parse_notification_delta(xmlTextReaderPtr reader,
     struct update_notification *notif)
 {
-	struct notification_delta delta;
+	struct notification_delta delta = { 0 };
 	int error;
 
 	error = parse_serial(reader, &delta.serial);
 	if (error)
 		return error;
 
-	error = parse_file_metadata(reader, HR_MANDATORY, &delta.meta);
-	if (error) {
-		serial_cleanup(&delta.serial);
-		return error;
+	error = parse_file_metadata(reader, &delta.meta);
+	if (error)
+		goto fail;
+
+	if (!delta.meta.hash) {
+		error = pr_val_err("Delta '%s' is missing a hash.",
+		    delta.meta.uri);
+		goto fail;
 	}
 
-	if (!str_same_origin(notif->url, delta.meta.uri))
-		return pr_val_err("Notification %s and Delta %s are not hosted by the same origin.",
+	if (!url_same_origin(notif->url, delta.meta.uri)) {
+		error = pr_val_err("Notification %s and Delta %s are not hosted by the same origin.",
 		    notif->url, delta.meta.uri);
+		goto fail;
+	}
 
 	notification_deltas_add(&notif->deltas, &delta);
 	return 0;
+
+fail:	serial_cleanup(&delta.serial);
+	metadata_cleanup(&delta.meta);
+	return error;
 }
 
 static int
@@ -813,10 +781,10 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_snapshot(struct update_notification *notif, char const *path,
+parse_snapshot(struct rrdp_session *session, char const *path,
     struct cache_node *rpp)
 {
-	struct parser_args args = { .session = &notif->session, .rpp = rpp };
+	struct parser_args args = { .session = session, .rpp = rpp };
 	return relax_ng_parse(path, xml_read_snapshot, &args);
 }
 
@@ -855,34 +823,42 @@ validate_session_desync(struct cachefile_notification *old_notif,
 	return 0; /* First $delta_threshold delta hashes match */
 }
 
+/* TODO (performance) Stream instead of caching notifs, snapshots & deltas. */
+static int
+dl_tmp(char const *url, char **path)
+{
+	int error;
+
+	error = cache_tmpfile(path);
+	if (error)
+		return error;
+
+	error = http_download(url, *path, 0, NULL);
+	if (error)
+		free(*path);
+
+	return error;
+}
+
 static int
 handle_snapshot(struct update_notification *notif, struct cache_node *rpp)
 {
-	char const *url = notif->snapshot.uri;
-	char *path;
+	char *tmppath;
 	int error;
 
-//	delete_rpp(notif->map); XXX
+	pr_val_debug("Processing snapshot '%s'.", notif->snapshot.uri);
+	fnstack_push(notif->snapshot.uri);
 
-	pr_val_debug("Processing snapshot '%s'.", url);
-	fnstack_push(url);
-
-	/*
-	 * TODO (performance) Is there a point in caching the snapshot?
-	 * Especially considering we delete it 4 lines afterwards.
-	 * Maybe stream it instead.
-	 * Same for the notification and deltas.
-	 */
-	error = http_download_tmp(url, &path, 0, NULL);
+	error = dl_tmp(notif->snapshot.uri, &tmppath);
 	if (error)
 		goto end1;
-	error = validate_hash(&notif->snapshot, path);
+	error = validate_hash(&notif->snapshot, tmppath);
 	if (error)
 		goto end2;
-	error = parse_snapshot(notif, path, rpp);
-	delete_file(path);
+	error = parse_snapshot(&notif->session, tmppath, rpp);
+	delete_file(tmppath);
 
-end2:	free(path);
+end2:	free(tmppath);
 end1:	fnstack_pop();
 	return error;
 }
@@ -941,20 +917,19 @@ static int
 handle_delta(struct update_notification *notif,
     struct notification_delta *delta, struct cache_node *node)
 {
-	char const *url = delta->meta.uri;
-	char *path;
+	char *tmppath;
 	int error;
 
-	pr_val_debug("Processing delta '%s'.", url);
-	fnstack_push(url);
+	pr_val_debug("Processing delta '%s'.", delta->meta.uri);
+	fnstack_push(delta->meta.uri);
 
-	error = http_download_tmp(url, &path, NULL, NULL);
+	error = dl_tmp(delta->meta.uri, &tmppath);
 	if (error)
 		goto end;
-	error = parse_delta(notif, delta, path, node);
-	delete_file(path);
+	error = parse_delta(notif, delta, tmppath, node);
+	delete_file(tmppath);
 
-	free(path);
+	free(tmppath);
 end:	fnstack_pop();
 	return error;
 }
@@ -974,7 +949,7 @@ handle_deltas(struct update_notification *notif, struct cache_node *node)
 		return -ENOENT;
 	}
 
-	old = &node->notif->session.serial;
+	old = &node->notif.session.serial;
 	new = &notif->session.serial;
 
 	pr_val_debug("Handling RRDP delta serials %s-%s.", old->str, new->str);
@@ -1159,7 +1134,7 @@ rrdp_update(struct cache_node *notif)
 		goto end;
 
 	remove(notif->tmppath); // XXX
-	if (mkdir(notif->tmppath) == -1) {
+	if (mkdir(notif->tmppath, 0777) == -1) {
 		error = errno;
 		pr_val_err("Can't create notification's temporal directory: %s",
 		    strerror(error));
@@ -1216,7 +1191,7 @@ rrdp_update(struct cache_node *notif)
 
 snapshot_fallback:
 	pr_val_debug("Falling back to snapshot.");
-	error = handle_snapshot(&new);
+	error = handle_snapshot(&new, notif);
 	if (error)
 		goto clean_notif;
 

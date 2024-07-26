@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 
 #include "alloc.h"
+#include "common.h"
 #include "log.h"
 #include "data_structure/path_builder.h"
 #include "data_structure/uthash.h"
@@ -29,7 +30,7 @@ file_open(char const *file_name, FILE **result, struct stat *stat)
 		goto fail;
 	}
 	if (!S_ISREG(stat->st_mode)) {
-		error = pr_val_err("%s does not seem to be a file", file_name);
+		error = pr_val_err("'%s' does not seem to be a file.", file_name);
 		goto fail;
 	}
 
@@ -57,6 +58,33 @@ file_write(char const *file_name, char const *mode, FILE **result)
 	}
 
 	*result = file;
+	return 0;
+}
+
+int
+file_write_full(char const *path, unsigned char *content, size_t content_len)
+{
+	FILE *out;
+	size_t written;
+	int error;
+
+	error = mkdir_p(path, false, 0777);
+	if (error)
+		return error;
+
+	error = file_write(path, "wb", &out);
+	if (error)
+		return error;
+
+	written = fwrite(content, sizeof(unsigned char), content_len, out);
+	file_close(out);
+
+	if (written != content_len)
+		return pr_val_err(
+		    "Couldn't write file '%s' (error code not available)",
+		    path
+		);
+
 	return 0;
 }
 

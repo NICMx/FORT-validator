@@ -336,7 +336,7 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 
 		if (redirect == NULL)
 			break;
-		if (!str_same_origin(src, redirect)) {
+		if (!url_same_origin(src, redirect)) {
 			error = pr_val_err("%s is redirecting to %s; disallowing because of different origin.",
 			   src, redirect);
 			redirect = NULL;

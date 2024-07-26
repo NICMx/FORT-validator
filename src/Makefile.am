@@ -4,6 +4,8 @@ fort_SOURCES = alloc.c alloc.h
 fort_SOURCES += cache/cachent.c cache/cachent.h
 fort_SOURCES += cache/local_cache.c cache/local_cache.h
 fort_SOURCES += log.c log.h
+fort_SOURCES += rsync/rsync.c rsync/rsync.h
+fort_SOURCES += rrdp.c rrdp.h
 
 fort_CFLAGS  = -Wall -Wpedantic -Werror
 #fort_CFLAGS += $(GCC_WARNS)

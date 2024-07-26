@@ -1356,7 +1356,7 @@ config_get_rsync_retry_interval(void)
 	return rpki_config.rsync.retry.interval;
 }
 
-char *
+char const *
 config_get_rsync_program(void)
 {
 	return rpki_config.rsync.program;

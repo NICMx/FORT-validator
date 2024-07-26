@@ -32,12 +32,17 @@ duplicate_fds(int fds[2][2])
 }
 
 static void
-prepare_rsync(char *args, char const *src, char const *dst, char const *cmpdst)
+prepare_rsync(char **args, char const *src, char const *dst, char const *cmpdst)
 {
 	size_t i = 0;
 
+	/*
+	 * execvp() is not going to tweak those strings;
+	 * stop angsting over those casts.
+	 */
+
 	/* XXX review */
-	args[i++] = config_get_rsync_program();
+	args[i++] = (char *)config_get_rsync_program();
 	args[i++] = "-rtz";
 	args[i++] = "--omit-dir-times";
 	args[i++] = "--contimeout";
@@ -55,10 +60,10 @@ prepare_rsync(char *args, char const *src, char const *dst, char const *cmpdst)
 	args[i++] = "--exclude=*";
 	if (cmpdst) {
 		args[i++] = "--compare-dest";
-		args[i++] = cmpdst;
+		args[i++] = (char *)cmpdst;
 	}
-	args[i++] = src;
-	args[i++] = dst;
+	args[i++] = (char *)src;
+	args[i++] = (char *)dst;
 	args[i++] = NULL;
 }
 
@@ -202,7 +207,7 @@ rsync_download(char const *src, char const *dst, char const *cmpdst)
 	int error;
 
 	/* Prepare everything for the child exec */
-	prepare_rsync(&args, src, dst, cmpdst);
+	prepare_rsync(args, src, dst, cmpdst);
 
 	pr_val_info("rsync: %s", src);
 	if (log_val_enabled(LOG_DEBUG)) {

@@ -13,7 +13,6 @@ if USE_TESTS
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
 AM_CFLAGS =  -pedantic -Wall -Wno-unused
-#AM_CFLAGS += -Wno-unused
 AM_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
 AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}
 # Reminder: As opposed to AM_CFLAGS, "AM_LDADD" is not idiomatic automake, and
@@ -25,16 +24,24 @@ MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
 check_PROGRAMS  = url.test
 check_PROGRAMS += cachent.test
 check_PROGRAMS += cache.test
+check_PROGRAMS += rrdp.test
+check_PROGRAMS += rrdp_update.test
 TESTS = ${check_PROGRAMS}
 
 url_test_SOURCES = types/url_test.c
 url_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
+cachent_test_SOURCES = cache/cachent_test.c
+cachent_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
+
 cache_test_SOURCES = cache/local_cache_test.c
 cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
-cachent_test_SOURCES = cache/cachent_test.c
-cachent_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
+rrdp_test_SOURCES = rrdp_test.c
+rrdp_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
+
+rrdp_update_test_SOURCES = rrdp_update_test.c
+rrdp_update_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
 
 EXTRA_DIST  = mock.c mock.h
 EXTRA_DIST += resources/lorem-ipsum.txt

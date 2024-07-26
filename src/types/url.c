@@ -55,3 +55,29 @@ url_normalize(char const *url)
 fail:	free(normal);
 	return NULL;
 }
+
+bool
+url_same_origin(char const *url1, char const *url2)
+{
+	size_t c, slashes;
+
+	slashes = 0;
+	for (c = 0; url1[c] == url2[c]; c++) {
+		switch (url1[c]) {
+		case '/':
+			slashes++;
+			if (slashes == 3)
+				return true;
+			break;
+		case '\0':
+			return slashes == 2;
+		}
+	}
+
+	if (url1[c] == '\0')
+		return (slashes == 2) && url2[c] == '/';
+	if (url2[c] == '\0')
+		return (slashes == 2) && url1[c] == '/';
+
+	return false;
+}

@@ -91,9 +91,10 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 	int read;
 	int error;
 
+	/* TODO (warning) This uses "XML_CHAR_ENCODING_NONE" */
 	reader = xmlNewTextReaderFilename(path);
 	if (reader == NULL)
-		return pr_val_err("Couldn't get XML '%s' file.", path);
+		return pr_val_err("Unable to open %s (Cause unavailable).", path);
 
 	error = xmlTextReaderRelaxNGSetSchema(reader, schema);
 	if (error) {
