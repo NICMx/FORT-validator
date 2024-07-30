@@ -6,7 +6,7 @@
 
 #include "cert_stack.h"
 #include "common.h"
-#include "crypto/hash.h"
+#include "hash.h"
 #include "json_util.h"
 #include "libcrypto_util.h"
 #include "log.h"

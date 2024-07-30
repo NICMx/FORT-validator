@@ -4,7 +4,7 @@
 #include <libxml/xmlreader.h>
 
 #include "mock.c"
-#include "xml/relax_ng.c"
+#include "relax_ng.c"
 
 struct reader_ctx {
 	unsigned int delta_count;
@@ -58,7 +58,7 @@ reader_cb(xmlTextReaderPtr reader, void *arg)
 START_TEST(relax_ng_valid)
 {
 	struct reader_ctx ctx;
-	char const *url = "xml/notification.xml";
+	char const *url = "resources/xml/notification.xml";
 
 	ctx.delta_count = 0;
 	ctx.snapshot_count = 0;

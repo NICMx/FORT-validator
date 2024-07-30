@@ -7,8 +7,8 @@
 #include "alloc.h"
 #include "common.h"
 #include "log.h"
-#include "data_structure/path_builder.h"
-#include "data_structure/uthash.h"
+#include "types/path.h"
+#include "types/uthash.h"
 
 int
 file_open(char const *file_name, FILE **result, struct stat *stat)

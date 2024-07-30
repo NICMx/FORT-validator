@@ -1,5 +1,5 @@
-#ifndef TAL_OBJECT_H_
-#define TAL_OBJECT_H_
+#ifndef SRC_OBJECT_TAL_H_
+#define SRC_OBJECT_TAL_H_
 
 /* This is RFC 8630. */
 
@@ -13,4 +13,4 @@ void tal_get_spki(struct tal *, unsigned char const **, size_t *);
 
 struct db_table *perform_standalone_validation(void);
 
-#endif /* TAL_OBJECT_H_ */
+#endif /* SRC_OBJECT_TAL_H_ */

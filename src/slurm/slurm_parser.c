@@ -5,7 +5,7 @@
 
 #include "algorithm.h"
 #include "alloc.h"
-#include "crypto/base64.h"
+#include "base64.h"
 #include "json_util.h"
 #include "log.h"
 #include "slurm/db_slurm.h"

@@ -1,9 +1,10 @@
-#ifndef SRC_OID_H_
-#define SRC_OID_H_
+#ifndef SRC_ASN1_OID_H_
+#define SRC_ASN1_OID_H_
 
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "common.h"
+#include "types/array.h"
 
 /* These objects are expected to live on the stack. */
 struct oid_arcs {
@@ -51,4 +52,4 @@ bool arcs_equal_oids(struct oid_arcs *, asn_oid_arc_t const *, size_t);
  */
 #define ARCS_EQUAL_OIDS(a, b) arcs_equal_oids(a, b, ARRAY_LEN(b))
 
-#endif /* SRC_OID_H_ */
+#endif /* SRC_ASN1_OID_H_ */

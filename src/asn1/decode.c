@@ -3,7 +3,7 @@
 #include "asn1/asn1c/ber_decoder.h"
 #include "asn1/asn1c/constraints.h"
 #include "common.h"
-#include "incidence/incidence.h"
+#include "incidence.h"
 #include "log.h"
 
 #define COND_LOG(log, pr) (log ? pr : -EINVAL)

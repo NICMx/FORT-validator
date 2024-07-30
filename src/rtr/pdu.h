@@ -1,5 +1,5 @@
-#ifndef RTR_PDU_H_
-#define RTR_PDU_H_
+#ifndef SRC_RTR_PDU_H_
+#define SRC_RTR_PDU_H_
 
 #include <stddef.h>
 #include <stdio.h>
@@ -79,4 +79,4 @@ rtrpdu_error_report_len(uint32_t errpdu_len, uint32_t errmsg_len)
 	    + errmsg_len;
 }
 
-#endif /* RTR_PDU_H_ */
+#endif /* SRC_RTR_PDU_H_ */

@@ -3,8 +3,8 @@
 #include <errno.h>
 
 #include "alloc.h"
-#include "data_structure/uthash.h"
 #include "log.h"
+#include "types/uthash.h"
 
 struct hashable_roa {
 	struct vrp data;

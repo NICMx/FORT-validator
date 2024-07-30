@@ -3,16 +3,17 @@
 #include <errno.h>
 
 #include "alloc.h"
+#include "cache.h"
 #include "common.h"
 #include "config.h"
+#include "config/filename_format.h"
 #include "log.h"
 #include "rrdp.h"
 #include "state.h"
-#include "str_token.h"
 #include "thread_var.h"
-#include "cache/local_cache.h"
-#include "config/filename_format.h"
-#include "data_structure/path_builder.h"
+#include "types/path.h"
+#include "types/str.h"
+#include "types/url.h"
 
 /**
  * Aside from the reference counter, instances are meant to be immutable.
@@ -231,7 +232,7 @@ map_simple(struct cache_mapping *map, char const *subdir)
 	if (error)
 		return error;
 
-	error = pb_append(&pb, &map->url[SCHEMA_LEN]);
+	error = pb_append(&pb, &map->url[RPKI_SCHEMA_LEN]);
 	if (error) {
 		pb_cleanup(&pb);
 		return error;

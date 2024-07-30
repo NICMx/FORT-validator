@@ -1,13 +1,13 @@
 #include <check.h>
 
 #include "alloc.c"
-#include "cache/cachent.c"
+#include "base64.c"
+#include "cachent.c"
 #include "common.c"
-#include "crypto/base64.c"
-#include "data_structure/path_builder.c"
 #include "json_util.c"
 #include "mock.c"
 #include "rrdp.c"
+#include "types/path.c"
 #include "types/url.c"
 
 /* Mocks */

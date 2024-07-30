@@ -7,12 +7,12 @@
 #include "asn1/content_info.h"
 #include "common.h"
 #include "config.h"
-#include "data_structure/path_builder.h"
 #include "file.h"
 #include "log.h"
-#include "rsync/rsync.h"
+#include "rsync.h"
 #include "types/bio_seq.h"
 #include "types/map.h"
+#include "types/path.h"
 
 #define HDRSIZE 32
 

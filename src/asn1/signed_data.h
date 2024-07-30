@@ -1,5 +1,5 @@
-#ifndef SRC_SIGNED_DATA_H_
-#define SRC_SIGNED_DATA_H_
+#ifndef SRC_ASN1_SIGNED_DATA_H_
+#define SRC_ASN1_SIGNED_DATA_H_
 
 /* Some wrappers for asn1/asn1c/SignedData.h. */
 
@@ -27,4 +27,4 @@ int signed_data_validate(ANY_t *, struct SignedData *, struct ee_cert *);
 
 int get_content_type_attr(struct SignedData *, OBJECT_IDENTIFIER_t **);
 
-#endif /* SRC_SIGNED_DATA_H_ */
+#endif /* SRC_ASN1_SIGNED_DATA_H_ */

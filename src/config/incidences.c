@@ -1,6 +1,6 @@
 #include "config/incidences.h"
 
-#include "incidence/incidence.h"
+#include "incidence.h"
 
 static void
 incidences_print(struct option_field const *field, void *_value)

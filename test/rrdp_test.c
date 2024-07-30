@@ -3,17 +3,17 @@
 #include <stdlib.h>
 
 #include "alloc.c"
-#include "cache/cachent.c"
+#include "base64.c"
+#include "cachent.c"
 #include "common.c"
-#include "crypto/base64.c"
-#include "crypto/hash.c"
-#include "data_structure/path_builder.c"
 #include "file.c"
+#include "hash.c"
 #include "json_util.c"
 #include "mock.c"
+#include "relax_ng.c"
 #include "rrdp.c"
+#include "types/path.c"
 #include "types/url.c"
-#include "xml/relax_ng.c"
 
 /* Mocks */
 

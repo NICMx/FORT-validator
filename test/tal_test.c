@@ -3,12 +3,13 @@
 #include <check.h>
 
 #include "alloc.c"
+#include "base64.c"
 #include "common.c"
 #include "file.c"
 #include "mock.c"
-#include "data_structure/path_builder.c"
 #include "types/map.c"
-#include "crypto/base64.c"
+#include "types/path.c"
+#include "types/str.c"
 
 /* Mocks */
 
@@ -18,8 +19,7 @@ MOCK_VOID(cache_destroy, struct rpki_cache *cache)
 MOCK_ABORT_INT(cache_download, struct rpki_cache *cache,
     struct cache_mapping *map, bool *changed,
     struct cachefile_notification ***notif)
-MOCK_ABORT_INT(cache_download_alt, struct rpki_cache *cache,
-    struct map_list *maps, enum map_type http_type, enum map_type rsync_type,
+MOCK_ABORT_INT(cache_download_alt, struct sia_uris *sias,
     maps_dl_cb cb, void *arg)
 MOCK_ABORT_PTR(cache_recover, cache_mapping, struct rpki_cache *cache,
     struct map_list *maps)
@@ -42,7 +42,7 @@ MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
 MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
-MOCK_ABORT_INT(rrdp_update, struct cache_mapping *map)
+MOCK_ABORT_INT(rrdp_update, struct cache_node *notif)
 MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
 MOCK_ABORT_VOID(validation_destroy, struct validation *state)
@@ -101,7 +101,7 @@ test_1url(char const *file)
 	ck_assert_int_eq(0, tal_init(&tal, file));
 
 	ck_assert_uint_eq(1, tal.urls.len);
-	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.urls.array[0]->url);
+	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.urls.array[0]);
 	check_spki(&tal);
 
 	tal_cleanup(&tal);

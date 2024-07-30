@@ -3,7 +3,7 @@
 
 #include "alloc.c"
 #include "mock.c"
-#include "data_structure/path_builder.c"
+#include "types/path.c"
 #include "types/url.c"
 
 #define TEST_NORMALIZE(dirty, clean)					\

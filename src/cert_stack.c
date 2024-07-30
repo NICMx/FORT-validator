@@ -4,11 +4,12 @@
 #include <sys/queue.h>
 
 #include "alloc.h"
-#include "data_structure/array_list.h"
-#include "object/name.h"
+#include "log.h"
 #include "resource.h"
-#include "str_token.h"
 #include "thread_var.h"
+#include "types/arraylist.h"
+#include "types/name.h"
+#include "types/str.h"
 
 enum defer_node_type {
 	DNT_SEPARATOR,

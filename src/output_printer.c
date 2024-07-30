@@ -1,8 +1,8 @@
 #include "output_printer.h"
 
+#include "base64.h"
 #include "common.h"
 #include "config.h"
-#include "crypto/base64.h"
 #include "file.h"
 #include "log.h"
 #include "types/vrp.h"

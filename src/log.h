@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "incidence/incidence.h"
+#include "incidence.h"
 
 /*
  * According to BSD style, __dead is supposed to be defined in sys/cdefs.h,

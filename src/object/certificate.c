@@ -17,22 +17,22 @@
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
-#include "cache/local_cache.h"
+#include "cache.h"
 #include "cert_stack.h"
 #include "config.h"
-#include "crypto/hash.h"
+#include "hash.h"
 #include "types/str.h"
 #include "extension.h"
-#include "incidence/incidence.h"
+#include "incidence.h"
 #include "log.h"
 #include "nid.h"
 #include "object/bgpsec.h"
 #include "object/manifest.h"
-#include "object/name.h"
 #include "object/signed_object.h"
 #include "rrdp.h"
-#include "str_token.h"
 #include "thread_var.h"
+#include "types/name.h"
+#include "types/str.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -1873,7 +1873,7 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	if (error)
 		goto revert_cert;
 
-	sia_uris_init(&sia_uris);
+	sias_init(&sia_uris);
 	error = (certype == CERTYPE_TA)
 	    ? certificate_validate_extensions_ta(cert, &sia_uris, &policy)
 	    : certificate_validate_extensions_ca(cert, &sia_uris, &policy,
@@ -1881,7 +1881,7 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	if (error)
 		goto revert_uris;
 
-	error = cache_download_alt(&sia_uris, MAP_NOTIF, NULL, NULL);
+	error = cache_download_alt(&sia_uris, NULL, NULL);
 	if (error)
 		goto revert_uris;
 

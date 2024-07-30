@@ -4,9 +4,10 @@
 #include <time.h>
 
 #include "alloc.h"
+#include "base64.h"
 #include "common.h"
-#include "crypto/base64.h"
-#include "data_structure/array_list.h"
+#include "log.h"
+#include "types/arraylist.h"
 #include "types/router_key.h"
 
 struct slurm_prefix_wrap {

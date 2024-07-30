@@ -6,7 +6,7 @@
 #include "alloc.h"
 #include "common.h"
 #include "config.h"
-#include "data_structure/array_list.h"
+#include "log.h"
 #include "object/tal.h"
 #include "output_printer.h"
 #include "rtr/db/db_table.h"

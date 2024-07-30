@@ -1,9 +1,9 @@
 #include "init.h"
 
 #include "config.h"
-#include "data_structure/path_builder.h"
-#include "http/http.h"
+#include "http.h"
 #include "log.h"
+#include "types/path.h"
 
 static int
 fetch_url(char const *url, char const *filename)

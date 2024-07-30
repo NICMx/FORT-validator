@@ -7,7 +7,7 @@
 #include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "common.h"
-#include "crypto/hash.h"
+#include "hash.h"
 #include "log.h"
 #include "object/certificate.h"
 #include "object/crl.h"

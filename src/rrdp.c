@@ -4,19 +4,18 @@
 #include <openssl/evp.h>
 
 #include "alloc.h"
-#include "cache/local_cache.h"
+#include "base64.h"
+#include "cache.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
+#include "hash.h"
+#include "http.h"
 #include "json_util.h"
 #include "log.h"
+#include "relax_ng.h"
 #include "thread_var.h"
-#include "http/http.h"
-#include "cache/cachent.h"
-#include "crypto/base64.h"
-#include "crypto/hash.h"
 #include "types/url.h"
-#include "xml/relax_ng.h"
 
 /* RRDP's XML namespace */
 #define RRDP_NAMESPACE		"http://www.ripe.net/rpki/rrdp"

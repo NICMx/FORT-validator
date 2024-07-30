@@ -7,8 +7,8 @@
 #include "algorithm.h"
 #include "extension.h"
 #include "log.h"
-#include "object/name.h"
 #include "thread_var.h"
+#include "types/name.h"
 
 static int
 __crl_load(struct cache_mapping *map, X509_CRL **result)

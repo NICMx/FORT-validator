@@ -2,27 +2,28 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "crypto/base64.c"
 #include "algorithm.c"
 #include "alloc.c"
+#include "base64.c"
 #include "common.c"
 #include "file.c"
 #include "json_util.c"
 #include "mock.c"
 #include "output_printer.c"
-#include "types/delta.c"
-#include "types/router_key.c"
-#include "types/serial.c"
-#include "types/vrp.c"
+#include "rtr/db/db_table.c"
 #include "rtr/db/delta.c"
 #include "rtr/db/deltas_array.c"
-#include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_mock.c"
 #include "rtr/db/vrps.c"
 #include "slurm/db_slurm.c"
 #include "slurm/slurm_loader.c"
 #include "slurm/slurm_parser.c"
-#include "thread/thread_pool.c"
+#include "thread_pool.c"
+#include "types/delta.c"
+#include "types/path.c"
+#include "types/router_key.c"
+#include "types/serial.c"
+#include "types/vrp.c"
 
 /* -- Expected database descriptors -- */
 

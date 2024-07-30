@@ -5,7 +5,7 @@
 #include "alloc.c"
 #include "common.c"
 #include "mock.c"
-#include "thread/thread_pool.c"
+#include "thread_pool.c"
 
 static void
 thread_work(void *arg)

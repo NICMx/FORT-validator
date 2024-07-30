@@ -18,6 +18,7 @@
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
+#include "types/array.h"
 
 /**
  * To add a member to this structure,

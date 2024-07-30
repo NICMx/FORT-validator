@@ -23,8 +23,6 @@
  */
 #define ENSURE_NEGATIVE(error) (((error) < 0) ? (error) : -(error))
 
-#define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
-
 bool str_starts_with(char const *, char const *);
 bool str_ends_with(char const *, char const *);
 

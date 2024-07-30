@@ -4,9 +4,9 @@
 #include <openssl/bn.h>
 
 #include "object/certificate.h"
-#include "object/name.h"
 #include "resource.h"
 #include "types/map.h"
+#include "types/name.h"
 
 /*
  * One certificate stack is allocated per validation cycle, and it is used

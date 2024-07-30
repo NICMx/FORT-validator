@@ -1,7 +1,7 @@
 #include "types/url.h"
 
 #include "alloc.h"
-#include "data_structure/path_builder.h"
+#include "types/path.h"
 
 static char *
 path_rewind(char const *root, char *cursor)

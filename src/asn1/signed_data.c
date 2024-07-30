@@ -9,7 +9,7 @@
 #include "asn1/decode.h"
 #include "asn1/oid.h"
 #include "config.h"
-#include "crypto/hash.h"
+#include "hash.h"
 #include "log.h"
 #include "object/certificate.h"
 #include "thread_var.h"

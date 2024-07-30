@@ -17,7 +17,7 @@
 #include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_mock.c"
 #include "rtr/db/vrps.c"
-#include "thread/thread_pool.c"
+#include "thread_pool.c"
 
 /* Mocks */
 

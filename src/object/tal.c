@@ -7,18 +7,19 @@
 #include <time.h>
 
 #include "alloc.h"
+#include "base64.h"
+#include "cache.h"
 #include "cert_stack.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
-#include "state.h"
-#include "thread_var.h"
-#include "validation_handler.h"
-#include "crypto/base64.h"
 #include "object/certificate.h"
 #include "rtr/db/vrps.h"
-#include "cache/local_cache.h"
+#include "state.h"
+#include "thread_var.h"
+#include "types/str.h"
+#include "validation_handler.h"
 
 typedef int (*foreach_map_cb)(struct tal *, struct cache_mapping *, void *);
 
@@ -267,7 +268,7 @@ do_file_validation(void *arg)
 		goto end;
 
 	args.db = db_table_create();
-	thread->error = cache_download_urls(&args.tal.urls,
+	thread->error = cache_download_uri(&args.tal.urls,
 	    __handle_tal_map, &args);
 	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",

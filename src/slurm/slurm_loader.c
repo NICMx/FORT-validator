@@ -7,7 +7,7 @@
 #include "log.h"
 #include "config.h"
 #include "common.h"
-#include "crypto/hash.h"
+#include "hash.h"
 #include "slurm/slurm_parser.h"
 
 #define SLURM_FILE_EXTENSION	".slurm"

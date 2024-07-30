@@ -3,11 +3,11 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include "config.h"
-#include "state.h"
-#include "thread_var.h"
 #include "config/filename_format.h"
 #include "config/mode.h"
-#include "incidence/incidence.h"
+#include "incidence.h"
+#include "state.h"
+#include "thread_var.h"
 
 /**
  * Some core functions, as linked from unit tests.

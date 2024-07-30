@@ -1,17 +1,17 @@
 #include <errno.h>
 
 #include "config.h"
-#include "crypto/hash.h"
 #include "extension.h"
-#include "http/http.h"
-#include "incidence/incidence.h"
+#include "hash.h"
+#include "http.h"
+#include "incidence.h"
 #include "log.h"
 #include "nid.h"
 #include "print_file.h"
+#include "relax_ng.h"
 #include "rtr/db/vrps.h"
 #include "rtr/rtr.h"
 #include "thread_var.h"
-#include "xml/relax_ng.h"
 
 static int
 fort_standalone(void)

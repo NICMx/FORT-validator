@@ -1,5 +1,5 @@
-#ifndef SRC_VRPS_H_
-#define SRC_VRPS_H_
+#ifndef SRC_RTR_DB_VRPS_H_
+#define SRC_RTR_DB_VRPS_H_
 
 /*
  * "VRPs" = "Validated ROA Payloads." See RFC 6811.
@@ -7,9 +7,9 @@
  * This module stores VRPs and their serials.
  */
 
-#include "as_number.h"
 #include "rtr/db/deltas_array.h"
 #include "types/address.h"
+#include "types/asn.h"
 
 int vrps_init(void);
 void vrps_destroy(void);
@@ -36,4 +36,4 @@ uint16_t get_current_session_id(uint8_t);
 
 void vrps_print_base(void);
 
-#endif /* SRC_VRPS_H_ */
+#endif /* SRC_RTR_DB_VRPS_H_ */
