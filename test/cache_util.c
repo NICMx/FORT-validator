@@ -1,29 +1,63 @@
 #include "cache_util.h"
 
+#include <check.h>
 #include <string.h>
 #include "types/uthash.h"
 
-static struct cache_node *
-node(char const *schema, char const *path, int flags, char const *tmpdir,
+static int
+cnf_clean(int flags)
+{
+	return flags & ~(CNF_FREE_URL | CNF_FREE_PATH | CNF_FREE_TMPPATH);
+}
+
+void
+ck_assert_cachent_eq(struct cache_node *expected, struct cache_node *actual)
+{
+	struct cache_node *echild, *achild, *tmp;
+
+	PR_DEBUG_MSG("Comparing %s vs %s", expected->url, actual->url);
+
+	ck_assert_str_eq(expected->url, actual->url);
+	ck_assert_str_eq(expected->path, actual->path);
+	ck_assert_str_eq(expected->name, actual->name);
+	ck_assert_int_eq(cnf_clean(expected->flags), cnf_clean(actual->flags));
+	if (expected->tmppath)
+		ck_assert_str_eq(expected->tmppath, actual->tmppath);
+	else
+		ck_assert_ptr_eq(NULL, actual->tmppath);
+
+	HASH_ITER(hh, expected->children, echild, tmp) {
+		HASH_FIND(hh, actual->children, echild->name,
+		    strlen(echild->name), achild);
+		if (achild == NULL)
+			ck_abort_msg("Expected not found: %s", echild->url);
+		ck_assert_cachent_eq(echild, achild);
+	}
+
+	HASH_ITER(hh, actual->children, achild, tmp) {
+		HASH_FIND(hh, expected->children, achild->name,
+		    strlen(achild->name), echild);
+		if (echild == NULL)
+			ck_abort_msg("Actual not found: %s", achild->url);
+	}
+}
+
+struct cache_node *
+vcreate_node(char const *url, char const *path, int flags, char const *tmppath,
     va_list children)
 {
 	struct cache_node *result;
 	struct cache_node *child;
 	char buffer[64];
-	char const *slash;
 
 	result = pzalloc(sizeof(struct cache_node));
 
-	ck_assert(snprintf(buffer, 64, "%s://%s", schema, path) < 64);
-	result->url = pstrdup(buffer);
-	slash = (path[0] == 0) ? "" : "/";
-	ck_assert(snprintf(buffer, 64, "tmp/%s%s%s", schema, slash, path) < 64);
-	result->path = pstrdup(buffer);
-
+	result->url = (char *)url;
+	result->path = (char *)path;
 	result->name = strrchr(result->path, '/') + 1;
 	ck_assert_ptr_ne(NULL, result->name);
 	result->flags = flags;
-	result->tmppath = tmpdir ? pstrdup(tmpdir) : NULL;
+	result->tmppath = (char *)tmppath;
 
 	while ((child = va_arg(children, struct cache_node *)) != NULL) {
 		HASH_ADD_KEYPTR(hh, result->children, child->name,
@@ -35,78 +69,76 @@ node(char const *schema, char const *path, int flags, char const *tmpdir,
 }
 
 struct cache_node *
-ruftnode(char const *path, int flags, char const *tmpdir, ...)
+ruftnode(char const *url, char const *path, int flags, char const *tmppath, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
-	va_start(children, tmpdir);
-	result = node("rsync", path, flags, tmpdir, children);
+	va_start(children, tmppath);
+	result = vcreate_node(url, path, flags, tmppath, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-rufnode(char const *path, int flags, ...)
+rufnode(char const *url, char const *path, int flags, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, flags);
-	result = node("rsync", path, flags, NULL, children);
+	result = vcreate_node(url, path, flags, NULL, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-runode(char const *path, ...)
+runode(char const *url, char const *path, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, path);
-	result = node("rsync", path, 0, NULL, children);
+	result = vcreate_node(url, path, 0, NULL, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-huftnode(char const *path, int flags, char const *tmpdir, ...)
+huftnode(char const *url, char const *path, int flags, char const *tmppath, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
-	va_start(children, tmpdir);
-	result = node("https", path, flags, tmpdir, children);
+	va_start(children, tmppath);
+	result = vcreate_node(url, path, flags, tmppath, children);
 	va_end(children);
 
 	return result;
 }
 
-struct cache_node *
-hufnode(char const *path, int flags, ...)
+struct cache_node *hufnode(char const *url, char const *path, int flags, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, flags);
-	result = node("https", path, flags, NULL, children);
+	result = vcreate_node(url, path, flags, NULL, children);
 	va_end(children);
 
 	return result;
 }
 
-struct cache_node *
-hunode(char const *path, ...)
+struct cache_node *hunode(char const *url, char const *path, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, path);
-	result = node("https", path, 0, NULL, children);
+	result = vcreate_node(url, path, 0, NULL, children);
 	va_end(children);
 
 	return result;

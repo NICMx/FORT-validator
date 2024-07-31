@@ -3,7 +3,7 @@
 #include <errno.h>
 
 #include "alloc.h"
-#include "cache.h"
+#include "cachetmp.h"
 #include "common.h"
 #include "config.h"
 #include "config/filename_format.h"

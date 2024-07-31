@@ -160,8 +160,6 @@
 "  </define>"								\
 "</grammar>"
 
-#define RRDP_V1_RNG_SIZE strlen(RRDP_V1_RNG)
-
 
 int relax_ng_init(void);
 void relax_ng_cleanup(void);

@@ -62,7 +62,8 @@ file_write(char const *file_name, char const *mode, FILE **result)
 }
 
 int
-file_write_full(char const *path, unsigned char *content, size_t content_len)
+file_write_full(char const *path, unsigned char const *content,
+    size_t content_len)
 {
 	FILE *out;
 	size_t written;

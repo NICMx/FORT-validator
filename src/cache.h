@@ -7,8 +7,6 @@
 void cache_setup(void);		/* Init this module */
 void cache_teardown(void);	/* Destroy this module */
 
-int cache_tmpfile(char **);	/* Return new unique path in <cache>/tmp/ */
-
 void cache_prepare(void);	/* Prepare cache for new validation cycle */
 void cache_commit(void);	/* Finish successful validation cycle */
 /* XXX Huh. Looks like this could use a cache_rollback() */

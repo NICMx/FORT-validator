@@ -71,7 +71,7 @@ struct withdraw {
 
 struct parser_args {
 	struct rrdp_session *session;
-	struct cache_node *rpp;
+	struct cache_node *notif;
 };
 
 static BIGNUM *
@@ -479,21 +479,31 @@ delete_file(char const *path)
 }
 
 static int
-handle_publish(xmlTextReaderPtr reader, struct cache_node *rpp)
+handle_publish(xmlTextReaderPtr reader, struct cache_node *notif)
 {
 	struct publish tag = { 0 };
-	struct cache_node *node;
+	struct cache_node *subtree, *node;
 	int error;
 
 	error = parse_publish(reader, &tag);
 	if (error)
 		goto end;
+	pr_val_debug("- publish %s", tag.meta.uri);
 
-	// XXX Not going to pass URL validation.
-	node = cachent_provide(rpp, tag.meta.uri);
+	if (!notif->rrdp.subtree) {
+		subtree = pzalloc(sizeof(struct cache_node));
+		subtree->url = "rsync://";
+		subtree->path = notif->path;
+		subtree->name = strrchr(subtree->path, '/') + 1;
+		subtree->tmppath = notif->tmppath;
+		notif->rrdp.subtree = subtree;
+	}
+
+	node = cachent_provide(notif->rrdp.subtree, tag.meta.uri);
 	if (!node) {
+		// XXX outdated msg
 		error = pr_val_err("Broken RRDP: <publish> is attempting to create file '%s' outside of its publication point '%s'.",
-		    tag.meta.uri, rpp->url);
+		    tag.meta.uri, notif->url);
 		goto end;
 	}
 
@@ -517,6 +527,7 @@ handle_publish(xmlTextReaderPtr reader, struct cache_node *rpp)
 		goto end;
 	}
 
+	pr_val_debug("Caching file: %s", node->tmppath);
 	error = file_write_full(node->tmppath, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
@@ -525,7 +536,7 @@ end:	metadata_cleanup(&tag.meta);
 }
 
 static int
-handle_withdraw(xmlTextReaderPtr reader, struct cache_node *rpp)
+handle_withdraw(xmlTextReaderPtr reader, struct cache_node *notif)
 {
 	struct withdraw tag = { 0 };
 	struct cache_node *node;
@@ -535,11 +546,13 @@ handle_withdraw(xmlTextReaderPtr reader, struct cache_node *rpp)
 	if (error)
 		goto end;
 
-	// XXX Not going to pass URL validation.
-	node = cachent_provide(rpp, tag.meta.uri);
+	pr_val_debug("- withdraw: %s", tag.meta.uri);
+
+	node = cachent_provide(notif->rrdp.subtree, tag.meta.uri);
 	if (!node) {
+		// XXX outdated msg
 		error = pr_val_err("Broken RRDP: <withdraw> is attempting to delete file '%s' outside of its publication point '%s'.",
-		    tag.meta.uri, rpp->url);
+		    tag.meta.uri, notif->url);
 		goto end;
 	}
 
@@ -738,13 +751,14 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_notification(struct cache_node *notif, struct update_notification *result)
+parse_notification(char const *url, char const *path,
+    struct update_notification *result)
 {
 	int error;
 
-	update_notification_init(result, notif->url);
+	update_notification_init(result, url);
 
-	error = relax_ng_parse(notif->tmppath, xml_read_notif, result);
+	error = relax_ng_parse(path, xml_read_notif, result);
 	if (error)
 		update_notification_cleanup(result);
 
@@ -764,7 +778,7 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = handle_publish(reader, args->rpp);
+			error = handle_publish(reader, args->notif);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
 			error = validate_session(reader, args->session);
 		else
@@ -781,9 +795,9 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 
 static int
 parse_snapshot(struct rrdp_session *session, char const *path,
-    struct cache_node *rpp)
+    struct cache_node *notif)
 {
-	struct parser_args args = { .session = session, .rpp = rpp };
+	struct parser_args args = { .session = session, .notif = notif };
 	return relax_ng_parse(path, xml_read_snapshot, &args);
 }
 
@@ -840,21 +854,21 @@ dl_tmp(char const *url, char **path)
 }
 
 static int
-handle_snapshot(struct update_notification *notif, struct cache_node *rpp)
+handle_snapshot(struct update_notification *new, struct cache_node *notif)
 {
 	char *tmppath;
 	int error;
 
-	pr_val_debug("Processing snapshot '%s'.", notif->snapshot.uri);
-	fnstack_push(notif->snapshot.uri);
+	pr_val_debug("Processing snapshot '%s'.", new->snapshot.uri);
+	fnstack_push(new->snapshot.uri);
 
-	error = dl_tmp(notif->snapshot.uri, &tmppath);
+	error = dl_tmp(new->snapshot.uri, &tmppath);
 	if (error)
 		goto end1;
-	error = validate_hash(&notif->snapshot, tmppath);
+	error = validate_hash(&new->snapshot, tmppath);
 	if (error)
 		goto end2;
-	error = parse_snapshot(&notif->session, tmppath, rpp);
+	error = parse_snapshot(&new->session, tmppath, notif);
 	delete_file(tmppath);
 
 end2:	free(tmppath);
@@ -875,9 +889,9 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = handle_publish(reader, args->rpp);
+			error = handle_publish(reader, args->notif);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
-			error = handle_withdraw(reader, args->rpp);
+			error = handle_withdraw(reader, args->notif);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
 			error = validate_session(reader, args->session);
 		else
@@ -894,7 +908,7 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 
 static int
 parse_delta(struct update_notification *notif, struct notification_delta *delta,
-    char const *path, struct cache_node *node)
+    char const *path, struct cache_node *notif_node)
 {
 	struct parser_args args;
 	struct rrdp_session session;
@@ -907,14 +921,14 @@ parse_delta(struct update_notification *notif, struct notification_delta *delta,
 	session.session_id = notif->session.session_id;
 	session.serial = delta->serial;
 	args.session = &session;
-	args.rpp = node;
+	args.notif = notif_node;
 
 	return relax_ng_parse(path, xml_read_delta, &args);
 }
 
 static int
 handle_delta(struct update_notification *notif,
-    struct notification_delta *delta, struct cache_node *node)
+    struct notification_delta *delta, struct cache_node *notif_node)
 {
 	char *tmppath;
 	int error;
@@ -925,7 +939,7 @@ handle_delta(struct update_notification *notif,
 	error = dl_tmp(delta->meta.uri, &tmppath);
 	if (error)
 		goto end;
-	error = parse_delta(notif, delta, tmppath, node);
+	error = parse_delta(notif, delta, tmppath, notif_node);
 	delete_file(tmppath);
 
 	free(tmppath);
@@ -934,7 +948,7 @@ end:	fnstack_pop();
 }
 
 static int
-handle_deltas(struct update_notification *notif, struct cache_node *node)
+handle_deltas(struct update_notification *notif, struct cache_node *notif_node)
 {
 	struct rrdp_serial *old;
 	struct rrdp_serial *new;
@@ -948,7 +962,7 @@ handle_deltas(struct update_notification *notif, struct cache_node *node)
 		return -ENOENT;
 	}
 
-	old = &node->notif.session.serial;
+	old = &notif_node->rrdp.session.serial;
 	new = &notif->session.serial;
 
 	pr_val_debug("Handling RRDP delta serials %s-%s.", old->str, new->str);
@@ -971,7 +985,7 @@ handle_deltas(struct update_notification *notif, struct cache_node *node)
 		    old->str, new->str);
 
 	for (d = notif->deltas.len - diff; d < notif->deltas.len; d++) {
-		error = handle_delta(notif, &notif->deltas.array[d], node);
+		error = handle_delta(notif, &notif->deltas.array[d], notif_node);
 		if (error)
 			return error;
 	}
@@ -1072,39 +1086,59 @@ update_notif(struct cachefile_notification *old, struct update_notification *new
 	return 0;
 }
 
-static int
-dl_notif(struct cache_node *notif)
+static bool
+dl_notif(struct cache_node *notif, struct update_notification *new)
 {
 	char *tmppath;
+	time_t mtim;
 	bool changed;
-	int error;
 
-	error = cache_tmpfile(&tmppath);
-	if (error)
-		return error;
+	notif->dlerr = cache_tmpfile(&tmppath);
+	if (notif->dlerr)
+		return false;
 
-	error = http_download(notif->url, tmppath, notif->mtim, &changed);
-	if (error) {
-		free(tmppath);
-		return error;
+	mtim = time(NULL); // XXX
+	changed = false;
+	notif->dlerr = http_download(notif->url, tmppath, notif->mtim, &changed);
+	notif->flags |= CNF_FRESH;
+
+	if (notif->dlerr)
+		goto end;
+	if (!changed) {
+		pr_val_debug("The Notification has not changed.");
+		goto end;
 	}
 
-	// XXX notif->flags |= CNF_CACHED | CNF_FRESH;
-	if (changed) {
-		notif->mtim = time(NULL); // XXX
-		notif->tmppath = tmppath;
-	} else {
-		free(tmppath);
+	notif->mtim = mtim; /* XXX should happen much later */
+	notif->dlerr = parse_notification(notif->url, tmppath, new);
+	if (notif->dlerr)
+		goto end;
+
+	if (remove(tmppath) == -1) {
+		notif->dlerr = errno;
+		pr_val_err("Can't remove notification's temporal file: %s",
+		   strerror(notif->dlerr));
+		goto end;
+	}
+	if (mkdir(tmppath, 0777) == -1) {
+		notif->dlerr = errno;
+		pr_val_err("Can't create notification's temporal directory: %s",
+		    strerror(notif->dlerr));
+		goto end;
 	}
 
-	return 0;
+	notif->tmppath = tmppath;
+	return true;
+
+end:	free(tmppath);
+	return false;
 }
 
 /*
  * Downloads the Update Notification @notif, and updates the cache accordingly.
  *
  * "Updates the cache accordingly" means it downloads the missing deltas or
- * snapshot, and explodes them into @rpp's tmp directory.
+ * snapshot, and explodes them into @notif's tmp directory.
  */
 int
 rrdp_update(struct cache_node *notif)
@@ -1112,62 +1146,39 @@ rrdp_update(struct cache_node *notif)
 	struct cachefile_notification *old;
 	struct update_notification new;
 	int serial_cmp;
-	int error;
 
 	fnstack_push(notif->url);
 	pr_val_debug("Processing notification.");
 
-	///////////////////////////////////////////////////////////////////////
-
-	error = dl_notif(notif);
-	if (error)
-		goto end;
-
-	if (!notif->tmppath) {
-		pr_val_debug("The Notification has not changed.");
-		goto end;
-	}
-
-	error = parse_notification(notif, &new);
-	if (error)
-		goto end;
-
-	remove(notif->tmppath); // XXX
-	if (mkdir(notif->tmppath, 0777) == -1) {
-		error = errno;
-		pr_val_err("Can't create notification's temporal directory: %s",
-		    strerror(error));
-		goto clean_notif;
-	}
-
-	///////////////////////////////////////////////////////////////////////
+	if (!dl_notif(notif, &new))
+		goto end; /* Unchanged or error */
 
 	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
 	    new.session.serial.str);
 
 	if (!(notif->flags & CNF_NOTIFICATION)) {
 		pr_val_debug("This is a new Notification.");
-		error = handle_snapshot(&new, notif);
-		if (error)
+		notif->dlerr = handle_snapshot(&new, notif);
+		if (notif->dlerr)
 			goto clean_notif;
 
 		notif->flags |= CNF_NOTIFICATION;
-		init_notif(&notif->notif, &new);
+		init_notif(&notif->rrdp, &new);
 		goto end;
 	}
 
-	old = &notif->notif;
+	old = &notif->rrdp;
 	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
 	if (serial_cmp < 0) {
 		pr_val_debug("The Notification's serial changed.");
-		error = validate_session_desync(old, &new);
-		if (error)
+		notif->dlerr = validate_session_desync(old, &new);
+		if (notif->dlerr)
 			goto snapshot_fallback;
-		error = handle_deltas(&new, notif);
-		if (error)
+		notif->dlerr = handle_deltas(&new, notif);
+		if (notif->dlerr)
 			goto snapshot_fallback;
-		error = update_notif(old, &new);
-		if (!error)
+		notif->dlerr = update_notif(old, &new);
+		if (!notif->dlerr)
 			goto end;
 		/*
 		 * The files are exploded and usable, but @cached is not
@@ -1190,8 +1201,8 @@ rrdp_update(struct cache_node *notif)
 
 snapshot_fallback:
 	pr_val_debug("Falling back to snapshot.");
-	error = handle_snapshot(&new, notif);
-	if (error)
+	notif->dlerr = handle_snapshot(&new, notif);
+	if (notif->dlerr)
 		goto clean_notif;
 
 reset_notif:
@@ -1202,9 +1213,8 @@ reset_notif:
 clean_notif:
 	update_notification_cleanup(&new);
 
-end:
-	fnstack_pop();
-	return error;
+end:	fnstack_pop();
+	return notif->dlerr;
 }
 
 #define TAGNAME_SESSION "session_id"

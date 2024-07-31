@@ -20,14 +20,14 @@ START_TEST(test_delete)
 {
 	struct cache_node *root, *a, *b;
 
-	a = runode("a", NULL);
+	a = runode(RO2UP("a"), NULL);
 	dn = 0;
 	cachent_delete(a);
 	ck_assert_uint_eq(1, dn);
 	ck_assert_str_eq("a", deleted[0]);
 
-	a = runode("a", NULL);
-	root = runode("", a, NULL);
+	a = runode(RO2UP("a"), NULL);
+	root = runode(RE2UP, a, NULL);
 	dn = 0;
 	cachent_delete(a);
 	ck_assert_ptr_eq(NULL, root->children);
@@ -39,23 +39,23 @@ START_TEST(test_delete)
 	ck_assert_uint_eq(1, dn);
 	ck_assert_str_eq("rsync", deleted[0]);
 
-	b = runode("a/b",
-		runode("a/b/c", NULL),
-		runode("a/b/d", NULL),
-		runode("a/b/e", NULL),
-		runode("a/b/f", NULL), NULL);
-	a = runode("a",
+	b = runode(RO2UP("a/b"),
+		runode(RO2UP("a/b/c"), NULL),
+		runode(RO2UP("a/b/d"), NULL),
+		runode(RO2UP("a/b/e"), NULL),
+		runode(RO2UP("a/b/f"), NULL), NULL);
+	a = runode(RO2UP("a"),
 		b,
-		runode("a/g",
-			runode("a/g/h",
-				runode("a/g/h/i", NULL), NULL),
-			runode("a/g/j",
-				runode("a/g/j/k", NULL), NULL),
-			runode("a/g/l",
-				runode("a/g/l/m", NULL), NULL),
-			runode("a/g/n",
-				runode("a/g/n/o", NULL), NULL), NULL), NULL);
-	root = runode("", a, NULL);
+		runode(RO2UP("a/g"),
+			runode(RO2UP("a/g/h"),
+				runode(RO2UP("a/g/h/i"), NULL), NULL),
+			runode(RO2UP("a/g/j"),
+				runode(RO2UP("a/g/j/k"), NULL), NULL),
+			runode(RO2UP("a/g/l"),
+				runode(RO2UP("a/g/l/m"), NULL), NULL),
+			runode(RO2UP("a/g/n"),
+				runode(RO2UP("a/g/n/o"), NULL), NULL), NULL), NULL);
+	root = runode(RE2UP, a, NULL);
 
 	dn = 0;
 	cachent_delete(b);
@@ -124,36 +124,36 @@ START_TEST(test_traverse)
 	root = NULL;
 	ck_traverse(root, NULL);
 
-	root =	runode("a", NULL);
+	root =	runode(RO2UP("a"), NULL);
 	ck_traverse(root, "tmp/rsync/a", NULL);
 
-	root =	runode("a",
-			runode("a/b", NULL), NULL);
+	root =	runode(RO2UP("a"),
+			runode(RO2UP("a/b"), NULL), NULL);
 	ck_traverse(root, "tmp/rsync/a", "tmp/rsync/a/b", NULL);
 
-	root =	runode("a",
-			runode("a/b",
-				runode("a/b/c", NULL), NULL), NULL);
+	root =	runode(RO2UP("a"),
+			runode(RO2UP("a/b"),
+				runode(RO2UP("a/b/c"), NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/rsync/a",
 		"tmp/rsync/a/b",
 		"tmp/rsync/a/b/c", NULL);
 
-	root =	runode("a",
-			runode("a/b",
-				runode("a/b/c", NULL),
-				runode("a/b/d", NULL), NULL), NULL);
+	root =	runode(RO2UP("a"),
+			runode(RO2UP("a/b"),
+				runode(RO2UP("a/b/c"), NULL),
+				runode(RO2UP("a/b/d"), NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/rsync/a",
 		"tmp/rsync/a/b",
 		"tmp/rsync/a/b/c",
 		"tmp/rsync/a/b/d", NULL);
 
-	root =	runode("a",
-			runode("a/b",
-				runode("a/b/c", NULL),
-				runode("a/b/d", NULL), NULL),
-			runode("a/e", NULL), NULL);
+	root =	runode(RO2UP("a"),
+			runode(RO2UP("a/b"),
+				runode(RO2UP("a/b/c"), NULL),
+				runode(RO2UP("a/b/d"), NULL), NULL),
+			runode(RO2UP("a/e"), NULL), NULL);
 	ck_traverse(root,
 		"tmp/rsync/a",
 		"tmp/rsync/a/b",
@@ -161,11 +161,11 @@ START_TEST(test_traverse)
 		"tmp/rsync/a/b/d",
 		"tmp/rsync/a/e", NULL);
 
-	root =	runode("a",
-			runode("a/b", NULL),
-			runode("a/c",
-				runode("a/c/d", NULL),
-				runode("a/c/e", NULL), NULL), NULL);
+	root =	runode(RO2UP("a"),
+			runode(RO2UP("a/b"), NULL),
+			runode(RO2UP("a/c"),
+				runode(RO2UP("a/c/d"), NULL),
+				runode(RO2UP("a/c/e"), NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/rsync/a",
 		"tmp/rsync/a/b",
@@ -173,13 +173,13 @@ START_TEST(test_traverse)
 		"tmp/rsync/a/c/d",
 		"tmp/rsync/a/c/e", NULL);
 
-	root =	runode("a",
-			runode("a/b",
-				runode("a/b/c", NULL),
-				runode("a/b/d", NULL), NULL),
-			runode("a/e",
-				runode("a/e/f", NULL),
-				runode("a/e/g", NULL), NULL), NULL);
+	root =	runode(RO2UP("a"),
+			runode(RO2UP("a/b"),
+				runode(RO2UP("a/b/c"), NULL),
+				runode(RO2UP("a/b/d"), NULL), NULL),
+			runode(RO2UP("a/e"),
+				runode(RO2UP("a/e/f"), NULL),
+				runode(RO2UP("a/e/g"), NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/rsync/a",
 		"tmp/rsync/a/b",
@@ -189,21 +189,21 @@ START_TEST(test_traverse)
 		"tmp/rsync/a/e/f",
 		"tmp/rsync/a/e/g", NULL);
 
-	root =	runode("a",
-			runode("a/b",
-				runode("a/b/c", NULL),
-				runode("a/b/d", NULL),
-				runode("a/b/e", NULL),
-				runode("a/b/f", NULL), NULL),
-			runode("a/g",
-				runode("a/g/h",
-					runode("a/g/h/i", NULL), NULL),
-				runode("a/g/j",
-					runode("a/g/j/k", NULL), NULL),
-				runode("a/g/l",
-					runode("a/g/l/m", NULL), NULL),
-				runode("a/g/n",
-					runode("a/g/n/o", NULL), NULL), NULL), NULL);
+	root =	runode(RO2UP("a"),
+			runode(RO2UP("a/b"),
+				runode(RO2UP("a/b/c"), NULL),
+				runode(RO2UP("a/b/d"), NULL),
+				runode(RO2UP("a/b/e"), NULL),
+				runode(RO2UP("a/b/f"), NULL), NULL),
+			runode(RO2UP("a/g"),
+				runode(RO2UP("a/g/h"),
+					runode(RO2UP("a/g/h/i"), NULL), NULL),
+				runode(RO2UP("a/g/j"),
+					runode(RO2UP("a/g/j/k"), NULL), NULL),
+				runode(RO2UP("a/g/l"),
+					runode(RO2UP("a/g/l/m"), NULL), NULL),
+				runode(RO2UP("a/g/n"),
+					runode(RO2UP("a/g/n/o"), NULL), NULL), NULL), NULL);
 	ck_traverse(root,
 		"tmp/rsync/a",
 		"tmp/rsync/a/b",
@@ -227,7 +227,7 @@ START_TEST(test_provide)
 {
 	struct cache_node *rsync, *abc, *d, *e, *f, *g, *h, *ee;
 
-	rsync = cachent_create_root(false);
+	rsync = cachent_root_rsync();
 	ck_assert_ptr_ne(NULL, rsync);
 	ck_assert_ptr_eq(NULL, rsync->parent);
 	ck_assert_str_eq("rsync://", rsync->url);

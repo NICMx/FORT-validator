@@ -7,10 +7,10 @@
 #include "cache.h"
 
 #include <ftw.h>
-#include <stdatomic.h>
 #include <time.h>
 
 #include "alloc.h"
+#include "cachetmp.h"
 #include "common.h"
 #include "config.h"
 #include "configure_ac.h"
@@ -46,13 +46,10 @@ static struct rpki_cache {
 //	time_t startup_ts; /* When we started the last validation */
 } cache;
 
-static atomic_uint file_counter;
-
 #define CACHE_METAFILE "cache.json"
 #define TAGNAME_VERSION "fort-version"
 
 #define CACHEDIR_TAG "CACHEDIR.TAG"
-#define TMPDIR "tmp"
 
 #define TAL_METAFILE "tal.json"
 #define TAGNAME_TYPE "type"
@@ -180,7 +177,7 @@ init_tmp_dir(void)
 	char *dirname;
 	int error;
 
-	dirname = get_cache_filename(TMPDIR, true);
+	dirname = get_cache_filename(CACHE_TMPDIR, true);
 
 	error = mkdir(dirname, true);
 	if (error != EEXIST)
@@ -209,37 +206,6 @@ cache_teardown(void)
 	write_simple_file(filename, "{ \"" TAGNAME_VERSION "\": \""
 	    PACKAGE_VERSION "\" }\n");
 	free(filename);
-}
-
-/*
- * Returns a unique temporary file name in the local cache. Note, it's a name,
- * and it's pretty much reserved. The file itself will not be created.
- *
- * The file will not be automatically deleted when it is closed or the program
- * terminates.
- *
- * The name of the function is inherited from tmpfile(3).
- *
- * The resulting string needs to be released.
- */
-int
-cache_tmpfile(char **filename)
-{
-	struct path_builder pb;
-	int error;
-
-	error = pb_init_cache(&pb, TMPDIR);
-	if (error)
-		return error;
-
-	error = pb_append_u32(&pb, atomic_fetch_add(&file_counter, 1u));
-	if (error) {
-		pb_cleanup(&pb);
-		return error;
-	}
-
-	*filename = pb.string;
-	return 0;
 }
 
 //static char *
@@ -337,8 +303,8 @@ cache_tmpfile(char **filename)
 static void
 load_tal_json(void)
 {
-	cache.rsync = cachent_create_root(false);
-	cache.https = cachent_create_root(true);
+	cache.rsync = cachent_root_rsync();
+	cache.https = cachent_root_https();
 
 //	char *filename;
 //	json_t *root;
@@ -562,6 +528,7 @@ static int
 dl_http(struct cache_node *node)
 {
 	char *tmppath;
+	time_t mtim;
 	bool changed;
 	int error;
 
@@ -574,17 +541,17 @@ dl_http(struct cache_node *node)
 	if (error)
 		return error;
 
+	mtim = time(NULL); // XXX
+
 	error = http_download(node->url, tmppath, node->mtim, &changed);
 	if (error) {
 		free(tmppath);
 		return error;
 	}
 
-	node->flags |= CNF_CACHED | CNF_FRESH; // XXX on notification, preserve node but not file
-	if (changed) {
-		node->flags |= CNF_CHANGED;
-		node->mtim = time(NULL); // XXX catch -1
-	}
+	node->flags |= CNF_CACHED | CNF_FRESH;
+	if (changed)
+		node->mtim = mtim;
 	node->tmppath = tmppath;
 	return 0;
 }
@@ -826,7 +793,7 @@ rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 static void
 cleanup_tmp(void)
 {
-	char *tmpdir = get_cache_filename(TMPDIR, true);
+	char *tmpdir = get_cache_filename(CACHE_TMPDIR, true);
 	if (nftw(tmpdir, rmf, 32, FTW_DEPTH | FTW_PHYS))
 		pr_op_warn("Cannot empty the cache's tmp directory: %s",
 		    strerror(errno));

@@ -7,18 +7,30 @@
 #include "types/path.h"
 #include "types/url.h"
 
-struct cache_node *
-cachent_create_root(bool https)
+static struct cache_node *
+cachent_root(char const *schema, char const *dir)
 {
 	struct cache_node *root;
 
 	root = pzalloc(sizeof(struct cache_node));
-	root->url = pstrdup(https ? "https://" : "rsync://");
-	root->path = join_paths(config_get_local_repository(),
-	   https ? "https" : "rsync");
+	root->url = (char *)schema;
+	root->path = join_paths(config_get_local_repository(), dir);
 	root->name = strrchr(root->path, '/') + 1;
+	root->flags = CNF_FREE_PATH;
 
 	return root;
+}
+
+struct cache_node *
+cachent_root_rsync(void)
+{
+	return cachent_root("rsync://", "rsync");
+}
+
+struct cache_node *
+cachent_root_https(void)
+{
+	return cachent_root("https://", "https");
 }
 
 /* Preorder. @cb returns whether the children should be traversed. */
@@ -129,10 +141,13 @@ provide(struct cache_node *parent, char const *url,
 	child->url = pstrndup(url, name - url + namelen);
 	child->path = inherit_path(parent->path, name, namelen);
 	child->name = child->url + (name - url);
+	child->flags = CNF_FREE_URL | CNF_FREE_PATH;
 	if ((parent->flags & RSYNC_INHERIT) == RSYNC_INHERIT)
-		child->flags = RSYNC_INHERIT;
-	if (parent->tmppath && !(parent->flags & CNF_RSYNC))
+		child->flags |= RSYNC_INHERIT;
+	if (parent->tmppath && !(parent->flags & CNF_RSYNC)) {
 		child->tmppath = inherit_path(parent->tmppath, name, namelen);
+		child->flags |= CNF_FREE_TMPPATH;
+	}
 	child->parent = parent;
 	HASH_ADD_KEYPTR(hh, parent->children, child->name, namelen, child);
 
@@ -196,9 +211,12 @@ __delete_node(struct cache_node *node)
 
 	if (node->parent != NULL)
 		HASH_DEL(node->parent->children, node);
-	free(node->url);
-	free(node->path);
-	free(node->tmppath);
+	if (node->flags & CNF_FREE_URL)
+		free(node->url);
+	if (node->flags & CNF_FREE_PATH)
+		free(node->path);
+	if (node->flags & CNF_FREE_TMPPATH)
+		free(node->tmppath);
 	free(node);
 
 	return valid;
@@ -246,7 +264,6 @@ print_node(struct cache_node *node, unsigned int tabs)
 	printf("%s", (node->flags & CNF_RSYNC) ? "rsync " : "");
 	printf("%s", (node->flags & CNF_CACHED) ? "cached " : "");
 	printf("%s", (node->flags & CNF_FRESH) ? "fresh " : "");
-	printf("%s", (node->flags & CNF_CHANGED) ? "changed " : "");
 	printf("%s", (node->flags & CNF_TOUCHED) ? "touched " : "");
 	printf("%s", (node->flags & CNF_VALID) ? "valid " : "");
 	printf("%s", (node->flags & CNF_NOTIFICATION) ? "notification " : "");

@@ -21,11 +21,6 @@
  * "Allegedly" because we might have rsync'd an ancestor.
  */
 #define CNF_FRESH		(1 << 2)
-/*
- * Did it change between the previous cycle and the current one?
- * (This is HTTP and RRDP only; rsync doesn't tell us.)
- */
-#define CNF_CHANGED		(1 << 3)
 /* Was it read during the current cycle? */
 #define CNF_TOUCHED		(1 << 4)
 /*
@@ -40,6 +35,10 @@
 #define CNF_NOTIFICATION	(1 << 6)
 /* Withdrawn by RRDP? */
 #define CNF_WITHDRAWN		(1 << 7)
+
+#define CNF_FREE_URL		(1 << 8)
+#define CNF_FREE_PATH		(1 << 9)
+#define CNF_FREE_TMPPATH	(1 << 10)
 
 /*
  * Flags for children of downloaded rsync nodes that should be cleaned later.
@@ -67,7 +66,7 @@ struct cache_node {
 	char *tmppath;		/* path/to/cache/tmp/1234 */
 
 	/* Only if flags & CNF_NOTIFICATION */
-	struct cachefile_notification notif;
+	struct cachefile_notification rrdp;
 
 	struct cache_node *parent;	/* Tree parent */
 	struct cache_node *children;	/* Tree children */
@@ -75,7 +74,8 @@ struct cache_node {
 	UT_hash_handle hh;		/* Hash table hook */
 };
 
-struct cache_node *cachent_create_root(bool);
+struct cache_node *cachent_root_rsync(void);
+struct cache_node *cachent_root_https(void);
 
 int cachent_traverse(struct cache_node *, bool (*cb)(struct cache_node *));
 

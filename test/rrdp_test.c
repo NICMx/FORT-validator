@@ -5,6 +5,7 @@
 #include "alloc.c"
 #include "base64.c"
 #include "cachent.c"
+#include "cachetmp.c"
 #include "common.c"
 #include "file.c"
 #include "hash.c"
@@ -17,32 +18,17 @@
 
 /* Mocks */
 
-int
-cache_tmpfile(char **filename)
-{
-	static unsigned int file_counter = 0;
-	char *result;
-	int written;
-
-	result = pmalloc(10);
-	written = snprintf(result, 10, "tmp/%u", file_counter++);
-	ck_assert(4 < written && written < 10);
-
-	*filename = result;
-	return 0;
-}
-
 MOCK_VOID(fnstack_push, char const *file)
 MOCK_VOID(fnstack_pop, void)
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
-MOCK_UINT(config_get_rrdp_delta_threshold, 5, void)
 MOCK_ABORT_INT(http_download, char const *url, char const *path, curl_off_t ims,
     bool *changed)
 
 /* Mocks end */
 
 static void
-ck_rrdp_session(char const *session, char const *serial, struct rrdp_session *actual)
+ck_rrdp_session(char const *session, char const *serial,
+    struct rrdp_session *actual)
 {
 	BIGNUM *bn;
 
@@ -398,7 +384,8 @@ init_regular_notif(struct update_notification *notif, unsigned long serial, ...)
 }
 
 static void
-validate_cachefile_notif(struct cachefile_notification *notif, unsigned long __serial, ...)
+validate_cachefile_notif(struct cachefile_notification *notif,
+    unsigned long __serial, ...)
 {
 	struct rrdp_serial serial;
 	va_list args;
@@ -465,27 +452,16 @@ START_TEST(test_update_notif)
 }
 END_TEST
 
-static void
-init_map(struct cache_node *map, char *url, char *path)
-{
-	memset(map, 0, sizeof(*map));
-
-	map->url = url;
-	map->path = path;
-	map->tmppath = path;
-	map->name = strrchr(path, '/') + 1;
-}
-
 START_TEST(test_parse_notification_ok)
 {
-	struct cache_node map;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	init_map(&map, "https://host/notification.xml", "resources/rrdp/notif-ok.xml");
-	ck_assert_int_eq(0, parse_notification(&map, &notif));
+	ck_assert_int_eq(0, parse_notification("https://host/notification.xml",
+	    "resources/rrdp/notif-ok.xml", &notif));
 
-	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
+	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28",
+	    (char const *)notif.session.session_id);
 	ck_assert_str_eq("3", (char const *)notif.session.serial.str);
 
 	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri);
@@ -495,12 +471,14 @@ START_TEST(test_parse_notification_ok)
 	ck_assert_uint_eq(2, notif.deltas.len);
 
 	ck_assert_str_eq("2", (char const *)notif.deltas.array[0].serial.str);
-	ck_assert_str_eq("https://host/9d-8/2/delta.xml", notif.deltas.array[0].meta.uri);
+	ck_assert_str_eq("https://host/9d-8/2/delta.xml",
+	    notif.deltas.array[0].meta.uri);
 	ck_assert_uint_eq(32, notif.deltas.array[0].meta.hash_len);
 	validate_01234_hash(notif.deltas.array[0].meta.hash);
 
 	ck_assert_str_eq("3", (char const *)notif.deltas.array[1].serial.str);
-	ck_assert_str_eq("https://host/9d-8/3/delta.xml", notif.deltas.array[1].meta.uri);
+	ck_assert_str_eq("https://host/9d-8/3/delta.xml",
+	    notif.deltas.array[1].meta.uri);
 	ck_assert_uint_eq(32, notif.deltas.array[1].meta.hash_len);
 	validate_01234_hash(notif.deltas.array[0].meta.hash);
 
@@ -511,14 +489,14 @@ END_TEST
 
 START_TEST(test_parse_notification_0deltas)
 {
-	struct cache_node map;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	init_map(&map, "https://host/notification.xml", "resources/rrdp/notif-0deltas.xml");
-	ck_assert_int_eq(0, parse_notification(&map, &notif));
+	ck_assert_int_eq(0, parse_notification("https://host/notification.xml",
+	    "resources/rrdp/notif-0deltas.xml", &notif));
 
-	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
+	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28",
+	    (char const *)notif.session.session_id);
 	ck_assert_str_eq("3", (char const *)notif.session.serial.str);
 
 	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri);
@@ -538,17 +516,19 @@ START_TEST(test_parse_notification_large_serial)
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	init_map(&map, "https://host/notification.xml", "resources/rrdp/notif-large-serial.xml");
-	ck_assert_int_eq(0, parse_notification(&map, &notif));
+	ck_assert_int_eq(0, parse_notification("https://host/notification.xml",
+	    "resources/rrdp/notif-large-serial.xml", &notif));
 
-	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28", (char const *)notif.session.session_id);
+	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28",
+	    (char const *)notif.session.session_id);
 	/*
 	 * This seems to be the largest positive integer libxml2 supports,
 	 * at least by default. It's significantly larger than 2^64.
 	 * It's not as many digits as I was expecting though.
 	 * Maybe research if it's possible to increase it further.
 	 */
-	ck_assert_str_eq("999999999999999999999999", (char const *)notif.session.serial.str);
+	ck_assert_str_eq("999999999999999999999999",
+	    (char const *)notif.session.serial.str);
 
 	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri);
 	ck_assert_uint_eq(32, notif.snapshot.hash_len);
@@ -564,12 +544,11 @@ END_TEST
 static void
 test_parse_notification_error(char *file)
 {
-	struct cache_node map;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	init_map(&map, "https://host/notification.xml", file);
-	ck_assert_int_eq(-EINVAL, parse_notification(&map, &notif));
+	ck_assert_int_eq(-EINVAL,
+	    parse_notification("https://host/notification.xml", file, &notif));
 
 	relax_ng_cleanup();
 }

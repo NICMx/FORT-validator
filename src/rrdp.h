@@ -31,6 +31,7 @@ struct rrdp_hash {
  */
 struct cachefile_notification {
 	struct rrdp_session session;
+	struct cache_node *subtree;
 	/*
 	 * The 1st one contains the hash of the session.serial delta.
 	 * The 2nd one contains the hash of the session.serial - 1 delta.

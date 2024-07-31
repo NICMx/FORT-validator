@@ -3,9 +3,15 @@
 #include "alloc.c"
 #include "base64.c"
 #include "cachent.c"
+#include "cachetmp.c"
+#include "cache_util.c"
 #include "common.c"
+#include "file.c"
+#include "hash.c"
 #include "json_util.c"
 #include "mock.c"
+#include "mock_https.c"
+#include "relax_ng.c"
 #include "rrdp.c"
 #include "types/path.c"
 #include "types/url.c"
@@ -14,58 +20,40 @@
 
 MOCK_VOID(fnstack_push, char const *file)
 MOCK_VOID(fnstack_pop, void)
-MOCK_UINT(config_get_rrdp_delta_threshold, 5, void)
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
-MOCK(hash_get_sha256, struct hash_algorithm const *, NULL, void)
-MOCK_INT(hash_validate_file, 0, struct hash_algorithm const *algorithm,
-    char const *path, unsigned char const *expected, size_t expected_len)
-MOCK_INT(file_write_full, 0, char const *path, unsigned char *content,
-    size_t content_len)
 
-int
-cache_tmpfile(char **filename)
+/* Utils */
+
+static void
+setup_test(void)
 {
-	*filename = pstrdup("tmp/a");
-	return 0;
+	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	ck_assert_int_eq(0, system("mkdir -p tmp/rsync tmp/https tmp/tmp"));
+	ck_assert_int_eq(0, hash_setup());
+	ck_assert_int_eq(0, relax_ng_init());
 }
 
-int
-http_download(char const *url, char const *path, curl_off_t ims, bool *changed)
+static void
+cleanup_test(void)
 {
-	printf("http_download(): %s -> %s\n", url, path);
-	if (changed)
-		*changed = true;
-	return 0;
+//	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	hash_teardown();
+	relax_ng_cleanup();
 }
 
-static char const *dls[8];
-static unsigned int d;
-
-int
-relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
+static void
+ck_file(char const *path)
 {
-	xmlTextReaderPtr reader;
-	int read;
+	FILE *file;
+	char buffer[8] = { 0 };
 
-	/* TODO (warning) "XML_CHAR_ENCODING_NONE" */
-	reader = xmlReaderForMemory(dls[d], strlen(dls[d]), path, "UTF-8", 0);
-	if (reader == NULL)
-		return pr_val_err("Unable to open %s (Cause unavailable).", path);
-	d++;
-
-	while ((read = xmlTextReaderRead(reader)) == 1) {
-//		ck_assert_int_eq(1, xmlTextReaderIsValid(reader));
-		ck_assert_int_eq(0, cb(reader, arg));
-	}
-
-	ck_assert_int_eq(read, 0);
-//	ck_assert_int_eq(1, xmlTextReaderIsValid(reader));
-
-	xmlFreeTextReader(reader);
-	return 0;
+	file = fopen(path, "rb");
+	ck_assert_ptr_ne(NULL, file);
+	ck_assert_int_eq(5, fread(buffer, 1, 8, file));
+	ck_assert_int_ne(0, feof(file));
+	ck_assert_int_eq(0, fclose(file));
+	ck_assert_str_eq("Fort\n", buffer);
 }
-
-/* Tests */
 
 #define NHDR(serial) "<notification "					\
 		"xmlns=\"http://www.ripe.net/rpki/rrdp\" "		\
@@ -84,23 +72,58 @@ relax_ng_parse(const char *path, xml_read_cb cb, void *arg)
 
 #define PBLSH(u, c) "<publish uri=\"" u "\">" c "</publish>"
 
+/* Tests */
+
 START_TEST(startup)
 {
+#define NOTIF_PATH "tmp/https/host/notification.xml"
 	struct cache_node notif;
+
+	setup_test();
 
 	memset(&notif, 0, sizeof(notif));
 	notif.url = "https://host/notification.xml";
-	notif.path = "tmp/https/host/notification.xml";
+	notif.path = NOTIF_PATH;
 	notif.name = "notification.xml";
 
 	dls[0] = NHDR("3")
-		NSS("https://host/9d-8/3/snapshot.xml", "0123456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD")
+		NSS("https://host/9d-8/3/snapshot.xml", "0c84fb949e7b5379ae091b86c41bb1a33cb91636b154b86ad1b1dedd44651a25")
 		NTAIL;
-	dls[1] = SHDR("3") PBLSH("rsync://a/b/c.cer", "Rm9ydA==") STAIL;
+	dls[1] = SHDR("3") PBLSH("rsync://a/b/c.cer", "Rm9ydAo=") STAIL;
 	dls[2] = NULL;
-	d = 0;
+	https_counter = 0;
 
 	ck_assert_int_eq(0, rrdp_update(&notif));
+	ck_assert_uint_eq(2, https_counter);
+	ck_file("tmp/tmp/0/a/b/c.cer");
+	ck_assert_cachent_eq(
+		ruftnode("rsync://", NOTIF_PATH, 0, "tmp/tmp/0",
+			ruftnode("rsync://a", NOTIF_PATH "/a", 0, "tmp/tmp/0/a",
+				ruftnode("rsync://a/b", NOTIF_PATH "/a/b", 0, "tmp/tmp/0/a/b",
+					ruftnode("rsync://a/b/c.cer", NOTIF_PATH "/a/b/c.cer", 0, "tmp/tmp/0/a/b/c.cer", NULL),
+					NULL),
+				NULL),
+			NULL),
+		notif.rrdp.subtree
+	);
+
+	dls[1] = NULL;
+	https_counter = 0;
+	ck_assert_int_eq(0, rrdp_update(&notif));
+	ck_assert_uint_eq(1, https_counter);
+	ck_file("tmp/tmp/0/a/b/c.cer");
+	ck_assert_cachent_eq(
+		ruftnode("rsync://", NOTIF_PATH, 0, "tmp/tmp/0",
+			ruftnode("rsync://a", NOTIF_PATH "/a", 0, "tmp/tmp/0/a",
+				ruftnode("rsync://a/b", NOTIF_PATH "/a/b", 0, "tmp/tmp/0/a/b",
+					ruftnode("rsync://a/b/c.cer", NOTIF_PATH "/a/b/c.cer", 0, "tmp/tmp/0/a/b/c.cer", NULL),
+					NULL),
+				NULL),
+			NULL),
+		notif.rrdp.subtree
+	);
+
+	cleanup_test();
 }
 END_TEST
 

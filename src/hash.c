@@ -163,6 +163,8 @@ hash_validate_file(struct hash_algorithm const *algorithm, char const *path,
 	size_t actual_len;
 	int error;
 
+	pr_val_debug("Validating file hash: %s", path);
+
 	error = hash_file(algorithm, path, actual, &actual_len);
 	if (error)
 		return error;

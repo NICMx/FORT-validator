@@ -11,6 +11,7 @@ fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
 fort_SOURCES += base64.h base64.c
 fort_SOURCES += cache.c cache.h
 fort_SOURCES += cachent.c cachent.h
+fort_SOURCES += cachetmp.c cachetmp.h
 fort_SOURCES += certificate_refs.h certificate_refs.c
 fort_SOURCES += cert_stack.h cert_stack.c
 fort_SOURCES += common.c common.h

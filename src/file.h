@@ -25,7 +25,7 @@ struct file_contents {
 
 int file_open(char const *, FILE **, struct stat *);
 int file_write(char const *, char const *, FILE **);
-int file_write_full(char const *, unsigned char *, size_t);
+int file_write_full(char const *, unsigned char const *, size_t);
 void file_close(FILE *);
 
 int file_load(char const *, struct file_contents *, bool);

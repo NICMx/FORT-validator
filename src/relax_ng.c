@@ -56,7 +56,7 @@ relax_ng_init(void)
 
 	xmlInitParser();
 
-	rngparser = xmlRelaxNGNewMemParserCtxt(RRDP_V1_RNG, RRDP_V1_RNG_SIZE);
+	rngparser = xmlRelaxNGNewMemParserCtxt(RRDP_V1_RNG, strlen(RRDP_V1_RNG));
 	if (rngparser == NULL) {
 		error = pr_op_err("XML parser init error: xmlRelaxNGNewMemParserCtxt() returned NULL");
 		goto cleanup_parser;
