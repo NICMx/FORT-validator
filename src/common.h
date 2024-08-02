@@ -10,10 +10,6 @@
 #define ENOTSUPPORTED 3172
 /* "I haven't implemented this yet." */
 #define ENOTIMPLEMENTED 3173
-/* "URI was not RSYNC." */
-#define ENOTRSYNC 3174
-/* "URI was not HTTPS." */
-#define ENOTHTTPS 3175
 
 /*
  * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
@@ -52,6 +48,7 @@ bool valid_file_or_dir(char const *, bool);
 int mkdir_p(char const *, bool, mode_t);
 int delete_dir_recursive_bottom_up(char const *);
 
-int get_current_time(time_t *);
+time_t time_nonfatal(void);
+time_t time_fatal(void);
 
 #endif /* SRC_RTR_COMMON_H_ */

@@ -42,7 +42,7 @@ STATIC_ARRAY_LIST(serial_numbers, struct serial_number)
  * Cached certificate data.
  */
 struct metadata_node {
-	struct cache_mapping *map;
+	struct cache_mapping map;
 	struct resources *resources;
 	/*
 	 * Serial numbers of the children.
@@ -121,7 +121,6 @@ defer_destroy(struct defer_node *defer)
 	case DNT_SEPARATOR:
 		break;
 	case DNT_CERT:
-		map_refput(defer->deferred.map);
 		rpp_refput(defer->deferred.pp);
 		break;
 	}
@@ -139,7 +138,6 @@ serial_cleanup(struct serial_number *serial)
 static void
 meta_destroy(struct metadata_node *meta)
 {
-	map_refput(meta->map);
 	resources_destroy(meta->resources);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	free(meta);
@@ -185,7 +183,6 @@ deferstack_push(struct cert_stack *stack, struct deferred_cert *deferred)
 
 	node->type = DNT_CERT;
 	node->deferred = *deferred;
-	map_refget(deferred->map);
 	rpp_refget(deferred->pp);
 	SLIST_INSERT_HEAD(&stack->defers, node, next);
 }
@@ -229,7 +226,6 @@ again:	node = SLIST_FIRST(&stack->defers);
 	}
 
 	*result = node->deferred;
-	map_refget(node->deferred.map);
 	rpp_refget(node->deferred.pp);
 
 	SLIST_REMOVE_HEAD(&stack->defers, next);
@@ -299,7 +295,7 @@ x509stack_push(struct cert_stack *stack, struct cache_mapping *map, X509 *x509,
 
 	meta = pmalloc(sizeof(struct metadata_node));
 
-	meta->map = map_refget(map);
+	meta->map = *map;
 	serial_numbers_init(&meta->serials);
 
 	error = init_resources(x509, policy, type, &meta->resources);
@@ -325,7 +321,6 @@ destroy_separator:
 	resources_destroy(meta->resources);
 cleanup_serial:
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
-	map_refput(meta->map);
 	free(meta);
 	return error;
 }
@@ -362,7 +357,7 @@ struct cache_mapping *
 x509stack_peek_map(struct cert_stack *stack)
 {
 	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
-	return (meta != NULL) ? meta->map : NULL;
+	return (meta != NULL) ? &meta->map : NULL;
 }
 
 struct resources *

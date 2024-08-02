@@ -29,7 +29,7 @@ check_PROGRAMS += db_table.test
 check_PROGRAMS += deltas_array.test
 check_PROGRAMS += hash.test
 check_PROGRAMS += json_util.test
-check_PROGRAMS += map.test
+check_PROGRAMS += mft.test
 check_PROGRAMS += path.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += pdu_stream.test
@@ -71,8 +71,8 @@ hash_test_LDADD = ${MY_LDADD}
 json_util_test_SOURCES = json_util_test.c
 json_util_test_LDADD = ${MY_LDADD}
 
-map_test_SOURCES = types/map_test.c
-map_test_LDADD = ${MY_LDADD}
+mft_test_SOURCES = object/manifest_test.c
+mft_test_LDADD = ${MY_LDADD}
 
 path_test_SOURCES = types/path_test.c
 path_test_LDADD = ${MY_LDADD}

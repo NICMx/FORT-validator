@@ -78,10 +78,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 		    TM_ARGS(nextUpdate));
 	}
 
-	now_tt = 0;
-	error = get_current_time(&now_tt);
-	if (error)
-		return error;
+	now_tt = time_fatal();
 	if (gmtime_r(&now_tt, &now) == NULL) {
 		error = errno;
 		return pr_val_err("gmtime_r(now) error %d: %s", error,
@@ -211,74 +208,74 @@ validate_mft_file(IA5String_t *ia5)
 	return 0;
 }
 
-/**
- * Computes the hash of the file @map, and compares it to @expected (The
- * "expected" hash).
- *
- * Returns:
- *   0 if no errors happened and the hashes match, or the hash doesn't match
- *     but there's an incidence to ignore such error.
- * < 0 if there was an error that can't be ignored.
- * > 0 if there was an error but it can be ignored (file not found and there's
- *     an incidence to ignore this).
- */
-static int
-hash_validate_mft_file(struct cache_mapping *map, BIT_STRING_t const *expected)
-{
-	struct hash_algorithm const *algorithm;
-	size_t hash_size;
-	unsigned char actual[EVP_MAX_MD_SIZE];
-	int error;
-
-	algorithm = hash_get_sha256();
-	hash_size = hash_get_size(algorithm);
-
-	if (expected->size != hash_size)
-		return pr_val_err("%s string has bogus size: %zu",
-		    hash_get_name(algorithm), expected->size);
-	if (expected->bits_unused != 0)
-		return pr_val_err("Hash string has unused bits.");
-
-	/*
-	 * TODO (#82) This is atrocious. Implement RFC 9286, and probably reuse
-	 * hash_validate_file().
-	 */
-
-	error = hash_file(algorithm, map_get_path(map), actual, NULL);
-	if (error) {
-		if (error == EACCES || error == ENOENT) {
-			/* FIXME .................. */
-			if (incidence(INID_MFT_FILE_NOT_FOUND,
-			    "File '%s' listed at manifest doesn't exist.",
-			    map_val_get_printable(map)))
-				return -EINVAL;
-
-			return error;
-		}
-		/* Any other error (crypto, file read) */
-		return ENSURE_NEGATIVE(error);
-	}
-
-	if (memcmp(expected->buf, actual, hash_size) != 0) {
-		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
-		    "File '%s' does not match its manifest hash.",
-		    map_val_get_printable(map));
-	}
-
-	return 0;
-}
+///**
+// * Computes the hash of the file @map, and compares it to @expected (The
+// * "expected" hash).
+// *
+// * Returns:
+// *   0 if no errors happened and the hashes match, or the hash doesn't match
+// *     but there's an incidence to ignore such error.
+// * < 0 if there was an error that can't be ignored.
+// * > 0 if there was an error but it can be ignored (file not found and there's
+// *     an incidence to ignore this).
+// */
+//static int
+//hash_validate_mft_file(struct cache_mapping *map, BIT_STRING_t const *expected)
+//{
+//	struct hash_algorithm const *algorithm;
+//	size_t hash_size;
+//	unsigned char actual[EVP_MAX_MD_SIZE];
+//	int error;
+//
+//	algorithm = hash_get_sha256();
+//	hash_size = hash_get_size(algorithm);
+//
+//	if (expected->size != hash_size)
+//		return pr_val_err("%s string has bogus size: %zu",
+//		    hash_get_name(algorithm), expected->size);
+//	if (expected->bits_unused != 0)
+//		return pr_val_err("Hash string has unused bits.");
+//
+//	/*
+//	 * TODO (#82) This is atrocious. Implement RFC 9286, and probably reuse
+//	 * hash_validate_file().
+//	 */
+//
+//	error = hash_file(algorithm, map_get_path(map), actual, NULL);
+//	if (error) {
+//		if (error == EACCES || error == ENOENT) {
+//			/* FIXME .................. */
+//			if (incidence(INID_MFT_FILE_NOT_FOUND,
+//			    "File '%s' listed at manifest doesn't exist.",
+//			    map_val_get_printable(map)))
+//				return -EINVAL;
+//
+//			return error;
+//		}
+//		/* Any other error (crypto, file read) */
+//		return ENSURE_NEGATIVE(error);
+//	}
+//
+//	if (memcmp(expected->buf, actual, hash_size) != 0) {
+//		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
+//		    "File '%s' does not match its manifest hash.",
+//		    map_val_get_printable(map));
+//	}
+//
+//	return 0;
+//}
 
 static int
 build_rpp(struct Manifest *mft, char const *mft_url, struct rpp **pp)
 {
-	char *path, *slash;
-	size_t path_len;
+	char *rpp_url, *slash;
+	size_t rpp_url_len;
 	int i;
 	struct FileAndHash *fah;
-	char *file;
-	size_t file_len;
+	char *file_url;
+	size_t file_url_len;
 	int written;
-	struct cache_mapping *map;
+	char const *extension;
 	int error;
 
 	*pp = rpp_create();
@@ -286,8 +283,8 @@ build_rpp(struct Manifest *mft, char const *mft_url, struct rpp **pp)
 	slash = strrchr(mft_url, '/');
 	if (!slash)
 		; // XXX
-	path_len = slash - mft_url;
-	path = pstrndup(mft_url, path_len);
+	rpp_url_len = slash - mft_url;
+	rpp_url = pstrndup(mft_url, rpp_url_len);
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
@@ -302,54 +299,50 @@ build_rpp(struct Manifest *mft, char const *mft_url, struct rpp **pp)
 		if (error)
 			; // XXX
 
-		file_len = path_len + fah->file.size + 2;
-		file = pmalloc(file_len);
-		written = snprintf(file, file_len, "%s/%.*s", path,
+		file_url_len = rpp_url_len + fah->file.size + 2;
+		file_url = pmalloc(file_url_len);
+		written = snprintf(file_url, file_url_len, "%s/%.*s", rpp_url,
 		    (int)fah->file.size, fah->file.buf);
-		if (written >= file_len)
+		if (written >= file_url_len)
 			; // XXX
 
-		map = create_map(file); /* Needs to swallow @file. */
-		if (!map)
-			; // XXX
+//		/*
+//		 * XXX I think this should be moved somewhere else.
+//		 *
+//		 * Expect:
+//		 * - Negative value: an error not to be ignored, the whole
+//		 *   manifest will be discarded.
+//		 * - Zero value: hash at manifest matches file's hash, or it
+//		 *   doesn't match its hash but there's an incidence to ignore
+//		 *   such error.
+//		 * - Positive value: file doesn't exist and keep validating
+//		 *   manifest.
+//		 */
+//		error = hash_validate_mft_file(map, &fah->hash);
+//		if (error < 0) {
+//			free(file_url);
+//			goto fail;
+//		}
+//		if (error > 0) {
+//			free(file_url);
+//			continue;
+//		}
 
-		/*
-		 * XXX I think this should be moved somewhere else.
-		 *
-		 * Expect:
-		 * - Negative value: an error not to be ignored, the whole
-		 *   manifest will be discarded.
-		 * - Zero value: hash at manifest matches file's hash, or it
-		 *   doesn't match its hash but there's an incidence to ignore
-		 *   such error.
-		 * - Positive value: file doesn't exist and keep validating
-		 *   manifest.
-		 */
-		error = hash_validate_mft_file(map, &fah->hash);
-		if (error < 0) {
-			map_refput(map);
-			goto fail;
-		}
-		if (error > 0) {
-			map_refput(map);
-			continue;
-		}
-
-		if (map_has_extension(map, ".cer"))
-			rpp_add_cert(*pp, map);
-		else if (map_has_extension(map, ".roa"))
-			rpp_add_roa(*pp, map);
-		else if (map_has_extension(map, ".crl"))
-			error = rpp_add_crl(*pp, map);
-		else if (map_has_extension(map, ".gbr"))
-			rpp_add_ghostbusters(*pp, map);
+		extension = ((char const *)fah->file.buf) + fah->file.size - 4;
+		if (strcmp(extension, ".cer") == 0)
+			rpp_add_cert(*pp, file_url);
+		else if (strcmp(extension, ".roa") == 0)
+			rpp_add_roa(*pp, file_url);
+		else if (strcmp(extension, ".crl") == 0) {
+			error = rpp_add_crl(*pp, file_url);
+			if (error) {
+				free(file_url);
+				goto fail;
+			}
+		} else if (strcmp(extension, ".gbr") == 0)
+			rpp_add_ghostbusters(*pp, file_url);
 		else
-			map_refput(map); /* ignore it. */
-
-		if (error) {
-			map_refput(map);
-			goto fail;
-		} /* Otherwise ownership was transferred to @pp. */
+			free(file_url); /* ignore it. */
 	}
 
 	/* rfc6486#section-7 */
@@ -370,9 +363,8 @@ fail:
  * @pp.
  */
 int
-handle_manifest(char const *uri, struct rpp **pp)
+handle_manifest(struct cache_mapping *map, struct rpp **pp)
 {
-	struct cache_mapping *map;
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
 	struct signed_object sobj;
@@ -381,16 +373,12 @@ handle_manifest(char const *uri, struct rpp **pp)
 	STACK_OF(X509_CRL) *crl;
 	int error;
 
-	map = create_map(uri);
-	if (!map)
-		return -EINVAL; /* XXX msg */
-
 	/* Prepare */
 	pr_val_debug("Manifest '%s' {", map_val_get_printable(map));
 	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map);
+	error = signed_object_decode(&sobj, map->path);
 	if (error)
 		goto revert_log;
 	error = decode_manifest(&sobj, &mft);
@@ -398,7 +386,7 @@ handle_manifest(char const *uri, struct rpp **pp)
 		goto revert_sobj;
 
 	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, uri, pp);
+	error = build_rpp(mft, map->url, pp);
 	if (error)
 		goto revert_manifest;
 
@@ -415,7 +403,7 @@ handle_manifest(char const *uri, struct rpp **pp)
 	error = validate_manifest(mft);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&ee.refs, *pp, map);
+	error = refs_validate_ee(&ee.refs, *pp, map->url);
 	if (error)
 		goto revert_args;
 
@@ -434,6 +422,5 @@ revert_sobj:
 revert_log:
 	pr_val_debug("}");
 	fnstack_pop();
-	map_refput(map);
 	return error;
 }

@@ -1,7 +1,7 @@
 #ifndef SRC_CACHE_LOCAL_CACHE_H_
 #define SRC_CACHE_LOCAL_CACHE_H_
 
-#include "cachent.h"
+#include "types/map.h"
 #include "types/str.h"
 
 void cache_setup(void);		/* Init this module */
@@ -26,12 +26,10 @@ void sias_cleanup(struct sia_uris *);
  * - 0 on success ("Mapping handled successfully")
  * - > 0 on soft errors ("Try another mapping")
  * - < 0 on hard errors ("Abandon foreach")
- *
- * XXX rename
  */
-typedef int (*maps_dl_cb)(struct cache_node *rpp, void *arg);
-int cache_download_uri(struct strlist *, maps_dl_cb, void *);
-int cache_download_alt(struct sia_uris *, maps_dl_cb, void *);
+typedef int (*validate_cb)(struct cache_mapping *, void *);
+int cache_download_uri(struct strlist *, validate_cb, void *);
+int cache_download_alt(struct sia_uris *, validate_cb, void *);
 
 void cache_print(void); /* Dump cache in stdout. Recursive; tests only */
 

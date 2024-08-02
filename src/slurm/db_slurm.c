@@ -101,11 +101,7 @@ db_slurm_create(struct slurm_csum_list *csums, struct db_slurm **result)
 
 	db = pmalloc(sizeof(struct db_slurm));
 
-	error = get_current_time(&db->loaded_date);
-	if (error) {
-		free(db);
-		return error;
-	}
+	db->loaded_date = time_nonfatal();
 
 	/* Not ready yet (nor required yet) for multithreading */
 	al_filter_prefix_init(&db->lists.filter_pfx_al);

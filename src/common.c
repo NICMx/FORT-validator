@@ -383,20 +383,28 @@ release_str:
 	return error;
 }
 
-int
-get_current_time(time_t *result)
+time_t
+time_nonfatal(void)
 {
-	time_t now;
-	int error;
+	time_t result;
 
-	now = time(NULL);
-	if (now == ((time_t) -1)) {
-		error = errno;
-		pr_val_err("Error getting the current time: %s",
-		    strerror(errno));
-		return error;
+	result = time(NULL);
+	if (result == ((time_t)-1)) {
+		pr_val_warn("time(NULL) returned -1: %s", strerror(errno));
+		result = 0;
 	}
 
-	*result = now;
-	return 0;
+	return result;
+}
+
+time_t
+time_fatal(void)
+{
+	time_t result;
+
+	result = time(NULL);
+	if (result == ((time_t)-1))
+		pr_crit("time(NULL) returned -1: %s", strerror(errno));
+
+	return result;
 }

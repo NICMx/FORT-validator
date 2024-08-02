@@ -77,7 +77,7 @@ struct cache_node {
 struct cache_node *cachent_root_rsync(void);
 struct cache_node *cachent_root_https(void);
 
-int cachent_traverse(struct cache_node *, bool (*cb)(struct cache_node *));
+void cachent_traverse(struct cache_node *, bool (*cb)(struct cache_node *));
 
 struct cache_node *cachent_find(struct cache_node *, char const *,
     struct cache_node **);

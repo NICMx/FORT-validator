@@ -31,7 +31,7 @@
 struct cert_stack;
 
 struct deferred_cert {
-	struct cache_mapping *map;
+	struct cache_mapping map;
 	struct rpp *pp;
 };
 

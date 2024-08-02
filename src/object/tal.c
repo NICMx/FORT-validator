@@ -21,8 +21,6 @@
 #include "types/str.h"
 #include "validation_handler.h"
 
-typedef int (*foreach_map_cb)(struct tal *, struct cache_mapping *, void *);
-
 struct tal {
 	char const *file_name;
 	struct strlist urls;
@@ -164,38 +162,39 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 }
 
 /**
- * Performs the whole validation walkthrough on the @map mapping, which is
- * assumed to have been extracted from TAL @tal.
+ * Performs the whole validation walkthrough that starts with Trust Anchor @ta,
+ * which is assumed to have been extracted from TAL @arg->tal.
  */
 static int
-handle_tal_map(struct tal *tal, struct cache_mapping *map, struct db_table *db)
+handle_ta(struct cache_mapping *ta, void *arg)
 {
+	struct handle_tal_args *args = arg;
 	struct validation_handler validation_handler;
 	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
 	int error;
 
-	pr_val_debug("TAL URI '%s' {", map_val_get_printable(map));
+	pr_val_debug("TAL URI '%s' {", map_val_get_printable(ta));
 
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
-	validation_handler.arg = db;
+	validation_handler.arg = args->db;
 
-	error = validation_prepare(&state, tal, &validation_handler);
+	error = validation_prepare(&state, &args->tal, &validation_handler);
 	if (error)
 		return ENSURE_NEGATIVE(error);
 
-	if (!map_has_extension(map, ".cer")) {
+	if (!str_ends_with(ta->url, ".cer")) {
 		pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
-		    map_op_get_printable(map));
+		    ta->url);
 		error = EINVAL;
 		goto end;
 	}
 
 	/* Handle root certificate. */
-	error = certificate_traverse(NULL, map);
+	error = certificate_traverse(NULL, ta);
 	if (error) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:
@@ -233,22 +232,14 @@ handle_tal_map(struct tal *tal, struct cache_mapping *map, struct db_table *db)
 		 * Ignore result code; remaining certificates are unrelated,
 		 * so they should not be affected.
 		 */
-		certificate_traverse(deferred.pp, deferred.map);
+		certificate_traverse(deferred.pp, &deferred.map);
 
-		map_refput(deferred.map);
 		rpp_refput(deferred.pp);
 	} while (true);
 
 end:	validation_destroy(state);
 	pr_val_debug("}");
 	return error;
-}
-
-static int
-__handle_tal_map(struct cache_mapping *map, void *arg)
-{
-	struct handle_tal_args *args = arg;
-	return handle_tal_map(&args->tal, map, args->db);
 }
 
 static void *
@@ -268,8 +259,7 @@ do_file_validation(void *arg)
 		goto end;
 
 	args.db = db_table_create();
-	thread->error = cache_download_uri(&args.tal.urls,
-	    __handle_tal_map, &args);
+	thread->error = cache_download_uri(&args.tal.urls, handle_ta, &args);
 	if (thread->error) {
 		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
 		    thread->tal_file);

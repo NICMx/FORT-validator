@@ -6,16 +6,13 @@
 
 void ck_assert_cachent_eq(struct cache_node *, struct cache_node *);
 
-struct cache_node *vcreate_node(char const *, char const *, int, char const *, va_list);
+struct cache_node *rftnode(char const *, char const *, int, char const *, ...);
+struct cache_node *rfnode(char const *, char const *, int, ...);
+struct cache_node *rnode(char const *, char const *, ...);
 
-// XXX Rename ?
-struct cache_node *ruftnode(char const *, char const *, int, char const *, ...);
-struct cache_node *rufnode(char const *, char const *, int, ...);
-struct cache_node *runode(char const *, char const *, ...);
-
-struct cache_node *huftnode(char const *, char const *, int, char const *, ...);
-struct cache_node *hufnode(char const *, char const *, int, ...);
-struct cache_node *hunode(char const *, char const *, ...);
+struct cache_node *hftnode(char const *, char const *, int, char const *, ...);
+struct cache_node *hfnode(char const *, char const *, int, ...);
+struct cache_node *hnode(char const *, char const *, ...);
 
 /* rsync offset to url + path */
 #define RO2UP(offset) "rsync://" offset, "tmp/rsync/" offset

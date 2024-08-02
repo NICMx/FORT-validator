@@ -40,6 +40,6 @@ void refs_init(struct certificate_refs *);
 void refs_cleanup(struct certificate_refs *);
 int refs_validate_ca(struct certificate_refs *, struct rpp const *);
 int refs_validate_ee(struct certificate_refs *, struct rpp const *,
-    struct cache_mapping *);
+    char const *);
 
 #endif /* SRC_CERTIFICATE_REFS_H_ */

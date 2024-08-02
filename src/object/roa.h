@@ -2,7 +2,6 @@
 #define SRC_OBJECT_ROA_H_
 
 #include "rpp.h"
-#include "types/address.h"
 #include "types/map.h"
 
 int roa_traverse(struct cache_mapping *, struct rpp *);

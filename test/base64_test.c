@@ -4,6 +4,7 @@
 #include "base64.c"
 #include "common.h"
 #include "mock.c"
+#include "types/array.h"
 
 static void
 ck_uchar_array(unsigned char *expected, size_t expected_len,

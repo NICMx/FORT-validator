@@ -1,61 +1,28 @@
 #ifndef SRC_TYPES_MAP_H_
 #define SRC_TYPES_MAP_H_
 
-#include <stdbool.h>
-#include "asn1/asn1c/IA5String.h"
-#include "types/arraylist.h"
-
-/*
- * "Long" time = seven days.
- * Currently hardcoded, but queued for tweakability.
- */
-enum map_type {
+// XXX document this better
+struct cache_mapping {
 	/*
-	 * (rsync) Repository Publication Point. RFC 6481.
-	 * The directory is cached until it's untraversed for a "long" time.
+	 * The one that always starts with "rsync://" or "https://".
+	 * Normalized, ASCII-only, NULL-terminated.
 	 */
-	MAP_RSYNC = (1 << 0),
-
-	MAP_HTTP = (1 << 1),
+	char const *url;
 
 	/*
-	 * An RRDP notification file; downloaded via HTTP.
-	 * The file itself is not cached, but we preserve a handful of metadata
-	 * that is needed in subsequent iterations.
-	 * The metadata is cached until it's untraversed for a "long" time.
+	 * Official cache location of the file.
+	 * Normalized, ASCII-only, NULL-terminated.
 	 */
-	MAP_NOTIF = (MAP_HTTP | (1 << 2)),
+	char const *path;
+
+	/*
+	 * Temporary cache location of the file.
+	 * It'll stay here until committed.
+	 */
+	char const *tmppath;
 };
-
-struct cache_mapping;
-
-struct cache_mapping *create_map(char const *);
-
-struct cache_mapping *map_refget(struct cache_mapping *);
-void map_refput(struct cache_mapping *);
-
-/*
- * Note that, if you intend to print some mapping, you're likely supposed to use
- * map_*_get_printable() instead.
- */
-char const *map_get_url(struct cache_mapping *);
-char const *map_get_path(struct cache_mapping *);
-
-bool map_has_extension(struct cache_mapping *, char const *);
-
-enum map_type map_get_type(struct cache_mapping *);
 
 char const *map_val_get_printable(struct cache_mapping *);
 char const *map_op_get_printable(struct cache_mapping *);
-
-/* Plural */
-
-/* XXX still used? */
-DEFINE_ARRAY_LIST_STRUCT(map_list, struct cache_mapping *);
-
-void maps_init(struct map_list *);
-void maps_cleanup(struct map_list *);
-
-void maps_add(struct map_list *, struct cache_mapping *);
 
 #endif /* SRC_TYPES_MAP_H_ */

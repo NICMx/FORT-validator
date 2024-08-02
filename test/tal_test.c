@@ -16,13 +16,8 @@
 MOCK_ABORT_VOID(cache_setup, void)
 MOCK(cache_create, struct rpki_cache *, NULL, void)
 MOCK_VOID(cache_destroy, struct rpki_cache *cache)
-MOCK_ABORT_INT(cache_download, struct rpki_cache *cache,
-    struct cache_mapping *map, bool *changed,
-    struct cachefile_notification ***notif)
 MOCK_ABORT_INT(cache_download_alt, struct sia_uris *sias,
-    maps_dl_cb cb, void *arg)
-MOCK_ABORT_PTR(cache_recover, cache_mapping, struct rpki_cache *cache,
-    struct map_list *maps)
+    validate_cb cb, void *arg)
 MOCK_ABORT_INT(cache_tmpfile, char **filename)
 MOCK_ABORT_VOID(cache_teardown, void)
 MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
@@ -32,9 +27,6 @@ MOCK_VOID(db_table_destroy, struct db_table *table)
 MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
 MOCK_ABORT_INT(deferstack_pop, struct cert_stack *stack,
     struct deferred_cert *result)
-MOCK_ABORT_VOID(fnstack_cleanup, void)
-MOCK_ABORT_VOID(fnstack_init, void)
-MOCK_ABORT_VOID(fnstack_push, char const *f)
 MOCK_ABORT_INT(handle_roa_v4, uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
 MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
@@ -42,7 +34,6 @@ MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
 MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
-MOCK_ABORT_INT(rrdp_update, struct cache_node *notif)
 MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
 MOCK_ABORT_VOID(validation_destroy, struct validation *state)

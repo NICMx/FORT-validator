@@ -42,7 +42,8 @@ bool token_equals(struct string_tokenizer *, struct string_tokenizer *);
 char *token_read(struct string_tokenizer *);
 size_t token_count(struct string_tokenizer *);
 
-/* XXX delete? */
+/* Plural */
+
 DEFINE_ARRAY_LIST_STRUCT(strlist, char *);
 
 void strlist_init(struct strlist *);

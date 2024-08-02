@@ -8,20 +8,19 @@
 #include "object/ghostbusters.h"
 #include "object/roa.h"
 #include "thread_var.h"
-#include "types/arraylist.h"
-#include "types/map.h"
+#include "types/str.h"
 
-/** A Repository Publication Point (RFC 6481), as described by some manifest. */
+/* A Repository Publication Point (RFC 6481), as described by some manifest. */
 struct rpp {
-	struct map_list certs; /* Certificates */
+	struct strlist certs;
 
 	/*
 	 * map NULL implies stack NULL and error 0.
 	 * If map is set, stack might or might not be set.
 	 * error is only relevant when map is set and stack is unset.
 	 */
-	struct { /* Certificate Revocation List */
-		struct cache_mapping *map;
+	struct {
+		char *url;
 		/*
 		 * CRL in libcrypto-friendly form.
 		 * Initialized lazily; access via rpp_crl().
@@ -36,10 +35,8 @@ struct rpp {
 	} crl;
 
 	/* The Manifest is not needed for now. */
-
-	struct map_list roas; /* Route Origin Attestations */
-
-	struct map_list ghostbusters;
+	struct strlist roas;
+	struct strlist ghostbusters;
 
 	/*
 	 * Note that the reference counting functions are not prepared for
@@ -55,12 +52,12 @@ rpp_create(void)
 
 	result = pmalloc(sizeof(struct rpp));
 
-	maps_init(&result->certs);
-	result->crl.map = NULL;
+	strlist_init(&result->certs);
+	result->crl.url = NULL;
 	result->crl.stack = NULL;
 	result->crl.error = 0;
-	maps_init(&result->roas);
-	maps_init(&result->ghostbusters);
+	strlist_init(&result->roas);
+	strlist_init(&result->ghostbusters);
 	result->references = 1;
 
 	return result;
@@ -77,54 +74,52 @@ rpp_refput(struct rpp *pp)
 {
 	pp->references--;
 	if (pp->references == 0) {
-		maps_cleanup(&pp->certs);
-		if (pp->crl.map != NULL)
-			map_refput(pp->crl.map);
-		if (pp->crl.stack != NULL)
-			sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
-		maps_cleanup(&pp->roas);
-		maps_cleanup(&pp->ghostbusters);
+		strlist_cleanup(&pp->certs);
+		free(pp->crl.url);
+		sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
+		strlist_cleanup(&pp->roas);
+		strlist_cleanup(&pp->ghostbusters);
 		free(pp);
 	}
 }
 
-/** Steals ownership of @map. */
+/* Steals ownership of @url */
 void
-rpp_add_cert(struct rpp *pp, struct cache_mapping *map)
+rpp_add_cert(struct rpp *pp, char *url)
 {
-	maps_add(&pp->certs, map);
+	strlist_add(&pp->certs, url);
 }
 
-/** Steals ownership of @map. */
+/* Steals ownership of @url */
 void
-rpp_add_roa(struct rpp *pp, struct cache_mapping *map)
+rpp_add_roa(struct rpp *pp, char *url)
 {
-	maps_add(&pp->roas, map);
+	strlist_add(&pp->roas, url);
 }
 
-/** Steals ownership of @map. */
+/* Steals ownership of @url */
 void
-rpp_add_ghostbusters(struct rpp *pp, struct cache_mapping *map)
+rpp_add_ghostbusters(struct rpp *pp, char *url)
 {
-	maps_add(&pp->ghostbusters, map);
+	strlist_add(&pp->ghostbusters, url);
 }
 
-/** Steals ownership of @map. */
+/* Steals ownership of @url */
 int
-rpp_add_crl(struct rpp *pp, struct cache_mapping *map)
+rpp_add_crl(struct rpp *pp, char *url)
 {
 	/* rfc6481#section-2.2 */
-	if (pp->crl.map)
+	if (pp->crl.url)
 		return pr_val_err("Repository Publication Point has more than one CRL.");
 
-	pp->crl.map = map;
+	pp->crl.url = url;
 	return 0;
 }
 
-struct cache_mapping *
+char const *
 rpp_get_crl(struct rpp const *pp)
 {
-	return pp->crl.map;
+	return pp->crl.url;
 }
 
 static int
@@ -134,9 +129,9 @@ add_crl_to_stack(struct rpp *pp, STACK_OF(X509_CRL) *crls)
 	int error;
 	int idx;
 
-	fnstack_push_map(pp->crl.map);
+	fnstack_push(pp->crl.url);
 
-	error = crl_load(pp->crl.map, &crl);
+	error = crl_load(pp->crl.url, &crl);
 	if (error)
 		goto end;
 
@@ -152,7 +147,7 @@ end:
 	return error;
 }
 
-/**
+/*
  * Returns the pp's CRL in stack form (which is how libcrypto functions want
  * it).
  * The stack belongs to @pp and should not be released. Can be NULL, in which
@@ -169,7 +164,7 @@ rpp_crl(struct rpp *pp, STACK_OF(X509_CRL) **result)
 		*result = NULL;
 		return 0;
 	}
-	if (pp->crl.map == NULL) {
+	if (pp->crl.url == NULL) {
 		/* rpp_crl() assumes the rpp has been populated already. */
 		pr_crit("RPP lacks a CRL.");
 	}
@@ -226,13 +221,11 @@ __cert_traverse(struct rpp *pp)
 	return 0;
 }
 
-/**
- * Traverses through all of @pp's known files, validating them.
- */
+/* Traverses through all of @pp's known files, validating them. */
 void
 rpp_traverse(struct rpp *pp)
 {
-	struct cache_mapping **map;
+	char **url;
 
 	/*
 	 * A subtree should not invalidate the rest of the tree, so error codes
@@ -249,13 +242,13 @@ rpp_traverse(struct rpp *pp)
 	__cert_traverse(pp);
 
 	/* Validate ROAs, apply validation_handler on them. */
-	ARRAYLIST_FOREACH(&pp->roas, map)
-		roa_traverse(*map, pp);
+	ARRAYLIST_FOREACH(&pp->roas, url)
+		roa_traverse(*url, pp);
 
 	/*
 	 * We don't do much with the ghostbusters right now.
 	 * Just validate them.
 	 */
-	ARRAYLIST_FOREACH(&pp->ghostbusters, map)
-		ghostbusters_traverse(*map, pp);
+	ARRAYLIST_FOREACH(&pp->ghostbusters, url)
+		ghostbusters_traverse(*url, pp);
 }

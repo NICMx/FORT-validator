@@ -42,8 +42,8 @@ ck_assert_cachent_eq(struct cache_node *expected, struct cache_node *actual)
 	}
 }
 
-struct cache_node *
-vcreate_node(char const *url, char const *path, int flags, char const *tmppath,
+static struct cache_node *
+vnode(char const *url, char const *path, int flags, char const *tmppath,
     va_list children)
 {
 	struct cache_node *result;
@@ -69,76 +69,78 @@ vcreate_node(char const *url, char const *path, int flags, char const *tmppath,
 }
 
 struct cache_node *
-ruftnode(char const *url, char const *path, int flags, char const *tmppath, ...)
+rftnode(char const *url, char const *path, int flags, char const *tmppath, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, tmppath);
-	result = vcreate_node(url, path, flags, tmppath, children);
+	result = vnode(url, path, flags, tmppath, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-rufnode(char const *url, char const *path, int flags, ...)
+rfnode(char const *url, char const *path, int flags, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, flags);
-	result = vcreate_node(url, path, flags, NULL, children);
+	result = vnode(url, path, flags, NULL, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-runode(char const *url, char const *path, ...)
+rnode(char const *url, char const *path, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, path);
-	result = vcreate_node(url, path, 0, NULL, children);
+	result = vnode(url, path, 0, NULL, children);
 	va_end(children);
 
 	return result;
 }
 
 struct cache_node *
-huftnode(char const *url, char const *path, int flags, char const *tmppath, ...)
+hftnode(char const *url, char const *path, int flags, char const *tmppath, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, tmppath);
-	result = vcreate_node(url, path, flags, tmppath, children);
+	result = vnode(url, path, flags, tmppath, children);
 	va_end(children);
 
 	return result;
 }
 
-struct cache_node *hufnode(char const *url, char const *path, int flags, ...)
+struct cache_node *
+hfnode(char const *url, char const *path, int flags, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, flags);
-	result = vcreate_node(url, path, flags, NULL, children);
+	result = vnode(url, path, flags, NULL, children);
 	va_end(children);
 
 	return result;
 }
 
-struct cache_node *hunode(char const *url, char const *path, ...)
+struct cache_node *
+hnode(char const *url, char const *path, ...)
 {
 	struct cache_node *result;
 	va_list children;
 
 	va_start(children, path);
-	result = vcreate_node(url, path, 0, NULL, children);
+	result = vnode(url, path, 0, NULL, children);
 	va_end(children);
 
 	return result;

@@ -18,8 +18,6 @@
 
 /* Mocks */
 
-MOCK_VOID(fnstack_push, char const *file)
-MOCK_VOID(fnstack_pop, void)
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 MOCK_ABORT_INT(http_download, char const *url, char const *path, curl_off_t ims,
     bool *changed)

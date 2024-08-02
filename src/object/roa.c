@@ -262,7 +262,7 @@ roa_traverse(struct cache_mapping *map, struct rpp *pp)
 	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map);
+	error = signed_object_decode(&sobj, map->path);
 	if (error)
 		goto revert_log;
 	error = decode_roa(&sobj, &roa);
@@ -282,7 +282,7 @@ roa_traverse(struct cache_mapping *map, struct rpp *pp)
 	error = __handle_roa(roa, ee.res);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&ee.refs, pp, map);
+	error = refs_validate_ee(&ee.refs, pp, map->url);
 
 revert_args:
 	eecert_cleanup(&ee);

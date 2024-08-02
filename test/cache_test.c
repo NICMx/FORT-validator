@@ -56,10 +56,8 @@ setup_test(void)
 }
 
 static int
-okay(struct cache_node *node, void *arg)
+okay(struct cache_mapping *map, void *arg)
 {
-	// XXX ensure the rsync and RRDP codes do this
-	node->flags |= CNF_VALID;
 	return 0;
 }
 
@@ -181,13 +179,13 @@ ck_cache(struct cache_node *rsync, struct cache_node *https)
 static void
 ck_cache_rsync(struct cache_node *rsync)
 {
-	ck_cache(rsync, hunode(HE2UP, NULL));
+	ck_cache(rsync, hnode(HE2UP, NULL));
 }
 
 static void
 ck_cache_https(struct cache_node *https)
 {
-	ck_cache(runode(RE2UP, NULL), https);
+	ck_cache(rnode(RE2UP, NULL), https);
 }
 
 static time_t
@@ -197,9 +195,7 @@ get_days_ago(int days)
 	struct tm tm;
 	int error;
 
-	tt_now = time(NULL);
-	if (tt_now == (time_t) -1)
-		pr_crit("time(NULL) returned (time_t) -1.");
+	tt_now = time_fatal();
 	if (localtime_r(&tt_now, &tm) == NULL) {
 		error = errno;
 		pr_crit("localtime_r(tt, &tm) returned error: %s",
@@ -280,16 +276,16 @@ START_TEST(test_cache_download_rsync)
 	printf("==== Startup ====\n");
 	run_dl_rsync("rsync://a.b.c/d", 0, 1);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL), NULL), NULL));
 
 	printf("==== Redownload same file, nothing should happen ====\n");
 	run_dl_rsync("rsync://a.b.c/d", 0, 0);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL), NULL), NULL));
 
 	/*
 	 * rsyncs are recursive, which means if we've been recently asked to
@@ -298,10 +294,10 @@ START_TEST(test_cache_download_rsync)
 	printf("==== Don't redownload child ====\n");
 	run_dl_rsync("rsync://a.b.c/d/e", 0, 0);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0",
-					rufnode(RO2UP("a.b.c/d/e"), VALIDATED, NULL), NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0",
+					rfnode(RO2UP("a.b.c/d/e"), VALIDATED, NULL), NULL), NULL), NULL));
 
 	/*
 	 * rsyncs get truncated, because it results in much faster
@@ -312,28 +308,28 @@ START_TEST(test_cache_download_rsync)
 	printf("==== rsync truncated ====\n");
 	run_dl_rsync("rsync://x.y.z/m/n/o", 0, 1);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0",
-					rufnode(RO2UP("a.b.c/d/e"), VALIDATED, NULL), NULL), NULL),
-			runode(RO2UP("x.y.z"),
-				ruftnode(RO2UP("x.y.z/m"), DOWNLOADED, "tmp/tmp/1",
-					rufnode(RO2UP("x.y.z/m/n"), BRANCH,
-						rufnode(RO2UP("x.y.z/m/n/o"), VALIDATED, NULL), NULL), NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0",
+					rfnode(RO2UP("a.b.c/d/e"), VALIDATED, NULL), NULL), NULL),
+			rnode(RO2UP("x.y.z"),
+				rftnode(RO2UP("x.y.z/m"), DOWNLOADED, "tmp/tmp/1",
+					rfnode(RO2UP("x.y.z/m/n"), BRANCH,
+						rfnode(RO2UP("x.y.z/m/n/o"), VALIDATED, NULL), NULL), NULL), NULL), NULL));
 
 	printf("==== Sibling ====\n");
 	run_dl_rsync("rsync://a.b.c/e/f", 0, 1);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0",
-					rufnode(RO2UP("a.b.c/d/e"), VALIDATED, NULL), NULL),
-				ruftnode(RO2UP("a.b.c/e"), DOWNLOADED, "tmp/tmp/2",
-					rufnode(RO2UP("a.b.c/e/f"), VALIDATED, NULL), NULL), NULL),
-			runode(RO2UP("x.y.z"),
-				ruftnode(RO2UP("x.y.z/m"), DOWNLOADED, "tmp/tmp/1",
-					rufnode(RO2UP("x.y.z/m/n"), BRANCH,
-						rufnode(RO2UP("x.y.z/m/n/o"), VALIDATED, NULL), NULL), NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0",
+					rfnode(RO2UP("a.b.c/d/e"), VALIDATED, NULL), NULL),
+				rftnode(RO2UP("a.b.c/e"), DOWNLOADED, "tmp/tmp/2",
+					rfnode(RO2UP("a.b.c/e/f"), VALIDATED, NULL), NULL), NULL),
+			rnode(RO2UP("x.y.z"),
+				rftnode(RO2UP("x.y.z/m"), DOWNLOADED, "tmp/tmp/1",
+					rfnode(RO2UP("x.y.z/m/n"), BRANCH,
+						rfnode(RO2UP("x.y.z/m/n/o"), VALIDATED, NULL), NULL), NULL), NULL), NULL));
 
 	cleanup_test();
 }
@@ -349,27 +345,27 @@ START_TEST(test_cache_download_rsync_error)
 	dl_error = -EINVAL;
 	run_dl_rsync("rsync://a.b.c/e", -EINVAL, 1);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
-				rufnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
+				rfnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
 
 	printf("==== Regardless of error, not reattempted because same iteration ====\n");
 	dl_error = EINVAL;
 	run_dl_rsync("rsync://a.b.c/e", -EINVAL, 0);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
-				rufnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
+				rfnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
 
 	dl_error = 0;
 	run_dl_rsync("rsync://a.b.c/e", -EINVAL, 0);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
-				rufnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
+				rfnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
 
 	cleanup_test();
 }
@@ -385,10 +381,10 @@ START_TEST(test_cache_cleanup_rsync)
 	run_dl_rsync("rsync://a.b.c/e", 0, 1);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/d"), FULL, NULL),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/d"), FULL, NULL),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
 
 	printf("==== One iteration with no changes, for paranoia ====\n");
 	new_iteration(true);
@@ -396,10 +392,10 @@ START_TEST(test_cache_cleanup_rsync)
 	run_dl_rsync("rsync://a.b.c/e", 0, 1);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/d"), FULL, NULL),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/d"), FULL, NULL),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
 
 	printf("==== Add one sibling ====\n");
 	new_iteration(true);
@@ -408,62 +404,62 @@ START_TEST(test_cache_cleanup_rsync)
 	run_dl_rsync("rsync://a.b.c/f", 0, 1);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/d"), FULL, NULL),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL),
-				rufnode(RO2UP("a.b.c/f"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/d"), FULL, NULL),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL),
+				rfnode(RO2UP("a.b.c/f"), FULL, NULL), NULL), NULL));
 
 	printf("==== Nodes don't get updated, but they're still too young ====\n");
 	new_iteration(false);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/d"), STALE, NULL),
-				rufnode(RO2UP("a.b.c/e"), STALE, NULL),
-				rufnode(RO2UP("a.b.c/f"), STALE, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/d"), STALE, NULL),
+				rfnode(RO2UP("a.b.c/e"), STALE, NULL),
+				rfnode(RO2UP("a.b.c/f"), STALE, NULL), NULL), NULL));
 
 	printf("==== Remove some branches ====\n");
 	new_iteration(true);
 	run_dl_rsync("rsync://a.b.c/d", 0, 1);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/d"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/d"), FULL, NULL), NULL), NULL));
 
 	printf("==== Remove old branch and add sibling at the same time ====\n");
 	new_iteration(true);
 	run_dl_rsync("rsync://a.b.c/e", 0, 1);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
 
 	printf("==== Try child ====\n");
 	new_iteration(true);
 	run_dl_rsync("rsync://a.b.c/e/f/g", 0, 1);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
 
 	printf("==== Parent again ====\n");
 	new_iteration(true);
 	run_dl_rsync("rsync://a.b.c/e", 0, 1);
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
 
 	printf("==== Empty the tree ====\n");
 	new_iteration(true);
 	run_cleanup();
-	ck_cache_rsync(runode(RE2UP, NULL));
+	ck_cache_rsync(rnode(RE2UP, NULL));
 
 
 	printf("==== Node exists, but file doesn't ====\n");
@@ -471,22 +467,22 @@ START_TEST(test_cache_cleanup_rsync)
 	run_dl_rsync("rsync://a.b.c/e", 0, 1);
 	run_dl_rsync("rsync://a.b.c/f", 0, 1);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/e"), FULL, "tmp/tmp/B", NULL),
-				ruftnode(RO2UP("a.b.c/f"), FULL, "tmp/tmp/C", NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/e"), FULL, "tmp/tmp/B", NULL),
+				rftnode(RO2UP("a.b.c/f"), FULL, "tmp/tmp/C", NULL), NULL), NULL));
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL),
-				rufnode(RO2UP("a.b.c/f"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL),
+				rfnode(RO2UP("a.b.c/f"), FULL, NULL), NULL), NULL));
 	ck_assert_int_eq(0, file_rm_rf("tmp/rsync/a.b.c/f"));
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/e"), FULL, NULL), NULL), NULL));
 
 	cleanup_test();
 }
@@ -502,17 +498,17 @@ START_TEST(test_cache_cleanup_rsync_error)
 	dl_error = -EINVAL;
 	run_dl_rsync("rsync://a.b.c/e", -EINVAL, 1);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				ruftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
-				rufnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rftnode(RO2UP("a.b.c/d"), FULL, "tmp/tmp/0", NULL),
+				rfnode(RO2UP("a.b.c/e"), FAILED, NULL), NULL), NULL));
 
 	printf("==== Node deleted because file doesn't exist ====\n");
 	run_cleanup();
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/d"), FULL, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/d"), FULL, NULL), NULL), NULL));
 
 	printf("==== Node and file preserved because young ====\n");
 	/* (Deletion does not depend on success or failure.) */
@@ -520,14 +516,14 @@ START_TEST(test_cache_cleanup_rsync_error)
 	dl_error = -EINVAL;
 	run_dl_rsync("rsync://a.b.c/d", -EINVAL, 1);
 	ck_cache_rsync(
-		runode(RE2UP,
-			runode(RO2UP("a.b.c"),
-				rufnode(RO2UP("a.b.c/d"), DOWNLOADED, NULL), NULL), NULL));
+		rnode(RE2UP,
+			rnode(RO2UP("a.b.c"),
+				rfnode(RO2UP("a.b.c/d"), DOWNLOADED, NULL), NULL), NULL));
 
 	printf("==== Error node deleted because old ====\n");
 	new_iteration(true);
 	run_cleanup();
-	ck_cache_rsync(runode(RE2UP, NULL));
+	ck_cache_rsync(rnode(RE2UP, NULL));
 
 	cleanup_test();
 }
@@ -547,30 +543,30 @@ START_TEST(test_cache_download_https)
 	printf("==== Download *file* e ====\n");
 	run_dl_https("https://a.b.c/d/e", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hunode(HO2UP("a.b.c/d"),
-					huftnode(HO2UP("a.b.c/d/e"), HFULL, "tmp/tmp/0", NULL), NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hnode(HO2UP("a.b.c/d"),
+					hftnode(HO2UP("a.b.c/d/e"), HFULL, "tmp/tmp/0", NULL), NULL), NULL), NULL));
 
 	printf("==== Download something else 1 ====\n");
 	run_dl_https("https://a.b.c/e", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hunode(HO2UP("a.b.c/d"),
-					huftnode(HO2UP("a.b.c/d/e"), HFULL, "tmp/tmp/0", NULL), NULL),
-				huftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/1", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hnode(HO2UP("a.b.c/d"),
+					hftnode(HO2UP("a.b.c/d/e"), HFULL, "tmp/tmp/0", NULL), NULL),
+				hftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/1", NULL), NULL), NULL));
 
 	printf("==== Download something else 2 ====\n");
 	run_dl_https("https://x.y.z/e", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hunode(HO2UP("a.b.c/d"),
-					huftnode(HO2UP("a.b.c/d/e"), HFULL, "tmp/tmp/0", NULL), NULL),
-				huftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/1", NULL), NULL),
-			hunode(HO2UP("x.y.z"),
-				huftnode(HO2UP("x.y.z/e"), HFULL, "tmp/tmp/2", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hnode(HO2UP("a.b.c/d"),
+					hftnode(HO2UP("a.b.c/d/e"), HFULL, "tmp/tmp/0", NULL), NULL),
+				hftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/1", NULL), NULL),
+			hnode(HO2UP("x.y.z"),
+				hftnode(HO2UP("x.y.z/e"), HFULL, "tmp/tmp/2", NULL), NULL), NULL));
 
 	cleanup_test();
 }
@@ -586,10 +582,10 @@ START_TEST(test_cache_download_https_error)
 	dl_error = -EINVAL;
 	run_dl_https("https://a.b.c/e", -EINVAL, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
-				huftnode(HO2UP("a.b.c/e"), HFAILED, NULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
+				hftnode(HO2UP("a.b.c/e"), HFAILED, NULL, NULL), NULL), NULL));
 
 	printf("==== Regardless of error, not reattempted because same iteration ====\n");
 	dl_error = -EINVAL;
@@ -597,10 +593,10 @@ START_TEST(test_cache_download_https_error)
 	dl_error = 0;
 	run_dl_https("https://a.b.c/e", -EINVAL, 0);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
-				huftnode(HO2UP("a.b.c/e"), HFAILED, NULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
+				hftnode(HO2UP("a.b.c/e"), HFAILED, NULL, NULL), NULL), NULL));
 
 	cleanup_test();
 }
@@ -618,39 +614,39 @@ START_TEST(test_cache_cleanup_https)
 	run_dl_https("https://a.b.c/e", 0, 1);
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/d"), HFULL, NULL),
-				hufnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/d"), HFULL, NULL),
+				hfnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
 
 	printf("==== Remove one branch ====\n");
 	new_iteration(true);
 	run_dl_https("https://a.b.c/d", 0, 1);
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/d"), HFULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/d"), HFULL, NULL), NULL), NULL));
 
 	printf("==== Change the one branch ====\n");
 	new_iteration(true);
 	run_dl_https("https://a.b.c/e", 0, 1);
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
 
 	printf("==== Add a child to the same branch, do not update the old one ====\n");
 	new_iteration(true);
 	run_dl_https("https://a.b.c/e/f/g", 0, 1);
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hunode(HO2UP("a.b.c/e"),
-					hunode(HO2UP("a.b.c/e/f"),
-						hufnode(HO2UP("a.b.c/e/f/g"), HFULL, NULL), NULL), NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hnode(HO2UP("a.b.c/e"),
+					hnode(HO2UP("a.b.c/e/f"),
+						hfnode(HO2UP("a.b.c/e/f/g"), HFULL, NULL), NULL), NULL), NULL), NULL));
 
 	printf("====  Download parent, do not update child ====\n");
 	/* (Children need to die, because parent is now a file) */
@@ -658,87 +654,87 @@ START_TEST(test_cache_cleanup_https)
 	run_dl_https("https://a.b.c/e/f", 0, 1);
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hunode(HO2UP("a.b.c/e"),
-					hufnode(HO2UP("a.b.c/e/f"), HFULL, NULL), NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hnode(HO2UP("a.b.c/e"),
+					hfnode(HO2UP("a.b.c/e/f"), HFULL, NULL), NULL), NULL), NULL));
 
 	printf("==== Do it again ====\n");
 	new_iteration(true);
 	run_dl_https("https://a.b.c/e", 0, 1);
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
 
 
 	printf("==== Empty the tree ====\n");
 	new_iteration(true);
 	run_cleanup();
-	ck_cache_https(hunode(HE2UP, NULL));
+	ck_cache_https(hnode(HE2UP, NULL));
 
 	printf("==== Node exists, but file doesn't ====\n");
 	new_iteration(true);
 	run_dl_https("https://a.b.c/e", 0, 1);
 	run_dl_https("https://a.b.c/f/g/h", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/7", NULL),
-				hunode(HO2UP("a.b.c/f"),
-					hunode(HO2UP("a.b.c/f/g"),
-						huftnode(HO2UP("a.b.c/f/g/h"), HFULL, "tmp/tmp/8", NULL), NULL), NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/7", NULL),
+				hnode(HO2UP("a.b.c/f"),
+					hnode(HO2UP("a.b.c/f/g"),
+						hftnode(HO2UP("a.b.c/f/g/h"), HFULL, "tmp/tmp/8", NULL), NULL), NULL), NULL), NULL));
 	run_cleanup(); /* Move from tmp/tmp to tmp/https */
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/e"), HFULL, NULL),
-				hunode(HO2UP("a.b.c/f"),
-					hunode(HO2UP("a.b.c/f/g"),
-						hufnode(HO2UP("a.b.c/f/g/h"), HFULL, NULL), NULL), NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/e"), HFULL, NULL),
+				hnode(HO2UP("a.b.c/f"),
+					hnode(HO2UP("a.b.c/f/g"),
+						hfnode(HO2UP("a.b.c/f/g/h"), HFULL, NULL), NULL), NULL), NULL), NULL));
 	ck_assert_int_eq(0, file_rm_rf("tmp/https/a.b.c/f/g/h"));
 	run_cleanup(); /* Actual test */
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
 
 	printf("==== Temporal version disappears before we get a commit ====\n");
 	new_iteration(true);
 	run_dl_https("https://a.b.c/e", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/9", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/9", NULL), NULL), NULL));
 	ck_assert_int_eq(0, file_rm_rf("tmp/tmp/9"));
 	run_cleanup();
-	ck_cache_https(hunode(HE2UP, NULL));
+	ck_cache_https(hnode(HE2UP, NULL));
 
 	printf("==== Temporal version disappears after we get a commit ====\n");
 	new_iteration(true);
 	run_dl_https("https://a.b.c/e", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/A", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/A", NULL), NULL), NULL));
 	run_cleanup(); /* Commit */
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/e"), HFULL, NULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/e"), HFULL, NULL, NULL), NULL), NULL));
 	new_iteration(false);
 	run_dl_https("https://a.b.c/e", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/B", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/B", NULL), NULL), NULL));
 	ck_assert_int_eq(0, file_rm_rf("tmp/tmp/B"));
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/e"), HFULL, NULL), NULL), NULL));
 
 	cleanup_test();
 }
@@ -755,39 +751,39 @@ START_TEST(test_cache_cleanup_https_error)
 	run_dl_https("https://a.b.c/e", -EINVAL, 1);
 	PR_DEBUG;
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
-				hufnode(HO2UP("a.b.c/e"), HFAILED, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
+				hfnode(HO2UP("a.b.c/e"), HFAILED, NULL), NULL), NULL));
 
 	printf("==== Deleted because file ENOENT ====\n");
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/d"), HFULL, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/d"), HFULL, NULL), NULL), NULL));
 
 	printf("==== Fail d ====\n");
 	new_iteration(false);
 	dl_error = -EINVAL;
 	run_dl_https("https://a.b.c/d", -EINVAL, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/d"), CNF_CACHED | CNF_FRESH, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/d"), CNF_CACHED | CNF_FRESH, NULL), NULL), NULL));
 
 	printf("==== Not deleted, because not old ====\n");
 	new_iteration(false);
 	run_cleanup();
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				hufnode(HO2UP("a.b.c/d"), CNF_CACHED, NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hfnode(HO2UP("a.b.c/d"), CNF_CACHED, NULL), NULL), NULL));
 
 	printf("==== Become old ====\n");
 	new_iteration(true);
 	run_cleanup();
-	ck_cache_https(hunode(HE2UP, NULL));
+	ck_cache_https(hnode(HE2UP, NULL));
 
 	cleanup_test();
 }
@@ -799,28 +795,28 @@ START_TEST(test_dots)
 
 	run_dl_https("https://a.b.c/d", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL), NULL), NULL));
 
 	run_dl_https("https://a.b.c/d/.", 0, 0);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL), NULL), NULL));
 
 	run_dl_https("https://a.b.c/d/e/..", 0, 0);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL), NULL), NULL));
 
 	run_dl_https("https://a.b.c/./d/../e", 0, 1);
 	ck_cache_https(
-		hunode(HE2UP,
-			hunode(HO2UP("a.b.c"),
-				huftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
-				huftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/1", NULL), NULL), NULL));
+		hnode(HE2UP,
+			hnode(HO2UP("a.b.c"),
+				hftnode(HO2UP("a.b.c/d"), HFULL, "tmp/tmp/0", NULL),
+				hftnode(HO2UP("a.b.c/e"), HFULL, "tmp/tmp/1", NULL), NULL), NULL));
 
 	cleanup_test();
 }

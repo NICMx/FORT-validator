@@ -793,7 +793,7 @@ certificate_load(struct cache_mapping *map, X509 **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, map_get_path(map)) <= 0) {
+	if (BIO_read_filename(bio, map->path) <= 0) {
 		error = val_crypto_err("Error reading certificate");
 		goto end;
 	}
@@ -821,12 +821,6 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 {
 	ASN1_TIME *tm;
 	X509_CRL *clone;
-	time_t t;
-	int error;
-
-	error = get_current_time(&t);
-	if (error)
-		return error;
 
 	/*
 	 * Yes, this is an awful hack. The other options were:
@@ -837,7 +831,7 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 	 *   only the nextUpdate field wrong (maybe there are other invalid
 	 *   things).
 	 */
-	tm = ASN1_TIME_adj(NULL, t, 0, 60);
+	tm = ASN1_TIME_adj(NULL, time_fatal(), 0, 60);
 	if (tm == NULL)
 		return val_crypto_err("ASN1_TIME_adj() returned NULL.");
 
@@ -850,8 +844,7 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 	X509_CRL_set1_nextUpdate(clone, tm);
 	ASN1_STRING_free(tm);
 
-	error = sk_X509_CRL_push(crls, clone);
-	if (error <= 0) {
+	if (sk_X509_CRL_push(crls, clone) <= 0) {
 		X509_CRL_free(clone);
 		return val_crypto_err("Error calling sk_X509_CRL_push()");
 	}
@@ -1813,7 +1806,7 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	struct validation *state;
 	int total_parents;
 	STACK_OF(X509_CRL) *rpp_parent_crl;
-	X509 *cert;
+	X509 *x509;
 	struct sia_uris sia_uris;
 	enum rpki_policy policy;
 	enum cert_type certype;
@@ -1833,7 +1826,6 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	else
 		pr_val_debug("Certificate '%s' {",
 		    map_val_get_printable(cert_map));
-
 	fnstack_push_map(cert_map);
 
 	error = rpp_crl(rpp_parent, &rpp_parent_crl);
@@ -1841,14 +1833,14 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 		goto revert_fnstack_and_debug;
 
 	/* -- Validate the certificate (@cert) -- */
-	error = certificate_load(cert_map, &cert);
+	error = certificate_load(cert_map, &x509);
 	if (error)
 		goto revert_fnstack_and_debug;
-	error = certificate_validate_chain(cert, rpp_parent_crl);
+	error = certificate_validate_chain(x509, rpp_parent_crl);
 	if (error)
 		goto revert_cert;
 
-	error = get_certificate_type(cert, rpp_parent == NULL, &certype);
+	error = get_certificate_type(x509, rpp_parent == NULL, &certype);
 	if (error)
 		goto revert_cert;
 
@@ -1869,14 +1861,14 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 		goto revert_cert;
 	}
 
-	error = certificate_validate_rfc6487(cert, certype);
+	error = certificate_validate_rfc6487(x509, certype);
 	if (error)
 		goto revert_cert;
 
 	sias_init(&sia_uris);
 	error = (certype == CERTYPE_TA)
-	    ? certificate_validate_extensions_ta(cert, &sia_uris, &policy)
-	    : certificate_validate_extensions_ca(cert, &sia_uris, &policy,
+	    ? certificate_validate_extensions_ta(x509, &sia_uris, &policy)
+	    : certificate_validate_extensions_ca(x509, &sia_uris, &policy,
 	                                         rpp_parent);
 	if (error)
 		goto revert_uris;
@@ -1885,11 +1877,11 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	if (error)
 		goto revert_uris;
 
-	error = x509stack_push(validation_certstack(state), cert_map, cert,
+	error = x509stack_push(validation_certstack(state), cert_map, x509,
 	    policy, certype);
 	if (error)
 		goto revert_uris;
-	cert = NULL; /* Ownership stolen */
+	x509 = NULL; /* Ownership stolen */
 
 	error = handle_manifest(sia_uris.rpkiManifest, &pp);
 	if (error) {
@@ -1904,8 +1896,8 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 revert_uris:
 	sias_cleanup(&sia_uris);
 revert_cert:
-	if (cert != NULL)
-		X509_free(cert);
+	if (x509 != NULL)
+		X509_free(x509);
 revert_fnstack_and_debug:
 	fnstack_pop();
 	pr_val_debug("}");

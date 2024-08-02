@@ -29,7 +29,7 @@ ghostbusters_traverse(struct cache_mapping *map, struct rpp *pp)
 	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map);
+	error = signed_object_decode(&sobj, map->path);
 	if (error)
 		goto revert_log;
 
@@ -46,7 +46,7 @@ ghostbusters_traverse(struct cache_mapping *map, struct rpp *pp)
 	error = handle_vcard(&sobj);
 	if (error)
 		goto revert_args;
-	error = refs_validate_ee(&ee.refs, pp, map);
+	error = refs_validate_ee(&ee.refs, pp, map->url);
 
 revert_args:
 	eecert_cleanup(&ee);

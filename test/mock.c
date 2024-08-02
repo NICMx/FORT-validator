@@ -124,3 +124,7 @@ MOCK_NULL(config_get_output_roa, char const *, void)
 MOCK_NULL(config_get_output_bgpsec, char const *, void)
 MOCK(config_get_op_log_filename_format, enum filename_format, FNF_NAME, void)
 MOCK(config_get_val_log_filename_format, enum filename_format, FNF_NAME, void)
+
+MOCK_VOID(fnstack_push, char const *file)
+MOCK_VOID(fnstack_push_map, struct cache_mapping *map)
+MOCK_VOID(fnstack_pop, void)

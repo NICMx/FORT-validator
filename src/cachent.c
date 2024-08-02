@@ -34,24 +34,23 @@ cachent_root_https(void)
 }
 
 /* Preorder. @cb returns whether the children should be traversed. */
-int
+void
 cachent_traverse(struct cache_node *root, bool (*cb)(struct cache_node *))
 {
 	struct cache_node *iter_start;
 	struct cache_node *parent, *child;
 	struct cache_node *tmp;
-	int error;
 
 	if (!root)
-		return 0;
+		return;
 
 	if (!cb(root))
-		return error;
+		return;
 
 	parent = root;
 	iter_start = parent->children;
 	if (iter_start == NULL)
-		return error;
+		return;
 
 reloop:	/* iter_start must not be NULL */
 	HASH_ITER(hh, iter_start, child, tmp) {
@@ -65,7 +64,7 @@ reloop:	/* iter_start must not be NULL */
 	parent = iter_start->parent;
 	do {
 		if (parent == NULL)
-			return error;
+			return;
 		iter_start = parent->hh.next;
 		parent = parent->parent;
 	} while (iter_start == NULL);
@@ -167,7 +166,8 @@ provide(struct cache_node *parent, char const *url,
  * anything that is not @ancestor or one of its descendants. (ie. dot-dotting is
  * allowed, but the end result must not land outside of @ancestor.)
  *
- * XXX review callers; can now return NULL.
+ * XXX In the end, it seems this is only being used by root ancestors.
+ * Should probably separate the caging to a simple get.
  */
 struct cache_node *
 cachent_provide(struct cache_node *ancestor, char const *url)

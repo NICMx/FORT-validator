@@ -18,8 +18,6 @@
 
 /* Mocks */
 
-MOCK_VOID(fnstack_push, char const *file)
-MOCK_VOID(fnstack_pop, void)
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 
 /* Utils */
@@ -97,10 +95,10 @@ START_TEST(startup)
 	ck_assert_uint_eq(2, https_counter);
 	ck_file("tmp/tmp/0/a/b/c.cer");
 	ck_assert_cachent_eq(
-		ruftnode("rsync://", NOTIF_PATH, 0, "tmp/tmp/0",
-			ruftnode("rsync://a", NOTIF_PATH "/a", 0, "tmp/tmp/0/a",
-				ruftnode("rsync://a/b", NOTIF_PATH "/a/b", 0, "tmp/tmp/0/a/b",
-					ruftnode("rsync://a/b/c.cer", NOTIF_PATH "/a/b/c.cer", 0, "tmp/tmp/0/a/b/c.cer", NULL),
+		rftnode("rsync://", NOTIF_PATH, 0, "tmp/tmp/0",
+			rftnode("rsync://a", NOTIF_PATH "/a", 0, "tmp/tmp/0/a",
+				rftnode("rsync://a/b", NOTIF_PATH "/a/b", 0, "tmp/tmp/0/a/b",
+					rftnode("rsync://a/b/c.cer", NOTIF_PATH "/a/b/c.cer", 0, "tmp/tmp/0/a/b/c.cer", NULL),
 					NULL),
 				NULL),
 			NULL),
@@ -113,10 +111,10 @@ START_TEST(startup)
 	ck_assert_uint_eq(1, https_counter);
 	ck_file("tmp/tmp/0/a/b/c.cer");
 	ck_assert_cachent_eq(
-		ruftnode("rsync://", NOTIF_PATH, 0, "tmp/tmp/0",
-			ruftnode("rsync://a", NOTIF_PATH "/a", 0, "tmp/tmp/0/a",
-				ruftnode("rsync://a/b", NOTIF_PATH "/a/b", 0, "tmp/tmp/0/a/b",
-					ruftnode("rsync://a/b/c.cer", NOTIF_PATH "/a/b/c.cer", 0, "tmp/tmp/0/a/b/c.cer", NULL),
+		rftnode("rsync://", NOTIF_PATH, 0, "tmp/tmp/0",
+			rftnode("rsync://a", NOTIF_PATH "/a", 0, "tmp/tmp/0/a",
+				rftnode("rsync://a/b", NOTIF_PATH "/a/b", 0, "tmp/tmp/0/a/b",
+					rftnode("rsync://a/b/c.cer", NOTIF_PATH "/a/b/c.cer", 0, "tmp/tmp/0/a/b/c.cer", NULL),
 					NULL),
 				NULL),
 			NULL),

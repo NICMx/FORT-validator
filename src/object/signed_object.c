@@ -4,11 +4,11 @@
 #include "log.h"
 
 int
-signed_object_decode(struct signed_object *sobj, struct cache_mapping *map)
+signed_object_decode(struct signed_object *sobj, char const *path)
 {
 	int error;
 
-	error = content_info_load(map_get_path(map), &sobj->cinfo);
+	error = content_info_load(path, &sobj->cinfo);
 	if (error)
 		return error;
 

@@ -22,34 +22,33 @@ refs_cleanup(struct certificate_refs *refs)
 static int
 validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 {
-	struct cache_mapping *pp_crl;
+	char const *crl_url;
 
 	if (refs->crldp == NULL)
 		pr_crit("Certificate's CRL Distribution Point was not recorded.");
 
-	pp_crl = rpp_get_crl(pp);
-	if (pp_crl == NULL)
+	crl_url = rpp_get_crl(pp);
+	if (crl_url == NULL)
 		pr_crit("Manifest's CRL was not recorded.");
 
-	if (strcmp(refs->crldp, map_get_url(pp_crl)) != 0) {
+	if (strcmp(refs->crldp, crl_url) != 0) {
 		return pr_val_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
-		    refs->crldp, map_get_url(pp_crl));
+		    refs->crldp, crl_url);
 	}
 
 	return 0;
 }
 
 static int
-validate_signedObject(struct certificate_refs *refs,
-    struct cache_mapping *signedObject_map)
+validate_signedObject(struct certificate_refs *refs, char const *url)
 {
 	if (refs->signedObject == NULL)
 		pr_crit("Certificate's signedObject was not recorded.");
 
 	/* XXX the left one is no longer normalized */
-	if (strcmp(refs->signedObject, map_get_url(signedObject_map)) != 0) {
+	if (strcmp(refs->signedObject, url) != 0) {
 		return pr_val_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
-		    refs->signedObject, map_get_url(signedObject_map));
+		    refs->signedObject, url);
 	}
 
 	return 0;
@@ -84,11 +83,11 @@ refs_validate_ca(struct certificate_refs *refs, struct rpp const *pp)
  *
  * @refs: References you want validated.
  * @pp: Repository Publication Point, as described by the Manifest.
- * @map: Mapping of the signed object that contains the EE certificate.
+ * @url: URL of the signed object that contains the EE certificate.
  */
 int
 refs_validate_ee(struct certificate_refs *refs, struct rpp const *pp,
-    struct cache_mapping *map)
+    char const *url)
 {
 	int error;
 
@@ -96,5 +95,5 @@ refs_validate_ee(struct certificate_refs *refs, struct rpp const *pp,
 	if (error)
 		return error;
 
-	return validate_signedObject(refs, map);
+	return validate_signedObject(refs, url);
 }

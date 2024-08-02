@@ -1097,7 +1097,7 @@ dl_notif(struct cache_node *notif, struct update_notification *new)
 	if (notif->dlerr)
 		return false;
 
-	mtim = time(NULL); // XXX
+	mtim = time_nonfatal();
 	changed = false;
 	notif->dlerr = http_download(notif->url, tmppath, notif->mtim, &changed);
 	notif->flags |= CNF_FRESH;

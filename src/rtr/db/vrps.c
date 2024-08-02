@@ -82,7 +82,6 @@ static pthread_rwlock_t state_lock;
 int
 vrps_init(void)
 {
-	time_t now;
 	int error;
 
 	state.base = NULL;
@@ -96,11 +95,7 @@ vrps_init(void)
 	state.serial = 0;
 
 	/* Get the bits that'll fit in session_id */
-	now = 0;
-	error = get_current_time(&now);
-	if (error)
-		goto revert_deltas;
-	state.v0_session_id = now & 0xFFFF;
+	state.v0_session_id = time_fatal() & 0xFFFF;
 
 	/* Minus 1 to prevent same ID */
 	state.v1_session_id = (state.v0_session_id != 0)
@@ -113,14 +108,11 @@ vrps_init(void)
 	if (error) {
 		pr_op_err("state pthread_rwlock_init() errored: %s",
 		    strerror(error));
-		goto revert_deltas;
+		darray_destroy(state.deltas);
+		return error;
 	}
 
 	return 0;
-
-revert_deltas:
-	darray_destroy(state.deltas);
-	return error;
 }
 
 void

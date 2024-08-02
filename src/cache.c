@@ -10,6 +10,7 @@
 #include <time.h>
 
 #include "alloc.h"
+#include "cachent.h"
 #include "cachetmp.h"
 #include "common.h"
 #include "config.h"
@@ -513,7 +514,7 @@ dl_rsync(struct cache_node *rpp)
 	}
 
 	module->flags |= CNF_RSYNC | CNF_CACHED | CNF_FRESH;
-	module->mtim = time(NULL); // XXX catch -1
+	module->mtim = time_nonfatal();
 	module->tmppath = tmppath;
 
 	for (node = rpp; node != module; node = node->parent) {
@@ -541,7 +542,7 @@ dl_http(struct cache_node *node)
 	if (error)
 		return error;
 
-	mtim = time(NULL); // XXX
+	mtim = time_nonfatal();
 
 	error = http_download(node->url, tmppath, node->mtim, &changed);
 	if (error) {
@@ -559,9 +560,10 @@ dl_http(struct cache_node *node)
 /* @uri is either a caRepository or a rpkiNotify */
 static int
 try_uri(char const *uri, struct cache_node *root,
-    dl_cb download, maps_dl_cb validate, void *arg)
+    dl_cb download, validate_cb validate, void *arg)
 {
 	struct cache_node *rpp;
+	struct cache_mapping map;
 	int error;
 
 	if (!uri)
@@ -585,19 +587,23 @@ try_uri(char const *uri, struct cache_node *root,
 		}
 	}
 
-	error = validate(rpp, arg);
+	map.url = rpp->url;
+	map.path = rpp->path;
+	map.tmppath = rpp->tmppath;
+	error = validate(&map, arg);
 	if (error) {
 		pr_val_debug("RPP validation failed.");
 		return error;
 	}
 
 	pr_val_debug("RPP validated successfully.");
+	rpp->flags |= CNF_VALID;
 	return 0;
 }
 
 static int
 try_uris(struct strlist *uris, struct cache_node *root,
-    char const *prefix, dl_cb dl, maps_dl_cb cb, void *arg)
+    char const *prefix, dl_cb dl, validate_cb cb, void *arg)
 {
 	char **str;
 	int error;
@@ -613,7 +619,7 @@ try_uris(struct strlist *uris, struct cache_node *root,
 }
 
 int
-cache_download_uri(struct strlist *uris, maps_dl_cb cb, void *arg)
+cache_download_uri(struct strlist *uris, validate_cb cb, void *arg)
 {
 	int error;
 
@@ -649,7 +655,7 @@ cache_download_uri(struct strlist *uris, maps_dl_cb cb, void *arg)
  * that's already cached, and callbacks it.
  */
 int
-cache_download_alt(struct sia_uris *sias, maps_dl_cb cb, void *arg)
+cache_download_alt(struct sia_uris *sias, validate_cb cb, void *arg)
 {
 	int error;
 
@@ -695,10 +701,6 @@ prune_rsync(void)
 			}
 }
 
-/*
- * XXX this needs to be hit only by files now
- * XXX result is redundant
- */
 static bool
 commit_rpp_delta(struct cache_node *node)
 {
@@ -747,38 +749,6 @@ branch:	node->flags = 0;
 	}
 	return true;
 }
-
-//static bool
-//is_node_fresh(struct cache_node *node, time_t epoch)
-//{
-//	/* TODO This is a startup; probably complicate this. */
-//	return difftime(epoch, node->attempt.ts) < 0;
-//}
-//
-//static void
-//delete_node(struct rpki_cache *cache, struct cache_node *node)
-//{
-//	HASH_DEL(cache->ht, node);
-//	map_refput(node->map);
-//	rrdp_notif_free(node->notif);
-//	free(node);
-//}
-//
-//static void
-//delete_node_and_cage(struct rpki_cache *cache, struct cache_node *node)
-//{
-//	struct cache_mapping *cage;
-//
-//	if (map_get_type(node->map) == MAP_NOTIF) {
-//		if (map_create_cage(&cage, node->map) == 0) {
-//			pr_op_debug("Deleting cage %s.", map_get_path(cage));
-//			file_rm_rf(map_get_path(cage));
-//			map_refput(cage);
-//		}
-//	}
-//
-//	delete_node(cache, node);
-//}
 
 static int
 rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
