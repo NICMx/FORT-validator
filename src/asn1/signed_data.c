@@ -468,30 +468,32 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 	bool equal;
 
 	if (sdata == NULL)
-		return -EINVAL;
+		return pr_val_err("SignedData is NULL.");
 	if (sdata->signerInfos.list.array == NULL)
-		return -EINVAL;
+		return pr_val_err("SignerInfos array is NULL.");
 	if (sdata->signerInfos.list.array[0] == NULL)
-		return -EINVAL;
+		return pr_val_err("SignerInfos array first element is NULL.");
 
 	signedAttrs = sdata->signerInfos.list.array[0]->signedAttrs;
+	if (signedAttrs == NULL)
+		return pr_val_err("signedAttrs is NULL.");
 	if (signedAttrs->list.array == NULL)
-		return -EINVAL;
+		return pr_val_err("signedAttrs array is NULL.");
 
 	for (i = 0; i < signedAttrs->list.count; i++) {
 		attr = signedAttrs->list.array[i];
 		if (!attr)
-			return -EINVAL;
+			return pr_val_err("signedAttrs array element %d is NULL.", i);
 		error = oid2arcs(&attr->attrType, &arcs);
 		if (error)
-			return -EINVAL;
+			return error;
 		equal = ARCS_EQUAL_OIDS(&arcs, oid_cta);
 		free_arcs(&arcs);
 		if (equal) {
 			if (attr->attrValues.list.array == NULL)
-				return -EINVAL;
+				return pr_val_err("signedAttrs attrValue array is NULL.");
 			if (attr->attrValues.list.array[0] == NULL)
-				return -EINVAL;
+				return pr_val_err("signedAttrs attrValue array first element is NULL.");
 			return asn1_decode_any(attr->attrValues.list.array[0],
 			    &asn_DEF_OBJECT_IDENTIFIER,
 			    (void **) result, true);
