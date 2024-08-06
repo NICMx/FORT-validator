@@ -1005,6 +1005,10 @@ handle_aki(void *ext, void *arg)
 	AUTHORITY_KEYID *aki = ext;
 	X509 *parent;
 
+	if (aki->keyid == NULL) {
+		return pr_val_err("%s extension lacks a keyIdentifier.",
+		    ext_aki()->name);
+	}
 	if (aki->issuer != NULL) {
 		return pr_val_err("%s extension contains an authorityCertIssuer.",
 		    ext_aki()->name);

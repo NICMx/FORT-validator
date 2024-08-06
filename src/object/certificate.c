@@ -1311,7 +1311,8 @@ handle_aki_ta(void *ext, void *arg)
 	}
 
 	error = (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0)
-	      ? pr_val_err("The '%s' does not equal the '%s'.", ext_aki()->name, ext_ski()->name)
+	      ? pr_val_err("The '%s' does not equal the '%s'.",
+	                   ext_aki()->name, ext_ski()->name)
 	      : 0;
 
 	ASN1_BIT_STRING_free(ski);
