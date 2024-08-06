@@ -421,13 +421,18 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 
 #define MODULUS 2048
 #define EXPONENT "65537"
+	EVP_PKEY *pkey;
 	const RSA *rsa;
 	const BIGNUM *exp;
 	char *exp_str;
 	int modulus;
 	int error;
 
-	rsa = EVP_PKEY_get0_RSA(X509_PUBKEY_get0(pubkey));
+	pkey = X509_PUBKEY_get0(pubkey);
+	if (pkey == NULL)
+		return val_crypto_err("The certificate's Subject Public Key is missing or malformed.");
+
+	rsa = EVP_PKEY_get0_RSA(pkey);
 	if (rsa == NULL)
 		return val_crypto_err("EVP_PKEY_get0_RSA() returned NULL");
 
