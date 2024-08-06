@@ -1329,9 +1329,9 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 
 	unsigned char data[2];
 
-	if (ku->length == 0) {
-		return pr_val_err("%s bit string has no enabled bits.",
-		    ext_ku()->name);
+	if (ku->length != 2 && ku->length != 1) {
+		return pr_val_err("Bogus %s length: %d",
+		    ext_ku()->name, ku->length);
 	}
 
 	memset(data, 0, sizeof(data));
