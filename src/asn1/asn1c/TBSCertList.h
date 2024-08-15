@@ -14,10 +14,6 @@
 #include "asn1/asn1c/Name.h"
 #include "asn1/asn1c/Time.h"
 #include "asn1/asn1c/Version.h"
-#include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Forward definitions */
 typedef struct TBSCertList__revokedCertificates__Member {

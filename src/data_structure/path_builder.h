@@ -1,9 +1,18 @@
 #ifndef SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 #define SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 
+#include <arpa/inet.h>
 #include <netdb.h>
-
-#include "types/uri.h"
+#include <netinet/in.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 struct path_builder {
 	char *string;

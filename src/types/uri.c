@@ -1,15 +1,10 @@
 #include "types/uri.h"
 
-#include "alloc.h"
 #include "common.h"
 #include "config.h"
-#include "config/filename_format.h"
 #include "data_structure/path_builder.h"
 #include "log.h"
-#include "rrdp.h"
-#include "state.h"
-#include "str_token.h"
-#include "thread_var.h"
+#include "object/tal.h"
 
 /**
  * Design notes:

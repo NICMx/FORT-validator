@@ -1,11 +1,9 @@
 #include "config.h"
 
+#include <errno.h>
 #include <getopt.h>
-#include <limits.h>
-#include <sys/socket.h>
 #include <syslog.h>
 
-#include "alloc.h"
 #include "common.h"
 #include "config/boolean.h"
 #include "config/incidences.h"
@@ -14,10 +12,11 @@
 #include "config/work_offline.h"
 #include "configure_ac.h"
 #include "daemon.h"
-#include "file.h"
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
+#include "state.h"
+#include "thread/thread_pool.h"
 
 /**
  * To add a member to this structure,

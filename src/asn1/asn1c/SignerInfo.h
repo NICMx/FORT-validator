@@ -15,8 +15,6 @@
 #include "asn1/asn1c/SignedAttributes.h"
 #include "asn1/asn1c/SignerIdentifier.h"
 #include "asn1/asn1c/UnsignedAttributes.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* SignerInfo */
 typedef struct SignerInfo {

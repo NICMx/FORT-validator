@@ -11,7 +11,6 @@
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* CertificateSet */
 typedef struct CertificateSet {

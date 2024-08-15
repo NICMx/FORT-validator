@@ -4,8 +4,6 @@
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
-#include "cert_stack.h"
-#include "common.h"
 #include "crypto/hash.h"
 #include "json_util.h"
 #include "libcrypto_util.h"

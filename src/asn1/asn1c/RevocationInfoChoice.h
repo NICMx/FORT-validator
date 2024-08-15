@@ -10,8 +10,6 @@
 
 #include "asn1/asn1c/CertificateList.h"
 #include "asn1/asn1c/OtherRevocationInfoFormat.h"
-#include "asn1/asn1c/constr_CHOICE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum RevocationInfoChoice_PR {

@@ -11,7 +11,6 @@
 #include "asn1/asn1c/GeneralizedTime.h"
 #include "asn1/asn1c/UTCTime.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum Time_PR {

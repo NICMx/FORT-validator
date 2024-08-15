@@ -4,18 +4,14 @@
 #include <fcntl.h>
 #include <poll.h>
 
-#include "alloc.h"
+#include "common.h"
 #include "config.h"
 #include "data_structure/array_list.h"
+#include "log.h"
 #include "rtr/db/vrps.h"
-#include "rtr/err_pdu.h"
-#include "rtr/pdu.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
-#include "rtr/pdu_stream.h"
 #include "thread/thread_pool.h"
-#include "types/address.h"
-#include "types/serial.h"
 
 struct rtr_server {
 	int fd;

@@ -3,7 +3,6 @@
 
 #include "rtr/db/delta.h"
 #include "types/address.h"
-#include "types/vrp.h"
 
 struct db_table;
 

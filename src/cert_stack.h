@@ -5,8 +5,6 @@
 
 #include "object/certificate.h"
 #include "object/name.h"
-#include "resource.h"
-#include "types/uri.h"
 
 /*
  * One certificate stack is allocated per validation cycle, and it is used

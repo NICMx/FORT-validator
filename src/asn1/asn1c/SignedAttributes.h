@@ -9,9 +9,7 @@
 #define	_SignedAttributes_H_
 
 #include "asn1/asn1c/CMSAttribute.h"
-#include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* SignedAttributes */
 typedef struct SignedAttributes {

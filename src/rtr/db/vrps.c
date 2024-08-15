@@ -3,17 +3,14 @@
 #include <errno.h>
 #include <time.h>
 
-#include "alloc.h"
 #include "common.h"
 #include "config.h"
-#include "data_structure/array_list.h"
+#include "log.h"
 #include "object/tal.h"
 #include "output_printer.h"
-#include "rtr/db/db_table.h"
-#include "rtr/rtr.h"
+#include "rtr/db/deltas_array.h"
+#include "rtr/pdu.h"
 #include "slurm/slurm_loader.h"
-#include "types/router_key.h"
-#include "validation_handler.h"
 
 struct vrp_node {
 	struct delta_vrp delta;

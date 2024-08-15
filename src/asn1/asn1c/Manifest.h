@@ -13,9 +13,6 @@
 #include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Manifest */
 typedef struct Manifest {

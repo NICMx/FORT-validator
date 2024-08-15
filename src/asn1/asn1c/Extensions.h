@@ -10,8 +10,7 @@
 
 #include "asn1/asn1c/Extension.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
+#include "asn1/asn1c/constr_SET_OF.h"
 
 /* Extensions */
 typedef struct Extensions {

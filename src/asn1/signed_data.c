@@ -1,18 +1,15 @@
 #include "asn1/signed_data.h"
 
 #include "algorithm.h"
-#include "alloc.h"
-#include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/ContentTypePKCS7.h"
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SignedDataPKCS7.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
-#include "config.h"
 #include "crypto/hash.h"
 #include "log.h"
 #include "object/certificate.h"
-#include "thread_var.h"
+#include "object/name.h"
 
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;

@@ -4,17 +4,16 @@
 #include <stdatomic.h>
 #include <time.h>
 
-#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "configure_ac.h"
-#include "data_structure/array_list.h"
 #include "data_structure/path_builder.h"
 #include "data_structure/uthash.h"
 #include "file.h"
 #include "http/http.h"
 #include "json_util.h"
 #include "log.h"
+#include "object/tal.h"
 #include "rrdp.h"
 #include "rsync/rsync.h"
 

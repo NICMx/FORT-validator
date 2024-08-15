@@ -4,10 +4,8 @@
  */
 #include "asn1/asn1c/BOOLEAN.h"
 
-#include "asn1/asn1c/asn_codecs_prim.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_decoder.h"
-#include "asn1/asn1c/constraints.h"
 #include "asn1/asn1c/der_encoder.h"
 
 /*

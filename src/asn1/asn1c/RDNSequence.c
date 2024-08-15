@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/RDNSequence.h"
 
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+
 asn_TYPE_member_t asn_MBR_RDNSequence_1[] = {
 	{ ATF_POINTER, 0, 0,
 		(ASN_TAG_CLASS_UNIVERSAL | (17 << 2)),

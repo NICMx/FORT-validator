@@ -1,12 +1,9 @@
 #include "rrdp.h"
 
 #include <ctype.h>
-#include <openssl/bn.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
-#include "alloc.h"
-#include "cache/local_cache.h"
 #include "common.h"
 #include "crypto/base64.h"
 #include "crypto/hash.h"

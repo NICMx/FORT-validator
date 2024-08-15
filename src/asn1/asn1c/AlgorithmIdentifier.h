@@ -11,7 +11,6 @@
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* AlgorithmIdentifier */
 typedef struct AlgorithmIdentifier {

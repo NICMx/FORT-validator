@@ -8,12 +8,8 @@
 #ifndef	_ROAIPAddressFamily_H_
 #define	_ROAIPAddressFamily_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/ROAIPAddress.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* ROAIPAddressFamily */
 typedef struct ROAIPAddressFamily {

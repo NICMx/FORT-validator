@@ -11,26 +11,17 @@
 #include <openssl/rsa.h>
 #include <openssl/x509v3.h>
 #include <syslog.h>
+#include <time.h>
 
 #include "algorithm.h"
-#include "alloc.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "cache/local_cache.h"
-#include "cert_stack.h"
+#include "common.h"
 #include "config.h"
-#include "crypto/hash.h"
-#include "data_structure/array_list.h"
 #include "extension.h"
-#include "incidence/incidence.h"
 #include "log.h"
 #include "nid.h"
-#include "object/bgpsec.h"
 #include "object/manifest.h"
-#include "object/name.h"
-#include "object/signed_object.h"
-#include "rrdp.h"
 #include "str_token.h"
 #include "thread_var.h"
 

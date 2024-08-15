@@ -9,7 +9,6 @@
 #define	_DistinguishedName_H_
 
 #include "asn1/asn1c/RDNSequence.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* DistinguishedName */
 typedef RDNSequence_t	 DistinguishedName_t;

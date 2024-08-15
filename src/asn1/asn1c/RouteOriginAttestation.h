@@ -9,12 +9,7 @@
 #define	_RouteOriginAttestation_H_
 
 #include "asn1/asn1c/ASId.h"
-#include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/ROAIPAddressFamily.h"
-#include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* RouteOriginAttestation */
 typedef struct RouteOriginAttestation {

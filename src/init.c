@@ -3,7 +3,6 @@
 #include "config.h"
 #include "data_structure/path_builder.h"
 #include "http/http.h"
-#include "log.h"
 
 static int
 fetch_url(char const *url, char const *filename)

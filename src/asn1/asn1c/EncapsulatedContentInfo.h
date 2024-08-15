@@ -9,9 +9,7 @@
 #define	_EncapsulatedContentInfo_H_
 
 #include "asn1/asn1c/ContentType.h"
-#include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* EncapsulatedContentInfo */
 typedef struct EncapsulatedContentInfo {

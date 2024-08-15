@@ -5,7 +5,6 @@
 #ifndef	ASN1_CONSTRAINTS_VALIDATOR_H
 #define	ASN1_CONSTRAINTS_VALIDATOR_H
 
-#include "asn1/asn1c/asn_system.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
 /*

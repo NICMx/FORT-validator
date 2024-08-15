@@ -12,7 +12,6 @@
 #include <openssl/objects.h>
 
 #include "asn1/asn1c/INTEGER.h"
-#include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "json_util.h"
 

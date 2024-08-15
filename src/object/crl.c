@@ -8,7 +8,6 @@
 #include "extension.h"
 #include "log.h"
 #include "object/name.h"
-#include "thread_var.h"
 
 static int
 __crl_load(struct rpki_uri *uri, X509_CRL **result)
