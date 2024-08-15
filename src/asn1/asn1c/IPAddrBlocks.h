@@ -13,9 +13,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct IPAddressFamily;
-
 /* IPAddrBlocks */
 typedef struct IPAddrBlocks {
 	A_SEQUENCE_OF(struct IPAddressFamily) list;

@@ -17,9 +17,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct FileAndHash;
-
 /* Manifest */
 typedef struct Manifest {
 	INTEGER_t	*version	/* DEFAULT 0 */;

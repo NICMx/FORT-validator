@@ -13,9 +13,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct Extension;
-
 /* Extensions */
 typedef struct Extensions {
 	A_SEQUENCE_OF(struct Extension) list;

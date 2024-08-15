@@ -22,9 +22,6 @@ typedef enum ASIdentifierChoice_PR {
 	ASIdentifierChoice_PR_asIdsOrRanges
 } ASIdentifierChoice_PR;
 
-/* Forward declarations */
-struct ASIdOrRange;
-
 /* ASIdentifierChoice */
 typedef struct ASIdentifierChoice {
 	ASIdentifierChoice_PR present;

@@ -16,9 +16,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct ROAIPAddressFamily;
-
 /* RouteOriginAttestation */
 typedef struct RouteOriginAttestation {
 	INTEGER_t	*version	/* DEFAULT 0 */;

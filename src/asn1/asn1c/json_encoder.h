@@ -12,7 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-struct asn_TYPE_descriptor_s;	/* Forward declaration */
+#include "asn1/asn1c/constr_TYPE.h"
 
 json_t *json_encode(
     const struct asn_TYPE_descriptor_s *type_descriptor,

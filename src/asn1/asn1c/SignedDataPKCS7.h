@@ -17,10 +17,6 @@
 #include "asn1/asn1c/constr_SEQUENCE.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct CertificateSet;
-struct RevocationInfoChoices;
-
 /* SignedDataPKCS7 */
 typedef struct SignedDataPKCS7 {
 	CMSVersion_t	 version;

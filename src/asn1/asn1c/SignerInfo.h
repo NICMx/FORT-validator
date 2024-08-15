@@ -18,10 +18,6 @@
 #include "asn1/asn1c/constr_SEQUENCE.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct SignedAttributes;
-struct UnsignedAttributes;
-
 /* SignerInfo */
 typedef struct SignerInfo {
 	CMSVersion_t	 version;

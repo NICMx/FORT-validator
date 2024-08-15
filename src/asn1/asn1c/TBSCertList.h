@@ -19,10 +19,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct Time;
-struct Extensions;
-
 /* Forward definitions */
 typedef struct TBSCertList__revokedCertificates__Member {
 	CertificateSerialNumber_t	 userCertificate;

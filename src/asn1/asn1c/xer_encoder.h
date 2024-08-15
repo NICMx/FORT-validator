@@ -7,8 +7,6 @@
 
 #include "asn1/asn1c/constr_TYPE.h"
 
-struct asn_TYPE_descriptor_s;	/* Forward declaration */
-
 /* Flags used by the xer_encode() and (*xer_type_encoder_f), defined below */
 enum xer_encoder_flags_e {
 	/* Mode of encoding */

@@ -7,8 +7,8 @@
 #define	ASN_IOC_H
 
 #include "asn1/asn1c/asn_system.h"
+#include "asn1/asn1c/constr_TYPE.h"
 
-struct asn_TYPE_descriptor_s;
 struct asn_ioc_cell_s;
 
 /*

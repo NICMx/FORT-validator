@@ -22,9 +22,6 @@ typedef enum IPAddressChoice_PR {
 	IPAddressChoice_PR_addressesOrRanges
 } IPAddressChoice_PR;
 
-/* Forward declarations */
-struct IPAddressOrRange;
-
 /* IPAddressChoice */
 typedef struct IPAddressChoice {
 	IPAddressChoice_PR present;

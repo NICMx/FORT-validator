@@ -13,9 +13,6 @@
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct RelativeDistinguishedName;
-
 /* RDNSequence */
 typedef struct RDNSequence {
 	A_SEQUENCE_OF(struct RelativeDistinguishedName) list;

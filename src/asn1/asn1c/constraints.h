@@ -8,8 +8,6 @@
 #include "asn1/asn1c/asn_system.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-struct asn_TYPE_descriptor_s;		/* Forward declaration */
-
 /*
  * Validate the structure according to the ASN.1 constraints.
  * If errbuf and errlen are given, they shall be pointing to the appropriate

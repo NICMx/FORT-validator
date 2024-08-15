@@ -13,9 +13,6 @@
 #include "asn1/asn1c/constr_SET_OF.h"
 #include "asn1/asn1c/constr_TYPE.h"
 
-/* Forward declarations */
-struct AttributeTypeAndValue;
-
 /* RelativeDistinguishedName */
 typedef struct RelativeDistinguishedName {
 	A_SET_OF(struct AttributeTypeAndValue) list;
