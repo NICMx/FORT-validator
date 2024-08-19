@@ -10,7 +10,6 @@
 #include "log.h"
 #include "slurm/db_slurm.h"
 #include "types/address.h"
-#include "types/router_key.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"

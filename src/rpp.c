@@ -1,15 +1,10 @@
 #include "rpp.h"
 
-#include "alloc.h"
-#include "cert_stack.h"
-#include "data_structure/array_list.h"
 #include "log.h"
-#include "object/certificate.h"
 #include "object/crl.h"
 #include "object/ghostbusters.h"
 #include "object/roa.h"
 #include "thread_var.h"
-#include "types/uri.h"
 
 /** A Repository Publication Point (RFC 6481), as described by some manifest. */
 struct rpp {

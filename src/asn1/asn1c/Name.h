@@ -10,7 +10,6 @@
 
 #include "asn1/asn1c/RDNSequence.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum Name_PR {

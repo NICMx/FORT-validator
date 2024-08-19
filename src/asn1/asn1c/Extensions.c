@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/Extensions.h"
 
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+
 asn_TYPE_member_t asn_MBR_Extensions_1[] = {
 	{ ATF_POINTER, 0, 0,
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),

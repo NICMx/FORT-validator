@@ -9,7 +9,6 @@
 #define	_ContentTypePKCS7_H_
 
 #include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* ContentTypePKCS7 */
 typedef OCTET_STRING_t	 ContentTypePKCS7_t;

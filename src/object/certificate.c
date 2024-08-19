@@ -11,26 +11,17 @@
 #include <openssl/rsa.h>
 #include <openssl/x509v3.h>
 #include <syslog.h>
+#include <time.h>
 
 #include "algorithm.h"
-#include "alloc.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "cache/local_cache.h"
-#include "cert_stack.h"
+#include "common.h"
 #include "config.h"
-#include "crypto/hash.h"
-#include "data_structure/array_list.h"
 #include "extension.h"
-#include "incidence/incidence.h"
 #include "log.h"
 #include "nid.h"
-#include "object/bgpsec.h"
 #include "object/manifest.h"
-#include "object/name.h"
-#include "object/signed_object.h"
-#include "rrdp.h"
 #include "str_token.h"
 #include "thread_var.h"
 
@@ -421,13 +412,18 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 
 #define MODULUS 2048
 #define EXPONENT "65537"
+	EVP_PKEY *pkey;
 	const RSA *rsa;
 	const BIGNUM *exp;
 	char *exp_str;
 	int modulus;
 	int error;
 
-	rsa = EVP_PKEY_get0_RSA(X509_PUBKEY_get0(pubkey));
+	pkey = X509_PUBKEY_get0(pubkey);
+	if (pkey == NULL)
+		return val_crypto_err("The certificate's Subject Public Key is missing or malformed.");
+
+	rsa = EVP_PKEY_get0_RSA(pkey);
 	if (rsa == NULL)
 		return val_crypto_err("EVP_PKEY_get0_RSA() returned NULL");
 
@@ -467,6 +463,7 @@ static int
 validate_public_key(X509 *cert, enum cert_type type)
 {
 	X509_PUBKEY *pubkey;
+	EVP_PKEY *evppkey;
 	X509_ALGOR *pa;
 	int ok;
 	int error;
@@ -507,6 +504,10 @@ validate_public_key(X509 *cert, enum cert_type type)
 		error = validate_spki(pubkey);
 		if (error)
 			return error;
+		if ((evppkey = X509_get0_pubkey(cert)) == NULL)
+			return val_crypto_err("X509_get0_pubkey() returned NULL");
+		if (X509_verify(cert, evppkey) != 1)
+			return -EINVAL;
 	}
 
 	return 0;
@@ -575,47 +576,47 @@ struct progress {
 /**
  * Skip the "T" part of a TLV.
  */
-static void
+static int
 skip_t(ANY_t *content, struct progress *p, unsigned int tag)
 {
-	/*
-	 * BTW: I made these errors critical because the signedData is supposed
-	 * to be validated by this point.
-	 */
+	/* These errors happen when the object is not DER-encoded */
 
 	if (content->buf[p->offset] != tag)
-		pr_crit("Expected tag 0x%x, got 0x%x", tag,
-		    content->buf[p->offset]);
-
+		return pr_val_err("Expected tag 0x%x, got 0x%x.",
+		    tag, content->buf[p->offset]);
 	if (p->remaining == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
+
 	p->offset++;
 	p->remaining--;
+	return 0;
 }
 
 /**
  * Skip the "TL" part of a TLV.
  */
-static void
+static int
 skip_tl(ANY_t *content, struct progress *p, unsigned int tag)
 {
 	ssize_t len_len; /* Length of the length field */
 	ber_tlv_len_t value_len; /* Length of the value */
 
-	skip_t(content, p, tag);
+	if (skip_t(content, p, tag) != 0)
+		return -EINVAL;
 
 	len_len = ber_fetch_length(true, &content->buf[p->offset], p->remaining,
 	    &value_len);
 	if (len_len == -1)
-		pr_crit("Could not decipher length (Cause is unknown)");
+		return pr_val_err("Could not decipher length (Unknown cause).");
 	if (len_len == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
 
 	p->offset += len_len;
 	p->remaining -= len_len;
+	return 0;
 }
 
-static void
+static int
 skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 {
 	int is_constructed;
@@ -623,17 +624,19 @@ skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 
 	is_constructed = BER_TLV_CONSTRUCTED(&content->buf[p->offset]);
 
-	skip_t(content, p, tag);
+	if (skip_t(content, p, tag) != 0)
+		return -EINVAL;
 
 	skip = ber_skip_length(NULL, is_constructed, &content->buf[p->offset],
 	    p->remaining);
 	if (skip == -1)
-		pr_crit("Could not skip length (Cause is unknown)");
+		return pr_val_err("Could not skip length (Unknown cause).");
 	if (skip == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
 
 	p->offset += skip;
 	p->remaining -= skip;
+	return 0;
 }
 
 /**
@@ -644,12 +647,12 @@ struct encoded_signedAttrs {
 	ber_tlv_len_t size;
 };
 
-static void
+static int
 find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 {
-#define INTEGER_TAG		0x02
-#define SEQUENCE_TAG		0x30
-#define SET_TAG			0x31
+	static const unsigned int INTEGER_TAG = 0x02;
+	static const unsigned int SEQUENCE_TAG = 0x30;
+	static const unsigned int SET_TAG = 0x31;
 
 	struct progress p;
 	ssize_t len_len;
@@ -660,43 +663,55 @@ find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 	p.remaining = signedData->size;
 
 	/* SignedData: SEQUENCE */
-	skip_tl(signedData, &p, SEQUENCE_TAG);
+	if (skip_tl(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 
 	/* SignedData.version: CMSVersion -> INTEGER */
-	skip_tlv(signedData, &p, INTEGER_TAG);
+	if (skip_tlv(signedData, &p, INTEGER_TAG) != 0)
+		return -EINVAL;
 	/* SignedData.digestAlgorithms: DigestAlgorithmIdentifiers -> SET */
-	skip_tlv(signedData, &p, SET_TAG);
+	if (skip_tlv(signedData, &p, SET_TAG) != 0)
+		return -EINVAL;
 	/* SignedData.encapContentInfo: EncapsulatedContentInfo -> SEQUENCE */
-	skip_tlv(signedData, &p, SEQUENCE_TAG);
+	if (skip_tlv(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 	/* SignedData.certificates: CertificateSet -> SET */
-	skip_tlv(signedData, &p, 0xA0);
+	if (skip_tlv(signedData, &p, 0xA0) != 0)
+		return -EINVAL;
 	/* SignedData.signerInfos: SignerInfos -> SET OF SEQUENCE */
-	skip_tl(signedData, &p, SET_TAG);
-	skip_tl(signedData, &p, SEQUENCE_TAG);
+	if (skip_tl(signedData, &p, SET_TAG) != 0)
+		return -EINVAL;
+	if (skip_tl(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 
 	/* SignedData.signerInfos.version: CMSVersion -> INTEGER */
-	skip_tlv(signedData, &p, INTEGER_TAG);
+	if (skip_tlv(signedData, &p, INTEGER_TAG) != 0)
+		return -EINVAL;
 	/*
 	 * SignedData.signerInfos.sid: SignerIdentifier -> CHOICE -> always
 	 * subjectKeyIdentifier, which is a [0].
 	 */
-	skip_tlv(signedData, &p, 0x80);
+	if (skip_tlv(signedData, &p, 0x80) != 0)
+		return -EINVAL;
 	/* SignedData.signerInfos.digestAlgorithm: DigestAlgorithmIdentifier
 	 * -> AlgorithmIdentifier -> SEQUENCE */
-	skip_tlv(signedData, &p, SEQUENCE_TAG);
+	if (skip_tlv(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 
 	/* SignedData.signerInfos.signedAttrs: SignedAttributes -> SET */
 	/* We will need to replace the tag 0xA0 with 0x31, so skip it as well */
-	skip_t(signedData, &p, 0xA0);
+	if (skip_t(signedData, &p, 0xA0) != 0)
+		return -EINVAL;
 
 	result->buffer = &signedData->buf[p.offset];
 	len_len = ber_fetch_length(true, result->buffer,
 	    p.remaining, &result->size);
 	if (len_len == -1)
-		pr_crit("Could not decipher length (Cause is unknown)");
+		return pr_val_err("Could not decipher length (Unknown cause.)");
 	if (len_len == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
 	result->size += len_len;
+	return 0;
 }
 
 /*
@@ -778,7 +793,9 @@ certificate_validate_signature(X509 *cert, ANY_t *signedData,
 	 * Second option it is.
 	 */
 
-	find_signedAttrs(signedData, &signedAttrs);
+	error = find_signedAttrs(signedData, &signedAttrs);
+	if (error)
+		goto end;
 
 	error = EVP_DigestVerifyUpdate(ctx, &EXPLICIT_SET_OF_TAG,
 	    sizeof(EXPLICIT_SET_OF_TAG));
@@ -1301,7 +1318,8 @@ handle_aki_ta(void *ext, void *arg)
 	}
 
 	error = (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0)
-	      ? pr_val_err("The '%s' does not equal the '%s'.", ext_aki()->name, ext_ski()->name)
+	      ? pr_val_err("The '%s' does not equal the '%s'.",
+	                   ext_aki()->name, ext_ski()->name)
 	      : 0;
 
 	ASN1_BIT_STRING_free(ski);
@@ -1319,9 +1337,9 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 
 	unsigned char data[2];
 
-	if (ku->length == 0) {
-		return pr_val_err("%s bit string has no enabled bits.",
-		    ext_ku()->name);
+	if (ku->length != 2 && ku->length != 1) {
+		return pr_val_err("Bogus %s length: %d",
+		    ext_ku()->name, ku->length);
 	}
 
 	memset(data, 0, sizeof(data));

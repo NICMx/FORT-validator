@@ -5,6 +5,7 @@
 #include "alloc.c"
 #include "common.c"
 #include "mock.c"
+#include "rrdp.h"
 #include "types/uri.c"
 #include "data_structure/path_builder.c"
 

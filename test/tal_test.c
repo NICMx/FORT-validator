@@ -8,6 +8,7 @@
 #include "line_file.c"
 #include "mock.c"
 #include "data_structure/path_builder.c"
+#include "rrdp.h"
 #include "types/uri.c"
 #include "crypto/base64.c"
 

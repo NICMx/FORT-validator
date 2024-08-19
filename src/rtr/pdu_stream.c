@@ -5,7 +5,6 @@
 #include "alloc.h"
 #include "log.h"
 #include "rtr/err_pdu.h"
-#include "rtr/pdu.h"
 
 enum buffer_state {
 	/* We've read all available bytes for now. */

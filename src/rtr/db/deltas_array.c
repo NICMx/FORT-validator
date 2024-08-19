@@ -5,7 +5,6 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "log.h"
 
 struct deltas_array {
 	struct deltas **array; /* It's a circular array. */

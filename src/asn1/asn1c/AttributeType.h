@@ -9,7 +9,6 @@
 #define	_AttributeType_H_
 
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* AttributeType */
 typedef OBJECT_IDENTIFIER_t	 AttributeType_t;

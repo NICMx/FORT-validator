@@ -12,7 +12,6 @@
 #include "config/mode.h"
 #include "config/output_format.h"
 #include "config/string_array.h"
-#include "config/types.h"
 
 /* Init/destroy */
 int handle_flags_config(int , char **);

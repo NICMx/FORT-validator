@@ -9,7 +9,6 @@
 #define	_IPAddress_H_
 
 #include "asn1/asn1c/BIT_STRING.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* IPAddress */
 typedef BIT_STRING_t	 IPAddress_t;

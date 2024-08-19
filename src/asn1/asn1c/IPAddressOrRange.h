@@ -8,10 +8,8 @@
 #ifndef	_IPAddressOrRange_H_
 #define	_IPAddressOrRange_H_
 
-#include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/IPAddressRange.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum IPAddressOrRange_PR {

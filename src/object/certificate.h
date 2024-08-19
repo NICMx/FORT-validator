@@ -5,8 +5,6 @@
 #include "asn1/asn1c/SignatureValue.h"
 #include "certificate_refs.h"
 #include "resource.h"
-#include "rpp.h"
-#include "types/uri.h"
 
 /* Certificate types in the RPKI */
 enum cert_type {

@@ -1,8 +1,5 @@
 #include "state.h"
 
-#include "alloc.h"
-#include "cache/local_cache.h"
-#include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
 

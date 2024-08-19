@@ -8,7 +8,6 @@
 #include "extension.h"
 #include "log.h"
 #include "object/name.h"
-#include "thread_var.h"
 
 static int
 __crl_load(struct rpki_uri *uri, X509_CRL **result)
@@ -106,9 +105,22 @@ static int
 handle_crlnum(void *ext, void *arg)
 {
 	/*
-	 * We're allowing only one CRL per RPP, so there's nothing to do here I
-	 * think.
+	 * From draft-spaghetti-sidrops-rpki-crl-numbers:
+	 *
+	 * In the RPKI, a wellformed Manifest FileList contains exactly one
+	 * entry for its associated CRL, together with a collision-resistant
+	 * message digest of that CRLs contents (see Section 2.2 of RFC6481
+	 * and Section 2 of RFC9286). Additionally, the target of the CRL
+	 * Distribution Points extension in an RPKI Resource Certificate is the
+	 * same CRL object listed on the issuing CAs current manifest (see
+	 * Section 4.8.6 of RFC6487). Together, these properties guarantee
+	 * that RPKI RPs will always be able to unambiguously identify exactly
+	 * one current CRL for each RPKI CA. Thus, in the RPKI, the ordering
+	 * functionality provided by CRL Numbers is fully subsumed by monotonically
+	 * increasing Manifest Numbers (Section 4.2.1 of RFC9286), thereby
+	 * obviating the need for RPKI RPs to process CRL Number extensions.
 	 */
+
 	return 0;
 }
 

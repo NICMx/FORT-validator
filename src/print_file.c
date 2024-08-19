@@ -1,18 +1,19 @@
 #include "print_file.h"
 
+#include <errno.h>
+
 #include "asn1/asn1c/CRL.h"
 #include "asn1/asn1c/Certificate.h"
+#include "asn1/asn1c/ContentInfo.h"
 #include "asn1/asn1c/ber_decoder.h"
 #include "asn1/asn1c/json_encoder.h"
-#include "asn1/content_info.h"
 #include "common.h"
 #include "config.h"
 #include "data_structure/path_builder.h"
-#include "file.h"
 #include "log.h"
+#include "object/tal.h"
 #include "rsync/rsync.h"
 #include "types/bio_seq.h"
-#include "types/uri.h"
 
 #define HDRSIZE 32
 
@@ -36,7 +37,7 @@ rsync2bio_tmpdir(char const *src)
 #define TMPDIR "/tmp/fort-XXXXXX"
 
 	struct path_builder pb;
-	char buf[strlen(TMPDIR) + 1];
+	char buf[17]; /* strlen(TMPDIR) + 1 */
 	char *tmpdir;
 	BIO *result = NULL;
 	int error;

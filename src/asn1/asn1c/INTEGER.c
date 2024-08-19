@@ -8,7 +8,6 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "asn1/asn1c/asn_codecs_prim.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "json_util.h"
 

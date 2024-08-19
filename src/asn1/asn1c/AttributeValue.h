@@ -9,7 +9,6 @@
 #define	_AttributeValue_H_
 
 #include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* AttributeValue */
 typedef ANY_t	 AttributeValue_t;

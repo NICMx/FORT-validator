@@ -9,12 +9,7 @@
 #define	_UnsignedAttributes_H_
 
 #include "asn1/asn1c/CMSAttribute.h"
-#include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/constr_SET_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
-
-/* Forward declarations */
-struct CMSAttribute;
 
 /* UnsignedAttributes */
 typedef struct UnsignedAttributes {

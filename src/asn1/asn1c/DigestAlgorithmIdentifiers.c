@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/DigestAlgorithmIdentifiers.h"
 
+#include "asn1/asn1c/DigestAlgorithmIdentifier.h"
+
 asn_TYPE_member_t asn_MBR_DigestAlgorithmIdentifiers_1[] = {
 	{ ATF_POINTER, 0, 0,
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),

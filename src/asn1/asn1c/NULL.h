@@ -5,7 +5,7 @@
 #ifndef	ASN_TYPE_NULL_H
 #define	ASN_TYPE_NULL_H
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "asn1/asn1c/constraints.h"
 
 /*
  * The value of the NULL type is meaningless.

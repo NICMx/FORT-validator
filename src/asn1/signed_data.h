@@ -4,7 +4,7 @@
 /* Some wrappers for asn1/asn1c/SignedData.h. */
 
 #include "asn1/asn1c/SignedData.h"
-#include "object/certificate.h"
+#include "certificate_refs.h"
 #include "resource.h"
 
 struct ee_cert {

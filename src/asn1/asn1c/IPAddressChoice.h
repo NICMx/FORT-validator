@@ -11,9 +11,6 @@
 #include "asn1/asn1c/IPAddressOrRange.h"
 #include "asn1/asn1c/NULL.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_CHOICE.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum IPAddressChoice_PR {
@@ -21,9 +18,6 @@ typedef enum IPAddressChoice_PR {
 	IPAddressChoice_PR_inherit,
 	IPAddressChoice_PR_addressesOrRanges
 } IPAddressChoice_PR;
-
-/* Forward declarations */
-struct IPAddressOrRange;
 
 /* IPAddressChoice */
 typedef struct IPAddressChoice {

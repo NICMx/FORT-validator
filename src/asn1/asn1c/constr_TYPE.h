@@ -17,7 +17,6 @@
 #include "asn1/asn1c/ber_tlv_length.h"
 #include "asn1/asn1c/ber_tlv_tag.h"
 
-struct asn_TYPE_descriptor_s;	/* Forward declaration */
 struct asn_TYPE_member_s;	/* Forward declaration */
 
 /*

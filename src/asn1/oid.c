@@ -1,8 +1,8 @@
 #include "asn1/oid.h"
 
+#include <errno.h>
+
 #include "alloc.h"
-#include "asn1/decode.h"
-#include "common.h"
 #include "log.h"
 
 void

@@ -9,7 +9,6 @@
 #define	_ContentType_H_
 
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* ContentType */
 typedef OBJECT_IDENTIFIER_t	 ContentType_t;

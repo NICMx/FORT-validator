@@ -3,7 +3,7 @@
 #include <ftw.h>
 
 #include "alloc.h"
-#include "data_structure/uthash.h"
+#include "config/mode.h"
 #include "log.h"
 
 int

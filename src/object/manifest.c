@@ -1,16 +1,10 @@
 #include "object/manifest.h"
 
 #include "algorithm.h"
-#include "asn1/asn1c/GeneralizedTime.h"
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "common.h"
 #include "crypto/hash.h"
 #include "log.h"
-#include "object/certificate.h"
-#include "object/crl.h"
-#include "object/roa.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
 
@@ -192,14 +186,26 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
     struct rpki_uri *mft_uri, struct rpp **pp)
 {
 	char const *tal;
-	int i;
-	struct FileAndHash *fah;
+	unsigned int i, j;
+	struct FileAndHash *fah, *tmpfah;
 	struct rpki_uri *uri;
 	int error;
+	unsigned int seed, rnd;
+
+	seed = time(NULL) ^ getpid();
 
 	*pp = rpp_create();
 
 	tal = tal_get_file_name(validation_tal(state_retrieve()));
+
+	/* Fisher-Yates shuffle with modulo bias */
+	for (i = 0; i < mft->fileList.list.count - 1; i++) {
+		rnd = rand_r(&seed);
+		j = i + rnd % (mft->fileList.list.count - i);
+		tmpfah = mft->fileList.list.array[j];
+		mft->fileList.list.array[j] = mft->fileList.list.array[i];
+		mft->fileList.list.array[i] = tmpfah;
+	}
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];

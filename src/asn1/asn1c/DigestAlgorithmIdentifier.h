@@ -9,7 +9,6 @@
 #define	_DigestAlgorithmIdentifier_H_
 
 #include "asn1/asn1c/AlgorithmIdentifier.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* DigestAlgorithmIdentifier */
 typedef AlgorithmIdentifier_t	 DigestAlgorithmIdentifier_t;

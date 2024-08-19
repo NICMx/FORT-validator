@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <sys/socket.h>
 
-#include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/IPAddressRange.h"
 
 struct ipv4_prefix {

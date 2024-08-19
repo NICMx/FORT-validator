@@ -1,9 +1,9 @@
 #ifndef SRC_RTR_PDU_STREAM_H_
 #define SRC_RTR_PDU_STREAM_H_
 
-#include "data_structure/array_list.h"
+#include <stdbool.h>
+
 #include "rtr/pdu.h"
-#include "rtr/rtr.h"
 
 struct pdu_stream; /* It's an *input* stream. */
 

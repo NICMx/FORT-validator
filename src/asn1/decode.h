@@ -4,7 +4,6 @@
 #include <stdbool.h>
 
 #include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/constr_TYPE.h"
 #include "file.h"
 
 int asn1_decode(const void *, size_t, asn_TYPE_descriptor_t const *, void **,

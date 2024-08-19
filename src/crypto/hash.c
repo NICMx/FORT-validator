@@ -2,8 +2,6 @@
 
 #include <openssl/evp.h>
 
-#include "alloc.h"
-#include "asn1/oid.h"
 #include "common.h"
 #include "file.h"
 #include "log.h"

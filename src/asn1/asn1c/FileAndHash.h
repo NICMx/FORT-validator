@@ -11,7 +11,6 @@
 #include "asn1/asn1c/BIT_STRING.h"
 #include "asn1/asn1c/IA5String.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* FileAndHash */
 typedef struct FileAndHash {

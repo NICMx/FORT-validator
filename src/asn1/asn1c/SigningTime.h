@@ -9,7 +9,6 @@
 #define	_SigningTime_H_
 
 #include "asn1/asn1c/Time.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* SigningTime */
 typedef Time_t	 SigningTime_t;

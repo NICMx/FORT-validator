@@ -2,7 +2,6 @@
 
 #include <errno.h>
 
-#include "alloc.h"
 #include "common.h"
 #include "config.h"
 #include "crypto/hash.h"

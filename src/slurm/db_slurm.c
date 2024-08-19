@@ -3,11 +3,10 @@
 #include <errno.h>
 #include <time.h>
 
-#include "alloc.h"
 #include "common.h"
 #include "crypto/base64.h"
 #include "data_structure/array_list.h"
-#include "types/router_key.h"
+#include "log.h"
 
 struct slurm_prefix_wrap {
 	struct slurm_prefix element;

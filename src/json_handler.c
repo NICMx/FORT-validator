@@ -4,7 +4,6 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "config/types.h"
 #include "log.h"
 
 static json_t *

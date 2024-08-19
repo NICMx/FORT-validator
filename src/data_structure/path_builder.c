@@ -2,10 +2,9 @@
 
 #include <errno.h>
 
-#include "alloc.h"
 #include "config.h"
-#include "crypto/hash.h"
 #include "log.h"
+#include "object/tal.h"
 
 #define SHA256_LEN (256 >> 3) /* 256 / 8, bits -> bytes */
 
