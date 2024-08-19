@@ -3,7 +3,7 @@ Upstream-Name: fort
 Source: https://github.com/NICMx/FORT-validator
 
 Files: *
-Copyright: 2023 NIC Mexico <fort-validator@nic.mx>
+Copyright: 2024 NIC Mexico <fort-validator@nic.mx>
 License: MIT
 
 Files: src/asn1/asn1c/*

@@ -9,7 +9,7 @@ Build-Depends: debhelper-compat (= 11),
  libjansson-dev,
  libssl-dev,
  libxml2-dev,
-Standards-Version: 4.5.1
+Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Homepage: https://nicmx.github.io/FORT-validator
 Vcs-Git: https://github.com/NICMx/FORT-validator.git -b debian
