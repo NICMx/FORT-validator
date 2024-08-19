@@ -37,7 +37,7 @@ rsync2bio_tmpdir(char const *src)
 #define TMPDIR "/tmp/fort-XXXXXX"
 
 	struct path_builder pb;
-	char buf[strlen(TMPDIR) + 1];
+	char buf[17]; /* strlen(TMPDIR) + 1 */
 	char *tmpdir;
 	BIO *result = NULL;
 	int error;

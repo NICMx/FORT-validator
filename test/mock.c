@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include "config.h"
+#include "log.h"
 #include "state.h"
 #include "thread_var.h"
 #include "config/filename_format.h"
