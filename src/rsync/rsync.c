@@ -154,21 +154,41 @@ read_pipe(int fd_pipe[2][2], int type)
 {
 	char buffer[4096];
 	ssize_t count;
-	int error;
+	struct timeval timeout;
+	fd_set read_fds;
+	int error, res;
 
 	while (1) {
-		count = read(fd_pipe[type][0], buffer, sizeof(buffer));
-		if (count == -1) {
-			error = errno;
-			if (error == EINTR)
+		timeout.tv_sec = config_get_rsync_transfer_timeout();
+		timeout.tv_usec = 0;
+
+		FD_ZERO(&read_fds);
+		FD_SET(fd_pipe[type][0], &read_fds);
+
+		res = select(fd_pipe[type][0] + 1, &read_fds, NULL, NULL, &timeout);
+		if (res == 0) {
+			pr_val_err("rsync transfer timeout reached");
+			close(fd_pipe[type][0]);
+			return 1;
+		} else if (res < 0) {
+			if (errno == EINTR)
 				continue;
-			close(fd_pipe[type][0]); /* Close read end */
-			pr_val_err("rsync buffer read error: %s",
-			    strerror(error));
-			return -error;
+			close(fd_pipe[type][0]);
+			return 1;
+		} else {
+			count = read(fd_pipe[type][0], buffer, sizeof(buffer));
+			if (count == -1) {
+				error = errno;
+				if (error == EINTR)
+					continue;
+				close(fd_pipe[type][0]); /* Close read end */
+				pr_val_err("rsync buffer read error: %s",
+				    strerror(error));
+				return -error;
+			}
+			if (count == 0)
+				break;
 		}
-		if (count == 0)
-			break;
 
 		log_buffer(buffer, count, type);
 	}
@@ -276,7 +296,7 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 		/* This code is run by us. */
 		error = read_pipes(fork_fds);
 		if (error)
-			kill(child_pid, SIGCHLD); /* Stop the child */
+			kill(child_pid, SIGTERM); /* Stop the child */
 
 		error = waitpid(child_pid, &child_status, 0);
 		do {

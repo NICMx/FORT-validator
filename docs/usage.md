@@ -65,6 +65,7 @@ description: Guide to use arguments of FORT Validator.
 	51. [`--rsync.priority`](#--rsyncpriority)
 	53. [`--rsync.retry.count`](#--rsyncretrycount)
 	54. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	40. [`--rsync.transfer-timeout`](#--rsynctransfer-timeout)
 	55. [`--configuration-file`](#--configuration-file)
 	56. [`rsync.program`](#rsyncprogram)
 	57. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
@@ -103,6 +104,7 @@ description: Guide to use arguments of FORT Validator.
 	[--rsync.priority=<unsigned integer>]
 	[--rsync.retry.count=<unsigned integer>]
 	[--rsync.retry.interval=<unsigned integer>]
+	[--rsync.transfer-timeout=<unsigned integer>]
 	[--http.enabled=true|false]
 	[--http.priority=<unsigned integer>]
 	[--http.retry.count=<unsigned integer>]
@@ -931,6 +933,17 @@ Whenever is necessary to execute an RSYNC, the validator will try at least one t
 
 Period of time (in seconds) to wait between each retry to execute an RSYNC.
 
+### `--rsync.transfer-timeout`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 900
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
+
+Maximum time in seconds that the rsync transfer can last.
+
+Once the connection is established with the server, the request will last a maximum of `rsync.transfer-timeout` seconds. A value of 0 means unlimited time.
+
 ### `--configuration-file`
 
 - **Type:** String (Path to file)
@@ -974,6 +987,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--rsyncretrycount">count</a>": 1,
 			"<a href="#--rsyncretryinterval">interval</a>": 4
 		},
+		"<a href="#--rsynctransfer-timeout">transfer-timeout</a>": 0,
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
 			"-rtz",
