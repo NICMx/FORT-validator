@@ -1345,13 +1345,13 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 	memset(data, 0, sizeof(data));
 	memcpy(data, ku->data, ku->length);
 
-	if (ku->data[0] != byte1) {
+	if (data[0] != byte1 || data[1] != 0) {
 		return pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
-		    !!(ku->data[0] & 0x80u), !!(ku->data[0] & 0x40u),
-		    !!(ku->data[0] & 0x20u), !!(ku->data[0] & 0x10u),
-		    !!(ku->data[0] & 0x08u), !!(ku->data[0] & 0x04u),
-		    !!(ku->data[0] & 0x02u), !!(ku->data[0] & 0x01u),
-		    !!(ku->data[1] & 0x80u));
+		    !!(data[0] & 0x80u), !!(data[0] & 0x40u),
+		    !!(data[0] & 0x20u), !!(data[0] & 0x10u),
+		    !!(data[0] & 0x08u), !!(data[0] & 0x04u),
+		    !!(data[0] & 0x02u), !!(data[0] & 0x01u),
+		    !!(data[1] & 0x80u));
 	}
 
 	return 0;
