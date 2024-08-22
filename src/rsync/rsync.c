@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <syslog.h>
@@ -154,21 +155,44 @@ read_pipe(int fd_pipe[2][2], int type)
 {
 	char buffer[4096];
 	ssize_t count;
-	int error;
+	struct pollfd pfd[1];
+	int error, nready;
+
+	memset(&pfd, 0, sizeof(pfd));
+	pfd[0].fd = fd_pipe[type][0];
+	pfd[0].events = POLLIN;
 
 	while (1) {
-		count = read(fd_pipe[type][0], buffer, sizeof(buffer));
-		if (count == -1) {
-			error = errno;
-			if (error == EINTR)
-				continue;
-			close(fd_pipe[type][0]); /* Close read end */
-			pr_val_err("rsync buffer read error: %s",
-			    strerror(error));
-			return -error;
+		nready = poll(pfd, 1, 1000 * config_get_rsync_transfer_timeout());
+		if (nready == 0) {
+			pr_val_err("rsync transfer timeout reached");
+			close(fd_pipe[type][0]);
+			return 1;
 		}
-		if (count == 0)
-			break;
+		if (nready == -1) {
+			if (errno == EINTR)
+				continue;
+			pr_val_err("rsync bad poll");
+			close(fd_pipe[type][0]);
+			return 1;
+		}
+		if (pfd[0].revents & (POLLERR|POLLNVAL)) {
+			pr_val_err("rsync bad fd: %i", pfd[0].fd);
+			return 1;
+		} else if (pfd[0].revents & (POLLIN|POLLHUP)) {
+			count = read(fd_pipe[type][0], buffer, sizeof(buffer));
+			if (count == -1) {
+				if (errno == EINTR)
+					continue;
+				error = errno;
+				close(fd_pipe[type][0]); /* Close read end */
+				pr_val_err("rsync buffer read error: %s",
+				    strerror(error));
+				return -error;
+			}
+			if (count == 0)
+				break;
+		}
 
 		log_buffer(buffer, count, type);
 	}
@@ -276,7 +300,7 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 		/* This code is run by us. */
 		error = read_pipes(fork_fds);
 		if (error)
-			kill(child_pid, SIGCHLD); /* Stop the child */
+			kill(child_pid, SIGTERM); /* Stop the child */
 
 		error = waitpid(child_pid, &child_status, 0);
 		do {

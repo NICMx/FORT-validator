@@ -1009,6 +1009,18 @@ By default, the value is \fI5\fR.
 .RE
 .P
 
+.B \-\-rsync.transfer\-timeout=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum time in seconds that the rsync process can last.
+.P
+Once the connection is established with the server, the request will last a
+maximum of \fBrsync.transfer-timeout\fR seconds. A value of \fI0\fR means
+unlimited time (default value).
+.P
+By default, it has a value of \fI900\fR.
+.RE
+.P
+
 .B \-\-output.roa=\fIFILE\fR
 .RS 4
 File where the ROAs will be printed in the configured format (see
