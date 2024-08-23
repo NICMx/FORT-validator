@@ -704,7 +704,7 @@ The value specified (either by the argument or the default value) is utilized in
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 0
+- **Default:** 900
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_

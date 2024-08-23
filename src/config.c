@@ -960,7 +960,7 @@ set_default_values(void)
 	rpki_config.http.user_agent = pstrdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	rpki_config.http.max_redirs = 10;
 	rpki_config.http.connect_timeout = 30;
-	rpki_config.http.transfer_timeout = 0;
+	rpki_config.http.transfer_timeout = 900;
 	rpki_config.http.low_speed_limit = 100000;
 	rpki_config.http.low_speed_time = 10;
 	rpki_config.http.max_file_size = 1000000000;
