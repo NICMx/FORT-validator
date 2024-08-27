@@ -4,9 +4,7 @@ title: CVE
 
 # CVEs
 
-Note: Still awaiting CVE ID number assignments.
-
-## CVE-2024-_____
+## CVE-2024-45238
 
 Certificate containing a malformed `subjectPublicKey` crashes Fort 1.6.2-, when compiled with OpenSSL < 3.
 
@@ -15,7 +13,7 @@ Certificate containing a malformed `subjectPublicKey` crashes Fort 1.6.2-, when 
 | Patch | Commit [5689dea](https://github.com/NICMx/FORT-validator/commit/5689dea5e878fed28c5f338a27d7cda4151a14f1), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
 
-## CVE-2024-_____
+## CVE-2024-45237
 
 Certificate containing a Key Usage bit string longer than 2 bytes causes buffer overflow on Fort 1.6.2-.
 
@@ -24,7 +22,7 @@ Certificate containing a Key Usage bit string longer than 2 bytes causes buffer 
 | Patch | Commit [939d988](https://github.com/NICMx/FORT-validator/commit/939d988551d17996be73f52c376a70a3d6ba69f9), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
 
-## CVE-2024-_____
+## CVE-2024-45235
 
 Certificate containing an Authority Key Identifier missing a `keyIdentifier` crashes Fort 1.6.2-.
 
@@ -33,7 +31,7 @@ Certificate containing an Authority Key Identifier missing a `keyIdentifier` cra
 | Patch | Commit [b1eb3c5](https://github.com/NICMx/FORT-validator/commit/b1eb3c507ae920859bbe294776ebc2bb30bb7e56), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
 
-## CVE-2024-_____
+## CVE-2024-45236
 
 Signed Object containing empty `signedAttrs` crashes Fort 1.6.2-.
 
@@ -42,7 +40,7 @@ Signed Object containing empty `signedAttrs` crashes Fort 1.6.2-.
 | Patch | Commit [4dafbd9](https://github.com/NICMx/FORT-validator/commit/4dafbd9de64a5a0616af97365bc1751465b29d2e), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
 
-## CVE-2024-_____
+## CVE-2024-45239
 
 Signed Object containing null `eContent` crashes Fort 1.6.2-.
 
@@ -51,7 +49,7 @@ Signed Object containing null `eContent` crashes Fort 1.6.2-.
 | Patch | Commit [942f921](https://github.com/NICMx/FORT-validator/commit/942f921ba7244cdcf4574cedc4c16392a7cc594b), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
 
-## CVE-2024-_____
+## CVE-2024-45234
 
 Certificate containing `signedAttrs` not in canonical form crashes Fort 1.6.2-.
 
