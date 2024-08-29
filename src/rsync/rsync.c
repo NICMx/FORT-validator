@@ -120,6 +120,15 @@ create_pipes(int fds[2][2])
 	return 0;
 }
 
+static long
+get_current_millis(void)
+{
+	struct timespec now;
+	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
+		pr_crit("clock_gettime() returned %d", errno);
+	return 1000L * now.tv_sec + now.tv_nsec / 1000000L;
+}
+
 static void
 log_buffer(char const *buffer, ssize_t read, int type)
 {
@@ -150,6 +159,10 @@ log_buffer(char const *buffer, ssize_t read, int type)
 #undef PRE_RSYNC
 }
 
+/*
+ * Consumes (and throws away) all the bytes in read stream fd_pipe[type][0],
+ * then closes it after end of stream.
+ */
 static int
 read_pipe(int fd_pipe[2][2], int type)
 {
@@ -157,18 +170,20 @@ read_pipe(int fd_pipe[2][2], int type)
 	ssize_t count;
 	struct pollfd pfd[1];
 	int error, nready;
+	long epoch, delta, timeout;
 
 	memset(&pfd, 0, sizeof(pfd));
 	pfd[0].fd = fd_pipe[type][0];
 	pfd[0].events = POLLIN;
 
+	epoch = get_current_millis();
+	delta = 0;
+	timeout = 1000 * config_get_rsync_transfer_timeout();
+
 	while (1) {
-		nready = poll(pfd, 1, 1000 * config_get_rsync_transfer_timeout());
-		if (nready == 0) {
-			pr_val_err("rsync transfer timeout reached");
-			close(fd_pipe[type][0]);
-			return 1;
-		}
+		nready = poll(pfd, 1, timeout - delta);
+		if (nready == 0)
+			goto timed_out;
 		if (nready == -1) {
 			if (errno == EINTR)
 				continue;
@@ -192,18 +207,34 @@ read_pipe(int fd_pipe[2][2], int type)
 			}
 			if (count == 0)
 				break;
+
+			log_buffer(buffer, count, type);
 		}
 
-		log_buffer(buffer, count, type);
+		delta = get_current_millis() - epoch;
+		if (delta < 0) {
+			pr_val_err("This clock does not seem monotonic. I'm going to have to give up this rsync.");
+			close(fd_pipe[type][0]);
+			return 1;
+		}
+		if (delta >= timeout)
+			goto timed_out; /* Read took too long */
 	}
 
 	close(fd_pipe[type][0]); /* Close read end */
 	return 0;
+
+timed_out:
+	pr_val_err("rsync transfer timeout reached");
+	close(fd_pipe[type][0]);
+	return 1;
 }
 
 /*
- * Read the piped output from the child, assures that all pipes are closed on
- * success and on error.
+ * Completely consumes @fd's streams, and closes them.
+ *
+ * Allegedly, this is a portable way to wait for the child process to finish.
+ * (IIRC, waitpid() doesn't do this reliably.)
  */
 static int
 read_pipes(int fds[2][2])
