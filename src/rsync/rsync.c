@@ -191,8 +191,12 @@ exhaust_read_fd(int fd, int type)
 			close(fd);
 			return 1;
 		}
-		if (pfd[0].revents & (POLLERR|POLLNVAL)) {
+		if (pfd[0].revents & POLLNVAL) {
 			pr_val_err("rsync bad fd: %i", pfd[0].fd);
+			return 1; /* Already closed */
+		} else if (pfd[0].revents & POLLERR) {
+			pr_val_err("Generic error during rsync poll.");
+			close(fd);
 			return 1;
 		} else if (pfd[0].revents & (POLLIN|POLLHUP)) {
 			count = read(fd, buffer, sizeof(buffer));
