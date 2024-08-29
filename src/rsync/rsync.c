@@ -160,11 +160,11 @@ log_buffer(char const *buffer, ssize_t read, int type)
 }
 
 /*
- * Consumes (and throws away) all the bytes in read stream fd_pipe[type][0],
+ * Consumes (and throws away) all the bytes in read stream @fd,
  * then closes it after end of stream.
  */
 static int
-read_pipe(int fd_pipe[2][2], int type)
+exhaust_read_fd(int fd, int type)
 {
 	char buffer[4096];
 	ssize_t count;
@@ -173,7 +173,7 @@ read_pipe(int fd_pipe[2][2], int type)
 	long epoch, delta, timeout;
 
 	memset(&pfd, 0, sizeof(pfd));
-	pfd[0].fd = fd_pipe[type][0];
+	pfd[0].fd = fd;
 	pfd[0].events = POLLIN;
 
 	epoch = get_current_millis();
@@ -188,19 +188,19 @@ read_pipe(int fd_pipe[2][2], int type)
 			if (errno == EINTR)
 				continue;
 			pr_val_err("rsync bad poll");
-			close(fd_pipe[type][0]);
+			close(fd);
 			return 1;
 		}
 		if (pfd[0].revents & (POLLERR|POLLNVAL)) {
 			pr_val_err("rsync bad fd: %i", pfd[0].fd);
 			return 1;
 		} else if (pfd[0].revents & (POLLIN|POLLHUP)) {
-			count = read(fd_pipe[type][0], buffer, sizeof(buffer));
+			count = read(fd, buffer, sizeof(buffer));
 			if (count == -1) {
 				if (errno == EINTR)
 					continue;
 				error = errno;
-				close(fd_pipe[type][0]); /* Close read end */
+				close(fd); /* Close read end */
 				pr_val_err("rsync buffer read error: %s",
 				    strerror(error));
 				return -error;
@@ -214,19 +214,19 @@ read_pipe(int fd_pipe[2][2], int type)
 		delta = get_current_millis() - epoch;
 		if (delta < 0) {
 			pr_val_err("This clock does not seem monotonic. I'm going to have to give up this rsync.");
-			close(fd_pipe[type][0]);
+			close(fd);
 			return 1;
 		}
 		if (delta >= timeout)
 			goto timed_out; /* Read took too long */
 	}
 
-	close(fd_pipe[type][0]); /* Close read end */
+	close(fd); /* Close read end */
 	return 0;
 
 timed_out:
 	pr_val_err("rsync transfer timeout reached");
-	close(fd_pipe[type][0]);
+	close(fd);
 	return 1;
 }
 
@@ -237,24 +237,22 @@ timed_out:
  * (IIRC, waitpid() doesn't do this reliably.)
  */
 static int
-read_pipes(int fds[2][2])
+exhaust_pipes(int fds[2][2])
 {
 	int error;
 
-	/* Won't be needed (sterr/stdout write ends) */
-	close(fds[0][1]);
-	close(fds[1][1]);
+	close(fds[0][1]); /* Standard error, write end */
+	close(fds[1][1]); /* Standard output, write end */
 
-	/* stderr pipe */
-	error = read_pipe(fds, 0);
+	/* Standard error, read end */
+	error = exhaust_read_fd(fds[0][0], 0);
 	if (error) {
-		/* Close the other pipe pending to read */
 		close(fds[1][0]);
 		return error;
 	}
 
-	/* stdout pipe, always logs to info */
-	return read_pipe(fds, 1);
+	/* Standard output, read end */
+	return exhaust_read_fd(fds[1][0], 1);
 }
 
 /*
@@ -329,7 +327,7 @@ rsync_download(char const *src, char const *dst, bool is_directory)
 		}
 
 		/* This code is run by us. */
-		error = read_pipes(fork_fds);
+		error = exhaust_pipes(fork_fds);
 		if (error)
 			kill(child_pid, SIGTERM); /* Stop the child */
 

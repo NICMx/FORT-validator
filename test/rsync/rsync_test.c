@@ -73,52 +73,44 @@ rsync_drip_feed(void *arg)
 }
 
 static void
-prepare_test(int fds[2][2], pthread_t *thread, void *(*rsync_simulator)(void *))
+prepare_test(int fds[2], pthread_t *thread, void *(*rsync_simulator)(void *))
 {
 	int *arg;
 
-	ck_assert_int_eq(0, pipe(fds[0]));
-	memset(fds[1], 0, sizeof(fds[1]));
+	ck_assert_int_eq(0, pipe(fds));
 
-	arg = pmalloc(sizeof(fds[0][1]));
-	*arg = fds[0][1];
+	arg = pmalloc(sizeof(fds[1]));
+	*arg = fds[1];
 	ck_assert_int_eq(0, pthread_create(thread, NULL, rsync_simulator, arg));
 }
 
 static void
-finish_test(int fds[2][2], pthread_t thread)
+finish_test(pthread_t thread)
 {
-	close(fds[0][0]);
 	pthread_join(thread, NULL);
 }
 
 START_TEST(read_pipe_test) /* Tests the read_pipe() function */
 {
-	/*
-	 * [0][0] = standard error, read end
-	 * [0][1] = standard error, write end
-	 * [1][0] = standard output, read end (unused during this test)
-	 * [1][1] = standard output, write end (unused during this test)
-	 */
-	int fds[2][2];
+	int fds[2];
 	pthread_t rsync_writer;
 
 	printf("This test needs to exhaust some timeouts. Please be patient.\n");
 
 	printf("Normal transfer\n");
 	prepare_test(fds, &rsync_writer, rsync_fast);
-	ck_assert_int_eq(0, read_pipe(fds, 0));
-	finish_test(fds, rsync_writer);
+	ck_assert_int_eq(0, exhaust_read_fd(fds[0], 0));
+	finish_test(rsync_writer);
 
 	printf("Stalled transfer\n");
 	prepare_test(fds, &rsync_writer, rsync_stalled);
-	ck_assert_int_eq(1, read_pipe(fds, 0));
-	finish_test(fds, rsync_writer);
+	ck_assert_int_eq(1, exhaust_read_fd(fds[0], 0));
+	finish_test(rsync_writer);
 
 	printf("Drip-feed\n");
 	prepare_test(fds, &rsync_writer, rsync_drip_feed);
-	ck_assert_int_eq(1, read_pipe(fds, 0));
-	finish_test(fds, rsync_writer);
+	ck_assert_int_eq(1, exhaust_read_fd(fds[0], 0));
+	finish_test(rsync_writer);
 }
 END_TEST
 
