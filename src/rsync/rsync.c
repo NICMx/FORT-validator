@@ -162,6 +162,8 @@ log_buffer(char const *buffer, ssize_t read, int type)
 /*
  * Consumes (and throws away) all the bytes in read stream @fd,
  * then closes it after end of stream.
+ *
+ * Returns: ok -> 0, error -> 1, timeout -> 2.
  */
 static int
 exhaust_read_fd(int fd, int type)
@@ -185,29 +187,27 @@ exhaust_read_fd(int fd, int type)
 		if (nready == 0)
 			goto timed_out;
 		if (nready == -1) {
-			if (errno == EINTR)
+			error = errno;
+			if (error == EINTR)
 				continue;
-			pr_val_err("rsync bad poll");
-			close(fd);
-			return 1;
+			pr_val_err("rsync bad poll: %s", strerror(error));
+			goto fail;
 		}
 		if (pfd[0].revents & POLLNVAL) {
 			pr_val_err("rsync bad fd: %i", pfd[0].fd);
 			return 1; /* Already closed */
 		} else if (pfd[0].revents & POLLERR) {
 			pr_val_err("Generic error during rsync poll.");
-			close(fd);
-			return 1;
+			goto fail;
 		} else if (pfd[0].revents & (POLLIN|POLLHUP)) {
 			count = read(fd, buffer, sizeof(buffer));
 			if (count == -1) {
-				if (errno == EINTR)
-					continue;
 				error = errno;
-				close(fd); /* Close read end */
+				if (error == EINTR)
+					continue;
 				pr_val_err("rsync buffer read error: %s",
 				    strerror(error));
-				return -error;
+				goto fail;
 			}
 			if (count == 0)
 				break;
@@ -218,8 +218,7 @@ exhaust_read_fd(int fd, int type)
 		delta = get_current_millis() - epoch;
 		if (delta < 0) {
 			pr_val_err("This clock does not seem monotonic. I'm going to have to give up this rsync.");
-			close(fd);
-			return 1;
+			goto fail;
 		}
 		if (delta >= timeout)
 			goto timed_out; /* Read took too long */
@@ -230,6 +229,10 @@ exhaust_read_fd(int fd, int type)
 
 timed_out:
 	pr_val_err("rsync transfer timeout reached");
+	close(fd);
+	return 2;
+
+fail:
 	close(fd);
 	return 1;
 }

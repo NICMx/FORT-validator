@@ -104,12 +104,12 @@ START_TEST(read_pipe_test) /* Tests the read_pipe() function */
 
 	printf("Stalled transfer\n");
 	prepare_test(fds, &rsync_writer, rsync_stalled);
-	ck_assert_int_eq(1, exhaust_read_fd(fds[0], 0));
+	ck_assert_int_eq(2, exhaust_read_fd(fds[0], 0));
 	finish_test(rsync_writer);
 
 	printf("Drip-feed\n");
 	prepare_test(fds, &rsync_writer, rsync_drip_feed);
-	ck_assert_int_eq(1, exhaust_read_fd(fds[0], 0));
+	ck_assert_int_eq(2, exhaust_read_fd(fds[0], 0));
 	finish_test(rsync_writer);
 }
 END_TEST
