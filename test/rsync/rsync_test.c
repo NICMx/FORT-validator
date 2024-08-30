@@ -24,64 +24,64 @@ disable_sigpipe(void)
 static void *
 rsync_fast(void *arg)
 {
-	int writefd = *((int *)arg);
-	free(arg);
+	int fds[2][2];
+	memcpy(fds, arg, sizeof(fds));
 
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDERR_WRITE(fds), PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDERR_WRITE(fds), PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
 
-	close(writefd);
+	close(STDERR_WRITE(fds));
+	close(STDOUT_WRITE(fds));
 	return NULL;
 }
 
 static void *
 rsync_stalled(void *arg)
 {
-	int writefd = *((int *)arg);
-	free(arg);
+	int fds[2][2];
+	memcpy(fds, arg, sizeof(fds));
 
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
 
 	sleep(5); /* The timeout is 4 seconds */
 
-	ck_assert_int_ne(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_ne(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
 
-	close(writefd);
+	close(STDERR_WRITE(fds));
+	close(STDOUT_WRITE(fds));
 	return NULL;
 }
 
 static void *
 rsync_drip_feed(void *arg)
 {
-	int writefd = *((int *)arg);
-	free(arg);
+	int fds[2][2];
+	memcpy(fds, arg, sizeof(fds));
 
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
 	sleep(1);
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDERR_WRITE(fds), PKT, PKTLEN));
 	sleep(1);
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
 	sleep(1);
-	ck_assert_int_eq(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_eq(PKTLEN, write(STDERR_WRITE(fds), PKT, PKTLEN));
 	sleep(2);
-	ck_assert_int_ne(PKTLEN, write(writefd, PKT, PKTLEN));
+	ck_assert_int_ne(PKTLEN, write(STDOUT_WRITE(fds), PKT, PKTLEN));
 
-	close(writefd);
+	close(STDERR_WRITE(fds));
+	close(STDOUT_WRITE(fds));
 	return NULL;
 }
 
 static void
-prepare_test(int fds[2], pthread_t *thread, void *(*rsync_simulator)(void *))
+prepare_test(int fds[2][2], pthread_t *thread, void *(*rsync_simulator)(void *))
 {
-	int *arg;
-
-	ck_assert_int_eq(0, pipe(fds));
-
-	arg = pmalloc(sizeof(fds[1]));
-	*arg = fds[1];
-	ck_assert_int_eq(0, pthread_create(thread, NULL, rsync_simulator, arg));
+	ck_assert_int_eq(0, pipe(fds[0]));
+	ck_assert_int_eq(0, pipe(fds[1]));
+	ck_assert_int_eq(0, pthread_create(thread, NULL, rsync_simulator, fds));
 }
 
 static void
@@ -92,24 +92,24 @@ finish_test(pthread_t thread)
 
 START_TEST(read_pipe_test) /* Tests the read_pipe() function */
 {
-	int fds[2];
+	int fds[2][2];
 	pthread_t rsync_writer;
 
 	printf("This test needs to exhaust some timeouts. Please be patient.\n");
 
 	printf("Normal transfer\n");
 	prepare_test(fds, &rsync_writer, rsync_fast);
-	ck_assert_int_eq(0, exhaust_read_fd(fds[0], 0));
+	ck_assert_int_eq(0, exhaust_read_fds(STDERR_READ(fds), STDOUT_READ(fds)));
 	finish_test(rsync_writer);
 
 	printf("Stalled transfer\n");
 	prepare_test(fds, &rsync_writer, rsync_stalled);
-	ck_assert_int_eq(2, exhaust_read_fd(fds[0], 0));
+	ck_assert_int_eq(2, exhaust_read_fds(STDERR_READ(fds), STDOUT_READ(fds)));
 	finish_test(rsync_writer);
 
 	printf("Drip-feed\n");
 	prepare_test(fds, &rsync_writer, rsync_drip_feed);
-	ck_assert_int_eq(2, exhaust_read_fd(fds[0], 0));
+	ck_assert_int_eq(2, exhaust_read_fds(STDERR_READ(fds), STDOUT_READ(fds)));
 	finish_test(rsync_writer);
 }
 END_TEST
