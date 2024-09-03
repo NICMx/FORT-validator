@@ -86,6 +86,7 @@ struct rpki_config {
 			/* Interval (in seconds) between each retry */
 			unsigned int interval;
 		} retry;
+		unsigned int transfer_timeout;
 		char *program;
 		struct {
 			struct string_array flat; /* Deprecated */
@@ -486,6 +487,14 @@ static const struct option_field options[] = {
 		/* Unlimited */
 		.max = 0,
 		.deprecated = true,
+	}, {
+		.id = 3008,
+		.name = "rsync.transfer-timeout",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rsync.transfer_timeout),
+		.doc = "Maximum transfer time before killing the rsync process",
+		.min = 0,
+		.max = UINT_MAX,
 	},
 
 	/* HTTP requests parameters */
@@ -946,6 +955,7 @@ set_default_values(void)
 	rpki_config.rsync.strategy = pstrdup("<deprecated>");
 	rpki_config.rsync.retry.count = 1;
 	rpki_config.rsync.retry.interval = 4;
+	rpki_config.rsync.transfer_timeout = 900;
 	rpki_config.rsync.program = pstrdup("rsync");
 	string_array_init(&rpki_config.rsync.args.flat,
 	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
@@ -1340,6 +1350,12 @@ unsigned int
 config_get_rsync_retry_interval(void)
 {
 	return rpki_config.rsync.retry.interval;
+}
+
+long
+config_get_rsync_transfer_timeout(void)
+{
+	return rpki_config.rsync.transfer_timeout;
 }
 
 char *
