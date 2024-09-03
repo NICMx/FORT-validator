@@ -307,6 +307,7 @@ Assuming not much time has passed since the last time the repository was cached,
 
 - **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
+- **Default:** `false`
 
 Skip the repository cache update?
 
@@ -318,6 +319,7 @@ Mostly intended for debugging. See [`--rsync.enabled`](#--rsyncenabled) and [`--
 
 - **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
+- **Default:** `false`
 
 Send process to the background?
 
@@ -648,7 +650,7 @@ See [`--rsync.priority`](#--rsyncpriority).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 0
+- **Default:** 1
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Number of additional HTTP requests after a failed attempt.
@@ -659,7 +661,7 @@ If a transient error is returned when Fort tries to perform an HTTP transfer, it
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 5
+- **Default:** 4
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Period of time (in seconds) to wait between each retry to request an HTTP URI.
@@ -776,6 +778,7 @@ Watch out for the following warning in the operation logs:
 
 - **Type:** String (Path to directory)
 - **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
 
@@ -792,6 +795,7 @@ The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://cur
 
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
 
 File where the ROAs (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
@@ -824,6 +828,7 @@ If `--output.roa` is omitted, the ROAs are not printed.
 
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
 
 > ![Warning!](img/warn.svg) BGPsec certificate validation has been disabled in version 1.5.2 because of [this bug](https://github.com/NICMx/FORT-validator/issues/58).
 
@@ -915,7 +920,7 @@ See [`--http.priority`](#--httppriority).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 0
+- **Default:** 1
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Maximum number of retries whenever there's an error executing an RSYNC.
@@ -928,7 +933,7 @@ Whenever is necessary to execute an RSYNC, the validator will try at least one t
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 5
+- **Default:** 4
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Period of time (in seconds) to wait between each retry to execute an RSYNC.
@@ -948,6 +953,7 @@ Once the connection is established with the server, the request will last a maxi
 
 - **Type:** String (Path to file)
 - **Availability:** `argv` only
+- **Default:** `NULL` (disabled)
 
 Path to a JSON file from which additional configuration will be read.
 
@@ -1160,7 +1166,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 43200 (12 hours)
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
@@ -1171,7 +1176,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
 - **Availability:** `argv` and JSON
-- **Default:** `root-except-ta`
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
@@ -1181,7 +1185,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "--dirs", "$REMOTE", "$LOCAL" ]`
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
@@ -1191,7 +1194,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 5
 - **Range:** [1, 100]
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
