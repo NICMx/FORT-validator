@@ -1,7 +1,11 @@
 #include "config.h"
 
+#include <curl/curl.h>
 #include <errno.h>
 #include <getopt.h>
+#include <libxml/xmlversion.h>
+#include <jansson.h>
+#include <openssl/opensslv.h>
 #include <syslog.h>
 
 #include "common.h"
@@ -895,6 +899,11 @@ print_config(void)
 	struct option_field const *opt;
 
 	pr_op_info(PACKAGE_STRING);
+	pr_op_info("  libcrypto: " OPENSSL_VERSION_TEXT);
+	pr_op_info("  jansson:   " JANSSON_VERSION);
+	pr_op_info("  libcurl:   " LIBCURL_VERSION);
+	pr_op_info("  libxml:    " LIBXML_DOTTED_VERSION);
+
 	pr_op_info("Configuration {");
 
 	FOREACH_OPTION(options, opt, 0xFFFF)

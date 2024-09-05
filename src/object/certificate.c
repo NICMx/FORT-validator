@@ -19,6 +19,7 @@
 #include "common.h"
 #include "config.h"
 #include "extension.h"
+#include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"
 #include "object/manifest.h"
@@ -901,6 +902,20 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 	return 0;
 }
 
+static void
+pr_debug_x509_dates(X509 *x509)
+{
+	char *nb, *na;
+
+	nb = asn1time2str(X509_get0_notBefore(x509));
+	na = asn1time2str(X509_get0_notAfter(x509));
+
+	pr_val_debug("Valid range: [%s, %s]", nb, na);
+
+	free(nb);
+	free(na);
+}
+
 /*
  * Retry certificate validation without CRL time validation.
  */
@@ -948,6 +963,9 @@ verify_cert_crl_stale(struct validation *state, X509 *cert,
 	else
 		error = val_crypto_err("Certificate validation failed: %d", ok);
 
+	if (error && log_val_enabled(LOG_DEBUG))
+		pr_debug_x509_dates(cert);
+
 pop_clone:
 	clone = sk_X509_CRL_pop(crls);
 	if (clone == NULL)
@@ -963,6 +981,31 @@ release_ctx:
 	X509_STORE_CTX_free(ctx);
 	return error;
 
+}
+
+static int
+complain_crl_stale(STACK_OF(X509_CRL) *crls)
+{
+	X509_CRL *crl;
+	char *lu;
+	char *nu;
+	int ret;
+
+	if (sk_X509_CRL_num(crls) < 1)
+		pr_crit("Empty CRL stack despite validations.");
+	crl = sk_X509_CRL_value(crls, 0);
+	if (crl == NULL)
+		pr_crit("Unable to pop CRL from nonempty stack.");
+
+	lu = asn1time2str(X509_CRL_get0_lastUpdate(crl));
+	nu = asn1time2str(X509_CRL_get0_nextUpdate(crl));
+
+	ret = incidence(INID_CRL_STALE,
+	    "CRL is stale/expired. (lastUpdate:%s, nextUpdate:%s)", lu, nu);
+
+	free(lu);
+	free(nu);
+	return ret;
 }
 
 int
@@ -1019,9 +1062,9 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 				    X509_verify_cert_error_string(error));
 				goto abort;
 			}
-			if (incidence(INID_CRL_STALE, "CRL is stale/expired"))
-				goto abort;
 
+			if (complain_crl_stale(crls))
+				goto abort;
 			X509_STORE_CTX_free(ctx);
 			if (incidence_get_action(INID_CRL_STALE) == INAC_WARN)
 				pr_val_info("Re-validating avoiding CRL time check");
