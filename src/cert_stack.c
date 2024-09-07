@@ -175,15 +175,17 @@ certstack_destroy(struct cert_stack *stack)
 }
 
 void
-deferstack_push(struct cert_stack *stack, struct deferred_cert *deferred)
+deferstack_push(struct cert_stack *stack, struct cache_mapping *map,
+    struct rpp *pp)
 {
 	struct defer_node *node;
 
 	node = pmalloc(sizeof(struct defer_node));
 
 	node->type = DNT_CERT;
-	node->deferred = *deferred;
-	rpp_refget(deferred->pp);
+	node->deferred.map = *map;
+	node->deferred.pp = pp;
+	rpp_refget(pp);
 	SLIST_INSERT_HEAD(&stack->defers, node, next);
 }
 

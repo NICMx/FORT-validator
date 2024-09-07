@@ -1,5 +1,7 @@
 #include "object/ghostbusters.h"
 
+#include <errno.h>
+
 #include "asn1/oid.h"
 #include "log.h"
 #include "object/signed_object.h"
@@ -34,9 +36,11 @@ ghostbusters_traverse(struct cache_mapping *map, struct rpp *pp)
 		goto revert_log;
 
 	/* Prepare validation arguments */
-	error = rpp_crl(pp, &crl);
-	if (error)
+	crl = rpp_crl(pp);
+	if (crl == NULL) {
+		error = -EINVAL;
 		goto revert_sobj;
+	}
 	eecert_init(&ee, crl, true);
 
 	/* Validate everything */

@@ -1,8 +1,11 @@
 #include "types/map.h"
 
 #include <string.h>
+
+#include "alloc.h"
 #include "config.h"
 #include "log.h"
+#include "types/path.h"
 
 static char const *
 get_filename(char const *file_path)
@@ -37,4 +40,30 @@ char const *
 map_op_get_printable(struct cache_mapping *map)
 {
 	return map_get_printable(map, config_get_op_log_filename_format());
+}
+
+void
+map_parent(struct cache_mapping *child, struct cache_mapping *parent)
+{
+	parent->url = path_parent(child->url);
+	parent->path = path_parent(child->path);
+}
+
+struct cache_mapping *
+map_child(struct cache_mapping *parent, char const *name)
+{
+	struct cache_mapping *child;
+
+	child = pmalloc(sizeof(struct cache_mapping));
+	child->url = join_paths(parent->url, name);
+	child->path = join_paths(parent->path, name);
+
+	return child;
+}
+
+void
+map_cleanup(struct cache_mapping *map)
+{
+	free(map->url);
+	free(map->path);
 }

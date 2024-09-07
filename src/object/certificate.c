@@ -32,6 +32,7 @@
 #include "rrdp.h"
 #include "thread_var.h"
 #include "types/name.h"
+#include "types/path.h"
 #include "types/str.h"
 
 /*
@@ -1799,6 +1800,27 @@ certificate_validate_aia(char const *caIssuers, X509 *cert)
 	return 0;
 }
 
+static int
+check_rpp(struct cache_mapping *map_rpp, void *rpkiManifest)
+{
+	struct cache_mapping mft;
+	struct rpp *pp;
+	int error;
+
+	mft.url = rpkiManifest;
+	mft.path = join_paths(map_rpp->path, strrchr(mft.url, '/')); // XXX
+
+	error = handle_manifest(&mft, &pp);
+	if (error)
+		goto end;
+
+	rpp_traverse(pp);
+	rpp_refput(pp);
+
+end:	free(mft.path);
+	return error;
+}
+
 /** Boilerplate code for CA certificate validation and recursive traversal. */
 int
 certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
@@ -1810,7 +1832,6 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	struct sia_uris sia_uris;
 	enum rpki_policy policy;
 	enum cert_type certype;
-	struct rpp *pp;
 	int error;
 
 	state = state_retrieve();
@@ -1828,9 +1849,11 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 		    map_val_get_printable(cert_map));
 	fnstack_push_map(cert_map);
 
-	error = rpp_crl(rpp_parent, &rpp_parent_crl);
-	if (error)
+	rpp_parent_crl = rpp_crl(rpp_parent);
+	if (rpp_parent_crl == NULL) {
+		error = -EINVAL;
 		goto revert_fnstack_and_debug;
+	}
 
 	/* -- Validate the certificate (@cert) -- */
 	error = certificate_load(cert_map, &x509);
@@ -1873,25 +1896,15 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	if (error)
 		goto revert_uris;
 
-	error = cache_download_alt(&sia_uris, NULL, NULL);
-	if (error)
-		goto revert_uris;
-
 	error = x509stack_push(validation_certstack(state), cert_map, x509,
 	    policy, certype);
 	if (error)
 		goto revert_uris;
 	x509 = NULL; /* Ownership stolen */
 
-	error = handle_manifest(sia_uris.rpkiManifest, &pp);
-	if (error) {
+	error = cache_download_alt(&sia_uris, check_rpp, sia_uris.rpkiManifest);
+	if (error)
 		x509stack_cancel(validation_certstack(state));
-		goto revert_uris;
-	}
-
-	/* -- Validate & traverse the RPP (@pp) described by the manifest -- */
-	rpp_traverse(pp);
-	rpp_refput(pp);
 
 revert_uris:
 	sias_cleanup(&sia_uris);

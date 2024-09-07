@@ -270,9 +270,11 @@ roa_traverse(struct cache_mapping *map, struct rpp *pp)
 		goto revert_sobj;
 
 	/* Prepare validation arguments */
-	error = rpp_crl(pp, &crl);
-	if (error)
+	crl = rpp_crl(pp);
+	if (crl == NULL) {
+		error = -EINVAL;
 		goto revert_roa;
+	}
 	eecert_init(&ee, crl, false);
 
 	/* Validate and handle everything */

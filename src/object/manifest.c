@@ -14,6 +14,7 @@
 #include "object/roa.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
+#include "types/path.h"
 
 static int
 decode_manifest(struct signed_object *sobj, struct Manifest **result)
@@ -181,7 +182,7 @@ is_valid_mft_file_chara(uint8_t chara)
 	    || (chara == '_');
 }
 
-/* RFC 6486bis, section 4.2.2 */
+/* RFC 9286, section 4.2.2 */
 static int
 validate_mft_file(IA5String_t *ia5)
 {
@@ -192,99 +193,65 @@ validate_mft_file(IA5String_t *ia5)
 		return pr_val_err("File name is too short (%zu < 5).", ia5->size);
 	dot = ia5->size - 4;
 	if (ia5->buf[dot] != '.')
-		return pr_val_err("File name seems to lack a three-letter extension.");
+		return pr_val_err("File name is missing three-letter extension.");
 
-	for (i = 0; i < ia5->size; i++) {
-		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i])) {
+	for (i = 0; i < ia5->size; i++)
+		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i]))
 			return pr_val_err("File name contains illegal character #%u",
 			    ia5->buf[i]);
-		}
-	}
 
 	/*
-	 * Actual extension doesn't matter; if there's no handler,
-	 * we'll naturally ignore the file.
+	 * Well... the RFC says the extension must match a IANA listing,
+	 * but rejecting unknown extensions is a liability since they keep
+	 * adding new ones, and people rarely updates.
+	 * If we don't have a handler, we'll naturally ignore the file.
 	 */
 	return 0;
 }
 
-///**
-// * Computes the hash of the file @map, and compares it to @expected (The
-// * "expected" hash).
-// *
-// * Returns:
-// *   0 if no errors happened and the hashes match, or the hash doesn't match
-// *     but there's an incidence to ignore such error.
-// * < 0 if there was an error that can't be ignored.
-// * > 0 if there was an error but it can be ignored (file not found and there's
-// *     an incidence to ignore this).
-// */
-//static int
-//hash_validate_mft_file(struct cache_mapping *map, BIT_STRING_t const *expected)
-//{
-//	struct hash_algorithm const *algorithm;
-//	size_t hash_size;
-//	unsigned char actual[EVP_MAX_MD_SIZE];
-//	int error;
-//
-//	algorithm = hash_get_sha256();
-//	hash_size = hash_get_size(algorithm);
-//
-//	if (expected->size != hash_size)
-//		return pr_val_err("%s string has bogus size: %zu",
-//		    hash_get_name(algorithm), expected->size);
-//	if (expected->bits_unused != 0)
-//		return pr_val_err("Hash string has unused bits.");
-//
-//	/*
-//	 * TODO (#82) This is atrocious. Implement RFC 9286, and probably reuse
-//	 * hash_validate_file().
-//	 */
-//
-//	error = hash_file(algorithm, map_get_path(map), actual, NULL);
-//	if (error) {
-//		if (error == EACCES || error == ENOENT) {
-//			/* FIXME .................. */
-//			if (incidence(INID_MFT_FILE_NOT_FOUND,
-//			    "File '%s' listed at manifest doesn't exist.",
-//			    map_val_get_printable(map)))
-//				return -EINVAL;
-//
-//			return error;
-//		}
-//		/* Any other error (crypto, file read) */
-//		return ENSURE_NEGATIVE(error);
-//	}
-//
-//	if (memcmp(expected->buf, actual, hash_size) != 0) {
-//		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
-//		    "File '%s' does not match its manifest hash.",
-//		    map_val_get_printable(map));
-//	}
-//
-//	return 0;
-//}
+static int
+check_file_and_hash(struct FileAndHash *fah, char const *path)
+{
+	if (fah->hash.bits_unused != 0)
+		return pr_val_err("Hash string has unused bits.");
+
+	/* Includes file exists validation, obv. */
+	return hash_validate_file(hash_get_sha256(), path,
+	    fah->hash.buf, fah->hash.size);
+}
+
+#define INFER_CHILD(parent, fah) \
+	path_childn(parent, (char const *)fah->file.buf, fah->file.size)
+
+/*
+ * XXX
+ *
+ * revoked manifest: 6.6
+ * CRL not in fileList: 6.6
+ * fileList file in different folder: 6.6
+ * manifest is identified by id-ad-rpkiManifest. (A directory will have more
+ * than 1 on rollover.)
+ * id-ad-rpkiManifest not found: 6.6
+ * invalid manifest: 6.6
+ * stale manifest: 6.6
+ * fileList file not found: 6.6
+ * bad hash: 6.6
+ * 6.6: warning, fallback to previous version. Children inherit this.
+ */
 
 static int
-build_rpp(struct Manifest *mft, char const *mft_url, struct rpp **pp)
+build_rpp(struct cache_mapping *mft_map, struct Manifest *mft,
+    struct rpp **result)
 {
-	char *rpp_url, *slash;
-	size_t rpp_url_len;
+	struct cache_mapping pp_map;
+	struct rpp *pp;
 	int i;
 	struct FileAndHash *fah;
-	char *file_url;
-	size_t file_url_len;
-	int written;
-	char const *extension;
+	struct cache_mapping map;
 	int error;
 
-	*pp = rpp_create();
-
-	slash = strrchr(mft_url, '/');
-	if (!slash)
-		; // XXX
-	rpp_url_len = slash - mft_url;
-	rpp_url = pstrndup(mft_url, rpp_url_len);
+	map_parent(mft_map, &pp_map);
+	pp = rpp_create();
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
@@ -292,76 +259,40 @@ build_rpp(struct Manifest *mft, char const *mft_url, struct rpp **pp)
 		/*
 		 * IA5String is a subset of ASCII. However, IA5String_t doesn't
 		 * seem to be guaranteed to be NULL-terminated.
-		 * `(char *) ia5->buf` is fair, but `strlen(ia5->buf)` is not.
 		 */
 
 		error = validate_mft_file(&fah->file);
 		if (error)
-			; // XXX
+			goto fail;
 
-		file_url_len = rpp_url_len + fah->file.size + 2;
-		file_url = pmalloc(file_url_len);
-		written = snprintf(file_url, file_url_len, "%s/%.*s", rpp_url,
-		    (int)fah->file.size, fah->file.buf);
-		if (written >= file_url_len)
-			; // XXX
+		map.url = INFER_CHILD(pp_map.url, fah);
+		map.path = INFER_CHILD(pp_map.path, fah);
 
-//		/*
-//		 * XXX I think this should be moved somewhere else.
-//		 *
-//		 * Expect:
-//		 * - Negative value: an error not to be ignored, the whole
-//		 *   manifest will be discarded.
-//		 * - Zero value: hash at manifest matches file's hash, or it
-//		 *   doesn't match its hash but there's an incidence to ignore
-//		 *   such error.
-//		 * - Positive value: file doesn't exist and keep validating
-//		 *   manifest.
-//		 */
-//		error = hash_validate_mft_file(map, &fah->hash);
-//		if (error < 0) {
-//			free(file_url);
-//			goto fail;
-//		}
-//		if (error > 0) {
-//			free(file_url);
-//			continue;
-//		}
+		error = check_file_and_hash(fah, map.path);
+		if (error)
+			goto fail;
 
-		extension = ((char const *)fah->file.buf) + fah->file.size - 4;
-		if (strcmp(extension, ".cer") == 0)
-			rpp_add_cert(*pp, file_url);
-		else if (strcmp(extension, ".roa") == 0)
-			rpp_add_roa(*pp, file_url);
-		else if (strcmp(extension, ".crl") == 0) {
-			error = rpp_add_crl(*pp, file_url);
-			if (error) {
-				free(file_url);
-				goto fail;
-			}
-		} else if (strcmp(extension, ".gbr") == 0)
-			rpp_add_ghostbusters(*pp, file_url);
-		else
-			free(file_url); /* ignore it. */
+		error = rpp_add_file(pp, &map);
+		if (error)
+			goto fail;
 	}
 
 	/* rfc6486#section-7 */
-	if (rpp_get_crl(*pp) == NULL) {
+	if (rpp_crl(pp) == NULL) {
 		error = pr_val_err("Manifest lacks a CRL.");
 		goto fail;
 	}
 
+	map_cleanup(&pp_map);
+	*result = pp;
 	return 0;
 
-fail:
-	rpp_refput(*pp);
+fail:	map_cleanup(&pp_map);
+	rpp_refput(pp);
 	return error;
 }
 
-/**
- * Validates the manifest pointed by @uri, returns the RPP described by it in
- * @pp.
- */
+/* Validates the manifest @map, returns the RPP described by it in @pp. */
 int
 handle_manifest(struct cache_mapping *map, struct rpp **pp)
 {
@@ -385,15 +316,17 @@ handle_manifest(struct cache_mapping *map, struct rpp **pp)
 	if (error)
 		goto revert_sobj;
 
-	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, map->url, pp);
+	/* Initialize @pp */
+	error = build_rpp(map, mft, pp);
 	if (error)
 		goto revert_manifest;
 
 	/* Prepare validation arguments */
-	error = rpp_crl(*pp, &crl);
-	if (error)
+	crl = rpp_crl(*pp);
+	if (crl == NULL) {
+		error = -EINVAL;
 		goto revert_rpp;
+	}
 	eecert_init(&ee, crl, false);
 
 	/* Validate everything */

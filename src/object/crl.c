@@ -11,7 +11,7 @@
 #include "types/name.h"
 
 static int
-__crl_load(struct cache_mapping *map, X509_CRL **result)
+__crl_load(char const *path, X509_CRL **result)
 {
 	X509_CRL *crl;
 	BIO *bio;
@@ -20,16 +20,14 @@ __crl_load(struct cache_mapping *map, X509_CRL **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, map_get_path(map)) <= 0) {
-		error = val_crypto_err("Error reading CRL '%s'",
-		    map_val_get_printable(map));
+	if (BIO_read_filename(bio, path) <= 0) {
+		error = val_crypto_err("Error reading CRL '%s'", path);
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
-		error = val_crypto_err("Error parsing CRL '%s'",
-		    map_val_get_printable(map));
+		error = val_crypto_err("Error parsing CRL '%s'", path);
 		goto end;
 	}
 
@@ -152,13 +150,13 @@ crl_validate(X509_CRL *crl)
 }
 
 int
-crl_load(struct cache_mapping *map, X509_CRL **result)
+crl_load(char const *path, X509_CRL **result)
 {
 	int error;
 
-	pr_val_debug("CRL '%s' {", map_val_get_printable(map));
+	pr_val_debug("CRL '%s' {", path);
 
-	error = __crl_load(map, result);
+	error = __crl_load(path, result);
 	if (error)
 		goto end;
 

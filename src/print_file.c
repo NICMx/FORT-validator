@@ -66,19 +66,22 @@ end:	pb_cleanup(&pb);
 static BIO *
 rsync2bio_cache(char const *src)
 {
-	char *dst;
-	BIO *bio;
+	pr_op_err("Disabled for now."); // XXX
+	return NULL;
 
-	dst = url2path(src);
-	if (!dst) {
-		pr_op_err("Unparseable rsync URI.");
-		return NULL;
-	}
-
-	bio = __rsync2bio(src, dst);
-
-	free(dst);
-	return bio;
+//	char *dst;
+//	BIO *bio;
+//
+//	dst = url2path(src);
+//	if (!dst) {
+//		pr_op_err("Unparseable rsync URI.");
+//		return NULL;
+//	}
+//
+//	bio = __rsync2bio(src, dst);
+//
+//	free(dst);
+//	return bio;
 }
 
 static BIO *

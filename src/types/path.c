@@ -216,7 +216,34 @@ pb_cleanup(struct path_builder *pb)
 	free(pb->string);
 }
 
-/* Cannot return NULL. */
+/* Note, fatal is hardcoded as 1. */
+char *
+path_parent(char const *child)
+{
+	struct path_builder pb;
+	pb.string = pstrdup(child);
+	pb.len = pb.capacity = strlen(pb.string);
+	pb_pop(&pb, true);
+	return pb.string;
+}
+
+char *
+path_childn(char const *p1, char const *p2, size_t p2len)
+{
+	struct path_builder pb;
+
+	pb_init(&pb);
+	pb_append(&pb, p1); // XXX
+	pb_appendn(&pb, p2, p2len); // XXX
+
+	return pb.string;
+}
+
+/*
+ * Cannot return NULL.
+ *
+ * XXX I'm starting to use this more. Probably clean the slashes.
+ */
 char *
 join_paths(char const *path1, char const *path2)
 {

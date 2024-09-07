@@ -27,7 +27,7 @@ validate_cdp(struct certificate_refs *refs, struct rpp const *pp)
 	if (refs->crldp == NULL)
 		pr_crit("Certificate's CRL Distribution Point was not recorded.");
 
-	crl_url = rpp_get_crl(pp);
+	crl_url = rpp_get_crl_url(pp);
 	if (crl_url == NULL)
 		pr_crit("Manifest's CRL was not recorded.");
 

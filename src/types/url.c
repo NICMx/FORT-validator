@@ -16,38 +16,38 @@
  * times we get unsigned chars.
  * Casting a negative char into a unsigned char is undefined behavior.
  */
-static int
-validate_url_character(int character)
-{
-	/*
-	 * RFCs 1738 and 3986 define a very specific range of allowed
-	 * characters, but I don't think we're that concerned about URL
-	 * correctness. Validating the URL properly is more involved than simply
-	 * checking legal characters, anyway.
-	 *
-	 * What I really need this validation for is ensure that we won't get
-	 * any trouble later, when we attempt to map the URL to a path.
-	 *
-	 * Sample trouble: Getting UTF-8 characters. Why are they trouble?
-	 * Because we don't have any guarantees that the system's file name
-	 * encoding is UTF-8. URIs are not supposed to contain UTF-8 in the
-	 * first place, so we have no reason to deal with encoding conversion.
-	 *
-	 * To be perfectly fair, we have no guarantees that the system's file
-	 * name encoding is ASCII-compatible either, but I need to hang onto
-	 * SOMETHING.
-	 *
-	 * (Asking users to use UTF-8 is fine, but asking users to use something
-	 * ASCII-compatible is a little better.)
-	 *
-	 * So just make sure that the character is printable ASCII.
-	 *
-	 * TODO (next iteration) Consider exhaustive URL validation.
-	 */
-	return (0x20 <= character && character <= 0x7E)
-	    ? 0
-	    : pr_val_err("URL has non-printable character code '%d'.", character);
-}
+//static int
+//validate_url_character(int character)
+//{
+//	/*
+//	 * RFCs 1738 and 3986 define a very specific range of allowed
+//	 * characters, but I don't think we're that concerned about URL
+//	 * correctness. Validating the URL properly is more involved than simply
+//	 * checking legal characters, anyway.
+//	 *
+//	 * What I really need this validation for is ensure that we won't get
+//	 * any trouble later, when we attempt to map the URL to a path.
+//	 *
+//	 * Sample trouble: Getting UTF-8 characters. Why are they trouble?
+//	 * Because we don't have any guarantees that the system's file name
+//	 * encoding is UTF-8. URIs are not supposed to contain UTF-8 in the
+//	 * first place, so we have no reason to deal with encoding conversion.
+//	 *
+//	 * To be perfectly fair, we have no guarantees that the system's file
+//	 * name encoding is ASCII-compatible either, but I need to hang onto
+//	 * SOMETHING.
+//	 *
+//	 * (Asking users to use UTF-8 is fine, but asking users to use something
+//	 * ASCII-compatible is a little better.)
+//	 *
+//	 * So just make sure that the character is printable ASCII.
+//	 *
+//	 * TODO (next iteration) Consider exhaustive URL validation.
+//	 */
+//	return (0x20 <= character && character <= 0x7E)
+//	    ? 0
+//	    : pr_val_err("URL has non-printable character code '%d'.", character);
+//}
 
 static char *
 path_rewind(char const *root, char *cursor)

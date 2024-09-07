@@ -6,6 +6,8 @@
 #include "alloc.h"
 #include "base64.h"
 #include "cache.h"
+#include "cachent.h"
+#include "cachetmp.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"

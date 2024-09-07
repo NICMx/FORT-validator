@@ -97,7 +97,6 @@ int
 db_slurm_create(struct slurm_csum_list *csums, struct db_slurm **result)
 {
 	struct db_slurm *db;
-	int error;
 
 	db = pmalloc(sizeof(struct db_slurm));
 

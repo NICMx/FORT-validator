@@ -1243,6 +1243,12 @@ config_get_local_repository(void)
 	return rpki_config.local_repository;
 }
 
+time_t
+cfg_cache_threshold(void)
+{
+	return 86400; // XXX
+}
+
 unsigned int
 config_get_max_cert_depth(void)
 {

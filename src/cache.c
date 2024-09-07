@@ -588,8 +588,7 @@ try_uri(char const *uri, struct cache_node *root,
 	}
 
 	map.url = rpp->url;
-	map.path = rpp->path;
-	map.tmppath = rpp->tmppath;
+	map.path = (download != NULL) ? rpp->tmppath : rpp->path;
 	error = validate(&map, arg);
 	if (error) {
 		pr_val_debug("RPP validation failed.");

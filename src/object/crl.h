@@ -3,8 +3,6 @@
 
 #include <openssl/x509.h>
 
-#include "types/map.h"
-
-int crl_load(struct cache_mapping *, X509_CRL **);
+int crl_load(char const *, X509_CRL **);
 
 #endif /* SRC_OBJECT_CRL_H_ */

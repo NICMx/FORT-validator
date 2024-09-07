@@ -38,7 +38,7 @@ struct deferred_cert {
 int certstack_create(struct cert_stack **);
 void certstack_destroy(struct cert_stack *);
 
-void deferstack_push(struct cert_stack *, struct deferred_cert *cert);
+void deferstack_push(struct cert_stack *, struct cache_mapping *, struct rpp *);
 int deferstack_pop(struct cert_stack *, struct deferred_cert *cert);
 bool deferstack_is_empty(struct cert_stack *);
 
