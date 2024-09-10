@@ -8,7 +8,6 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <sys/stat.h>
 #include <syslog.h>
 #include <time.h>
 

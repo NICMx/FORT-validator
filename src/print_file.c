@@ -1,17 +1,17 @@
 #include "print_file.h"
 
+#include <errno.h>
+
 #include "asn1/asn1c/CRL.h"
 #include "asn1/asn1c/Certificate.h"
+#include "asn1/asn1c/ContentInfo.h"
 #include "asn1/asn1c/ber_decoder.h"
 #include "asn1/asn1c/json_encoder.h"
-#include "asn1/content_info.h"
 #include "common.h"
 #include "config.h"
-#include "file.h"
 #include "log.h"
 #include "rsync.h"
 #include "types/bio_seq.h"
-#include "types/map.h"
 #include "types/path.h"
 
 #define HDRSIZE 32

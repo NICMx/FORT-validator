@@ -11,7 +11,6 @@
 #include "asn1/asn1c/ANY.h"
 #include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* EncapsulatedContentInfoPKCS7 */
 typedef struct EncapsulatedContentInfoPKCS7 {

@@ -1,25 +1,16 @@
 #include "object/tal.h"
 
 #include <ctype.h>
-#include <errno.h>
-#include <openssl/evp.h>
 #include <sys/queue.h>
 #include <time.h>
 
-#include "alloc.h"
 #include "base64.h"
 #include "cache.h"
-#include "cert_stack.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
-#include "object/certificate.h"
-#include "rtr/db/vrps.h"
-#include "state.h"
 #include "thread_var.h"
-#include "types/str.h"
-#include "validation_handler.h"
 
 struct tal {
 	char const *file_name;

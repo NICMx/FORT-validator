@@ -1,11 +1,6 @@
 #include "rrdp.h"
 
-#include <ctype.h>
-#include <openssl/evp.h>
-
-#include "alloc.h"
 #include "base64.h"
-#include "cache.h"
 #include "cachent.h"
 #include "cachetmp.h"
 #include "common.h"
@@ -17,6 +12,7 @@
 #include "log.h"
 #include "relax_ng.h"
 #include "thread_var.h"
+#include "types/arraylist.h"
 #include "types/url.h"
 
 /* RRDP's XML namespace */

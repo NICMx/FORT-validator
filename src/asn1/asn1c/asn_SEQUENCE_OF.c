@@ -5,9 +5,6 @@
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
 
 #include <stddef.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
 
 typedef A_SEQUENCE_OF(void) asn_sequence;
 

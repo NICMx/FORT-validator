@@ -1,6 +1,7 @@
 #ifndef SRC_STATE_H_
 #define SRC_STATE_H_
 
+#include "cert_stack.h"
 #include "object/tal.h"
 #include "validation_handler.h"
 

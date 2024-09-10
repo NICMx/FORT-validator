@@ -11,29 +11,20 @@
 #include <openssl/rsa.h>
 #include <openssl/x509v3.h>
 #include <syslog.h>
+#include <time.h>
 
 #include "algorithm.h"
-#include "alloc.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "asn1/decode.h"
-#include "asn1/oid.h"
 #include "cache.h"
-#include "cert_stack.h"
+#include "common.h"
 #include "config.h"
-#include "hash.h"
-#include "types/str.h"
 #include "extension.h"
-#include "incidence.h"
 #include "log.h"
 #include "nid.h"
-#include "object/bgpsec.h"
 #include "object/manifest.h"
-#include "object/signed_object.h"
-#include "rrdp.h"
 #include "thread_var.h"
-#include "types/name.h"
 #include "types/path.h"
-#include "types/str.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.

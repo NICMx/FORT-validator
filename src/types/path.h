@@ -1,8 +1,18 @@
 #ifndef SRC_TYPES_PATH_H_
 #define SRC_TYPES_PATH_H_
 
-#include <stdbool.h>
+#include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 // XXX rename
 struct tokenizer {

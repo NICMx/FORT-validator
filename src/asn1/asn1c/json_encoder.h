@@ -1,18 +1,7 @@
 #ifndef SRC_ASN1_ASN1C_JSON_ENCODER_H_
 #define SRC_ASN1_ASN1C_JSON_ENCODER_H_
 
-#include <jansson.h>
-#include <netinet/in.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-struct asn_TYPE_descriptor_s;	/* Forward declaration */
+#include "asn1/asn1c/constr_TYPE.h"
 
 json_t *json_encode(
     const struct asn_TYPE_descriptor_s *type_descriptor,

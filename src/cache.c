@@ -7,25 +7,18 @@
 #include "cache.h"
 
 #include <ftw.h>
-#include <time.h>
 
-#include "alloc.h"
 #include "cachent.h"
 #include "cachetmp.h"
 #include "common.h"
 #include "config.h"
 #include "configure_ac.h"
 #include "file.h"
-#include "json_util.h"
-#include "log.h"
 #include "http.h"
-#include "rrdp.h"
+#include "log.h"
+#include "rpp.h"
 #include "rsync.h"
-#include "types/arraylist.h"
-#include "types/str.h"
 #include "types/path.h"
-#include "types/url.h"
-#include "types/uthash.h"
 
 /* XXX force RRDP if one RPP fails to validate by rsync? */
 

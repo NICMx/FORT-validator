@@ -1,6 +1,5 @@
 #include "resource/asn.h"
 
-#include "log.h"
 #include "types/sorted_array.h"
 
 struct asn_cb {

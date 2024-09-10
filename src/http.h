@@ -1,8 +1,8 @@
 #ifndef SRC_HTTP_H_
 #define SRC_HTTP_H_
 
-#include <stdbool.h>
 #include <curl/curl.h>
+#include <stdbool.h>
 
 int http_init(void);
 void http_cleanup(void);

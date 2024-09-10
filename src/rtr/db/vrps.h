@@ -7,9 +7,10 @@
  * This module stores VRPs and their serials.
  */
 
-#include "rtr/db/deltas_array.h"
 #include "types/address.h"
 #include "types/asn.h"
+#include "types/delta.h"
+#include "types/serial.h"
 
 int vrps_init(void);
 void vrps_destroy(void);

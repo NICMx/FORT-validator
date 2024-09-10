@@ -6,7 +6,6 @@
 #define ASN_TYPE_ANY_H
 
 #include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/constraints.h"
 
 typedef struct ANY {
 	uint8_t *buf;	/* BER-encoded ANY contents */

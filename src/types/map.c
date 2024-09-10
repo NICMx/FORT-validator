@@ -1,7 +1,5 @@
 #include "types/map.h"
 
-#include <string.h>
-
 #include "alloc.h"
 #include "config.h"
 #include "log.h"

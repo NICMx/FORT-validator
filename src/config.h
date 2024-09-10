@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <sys/stat.h>
 
 #include "config/file_type.h"
 #include "config/filename_format.h"
@@ -12,7 +13,6 @@
 #include "config/mode.h"
 #include "config/output_format.h"
 #include "config/string_array.h"
-#include "config/types.h"
 
 /* Init/destroy */
 int handle_flags_config(int , char **);

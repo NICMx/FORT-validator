@@ -1,6 +1,7 @@
 #ifndef SRC_TYPES_ARRAYLIST_H_
 #define SRC_TYPES_ARRAYLIST_H_
 
+#include "alloc.h"
 #include "types/array.h"
 
 #define DEFINE_ARRAY_LIST_STRUCT(name, elem_type)			\

@@ -6,7 +6,6 @@
 #include <syslog.h>
 
 #include "alloc.h"
-#include "cert_stack.h"
 #include "log.h"
 #include "thread_var.h"
 

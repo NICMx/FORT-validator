@@ -1,7 +1,10 @@
 #include "certificate_refs.h"
 
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "log.h"
-#include "thread_var.h"
 
 void
 refs_init(struct certificate_refs *refs)

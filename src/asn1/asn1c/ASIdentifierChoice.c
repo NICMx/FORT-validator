@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/ASIdentifierChoice.h"
 
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+
 static asn_TYPE_member_t asn_MBR_asIdsOrRanges_3[] = {
 	{ ATF_POINTER, 0, 0,
 		-1 /* Ambiguous tag (CHOICE?) */,

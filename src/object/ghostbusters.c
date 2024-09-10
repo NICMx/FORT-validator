@@ -2,7 +2,6 @@
 
 #include <errno.h>
 
-#include "asn1/oid.h"
 #include "log.h"
 #include "object/signed_object.h"
 #include "object/vcard.h"

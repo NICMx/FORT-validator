@@ -1,13 +1,11 @@
 #include "http.h"
 
 #include "alloc.h"
-#include "cache.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
 #include "types/url.h"
-#include "types/uthash.h"
 
 struct http_handler {
 	CURL *curl;

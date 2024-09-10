@@ -3,12 +3,8 @@
 #include <errno.h>
 #include <sys/queue.h>
 
-#include "alloc.h"
 #include "log.h"
-#include "resource.h"
 #include "thread_var.h"
-#include "types/arraylist.h"
-#include "types/name.h"
 #include "types/str.h"
 
 enum defer_node_type {

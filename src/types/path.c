@@ -4,7 +4,6 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "hash.h"
 #include "log.h"
 
 /* These are arbitrary; feel free to change them. */

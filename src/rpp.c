@@ -1,15 +1,12 @@
 #include "rpp.h"
 
-#include "alloc.h"
-#include "cert_stack.h"
 #include "common.h"
 #include "log.h"
-#include "object/certificate.h"
 #include "object/crl.h"
 #include "object/ghostbusters.h"
 #include "object/roa.h"
 #include "thread_var.h"
-#include "types/str.h"
+#include "types/arraylist.h"
 
 STATIC_ARRAY_LIST(filelist, struct cache_mapping)
 

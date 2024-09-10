@@ -2,13 +2,12 @@
 
 #include <fcntl.h>
 #include <ftw.h>
-#include <sys/stat.h>
 
 #include "alloc.h"
 #include "common.h"
+#include "config/mode.h"
 #include "log.h"
 #include "types/path.h"
-#include "types/uthash.h"
 
 int
 file_open(char const *file_name, FILE **result, struct stat *stat)

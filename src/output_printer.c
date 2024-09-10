@@ -1,11 +1,9 @@
 #include "output_printer.h"
 
 #include "base64.h"
-#include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
-#include "types/vrp.h"
 
 typedef struct json_out {
 	FILE *file;

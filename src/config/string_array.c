@@ -2,9 +2,9 @@
 
 #include <getopt.h>
 
-#include "alloc.h"
 #include "config/str.h"
 #include "log.h"
+#include "types/path.h"
 #include "types/str.h"
 
 void

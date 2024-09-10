@@ -4,8 +4,10 @@
 /* CACHE ENTity, CACHE elemENT, CACHE componENT */
 
 #include <stdbool.h>
-#include "types/uthash.h"
+#include <sys/stat.h>
+
 #include "rrdp.h"
+#include "types/uthash.h"
 
 /* XXX rename "touched" and "validated" into "preserve"? */
 

@@ -7,7 +7,6 @@
 #include <openssl/pem.h>
 #include <time.h>
 
-#include "alloc.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "extension.h"
 #include "json_util.h"

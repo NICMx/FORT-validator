@@ -7,7 +7,6 @@
 #include "algorithm.h"
 #include "extension.h"
 #include "log.h"
-#include "thread_var.h"
 #include "types/name.h"
 
 static int

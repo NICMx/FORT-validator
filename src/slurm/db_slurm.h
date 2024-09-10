@@ -2,7 +2,14 @@
 #define SRC_SLURM_DB_SLURM_H_
 
 #include <openssl/evp.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 #include <sys/queue.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "types/router_key.h"
 #include "types/vrp.h"

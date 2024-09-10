@@ -1,9 +1,9 @@
 #ifndef SRC_ASN1_OID_H_
 #define SRC_ASN1_OID_H_
 
-#include "asn1/asn1c/ANY.h"
+#include <stdbool.h>
+
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "common.h"
 #include "types/array.h"
 
 /* These objects are expected to live on the stack. */

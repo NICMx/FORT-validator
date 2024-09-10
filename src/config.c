@@ -1,8 +1,7 @@
 #include "config.h"
 
+#include <errno.h>
 #include <getopt.h>
-#include <limits.h>
-#include <sys/socket.h>
 #include <syslog.h>
 
 #include "alloc.h"
@@ -14,10 +13,11 @@
 #include "config/work_offline.h"
 #include "configure_ac.h"
 #include "daemon.h"
-#include "file.h"
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
+#include "state.h"
+#include "thread_pool.h"
 #include "types/array.h"
 
 /**

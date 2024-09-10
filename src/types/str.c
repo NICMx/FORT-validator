@@ -1,10 +1,9 @@
 #include "types/str.h"
 
 #include <openssl/bio.h>
-#include <stdint.h>
 
-#include "alloc.h"
 #include "log.h"
+#include "types/path.h"
 
 /**
  * Does not assume that @string is NULL-terminated.

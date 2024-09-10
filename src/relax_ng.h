@@ -2,7 +2,6 @@
 #define SRC_XML_RELAX_NG_H_
 
 #include <libxml/xmlreader.h>
-#include <string.h>
 
 /*
  * Schema obtained from RFC 8182, converted using the tool rnc2rng

@@ -4,7 +4,6 @@
 /* This is RFC 8630. */
 
 #include "rtr/db/db_table.h"
-#include "types/map.h"
 
 struct tal;
 

@@ -9,9 +9,6 @@
 #define	_IPAddressFamily_H_
 
 #include "asn1/asn1c/IPAddressChoice.h"
-#include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* IPAddressFamily */
 typedef struct IPAddressFamily {

@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 
-#include "asn1/asn1c/ASId.h"
 #include "types/asn.h"
 
 /*

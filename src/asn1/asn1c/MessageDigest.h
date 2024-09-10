@@ -9,7 +9,6 @@
 #define	_MessageDigest_H_
 
 #include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* MessageDigest */
 typedef OCTET_STRING_t	 MessageDigest_t;

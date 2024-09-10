@@ -2,7 +2,6 @@
 
 #include <stdatomic.h>
 
-#include "alloc.h"
 #include "log.h"
 #include "types/address.h"
 #include "types/arraylist.h"

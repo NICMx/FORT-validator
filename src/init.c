@@ -2,7 +2,6 @@
 
 #include "config.h"
 #include "http.h"
-#include "log.h"
 #include "types/path.h"
 
 static int

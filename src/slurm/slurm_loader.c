@@ -4,10 +4,10 @@
 #include <openssl/sha.h>
 
 #include "alloc.h"
-#include "log.h"
-#include "config.h"
 #include "common.h"
+#include "config.h"
 #include "hash.h"
+#include "log.h"
 #include "slurm/slurm_parser.h"
 
 #define SLURM_FILE_EXTENSION	".slurm"

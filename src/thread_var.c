@@ -3,7 +3,6 @@
 #include <pthread.h>
 
 #include "alloc.h"
-#include "config.h"
 #include "log.h"
 
 static pthread_key_t state_key;

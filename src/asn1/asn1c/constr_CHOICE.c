@@ -797,7 +797,7 @@ CHOICE_compare(const asn_TYPE_descriptor_t *td, const void *aptr, const void *bp
  * Return the 1-based choice variant presence index.
  * Returns 0 in case of error.
  */
-unsigned
+unsigned int
 CHOICE_variant_get_presence(const asn_TYPE_descriptor_t *td, const void *sptr) {
     const asn_CHOICE_specifics_t *specs =
         (const asn_CHOICE_specifics_t *)td->specifics;

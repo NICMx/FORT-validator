@@ -10,8 +10,6 @@
 
 #include "asn1/asn1c/CMSSubjectKeyIdentifier.h"
 #include "asn1/asn1c/IssuerAndSerialNumber.h"
-#include "asn1/asn1c/constr_CHOICE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum SignerIdentifier_PR {

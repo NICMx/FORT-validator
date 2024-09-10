@@ -8,6 +8,7 @@
 #include "asn1/asn1c/Manifest.h"
 
 #include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
 
 static int
 memb_manifestNumber_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,
