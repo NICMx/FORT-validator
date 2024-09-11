@@ -117,6 +117,8 @@ defer_destroy(struct defer_node *defer)
 	case DNT_SEPARATOR:
 		break;
 	case DNT_CERT:
+		free(defer->deferred.map.url);
+		free(defer->deferred.map.path);
 		rpp_refput(defer->deferred.pp);
 		break;
 	}
@@ -134,6 +136,8 @@ serial_cleanup(struct serial_number *serial)
 static void
 meta_destroy(struct metadata_node *meta)
 {
+	free(meta->map.url);
+	free(meta->map.path);
 	resources_destroy(meta->resources);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	free(meta);
@@ -179,7 +183,7 @@ deferstack_push(struct cert_stack *stack, struct cache_mapping *map,
 	node = pmalloc(sizeof(struct defer_node));
 
 	node->type = DNT_CERT;
-	node->deferred.map = *map;
+	node->deferred.map = *map; // XXX
 	node->deferred.pp = pp;
 	rpp_refget(pp);
 	SLIST_INSERT_HEAD(&stack->defers, node, next);
@@ -224,6 +228,7 @@ again:	node = SLIST_FIRST(&stack->defers);
 	}
 
 	*result = node->deferred;
+//	uri_refget(node->deferred.uri); // XXX
 	rpp_refget(node->deferred.pp);
 
 	SLIST_REMOVE_HEAD(&stack->defers, next);
@@ -293,7 +298,7 @@ x509stack_push(struct cert_stack *stack, struct cache_mapping *map, X509 *x509,
 
 	meta = pmalloc(sizeof(struct metadata_node));
 
-	meta->map = *map;
+	meta->map = *map; // XXX
 	serial_numbers_init(&meta->serials);
 
 	error = init_resources(x509, policy, type, &meta->resources);
@@ -319,6 +324,8 @@ destroy_separator:
 	resources_destroy(meta->resources);
 cleanup_serial:
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
+	free(meta->map.url);
+	free(meta->map.path);
 	free(meta);
 	return error;
 }

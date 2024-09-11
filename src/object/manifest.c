@@ -239,13 +239,25 @@ build_rpp(struct cache_mapping *mft_map, struct Manifest *mft,
 {
 	struct cache_mapping pp_map;
 	struct rpp *pp;
-	int i;
-	struct FileAndHash *fah;
+	unsigned int i, j;
+	struct FileAndHash *fah, *tmpfah;
 	struct cache_mapping map;
 	int error;
+	unsigned int seed, rnd;
+
+	seed = time(NULL) ^ getpid();
 
 	map_parent(mft_map, &pp_map);
 	pp = rpp_create();
+
+	/* Fisher-Yates shuffle with modulo bias */
+	for (i = 0; i < mft->fileList.list.count - 1; i++) {
+		rnd = rand_r(&seed);
+		j = i + rnd % (mft->fileList.list.count - i);
+		tmpfah = mft->fileList.list.array[j];
+		mft->fileList.list.array[j] = mft->fileList.list.array[i];
+		mft->fileList.list.array[i] = tmpfah;
+	}
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];

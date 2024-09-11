@@ -15,7 +15,6 @@
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
-static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 void
 eecert_init(struct ee_cert *ee, STACK_OF(X509_CRL) *crls, bool force_inherit)
@@ -170,7 +169,6 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 	bool content_type_found = false;
 	bool message_digest_found = false;
 	bool signing_time_found = false;
-	bool binary_signing_time_found = false;
 	int error;
 
 	if (sinfo->signedAttrs == NULL)
@@ -220,15 +218,6 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			}
 			error = 0; /* No validations needed for now. */
 			signing_time_found = true;
-
-		} else if (ARCS_EQUAL_OIDS(&attrType, oid_bsta)) {
-			if (binary_signing_time_found) {
-				pr_val_err("Multiple BinarySigningTimes found.");
-				goto illegal_attrType;
-			}
-			error = 0; /* No validations needed for now. */
-			binary_signing_time_found = true;
-
 		} else {
 			/* rfc6488#section-3.1.g */
 			pr_val_err("Illegal attrType OID in SignerInfo.");
@@ -246,6 +235,8 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 		return pr_val_err("SignerInfo lacks a ContentType attribute.");
 	if (!message_digest_found)
 		return pr_val_err("SignerInfo lacks a MessageDigest attribute.");
+	if (!signing_time_found)
+		return pr_val_err("SignerInfo lacks a SigningTime attribute.");
 
 	return 0;
 
@@ -467,30 +458,32 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 	bool equal;
 
 	if (sdata == NULL)
-		return -EINVAL;
+		return pr_val_err("SignedData is NULL.");
 	if (sdata->signerInfos.list.array == NULL)
-		return -EINVAL;
+		return pr_val_err("SignerInfos array is NULL.");
 	if (sdata->signerInfos.list.array[0] == NULL)
-		return -EINVAL;
+		return pr_val_err("SignerInfos array first element is NULL.");
 
 	signedAttrs = sdata->signerInfos.list.array[0]->signedAttrs;
+	if (signedAttrs == NULL)
+		return pr_val_err("signedAttrs is NULL.");
 	if (signedAttrs->list.array == NULL)
-		return -EINVAL;
+		return pr_val_err("signedAttrs array is NULL.");
 
 	for (i = 0; i < signedAttrs->list.count; i++) {
 		attr = signedAttrs->list.array[i];
 		if (!attr)
-			return -EINVAL;
+			return pr_val_err("signedAttrs array element %d is NULL.", i);
 		error = oid2arcs(&attr->attrType, &arcs);
 		if (error)
-			return -EINVAL;
+			return error;
 		equal = ARCS_EQUAL_OIDS(&arcs, oid_cta);
 		free_arcs(&arcs);
 		if (equal) {
 			if (attr->attrValues.list.array == NULL)
-				return -EINVAL;
+				return pr_val_err("signedAttrs attrValue array is NULL.");
 			if (attr->attrValues.list.array[0] == NULL)
-				return -EINVAL;
+				return pr_val_err("signedAttrs attrValue array first element is NULL.");
 			return asn1_decode_any(attr->attrValues.list.array[0],
 			    &asn_DEF_OBJECT_IDENTIFIER,
 			    (void **) result, true);

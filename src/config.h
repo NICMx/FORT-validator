@@ -47,6 +47,7 @@ bool config_get_rsync_enabled(void);
 unsigned int config_get_rsync_priority(void);
 unsigned int config_get_rsync_retry_count(void);
 unsigned int config_get_rsync_retry_interval(void);
+long config_get_rsync_transfer_timeout(void);
 char const *config_get_rsync_program(void);
 bool config_get_http_enabled(void);
 unsigned int config_get_http_priority(void);

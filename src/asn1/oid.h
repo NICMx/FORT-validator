@@ -33,7 +33,6 @@ typedef asn_oid_arc_t OID[];
 #define OID_CONTENT_TYPE_ATTR        { 1, 2, 840, 113549, 1, 9, 3 }
 #define OID_MESSAGE_DIGEST_ATTR      { 1, 2, 840, 113549, 1, 9, 4 }
 #define OID_SIGNING_TIME_ATTR        { 1, 2, 840, 113549, 1, 9, 5 }
-#define OID_BINARY_SIGNING_TIME_ATTR { 1, 2, 840, 113549, 1, 9, 16, 2, 46 }
 
 #define OID_ROA                      { 1, 2, 840, 113549, 1, 9, 16, 1, 24 }
 #define OID_MANIFEST                 { 1, 2, 840, 113549, 1, 9, 16, 1, 26 }

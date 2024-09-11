@@ -130,6 +130,11 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 
 	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
 
+	setopt_str(result, CURLOPT_ACCEPT_ENCODING, "");
+
+	setopt_long(result, CURLOPT_FOLLOWLOCATION, 1);
+	setopt_long(result, CURLOPT_MAXREDIRS, config_get_max_redirs());
+
 	setopt_long(result, CURLOPT_CONNECTTIMEOUT,
 	    config_get_http_connect_timeout());
 	setopt_long(result, CURLOPT_TIMEOUT,

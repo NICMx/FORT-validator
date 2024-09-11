@@ -62,14 +62,18 @@ int
 asn1_decode_any(ANY_t *any, asn_TYPE_descriptor_t const *descriptor,
     void **result, bool log)
 {
-	return asn1_decode(any->buf, any->size, descriptor, result, log);
+	return (any != NULL)
+	    ? asn1_decode(any->buf, any->size, descriptor, result, log)
+	    : pr_val_err("ANY '%s' is NULL.", descriptor->name);
 }
 
 int
 asn1_decode_octet_string(OCTET_STRING_t *string,
     asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
-	return asn1_decode(string->buf, string->size, descriptor, result, log);
+	return (string != NULL)
+	    ? asn1_decode(string->buf, string->size, descriptor, result, log)
+	    : pr_val_err("Octet String '%s' is NULL.", descriptor->name);
 }
 
 /*
