@@ -7,6 +7,7 @@
 #include "algorithm.h"
 #include "extension.h"
 #include "log.h"
+#include "thread_var.h"
 #include "types/name.h"
 
 static int
@@ -20,13 +21,13 @@ __crl_load(char const *path, X509_CRL **result)
 	if (bio == NULL)
 		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
 	if (BIO_read_filename(bio, path) <= 0) {
-		error = val_crypto_err("Error reading CRL '%s'", path);
+		error = val_crypto_err("Error reading CRL");
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
-		error = val_crypto_err("Error parsing CRL '%s'", path);
+		error = val_crypto_err("Error parsing CRL");
 		goto end;
 	}
 
@@ -163,15 +164,14 @@ crl_validate(X509_CRL *crl)
 	return validate_extensions(crl);
 }
 
-/* XXX I suspect this should receive the map */
 int
-crl_load(char const *path, X509_CRL **result)
+crl_load(struct cache_mapping *map, X509_CRL **result)
 {
 	int error;
 
-	pr_val_debug("CRL '%s' {", path);
+	fnstack_push_map(map);
 
-	error = __crl_load(path, result);
+	error = __crl_load(map->path, result);
 	if (error)
 		goto end;
 
@@ -179,7 +179,6 @@ crl_load(char const *path, X509_CRL **result)
 	if (error)
 		X509_CRL_free(*result);
 
-end:
-	pr_val_debug("}");
+end:	fnstack_pop();
 	return error;
 }

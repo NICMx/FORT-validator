@@ -96,7 +96,7 @@ rsync_test_LDADD = ${MY_LDADD}
 serial_test_SOURCES = types/serial_test.c
 serial_test_LDADD = ${MY_LDADD}
 
-tal_test_SOURCES = tal_test.c
+tal_test_SOURCES = object/tal_test.c
 tal_test_LDADD = ${MY_LDADD}
 
 thread_pool_test_SOURCES = thread_pool_test.c

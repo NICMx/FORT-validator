@@ -60,6 +60,13 @@ map_child(struct cache_mapping *parent, char const *name)
 }
 
 void
+map_copy(struct cache_mapping *dst, struct cache_mapping *src)
+{
+	dst->url = pstrdup(src->url);
+	dst->path = pstrdup(src->path);
+}
+
+void
 map_cleanup(struct cache_mapping *map)
 {
 	free(map->url);

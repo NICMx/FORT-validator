@@ -40,6 +40,7 @@ rsync_download(char const *src, char const *dst, char const *cmpdir)
 
 MOCK_ABORT_INT(rrdp_update, struct cache_node *notif)
 __MOCK_ABORT(rrdp_notif2json, json_t *, NULL, struct cachefile_notification *notif)
+MOCK_ABORT_VOID(rrdp_notif_cleanup, struct cachefile_notification *notif)
 MOCK_VOID(rrdp_notif_free, struct cachefile_notification *notif)
 MOCK_ABORT_INT(rrdp_json2notif, json_t *json, struct cachefile_notification **result)
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)

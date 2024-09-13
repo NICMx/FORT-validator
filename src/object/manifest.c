@@ -276,11 +276,11 @@ build_rpp(struct cache_mapping *mft_map, struct Manifest *mft,
 
 		error = check_file_and_hash(fah, map.path);
 		if (error)
-			goto fail;
+			goto fail2;
 
 		error = rpp_add_file(pp, &map);
 		if (error)
-			goto fail;
+			goto fail2;
 	}
 
 	/* rfc6486#section-7 */
@@ -293,6 +293,7 @@ build_rpp(struct cache_mapping *mft_map, struct Manifest *mft,
 	*result = pp;
 	return 0;
 
+fail2:	map_cleanup(&map);
 fail:	map_cleanup(&pp_map);
 	rpp_refput(pp);
 	return error;
@@ -311,7 +312,6 @@ handle_manifest(struct cache_mapping *map, struct rpp **pp)
 	int error;
 
 	/* Prepare */
-	pr_val_debug("Manifest '%s' {", map_val_get_printable(map));
 	fnstack_push_map(map);
 
 	/* Decode */
@@ -359,7 +359,6 @@ revert_manifest:
 revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:
-	pr_val_debug("}");
 	fnstack_pop();
 	return error;
 }

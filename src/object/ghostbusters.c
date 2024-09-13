@@ -26,7 +26,6 @@ ghostbusters_traverse(struct cache_mapping *map, struct rpp *pp)
 	int error;
 
 	/* Prepare */
-	pr_val_debug("Ghostbusters '%s' {", map_val_get_printable(map));
 	fnstack_push_map(map);
 
 	/* Decode */
@@ -56,7 +55,6 @@ revert_args:
 revert_sobj:
 	signed_object_cleanup(&sobj);
 revert_log:
-	pr_val_debug("}");
 	fnstack_pop();
 	return error;
 }

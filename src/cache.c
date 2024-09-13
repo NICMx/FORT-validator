@@ -165,7 +165,7 @@ init_cachedir_tag(void)
 	free(filename);
 }
 
-static void
+static int
 init_tmp_dir(void)
 {
 	char *dirname;
@@ -173,19 +173,24 @@ init_tmp_dir(void)
 
 	dirname = get_cache_filename(CACHE_TMPDIR, true);
 
-	error = mkdir(dirname, true);
-	if (error != EEXIST)
-		pr_crit("Cannot create %s: %s", dirname, strerror(error));
+	if (mkdir(dirname, 0777) < 0) {
+		error = errno;
+		if (error != EEXIST)
+			return pr_op_err("Cannot create '%s': %s",
+			    dirname, strerror(error));
+	}
 
 	free(dirname);
+	return 0;
 }
 
-void
+int
 cache_setup(void)
 {
 	init_cache_metafile();
 	init_tmp_dir();
 	init_cachedir_tag();
+	return 0;
 }
 
 void
@@ -506,7 +511,7 @@ dl_rsync(struct cache_node *rpp)
 		return error;
 	}
 
-	module->flags |= CNF_RSYNC | CNF_CACHED | CNF_FRESH;
+	module->flags |= CNF_RSYNC | CNF_CACHED | CNF_FRESH | CNF_FREE_TMPPATH;
 	module->mtim = time_nonfatal();
 	module->tmppath = tmppath;
 
@@ -543,11 +548,46 @@ dl_http(struct cache_node *node)
 		return error;
 	}
 
-	node->flags |= CNF_CACHED | CNF_FRESH;
+	node->flags |= CNF_CACHED | CNF_FRESH | CNF_FREE_TMPPATH;
 	if (changed)
 		node->mtim = mtim;
 	node->tmppath = tmppath;
 	return 0;
+}
+
+static char *
+get_tmppath(struct cache_node *node)
+{
+	struct cache_node *ancestor;
+	struct path_builder pb;
+	size_t skiplen;
+
+	if (node->tmppath != NULL)
+		return node->tmppath;
+
+	ancestor = node;
+	do {
+		ancestor = ancestor->parent;
+		if (ancestor == NULL)
+			pr_crit("aaaaa"); // XXX This should never happen, but maybe don't crash anyway
+	} while (ancestor->tmppath == NULL);
+
+	skiplen = strlen(ancestor->path);
+	if (strncmp(ancestor->path, node->path, skiplen) != 0)
+		return NULL; // XXX
+
+	pb_init(&pb);
+	if (pb_append(&pb, ancestor->tmppath) != 0)
+		goto cancel;
+	if (pb_append(&pb, node->path + skiplen) != 0)
+		goto cancel;
+
+	node->flags |= CNF_FREE_TMPPATH;
+	node->tmppath = pb.string;
+	return pb.string;
+
+cancel:	pb_cleanup(&pb);
+	return NULL;
 }
 
 /* @uri is either a caRepository or a rpkiNotify */
@@ -581,7 +621,7 @@ try_uri(char const *uri, struct cache_node *root,
 	}
 
 	map.url = rpp->url;
-	map.path = (download != NULL) ? rpp->tmppath : rpp->path;
+	map.path = (download != NULL) ? get_tmppath(rpp) : rpp->path;
 	error = validate(&map, arg);
 	if (error) {
 		pr_val_debug("RPP validation failed.");
@@ -633,7 +673,7 @@ cache_download_uri(struct strlist *uris, validate_cb cb, void *arg)
 	return try_uris(uris, cache.rsync, "rsync://", NULL, cb, arg);
 }
 
-/**
+/*
  * XXX outdated comment
  *
  * Assumes the URIs represent different ways to access the same content.
@@ -734,7 +774,8 @@ commit_rpp_delta(struct cache_node *node)
 	node->tmppath = NULL;
 	return true;
 
-branch:	node->flags = 0;
+branch:	/* Clean up state flags */
+	node->flags &= ~(CNF_CACHED | CNF_FRESH | CNF_TOUCHED | CNF_VALID);
 	if (node->tmppath) {
 		free(node->tmppath);
 		node->tmppath = NULL;
@@ -745,7 +786,7 @@ branch:	node->flags = 0;
 static int
 rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
-	if (remove(fpath))
+	if (remove(fpath) < 0)
 		pr_op_warn("Can't remove %s: %s", fpath, strerror(errno));
 	else
 		pr_op_debug("Removed %s.", fpath);
@@ -898,7 +939,7 @@ abandoned:
 	if (pm)
 		cachent_delete(pm);
 unknown:
-	if (remove(path))
+	if (remove(path) < 0)
 		PR_DEBUG_MSG("remove(): %s", strerror(errno)); // XXX
 	return 0;
 }
@@ -932,6 +973,12 @@ remove_orphaned(struct cache_node *node)
 	if (file_exists(node->path) == ENOENT) {
 		pr_op_debug("Missing file; deleting node: %s", node->path);
 		cachent_delete(node);
+
+		if (node == cache.https)
+			cache.https = NULL;
+		else if (node == cache.rsync)
+			cache.rsync = NULL;
+
 		return false;
 	}
 

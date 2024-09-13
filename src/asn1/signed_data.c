@@ -61,8 +61,6 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
 	 * to a tree leaf. Loops aren't possible.
 	 */
 
-	pr_val_debug("EE Certificate (embedded) {");
-
 	/*
 	 * "If the call is successful *in is incremented to the byte following
 	 * the parsed data."
@@ -103,14 +101,9 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
 
 	resources_set_policy(ee->res, policy);
 	error = certificate_get_resources(cert, ee->res, CERTYPE_EE);
-	if (error)
-		goto end2;
 
-end2:
-	X509_free(cert);
-end1:
-	pr_val_debug("}");
-	return error;
+end2:	X509_free(cert);
+end1:	return error;
 }
 
 /* rfc6488#section-2.1.6.4.1 */

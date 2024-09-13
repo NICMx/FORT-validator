@@ -101,8 +101,8 @@ session_cleanup(struct rrdp_session *meta)
 static void
 metadata_cleanup(struct file_metadata *meta)
 {
-	free(meta->hash);
 	free(meta->uri);
+	free(meta->hash);
 }
 
 static void
@@ -867,7 +867,7 @@ handle_snapshot(struct update_notification *new, struct cache_node *notif)
 	if (error)
 		goto end2;
 	error = parse_snapshot(&new->session, tmppath, notif);
-	delete_file(tmppath);
+//	delete_file(tmppath); XXX
 
 end2:	free(tmppath);
 end1:	fnstack_pop();
@@ -938,7 +938,7 @@ handle_delta(struct update_notification *notif,
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta, tmppath, notif_node);
-	delete_file(tmppath);
+//	delete_file(tmppath); XXX
 
 	free(tmppath);
 end:	fnstack_pop();
@@ -1112,19 +1112,22 @@ dl_notif(struct cache_node *notif, struct update_notification *new)
 	if (notif->dlerr)
 		goto end;
 
-	if (remove(tmppath) == -1) {
-		notif->dlerr = errno;
-		pr_val_err("Can't remove notification's temporal file: %s",
-		   strerror(notif->dlerr));
-		goto end;
-	}
-	if (mkdir(tmppath, 0777) == -1) {
-		notif->dlerr = errno;
-		pr_val_err("Can't create notification's temporal directory: %s",
-		    strerror(notif->dlerr));
-		goto end;
-	}
+//	if (remove(tmppath) < 0) {
+//		notif->dlerr = errno;
+//		pr_val_err("Can't remove notification's temporal file: %s",
+//		   strerror(notif->dlerr));
+//		update_notification_cleanup(new);
+//		goto end;
+//	}
+//	if (mkdir(tmppath, 0777) < 0) {
+//		notif->dlerr = errno;
+//		pr_val_err("Can't create notification's temporal directory: %s",
+//		    strerror(notif->dlerr));
+//		update_notification_cleanup(new);
+//		goto end;
+//	}
 
+	notif->flags |= CNF_FREE_TMPPATH;
 	notif->tmppath = tmppath;
 	return true;
 
@@ -1407,12 +1410,18 @@ revert_notif:
 }
 
 void
+rrdp_notif_cleanup(struct cachefile_notification *notif)
+{
+	session_cleanup(&notif->session);
+	cachent_delete(notif->subtree);
+	clear_delta_hashes(notif);
+}
+
+void
 rrdp_notif_free(struct cachefile_notification *notif)
 {
-	if (notif == NULL)
-		return;
-
-	session_cleanup(&notif->session);
-	clear_delta_hashes(notif);
-	free(notif);
+	if (notif != NULL) {
+		rrdp_notif_cleanup(notif);
+		free(notif);
+	}
 }

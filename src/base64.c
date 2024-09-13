@@ -34,17 +34,21 @@ base64_decode(char *in, size_t in_len, unsigned char **out, size_t *out_len)
 
 	status = EVP_DecodeUpdate(ctx, result, &outl, (unsigned char *)in, in_len);
 	if (status == -1)
-		return false;
+		goto cancel;
 
 	*out_len = outl;
 
 	status = EVP_DecodeFinal(ctx, result + outl, &outl);
 	if (status != 1)
-		return false;
+		goto cancel;
 
+	EVP_ENCODE_CTX_free(ctx);
 	*out = result;
 	*out_len += outl;
 	return true;
+
+cancel:	EVP_ENCODE_CTX_free(ctx);
+	return false;
 }
 
 /*

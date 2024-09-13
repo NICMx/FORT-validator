@@ -260,10 +260,10 @@ ensure_dir(char const *path, mode_t mode)
 	 * path actually refers to a file.
 	 * So it looks like this stat() is unavoidable.
 	 */
-	if (stat_dir(path) == ENOTDIR && remove(path))
+	if (stat_dir(path) == ENOTDIR && remove(path) < 0)
 		return errno;
 
-	if (mkdir(path, mode)) {
+	if (mkdir(path, mode) < 0) {
 		error = errno;
 		return (error == EEXIST) ? 0 : error;
 	}
@@ -298,7 +298,7 @@ mkdir_p(char const *_path, bool include_basename, mode_t mode)
 	}
 
 	if (result == ENOTDIR)
-		pr_op_err_st("stack tracing...");
+		pr_op_err_st("stack tracing for '%s'...", path);
 
 	for (i = 1; path[i] != '\0'; i++) {
 		if (path[i] == '/') {
@@ -334,8 +334,7 @@ delete_dir_recursive_bottom_up(char const *path)
 	size_t config_len;
 	int error;
 
-	errno = 0;
-	if (remove(path) != 0) {
+	if (remove(path) < 0) {
 		error = errno;
 		pr_val_err("Couldn't delete '%s': %s", path, strerror(error));
 		return error;

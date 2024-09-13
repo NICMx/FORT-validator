@@ -239,8 +239,7 @@ file_rm_f(char const *path)
 {
 	int error;
 
-	errno = 0;
-	if (remove(path) != 0) {
+	if (remove(path) < 0) {
 		error = errno;
 		if (error != ENOENT)
 			return error;
@@ -253,8 +252,7 @@ static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
 	pr_op_debug("Deleting %s.", fpath);
-	errno = 0;
-	return (remove(fpath) != 0) ? errno : 0;
+	return (remove(fpath) < 0) ? errno : 0;
 }
 
 /* Same as `system("rm -rf <path>")`, but more portable and maaaaybe faster. */

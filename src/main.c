@@ -1,5 +1,6 @@
 #include <errno.h>
 
+#include "cache.h"
 #include "config.h"
 #include "extension.h"
 #include "hash.h"
@@ -75,7 +76,7 @@ fort_server(void)
 	return error;
 }
 
-/**
+/*
  * Shells don't like it when we return values other than 0-255.
  * In fact, bash also has its own meanings for 126-255.
  * (See man 1 bash > EXIT STATUS)
@@ -147,6 +148,9 @@ main(int argc, char **argv)
 	error = vrps_init();
 	if (error)
 		goto revert_relax_ng;
+	error = cache_setup();
+	if (error)
+		goto revert_vrps;
 
 	/* Meat */
 
@@ -164,6 +168,8 @@ main(int argc, char **argv)
 
 	/* End */
 
+	cache_teardown();
+revert_vrps:
 	vrps_destroy();
 revert_relax_ng:
 	relax_ng_cleanup();

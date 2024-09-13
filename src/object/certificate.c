@@ -211,7 +211,7 @@ validate_subject(X509 *cert)
 static X509_PUBKEY *
 decode_spki(struct tal *tal)
 {
-	X509_PUBKEY *spki = NULL;
+	X509_PUBKEY *spki;
 	unsigned char const *origin, *cursor;
 	size_t len;
 
@@ -548,9 +548,7 @@ struct progress {
 	size_t remaining;
 };
 
-/**
- * Skip the "T" part of a TLV.
- */
+/* Skip the "T" part of a TLV. */
 static int
 skip_t(ANY_t *content, struct progress *p, unsigned int tag)
 {
@@ -567,9 +565,7 @@ skip_t(ANY_t *content, struct progress *p, unsigned int tag)
 	return 0;
 }
 
-/**
- * Skip the "TL" part of a TLV.
- */
+/* Skip the "TL" part of a TLV. */
 static int
 skip_tl(ANY_t *content, struct progress *p, unsigned int tag)
 {
@@ -614,9 +610,7 @@ skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 	return 0;
 }
 
-/**
- * A structure that points to the LV part of a signedAttrs TLV.
- */
+/* A structure that points to the LV part of a signedAttrs TLV. */
 struct encoded_signedAttrs {
 	const uint8_t *buffer;
 	ber_tlv_len_t size;
@@ -1150,11 +1144,9 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 			if (!X509_EXTENSION_get_critical(ext))
 				return pr_val_err("The IP extension is not marked as critical.");
 
-			pr_val_debug("IP {");
-			error = handle_ip_extension(ext, resources);
-			pr_val_debug("}");
 			ip_ext_found = true;
 
+			error = handle_ip_extension(ext, resources);
 			if (error)
 				return error;
 
@@ -1164,12 +1156,10 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 			if (!X509_EXTENSION_get_critical(ext))
 				return pr_val_err("The AS extension is not marked as critical.");
 
-			pr_val_debug("ASN {");
-			error = handle_asn_extension(ext, resources,
-			    allow_asn_inherit);
-			pr_val_debug("}");
 			asn_ext_found = true;
 
+			error = handle_asn_extension(ext, resources,
+			    allow_asn_inherit);
 			if (error)
 				return error;
 
@@ -1188,9 +1178,7 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 	return 0;
 }
 
-/**
- * Copies the resources from @cert to @resources.
- */
+/* Copies the resources from @cert to @resources. */
 int
 certificate_get_resources(X509 *cert, struct resources *resources,
     enum cert_type type)
@@ -1528,7 +1516,7 @@ ad2uri(char **uri, ACCESS_DESCRIPTION *ad)
 	return 0;
 }
 
-/**
+/*
  * The RFC does not explain AD validation very well. This is personal
  * interpretation, influenced by Tim Bruijnzeels's response
  * (https://mailarchive.ietf.org/arch/msg/sidr/4ycmff9jEU4VU9gGK5RyhZ7JYsQ)
@@ -1691,9 +1679,7 @@ handle_cp(void *ext, void *arg)
 	return 0;
 }
 
-/**
- * Validates the certificate extensions, Trust Anchor style.
- */
+/* Validates the certificate extensions, Trust Anchor style. */
 static int
 certificate_validate_extensions_ta(X509 *cert, struct sia_uris *sia_uris,
     enum rpki_policy *policy)
@@ -1717,7 +1703,7 @@ certificate_validate_extensions_ta(X509 *cert, struct sia_uris *sia_uris,
 	return handle_extensions(handlers, X509_get0_extensions(cert));
 }
 
-/**
+/*
  * Validates the certificate extensions, (intermediate) Certificate Authority
  * style.
  *
@@ -1880,13 +1866,12 @@ end:	free(mft.path);
 	return error;
 }
 
-/** Boilerplate code for CA certificate validation and recursive traversal. */
+/* Boilerplate code for CA certificate validation and recursive traversal. */
 int
 certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 {
 	struct validation *state;
 	int total_parents;
-	STACK_OF(X509_CRL) *rpp_parent_crl;
 	X509 *x509;
 	struct sia_uris sia_uris;
 	enum rpki_policy policy;
@@ -1899,26 +1884,13 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	if (total_parents >= config_get_max_cert_depth())
 		return pr_val_err("Certificate chain maximum depth exceeded.");
 
-	/* Debug cert type */
-	if (rpp_parent == NULL)
-		pr_val_debug("TA Certificate '%s' {",
-		    map_val_get_printable(cert_map));
-	else
-		pr_val_debug("Certificate '%s' {",
-		    map_val_get_printable(cert_map));
 	fnstack_push_map(cert_map);
-
-	rpp_parent_crl = rpp_crl(rpp_parent);
-	if (rpp_parent_crl == NULL) {
-		error = -EINVAL;
-		goto revert_fnstack_and_debug;
-	}
 
 	/* -- Validate the certificate (@cert) -- */
 	error = certificate_load(cert_map, &x509);
 	if (error)
 		goto revert_fnstack_and_debug;
-	error = certificate_validate_chain(x509, rpp_parent_crl);
+	error = certificate_validate_chain(x509, rpp_crl(rpp_parent));
 	if (error)
 		goto revert_cert;
 
@@ -1972,6 +1944,5 @@ revert_cert:
 		X509_free(x509);
 revert_fnstack_and_debug:
 	fnstack_pop();
-	pr_val_debug("}");
 	return error;
 }

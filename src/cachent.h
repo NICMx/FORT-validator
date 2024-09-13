@@ -49,7 +49,6 @@
  */
 #define RSYNC_INHERIT		(CNF_RSYNC | CNF_FRESH)
 
-// XXX rename to cache_entity or cachent
 struct cache_node {
 	char *url;		/* rsync://a.b.c/d/e (normalized) */
 	char *path;		/* path/to/cache/rsync/a.b.c/d/e */

@@ -15,13 +15,13 @@ enum defer_node_type {
 struct defer_node {
 	enum defer_node_type type;
 
-	/**
-	 * This field is only relevant if @type == PCT_CERT.
+	/*
+	 * This field is only relevant if @type == DNT_CERT.
 	 * Do not dereference members otherwise.
 	 */
 	struct deferred_cert deferred;
 
-	/** Used by certstack. Points to the next stacked certificate. */
+	/* Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(defer_node) next;
 };
 
@@ -34,9 +34,7 @@ struct serial_number {
 
 STATIC_ARRAY_LIST(serial_numbers, struct serial_number)
 
-/**
- * Cached certificate data.
- */
+/* Cached certificate data */
 struct metadata_node {
 	struct cache_mapping map;
 	struct resources *resources;
@@ -47,47 +45,31 @@ struct metadata_node {
 	 */
 	struct serial_numbers serials;
 
-	/** Used by certstack. Points to the next stacked certificate. */
+	/* Used by certstack. Points to the next stacked certificate. */
 	SLIST_ENTRY(metadata_node) next;
 };
 
-SLIST_HEAD(metadata_stack, metadata_node);
-
-/**
- * This is the foundation through which we pull off our iterative traversal,
- * as opposed to a stack-threatening recursive one.
- *
- * It is a bunch of data that replaces the one that would normally be allocated
- * in the function stack.
- */
+/* Certificates that need to be remembered during a validation cycle. */
 struct cert_stack {
-	/**
-	 * Defer stack. Certificates we haven't iterated through yet.
-	 *
-	 * Every time a certificate validates successfully, its children are
-	 * stored here so they can be traversed later.
+	/*
+	 * Defer stack; certificates whose validation has been postponed.
+	 * (Postponing certificates avoids us recursion and stack overflow.)
 	 */
 	struct defer_stack defers;
 
-	/**
-	 * x509 stack. Parents of the certificate we're currently iterating
-	 * through.
+	/*
+	 * X509 stack. Ancestor certificates of the current certificate.
 	 * Formatted for immediate libcrypto consumption.
 	 */
 	STACK_OF(X509) *x509s;
 
-	/**
-	 * Stacked additional data to each @x509 certificate.
+	/*
+	 * Metadata for each X509. Stuff that doesn't fit in libcrypto's struct.
 	 *
-	 * (These two stacks should always have the same size. The reason why I
-	 * don't combine them is because libcrypto's validation function needs
-	 * the X509 stack, and I'm not creating it over and over again.)
-	 *
-	 * (This is a SLIST and not a STACK_OF because the OpenSSL stack
-	 * implementation is different than the LibreSSL one, and the latter is
-	 * seemingly not intended to be used outside of its library.)
+	 * (This is a SLIST and not a STACK_OF because the LibreSSL STACK_OF
+	 * is seemingly private.)
 	 */
-	struct metadata_stack metas;
+	SLIST_HEAD(, metadata_node) metas;
 };
 
 int
@@ -111,18 +93,19 @@ certstack_create(struct cert_stack **result)
 }
 
 static void
-defer_destroy(struct defer_node *defer)
+defer_pop(struct cert_stack *stack)
 {
-	switch (defer->type) {
-	case DNT_SEPARATOR:
-		break;
-	case DNT_CERT:
-		free(defer->deferred.map.url);
-		free(defer->deferred.map.path);
-		rpp_refput(defer->deferred.pp);
-		break;
-	}
+	struct defer_node *defer;
 
+	defer = SLIST_FIRST(&stack->defers);
+	if (defer == NULL)
+		pr_crit("Attempted to pop empty defer stack");
+
+	SLIST_REMOVE_HEAD(&stack->defers, next);
+	if (defer->type == DNT_CERT) {
+		map_cleanup(&defer->deferred.map);
+		rpp_refput(defer->deferred.pp);
+	}
 	free(defer);
 }
 
@@ -134,10 +117,16 @@ serial_cleanup(struct serial_number *serial)
 }
 
 static void
-meta_destroy(struct metadata_node *meta)
+meta_pop(struct cert_stack *stack)
 {
-	free(meta->map.url);
-	free(meta->map.path);
+	struct metadata_node *meta;
+
+	meta = SLIST_FIRST(&stack->metas);
+	if (meta == NULL)
+		pr_crit("Attempted to pop empty metadata stack");
+
+	SLIST_REMOVE_HEAD(&stack->metas, next);
+	map_cleanup(&meta->map);
 	resources_destroy(meta->resources);
 	serial_numbers_cleanup(&meta->serials, serial_cleanup);
 	free(meta);
@@ -146,30 +135,19 @@ meta_destroy(struct metadata_node *meta)
 void
 certstack_destroy(struct cert_stack *stack)
 {
-	unsigned int stack_size;
-	struct metadata_node *meta;
-	struct defer_node *post;
+	int n;
 
-	stack_size = 0;
-	while (!SLIST_EMPTY(&stack->defers)) {
-		post = SLIST_FIRST(&stack->defers);
-		SLIST_REMOVE_HEAD(&stack->defers, next);
-		defer_destroy(post);
-		stack_size++;
-	}
-	pr_val_debug("Deleted %u deferred certificates.", stack_size);
+	for (n = 0; !SLIST_EMPTY(&stack->defers); n++)
+		defer_pop(stack);
+	pr_val_debug("Deleted %d deferred certificates.", n);
 
-	pr_val_debug("Deleting %d stacked x509s.", sk_X509_num(stack->x509s));
+	n = sk_X509_num(stack->x509s);
 	sk_X509_pop_free(stack->x509s, X509_free);
+	pr_val_debug("Deleted %d stacked x509s.", n);
 
-	stack_size = 0;
-	while (!SLIST_EMPTY(&stack->metas)) {
-		meta = SLIST_FIRST(&stack->metas);
-		SLIST_REMOVE_HEAD(&stack->metas, next);
-		meta_destroy(meta);
-		stack_size++;
-	}
-	pr_val_debug("Deleted %u metadatas.", stack_size);
+	for (n = 0; !SLIST_EMPTY(&stack->metas); n++)
+		meta_pop(stack);
+	pr_val_debug("Deleted %u metadatas.", n);
 
 	free(stack);
 }
@@ -183,7 +161,7 @@ deferstack_push(struct cert_stack *stack, struct cache_mapping *map,
 	node = pmalloc(sizeof(struct defer_node));
 
 	node->type = DNT_CERT;
-	node->deferred.map = *map; // XXX
+	map_copy(&node->deferred.map, map);
 	node->deferred.pp = pp;
 	rpp_refget(pp);
 	SLIST_INSERT_HEAD(&stack->defers, node, next);
@@ -193,23 +171,16 @@ static void
 x509stack_pop(struct cert_stack *stack)
 {
 	X509 *cert;
-	struct metadata_node *meta;
 
 	cert = sk_X509_pop(stack->x509s);
 	if (cert == NULL)
 		pr_crit("Attempted to pop empty X509 stack");
 	X509_free(cert);
 
-	meta = SLIST_FIRST(&stack->metas);
-	if (meta == NULL)
-		pr_crit("Attempted to pop empty metadata stack");
-	SLIST_REMOVE_HEAD(&stack->metas, next);
-	meta_destroy(meta);
+	meta_pop(stack);
 }
 
-/**
- * Contract: Returns either 0 or -ENOENT. No other outcomes.
- */
+/* Contract: Returns either 0 or -ENOENT. No other outcomes. */
 int
 deferstack_pop(struct cert_stack *stack, struct deferred_cert *result)
 {
@@ -221,25 +192,15 @@ again:	node = SLIST_FIRST(&stack->defers);
 
 	if (node->type == DNT_SEPARATOR) {
 		x509stack_pop(stack);
-
-		SLIST_REMOVE_HEAD(&stack->defers, next);
-		defer_destroy(node);
+		defer_pop(stack);
 		goto again;
 	}
 
 	*result = node->deferred;
-//	uri_refget(node->deferred.uri); // XXX
-	rpp_refget(node->deferred.pp);
 
 	SLIST_REMOVE_HEAD(&stack->defers, next);
-	defer_destroy(node);
+	free(node);
 	return 0;
-}
-
-bool
-deferstack_is_empty(struct cert_stack *stack)
-{
-	return SLIST_EMPTY(&stack->defers);
 }
 
 static int
@@ -286,7 +247,7 @@ create_separator(void)
 	return result;
 }
 
-/** Steals ownership of @x509 on success. */
+/* Steals ownership of @x509 on success. */
 int
 x509stack_push(struct cert_stack *stack, struct cache_mapping *map, X509 *x509,
     enum rpki_policy policy, enum cert_type type)
@@ -298,7 +259,7 @@ x509stack_push(struct cert_stack *stack, struct cache_mapping *map, X509 *x509,
 
 	meta = pmalloc(sizeof(struct metadata_node));
 
-	meta->map = *map; // XXX
+	map_copy(&meta->map, map);
 	serial_numbers_init(&meta->serials);
 
 	error = init_resources(x509, policy, type, &meta->resources);
@@ -330,7 +291,7 @@ cleanup_serial:
 	return error;
 }
 
-/**
+/*
  * This one is intended to revert a recent x509 push.
  * Reverts that particular push.
  *
@@ -340,29 +301,14 @@ cleanup_serial:
 void
 x509stack_cancel(struct cert_stack *stack)
 {
-	struct defer_node *defer_separator;
-
 	x509stack_pop(stack);
-
-	defer_separator = SLIST_FIRST(&stack->defers);
-	if (defer_separator == NULL)
-		pr_crit("Attempted to pop empty defer stack");
-	SLIST_REMOVE_HEAD(&stack->defers, next);
-	defer_destroy(defer_separator);
+	defer_pop(stack);
 }
 
 X509 *
 x509stack_peek(struct cert_stack *stack)
 {
 	return sk_X509_value(stack->x509s, sk_X509_num(stack->x509s) - 1);
-}
-
-/** Does not grab reference. */
-struct cache_mapping *
-x509stack_peek_map(struct cert_stack *stack)
-{
-	struct metadata_node *meta = SLIST_FIRST(&stack->metas);
-	return (meta != NULL) ? &meta->map : NULL;
 }
 
 struct resources *
@@ -384,7 +330,7 @@ get_current_file_name(void)
 	return pstrdup(file_name);
 }
 
-/**
+/*
  * Intended to validate serial number uniqueness.
  * "Stores" the serial number in the current relevant certificate metadata,
  * and complains if there's a collision. That's all.

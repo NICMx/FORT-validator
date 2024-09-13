@@ -65,7 +65,7 @@ set_crl(struct rpp *pp, struct cache_mapping *map)
 	if (pp->crl.stack != NULL)
 		return pr_val_err("Repository Publication Point has more than one CRL.");
 
-	error = crl_load(map->path, &crl);
+	error = crl_load(map, &crl);
 	if (error)
 		return error;
 
@@ -87,7 +87,7 @@ set_crl(struct rpp *pp, struct cache_mapping *map)
 int
 rpp_add_file(struct rpp *pp, struct cache_mapping *map)
 {
-	if (str_ends_with(map->url, ".crl") == 0)
+	if (str_ends_with(map->url, ".crl"))
 		return set_crl(pp, map);
 
 	filelist_add(&pp->files, map);
@@ -107,7 +107,7 @@ rpp_get_crl_url(struct rpp const *pp)
 STACK_OF(X509_CRL) *
 rpp_crl(struct rpp *pp)
 {
-	return pp->crl.stack;
+	return (pp != NULL) ? pp->crl.stack : NULL;
 }
 
 /* Traverses through all of @pp's known files, validating them. */

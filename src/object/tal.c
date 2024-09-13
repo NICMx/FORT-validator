@@ -83,8 +83,9 @@ read_content(char *fc /* File Content */, struct tal *tal)
 		if (is_blank(fc))
 			break;
 
-		// XXX no longer validating schema
-		strlist_add(&tal->urls, pstrdup(fc));
+		if (str_starts_with(fc, "https://") ||
+		    str_starts_with(fc, "rsync://"))
+			strlist_add(&tal->urls, pstrdup(fc));
 
 		fc = nl + cr + 1;
 		if (*fc == '\0')
@@ -105,9 +106,7 @@ premature:
 	return pr_op_err("The TAL seems to end prematurely at line '%s'.", fc);
 }
 
-/**
- * @file_name is expected to outlive the result.
- */
+/* @file_path is expected to outlive @tal. */
 static int
 tal_init(struct tal *tal, char const *file_path)
 {
@@ -152,7 +151,7 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-/**
+/*
  * Performs the whole validation walkthrough that starts with Trust Anchor @ta,
  * which is assumed to have been extracted from TAL @arg->tal.
  */
@@ -166,8 +165,6 @@ handle_ta(struct cache_mapping *ta, void *arg)
 	struct deferred_cert deferred;
 	int error;
 
-	pr_val_debug("TAL URI '%s' {", map_val_get_printable(ta));
-
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
@@ -178,8 +175,7 @@ handle_ta(struct cache_mapping *ta, void *arg)
 		return ENSURE_NEGATIVE(error);
 
 	if (!str_ends_with(ta->url, ".cer")) {
-		pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
-		    ta->url);
+		pr_op_err("TAL URI lacks '.cer' extension: %s", ta->url);
 		error = EINVAL;
 		goto end;
 	}
@@ -208,8 +204,6 @@ handle_ta(struct cache_mapping *ta, void *arg)
 
 	/* Handle every other certificate. */
 	certstack = validation_certstack(state);
-	if (certstack == NULL)
-		pr_crit("Validation state has no certificate stack");
 
 	do {
 		error = deferstack_pop(certstack, &deferred);
@@ -229,7 +223,6 @@ handle_ta(struct cache_mapping *ta, void *arg)
 	} while (true);
 
 end:	validation_destroy(state);
-	pr_val_debug("}");
 	return error;
 }
 
@@ -252,8 +245,7 @@ do_file_validation(void *arg)
 	args.db = db_table_create();
 	thread->error = cache_download_uri(&args.tal.urls, handle_ta, &args);
 	if (thread->error) {
-		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
-		    thread->tal_file);
+		pr_op_err("None of the TAL URIs yielded a successful traversal.");
 		db_table_destroy(args.db);
 	} else {
 		thread->db = args.db;
@@ -312,7 +304,7 @@ perform_standalone_validation(void)
 	int error = 0;
 	int tmperr;
 
-	cache_setup();
+	cache_prepare();
 
 	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
 	if (foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
@@ -322,7 +314,12 @@ perform_standalone_validation(void)
 			SLIST_REMOVE_HEAD(&threads, next);
 			thread_destroy(thread);
 		}
-		return NULL;
+
+		/*
+		 * Commit even on failure, as there's no reason to throw away
+		 * something we recently downloaded if it's marked as valid.
+		 */
+		goto end;
 	}
 
 	/* Wait for all */
@@ -330,13 +327,14 @@ perform_standalone_validation(void)
 		thread = SLIST_FIRST(&threads);
 		tmperr = pthread_join(thread->pid, NULL);
 		if (tmperr)
-			pr_crit("pthread_join() threw %d (%s) on the '%s' thread.",
-			    tmperr, strerror(tmperr), thread->tal_file);
+			pr_crit("pthread_join() threw '%s' on the '%s' thread.",
+			    strerror(tmperr), thread->tal_file);
 		SLIST_REMOVE_HEAD(&threads, next);
 		if (thread->error) {
 			error = thread->error;
-			pr_op_warn("Validation from TAL '%s' yielded error %d (%s); discarding all validation results.",
-			    thread->tal_file, error, strerror(abs(error)));
+			pr_op_warn("Validation from TAL '%s' yielded '%s'; "
+			    "discarding all validation results.",
+			    thread->tal_file, strerror(abs(error)));
 		}
 
 		if (!error) {
@@ -351,13 +349,12 @@ perform_standalone_validation(void)
 		thread_destroy(thread);
 	}
 
-	cache_teardown();
-
-	/* If one thread has errors, we can't keep the resulting table. */
+	/* If at least one thread had a fatal error, the table is unusable. */
 	if (error) {
 		db_table_destroy(db);
 		db = NULL;
 	}
 
+end:	cache_commit();
 	return db;
 }

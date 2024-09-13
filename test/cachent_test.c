@@ -10,6 +10,8 @@
 static char deleted[16][6];
 static unsigned int dn;
 
+MOCK_ABORT_VOID(rrdp_notif_cleanup, struct cachefile_notification *notif)
+
 static void
 __delete_node_cb(struct cache_node const *node)
 {

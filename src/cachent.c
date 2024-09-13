@@ -111,6 +111,7 @@ cachent_find(struct cache_node *root, char const *path, struct cache_node **msm)
 	return child;
 }
 
+// XXX path_childn() dup
 static char *
 inherit_path(char const *parent, char const *name, size_t nlen)
 {
@@ -217,6 +218,8 @@ __delete_node(struct cache_node *node)
 		free(node->path);
 	if (node->flags & CNF_FREE_TMPPATH)
 		free(node->tmppath);
+	if (node->flags & CNF_NOTIFICATION)
+		rrdp_notif_cleanup(&node->rrdp);
 	free(node);
 
 	return valid;

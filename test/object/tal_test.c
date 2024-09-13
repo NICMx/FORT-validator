@@ -13,15 +13,8 @@
 
 /* Mocks */
 
-MOCK_ABORT_VOID(cache_setup, void)
-MOCK(cache_create, struct rpki_cache *, NULL, void)
-MOCK_VOID(cache_destroy, struct rpki_cache *cache)
-MOCK_ABORT_INT(cache_download_alt, struct sia_uris *sias,
-    validate_cb cb, void *arg)
-MOCK_ABORT_INT(cache_tmpfile, char **filename)
-MOCK_ABORT_VOID(cache_teardown, void)
-MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
-    struct cache_mapping *cert_map)
+MOCK_ABORT_VOID(cache_prepare, void)
+MOCK_ABORT_VOID(cache_commit, void)
 MOCK_ABORT_PTR(db_table_create, db_table, void)
 MOCK_VOID(db_table_destroy, struct db_table *table)
 MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
@@ -129,6 +122,7 @@ START_TEST(test_tal_load_4urls)
 	test_4urls("resources/tal/4urls-crlf.tal");
 	test_4urls("resources/tal/4urls-lf-comment.tal");
 	test_4urls("resources/tal/4urls-lf-comment-utf8.tal");
+	test_4urls("resources/tal/4urls-ignored-protos.tal");
 }
 END_TEST
 

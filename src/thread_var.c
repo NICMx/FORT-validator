@@ -112,7 +112,7 @@ fnstack_cleanup(void)
 		pr_op_err("pthread_setspecific() returned %d.", error);
 }
 
-/**
+/*
  * Call this function every time you're about to start processing a new file.
  * Any pr_op_err()s and friends will now include the new file name.
  * Use fnstack_pop() to revert back to the previously stacked file name.
@@ -156,12 +156,7 @@ fnstack_push(char const *file)
 	files->filenames[files->len++] = file;
 }
 
-/**
- * See fnstack_push().
- *
- * This function cannot claim a reference for @map, so @map will have to outlive
- * the push/pop.
- */
+/* See fnstack_push(). @map needs to outlive the push/pop. */
 void
 fnstack_push_map(struct cache_mapping *map)
 {
@@ -201,7 +196,7 @@ addr2str(int af, void const *addr, char *(*buffer_cb)(struct validation *))
 	return inet_ntop(af, addr, buffer_cb(state), INET6_ADDRSTRLEN);
 }
 
-/**
+/*
  * Returns @addr, converted to a printable string. Intended for minimal clutter
  * address printing.
  *
@@ -217,27 +212,21 @@ v4addr2str(struct in_addr const *addr)
 	return addr2str(AF_INET, addr, validation_get_ip_buffer1);
 }
 
-/**
- * Same as v4addr2str(), except a different buffer is used.
- */
+/* Same as v4addr2str(), except a different buffer is used. */
 char const *
 v4addr2str2(struct in_addr const *addr)
 {
 	return addr2str(AF_INET, addr, validation_get_ip_buffer2);
 }
 
-/**
- * See v4addr2str().
- */
+/* See v4addr2str(). */
 char const *
 v6addr2str(struct in6_addr const *addr)
 {
 	return addr2str(AF_INET6, addr, validation_get_ip_buffer1);
 }
 
-/**
- * See v4addr2str2().
- */
+/* See v4addr2str2(). */
 char const *
 v6addr2str2(struct in6_addr const *addr)
 {

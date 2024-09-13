@@ -4,12 +4,11 @@
 #include "types/map.h"
 #include "types/str.h"
 
-void cache_setup(void);		/* Init this module */
+int cache_setup(void);		/* Init this module */
 void cache_teardown(void);	/* Destroy this module */
 
 void cache_prepare(void);	/* Prepare cache for new validation cycle */
-void cache_commit(void);	/* Finish successful validation cycle */
-/* XXX Huh. Looks like this could use a cache_rollback() */
+void cache_commit(void);	/* Finish validation cycle */
 
 struct sia_uris {
 	char *caRepository;	/* RPP cage */
