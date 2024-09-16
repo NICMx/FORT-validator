@@ -53,7 +53,7 @@ rsync2bio_tmpdir(char const *src)
 	error = pb_append(&pb, tmpdir);
 	if (error)
 		goto end;
-	error = pb_append(&pb, strrchr(src, '/') + 1);
+	error = pb_append(&pb, path_filename(src));
 	if (error)
 		goto end;
 

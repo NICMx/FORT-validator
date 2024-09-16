@@ -4,14 +4,20 @@
 #include <sys/queue.h>
 
 #include "alloc.c"
+#include "base64.c"
 #include "common.c"
 #include "cache.c"
 #include "cachent.c"
 #include "cachetmp.c"
 #include "cache_util.c"
 #include "file.c"
+#include "hash.c"
+#include "json_util.c"
 #include "mock.c"
 #include "mock_https.c"
+#include "rrdp_util.h"
+#include "relax_ng.c"
+#include "rrdp.c"
 #include "types/path.c"
 #include "types/str.c"
 #include "types/url.c"
@@ -20,29 +26,28 @@
 
 static unsigned int rsync_counter; /* Times the rsync function was called */
 
+static void
+touch_file(char const *dir)
+{
+	char cmd[64];
+	ck_assert(snprintf(cmd, sizeof(cmd), "touch %s/file", dir) < sizeof(cmd));
+	ck_assert_int_eq(0, system(cmd));
+}
+
 int
 rsync_download(char const *src, char const *dst, char const *cmpdir)
 {
-	char cmd[64];
-
 	rsync_counter++;
 
 	if (dl_error)
 		return dl_error;
 
-	ck_assert_int_eq(0, mkdir_p(dst, true, 0777));
-
-	ck_assert(snprintf(cmd, sizeof(cmd), "touch %s/file", dst) < sizeof(cmd));
-	ck_assert_int_eq(0, system(cmd));
+	ck_assert_int_eq(0, mkdir_p(dst, true));
+	touch_file(dst);
 
 	return 0;
 }
 
-MOCK_ABORT_INT(rrdp_update, struct cache_node *notif)
-__MOCK_ABORT(rrdp_notif2json, json_t *, NULL, struct cachefile_notification *notif)
-MOCK_ABORT_VOID(rrdp_notif_cleanup, struct cachefile_notification *notif)
-MOCK_VOID(rrdp_notif_free, struct cachefile_notification *notif)
-MOCK_ABORT_INT(rrdp_json2notif, json_t *json, struct cachefile_notification **result)
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 
 /* Helpers */
@@ -790,6 +795,70 @@ START_TEST(test_cache_cleanup_https_error)
 }
 END_TEST
 
+START_TEST(test_collisions)
+{
+	/*
+	 * Request
+	 *
+	 * 1. rsync://a.b.c/d/e/f/
+	 * 2. https://x.y.z/m/n/o.notification -> rsync://a.b.c/d/e/f/
+	 *
+	 * - None validates
+	 * - rsync validates
+	 * - https validates
+	 * - Both validate
+	 */
+
+	struct sia_uris sias;
+
+	ck_assert_int_eq(0, hash_setup());
+	ck_assert_int_eq(0, relax_ng_init());
+
+	setup_test();
+
+	printf("==== 1 ====\n");
+
+	/* Context: rsync */
+	sias.caRepository = "rsync://a.b.c/mod/rpp1";
+	sias.rpkiManifest = "rsync://a.b.c/mod/rpp1/m.mft";
+	sias.rpkiNotify = NULL;
+
+	rsync_counter = https_counter = 0;
+	ck_assert_int_eq(0, cache_download_alt(&sias, okay, NULL));
+	ck_assert_uint_eq(1, rsync_counter);
+	ck_assert_uint_eq(0, https_counter);
+
+	cache_print();
+
+	/*
+	 * Context: notification "https://a.b.c/d/notification.xml".
+	 * Both point to the same caRepository (RPP).
+	 *
+	 * This is either two benign RPPs coexisting (likely because of key
+	 * rollover), or one malicious RPP is trying to overwrite the other.
+	 *
+	 * So they need to be cached separately. We cannot reuse the RPP simply
+	 * because the caRepositories are identical.
+	 */
+	sias.rpkiNotify = "https://a.b.c/d/notification.xml";
+
+	dls[0] = NHDR("12") NSS("https://a.b.c/d/snapshot.xml",
+	    "d880c0e3136695636f73f8fb6340245182f4b19bd4b092679b9002ad427dc380")
+	    NTAIL;
+	dls[1] = SHDR("12") PBLSH("rsync://a.b.c/mod/rpp1/m.mft",
+	    "ZXhhbXBsZTE=") STAIL;
+	dls[2] = NULL;
+
+	rsync_counter = https_counter = 0;
+	ck_assert_int_eq(0, cache_download_alt(&sias, okay, NULL));
+	ck_assert_uint_eq(0, rsync_counter);
+	ck_assert_uint_eq(2, https_counter);
+
+	cache_print();
+
+	// XXX
+}
+
 START_TEST(test_dots)
 {
 	setup_test();
@@ -1016,7 +1085,7 @@ END_TEST
 static Suite *thread_pool_suite(void)
 {
 	Suite *suite;
-	TCase *rsync, *https, *dot, *meta, *recover;
+	TCase *rsync, *https, *mix, *dot, *meta, *recover;
 
 	rsync = tcase_create("rsync");
 	tcase_add_test(rsync, test_cache_download_rsync);
@@ -1029,6 +1098,9 @@ static Suite *thread_pool_suite(void)
 	tcase_add_test(https, test_cache_download_https_error);
 	tcase_add_test(https, test_cache_cleanup_https);
 	tcase_add_test(https, test_cache_cleanup_https_error);
+
+	mix = tcase_create("mix");
+	tcase_add_test(https, test_collisions);
 
 	dot = tcase_create("dot");
 	tcase_add_test(dot, test_dots);

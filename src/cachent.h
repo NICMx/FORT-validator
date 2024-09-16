@@ -9,7 +9,7 @@
 #include "rrdp.h"
 #include "types/uthash.h"
 
-/* XXX rename "touched" and "validated" into "preserve"? */
+/* XXX rename "touched" and "valid" into "preserve"? */
 
 // XXX trees now separated; consider removing this flag
 #define CNF_RSYNC		(1 << 0)

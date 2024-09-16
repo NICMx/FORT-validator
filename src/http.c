@@ -389,7 +389,7 @@ http_download(char const *url, char const *path, curl_off_t ims, bool *changed)
 	pr_val_info("HTTP GET: %s -> %s", url, path);
 
 	/* XXX might not be needed anymore */
-	error = mkdir_p(path, false, 0777);
+	error = mkdir_p(path, false);
 	if (error)
 		return error;
 

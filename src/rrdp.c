@@ -13,6 +13,7 @@
 #include "relax_ng.h"
 #include "thread_var.h"
 #include "types/arraylist.h"
+#include "types/path.h"
 #include "types/url.h"
 
 /* RRDP's XML namespace */
@@ -486,13 +487,12 @@ handle_publish(xmlTextReaderPtr reader, struct cache_node *notif)
 	error = parse_publish(reader, &tag);
 	if (error)
 		goto end;
-	pr_val_debug("- publish %s", tag.meta.uri);
 
 	if (!notif->rrdp.subtree) {
 		subtree = pzalloc(sizeof(struct cache_node));
 		subtree->url = "rsync://";
 		subtree->path = notif->path;
-		subtree->name = strrchr(subtree->path, '/') + 1;
+		subtree->name = path_filename(subtree->path);
 		subtree->tmppath = notif->tmppath;
 		notif->rrdp.subtree = subtree;
 	}
@@ -525,7 +525,7 @@ handle_publish(xmlTextReaderPtr reader, struct cache_node *notif)
 		goto end;
 	}
 
-	pr_val_debug("Caching file: %s", node->tmppath);
+	pr_val_debug("Publish %s", logv_filename(node->tmppath));
 	error = file_write_full(node->tmppath, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
@@ -543,8 +543,6 @@ handle_withdraw(xmlTextReaderPtr reader, struct cache_node *notif)
 	error = parse_withdraw(reader, &tag);
 	if (error)
 		goto end;
-
-	pr_val_debug("- withdraw: %s", tag.meta.uri);
 
 	node = cachent_provide(notif->rrdp.subtree, tag.meta.uri);
 	if (!node) {
@@ -570,6 +568,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct cache_node *notif)
 		goto end;
 
 	node->flags |= CNF_WITHDRAWN;
+	pr_val_debug("Withdraw %s", logv_filename(tag.meta.uri));
 
 end:	metadata_cleanup(&tag.meta);
 	return error;
@@ -857,7 +856,7 @@ handle_snapshot(struct update_notification *new, struct cache_node *notif)
 	char *tmppath;
 	int error;
 
-	pr_val_debug("Processing snapshot '%s'.", new->snapshot.uri);
+	pr_val_debug("Processing snapshot.");
 	fnstack_push(new->snapshot.uri);
 
 	error = dl_tmp(new->snapshot.uri, &tmppath);
@@ -1112,20 +1111,18 @@ dl_notif(struct cache_node *notif, struct update_notification *new)
 	if (notif->dlerr)
 		goto end;
 
-//	if (remove(tmppath) < 0) {
-//		notif->dlerr = errno;
-//		pr_val_err("Can't remove notification's temporal file: %s",
-//		   strerror(notif->dlerr));
-//		update_notification_cleanup(new);
-//		goto end;
-//	}
-//	if (mkdir(tmppath, 0777) < 0) {
-//		notif->dlerr = errno;
-//		pr_val_err("Can't create notification's temporal directory: %s",
-//		    strerror(notif->dlerr));
-//		update_notification_cleanup(new);
-//		goto end;
-//	}
+	if (remove(tmppath) < 0) {
+		/*
+		 * Note, this could be ignored if we weren't planning on reusing
+		 * the path. This is going to stop being an issue once streaming
+		 * is implemented.
+		 */
+		notif->dlerr = errno;
+		pr_val_err("Can't remove notification's temporal file: %s",
+		   strerror(notif->dlerr));
+		update_notification_cleanup(new);
+		goto end;
+	}
 
 	notif->flags |= CNF_FREE_TMPPATH;
 	notif->tmppath = tmppath;

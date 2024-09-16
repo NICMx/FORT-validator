@@ -12,7 +12,7 @@ if USE_TESTS
 # <mumble>_CFLAGS is not defined.
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
-AM_CFLAGS =  -pedantic -Wall -Wno-unused
+AM_CFLAGS =  -Wall -Wpedantic
 AM_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
 AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}
 # Reminder: As opposed to AM_CFLAGS, "AM_LDADD" is not idiomatic automake, and
@@ -58,7 +58,7 @@ cachent_test_SOURCES = cachent_test.c
 cachent_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 cache_test_SOURCES = cache_test.c
-cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
+cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
 
 db_table_test_SOURCES = rtr/db/db_table_test.c
 db_table_test_LDADD = ${MY_LDADD}

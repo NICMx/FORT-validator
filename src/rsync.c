@@ -299,7 +299,7 @@ rsync_download(char const *src, char const *dst, char const *cmpdst)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	error = mkdir_p(dst, true, 0777);
+	error = mkdir_p(dst, true);
 	if (error)
 		return error;
 

@@ -24,6 +24,7 @@
 #include "object/manifest.h"
 #include "thread_var.h"
 #include "types/path.h"
+#include "types/url.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -1853,7 +1854,7 @@ check_rpp(struct cache_mapping *map_rpp, void *rpkiManifest)
 	int error;
 
 	mft.url = rpkiManifest;
-	mft.path = join_paths(map_rpp->path, strrchr(mft.url, '/')); // XXX
+	mft.path = join_paths(map_rpp->path, mft.url + RPKI_SCHEMA_LEN);
 
 	error = handle_manifest(&mft, &pp);
 	if (error)

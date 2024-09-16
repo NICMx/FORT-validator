@@ -11,6 +11,7 @@
 #include "file.h"
 #include "log.h"
 #include "thread_var.h"
+#include "types/path.h"
 
 struct tal {
 	char const *file_name;
@@ -110,7 +111,6 @@ premature:
 static int
 tal_init(struct tal *tal, char const *file_path)
 {
-	char const *file_name;
 	struct file_contents file;
 	int error;
 
@@ -118,9 +118,7 @@ tal_init(struct tal *tal, char const *file_path)
 	if (error)
 		return error;
 
-	file_name = strrchr(file_path, '/');
-	file_name = (file_name != NULL) ? (file_name + 1) : file_path;
-	tal->file_name = file_name;
+	tal->file_name = path_filename(file_path);
 
 	strlist_init(&tal->urls);
 	error = read_content((char *)file.buffer, tal);
@@ -219,6 +217,7 @@ handle_ta(struct cache_mapping *ta, void *arg)
 		 */
 		certificate_traverse(deferred.pp, &deferred.map);
 
+		map_cleanup(&deferred.map);
 		rpp_refput(deferred.pp);
 	} while (true);
 

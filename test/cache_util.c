@@ -54,7 +54,7 @@ vnode(char const *url, char const *path, int flags, char const *tmppath,
 
 	result->url = (char *)url;
 	result->path = (char *)path;
-	result->name = strrchr(result->path, '/') + 1;
+	result->name = path_filename(result->path);
 	ck_assert_ptr_ne(NULL, result->name);
 	result->flags = flags;
 	result->tmppath = (char *)tmppath;

@@ -6,13 +6,6 @@
 #include "types/path.h"
 
 static char const *
-get_filename(char const *file_path)
-{
-	char *slash = strrchr(file_path, '/');
-	return (slash != NULL) ? (slash + 1) : file_path;
-}
-
-static char const *
 map_get_printable(struct cache_mapping *map, enum filename_format format)
 {
 	switch (format) {
@@ -21,7 +14,7 @@ map_get_printable(struct cache_mapping *map, enum filename_format format)
 	case FNF_LOCAL:
 		return map->path;
 	case FNF_NAME:
-		return get_filename(map->url);
+		return path_filename(map->url);
 	}
 
 	pr_crit("Unknown file name format: %u", format);
@@ -31,13 +24,13 @@ map_get_printable(struct cache_mapping *map, enum filename_format format)
 char const *
 map_val_get_printable(struct cache_mapping *map)
 {
-	return map_get_printable(map, config_get_val_log_filename_format());
+	return map_get_printable(map, config_get_val_log_file_format());
 }
 
 char const *
 map_op_get_printable(struct cache_mapping *map)
 {
-	return map_get_printable(map, config_get_op_log_filename_format());
+	return map_get_printable(map, config_get_op_log_file_format());
 }
 
 void

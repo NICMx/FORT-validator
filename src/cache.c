@@ -173,7 +173,7 @@ init_tmp_dir(void)
 
 	dirname = get_cache_filename(CACHE_TMPDIR, true);
 
-	if (mkdir(dirname, 0777) < 0) {
+	if (mkdir(dirname, CACHE_FILEMODE) < 0) {
 		error = errno;
 		if (error != EEXIST)
 			return pr_op_err("Cannot create '%s': %s",
@@ -568,13 +568,16 @@ get_tmppath(struct cache_node *node)
 	ancestor = node;
 	do {
 		ancestor = ancestor->parent;
-		if (ancestor == NULL)
-			pr_crit("aaaaa"); // XXX This should never happen, but maybe don't crash anyway
+		if (ancestor == NULL) {
+			/* May warrant pr_crit(), but I'm chickening out. */
+			pr_val_err("The download function did not set any tmppaths.");
+			return NULL;
+		}
 	} while (ancestor->tmppath == NULL);
 
 	skiplen = strlen(ancestor->path);
 	if (strncmp(ancestor->path, node->path, skiplen) != 0)
-		return NULL; // XXX
+		pr_crit("???"); // XXX
 
 	pb_init(&pb);
 	if (pb_append(&pb, ancestor->tmppath) != 0)
@@ -751,7 +754,7 @@ commit_rpp_delta(struct cache_node *node)
 			pr_op_debug("Branch.");
 			goto branch;
 		} else {
-			pr_op_debug("Not changed; nothing to commit.");
+			pr_op_debug("Unchanged leaf; nothing to commit.");
 			return true;
 		}
 	}
@@ -898,6 +901,7 @@ nftw_remove_abandoned(const char *path, const struct stat *st,
 		goto unknown;
 	}
 	if (!pm && !(msm->flags & CNF_RSYNC)) {
+		/* XXX what about HTTP? */
 		pr_op_debug("RRDP and no perfect match; unknown.");
 		goto unknown; /* The traversal is depth-first */
 	}

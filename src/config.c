@@ -22,6 +22,7 @@
 #include "state.h"
 #include "thread_pool.h"
 #include "types/array.h"
+#include "types/path.h"
 
 /**
  * To add a member to this structure,
@@ -1292,7 +1293,7 @@ config_get_op_log_color_output(void)
 }
 
 enum filename_format
-config_get_op_log_filename_format(void)
+config_get_op_log_file_format(void)
 {
 	return rpki_config.log.filename_format;
 }
@@ -1334,9 +1335,17 @@ config_get_val_log_color_output(void)
 }
 
 enum filename_format
-config_get_val_log_filename_format(void)
+config_get_val_log_file_format(void)
 {
 	return rpki_config.validation_log.filename_format;
+}
+
+char const *
+logv_filename(char const *path)
+{
+	return (rpki_config.validation_log.filename_format == FNF_NAME)
+	     ? path_filename(path)
+	     : path;
 }
 
 uint8_t

@@ -96,7 +96,7 @@ fort_SOURCES += validation_handler.h validation_handler.c
 include asn1/asn1c/Makefile.include
 fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 
-#fort_CFLAGS  = -Wall -Wpedantic -Werror
+# -Werror -Wno-unused
 fort_CFLAGS  = -Wall -Wpedantic
 #fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1

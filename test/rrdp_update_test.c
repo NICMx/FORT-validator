@@ -13,6 +13,7 @@
 #include "mock_https.c"
 #include "relax_ng.c"
 #include "rrdp.c"
+#include "rrdp_util.h"
 #include "types/path.c"
 #include "types/url.c"
 
@@ -52,23 +53,6 @@ ck_file(char const *path)
 	ck_assert_int_eq(0, fclose(file));
 	ck_assert_str_eq("Fort\n", buffer);
 }
-
-#define NHDR(serial) "<notification "					\
-		"xmlns=\"http://www.ripe.net/rpki/rrdp\" "		\
-		"version=\"1\" "					\
-		"session_id=\"9df4b597-af9e-4dca-bdda-719cce2c4e28\" "	\
-		"serial=\"" serial "\">\n"
-#define NSS(u, h) "\t<snapshot uri=\"" u "\" hash=\"" h "\"/>\n"
-#define NTAIL "</notification>"
-
-#define SHDR(serial) "<snapshot "					\
-		"xmlns=\"http://www.ripe.net/rpki/rrdp\" "		\
-		"version=\"1\" "					\
-		"session_id=\"9df4b597-af9e-4dca-bdda-719cce2c4e28\" "	\
-		"serial=\"" serial "\">\n"
-#define STAIL "</snapshot>"
-
-#define PBLSH(u, c) "<publish uri=\"" u "\">" c "</publish>"
 
 /* Tests */
 

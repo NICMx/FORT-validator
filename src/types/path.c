@@ -238,6 +238,13 @@ path_childn(char const *p1, char const *p2, size_t p2len)
 	return pb.string;
 }
 
+char const *
+path_filename(char const *path)
+{
+	char *slash = strrchr(path, '/');
+	return slash ? (slash + 1) : path;
+}
+
 /*
  * Cannot return NULL.
  *

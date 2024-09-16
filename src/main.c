@@ -116,7 +116,7 @@ main(int argc, char **argv)
 
 	/* Initializations */
 
-	error = log_setup(false);
+	error = log_setup();
 	if (error)
 		goto just_quit;
 

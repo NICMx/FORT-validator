@@ -251,7 +251,7 @@ stat_dir(char const *path)
 }
 
 static int
-ensure_dir(char const *path, mode_t mode)
+ensure_dir(char const *path)
 {
 	int error;
 
@@ -263,7 +263,7 @@ ensure_dir(char const *path, mode_t mode)
 	if (stat_dir(path) == ENOTDIR && remove(path) < 0)
 		return errno;
 
-	if (mkdir(path, mode) < 0) {
+	if (mkdir(path, CACHE_FILEMODE) < 0) {
 		error = errno;
 		return (error == EEXIST) ? 0 : error;
 	}
@@ -274,7 +274,7 @@ ensure_dir(char const *path, mode_t mode)
 /* mkdir -p $_path */
 /* XXX Maybe also short-circuit by parent? */
 int
-mkdir_p(char const *_path, bool include_basename, mode_t mode)
+mkdir_p(char const *_path, bool include_basename)
 {
 	char *path, *last_slash;
 	int i, result = 0;
@@ -297,13 +297,10 @@ mkdir_p(char const *_path, bool include_basename, mode_t mode)
 		goto end;
 	}
 
-	if (result == ENOTDIR)
-		pr_op_err_st("stack tracing for '%s'...", path);
-
 	for (i = 1; path[i] != '\0'; i++) {
 		if (path[i] == '/') {
 			path[i] = '\0';
-			result = ensure_dir(path, mode);
+			result = ensure_dir(path);
 			path[i] = '/';
 			if (result != 0) {
 				pr_op_err_st("Error during mkdir(%s): %s",
@@ -312,7 +309,7 @@ mkdir_p(char const *_path, bool include_basename, mode_t mode)
 			}
 		}
 	}
-	result = ensure_dir(path, mode);
+	result = ensure_dir(path);
 
 end:	free(path);
 	return result;

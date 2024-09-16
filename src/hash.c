@@ -178,7 +178,18 @@ hash_validate_file(struct hash_algorithm const *algorithm, char const *path,
 	return 0;
 
 fail:
-	return pr_val_err("File '%s' does not match its expected hash.", path);
+	error = pr_val_err("File '%s' does not match its expected hash.", path);
+#ifdef UNIT_TESTING
+	size_t i;
+	printf("Expected: ");
+	for (i = 0; i < expected_len; i++)
+		printf("%02x", expected[i]);
+	printf("\nActual:   ");
+	for (i = 0; i < actual_len; i++)
+		printf("%02x", actual[i]);
+	printf("\n");
+#endif
+	return error;
 }
 
 static int

@@ -15,7 +15,7 @@ cachent_root(char const *schema, char const *dir)
 	root = pzalloc(sizeof(struct cache_node));
 	root->url = (char *)schema;
 	root->path = join_paths(config_get_local_repository(), dir);
-	root->name = strrchr(root->path, '/') + 1;
+	root->name = path_filename(root->path);
 	root->flags = CNF_FREE_PATH;
 
 	return root;
@@ -48,7 +48,7 @@ cachent_traverse(struct cache_node *root, bool (*cb)(struct cache_node *))
 		return;
 
 	parent = root;
-	iter_start = parent->children;
+	iter_start = parent->children; /* aka "first child" */
 	if (iter_start == NULL)
 		return;
 
@@ -61,7 +61,6 @@ reloop:	/* iter_start must not be NULL */
 		}
 	}
 
-	parent = iter_start->parent;
 	do {
 		if (parent == NULL)
 			return;
@@ -83,7 +82,6 @@ find_child(struct cache_node *parent, char const *name, size_t namelen)
 /*
  * Returns perfect match or NULL. @msm will point to the Most Specific Match.
  * Assumes @path is normalized.
- * XXX if root doesn't match path, will return garbage
  */
 struct cache_node *
 cachent_find(struct cache_node *root, char const *path, struct cache_node **msm)
@@ -102,8 +100,15 @@ cachent_find(struct cache_node *root, char const *path, struct cache_node **msm)
 	for (parent = child = root; token_next(&tkn); parent = child) {
 		child = find_child(parent, tkn.str, tkn.len);
 		if (!child) {
-			*msm = parent;
-			return NULL;
+			if (parent->flags & CNF_NOTIFICATION) {
+				child = find_child(parent->rrdp.subtree,
+				    tkn.str, tkn.len);
+				if (!child)
+					goto nochild;
+			} else {
+nochild:			*msm = parent;
+				return NULL;
+			}
 		}
 	}
 

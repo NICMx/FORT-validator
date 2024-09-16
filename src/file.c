@@ -68,7 +68,7 @@ file_write_full(char const *path, unsigned char const *content,
 	size_t written;
 	int error;
 
-	error = mkdir_p(path, false, 0777);
+	error = mkdir_p(path, false);
 	if (error)
 		return error;
 
@@ -157,6 +157,7 @@ file_free(struct file_contents *fc)
 }
 
 /* Wrapper for stat(), mostly for the sake of unit test mocking. */
+/* XXX needs a rename, because it returns errno. */
 int
 file_exists(char const *path)
 {
@@ -181,23 +182,23 @@ merge_into(const char *src, const struct stat *st, int typeflag,
 
 	if (S_ISDIR(st->st_mode)) {
 		pr_op_debug("mkdir -p %s", dst);
-		if (mkdir_p(dst, true, st->st_mode)) {
+		if (mkdir_p(dst, true)) {
 			PR_DEBUG_MSG("Failed: %s", strerror(errno));
 			goto end;
 		}
 
 		times[0] = st->st_atim;
 		times[1] = st->st_mtim;
-		if (utimensat(AT_FDCWD, dst, times, AT_SYMLINK_NOFOLLOW))
+		if (utimensat(AT_FDCWD, dst, times, AT_SYMLINK_NOFOLLOW) < 0)
 			PR_DEBUG_MSG("utimensat: %s", strerror(errno));
 	} else {
 		pr_op_debug("rename: %s -> %s", src, dst);
-		if (rename(src, dst)) {
+		if (rename(src, dst) < 0) {
 			if (errno == EISDIR) {
 				/* XXX stacked nftw()s */
 				if (file_rm_rf(dst) != 0)
 					PR_DEBUG_MSG("%s", "AAAAAAAAAAA");
-				if (rename(src, dst))
+				if (rename(src, dst) < 0)
 					PR_DEBUG_MSG("rename: %s", strerror(errno));
 			}
 		}
@@ -221,9 +222,19 @@ file_merge_into(char const *src, char const *dst)
 {
 	int error;
 
-	error = mkdir_p(dst, false, 0777);
+	error = mkdir_p(dst, false);
 	if (error)
 		return error;
+
+	if (file_exists(dst) == ENOENT) {
+		if (rename(src, dst) < 0) {
+			error = errno;
+			pr_op_err("Could not move %s to %s: %s",
+			    src, dst, strerror(error));
+			return error;
+		}
+		return 0;
+	}
 
 	src_offset = strlen(src);
 	merge_dst = dst;
