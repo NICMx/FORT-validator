@@ -12,6 +12,8 @@
 #include "log.h"
 #include "thread_var.h"
 #include "types/path.h"
+#include "types/str.h"
+#include "types/url.h"
 
 struct tal {
 	char const *file_name;
@@ -32,10 +34,13 @@ struct validation_thread {
 /* List of threads, one per TAL file */
 SLIST_HEAD(threads_list, validation_thread);
 
-struct handle_tal_args {
-	struct tal tal;
-	struct db_table *db;
-};
+#define TS_SUCCESS	0	/* TA looks sane. */
+#define TS_NEXT		1	/* TA seems compromised; try some other URL. */
+#define TS_FALLBACK	2	/* TA is broken; fall back to old cache. */
+typedef struct { int v; } ta_status;
+static ta_status ts_success	= { .v = TS_SUCCESS };
+static ta_status ts_next	= { .v = TS_NEXT };
+static ta_status ts_fallback	= { .v = TS_FALLBACK };
 
 static char *
 find_newline(char *str)
@@ -84,8 +89,7 @@ read_content(char *fc /* File Content */, struct tal *tal)
 		if (is_blank(fc))
 			break;
 
-		if (str_starts_with(fc, "https://") ||
-		    str_starts_with(fc, "rsync://"))
+		if (url_is_https(fc) || url_is_rsync(fc))
 			strlist_add(&tal->urls, pstrdup(fc));
 
 		fc = nl + cr + 1;
@@ -149,47 +153,31 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-/*
- * Performs the whole validation walkthrough that starts with Trust Anchor @ta,
- * which is assumed to have been extracted from TAL @arg->tal.
- */
-static int
-handle_ta(struct cache_mapping *ta, void *arg)
+static ta_status
+handle_ta(struct cache_mapping const *ta, struct validation *state)
 {
-	struct handle_tal_args *args = arg;
-	struct validation_handler validation_handler;
-	struct validation *state;
 	struct cert_stack *certstack;
 	struct deferred_cert deferred;
 	int error;
 
-	validation_handler.handle_roa_v4 = handle_roa_v4;
-	validation_handler.handle_roa_v6 = handle_roa_v6;
-	validation_handler.handle_router_key = handle_router_key;
-	validation_handler.arg = args->db;
-
-	error = validation_prepare(&state, &args->tal, &validation_handler);
-	if (error)
-		return ENSURE_NEGATIVE(error);
-
-	if (!str_ends_with(ta->url, ".cer")) {
-		pr_op_err("TAL URI lacks '.cer' extension: %s", ta->url);
-		error = EINVAL;
-		goto end;
-	}
-
-	/* Handle root certificate. */
-	error = certificate_traverse(NULL, ta);
-	if (error) {
+	/* == Root certificate == */
+	if (certificate_traverse(NULL, ta) != 0) {
 		switch (validation_pubkey_state(state)) {
 		case PKS_INVALID:
-			error = EINVAL;
-			goto end;
+			/* Signature invalid; probably an impersonator. */
+			return ts_next;
 		case PKS_VALID:
+			/* No impersonator but still error: Broken tree. */
+			/*
+			 * XXX Change to ts_next. This is the TA;
+			 * we can't really afford to panic-fallback.
+			 */
+			return ts_fallback;
 		case PKS_UNTESTED:
-			error = ENSURE_NEGATIVE(error);
-			goto end;
+			/* We don't know; try some other URL. */
+			return ts_next;
 		}
+
 		pr_crit("Unknown public key state: %u",
 		    validation_pubkey_state(state));
 	}
@@ -200,15 +188,14 @@ handle_ta(struct cache_mapping *ta, void *arg)
 	 * (the root validated successfully; subtrees are isolated problems.)
 	 */
 
-	/* Handle every other certificate. */
+	/* == Every other certificate == */
 	certstack = validation_certstack(state);
 
 	do {
 		error = deferstack_pop(certstack, &deferred);
-		if (error == -ENOENT) {
-			error = 0; /* No more certificates left; we're done */
-			goto end;
-		} else if (error) /* All other errors are critical, currently */
+		if (error == -ENOENT)
+			return ts_success; /* No more certificates left */
+		else if (error) /* All other errors are critical, currently */
 			pr_crit("deferstack_pop() returned illegal %d.", error);
 
 		/*
@@ -220,16 +207,72 @@ handle_ta(struct cache_mapping *ta, void *arg)
 		map_cleanup(&deferred.map);
 		rpp_refput(deferred.pp);
 	} while (true);
+}
 
-end:	validation_destroy(state);
-	return error;
+static void
+__do_file_validation(struct validation_thread *thread)
+{
+	struct tal tal;
+	struct validation_handler collector;
+	struct db_table *db;
+	struct validation *state;
+	char **url;
+	struct cache_mapping map;
+	ta_status status;
+
+	thread->error = tal_init(&tal, thread->tal_file);
+	if (thread->error)
+		return;
+
+	collector.handle_roa_v4 = handle_roa_v4;
+	collector.handle_roa_v6 = handle_roa_v6;
+	collector.handle_router_key = handle_router_key;
+	collector.arg = db = db_table_create();
+
+	thread->error = validation_prepare(&state, &tal, &collector);
+	if (thread->error) {
+		db_table_destroy(db);
+		goto end2;
+	}
+
+	ARRAYLIST_FOREACH(&tal.urls, url) {
+		if (cache_refresh_url(*url, &map) != 0)
+			continue;
+
+		status = handle_ta(&map, state);
+		switch (status.v) {
+		case TS_SUCCESS:	goto end1;
+		case TS_FALLBACK:	goto fallback;
+		case TS_NEXT: 		; /* Fall through */
+		}
+	}
+
+fallback:
+	ARRAYLIST_FOREACH(&tal.urls, url) {
+		if (cache_fallback_url(*url, &map) != 0)
+			continue;
+
+		status = handle_ta(&map, state);
+		switch (status.v) {
+		case TS_SUCCESS:	goto end1;
+		case TS_FALLBACK:	/* Already fallbacking */
+		case TS_NEXT:		; /* Fall through */
+		}
+	}
+
+	pr_op_err("None of the TAL URIs yielded a successful traversal.");
+	thread->error = EINVAL;
+	db_table_destroy(db);
+	db = NULL;
+
+end1:	thread->db = db;
+end2:	tal_cleanup(&tal);
 }
 
 static void *
 do_file_validation(void *arg)
 {
 	struct validation_thread *thread = arg;
-	struct handle_tal_args args;
 	time_t start, finish;
 
 	start = time(NULL);
@@ -237,26 +280,15 @@ do_file_validation(void *arg)
 	fnstack_init();
 	fnstack_push(thread->tal_file);
 
-	thread->error = tal_init(&args.tal, thread->tal_file);
-	if (thread->error)
-		goto end;
+	__do_file_validation(thread);
 
-	args.db = db_table_create();
-	thread->error = cache_download_uri(&args.tal.urls, handle_ta, &args);
-	if (thread->error) {
-		pr_op_err("None of the TAL URIs yielded a successful traversal.");
-		db_table_destroy(args.db);
-	} else {
-		thread->db = args.db;
-	}
-
-	tal_cleanup(&args.tal);
-end:	fnstack_cleanup();
+	fnstack_cleanup();
 
 	finish = time(NULL);
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
 		pr_op_debug("The %s tree took %.0lf seconds.",
-		    args.tal.file_name, difftime(finish, start));
+		    path_filename(thread->tal_file),
+		    difftime(finish, start));
 	return NULL;
 }
 

@@ -19,6 +19,7 @@
 #include "rpp.h"
 #include "rsync.h"
 #include "types/path.h"
+#include "types/url.h"
 
 /* XXX force RRDP if one RPP fails to validate by rsync? */
 
@@ -594,124 +595,115 @@ cancel:	pb_cleanup(&pb);
 }
 
 /* @uri is either a caRepository or a rpkiNotify */
-static int
-try_uri(char const *uri, struct cache_node *root,
-    dl_cb download, validate_cb validate, void *arg)
+static struct cache_node *
+do_refresh(char const *uri, struct cache_node *root, dl_cb download)
 {
-	struct cache_node *rpp;
-	struct cache_mapping map;
-	int error;
+	struct cache_node *node;
 
 	if (!uri)
-		return 1; /* Protocol unavailable; ignore */
+		return NULL; /* Protocol unavailable; ignore */
 
-	pr_val_debug("Trying %s (%s)...", uri, download ? "online" : "offline");
+	pr_val_debug("Trying %s (online)...", uri);
 
-	rpp = cachent_provide(root, uri);
-	if (!rpp)
-		return pr_val_err("Malformed URL: %s", uri);
-
-	if (download != NULL) {
-		if (rpp->flags & CNF_FRESH) {
-			if (rpp->dlerr)
-				return rpp->dlerr;
-		} else {
-			rpp->flags |= CNF_FRESH;
-			error = rpp->dlerr = download(rpp);
-			if (error)
-				return error;
-		}
+	node = cachent_provide(root, uri);
+	if (!node) {
+		pr_val_err("Malformed URL: %s", uri);
+		return NULL;
 	}
 
-	map.url = rpp->url;
-	map.path = (download != NULL) ? get_tmppath(rpp) : rpp->path;
-	error = validate(&map, arg);
-	if (error) {
-		pr_val_debug("RPP validation failed.");
-		return error;
+	if (!(node->flags & CNF_FRESH)) {
+		node->flags |= CNF_FRESH;
+		node->dlerr = download(node);
 	}
+	if (node->dlerr)
+		pr_val_debug("Refresh failed.");
 
-	pr_val_debug("RPP validated successfully.");
-	rpp->flags |= CNF_VALID;
-	return 0;
+	return node;
 }
 
-static int
-try_uris(struct strlist *uris, struct cache_node *root,
-    char const *prefix, dl_cb dl, validate_cb cb, void *arg)
-{
-	char **str;
-	int error;
-
-	ARRAYLIST_FOREACH(uris, str)
-		if (str_starts_with(*str, prefix)) {
-			error = try_uri(*str, root, dl, cb, arg);
-			if (error <= 0)
-				return error;
-		}
-
-	return 1;
-}
-
+/* @url needs to outlive @map. */
 int
-cache_download_uri(struct strlist *uris, validate_cb cb, void *arg)
+cache_refresh_url(char *url, struct cache_mapping *map)
 {
-	int error;
+	struct cache_node *node = NULL;
 
 	// XXX mutex
 	// XXX review result signs
 
-	/* Online attempts */
-	error = try_uris(uris, cache.https, "https://", dl_http, cb, arg);
-	if (error <= 0)
-		return error;
-	error = try_uris(uris, cache.rsync, "rsync://", dl_rsync, cb, arg);
-	if (error <= 0)
-		return error;
+	if (url_is_https(url))
+		node = do_refresh(url, cache.https, dl_http);
+	else if (url_is_rsync(url))
+		node = do_refresh(url, cache.rsync, dl_rsync);
+	if (!node)
+		return EINVAL;
 
-	/* Offline attempts */
-	error = try_uris(uris, cache.https, "https://", NULL, cb, arg);
-	if (error <= 0)
-		return error;
-	return try_uris(uris, cache.rsync, "rsync://", NULL, cb, arg);
+	// XXX might want to const url and path.
+	// Alternatively, strdup path so the caller can't corrupt our string.
+	map->url = url;
+	map->path = get_tmppath(node);
+	return (map->path != NULL) ? 0 : EINVAL;
+}
+
+/* @url needs to outlive @map. */
+int
+cache_fallback_url(char *url, struct cache_mapping *map)
+{
+	struct cache_node *node = NULL;
+
+	if (url_is_https(url))
+		node = cachent_provide(cache.https, url);
+	else if (url_is_rsync(url))
+		node = cachent_provide(cache.rsync, url);
+	if (!node)
+		return EINVAL;
+
+	map->url = url;
+	map->path = node->path;
+	return 0;
 }
 
 /*
- * XXX outdated comment
- *
- * Assumes the URIs represent different ways to access the same content.
- *
- * Sequentially (in the order dictated by their priorities) attempts to update
- * (in the cache) the content pointed by each URL.
- * If a download succeeds, calls cb on it. If cb succeeds, returns without
- * trying more URLs.
- *
- * If none of the URLs download and callback properly, attempts to find one
- * that's already cached, and callbacks it.
+ * Attempts to refresh the RPP described by @sias, returns the resulting
+ * repository's mapping.
  */
 int
-cache_download_alt(struct sia_uris *sias, validate_cb cb, void *arg)
+cache_refresh_sias(struct sia_uris *sias, struct cache_mapping *map)
 {
-	int error;
+	struct cache_node *hnode;
+	struct cache_node *rnode;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
-	/* XXX mutex */
-
-	/* Online attempts */
+	// XXX mutex
 	// XXX review result signs
 	// XXX normalize rpkiNotify & caRepository?
-	error = try_uri(sias->rpkiNotify, cache.https, dl_rrdp, cb, arg);
-	if (error <= 0)
-		return error;
-	error = try_uri(sias->caRepository, cache.rsync, dl_rsync, cb, arg);
-	if (error <= 0)
-		return error;
 
-	/* Offline attempts */
-	error = try_uri(sias->rpkiNotify, cache.https, NULL, cb, arg);
-	if (error <= 0)
-		return error;
-	return try_uri(sias->caRepository, cache.rsync, NULL, cb, arg);
+	hnode = do_refresh(sias->rpkiNotify, cache.https, dl_rrdp);
+	if (hnode && !hnode->dlerr) {
+		map->url = hnode->url;
+		map->path = hnode->tmppath;
+		return 0;
+	}
+
+	rnode = do_refresh(sias->caRepository, cache.rsync, dl_rsync);
+	if (rnode && !rnode->dlerr) {
+		map->url = rnode->url;
+		map->path = rnode->tmppath;
+		return 0;
+	}
+
+	if (hnode && cachent_is_cached(hnode)) {
+		map->url = hnode->url;
+		map->path = hnode->path;
+		return 0;
+	}
+
+	if (hnode && cachent_is_cached(rnode)) {
+		map->url = hnode->url;
+		map->path = hnode->path;
+		return 0;
+	}
+
+	return EINVAL;
 }
 
 void

@@ -13,6 +13,7 @@
 #include "rsync.h"
 #include "types/bio_seq.h"
 #include "types/path.h"
+#include "types/url.h"
 
 #define HDRSIZE 32
 
@@ -98,7 +99,7 @@ filename2bio(char const *filename)
 	if (filename == NULL || strcmp(filename, "-") == 0)
 		return BIO_new_fp(stdin, BIO_NOCLOSE);
 
-	if (str_starts_with(filename, "rsync://"))
+	if (url_is_rsync(filename))
 		return rsync2bio(filename);
 
 	return BIO_new_file(filename, "rb");

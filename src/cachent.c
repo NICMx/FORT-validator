@@ -33,6 +33,18 @@ cachent_root_https(void)
 	return cachent_root("https://", "https");
 }
 
+bool
+cachent_is_cached(struct cache_node *node)
+{
+	if (cachent_is_https(node))
+		return node->flags & CNF_CACHED;
+
+	for (; node != NULL; node = node->parent)
+		if (node->flags & CNF_CACHED)
+			return true;
+	return false;
+}
+
 /* Preorder. @cb returns whether the children should be traversed. */
 void
 cachent_traverse(struct cache_node *root, bool (*cb)(struct cache_node *))

@@ -5,6 +5,9 @@
 
 #define RPKI_SCHEMA_LEN 8 /* strlen("rsync://"), strlen("https://") */
 
+bool url_is_rsync(char const *);
+bool url_is_https(char const *);
+
 char *url_normalize(char const *);
 bool url_same_origin(char const *, char const *);
 

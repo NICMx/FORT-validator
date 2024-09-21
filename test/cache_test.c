@@ -62,7 +62,7 @@ setup_test(void)
 }
 
 static int
-okay(struct cache_mapping *map, void *arg)
+okay(struct cache_mapping const *map, void *arg)
 {
 	return 0;
 }
@@ -952,9 +952,9 @@ END_TEST
 //
 //	va_start(args, maps);
 //	while ((str = va_arg(args, char const *)) != NULL) {
-//		if (str_starts_with(str, "https://"))
+//		if (url_is_https(str))
 //			type = MAP_HTTP;
-//		else if (str_starts_with(str, "rsync://"))
+//		else if (url_is_rsync(str))
 //			type = MAP_RSYNC;
 //		else
 //			ck_abort_msg("Bad protocol: %s", str);

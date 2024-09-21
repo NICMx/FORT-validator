@@ -19,8 +19,8 @@ void certstack_destroy(struct cert_stack *);
 void deferstack_push(struct cert_stack *, struct cache_mapping *, struct rpp *);
 int deferstack_pop(struct cert_stack *, struct deferred_cert *cert);
 
-int x509stack_push(struct cert_stack *, struct cache_mapping *, X509 *,
-    enum rpki_policy, enum cert_type);
+int x509stack_push(struct cert_stack *, struct cache_mapping const *,
+    X509 *, enum rpki_policy, enum cert_type);
 void x509stack_cancel(struct cert_stack *);
 X509 *x509stack_peek(struct cert_stack *);
 struct resources *x509stack_peek_resources(struct cert_stack *);

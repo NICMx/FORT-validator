@@ -2,7 +2,6 @@
 #define SRC_CACHE_LOCAL_CACHE_H_
 
 #include "types/map.h"
-#include "types/str.h"
 
 int cache_setup(void);		/* Init this module */
 void cache_teardown(void);	/* Destroy this module */
@@ -19,16 +18,9 @@ struct sia_uris {
 void sias_init(struct sia_uris *);
 void sias_cleanup(struct sia_uris *);
 
-/*
- * The callback should return
- *
- * - 0 on success ("Mapping handled successfully")
- * - > 0 on soft errors ("Try another mapping")
- * - < 0 on hard errors ("Abandon foreach")
- */
-typedef int (*validate_cb)(struct cache_mapping *, void *);
-int cache_download_uri(struct strlist *, validate_cb, void *);
-int cache_download_alt(struct sia_uris *, validate_cb, void *);
+int cache_refresh_url(char *, struct cache_mapping *);
+int cache_fallback_url(char *, struct cache_mapping *);
+int cache_refresh_sias(struct sia_uris *, struct cache_mapping *);
 
 void cache_print(void); /* Dump cache in stdout. Recursive; tests only */
 

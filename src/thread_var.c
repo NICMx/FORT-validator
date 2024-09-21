@@ -158,7 +158,7 @@ fnstack_push(char const *file)
 
 /* See fnstack_push(). @map needs to outlive the push/pop. */
 void
-fnstack_push_map(struct cache_mapping *map)
+fnstack_push_map(struct cache_mapping const *map)
 {
 	fnstack_push(map_val_get_printable(map));
 }

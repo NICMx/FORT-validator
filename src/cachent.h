@@ -78,6 +78,11 @@ struct cache_node {
 struct cache_node *cachent_root_rsync(void);
 struct cache_node *cachent_root_https(void);
 
+#define cachent_is_rsync(node) ((node)->flags & CNF_RSYNC)
+#define cachent_is_https(node) (!cachent_is_rsync(node))
+
+bool cachent_is_cached(struct cache_node *);
+
 void cachent_traverse(struct cache_node *, bool (*cb)(struct cache_node *));
 
 struct cache_node *cachent_find(struct cache_node *, char const *,

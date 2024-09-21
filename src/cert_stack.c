@@ -249,8 +249,8 @@ create_separator(void)
 
 /* Steals ownership of @x509 on success. */
 int
-x509stack_push(struct cert_stack *stack, struct cache_mapping *map, X509 *x509,
-    enum rpki_policy policy, enum cert_type type)
+x509stack_push(struct cert_stack *stack, struct cache_mapping const *map,
+    X509 *x509, enum rpki_policy policy, enum cert_type type)
 {
 	struct metadata_node *meta;
 	struct defer_node *defer_separator;

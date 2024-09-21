@@ -1,7 +1,20 @@
 #include "types/url.h"
 
 #include "alloc.h"
+#include "common.h"
 #include "types/path.h"
+
+bool
+url_is_rsync(char const *url)
+{
+	return str_starts_with(url, "rsync://");
+}
+
+bool
+url_is_https(char const *url)
+{
+	return str_starts_with(url, "https://");
+}
 
 /*
  * XXX use this:

@@ -24,6 +24,7 @@
 #include "object/manifest.h"
 #include "thread_var.h"
 #include "types/path.h"
+#include "types/str.h"
 #include "types/url.h"
 
 /*
@@ -794,7 +795,7 @@ end:
 }
 
 static int
-certificate_load(struct cache_mapping *map, X509 **result)
+certificate_load(struct cache_mapping const *map, X509 **result)
 {
 	X509 *cert = NULL;
 	BIO *bio;
@@ -1847,7 +1848,7 @@ certificate_validate_aia(char const *caIssuers, X509 *cert)
 }
 
 static int
-check_rpp(struct cache_mapping *map_rpp, void *rpkiManifest)
+check_rpp(struct cache_mapping const *map_rpp, char *rpkiManifest)
 {
 	struct cache_mapping mft;
 	struct rpp *pp;
@@ -1869,14 +1870,16 @@ end:	free(mft.path);
 
 /* Boilerplate code for CA certificate validation and recursive traversal. */
 int
-certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
+certificate_traverse(struct rpp *rpp_parent,
+    struct cache_mapping const *cert_map)
 {
 	struct validation *state;
 	int total_parents;
 	X509 *x509;
-	struct sia_uris sia_uris;
+	struct sia_uris sias;
 	enum rpki_policy policy;
 	enum cert_type certype;
+	struct cache_mapping rpp;
 	int error;
 
 	state = state_retrieve();
@@ -1920,26 +1923,32 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 	if (error)
 		goto revert_cert;
 
-	sias_init(&sia_uris);
+	sias_init(&sias);
 	error = (certype == CERTYPE_TA)
-	    ? certificate_validate_extensions_ta(x509, &sia_uris, &policy)
-	    : certificate_validate_extensions_ca(x509, &sia_uris, &policy,
+	    ? certificate_validate_extensions_ta(x509, &sias, &policy)
+	    : certificate_validate_extensions_ca(x509, &sias, &policy,
 	                                         rpp_parent);
 	if (error)
-		goto revert_uris;
+		goto revert_sias;
 
 	error = x509stack_push(validation_certstack(state), cert_map, x509,
 	    policy, certype);
 	if (error)
-		goto revert_uris;
+		goto revert_sias;
 	x509 = NULL; /* Ownership stolen */
 
-	error = cache_download_alt(&sia_uris, check_rpp, sia_uris.rpkiManifest);
+	error = cache_refresh_sias(&sias, &rpp);
+	if (error) {
+		x509stack_cancel(validation_certstack(state));
+		goto revert_sias;
+	}
+
+	error = check_rpp(&rpp, sias.rpkiManifest);
 	if (error)
 		x509stack_cancel(validation_certstack(state));
 
-revert_uris:
-	sias_cleanup(&sia_uris);
+revert_sias:
+	sias_cleanup(&sias);
 revert_cert:
 	if (x509 != NULL)
 		X509_free(x509);

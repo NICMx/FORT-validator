@@ -55,6 +55,6 @@ int certificate_validate_extensions_bgpsec(X509 *, unsigned char **,
  */
 int certificate_validate_aia(char const *, X509 *);
 
-int certificate_traverse(struct rpp *, struct cache_mapping *);
+int certificate_traverse(struct rpp *, struct cache_mapping const *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */
