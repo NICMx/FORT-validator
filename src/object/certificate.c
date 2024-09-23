@@ -5,11 +5,9 @@
 #if OPENSSL_VERSION_MAJOR >= 3
 #include <openssl/core_names.h>
 #endif
-#include <openssl/evp.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
-#include <openssl/x509v3.h>
 #include <syslog.h>
 #include <time.h>
 
@@ -19,6 +17,7 @@
 #include "common.h"
 #include "config.h"
 #include "extension.h"
+#include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"
 #include "object/manifest.h"
@@ -901,6 +900,20 @@ update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
 	return 0;
 }
 
+static void
+pr_debug_x509_dates(X509 *x509)
+{
+	char *nb, *na;
+
+	nb = asn1time2str(X509_get0_notBefore(x509));
+	na = asn1time2str(X509_get0_notAfter(x509));
+
+	pr_val_debug("Valid range: [%s, %s]", nb, na);
+
+	free(nb);
+	free(na);
+}
+
 /*
  * Retry certificate validation without CRL time validation.
  */
@@ -948,6 +961,9 @@ verify_cert_crl_stale(struct validation *state, X509 *cert,
 	else
 		error = val_crypto_err("Certificate validation failed: %d", ok);
 
+	if (error && log_val_enabled(LOG_DEBUG))
+		pr_debug_x509_dates(cert);
+
 pop_clone:
 	clone = sk_X509_CRL_pop(crls);
 	if (clone == NULL)
@@ -963,6 +979,31 @@ release_ctx:
 	X509_STORE_CTX_free(ctx);
 	return error;
 
+}
+
+static int
+complain_crl_stale(STACK_OF(X509_CRL) *crls)
+{
+	X509_CRL *crl;
+	char *lu;
+	char *nu;
+	int ret;
+
+	if (sk_X509_CRL_num(crls) < 1)
+		pr_crit("Empty CRL stack despite validations.");
+	crl = sk_X509_CRL_value(crls, 0);
+	if (crl == NULL)
+		pr_crit("Unable to pop CRL from nonempty stack.");
+
+	lu = asn1time2str(X509_CRL_get0_lastUpdate(crl));
+	nu = asn1time2str(X509_CRL_get0_nextUpdate(crl));
+
+	ret = incidence(INID_CRL_STALE,
+	    "CRL is stale/expired. (lastUpdate:%s, nextUpdate:%s)", lu, nu);
+
+	free(lu);
+	free(nu);
+	return ret;
 }
 
 int
@@ -1019,9 +1060,9 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 				    X509_verify_cert_error_string(error));
 				goto abort;
 			}
-			if (incidence(INID_CRL_STALE, "CRL is stale/expired"))
-				goto abort;
 
+			if (complain_crl_stale(crls))
+				goto abort;
 			X509_STORE_CTX_free(ctx);
 			if (incidence_get_action(INID_CRL_STALE) == INAC_WARN)
 				pr_val_info("Re-validating avoiding CRL time check");
@@ -1345,13 +1386,13 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 	memset(data, 0, sizeof(data));
 	memcpy(data, ku->data, ku->length);
 
-	if (ku->data[0] != byte1) {
+	if (data[0] != byte1 || data[1] != 0) {
 		return pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
-		    !!(ku->data[0] & 0x80u), !!(ku->data[0] & 0x40u),
-		    !!(ku->data[0] & 0x20u), !!(ku->data[0] & 0x10u),
-		    !!(ku->data[0] & 0x08u), !!(ku->data[0] & 0x04u),
-		    !!(ku->data[0] & 0x02u), !!(ku->data[0] & 0x01u),
-		    !!(ku->data[1] & 0x80u));
+		    !!(data[0] & 0x80u), !!(data[0] & 0x40u),
+		    !!(data[0] & 0x20u), !!(data[0] & 0x10u),
+		    !!(data[0] & 0x08u), !!(data[0] & 0x04u),
+		    !!(data[0] & 0x02u), !!(data[0] & 0x01u),
+		    !!(data[1] & 0x80u));
 	}
 
 	return 0;

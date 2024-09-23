@@ -17,17 +17,14 @@ Fort is a command-line application intended for UNIX operating systems, written 
 
 ## Roadmap
 
-<!-- Remember to remove issues 59 and 60 during import -->
-
 | Issue | Title | Urgency | Due release |
 |-------|-------|---------|-------------|
-| [issue82](https://github.com/NICMx/FORT-validator/issues/82) | Reach 100% RFC 9286 compliance | <span class="urgency-critical">Critical</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.6.4</a> |
-| [issue112](https://github.com/NICMx/FORT-validator/issues/112) | Enforce same origin for RRDP files | <span class="urgency-high">High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.6.4</a> |
-| [issue113](https://github.com/NICMx/FORT-validator/issues/113) | Detect and properly respond to subtler RRDP session desynchronization | <span class="urgency-medium">Medium</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.6.4</a> |
-| [issue114](https://github.com/NICMx/FORT-validator/issues/114) | Support automatic TA key rollover | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/13">1.6.5</a> |
-| [issue50](https://github.com/NICMx/FORT-validator/issues/50) | Provide prometheus endpoint | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/14">1.6.6</a> |
-| [issue58](https://github.com/NICMx/FORT-validator/issues/58) | Fort's validation produces no router keys | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/15">1.6.7</a> |
-| [issue74](https://github.com/NICMx/FORT-validator/issues/74) | Kill rsync if a timeout is exceeded | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/16">1.6.8</a> |
+| [issue82](https://github.com/NICMx/FORT-validator/issues/82) | Reach 100% RFC 9286 compliance | <span class="urgency-critical">Critical</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.7.0</a> |
+| [issue112](https://github.com/NICMx/FORT-validator/issues/112) | Enforce same origin for RRDP files | <span class="urgency-high">High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.7.0</a> |
+| [issue113](https://github.com/NICMx/FORT-validator/issues/113) | Detect and properly respond to subtler RRDP session desynchronization | <span class="urgency-medium">Medium</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">1.7.0</a> |
+| [issue114](https://github.com/NICMx/FORT-validator/issues/114) | Support automatic TA key rollover | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/13">1.7.1</a> |
+| [issue50](https://github.com/NICMx/FORT-validator/issues/50) | Provide prometheus endpoint | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/14">1.7.2</a> |
+| [issue58](https://github.com/NICMx/FORT-validator/issues/58) | Fort's validation produces no router keys | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/15">1.7.3</a> |
 | [issue116](https://github.com/NICMx/FORT-validator/issues/116) | SLURM review | <span class="urgency-high">High</span> | - |
 | [issue118](https://github.com/NICMx/FORT-validator/issues/118) | Implement validation re-reconsidered | <span class="urgency-high">High</span> | - |
 | [issue119](https://github.com/NICMx/FORT-validator/issues/119) | Review IRIs to file names transition | <span class="urgency-high">High</span> | - |

@@ -65,6 +65,7 @@ description: Guide to use arguments of FORT Validator.
 	51. [`--rsync.priority`](#--rsyncpriority)
 	53. [`--rsync.retry.count`](#--rsyncretrycount)
 	54. [`--rsync.retry.interval`](#--rsyncretryinterval)
+	40. [`--rsync.transfer-timeout`](#--rsynctransfer-timeout)
 	55. [`--configuration-file`](#--configuration-file)
 	56. [`rsync.program`](#rsyncprogram)
 	57. [`rsync.arguments-recursive`](#rsyncarguments-recursive)
@@ -103,6 +104,7 @@ description: Guide to use arguments of FORT Validator.
 	[--rsync.priority=<unsigned integer>]
 	[--rsync.retry.count=<unsigned integer>]
 	[--rsync.retry.interval=<unsigned integer>]
+	[--rsync.transfer-timeout=<unsigned integer>]
 	[--http.enabled=true|false]
 	[--http.priority=<unsigned integer>]
 	[--http.retry.count=<unsigned integer>]
@@ -305,6 +307,7 @@ Assuming not much time has passed since the last time the repository was cached,
 
 - **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
+- **Default:** `false`
 
 Skip the repository cache update?
 
@@ -316,6 +319,7 @@ Mostly intended for debugging. See [`--rsync.enabled`](#--rsyncenabled) and [`--
 
 - **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
+- **Default:** `false`
 
 Send process to the background?
 
@@ -646,7 +650,7 @@ See [`--rsync.priority`](#--rsyncpriority).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 0
+- **Default:** 1
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Number of additional HTTP requests after a failed attempt.
@@ -657,7 +661,7 @@ If a transient error is returned when Fort tries to perform an HTTP transfer, it
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 5
+- **Default:** 4
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Period of time (in seconds) to wait between each retry to request an HTTP URI.
@@ -704,7 +708,7 @@ The value specified (either by the argument or the default value) is utilized in
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 0
+- **Default:** 900
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
@@ -774,6 +778,7 @@ Watch out for the following warning in the operation logs:
 
 - **Type:** String (Path to directory)
 - **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
 
 _**All requests are made using HTTPS, verifying the peer and the certificate name vs host**_
 
@@ -790,6 +795,7 @@ The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://cur
 
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
 
 File where the ROAs (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
 
@@ -822,6 +828,7 @@ If `--output.roa` is omitted, the ROAs are not printed.
 
 - **Type:** String (Path to file)
 - **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
 
 > ![Warning!](img/warn.svg) BGPsec certificate validation has been disabled in version 1.5.2 because of [this bug](https://github.com/NICMx/FORT-validator/issues/58).
 
@@ -913,7 +920,7 @@ See [`--http.priority`](#--httppriority).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 0
+- **Default:** 1
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Maximum number of retries whenever there's an error executing an RSYNC.
@@ -926,15 +933,27 @@ Whenever is necessary to execute an RSYNC, the validator will try at least one t
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 5
+- **Default:** 4
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 Period of time (in seconds) to wait between each retry to execute an RSYNC.
+
+### `--rsync.transfer-timeout`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 900
+- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
+
+Maximum time in seconds that the rsync transfer can last.
+
+Once the connection is established with the server, the request will last a maximum of `rsync.transfer-timeout` seconds. A value of 0 means unlimited time.
 
 ### `--configuration-file`
 
 - **Type:** String (Path to file)
 - **Availability:** `argv` only
+- **Default:** `NULL` (disabled)
 
 Path to a JSON file from which additional configuration will be read.
 
@@ -974,6 +993,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--rsyncretrycount">count</a>": 1,
 			"<a href="#--rsyncretryinterval">interval</a>": 4
 		},
+		"<a href="#--rsynctransfer-timeout">transfer-timeout</a>": 900,
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
 			"-rtz",
@@ -1001,10 +1021,10 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--httpretrycount">count</a>": 1,
 			"<a href="#--httpretryinterval">interval</a>": 4
 		},
-		"<a href="#--httpuser-agent">user-agent</a>": "fort/1.6.2",
+		"<a href="#--httpuser-agent">user-agent</a>": "fort/{{ site.fort-latest-version }}",
 		"<a href="#--httpmax-redirs">max-redirs</a>": 10,
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
-		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
+		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 900,
 		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
 		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
 		"<a href="#--httpmax-file-size">max-file-size</a>": 1000000000,
@@ -1014,8 +1034,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"log": {
 		"<a href="#--logenabled">enabled</a>": true,
 		"<a href="#--logoutput">output</a>": "console",
-		"<a href="#--loglevel">level</a>": "info",
-		"<a href="#--logtag">tag</a>": "Operation",
+		"<a href="#--loglevel">level</a>": "warning",
+		"<a href="#--logtag">tag</a>": "Op",
 		"<a href="#--logfacility">facility</a>": "daemon",
 		"<a href="#--logfile-name-format">file-name-format</a>": "global-url",
 		"<a href="#--logcolor-output">color-output</a>": false
@@ -1146,7 +1166,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 43200 (12 hours)
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
@@ -1157,7 +1176,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
 - **Availability:** `argv` and JSON
-- **Default:** `root-except-ta`
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
@@ -1167,7 +1185,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "--times", "--contimeout=20", "--timeout=15", "--max-size=20MB", "--dirs", "$REMOTE", "$LOCAL" ]`
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
 
@@ -1177,7 +1194,6 @@ Does nothing as of Fort 1.6.0.
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 5
 - **Range:** [1, 100]
 
 > ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.

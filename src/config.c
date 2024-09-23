@@ -1,7 +1,10 @@
 #include "config.h"
 
+#include <curl/curl.h>
 #include <errno.h>
 #include <getopt.h>
+#include <libxml/xmlreader.h>
+#include <openssl/opensslv.h>
 #include <syslog.h>
 
 #include "common.h"
@@ -86,6 +89,7 @@ struct rpki_config {
 			/* Interval (in seconds) between each retry */
 			unsigned int interval;
 		} retry;
+		unsigned int transfer_timeout;
 		char *program;
 		struct {
 			struct string_array flat; /* Deprecated */
@@ -486,6 +490,14 @@ static const struct option_field options[] = {
 		/* Unlimited */
 		.max = 0,
 		.deprecated = true,
+	}, {
+		.id = 3008,
+		.name = "rsync.transfer-timeout",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rsync.transfer_timeout),
+		.doc = "Maximum transfer time before killing the rsync process",
+		.min = 0,
+		.max = UINT_MAX,
 	},
 
 	/* HTTP requests parameters */
@@ -886,6 +898,11 @@ print_config(void)
 	struct option_field const *opt;
 
 	pr_op_info(PACKAGE_STRING);
+	pr_op_info("  libcrypto: " OPENSSL_VERSION_TEXT);
+	pr_op_info("  jansson:   " JANSSON_VERSION);
+	pr_op_info("  libcurl:   " LIBCURL_VERSION);
+	pr_op_info("  libxml:    " LIBXML_DOTTED_VERSION);
+
 	pr_op_info("Configuration {");
 
 	FOREACH_OPTION(options, opt, 0xFFFF)
@@ -946,6 +963,7 @@ set_default_values(void)
 	rpki_config.rsync.strategy = pstrdup("<deprecated>");
 	rpki_config.rsync.retry.count = 1;
 	rpki_config.rsync.retry.interval = 4;
+	rpki_config.rsync.transfer_timeout = 900;
 	rpki_config.rsync.program = pstrdup("rsync");
 	string_array_init(&rpki_config.rsync.args.flat,
 	    flat_rsync_args, ARRAY_LEN(flat_rsync_args));
@@ -960,7 +978,7 @@ set_default_values(void)
 	rpki_config.http.user_agent = pstrdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	rpki_config.http.max_redirs = 10;
 	rpki_config.http.connect_timeout = 30;
-	rpki_config.http.transfer_timeout = 0;
+	rpki_config.http.transfer_timeout = 900;
 	rpki_config.http.low_speed_limit = 100000;
 	rpki_config.http.low_speed_time = 10;
 	rpki_config.http.max_file_size = 1000000000;
@@ -1036,6 +1054,9 @@ print_usage(FILE *stream, bool print_doc)
 
 	fprintf(stream, "Usage: %s\n", program_name);
 	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
+		if (option->deprecated)
+			continue;
+
 		fprintf(stream, "\t[");
 		fprintf(stream, "--%s", option->name);
 
@@ -1340,6 +1361,12 @@ unsigned int
 config_get_rsync_retry_interval(void)
 {
 	return rpki_config.rsync.retry.interval;
+}
+
+long
+config_get_rsync_transfer_timeout(void)
+{
+	return rpki_config.rsync.transfer_timeout;
 }
 
 char *

@@ -14,7 +14,6 @@
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
-static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
 
 void
 eecert_init(struct ee_cert *ee, STACK_OF(X509_CRL) *crls, bool force_inherit)
@@ -168,7 +167,6 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 	bool content_type_found = false;
 	bool message_digest_found = false;
 	bool signing_time_found = false;
-	bool binary_signing_time_found = false;
 	int error;
 
 	if (sinfo->signedAttrs == NULL)
@@ -218,15 +216,6 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			}
 			error = 0; /* No validations needed for now. */
 			signing_time_found = true;
-
-		} else if (ARCS_EQUAL_OIDS(&attrType, oid_bsta)) {
-			if (binary_signing_time_found) {
-				pr_val_err("Multiple BinarySigningTimes found.");
-				goto illegal_attrType;
-			}
-			error = 0; /* No validations needed for now. */
-			binary_signing_time_found = true;
-
 		} else {
 			/* rfc6488#section-3.1.g */
 			pr_val_err("Illegal attrType OID in SignerInfo.");
@@ -244,6 +233,8 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 		return pr_val_err("SignerInfo lacks a ContentType attribute.");
 	if (!message_digest_found)
 		return pr_val_err("SignerInfo lacks a MessageDigest attribute.");
+	if (!signing_time_found)
+		return pr_val_err("SignerInfo lacks a SigningTime attribute.");
 
 	return 0;
 

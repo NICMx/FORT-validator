@@ -8,6 +8,8 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
+char *asn1time2str(ASN1_TIME const *);
+
 json_t *oid2json(ASN1_OBJECT const *);
 json_t *asn1int2json(ASN1_INTEGER const *);
 json_t *asn1str2json(ASN1_STRING const *); /* octet string, bit string, etc */
