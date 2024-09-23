@@ -5,11 +5,9 @@
 #if OPENSSL_VERSION_MAJOR >= 3
 #include <openssl/core_names.h>
 #endif
-#include <openssl/evp.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
-#include <openssl/x509v3.h>
 #include <syslog.h>
 #include <time.h>
 

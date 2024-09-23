@@ -993,7 +993,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--rsyncretrycount">count</a>": 1,
 			"<a href="#--rsyncretryinterval">interval</a>": 4
 		},
-		"<a href="#--rsynctransfer-timeout">transfer-timeout</a>": 0,
+		"<a href="#--rsynctransfer-timeout">transfer-timeout</a>": 900,
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
 			"-rtz",
@@ -1021,10 +1021,10 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--httpretrycount">count</a>": 1,
 			"<a href="#--httpretryinterval">interval</a>": 4
 		},
-		"<a href="#--httpuser-agent">user-agent</a>": "fort/1.6.2",
+		"<a href="#--httpuser-agent">user-agent</a>": "fort/{{ site.fort-latest-version }}",
 		"<a href="#--httpmax-redirs">max-redirs</a>": 10,
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,
-		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 0,
+		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 900,
 		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
 		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
 		"<a href="#--httpmax-file-size">max-file-size</a>": 1000000000,
@@ -1034,8 +1034,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"log": {
 		"<a href="#--logenabled">enabled</a>": true,
 		"<a href="#--logoutput">output</a>": "console",
-		"<a href="#--loglevel">level</a>": "info",
-		"<a href="#--logtag">tag</a>": "Operation",
+		"<a href="#--loglevel">level</a>": "warning",
+		"<a href="#--logtag">tag</a>": "Op",
 		"<a href="#--logfacility">facility</a>": "daemon",
 		"<a href="#--logfile-name-format">file-name-format</a>": "global-url",
 		"<a href="#--logcolor-output">color-output</a>": false

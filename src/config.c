@@ -3,8 +3,7 @@
 #include <curl/curl.h>
 #include <errno.h>
 #include <getopt.h>
-#include <libxml/xmlversion.h>
-#include <jansson.h>
+#include <libxml/xmlreader.h>
 #include <openssl/opensslv.h>
 #include <syslog.h>
 
@@ -1055,6 +1054,9 @@ print_usage(FILE *stream, bool print_doc)
 
 	fprintf(stream, "Usage: %s\n", program_name);
 	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
+		if (option->deprecated)
+			continue;
+
 		fprintf(stream, "\t[");
 		fprintf(stream, "--%s", option->name);
 
