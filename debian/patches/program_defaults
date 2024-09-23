@@ -3,7 +3,7 @@ Description: Changes two configuration defaults to better match the
 Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
 Forwarded: not-needed
 diff --git a/man/fort.8 b/man/fort.8
-index 3411106..64b40fb 100644
+index 6e32e14..4a139df 100644
 --- a/man/fort.8
 +++ b/man/fort.8
 @@ -211,6 +211,8 @@ The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
@@ -25,17 +25,17 @@ index 3411106..64b40fb 100644
  .P
  
 diff --git a/src/config.c b/src/config.c
-index e010a97..251eab7 100644
+index caee469..5813684 100644
 --- a/src/config.c
 +++ b/src/config.c
-@@ -923,8 +923,8 @@ set_default_values(void)
+@@ -940,8 +940,8 @@ set_default_values(void)
  	 * duplicates.
  	 */
  
 -	rpki_config.tal = NULL;
 -	rpki_config.local_repository = pstrdup("/tmp/fort/repository");
 +	rpki_config.tal = pstrdup("/etc/tals");
-+	rpki_config.local_repository = strdup("/var/lib/fort");
++	rpki_config.local_repository = pstrdup("/var/lib/fort");
  	rpki_config.shuffle_tal_uris = false;
  	rpki_config.maximum_certificate_depth = 32;
  	rpki_config.slurm = NULL;
