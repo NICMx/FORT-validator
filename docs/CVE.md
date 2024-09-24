@@ -57,3 +57,14 @@ Certificate containing `signedAttrs` not in canonical form crashes Fort 1.6.2-.
 | Impact | Crash. (Potential unavailability of Route Origin Validation.) |
 | Patch | Commit [521b1a0](https://github.com/NICMx/FORT-validator/commit/521b1a0db5041258096fbabdf8fc1e10ecc793cf), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
+
+## CVE-____-_____
+
+(Awaiting CVE ID number assignment.)
+
+Malicious rsync repositories can block Fort by drip-feeding repository objects.
+
+| Description | A malicious RPKI rsync repository can prevent Fort from finishing its validation run by drip-feeding its content. |
+| Impact | Delayed validation. (Stale or unavailable Route Origin Validation.) |
+| Patch | Commit [4ee88d1](https://github.com/NICMx/FORT-validator/commit/4ee88d1c3fa7df763dd52312134cd93c1ce50870), released in Fort 1.6.4. |
+| Acknowledgments | Thanks to Koen van Hove for his research and disclosure, and Job Snijders for the proposed fix. |
