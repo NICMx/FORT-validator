@@ -1,14 +1,10 @@
-/*
- * - We only need to keep nodes for the rsync root.
- * - The tree traverse only needs to touch files.
- * - RRDP needs caging.
- */
-
 #include "cache.h"
 
 #include <ftw.h>
+#include <stdbool.h>
+#include <sys/stat.h>
 
-#include "cachent.h"
+#include "alloc.h"
 #include "cachetmp.h"
 #include "common.h"
 #include "config.h"
@@ -17,29 +13,50 @@
 #include "http.h"
 #include "log.h"
 #include "rpp.h"
+#include "rrdp.h"
 #include "rsync.h"
 #include "types/path.h"
 #include "types/url.h"
+#include "types/uthash.h"
 
-/* XXX force RRDP if one RPP fails to validate by rsync? */
+struct cache_node {
+	struct cache_mapping map;
+
+	int fresh;		/* Refresh already attempted? */
+	int dlerr;		/* Result code of recent download attempt */
+	time_t mtim;		/* Last successful download time, or zero */
+
+	struct rrdp_state *rrdp;
+
+	UT_hash_handle hh;	/* Hash table hook */
+};
 
 typedef int (*dl_cb)(struct cache_node *rpp);
 
-struct cached_file {
-	char *url;
-	char *path;
-	UT_hash_handle hh; /* Hash table hook */
-};
-
-struct cached_rpp {
-	struct cached_file *ht;
+struct cache_table {
+	char const *name;
+	bool enabled;
+	unsigned int next_id;
+	size_t pathlen;
+	struct cache_node *nodes; /* Hash Table */
+	dl_cb download;
 };
 
 static struct rpki_cache {
-	struct cache_node *rsync;
-	struct cache_node *https;
-//	time_t startup_ts; /* When we started the last validation */
+	/* Latest view of the remote rsync modules */
+	struct cache_table rsync;
+	/* Latest view of the remote HTTPS TAs */
+	struct cache_table https;
+	/* Latest view of the remote RRDP cages */
+	struct cache_table rrdp;
+	/* Committed RPPs and TAs (offline fallback hard links) */
+	struct cache_table fallback;
 } cache;
+
+struct cache_cage {
+	struct cache_node *refresh;
+	struct cache_node *fallback;
+};
 
 #define CACHE_METAFILE "cache.json"
 #define TAGNAME_VERSION "fort-version"
@@ -57,6 +74,26 @@ static struct rpki_cache {
 #define TYPEVALUE_TA_HTTP "TA (HTTP)"
 #define TYPEVALUE_RPP "RPP"
 #define TYPEVALUE_NOTIF "RRDP Notification"
+
+#ifdef UNIT_TESTING
+static void __delete_node_cb(struct cache_node const *);
+#endif
+
+static void
+delete_node(struct cache_table *tbl, struct cache_node *node)
+{
+#ifdef UNIT_TESTING
+	__delete_node_cb(node);
+#endif
+
+	HASH_DEL(tbl->nodes, node);
+
+	free(node->map.url);
+	free(node->map.path);
+	if (node->rrdp)
+		rrdp_state_cleanup(node->rrdp);
+	free(node);
+}
 
 static char *
 get_cache_filename(char const *name, bool fatal)
@@ -101,6 +138,29 @@ fail:
 	if (file != NULL)
 		fclose(file);
 	return error;
+}
+
+static int dl_rsync(struct cache_node *);
+static int dl_http(struct cache_node *);
+static int dl_rrdp(struct cache_node *);
+
+static void
+init_table(struct cache_table *tbl, char const *name, bool enabled, dl_cb dl)
+{
+	memset(tbl, 0, sizeof(*tbl));
+	tbl->name = name;
+	tbl->enabled = enabled;
+	tbl->pathlen = strlen(config_get_local_repository()) + strlen(name) + 6;
+	tbl->download = dl;
+}
+
+static void
+init_tables(void)
+{
+	init_table(&cache.rsync, "rsync", config_get_rsync_enabled(), dl_rsync);
+	init_table(&cache.rsync, "https", config_get_http_enabled(), dl_http);
+	init_table(&cache.rsync, "rrdp", config_get_http_enabled(), dl_rrdp);
+	init_table(&cache.fallback, "fallback", true, NULL);
 }
 
 static void
@@ -188,6 +248,7 @@ init_tmp_dir(void)
 int
 cache_setup(void)
 {
+	init_tables();
 	init_cache_metafile();
 	init_tmp_dir();
 	init_cachedir_tag();
@@ -303,9 +364,6 @@ cache_teardown(void)
 static void
 load_tal_json(void)
 {
-	cache.rsync = cachent_root_rsync();
-	cache.https = cachent_root_https();
-
 //	char *filename;
 //	json_t *root;
 //	json_error_t jerror;
@@ -447,355 +505,283 @@ write_tal_json(void)
 //	free(filename);
 }
 
-/*
- * The "rsync module" is the component immediately after the domain.
- *
- * get_rsync_module(rsync://a.b.c/d/e/f/potato.mft) = d
- */
-static struct cache_node *
-get_rsync_module(struct cache_node *node)
-{
-	struct cache_node *gp; /* Grandparent */
-
-	if (!node || !node->parent || !node->parent->parent)
-		return NULL;
-
-	for (gp = node->parent->parent; gp->parent != NULL; gp = gp->parent)
-		node = node->parent;
-	return node;
-}
-
 static int
-dl_rrdp(struct cache_node *rpp)
+dl_rsync(struct cache_node *module)
 {
 	int error;
 
-	if (!config_get_http_enabled()) {
-		pr_val_debug("HTTP is disabled.");
-		return 1;
-	}
-
-	// XXX needs to add all files to node.
-	// Probably also update node itself.
-	// XXX maybe pr_crit() on !mft->parent?
-	error = rrdp_update(rpp);
-	if (error)
-		pr_val_debug("RRDP RPP: Failed refresh.");
-
-	return error;
-}
-
-static int
-dl_rsync(struct cache_node *rpp)
-{
-	struct cache_node *module, *node;
-	char *tmppath;
-	int error;
-
-	if (!config_get_rsync_enabled()) {
-		pr_val_debug("rsync is disabled.");
-		return 1;
-	}
-
-	module = get_rsync_module(rpp);
-	if (module == NULL)
-		return -EINVAL; // XXX
-
-	error = cache_tmpfile(&tmppath);
+	error = rsync_download(&module->map);
 	if (error)
 		return error;
 
-	error = rsync_download(module->url, tmppath,
-	    (module->flags & CNF_CACHED) ? module->path : NULL);
-	if (error) {
-		free(tmppath);
-		return error;
-	}
-
-	module->flags |= CNF_RSYNC | CNF_CACHED | CNF_FRESH | CNF_FREE_TMPPATH;
-	module->mtim = time_nonfatal();
-	module->tmppath = tmppath;
-
-	for (node = rpp; node != module; node = node->parent) {
-		node->flags |= RSYNC_INHERIT;
-		node->mtim = module->mtim;
-	}
-
+	module->mtim = time_nonfatal(); /* XXX probably not needed */
 	return 0;
 }
 
 static int
-dl_http(struct cache_node *node)
+dl_rrdp(struct cache_node *notif)
 {
-	char *tmppath;
 	time_t mtim;
 	bool changed;
 	int error;
 
-	if (!config_get_http_enabled()) {
-		pr_val_debug("HTTP is disabled.");
-		return 1;
-	}
+	mtim = time_nonfatal();
 
-	error = cache_tmpfile(&tmppath);
+	error = rrdp_update(&notif->map, notif->mtim, &changed, &notif->rrdp);
 	if (error)
 		return error;
 
-	mtim = time_nonfatal();
-
-	error = http_download(node->url, tmppath, node->mtim, &changed);
-	if (error) {
-		free(tmppath);
-		return error;
-	}
-
-	node->flags |= CNF_CACHED | CNF_FRESH | CNF_FREE_TMPPATH;
 	if (changed)
-		node->mtim = mtim;
-	node->tmppath = tmppath;
+		notif->mtim = mtim;
 	return 0;
 }
 
-static char *
-get_tmppath(struct cache_node *node)
+static int
+dl_http(struct cache_node *file)
 {
-	struct cache_node *ancestor;
-	struct path_builder pb;
-	size_t skiplen;
+	time_t mtim;
+	bool changed;
+	int error;
 
-	if (node->tmppath != NULL)
-		return node->tmppath;
+	mtim = time_nonfatal();
 
-	ancestor = node;
-	do {
-		ancestor = ancestor->parent;
-		if (ancestor == NULL) {
-			/* May warrant pr_crit(), but I'm chickening out. */
-			pr_val_err("The download function did not set any tmppaths.");
-			return NULL;
-		}
-	} while (ancestor->tmppath == NULL);
+	error = http_download(file->map.url, file->map.path,
+	    file->mtim, &changed);
+	if (error)
+		return error;
 
-	skiplen = strlen(ancestor->path);
-	if (strncmp(ancestor->path, node->path, skiplen) != 0)
-		pr_crit("???"); // XXX
-
-	pb_init(&pb);
-	if (pb_append(&pb, ancestor->tmppath) != 0)
-		goto cancel;
-	if (pb_append(&pb, node->path + skiplen) != 0)
-		goto cancel;
-
-	node->flags |= CNF_FREE_TMPPATH;
-	node->tmppath = pb.string;
-	return pb.string;
-
-cancel:	pb_cleanup(&pb);
-	return NULL;
+	if (changed)
+		file->mtim = mtim;
+	return 0;
 }
 
-/* @uri is either a caRepository or a rpkiNotify */
 static struct cache_node *
-do_refresh(char const *uri, struct cache_node *root, dl_cb download)
+find_node(struct cache_table *tbl, char const *url, size_t urlen)
 {
 	struct cache_node *node;
+	HASH_FIND(hh, tbl->nodes, url, urlen, node);
+	return node;
+}
 
-	if (!uri)
-		return NULL; /* Protocol unavailable; ignore */
+static char *
+create_path(struct cache_table *tbl)
+{
+	char *path;
+	int len;
 
-	pr_val_debug("Trying %s (online)...", uri);
+	do {
+		path = pmalloc(tbl->pathlen);
 
-	node = cachent_provide(root, uri);
-	if (!node) {
-		pr_val_err("Malformed URL: %s", uri);
+		len = snprintf(path, tbl->pathlen, "%s/%s/%X",
+		    config_get_local_repository(), tbl->name, tbl->next_id);
+		if (len < 0) {
+			pr_val_err("Cannot compute new cache path: Unknown cause.");
+			return NULL;
+		}
+		if (len < tbl->pathlen) {
+			tbl->next_id++;
+			return path; /* Happy path */
+		}
+
+		tbl->pathlen++;
+		free(path);
+	} while (true);
+}
+
+static struct cache_node *
+provide_node(struct cache_table *tbl, char const *url)
+{
+	size_t urlen;
+	struct cache_node *node;
+
+	urlen = strlen(url);
+	node = find_node(tbl, url, urlen);
+	if (node)
+		return node;
+
+	node = pzalloc(sizeof(struct cache_node));
+	node->map.url = pstrdup(url);
+	node->map.path = create_path(tbl);
+	if (!node->map.path) {
+		free(node->map.url);
+		free(node);
 		return NULL;
 	}
-
-	if (!(node->flags & CNF_FRESH)) {
-		node->flags |= CNF_FRESH;
-		node->dlerr = download(node);
-	}
-	if (node->dlerr)
-		pr_val_debug("Refresh failed.");
+	HASH_ADD_KEYPTR(hh, tbl->nodes, node->map.url, urlen, node);
 
 	return node;
 }
 
-/* @url needs to outlive @map. */
-int
-cache_refresh_url(char *url, struct cache_mapping *map)
+/* @uri is either a caRepository or a rpkiNotify */
+static struct cache_node *
+do_refresh(struct cache_table *tbl, char const *uri)
+{
+	struct cache_node *node;
+
+	if (!tbl->enabled)
+		return NULL;
+
+	pr_val_debug("Trying %s (online)...", uri);
+
+	node = provide_node(tbl, uri);
+	if (!node)
+		return NULL;
+
+	if (!node->fresh) {
+		node->fresh = true;
+		node->dlerr = tbl->download(node);
+	}
+
+	pr_val_debug(node->dlerr ? "Refresh failed." : "Refresh succeeded.");
+	return node;
+}
+
+static struct cache_node *
+get_fallback(char const *caRepository)
+{
+	struct cache_node *node;
+
+	pr_val_debug("Retrieving %s fallback...", caRepository);
+	node = find_node(&cache.fallback, caRepository, strlen(caRepository));
+	pr_val_debug(node ? "Fallback found." : "Fallback unavailable.");
+
+	return node;
+}
+
+/* Do not free nor modify the result. */
+char *
+cache_refresh_url(char const *url)
 {
 	struct cache_node *node = NULL;
 
 	// XXX mutex
 	// XXX review result signs
+	// XXX Normalize @url
 
 	if (url_is_https(url))
-		node = do_refresh(url, cache.https, dl_http);
+		node = do_refresh(&cache.https, url);
 	else if (url_is_rsync(url))
-		node = do_refresh(url, cache.rsync, dl_rsync);
-	if (!node)
-		return EINVAL;
+		node = do_refresh(&cache.rsync, url);
 
-	// XXX might want to const url and path.
-	// Alternatively, strdup path so the caller can't corrupt our string.
-	map->url = url;
-	map->path = get_tmppath(node);
-	return (map->path != NULL) ? 0 : EINVAL;
+	// XXX Maybe strdup path so the caller can't corrupt our string
+	return node ? node->map.path : NULL;
 }
 
-/* @url needs to outlive @map. */
-int
-cache_fallback_url(char *url, struct cache_mapping *map)
+/* Do not free nor modify the result. */
+char *
+cache_fallback_url(char const *url)
 {
-	struct cache_node *node = NULL;
-
-	if (url_is_https(url))
-		node = cachent_provide(cache.https, url);
-	else if (url_is_rsync(url))
-		node = cachent_provide(cache.rsync, url);
-	if (!node)
-		return EINVAL;
-
-	map->url = url;
-	map->path = node->path;
-	return 0;
+	struct cache_node *node;
+	node = find_node(&cache.fallback, url, strlen(url));
+	return node ? node->map.path : NULL;
 }
 
 /*
  * Attempts to refresh the RPP described by @sias, returns the resulting
  * repository's mapping.
+ *
+ * XXX Need to normalize the sias.
+ * XXX Fallback only if parent is fallback
  */
-int
-cache_refresh_sias(struct sia_uris *sias, struct cache_mapping *map)
+struct cache_cage *
+cache_refresh_sias(struct sia_uris *sias)
 {
-	struct cache_node *hnode;
-	struct cache_node *rnode;
+	struct cache_cage *cage;
+	struct cache_node *node;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
 	// XXX mutex
 	// XXX review result signs
 	// XXX normalize rpkiNotify & caRepository?
+	// XXX do module if rsync
 
-	hnode = do_refresh(sias->rpkiNotify, cache.https, dl_rrdp);
-	if (hnode && !hnode->dlerr) {
-		map->url = hnode->url;
-		map->path = hnode->tmppath;
-		return 0;
+	cage = pzalloc(sizeof(struct cache_cage));
+	cage->fallback = get_fallback(sias->caRepository);
+
+	if (sias->rpkiNotify) {
+		node = do_refresh(&cache.rrdp, sias->rpkiNotify);
+		if (node && !node->dlerr) {
+			cage->refresh = node;
+			return cage; /* RRDP + optional fallback happy path */
+		}
 	}
 
-	rnode = do_refresh(sias->caRepository, cache.rsync, dl_rsync);
-	if (rnode && !rnode->dlerr) {
-		map->url = rnode->url;
-		map->path = rnode->tmppath;
-		return 0;
+	node = do_refresh(&cache.rsync, sias->caRepository);
+	if (node && !node->dlerr) {
+		cage->refresh = node;
+		return cage; /* rsync + optional fallback happy path */
 	}
 
-	if (hnode && cachent_is_cached(hnode)) {
-		map->url = hnode->url;
-		map->path = hnode->path;
-		return 0;
+	if (cage->fallback == NULL) {
+		free(cage);
+		return NULL;
 	}
 
-	if (hnode && cachent_is_cached(rnode)) {
-		map->url = hnode->url;
-		map->path = hnode->path;
-		return 0;
-	}
+	return cage; /* fallback happy path */
+}
 
-	return EINVAL;
+char const *
+node2file(struct cache_node *node, char const *url)
+{
+	if (node == NULL)
+		return NULL;
+	return (node->rrdp)
+	    ? /* RRDP  */ rrdp_file(node->rrdp, url)
+	    : /* rsync */ join_paths(node->map.path, url + RPKI_SCHEMA_LEN); // XXX wrong; need to get the module.
+}
+
+char const *
+cage_map_file(struct cache_cage *cage, char const *url)
+{
+	char const *file;
+
+	file = node2file(cage->refresh, url);
+	if (!file)
+		file = node2file(cage->fallback, url);
+
+	return file;
+}
+
+/* Returns true if previously enabled */
+bool
+cage_disable_refresh(struct cache_cage *cage)
+{
+	bool enabled = (cage->refresh != NULL);
+	cage->refresh = NULL;
+	return enabled;
+}
+
+static void
+cachent_print(struct cache_node *node)
+{
+	if (!node)
+		return;
+
+	printf("\t%s (%s): ", node->map.url, node->map.path);
+	if (node->fresh)
+		printf("fresh (errcode %d)", node->dlerr);
+	else
+		printf("stale");
+	printf("\n");
+}
+
+static void
+table_print(struct cache_table *tbl)
+{
+	struct cache_node *node, *tmp;
+
+	printf("%s (%s):", tbl->name, tbl->enabled ? "enabled" : "disabled");
+	HASH_ITER(hh, tbl->nodes, node, tmp)
+		cachent_print(node);
 }
 
 void
 cache_print(void)
 {
-	cachent_print(cache.rsync);
-	cachent_print(cache.https);
-}
-
-static void
-prune_rsync(void)
-{
-	struct cache_node *domain, *tmp1;
-	struct cache_node *module, *tmp2;
-	struct cache_node *child, *tmp3;
-
-	HASH_ITER(hh, cache.rsync->children, domain, tmp1)
-		HASH_ITER(hh, domain->children, module, tmp2)
-			HASH_ITER(hh, module->children, child, tmp3) {
-				pr_op_debug("Removing leftover: %s", child->url);
-				module->flags |= cachent_delete(child);
-			}
-}
-
-static bool
-commit_rpp_delta(struct cache_node *node)
-{
-	struct cache_node *child, *tmp;
-	int error;
-
-	pr_op_debug("Commiting %s", node->url);
-
-	if (node == cache.rsync || node == cache.https) {
-		pr_op_debug("Root; nothing to commit.");
-		goto branch;
-	}
-
-	if (node->tmppath == NULL) {
-		if (node->children) {
-			pr_op_debug("Branch.");
-			goto branch;
-		} else {
-			pr_op_debug("Unchanged leaf; nothing to commit.");
-			return true;
-		}
-	}
-
-	if (node->flags & CNF_VALID) {
-		pr_op_debug("Validation successful; committing.");
-		error = file_merge_into(node->tmppath, node->path);
-		if (error)
-			printf("rename errno: %d\n", error); // XXX
-		/* XXX Think more about the implications of this. */
-		HASH_ITER(hh, node->children, child, tmp)
-			cachent_delete(child);
-	} else {
-		pr_op_debug("Validation unsuccessful; rollbacking.");
-		/* XXX just do remove()? */
-		file_rm_f(node->tmppath);
-	}
-
-	free(node->tmppath);
-	node->tmppath = NULL;
-	return true;
-
-branch:	/* Clean up state flags */
-	node->flags &= ~(CNF_CACHED | CNF_FRESH | CNF_TOUCHED | CNF_VALID);
-	if (node->tmppath) {
-		free(node->tmppath);
-		node->tmppath = NULL;
-	}
-	return true;
-}
-
-static int
-rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-{
-	if (remove(fpath) < 0)
-		pr_op_warn("Can't remove %s: %s", fpath, strerror(errno));
-	else
-		pr_op_debug("Removed %s.", fpath);
-	return 0;
-}
-
-static void
-cleanup_tmp(void)
-{
-	char *tmpdir = get_cache_filename(CACHE_TMPDIR, true);
-	if (nftw(tmpdir, rmf, 32, FTW_DEPTH | FTW_PHYS))
-		pr_op_warn("Cannot empty the cache's tmp directory: %s",
-		    strerror(errno));
-	free(tmpdir);
+	table_print(&cache.rsync);
+	table_print(&cache.https);
+	table_print(&cache.rrdp);
+	table_print(&cache.fallback);
 }
 
 //static void
@@ -866,88 +852,31 @@ cleanup_tmp(void)
 //	return false;
 //}
 
-static struct cache_node *nftw_root;
-
 static int
-nftw_remove_abandoned(const char *path, const struct stat *st,
-    int typeflag, struct FTW *ftw)
+rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
-	char const *lookup;
-	struct cache_node *pm; /* Perfect Match */
-	struct cache_node *msm; /* Most Specific Match */
-	struct timespec now;
-
-	// XXX
-	lookup = path + strlen(config_get_local_repository());
-	while (lookup[0] == '/')
-		lookup++;
-	pr_op_debug("Removing if abandoned: %s", lookup);
-
-	pm = cachent_find(nftw_root, lookup, &msm);
-	if (pm == cache.rsync || pm == cache.https) {
-		pr_op_debug("Root; skipping.");
-		return 0;
-	}
-	if (!msm) {
-		pr_op_debug("Not matched by the tree; unknown.");
-		goto unknown;
-	}
-	if (!pm && !(msm->flags & CNF_RSYNC)) {
-		/* XXX what about HTTP? */
-		pr_op_debug("RRDP and no perfect match; unknown.");
-		goto unknown; /* The traversal is depth-first */
-	}
-
-	if (S_ISDIR(st->st_mode)) {
-		/*
-		 * rmdir() fails if the directory is not empty.
-		 * This will happen most of the time.
-		 */
-		if (rmdir(path) == 0) {
-			pr_op_debug("Directory empty; purging node.");
-			cachent_delete(pm);
-		} else if (errno == ENOENT) {
-			pr_op_debug("Directory does not exist; purging node.");
-			cachent_delete(pm);
-		} else {
-			pr_op_debug("Directory exists and has contents; preserving.");
-		}
-
-	} else if (S_ISREG(st->st_mode)) {
-
-//		if ((msm->flags & CNF_RSYNC) || !pm || (pm->flags & CNF_WITHDRAWN))
-		clock_gettime(CLOCK_REALTIME, &now); // XXX
-		PR_DEBUG_MSG("%ld > %ld", now.tv_sec - st->st_atim.tv_sec, cfg_cache_threshold());
-		if (now.tv_sec - st->st_atim.tv_sec > cfg_cache_threshold()) {
-			pr_op_debug("Too old; abandoned.");
-			goto abandoned;
-		}
-		pr_op_debug("Still young; preserving.");
-
-	} else {
-		pr_op_debug("Unknown type; abandoned.");
-		goto abandoned;
-	}
-
-	return 0;
-
-abandoned:
-	if (pm)
-		cachent_delete(pm);
-unknown:
-	if (remove(path) < 0)
-		PR_DEBUG_MSG("remove(): %s", strerror(errno)); // XXX
+	if (remove(fpath) < 0)
+		pr_op_warn("Can't remove %s: %s", fpath, strerror(errno));
+	else
+		pr_op_debug("Removed %s.", fpath);
 	return 0;
 }
 
-/*
- * Note: It'll probably be healthy if touched nodes also touch their parents.
- * You don't always need to go up all the way to the root.
- * But I'm afraid this will hit the mutexes.
- */
+static void
+cleanup_tmp(void)
+{
+	char *tmpdir = get_cache_filename(CACHE_TMPDIR, true);
+	if (nftw(tmpdir, rmf, 32, FTW_DEPTH | FTW_PHYS))
+		pr_op_warn("Cannot empty the cache's tmp directory: %s",
+		    strerror(errno));
+	free(tmpdir);
+}
+
 static void
 remove_abandoned(void)
 {
+	// XXX no need to recurse anymore.
+	/*
 	char *rootpath;
 
 	rootpath = join_paths(config_get_local_repository(), "rsync");
@@ -961,24 +890,31 @@ remove_abandoned(void)
 	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
 
 	free(rootpath);
+	*/
 }
 
-static bool
-remove_orphaned(struct cache_node *node)
+static void
+remove_orphaned(struct cache_table *table, struct cache_node *node)
 {
-	if (file_exists(node->path) == ENOENT) {
-		pr_op_debug("Missing file; deleting node: %s", node->path);
-		cachent_delete(node);
-
-		if (node == cache.https)
-			cache.https = NULL;
-		else if (node == cache.rsync)
-			cache.rsync = NULL;
-
-		return false;
+	if (file_exists(node->map.path) == ENOENT) {
+		pr_op_debug("Missing file; deleting node: %s", node->map.path);
+		delete_node(table, node);
 	}
+}
 
-	return true;
+static void
+cache_foreach(void (*cb)(struct cache_table *, struct cache_node *))
+{
+	struct cache_node *node, *tmp;
+
+	HASH_ITER(hh, cache.rsync.nodes, node, tmp)
+		cb(&cache.rsync, node);
+	HASH_ITER(hh, cache.https.nodes, node, tmp)
+		cb(&cache.https, node);
+	HASH_ITER(hh, cache.rrdp.nodes, node, tmp)
+		cb(&cache.rrdp, node);
+	HASH_ITER(hh, cache.fallback.nodes, node, tmp)
+		cb(&cache.fallback, node);
 }
 
 /*
@@ -987,12 +923,7 @@ remove_orphaned(struct cache_node *node)
 static void
 cleanup_cache(void)
 {
-	pr_op_debug("Ditching redundant rsync nodes.");
-	prune_rsync();
-
-	pr_op_debug("Committing successful RPPs.");
-	cachent_traverse(cache.rsync, commit_rpp_delta);
-	cachent_traverse(cache.https, commit_rpp_delta);
+	// XXX Review
 
 	pr_op_debug("Cleaning up temporal files.");
 	cleanup_tmp();
@@ -1001,8 +932,7 @@ cleanup_cache(void)
 	remove_abandoned();
 
 	pr_op_debug("Cleaning up orphaned nodes.");
-	cachent_traverse(cache.rsync, remove_orphaned);
-	cachent_traverse(cache.https, remove_orphaned);
+	cache_foreach(remove_orphaned);
 }
 
 void
@@ -1010,8 +940,7 @@ cache_commit(void)
 {
 	cleanup_cache();
 	write_tal_json();
-	cachent_delete(cache.rsync);
-	cachent_delete(cache.https);
+	cache_foreach(delete_node);
 }
 
 void
@@ -1026,4 +955,7 @@ sias_cleanup(struct sia_uris *sias)
 	free(sias->caRepository);
 	free(sias->rpkiNotify);
 	free(sias->rpkiManifest);
+	free(sias->crldp);
+	free(sias->caIssuers);
+	free(sias->signedObject);
 }

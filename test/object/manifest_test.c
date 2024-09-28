@@ -10,7 +10,7 @@
 #include "types/path.c"
 #include "types/url.c"
 
-MOCK_ABORT_VOID(rrdp_notif_cleanup, struct cachefile_notification *notif)
+MOCK_ABORT_VOID(rrdp_state_cleanup, struct cachefile_notification *notif)
 MOCK_ABORT_INT(signed_object_decode, struct signed_object *sobj, char const *path)
 MOCK_ABORT_VOID(signed_object_cleanup, struct signed_object *sobj)
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
@@ -32,7 +32,7 @@ __test_validate(char const *src, size_t len)
 	dst.buf = buffer;
 	dst.size = len;
 
-	return validate_mft_file(&dst);
+	return validate_mft_filename(&dst);
 }
 
 #define test_validate(str) __test_validate(str, sizeof(str) - 1)

@@ -1,7 +1,10 @@
 #include "rrdp.h"
 
+#include <openssl/bn.h>
+#include <openssl/sha.h>
+#include <sys/queue.h>
+
 #include "base64.h"
-#include "cachent.h"
 #include "cachetmp.h"
 #include "common.h"
 #include "config.h"
@@ -15,6 +18,7 @@
 #include "types/arraylist.h"
 #include "types/path.h"
 #include "types/url.h"
+#include "types/uthash.h"
 
 /* RRDP's XML namespace */
 #define RRDP_NAMESPACE		"http://www.ripe.net/rpki/rrdp"
@@ -32,6 +36,47 @@
 #define RRDP_ATTR_SERIAL	"serial"
 #define RRDP_ATTR_URI		"uri"
 #define RRDP_ATTR_HASH		"hash"
+
+struct rrdp_serial {
+	BIGNUM *num;
+	char *str;			/* String version of @num. */
+};
+
+struct rrdp_session {
+	char *session_id;
+	struct rrdp_serial serial;
+};
+
+#define RRDP_HASH_LEN SHA256_DIGEST_LENGTH
+
+struct rrdp_hash {
+	unsigned char bytes[RRDP_HASH_LEN];
+	STAILQ_ENTRY(rrdp_hash) hook;
+};
+
+struct cache_file {
+	struct cache_mapping map;
+	UT_hash_handle hh;		/* Hash table hook */
+};
+
+/* Subset of the notification that is relevant to the TAL's cachefile */
+struct rrdp_state {
+	char const *repo;		/* Points to cache_node's map.path */
+
+	struct rrdp_session session;
+
+	struct cache_file *files;	/* Hash table */
+	unsigned int next_id;
+	size_t pathlen;
+
+	/*
+	 * The 1st one contains the hash of the session.serial delta.
+	 * The 2nd one contains the hash of the session.serial - 1 delta.
+	 * The 3rd one contains the hash of the session.serial - 2 delta.
+	 * And so on.
+	 */
+	STAILQ_HEAD(, rrdp_hash) delta_hashes;
+};
 
 struct file_metadata {
 	char *uri;
@@ -70,7 +115,7 @@ struct withdraw {
 
 struct parser_args {
 	struct rrdp_session *session;
-	struct cache_node *notif;
+	struct rrdp_state *state;
 };
 
 static BIGNUM *
@@ -97,6 +142,27 @@ session_cleanup(struct rrdp_session *meta)
 	free(meta->session_id);
 	BN_free(meta->serial.num);
 	free(meta->serial.str);
+}
+
+static struct cache_file *
+state_find_file(struct rrdp_state *state, char const *url, size_t len)
+{
+	struct cache_file *file;
+	HASH_FIND(hh, state->files, url, len, file);
+	return file;
+}
+
+static void
+state_flush_files(struct rrdp_state *state)
+{
+	struct cache_file *file, *tmp;
+
+	HASH_ITER(hh, state->files, file, tmp) {
+		HASH_DEL(state->files, file);
+		free(file->map.url);
+		free(file->map.path);
+		free(file);
+	}
 }
 
 static void
@@ -371,7 +437,7 @@ parse_session(xmlTextReaderPtr reader, struct rrdp_session *meta)
 }
 
 static int
-validate_session(xmlTextReaderPtr reader, struct rrdp_session *expected)
+validate_session(xmlTextReaderPtr reader, struct parser_args *args)
 {
 	struct rrdp_session actual = { 0 };
 	int error;
@@ -380,15 +446,15 @@ validate_session(xmlTextReaderPtr reader, struct rrdp_session *expected)
 	if (error)
 		return error;
 
-	if (strcmp(expected->session_id, actual.session_id) != 0) {
+	if (strcmp(args->session->session_id, actual.session_id) != 0) {
 		error = pr_val_err("File session id [%s] doesn't match notification's session id [%s]",
-		    expected->session_id, actual.session_id);
+		    args->session->session_id, actual.session_id);
 		goto end;
 	}
 
-	if (BN_cmp(actual.serial.num, expected->serial.num) != 0) {
+	if (BN_cmp(actual.serial.num, args->session->serial.num) != 0) {
 		error = pr_val_err("File serial [%s] doesn't match notification's serial [%s]",
-		    actual.serial.str, expected->serial.str);
+		    actual.serial.str, args->session->serial.str);
 		goto end;
 	}
 
@@ -469,64 +535,100 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw *tag)
 	return 0;
 }
 
-/* Remove a local file and its directory tree (if empty) */
-static int
-delete_file(char const *path)
+static char *
+create_path(struct rrdp_state *state)
 {
-	/* Delete parent dirs only if empty. */
-	return delete_dir_recursive_bottom_up(path);
+	char *path;
+	int len;
+
+	do {
+		path = pmalloc(state->pathlen);
+
+		len = snprintf(path, state->pathlen, "%s/%X",
+		    state->repo, state->next_id);
+		if (len < 0) {
+			pr_val_err("Cannot compute new cache path: Unknown cause.");
+			return NULL;
+		}
+		if (len < state->pathlen) {
+			state->next_id++;
+			return path; /* Happy path */
+		}
+
+		state->pathlen++;
+		free(path);
+	} while (true);
 }
 
 static int
-handle_publish(xmlTextReaderPtr reader, struct cache_node *notif)
+handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 {
 	struct publish tag = { 0 };
-	struct cache_node *subtree, *node;
+	struct cache_file *file;
+	size_t len;
 	int error;
 
 	error = parse_publish(reader, &tag);
 	if (error)
 		goto end;
 
-	if (!notif->rrdp.subtree) {
-		subtree = pzalloc(sizeof(struct cache_node));
-		subtree->url = "rsync://";
-		subtree->path = notif->path;
-		subtree->name = path_filename(subtree->path);
-		subtree->tmppath = notif->tmppath;
-		notif->rrdp.subtree = subtree;
-	}
+	pr_val_debug("Publish %s", logv_filename(tag.meta.uri));
 
-	node = cachent_provide(notif->rrdp.subtree, tag.meta.uri);
-	if (!node) {
-		// XXX outdated msg
-		error = pr_val_err("Broken RRDP: <publish> is attempting to create file '%s' outside of its publication point '%s'.",
-		    tag.meta.uri, notif->url);
-		goto end;
-	}
+	len = strlen(tag.meta.uri);
+	file = state_find_file(args->state, tag.meta.uri, len);
 
 	/* rfc8181#section-2.2 */
-	if (node->flags & CNF_CACHED) {
+	if (file) {
 		if (tag.meta.hash == NULL) {
 			// XXX watch out for this in the log before release
-			error = pr_val_err("RRDP desync: <publish> is attempting to create '%s', but the file is already cached.",
+			error = pr_val_err("RRDP desync: "
+			    "<publish> is attempting to create '%s', "
+			    "but the file is already cached.",
 			    tag.meta.uri);
 			goto end;
 		}
 
-		error = validate_hash(&tag.meta, node->path);
+		error = validate_hash(&tag.meta, file->map.path);
 		if (error)
 			goto end;
 
-	} else if (tag.meta.hash != NULL) {
-		// XXX watch out for this in the log before release
-		error = pr_val_err("RRDP desync: <publish> is attempting to overwrite '%s', but the file is absent in the cache.",
-		    tag.meta.uri);
-		goto end;
+		/*
+		 * Reminder: This is needed because the file might be
+		 * hard-linked. Our repo file write should not propagate
+		 * to the fallback.
+		 */
+		if (remove(file->map.path) < 0) {
+			error = errno;
+			pr_val_err("Cannot delete %s: %s",
+			    file->map.path, strerror(error));
+			if (error != ENOENT)
+				goto end;
+		}
+
+	} else {
+		if (tag.meta.hash != NULL) {
+			// XXX watch out for this in the log before release
+			error = pr_val_err("RRDP desync: "
+			    "<publish> is attempting to overwrite '%s', "
+			    "but the file is absent in the cache.",
+			    tag.meta.uri);
+			goto end;
+		}
+
+		file = pzalloc(sizeof(struct cache_file));
+		file->map.url = pstrdup(tag.meta.uri);
+		file->map.path = create_path(args->state);
+		if (!file->map.path) {
+			free(file->map.url);
+			free(file);
+			error = -EINVAL;
+			goto end;
+		}
+
+		HASH_ADD_KEYPTR(hh, args->state->files, file->map.url, len, file);
 	}
 
-	pr_val_debug("Publish %s", logv_filename(node->tmppath));
-	error = file_write_full(node->tmppath, tag.content, tag.content_len);
+	error = file_write_full(file->map.path, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
 	free(tag.content);
@@ -534,41 +636,43 @@ end:	metadata_cleanup(&tag.meta);
 }
 
 static int
-handle_withdraw(xmlTextReaderPtr reader, struct cache_node *notif)
+handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 {
 	struct withdraw tag = { 0 };
-	struct cache_node *node;
+	struct cache_file *file;
+	size_t len;
 	int error;
 
 	error = parse_withdraw(reader, &tag);
 	if (error)
 		goto end;
 
-	node = cachent_provide(notif->rrdp.subtree, tag.meta.uri);
-	if (!node) {
-		// XXX outdated msg
-		error = pr_val_err("Broken RRDP: <withdraw> is attempting to delete file '%s' outside of its publication point '%s'.",
-		    tag.meta.uri, notif->url);
-		goto end;
-	}
+	pr_val_debug("Withdraw %s", logv_filename(tag.meta.uri));
 
-	/*
-	 * XXX CNF_CACHED's comment suggests I should check parents,
-	 * but this is not rsync.
-	 */
-	if (!(node->flags & CNF_CACHED)) {
-		/* XXX May want to query the actualy filesystem, to be sure */
-		error = pr_val_err("RRDP desync: <withdraw> is attempting to delete file '%s', but it doesn't appear to exist.",
+	len = strlen(tag.meta.uri);
+	file = state_find_file(args->state, tag.meta.uri, len);
+
+	if (!file) {
+		error = pr_val_err("Broken RRDP: "
+		    "<withdraw> is attempting to delete unknown file '%s'.",
 		    tag.meta.uri);
 		goto end;
 	}
 
-	error = validate_hash(&tag.meta, node->path);
+	error = validate_hash(&tag.meta, file->map.path);
 	if (error)
 		goto end;
 
-	node->flags |= CNF_WITHDRAWN;
-	pr_val_debug("Withdraw %s", logv_filename(tag.meta.uri));
+	if (remove(file->map.path) < 0) {
+		pr_val_warn("Cannot delete %s: %s", file->map.path,
+		    strerror(errno));
+		/* It's fine; keep going. */
+	}
+
+	HASH_DEL(args->state->files, file);
+	free(file->map.url);
+	free(file->map.path);
+	free(file);
 
 end:	metadata_cleanup(&tag.meta);
 	return error;
@@ -765,7 +869,6 @@ parse_notification(char const *url, char const *path,
 static int
 xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 {
-	struct parser_args *args = arg;
 	xmlReaderTypes type;
 	xmlChar const *name;
 	int error;
@@ -775,9 +878,9 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = handle_publish(reader, args->notif);
+			error = handle_publish(reader, arg);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
-			error = validate_session(reader, args->session);
+			error = validate_session(reader, arg);
 		else
 			return pr_val_err("Unexpected '%s' element", name);
 		if (error)
@@ -792,14 +895,14 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 
 static int
 parse_snapshot(struct rrdp_session *session, char const *path,
-    struct cache_node *notif)
+    struct rrdp_state *state)
 {
-	struct parser_args args = { .session = session, .notif = notif };
+	struct parser_args args = { .session = session, .state = state };
 	return relax_ng_parse(path, xml_read_snapshot, &args);
 }
 
 static int
-validate_session_desync(struct cachefile_notification *old_notif,
+validate_session_desync(struct rrdp_state *old_notif,
     struct update_notification *new_notif)
 {
 	struct rrdp_hash *old_delta;
@@ -851,7 +954,7 @@ dl_tmp(char const *url, char **path)
 }
 
 static int
-handle_snapshot(struct update_notification *new, struct cache_node *notif)
+handle_snapshot(struct update_notification *new, struct rrdp_state *state)
 {
 	char *tmppath;
 	int error;
@@ -865,7 +968,7 @@ handle_snapshot(struct update_notification *new, struct cache_node *notif)
 	error = validate_hash(&new->snapshot, tmppath);
 	if (error)
 		goto end2;
-	error = parse_snapshot(&new->session, tmppath, notif);
+	error = parse_snapshot(&new->session, tmppath, state);
 //	delete_file(tmppath); XXX
 
 end2:	free(tmppath);
@@ -876,7 +979,6 @@ end1:	fnstack_pop();
 static int
 xml_read_delta(xmlTextReaderPtr reader, void *arg)
 {
-	struct parser_args *args = arg;
 	xmlReaderTypes type;
 	xmlChar const *name;
 	int error;
@@ -886,11 +988,11 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 	switch (type) {
 	case XML_READER_TYPE_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_PUBLISH))
-			error = handle_publish(reader, args->notif);
+			error = handle_publish(reader, arg);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_WITHDRAW))
-			error = handle_withdraw(reader, args->notif);
+			error = handle_withdraw(reader, arg);
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
-			error = validate_session(reader, args->session);
+			error = validate_session(reader, arg);
 		else
 			return pr_val_err("Unexpected '%s' element", name);
 		if (error)
@@ -905,7 +1007,7 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 
 static int
 parse_delta(struct update_notification *notif, struct notification_delta *delta,
-    char const *path, struct cache_node *notif_node)
+    char const *path, struct rrdp_state *state)
 {
 	struct parser_args args;
 	struct rrdp_session session;
@@ -918,14 +1020,14 @@ parse_delta(struct update_notification *notif, struct notification_delta *delta,
 	session.session_id = notif->session.session_id;
 	session.serial = delta->serial;
 	args.session = &session;
-	args.notif = notif_node;
+	args.state = state;
 
 	return relax_ng_parse(path, xml_read_delta, &args);
 }
 
 static int
 handle_delta(struct update_notification *notif,
-    struct notification_delta *delta, struct cache_node *notif_node)
+    struct notification_delta *delta, struct rrdp_state *state)
 {
 	char *tmppath;
 	int error;
@@ -936,7 +1038,7 @@ handle_delta(struct update_notification *notif,
 	error = dl_tmp(delta->meta.uri, &tmppath);
 	if (error)
 		goto end;
-	error = parse_delta(notif, delta, tmppath, notif_node);
+	error = parse_delta(notif, delta, tmppath, state);
 //	delete_file(tmppath); XXX
 
 	free(tmppath);
@@ -945,7 +1047,7 @@ end:	fnstack_pop();
 }
 
 static int
-handle_deltas(struct update_notification *notif, struct cache_node *notif_node)
+handle_deltas(struct update_notification *notif, struct rrdp_state *state)
 {
 	struct rrdp_serial *old;
 	struct rrdp_serial *new;
@@ -959,7 +1061,7 @@ handle_deltas(struct update_notification *notif, struct cache_node *notif_node)
 		return -ENOENT;
 	}
 
-	old = &notif_node->rrdp.session.serial;
+	old = &state->session.serial;
 	new = &notif->session.serial;
 
 	pr_val_debug("Handling RRDP delta serials %s-%s.", old->str, new->str);
@@ -982,7 +1084,7 @@ handle_deltas(struct update_notification *notif, struct cache_node *notif_node)
 		    old->str, new->str);
 
 	for (d = notif->deltas.len - diff; d < notif->deltas.len; d++) {
-		error = handle_delta(notif, &notif->deltas.array[d], notif_node);
+		error = handle_delta(notif, &notif->deltas.array[d], state);
 		if (error)
 			return error;
 	}
@@ -995,7 +1097,7 @@ handle_deltas(struct update_notification *notif, struct cache_node *notif_node)
  * Consumes @new.
  */
 static void
-init_notif(struct cachefile_notification *old, struct update_notification *new)
+init_notif(struct rrdp_state *old, struct update_notification *new)
 {
 	size_t dn;
 	size_t i;
@@ -1018,14 +1120,14 @@ init_notif(struct cachefile_notification *old, struct update_notification *new)
 }
 
 static void
-drop_notif(struct cachefile_notification *notif)
+drop_notif(struct rrdp_state *state)
 {
 	struct rrdp_hash *hash;
 
-	session_cleanup(&notif->session);
-	while (!STAILQ_EMPTY(&notif->delta_hashes)) {
-		hash = STAILQ_FIRST(&notif->delta_hashes);
-		STAILQ_REMOVE_HEAD(&notif->delta_hashes, hook);
+	session_cleanup(&state->session);
+	while (!STAILQ_EMPTY(&state->delta_hashes)) {
+		hash = STAILQ_FIRST(&state->delta_hashes);
+		STAILQ_REMOVE_HEAD(&state->delta_hashes, hook);
 		free(hash);
 	}
 }
@@ -1035,7 +1137,7 @@ drop_notif(struct cachefile_notification *notif)
  * Consumes @new on success.
  */
 static int
-update_notif(struct cachefile_notification *old, struct update_notification *new)
+update_notif(struct rrdp_state *old, struct update_notification *new)
 {
 	BIGNUM *diff_bn;
 	BN_ULONG diff; /* difference between the old and new serials */
@@ -1083,100 +1185,102 @@ update_notif(struct cachefile_notification *old, struct update_notification *new
 	return 0;
 }
 
-static bool
-dl_notif(struct cache_node *notif, struct update_notification *new)
+static int
+dl_notif(struct cache_mapping *map,  time_t mtim, bool *changed,
+    struct update_notification *new)
 {
 	char *tmppath;
-	time_t mtim;
-	bool changed;
+	int error;
 
-	notif->dlerr = cache_tmpfile(&tmppath);
-	if (notif->dlerr)
-		return false;
+	error = cache_tmpfile(&tmppath);
+	if (error)
+		return error;
 
-	mtim = time_nonfatal();
-	changed = false;
-	notif->dlerr = http_download(notif->url, tmppath, notif->mtim, &changed);
-	notif->flags |= CNF_FRESH;
-
-	if (notif->dlerr)
+	*changed = false;
+	error = http_download(map->url, tmppath, mtim, changed);
+	if (error)
 		goto end;
-	if (!changed) {
+	if (!(*changed)) {
 		pr_val_debug("The Notification has not changed.");
 		goto end;
 	}
 
-	notif->mtim = mtim; /* XXX should happen much later */
-	notif->dlerr = parse_notification(notif->url, tmppath, new);
-	if (notif->dlerr)
+	error = parse_notification(map->url, tmppath, new);
+	if (error)
 		goto end;
 
 	if (remove(tmppath) < 0) {
-		/*
-		 * Note, this could be ignored if we weren't planning on reusing
-		 * the path. This is going to stop being an issue once streaming
-		 * is implemented.
-		 */
-		notif->dlerr = errno;
-		pr_val_err("Can't remove notification's temporal file: %s",
-		   strerror(notif->dlerr));
+		pr_val_warn("Can't remove notification's temporal file: %s",
+		   strerror(errno));
 		update_notification_cleanup(new);
-		goto end;
+		/* Nonfatal; fall through */
 	}
 
-	notif->flags |= CNF_FREE_TMPPATH;
-	notif->tmppath = tmppath;
-	return true;
-
 end:	free(tmppath);
-	return false;
+	return error;
 }
 
 /*
- * Downloads the Update Notification @notif, and updates the cache accordingly.
+ * Downloads the Update Notification @notif->url, and updates the cache
+ * accordingly.
  *
  * "Updates the cache accordingly" means it downloads the missing deltas or
- * snapshot, and explodes them into @notif's tmp directory.
+ * snapshot, and explodes them into @notif->path.
  */
 int
-rrdp_update(struct cache_node *notif)
+rrdp_update(struct cache_mapping *notif, time_t mtim, bool *changed,
+    struct rrdp_state **state)
 {
-	struct cachefile_notification *old;
+	struct rrdp_state *old;
 	struct update_notification new;
 	int serial_cmp;
+	int error;
 
 	fnstack_push(notif->url);
 	pr_val_debug("Processing notification.");
 
-	if (!dl_notif(notif, &new))
-		goto end; /* Unchanged or error */
+	error = dl_notif(notif, mtim, changed, &new);
+	if (error)
+		goto end;
+	if (!(*changed))
+		goto end;
 
 	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
 	    new.session.serial.str);
 
-	if (!(notif->flags & CNF_NOTIFICATION)) {
+	if ((*state) == NULL) {
 		pr_val_debug("This is a new Notification.");
-		notif->dlerr = handle_snapshot(&new, notif);
-		if (notif->dlerr)
-			goto clean_notif;
 
-		notif->flags |= CNF_NOTIFICATION;
-		init_notif(&notif->rrdp, &new);
+		old = pzalloc(sizeof(struct rrdp_state));
+		old->repo = notif->path;
+		/* session postponed! */
+		old->pathlen = strlen(old->repo) + 5;
+		STAILQ_INIT(&old->delta_hashes);
+
+		error = handle_snapshot(&new, old);
+		if (error) {
+			state_flush_files(old);
+			free(old);
+			goto clean_notif;
+		}
+
+		init_notif(old, &new);
+		*state = old;
 		goto end;
 	}
 
-	old = &notif->rrdp;
+	old = *state;
 	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
 	if (serial_cmp < 0) {
 		pr_val_debug("The Notification's serial changed.");
-		notif->dlerr = validate_session_desync(old, &new);
-		if (notif->dlerr)
+		error = validate_session_desync(old, &new);
+		if (error)
 			goto snapshot_fallback;
-		notif->dlerr = handle_deltas(&new, notif);
-		if (notif->dlerr)
+		error = handle_deltas(&new, old);
+		if (error)
 			goto snapshot_fallback;
-		notif->dlerr = update_notif(old, &new);
-		if (!notif->dlerr)
+		error = update_notif(old, &new);
+		if (!error)
 			goto end;
 		/*
 		 * The files are exploded and usable, but @cached is not
@@ -1199,8 +1303,8 @@ rrdp_update(struct cache_node *notif)
 
 snapshot_fallback:
 	pr_val_debug("Falling back to snapshot.");
-	notif->dlerr = handle_snapshot(&new, notif);
-	if (notif->dlerr)
+	error = handle_snapshot(&new, old);
+	if (error)
 		goto clean_notif;
 
 reset_notif:
@@ -1212,7 +1316,15 @@ clean_notif:
 	update_notification_cleanup(&new);
 
 end:	fnstack_pop();
-	return notif->dlerr;
+	return error;
+}
+
+char const *
+rrdp_file(struct rrdp_state *state, char const *url)
+{
+	struct cache_file *file;
+	file = state_find_file(state, url, strlen(url));
+	return file ? file->map.path : NULL;
 }
 
 #define TAGNAME_SESSION "session_id"
@@ -1228,7 +1340,7 @@ hash_b2c(unsigned char bin)
 }
 
 json_t *
-rrdp_notif2json(struct cachefile_notification *notif)
+rrdp_state2json(struct rrdp_state *state)
 {
 	json_t *json;
 	json_t *deltas;
@@ -1236,19 +1348,19 @@ rrdp_notif2json(struct cachefile_notification *notif)
 	struct rrdp_hash *hash;
 	size_t i;
 
-	if (notif == NULL)
+	if (state == NULL)
 		return NULL;
 
 	json = json_object();
 	if (json == NULL)
 		enomem_panic();
 
-	if (json_add_str(json, TAGNAME_SESSION, notif->session.session_id))
+	if (json_add_str(json, TAGNAME_SESSION, state->session.session_id))
 		goto fail;
-	if (json_add_str(json, TAGNAME_SERIAL, notif->session.serial.str))
+	if (json_add_str(json, TAGNAME_SERIAL, state->session.serial.str))
 		goto fail;
 
-	if (STAILQ_EMPTY(&notif->delta_hashes))
+	if (STAILQ_EMPTY(&state->delta_hashes))
 		return json; /* Happy path, but unlikely. */
 
 	deltas = json_array();
@@ -1258,7 +1370,7 @@ rrdp_notif2json(struct cachefile_notification *notif)
 		goto fail;
 
 	hash_str[2 * RRDP_HASH_LEN] = '\0';
-	STAILQ_FOREACH(hash, &notif->delta_hashes, hook) {
+	STAILQ_FOREACH(hash, &state->delta_hashes, hook) {
 		for (i = 0; i < RRDP_HASH_LEN; i++) {
 			hash_str[2 * i    ] = hash_b2c(hash->bytes[i] >> 4);
 			hash_str[2 * i + 1] = hash_b2c(hash->bytes[i]     );
@@ -1324,29 +1436,29 @@ bad_char:
 }
 
 static void
-clear_delta_hashes(struct cachefile_notification *notif)
+clear_delta_hashes(struct rrdp_state *state)
 {
 	struct rrdp_hash *hash;
 
-	while (!STAILQ_EMPTY(&notif->delta_hashes)) {
-		hash = STAILQ_FIRST(&notif->delta_hashes);
-		STAILQ_REMOVE_HEAD(&notif->delta_hashes, hook);
+	while (!STAILQ_EMPTY(&state->delta_hashes)) {
+		hash = STAILQ_FIRST(&state->delta_hashes);
+		STAILQ_REMOVE_HEAD(&state->delta_hashes, hook);
 		free(hash);
 	}
 }
 
 int
-rrdp_json2notif(json_t *json, struct cachefile_notification **result)
+rrdp_json2state(json_t *json, struct rrdp_state **result)
 {
-	struct cachefile_notification *notif;
+	struct rrdp_state *state;
 	char const *str;
 	json_t *jdeltas;
 	size_t d, dn;
 	struct rrdp_hash *hash;
 	int error;
 
-	notif = pzalloc(sizeof(struct cachefile_notification));
-	STAILQ_INIT(&notif->delta_hashes);
+	state = pzalloc(sizeof(struct rrdp_state));
+	STAILQ_INIT(&state->delta_hashes);
 
 	error = json_get_str(json, TAGNAME_SESSION, &str);
 	if (error) {
@@ -1354,7 +1466,7 @@ rrdp_json2notif(json_t *json, struct cachefile_notification **result)
 			pr_op_err("Node is missing the '" TAGNAME_SESSION "' tag.");
 		goto revert_notif;
 	}
-	notif->session.session_id = pstrdup(str);
+	state->session.session_id = pstrdup(str);
 
 	error = json_get_str(json, TAGNAME_SERIAL, &str);
 	if (error) {
@@ -1362,11 +1474,11 @@ rrdp_json2notif(json_t *json, struct cachefile_notification **result)
 			pr_op_err("Node is missing the '" TAGNAME_SERIAL "' tag.");
 		goto revert_session;
 	}
-	notif->session.serial.str = pstrdup(str);
+	state->session.serial.str = pstrdup(str);
 
-	notif->session.serial.num = BN_create();
-	if (!BN_dec2bn(&notif->session.serial.num, notif->session.serial.str)) {
-		error = pr_op_err("Not a serial number: %s", notif->session.serial.str);
+	state->session.serial.num = BN_create();
+	if (!BN_dec2bn(&state->session.serial.num, state->session.serial.str)) {
+		error = pr_op_err("Not a serial number: %s", state->session.serial.str);
 		goto revert_serial;
 	}
 
@@ -1387,38 +1499,38 @@ rrdp_json2notif(json_t *json, struct cachefile_notification **result)
 		error = json2dh(json_array_get(jdeltas, d), &hash);
 		if (error)
 			goto revert_deltas;
-		STAILQ_INSERT_TAIL(&notif->delta_hashes, hash, hook);
+		STAILQ_INSERT_TAIL(&state->delta_hashes, hash, hook);
 	}
 
 success:
-	*result = notif;
+	*result = state;
 	return 0;
 
 revert_deltas:
-	clear_delta_hashes(notif);
+	clear_delta_hashes(state);
 revert_serial:
-	BN_free(notif->session.serial.num);
-	free(notif->session.serial.str);
+	BN_free(state->session.serial.num);
+	free(state->session.serial.str);
 revert_session:
-	free(notif->session.session_id);
+	free(state->session.session_id);
 revert_notif:
-	free(notif);
+	free(state);
 	return error;
 }
 
 void
-rrdp_notif_cleanup(struct cachefile_notification *notif)
+rrdp_state_cleanup(struct rrdp_state *state)
 {
-	session_cleanup(&notif->session);
-	cachent_delete(notif->subtree);
-	clear_delta_hashes(notif);
+	session_cleanup(&state->session);
+	state_flush_files(state);
+	clear_delta_hashes(state);
 }
 
 void
-rrdp_notif_free(struct cachefile_notification *notif)
+rrdp_state_free(struct rrdp_state *state)
 {
-	if (notif != NULL) {
-		rrdp_notif_cleanup(notif);
-		free(notif);
+	if (state != NULL) {
+		rrdp_state_cleanup(state);
+		free(state);
 	}
 }

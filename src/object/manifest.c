@@ -1,11 +1,13 @@
 #include "object/manifest.h"
 
 #include "algorithm.h"
+#include "alloc.h"
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/decode.h"
 #include "common.h"
 #include "hash.h"
 #include "log.h"
+#include "object/crl.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
 #include "types/path.h"
@@ -166,6 +168,25 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
+static void
+shuffle_mft_files(struct Manifest *mft)
+{
+	int i, j;
+	unsigned int seed, rnd;
+	struct FileAndHash *tmpfah;
+
+	seed = time(NULL) ^ getpid();
+
+	/* Fisher-Yates shuffle with modulo bias */
+	for (i = 0; i < mft->fileList.list.count - 1; i++) {
+		rnd = rand_r(&seed);
+		j = i + rnd % (mft->fileList.list.count - i);
+		tmpfah = mft->fileList.list.array[j];
+		mft->fileList.list.array[j] = mft->fileList.list.array[i];
+		mft->fileList.list.array[i] = tmpfah;
+	}
+}
+
 static bool
 is_valid_mft_file_chara(uint8_t chara)
 {
@@ -178,7 +199,7 @@ is_valid_mft_file_chara(uint8_t chara)
 
 /* RFC 9286, section 4.2.2 */
 static int
-validate_mft_file(IA5String_t *ia5)
+validate_mft_filename(IA5String_t *ia5)
 {
 	size_t dot;
 	size_t i;
@@ -214,9 +235,6 @@ check_file_and_hash(struct FileAndHash *fah, char const *path)
 	    fah->hash.buf, fah->hash.size);
 }
 
-#define INFER_CHILD(parent, fah) \
-	path_childn(parent, (char const *)fah->file.buf, fah->file.size)
-
 /*
  * XXX
  *
@@ -234,131 +252,124 @@ check_file_and_hash(struct FileAndHash *fah, char const *path)
  */
 
 static int
-build_rpp(struct cache_mapping *mft_map, struct Manifest *mft,
-    struct rpp **result)
+build_rpp(char const *mft_url, struct Manifest *mft, struct cache_cage *cage,
+    struct rpki_certificate *parent)
 {
-	struct cache_mapping pp_map;
-	struct rpp *pp;
-	unsigned int i, j;
-	struct FileAndHash *fah, *tmpfah;
-	struct cache_mapping map;
+	struct rpp *rpp;
+	char *rpp_url;
+	unsigned int i;
+	struct FileAndHash *src;
+	struct cache_mapping *dst;
+	char const *path;
 	int error;
-	unsigned int seed, rnd;
 
-	seed = time(NULL) ^ getpid();
+	shuffle_mft_files(mft);
 
-	map_parent(mft_map, &pp_map);
-	pp = rpp_create();
-
-	/* Fisher-Yates shuffle with modulo bias */
-	for (i = 0; i < mft->fileList.list.count - 1; i++) {
-		rnd = rand_r(&seed);
-		j = i + rnd % (mft->fileList.list.count - i);
-		tmpfah = mft->fileList.list.array[j];
-		mft->fileList.list.array[j] = mft->fileList.list.array[i];
-		mft->fileList.list.array[i] = tmpfah;
-	}
+	rpp = &parent->rpp;
+	rpp_url = path_parent(mft_url);
+	rpp->nfiles = mft->fileList.list.count;
+	rpp->files = pzalloc(rpp->nfiles * sizeof(*rpp->files));
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
-		fah = mft->fileList.list.array[i];
+		src = mft->fileList.list.array[i];
+		dst = &rpp->files[i];
 
 		/*
 		 * IA5String is a subset of ASCII. However, IA5String_t doesn't
 		 * seem to be guaranteed to be NULL-terminated.
 		 */
 
-		error = validate_mft_file(&fah->file);
+		error = validate_mft_filename(&src->file);
 		if (error)
-			goto fail;
+			goto revert;
 
-		map.url = INFER_CHILD(pp_map.url, fah);
-		map.path = INFER_CHILD(pp_map.path, fah);
+		dst->url = path_childn(rpp_url,
+		    (char const *)src->file.buf,
+		    src->file.size);
 
-		error = check_file_and_hash(fah, map.path);
+		path = cage_map_file(cage, dst->url);
+		if (!path) {
+			error = pr_val_err(
+			    "Manifest file '%s' is absent from the cache.",
+			    dst->url);
+			goto revert;
+		}
+		dst->path = pstrdup(path);
+
+		error = check_file_and_hash(src, dst->path);
 		if (error)
-			goto fail2;
+			goto revert;
 
-		error = rpp_add_file(pp, &map);
-		if (error)
-			goto fail2;
+		if (strcmp(((char const *)src->file.buf) + src->file.size - 4, ".crl") == 0) {
+			if (rpp->crl.map != NULL) {
+				error = pr_val_err(
+				    "Manifest has more than one CRL.");
+				goto revert;
+			}
+			rpp->crl.map = dst;
+		}
 	}
 
 	/* rfc6486#section-7 */
-	if (rpp_crl(pp) == NULL) {
+	if (rpp->crl.map == NULL) {
 		error = pr_val_err("Manifest lacks a CRL.");
-		goto fail;
+		goto revert;
 	}
 
-	map_cleanup(&pp_map);
-	*result = pp;
+	error = crl_load(rpp->crl.map, parent->x509, &rpp->crl.obj);
+	if (error)
+		goto revert;
+
+	free(rpp_url);
 	return 0;
 
-fail2:	map_cleanup(&map);
-fail:	map_cleanup(&pp_map);
-	rpp_refput(pp);
+revert:	rpp_cleanup(rpp);
+	free(rpp_url);
 	return error;
 }
 
-/* Validates the manifest @map, returns the RPP described by it in @pp. */
 int
-handle_manifest(struct cache_mapping *map, struct rpp **pp)
+manifest_validate(char const *url, char const *path, struct cache_cage *cage,
+    struct rpki_certificate *parent)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
 	struct signed_object sobj;
-	struct ee_cert ee;
+	struct rpki_certificate ee;
 	struct Manifest *mft;
-	STACK_OF(X509_CRL) *crl;
 	int error;
 
 	/* Prepare */
-	fnstack_push_map(map);
+	fnstack_push(url); // XXX
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map->path);
+	error = signed_object_decode(&sobj, path);
 	if (error)
-		goto revert_log;
+		goto end1;
 	error = decode_manifest(&sobj, &mft);
 	if (error)
-		goto revert_sobj;
+		goto end2;
 
-	/* Initialize @pp */
-	error = build_rpp(map, mft, pp);
+	/* Initialize @summary */
+	error = build_rpp(url, mft, cage, parent);
 	if (error)
-		goto revert_manifest;
+		goto end3;
 
 	/* Prepare validation arguments */
-	crl = rpp_crl(*pp);
-	if (crl == NULL) {
-		error = -EINVAL;
-		goto revert_rpp;
-	}
-	eecert_init(&ee, crl, false);
+	rpki_certificate_init_ee(&ee, parent, false);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
-		goto revert_args;
+		goto end4;
 	error = validate_manifest(mft);
 	if (error)
-		goto revert_args;
-	error = refs_validate_ee(&ee.refs, *pp, map->url);
-	if (error)
-		goto revert_args;
+		goto end4;
+	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, url);
 
-	/* Success */
-	eecert_cleanup(&ee);
-	goto revert_manifest;
-
-revert_args:
-	eecert_cleanup(&ee);
-revert_rpp:
-	rpp_refput(*pp);
-revert_manifest:
-	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
-revert_sobj:
-	signed_object_cleanup(&sobj);
-revert_log:
-	fnstack_pop();
+end4:	rpki_certificate_cleanup(&ee);
+end3:	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
+end2:	signed_object_cleanup(&sobj);
+end1:	fnstack_pop();
 	return error;
 }

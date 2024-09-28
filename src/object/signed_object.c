@@ -68,7 +68,7 @@ validate_content_type(struct SignedData *sdata, struct oid_arcs const *oid)
 
 int
 signed_object_validate(struct signed_object *sobj, struct oid_arcs const *oid,
-    struct ee_cert *ee)
+    struct rpki_certificate *ee)
 {
 	int error;
 

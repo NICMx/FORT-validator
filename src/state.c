@@ -5,11 +5,10 @@
 #include "thread_var.h"
 
 /**
- * The current state of the validation cycle.
+ * Just a bunch of thread-specific variables that are too much of a pain
+ * to keep passing around.
  *
- * It is one of the core objects in this project. Every time a trust anchor
- * triggers a validation cycle, the validator creates one of these objects and
- * uses it to traverse the tree and keep track of validated data.
+ * Should be refactored away, honestly.
  */
 struct validation {
 	struct tal *tal;
@@ -19,11 +18,6 @@ struct validation {
 		X509_STORE *store;
 		X509_VERIFY_PARAM *params;
 	} x509_data;
-
-	struct cert_stack *certstack;
-
-	/* Did the TAL's public key match the root certificate's public key? */
-	enum pubkey_state pubkey_state;
 
 	/**
 	 * Two buffers calling code will store stringified IP addresses in,
@@ -107,20 +101,12 @@ validation_prepare(struct validation **out, struct tal *tal,
 	X509_STORE_set1_param(result->x509_data.store, params);
 	X509_STORE_set_verify_cb(result->x509_data.store, cb);
 
-	error = certstack_create(&result->certstack);
-	if (error)
-		goto undo_crypto;
-
-	result->pubkey_state = PKS_UNTESTED;
 	result->validation_handler = *validation_handler;
 	result->x509_data.params = params; /* Ownership transfered */
 
 	*out = result;
 	return 0;
 
-undo_crypto:
-	X509_VERIFY_PARAM_free(params);
-	X509_STORE_free(result->x509_data.store);
 undo_result:
 	free(result);
 	return error;
@@ -131,7 +117,6 @@ validation_destroy(struct validation *state)
 {
 	X509_VERIFY_PARAM_free(state->x509_data.params);
 	X509_STORE_free(state->x509_data.store);
-	certstack_destroy(state->certstack);
 	free(state);
 }
 
@@ -145,30 +130,6 @@ X509_STORE *
 validation_store(struct validation *state)
 {
 	return state->x509_data.store;
-}
-
-struct cert_stack *
-validation_certstack(struct validation *state)
-{
-	return state->certstack;
-}
-
-void
-validation_pubkey_valid(struct validation *state)
-{
-	state->pubkey_state = PKS_VALID;
-}
-
-void
-validation_pubkey_invalid(struct validation *state)
-{
-	state->pubkey_state = PKS_INVALID;
-}
-
-enum pubkey_state
-validation_pubkey_state(struct validation *state)
-{
-	return state->pubkey_state;
 }
 
 char *

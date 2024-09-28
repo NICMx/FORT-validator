@@ -16,21 +16,6 @@ static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 
-void
-eecert_init(struct ee_cert *ee, STACK_OF(X509_CRL) *crls, bool force_inherit)
-{
-	ee->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
-	ee->crls = crls;
-	memset(&ee->refs, 0, sizeof(ee->refs));
-}
-
-void
-eecert_cleanup(struct ee_cert *ee)
-{
-	resources_destroy(ee->res);
-	refs_cleanup(&ee->refs);
-}
-
 static int
 get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 {
@@ -48,12 +33,10 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 }
 
 static int
-handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
+handle_sdata_certificate(ANY_t *cert_encoded, struct rpki_certificate *ee,
     OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
 	const unsigned char *otmp, *tmp;
-	X509 *cert;
-	enum rpki_policy policy;
 	int error;
 
 	/*
@@ -70,40 +53,31 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
 	 */
 	tmp = (const unsigned char *) cert_encoded->buf;
 	otmp = tmp;
-	cert = d2i_X509(NULL, &tmp, cert_encoded->size);
-	if (cert == NULL) {
-		error = val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
-		goto end1;
-	}
-	if (tmp != otmp + cert_encoded->size) {
-		error = val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
-		goto end2;
-	}
+	ee->x509 = d2i_X509(NULL, &tmp, cert_encoded->size);
+	if (ee->x509 == NULL)
+		return val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
+	if (tmp != otmp + cert_encoded->size)
+		return val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
 
-	x509_name_pr_debug("Issuer", X509_get_issuer_name(cert));
+	x509_name_pr_debug("Issuer", X509_get_issuer_name(ee->x509));
 
-	error = certificate_validate_chain(cert, ee->crls);
+	error = certificate_validate_chain(ee);
 	if (error)
-		goto end2;
-	error = certificate_validate_rfc6487(cert, CERTYPE_EE);
+		return error;
+	error = certificate_validate_rfc6487(ee);
 	if (error)
-		goto end2;
-	error = certificate_validate_extensions_ee(cert, sid, &ee->refs,
-	    &policy);
+		return error;
+	error = certificate_validate_extensions_ee(ee, sid);
 	if (error)
-		goto end2;
-	error = certificate_validate_aia(ee->refs.caIssuers, cert);
+		return error;
+	error = certificate_validate_aia(ee);
 	if (error)
-		goto end2;
-	error = certificate_validate_signature(cert, signedData, signature);
+		return error;
+	error = certificate_validate_signature(ee->x509, signedData, signature);
 	if (error)
-		goto end2;
-
-	resources_set_policy(ee->res, policy);
-	error = certificate_get_resources(cert, ee->res, CERTYPE_EE);
-
-end2:	X509_free(cert);
-end1:	return error;
+		return error;
+	resources_set_policy(ee->resources, ee->policy);
+	return certificate_get_resources(ee);
 }
 
 /* rfc6488#section-2.1.6.4.1 */
@@ -240,7 +214,7 @@ illegal_attrType:
 
 int
 signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
-		     struct ee_cert *ee)
+     struct rpki_certificate *ee)
 {
 	struct SignerInfo *sinfo;
 	OCTET_STRING_t *sid = NULL;

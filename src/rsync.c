@@ -38,13 +38,13 @@ duplicate_fds(int fds[2][2])
 }
 
 static void
-prepare_rsync(char **args, char const *src, char const *dst, char const *cmpdst)
+prepare_rsync(char **args, struct cache_mapping *map)
 {
 	size_t i = 0;
 
 	/*
-	 * execvp() is not going to tweak those strings;
-	 * stop angsting over those casts.
+	 * execvp() is not going to tweak these strings;
+	 * stop angsting over the const-to-raw conversion.
 	 */
 
 	/* XXX review */
@@ -69,13 +69,9 @@ prepare_rsync(char **args, char const *src, char const *dst, char const *cmpdst)
 	args[i++] = "--include=*.mft";
 	args[i++] = "--include=*.roa";
 	args[i++] = "--exclude=*";
-	if (cmpdst) {
-		args[i++] = "--compare-dest";
-		args[i++] = (char *)cmpdst;
-	}
 #endif
-	args[i++] = (char *)src;
-	args[i++] = (char *)dst;
+	args[i++] = map->url;
+	args[i++] = map->path;
 	args[i++] = NULL;
 }
 
@@ -276,9 +272,9 @@ exhaust_pipes(int fds[2][2])
 	return exhaust_read_fds(STDERR_READ(fds), STDOUT_READ(fds));
 }
 
-/* rsync [--compare-dest @cmpdst] @src @dst */
+/* rsync @src @dst */
 int
-rsync_download(char const *src, char const *dst, char const *cmpdst)
+rsync_download(struct cache_mapping *map)
 {
 	char *args[32];
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
@@ -290,16 +286,16 @@ rsync_download(char const *src, char const *dst, char const *cmpdst)
 	int error;
 
 	/* Prepare everything for the child exec */
-	prepare_rsync(args, src, dst, cmpdst);
+	prepare_rsync(args, map);
 
-	pr_val_info("rsync: %s", src);
+	pr_val_info("rsync: %s -> %s", map->url, map->path);
 	if (log_val_enabled(LOG_DEBUG)) {
 		pr_val_debug("Executing rsync:");
 		for (i = 0; args[i] != NULL; i++)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	error = mkdir_p(dst, true);
+	error = mkdir_p(map->path, true);
 	if (error)
 		return error;
 
@@ -369,11 +365,11 @@ rsync_download(char const *src, char const *dst, char const *cmpdst)
 			if (retries == config_get_rsync_retry_count()) {
 				if (retries > 0)
 					pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
-					    retries, src);
+					    retries, map->url);
 				return EIO;
 			}
 			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
-			    src,
+			    map->url,
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
 			retries++;

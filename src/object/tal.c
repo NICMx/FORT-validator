@@ -10,6 +10,7 @@
 #include "config.h"
 #include "file.h"
 #include "log.h"
+#include "object/certificate.h"
 #include "thread_var.h"
 #include "types/path.h"
 #include "types/str.h"
@@ -33,14 +34,6 @@ struct validation_thread {
 
 /* List of threads, one per TAL file */
 SLIST_HEAD(threads_list, validation_thread);
-
-#define TS_SUCCESS	0	/* TA looks sane. */
-#define TS_NEXT		1	/* TA seems compromised; try some other URL. */
-#define TS_FALLBACK	2	/* TA is broken; fall back to old cache. */
-typedef struct { int v; } ta_status;
-static ta_status ts_success	= { .v = TS_SUCCESS };
-static ta_status ts_next	= { .v = TS_NEXT };
-static ta_status ts_fallback	= { .v = TS_FALLBACK };
 
 static char *
 find_newline(char *str)
@@ -153,62 +146,6 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-static ta_status
-handle_ta(struct cache_mapping const *ta, struct validation *state)
-{
-	struct cert_stack *certstack;
-	struct deferred_cert deferred;
-	int error;
-
-	/* == Root certificate == */
-	if (certificate_traverse(NULL, ta) != 0) {
-		switch (validation_pubkey_state(state)) {
-		case PKS_INVALID:
-			/* Signature invalid; probably an impersonator. */
-			return ts_next;
-		case PKS_VALID:
-			/* No impersonator but still error: Broken tree. */
-			/*
-			 * XXX Change to ts_next. This is the TA;
-			 * we can't really afford to panic-fallback.
-			 */
-			return ts_fallback;
-		case PKS_UNTESTED:
-			/* We don't know; try some other URL. */
-			return ts_next;
-		}
-
-		pr_crit("Unknown public key state: %u",
-		    validation_pubkey_state(state));
-	}
-
-	/*
-	 * From now on, the tree should be considered valid, even if subsequent
-	 * certificates fail.
-	 * (the root validated successfully; subtrees are isolated problems.)
-	 */
-
-	/* == Every other certificate == */
-	certstack = validation_certstack(state);
-
-	do {
-		error = deferstack_pop(certstack, &deferred);
-		if (error == -ENOENT)
-			return ts_success; /* No more certificates left */
-		else if (error) /* All other errors are critical, currently */
-			pr_crit("deferstack_pop() returned illegal %d.", error);
-
-		/*
-		 * Ignore result code; remaining certificates are unrelated,
-		 * so they should not be affected.
-		 */
-		certificate_traverse(deferred.pp, &deferred.map);
-
-		map_cleanup(&deferred.map);
-		rpp_refput(deferred.pp);
-	} while (true);
-}
-
 static void
 __do_file_validation(struct validation_thread *thread)
 {
@@ -218,7 +155,6 @@ __do_file_validation(struct validation_thread *thread)
 	struct validation *state;
 	char **url;
 	struct cache_mapping map;
-	ta_status status;
 
 	thread->error = tal_init(&tal, thread->tal_file);
 	if (thread->error)
@@ -236,28 +172,23 @@ __do_file_validation(struct validation_thread *thread)
 	}
 
 	ARRAYLIST_FOREACH(&tal.urls, url) {
-		if (cache_refresh_url(*url, &map) != 0)
+		map.url = *url;
+		map.path = cache_refresh_url(*url);
+		if (!map.path)
 			continue;
-
-		status = handle_ta(&map, state);
-		switch (status.v) {
-		case TS_SUCCESS:	goto end1;
-		case TS_FALLBACK:	goto fallback;
-		case TS_NEXT: 		; /* Fall through */
-		}
+		if (traverse_tree(&map, state) != 0)
+			continue;
+		goto end1; /* Happy path */
 	}
 
-fallback:
 	ARRAYLIST_FOREACH(&tal.urls, url) {
-		if (cache_fallback_url(*url, &map) != 0)
+		map.url = *url;
+		map.path = cache_fallback_url(*url);
+		if (!map.path)
 			continue;
-
-		status = handle_ta(&map, state);
-		switch (status.v) {
-		case TS_SUCCESS:	goto end1;
-		case TS_FALLBACK:	/* Already fallbacking */
-		case TS_NEXT:		; /* Fall through */
-		}
+		if (traverse_tree(&map, state) != 0)
+			continue;
+		goto end1; /* Happy path */
 	}
 
 	pr_op_err("None of the TAL URIs yielded a successful traversal.");

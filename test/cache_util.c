@@ -4,12 +4,6 @@
 #include <string.h>
 #include "types/uthash.h"
 
-static int
-cnf_clean(int flags)
-{
-	return flags & ~(CNF_FREE_URL | CNF_FREE_PATH | CNF_FREE_TMPPATH);
-}
-
 void
 ck_assert_cachent_eq(struct cache_node *expected, struct cache_node *actual)
 {
@@ -20,7 +14,7 @@ ck_assert_cachent_eq(struct cache_node *expected, struct cache_node *actual)
 	ck_assert_str_eq(expected->url, actual->url);
 	ck_assert_str_eq(expected->path, actual->path);
 	ck_assert_str_eq(expected->name, actual->name);
-	ck_assert_int_eq(cnf_clean(expected->flags), cnf_clean(actual->flags));
+	ck_assert_int_eq(expected->flags, actual->flags);
 	if (expected->tmppath)
 		ck_assert_str_eq(expected->tmppath, actual->tmppath);
 	else

@@ -12,7 +12,7 @@ struct signed_object {
 
 int signed_object_decode(struct signed_object *, char const *);
 int signed_object_validate(struct signed_object *, struct oid_arcs const *,
-    struct ee_cert *);
+    struct rpki_certificate *);
 void signed_object_cleanup(struct signed_object *);
 
 #endif /* SRC_OBJECT_SIGNED_OBJECT_H_ */

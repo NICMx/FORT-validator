@@ -2,6 +2,7 @@
 #define SRC_THREAD_VAR_H_
 
 #include "state.h"
+#include "types/map.h"
 
 int thvar_init(void); /* This function does not need cleanup. */
 

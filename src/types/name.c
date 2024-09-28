@@ -140,10 +140,8 @@ x509_name_equals(struct rfc5280_name *a, struct rfc5280_name *b)
 }
 
 int
-validate_issuer_name(char const *container, X509_NAME *issuer)
+validate_issuer_name(X509_NAME *issuer, X509 *parent)
 {
-	struct validation *state;
-	X509 *parent;
 	struct rfc5280_name *parent_subject;
 	struct rfc5280_name *child_issuer;
 	int error;
@@ -154,13 +152,6 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 	 * very much not what rfc6487#section-4.4 is asking us to check.
 	 * But let's check it anyway.
 	 */
-
-	state = state_retrieve();
-	parent = x509stack_peek(validation_certstack(state));
-	if (parent == NULL) {
-		return pr_val_err("%s appears to have no parent certificate.",
-		    container);
-	}
 
 	error = x509_name_decode(X509_get_subject_name(parent), "subject",
 	    &parent_subject);
@@ -178,8 +169,7 @@ validate_issuer_name(char const *container, X509_NAME *issuer)
 		parent_serial = x509_name_serialNumber(parent_subject);
 		child_serial = x509_name_serialNumber(child_issuer);
 
-		error = pr_val_err("%s's issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
-		    container,
+		error = pr_val_err("Issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
 		    x509_name_commonName(child_issuer),
 		    (child_serial != NULL) ? "/" : "",
 		    (child_serial != NULL) ? child_serial : "",

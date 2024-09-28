@@ -410,7 +410,7 @@ validate_cachefile_notif(struct cachefile_notification *notif,
 
 	ck_assert_ptr_eq(NULL, hash);
 
-	rrdp_notif_free(notif);
+	rrdp_state_free(notif);
 }
 
 START_TEST(test_update_notif)
@@ -632,10 +632,10 @@ START_TEST(test_2s_simple)
 
 	notif = create_cachefile_notif("session", "1234", 0);
 
-	json = rrdp_notif2json(notif);
+	json = rrdp_state2json(notif);
 	ck_assert_ptr_ne(NULL, json);
 
-	rrdp_notif_free(notif);
+	rrdp_state_free(notif);
 	notif = NULL;
 
 	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
@@ -644,12 +644,12 @@ START_TEST(test_2s_simple)
 	ck_assert_str_eq("1234", str);
 	ck_assert_int_eq(ENOENT, json_get_array(json, TAGNAME_DELTAS, &jdeltas));
 
-	ck_assert_int_eq(0, rrdp_json2notif(json, &notif));
+	ck_assert_int_eq(0, rrdp_json2state(json, &notif));
 	ck_rrdp_session("session", "1234", &notif->session);
 	ck_assert_uint_eq(true, STAILQ_EMPTY(&notif->delta_hashes));
 
 	json_decref(json);
-	rrdp_notif_free(notif);
+	rrdp_state_free(notif);
 }
 END_TEST
 
@@ -672,10 +672,10 @@ START_TEST(test_2s_more)
 	    "123456789012345678901234567890123456789012",
 	    0xAA, 0xBB, 0xCD, 0);
 
-	json = rrdp_notif2json(notif);
+	json = rrdp_state2json(notif);
 	ck_assert_ptr_ne(NULL, json);
 
-	rrdp_notif_free(notif);
+	rrdp_state_free(notif);
 	notif = NULL;
 
 	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
@@ -691,7 +691,7 @@ START_TEST(test_2s_more)
 	ck_assert_str_eq("cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 	    json_string_value(json_array_get(jdeltas, 2)));
 
-	ck_assert_int_eq(0, rrdp_json2notif(json, &notif));
+	ck_assert_int_eq(0, rrdp_json2state(json, &notif));
 	ck_rrdp_session("session", "123456789012345678901234567890123456789012", &notif->session);
 	hash = STAILQ_FIRST(&notif->delta_hashes);
 	ck_assert_ptr_ne(NULL, hash);
@@ -706,12 +706,12 @@ START_TEST(test_2s_more)
 	ck_assert_ptr_eq(NULL, hash);
 
 	json_decref(json);
-	rrdp_notif_free(notif);
+	rrdp_state_free(notif);
 }
 END_TEST
 
 void
-ck_json2notif(int expected, char const *json_str)
+ck_json2state(int expected, char const *json_str)
 {
 	json_t *json;
 	json_error_t error;
@@ -721,55 +721,55 @@ ck_json2notif(int expected, char const *json_str)
 	ck_assert_ptr_ne(NULL, json);
 
 	notif = NULL;
-	ck_assert_int_eq(expected, rrdp_json2notif(json, &notif));
+	ck_assert_int_eq(expected, rrdp_json2state(json, &notif));
 
 	json_decref(json);
 	if (notif == NULL)
-		rrdp_notif_free(notif);
+		rrdp_state_free(notif);
 }
 
 START_TEST(test_2s_errors)
 {
 	struct cachefile_notification notif = { 0 };
 
-	ck_assert_ptr_eq(NULL, rrdp_notif2json(NULL));
-	ck_assert_ptr_eq(NULL, rrdp_notif2json(&notif));
+	ck_assert_ptr_eq(NULL, rrdp_state2json(NULL));
+	ck_assert_ptr_eq(NULL, rrdp_state2json(&notif));
 	notif.session.session_id = "sid";
-	ck_assert_ptr_eq(NULL, rrdp_notif2json(&notif));
+	ck_assert_ptr_eq(NULL, rrdp_state2json(&notif));
 
-	ck_json2notif(ENOENT, "{}");
-	ck_json2notif(0, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":null, \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":null }");
-	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":123, \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2notif(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":123 }");
-	ck_json2notif(ENOENT, "{ \"" TAGNAME_SESSION "\":\"sss\" }");
-	ck_json2notif(ENOENT, "{ \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2notif(-EINVAL,
+	ck_json2state(ENOENT, "{}");
+	ck_json2state(0, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":null, \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":null }");
+	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":123, \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":123 }");
+	ck_json2state(ENOENT, "{ \"" TAGNAME_SESSION "\":\"sss\" }");
+	ck_json2state(ENOENT, "{ \"" TAGNAME_SERIAL "\":\"123\" }");
+	ck_json2state(-EINVAL,
 	    "{ \"" TAGNAME_SESSION "\":\"sss\","
 	      "\"" TAGNAME_SERIAL "\":\"123\","
 	      "\"" TAGNAME_DELTAS "\":null }");
-	ck_json2notif(-EINVAL,
+	ck_json2state(-EINVAL,
 	    "{ \"" TAGNAME_SESSION "\":\"sss\","
 	      "\"" TAGNAME_SERIAL "\":\"123\","
 	      "\"" TAGNAME_DELTAS "\":\"123\" }");
-	ck_json2notif(-EINVAL,
+	ck_json2state(-EINVAL,
 	    "{ \"" TAGNAME_SESSION "\":\"sss\","
 	      "\"" TAGNAME_SERIAL "\":\"123\","
 	      "\"" TAGNAME_DELTAS "\":{} }");
-	ck_json2notif(0,
+	ck_json2state(0,
 	    "{ \"" TAGNAME_SESSION "\":\"sss\","
 	      "\"" TAGNAME_SERIAL "\":\"123\","
 	      "\"" TAGNAME_DELTAS "\":[] }");
-	ck_json2notif(-EINVAL,
+	ck_json2state(-EINVAL,
 	    "{ \"" TAGNAME_SESSION "\":\"sss\","
 	      "\"" TAGNAME_SERIAL "\":\"123\","
 	      "\"" TAGNAME_DELTAS "\":[ 1 ] }");
-	ck_json2notif(-EINVAL,
+	ck_json2state(-EINVAL,
 	    "{ \"" TAGNAME_SESSION "\":\"sss\","
 	      "\"" TAGNAME_SERIAL "\":\"123\","
 	      "\"" TAGNAME_DELTAS "\":[ \"111\" ] }");
-	ck_json2notif(0,
+	ck_json2state(0,
 	    "{ \"" TAGNAME_SESSION "\":\"sss\","
 	      "\"" TAGNAME_SERIAL "\":\"123\","
 	      "\"" TAGNAME_DELTAS "\":[ \"1111111111111111111111111111111111111111111111111111111111111111\" ] }");

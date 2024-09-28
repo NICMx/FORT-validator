@@ -321,7 +321,7 @@ end:	free(path);
  * If parent's parent is now empty, delete parent's parent.
  * And so on.
  *
- * FIXME this should be done by the cache cleaner instead.
+ * XXX this should be done by the cache cleaner instead.
  */
 int
 delete_dir_recursive_bottom_up(char const *path)

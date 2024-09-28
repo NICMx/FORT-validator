@@ -139,7 +139,7 @@ validate_extensions(X509_CRL *crl)
 }
 
 static int
-crl_validate(X509_CRL *crl)
+crl_validate(X509_CRL *crl, X509 *parent)
 {
 	long version;
 	int error;
@@ -153,7 +153,7 @@ crl_validate(X509_CRL *crl)
 	if (error)
 		return error;
 
-	error = validate_issuer_name("CRL", X509_CRL_get_issuer(crl));
+	error = validate_issuer_name(X509_CRL_get_issuer(crl), parent);
 	if (error)
 		return error;
 
@@ -165,7 +165,7 @@ crl_validate(X509_CRL *crl)
 }
 
 int
-crl_load(struct cache_mapping *map, X509_CRL **result)
+crl_load(struct cache_mapping *map, X509 *parent, X509_CRL **result)
 {
 	int error;
 
@@ -175,7 +175,7 @@ crl_load(struct cache_mapping *map, X509_CRL **result)
 	if (error)
 		goto end;
 
-	error = crl_validate(*result);
+	error = crl_validate(*result, parent);
 	if (error)
 		X509_CRL_free(*result);
 

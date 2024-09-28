@@ -1,22 +1,25 @@
 #ifndef SRC_RPP_H_
 #define SRC_RPP_H_
 
-#include <openssl/safestack.h>
+// XXX move to types?
+
 #include <openssl/x509.h>
 
 #include "types/map.h"
 
-struct rpp;
+/* Repository Publication Point */
+struct rpp {
+	STACK_OF(X509) *ancestors;		/* 1st = root, last = parent */
 
-struct rpp *rpp_create(void);
-void rpp_refget(struct rpp *);
-void rpp_refput(struct rpp *);
+	struct cache_mapping *files;
+	size_t nfiles;				/* Number of maps in @files */
 
-int rpp_add_file(struct rpp *, struct cache_mapping *);
+	struct {
+		struct cache_mapping *map;	/* Points to @files entry */
+		X509_CRL *obj;
+	} crl;
+};
 
-char const *rpp_get_crl_url(struct rpp const *);
-STACK_OF(X509_CRL) *rpp_crl(struct rpp *);
-
-void rpp_traverse(struct rpp *);
+void rpp_cleanup(struct rpp *);
 
 #endif /* SRC_RPP_H_ */

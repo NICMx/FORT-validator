@@ -45,12 +45,6 @@ static struct incidence incidences[__INID_MAX] = {
 		"The current time is after the nextUpdate field at the manifest",
 		INAC_ERROR,
 	},
-	{
-		INID_CRL_STALE,
-		"incid-crl-stale",
-		"The current time is after the nextUpdate field at the CRL",
-		INAC_ERROR,
-	},
 };
 
 static int

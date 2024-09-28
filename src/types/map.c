@@ -34,25 +34,6 @@ map_op_get_printable(struct cache_mapping const *map)
 }
 
 void
-map_parent(struct cache_mapping const *child, struct cache_mapping *parent)
-{
-	parent->url = path_parent(child->url);
-	parent->path = path_parent(child->path);
-}
-
-struct cache_mapping *
-map_child(struct cache_mapping const *parent, char const *name)
-{
-	struct cache_mapping *child;
-
-	child = pmalloc(sizeof(struct cache_mapping));
-	child->url = join_paths(parent->url, name);
-	child->path = join_paths(parent->path, name);
-
-	return child;
-}
-
-void
 map_copy(struct cache_mapping *dst, struct cache_mapping const *src)
 {
 	dst->url = pstrdup(src->url);

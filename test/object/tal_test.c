@@ -26,13 +26,10 @@ MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
     uint8_t max_length, void *arg)
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
-MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
 MOCK(state_retrieve, struct validation *, NULL, void)
-MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
 MOCK_ABORT_VOID(validation_destroy, struct validation *state)
 MOCK_ABORT_INT(validation_prepare, struct validation **out, struct tal *tal,
     struct validation_handler *validation_handler)
-MOCK_ABORT_ENUM(validation_pubkey_state, pubkey_state, struct validation *state)
 MOCK(validation_tal, struct tal *, NULL, struct validation *state)
 
 /* Tests */

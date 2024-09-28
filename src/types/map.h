@@ -12,9 +12,6 @@ struct cache_mapping {
 char const *map_val_get_printable(struct cache_mapping const *);
 char const *map_op_get_printable(struct cache_mapping const *);
 
-void map_parent(struct cache_mapping const *, struct cache_mapping *);
-struct cache_mapping *map_child(struct cache_mapping const *, char const *);
-
 void map_copy(struct cache_mapping *, struct cache_mapping const *);
 void map_cleanup(struct cache_mapping *);
 

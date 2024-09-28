@@ -13,7 +13,7 @@ enum incidence_id {
 	INID_MFT_FILE_NOT_FOUND, // XXX deprecate and no-op
 	INID_MFT_FILE_HASH_NOT_MATCH, // XXX deprecate and no-op
 	INID_MFT_STALE,
-	INID_CRL_STALE,
+	// XXX Document elimination of INID_CRL_STALE
 
 	__INID_MAX,
 };

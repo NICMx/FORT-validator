@@ -200,14 +200,13 @@ family_error:
 }
 
 int
-roa_traverse(struct cache_mapping *map, struct rpp *pp)
+roa_traverse(struct cache_mapping *map, struct rpki_certificate *parent)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
 	struct signed_object sobj;
-	struct ee_cert ee;
+	struct rpki_certificate ee;
 	struct RouteOriginAttestation *roa;
-	STACK_OF(X509_CRL) *crl;
 	int error;
 
 	/* Prepare */
@@ -216,35 +215,26 @@ roa_traverse(struct cache_mapping *map, struct rpp *pp)
 	/* Decode */
 	error = signed_object_decode(&sobj, map->path);
 	if (error)
-		goto revert_log;
+		goto end1;
 	error = decode_roa(&sobj, &roa);
 	if (error)
-		goto revert_sobj;
+		goto end2;
 
 	/* Prepare validation arguments */
-	crl = rpp_crl(pp);
-	if (crl == NULL) {
-		error = -EINVAL;
-		goto revert_roa;
-	}
-	eecert_init(&ee, crl, false);
+	rpki_certificate_init_ee(&ee, parent, false);
 
 	/* Validate and handle everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
-		goto revert_args;
-	error = __handle_roa(roa, ee.res);
+		goto end3;
+	error = __handle_roa(roa, ee.resources);
 	if (error)
-		goto revert_args;
-	error = refs_validate_ee(&ee.refs, pp, map->url);
+		goto end3;
+	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, map->url);
 
-revert_args:
-	eecert_cleanup(&ee);
-revert_roa:
+end3:	rpki_certificate_cleanup(&ee);
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
-revert_sobj:
-	signed_object_cleanup(&sobj);
-revert_log:
-	fnstack_pop();
+end2:	signed_object_cleanup(&sobj);
+end1:	fnstack_pop();
 	return error;
 }
