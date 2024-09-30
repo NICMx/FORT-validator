@@ -7,6 +7,8 @@
 #include "mock.c"
 #include "data_structure/path_builder.c"
 
+__MOCK_ABORT(config_get_local_repository, char const *, "tmp/pb", void)
+
 #define CHECK_PB(_string, _capacity)					\
 	ck_assert_str_eq(_string, pb.string);				\
 	ck_assert_uint_eq(strlen(_string), pb.len);			\

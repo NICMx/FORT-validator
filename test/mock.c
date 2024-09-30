@@ -113,7 +113,6 @@ v6addr2str2(struct in6_addr const *addr)
 
 MOCK_NULL(config_get_slurm, char const *, void)
 MOCK(config_get_tal, char const *, "tal/", void)
-MOCK(config_get_local_repository, char const *, "tmp", void)
 MOCK(config_get_mode, enum mode, STANDALONE, void)
 MOCK_TRUE(config_get_rsync_enabled, void)
 MOCK_UINT(config_get_rsync_priority, 50, void)

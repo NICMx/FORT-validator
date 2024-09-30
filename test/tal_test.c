@@ -14,6 +14,7 @@
 
 /* Mocks */
 
+MOCK(config_get_local_repository, char const *, "tmp/tal", void)
 MOCK_ABORT_VOID(cache_setup, void)
 MOCK(cache_create, struct rpki_cache *, NULL, char const *tal)
 MOCK_VOID(cache_destroy, struct rpki_cache *cache)

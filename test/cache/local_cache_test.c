@@ -15,6 +15,7 @@
 
 /* Mocks */
 
+#define CACHEDIR "tmp/cache"
 #define TAL_FILE "test.tal"
 
 static struct rpki_cache *cache;
@@ -92,6 +93,7 @@ http_download(struct rpki_uri *uri, bool *changed)
 	return error;
 }
 
+MOCK(config_get_local_repository, char const *, CACHEDIR, void)
 MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 
 /* Helpers */
@@ -99,7 +101,7 @@ MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 static void
 setup_test(void)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
+	ck_assert_int_eq(0, system("rm -rf " CACHEDIR));
 
 	dl_error = false;
 	cache = cache_create(TAL_FILE);
@@ -481,7 +483,7 @@ START_TEST(test_cache_cleanup_rsync)
 		NODE("rsync://a.b.c/e/", 0, 1, true),
 		NODE("rsync://a.b.c/f/", 0, 1, true),
 		NULL);
-	ck_assert_int_eq(0, file_rm_rf("tmp/" TAL_FILE "/rsync/a.b.c/f"));
+	ck_assert_int_eq(0, file_rm_rf(CACHEDIR "/" TAL_FILE "/rsync/a.b.c/f"));
 	cache_cleanup(cache);
 	validate_cache(0, NODE("rsync://a.b.c/e/", 0, 1, true), NULL);
 
@@ -641,7 +643,7 @@ START_TEST(test_cache_cleanup_https)
 	    NODE("https://a.b.c/e", 0, 1, 1),
 	    NODE("https://a.b.c/f/g/h", 0, 1, 1),
 	    NULL);
-	ck_assert_int_eq(0, file_rm_rf("tmp/" TAL_FILE "/https/a.b.c/f/g/h"));
+	ck_assert_int_eq(0, file_rm_rf(CACHEDIR "/" TAL_FILE "/https/a.b.c/f/g/h"));
 	cache_cleanup(cache);
 	validate_cache(0, NODE("https://a.b.c/e", 0, 1, 1), NULL);
 
@@ -719,8 +721,7 @@ START_TEST(test_tal_json)
 
 	setup_test();
 
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	ck_assert_int_eq(0, system("mkdir -p tmp/" TAL_FILE));
+	ck_assert_int_eq(0, system("mkdir -p " CACHEDIR "/" TAL_FILE));
 
 	add_node(cache, NODE("rsync://a.b.c/d", 0, 1, 0));
 	add_node(cache, NODE("rsync://a.b.c/e", 1, 0, 0));
@@ -729,7 +730,7 @@ START_TEST(test_tal_json)
 	add_node(cache, node("https://a/c", 0, 0, 1, 0, 1));
 
 	json = build_tal_json(cache);
-	ck_assert_int_eq(0, json_dump_file(json, "tmp/" TAL_FILE "/" TAL_METAFILE, JSON_COMPACT));
+	ck_assert_int_eq(0, json_dump_file(json, CACHEDIR "/" TAL_FILE "/" TAL_METAFILE, JSON_COMPACT));
 
 	str = json_dumps(json, /* JSON_INDENT(4) */ JSON_COMPACT);
 	json_decref(json);

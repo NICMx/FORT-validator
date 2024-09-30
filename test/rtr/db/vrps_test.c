@@ -72,6 +72,7 @@ MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
 MOCK_ABORT_ENUM(config_get_output_format, output_format, void)
 MOCK_ABORT_INT(hash_local_file, char const *uri, unsigned char *result,
     unsigned int *result_len)
+__MOCK_ABORT(config_get_local_repository, char const *, "tmp/vrps", void)
 
 /* Test functions */
 

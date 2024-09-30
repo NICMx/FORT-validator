@@ -7,7 +7,7 @@
 #include "mock.c"
 #include "types/address.c"
 
-/* Tests */
+__MOCK_ABORT(config_get_local_repository, char const *, "tmp/address", void)
 
 static void
 test_range4(uint32_t min, uint32_t max, bool valid)
