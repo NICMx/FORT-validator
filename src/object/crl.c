@@ -126,11 +126,11 @@ handle_crlnum(void *ext, void *arg)
 }
 
 static int
-validate_extensions(X509_CRL *crl)
+validate_extensions(X509_CRL *crl, X509 *parent)
 {
 	struct extension_handler handlers[] = {
 	   /* ext        reqd   handler        arg */
-	    { ext_aki(), true,  handle_aki,              },
+	    { ext_aki(), true,  handle_aki,    parent    },
 	    { ext_cn(),  true,  handle_crlnum,           },
 	    { NULL },
 	};
@@ -161,7 +161,7 @@ crl_validate(X509_CRL *crl, X509 *parent)
 	if (error)
 		return error;
 
-	return validate_extensions(crl);
+	return validate_extensions(crl, parent);
 }
 
 int

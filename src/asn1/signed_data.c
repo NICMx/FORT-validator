@@ -339,12 +339,8 @@ signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
 		    sdata->certificates->list.count);
 	}
 
-	error = handle_sdata_certificate(sdata->certificates->list.array[0],
+	return handle_sdata_certificate(sdata->certificates->list.array[0],
 	    ee, sid, encoded, &sinfo->signature);
-	if (error)
-		return error;
-
-	return 0;
 }
 
 /*

@@ -51,6 +51,6 @@ void pb_cleanup(struct path_builder *);
 char *path_parent(char const *);
 char *path_childn(char const *, char const *, size_t);
 char const *path_filename(char const *);
-char *join_paths(char const *, char const *);
+char *path_join(char const *, char const *);
 
 #endif /* SRC_TYPES_PATH_H_ */

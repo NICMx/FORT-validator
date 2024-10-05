@@ -2,7 +2,6 @@
 #define TEST_CACHE_UTIL_H_
 
 #include <stdarg.h>
-#include "cachent.h"
 
 void ck_assert_cachent_eq(struct cache_node *, struct cache_node *);
 

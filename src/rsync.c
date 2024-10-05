@@ -38,7 +38,7 @@ duplicate_fds(int fds[2][2])
 }
 
 static void
-prepare_rsync(char **args, struct cache_mapping *map)
+prepare_rsync(char **args, char const *url, char const *path)
 {
 	size_t i = 0;
 
@@ -70,8 +70,8 @@ prepare_rsync(char **args, struct cache_mapping *map)
 	args[i++] = "--include=*.roa";
 	args[i++] = "--exclude=*";
 #endif
-	args[i++] = map->url;
-	args[i++] = map->path;
+	args[i++] = (char *)url;
+	args[i++] = (char *)path;
 	args[i++] = NULL;
 }
 
@@ -272,9 +272,9 @@ exhaust_pipes(int fds[2][2])
 	return exhaust_read_fds(STDERR_READ(fds), STDOUT_READ(fds));
 }
 
-/* rsync @src @dst */
+/* rsync @url @path */
 int
-rsync_download(struct cache_mapping *map)
+rsync_download(char const *url, char const *path)
 {
 	char *args[32];
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
@@ -286,16 +286,16 @@ rsync_download(struct cache_mapping *map)
 	int error;
 
 	/* Prepare everything for the child exec */
-	prepare_rsync(args, map);
+	prepare_rsync(args, url, path);
 
-	pr_val_info("rsync: %s -> %s", map->url, map->path);
+	pr_val_info("rsync: %s -> %s", url, path);
 	if (log_val_enabled(LOG_DEBUG)) {
 		pr_val_debug("Executing rsync:");
 		for (i = 0; args[i] != NULL; i++)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	error = mkdir_p(map->path, true);
+	error = mkdir_p(path, true);
 	if (error)
 		return error;
 
@@ -365,11 +365,11 @@ rsync_download(struct cache_mapping *map)
 			if (retries == config_get_rsync_retry_count()) {
 				if (retries > 0)
 					pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
-					    retries, map->url);
+					    retries, url);
 				return EIO;
 			}
 			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
-			    map->url,
+			    url,
 			    config_get_rsync_retry_interval(),
 			    config_get_rsync_retry_count() - retries);
 			retries++;

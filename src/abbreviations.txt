@@ -12,12 +12,14 @@ db: database
 dl: download
 eof: end of file
 err: error
+fb: (Cached) fallback
 fd: File Descriptor (see `man 2 accept`)
 hdr: header
 hh: hash (table) hook
 ht: hash table
 id: identifier
 len: length
+map: mapping (between a URL and a local path in the cache)
 max: maximum
 min: minimum
 msg: message

@@ -5,6 +5,7 @@
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/decode.h"
 #include "common.h"
+#include "config.h"
 #include "hash.h"
 #include "log.h"
 #include "object/crl.h"
@@ -75,7 +76,10 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 		    TM_ARGS(nextUpdate));
 	}
 
-	now_tt = time_fatal();
+	now_tt = config_get_validation_time();
+	if (now_tt == 0)
+		now_tt = time_fatal();
+
 	if (gmtime_r(&now_tt, &now) == NULL) {
 		error = errno;
 		return pr_val_err("gmtime_r(now) error %d: %s", error,
@@ -329,7 +333,7 @@ revert:	rpp_cleanup(rpp);
 }
 
 int
-manifest_validate(char const *url, char const *path, struct cache_cage *cage,
+manifest_traverse(char const *url, char const *path, struct cache_cage *cage,
     struct rpki_certificate *parent)
 {
 	static OID oid = OID_MANIFEST;
@@ -361,13 +365,15 @@ manifest_validate(char const *url, char const *path, struct cache_cage *cage,
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
-		goto end4;
+		goto end5;
 	error = validate_manifest(mft);
 	if (error)
-		goto end4;
+		goto end5;
 	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, url);
 
-end4:	rpki_certificate_cleanup(&ee);
+end5:	rpki_certificate_cleanup(&ee);
+	if (error)
+		rpp_cleanup(&parent->rpp);
 end3:	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
 end2:	signed_object_cleanup(&sobj);
 end1:	fnstack_pop();

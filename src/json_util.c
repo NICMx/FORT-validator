@@ -4,14 +4,8 @@
 #include <limits.h>
 #include <time.h>
 
+#include "common.h"
 #include "log.h"
-
-/*
- * Careful with this; several of the conversion specification characters
- * documented in the Linux man page are not actually portable.
- */
-#define JSON_TS_FORMAT "%Y-%m-%dT%H:%M:%SZ"
-#define JSON_TS_LEN 21 /* strlen("YYYY-mm-ddTHH:MM:SSZ") + 1 */
 
 int
 json_get_str(json_t *parent, char const *name, char const **result)
@@ -89,27 +83,23 @@ json_get_u32(json_t *parent, char const *name, uint32_t *result)
 	return 0;
 }
 
-static int
-str2tt(char const *str, time_t *tt)
+int
+json_get_ulong(json_t *parent, char const *name, unsigned long *result)
 {
-	char const *consumed;
-	struct tm tm;
-	time_t time;
+	json_int_t json_int;
 	int error;
 
-	memset(&tm, 0, sizeof(tm));
-	consumed = strptime(str, JSON_TS_FORMAT, &tm);
-	if (consumed == NULL || (*consumed) != 0)
-		return pr_op_err("String '%s' does not appear to be a timestamp.",
-		    str);
-	time = timegm(&tm);
-	if (time == ((time_t) -1)) {
-		error = errno;
-		return pr_op_err("String '%s' does not appear to be a timestamp: %s",
-		    str, strerror(error));
-	}
+	*result = 0;
 
-	*tt = time;
+	error = json_get_int_t(parent, name, &json_int);
+	if (error)
+		return error;
+	if (json_int < 0 || ULONG_MAX < json_int)
+		return pr_op_err("Tag '%s' (%" JSON_INTEGER_FORMAT
+		    ") is out of range [0, %lu].",
+		    name, json_int, ULONG_MAX);
+
+	*result = json_int;
 	return 0;
 }
 
@@ -123,7 +113,7 @@ json_get_ts(json_t *parent, char const *name, time_t *result)
 	if (error)
 		return error;
 
-	return str2tt(str, result);
+	return str2time(str, result);
 }
 
 int
@@ -187,6 +177,18 @@ json_add_int(json_t *parent, char const *name, int value)
 }
 
 int
+json_add_ulong(json_t *parent, char const *name, unsigned long value)
+{
+	if (json_object_set_new(parent, name, json_integer(value)))
+		return pr_op_err(
+		    "Cannot convert %s '%lu' to json; unknown cause.",
+		    name, value
+		);
+
+	return 0;
+}
+
+int
 json_add_str(json_t *parent, char const *name, char const *value)
 {
 	if (json_object_set_new(parent, name, json_string(value)))
@@ -198,28 +200,13 @@ json_add_str(json_t *parent, char const *name, char const *value)
 	return 0;
 }
 
-static int
-tt2str(time_t tt, char *str)
-{
-	struct tm tmbuffer, *tm;
-
-	memset(&tmbuffer, 0, sizeof(tmbuffer));
-	tm = gmtime_r(&tt, &tmbuffer);
-	if (tm == NULL)
-		return errno;
-	if (strftime(str, JSON_TS_LEN, JSON_TS_FORMAT, tm) == 0)
-		return ENOSPC;
-
-	return 0;
-}
-
 int
 json_add_ts(json_t *parent, char const *name, time_t value)
 {
-	char str[JSON_TS_LEN];
+	char str[FORT_TS_LEN];
 	int error;
 
-	error = tt2str(value, str);
+	error = time2str(value, str);
 	if (error) {
 		pr_op_err("Cannot convert timestamp '%s' to json: %s",
 		    name, strerror(error));

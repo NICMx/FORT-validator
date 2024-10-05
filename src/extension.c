@@ -997,7 +997,7 @@ int
 handle_aki(void *ext, void *arg)
 {
 	AUTHORITY_KEYID *aki = ext;
-//	X509 *parent;
+	X509 *parent = arg;
 
 	if (aki->keyid == NULL) {
 		return pr_val_err("The %s lacks a keyIdentifier.",
@@ -1012,12 +1012,5 @@ handle_aki(void *ext, void *arg)
 		    ext_aki()->name);
 	}
 
-	/* XXX
-	parent = x509stack_peek(validation_certstack(state_retrieve()));
-	if (parent == NULL)
-		return pr_val_err("Certificate has no parent.");
-
 	return validate_public_key_hash(parent, aki->keyid, "AKI");
-	*/
-	return 0;
 }

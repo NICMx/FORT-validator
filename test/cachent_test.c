@@ -1,16 +1,12 @@
 #include <check.h>
 
 #include "alloc.c"
-#include "cachent.c"
-#include "cache_util.c"
 #include "mock.c"
 #include "types/path.c"
 #include "types/url.c"
 
 static char deleted[16][6];
 static unsigned int dn;
-
-MOCK_ABORT_VOID(rrdp_state_cleanup, struct cachefile_notification *notif)
 
 static void
 __delete_node_cb(struct cache_node const *node)

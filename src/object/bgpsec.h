@@ -2,7 +2,7 @@
 #define SRC_OBJECT_BGPSEC_H_
 
 #include "resource.h"
-#include "rpp.h"
+#include "types/rpp.h"
 
 int handle_bgpsec(X509 *, struct resources *, struct rpp *);
 

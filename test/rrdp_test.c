@@ -4,7 +4,6 @@
 
 #include "alloc.c"
 #include "base64.c"
-#include "cachent.c"
 #include "cachetmp.c"
 #include "common.c"
 #include "file.c"
@@ -13,12 +12,12 @@
 #include "mock.c"
 #include "relax_ng.c"
 #include "rrdp.c"
+#include "types/map.c"
 #include "types/path.c"
 #include "types/url.c"
 
 /* Mocks */
 
-MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 MOCK_ABORT_INT(http_download, char const *url, char const *path, curl_off_t ims,
     bool *changed)
 
@@ -40,30 +39,31 @@ ck_rrdp_session(char const *session, char const *serial,
 	BN_free(bn);
 }
 
-static struct cachefile_notification *
-create_cachefile_notif(char const *session, char const *serial, ...)
+static struct rrdp_state *
+create_rrdp_state(char const *session, char const *serial, ...)
 {
-	struct cachefile_notification *notif;
+	struct rrdp_state *state;
 	struct rrdp_hash *hash;
 	int dh_byte;
 	va_list args;
 
-	notif = pmalloc(sizeof(struct cachefile_notification));
+	state = pmalloc(sizeof(struct rrdp_state));
 
-	notif->session.session_id = pstrdup(session);
-	notif->session.serial.str = pstrdup(serial);
-	notif->session.serial.num = NULL; /* Not needed for now. */
-	STAILQ_INIT(&notif->delta_hashes);
+	state->session.session_id = pstrdup(session);
+	state->session.serial.str = pstrdup(serial);
+	state->session.serial.num = NULL; /* Not needed for now. */
+	state->files = NULL;
+	STAILQ_INIT(&state->delta_hashes);
 
 	va_start(args, serial);
 	while ((dh_byte = va_arg(args, int)) != 0) {
 		hash = pmalloc(sizeof(struct rrdp_hash));
 		memset(hash->bytes, dh_byte, sizeof(hash->bytes));
-		STAILQ_INSERT_TAIL(&notif->delta_hashes, hash, hook);
+		STAILQ_INSERT_TAIL(&state->delta_hashes, hash, hook);
 	}
 	va_end(args);
 
-	return notif;
+	return state;
 }
 
 START_TEST(test_xmlChar_NULL_assumption)
@@ -331,16 +331,16 @@ init_rrdp_session(struct rrdp_session *session, unsigned long serial)
 }
 
 static void
-init_cachefile_notif(struct cachefile_notification **result,
+init_rrdp_state(struct rrdp_state **result,
     unsigned long serial, ...)
 {
-	struct cachefile_notification *notif;
+	struct rrdp_state *notif;
 	va_list args;
 	int hash_byte;
 	struct rrdp_hash *hash;
 	size_t i;
 
-	notif = pmalloc(sizeof(struct cachefile_notification));
+	notif = pmalloc(sizeof(struct rrdp_state));
 	*result = notif;
 
 	init_rrdp_session(&notif->session, serial);
@@ -382,8 +382,7 @@ init_regular_notif(struct update_notification *notif, unsigned long serial, ...)
 }
 
 static void
-validate_cachefile_notif(struct cachefile_notification *notif,
-    unsigned long __serial, ...)
+validate_rrdp_state(struct rrdp_state *state, unsigned long __serial, ...)
 {
 	struct rrdp_serial serial;
 	va_list args;
@@ -391,13 +390,13 @@ validate_cachefile_notif(struct cachefile_notification *notif,
 	struct rrdp_hash *hash;
 	size_t i;
 
-	ck_assert_str_eq("session", notif->session.session_id);
+	ck_assert_str_eq("session", state->session.session_id);
 	init_serial(&serial, __serial);
-	ck_assert_str_eq(serial.str, notif->session.serial.str);
-	ck_assert_int_eq(0, BN_cmp(serial.num, notif->session.serial.num));
+	ck_assert_str_eq(serial.str, state->session.serial.str);
+	ck_assert_int_eq(0, BN_cmp(serial.num, state->session.serial.num));
 	serial_cleanup(&serial);
 
-	hash = STAILQ_FIRST(&notif->delta_hashes);
+	hash = STAILQ_FIRST(&state->delta_hashes);
 
 	va_start(args, __serial);
 	while ((hash_byte = va_arg(args, int)) >= 0) {
@@ -410,43 +409,43 @@ validate_cachefile_notif(struct cachefile_notification *notif,
 
 	ck_assert_ptr_eq(NULL, hash);
 
-	rrdp_state_free(notif);
+	rrdp_state_free(state);
 }
 
 START_TEST(test_update_notif)
 {
-	struct cachefile_notification *old;
+	struct rrdp_state *old;
 	struct update_notification new;
 
 	/* No changes */
-	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_rrdp_state(&old, 5555, 1, 2, 3, -1);
 	init_regular_notif(&new, 5555, 1, 2, 3, -1);
 	ck_assert_int_eq(0, update_notif(old, &new));
-	validate_cachefile_notif(old, 5555, 1, 2, 3, -1);
+	validate_rrdp_state(old, 5555, 1, 2, 3, -1);
 
 	/* Add a few serials */
-	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_rrdp_state(&old, 5555, 1, 2, 3, -1);
 	init_regular_notif(&new, 5557, 3, 4, 5, -1);
 	ck_assert_int_eq(0, update_notif(old, &new));
-	validate_cachefile_notif(old, 5557, 1, 2, 3, 4, 5, -1);
+	validate_rrdp_state(old, 5557, 1, 2, 3, 4, 5, -1);
 
 	/* Add serials, delta threshold exceeded */
-	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_rrdp_state(&old, 5555, 1, 2, 3, -1);
 	init_regular_notif(&new, 5558, 3, 4, 5, 6, -1);
 	ck_assert_int_eq(0, update_notif(old, &new));
-	validate_cachefile_notif(old, 5558, 2, 3, 4, 5, 6, -1);
+	validate_rrdp_state(old, 5558, 2, 3, 4, 5, 6, -1);
 
 	/* All new serials, but no hashes skipped */
-	init_cachefile_notif(&old, 5555, 1, 2, 3, -1);
+	init_rrdp_state(&old, 5555, 1, 2, 3, -1);
 	init_regular_notif(&new, 5557, 4, 5, -1);
 	ck_assert_int_eq(0, update_notif(old, &new));
-	validate_cachefile_notif(old, 5557, 1, 2, 3, 4, 5, -1);
+	validate_rrdp_state(old, 5557, 1, 2, 3, 4, 5, -1);
 
 	/* 2 previous tests combined */
-	init_cachefile_notif(&old, 5555, 1, 2, 3, 4, 5, -1);
+	init_rrdp_state(&old, 5555, 1, 2, 3, 4, 5, -1);
 	init_regular_notif(&new, 5560, 6, 7, 8, 9, 10, -1);
 	ck_assert_int_eq(0, update_notif(old, &new));
-	validate_cachefile_notif(old, 5560, 6, 7, 8, 9, 10, -1);
+	validate_rrdp_state(old, 5560, 6, 7, 8, 9, 10, -1);
 }
 END_TEST
 
@@ -510,7 +509,6 @@ END_TEST
 
 START_TEST(test_parse_notification_large_serial)
 {
-	struct cache_node map;
 	struct update_notification notif;
 
 	ck_assert_int_eq(0, relax_ng_init());
@@ -604,16 +602,13 @@ BN_two(void)
 START_TEST(test_parse_snapshot_bad_publish)
 {
 	struct rrdp_session session;
-	struct cache_node rpp = { 0 };
+	struct rrdp_state rpp = { 0 };
 
 	ck_assert_int_eq(0, relax_ng_init());
 
 	session.session_id = "9df4b597-af9e-4dca-bdda-719cce2c4e28";
 	session.serial.str = "2";
 	session.serial.num = BN_two();
-	rpp.url = "https://example.com/notification.xml";
-	rpp.path = "cache/https/example.com/notification.xml";
-	rpp.name = "notification.xml";
 
 	ck_assert_int_eq(-EINVAL, parse_snapshot(&session,
 	    "resources/rrdp/snapshot-bad-publish.xml", &rpp));
@@ -626,17 +621,17 @@ END_TEST
 
 START_TEST(test_2s_simple)
 {
-	struct cachefile_notification *notif;
+	struct rrdp_state *state;
 	json_t *json, *jdeltas;
 	char const *str;
 
-	notif = create_cachefile_notif("session", "1234", 0);
+	state = create_rrdp_state("session", "1234", 0);
 
-	json = rrdp_state2json(notif);
+	json = rrdp_state2json(state);
 	ck_assert_ptr_ne(NULL, json);
 
-	rrdp_state_free(notif);
-	notif = NULL;
+	rrdp_state_free(state);
+	state = NULL;
 
 	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
 	ck_assert_str_eq("session", str);
@@ -644,12 +639,12 @@ START_TEST(test_2s_simple)
 	ck_assert_str_eq("1234", str);
 	ck_assert_int_eq(ENOENT, json_get_array(json, TAGNAME_DELTAS, &jdeltas));
 
-	ck_assert_int_eq(0, rrdp_json2state(json, &notif));
-	ck_rrdp_session("session", "1234", &notif->session);
-	ck_assert_uint_eq(true, STAILQ_EMPTY(&notif->delta_hashes));
+	ck_assert_int_eq(0, rrdp_json2state(json, &state));
+	ck_rrdp_session("session", "1234", &state->session);
+	ck_assert_uint_eq(true, STAILQ_EMPTY(&state->delta_hashes));
 
 	json_decref(json);
-	rrdp_state_free(notif);
+	rrdp_state_free(state);
 }
 END_TEST
 
@@ -663,20 +658,20 @@ ck_hash(struct rrdp_hash *hash, unsigned char chara)
 
 START_TEST(test_2s_more)
 {
-	struct cachefile_notification *notif;
+	struct rrdp_state *state;
 	struct rrdp_hash *hash;
 	json_t *json, *jdeltas;
 	char const *str;
 
-	notif = create_cachefile_notif("session",
+	state = create_rrdp_state("session",
 	    "123456789012345678901234567890123456789012",
 	    0xAA, 0xBB, 0xCD, 0);
 
-	json = rrdp_state2json(notif);
+	json = rrdp_state2json(state);
 	ck_assert_ptr_ne(NULL, json);
 
-	rrdp_state_free(notif);
-	notif = NULL;
+	rrdp_state_free(state);
+	state = NULL;
 
 	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
 	ck_assert_str_eq("session", str);
@@ -691,9 +686,9 @@ START_TEST(test_2s_more)
 	ck_assert_str_eq("cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
 	    json_string_value(json_array_get(jdeltas, 2)));
 
-	ck_assert_int_eq(0, rrdp_json2state(json, &notif));
-	ck_rrdp_session("session", "123456789012345678901234567890123456789012", &notif->session);
-	hash = STAILQ_FIRST(&notif->delta_hashes);
+	ck_assert_int_eq(0, rrdp_json2state(json, &state));
+	ck_rrdp_session("session", "123456789012345678901234567890123456789012", &state->session);
+	hash = STAILQ_FIRST(&state->delta_hashes);
 	ck_assert_ptr_ne(NULL, hash);
 	ck_hash(hash, 0xAA);
 	hash = STAILQ_NEXT(hash, hook);
@@ -706,7 +701,7 @@ START_TEST(test_2s_more)
 	ck_assert_ptr_eq(NULL, hash);
 
 	json_decref(json);
-	rrdp_state_free(notif);
+	rrdp_state_free(state);
 }
 END_TEST
 
@@ -715,27 +710,26 @@ ck_json2state(int expected, char const *json_str)
 {
 	json_t *json;
 	json_error_t error;
-	struct cachefile_notification *notif;
+	struct rrdp_state *state;
 
 	json = json_loads(json_str, 0, &error);
 	ck_assert_ptr_ne(NULL, json);
 
-	notif = NULL;
-	ck_assert_int_eq(expected, rrdp_json2state(json, &notif));
+	state = NULL;
+	ck_assert_int_eq(expected, rrdp_json2state(json, &state));
 
 	json_decref(json);
-	if (notif == NULL)
-		rrdp_state_free(notif);
+	if (state != NULL)
+		rrdp_state_free(state);
 }
 
 START_TEST(test_2s_errors)
 {
-	struct cachefile_notification notif = { 0 };
+	struct rrdp_state state = { 0 };
 
-	ck_assert_ptr_eq(NULL, rrdp_state2json(NULL));
-	ck_assert_ptr_eq(NULL, rrdp_state2json(&notif));
-	notif.session.session_id = "sid";
-	ck_assert_ptr_eq(NULL, rrdp_state2json(&notif));
+	ck_assert_ptr_eq(NULL, rrdp_state2json(&state));
+	state.session.session_id = "sid";
+	ck_assert_ptr_eq(NULL, rrdp_state2json(&state));
 
 	ck_json2state(ENOENT, "{}");
 	ck_json2state(0, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":\"123\" }");

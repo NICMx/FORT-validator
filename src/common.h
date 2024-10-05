@@ -53,4 +53,13 @@ int delete_dir_recursive_bottom_up(char const *);
 time_t time_nonfatal(void);
 time_t time_fatal(void);
 
+/*
+ * Careful with this; several of the conversion specification characters
+ * documented in the Linux man page are not actually portable.
+ */
+#define FORT_TS_FORMAT "%Y-%m-%dT%H:%M:%SZ"
+#define FORT_TS_LEN 21 /* strlen("YYYY-mm-ddTHH:MM:SSZ") + 1 */
+int time2str(time_t, char *);
+int str2time(char const *, time_t *);
+
 #endif /* SRC_RTR_COMMON_H_ */

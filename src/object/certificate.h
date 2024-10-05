@@ -9,8 +9,8 @@
 #include "cache.h"
 #include "certificate_refs.h"
 #include "resource.h"
-#include "rpp.h"
 #include "state.h"
+#include "types/rpp.h"
 
 /* Certificate types in the RPKI */
 enum cert_type {

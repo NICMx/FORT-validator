@@ -126,6 +126,15 @@ MOCK(logv_filename, char const *, path, char const *path)
 
 MOCK_VOID(fnstack_init, void)
 MOCK_VOID(fnstack_push, char const *file)
-MOCK_VOID(fnstack_push_map, struct cache_mapping *map)
+MOCK_VOID(fnstack_push_map, struct cache_mapping const *map)
 MOCK_VOID(fnstack_pop, void)
 MOCK_VOID(fnstack_cleanup, void)
+
+void
+ck_assert_str(char const *expected, char const *actual)
+{
+	if (expected)
+		ck_assert_str_eq(expected, actual);
+	else
+		ck_assert_ptr_eq(NULL, actual);
+}

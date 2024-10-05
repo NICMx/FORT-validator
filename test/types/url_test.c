@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "alloc.c"
+#include "common.c"
 #include "mock.c"
 #include "types/path.c"
 #include "types/url.c"

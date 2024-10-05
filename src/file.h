@@ -37,6 +37,15 @@ int file_merge_into(char const *, char const *);
 int file_rm_f(char const *);
 int file_rm_rf(char const *);
 
+struct cache_sequence {
+	char *prefix;
+	unsigned long next_id;
+	size_t pathlen;
+};
+
+void cseq_init(struct cache_sequence *, char *);
+char *cseq_next(struct cache_sequence *);
+
 /*
  * Remember that this API is awkward:
  *

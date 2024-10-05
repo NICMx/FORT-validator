@@ -5,6 +5,7 @@
 #include <sys/queue.h>
 
 #include "base64.h"
+#include "cache.h"
 #include "cachetmp.h"
 #include "common.h"
 #include "config.h"
@@ -61,13 +62,10 @@ struct cache_file {
 
 /* Subset of the notification that is relevant to the TAL's cachefile */
 struct rrdp_state {
-	char const *repo;		/* Points to cache_node's map.path */
-
 	struct rrdp_session session;
 
 	struct cache_file *files;	/* Hash table */
-	unsigned int next_id;
-	size_t pathlen;
+	struct cache_sequence seq;
 
 	/*
 	 * The 1st one contains the hash of the session.serial delta.
@@ -150,19 +148,6 @@ state_find_file(struct rrdp_state *state, char const *url, size_t len)
 	struct cache_file *file;
 	HASH_FIND(hh, state->files, url, len, file);
 	return file;
-}
-
-static void
-state_flush_files(struct rrdp_state *state)
-{
-	struct cache_file *file, *tmp;
-
-	HASH_ITER(hh, state->files, file, tmp) {
-		HASH_DEL(state->files, file);
-		free(file->map.url);
-		free(file->map.path);
-		free(file);
-	}
 }
 
 static void
@@ -535,31 +520,6 @@ parse_withdraw(xmlTextReaderPtr reader, struct withdraw *tag)
 	return 0;
 }
 
-static char *
-create_path(struct rrdp_state *state)
-{
-	char *path;
-	int len;
-
-	do {
-		path = pmalloc(state->pathlen);
-
-		len = snprintf(path, state->pathlen, "%s/%X",
-		    state->repo, state->next_id);
-		if (len < 0) {
-			pr_val_err("Cannot compute new cache path: Unknown cause.");
-			return NULL;
-		}
-		if (len < state->pathlen) {
-			state->next_id++;
-			return path; /* Happy path */
-		}
-
-		state->pathlen++;
-		free(path);
-	} while (true);
-}
-
 static int
 handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 {
@@ -617,7 +577,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 
 		file = pzalloc(sizeof(struct cache_file));
 		file->map.url = pstrdup(tag.meta.uri);
-		file->map.path = create_path(args->state);
+		file->map.path = cseq_next(&args->state->seq);
 		if (!file->map.path) {
 			free(file->map.url);
 			free(file);
@@ -670,8 +630,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 	}
 
 	HASH_DEL(args->state->files, file);
-	free(file->map.url);
-	free(file->map.path);
+	map_cleanup(&file->map);
 	free(file);
 
 end:	metadata_cleanup(&tag.meta);
@@ -1186,7 +1145,7 @@ update_notif(struct rrdp_state *old, struct update_notification *new)
 }
 
 static int
-dl_notif(struct cache_mapping *map,  time_t mtim, bool *changed,
+dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
     struct update_notification *new)
 {
 	char *tmppath;
@@ -1228,8 +1187,8 @@ end:	free(tmppath);
  * snapshot, and explodes them into @notif->path.
  */
 int
-rrdp_update(struct cache_mapping *notif, time_t mtim, bool *changed,
-    struct rrdp_state **state)
+rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
+    struct cache_sequence *rrdp_seq, struct rrdp_state **state)
 {
 	struct rrdp_state *old;
 	struct update_notification new;
@@ -1249,18 +1208,22 @@ rrdp_update(struct cache_mapping *notif, time_t mtim, bool *changed,
 	    new.session.serial.str);
 
 	if ((*state) == NULL) {
+		char *cage;
+
 		pr_val_debug("This is a new Notification.");
 
+		cage = cseq_next(rrdp_seq);
+		if (!cage)
+			goto clean_notif;
+
 		old = pzalloc(sizeof(struct rrdp_state));
-		old->repo = notif->path;
 		/* session postponed! */
-		old->pathlen = strlen(old->repo) + 5;
+		cseq_init(&old->seq, cage);
 		STAILQ_INIT(&old->delta_hashes);
 
 		error = handle_snapshot(&new, old);
 		if (error) {
-			state_flush_files(old);
-			free(old);
+			rrdp_state_free(old);
 			goto clean_notif;
 		}
 
@@ -1298,6 +1261,7 @@ rrdp_update(struct cache_mapping *notif, time_t mtim, bool *changed,
 
 	} else {
 		pr_val_debug("The Notification changed, but the session ID and serial didn't, and no session desync was detected.");
+		*changed = false;
 		goto clean_notif;
 	}
 
@@ -1327,6 +1291,35 @@ rrdp_file(struct rrdp_state *state, char const *url)
 	return file ? file->map.path : NULL;
 }
 
+char const *
+rrdp_create_fallback(char const *cage, struct rrdp_state **_state,
+    char const *url)
+{
+	struct rrdp_state *state;
+	struct cache_file *file;
+	size_t len;
+
+	state = *_state;
+	if (state == NULL) {
+		*_state = state = pzalloc(sizeof(struct rrdp_state));
+		cseq_init(&state->seq, pstrdup(cage));
+	}
+
+	file = pzalloc(sizeof(struct cache_file));
+	file->map.url = pstrdup(url);
+	file->map.path = cseq_next(&state->seq);
+	if (!file->map.path) {
+		free(file->map.url);
+		free(file);
+		return NULL;
+	}
+
+	len = strlen(file->map.url);
+	HASH_ADD_KEYPTR(hh, state->files, file->map.url, len, file);
+
+	return file->map.path;
+}
+
 #define TAGNAME_SESSION "session_id"
 #define TAGNAME_SERIAL "serial"
 #define TAGNAME_DELTAS "deltas"
@@ -1339,17 +1332,58 @@ hash_b2c(unsigned char bin)
 	return (bin < 10) ? (bin + '0') : (bin + 'a' - 10);
 }
 
+static json_t *
+files2json(struct rrdp_state *state)
+{
+	json_t *json;
+	struct cache_file *file, *tmp;
+
+	json = json_obj_new();
+	if (json == NULL)
+		return NULL;
+
+	HASH_ITER(hh, state->files, file, tmp)
+		if (json_add_str(json, file->map.url, file->map.path))
+			goto fail;
+
+	return json;
+
+fail:	json_decref(json);
+	return NULL;
+}
+
+static json_t *
+dh2json(struct rrdp_state *state)
+{
+	json_t *json;
+	char hash_str[2 * RRDP_HASH_LEN + 1];
+	struct rrdp_hash *hash;
+	array_index i;
+
+	json = json_array_new();
+	if (json == NULL)
+		return NULL;
+
+	hash_str[2 * RRDP_HASH_LEN] = '\0';
+	STAILQ_FOREACH(hash, &state->delta_hashes, hook) {
+		for (i = 0; i < RRDP_HASH_LEN; i++) {
+			hash_str[2 * i    ] = hash_b2c(hash->bytes[i] >> 4);
+			hash_str[2 * i + 1] = hash_b2c(hash->bytes[i]     );
+		}
+		if (json_array_add(json, json_string(hash_str)))
+			goto fail;
+	}
+
+	return json;
+
+fail:	json_decref(json);
+	return NULL;
+}
+
 json_t *
 rrdp_state2json(struct rrdp_state *state)
 {
 	json_t *json;
-	json_t *deltas;
-	char hash_str[2 * RRDP_HASH_LEN + 1];
-	struct rrdp_hash *hash;
-	size_t i;
-
-	if (state == NULL)
-		return NULL;
 
 	json = json_object();
 	if (json == NULL)
@@ -1359,30 +1393,18 @@ rrdp_state2json(struct rrdp_state *state)
 		goto fail;
 	if (json_add_str(json, TAGNAME_SERIAL, state->session.serial.str))
 		goto fail;
-
-	if (STAILQ_EMPTY(&state->delta_hashes))
-		return json; /* Happy path, but unlikely. */
-
-	deltas = json_array();
-	if (deltas == NULL)
-		enomem_panic();
-	if (json_object_add(json, TAGNAME_DELTAS, deltas))
-		goto fail;
-
-	hash_str[2 * RRDP_HASH_LEN] = '\0';
-	STAILQ_FOREACH(hash, &state->delta_hashes, hook) {
-		for (i = 0; i < RRDP_HASH_LEN; i++) {
-			hash_str[2 * i    ] = hash_b2c(hash->bytes[i] >> 4);
-			hash_str[2 * i + 1] = hash_b2c(hash->bytes[i]     );
-		}
-		if (json_array_append(deltas, json_string(hash_str)))
+	if (state->files)
+		if (json_object_add(json, "files", files2json(state)))
 			goto fail;
-	}
+	if (json_add_ulong(json, "next", state->seq.next_id))
+		goto fail;
+	if (!STAILQ_EMPTY(&state->delta_hashes))
+		if (json_object_add(json, TAGNAME_DELTAS, dh2json(state)))
+			goto fail;
 
 	return json;
 
-fail:
-	json_decref(json);
+fail:	json_decref(json);
 	return NULL;
 }
 
@@ -1519,18 +1541,20 @@ revert_notif:
 }
 
 void
-rrdp_state_cleanup(struct rrdp_state *state)
-{
-	session_cleanup(&state->session);
-	state_flush_files(state);
-	clear_delta_hashes(state);
-}
-
-void
 rrdp_state_free(struct rrdp_state *state)
 {
-	if (state != NULL) {
-		rrdp_state_cleanup(state);
-		free(state);
+	struct cache_file *file, *tmp;
+
+	if (state == NULL)
+		return;
+
+	session_cleanup(&state->session);
+	HASH_ITER(hh, state->files, file, tmp) {
+		HASH_DEL(state->files, file);
+		map_cleanup(&file->map);
+		free(file);
 	}
+	free(state->seq.prefix);
+	clear_delta_hashes(state);
+	free(state);
 }

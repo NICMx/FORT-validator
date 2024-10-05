@@ -7,7 +7,7 @@
 #include "cache.h"
 #include "object/certificate.h"
 
-int manifest_validate(char const *url, char const *path,
+int manifest_traverse(char const *url, char const *path,
     struct cache_cage *cage, struct rpki_certificate *parent);
 
 #endif /* SRC_OBJECT_MANIFEST_H_ */

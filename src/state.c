@@ -1,6 +1,7 @@
 #include "state.h"
 
 #include "alloc.h"
+#include "config.h"
 #include "log.h"
 #include "thread_var.h"
 
@@ -98,6 +99,8 @@ validation_prepare(struct validation **out, struct tal *tal,
 		enomem_panic();
 
 	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
+	if (config_get_validation_time() != 0)
+		X509_VERIFY_PARAM_set_time(params, config_get_validation_time());
 	X509_STORE_set1_param(result->x509_data.store, params);
 	X509_STORE_set_verify_cb(result->x509_data.store, cb);
 

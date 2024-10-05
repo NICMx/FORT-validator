@@ -25,10 +25,10 @@ check_PROGRAMS  = address.test
 check_PROGRAMS += base64.test
 check_PROGRAMS += cachent.test
 check_PROGRAMS += cache.test
+check_PROGRAMS += common.test
 check_PROGRAMS += db_table.test
 check_PROGRAMS += deltas_array.test
 check_PROGRAMS += hash.test
-check_PROGRAMS += json_util.test
 check_PROGRAMS += mft.test
 check_PROGRAMS += path.test
 check_PROGRAMS += pdu_handler.test
@@ -60,6 +60,9 @@ cachent_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 cache_test_SOURCES = cache_test.c
 cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
 
+common_test_SOURCES = common_test.c
+common_test_LDADD = ${MY_LDADD}
+
 db_table_test_SOURCES = rtr/db/db_table_test.c
 db_table_test_LDADD = ${MY_LDADD}
 
@@ -68,9 +71,6 @@ deltas_array_test_LDADD = ${MY_LDADD}
 
 hash_test_SOURCES = hash_test.c
 hash_test_LDADD = ${MY_LDADD}
-
-json_util_test_SOURCES = json_util_test.c
-json_util_test_LDADD = ${MY_LDADD}
 
 mft_test_SOURCES = object/manifest_test.c
 mft_test_LDADD = ${MY_LDADD}

@@ -2,6 +2,7 @@
 
 #include <ftw.h>
 #include <stdbool.h>
+#include <sys/queue.h>
 #include <sys/stat.h>
 
 #include "alloc.h"
@@ -11,10 +12,11 @@
 #include "configure_ac.h"
 #include "file.h"
 #include "http.h"
+#include "json_util.h"
 #include "log.h"
-#include "rpp.h"
 #include "rrdp.h"
 #include "rsync.h"
+#include "types/array.h"
 #include "types/path.h"
 #include "types/url.h"
 #include "types/uthash.h"
@@ -22,6 +24,7 @@
 struct cache_node {
 	struct cache_mapping map;
 
+	/* XXX change to boolean? */
 	int fresh;		/* Refresh already attempted? */
 	int dlerr;		/* Result code of recent download attempt */
 	time_t mtim;		/* Last successful download time, or zero */
@@ -36,8 +39,7 @@ typedef int (*dl_cb)(struct cache_node *rpp);
 struct cache_table {
 	char const *name;
 	bool enabled;
-	unsigned int next_id;
-	size_t pathlen;
+	struct cache_sequence seq;
 	struct cache_node *nodes; /* Hash Table */
 	dl_cb download;
 };
@@ -58,22 +60,18 @@ struct cache_cage {
 	struct cache_node *fallback;
 };
 
+struct cache_commit {
+	char *caRepository;
+	struct cache_mapping *files;
+	size_t nfiles;
+	STAILQ_ENTRY(cache_commit) lh;
+};
+
+STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZER(commits);
+
 #define CACHE_METAFILE "cache.json"
 #define TAGNAME_VERSION "fort-version"
-
-#define CACHEDIR_TAG "CACHEDIR.TAG"
-
 #define TAL_METAFILE "tal.json"
-#define TAGNAME_TYPE "type"
-#define TAGNAME_URL "url"
-#define TAGNAME_ATTEMPT_TS "attempt-timestamp"
-#define TAGNAME_ATTEMPT_ERR "attempt-result"
-#define TAGNAME_SUCCESS_TS "success-timestamp"
-#define TAGNAME_NOTIF "notification"
-
-#define TYPEVALUE_TA_HTTP "TA (HTTP)"
-#define TYPEVALUE_RPP "RPP"
-#define TYPEVALUE_NOTIF "RRDP Notification"
 
 #ifdef UNIT_TESTING
 static void __delete_node_cb(struct cache_node const *);
@@ -88,10 +86,8 @@ delete_node(struct cache_table *tbl, struct cache_node *node)
 
 	HASH_DEL(tbl->nodes, node);
 
-	free(node->map.url);
-	free(node->map.path);
-	if (node->rrdp)
-		rrdp_state_cleanup(node->rrdp);
+	map_cleanup(&node->map);
+	rrdp_state_free(node->rrdp);
 	free(node);
 }
 
@@ -114,6 +110,44 @@ get_cache_filename(char const *name, bool fatal)
 	}
 
 	return pb.string;
+}
+
+char *
+get_rsync_module(char const *url)
+{
+	array_index u;
+	unsigned int slashes;
+
+	slashes = 0;
+	for (u = 0; url[u] != 0; u++)
+		if (url[u] == '/') {
+			slashes++;
+			if (slashes == 4)
+				return pstrndup(url, u);
+		}
+
+	if (slashes == 3 && url[u - 1] != '/')
+		return pstrdup(url);
+
+	pr_val_err("Url '%s' does not appear to have an rsync module.", url);
+	return NULL;
+}
+
+char const *
+strip_rsync_module(char const *url)
+{
+	array_index u;
+	unsigned int slashes;
+
+	slashes = 0;
+	for (u = 0; url[u] != 0; u++)
+		if (url[u] == '/') {
+			slashes++;
+			if (slashes == 4)
+				return url + u + 1;
+		}
+
+	return NULL;
 }
 
 static int
@@ -150,7 +184,7 @@ init_table(struct cache_table *tbl, char const *name, bool enabled, dl_cb dl)
 	memset(tbl, 0, sizeof(*tbl));
 	tbl->name = name;
 	tbl->enabled = enabled;
-	tbl->pathlen = strlen(config_get_local_repository()) + strlen(name) + 6;
+	cseq_init(&tbl->seq, path_join(config_get_local_repository(), name));
 	tbl->download = dl;
 }
 
@@ -158,53 +192,53 @@ static void
 init_tables(void)
 {
 	init_table(&cache.rsync, "rsync", config_get_rsync_enabled(), dl_rsync);
-	init_table(&cache.rsync, "https", config_get_http_enabled(), dl_http);
-	init_table(&cache.rsync, "rrdp", config_get_http_enabled(), dl_rrdp);
+	init_table(&cache.https, "https", config_get_http_enabled(), dl_http);
+	init_table(&cache.rrdp, "rrdp", config_get_http_enabled(), dl_rrdp);
 	init_table(&cache.fallback, "fallback", true, NULL);
 }
 
 static void
 init_cache_metafile(void)
 {
-//	char *filename;
-//	json_t *root;
-//	json_error_t jerror;
-//	char const *file_version;
-//	int error;
-//
-//	filename = get_cache_filename(CACHE_METAFILE, true);
-//	root = json_load_file(filename, 0, &jerror);
-//
-//	if (root == NULL) {
-//		if (json_error_code(&jerror) == json_error_cannot_open_file)
-//			pr_op_debug("%s does not exist.", filename);
-//		else
-//			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-//			    filename, jerror.line, jerror.column, jerror.text);
-//		goto invalid_cache;
-//	}
-//	if (json_typeof(root) != JSON_OBJECT) {
-//		pr_op_err("The root tag of %s is not an object.", filename);
-//		goto invalid_cache;
-//	}
-//
-//	error = json_get_str(root, TAGNAME_VERSION, &file_version);
-//	if (error) {
-//		if (error > 0)
-//			pr_op_err("%s is missing the " TAGNAME_VERSION " tag.",
-//			    filename);
-//		goto invalid_cache;
-//	}
-//
-//	if (strcmp(file_version, PACKAGE_VERSION) == 0)
-//		goto end;
-//
-//invalid_cache:
-//	pr_op_info("The cache appears to have been built by a different version of Fort. I'm going to clear it, just to be safe.");
-//	file_rm_rf(config_get_local_repository());
-//
-//end:	json_decref(root);
-//	free(filename);
+	char *filename;
+	json_t *root;
+	json_error_t jerror;
+	char const *file_version;
+	int error;
+
+	filename = get_cache_filename(CACHE_METAFILE, true);
+	root = json_load_file(filename, 0, &jerror);
+
+	if (root == NULL) {
+		if (json_error_code(&jerror) == json_error_cannot_open_file)
+			pr_op_debug("%s does not exist.", filename);
+		else
+			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+			    filename, jerror.line, jerror.column, jerror.text);
+		goto invalid_cache;
+	}
+	if (json_typeof(root) != JSON_OBJECT) {
+		pr_op_err("The root tag of %s is not an object.", filename);
+		goto invalid_cache;
+	}
+
+	error = json_get_str(root, TAGNAME_VERSION, &file_version);
+	if (error) {
+		if (error > 0)
+			pr_op_err("%s is missing the " TAGNAME_VERSION " tag.",
+			    filename);
+		goto invalid_cache;
+	}
+
+	if (strcmp(file_version, PACKAGE_VERSION) == 0)
+		goto end;
+
+invalid_cache:
+	pr_op_info("The cache appears to have been built by a different version of Fort. I'm going to clear it, just to be safe.");
+	file_rm_rf(config_get_local_repository());
+
+end:	json_decref(root);
+	free(filename);
 }
 
 static void
@@ -212,7 +246,7 @@ init_cachedir_tag(void)
 {
 	char *filename;
 
-	filename = get_cache_filename(CACHEDIR_TAG, false);
+	filename = get_cache_filename("CACHEDIR.TAG", false);
 	if (filename == NULL)
 		return;
 
@@ -248,6 +282,7 @@ init_tmp_dir(void)
 int
 cache_setup(void)
 {
+	// XXX Lock the cache directory
 	init_tables();
 	init_cache_metafile();
 	init_tmp_dir();
@@ -269,240 +304,216 @@ cache_teardown(void)
 	free(filename);
 }
 
-//static char *
-//get_tal_json_filename(void)
-//{
-//	struct path_builder pb;
-//	return pb_init_cache(&pb, TAL_METAFILE) ? NULL : pb.string;
-//}
-//
-//static struct cache_node *
-//json2node(json_t *json)
-//{
-//	struct cache_node *node;
-//	char const *type_str;
-//	enum map_type type;
-//	char const *url;
-//	json_t *notif;
-//	int error;
-//
-//	node = pzalloc(sizeof(struct cache_node));
-//
-//	error = json_get_str(json, TAGNAME_TYPE, &type_str);
-//	if (error) {
-//		if (error > 0)
-//			pr_op_err("Node is missing the '" TAGNAME_TYPE "' tag.");
-//		goto fail;
-//	}
-//
-//	if (strcmp(type_str, TYPEVALUE_TA_HTTP) == 0)
-//		type = MAP_HTTP;
-//	else if (strcmp(type_str, TYPEVALUE_RPP) == 0)
-//		type = MAP_RSYNC;
-//	else if (strcmp(type_str, TYPEVALUE_NOTIF) == 0)
-//		type = MAP_NOTIF;
-//	else {
-//		pr_op_err("Unknown node type: %s", type_str);
-//		goto fail;
-//	}
-//
-//	error = json_get_str(json, TAGNAME_URL, &url);
-//	if (error) {
-//		if (error > 0)
-//			pr_op_err("Node is missing the '" TAGNAME_URL "' tag.");
-//		goto fail;
-//	}
-//
-//	if (type == MAP_NOTIF) {
-//		error = json_get_object(json, TAGNAME_NOTIF, &notif);
-//		switch (error) {
-//		case 0:
-//			error = rrdp_json2notif(notif, &node->notif);
-//			if (error)
-//				goto fail;
-//			break;
-//		case ENOENT:
-//			node->notif = NULL;
-//			break;
-//		default:
-//			goto fail;
-//		}
-//	}
-//
-//	error = map_create(&node->map, type, url);
-//	if (error) {
-//		pr_op_err("Cannot parse '%s' into a URI.", url);
-//		goto fail;
-//	}
-//
-//	error = json_get_ts(json, TAGNAME_ATTEMPT_TS, &node->attempt.ts);
-//	if (error) {
-//		if (error > 0)
-//			pr_op_err("Node '%s' is missing the '"
-//			    TAGNAME_ATTEMPT_TS "' tag.", url);
-//		goto fail;
-//	}
-//
-//	if (json_get_int(json, TAGNAME_ATTEMPT_ERR, &node->attempt.result) < 0)
-//		goto fail;
-//
-//	error = json_get_ts(json, TAGNAME_SUCCESS_TS, &node->success.ts);
-//	if (error < 0)
-//		goto fail;
-//	node->success.happened = (error == 0);
-//
-//	pr_op_debug("Node '%s' loaded successfully.", url);
-//	return node;
-//
-//fail:
-//	map_refput(node->map);
-//	rrdp_notif_free(node->notif);
-//	free(node);
-//	return NULL;
-//}
+static char *
+get_tal_json_filename(void)
+{
+	struct path_builder pb;
+	return pb_init_cache(&pb, TAL_METAFILE) ? NULL : pb.string;
+}
+
+static struct cache_node *
+json2node(json_t *json)
+{
+	struct cache_node *node;
+	char const *str;
+	json_t *rrdp;
+	int error;
+
+	node = pzalloc(sizeof(struct cache_node));
+
+	if (json_get_str(json, "url", &str))
+		goto fail;
+	node->map.url = pstrdup(str);
+	if (json_get_str(json, "path", &str))
+		goto fail;
+	node->map.path = pstrdup(str);
+	if (json_get_int(json, "dlerr", &node->dlerr))
+		goto fail;
+	if (json_get_ts(json, "mtim", &node->mtim))
+		goto fail;
+	error = json_get_object(json, "rrdp", &rrdp);
+	if (error < 0)
+		goto fail;
+	if (error == 0 && rrdp_json2state(rrdp, &node->rrdp))
+		goto fail;
+
+	return node;
+
+fail:	map_cleanup(&node->map);
+	return NULL;
+}
+
+static void
+json2tbl(json_t *root, struct cache_table *tbl)
+{
+	json_t *array, *child;
+	int index;
+	struct cache_node *node;
+	size_t urlen;
+
+	// XXX load (and save) seqs
+	if (json_get_ulong(root, "next", &tbl->seq.next_id))
+		return;
+	if (json_get_array(root, tbl->name, &array))
+		return;
+
+	json_array_foreach(array, index, child) {
+		node = json2node(child);
+		if (node == NULL)
+			continue;
+		urlen = strlen(node->map.url);
+		// XXX worry about dupes
+		HASH_ADD_KEYPTR(hh, tbl->nodes, node->map.url, urlen, node);
+	}
+}
 
 static void
 load_tal_json(void)
 {
-//	char *filename;
-//	json_t *root;
-//	json_error_t jerror;
-//	size_t n;
-//	struct cache_node *node;
-//
-//	/*
-//	 * Note: Loading TAL_METAFILE is one of few things Fort can fail at
-//	 * without killing itself. It's just a cache of a cache.
-//	 */
-//
-//	filename = get_tal_json_filename();
-//	if (filename == NULL)
-//		return;
-//
-//	pr_op_debug("Loading %s.", filename);
-//
-//	root = json_load_file(filename, 0, &jerror);
-//
-//	if (root == NULL) {
-//		if (json_error_code(&jerror) == json_error_cannot_open_file)
-//			pr_op_debug("%s does not exist.", filename);
-//		else
-//			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-//			    filename, jerror.line, jerror.column, jerror.text);
-//		goto end;
-//	}
-//	if (json_typeof(root) != JSON_ARRAY) {
-//		pr_op_err("The root tag of %s is not an array.", filename);
-//		goto end;
-//	}
-//
-//	for (n = 0; n < json_array_size(root); n++) {
-//		node = json2node(json_array_get(root, n));
-//		if (node != NULL)
-//			add_node(cache, node);
-//	}
-//
-//end:	json_decref(root);
-//	free(filename);
+	char *filename;
+	json_t *root;
+	json_error_t jerror;
+
+	/*
+	 * Note: Loading TAL_METAFILE is one of few things Fort can fail at
+	 * without killing itself. It's just a cache of a cache.
+	 */
+
+	filename = get_tal_json_filename();
+	if (filename == NULL)
+		return;
+
+	pr_op_debug("Loading %s.", filename);
+
+	root = json_load_file(filename, 0, &jerror);
+
+	if (root == NULL) {
+		if (json_error_code(&jerror) == json_error_cannot_open_file)
+			pr_op_debug("%s does not exist.", filename);
+		else
+			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+			    filename, jerror.line, jerror.column, jerror.text);
+		goto end;
+	}
+	if (json_typeof(root) != JSON_OBJECT) {
+		pr_op_err("The root tag of %s is not an object.", filename);
+		goto end;
+	}
+
+	json2tbl(root, &cache.rsync);
+	json2tbl(root, &cache.https);
+	json2tbl(root, &cache.rrdp);
+	json2tbl(root, &cache.fallback);
+
+end:	json_decref(root);
+	free(filename);
 }
 
 void
 cache_prepare(void)
 {
-	memset(&cache, 0, sizeof(cache));
 	load_tal_json();
 }
 
-//static json_t *
-//node2json(struct cache_node *node)
-//{
-//	json_t *json;
-//	char const *type;
-//	json_t *notification;
-//
-//	json = json_obj_new();
-//	if (json == NULL)
-//		return NULL;
-//
-//	switch (map_get_type(node->map)) {
-//	case MAP_HTTP:
-//		type = TYPEVALUE_TA_HTTP;
-//		break;
-//	case MAP_RSYNC:
-//		type = TYPEVALUE_RPP;
-//		break;
-//	case MAP_NOTIF:
-//		type = TYPEVALUE_NOTIF;
-//		break;
-//	default:
-//		goto cancel;
-//	}
-//
-//	if (json_add_str(json, TAGNAME_TYPE, type))
-//		goto cancel;
-//	if (json_add_str(json, TAGNAME_URL, map_get_url(node->map)))
-//		goto cancel;
-//	if (node->notif != NULL) {
-//		notification = rrdp_notif2json(node->notif);
-//		if (json_object_add(json, TAGNAME_NOTIF, notification))
-//			goto cancel;
-//	}
-//	if (json_add_ts(json, TAGNAME_ATTEMPT_TS, node->attempt.ts))
-//		goto cancel;
-//	if (json_add_int(json, TAGNAME_ATTEMPT_ERR, node->attempt.result))
-//		goto cancel;
-//	if (node->success.happened)
-//		if (json_add_ts(json, TAGNAME_SUCCESS_TS, node->success.ts))
-//			goto cancel;
-//
-//	return json;
-//
-//cancel:
-//	json_decref(json);
-//	return NULL;
-//}
-//
-//static json_t *
-//build_tal_json(struct rpki_cache *cache)
-//{
-//	struct cache_node *node, *tmp;
-//	json_t *root, *child;
-//
-//	root = json_array_new();
-//	if (root == NULL)
-//		return NULL;
-//
-//	HASH_ITER(hh, cache->ht, node, tmp) {
-//		child = node2json(node);
-//		if (child != NULL && json_array_append_new(root, child)) {
-//			pr_op_err("Cannot push %s json node into json root; unknown cause.",
-//			    map_op_get_printable(node->map));
-//			continue;
-//		}
-//	}
-//
-//	return root;
-//}
+static json_t *
+node2json(struct cache_node *node)
+{
+	json_t *json;
+
+	json = json_obj_new();
+	if (json == NULL)
+		return NULL;
+
+	if (json_add_str(json, "url", node->map.url))
+		goto fail;
+	if (json_add_str(json, "path", node->map.path))
+		goto fail;
+	if (json_add_int(json, "dlerr", node->dlerr)) // XXX relevant?
+		goto fail;
+	if (json_add_ts(json, "mtim", node->mtim))
+		goto fail;
+	if (node->rrdp)
+		if (json_object_add(json, "rrdp", rrdp_state2json(node->rrdp)))
+			goto fail;
+
+	return json;
+
+fail:	json_decref(json);
+	return NULL;
+}
+
+static json_t *
+tbl2json(struct cache_table *tbl)
+{
+	struct json_t *json, *nodes;
+	struct cache_node *node, *tmp;
+
+	json = json_obj_new();
+	if (!json)
+		return NULL;
+
+	if (json_add_ulong(json, "next", tbl->seq.next_id))
+		goto fail;
+
+	nodes = json_array_new();
+	if (!nodes)
+		goto fail;
+	if (json_object_add(json, "nodes", nodes))
+		goto fail;
+
+	HASH_ITER(hh, tbl->nodes, node, tmp)
+		if (json_array_add(nodes, node2json(node)))
+			goto fail;
+
+	return json;
+
+fail:	json_decref(json);
+	return NULL;
+}
+
+static json_t *
+build_tal_json(void)
+{
+	json_t *json;
+
+	json = json_obj_new();
+	if (json == NULL)
+		return NULL;
+
+	if (json_object_add(json, "rsync", tbl2json(&cache.rsync)))
+		goto fail;
+	if (json_object_add(json, "https", tbl2json(&cache.https)))
+		goto fail;
+	if (json_object_add(json, "rrdp", tbl2json(&cache.rrdp)))
+		goto fail;
+	if (json_object_add(json, "fallback", tbl2json(&cache.fallback)))
+		goto fail;
+
+	return json;
+
+fail:	json_decref(json);
+	return NULL;
+}
 
 static void
 write_tal_json(void)
 {
-//	char *filename;
-//	struct json_t *json;
-//
-//	json = build_tal_json(cache);
-//	if (json == NULL)
-//		return;
-//
-//	filename = get_tal_json_filename();
-//	if (filename == NULL)
-//		goto end;
-//
-//	if (json_dump_file(json, filename, JSON_INDENT(2)))
-//		pr_op_err("Unable to write %s; unknown cause.", filename);
-//
-//end:	json_decref(json);
-//	free(filename);
+	char *filename;
+	struct json_t *json;
+
+	json = build_tal_json();
+	if (json == NULL)
+		return;
+
+	filename = get_tal_json_filename();
+	if (filename == NULL)
+		goto end;
+
+	if (json_dump_file(json, filename, JSON_INDENT(2)))
+		pr_op_err("Unable to write %s; unknown cause.", filename);
+
+end:	json_decref(json);
+	free(filename);
 }
 
 static int
@@ -510,7 +521,7 @@ dl_rsync(struct cache_node *module)
 {
 	int error;
 
-	error = rsync_download(&module->map);
+	error = rsync_download(module->map.url, module->map.path);
 	if (error)
 		return error;
 
@@ -527,7 +538,8 @@ dl_rrdp(struct cache_node *notif)
 
 	mtim = time_nonfatal();
 
-	error = rrdp_update(&notif->map, notif->mtim, &changed, &notif->rrdp);
+	error = rrdp_update(&notif->map, notif->mtim, &changed, &cache.rrdp.seq,
+	    &notif->rrdp);
 	if (error)
 		return error;
 
@@ -563,31 +575,6 @@ find_node(struct cache_table *tbl, char const *url, size_t urlen)
 	return node;
 }
 
-static char *
-create_path(struct cache_table *tbl)
-{
-	char *path;
-	int len;
-
-	do {
-		path = pmalloc(tbl->pathlen);
-
-		len = snprintf(path, tbl->pathlen, "%s/%s/%X",
-		    config_get_local_repository(), tbl->name, tbl->next_id);
-		if (len < 0) {
-			pr_val_err("Cannot compute new cache path: Unknown cause.");
-			return NULL;
-		}
-		if (len < tbl->pathlen) {
-			tbl->next_id++;
-			return path; /* Happy path */
-		}
-
-		tbl->pathlen++;
-		free(path);
-	} while (true);
-}
-
 static struct cache_node *
 provide_node(struct cache_table *tbl, char const *url)
 {
@@ -601,7 +588,7 @@ provide_node(struct cache_table *tbl, char const *url)
 
 	node = pzalloc(sizeof(struct cache_node));
 	node->map.url = pstrdup(url);
-	node->map.path = create_path(tbl);
+	node->map.path = cseq_next(&tbl->seq);
 	if (!node->map.path) {
 		free(node->map.url);
 		free(node);
@@ -618,12 +605,22 @@ do_refresh(struct cache_table *tbl, char const *uri)
 {
 	struct cache_node *node;
 
-	if (!tbl->enabled)
-		return NULL;
-
 	pr_val_debug("Trying %s (online)...", uri);
 
-	node = provide_node(tbl, uri);
+	if (!tbl->enabled) {
+		pr_val_debug("Protocol disabled.");
+		return NULL;
+	}
+
+	if (tbl == &cache.rsync) {
+		char *module = get_rsync_module(uri);
+		if (module == NULL)
+			return NULL;
+		node = provide_node(tbl, module);
+		free(module);
+	} else {
+		node = provide_node(tbl, uri);
+	}
 	if (!node)
 		return NULL;
 
@@ -664,7 +661,7 @@ cache_refresh_url(char const *url)
 		node = do_refresh(&cache.rsync, url);
 
 	// XXX Maybe strdup path so the caller can't corrupt our string
-	return node ? node->map.path : NULL;
+	return (node && !node->dlerr) ? node->map.path : NULL;
 }
 
 /* Do not free nor modify the result. */
@@ -672,13 +669,21 @@ char *
 cache_fallback_url(char const *url)
 {
 	struct cache_node *node;
+
+	pr_val_debug("Trying %s (offline)...", url);
+
 	node = find_node(&cache.fallback, url, strlen(url));
-	return node ? node->map.path : NULL;
+	if (!node) {
+		pr_val_debug("Cache data unavailable.");
+		return NULL;
+	}
+
+	return node->map.path;
 }
 
 /*
  * Attempts to refresh the RPP described by @sias, returns the resulting
- * repository's mapping.
+ * repository's mapper.
  *
  * XXX Need to normalize the sias.
  * XXX Fallback only if parent is fallback
@@ -693,7 +698,6 @@ cache_refresh_sias(struct sia_uris *sias)
 	// XXX mutex
 	// XXX review result signs
 	// XXX normalize rpkiNotify & caRepository?
-	// XXX do module if rsync
 
 	cage = pzalloc(sizeof(struct cache_cage));
 	cage->fallback = get_fallback(sias->caRepository);
@@ -725,9 +729,10 @@ node2file(struct cache_node *node, char const *url)
 {
 	if (node == NULL)
 		return NULL;
+	// XXX RRDP is const, rsync needs to be freed
 	return (node->rrdp)
 	    ? /* RRDP  */ rrdp_file(node->rrdp, url)
-	    : /* rsync */ join_paths(node->map.path, url + RPKI_SCHEMA_LEN); // XXX wrong; need to get the module.
+	    : /* rsync */ path_join(node->map.path, strip_rsync_module(url));
 }
 
 char const *
@@ -742,13 +747,59 @@ cage_map_file(struct cache_cage *cage, char const *url)
 	return file;
 }
 
-/* Returns true if previously enabled */
+/* Returns true if fallback should be attempted */
 bool
 cage_disable_refresh(struct cache_cage *cage)
 {
 	bool enabled = (cage->refresh != NULL);
 	cage->refresh = NULL;
-	return enabled;
+
+	if (cage->fallback == NULL) {
+		pr_val_debug("There is no fallback.");
+		return false;
+	}
+	if (!enabled) {
+		pr_val_debug("Fallback exhausted.");
+		return false;
+	}
+
+	pr_val_debug("Attempting fallback.");
+	return true;
+}
+
+/*
+ * Steals ownership of @rpp->files and @rpp->nfiles, but they're not going to be
+ * modified nor deleted until the cache cleanup.
+ */
+void
+cache_commit_rpp(char const *caRepository, struct rpp *rpp)
+{
+	struct cache_commit *commit;
+
+	commit = pmalloc(sizeof(struct cache_commit));
+	// XXX missing context
+	commit->caRepository = pstrdup(caRepository);
+	commit->files = rpp->files;
+	commit->nfiles = rpp->nfiles;
+	STAILQ_INSERT_TAIL(&commits, commit, lh);
+
+	rpp->files = NULL;
+	rpp->nfiles = 0;
+}
+
+void
+cache_commit_file(struct cache_mapping *map)
+{
+	struct cache_commit *commit;
+
+	commit = pmalloc(sizeof(struct cache_commit));
+	// XXX missing context
+	commit->caRepository = NULL;
+	commit->files = pmalloc(sizeof(*map));
+	commit->files[0].url = pstrdup(map->url);
+	commit->files[0].path = pstrdup(map->path);
+	commit->nfiles = 1;
+	STAILQ_INSERT_TAIL(&commits, commit, lh);
 }
 
 static void
@@ -770,7 +821,10 @@ table_print(struct cache_table *tbl)
 {
 	struct cache_node *node, *tmp;
 
-	printf("%s (%s):", tbl->name, tbl->enabled ? "enabled" : "disabled");
+	if (HASH_COUNT(tbl->nodes) == 0)
+		return;
+
+	printf("    %s (%s):\n", tbl->name, tbl->enabled ? "enabled" : "disabled");
 	HASH_ITER(hh, tbl->nodes, node, tmp)
 		cachent_print(node);
 }
@@ -872,6 +926,167 @@ cleanup_tmp(void)
 	free(tmpdir);
 }
 
+static bool
+is_fallback(char const *path)
+{
+	// XXX just cd to the freaking cache, ffs
+	path += strlen(config_get_local_repository());
+	return str_starts_with(path, "fallback/") ||
+	       str_starts_with(path, "/fallback/");
+}
+
+/* Hard-links @rpp's approved files into the fallback directory. */
+static void
+commit_rpp(struct cache_commit *commit, struct cache_node *fb)
+{
+	struct cache_mapping *src;
+	char const *dst;
+	array_index i;
+
+	for (i = 0; i < commit->nfiles; i++) {
+		src = commit->files + i;
+
+		if (is_fallback(src->path))
+			continue;
+
+		/*
+		 * (fine)
+		 * Note, this is accidentally working perfectly for rsync too.
+		 * Might want to rename some of this.
+		 */
+		dst = rrdp_create_fallback(fb->map.path, &fb->rrdp, src->url);
+		if (!dst)
+			goto skip;
+
+		pr_op_debug("Hard-linking: %s -> %s", src->path, dst);
+		if (link(src->path, dst) < 0)
+			pr_op_warn("Could not hard-link cache file: %s",
+			    strerror(errno));
+
+skip:		free(src->path);
+		src->path = pstrdup(dst);
+	}
+}
+
+/* Deletes abandoned (ie. no longer ref'd by manifests) fallback hard links. */
+static void
+discard_trash(struct cache_commit *commit, struct cache_node *fallback)
+{
+	DIR *dir;
+	struct dirent *file;
+	char *file_path;
+	array_index i;
+
+	dir = opendir(fallback->map.path);
+	if (dir == NULL) {
+		pr_op_err("opendir() error: %s", strerror(errno));
+		return;
+	}
+
+	FOREACH_DIR_FILE(dir, file) {
+		if (S_ISDOTS(file))
+			continue;
+
+		/*
+		 * TODO (fine) Bit slow; wants a hash table,
+		 * and maybe skip @file_path's reallocation.
+		 */
+
+		file_path = path_join(fallback->map.path, file->d_name);
+
+		for (i = 0; i < commit->nfiles; i++) {
+			if (commit->files[i].path == NULL)
+				continue;
+			if (strcmp(file_path, commit->files[i].path) == 0)
+				goto next;
+		}
+
+		/*
+		 * Uh... maybe keep the file until an expiration threshold?
+		 * None of the current requirements seem to mandate it.
+		 * It sounds pretty unreasonable for a signed valid manifest to
+		 * "forget" a file, then legitimately relist it without actually
+		 * providing it.
+		 */
+		pr_op_debug("Removing hard link: %s", file_path);
+		if (unlink(file_path) < 0)
+			pr_op_warn("Could not unlink %s: %s",
+			    file_path, strerror(errno));
+
+next:		free(file_path);
+	}
+
+	if (errno)
+		pr_op_err("Fallback directory traversal errored: %s",
+		    strerror(errno));
+	closedir(dir);
+}
+
+static void
+commit_fallbacks(void)
+{
+	struct cache_commit *commit;
+	struct cache_node *fb, *tmp;
+	array_index i;
+
+	while (!STAILQ_EMPTY(&commits)) {
+		commit = STAILQ_FIRST(&commits);
+		STAILQ_REMOVE_HEAD(&commits, lh);
+
+		if (commit->caRepository) {
+			fb = provide_node(&cache.fallback, commit->caRepository);
+
+			if (mkdir(fb->map.path, CACHE_FILEMODE) < 0) {
+				if (errno != EEXIST) {
+					pr_op_warn("Failed to create %s: %s",
+					    fb->map.path, strerror(errno));
+					goto skip;
+				}
+			}
+
+			commit_rpp(commit, fb);
+			discard_trash(commit, fb);
+
+		} else { /* TA */
+			struct cache_mapping *map = &commit->files[0];
+
+			fb = provide_node(&cache.fallback, map->url);
+			if (is_fallback(map->path))
+				goto freshen;
+
+			pr_op_debug("Hard-linking TA: %s -> %s",
+			    map->path, fb->map.path);
+			if (link(map->path, fb->map.path) < 0)
+				pr_op_warn("Could not hard-link cache file: %s",
+				    strerror(errno));
+		}
+
+freshen:	fb->fresh = 1;
+skip:		free(commit->caRepository);
+		for (i = 0; i < commit->nfiles; i++) {
+			free(commit->files[i].url);
+			free(commit->files[i].path);
+		}
+		free(commit->files);
+		free(commit);
+	}
+
+	HASH_ITER(hh, cache.fallback.nodes, fb, tmp) {
+		if (fb->fresh)
+			continue;
+
+		/*
+		 * XXX This one, on the other hand, would definitely benefit
+		 * from an expiration threshold.
+		 */
+		pr_op_debug("Removing orphaned fallback: %s", fb->map.path);
+		if (file_rm_rf(fb->map.path) < 0)
+			pr_op_warn("Could not remove %s; unknown cause.",
+			    fb->map.path);
+		delete_node(&cache.fallback, fb);
+	}
+}
+
 static void
 remove_abandoned(void)
 {
@@ -924,9 +1139,11 @@ static void
 cleanup_cache(void)
 {
 	// XXX Review
-
 	pr_op_debug("Cleaning up temporal files.");
 	cleanup_tmp();
+
+	pr_op_debug("Creating fallbacks for valid RPPs.");
+	commit_fallbacks();
 
 	pr_op_debug("Cleaning up old abandoned and unknown cache files.");
 	remove_abandoned();
@@ -941,6 +1158,10 @@ cache_commit(void)
 	cleanup_cache();
 	write_tal_json();
 	cache_foreach(delete_node);
+	free(cache.rsync.seq.prefix);
+	free(cache.https.seq.prefix);
+	free(cache.rrdp.seq.prefix);
+	free(cache.fallback.seq.prefix);
 }
 
 void

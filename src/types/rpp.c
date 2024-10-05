@@ -1,4 +1,4 @@
-#include "rpp.h"
+#include "types/rpp.h"
 
 #include "types/array.h"
 
@@ -7,12 +7,15 @@ rpp_cleanup(struct rpp *rpp)
 {
 	array_index i;
 
-	sk_X509_pop_free(rpp->ancestors, X509_free);
-
 	for (i = 0; i < rpp->nfiles; i++)
 		map_cleanup(&rpp->files[i]);
 	free(rpp->files);
+	rpp->files = NULL;
+	rpp->nfiles = 0;
 
-	if (rpp->crl.obj != NULL)
+	rpp->crl.map = NULL;
+	if (rpp->crl.obj != NULL) {
 		X509_CRL_free(rpp->crl.obj);
+		rpp->crl.obj = NULL;
+	}
 }

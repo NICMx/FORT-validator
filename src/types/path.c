@@ -251,7 +251,7 @@ path_filename(char const *path)
  * XXX I'm starting to use this more. Probably clean the slashes.
  */
 char *
-join_paths(char const *path1, char const *path2)
+path_join(char const *path1, char const *path2)
 {
 	size_t n;
 	char *result;
@@ -260,7 +260,7 @@ join_paths(char const *path1, char const *path2)
 	// XXX needed?
 	if (path1[0] == 0)
 		return pstrdup(path2);
-	if (path2[0] == 0)
+	if (path2 == NULL || path2[0] == 0)
 		return pstrdup(path1);
 
 	n = strlen(path1) + strlen(path2) + 2;

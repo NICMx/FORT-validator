@@ -1,5 +1,7 @@
 #include "cache_util.h"
 
+/* XXX Might wanna delete this */
+
 #include <check.h>
 #include <string.h>
 #include "types/uthash.h"
@@ -15,10 +17,7 @@ ck_assert_cachent_eq(struct cache_node *expected, struct cache_node *actual)
 	ck_assert_str_eq(expected->path, actual->path);
 	ck_assert_str_eq(expected->name, actual->name);
 	ck_assert_int_eq(expected->flags, actual->flags);
-	if (expected->tmppath)
-		ck_assert_str_eq(expected->tmppath, actual->tmppath);
-	else
-		ck_assert_ptr_eq(NULL, actual->tmppath);
+	ck_assert_str(expected->tmppath, actual->tmmpath);
 
 	HASH_ITER(hh, expected->children, echild, tmp) {
 		HASH_FIND(hh, actual->children, echild->name,

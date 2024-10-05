@@ -12,6 +12,7 @@
 #include "config/boolean.h"
 #include "config/incidences.h"
 #include "config/str.h"
+#include "config/time.h"
 #include "config/uint.h"
 #include "config/work_offline.h"
 #include "configure_ac.h"
@@ -44,6 +45,8 @@ struct rpki_config {
 	/**
 	 * rfc6487#section-7.2, last paragraph.
 	 * Prevents arbitrarily long paths and loops.
+	 *
+	 * XXX X509_VERIFY_MAX_CHAIN_CERTS
 	 */
 	unsigned int maximum_certificate_depth;
 	/** File or directory where the .slurm file(s) is(are) located */
@@ -214,6 +217,16 @@ struct rpki_config {
 
 	enum file_type ft;
 	char *payload;
+
+	struct {
+		/*
+		 * If nonzero, all RPKI object expiration dates are compared to
+		 * this number instead of the current time.
+		 * Meant for test repositories we don't want to have to keep
+		 * regenerating.
+		 */
+		time_t validation_time;
+	} debug;
 };
 
 static void print_usage(FILE *, bool);
@@ -804,6 +817,13 @@ static const struct option_field options[] = {
 		.deprecated = true,
 		.min = 0,
 		.max = 100,
+	},
+
+	{
+		.id = 13000,
+		.name = "debug.validation-time",
+		.type = &gt_time,
+		.offset = offsetof(struct rpki_config, debug.validation_time),
 	},
 
 	{
@@ -1520,6 +1540,12 @@ char const *
 config_get_payload(void)
 {
 	return rpki_config.payload;
+}
+
+time_t
+config_get_validation_time(void)
+{
+	return rpki_config.debug.validation_time;
 }
 
 void

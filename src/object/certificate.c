@@ -780,25 +780,12 @@ certificate_stack_push(struct cert_stack *stack, struct cache_mapping *map,
 	struct rpki_certificate *cert;
 
 	cert = pzalloc(sizeof(*cert));
-	cert->refcount++;
-
 	map_copy(&cert->map, map);
-
 	cert->parent = parent;
-	parent->refcount++;
-
-	cert->rpp.ancestors = X509_chain_up_ref(parent->rpp.ancestors);
-	if (!cert->rpp.ancestors)
-		goto fail;
-	if (sk_X509_push(cert->rpp.ancestors, parent->x509) <= 0)
-		goto fail;
-	if (!X509_up_ref(parent->x509))
-		goto fail;
-
+	cert->refcount = 1;
 	SLIST_INSERT_HEAD(stack, cert, lh);
-	return;
 
-fail:	rpki_certificate_free(cert);
+	parent->refcount++;
 }
 
 void
@@ -811,6 +798,8 @@ rpki_certificate_init_ee(struct rpki_certificate *ee,
 	ee->resources = resources_create(RPKI_POLICY_RFC6484, force_inherit);
 	ee->parent = parent;
 	ee->refcount = 1;
+
+	parent->refcount++;
 }
 
 void
@@ -822,7 +811,8 @@ rpki_certificate_cleanup(struct rpki_certificate *cert)
 	resources_destroy(cert->resources);
 	sias_cleanup(&cert->sias);
 	// XXX Recursive. Try refcounting the resources.
-	rpki_certificate_free(cert->parent);
+	if (cert->parent)
+		rpki_certificate_free(cert->parent);
 	rpp_cleanup(&cert->rpp);
 }
 
@@ -834,6 +824,50 @@ rpki_certificate_free(struct rpki_certificate *cert)
 		rpki_certificate_cleanup(cert);
 		free(cert);
 	}
+}
+
+static STACK_OF(X509) *
+build_trusted_stack(struct rpki_certificate *cert)
+{
+	STACK_OF(X509) *stack;
+	int ret;
+
+	stack = sk_X509_new_null();
+	if (!stack) {
+		val_crypto_err("sk_X509_new_null() returned NULL.");
+		return NULL;
+	}
+
+	for (cert = cert->parent; cert != NULL; cert = cert->parent) {
+		ret = sk_X509_push(stack, cert->x509);
+		if (ret <= 0) {
+			val_crypto_err("sk_X509_push returned %d.", ret);
+			sk_X509_pop_free(stack, X509_free);
+			return NULL;
+		}
+	}
+
+	return stack;
+}
+
+static STACK_OF(X509_CRL) *
+build_crl_stack(struct rpki_certificate *cert)
+{
+	STACK_OF(X509_CRL) *stack;
+	int ok;
+
+	stack = sk_X509_CRL_new_null();
+	if (!stack) {
+		val_crypto_err("sk_X509_CRL_new_null() returned NULL.");
+		return NULL;
+	}
+	ok = sk_X509_CRL_push(stack, cert->parent->rpp.crl.obj);
+	if (ok != 1) {
+		val_crypto_err("sk_X509_CRL_push() returned %d.", ok);
+		return NULL;
+	}
+
+	return stack;
 }
 
 static void
@@ -872,6 +906,7 @@ certificate_validate_chain(struct rpki_certificate *cert)
 	/* Reference: openbsd/src/usr.bin/openssl/verify.c */
 
 	X509_STORE_CTX *ctx;
+	STACK_OF(X509) *trusted;
 	STACK_OF(X509_CRL) *crls;
 	int ok;
 	int error;
@@ -882,29 +917,30 @@ certificate_validate_chain(struct rpki_certificate *cert)
 	ctx = X509_STORE_CTX_new();
 	if (ctx == NULL) {
 		val_crypto_err("X509_STORE_CTX_new() returned NULL");
-		return -EINVAL;
+		return EINVAL;
 	}
 
 	/* Returns 0 or 1 , all callers test ! only. */
 	ok = X509_STORE_CTX_init(ctx, validation_store(state_retrieve()),
 	    cert->x509, NULL);
 	if (!ok) {
-		val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
-		goto abort;
+		error = val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
+		goto end1;
 	}
 
-	X509_STORE_CTX_trusted_stack(ctx, cert->rpp.ancestors);
-
-	crls = sk_X509_CRL_new_null();
-	if (!crls)
-		enomem_panic();
-	if (sk_X509_CRL_push(crls, cert->rpp.crl.obj) != 1) {
-		// XXX
+	trusted = build_trusted_stack(cert);
+	if (!trusted) {
+		error = EINVAL;
+		goto end1;
 	}
-	// XXX These CRLs will only be used if CRL verification is enabled in
-	// the associated X509_VERIFY_PARAM structure.
-	X509_STORE_CTX_set0_crls(ctx, crls); // XXX needs free
-	// sk_X509_CRL_pop_free(cert->crl.stack, X509_CRL_free);
+	X509_STORE_CTX_trusted_stack(ctx, trusted);
+
+	crls = build_crl_stack(cert);
+	if (!crls) {
+		error = EINVAL;
+		goto end2;
+	}
+	X509_STORE_CTX_set0_crls(ctx, crls);
 
 	if (log_val_enabled(LOG_DEBUG))
 		pr_debug_x509_dates(cert->x509);
@@ -926,26 +962,28 @@ certificate_validate_chain(struct rpki_certificate *cert)
 		 */
 		error = X509_STORE_CTX_get_error(ctx);
 		if (error == X509_V_ERR_CRL_HAS_EXPIRED)
-			complain_crl_stale(cert->rpp.crl.obj);
+			complain_crl_stale(cert->parent->rpp.crl.obj);
 		else if (error)
 			pr_val_err("Certificate validation failed: %s",
 			    X509_verify_cert_error_string(error));
-		else
+		else {
 			/*
 			 * ...But don't trust X509_STORE_CTX_get_error() either.
 			 * That said, there's not much to do about !error,
 			 * so hope for the best.
 			 */
 			val_crypto_err("Certificate validation failed: %d", ok);
-		goto abort;
+			error = EINVAL;
+		}
+		goto end3;
 	}
 
-	X509_STORE_CTX_free(ctx);
-	return 0;
+	error = 0;
 
-abort:
-	X509_STORE_CTX_free(ctx);
-	return -EINVAL;
+end3:	sk_X509_CRL_free(crls);
+end2:	sk_X509_free(trusted);
+end1:	X509_STORE_CTX_free(ctx);
+	return error;
 }
 
 static int
@@ -991,7 +1029,7 @@ handle_ip_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 
 	for (i = 0; i < blocks->list.count && !error; i++)
 		error = resources_add_ip(cert->resources,
-		    cert->parent->resources,
+		    cert->parent ? cert->parent->resources : NULL,
 		    blocks->list.array[i]);
 
 end:
@@ -1012,7 +1050,8 @@ handle_asn_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 	if (error)
 		return error;
 
-	error = resources_add_asn(cert->resources, cert->parent->resources,
+	error = resources_add_asn(cert->resources,
+	    cert->parent ? cert->parent->resources : NULL,
 	    ids, cert->type != CERTYPE_BGPSEC);
 
 	ASN_STRUCT_FREE(asn_DEF_ASIdentifiers, ids);
@@ -1609,20 +1648,20 @@ static int
 validate_ca_extensions(struct rpki_certificate *cert)
 {
 	struct extension_handler handlers[] = {
-	   /* ext        reqd   handler        arg           */
-	    { ext_bc(),  true,  handle_bc,                    },
-	    { ext_ski(), true,  handle_ski_ca, cert->x509     },
-	    { ext_aki(), true,  handle_aki,                   },
-	    { ext_ku(),  true,  handle_ku_ca,                 },
-	    { ext_cdp(), true,  handle_cdp,    &cert->sias    },
-	    { ext_aia(), true,  handle_aia,    &cert->sias    },
-	    { ext_sia(), true,  handle_sia_ca, &cert->sias    },
-	    { ext_cp(),  true,  handle_cp,     &cert->policy  },
+	   /* ext        reqd   handler        arg                */
+	    { ext_bc(),  true,  handle_bc,                         },
+	    { ext_ski(), true,  handle_ski_ca, cert->x509          },
+	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
+	    { ext_ku(),  true,  handle_ku_ca,                      },
+	    { ext_cdp(), true,  handle_cdp,    &cert->sias         },
+	    { ext_aia(), true,  handle_aia,    &cert->sias         },
+	    { ext_sia(), true,  handle_sia_ca, &cert->sias         },
+	    { ext_cp(),  true,  handle_cp,     &cert->policy       },
 	    /* These are handled by certificate_get_resources(). */
-	    { ext_ir(),  false,                               },
-	    { ext_ar(),  false,                               },
-	    { ext_ir2(), false,                               },
-	    { ext_ar2(), false,                               },
+	    { ext_ir(),  false,                                    },
+	    { ext_ar(),  false,                                    },
+	    { ext_ir2(), false,                                    },
+	    { ext_ar2(), false,                                    },
 	    { NULL },
 	};
 	int error;
@@ -1633,7 +1672,7 @@ validate_ca_extensions(struct rpki_certificate *cert)
 	error = certificate_validate_aia(cert);
 	if (error)
 		return error;
-	return validate_cdp(&cert->sias, cert->rpp.crl.map->url);
+	return validate_cdp(&cert->sias, cert->parent->rpp.crl.map->url);
 }
 
 int
@@ -1642,18 +1681,18 @@ certificate_validate_extensions_ee(struct rpki_certificate *cert,
 {
 	struct ski_arguments ski_args;
 	struct extension_handler handlers[] = {
-	   /* ext        reqd   handler        arg           */
-	    { ext_ski(), true,  handle_ski_ee, &ski_args      },
-	    { ext_aki(), true,  handle_aki,                   },
-	    { ext_ku(),  true,  handle_ku_ee,                 },
-	    { ext_cdp(), true,  handle_cdp,    &cert->sias    },
-	    { ext_aia(), true,  handle_aia,    &cert->sias    },
-	    { ext_sia(), true,  handle_sia_ee, &cert->sias    },
-	    { ext_cp(),  true,  handle_cp,     &cert->policy  },
-	    { ext_ir(),  false,                               },
-	    { ext_ar(),  false,                               },
-	    { ext_ir2(), false,                               },
-	    { ext_ar2(), false,                               },
+	   /* ext        reqd   handler        arg                */
+	    { ext_ski(), true,  handle_ski_ee, &ski_args           },
+	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
+	    { ext_ku(),  true,  handle_ku_ee,                      },
+	    { ext_cdp(), true,  handle_cdp,    &cert->sias         },
+	    { ext_aia(), true,  handle_aia,    &cert->sias         },
+	    { ext_sia(), true,  handle_sia_ee, &cert->sias         },
+	    { ext_cp(),  true,  handle_cp,     &cert->policy       },
+	    { ext_ir(),  false,                                    },
+	    { ext_ar(),  false,                                    },
+	    { ext_ir2(), false,                                    },
+	    { ext_ar2(), false,                                    },
 	    { NULL },
 	};
 
@@ -1700,7 +1739,7 @@ has_bgpsec_router_eku(X509 *cert)
 static enum cert_type
 get_certificate_type(struct rpki_certificate *cert)
 {
-	if (cert->rpp.ancestors == NULL)
+	if (cert->parent == NULL)
 		return CERTYPE_TA;
 
 	if (X509_check_purpose(cert->x509, -1, -1) <= 0)
@@ -1724,6 +1763,15 @@ certificate_validate_aia(struct rpki_certificate *cert)
 	 * the #78 refactor.
 	 */
 	return 0;
+}
+
+static unsigned int
+chain_length(struct rpki_certificate *cert)
+{
+	unsigned int a;
+	for (a = 0; cert != NULL; a++)
+		cert = cert->parent;
+	return a;
 }
 
 static int
@@ -1755,7 +1803,7 @@ certificate_validate(struct rpki_certificate *cert)
 {
 	int error;
 
-	if (sk_X509_num(cert->rpp.ancestors) >= config_get_max_cert_depth())
+	if (chain_length(cert) >= config_get_max_cert_depth())
 		return pr_val_err("Certificate chain maximum depth exceeded.");
 
 	fnstack_push_map(&cert->map);
@@ -1771,6 +1819,7 @@ certificate_validate(struct rpki_certificate *cert)
 
 	switch (cert->type) {
 	case CERTYPE_TA:
+		pr_val_debug("Type: TA");
 		break;
 	case CERTYPE_CA:
 		pr_val_debug("Type: CA");
@@ -1833,7 +1882,7 @@ retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
 		goto end;
 	}
 
-	error = manifest_validate(ca->sias.rpkiManifest, mft, cage, ca);
+	error = manifest_traverse(ca->sias.rpkiManifest, mft, cage, ca);
 	if (error) {
 		if (cage_disable_refresh(cage))
 			goto retry;
@@ -1851,6 +1900,8 @@ retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
 			ghostbusters_traverse(map, ca);
 	}
 
+	cache_commit_rpp(ca->sias.caRepository, &ca->rpp);
+
 end:	free(cage);
 	return error;
 }
@@ -1859,16 +1910,20 @@ int
 traverse_tree(struct cache_mapping const *ta_map, struct validation *state)
 {
 	struct cert_stack stack;
-	struct rpki_certificate ta = { .map = *ta_map };
+	struct rpki_certificate *ta;
 	struct rpki_certificate *ca;
 	int error;
 
 	SLIST_INIT(&stack);
 
 	/* == Root certificate == */
-	error = certificate_traverse(&ta, &stack); // XXX clean up TA
+	ta = pzalloc(sizeof(struct rpki_certificate));
+	map_copy(&ta->map, ta_map);
+	ta->refcount = 1;
+
+	error = certificate_traverse(ta, &stack);
 	if (error)
-		return error;
+		goto end;
 
 	/*
 	 * From now on, the tree should be considered valid, even if subsequent
@@ -1886,5 +1941,6 @@ traverse_tree(struct cache_mapping const *ta_map, struct validation *state)
 		rpki_certificate_free(ca);
 	}
 
-	return 0;
+end:	rpki_certificate_free(ta);
+	return error;
 }

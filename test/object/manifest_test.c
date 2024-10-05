@@ -2,7 +2,6 @@
 #include <check.h>
 
 #include "alloc.c"
-#include "cachent.c"
 #include "common.c"
 #include "mock.c"
 #include "object/manifest.c"
@@ -10,10 +9,8 @@
 #include "types/path.c"
 #include "types/url.c"
 
-MOCK_ABORT_VOID(rrdp_state_cleanup, struct cachefile_notification *notif)
 MOCK_ABORT_INT(signed_object_decode, struct signed_object *sobj, char const *path)
 MOCK_ABORT_VOID(signed_object_cleanup, struct signed_object *sobj)
-MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 
 #define BUFFER_LEN 128
 static uint8_t buffer[BUFFER_LEN];

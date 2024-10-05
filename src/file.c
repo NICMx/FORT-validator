@@ -68,6 +68,8 @@ file_write_full(char const *path, unsigned char const *content,
 	size_t written;
 	int error;
 
+	pr_val_debug("Writing file: %s", path);
+
 	error = mkdir_p(path, false);
 	if (error)
 		return error;
@@ -178,7 +180,7 @@ merge_into(const char *src, const struct stat *st, int typeflag,
 	char *dst;
 	struct timespec times[2];
 
-	dst = join_paths(merge_dst, &src[src_offset]);
+	dst = path_join(merge_dst, &src[src_offset]);
 
 	if (S_ISDIR(st->st_mode)) {
 		pr_op_debug("mkdir -p %s", dst);
@@ -272,4 +274,38 @@ file_rm_rf(char const *path)
 {
 	/* TODO (performance) optimize that 32 */
 	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
+}
+
+void
+cseq_init(struct cache_sequence *seq, char *prefix)
+{
+	seq->prefix = prefix;
+	seq->next_id = 0;
+	seq->pathlen = strlen(prefix) + 4;
+}
+
+char *
+cseq_next(struct cache_sequence *seq)
+{
+	char *path;
+	int len;
+
+	do {
+		path = pmalloc(seq->pathlen);
+
+		// XXX not generic enough
+		len = snprintf(path, seq->pathlen, "%s/%lX",
+		    seq->prefix, seq->next_id);
+		if (len < 0) {
+			pr_val_err("Cannot compute new cache path: Unknown cause.");
+			return NULL;
+		}
+		if (len < seq->pathlen) {
+			seq->next_id++;
+			return path; /* Happy path */
+		}
+
+		seq->pathlen++;
+		free(path);
+	} while (true);
 }

@@ -168,7 +168,7 @@ __do_file_validation(struct validation_thread *thread)
 	thread->error = validation_prepare(&state, &tal, &collector);
 	if (thread->error) {
 		db_table_destroy(db);
-		goto end2;
+		goto end1;
 	}
 
 	ARRAYLIST_FOREACH(&tal.urls, url) {
@@ -178,7 +178,7 @@ __do_file_validation(struct validation_thread *thread)
 			continue;
 		if (traverse_tree(&map, state) != 0)
 			continue;
-		goto end1; /* Happy path */
+		goto end2; /* Happy path */
 	}
 
 	ARRAYLIST_FOREACH(&tal.urls, url) {
@@ -188,7 +188,7 @@ __do_file_validation(struct validation_thread *thread)
 			continue;
 		if (traverse_tree(&map, state) != 0)
 			continue;
-		goto end1; /* Happy path */
+		goto end2; /* Happy path */
 	}
 
 	pr_op_err("None of the TAL URIs yielded a successful traversal.");
@@ -196,8 +196,9 @@ __do_file_validation(struct validation_thread *thread)
 	db_table_destroy(db);
 	db = NULL;
 
-end1:	thread->db = db;
-end2:	tal_cleanup(&tal);
+end2:	thread->db = db;
+	validation_destroy(state);
+end1:	tal_cleanup(&tal);
 }
 
 static void *

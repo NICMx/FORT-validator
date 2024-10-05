@@ -226,13 +226,13 @@ roa_traverse(struct cache_mapping *map, struct rpki_certificate *parent)
 	/* Validate and handle everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
-		goto end3;
+		goto end4;
 	error = __handle_roa(roa, ee.resources);
 	if (error)
-		goto end3;
+		goto end4;
 	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, map->url);
 
-end3:	rpki_certificate_cleanup(&ee);
+end4:	rpki_certificate_cleanup(&ee);
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
 end2:	signed_object_cleanup(&sobj);
 end1:	fnstack_pop();

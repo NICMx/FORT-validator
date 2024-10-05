@@ -404,3 +404,42 @@ time_fatal(void)
 
 	return result;
 }
+
+int
+time2str(time_t tt, char *str)
+{
+	struct tm tmbuffer, *tm;
+
+	memset(&tmbuffer, 0, sizeof(tmbuffer));
+	tm = gmtime_r(&tt, &tmbuffer);
+	if (tm == NULL)
+		return errno;
+	if (strftime(str, FORT_TS_LEN, FORT_TS_FORMAT, tm) == 0)
+		return ENOSPC;
+
+	return 0;
+}
+
+int
+str2time(char const *str, time_t *tt)
+{
+	char const *consumed;
+	struct tm tm;
+	time_t time;
+	int error;
+
+	memset(&tm, 0, sizeof(tm));
+	consumed = strptime(str, FORT_TS_FORMAT, &tm);
+	if (consumed == NULL || (*consumed) != 0)
+		return pr_op_err("String '%s' does not appear to be a timestamp.",
+		    str);
+	time = timegm(&tm);
+	if (time == ((time_t) -1)) {
+		error = errno;
+		return pr_op_err("String '%s' does not appear to be a timestamp: %s",
+		    str, strerror(error));
+	}
+
+	*tt = time;
+	return 0;
+}

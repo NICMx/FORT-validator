@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "types/map.h"
+#include "types/rpp.h"
 
 int cache_setup(void);		/* Init this module */
 void cache_teardown(void);	/* Destroy this module */
@@ -43,6 +44,8 @@ struct cache_cage;
 struct cache_cage *cache_refresh_sias(struct sia_uris *);
 char const *cage_map_file(struct cache_cage *, char const *);
 bool cage_disable_refresh(struct cache_cage *);
+void cache_commit_rpp(char const *, struct rpp *);
+void cache_commit_file(struct cache_mapping *);
 
 void cache_print(void);		/* Dump cache in stdout */
 

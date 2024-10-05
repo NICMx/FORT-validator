@@ -192,7 +192,7 @@ START_TEST(full_rsync_timeout_test_1kb)
 	ensure_file_deleted("tmp/1kb-copy");
 	// XXX this is creating directories because of rsync_download's mkdir_p.
 	// Is this a symptom of a problem?
-	ck_assert_int_eq(0, rsync_download("tmp/1kb", "tmp/1kb-copy", false));
+	ck_assert_int_eq(0, rsync_download("tmp/1kb", "tmp/1kb-copy"));
 }
 END_TEST
 
@@ -201,7 +201,7 @@ START_TEST(full_rsync_timeout_test_3kb)
 	printf("3kb\n");
 	create_file("tmp/3kb", 3);
 	ensure_file_deleted("tmp/3kb-copy");
-	ck_assert_int_eq(0, rsync_download("tmp/3kb", "tmp/3kb-copy", false));
+	ck_assert_int_eq(0, rsync_download("tmp/3kb", "tmp/3kb-copy"));
 }
 END_TEST
 
@@ -211,7 +211,7 @@ START_TEST(full_rsync_timeout_test_5kb)
 	create_file("tmp/5kb", 5);
 	ensure_file_deleted("tmp/5kb-copy");
 	/* Max speed is 1kbps, timeout is 4 seconds */
-	ck_assert_int_eq(EIO, rsync_download("tmp/5kb", "tmp/5kb-copy", false));
+	ck_assert_int_eq(EIO, rsync_download("tmp/5kb", "tmp/5kb-copy"));
 }
 END_TEST
 

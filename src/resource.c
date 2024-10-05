@@ -81,9 +81,8 @@ unknown:
 static int
 inherit_aors(struct resources *resources, struct resources *parent, int family)
 {
-	// XXX is this really crit worthy?
 	if (parent == NULL)
-		pr_crit("Parent has no resources.");
+		return pr_val_err("Root certificate is trying to inherit IP resources from a parent.");
 
 	switch (family) {
 	case AF_INET:
@@ -368,7 +367,7 @@ static int
 inherit_asiors(struct resources *resources, struct resources *parent)
 {
 	if (parent == NULL)
-		pr_crit("Parent has no resources.");
+		return pr_val_err("Root certificate is trying to inherit AS resources from a parent.");
 
 	if (resources->asns != NULL)
 		return pr_val_err("Certificate inherits ASN resources while also defining others of its own.");

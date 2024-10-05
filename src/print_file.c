@@ -20,15 +20,11 @@
 static BIO *
 __rsync2bio(char const *src, char const *dst)
 {
-	struct cache_mapping map;
 	int error;
 
 	// XXX use the cache
 
-	map.url = (char *)src;
-	map.path = (char *)dst;
-
-	error = rsync_download(&map);
+	error = rsync_download(src, dst);
 	if (error) {
 		pr_op_err("rysnc download failed: %s", strerror(abs(error)));
 		return NULL;

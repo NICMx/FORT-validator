@@ -1,8 +1,6 @@
 #ifndef SRC_RSYNC_RSYNC_H_
 #define SRC_RSYNC_RSYNC_H_
 
-#include "types/map.h"
-
-int rsync_download(struct cache_mapping *);
+int rsync_download(char const *, char const *);
 
 #endif /* SRC_RSYNC_RSYNC_H_ */

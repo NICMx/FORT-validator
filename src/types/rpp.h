@@ -1,16 +1,12 @@
 #ifndef SRC_RPP_H_
 #define SRC_RPP_H_
 
-// XXX move to types?
-
 #include <openssl/x509.h>
 
 #include "types/map.h"
 
 /* Repository Publication Point */
 struct rpp {
-	STACK_OF(X509) *ancestors;		/* 1st = root, last = parent */
-
 	struct cache_mapping *files;
 	size_t nfiles;				/* Number of maps in @files */
 
