@@ -89,6 +89,7 @@ START_TEST(startup)
 	seq.prefix = "tmp/rrdp";
 	seq.next_id = 0;
 	seq.pathlen = strlen(seq.prefix);
+	seq.free_prefix = false;
 
 	dls[0] = NHDR("3")
 		NSS("https://host/9d-8/3/snapshot.xml",

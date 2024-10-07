@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <sys/queue.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "alloc.h"
 #include "cachetmp.h"
@@ -37,7 +38,7 @@ struct cache_node {
 typedef int (*dl_cb)(struct cache_node *rpp);
 
 struct cache_table {
-	char const *name;
+	char *name;
 	bool enabled;
 	struct cache_sequence seq;
 	struct cache_node *nodes; /* Hash Table */
@@ -89,27 +90,6 @@ delete_node(struct cache_table *tbl, struct cache_node *node)
 	map_cleanup(&node->map);
 	rrdp_state_free(node->rrdp);
 	free(node);
-}
-
-static char *
-get_cache_filename(char const *name, bool fatal)
-{
-	struct path_builder pb;
-	int error;
-
-	error = pb_init_cache(&pb, name);
-	if (error) {
-		if (fatal) {
-			pr_crit("Cannot create path to %s: %s", name,
-			    strerror(error));
-		} else {
-			pr_op_err("Cannot create path to %s: %s", name,
-			    strerror(error));
-			return NULL;
-		}
-	}
-
-	return pb.string;
 }
 
 char *
@@ -179,12 +159,12 @@ static int dl_http(struct cache_node *);
 static int dl_rrdp(struct cache_node *);
 
 static void
-init_table(struct cache_table *tbl, char const *name, bool enabled, dl_cb dl)
+init_table(struct cache_table *tbl, char *name, bool enabled, dl_cb dl)
 {
 	memset(tbl, 0, sizeof(*tbl));
 	tbl->name = name;
 	tbl->enabled = enabled;
-	cseq_init(&tbl->seq, path_join(config_get_local_repository(), name));
+	cseq_init(&tbl->seq, name, false);
 	tbl->download = dl;
 }
 
@@ -200,88 +180,84 @@ init_tables(void)
 static void
 init_cache_metafile(void)
 {
-	char *filename;
 	json_t *root;
 	json_error_t jerror;
 	char const *file_version;
 	int error;
 
-	filename = get_cache_filename(CACHE_METAFILE, true);
-	root = json_load_file(filename, 0, &jerror);
+	root = json_load_file(CACHE_METAFILE, 0, &jerror);
 
 	if (root == NULL) {
 		if (json_error_code(&jerror) == json_error_cannot_open_file)
-			pr_op_debug("%s does not exist.", filename);
+			pr_op_debug(CACHE_METAFILE " does not exist.");
 		else
-			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-			    filename, jerror.line, jerror.column, jerror.text);
+			pr_op_err("Json parsing failure at " CACHE_METAFILE
+			    " (%d:%d): %s", jerror.line, jerror.column,
+			    jerror.text);
 		goto invalid_cache;
 	}
 	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_err("The root tag of %s is not an object.", filename);
+		pr_op_err(CACHE_METAFILE "'s root tag is not an object.");
 		goto invalid_cache;
 	}
 
 	error = json_get_str(root, TAGNAME_VERSION, &file_version);
 	if (error) {
 		if (error > 0)
-			pr_op_err("%s is missing the " TAGNAME_VERSION " tag.",
-			    filename);
+			pr_op_err(CACHE_METAFILE " is missing the "
+			    TAGNAME_VERSION " tag.");
 		goto invalid_cache;
 	}
 
-	if (strcmp(file_version, PACKAGE_VERSION) == 0)
-		goto end;
+	if (strcmp(file_version, PACKAGE_VERSION) != 0)
+		goto invalid_cache;
+
+	json_decref(root);
+	return;
 
 invalid_cache:
-	pr_op_info("The cache appears to have been built by a different version of Fort. I'm going to clear it, just to be safe.");
-	file_rm_rf(config_get_local_repository());
-
-end:	json_decref(root);
-	free(filename);
+	pr_op_info("The cache seems to have been built by a different version of Fort. "
+	    "I'm going to clear it, just to be safe.");
+	file_rm_rf(".");
+	json_decref(root);
 }
 
 static void
 init_cachedir_tag(void)
 {
-	char *filename;
-
-	filename = get_cache_filename("CACHEDIR.TAG", false);
-	if (filename == NULL)
-		return;
-
+	static char const *filename = "CACHEDIR.TAG";
 	if (file_exists(filename) == ENOENT)
 		write_simple_file(filename,
 		   "Signature: 8a477f597d28d172789f06886806bc55\n"
 		   "# This file is a cache directory tag created by Fort.\n"
 		   "# For information about cache directory tags, see:\n"
 		   "#	https://bford.info/cachedir/\n");
-
-	free(filename);
 }
 
 static int
 init_tmp_dir(void)
 {
-	char *dirname;
 	int error;
 
-	dirname = get_cache_filename(CACHE_TMPDIR, true);
-
-	if (mkdir(dirname, CACHE_FILEMODE) < 0) {
+	if (mkdir(CACHE_TMPDIR, CACHE_FILEMODE) < 0) {
 		error = errno;
 		if (error != EEXIST)
 			return pr_op_err("Cannot create '%s': %s",
-			    dirname, strerror(error));
+			    CACHE_TMPDIR, strerror(error));
 	}
 
-	free(dirname);
 	return 0;
 }
 
 int
 cache_setup(void)
 {
+	if (chdir(config_get_local_repository()) < 0) {
+		pr_op_err("Cannot cd to the cache directory: %s",
+		    strerror(errno));
+		return errno;
+	}
+
 	// XXX Lock the cache directory
 	init_tables();
 	init_cache_metafile();
@@ -293,22 +269,9 @@ cache_setup(void)
 void
 cache_teardown(void)
 {
-	char *filename;
-
-	filename = get_cache_filename(CACHE_METAFILE, false);
-	if (filename == NULL)
-		return;
-
-	write_simple_file(filename, "{ \"" TAGNAME_VERSION "\": \""
+	// XXX catch result?
+	write_simple_file(CACHE_METAFILE, "{ \"" TAGNAME_VERSION "\": \""
 	    PACKAGE_VERSION "\" }\n");
-	free(filename);
-}
-
-static char *
-get_tal_json_filename(void)
-{
-	struct path_builder pb;
-	return pb_init_cache(&pb, TAL_METAFILE) ? NULL : pb.string;
 }
 
 static struct cache_node *
@@ -370,7 +333,6 @@ json2tbl(json_t *root, struct cache_table *tbl)
 static void
 load_tal_json(void)
 {
-	char *filename;
 	json_t *root;
 	json_error_t jerror;
 
@@ -379,24 +341,21 @@ load_tal_json(void)
 	 * without killing itself. It's just a cache of a cache.
 	 */
 
-	filename = get_tal_json_filename();
-	if (filename == NULL)
-		return;
+	pr_op_debug("Loading " TAL_METAFILE ".");
 
-	pr_op_debug("Loading %s.", filename);
-
-	root = json_load_file(filename, 0, &jerror);
+	root = json_load_file(TAL_METAFILE, 0, &jerror);
 
 	if (root == NULL) {
 		if (json_error_code(&jerror) == json_error_cannot_open_file)
-			pr_op_debug("%s does not exist.", filename);
+			pr_op_debug(TAL_METAFILE " does not exist.");
 		else
 			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-			    filename, jerror.line, jerror.column, jerror.text);
+			    TAL_METAFILE, jerror.line, jerror.column,
+			    jerror.text);
 		goto end;
 	}
 	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_err("The root tag of %s is not an object.", filename);
+		pr_op_err("The root tag of " TAL_METAFILE " is not an object.");
 		goto end;
 	}
 
@@ -406,7 +365,6 @@ load_tal_json(void)
 	json2tbl(root, &cache.fallback);
 
 end:	json_decref(root);
-	free(filename);
 }
 
 void
@@ -498,22 +456,16 @@ fail:	json_decref(json);
 static void
 write_tal_json(void)
 {
-	char *filename;
 	struct json_t *json;
 
 	json = build_tal_json();
 	if (json == NULL)
 		return;
 
-	filename = get_tal_json_filename();
-	if (filename == NULL)
-		goto end;
+	if (json_dump_file(json, TAL_METAFILE, JSON_INDENT(2)))
+		pr_op_err("Unable to write " TAL_METAFILE "; unknown cause.");
 
-	if (json_dump_file(json, filename, JSON_INDENT(2)))
-		pr_op_err("Unable to write %s; unknown cause.", filename);
-
-end:	json_decref(json);
-	free(filename);
+	json_decref(json);
 }
 
 static int
@@ -919,20 +871,15 @@ rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 static void
 cleanup_tmp(void)
 {
-	char *tmpdir = get_cache_filename(CACHE_TMPDIR, true);
-	if (nftw(tmpdir, rmf, 32, FTW_DEPTH | FTW_PHYS))
+	if (nftw(CACHE_TMPDIR, rmf, 32, FTW_DEPTH | FTW_PHYS))
 		pr_op_warn("Cannot empty the cache's tmp directory: %s",
 		    strerror(errno));
-	free(tmpdir);
 }
 
 static bool
 is_fallback(char const *path)
 {
-	// XXX just cd to the freaking cache, ffs
-	path += strlen(config_get_local_repository());
-	return str_starts_with(path, "fallback/") ||
-	       str_starts_with(path, "/fallback/");
+	return str_starts_with(path, "fallback/");
 }
 
 /* Hard-links @rpp's approved files into the fallback directory. */
@@ -1092,19 +1039,11 @@ remove_abandoned(void)
 {
 	// XXX no need to recurse anymore.
 	/*
-	char *rootpath;
-
-	rootpath = join_paths(config_get_local_repository(), "rsync");
-
 	nftw_root = cache.rsync;
-	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
-
-	strcpy(rootpath + strlen(rootpath) - 5, "https");
+	nftw("rsync", nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
 
 	nftw_root = cache.https;
-	nftw(rootpath, nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
-
-	free(rootpath);
+	nftw("https", nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
 	*/
 }
 
@@ -1158,10 +1097,6 @@ cache_commit(void)
 	cleanup_cache();
 	write_tal_json();
 	cache_foreach(delete_node);
-	free(cache.rsync.seq.prefix);
-	free(cache.https.seq.prefix);
-	free(cache.rrdp.seq.prefix);
-	free(cache.fallback.seq.prefix);
 }
 
 void

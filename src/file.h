@@ -41,9 +41,10 @@ struct cache_sequence {
 	char *prefix;
 	unsigned long next_id;
 	size_t pathlen;
+	bool free_prefix;
 };
 
-void cseq_init(struct cache_sequence *, char *);
+void cseq_init(struct cache_sequence *, char *, bool);
 char *cseq_next(struct cache_sequence *);
 
 /*

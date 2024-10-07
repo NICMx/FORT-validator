@@ -1218,7 +1218,7 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 
 		old = pzalloc(sizeof(struct rrdp_state));
 		/* session postponed! */
-		cseq_init(&old->seq, cage);
+		cseq_init(&old->seq, cage, true);
 		STAILQ_INIT(&old->delta_hashes);
 
 		error = handle_snapshot(&new, old);
@@ -1292,8 +1292,7 @@ rrdp_file(struct rrdp_state *state, char const *url)
 }
 
 char const *
-rrdp_create_fallback(char const *cage, struct rrdp_state **_state,
-    char const *url)
+rrdp_create_fallback(char *cage, struct rrdp_state **_state, char const *url)
 {
 	struct rrdp_state *state;
 	struct cache_file *file;
@@ -1302,7 +1301,7 @@ rrdp_create_fallback(char const *cage, struct rrdp_state **_state,
 	state = *_state;
 	if (state == NULL) {
 		*_state = state = pzalloc(sizeof(struct rrdp_state));
-		cseq_init(&state->seq, pstrdup(cage));
+		cseq_init(&state->seq, cage, false);
 	}
 
 	file = pzalloc(sizeof(struct cache_file));
@@ -1554,7 +1553,8 @@ rrdp_state_free(struct rrdp_state *state)
 		map_cleanup(&file->map);
 		free(file);
 	}
-	free(state->seq.prefix);
+	if (state->seq.free_prefix)
+		free(state->seq.prefix);
 	clear_delta_hashes(state);
 	free(state);
 }

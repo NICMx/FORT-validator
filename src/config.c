@@ -4,7 +4,9 @@
 #include <errno.h>
 #include <getopt.h>
 #include <libxml/xmlreader.h>
+#include <limits.h>
 #include <openssl/opensslv.h>
+#include <stdlib.h>
 #include <syslog.h>
 
 #include "alloc.h"
@@ -1139,6 +1141,25 @@ handle_opt(int opt)
 	return -ESRCH;
 }
 
+static int
+become_absolute_path(char **_path)
+{
+	char *relative = *_path;
+	char *absolute;
+
+	if (relative == NULL)
+		return 0;
+
+	absolute = realpath(relative, NULL);
+	if (!absolute)
+		return pr_op_err("Cannot resolve the absolute path of %s: %s",
+		    relative, strerror(errno));
+
+	free(relative);
+	*_path = absolute;
+	return 0;
+}
+
 int
 handle_flags_config(int argc, char **argv)
 {
@@ -1165,6 +1186,16 @@ handle_flags_config(int argc, char **argv)
 		rpki_config.payload = pstrdup(argv[optind]);
 
 	error = validate_config();
+	if (error)
+		goto end;
+
+	error = become_absolute_path(&rpki_config.tal);
+	if (error)
+		goto end;
+	error = become_absolute_path(&rpki_config.slurm);
+	if (error)
+		goto end;
+	error = become_absolute_path(&rpki_config.http.ca_path);
 	if (error)
 		goto end;
 

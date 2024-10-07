@@ -23,16 +23,18 @@ cache_tmpfile(char **filename)
 	struct path_builder pb;
 	int error;
 
-	error = pb_init_cache(&pb, CACHE_TMPDIR);
-	if (error)
-		return error;
+	pb_init(&pb);
 
+	error = pb_append(&pb, CACHE_TMPDIR);
+	if (error)
+		goto fail;
 	error = pb_append_u32(&pb, atomic_fetch_add(&file_counter, 1u));
-	if (error) {
-		pb_cleanup(&pb);
-		return error;
-	}
+	if (error)
+		goto fail;
 
 	*filename = pb.string;
 	return 0;
+
+fail:	pb_cleanup(&pb);
+	return error;
 }

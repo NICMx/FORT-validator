@@ -55,9 +55,9 @@ static void
 setup_test(void)
 {
 	dl_error = 0;
-	ck_assert_int_eq(0, system("rm -rf tmp"));
 	init_tables();
-	ck_assert_int_eq(0, system("mkdir -p tmp/rsync tmp/https tmp/rrdp tmp/fallback"));
+	ck_assert_int_eq(0, system("rm -rf rsync/ https/ rrdp/ fallback/"));
+	ck_assert_int_eq(0, system("mkdir rsync/ https/ rrdp/ fallback/"));
 }
 
 static struct cache_cage *
@@ -128,7 +128,7 @@ print_tree(void)
 	printf("\n");
 
 	printf("Files in cache:\n");
-	ck_assert_int_eq(0, nftw("tmp/", print_file, 32, FTW_PHYS));
+	ck_assert_int_eq(0, nftw(".", print_file, 32, FTW_PHYS));
 	printf("\n");
 }
 
@@ -324,7 +324,7 @@ new_iteration(bool outdate)
 
 	pr_op_debug("--- Unfreshening... ---");
 	cache_foreach(unfreshen);
-	ck_assert_int_eq(0, nftw("tmp/rsync", nftw_unfreshen, 32, FTW_PHYS));
+	ck_assert_int_eq(0, nftw(".", nftw_unfreshen, 32, FTW_PHYS));
 
 	pr_op_debug("---- Tree now stale. ----");
 	cache_print();
@@ -349,17 +349,17 @@ START_TEST(test_cache_download_rsync)
 	printf("==== Startup ====\n");
 	cage = run_dl_rsync("rsync://a.b.c/d", 1);
 	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/d", "tmp/rsync/0", NULL);
-	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "tmp/rsync/0/e/f.cer", NULL);
-	init_node_rsync(&nodes[0], "rsync://a.b.c/d", "tmp/rsync/0", 1, 0);
+	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
+	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
+	init_node_rsync(&nodes[0], "rsync://a.b.c/d", "rsync/0", 1, 0);
 	ck_cache_rsync(nodes);
 	free(cage);
 
 	printf("==== Redownload same file, nothing should happen ====\n");
 	cage = run_dl_rsync("rsync://a.b.c/d", 0);
 	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/d", "tmp/rsync/0", NULL);
-	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "tmp/rsync/0/e/f.cer", NULL);
+	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
+	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
 	ck_cache_rsync(nodes);
 	free(cage);
 
@@ -370,8 +370,8 @@ START_TEST(test_cache_download_rsync)
 	printf("==== Don't redownload child ====\n");
 	cage = run_dl_rsync("rsync://a.b.c/d/e", 0);
 	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/d", "tmp/rsync/0", NULL);
-	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "tmp/rsync/0/e/f.cer", NULL);
+	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
+	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
 	ck_cache_rsync(nodes);
 	free(cage);
 
@@ -384,18 +384,18 @@ START_TEST(test_cache_download_rsync)
 	printf("==== rsync truncated ====\n");
 	cage = run_dl_rsync("rsync://x.y.z/m/n/o", 1);
 	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://x.y.z/m", "tmp/rsync/1", NULL);
-	ck_cage(cage, "rsync://x.y.z/m/n/o", "tmp/rsync/1/n/o", NULL);
-	init_node_rsync(&nodes[1], "rsync://x.y.z/m", "tmp/rsync/1", 1, 0);
+	ck_cage(cage, "rsync://x.y.z/m", "rsync/1", NULL);
+	ck_cage(cage, "rsync://x.y.z/m/n/o", "rsync/1/n/o", NULL);
+	init_node_rsync(&nodes[1], "rsync://x.y.z/m", "rsync/1", 1, 0);
 	ck_cache_rsync(nodes);
 	free(cage);
 
 	printf("==== Sibling ====\n");
 	cage = run_dl_rsync("rsync://a.b.c/e/f", 1);
 	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/e", "tmp/rsync/2", NULL);
-	ck_cage(cage, "rsync://a.b.c/e/f/x/y/z", "tmp/rsync/2/f/x/y/z", NULL);
-	init_node_rsync(&nodes[2], "rsync://a.b.c/e", "tmp/rsync/2", 1, 0);
+	ck_cage(cage, "rsync://a.b.c/e", "rsync/2", NULL);
+	ck_cage(cage, "rsync://a.b.c/e/f/x/y/z", "rsync/2/f/x/y/z", NULL);
+	init_node_rsync(&nodes[2], "rsync://a.b.c/e", "rsync/2", 1, 0);
 	ck_cache_rsync(nodes);
 	free(cage);
 
@@ -409,8 +409,8 @@ START_TEST(test_cache_download_rsync_error)
 
 	setup_test();
 
-	init_node_rsync(&nodes[0], "rsync://a.b.c/d", "tmp/rsync/0", 1, 0);
-	init_node_rsync(&nodes[1], "rsync://a.b.c/e", "tmp/rsync/1", 1, EINVAL);
+	init_node_rsync(&nodes[0], "rsync://a.b.c/d", "rsync/0", 1, 0);
+	init_node_rsync(&nodes[1], "rsync://a.b.c/e", "rsync/1", 1, EINVAL);
 
 	printf("==== Startup ====\n");
 	dl_error = 0;
@@ -437,61 +437,62 @@ START_TEST(test_rsync_commit)
 
 	setup_test();
 
-	ck_assert_int_eq(0, system("mkdir -p tmp/rsync/0 tmp/rsync/1 tmp/rsync/2 tmp/rsync/3"));
+	ck_assert_int_eq(0, system("mkdir rsync/0 rsync/1 rsync/2 rsync/3"));
 
 	/* RPP0: Will remain constant */
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/0/0", "A"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/0/1", "B"));
+	ck_assert_int_eq(0, write_simple_file("rsync/0/0", "A"));
+	ck_assert_int_eq(0, write_simple_file("rsync/0/1", "B"));
 	/* RPP1: Will be added in its second cycle */
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/1/0", "C"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/1/1", "D"));
+	ck_assert_int_eq(0, write_simple_file("rsync/1/0", "C"));
+	ck_assert_int_eq(0, write_simple_file("rsync/1/1", "D"));
 	/* RPP2: Will be removed in its second cycle */
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/2/0", "E"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/2/1", "F"));
+	ck_assert_int_eq(0, write_simple_file("rsync/2/0", "E"));
+	ck_assert_int_eq(0, write_simple_file("rsync/2/1", "F"));
 	/* RPP3: Will be updated in its second cycle */
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/3/0", "G")); /* Keeper */
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/3/1", "H")); /* Added */
-	ck_assert_int_eq(0, write_simple_file("tmp/rsync/3/2", "I")); /* Removed */
+	ck_assert_int_eq(0, write_simple_file("rsync/3/0", "G")); /* Keeper */
+	ck_assert_int_eq(0, write_simple_file("rsync/3/1", "H")); /* Added */
+	ck_assert_int_eq(0, write_simple_file("rsync/3/2", "I")); /* Removed */
 
 	/* Commit 1: Empty -> Empty */
 	/* Commit 2: Empty -> Empty (just free noise) */
 	for (i = 0; i < 2; i++) {
 		commit_fallbacks();
-		ck_filesystem("tmp/fallback", NULL);
+		ck_filesystem("fallback", NULL);
 
 		new_iteration(false);
 	}
 
 	/* Commit 3: Empty -> Populated */
-	queue_commit("rsync://domain/mod/rpp0", "tmp/rsync/0/0", "tmp/rsync/0/1");
-	queue_commit("rsync://domain/mod/rpp2", "tmp/rsync/2/0", "tmp/rsync/2/1");
-	queue_commit("rsync://domain/mod/rpp3", "tmp/rsync/3/0", "tmp/rsync/3/2");
+	queue_commit("rsync://domain/mod/rpp0", "rsync/0/0", "rsync/0/1");
+	queue_commit("rsync://domain/mod/rpp2", "rsync/2/0", "rsync/2/1");
+	queue_commit("rsync://domain/mod/rpp3", "rsync/3/0", "rsync/3/2");
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback",
-	    /* RPP0 */ "tmp/fallback/0/0", "A", "tmp/fallback/0/1", "B",
-	    /* RPP2 */ "tmp/fallback/1/0", "E", "tmp/fallback/1/1", "F",
-	    /* RPP3 */ "tmp/fallback/2/0", "G", "tmp/fallback/2/1", "I",
+	ck_filesystem("fallback",
+	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B",
+	    /* RPP2 */ "fallback/1/0", "E", "fallback/1/1", "F",
+	    /* RPP3 */ "fallback/2/0", "G", "fallback/2/1", "I",
 	    NULL);
 
 	new_iteration(false);
 
 	/* Commit 4: Populated -> Populated */
 	/* XXX check the refresh does, in fact, only return fallbacks when the RPP doesn't change */
-	queue_commit("rsync://domain/mod/rpp0", "tmp/fallback/0/0", "tmp/fallback/0/1");
-	queue_commit("rsync://domain/mod/rpp1", "tmp/rsync/1/0", "tmp/rsync/1/1");
-	queue_commit("rsync://domain/mod/rpp3", "tmp/fallback/2/0", "tmp/rsync/3/1");
+	queue_commit("rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
+	queue_commit("rsync://domain/mod/rpp1", "rsync/1/0", "rsync/1/1");
+	queue_commit("rsync://domain/mod/rpp3", "fallback/2/0", "rsync/3/1");
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback",
-	    /* RPP0 */ "tmp/fallback/0/0", "A", "tmp/fallback/0/1", "B",
-	    /* RPP3 */ "tmp/fallback/2/0", "G", "tmp/fallback/2/2", "H",
-	    /* RPP1 */ "tmp/fallback/3/0", "C", "tmp/fallback/3/1", "D",
+
+	ck_filesystem("fallback",
+	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B",
+	    /* RPP3 */ "fallback/2/0", "G", "fallback/2/2", "H",
+	    /* RPP1 */ "fallback/3/0", "C", "fallback/3/1", "D",
 	    NULL);
 
 	new_iteration(false);
 
 	/* Commit 5: Populated -> Empty */
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback", NULL);
+	ck_filesystem("fallback", NULL);
 
 	cache_foreach(delete_node);
 }
@@ -504,22 +505,22 @@ START_TEST(test_cache_download_https)
 	setup_test();
 
 	printf("==== Download file ====\n");
-	run_dl_https("https://a.b.c/d/e", 1, "tmp/https/0");
-	init_node_https(&nodes[0], "https://a.b.c/d/e", "tmp/https/0", 1, 0);
+	run_dl_https("https://a.b.c/d/e", 1, "https/0");
+	init_node_https(&nodes[0], "https://a.b.c/d/e", "https/0", 1, 0);
 	ck_cache_https(nodes);
 
 	printf("==== Download same file ====\n");
-	run_dl_https("https://a.b.c/d/e", 0, "tmp/https/0");
+	run_dl_https("https://a.b.c/d/e", 0, "https/0");
 	ck_cache_https(nodes);
 
 	printf("==== Download something else 1 ====\n");
-	run_dl_https("https://a.b.c/e", 1, "tmp/https/1");
-	init_node_https(&nodes[1], "https://a.b.c/e", "tmp/https/1", 1, 0);
+	run_dl_https("https://a.b.c/e", 1, "https/1");
+	init_node_https(&nodes[1], "https://a.b.c/e", "https/1", 1, 0);
 	ck_cache_https(nodes);
 
 	printf("==== Download something else 2 ====\n");
-	run_dl_https("https://x.y.z/e", 1, "tmp/https/2");
-	init_node_https(&nodes[2], "https://x.y.z/e", "tmp/https/2", 1, 0);
+	run_dl_https("https://x.y.z/e", 1, "https/2");
+	init_node_https(&nodes[2], "https://x.y.z/e", "https/2", 1, 0);
 	ck_cache_https(nodes);
 
 	cleanup_test();
@@ -532,22 +533,22 @@ START_TEST(test_cache_download_https_error)
 
 	setup_test();
 
-	init_node_https(&nodes[0], "https://a.b.c/d", "tmp/https/0", 1, 0);
-	init_node_https(&nodes[1], "https://a.b.c/e", "tmp/https/1", 1, EINVAL);
+	init_node_https(&nodes[0], "https://a.b.c/d", "https/0", 1, 0);
+	init_node_https(&nodes[1], "https://a.b.c/e", "https/1", 1, EINVAL);
 
 	printf("==== Startup ====\n");
 	dl_error = 0;
-	run_dl_https("https://a.b.c/d", 1, "tmp/https/0");
+	run_dl_https("https://a.b.c/d", 1, "https/0");
 	dl_error = EINVAL;
 	run_dl_https("https://a.b.c/e", 1, NULL);
 	ck_cache_https(nodes);
 
 	printf("==== Regardless of error, not reattempted because same iteration ====\n");
 	dl_error = -EINVAL;
-	run_dl_https("https://a.b.c/d", 0, "tmp/https/0");
+	run_dl_https("https://a.b.c/d", 0, "https/0");
 	run_dl_https("https://a.b.c/e", 0, NULL);
 	dl_error = 0;
-	run_dl_https("https://a.b.c/d", 0, "tmp/https/0");
+	run_dl_https("https://a.b.c/d", 0, "https/0");
 	run_dl_https("https://a.b.c/e", 0, NULL);
 	ck_cache_https(nodes);
 
@@ -563,51 +564,45 @@ START_TEST(test_https_commit)
 
 	setup_test();
 
-	ck_assert_int_eq(0, write_simple_file("tmp/https/50", "A")); /* Keeper */
-	ck_assert_int_eq(0, write_simple_file("tmp/https/51", "B")); /* Added */
-	ck_assert_int_eq(0, write_simple_file("tmp/https/52", "C")); /* Removed */
+	ck_assert_int_eq(0, write_simple_file("https/50", "A")); /* Keeper */
+	ck_assert_int_eq(0, write_simple_file("https/51", "B")); /* Added */
+	ck_assert_int_eq(0, write_simple_file("https/52", "C")); /* Removed */
 
 	/* 1, 2 */
 	for (i = 0; i < 2; i++) {
 		commit_fallbacks();
-		ck_filesystem("tmp/fallback", NULL);
+		ck_filesystem("fallback", NULL);
 
 		new_iteration(false);
 	}
 
 	/* 3 */
 	map.url = "https://domain/rpki/ta50.cer";
-	map.path = "tmp/https/50";
+	map.path = "https/50";
 	cache_commit_file(&map);
 	map.url = "https://domain/rpki/ta52.cer";
-	map.path = "tmp/https/52";
+	map.path = "https/52";
 	cache_commit_file(&map);
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback",
-	    "tmp/fallback/0", "A",
-	    "tmp/fallback/1", "C",
-	    NULL);
+	ck_filesystem("fallback", "fallback/0", "A", "fallback/1", "C", NULL);
 
 	new_iteration(false);
 
 	/* 4 */
 	map.url = "https://domain/rpki/ta50.cer";
-	map.path = "tmp/fallback/0";
+	map.path = "fallback/0";
 	cache_commit_file(&map);
 	map.url = "https://domain/rpki/ta51.cer";
-	map.path = "tmp/https/51";
+	map.path = "https/51";
 	cache_commit_file(&map);
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback",
-	    "tmp/fallback/0", "A",
-	    "tmp/fallback/2", "B",
-	    NULL);
+	ck_filesystem("fallback", "fallback/0", "A", "fallback/2", "B", NULL);
 
 	new_iteration(false);
 
 	/* 5 */
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback", NULL);
+	ck_filesystem("fallback", NULL);
 
 	cache_foreach(delete_node);
 }
@@ -620,55 +615,55 @@ START_TEST(test_rrdp_commit)
 
 	setup_test();
 
-	ck_assert_int_eq(0, system("mkdir -p tmp/rrdp/0 tmp/rrdp/1 tmp/rrdp/2 tmp/rrdp/3"));
+	ck_assert_int_eq(0, system("mkdir rrdp/0 rrdp/1 rrdp/2 rrdp/3"));
 
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/0/0", "A"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/0/1", "B"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/1/0", "C"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/1/1", "D"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/2/0", "E"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/2/1", "F"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/3/0", "G"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/3/1", "H"));
-	ck_assert_int_eq(0, write_simple_file("tmp/rrdp/3/2", "I"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/0/0", "A"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/0/1", "B"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/1/0", "C"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/1/1", "D"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/2/0", "E"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/2/1", "F"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/3/0", "G"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/3/1", "H"));
+	ck_assert_int_eq(0, write_simple_file("rrdp/3/2", "I"));
 
 	/* 1, 2 */
 	for (i = 0; i < 2; i++) {
 		commit_fallbacks();
-		ck_filesystem("tmp/fallback", NULL);
+		ck_filesystem("fallback", NULL);
 
 		new_iteration(false);
 	}
 
 	/* 3 */
-	queue_commit("rsync://domain/mod/rpp0", "tmp/rrdp/0/0", "tmp/rrdp/0/1");
-	queue_commit("rsync://domain/mod/rpp2", "tmp/rrdp/2/0", "tmp/rrdp/2/1");
-	queue_commit("rsync://domain/mod/rpp3", "tmp/rrdp/3/0", "tmp/rrdp/3/2");
+	queue_commit("rsync://domain/mod/rpp0", "rrdp/0/0", "rrdp/0/1");
+	queue_commit("rsync://domain/mod/rpp2", "rrdp/2/0", "rrdp/2/1");
+	queue_commit("rsync://domain/mod/rpp3", "rrdp/3/0", "rrdp/3/2");
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback",
-	    "tmp/fallback/0/0", "A", "tmp/fallback/0/1", "B",
-	    "tmp/fallback/1/0", "E", "tmp/fallback/1/1", "F",
-	    "tmp/fallback/2/0", "G", "tmp/fallback/2/1", "I",
+	ck_filesystem("fallback",
+	    "fallback/0/0", "A", "fallback/0/1", "B",
+	    "fallback/1/0", "E", "fallback/1/1", "F",
+	    "fallback/2/0", "G", "fallback/2/1", "I",
 	    NULL);
 
 	new_iteration(false);
 
 	/* 4 */
-	queue_commit("rsync://domain/mod/rpp0", "tmp/fallback/0/0", "tmp/fallback/0/1");
-	queue_commit("rsync://domain/mod/rpp1", "tmp/rrdp/1/0", "tmp/rrdp/1/1");
-	queue_commit("rsync://domain/mod/rpp3", "tmp/fallback/2/0", "tmp/rrdp/3/1");
+	queue_commit("rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
+	queue_commit("rsync://domain/mod/rpp1", "rrdp/1/0", "rrdp/1/1");
+	queue_commit("rsync://domain/mod/rpp3", "fallback/2/0", "rrdp/3/1");
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback",
-	    "tmp/fallback/0/0", "A", "tmp/fallback/0/1", "B",
-	    "tmp/fallback/2/0", "G", "tmp/fallback/2/2", "H",
-	    "tmp/fallback/3/0", "C", "tmp/fallback/3/1", "D",
+	ck_filesystem("fallback",
+	    "fallback/0/0", "A", "fallback/0/1", "B",
+	    "fallback/2/0", "G", "fallback/2/2", "H",
+	    "fallback/3/0", "C", "fallback/3/1", "D",
 	    NULL);
 
 	new_iteration(false);
 
 	/* 5 */
 	commit_fallbacks();
-	ck_filesystem("tmp/fallback", NULL);
+	ck_filesystem("fallback", NULL);
 
 	cache_foreach(delete_node);
 }
@@ -708,8 +703,17 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = create_suite();
 	dls[0] = "Fort\n";
+	if (mkdir("tmp", CACHE_FILEMODE) < 0 && errno != EEXIST) {
+		fprintf(stderr, "mkdir('tmp/'): %s\n", strerror(errno));
+		return 1;
+	}
+	if (chdir("tmp") < 0) {
+		fprintf(stderr, "chdir('tmp/'): %s\n", strerror(errno));
+		return 1;
+	}
+
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

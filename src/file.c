@@ -277,11 +277,12 @@ file_rm_rf(char const *path)
 }
 
 void
-cseq_init(struct cache_sequence *seq, char *prefix)
+cseq_init(struct cache_sequence *seq, char *prefix, bool free_prefix)
 {
 	seq->prefix = prefix;
 	seq->next_id = 0;
 	seq->pathlen = strlen(prefix) + 4;
+	seq->free_prefix = free_prefix;
 }
 
 char *

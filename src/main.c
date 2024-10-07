@@ -129,6 +129,7 @@ main(int argc, char **argv)
 	error = handle_flags_config(argc, argv);
 	if (error)
 		goto revert_log;
+
 	error = nid_init();
 	if (error)
 		goto revert_config;

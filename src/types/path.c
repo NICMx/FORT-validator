@@ -49,27 +49,6 @@ __pb_init(struct path_builder *pb, size_t reserve)
 	pb->capacity = INITIAL_CAPACITY;
 }
 
-int
-pb_init_cache(struct path_builder *pb, char const *subdir)
-{
-	int error;
-
-	pb_init(pb);
-
-	error = pb_append(pb, config_get_local_repository());
-	if (error)
-		goto cancel;
-	error = pb_append(pb, subdir);
-	if (error)
-		goto cancel;
-
-	return 0;
-
-cancel:
-	pb_cleanup(pb);
-	return error;
-}
-
 static int
 pb_grow(struct path_builder *pb, size_t total_len, char const *addend)
 {

@@ -14,8 +14,7 @@ int rrdp_update(struct cache_mapping const *, time_t, bool *,
     struct cache_sequence *, struct rrdp_state **);
 char const *rrdp_file(struct rrdp_state *, char const *);
 
-char const *rrdp_create_fallback(char const *, struct rrdp_state **,
-    char const *);
+char const *rrdp_create_fallback(char *, struct rrdp_state **, char const *);
 
 json_t *rrdp_state2json(struct rrdp_state *);
 int rrdp_json2state(json_t *, struct rrdp_state **);
