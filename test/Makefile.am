@@ -23,7 +23,6 @@ MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
 
 check_PROGRAMS  = address.test
 check_PROGRAMS += base64.test
-check_PROGRAMS += cachent.test
 check_PROGRAMS += cache.test
 check_PROGRAMS += common.test
 check_PROGRAMS += db_table.test
@@ -53,9 +52,6 @@ address_test_LDADD = ${MY_LDADD}
 
 base64_test_SOURCES = base64_test.c
 base64_test_LDADD = ${MY_LDADD}
-
-cachent_test_SOURCES = cachent_test.c
-cachent_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 cache_test_SOURCES = cache_test.c
 cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
