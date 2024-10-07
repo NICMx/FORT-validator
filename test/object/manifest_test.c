@@ -65,7 +65,7 @@ START_TEST(check_validate_current_directory)
 END_TEST
 
 static Suite *
-mft_suite(void)
+create_suite(void)
 {
 	Suite *suite;
 	TCase *core;
@@ -85,7 +85,7 @@ main(int argc, char **argv)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = mft_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

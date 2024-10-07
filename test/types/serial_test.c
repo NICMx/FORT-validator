@@ -120,7 +120,7 @@ START_TEST(rfc1982_section_5_2)
 }
 END_TEST
 
-static Suite *serial_suite(void)
+static Suite *create_suite(void)
 {
 	Suite *suite;
 	TCase *core;
@@ -142,7 +142,7 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = serial_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

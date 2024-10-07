@@ -114,7 +114,7 @@ START_TEST(test_base64_decode)
 END_TEST
 
 static Suite *
-pdu_suite(void)
+create_suite(void)
 {
 	Suite *suite;
 	TCase *core;
@@ -134,7 +134,7 @@ main(int argc, char **argv)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = pdu_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

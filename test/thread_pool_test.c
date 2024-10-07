@@ -61,7 +61,7 @@ START_TEST(tpool_multiple_work)
 }
 END_TEST
 
-static Suite *thread_pool_suite(void)
+static Suite *create_suite(void)
 {
 	Suite *suite;
 	TCase *single, *multiple;
@@ -85,7 +85,7 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = thread_pool_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

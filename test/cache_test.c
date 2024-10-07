@@ -676,7 +676,7 @@ END_TEST
 
 /* Boilerplate */
 
-static Suite *cache_suite(void)
+static Suite *create_suite(void)
 {
 	Suite *suite;
 	TCase *rsync, *https, *rrdp;
@@ -708,7 +708,7 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = cache_suite();
+	suite = create_suite();
 	dls[0] = "Fort\n";
 
 	runner = srunner_create(suite);

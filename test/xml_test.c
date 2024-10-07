@@ -73,7 +73,7 @@ START_TEST(relax_ng_valid)
 }
 END_TEST
 
-static Suite *xml_load_suite(void)
+static Suite *create_suite(void)
 {
 	Suite *suite;
 	TCase *validate;
@@ -93,7 +93,7 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = xml_load_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

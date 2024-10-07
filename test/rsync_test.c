@@ -215,7 +215,7 @@ START_TEST(full_rsync_timeout_test_5kb)
 }
 END_TEST
 
-static Suite *xml_load_suite(void)
+static Suite *create_suite(void)
 {
 	Suite *suite;
 	TCase *pipes;
@@ -246,7 +246,7 @@ int main(void)
 	init_content();
 	init_tmp();
 
-	suite = xml_load_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

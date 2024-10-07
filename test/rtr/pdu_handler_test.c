@@ -388,7 +388,7 @@ START_TEST(test_bad_session_id)
 }
 END_TEST
 
-static Suite *pdu_suite(void)
+static Suite *create_suite(void)
 {
 	Suite *suite;
 	TCase *core, *error;
@@ -414,7 +414,7 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = pdu_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);

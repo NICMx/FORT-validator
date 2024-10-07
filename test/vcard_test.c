@@ -99,7 +99,7 @@ START_TEST(vcard_normal)
 }
 END_TEST
 
-static Suite *ghostbusters_suite(void)
+static Suite *create_suite(void)
 {
 	Suite *suite;
 	TCase *hgv;
@@ -118,7 +118,7 @@ int main(void)
 	SRunner *runner;
 	int tests_failed;
 
-	suite = ghostbusters_suite();
+	suite = create_suite();
 
 	runner = srunner_create(suite);
 	srunner_run_all(runner, CK_NORMAL);
