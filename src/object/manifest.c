@@ -1,30 +1,17 @@
 #include "object/manifest.h"
 
 #include "algorithm.h"
-#include "asn1/asn1c/GeneralizedTime.h"
+#include "alloc.h"
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/decode.h"
-#include "asn1/oid.h"
 #include "common.h"
-#include "crypto/hash.h"
+#include "config.h"
+#include "hash.h"
 #include "log.h"
-#include "object/certificate.h"
 #include "object/crl.h"
-#include "object/roa.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
-
-static int
-cage(struct cache_mapping **map, struct cache_mapping *notif)
-{
-	if (notif == NULL) {
-		/* No need to cage */
-		map_refget(*map);
-		return 0;
-	}
-
-	return map_create_caged(map, notif, map_get_url(*map));
-}
+#include "types/path.h"
 
 static int
 decode_manifest(struct signed_object *sobj, struct Manifest **result)
@@ -89,10 +76,10 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 		    TM_ARGS(nextUpdate));
 	}
 
-	now_tt = 0;
-	error = get_current_time(&now_tt);
-	if (error)
-		return error;
+	now_tt = config_get_validation_time();
+	if (now_tt == 0)
+		now_tt = time_fatal();
+
 	if (gmtime_r(&now_tt, &now) == NULL) {
 		error = errno;
 		return pr_val_err("gmtime_r(now) error %d: %s", error,
@@ -185,204 +172,210 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
-/**
- * Computes the hash of the file @map, and compares it to @expected (The
- * "expected" hash).
- *
- * Returns:
- *   0 if no errors happened and the hashes match, or the hash doesn't match
- *     but there's an incidence to ignore such error.
- * < 0 if there was an error that can't be ignored.
- * > 0 if there was an error but it can be ignored (file not found and there's
- *     an incidence to ignore this).
- */
-static int
-hash_validate_mft_file(struct cache_mapping *map, BIT_STRING_t const *expected)
+static void
+shuffle_mft_files(struct Manifest *mft)
 {
-	struct hash_algorithm const *algorithm;
-	size_t hash_size;
-	unsigned char actual[EVP_MAX_MD_SIZE];
-	int error;
+	int i, j;
+	unsigned int seed, rnd;
+	struct FileAndHash *tmpfah;
 
-	algorithm = hash_get_sha256();
-	hash_size = hash_get_size(algorithm);
+	seed = time(NULL) ^ getpid();
 
-	if (expected->size != hash_size)
-		return pr_val_err("%s string has bogus size: %zu",
-		    hash_get_name(algorithm), expected->size);
-	if (expected->bits_unused != 0)
-		return pr_val_err("Hash string has unused bits.");
+	/* Fisher-Yates shuffle with modulo bias */
+	for (i = 0; i < mft->fileList.list.count - 1; i++) {
+		rnd = rand_r(&seed);
+		j = i + rnd % (mft->fileList.list.count - i);
+		tmpfah = mft->fileList.list.array[j];
+		mft->fileList.list.array[j] = mft->fileList.list.array[i];
+		mft->fileList.list.array[i] = tmpfah;
+	}
+}
+
+static bool
+is_valid_mft_file_chara(uint8_t chara)
+{
+	return ('a' <= chara && chara <= 'z')
+	    || ('A' <= chara && chara <= 'Z')
+	    || ('0' <= chara && chara <= '9')
+	    || (chara == '-')
+	    || (chara == '_');
+}
+
+/* RFC 9286, section 4.2.2 */
+static int
+validate_mft_filename(IA5String_t *ia5)
+{
+	size_t dot;
+	size_t i;
+
+	if (ia5->size < 5)
+		return pr_val_err("File name is too short (%zu < 5).", ia5->size);
+	dot = ia5->size - 4;
+	if (ia5->buf[dot] != '.')
+		return pr_val_err("File name is missing three-letter extension.");
+
+	for (i = 0; i < ia5->size; i++)
+		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i]))
+			return pr_val_err("File name contains illegal character #%u",
+			    ia5->buf[i]);
 
 	/*
-	 * TODO (#82) This is atrocious. Implement RFC 9286, and probably reuse
-	 * hash_validate_file().
+	 * Well... the RFC says the extension must match a IANA listing,
+	 * but rejecting unknown extensions is a liability since they keep
+	 * adding new ones, and people rarely updates.
+	 * If we don't have a handler, we'll naturally ignore the file.
 	 */
-
-	error = hash_file(algorithm, map_get_path(map), actual, NULL);
-	if (error) {
-		if (error == EACCES || error == ENOENT) {
-			/* FIXME .................. */
-			if (incidence(INID_MFT_FILE_NOT_FOUND,
-			    "File '%s' listed at manifest doesn't exist.",
-			    map_val_get_printable(map)))
-				return -EINVAL;
-
-			return error;
-		}
-		/* Any other error (crypto, file read) */
-		return ENSURE_NEGATIVE(error);
-	}
-
-	if (memcmp(expected->buf, actual, hash_size) != 0) {
-		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,
-		    "File '%s' does not match its manifest hash.",
-		    map_val_get_printable(map));
-	}
-
 	return 0;
 }
 
 static int
-build_rpp(struct Manifest *mft, struct cache_mapping *notif,
-    struct cache_mapping *mft_map, struct rpp **pp)
+check_file_and_hash(struct FileAndHash *fah, char const *path)
 {
-	int i;
-	struct FileAndHash *fah;
-	struct cache_mapping *map;
+	if (fah->hash.bits_unused != 0)
+		return pr_val_err("Hash string has unused bits.");
+
+	/* Includes file exists validation, obv. */
+	return hash_validate_file(hash_get_sha256(), path,
+	    fah->hash.buf, fah->hash.size);
+}
+
+/*
+ * XXX
+ *
+ * revoked manifest: 6.6
+ * CRL not in fileList: 6.6
+ * fileList file in different folder: 6.6
+ * manifest is identified by id-ad-rpkiManifest. (A directory will have more
+ * than 1 on rollover.)
+ * id-ad-rpkiManifest not found: 6.6
+ * invalid manifest: 6.6
+ * stale manifest: 6.6
+ * fileList file not found: 6.6
+ * bad hash: 6.6
+ * 6.6: warning, fallback to previous version. Children inherit this.
+ */
+
+static int
+build_rpp(char const *mft_url, struct Manifest *mft, struct cache_cage *cage,
+    struct rpki_certificate *parent)
+{
+	struct rpp *rpp;
+	char *rpp_url;
+	unsigned int i;
+	struct FileAndHash *src;
+	struct cache_mapping *dst;
+	char const *path;
 	int error;
 
-	*pp = rpp_create();
+	shuffle_mft_files(mft);
+
+	rpp = &parent->rpp;
+	rpp_url = path_parent(mft_url);
+	rpp->nfiles = mft->fileList.list.count;
+	rpp->files = pzalloc(rpp->nfiles * sizeof(*rpp->files));
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
-		fah = mft->fileList.list.array[i];
+		src = mft->fileList.list.array[i];
+		dst = &rpp->files[i];
 
-		error = map_create_mft(&map, notif, mft_map, &fah->file);
 		/*
-		 * Not handling ENOTRSYNC is fine because the manifest URL
-		 * should have been RSYNC. Something went wrong if an RSYNC URL
-		 * plus a relative path is not RSYNC.
+		 * IA5String is a subset of ASCII. However, IA5String_t doesn't
+		 * seem to be guaranteed to be NULL-terminated.
 		 */
+
+		error = validate_mft_filename(&src->file);
 		if (error)
-			goto fail;
+			goto revert;
 
-		/*
-		 * Expect:
-		 * - Negative value: an error not to be ignored, the whole
-		 *   manifest will be discarded.
-		 * - Zero value: hash at manifest matches file's hash, or it
-		 *   doesn't match its hash but there's an incidence to ignore
-		 *   such error.
-		 * - Positive value: file doesn't exist and keep validating
-		 *   manifest.
-		 */
-		error = hash_validate_mft_file(map, &fah->hash);
-		if (error < 0) {
-			map_refput(map);
-			goto fail;
+		dst->url = path_childn(rpp_url,
+		    (char const *)src->file.buf,
+		    src->file.size);
+
+		path = cage_map_file(cage, dst->url);
+		if (!path) {
+			error = pr_val_err(
+			    "Manifest file '%s' is absent from the cache.",
+			    dst->url);
+			goto revert;
 		}
-		if (error > 0) {
-			map_refput(map);
-			continue;
+		dst->path = pstrdup(path);
+
+		error = check_file_and_hash(src, dst->path);
+		if (error)
+			goto revert;
+
+		if (strcmp(((char const *)src->file.buf) + src->file.size - 4, ".crl") == 0) {
+			if (rpp->crl.map != NULL) {
+				error = pr_val_err(
+				    "Manifest has more than one CRL.");
+				goto revert;
+			}
+			rpp->crl.map = dst;
 		}
-
-		if (map_has_extension(map, ".cer"))
-			rpp_add_cert(*pp, map);
-		else if (map_has_extension(map, ".roa"))
-			rpp_add_roa(*pp, map);
-		else if (map_has_extension(map, ".crl"))
-			error = rpp_add_crl(*pp, map);
-		else if (map_has_extension(map, ".gbr"))
-			rpp_add_ghostbusters(*pp, map);
-		else
-			map_refput(map); /* ignore it. */
-
-		if (error) {
-			map_refput(map);
-			goto fail;
-		} /* Otherwise ownership was transferred to @pp. */
 	}
 
 	/* rfc6486#section-7 */
-	if (rpp_get_crl(*pp) == NULL) {
+	if (rpp->crl.map == NULL) {
 		error = pr_val_err("Manifest lacks a CRL.");
-		goto fail;
+		goto revert;
 	}
 
+	error = crl_load(rpp->crl.map, parent->x509, &rpp->crl.obj);
+	if (error)
+		goto revert;
+
+	free(rpp_url);
 	return 0;
 
-fail:
-	rpp_refput(*pp);
+revert:	rpp_cleanup(rpp);
+	free(rpp_url);
 	return error;
 }
 
-/**
- * Validates the manifest pointed by @map, returns the RPP described by it in
- * @pp.
- */
 int
-handle_manifest(struct cache_mapping *map, struct cache_mapping *notif,
-    struct rpp **pp)
+manifest_traverse(char const *url, char const *path, struct cache_cage *cage,
+    struct rpki_certificate *parent)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
 	struct signed_object sobj;
-	struct ee_cert ee;
+	struct rpki_certificate ee;
 	struct Manifest *mft;
-	STACK_OF(X509_CRL) *crl;
 	int error;
 
 	/* Prepare */
-	error = cage(&map, notif); /* ref++ */
-	if (error)
-		return error;
-	pr_val_debug("Manifest '%s' {", map_val_get_printable(map));
-	fnstack_push_map(map);
+	fnstack_push(url); // XXX
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map);
+	error = signed_object_decode(&sobj, path);
 	if (error)
-		goto revert_log;
+		goto end1;
 	error = decode_manifest(&sobj, &mft);
 	if (error)
-		goto revert_sobj;
+		goto end2;
 
-	/* Initialize out parameter (@pp) */
-	error = build_rpp(mft, notif, map, pp);
+	/* Initialize @summary */
+	error = build_rpp(url, mft, cage, parent);
 	if (error)
-		goto revert_manifest;
+		goto end3;
 
 	/* Prepare validation arguments */
-	error = rpp_crl(*pp, &crl);
-	if (error)
-		goto revert_rpp;
-	eecert_init(&ee, crl, false);
+	rpki_certificate_init_ee(&ee, parent, false);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
-		goto revert_args;
+		goto end5;
 	error = validate_manifest(mft);
 	if (error)
-		goto revert_args;
-	error = refs_validate_ee(&ee.refs, *pp, map);
+		goto end5;
+	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, url);
+
+end5:	rpki_certificate_cleanup(&ee);
 	if (error)
-		goto revert_args;
-
-	/* Success */
-	eecert_cleanup(&ee);
-	goto revert_manifest;
-
-revert_args:
-	eecert_cleanup(&ee);
-revert_rpp:
-	rpp_refput(*pp);
-revert_manifest:
-	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
-revert_sobj:
-	signed_object_cleanup(&sobj);
-revert_log:
-	pr_val_debug("}");
-	fnstack_pop();
-	map_refput(map); /* ref-- */
+		rpp_cleanup(&parent->rpp);
+end3:	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
+end2:	signed_object_cleanup(&sobj);
+end1:	fnstack_pop();
 	return error;
 }

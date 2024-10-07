@@ -1,16 +1,17 @@
-#ifndef RTR_PDU_H_
-#define RTR_PDU_H_
+#ifndef SRC_RTR_PDU_H_
+#define SRC_RTR_PDU_H_
 
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/types.h>
 #include <unistd.h>
-
-#include "common.h"
-#include "rtr/rtr.h"
-#include "types/router_key.h"
 
 enum rtr_version {
 	RTR_V0			= 0,
@@ -79,4 +80,4 @@ rtrpdu_error_report_len(uint32_t errpdu_len, uint32_t errmsg_len)
 	    + errmsg_len;
 }
 
-#endif /* RTR_PDU_H_ */
+#endif /* SRC_RTR_PDU_H_ */

@@ -1,15 +1,25 @@
 #ifndef SRC_RRDP_H_
 #define SRC_RRDP_H_
 
+#include <jansson.h>
+#include <stdbool.h>
+#include <time.h>
+
+#include "file.h"
 #include "types/map.h"
 
-struct cachefile_notification;
+struct rrdp_state;
 
-int rrdp_update(struct cache_mapping *);
+int rrdp_update(struct cache_mapping const *, time_t, bool *,
+    struct cache_sequence *, struct rrdp_state **);
+char const *rrdp_file(struct rrdp_state *, char const *);
 
-json_t *rrdp_notif2json(struct cachefile_notification *);
-int rrdp_json2notif(json_t *, struct cachefile_notification **);
+char const *rrdp_create_fallback(char const *, struct rrdp_state **,
+    char const *);
 
-void rrdp_notif_free(struct cachefile_notification *);
+json_t *rrdp_state2json(struct rrdp_state *);
+int rrdp_json2state(json_t *, struct rrdp_state **);
+
+void rrdp_state_free(struct rrdp_state *);
 
 #endif /* SRC_RRDP_H_ */

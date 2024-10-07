@@ -1,6 +1,7 @@
 #include "object/ghostbusters.h"
 
-#include "asn1/oid.h"
+#include <errno.h>
+
 #include "log.h"
 #include "object/signed_object.h"
 #include "object/vcard.h"
@@ -15,45 +16,37 @@ handle_vcard(struct signed_object *sobj)
 }
 
 int
-ghostbusters_traverse(struct cache_mapping *map, struct rpp *pp)
+ghostbusters_traverse(struct cache_mapping *map,
+    struct rpki_certificate *parent)
 {
 	static OID oid = OID_GHOSTBUSTERS;
 	struct oid_arcs arcs = OID2ARCS("ghostbusters", oid);
 	struct signed_object sobj;
-	struct ee_cert ee;
-	STACK_OF(X509_CRL) *crl;
+	struct rpki_certificate ee;
 	int error;
 
 	/* Prepare */
-	pr_val_debug("Ghostbusters '%s' {", map_val_get_printable(map));
 	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map);
+	error = signed_object_decode(&sobj, map->path);
 	if (error)
-		goto revert_log;
+		goto end1;
 
 	/* Prepare validation arguments */
-	error = rpp_crl(pp, &crl);
-	if (error)
-		goto revert_sobj;
-	eecert_init(&ee, crl, true);
+	rpki_certificate_init_ee(&ee, parent, true);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
-		goto revert_args;
+		goto end3;
 	error = handle_vcard(&sobj);
 	if (error)
-		goto revert_args;
-	error = refs_validate_ee(&ee.refs, pp, map);
+		goto end3;
+	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, map->url);
 
-revert_args:
-	eecert_cleanup(&ee);
-revert_sobj:
+end3:	rpki_certificate_cleanup(&ee);
 	signed_object_cleanup(&sobj);
-revert_log:
-	pr_val_debug("}");
-	fnstack_pop();
+end1:	fnstack_pop();
 	return error;
 }

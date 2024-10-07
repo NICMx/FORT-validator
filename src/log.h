@@ -4,7 +4,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "incidence/incidence.h"
+#include "incidence.h"
+
+#define PR_COLOR_DBG	"\x1B[36m"	/* Cyan */
+#define PR_COLOR_INF	"\x1B[37m"	/* White */
+#define PR_COLOR_WRN	"\x1B[33m"	/* Yellow */
+#define PR_COLOR_ERR	"\x1B[31m"	/* Red */
+#define PR_COLOR_CRT	"\x1B[35m"	/* Purple */
+#define PR_COLOR_RST	"\x1B[0m"
 
 /*
  * According to BSD style, __dead is supposed to be defined in sys/cdefs.h,
@@ -40,7 +47,7 @@
 #endif
 
 /*
- * Only call this group of functions when you know there's only one thread.
+ * Only call this group of functions while you know there's only one thread.
  *
  * log_setup() is an incomplete initialization meant to be called when the
  * program starts. Logging can be performed after log_setup(), but it will use
@@ -48,7 +55,7 @@
  * log_init() finishes initialization by loading the user's intended config.
  * log_teardown() reverts initialization.
  */
-int log_setup(bool);
+int log_setup(void);
 void log_start(void);
 void log_teardown(void);
 

@@ -5,34 +5,30 @@
 #if OPENSSL_VERSION_MAJOR >= 3
 #include <openssl/core_names.h>
 #endif
-#include <openssl/evp.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
-#include <openssl/x509v3.h>
 #include <syslog.h>
+#include <time.h>
 
 #include "algorithm.h"
-#include "alloc.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "cache/local_cache.h"
-#include "cert_stack.h"
+#include "cache.h"
+#include "common.h"
 #include "config.h"
-#include "crypto/hash.h"
-#include "data_structure/array_list.h"
 #include "extension.h"
-#include "incidence/incidence.h"
+#include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"
-#include "object/bgpsec.h"
+#include "object/ghostbusters.h"
 #include "object/manifest.h"
-#include "object/name.h"
-#include "object/signed_object.h"
-#include "rrdp.h"
-#include "str_token.h"
+#include "object/roa.h"
 #include "thread_var.h"
+#include "types/name.h"
+#include "types/path.h"
+#include "types/str.h"
+#include "types/url.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -41,14 +37,12 @@
  */
 typedef AUTHORITY_INFO_ACCESS SIGNATURE_INFO_ACCESS;
 
+/* Certificates that need to be postponed during a validation cycle. */
+SLIST_HEAD(cert_stack, rpki_certificate);
+
 struct ski_arguments {
 	X509 *cert;
 	OCTET_STRING_t *sid;
-};
-
-struct sia_uris {
-	struct map_list rpp;
-	struct cache_mapping *mft;
 };
 
 struct bgpsec_ski {
@@ -62,97 +56,44 @@ typedef int (access_method_exec)(struct sia_uris *);
 struct ad_metadata {
 	char const *name;
 	char const *ia_name;
-	enum map_type type;
-	char const *type_str;
+	char const *type;
 	bool required;
 };
 
 static const struct ad_metadata CA_ISSUERS = {
 	.name = "caIssuers",
 	.ia_name = "AIA",
-	.type = MAP_AIA,
-	.type_str = "rsync",
+	.type = "rsync",
 	.required = true,
 };
 
 static const struct ad_metadata SIGNED_OBJECT = {
 	.name = "signedObject",
 	.ia_name = "SIA",
-	.type = MAP_SO,
-	.type_str = "rsync",
+	.type = "rsync",
 	.required = true,
 };
 
 static const struct ad_metadata CA_REPOSITORY = {
 	.name = "caRepository",
 	.ia_name = "SIA",
-	.type = MAP_RPP,
-	.type_str = "rsync",
+	.type = "rsync",
 	.required = false,
 };
 
 static const struct ad_metadata RPKI_NOTIFY = {
 	.name = "rpkiNotify",
 	.ia_name = "SIA",
-	.type = MAP_NOTIF,
-	.type_str = "HTTPS",
+	.type = "HTTPS",
 	.required = false,
 };
 
 static const struct ad_metadata RPKI_MANIFEST = {
 	.name = "rpkiManifest",
 	.ia_name = "SIA",
-	.type = MAP_MFT,
-	.type_str = "rsync",
+	.type = "rsync",
 	.required = true,
 };
-
-static void
-sia_uris_init(struct sia_uris *uris)
-{
-	maps_init(&uris->rpp);
-	uris->mft = NULL;
-}
-
-static void
-sia_uris_cleanup(struct sia_uris *uris)
-{
-	maps_cleanup(&uris->rpp);
-	map_refput(uris->mft);
-}
-
-static void
-debug_serial_number(BIGNUM *number)
-{
-	char *number_str;
-
-	number_str = BN_bn2dec(number);
-	if (number_str == NULL) {
-		val_crypto_err("Could not convert BN to string");
-		return;
-	}
-
-	pr_val_debug("serial Number: %s", number_str);
-	free(number_str);
-}
-
-static int
-validate_serial_number(X509 *cert)
-{
-	struct validation *state;
-	BIGNUM *number;
-
-	number = ASN1_INTEGER_to_BN(X509_get0_serialNumber(cert), NULL);
-	if (number == NULL)
-		return val_crypto_err("Could not parse certificate serial number");
-
-	if (log_val_enabled(LOG_DEBUG))
-		debug_serial_number(number);
-
-	state = state_retrieve();
-	x509stack_store_serial(validation_certstack(state), number);
-	return 0;
-}
 
 static int
 validate_signature_algorithm(X509 *cert)
@@ -165,25 +106,23 @@ validate_signature_algorithm(X509 *cert)
 }
 
 static int
-validate_issuer(X509 *cert, bool is_ta)
+validate_issuer(struct rpki_certificate *cert)
 {
 	X509_NAME *issuer;
 	struct rfc5280_name *name;
 	int error;
 
-	issuer = X509_get_issuer_name(cert);
+	issuer = X509_get_issuer_name(cert->x509);
 
-	if (!is_ta)
-		return validate_issuer_name("Certificate", issuer);
-
-	/* TODO wait. Shouldn't we check subject == issuer? */
+	if (cert->type != CERTYPE_TA)
+		return validate_issuer_name(issuer, cert->parent->x509);
 
 	error = x509_name_decode(issuer, "issuer", &name);
 	if (error)
 		return error;
 	pr_val_debug("Issuer: %s", x509_name_commonName(name));
-
 	x509_name_put(name);
+
 	return 0;
 }
 
@@ -192,8 +131,7 @@ validate_issuer(X509 *cert, bool is_ta)
  * @diff_pk_cb when the public key is different; return 0 if both are equal.
  */
 static int
-spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki,
-    int (*diff_alg_cb)(void), int (*diff_pk_cb)(void))
+spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
 {
 	ASN1_OBJECT *tal_alg;
 	ASN1_OBJECT *cert_alg;
@@ -213,13 +151,18 @@ spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki,
 		return val_crypto_err("X509_PUBKEY_get0_param() 2 returned %d", ok);
 
 	if (OBJ_cmp(tal_alg, cert_alg) != 0)
-		return diff_alg_cb();
+		goto root_different_alg_err;
 	if (tal_spk_len != cert_spk_len)
-		return diff_pk_cb();
+		goto root_different_pk_err;
 	if (memcmp(tal_spk, cert_spk, cert_spk_len) != 0)
-		return diff_pk_cb();
+		goto root_different_pk_err;
 
 	return 0;
+
+root_different_alg_err:
+	return pr_val_err("TAL's public key algorithm is different than the root certificate's public key algorithm.");
+root_different_pk_err:
+	return pr_val_err("TAL's public key is different than the root certificate's public key.");
 }
 
 /*
@@ -245,7 +188,7 @@ validate_subject(X509 *cert)
 static X509_PUBKEY *
 decode_spki(struct tal *tal)
 {
-	X509_PUBKEY *spki = NULL;
+	X509_PUBKEY *spki;
 	unsigned char const *origin, *cursor;
 	size_t len;
 
@@ -272,27 +215,13 @@ fail:	fnstack_pop();
 }
 
 static int
-root_different_alg_err(void)
-{
-	return pr_val_err("TAL's public key algorithm is different than the root certificate's public key algorithm.");
-}
-
-static int
-root_different_pk_err(void)
-{
-	return pr_val_err("TAL's public key is different than the root certificate's public key.");
-}
-
-static int
 validate_spki(X509_PUBKEY *cert_spki)
 {
-	struct validation *state;
 	struct tal *tal;
 	X509_PUBKEY *tal_spki;
+	int error;
 
-	state = state_retrieve();
-
-	tal = validation_tal(state);
+	tal = validation_tal(state_retrieve());
 	if (tal == NULL)
 		pr_crit("Validation state has no TAL.");
 
@@ -318,16 +247,10 @@ validate_spki(X509_PUBKEY *cert_spki)
 	if (tal_spki == NULL)
 		return -EINVAL;
 
-	if (spki_cmp(tal_spki, cert_spki, root_different_alg_err,
-	    root_different_pk_err) != 0) {
-		X509_PUBKEY_free(tal_spki);
-		validation_pubkey_invalid(state);
-		return -EINVAL;
-	}
+	error = spki_cmp(tal_spki, cert_spki);
 
 	X509_PUBKEY_free(tal_spki);
-	validation_pubkey_valid(state);
-	return 0;
+	return error;
 }
 
 /*
@@ -421,13 +344,18 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 
 #define MODULUS 2048
 #define EXPONENT "65537"
+	EVP_PKEY *pkey;
 	const RSA *rsa;
 	const BIGNUM *exp;
 	char *exp_str;
 	int modulus;
 	int error;
 
-	rsa = EVP_PKEY_get0_RSA(X509_PUBKEY_get0(pubkey));
+	pkey = X509_PUBKEY_get0(pubkey);
+	if (pkey == NULL)
+		return val_crypto_err("The certificate's Subject Public Key is missing or malformed.");
+
+	rsa = EVP_PKEY_get0_RSA(pkey);
 	if (rsa == NULL)
 		return val_crypto_err("EVP_PKEY_get0_RSA() returned NULL");
 
@@ -467,6 +395,7 @@ static int
 validate_public_key(X509 *cert, enum cert_type type)
 {
 	X509_PUBKEY *pubkey;
+	EVP_PKEY *evppkey;
 	X509_ALGOR *pa;
 	int ok;
 	int error;
@@ -507,13 +436,17 @@ validate_public_key(X509 *cert, enum cert_type type)
 		error = validate_spki(pubkey);
 		if (error)
 			return error;
+		if ((evppkey = X509_get0_pubkey(cert)) == NULL)
+			return val_crypto_err("X509_get0_pubkey() returned NULL");
+		if (X509_verify(cert, evppkey) != 1)
+			return -EINVAL;
 	}
 
 	return 0;
 }
 
 int
-certificate_validate_rfc6487(X509 *cert, enum cert_type type)
+certificate_validate_rfc6487(struct rpki_certificate *cert)
 {
 	int error;
 
@@ -526,21 +459,19 @@ certificate_validate_rfc6487(X509 *cert, enum cert_type type)
 	 */
 
 	/* rfc6487#section-4.1 */
-	if (X509_get_version(cert) != 2)
+	if (X509_get_version(cert->x509) != 2)
 		return pr_val_err("Certificate version is not v3.");
 
 	/* rfc6487#section-4.2 */
-	error = validate_serial_number(cert);
-	if (error)
-		return error;
+	/* <Redacted> */
 
 	/* rfc6487#section-4.3 */
-	error = validate_signature_algorithm(cert);
+	error = validate_signature_algorithm(cert->x509);
 	if (error)
 		return error;
 
 	/* rfc6487#section-4.4 */
-	error = validate_issuer(cert, type == CERTYPE_TA);
+	error = validate_issuer(cert);
 	if (error)
 		return error;
 
@@ -550,7 +481,7 @@ certificate_validate_rfc6487(X509 *cert, enum cert_type type)
 	 * "An issuer SHOULD use a different subject name if the subject's
 	 * key pair has changed" (it's a SHOULD, so [for now] avoid validation)
 	 */
-	error = validate_subject(cert);
+	error = validate_subject(cert->x509);
 	if (error)
 		return error;
 
@@ -559,7 +490,7 @@ certificate_validate_rfc6487(X509 *cert, enum cert_type type)
 
 	/* rfc6487#section-4.7 */
 	/* Fragment of rfc8630#section-2.3 */
-	error = validate_public_key(cert, type);
+	error = validate_public_key(cert->x509, cert->type);
 	if (error)
 		return error;
 
@@ -572,50 +503,46 @@ struct progress {
 	size_t remaining;
 };
 
-/**
- * Skip the "T" part of a TLV.
- */
-static void
+/* Skip the "T" part of a TLV. */
+static int
 skip_t(ANY_t *content, struct progress *p, unsigned int tag)
 {
-	/*
-	 * BTW: I made these errors critical because the signedData is supposed
-	 * to be validated by this point.
-	 */
+	/* These errors happen when the object is not DER-encoded */
 
 	if (content->buf[p->offset] != tag)
-		pr_crit("Expected tag 0x%x, got 0x%x", tag,
-		    content->buf[p->offset]);
-
+		return pr_val_err("Expected tag 0x%x, got 0x%x.",
+		    tag, content->buf[p->offset]);
 	if (p->remaining == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
+
 	p->offset++;
 	p->remaining--;
+	return 0;
 }
 
-/**
- * Skip the "TL" part of a TLV.
- */
-static void
+/* Skip the "TL" part of a TLV. */
+static int
 skip_tl(ANY_t *content, struct progress *p, unsigned int tag)
 {
 	ssize_t len_len; /* Length of the length field */
 	ber_tlv_len_t value_len; /* Length of the value */
 
-	skip_t(content, p, tag);
+	if (skip_t(content, p, tag) != 0)
+		return -EINVAL;
 
 	len_len = ber_fetch_length(true, &content->buf[p->offset], p->remaining,
 	    &value_len);
 	if (len_len == -1)
-		pr_crit("Could not decipher length (Cause is unknown)");
+		return pr_val_err("Could not decipher length (Unknown cause).");
 	if (len_len == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
 
 	p->offset += len_len;
 	p->remaining -= len_len;
+	return 0;
 }
 
-static void
+static int
 skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 {
 	int is_constructed;
@@ -623,33 +550,33 @@ skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 
 	is_constructed = BER_TLV_CONSTRUCTED(&content->buf[p->offset]);
 
-	skip_t(content, p, tag);
+	if (skip_t(content, p, tag) != 0)
+		return -EINVAL;
 
 	skip = ber_skip_length(NULL, is_constructed, &content->buf[p->offset],
 	    p->remaining);
 	if (skip == -1)
-		pr_crit("Could not skip length (Cause is unknown)");
+		return pr_val_err("Could not skip length (Unknown cause).");
 	if (skip == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
 
 	p->offset += skip;
 	p->remaining -= skip;
+	return 0;
 }
 
-/**
- * A structure that points to the LV part of a signedAttrs TLV.
- */
+/* A structure that points to the LV part of a signedAttrs TLV. */
 struct encoded_signedAttrs {
 	const uint8_t *buffer;
 	ber_tlv_len_t size;
 };
 
-static void
+static int
 find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 {
-#define INTEGER_TAG		0x02
-#define SEQUENCE_TAG		0x30
-#define SET_TAG			0x31
+	static const unsigned int INTEGER_TAG = 0x02;
+	static const unsigned int SEQUENCE_TAG = 0x30;
+	static const unsigned int SET_TAG = 0x31;
 
 	struct progress p;
 	ssize_t len_len;
@@ -660,43 +587,55 @@ find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 	p.remaining = signedData->size;
 
 	/* SignedData: SEQUENCE */
-	skip_tl(signedData, &p, SEQUENCE_TAG);
+	if (skip_tl(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 
 	/* SignedData.version: CMSVersion -> INTEGER */
-	skip_tlv(signedData, &p, INTEGER_TAG);
+	if (skip_tlv(signedData, &p, INTEGER_TAG) != 0)
+		return -EINVAL;
 	/* SignedData.digestAlgorithms: DigestAlgorithmIdentifiers -> SET */
-	skip_tlv(signedData, &p, SET_TAG);
+	if (skip_tlv(signedData, &p, SET_TAG) != 0)
+		return -EINVAL;
 	/* SignedData.encapContentInfo: EncapsulatedContentInfo -> SEQUENCE */
-	skip_tlv(signedData, &p, SEQUENCE_TAG);
+	if (skip_tlv(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 	/* SignedData.certificates: CertificateSet -> SET */
-	skip_tlv(signedData, &p, 0xA0);
+	if (skip_tlv(signedData, &p, 0xA0) != 0)
+		return -EINVAL;
 	/* SignedData.signerInfos: SignerInfos -> SET OF SEQUENCE */
-	skip_tl(signedData, &p, SET_TAG);
-	skip_tl(signedData, &p, SEQUENCE_TAG);
+	if (skip_tl(signedData, &p, SET_TAG) != 0)
+		return -EINVAL;
+	if (skip_tl(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 
 	/* SignedData.signerInfos.version: CMSVersion -> INTEGER */
-	skip_tlv(signedData, &p, INTEGER_TAG);
+	if (skip_tlv(signedData, &p, INTEGER_TAG) != 0)
+		return -EINVAL;
 	/*
 	 * SignedData.signerInfos.sid: SignerIdentifier -> CHOICE -> always
 	 * subjectKeyIdentifier, which is a [0].
 	 */
-	skip_tlv(signedData, &p, 0x80);
+	if (skip_tlv(signedData, &p, 0x80) != 0)
+		return -EINVAL;
 	/* SignedData.signerInfos.digestAlgorithm: DigestAlgorithmIdentifier
 	 * -> AlgorithmIdentifier -> SEQUENCE */
-	skip_tlv(signedData, &p, SEQUENCE_TAG);
+	if (skip_tlv(signedData, &p, SEQUENCE_TAG) != 0)
+		return -EINVAL;
 
 	/* SignedData.signerInfos.signedAttrs: SignedAttributes -> SET */
 	/* We will need to replace the tag 0xA0 with 0x31, so skip it as well */
-	skip_t(signedData, &p, 0xA0);
+	if (skip_t(signedData, &p, 0xA0) != 0)
+		return -EINVAL;
 
 	result->buffer = &signedData->buf[p.offset];
 	len_len = ber_fetch_length(true, result->buffer,
 	    p.remaining, &result->size);
 	if (len_len == -1)
-		pr_crit("Could not decipher length (Cause is unknown)");
+		return pr_val_err("Could not decipher length (Unknown cause.)");
 	if (len_len == 0)
-		pr_crit("Buffer seems to be truncated");
+		return pr_val_err("Buffer seems truncated.");
 	result->size += len_len;
+	return 0;
 }
 
 /*
@@ -778,7 +717,9 @@ certificate_validate_signature(X509 *cert, ANY_t *signedData,
 	 * Second option it is.
 	 */
 
-	find_signedAttrs(signedData, &signedAttrs);
+	error = find_signedAttrs(signedData, &signedAttrs);
+	if (error)
+		goto end;
 
 	error = EVP_DigestVerifyUpdate(ctx, &EXPLICIT_SET_OF_TAG,
 	    sizeof(EXPLICIT_SET_OF_TAG));
@@ -806,179 +747,203 @@ end:
 	return error;
 }
 
-static int
-certificate_load(struct cache_mapping *map, X509 **result)
+static X509 *
+certificate_load(char const *path)
 {
 	X509 *cert = NULL;
 	BIO *bio;
-	int error;
-
-	*result = NULL;
 
 	bio = BIO_new(BIO_s_file());
-	if (bio == NULL)
-		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, map_get_path(map)) <= 0) {
-		error = val_crypto_err("Error reading certificate");
+	if (bio == NULL) {
+		val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
+		return NULL;
+	}
+	if (BIO_read_filename(bio, path) <= 0) {
+		val_crypto_err("Error reading certificate");
 		goto end;
 	}
 
 	cert = d2i_X509_bio(bio, NULL);
 	if (cert == NULL) {
-		error = val_crypto_err("Error parsing certificate");
+		val_crypto_err("Error parsing certificate");
 		goto end;
 	}
 
-	*result = cert;
-	error = 0;
-end:
-	BIO_free(bio);
-	return error;
+end:	BIO_free(bio);
+	return cert;
 }
 
-/*
- * Allocates a clone of @original_crl and pushes it to @crls.
- *
- * Don't forget to pop from @crls and release the popped CRL.
- */
-static int
-update_crl_time(STACK_OF(X509_CRL) *crls, X509_CRL *original_crl)
+static void
+certificate_stack_push(struct cert_stack *stack, struct cache_mapping *map,
+    struct rpki_certificate *parent)
 {
-	ASN1_TIME *tm;
-	X509_CRL *clone;
-	time_t t;
-	int error;
+	struct rpki_certificate *cert;
 
-	error = get_current_time(&t);
-	if (error)
-		return error;
+	cert = pzalloc(sizeof(*cert));
+	map_copy(&cert->map, map);
+	cert->parent = parent;
+	cert->refcount = 1;
+	SLIST_INSERT_HEAD(stack, cert, lh);
 
-	/*
-	 * Yes, this is an awful hack. The other options were:
-	 * - Use X509_V_FLAG_NO_CHECK_TIME parameter, but this avoids also the
-	 *   time check for the certificate.
-	 * - Avoid whole CRL check, but since we don't implement the
-	 *   certificate chain validation, we can't assure that the CRL has
-	 *   only the nextUpdate field wrong (maybe there are other invalid
-	 *   things).
-	 */
-	tm = ASN1_TIME_adj(NULL, t, 0, 60);
-	if (tm == NULL)
-		return val_crypto_err("ASN1_TIME_adj() returned NULL.");
-
-	clone = X509_CRL_dup(original_crl);
-	if (clone == NULL) {
-		ASN1_STRING_free(tm);
-		return val_crypto_err("X509_CRL_dup() returned NULL.");
-	}
-
-	X509_CRL_set1_nextUpdate(clone, tm);
-	ASN1_STRING_free(tm);
-
-	error = sk_X509_CRL_push(crls, clone);
-	if (error <= 0) {
-		X509_CRL_free(clone);
-		return val_crypto_err("Error calling sk_X509_CRL_push()");
-	}
-
-	return 0;
+	parent->refcount++;
 }
 
-/*
- * Retry certificate validation without CRL time validation.
- */
-static int
-verify_cert_crl_stale(struct validation *state, X509 *cert,
-    STACK_OF(X509_CRL) *crls)
+void
+rpki_certificate_init_ee(struct rpki_certificate *ee,
+    struct rpki_certificate *parent, bool force_inherit)
 {
-	X509_STORE_CTX *ctx;
-	X509_CRL *original_crl, *clone;
-	int error;
+	memset(ee, 0, sizeof(*ee));
+	ee->type = CERTYPE_EE;
+	ee->policy = RPKI_POLICY_RFC6484;
+	ee->resources = resources_create(RPKI_POLICY_RFC6484, force_inherit);
+	ee->parent = parent;
+	ee->refcount = 1;
+
+	parent->refcount++;
+}
+
+void
+rpki_certificate_cleanup(struct rpki_certificate *cert)
+{
+	map_cleanup(&cert->map);
+	if (cert->x509 != NULL)
+		X509_free(cert->x509);
+	resources_destroy(cert->resources);
+	sias_cleanup(&cert->sias);
+	// XXX Recursive. Try refcounting the resources.
+	if (cert->parent)
+		rpki_certificate_free(cert->parent);
+	rpp_cleanup(&cert->rpp);
+}
+
+void
+rpki_certificate_free(struct rpki_certificate *cert)
+{
+	cert->refcount--;
+	if (cert->refcount == 0) {
+		rpki_certificate_cleanup(cert);
+		free(cert);
+	}
+}
+
+static STACK_OF(X509) *
+build_trusted_stack(struct rpki_certificate *cert)
+{
+	STACK_OF(X509) *stack;
+	int ret;
+
+	stack = sk_X509_new_null();
+	if (!stack) {
+		val_crypto_err("sk_X509_new_null() returned NULL.");
+		return NULL;
+	}
+
+	for (cert = cert->parent; cert != NULL; cert = cert->parent) {
+		ret = sk_X509_push(stack, cert->x509);
+		if (ret <= 0) {
+			val_crypto_err("sk_X509_push returned %d.", ret);
+			sk_X509_pop_free(stack, X509_free);
+			return NULL;
+		}
+	}
+
+	return stack;
+}
+
+static STACK_OF(X509_CRL) *
+build_crl_stack(struct rpki_certificate *cert)
+{
+	STACK_OF(X509_CRL) *stack;
 	int ok;
 
-	ctx = X509_STORE_CTX_new();
-	if (ctx == NULL) {
-		val_crypto_err("X509_STORE_CTX_new() returned NULL");
-		return -EINVAL;
+	stack = sk_X509_CRL_new_null();
+	if (!stack) {
+		val_crypto_err("sk_X509_CRL_new_null() returned NULL.");
+		return NULL;
+	}
+	ok = sk_X509_CRL_push(stack, cert->parent->rpp.crl.obj);
+	if (ok != 1) {
+		val_crypto_err("sk_X509_CRL_push() returned %d.", ok);
+		return NULL;
 	}
 
-	/* Returns 0 or 1 , all callers test ! only. */
-	ok = X509_STORE_CTX_init(ctx, validation_store(state), cert, NULL);
-	if (!ok) {
-		error = val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
-		goto release_ctx;
-	}
+	return stack;
+}
 
-	original_crl = sk_X509_CRL_pop(crls);
-	error = update_crl_time(crls, original_crl);
-	if (error)
-		goto push_original;
+static void
+pr_debug_x509_dates(X509 *x509)
+{
+	char *nb, *na;
 
-	X509_STORE_CTX_trusted_stack(ctx,
-	    certstack_get_x509s(validation_certstack(state)));
-	X509_STORE_CTX_set0_crls(ctx, crls);
+	nb = asn1time2str(X509_get0_notBefore(x509));
+	na = asn1time2str(X509_get0_notAfter(x509));
 
-	ok = X509_verify_cert(ctx);
-	if (ok > 0) {
-		error = 0; /* Happy path */
-		goto pop_clone;
-	}
+	pr_val_debug("Valid range: [%s, %s]", nb, na);
 
-	error = X509_STORE_CTX_get_error(ctx);
-	if (error)
-		error = pr_val_err("Certificate validation failed: %s",
-		    X509_verify_cert_error_string(error));
-	else
-		error = val_crypto_err("Certificate validation failed: %d", ok);
+	free(nb);
+	free(na);
+}
 
-pop_clone:
-	clone = sk_X509_CRL_pop(crls);
-	if (clone == NULL)
-		error = pr_val_err("Error calling sk_X509_CRL_pop()");
-	else
-		X509_CRL_free(clone);
-push_original:
-	/* Try to return to the "regular" CRL chain */
-	ok = sk_X509_CRL_push(crls, original_crl);
-	if (ok <= 0)
-		error = val_crypto_err("Could not return CRL to a CRL stack");
-release_ctx:
-	X509_STORE_CTX_free(ctx);
-	return error;
+static void
+complain_crl_stale(X509_CRL *crl)
+{
+	char *lu;
+	char *nu;
 
+	lu = asn1time2str(X509_CRL_get0_lastUpdate(crl));
+	nu = asn1time2str(X509_CRL_get0_nextUpdate(crl));
+
+	pr_val_err("CRL is stale/expired. (lastUpdate:%s, nextUpdate:%s)",
+	    lu, nu);
+
+	free(lu);
+	free(nu);
 }
 
 int
-certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
+certificate_validate_chain(struct rpki_certificate *cert)
 {
 	/* Reference: openbsd/src/usr.bin/openssl/verify.c */
 
-	struct validation *state;
 	X509_STORE_CTX *ctx;
+	STACK_OF(X509) *trusted;
+	STACK_OF(X509_CRL) *crls;
 	int ok;
 	int error;
 
-	if (crls == NULL)
-		return 0; /* Certificate is TA; no chain validation needed. */
-
-	state = state_retrieve();
+	if (cert->type == CERTYPE_TA)
+		return 0; /* No chain to validate. */
 
 	ctx = X509_STORE_CTX_new();
 	if (ctx == NULL) {
 		val_crypto_err("X509_STORE_CTX_new() returned NULL");
-		return -EINVAL;
+		return EINVAL;
 	}
 
 	/* Returns 0 or 1 , all callers test ! only. */
-	ok = X509_STORE_CTX_init(ctx, validation_store(state), cert, NULL);
+	ok = X509_STORE_CTX_init(ctx, validation_store(state_retrieve()),
+	    cert->x509, NULL);
 	if (!ok) {
-		val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
-		goto abort;
+		error = val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
+		goto end1;
 	}
 
-	X509_STORE_CTX_trusted_stack(ctx,
-	    certstack_get_x509s(validation_certstack(state)));
+	trusted = build_trusted_stack(cert);
+	if (!trusted) {
+		error = EINVAL;
+		goto end1;
+	}
+	X509_STORE_CTX_trusted_stack(ctx, trusted);
+
+	crls = build_crl_stack(cert);
+	if (!crls) {
+		error = EINVAL;
+		goto end2;
+	}
 	X509_STORE_CTX_set0_crls(ctx, crls);
+
+	if (log_val_enabled(LOG_DEBUG))
+		pr_debug_x509_dates(cert->x509);
 
 	/*
 	 * HERE'S THE MEAT OF LIBCRYPTO'S VALIDATION.
@@ -996,41 +961,33 @@ certificate_validate_chain(X509 *cert, STACK_OF(X509_CRL) *crls)
 		 * error code is stored in the context.
 		 */
 		error = X509_STORE_CTX_get_error(ctx);
-		if (error) {
-			if (error != X509_V_ERR_CRL_HAS_EXPIRED) {
-				pr_val_err("Certificate validation failed: %s",
-				    X509_verify_cert_error_string(error));
-				goto abort;
-			}
-			if (incidence(INID_CRL_STALE, "CRL is stale/expired"))
-				goto abort;
-
-			X509_STORE_CTX_free(ctx);
-			if (incidence_get_action(INID_CRL_STALE) == INAC_WARN)
-				pr_val_info("Re-validating avoiding CRL time check");
-			return verify_cert_crl_stale(state, cert, crls);
-		} else {
+		if (error == X509_V_ERR_CRL_HAS_EXPIRED)
+			complain_crl_stale(cert->parent->rpp.crl.obj);
+		else if (error)
+			pr_val_err("Certificate validation failed: %s",
+			    X509_verify_cert_error_string(error));
+		else {
 			/*
 			 * ...But don't trust X509_STORE_CTX_get_error() either.
 			 * That said, there's not much to do about !error,
 			 * so hope for the best.
 			 */
 			val_crypto_err("Certificate validation failed: %d", ok);
+			error = EINVAL;
 		}
-
-		goto abort;
+		goto end3;
 	}
 
-	X509_STORE_CTX_free(ctx);
-	return 0;
+	error = 0;
 
-abort:
-	X509_STORE_CTX_free(ctx);
-	return -EINVAL;
+end3:	sk_X509_CRL_free(crls);
+end2:	sk_X509_free(trusted);
+end1:	X509_STORE_CTX_free(ctx);
+	return error;
 }
 
 static int
-handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
+handle_ip_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 {
 	ASN1_OCTET_STRING *string;
 	struct IPAddrBlocks *blocks;
@@ -1071,7 +1028,9 @@ handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
 	}
 
 	for (i = 0; i < blocks->list.count && !error; i++)
-		error = resources_add_ip(resources, blocks->list.array[i]);
+		error = resources_add_ip(cert->resources,
+		    cert->parent ? cert->parent->resources : NULL,
+		    blocks->list.array[i]);
 
 end:
 	ASN_STRUCT_FREE(asn_DEF_IPAddrBlocks, blocks);
@@ -1079,8 +1038,7 @@ end:
 }
 
 static int
-handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
-    bool allow_inherit)
+handle_asn_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 {
 	ASN1_OCTET_STRING *string;
 	struct ASIdentifiers *ids;
@@ -1092,16 +1050,18 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
 	if (error)
 		return error;
 
-	error = resources_add_asn(resources, ids, allow_inherit);
+	error = resources_add_asn(cert->resources,
+	    cert->parent ? cert->parent->resources : NULL,
+	    ids, cert->type != CERTYPE_BGPSEC);
 
 	ASN_STRUCT_FREE(asn_DEF_ASIdentifiers, ids);
 	return error;
 }
 
 static int
-__certificate_get_resources(X509 *cert, struct resources *resources,
+__certificate_get_resources(struct rpki_certificate *cert,
     int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
-    char const *policy_rfc, char const *bad_ext_rfc, bool allow_asn_inherit)
+    char const *policy_rfc, char const *bad_ext_rfc)
 {
 	X509_EXTENSION *ext;
 	int nid;
@@ -1113,8 +1073,8 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 	/* Reference: X509_get_ext_d2i */
 	/* rfc6487#section-2 */
 
-	for (i = 0; i < X509_get_ext_count(cert); i++) {
-		ext = X509_get_ext(cert, i);
+	for (i = 0; i < X509_get_ext_count(cert->x509); i++) {
+		ext = X509_get_ext(cert->x509, i);
 		nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
 
 		if (nid == addr_nid) {
@@ -1123,11 +1083,9 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 			if (!X509_EXTENSION_get_critical(ext))
 				return pr_val_err("The IP extension is not marked as critical.");
 
-			pr_val_debug("IP {");
-			error = handle_ip_extension(ext, resources);
-			pr_val_debug("}");
 			ip_ext_found = true;
 
+			error = handle_ip_extension(cert, ext);
 			if (error)
 				return error;
 
@@ -1137,12 +1095,9 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 			if (!X509_EXTENSION_get_critical(ext))
 				return pr_val_err("The AS extension is not marked as critical.");
 
-			pr_val_debug("ASN {");
-			error = handle_asn_extension(ext, resources,
-			    allow_asn_inherit);
-			pr_val_debug("}");
 			asn_ext_found = true;
 
+			error = handle_asn_extension(cert, ext);
 			if (error)
 				return error;
 
@@ -1161,30 +1116,24 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
 	return 0;
 }
 
-/**
- * Copies the resources from @cert to @resources.
- */
+/* Copies the resources from @cert to @resources. */
 int
-certificate_get_resources(X509 *cert, struct resources *resources,
-    enum cert_type type)
+certificate_get_resources(struct rpki_certificate *cert)
 {
-	enum rpki_policy policy;
-
-	policy = resources_get_policy(resources);
-	switch (policy) {
+	switch (cert->policy) {
 	case RPKI_POLICY_RFC6484:
-		return __certificate_get_resources(cert, resources,
+		return __certificate_get_resources(cert,
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
-		    "6484", "8360", type != CERTYPE_BGPSEC);
+		    "6484", "8360");
 	case RPKI_POLICY_RFC8360:
-		return __certificate_get_resources(cert, resources,
+		return __certificate_get_resources(cert,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
-		    "8360", "6484", type != CERTYPE_BGPSEC);
+		    "8360", "6484");
 	}
 
-	pr_crit("Unknown policy: %u", policy);
+	pr_crit("Unknown policy: %u", cert->policy);
 }
 
 static bool
@@ -1198,41 +1147,57 @@ is_rsync(ASN1_IA5STRING *uri)
 	    : false;
 }
 
-static int
-handle_rpkiManifest(struct cache_mapping *map, void *arg)
+static void
+handle_rpkiManifest(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
-	uris->mft = map_refget(map);
-	return 0;
+
+	pr_val_debug("rpkiManifest: %s", uri);
+
+	if (uris->rpkiManifest != NULL) {
+		pr_val_warn("Ignoring additional rpkiManifest: %s", uri);
+		free(uri);
+	} else {
+		uris->rpkiManifest = uri;
+	}
 }
 
-static int
-handle_caRepository(struct cache_mapping *map, void *arg)
+static void
+handle_caRepository(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
-	pr_val_debug("caRepository: %s", map_val_get_printable(map));
-	maps_add(&uris->rpp, map);
-	map_refget(map);
-	return 0;
+
+	pr_val_debug("caRepository: %s", uri);
+
+	if (uris->caRepository != NULL) {
+		pr_val_warn("Ignoring additional caRepository: %s", uri);
+		free(uri);
+	} else {
+		uris->caRepository = uri;
+	}
 }
 
-static int
-handle_rpkiNotify(struct cache_mapping *map, void *arg)
+static void
+handle_rpkiNotify(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
-	pr_val_debug("rpkiNotify: %s", map_val_get_printable(map));
-	maps_add(&uris->rpp, map);
-	map_refget(map);
-	return 0;
+
+	pr_val_debug("rpkiNotify: %s", uri);
+
+	if (uris->rpkiNotify != NULL) {
+		pr_val_warn("Ignoring additional rpkiNotify: %s", uri);
+		free(uri);
+	} else {
+		uris->rpkiNotify = uri;
+	}
 }
 
-static int
-handle_signedObject(struct cache_mapping *map, void *arg)
+static void
+handle_signedObject(char *uri, void *arg)
 {
-	struct certificate_refs *refs = arg;
-	pr_val_debug("signedObject: %s", map_val_get_printable(map));
-	refs->signedObject = map_refget(map);
-	return 0;
+	struct sia_uris *sias = arg;
+	pr_val_debug("signedObject: %s", uri);
+	sias->signedObject = uri;
 }
 
 static int
@@ -1301,7 +1266,8 @@ handle_aki_ta(void *ext, void *arg)
 	}
 
 	error = (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0)
-	      ? pr_val_err("The '%s' does not equal the '%s'.", ext_aki()->name, ext_ski()->name)
+	      ? pr_val_err("The '%s' does not equal the '%s'.",
+	                   ext_aki()->name, ext_ski()->name)
 	      : 0;
 
 	ASN1_BIT_STRING_free(ski);
@@ -1319,21 +1285,21 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 
 	unsigned char data[2];
 
-	if (ku->length == 0) {
-		return pr_val_err("%s bit string has no enabled bits.",
-		    ext_ku()->name);
+	if (ku->length != 2 && ku->length != 1) {
+		return pr_val_err("Bogus %s length: %d",
+		    ext_ku()->name, ku->length);
 	}
 
 	memset(data, 0, sizeof(data));
 	memcpy(data, ku->data, ku->length);
 
-	if (ku->data[0] != byte1) {
+	if (data[0] != byte1 || data[1] != 0) {
 		return pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
-		    !!(ku->data[0] & 0x80u), !!(ku->data[0] & 0x40u),
-		    !!(ku->data[0] & 0x20u), !!(ku->data[0] & 0x10u),
-		    !!(ku->data[0] & 0x08u), !!(ku->data[0] & 0x04u),
-		    !!(ku->data[0] & 0x02u), !!(ku->data[0] & 0x01u),
-		    !!(ku->data[1] & 0x80u));
+		    !!(data[0] & 0x80u), !!(data[0] & 0x40u),
+		    !!(data[0] & 0x20u), !!(data[0] & 0x10u),
+		    !!(data[0] & 0x08u), !!(data[0] & 0x04u),
+		    !!(data[0] & 0x02u), !!(data[0] & 0x01u),
+		    !!(data[1] & 0x80u));
 	}
 
 	return 0;
@@ -1355,7 +1321,7 @@ static int
 handle_cdp(void *ext, void *arg)
 {
 	STACK_OF(DIST_POINT) *crldp = ext;
-	struct certificate_refs *refs = arg;
+	struct sia_uris *sias = arg;
 	DIST_POINT *dp;
 	GENERAL_NAMES *names;
 	GENERAL_NAME *name;
@@ -1416,7 +1382,7 @@ handle_cdp(void *ext, void *arg)
 			 * So we will store the URI in @refs, and validate it
 			 * later.
 			 */
-			return ia5s2string(str, &refs->crldp);
+			return ia5s2string(str, &sias->crldp);
 		}
 	}
 
@@ -1431,13 +1397,10 @@ dist_point_error:
  * Create @map from the @ad
  */
 static int
-map_create_ad(struct cache_mapping **map, ACCESS_DESCRIPTION *ad,
-    enum map_type type)
+ad2uri(char **uri, ACCESS_DESCRIPTION *ad)
 {
 	ASN1_STRING *asn1str;
-	char *str;
 	int ptype;
-	int error;
 
 	asn1str = GENERAL_NAME_get0_value(ad->location, &ptype);
 
@@ -1474,17 +1437,19 @@ map_create_ad(struct cache_mapping **map, ACCESS_DESCRIPTION *ad,
 	 * conversion, so we should be looking at precisely the IA5String
 	 * directory our g2l version of @asn1_string should contain.
 	 * But ask the testers to keep an eye on it anyway.
+	 *
+	 * XXX There used to be a map_create() here. Make sure validations are
+	 * restored somewhere:
+	 * 1. ascii
+	 * 2. "rsync://" or "https://" prefix (ENOTRSYNC, ENOTHTTPS)
+	 * 3. URL normalization
 	 */
-	str = pstrndup((char const *)ASN1_STRING_get0_data(asn1str),
+	*uri = pstrndup((char const *)ASN1_STRING_get0_data(asn1str),
 	    ASN1_STRING_length(asn1str));
-
-	error = map_create(map, type, NULL, str);
-
-	free(str);
-	return error;
+	return 0;
 }
 
-/**
+/*
  * The RFC does not explain AD validation very well. This is personal
  * interpretation, influenced by Tim Bruijnzeels's response
  * (https://mailarchive.ietf.org/arch/msg/sidr/4ycmff9jEU4VU9gGK5RyhZ7JYsQ)
@@ -1500,13 +1465,17 @@ map_create_ad(struct cache_mapping **map, ACCESS_DESCRIPTION *ad,
  *    supposed to be ignored.
  * 5. Other access descriptions that match the NID but do not have recognized
  *    URLs are also allowed, and also supposed to be ignored.
+ *
+ * cb() always steals ownership of the URL string.
+ *
+ * TODO (test) is this tested somewhere?
  */
 static int
 handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
-    int (*cb)(struct cache_mapping *, void *), void *arg)
+    void (*cb)(char *, void *), void *arg)
 {
 	ACCESS_DESCRIPTION *ad;
-	struct cache_mapping *map;
+	char *uri;
 	bool found;
 	unsigned int i;
 	int error;
@@ -1515,12 +1484,10 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == nid) {
-			error = map_create_ad(&map, ad, meta->type);
+			error = ad2uri(&uri, ad);
 			switch (error) {
 			case 0:
 				break;
-			case ENOTRSYNC:
-			case ENOTHTTPS:
 			case ENOTSUPPORTED:
 				continue;
 			default:
@@ -1528,42 +1495,37 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 			}
 
 			if (found) {
-				map_refput(map);
+				free(uri);
 				return pr_val_err("Extension '%s' has multiple '%s' %s URIs.",
-				    meta->ia_name, meta->name, meta->type_str);
+				    meta->ia_name, meta->name, meta->type);
 			}
 
-			error = cb(map, arg);
-			if (error) {
-				map_refput(map);
-				return error;
-			}
-
-			map_refput(map);
+			cb(uri, arg); /* Ownership of uri stolen */
 			found = true;
 		}
 	}
 
 	if (meta->required && !found) {
 		pr_val_err("Extension '%s' lacks a '%s' valid %s URI.",
-		    meta->ia_name, meta->name, meta->type_str);
+		    meta->ia_name, meta->name, meta->type);
 		return -ESRCH;
 	}
 
 	return 0;
 }
 
-static int
-handle_caIssuers(struct cache_mapping *map, void *arg)
+static void
+handle_caIssuers(char *uri, void *arg)
 {
-	struct certificate_refs *refs = arg;
+	struct sia_uris *sias = arg;
 	/*
 	 * Bringing the parent certificate's URI all the way
 	 * over here is too much trouble, so do the handle_cdp()
 	 * hack.
+	 *
+	 * XXX Uh... it's extremely easy now.
 	 */
-	refs->caIssuers = map_refget(map);
-	return 0;
+	sias->caIssuers = uri;
 }
 
 static int
@@ -1652,33 +1614,30 @@ handle_cp(void *ext, void *arg)
 	return 0;
 }
 
-/**
- * Validates the certificate extensions, Trust Anchor style.
- */
+/* Validates the certificate extensions, Trust Anchor style. */
 static int
-certificate_validate_extensions_ta(X509 *cert, struct sia_uris *sia_uris,
-    enum rpki_policy *policy)
+validate_ta_extensions(struct rpki_certificate *cert)
 {
 	struct extension_handler handlers[] = {
-	   /* ext        reqd   handler        arg       */
-	    { ext_bc(),  true,  handle_bc,               },
-	    { ext_ski(), true,  handle_ski_ca, cert      },
-	    { ext_aki(), false, handle_aki_ta, cert      },
-	    { ext_ku(),  true,  handle_ku_ca,            },
-	    { ext_sia(), true,  handle_sia_ca, sia_uris  },
-	    { ext_cp(),  true,  handle_cp,     policy    },
+	   /* ext        reqd   handler        arg           */
+	    { ext_bc(),  true,  handle_bc,                    },
+	    { ext_ski(), true,  handle_ski_ca, cert->x509     },
+	    { ext_aki(), false, handle_aki_ta, cert->x509     },
+	    { ext_ku(),  true,  handle_ku_ca,                 },
+	    { ext_sia(), true,  handle_sia_ca, &cert->sias    },
+	    { ext_cp(),  true,  handle_cp,     &cert->policy  },
 	    /* These are handled by certificate_get_resources(). */
-	    { ext_ir(),  false,                          },
-	    { ext_ar(),  false,                          },
-	    { ext_ir2(), false,                          },
-	    { ext_ar2(), false,                          },
+	    { ext_ir(),  false,                               },
+	    { ext_ar(),  false,                               },
+	    { ext_ir2(), false,                               },
+	    { ext_ar2(), false,                               },
 	    { NULL },
 	};
 
-	return handle_extensions(handlers, X509_get0_extensions(cert));
+	return handle_extensions(handlers, X509_get0_extensions(cert->x509));
 }
 
-/**
+/*
  * Validates the certificate extensions, (intermediate) Certificate Authority
  * style.
  *
@@ -1686,71 +1645,65 @@ certificate_validate_extensions_ta(X509 *cert, struct sia_uris *sia_uris,
  * extensions.
  */
 static int
-certificate_validate_extensions_ca(X509 *cert, struct sia_uris *sia_uris,
-    enum rpki_policy *policy, struct rpp *rpp_parent)
+validate_ca_extensions(struct rpki_certificate *cert)
 {
-	struct certificate_refs refs = { 0 };
 	struct extension_handler handlers[] = {
-	   /* ext        reqd   handler        arg       */
-	    { ext_bc(),  true,  handle_bc,               },
-	    { ext_ski(), true,  handle_ski_ca, cert      },
-	    { ext_aki(), true,  handle_aki,              },
-	    { ext_ku(),  true,  handle_ku_ca,            },
-	    { ext_cdp(), true,  handle_cdp,    &refs     },
-	    { ext_aia(), true,  handle_aia,    &refs     },
-	    { ext_sia(), true,  handle_sia_ca, sia_uris  },
-	    { ext_cp(),  true,  handle_cp,     policy    },
-	    { ext_ir(),  false,                          },
-	    { ext_ar(),  false,                          },
-	    { ext_ir2(), false,                          },
-	    { ext_ar2(), false,                          },
+	   /* ext        reqd   handler        arg                */
+	    { ext_bc(),  true,  handle_bc,                         },
+	    { ext_ski(), true,  handle_ski_ca, cert->x509          },
+	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
+	    { ext_ku(),  true,  handle_ku_ca,                      },
+	    { ext_cdp(), true,  handle_cdp,    &cert->sias         },
+	    { ext_aia(), true,  handle_aia,    &cert->sias         },
+	    { ext_sia(), true,  handle_sia_ca, &cert->sias         },
+	    { ext_cp(),  true,  handle_cp,     &cert->policy       },
+	    /* These are handled by certificate_get_resources(). */
+	    { ext_ir(),  false,                                    },
+	    { ext_ar(),  false,                                    },
+	    { ext_ir2(), false,                                    },
+	    { ext_ar2(), false,                                    },
 	    { NULL },
 	};
 	int error;
 
-	error = handle_extensions(handlers, X509_get0_extensions(cert));
+	error = handle_extensions(handlers, X509_get0_extensions(cert->x509));
 	if (error)
-		goto end;
-	error = certificate_validate_aia(refs.caIssuers, cert);
+		return error;
+	error = certificate_validate_aia(cert);
 	if (error)
-		goto end;
-	error = refs_validate_ca(&refs, rpp_parent);
-
-end:
-	refs_cleanup(&refs);
-	return error;
+		return error;
+	return validate_cdp(&cert->sias, cert->parent->rpp.crl.map->url);
 }
 
 int
-certificate_validate_extensions_ee(X509 *cert, OCTET_STRING_t *sid,
-    struct certificate_refs *refs, enum rpki_policy *policy)
+certificate_validate_extensions_ee(struct rpki_certificate *cert,
+    OCTET_STRING_t *sid)
 {
 	struct ski_arguments ski_args;
 	struct extension_handler handlers[] = {
-	   /* ext        reqd   handler        arg       */
-	    { ext_ski(), true,  handle_ski_ee, &ski_args },
-	    { ext_aki(), true,  handle_aki,              },
-	    { ext_ku(),  true,  handle_ku_ee,            },
-	    { ext_cdp(), true,  handle_cdp,    refs      },
-	    { ext_aia(), true,  handle_aia,    refs      },
-	    { ext_sia(), true,  handle_sia_ee, refs      },
-	    { ext_cp(),  true,  handle_cp,     policy    },
-	    { ext_ir(),  false,                          },
-	    { ext_ar(),  false,                          },
-	    { ext_ir2(), false,                          },
-	    { ext_ar2(), false,                          },
+	   /* ext        reqd   handler        arg                */
+	    { ext_ski(), true,  handle_ski_ee, &ski_args           },
+	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
+	    { ext_ku(),  true,  handle_ku_ee,                      },
+	    { ext_cdp(), true,  handle_cdp,    &cert->sias         },
+	    { ext_aia(), true,  handle_aia,    &cert->sias         },
+	    { ext_sia(), true,  handle_sia_ee, &cert->sias         },
+	    { ext_cp(),  true,  handle_cp,     &cert->policy       },
+	    { ext_ir(),  false,                                    },
+	    { ext_ar(),  false,                                    },
+	    { ext_ir2(), false,                                    },
+	    { ext_ar2(), false,                                    },
 	    { NULL },
 	};
 
-	ski_args.cert = cert;
+	ski_args.cert = cert->x509;
 	ski_args.sid = sid;
 
-	return handle_extensions(handlers, X509_get0_extensions(cert));
+	return handle_extensions(handlers, X509_get0_extensions(cert->x509));
 }
 
 int
-certificate_validate_extensions_bgpsec(X509 *cert, unsigned char **ski,
-    enum rpki_policy *policy, struct rpp *pp)
+certificate_validate_extensions_bgpsec(void)
 {
 	return 0; /* TODO (#58) */
 }
@@ -1783,34 +1736,26 @@ has_bgpsec_router_eku(X509 *cert)
  * Assumption: Meant to be used exclusively in the context of parsing a .cer
  * certificate.
  */
-static int
-get_certificate_type(X509 *cert, bool is_ta, enum cert_type *result)
+static enum cert_type
+get_certificate_type(struct rpki_certificate *cert)
 {
-	if (is_ta) {
-		*result = CERTYPE_TA;
-		return 0;
-	}
+	if (cert->parent == NULL)
+		return CERTYPE_TA;
 
-	if (X509_check_purpose(cert, -1, -1) <= 0)
-		goto err;
+	if (X509_check_purpose(cert->x509, -1, -1) <= 0)
+		return CERTYPE_UNKNOWN;
 
-	if (X509_check_ca(cert) == 1) {
-		*result = CERTYPE_CA;
-		return 0;
-	}
+	if (X509_check_ca(cert->x509) == 1)
+		return CERTYPE_CA;
 
-	if (has_bgpsec_router_eku(cert)) {
-		*result = CERTYPE_BGPSEC;
-		return 0;
-	}
+	if (has_bgpsec_router_eku(cert->x509))
+		return CERTYPE_BGPSEC;
 
-err:
-	*result = CERTYPE_EE; /* Shuts up nonsense gcc 8.3 warning */
-	return pr_val_err("Certificate is not TA, CA nor BGPsec. Ignoring...");
+	return CERTYPE_UNKNOWN;
 }
 
 int
-certificate_validate_aia(struct cache_mapping *caIssuers, X509 *cert)
+certificate_validate_aia(struct rpki_certificate *cert)
 {
 	/*
 	 * FIXME Compare the AIA to the parent's URI.
@@ -1820,80 +1765,61 @@ certificate_validate_aia(struct cache_mapping *caIssuers, X509 *cert)
 	return 0;
 }
 
-static int
-retrieve_mapping(struct cache_mapping *map, void *arg)
+static unsigned int
+chain_length(struct rpki_certificate *cert)
 {
-	struct cache_mapping **result = arg;
-	*result = map;
+	unsigned int a;
+	for (a = 0; cert != NULL; a++)
+		cert = cert->parent;
+	return a;
+}
+
+static int
+init_resources(struct rpki_certificate *cert)
+{
+	int error;
+
+	cert->resources = resources_create(cert->policy, false);
+
+	error = certificate_get_resources(cert);
+	if (error)
+		return error;
+
+	/*
+	 * rfc8630#section-2.3
+	 * "The INR extension(s) of this TA MUST contain a non-empty set of
+	 * number resources."
+	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
+	 * part is already handled in certificate_get_resources().
+	 */
+	if (cert->type == CERTYPE_TA && resources_empty(cert->resources))
+		return pr_val_err("Trust Anchor certificate does not define any number resources.");
+
 	return 0;
 }
 
-static struct cache_mapping *
-download_rpp(struct sia_uris *uris)
+static int
+certificate_validate(struct rpki_certificate *cert)
 {
-	struct cache_mapping *map;
 	int error;
 
-	if (uris->rpp.len == 0) {
-		pr_val_err("SIA lacks both caRepository and rpkiNotify.");
-		return NULL;
-	}
-
-	error = cache_download_alt(validation_cache(state_retrieve()),
-	    &uris->rpp, MAP_NOTIF, MAP_RPP, retrieve_mapping, &map);
-	return error ? NULL : map;
-}
-
-/** Boilerplate code for CA certificate validation and recursive traversal. */
-int
-certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
-{
-	struct validation *state;
-	int total_parents;
-	STACK_OF(X509_CRL) *rpp_parent_crl;
-	X509 *cert;
-	struct sia_uris sia_uris;
-	struct cache_mapping *downloaded;
-	enum rpki_policy policy;
-	enum cert_type certype;
-	struct rpp *pp;
-	int error;
-
-	state = state_retrieve();
-
-	total_parents = certstack_get_x509_num(validation_certstack(state));
-	if (total_parents >= config_get_max_cert_depth())
+	if (chain_length(cert) >= config_get_max_cert_depth())
 		return pr_val_err("Certificate chain maximum depth exceeded.");
 
-	/* Debug cert type */
-	if (rpp_parent == NULL)
-		pr_val_debug("TA Certificate '%s' {",
-		    map_val_get_printable(cert_map));
-	else
-		pr_val_debug("Certificate '%s' {",
-		    map_val_get_printable(cert_map));
+	fnstack_push_map(&cert->map);
 
-	fnstack_push_map(cert_map);
+	cert->x509 = certificate_load(cert->map.path);
+	if (!cert->x509)
+		return -EINVAL;
+	cert->type = get_certificate_type(cert);
 
-	error = rpp_crl(rpp_parent, &rpp_parent_crl);
+	error = certificate_validate_chain(cert);
 	if (error)
-		goto revert_fnstack_and_debug;
+		goto end;
 
-	/* -- Validate the certificate (@cert) -- */
-	error = certificate_load(cert_map, &cert);
-	if (error)
-		goto revert_fnstack_and_debug;
-	error = certificate_validate_chain(cert, rpp_parent_crl);
-	if (error)
-		goto revert_cert;
-
-	error = get_certificate_type(cert, rpp_parent == NULL, &certype);
-	if (error)
-		goto revert_cert;
-
-	/* Debug cert type */
-	switch (certype) {
+	switch (cert->type) {
 	case CERTYPE_TA:
+		pr_val_debug("Type: TA");
 		break;
 	case CERTYPE_CA:
 		pr_val_debug("Type: CA");
@@ -1902,55 +1828,119 @@ certificate_traverse(struct rpp *rpp_parent, struct cache_mapping *cert_map)
 		pr_val_debug("Type: BGPsec EE. Ignoring...");
 //		error = handle_bgpsec(cert, x509stack_peek_resources(
 //		    validation_certstack(state)), rpp_parent);
-		goto revert_cert;
+		goto end;
 	default:
 		pr_val_debug("Type: Unknown. Ignoring...");
-		goto revert_cert;
+		goto end;
 	}
 
-	error = certificate_validate_rfc6487(cert, certype);
+	error = certificate_validate_rfc6487(cert);
 	if (error)
-		goto revert_cert;
+		goto end;
 
-	sia_uris_init(&sia_uris);
-	error = (certype == CERTYPE_TA)
-	    ? certificate_validate_extensions_ta(cert, &sia_uris, &policy)
-	    : certificate_validate_extensions_ca(cert, &sia_uris, &policy,
-	                                         rpp_parent);
+	error = (cert->type == CERTYPE_TA)
+	    ? validate_ta_extensions(cert)
+	    : validate_ca_extensions(cert);
 	if (error)
-		goto revert_uris;
+		goto end;
 
-	downloaded = download_rpp(&sia_uris);
-	if (downloaded == NULL) {
-		error = EINVAL;
-		goto revert_uris;
+	error = init_resources(cert);
+
+end:	fnstack_pop();
+	return error;
+}
+
+static int
+certificate_traverse(struct rpki_certificate *ca, struct cert_stack *stack)
+{
+	struct cache_cage *cage;
+	char const *mft;
+	array_index i;
+	struct cache_mapping *map;
+	char const *ext;
+	int error;
+
+	error = certificate_validate(ca);
+	if (error)
+		return error;
+
+	if (ca->type != CERTYPE_TA && ca->type != CERTYPE_CA)
+		return 0;
+
+	cage = cache_refresh_sias(&ca->sias);
+	if (!cage)
+		return pr_val_err("caRepository '%s' could not be refreshed, "
+		    "and there is no fallback in the cache. "
+		    "I'm going to have to skip it.", ca->sias.caRepository);
+
+retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
+	if (!mft) {
+		if (cage_disable_refresh(cage))
+			goto retry;
+		error = pr_val_err("caRepository '%s' is missing a manifest.",
+		    ca->sias.caRepository);
+		goto end;
 	}
 
-	error = x509stack_push(validation_certstack(state), cert_map, cert,
-	    policy, certype);
-	if (error)
-		goto revert_uris;
-	cert = NULL; /* Ownership stolen */
-
-	error = handle_manifest(sia_uris.mft,
-	    (map_get_type(downloaded) == MAP_NOTIF) ? downloaded : NULL,
-	    &pp);
+	error = manifest_traverse(ca->sias.rpkiManifest, mft, cage, ca);
 	if (error) {
-		x509stack_cancel(validation_certstack(state));
-		goto revert_uris;
+		if (cage_disable_refresh(cage))
+			goto retry;
+		goto end;
 	}
 
-	/* -- Validate & traverse the RPP (@pp) described by the manifest -- */
-	rpp_traverse(pp);
-	rpp_refput(pp);
+	for (i = 0; i < ca->rpp.nfiles; i++) {
+		map = ca->rpp.files + i;
+		ext = map->url + strlen(map->url) - 4;
+		if (strcmp(ext, ".cer") == 0)
+			certificate_stack_push(stack, map, ca);
+		else if (strcmp(ext, ".roa") == 0)
+			roa_traverse(map, ca);
+		else if (strcmp(ext, ".gbr") == 0)
+			ghostbusters_traverse(map, ca);
+	}
 
-revert_uris:
-	sia_uris_cleanup(&sia_uris);
-revert_cert:
-	if (cert != NULL)
-		X509_free(cert);
-revert_fnstack_and_debug:
-	fnstack_pop();
-	pr_val_debug("}");
+	cache_commit_rpp(ca->sias.caRepository, &ca->rpp);
+
+end:	free(cage);
+	return error;
+}
+
+int
+traverse_tree(struct cache_mapping const *ta_map, struct validation *state)
+{
+	struct cert_stack stack;
+	struct rpki_certificate *ta;
+	struct rpki_certificate *ca;
+	int error;
+
+	SLIST_INIT(&stack);
+
+	/* == Root certificate == */
+	ta = pzalloc(sizeof(struct rpki_certificate));
+	map_copy(&ta->map, ta_map);
+	ta->refcount = 1;
+
+	error = certificate_traverse(ta, &stack);
+	if (error)
+		goto end;
+
+	/*
+	 * From now on, the tree should be considered valid, even if subsequent
+	 * certificates fail.
+	 * (the root validated successfully; subtrees are isolated problems.)
+	 */
+
+	/* == Every other certificate == */
+	while (!SLIST_EMPTY(&stack)) {
+		ca = SLIST_FIRST(&stack);
+		SLIST_REMOVE_HEAD(&stack, lh);
+
+		certificate_traverse(ca, &stack);
+
+		rpki_certificate_free(ca);
+	}
+
+end:	rpki_certificate_free(ta);
 	return error;
 }

@@ -10,10 +10,6 @@
 #define ENOTSUPPORTED 3172
 /* "I haven't implemented this yet." */
 #define ENOTIMPLEMENTED 3173
-/* "URI was not RSYNC." */
-#define ENOTRSYNC 3174
-/* "URI was not HTTPS." */
-#define ENOTHTTPS 3175
 
 /*
  * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
@@ -22,8 +18,6 @@
  * BE CAREFUL ABOUT DOUBLE EVALUATION.
  */
 #define ENSURE_NEGATIVE(error) (((error) < 0) ? (error) : -(error))
-
-#define ARRAY_LEN(array) (sizeof(array) / sizeof((array)[0]))
 
 bool str_starts_with(char const *, char const *);
 bool str_ends_with(char const *, char const *);
@@ -45,14 +39,27 @@ int rwlock_read_lock(pthread_rwlock_t *);
 void rwlock_write_lock(pthread_rwlock_t *);
 void rwlock_unlock(pthread_rwlock_t *);
 
+#define CACHE_FILEMODE 0755
+
 typedef int (*foreach_file_cb)(char const *, void *);
 int foreach_file(char const *, char const *, bool, foreach_file_cb, void *);
 
+// XXX
 bool valid_file_or_dir(char const *, bool);
 
 int mkdir_p(char const *, bool);
 int delete_dir_recursive_bottom_up(char const *);
 
-int get_current_time(time_t *);
+time_t time_nonfatal(void);
+time_t time_fatal(void);
+
+/*
+ * Careful with this; several of the conversion specification characters
+ * documented in the Linux man page are not actually portable.
+ */
+#define FORT_TS_FORMAT "%Y-%m-%dT%H:%M:%SZ"
+#define FORT_TS_LEN 21 /* strlen("YYYY-mm-ddTHH:MM:SSZ") + 1 */
+int time2str(time_t, char *);
+int str2time(char const *, time_t *);
 
 #endif /* SRC_RTR_COMMON_H_ */

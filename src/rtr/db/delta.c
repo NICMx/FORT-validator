@@ -2,9 +2,9 @@
 
 #include <stdatomic.h>
 
-#include "alloc.h"
-#include "data_structure/array_list.h"
+#include "log.h"
 #include "types/address.h"
+#include "types/arraylist.h"
 
 struct delta_v4 {
 	uint32_t as;

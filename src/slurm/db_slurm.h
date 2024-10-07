@@ -1,8 +1,15 @@
-#ifndef SRC_SLURM_db_slurm_H_
-#define SRC_SLURM_db_slurm_H_
+#ifndef SRC_SLURM_DB_SLURM_H_
+#define SRC_SLURM_DB_SLURM_H_
 
 #include <openssl/evp.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 #include <sys/queue.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "types/router_key.h"
 #include "types/vrp.h"
@@ -82,4 +89,4 @@ void db_slurm_destroy(struct db_slurm *);
 
 void db_slurm_get_csum_list(struct db_slurm *, struct slurm_csum_list *);
 
-#endif /* SRC_SLURM_db_slurm_H_ */
+#endif /* SRC_SLURM_DB_SLURM_H_ */

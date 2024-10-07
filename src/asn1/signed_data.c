@@ -2,37 +2,19 @@
 
 #include "algorithm.h"
 #include "alloc.h"
-#include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/ContentTypePKCS7.h"
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SignedDataPKCS7.h"
 #include "asn1/decode.h"
 #include "asn1/oid.h"
-#include "config.h"
-#include "crypto/hash.h"
+#include "hash.h"
 #include "log.h"
 #include "object/certificate.h"
-#include "thread_var.h"
+#include "types/name.h"
 
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
-static const OID oid_bsta = OID_BINARY_SIGNING_TIME_ATTR;
-
-void
-eecert_init(struct ee_cert *ee, STACK_OF(X509_CRL) *crls, bool force_inherit)
-{
-	ee->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
-	ee->crls = crls;
-	memset(&ee->refs, 0, sizeof(ee->refs));
-}
-
-void
-eecert_cleanup(struct ee_cert *ee)
-{
-	resources_destroy(ee->res);
-	refs_cleanup(&ee->refs);
-}
 
 static int
 get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
@@ -51,20 +33,16 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 }
 
 static int
-handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
+handle_sdata_certificate(ANY_t *cert_encoded, struct rpki_certificate *ee,
     OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
 {
 	const unsigned char *otmp, *tmp;
-	X509 *cert;
-	enum rpki_policy policy;
 	int error;
 
 	/*
 	 * No need to validate certificate chain length, since we just arrived
 	 * to a tree leaf. Loops aren't possible.
 	 */
-
-	pr_val_debug("EE Certificate (embedded) {");
 
 	/*
 	 * "If the call is successful *in is incremented to the byte following
@@ -75,45 +53,31 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
 	 */
 	tmp = (const unsigned char *) cert_encoded->buf;
 	otmp = tmp;
-	cert = d2i_X509(NULL, &tmp, cert_encoded->size);
-	if (cert == NULL) {
-		error = val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
-		goto end1;
-	}
-	if (tmp != otmp + cert_encoded->size) {
-		error = val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
-		goto end2;
-	}
+	ee->x509 = d2i_X509(NULL, &tmp, cert_encoded->size);
+	if (ee->x509 == NULL)
+		return val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
+	if (tmp != otmp + cert_encoded->size)
+		return val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
 
-	x509_name_pr_debug("Issuer", X509_get_issuer_name(cert));
+	x509_name_pr_debug("Issuer", X509_get_issuer_name(ee->x509));
 
-	error = certificate_validate_chain(cert, ee->crls);
+	error = certificate_validate_chain(ee);
 	if (error)
-		goto end2;
-	error = certificate_validate_rfc6487(cert, CERTYPE_EE);
+		return error;
+	error = certificate_validate_rfc6487(ee);
 	if (error)
-		goto end2;
-	error = certificate_validate_extensions_ee(cert, sid, &ee->refs,
-	    &policy);
+		return error;
+	error = certificate_validate_extensions_ee(ee, sid);
 	if (error)
-		goto end2;
-	error = certificate_validate_aia(ee->refs.caIssuers, cert);
+		return error;
+	error = certificate_validate_aia(ee);
 	if (error)
-		goto end2;
-	error = certificate_validate_signature(cert, signedData, signature);
+		return error;
+	error = certificate_validate_signature(ee->x509, signedData, signature);
 	if (error)
-		goto end2;
-
-	resources_set_policy(ee->res, policy);
-	error = certificate_get_resources(cert, ee->res, CERTYPE_EE);
-	if (error)
-		goto end2;
-
-end2:
-	X509_free(cert);
-end1:
-	pr_val_debug("}");
-	return error;
+		return error;
+	resources_set_policy(ee->resources, ee->policy);
+	return certificate_get_resources(ee);
 }
 
 /* rfc6488#section-2.1.6.4.1 */
@@ -172,7 +136,6 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 	bool content_type_found = false;
 	bool message_digest_found = false;
 	bool signing_time_found = false;
-	bool binary_signing_time_found = false;
 	int error;
 
 	if (sinfo->signedAttrs == NULL)
@@ -222,15 +185,6 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 			}
 			error = 0; /* No validations needed for now. */
 			signing_time_found = true;
-
-		} else if (ARCS_EQUAL_OIDS(&attrType, oid_bsta)) {
-			if (binary_signing_time_found) {
-				pr_val_err("Multiple BinarySigningTimes found.");
-				goto illegal_attrType;
-			}
-			error = 0; /* No validations needed for now. */
-			binary_signing_time_found = true;
-
 		} else {
 			/* rfc6488#section-3.1.g */
 			pr_val_err("Illegal attrType OID in SignerInfo.");
@@ -248,6 +202,8 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 		return pr_val_err("SignerInfo lacks a ContentType attribute.");
 	if (!message_digest_found)
 		return pr_val_err("SignerInfo lacks a MessageDigest attribute.");
+	if (!signing_time_found)
+		return pr_val_err("SignerInfo lacks a SigningTime attribute.");
 
 	return 0;
 
@@ -258,7 +214,7 @@ illegal_attrType:
 
 int
 signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
-		     struct ee_cert *ee)
+     struct rpki_certificate *ee)
 {
 	struct SignerInfo *sinfo;
 	OCTET_STRING_t *sid = NULL;
@@ -383,12 +339,8 @@ signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
 		    sdata->certificates->list.count);
 	}
 
-	error = handle_sdata_certificate(sdata->certificates->list.array[0],
+	return handle_sdata_certificate(sdata->certificates->list.array[0],
 	    ee, sid, encoded, &sinfo->signature);
-	if (error)
-		return error;
-
-	return 0;
 }
 
 /*
@@ -469,30 +421,32 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 	bool equal;
 
 	if (sdata == NULL)
-		return -EINVAL;
+		return pr_val_err("SignedData is NULL.");
 	if (sdata->signerInfos.list.array == NULL)
-		return -EINVAL;
+		return pr_val_err("SignerInfos array is NULL.");
 	if (sdata->signerInfos.list.array[0] == NULL)
-		return -EINVAL;
+		return pr_val_err("SignerInfos array first element is NULL.");
 
 	signedAttrs = sdata->signerInfos.list.array[0]->signedAttrs;
+	if (signedAttrs == NULL)
+		return pr_val_err("signedAttrs is NULL.");
 	if (signedAttrs->list.array == NULL)
-		return -EINVAL;
+		return pr_val_err("signedAttrs array is NULL.");
 
 	for (i = 0; i < signedAttrs->list.count; i++) {
 		attr = signedAttrs->list.array[i];
 		if (!attr)
-			return -EINVAL;
+			return pr_val_err("signedAttrs array element %d is NULL.", i);
 		error = oid2arcs(&attr->attrType, &arcs);
 		if (error)
-			return -EINVAL;
+			return error;
 		equal = ARCS_EQUAL_OIDS(&arcs, oid_cta);
 		free_arcs(&arcs);
 		if (equal) {
 			if (attr->attrValues.list.array == NULL)
-				return -EINVAL;
+				return pr_val_err("signedAttrs attrValue array is NULL.");
 			if (attr->attrValues.list.array[0] == NULL)
-				return -EINVAL;
+				return pr_val_err("signedAttrs attrValue array first element is NULL.");
 			return asn1_decode_any(attr->attrValues.list.array[0],
 			    &asn_DEF_OBJECT_IDENTIFIER,
 			    (void **) result, true);

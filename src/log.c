@@ -8,12 +8,12 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <sys/stat.h>
 #include <syslog.h>
 #include <time.h>
 
 #include "config.h"
 #include "thread_var.h"
+#include "types/path.h"
 
 struct level {
 	char const *label;
@@ -21,22 +21,22 @@ struct level {
 	FILE *stream;
 };
 
-static struct level DBG = { "DBG", "\x1B[36m" }; /* Cyan */
-static struct level INF = { "INF", "\x1B[37m" }; /* White */
-static struct level WRN = { "WRN", "\x1B[33m" }; /* Yellow */
-static struct level ERR = { "ERR", "\x1B[31m" }; /* Red */
-static struct level CRT = { "CRT", "\x1B[35m" }; /* Purple */
+static struct level DBG = { "DBG", PR_COLOR_DBG };
+static struct level INF = { "INF", PR_COLOR_INF };
+static struct level WRN = { "WRN", PR_COLOR_WRN };
+static struct level ERR = { "ERR", PR_COLOR_ERR };
+static struct level CRT = { "CRT", PR_COLOR_CRT };
 static struct level UNK = { "UNK", "" };
-#define COLOR_RESET "\x1B[0m"
 
 struct log_config {
 	bool fprintf_enabled; /* Print on the standard streams? */
 	bool syslog_enabled; /* Print on syslog? */
 
 	uint8_t level;
-	char const *prefix;
+	char const *tag;
 	bool color;
 	int facility;
+	bool rm_filepath;
 };
 
 /* Configuration for the operation logs. */
@@ -45,10 +45,8 @@ static struct log_config op_config;
 static struct log_config val_config;
 
 /*
- * Note: Normally, fprintf and syslog would have separate locks.
- *
- * However, fprintf and syslog are rarely enabled at the same time, so I don't
- * think it's worth it. So I'm reusing the lock.
+ * fprintf and syslog are rarely enabled at the same time, so I reused the
+ * mutex.
  *
  * "log" + "lock" = "logck"
  */
@@ -104,12 +102,12 @@ print_stack_trace(char const *title)
 #endif /* BACKTRACE_ENABLED */
 }
 
-static void init_config(struct log_config *cfg, bool unit_tests)
+static void init_config(struct log_config *cfg)
 {
 	cfg->fprintf_enabled = true;
-	cfg->syslog_enabled = !unit_tests;
+	cfg->syslog_enabled = true;
 	cfg->level = LOG_DEBUG;
-	cfg->prefix = NULL;
+	cfg->tag = NULL;
 	cfg->color = false;
 	cfg->facility = LOG_DAEMON;
 }
@@ -208,7 +206,7 @@ register_signal_handlers(void)
 }
 
 int
-log_setup(bool unit_tests)
+log_setup(void)
 {
 	/*
 	 * Remember not to use any actual logging functions until logging has
@@ -224,25 +222,21 @@ log_setup(bool unit_tests)
 	CRT.stream = stderr;
 	UNK.stream = stdout;
 
-	if (unit_tests)
-		openlog("fort", LOG_CONS | LOG_PID, LOG_DAEMON);
-
-	init_config(&op_config, unit_tests);
-	init_config(&val_config, unit_tests);
+	init_config(&op_config);
+	init_config(&val_config);
 
 	error = pthread_mutex_init(&logck, NULL);
 	if (error) {
-		fprintf(ERR.stream, "pthread_mutex_init() returned %d: %s\n",
+		fprintf(ERR.stream,
+		    "pthread_mutex_init() returned %d: %s\n",
 		    error, strerror(error));
-		if (!unit_tests)
-			syslog(LOG_ERR | op_config.facility,
-			    "pthread_mutex_init() returned %d: %s",
-			    error, strerror(error));
+		syslog(LOG_ERR | op_config.facility,
+		    "pthread_mutex_init() returned %d: %s",
+		    error, strerror(error));
 		return error;
 	}
 
-	if (!unit_tests)
-		register_signal_handlers();
+	register_signal_handlers();
 
 	return 0;
 }
@@ -295,13 +289,15 @@ log_start(void)
 	}
 
 	op_config.level = config_get_op_log_level();
-	op_config.prefix = config_get_op_log_tag();
+	op_config.tag = config_get_op_log_tag();
 	op_config.color = config_get_op_log_color_output();
 	op_config.facility = config_get_op_log_facility();
+	op_config.rm_filepath = config_get_op_log_file_format() == FNF_NAME;
 	val_config.level = config_get_val_log_level();
-	val_config.prefix = config_get_val_log_tag();
+	val_config.tag = config_get_val_log_tag();
 	val_config.color = config_get_val_log_color_output();
 	val_config.facility = config_get_val_log_facility();
+	val_config.rm_filepath = config_get_val_log_file_format() == FNF_NAME;
 }
 
 void
@@ -399,24 +395,28 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 
 	now = time(NULL);
 	if (now != ((time_t) -1)) {
+		// XXX not catching any errors
 		localtime_r(&now, &stm_buff);
 		strftime(time_buff, sizeof(time_buff), "%b %e %T", &stm_buff);
 		fprintf(lvl->stream, "%s ", time_buff);
 	}
 
 	fprintf(lvl->stream, "%s", lvl->label);
-	if (cfg->prefix)
-		fprintf(lvl->stream, " [%s]", cfg->prefix);
+	if (cfg->tag)
+		fprintf(lvl->stream, " [%s]", cfg->tag);
 	fprintf(lvl->stream, ": ");
 
 	file_name = fnstack_peek();
-	if (file_name != NULL)
+	if (file_name != NULL) {
+		if (cfg->rm_filepath)
+			file_name = path_filename(file_name);
 		fprintf(lvl->stream, "%s: ", file_name);
+	}
 
 	vfprintf(lvl->stream, format, args);
 
 	if (cfg->color)
-		fprintf(lvl->stream, COLOR_RESET);
+		fprintf(lvl->stream, PR_COLOR_RST);
 	fprintf(lvl->stream, "\n");
 
 	/* Force flush */
@@ -426,35 +426,46 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 	unlock_mutex();
 }
 
-#define MSG_LEN 1024
+/*
+ * TODO (fine) Optimize. Notice the buffer is static, which seems to be the
+ * reason why it's (probably ill-advisedly) mutexing.
+ */
+#define MSG_LEN 512
 
 static void
 __syslog(int level, struct log_config *cfg, const char *format, va_list args)
 {
 	static char msg[MSG_LEN];
-	char const *file_name;
+	char const *file;
+	int res;
 
-	file_name = fnstack_peek();
+	level |= cfg->facility;
+	file = fnstack_peek();
+	if (file && cfg->rm_filepath)
+		file = path_filename(file);
 
 	lock_mutex();
 
 	/* Can't use vsyslog(); it's not portable. */
-	vsnprintf(msg, MSG_LEN, format, args);
-	if (file_name != NULL) {
-		if (cfg->prefix != NULL)
-			syslog(level | cfg->facility, "[%s] %s: %s",
-			    cfg->prefix, file_name, msg);
+	res = vsnprintf(msg, MSG_LEN, format, args);
+	if (res < 0)
+		goto end;
+	if (res >= MSG_LEN)
+		msg[MSG_LEN - 1] = '\0';
+
+	if (file != NULL) {
+		if (cfg->tag != NULL)
+			syslog(level, "[%s] %s: %s", cfg->tag, file, msg);
 		else
-			syslog(level | cfg->facility, "%s: %s", file_name, msg);
+			syslog(level, "%s: %s", file, msg);
 	} else {
-		if (cfg->prefix != NULL)
-			syslog(level | cfg->facility, "[%s] %s",
-			    cfg->prefix, msg);
+		if (cfg->tag != NULL)
+			syslog(level, "[%s] %s", cfg->tag, msg);
 		else
-			syslog(level | cfg->facility, "%s", msg);
+			syslog(level, "%s", msg);
 	}
 
-	unlock_mutex();
+end:	unlock_mutex();
 }
 
 #define PR_SIMPLE(lvl, config)						\

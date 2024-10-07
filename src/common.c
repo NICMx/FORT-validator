@@ -238,51 +238,41 @@ valid_file_or_dir(char const *location, bool check_file)
 	return result;
 }
 
-/*
- * > 0: exists
- * = 0: !exists
- * < 0: error
- */
 static int
-dir_exists(char const *path)
+stat_dir(char const *path)
 {
 	struct stat meta;
-	int error;
 
-	if (stat(path, &meta) != 0) {
-		error = errno;
-		if (error == ENOENT)
-			return 0;
-		pr_op_err_st("stat() failed: %s", strerror(error));
-		return -error;
-	}
-
-	if (!S_ISDIR(meta.st_mode)) {
-		return pr_op_err_st("Path '%s' exists and is not a directory.",
-		    path);
-	}
-
-	return 1;
+	if (stat(path, &meta) != 0)
+		return errno;
+	if (!S_ISDIR(meta.st_mode))
+		return ENOTDIR;
+	return 0;
 }
 
 static int
-create_dir(char const *path)
+ensure_dir(char const *path)
 {
 	int error;
 
-	if (mkdir(path, 0777) != 0) {
+	/*
+	 * Perplexingly, mkdir() returns EEXIST instead of ENOTDIR when the
+	 * path actually refers to a file.
+	 * So it looks like this stat() is unavoidable.
+	 */
+	if (stat_dir(path) == ENOTDIR && remove(path) < 0)
+		return errno;
+
+	if (mkdir(path, CACHE_FILEMODE) < 0) {
 		error = errno;
-		if (error != EEXIST) {
-			pr_op_err_st("Error while making directory '%s': %s",
-			    path, strerror(error));
-			return error;
-		}
+		return (error == EEXIST) ? 0 : error;
 	}
 
 	return 0;
 }
 
 /* mkdir -p $_path */
+/* XXX Maybe also short-circuit by parent? */
 int
 mkdir_p(char const *_path, bool include_basename)
 {
@@ -298,27 +288,30 @@ mkdir_p(char const *_path, bool include_basename)
 		*last_slash = '\0';
 	}
 
-	result = dir_exists(path); /* short circuit */
-	if (result > 0) {
-		result = 0;
-		goto end;
-	} else if (result < 0) {
+	result = stat_dir(path); /* short circuit */
+	if (result == 0)
+		goto end; /* Already exists */
+	if (result != ENOENT && result != ENOTDIR) {
+		pr_op_err_st("Error during stat(%s): %s",
+		    path, strerror(result));
 		goto end;
 	}
 
 	for (i = 1; path[i] != '\0'; i++) {
 		if (path[i] == '/') {
 			path[i] = '\0';
-			result = create_dir(path);
+			result = ensure_dir(path);
 			path[i] = '/';
-			if (result != 0)
-				goto end; /* error msg already printed */
+			if (result != 0) {
+				pr_op_err_st("Error during mkdir(%s): %s",
+				    path, strerror(result));
+				goto end;
+			}
 		}
 	}
-	result = create_dir(path);
+	result = ensure_dir(path);
 
-end:
-	free(path);
+end:	free(path);
 	return result;
 }
 
@@ -328,7 +321,7 @@ end:
  * If parent's parent is now empty, delete parent's parent.
  * And so on.
  *
- * FIXME this should be done by the cache cleaner instead.
+ * XXX this should be done by the cache cleaner instead.
  */
 int
 delete_dir_recursive_bottom_up(char const *path)
@@ -338,8 +331,7 @@ delete_dir_recursive_bottom_up(char const *path)
 	size_t config_len;
 	int error;
 
-	errno = 0;
-	if (remove(path) != 0) {
+	if (remove(path) < 0) {
 		error = errno;
 		pr_val_err("Couldn't delete '%s': %s", path, strerror(error));
 		return error;
@@ -387,20 +379,67 @@ release_str:
 	return error;
 }
 
-int
-get_current_time(time_t *result)
+time_t
+time_nonfatal(void)
 {
-	time_t now;
-	int error;
+	time_t result;
 
-	now = time(NULL);
-	if (now == ((time_t) -1)) {
-		error = errno;
-		pr_val_err("Error getting the current time: %s",
-		    strerror(errno));
-		return error;
+	result = time(NULL);
+	if (result == ((time_t)-1)) {
+		pr_val_warn("time(NULL) returned -1: %s", strerror(errno));
+		result = 0;
 	}
 
-	*result = now;
+	return result;
+}
+
+time_t
+time_fatal(void)
+{
+	time_t result;
+
+	result = time(NULL);
+	if (result == ((time_t)-1))
+		pr_crit("time(NULL) returned -1: %s", strerror(errno));
+
+	return result;
+}
+
+int
+time2str(time_t tt, char *str)
+{
+	struct tm tmbuffer, *tm;
+
+	memset(&tmbuffer, 0, sizeof(tmbuffer));
+	tm = gmtime_r(&tt, &tmbuffer);
+	if (tm == NULL)
+		return errno;
+	if (strftime(str, FORT_TS_LEN, FORT_TS_FORMAT, tm) == 0)
+		return ENOSPC;
+
+	return 0;
+}
+
+int
+str2time(char const *str, time_t *tt)
+{
+	char const *consumed;
+	struct tm tm;
+	time_t time;
+	int error;
+
+	memset(&tm, 0, sizeof(tm));
+	consumed = strptime(str, FORT_TS_FORMAT, &tm);
+	if (consumed == NULL || (*consumed) != 0)
+		return pr_op_err("String '%s' does not appear to be a timestamp.",
+		    str);
+	time = timegm(&tm);
+	if (time == ((time_t) -1)) {
+		error = errno;
+		return pr_op_err("String '%s' does not appear to be a timestamp: %s",
+		    str, strerror(error));
+	}
+
+	*tt = time;
 	return 0;
 }

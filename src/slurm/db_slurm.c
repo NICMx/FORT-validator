@@ -3,11 +3,10 @@
 #include <errno.h>
 #include <time.h>
 
-#include "alloc.h"
+#include "base64.h"
 #include "common.h"
-#include "crypto/base64.h"
-#include "data_structure/array_list.h"
-#include "types/router_key.h"
+#include "log.h"
+#include "types/arraylist.h"
 
 struct slurm_prefix_wrap {
 	struct slurm_prefix element;
@@ -96,15 +95,10 @@ int
 db_slurm_create(struct slurm_csum_list *csums, struct db_slurm **result)
 {
 	struct db_slurm *db;
-	int error;
 
 	db = pmalloc(sizeof(struct db_slurm));
 
-	error = get_current_time(&db->loaded_date);
-	if (error) {
-		free(db);
-		return error;
-	}
+	db->loaded_date = time_nonfatal();
 
 	/* Not ready yet (nor required yet) for multithreading */
 	al_filter_prefix_init(&db->lists.filter_pfx_al);

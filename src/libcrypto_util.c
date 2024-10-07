@@ -11,6 +11,35 @@
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "extension.h"
 #include "json_util.h"
+#include "log.h"
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+#define BIO_PR_TIME(bio, tm) ASN1_TIME_print_ex(bio, tm, ASN1_DTFLGS_ISO8601)
+#else
+#define BIO_PR_TIME(bio, tm) ASN1_TIME_print(bio, tm)
+#endif
+
+char *
+asn1time2str(ASN1_TIME const *tm)
+{
+	BIO *bio;
+	BUF_MEM *buf;
+	char *res;
+
+	bio = BIO_new(BIO_s_mem());
+	if (bio == NULL)
+		enomem_panic();
+
+	if (BIO_PR_TIME(bio, tm) <= 0)
+		return NULL;
+
+	BIO_flush(bio);
+	BIO_get_mem_ptr(bio, &buf);
+	res = pstrndup(buf->data, buf->length);
+
+	BIO_free_all(bio);
+	return res;
+}
 
 /* Swallows @bio. */
 static json_t *
@@ -84,7 +113,6 @@ json_t *
 asn1time2json(ASN1_TIME const *time)
 {
 	BIO *bio;
-	int success;
 
 	if (time == NULL)
 		return json_null();
@@ -93,12 +121,7 @@ asn1time2json(ASN1_TIME const *time)
 	if (bio == NULL)
 		return NULL;
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	success = ASN1_TIME_print_ex(bio, time, ASN1_DTFLGS_ISO8601);
-#else
-	success = ASN1_TIME_print(bio, time); /* Kill me */
-#endif
-	if (!success) {
+	if (BIO_PR_TIME(bio, time) <= 0) {
 		BIO_free_all(bio);
 		return NULL;
 	}

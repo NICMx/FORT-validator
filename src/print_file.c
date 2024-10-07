@@ -1,18 +1,19 @@
 #include "print_file.h"
 
+#include <errno.h>
+
 #include "asn1/asn1c/CRL.h"
 #include "asn1/asn1c/Certificate.h"
+#include "asn1/asn1c/ContentInfo.h"
 #include "asn1/asn1c/ber_decoder.h"
 #include "asn1/asn1c/json_encoder.h"
-#include "asn1/content_info.h"
 #include "common.h"
 #include "config.h"
-#include "data_structure/path_builder.h"
-#include "file.h"
 #include "log.h"
-#include "rsync/rsync.h"
+#include "rsync.h"
 #include "types/bio_seq.h"
-#include "types/map.h"
+#include "types/path.h"
+#include "types/url.h"
 
 #define HDRSIZE 32
 
@@ -21,7 +22,9 @@ __rsync2bio(char const *src, char const *dst)
 {
 	int error;
 
-	error = rsync_download(src, dst, false);
+	// XXX use the cache
+
+	error = rsync_download(src, dst);
 	if (error) {
 		pr_op_err("rysnc download failed: %s", strerror(abs(error)));
 		return NULL;
@@ -36,7 +39,7 @@ rsync2bio_tmpdir(char const *src)
 #define TMPDIR "/tmp/fort-XXXXXX"
 
 	struct path_builder pb;
-	char buf[strlen(TMPDIR) + 1];
+	char buf[sizeof(TMPDIR)];
 	char *tmpdir;
 	BIO *result = NULL;
 	int error;
@@ -52,7 +55,7 @@ rsync2bio_tmpdir(char const *src)
 	error = pb_append(&pb, tmpdir);
 	if (error)
 		goto end;
-	error = pb_append(&pb, strrchr(src, '/') + 1);
+	error = pb_append(&pb, path_filename(src));
 	if (error)
 		goto end;
 
@@ -65,24 +68,22 @@ end:	pb_cleanup(&pb);
 static BIO *
 rsync2bio_cache(char const *src)
 {
-	struct cache_mapping *map = NULL;
-	BIO *bio;
-	int error;
+	pr_op_err("Disabled for now."); // XXX
+	return NULL;
 
-	/*
-	 * TODO (#82) maybe rename MAP_TA_RSYNC into single rsync.
-	 * If applies and it's going to survive.
-	 */
-	error = map_create(&map, MAP_TA_RSYNC, NULL, src);
-	if (error) {
-		pr_op_err("Unparseable rsync URI: %s", strerror(abs(error)));
-		return NULL;
-	}
-
-	bio = __rsync2bio(map_get_url(map), map_get_path(map));
-
-	map_refput(map);
-	return bio;
+//	char *dst;
+//	BIO *bio;
+//
+//	dst = url2path(src);
+//	if (!dst) {
+//		pr_op_err("Unparseable rsync URI.");
+//		return NULL;
+//	}
+//
+//	bio = __rsync2bio(src, dst);
+//
+//	free(dst);
+//	return bio;
 }
 
 static BIO *
@@ -99,7 +100,7 @@ filename2bio(char const *filename)
 	if (filename == NULL || strcmp(filename, "-") == 0)
 		return BIO_new_fp(stdin, BIO_NOCLOSE);
 
-	if (str_starts_with(filename, "rsync://"))
+	if (url_is_rsync(filename))
 		return rsync2bio(filename);
 
 	return BIO_new_file(filename, "rb");

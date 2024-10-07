@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 /*
- * A ROA.
+ * A ROA payload.
  *
  * I think it's called "VRP" ("Validated ROA Payload") because it was originally
  * meant to represent an already validated ROA, and used exclusively by the RTR

@@ -3,8 +3,7 @@
 
 #include <stdbool.h>
 
-#include "as_number.h"
-#include "asn1/asn1c/ASId.h"
+#include "types/asn.h"
 
 /*
  * Implementation note: This is just a casted struct sorted_array.

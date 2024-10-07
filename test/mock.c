@@ -3,65 +3,63 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include "config.h"
+#include "incidence.h"
+#include "log.h"
 #include "state.h"
 #include "thread_var.h"
-#include "config/filename_format.h"
-#include "config/mode.h"
-#include "incidence/incidence.h"
 
-/**
- * Some core functions, as linked from unit tests.
- */
+/* Some core functions, as linked from unit tests. */
 
 MOCK_TRUE(log_val_enabled, unsigned int l)
 MOCK_TRUE(log_op_enabled, unsigned int l)
 
 /* CFLAGS=-DPRINT_PRS make check */
 #ifdef PRINT_PRS
-#define MOCK_PRINT							\
+#define MOCK_PRINT(color)						\
 	do {								\
 		va_list args;						\
+		printf(color);						\
 		va_start(args, format);					\
 		vfprintf(stdout, format, args);				\
 		va_end(args);						\
-		printf("\n");						\
+		printf(PR_COLOR_RST "\n");				\
 	} while (0)
 #else
-#define MOCK_PRINT
+#define MOCK_PRINT(color)
 #endif
 
-#define MOCK_VOID_PRINT(name)						\
+#define MOCK_VOID_PRINT(name, color)					\
 	void								\
 	name(const char *format, ...)					\
 	{								\
-		MOCK_PRINT;						\
+		MOCK_PRINT(color);					\
 	}
 
-#define MOCK_INT_PRINT(name, result)					\
+#define MOCK_INT_PRINT(name, color, result)				\
 	int								\
 	name(const char *format, ...)					\
 	{								\
-		MOCK_PRINT;						\
+		MOCK_PRINT(color);					\
 		return result;						\
 	}
 
-MOCK_VOID_PRINT(pr_op_debug)
-MOCK_VOID_PRINT(pr_op_info)
-MOCK_INT_PRINT(pr_op_warn, 0)
-MOCK_INT_PRINT(pr_op_err, -EINVAL)
-MOCK_INT_PRINT(pr_op_err_st, -EINVAL)
-MOCK_INT_PRINT(op_crypto_err, -EINVAL)
+MOCK_VOID_PRINT(pr_op_debug, PR_COLOR_DBG)
+MOCK_VOID_PRINT(pr_op_info, PR_COLOR_INF)
+MOCK_INT_PRINT(pr_op_warn, PR_COLOR_WRN, 0)
+MOCK_INT_PRINT(pr_op_err, PR_COLOR_ERR, -EINVAL)
+MOCK_INT_PRINT(pr_op_err_st, PR_COLOR_ERR, -EINVAL)
+MOCK_INT_PRINT(op_crypto_err, PR_COLOR_ERR, -EINVAL)
 
-MOCK_VOID_PRINT(pr_val_debug)
-MOCK_VOID_PRINT(pr_val_info)
-MOCK_INT_PRINT(pr_val_warn, 0)
-MOCK_INT_PRINT(pr_val_err, -EINVAL)
-MOCK_INT_PRINT(val_crypto_err, -EINVAL)
+MOCK_VOID_PRINT(pr_val_debug, PR_COLOR_DBG)
+MOCK_VOID_PRINT(pr_val_info, PR_COLOR_INF)
+MOCK_INT_PRINT(pr_val_warn, PR_COLOR_WRN, 0)
+MOCK_INT_PRINT(pr_val_err, PR_COLOR_ERR, -EINVAL)
+MOCK_INT_PRINT(val_crypto_err, PR_COLOR_ERR, -EINVAL)
 
 int
 incidence(enum incidence_id id, const char *format, ...)
 {
-	MOCK_PRINT;
+	MOCK_PRINT(PR_COLOR_ERR);
 	return -EINVAL;
 }
 
@@ -113,12 +111,30 @@ v6addr2str2(struct in6_addr const *addr)
 MOCK_NULL(config_get_slurm, char const *, void)
 MOCK(config_get_tal, char const *, "tal/", void)
 MOCK(config_get_local_repository, char const *, "tmp", void)
+MOCK(cfg_cache_threshold, time_t, 60 * 60 * 24 * 7, void)
 MOCK(config_get_mode, enum mode, STANDALONE, void)
+MOCK_UINT(config_get_rrdp_delta_threshold, 5, void)
 MOCK_TRUE(config_get_rsync_enabled, void)
 MOCK_UINT(config_get_rsync_priority, 50, void)
 MOCK_TRUE(config_get_http_enabled, void)
 MOCK_UINT(config_get_http_priority, 60, void)
 MOCK_NULL(config_get_output_roa, char const *, void)
 MOCK_NULL(config_get_output_bgpsec, char const *, void)
-MOCK(config_get_op_log_filename_format, enum filename_format, FNF_NAME, void)
-MOCK(config_get_val_log_filename_format, enum filename_format, FNF_NAME, void)
+MOCK(config_get_op_log_file_format, enum filename_format, FNF_NAME, void)
+MOCK(config_get_val_log_file_format, enum filename_format, FNF_NAME, void)
+MOCK(logv_filename, char const *, path, char const *path)
+
+MOCK_VOID(fnstack_init, void)
+MOCK_VOID(fnstack_push, char const *file)
+MOCK_VOID(fnstack_push_map, struct cache_mapping const *map)
+MOCK_VOID(fnstack_pop, void)
+MOCK_VOID(fnstack_cleanup, void)
+
+void
+ck_assert_str(char const *expected, char const *actual)
+{
+	if (expected)
+		ck_assert_str_eq(expected, actual);
+	else
+		ck_assert_ptr_eq(NULL, actual);
+}

@@ -1,34 +1,26 @@
 #include "object/tal.h"
 
 #include <ctype.h>
-#include <errno.h>
-#include <openssl/evp.h>
 #include <sys/queue.h>
 #include <time.h>
 
-#include "alloc.h"
-#include "cert_stack.h"
+#include "base64.h"
+#include "cache.h"
 #include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
-#include "state.h"
-#include "thread_var.h"
-#include "validation_handler.h"
-#include "crypto/base64.h"
 #include "object/certificate.h"
-#include "rtr/db/vrps.h"
-#include "cache/local_cache.h"
-
-typedef int (*foreach_map_cb)(struct tal *, struct cache_mapping *, void *);
+#include "thread_var.h"
+#include "types/path.h"
+#include "types/str.h"
+#include "types/url.h"
 
 struct tal {
 	char const *file_name;
-	struct map_list maps;
+	struct strlist urls;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
-
-	struct rpki_cache *cache;
 };
 
 struct validation_thread {
@@ -42,11 +34,6 @@ struct validation_thread {
 
 /* List of threads, one per TAL file */
 SLIST_HEAD(threads_list, validation_thread);
-
-struct handle_tal_args {
-	struct tal tal;
-	struct db_table *db;
-};
 
 static char *
 find_newline(char *str)
@@ -71,30 +58,10 @@ is_blank(char const *str)
 }
 
 static int
-add_url(struct tal *tal, char *url)
-{
-	struct cache_mapping *new = NULL;
-	int error;
-
-	if (str_starts_with(url, "rsync://"))
-		error = map_create(&new, MAP_TA_RSYNC, NULL, url);
-	else if (str_starts_with(url, "https://"))
-		error = map_create(&new, MAP_TA_HTTP, NULL, url);
-	else
-		return pr_op_err("TAL has non-rsync/HTTPS URI: %s", url);
-	if (error)
-		return error;
-
-	maps_add(&tal->maps, new);
-	return 0;
-}
-
-static int
 read_content(char *fc /* File Content */, struct tal *tal)
 {
 	char *nl; /* New Line */
 	bool cr; /* Carriage return */
-	int error;
 
 	/* Comment section */
 	while (fc[0] == '#') {
@@ -115,16 +82,15 @@ read_content(char *fc /* File Content */, struct tal *tal)
 		if (is_blank(fc))
 			break;
 
-		error = add_url(tal, fc);
-		if (error)
-			return error;
+		if (url_is_https(fc) || url_is_rsync(fc))
+			strlist_add(&tal->urls, pstrdup(fc));
 
 		fc = nl + cr + 1;
 		if (*fc == '\0')
 			return pr_op_err("The TAL seems to be missing the public key.");
 	} while (true);
 
-	if (tal->maps.len == 0)
+	if (tal->urls.len == 0)
 		return pr_op_err("There seems to be an empty/blank line before the end of the URI section.");
 
 	/* subjectPublicKeyInfo section */
@@ -138,13 +104,10 @@ premature:
 	return pr_op_err("The TAL seems to end prematurely at line '%s'.", fc);
 }
 
-/**
- * @file_name is expected to outlive the result.
- */
+/* @file_path is expected to outlive @tal. */
 static int
 tal_init(struct tal *tal, char const *file_path)
 {
-	char const *file_name;
 	struct file_contents file;
 	int error;
 
@@ -152,20 +115,13 @@ tal_init(struct tal *tal, char const *file_path)
 	if (error)
 		return error;
 
-	file_name = strrchr(file_path, '/');
-	file_name = (file_name != NULL) ? (file_name + 1) : file_path;
-	tal->file_name = file_name;
+	tal->file_name = path_filename(file_path);
 
-	maps_init(&tal->maps);
+	strlist_init(&tal->urls);
 	error = read_content((char *)file.buffer, tal);
-	if (error) {
-		maps_cleanup(&tal->maps);
-		goto end;
-	}
+	if (error)
+		strlist_cleanup(&tal->urls);
 
-	tal->cache = cache_create();
-
-end:
 	file_free(&file);
 	return error;
 }
@@ -173,9 +129,8 @@ end:
 static void
 tal_cleanup(struct tal *tal)
 {
-	cache_destroy(tal->cache);
 	free(tal->spki);
-	maps_cleanup(&tal->maps);
+	strlist_cleanup(&tal->urls);
 }
 
 char const *
@@ -191,105 +146,65 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-struct rpki_cache *
-tal_get_cache(struct tal *tal)
+static void
+__do_file_validation(struct validation_thread *thread)
 {
-	return tal->cache;
-}
-
-/**
- * Performs the whole validation walkthrough on the @map mapping, which is
- * assumed to have been extracted from TAL @tal.
- */
-static int
-handle_tal_map(struct tal *tal, struct cache_mapping *map, struct db_table *db)
-{
-	struct validation_handler validation_handler;
+	struct tal tal;
+	struct validation_handler collector;
+	struct db_table *db;
 	struct validation *state;
-	struct cert_stack *certstack;
-	struct deferred_cert deferred;
-	int error;
+	char **url;
+	struct cache_mapping map;
 
-	pr_val_debug("TAL URI '%s' {", map_val_get_printable(map));
+	thread->error = tal_init(&tal, thread->tal_file);
+	if (thread->error)
+		return;
 
-	validation_handler.handle_roa_v4 = handle_roa_v4;
-	validation_handler.handle_roa_v6 = handle_roa_v6;
-	validation_handler.handle_router_key = handle_router_key;
-	validation_handler.arg = db;
+	collector.handle_roa_v4 = handle_roa_v4;
+	collector.handle_roa_v6 = handle_roa_v6;
+	collector.handle_router_key = handle_router_key;
+	collector.arg = db = db_table_create();
 
-	error = validation_prepare(&state, tal, &validation_handler);
-	if (error)
-		return ENSURE_NEGATIVE(error);
-
-	if (!map_is_certificate(map)) {
-		pr_op_err("TAL URI does not point to a certificate. (Expected .cer, got '%s')",
-		    map_op_get_printable(map));
-		error = EINVAL;
-		goto end;
+	thread->error = validation_prepare(&state, &tal, &collector);
+	if (thread->error) {
+		db_table_destroy(db);
+		goto end1;
 	}
 
-	/* Handle root certificate. */
-	error = certificate_traverse(NULL, map);
-	if (error) {
-		switch (validation_pubkey_state(state)) {
-		case PKS_INVALID:
-			error = EINVAL;
-			goto end;
-		case PKS_VALID:
-		case PKS_UNTESTED:
-			error = ENSURE_NEGATIVE(error);
-			goto end;
-		}
-		pr_crit("Unknown public key state: %u",
-		    validation_pubkey_state(state));
+	ARRAYLIST_FOREACH(&tal.urls, url) {
+		map.url = *url;
+		map.path = cache_refresh_url(*url);
+		if (!map.path)
+			continue;
+		if (traverse_tree(&map, state) != 0)
+			continue;
+		goto end2; /* Happy path */
 	}
 
-	/*
-	 * From now on, the tree should be considered valid, even if subsequent
-	 * certificates fail.
-	 * (the root validated successfully; subtrees are isolated problems.)
-	 */
+	ARRAYLIST_FOREACH(&tal.urls, url) {
+		map.url = *url;
+		map.path = cache_fallback_url(*url);
+		if (!map.path)
+			continue;
+		if (traverse_tree(&map, state) != 0)
+			continue;
+		goto end2; /* Happy path */
+	}
 
-	/* Handle every other certificate. */
-	certstack = validation_certstack(state);
-	if (certstack == NULL)
-		pr_crit("Validation state has no certificate stack");
+	pr_op_err("None of the TAL URIs yielded a successful traversal.");
+	thread->error = EINVAL;
+	db_table_destroy(db);
+	db = NULL;
 
-	do {
-		error = deferstack_pop(certstack, &deferred);
-		if (error == -ENOENT) {
-			error = 0; /* No more certificates left; we're done */
-			goto end;
-		} else if (error) /* All other errors are critical, currently */
-			pr_crit("deferstack_pop() returned illegal %d.", error);
-
-		/*
-		 * Ignore result code; remaining certificates are unrelated,
-		 * so they should not be affected.
-		 */
-		certificate_traverse(deferred.pp, deferred.map);
-
-		map_refput(deferred.map);
-		rpp_refput(deferred.pp);
-	} while (true);
-
-end:	validation_destroy(state);
-	pr_val_debug("}");
-	return error;
-}
-
-static int
-__handle_tal_map(struct cache_mapping *map, void *arg)
-{
-	struct handle_tal_args *args = arg;
-	return handle_tal_map(&args->tal, map, args->db);
+end2:	thread->db = db;
+	validation_destroy(state);
+end1:	tal_cleanup(&tal);
 }
 
 static void *
 do_file_validation(void *arg)
 {
 	struct validation_thread *thread = arg;
-	struct handle_tal_args args;
 	time_t start, finish;
 
 	start = time(NULL);
@@ -297,28 +212,15 @@ do_file_validation(void *arg)
 	fnstack_init();
 	fnstack_push(thread->tal_file);
 
-	thread->error = tal_init(&args.tal, thread->tal_file);
-	if (thread->error)
-		goto end;
+	__do_file_validation(thread);
 
-	args.db = db_table_create();
-	thread->error = cache_download_alt(args.tal.cache, &args.tal.maps,
-	    MAP_TA_HTTP, MAP_TA_RSYNC, __handle_tal_map, &args);
-	if (thread->error) {
-		pr_op_err("None of the URIs of the TAL '%s' yielded a successful traversal.",
-		    thread->tal_file);
-		db_table_destroy(args.db);
-	} else {
-		thread->db = args.db;
-	}
-
-	tal_cleanup(&args.tal);
-end:	fnstack_cleanup();
+	fnstack_cleanup();
 
 	finish = time(NULL);
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
 		pr_op_debug("The %s tree took %.0lf seconds.",
-		    args.tal.file_name, difftime(finish, start));
+		    path_filename(thread->tal_file),
+		    difftime(finish, start));
 	return NULL;
 }
 
@@ -365,7 +267,7 @@ perform_standalone_validation(void)
 	int error = 0;
 	int tmperr;
 
-	cache_setup();
+	cache_prepare();
 
 	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
 	if (foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
@@ -375,7 +277,12 @@ perform_standalone_validation(void)
 			SLIST_REMOVE_HEAD(&threads, next);
 			thread_destroy(thread);
 		}
-		return NULL;
+
+		/*
+		 * Commit even on failure, as there's no reason to throw away
+		 * something we recently downloaded if it's marked as valid.
+		 */
+		goto end;
 	}
 
 	/* Wait for all */
@@ -383,13 +290,14 @@ perform_standalone_validation(void)
 		thread = SLIST_FIRST(&threads);
 		tmperr = pthread_join(thread->pid, NULL);
 		if (tmperr)
-			pr_crit("pthread_join() threw %d (%s) on the '%s' thread.",
-			    tmperr, strerror(tmperr), thread->tal_file);
+			pr_crit("pthread_join() threw '%s' on the '%s' thread.",
+			    strerror(tmperr), thread->tal_file);
 		SLIST_REMOVE_HEAD(&threads, next);
 		if (thread->error) {
 			error = thread->error;
-			pr_op_warn("Validation from TAL '%s' yielded error %d (%s); discarding all validation results.",
-			    thread->tal_file, error, strerror(abs(error)));
+			pr_op_warn("Validation from TAL '%s' yielded '%s'; "
+			    "discarding all validation results.",
+			    thread->tal_file, strerror(abs(error)));
 		}
 
 		if (!error) {
@@ -404,13 +312,12 @@ perform_standalone_validation(void)
 		thread_destroy(thread);
 	}
 
-	cache_teardown();
-
-	/* If one thread has errors, we can't keep the resulting table. */
+	/* If at least one thread had a fatal error, the table is unusable. */
 	if (error) {
 		db_table_destroy(db);
 		db = NULL;
 	}
 
+end:	cache_commit();
 	return db;
 }

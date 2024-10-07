@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <sys/stat.h>
 
 #include "config/file_type.h"
 #include "config/filename_format.h"
@@ -12,7 +13,6 @@
 #include "config/mode.h"
 #include "config/output_format.h"
 #include "config/string_array.h"
-#include "config/types.h"
 
 /* Init/destroy */
 int handle_flags_config(int , char **);
@@ -31,6 +31,7 @@ char const *config_get_slurm(void);
 
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);
+time_t cfg_cache_threshold(void);
 unsigned int config_get_max_cert_depth(void);
 enum mode config_get_mode(void);
 char const *config_get_http_user_agent(void);
@@ -46,8 +47,8 @@ bool config_get_rsync_enabled(void);
 unsigned int config_get_rsync_priority(void);
 unsigned int config_get_rsync_retry_count(void);
 unsigned int config_get_rsync_retry_interval(void);
-char *config_get_rsync_program(void);
-struct string_array const *config_get_rsync_args(void);
+long config_get_rsync_transfer_timeout(void);
+char const *config_get_rsync_program(void);
 bool config_get_http_enabled(void);
 unsigned int config_get_http_priority(void);
 unsigned int config_get_http_retry_count(void);
@@ -59,12 +60,13 @@ unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_thread_pool_server_max(void);
 enum file_type config_get_file_type(void);
 char const *config_get_payload(void);
+time_t config_get_validation_time(void);
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);
 char const * config_get_op_log_tag(void);
 bool config_get_op_log_color_output(void);
-enum filename_format config_get_op_log_filename_format(void);
+enum filename_format config_get_op_log_file_format(void);
 uint8_t config_get_op_log_level(void);
 enum log_output config_get_op_log_output(void);
 uint32_t config_get_op_log_facility(void);
@@ -72,7 +74,8 @@ uint32_t config_get_op_log_facility(void);
 bool config_get_val_log_enabled(void);
 char const * config_get_val_log_tag(void);
 bool config_get_val_log_color_output(void);
-enum filename_format config_get_val_log_filename_format(void);
+enum filename_format config_get_val_log_file_format(void);
+char const *logv_filename(char const *);
 uint8_t config_get_val_log_level(void);
 enum log_output config_get_val_log_output(void);
 uint32_t config_get_val_log_facility(void);

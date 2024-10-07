@@ -250,12 +250,8 @@ test_read_string_success(unsigned char *input, size_t length, char *expected)
 	char *actual;
 
 	stream = create_stream(input, length);
-
 	actual = read_string(stream, length);
-	if (expected == NULL)
-		ck_assert_ptr_eq(NULL, actual);
-	else
-		ck_assert_str_eq(expected, actual);
+	ck_assert_str(expected, actual);
 
 	free(actual);
 	free(stream);

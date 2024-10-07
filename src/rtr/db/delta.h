@@ -1,5 +1,5 @@
-#ifndef SRC_DELTA_H_
-#define SRC_DELTA_H_
+#ifndef SRC_RTR_DB_DELTA_H_
+#define SRC_RTR_DB_DELTA_H_
 
 #include "types/delta.h"
 
@@ -18,4 +18,4 @@ int deltas_foreach(struct deltas *, delta_vrp_foreach_cb,
     delta_router_key_foreach_cb, void *);
 void deltas_print(struct deltas *);
 
-#endif /* SRC_DELTA_H_ */
+#endif /* SRC_RTR_DB_DELTA_H_ */

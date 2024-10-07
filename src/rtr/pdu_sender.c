@@ -4,7 +4,6 @@
 #include <poll.h>
 
 #include "alloc.h"
-#include "common.h"
 #include "config.h"
 #include "log.h"
 #include "rtr/db/vrps.h"

@@ -1,7 +1,6 @@
 #include "resource/asn.h"
 
-#include "log.h"
-#include "sorted_array.h"
+#include "types/sorted_array.h"
 
 struct asn_cb {
 	foreach_asn_cb cb;

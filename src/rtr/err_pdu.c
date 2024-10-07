@@ -3,7 +3,6 @@
 #include <errno.h>
 
 #include "alloc.h"
-#include "log.h"
 #include "rtr/pdu_sender.h"
 
 typedef enum rtr_error_code {

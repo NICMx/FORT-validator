@@ -7,11 +7,11 @@
 #include "algorithm.h"
 #include "extension.h"
 #include "log.h"
-#include "object/name.h"
 #include "thread_var.h"
+#include "types/name.h"
 
 static int
-__crl_load(struct cache_mapping *map, X509_CRL **result)
+__crl_load(char const *path, X509_CRL **result)
 {
 	X509_CRL *crl;
 	BIO *bio;
@@ -20,16 +20,14 @@ __crl_load(struct cache_mapping *map, X509_CRL **result)
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
-	if (BIO_read_filename(bio, map_get_path(map)) <= 0) {
-		error = val_crypto_err("Error reading CRL '%s'",
-		    map_val_get_printable(map));
+	if (BIO_read_filename(bio, path) <= 0) {
+		error = val_crypto_err("Error reading CRL");
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
-		error = val_crypto_err("Error parsing CRL '%s'",
-		    map_val_get_printable(map));
+		error = val_crypto_err("Error parsing CRL");
 		goto end;
 	}
 
@@ -106,18 +104,33 @@ static int
 handle_crlnum(void *ext, void *arg)
 {
 	/*
-	 * We're allowing only one CRL per RPP, so there's nothing to do here I
-	 * think.
+	 * TODO (fine) update RFC name later
+	 *
+	 * From draft-spaghetti-sidrops-rpki-crl-numbers:
+	 *
+	 * In the RPKI, a wellformed Manifest FileList contains exactly one
+	 * entry for its associated CRL, together with a collision-resistant
+	 * message digest of that CRLs contents (see Section 2.2 of RFC6481
+	 * and Section 2 of RFC9286). Additionally, the target of the CRL
+	 * Distribution Points extension in an RPKI Resource Certificate is the
+	 * same CRL object listed on the issuing CAs current manifest (see
+	 * Section 4.8.6 of RFC6487). Together, these properties guarantee
+	 * that RPKI RPs will always be able to unambiguously identify exactly
+	 * one current CRL for each RPKI CA. Thus, in the RPKI, the ordering
+	 * functionality provided by CRL Numbers is fully subsumed by monotonically
+	 * increasing Manifest Numbers (Section 4.2.1 of RFC9286), thereby
+	 * obviating the need for RPKI RPs to process CRL Number extensions.
 	 */
+
 	return 0;
 }
 
 static int
-validate_extensions(X509_CRL *crl)
+validate_extensions(X509_CRL *crl, X509 *parent)
 {
 	struct extension_handler handlers[] = {
 	   /* ext        reqd   handler        arg */
-	    { ext_aki(), true,  handle_aki,              },
+	    { ext_aki(), true,  handle_aki,    parent    },
 	    { ext_cn(),  true,  handle_crlnum,           },
 	    { NULL },
 	};
@@ -126,7 +139,7 @@ validate_extensions(X509_CRL *crl)
 }
 
 static int
-crl_validate(X509_CRL *crl)
+crl_validate(X509_CRL *crl, X509 *parent)
 {
 	long version;
 	int error;
@@ -140,7 +153,7 @@ crl_validate(X509_CRL *crl)
 	if (error)
 		return error;
 
-	error = validate_issuer_name("CRL", X509_CRL_get_issuer(crl));
+	error = validate_issuer_name(X509_CRL_get_issuer(crl), parent);
 	if (error)
 		return error;
 
@@ -148,25 +161,24 @@ crl_validate(X509_CRL *crl)
 	if (error)
 		return error;
 
-	return validate_extensions(crl);
+	return validate_extensions(crl, parent);
 }
 
 int
-crl_load(struct cache_mapping *map, X509_CRL **result)
+crl_load(struct cache_mapping *map, X509 *parent, X509_CRL **result)
 {
 	int error;
 
-	pr_val_debug("CRL '%s' {", map_val_get_printable(map));
+	fnstack_push_map(map);
 
-	error = __crl_load(map, result);
+	error = __crl_load(map->path, result);
 	if (error)
 		goto end;
 
-	error = crl_validate(*result);
+	error = crl_validate(*result, parent);
 	if (error)
 		X509_CRL_free(*result);
 
-end:
-	pr_val_debug("}");
+end:	fnstack_pop();
 	return error;
 }

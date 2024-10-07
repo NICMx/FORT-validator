@@ -1,10 +1,8 @@
 #ifndef SRC_OBJECT_ROA_H_
 #define SRC_OBJECT_ROA_H_
 
-#include "rpp.h"
-#include "types/address.h"
-#include "types/map.h"
+#include "object/certificate.h"
 
-int roa_traverse(struct cache_mapping *, struct rpp *);
+int roa_traverse(struct cache_mapping *, struct rpki_certificate *);
 
 #endif /* SRC_OBJECT_ROA_H_ */

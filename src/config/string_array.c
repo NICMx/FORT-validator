@@ -2,10 +2,10 @@
 
 #include <getopt.h>
 
-#include "alloc.h"
 #include "config/str.h"
 #include "log.h"
-#include "str_token.h"
+#include "types/path.h"
+#include "types/str.h"
 
 void
 string_array_init(struct string_array *array, char const *const *values,

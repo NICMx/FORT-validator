@@ -4,9 +4,7 @@
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
-#include "cert_stack.h"
-#include "common.h"
-#include "crypto/hash.h"
+#include "hash.h"
 #include "json_util.h"
 #include "libcrypto_util.h"
 #include "log.h"
@@ -999,20 +997,20 @@ int
 handle_aki(void *ext, void *arg)
 {
 	AUTHORITY_KEYID *aki = ext;
-	X509 *parent;
+	X509 *parent = arg;
 
+	if (aki->keyid == NULL) {
+		return pr_val_err("The %s lacks a keyIdentifier.",
+		    ext_aki()->name);
+	}
 	if (aki->issuer != NULL) {
-		return pr_val_err("%s extension contains an authorityCertIssuer.",
+		return pr_val_err("The %s contains an authorityCertIssuer.",
 		    ext_aki()->name);
 	}
 	if (aki->serial != NULL) {
-		return pr_val_err("%s extension contains an authorityCertSerialNumber.",
+		return pr_val_err("The %s contains an authorityCertSerialNumber.",
 		    ext_aki()->name);
 	}
-
-	parent = x509stack_peek(validation_certstack(state_retrieve()));
-	if (parent == NULL)
-		return pr_val_err("Certificate has no parent.");
 
 	return validate_public_key_hash(parent, aki->keyid, "AKI");
 }

@@ -1,8 +1,13 @@
 #ifndef SRC_OBJECT_MANIFEST_H_
 #define SRC_OBJECT_MANIFEST_H_
 
-#include "rpp.h"
+#include <openssl/sha.h>
+#include <openssl/x509.h>
 
-int handle_manifest(struct cache_mapping *, struct cache_mapping *, struct rpp **);
+#include "cache.h"
+#include "object/certificate.h"
+
+int manifest_traverse(char const *url, char const *path,
+    struct cache_cage *cage, struct rpki_certificate *parent);
 
 #endif /* SRC_OBJECT_MANIFEST_H_ */

@@ -13,11 +13,7 @@
 #define TOTAL_CREATED 15
 static struct deltas *created[TOTAL_CREATED];
 
-unsigned int
-config_get_deltas_lifetime(void)
-{
-	return 5;
-}
+MOCK_UINT(config_get_deltas_lifetime, 5, void)
 
 static int
 foreach_cb(struct deltas *deltas, void *arg)
