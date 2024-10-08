@@ -38,11 +38,10 @@ rsync2bio_tmpdir(char const *src)
 {
 #define TMPDIR "/tmp/fort-XXXXXX"
 
-	struct path_builder pb;
 	char buf[sizeof(TMPDIR)];
 	char *tmpdir;
+	char *tmpfile;
 	BIO *result = NULL;
-	int error;
 
 	strcpy(buf, TMPDIR);
 	tmpdir = mkdtemp(buf);
@@ -51,17 +50,10 @@ rsync2bio_tmpdir(char const *src)
 		return NULL;
 	}
 
-	pb_init(&pb);
-	error = pb_append(&pb, tmpdir);
-	if (error)
-		goto end;
-	error = pb_append(&pb, path_filename(src));
-	if (error)
-		goto end;
+	tmpfile = path_join(tmpdir, path_filename(src));
+	result = __rsync2bio(src, tmpfile);
+	free(tmpfile);
 
-	result = __rsync2bio(src, pb.string);
-
-end:	pb_cleanup(&pb);
 	return result;
 }
 

@@ -7,35 +7,20 @@
 static int
 fetch_url(char const *url, char const *filename)
 {
-	struct path_builder pb;
+	char *path;
 	int error;
 
-	pb_init(&pb);
-	error = pb_append(&pb, config_get_tal());
-	if (error)
-		goto pbfail;
-	error = pb_append(&pb, filename);
-	if (error)
-		goto pbfail;
+	path = path_join(config_get_tal(), filename);
 
-	error = http_download_direct(url, pb.string);
-	if (error)
-		goto dlfail;
+	error = http_download_direct(url, path);
+	if (error) {
+		fprintf(stderr, "Couldn't fetch '%s': %s\n",
+		    path, strerror(abs(error)));
+		goto end;
+	}
 
-	fprintf(stdout, "Successfully fetched '%s'!\n\n", pb.string);
-	pb_cleanup(&pb);
-	return 0;
-
-pbfail:
-	fprintf(stderr, "Cannot determine destination path: %s\n",
-		strerror(abs(error)));
-	pb_cleanup(&pb);
-	return error;
-
-dlfail:
-	fprintf(stderr, "Couldn't fetch '%s': %s\n", pb.string,
-		strerror(abs(error)));
-	pb_cleanup(&pb);
+	fprintf(stdout, "Successfully fetched '%s'!\n\n", path);
+end:	free(path);
 	return error;
 }
 

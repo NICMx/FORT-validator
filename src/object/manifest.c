@@ -12,6 +12,7 @@
 #include "object/signed_object.h"
 #include "thread_var.h"
 #include "types/path.h"
+#include "types/url.h"
 
 static int
 decode_manifest(struct signed_object *sobj, struct Manifest **result)
@@ -270,7 +271,7 @@ build_rpp(char const *mft_url, struct Manifest *mft, struct cache_cage *cage,
 	shuffle_mft_files(mft);
 
 	rpp = &parent->rpp;
-	rpp_url = path_parent(mft_url);
+	rpp_url = url_parent(mft_url); // XXX
 	rpp->nfiles = mft->fileList.list.count;
 	rpp->files = pzalloc(rpp->nfiles * sizeof(*rpp->files));
 
@@ -287,7 +288,7 @@ build_rpp(char const *mft_url, struct Manifest *mft, struct cache_cage *cage,
 		if (error)
 			goto revert;
 
-		dst->url = path_childn(rpp_url,
+		dst->url = path_njoin(rpp_url,
 		    (char const *)src->file.buf,
 		    src->file.size);
 

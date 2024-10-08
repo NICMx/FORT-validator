@@ -897,41 +897,31 @@ validate_session_desync(struct rrdp_state *old_notif,
 
 /* TODO (performance) Stream instead of caching notifs, snapshots & deltas. */
 static int
-dl_tmp(char const *url, char **path)
+dl_tmp(char const *url, char *path)
 {
-	int error;
-
-	error = cache_tmpfile(path);
-	if (error)
-		return error;
-
-	error = http_download(url, *path, 0, NULL);
-	if (error)
-		free(*path);
-
-	return error;
+	cache_tmpfile(path);
+	return http_download(url, path, 0, NULL);
 }
 
 static int
 handle_snapshot(struct update_notification *new, struct rrdp_state *state)
 {
-	char *tmppath;
+	char tmppath[CACHE_TMPFILE_BUFLEN];
 	int error;
 
 	pr_val_debug("Processing snapshot.");
 	fnstack_push(new->snapshot.uri);
 
-	error = dl_tmp(new->snapshot.uri, &tmppath);
+	error = dl_tmp(new->snapshot.uri, tmppath);
 	if (error)
-		goto end1;
+		goto end;
 	error = validate_hash(&new->snapshot, tmppath);
 	if (error)
-		goto end2;
+		goto end;
 	error = parse_snapshot(&new->session, tmppath, state);
 //	delete_file(tmppath); XXX
 
-end2:	free(tmppath);
-end1:	fnstack_pop();
+end:	fnstack_pop();
 	return error;
 }
 
@@ -988,19 +978,18 @@ static int
 handle_delta(struct update_notification *notif,
     struct notification_delta *delta, struct rrdp_state *state)
 {
-	char *tmppath;
+	char tmppath[CACHE_TMPFILE_BUFLEN];
 	int error;
 
 	pr_val_debug("Processing delta '%s'.", delta->meta.uri);
 	fnstack_push(delta->meta.uri);
 
-	error = dl_tmp(delta->meta.uri, &tmppath);
+	error = dl_tmp(delta->meta.uri, tmppath);
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta, tmppath, state);
 //	delete_file(tmppath); XXX
 
-	free(tmppath);
 end:	fnstack_pop();
 	return error;
 }
@@ -1148,25 +1137,23 @@ static int
 dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
     struct update_notification *new)
 {
-	char *tmppath;
+	char tmppath[CACHE_TMPFILE_BUFLEN];
 	int error;
 
-	error = cache_tmpfile(&tmppath);
-	if (error)
-		return error;
+	cache_tmpfile(tmppath);
 
 	*changed = false;
 	error = http_download(map->url, tmppath, mtim, changed);
 	if (error)
-		goto end;
+		return error;
 	if (!(*changed)) {
 		pr_val_debug("The Notification has not changed.");
-		goto end;
+		return 0;
 	}
 
 	error = parse_notification(map->url, tmppath, new);
 	if (error)
-		goto end;
+		return error;
 
 	if (remove(tmppath) < 0) {
 		pr_val_warn("Can't remove notification's temporal file: %s",
@@ -1175,8 +1162,7 @@ dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
 		/* Nonfatal; fall through */
 	}
 
-end:	free(tmppath);
-	return error;
+	return 0;
 }
 
 /*

@@ -9,6 +9,7 @@ bool url_is_rsync(char const *);
 bool url_is_https(char const *);
 
 char *url_normalize(char const *);
+char *url_parent(char const *);
 bool url_same_origin(char const *, char const *);
 
 #endif /* SRC_TYPES_URL_H_ */

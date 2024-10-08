@@ -133,6 +133,13 @@ fail:	free(normal);
 	return NULL;
 }
 
+char *
+url_parent(char const *child)
+{
+	char *slash = strrchr(child, '/');
+	return (slash != NULL) ? pstrndup(child, slash - child) : NULL;
+}
+
 bool
 url_same_origin(char const *url1, char const *url2)
 {

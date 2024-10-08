@@ -29,7 +29,6 @@ check_PROGRAMS += db_table.test
 check_PROGRAMS += deltas_array.test
 check_PROGRAMS += hash.test
 check_PROGRAMS += mft.test
-check_PROGRAMS += path.test
 check_PROGRAMS += pdu_handler.test
 check_PROGRAMS += pdu_stream.test
 check_PROGRAMS += rrdp.test
@@ -70,9 +69,6 @@ hash_test_LDADD = ${MY_LDADD}
 
 mft_test_SOURCES = object/manifest_test.c
 mft_test_LDADD = ${MY_LDADD}
-
-path_test_SOURCES = types/path_test.c
-path_test_LDADD = ${MY_LDADD}
 
 pdu_handler_test_SOURCES = rtr/pdu_handler_test.c
 pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
