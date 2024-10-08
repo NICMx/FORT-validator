@@ -1207,6 +1207,12 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 		cseq_init(&old->seq, cage, true);
 		STAILQ_INIT(&old->delta_hashes);
 
+		error = file_mkdir(cage, false);
+		if (error) {
+			rrdp_state_free(old);
+			goto clean_notif;
+		}
+
 		error = handle_snapshot(&new, old);
 		if (error) {
 			rrdp_state_free(old);

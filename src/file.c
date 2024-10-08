@@ -50,8 +50,8 @@ file_write(char const *file_name, char const *mode, FILE **result)
 	file = fopen(file_name, mode);
 	if (file == NULL) {
 		error = errno;
-		pr_val_err("Could not open file '%s': %s", file_name,
-		    strerror(error));
+		pr_val_err("Could not open file '%s' for writing: %s",
+		    file_name, strerror(error));
 		*result = NULL;
 		return error;
 	}
@@ -69,10 +69,6 @@ file_write_full(char const *path, unsigned char const *content,
 	int error;
 
 	pr_val_debug("Writing file: %s", path);
-
-	error = mkdir_p(path, false);
-	if (error)
-		return error;
 
 	error = file_write(path, "wb", &out);
 	if (error)
@@ -167,83 +163,6 @@ file_exists(char const *path)
 	return (stat(path, &meta) == 0) ? 0 : errno;
 }
 
-/* strlen("cache/tmp/123"), ie. 13 */
-static size_t src_offset;
-/* cache/rsync/a.b.c/d/e */
-static char const *merge_dst;
-
-/* Moves cache/tmp/123/z into cache/rsync/a.b.c/d/e/z. */
-static int
-merge_into(const char *src, const struct stat *st, int typeflag,
-    struct FTW *ftw)
-{
-	char *dst;
-	struct timespec times[2];
-
-	dst = path_join(merge_dst, &src[src_offset]);
-
-	if (S_ISDIR(st->st_mode)) {
-		pr_op_debug("mkdir -p %s", dst);
-		if (mkdir_p(dst, true)) {
-			PR_DEBUG_MSG("Failed: %s", strerror(errno));
-			goto end;
-		}
-
-		times[0] = st->st_atim;
-		times[1] = st->st_mtim;
-		if (utimensat(AT_FDCWD, dst, times, AT_SYMLINK_NOFOLLOW) < 0)
-			PR_DEBUG_MSG("utimensat: %s", strerror(errno));
-	} else {
-		pr_op_debug("rename: %s -> %s", src, dst);
-		if (rename(src, dst) < 0) {
-			if (errno == EISDIR) {
-				/* XXX stacked nftw()s */
-				if (file_rm_rf(dst) != 0)
-					PR_DEBUG_MSG("%s", "AAAAAAAAAAA");
-				if (rename(src, dst) < 0)
-					PR_DEBUG_MSG("rename: %s", strerror(errno));
-			}
-		}
-	}
-
-end:	free(dst);
-	return 0;
-}
-
-/*
- * Move all the files contained in @src to @dst, overwriting when necessary,
- * not touching files that exist in @dst but not in @src.
- *
- * @src must exist.
- *
- * @src: cache/tmp/123
- * @dst: cache/rsync/a.b.c/d/e
- */
-int
-file_merge_into(char const *src, char const *dst)
-{
-	int error;
-
-	error = mkdir_p(dst, false);
-	if (error)
-		return error;
-
-	if (file_exists(dst) == ENOENT) {
-		if (rename(src, dst) < 0) {
-			error = errno;
-			pr_op_err("Could not move %s to %s: %s",
-			    src, dst, strerror(error));
-			return error;
-		}
-		return 0;
-	}
-
-	src_offset = strlen(src);
-	merge_dst = dst;
-	/* TODO (performance) optimize that 32 */
-	return nftw(src, merge_into, 32, FTW_PHYS);
-}
-
 /*
  * Like remove(), but don't care if the file is already deleted.
  */
@@ -265,15 +184,51 @@ static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
 	pr_op_debug("Deleting %s.", fpath);
-	return (remove(fpath) < 0) ? errno : 0;
+	if (remove(fpath) < 0)
+		pr_op_warn("Cannot delete %s: %s", fpath, strerror(errno));
+	return 0;
 }
 
 /* Same as `system("rm -rf <path>")`, but more portable and maaaaybe faster. */
 int
 file_rm_rf(char const *path)
 {
+	int error;
+
 	/* TODO (performance) optimize that 32 */
-	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
+	errno = 0;
+	switch (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS)) {
+	case 0:
+		return 0; /* Happy path */
+	case -1:
+		/*
+		 * POSIX requires nftw() to set errno,
+		 * but the Linux man page doesn't mention it at all...
+		 */
+		error = errno;
+		return error ? error : -1;
+	}
+
+	/* This is supposed to be unreachable, but let's not panic. */
+	return -1;
+}
+
+/* If @force, don't treat EEXIST as an error. */
+int
+file_mkdir(char const *path, bool force)
+{
+	int error;
+
+	if (mkdir(path, CACHE_FILEMODE) < 0) {
+		error = errno;
+		if (!force || error != EEXIST) {
+			pr_op_err("Cannot create '%s': %s",
+			    path, strerror(error));
+			return error;
+		}
+	}
+
+	return 0;
 }
 
 void

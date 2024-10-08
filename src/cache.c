@@ -235,18 +235,22 @@ init_cachedir_tag(void)
 }
 
 static int
-init_tmp_dir(void)
+init_cache_dirs(void)
 {
 	int error;
-
-	if (mkdir(CACHE_TMPDIR, CACHE_FILEMODE) < 0) {
-		error = errno;
-		if (error != EEXIST)
-			return pr_op_err("Cannot create '%s': %s",
-			    CACHE_TMPDIR, strerror(error));
-	}
-
-	return 0;
+	error = file_mkdir("rsync", true);
+	if (error)
+		return error;
+	error = file_mkdir("https", true);
+	if (error)
+		return error;
+	error = file_mkdir("rrdp", true);
+	if (error)
+		return error;
+	error = file_mkdir("fallback", true);
+	if (error)
+		return error;
+	return file_mkdir(CACHE_TMPDIR, true);
 }
 
 int
@@ -261,7 +265,7 @@ cache_setup(void)
 	// XXX Lock the cache directory
 	init_tables();
 	init_cache_metafile();
-	init_tmp_dir();
+	init_cache_dirs();
 	init_cachedir_tag();
 	return 0;
 }
@@ -975,6 +979,7 @@ commit_fallbacks(void)
 	struct cache_commit *commit;
 	struct cache_node *fb, *tmp;
 	array_index i;
+	int error;
 
 	while (!STAILQ_EMPTY(&commits)) {
 		commit = STAILQ_FIRST(&commits);
@@ -983,13 +988,8 @@ commit_fallbacks(void)
 		if (commit->caRepository) {
 			fb = provide_node(&cache.fallback, commit->caRepository);
 
-			if (mkdir(fb->map.path, CACHE_FILEMODE) < 0) {
-				if (errno != EEXIST) {
-					pr_op_warn("Failed to create %s: %s",
-					    fb->map.path, strerror(errno));
-					goto skip;
-				}
-			}
+			if (file_mkdir(fb->map.path, true) != 0)
+				goto skip;
 
 			commit_rpp(commit, fb);
 			discard_trash(commit, fb);
@@ -1027,9 +1027,10 @@ skip:		free(commit->caRepository);
 		 * from an expiration threshold.
 		 */
 		pr_op_debug("Removing orphaned fallback: %s", fb->map.path);
-		if (file_rm_rf(fb->map.path) < 0)
-			pr_op_warn("Could not remove %s; unknown cause.",
-			    fb->map.path);
+		error = file_rm_rf(fb->map.path);
+		if (error)
+			pr_op_warn("%s removal failed: %s",
+			    fb->map.path, strerror(error));
 		delete_node(&cache.fallback, fb);
 	}
 }

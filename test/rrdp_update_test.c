@@ -22,7 +22,7 @@ static void
 setup_test(void)
 {
 	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	ck_assert_int_eq(0, system("mkdir -p tmp/rsync tmp/https tmp/tmp"));
+	ck_assert_int_eq(0, system("mkdir -p tmp/https tmp/rrdp tmp/tmp"));
 	ck_assert_int_eq(0, hash_setup());
 	ck_assert_int_eq(0, relax_ng_init());
 }

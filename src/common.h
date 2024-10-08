@@ -47,8 +47,6 @@ int foreach_file(char const *, char const *, bool, foreach_file_cb, void *);
 // XXX
 bool valid_file_or_dir(char const *, bool);
 
-int mkdir_p(char const *, bool);
-
 time_t time_nonfatal(void);
 time_t time_fatal(void);
 

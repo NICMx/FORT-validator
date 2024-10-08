@@ -295,10 +295,6 @@ rsync_download(char const *url, char const *path)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	error = mkdir_p(path, true);
-	if (error)
-		return error;
-
 	retries = 0;
 	do {
 		child_status = 0;

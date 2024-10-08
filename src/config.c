@@ -1211,7 +1211,7 @@ handle_flags_config(int argc, char **argv)
 	}
 
 	if (rpki_config.daemon) {
-		pr_op_warn("Executing as daemon, all logs will be sent to syslog.");
+		pr_op_info("Executing as daemon, all logs will be sent to syslog.");
 		/* Send all logs to syslog */
 		rpki_config.log.output = SYSLOG;
 		rpki_config.validation_log.output = SYSLOG;

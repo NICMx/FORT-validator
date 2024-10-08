@@ -41,7 +41,7 @@ rsync_download(char const *url, char const *path)
 	if (dl_error)
 		return dl_error;
 
-	ck_assert_int_eq(0, mkdir_p(path, true));
+	ck_assert_int_eq(0, mkdir(path, CACHE_FILEMODE));
 	touch_file(path);
 
 	return 0;
