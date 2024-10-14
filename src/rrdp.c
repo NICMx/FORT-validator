@@ -588,7 +588,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 		HASH_ADD_KEYPTR(hh, args->state->files, file->map.url, len, file);
 	}
 
-	error = file_write_full(file->map.path, tag.content, tag.content_len);
+	error = file_write_bin(file->map.path, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
 	free(tag.content);

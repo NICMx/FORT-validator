@@ -60,30 +60,39 @@ file_write(char const *file_name, char const *mode, FILE **result)
 	return 0;
 }
 
-int
-file_write_full(char const *path, unsigned char const *content,
-    size_t content_len)
+static int
+write_file(char const *path, void const *bytes, size_t n)
 {
 	FILE *out;
-	size_t written;
 	int error;
-
-	pr_val_debug("Writing file: %s", path);
 
 	error = file_write(path, "wb", &out);
 	if (error)
 		return error;
 
-	written = fwrite(content, sizeof(unsigned char), content_len, out);
+	if (fwrite(bytes, 1, n, out) != n) {
+		error = errno;
+		if (!error) /* Linux's man page does not mention errno */
+			error = -1;
+		pr_val_err("Cannot write %s: %s", path, strerror(error));
+	}
+
 	file_close(out);
+	return error;
+}
 
-	if (written != content_len)
-		return pr_val_err(
-		    "Couldn't write file '%s' (error code not available)",
-		    path
-		);
+int
+file_write_txt(char const *path, char const *txt)
+{
+	pr_val_debug("echo 'blah blah' > %s", path);
+	return write_file(path, txt, strlen(txt));
+}
 
-	return 0;
+int
+file_write_bin(char const *path, unsigned char const *bytes, size_t n)
+{
+	pr_val_debug("echo 'beep boop' > %s", path);
+	return write_file(path, bytes, n);
 }
 
 void

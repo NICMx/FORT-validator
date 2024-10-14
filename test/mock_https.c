@@ -26,8 +26,7 @@ http_download(char const *url, char const *path, curl_off_t ims, bool *changed)
 	if (!content)
 		ck_abort_msg("Test was not expecting an HTTP download.");
 
-	ck_assert_int_eq(0, file_write_full(path,
-	    (unsigned char const *)content, strlen(content)));
+	ck_assert_int_eq(0, file_write_txt(path, content));
 
 	if (changed)
 		*changed = true;

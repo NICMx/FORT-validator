@@ -25,7 +25,8 @@ struct file_contents {
 
 int file_open(char const *, FILE **, struct stat *);
 int file_write(char const *, char const *, FILE **);
-int file_write_full(char const *, unsigned char const *, size_t);
+int file_write_txt(char const *, char const *);
+int file_write_bin(char const *, unsigned char const *, size_t);
 void file_close(FILE *);
 
 int file_load(char const *, struct file_contents *, bool);
@@ -33,7 +34,6 @@ void file_free(struct file_contents *);
 
 int file_exists(char const *);
 
-int file_merge_into(char const *, char const *);
 int file_rm_f(char const *);
 int file_rm_rf(char const *);
 int file_mkdir(char const *, bool);

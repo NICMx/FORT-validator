@@ -440,18 +440,18 @@ START_TEST(test_rsync_commit)
 	ck_assert_int_eq(0, system("mkdir rsync/0 rsync/1 rsync/2 rsync/3"));
 
 	/* RPP0: Will remain constant */
-	ck_assert_int_eq(0, write_simple_file("rsync/0/0", "A"));
-	ck_assert_int_eq(0, write_simple_file("rsync/0/1", "B"));
+	ck_assert_int_eq(0, file_write_txt("rsync/0/0", "A"));
+	ck_assert_int_eq(0, file_write_txt("rsync/0/1", "B"));
 	/* RPP1: Will be added in its second cycle */
-	ck_assert_int_eq(0, write_simple_file("rsync/1/0", "C"));
-	ck_assert_int_eq(0, write_simple_file("rsync/1/1", "D"));
+	ck_assert_int_eq(0, file_write_txt("rsync/1/0", "C"));
+	ck_assert_int_eq(0, file_write_txt("rsync/1/1", "D"));
 	/* RPP2: Will be removed in its second cycle */
-	ck_assert_int_eq(0, write_simple_file("rsync/2/0", "E"));
-	ck_assert_int_eq(0, write_simple_file("rsync/2/1", "F"));
+	ck_assert_int_eq(0, file_write_txt("rsync/2/0", "E"));
+	ck_assert_int_eq(0, file_write_txt("rsync/2/1", "F"));
 	/* RPP3: Will be updated in its second cycle */
-	ck_assert_int_eq(0, write_simple_file("rsync/3/0", "G")); /* Keeper */
-	ck_assert_int_eq(0, write_simple_file("rsync/3/1", "H")); /* Added */
-	ck_assert_int_eq(0, write_simple_file("rsync/3/2", "I")); /* Removed */
+	ck_assert_int_eq(0, file_write_txt("rsync/3/0", "G")); /* Keeper */
+	ck_assert_int_eq(0, file_write_txt("rsync/3/1", "H")); /* Added */
+	ck_assert_int_eq(0, file_write_txt("rsync/3/2", "I")); /* Removed */
 
 	/* Commit 1: Empty -> Empty */
 	/* Commit 2: Empty -> Empty (just free noise) */
@@ -564,9 +564,9 @@ START_TEST(test_https_commit)
 
 	setup_test();
 
-	ck_assert_int_eq(0, write_simple_file("https/50", "A")); /* Keeper */
-	ck_assert_int_eq(0, write_simple_file("https/51", "B")); /* Added */
-	ck_assert_int_eq(0, write_simple_file("https/52", "C")); /* Removed */
+	ck_assert_int_eq(0, file_write_txt("https/50", "A")); /* Keeper */
+	ck_assert_int_eq(0, file_write_txt("https/51", "B")); /* Added */
+	ck_assert_int_eq(0, file_write_txt("https/52", "C")); /* Removed */
 
 	/* 1, 2 */
 	for (i = 0; i < 2; i++) {
@@ -617,15 +617,15 @@ START_TEST(test_rrdp_commit)
 
 	ck_assert_int_eq(0, system("mkdir rrdp/0 rrdp/1 rrdp/2 rrdp/3"));
 
-	ck_assert_int_eq(0, write_simple_file("rrdp/0/0", "A"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/0/1", "B"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/1/0", "C"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/1/1", "D"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/2/0", "E"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/2/1", "F"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/3/0", "G"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/3/1", "H"));
-	ck_assert_int_eq(0, write_simple_file("rrdp/3/2", "I"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/0/0", "A"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/0/1", "B"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/1/0", "C"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/1/1", "D"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/2/0", "E"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/2/1", "F"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/3/0", "G"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/3/1", "H"));
+	ck_assert_int_eq(0, file_write_txt("rrdp/3/2", "I"));
 
 	/* 1, 2 */
 	for (i = 0; i < 2; i++) {

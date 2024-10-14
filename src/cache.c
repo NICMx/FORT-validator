@@ -130,30 +130,6 @@ strip_rsync_module(char const *url)
 	return NULL;
 }
 
-static int
-write_simple_file(char const *filename, char const *content)
-{
-	FILE *file;
-	int error;
-
-	file = fopen(filename, "w");
-	if (file == NULL)
-		goto fail;
-
-	if (fprintf(file, "%s", content) < 0)
-		goto fail;
-
-	fclose(file);
-	return 0;
-
-fail:
-	error = errno;
-	pr_op_err("Cannot write %s: %s", filename, strerror(error));
-	if (file != NULL)
-		fclose(file);
-	return error;
-}
-
 static int dl_rsync(struct cache_node *);
 static int dl_http(struct cache_node *);
 static int dl_rrdp(struct cache_node *);
@@ -227,7 +203,7 @@ init_cachedir_tag(void)
 {
 	static char const *filename = "CACHEDIR.TAG";
 	if (file_exists(filename) == ENOENT)
-		write_simple_file(filename,
+		file_write_txt(filename,
 		   "Signature: 8a477f597d28d172789f06886806bc55\n"
 		   "# This file is a cache directory tag created by Fort.\n"
 		   "# For information about cache directory tags, see:\n"
@@ -274,7 +250,7 @@ void
 cache_teardown(void)
 {
 	// XXX catch result?
-	write_simple_file(CACHE_METAFILE, "{ \"" TAGNAME_VERSION "\": \""
+	file_write_txt(CACHE_METAFILE, "{ \"" TAGNAME_VERSION "\": \""
 	    PACKAGE_VERSION "\" }\n");
 }
 
