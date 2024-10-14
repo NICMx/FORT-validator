@@ -58,9 +58,7 @@ Certificate containing `signedAttrs` not in canonical form crashes Fort 1.6.2-.
 | Patch | Commit [521b1a0](https://github.com/NICMx/FORT-validator/commit/521b1a0db5041258096fbabdf8fc1e10ecc793cf), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
 
-## CVE-____-_____
-
-(Awaiting CVE ID number assignment.)
+## CVE-2024-48943
 
 Malicious rsync repositories can block Fort by drip-feeding repository objects.
 
