@@ -153,6 +153,41 @@ init_tables(void)
 	init_table(&cache.fallback, "fallback", true, NULL);
 }
 
+static int
+reset_cache_dir(void)
+{
+	DIR *dir;
+	struct dirent *file;
+	int error;
+	unsigned int deleted;
+
+	pr_op_debug("Resetting cache...");
+
+	dir = opendir(".");
+	if (dir == NULL)
+		goto fail;
+
+	deleted = 0;
+	FOREACH_DIR_FILE(dir, file)
+		if (!S_ISDOTS(file)) {
+			error = file_rm_rf(file->d_name);
+			if (error)
+				goto end;
+			deleted++;
+		}
+	if (errno)
+		goto fail;
+
+	pr_op_debug(deleted > 0 ? "Cache cleared." : "Cache was empty.");
+	error = 0;
+	goto end;
+
+fail:	error = errno;
+	pr_op_err("Cannot traverse the cache: %s", strerror(error));
+end:	closedir(dir);
+	return error;
+}
+
 static void
 init_cache_metafile(void)
 {
@@ -194,7 +229,7 @@ init_cache_metafile(void)
 invalid_cache:
 	pr_op_info("The cache seems to have been built by a different version of Fort. "
 	    "I'm going to clear it, just to be safe.");
-	file_rm_rf(".");
+	reset_cache_dir();
 	json_decref(root);
 }
 
