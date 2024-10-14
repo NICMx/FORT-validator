@@ -70,9 +70,8 @@ struct cache_commit {
 
 STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZER(commits);
 
-#define CACHE_METAFILE "cache.json"
+#define INDEX_FILE "index.json"
 #define TAGNAME_VERSION "fort-version"
-#define TAL_METAFILE "tal.json"
 
 #ifdef UNIT_TESTING
 static void __delete_node_cb(struct cache_node const *);
@@ -203,49 +202,6 @@ end:	closedir(dir);
 	return error;
 }
 
-static int
-init_cache_metafile(void)
-{
-	json_t *root;
-	json_error_t jerror;
-	char const *file_version;
-	int error;
-
-	root = json_load_file(CACHE_METAFILE, 0, &jerror);
-
-	if (root == NULL) {
-		if (json_error_code(&jerror) == json_error_cannot_open_file)
-			pr_op_debug(CACHE_METAFILE " does not exist.");
-		else
-			pr_op_err("Json parsing failure at " CACHE_METAFILE
-			    " (%d:%d): %s", jerror.line, jerror.column,
-			    jerror.text);
-		goto invalid_cache;
-	}
-	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_err(CACHE_METAFILE "'s root tag is not an object.");
-		goto invalid_cache;
-	}
-
-	error = json_get_str(root, TAGNAME_VERSION, &file_version);
-	if (error) {
-		if (error > 0)
-			pr_op_err(CACHE_METAFILE " is missing the "
-			    TAGNAME_VERSION " tag.");
-		goto invalid_cache;
-	}
-
-	if (strcmp(file_version, PACKAGE_VERSION) != 0)
-		goto invalid_cache;
-
-	json_decref(root);
-	return 0;
-
-invalid_cache:
-	json_decref(root);
-	return EINVAL;
-}
-
 static void
 init_cachedir_tag(void)
 {
@@ -270,6 +226,7 @@ cache_setup(void)
 	if (error)
 		return error;
 
+	pr_op_debug("cd %s", cachedir);
 	if (chdir(cachedir) < 0) {
 		error = errno;
 		pr_op_err("Cannot cd to %s: %s", cachedir, strerror(error));
@@ -283,9 +240,7 @@ cache_setup(void)
 void
 cache_teardown(void)
 {
-	// XXX catch result?
-	file_write_txt(CACHE_METAFILE, "{ \"" TAGNAME_VERSION "\": \""
-	    PACKAGE_VERSION "\" }\n");
+	/* Empty */
 }
 
 static struct cache_node *
@@ -345,33 +300,38 @@ json2tbl(json_t *root, struct cache_table *tbl)
 }
 
 static int
-load_tal_json(void)
+load_index_file(void)
 {
 	json_t *root;
-	json_error_t jerror;
+	json_error_t jerr;
+	char const *file_version;
+	int error;
 
-	/*
-	 * Note: Loading TAL_METAFILE is one of few things Fort can fail at
-	 * without killing itself. It's just a cache of a cache.
-	 */
+	pr_op_debug("Loading " INDEX_FILE "...");
 
-	pr_op_debug("Loading " TAL_METAFILE ".");
-
-	root = json_load_file(TAL_METAFILE, 0, &jerror);
-
+	root = json_load_file(INDEX_FILE, 0, &jerr);
 	if (root == NULL) {
-		if (json_error_code(&jerror) == json_error_cannot_open_file)
-			pr_op_debug(TAL_METAFILE " does not exist.");
+		if (json_error_code(&jerr) == json_error_cannot_open_file)
+			pr_op_debug(INDEX_FILE " does not exist.");
 		else
 			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-			    TAL_METAFILE, jerror.line, jerror.column,
-			    jerror.text);
-		goto end;
+			    INDEX_FILE, jerr.line, jerr.column, jerr.text);
+		goto fail;
 	}
 	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_err("The root tag of " TAL_METAFILE " is not an object.");
-		goto end;
+		pr_op_err("The root tag of " INDEX_FILE " is not an object.");
+		goto fail;
 	}
+
+	error = json_get_str(root, TAGNAME_VERSION, &file_version);
+	if (error) {
+		if (error > 0)
+			pr_op_err(INDEX_FILE " is missing the '"
+			    TAGNAME_VERSION "' tag.");
+		goto fail;
+	}
+	if (strcmp(file_version, PACKAGE_VERSION) != 0)
+		goto fail;
 
 	json2tbl(root, &cache.rsync);
 	json2tbl(root, &cache.https);
@@ -379,9 +339,10 @@ load_tal_json(void)
 	json2tbl(root, &cache.fallback);
 
 	json_decref(root);
+	pr_op_debug(INDEX_FILE " loaded.");
 	return 0;
 
-end:	json_decref(root);
+fail:	json_decref(root);
 	return EINVAL;
 }
 
@@ -390,12 +351,7 @@ cache_prepare(void)
 {
 	int error;
 
-	if (init_cache_metafile() != 0) {
-		error = reset_cache_dir();
-		if (error)
-			return error;
-	}
-	if (load_tal_json() != 0) {
+	if (load_index_file() != 0) {
 		error = reset_cache_dir();
 		if (error)
 			return error;
@@ -482,7 +438,7 @@ fail:	json_decref(json);
 }
 
 static json_t *
-build_tal_json(void)
+build_index_file(void)
 {
 	json_t *json;
 
@@ -490,6 +446,8 @@ build_tal_json(void)
 	if (json == NULL)
 		return NULL;
 
+	if (json_object_add(json, TAGNAME_VERSION, json_str_new(PACKAGE_VERSION)))
+		goto fail;
 	if (json_object_add(json, "rsync", tbl2json(&cache.rsync)))
 		goto fail;
 	if (json_object_add(json, "https", tbl2json(&cache.https)))
@@ -506,16 +464,16 @@ fail:	json_decref(json);
 }
 
 static void
-write_tal_json(void)
+write_index_file(void)
 {
 	struct json_t *json;
 
-	json = build_tal_json();
+	json = build_index_file();
 	if (json == NULL)
 		return;
 
-	if (json_dump_file(json, TAL_METAFILE, JSON_INDENT(2)))
-		pr_op_err("Unable to write " TAL_METAFILE "; unknown cause.");
+	if (json_dump_file(json, INDEX_FILE, JSON_INDENT(2)))
+		pr_op_err("Unable to write " INDEX_FILE "; unknown cause.");
 
 	json_decref(json);
 }
@@ -1129,7 +1087,7 @@ void
 cache_commit(void)
 {
 	cleanup_cache();
-	write_tal_json();
+	write_index_file();
 	cache_foreach(delete_node);
 }
 

@@ -228,6 +228,7 @@ file_mkdir(char const *path, bool force)
 {
 	int error;
 
+	pr_op_debug("mkdir %s%s", force ? "-f " : "", path);
 	if (mkdir(path, CACHE_FILEMODE) < 0) {
 		error = errno;
 		if (!force || error != EEXIST) {
