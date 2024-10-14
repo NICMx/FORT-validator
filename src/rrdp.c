@@ -1380,9 +1380,11 @@ rrdp_state2json(struct rrdp_state *state)
 	if (json == NULL)
 		enomem_panic();
 
-	if (json_add_str(json, TAGNAME_SESSION, state->session.session_id))
+	if (state->session.session_id &&
+	    json_add_str(json, TAGNAME_SESSION, state->session.session_id))
 		goto fail;
-	if (json_add_str(json, TAGNAME_SERIAL, state->session.serial.str))
+	if (state->session.serial.str &&
+	    json_add_str(json, TAGNAME_SERIAL, state->session.serial.str))
 		goto fail;
 	if (state->files)
 		if (json_object_add(json, "files", files2json(state)))

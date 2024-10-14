@@ -394,9 +394,9 @@ node2json(struct cache_node *node)
 		goto fail;
 	if (json_add_str(json, "path", node->map.path))
 		goto fail;
-	if (json_add_int(json, "dlerr", node->dlerr)) // XXX relevant?
+	if (node->dlerr && json_add_int(json, "dlerr", node->dlerr)) // XXX relevant?
 		goto fail;
-	if (json_add_ts(json, "mtim", node->mtim))
+	if (node->mtim && json_add_ts(json, "mtim", node->mtim))
 		goto fail;
 	if (node->rrdp)
 		if (json_object_add(json, "rrdp", rrdp_state2json(node->rrdp)))
