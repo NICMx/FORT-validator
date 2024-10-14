@@ -14,7 +14,7 @@
 
 /* Mocks */
 
-MOCK_ABORT_VOID(cache_prepare, void)
+MOCK_ABORT_INT(cache_prepare, void)
 MOCK_ABORT_VOID(cache_commit, void)
 MOCK_ABORT_PTR(db_table_create, db_table, void)
 MOCK_VOID(db_table_destroy, struct db_table *table)

@@ -8,7 +8,7 @@
 int cache_setup(void);		/* Init this module */
 void cache_teardown(void);	/* Destroy this module */
 
-void cache_prepare(void);	/* Prepare cache for new validation cycle */
+int cache_prepare(void);	/* Prepare cache for new validation cycle */
 void cache_commit(void);	/* Finish validation cycle */
 
 /* XXX might wanna rename */

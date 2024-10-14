@@ -92,6 +92,21 @@ delete_node(struct cache_table *tbl, struct cache_node *node)
 	free(node);
 }
 
+static void
+cache_foreach(void (*cb)(struct cache_table *, struct cache_node *))
+{
+	struct cache_node *node, *tmp;
+
+	HASH_ITER(hh, cache.rsync.nodes, node, tmp)
+		cb(&cache.rsync, node);
+	HASH_ITER(hh, cache.https.nodes, node, tmp)
+		cb(&cache.https, node);
+	HASH_ITER(hh, cache.rrdp.nodes, node, tmp)
+		cb(&cache.rrdp, node);
+	HASH_ITER(hh, cache.fallback.nodes, node, tmp)
+		cb(&cache.fallback, node);
+}
+
 char *
 get_rsync_module(char const *url)
 {
@@ -188,7 +203,7 @@ end:	closedir(dir);
 	return error;
 }
 
-static void
+static int
 init_cache_metafile(void)
 {
 	json_t *root;
@@ -224,13 +239,11 @@ init_cache_metafile(void)
 		goto invalid_cache;
 
 	json_decref(root);
-	return;
+	return 0;
 
 invalid_cache:
-	pr_op_info("The cache seems to have been built by a different version of Fort. "
-	    "I'm going to clear it, just to be safe.");
-	reset_cache_dir();
 	json_decref(root);
+	return EINVAL;
 }
 
 static void
@@ -243,25 +256,6 @@ init_cachedir_tag(void)
 		   "# This file is a cache directory tag created by Fort.\n"
 		   "# For information about cache directory tags, see:\n"
 		   "#	https://bford.info/cachedir/\n");
-}
-
-static int
-init_cache_dirs(void)
-{
-	int error;
-	error = file_mkdir("rsync", true);
-	if (error)
-		return error;
-	error = file_mkdir("https", true);
-	if (error)
-		return error;
-	error = file_mkdir("rrdp", true);
-	if (error)
-		return error;
-	error = file_mkdir("fallback", true);
-	if (error)
-		return error;
-	return file_mkdir(CACHE_TMPDIR, true);
 }
 
 int
@@ -282,11 +276,7 @@ cache_setup(void)
 		return error;
 	}
 
-	// XXX Lock the cache directory
 	init_tables();
-	init_cache_metafile();
-	init_cache_dirs();
-	init_cachedir_tag();
 	return 0;
 }
 
@@ -354,7 +344,7 @@ json2tbl(json_t *root, struct cache_table *tbl)
 	}
 }
 
-static void
+static int
 load_tal_json(void)
 {
 	json_t *root;
@@ -388,13 +378,51 @@ load_tal_json(void)
 	json2tbl(root, &cache.rrdp);
 	json2tbl(root, &cache.fallback);
 
+	json_decref(root);
+	return 0;
+
 end:	json_decref(root);
+	return EINVAL;
 }
 
-void
+int
 cache_prepare(void)
 {
-	load_tal_json();
+	int error;
+
+	if (init_cache_metafile() != 0) {
+		error = reset_cache_dir();
+		if (error)
+			return error;
+	}
+	if (load_tal_json() != 0) {
+		error = reset_cache_dir();
+		if (error)
+			return error;
+	}
+
+	// XXX Lock the cache directory
+	error = file_mkdir("rsync", true);
+	if (error)
+		goto fail;
+	error = file_mkdir("https", true);
+	if (error)
+		goto fail;
+	error = file_mkdir("rrdp", true);
+	if (error)
+		goto fail;
+	error = file_mkdir("fallback", true);
+	if (error)
+		goto fail;
+	error = file_mkdir(CACHE_TMPDIR, true);
+	if (error)
+		goto fail;
+	init_cachedir_tag();
+
+	return 0;
+
+fail:	cache_foreach(delete_node);
+	return error;
 }
 
 static json_t *
@@ -1075,21 +1103,6 @@ remove_orphaned(struct cache_table *table, struct cache_node *node)
 		pr_op_debug("Missing file; deleting node: %s", node->map.path);
 		delete_node(table, node);
 	}
-}
-
-static void
-cache_foreach(void (*cb)(struct cache_table *, struct cache_node *))
-{
-	struct cache_node *node, *tmp;
-
-	HASH_ITER(hh, cache.rsync.nodes, node, tmp)
-		cb(&cache.rsync, node);
-	HASH_ITER(hh, cache.https.nodes, node, tmp)
-		cb(&cache.https, node);
-	HASH_ITER(hh, cache.rrdp.nodes, node, tmp)
-		cb(&cache.rrdp, node);
-	HASH_ITER(hh, cache.fallback.nodes, node, tmp)
-		cb(&cache.fallback, node);
 }
 
 /*

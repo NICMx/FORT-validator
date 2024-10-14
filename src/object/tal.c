@@ -264,10 +264,12 @@ perform_standalone_validation(void)
 	struct threads_list threads = SLIST_HEAD_INITIALIZER(threads);
 	struct validation_thread *thread;
 	struct db_table *db = NULL;
-	int error = 0;
+	int error;
 	int tmperr;
 
-	cache_prepare();
+	error = cache_prepare();
+	if (error)
+		return NULL;
 
 	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
 	if (foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
