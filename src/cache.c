@@ -232,10 +232,19 @@ init_cache_dirs(void)
 int
 cache_setup(void)
 {
-	if (chdir(config_get_local_repository()) < 0) {
-		pr_op_err("Cannot cd to the cache directory: %s",
-		    strerror(errno));
-		return errno;
+	char const *cachedir;
+	int error;
+
+	cachedir = config_get_local_repository();
+
+	error = file_mkdir(cachedir, true);
+	if (error)
+		return error;
+
+	if (chdir(cachedir) < 0) {
+		error = errno;
+		pr_op_err("Cannot cd to %s: %s", cachedir, strerror(error));
+		return error;
 	}
 
 	// XXX Lock the cache directory
