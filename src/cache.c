@@ -259,9 +259,11 @@ json2node(json_t *json)
 	if (json_get_str(json, "path", &str))
 		goto fail;
 	node->map.path = pstrdup(str);
-	if (json_get_int(json, "dlerr", &node->dlerr))
+	error = json_get_int(json, "dlerr", &node->dlerr);
+	if (error != 0 && error != ENOENT)
 		goto fail;
-	if (json_get_ts(json, "mtim", &node->mtim))
+	error = json_get_ts(json, "mtim", &node->mtim);
+	if (error != 0 && error != ENOENT)
 		goto fail;
 	error = json_get_object(json, "rrdp", &rrdp);
 	if (error < 0)

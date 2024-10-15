@@ -1476,20 +1476,14 @@ rrdp_json2state(json_t *json, struct rrdp_state **result)
 	STAILQ_INIT(&state->delta_hashes);
 
 	error = json_get_str(json, TAGNAME_SESSION, &str);
-	if (error) {
-		if (error > 0)
-			pr_op_err("Node is missing the '" TAGNAME_SESSION "' tag.");
+	if (error < 0)
 		goto revert_notif;
-	}
-	state->session.session_id = pstrdup(str);
+	state->session.session_id = (error == 0) ? pstrdup(str) : NULL;
 
 	error = json_get_str(json, TAGNAME_SERIAL, &str);
-	if (error) {
-		if (error > 0)
-			pr_op_err("Node is missing the '" TAGNAME_SERIAL "' tag.");
+	if (error < 0)
 		goto revert_session;
-	}
-	state->session.serial.str = pstrdup(str);
+	state->session.serial.str = (error == 0) ? pstrdup(str) : NULL;
 
 	state->session.serial.num = BN_create();
 	if (!BN_dec2bn(&state->session.serial.num, state->session.serial.str)) {
