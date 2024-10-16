@@ -10,6 +10,7 @@
 #include "print_file.h"
 #include "relax_ng.h"
 #include "rtr/rtr.h"
+#include "sig.h"
 #include "thread_var.h"
 
 static int
@@ -119,7 +120,7 @@ main(int argc, char **argv)
 	error = log_setup();
 	if (error)
 		goto just_quit;
-
+	register_signal_handlers();
 	error = thvar_init();
 	if (error)
 		goto revert_log;

@@ -68,6 +68,7 @@ fort_SOURCES += rtr/pdu_sender.c rtr/pdu_sender.h
 fort_SOURCES += rtr/pdu_stream.c rtr/pdu_stream.h
 fort_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 fort_SOURCES += rtr/rtr.c rtr/rtr.h
+fort_SOURCES += sig.h sig.c
 fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h

@@ -6,7 +6,6 @@
 #endif
 #include <openssl/err.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdarg.h>
 #include <syslog.h>
 #include <time.h>
@@ -112,99 +111,6 @@ static void init_config(struct log_config *cfg)
 	cfg->facility = LOG_DAEMON;
 }
 
-#ifdef BACKTRACE_ENABLED
-
-static void
-sigsegv_handler(int signum)
-{
-	/*
-	 * IMPORTANT: See https://stackoverflow.com/questions/29982643
-	 * I went with rationalcoder's answer, because I think not printing
-	 * stack traces on segfaults is a nice way of ending up committing
-	 * suicide.
-	 *
-	 * Here's a list of legal functions:
-	 * https://stackoverflow.com/a/16891799/1735458
-	 * (Man, I wish POSIX standards were easier to link to.)
-	 */
-
-#define STACK_SIZE 64
-	void *array[STACK_SIZE];
-	size_t size;
-
-	size = backtrace(array, STACK_SIZE);
-	backtrace_symbols_fd(array, size, STDERR_FILENO);
-
-	/* Trigger default handler. */
-	signal(signum, SIG_DFL);
-	kill(getpid(), signum);
-}
-
-#endif
-
-/*
- * Register better handlers for some signals.
- *
- * Remember to enable -rdynamic (See print_stack_trace()).
- */
-static void
-register_signal_handlers(void)
-{
-#ifdef BACKTRACE_ENABLED
-	struct sigaction action;
-	void* dummy;
-
-	/*
-	 * Make sure libgcc is loaded; otherwise backtrace() might allocate
-	 * during a signal handler. (Which is illegal.)
-	 */
-	dummy = NULL;
-	backtrace(&dummy, 1);
-
-	/* Register the segmentation fault handler */
-	memset(&action, 0, sizeof(action));
-	action.sa_handler = sigsegv_handler;
-	sigemptyset(&action.sa_mask);
-	action.sa_flags = 0;
-	if (sigaction(SIGSEGV, &action, NULL) == -1) {
-		/*
-		 * Not fatal; it just means we will not print stack traces on
-		 * Segmentation Faults.
-		 */
-		pr_op_err("SIGSEGV handler registration failure: %s",
-		    strerror(errno));
-	}
-#endif
-
-	/*
-	 * SIGPIPE can be triggered by any I/O function. libcurl is particularly
-	 * tricky:
-	 *
-	 * > libcurl makes an effort to never cause such SIGPIPEs to trigger,
-	 * > but some operating systems have no way to avoid them and even on
-	 * > those that have there are some corner cases when they may still
-	 * > happen
-	 * (Documentation of CURLOPT_NOSIGNAL)
-	 *
-	 * All SIGPIPE means is "the peer closed the connection for some
-	 * reason."
-	 * Which is a normal I/O error, and should be handled by the normal
-	 * error propagation logic, not by a signal handler.
-	 * So, ignore SIGPIPE.
-	 *
-	 * https://github.com/NICMx/FORT-validator/issues/49
-	 */
-	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-		/*
-		 * Not fatal. It just means that, if a broken pipe happens, we
-		 * will die silently.
-		 * But they're somewhat rare, so whatever.
-		 */
-		pr_op_err("SIGPIPE handler registration failure: %s",
-		    strerror(errno));
-	}
-}
-
 int
 log_setup(void)
 {
@@ -235,8 +141,6 @@ log_setup(void)
 		    error, strerror(error));
 		return error;
 	}
-
-	register_signal_handlers();
 
 	return 0;
 }
