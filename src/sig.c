@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "cache.h"
 #include "log.h"
 
 /*
@@ -50,7 +51,10 @@ print_stack_trace(void)
 static void
 do_cleanup(int signum)
 {
-	print_stack_trace();
+	if (signum == SIGSEGV || signum == SIGBUS)
+		print_stack_trace();
+
+	cache_atexit();
 
 	/* Trigger default handler */
 	signal(signum, SIG_DFL);
@@ -62,7 +66,12 @@ void
 register_signal_handlers(void)
 {
 	/* Important: All of these need to terminate by default */
-	int const cleanups[] = { SIGSEGV, SIGBUS, 0 };
+	int const cleanups[] = {
+	    SIGFPE, SIGSEGV, SIGBUS, SIGABRT, SIGSYS,	/* 24.2.1 */
+	    SIGTERM, SIGINT, SIGQUIT, SIGHUP,		/* 24.2.2 */
+	    SIGUSR1, SIGUSR2,				/* 24.2.7 */
+	    0
+	};
 	struct sigaction action;
 	unsigned int i;
 

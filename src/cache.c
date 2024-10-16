@@ -1,9 +1,12 @@
 #include "cache.h"
 
+#include <fcntl.h>
 #include <ftw.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <sys/queue.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "alloc.h"
@@ -56,6 +59,9 @@ static struct rpki_cache {
 	struct cache_table fallback;
 } cache;
 
+/* "Is the lockfile ours?" */
+static volatile sig_atomic_t lockfile_owned;
+
 struct cache_cage {
 	struct cache_node *refresh;
 	struct cache_node *fallback;
@@ -70,6 +76,7 @@ struct cache_commit {
 
 STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZER(commits);
 
+#define LOCKFILE ".lock"
 #define INDEX_FILE "index.json"
 #define TAGNAME_VERSION "fort-version"
 
@@ -183,7 +190,7 @@ reset_cache_dir(void)
 
 	deleted = 0;
 	FOREACH_DIR_FILE(dir, file)
-		if (!S_ISDOTS(file)) {
+		if (!S_ISDOTS(file) && strcmp(file->d_name, LOCKFILE) != 0) {
 			error = file_rm_rf(file->d_name);
 			if (error)
 				goto end;
@@ -214,6 +221,67 @@ init_cachedir_tag(void)
 		   "#	https://bford.info/cachedir/\n");
 }
 
+static int
+lock_cache(void)
+{
+	int fd;
+	int error;
+
+	pr_op_debug("touch " LOCKFILE);
+
+	/*
+	 * Suppose we get SIGTERM in the middle of this function.
+	 *
+	 * 1. open() then lockfile_owned = 1, we're interrupted between them:
+	 *    The handler doesn't delete our lock.
+	 * 2. lockfile_owned = 1 then open(), we're interrupted between them:
+	 *    The handler deletes some other instance's lock.
+	 *
+	 * 1 is better because we already couldn't guarantee the lock was
+	 * deleted on every situation. (SIGKILL)
+	 */
+
+	fd = open(LOCKFILE, O_CREAT | O_EXCL, 0644);
+	if (fd < 0) {
+		error = errno;
+		pr_op_err("Cannot create lockfile '%s/" LOCKFILE "': %s",
+		    config_get_local_repository(), strerror(error));
+		return error;
+	}
+	close(fd);
+
+	lockfile_owned = 1;
+	return 0;
+}
+
+static void
+unlock_cache(void)
+{
+	pr_op_debug("rm " LOCKFILE);
+
+	if (!lockfile_owned) {
+		pr_op_debug("The cache wasn't locked.");
+		return;
+	}
+
+	if (unlink(LOCKFILE) < 0) {
+		int error = errno;
+		pr_op_err("Cannot remove lockfile: %s", strerror(error));
+		if (error != ENOENT)
+			return;
+	}
+
+	lockfile_owned = 0;
+}
+
+/* THIS FUNCTION CAN BE CALLED FROM A SIGNAL HANDLER. */
+void
+cache_atexit(void)
+{
+	if (lockfile_owned)
+		unlink(LOCKFILE);
+}
+
 int
 cache_setup(void)
 {
@@ -234,6 +302,17 @@ cache_setup(void)
 	}
 
 	init_tables();
+
+	errno = 0;
+	error = atexit(cache_atexit);
+	if (error) {
+		int err2 = errno;
+		pr_op_err("Cannot register cache's exit function.");
+		pr_op_err("Error message attempt 1: %s", strerror(error));
+		pr_op_err("Error message attempt 2: %s", strerror(err2));
+		return error;
+	}
+
 	return 0;
 }
 
@@ -353,13 +432,16 @@ cache_prepare(void)
 {
 	int error;
 
+	error = lock_cache();
+	if (error)
+		return error;
+
 	if (load_index_file() != 0) {
 		error = reset_cache_dir();
 		if (error)
-			return error;
+			goto fail;
 	}
 
-	// XXX Lock the cache directory
 	error = file_mkdir("rsync", true);
 	if (error)
 		goto fail;
@@ -380,6 +462,7 @@ cache_prepare(void)
 	return 0;
 
 fail:	cache_foreach(delete_node);
+	unlock_cache();
 	return error;
 }
 
@@ -1090,6 +1173,7 @@ cache_commit(void)
 {
 	cleanup_cache();
 	write_index_file();
+	unlock_cache();
 	cache_foreach(delete_node);
 }
 
