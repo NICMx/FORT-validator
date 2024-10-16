@@ -7,6 +7,7 @@
 #include "http.h"
 #include "log.h"
 #include "nid.h"
+#include "output_printer.h"
 #include "print_file.h"
 #include "relax_ng.h"
 #include "rtr/rtr.h"
@@ -153,6 +154,9 @@ main(int argc, char **argv)
 	error = cache_setup();
 	if (error)
 		goto revert_vrps;
+	error = output_setup();
+	if (error)
+		goto revert_cache;
 
 	/* Meat */
 
@@ -169,7 +173,7 @@ main(int argc, char **argv)
 	}
 
 	/* End */
-
+revert_cache:
 	cache_teardown();
 revert_vrps:
 	vrps_destroy();

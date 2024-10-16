@@ -10,8 +10,27 @@ typedef struct json_out {
 	bool first;
 } JSON_OUT;
 
+int
+output_setup(void)
+{
+	int err1;
+	int err2;
+
+	errno = 0;
+	err1 = atexit(output_atexit);
+	if (err1) {
+		err2 = errno;
+		pr_op_err("Cannot register output's exit function.");
+		pr_op_err("Error message attempt 1: %s", strerror(err1));
+		pr_op_err("Error message attempt 2: %s", strerror(err2));
+		return err1;
+	}
+
+	return 0;
+}
+
 static FILE *
-load_output_file(char const *filename)
+load_output_file(char const *filename, char const *tmpname)
 {
 	FILE *out;
 
@@ -21,7 +40,7 @@ load_output_file(char const *filename)
 	if (strcmp(filename, "-") == 0)
 		return stdout;
 
-	return (file_write(filename, "w", &out) == 0) ? out : NULL;
+	return (file_write(tmpname, "w", &out) == 0) ? out : NULL;
 }
 
 static int
@@ -130,7 +149,7 @@ print_roas(struct db_table const *db)
 	JSON_OUT json_out;
 	int error;
 
-	out = load_output_file(config_get_output_roa());
+	out = load_output_file(config_get_output_roa(), ".roa");
 	if (out == NULL)
 		return;
 
@@ -149,8 +168,12 @@ print_roas(struct db_table const *db)
 
 	if (error)
 		pr_op_err("Error printing ROAs: %s", strerror(error));
-	if (out != stdout)
+	if (out != stdout) {
 		file_close(out);
+		if (!error && rename(".roa", config_get_output_roa()) < 0)
+			pr_op_err("Cannot move '.roa' to '%s': %s",
+			    config_get_output_roa(), strerror(errno));
+	}
 }
 
 static void
@@ -160,7 +183,7 @@ print_router_keys(struct db_table const *db)
 	JSON_OUT json_out;
 	int error;
 
-	out = load_output_file(config_get_output_bgpsec());
+	out = load_output_file(config_get_output_bgpsec(), ".rk");
 	if (out == NULL)
 		return;
 
@@ -179,8 +202,12 @@ print_router_keys(struct db_table const *db)
 
 	if (error)
 		pr_op_err("Error printing Router Keys: %s", strerror(error));
-	if (out != stdout)
+	if (out != stdout) {
 		file_close(out);
+		if (!error && rename(".rk", config_get_output_bgpsec()) < 0)
+			pr_op_err("Cannot move '.rk' to '%s': %s",
+			    config_get_output_bgpsec(), strerror(errno));
+	}
 }
 
 void
@@ -188,4 +215,12 @@ output_print_data(struct db_table const *db)
 {
 	print_roas(db);
 	print_router_keys(db);
+}
+
+/* THIS FUNCTION CAN BE CALLED FROM A SIGNAL HANDLER. */
+void
+output_atexit(void)
+{
+	unlink(".roa");
+	unlink(".rk");
 }

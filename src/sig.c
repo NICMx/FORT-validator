@@ -12,6 +12,7 @@
 
 #include "cache.h"
 #include "log.h"
+#include "output_printer.h"
 
 /*
  * Ensures libgcc is loaded; otherwise backtrace() might allocate
@@ -55,6 +56,7 @@ do_cleanup(int signum)
 		print_stack_trace();
 
 	cache_atexit();
+	output_atexit();
 
 	/* Trigger default handler */
 	signal(signum, SIG_DFL);
