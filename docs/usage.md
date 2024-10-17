@@ -46,8 +46,6 @@ description: Guide to use arguments of FORT Validator.
 	33. [`--validation-log.tag`](#--validation-logtag)
 	34. [`--http.enabled`](#--httpenabled)
 	35. [`--http.priority`](#--httppriority)
-	36. [`--http.retry.count`](#--httpretrycount)
-	37. [`--http.retry.interval`](#--httpretryinterval)
 	38. [`--http.user-agent`](#--httpuser-agent)
 	38. [`--http.max-redirs`](#--httpmax-redirs)
 	39. [`--http.connect-timeout`](#--httpconnect-timeout)
@@ -63,8 +61,6 @@ description: Guide to use arguments of FORT Validator.
 	48. [`--thread-pool.server.max`](#--thread-poolservermax)
 	50. [`--rsync.enabled`](#--rsyncenabled)
 	51. [`--rsync.priority`](#--rsyncpriority)
-	53. [`--rsync.retry.count`](#--rsyncretrycount)
-	54. [`--rsync.retry.interval`](#--rsyncretryinterval)
 	40. [`--rsync.transfer-timeout`](#--rsynctransfer-timeout)
 	55. [`--configuration-file`](#--configuration-file)
 	56. [`rsync.program`](#rsyncprogram)
@@ -102,13 +98,9 @@ description: Guide to use arguments of FORT Validator.
 	[--server.deltas.lifetime=<unsigned integer>]
 	[--rsync.enabled=true|false]
 	[--rsync.priority=<unsigned integer>]
-	[--rsync.retry.count=<unsigned integer>]
-	[--rsync.retry.interval=<unsigned integer>]
 	[--rsync.transfer-timeout=<unsigned integer>]
 	[--http.enabled=true|false]
 	[--http.priority=<unsigned integer>]
-	[--http.retry.count=<unsigned integer>]
-	[--http.retry.interval=<unsigned integer>]
 	[--http.user-agent=<string>]
 	[--http.max-redirs=<unsigned integer>]
 	[--http.connect-timeout=<unsigned integer>]
@@ -646,26 +638,6 @@ HTTP's (and therefore RRDP's) precedence when choosing the protocol used to down
 
 See [`--rsync.priority`](#--rsyncpriority).
 
-### `--http.retry.count`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 1
-- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
-
-Number of additional HTTP requests after a failed attempt.
-
-If a transient error is returned when Fort tries to perform an HTTP transfer, it will retry this number of times before giving up. Setting the number to 0 makes Fort do no retries (which is the default). "Transient error" is a timeout, an HTTP 408 response code, or an HTTP 5xx response code.
-
-### `--http.retry.interval`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 4
-- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
-
-Period of time (in seconds) to wait between each retry to request an HTTP URI.
-
 ### `--http.user-agent`
 
 - **Type:** String
@@ -916,28 +888,6 @@ RSYNC's precedence when choosing the protocol used to download files (assuming F
 
 See [`--http.priority`](#--httppriority).
 
-### `--rsync.retry.count`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 1
-- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
-
-Maximum number of retries whenever there's an error executing an RSYNC.
-
-A value of **0** means **no retries**.
-
-Whenever is necessary to execute an RSYNC, the validator will try at least one time the execution. If there was an error executing the RSYNC, the validator will retry it at most `--rsync.retry.count` times, waiting [`--rsync.retry.interval`](#--rsyncretryinterval) seconds between each retry.
-
-### `--rsync.retry.interval`
-
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 4
-- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
-
-Period of time (in seconds) to wait between each retry to execute an RSYNC.
-
 ### `--rsync.transfer-timeout`
 
 - **Type:** Integer
@@ -989,10 +939,6 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"rsync": {
 		"<a href="#--rsyncenabled">enabled</a>": true,
 		"<a href="#--rsyncpriority">priority</a>": 50,
-		"retry": {
-			"<a href="#--rsyncretrycount">count</a>": 1,
-			"<a href="#--rsyncretryinterval">interval</a>": 4
-		},
 		"<a href="#--rsynctransfer-timeout">transfer-timeout</a>": 0,
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
@@ -1017,10 +963,6 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"http": {
 		"<a href="#--httpenabled">enabled</a>": true,
 		"<a href="#--httppriority">priority</a>": 60,
-		"retry": {
-			"<a href="#--httpretrycount">count</a>": 1,
-			"<a href="#--httpretryinterval">interval</a>": 4
-		},
 		"<a href="#--httpuser-agent">user-agent</a>": "fort/1.6.2",
 		"<a href="#--httpmax-redirs">max-redirs</a>": 10,
 		"<a href="#--httpconnect-timeout">connect-timeout</a>": 30,

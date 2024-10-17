@@ -12,7 +12,7 @@ fetch_url(char const *url, char const *filename)
 
 	path = path_join(config_get_tal(), filename);
 
-	error = http_download_direct(url, path);
+	error = http_download(url, path, 0, NULL);
 	if (error) {
 		fprintf(stderr, "Couldn't fetch '%s': %s\n",
 		    path, strerror(abs(error)));

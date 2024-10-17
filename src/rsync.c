@@ -280,9 +280,8 @@ rsync_download(char const *url, char const *path)
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	int fork_fds[2][2];
 	pid_t child_pid;
-	unsigned int retries;
 	unsigned int i;
-	int child_status;
+	int child;
 	int error;
 
 	/* Prepare everything for the child exec */
@@ -295,105 +294,64 @@ rsync_download(char const *url, char const *path)
 			pr_val_debug("    %s", args[i]);
 	}
 
-	retries = 0;
-	do {
-		child_status = 0;
+	error = create_pipes(fork_fds);
+	if (error)
+		return error;
 
-		error = create_pipes(fork_fds);
-		if (error)
-			return error;
+	/* Flush output (avoid locks between father and child) */
+	log_flush();
 
-		/* Flush output (avoid locks between father and child) */
-		log_flush();
-
-		/* We need to fork because execvp() magics the thread away. */
-		child_pid = fork();
-		if (child_pid == 0) {
-			/*
-			 * This code is run by the child, and should try to
-			 * call execvp() as soon as possible.
-			 *
-			 * Refer to
-			 * https://pubs.opengroup.org/onlinepubs/9699919799/functions/fork.html
-			 * "{..} to avoid errors, the child process may only
-			 * execute async-signal-safe operations until such time
-			 * as one of the exec functions is called."
-			 */
-			handle_child_thread(args, fork_fds);
-		}
-		if (child_pid < 0) {
-			error = errno;
-			pr_op_err_st("Couldn't fork to execute rsync: %s",
-			   strerror(error));
-			/* Close all ends from the created pipes */
-			close(STDERR_READ(fork_fds));
-			close(STDOUT_READ(fork_fds));
-			close(STDERR_WRITE(fork_fds));
-			close(STDOUT_WRITE(fork_fds));
-			return error;
-		}
-
-		/* This code is run by us. */
-		error = exhaust_pipes(fork_fds);
-		if (error)
-			kill(child_pid, SIGTERM); /* Stop the child */
-
-		error = waitpid(child_pid, &child_status, 0);
-		do {
-			if (error == -1) {
-				error = errno;
-				pr_op_err_st("The rsync sub-process returned error %d (%s)",
-				    error, strerror(error));
-				if (child_status > 0)
-					break;
-				return error;
-			}
-		} while (0);
-
-		if (WIFEXITED(child_status)) {
-			/* Happy path (but also sad path sometimes). */
-			error = WEXITSTATUS(child_status);
-			pr_val_debug("The rsync sub-process terminated with error code %d.",
-			    error);
-			if (!error)
-				return 0;
-
-			if (retries == config_get_rsync_retry_count()) {
-				if (retries > 0)
-					pr_val_warn("Max RSYNC retries (%u) reached on '%s', won't retry again.",
-					    retries, url);
-				return EIO;
-			}
-			pr_val_warn("Retrying RSYNC '%s' in %u seconds, %u attempts remaining.",
-			    url,
-			    config_get_rsync_retry_interval(),
-			    config_get_rsync_retry_count() - retries);
-			retries++;
-			sleep(config_get_rsync_retry_interval());
-			continue;
-		}
-		break;
-	} while (true);
-
-	if (WIFSIGNALED(child_status)) {
-		switch (WTERMSIG(child_status)) {
-		case SIGINT:
-			pr_op_err_st("RSYNC was user-interrupted. Guess I'll interrupt myself too.");
-			break;
-		case SIGQUIT:
-			pr_op_err_st("RSYNC received a quit signal. Guess I'll quit as well.");
-			break;
-		case SIGKILL:
-			pr_op_err_st("Killed.");
-			break;
-		default:
-			pr_op_err_st("The RSYNC was terminated by a signal [%d] I don't have a handler for. Dunno; guess I'll just die.",
-			    WTERMSIG(child_status));
-			break;
-		}
-		return -EINTR; /* Meh? */
+	/* We need to fork because execvp() magics the thread away. */
+	child_pid = fork();
+	if (child_pid == 0) {
+		/*
+		 * This code is run by the child, and should try to
+		 * call execvp() as soon as possible.
+		 *
+		 * Refer to
+		 * https://pubs.opengroup.org/onlinepubs/9699919799/functions/fork.html
+		 * "{..} to avoid errors, the child process may only
+		 * execute async-signal-safe operations until such time
+		 * as one of the exec functions is called."
+		 */
+		handle_child_thread(args, fork_fds);
+	}
+	if (child_pid < 0) {
+		error = errno;
+		pr_op_err_st("Couldn't fork to execute rsync: %s",
+		    strerror(error));
+		/* Close all ends from the created pipes */
+		close(STDERR_READ(fork_fds));
+		close(STDOUT_READ(fork_fds));
+		close(STDERR_WRITE(fork_fds));
+		close(STDOUT_WRITE(fork_fds));
+		return error;
 	}
 
-	pr_op_err_st("The RSYNC command died in a way I don't have a handler for. Dunno; guess I'll die as well.");
+	/* This code is run by us. */
+	error = exhaust_pipes(fork_fds);
+	if (error)
+		kill(child_pid, SIGTERM); /* Stop the child */
+
+	child = 0;
+	if (waitpid(child_pid, &child, 0) < 0) {
+		error = errno;
+		pr_op_err("Could not wait for rsync: %s", strerror(error));
+		return error;
+	}
+
+	if (WIFEXITED(child)) {
+		/* Happy path (but also sad path sometimes) */
+		error = WEXITSTATUS(child);
+		pr_val_debug("rsync ended. Result: %d", error);
+		return error ? EIO : 0;
+	}
+
+	if (WIFSIGNALED(child)) {
+		pr_op_warn("rsync interrupted by signal %d.", WTERMSIG(child));
+		return EINTR; /* Meh? */
+	}
+
+	pr_op_err_st("rsync died in an unknown way.");
 	return -EINVAL;
 }

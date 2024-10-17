@@ -14,8 +14,6 @@ static char content[1024];
 /* Mocks */
 
 MOCK(config_get_rsync_program, char const *, "rsync", void)
-MOCK_UINT(config_get_rsync_retry_count, 0, void)
-MOCK_UINT(config_get_rsync_retry_interval, 10, void)
 MOCK(config_get_rsync_transfer_timeout, long, 4, void)
 
 void

@@ -246,10 +246,17 @@ handle_http_response_code(long http_code)
 }
 
 /*
- * Fetch data from @src and write result on @dst.
+ * Download @src into @dst; HTTP assumed.
+ *
+ * If @changed returns true, the file was downloaded normally.
+ * If @changed returns false, the file has not been modified since @ims.
+ *
+ * @ims can be 0, which means "no epoch."
+ * @changed can be NULL, which means "I don't care."
+ * If @changed is not NULL, initialize it to false.
  */
-static int
-http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
+int
+http_download(char const *src, char const *dst, curl_off_t ims, bool *changed)
 {
 	struct http_handler handler;
 	struct write_callback_arg args;
@@ -258,6 +265,8 @@ http_fetch(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	char *redirect;
 	unsigned int r;
 	int error;
+
+	pr_val_info("HTTP GET: %s -> %s", src, dst);
 
 	error = http_easy_init(&handler, ims);
 	if (error)
@@ -368,65 +377,4 @@ end:	http_easy_cleanup(&handler);
 	if (redirect != NULL)
 		free(redirect);
 	return error;
-}
-
-/*
- * Download @url into @path; HTTP assumed.
- *
- * If @changed returns true, the file was downloaded normally.
- * If @changed returns false, the file has not been modified since @ims.
- *
- * @ims can be 0, which means "no epoch."
- * @changed can be NULL, which means "I don't care."
- * If @changed is not NULL, initialize it to false.
- */
-int
-http_download(char const *url, char const *path, curl_off_t ims, bool *changed)
-{
-	unsigned int r;
-	int error;
-
-	pr_val_info("HTTP GET: %s -> %s", url, path);
-
-	for (r = 0; true; r++) {
-		pr_val_debug("Download attempt #%u...", r + 1);
-
-		error = http_fetch(url, path, ims, changed);
-		switch (error) {
-		case 0:
-			pr_val_debug("Download successful.");
-			return 0; /* Happy path */
-
-		case EAGAIN:
-			break;
-
-		default:
-			pr_val_debug("Download failed.");
-			return error;
-		}
-
-		if (r >= config_get_http_retry_count()) {
-			pr_val_debug("Download failed: Retries exhausted.");
-			return EIO;
-		}
-
-		pr_val_warn("Download failed; retrying in %u seconds.",
-		    config_get_http_retry_interval());
-		/*
-		 * TODO (fine) Wrong. This is slowing the entire tree traversal
-		 * down; use a thread pool.
-		 */
-		sleep(config_get_http_retry_interval());
-	}
-}
-
-/*
- * Downloads @remote to the absolute path @dest (no workspace nor directory
- * structure is created).
- */
-int
-http_download_direct(char const *src, char const *dst)
-{
-	pr_val_info("HTTP GET: %s -> %s", src, dst);
-	return http_fetch(src, dst, 0, NULL);
 }

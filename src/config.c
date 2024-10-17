@@ -90,13 +90,6 @@ struct rpki_config {
 		unsigned int priority;
 		/* Deprecated; does nothing. */
 		char *strategy;
-		/* Retry conf, utilized on errors */
-		struct {
-			/* Maximum number of retries on error */
-			unsigned int count;
-			/* Interval (in seconds) between each retry */
-			unsigned int interval;
-		} retry;
 		unsigned int transfer_timeout;
 		char *program;
 		struct string_array args;
@@ -107,13 +100,6 @@ struct rpki_config {
 		bool enabled;
 		/* Protocol preference; compared to rsync.priority */
 		unsigned int priority;
-		/* Retry conf, utilized on errors */
-		struct {
-			/* Maximum number of retries on error */
-			unsigned int count;
-			/* Interval (in seconds) between each retry */
-			unsigned int interval;
-		} retry;
 		/* HTTP User-Agent request header */
 		char *user_agent;
 		/* Allowed redirects per request */
@@ -479,22 +465,6 @@ static const struct option_field options[] = {
 		.json_null_allowed = true,
 		.deprecated = true,
 	}, {
-		.id = 3003,
-		.name = "rsync.retry.count",
-		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, rsync.retry.count),
-		.doc = "Maximum amount of retries whenever there's an RSYNC error",
-		.min = 0,
-		.max = UINT_MAX,
-	}, {
-		.id = 3004,
-		.name = "rsync.retry.interval",
-		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, rsync.retry.interval),
-		.doc = "Period (in seconds) to wait between retries after an RSYNC error ocurred",
-		.min = 0,
-		.max = UINT_MAX,
-	}, {
 		.id = 3005,
 		.name = "rsync.program",
 		.type = &gt_string,
@@ -545,22 +515,6 @@ static const struct option_field options[] = {
 		.min = 0,
 		.max = 100,
 		/* XXX deprecated? */
-	}, {
-		.id = 9002,
-		.name = "http.retry.count",
-		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, http.retry.count),
-		.doc = "Maximum amount of retries whenever there's an error requesting HTTP URIs",
-		.min = 0,
-		.max = UINT_MAX,
-	}, {
-		.id = 9003,
-		.name = "http.retry.interval",
-		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config, http.retry.interval),
-		.doc = "Period (in seconds) to wait between retries after an error ocurred doing HTTP requests",
-		.min = 0,
-		.max = UINT_MAX,
 	}, {
 		.id = 9004,
 		.name = "http.user-agent",
@@ -999,8 +953,6 @@ set_default_values(void)
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
 	rpki_config.rsync.strategy = pstrdup("<deprecated>");
-	rpki_config.rsync.retry.count = 1;
-	rpki_config.rsync.retry.interval = 4;
 	rpki_config.rsync.transfer_timeout = 900;
 	rpki_config.rsync.program = pstrdup("rsync");
 	string_array_init(&rpki_config.rsync.args, trash, ARRAY_LEN(trash));
@@ -1008,8 +960,6 @@ set_default_values(void)
 	rpki_config.http.enabled = true;
 	/* Higher priority than rsync by default */
 	rpki_config.http.priority = 60;
-	rpki_config.http.retry.count = 1;
-	rpki_config.http.retry.interval = 4;
 	rpki_config.http.user_agent = pstrdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	rpki_config.http.max_redirs = 10;
 	rpki_config.http.connect_timeout = 30;
@@ -1429,18 +1379,6 @@ config_get_rsync_priority(void)
 	return rpki_config.rsync.priority;
 }
 
-unsigned int
-config_get_rsync_retry_count(void)
-{
-	return rpki_config.rsync.retry.count;
-}
-
-unsigned int
-config_get_rsync_retry_interval(void)
-{
-	return rpki_config.rsync.retry.interval;
-}
-
 long
 config_get_rsync_transfer_timeout(void)
 {
@@ -1463,18 +1401,6 @@ unsigned int
 config_get_http_priority(void)
 {
 	return rpki_config.http.priority;
-}
-
-unsigned int
-config_get_http_retry_count(void)
-{
-	return rpki_config.http.retry.count;
-}
-
-unsigned int
-config_get_http_retry_interval(void)
-{
-	return rpki_config.http.retry.interval;
 }
 
 char const *
