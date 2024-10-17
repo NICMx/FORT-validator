@@ -38,7 +38,7 @@ duplicate_fds(int fds[2][2])
 }
 
 static void
-prepare_rsync(char **args, char const *url, char const *path)
+prepare_rsync_args(char **args, char const *url, char const *path)
 {
 	size_t i = 0;
 
@@ -76,11 +76,13 @@ prepare_rsync(char **args, char const *url, char const *path)
 }
 
 __dead static void
-handle_child_thread(char **args, int fds[2][2])
+handle_child_thread(char const *url, char const *path, int fds[2][2])
 {
 	/* THIS FUNCTION MUST NEVER RETURN!!! */
+	char *args[20];
 	int error;
 
+	prepare_rsync_args(args, url, path);
 	duplicate_fds(fds);
 
 	execvp(args[0], args);
@@ -276,23 +278,13 @@ exhaust_pipes(int fds[2][2])
 int
 rsync_download(char const *url, char const *path)
 {
-	char *args[32];
 	/* Descriptors to pipe stderr (first element) and stdout (second) */
 	int fork_fds[2][2];
 	pid_t child_pid;
-	unsigned int i;
 	int child;
 	int error;
 
-	/* Prepare everything for the child exec */
-	prepare_rsync(args, url, path);
-
 	pr_val_info("rsync: %s -> %s", url, path);
-	if (log_val_enabled(LOG_DEBUG)) {
-		pr_val_debug("Executing rsync:");
-		for (i = 0; args[i] != NULL; i++)
-			pr_val_debug("    %s", args[i]);
-	}
 
 	error = create_pipes(fork_fds);
 	if (error)
@@ -314,7 +306,7 @@ rsync_download(char const *url, char const *path)
 		 * execute async-signal-safe operations until such time
 		 * as one of the exec functions is called."
 		 */
-		handle_child_thread(args, fork_fds);
+		handle_child_thread(url, path, fork_fds);
 	}
 	if (child_pid < 0) {
 		error = errno;
