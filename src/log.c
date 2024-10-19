@@ -211,15 +211,6 @@ log_teardown(void)
 	pthread_mutex_destroy(&logck);
 }
 
-void
-log_flush(void)
-{
-	if (op_config.fprintf_enabled || val_config.fprintf_enabled) {
-		fflush(stdout);
-		fflush(stderr);
-	}
-}
-
 bool
 log_val_enabled(unsigned int level)
 {

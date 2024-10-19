@@ -11,6 +11,7 @@
 #include "print_file.h"
 #include "relax_ng.h"
 #include "rtr/rtr.h"
+#include "rsync.h"
 #include "sig.h"
 #include "thread_var.h"
 
@@ -121,20 +122,22 @@ main(int argc, char **argv)
 	error = log_setup();
 	if (error)
 		goto just_quit;
-	register_signal_handlers();
-	error = thvar_init();
-	if (error)
-		goto revert_log;
-	error = incidence_init();
-	if (error)
-		goto revert_log;
 	error = handle_flags_config(argc, argv);
 	if (error)
 		goto revert_log;
 
+	rsync_setup(); /* Spawn rsync spawner ASAP */
+	register_signal_handlers();
+
+	error = thvar_init();
+	if (error)
+		goto revert_rsync;
+	error = incidence_init();
+	if (error)
+		goto revert_rsync;
 	error = nid_init();
 	if (error)
-		goto revert_config;
+		goto revert_rsync;
 	error = extension_init();
 	if (error)
 		goto revert_nid;
@@ -144,7 +147,6 @@ main(int argc, char **argv)
 	error = http_init();
 	if (error)
 		goto revert_hash;
-
 	error = relax_ng_init();
 	if (error)
 		goto revert_http;
@@ -156,7 +158,7 @@ main(int argc, char **argv)
 		goto revert_vrps;
 	error = output_setup();
 	if (error)
-		goto revert_cache;
+		goto revert_vrps;
 
 	/* Meat */
 
@@ -173,8 +175,6 @@ main(int argc, char **argv)
 	}
 
 	/* End */
-revert_cache:
-	cache_teardown();
 revert_vrps:
 	vrps_destroy();
 revert_relax_ng:
@@ -185,7 +185,8 @@ revert_hash:
 	hash_teardown();
 revert_nid:
 	nid_destroy();
-revert_config:
+revert_rsync:
+	rsync_teardown();
 	free_rpki_config();
 revert_log:
 	log_teardown();

@@ -4,6 +4,7 @@
 #include "common.c"
 #include "mock.c"
 #include "rsync.c"
+#include "stream.c"
 
 static char const STR64[] = "abcdefghijklmnopqrstuvwxyz"
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -15,13 +16,6 @@ static char content[1024];
 
 MOCK(config_get_rsync_program, char const *, "rsync", void)
 MOCK(config_get_rsync_transfer_timeout, long, 4, void)
-
-void
-log_flush(void)
-{
-	fflush(stdout);
-	fflush(stderr);
-}
 
 /* Tests */
 
@@ -188,9 +182,7 @@ START_TEST(full_rsync_timeout_test_1kb)
 	printf("1kb\n");
 	create_file("tmp/1kb", 1);
 	ensure_file_deleted("tmp/1kb-copy");
-	// XXX this is creating directories because of rsync_download's mkdir_p.
-	// Is this a symptom of a problem?
-	ck_assert_int_eq(0, rsync_download("tmp/1kb", "tmp/1kb-copy"));
+	ck_assert_int_eq(0, rsync("tmp/1kb", "tmp/1kb-copy"));
 }
 END_TEST
 
@@ -199,7 +191,7 @@ START_TEST(full_rsync_timeout_test_3kb)
 	printf("3kb\n");
 	create_file("tmp/3kb", 3);
 	ensure_file_deleted("tmp/3kb-copy");
-	ck_assert_int_eq(0, rsync_download("tmp/3kb", "tmp/3kb-copy"));
+	ck_assert_int_eq(0, rsync("tmp/3kb", "tmp/3kb-copy"));
 }
 END_TEST
 
@@ -209,14 +201,70 @@ START_TEST(full_rsync_timeout_test_5kb)
 	create_file("tmp/5kb", 5);
 	ensure_file_deleted("tmp/5kb-copy");
 	/* Max speed is 1kbps, timeout is 4 seconds */
-	ck_assert_int_eq(EIO, rsync_download("tmp/5kb", "tmp/5kb-copy"));
+	ck_assert_int_eq(EIO, rsync("tmp/5kb", "tmp/5kb-copy"));
+}
+END_TEST
+
+static void
+wait_rsyncs(unsigned int expected)
+{
+	unsigned int actual = 0;
+
+	do {
+		actual += rsync_finished();
+		if (expected == actual) {
+			ck_assert_uint_eq(0, rsync_finished());
+			return;
+		}
+		ck_assert(expected > actual);
+		sleep(1);
+	} while (true);
+}
+
+START_TEST(test_rsync_finished)
+{
+	printf("rsync_finished()\n");
+
+	create_file("tmp/2kb", 1);
+	ensure_file_deleted("tmp/2kb-copy");
+
+	rsync_setup();
+
+	ck_assert_int_eq(0, rsync_download("tmp/2kb", "tmp/2kb-copy"));
+	ck_assert_int_eq(0, rsync_finished());
+	wait_rsyncs(1);
+
+	rsync_teardown();
+}
+END_TEST
+
+START_TEST(test_multi_rsync)
+{
+	printf("simultaneous rsyncs\n");
+
+	create_file("tmp/i1", 1);
+	ensure_file_deleted("tmp/i1-copy");
+	create_file("tmp/i2", 1);
+	ensure_file_deleted("tmp/i2-copy");
+	create_file("tmp/i3", 1);
+	ensure_file_deleted("tmp/i3-copy");
+
+	rsync_setup();
+
+	ck_assert_int_eq(0, rsync_download("tmp/i1", "tmp/"));
+	ck_assert_int_eq(0, rsync_finished());
+	ck_assert_int_eq(0, rsync_download("tmp/i2", "tmp/i2-copy"));
+	ck_assert_int_eq(0, rsync_download("tmp/i3", "tmp/i3-copy"));
+	wait_rsyncs(3);
+
+	rsync_teardown();
 }
 END_TEST
 
 static Suite *create_suite(void)
 {
 	Suite *suite;
-	TCase *pipes;
+	TCase *pipes, *spawner;
 
 	pipes = tcase_create("pipes");
 	tcase_add_test(pipes, exhaust_read_fds_test_normal);
@@ -227,8 +275,14 @@ static Suite *create_suite(void)
 	tcase_add_test(pipes, full_rsync_timeout_test_5kb);
 	tcase_set_timeout(pipes, 6);
 
+	spawner = tcase_create("spawner");
+	tcase_add_test(spawner, test_rsync_finished);
+	tcase_add_test(spawner, test_multi_rsync);
+	tcase_set_timeout(spawner, 6);
+
 	suite = suite_create("rsync");
 	suite_add_tcase(suite, pipes);
+	suite_add_tcase(suite, spawner);
 
 	return suite;
 }

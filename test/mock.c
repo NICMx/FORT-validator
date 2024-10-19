@@ -81,6 +81,8 @@ pr_crit(const char *format, ...)
 	ck_abort();
 }
 
+MOCK_VOID(log_teardown, void)
+
 static char addr_buffer1[INET6_ADDRSTRLEN];
 static char addr_buffer2[INET6_ADDRSTRLEN];
 
@@ -123,6 +125,7 @@ MOCK_NULL(config_get_output_bgpsec, char const *, void)
 MOCK(config_get_op_log_file_format, enum filename_format, FNF_NAME, void)
 MOCK(config_get_val_log_file_format, enum filename_format, FNF_NAME, void)
 MOCK(logv_filename, char const *, path, char const *path)
+MOCK_VOID(free_rpki_config, void)
 
 MOCK_VOID(fnstack_init, void)
 MOCK_VOID(fnstack_push, char const *file)

@@ -6,7 +6,6 @@
 #include "types/rpp.h"
 
 int cache_setup(void);		/* Init this module */
-void cache_teardown(void);	/* Destroy this module */
 void cache_atexit(void);
 
 int cache_prepare(void);	/* Prepare cache for new validation cycle */

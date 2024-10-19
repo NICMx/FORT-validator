@@ -316,12 +316,6 @@ cache_setup(void)
 	return 0;
 }
 
-void
-cache_teardown(void)
-{
-	/* Empty */
-}
-
 static struct cache_node *
 json2node(json_t *json)
 {

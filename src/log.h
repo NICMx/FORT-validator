@@ -59,9 +59,6 @@ int log_setup(void);
 void log_start(void);
 void log_teardown(void);
 
-/* Call to flush the stdout/stderr streams */
-void log_flush(void);
-
 /*
  * Check if corresponding logging is enabled. You can use these to short-circuit
  * out of heavy logging code.
