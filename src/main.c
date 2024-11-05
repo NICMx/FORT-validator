@@ -10,9 +10,11 @@
 #include "output_printer.h"
 #include "print_file.h"
 #include "relax_ng.h"
+#include "rtr/db/vrps.h"
 #include "rtr/rtr.h"
 #include "rsync.h"
 #include "sig.h"
+#include "task.h"
 #include "thread_var.h"
 
 static int
@@ -159,6 +161,7 @@ main(int argc, char **argv)
 	error = output_setup();
 	if (error)
 		goto revert_vrps;
+	task_setup();
 
 	/* Meat */
 
@@ -175,6 +178,7 @@ main(int argc, char **argv)
 	}
 
 	/* End */
+	task_teardown();
 revert_vrps:
 	vrps_destroy();
 revert_relax_ng:

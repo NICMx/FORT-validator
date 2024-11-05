@@ -5,7 +5,6 @@
 #include "alloc.h"
 #include "log.h"
 
-static pthread_key_t state_key;
 static pthread_key_t filenames_key;
 
 struct filename_stack {
@@ -29,14 +28,6 @@ thvar_init(void)
 {
 	int error;
 
-	error = pthread_key_create(&state_key, NULL);
-	if (error) {
-		pr_op_err(
-		    "Fatal: Errcode %d while initializing the validation state thread variable.",
-		    error);
-		return error;
-	}
-
 	/*
 	 * Hm. It's a little odd.
 	 * fnstack_discard() is not being called on program termination.
@@ -52,29 +43,6 @@ thvar_init(void)
 	}
 
 	return 0;
-}
-
-/* Puts @state in the current thread's variable pool. Call once per thread. */
-int
-state_store(struct validation *state)
-{
-	int error;
-
-	error = pthread_setspecific(state_key, state);
-	if (error)
-		pr_op_err("pthread_setspecific() returned %d.", error);
-
-	return error;
-}
-
-/*
- * Returns the current thread's validation state. Should not be used outside of
- * validation threads.
- */
-struct validation *
-state_retrieve(void)
-{
-	return pthread_getspecific(state_key);
 }
 
 /** Initializes the current thread's fnstack. Call once per thread. */
@@ -187,48 +155,4 @@ fnstack_pop(void)
 		return;
 
 	files->len--;
-}
-
-static char const *
-addr2str(int af, void const *addr, char *(*buffer_cb)(struct validation *))
-{
-	struct validation *state = state_retrieve();
-	return inet_ntop(af, addr, buffer_cb(state), INET6_ADDRSTRLEN);
-}
-
-/*
- * Returns @addr, converted to a printable string. Intended for minimal clutter
- * address printing.
- *
- * The buffer the string is stored in was allocated in a thread variable, so it
- * will be overridden the next time you call this function. Also, you should not
- * free it.
- *
- * The buffer is the same as v6addr2str()'s, so don't mix them either.
- */
-char const *
-v4addr2str(struct in_addr const *addr)
-{
-	return addr2str(AF_INET, addr, validation_get_ip_buffer1);
-}
-
-/* Same as v4addr2str(), except a different buffer is used. */
-char const *
-v4addr2str2(struct in_addr const *addr)
-{
-	return addr2str(AF_INET, addr, validation_get_ip_buffer2);
-}
-
-/* See v4addr2str(). */
-char const *
-v6addr2str(struct in6_addr const *addr)
-{
-	return addr2str(AF_INET6, addr, validation_get_ip_buffer1);
-}
-
-/* See v4addr2str2(). */
-char const *
-v6addr2str2(struct in6_addr const *addr)
-{
-	return addr2str(AF_INET6, addr, validation_get_ip_buffer2);
 }

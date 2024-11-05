@@ -74,7 +74,7 @@ struct cache_commit {
 	STAILQ_ENTRY(cache_commit) lh;
 };
 
-STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZER(commits);
+static STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZER(commits);
 
 #define LOCKFILE ".lock"
 #define INDEX_FILE "index.json"

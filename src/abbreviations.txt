@@ -27,6 +27,7 @@ notif: (RRDP) Notification
 pdu: Protocol Data Unit (RFC 6810)
 pp: Publication Point
 pr: print
+pfx: prefix
 ptr: pointer
 refget: reference get (+1 to reference counter)
 refput: reference put (-1 to reference counter)

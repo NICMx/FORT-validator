@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "alloc.h"
+#include "log.h"
+
 void
 read_stream_init(struct read_stream *stream, int fd)
 {

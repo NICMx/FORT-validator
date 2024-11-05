@@ -113,6 +113,7 @@ add_prefix4(struct resources *resources, struct resources *parent,
     IPAddress_t *addr)
 {
 	struct ipv4_prefix prefix;
+	char buf[INET_ADDRSTRLEN];
 	int error;
 
 	if (parent && (resources->ip4s == parent->ip4s))
@@ -126,10 +127,10 @@ add_prefix4(struct resources *resources, struct resources *parent,
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
 			return pr_val_err("Parent certificate doesn't own IPv4 prefix '%s/%u'.",
-			    v4addr2str(&prefix.addr), prefix.len);
+			    addr2str4(&prefix.addr, buf), prefix.len);
 		case RPKI_POLICY_RFC8360:
 			return pr_val_warn("Certificate is overclaiming the IPv4 prefix '%s/%u'.",
-			    v4addr2str(&prefix.addr), prefix.len);
+			    addr2str4(&prefix.addr, buf), prefix.len);
 		}
 	}
 
@@ -139,12 +140,12 @@ add_prefix4(struct resources *resources, struct resources *parent,
 	error = res4_add_prefix(resources->ip4s, &prefix);
 	if (error) {
 		pr_val_err("Error adding IPv4 prefix '%s/%u' to certificate resources: %s",
-		    v4addr2str(&prefix.addr), prefix.len,
+		    addr2str4(&prefix.addr, buf), prefix.len,
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_val_debug("Prefix: %s/%u", v4addr2str(&prefix.addr), prefix.len);
+	pr_val_debug("Prefix: %s/%u", addr2str4(&prefix.addr, buf), prefix.len);
 	return 0;
 }
 
@@ -153,6 +154,7 @@ add_prefix6(struct resources *resources, struct resources *parent,
     IPAddress_t *addr)
 {
 	struct ipv6_prefix prefix;
+	char buf[INET6_ADDRSTRLEN];
 	int error;
 
 	if (parent && (resources->ip6s == parent->ip6s))
@@ -166,10 +168,10 @@ add_prefix6(struct resources *resources, struct resources *parent,
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
 			return pr_val_err("Parent certificate doesn't own IPv6 prefix '%s/%u'.",
-			    v6addr2str(&prefix.addr), prefix.len);
+			    addr2str6(&prefix.addr, buf), prefix.len);
 		case RPKI_POLICY_RFC8360:
 			return pr_val_warn("Certificate is overclaiming the IPv6 prefix '%s/%u'.",
-			    v6addr2str(&prefix.addr), prefix.len);
+			    addr2str6(&prefix.addr, buf), prefix.len);
 		}
 	}
 
@@ -179,12 +181,12 @@ add_prefix6(struct resources *resources, struct resources *parent,
 	error = res6_add_prefix(resources->ip6s, &prefix);
 	if (error) {
 		pr_val_err("Error adding IPv6 prefix '%s/%u' to certificate resources: %s",
-		    v6addr2str(&prefix.addr), prefix.len,
+		    addr2str6(&prefix.addr, buf), prefix.len,
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_val_debug("Prefix: %s/%u", v6addr2str(&prefix.addr), prefix.len);
+	pr_val_debug("Prefix: %s/%u", addr2str6(&prefix.addr, buf), prefix.len);
 	return 0;
 }
 
@@ -208,6 +210,8 @@ add_range4(struct resources *resources, struct resources *parent,
     IPAddressRange_t *input)
 {
 	struct ipv4_range range;
+	char buf1[INET_ADDRSTRLEN];
+	char buf2[INET_ADDRSTRLEN];
 	int error;
 
 	if (parent && (resources->ip4s == parent->ip4s))
@@ -221,10 +225,12 @@ add_range4(struct resources *resources, struct resources *parent,
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
 			return pr_val_err("Parent certificate doesn't own IPv4 range '%s-%s'.",
-			    v4addr2str(&range.min), v4addr2str2(&range.max));
+			    addr2str4(&range.min, buf1),
+			    addr2str4(&range.max, buf2));
 		case RPKI_POLICY_RFC8360:
 			return pr_val_warn("Certificate is overclaiming the IPv4 range '%s-%s'.",
-			    v4addr2str(&range.min), v4addr2str2(&range.max));
+			    addr2str4(&range.min, buf1),
+			    addr2str4(&range.max, buf2));
 		}
 	}
 
@@ -234,13 +240,15 @@ add_range4(struct resources *resources, struct resources *parent,
 	error = res4_add_range(resources->ip4s, &range);
 	if (error) {
 		pr_val_err("Error adding IPv4 range '%s-%s' to certificate resources: %s",
-		    v4addr2str(&range.min), v4addr2str2(&range.max),
+		    addr2str4(&range.min, buf1),
+		    addr2str4(&range.max, buf2),
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_val_debug("Range: %s-%s", v4addr2str(&range.min),
-	    v4addr2str2(&range.max));
+	pr_val_debug("Range: %s-%s",
+	    addr2str4(&range.min, buf1),
+	    addr2str4(&range.max, buf2));
 	return 0;
 }
 
@@ -249,6 +257,8 @@ add_range6(struct resources *resources, struct resources *parent,
     IPAddressRange_t *input)
 {
 	struct ipv6_range range;
+	char buf1[INET6_ADDRSTRLEN];
+	char buf2[INET6_ADDRSTRLEN];
 	int error;
 
 	if (parent && (resources->ip6s == parent->ip6s))
@@ -262,10 +272,12 @@ add_range6(struct resources *resources, struct resources *parent,
 		switch (resources->policy) {
 		case RPKI_POLICY_RFC6484:
 			return pr_val_err("Parent certificate doesn't own IPv6 range '%s-%s'.",
-			    v6addr2str(&range.min), v6addr2str2(&range.max));
+			    addr2str6(&range.min, buf1),
+			    addr2str6(&range.max, buf2));
 		case RPKI_POLICY_RFC8360:
 			return pr_val_warn("Certificate is overclaiming the IPv6 range '%s-%s'.",
-			    v6addr2str(&range.min), v6addr2str2(&range.max));
+			    addr2str6(&range.min, buf1),
+			    addr2str6(&range.max, buf2));
 		}
 	}
 
@@ -275,13 +287,15 @@ add_range6(struct resources *resources, struct resources *parent,
 	error = res6_add_range(resources->ip6s, &range);
 	if (error) {
 		pr_val_err("Error adding IPv6 range '%s-%s' to certificate resources: %s",
-		    v6addr2str(&range.min), v6addr2str2(&range.max),
+		    addr2str6(&range.min, buf1),
+		    addr2str6(&range.max, buf2),
 		    sarray_err2str(error));
 		return error;
 	}
 
-	pr_val_debug("Range: %s-%s", v6addr2str(&range.min),
-	    v6addr2str2(&range.max));
+	pr_val_debug("Range: %s-%s",
+	    addr2str6(&range.min, buf1),
+	    addr2str6(&range.max, buf2));
 	return 0;
 }
 

@@ -5,7 +5,6 @@
 #include "config.h"
 #include "incidence.h"
 #include "log.h"
-#include "state.h"
 #include "thread_var.h"
 
 /* Some core functions, as linked from unit tests. */

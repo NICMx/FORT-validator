@@ -20,7 +20,7 @@ asn_cb(struct asn_range const *range, void *arg)
 		return pr_val_err("BGPsec certificate is not allowed to contain ASN range %u-%u.",
 		    range->min, range->max);
 
-	return vhandler_handle_router_key(params->ski, range, params->spk);
+	return vhandle_router_key(params->ski, range, params->spk);
 }
 
 int

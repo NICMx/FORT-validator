@@ -47,14 +47,14 @@ static json_t *
 prefix6_to_json(struct ROAIPAddress *addr)
 {
 	struct ipv6_prefix prefix6;
-	char buff[INET6_ADDRSTRLEN];
+	char buf[INET6_ADDRSTRLEN];
 
 	if (prefix6_decode(&addr->address, &prefix6) != 0)
 		return NULL;
-	if (inet_ntop(AF_INET6, &prefix6.addr, buff, INET6_ADDRSTRLEN) == NULL)
+	if (inet_ntop(AF_INET6, &prefix6.addr, buf, INET6_ADDRSTRLEN) == NULL)
 		return NULL;
 
-	return prefix2json(buff, prefix6.len);
+	return prefix2json(buf, prefix6.len);
 }
 
 static json_t *

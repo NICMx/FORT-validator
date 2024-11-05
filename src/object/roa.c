@@ -5,6 +5,7 @@
 #include "log.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
+#include "validation_handler.h"
 
 static int
 decode_roa(struct signed_object *sobj, struct RouteOriginAttestation **result)
@@ -21,18 +22,19 @@ static int
 ____handle_roa_v4(struct resources *parent, unsigned long asn,
     struct ROAIPAddress *roa_addr)
 {
-	struct ipv4_prefix prefix;
-	unsigned long max_length;
+	struct ipv4_prefix pfx;
+	unsigned long maxlen;
+	char buf[INET_ADDRSTRLEN];
 	int error;
 
-	error = prefix4_decode(&roa_addr->address, &prefix);
+	error = prefix4_decode(&roa_addr->address, &pfx);
 	if (error)
 		return error;
 
-	pr_val_debug("address: %s/%u", v4addr2str(&prefix.addr), prefix.len);
+	pr_val_debug("address: %s/%u", addr2str4(&pfx.addr, buf), pfx.len);
 
 	if (roa_addr->maxLength != NULL) {
-		error = asn_INTEGER2ulong(roa_addr->maxLength, &max_length);
+		error = asn_INTEGER2ulong(roa_addr->maxLength, &maxlen);
 		if (error) {
 			if (errno) {
 				pr_val_err("Error casting ROA's IPv4 maxLength: %s",
@@ -40,46 +42,47 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 			}
 			return pr_val_err("The ROA's IPv4 maxLength isn't a valid unsigned long");
 		}
-		pr_val_debug("maxLength: %lu", max_length);
+		pr_val_debug("maxLength: %lu", maxlen);
 
-		if (max_length > 32) {
+		if (maxlen > 32) {
 			return pr_val_err("maxLength (%lu) is out of bounds (0-32).",
-			    max_length);
+			    maxlen);
 		}
 
-		if (prefix.len > max_length) {
+		if (pfx.len > maxlen) {
 			return pr_val_err("Prefix length (%u) > maxLength (%lu)",
-			    prefix.len, max_length);
+			    pfx.len, maxlen);
 		}
 
 	} else {
-		max_length = prefix.len;
+		maxlen = pfx.len;
 	}
 
-	if (!resources_contains_ipv4(parent, &prefix)) {
+	if (!resources_contains_ipv4(parent, &pfx)) {
 		return pr_val_err("ROA is not allowed to advertise %s/%u.",
-		    v4addr2str(&prefix.addr), prefix.len);
+		    addr2str4(&pfx.addr, buf), pfx.len);
 	}
 
-	return vhandler_handle_roa_v4(asn, &prefix, max_length);
+	return vhandle_roa_v4(asn, &pfx, maxlen);
 }
 
 static int
 ____handle_roa_v6(struct resources *parent, unsigned long asn,
     struct ROAIPAddress *roa_addr)
 {
-	struct ipv6_prefix prefix;
-	unsigned long max_length;
+	struct ipv6_prefix pfx;
+	unsigned long maxlen;
+	char buf[INET6_ADDRSTRLEN];
 	int error;
 
-	error = prefix6_decode(&roa_addr->address, &prefix);
+	error = prefix6_decode(&roa_addr->address, &pfx);
 	if (error)
 		return error;
 
-	pr_val_debug("address: %s/%u", v6addr2str(&prefix.addr), prefix.len);
+	pr_val_debug("address: %s/%u", addr2str6(&pfx.addr, buf), pfx.len);
 
 	if (roa_addr->maxLength != NULL) {
-		error = asn_INTEGER2ulong(roa_addr->maxLength, &max_length);
+		error = asn_INTEGER2ulong(roa_addr->maxLength, &maxlen);
 		if (error) {
 			if (errno) {
 				pr_val_err("Error casting ROA's IPv6 maxLength: %s",
@@ -87,28 +90,28 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 			}
 			return pr_val_err("The ROA's IPv6 maxLength isn't a valid unsigned long");
 		}
-		pr_val_debug("maxLength: %lu", max_length);
+		pr_val_debug("maxLength: %lu", maxlen);
 
-		if (max_length > 128) {
+		if (maxlen > 128) {
 			return pr_val_err("maxLength (%lu) is out of bounds (0-128).",
-			    max_length);
+			    maxlen);
 		}
 
-		if (prefix.len > max_length) {
+		if (pfx.len > maxlen) {
 			return pr_val_err("Prefix length (%u) > maxLength (%lu)",
-			    prefix.len, max_length);
+			    pfx.len, maxlen);
 		}
 
 	} else {
-		max_length = prefix.len;
+		maxlen = pfx.len;
 	}
 
-	if (!resources_contains_ipv6(parent, &prefix)) {
+	if (!resources_contains_ipv6(parent, &pfx)) {
 		return pr_val_err("ROA is not allowed to advertise %s/%u.",
-		    v6addr2str(&prefix.addr), prefix.len);
+		    addr2str6(&pfx.addr, buf), pfx.len);
 	}
 
-	return vhandler_handle_roa_v6(asn, &prefix, max_length);
+	return vhandle_roa_v6(asn, &pfx, maxlen);
 }
 
 static int

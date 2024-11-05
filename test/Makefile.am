@@ -36,6 +36,7 @@ check_PROGRAMS += rrdp_update.test
 check_PROGRAMS += rsync.test
 check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
+check_PROGRAMS += task.test
 check_PROGRAMS += thread_pool.test
 check_PROGRAMS += url.test
 check_PROGRAMS += uthash.test
@@ -90,6 +91,9 @@ serial_test_LDADD = ${MY_LDADD}
 
 tal_test_SOURCES = object/tal_test.c
 tal_test_LDADD = ${MY_LDADD}
+
+task_test_SOURCES = task_test.c
+task_test_LDADD = ${MY_LDADD}
 
 thread_pool_test_SOURCES = thread_pool_test.c
 thread_pool_test_LDADD = ${MY_LDADD}

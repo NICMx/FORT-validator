@@ -2,6 +2,7 @@
 #define SRC_OBJECT_CERTIFICATE_H_
 
 #include <openssl/x509.h>
+#include <stdatomic.h>
 #include <sys/queue.h>
 
 #include "asn1/asn1c/ANY.h"
@@ -9,7 +10,6 @@
 #include "cache.h"
 #include "certificate_refs.h"
 #include "resource.h"
-#include "state.h"
 #include "types/rpp.h"
 
 /* Certificate types in the RPKI */
@@ -30,11 +30,12 @@ struct rpki_certificate {
 	struct resources *resources;
 	struct sia_uris sias;
 
+	struct tal *tal;			/* Only needed by TAs for now */
 	struct rpki_certificate *parent;
 	struct rpp rpp;				/* Nonexistent on EEs */
 
 	SLIST_ENTRY(rpki_certificate) lh;	/* List Hook */
-	unsigned int refcount;
+	atomic_uint refcount;
 };
 
 void rpki_certificate_init_ee(struct rpki_certificate *,
@@ -82,6 +83,6 @@ int certificate_validate_extensions_bgpsec(void);
  */
 int certificate_validate_aia(struct rpki_certificate *);
 
-int traverse_tree(struct cache_mapping const *, struct validation *);
+int certificate_traverse(struct rpki_certificate *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

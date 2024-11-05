@@ -11,6 +11,7 @@
 #include "file.h"
 #include "log.h"
 #include "object/certificate.h"
+#include "task.h"
 #include "thread_var.h"
 #include "types/path.h"
 #include "types/str.h"
@@ -22,18 +23,6 @@ struct tal {
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
 };
-
-struct validation_thread {
-	pthread_t pid;
-	char *tal_file; /* TAL file name */
-	struct db_table *db;
-	int error;
-	/* This should also only be manipulated by the parent thread. */
-	SLIST_ENTRY(validation_thread) next;
-};
-
-/* List of threads, one per TAL file */
-SLIST_HEAD(threads_list, validation_thread);
 
 static char *
 find_newline(char *str)
@@ -146,180 +135,121 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 	*len = tal->spki_len;
 }
 
-static void
-__do_file_validation(struct validation_thread *thread)
+static int
+validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
+{
+	struct rpki_certificate *ta;
+	int error;
+
+	ta = pzalloc(sizeof(struct rpki_certificate));
+	map_copy(&ta->map, ta_map);
+	ta->tal = tal;
+	atomic_init(&ta->refcount, 1);
+
+	error = certificate_traverse(ta);
+
+	rpki_certificate_free(ta);
+	return error;
+}
+
+static int
+traverse_tal(char const *tal_path, void *arg)
 {
 	struct tal tal;
-	struct validation_handler collector;
-	struct db_table *db;
-	struct validation *state;
 	char **url;
 	struct cache_mapping map;
+	int error;
 
-	thread->error = tal_init(&tal, thread->tal_file);
-	if (thread->error)
-		return;
+	fnstack_push(tal_path);
 
-	collector.handle_roa_v4 = handle_roa_v4;
-	collector.handle_roa_v6 = handle_roa_v6;
-	collector.handle_router_key = handle_router_key;
-	collector.arg = db = db_table_create();
-
-	thread->error = validation_prepare(&state, &tal, &collector);
-	if (thread->error) {
-		db_table_destroy(db);
+	error = tal_init(&tal, tal_path);
+	if (error)
 		goto end1;
-	}
 
+	/* Online attempts */
 	ARRAYLIST_FOREACH(&tal.urls, url) {
 		map.url = *url;
 		map.path = cache_refresh_url(*url);
 		if (!map.path)
 			continue;
-		if (traverse_tree(&map, state) != 0)
+		if (validate_ta(&tal, &map) != 0)
 			continue;
 		goto end2; /* Happy path */
 	}
 
+	/* Offline fallback attempts */
 	ARRAYLIST_FOREACH(&tal.urls, url) {
 		map.url = *url;
 		map.path = cache_fallback_url(*url);
 		if (!map.path)
 			continue;
-		if (traverse_tree(&map, state) != 0)
+		if (validate_ta(&tal, &map) != 0)
 			continue;
 		goto end2; /* Happy path */
 	}
 
 	pr_op_err("None of the TAL URIs yielded a successful traversal.");
-	thread->error = EINVAL;
-	db_table_destroy(db);
-	db = NULL;
+	error = EINVAL;
 
-end2:	thread->db = db;
-	validation_destroy(state);
-end1:	tal_cleanup(&tal);
-}
-
-static void *
-do_file_validation(void *arg)
-{
-	struct validation_thread *thread = arg;
-	time_t start, finish;
-
-	start = time(NULL);
-
-	fnstack_init();
-	fnstack_push(thread->tal_file);
-
-	__do_file_validation(thread);
-
-	fnstack_cleanup();
-
-	finish = time(NULL);
-	if (start != ((time_t) -1) && finish != ((time_t) -1))
-		pr_op_debug("The %s tree took %.0lf seconds.",
-		    path_filename(thread->tal_file),
-		    difftime(finish, start));
-	return NULL;
-}
-
-static void
-thread_destroy(struct validation_thread *thread)
-{
-	free(thread->tal_file);
-	db_table_destroy(thread->db);
-	free(thread);
-}
-
-/* Creates a thread for the @tal_file TAL */
-static int
-spawn_tal_thread(char const *tal_file, void *arg)
-{
-	struct threads_list *threads = arg;
-	struct validation_thread *thread;
-	int error;
-
-	thread = pmalloc(sizeof(struct validation_thread));
-
-	thread->tal_file = pstrdup(tal_file);
-	thread->db = NULL;
-	thread->error = -EINTR;
-	SLIST_INSERT_HEAD(threads, thread, next);
-
-	error = pthread_create(&thread->pid, NULL, do_file_validation, thread);
-	if (error) {
-		pr_op_err("Could not spawn validation thread for %s: %s",
-		    tal_file, strerror(error));
-		free(thread->tal_file);
-		free(thread);
-	}
-
+end2:	tal_cleanup(&tal);
+end1:	fnstack_pop();
 	return error;
 }
 
-struct db_table *
+static void *
+pick_up_work(void *arg)
+{
+	struct validation_task *task = NULL;
+
+	while ((task = task_dequeue(task)) != NULL)
+		certificate_traverse(task->ca);
+
+	return NULL;
+}
+
+int
 perform_standalone_validation(void)
 {
-	struct threads_list threads = SLIST_HEAD_INITIALIZER(threads);
-	struct validation_thread *thread;
-	struct db_table *db = NULL;
+	pthread_t threads[5]; // XXX variabilize
+	unsigned int ids[5];
+	array_index t, t2;
 	int error;
-	int tmperr;
 
 	error = cache_prepare();
 	if (error)
-		return NULL;
+		return error;
+	fnstack_init();
+	task_start();
 
-	/* TODO (fine) Maybe don't spawn threads if there's only one TAL */
-	if (foreach_file(config_get_tal(), ".tal", true, spawn_tal_thread,
-			 &threads) != 0) {
-		while (!SLIST_EMPTY(&threads)) {
-			thread = SLIST_FIRST(&threads);
-			SLIST_REMOVE_HEAD(&threads, next);
-			thread_destroy(thread);
-		}
-
-		/*
-		 * Commit even on failure, as there's no reason to throw away
-		 * something we recently downloaded if it's marked as valid.
-		 */
+	if (foreach_file(config_get_tal(), ".tal", true, traverse_tal, NULL)!=0)
 		goto end;
-	}
 
-	/* Wait for all */
-	while (!SLIST_EMPTY(&threads)) {
-		thread = SLIST_FIRST(&threads);
-		tmperr = pthread_join(thread->pid, NULL);
-		if (tmperr)
-			pr_crit("pthread_join() threw '%s' on the '%s' thread.",
-			    strerror(tmperr), thread->tal_file);
-		SLIST_REMOVE_HEAD(&threads, next);
-		if (thread->error) {
-			error = thread->error;
-			pr_op_warn("Validation from TAL '%s' yielded '%s'; "
-			    "discarding all validation results.",
-			    thread->tal_file, strerror(abs(error)));
+	for (t = 0; t < 5; t++) {
+		ids[t] = t;
+		error = pthread_create(&threads[t], NULL, pick_up_work, &ids[t]);
+		if (error) {
+			pr_op_err("Could not spawn validation thread %zu: %s",
+			    t, strerror(error));
+			break;
 		}
-
-		if (!error) {
-			if (db == NULL) {
-				db = thread->db;
-				thread->db = NULL;
-			} else {
-				error = db_table_join(db, thread->db);
-			}
-		}
-
-		thread_destroy(thread);
 	}
 
-	/* If at least one thread had a fatal error, the table is unusable. */
-	if (error) {
-		db_table_destroy(db);
-		db = NULL;
+	if (t == 0) {
+		pick_up_work(NULL);
+		error = 0;
+	} else for (t2 = 0; t2 < t; t2++) {
+		error = pthread_join(threads[t2], NULL);
+		if (error)
+			pr_crit("pthread_join(%zu) failed: %s",
+			    t2, strerror(error));
 	}
 
-end:	cache_commit();
-	return db;
+end:	task_stop();
+	fnstack_cleanup();
+	/*
+	 * Commit even on failure, as there's no reason to throw away something
+	 * we might have recently downloaded if it managed to be marked valid.
+	 */
+	cache_commit();
+	return error;
 }

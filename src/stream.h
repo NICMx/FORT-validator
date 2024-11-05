@@ -1,6 +1,8 @@
 #ifndef SRC_STREAM_H_
 #define SRC_STREAM_H_
 
+#include <stddef.h>
+
 struct read_stream {
 	int fd;
 	unsigned char *buffer;

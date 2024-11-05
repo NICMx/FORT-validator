@@ -159,6 +159,7 @@ prefix6_equals(struct ipv6_prefix const *a, struct ipv6_prefix const *b)
 int
 prefix4_decode(IPAddress_t const *str, struct ipv4_prefix *result)
 {
+	char buf[INET_ADDRSTRLEN];
 	int len;
 
 	if (str->size > 4) {
@@ -183,7 +184,7 @@ prefix4_decode(IPAddress_t const *str, struct ipv4_prefix *result)
 
 	if ((result->addr.s_addr & be32_suffix_mask(result->len)) != 0) {
 		return pr_val_err("IPv4 prefix '%s/%u' has enabled suffix bits.",
-		    v4addr2str(&result->addr), result->len);
+		    addr2str4(&result->addr, buf), result->len);
 	}
 
 	return 0;
@@ -196,6 +197,7 @@ int
 prefix6_decode(IPAddress_t const *str, struct ipv6_prefix *result)
 {
 	struct in6_addr suffix;
+	char buf[INET6_ADDRSTRLEN];
 	int len;
 
 	if (str->size > 16) {
@@ -222,7 +224,7 @@ prefix6_decode(IPAddress_t const *str, struct ipv6_prefix *result)
 	ipv6_suffix_mask(result->len, &suffix);
 	if (addr6_bitwise_and(&result->addr, &suffix)) {
 		return pr_val_err("IPv6 prefix '%s/%u' has enabled suffix bits.",
-		    v6addr2str(&result->addr), result->len);
+		    addr2str6(&result->addr, buf), result->len);
 	}
 
 	return 0;
@@ -231,9 +233,13 @@ prefix6_decode(IPAddress_t const *str, struct ipv6_prefix *result)
 static int
 check_order4(struct ipv4_range *result)
 {
+	char buf1[INET_ADDRSTRLEN];
+	char buf2[INET_ADDRSTRLEN];
+
 	if (ntohl(result->min.s_addr) > ntohl(result->max.s_addr)) {
 		return pr_val_err("The IPv4 range '%s-%s' is inverted.",
-		    v4addr2str(&result->min), v4addr2str2(&result->max));
+		    addr2str4(&result->min, buf1),
+		    addr2str4(&result->max, buf2));
 	}
 
 	return 0;
@@ -247,6 +253,8 @@ check_order4(struct ipv4_range *result)
 static int
 check_encoding4(struct ipv4_range *range)
 {
+	char buf1[INET_ADDRSTRLEN];
+	char buf2[INET_ADDRSTRLEN];
 	const uint32_t MIN = ntohl(range->min.s_addr);
 	const uint32_t MAX = ntohl(range->max.s_addr);
 	uint32_t mask;
@@ -260,7 +268,7 @@ check_encoding4(struct ipv4_range *range)
 			return 0;
 
 	return pr_val_err("IPAddressRange '%s-%s' is a range, but should have been encoded as a prefix.",
-	    v4addr2str(&range->min), v4addr2str2(&range->max));
+	    addr2str4(&range->min, buf1), addr2str4(&range->max, buf2));
 }
 
 /**
@@ -295,14 +303,16 @@ check_order6(struct ipv6_range *result)
 	uint32_t min;
 	uint32_t max;
 	unsigned int quadrant;
+	char buf1[INET6_ADDRSTRLEN];
+	char buf2[INET6_ADDRSTRLEN];
 
 	for (quadrant = 0; quadrant < 4; quadrant++) {
 		min = addr6_get_quadrant(&result->min, quadrant);
 		max = addr6_get_quadrant(&result->max, quadrant);
 		if (min > max) {
 			return pr_val_err("The IPv6 range '%s-%s' is inverted.",
-			    v6addr2str(&result->min),
-			    v6addr2str2(&result->max));
+			    addr2str6(&result->min, buf1),
+			    addr2str6(&result->max, buf2));
 		} else if (min < max) {
 			return 0; /* result->min < result->max */
 		}
@@ -314,8 +324,11 @@ check_order6(struct ipv6_range *result)
 static int
 pr_bad_encoding(struct ipv6_range *range)
 {
+	char buf1[INET6_ADDRSTRLEN];
+	char buf2[INET6_ADDRSTRLEN];
 	return pr_val_err("IPAddressRange %s-%s is a range, but should have been encoded as a prefix.",
-	    v6addr2str(&range->min), v6addr2str2(&range->max));
+	    addr2str6(&range->min, buf1),
+	    addr2str6(&range->max, buf2));
 }
 
 static int

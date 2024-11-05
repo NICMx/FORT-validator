@@ -1,8 +1,10 @@
 #include "rtr/db/db_table.h"
 
 #include <errno.h>
+#include <pthread.h>
 
 #include "alloc.h"
+#include "common.h"
 #include "log.h"
 #include "types/uthash.h"
 
@@ -19,6 +21,7 @@ struct hashable_key {
 struct db_table {
 	struct hashable_roa *roas;
 	struct hashable_key *router_keys;
+	pthread_mutex_t lock;
 };
 
 struct db_table *
@@ -29,6 +32,8 @@ db_table_create(void)
 	table = pmalloc(sizeof(struct db_table));
 	table->roas = NULL;
 	table->router_keys = NULL;
+	panic_on_fail(pthread_mutex_init(&table->lock, NULL),
+	    "pthread_mutex_init");
 
 	return table;
 }
@@ -52,6 +57,8 @@ db_table_destroy(struct db_table *table)
 		free(rk);
 	}
 
+	pthread_mutex_destroy(&table->lock);
+
 	free(table);
 }
 
@@ -61,9 +68,14 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 	struct hashable_roa *old;
 	int error;
 
+	mutex_lock(&table->lock);
+
 	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
 	error = errno;
+
+	mutex_unlock(&table->lock);
+
 	if (error) {
 		pr_val_err("ROA couldn't be added to hash table: %s",
 		    strerror(error));
@@ -81,9 +93,14 @@ add_router_key(struct db_table *table, struct hashable_key *new)
 	struct hashable_key *old;
 	int error;
 
+	mutex_lock(&table->lock);
+
 	errno = 0;
 	HASH_REPLACE(hh, table->router_keys, data, sizeof(new->data), new, old);
 	error = errno;
+
+	mutex_unlock(&table->lock);
+
 	if (error) {
 		pr_val_err("Router Key couldn't be added to hash table: %s",
 		    strerror(error));

@@ -1,58 +1,52 @@
 #include "validation_handler.h"
 
-#include "log.h"
-#include "thread_var.h"
+#include "rtr/db/db_table.h"
 
-/*
- * Never returns NULL by contract.
- */
-static struct validation_handler const *
-get_current_threads_handler(void)
+static struct db_table *table;
+
+void
+vhandle_init(void)
 {
-	struct validation_handler const *handler;
+	table = db_table_create();
+}
 
-	handler = validation_get_validation_handler(state_retrieve());
-	if (handler == NULL)
-		pr_crit("This thread lacks a validation handler.");
-
-	return handler;
+struct db_table *
+vhandle_claim(void)
+{
+	struct db_table *result = table;
+	table = NULL;
+	return result;
 }
 
 int
-vhandler_handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
-    uint8_t max_length)
+vhandle_roa_v4(uint32_t as, struct ipv4_prefix const *pfx, uint8_t maxlen)
 {
-	struct validation_handler const *handler;
-
-	handler = get_current_threads_handler();
-
-	return (handler->handle_roa_v4 != NULL)
-	    ? handler->handle_roa_v4(as, prefix, max_length, handler->arg)
-	    : 0;
+	return rtrhandler_handle_roa_v4(table, as, pfx, maxlen);
 }
 
 int
-vhandler_handle_roa_v6(uint32_t as, struct ipv6_prefix const *prefix,
-    uint8_t max_length)
+vhandle_roa_v6(uint32_t as, struct ipv6_prefix const *pfx, uint8_t maxlen)
 {
-	struct validation_handler const *handler;
-
-	handler = get_current_threads_handler();
-
-	return (handler->handle_roa_v6 != NULL)
-	    ? handler->handle_roa_v6(as, prefix, max_length, handler->arg)
-	    : 0;
+	return rtrhandler_handle_roa_v6(table, as, pfx, maxlen);
 }
 
 int
-vhandler_handle_router_key(unsigned char const *ski,
-    struct asn_range const *asns, unsigned char const *spk)
+vhandle_router_key(unsigned char const *ski, struct asn_range const *asns,
+    unsigned char const *spk)
 {
-	struct validation_handler const *handler;
+	uint64_t asn;
+	int error;
 
-	handler = get_current_threads_handler();
+	/*
+	 * TODO (warning) Umm... this is begging for a limit.
+	 * If the issuer gets it wrong, we can iterate up to 2^32 times.
+	 * The RFCs don't seem to care about this.
+	 */
+	for (asn = asns->min; asn <= asns->max; asn++) {
+		error = rtrhandler_handle_router_key(table, ski, asn, spk);
+		if (error)
+			return error;
+	}
 
-	return (handler->handle_router_key != NULL)
-	    ? handler->handle_router_key(ski, asns, spk, handler->arg)
-	    : 0;
+	return 0;
 }

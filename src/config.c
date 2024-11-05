@@ -22,7 +22,6 @@
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
-#include "state.h"
 #include "thread_pool.h"
 #include "types/array.h"
 #include "types/path.h"

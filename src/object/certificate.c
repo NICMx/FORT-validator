@@ -24,6 +24,8 @@
 #include "object/ghostbusters.h"
 #include "object/manifest.h"
 #include "object/roa.h"
+#include "object/tal.h"
+#include "task.h"
 #include "thread_var.h"
 #include "types/name.h"
 #include "types/path.h"
@@ -215,15 +217,13 @@ fail:	fnstack_pop();
 }
 
 static int
-validate_spki(X509_PUBKEY *cert_spki)
+validate_spki(struct tal *tal, X509_PUBKEY *cert_spki)
 {
-	struct tal *tal;
 	X509_PUBKEY *tal_spki;
 	int error;
 
-	tal = validation_tal(state_retrieve());
 	if (tal == NULL)
-		pr_crit("Validation state has no TAL.");
+		pr_crit("TAL is NULL.");
 
 	/*
 	 * We have a problem at this point:
@@ -392,7 +392,7 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 }
 
 static int
-validate_public_key(X509 *cert, enum cert_type type)
+validate_public_key(struct rpki_certificate *cert)
 {
 	X509_PUBKEY *pubkey;
 	EVP_PKEY *evppkey;
@@ -401,7 +401,7 @@ validate_public_key(X509 *cert, enum cert_type type)
 	int error;
 
 	/* Reminder: X509_PUBKEY is the same as SubjectPublicKeyInfo. */
-	pubkey = X509_get_X509_PUBKEY(cert);
+	pubkey = X509_get_X509_PUBKEY(cert->x509);
 	if (pubkey == NULL)
 		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
@@ -409,7 +409,7 @@ validate_public_key(X509 *cert, enum cert_type type)
 	if (!ok)
 		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
-	if (type == CERTYPE_BGPSEC)
+	if (cert->type == CERTYPE_BGPSEC)
 		return validate_certificate_public_key_algorithm_bgpsec(pa);
 
 	error = validate_certificate_public_key_algorithm(pa);
@@ -432,13 +432,13 @@ validate_public_key(X509 *cert, enum cert_type type)
 	 * getting the message.
 	 */
 
-	if (type == CERTYPE_TA) {
-		error = validate_spki(pubkey);
+	if (cert->type == CERTYPE_TA) {
+		error = validate_spki(cert->tal, pubkey);
 		if (error)
 			return error;
-		if ((evppkey = X509_get0_pubkey(cert)) == NULL)
+		if ((evppkey = X509_get0_pubkey(cert->x509)) == NULL)
 			return val_crypto_err("X509_get0_pubkey() returned NULL");
-		if (X509_verify(cert, evppkey) != 1)
+		if (X509_verify(cert->x509, evppkey) != 1)
 			return -EINVAL;
 	}
 
@@ -490,7 +490,7 @@ certificate_validate_rfc6487(struct rpki_certificate *cert)
 
 	/* rfc6487#section-4.7 */
 	/* Fragment of rfc8630#section-2.3 */
-	error = validate_public_key(cert->x509, cert->type);
+	error = validate_public_key(cert);
 	if (error)
 		return error;
 
@@ -773,21 +773,6 @@ end:	BIO_free(bio);
 	return cert;
 }
 
-static void
-certificate_stack_push(struct cert_stack *stack, struct cache_mapping *map,
-    struct rpki_certificate *parent)
-{
-	struct rpki_certificate *cert;
-
-	cert = pzalloc(sizeof(*cert));
-	map_copy(&cert->map, map);
-	cert->parent = parent;
-	cert->refcount = 1;
-	SLIST_INSERT_HEAD(stack, cert, lh);
-
-	parent->refcount++;
-}
-
 void
 rpki_certificate_init_ee(struct rpki_certificate *ee,
     struct rpki_certificate *parent, bool force_inherit)
@@ -797,9 +782,9 @@ rpki_certificate_init_ee(struct rpki_certificate *ee,
 	ee->policy = RPKI_POLICY_RFC6484;
 	ee->resources = resources_create(RPKI_POLICY_RFC6484, force_inherit);
 	ee->parent = parent;
-	ee->refcount = 1;
+	atomic_init(&ee->refcount, 1);
 
-	parent->refcount++;
+	atomic_fetch_add(&parent->refcount, 1);
 }
 
 void
@@ -819,11 +804,45 @@ rpki_certificate_cleanup(struct rpki_certificate *cert)
 void
 rpki_certificate_free(struct rpki_certificate *cert)
 {
-	cert->refcount--;
-	if (cert->refcount == 0) {
+	if (atomic_fetch_sub(&cert->refcount, 1) == 1) {
 		rpki_certificate_cleanup(cert);
 		free(cert);
 	}
+}
+
+/*
+ * It appears that this function is called by LibreSSL whenever it finds an
+ * error while validating.
+ * It is expected to return "okay" status: Nonzero if the error should be
+ * ignored, zero if the error is grounds to abort the validation.
+ *
+ * Note to myself: During my tests, this function was called in
+ * X509_verify_cert(ctx) -> check_chain_extensions(0, ctx),
+ * and then twice again in
+ * X509_verify_cert(ctx) -> internal_verify(1, ctx).
+ *
+ * Regarding the ok argument: I'm not 100% sure that I get it; I don't
+ * understand why this function would be called with ok = 1.
+ * http://openssl.cs.utah.edu/docs/crypto/X509_STORE_CTX_set_verify_cb.html
+ * The logic I implemented is the same as the second example: Always ignore the
+ * error that's troubling the library, otherwise try to be as unintrusive as
+ * possible.
+ */
+static int
+cb(int ok, X509_STORE_CTX *ctx)
+{
+	int error;
+
+	/*
+	 * We need to handle two new critical extensions (IP Resources and ASN
+	 * Resources), so unknown critical extensions are fine as far as
+	 * LibreSSL is concerned.
+	 * Unfortunately, LibreSSL has no way of telling us *which* is the
+	 * unknown critical extension, but since RPKI defines its own set of
+	 * valid extensions, we'll have to figure it out later anyway.
+	 */
+	error = X509_STORE_CTX_get_error(ctx);
+	return (error == X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION) ? 1 : ok;
 }
 
 static STACK_OF(X509) *
@@ -906,6 +925,8 @@ certificate_validate_chain(struct rpki_certificate *cert)
 	/* Reference: openbsd/src/usr.bin/openssl/verify.c */
 
 	X509_STORE_CTX *ctx;
+	X509_STORE *store;
+	X509_VERIFY_PARAM *params;
 	STACK_OF(X509) *trusted;
 	STACK_OF(X509_CRL) *crls;
 	int ok;
@@ -915,30 +936,45 @@ certificate_validate_chain(struct rpki_certificate *cert)
 		return 0; /* No chain to validate. */
 
 	ctx = X509_STORE_CTX_new();
-	if (ctx == NULL) {
-		val_crypto_err("X509_STORE_CTX_new() returned NULL");
-		return EINVAL;
+	if (ctx == NULL)
+		return val_crypto_err("X509_STORE_CTX_new() returned NULL");
+
+	store = X509_STORE_new();
+	if (!store) {
+		error = val_crypto_err("X509_STORE_new() returned NULL");
+		goto end1;
 	}
 
+	params = X509_VERIFY_PARAM_new();
+	if (params == NULL) {
+		error = val_crypto_err("X509_VERIFY_PARAM_new() returned NULL");
+		goto end2;
+	}
+
+	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
+	if (config_get_validation_time() != 0)
+		X509_VERIFY_PARAM_set_time(params, config_get_validation_time());
+	X509_STORE_set1_param(store, params);
+	X509_STORE_set_verify_cb(store, cb);
+
 	/* Returns 0 or 1 , all callers test ! only. */
-	ok = X509_STORE_CTX_init(ctx, validation_store(state_retrieve()),
-	    cert->x509, NULL);
+	ok = X509_STORE_CTX_init(ctx, store, cert->x509, NULL);
 	if (!ok) {
 		error = val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
-		goto end1;
+		goto end3;
 	}
 
 	trusted = build_trusted_stack(cert);
 	if (!trusted) {
 		error = EINVAL;
-		goto end1;
+		goto end3;
 	}
 	X509_STORE_CTX_trusted_stack(ctx, trusted);
 
 	crls = build_crl_stack(cert);
 	if (!crls) {
 		error = EINVAL;
-		goto end2;
+		goto end4;
 	}
 	X509_STORE_CTX_set0_crls(ctx, crls);
 
@@ -961,9 +997,10 @@ certificate_validate_chain(struct rpki_certificate *cert)
 		 * error code is stored in the context.
 		 */
 		error = X509_STORE_CTX_get_error(ctx);
-		if (error == X509_V_ERR_CRL_HAS_EXPIRED)
+		if (error == X509_V_ERR_CRL_HAS_EXPIRED) {
 			complain_crl_stale(cert->parent->rpp.crl.obj);
-		else if (error)
+			error = EINVAL;
+		} else if (error)
 			pr_val_err("Certificate validation failed: %s",
 			    X509_verify_cert_error_string(error));
 		else {
@@ -975,13 +1012,15 @@ certificate_validate_chain(struct rpki_certificate *cert)
 			val_crypto_err("Certificate validation failed: %d", ok);
 			error = EINVAL;
 		}
-		goto end3;
+		goto end5;
 	}
 
 	error = 0;
 
-end3:	sk_X509_CRL_free(crls);
-end2:	sk_X509_free(trusted);
+end5:	sk_X509_CRL_free(crls);
+end4:	sk_X509_free(trusted);
+end3:	X509_VERIFY_PARAM_free(params);
+end2:	X509_STORE_free(store);
 end1:	X509_STORE_CTX_free(ctx);
 	return error;
 }
@@ -1850,14 +1889,15 @@ end:	fnstack_pop();
 	return error;
 }
 
-static int
-certificate_traverse(struct rpki_certificate *ca, struct cert_stack *stack)
+int
+certificate_traverse(struct rpki_certificate *ca)
 {
 	struct cache_cage *cage;
 	char const *mft;
 	array_index i;
 	struct cache_mapping *map;
 	char const *ext;
+	unsigned int queued;
 	int error;
 
 	error = certificate_validate(ca);
@@ -1889,58 +1929,22 @@ retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
 		goto end;
 	}
 
+	queued = 0;
 	for (i = 0; i < ca->rpp.nfiles; i++) {
 		map = ca->rpp.files + i;
 		ext = map->url + strlen(map->url) - 4;
 		if (strcmp(ext, ".cer") == 0)
-			certificate_stack_push(stack, map, ca);
+			queued += task_enqueue(map, ca);
 		else if (strcmp(ext, ".roa") == 0)
 			roa_traverse(map, ca);
 		else if (strcmp(ext, ".gbr") == 0)
 			ghostbusters_traverse(map, ca);
 	}
 
+	if (queued > 0)
+		task_wakeup();
 	cache_commit_rpp(ca->sias.caRepository, &ca->rpp);
 
 end:	free(cage);
-	return error;
-}
-
-int
-traverse_tree(struct cache_mapping const *ta_map, struct validation *state)
-{
-	struct cert_stack stack;
-	struct rpki_certificate *ta;
-	struct rpki_certificate *ca;
-	int error;
-
-	SLIST_INIT(&stack);
-
-	/* == Root certificate == */
-	ta = pzalloc(sizeof(struct rpki_certificate));
-	map_copy(&ta->map, ta_map);
-	ta->refcount = 1;
-
-	error = certificate_traverse(ta, &stack);
-	if (error)
-		goto end;
-
-	/*
-	 * From now on, the tree should be considered valid, even if subsequent
-	 * certificates fail.
-	 * (the root validated successfully; subtrees are isolated problems.)
-	 */
-
-	/* == Every other certificate == */
-	while (!SLIST_EMPTY(&stack)) {
-		ca = SLIST_FIRST(&stack);
-		SLIST_REMOVE_HEAD(&stack, lh);
-
-		certificate_traverse(ca, &stack);
-
-		rpki_certificate_free(ca);
-	}
-
-end:	rpki_certificate_free(ta);
 	return error;
 }

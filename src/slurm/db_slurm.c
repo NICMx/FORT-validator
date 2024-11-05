@@ -37,8 +37,6 @@ struct db_slurm {
 	struct slurm_csum_list csum_list;
 };
 
-static char addr_buf[INET6_ADDRSTRLEN];
-
 static void
 slurm_bgpsec_wrap_refget(struct slurm_bgpsec_wrap *elem)
 {
@@ -437,20 +435,21 @@ db_slurm_foreach_assertion_bgpsec(struct db_slurm *db, bgpsec_foreach_cb cb,
 static int
 print_prefix_data(struct slurm_prefix *prefix, void *arg)
 {
-	char *pad = "     ";
+	char addr_buf[INET6_ADDRSTRLEN];
 
 	pr_op_info("    {");
 	if (prefix->data_flag & SLURM_COM_FLAG_ASN)
-		pr_op_info("%s ASN: %u", pad, prefix->vrp.asn);
+		pr_op_info("      ASN: %u", prefix->vrp.asn);
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) {
-		pr_op_info("%s Prefix: %s/%u", pad,
+		pr_op_info("      Prefix: %s/%u",
 		    inet_ntop(prefix->vrp.addr_fam, &prefix->vrp.prefix,
-		    addr_buf, INET6_ADDRSTRLEN), prefix->vrp.prefix_length);
+		        addr_buf, INET6_ADDRSTRLEN),
+		    prefix->vrp.prefix_length);
 	}
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_MAX_LENGTH)
-		pr_op_info("%s Max prefix length: %u", pad,
+		pr_op_info("      Max prefix length: %u",
 		    prefix->vrp.max_prefix_length);
 	pr_op_info("    }");
 

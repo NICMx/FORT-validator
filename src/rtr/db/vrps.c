@@ -12,6 +12,7 @@
 #include "rtr/db/deltas_array.h"
 #include "rtr/pdu.h"
 #include "slurm/slurm_loader.h"
+#include "validation_handler.h"
 
 struct vrp_node {
 	struct delta_vrp delta;
@@ -126,41 +127,6 @@ vrps_destroy(void)
 		db_table_destroy(state.base);
 }
 
-int
-handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
-    uint8_t max_length, void *arg)
-{
-	return rtrhandler_handle_roa_v4(arg, as, prefix, max_length);
-}
-
-int
-handle_roa_v6(uint32_t as, struct ipv6_prefix const * prefix,
-    uint8_t max_length, void *arg)
-{
-	return rtrhandler_handle_roa_v6(arg, as, prefix, max_length);
-}
-
-int
-handle_router_key(unsigned char const *ski, struct asn_range const *asns,
-    unsigned char const *spk, void *arg)
-{
-	uint64_t asn;
-	int error;
-
-	/*
-	 * TODO (warning) Umm... this is begging for a limit.
-	 * If the issuer gets it wrong, we can iterate up to 2^32 times.
-	 * The RFCs don't seem to care about this.
-	 */
-	for (asn = asns->min; asn <= asns->max; asn++) {
-		error = rtrhandler_handle_router_key(arg, ski, asn, spk);
-		if (error)
-			return error;
-	}
-
-	return 0;
-}
-
 /*
  * High level validator function.
  *
@@ -184,15 +150,20 @@ __vrps_update(bool *changed)
 	struct deltas *new_deltas;
 	int error;
 
+	vhandle_init();
+
 	if (changed != NULL)
 		*changed = false;
 	old_base = state.base;
-	new_base = NULL;
 	new_deltas = NULL;
 
-	new_base = perform_standalone_validation();
-	if (new_base == NULL)
-		return EINVAL;
+	error = perform_standalone_validation();
+	if (error) {
+		db_table_destroy(vhandle_claim());
+		return error;
+	}
+
+	new_base = vhandle_claim();
 
 	error = slurm_apply(new_base, &state.slurm);
 	if (error) {
