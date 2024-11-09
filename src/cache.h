@@ -37,11 +37,11 @@ struct sia_uris {
 void sias_init(struct sia_uris *);
 void sias_cleanup(struct sia_uris *);
 
-char *cache_refresh_url(char const *);
-char *cache_fallback_url(char const *);
+char *cache_refresh_by_url(char const *);
+char *cache_get_fallback(char const *);
 
 struct cache_cage;
-struct cache_cage *cache_refresh_sias(struct sia_uris *);
+int cache_refresh_by_sias(struct sia_uris *, struct cache_cage **);
 char const *cage_map_file(struct cache_cage *, char const *);
 bool cage_disable_refresh(struct cache_cage *);
 void cache_commit_rpp(char const *, struct rpp *);

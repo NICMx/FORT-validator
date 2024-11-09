@@ -48,6 +48,7 @@ rsync_download(char const *url, char const *path)
 }
 
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
+MOCK_VOID(task_wakeup_busy, void)
 
 /* Helpers */
 
@@ -61,15 +62,15 @@ setup_test(void)
 }
 
 static struct cache_cage *
-run_dl_rsync(char *caRepository, unsigned int expected_calls)
+run_dl_rsync(char *caRepository, int expected_err, unsigned int expected_calls)
 {
 	struct sia_uris sias = { .caRepository = caRepository };
-	struct cache_cage *cage;
+	struct cache_cage *cage = NULL;
 
 	rsync_counter = 0;
 	https_counter = 0;
 	printf("---- Downloading... ----\n");
-	cage = cache_refresh_sias(&sias);
+	ck_assert_int_eq(expected_err, cache_refresh_by_sias(&sias, &cage));
 	printf("---- Downloaded. ----\n");
 	ck_assert_uint_eq(expected_calls, rsync_counter);
 	ck_assert_uint_eq(0, https_counter);
@@ -86,13 +87,13 @@ run_dl_https(char const *url, unsigned int expected_calls,
 	rsync_counter = 0;
 	https_counter = 0;
 	printf("---- Downloading... ----\n");
-	result = cache_refresh_url(url);
+	result = cache_refresh_by_url(url);
 	printf("---- Downloaded. ----\n");
 	ck_assert_uint_eq(0, rsync_counter);
 	ck_assert_uint_eq(expected_calls, https_counter);
 
 	ck_assert_str(expected_result, result);
-	ck_assert_str(NULL, cache_fallback_url(url));
+	ck_assert_str(NULL, cache_get_fallback(url));
 }
 
 
@@ -100,7 +101,7 @@ static void
 ck_cage(struct cache_cage *cage, char const *url,
     char const *refresh, char const *fallback)
 {
-	struct cache_node *bkp;
+	struct cache_node const *bkp;
 
 	ck_assert_str(refresh, cage_map_file(cage, url));
 
@@ -215,7 +216,7 @@ init_node_rsync(struct cache_node *node, char *url, char *path,
 {
 	node->map.url = url;
 	node->map.path = path;
-	node->fresh = fresh;
+	node->state = fresh ? DLS_FRESH : DLS_OUTDATED; /* XXX (test) */
 	node->dlerr = dlerr;
 	node->rrdp = NULL;
 }
@@ -226,7 +227,7 @@ init_node_https(struct cache_node *node, char *url, char *path,
 {
 	node->map.url = url;
 	node->map.path = path;
-	node->fresh = fresh;
+	node->state = fresh ? DLS_FRESH : DLS_OUTDATED;
 	node->dlerr = dlerr;
 	node->rrdp = NULL;
 }
@@ -236,7 +237,7 @@ ck_cache_node_eq(struct cache_node *expected, struct cache_node *actual)
 {
 	ck_assert_str_eq(expected->map.url, actual->map.url);
 	ck_assert_str_eq(expected->map.path, actual->map.path);
-	ck_assert_int_eq(expected->fresh, actual->fresh);
+	ck_assert_int_eq(expected->state, actual->state);
 	ck_assert_int_eq(expected->dlerr, actual->dlerr);
 	if (expected->rrdp == NULL)
 		ck_assert_ptr_eq(expected->rrdp, actual->rrdp);
@@ -298,7 +299,7 @@ static time_t epoch;
 static void
 unfreshen(struct cache_table *tbl, struct cache_node *node)
 {
-	node->fresh = 0;
+	node->state = DLS_OUTDATED;
 }
 
 static int
@@ -347,7 +348,7 @@ START_TEST(test_cache_download_rsync)
 	setup_test();
 
 	printf("==== Startup ====\n");
-	cage = run_dl_rsync("rsync://a.b.c/d", 1);
+	cage = run_dl_rsync("rsync://a.b.c/d", 0, 1);
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
 	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
@@ -356,7 +357,7 @@ START_TEST(test_cache_download_rsync)
 	free(cage);
 
 	printf("==== Redownload same file, nothing should happen ====\n");
-	cage = run_dl_rsync("rsync://a.b.c/d", 0);
+	cage = run_dl_rsync("rsync://a.b.c/d", 0, 0);
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
 	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
@@ -368,7 +369,7 @@ START_TEST(test_cache_download_rsync)
 	 * download d, we needn't bother redownloading d/e.
 	 */
 	printf("==== Don't redownload child ====\n");
-	cage = run_dl_rsync("rsync://a.b.c/d/e", 0);
+	cage = run_dl_rsync("rsync://a.b.c/d/e", 0, 0);
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
 	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
@@ -382,7 +383,7 @@ START_TEST(test_cache_download_rsync)
 	 * and there would be consequences for violating it.
 	 */
 	printf("==== rsync truncated ====\n");
-	cage = run_dl_rsync("rsync://x.y.z/m/n/o", 1);
+	cage = run_dl_rsync("rsync://x.y.z/m/n/o", 0, 1);
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://x.y.z/m", "rsync/1", NULL);
 	ck_cage(cage, "rsync://x.y.z/m/n/o", "rsync/1/n/o", NULL);
@@ -391,7 +392,7 @@ START_TEST(test_cache_download_rsync)
 	free(cage);
 
 	printf("==== Sibling ====\n");
-	cage = run_dl_rsync("rsync://a.b.c/e/f", 1);
+	cage = run_dl_rsync("rsync://a.b.c/e/f", 0, 1);
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://a.b.c/e", "rsync/2", NULL);
 	ck_cage(cage, "rsync://a.b.c/e/f/x/y/z", "rsync/2/f/x/y/z", NULL);
@@ -414,17 +415,17 @@ START_TEST(test_cache_download_rsync_error)
 
 	printf("==== Startup ====\n");
 	dl_error = 0;
-	free(run_dl_rsync("rsync://a.b.c/d", 1));
+	free(run_dl_rsync("rsync://a.b.c/d", 0, 1));
 	dl_error = EINVAL;
-	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", 1));
+	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", EINVAL, 1));
 	ck_cache_rsync(nodes);
 
 	printf("==== Regardless of error, not reattempted because same iteration ====\n");
 	dl_error = EINVAL;
-	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", 0));
+	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", EINVAL, 0));
 	ck_cache_rsync(nodes);
 	dl_error = 0;
-	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", 0));
+	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", EINVAL, 0));
 	ck_cache_rsync(nodes);
 
 	cleanup_test();

@@ -20,16 +20,37 @@
 #include "log.h"
 #include "rrdp.h"
 #include "rsync.h"
+#include "task.h"
 #include "types/array.h"
 #include "types/path.h"
 #include "types/url.h"
 #include "types/uthash.h"
 
+enum dl_state {
+	DLS_OUTDATED = 0,	/* Not downloaded yet */
+	DLS_ONGOING,		/* Download in progress */
+	DLS_FRESH,		/* Download complete */
+};
+
+/*
+ * This is a delicate structure; pay attention.
+ *
+ * During the multithreaded stage of the validation cycle, the entire cache_node
+ * (except @hh) becomes (effectively) constant when @state becomes DLS_FRESH.
+ *
+ * The cache (ie. this module) only hands the node to the validation code
+ * (through cache_cage) when @state becomes DLS_FRESH.
+ *
+ * This is intended to allow the validation code to read the remaining fields
+ * (all except @hh) without having to hold the table mutex.
+ *
+ * C cannot entirely ensure the node remains constant after it's handed outside;
+ * this must be done through careful coding and review.
+ */
 struct cache_node {
 	struct cache_mapping map;
 
-	/* XXX change to boolean? */
-	int fresh;		/* Refresh already attempted? */
+	enum dl_state state;
 	int dlerr;		/* Result code of recent download attempt */
 	time_t mtim;		/* Last successful download time, or zero */
 
@@ -40,12 +61,20 @@ struct cache_node {
 
 typedef int (*dl_cb)(struct cache_node *rpp);
 
+/*
+ * When concurrency is at play, you need @lock to access @nodes and @seq.
+ * @name, @enabled and @download stay constant through the validation.
+ *
+ * @lock also protects the nodes' @state and @hh, which have additional rules.
+ * (See cache_node.)
+ */
 struct cache_table {
 	char *name;
 	bool enabled;
 	struct cache_sequence seq;
 	struct cache_node *nodes; /* Hash Table */
 	dl_cb download;
+	pthread_mutex_t lock;
 };
 
 static struct rpki_cache {
@@ -63,8 +92,8 @@ static struct rpki_cache {
 static volatile sig_atomic_t lockfile_owned;
 
 struct cache_cage {
-	struct cache_node *refresh;
-	struct cache_node *fallback;
+	struct cache_node const *refresh;
+	struct cache_node const *fallback;
 };
 
 struct cache_commit {
@@ -75,6 +104,7 @@ struct cache_commit {
 };
 
 static STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZER(commits);
+static pthread_mutex_t commits_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define LOCKFILE ".lock"
 #define INDEX_FILE "index.json"
@@ -163,6 +193,8 @@ init_table(struct cache_table *tbl, char *name, bool enabled, dl_cb dl)
 	tbl->enabled = enabled;
 	cseq_init(&tbl->seq, name, false);
 	tbl->download = dl;
+	panic_on_fail(pthread_mutex_init(&tbl->lock, NULL),
+	    "pthread_mutex_init");
 }
 
 static void
@@ -608,6 +640,7 @@ dl_http(struct cache_node *file)
 	return 0;
 }
 
+/* Caller must lock @tbl->lock */
 static struct cache_node *
 find_node(struct cache_table *tbl, char const *url, size_t urlen)
 {
@@ -640,38 +673,75 @@ provide_node(struct cache_table *tbl, char const *url)
 	return node;
 }
 
-/* @uri is either a caRepository or a rpkiNotify */
-static struct cache_node *
-do_refresh(struct cache_table *tbl, char const *uri)
+/*
+ * @uri is either a caRepository or a rpkiNotify
+ * By contract, only sets @result on return 0.
+ * By contract, @result->state will be DLS_FRESH on return 0.
+ */
+static int
+do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 {
 	struct cache_node *node;
+	bool downloaded = false;
 
 	pr_val_debug("Trying %s (online)...", uri);
 
 	if (!tbl->enabled) {
 		pr_val_debug("Protocol disabled.");
-		return NULL;
+		return ESRCH;
 	}
 
 	if (tbl == &cache.rsync) {
 		char *module = get_rsync_module(uri);
 		if (module == NULL)
-			return NULL;
+			return EINVAL;
+		mutex_lock(&tbl->lock);
 		node = provide_node(tbl, module);
 		free(module);
 	} else {
+		mutex_lock(&tbl->lock);
 		node = provide_node(tbl, uri);
 	}
-	if (!node)
-		return NULL;
-
-	if (!node->fresh) {
-		node->fresh = true;
-		node->dlerr = tbl->download(node);
+	if (!node) {
+		mutex_unlock(&tbl->lock);
+		return EINVAL;
 	}
 
-	pr_val_debug(node->dlerr ? "Refresh failed." : "Refresh succeeded.");
-	return node;
+	switch (node->state) {
+	case DLS_OUTDATED:
+		node->state = DLS_ONGOING;
+		mutex_unlock(&tbl->lock);
+
+		node->dlerr = tbl->download(node);
+		downloaded = true;
+
+		mutex_lock(&tbl->lock);
+		node->state = DLS_FRESH;
+		break;
+	case DLS_ONGOING:
+		mutex_unlock(&tbl->lock);
+		pr_val_debug("Refresh ongoing.");
+		return EBUSY;
+	case DLS_FRESH:
+		break;
+	default:
+		pr_crit("Unknown node state: %d", node->state);
+	}
+
+	mutex_unlock(&tbl->lock);
+	/* node->state is guaranteed to be DLS_FRESH at this point. */
+
+	if (downloaded) /* Kickstart tasks that fell into DLS_ONGOING */
+		task_wakeup_busy();
+
+	if (node->dlerr != 0) {
+		pr_val_debug("Refresh failed.");
+		return node->dlerr;
+	}
+
+	pr_val_debug("Refresh succeeded.");
+	*result = node;
+	return 0;
 }
 
 static struct cache_node *
@@ -688,28 +758,31 @@ get_fallback(char const *caRepository)
 
 /* Do not free nor modify the result. */
 char *
-cache_refresh_url(char const *url)
+cache_refresh_by_url(char const *url)
 {
 	struct cache_node *node = NULL;
 
-	// XXX mutex
 	// XXX review result signs
 	// XXX Normalize @url
 
 	if (url_is_https(url))
-		node = do_refresh(&cache.https, url);
+		do_refresh(&cache.https, url, &node);
 	else if (url_is_rsync(url))
-		node = do_refresh(&cache.rsync, url);
+		do_refresh(&cache.rsync, url, &node);
 
-	// XXX Maybe strdup path so the caller can't corrupt our string
-	return (node && !node->dlerr) ? node->map.path : NULL;
+	return node ? node->map.path : NULL;
 }
 
 /* Do not free nor modify the result. */
 char *
-cache_fallback_url(char const *url)
+cache_get_fallback(char const *url)
 {
 	struct cache_node *node;
+
+	/*
+	 * The fallback table is read-only until the cleanup.
+	 * Mutex not needed here.
+	 */
 
 	pr_val_debug("Trying %s (offline)...", url);
 
@@ -729,44 +802,53 @@ cache_fallback_url(char const *url)
  * XXX Need to normalize the sias.
  * XXX Fallback only if parent is fallback
  */
-struct cache_cage *
-cache_refresh_sias(struct sia_uris *sias)
+int
+cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 {
-	struct cache_cage *cage;
 	struct cache_node *node;
+	struct cache_cage *cage;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
-	// XXX mutex
 	// XXX review result signs
 	// XXX normalize rpkiNotify & caRepository?
 
-	cage = pzalloc(sizeof(struct cache_cage));
-	cage->fallback = get_fallback(sias->caRepository);
-
+	/* Try RRDP + optional fallback */
 	if (sias->rpkiNotify) {
-		node = do_refresh(&cache.rrdp, sias->rpkiNotify);
-		if (node && !node->dlerr) {
-			cage->refresh = node;
-			return cage; /* RRDP + optional fallback happy path */
+		switch (do_refresh(&cache.rrdp, sias->rpkiNotify, &node)) {
+		case 0:
+			goto refresh_success;
+		case EBUSY:
+			return EBUSY;
 		}
 	}
 
-	node = do_refresh(&cache.rsync, sias->caRepository);
-	if (node && !node->dlerr) {
-		cage->refresh = node;
-		return cage; /* rsync + optional fallback happy path */
+	/* Try rsync + optional fallback */
+	switch (do_refresh(&cache.rsync, sias->caRepository, &node)) {
+	case 0:
+		goto refresh_success;
+	case EBUSY:
+		return EBUSY;
 	}
 
-	if (cage->fallback == NULL) {
-		free(cage);
-		return NULL;
-	}
+	/* Try fallback only */
+	node = get_fallback(sias->caRepository); /* XXX (test) does this catch notifies? */
+	if (!node)
+		return EINVAL; /* Nothing to work with */
 
-	return cage; /* fallback happy path */
+	*result = cage = pmalloc(sizeof(struct cache_cage));
+	cage->refresh = NULL;
+	cage->fallback = node;
+	return 0;
+
+refresh_success:
+	*result = cage = pmalloc(sizeof(struct cache_cage));
+	cage->refresh = node;
+	cage->fallback = get_fallback(sias->caRepository);
+	return 0;
 }
 
-char const *
-node2file(struct cache_node *node, char const *url)
+static char const *
+node2file(struct cache_node const *node, char const *url)
 {
 	if (node == NULL)
 		return NULL;
@@ -779,6 +861,12 @@ node2file(struct cache_node *node, char const *url)
 char const *
 cage_map_file(struct cache_cage *cage, char const *url)
 {
+	/*
+	 * Remember: In addition to honoring the consts of cache->refresh and
+	 * cache->fallback, anything these structures point to MUST NOT be
+	 * modified either.
+	 */
+
 	char const *file;
 
 	file = node2file(cage->refresh, url);
@@ -792,6 +880,12 @@ cage_map_file(struct cache_cage *cage, char const *url)
 bool
 cage_disable_refresh(struct cache_cage *cage)
 {
+	/*
+	 * Remember: In addition to honoring the consts of cache->refresh and
+	 * cache->fallback, anything these structures point to MUST NOT be
+	 * modified either.
+	 */
+
 	bool enabled = (cage->refresh != NULL);
 	cage->refresh = NULL;
 
@@ -822,12 +916,16 @@ cache_commit_rpp(char const *caRepository, struct rpp *rpp)
 	commit->caRepository = pstrdup(caRepository);
 	commit->files = rpp->files;
 	commit->nfiles = rpp->nfiles;
+
+	mutex_lock(&commits_lock);
 	STAILQ_INSERT_TAIL(&commits, commit, lh);
+	mutex_unlock(&commits_lock);
 
 	rpp->files = NULL;
 	rpp->nfiles = 0;
 }
 
+/* XXX not called */
 void
 cache_commit_file(struct cache_mapping *map)
 {
@@ -840,7 +938,10 @@ cache_commit_file(struct cache_mapping *map)
 	commit->files[0].url = pstrdup(map->url);
 	commit->files[0].path = pstrdup(map->path);
 	commit->nfiles = 1;
+
+	mutex_lock(&commits_lock);
 	STAILQ_INSERT_TAIL(&commits, commit, lh);
+	mutex_unlock(&commits_lock);
 }
 
 static void
@@ -850,10 +951,17 @@ cachent_print(struct cache_node *node)
 		return;
 
 	printf("\t%s (%s): ", node->map.url, node->map.path);
-	if (node->fresh)
-		printf("fresh (errcode %d)", node->dlerr);
-	else
+	switch (node->state) {
+	case DLS_OUTDATED:
 		printf("stale");
+		break;
+	case DLS_ONGOING:
+		printf("downloading");
+		break;
+	case DLS_FRESH:
+		printf("fresh (errcode %d)", node->dlerr);
+		break;
+	}
 	printf("\n");
 }
 
@@ -1093,7 +1201,7 @@ commit_fallbacks(void)
 				    strerror(errno));
 		}
 
-freshen:	fb->fresh = 1;
+freshen:	fb->state = DLS_FRESH;
 skip:		free(commit->caRepository);
 		for (i = 0; i < commit->nfiles; i++) {
 			free(commit->files[i].url);
@@ -1104,7 +1212,7 @@ skip:		free(commit->caRepository);
 	}
 
 	HASH_ITER(hh, cache.fallback.nodes, fb, tmp) {
-		if (fb->fresh)
+		if (fb->state == DLS_FRESH)
 			continue;
 
 		/*

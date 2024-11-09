@@ -1900,18 +1900,25 @@ certificate_traverse(struct rpki_certificate *ca)
 	unsigned int queued;
 	int error;
 
-	error = certificate_validate(ca);
-	if (error)
-		return error;
+	if (!ca->x509) {
+		error = certificate_validate(ca);
+		if (error)
+			return error;
 
-	if (ca->type != CERTYPE_TA && ca->type != CERTYPE_CA)
-		return 0;
+		if (ca->type != CERTYPE_TA && ca->type != CERTYPE_CA)
+			return 0;
+	} /* else "we already did this, and returned EBUSY" */
 
-	cage = cache_refresh_sias(&ca->sias);
-	if (!cage)
+	switch (cache_refresh_by_sias(&ca->sias, &cage)) {
+	case 0:
+		break;
+	case EBUSY:
+		return EBUSY;
+	default:
 		return pr_val_err("caRepository '%s' could not be refreshed, "
 		    "and there is no fallback in the cache. "
 		    "I'm going to have to skip it.", ca->sias.caRepository);
+	}
 
 retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
 	if (!mft) {

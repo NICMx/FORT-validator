@@ -143,7 +143,7 @@ session_cleanup(struct rrdp_session *meta)
 }
 
 static struct cache_file *
-state_find_file(struct rrdp_state *state, char const *url, size_t len)
+state_find_file(struct rrdp_state const *state, char const *url, size_t len)
 {
 	struct cache_file *file;
 	HASH_FIND(hh, state->files, url, len, file);
@@ -1276,7 +1276,7 @@ end:	fnstack_pop();
 }
 
 char const *
-rrdp_file(struct rrdp_state *state, char const *url)
+rrdp_file(struct rrdp_state const *state, char const *url)
 {
 	struct cache_file *file;
 	file = state_find_file(state, url, strlen(url));

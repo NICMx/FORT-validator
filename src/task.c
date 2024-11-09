@@ -6,9 +6,13 @@
 #include "common.h"
 #include "log.h"
 
+STAILQ_HEAD(validation_tasks, validation_task);
+
 /* Queued, not yet claimed tasks */
-static STAILQ_HEAD(validation_tasks, validation_task) tasks;
-/* Active tasks (length of @tasks plus number of running tasks) */
+static struct validation_tasks tasks;
+/* Queued, but not yet available for claiming */
+static struct validation_tasks busy;
+/* Active tasks (length(@tasks) + length(@busy) + number of running tasks) */
 static int active;
 
 static bool enabled = true;
@@ -27,6 +31,7 @@ void
 task_setup(void)
 {
 	STAILQ_INIT(&tasks);
+	STAILQ_INIT(&busy);
 	active = 0;
 	enabled = true;
 	panic_on_fail(pthread_mutex_init(&lock, NULL), "pthread_mutex_init");
@@ -34,17 +39,24 @@ task_setup(void)
 }
 
 static void
-cleanup(void)
+cleanup_tasks(struct validation_tasks *tasks)
 {
 	struct validation_task *task;
 
-	enabled = false;
-	active = 0;
-	while (!STAILQ_EMPTY(&tasks)) {
-		task = STAILQ_FIRST(&tasks);
-		STAILQ_REMOVE_HEAD(&tasks, lh);
+	while (!STAILQ_EMPTY(tasks)) {
+		task = STAILQ_FIRST(tasks);
+		STAILQ_REMOVE_HEAD(tasks, lh);
 		task_free(task);
 	}
+}
+
+static void
+cleanup(void)
+{
+	enabled = false;
+	active = 0;
+	cleanup_tasks(&tasks);
+	cleanup_tasks(&busy);
 }
 
 void
@@ -91,17 +103,33 @@ task_enqueue(struct cache_mapping *map, struct rpki_certificate *parent)
 	task->ca = ca;
 
 	mutex_lock(&lock);
-
 	if (enabled) {
 		STAILQ_INSERT_TAIL(&tasks, task, lh);
+		task = NULL;
 		active++;
-	} else {
-		task_free(task);
 	}
-
 	mutex_unlock(&lock);
 
+	if (task) {
+		task_free(task); /* Couldn't queue */
+		return 0;
+	}
+
 	return 1;
+}
+
+void
+task_requeue_busy(struct validation_task *task)
+{
+	mutex_lock(&lock);
+	if (enabled) {
+		STAILQ_INSERT_TAIL(&busy, task, lh);
+		task = NULL;
+	}
+	mutex_unlock(&lock);
+
+	if (task)
+		task_free(task); /* Couldn't queue */
 }
 
 /* Wakes up threads currently waiting for tasks. */
@@ -114,10 +142,21 @@ task_wakeup(void)
 	mutex_unlock(&lock);
 }
 
+void
+task_wakeup_busy(void)
+{
+	mutex_lock(&lock);
+	STAILQ_CONCAT(&tasks, &busy);
+	panic_on_fail(pthread_cond_broadcast(&awakener),
+	    "pthread_cond_broadcast");
+	mutex_unlock(&lock);
+}
+
 /*
  * Frees the @prev previous task, and returns the next one.
  *
- * If no task is available yet, will sleep until someone calls task_wakeup().
+ * If no task is available yet, will sleep until someone calls task_wakeup() or
+ * task_wakeup_busy().
  * If all the tasks are done, returns NULL.
  *
  * Assumes at least one task has been queued before the first dequeue.

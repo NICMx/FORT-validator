@@ -32,7 +32,9 @@ void
 panic_on_fail(int error, char const *function_name)
 {
 	if (error)
-		pr_crit("%s() returned error code %d. This is too critical for a graceful recovery; I must die now.",
+		pr_crit("%s() returned error code %d. "
+		    "This is too critical for a graceful recovery; "
+		    "I must die now.",
 		    function_name, error);
 }
 

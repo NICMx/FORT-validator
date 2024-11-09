@@ -169,7 +169,7 @@ traverse_tal(char const *tal_path, void *arg)
 	/* Online attempts */
 	ARRAYLIST_FOREACH(&tal.urls, url) {
 		map.url = *url;
-		map.path = cache_refresh_url(*url);
+		map.path = cache_refresh_by_url(*url);
 		if (!map.path)
 			continue;
 		if (validate_ta(&tal, &map) != 0)
@@ -180,7 +180,7 @@ traverse_tal(char const *tal_path, void *arg)
 	/* Offline fallback attempts */
 	ARRAYLIST_FOREACH(&tal.urls, url) {
 		map.url = *url;
-		map.path = cache_fallback_url(*url);
+		map.path = cache_get_fallback(*url);
 		if (!map.path)
 			continue;
 		if (validate_ta(&tal, &map) != 0)
@@ -201,8 +201,12 @@ pick_up_work(void *arg)
 {
 	struct validation_task *task = NULL;
 
-	while ((task = task_dequeue(task)) != NULL)
-		certificate_traverse(task->ca);
+	while ((task = task_dequeue(task)) != NULL) {
+		if (certificate_traverse(task->ca) == EBUSY) {
+			task_requeue_busy(task);
+			task = NULL;
+		}
+	}
 
 	return NULL;
 }
@@ -211,7 +215,6 @@ int
 perform_standalone_validation(void)
 {
 	pthread_t threads[5]; // XXX variabilize
-	unsigned int ids[5];
 	array_index t, t2;
 	int error;
 
@@ -225,8 +228,7 @@ perform_standalone_validation(void)
 		goto end;
 
 	for (t = 0; t < 5; t++) {
-		ids[t] = t;
-		error = pthread_create(&threads[t], NULL, pick_up_work, &ids[t]);
+		error = pthread_create(&threads[t], NULL, pick_up_work, NULL);
 		if (error) {
 			pr_op_err("Could not spawn validation thread %zu: %s",
 			    t, strerror(error));
