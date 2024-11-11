@@ -174,6 +174,7 @@ traverse_tal(char const *tal_path, void *arg)
 			continue;
 		if (validate_ta(&tal, &map) != 0)
 			continue;
+		cache_commit_file(&map);
 		goto end2; /* Happy path */
 	}
 
@@ -185,6 +186,7 @@ traverse_tal(char const *tal_path, void *arg)
 			continue;
 		if (validate_ta(&tal, &map) != 0)
 			continue;
+		cache_commit_file(&map);
 		goto end2; /* Happy path */
 	}
 

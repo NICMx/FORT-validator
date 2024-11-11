@@ -925,7 +925,6 @@ cache_commit_rpp(char const *caRepository, struct rpp *rpp)
 	rpp->nfiles = 0;
 }
 
-/* XXX not called */
 void
 cache_commit_file(struct cache_mapping *map)
 {
