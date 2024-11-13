@@ -38,9 +38,12 @@ rsync_download(char const *url, char const *path)
 {
 	rsync_counter++;
 
-	if (dl_error)
+	if (dl_error) {
+		printf("Simulating failed rsync.\n");
 		return dl_error;
+	}
 
+	printf("Simulating rsync: %s -> %s\n", url, path);
 	ck_assert_int_eq(0, mkdir(path, CACHE_FILEMODE));
 	touch_file(path);
 
@@ -57,8 +60,8 @@ setup_test(void)
 {
 	dl_error = 0;
 	init_tables();
-	ck_assert_int_eq(0, system("rm -rf rsync/ https/ rrdp/ fallback/"));
-	ck_assert_int_eq(0, system("mkdir rsync/ https/ rrdp/ fallback/"));
+	ck_assert_int_eq(0, system("rm -rf rsync/ https/ rrdp/ fallback/ tmp/"));
+	ck_assert_int_eq(0, system("mkdir rsync/ https/ rrdp/ fallback/ tmp/"));
 }
 
 static struct cache_cage *
@@ -134,7 +137,8 @@ print_tree(void)
 }
 
 static void
-queue_commit(char const *caRepository, char const *path1, char const *path2)
+queue_commit(char const *rpkiNotify, char const *caRepository,
+    char const *path1, char const *path2)
 {
 	struct rpp rpp = { 0 };
 
@@ -145,7 +149,7 @@ queue_commit(char const *caRepository, char const *path1, char const *path2)
 	rpp.files[1].url = path_join(caRepository, "cert.cer");
 	rpp.files[1].path = pstrdup(path2);
 
-	cache_commit_rpp(caRepository, &rpp);
+	cache_commit_rpp(rpkiNotify, caRepository, &rpp);
 }
 
 /* Only validates the first character of the file. */
@@ -464,9 +468,9 @@ START_TEST(test_rsync_commit)
 	}
 
 	/* Commit 3: Empty -> Populated */
-	queue_commit("rsync://domain/mod/rpp0", "rsync/0/0", "rsync/0/1");
-	queue_commit("rsync://domain/mod/rpp2", "rsync/2/0", "rsync/2/1");
-	queue_commit("rsync://domain/mod/rpp3", "rsync/3/0", "rsync/3/2");
+	queue_commit(NULL, "rsync://domain/mod/rpp0", "rsync/0/0", "rsync/0/1");
+	queue_commit(NULL, "rsync://domain/mod/rpp2", "rsync/2/0", "rsync/2/1");
+	queue_commit(NULL, "rsync://domain/mod/rpp3", "rsync/3/0", "rsync/3/2");
 	commit_fallbacks();
 	ck_filesystem("fallback",
 	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B",
@@ -478,9 +482,9 @@ START_TEST(test_rsync_commit)
 
 	/* Commit 4: Populated -> Populated */
 	/* XXX check the refresh does, in fact, only return fallbacks when the RPP doesn't change */
-	queue_commit("rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
-	queue_commit("rsync://domain/mod/rpp1", "rsync/1/0", "rsync/1/1");
-	queue_commit("rsync://domain/mod/rpp3", "fallback/2/0", "rsync/3/1");
+	queue_commit(NULL, "rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
+	queue_commit(NULL, "rsync://domain/mod/rpp1", "rsync/1/0", "rsync/1/1");
+	queue_commit(NULL, "rsync://domain/mod/rpp3", "fallback/2/0", "rsync/3/1");
 	commit_fallbacks();
 
 	ck_filesystem("fallback",
@@ -612,6 +616,7 @@ END_TEST
 /* See comments at test_rsync_commit(). */
 START_TEST(test_rrdp_commit)
 {
+	char const *notif = "https://domain/rpki/notif.xml";
 	unsigned int i;
 
 	setup_test();
@@ -637,9 +642,9 @@ START_TEST(test_rrdp_commit)
 	}
 
 	/* 3 */
-	queue_commit("rsync://domain/mod/rpp0", "rrdp/0/0", "rrdp/0/1");
-	queue_commit("rsync://domain/mod/rpp2", "rrdp/2/0", "rrdp/2/1");
-	queue_commit("rsync://domain/mod/rpp3", "rrdp/3/0", "rrdp/3/2");
+	queue_commit(notif, "rsync://domain/mod/rpp0", "rrdp/0/0", "rrdp/0/1");
+	queue_commit(notif, "rsync://domain/mod/rpp2", "rrdp/2/0", "rrdp/2/1");
+	queue_commit(notif, "rsync://domain/mod/rpp3", "rrdp/3/0", "rrdp/3/2");
 	commit_fallbacks();
 	ck_filesystem("fallback",
 	    "fallback/0/0", "A", "fallback/0/1", "B",
@@ -650,9 +655,9 @@ START_TEST(test_rrdp_commit)
 	new_iteration(false);
 
 	/* 4 */
-	queue_commit("rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
-	queue_commit("rsync://domain/mod/rpp1", "rrdp/1/0", "rrdp/1/1");
-	queue_commit("rsync://domain/mod/rpp3", "fallback/2/0", "rrdp/3/1");
+	queue_commit(notif, "rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
+	queue_commit(notif, "rsync://domain/mod/rpp1", "rrdp/1/0", "rrdp/1/1");
+	queue_commit(notif, "rsync://domain/mod/rpp3", "fallback/2/0", "rrdp/3/1");
 	commit_fallbacks();
 	ck_filesystem("fallback",
 	    "fallback/0/0", "A", "fallback/0/1", "B",
@@ -670,12 +675,90 @@ START_TEST(test_rrdp_commit)
 }
 END_TEST
 
+START_TEST(test_context)
+{
+	char *RPKI_NOTIFY =	"https://a.b.c/notif.xml";
+	char *CA_REPOSITORY =	"rsync://x.y.z/mod5/rpp3";
+	char *FILE_URL =	"rsync://x.y.z/mod5/rpp3/a.cer";
+	char *FILE_RRDP_PATH =	"rrdp/0/0";
+	char *FILE_RSYNC_PATH =	"rsync/0/rpp3/a.cer";
+
+	struct sia_uris sias = { 0 };
+	struct cache_cage *cage;
+	struct rpp rpp = { 0 };
+
+	ck_assert_int_eq(0, hash_setup());
+	ck_assert_int_eq(0, relax_ng_init());
+	setup_test();
+
+	dls[0] = NHDR("3")
+		NSS("https://a.b.c/3/snapshot.xml",
+		    "25b49ae65eeeda44222d599959086911c65ed4277021cdec456d80a6604b83c9")
+		NTAIL;
+	dls[1] = SHDR("3") PBLSH("rsync://x.y.z/mod5/rpp3/a.cer", "Rm9ydAo=") STAIL;
+	dls[2] = NULL;
+
+	/* 1. 1st CA succeeds on RRDP */
+	sias.rpkiNotify = RPKI_NOTIFY;
+	sias.caRepository = CA_REPOSITORY;
+	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(RPKI_NOTIFY, cage->rpkiNotify);
+	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, FILE_URL));
+	ck_assert_int_eq(false, cage_disable_refresh(cage));
+	ck_assert_ptr_eq(NULL, cage_map_file(cage, FILE_URL));
+
+	/*
+	 * 2. 2nd CA points to the same caRepository,
+	 *    but does not provide RRDP as an option.
+	 */
+	sias.rpkiNotify = NULL;
+	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_ptr_eq(NULL, cage->rpkiNotify);
+	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, FILE_URL));
+	ck_assert_int_eq(false, cage_disable_refresh(cage));
+	ck_assert_ptr_eq(NULL, cage_map_file(cage, FILE_URL));
+
+	/* 3. Commit */
+	rpp.nfiles = 1;
+	rpp.files = pzalloc(sizeof(struct cache_mapping));
+	rpp.files->url = pstrdup(FILE_URL);
+	rpp.files->path = pstrdup(FILE_RRDP_PATH);
+	cache_commit_rpp(RPKI_NOTIFY, CA_REPOSITORY, &rpp);
+
+	rpp.nfiles = 1;
+	rpp.files = pzalloc(sizeof(struct cache_mapping));
+	rpp.files->url = pstrdup(FILE_URL);
+	rpp.files->path = pstrdup(FILE_RSYNC_PATH);
+	cache_commit_rpp(NULL, CA_REPOSITORY, &rpp);
+
+	commit_fallbacks();
+
+	/* 4. Redo both CAs, check the fallbacks too */
+	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_ptr_eq(NULL, cage->rpkiNotify);
+	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, FILE_URL));
+	ck_assert_int_eq(true, cage_disable_refresh(cage));
+	ck_assert_str_eq("fallback/1/0", cage_map_file(cage, FILE_URL));
+
+	sias.rpkiNotify = RPKI_NOTIFY;
+	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(RPKI_NOTIFY, cage->rpkiNotify);
+	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, FILE_URL));
+	ck_assert_int_eq(true, cage_disable_refresh(cage));
+	ck_assert_str_eq("fallback/0/0", cage_map_file(cage, FILE_URL));
+
+	cleanup_test();
+	relax_ng_cleanup();
+	hash_teardown();
+}
+END_TEST
+
 /* Boilerplate */
 
 static Suite *create_suite(void)
 {
 	Suite *suite;
-	TCase *rsync, *https, *rrdp;
+	TCase *rsync, *https, *rrdp, *multi;
 
 	rsync = tcase_create("rsync");
 	tcase_add_test(rsync, test_cache_download_rsync);
@@ -690,10 +773,14 @@ static Suite *create_suite(void)
 	rrdp = tcase_create("rrdp");
 	tcase_add_test(rrdp, test_rrdp_commit);
 
+	multi = tcase_create("multi-protocol");
+	tcase_add_test(multi, test_context);
+
 	suite = suite_create("local-cache");
 	suite_add_tcase(suite, rsync);
 	suite_add_tcase(suite, https);
 	suite_add_tcase(suite, rrdp);
+	suite_add_tcase(suite, multi);
 
 	return suite;
 }

@@ -79,12 +79,17 @@ struct cache_table {
 
 static struct rpki_cache {
 	/* Latest view of the remote rsync modules */
+	/* rsync modules (repositories); indexed by plain rsync URL */
 	struct cache_table rsync;
 	/* Latest view of the remote HTTPS TAs */
+	/* HTTPS files; indexed by plain HTTPS URL */
 	struct cache_table https;
 	/* Latest view of the remote RRDP cages */
+	/* RRDP modules (repositories); indexed by rpkiNotify */
 	struct cache_table rrdp;
-	/* Committed RPPs and TAs (offline fallback hard links) */
+
+	/* Committed (offline fallback hard links) RPPs and TAs */
+	/* RPPs indexed by [rpkiNotif] + caRepo; TAs indexed by plain URL. */
 	struct cache_table fallback;
 } cache;
 
@@ -94,9 +99,11 @@ static volatile sig_atomic_t lockfile_owned;
 struct cache_cage {
 	struct cache_node const *refresh;
 	struct cache_node const *fallback;
+	char const *rpkiNotify;
 };
 
 struct cache_commit {
+	char *rpkiNotify;
 	char *caRepository;
 	struct cache_mapping *files;
 	size_t nfiles;
@@ -611,8 +618,7 @@ dl_rrdp(struct cache_node *notif)
 
 	mtim = time_nonfatal();
 
-	error = rrdp_update(&notif->map, notif->mtim, &changed, &cache.rrdp.seq,
-	    &notif->rrdp);
+	error = rrdp_update(&notif->map, notif->mtim, &changed, &notif->rrdp);
 	if (error)
 		return error;
 
@@ -744,16 +750,55 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 	return 0;
 }
 
-static struct cache_node *
-get_fallback(char const *caRepository)
+static char *
+get_rrdp_fallback_key(char const *context, char const *caRepository)
 {
-	struct cache_node *node;
+	char *key;
+	size_t keylen;
+	int written;
 
-	pr_val_debug("Retrieving %s fallback...", caRepository);
-	node = find_node(&cache.fallback, caRepository, strlen(caRepository));
-	pr_val_debug(node ? "Fallback found." : "Fallback unavailable.");
+	keylen = strlen(context) + strlen(caRepository) + 2;
+	key = pmalloc(keylen);
 
-	return node;
+	written = snprintf(key, keylen, "%s\t%s", context, caRepository);
+	if (written != keylen - 1)
+		pr_crit("find_rrdp_fallback_node: %zu %d %s %s",
+		    keylen, written, context, caRepository);
+
+	return key;
+}
+
+static struct cache_node *
+find_rrdp_fallback_node(struct sia_uris *sias)
+{
+	char *key;
+	struct cache_node *result;
+
+	if (!sias->rpkiNotify || !sias->caRepository)
+		return NULL;
+
+	key = get_rrdp_fallback_key(sias->rpkiNotify, sias->caRepository);
+	result = find_node(&cache.fallback, key, strlen(key));
+	free(key);
+
+	return result;
+}
+
+static struct cache_node *
+get_fallback(struct sia_uris *sias)
+{
+	struct cache_node *rrdp;
+	struct cache_node *rsync;
+
+	rrdp = find_rrdp_fallback_node(sias);
+	rsync = find_node(&cache.fallback, sias->caRepository,
+	    strlen(sias->caRepository));
+
+	if (rrdp == NULL)
+		return rsync;
+	if (rsync == NULL)
+		return rrdp;
+	return (difftime(rsync->mtim, rrdp->mtim) > 0) ? rsync : rrdp;
 }
 
 /* Do not free nor modify the result. */
@@ -773,7 +818,10 @@ cache_refresh_by_url(char const *url)
 	return node ? node->map.path : NULL;
 }
 
-/* Do not free nor modify the result. */
+/*
+ * HTTPS (TAs) and rsync only; don't use this for RRDP.
+ * Do not free nor modify the result.
+ */
 char *
 cache_get_fallback(char const *url)
 {
@@ -807,6 +855,7 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 {
 	struct cache_node *node;
 	struct cache_cage *cage;
+	char const *rpkiNotify;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
 	// XXX review result signs
@@ -816,6 +865,7 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 	if (sias->rpkiNotify) {
 		switch (do_refresh(&cache.rrdp, sias->rpkiNotify, &node)) {
 		case 0:
+			rpkiNotify = sias->rpkiNotify;
 			goto refresh_success;
 		case EBUSY:
 			return EBUSY;
@@ -825,13 +875,14 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 	/* Try rsync + optional fallback */
 	switch (do_refresh(&cache.rsync, sias->caRepository, &node)) {
 	case 0:
+		rpkiNotify = NULL;
 		goto refresh_success;
 	case EBUSY:
 		return EBUSY;
 	}
 
 	/* Try fallback only */
-	node = get_fallback(sias->caRepository); /* XXX (test) does this catch notifies? */
+	node = get_fallback(sias);
 	if (!node)
 		return EINVAL; /* Nothing to work with */
 
@@ -842,8 +893,9 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 
 refresh_success:
 	*result = cage = pmalloc(sizeof(struct cache_cage));
+	cage->rpkiNotify = rpkiNotify;
 	cage->refresh = node;
-	cage->fallback = get_fallback(sias->caRepository);
+	cage->fallback = get_fallback(sias);
 	return 0;
 }
 
@@ -907,12 +959,13 @@ cage_disable_refresh(struct cache_cage *cage)
  * modified nor deleted until the cache cleanup.
  */
 void
-cache_commit_rpp(char const *caRepository, struct rpp *rpp)
+cache_commit_rpp(char const *rpkiNotify, char const *caRepository,
+    struct rpp *rpp)
 {
 	struct cache_commit *commit;
 
 	commit = pmalloc(sizeof(struct cache_commit));
-	// XXX missing context
+	commit->rpkiNotify = rpkiNotify ? pstrdup(rpkiNotify) : NULL;
 	commit->caRepository = pstrdup(caRepository);
 	commit->files = rpp->files;
 	commit->nfiles = rpp->nfiles;
@@ -931,7 +984,7 @@ cache_commit_file(struct cache_mapping *map)
 	struct cache_commit *commit;
 
 	commit = pmalloc(sizeof(struct cache_commit));
-	// XXX missing context
+	commit->rpkiNotify = NULL;
 	commit->caRepository = NULL;
 	commit->files = pmalloc(sizeof(*map));
 	commit->files[0].url = pstrdup(map->url);
@@ -941,6 +994,12 @@ cache_commit_file(struct cache_mapping *map)
 	mutex_lock(&commits_lock);
 	STAILQ_INSERT_TAIL(&commits, commit, lh);
 	mutex_unlock(&commits_lock);
+}
+
+char const *
+cage_rpkiNotify(struct cache_cage *cage)
+{
+	return cage->rpkiNotify;
 }
 
 static void
@@ -1170,15 +1229,27 @@ commit_fallbacks(void)
 {
 	struct cache_commit *commit;
 	struct cache_node *fb, *tmp;
+	time_t now;
 	array_index i;
 	int error;
+
+	now = time_fatal();
 
 	while (!STAILQ_EMPTY(&commits)) {
 		commit = STAILQ_FIRST(&commits);
 		STAILQ_REMOVE_HEAD(&commits, lh);
 
 		if (commit->caRepository) {
-			fb = provide_node(&cache.fallback, commit->caRepository);
+			if (commit->rpkiNotify) {
+				char *key;
+				key = get_rrdp_fallback_key(commit->rpkiNotify,
+				    commit->caRepository);
+				fb = provide_node(&cache.fallback, key);
+				free(key);
+			} else {
+				fb = provide_node(&cache.fallback,
+				    commit->caRepository);
+			}
 
 			if (file_mkdir(fb->map.path, true) != 0)
 				goto skip;
@@ -1201,7 +1272,9 @@ commit_fallbacks(void)
 		}
 
 freshen:	fb->state = DLS_FRESH;
-skip:		free(commit->caRepository);
+		fb->mtim = now;
+skip:		free(commit->rpkiNotify);
+		free(commit->caRepository);
 		for (i = 0; i < commit->nfiles; i++) {
 			free(commit->files[i].url);
 			free(commit->files[i].path);

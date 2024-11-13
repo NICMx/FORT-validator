@@ -11,7 +11,7 @@
 struct rrdp_state;
 
 int rrdp_update(struct cache_mapping const *, time_t, bool *,
-    struct cache_sequence *, struct rrdp_state **);
+    struct rrdp_state **);
 char const *rrdp_file(struct rrdp_state const *, char const *);
 
 char const *rrdp_create_fallback(char *, struct rrdp_state **, char const *);

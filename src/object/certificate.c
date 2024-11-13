@@ -1950,7 +1950,7 @@ retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
 
 	if (queued > 0)
 		task_wakeup();
-	cache_commit_rpp(ca->sias.caRepository, &ca->rpp);
+	cache_commit_rpp(cage_rpkiNotify(cage), ca->sias.caRepository, &ca->rpp);
 
 end:	free(cage);
 	return error;

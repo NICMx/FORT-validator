@@ -1174,7 +1174,7 @@ dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
  */
 int
 rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
-    struct cache_sequence *rrdp_seq, struct rrdp_state **state)
+    struct rrdp_state **state)
 {
 	struct rrdp_state *old;
 	struct update_notification new;
@@ -1194,20 +1194,14 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 	    new.session.serial.str);
 
 	if ((*state) == NULL) {
-		char *cage;
-
 		pr_val_debug("This is a new Notification.");
-
-		cage = cseq_next(rrdp_seq);
-		if (!cage)
-			goto clean_notif;
 
 		old = pzalloc(sizeof(struct rrdp_state));
 		/* session postponed! */
-		cseq_init(&old->seq, cage, true);
+		cseq_init(&old->seq, pstrdup(notif->path), true);
 		STAILQ_INIT(&old->delta_hashes);
 
-		error = file_mkdir(cage, false);
+		error = file_mkdir(notif->path, false);
 		if (error) {
 			rrdp_state_free(old);
 			goto clean_notif;

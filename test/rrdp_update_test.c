@@ -21,8 +21,8 @@
 static void
 setup_test(void)
 {
-	ck_assert_int_eq(0, system("rm -rf tmp/"));
-	ck_assert_int_eq(0, system("mkdir -p tmp/https tmp/rrdp tmp/tmp"));
+	ck_assert_int_eq(0, system("rm -rf https/ rrdp/ tmp/"));
+	ck_assert_int_eq(0, system("mkdir https/ rrdp/ tmp/"));
 	ck_assert_int_eq(0, hash_setup());
 	ck_assert_int_eq(0, relax_ng_init());
 }
@@ -84,10 +84,10 @@ START_TEST(startup)
 	setup_test();
 
 	notif.url = "https://host/notification.xml";
-	notif.path = "tmp/https/0";
+	notif.path = "rrdp/0";
 
-	seq.prefix = "tmp/rrdp";
-	seq.next_id = 0;
+	seq.prefix = "rrdp";
+	seq.next_id = 1;
 	seq.pathlen = strlen(seq.prefix);
 	seq.free_prefix = false;
 
@@ -99,29 +99,30 @@ START_TEST(startup)
 	dls[2] = NULL;
 	https_counter = 0;
 
-	ck_assert_int_eq(0, rrdp_update(&notif, 0, &changed, &seq, &state));
+	ck_assert_int_eq(0, rrdp_update(&notif, 0, &changed, &state));
 	ck_assert_uint_eq(2, https_counter);
 	ck_assert_uint_eq(true, changed);
-	ck_file("tmp/rrdp/0/0"); /* "tmp/rrdp/<first-cage>/<c.cer>" */
+	ck_file("rrdp/0/0"); /* "rrdp/<first-cage>/<c.cer>" */
 
 	maps[0].url = "rsync://a/b/c.cer";
-	maps[0].path = "tmp/rrdp/0/0";
+	maps[0].path = "rrdp/0/0";
 	maps[1].url = NULL;
 	ck_state(TEST_SESSION, "3", 1, maps, state);
 
 	/* Attempt to update, server hasn't changed anything. */
 	dls[1] = NULL; /* Snapshot should not redownload */
 	https_counter = 0;
-	ck_assert_int_eq(0, rrdp_update(&notif, 0, &changed, &seq, &state));
+	ck_assert_int_eq(0, rrdp_update(&notif, 0, &changed, &state));
 	ck_assert_uint_eq(1, https_counter);
 	ck_assert_uint_eq(false, changed);
-	ck_file("tmp/rrdp/0/0");
+	ck_file("rrdp/0/0");
 	ck_state(TEST_SESSION, "3", 1, maps, state);
 
 	rrdp_state_free(state);
-	cleanup_test();
 
 	// XXX Missing a looooooooooooooooooot of tests
+
+	cleanup_test();
 }
 END_TEST
 
@@ -144,6 +145,15 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	if (mkdir("tmp", CACHE_FILEMODE) < 0 && errno != EEXIST) {
+		fprintf(stderr, "mkdir('tmp/'): %s\n", strerror(errno));
+		return 1;
+	}
+	if (chdir("tmp") < 0) {
+		fprintf(stderr, "chdir('tmp/'): %s\n", strerror(errno));
+		return 1;
+	}
 
 	suite = create_suite();
 
