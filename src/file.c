@@ -192,7 +192,6 @@ file_rm_f(char const *path)
 static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
-	pr_op_debug("Deleting %s.", fpath);
 	if (remove(fpath) < 0)
 		pr_op_warn("Cannot delete %s: %s", fpath, strerror(errno));
 	return 0;
@@ -204,22 +203,16 @@ file_rm_rf(char const *path)
 {
 	int error;
 
+	pr_op_debug("rm -rf %s", path);
+
 	/* TODO (performance) optimize that 32 */
-	errno = 0;
-	switch (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS)) {
-	case 0:
-		return 0; /* Happy path */
-	case -1:
-		/*
-		 * POSIX requires nftw() to set errno,
-		 * but the Linux man page doesn't mention it at all...
-		 */
+	if (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS) < 0) {
 		error = errno;
+		pr_op_warn("Cannot remove %s: %s", path, strerror(error));
 		return error ? error : -1;
 	}
 
-	/* This is supposed to be unreachable, but let's not panic. */
-	return -1;
+	return 0;
 }
 
 /* If @force, don't treat EEXIST as an error. */
@@ -239,6 +232,15 @@ file_mkdir(char const *path, bool force)
 	}
 
 	return 0;
+}
+
+void
+file_ln(char const *oldpath, char const *newpath)
+{
+	pr_op_debug("ln %s %s", oldpath, newpath);
+	if (link(oldpath, newpath) < 0)
+		pr_op_warn("Could not hard-link %s to %s: %s",
+		    newpath, oldpath, strerror(errno));
 }
 
 void

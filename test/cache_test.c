@@ -301,9 +301,11 @@ get_days_ago(int days)
 static time_t epoch;
 
 static void
-unfreshen(struct cache_table *tbl, struct cache_node *node)
+unfreshen(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
 	node->state = DLS_OUTDATED;
+	node->attempt_ts -= 4;
+	node->attempt_ts -= 4;
 }
 
 static int
@@ -328,7 +330,7 @@ new_iteration(bool outdate)
 	epoch = outdate ? get_days_ago(30) : get_days_ago(1);
 
 	pr_op_debug("--- Unfreshening... ---");
-	cache_foreach(unfreshen);
+	foreach_node(unfreshen, NULL);
 	ck_assert_int_eq(0, nftw(".", nftw_unfreshen, 32, FTW_PHYS));
 
 	pr_op_debug("---- Tree now stale. ----");
@@ -436,7 +438,7 @@ START_TEST(test_cache_download_rsync_error)
 }
 END_TEST
 
-START_TEST(test_rsync_commit)
+START_TEST(test_rsync_cleanup)
 {
 	unsigned int i;
 
@@ -461,7 +463,7 @@ START_TEST(test_rsync_commit)
 	/* Commit 1: Empty -> Empty */
 	/* Commit 2: Empty -> Empty (just free noise) */
 	for (i = 0; i < 2; i++) {
-		commit_fallbacks();
+		cleanup_cache();
 		ck_filesystem("fallback", NULL);
 
 		new_iteration(false);
@@ -471,7 +473,7 @@ START_TEST(test_rsync_commit)
 	queue_commit(NULL, "rsync://domain/mod/rpp0", "rsync/0/0", "rsync/0/1");
 	queue_commit(NULL, "rsync://domain/mod/rpp2", "rsync/2/0", "rsync/2/1");
 	queue_commit(NULL, "rsync://domain/mod/rpp3", "rsync/3/0", "rsync/3/2");
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback",
 	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B",
 	    /* RPP2 */ "fallback/1/0", "E", "fallback/1/1", "F",
@@ -485,7 +487,7 @@ START_TEST(test_rsync_commit)
 	queue_commit(NULL, "rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
 	queue_commit(NULL, "rsync://domain/mod/rpp1", "rsync/1/0", "rsync/1/1");
 	queue_commit(NULL, "rsync://domain/mod/rpp3", "fallback/2/0", "rsync/3/1");
-	commit_fallbacks();
+	cleanup_cache();
 
 	ck_filesystem("fallback",
 	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B",
@@ -496,10 +498,10 @@ START_TEST(test_rsync_commit)
 	new_iteration(false);
 
 	/* Commit 5: Populated -> Empty */
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback", NULL);
 
-	cache_foreach(delete_node);
+	flush_nodes();
 }
 END_TEST
 
@@ -561,8 +563,8 @@ START_TEST(test_cache_download_https_error)
 }
 END_TEST
 
-/* See comments at test_rsync_commit(). */
-START_TEST(test_https_commit)
+/* See comments at test_rsync_cleanup(). */
+START_TEST(test_https_cleanup)
 {
 	struct cache_mapping map;
 	unsigned int i;
@@ -575,7 +577,7 @@ START_TEST(test_https_commit)
 
 	/* 1, 2 */
 	for (i = 0; i < 2; i++) {
-		commit_fallbacks();
+		cleanup_cache();
 		ck_filesystem("fallback", NULL);
 
 		new_iteration(false);
@@ -588,7 +590,7 @@ START_TEST(test_https_commit)
 	map.url = "https://domain/rpki/ta52.cer";
 	map.path = "https/52";
 	cache_commit_file(&map);
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback", "fallback/0", "A", "fallback/1", "C", NULL);
 
 	new_iteration(false);
@@ -600,21 +602,21 @@ START_TEST(test_https_commit)
 	map.url = "https://domain/rpki/ta51.cer";
 	map.path = "https/51";
 	cache_commit_file(&map);
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback", "fallback/0", "A", "fallback/2", "B", NULL);
 
 	new_iteration(false);
 
 	/* 5 */
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback", NULL);
 
-	cache_foreach(delete_node);
+	flush_nodes();
 }
 END_TEST
 
-/* See comments at test_rsync_commit(). */
-START_TEST(test_rrdp_commit)
+/* See comments at test_rsync_cleanup(). */
+START_TEST(test_rrdp_cleanup)
 {
 	char const *notif = "https://domain/rpki/notif.xml";
 	unsigned int i;
@@ -635,7 +637,7 @@ START_TEST(test_rrdp_commit)
 
 	/* 1, 2 */
 	for (i = 0; i < 2; i++) {
-		commit_fallbacks();
+		cleanup_cache();
 		ck_filesystem("fallback", NULL);
 
 		new_iteration(false);
@@ -645,7 +647,7 @@ START_TEST(test_rrdp_commit)
 	queue_commit(notif, "rsync://domain/mod/rpp0", "rrdp/0/0", "rrdp/0/1");
 	queue_commit(notif, "rsync://domain/mod/rpp2", "rrdp/2/0", "rrdp/2/1");
 	queue_commit(notif, "rsync://domain/mod/rpp3", "rrdp/3/0", "rrdp/3/2");
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback",
 	    "fallback/0/0", "A", "fallback/0/1", "B",
 	    "fallback/1/0", "E", "fallback/1/1", "F",
@@ -658,7 +660,7 @@ START_TEST(test_rrdp_commit)
 	queue_commit(notif, "rsync://domain/mod/rpp0", "fallback/0/0", "fallback/0/1");
 	queue_commit(notif, "rsync://domain/mod/rpp1", "rrdp/1/0", "rrdp/1/1");
 	queue_commit(notif, "rsync://domain/mod/rpp3", "fallback/2/0", "rrdp/3/1");
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback",
 	    "fallback/0/0", "A", "fallback/0/1", "B",
 	    "fallback/2/0", "G", "fallback/2/2", "H",
@@ -668,10 +670,10 @@ START_TEST(test_rrdp_commit)
 	new_iteration(false);
 
 	/* 5 */
-	commit_fallbacks();
+	cleanup_cache();
 	ck_filesystem("fallback", NULL);
 
-	cache_foreach(delete_node);
+	flush_nodes();
 }
 END_TEST
 
@@ -731,7 +733,7 @@ START_TEST(test_context)
 	rpp.files->path = pstrdup(FILE_RSYNC_PATH);
 	cache_commit_rpp(NULL, CA_REPOSITORY, &rpp);
 
-	commit_fallbacks();
+	commit_fallbacks(time_fatal());
 
 	/* 4. Redo both CAs, check the fallbacks too */
 	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
@@ -763,15 +765,15 @@ static Suite *create_suite(void)
 	rsync = tcase_create("rsync");
 	tcase_add_test(rsync, test_cache_download_rsync);
 	tcase_add_test(rsync, test_cache_download_rsync_error);
-	tcase_add_test(rsync, test_rsync_commit);
+	tcase_add_test(rsync, test_rsync_cleanup);
 
 	https = tcase_create("https");
 	tcase_add_test(https, test_cache_download_https);
 	tcase_add_test(https, test_cache_download_https_error);
-	tcase_add_test(https, test_https_commit);
+	tcase_add_test(https, test_https_cleanup);
 
 	rrdp = tcase_create("rrdp");
-	tcase_add_test(rrdp, test_rrdp_commit);
+	tcase_add_test(rrdp, test_rrdp_cleanup);
 
 	multi = tcase_create("multi-protocol");
 	tcase_add_test(multi, test_context);

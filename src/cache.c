@@ -26,10 +26,16 @@
 #include "types/url.h"
 #include "types/uthash.h"
 
-enum dl_state {
-	DLS_OUTDATED = 0,	/* Not downloaded yet */
-	DLS_ONGOING,		/* Download in progress */
-	DLS_FRESH,		/* Download complete */
+enum node_state {
+	/* Refresh nodes: Not downloaded yet (stale) */
+	/* Fallback nodes: Queued for commit */
+	DLS_OUTDATED = 0,
+	/* Refresh nodes: Download in progress */
+	/* Fallback nodes: N/A */
+	DLS_ONGOING,
+	/* Refresh nodes: Download complete */
+	/* Fallback nodes: Committed */
+	DLS_FRESH,
 };
 
 /*
@@ -50,9 +56,11 @@ enum dl_state {
 struct cache_node {
 	struct cache_mapping map;
 
-	enum dl_state state;
-	int dlerr;		/* Result code of recent download attempt */
-	time_t mtim;		/* Last successful download time, or zero */
+	enum node_state state;
+	/* Result code of recent dl attempt (DLS_FRESH only) */
+	int dlerr;
+	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Commit */
+	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
 	struct rrdp_state *rrdp;
 
@@ -122,7 +130,7 @@ static void __delete_node_cb(struct cache_node const *);
 #endif
 
 static void
-delete_node(struct cache_table *tbl, struct cache_node *node)
+delete_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
 #ifdef UNIT_TESTING
 	__delete_node_cb(node);
@@ -136,18 +144,25 @@ delete_node(struct cache_table *tbl, struct cache_node *node)
 }
 
 static void
-cache_foreach(void (*cb)(struct cache_table *, struct cache_node *))
+foreach_node(void (*cb)(struct cache_table *, struct cache_node *, void *),
+    void *arg)
 {
 	struct cache_node *node, *tmp;
 
 	HASH_ITER(hh, cache.rsync.nodes, node, tmp)
-		cb(&cache.rsync, node);
+		cb(&cache.rsync, node, arg);
 	HASH_ITER(hh, cache.https.nodes, node, tmp)
-		cb(&cache.https, node);
+		cb(&cache.https, node, arg);
 	HASH_ITER(hh, cache.rrdp.nodes, node, tmp)
-		cb(&cache.rrdp, node);
+		cb(&cache.rrdp, node, arg);
 	HASH_ITER(hh, cache.fallback.nodes, node, tmp)
-		cb(&cache.fallback, node);
+		cb(&cache.fallback, node, arg);
+}
+
+static void
+flush_nodes(void)
+{
+	foreach_node(delete_node, NULL);
 }
 
 char *
@@ -371,10 +386,10 @@ json2node(json_t *json)
 	if (json_get_str(json, "path", &str))
 		goto fail;
 	node->map.path = pstrdup(str);
-	error = json_get_int(json, "dlerr", &node->dlerr);
+	error = json_get_ts(json, "attempt", &node->attempt_ts);
 	if (error != 0 && error != ENOENT)
 		goto fail;
-	error = json_get_ts(json, "mtim", &node->mtim);
+	error = json_get_ts(json, "success", &node->success_ts);
 	if (error != 0 && error != ENOENT)
 		goto fail;
 	error = json_get_object(json, "rrdp", &rrdp);
@@ -494,7 +509,7 @@ cache_prepare(void)
 
 	return 0;
 
-fail:	cache_foreach(delete_node);
+fail:	flush_nodes();
 	unlock_cache();
 	return error;
 }
@@ -512,9 +527,9 @@ node2json(struct cache_node *node)
 		goto fail;
 	if (json_add_str(json, "path", node->map.path))
 		goto fail;
-	if (node->dlerr && json_add_int(json, "dlerr", node->dlerr)) // XXX relevant?
+	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
 		goto fail;
-	if (node->mtim && json_add_ts(json, "mtim", node->mtim))
+	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
 		goto fail;
 	if (node->rrdp)
 		if (json_object_add(json, "rrdp", rrdp_state2json(node->rrdp)))
@@ -605,44 +620,39 @@ dl_rsync(struct cache_node *module)
 	if (error)
 		return error;
 
-	module->mtim = time_nonfatal(); /* XXX probably not needed */
+	module->success_ts = module->attempt_ts;
 	return 0;
 }
 
 static int
 dl_rrdp(struct cache_node *notif)
 {
-	time_t mtim;
 	bool changed;
 	int error;
 
-	mtim = time_nonfatal();
-
-	error = rrdp_update(&notif->map, notif->mtim, &changed, &notif->rrdp);
+	error = rrdp_update(&notif->map, notif->success_ts,
+	    &changed, &notif->rrdp);
 	if (error)
 		return error;
 
 	if (changed)
-		notif->mtim = mtim;
+		notif->success_ts = notif->attempt_ts;
 	return 0;
 }
 
 static int
 dl_http(struct cache_node *file)
 {
-	time_t mtim;
 	bool changed;
 	int error;
 
-	mtim = time_nonfatal();
-
 	error = http_download(file->map.url, file->map.path,
-	    file->mtim, &changed);
+	    file->success_ts, &changed);
 	if (error)
 		return error;
 
 	if (changed)
-		file->mtim = mtim;
+		file->success_ts = file->attempt_ts;
 	return 0;
 }
 
@@ -718,6 +728,7 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 		node->state = DLS_ONGOING;
 		mutex_unlock(&tbl->lock);
 
+		node->attempt_ts = time_fatal();
 		node->dlerr = tbl->download(node);
 		downloaded = true;
 
@@ -798,7 +809,7 @@ get_fallback(struct sia_uris *sias)
 		return rsync;
 	if (rsync == NULL)
 		return rrdp;
-	return (difftime(rsync->mtim, rrdp->mtim) > 0) ? rsync : rrdp;
+	return (difftime(rsync->success_ts, rrdp->success_ts) > 0) ? rsync : rrdp;
 }
 
 /* Do not free nor modify the result. */
@@ -1045,92 +1056,6 @@ cache_print(void)
 	table_print(&cache.fallback);
 }
 
-//static void
-//cleanup_node(struct rpki_cache *cache, struct cache_node *node,
-//    time_t last_week)
-//{
-//	char const *path;
-//	int error;
-//
-//	path = map_get_path(node->map);
-//	if (map_get_type(node->map) == MAP_NOTIF)
-//		goto skip_file;
-//
-//	error = file_exists(path);
-//	switch (error) {
-//	case 0:
-//		break;
-//	case ENOENT:
-//		/* Node exists but file doesn't: Delete node */
-//		pr_op_debug("Node exists but file doesn't: %s", path);
-//		delete_node_and_cage(cache, node);
-//		return;
-//	default:
-//		pr_op_err("Trouble cleaning '%s'; stat() returned errno %d: %s",
-//		    map_op_get_printable(node->map), error, strerror(error));
-//	}
-//
-//skip_file:
-//	if (!is_node_fresh(node, last_week)) {
-//		pr_op_debug("Deleting expired cache element %s.", path);
-//		file_rm_rf(path);
-//		delete_node_and_cage(cache, node);
-//	}
-//}
-//
-///*
-// * "Do not clean." List of mappings that should not be deleted from the cache.
-// * Global because nftw doesn't have a generic argument.
-// */
-//static struct map_list dnc;
-//static pthread_mutex_t dnc_lock = PTHREAD_MUTEX_INITIALIZER;
-//
-//static bool
-//is_cached(char const *_fpath)
-//{
-//	struct cache_mapping **node;
-//	char const *fpath, *npath;
-//	size_t c;
-//
-//	/*
-//	 * This relies on paths being normalized, which is currently done by the
-//	 * struct cache_mapping constructors.
-//	 */
-//
-//	ARRAYLIST_FOREACH(&dnc, node) {
-//		fpath = _fpath;
-//		npath = map_get_path(*node);
-//
-//		for (c = 0; fpath[c] == npath[c]; c++)
-//			if (fpath[c] == '\0')
-//				return true;
-//		if (fpath[c] == '\0' && npath[c] == '/')
-//			return true;
-//		if (npath[c] == '\0' && fpath[c] == '/')
-//			return true;
-//	}
-//
-//	return false;
-//}
-
-static int
-rmf(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-{
-	if (remove(fpath) < 0)
-		pr_op_warn("Can't remove %s: %s", fpath, strerror(errno));
-	else
-		pr_op_debug("Removed %s.", fpath);
-	return 0;
-}
-
-static void
-cleanup_tmp(void)
-{
-	if (nftw(CACHE_TMPDIR, rmf, 32, FTW_DEPTH | FTW_PHYS))
-		pr_op_warn("Cannot empty the cache's tmp directory: %s",
-		    strerror(errno));
-}
-
 static bool
 is_fallback(char const *path)
 {
@@ -1160,10 +1085,7 @@ commit_rpp(struct cache_commit *commit, struct cache_node *fb)
 		if (!dst)
 			goto skip;
 
-		pr_op_debug("Hard-linking: %s -> %s", src->path, dst);
-		if (link(src->path, dst) < 0)
-			pr_op_warn("Could not hard-link cache file: %s",
-			    strerror(errno));
+		file_ln(src->path, dst);
 
 skip:		free(src->path);
 		src->path = pstrdup(dst);
@@ -1225,21 +1147,20 @@ next:		free(file_path);
 }
 
 static void
-commit_fallbacks(void)
+commit_fallbacks(time_t now)
 {
 	struct cache_commit *commit;
-	struct cache_node *fb, *tmp;
-	time_t now;
+	struct cache_node *fb;
 	array_index i;
-	int error;
-
-	now = time_fatal();
 
 	while (!STAILQ_EMPTY(&commits)) {
 		commit = STAILQ_FIRST(&commits);
 		STAILQ_REMOVE_HEAD(&commits, lh);
 
 		if (commit->caRepository) {
+			pr_op_debug("Creating fallback for %s (%s)",
+			    commit->caRepository, commit->rpkiNotify);
+
 			if (commit->rpkiNotify) {
 				char *key;
 				key = get_rrdp_fallback_key(commit->rpkiNotify,
@@ -1260,19 +1181,17 @@ commit_fallbacks(void)
 		} else { /* TA */
 			struct cache_mapping *map = &commit->files[0];
 
+			pr_op_debug("Creating fallback for %s", map->url);
+
 			fb = provide_node(&cache.fallback, map->url);
 			if (is_fallback(map->path))
 				goto freshen;
 
-			pr_op_debug("Hard-linking TA: %s -> %s",
-			    map->path, fb->map.path);
-			if (link(map->path, fb->map.path) < 0)
-				pr_op_warn("Could not hard-link cache file: %s",
-				    strerror(errno));
+			file_ln(map->path, fb->map.path);
 		}
 
 freshen:	fb->state = DLS_FRESH;
-		fb->mtim = now;
+		fb->attempt_ts = fb->success_ts = now;
 skip:		free(commit->rpkiNotify);
 		free(commit->caRepository);
 		for (i = 0; i < commit->nfiles; i++) {
@@ -1282,64 +1201,70 @@ skip:		free(commit->rpkiNotify);
 		free(commit->files);
 		free(commit);
 	}
+}
 
-	HASH_ITER(hh, cache.fallback.nodes, fb, tmp) {
-		if (fb->state == DLS_FRESH)
-			continue;
+static void
+remove_abandoned(struct cache_table *table, struct cache_node *node, void *arg)
+{
+	time_t now;
 
-		/*
-		 * XXX This one, on the other hand, would definitely benefit
-		 * from an expiration threshold.
-		 */
-		pr_op_debug("Removing orphaned fallback: %s", fb->map.path);
-		error = file_rm_rf(fb->map.path);
-		if (error)
-			pr_op_warn("%s removal failed: %s",
-			    fb->map.path, strerror(error));
-		delete_node(&cache.fallback, fb);
+	if (node->state == DLS_FRESH)
+		return;
+
+	now = *((time_t *)arg);
+	if (difftime(node->attempt_ts + cfg_cache_threshold(), now) < 0) {
+		file_rm_rf(node->map.path);
+		delete_node(table, node, NULL);
 	}
 }
 
 static void
-remove_abandoned(void)
-{
-	// XXX no need to recurse anymore.
-	/*
-	nftw_root = cache.rsync;
-	nftw("rsync", nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
-
-	nftw_root = cache.https;
-	nftw("https", nftw_remove_abandoned, 32, FTW_DEPTH | FTW_PHYS); // XXX
-	*/
-}
-
-static void
-remove_orphaned(struct cache_table *table, struct cache_node *node)
+remove_orphaned_nodes(struct cache_table *table, struct cache_node *node,
+    void *arg)
 {
 	if (file_exists(node->map.path) == ENOENT) {
 		pr_op_debug("Missing file; deleting node: %s", node->map.path);
-		delete_node(table, node);
+		delete_node(table, node, NULL);
 	}
 }
 
-/*
- * Deletes unknown and old untraversed cached files, writes metadata into XML.
- */
+static void
+remove_orphaned_files(void)
+{
+	// XXX
+}
+
+/* Deletes obsolete files and nodes from the cache. */
 static void
 cleanup_cache(void)
 {
-	// XXX Review
+	time_t now = time_fatal();
+
+	/* Delete the entirety of cache/tmp/. */
 	pr_op_debug("Cleaning up temporal files.");
-	cleanup_tmp();
+	file_rm_rf(CACHE_TMPDIR);
 
-	pr_op_debug("Creating fallbacks for valid RPPs.");
-	commit_fallbacks();
+	/*
+	 * Ensure valid RPPs and TAs are linked in fallback,
+	 * by hard-linking the new files.
+	 */
+	pr_op_debug("Committing fallbacks.");
+	commit_fallbacks(now);
 
-	pr_op_debug("Cleaning up old abandoned and unknown cache files.");
-	remove_abandoned();
+	/*
+	 * Delete refresh nodes that haven't been downloaded in a while,
+	 * and fallback nodes that haven't been valid in a while.
+	 */
+	pr_op_debug("Cleaning up abandoned cache files.");
+	foreach_node(remove_abandoned, &now);
 
+	/* (Paranoid) Delete nodes that are no longer mapped to files. */
 	pr_op_debug("Cleaning up orphaned nodes.");
-	cache_foreach(remove_orphaned);
+	foreach_node(remove_orphaned_nodes, NULL);
+
+	/* (Paranoid) Delete files that are no longer mapped to nodes. */
+	pr_op_debug("Cleaning up orphaned files.");
+	remove_orphaned_files();
 }
 
 void
@@ -1348,7 +1273,7 @@ cache_commit(void)
 	cleanup_cache();
 	write_index_file();
 	unlock_cache();
-	cache_foreach(delete_node);
+	flush_nodes();
 }
 
 void

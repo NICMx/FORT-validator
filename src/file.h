@@ -37,6 +37,7 @@ int file_exists(char const *);
 int file_rm_f(char const *);
 int file_rm_rf(char const *);
 int file_mkdir(char const *, bool);
+void file_ln(char const *, char const *);
 
 struct cache_sequence {
 	char *prefix;
