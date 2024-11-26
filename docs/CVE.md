@@ -66,3 +66,26 @@ Malicious rsync repositories can block Fort by drip-feeding repository objects.
 | Impact | Delayed validation. (Stale or unavailable Route Origin Validation.) |
 | Patch | Commit [4ee88d1](https://github.com/NICMx/FORT-validator/commit/4ee88d1c3fa7df763dd52312134cd93c1ce50870), released in Fort 1.6.4. |
 | Acknowledgments | Thanks to Koen van Hove for his research and disclosure, and Job Snijders for the proposed fix. |
+
+## CVE-XXXX-XXXXX
+
+(Awaiting CVE ID number assignment.)
+
+Fort is employing the latest fetched manifest, rather than the one with the most recent metadata.
+
+| Description | RPKI manifests are listings of relevant files that clients are supposed to verify.<br>Assuming everything else is correct, the most recent version of a manifest should be prioritized over other versions, to prevent replays, accidental or otherwise.<br>Manifests contain the `manifestNumber` and `thisUpdate` fields, which can be used to gauge the relevance of a given manifest, when compared to other manifests. The former is a serial-like sequential number, and the latter is the date in which the manifest was created.<br>Fort is not comparing the up-to-dateness of the most recently-fetched manifest against the cached manifest. As such, it's prone to roll back into a previous version if it's served a valid outdated manifest. |
+| Impact | Outdated Route Origin Validation. |
+| Patch | Scheduled for Fort release [2.0.0](https://github.com/NICMx/FORT-validator/milestone/12). |
+| Acknowledgments | Job Snijders |
+
+## CVE-YYYY-YYYYY
+
+(Awaiting CVE ID number assignment.)
+
+Fort's cache provides insufficient fallbacking.
+
+| Description | RPKI Relying Parties (such as Fort) are supposed to maintain a backup cache of the remote RPKI data. This can be employed as fallback in case a new fetch fails or yields incorrect files.<br>Fort is presently using its cache merely as a bandwidth saving tool. (Because the fetching is performed through deltas.) If a fetch fails midway or yields incorrect files, Fort is left without a viable fallback. |
+| Impact | Incomplete Route Origin Validation data. |
+| Patch | Scheduled for Fort release [2.0.0](https://github.com/NICMx/FORT-validator/milestone/12). |
+| Acknowledgments | Ties de Kock |
+| Issue | [82](https://github.com/NICMx/FORT-validator/issues/82) |
