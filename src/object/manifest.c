@@ -1,3 +1,6 @@
+#define _DEFAULT_SOURCE  1	/* timegm() on Linux */
+#define _DARWIN_C_SOURCE 1	/* timegm() on MacOS */
+
 #include "object/manifest.h"
 
 #include "algorithm.h"
@@ -49,7 +52,8 @@ tm_cmp(struct tm *tm1, struct tm *tm2)
 }
 
 static int
-validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
+validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
+    struct mft_meta *meta)
 {
 #define TM_FMT "%02d/%02d/%02d %02d:%02d:%02d"
 #define TM_ARGS(tm)							\
@@ -98,6 +102,13 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 		    TM_ARGS(nextUpdate));
 	}
 
+	meta->update = timegm(&thisUpdate);
+	if (meta->update == (time_t)-1) {
+		error = errno;
+		return pr_val_err("Cannot convert '" TM_FMT "' to time_t: %s",
+		    TM_ARGS(thisUpdate), strerror(error));
+	}
+
 	return 0;
 
 #undef TM_FMT
@@ -105,7 +116,23 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next)
 }
 
 static int
-validate_manifest(struct Manifest *manifest)
+check_more_recent(struct cache_cage *cage, struct mft_meta *current)
+{
+	struct mft_meta const *prev;
+
+	prev = cage_mft_fallback(cage);
+	if (!prev)
+		return 0;
+
+	if (prev->update && difftime(prev->update, current->update) > 0)
+		return pr_val_err("The fallback manifest is newer than the downloaded one.");
+
+	return 0;
+}
+
+static int
+validate_manifest(struct Manifest *mft, struct cache_cage *cage,
+    struct mft_meta *meta)
 {
 	unsigned long version;
 	int error;
@@ -130,8 +157,8 @@ validate_manifest(struct Manifest *manifest)
 	 */
 
 	/* rfc6486#section-4.4.2 */
-	if (manifest->version != NULL) {
-		error = asn_INTEGER2ulong(manifest->version, &version);
+	if (mft->version != NULL) {
+		error = asn_INTEGER2ulong(mft->version, &version);
 		if (error) {
 			if (errno) {
 				pr_val_err("Error casting manifest version: %s",
@@ -147,11 +174,15 @@ validate_manifest(struct Manifest *manifest)
 	 * "Manifest verifiers MUST be able to handle number values up to
 	 * 20 octets."
 	 */
-	if (manifest->manifestNumber.size > 20)
+	if (mft->manifestNumber.size > 20)
 		return pr_val_err("Manifest number is larger than 20 octets");
 
 	/* rfc6486#section-4.4.3 */
-	error = validate_dates(&manifest->thisUpdate, &manifest->nextUpdate);
+	error = validate_dates(&mft->thisUpdate, &mft->nextUpdate, meta);
+	if (error)
+		return error;
+
+	error = check_more_recent(cage, meta);
 	if (error)
 		return error;
 
@@ -163,7 +194,7 @@ validate_manifest(struct Manifest *manifest)
 	 * I'm going with the signed object hash function, since it appears to
 	 * be the closest match.
 	 */
-	error = validate_cms_hashing_algorithm_oid(&manifest->fileHashAlg,
+	error = validate_cms_hashing_algorithm_oid(&mft->fileHashAlg,
 	    "manifest file");
 	if (error)
 		return error;
@@ -367,7 +398,7 @@ manifest_traverse(char const *url, char const *path, struct cache_cage *cage,
 	error = signed_object_validate(&sobj, &arcs, &ee);
 	if (error)
 		goto end5;
-	error = validate_manifest(mft);
+	error = validate_manifest(mft, cage, &parent->rpp.mft);
 	if (error)
 		goto end5;
 	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, url);

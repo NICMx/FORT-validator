@@ -44,6 +44,7 @@ struct cache_cage;
 int cache_refresh_by_sias(struct sia_uris *, struct cache_cage **);
 char const *cage_map_file(struct cache_cage *, char const *);
 bool cage_disable_refresh(struct cache_cage *);
+struct mft_meta const *cage_mft_fallback(struct cache_cage *);
 void cache_commit_rpp(char const *, char const *, struct rpp *);
 void cache_commit_file(struct cache_mapping *);
 

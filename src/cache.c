@@ -62,6 +62,7 @@ struct cache_node {
 	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Commit */
 	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
+	struct mft_meta mft;	/* RPP fallbacks only */
 	struct rrdp_state *rrdp;
 
 	UT_hash_handle hh;	/* Hash table hook */
@@ -80,7 +81,7 @@ struct cache_table {
 	char *name;
 	bool enabled;
 	struct cache_sequence seq;
-	struct cache_node *nodes; /* Hash Table */
+	struct cache_node *nodes;	/* Hash Table */
 	dl_cb download;
 	pthread_mutex_t lock;
 };
@@ -108,6 +109,7 @@ struct cache_cage {
 	struct cache_node const *refresh;
 	struct cache_node const *fallback;
 	char const *rpkiNotify;
+	struct mft_meta *mft;		/* Fallback */
 };
 
 struct cache_commit {
@@ -115,6 +117,7 @@ struct cache_commit {
 	char *caRepository;
 	struct cache_mapping *files;
 	size_t nfiles;
+	struct mft_meta mft;		/* RPPs commits only */
 	STAILQ_ENTRY(cache_commit) lh;
 };
 
@@ -392,6 +395,9 @@ json2node(json_t *json)
 	error = json_get_ts(json, "success", &node->success_ts);
 	if (error != 0 && error != ENOENT)
 		goto fail;
+	error = json_get_ts(json, "mftUpdate", &node->mft.update);
+	if (error < 0)
+		goto fail;
 	error = json_get_object(json, "rrdp", &rrdp);
 	if (error < 0)
 		goto fail;
@@ -530,6 +536,8 @@ node2json(struct cache_node *node)
 	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
 		goto fail;
 	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
+		goto fail;
+	if (node->mft.update && json_add_ts(json, "mftUpdate", node->mft.update))
 		goto fail;
 	if (node->rrdp)
 		if (json_object_add(json, "rrdp", rrdp_state2json(node->rrdp)))
@@ -965,6 +973,12 @@ cage_disable_refresh(struct cache_cage *cage)
 	return true;
 }
 
+struct mft_meta const *
+cage_mft_fallback(struct cache_cage *cage)
+{
+	return cage->mft;
+}
+
 /*
  * Steals ownership of @rpp->files and @rpp->nfiles, but they're not going to be
  * modified nor deleted until the cache cleanup.
@@ -980,6 +994,7 @@ cache_commit_rpp(char const *rpkiNotify, char const *caRepository,
 	commit->caRepository = pstrdup(caRepository);
 	commit->files = rpp->files;
 	commit->nfiles = rpp->nfiles;
+	commit->mft = rpp->mft;
 
 	mutex_lock(&commits_lock);
 	STAILQ_INSERT_TAIL(&commits, commit, lh);
@@ -1069,6 +1084,8 @@ commit_rpp(struct cache_commit *commit, struct cache_node *fb)
 	struct cache_mapping *src;
 	char const *dst;
 	array_index i;
+
+	fb->mft = commit->mft;
 
 	for (i = 0; i < commit->nfiles; i++) {
 		src = commit->files + i;
