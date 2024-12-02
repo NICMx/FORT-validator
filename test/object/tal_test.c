@@ -7,26 +7,9 @@
 #include "common.c"
 #include "file.c"
 #include "mock.c"
-#include "types/map.c"
 #include "types/path.c"
 #include "types/str.c"
 #include "types/url.c"
-
-/* Mocks */
-
-MOCK_ABORT_INT(cache_prepare, void)
-MOCK_ABORT_VOID(cache_commit, void)
-MOCK_ABORT_PTR(db_table_create, db_table, void)
-MOCK_VOID(db_table_destroy, struct db_table *table)
-MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
-MOCK_ABORT_INT(handle_roa_v4, uint32_t as, struct ipv4_prefix const *prefix,
-    uint8_t max_length, void *arg)
-MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
-    uint8_t max_length, void *arg)
-MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
-    struct asn_range const *asns, unsigned char const *spk, void *arg)
-
-/* Tests */
 
 static void
 check_spki(struct tal *tal)

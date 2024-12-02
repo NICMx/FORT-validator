@@ -2,7 +2,7 @@
 
 #include "cache.h"
 #include "config.h"
-#include "extension.h"
+#include "ext.h"
 #include "hash.h"
 #include "http.h"
 #include "log.h"

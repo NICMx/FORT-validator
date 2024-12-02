@@ -2,7 +2,7 @@
 
 #include <openssl/objects.h>
 
-#include "extension.h"
+#include "ext.h"
 #include "json_util.h"
 #include "libcrypto_util.h"
 #include "log.h"

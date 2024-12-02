@@ -1,3 +1,6 @@
+#define _DEFAULT_SOURCE  1	/* timegm() on Linux */
+#define _DARWIN_C_SOURCE 1	/* timegm() on MacOS */
+
 #include "common.h"
 
 #include <dirent.h>

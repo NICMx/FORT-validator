@@ -7,7 +7,6 @@
 #include "mock.c"
 #include "types/array.h"
 #include "types/map.c"
-#include "types/path.c"
 
 void
 rpki_certificate_free(struct rpki_certificate *cert)

@@ -6,7 +6,6 @@
 #include "alloc.c"
 #include "common.c"
 #include "mock.c"
-#include "types/delta.c"
 #include "types/router_key.c"
 #include "types/serial.c"
 #include "types/vrp.c"
@@ -17,7 +16,6 @@
 #include "rtr/db/db_table.c"
 #include "rtr/db/rtr_db_mock.c"
 #include "rtr/db/vrps.c"
-#include "thread_pool.c"
 
 /* Mocks */
 

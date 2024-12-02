@@ -549,7 +549,7 @@ enomem_panic(void)
 		garbage = write(STDERR_FILENO, ENOMEM_MSG, strlen(ENOMEM_MSG));
 		unlock_mutex();
 		/* Prevents "set but not used" warning. */
-		garbage++;
+		garbage += garbage;
 	}
 
 	if (op_config.syslog_enabled) {

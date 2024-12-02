@@ -5,12 +5,6 @@
 #include "common.c"
 #include "mock.c"
 #include "object/manifest.c"
-#include "types/map.c"
-#include "types/path.c"
-#include "types/url.c"
-
-MOCK_ABORT_INT(signed_object_decode, struct signed_object *sobj, char const *path)
-MOCK_ABORT_VOID(signed_object_cleanup, struct signed_object *sobj)
 
 #define BUFFER_LEN 128
 static uint8_t buffer[BUFFER_LEN];

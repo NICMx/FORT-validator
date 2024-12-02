@@ -9,7 +9,7 @@
 
 #include "alloc.h"
 #include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "extension.h"
+#include "ext.h"
 #include "json_util.h"
 #include "log.h"
 

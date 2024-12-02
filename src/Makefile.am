@@ -28,7 +28,7 @@ fort_SOURCES += config/types.h
 fort_SOURCES += config/uint.c config/uint.h
 fort_SOURCES += config/work_offline.c config/work_offline.h
 fort_SOURCES += daemon.h daemon.c
-fort_SOURCES += extension.h extension.c
+fort_SOURCES += ext.h ext.c
 fort_SOURCES += file.h file.c
 fort_SOURCES += hash.h hash.c
 fort_SOURCES += http.h http.c
@@ -100,7 +100,7 @@ fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 # -Werror -Wno-unused
 fort_CFLAGS  = -Wall -Wpedantic
 #fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
+fort_CFLAGS += -std=c99 -D_XOPEN_SOURCE=700
 fort_CFLAGS += -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
 if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED

@@ -6,7 +6,6 @@
 #include "file.c"
 #include "hash.c"
 #include "mock.c"
-#include "types/path.c"
 
 /* Actually mostly tests libcrypto's sanity, not Fort's. */
 START_TEST(test_hash)

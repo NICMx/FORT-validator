@@ -18,7 +18,6 @@
 #include "rrdp.c"
 #include "types/map.c"
 #include "types/path.c"
-#include "types/str.c"
 #include "types/url.c"
 
 /* Mocks */

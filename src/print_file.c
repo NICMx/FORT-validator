@@ -1,3 +1,10 @@
+/*
+ * This seems like a MacOS bug.
+ * mkdtemp() is supposed to be POSIX 2008,
+ * but Mac considers it a "Darwin extension."
+ */
+#define _DARWIN_C_SOURCE 1 /* mkdtemp() on MacOS */
+
 #include "print_file.h"
 
 #include <errno.h>

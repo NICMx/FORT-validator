@@ -4,7 +4,6 @@
 
 #include "alloc.c"
 #include "base64.c"
-#include "cachetmp.c"
 #include "common.c"
 #include "file.c"
 #include "hash.c"
@@ -13,15 +12,7 @@
 #include "relax_ng.c"
 #include "rrdp.c"
 #include "types/map.c"
-#include "types/path.c"
 #include "types/url.c"
-
-/* Mocks */
-
-MOCK_ABORT_INT(http_download, char const *url, char const *path, curl_off_t ims,
-    bool *changed)
-
-/* Mocks end */
 
 static void
 ck_rrdp_session(char const *session, char const *serial,

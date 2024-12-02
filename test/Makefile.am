@@ -13,107 +13,115 @@ if USE_TESTS
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
 AM_CFLAGS =  -Wall -Wpedantic
-AM_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
-AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}
-# Reminder: As opposed to AM_CFLAGS, "AM_LDADD" is not idiomatic automake, and
-# autotools will even reprehend us if we declare it. Therefore, I came up with
-# "my" own "ldadd". Unlike AM_CFLAGS, it needs to be manually added to every
-# target.
-MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
+# The extra info provided by this flag allows the linker to strip unused
+# symbols, which reduces required superfluous #includes and mocks.
+# It's supported by gcc and clang, not sure about others.
+AM_CFLAGS += -flto
+AM_CFLAGS += -std=c99 -D_XOPEN_SOURCE=700
+# Most (if not all) tests need common.c, which needs timegm()
+AM_CFLAGS += -D_DEFAULT_SOURCE=1 -D_DARWIN_C_SOURCE=1
+AM_CFLAGS += -I../src -DUNIT_TESTING
+AM_CFLAGS += ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}
+# AM_LDFLAGS isn't working on Linux, and "AM_LDADD" is not idiomatic
+# automake. (autotools will reprehend us if we declare it.)
 
-check_PROGRAMS  = address.test
-check_PROGRAMS += base64.test
-check_PROGRAMS += cache.test
-check_PROGRAMS += common.test
-check_PROGRAMS += db_table.test
-check_PROGRAMS += deltas_array.test
-check_PROGRAMS += hash.test
-check_PROGRAMS += mft.test
-check_PROGRAMS += pdu_handler.test
-check_PROGRAMS += pdu_stream.test
-check_PROGRAMS += rrdp.test
-check_PROGRAMS += rrdp_update.test
-check_PROGRAMS += rsync.test
-check_PROGRAMS += serial.test
-check_PROGRAMS += tal.test
-check_PROGRAMS += task.test
-check_PROGRAMS += thread_pool.test
-check_PROGRAMS += url.test
-check_PROGRAMS += uthash.test
-check_PROGRAMS += vcard.test
-check_PROGRAMS += vrps.test
-check_PROGRAMS += xml.test
+
+check_PROGRAMS =		address.test
+address_test_SOURCES =		types/address_test.c
+address_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		base64.test
+base64_test_SOURCES =		base64_test.c
+base64_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		cache.test
+cache_test_SOURCES =		cache_test.c
+cache_test_LDADD =		${CHECK_LIBS}
+cache_test_LDADD +=		${XML2_LIBS}
+cache_test_LDADD +=		${JANSSON_LIBS}
+
+check_PROGRAMS +=		common.test
+common_test_SOURCES =		common_test.c
+common_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		db_table.test
+db_table_test_SOURCES =		rtr/db/db_table_test.c
+db_table_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		deltas_array.test
+deltas_array_test_SOURCES =	rtr/db/deltas_array_test.c
+deltas_array_test_LDADD =	${CHECK_LIBS}
+
+check_PROGRAMS +=		hash.test
+hash_test_SOURCES =		hash_test.c
+hash_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		mft.test
+mft_test_SOURCES =		object/manifest_test.c
+mft_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		pdu_handler.test
+pdu_handler_test_SOURCES =	rtr/pdu_handler_test.c
+pdu_handler_test_LDADD =	${CHECK_LIBS}
+
+check_PROGRAMS +=		pdu_stream.test
+pdu_stream_test_SOURCES =	rtr/pdu_stream_test.c
+pdu_stream_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		rrdp.test
+rrdp_test_SOURCES =		rrdp_test.c
+rrdp_test_LDADD =		${CHECK_LIBS}
+rrdp_test_LDADD +=		${XML2_LIBS}
+rrdp_test_LDADD +=		${JANSSON_LIBS}
+
+check_PROGRAMS +=		rrdp_update.test
+rrdp_update_test_SOURCES =	rrdp_update_test.c
+rrdp_update_test_LDADD =	${CHECK_LIBS}
+rrdp_update_test_LDADD +=	${XML2_LIBS}
+
+check_PROGRAMS +=		rsync.test
+rsync_test_SOURCES =		rsync_test.c
+rsync_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		serial.test
+serial_test_SOURCES =		types/serial_test.c
+serial_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		tal.test
+tal_test_SOURCES =		object/tal_test.c
+tal_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		task.test
+task_test_SOURCES =		task_test.c
+task_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		thread_pool.test
+thread_pool_test_SOURCES =	thread_pool_test.c
+thread_pool_test_LDADD =	${CHECK_LIBS}
+
+check_PROGRAMS +=		url.test
+url_test_SOURCES =		types/url_test.c
+url_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		uthash.test
+uthash_test_SOURCES =		types/uthash_test.c
+uthash_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		vcard.test
+vcard_test_SOURCES =		vcard_test.c
+vcard_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		vrps.test
+vrps_test_SOURCES =		rtr/db/vrps_test.c
+vrps_test_LDADD =		${CHECK_LIBS}
+
+check_PROGRAMS +=		xml.test
+xml_test_SOURCES =		xml_test.c
+xml_test_LDADD =		${CHECK_LIBS}
+xml_test_LDADD +=		${XML2_LIBS}
+
 TESTS = ${check_PROGRAMS}
 
-###############################################################################
-
-address_test_SOURCES = types/address_test.c
-address_test_LDADD = ${MY_LDADD}
-
-base64_test_SOURCES = base64_test.c
-base64_test_LDADD = ${MY_LDADD}
-
-cache_test_SOURCES = cache_test.c
-cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
-
-common_test_SOURCES = common_test.c
-common_test_LDADD = ${MY_LDADD}
-
-db_table_test_SOURCES = rtr/db/db_table_test.c
-db_table_test_LDADD = ${MY_LDADD}
-
-deltas_array_test_SOURCES = rtr/db/deltas_array_test.c
-deltas_array_test_LDADD = ${MY_LDADD}
-
-hash_test_SOURCES = hash_test.c
-hash_test_LDADD = ${MY_LDADD}
-
-mft_test_SOURCES = object/manifest_test.c
-mft_test_LDADD = ${MY_LDADD}
-
-pdu_handler_test_SOURCES = rtr/pdu_handler_test.c
-pdu_handler_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-pdu_stream_test_SOURCES = rtr/pdu_stream_test.c
-pdu_stream_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-rrdp_test_SOURCES = rrdp_test.c
-rrdp_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
-
-rrdp_update_test_SOURCES = rrdp_update_test.c
-rrdp_update_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS} ${XML2_LIBS}
-
-rsync_test_SOURCES = rsync_test.c
-rsync_test_LDADD = ${MY_LDADD}
-
-serial_test_SOURCES = types/serial_test.c
-serial_test_LDADD = ${MY_LDADD}
-
-tal_test_SOURCES = object/tal_test.c
-tal_test_LDADD = ${MY_LDADD}
-
-task_test_SOURCES = task_test.c
-task_test_LDADD = ${MY_LDADD}
-
-thread_pool_test_SOURCES = thread_pool_test.c
-thread_pool_test_LDADD = ${MY_LDADD}
-
-url_test_SOURCES = types/url_test.c
-url_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-uthash_test_SOURCES = types/uthash_test.c
-uthash_test_LDADD = ${MY_LDADD}
-
-vcard_test_SOURCES = vcard_test.c
-vcard_test_LDADD = ${MY_LDADD}
-
-vrps_test_SOURCES = rtr/db/vrps_test.c
-vrps_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
-xml_test_SOURCES = xml_test.c
-xml_test_LDADD = ${MY_LDADD} ${XML2_LIBS}
-
-###############################################################################
 
 EXTRA_DIST  = mock.c mock.h
 EXTRA_DIST += resources/lorem-ipsum.txt

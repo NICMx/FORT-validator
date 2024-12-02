@@ -5,7 +5,7 @@
 #include <syslog.h>
 
 #include "algorithm.h"
-#include "extension.h"
+#include "ext.h"
 #include "log.h"
 #include "thread_var.h"
 #include "types/name.h"

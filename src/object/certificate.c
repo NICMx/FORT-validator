@@ -17,7 +17,7 @@
 #include "cache.h"
 #include "common.h"
 #include "config.h"
-#include "extension.h"
+#include "ext.h"
 #include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"

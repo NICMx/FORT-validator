@@ -6,14 +6,12 @@
 #include "common.c"
 #include "file.c"
 #include "hash.c"
-#include "json_util.c"
 #include "mock.c"
 #include "mock_https.c"
 #include "relax_ng.c"
 #include "rrdp.c"
 #include "rrdp_util.h"
 #include "types/map.c"
-#include "types/path.c"
 #include "types/url.c"
 
 /* Utils */

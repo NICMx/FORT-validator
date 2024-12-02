@@ -4,11 +4,8 @@
 #include "alloc.c"
 #include "common.c"
 #include "mock.c"
+#include "types/array.h"
 #include "types/address.c"
-#include "types/delta.c"
-#include "types/router_key.c"
-#include "types/vrp.c"
-#include "rtr/db/delta.c"
 #include "rtr/db/db_table.c"
 
 #define ADDR1 htonl(0xC0000201) /* 192.0.2.1 */
