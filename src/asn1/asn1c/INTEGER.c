@@ -8,6 +8,8 @@
 #include <assert.h>
 #include <errno.h>
 
+#include "alloc.h"
+#include "common.h"
 #include "asn1/asn1c/asn_codecs_prim.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "json_util.h"
@@ -695,6 +697,44 @@ asn_strtoul_lim(const char *str, const char **end, unsigned long *ulp) {
     return ASN_STRTOX_ERROR_INVAL;
 }
 
+char *
+asn_INTEGER2str(INTEGER_t const *bi)
+{
+	return bi ? hex2str(bi->buf, bi->size) : NULL;
+}
+
+int
+asn_str2INTEGER(char const *str, INTEGER_t *bigint)
+{
+	size_t slen;
+	int error;
+
+	if (str == NULL) {
+		bigint->buf = NULL;
+		bigint->size = 0;
+		return 0;
+	}
+
+	slen = strlen(str);
+	if (slen > 40)
+		return EOVERFLOW;
+	if (slen & 1)
+		return EINVAL;
+
+	bigint->size = slen / 2;
+	bigint->buf = pmalloc(bigint->size);
+
+	error = str2hex(str, bigint->buf);
+	if (error) {
+		free(bigint->buf);
+		bigint->buf = NULL;
+		bigint->size = 0;
+		return error;
+	}
+
+	return 0;
+}
+
 int
 INTEGER_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
                      const void *bptr) {
@@ -736,4 +776,24 @@ INTEGER_compare(const asn_TYPE_descriptor_t *td, const void *aptr,
         return 1;
     }
 
+}
+
+int
+INTEGER_cmp(INTEGER_t const *a, INTEGER_t const *b)
+{
+	return INTEGER_compare(&asn_DEF_INTEGER, a, b);
+}
+
+/* Transfers ownership */
+void
+INTEGER_move(INTEGER_t *to, INTEGER_t *from)
+{
+	*to = *from;
+	memset(from, 0, sizeof(*from));
+}
+
+void
+INTEGER_cleanup(INTEGER_t *st)
+{
+	INTEGER_free(&asn_DEF_INTEGER, st, ASFM_FREE_UNDERLYING);
 }

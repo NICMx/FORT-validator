@@ -30,6 +30,10 @@ check_PROGRAMS =		address.test
 address_test_SOURCES =		types/address_test.c
 address_test_LDADD =		${CHECK_LIBS}
 
+check_PROGRAMS += asn1_int.test
+asn1_int_test_SOURCES = asn1/asn1c/INTEGER_t_test.c
+asn1_int_test_LDADD =		${CHECK_LIBS}
+
 check_PROGRAMS +=		base64.test
 base64_test_SOURCES =		base64_test.c
 base64_test_LDADD =		${CHECK_LIBS}

@@ -18,4 +18,6 @@ rpp_cleanup(struct rpp *rpp)
 		X509_CRL_free(rpp->crl.obj);
 		rpp->crl.obj = NULL;
 	}
+
+	mftm_cleanup(&rpp->mft);
 }

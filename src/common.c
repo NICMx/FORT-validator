@@ -307,3 +307,60 @@ str2time(char const *str, time_t *tt)
 	*tt = time;
 	return 0;
 }
+
+char *hex2str(uint8_t const *hex, size_t hexlen)
+{
+	static const char * const H2C = "0123456789ABCDEF";
+	char *str;
+	size_t i;
+
+	if (hex == NULL || hexlen == 0)
+		return NULL;
+
+	str = pmalloc(2 * hexlen + 1);
+	for (i = 0; i < hexlen; i++) {
+		str[2 * i    ] = H2C[hex[i] >> 4];
+		str[2 * i + 1] = H2C[hex[i] & 0xF];
+	}
+	str[2 * i] = 0;
+
+	return str;
+}
+
+static int
+c2h(char c)
+{
+	if ('0' <= c && c <= '9')
+		return c - '0';
+	if ('A' <= c && c <= 'F')
+		return c - 'A' + 10;
+	if ('a' <= c && c <= 'f')
+		return c - 'a' + 10;
+	return -1;
+}
+
+/* @hex needs to be already allocated. */
+int str2hex(char const *str, uint8_t *hex)
+{
+	size_t h;
+	int digit;
+
+	if (str[0] == 0)
+		return EINVAL; /* Not a number */
+
+	for (h = 0; str[2 * h] != 0; h++) {
+		digit = c2h(str[2 * h]);
+		if (digit < 0)
+			return EINVAL; /* Not hexadecimal */
+		hex[h] = digit << 4;
+
+		if (str[2 * h + 1] == 0)
+			return EINVAL; /* Need an even length */
+		digit = c2h(str[2 * h + 1]);
+		if (digit < 0)
+			return EINVAL; /* Not hexadecimal */
+		hex[h] |= digit;
+	}
+
+	return 0;
+}

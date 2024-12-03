@@ -395,6 +395,9 @@ json2node(json_t *json)
 	error = json_get_ts(json, "success", &node->success_ts);
 	if (error != 0 && error != ENOENT)
 		goto fail;
+	error = json_get_bigint(json, "mftNum", &node->mft.num);
+	if (error < 0)
+		goto fail;
 	error = json_get_ts(json, "mftUpdate", &node->mft.update);
 	if (error < 0)
 		goto fail;
@@ -536,6 +539,8 @@ node2json(struct cache_node *node)
 	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
 		goto fail;
 	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
+		goto fail;
+	if (node->mft.num.size && json_add_bigint(json, "mftNum", &node->mft.num))
 		goto fail;
 	if (node->mft.update && json_add_ts(json, "mftUpdate", node->mft.update))
 		goto fail;
@@ -980,8 +985,8 @@ cage_mft_fallback(struct cache_cage *cage)
 }
 
 /*
- * Steals ownership of @rpp->files and @rpp->nfiles, but they're not going to be
- * modified nor deleted until the cache cleanup.
+ * Steals ownership of @rpp->files, @rpp->nfiles and @rpp->mft.num, but they're
+ * not going to be modified nor deleted until the cache cleanup.
  */
 void
 cache_commit_rpp(char const *rpkiNotify, char const *caRepository,
@@ -994,7 +999,8 @@ cache_commit_rpp(char const *rpkiNotify, char const *caRepository,
 	commit->caRepository = pstrdup(caRepository);
 	commit->files = rpp->files;
 	commit->nfiles = rpp->nfiles;
-	commit->mft = rpp->mft;
+	INTEGER_move(&commit->mft.num, &rpp->mft.num);
+	commit->mft.update = rpp->mft.update;
 
 	mutex_lock(&commits_lock);
 	STAILQ_INSERT_TAIL(&commits, commit, lh);
@@ -1016,6 +1022,7 @@ cache_commit_file(struct cache_mapping *map)
 	commit->files[0].url = pstrdup(map->url);
 	commit->files[0].path = pstrdup(map->path);
 	commit->nfiles = 1;
+	memset(&commit->mft, 0, sizeof(commit->mft));
 
 	mutex_lock(&commits_lock);
 	STAILQ_INSERT_TAIL(&commits, commit, lh);
@@ -1085,7 +1092,8 @@ commit_rpp(struct cache_commit *commit, struct cache_node *fb)
 	char const *dst;
 	array_index i;
 
-	fb->mft = commit->mft;
+	INTEGER_move(&fb->mft.num, &commit->mft.num);
+	fb->mft.update = commit->mft.update;
 
 	for (i = 0; i < commit->nfiles; i++) {
 		src = commit->files + i;
@@ -1216,6 +1224,7 @@ skip:		free(commit->rpkiNotify);
 			free(commit->files[i].path);
 		}
 		free(commit->files);
+		mftm_cleanup(&commit->mft);
 		free(commit);
 	}
 }

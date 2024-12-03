@@ -51,6 +51,9 @@ rsync_download(char const *url, char const *path)
 
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 MOCK_VOID(task_wakeup_busy, void)
+__MOCK_ABORT(asn_INTEGER2str, char *, NULL, INTEGER_t const *bi)
+MOCK_VOID(INTEGER_move, INTEGER_t *to, INTEGER_t *from)
+MOCK_VOID(INTEGER_cleanup, INTEGER_t *i)
 
 /* Helpers */
 

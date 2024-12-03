@@ -3,6 +3,7 @@
 
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -58,5 +59,8 @@ time_t time_fatal(void);
 #define FORT_TS_LEN 21 /* strlen("YYYY-mm-ddTHH:MM:SSZ") + 1 */
 int time2str(time_t, char *);
 int str2time(char const *, time_t *);
+
+char *hex2str(uint8_t const *, size_t);
+int str2hex(char const *, uint8_t *);
 
 #endif /* SRC_RTR_COMMON_H_ */

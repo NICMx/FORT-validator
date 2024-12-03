@@ -1395,53 +1395,28 @@ fail:	json_decref(json);
 	return NULL;
 }
 
-static char
-hash_c2b(char chara)
-{
-	if ('a' <= chara && chara <= 'f')
-		return chara - 'a' + 10;
-	if ('A' <= chara && chara <= 'F')
-		return chara - 'A' + 10;
-	if ('0' <= chara && chara <= '9')
-		return chara - '0';
-	return -1;
-}
-
 static int
-json2dh(json_t *json, struct rrdp_hash **result)
+json2dh(json_t *json, struct rrdp_hash **dh)
 {
-	char const *src;
-	size_t srclen;
-	struct rrdp_hash *dst;
-	char digit;
-	size_t i;
+	char const *str;
+	struct rrdp_hash *hash;
 
-	src = json_string_value(json);
-	if (src == NULL)
+	str = json_string_value(json);
+	if (str == NULL)
 		return pr_op_err("Hash is not a string.");
 
-	srclen = strlen(src);
-	if (srclen != 2 * RRDP_HASH_LEN)
-		return pr_op_err("Hash is not %d characters long.", 2 * RRDP_HASH_LEN);
+	if (strlen(str) != 2 * RRDP_HASH_LEN)
+		return pr_op_err("Hash is not %d characters long.",
+		    2 * RRDP_HASH_LEN);
 
-	dst = pmalloc(sizeof(struct rrdp_hash));
-	for (i = 0; i < RRDP_HASH_LEN; i++) {
-		digit = hash_c2b(src[2 * i]);
-		if (digit == -1)
-			goto bad_char;
-		dst->bytes[i] = digit << 4;
-		digit = hash_c2b(src[2 * i + 1]);
-		if (digit == -1)
-			goto bad_char;
-		dst->bytes[i] |= digit;
+	hash = pmalloc(sizeof(struct rrdp_hash));
+	if (str2hex(str, hash->bytes) != 0) {
+		free(hash);
+		return pr_op_err("Malformed hash: %s", str);
 	}
 
-	*result = dst;
+	*dh = hash;
 	return 0;
-
-bad_char:
-	free(dst);
-	return pr_op_err("Invalid characters in hash: %c%c", src[2 * i], src[2 * i] + 1);
 }
 
 static void

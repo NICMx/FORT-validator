@@ -83,10 +83,17 @@ enum asn_strtox_result_e asn_strtoimax_lim(const char *str, const char **end,
 enum asn_strtox_result_e asn_strtoumax_lim(const char *str, const char **end,
                                            uintmax_t *l);
 
+char *asn_INTEGER2str(INTEGER_t const *);
+int asn_str2INTEGER(char const *, INTEGER_t *);
+
 /*
  * Convert the integer value into the corresponding enumeration map entry.
  */
 const asn_INTEGER_enum_map_t *INTEGER_map_value2enum(
     const asn_INTEGER_specifics_t *specs, long value);
+
+int INTEGER_cmp(INTEGER_t const *, INTEGER_t const *);
+void INTEGER_move(INTEGER_t *, INTEGER_t *);
+void INTEGER_cleanup(INTEGER_t *);
 
 #endif	/* _INTEGER_H_ */

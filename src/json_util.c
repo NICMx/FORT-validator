@@ -104,6 +104,24 @@ json_get_ulong(json_t *parent, char const *name, unsigned long *result)
 }
 
 int
+json_get_bigint(json_t *parent, char const *name, INTEGER_t *result)
+{
+	char const *str;
+	int error;
+
+	error = json_get_str(parent, name, &str);
+	if (error)
+		return error;
+
+	error = asn_str2INTEGER(str, result);
+	if (error)
+		pr_op_err("Tag '%s' (%s) cannot be parsed into an integer: %s",
+		    name, str, strerror(error));
+
+	return error;
+}
+
+int
 json_get_ts(json_t *parent, char const *name, time_t *result)
 {
 	char const *str;
@@ -186,6 +204,22 @@ json_add_ulong(json_t *parent, char const *name, unsigned long value)
 		);
 
 	return 0;
+}
+
+int
+json_add_bigint(json_t *parent, char const *name, INTEGER_t *value)
+{
+	char *str;
+	int error;
+
+	str = asn_INTEGER2str(value);
+	if (!str)
+		return pr_op_err("Cannot convert %s to string.", name);
+
+	error = json_add_str(parent, name, str);
+
+	free(str);
+	return error;
 }
 
 int

@@ -124,6 +124,8 @@ check_more_recent(struct cache_cage *cage, struct mft_meta *current)
 	if (!prev)
 		return 0;
 
+	if (prev->num.size && INTEGER_cmp(&prev->num, &current->num) > 0)
+		return pr_val_err("The fallback manifest has a higher manifestNumber than the downloaded one.");
 	if (prev->update && difftime(prev->update, current->update) > 0)
 		return pr_val_err("The fallback manifest is newer than the downloaded one.");
 
@@ -176,6 +178,7 @@ validate_manifest(struct Manifest *mft, struct cache_cage *cage,
 	 */
 	if (mft->manifestNumber.size > 20)
 		return pr_val_err("Manifest number is larger than 20 octets");
+	INTEGER_move(&meta->num, &mft->manifestNumber);
 
 	/* rfc6486#section-4.4.3 */
 	error = validate_dates(&mft->thisUpdate, &mft->nextUpdate, meta);
