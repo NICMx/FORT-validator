@@ -45,6 +45,9 @@ resources_create(enum rpki_policy policy, bool force_inherit)
 void
 resources_destroy(struct resources *resources)
 {
+	if (resources == NULL)
+		return;
+
 	if (resources->ip4s != NULL)
 		res4_put(resources->ip4s);
 	if (resources->ip6s != NULL)

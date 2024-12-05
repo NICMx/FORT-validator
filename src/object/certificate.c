@@ -1848,8 +1848,10 @@ certificate_validate(struct rpki_certificate *cert)
 	fnstack_push_map(&cert->map);
 
 	cert->x509 = certificate_load(cert->map.path);
-	if (!cert->x509)
-		return -EINVAL;
+	if (!cert->x509) {
+		error = -EINVAL;
+		goto end;
+	}
 	cert->type = get_certificate_type(cert);
 
 	error = certificate_validate_chain(cert);

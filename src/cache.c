@@ -910,13 +910,12 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 	if (!node)
 		return EINVAL; /* Nothing to work with */
 
-	*result = cage = pmalloc(sizeof(struct cache_cage));
-	cage->refresh = NULL;
+	*result = cage = pzalloc(sizeof(struct cache_cage));
 	cage->fallback = node;
 	return 0;
 
 refresh_success:
-	*result = cage = pmalloc(sizeof(struct cache_cage));
+	*result = cage = pzalloc(sizeof(struct cache_cage));
 	cage->rpkiNotify = rpkiNotify;
 	cage->refresh = node;
 	cage->fallback = get_fallback(sias);
