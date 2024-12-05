@@ -252,6 +252,13 @@ cseq_init(struct cache_sequence *seq, char *prefix, bool free_prefix)
 	seq->free_prefix = free_prefix;
 }
 
+void
+cseq_cleanup(struct cache_sequence *seq)
+{
+	if (seq->free_prefix)
+		free(seq->prefix);
+}
+
 char *
 cseq_next(struct cache_sequence *seq)
 {

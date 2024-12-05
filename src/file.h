@@ -47,6 +47,7 @@ struct cache_sequence {
 };
 
 void cseq_init(struct cache_sequence *, char *, bool);
+void cseq_cleanup(struct cache_sequence *);
 char *cseq_next(struct cache_sequence *);
 
 /*

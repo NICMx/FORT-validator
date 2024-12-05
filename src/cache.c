@@ -421,11 +421,20 @@ json2tbl(json_t *root, struct cache_table *tbl)
 	struct cache_node *node;
 	size_t urlen;
 
-	// XXX load (and save) seqs
-	if (json_get_ulong(root, "next", &tbl->seq.next_id))
+	if (json_get_object(root, tbl->name, &root))
 		return;
-	if (json_get_array(root, tbl->name, &array))
+
+	if (json_get_seq(root, "seq", &tbl->seq)) {
+		// XXX this is grouds to reset the cache...
+		pr_op_warn("Unable to load the 'seq' child for the %s table.",
+		    tbl->name);
 		return;
+	}
+	if (json_get_array(root, "nodes", &array)) {
+		pr_op_warn("Unable to load the 'nodes' child for the %s table.",
+		    tbl->name);
+		return;
+	}
 
 	json_array_foreach(array, index, child) {
 		node = json2node(child);
@@ -564,7 +573,7 @@ tbl2json(struct cache_table *tbl)
 	if (!json)
 		return NULL;
 
-	if (json_add_ulong(json, "next", tbl->seq.next_id))
+	if (json_add_seq(json, "seq", &tbl->seq))
 		goto fail;
 
 	nodes = json_array_new();

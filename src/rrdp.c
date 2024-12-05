@@ -1383,7 +1383,7 @@ rrdp_state2json(struct rrdp_state *state)
 	if (state->files)
 		if (json_object_add(json, "files", files2json(state)))
 			goto fail;
-	if (json_add_ulong(json, "next", state->seq.next_id))
+	if (json_add_seq(json, "seq", &state->seq))
 		goto fail;
 	if (!STAILQ_EMPTY(&state->delta_hashes))
 		if (json_object_add(json, TAGNAME_DELTAS, dh2json(state)))
@@ -1431,18 +1431,46 @@ clear_delta_hashes(struct rrdp_state *state)
 	}
 }
 
-int
-rrdp_json2state(json_t *json, struct rrdp_state **result)
+static int
+json2dhs(json_t *json, struct rrdp_state *state)
 {
-	struct rrdp_state *state;
-	char const *str;
 	json_t *jdeltas;
 	size_t d, dn;
 	struct rrdp_hash *hash;
 	int error;
 
-	state = pzalloc(sizeof(struct rrdp_state));
 	STAILQ_INIT(&state->delta_hashes);
+
+	error = json_get_array(json, TAGNAME_DELTAS, &jdeltas);
+	if (error)
+		return (error > 0) ? 0 : error;
+
+	dn = json_array_size(jdeltas);
+	if (dn == 0)
+		return 0;
+	if (dn > config_get_rrdp_delta_threshold())
+		dn = config_get_rrdp_delta_threshold();
+
+	for (d = 0; d < dn; d++) {
+		error = json2dh(json_array_get(jdeltas, d), &hash);
+		if (error) {
+			clear_delta_hashes(state);
+			return error;
+		}
+		STAILQ_INSERT_TAIL(&state->delta_hashes, hash, hook);
+	}
+
+	return 0;
+}
+
+int
+rrdp_json2state(json_t *json, struct rrdp_state **result)
+{
+	struct rrdp_state *state;
+	char const *str;
+	int error;
+
+	state = pzalloc(sizeof(struct rrdp_state));
 
 	error = json_get_str(json, TAGNAME_SESSION, &str);
 	if (error < 0)
@@ -1460,32 +1488,19 @@ rrdp_json2state(json_t *json, struct rrdp_state **result)
 		goto revert_serial;
 	}
 
-	error = json_get_array(json, TAGNAME_DELTAS, &jdeltas);
-	if (error) {
-		if (error > 0)
-			goto success;
+	error = json_get_seq(json, "seq", &state->seq);
+	if (error)
 		goto revert_serial;
-	}
 
-	dn = json_array_size(jdeltas);
-	if (dn == 0)
-		goto success;
-	if (dn > config_get_rrdp_delta_threshold())
-		dn = config_get_rrdp_delta_threshold();
+	error = json2dhs(json, state);
+	if (error)
+		goto revert_seq;
 
-	for (d = 0; d < dn; d++) {
-		error = json2dh(json_array_get(jdeltas, d), &hash);
-		if (error)
-			goto revert_deltas;
-		STAILQ_INSERT_TAIL(&state->delta_hashes, hash, hook);
-	}
-
-success:
 	*result = state;
 	return 0;
 
-revert_deltas:
-	clear_delta_hashes(state);
+revert_seq:
+	cseq_cleanup(&state->seq);
 revert_serial:
 	BN_free(state->session.serial.num);
 	free(state->session.serial.str);
@@ -1510,8 +1525,7 @@ rrdp_state_free(struct rrdp_state *state)
 		map_cleanup(&file->map);
 		free(file);
 	}
-	if (state->seq.free_prefix)
-		free(state->seq.prefix);
+	cseq_cleanup(&state->seq);
 	clear_delta_hashes(state);
 	free(state);
 }

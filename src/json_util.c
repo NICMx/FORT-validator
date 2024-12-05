@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <time.h>
 
+#include "alloc.h"
 #include "common.h"
 #include "log.h"
 
@@ -170,6 +171,35 @@ json_get_object(json_t *parent, char const *name, json_t **obj)
 	return 0;
 }
 
+int
+json_get_seq(json_t *parent, char const *name, struct cache_sequence *seq)
+{
+	json_t *child;
+	char const *pfx;
+	int error;
+
+	error = json_get_object(parent, name, &child);
+	if (error)
+		return error;
+
+	error = json_get_str(child, "pfx", &pfx);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return pr_op_err(
+		    "The '%s' JSON object is missing mandatory child 'pfx'.",
+		    name
+		);
+	error = json_get_ulong(child, "next", &seq->next_id);
+	if (error < 0)
+		return error;
+
+	seq->prefix = pstrdup(pfx);
+	seq->pathlen = strlen(pfx) + 4;
+	seq->free_prefix = true;
+	return 0;
+}
+
 /*
  * Any unknown members should be treated as errors, RFC8416 3.1:
  * "JSON members that are not defined here MUST NOT be used in SLURM
@@ -254,6 +284,33 @@ json_add_ts(json_t *parent, char const *name, time_t value)
 		);
 
 	return 0;
+}
+
+int
+json_add_seq(json_t *parent, char const *name,
+    struct cache_sequence const *value)
+{
+	json_t *seq;
+
+	seq = json_obj_new();
+	if (seq == NULL)
+		return -EINVAL;
+
+	if (json_add_ulong(seq, "next", value->next_id))
+		goto fail;
+	if (json_add_str(seq, "pfx", value->prefix))
+		goto fail;
+
+	if (json_object_set_new(parent, name, seq))
+		return pr_op_err(
+		    "Cannot convert sequence [%s, %lu] to json; unknown cause.",
+		    value->prefix, value->next_id
+		);
+
+	return 0;
+
+fail:	json_decref(seq);
+	return -EINVAL;
 }
 
 #define OOM_PFX " Likely out of memory (but there is no contract)."
