@@ -158,14 +158,16 @@ json_get_object(json_t *parent, char const *name, json_t **obj)
 {
 	json_t *child;
 
-	*obj = NULL;
-
 	child = json_object_get(parent, name);
-	if (child == NULL)
+	if (child == NULL) {
+		*obj = NULL;
 		return ENOENT;
+	}
 
-	if (!json_is_object(child))
+	if (!json_is_object(child)) {
+		*obj = NULL;
 		return pr_op_err("Tag '%s' is not a JSON object.", name);
+	}
 
 	*obj = child;
 	return 0;

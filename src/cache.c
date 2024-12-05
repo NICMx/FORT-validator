@@ -1069,10 +1069,9 @@ table_print(struct cache_table *tbl)
 {
 	struct cache_node *node, *tmp;
 
-	if (HASH_COUNT(tbl->nodes) == 0)
-		return;
-
-	printf("    %s (%s):\n", tbl->name, tbl->enabled ? "enabled" : "disabled");
+	printf("    %s enabled:%d seq:%s/%lu\n",
+	    tbl->name, tbl->enabled,
+	    tbl->seq.prefix, tbl->seq.next_id);
 	HASH_ITER(hh, tbl->nodes, node, tmp)
 		cachent_print(node);
 }

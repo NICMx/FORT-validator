@@ -1396,6 +1396,44 @@ fail:	json_decref(json);
 }
 
 static int
+json2session(json_t *parent, char **session)
+{
+	char const *str;
+	int error;
+
+	error = json_get_str(parent, TAGNAME_SESSION, &str);
+	*session = error ? NULL : pstrdup(str);
+	return error;
+}
+
+static int
+json2serial(json_t *parent, struct rrdp_serial *serial)
+{
+	char const *str;
+	int error;
+
+	error = json_get_str(parent, TAGNAME_SERIAL, &str);
+	if (error < 0)
+		return error;
+	if (error > 0) {
+		serial->num = NULL;
+		serial->str = NULL;
+		return error;
+	}
+
+	serial->num = BN_create();
+	serial->str = pstrdup(str);
+	if (!BN_dec2bn(&serial->num, serial->str)) {
+		error = pr_op_err("Not a serial number: %s", serial->str);
+		BN_free(serial->num);
+		free(serial->str);
+		return error;
+	}
+
+	return 0;
+}
+
+static int
 json2dh(json_t *json, struct rrdp_hash **dh)
 {
 	char const *str;
@@ -1467,31 +1505,19 @@ int
 rrdp_json2state(json_t *json, struct rrdp_state **result)
 {
 	struct rrdp_state *state;
-	char const *str;
 	int error;
 
 	state = pzalloc(sizeof(struct rrdp_state));
 
-	error = json_get_str(json, TAGNAME_SESSION, &str);
-	if (error < 0)
+	error = json2session(json, &state->session.session_id);
+	if (error)
 		goto revert_notif;
-	state->session.session_id = (error == 0) ? pstrdup(str) : NULL;
-
-	error = json_get_str(json, TAGNAME_SERIAL, &str);
-	if (error < 0)
+	error = json2serial(json, &state->session.serial);
+	if (error)
 		goto revert_session;
-	state->session.serial.str = (error == 0) ? pstrdup(str) : NULL;
-
-	state->session.serial.num = BN_create();
-	if (!BN_dec2bn(&state->session.serial.num, state->session.serial.str)) {
-		error = pr_op_err("Not a serial number: %s", state->session.serial.str);
-		goto revert_serial;
-	}
-
 	error = json_get_seq(json, "seq", &state->seq);
 	if (error)
 		goto revert_serial;
-
 	error = json2dhs(json, state);
 	if (error)
 		goto revert_seq;
