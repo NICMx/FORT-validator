@@ -180,6 +180,8 @@ file_rm_f(char const *path)
 {
 	int error;
 
+	pr_op_debug("rm -f %s", path);
+
 	if (remove(path) < 0) {
 		error = errno;
 		if (error != ENOENT)

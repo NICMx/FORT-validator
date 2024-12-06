@@ -487,6 +487,25 @@ load_index_file(void)
 
 	json_decref(root);
 	pr_op_debug(INDEX_FILE " loaded.");
+
+	/*
+	 * There are many ways in which a mismatching cache index can cause
+	 * erratic behavior that's hard to detect. Since the index is written at
+	 * the end of the validation cycle, crashing at any point between a
+	 * cache refresh and the index write results in a misindexed cache.
+	 *
+	 * Deleting the index right after loading it seems to be a simple and
+	 * reliable way to force Fort to reset the cache after a crash.
+	 * (Recovering with an empty cache is safer than with a misindexed one.)
+	 */
+	error = file_rm_f(INDEX_FILE);
+	if (error)
+		pr_op_warn("Unable to delete " INDEX_FILE ": %s. "
+		    "This means Fort might not recover properly after a crash. "
+		    "If Fort crashes for some reason, "
+		    "please clear the cache manually before restarting.",
+		    strerror(error));
+
 	return 0;
 
 fail:	json_decref(root);
