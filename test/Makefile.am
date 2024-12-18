@@ -108,4 +108,7 @@ EXTRA_DIST += rtr/db/rtr_db_mock.c
 EXTRA_DIST += tal/lacnic.tal
 EXTRA_DIST += xml/notification.xml
 
+clean-local:
+	rm -rf tmp/ # test sandboxes
+
 endif

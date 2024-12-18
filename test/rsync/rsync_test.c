@@ -14,6 +14,9 @@ static char content[1024];
 
 /* Mocks */
 
+#define CACHEDIR "tmp/rsync"
+
+__MOCK_ABORT(config_get_local_repository, char const *, CACHEDIR, void)
 MOCK(config_get_rsync_program, char *, "rsync", void)
 MOCK_UINT(config_get_rsync_retry_count, 0, void)
 MOCK_UINT(config_get_rsync_retry_interval, 10, void)
@@ -70,9 +73,14 @@ init_content(void)
 static void
 init_tmp(void)
 {
-	int res = mkdir("tmp/", 0700);
-	if (res && errno != EEXIST)
-		pr_crit("Could not create tmp/: %s", strerror(errno));
+	int error;
+
+	error = system("rm -rf " CACHEDIR);
+	if (error)
+		pr_crit("system(rm): %d", error);
+	error = system("mkdir -p " CACHEDIR);
+	if (error)
+		pr_crit("system(mkdir): %d", error);
 }
 
 static void *
@@ -209,28 +217,28 @@ ensure_file_deleted(char const *name)
 START_TEST(full_rsync_timeout_test_1kb)
 {
 	printf("1kb\n");
-	create_file("tmp/1kb", 1);
-	ensure_file_deleted("tmp/1kb-copy");
-	ck_assert_int_eq(0, rsync_download("tmp/1kb", "tmp/1kb-copy", false));
+	create_file(CACHEDIR "/1kb", 1);
+	ensure_file_deleted(CACHEDIR "/1kb-copy");
+	ck_assert_int_eq(0, rsync_download(CACHEDIR "/1kb", CACHEDIR "/1kb-copy", false));
 }
 END_TEST
 
 START_TEST(full_rsync_timeout_test_3kb)
 {
 	printf("3kb\n");
-	create_file("tmp/3kb", 3);
-	ensure_file_deleted("tmp/3kb-copy");
-	ck_assert_int_eq(0, rsync_download("tmp/3kb", "tmp/3kb-copy", false));
+	create_file(CACHEDIR "/3kb", 3);
+	ensure_file_deleted(CACHEDIR"/3kb-copy");
+	ck_assert_int_eq(0, rsync_download(CACHEDIR "/3kb", CACHEDIR "/3kb-copy", false));
 }
 END_TEST
 
 START_TEST(full_rsync_timeout_test_5kb)
 {
 	printf("5kb\n");
-	create_file("tmp/5kb", 5);
-	ensure_file_deleted("tmp/5kb-copy");
+	create_file(CACHEDIR "/5kb", 5);
+	ensure_file_deleted(CACHEDIR "/5kb-copy");
 	/* Max speed is 1kbps, timeout is 4 seconds */
-	ck_assert_int_eq(EIO, rsync_download("tmp/5kb", "tmp/5kb-copy", false));
+	ck_assert_int_eq(EIO, rsync_download(CACHEDIR "/5kb", CACHEDIR "/5kb-copy", false));
 }
 END_TEST
 
