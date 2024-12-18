@@ -67,9 +67,7 @@ Malicious rsync repositories can block Fort by drip-feeding repository objects.
 | Patch | Commit [4ee88d1](https://github.com/NICMx/FORT-validator/commit/4ee88d1c3fa7df763dd52312134cd93c1ce50870), released in Fort 1.6.4. |
 | Acknowledgments | Thanks to Koen van Hove for his research and disclosure, and Job Snijders for the proposed fix. |
 
-## CVE-XXXX-XXXXX
-
-(Awaiting CVE ID number assignment.)
+## CVE-2024-56170
 
 Fort is employing the latest fetched manifest, rather than the one with the most recent metadata.
 
@@ -78,9 +76,7 @@ Fort is employing the latest fetched manifest, rather than the one with the most
 | Patch | Scheduled for Fort release [2.0.0](https://github.com/NICMx/FORT-validator/milestone/12). |
 | Acknowledgments | Job Snijders |
 
-## CVE-YYYY-YYYYY
-
-(Awaiting CVE ID number assignment.)
+## CVE-2024-56169
 
 Fort's cache provides insufficient fallbacking.
 
