@@ -181,22 +181,15 @@ validate_manifest(struct Manifest *manifest)
 	return 0;
 }
 
-static int
-build_rpp(struct Manifest *mft, struct rpki_uri *notif,
-    struct rpki_uri *mft_uri, struct rpp **pp)
+/* Requires list->count > 0 */
+static void
+shuffle_file_list(struct Manifest *mft)
 {
-	char const *tal;
-	unsigned int i, j;
-	struct FileAndHash *fah, *tmpfah;
-	struct rpki_uri *uri;
-	int error;
 	unsigned int seed, rnd;
+	unsigned int i, j;
+	struct FileAndHash *tmpfah;
 
 	seed = time(NULL) ^ getpid();
-
-	*pp = rpp_create();
-
-	tal = tal_get_file_name(validation_tal(state_retrieve()));
 
 	/* Fisher-Yates shuffle with modulo bias */
 	for (i = 0; i < mft->fileList.list.count - 1; i++) {
@@ -206,6 +199,25 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 		mft->fileList.list.array[j] = mft->fileList.list.array[i];
 		mft->fileList.list.array[i] = tmpfah;
 	}
+}
+
+static int
+build_rpp(struct Manifest *mft, struct rpki_uri *notif,
+    struct rpki_uri *mft_uri, struct rpp **pp)
+{
+	char const *tal;
+	unsigned int i;
+	struct FileAndHash *fah;
+	struct rpki_uri *uri;
+	int error;
+
+	if (mft->fileList.list.count == 0)
+		return pr_val_err("Manifest's file list is empty.");
+
+	shuffle_file_list(mft);
+
+	*pp = rpp_create();
+	tal = tal_get_file_name(validation_tal(state_retrieve()));
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
