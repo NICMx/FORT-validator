@@ -1,6 +1,6 @@
 #--- Alpine build container ---
 FROM alpine:latest AS builder
-ARG FORT_VERSION=1.6.4
+ARG FORT_VERSION=1.6.5
 
 # Install compiler and dependencies
 RUN apk --update --no-cache add build-base autoconf automake pkgconfig jansson-dev check-dev \
