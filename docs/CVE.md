@@ -85,3 +85,14 @@ Fort's cache provides insufficient fallbacking.
 | Patch | Scheduled for Fort release [2.0.0](https://github.com/NICMx/FORT-validator/milestone/12). |
 | Acknowledgments | Ties de Kock |
 | Issue | [82](https://github.com/NICMx/FORT-validator/issues/82) |
+
+## CVE-XXXX-XXXXX
+
+(Awaiting CVE ID number assignment.)
+
+Manifest containing empty `fileList` crashes Fort 1.6.3, 1.6.4.
+
+| Description | A malicious RPKI repository that descends from a (trusted) Trust Anchor can serve (via rsync or RRDP) a Manifest RPKI object containing an empty fileList.<br>Fort dereferences (and shortly afterwards writes) this array during a shuffle attempt, before the validation that would normally reject it when empty.<br>This out-of-bounds access is caused by an integer underflow that causes the surrounding loop to iterate infinitely. As Fort gets stuck permanently attempting to overshuffle an array that doesn't actually exist, a crash is pretty much guaranteed. |
+| Impact | Crash. (Potential unavailability of Route Origin Validation.) |
+| Patch | Commit [17f0952](https://github.com/NICMx/FORT-validator/commit/17f095210553182b0e0a28ee6fd41b0d3c8fc1d3), released in Fort 1.6.5. |
+| Acknowledgments | Niklas Vogel |
