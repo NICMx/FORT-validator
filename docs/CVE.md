@@ -86,9 +86,7 @@ Fort's cache provides insufficient fallbacking.
 | Acknowledgments | Ties de Kock |
 | Issue | [82](https://github.com/NICMx/FORT-validator/issues/82) |
 
-## CVE-XXXX-XXXXX
-
-(Awaiting CVE ID number assignment.)
+## CVE-2024-56375
 
 Manifest containing empty `fileList` crashes Fort 1.6.3, 1.6.4.
 
