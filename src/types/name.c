@@ -160,7 +160,7 @@ validate_issuer_name(X509_NAME *issuer, X509 *parent)
 	error = x509_name_decode(issuer, "issuer", &child_issuer);
 	if (error)
 		goto end;
-	pr_val_debug("Issuer: %s", child_issuer->commonName);
+	pr_clutter("Issuer: %s", child_issuer->commonName);
 
 	if (!x509_name_equals(parent_subject, child_issuer)) {
 		char const *parent_serial;
@@ -184,21 +184,21 @@ end:	x509_name_put(parent_subject);
 }
 
 void
-x509_name_pr_debug(const char *prefix, X509_NAME *name)
+x509_name_pr_clutter(const char *prefix, X509_NAME *name)
 {
-	if (!log_val_enabled(LOG_DEBUG))
+	if (!pr_clutter_enabled())
 		return;
 
 	struct rfc5280_name *printable;
 
 	if (name == NULL) {
-		pr_val_debug("%s: (null)", prefix);
+		pr_clutter("%s: (null)", prefix);
 		return;
 	}
 
 	if (x509_name_decode(name, prefix, &printable) != 0)
 		return; /* Error message already printed */
 
-	pr_val_debug("%s: %s", prefix, printable->commonName);
+	pr_clutter("%s: %s", prefix, printable->commonName);
 	x509_name_put(printable);
 }

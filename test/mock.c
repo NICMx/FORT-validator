@@ -9,9 +9,6 @@
 
 /* Some core functions, as linked from unit tests. */
 
-MOCK_TRUE(log_val_enabled, unsigned int l)
-MOCK_TRUE(log_op_enabled, unsigned int l)
-
 /* CFLAGS=-DPRINT_PRS make check */
 #ifdef PRINT_PRS
 #define MOCK_PRINT(color)						\

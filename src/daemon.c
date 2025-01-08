@@ -70,6 +70,7 @@ daemonize(daemon_log_cb log_cb)
 	 * Ignore SIGHUP. SIGCHLD isn't ignored since we still do a fork to
 	 * execute rsync; when that's not the case then:
 	 *   signal(SIGCHLD, SIG_IGN);
+	 * XXX unsafe on multithreaded
 	 */
 	signal(SIGHUP, SIG_IGN);
 

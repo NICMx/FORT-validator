@@ -122,7 +122,7 @@ validate_issuer(struct rpki_certificate *cert)
 	error = x509_name_decode(issuer, "issuer", &name);
 	if (error)
 		return error;
-	pr_val_debug("Issuer: %s", x509_name_commonName(name));
+	pr_clutter("Issuer: %s", x509_name_commonName(name));
 	x509_name_put(name);
 
 	return 0;
@@ -181,7 +181,7 @@ validate_subject(X509 *cert)
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
 		return error;
-	pr_val_debug("Subject: %s", x509_name_commonName(name));
+	pr_clutter("Subject: %s", x509_name_commonName(name));
 
 	x509_name_put(name);
 	return error;
@@ -890,14 +890,14 @@ build_crl_stack(struct rpki_certificate *cert)
 }
 
 static void
-pr_debug_x509_dates(X509 *x509)
+pr_clutter_x509_dates(X509 *x509)
 {
 	char *nb, *na;
 
 	nb = asn1time2str(X509_get0_notBefore(x509));
 	na = asn1time2str(X509_get0_notAfter(x509));
 
-	pr_val_debug("Valid range: [%s, %s]", nb, na);
+	pr_clutter("Valid range: [%s, %s]", nb, na);
 
 	free(nb);
 	free(na);
@@ -978,8 +978,8 @@ certificate_validate_chain(struct rpki_certificate *cert)
 	}
 	X509_STORE_CTX_set0_crls(ctx, crls);
 
-	if (log_val_enabled(LOG_DEBUG))
-		pr_debug_x509_dates(cert->x509);
+	if (pr_clutter_enabled())
+		pr_clutter_x509_dates(cert->x509);
 
 	/*
 	 * HERE'S THE MEAT OF LIBCRYPTO'S VALIDATION.
@@ -1191,7 +1191,7 @@ handle_rpkiManifest(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
 
-	pr_val_debug("rpkiManifest: %s", uri);
+	pr_clutter("rpkiManifest: %s", uri);
 
 	if (uris->rpkiManifest != NULL) {
 		pr_val_warn("Ignoring additional rpkiManifest: %s", uri);
@@ -1206,7 +1206,7 @@ handle_caRepository(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
 
-	pr_val_debug("caRepository: %s", uri);
+	pr_clutter("caRepository: %s", uri);
 
 	if (uris->caRepository != NULL) {
 		pr_val_warn("Ignoring additional caRepository: %s", uri);
@@ -1221,7 +1221,7 @@ handle_rpkiNotify(char *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
 
-	pr_val_debug("rpkiNotify: %s", uri);
+	pr_clutter("rpkiNotify: %s", uri);
 
 	if (uris->rpkiNotify != NULL) {
 		pr_val_warn("Ignoring additional rpkiNotify: %s", uri);
@@ -1235,7 +1235,7 @@ static void
 handle_signedObject(char *uri, void *arg)
 {
 	struct sia_uris *sias = arg;
-	pr_val_debug("signedObject: %s", uri);
+	pr_clutter("signedObject: %s", uri);
 	sias->signedObject = uri;
 }
 
@@ -1860,13 +1860,13 @@ certificate_validate(struct rpki_certificate *cert)
 
 	switch (cert->type) {
 	case CERTYPE_TA:
-		pr_val_debug("Type: TA");
+		pr_clutter("Type: TA");
 		break;
 	case CERTYPE_CA:
-		pr_val_debug("Type: CA");
+		pr_clutter("Type: CA");
 		break;
 	case CERTYPE_BGPSEC:
-		pr_val_debug("Type: BGPsec EE. Ignoring...");
+		pr_clutter("Type: BGPsec EE. Ignoring...");
 //		error = handle_bgpsec(cert, x509stack_peek_resources(
 //		    validation_certstack(state)), rpp_parent);
 		goto end;

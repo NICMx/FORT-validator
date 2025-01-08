@@ -63,8 +63,11 @@ void log_teardown(void);
  * Check if corresponding logging is enabled. You can use these to short-circuit
  * out of heavy logging code.
  */
-bool log_val_enabled(unsigned int level);
-bool log_op_enabled(unsigned int level);
+bool pr_val_enabled(unsigned int level);
+bool pr_op_enabled(unsigned int level);
+
+#define pr_clutter_enabled() false
+#define pr_clutter(...)
 
 /* == Operation logs == */
 
@@ -80,7 +83,6 @@ int pr_op_err(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_op_err_st(const char *format, ...) CHECK_FORMAT(1, 2);
 /* Like pr_op_err(), except it prints libcrypto's error stack as well. */
 int op_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
-
 
 /* == Validation logs == */
 

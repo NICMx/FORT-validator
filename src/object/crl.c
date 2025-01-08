@@ -40,7 +40,7 @@ end:
 }
 
 static void
-debug_revoked(ASN1_INTEGER const *serial_int)
+pr_clutter_revoked(ASN1_INTEGER const *serial_int)
 {
 	BIGNUM *serial_bn;
 	char *serial_str;
@@ -57,7 +57,7 @@ debug_revoked(ASN1_INTEGER const *serial_int)
 		goto end;
 	}
 
-	pr_val_debug("Revoked: %s", serial_str);
+	pr_clutter("Revoked: %s", serial_str);
 
 	free(serial_str);
 end:	BN_free(serial_bn);
@@ -84,8 +84,8 @@ validate_revoked(X509_CRL *crl)
 			    i + 1);
 		}
 
-		if (log_val_enabled(LOG_DEBUG))
-			debug_revoked(serial_int);
+		if (pr_clutter_enabled())
+			pr_clutter_revoked(serial_int);
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {
 			return pr_val_err("CRL's revoked entry #%d lacks a revocation date.",

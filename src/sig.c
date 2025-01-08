@@ -59,6 +59,7 @@ do_cleanup(int signum)
 	output_atexit();
 
 	/* Trigger default handler */
+	/* XXX unsafe on multithreaded */
 	signal(signum, SIG_DFL);
 	kill(getpid(), signum);
 }

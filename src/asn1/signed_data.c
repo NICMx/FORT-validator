@@ -59,7 +59,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct rpki_certificate *ee,
 	if (tmp != otmp + cert_encoded->size)
 		return val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
 
-	x509_name_pr_debug("Issuer", X509_get_issuer_name(ee->x509));
+	x509_name_pr_clutter("Issuer", X509_get_issuer_name(ee->x509));
 
 	error = certificate_validate_chain(ee);
 	if (error)

@@ -160,7 +160,7 @@ hash_validate_file(struct hash_algorithm const *algorithm, char const *path,
 	size_t actual_len;
 	int error;
 
-	pr_val_debug("Validating file hash: %s", path);
+	pr_clutter("Validating file hash: %s", path);
 
 	if (expected_len != hash_get_size(algorithm))
 		return pr_val_err("%s string has bogus size: %zu",

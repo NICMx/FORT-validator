@@ -94,7 +94,7 @@ inherit_aors(struct resources *resources, struct resources *parent, int family)
 		resources->ip4s = parent->ip4s;
 		if (resources->ip4s != NULL)
 			res4_get(resources->ip4s);
-		pr_val_debug("<Inherit IPv4>");
+		pr_clutter("<Inherit IPv4>");
 		return 0;
 
 	case AF_INET6:
@@ -103,7 +103,7 @@ inherit_aors(struct resources *resources, struct resources *parent, int family)
 		resources->ip6s = parent->ip6s;
 		if (resources->ip6s != NULL)
 			res6_get(resources->ip6s);
-		pr_val_debug("<Inherit IPv6>");
+		pr_clutter("<Inherit IPv6>");
 		return 0;
 	}
 
@@ -148,7 +148,7 @@ add_prefix4(struct resources *resources, struct resources *parent,
 		return error;
 	}
 
-	pr_val_debug("Prefix: %s/%u", addr2str4(&prefix.addr, buf), prefix.len);
+	pr_clutter("Prefix: %s/%u", addr2str4(&prefix.addr, buf), prefix.len);
 	return 0;
 }
 
@@ -189,7 +189,7 @@ add_prefix6(struct resources *resources, struct resources *parent,
 		return error;
 	}
 
-	pr_val_debug("Prefix: %s/%u", addr2str6(&prefix.addr, buf), prefix.len);
+	pr_clutter("Prefix: %s/%u", addr2str6(&prefix.addr, buf), prefix.len);
 	return 0;
 }
 
@@ -249,7 +249,7 @@ add_range4(struct resources *resources, struct resources *parent,
 		return error;
 	}
 
-	pr_val_debug("Range: %s-%s",
+	pr_clutter("Range: %s-%s",
 	    addr2str4(&range.min, buf1),
 	    addr2str4(&range.max, buf2));
 	return 0;
@@ -296,7 +296,7 @@ add_range6(struct resources *resources, struct resources *parent,
 		return error;
 	}
 
-	pr_val_debug("Range: %s-%s",
+	pr_clutter("Range: %s-%s",
 	    addr2str6(&range.min, buf1),
 	    addr2str6(&range.max, buf2));
 	return 0;
@@ -392,7 +392,7 @@ inherit_asiors(struct resources *resources, struct resources *parent)
 	resources->asns = parent->asns;
 	if (resources->asns != NULL)
 		rasn_get(resources->asns);
-	pr_val_debug("<Inherit ASN>");
+	pr_clutter("<Inherit ASN>");
 	return 0;
 }
 
@@ -454,9 +454,9 @@ add_asn(struct resources *resources, struct asn_range const *asns,
 	}
 
 	if (asns->min == asns->max)
-		pr_val_debug("ASN: %u", asns->min);
+		pr_clutter("ASN: %u", asns->min);
 	else
-		pr_val_debug("ASN: %u-%u", asns->min, asns->max);
+		pr_clutter("ASN: %u-%u", asns->min, asns->max);
 	return 0;
 }
 

@@ -212,13 +212,13 @@ log_teardown(void)
 }
 
 bool
-log_val_enabled(unsigned int level)
+pr_val_enabled(unsigned int level)
 {
 	return val_config.level >= level;
 }
 
 bool
-log_op_enabled(unsigned int level)
+pr_op_enabled(unsigned int level)
 {
 	return op_config.level >= level;
 }

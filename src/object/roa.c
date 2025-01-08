@@ -31,7 +31,7 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 	if (error)
 		return error;
 
-	pr_val_debug("address: %s/%u", addr2str4(&pfx.addr, buf), pfx.len);
+	pr_clutter("address: %s/%u", addr2str4(&pfx.addr, buf), pfx.len);
 
 	if (roa_addr->maxLength != NULL) {
 		error = asn_INTEGER2ulong(roa_addr->maxLength, &maxlen);
@@ -42,7 +42,7 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 			}
 			return pr_val_err("The ROA's IPv4 maxLength isn't a valid unsigned long");
 		}
-		pr_val_debug("maxLength: %lu", maxlen);
+		pr_clutter("maxLength: %lu", maxlen);
 
 		if (maxlen > 32) {
 			return pr_val_err("maxLength (%lu) is out of bounds (0-32).",
@@ -79,7 +79,7 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 	if (error)
 		return error;
 
-	pr_val_debug("address: %s/%u", addr2str6(&pfx.addr, buf), pfx.len);
+	pr_clutter("address: %s/%u", addr2str6(&pfx.addr, buf), pfx.len);
 
 	if (roa_addr->maxLength != NULL) {
 		error = asn_INTEGER2ulong(roa_addr->maxLength, &maxlen);
@@ -90,7 +90,7 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 			}
 			return pr_val_err("The ROA's IPv6 maxLength isn't a valid unsigned long");
 		}
-		pr_val_debug("maxLength: %lu", maxlen);
+		pr_clutter("maxLength: %lu", maxlen);
 
 		if (maxlen > 128) {
 			return pr_val_err("maxLength (%lu) is out of bounds (0-128).",

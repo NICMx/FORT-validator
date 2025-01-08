@@ -22,6 +22,6 @@ bool x509_name_equals(struct rfc5280_name *, struct rfc5280_name *);
 /* X509_NAME utils */
 int validate_issuer_name(X509_NAME *, X509 *);
 
-void x509_name_pr_debug(char const *, X509_NAME *);
+void x509_name_pr_clutter(char const *, X509_NAME *);
 
 #endif /* SRC_TYPES_NAME_H_ */
