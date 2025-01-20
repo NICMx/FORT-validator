@@ -35,7 +35,6 @@ int json_get_ts(json_t *, char const *, time_t *);
 int json_get_str(json_t *, char const *, char const **);
 int json_get_array(json_t *, char const *, json_t **);
 int json_get_object(json_t *, char const *, json_t **);
-int json_get_seq(json_t *, char const *, struct cache_sequence *);
 
 bool json_valid_members_count(json_t *, size_t);
 
@@ -43,8 +42,8 @@ int json_add_int(json_t *, char const *, int);
 int json_add_ulong(json_t *, char const *, unsigned long);
 int json_add_bigint(json_t *, char const *, INTEGER_t *);
 int json_add_str(json_t *, char const *, char const *);
+int json_add_strn(json_t *, char const *, char const *, size_t);
 int json_add_ts(json_t *, char const *, time_t);
-int json_add_seq(json_t *, char const *, struct cache_sequence const *);
 
 json_t *json_obj_new(void);
 json_t *json_array_new(void);

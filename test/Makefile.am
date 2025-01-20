@@ -30,8 +30,8 @@ check_PROGRAMS =		address.test
 address_test_SOURCES =		types/address_test.c
 address_test_LDADD =		${CHECK_LIBS}
 
-check_PROGRAMS += asn1_int.test
-asn1_int_test_SOURCES = asn1/asn1c/INTEGER_t_test.c
+check_PROGRAMS +=		asn1_int.test
+asn1_int_test_SOURCES =		asn1/asn1c/INTEGER_t_test.c
 asn1_int_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		base64.test
@@ -82,6 +82,7 @@ check_PROGRAMS +=		rrdp_update.test
 rrdp_update_test_SOURCES =	rrdp_update_test.c
 rrdp_update_test_LDADD =	${CHECK_LIBS}
 rrdp_update_test_LDADD +=	${XML2_LIBS}
+rrdp_update_test_LDADD +=	${JANSSON_LIBS}
 
 check_PROGRAMS +=		rsync.test
 rsync_test_SOURCES =		rsync_test.c

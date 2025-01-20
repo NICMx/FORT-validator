@@ -1895,7 +1895,7 @@ int
 certificate_traverse(struct rpki_certificate *ca)
 {
 	struct cache_cage *cage;
-	char const *mft;
+	char const *mft_path;
 	array_index i;
 	struct cache_mapping *map;
 	char const *ext;
@@ -1922,8 +1922,8 @@ certificate_traverse(struct rpki_certificate *ca)
 		    "I'm going to have to skip it.", ca->sias.caRepository);
 	}
 
-retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
-	if (!mft) {
+retry:	mft_path = cage_map_file(cage, ca->sias.rpkiManifest);
+	if (!mft_path) {
 		if (cage_disable_refresh(cage))
 			goto retry;
 		error = pr_val_err("caRepository '%s' is missing a manifest.",
@@ -1931,7 +1931,7 @@ retry:	mft = cage_map_file(cage, ca->sias.rpkiManifest);
 		goto end;
 	}
 
-	error = manifest_traverse(ca->sias.rpkiManifest, mft, cage, ca);
+	error = manifest_traverse(ca->sias.rpkiManifest, mft_path, cage, ca);
 	if (error) {
 		if (cage_disable_refresh(cage))
 			goto retry;

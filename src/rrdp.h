@@ -17,8 +17,10 @@ char const *rrdp_file(struct rrdp_state const *, char const *);
 char const *rrdp_create_fallback(char *, struct rrdp_state **, char const *);
 
 json_t *rrdp_state2json(struct rrdp_state *);
-int rrdp_json2state(json_t *, struct rrdp_state **);
+int rrdp_json2state(json_t *, char *, struct rrdp_state **);
 
 void rrdp_state_free(struct rrdp_state *);
+
+void rrdp_print(struct rrdp_state *);
 
 #endif /* SRC_RRDP_H_ */

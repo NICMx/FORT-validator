@@ -70,6 +70,7 @@ write_file(char const *path, void const *bytes, size_t n)
 	if (error)
 		return error;
 
+	errno = 0;
 	if (fwrite(bytes, 1, n, out) != n) {
 		error = errno;
 		if (!error) /* Linux's man page does not mention errno */
@@ -210,6 +211,7 @@ file_rm_rf(char const *path)
 	/* TODO (performance) optimize that 32 */
 	if (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS) < 0) {
 		error = errno;
+		// XXX This msg is sometimes annoying; maybe defer it
 		pr_op_warn("Cannot remove %s: %s", path, strerror(error));
 		return error ? error : -1;
 	}
@@ -246,10 +248,11 @@ file_ln(char const *oldpath, char const *newpath)
 }
 
 void
-cseq_init(struct cache_sequence *seq, char *prefix, bool free_prefix)
+cseq_init(struct cache_sequence *seq, char *prefix, unsigned long id,
+    bool free_prefix)
 {
 	seq->prefix = prefix;
-	seq->next_id = 0;
+	seq->next_id = id;
 	seq->pathlen = strlen(prefix) + 4;
 	seq->free_prefix = free_prefix;
 }

@@ -7,6 +7,10 @@
 
 #include "types/arraylist.h"
 
+char *str_concat(char const *, char const *);
+
+int hex2ulong(char const *, unsigned long *);
+
 int ia5s2string(ASN1_IA5STRING *, char **);
 int BN2string(BIGNUM *, char **);
 

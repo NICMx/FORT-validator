@@ -18,6 +18,7 @@
 #include "thread_var.h"
 #include "types/arraylist.h"
 #include "types/path.h"
+#include "types/str.h"
 #include "types/url.h"
 #include "types/uthash.h"
 
@@ -147,6 +148,21 @@ state_find_file(struct rrdp_state const *state, char const *url, size_t len)
 {
 	struct cache_file *file;
 	HASH_FIND(hh, state->files, url, len, file);
+	return file;
+}
+
+static struct cache_file *
+cache_file_add(struct rrdp_state *state, char *url, char *path)
+{
+	struct cache_file *file;
+	size_t urlen;
+
+	file = pzalloc(sizeof(struct cache_file));
+	file->map.url = url;
+	file->map.path = path;
+	urlen = strlen(url);
+	HASH_ADD_KEYPTR(hh, state->files, file->map.url, urlen, file);
+
 	return file;
 }
 
@@ -525,7 +541,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 {
 	struct publish tag = { 0 };
 	struct cache_file *file;
-	size_t len;
+	char *path;
 	int error;
 
 	error = parse_publish(reader, &tag);
@@ -534,8 +550,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 
 	pr_clutter("Publish %s", logv_filename(tag.meta.uri));
 
-	len = strlen(tag.meta.uri);
-	file = state_find_file(args->state, tag.meta.uri, len);
+	file = state_find_file(args->state, tag.meta.uri, strlen(tag.meta.uri));
 
 	/* rfc8181#section-2.2 */
 	if (file) {
@@ -575,17 +590,12 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 			goto end;
 		}
 
-		file = pzalloc(sizeof(struct cache_file));
-		file->map.url = pstrdup(tag.meta.uri);
-		file->map.path = cseq_next(&args->state->seq);
-		if (!file->map.path) {
-			free(file->map.url);
-			free(file);
+		path = cseq_next(&args->state->seq);
+		if (!path) {
 			error = -EINVAL;
 			goto end;
 		}
-
-		HASH_ADD_KEYPTR(hh, args->state->files, file->map.url, len, file);
+		file = cache_file_add(args->state, pstrdup(tag.meta.uri), path);
 	}
 
 	error = file_write_bin(file->map.path, tag.content, tag.content_len);
@@ -1173,8 +1183,8 @@ dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
  * snapshot, and explodes them into @notif->path.
  */
 int
-rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
-    struct rrdp_state **state)
+rrdp_update(struct cache_mapping const *notif, time_t mtim,
+    bool *changed, struct rrdp_state **state)
 {
 	struct rrdp_state *old;
 	struct update_notification new;
@@ -1190,7 +1200,8 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 	if (!(*changed))
 		goto end;
 
-	pr_val_debug("New session/serial: %s/%s", new.session.session_id,
+	pr_val_debug("New session/serial: %s/%s",
+	    new.session.session_id,
 	    new.session.serial.str);
 
 	if ((*state) == NULL) {
@@ -1198,7 +1209,7 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 
 		old = pzalloc(sizeof(struct rrdp_state));
 		/* session postponed! */
-		cseq_init(&old->seq, pstrdup(notif->path), true);
+		cseq_init(&old->seq, notif->path, 0, false);
 		STAILQ_INIT(&old->delta_hashes);
 
 		error = file_mkdir(notif->path, false);
@@ -1222,6 +1233,7 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
 	if (serial_cmp < 0) {
 		pr_val_debug("The Notification's serial changed.");
+
 		error = validate_session_desync(old, &new);
 		if (error)
 			goto snapshot_fallback;
@@ -1232,8 +1244,8 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 		if (!error)
 			goto end;
 		/*
-		 * The files are exploded and usable, but @cached is not
-		 * updatable. So drop and create it anew.
+		 * The files are exploded and usable, but @old is not updatable.
+		 * So drop and create it anew.
 		 * We might lose some delta hashes, but it's better than
 		 * re-snapshotting the next time the notification changes.
 		 * Not sure if it matters. This looks so unlikely, it's
@@ -1243,12 +1255,12 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim, bool *changed,
 
 	} else if (serial_cmp > 0) {
 		pr_val_debug("Cached serial is higher than notification serial.");
-		goto snapshot_fallback;
+		goto end;
 
 	} else {
 		pr_val_debug("The Notification changed, but the session ID and serial didn't, and no session desync was detected.");
 		*changed = false;
-		goto clean_notif;
+		goto end;
 	}
 
 snapshot_fallback:
@@ -1287,7 +1299,7 @@ rrdp_create_fallback(char *cage, struct rrdp_state **_state, char const *url)
 	state = *_state;
 	if (state == NULL) {
 		*_state = state = pzalloc(sizeof(struct rrdp_state));
-		cseq_init(&state->seq, cage, false);
+		cseq_init(&state->seq, cage, 0, false);
 	}
 
 	file = pzalloc(sizeof(struct cache_file));
@@ -1383,8 +1395,6 @@ rrdp_state2json(struct rrdp_state *state)
 	if (state->files)
 		if (json_object_add(json, "files", files2json(state)))
 			goto fail;
-	if (json_add_seq(json, "seq", &state->seq))
-		goto fail;
 	if (!STAILQ_EMPTY(&state->delta_hashes))
 		if (json_object_add(json, TAGNAME_DELTAS, dh2json(state)))
 			goto fail;
@@ -1430,6 +1440,63 @@ json2serial(json_t *parent, struct rrdp_serial *serial)
 		return error;
 	}
 
+	return 0;
+}
+
+static int
+json2files(json_t *jparent, char *parent, struct rrdp_state *state)
+{
+	json_t *jfiles;
+	char const *jkey;
+	json_t *jvalue;
+	size_t parent_len;
+	char const *path;
+	unsigned long id, max_id;
+	int error;
+
+	error = json_get_object(jparent, "files", &jfiles);
+	if (error < 0) {
+		pr_op_debug("files: %s", strerror(error));
+		return error;
+	}
+	if (error > 0)
+		return 0;
+
+	parent_len = strlen(parent);
+	max_id = 0;
+
+	json_object_foreach(jfiles, jkey, jvalue) {
+		if (!json_is_string(jvalue)) {
+			pr_op_warn("RRDP file URL '%s' is not a string.", jkey);
+			continue;
+		}
+
+		// XXX sanitize more
+
+		path = json_string_value(jvalue);
+		if (strncmp(path, parent, parent_len || path[parent_len] != '/') != 0) {
+			pr_op_warn("RRDP path '%s' is not child of '%s'.",
+			    path, parent);
+			continue;
+		}
+
+		error = hex2ulong(path + parent_len + 1, &id);
+		if (error) {
+			pr_op_warn("RRDP file '%s' is not a hexadecimal number.", path);
+			continue;
+		}
+		if (id > max_id)
+			max_id = id;
+
+		cache_file_add(state, pstrdup(jkey), pstrdup(path));
+	}
+
+	if (HASH_COUNT(state->files) == 0) {
+		pr_op_warn("RRDP cage does not index any files.");
+		return EINVAL;
+	}
+
+	cseq_init(&state->seq, parent, max_id + 1, false);
 	return 0;
 }
 
@@ -1501,8 +1568,9 @@ json2dhs(json_t *json, struct rrdp_state *state)
 	return 0;
 }
 
+/* @path is expected to outlive the state. */
 int
-rrdp_json2state(json_t *json, struct rrdp_state **result)
+rrdp_json2state(json_t *json, char *path, struct rrdp_state **result)
 {
 	struct rrdp_state *state;
 	int error;
@@ -1510,30 +1578,30 @@ rrdp_json2state(json_t *json, struct rrdp_state **result)
 	state = pzalloc(sizeof(struct rrdp_state));
 
 	error = json2session(json, &state->session.session_id);
-	if (error)
-		goto revert_notif;
+	if (error < 0) {
+		pr_op_debug("session: %s", strerror(error));
+		goto fail;
+	}
 	error = json2serial(json, &state->session.serial);
-	if (error)
-		goto revert_session;
-	error = json_get_seq(json, "seq", &state->seq);
-	if (error)
-		goto revert_serial;
+	if (error < 0) {
+		pr_op_debug("serial: %s", strerror(error));
+		goto fail;
+	}
+	error = json2files(json, path, state);
+	if (error) {
+		pr_op_debug("files: %s", strerror(error));
+		goto fail;
+	}
 	error = json2dhs(json, state);
-	if (error)
-		goto revert_seq;
+	if (error) {
+		pr_op_debug("delta hashes: %s", strerror(error));
+		goto fail;
+	}
 
 	*result = state;
 	return 0;
 
-revert_seq:
-	cseq_cleanup(&state->seq);
-revert_serial:
-	BN_free(state->session.serial.num);
-	free(state->session.serial.str);
-revert_session:
-	free(state->session.session_id);
-revert_notif:
-	free(state);
+fail:	rrdp_state_free(state);
 	return error;
 }
 
@@ -1554,4 +1622,29 @@ rrdp_state_free(struct rrdp_state *state)
 	cseq_cleanup(&state->seq);
 	clear_delta_hashes(state);
 	free(state);
+}
+
+void
+rrdp_print(struct rrdp_state *rs)
+{
+	struct cache_file *file, *tmp;
+	struct rrdp_hash *hash;
+	unsigned int i;
+
+	if (rs == NULL)
+		return;
+
+	printf("session:%s/%s\n", rs->session.session_id, rs->session.serial.str);
+	HASH_ITER(hh, rs->files, file, tmp)
+		printf("\t\tfile: %s\n", /* file->map.url, */ file->map.path);
+	printf("\t\tseq:%s/%lx\n", rs->seq.prefix, rs->seq.next_id);
+
+	STAILQ_FOREACH(hash, &rs->delta_hashes, hook) {
+		printf("\t\thash: ");
+		for (i = 0; i < RRDP_HASH_LEN; i++)
+			printf("%c%c",
+			    hash_b2c(hash->bytes[i] >> 4),
+			    hash_b2c(hash->bytes[i]));
+		printf("\n");
+	}
 }

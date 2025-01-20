@@ -16,8 +16,11 @@
 #include "rrdp_util.h"
 #include "relax_ng.c"
 #include "rrdp.c"
+#include "asn1/asn1c/asn_codecs_prim.c"
+#include "asn1/asn1c/INTEGER.c"
 #include "types/map.c"
 #include "types/path.c"
+#include "types/str.c"
 #include "types/url.c"
 
 /* Mocks */
@@ -51,9 +54,20 @@ rsync_download(char const *url, char const *path)
 
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
 MOCK_VOID(task_wakeup_busy, void)
-__MOCK_ABORT(asn_INTEGER2str, char *, NULL, INTEGER_t const *bi)
-MOCK_VOID(INTEGER_move, INTEGER_t *to, INTEGER_t *from)
-MOCK_VOID(INTEGER_cleanup, INTEGER_t *i)
+static asn_dec_rval_t dummy = { 0 };
+__MOCK_ABORT(ber_check_tags, asn_dec_rval_t, dummy, const asn_codec_ctx_t *ctx,
+    const asn_TYPE_descriptor_t *td, asn_struct_ctx_t *opt_ctx,
+    const void *ptr, size_t size, int tag_mode, int last_tag_form,
+    ber_tlv_len_t *last_length, int *opt_tlv_form)
+__MOCK_ABORT(der_write_tags, ssize_t, 0, const asn_TYPE_descriptor_t *sd,
+    size_t struct_length, int tag_mode, int last_tag_form, ber_tlv_tag_t tag,
+    asn_app_consume_bytes_f *cb, void *app_key)
+__MOCK_ABORT(asn__format_to_callback, ssize_t, 0,
+    int (*cb)(const void *, size_t, void *key),
+    void *key, const char *fmt, ...)
+MOCK_ABORT_INT(asn_generic_no_constraint,
+    const asn_TYPE_descriptor_t *type_descriptor, const void *struct_ptr,
+    asn_app_constraint_failed_f *cb, void *key)
 
 /* Helpers */
 
@@ -62,8 +76,14 @@ setup_test(void)
 {
 	dl_error = 0;
 	init_tables();
-	ck_assert_int_eq(0, system("rm -rf rsync/ https/ rrdp/ fallback/ tmp/"));
-	ck_assert_int_eq(0, system("mkdir rsync/ https/ rrdp/ fallback/ tmp/"));
+
+	// XXX consider changing this function to `rm -rf <path>/*`
+	ck_assert_int_eq(0, file_rm_rf("."));
+	ck_assert_int_eq(0, mkdir("rsync", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("https", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("rrdp", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("fallback", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("tmp", CACHE_FILEMODE));
 }
 
 static struct cache_cage *
@@ -446,7 +466,10 @@ START_TEST(test_rsync_cleanup)
 
 	setup_test();
 
-	ck_assert_int_eq(0, system("mkdir rsync/0 rsync/1 rsync/2 rsync/3"));
+	ck_assert_int_eq(0, mkdir("rsync/0", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("rsync/1", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("rsync/2", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("rsync/3", CACHE_FILEMODE));
 
 	/* RPP0: Will remain constant */
 	ck_assert_int_eq(0, file_write_txt("rsync/0/0", "A"));
@@ -477,9 +500,9 @@ START_TEST(test_rsync_cleanup)
 	queue_commit(NULL, "rsync://domain/mod/rpp3", "rsync/3/0", "rsync/3/2");
 	cleanup_cache();
 	ck_filesystem("fallback",
-	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B",
-	    /* RPP2 */ "fallback/1/0", "E", "fallback/1/1", "F",
-	    /* RPP3 */ "fallback/2/0", "G", "fallback/2/1", "I",
+	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B", "fallback/0.json", "{",
+	    /* RPP2 */ "fallback/1/0", "E", "fallback/1/1", "F", "fallback/1.json", "{",
+	    /* RPP3 */ "fallback/2/0", "G", "fallback/2/1", "I", "fallback/2.json", "{",
 	    NULL);
 
 	new_iteration(false);
@@ -492,9 +515,9 @@ START_TEST(test_rsync_cleanup)
 	cleanup_cache();
 
 	ck_filesystem("fallback",
-	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B",
-	    /* RPP3 */ "fallback/2/0", "G", "fallback/2/2", "H",
-	    /* RPP1 */ "fallback/3/0", "C", "fallback/3/1", "D",
+	    /* RPP0 */ "fallback/0/0", "A", "fallback/0/1", "B", "fallback/0.json", "{",
+	    /* RPP3 */ "fallback/2/0", "G", "fallback/2/2", "H", "fallback/2.json", "{",
+	    /* RPP1 */ "fallback/3/0", "C", "fallback/3/1", "D", "fallback/3.json", "{",
 	    NULL);
 
 	new_iteration(false);
@@ -593,7 +616,10 @@ START_TEST(test_https_cleanup)
 	map.path = "https/52";
 	cache_commit_file(&map);
 	cleanup_cache();
-	ck_filesystem("fallback", "fallback/0", "A", "fallback/1", "C", NULL);
+	ck_filesystem("fallback",
+	    "fallback/0", "A", "fallback/0.json", "{",
+	    "fallback/1", "C", "fallback/1.json", "{",
+	    NULL);
 
 	new_iteration(false);
 
@@ -605,7 +631,10 @@ START_TEST(test_https_cleanup)
 	map.path = "https/51";
 	cache_commit_file(&map);
 	cleanup_cache();
-	ck_filesystem("fallback", "fallback/0", "A", "fallback/2", "B", NULL);
+	ck_filesystem("fallback",
+	    "fallback/0", "A", "fallback/0.json", "{",
+	    "fallback/2", "B", "fallback/2.json", "{",
+	    NULL);
 
 	new_iteration(false);
 
@@ -625,7 +654,10 @@ START_TEST(test_rrdp_cleanup)
 
 	setup_test();
 
-	ck_assert_int_eq(0, system("mkdir rrdp/0 rrdp/1 rrdp/2 rrdp/3"));
+	ck_assert_int_eq(0, mkdir("rrdp/0", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("rrdp/1", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("rrdp/2", CACHE_FILEMODE));
+	ck_assert_int_eq(0, mkdir("rrdp/3", CACHE_FILEMODE));
 
 	ck_assert_int_eq(0, file_write_txt("rrdp/0/0", "A"));
 	ck_assert_int_eq(0, file_write_txt("rrdp/0/1", "B"));
@@ -651,9 +683,9 @@ START_TEST(test_rrdp_cleanup)
 	queue_commit(notif, "rsync://domain/mod/rpp3", "rrdp/3/0", "rrdp/3/2");
 	cleanup_cache();
 	ck_filesystem("fallback",
-	    "fallback/0/0", "A", "fallback/0/1", "B",
-	    "fallback/1/0", "E", "fallback/1/1", "F",
-	    "fallback/2/0", "G", "fallback/2/1", "I",
+	    "fallback/0/0", "A", "fallback/0/1", "B", "fallback/0.json", "{",
+	    "fallback/1/0", "E", "fallback/1/1", "F", "fallback/1.json", "{",
+	    "fallback/2/0", "G", "fallback/2/1", "I", "fallback/2.json", "{",
 	    NULL);
 
 	new_iteration(false);
@@ -664,9 +696,9 @@ START_TEST(test_rrdp_cleanup)
 	queue_commit(notif, "rsync://domain/mod/rpp3", "fallback/2/0", "rrdp/3/1");
 	cleanup_cache();
 	ck_filesystem("fallback",
-	    "fallback/0/0", "A", "fallback/0/1", "B",
-	    "fallback/2/0", "G", "fallback/2/2", "H",
-	    "fallback/3/0", "C", "fallback/3/1", "D",
+	    "fallback/0/0", "A", "fallback/0/1", "B", "fallback/0.json", "{",
+	    "fallback/2/0", "G", "fallback/2/2", "H", "fallback/2.json", "{",
+	    "fallback/3/0", "C", "fallback/3/1", "D", "fallback/3.json", "{",
 	    NULL);
 
 	new_iteration(false);
@@ -757,12 +789,157 @@ START_TEST(test_context)
 }
 END_TEST
 
+static void
+ck_rrdp(struct rrdp_state *expected, struct rrdp_state *actual)
+{
+	struct cache_file *expf, *actf, *tmp;
+	struct rrdp_hash *exph, *acth;
+
+	if (expected == NULL) {
+		ck_assert_ptr_eq(NULL, actual);
+		return;
+	}
+
+	ck_assert_ptr_ne(NULL, actual);
+	ck_assert_str_eq(expected->session.session_id, actual->session.session_id);
+	ck_assert_int_eq(0, BN_cmp(expected->session.serial.num, actual->session.serial.num));
+	ck_assert_str_eq(expected->session.serial.str, actual->session.serial.str);
+
+	ck_assert_int_eq(HASH_COUNT(expected->files), HASH_COUNT(actual->files));
+	HASH_ITER(hh, expected->files, expf, tmp) {
+		HASH_FIND(hh, actual->files, expf->map.url, strlen(expf->map.url), actf);
+		ck_assert_ptr_ne(NULL, actf);
+		ck_assert_str_eq(expf->map.url, actf->map.url);
+		ck_assert_str_eq(expf->map.path, actf->map.path);
+	}
+
+	acth = STAILQ_FIRST(&expected->delta_hashes);
+	STAILQ_FOREACH(exph, &expected->delta_hashes, hook) {
+		ck_assert_ptr_ne(NULL, acth);
+		ck_assert(memcmp(exph->bytes, acth->bytes, sizeof(exph->bytes)) == 0);
+		acth = STAILQ_NEXT(acth, hook);
+	}
+	ck_assert_ptr_eq(NULL, acth);
+}
+
+static void
+ck_json(struct cache_node *src)
+{
+	struct cache_node *dst;
+	json_t *json;
+
+	json = node2json(src);
+	json_dumpf(json, stdout, JSON_INDENT(2));
+	printf("\n");
+	ck_assert_ptr_ne(NULL, json);
+	dst = json2node(json);
+	json_decref(json);
+
+	ck_assert_ptr_ne(NULL, dst);
+	ck_assert_str_eq(src->map.url, dst->map.url);
+	ck_assert_str_eq(src->map.path, dst->map.path);
+	ck_assert_int_eq(DLS_OUTDATED, dst->state);	/* Must be reset */
+	ck_assert_int_eq(0, dst->dlerr);		/* Must be reset */
+	ck_assert_int_eq(src->attempt_ts, dst->attempt_ts);
+	ck_assert_int_eq(src->success_ts, dst->success_ts);
+	ck_assert(INTEGER_cmp(&src->mft.num, &dst->mft.num) == 0);
+	ck_assert_int_eq(src->mft.update, dst->mft.update);
+	ck_rrdp(src->rrdp, dst->rrdp);
+
+	delete_node(NULL, src, NULL);
+	delete_node(NULL, dst, NULL);
+}
+
+START_TEST(test_json_min)
+{
+	struct cache_node *node = pzalloc(sizeof(struct cache_node));
+
+	node->map.url = pstrdup("https://a.b.c/sample.cer");
+	node->map.path = pstrdup("tmp/sample.cer");
+	node->state = DLS_FRESH;
+	node->dlerr = ENOENT;
+
+	ck_json(node);
+}
+
+START_TEST(test_json_rrdp_min)
+{
+	struct cache_node *node = pzalloc(sizeof(struct cache_node));
+
+	node->map.url = pstrdup("https://a.b.c/sample.cer");
+	node->map.path = pstrdup("rrdp/123");
+	node->state = DLS_FRESH;
+	node->dlerr = ENOENT;
+
+	node->rrdp = pmalloc(sizeof(struct rrdp_state));
+	node->rrdp->session.session_id = pstrdup("session");
+	node->rrdp->session.serial.num = BN_create();
+	ck_assert_ptr_ne(NULL, node->rrdp->session.serial.num);
+	BN_add_word(node->rrdp->session.serial.num, 1357);
+	node->rrdp->session.serial.str = pstrdup("1357");
+	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/e.mft"), pstrdup("rrdp/123/0"));
+	cseq_init(&node->rrdp->seq, node->map.path, 1, false);
+	STAILQ_INIT(&node->rrdp->delta_hashes);
+
+	ck_json(node);
+}
+
+START_TEST(test_json_max)
+{
+	struct cache_node *node = pzalloc(sizeof(struct cache_node));
+	struct rrdp_hash *hash;
+
+	node->map.url = pstrdup("https://a.b.c/sample.cer");
+	node->map.path = pstrdup("rrdp/123");
+	node->state = DLS_FRESH;
+	node->dlerr = ENOENT;
+	node->attempt_ts = 1234;
+	node->success_ts = 4321;
+	ck_assert_int_eq(0, asn_long2INTEGER(&node->mft.num, 5678));
+	node->mft.update = 8765;
+
+	node->rrdp = pmalloc(sizeof(struct rrdp_state));
+	node->rrdp->session.session_id = pstrdup("session");
+	node->rrdp->session.serial.num = BN_create();
+	ck_assert_ptr_ne(NULL, node->rrdp->session.serial.num);
+	BN_add_word(node->rrdp->session.serial.num, 1357);
+	node->rrdp->session.serial.str = pstrdup("1357");
+	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/e.mft"), pstrdup("rrdp/123/0"));
+	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/f.crl"), pstrdup("rrdp/123/1"));
+	cseq_init(&node->rrdp->seq, node->map.path, 2, false);
+	STAILQ_INIT(&node->rrdp->delta_hashes);
+	hash = pmalloc(sizeof(struct rrdp_hash));
+	memset(&hash->bytes, 1, sizeof(hash->bytes));
+	STAILQ_INSERT_HEAD(&node->rrdp->delta_hashes, hash, hook);
+	hash = pmalloc(sizeof(struct rrdp_hash));
+	memset(&hash->bytes, 2, sizeof(hash->bytes));
+	STAILQ_INSERT_HEAD(&node->rrdp->delta_hashes, hash, hook);
+
+	ck_json(node);
+}
+
+START_TEST(test_json_weirdurl)
+{
+	struct cache_node *node = pzalloc(sizeof(struct cache_node));
+
+	node->map.url = pstrdup("https://a.b.c/notif.xml\trsync://a.b.c/rpp");
+	node->map.path = pstrdup("tmp/sample.cer");
+	node->state = DLS_FRESH;
+	node->dlerr = ENOENT;
+	node->attempt_ts = 1234;
+	node->success_ts = 4321;
+	ck_assert_int_eq(0, asn_long2INTEGER(&node->mft.num, 5678));
+	node->mft.update = 8765;
+
+	ck_json(node);
+}
+
 /* Boilerplate */
 
 static Suite *create_suite(void)
 {
 	Suite *suite;
-	TCase *rsync, *https, *rrdp, *multi;
+	TCase *rsync, *https, *rrdp, *multi, *json;
 
 	rsync = tcase_create("rsync");
 	tcase_add_test(rsync, test_cache_download_rsync);
@@ -780,11 +957,18 @@ static Suite *create_suite(void)
 	multi = tcase_create("multi-protocol");
 	tcase_add_test(multi, test_context);
 
+	json = tcase_create("json");
+	tcase_add_test(json, test_json_min);
+	tcase_add_test(json, test_json_rrdp_min);
+	tcase_add_test(json, test_json_max);
+	tcase_add_test(json, test_json_weirdurl);
+
 	suite = suite_create("local-cache");
 	suite_add_tcase(suite, rsync);
 	suite_add_tcase(suite, https);
 	suite_add_tcase(suite, rrdp);
 	suite_add_tcase(suite, multi);
+	suite_add_tcase(suite, json);
 
 	return suite;
 }
@@ -796,12 +980,17 @@ int main(void)
 	int tests_failed;
 
 	dls[0] = "Fort\n";
+
 	if (mkdir("tmp", CACHE_FILEMODE) < 0 && errno != EEXIST) {
 		fprintf(stderr, "mkdir('tmp/'): %s\n", strerror(errno));
 		return 1;
 	}
-	if (chdir("tmp") < 0) {
-		fprintf(stderr, "chdir('tmp/'): %s\n", strerror(errno));
+	if (mkdir("tmp/cache", CACHE_FILEMODE) < 0 && errno != EEXIST) {
+		fprintf(stderr, "mkdir('tmp/cache'): %s\n", strerror(errno));
+		return 1;
+	}
+	if (chdir("tmp/cache") < 0) {
+		fprintf(stderr, "chdir('tmp/cache'): %s\n", strerror(errno));
 		return 1;
 	}
 

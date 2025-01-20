@@ -208,21 +208,24 @@ validate_manifest(struct Manifest *mft, struct cache_cage *cage,
 }
 
 static void
-shuffle_mft_files(struct Manifest *mft)
+shuffle_mft_files(struct rpp *rpp)
 {
-	int i, j;
+	size_t i, j;
 	unsigned int seed, rnd;
-	struct FileAndHash *tmpfah;
+	struct cache_mapping tmp;
+
+	if (rpp->nfiles < 2)
+		return;
 
 	seed = time(NULL) ^ getpid();
 
 	/* Fisher-Yates shuffle with modulo bias */
-	for (i = 0; i < mft->fileList.list.count - 1; i++) {
+	for (i = 0; i < rpp->nfiles - 1; i++) {
 		rnd = rand_r(&seed);
-		j = i + rnd % (mft->fileList.list.count - i);
-		tmpfah = mft->fileList.list.array[j];
-		mft->fileList.list.array[j] = mft->fileList.list.array[i];
-		mft->fileList.list.array[i] = tmpfah;
+		j = i + rnd % (rpp->nfiles - i);
+		tmp = rpp->files[j];
+		rpp->files[j] = rpp->files[i];
+		rpp->files[i] = tmp;
 	}
 }
 
@@ -291,7 +294,8 @@ check_file_and_hash(struct FileAndHash *fah, char const *path)
  */
 
 static int
-build_rpp(char const *mft_url, struct Manifest *mft, struct cache_cage *cage,
+collect_files(char const *mft_url, char const *mft_path,
+    struct Manifest *mft, struct cache_cage *cage,
     struct rpki_certificate *parent)
 {
 	struct rpp *rpp;
@@ -302,11 +306,12 @@ build_rpp(char const *mft_url, struct Manifest *mft, struct cache_cage *cage,
 	char const *path;
 	int error;
 
-	shuffle_mft_files(mft);
+	if (mft->fileList.list.count == 0)
+		return pr_val_err("Manifest's file list is empty.");
 
 	rpp = &parent->rpp;
 	rpp_url = url_parent(mft_url); // XXX
-	rpp->nfiles = mft->fileList.list.count;
+	rpp->nfiles = mft->fileList.list.count + 1;	/* plus manifest */
 	rpp->files = pzalloc(rpp->nfiles * sizeof(*rpp->files));
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
@@ -338,28 +343,13 @@ build_rpp(char const *mft_url, struct Manifest *mft, struct cache_cage *cage,
 		error = check_file_and_hash(src, dst->path);
 		if (error)
 			goto revert;
-
-		if (strcmp(((char const *)src->file.buf) + src->file.size - 4, ".crl") == 0) {
-			if (rpp->crl.map != NULL) {
-				error = pr_val_err(
-				    "Manifest has more than one CRL.");
-				goto revert;
-			}
-			rpp->crl.map = dst;
-		}
 	}
 
-	/* rfc6486#section-7 */
-	if (rpp->crl.map == NULL) {
-		error = pr_val_err("Manifest lacks a CRL.");
-		goto revert;
-	}
+	/* Manifest */
+	dst = &rpp->files[mft->fileList.list.count];
+	dst->url = pstrdup(mft_url);
+	dst->path = pstrdup(mft_path);
 
-	error = crl_load(rpp->crl.map, parent->x509, &rpp->crl.obj);
-	if (error)
-		goto revert;
-
-	free(rpp_url);
 	return 0;
 
 revert:	rpp_cleanup(rpp);
@@ -367,9 +357,50 @@ revert:	rpp_cleanup(rpp);
 	return error;
 }
 
+static int
+load_crl(struct rpki_certificate *parent)
+{
+	struct rpp *rpp;
+	array_index f;
+
+	rpp = &parent->rpp;
+
+	for (f = 0; f < rpp->nfiles; f++)
+		if (str_ends_with(rpp->files[f].url, ".crl")) {
+			if (rpp->crl.map != NULL)
+				return pr_val_err("Manifest has more than one CRL.");
+			rpp->crl.map = &rpp->files[f];
+		}
+
+	/* rfc6486#section-7 */
+	if (rpp->crl.map == NULL)
+		return pr_val_err("Manifest lacks a CRL.");
+
+	return crl_load(rpp->crl.map, parent->x509, &rpp->crl.obj);
+}
+
+static int
+build_rpp(char const *mft_url, char const *mft_path, struct Manifest *mft,
+    struct cache_cage *cage, struct rpki_certificate *parent)
+{
+	int error;
+
+	error = collect_files(mft_url, mft_path, mft, cage, parent);
+	if (error)
+		return error;
+
+	shuffle_mft_files(&parent->rpp);
+
+	error = load_crl(parent);
+	if (error)
+		rpp_cleanup(&parent->rpp);
+
+	return error;
+}
+
 int
-manifest_traverse(char const *url, char const *path, struct cache_cage *cage,
-    struct rpki_certificate *parent)
+manifest_traverse(char const *mft_url, char const *mft_path,
+    struct cache_cage *cage, struct rpki_certificate *parent)
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
@@ -379,10 +410,10 @@ manifest_traverse(char const *url, char const *path, struct cache_cage *cage,
 	int error;
 
 	/* Prepare */
-	fnstack_push(url); // XXX
+	fnstack_push(mft_url);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, path);
+	error = signed_object_decode(&sobj, mft_path);
 	if (error)
 		goto end1;
 	error = decode_manifest(&sobj, &mft);
@@ -390,7 +421,7 @@ manifest_traverse(char const *url, char const *path, struct cache_cage *cage,
 		goto end2;
 
 	/* Initialize @summary */
-	error = build_rpp(url, mft, cage, parent);
+	error = build_rpp(mft_url, mft_path, mft, cage, parent);
 	if (error)
 		goto end3;
 
@@ -404,7 +435,7 @@ manifest_traverse(char const *url, char const *path, struct cache_cage *cage,
 	error = validate_manifest(mft, cage, &parent->rpp.mft);
 	if (error)
 		goto end5;
-	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, url);
+	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, mft_url);
 
 end5:	rpki_certificate_cleanup(&ee);
 	if (error)

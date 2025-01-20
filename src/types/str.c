@@ -1,9 +1,43 @@
 #include "types/str.h"
 
+#include <errno.h>
 #include <openssl/bio.h>
 
 #include "log.h"
 #include "types/path.h"
+
+/* Allocates the result; will need free(). Never returns NULL. */
+char *
+str_concat(char const *s1, char const *s2)
+{
+	size_t n;
+	char *result;
+	int written;
+
+	n = strlen(s1) + strlen(s2) + 1;
+	result = pmalloc(n);
+
+	written = snprintf(result, n, "%s%s", s1, s2);
+	if (written != n - 1)
+		pr_crit("str_concat: %zu %d %s %s", n, written, s1, s2);
+
+	return result;
+}
+
+int
+hex2ulong(char const *hex, unsigned long *ulong)
+{
+	char *endptr;
+
+	errno = 0;
+	*ulong = strtoul(hex, &endptr, 16);
+	if (errno)
+		return errno;
+	if (endptr[0] != 0)
+		return -1;
+
+	return 0;
+}
 
 /**
  * Does not assume that @string is NULL-terminated.

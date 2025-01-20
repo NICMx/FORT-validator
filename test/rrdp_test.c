@@ -14,49 +14,6 @@
 #include "types/map.c"
 #include "types/url.c"
 
-static void
-ck_rrdp_session(char const *session, char const *serial,
-    struct rrdp_session *actual)
-{
-	BIGNUM *bn;
-
-	ck_assert_str_eq(session, actual->session_id);
-	ck_assert_str_eq(serial, actual->serial.str);
-
-	bn = BN_new();
-	ck_assert_ptr_ne(NULL, bn);
-	ck_assert_int_eq(strlen(serial), BN_dec2bn(&bn, serial));
-	ck_assert_int_eq(0, BN_cmp(bn, actual->serial.num));
-	BN_free(bn);
-}
-
-static struct rrdp_state *
-create_rrdp_state(char const *session, char const *serial, ...)
-{
-	struct rrdp_state *state;
-	struct rrdp_hash *hash;
-	int dh_byte;
-	va_list args;
-
-	state = pmalloc(sizeof(struct rrdp_state));
-
-	state->session.session_id = pstrdup(session);
-	state->session.serial.str = pstrdup(serial);
-	state->session.serial.num = NULL; /* Not needed for now. */
-	state->files = NULL;
-	STAILQ_INIT(&state->delta_hashes);
-
-	va_start(args, serial);
-	while ((dh_byte = va_arg(args, int)) != 0) {
-		hash = pmalloc(sizeof(struct rrdp_hash));
-		memset(hash->bytes, dh_byte, sizeof(hash->bytes));
-		STAILQ_INSERT_TAIL(&state->delta_hashes, hash, hook);
-	}
-	va_end(args);
-
-	return state;
-}
-
 START_TEST(test_xmlChar_NULL_assumption)
 {
 	xmlChar *xmlstr;
@@ -610,161 +567,10 @@ START_TEST(test_parse_snapshot_bad_publish)
 }
 END_TEST
 
-START_TEST(test_2s_simple)
-{
-	struct rrdp_state *state;
-	json_t *json, *jdeltas;
-	char const *str;
-
-	state = create_rrdp_state("session", "1234", 0);
-
-	json = rrdp_state2json(state);
-	ck_assert_ptr_ne(NULL, json);
-
-	rrdp_state_free(state);
-	state = NULL;
-
-	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
-	ck_assert_str_eq("session", str);
-	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SERIAL, &str));
-	ck_assert_str_eq("1234", str);
-	ck_assert_int_eq(ENOENT, json_get_array(json, TAGNAME_DELTAS, &jdeltas));
-
-	ck_assert_int_eq(0, rrdp_json2state(json, &state));
-	ck_rrdp_session("session", "1234", &state->session);
-	ck_assert_uint_eq(true, STAILQ_EMPTY(&state->delta_hashes));
-
-	json_decref(json);
-	rrdp_state_free(state);
-}
-END_TEST
-
-static void
-ck_hash(struct rrdp_hash *hash, unsigned char chara)
-{
-	size_t i;
-	for (i = 0; i < sizeof(hash->bytes); i++)
-		ck_assert_uint_eq(chara, hash->bytes[i]);
-}
-
-START_TEST(test_2s_more)
-{
-	struct rrdp_state *state;
-	struct rrdp_hash *hash;
-	json_t *json, *jdeltas;
-	char const *str;
-
-	state = create_rrdp_state("session",
-	    "123456789012345678901234567890123456789012",
-	    0xAA, 0xBB, 0xCD, 0);
-
-	json = rrdp_state2json(state);
-	ck_assert_ptr_ne(NULL, json);
-
-	rrdp_state_free(state);
-	state = NULL;
-
-	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SESSION, &str));
-	ck_assert_str_eq("session", str);
-	ck_assert_int_eq(0, json_get_str(json, TAGNAME_SERIAL, &str));
-	ck_assert_str_eq("123456789012345678901234567890123456789012", str);
-	ck_assert_int_eq(0, json_get_array(json, TAGNAME_DELTAS, &jdeltas));
-	ck_assert_uint_eq(3, json_array_size(jdeltas));
-	ck_assert_str_eq("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-	    json_string_value(json_array_get(jdeltas, 0)));
-	ck_assert_str_eq("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-	    json_string_value(json_array_get(jdeltas, 1)));
-	ck_assert_str_eq("cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
-	    json_string_value(json_array_get(jdeltas, 2)));
-
-	ck_assert_int_eq(0, rrdp_json2state(json, &state));
-	ck_rrdp_session("session", "123456789012345678901234567890123456789012", &state->session);
-	hash = STAILQ_FIRST(&state->delta_hashes);
-	ck_assert_ptr_ne(NULL, hash);
-	ck_hash(hash, 0xAA);
-	hash = STAILQ_NEXT(hash, hook);
-	ck_assert_ptr_ne(NULL, hash);
-	ck_hash(hash, 0xBB);
-	hash = STAILQ_NEXT(hash, hook);
-	ck_assert_ptr_ne(NULL, hash);
-	ck_hash(hash, 0xCD);
-	hash = STAILQ_NEXT(hash, hook);
-	ck_assert_ptr_eq(NULL, hash);
-
-	json_decref(json);
-	rrdp_state_free(state);
-}
-END_TEST
-
-void
-ck_json2state(int expected, char const *json_str)
-{
-	json_t *json;
-	json_error_t error;
-	struct rrdp_state *state;
-
-	json = json_loads(json_str, 0, &error);
-	ck_assert_ptr_ne(NULL, json);
-
-	state = NULL;
-	ck_assert_int_eq(expected, rrdp_json2state(json, &state));
-
-	json_decref(json);
-	if (state != NULL)
-		rrdp_state_free(state);
-}
-
-START_TEST(test_2s_errors)
-{
-	struct rrdp_state state = { 0 };
-
-	ck_assert_ptr_eq(NULL, rrdp_state2json(&state));
-	state.session.session_id = "sid";
-	ck_assert_ptr_eq(NULL, rrdp_state2json(&state));
-
-	ck_json2state(ENOENT, "{}");
-	ck_json2state(0, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":null, \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":null }");
-	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":123, \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2state(-EINVAL, "{ \"" TAGNAME_SESSION "\":\"sss\", \"" TAGNAME_SERIAL "\":123 }");
-	ck_json2state(ENOENT, "{ \"" TAGNAME_SESSION "\":\"sss\" }");
-	ck_json2state(ENOENT, "{ \"" TAGNAME_SERIAL "\":\"123\" }");
-	ck_json2state(-EINVAL,
-	    "{ \"" TAGNAME_SESSION "\":\"sss\","
-	      "\"" TAGNAME_SERIAL "\":\"123\","
-	      "\"" TAGNAME_DELTAS "\":null }");
-	ck_json2state(-EINVAL,
-	    "{ \"" TAGNAME_SESSION "\":\"sss\","
-	      "\"" TAGNAME_SERIAL "\":\"123\","
-	      "\"" TAGNAME_DELTAS "\":\"123\" }");
-	ck_json2state(-EINVAL,
-	    "{ \"" TAGNAME_SESSION "\":\"sss\","
-	      "\"" TAGNAME_SERIAL "\":\"123\","
-	      "\"" TAGNAME_DELTAS "\":{} }");
-	ck_json2state(0,
-	    "{ \"" TAGNAME_SESSION "\":\"sss\","
-	      "\"" TAGNAME_SERIAL "\":\"123\","
-	      "\"" TAGNAME_DELTAS "\":[] }");
-	ck_json2state(-EINVAL,
-	    "{ \"" TAGNAME_SESSION "\":\"sss\","
-	      "\"" TAGNAME_SERIAL "\":\"123\","
-	      "\"" TAGNAME_DELTAS "\":[ 1 ] }");
-	ck_json2state(-EINVAL,
-	    "{ \"" TAGNAME_SESSION "\":\"sss\","
-	      "\"" TAGNAME_SERIAL "\":\"123\","
-	      "\"" TAGNAME_DELTAS "\":[ \"111\" ] }");
-	ck_json2state(0,
-	    "{ \"" TAGNAME_SESSION "\":\"sss\","
-	      "\"" TAGNAME_SERIAL "\":\"123\","
-	      "\"" TAGNAME_DELTAS "\":[ \"1111111111111111111111111111111111111111111111111111111111111111\" ] }");
-}
-END_TEST
-
 static Suite *create_suite(void)
 {
 	Suite *suite;
-	TCase *misc, *parse, *cf;
+	TCase *misc, *parse;
 
 	misc = tcase_create("misc");
 	tcase_add_test(misc, test_xmlChar_NULL_assumption);
@@ -783,15 +589,9 @@ static Suite *create_suite(void)
 	tcase_add_test(parse, test_parse_notification_bad_uri);
 	tcase_add_test(parse, test_parse_snapshot_bad_publish);
 
-	cf = tcase_create("cachefile");
-	tcase_add_test(parse, test_2s_simple);
-	tcase_add_test(parse, test_2s_more);
-	tcase_add_test(parse, test_2s_errors);
-
 	suite = suite_create("RRDP");
 	suite_add_tcase(suite, misc);
 	suite_add_tcase(suite, parse);
-	suite_add_tcase(suite, cf);
 
 	return suite;
 }

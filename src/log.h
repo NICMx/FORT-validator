@@ -67,7 +67,7 @@ bool pr_val_enabled(unsigned int level);
 bool pr_op_enabled(unsigned int level);
 
 #define pr_clutter_enabled() false
-#define pr_clutter(...)
+#define pr_clutter(...) /* pr_op_debug(__VA_ARGS__) */
 
 /* == Operation logs == */
 

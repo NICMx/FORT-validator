@@ -23,6 +23,7 @@
 #include "task.h"
 #include "types/array.h"
 #include "types/path.h"
+#include "types/str.h"
 #include "types/url.h"
 #include "types/uthash.h"
 
@@ -37,6 +38,8 @@ enum node_state {
 	/* Fallback nodes: Committed */
 	DLS_FRESH,
 };
+
+struct cache_table;
 
 /*
  * This is a delicate structure; pay attention.
@@ -54,12 +57,18 @@ enum node_state {
  * this must be done through careful coding and review.
  */
 struct cache_node {
+	/*
+	 * Hack: The "url" is a cache identifier, not an actual URL.
+	 * If this is an rsync node, it equals `caRepository`.
+	 * If this is an RRDP node, it's `rpkiNotify\tcaRepository`.
+	 * This allows easy hash table indexing.
+	 */
 	struct cache_mapping map;
 
 	enum node_state state;
 	/* Result code of recent dl attempt (DLS_FRESH only) */
 	int dlerr;
-	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Commit */
+	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Unused */
 	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
 	struct mft_meta mft;	/* RPP fallbacks only */
@@ -125,7 +134,7 @@ static STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZE
 static pthread_mutex_t commits_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define LOCKFILE ".lock"
-#define INDEX_FILE "index.json"
+#define METAFILE "meta.json"
 #define TAGNAME_VERSION "fort-version"
 
 #ifdef UNIT_TESTING
@@ -139,7 +148,8 @@ delete_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 	__delete_node_cb(node);
 #endif
 
-	HASH_DEL(tbl->nodes, node);
+	if (tbl)
+		HASH_DEL(tbl->nodes, node);
 
 	map_cleanup(&node->map);
 	rrdp_state_free(node->rrdp);
@@ -206,6 +216,48 @@ strip_rsync_module(char const *url)
 	return NULL;
 }
 
+static json_t *
+node2json(struct cache_node *node)
+{
+	char *tab;
+	json_t *json;
+
+	json = json_obj_new();
+	if (json == NULL)
+		return NULL;
+
+	tab = strchr(node->map.url, '\t');
+	if (tab == NULL) {
+		if (json_add_str(json, "url", node->map.url))
+			goto fail;
+	} else {
+		if (json_add_strn(json, "notification", node->map.url, tab - node->map.url))
+			goto fail;
+		if (json_add_str(json, "url", tab + 1))
+			goto fail;
+	}
+	if (json_add_str(json, "path", node->map.path))
+		goto fail;
+	if (node->dlerr && json_add_int(json, "error", node->dlerr))
+		goto fail;
+	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
+		goto fail;
+	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
+		goto fail;
+	if (node->mft.num.size && json_add_bigint(json, "mftNum", &node->mft.num))
+		goto fail;
+	if (node->mft.update && json_add_ts(json, "mftUpdate", node->mft.update))
+		goto fail;
+	if (node->rrdp)
+		if (json_object_add(json, "rrdp", rrdp_state2json(node->rrdp)))
+			goto fail;
+
+	return json;
+
+fail:	json_decref(json);
+	return NULL;
+}
+
 static int dl_rsync(struct cache_node *);
 static int dl_http(struct cache_node *);
 static int dl_rrdp(struct cache_node *);
@@ -216,7 +268,7 @@ init_table(struct cache_table *tbl, char *name, bool enabled, dl_cb dl)
 	memset(tbl, 0, sizeof(*tbl));
 	tbl->name = name;
 	tbl->enabled = enabled;
-	cseq_init(&tbl->seq, name, false);
+	cseq_init(&tbl->seq, name, 0, false);
 	tbl->download = dl;
 	panic_on_fail(pthread_mutex_init(&tbl->lock, NULL),
 	    "pthread_mutex_init");
@@ -373,143 +425,262 @@ cache_setup(void)
 	return 0;
 }
 
+static char *
+ctx2id(char const *rpkiNotify, char const *caRepository)
+{
+	char *result;
+	size_t nlen;
+
+	if (rpkiNotify == NULL && caRepository == NULL)
+		return NULL;
+	if (rpkiNotify == NULL)
+		return pstrdup(caRepository);
+	if (caRepository == NULL)
+		return pstrdup(rpkiNotify);
+
+	nlen = strlen(rpkiNotify);
+	result = pmalloc(nlen + strlen(caRepository) + 2);
+	strcpy(result, rpkiNotify);
+	result[nlen] = '\t';
+	strcpy(result + nlen + 1, caRepository);
+
+	return result;
+}
+
 static struct cache_node *
 json2node(json_t *json)
 {
 	struct cache_node *node;
-	char const *str;
+	char const *notification;
+	char const *url;
+	char const *path;
 	json_t *rrdp;
 	int error;
 
 	node = pzalloc(sizeof(struct cache_node));
 
-	if (json_get_str(json, "url", &str))
-		goto fail;
-	node->map.url = pstrdup(str);
-	if (json_get_str(json, "path", &str))
-		goto fail;
-	node->map.path = pstrdup(str);
+	error = json_get_str(json, "notification", &notification);
+	switch (error) {
+	case 0:
+		break;
+	case ENOENT:
+		notification = NULL;
+		break;
+	default:
+		pr_op_debug("notification: %s", strerror(error));
+		goto fail1;
+	}
+
+	error = json_get_str(json, "url", &url);
+	switch (error) {
+	case 0:
+		break;
+	case ENOENT:
+		url = NULL;
+		break;
+	default:
+		pr_op_debug("url: %s", strerror(error));
+		goto fail1;
+	}
+
+	node->map.url = ctx2id(notification, url);
+	if (node->map.url == NULL) {
+		pr_op_debug("Tag is missing both notification and url.");
+		goto fail1;
+	}
+
+	error = json_get_str(json, "path", &path);
+	if (error) {
+		pr_op_debug("path: %s", strerror(error));
+		goto fail2;
+	}
+	node->map.path = pstrdup(path);
+
 	error = json_get_ts(json, "attempt", &node->attempt_ts);
-	if (error != 0 && error != ENOENT)
-		goto fail;
+	if (error != 0 && error != ENOENT) {
+		pr_op_debug("attempt: %s", strerror(error));
+		goto fail2;
+	}
+
 	error = json_get_ts(json, "success", &node->success_ts);
-	if (error != 0 && error != ENOENT)
-		goto fail;
+	if (error != 0 && error != ENOENT) {
+		pr_op_debug("success: %s", strerror(error));
+		goto fail2;
+	}
+
 	error = json_get_bigint(json, "mftNum", &node->mft.num);
-	if (error < 0)
-		goto fail;
+	if (error < 0) {
+		pr_op_debug("mftNum: %s", strerror(error));
+		goto fail2;
+	}
+
 	error = json_get_ts(json, "mftUpdate", &node->mft.update);
-	if (error < 0)
-		goto fail;
+	if (error < 0) {
+		pr_op_debug("mftUpdate: %s", strerror(error));
+		goto fail3;
+	}
+
 	error = json_get_object(json, "rrdp", &rrdp);
-	if (error < 0)
-		goto fail;
-	if (error == 0 && rrdp_json2state(rrdp, &node->rrdp))
-		goto fail;
+	if (error < 0) {
+		pr_op_debug("rrdp: %s", strerror(error));
+		goto fail3;
+	}
+	if (error == 0 && rrdp_json2state(rrdp, node->map.path, &node->rrdp))
+		goto fail3;
 
 	return node;
 
-fail:	map_cleanup(&node->map);
+fail3:	INTEGER_cleanup(&node->mft.num);
+fail2:	map_cleanup(&node->map);
+fail1:	free(node);
 	return NULL;
 }
 
-static void
-json2tbl(json_t *root, struct cache_table *tbl)
-{
-	json_t *array, *child;
-	int index;
-	struct cache_node *node;
-	size_t urlen;
-
-	if (json_get_object(root, tbl->name, &root))
-		return;
-
-	if (json_get_seq(root, "seq", &tbl->seq)) {
-		// XXX this is grouds to reset the cache...
-		pr_op_warn("Unable to load the 'seq' child for the %s table.",
-		    tbl->name);
-		return;
-	}
-	if (json_get_array(root, "nodes", &array)) {
-		pr_op_warn("Unable to load the 'nodes' child for the %s table.",
-		    tbl->name);
-		return;
-	}
-
-	json_array_foreach(array, index, child) {
-		node = json2node(child);
-		if (node == NULL)
-			continue;
-		urlen = strlen(node->map.url);
-		// XXX worry about dupes
-		HASH_ADD_KEYPTR(hh, tbl->nodes, node->map.url, urlen, node);
-	}
-}
-
 static int
-load_index_file(void)
+check_root_metafile(void)
 {
-	json_t *root;
 	json_error_t jerr;
+	json_t *root;
 	char const *file_version;
 	int error;
 
-	pr_op_debug("Loading " INDEX_FILE "...");
+	pr_op_debug("Loading " METAFILE "...");
 
-	root = json_load_file(INDEX_FILE, 0, &jerr);
+	root = json_load_file(METAFILE, 0, &jerr);
 	if (root == NULL) {
-		if (json_error_code(&jerr) == json_error_cannot_open_file)
-			pr_op_debug(INDEX_FILE " does not exist.");
-		else
+		if (json_error_code(&jerr) == json_error_cannot_open_file) {
+			pr_op_debug(METAFILE " does not exist.");
+			return ENOENT;
+		} else {
 			pr_op_err("Json parsing failure at %s (%d:%d): %s",
-			    INDEX_FILE, jerr.line, jerr.column, jerr.text);
-		goto fail;
+			    METAFILE, jerr.line, jerr.column, jerr.text);
+			return EINVAL;
+		}
 	}
+
 	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_err("The root tag of " INDEX_FILE " is not an object.");
+		pr_op_err("The root tag of " METAFILE " is not an object.");
 		goto fail;
 	}
 
 	error = json_get_str(root, TAGNAME_VERSION, &file_version);
 	if (error) {
 		if (error > 0)
-			pr_op_err(INDEX_FILE " is missing the '"
+			pr_op_err(METAFILE " is missing the '"
 			    TAGNAME_VERSION "' tag.");
 		goto fail;
 	}
-	if (strcmp(file_version, PACKAGE_VERSION) != 0)
+	if (strcmp(file_version, PACKAGE_VERSION) != 0) {
+		pr_op_err("The cache was written by Fort %s; "
+		    "I need to clear it.", file_version);
 		goto fail;
-
-	json2tbl(root, &cache.rsync);
-	json2tbl(root, &cache.https);
-	json2tbl(root, &cache.rrdp);
-	json2tbl(root, &cache.fallback);
+	}
 
 	json_decref(root);
-	pr_op_debug(INDEX_FILE " loaded.");
-
-	/*
-	 * There are many ways in which a mismatching cache index can cause
-	 * erratic behavior that's hard to detect. Since the index is written at
-	 * the end of the validation cycle, crashing at any point between a
-	 * cache refresh and the index write results in a misindexed cache.
-	 *
-	 * Deleting the index right after loading it seems to be a simple and
-	 * reliable way to force Fort to reset the cache after a crash.
-	 * (Recovering with an empty cache is safer than with a misindexed one.)
-	 */
-	error = file_rm_f(INDEX_FILE);
-	if (error)
-		pr_op_warn("Unable to delete " INDEX_FILE ": %s. "
-		    "This means Fort might not recover properly after a crash. "
-		    "If Fort crashes for some reason, "
-		    "please clear the cache manually before restarting.",
-		    strerror(error));
-
+	pr_op_debug(METAFILE " loaded.");
 	return 0;
 
 fail:	json_decref(root);
 	return EINVAL;
+}
+
+static void
+collect_meta(struct cache_table *tbl, struct dirent *dir)
+{
+	char filename[64];
+	int wrt;
+	json_error_t jerr;
+	json_t *root;
+	struct cache_node *node;
+	size_t n;
+
+	if (S_ISDOTS(dir))
+		return;
+
+	wrt = snprintf(filename, 64, "%s/%s.json", tbl->name, dir->d_name);
+	if (wrt >= 64)
+		pr_crit("collect_meta: %d %s %s", wrt, tbl->name, dir->d_name);
+
+	pr_clutter("%s: Loading...", filename);
+
+	root = json_load_file(filename, 0, &jerr);
+	if (root == NULL) {
+		if (json_error_code(&jerr) == json_error_cannot_open_file)
+			pr_op_warn("%s: File does not exist.", filename);
+		else
+			pr_op_warn("%s: Json parsing failure at (%d:%d): %s",
+			    filename, jerr.line, jerr.column, jerr.text);
+		return;
+	}
+
+	if (json_typeof(root) != JSON_OBJECT) {
+		pr_op_warn("%s: Root tag is not an object.", filename);
+		goto end;
+	}
+
+	node = json2node(root);
+	if (node != NULL) {
+		n = strlen(node->map.url);
+		// XXX worry about dupes
+		HASH_ADD_KEYPTR(hh, tbl->nodes, node->map.url, n, node);
+	}
+
+	pr_clutter("%s: Loaded.", filename);
+end:	json_decref(root);
+}
+
+static void
+collect_metas(struct cache_table *tbl)
+{
+	DIR *dir;
+	struct dirent *file;
+	unsigned long id, max_id;
+	int error;
+
+	dir = opendir(tbl->name);
+	if (dir == NULL) {
+		error = errno;
+		if (error != ENOENT)
+			pr_op_warn("Cannot open %s: %s",
+			    tbl->name, strerror(error));
+		return;
+	}
+
+	max_id = 0;
+	FOREACH_DIR_FILE(dir, file) {
+		if (hex2ulong(file->d_name, &id) != 0)
+			continue;
+		if (id > max_id)
+			max_id = id;
+		collect_meta(tbl, file);
+	}
+	error = errno;
+	if (error)
+		pr_op_warn("Could not finish traversing %s: %s",
+		    tbl->name, strerror(error));
+
+	closedir(dir);
+
+	tbl->seq.prefix = tbl->name;
+	tbl->seq.next_id = max_id + 1;
+	tbl->seq.pathlen = strlen(tbl->name);
+	tbl->seq.free_prefix = false;
+}
+
+static int
+load_index(void)
+{
+	int error;
+
+	error = check_root_metafile();
+	if (error)
+		return error;
+
+	collect_metas(&cache.rsync);
+	collect_metas(&cache.https);
+	collect_metas(&cache.rrdp);
+	collect_metas(&cache.fallback);
+	return 0;
 }
 
 int
@@ -521,7 +692,7 @@ cache_prepare(void)
 	if (error)
 		return error;
 
-	if (load_index_file() != 0) {
+	if (load_index() != 0) {
 		error = reset_cache_dir();
 		if (error)
 			goto fail;
@@ -551,107 +722,6 @@ fail:	flush_nodes();
 	return error;
 }
 
-static json_t *
-node2json(struct cache_node *node)
-{
-	json_t *json;
-
-	json = json_obj_new();
-	if (json == NULL)
-		return NULL;
-
-	if (json_add_str(json, "url", node->map.url))
-		goto fail;
-	if (json_add_str(json, "path", node->map.path))
-		goto fail;
-	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
-		goto fail;
-	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
-		goto fail;
-	if (node->mft.num.size && json_add_bigint(json, "mftNum", &node->mft.num))
-		goto fail;
-	if (node->mft.update && json_add_ts(json, "mftUpdate", node->mft.update))
-		goto fail;
-	if (node->rrdp)
-		if (json_object_add(json, "rrdp", rrdp_state2json(node->rrdp)))
-			goto fail;
-
-	return json;
-
-fail:	json_decref(json);
-	return NULL;
-}
-
-static json_t *
-tbl2json(struct cache_table *tbl)
-{
-	struct json_t *json, *nodes;
-	struct cache_node *node, *tmp;
-
-	json = json_obj_new();
-	if (!json)
-		return NULL;
-
-	if (json_add_seq(json, "seq", &tbl->seq))
-		goto fail;
-
-	nodes = json_array_new();
-	if (!nodes)
-		goto fail;
-	if (json_object_add(json, "nodes", nodes))
-		goto fail;
-
-	HASH_ITER(hh, tbl->nodes, node, tmp)
-		if (json_array_add(nodes, node2json(node)))
-			goto fail;
-
-	return json;
-
-fail:	json_decref(json);
-	return NULL;
-}
-
-static json_t *
-build_index_file(void)
-{
-	json_t *json;
-
-	json = json_obj_new();
-	if (json == NULL)
-		return NULL;
-
-	if (json_object_add(json, TAGNAME_VERSION, json_str_new(PACKAGE_VERSION)))
-		goto fail;
-	if (json_object_add(json, "rsync", tbl2json(&cache.rsync)))
-		goto fail;
-	if (json_object_add(json, "https", tbl2json(&cache.https)))
-		goto fail;
-	if (json_object_add(json, "rrdp", tbl2json(&cache.rrdp)))
-		goto fail;
-	if (json_object_add(json, "fallback", tbl2json(&cache.fallback)))
-		goto fail;
-
-	return json;
-
-fail:	json_decref(json);
-	return NULL;
-}
-
-static void
-write_index_file(void)
-{
-	struct json_t *json;
-
-	json = build_index_file();
-	if (json == NULL)
-		return;
-
-	if (json_dump_file(json, INDEX_FILE, JSON_INDENT(2)))
-		pr_op_err("Unable to write " INDEX_FILE "; unknown cause.");
-
-	json_decref(json);
-}
-
 static int
 dl_rsync(struct cache_node *module)
 {
@@ -671,8 +741,8 @@ dl_rrdp(struct cache_node *notif)
 	bool changed;
 	int error;
 
-	error = rrdp_update(&notif->map, notif->success_ts,
-	    &changed, &notif->rrdp);
+	error = rrdp_update(&notif->map, notif->success_ts, &changed,
+	    &notif->rrdp);
 	if (error)
 		return error;
 
@@ -730,6 +800,44 @@ provide_node(struct cache_table *tbl, char const *url)
 	return node;
 }
 
+static void
+rm_metadata(struct cache_node *node)
+{
+	char *filename;
+	int error;
+
+	filename = str_concat(node->map.path, ".json");
+	pr_op_debug("rm %s", filename);
+	if (unlink(filename) < 0) {
+		error = errno;
+		if (error == ENOENT)
+			pr_op_debug("%s already doesn't exist.", filename);
+		else
+			pr_op_warn("Cannot rm %s: %s", filename, strerror(errno));
+	}
+
+	free(filename);
+}
+
+static void
+write_metadata(struct cache_node *node)
+{
+	char *filename;
+	json_t *json;
+
+	json = node2json(node);
+	if (!json)
+		return;
+	filename = str_concat(node->map.path, ".json");
+
+	pr_op_debug("echo \"$json\" > %s", filename);
+	if (json_dump_file(json, filename, JSON_INDENT(2)))
+		pr_op_err("Unable to write %s; unknown cause.", filename);
+
+	free(filename);
+	json_decref(json);
+}
+
 /*
  * @uri is either a caRepository or a rpkiNotify
  * By contract, only sets @result on return 0.
@@ -770,7 +878,9 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 		mutex_unlock(&tbl->lock);
 
 		node->attempt_ts = time_fatal();
+		rm_metadata(node);
 		node->dlerr = tbl->download(node);
+		write_metadata(node);
 		downloaded = true;
 
 		mutex_lock(&tbl->lock);
@@ -1071,15 +1181,19 @@ cachent_print(struct cache_node *node)
 	printf("\t%s (%s): ", node->map.url, node->map.path);
 	switch (node->state) {
 	case DLS_OUTDATED:
-		printf("stale");
+		printf("stale ");
 		break;
 	case DLS_ONGOING:
-		printf("downloading");
+		printf("downloading ");
 		break;
 	case DLS_FRESH:
-		printf("fresh (errcode %d)", node->dlerr);
+		printf("fresh (errcode %d) ", node->dlerr);
 		break;
 	}
+
+	printf("attempt:%lx success:%lx ", node->attempt_ts, node->success_ts);
+	printf("mftUpdate:%lx ", node->mft.update);
+	rrdp_print(node->rrdp);
 	printf("\n");
 }
 
@@ -1088,7 +1202,7 @@ table_print(struct cache_table *tbl)
 {
 	struct cache_node *node, *tmp;
 
-	printf("    %s enabled:%d seq:%s/%lu\n",
+	printf("%s enabled:%d seq:%s/%lx\n",
 	    tbl->name, tbl->enabled,
 	    tbl->seq.prefix, tbl->seq.next_id);
 	HASH_ITER(hh, tbl->nodes, node, tmp)
@@ -1203,6 +1317,7 @@ commit_fallbacks(time_t now)
 	struct cache_commit *commit;
 	struct cache_node *fb;
 	array_index i;
+	int error;
 
 	while (!STAILQ_EMPTY(&commits)) {
 		commit = STAILQ_FIRST(&commits);
@@ -1222,9 +1337,19 @@ commit_fallbacks(time_t now)
 				fb = provide_node(&cache.fallback,
 				    commit->caRepository);
 			}
+			fb->success_ts = now;
 
-			if (file_mkdir(fb->map.path, true) != 0)
-				goto skip;
+			pr_op_debug("mkdir -f %s", fb->map.path);
+			if (mkdir(fb->map.path, CACHE_FILEMODE) < 0) {
+				error = errno;
+				if (error != EEXIST) {
+					pr_op_err("Cannot create '%s': %s",
+					    fb->map.path, strerror(error));
+					goto skip;
+				}
+
+				rm_metadata(fb); /* error == EEXIST */
+			}
 
 			commit_rpp(commit, fb);
 			discard_trash(commit, fb);
@@ -1235,14 +1360,16 @@ commit_fallbacks(time_t now)
 			pr_op_debug("Creating fallback for %s", map->url);
 
 			fb = provide_node(&cache.fallback, map->url);
+			fb->success_ts = now;
 			if (is_fallback(map->path))
 				goto freshen;
 
 			file_ln(map->path, fb->map.path);
 		}
 
+		write_metadata(fb);
+
 freshen:	fb->state = DLS_FRESH;
-		fb->attempt_ts = fb->success_ts = now;
 skip:		free(commit->rpkiNotify);
 		free(commit->caRepository);
 		for (i = 0; i < commit->nfiles; i++) {
@@ -1265,6 +1392,7 @@ remove_abandoned(struct cache_table *table, struct cache_node *node, void *arg)
 
 	now = *((time_t *)arg);
 	if (difftime(node->attempt_ts + cfg_cache_threshold(), now) < 0) {
+		rm_metadata(node);
 		file_rm_rf(node->map.path);
 		delete_node(table, node, NULL);
 	}
@@ -1323,7 +1451,7 @@ void
 cache_commit(void)
 {
 	cleanup_cache();
-	write_index_file();
+	file_write_txt(METAFILE, "{ \"fort-version\": \"" PACKAGE_VERSION "\" }");
 	unlock_cache();
 	flush_nodes();
 }
