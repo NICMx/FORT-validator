@@ -84,24 +84,27 @@ rpp_refput(struct rpp *pp)
 }
 
 /** Steals ownership of @uri. */
-void
-rpp_add_cert(struct rpp *pp, struct rpki_uri *uri)
+int
+rpp_add_cer(struct rpp *pp, struct rpki_uri *uri)
 {
 	uris_add(&pp->certs, uri);
+	return 0;
 }
 
 /** Steals ownership of @uri. */
-void
+int
 rpp_add_roa(struct rpp *pp, struct rpki_uri *uri)
 {
 	uris_add(&pp->roas, uri);
+	return 0;
 }
 
 /** Steals ownership of @uri. */
-void
-rpp_add_ghostbusters(struct rpp *pp, struct rpki_uri *uri)
+int
+rpp_add_gbr(struct rpp *pp, struct rpki_uri *uri)
 {
 	uris_add(&pp->ghostbusters, uri);
+	return 0;
 }
 
 /** Steals ownership of @uri. */

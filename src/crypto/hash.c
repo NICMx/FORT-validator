@@ -113,22 +113,20 @@ hash_validate_mft_file(struct rpki_uri *uri, BIT_STRING_t const *expected)
 	if (expected->bits_unused != 0)
 		return pr_val_err("Hash string has unused bits.");
 
-	do {
-		error = hash_file(uri, actual, &actual_len);
-		if (!error)
-			break;
-
-		if (error == EACCES || error == ENOENT) {
-			if (incidence(INID_MFT_FILE_NOT_FOUND,
-			    "File '%s' listed at manifest doesn't exist.",
-			    uri_val_get_printable(uri)))
-				return -EINVAL;
-
-			return error;
-		}
-		/* Any other error (crypto, enomem, file read) */
+	error = hash_file(uri, actual, &actual_len);
+	switch (error) {
+	case 0:
+		break;
+	case EACCES:
+	case ENOENT:
+		if (incidence(INID_MFT_FILE_NOT_FOUND,
+		    "File '%s' listed at manifest doesn't exist.",
+		    uri_val_get_printable(uri)))
+			return -EINVAL;
+		return error;
+	default:
 		return ENSURE_NEGATIVE(error);
-	} while (0);
+	}
 
 	if (!hash_matches(expected->buf, expected->size, actual, actual_len)) {
 		return incidence(INID_MFT_FILE_HASH_NOT_MATCH,

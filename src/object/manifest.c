@@ -201,6 +201,18 @@ shuffle_file_list(struct Manifest *mft)
 	}
 }
 
+/*
+ * Contract:
+ * - Length = 4 (includes dot)
+ * - Not NULL-terminated!
+ * - Can return NULL
+ */
+static char *
+get_extension(IA5String_t *file)
+{
+	return (file->size < 4) ? NULL : (((char *)file->buf) + file->size - 4);
+}
+
 static int
 build_rpp(struct Manifest *mft, struct rpki_uri *notif,
     struct rpki_uri *mft_uri, struct rpp **pp)
@@ -208,6 +220,8 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 	char const *tal;
 	unsigned int i;
 	struct FileAndHash *fah;
+	char *ext;
+	int (*rpp_add)(struct rpp *pp, struct rpki_uri *uri);
 	struct rpki_uri *uri;
 	int error;
 
@@ -221,6 +235,30 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 
 	for (i = 0; i < mft->fileList.list.count; i++) {
 		fah = mft->fileList.list.array[i];
+
+		/*
+		 * rsync filters unknown files. We don't want absent unknown
+		 * files to induce RPP rejection, so we'll skip them.
+		 * This contradicts rfc9286#6.4, but it's necessary evil because
+		 * we can't trust the repositories to not accidentally serve
+		 * garbage.
+		 *
+		 * This includes .mft; They're presently not supposed to be
+		 * listed.
+		 */
+		ext = get_extension(&fah->file);
+		if (ext == NULL)
+			continue;
+		else if (strncmp(ext, ".cer", 4) == 0)
+			rpp_add = rpp_add_cer;
+		else if (strncmp(ext, ".roa", 4) == 0)
+			rpp_add = rpp_add_roa;
+		else if (strncmp(ext, ".crl", 4) == 0)
+			rpp_add = rpp_add_crl;
+		else if (strncmp(ext, ".gbr", 4) == 0)
+			rpp_add = rpp_add_gbr;
+		else
+			continue;
 
 		error = uri_create_mft(&uri, tal, notif, mft_uri, &fah->file);
 		/*
@@ -251,17 +289,7 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 			continue;
 		}
 
-		if (uri_has_extension(uri, ".cer"))
-			rpp_add_cert(*pp, uri);
-		else if (uri_has_extension(uri, ".roa"))
-			rpp_add_roa(*pp, uri);
-		else if (uri_has_extension(uri, ".crl"))
-			error = rpp_add_crl(*pp, uri);
-		else if (uri_has_extension(uri, ".gbr"))
-			rpp_add_ghostbusters(*pp, uri);
-		else
-			uri_refput(uri); /* ignore it. */
-
+		error = rpp_add(*pp, uri);
 		if (error) {
 			uri_refput(uri);
 			goto fail;
