@@ -1,6 +1,5 @@
 #include "object/bgpsec.h"
 
-#include "alloc.h"
 #include "log.h"
 #include "object/certificate.h"
 #include "validation_handler.h"

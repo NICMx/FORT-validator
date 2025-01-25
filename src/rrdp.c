@@ -491,62 +491,61 @@ parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 	return 0;
 }
 
-/* Does not clean @tag on failure. */
-static int
-parse_publish(xmlTextReaderPtr reader, struct publish *tag)
+static bool
+is_known_extension(char const *uri)
 {
-	xmlChar *base64_str;
-	int error;
+	size_t len;
+	char const *ext;
 
-	error = parse_file_metadata(reader, &tag->meta);
-	if (error)
-		return error;
+	len = strlen(uri);
+	if (len < 4)
+		return false;
 
-	/* Read the text */
-	if (xmlTextReaderRead(reader) != 1)
-		return pr_val_err(
-		    "Couldn't read publish content of element '%s'",
-		    tag->meta.uri
-		);
-
-	base64_str = parse_string(reader, NULL);
-	if (base64_str == NULL)
-		return -EINVAL;
-	if (!base64_decode((char *)base64_str, 0, &tag->content, &tag->content_len))
-		error = pr_val_err("Cannot decode publish tag's base64.");
-	xmlFree(base64_str);
-
-	return error;
-}
-
-/* Does not clean @tag on failure. */
-static int
-parse_withdraw(xmlTextReaderPtr reader, struct withdraw *tag)
-{
-	int error;
-
-	error = parse_file_metadata(reader, &tag->meta);
-	if (error)
-		return error;
-
-	if (!tag->meta.hash)
-		return pr_val_err("Withdraw '%s' is missing a hash.",
-		    tag->meta.uri);
-
-	return 0;
+	ext = uri + len - 4;
+	return ((strcmp(ext, ".cer") == 0)
+	     || (strcmp(ext, ".roa") == 0)
+	     || (strcmp(ext, ".mft") == 0)
+	     || (strcmp(ext, ".crl") == 0)
+	     || (strcmp(ext, ".gbr") == 0));
 }
 
 static int
 handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 {
 	struct publish tag = { 0 };
+	xmlChar *base64_str;
 	struct cache_file *file;
 	char *path;
 	int error;
 
-	error = parse_publish(reader, &tag);
+	/* Parse tag itself */
+	error = parse_file_metadata(reader, &tag.meta);
 	if (error)
+		return error;
+	if (xmlTextReaderRead(reader) != 1) {
+		error = pr_val_err(
+		    "Couldn't read publish content of element '%s'",
+		    tag.meta.uri
+		);
 		goto end;
+	}
+	if (!is_known_extension(tag.meta.uri))
+		goto end; /* Mirror rsync filters */
+
+	/* Parse tag content */
+	base64_str = parse_string(reader, NULL);
+	if (base64_str == NULL) {
+		error = -EINVAL;
+		goto end;
+	}
+	if (!base64_decode((char *)base64_str, 0, &tag.content, &tag.content_len)) {
+		xmlFree(base64_str);
+		error = pr_val_err("Cannot decode publish tag's base64.");
+		goto end;
+	}
+	xmlFree(base64_str);
+
+	/* Parsing done */
 
 	pr_clutter("Publish %s", logv_filename(tag.meta.uri));
 
@@ -613,9 +612,16 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 	size_t len;
 	int error;
 
-	error = parse_withdraw(reader, &tag);
+	error = parse_file_metadata(reader, &tag.meta);
 	if (error)
 		goto end;
+	if (!is_known_extension(tag.meta.uri))
+		goto end; /* Mirror rsync filters */
+	if (!tag.meta.hash) {
+		error = pr_val_err("Withdraw '%s' is missing a hash.",
+		    tag.meta.uri);
+		goto end;
+	}
 
 	pr_clutter("Withdraw %s", logv_filename(tag.meta.uri));
 

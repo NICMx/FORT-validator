@@ -12,6 +12,7 @@
 #include "asn1/asn1c/ContentType.h"
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SigningTime.h"
+#include "asn1/asn1c/constr_SET_OF.h"
 #include "json_util.h"
 
 static json_t *

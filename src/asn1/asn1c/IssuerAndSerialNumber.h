@@ -10,8 +10,6 @@
 
 #include "asn1/asn1c/CertificateSerialNumber.h"
 #include "asn1/asn1c/Name.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* IssuerAndSerialNumber */
 typedef struct IssuerAndSerialNumber {

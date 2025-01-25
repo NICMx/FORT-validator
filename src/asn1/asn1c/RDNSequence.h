@@ -10,11 +10,6 @@
 
 #include "asn1/asn1c/RelativeDistinguishedName.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_TYPE.h"
-
-/* Forward declarations */
-struct RelativeDistinguishedName;
 
 /* RDNSequence */
 typedef struct RDNSequence {

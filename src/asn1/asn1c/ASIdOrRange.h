@@ -8,10 +8,8 @@
 #ifndef	_ASIdOrRange_H_
 #define	_ASIdOrRange_H_
 
-#include "asn1/asn1c/ASId.h"
 #include "asn1/asn1c/ASRange.h"
 #include "asn1/asn1c/constr_CHOICE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum ASIdOrRange_PR {

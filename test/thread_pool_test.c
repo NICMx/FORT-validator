@@ -7,6 +7,8 @@
 #include "mock.c"
 #include "thread_pool.c"
 
+__MOCK_ABORT(config_get_local_repository, char const *, "tmp/thread", void)
+
 static void
 thread_work(void *arg)
 {

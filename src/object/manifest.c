@@ -257,12 +257,6 @@ validate_mft_filename(IA5String_t *ia5)
 			return pr_val_err("File name contains illegal character #%u",
 			    ia5->buf[i]);
 
-	/*
-	 * Well... the RFC says the extension must match a IANA listing,
-	 * but rejecting unknown extensions is a liability since they keep
-	 * adding new ones, and people rarely updates.
-	 * If we don't have a handler, we'll naturally ignore the file.
-	 */
 	return 0;
 }
 
@@ -300,9 +294,10 @@ collect_files(char const *mft_url, char const *mft_path,
 {
 	struct rpp *rpp;
 	char *rpp_url;
-	unsigned int i;
+	unsigned int m;
 	struct FileAndHash *src;
 	struct cache_mapping *dst;
+	char const *ext;
 	char const *path;
 	int error;
 
@@ -311,12 +306,11 @@ collect_files(char const *mft_url, char const *mft_path,
 
 	rpp = &parent->rpp;
 	rpp_url = url_parent(mft_url); // XXX
-	rpp->nfiles = mft->fileList.list.count + 1;	/* plus manifest */
-	rpp->files = pzalloc(rpp->nfiles * sizeof(*rpp->files));
+	rpp->files = pzalloc((mft->fileList.list.count + 1) * sizeof(*rpp->files));
+	rpp->nfiles = 0;
 
-	for (i = 0; i < mft->fileList.list.count; i++) {
-		src = mft->fileList.list.array[i];
-		dst = &rpp->files[i];
+	for (m = 0; m < mft->fileList.list.count; m++) {
+		src = mft->fileList.list.array[m];
 
 		/*
 		 * IA5String is a subset of ASCII. However, IA5String_t doesn't
@@ -327,6 +321,24 @@ collect_files(char const *mft_url, char const *mft_path,
 		if (error)
 			goto revert;
 
+		/*
+		 * rsync and RRDP filter unknown files. We don't want absent
+		 * unknown files to induce RPP rejection, so we'll skip them.
+		 * This contradicts rfc9286#6.4, but it's necessary evil because
+		 * we can't trust the repositories to not accidentally serve
+		 * garbage.
+		 *
+		 * This includes .mft; They're presently not supposed to be
+		 * listed.
+		 */
+		ext = ((char const *)src->file.buf) + src->file.size - 3;
+		if ((strncmp(ext, "cer", 3) != 0) &&
+		    (strncmp(ext, "roa", 3) != 0) &&
+		    (strncmp(ext, "crl", 3) != 0) &&
+		    (strncmp(ext, "gbr", 3) != 0))
+			continue;
+
+		dst = &rpp->files[rpp->nfiles++];
 		dst->url = path_njoin(rpp_url,
 		    (char const *)src->file.buf,
 		    src->file.size);
@@ -346,7 +358,7 @@ collect_files(char const *mft_url, char const *mft_path,
 	}
 
 	/* Manifest */
-	dst = &rpp->files[mft->fileList.list.count];
+	dst = &rpp->files[rpp->nfiles++];
 	dst->url = pstrdup(mft_url);
 	dst->path = pstrdup(mft_path);
 

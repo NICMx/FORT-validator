@@ -5,7 +5,6 @@
 #include "asn1/asn1c/OPEN_TYPE.h"
 
 #include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/constr_CHOICE.h"
 
 asn_TYPE_operation_t asn_OP_OPEN_TYPE = {
 	OPEN_TYPE_free,

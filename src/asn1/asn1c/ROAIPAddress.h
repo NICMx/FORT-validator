@@ -11,7 +11,6 @@
 #include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/IPAddress.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* ROAIPAddress */
 typedef struct ROAIPAddress {

@@ -7,9 +7,6 @@
 
 #include "asn1/asn1c/constr_TYPE.h"
 
-struct asn_TYPE_descriptor_s;	/* Forward declaration */
-struct asn_codec_ctx_s;		/* Forward declaration */
-
 /*
  * The BER decoder of any type.
  * This function may be invoked directly from the application.

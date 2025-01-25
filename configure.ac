@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([fort],[1.6.2],[validadorfort@fortproject.net])
+AC_INIT([fort],[1.255.0],[validadorfort@fortproject.net])
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
 

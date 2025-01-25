@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/DistinguishedName.h"
 
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+
 /*
  * This type is implemented using RDNSequence,
  * so here we adjust the DEF accordingly.

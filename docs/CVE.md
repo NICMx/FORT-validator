@@ -57,3 +57,40 @@ Certificate containing `signedAttrs` not in canonical form crashes Fort 1.6.2-.
 | Impact | Crash. (Potential unavailability of Route Origin Validation.) |
 | Patch | Commit [521b1a0](https://github.com/NICMx/FORT-validator/commit/521b1a0db5041258096fbabdf8fc1e10ecc793cf), released in Fort 1.6.3. |
 | Acknowledgments | Thanks to Niklas Vogel and Haya Schulmann for their research and disclosure. |
+
+## CVE-2024-48943
+
+Malicious rsync repositories can block Fort by drip-feeding repository objects.
+
+| Description | A malicious RPKI rsync repository can prevent Fort from finishing its validation run by drip-feeding its content. |
+| Impact | Delayed validation. (Stale or unavailable Route Origin Validation.) |
+| Patch | Commit [4ee88d1](https://github.com/NICMx/FORT-validator/commit/4ee88d1c3fa7df763dd52312134cd93c1ce50870), released in Fort 1.6.4. |
+| Acknowledgments | Thanks to Koen van Hove for his research and disclosure, and Job Snijders for the proposed fix. |
+
+## CVE-2024-56170
+
+Fort is employing the latest fetched manifest, rather than the one with the most recent metadata.
+
+| Description | RPKI manifests are listings of relevant files that clients are supposed to verify.<br>Assuming everything else is correct, the most recent version of a manifest should be prioritized over other versions, to prevent replays, accidental or otherwise.<br>Manifests contain the `manifestNumber` and `thisUpdate` fields, which can be used to gauge the relevance of a given manifest, when compared to other manifests. The former is a serial-like sequential number, and the latter is the date in which the manifest was created.<br>Fort is not comparing the up-to-dateness of the most recently-fetched manifest against the cached manifest. As such, it's prone to roll back into a previous version if it's served a valid outdated manifest. |
+| Impact | Outdated Route Origin Validation. |
+| Patch | Scheduled for Fort release [2.0.0](https://github.com/NICMx/FORT-validator/milestone/12). |
+| Acknowledgments | Job Snijders |
+
+## CVE-2024-56169
+
+Fort's cache provides insufficient fallbacking.
+
+| Description | RPKI Relying Parties (such as Fort) are supposed to maintain a backup cache of the remote RPKI data. This can be employed as fallback in case a new fetch fails or yields incorrect files.<br>Fort is presently using its cache merely as a bandwidth saving tool. (Because the fetching is performed through deltas.) If a fetch fails midway or yields incorrect files, Fort is left without a viable fallback. |
+| Impact | Incomplete Route Origin Validation data. |
+| Patch | Scheduled for Fort release [2.0.0](https://github.com/NICMx/FORT-validator/milestone/12). |
+| Acknowledgments | Ties de Kock |
+| Issue | [82](https://github.com/NICMx/FORT-validator/issues/82) |
+
+## CVE-2024-56375
+
+Manifest containing empty `fileList` crashes Fort 1.6.3, 1.6.4.
+
+| Description | A malicious RPKI repository that descends from a (trusted) Trust Anchor can serve (via rsync or RRDP) a Manifest RPKI object containing an empty fileList.<br>Fort dereferences (and shortly afterwards writes) this array during a shuffle attempt, before the validation that would normally reject it when empty.<br>This out-of-bounds access is caused by an integer underflow that causes the surrounding loop to iterate infinitely. As Fort gets stuck permanently attempting to overshuffle an array that doesn't actually exist, a crash is pretty much guaranteed. |
+| Impact | Crash. (Potential unavailability of Route Origin Validation.) |
+| Patch | Commit [17f0952](https://github.com/NICMx/FORT-validator/commit/17f095210553182b0e0a28ee6fd41b0d3c8fc1d3), released in Fort 1.6.5. |
+| Acknowledgments | Niklas Vogel |

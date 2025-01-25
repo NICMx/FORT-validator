@@ -46,7 +46,7 @@ extern asn_TYPE_operation_t asn_OP_CHOICE;
  * Return the 1-based choice variant presence index.
  * Returns 0 in case of error.
  */
-unsigned CHOICE_variant_get_presence(const asn_TYPE_descriptor_t *td,
+unsigned int CHOICE_variant_get_presence(const asn_TYPE_descriptor_t *td,
                                      const void *structure_ptr);
 
 /*

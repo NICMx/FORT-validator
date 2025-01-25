@@ -15,6 +15,8 @@
 static bool roas_found[TOTAL_ROAS];
 static unsigned int total_found;
 
+__MOCK_ABORT(config_get_local_repository, char const *, "tmp/dbt", void)
+
 static bool
 vrp_equals_v4(struct vrp const *vrp, uint8_t as, uint32_t addr,
     uint8_t prefix_len, uint8_t max_prefix_len)

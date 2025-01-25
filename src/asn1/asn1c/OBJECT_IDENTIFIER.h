@@ -9,7 +9,6 @@
 
 #include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/asn_codecs_prim.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 typedef uint32_t asn_oid_arc_t;
 #define ASN_OID_ARC_MAX (~((asn_oid_arc_t)0))

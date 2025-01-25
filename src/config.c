@@ -209,8 +209,8 @@ struct rpki_config {
 		/*
 		 * If nonzero, all RPKI object expiration dates are compared to
 		 * this number instead of the current time.
-		 * Meant for test repositories we don't want to have to keep
-		 * regenerating.
+		 * Meant for testing of repositories we don't want to have to
+		 * keep regenerating.
 		 */
 		time_t validation_time;
 	} debug;
@@ -782,7 +782,7 @@ static const struct option_field options[] = {
 	},
 
 	{
-		.id = 13000,
+		.id = 13001,
 		.name = "file-type",
 		.type = &gt_file_type,
 		.offset = offsetof(struct rpki_config, ft),
@@ -1041,6 +1041,9 @@ print_usage(FILE *stream, bool print_doc)
 
 	fprintf(stream, "Usage: %s\n", program_name);
 	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
+		if (option->deprecated)
+			continue;
+
 		fprintf(stream, "\t[");
 		fprintf(stream, "--%s", option->name);
 

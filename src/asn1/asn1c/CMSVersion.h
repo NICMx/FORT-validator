@@ -9,7 +9,6 @@
 #define	_CMSVersion_H_
 
 #include "asn1/asn1c/INTEGER.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* Dependencies */
 typedef enum CMSVersion {

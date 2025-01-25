@@ -11,7 +11,6 @@
 #include "asn1/asn1c/AttributeType.h"
 #include "asn1/asn1c/AttributeValue.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* AttributeTypeAndValue */
 typedef struct AttributeTypeAndValue {

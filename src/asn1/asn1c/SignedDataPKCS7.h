@@ -8,18 +8,11 @@
 #ifndef	_SignedDataPKCS7_H_
 #define	_SignedDataPKCS7_H_
 
-#include "asn1/asn1c/CMSVersion.h"
 #include "asn1/asn1c/CertificateSet.h"
 #include "asn1/asn1c/DigestAlgorithmIdentifiers.h"
 #include "asn1/asn1c/EncapsulatedContentInfoPKCS7.h"
 #include "asn1/asn1c/RevocationInfoChoices.h"
 #include "asn1/asn1c/SignerInfos.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
-
-/* Forward declarations */
-struct CertificateSet;
-struct RevocationInfoChoices;
 
 /* SignedDataPKCS7 */
 typedef struct SignedDataPKCS7 {

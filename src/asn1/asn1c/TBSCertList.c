@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/TBSCertList.h"
 
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+
 static asn_TYPE_member_t asn_MBR_Member_8[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct TBSCertList__revokedCertificates__Member, userCertificate),
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),

@@ -7,8 +7,6 @@
 
 #include "asn1/asn1c/constr_TYPE.h"
 
-struct asn_TYPE_descriptor_s;	/* Forward declaration */
-
 /*
  * The DER encoder of any type. May be invoked by the application.
  * Produces DER- and BER-compliant encoding. (DER is a subset of BER).

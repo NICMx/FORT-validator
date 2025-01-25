@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/ROAIPAddressFamily.h"
 
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
 #include "json_util.h"
 #include "types/address.h"
 

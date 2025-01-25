@@ -8,18 +8,11 @@
 #ifndef	_SignedData_H_
 #define	_SignedData_H_
 
-#include "asn1/asn1c/CMSVersion.h"
 #include "asn1/asn1c/CertificateSet.h"
 #include "asn1/asn1c/DigestAlgorithmIdentifiers.h"
 #include "asn1/asn1c/EncapsulatedContentInfo.h"
 #include "asn1/asn1c/RevocationInfoChoices.h"
 #include "asn1/asn1c/SignerInfos.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-#include "asn1/asn1c/constr_TYPE.h"
-
-/* Forward declarations */
-struct CertificateSet;
-struct RevocationInfoChoices;
 
 /* SignedData */
 typedef struct SignedData {

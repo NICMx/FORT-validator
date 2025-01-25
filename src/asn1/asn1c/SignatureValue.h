@@ -9,7 +9,6 @@
 #define	_SignatureValue_H_
 
 #include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/constr_TYPE.h"
 
 /* SignatureValue */
 typedef OCTET_STRING_t	 SignatureValue_t;
