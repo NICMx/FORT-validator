@@ -1,7 +1,5 @@
 #include "http/http.h"
 
-#include <curl/curl.h>
-
 #include "cache/local_cache.h"
 #include "common.h"
 #include "config.h"

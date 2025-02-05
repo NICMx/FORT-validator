@@ -29,6 +29,7 @@ MOCK_ABORT_INT(relax_ng_parse, const char *path, xml_read_cb cb, void *arg)
 MOCK_ABORT_PTR(state_retrieve, validation, void)
 __MOCK_ABORT(tal_get_file_name, char const *, NULL, struct tal *tal)
 __MOCK_ABORT(uri_get_global, char const *, NULL, struct rpki_uri *uri)
+__MOCK_ABORT(uri_get_global_len, size_t, 0, struct rpki_uri *uri)
 __MOCK_ABORT(uri_get_local, char const *, NULL, struct rpki_uri *uri)
 __MOCK_ABORT(uri_get_rrdp_workspace, char *, NULL, char const *tal,
     struct rpki_uri *notif)
