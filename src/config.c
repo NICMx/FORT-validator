@@ -1,6 +1,5 @@
 #include "config.h"
 
-#include <curl/curl.h>
 #include <errno.h>
 #include <getopt.h>
 #include <libxml/xmlreader.h>
@@ -9,6 +8,7 @@
 
 #include "common.h"
 #include "config/boolean.h"
+#include "config/curl_offset.h"
 #include "config/incidences.h"
 #include "config/str.h"
 #include "config/uint.h"
@@ -121,11 +121,8 @@ struct rpki_config {
 		unsigned int low_speed_limit;
 		/* CURLOPT_LOW_SPEED_TIME for our HTTP transfers. */
 		unsigned int low_speed_time;
-		/*
-		 * CURLOPT_MAXFILESIZE, except it also works for unknown size
-		 * files. (Though this is reactive, not preventive.)
-		 */
-		unsigned int max_file_size;
+		/* CURLOPT_MAXFILESIZE_LARGE for our HTTP transfers. */
+		curl_off_t max_file_size;
 		/* Directory where CA certs to verify peers are found */
 		char *ca_path;
 	} http;
@@ -581,7 +578,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 9011,
 		.name = "http.max-file-size",
-		.type = &gt_uint,
+		.type = &gt_curl_offset,
 		.offset = offsetof(struct rpki_config, http.max_file_size),
 		.doc = "Fort will refuse to download files larger than this number of bytes.",
 		.min = 0,
@@ -981,7 +978,7 @@ set_default_values(void)
 	rpki_config.http.transfer_timeout = 900;
 	rpki_config.http.low_speed_limit = 100000;
 	rpki_config.http.low_speed_time = 10;
-	rpki_config.http.max_file_size = 1000000000;
+	rpki_config.http.max_file_size = 2000000000;
 	rpki_config.http.ca_path = NULL; /* Use system default */
 
 	rpki_config.log.enabled = true;
@@ -1441,7 +1438,7 @@ config_get_http_low_speed_time(void)
 	return rpki_config.http.low_speed_time;
 }
 
-long
+curl_off_t
 config_get_http_max_file_size(void)
 {
 	return rpki_config.http.max_file_size;
