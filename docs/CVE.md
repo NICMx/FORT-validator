@@ -85,3 +85,23 @@ Fort's cache provides insufficient fallbacking.
 | Patch | Scheduled for Fort release [2.0.0](https://github.com/NICMx/FORT-validator/milestone/12). |
 | Acknowledgments | Ties de Kock |
 | Issue | [82](https://github.com/NICMx/FORT-validator/issues/82) |
+
+## CVE-2024-56375
+
+Manifest containing empty `fileList` crashes Fort 1.6.3, 1.6.4.
+
+| Description | A malicious RPKI repository that descends from a (trusted) Trust Anchor can serve (via rsync or RRDP) a Manifest RPKI object containing an empty fileList.<br>Fort dereferences (and shortly afterwards writes) this array during a shuffle attempt, before the validation that would normally reject it when empty.<br>This out-of-bounds access is caused by an integer underflow that causes the surrounding loop to iterate infinitely. As Fort gets stuck permanently attempting to overshuffle an array that doesn't actually exist, a crash is pretty much guaranteed. |
+| Impact | Crash. (Potential unavailability of Route Origin Validation.) |
+| Patch | Commit [17f0952](https://github.com/NICMx/FORT-validator/commit/17f095210553182b0e0a28ee6fd41b0d3c8fc1d3), released in Fort 1.6.5. |
+| Acknowledgments | Niklas Vogel |
+
+# CVE-____-_____
+
+(Awaiting CVE number assignment.)
+
+CWE-167 in manifest validation in LACNIC FORT-Validator 1.6.5 induces invalidation of legitimate RPKI objects.
+
+| Description | RFC 9286 (section 6.4) states that all files from an RPKI Manifest need to be present for a given Repository Publication Point (RPP) to be considered valid. To optimize bandwidth usage and minimize cache burnout, FORT 1.6.5 is filtering unknown files during the rsync download step.<br>If an RPP provides (and lists in the Manifest) a file that is blocked by the rsync filters, and FORT downloads it via rsync, the filtered file will cause the relevant 9286 validation to drop all the other files from the RPP as well.<br>The rsync filters are necessary to prevent accidental cache pollution and minimize network traffic. Given their missing implementation, unknown objects provide no value to the RPKI validation process.<br>This vulnerability does not actually require an attacker; it's currently happening in the wild because of the introduction of new RPKI object "ASPA."<br>The reason why it's a security risk is because it results in the elimination of adjacent RPKI data, which tends to be trusted by some of the Internet's BGP routing infrastructure to make routing decisions. |
+| Impact | Partial unavailability of Route Origin Validation. |
+| Patch | Commit [7f3094d](https://github.com/NICMx/FORT-validator/commit/7f3094d8d50c32df208ed81e54a1da78e33167d9), released in Fort 1.6.6. |
+| Acknowledgements | Frank Hill |

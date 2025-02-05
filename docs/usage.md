@@ -757,22 +757,23 @@ See [`--http.low-speed-limit`](#--httplow-speed-limit) for an example.
 
 ### `--http.max-file-size`
 
-- **Type:** Integer
-- **Availability:** `argv` and JSON
-- **Default:** 1,000,000,000 (1 Gigabyte)
-- **Range:** [0, 2000000000] (2 Gigabytes)
+The maximum file size Fort will allow itself to transfer during each HTTP request. This is intended to prevent malicious RPKI repositories from stagnating Fort.
 
-The maximum amount of bytes files are allowed to length during HTTP transfers. Files that exceed this limit are dropped, either early (through [CURLOPT_MAXFILESIZE](https://curl.haxx.se/libcurl/c/CURLOPT_MAXFILESIZE.html)) or as they hit the limit (when the file size is not known prior to download).
+| Type    | Availability  | Default     | Range  |
+|=========|===============|=============|========|
+| Integer | `argv` and JSON | 2 Gigabytes | [0, ?] |
 
-This is intended to prevent malicious RPKI repositories from stagnating Fort.
+`--http.max-file-size` is implemented as [CURLOPT_MAXFILESIZE_LARGE](https://curl.se/libcurl/c/CURLOPT_MAXFILESIZE_LARGE.html), although Fort ensures it also applies to ongoing transfers in cURL < 8.4.0.
 
-As of 2021-10-05, the largest legitimate file in the repositories is an RRDP snapshot that weights ~150 megabytes. (But will double in size during key rollover.)
+The maximum allowed value is platform-specific. The data type is `curl_off_t`, which is [aggressively intended (but not guaranteed) to be a signed 64-bit integer](https://github.com/curl/curl/blob/curl-8_12_0/include/curl/system.h#L36-L44).
 
-This configuration value is _transient_. It is expected that the IETF will eventually standardize a more versatile means to prevent unbounded file transfers. In particular, because RRDP snapshots tend to grow over time, `--http.max-file-size`'s default value will likely eventually be exceeded by legitimate files.
+As of 2025-02-01, the largest legitimate file in the repositories is an RRDP snapshot that weights ~530 megabytes. Its size is expected to double during key rollover.
 
-Watch out for the following warning in the operation logs:
+`--http.max-file-size`'s default value is transient, as it sometimes changes between different Fort versions to account for growth of legitimate RRDP snapshots in the wild. Be aware that, if you override it, you inherit the responsibility of keeping it up-to-date.
 
-	File size exceeds 50% of the configured limit
+Assuming it refers to a legitimate file, the following warning in the operation logs is an indication that `--http.max-file-size` likely needs to be increased:
+
+	File size exceeds 40% of the configured limit
 
 ### `--http.ca-path`
 
@@ -1027,7 +1028,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--httptransfer-timeout">transfer-timeout</a>": 900,
 		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
 		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
-		"<a href="#--httpmax-file-size">max-file-size</a>": 1000000000,
+		"<a href="#--httpmax-file-size">max-file-size</a>": 2000000000,
 		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
 	},
 

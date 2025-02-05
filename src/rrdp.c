@@ -526,6 +526,22 @@ parse_file_metadata(xmlTextReaderPtr reader, struct rpki_uri *notif,
 	return 0;
 }
 
+static bool
+is_known_extension(struct rpki_uri *uri)
+{
+	char const *ext;
+
+	if (uri_get_global_len(uri) < 4)
+		return false;
+
+	ext = uri_get_global(uri) + uri_get_global_len(uri) - 4;
+	return ((strcmp(ext, ".cer") == 0)
+	     || (strcmp(ext, ".roa") == 0)
+	     || (strcmp(ext, ".mft") == 0)
+	     || (strcmp(ext, ".crl") == 0)
+	     || (strcmp(ext, ".gbr") == 0));
+}
+
 static int
 parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
     hash_requirement hr, struct publish *tag)
@@ -545,6 +561,9 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 		);
 	}
 
+	if (!is_known_extension(tag->meta.uri))
+		return 0; /* Mirror rsync filters */
+
 	base64_str = parse_string(reader, NULL);
 	if (base64_str == NULL)
 		return -EINVAL;
@@ -562,24 +581,14 @@ parse_publish(xmlTextReaderPtr reader, struct rpki_uri *notif,
 }
 
 static int
-parse_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif,
-    struct withdraw *tag)
-{
-	int error;
-
-	error = parse_file_metadata(reader, notif, HR_MANDATORY, &tag->meta);
-	if (error)
-		return error;
-
-	return validate_hash(&tag->meta);
-}
-
-static int
 write_file(struct rpki_uri *uri, unsigned char *content, size_t content_len)
 {
 	FILE *out;
 	size_t written;
 	int error;
+
+	if (content_len == 0)
+		return 0;
 
 	error = mkdir_p(uri_get_local(uri), false);
 	if (error)
@@ -632,11 +641,20 @@ handle_withdraw(xmlTextReaderPtr reader, struct rpki_uri *notif)
 	struct withdraw tag = { 0 };
 	int error;
 
-	error = parse_withdraw(reader, notif, &tag);
-	if (!error)
-		error = delete_file(tag.meta.uri);
+	error = parse_file_metadata(reader, notif, HR_MANDATORY, &tag.meta);
+	if (error)
+		return error;
 
-	metadata_cleanup(&tag.meta);
+	if (!is_known_extension(tag.meta.uri))
+		goto end; /* Mirror rsync filters */
+
+	error = validate_hash(&tag.meta);
+	if (error)
+		goto end;
+
+	error = delete_file(tag.meta.uri);
+
+end:	metadata_cleanup(&tag.meta);
 	return error;
 }
 
