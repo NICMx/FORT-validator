@@ -900,7 +900,7 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 	/* node->state is guaranteed to be DLS_FRESH at this point. */
 
 	if (downloaded) /* Kickstart tasks that fell into DLS_ONGOING */
-		task_wakeup_busy();
+		task_wakeup_dormants();
 
 	if (node->dlerr != 0) {
 		pr_val_debug("Refresh failed.");

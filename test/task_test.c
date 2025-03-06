@@ -139,7 +139,7 @@ struct test_task {
 
 static STAILQ_HEAD(test_task_list, test_task) test_tasks;
 static pthread_mutex_t test_tasks_lock = PTHREAD_MUTEX_INITIALIZER;
-static bool return_busy;
+static bool return_dormant;
 
 static void
 populate_test_tasks(void)
@@ -188,7 +188,7 @@ certificate_traverse_mock(struct rpki_certificate *ca, int thid)
 	if (n != 0)
 		task_wakeup();
 
-	if (return_busy && (rand() & 3) == 0)
+	if (return_dormant && (rand() & 3) == 0)
 		return EBUSY; /* Return "busy" 25% of the time */
 
 	return 0;
@@ -210,7 +210,7 @@ user_thread(void *arg)
 		if (certificate_traverse_mock(task->ca, thid) == EBUSY) {
 			printf("+ th%d: Requeuing '%s'\n",
 			    thid, task->ca->map.url);
-			task_requeue_busy(task);
+			task_requeue_dormant(task);
 			task = NULL;
 		}
 	}
@@ -241,7 +241,7 @@ run_threads(void)
 
 START_TEST(test_queue_multiuser)
 {
-	return_busy = false;
+	return_dormant = false;
 
 	task_setup();
 	task_start();
@@ -255,20 +255,20 @@ START_TEST(test_queue_multiuser)
 END_TEST
 
 static void *
-release_busies(void *arg)
+upgrade_dormants(void *arg)
 {
 	unsigned int i;
 
 	for (i = 0; i < 2; i++) {
 		sleep(1);
-		printf("Waking up busy tasks!\n");
-		task_wakeup_busy();
+		printf("Upgrading dormant tasks!\n");
+		task_wakeup_dormants();
 	}
 
 	sleep(1);
-	return_busy = false;
-	printf("Waking up busy tasks for the last time!\n");
-	task_wakeup_busy();
+	return_dormant = false;
+	printf("Upgrading dormant tasks for the last time!\n");
+	task_wakeup_dormants();
 
 	return NULL;
 }
@@ -277,12 +277,12 @@ START_TEST(test_queue_multiuser_busy)
 {
 	pthread_t thr;
 
-	return_busy = true;
+	return_dormant = true;
 
 	task_setup();
 	task_start();
 
-	ck_assert_int_eq(0, pthread_create(&thr, NULL, release_busies, NULL));
+	ck_assert_int_eq(0, pthread_create(&thr, NULL, upgrade_dormants, NULL));
 
 	populate_test_tasks();
 	run_threads();

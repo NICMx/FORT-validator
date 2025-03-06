@@ -9,11 +9,14 @@
 STAILQ_HEAD(validation_tasks, validation_task);
 
 /* Queued, not yet claimed tasks */
-static struct validation_tasks tasks;
+static struct validation_tasks waiting;
 /* Queued, but not yet available for claiming */
-static struct validation_tasks busy;
-/* Active tasks (length(@tasks) + length(@busy) + number of running tasks) */
-static int active;
+static struct validation_tasks dormant;
+/*
+ * Total currently existing tasks
+ * (length(@waiting) + length(@dormant) + total active tasks)
+ */
+static int ntasks;
 
 static bool enabled = true;
 
@@ -30,9 +33,9 @@ task_free(struct validation_task *task)
 void
 task_setup(void)
 {
-	STAILQ_INIT(&tasks);
-	STAILQ_INIT(&busy);
-	active = 0;
+	STAILQ_INIT(&waiting);
+	STAILQ_INIT(&dormant);
+	ntasks = 0;
 	enabled = true;
 	panic_on_fail(pthread_mutex_init(&lock, NULL), "pthread_mutex_init");
 	panic_on_fail(pthread_cond_init(&awakener, NULL), "pthread_cond_init");
@@ -54,9 +57,9 @@ static void
 cleanup(void)
 {
 	enabled = false;
-	active = 0;
-	cleanup_tasks(&tasks);
-	cleanup_tasks(&busy);
+	ntasks = 0;
+	cleanup_tasks(&waiting);
+	cleanup_tasks(&dormant);
 }
 
 void
@@ -84,6 +87,7 @@ task_teardown(void)
 /*
  * Defers a task for later.
  * Call task_wakeup() once you've queued all your tasks.
+ * Returns number of deferred tasks.
  */
 unsigned int
 task_enqueue(struct cache_mapping *map, struct rpki_certificate *parent)
@@ -104,9 +108,9 @@ task_enqueue(struct cache_mapping *map, struct rpki_certificate *parent)
 
 	mutex_lock(&lock);
 	if (enabled) {
-		STAILQ_INSERT_TAIL(&tasks, task, lh);
+		STAILQ_INSERT_TAIL(&waiting, task, lh);
 		task = NULL;
-		active++;
+		ntasks++;
 	}
 	mutex_unlock(&lock);
 
@@ -118,12 +122,13 @@ task_enqueue(struct cache_mapping *map, struct rpki_certificate *parent)
 	return 1;
 }
 
+/* Steals ownership of @task. */
 void
-task_requeue_busy(struct validation_task *task)
+task_requeue_dormant(struct validation_task *task)
 {
 	mutex_lock(&lock);
 	if (enabled) {
-		STAILQ_INSERT_TAIL(&busy, task, lh);
+		STAILQ_INSERT_TAIL(&dormant, task, lh);
 		task = NULL;
 	}
 	mutex_unlock(&lock);
@@ -132,7 +137,7 @@ task_requeue_busy(struct validation_task *task)
 		task_free(task); /* Couldn't queue */
 }
 
-/* Wakes up threads currently waiting for tasks. */
+/* Wakes up all sleeping task threads. */
 void
 task_wakeup(void)
 {
@@ -142,11 +147,12 @@ task_wakeup(void)
 	mutex_unlock(&lock);
 }
 
+/* Upgrades all dormant tasks, and wakes up all sleeping task threads. */
 void
-task_wakeup_busy(void)
+task_wakeup_dormants(void)
 {
 	mutex_lock(&lock);
-	STAILQ_CONCAT(&tasks, &busy);
+	STAILQ_CONCAT(&waiting, &dormant);
 	panic_on_fail(pthread_cond_broadcast(&awakener),
 	    "pthread_cond_broadcast");
 	mutex_unlock(&lock);
@@ -156,9 +162,10 @@ task_wakeup_busy(void)
  * Frees the @prev previous task, and returns the next one.
  *
  * If no task is available yet, will sleep until someone calls task_wakeup() or
- * task_wakeup_busy().
+ * task_wakeup_dormants().
  * If all the tasks are done, returns NULL.
  *
+ * Steals ownership of @prev.
  * Assumes at least one task has been queued before the first dequeue.
  */
 struct validation_task *
@@ -178,17 +185,17 @@ task_dequeue(struct validation_task *prev)
 		goto end;
 
 	if (prev) {
-		active--;
-		if (active < 0)
-			pr_crit("active < 0: %d", active);
+		ntasks--;
+		if (ntasks < 0)
+			pr_crit("active < 0: %d", ntasks);
 	}
 
-	while (active > 0) {
-		pr_op_debug("task_dequeue(): %u tasks active.", active);
+	while (ntasks > 0) {
+		pr_op_debug("task_dequeue(): %u existing tasks.", ntasks);
 
-		task = STAILQ_FIRST(&tasks);
+		task = STAILQ_FIRST(&waiting);
 		if (task != NULL) {
-			STAILQ_REMOVE_HEAD(&tasks, lh);
+			STAILQ_REMOVE_HEAD(&waiting, lh);
 			mutex_unlock(&lock);
 			pr_op_debug("task_dequeue(): Claimed task '%s'.",
 			    task->ca->map.url);

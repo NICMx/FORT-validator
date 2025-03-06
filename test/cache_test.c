@@ -53,7 +53,7 @@ rsync_download(char const *url, char const *path)
 }
 
 MOCK_VOID(__delete_node_cb, struct cache_node const *node)
-MOCK_VOID(task_wakeup_busy, void)
+MOCK_VOID(task_wakeup_dormants, void)
 static asn_dec_rval_t dummy = { 0 };
 __MOCK_ABORT(ber_check_tags, asn_dec_rval_t, dummy, const asn_codec_ctx_t *ctx,
     const asn_TYPE_descriptor_t *td, asn_struct_ctx_t *opt_ctx,

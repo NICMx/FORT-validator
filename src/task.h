@@ -17,9 +17,9 @@ void task_stop(void);
 void task_teardown(void);
 
 unsigned int task_enqueue(struct cache_mapping *, struct rpki_certificate *);
-void task_requeue_busy(struct validation_task *);
+void task_requeue_dormant(struct validation_task *);
 void task_wakeup(void);
-void task_wakeup_busy(void);
+void task_wakeup_dormants(void);
 struct validation_task *task_dequeue(struct validation_task *);
 
 #endif /* SRC_TASK_H_ */

@@ -169,6 +169,7 @@ traverse_tal(char const *tal_path, void *arg)
 	/* Online attempts */
 	ARRAYLIST_FOREACH(&tal.urls, url) {
 		map.url = *url;
+		// XXX if this is rsync, it seems this will queue and fail
 		map.path = cache_refresh_by_url(*url);
 		if (!map.path)
 			continue;
@@ -205,7 +206,7 @@ pick_up_work(void *arg)
 
 	while ((task = task_dequeue(task)) != NULL) {
 		if (certificate_traverse(task->ca) == EBUSY) {
-			task_requeue_busy(task);
+			task_requeue_dormant(task);
 			task = NULL;
 		}
 	}
