@@ -24,7 +24,7 @@ queue_1(char *mapstr)
 	struct rpki_certificate parent = { 0 };
 
 	map.url = map.path = mapstr;
-	ck_assert_int_eq(1, task_enqueue(&map, &parent));
+	ck_assert_int_eq(1, task_enqueue_rpp(&map, &parent));
 }
 
 static struct validation_task *
@@ -32,7 +32,7 @@ dequeue_1(char *mapstr, struct validation_task *prev)
 {
 	struct validation_task *task;
 	task = task_dequeue(prev);
-	ck_assert_str_eq(mapstr, task->ca->map.url);
+	ck_assert_str_eq(mapstr, task->u.ca->map.url);
 	return task;
 }
 
@@ -204,12 +204,12 @@ user_thread(void *arg)
 	printf("th%d: Started.\n", thid);
 
 	while ((task = task_dequeue(task)) != NULL) {
-		printf("- th%d: Dequeued '%s'\n", thid, task->ca->map.url);
+		printf("- th%d: Dequeued '%s'\n", thid, task->u.ca->map.url);
 		total_dequeued++;
 
-		if (certificate_traverse_mock(task->ca, thid) == EBUSY) {
+		if (certificate_traverse_mock(task->u.ca, thid) == EBUSY) {
 			printf("+ th%d: Requeuing '%s'\n",
-			    thid, task->ca->map.url);
+			    thid, task->u.ca->map.url);
 			task_requeue_dormant(task);
 			task = NULL;
 		}

@@ -136,6 +136,18 @@ tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
 }
 
 static int
+queue_tal(char const *tal_path, void *arg)
+{
+	if (task_enqueue_tal(tal_path) < 1) {
+		pr_op_err("Could not enqueue task '%s'; abandoning validation.",
+		    tal_path);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int
 validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 {
 	struct rpki_certificate *ta;
@@ -153,7 +165,7 @@ validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 }
 
 static int
-traverse_tal(char const *tal_path, void *arg)
+traverse_tal(char const *tal_path)
 {
 	struct tal tal;
 	char **url;
@@ -205,10 +217,19 @@ pick_up_work(void *arg)
 	struct validation_task *task = NULL;
 
 	while ((task = task_dequeue(task)) != NULL) {
-		if (certificate_traverse(task->ca) == EBUSY) {
-			task_requeue_dormant(task);
-			task = NULL;
+		switch (task->type) {
+		case VTT_RPP:
+			if (certificate_traverse(task->u.ca) == EBUSY) {
+				task_requeue_dormant(task);
+				task = NULL;
+			}
+			break;
+		case VTT_TAL:
+			if (traverse_tal(task->u.tal) != 0)
+				task_stop();
+			break;
 		}
+
 	}
 
 	return NULL;
@@ -218,7 +239,7 @@ int
 perform_standalone_validation(void)
 {
 	pthread_t threads[5]; // XXX variabilize
-	array_index t, t2;
+	array_index t;
 	int error;
 
 	error = cache_prepare();
@@ -227,29 +248,26 @@ perform_standalone_validation(void)
 	fnstack_init();
 	task_start();
 
-	if (foreach_file(config_get_tal(), ".tal", true, traverse_tal, NULL)!=0)
+	error = foreach_file(config_get_tal(), ".tal", true, queue_tal, NULL);
+	if (error)
 		goto end;
 
 	for (t = 0; t < 5; t++) {
 		error = pthread_create(&threads[t], NULL, pick_up_work, NULL);
-		if (error) {
-			pr_op_err("Could not spawn validation thread %zu: %s",
+		if (error)
+			pr_crit("pthread_create(%zu) failed: %s",
 			    t, strerror(error));
-			break;
-		}
 	}
 
-	if (t == 0) {
-		pick_up_work(NULL);
-		error = 0;
-	} else for (t2 = 0; t2 < t; t2++) {
-		error = pthread_join(threads[t2], NULL);
+	for (t = 0; t < 5; t++) {
+		error = pthread_join(threads[t], NULL);
 		if (error)
 			pr_crit("pthread_join(%zu) failed: %s",
-			    t2, strerror(error));
+			    t, strerror(error));
 	}
 
-end:	task_stop();
+end:	if (task_stop())
+		error = EINVAL; /* pick_up_work(), VTT_TAL */
 	fnstack_cleanup();
 	/*
 	 * Commit even on failure, as there's no reason to throw away something

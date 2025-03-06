@@ -26,7 +26,15 @@ static pthread_cond_t awakener = PTHREAD_COND_INITIALIZER;
 static void
 task_free(struct validation_task *task)
 {
-	rpki_certificate_free(task->ca);
+	switch (task->type) {
+	case VTT_RPP:
+		rpki_certificate_free(task->u.ca);
+		break;
+	case VTT_TAL:
+		free(task->u.tal);
+		break;
+	}
+
 	free(task);
 }
 
@@ -69,12 +77,18 @@ task_start(void)
 	enabled = true;
 }
 
-void
+/* Returns true if the module had already been stopped. */
+bool
 task_stop(void)
 {
+	bool result;
+
 	mutex_lock(&lock);
+	result = !enabled;
 	cleanup();
 	mutex_unlock(&lock);
+
+	return result;
 }
 
 void
@@ -84,28 +98,9 @@ task_teardown(void)
 	pthread_cond_destroy(&awakener);
 }
 
-/*
- * Defers a task for later.
- * Call task_wakeup() once you've queued all your tasks.
- * Returns number of deferred tasks.
- */
-unsigned int
-task_enqueue(struct cache_mapping *map, struct rpki_certificate *parent)
+static int
+enqueue_task(struct validation_task *task)
 {
-	struct validation_task *task;
-	struct rpki_certificate *ca;
-
-	atomic_fetch_add(&parent->refcount, 1);
-
-	ca = pzalloc(sizeof(struct rpki_certificate));
-	ca->map.url = pstrdup(map->url);
-	ca->map.path = pstrdup(map->path);
-	ca->parent = parent;
-	atomic_init(&ca->refcount, 1);
-
-	task = pmalloc(sizeof(struct validation_task));
-	task->ca = ca;
-
 	mutex_lock(&lock);
 	if (enabled) {
 		STAILQ_INSERT_TAIL(&waiting, task, lh);
@@ -120,6 +115,44 @@ task_enqueue(struct cache_mapping *map, struct rpki_certificate *parent)
 	}
 
 	return 1;
+}
+
+unsigned int
+task_enqueue_tal(char const *tal_path)
+{
+	struct validation_task *task;
+
+	task = pmalloc(sizeof(struct validation_task));
+	task->type = VTT_TAL;
+	task->u.tal = pstrdup(tal_path);
+
+	return enqueue_task(task);
+}
+
+/*
+ * Defers a task for later.
+ * Call task_wakeup() once you've queued all your tasks.
+ * Returns number of deferred tasks.
+ */
+unsigned int
+task_enqueue_rpp(struct cache_mapping *map, struct rpki_certificate *parent)
+{
+	struct validation_task *task;
+	struct rpki_certificate *ca;
+
+	atomic_fetch_add(&parent->refcount, 1);
+
+	ca = pzalloc(sizeof(struct rpki_certificate));
+	ca->map.url = pstrdup(map->url);
+	ca->map.path = pstrdup(map->path);
+	ca->parent = parent;
+	atomic_init(&ca->refcount, 1);
+
+	task = pmalloc(sizeof(struct validation_task));
+	task->type = VTT_RPP;
+	task->u.ca = ca;
+
+	return enqueue_task(task);
 }
 
 /* Steals ownership of @task. */
@@ -198,7 +231,7 @@ task_dequeue(struct validation_task *prev)
 			STAILQ_REMOVE_HEAD(&waiting, lh);
 			mutex_unlock(&lock);
 			pr_op_debug("task_dequeue(): Claimed task '%s'.",
-			    task->ca->map.url);
+			    task->u.ca->map.url);
 			return task;
 		}
 

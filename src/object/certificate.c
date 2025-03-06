@@ -1943,7 +1943,7 @@ retry:	mft_path = cage_map_file(cage, ca->sias.rpkiManifest);
 		map = ca->rpp.files + i;
 		ext = map->url + strlen(map->url) - 4;
 		if (strcmp(ext, ".cer") == 0)
-			queued += task_enqueue(map, ca);
+			queued += task_enqueue_rpp(map, ca);
 		else if (strcmp(ext, ".roa") == 0)
 			roa_traverse(map, ca);
 		else if (strcmp(ext, ".gbr") == 0)
