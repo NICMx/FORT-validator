@@ -165,11 +165,33 @@ validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 }
 
 static int
+try_urls(struct tal *tal, bool (*url_is_protocol)(char const *),
+    char *(*get_path)(char const *))
+{
+	char **url;
+	struct cache_mapping map;
+
+	ARRAYLIST_FOREACH(&tal->urls, url) {
+		map.url = *url;
+		if (!url_is_protocol(map.url))
+			continue;
+		// XXX if this is rsync, it seems this will queue and fail
+		map.path = get_path(*url);
+		if (!map.path)
+			continue;
+		if (validate_ta(tal, &map) != 0)
+			continue;
+		cache_commit_file(&map);
+		return 0;
+	}
+
+	return ESRCH;
+}
+
+static int
 traverse_tal(char const *tal_path)
 {
 	struct tal tal;
-	char **url;
-	struct cache_mapping map;
 	int error;
 
 	fnstack_push(tal_path);
@@ -179,29 +201,15 @@ traverse_tal(char const *tal_path)
 		goto end1;
 
 	/* Online attempts */
-	ARRAYLIST_FOREACH(&tal.urls, url) {
-		map.url = *url;
-		// XXX if this is rsync, it seems this will queue and fail
-		map.path = cache_refresh_by_url(*url);
-		if (!map.path)
-			continue;
-		if (validate_ta(&tal, &map) != 0)
-			continue;
-		cache_commit_file(&map);
-		goto end2; /* Happy path */
-	}
-
+	if (try_urls(&tal, url_is_https, cache_refresh_by_url) == 0)
+		goto end2;
+	if (try_urls(&tal, url_is_rsync, cache_refresh_by_url) == 0)
+		goto end2;
 	/* Offline fallback attempts */
-	ARRAYLIST_FOREACH(&tal.urls, url) {
-		map.url = *url;
-		map.path = cache_get_fallback(*url);
-		if (!map.path)
-			continue;
-		if (validate_ta(&tal, &map) != 0)
-			continue;
-		cache_commit_file(&map);
-		goto end2; /* Happy path */
-	}
+	if (try_urls(&tal, url_is_https, cache_get_fallback) == 0)
+		goto end2;
+	if (try_urls(&tal, url_is_rsync, cache_get_fallback) == 0)
+		goto end2;
 
 	pr_op_err("None of the TAL URIs yielded a successful traversal.");
 	error = EINVAL;
