@@ -44,14 +44,18 @@ struct cache_table;
 /*
  * This is a delicate structure; pay attention.
  *
- * During the multithreaded stage of the validation cycle, the entire cache_node
- * (except @hh) becomes (effectively) constant when @state becomes DLS_FRESH.
+ * During the multithreaded stage of the validation cycle, one thread will
+ * switch @state from DLS_OUTDATED to DLS_ONGOING, and become the only writer
+ * for the given node. Other threads are only allowed to lock, and with the
+ * lock, read @state (to find out they shouldn't touch anything else).
  *
- * The cache (ie. this module) only hands the node to the validation code
- * (through cache_cage) when @state becomes DLS_FRESH.
+ * The entire cache_node (except @hh) becomes (effectively) constant when the
+ * writer thread upgrades @state to DLS_FRESH.
  *
- * This is intended to allow the validation code to read the remaining fields
- * (all except @hh) without having to hold the table mutex.
+ * This is intended to allow the cache (ie. this module) to pass the node to the
+ * validation code (through cache_cage) without having to allocate a deep copy
+ * (@rrdp can be somewhat large), and to allow the validation code to read-only
+ * the node (except @hh) without having to hold the table mutex.
  *
  * C cannot entirely ensure the node remains constant after it's handed outside;
  * this must be done through careful coding and review.
@@ -871,6 +875,11 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 		mutex_unlock(&tbl->lock);
 		return EINVAL;
 	}
+
+	/*
+	 * Reminder: If the state is ONGOING, DO NOT read anything other than
+	 * the lock and state.
+	 */
 
 	switch (node->state) {
 	case DLS_OUTDATED:
