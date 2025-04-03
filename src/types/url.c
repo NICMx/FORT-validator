@@ -1,5 +1,7 @@
 #include "types/url.h"
 
+#include <curl/curl.h>
+
 #include "alloc.h"
 #include "common.h"
 #include "types/path.h"
@@ -17,119 +19,82 @@ url_is_https(char const *url)
 }
 
 /*
- * XXX use this:
- *
- *	for (s = str; s[0] != '\0'; s++) {
-		error = validate_url_character(s[0]);
-		if (error)
-			return error;
-	}
- *
  * @character is an integer because we sometimes receive signed chars, and other
  * times we get unsigned chars.
  * Casting a negative char into a unsigned char is undefined behavior.
  */
-//static int
-//validate_url_character(int character)
-//{
-//	/*
-//	 * RFCs 1738 and 3986 define a very specific range of allowed
-//	 * characters, but I don't think we're that concerned about URL
-//	 * correctness. Validating the URL properly is more involved than simply
-//	 * checking legal characters, anyway.
-//	 *
-//	 * What I really need this validation for is ensure that we won't get
-//	 * any trouble later, when we attempt to map the URL to a path.
-//	 *
-//	 * Sample trouble: Getting UTF-8 characters. Why are they trouble?
-//	 * Because we don't have any guarantees that the system's file name
-//	 * encoding is UTF-8. URIs are not supposed to contain UTF-8 in the
-//	 * first place, so we have no reason to deal with encoding conversion.
-//	 *
-//	 * To be perfectly fair, we have no guarantees that the system's file
-//	 * name encoding is ASCII-compatible either, but I need to hang onto
-//	 * SOMETHING.
-//	 *
-//	 * (Asking users to use UTF-8 is fine, but asking users to use something
-//	 * ASCII-compatible is a little better.)
-//	 *
-//	 * So just make sure that the character is printable ASCII.
-//	 *
-//	 * TODO (next iteration) Consider exhaustive URL validation.
-//	 */
-//	return (0x20 <= character && character <= 0x7E)
-//	    ? 0
-//	    : pr_val_err("URL has non-printable character code '%d'.", character);
-//}
-
-static char *
-path_rewind(char const *root, char *cursor)
+static int
+validate_url_character(int character)
 {
-	for (cursor -= 2; root <= cursor; cursor--)
-		if (*cursor == '/')
-			return cursor + 1;
-	return NULL;
+	return (0x20 <= character && character <= 0x7E)
+	    ? 0
+	    : pr_val_err("URL has non-printable character code '%d'.", character);
 }
 
-static bool
-has_bad_prefix(char const *url)
+/* Not done by libcurl, apparently */
+static int
+validate_url_characters(char const *str)
 {
-	// XXX what happens if code expects one but url is the other
-	if (strncmp(url, "rsync://", RPKI_SCHEMA_LEN) &&
-	    strncmp(url, "https://", RPKI_SCHEMA_LEN))
-		return true;
+	char const *s;
+	int error;
 
-	/* Disallow the root domain */
-	url += RPKI_SCHEMA_LEN;
-	if (url[0] == '/')
-		return true;
-	if (url[0] == '.' && url[1] == '/')
-		return true;
+	for (s = str; s[0] != '\0'; s++) {
+		error = validate_url_character(s[0]);
+		if (error)
+			return error;
+	}
 
-	// XXX read the standard and reject more bad URLs
-	return false;
+	return 0;
 }
 
 /*
- * Collapses '//' (except from the schema), '.' and '..'.
+ * See RFC 3986. Basically, "rsync://%61.b/./c/.././%64/." -> "rsync://a.b/d"
  *
- * "rsync://a.b/./c//.././/d/." -> "rsync://a.b/d"
+ * This is not actually a perfect normalization, because it's deferred to curl,
+ * whose implementation is somewhat flawed (at least until version 8.12.1):
+ * https://github.com/curl/curl/issues/16829
+ *
+ * On the other hand, since Fort 2 no longer maps URI paths to literal local
+ * paths, all normalization does for us is prevent some theoretical redundant
+ * downloading, so it might not even be that necessary.
  */
 char *
 url_normalize(char const *url)
 {
-	char *normal, *dst;
-	struct tokenizer tkn;
+	CURLU *curlu;
+	char *curl_normal;
+	char *normal;
+	CURLUcode err;
 
-	if (has_bad_prefix(url))
+	if (validate_url_characters(url))
 		return NULL;
 
-	normal = pstrdup(url);
-	dst = normal + RPKI_SCHEMA_LEN;
-	token_init(&tkn, url + RPKI_SCHEMA_LEN);
+	curlu = curl_url();
+	if (!curlu)
+		enomem_panic();
 
-	while (token_next(&tkn)) {
-		if (tkn.len == 1 && tkn.str[0] == '.')
-			continue;
-		if (tkn.len == 2 && tkn.str[0] == '.' && tkn.str[1] == '.') {
-			dst = path_rewind(normal + RPKI_SCHEMA_LEN, dst);
-			if (!dst)
-				goto fail;
-			continue;
-		}
-		strncpy(dst, tkn.str, tkn.len);
-		dst[tkn.len] = '/';
-		dst += tkn.len + 1;
+	/* The flag is needed by rsync */
+	err = curl_url_set(curlu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME);
+	if (err)
+		goto einval;
+	err = curl_url_get(curlu, CURLUPART_URL, &curl_normal, 0);
+	if (err)
+		goto einval;
+
+	curl_url_cleanup(curlu);
+
+	if (strncmp(curl_normal, "rsync://", RPKI_SCHEMA_LEN) &&
+	    strncmp(curl_normal, "https://", RPKI_SCHEMA_LEN)) {
+		curl_free(curl_normal);
+		return NULL;
 	}
 
-	/* Reject URL if there's nothing after the schema. Maybe unnecessary. */
-	if (dst == normal + RPKI_SCHEMA_LEN)
-		goto fail;
-
-	dst[-1] = '\0';
+	normal = pstrdup(curl_normal);
+	curl_free(curl_normal);
 	return normal;
 
-fail:	free(normal);
+einval:	pr_val_err("Error parsing URL: %s", curl_url_strerror(err));
+	curl_url_cleanup(curlu);
 	return NULL;
 }
 

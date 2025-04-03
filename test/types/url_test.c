@@ -16,18 +16,18 @@ START_TEST(test_normalize)
 {
 	char *normal;
 
-	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c");
-	TEST_NORMALIZE("rsync://a.b.c/", "rsync://a.b.c");
+	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/", "rsync://a.b.c/");
 	TEST_NORMALIZE("rsync://a.b.c/d", "rsync://a.b.c/d");
-	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c");
+	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c//////");
 	TEST_NORMALIZE("rsync://a.b.c/d/e", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/././d/././e/./.", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/..", "rsync://a.b.c");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e/");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e/");
+	TEST_NORMALIZE("rsync://a.b.c/././d/././e/./.", "rsync://a.b.c/d/e/");
+	TEST_NORMALIZE("rsync://a.b.c/d/..", "rsync://a.b.c/");
 	TEST_NORMALIZE("rsync://a.b.c/x/../x/y/z", "rsync://a.b.c/x/y/z");
-	TEST_NORMALIZE("rsync://a.b.c/d/../d/../d/e/", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://x//y/z/../../m/./n/o", "rsync://x/m/n/o");
+	TEST_NORMALIZE("rsync://a.b.c/d/../d/../d/e/", "rsync://a.b.c/d/e/");
+	TEST_NORMALIZE("rsync://x//y/z/../../m/./n/o", "rsync://x//m/n/o");
 
 	ck_assert_ptr_eq(NULL, url_normalize(""));
 	ck_assert_ptr_eq(NULL, url_normalize("h"));
@@ -36,19 +36,32 @@ START_TEST(test_normalize)
 	ck_assert_ptr_eq(NULL, url_normalize("https:"));
 	ck_assert_ptr_eq(NULL, url_normalize("https:/"));
 	ck_assert_ptr_eq(NULL, url_normalize("rsync://"));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://."));
-	ck_assert_ptr_eq(NULL, url_normalize("https://./."));
-	ck_assert_ptr_eq(NULL, url_normalize("https://./d"));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://.."));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://../.."));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://../d"));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.b.c/.."));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.b.c/../.."));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.b.c/../x"));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.b.c/../x/y/z"));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.b.c/d/e/../../.."));
+	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.β.c/"));
+
+	TEST_NORMALIZE("rsync://.", "rsync://./");
+	TEST_NORMALIZE("https://./.", "https://./");
+	TEST_NORMALIZE("https://./d", "https://./d");
+	TEST_NORMALIZE("rsync://..", "rsync://../");
+	TEST_NORMALIZE("rsync://../..", "rsync://../");
+	TEST_NORMALIZE("rsync://../d", "rsync://../d");
+	TEST_NORMALIZE("rsync://a.b.c/..", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/../..", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/../x", "rsync://a.b.c/x");
+	TEST_NORMALIZE("rsync://a.b.c/../x/y/z", "rsync://a.b.c/x/y/z");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/../../..", "rsync://a.b.c/");
 	ck_assert_ptr_eq(NULL, url_normalize("http://a.b.c/d"));
 	ck_assert_ptr_eq(NULL, url_normalize("abcde://a.b.c/d"));
+	TEST_NORMALIZE("HTTPS://a.b.c/d", "https://a.b.c/d");
+	TEST_NORMALIZE("rSyNc://a.b.c/d", "rsync://a.b.c/d");
+
+	TEST_NORMALIZE("https://a.b.c:80/d/e", "https://a.b.c:80/d/e");
+	/* TEST_NORMALIZE("https://a.b.c:443/d/e", "https://a.b.c/d/e"); */
+	TEST_NORMALIZE("https://a.b.c:/d/e", "https://a.b.c/d/e");
+
+	/*
+	 * XXX make sure libcurl 8.12.2 implements lowercasing domains,
+	 * defaulting 443, and maybe reject UTF-8.
+	 */
 }
 END_TEST
 
