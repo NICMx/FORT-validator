@@ -1480,7 +1480,7 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 		// XXX sanitize more
 
 		path = json_string_value(jvalue);
-		if (strncmp(path, parent, parent_len || path[parent_len] != '/') != 0) {
+		if (strncmp(path, parent, parent_len) != 0 || path[parent_len] != '/') {
 			pr_op_warn("RRDP path '%s' is not child of '%s'.",
 			    path, parent);
 			continue;
