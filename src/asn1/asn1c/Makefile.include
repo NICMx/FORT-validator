@@ -58,6 +58,7 @@ ASN_MODULE_SRCS=	\
 	asn1/asn1c/RouteOriginAttestation.c	\
 	asn1/asn1c/ROAIPAddressFamily.c	\
 	asn1/asn1c/ROAIPAddress.c	\
+	asn1/asn1c/RsyncRequest.c	\
 	asn1/asn1c/Manifest.c	\
 	asn1/asn1c/FileAndHash.c	\
 	asn1/asn1c/BinarySigningTime.c	\
@@ -123,6 +124,7 @@ ASN_MODULE_HDRS=	\
 	asn1/asn1c/RouteOriginAttestation.h	\
 	asn1/asn1c/ROAIPAddressFamily.h	\
 	asn1/asn1c/ROAIPAddress.h	\
+	asn1/asn1c/RsyncRequest.h	\
 	asn1/asn1c/Manifest.h	\
 	asn1/asn1c/FileAndHash.h	\
 	asn1/asn1c/BinarySigningTime.h	\

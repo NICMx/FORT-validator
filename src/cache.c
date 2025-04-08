@@ -731,7 +731,8 @@ dl_rsync(struct cache_node *module)
 {
 	int error;
 
-	error = rsync_download(module->map.url, module->map.path);
+	// XXX go pick some other task on zero
+	error = rsync_queue(module->map.url, module->map.path);
 	if (error)
 		return error;
 
@@ -889,6 +890,8 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 		node->attempt_ts = time_fatal();
 		rm_metadata(node);
 		node->dlerr = tbl->download(node);
+		if (node->dlerr == EBUSY)
+			goto ongoing;
 		write_metadata(node);
 		downloaded = true;
 
@@ -896,7 +899,7 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 		node->state = DLS_FRESH;
 		break;
 	case DLS_ONGOING:
-		mutex_unlock(&tbl->lock);
+ongoing:	mutex_unlock(&tbl->lock);
 		pr_val_debug("Refresh ongoing.");
 		return EBUSY;
 	case DLS_FRESH:

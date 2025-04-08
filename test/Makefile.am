@@ -34,6 +34,10 @@ check_PROGRAMS +=		asn1_int.test
 asn1_int_test_SOURCES =		asn1/asn1c/INTEGER_t_test.c
 asn1_int_test_LDADD =		${CHECK_LIBS}
 
+check_PROGRAMS +=		asn1_stream.test
+asn1_stream_test_SOURCES =	asn1/asn1c/asn1stream_test.c
+asn1_stream_test_LDADD =	${CHECK_LIBS}
+
 check_PROGRAMS +=		base64.test
 base64_test_SOURCES =		base64_test.c
 base64_test_LDADD =		${CHECK_LIBS}
@@ -91,6 +95,10 @@ rsync_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		serial.test
 serial_test_SOURCES =		types/serial_test.c
 serial_test_LDADD =		${CHECK_LIBS}
+
+#check_PROGRAMS +=		stream.test
+#stream_test_SOURCES =		stream_test.c
+#stream_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		tal.test
 tal_test_SOURCES =		object/tal_test.c

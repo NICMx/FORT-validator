@@ -31,9 +31,9 @@ __rsync2bio(char const *src, char const *dst)
 
 	// XXX use the cache
 
-	error = rsync_download(src, dst);
+	error = rsync_queue(src, dst);
 	if (error) {
-		pr_op_err("rysnc download failed: %s", strerror(abs(error)));
+		pr_op_err("rsync download failed: %s", strerror(abs(error)));
 		return NULL;
 	}
 

@@ -23,6 +23,19 @@
 #include "types/str.c"
 #include "types/url.c"
 
+/*
+ * XXX
+ *
+ * Check rpps can't override each other:
+ * 	rpp1: rsync://domain/mod/rpp1, file rsync://domain/mod/rpp1/a
+ * 	rpp2: rsync://domain/mod/rpp1/a/b, file rsync://domain/mod/rpp1/a/b/c
+ * Check nodes are cleaned up when the file doesn't exist
+ * Check the file gets cleaned when the node doesn't exist
+ * If node is an error, what happens to the refresh and fallback?
+ * What happens if the refresh files somehow get deleted before a commit?
+ * What happens if the fallback files somehow get deleted before/after a commit?
+ */
+
 /* Mocks */
 
 static unsigned int rsync_counter; /* Times the rsync function was called */
@@ -36,7 +49,7 @@ touch_file(char const *dir)
 }
 
 int
-rsync_download(char const *url, char const *path)
+rsync_queue(char const *url, char const *path)
 {
 	rsync_counter++;
 

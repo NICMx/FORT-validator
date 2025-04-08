@@ -37,6 +37,7 @@ xer_type_encoder_f OCTET_STRING_encode_xer;
 xer_type_encoder_f OCTET_STRING_encode_xer_utf8;
 
 #define OCTET_STRING_constraint  asn_generic_no_constraint
+#define OCTET_STRING_cmp(a, b) OCTET_STRING_compare(&asn_DEF_OCTET_STRING, a, b)
 
 /******************************
  * Handy conversion routines. *
