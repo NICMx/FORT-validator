@@ -60,6 +60,11 @@ time_t time_fatal(void);
 int time2str(time_t, char *);
 int str2time(char const *, time_t *);
 
+void ts_now(struct timespec *);
+int ts_cmp(struct timespec *, struct timespec *);
+int ts_delta(struct timespec *, struct timespec *);
+void ts_add(struct timespec *, struct timespec *, long);
+
 char *hex2str(uint8_t const *, size_t);
 int str2hex(char const *, uint8_t *);
 

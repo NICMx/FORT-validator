@@ -209,6 +209,7 @@ file_rm_rf(char const *path)
 	pr_op_debug("rm -rf %s", path);
 
 	/* TODO (performance) optimize that 32 */
+	// XXX In MacOS, this breaks if path is a file.
 	if (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS) < 0) {
 		error = errno;
 		// XXX This msg is sometimes annoying; maybe defer it

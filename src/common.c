@@ -309,7 +309,60 @@ str2time(char const *str, time_t *tt)
 	return 0;
 }
 
-char *hex2str(uint8_t const *hex, size_t hexlen)
+static void
+ts_normalize(struct timespec *ts)
+{
+	if (ts->tv_nsec >= 1000000000L) {
+		ts->tv_sec += ts->tv_nsec / 1000000000L;
+		ts->tv_nsec %= 1000000000L;
+	}
+	while (ts->tv_nsec < 0) {
+		ts->tv_sec--;
+		ts->tv_nsec += 1000000000L;
+	}
+}
+
+void
+ts_now(struct timespec *now)
+{
+	if (clock_gettime(CLOCK_MONOTONIC, now) < 0)
+		pr_crit("clock_gettime() returned '%s'", strerror(errno));
+	ts_normalize(now); /* Probably not needed, but I can't find contracts */
+}
+
+int
+ts_cmp(struct timespec *ts1, struct timespec *ts2)
+{
+	if (ts1->tv_sec < ts2->tv_sec)
+		return -1;
+	if (ts1->tv_sec > ts2->tv_sec)
+		return 1;
+	if (ts1->tv_nsec < ts2->tv_nsec)
+		return -1;
+	if (ts1->tv_nsec > ts2->tv_nsec)
+		return 1;
+	return 0;
+}
+
+/* Result in milliseconds */
+int
+ts_delta(struct timespec *before, struct timespec *after)
+{
+	return (1000 * (after->tv_sec - before->tv_sec))
+	     + ((after->tv_nsec - before->tv_nsec) / 1000000L);
+}
+
+/* dst = src + millis */
+void
+ts_add(struct timespec *dst, struct timespec *src, long millis)
+{
+	dst->tv_sec = src->tv_sec;
+	dst->tv_nsec = src->tv_nsec + (1000000L * millis);
+	ts_normalize(dst);
+
+}
+char *
+hex2str(uint8_t const *hex, size_t hexlen)
 {
 	static const char * const H2C = "0123456789ABCDEF";
 	char *str;
@@ -341,7 +394,8 @@ c2h(char c)
 }
 
 /* @hex needs to be already allocated. */
-int str2hex(char const *str, uint8_t *hex)
+int
+str2hex(char const *str, uint8_t *hex)
 {
 	size_t h;
 	int digit;

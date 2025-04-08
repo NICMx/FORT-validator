@@ -252,6 +252,12 @@ perform_standalone_validation(void)
 	if (error)
 		goto end;
 
+	/*
+	 * From now on, the trees should be considered valid, even if subsequent
+	 * certificates fail.
+	 * (The roots validated successfully; subtrees are isolated problems.)
+	 */
+
 	for (t = 0; t < 5; t++) {
 		error = pthread_create(&threads[t], NULL, pick_up_work, NULL);
 		if (error)

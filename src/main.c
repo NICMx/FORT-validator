@@ -128,7 +128,7 @@ main(int argc, char **argv)
 	if (error)
 		goto revert_log;
 
-	rsync_setup(); /* Spawn rsync spawner ASAP */
+	rsync_setup(NULL, NULL); /* Spawn rsync spawner ASAP */
 	register_signal_handlers();
 
 	error = thvar_init();

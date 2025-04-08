@@ -5,6 +5,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <stream.h>
+#include <sys/queue.h>
 #include <sys/wait.h>
 #include <syslog.h>
 
@@ -12,205 +13,157 @@
 #include "common.h"
 #include "config.h"
 #include "log.h"
+#include "types/array.h"
+
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/der_encoder.h"
+#include "asn1/asn1c/RsyncRequest.h"
+
+#define RSP /* rsync spawner prefix */ "[rsync spawner] "
+
+static char const *rsync_args[20]; /* Last must be NULL */
+
+static const int RDFD = 0;
+static const int WRFD = 1;
 
 #define STDERR_WRITE(fds) fds[0][1]
 #define STDOUT_WRITE(fds) fds[1][1]
 #define STDERR_READ(fds)  fds[0][0]
 #define STDOUT_READ(fds)  fds[1][0]
 
-static pid_t spawner;		/* The process that spawns rsync runs */
+static pid_t spawner;	/* The subprocess that spawns rsync runs */
 
-static int readfd;		/* Our end of the spawner-to-parent pipe */
+static int readfd;	/* Parent's end of the spawner-to-parent pipe */
 static pthread_mutex_t readlock = PTHREAD_MUTEX_INITIALIZER;
 
-static int writefd;		/* Our end of the parent-to-spawner pipe */
+static int writefd;	/* Parent's end of the parent-to-spawner pipe */
 static pthread_mutex_t writelock = PTHREAD_MUTEX_INITIALIZER;
 
-static int rsync(char const *, char const *);
+/*
+ * "Spawner to parent" socket.
+ * Socket used by the spawner to communicate with the parent.
+ */
+struct s2p_socket {
+	/* Spawner's end of the parent-to-spawner pipe */
+	struct read_stream rd;
+	/* Spawner's end of the spawner-to-parent pipe */
+	int wr;
+	/* Scratchpad buffer for stream read */
+	struct RsyncRequest *rr;
+};
 
-static int
-run_child(int readfd, int writefd)
+struct rsync_task {
+	int pid;
+	char *url;
+	char *path;
+	int stdoutfd;	/* Child rsync's standard output */
+	int stderrfd;	/* Child rsync's standard error */
+	struct timespec expiration;
+
+	LIST_ENTRY(rsync_task) lh;
+};
+
+LIST_HEAD(rsync_tasks, rsync_task);
+
+#ifndef LIST_FOREACH_SAFE
+#define LIST_FOREACH_SAFE(var, ls, lh, tmp)				\
+    for (								\
+        var = LIST_FIRST(ls), tmp = (var ? LIST_NEXT(var, lh) : NULL);	\
+        var != NULL;							\
+        var = tmp, tmp = (var ? LIST_NEXT(var, lh) : NULL)		\
+    )
+#endif
+
+static void
+void_task(struct rsync_task *task, struct s2p_socket *s2p)
 {
-	unsigned char zero = 0;
-	struct read_stream stream;
-	char *url, *path;
-	int error;
+	static const unsigned char one = 1;
 
-	read_stream_init(&stream, readfd);
+	free(task->url);
+	free(task->path);
+	free(task);
 
-	do {
-		error = read_string(&stream, &url);
-		if (error || url == NULL)
-			break;
-		error = read_string(&stream, &path);
-		if (error || path == NULL) {
-			free(url);
-			break;
-		}
+	if (s2p->wr != -1 && write(s2p->wr, &one, 1) < 0) {
+		pr_op_err("Cannot message parent process: %s", strerror(errno));
 
-		error = rsync(url, path);
-
-		free(url);
-		free(path);
-
-		error = full_write(writefd, &zero, 1);
-	} while (!error);
-
-	read_stream_close(&stream);
-	close(writefd);
-	free_rpki_config();
-	log_teardown();
-	return error;
+		close(s2p->wr);
+		s2p->wr = -1;
+		/* Can't signal finished rsyncs anymore; reject future ones. */
+		rstream_close(&s2p->rd, true);
+	}
 }
 
-void
-rsync_setup(void)
+static void
+finish_task(struct rsync_task *task, struct s2p_socket *s2p)
 {
-	static const int RDFD = 0;
-	static const int WRFD = 1;
-	int parent2spawner[2];	/* Pipe: Parent writes, spawner reads */
-	int spawner2parent[2];	/* Pipe: Spawner writes, parent reads */
-	int flags;
-
-	if (pipe(parent2spawner) < 0) {
-		pr_op_err("Cannot create pipe: %s", strerror(errno));
-		goto fail1;
-	}
-	if (pipe(spawner2parent) < 0) {
-		pr_op_err("Cannot create pipe: %s", strerror(errno));
-		goto fail2;
-	}
-
-	flags = fcntl(spawner2parent[RDFD], F_GETFL);
-	if (flags < 0) {
-		pr_op_err("Cannot retrieve pipe flags: %s", strerror(errno));
-		goto fail3;
-	}
-	if (fcntl(spawner2parent[RDFD], F_SETFL, flags | O_NONBLOCK) < 0) {
-		pr_op_err("Cannot enable O_NONBLOCK: %s", strerror(errno));
-		goto fail3;
-	}
-
-	fflush(stdout);
-	fflush(stderr);
-
-	spawner = fork();
-	if (spawner < 0) {
-		pr_op_err("Cannot fork rsync spawner: %s", strerror(errno));
-		goto fail3;
-	}
-
-	if (spawner == 0) { /* Client code */
-		close(parent2spawner[WRFD]);
-		close(spawner2parent[RDFD]);
-		exit(run_child(parent2spawner[RDFD], spawner2parent[WRFD]));
-	}
-
-	/* Parent code */
-	close(parent2spawner[RDFD]);
-	close(spawner2parent[WRFD]);
-	readfd = spawner2parent[RDFD];
-	writefd = parent2spawner[WRFD];
-	return;
-
-fail3:	close(spawner2parent[RDFD]);
-	close(spawner2parent[WRFD]);
-fail2:	close(parent2spawner[RDFD]);
-	close(parent2spawner[WRFD]);
-fail1:	pr_op_warn("rsync will not be available.");
-	readfd = writefd = 0;
+	LIST_REMOVE(task, lh);
+	void_task(task, s2p);
 }
 
-int
-rsync_download(char const *url, char const *path)
+static void
+init_pfd(struct pollfd *pfd, int fd)
 {
-	mutex_lock(&writelock);
-
-	if (writefd == 0)
-		goto fail1;
-	if (write_string(writefd, url) != 0)
-		goto fail2;
-	if (write_string(writefd, path) != 0)
-		goto fail2;
-
-	mutex_unlock(&writelock);
-	return 0; // XXX go pick some other task
-
-fail2:	close(readfd);
-	close(writefd);
-	readfd = writefd = 0;
-fail1:	mutex_unlock(&writelock);
-	return EIO;
+	pfd->fd = fd;
+	pfd->events = POLLIN;
+	pfd->revents = 0;
 }
 
-/* Returns the number of rsyncs that have ended since the last query */
-unsigned int
-rsync_finished(void)
+static struct pollfd *
+create_pfds(int request_fd, struct rsync_tasks *tasks, size_t tn)
 {
-	unsigned char buf[8];
-	ssize_t result;
+	struct pollfd *pfds;
+	struct rsync_task *task;
+	size_t p;
 
-	mutex_lock(&readlock);
-	result = (readfd != 0) ? read(readfd, buf, sizeof(buf)) : 0;
-	mutex_unlock(&readlock);
+	pfds = pmalloc((2 * tn + 1) * sizeof(struct pollfd));
+	p = 0;
 
-	return (result >= 0) ? result : 0;
+	init_pfd(&pfds[p++], request_fd);
+	LIST_FOREACH(task, tasks, lh) {
+		init_pfd(&pfds[p++], task->stdoutfd);
+		init_pfd(&pfds[p++], task->stderrfd);
+	}
+
+	return pfds;
 }
 
 static int
-wait_child(char const *name, pid_t pid)
+create_pipes(int fds[2][2])
 {
-	int status;
 	int error;
 
-again:	status = 0;
-	if (waitpid(pid, &status, 0) < 0) {
+	if (pipe(fds[0]) < 0) {
 		error = errno;
-		pr_op_err("Could not wait for %s: %s", name, strerror(error));
+		pr_op_err_st("Piping rsync stderr: %s", strerror(error));
 		return error;
 	}
 
-	if (WIFEXITED(status)) {
-		/* Happy path (but also sad path sometimes) */
-		error = WEXITSTATUS(status);
-		pr_val_debug("%s ended. Result: %d", name, error);
-		return error ? EIO : 0;
+	if (pipe(fds[1]) < 0) {
+		error = errno;
+		pr_op_err_st("Piping rsync stdout: %s", strerror(error));
+		close(fds[0][0]);
+		close(fds[0][1]);
+		return error;
 	}
 
-	if (WIFSIGNALED(status)) {
-		pr_op_warn("%s interrupted by signal %d.",
-		    name, WTERMSIG(status));
-		return EINTR;
-	}
-
-	if (WIFCONTINUED(status)) {
-		/*
-		 * Testing warning:
-		 * I can't trigger this branch. It always exits or signals;
-		 * SIGSTOP then SIGCONT doesn't seem to wake up waitpid().
-		 * It's concerning because every sample code I've found assumes
-		 * waitpid() returning always means the subprocess ended, so
-		 * they never retry. But that contradicts all documentation,
-		 * yet seems to be accurate to reality.
-		 */
-		pr_op_debug("%s has resumed.", name);
-		goto again;
-	}
-
-	/* Dead code */
-	pr_op_err("Unknown waitpid() status; giving up %s.", name);
-	return EINVAL;
+	return 0;
 }
 
-void
-rsync_teardown(void)
+static void
+prepare_rsync_args(char **args, char const *url, char const *path)
 {
-	if (readfd)
-		close(readfd);
-	if (writefd)
-		close(writefd);
-	readfd = writefd = 0;
-	wait_child("rsync spawner", spawner);
+	size_t i;
+
+	/*
+	 * execvp() is not going to tweak these strings;
+	 * stop angsting over the const-to-raw conversion.
+	 */
+
+	for (i = 0; rsync_args[i] != NULL; i++)
+		args[i] = (char *)rsync_args[i];
+	args[i++] = (char *)url;
+	args[i++] = (char *)path;
+	args[i++] = NULL;
 }
 
 /*
@@ -233,44 +186,6 @@ duplicate_fds(int fds[2][2])
 	close(STDOUT_READ(fds));
 }
 
-static void
-prepare_rsync_args(char **args, char const *url, char const *path)
-{
-	size_t i = 0;
-
-	/*
-	 * execvp() is not going to tweak these strings;
-	 * stop angsting over the const-to-raw conversion.
-	 */
-
-	/* XXX review */
-	args[i++] = (char *)config_get_rsync_program();
-#ifdef UNIT_TESTING
-	/* Note... --bwlimit does not seem to exist in openrsync */
-	args[i++] = "--bwlimit=1K";
-	args[i++] = "-vvv";
-#else
-	args[i++] = "-rtz";
-	args[i++] = "--omit-dir-times";
-	args[i++] = "--contimeout";
-	args[i++] = "20";
-	args[i++] = "--max-size";
-	args[i++] = "20MB";
-	args[i++] = "--timeout";
-	args[i++] = "15";
-	args[i++] = "--include=*/";
-	args[i++] = "--include=*.cer";
-	args[i++] = "--include=*.crl";
-	args[i++] = "--include=*.gbr";
-	args[i++] = "--include=*.mft";
-	args[i++] = "--include=*.roa";
-	args[i++] = "--exclude=*";
-#endif
-	args[i++] = (char *)url;
-	args[i++] = (char *)path;
-	args[i++] = NULL;
-}
-
 static int
 execvp_rsync(char const *url, char const *path, int fds[2][2])
 {
@@ -286,37 +201,142 @@ execvp_rsync(char const *url, char const *path, int fds[2][2])
 }
 
 static int
-create_pipes(int fds[2][2])
+fork_rsync(struct rsync_task *task)
 {
+	int fork_fds[2][2];
 	int error;
 
-	if (pipe(fds[0]) == -1) {
+	error = create_pipes(fork_fds);
+	if (error)
+		return error;
+
+	fflush(stdout);
+	fflush(stderr);
+
+	task->pid = fork();
+	if (task->pid < 0) {
 		error = errno;
-		pr_op_err_st("Piping rsync stderr: %s", strerror(error));
-		return -error;
+		pr_op_err_st("Couldn't spawn the rsync process: %s",
+		    strerror(error));
+		close(STDERR_READ(fork_fds));
+		close(STDOUT_READ(fork_fds));
+		close(STDERR_WRITE(fork_fds));
+		close(STDOUT_WRITE(fork_fds));
+		return error;
 	}
 
-	if (pipe(fds[1]) == -1) {
-		error = errno;
+	if (task->pid == 0) /* Child code */
+		exit(execvp_rsync(task->url, task->path, fork_fds));
 
-		/* Close pipe previously created */
-		close(fds[0][0]);
-		close(fds[0][1]);
+	/* Parent code */
 
-		pr_op_err_st("Piping rsync stdout: %s", strerror(error));
-		return -error;
-	}
-
+	close(STDERR_WRITE(fork_fds));
+	close(STDOUT_WRITE(fork_fds));
+	task->stderrfd = STDERR_READ(fork_fds);
+	task->stdoutfd = STDOUT_READ(fork_fds);
 	return 0;
 }
 
-static long
-get_current_millis(void)
+static unsigned int
+start_task(struct s2p_socket *s2p, struct rsync_tasks *tasks,
+    struct timespec *now)
 {
-	struct timespec now;
-	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
-		pr_crit("clock_gettime() returned %d", errno);
-	return 1000L * now.tv_sec + now.tv_nsec / 1000000L;
+	struct rsync_task *task;
+
+	task = pzalloc(sizeof(struct rsync_task));
+	task->url = pstrndup((char *)s2p->rr->url.buf, s2p->rr->url.size);
+	task->path = pstrndup((char *)s2p->rr->path.buf, s2p->rr->path.size);
+	ts_add(&task->expiration, now, 1000 * config_get_rsync_transfer_timeout());
+
+	if (fork_rsync(task) != 0) {
+		void_task(task, s2p);
+		return 0;
+	}
+
+	LIST_INSERT_HEAD(tasks, task, lh);
+	pr_val_debug(RSP "Got new task: %d", task->pid);
+	return 1;
+}
+
+static unsigned int
+read_tasks(struct s2p_socket *s2p, struct rsync_tasks *tasks,
+    struct timespec *now)
+{
+	struct read_stream *in;
+	ssize_t consumed;
+	size_t offset;
+	asn_dec_rval_t decres;
+	unsigned int t;
+	int error;
+
+	in = &s2p->rd;
+	t = 0;
+
+	do {
+		consumed = read(in->fd, in->buffer + in->len,
+		    in->capacity - in->len);
+		if (consumed < 0) {
+			error = errno;
+			if (error != EAGAIN && error != EWOULDBLOCK)
+				rstream_close(in, true);
+			return t;
+		}
+		if (consumed == 0) { /* EOS */
+			rstream_close(in, true);
+			return t;
+		}
+
+		in->len += consumed;
+
+		for (offset = 0; offset < in->len;) {
+			decres = ber_decode(&asn_DEF_RsyncRequest,
+			    (void **)&s2p->rr,
+			    in->buffer + offset, in->len - offset);
+			offset += decres.consumed;
+			switch (decres.code) {
+			case RC_OK:
+				t += start_task(s2p, tasks, now);
+				ASN_STRUCT_RESET(asn_DEF_RsyncRequest, s2p->rr);
+				break;
+			case RC_WMORE:
+				goto break_for;
+			case RC_FAIL:
+				rstream_close(in, true);
+				return t;
+			}
+		}
+
+break_for:	if (offset > in->len)
+			pr_crit("read_tasks off:%zu len:%zu", offset, in->len);
+		in->len -= offset;
+		memmove(in->buffer, in->buffer + offset, in->len);
+	} while (true);
+}
+
+/* Returns number of tasks created */
+static int
+handle_parent_fd(struct s2p_socket *s2p, struct pollfd *pfd,
+    struct rsync_tasks *tasks, struct timespec *now)
+{
+	if (s2p->rd.fd == -1)
+		return 0;
+
+	if (pfd->revents & POLLNVAL) {
+		pr_val_err(RSP "bad parent fd: %i", pfd->fd);
+		rstream_close(&s2p->rd, false);
+		return 0;
+	}
+
+	if (pfd->revents & POLLERR) {
+		pr_val_err(RSP "Generic error during parent fd poll.");
+		rstream_close(&s2p->rd, true);
+		return 0;
+	}
+
+	if (pfd->revents & (POLLIN | POLLHUP))
+		return read_tasks(s2p, tasks, now);
+
+	return 0;
 }
 
 static void
@@ -333,7 +353,7 @@ log_buffer(char const *buffer, ssize_t read, bool is_error)
 	cur = cpy;
 	while ((tmp = strchr(cur, '\n')) != NULL) {
 		*tmp = '\0';
-		if(strlen(cur) == 0) {
+		if (strlen(cur) == 0) {
 			cur = tmp + 1;
 			continue;
 		}
@@ -346,162 +366,410 @@ log_buffer(char const *buffer, ssize_t read, bool is_error)
 	free(cpy);
 }
 
-#define DROP_FD(f, fail)		\
-	do {				\
-		pfd[f].fd = -1;		\
-		error |= fail;		\
-	} while (0)
-#define CLOSE_FD(f, fail)		\
-	do {				\
-		close(pfd[f].fd);	\
-		DROP_FD(f, fail);	\
-	} while (0)
-
-/*
- * Consumes (and throws away) all the bytes in read streams @fderr and @fdout,
- * then closes them once they reach end of stream.
- *
- * Returns: ok -> 0, error -> 1, timeout -> 2.
- */
+/* 0 = still more to read; 1 = stream down */
 static int
-exhaust_read_fds(int fderr, int fdout)
+log_rsync_output(struct pollfd *pfd, size_t p)
 {
-	struct pollfd pfd[2];
-	int error, nready, f;
-	long epoch, delta, timeout;
+	char buffer[1024];
+	ssize_t count;
+	int error;
 
-	memset(&pfd, 0, sizeof(pfd));
-	pfd[0].fd = fderr;
-	pfd[0].events = POLLIN;
-	pfd[1].fd = fdout;
-	pfd[1].events = POLLIN;
-
-	error = 0;
-
-	epoch = get_current_millis();
-	delta = 0;
-	timeout = 1000 * config_get_rsync_transfer_timeout();
-
-	while (1) {
-		nready = poll(pfd, 2, timeout - delta);
-		if (nready == 0)
-			goto timed_out;
-		if (nready == -1) {
-			error = errno;
-			if (error == EINTR)
-				continue;
-			pr_val_err("rsync bad poll: %s", strerror(error));
-			error = 1;
-			goto fail;
-		}
-
-		for (f = 0; f < 2; f++) {
-			if (pfd[f].revents & POLLNVAL) {
-				pr_val_err("rsync bad fd: %i", pfd[f].fd);
-				DROP_FD(f, 1);
-
-			} else if (pfd[f].revents & POLLERR) {
-				pr_val_err("Generic error during rsync poll.");
-				CLOSE_FD(f, 1);
-
-			} else if (pfd[f].revents & (POLLIN|POLLHUP)) {
-				char buffer[4096];
-				ssize_t count;
-
-				count = read(pfd[f].fd, buffer, sizeof(buffer));
-				if (count == -1) {
-					error = errno;
-					if (error == EINTR)
-						continue;
-					pr_val_err("rsync buffer read error: %s",
-					    strerror(error));
-					CLOSE_FD(f, 1);
-					continue;
-				}
-
-				if (count == 0)
-					CLOSE_FD(f, 0);
-				log_buffer(buffer, count, pfd[f].fd == fderr);
-			}
-		}
-
-		if (pfd[0].fd == -1 && pfd[1].fd == -1)
-			return error; /* Happy path! */
-
-		delta = get_current_millis() - epoch;
-		if (delta < 0) {
-			pr_val_err("This clock does not seem monotonic. "
-			    "I'm going to have to give up this rsync.");
-			error = 1;
-			goto fail;
-		}
-		if (delta >= timeout)
-			goto timed_out; /* Read took too long */
+	count = read(pfd->fd, buffer, sizeof(buffer));
+	if (count == 0)
+		goto down; /* EOF */
+	if (count == -1) {
+		error = errno;
+		if (error == EINTR)
+			return 0; /* Dunno; retry */
+		pr_val_err("rsync buffer read error: %s", strerror(error));
+		goto down; /* Error */
 	}
 
-timed_out:
-	pr_val_err("rsync transfer timeout exhausted");
-	error = 2;
-fail:	for (f = 0; f < 2; f++)
-		if (pfd[f].fd != -1)
-			close(pfd[f].fd);
+	log_buffer(buffer, count, (p & 1) == 0);
+	return 0; /* Keep going */
+
+down:	close(pfd->fd);
+	pfd->fd = -1;
+	return 1;
+}
+
+/* Returns 1 if the stream ended */
+static int
+handle_rsync_fd(struct pollfd *pfd, size_t p)
+{
+	if (pfd->fd == -1) {
+		pr_val_debug(RSP "File descriptor already closed.");
+		return 1;
+	}
+
+	if (pfd->revents & POLLNVAL) {
+		pr_val_err(RSP "rsync bad fd: %i", pfd->fd);
+		return 1;
+	}
+
+	if (pfd->revents & POLLERR) {
+		pr_val_err(RSP "Generic error during rsync poll.");
+		close(pfd->fd);
+		return 1;
+	}
+
+	if (pfd->revents & (POLLIN | POLLHUP))
+		return log_rsync_output(pfd, p);
+
+	return 0;
+}
+
+static int
+wait_subprocess(char const *name, pid_t pid)
+{
+	int status;
+	int error;
+
+again:	status = 0;
+	if (waitpid(pid, &status, 0) < 0) {
+		error = errno;
+		pr_op_err("Could not wait for %s: %s", name, strerror(error));
+		return error;
+	}
+
+	if (WIFEXITED(status)) {
+		/* Happy path (but also sad path sometimes) */
+		error = WEXITSTATUS(status);
+		pr_val_debug("%s ended. Result: %d", name, error);
+		return error ? EIO : 0;
+	}
+
+	if (WIFSIGNALED(status)) {
+		pr_op_warn("%s interrupted by signal %d (%s).",
+		    name, WTERMSIG(status), strsignal(WTERMSIG(status)));
+		return EINTR;
+	}
+
+	if (WIFCONTINUED(status)) {
+		/*
+		 * Testing warning:
+		 * I can't trigger this branch. It always exits or signals;
+		 * SIGSTOP then SIGCONT doesn't seem to wake up waitpid().
+		 * It's concerning because every sample code I've found assumes
+		 * waitpid() returning always means the subprocess ended, so
+		 * they never retry. But that contradicts all documentation,
+		 * yet seems to be accurate to reality.
+		 */
+		pr_op_debug("%s has resumed.", name);
+		goto again;
+	}
+
+	/* Dead code */
+	pr_op_err("Unknown waitpid() status; giving up %s.", name);
+	return EINVAL;
+}
+
+static void
+kill_subprocess(struct rsync_task *task)
+{
+	if (task->stdoutfd != -1)
+		close(task->stdoutfd);
+	if (task->stderrfd != -1)
+		close(task->stderrfd);
+	kill(task->pid, SIGTERM);
+}
+
+/* Returns true if the task died. */
+static bool
+maybe_expire(struct timespec *now, struct rsync_task *task,
+    struct s2p_socket *s2p)
+{
+	struct timespec epoch;
+
+	ts_add(&epoch, now, 100);
+	if (ts_cmp(&epoch, &task->expiration) < 0)
+		return false;
+
+	pr_op_debug(RSP "Task %d ran out of time.", task->pid);
+	kill_subprocess(task);
+	wait_subprocess("rsync", task->pid);
+	finish_task(task, s2p);
+	return true;
+}
+
+static int
+spawner_run(
+    int request_fd,	/* Requests from parent to us (spawner) */
+    int response_fd	/* Responses from us (spawner) to parent */
+) {
+	struct s2p_socket s2p;	/* Channel to parent */
+
+	struct pollfd *pfds;	/* Channels to children */
+	size_t p, pfds_count;
+	struct timespec now, expiration;
+	int timeout;
+
+	int events;
+
+	struct rsync_tasks tasks;
+	struct rsync_task *task, *tmp;
+	int task_count;
+
+	int error;
+
+	rstream_init(&s2p.rd, request_fd, 1024);
+	s2p.wr = response_fd;
+	s2p.rr = NULL;
+
+	LIST_INIT(&tasks);
+	task_count = 0;
+	error = 0;
+
+	ts_now(&now);
+
+	do {
+		/*
+		 * 0: request pipe
+		 * odd: stdouts
+		 * even > 0: stderrs
+		 */
+		pfds = create_pfds(s2p.rd.fd, &tasks, task_count);
+		pfds_count = 2 * task_count + 1;
+		expiration.tv_sec = now.tv_sec + 10;
+		expiration.tv_nsec = now.tv_nsec;
+		LIST_FOREACH(task, &tasks, lh)
+			if ((ts_cmp(&now, &task->expiration) < 0) &&
+			    (ts_cmp(&task->expiration, &expiration) < 0))
+				expiration = task->expiration;
+
+		timeout = ts_delta(&now, &expiration);
+		pr_val_debug(RSP "Timeout decided: %dms", timeout);
+		events = poll(pfds, pfds_count, timeout);
+		if (events < 0) {
+			error = errno;
+			free(pfds);
+			break;
+		}
+
+		ts_now(&now);
+
+		if (events == 0) { /* Timeout */
+			pr_val_debug(RSP "Woke up because of timeout.");
+			LIST_FOREACH_SAFE(task, &tasks, lh, tmp)
+				task_count -= maybe_expire(&now, task, &s2p);
+			goto cont;
+		}
+
+		pr_val_debug(RSP "Woke up because of input.");
+		p = 1;
+		LIST_FOREACH_SAFE(task, &tasks, lh, tmp) {
+			if (maybe_expire(&now, task, &s2p)) {
+				task_count--;
+				continue;
+			}
+
+			if (handle_rsync_fd(&pfds[p], p)) {
+				pr_val_debug(RSP "Task %d: Stdout closed.",
+				    task->pid);
+				task->stdoutfd = -1;
+			}
+			p++;
+			if (handle_rsync_fd(&pfds[p], p)) {
+				pr_val_debug(RSP "Task %d: Stderr closed.",
+				    task->pid);
+				task->stderrfd = -1;
+			}
+			p++;
+			if (task->stdoutfd == -1 && task->stderrfd == -1) {
+				pr_val_debug(RSP "Both stdout & stderr are closed; ending task %d.",
+				    task->pid);
+				wait_subprocess("rsync", task->pid);
+				finish_task(task, &s2p);
+				task_count--;
+			}
+		}
+		task_count += handle_parent_fd(&s2p, &pfds[0], &tasks, &now);
+
+cont:		free(pfds);
+	} while ((s2p.rd.fd != -1 || task_count > 0));
+	pr_val_debug(RSP "The parent stream is closed and there are no rsync tasks running. Cleaning up...");
+
+	LIST_FOREACH_SAFE(task, &tasks, lh, tmp) {
+		kill_subprocess(task);
+		wait_subprocess("rsync", task->pid);
+		finish_task(task, &s2p);
+	}
+
+	rstream_close(&s2p.rd, true);
+	if (s2p.wr != -1)
+		close(s2p.wr);
+
+	free_rpki_config();
+	log_teardown();
 	return error;
 }
 
-/*
- * Completely consumes @fds' streams, and closes them.
- *
- * Originally, this was meant to redirect rsync's output to syslog:
- * ac56d70c954caf49382f5f28ff4a017e859e2e0a
- * (ie. we need to exhaust the streams because we dup2()'d them.)
- *
- * Later, @job repurposed this code to fix #74.
- */
 static int
-exhaust_pipes(int fds[2][2])
+nonblock_pipe(int *fds)
 {
-	close(STDERR_WRITE(fds));
-	close(STDOUT_WRITE(fds));
-	return exhaust_read_fds(STDERR_READ(fds), STDOUT_READ(fds));
+	int error;
+	int flags;
+
+	if (pipe(fds) < 0) {
+		error = errno;
+		pr_op_err("Cannot create pipe: %s", strerror(error));
+		return error;
+	}
+
+	flags = fcntl(fds[RDFD], F_GETFL);
+	if (flags < 0) {
+		error = errno;
+		pr_op_err("Cannot retrieve pipe flags: %s", strerror(error));
+		goto cancel;
+	}
+	if (fcntl(fds[RDFD], F_SETFL, flags | O_NONBLOCK) < 0) {
+		error = errno;
+		pr_op_err("Cannot enable O_NONBLOCK: %s", strerror(error));
+		goto cancel;
+	}
+
+	return 0;
+
+cancel:	close(fds[RDFD]);
+	close(fds[WRFD]);
+	return error;
 }
 
-/* rsync @url @path */
-static int
-rsync(char const *url, char const *path)
+void
+rsync_setup(char const *program, ...)
 {
-	/* Descriptors to pipe stderr (first element) and stdout (second) */
-	int fork_fds[2][2];
-	pid_t child_pid;
-	int error;
+	int parent2spawner[2];	/* Pipe: Parent writes, spawner reads */
+	int spawner2parent[2];	/* Pipe: Spawner writes, parent reads */
 
-	error = create_pipes(fork_fds);
-	if (error)
-		return error;
+	va_list args;
+	array_index i;
+	char const *arg;
+
+	if (program != NULL) {
+		rsync_args[0] = arg = program;
+		va_start(args, program);
+		for (i = 1; arg != NULL; i++) {
+			arg = va_arg(args, char const *);
+			rsync_args[i] = arg;
+		}
+		va_end(args);
+	} else {
+		/* XXX review */
+		/* XXX Where is --delete? */
+		i = 0;
+		rsync_args[i++] = config_get_rsync_program();
+		rsync_args[i++] = "-rtz";
+		rsync_args[i++] = "--omit-dir-times";
+		rsync_args[i++] = "--contimeout";
+		rsync_args[i++] = "20";
+		rsync_args[i++] = "--max-size";
+		rsync_args[i++] = "20MB";
+		rsync_args[i++] = "--timeout";
+		rsync_args[i++] = "15";
+		rsync_args[i++] = "--include=*/";
+		rsync_args[i++] = "--include=*.cer";
+		rsync_args[i++] = "--include=*.crl";
+		rsync_args[i++] = "--include=*.gbr";
+		rsync_args[i++] = "--include=*.mft";
+		rsync_args[i++] = "--include=*.roa";
+		rsync_args[i++] = "--exclude=*";
+		rsync_args[i++] = NULL;
+	}
+
+	if (nonblock_pipe(parent2spawner) != 0)
+		goto fail1;
+	if (nonblock_pipe(spawner2parent) != 0)
+		goto fail2;
 
 	fflush(stdout);
 	fflush(stderr);
 
-	child_pid = fork();
-	if (child_pid < 0) {
-		error = errno;
-		pr_op_err_st("Couldn't spawn the rsync process: %s",
-		    strerror(error));
-		/* Close all ends from the created pipes */
-		close(STDERR_READ(fork_fds));
-		close(STDOUT_READ(fork_fds));
-		close(STDERR_WRITE(fork_fds));
-		close(STDOUT_WRITE(fork_fds));
-		return error;
+	spawner = fork();
+	if (spawner < 0) {
+		pr_op_err("Cannot fork rsync spawner: %s", strerror(errno));
+		goto fail3;
 	}
 
-	if (child_pid == 0)
-		exit(execvp_rsync(url, path, fork_fds)); /* Child code */
+	if (spawner == 0) { /* Client code */
+		close(parent2spawner[WRFD]);
+		close(spawner2parent[RDFD]);
+		exit(spawner_run(parent2spawner[RDFD], spawner2parent[WRFD]));
+	}
 
 	/* Parent code */
+	close(parent2spawner[RDFD]);
+	close(spawner2parent[WRFD]);
+	readfd = spawner2parent[RDFD];
+	writefd = parent2spawner[WRFD];
+	return;
 
-	error = exhaust_pipes(fork_fds);
-	if (error)
-		kill(child_pid, SIGTERM); /* Stop the child */
+fail3:	close(spawner2parent[RDFD]);
+	close(spawner2parent[WRFD]);
+fail2:	close(parent2spawner[RDFD]);
+	close(parent2spawner[WRFD]);
+fail1:	pr_op_warn("rsync will not be available.");
+	readfd = writefd = -1;
+}
 
-	return wait_child("rsync", child_pid);
+static int
+send_to_spawner(const void *buffer, size_t size, void *arg)
+{
+	return stream_full_write(writefd, buffer, size);
+}
+
+/* Queues rsync; doesn't wait. Call rsync_finished() later.  */
+int
+rsync_queue(char const *url, char const *path)
+{
+	struct RsyncRequest req;
+	asn_enc_rval_t result;
+	int error;
+
+	if (RsyncRequest_init(&req, url, path) < 0)
+		return EINVAL;
+
+	mutex_lock(&writelock);
+
+	if (writefd == -1) {
+		error = EIO;
+		goto end;
+	}
+
+	result = der_encode(&asn_DEF_RsyncRequest, &req, send_to_spawner, NULL);
+	if (result.encoded == -1) {
+		close(writefd);
+		writefd = -1;
+		error = EIO;
+		goto end;
+	}
+
+	error = 0;
+end:	mutex_unlock(&writelock);
+	ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_RsyncRequest, &req);
+	return error;
+}
+
+/* Returns the number of rsyncs that have ended since the last query */
+unsigned int
+rsync_finished(void)
+{
+	unsigned char buf[8];
+	ssize_t result;
+
+	mutex_lock(&readlock);
+	result = (readfd != -1) ? read(readfd, buf, sizeof(buf)) : 0;
+	mutex_unlock(&readlock);
+
+	return (result >= 0) ? result : 0;
+}
+
+void
+rsync_teardown(void)
+{
+	if (readfd != -1)
+		close(readfd);
+	if (writefd != -1)
+		close(writefd);
+	readfd = writefd = -1;
+	wait_subprocess("rsync spawner", spawner);
 }
