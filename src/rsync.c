@@ -63,7 +63,14 @@ struct rsync_task {
 	LIST_ENTRY(rsync_task) lh;
 };
 
-LIST_HEAD(rsync_tasks, rsync_task);
+LIST_HEAD(rsync_task_list, rsync_task);
+
+struct rsync_tasks {
+	struct rsync_task_list active;
+	int a; /* total active */
+
+	struct rsync_task_list queued;
+};
 
 #ifndef LIST_FOREACH_SAFE
 #define LIST_FOREACH_SAFE(var, ls, lh, tmp)				\
@@ -84,7 +91,7 @@ void_task(struct rsync_task *task, struct s2p_socket *s2p)
 	free(task);
 
 	if (s2p->wr != -1 && write(s2p->wr, &one, 1) < 0) {
-		pr_op_err("Cannot message parent process: %s", strerror(errno));
+		pr_op_err(RSP "Cannot message parent process: %s", strerror(errno));
 
 		close(s2p->wr);
 		s2p->wr = -1;
@@ -94,9 +101,11 @@ void_task(struct rsync_task *task, struct s2p_socket *s2p)
 }
 
 static void
-finish_task(struct rsync_task *task, struct s2p_socket *s2p)
+finish_task(struct rsync_tasks *tasks, struct rsync_task *task,
+    struct s2p_socket *s2p)
 {
 	LIST_REMOVE(task, lh);
+	tasks->a--;
 	void_task(task, s2p);
 }
 
@@ -109,7 +118,7 @@ init_pfd(struct pollfd *pfd, int fd)
 }
 
 static struct pollfd *
-create_pfds(int request_fd, struct rsync_tasks *tasks, size_t tn)
+create_pfds(int request_fd, struct rsync_task_list *tasks, size_t tn)
 {
 	struct pollfd *pfds;
 	struct rsync_task *task;
@@ -134,13 +143,13 @@ create_pipes(int fds[2][2])
 
 	if (pipe(fds[0]) < 0) {
 		error = errno;
-		pr_op_err_st("Piping rsync stderr: %s", strerror(error));
+		pr_op_err_st(RSP "Piping rsync stderr: %s", strerror(error));
 		return error;
 	}
 
 	if (pipe(fds[1]) < 0) {
 		error = errno;
-		pr_op_err_st("Piping rsync stdout: %s", strerror(error));
+		pr_op_err_st(RSP "Piping rsync stdout: %s", strerror(error));
 		close(fds[0][0]);
 		close(fds[0][1]);
 		return error;
@@ -216,7 +225,7 @@ fork_rsync(struct rsync_task *task)
 	task->pid = fork();
 	if (task->pid < 0) {
 		error = errno;
-		pr_op_err_st("Couldn't spawn the rsync process: %s",
+		pr_op_err_st(RSP "Couldn't spawn the rsync process: %s",
 		    strerror(error));
 		close(STDERR_READ(fork_fds));
 		close(STDOUT_READ(fork_fds));
@@ -237,8 +246,23 @@ fork_rsync(struct rsync_task *task)
 	return 0;
 }
 
-static unsigned int
-start_task(struct s2p_socket *s2p, struct rsync_tasks *tasks,
+static void
+activate_task(struct rsync_tasks *tasks, struct rsync_task *task,
+    struct s2p_socket *s2p, struct timespec *now)
+{
+	ts_add(&task->expiration, now, 1000 * config_rsync_timeout());
+
+	if (fork_rsync(task) != 0) {
+		void_task(task, s2p);
+		return;
+	}
+
+	LIST_INSERT_HEAD(&tasks->active, task, lh);
+	tasks->a++;
+}
+
+static void
+post_task(struct s2p_socket *s2p, struct rsync_tasks *tasks,
     struct timespec *now)
 {
 	struct rsync_task *task;
@@ -246,19 +270,17 @@ start_task(struct s2p_socket *s2p, struct rsync_tasks *tasks,
 	task = pzalloc(sizeof(struct rsync_task));
 	task->url = pstrndup((char *)s2p->rr->url.buf, s2p->rr->url.size);
 	task->path = pstrndup((char *)s2p->rr->path.buf, s2p->rr->path.size);
-	ts_add(&task->expiration, now, 1000 * config_get_rsync_transfer_timeout());
 
-	if (fork_rsync(task) != 0) {
-		void_task(task, s2p);
-		return 0;
+	if (tasks->a >= config_rsync_max()) {
+		LIST_INSERT_HEAD(&tasks->queued, task, lh);
+		pr_op_debug(RSP "Queued new task.");
+	} else {
+		activate_task(tasks, task, s2p, now);
+		pr_op_debug(RSP "Got new task: %d", task->pid);
 	}
-
-	LIST_INSERT_HEAD(tasks, task, lh);
-	pr_val_debug(RSP "Got new task: %d", task->pid);
-	return 1;
 }
 
-static unsigned int
+static void
 read_tasks(struct s2p_socket *s2p, struct rsync_tasks *tasks,
     struct timespec *now)
 {
@@ -266,11 +288,9 @@ read_tasks(struct s2p_socket *s2p, struct rsync_tasks *tasks,
 	ssize_t consumed;
 	size_t offset;
 	asn_dec_rval_t decres;
-	unsigned int t;
 	int error;
 
 	in = &s2p->rd;
-	t = 0;
 
 	do {
 		consumed = read(in->fd, in->buffer + in->len,
@@ -279,11 +299,11 @@ read_tasks(struct s2p_socket *s2p, struct rsync_tasks *tasks,
 			error = errno;
 			if (error != EAGAIN && error != EWOULDBLOCK)
 				rstream_close(in, true);
-			return t;
+			return;
 		}
 		if (consumed == 0) { /* EOS */
 			rstream_close(in, true);
-			return t;
+			return;
 		}
 
 		in->len += consumed;
@@ -295,14 +315,14 @@ read_tasks(struct s2p_socket *s2p, struct rsync_tasks *tasks,
 			offset += decres.consumed;
 			switch (decres.code) {
 			case RC_OK:
-				t += start_task(s2p, tasks, now);
+				post_task(s2p, tasks, now);
 				ASN_STRUCT_RESET(asn_DEF_RsyncRequest, s2p->rr);
 				break;
 			case RC_WMORE:
 				goto break_for;
 			case RC_FAIL:
 				rstream_close(in, true);
-				return t;
+				return;
 			}
 		}
 
@@ -313,30 +333,24 @@ break_for:	if (offset > in->len)
 	} while (true);
 }
 
-/* Returns number of tasks created */
-static int
+static void
 handle_parent_fd(struct s2p_socket *s2p, struct pollfd *pfd,
     struct rsync_tasks *tasks, struct timespec *now)
 {
 	if (s2p->rd.fd == -1)
-		return 0;
+		return;
 
 	if (pfd->revents & POLLNVAL) {
-		pr_val_err(RSP "bad parent fd: %i", pfd->fd);
+		pr_op_err(RSP "bad parent fd: %i", pfd->fd);
 		rstream_close(&s2p->rd, false);
-		return 0;
-	}
 
-	if (pfd->revents & POLLERR) {
-		pr_val_err(RSP "Generic error during parent fd poll.");
+	} else if (pfd->revents & POLLERR) {
+		pr_op_err(RSP "Generic error during parent fd poll.");
 		rstream_close(&s2p->rd, true);
-		return 0;
+
+	} else if (pfd->revents & (POLLIN | POLLHUP)) {
+		read_tasks(s2p, tasks, now);
 	}
-
-	if (pfd->revents & (POLLIN | POLLHUP))
-		return read_tasks(s2p, tasks, now);
-
-	return 0;
 }
 
 static void
@@ -358,9 +372,9 @@ log_buffer(char const *buffer, ssize_t read, bool is_error)
 			continue;
 		}
 		if (is_error)
-			pr_val_err("[RSYNC exec] %s", cur);
+			pr_op_err("[RSYNC exec] %s", cur);
 		else
-			pr_val_debug("[RSYNC exec] %s", cur);
+			pr_op_debug("[RSYNC exec] %s", cur);
 		cur = tmp + 1;
 	}
 	free(cpy);
@@ -381,7 +395,7 @@ log_rsync_output(struct pollfd *pfd, size_t p)
 		error = errno;
 		if (error == EINTR)
 			return 0; /* Dunno; retry */
-		pr_val_err("rsync buffer read error: %s", strerror(error));
+		pr_op_err(RSP "rsync buffer read error: %s", strerror(error));
 		goto down; /* Error */
 	}
 
@@ -398,17 +412,17 @@ static int
 handle_rsync_fd(struct pollfd *pfd, size_t p)
 {
 	if (pfd->fd == -1) {
-		pr_val_debug(RSP "File descriptor already closed.");
+		pr_op_debug(RSP "File descriptor already closed.");
 		return 1;
 	}
 
 	if (pfd->revents & POLLNVAL) {
-		pr_val_err(RSP "rsync bad fd: %i", pfd->fd);
+		pr_op_err(RSP "rsync bad fd: %i", pfd->fd);
 		return 1;
 	}
 
 	if (pfd->revents & POLLERR) {
-		pr_val_err(RSP "Generic error during rsync poll.");
+		pr_op_err(RSP "Generic error during rsync poll.");
 		close(pfd->fd);
 		return 1;
 	}
@@ -435,7 +449,7 @@ again:	status = 0;
 	if (WIFEXITED(status)) {
 		/* Happy path (but also sad path sometimes) */
 		error = WEXITSTATUS(status);
-		pr_val_debug("%s ended. Result: %d", name, error);
+		pr_op_debug("%s ended. Result: %d", name, error);
 		return error ? EIO : 0;
 	}
 
@@ -474,10 +488,26 @@ kill_subprocess(struct rsync_task *task)
 	kill(task->pid, SIGTERM);
 }
 
+static void
+activate_queued(struct rsync_tasks *tasks, struct s2p_socket *s2p,
+    struct timespec *now)
+{
+	struct rsync_task *task;
+
+	task = LIST_FIRST(&tasks->queued);
+	if (task == NULL)
+		return;
+
+	pr_op_debug(RSP "Activating queued task %s -> %s.",
+	    task->url, task->path);
+	LIST_REMOVE(task, lh);
+	activate_task(tasks, task, s2p, now);
+}
+
 /* Returns true if the task died. */
 static bool
-maybe_expire(struct timespec *now, struct rsync_task *task,
-    struct s2p_socket *s2p)
+maybe_expire(struct rsync_tasks *tasks, struct rsync_task *task,
+    struct s2p_socket *s2p, struct timespec *now)
 {
 	struct timespec epoch;
 
@@ -488,7 +518,9 @@ maybe_expire(struct timespec *now, struct rsync_task *task,
 	pr_op_debug(RSP "Task %d ran out of time.", task->pid);
 	kill_subprocess(task);
 	wait_subprocess("rsync", task->pid);
-	finish_task(task, s2p);
+	finish_task(tasks, task, s2p);
+	activate_queued(tasks, s2p, now);
+
 	return true;
 }
 
@@ -508,7 +540,6 @@ spawner_run(
 
 	struct rsync_tasks tasks;
 	struct rsync_task *task, *tmp;
-	int task_count;
 
 	int error;
 
@@ -516,8 +547,9 @@ spawner_run(
 	s2p.wr = response_fd;
 	s2p.rr = NULL;
 
-	LIST_INIT(&tasks);
-	task_count = 0;
+	LIST_INIT(&tasks.active);
+	LIST_INIT(&tasks.queued);
+	tasks.a = 0;
 	error = 0;
 
 	ts_now(&now);
@@ -528,17 +560,17 @@ spawner_run(
 		 * odd: stdouts
 		 * even > 0: stderrs
 		 */
-		pfds = create_pfds(s2p.rd.fd, &tasks, task_count);
-		pfds_count = 2 * task_count + 1;
+		pfds = create_pfds(s2p.rd.fd, &tasks.active, tasks.a);
+		pfds_count = 2 * tasks.a + 1;
 		expiration.tv_sec = now.tv_sec + 10;
 		expiration.tv_nsec = now.tv_nsec;
-		LIST_FOREACH(task, &tasks, lh)
+		LIST_FOREACH(task, &tasks.active, lh)
 			if ((ts_cmp(&now, &task->expiration) < 0) &&
 			    (ts_cmp(&task->expiration, &expiration) < 0))
 				expiration = task->expiration;
 
 		timeout = ts_delta(&now, &expiration);
-		pr_val_debug(RSP "Timeout decided: %dms", timeout);
+		pr_op_debug(RSP "Timeout decided: %dms", timeout);
 		events = poll(pfds, pfds_count, timeout);
 		if (events < 0) {
 			error = errno;
@@ -549,50 +581,52 @@ spawner_run(
 		ts_now(&now);
 
 		if (events == 0) { /* Timeout */
-			pr_val_debug(RSP "Woke up because of timeout.");
-			LIST_FOREACH_SAFE(task, &tasks, lh, tmp)
-				task_count -= maybe_expire(&now, task, &s2p);
+			pr_op_debug(RSP "Woke up because of timeout.");
+			LIST_FOREACH_SAFE(task, &tasks.active, lh, tmp)
+				maybe_expire(&tasks, task, &s2p, &now);
 			goto cont;
 		}
 
-		pr_val_debug(RSP "Woke up because of input.");
+		pr_op_debug(RSP "Woke up because of input.");
 		p = 1;
-		LIST_FOREACH_SAFE(task, &tasks, lh, tmp) {
-			if (maybe_expire(&now, task, &s2p)) {
-				task_count--;
+		LIST_FOREACH_SAFE(task, &tasks.active, lh, tmp) {
+			if (maybe_expire(&tasks, task, &s2p, &now))
 				continue;
-			}
 
 			if (handle_rsync_fd(&pfds[p], p)) {
-				pr_val_debug(RSP "Task %d: Stdout closed.",
+				pr_op_debug(RSP "Task %d: Stdout closed.",
 				    task->pid);
 				task->stdoutfd = -1;
 			}
 			p++;
 			if (handle_rsync_fd(&pfds[p], p)) {
-				pr_val_debug(RSP "Task %d: Stderr closed.",
+				pr_op_debug(RSP "Task %d: Stderr closed.",
 				    task->pid);
 				task->stderrfd = -1;
 			}
 			p++;
 			if (task->stdoutfd == -1 && task->stderrfd == -1) {
-				pr_val_debug(RSP "Both stdout & stderr are closed; ending task %d.",
+				pr_op_debug(RSP "Both stdout & stderr are closed; ending task %d.",
 				    task->pid);
 				wait_subprocess("rsync", task->pid);
-				finish_task(task, &s2p);
-				task_count--;
+				finish_task(&tasks, task, &s2p);
+				activate_queued(&tasks, &s2p, &now);
 			}
 		}
-		task_count += handle_parent_fd(&s2p, &pfds[0], &tasks, &now);
+		handle_parent_fd(&s2p, &pfds[0], &tasks, &now);
 
 cont:		free(pfds);
-	} while ((s2p.rd.fd != -1 || task_count > 0));
-	pr_val_debug(RSP "The parent stream is closed and there are no rsync tasks running. Cleaning up...");
+	} while ((s2p.rd.fd != -1 || tasks.a > 0));
+	pr_op_debug(RSP "The parent stream is closed and there are no rsync tasks running. Cleaning up...");
 
-	LIST_FOREACH_SAFE(task, &tasks, lh, tmp) {
+	LIST_FOREACH_SAFE(task, &tasks.active, lh, tmp) {
 		kill_subprocess(task);
 		wait_subprocess("rsync", task->pid);
-		finish_task(task, &s2p);
+		finish_task(&tasks, task, &s2p);
+	}
+	LIST_FOREACH_SAFE(task, &tasks.queued, lh, tmp) {
+		LIST_REMOVE(task, lh);
+		void_task(task, &s2p);
 	}
 
 	rstream_close(&s2p.rd, true);

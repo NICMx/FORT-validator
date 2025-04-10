@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
+#include <time.h>
 #include "config.h"
 #include "incidence.h"
 #include "log.h"
@@ -9,17 +10,28 @@
 
 /* Some core functions, as linked from unit tests. */
 
-/* CFLAGS=-DPRINT_PRS make check */
-#ifdef PRINT_PRS
+#if 0
+
+static void
+print_monotime(void)
+{
+	struct timespec now;
+	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
+		pr_crit("clock_gettime() returned '%s'", strerror(errno));
+	printf("%ld.%.3ld ", now.tv_sec, now.tv_nsec / 1000000);
+}
+
 #define MOCK_PRINT(color)						\
 	do {								\
 		va_list args;						\
 		printf(color);						\
+		print_monotime();					\
 		va_start(args, format);					\
 		vfprintf(stdout, format, args);				\
 		va_end(args);						\
 		printf(PR_COLOR_RST "\n");				\
 	} while (0)
+
 #else
 #define MOCK_PRINT(color)
 #endif

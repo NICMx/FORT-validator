@@ -6,7 +6,6 @@
 #include "rsync.c"
 #include "stream.c"
 
-
 #include "asn1/asn1c/ber_decoder.c"
 #include "asn1/asn1c/ber_tlv_length.c"
 #include "asn1/asn1c/ber_tlv_tag.c"
@@ -27,7 +26,8 @@ static char content[1024];
 /* Mocks */
 
 MOCK(config_get_rsync_program, char const *, "rsync", void)
-MOCK(config_get_rsync_transfer_timeout, long, 4, void)
+MOCK_UINT(config_rsync_max, 3, void)
+MOCK(config_rsync_timeout, long, 4, void)
 MOCK_UINT(config_get_asn1_decode_max_stack, 16 * 1024, void)
 
 MOCK_ABORT_PTR(json_obj_new, json_t, void)
@@ -43,113 +43,6 @@ MOCK_ABORT_INT(asn_generic_no_constraint, const asn_TYPE_descriptor_t *td,
                 const void *strt, asn_app_constraint_failed_f *cb, void *key)
 
 /* Tests */
-
-static void
-disable_sigpipe(void)
-{
-	struct sigaction action = { .sa_handler = SIG_IGN };
-	if (sigaction(SIGPIPE, &action, NULL) == -1)
-		pr_crit("Cannot disable SIGPIPE: %s", strerror(errno));
-}
-
-static void
-init_content(void)
-{
-	size_t i;
-
-	if (sizeof(content) % STR64LEN != 0)
-		pr_crit("content's length isn't divisible by str64's length");
-	for (i = 0; i < (sizeof(content) / STR64LEN); i++)
-		memcpy(content + 64 * i, STR64, STR64LEN);
-}
-
-static void
-create_dir(char const *path)
-{
-	if (mkdir(path, 0700) < 0)
-		ck_assert_int_eq(EEXIST, errno);
-}
-
-static void
-create_file(char const *name, unsigned int kbs)
-{
-	FILE *file;
-
-	file = fopen(name, "wb");
-	ck_assert_ptr_ne(NULL, file);
-	ck_assert_int_eq(kbs, fwrite(content, sizeof(content), kbs, file));
-	ck_assert_int_eq(0, fclose(file));
-}
-
-static void
-ensure_file_deleted(char const *name)
-{
-	int ret;
-	int error;
-
-	errno = 0;
-	ret = unlink(name);
-	error = errno;
-
-	ck_assert(ret == 0 || error == ENOENT);
-}
-
-static void
-create_rsync_sandbox(void)
-{
-	create_dir("tmp");
-	create_dir("tmp/rsync");
-	create_dir("tmp/rsync/src");
-	create_dir("tmp/rsync/dst");
-
-	create_file("tmp/rsync/src/a", 1);
-	create_file("tmp/rsync/src/b", 1);
-	create_file("tmp/rsync/src/c", 1);
-
-	ensure_file_deleted("tmp/rsync/dst/a");
-	ensure_file_deleted("tmp/rsync/dst/b");
-	ensure_file_deleted("tmp/rsync/dst/c");
-}
-
-static void
-diff(char const *file1, char const *file2)
-{
-	int fd1, fd2;
-	struct read_stream rs1, rs2;
-	int read1, read2;
-
-	fd1 = open(file1, O_RDONLY, 0);
-	ck_assert_int_ne(-1, fd1);
-	rstream_init(&rs1, fd1, 1024);
-
-	fd2 = open(file2, O_RDONLY, 0);
-	ck_assert_int_ne(-1, fd2);
-	rstream_init(&rs2, fd2, 1024);
-
-	do {
-		read1 = rstream_full_read(&rs1, 1024);
-		ck_assert_int_ge(read1, 0);
-		read2 = rstream_full_read(&rs2, 1024);
-		ck_assert_int_eq(read1, read2);
-		ck_assert_int_eq(0, memcmp(rs1.buffer, rs2.buffer, read1));
-	} while (read1 == 1024);
-
-	rstream_close(&rs1, true);
-	rstream_close(&rs2, true);
-}
-
-static void
-ck_1st_task(struct rsync_tasks *tasks, struct s2p_socket *sk,
-    char const *url, char const *path)
-{
-	struct rsync_task *task;
-
-	task = LIST_FIRST(tasks);
-	ck_assert_ptr_ne(NULL, task);
-	ck_assert_str_eq(url, task->url);
-	ck_assert_str_eq(path, task->path);
-	finish_task(task, sk);
-}
 
 /* Test RsyncRequest decode, feeding as few bytes as possible every time. */
 START_TEST(test_decode_extremely_fragmented)
@@ -200,6 +93,28 @@ START_TEST(test_decode_extremely_fragmented)
 END_TEST
 
 static void
+ck_no_tasks(struct rsync_tasks *tasks)
+{
+	ck_assert_int_eq(0, tasks->a);
+	ck_assert(LIST_EMPTY(&tasks->active));
+	ck_assert(LIST_EMPTY(&tasks->queued));
+}
+
+static void
+ck_1st_task(struct rsync_tasks *tasks, struct s2p_socket *sk,
+    char const *url, char const *path)
+{
+	struct rsync_task *task;
+
+	task = LIST_FIRST(&tasks->active);
+	ck_assert_ptr_ne(NULL, task);
+	ck_assert_str_eq(url, task->url);
+	ck_assert_str_eq(path, task->path);
+	ck_assert(tasks->a > 0);
+	finish_task(tasks, task, sk);
+}
+
+static void
 encode_request(char const *url, char const *path, unsigned char *buffer)
 {
 	struct RsyncRequest rr;
@@ -227,56 +142,60 @@ START_TEST(test_read_tasks)
 	rstream_init(&sk.rd, fds[0], 256);
 	sk.wr = -1;
 	sk.rr = NULL;
-	LIST_INIT(&tasks);
+	LIST_INIT(&tasks.active);
+	LIST_INIT(&tasks.queued);
+	tasks.a = 0;
 	ts_now(&now);
 
 	printf("Read yields nothing\n");
-	ck_assert_uint_eq(0, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
+	ck_no_tasks(&tasks);
 
 	printf("Read yields less than 1 request\n");
 	encode_request("111", "2222", bytes); /* 13 bytes */
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes, 10));
-	ck_assert_uint_eq(0, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
+	ck_no_tasks(&tasks);
 
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes + 10, 3));
-	ck_assert_uint_eq(1, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
 
 	ck_1st_task(&tasks, &sk, "111", "2222");
-	ck_assert(LIST_EMPTY(&tasks));
+	ck_no_tasks(&tasks);
 
 	printf("Read yields 1 request\n");
 	encode_request("3333", "444", bytes); /* 13 bytes */
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes, 13));
-	ck_assert_uint_eq(1, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
 
 	ck_1st_task(&tasks, &sk, "3333", "444");
-	ck_assert(LIST_EMPTY(&tasks));
+	ck_no_tasks(&tasks);
 
 	printf("Read yields 1.5 requests\n");
 	encode_request("55", "666", bytes); /* 11 bytes */
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes, 11));
 	encode_request("777", "88", bytes); /* 11 bytes */
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes, 5));
-	ck_assert_uint_eq(1, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
 
 	ck_1st_task(&tasks, &sk, "55", "666");
-	ck_assert(LIST_EMPTY(&tasks));
+	ck_no_tasks(&tasks);
 
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes + 5, 6));
-	ck_assert_uint_eq(1, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
 
 	ck_1st_task(&tasks, &sk, "777", "88");
-	ck_assert(LIST_EMPTY(&tasks));
+	ck_no_tasks(&tasks);
 
 	printf("Read yields 2 requests\n");
 	encode_request("9999", "00", bytes); /* 12 bytes */
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes, 12));
 	encode_request("aa", "bbbb", bytes); /* 12 bytes */
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes, 12));
-	ck_assert_uint_eq(2, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
 	ck_1st_task(&tasks, &sk, "aa", "bbbb");
 	ck_1st_task(&tasks, &sk, "9999", "00");
-	ck_assert(LIST_EMPTY(&tasks));
+	ck_no_tasks(&tasks);
 
 	printf("Read yields 2.5 requests\n");
 	encode_request("cc", "dd", bytes); /* 10 bytes */
@@ -286,30 +205,36 @@ START_TEST(test_read_tasks)
 	encode_request("gggg", "hhhhh", bytes); /* 15 bytes */
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes, 3));
 
-	ck_assert_uint_eq(2, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
 	ck_1st_task(&tasks, &sk, "eeeee", "fffff");
 	ck_1st_task(&tasks, &sk, "cc", "dd");
-	ck_assert(LIST_EMPTY(&tasks));
+	ck_no_tasks(&tasks);
 
 	ck_assert_int_eq(0, stream_full_write(fds[1], bytes + 3, 12));
-	ck_assert_uint_eq(1, read_tasks(&sk, &tasks, &now));
+	read_tasks(&sk, &tasks, &now);
 	ck_1st_task(&tasks, &sk, "gggg", "hhhhh");
-	ck_assert(LIST_EMPTY(&tasks));
+	ck_no_tasks(&tasks);
 }
 END_TEST
 
+/* Makes sure @count rsyncs finish after roughly @millis milliseconds. */
 static void
-wait_rsyncs(unsigned int count)
+wait_rsyncs(unsigned int count, unsigned int millis)
 {
-	unsigned int done = 0;
+	struct timespec req;
 
-	do {
-		sleep(1);
-		done += rsync_finished();
-		printf("rsyncs done: %u\n", done);
-	} while (done < count);
+	if (millis > 100) {
+		millis -= 100;
+		req.tv_sec = millis / 1000;
+		req.tv_nsec = (millis % 1000) * 1000000;
+		ck_assert_int_eq(0, nanosleep(&req, NULL));
+		ck_assert_uint_eq(0, rsync_finished());
+	}
 
-	ck_assert_uint_eq(count, done);
+	req.tv_sec = 0;
+	req.tv_nsec = 200000000; /* 200ms */
+	ck_assert_int_eq(0, nanosleep(&req, NULL));
+	ck_assert_uint_eq(count, rsync_finished());
 }
 
 START_TEST(test_fast_single_rsync)
@@ -319,7 +244,7 @@ START_TEST(test_fast_single_rsync)
 	ck_assert_int_ne(-1, writefd);
 
 	ck_assert_int_eq(0, rsync_queue("A", "B"));
-	wait_rsyncs(1);
+	wait_rsyncs(1, 0);
 
 	rsync_teardown();
 }
@@ -332,7 +257,7 @@ START_TEST(test_stalled_single_rsync)
 	ck_assert_int_ne(-1, writefd);
 
 	ck_assert_int_eq(0, rsync_queue("A", "B"));
-	wait_rsyncs(1);
+	wait_rsyncs(1, 3000);
 
 	rsync_teardown();
 }
@@ -345,7 +270,7 @@ START_TEST(test_stalled_single_rsync_timeout)
 	ck_assert_int_ne(-1, writefd);
 
 	ck_assert_int_eq(0, rsync_queue("A", "B"));
-	wait_rsyncs(1);
+	wait_rsyncs(1, 4000); /* 4000 = timeout */
 
 	rsync_teardown();
 }
@@ -358,7 +283,7 @@ START_TEST(test_dripfeed_single_rsync)
 	ck_assert_int_ne(-1, writefd);
 
 	ck_assert_int_eq(0, rsync_queue("A", "B"));
-	wait_rsyncs(1);
+	wait_rsyncs(1, 3000);
 
 	rsync_teardown();
 }
@@ -371,7 +296,7 @@ START_TEST(test_dripfeed_single_rsync_timeout)
 	ck_assert_int_ne(-1, writefd);
 
 	ck_assert_int_eq(0, rsync_queue("A", "B"));
-	wait_rsyncs(1);
+	wait_rsyncs(1, 4000); /* 4000 = timeout */
 
 	rsync_teardown();
 }
@@ -384,6 +309,7 @@ START_TEST(test_no_rsyncs)
 	ck_assert_int_ne(-1, writefd);
 
 	sleep(2);
+	ck_assert_uint_eq(0, rsync_finished());
 
 	rsync_teardown();
 }
@@ -391,22 +317,36 @@ END_TEST
 
 START_TEST(test_simultaneous_rsyncs)
 {
-	create_rsync_sandbox();
-	/* Note... --bwlimit does not seem to exist in openrsync */
-	rsync_setup("rsync", "--bwlimit=1K", "-vvv", NULL);
+	rsync_setup("resources/rsync/simultaneous.sh", NULL);
 	ck_assert_int_ne(-1, readfd);
 	ck_assert_int_ne(-1, writefd);
 
-	ck_assert_int_eq(0, rsync_queue("tmp/rsync/src/a", "tmp/rsync/dst/a"));
-	ck_assert_int_eq(0, rsync_queue("tmp/rsync/src/b", "tmp/rsync/dst/b"));
-	ck_assert_int_eq(0, rsync_queue("tmp/rsync/src/c", "tmp/rsync/dst/c"));
-	wait_rsyncs(3);
+	ck_assert_int_eq(0, rsync_queue("A", "B"));
+	ck_assert_int_eq(0, rsync_queue("C", "D"));
+	ck_assert_int_eq(0, rsync_queue("E", "F"));
+
+	wait_rsyncs(3, 1000);
 
 	rsync_teardown();
+}
+END_TEST
 
-	diff("tmp/rsync/src/a", "tmp/rsync/dst/a");
-	diff("tmp/rsync/src/b", "tmp/rsync/dst/b");
-	diff("tmp/rsync/src/c", "tmp/rsync/dst/c");
+START_TEST(test_queued_rsyncs)
+{
+	rsync_setup("resources/rsync/queued.sh", NULL);
+	ck_assert_int_ne(-1, readfd);
+	ck_assert_int_ne(-1, writefd);
+
+
+	ck_assert_int_eq(0, rsync_queue("A", "B"));
+	ck_assert_int_eq(0, rsync_queue("C", "D"));
+	ck_assert_int_eq(0, rsync_queue("E", "F"));
+	ck_assert_int_eq(0, rsync_queue("G", "H"));
+
+	wait_rsyncs(3, 2000);
+	wait_rsyncs(1, 2000);
+
+	rsync_teardown();
 }
 END_TEST
 
@@ -421,17 +361,18 @@ create_suite(void)
 	tcase_add_test(p2s, test_read_tasks);
 
 	s2r = tcase_create("spawner-rsync channel");
-	tcase_add_test(p2s, test_fast_single_rsync);
-	tcase_add_test(p2s, test_stalled_single_rsync);
-	tcase_add_test(p2s, test_stalled_single_rsync_timeout);
-	tcase_add_test(p2s, test_dripfeed_single_rsync);
-	tcase_add_test(p2s, test_dripfeed_single_rsync_timeout);
-	tcase_set_timeout(p2s, 6);
+	tcase_add_test(s2r, test_fast_single_rsync);
+	tcase_add_test(s2r, test_stalled_single_rsync);
+	tcase_add_test(s2r, test_stalled_single_rsync_timeout);
+	tcase_add_test(s2r, test_dripfeed_single_rsync);
+	tcase_add_test(s2r, test_dripfeed_single_rsync_timeout);
+	tcase_set_timeout(s2r, 6);
 
 	spawner = tcase_create("spawner");
 	tcase_add_test(spawner, test_no_rsyncs);
 	tcase_add_test(spawner, test_simultaneous_rsyncs);
-	tcase_set_timeout(spawner, 6);
+	tcase_add_test(spawner, test_queued_rsyncs);
+	tcase_set_timeout(spawner, 5);
 
 	suite = suite_create("rsync");
 	suite_add_tcase(suite, p2s);
@@ -439,6 +380,25 @@ create_suite(void)
 	suite_add_tcase(suite, spawner);
 
 	return suite;
+}
+
+static void
+disable_sigpipe(void)
+{
+	struct sigaction action = { .sa_handler = SIG_IGN };
+	if (sigaction(SIGPIPE, &action, NULL) == -1)
+		pr_crit("Cannot disable SIGPIPE: %s", strerror(errno));
+}
+
+static void
+init_content(void)
+{
+	size_t i;
+
+	if (sizeof(content) % STR64LEN != 0)
+		pr_crit("content's length isn't divisible by str64's length");
+	for (i = 0; i < (sizeof(content) / STR64LEN); i++)
+		memcpy(content + 64 * i, STR64, STR64LEN);
 }
 
 int

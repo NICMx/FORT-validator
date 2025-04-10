@@ -87,6 +87,8 @@ struct rpki_config {
 		bool enabled;
 		/* Protocol preference; compared to http.priority */
 		unsigned int priority;
+		/* Maximum simultaneous rsyncs */
+		unsigned int max;
 		/* Deprecated; does nothing. */
 		char *strategy;
 		unsigned int transfer_timeout;
@@ -446,6 +448,14 @@ static const struct option_field options[] = {
 		.type = &gt_bool,
 		.offset = offsetof(struct rpki_config, rsync.enabled),
 		.doc = "Enables RSYNC execution",
+	}, {
+		.id = 3001,
+		.name = "rsync.max",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, rsync.max),
+		.doc = "Maximum simultaneous rsyncs.",
+		.min = 0,
+		.max = UINT_MAX,
 	}, {
 		.id = 3001,
 		.name = "rsync.priority",
@@ -951,6 +961,7 @@ set_default_values(void)
 
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
+	rpki_config.rsync.max = 1;
 	rpki_config.rsync.strategy = pstrdup("<deprecated>");
 	rpki_config.rsync.transfer_timeout = 900;
 	rpki_config.rsync.program = pstrdup("rsync");
@@ -1381,8 +1392,14 @@ config_get_rsync_priority(void)
 	return rpki_config.rsync.priority;
 }
 
+unsigned int
+config_rsync_max(void)
+{
+	return rpki_config.rsync.max;
+}
+
 long
-config_get_rsync_transfer_timeout(void)
+config_rsync_timeout(void)
 {
 	return rpki_config.rsync.transfer_timeout;
 }
