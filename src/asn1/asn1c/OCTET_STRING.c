@@ -947,6 +947,12 @@ OCTET_STRING_new_fromBuf(const asn_TYPE_descriptor_t *td, const char *str,
 	return st;
 }
 
+char *
+OCTET_STRING_toString(OCTET_STRING_t *os)
+{
+	return pstrndup((char *)os->buf, os->size);
+}
+
 json_t *
 OCTET_STRING_to_json(const asn_TYPE_descriptor_t *td, OCTET_STRING_t const *ber)
 {

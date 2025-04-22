@@ -81,7 +81,7 @@ void
 pr_crit(const char *format, ...)
 {
 	va_list args;
-	fprintf(stderr, "pr_crit() called!\n");
+	fprintf(stderr, "pr_crit() called! ");
 	va_start(args, format);
 	vfprintf(stderr, format, args);
 	va_end(args);

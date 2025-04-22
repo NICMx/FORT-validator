@@ -3,7 +3,7 @@
 
 void rsync_setup(char const *, ...);
 int rsync_queue(char const *, char const *);
-unsigned int rsync_finished(void);
+void rsync_finished(char const *, char const *);
 void rsync_teardown(void);
 
 #endif /* SRC_RSYNC_RSYNC_H_ */

@@ -48,6 +48,9 @@ touch_file(char const *dir)
 	ck_assert_int_eq(0, system(cmd));
 }
 
+static char *queued_url;
+static char *queued_path;
+
 int
 rsync_queue(char const *url, char const *path)
 {
@@ -61,6 +64,9 @@ rsync_queue(char const *url, char const *path)
 	printf("Simulating rsync: %s -> %s\n", url, path);
 	ck_assert_int_eq(0, mkdir(path, CACHE_FILEMODE));
 	touch_file(path);
+
+	queued_url = pstrdup(url);
+	queued_path = pstrdup(path);
 
 	return 0;
 }
@@ -114,6 +120,22 @@ run_dl_rsync(char *caRepository, int expected_err, unsigned int expected_calls)
 	ck_assert_uint_eq(0, https_counter);
 
 	return cage;
+}
+
+static void
+finish_rsync(void)
+{
+	rsync_finished(queued_url, queued_path);
+	free(queued_url);
+	free(queued_path);
+}
+
+static struct cache_cage *
+rsync_dance(char *url)
+{
+	ck_assert_ptr_eq(NULL, run_dl_rsync(url, EBUSY, 1));
+	finish_rsync();
+	return run_dl_rsync(url, 0, 0);
 }
 
 static void
@@ -389,7 +411,7 @@ START_TEST(test_cache_download_rsync)
 	setup_test();
 
 	printf("==== Startup ====\n");
-	cage = run_dl_rsync("rsync://a.b.c/d", 0, 1);
+	cage = rsync_dance("rsync://a.b.c/d");
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
 	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
@@ -424,7 +446,7 @@ START_TEST(test_cache_download_rsync)
 	 * and there would be consequences for violating it.
 	 */
 	printf("==== rsync truncated ====\n");
-	cage = run_dl_rsync("rsync://x.y.z/m/n/o", 0, 1);
+	cage = rsync_dance("rsync://x.y.z/m/n/o");
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://x.y.z/m", "rsync/1", NULL);
 	ck_cage(cage, "rsync://x.y.z/m/n/o", "rsync/1/n/o", NULL);
@@ -433,7 +455,7 @@ START_TEST(test_cache_download_rsync)
 	free(cage);
 
 	printf("==== Sibling ====\n");
-	cage = run_dl_rsync("rsync://a.b.c/e/f", 0, 1);
+	cage = rsync_dance("rsync://a.b.c/e/f");
 	ck_assert_ptr_ne(NULL, cage);
 	ck_cage(cage, "rsync://a.b.c/e", "rsync/2", NULL);
 	ck_cage(cage, "rsync://a.b.c/e/f/x/y/z", "rsync/2/f/x/y/z", NULL);
@@ -456,7 +478,7 @@ START_TEST(test_cache_download_rsync_error)
 
 	printf("==== Startup ====\n");
 	dl_error = 0;
-	free(run_dl_rsync("rsync://a.b.c/d", 0, 1));
+	free(rsync_dance("rsync://a.b.c/d"));
 	dl_error = EINVAL;
 	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", EINVAL, 1));
 	ck_cache_rsync(nodes);
@@ -761,7 +783,11 @@ START_TEST(test_context)
 	 *    but does not provide RRDP as an option.
 	 */
 	sias.rpkiNotify = NULL;
+
+	ck_assert_int_eq(EBUSY, cache_refresh_by_sias(&sias, &cage));
+	finish_rsync();
 	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
+
 	ck_assert_ptr_eq(NULL, cage->rpkiNotify);
 	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, FILE_URL));
 	ck_assert_int_eq(false, cage_disable_refresh(cage));

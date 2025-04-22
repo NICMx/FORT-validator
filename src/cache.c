@@ -730,14 +730,8 @@ static int
 dl_rsync(struct cache_node *module)
 {
 	int error;
-
-	// XXX go pick some other task on zero
 	error = rsync_queue(module->map.url, module->map.path);
-	if (error)
-		return error;
-
-	module->success_ts = module->attempt_ts;
-	return 0;
+	return error ? error : EBUSY;
 }
 
 static int
@@ -1176,6 +1170,32 @@ cache_commit_file(struct cache_mapping *map)
 	mutex_lock(&commits_lock);
 	STAILQ_INSERT_TAIL(&commits, commit, lh);
 	mutex_unlock(&commits_lock);
+}
+
+void
+rsync_finished(char const *url, char const *path)
+{
+	struct cache_node *node;
+
+	mutex_lock(&cache.rsync.lock);
+
+	node = find_node(&cache.rsync, url, strlen(url));
+	if (node == NULL) {
+		mutex_unlock(&cache.rsync.lock);
+		pr_op_err("rsync '%s -> %s' finished, but cache node does not exist.",
+		    url, path);
+		return;
+	}
+	if (node->state != DLS_ONGOING)
+		pr_op_warn("rsync '%s -> %s' finished, but existing node was not in ONGOING state.",
+		    url, path);
+
+	node->state = DLS_FRESH;
+	node->dlerr = 0;
+	node->success_ts = node->attempt_ts;
+	mutex_unlock(&cache.rsync.lock);
+
+	task_wakeup_dormants();
 }
 
 char const *

@@ -117,9 +117,9 @@ int incidence(enum incidence_id, const char *, ...) CHECK_FORMAT(2, 3);
 #define DBG_COLOR_RESET "\x1B[0m"
 #define PR_DEBUG \
     printf(DBG_COLOR "%s:%d (%s())" DBG_COLOR_RESET "\n", \
-    __FILE__, __LINE__, __func__)
+        __FILE__, __LINE__, __func__)
 #define PR_DEBUG_MSG(msg, ...) \
     printf(DBG_COLOR "%s:%d (%s()): " msg DBG_COLOR_RESET "\n", \
-    __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+        __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
 #endif /* SRC_LOG_H_ */

@@ -170,16 +170,19 @@ try_urls(struct tal *tal, bool (*url_is_protocol)(char const *),
 {
 	char **url;
 	struct cache_mapping map;
+	int error;
 
 	ARRAYLIST_FOREACH(&tal->urls, url) {
 		map.url = *url;
 		if (!url_is_protocol(map.url))
 			continue;
-		// XXX if this is rsync, it seems this will queue and fail
 		map.path = get_path(*url);
 		if (!map.path)
 			continue;
-		if (validate_ta(tal, &map) != 0)
+		error = validate_ta(tal, &map);
+		if (error == EBUSY)
+			return EBUSY;
+		if (error)
 			continue;
 		cache_commit_file(&map);
 		return 0;
@@ -201,14 +204,18 @@ traverse_tal(char const *tal_path)
 		goto end1;
 
 	/* Online attempts */
-	if (try_urls(&tal, url_is_https, cache_refresh_by_url) == 0)
+	error = try_urls(&tal, url_is_https, cache_refresh_by_url);
+	if (!error || error == EBUSY)
 		goto end2;
-	if (try_urls(&tal, url_is_rsync, cache_refresh_by_url) == 0)
+	error = try_urls(&tal, url_is_rsync, cache_refresh_by_url);
+	if (!error || error == EBUSY)
 		goto end2;
 	/* Offline fallback attempts */
-	if (try_urls(&tal, url_is_https, cache_get_fallback) == 0)
+	error = try_urls(&tal, url_is_https, cache_get_fallback);
+	if (!error || error == EBUSY)
 		goto end2;
-	if (try_urls(&tal, url_is_rsync, cache_get_fallback) == 0)
+	error = try_urls(&tal, url_is_rsync, cache_get_fallback);
+	if (!error || error == EBUSY)
 		goto end2;
 
 	pr_op_err("None of the TAL URIs yielded a successful traversal.");
@@ -233,8 +240,16 @@ pick_up_work(void *arg)
 			}
 			break;
 		case VTT_TAL:
-			if (traverse_tal(task->u.tal) != 0)
+			switch (traverse_tal(task->u.tal)) {
+			case 0:
+				break;
+			case EBUSY:
+				task_requeue_dormant(task);
+				task = NULL;
+				break;
+			default:
 				task_stop();
+			}
 			break;
 		}
 
