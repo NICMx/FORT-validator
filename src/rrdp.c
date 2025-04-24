@@ -1150,7 +1150,7 @@ update_notif(struct rrdp_state *old, struct update_notification *new)
 }
 
 static int
-dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
+dl_notif(char const *url, time_t mtim, bool *changed,
     struct update_notification *new)
 {
 	char tmppath[CACHE_TMPFILE_BUFLEN];
@@ -1159,7 +1159,7 @@ dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
 	cache_tmpfile(tmppath);
 
 	*changed = false;
-	error = http_download(map->url, tmppath, mtim, changed);
+	error = http_download(url, tmppath, mtim, changed);
 	if (error)
 		return error;
 	if (!(*changed)) {
@@ -1167,7 +1167,7 @@ dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
 		return 0;
 	}
 
-	error = parse_notification(map->url, tmppath, new);
+	error = parse_notification(url, tmppath, new);
 	if (error)
 		return error;
 
@@ -1189,7 +1189,7 @@ dl_notif(struct cache_mapping const *map,  time_t mtim, bool *changed,
  * snapshot, and explodes them into @notif->path.
  */
 int
-rrdp_update(struct cache_mapping const *notif, time_t mtim,
+rrdp_update(char const *notif, char const *path, time_t mtim,
     bool *changed, struct rrdp_state **state)
 {
 	struct rrdp_state *old;
@@ -1197,7 +1197,7 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim,
 	int serial_cmp;
 	int error;
 
-	fnstack_push(notif->url);
+	fnstack_push(notif);
 	pr_val_debug("Processing notification.");
 
 	error = dl_notif(notif, mtim, changed, &new);
@@ -1215,10 +1215,10 @@ rrdp_update(struct cache_mapping const *notif, time_t mtim,
 
 		old = pzalloc(sizeof(struct rrdp_state));
 		/* session postponed! */
-		cseq_init(&old->seq, notif->path, 0, false);
+		cseq_init(&old->seq, pstrdup(path), 0, true);
 		STAILQ_INIT(&old->delta_hashes);
 
-		error = file_mkdir(notif->path, false);
+		error = file_mkdir(path, false);
 		if (error) {
 			rrdp_state_free(old);
 			goto clean_notif;

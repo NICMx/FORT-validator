@@ -4,6 +4,7 @@
 
 #include "alloc.h"
 #include "common.h"
+#include "log.h"
 #include "types/path.h"
 
 bool

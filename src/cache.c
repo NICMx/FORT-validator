@@ -39,7 +39,31 @@ enum node_state {
 	DLS_FRESH,
 };
 
-struct cache_table;
+struct node_key {
+	/*
+	 * Hash table indexer.
+	 *
+	 * If this is an rsync node, @id is the caRepository.
+	 * If this is an HTTP node, @id is the simple URL.
+	 * If this is an RRDP refresh node, @id is the rpkiNotify.
+	 * If this is an RRDP fallback node, @id is `rpkiNotify\0caRepository`.
+	 */
+	char *id;
+	size_t idlen;
+
+	/*
+	 * If node is rsync, @http is NULL.
+	 * If node is HTTP, @http is the simple URL.
+	 * If node is RRDP, @http is the rpkiNotify.
+	 */
+	char const *http;
+	/*
+	 * If node is rsync, @rsync is the simple URL.
+	 * If node is HTTP, @rsync is NULL.
+	 * If node is RRDP, @rsync is the caRepository.
+	 */
+	char const *rsync;
+};
 
 /*
  * This is a delicate structure; pay attention.
@@ -61,13 +85,8 @@ struct cache_table;
  * this must be done through careful coding and review.
  */
 struct cache_node {
-	/*
-	 * Hack: The "url" is a cache identifier, not an actual URL.
-	 * If this is an rsync node, it equals `caRepository`.
-	 * If this is an RRDP node, it's `rpkiNotify\tcaRepository`.
-	 * This allows easy hash table indexing.
-	 */
-	struct cache_mapping map;
+	struct node_key key;
+	char *path;
 
 	enum node_state state;
 	/* Result code of recent dl attempt (DLS_FRESH only) */
@@ -155,7 +174,8 @@ delete_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 	if (tbl)
 		HASH_DEL(tbl->nodes, node);
 
-	map_cleanup(&node->map);
+	free(node->key.id);
+	free(node->path);
 	rrdp_state_free(node->rrdp);
 	free(node);
 }
@@ -223,24 +243,17 @@ strip_rsync_module(char const *url)
 static json_t *
 node2json(struct cache_node *node)
 {
-	char *tab;
 	json_t *json;
 
 	json = json_obj_new();
 	if (json == NULL)
 		return NULL;
 
-	tab = strchr(node->map.url, '\t');
-	if (tab == NULL) {
-		if (json_add_str(json, "url", node->map.url))
-			goto fail;
-	} else {
-		if (json_add_strn(json, "notification", node->map.url, tab - node->map.url))
-			goto fail;
-		if (json_add_str(json, "url", tab + 1))
-			goto fail;
-	}
-	if (json_add_str(json, "path", node->map.path))
+	if (node->key.http && json_add_str(json, "http", node->key.http))
+		goto fail;
+	if (node->key.rsync && json_add_str(json, "rsync", node->key.rsync))
+		goto fail;
+	if (json_add_str(json, "path", node->path))
 		goto fail;
 	if (node->dlerr && json_add_int(json, "error", node->dlerr))
 		goto fail;
@@ -429,114 +442,122 @@ cache_setup(void)
 	return 0;
 }
 
-static char *
-ctx2id(char const *rpkiNotify, char const *caRepository)
+static void
+init_rrdp_fallback_key(struct node_key *key, char const *http, char const *rsync)
 {
-	char *result;
-	size_t nlen;
+	size_t hlen, rlen;
 
-	if (rpkiNotify == NULL && caRepository == NULL)
-		return NULL;
-	if (rpkiNotify == NULL)
-		return pstrdup(caRepository);
-	if (caRepository == NULL)
-		return pstrdup(rpkiNotify);
+	hlen = strlen(http);
+	rlen = strlen(rsync);
 
-	nlen = strlen(rpkiNotify);
-	result = pmalloc(nlen + strlen(caRepository) + 2);
-	strcpy(result, rpkiNotify);
-	result[nlen] = '\t';
-	strcpy(result + nlen + 1, caRepository);
+	key->idlen = hlen + rlen + 1;
+	key->id = pmalloc(key->idlen + 1);
+	key->http = key->id;
+	key->rsync = key->id + hlen + 1;
 
-	return result;
+	memcpy(key->id, http, hlen + 1);
+	memcpy(key->id + hlen + 1, rsync, rlen + 1);
+}
+
+static bool
+init_node_key(struct node_key *key, char const *http, char const *rsync)
+{
+	if (http != NULL && rsync != NULL) {
+		init_rrdp_fallback_key(key, http, rsync);
+
+	} else if (rsync != NULL) {
+		key->id = pstrdup(rsync);
+		key->idlen = strlen(key->id);
+		key->http = NULL;
+		key->rsync = key->id;
+
+	} else if (http != NULL) {
+		key->id = pstrdup(http);
+		key->idlen = strlen(key->id);
+		key->http = key->id;
+		key->rsync = NULL;
+
+	} else {
+		return false;
+	}
+
+	return true;
 }
 
 static struct cache_node *
 json2node(json_t *json)
 {
 	struct cache_node *node;
-	char const *notification;
-	char const *url;
+	char const *http;
+	char const *rsync;
 	char const *path;
 	json_t *rrdp;
 	int error;
 
+	error = json_get_str(json, "http", &http);
+	if (error && (error != ENOENT)) {
+		pr_op_debug("http: %s", strerror(error));
+		return NULL;
+	}
+
+	error = json_get_str(json, "rsync", &rsync);
+	if (error && (error != ENOENT)) {
+		pr_op_debug("rsync: %s", strerror(error));
+		return NULL;
+	}
+
 	node = pzalloc(sizeof(struct cache_node));
 
-	error = json_get_str(json, "notification", &notification);
-	switch (error) {
-	case 0:
-		break;
-	case ENOENT:
-		notification = NULL;
-		break;
-	default:
-		pr_op_debug("notification: %s", strerror(error));
-		goto fail1;
-	}
-
-	error = json_get_str(json, "url", &url);
-	switch (error) {
-	case 0:
-		break;
-	case ENOENT:
-		url = NULL;
-		break;
-	default:
-		pr_op_debug("url: %s", strerror(error));
-		goto fail1;
-	}
-
-	node->map.url = ctx2id(notification, url);
-	if (node->map.url == NULL) {
-		pr_op_debug("Tag is missing both notification and url.");
-		goto fail1;
+	if (!init_node_key(&node->key, http, rsync)) {
+		pr_op_debug("JSON node is missing both http and rsync tags.");
+		goto nde;
 	}
 
 	error = json_get_str(json, "path", &path);
 	if (error) {
 		pr_op_debug("path: %s", strerror(error));
-		goto fail2;
+		goto key;
 	}
-	node->map.path = pstrdup(path);
+	node->path = pstrdup(path);
 
 	error = json_get_ts(json, "attempt", &node->attempt_ts);
 	if (error != 0 && error != ENOENT) {
 		pr_op_debug("attempt: %s", strerror(error));
-		goto fail2;
+		goto pth;
 	}
 
 	error = json_get_ts(json, "success", &node->success_ts);
 	if (error != 0 && error != ENOENT) {
 		pr_op_debug("success: %s", strerror(error));
-		goto fail2;
+		goto pth;
 	}
 
 	error = json_get_bigint(json, "mftNum", &node->mft.num);
 	if (error < 0) {
 		pr_op_debug("mftNum: %s", strerror(error));
-		goto fail2;
+		goto pth;
 	}
 
 	error = json_get_ts(json, "mftUpdate", &node->mft.update);
 	if (error < 0) {
 		pr_op_debug("mftUpdate: %s", strerror(error));
-		goto fail3;
+		goto mft;
 	}
 
 	error = json_get_object(json, "rrdp", &rrdp);
 	if (error < 0) {
 		pr_op_debug("rrdp: %s", strerror(error));
-		goto fail3;
+		goto mft;
 	}
-	if (error == 0 && rrdp_json2state(rrdp, node->map.path, &node->rrdp))
-		goto fail3;
+	if (error == 0 && rrdp_json2state(rrdp, node->path, &node->rrdp))
+		goto mft;
 
 	return node;
 
-fail3:	INTEGER_cleanup(&node->mft.num);
-fail2:	map_cleanup(&node->map);
-fail1:	free(node);
+mft:	INTEGER_cleanup(&node->mft.num);
+pth:	free(node->path);
+key:	free(node->key.id);
+nde:	free(node);
 	return NULL;
 }
 
@@ -596,7 +617,6 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 	json_error_t jerr;
 	json_t *root;
 	struct cache_node *node;
-	size_t n;
 
 	if (S_ISDOTS(dir))
 		return;
@@ -624,9 +644,9 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 
 	node = json2node(root);
 	if (node != NULL) {
-		n = strlen(node->map.url);
 		// XXX worry about dupes
-		HASH_ADD_KEYPTR(hh, tbl->nodes, node->map.url, n, node);
+		HASH_ADD_KEYPTR(hh, tbl->nodes, node->key.id, node->key.idlen,
+		    node);
 	}
 
 	pr_clutter("%s: Loaded.", filename);
@@ -730,7 +750,7 @@ static int
 dl_rsync(struct cache_node *module)
 {
 	int error;
-	error = rsync_queue(module->map.url, module->map.path);
+	error = rsync_queue(module->key.rsync, module->path);
 	return error ? error : EBUSY;
 }
 
@@ -740,8 +760,8 @@ dl_rrdp(struct cache_node *notif)
 	bool changed;
 	int error;
 
-	error = rrdp_update(&notif->map, notif->success_ts, &changed,
-	    &notif->rrdp);
+	error = rrdp_update(notif->key.http, notif->path, notif->success_ts,
+	    &changed, &notif->rrdp);
 	if (error)
 		return error;
 
@@ -756,7 +776,7 @@ dl_http(struct cache_node *file)
 	bool changed;
 	int error;
 
-	error = http_download(file->map.url, file->map.path,
+	error = http_download(file->key.http, file->path,
 	    file->success_ts, &changed);
 	if (error)
 		return error;
@@ -776,27 +796,34 @@ find_node(struct cache_table *tbl, char const *url, size_t urlen)
 }
 
 static struct cache_node *
-provide_node(struct cache_table *tbl, char const *url)
+provide_node(struct cache_table *tbl, char const *http, char const *rsync)
 {
-	size_t urlen;
+	struct node_key key;
 	struct cache_node *node;
 
-	urlen = strlen(url);
-	node = find_node(tbl, url, urlen);
-	if (node)
-		return node;
-
-	node = pzalloc(sizeof(struct cache_node));
-	node->map.url = pstrdup(url);
-	node->map.path = cseq_next(&tbl->seq);
-	if (!node->map.path) {
-		free(node->map.url);
-		free(node);
+	if (!init_node_key(&key, http, rsync)) {
+		pr_val_debug("Can't build node identifier: Both HTTP and rsync URLs are NULL.");
 		return NULL;
 	}
-	HASH_ADD_KEYPTR(hh, tbl->nodes, node->map.url, urlen, node);
 
+	node = find_node(tbl, key.id, key.idlen);
+	if (node) {
+		free(key.id);
+		return node;
+	}
+
+	node = pzalloc(sizeof(struct cache_node));
+	node->key = key;
+	node->path = cseq_next(&tbl->seq);
+	if (!node->path) {
+		free(node);
+		free(key.id);
+		return NULL;
+	}
+
+	HASH_ADD_KEYPTR(hh, tbl->nodes, node->key.id, node->key.idlen, node);
 	return node;
+
 }
 
 static void
@@ -805,7 +832,7 @@ rm_metadata(struct cache_node *node)
 	char *filename;
 	int error;
 
-	filename = str_concat(node->map.path, ".json");
+	filename = str_concat(node->path, ".json");
 	pr_op_debug("rm %s", filename);
 	if (unlink(filename) < 0) {
 		error = errno;
@@ -827,7 +854,7 @@ write_metadata(struct cache_node *node)
 	json = node2json(node);
 	if (!json)
 		return;
-	filename = str_concat(node->map.path, ".json");
+	filename = str_concat(node->path, ".json");
 
 	pr_op_debug("echo \"$json\" > %s", filename);
 	if (json_dump_file(json, filename, JSON_INDENT(2)))
@@ -860,11 +887,11 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 		if (module == NULL)
 			return EINVAL;
 		mutex_lock(&tbl->lock);
-		node = provide_node(tbl, module);
+		node = provide_node(tbl, NULL, module);
 		free(module);
 	} else {
 		mutex_lock(&tbl->lock);
-		node = provide_node(tbl, uri);
+		node = provide_node(tbl, uri, NULL);
 	}
 	if (!node) {
 		mutex_unlock(&tbl->lock);
@@ -918,36 +945,18 @@ ongoing:	mutex_unlock(&tbl->lock);
 	return 0;
 }
 
-static char *
-get_rrdp_fallback_key(char const *context, char const *caRepository)
-{
-	char *key;
-	size_t keylen;
-	int written;
-
-	keylen = strlen(context) + strlen(caRepository) + 2;
-	key = pmalloc(keylen);
-
-	written = snprintf(key, keylen, "%s\t%s", context, caRepository);
-	if (written != keylen - 1)
-		pr_crit("find_rrdp_fallback_node: %zu %d %s %s",
-		    keylen, written, context, caRepository);
-
-	return key;
-}
-
 static struct cache_node *
 find_rrdp_fallback_node(struct sia_uris *sias)
 {
-	char *key;
+	struct node_key key;
 	struct cache_node *result;
 
 	if (!sias->rpkiNotify || !sias->caRepository)
 		return NULL;
 
-	key = get_rrdp_fallback_key(sias->rpkiNotify, sias->caRepository);
-	result = find_node(&cache.fallback, key, strlen(key));
-	free(key);
+	init_rrdp_fallback_key(&key, sias->rpkiNotify, sias->caRepository);
+	result = find_node(&cache.fallback, key.id, key.idlen);
+	free(key.id);
 
 	return result;
 }
@@ -983,7 +992,7 @@ cache_refresh_by_url(char const *url)
 	else if (url_is_rsync(url))
 		do_refresh(&cache.rsync, url, &node);
 
-	return node ? node->map.path : NULL;
+	return node ? node->path : NULL;
 }
 
 /*
@@ -1008,7 +1017,7 @@ cache_get_fallback(char const *url)
 		return NULL;
 	}
 
-	return node->map.path;
+	return node->path;
 }
 
 /*
@@ -1074,7 +1083,7 @@ node2file(struct cache_node const *node, char const *url)
 	// XXX RRDP is const, rsync needs to be freed
 	return (node->rrdp)
 	    ? /* RRDP  */ rrdp_file(node->rrdp, url)
-	    : /* rsync */ path_join(node->map.path, strip_rsync_module(url));
+	    : /* rsync */ path_join(node->path, strip_rsync_module(url));
 }
 
 char const *
@@ -1210,7 +1219,8 @@ cachent_print(struct cache_node *node)
 	if (!node)
 		return;
 
-	printf("\t%s (%s): ", node->map.url, node->map.path);
+	printf("\thttp:%s rsync:%s (%s): ", node->key.http, node->key.rsync,
+	    node->path);
 	switch (node->state) {
 	case DLS_OUTDATED:
 		printf("stale ");
@@ -1278,7 +1288,7 @@ commit_rpp(struct cache_commit *commit, struct cache_node *fb)
 		 * Note, this is accidentally working perfectly for rsync too.
 		 * Might want to rename some of this.
 		 */
-		dst = rrdp_create_fallback(fb->map.path, &fb->rrdp, src->url);
+		dst = rrdp_create_fallback(fb->path, &fb->rrdp, src->url);
 		if (!dst)
 			goto skip;
 
@@ -1298,7 +1308,7 @@ discard_trash(struct cache_commit *commit, struct cache_node *fallback)
 	char *file_path;
 	array_index i;
 
-	dir = opendir(fallback->map.path);
+	dir = opendir(fallback->path);
 	if (dir == NULL) {
 		pr_op_err("opendir() error: %s", strerror(errno));
 		return;
@@ -1313,7 +1323,7 @@ discard_trash(struct cache_commit *commit, struct cache_node *fallback)
 		 * and maybe skip @file_path's reallocation.
 		 */
 
-		file_path = path_join(fallback->map.path, file->d_name);
+		file_path = path_join(fallback->path, file->d_name);
 
 		for (i = 0; i < commit->nfiles; i++) {
 			if (commit->files[i].path == NULL)
@@ -1359,24 +1369,16 @@ commit_fallbacks(time_t now)
 			pr_op_debug("Creating fallback for %s (%s)",
 			    commit->caRepository, commit->rpkiNotify);
 
-			if (commit->rpkiNotify) {
-				char *key;
-				key = get_rrdp_fallback_key(commit->rpkiNotify,
-				    commit->caRepository);
-				fb = provide_node(&cache.fallback, key);
-				free(key);
-			} else {
-				fb = provide_node(&cache.fallback,
-				    commit->caRepository);
-			}
+			fb = provide_node(&cache.fallback, commit->rpkiNotify,
+			    commit->caRepository);
 			fb->success_ts = now;
 
-			pr_op_debug("mkdir -f %s", fb->map.path);
-			if (mkdir(fb->map.path, CACHE_FILEMODE) < 0) {
+			pr_op_debug("mkdir -f %s", fb->path);
+			if (mkdir(fb->path, CACHE_FILEMODE) < 0) {
 				error = errno;
 				if (error != EEXIST) {
 					pr_op_err("Cannot create '%s': %s",
-					    fb->map.path, strerror(error));
+					    fb->path, strerror(error));
 					goto skip;
 				}
 
@@ -1391,12 +1393,12 @@ commit_fallbacks(time_t now)
 
 			pr_op_debug("Creating fallback for %s", map->url);
 
-			fb = provide_node(&cache.fallback, map->url);
+			fb = provide_node(&cache.fallback, map->url, NULL);
 			fb->success_ts = now;
 			if (is_fallback(map->path))
 				goto freshen;
 
-			file_ln(map->path, fb->map.path);
+			file_ln(map->path, fb->path);
 		}
 
 		write_metadata(fb);
@@ -1425,7 +1427,7 @@ remove_abandoned(struct cache_table *table, struct cache_node *node, void *arg)
 	now = *((time_t *)arg);
 	if (difftime(node->attempt_ts + cfg_cache_threshold(), now) < 0) {
 		rm_metadata(node);
-		file_rm_rf(node->map.path);
+		file_rm_rf(node->path);
 		delete_node(table, node, NULL);
 	}
 }
@@ -1434,8 +1436,8 @@ static void
 remove_orphaned_nodes(struct cache_table *table, struct cache_node *node,
     void *arg)
 {
-	if (file_exists(node->map.path) == ENOENT) {
-		pr_op_debug("Missing file; deleting node: %s", node->map.path);
+	if (file_exists(node->path) == ENOENT) {
+		pr_op_debug("Missing file; deleting node: %s", node->path);
 		delete_node(table, node, NULL);
 	}
 }

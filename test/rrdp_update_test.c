@@ -76,16 +76,14 @@ ck_state(char const *session, char const *serial, unsigned long seq_id,
 
 START_TEST(startup)
 {
-	struct cache_mapping notif;
+	static char const *URL = "https://host/notification.xml";
+	static char const *PATH = "rrdp/0";
 	struct cache_sequence seq;
 	struct rrdp_state *state = NULL;
 	struct cache_mapping maps[4];
 	bool changed;
 
 	setup_test();
-
-	notif.url = "https://host/notification.xml";
-	notif.path = "rrdp/0";
 
 	seq.prefix = "rrdp";
 	seq.next_id = 1;
@@ -100,7 +98,7 @@ START_TEST(startup)
 	dls[2] = NULL;
 	https_counter = 0;
 
-	ck_assert_int_eq(0, rrdp_update(&notif, 0, &changed, &state));
+	ck_assert_int_eq(0, rrdp_update(URL, PATH, 0, &changed, &state));
 	ck_assert_uint_eq(2, https_counter);
 	ck_assert_uint_eq(true, changed);
 	ck_file("rrdp/0/0"); /* "rrdp/<first-cage>/<c.cer>" */
@@ -113,7 +111,7 @@ START_TEST(startup)
 	/* Attempt to update, server hasn't changed anything. */
 	dls[1] = NULL; /* Snapshot should not redownload */
 	https_counter = 0;
-	ck_assert_int_eq(0, rrdp_update(&notif, 0, &changed, &state));
+	ck_assert_int_eq(0, rrdp_update(URL, PATH, 0, &changed, &state));
 	ck_assert_uint_eq(1, https_counter);
 	ck_assert_uint_eq(false, changed);
 	ck_file("rrdp/0/0");

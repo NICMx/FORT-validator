@@ -275,8 +275,10 @@ static void
 init_node_rsync(struct cache_node *node, char *url, char *path,
     int fresh, int dlerr)
 {
-	node->map.url = url;
-	node->map.path = path;
+	node->key.id = url;
+	node->key.idlen = strlen(url);
+	node->key.rsync = url;
+	node->path = path;
 	node->state = fresh ? DLS_FRESH : DLS_OUTDATED; /* XXX (test) */
 	node->dlerr = dlerr;
 	node->rrdp = NULL;
@@ -286,18 +288,35 @@ static void
 init_node_https(struct cache_node *node, char *url, char *path,
     int fresh, int dlerr)
 {
-	node->map.url = url;
-	node->map.path = path;
+	node->key.id = url;
+	node->key.idlen = strlen(url);
+	node->key.http = url;
+	node->path = path;
 	node->state = fresh ? DLS_FRESH : DLS_OUTDATED;
 	node->dlerr = dlerr;
 	node->rrdp = NULL;
 }
 
 static void
+ck_node_key(struct node_key *expected, struct node_key *actual)
+{
+	if (expected->http)
+		ck_assert_str_eq(expected->http, actual->http);
+	else
+		ck_assert_ptr_eq(NULL, actual->http);
+	if (expected->rsync)
+		ck_assert_str_eq(expected->rsync, actual->rsync);
+	else
+		ck_assert_ptr_eq(NULL, actual->rsync);
+	ck_assert_uint_eq(expected->idlen, actual->idlen);
+	ck_assert_mem_eq(expected->id, actual->id, expected->idlen);
+}
+
+static void
 ck_cache_node_eq(struct cache_node *expected, struct cache_node *actual)
 {
-	ck_assert_str_eq(expected->map.url, actual->map.url);
-	ck_assert_str_eq(expected->map.path, actual->map.path);
+	ck_node_key(&expected->key, &actual->key);
+	ck_assert_str_eq(expected->path, actual->path);
 	ck_assert_int_eq(expected->state, actual->state);
 	ck_assert_int_eq(expected->dlerr, actual->dlerr);
 	if (expected->rrdp == NULL)
@@ -311,7 +330,7 @@ ck_cache(struct cache_node *expecteds, struct cache_table *tbl)
 	struct cache_node *actual, *tmp;
 	unsigned int n;
 
-	for (n = 0; expecteds[n].map.url != NULL; n++)
+	for (n = 0; expecteds[n].key.id != NULL; n++)
 		;
 	ck_assert_uint_eq(n, HASH_COUNT(tbl->nodes));
 
@@ -874,9 +893,8 @@ ck_json(struct cache_node *src)
 	dst = json2node(json);
 	json_decref(json);
 
-	ck_assert_ptr_ne(NULL, dst);
-	ck_assert_str_eq(src->map.url, dst->map.url);
-	ck_assert_str_eq(src->map.path, dst->map.path);
+	ck_node_key(&src->key, &dst->key);
+	ck_assert_str_eq(src->path, dst->path);
 	ck_assert_int_eq(DLS_OUTDATED, dst->state);	/* Must be reset */
 	ck_assert_int_eq(0, dst->dlerr);		/* Must be reset */
 	ck_assert_int_eq(src->attempt_ts, dst->attempt_ts);
@@ -893,8 +911,10 @@ START_TEST(test_json_min)
 {
 	struct cache_node *node = pzalloc(sizeof(struct cache_node));
 
-	node->map.url = pstrdup("https://a.b.c/sample.cer");
-	node->map.path = pstrdup("tmp/sample.cer");
+	node->key.id = pstrdup("https://a.b.c/sample.cer");
+	node->key.idlen = strlen(node->key.id);
+	node->key.http = node->key.id;
+	node->path = pstrdup("tmp/sample.cer");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;
 
@@ -905,8 +925,10 @@ START_TEST(test_json_rrdp_min)
 {
 	struct cache_node *node = pzalloc(sizeof(struct cache_node));
 
-	node->map.url = pstrdup("https://a.b.c/sample.cer");
-	node->map.path = pstrdup("rrdp/123");
+	node->key.id = pstrdup("https://a.b.c/sample.cer");
+	node->key.idlen = strlen(node->key.id);
+	node->key.http = node->key.id;
+	node->path = pstrdup("rrdp/123");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;
 
@@ -917,7 +939,7 @@ START_TEST(test_json_rrdp_min)
 	BN_add_word(node->rrdp->session.serial.num, 1357);
 	node->rrdp->session.serial.str = pstrdup("1357");
 	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/e.mft"), pstrdup("rrdp/123/0"));
-	cseq_init(&node->rrdp->seq, node->map.path, 1, false);
+	cseq_init(&node->rrdp->seq, node->path, 1, false);
 	STAILQ_INIT(&node->rrdp->delta_hashes);
 
 	ck_json(node);
@@ -928,8 +950,10 @@ START_TEST(test_json_max)
 	struct cache_node *node = pzalloc(sizeof(struct cache_node));
 	struct rrdp_hash *hash;
 
-	node->map.url = pstrdup("https://a.b.c/sample.cer");
-	node->map.path = pstrdup("rrdp/123");
+	node->key.id = pstrdup("https://a.b.c/sample.cer");
+	node->key.idlen = strlen(node->key.id);
+	node->key.http = node->key.id;
+	node->path = pstrdup("rrdp/123");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;
 	node->attempt_ts = 1234;
@@ -945,7 +969,7 @@ START_TEST(test_json_max)
 	node->rrdp->session.serial.str = pstrdup("1357");
 	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/e.mft"), pstrdup("rrdp/123/0"));
 	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/f.crl"), pstrdup("rrdp/123/1"));
-	cseq_init(&node->rrdp->seq, node->map.path, 2, false);
+	cseq_init(&node->rrdp->seq, node->path, 2, false);
 	STAILQ_INIT(&node->rrdp->delta_hashes);
 	hash = pmalloc(sizeof(struct rrdp_hash));
 	memset(&hash->bytes, 1, sizeof(hash->bytes));
@@ -959,10 +983,18 @@ START_TEST(test_json_max)
 
 START_TEST(test_json_weirdurl)
 {
+	static char const *NOTIF = "https://a.b.c/notif.xml";
+	static char const *CAREPO = "rsync://a.b.c/rpp";
+
 	struct cache_node *node = pzalloc(sizeof(struct cache_node));
 
-	node->map.url = pstrdup("https://a.b.c/notif.xml\trsync://a.b.c/rpp");
-	node->map.path = pstrdup("tmp/sample.cer");
+	node->key.idlen = strlen(NOTIF) + strlen(CAREPO) + 1;
+	node->key.id = pmalloc(node->key.idlen + 1);
+	strcpy(node->key.id, NOTIF);
+	strcpy(node->key.id + strlen(NOTIF) + 1, CAREPO);
+	node->key.http = node->key.id;
+	node->key.rsync = node->key.id + strlen(NOTIF) + 1;
+	node->path = pstrdup("tmp/sample.cer");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;
 	node->attempt_ts = 1234;

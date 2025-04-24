@@ -6,11 +6,10 @@
 #include <time.h>
 
 #include "file.h"
-#include "types/map.h"
 
 struct rrdp_state;
 
-int rrdp_update(struct cache_mapping const *, time_t, bool *,
+int rrdp_update(char const *, char const *, time_t, bool *,
     struct rrdp_state **);
 char const *rrdp_file(struct rrdp_state const *, char const *);
 
