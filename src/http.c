@@ -219,7 +219,7 @@ validate_file_size(struct write_callback_arg *args)
 
 static int
 get_http_response_code(struct http_handler *handler, long *http_code,
-    char const *uri)
+    struct uri const *uri)
 {
 	CURLcode res;
 
@@ -228,7 +228,7 @@ get_http_response_code(struct http_handler *handler, long *http_code,
 	if (res != CURLE_OK) {
 		return pr_op_err_st("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). "
 		    "I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
-		    res, curl_err_string(handler, res), uri);
+		    res, curl_err_string(handler, res), uri_str(uri));
 	}
 
 	return 0;
@@ -245,6 +245,24 @@ handle_http_response_code(long http_code)
 	return -EINVAL; /* Do not retry */
 }
 
+static int
+check_same_origin(struct uri const *src, char const *redirect)
+{
+	struct uri redirect_url;
+	int error;
+
+	error = uri_init(&redirect_url, redirect);
+	if (error)
+		return error;
+
+	if (!uri_same_origin(src, &redirect_url))
+		error = pr_val_err("%s is redirecting to %s; disallowing because of different origin.",
+		    uri_str(src), uri_str(&redirect_url));
+
+	uri_cleanup(&redirect_url);
+	return error;
+}
+
 /*
  * Download @src into @dst; HTTP assumed.
  *
@@ -256,7 +274,8 @@ handle_http_response_code(long http_code)
  * If @changed is not NULL, initialize it to false.
  */
 int
-http_download(char const *src, char const *dst, curl_off_t ims, bool *changed)
+http_download(struct uri const *src, char const *dst,
+    curl_off_t ims, bool *changed)
 {
 	struct http_handler handler;
 	struct write_callback_arg args;
@@ -266,7 +285,7 @@ http_download(char const *src, char const *dst, curl_off_t ims, bool *changed)
 	unsigned int r;
 	int error;
 
-	pr_val_info("HTTP GET: %s -> %s", src, dst);
+	pr_val_info("HTTP GET: %s -> %s", uri_str(src), dst);
 
 	error = http_easy_init(&handler, ims);
 	if (error)
@@ -277,7 +296,8 @@ http_download(char const *src, char const *dst, curl_off_t ims, bool *changed)
 
 	do {
 		handler.errbuf[0] = 0;
-		setopt_str(handler.curl, CURLOPT_URL, (redirect != NULL) ? redirect : src);
+		setopt_str(handler.curl, CURLOPT_URL,
+		    (redirect != NULL) ? redirect : uri_str(src));
 
 		args.total_bytes = 0;
 		args.error = 0;
@@ -288,7 +308,8 @@ http_download(char const *src, char const *dst, curl_off_t ims, bool *changed)
 		res = curl_easy_perform(handler.curl); /* write_callback() */
 		if (args.file != NULL)
 			file_close(args.file);
-		pr_val_debug("Done. Total bytes transferred: %zu", args.total_bytes);
+		pr_val_debug("Done. Total bytes transferred: %zu",
+		    args.total_bytes);
 
 		args.error = validate_file_size(&args);
 		if (args.error) {
@@ -339,7 +360,8 @@ http_download(char const *src, char const *dst, curl_off_t ims, bool *changed)
 			redirect = NULL;
 		}
 
-		res = curl_easy_getinfo(handler.curl, CURLINFO_REDIRECT_URL, &redirect);
+		res = curl_easy_getinfo(handler.curl, CURLINFO_REDIRECT_URL,
+		    &redirect);
 		if (res != CURLE_OK) {
 			error = pr_op_err("curl_easy_getinfo(CURLINFO_REDIRECT_URL) returned %u.", res);
 			redirect = NULL;
@@ -348,19 +370,15 @@ http_download(char const *src, char const *dst, curl_off_t ims, bool *changed)
 
 		if (redirect == NULL)
 			break;
-		if (!url_same_origin(src, redirect)) {
-			error = pr_val_err("%s is redirecting to %s; disallowing because of different origin.",
-			   src, redirect);
-			redirect = NULL;
-			goto end;
-		}
-
 		r++;
 		if (r > config_get_max_redirs()) {
 			error = pr_val_err("Too many redirects.");
 			redirect = NULL;
 			goto end;
 		}
+		error = check_same_origin(src, redirect);
+		if (error)
+			goto end;
 
 		/* The original redirect is destroyed during the next curl_easy_perform(). */
 		redirect = pstrdup(redirect);

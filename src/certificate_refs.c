@@ -7,33 +7,30 @@
 #include "log.h"
 
 int
-validate_cdp(struct sia_uris *sias, char const *crl_url)
+validate_cdp(struct sia_uris const *sias, struct uri const *crl_url)
 {
-	if (sias->crldp == NULL)
+	if (uri_str(&sias->crldp) == NULL)
 		pr_crit("Certificate's CRL Distribution Point was not recorded.");
-
-	if (crl_url == NULL)
+	if (uri_str(crl_url) == NULL)
 		pr_crit("Manifest's CRL was not recorded.");
 
-	if (strcmp(sias->crldp, crl_url) != 0) {
+	if (uri_equals(&sias->crldp, crl_url) != 0) {
 		return pr_val_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
-		    sias->crldp, crl_url);
+		    uri_str(&sias->crldp), uri_str(crl_url));
 	}
 
 	return 0;
 }
 
 static int
-validate_signedObject(struct sia_uris *sias, char const *url)
+validate_signedObject(struct sia_uris const *sias, struct uri const *url)
 {
-	if (sias->signedObject == NULL)
+	if (uri_str(&sias->signedObject) == NULL)
 		pr_crit("Certificate's signedObject was not recorded.");
 
-	/* XXX the left one is no longer normalized */
-	if (strcmp(sias->signedObject, url) != 0) {
+	if (!uri_equals(&sias->signedObject, url))
 		return pr_val_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
-		    sias->signedObject, url);
-	}
+		    uri_str(&sias->signedObject), uri_str(url));
 
 	return 0;
 }
@@ -46,7 +43,8 @@ validate_signedObject(struct sia_uris *sias, char const *url)
  * @url: URL of the signed object that contains the EE certificate.
  */
 int
-refs_validate_ee(struct sia_uris *sias, char const *crl_url, char const *url)
+refs_validate_ee(struct sia_uris const *sias, struct uri const *crl_url,
+    struct uri const *url)
 {
 	int error;
 

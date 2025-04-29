@@ -148,3 +148,10 @@ ck_assert_str(char const *expected, char const *actual)
 	else
 		ck_assert_ptr_eq(NULL, actual);
 }
+
+void
+ck_assert_uri(char const *expected, struct uri const *actual)
+{
+	ck_assert_str_eq(expected, uri_str(actual));
+	ck_assert_uint_eq(strlen(expected), uri_len(actual));
+}

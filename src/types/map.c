@@ -10,11 +10,11 @@ map_get_printable(struct cache_mapping const *map, enum filename_format format)
 {
 	switch (format) {
 	case FNF_GLOBAL:
-		return map->url;
+		return uri_str(&map->url);
 	case FNF_LOCAL:
 		return map->path;
 	case FNF_NAME:
-		return path_filename(map->url);
+		return path_filename(uri_str(&map->url));
 	}
 
 	pr_crit("Unknown file name format: %u", format);
@@ -36,13 +36,13 @@ map_op_get_printable(struct cache_mapping const *map)
 void
 map_copy(struct cache_mapping *dst, struct cache_mapping const *src)
 {
-	dst->url = pstrdup(src->url);
+	uri_copy(&dst->url, &src->url);
 	dst->path = pstrdup(src->path);
 }
 
 void
 map_cleanup(struct cache_mapping *map)
 {
-	free(map->url);
+	uri_cleanup(&map->url);
 	free(map->path);
 }

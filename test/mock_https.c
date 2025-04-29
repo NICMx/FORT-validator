@@ -8,7 +8,8 @@ static char const *dls[8];
 static unsigned int https_counter; /* Times http_download() was called */
 
 int
-http_download(char const *url, char const *path, curl_off_t ims, bool *changed)
+http_download(struct uri const *url, char const *path,
+    curl_off_t ims, bool *changed)
 {
 	char const *content;
 
@@ -20,7 +21,7 @@ http_download(char const *url, char const *path, curl_off_t ims, bool *changed)
 		return dl_error;
 	}
 
-	printf("Simulating HTTP download: %s -> %s\n", url, path);
+	printf("Simulating HTTP download: %s -> %s\n", uri_str(url), path);
 
 	content = dls[https_counter++];
 	if (!content)

@@ -1,12 +1,12 @@
 #ifndef SRC_TYPES_MAP_H_
 #define SRC_TYPES_MAP_H_
 
+#include "types/url.h"
+
 // XXX document this better
 struct cache_mapping {
-	/* Normalized, ASCII-only, NULL-terminated. */
-	char *url;
-	/* Normalized, ASCII-only, NULL-terminated. */
-	char *path;
+	struct uri url;		/* Normalized */
+	char *path;		/* Normalized */
 };
 
 char const *map_val_get_printable(struct cache_mapping const *);

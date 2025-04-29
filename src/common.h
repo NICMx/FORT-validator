@@ -7,8 +7,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-/* "I think this is not supposed to be implemented." */
-#define ENOTSUPPORTED 3172
 /* "I haven't implemented this yet." */
 #define ENOTIMPLEMENTED 3173
 

@@ -7,12 +7,17 @@
 static int
 fetch_url(char const *url, char const *filename)
 {
+	struct uri uri;
 	char *path;
 	int error;
 
+	error = uri_init(&uri, url);
+	if (error)
+		return error;
+
 	path = path_join(config_get_tal(), filename);
 
-	error = http_download(url, path, 0, NULL);
+	error = http_download(&uri, path, 0, NULL);
 	if (error) {
 		fprintf(stderr, "Couldn't fetch '%s': %s\n",
 		    path, strerror(abs(error)));
@@ -21,6 +26,7 @@ fetch_url(char const *url, char const *filename)
 
 	fprintf(stdout, "Successfully fetched '%s'!\n\n", path);
 end:	free(path);
+	uri_cleanup(&uri);
 	return error;
 }
 

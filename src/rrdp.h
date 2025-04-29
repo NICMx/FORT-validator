@@ -6,14 +6,16 @@
 #include <time.h>
 
 #include "file.h"
+#include "types/url.h"
 
 struct rrdp_state;
 
-int rrdp_update(char const *, char const *, time_t, bool *,
+int rrdp_update(struct uri const *, char const *, time_t, bool *,
     struct rrdp_state **);
-char const *rrdp_file(struct rrdp_state const *, char const *);
+char const *rrdp_file(struct rrdp_state const *, struct uri const *);
 
-char const *rrdp_create_fallback(char *, struct rrdp_state **, char const *);
+char const *rrdp_create_fallback(char *, struct rrdp_state **,
+    struct uri const *);
 
 json_t *rrdp_state2json(struct rrdp_state *);
 int rrdp_json2state(json_t *, char *, struct rrdp_state **);

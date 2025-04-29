@@ -1,6 +1,7 @@
 #include "types/url.h"
 
 #include <curl/curl.h>
+#include <errno.h>
 
 #include "alloc.h"
 #include "common.h"
@@ -8,15 +9,15 @@
 #include "types/path.h"
 
 bool
-url_is_rsync(char const *url)
+uri_is_rsync(struct uri const *url)
 {
-	return str_starts_with(url, "rsync://");
+	return str_starts_with(url->_str, "rsync://");
 }
 
 bool
-url_is_https(char const *url)
+uri_is_https(struct uri const *url)
 {
-	return str_starts_with(url, "https://");
+	return str_starts_with(url->_str, "https://");
 }
 
 /*
@@ -55,11 +56,11 @@ validate_url_characters(char const *str)
  * whose implementation is somewhat flawed (at least until version 8.12.1):
  * https://github.com/curl/curl/issues/16829
  *
- * On the other hand, since Fort 2 no longer maps URI paths to literal local
- * paths, all normalization does for us is prevent some theoretical redundant
- * downloading, so it might not even be that necessary.
+ * That said, since Fort 2 no longer maps URI paths to literal local paths, all
+ * normalization does for us is prevent some theoretical redundant downloading,
+ * so it's fine.
  */
-char *
+static char *
 url_normalize(char const *url)
 {
 	CURLU *curlu;
@@ -99,21 +100,80 @@ einval:	pr_val_err("Error parsing URL: %s", curl_url_strerror(err));
 	return NULL;
 }
 
-char *
-url_parent(char const *child)
+int
+uri_init(struct uri *url, char const *str)
 {
-	char *slash = strrchr(child, '/');
-	return (slash != NULL) ? pstrndup(child, slash - child) : NULL;
+	str = url_normalize(str);
+	if (!str)
+		return EINVAL;
+
+	__URI_INIT(url, str);
+	return 0;
+}
+
+/* @str must already be normalized. */
+void
+__uri_init(struct uri *url, char const *str, size_t len)
+{
+	url->_str = (char *)str;
+	url->_len = len;
+}
+
+void
+uri_copy(struct uri *dst, struct uri const *src)
+{
+	dst->_str = src->_str ? pstrdup(src->_str) : NULL;
+	dst->_len = src->_len;
+}
+
+void
+uri_cleanup(struct uri *url)
+{
+	free(url->_str);
+	url->_str = NULL;
 }
 
 bool
-url_same_origin(char const *url1, char const *url2)
+uri_equals(struct uri const *u1, struct uri const *u2)
 {
+	return (u1->_len == u2->_len)
+	    ? (memcmp(u1->_str, u2->_str, u1->_len) == 0)
+	    : false;
+}
+
+bool
+uri_has_extension(struct uri const *url, char const *ext)
+{
+	return strcmp(url->_str + url->_len - strlen(ext), ext) == 0;
+}
+
+/* Result is a shallow copy; do not clean. */
+int
+uri_parent(struct uri const *child, struct uri *parent)
+{
+	char *slash;
+
+	slash = strrchr(child->_str, '/');
+	if (slash == NULL)
+		return EINVAL;
+
+	parent->_str = child->_str;
+	parent->_len = slash - child->_str;
+	return 0;
+}
+
+bool
+uri_same_origin(struct uri const *uri1, struct uri const *uri2)
+{
+	char const *str1, *str2;
 	size_t c, slashes;
 
+	str1 = uri1->_str;
+	str2 = uri2->_str;
 	slashes = 0;
-	for (c = 0; url1[c] == url2[c]; c++) {
-		switch (url1[c]) {
+
+	for (c = 0; str1[c] == str2[c]; c++) {
+		switch (str1[c]) {
 		case '/':
 			slashes++;
 			if (slashes == 3)
@@ -124,10 +184,29 @@ url_same_origin(char const *url1, char const *url2)
 		}
 	}
 
-	if (url1[c] == '\0')
-		return (slashes == 2) && url2[c] == '/';
-	if (url2[c] == '\0')
-		return (slashes == 2) && url1[c] == '/';
+	if (str1[c] == '\0')
+		return (slashes == 2) && str2[c] == '/';
+	if (str2[c] == '\0')
+		return (slashes == 2) && str1[c] == '/';
 
 	return false;
 }
+
+void
+uri_child(struct uri const *parent, char const *name, size_t len,
+    struct uri *child)
+{
+	size_t slash;
+
+	slash = parent->_str[parent->_len - 1] != '/';
+
+	child->_len = parent->_len + slash + len;
+	child->_str = pmalloc(child->_len + 1);
+	strncpy(child->_str, parent->_str, parent->_len);
+	if (slash)
+		child->_str[parent->_len] = '/';
+	strncpy(child->_str + parent->_len + slash, name, len);
+	child->_str[child->_len] = '\0';
+}
+
+DEFINE_ARRAY_LIST_FUNCTIONS(uris, struct uri, )

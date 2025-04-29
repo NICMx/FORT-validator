@@ -65,25 +65,34 @@ START_TEST(test_normalize)
 }
 END_TEST
 
+#define ck_assert_origin(expected, s1, s2)				\
+	do {								\
+		__URI_INIT(&u1, s1);					\
+		__URI_INIT(&u2, s2);					\
+		ck_assert_int_eq(expected, uri_same_origin(&u1, &u2));	\
+	} while (0)
+
 START_TEST(test_same_origin)
 {
-	ck_assert_int_eq(true,	url_same_origin("https://a.b.c/d/e/f",	"https://a.b.c/g/h/i"));
-	ck_assert_int_eq(false,	url_same_origin("https://a.b.cc/d/e/f",	"https://a.b.c/g/h/i"));
-	ck_assert_int_eq(false,	url_same_origin("https://a.b.c/d/e/f",	"https://a.b.cc/g/h/i"));
-	ck_assert_int_eq(true,	url_same_origin("https://a.b.c",	"https://a.b.c"));
-	ck_assert_int_eq(true,	url_same_origin("https://a.b.c/",	"https://a.b.c"));
-	ck_assert_int_eq(true,	url_same_origin("https://a.b.c",	"https://a.b.c/"));
-	ck_assert_int_eq(true,	url_same_origin("https://",		"https://"));
-	ck_assert_int_eq(false,	url_same_origin("https://",		"https://a"));
-	ck_assert_int_eq(false,	url_same_origin("https://a",		"https://b"));
+	struct uri u1, u2;
+
+	ck_assert_origin(true,	"https://a.b.c/d/e/f",	"https://a.b.c/g/h/i");
+	ck_assert_origin(false,	"https://a.b.cc/d/e/f",	"https://a.b.c/g/h/i");
+	ck_assert_origin(false,	"https://a.b.c/d/e/f",	"https://a.b.cc/g/h/i");
+	ck_assert_origin(true,	"https://a.b.c",	"https://a.b.c");
+	ck_assert_origin(true,	"https://a.b.c/",	"https://a.b.c");
+	ck_assert_origin(true,	"https://a.b.c",	"https://a.b.c/");
+	ck_assert_origin(true,	"https://",		"https://");
+	ck_assert_origin(false,	"https://",		"https://a");
+	ck_assert_origin(false,	"https://a",		"https://b");
 
 	/* Undefined, but manhandle the code anyway */
-	ck_assert_int_eq(false,	url_same_origin("",			""));
-	ck_assert_int_eq(false,	url_same_origin("ht",			"ht"));
-	ck_assert_int_eq(false,	url_same_origin("https:",		"https:"));
-	ck_assert_int_eq(false,	url_same_origin("https:/",		"https:/"));
-	ck_assert_int_eq(false,	url_same_origin("https:/a",		"https:/a"));
-	ck_assert_int_eq(true,	url_same_origin("https:/a/",		"https:/a/"));
+	ck_assert_origin(false,	"",			"");
+	ck_assert_origin(false,	"ht",			"ht");
+	ck_assert_origin(false,	"https:",		"https:");
+	ck_assert_origin(false,	"https:/",		"https:/");
+	ck_assert_origin(false,	"https:/a",		"https:/a");
+	ck_assert_origin(true,	"https:/a/",		"https:/a/");
 }
 END_TEST
 

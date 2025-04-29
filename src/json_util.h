@@ -18,6 +18,7 @@
 
 #include "asn1/asn1c/INTEGER.h"
 #include "file.h"
+#include "types/url.h"
 
 /*
  * Contract of get functions:
@@ -33,6 +34,7 @@ int json_get_ulong(json_t *, char const *, unsigned long *);
 int json_get_bigint(json_t *, char const *, INTEGER_t *);
 int json_get_ts(json_t *, char const *, time_t *);
 int json_get_str(json_t *, char const *, char const **);
+int json_get_uri(json_t *, char const *, struct uri *);
 int json_get_array(json_t *, char const *, json_t **);
 int json_get_object(json_t *, char const *, json_t **);
 

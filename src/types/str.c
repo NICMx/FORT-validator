@@ -1,8 +1,11 @@
 #include "types/str.h"
 
 #include <errno.h>
+#include <string.h>
 #include <openssl/bio.h>
 
+#include "alloc.h"
+#include "array.h"
 #include "log.h"
 #include "types/path.h"
 
@@ -58,10 +61,28 @@ string_clone(void const *string, size_t size)
 int
 ia5s2string(ASN1_IA5STRING *ia5, char **result)
 {
-	if (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT)
-		return pr_val_err("CRL URI IA5String has unused bits.");
+	unsigned char const *data;
+	size_t len;
+	array_index i;
 
-	*result = string_clone(ia5->data, ia5->length);
+	/* Implementation-aware */
+	if (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT) {
+		pr_val_warn("CRL URI IA5String has unused bits.");
+		return EINVAL;
+	}
+
+	/* TODO (asn1c) This might already be done by the asn1 code. */
+	data = ASN1_STRING_get0_data(ia5);
+	len = ASN1_STRING_length(ia5);
+	for (i = 0; i < len; i++)
+		if (data[i] == 0) {
+			pr_val_warn("Null character found in IA5String index %zu. (Length: %zu)",
+			    i, len);
+			return EINVAL;
+		}
+
+	/* No NULL termination guarantee */
+	*result = pstrndup((char const *)data, len);
 	return 0;
 }
 
@@ -171,40 +192,4 @@ token_count(struct string_tokenizer *tokenizer)
 		count++;
 
 	return count;
-}
-
-void
-strlist_init(struct strlist *list)
-{
-	list->array = NULL;
-	list->len = 0;
-	list->capacity = 0;
-}
-
-void
-strlist_add(struct strlist *list, char *str)
-{
-	if (list->array == NULL) {
-		list->capacity = 8;
-		list->array = pmalloc(list->capacity * sizeof(char *));
-	}
-
-	list->len++;
-	while (list->len >= list->capacity) {
-		list->capacity *= 2;
-		list->array = prealloc(list->array,
-		    list->capacity * sizeof(char *));
-	}
-
-	list->array[list->len - 1] = str;
-}
-
-/* Call strlist_init() again if you want to reuse the list. */
-void
-strlist_cleanup(struct strlist *list)
-{
-	array_index i;
-	for (i = 0; i < list->len; i++)
-		free(list->array[i]);
-	free(list->array);
 }

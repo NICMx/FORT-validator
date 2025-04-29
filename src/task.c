@@ -143,7 +143,7 @@ task_enqueue_rpp(struct cache_mapping *map, struct rpki_certificate *parent)
 	atomic_fetch_add(&parent->refcount, 1);
 
 	ca = pzalloc(sizeof(struct rpki_certificate));
-	ca->map.url = pstrdup(map->url);
+	uri_copy(&ca->map.url, &map->url);
 	ca->map.path = pstrdup(map->path);
 	ca->parent = parent;
 	atomic_init(&ca->refcount, 1);
@@ -231,7 +231,7 @@ task_dequeue(struct validation_task *prev)
 			STAILQ_REMOVE_HEAD(&waiting, lh);
 			mutex_unlock(&lock);
 			pr_op_debug("task_dequeue(): Claimed task '%s'.",
-			    task->u.ca->map.url);
+			    uri_str(&task->u.ca->map.url));
 			return task;
 		}
 

@@ -233,7 +233,7 @@ roa_traverse(struct cache_mapping *map, struct rpki_certificate *parent)
 	error = __handle_roa(roa, ee.resources);
 	if (error)
 		goto end4;
-	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, map->url);
+	error = refs_validate_ee(&ee.sias, &parent->rpp.crl.map->url, &map->url);
 
 end4:	rpki_certificate_cleanup(&ee);
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);

@@ -78,7 +78,7 @@ struct rrdp_state {
 };
 
 struct file_metadata {
-	char *uri;
+	struct uri uri;
 	unsigned char *hash; /* Array. Sometimes omitted. */
 	size_t hash_len;
 };
@@ -97,7 +97,7 @@ struct update_notification {
 	struct rrdp_session session;
 	struct file_metadata snapshot;
 	struct notification_deltas deltas;
-	char const *url;
+	struct uri const *url;
 };
 
 /* A deserialized <publish> tag, from a snapshot or delta. */
@@ -144,24 +144,42 @@ session_cleanup(struct rrdp_session *meta)
 }
 
 static struct cache_file *
-state_find_file(struct rrdp_state const *state, char const *url, size_t len)
+state_find_file(struct rrdp_state const *state, struct uri const *url)
 {
+	char const *str;
+	size_t len;
 	struct cache_file *file;
-	HASH_FIND(hh, state->files, url, len, file);
+
+	str = uri_str(url);
+	len = uri_len(url);
+
+	HASH_FIND(hh, state->files, str, len, file);
+
 	return file;
 }
 
-static struct cache_file *
-cache_file_add(struct rrdp_state *state, char *url, char *path)
+static void
+state_add_file(struct rrdp_state *state, struct cache_file *file)
 {
-	struct cache_file *file;
+	char const *url;
 	size_t urlen;
 
+	url = uri_str(&file->map.url);
+	urlen = uri_len(&file->map.url);
+
+	HASH_ADD_KEYPTR(hh, state->files, url, urlen, file);
+}
+
+static struct cache_file *
+cache_file_add(struct rrdp_state *state, struct uri const *url, char *path)
+{
+	struct cache_file *file;
+
 	file = pzalloc(sizeof(struct cache_file));
-	file->map.url = url;
+	uri_copy(&file->map.url, url);
 	file->map.path = path;
-	urlen = strlen(url);
-	HASH_ADD_KEYPTR(hh, state->files, file->map.url, urlen, file);
+
+	state_add_file(state, file);
 
 	return file;
 }
@@ -169,7 +187,7 @@ cache_file_add(struct rrdp_state *state, char *url, char *path)
 static void
 metadata_cleanup(struct file_metadata *meta)
 {
-	free(meta->uri);
+	uri_cleanup(&meta->uri);
 	free(meta->hash);
 }
 
@@ -181,7 +199,8 @@ notification_delta_cleanup(struct notification_delta *delta)
 }
 
 static void
-update_notification_init(struct update_notification *notif, char const *url)
+update_notification_init(struct update_notification *notif,
+    struct uri const *url)
 {
 	memset(&notif->session, 0, sizeof(notif->session));
 	memset(&notif->snapshot, 0, sizeof(notif->snapshot));
@@ -276,22 +295,6 @@ parse_string(xmlTextReaderPtr reader, char const *attr)
 			    xmlTextReaderConstLocalName(reader), attr);
 	}
 
-	return result;
-}
-
-static char *
-parse_uri(xmlTextReaderPtr reader)
-{
-	xmlChar *xmlattr;
-	char *result;
-
-	xmlattr = parse_string(reader, RRDP_ATTR_URI);
-	if (xmlattr == NULL)
-		return NULL;
-
-	result = pstrdup((char const *)xmlattr);
-
-	xmlFree(xmlattr);
 	return result;
 }
 
@@ -473,18 +476,22 @@ end:
 static int
 parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 {
+	xmlChar *xmlattr;
 	int error;
 
 	memset(meta, 0, sizeof(*meta));
 
-	meta->uri = parse_uri(reader);
-	if (meta->uri == NULL)
+	xmlattr = parse_string(reader, RRDP_ATTR_URI);
+	if (xmlattr == NULL)
+		return -EINVAL;
+	error = uri_init(&meta->uri, (char const *)xmlattr);
+	xmlFree(xmlattr);
+	if (error)
 		return -EINVAL;
 
 	error = parse_hash(reader, &meta->hash, &meta->hash_len);
 	if (error) {
-		free(meta->uri);
-		meta->uri = NULL;
+		uri_cleanup(&meta->uri);
 		return error;
 	}
 
@@ -492,16 +499,16 @@ parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 }
 
 static bool
-is_known_extension(char const *uri)
+is_known_extension(struct uri const *uri)
 {
 	size_t len;
 	char const *ext;
 
-	len = strlen(uri);
+	len = uri_len(uri);
 	if (len < 4)
 		return false;
 
-	ext = uri + len - 4;
+	ext = uri_str(uri) + len - 4;
 	return ((strcmp(ext, ".cer") == 0)
 	     || (strcmp(ext, ".roa") == 0)
 	     || (strcmp(ext, ".mft") == 0)
@@ -525,11 +532,11 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 	if (xmlTextReaderRead(reader) != 1) {
 		error = pr_val_err(
 		    "Couldn't read publish content of element '%s'",
-		    tag.meta.uri
+		    uri_str(&tag.meta.uri)
 		);
 		goto end;
 	}
-	if (!is_known_extension(tag.meta.uri))
+	if (!is_known_extension(&tag.meta.uri))
 		goto end; /* Mirror rsync filters */
 
 	/* Parse tag content */
@@ -549,7 +556,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 
 	pr_clutter("Publish %s", logv_filename(tag.meta.uri));
 
-	file = state_find_file(args->state, tag.meta.uri, strlen(tag.meta.uri));
+	file = state_find_file(args->state, &tag.meta.uri);
 
 	/* rfc8181#section-2.2 */
 	if (file) {
@@ -558,7 +565,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 			error = pr_val_err("RRDP desync: "
 			    "<publish> is attempting to create '%s', "
 			    "but the file is already cached.",
-			    tag.meta.uri);
+			    uri_str(&tag.meta.uri));
 			goto end;
 		}
 
@@ -585,7 +592,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 			error = pr_val_err("RRDP desync: "
 			    "<publish> is attempting to overwrite '%s', "
 			    "but the file is absent in the cache.",
-			    tag.meta.uri);
+			    uri_str(&tag.meta.uri));
 			goto end;
 		}
 
@@ -594,7 +601,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 			error = -EINVAL;
 			goto end;
 		}
-		file = cache_file_add(args->state, pstrdup(tag.meta.uri), path);
+		file = cache_file_add(args->state, &tag.meta.uri, path);
 	}
 
 	error = file_write_bin(file->map.path, tag.content, tag.content_len);
@@ -609,29 +616,27 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 {
 	struct withdraw tag = { 0 };
 	struct cache_file *file;
-	size_t len;
 	int error;
 
 	error = parse_file_metadata(reader, &tag.meta);
 	if (error)
-		goto end;
-	if (!is_known_extension(tag.meta.uri))
+		return error;
+	if (!is_known_extension(&tag.meta.uri))
 		goto end; /* Mirror rsync filters */
 	if (!tag.meta.hash) {
 		error = pr_val_err("Withdraw '%s' is missing a hash.",
-		    tag.meta.uri);
+		    uri_str(&tag.meta.uri));
 		goto end;
 	}
 
 	pr_clutter("Withdraw %s", logv_filename(tag.meta.uri));
 
-	len = strlen(tag.meta.uri);
-	file = state_find_file(args->state, tag.meta.uri, len);
+	file = state_find_file(args->state, &tag.meta.uri);
 
 	if (!file) {
 		error = pr_val_err("Broken RRDP: "
 		    "<withdraw> is attempting to delete unknown file '%s'.",
-		    tag.meta.uri);
+		    uri_str(&tag.meta.uri));
 		goto end;
 	}
 
@@ -665,11 +670,11 @@ parse_notification_snapshot(xmlTextReaderPtr reader,
 
 	if (!notif->snapshot.hash)
 		return pr_val_err("Snapshot '%s' is missing a hash.",
-		    notif->snapshot.uri);
+		    uri_str(&notif->snapshot.uri));
 
-	if (!url_same_origin(notif->url, notif->snapshot.uri))
+	if (!uri_same_origin(notif->url, &notif->snapshot.uri))
 		return pr_val_err("Notification '%s' and Snapshot '%s' are not hosted by the same origin.",
-		    notif->url, notif->snapshot.uri);
+		    uri_str(notif->url), uri_str(&notif->snapshot.uri));
 
 	return 0;
 }
@@ -687,25 +692,25 @@ parse_notification_delta(xmlTextReaderPtr reader,
 
 	error = parse_file_metadata(reader, &delta.meta);
 	if (error)
-		goto fail;
+		goto srl;
 
 	if (!delta.meta.hash) {
 		error = pr_val_err("Delta '%s' is missing a hash.",
-		    delta.meta.uri);
-		goto fail;
+		    uri_str(&delta.meta.uri));
+		goto mta;
 	}
 
-	if (!url_same_origin(notif->url, delta.meta.uri)) {
+	if (!uri_same_origin(notif->url, &delta.meta.uri)) {
 		error = pr_val_err("Notification %s and Delta %s are not hosted by the same origin.",
-		    notif->url, delta.meta.uri);
-		goto fail;
+		    uri_str(notif->url), uri_str(&delta.meta.uri));
+		goto mta;
 	}
 
 	notification_deltas_add(&notif->deltas, &delta);
 	return 0;
 
-fail:	serial_cleanup(&delta.serial);
-	metadata_cleanup(&delta.meta);
+mta:	metadata_cleanup(&delta.meta);
+srl:	serial_cleanup(&delta.serial);
 	return error;
 }
 
@@ -827,7 +832,7 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 }
 
 static int
-parse_notification(char const *url, char const *path,
+parse_notification(struct uri const *url, char const *path,
     struct update_notification *result)
 {
 	int error;
@@ -913,7 +918,7 @@ validate_session_desync(struct rrdp_state *old_notif,
 
 /* TODO (performance) Stream instead of caching notifs, snapshots & deltas. */
 static int
-dl_tmp(char const *url, char *path)
+dl_tmp(struct uri const *url, char *path)
 {
 	cache_tmpfile(path);
 	return http_download(url, path, 0, NULL);
@@ -923,12 +928,14 @@ static int
 handle_snapshot(struct update_notification *new, struct rrdp_state *state)
 {
 	char tmppath[CACHE_TMPFILE_BUFLEN];
+	struct uri *url;
 	int error;
 
-	pr_val_debug("Processing snapshot.");
-	fnstack_push(new->snapshot.uri);
+	url = &new->snapshot.uri;
+	pr_val_debug("Processing snapshot '%s'.", uri_str(url));
+	fnstack_push(uri_str(url));
 
-	error = dl_tmp(new->snapshot.uri, tmppath);
+	error = dl_tmp(url, tmppath);
 	if (error)
 		goto end;
 	error = validate_hash(&new->snapshot, tmppath);
@@ -995,12 +1002,15 @@ handle_delta(struct update_notification *notif,
     struct notification_delta *delta, struct rrdp_state *state)
 {
 	char tmppath[CACHE_TMPFILE_BUFLEN];
+	struct uri const *url;
 	int error;
 
-	pr_val_debug("Processing delta '%s'.", delta->meta.uri);
-	fnstack_push(delta->meta.uri);
+	url = &delta->meta.uri;
 
-	error = dl_tmp(delta->meta.uri, tmppath);
+	pr_val_debug("Processing delta '%s'.", uri_str(url));
+	fnstack_push(uri_str(url));
+
+	error = dl_tmp(url, tmppath);
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta, tmppath, state);
@@ -1150,7 +1160,7 @@ update_notif(struct rrdp_state *old, struct update_notification *new)
 }
 
 static int
-dl_notif(char const *url, time_t mtim, bool *changed,
+dl_notif(struct uri const *url, time_t mtim, bool *changed,
     struct update_notification *new)
 {
 	char tmppath[CACHE_TMPFILE_BUFLEN];
@@ -1189,7 +1199,7 @@ dl_notif(char const *url, time_t mtim, bool *changed,
  * snapshot, and explodes them into @notif->path.
  */
 int
-rrdp_update(char const *notif, char const *path, time_t mtim,
+rrdp_update(struct uri const *notif, char const *path, time_t mtim,
     bool *changed, struct rrdp_state **state)
 {
 	struct rrdp_state *old;
@@ -1197,7 +1207,7 @@ rrdp_update(char const *notif, char const *path, time_t mtim,
 	int serial_cmp;
 	int error;
 
-	fnstack_push(notif);
+	fnstack_push(uri_str(notif));
 	pr_val_debug("Processing notification.");
 
 	error = dl_notif(notif, mtim, changed, &new);
@@ -1288,18 +1298,20 @@ end:	fnstack_pop();
 }
 
 char const *
-rrdp_file(struct rrdp_state const *state, char const *url)
+rrdp_file(struct rrdp_state const *state, struct uri const *url)
 {
 	struct cache_file *file;
-	file = state_find_file(state, url, strlen(url));
+	file = state_find_file(state, url);
 	return file ? file->map.path : NULL;
 }
 
 char const *
-rrdp_create_fallback(char *cage, struct rrdp_state **_state, char const *url)
+rrdp_create_fallback(char *cage, struct rrdp_state **_state,
+    struct uri const *url)
 {
 	struct rrdp_state *state;
 	struct cache_file *file;
+	char const *str;
 	size_t len;
 
 	state = *_state;
@@ -1309,16 +1321,17 @@ rrdp_create_fallback(char *cage, struct rrdp_state **_state, char const *url)
 	}
 
 	file = pzalloc(sizeof(struct cache_file));
-	file->map.url = pstrdup(url);
+	uri_copy(&file->map.url, url);
 	file->map.path = cseq_next(&state->seq);
 	if (!file->map.path) {
-		free(file->map.url);
+		uri_cleanup(&file->map.url);
 		free(file);
 		return NULL;
 	}
 
-	len = strlen(file->map.url);
-	HASH_ADD_KEYPTR(hh, state->files, file->map.url, len, file);
+	str = uri_str(&file->map.url);
+	len = uri_len(&file->map.url);
+	HASH_ADD_KEYPTR(hh, state->files, str, len, file);
 
 	return file->map.path;
 }
@@ -1346,7 +1359,7 @@ files2json(struct rrdp_state *state)
 		return NULL;
 
 	HASH_ITER(hh, state->files, file, tmp)
-		if (json_add_str(json, file->map.url, file->map.path))
+		if (json_add_str(json, uri_str(&file->map.url), file->map.path))
 			goto fail;
 
 	return json;
@@ -1456,6 +1469,7 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 	char const *jkey;
 	json_t *jvalue;
 	size_t parent_len;
+	struct uri url;
 	char const *path;
 	unsigned long id, max_id;
 	int error;
@@ -1476,25 +1490,33 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 			pr_op_warn("RRDP file URL '%s' is not a string.", jkey);
 			continue;
 		}
+		error = uri_init(&url, jkey);
+		if (error) {
+			pr_op_warn("Cannot parse '%s' as a URI.", jkey);
+			continue;
+		}
 
-		// XXX sanitize more
+		// XXX sanitize more?
 
 		path = json_string_value(jvalue);
 		if (strncmp(path, parent, parent_len) != 0 || path[parent_len] != '/') {
 			pr_op_warn("RRDP path '%s' is not child of '%s'.",
 			    path, parent);
+			uri_cleanup(&url);
 			continue;
 		}
 
 		error = hex2ulong(path + parent_len + 1, &id);
 		if (error) {
 			pr_op_warn("RRDP file '%s' is not a hexadecimal number.", path);
+			uri_cleanup(&url);
 			continue;
 		}
 		if (id > max_id)
 			max_id = id;
 
-		cache_file_add(state, pstrdup(jkey), pstrdup(path));
+		cache_file_add(state, &url, pstrdup(path));
+		uri_cleanup(&url);
 	}
 
 	if (HASH_COUNT(state->files) == 0) {
@@ -1640,10 +1662,11 @@ rrdp_print(struct rrdp_state *rs)
 	if (rs == NULL)
 		return;
 
-	printf("session:%s/%s\n", rs->session.session_id, rs->session.serial.str);
+	/* printf("session:%s/%s\n", rs->session.session_id, rs->session.serial.str); */
+	printf("\n");
 	HASH_ITER(hh, rs->files, file, tmp)
-		printf("\t\tfile: %s\n", /* file->map.url, */ file->map.path);
-	printf("\t\tseq:%s/%lx\n", rs->seq.prefix, rs->seq.next_id);
+		printf("\t\tfile: %s (%s)\n", file->map.path, uri_str(&file->map.url));
+	printf("\t\tseq:  %s/%lx\n", rs->seq.prefix, rs->seq.next_id);
 
 	STAILQ_FOREACH(hash, &rs->delta_hashes, hook) {
 		printf("\t\thash: ");

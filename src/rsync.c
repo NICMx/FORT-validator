@@ -49,7 +49,7 @@ struct {
 
 struct rsync_task {
 	int pid;
-	char *url;
+	struct uri url;
 	char *path;
 	int stdoutfd;	/* Child rsync's standard output */
 	int stderrfd;	/* Child rsync's standard error */
@@ -131,7 +131,7 @@ notify_parent(struct rsync_task *task)
 	 * The asn1 code needs better error reporting.
 	 */
 
-	if (RsyncRequest_init(&req, task->url, task->path) < 0) {
+	if (RsyncRequest_init(&req, &task->url, task->path) < 0) {
 		pr_op_err(RSP "Cannot message parent process: "
 		    "The request object cannot be created");
 		return;
@@ -157,7 +157,7 @@ void_task(struct rsync_task *task)
 {
 	notify_parent(task);
 
-	free(task->url);
+	uri_cleanup(&task->url);
 	free(task->path);
 	free(task);
 }
@@ -220,7 +220,7 @@ create_pipes(int fds[2][2])
 }
 
 static void
-prepare_rsync_args(char **args, char const *url, char const *path)
+prepare_rsync_args(char **args, struct uri const *url, char const *path)
 {
 	size_t i;
 
@@ -231,7 +231,7 @@ prepare_rsync_args(char **args, char const *url, char const *path)
 
 	for (i = 0; rsync_args[i] != NULL; i++)
 		args[i] = (char *)rsync_args[i];
-	args[i++] = (char *)url;
+	args[i++] = (char *)uri_str(url);
 	args[i++] = (char *)path;
 	args[i++] = NULL;
 }
@@ -257,7 +257,7 @@ duplicate_fds(int fds[2][2])
 }
 
 static int
-execvp_rsync(char const *url, char const *path, int fds[2][2])
+execvp_rsync(struct uri const *url, char const *path, int fds[2][2])
 {
 	char *args[20];
 
@@ -296,7 +296,7 @@ fork_rsync(struct rsync_task *task)
 	}
 
 	if (task->pid == 0) /* Child code */
-		exit(execvp_rsync(task->url, task->path, fork_fds));
+		exit(execvp_rsync(&task->url, task->path, fork_fds));
 
 	/* Parent code */
 
@@ -322,6 +322,7 @@ activate_task(struct rsync_tasks *tasks, struct rsync_task *task,
 	tasks->a++;
 }
 
+/* Steals ownership of @map. */
 static void
 post_task(struct cache_mapping *map, struct rsync_tasks *tasks,
     struct timespec *now)
@@ -358,7 +359,9 @@ again:	if (pssk.rd.len > 0) {
 
 		switch (decres.code) {
 		case RC_OK:
-			result->url = OCTET_STRING_toString(&pssk.rr->url);
+			__uri_init(&result->url,
+			    OCTET_STRING_toString(&pssk.rr->url),
+			    pssk.rr->url.size);
 			result->path = OCTET_STRING_toString(&pssk.rr->path);
 			ASN_STRUCT_RESET(asn_DEF_RsyncRequest, pssk.rr);
 			return 0;
@@ -557,7 +560,7 @@ activate_queued(struct rsync_tasks *tasks, struct timespec *now)
 		return;
 
 	pr_op_debug(RSP "Activating queued task %s -> %s.",
-	    task->url, task->path);
+	    uri_str(&task->url), task->path);
 	LIST_REMOVE(task, lh);
 	activate_task(tasks, task, now);
 }
@@ -723,7 +726,7 @@ rcv_spawner_responses(void *arg)
 	struct cache_mapping map = { 0 };
 
 	while (next_task(&map) == 0) {
-		rsync_finished(map.url, map.path);
+		rsync_finished(&map.url, map.path);
 		map_cleanup(&map);
 	}
 
@@ -823,7 +826,7 @@ fail1:	pr_op_warn("rsync will not be available.");
  * will be automatically called.
  */
 int
-rsync_queue(char const *url, char const *path)
+rsync_queue(struct uri const *url, char const *path)
 {
 	struct RsyncRequest req;
 	asn_enc_rval_t result;

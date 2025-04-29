@@ -27,11 +27,18 @@
 static BIO *
 __rsync2bio(char const *src, char const *dst)
 {
+	struct uri url;
 	int error;
+
+	if (uri_init(&url, src) != 0)
+		return NULL;
 
 	// XXX use the cache
 
-	error = rsync_queue(src, dst);
+	error = rsync_queue(&url, dst);
+
+	uri_cleanup(&url);
+
 	if (error) {
 		pr_op_err("rsync download failed: %s", strerror(abs(error)));
 		return NULL;
@@ -99,7 +106,7 @@ filename2bio(char const *filename)
 	if (filename == NULL || strcmp(filename, "-") == 0)
 		return BIO_new_fp(stdin, BIO_NOCLOSE);
 
-	if (url_is_rsync(filename))
+	if (str_starts_with(filename, "rsync://"))
 		return rsync2bio(filename);
 
 	return BIO_new_file(filename, "rb");

@@ -59,7 +59,7 @@ test_1url(char const *file)
 	ck_assert_int_eq(0, tal_init(&tal, file));
 
 	ck_assert_uint_eq(1, tal.urls.len);
-	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.urls.array[0]);
+	ck_assert_uri("rsync://example.com/rpki/ta.cer", &tal.urls.array[0]);
 	check_spki(&tal);
 
 	tal_cleanup(&tal);
@@ -80,10 +80,10 @@ test_4urls(char const *file)
 	ck_assert_int_eq(0, tal_init(&tal, file));
 
 	ck_assert_uint_eq(4, tal.urls.len);
-	ck_assert_str_eq("rsync://example.com/rpki/ta.cer", tal.urls.array[0]);
-	ck_assert_str_eq("https://example.com/rpki/ta.cer", tal.urls.array[1]);
-	ck_assert_str_eq("rsync://www.example.com/potato/ta.cer", tal.urls.array[2]);
-	ck_assert_str_eq("https://wx3.example.com/tomato/ta.cer", tal.urls.array[3]);
+	ck_assert_uri("rsync://example.com/rpki/ta.cer", &tal.urls.array[0]);
+	ck_assert_uri("https://example.com/rpki/ta.cer", &tal.urls.array[1]);
+	ck_assert_uri("rsync://www.example.com/potato/ta.cer", &tal.urls.array[2]);
+	ck_assert_uri("https://wx3.example.com/tomato/ta.cer", &tal.urls.array[3]);
 
 	check_spki(&tal);
 

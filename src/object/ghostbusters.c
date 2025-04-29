@@ -43,7 +43,7 @@ ghostbusters_traverse(struct cache_mapping *map,
 	error = handle_vcard(&sobj);
 	if (error)
 		goto end3;
-	error = refs_validate_ee(&ee.sias, parent->rpp.crl.map->url, map->url);
+	error = refs_validate_ee(&ee.sias, &parent->rpp.crl.map->url, &map->url);
 
 end3:	rpki_certificate_cleanup(&ee);
 	signed_object_cleanup(&sobj);

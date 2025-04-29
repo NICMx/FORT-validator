@@ -58,10 +58,11 @@ asn_TYPE_descriptor_t asn_DEF_RsyncRequest = {
 };
 
 int
-RsyncRequest_init(struct RsyncRequest *req, char const *url, char const *path)
+RsyncRequest_init(struct RsyncRequest *req, struct uri const *url,
+    char const *path)
 {
 	memset(req, 0, sizeof(*req));
-	if (OCTET_STRING_fromString(&req->url, url) < 0)
+	if (OCTET_STRING_fromBuf(&req->url, uri_str(url), uri_len(url)) < 0)
 		return -1;
 	if (OCTET_STRING_fromString(&req->path, path) < 0)
 		return -1;

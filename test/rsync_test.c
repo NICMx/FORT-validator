@@ -6,6 +6,7 @@
 #include "rsync.c"
 #include "stream.c"
 #include "types/map.c"
+#include "types/url.c"
 
 #include "asn1/asn1c/ber_decoder.c"
 #include "asn1/asn1c/ber_tlv_length.c"
@@ -48,7 +49,7 @@ static int rsync_expected_duration = -1;
 static int rsyncs_done = 0;
 
 void
-rsync_finished(char const *url, char const *path)
+rsync_finished(struct uri const *url, char const *path)
 {
 	struct timespec now;
 	int delta;
@@ -74,14 +75,16 @@ rsync_finished(char const *url, char const *path)
 /* Test RsyncRequest decode, feeding as few bytes as possible every time. */
 START_TEST(test_decode_extremely_fragmented)
 {
+	struct uri uri;
 	struct RsyncRequest src, *dst;
 	unsigned char encoded[BUFSIZE];
 	asn_enc_rval_t encres;
 	asn_dec_rval_t decres;
 	unsigned int start, end, max;
 
-	ck_assert_int_eq(0, RsyncRequest_init(&src,
-	    "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789",
+	__URI_INIT(&uri, "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789");
+
+	ck_assert_int_eq(0, RsyncRequest_init(&src, &uri,
 	    "AbCdEfGhIjKlMnOpQrStUvWxYz1234567890"));
 	encres = der_encode_to_buffer(&asn_DEF_RsyncRequest, &src,
 	    encoded, sizeof(encoded));
@@ -135,7 +138,7 @@ ck_next_task(char const *url, char const *path)
 	struct cache_mapping map;
 
 	ck_assert_int_eq(0, next_task(&map));
-	ck_assert_str_eq(url, map.url);
+	ck_assert_uri(url, &map.url);
 	ck_assert_str_eq(path, map.path);
 
 	map_cleanup(&map);
@@ -144,10 +147,13 @@ ck_next_task(char const *url, char const *path)
 static void
 encode_request(char const *url, char const *path, unsigned char *buffer)
 {
+	struct uri uri;
 	struct RsyncRequest rr;
 	asn_enc_rval_t encres;
 
-	ck_assert_int_eq(0, RsyncRequest_init(&rr, url, path));
+	__URI_INIT(&uri, url);
+
+	ck_assert_int_eq(0, RsyncRequest_init(&rr, &uri, path));
 	encres = der_encode_to_buffer(&asn_DEF_RsyncRequest, &rr, buffer, BUFSIZE);
 	ck_assert_int_gt(encres.encoded, 0);
 	ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_RsyncRequest, &rr);
@@ -228,6 +234,14 @@ START_TEST(test_next_task)
 }
 END_TEST
 
+static int
+RSYNC_QUEUE(char const *a, char const *b)
+{
+	struct uri uri;
+	__URI_INIT(&uri, a);
+	return rsync_queue(&uri, b);
+}
+
 /* Makes sure @count rsyncs finish after roughly @millis milliseconds. */
 static void
 wait_rsyncs(unsigned int count, unsigned int millis)
@@ -257,7 +271,7 @@ START_TEST(test_fast_single_rsync)
 	ck_assert_int_ne(-1, pssk.rd.fd);
 	ck_assert_int_ne(-1, pssk.wr);
 
-	ck_assert_int_eq(0, rsync_queue("A", "B"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("A", "B"));
 	wait_rsyncs(1, 0);
 
 	rsync_teardown();
@@ -272,7 +286,7 @@ START_TEST(test_stalled_single_rsync)
 	ck_assert_int_ne(-1, pssk.rd.fd);
 	ck_assert_int_ne(-1, pssk.wr);
 
-	ck_assert_int_eq(0, rsync_queue("A", "B"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("A", "B"));
 	wait_rsyncs(1, 3000);
 
 	rsync_teardown();
@@ -287,7 +301,7 @@ START_TEST(test_stalled_single_rsync_timeout)
 	ck_assert_int_ne(-1, pssk.rd.fd);
 	ck_assert_int_ne(-1, pssk.wr);
 
-	ck_assert_int_eq(0, rsync_queue("A", "B"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("A", "B"));
 	wait_rsyncs(1, 4000); /* 4000 = timeout */
 
 	rsync_teardown();
@@ -302,7 +316,7 @@ START_TEST(test_dripfeed_single_rsync)
 	ck_assert_int_ne(-1, pssk.rd.fd);
 	ck_assert_int_ne(-1, pssk.wr);
 
-	ck_assert_int_eq(0, rsync_queue("A", "B"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("A", "B"));
 	wait_rsyncs(1, 3000);
 
 	rsync_teardown();
@@ -317,7 +331,7 @@ START_TEST(test_dripfeed_single_rsync_timeout)
 	ck_assert_int_ne(-1, pssk.rd.fd);
 	ck_assert_int_ne(-1, pssk.wr);
 
-	ck_assert_int_eq(0, rsync_queue("A", "B"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("A", "B"));
 	wait_rsyncs(1, 4000); /* 4000 = timeout */
 
 	rsync_teardown();
@@ -346,9 +360,9 @@ START_TEST(test_simultaneous_rsyncs)
 	ck_assert_int_ne(-1, pssk.rd.fd);
 	ck_assert_int_ne(-1, pssk.wr);
 
-	ck_assert_int_eq(0, rsync_queue("A", "B"));
-	ck_assert_int_eq(0, rsync_queue("C", "D"));
-	ck_assert_int_eq(0, rsync_queue("E", "F"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("A", "B"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("C", "D"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("E", "F"));
 
 	wait_rsyncs(3, 1000);
 
@@ -364,10 +378,10 @@ START_TEST(test_queued_rsyncs)
 	ck_assert_int_ne(-1, pssk.rd.fd);
 	ck_assert_int_ne(-1, pssk.wr);
 
-	ck_assert_int_eq(0, rsync_queue("A", "B"));
-	ck_assert_int_eq(0, rsync_queue("C", "D"));
-	ck_assert_int_eq(0, rsync_queue("E", "F"));
-	ck_assert_int_eq(0, rsync_queue("G", "H"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("A", "B"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("C", "D"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("E", "F"));
+	ck_assert_int_eq(0, RSYNC_QUEUE("G", "H"));
 
 	wait_rsyncs(3, 2000);
 	/* 2k minus the 100 extra we slept during the previous wait_rsyncs() */

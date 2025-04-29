@@ -1175,68 +1175,96 @@ certificate_get_resources(struct rpki_certificate *cert)
 	pr_crit("Unknown policy: %u", cert->policy);
 }
 
-static bool
-is_rsync(ASN1_IA5STRING *uri)
-{
-	static char const *const PREFIX = "rsync://";
-	size_t prefix_len = strlen(PREFIX);
-
-	return (uri->length >= prefix_len)
-	    ? (strncmp((char *) uri->data, PREFIX, strlen(PREFIX)) == 0)
-	    : false;
-}
-
-static void
-handle_rpkiManifest(char *uri, void *arg)
+static int
+handle_rpkiManifest(struct uri const *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
+	char const *rm;
 
-	pr_clutter("rpkiManifest: %s", uri);
+	rm = uri_str(uri);
+	pr_clutter("rpkiManifest: %s", rm);
 
-	if (uris->rpkiManifest != NULL) {
-		pr_val_warn("Ignoring additional rpkiManifest: %s", uri);
-		free(uri);
-	} else {
-		uris->rpkiManifest = uri;
+	if (!uri_is_rsync(uri)) {
+		pr_val_debug("Ignoring non-rsync rpkiManifest '%s'.", rm);
+		return ENOTSUP;
 	}
+
+	if (uri_str(&uris->rpkiManifest) != NULL) {
+		pr_val_warn("Ignoring additional rpkiManifest: %s", rm);
+		return 0;
+	}
+
+	uri_copy(&uris->rpkiManifest, uri);
+	return 0;
 }
 
-static void
-handle_caRepository(char *uri, void *arg)
+static int
+handle_caRepository(struct uri const *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
+	char const *cr;
 
-	pr_clutter("caRepository: %s", uri);
+	cr = uri_str(uri);
+	pr_clutter("caRepository: %s", caRepo);
 
-	if (uris->caRepository != NULL) {
-		pr_val_warn("Ignoring additional caRepository: %s", uri);
-		free(uri);
-	} else {
-		uris->caRepository = uri;
+	if (!uri_is_rsync(uri)) {
+		pr_val_debug("Ignoring non-rsync caRepository '%s'.", cr);
+		return ENOTSUP;
 	}
+
+	if (uri_str(&uris->caRepository) != NULL) {
+		pr_val_warn("Ignoring additional caRepository: %s", cr);
+		return 0;
+	}
+
+	uri_copy(&uris->caRepository, uri);
+	return 0;
 }
 
-static void
-handle_rpkiNotify(char *uri, void *arg)
+static int
+handle_rpkiNotify(struct uri const *uri, void *arg)
 {
 	struct sia_uris *uris = arg;
+	char const *rn;
 
-	pr_clutter("rpkiNotify: %s", uri);
+	rn = uri_str(uri);
+	pr_clutter("rpkiNotify: %s", rn);
 
-	if (uris->rpkiNotify != NULL) {
-		pr_val_warn("Ignoring additional rpkiNotify: %s", uri);
-		free(uri);
-	} else {
-		uris->rpkiNotify = uri;
+	if (!uri_is_https(uri)) {
+		pr_val_debug("Ignoring non-https rpkiNotify '%s'.", rn);
+		return ENOTSUP;
 	}
+
+	if (uri_str(&uris->rpkiNotify) != NULL) {
+		pr_val_warn("Ignoring additional rpkiNotify: %s", rn);
+		return 0;
+	}
+
+	uri_copy(&uris->rpkiNotify, uri);
+	return 0;
 }
 
-static void
-handle_signedObject(char *uri, void *arg)
+static int
+handle_signedObject(struct uri const *uri, void *arg)
 {
 	struct sia_uris *sias = arg;
-	pr_clutter("signedObject: %s", uri);
-	sias->signedObject = uri;
+	char const *so;
+
+	so = uri_str(uri);
+	pr_clutter("signedObject: %s", so);
+
+	if (!uri_is_rsync(uri)) {
+		pr_val_debug("Ignoring non-rsync signedObject '%s'.", so);
+		return ENOTSUP;
+	}
+
+	if (uri_str(&sias->signedObject) != NULL) {
+		pr_val_warn("Ignoring additional signedObject: %s", so);
+		return 0;
+	}
+
+	uri_copy(&sias->signedObject, uri);
+	return 0;
 }
 
 static int
@@ -1357,16 +1385,44 @@ handle_ku_ee(void *ext, void *arg)
 }
 
 static int
+gn2uri(GENERAL_NAME *ad, struct uri *uri)
+{
+	ASN1_STRING *asn1str;
+	int ptype;
+	char *str;
+	int error;
+
+	asn1str = GENERAL_NAME_get0_value(ad, &ptype);
+	if (ptype != GEN_URI) {
+		pr_val_debug("Ignoring unknown GENERAL_NAME type: %d", ptype);
+		return ENOTSUP;
+	}
+
+	/*
+	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
+	 * somehow converted into URI form. I don't think that's an issue
+	 * because the RSYNC clone operation should not have performed the
+	 * conversion, so we should be looking at precisely the IA5String
+	 * directory our g2l version of @asn1_string should contain.
+	 * But ask the testers to keep an eye on it anyway.
+	 */
+	error = ia5s2string(asn1str, &str);
+	if (error)
+		return error;
+	error = uri_init(uri, str);
+	free(str);
+
+	return error;
+}
+
+static int
 handle_cdp(void *ext, void *arg)
 {
 	STACK_OF(DIST_POINT) *crldp = ext;
 	struct sia_uris *sias = arg;
 	DIST_POINT *dp;
 	GENERAL_NAMES *names;
-	GENERAL_NAME *name;
-	ASN1_IA5STRING *str;
 	int i;
-	int type;
 	char const *error_msg;
 
 	if (sk_DIST_POINT_num(crldp) != 1) {
@@ -1404,25 +1460,25 @@ handle_cdp(void *ext, void *arg)
 
 	names = dp->distpoint->name.fullname;
 	for (i = 0; i < sk_GENERAL_NAME_num(names); i++) {
-		name = sk_GENERAL_NAME_value(names, i);
-		str = GENERAL_NAME_get0_value(name, &type);
-		if (type == GEN_URI && is_rsync(str)) {
-			/*
-			 * Since we're parsing and validating the manifest's CRL
-			 * at some point, I think that all we need to do now is
-			 * compare this CRL URI to that one's.
-			 *
-			 * But there is a problem:
-			 * The manifest's CRL might not have been parsed at this
-			 * point. In fact, it's guaranteed to not have been
-			 * parsed if the certificate we're validating is the EE
-			 * certificate of the manifest itself.
-			 *
-			 * So we will store the URI in @refs, and validate it
-			 * later.
-			 */
-			return ia5s2string(str, &sias->crldp);
+		/*
+		 * Since we're parsing and validating the manifest's CRL at some
+		 * point, I think that all we need to do now is compare this CRL
+		 * URI to that one's.
+		 *
+		 * But there is a problem: The manifest's CRL might not have
+		 * been parsed at this point. In fact, it's guaranteed to not
+		 * have been parsed if the certificate we're validating is the
+		 * EE certificate of the manifest itself.
+		 *
+		 * So we will store the URI in @sias, and validate it later.
+		 */
+		if (gn2uri(sk_GENERAL_NAME_value(names, i), &sias->crldp) != 0)
+			continue;
+		if (!uri_is_rsync(&sias->crldp)) {
+			uri_cleanup(&sias->crldp);
+			continue;
 		}
+		return 0;
 	}
 
 	error_msg = "lacks an RSYNC URI";
@@ -1433,69 +1489,12 @@ dist_point_error:
 }
 
 /*
- * Create @map from the @ad
- */
-static int
-ad2uri(char **uri, ACCESS_DESCRIPTION *ad)
-{
-	ASN1_STRING *asn1str;
-	int ptype;
-
-	asn1str = GENERAL_NAME_get0_value(ad->location, &ptype);
-
-	/*
-	 * RFC 6487: "This extension MUST have an instance of an
-	 * AccessDescription with an accessMethod of id-ad-rpkiManifest, (...)
-	 * with an rsync URI [RFC5781] form of accessLocation."
-	 *
-	 * Ehhhhhh. It's a little annoying in that it seems to be stucking more
-	 * than one requirement in a single sentence, which I think is rather
-	 * rare for an RFC. Normally they tend to hammer things more.
-	 *
-	 * Does it imply that the GeneralName CHOICE is constrained to type
-	 * "uniformResourceIdentifier"? I guess so, though I don't see anything
-	 * stopping a few of the other types from also being capable of storing
-	 * URIs.
-	 *
-	 * Also, nobody seems to be using the other types, and handling them
-	 * would be a titanic pain. So this is what I'm committing to.
-	 */
-	if (ptype != GEN_URI) {
-		pr_val_err("Unknown GENERAL_NAME type: %d", ptype);
-		return ENOTSUPPORTED;
-	}
-
-	/*
-	 * GEN_URI signals an IA5String.
-	 * IA5String is a subset of ASCII, so this cast is safe.
-	 * No guarantees of a NULL chara though, which is why we need a dup.
-	 *
-	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
-	 * somehow converted into URI form. I don't think that's an issue
-	 * because the RSYNC clone operation should not have performed the
-	 * conversion, so we should be looking at precisely the IA5String
-	 * directory our g2l version of @asn1_string should contain.
-	 * But ask the testers to keep an eye on it anyway.
-	 *
-	 * XXX There used to be a map_create() here. Make sure validations are
-	 * restored somewhere:
-	 * 1. ascii
-	 * 2. "rsync://" or "https://" prefix (ENOTRSYNC, ENOTHTTPS)
-	 * 3. URL normalization
-	 */
-	*uri = pstrndup((char const *)ASN1_STRING_get0_data(asn1str),
-	    ASN1_STRING_length(asn1str));
-	return 0;
-}
-
-/*
  * The RFC does not explain AD validation very well. This is personal
  * interpretation, influenced by Tim Bruijnzeels's response
  * (https://mailarchive.ietf.org/arch/msg/sidr/4ycmff9jEU4VU9gGK5RyhZ7JYsQ)
  * (I'm being a bit more lax than he suggested.)
  *
  * 1. The NID (@nid) can be found more than once.
- * 2. All access descriptions that match the NID must be URLs.
  * 3. Depending on meta->required, zero or one of those matches will be an URL
  *    of the meta->type we're expecting.
  *    (I would have gone with "at least zero of those matches", but I don't know
@@ -1511,10 +1510,10 @@ ad2uri(char **uri, ACCESS_DESCRIPTION *ad)
  */
 static int
 handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
-    void (*cb)(char *, void *), void *arg)
+    int (*cb)(struct uri const *, void *), void *arg)
 {
 	ACCESS_DESCRIPTION *ad;
-	char *uri;
+	struct uri uri;
 	bool found;
 	unsigned int i;
 	int error;
@@ -1523,23 +1522,22 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == nid) {
-			error = ad2uri(&uri, ad);
-			switch (error) {
-			case 0:
-				break;
-			case ENOTSUPPORTED:
+			if (gn2uri(ad->location, &uri) != 0)
 				continue;
-			default:
-				return error;
-			}
 
 			if (found) {
-				free(uri);
+				uri_cleanup(&uri);
 				return pr_val_err("Extension '%s' has multiple '%s' %s URIs.",
 				    meta->ia_name, meta->name, meta->type);
 			}
 
-			cb(uri, arg); /* Ownership of uri stolen */
+			error = cb(&uri, arg);
+			uri_cleanup(&uri);
+			if (error == ENOTSUP)
+				continue;
+			if (error)
+				return error;
+
 			found = true;
 		}
 	}
@@ -1553,18 +1551,23 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	return 0;
 }
 
-static void
-handle_caIssuers(char *uri, void *arg)
+static int
+handle_caIssuers(struct uri const *uri, void *arg)
 {
 	struct sia_uris *sias = arg;
+
+	if (!uri_is_rsync(uri)) {
+		pr_val_debug("Ignoring non-rsync caIssuers '%s'.", uri_str(uri));
+		return ENOTSUP;
+	}
+
 	/*
 	 * Bringing the parent certificate's URI all the way
 	 * over here is too much trouble, so do the handle_cdp()
 	 * hack.
-	 *
-	 * XXX Uh... it's extremely easy now.
 	 */
-	sias->caIssuers = uri;
+	uri_copy(&sias->caIssuers, uri);
+	return 0;
 }
 
 static int
@@ -1711,7 +1714,7 @@ validate_ca_extensions(struct rpki_certificate *cert)
 	error = certificate_validate_aia(cert);
 	if (error)
 		return error;
-	return validate_cdp(&cert->sias, cert->parent->rpp.crl.map->url);
+	return validate_cdp(&cert->sias, &cert->parent->rpp.crl.map->url);
 }
 
 int
@@ -1796,11 +1799,11 @@ get_certificate_type(struct rpki_certificate *cert)
 int
 certificate_validate_aia(struct rpki_certificate *cert)
 {
-	/*
-	 * FIXME Compare the AIA to the parent's URI.
-	 * We're currently not recording the URI, so this can't be solved until
-	 * the #78 refactor.
-	 */
+	if (!uri_equals(&cert->parent->map.url, &cert->sias.caIssuers))
+		return pr_val_err("Certificate's caIssuers (%s) does not match parent certificate's URL (%s).",
+		    uri_str(&cert->parent->map.url),
+		    uri_str(&cert->sias.caIssuers));
+
 	return 0;
 }
 
@@ -1895,10 +1898,9 @@ int
 certificate_traverse(struct rpki_certificate *ca)
 {
 	struct cache_cage *cage;
-	char const *mft_path;
+	struct cache_mapping mft;
 	array_index i;
 	struct cache_mapping *map;
-	char const *ext;
 	unsigned int queued;
 	int error;
 
@@ -1919,19 +1921,21 @@ certificate_traverse(struct rpki_certificate *ca)
 	default:
 		return pr_val_err("caRepository '%s' could not be refreshed, "
 		    "and there is no fallback in the cache. "
-		    "I'm going to have to skip it.", ca->sias.caRepository);
+		    "I'm going to have to skip it.",
+		    uri_str(&ca->sias.caRepository));
 	}
 
-retry:	mft_path = cage_map_file(cage, ca->sias.rpkiManifest);
-	if (!mft_path) {
+	mft.url = ca->sias.rpkiManifest;
+retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
+	if (!mft.path) {
 		if (cage_disable_refresh(cage))
 			goto retry;
 		error = pr_val_err("caRepository '%s' is missing a manifest.",
-		    ca->sias.caRepository);
+		    uri_str(&ca->sias.caRepository));
 		goto end;
 	}
 
-	error = manifest_traverse(ca->sias.rpkiManifest, mft_path, cage, ca);
+	error = manifest_traverse(&mft, cage, ca);
 	if (error) {
 		if (cage_disable_refresh(cage))
 			goto retry;
@@ -1941,18 +1945,18 @@ retry:	mft_path = cage_map_file(cage, ca->sias.rpkiManifest);
 	queued = 0;
 	for (i = 0; i < ca->rpp.nfiles; i++) {
 		map = ca->rpp.files + i;
-		ext = map->url + strlen(map->url) - 4;
-		if (strcmp(ext, ".cer") == 0)
+		if (uri_has_extension(&map->url, ".cer"))
 			queued += task_enqueue_rpp(map, ca);
-		else if (strcmp(ext, ".roa") == 0)
+		else if (uri_has_extension(&map->url, ".roa"))
 			roa_traverse(map, ca);
-		else if (strcmp(ext, ".gbr") == 0)
+		else if (uri_has_extension(&map->url, ".gbr"))
 			ghostbusters_traverse(map, ca);
 	}
 
 	if (queued > 0)
 		task_wakeup();
-	cache_commit_rpp(cage_rpkiNotify(cage), ca->sias.caRepository, &ca->rpp);
+	cache_commit_rpp(cage_rpkiNotify(cage), &ca->sias.caRepository,
+	    &ca->rpp);
 
 end:	free(cage);
 	return error;

@@ -19,7 +19,7 @@
 
 struct tal {
 	char const *file_name;
-	struct strlist urls;
+	struct uris urls;
 	unsigned char *spki; /* Decoded; not base64. */
 	size_t spki_len;
 };
@@ -51,6 +51,7 @@ read_content(char *fc /* File Content */, struct tal *tal)
 {
 	char *nl; /* New Line */
 	bool cr; /* Carriage return */
+	struct uri url;
 
 	/* Comment section */
 	while (fc[0] == '#') {
@@ -71,8 +72,14 @@ read_content(char *fc /* File Content */, struct tal *tal)
 		if (is_blank(fc))
 			break;
 
-		if (url_is_https(fc) || url_is_rsync(fc))
-			strlist_add(&tal->urls, pstrdup(fc));
+		if (uri_init(&url, fc) == 0) {
+			if (uri_is_https(&url) || uri_is_rsync(&url))
+				uris_add(&tal->urls, &url);
+			else
+				uri_cleanup(&url);
+		} else {
+			pr_op_debug("Cannot parse '%s' as a URI; ignoring.", fc);
+		}
 
 		fc = nl + cr + 1;
 		if (*fc == '\0')
@@ -106,10 +113,10 @@ tal_init(struct tal *tal, char const *file_path)
 
 	tal->file_name = path_filename(file_path);
 
-	strlist_init(&tal->urls);
+	uris_init(&tal->urls);
 	error = read_content((char *)file.buffer, tal);
 	if (error)
-		strlist_cleanup(&tal->urls);
+		uris_cleanup(&tal->urls, uri_cleanup);
 
 	file_free(&file);
 	return error;
@@ -119,7 +126,7 @@ static void
 tal_cleanup(struct tal *tal)
 {
 	free(tal->spki);
-	strlist_cleanup(&tal->urls);
+	uris_cleanup(&tal->urls, uri_cleanup);
 }
 
 char const *
@@ -165,18 +172,18 @@ validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 }
 
 static int
-try_urls(struct tal *tal, bool (*url_is_protocol)(char const *),
-    char *(*get_path)(char const *))
+try_urls(struct tal *tal, bool (*url_is_protocol)(struct uri const *),
+    char *(*get_path)(struct uri const *))
 {
-	char **url;
+	struct uri *url;
 	struct cache_mapping map;
 	int error;
 
 	ARRAYLIST_FOREACH(&tal->urls, url) {
 		map.url = *url;
-		if (!url_is_protocol(map.url))
+		if (!url_is_protocol(&map.url))
 			continue;
-		map.path = get_path(*url);
+		map.path = get_path(url);
 		if (!map.path)
 			continue;
 		error = validate_ta(tal, &map);
@@ -204,17 +211,17 @@ traverse_tal(char const *tal_path)
 		goto end1;
 
 	/* Online attempts */
-	error = try_urls(&tal, url_is_https, cache_refresh_by_url);
+	error = try_urls(&tal, uri_is_https, cache_refresh_by_url);
 	if (!error || error == EBUSY)
 		goto end2;
-	error = try_urls(&tal, url_is_rsync, cache_refresh_by_url);
+	error = try_urls(&tal, uri_is_rsync, cache_refresh_by_url);
 	if (!error || error == EBUSY)
 		goto end2;
 	/* Offline fallback attempts */
-	error = try_urls(&tal, url_is_https, cache_get_fallback);
+	error = try_urls(&tal, uri_is_https, cache_get_fallback);
 	if (!error || error == EBUSY)
 		goto end2;
-	error = try_urls(&tal, url_is_rsync, cache_get_fallback);
+	error = try_urls(&tal, uri_is_rsync, cache_get_fallback);
 	if (!error || error == EBUSY)
 		goto end2;
 

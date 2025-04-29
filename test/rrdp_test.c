@@ -288,7 +288,7 @@ init_rrdp_state(struct rrdp_state **result,
 	struct rrdp_hash *hash;
 	size_t i;
 
-	notif = pmalloc(sizeof(struct rrdp_state));
+	notif = pzalloc(sizeof(struct rrdp_state));
 	*result = notif;
 
 	init_rrdp_session(&notif->session, serial);
@@ -319,7 +319,7 @@ init_regular_notif(struct update_notification *notif, unsigned long serial, ...)
 	va_start(args, serial);
 	while ((hash_byte = va_arg(args, int)) >= 0) {
 		init_serial(&delta.serial, serial--);
-		delta.meta.uri = NULL; /* Not needed for now */
+		memset(&delta.meta.uri, 0, sizeof(delta.meta.uri)); /* Not needed for now */
 		delta.meta.hash = pmalloc(RRDP_HASH_LEN);
 		for (i = 0; i < RRDP_HASH_LEN; i++)
 			delta.meta.hash[i] = hash_byte;
@@ -400,30 +400,33 @@ END_TEST
 START_TEST(test_parse_notification_ok)
 {
 	struct update_notification notif;
+	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(0, parse_notification("https://host/notification.xml",
+	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_int_eq(0, parse_notification(&nurl,
 	    "resources/rrdp/notif-ok.xml", &notif));
+	uri_cleanup(&nurl);
 
 	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28",
 	    (char const *)notif.session.session_id);
 	ck_assert_str_eq("3", (char const *)notif.session.serial.str);
 
-	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri);
+	ck_assert_uri("https://host/9d-8/3/snapshot.xml", &notif.snapshot.uri);
 	ck_assert_uint_eq(32, notif.snapshot.hash_len);
 	validate_aaaa_hash(notif.snapshot.hash);
 
 	ck_assert_uint_eq(2, notif.deltas.len);
 
 	ck_assert_str_eq("2", (char const *)notif.deltas.array[0].serial.str);
-	ck_assert_str_eq("https://host/9d-8/2/delta.xml",
-	    notif.deltas.array[0].meta.uri);
+	ck_assert_uri("https://host/9d-8/2/delta.xml",
+	    &notif.deltas.array[0].meta.uri);
 	ck_assert_uint_eq(32, notif.deltas.array[0].meta.hash_len);
 	validate_01234_hash(notif.deltas.array[0].meta.hash);
 
 	ck_assert_str_eq("3", (char const *)notif.deltas.array[1].serial.str);
-	ck_assert_str_eq("https://host/9d-8/3/delta.xml",
-	    notif.deltas.array[1].meta.uri);
+	ck_assert_uri("https://host/9d-8/3/delta.xml",
+	    &notif.deltas.array[1].meta.uri);
 	ck_assert_uint_eq(32, notif.deltas.array[1].meta.hash_len);
 	validate_01234_hash(notif.deltas.array[0].meta.hash);
 
@@ -435,16 +438,19 @@ END_TEST
 START_TEST(test_parse_notification_0deltas)
 {
 	struct update_notification notif;
+	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(0, parse_notification("https://host/notification.xml",
+	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_int_eq(0, parse_notification(&nurl,
 	    "resources/rrdp/notif-0deltas.xml", &notif));
+	uri_cleanup(&nurl);
 
 	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28",
 	    (char const *)notif.session.session_id);
 	ck_assert_str_eq("3", (char const *)notif.session.serial.str);
 
-	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri);
+	ck_assert_uri("https://host/9d-8/3/snapshot.xml", &notif.snapshot.uri);
 	ck_assert_uint_eq(32, notif.snapshot.hash_len);
 	validate_01234_hash(notif.snapshot.hash);
 
@@ -458,10 +464,13 @@ END_TEST
 START_TEST(test_parse_notification_large_serial)
 {
 	struct update_notification notif;
+	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(0, parse_notification("https://host/notification.xml",
+	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_int_eq(0, parse_notification(&nurl,
 	    "resources/rrdp/notif-large-serial.xml", &notif));
+	uri_cleanup(&nurl);
 
 	ck_assert_str_eq("9df4b597-af9e-4dca-bdda-719cce2c4e28",
 	    (char const *)notif.session.session_id);
@@ -474,7 +483,7 @@ START_TEST(test_parse_notification_large_serial)
 	ck_assert_str_eq("999999999999999999999999",
 	    (char const *)notif.session.serial.str);
 
-	ck_assert_str_eq("https://host/9d-8/3/snapshot.xml", notif.snapshot.uri);
+	ck_assert_uri("https://host/9d-8/3/snapshot.xml", &notif.snapshot.uri);
 	ck_assert_uint_eq(32, notif.snapshot.hash_len);
 	validate_01234_hash(notif.snapshot.hash);
 
@@ -489,10 +498,12 @@ static void
 test_parse_notification_error(char *file)
 {
 	struct update_notification notif;
+	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(-EINVAL,
-	    parse_notification("https://host/notification.xml", file, &notif));
+	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_int_eq(-EINVAL, parse_notification(&nurl, file, &notif));
+	uri_cleanup(&nurl);
 
 	relax_ng_cleanup();
 }

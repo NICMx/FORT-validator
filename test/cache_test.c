@@ -48,11 +48,11 @@ touch_file(char const *dir)
 	ck_assert_int_eq(0, system(cmd));
 }
 
-static char *queued_url;
+static struct uri queued_url;
 static char *queued_path;
 
 int
-rsync_queue(char const *url, char const *path)
+rsync_queue(struct uri const *url, char const *path)
 {
 	rsync_counter++;
 
@@ -61,11 +61,11 @@ rsync_queue(char const *url, char const *path)
 		return dl_error;
 	}
 
-	printf("Simulating rsync: %s -> %s\n", url, path);
+	printf("Simulating rsync: %s -> %s\n", uri_str(url), path);
 	ck_assert_int_eq(0, mkdir(path, CACHE_FILEMODE));
 	touch_file(path);
 
-	queued_url = pstrdup(url);
+	uri_copy(&queued_url, url);
 	queued_path = pstrdup(path);
 
 	return 0;
@@ -108,8 +108,11 @@ setup_test(void)
 static struct cache_cage *
 run_dl_rsync(char *caRepository, int expected_err, unsigned int expected_calls)
 {
-	struct sia_uris sias = { .caRepository = caRepository };
-	struct cache_cage *cage = NULL;
+	struct sia_uris sias = { 0 };
+	struct cache_cage *cage;
+
+	ck_assert_int_eq(0, uri_init(&sias.caRepository, caRepository));
+	cage = NULL;
 
 	rsync_counter = 0;
 	https_counter = 0;
@@ -119,14 +122,15 @@ run_dl_rsync(char *caRepository, int expected_err, unsigned int expected_calls)
 	ck_assert_uint_eq(expected_calls, rsync_counter);
 	ck_assert_uint_eq(0, https_counter);
 
+	uri_cleanup(&sias.caRepository);
 	return cage;
 }
 
 static void
 finish_rsync(void)
 {
-	rsync_finished(queued_url, queued_path);
-	free(queued_url);
+	rsync_finished(&queued_url, queued_path);
+	uri_cleanup(&queued_url);
 	free(queued_path);
 }
 
@@ -142,18 +146,23 @@ static void
 run_dl_https(char const *url, unsigned int expected_calls,
     char const *expected_result)
 {
+	struct uri uri;
 	char const *result;
+
+	ck_assert_int_eq(0, uri_init(&uri, url));
 
 	rsync_counter = 0;
 	https_counter = 0;
 	printf("---- Downloading... ----\n");
-	result = cache_refresh_by_url(url);
+	result = cache_refresh_by_url(&uri);
 	printf("---- Downloaded. ----\n");
 	ck_assert_uint_eq(0, rsync_counter);
 	ck_assert_uint_eq(expected_calls, https_counter);
 
 	ck_assert_str(expected_result, result);
-	ck_assert_str(NULL, cache_get_fallback(url));
+	ck_assert_str(NULL, cache_get_fallback(&uri));
+
+	uri_cleanup(&uri);
 }
 
 
@@ -161,16 +170,19 @@ static void
 ck_cage(struct cache_cage *cage, char const *url,
     char const *refresh, char const *fallback)
 {
+	struct uri uri;
 	struct cache_node const *bkp;
 
-	ck_assert_str(refresh, cage_map_file(cage, url));
+	ck_assert_int_eq(0, uri_init(&uri, url));
+
+	ck_assert_str(refresh, cage_map_file(cage, &uri));
 
 	bkp = cage->refresh;
 	cage_disable_refresh(cage);
-
-	ck_assert_str(fallback, cage_map_file(cage, url));
-
+	ck_assert_str(fallback, cage_map_file(cage, &uri));
 	cage->refresh = bkp;
+
+	uri_cleanup(&uri);
 }
 
 static int
@@ -198,15 +210,28 @@ queue_commit(char const *rpkiNotify, char const *caRepository,
     char const *path1, char const *path2)
 {
 	struct rpp rpp = { 0 };
+	struct uri rn, cr;
+
+	if (rpkiNotify)
+		ck_assert_int_eq(0, uri_init(&rn, rpkiNotify));
+	else
+		memset(&rn, 0, sizeof(rn));
+	if (caRepository)
+		ck_assert_int_eq(0, uri_init(&cr, caRepository));
+	else
+		memset(&cr, 0, sizeof(cr));
 
 	rpp.nfiles = 2;
 	rpp.files = pzalloc(rpp.nfiles * sizeof(struct cache_mapping));
-	rpp.files[0].url = path_join(caRepository, "manifest.mft");
+	URI_CHILD(&cr, "manifest.mft", &rpp.files[0].url);
 	rpp.files[0].path = pstrdup(path1);
-	rpp.files[1].url = path_join(caRepository, "cert.cer");
+	URI_CHILD(&cr, "cert.cer", &rpp.files[1].url);
 	rpp.files[1].path = pstrdup(path2);
 
-	cache_commit_rpp(rpkiNotify, caRepository, &rpp);
+	cache_commit_rpp(&rn, &cr, &rpp);
+
+	uri_cleanup(&cr);
+	uri_cleanup(&rn);
 }
 
 /* Only validates the first character of the file. */
@@ -277,7 +302,7 @@ init_node_rsync(struct cache_node *node, char *url, char *path,
 {
 	node->key.id = url;
 	node->key.idlen = strlen(url);
-	node->key.rsync = url;
+	ck_assert_int_eq(0, uri_init(&node->key.rsync, url));
 	node->path = path;
 	node->state = fresh ? DLS_FRESH : DLS_OUTDATED; /* XXX (test) */
 	node->dlerr = dlerr;
@@ -290,7 +315,7 @@ init_node_https(struct cache_node *node, char *url, char *path,
 {
 	node->key.id = url;
 	node->key.idlen = strlen(url);
-	node->key.http = url;
+	ck_assert_int_eq(0, uri_init(&node->key.http, url));
 	node->path = path;
 	node->state = fresh ? DLS_FRESH : DLS_OUTDATED;
 	node->dlerr = dlerr;
@@ -300,14 +325,8 @@ init_node_https(struct cache_node *node, char *url, char *path,
 static void
 ck_node_key(struct node_key *expected, struct node_key *actual)
 {
-	if (expected->http)
-		ck_assert_str_eq(expected->http, actual->http);
-	else
-		ck_assert_ptr_eq(NULL, actual->http);
-	if (expected->rsync)
-		ck_assert_str_eq(expected->rsync, actual->rsync);
-	else
-		ck_assert_ptr_eq(NULL, actual->rsync);
+	ck_assert(uri_equals(&expected->http, &actual->http));
+	ck_assert(uri_equals(&expected->rsync, &actual->rsync));
 	ck_assert_uint_eq(expected->idlen, actual->idlen);
 	ck_assert_mem_eq(expected->id, actual->id, expected->idlen);
 }
@@ -663,12 +682,16 @@ START_TEST(test_https_cleanup)
 	}
 
 	/* 3 */
-	map.url = "https://domain/rpki/ta50.cer";
-	map.path = "https/50";
+	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta50.cer"));
+	map.path = pstrdup("https/50");
 	cache_commit_file(&map);
-	map.url = "https://domain/rpki/ta52.cer";
-	map.path = "https/52";
+	map_cleanup(&map);
+
+	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta52.cer"));
+	map.path = pstrdup("https/52");
 	cache_commit_file(&map);
+	map_cleanup(&map);
+
 	cleanup_cache();
 	ck_filesystem("fallback",
 	    "fallback/0", "A", "fallback/0.json", "{",
@@ -678,12 +701,16 @@ START_TEST(test_https_cleanup)
 	new_iteration(false);
 
 	/* 4 */
-	map.url = "https://domain/rpki/ta50.cer";
-	map.path = "fallback/0";
+	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta50.cer"));
+	map.path = pstrdup("fallback/0");
 	cache_commit_file(&map);
-	map.url = "https://domain/rpki/ta51.cer";
-	map.path = "https/51";
+	map_cleanup(&map);
+
+	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta51.cer"));
+	map.path = pstrdup("https/51");
 	cache_commit_file(&map);
+	map_cleanup(&map);
+
 	cleanup_cache();
 	ck_filesystem("fallback",
 	    "fallback/0", "A", "fallback/0.json", "{",
@@ -774,6 +801,7 @@ START_TEST(test_context)
 	char *FILE_RSYNC_PATH =	"rsync/0/rpp3/a.cer";
 
 	struct sia_uris sias = { 0 };
+	struct uri file_url;
 	struct cache_cage *cage;
 	struct rpp rpp = { 0 };
 
@@ -788,58 +816,69 @@ START_TEST(test_context)
 	dls[1] = SHDR("3") PBLSH("rsync://x.y.z/mod5/rpp3/a.cer", "Rm9ydAo=") STAIL;
 	dls[2] = NULL;
 
-	/* 1. 1st CA succeeds on RRDP */
-	sias.rpkiNotify = RPKI_NOTIFY;
-	sias.caRepository = CA_REPOSITORY;
-	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
-	ck_assert_str_eq(RPKI_NOTIFY, cage->rpkiNotify);
-	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, FILE_URL));
-	ck_assert_int_eq(false, cage_disable_refresh(cage));
-	ck_assert_ptr_eq(NULL, cage_map_file(cage, FILE_URL));
+	ck_assert_int_eq(0, uri_init(&file_url, FILE_URL));
 
-	/*
-	 * 2. 2nd CA points to the same caRepository,
-	 *    but does not provide RRDP as an option.
-	 */
-	sias.rpkiNotify = NULL;
+	printf("1. 1st CA succeeds on RRDP\n");
+	print_tree();
+	ck_assert_int_eq(0, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
+	ck_assert_int_eq(0, uri_init(&sias.caRepository, CA_REPOSITORY));
+	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
+	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
+	ck_assert_int_eq(false, cage_disable_refresh(cage));
+	ck_assert_ptr_eq(NULL, cage_map_file(cage, &file_url));
+
+	printf("2. 2nd CA points to the same caRepository,\n");
+	printf("   but does not provide RRDP as an option.\n");
+	print_tree();
+	uri_cleanup(&sias.rpkiNotify);
 
 	ck_assert_int_eq(EBUSY, cache_refresh_by_sias(&sias, &cage));
 	finish_rsync();
 	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
 
-	ck_assert_ptr_eq(NULL, cage->rpkiNotify);
-	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, FILE_URL));
+	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
+	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(false, cage_disable_refresh(cage));
-	ck_assert_ptr_eq(NULL, cage_map_file(cage, FILE_URL));
+	ck_assert_ptr_eq(NULL, cage_map_file(cage, &file_url));
 
-	/* 3. Commit */
+	printf("3. Commit\n");
+
+	print_tree();
 	rpp.nfiles = 1;
 	rpp.files = pzalloc(sizeof(struct cache_mapping));
-	rpp.files->url = pstrdup(FILE_URL);
+	uri_copy(&rpp.files->url, &file_url);
 	rpp.files->path = pstrdup(FILE_RRDP_PATH);
-	cache_commit_rpp(RPKI_NOTIFY, CA_REPOSITORY, &rpp);
+	ck_assert_int_eq(0, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
+	cache_commit_rpp(&sias.rpkiNotify, &sias.caRepository, &rpp);
 
 	rpp.nfiles = 1;
 	rpp.files = pzalloc(sizeof(struct cache_mapping));
-	rpp.files->url = pstrdup(FILE_URL);
+	uri_copy(&rpp.files->url, &file_url);
 	rpp.files->path = pstrdup(FILE_RSYNC_PATH);
-	cache_commit_rpp(NULL, CA_REPOSITORY, &rpp);
+	uri_cleanup(&sias.rpkiNotify);
+	cache_commit_rpp(&sias.rpkiNotify, &sias.caRepository, &rpp);
 
 	commit_fallbacks(time_fatal());
 
-	/* 4. Redo both CAs, check the fallbacks too */
+	printf("4. Redo both CAs, check the fallbacks too\n");
+	print_tree();
 	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
-	ck_assert_ptr_eq(NULL, cage->rpkiNotify);
-	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, FILE_URL));
+	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
+	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(true, cage_disable_refresh(cage));
-	ck_assert_str_eq("fallback/1/0", cage_map_file(cage, FILE_URL));
+	ck_assert_str_eq("fallback/1/0", cage_map_file(cage, &file_url));
 
-	sias.rpkiNotify = RPKI_NOTIFY;
+	ck_assert_int_eq(0, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
 	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
-	ck_assert_str_eq(RPKI_NOTIFY, cage->rpkiNotify);
-	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, FILE_URL));
+	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
+	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(true, cage_disable_refresh(cage));
-	ck_assert_str_eq("fallback/0/0", cage_map_file(cage, FILE_URL));
+	ck_assert_str_eq("fallback/0/0", cage_map_file(cage, &file_url));
+
+	uri_cleanup(&sias.rpkiNotify);
+	uri_cleanup(&sias.caRepository);
+	uri_cleanup(&file_url);
 
 	cleanup_test();
 	relax_ng_cleanup();
@@ -865,9 +904,9 @@ ck_rrdp(struct rrdp_state *expected, struct rrdp_state *actual)
 
 	ck_assert_int_eq(HASH_COUNT(expected->files), HASH_COUNT(actual->files));
 	HASH_ITER(hh, expected->files, expf, tmp) {
-		HASH_FIND(hh, actual->files, expf->map.url, strlen(expf->map.url), actf);
+		HASH_FIND(hh, actual->files, uri_str(&expf->map.url), uri_len(&expf->map.url), actf);
 		ck_assert_ptr_ne(NULL, actf);
-		ck_assert_str_eq(expf->map.url, actf->map.url);
+		ck_assert(uri_equals(&expf->map.url, &actf->map.url));
 		ck_assert_str_eq(expf->map.path, actf->map.path);
 	}
 
@@ -913,12 +952,22 @@ START_TEST(test_json_min)
 
 	node->key.id = pstrdup("https://a.b.c/sample.cer");
 	node->key.idlen = strlen(node->key.id);
-	node->key.http = node->key.id;
+	__uri_init(&node->key.http, node->key.id, node->key.idlen);
 	node->path = pstrdup("tmp/sample.cer");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;
 
 	ck_json(node);
+}
+
+static void
+CACHE_FILE_ADD(struct rrdp_state *state, char const *url, char *path)
+{
+	struct uri uri;
+
+	ck_assert_int_eq(0, uri_init(&uri, url));
+	ck_assert_ptr_ne(NULL, cache_file_add(state, &uri, pstrdup(path)));
+	uri_cleanup(&uri);
 }
 
 START_TEST(test_json_rrdp_min)
@@ -927,7 +976,7 @@ START_TEST(test_json_rrdp_min)
 
 	node->key.id = pstrdup("https://a.b.c/sample.cer");
 	node->key.idlen = strlen(node->key.id);
-	node->key.http = node->key.id;
+	__uri_init(&node->key.http, node->key.id, node->key.idlen);
 	node->path = pstrdup("rrdp/123");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;
@@ -938,7 +987,7 @@ START_TEST(test_json_rrdp_min)
 	ck_assert_ptr_ne(NULL, node->rrdp->session.serial.num);
 	BN_add_word(node->rrdp->session.serial.num, 1357);
 	node->rrdp->session.serial.str = pstrdup("1357");
-	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/e.mft"), pstrdup("rrdp/123/0"));
+	CACHE_FILE_ADD(node->rrdp, "rsync://a.b.c/d/e.mft", "rrdp/123/0");
 	cseq_init(&node->rrdp->seq, node->path, 1, false);
 	STAILQ_INIT(&node->rrdp->delta_hashes);
 
@@ -952,7 +1001,7 @@ START_TEST(test_json_max)
 
 	node->key.id = pstrdup("https://a.b.c/sample.cer");
 	node->key.idlen = strlen(node->key.id);
-	node->key.http = node->key.id;
+	__uri_init(&node->key.http, node->key.id, node->key.idlen);
 	node->path = pstrdup("rrdp/123");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;
@@ -967,8 +1016,8 @@ START_TEST(test_json_max)
 	ck_assert_ptr_ne(NULL, node->rrdp->session.serial.num);
 	BN_add_word(node->rrdp->session.serial.num, 1357);
 	node->rrdp->session.serial.str = pstrdup("1357");
-	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/e.mft"), pstrdup("rrdp/123/0"));
-	cache_file_add(node->rrdp, pstrdup("rsync://a.b.c/d/f.crl"), pstrdup("rrdp/123/1"));
+	CACHE_FILE_ADD(node->rrdp, "rsync://a.b.c/d/e.mft", "rrdp/123/0");
+	CACHE_FILE_ADD(node->rrdp, "rsync://a.b.c/d/f.crl", "rrdp/123/1");
 	cseq_init(&node->rrdp->seq, node->path, 2, false);
 	STAILQ_INIT(&node->rrdp->delta_hashes);
 	hash = pmalloc(sizeof(struct rrdp_hash));
@@ -985,15 +1034,20 @@ START_TEST(test_json_weirdurl)
 {
 	static char const *NOTIF = "https://a.b.c/notif.xml";
 	static char const *CAREPO = "rsync://a.b.c/rpp";
+	size_t nlen;
+	size_t clen;
+	struct cache_node *node;
 
-	struct cache_node *node = pzalloc(sizeof(struct cache_node));
+	nlen = strlen(NOTIF);
+	clen = strlen(CAREPO);
+	node = pzalloc(sizeof(struct cache_node));
 
-	node->key.idlen = strlen(NOTIF) + strlen(CAREPO) + 1;
+	node->key.idlen = nlen + clen + 1;
 	node->key.id = pmalloc(node->key.idlen + 1);
 	strcpy(node->key.id, NOTIF);
-	strcpy(node->key.id + strlen(NOTIF) + 1, CAREPO);
-	node->key.http = node->key.id;
-	node->key.rsync = node->key.id + strlen(NOTIF) + 1;
+	strcpy(node->key.id + nlen + 1, CAREPO);
+	__uri_init(&node->key.http, node->key.id, nlen);
+	__uri_init(&node->key.rsync, node->key.id + nlen + 1, clen);
 	node->path = pstrdup("tmp/sample.cer");
 	node->state = DLS_FRESH;
 	node->dlerr = ENOENT;

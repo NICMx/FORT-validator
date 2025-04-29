@@ -55,14 +55,18 @@ struct node_key {
 	 * If node is rsync, @http is NULL.
 	 * If node is HTTP, @http is the simple URL.
 	 * If node is RRDP, @http is the rpkiNotify.
+	 *
+	 * Points to @id; do not clean.
 	 */
-	char const *http;
+	struct uri http;
 	/*
 	 * If node is rsync, @rsync is the simple URL.
 	 * If node is HTTP, @rsync is NULL.
 	 * If node is RRDP, @rsync is the caRepository.
+	 *
+	 * Points to @id; do not clean.
 	 */
-	char const *rsync;
+	struct uri rsync;
 };
 
 /*
@@ -140,13 +144,13 @@ static volatile sig_atomic_t lockfile_owned;
 struct cache_cage {
 	struct cache_node const *refresh;
 	struct cache_node const *fallback;
-	char const *rpkiNotify;
+	struct uri rpkiNotify;
 	struct mft_meta *mft;		/* Fallback */
 };
 
 struct cache_commit {
-	char *rpkiNotify;
-	char *caRepository;
+	struct uri rpkiNotify;
+	struct uri caRepository;
 	struct cache_mapping *files;
 	size_t nfiles;
 	struct mft_meta mft;		/* RPPs commits only */
@@ -202,25 +206,35 @@ flush_nodes(void)
 	foreach_node(delete_node, NULL);
 }
 
-char *
-get_rsync_module(char const *url)
+/*
+ * - Result must not be cleant.
+ * - strlen(uri_str(module)) should not be trusted.
+ */
+static bool
+get_rsync_module(struct uri const *url, struct uri *module)
 {
+	char const *str;
 	array_index u;
 	unsigned int slashes;
 
+	str = uri_str(url);
 	slashes = 0;
-	for (u = 0; url[u] != 0; u++)
-		if (url[u] == '/') {
+	for (u = 0; str[u] != 0; u++)
+		if (str[u] == '/') {
 			slashes++;
-			if (slashes == 4)
-				return pstrndup(url, u);
+			if (slashes == 4) {
+				__uri_init(module, str, u);
+				return true;
+			}
 		}
 
-	if (slashes == 3 && url[u - 1] != '/')
-		return pstrdup(url);
+	if (slashes == 3 && str[u - 1] != '/') {
+		*module = *url;
+		return true;
+	}
 
-	pr_val_err("Url '%s' does not appear to have an rsync module.", url);
-	return NULL;
+	pr_val_err("Url '%s' does not appear to have an rsync module.", str);
+	return false;
 }
 
 char const *
@@ -243,15 +257,18 @@ strip_rsync_module(char const *url)
 static json_t *
 node2json(struct cache_node *node)
 {
+	char const *str;
 	json_t *json;
 
 	json = json_obj_new();
 	if (json == NULL)
 		return NULL;
 
-	if (node->key.http && json_add_str(json, "http", node->key.http))
+	str = uri_str(&node->key.http);
+	if (str && json_add_str(json, "http", str))
 		goto fail;
-	if (node->key.rsync && json_add_str(json, "rsync", node->key.rsync))
+	str = uri_str(&node->key.rsync);
+	if (str && json_add_str(json, "rsync", str))
 		goto fail;
 	if (json_add_str(json, "path", node->path))
 		goto fail;
@@ -443,39 +460,46 @@ cache_setup(void)
 }
 
 static void
-init_rrdp_fallback_key(struct node_key *key, char const *http, char const *rsync)
+init_rrdp_fallback_key(struct node_key *key, struct uri const *http,
+    struct uri const *rsync)
 {
 	size_t hlen, rlen;
 
-	hlen = strlen(http);
-	rlen = strlen(rsync);
+	hlen = uri_len(http);
+	rlen = uri_len(rsync);
 
 	key->idlen = hlen + rlen + 1;
 	key->id = pmalloc(key->idlen + 1);
-	key->http = key->id;
-	key->rsync = key->id + hlen + 1;
+	__uri_init(&key->http, key->id, hlen);
+	__uri_init(&key->rsync, key->id + hlen + 1, rlen);
 
-	memcpy(key->id, http, hlen + 1);
-	memcpy(key->id + hlen + 1, rsync, rlen + 1);
+	memcpy(key->id, uri_str(http), hlen + 1);
+	memcpy(key->id + hlen + 1, uri_str(rsync), rlen + 1);
 }
 
-static bool
-init_node_key(struct node_key *key, char const *http, char const *rsync)
+static int
+init_node_key(struct node_key *key, struct uri const *http,
+    struct uri const *rsync)
 {
+	if (http && (uri_str(http) == NULL))
+		http = NULL;
+	if (rsync && (uri_str(rsync) == NULL))
+		rsync = NULL;
+
 	if (http != NULL && rsync != NULL) {
 		init_rrdp_fallback_key(key, http, rsync);
 
 	} else if (rsync != NULL) {
-		key->id = pstrdup(rsync);
-		key->idlen = strlen(key->id);
-		key->http = NULL;
-		key->rsync = key->id;
+		key->idlen = uri_len(rsync);
+		key->id = pstrndup(uri_str(rsync), key->idlen);
+		memset(&key->http, 0, sizeof(key->http));
+		__uri_init(&key->rsync, key->id, key->idlen);
 
 	} else if (http != NULL) {
-		key->id = pstrdup(http);
-		key->idlen = strlen(key->id);
-		key->http = key->id;
-		key->rsync = NULL;
+		key->idlen = uri_len(http);
+		key->id = pstrndup(uri_str(http), key->idlen);
+		__uri_init(&key->http, key->id, key->idlen);
+		memset(&key->rsync, 0, sizeof(key->rsync));
 
 	} else {
 		return false;
@@ -488,30 +512,36 @@ static struct cache_node *
 json2node(json_t *json)
 {
 	struct cache_node *node;
-	char const *http;
-	char const *rsync;
+	struct uri http;
+	struct uri rsync;
 	char const *path;
 	json_t *rrdp;
 	int error;
 
-	error = json_get_str(json, "http", &http);
+	error = json_get_uri(json, "http", &http);
 	if (error && (error != ENOENT)) {
 		pr_op_debug("http: %s", strerror(error));
 		return NULL;
 	}
 
-	error = json_get_str(json, "rsync", &rsync);
+	error = json_get_uri(json, "rsync", &rsync);
 	if (error && (error != ENOENT)) {
 		pr_op_debug("rsync: %s", strerror(error));
+		uri_cleanup(&http);
 		return NULL;
 	}
 
 	node = pzalloc(sizeof(struct cache_node));
 
-	if (!init_node_key(&node->key, http, rsync)) {
+	if (!init_node_key(&node->key, &http, &rsync)) {
 		pr_op_debug("JSON node is missing both http and rsync tags.");
+		uri_cleanup(&rsync);
+		uri_cleanup(&http);
 		goto nde;
 	}
+
+	uri_cleanup(&http);
+	uri_cleanup(&rsync);
 
 	error = json_get_str(json, "path", &path);
 	if (error) {
@@ -750,7 +780,7 @@ static int
 dl_rsync(struct cache_node *module)
 {
 	int error;
-	error = rsync_queue(module->key.rsync, module->path);
+	error = rsync_queue(&module->key.rsync, module->path);
 	return error ? error : EBUSY;
 }
 
@@ -760,7 +790,7 @@ dl_rrdp(struct cache_node *notif)
 	bool changed;
 	int error;
 
-	error = rrdp_update(notif->key.http, notif->path, notif->success_ts,
+	error = rrdp_update(&notif->key.http, notif->path, notif->success_ts,
 	    &changed, &notif->rrdp);
 	if (error)
 		return error;
@@ -776,7 +806,7 @@ dl_http(struct cache_node *file)
 	bool changed;
 	int error;
 
-	error = http_download(file->key.http, file->path,
+	error = http_download(&file->key.http, file->path,
 	    file->success_ts, &changed);
 	if (error)
 		return error;
@@ -796,7 +826,8 @@ find_node(struct cache_table *tbl, char const *url, size_t urlen)
 }
 
 static struct cache_node *
-provide_node(struct cache_table *tbl, char const *http, char const *rsync)
+provide_node(struct cache_table *tbl, struct uri const *http,
+   struct uri const *rsync)
 {
 	struct node_key key;
 	struct cache_node *node;
@@ -870,12 +901,14 @@ write_metadata(struct cache_node *node)
  * By contract, @result->state will be DLS_FRESH on return 0.
  */
 static int
-do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
+do_refresh(struct cache_table *tbl, struct uri const *uri,
+    struct cache_node **result)
 {
+	struct uri module;
 	struct cache_node *node;
 	bool downloaded = false;
 
-	pr_val_debug("Trying %s (online)...", uri);
+	pr_val_debug("Trying %s (online)...", uri_str(uri));
 
 	if (!tbl->enabled) {
 		pr_val_debug("Protocol disabled.");
@@ -883,12 +916,10 @@ do_refresh(struct cache_table *tbl, char const *uri, struct cache_node **result)
 	}
 
 	if (tbl == &cache.rsync) {
-		char *module = get_rsync_module(uri);
-		if (module == NULL)
+		if (!get_rsync_module(uri, &module))
 			return EINVAL;
 		mutex_lock(&tbl->lock);
-		node = provide_node(tbl, NULL, module);
-		free(module);
+		node = provide_node(tbl, NULL, &module);
 	} else {
 		mutex_lock(&tbl->lock);
 		node = provide_node(tbl, uri, NULL);
@@ -951,10 +982,10 @@ find_rrdp_fallback_node(struct sia_uris *sias)
 	struct node_key key;
 	struct cache_node *result;
 
-	if (!sias->rpkiNotify || !sias->caRepository)
+	if (!uri_str(&sias->rpkiNotify) || !uri_str(&sias->caRepository))
 		return NULL;
 
-	init_rrdp_fallback_key(&key, sias->rpkiNotify, sias->caRepository);
+	init_rrdp_fallback_key(&key, &sias->rpkiNotify, &sias->caRepository);
 	result = find_node(&cache.fallback, key.id, key.idlen);
 	free(key.id);
 
@@ -968,8 +999,8 @@ get_fallback(struct sia_uris *sias)
 	struct cache_node *rsync;
 
 	rrdp = find_rrdp_fallback_node(sias);
-	rsync = find_node(&cache.fallback, sias->caRepository,
-	    strlen(sias->caRepository));
+	rsync = find_node(&cache.fallback, uri_str(&sias->caRepository),
+	    uri_len(&sias->caRepository));
 
 	if (rrdp == NULL)
 		return rsync;
@@ -980,16 +1011,15 @@ get_fallback(struct sia_uris *sias)
 
 /* Do not free nor modify the result. */
 char *
-cache_refresh_by_url(char const *url)
+cache_refresh_by_url(struct uri const *url)
 {
 	struct cache_node *node = NULL;
 
 	// XXX review result signs
-	// XXX Normalize @url
 
-	if (url_is_https(url))
+	if (uri_is_https(url))
 		do_refresh(&cache.https, url, &node);
-	else if (url_is_rsync(url))
+	else if (uri_is_rsync(url))
 		do_refresh(&cache.rsync, url, &node);
 
 	return node ? node->path : NULL;
@@ -1000,7 +1030,7 @@ cache_refresh_by_url(char const *url)
  * Do not free nor modify the result.
  */
 char *
-cache_get_fallback(char const *url)
+cache_get_fallback(struct uri const *url)
 {
 	struct cache_node *node;
 
@@ -1009,9 +1039,9 @@ cache_get_fallback(char const *url)
 	 * Mutex not needed here.
 	 */
 
-	pr_val_debug("Trying %s (offline)...", url);
+	pr_val_debug("Trying %s (offline)...", uri_str(url));
 
-	node = find_node(&cache.fallback, url, strlen(url));
+	node = find_node(&cache.fallback, uri_str(url), uri_len(url));
 	if (!node) {
 		pr_val_debug("Cache data unavailable.");
 		return NULL;
@@ -1032,15 +1062,14 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 {
 	struct cache_node *node;
 	struct cache_cage *cage;
-	char const *rpkiNotify;
+	struct uri rpkiNotify;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
 	// XXX review result signs
-	// XXX normalize rpkiNotify & caRepository?
 
 	/* Try RRDP + optional fallback */
-	if (sias->rpkiNotify) {
-		switch (do_refresh(&cache.rrdp, sias->rpkiNotify, &node)) {
+	if (uri_str(&sias->rpkiNotify) != NULL) {
+		switch (do_refresh(&cache.rrdp, &sias->rpkiNotify, &node)) {
 		case 0:
 			rpkiNotify = sias->rpkiNotify;
 			goto refresh_success;
@@ -1050,9 +1079,9 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 	}
 
 	/* Try rsync + optional fallback */
-	switch (do_refresh(&cache.rsync, sias->caRepository, &node)) {
+	switch (do_refresh(&cache.rsync, &sias->caRepository, &node)) {
 	case 0:
-		rpkiNotify = NULL;
+		memset(&rpkiNotify, 0, sizeof(rpkiNotify));
 		goto refresh_success;
 	case EBUSY:
 		return EBUSY;
@@ -1076,18 +1105,18 @@ refresh_success:
 }
 
 static char const *
-node2file(struct cache_node const *node, char const *url)
+node2file(struct cache_node const *node, struct uri const *url)
 {
 	if (node == NULL)
 		return NULL;
 	// XXX RRDP is const, rsync needs to be freed
 	return (node->rrdp)
 	    ? /* RRDP  */ rrdp_file(node->rrdp, url)
-	    : /* rsync */ path_join(node->path, strip_rsync_module(url));
+	    : /* rsync */ path_join(node->path, strip_rsync_module(uri_str(url)));
 }
 
 char const *
-cage_map_file(struct cache_cage *cage, char const *url)
+cage_map_file(struct cache_cage *cage, struct uri const *url)
 {
 	/*
 	 * Remember: In addition to honoring the consts of cache->refresh and
@@ -1141,14 +1170,14 @@ cage_mft_fallback(struct cache_cage *cage)
  * not going to be modified nor deleted until the cache cleanup.
  */
 void
-cache_commit_rpp(char const *rpkiNotify, char const *caRepository,
+cache_commit_rpp(struct uri const *rpkiNotify, struct uri const *caRepository,
     struct rpp *rpp)
 {
 	struct cache_commit *commit;
 
 	commit = pmalloc(sizeof(struct cache_commit));
-	commit->rpkiNotify = rpkiNotify ? pstrdup(rpkiNotify) : NULL;
-	commit->caRepository = pstrdup(caRepository);
+	uri_copy(&commit->rpkiNotify, rpkiNotify);
+	uri_copy(&commit->caRepository, caRepository);
 	commit->files = rpp->files;
 	commit->nfiles = rpp->nfiles;
 	INTEGER_move(&commit->mft.num, &rpp->mft.num);
@@ -1167,11 +1196,11 @@ cache_commit_file(struct cache_mapping *map)
 {
 	struct cache_commit *commit;
 
-	commit = pmalloc(sizeof(struct cache_commit));
-	commit->rpkiNotify = NULL;
-	commit->caRepository = NULL;
+	commit = pzalloc(sizeof(struct cache_commit));
+	memset(&commit->rpkiNotify, 0, sizeof(commit->rpkiNotify));
+	memset(&commit->caRepository, 0, sizeof(commit->caRepository));
 	commit->files = pmalloc(sizeof(*map));
-	commit->files[0].url = pstrdup(map->url);
+	uri_copy(&commit->files[0].url, &map->url);
 	commit->files[0].path = pstrdup(map->path);
 	commit->nfiles = 1;
 	memset(&commit->mft, 0, sizeof(commit->mft));
@@ -1182,22 +1211,22 @@ cache_commit_file(struct cache_mapping *map)
 }
 
 void
-rsync_finished(char const *url, char const *path)
+rsync_finished(struct uri const *url, char const *path)
 {
 	struct cache_node *node;
 
 	mutex_lock(&cache.rsync.lock);
 
-	node = find_node(&cache.rsync, url, strlen(url));
+	node = find_node(&cache.rsync, uri_str(url), uri_len(url));
 	if (node == NULL) {
 		mutex_unlock(&cache.rsync.lock);
 		pr_op_err("rsync '%s -> %s' finished, but cache node does not exist.",
-		    url, path);
+		    uri_str(url), path);
 		return;
 	}
 	if (node->state != DLS_ONGOING)
 		pr_op_warn("rsync '%s -> %s' finished, but existing node was not in ONGOING state.",
-		    url, path);
+		    uri_str(url), path);
 
 	node->state = DLS_FRESH;
 	node->dlerr = 0;
@@ -1207,10 +1236,10 @@ rsync_finished(char const *url, char const *path)
 	task_wakeup_dormants();
 }
 
-char const *
+struct uri const *
 cage_rpkiNotify(struct cache_cage *cage)
 {
-	return cage->rpkiNotify;
+	return &cage->rpkiNotify;
 }
 
 static void
@@ -1219,8 +1248,8 @@ cachent_print(struct cache_node *node)
 	if (!node)
 		return;
 
-	printf("\thttp:%s rsync:%s (%s): ", node->key.http, node->key.rsync,
-	    node->path);
+	printf("\thttp:%s rsync:%s (%s): ", uri_str(&node->key.http),
+	    uri_str(&node->key.rsync), node->path);
 	switch (node->state) {
 	case DLS_OUTDATED:
 		printf("stale ");
@@ -1288,7 +1317,7 @@ commit_rpp(struct cache_commit *commit, struct cache_node *fb)
 		 * Note, this is accidentally working perfectly for rsync too.
 		 * Might want to rename some of this.
 		 */
-		dst = rrdp_create_fallback(fb->path, &fb->rrdp, src->url);
+		dst = rrdp_create_fallback(fb->path, &fb->rrdp, &src->url);
 		if (!dst)
 			goto skip;
 
@@ -1365,12 +1394,14 @@ commit_fallbacks(time_t now)
 		commit = STAILQ_FIRST(&commits);
 		STAILQ_REMOVE_HEAD(&commits, lh);
 
-		if (commit->caRepository) {
+		if (uri_str(&commit->caRepository) != NULL) {
 			pr_op_debug("Creating fallback for %s (%s)",
-			    commit->caRepository, commit->rpkiNotify);
+			    uri_str(&commit->caRepository),
+			    uri_str(&commit->rpkiNotify));
 
-			fb = provide_node(&cache.fallback, commit->rpkiNotify,
-			    commit->caRepository);
+			fb = provide_node(&cache.fallback,
+			    &commit->rpkiNotify,
+			    &commit->caRepository);
 			fb->success_ts = now;
 
 			pr_op_debug("mkdir -f %s", fb->path);
@@ -1391,9 +1422,10 @@ commit_fallbacks(time_t now)
 		} else { /* TA */
 			struct cache_mapping *map = &commit->files[0];
 
-			pr_op_debug("Creating fallback for %s", map->url);
+			pr_op_debug("Creating fallback for %s",
+			    uri_str(&map->url));
 
-			fb = provide_node(&cache.fallback, map->url, NULL);
+			fb = provide_node(&cache.fallback, &map->url, NULL);
 			fb->success_ts = now;
 			if (is_fallback(map->path))
 				goto freshen;
@@ -1404,10 +1436,10 @@ commit_fallbacks(time_t now)
 		write_metadata(fb);
 
 freshen:	fb->state = DLS_FRESH;
-skip:		free(commit->rpkiNotify);
-		free(commit->caRepository);
+skip:		uri_cleanup(&commit->rpkiNotify);
+		uri_cleanup(&commit->caRepository);
 		for (i = 0; i < commit->nfiles; i++) {
-			free(commit->files[i].url);
+			uri_cleanup(&commit->files[i].url);
 			free(commit->files[i].path);
 		}
 		free(commit->files);
@@ -1499,10 +1531,10 @@ sias_init(struct sia_uris *sias)
 void
 sias_cleanup(struct sia_uris *sias)
 {
-	free(sias->caRepository);
-	free(sias->rpkiNotify);
-	free(sias->rpkiManifest);
-	free(sias->crldp);
-	free(sias->caIssuers);
-	free(sias->signedObject);
+	uri_cleanup(&sias->caRepository);
+	uri_cleanup(&sias->rpkiNotify);
+	uri_cleanup(&sias->rpkiManifest);
+	uri_cleanup(&sias->crldp);
+	uri_cleanup(&sias->caIssuers);
+	uri_cleanup(&sias->signedObject);
 }

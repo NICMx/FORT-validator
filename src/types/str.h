@@ -5,8 +5,6 @@
 #include <openssl/bn.h>
 #include <stdbool.h>
 
-#include "types/arraylist.h"
-
 char *str_concat(char const *, char const *);
 
 int hex2ulong(char const *, unsigned long *);
@@ -38,13 +36,5 @@ bool string_tokenizer_next(struct string_tokenizer *);
 bool token_equals(struct string_tokenizer *, struct string_tokenizer *);
 char *token_read(struct string_tokenizer *);
 size_t token_count(struct string_tokenizer *);
-
-/* Plural */
-
-DEFINE_ARRAY_LIST_STRUCT(strlist, char *);
-
-void strlist_init(struct strlist *);
-void strlist_cleanup(struct strlist *);
-void strlist_add(struct strlist *, char *);
 
 #endif /* SRC_TYPES_STR_H_ */

@@ -45,6 +45,7 @@ base64_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		cache.test
 cache_test_SOURCES =		cache_test.c
 cache_test_LDADD =		${CHECK_LIBS}
+cache_test_LDADD +=		${CURL_LIBS}
 cache_test_LDADD +=		${XML2_LIBS}
 cache_test_LDADD +=		${JANSSON_LIBS}
 
@@ -79,18 +80,21 @@ pdu_stream_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		rrdp.test
 rrdp_test_SOURCES =		rrdp_test.c
 rrdp_test_LDADD =		${CHECK_LIBS}
+rrdp_test_LDADD +=		${CURL_LIBS}
 rrdp_test_LDADD +=		${XML2_LIBS}
 rrdp_test_LDADD +=		${JANSSON_LIBS}
 
 check_PROGRAMS +=		rrdp_update.test
 rrdp_update_test_SOURCES =	rrdp_update_test.c
 rrdp_update_test_LDADD =	${CHECK_LIBS}
+rrdp_update_test_LDADD +=	${CURL_LIBS}
 rrdp_update_test_LDADD +=	${XML2_LIBS}
 rrdp_update_test_LDADD +=	${JANSSON_LIBS}
 
 check_PROGRAMS +=		rsync.test
 rsync_test_SOURCES =		rsync_test.c
 rsync_test_LDADD =		${CHECK_LIBS}
+rsync_test_LDADD +=		${CURL_LIBS}
 
 check_PROGRAMS +=		serial.test
 serial_test_SOURCES =		types/serial_test.c
@@ -103,6 +107,7 @@ serial_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		tal.test
 tal_test_SOURCES =		object/tal_test.c
 tal_test_LDADD =		${CHECK_LIBS}
+tal_test_LDADD +=		${CURL_LIBS}
 
 check_PROGRAMS +=		task.test
 task_test_SOURCES =		task_test.c
