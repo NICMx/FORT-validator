@@ -117,9 +117,10 @@ check_PROGRAMS +=		thread_pool.test
 thread_pool_test_SOURCES =	thread_pool_test.c
 thread_pool_test_LDADD =	${CHECK_LIBS}
 
-check_PROGRAMS +=		url.test
-url_test_SOURCES =		types/url_test.c
-url_test_LDADD =		${CHECK_LIBS} ${CURL_LIBS}
+check_PROGRAMS +=		uri.test
+uri_test_SOURCES =		types/uri_test.c
+uri_test_LDADD =		${CHECK_LIBS}
+uri_test_LDADD +=		${CURL_LIBS}
 
 check_PROGRAMS +=		uthash.test
 uthash_test_SOURCES =		types/uthash_test.c

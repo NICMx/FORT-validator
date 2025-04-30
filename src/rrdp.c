@@ -19,7 +19,7 @@
 #include "types/arraylist.h"
 #include "types/path.h"
 #include "types/str.h"
-#include "types/url.h"
+#include "types/uri.h"
 #include "types/uthash.h"
 
 /* RRDP's XML namespace */

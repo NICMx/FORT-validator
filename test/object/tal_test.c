@@ -9,7 +9,7 @@
 #include "mock.c"
 #include "types/path.c"
 #include "types/str.c"
-#include "types/url.c"
+#include "types/uri.c"
 
 static void
 check_spki(struct tal *tal)

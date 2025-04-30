@@ -5,7 +5,7 @@
 #include "common.c"
 #include "mock.c"
 #include "types/path.c"
-#include "types/url.c"
+#include "types/uri.c"
 
 #define TEST_NORMALIZE(dirty, clean)					\
 	normal = url_normalize(dirty);					\

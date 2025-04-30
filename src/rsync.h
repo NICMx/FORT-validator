@@ -1,7 +1,7 @@
 #ifndef SRC_RSYNC_RSYNC_H_
 #define SRC_RSYNC_RSYNC_H_
 
-#include "types/url.h"
+#include "types/uri.h"
 
 void rsync_setup(char const *, ...);
 int rsync_queue(struct uri const *, char const *);

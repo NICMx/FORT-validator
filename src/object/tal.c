@@ -15,7 +15,7 @@
 #include "thread_var.h"
 #include "types/path.h"
 #include "types/str.h"
-#include "types/url.h"
+#include "types/uri.h"
 
 struct tal {
 	char const *file_name;

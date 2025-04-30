@@ -20,7 +20,7 @@
 #include "rsync.h"
 #include "types/bio_seq.h"
 #include "types/path.h"
-#include "types/url.h"
+#include "types/uri.h"
 
 #define HDRSIZE 32
 

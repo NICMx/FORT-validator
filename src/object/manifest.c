@@ -15,7 +15,7 @@
 #include "object/signed_object.h"
 #include "thread_var.h"
 #include "types/path.h"
-#include "types/url.h"
+#include "types/uri.h"
 
 static int
 decode_manifest(struct signed_object *sobj, struct Manifest **result)

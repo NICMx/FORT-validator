@@ -6,7 +6,7 @@
 #include "rsync.c"
 #include "stream.c"
 #include "types/map.c"
-#include "types/url.c"
+#include "types/uri.c"
 
 #include "asn1/asn1c/ber_decoder.c"
 #include "asn1/asn1c/ber_tlv_length.c"

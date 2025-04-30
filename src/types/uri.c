@@ -1,4 +1,4 @@
-#include "types/url.h"
+#include "types/uri.h"
 
 #include <curl/curl.h>
 #include <errno.h>

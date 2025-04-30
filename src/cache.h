@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include "types/map.h"
 #include "types/rpp.h"
-#include "types/url.h"
+#include "types/uri.h"
 
 int cache_setup(void);		/* Init this module */
 void cache_atexit(void);

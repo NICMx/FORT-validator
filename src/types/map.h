@@ -1,7 +1,7 @@
 #ifndef SRC_TYPES_MAP_H_
 #define SRC_TYPES_MAP_H_
 
-#include "types/url.h"
+#include "types/uri.h"
 
 // XXX document this better
 struct cache_mapping {

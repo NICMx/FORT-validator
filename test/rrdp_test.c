@@ -12,7 +12,7 @@
 #include "relax_ng.c"
 #include "rrdp.c"
 #include "types/map.c"
-#include "types/url.c"
+#include "types/uri.c"
 
 START_TEST(test_xmlChar_NULL_assumption)
 {

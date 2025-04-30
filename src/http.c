@@ -5,7 +5,7 @@
 #include "config.h"
 #include "file.h"
 #include "log.h"
-#include "types/url.h"
+#include "types/uri.h"
 
 struct http_handler {
 	CURL *curl;

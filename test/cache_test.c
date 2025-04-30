@@ -21,7 +21,7 @@
 #include "types/map.c"
 #include "types/path.c"
 #include "types/str.c"
-#include "types/url.c"
+#include "types/uri.c"
 
 /*
  * XXX

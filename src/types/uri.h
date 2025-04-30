@@ -1,5 +1,5 @@
-#ifndef SRC_TYPES_URL_H_
-#define SRC_TYPES_URL_H_
+#ifndef SRC_TYPES_URI_H_
+#define SRC_TYPES_URI_H_
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -38,4 +38,4 @@ void uri_child(struct uri const *, char const *, size_t, struct uri *);
 DEFINE_ARRAY_LIST_STRUCT(uris, struct uri);
 DECLARE_ARRAY_LIST_FUNCTIONS(uris, struct uri)
 
-#endif /* SRC_TYPES_URL_H_ */
+#endif /* SRC_TYPES_URI_H_ */

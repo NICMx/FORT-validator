@@ -9,7 +9,7 @@
 #define	_RsyncRequest_H_
 
 /* Including external dependencies */
-#include "types/url.h"
+#include "types/uri.h"
 #include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/constr_SEQUENCE.h"
 

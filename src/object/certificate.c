@@ -30,7 +30,7 @@
 #include "types/name.h"
 #include "types/path.h"
 #include "types/str.h"
-#include "types/url.h"
+#include "types/uri.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.

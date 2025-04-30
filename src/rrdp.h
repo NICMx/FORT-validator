@@ -6,7 +6,7 @@
 #include <time.h>
 
 #include "file.h"
-#include "types/url.h"
+#include "types/uri.h"
 
 struct rrdp_state;
 

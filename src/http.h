@@ -4,7 +4,7 @@
 #include <curl/curl.h>
 #include <stdbool.h>
 
-#include "types/url.h"
+#include "types/uri.h"
 
 int http_init(void);
 void http_cleanup(void);
