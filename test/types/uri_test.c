@@ -7,61 +7,55 @@
 #include "types/path.c"
 #include "types/uri.c"
 
+#define TEST_REWIND(expected, test, limit)				\
+	parser.dst = test;						\
+	parser.d = strlen(test);					\
+	rewind_buffer(&parser, limit);					\
+	ck_assert_uint_eq(strlen(expected), parser.d)
+
+START_TEST(test_rewind)
+{
+	struct uri_buffer parser;
+
+	TEST_REWIND("/a/b", "/a/b/c", 0);
+	TEST_REWIND("/a/b", "/a/b/cdefg", 0);
+
+	TEST_REWIND("/a/b", "/a/b/c", 2);
+	TEST_REWIND("/a/b", "/a/b/cdefg", 2);
+
+	TEST_REWIND("/a/b", "/a/b/c", 4);
+	TEST_REWIND("/a/b", "/a/b/cdefg", 4);
+
+	TEST_REWIND("/a/b", "/a/b", 4);
+}
+END_TEST
+
 #define TEST_NORMALIZE(dirty, clean)					\
-	normal = url_normalize(dirty);					\
+	normal = url_normalize(dirty, 0);				\
 	ck_assert_str_eq(clean, normal);				\
 	free(normal)
 
-START_TEST(test_normalize)
+#define TEST_NORMALIZE_AUS(dirty, clean)				\
+	normal = url_normalize(dirty, URI_ALLOW_UNKNOWN_SCHEME);	\
+	ck_assert_str_eq(clean, normal);				\
+	free(normal)
+
+#define TEST_NORMALIZE_FAIL(dirty)					\
+	ck_assert_ptr_eq(NULL, url_normalize(dirty, 0));
+
+START_TEST(awkward_dot_dotting)
 {
 	char *normal;
 
-	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c/");
-	TEST_NORMALIZE("rsync://a.b.c/", "rsync://a.b.c/");
-	TEST_NORMALIZE("rsync://a.b.c/d", "rsync://a.b.c/d");
-	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c//////");
-	TEST_NORMALIZE("rsync://a.b.c/d/e", "rsync://a.b.c/d/e");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e/");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e/");
-	TEST_NORMALIZE("rsync://a.b.c/././d/././e/./.", "rsync://a.b.c/d/e/");
-	TEST_NORMALIZE("rsync://a.b.c/d/..", "rsync://a.b.c/");
-	TEST_NORMALIZE("rsync://a.b.c/x/../x/y/z", "rsync://a.b.c/x/y/z");
-	TEST_NORMALIZE("rsync://a.b.c/d/../d/../d/e/", "rsync://a.b.c/d/e/");
-	TEST_NORMALIZE("rsync://x//y/z/../../m/./n/o", "rsync://x//m/n/o");
-
-	ck_assert_ptr_eq(NULL, url_normalize(""));
-	ck_assert_ptr_eq(NULL, url_normalize("h"));
-	ck_assert_ptr_eq(NULL, url_normalize("http"));
-	ck_assert_ptr_eq(NULL, url_normalize("https"));
-	ck_assert_ptr_eq(NULL, url_normalize("https:"));
-	ck_assert_ptr_eq(NULL, url_normalize("https:/"));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://"));
-	ck_assert_ptr_eq(NULL, url_normalize("rsync://a.β.c/"));
-
-	TEST_NORMALIZE("rsync://.", "rsync://./");
-	TEST_NORMALIZE("https://./.", "https://./");
-	TEST_NORMALIZE("https://./d", "https://./d");
-	TEST_NORMALIZE("rsync://..", "rsync://../");
-	TEST_NORMALIZE("rsync://../..", "rsync://../");
-	TEST_NORMALIZE("rsync://../d", "rsync://../d");
-	TEST_NORMALIZE("rsync://a.b.c/..", "rsync://a.b.c/");
-	TEST_NORMALIZE("rsync://a.b.c/../..", "rsync://a.b.c/");
-	TEST_NORMALIZE("rsync://a.b.c/../x", "rsync://a.b.c/x");
-	TEST_NORMALIZE("rsync://a.b.c/../x/y/z", "rsync://a.b.c/x/y/z");
-	TEST_NORMALIZE("rsync://a.b.c/d/e/../../..", "rsync://a.b.c/");
-	ck_assert_ptr_eq(NULL, url_normalize("http://a.b.c/d"));
-	ck_assert_ptr_eq(NULL, url_normalize("abcde://a.b.c/d"));
-	TEST_NORMALIZE("HTTPS://a.b.c/d", "https://a.b.c/d");
-	TEST_NORMALIZE("rSyNc://a.b.c/d", "rsync://a.b.c/d");
-
-	TEST_NORMALIZE("https://a.b.c:80/d/e", "https://a.b.c:80/d/e");
-	/* TEST_NORMALIZE("https://a.b.c:443/d/e", "https://a.b.c/d/e"); */
-	TEST_NORMALIZE("https://a.b.c:/d/e", "https://a.b.c/d/e");
-
 	/*
-	 * XXX make sure libcurl 8.12.2 implements lowercasing domains,
-	 * defaulting 443, and maybe reject UTF-8.
+	 * Additional, tricky: RFC 3986 never states that `//` should be
+	 * normalized as `/`, which is seemingly implying that `/d//..` equals
+	 * `/d/`, not `/` (as Unix would lead one to believe).
 	 */
+	printf("Extra\n");
+
+	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c//////");
+	TEST_NORMALIZE_AUS("http://a.b.c/d//..", "http://a.b.c/d");
 }
 END_TEST
 
@@ -96,17 +90,385 @@ START_TEST(test_same_origin)
 }
 END_TEST
 
+START_TEST(test_unknown_protocols)
+{
+	char *normal;
+
+	printf("Unknown protocols\n");
+
+	TEST_NORMALIZE_FAIL("httpz://a.b.c/d");
+	TEST_NORMALIZE_FAIL("abcde://a.b.c/d");
+	TEST_NORMALIZE_AUS("httpz://a.b.c/d", "httpz://a.b.c/d");
+	TEST_NORMALIZE_AUS("abcde://a.b.c/d", "abcde://a.b.c/d");
+}
+END_TEST
+
+START_TEST(reserved_unchanged)
+{
+	char *normal;
+
+	printf("3986#2.2: \"characters in the reserved set are protected from normalization\"\n");
+	printf("3986#6.2.2.1: Percent-encoding should always be uppercase\n");
+
+#define RESERVED_PCT "%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D"
+#define SUBDELIMS "!$&'()*+,;="
+
+	TEST_NORMALIZE("https://" RESERVED_PCT ":1234/" RESERVED_PCT "?" RESERVED_PCT "#" RESERVED_PCT,
+			"https://" RESERVED_PCT ":1234/" RESERVED_PCT "?" RESERVED_PCT "#" RESERVED_PCT);
+	TEST_NORMALIZE("https://" SUBDELIMS ":1234/" SUBDELIMS "?" SUBDELIMS "#" SUBDELIMS,
+			"https://" SUBDELIMS ":1234/" SUBDELIMS "?" SUBDELIMS "#" SUBDELIMS);
+
+	TEST_NORMALIZE("rsync://" RESERVED_PCT "@" RESERVED_PCT ":1234/" RESERVED_PCT,
+			"rsync://" RESERVED_PCT "@" RESERVED_PCT ":1234/" RESERVED_PCT);
+	TEST_NORMALIZE("rsync://" SUBDELIMS "@" SUBDELIMS ":1234/" SUBDELIMS,
+			"rsync://" SUBDELIMS "@" SUBDELIMS ":1234/" SUBDELIMS);
+}
+END_TEST
+
+START_TEST(lowercase_scheme_and_host)
+{
+	char *normal;
+
+	printf("3986#6.2.2.1, 9110#4.2.3c: Lowercase scheme and host\n");
+
+	TEST_NORMALIZE_AUS("http://a.b.c/d", "http://a.b.c/d");
+	TEST_NORMALIZE_AUS("abcde://a.b.c/d", "abcde://a.b.c/d");
+	TEST_NORMALIZE_AUS("HTTPS://a.b.c/d", "https://a.b.c/d");
+	TEST_NORMALIZE_AUS("rSyNc://a.b.c/d", "rsync://a.b.c/d");
+	TEST_NORMALIZE_AUS("HTTPS://A.B.C/d", "https://a.b.c/d");
+	TEST_NORMALIZE_AUS("HTTP://WWW.EXAMPLE.COM/aBc/dEf", "http://www.example.com/aBc/dEf");
+	TEST_NORMALIZE_AUS("HTTP://WWW.EXAMPLE.COM/aBc/dEf?gHi#jKl", "http://www.example.com/aBc/dEf?gHi#jKl");
+}
+END_TEST
+
+START_TEST(decode_unreserved_characters)
+{
+	char *normal;
+
+	printf("3986#6.2.2.2, 9110#4.2.3d: Decode unreserved characters\n");
+
+	TEST_NORMALIZE_AUS("http://%61%7A.%41%5A.%30%39/%61%7A%41%5A%30%39", "http://az.AZ.09/azAZ09");
+	TEST_NORMALIZE_AUS("http://%2D%2E%5F%7E/%2D%2E%5F%7E", "http://-._~/-._~");
+}
+END_TEST
+
+START_TEST(path_segment_normalization)
+{
+	char *normal;
+
+	printf("3986#6.2.2.3: Path segment normalization\n");
+
+	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/d", "rsync://a.b.c/d");
+	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c//////");
+	TEST_NORMALIZE("rsync://a.b.c/d/e", "rsync://a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/.", "rsync://a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/././d/././e/./.", "rsync://a.b.c/d/e");
+	TEST_NORMALIZE("rsync://a.b.c/d/..", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/x/../x/y/z", "rsync://a.b.c/x/y/z");
+	TEST_NORMALIZE("rsync://a.b.c/d/../d/../d/e/", "rsync://a.b.c/d/e/");
+	TEST_NORMALIZE("rsync://x//y/z/../../m/./n/o", "rsync://x//m/n/o");
+	TEST_NORMALIZE("rsync://.", "rsync://./");
+	TEST_NORMALIZE("https://./.", "https://./");
+	TEST_NORMALIZE("https://./d", "https://./d");
+	TEST_NORMALIZE("rsync://..", "rsync://../");
+	TEST_NORMALIZE("rsync://../..", "rsync://../");
+	TEST_NORMALIZE("rsync://../d", "rsync://../d");
+	TEST_NORMALIZE("rsync://a.b.c/..", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/../..", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c/../x", "rsync://a.b.c/x");
+	TEST_NORMALIZE("rsync://a.b.c/../x/y/z", "rsync://a.b.c/x/y/z");
+	TEST_NORMALIZE("rsync://a.b.c/d/e/../../..", "rsync://a.b.c/");
+}
+END_TEST
+
+START_TEST(all_the_above_combined)
+{
+	char *normal;
+
+	printf("3986#6.2.2: All the above, combined\n");
+
+	TEST_NORMALIZE_AUS("example://a/b/c/%5Bfoo%5D", "example://a/b/c/%5Bfoo%5D");
+	TEST_NORMALIZE_AUS("eXAMPLE://a/./b/../b/%63/%5bfoo%5d", "example://a/b/c/%5Bfoo%5D");
+}
+END_TEST
+
+START_TEST(scheme_based_normalization)
+{
+	char *normal;
+
+	printf("3986#6.2.3: Scheme-based normalization\n");
+
+	TEST_NORMALIZE_AUS("http://example.com/?", "http://example.com/?");
+	TEST_NORMALIZE_AUS("http://example.com/#", "http://example.com/#");
+}
+END_TEST
+
+START_TEST(https_grammar)
+{
+	printf("9110#4.2.2: https-URI     = \"https\" \"://\" authority path-abempty [ \"?\" query ]\n");
+	printf("            authority     = host [ \":\" port ]\n");
+	printf("            path-abempty  = *( \"/\" segment )\n");
+	printf("            segment       = *pchar\n");
+
+	TEST_NORMALIZE_FAIL("");
+	TEST_NORMALIZE_FAIL("h");
+	TEST_NORMALIZE_FAIL("http");
+	TEST_NORMALIZE_FAIL("https");
+	TEST_NORMALIZE_FAIL("https:");
+	TEST_NORMALIZE_FAIL("https:/");
+	TEST_NORMALIZE_FAIL("https://");
+	TEST_NORMALIZE_FAIL("https://a.β.c/");
+	TEST_NORMALIZE_FAIL("https://a.b.c/β");
+
+	/* I think everything else is already tested below. */
+}
+END_TEST
+
+START_TEST(https_default_port)
+{
+	char *normal;
+
+	printf("9110#4.2.2: Default https port is 443\n");
+	printf("(Also 9110#4.2.3: Omit default port)\n");
+
+	TEST_NORMALIZE("https://a.b.c/", "https://a.b.c/");
+	TEST_NORMALIZE("https://a.b.c:/", "https://a.b.c/");
+	TEST_NORMALIZE("https://a.b.c:443/", "https://a.b.c/");
+	TEST_NORMALIZE("https://a.b.c:873/", "https://a.b.c:873/");
+
+	TEST_NORMALIZE("https://a.b.c", "https://a.b.c/");
+	TEST_NORMALIZE("https://a.b.c:", "https://a.b.c/");
+	TEST_NORMALIZE("https://a.b.c:443", "https://a.b.c/");
+	TEST_NORMALIZE("https://a.b.c:873", "https://a.b.c:873/");
+}
+END_TEST
+
+START_TEST(disallow_http_empty_host)
+{
+	char *normal;
+
+	printf("9110#4.2.2: Disallow https empty host\n");
+	printf("(Also 9110#4.2.3: Empty path normalizes to '/')\n");
+
+	TEST_NORMALIZE("https://a", "https://a/");
+	TEST_NORMALIZE_FAIL("https://");
+	TEST_NORMALIZE("https://a/f/g", "https://a/f/g");
+	TEST_NORMALIZE_FAIL("https:///f/g");
+	TEST_NORMALIZE("https://a:1234/f/g", "https://a:1234/f/g");
+	TEST_NORMALIZE_FAIL("https://:1234/f/g");
+	TEST_NORMALIZE("https://a?123", "https://a/?123");
+	TEST_NORMALIZE_FAIL("https://?123");
+	TEST_NORMALIZE("https://a#123", "https://a/#123");
+	TEST_NORMALIZE_FAIL("https://#123");
+}
+END_TEST
+
+START_TEST(provide_default_path)
+{
+	char *normal;
+
+	printf("9110#4.2.3: Empty path normalizes to '/'\n");
+
+	TEST_NORMALIZE("https://example.com/", "https://example.com/");
+	TEST_NORMALIZE("https://example.com", "https://example.com/");
+}
+END_TEST
+
+START_TEST(scheme_and_host_lowercase)
+{
+	char *normal;
+
+	printf("9110#4.2.3: Scheme and host normalize to lowercase\n");
+
+	TEST_NORMALIZE("https://c.d.e:123/FgHi/jKlM?NoPQ#rStU", "https://c.d.e:123/FgHi/jKlM?NoPQ#rStU");
+	TEST_NORMALIZE("HTTPS://C.D.E:123/FgHi/jKlM?NoPQ#rStU", "https://c.d.e:123/FgHi/jKlM?NoPQ#rStU");
+	TEST_NORMALIZE("hTtPs://C.d.E:123/FgHi/jKlM?NoPQ#rStU", "https://c.d.e:123/FgHi/jKlM?NoPQ#rStU");
+}
+END_TEST
+
+START_TEST(not_reserved_not_pct_encoded)
+{
+	char *normal;
+
+	/*
+	 * Note: It seems "not in the reserved set" apparently means "unreserved
+	 * characters," not "any character, except those in the reserved set."
+	 *
+	 * Otherwise there are too many exceptions: Non-printables, whitespace,
+	 * quotes, percent, less/greater than, backslash, caret, backtick,
+	 * curlies and pipe.
+	 *
+	 * That being said, we're going to cover all characters in the same
+	 * test.
+	 */
+	printf("9110#4.2.3: \"Characters other than those in the 'reserved' set\" normalize to not percent-encoded\n");
+
+/* "All Characters, Encoded Uppercase" */
+#define ACEU "%00%01%02%03%04%05%06%07%08%09%0A%0B%0C%0D%0E%0F"	\
+	"%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F"	\
+	"%20%21%22%23%24%25%26%27%28%29%2A%2B%2C%2D%2E%2F"	\
+	"%30%31%32%33%34%35%36%37%38%39%3A%3B%3C%3D%3E%3F"	\
+	"%40%41%42%43%44%45%46%47%48%49%4A%4B%4C%4D%4E%4F"	\
+	"%50%51%52%53%54%55%56%57%58%59%5A%5B%5C%5D%5E%5F"	\
+	"%60%61%62%63%64%65%66%67%68%69%6A%6B%6C%6D%6E%6F"	\
+	"%70%71%72%73%74%75%76%77%78%79%7A%7B%7C%7D%7E%7F"
+/* "All Characters, Encoded Lowercase" */
+#define ACEL "%00%01%02%03%04%05%06%07%08%09%0a%0b%0c%0d%0e%0f"	\
+	"%10%11%12%13%14%15%16%17%18%19%1a%1b%1c%1d%1e%1f"	\
+	"%20%21%22%23%24%25%26%27%28%29%2a%2b%2c%2d%2e%2f"	\
+	"%30%31%32%33%34%35%36%37%38%39%3a%3b%3c%3d%3e%3f"	\
+	"%40%41%42%43%44%45%46%47%48%49%4a%4b%4c%4d%4e%4f"	\
+	"%50%51%52%53%54%55%56%57%58%59%5a%5b%5c%5d%5e%5f"	\
+	"%60%61%62%63%64%65%66%67%68%69%6a%6b%6c%6d%6e%6f"	\
+	"%70%71%72%73%74%75%76%77%78%79%7a%7b%7c%7d%7e%7f"	\
+/* "All Characters, Decoded" */
+#define ACD "%00%01%02%03%04%05%06%07%08%09%0A%0B%0C%0D%0E%0F"	\
+	"%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F"	\
+	"%20%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F"		\
+	"0123456789%3A%3B%3C%3D%3E%3F"				\
+	"%40ABCDEFGHIJKLMNO"					\
+	"PQRSTUVWXYZ%5B%5C%5D%5E_"				\
+	"%60abcdefghijklmno"					\
+	"pqrstuvwxyz%7B%7C%7D~%7F"
+
+	TEST_NORMALIZE("https://" ACEU "/" ACEU "?" ACEU "#" ACEU,
+			"https://" ACD "/" ACD "?" ACD "#" ACD);
+	TEST_NORMALIZE("https://" ACEL "/" ACEL "?" ACEL "#" ACEL,
+			"https://" ACD "/" ACD "?" ACD "#" ACD);
+}
+END_TEST
+
+START_TEST(aggregated_423)
+{
+	char *normal;
+
+	printf("9110#4.2.3: Aggregated example\n");
+
+	TEST_NORMALIZE("https://example.com:443/~smith/home.html", "https://example.com/~smith/home.html");
+	TEST_NORMALIZE("https://EXAMPLE.com/%7Esmith/home.html", "https://example.com/~smith/home.html");
+	TEST_NORMALIZE("https://EXAMPLE.com:/%7esmith/home.html", "https://example.com/~smith/home.html");
+}
+END_TEST
+
+START_TEST(disallow_https_userinfo)
+{
+	char *normal;
+
+	printf("9110#4.2.4: Disallow https userinfo\n");
+
+	TEST_NORMALIZE("https://c.d.e/f/g", "https://c.d.e/f/g");
+	TEST_NORMALIZE_FAIL("https://a@c.d.e/f/g");
+	TEST_NORMALIZE_FAIL("https://a:b@c.d.e/f/g");
+}
+END_TEST
+
+START_TEST(rsync_grammar)
+{
+	char *normal;
+
+	printf("5781#2: rsync://[user@]host[:PORT]/Source\n");
+	printf("rsyncuri        = \"rsync:\" hier-part\n");
+
+	TEST_NORMALIZE_FAIL("");
+	TEST_NORMALIZE_FAIL("r");
+	TEST_NORMALIZE_FAIL("rsyn");
+	TEST_NORMALIZE_FAIL("rsync");
+	TEST_NORMALIZE_FAIL("rsync:");
+	TEST_NORMALIZE_FAIL("rsync:/");
+	TEST_NORMALIZE_FAIL("rsync://");
+	TEST_NORMALIZE_FAIL("rsync://a.β.c/");
+	TEST_NORMALIZE_FAIL("rsync://a.b.c/β");
+
+	TEST_NORMALIZE("rsync://a.b.c/m", "rsync://a.b.c/m");
+	TEST_NORMALIZE("rsync://a.b.c/m/r", "rsync://a.b.c/m/r");
+	TEST_NORMALIZE_FAIL("rsync://a.b.c/m/r?query");
+	TEST_NORMALIZE_FAIL("rsync://a.b.c/m/r#fragment");
+
+	/* hier-part     = "//" authority path-abempty */
+	TEST_NORMALIZE("rsync://user@a.b.c:1234/m/r", "rsync://user@a.b.c:1234/m/r");
+	TEST_NORMALIZE("rsync://a.b.c/m/r", "rsync://a.b.c/m/r");
+	TEST_NORMALIZE("rsync://user@a.b.c:1234", "rsync://user@a.b.c:1234/");
+	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c/");
+
+	/* hier-part     = path-absolute */
+	/* ie. "rsync:/" [ pchar+ ( "/" pchar* )* ] */
+	/* (These refer to local files. The RFC allows them, but Fort shouldn't.) */
+	TEST_NORMALIZE_FAIL("rsync:/");
+	TEST_NORMALIZE_FAIL("rsync:/a");
+	TEST_NORMALIZE_FAIL("rsync:/a/");
+	TEST_NORMALIZE_FAIL("rsync:/a/a");
+	TEST_NORMALIZE_FAIL("rsync:/a/a/a");
+	TEST_NORMALIZE_FAIL("rsync:/abc/def/xyz");
+	TEST_NORMALIZE_FAIL("rsync:/abc////def//xyz");
+
+	/* hier-part     = path-rootless */
+	/* ie. "rsync:" pchar+ ( "/" pchar* )* */
+	/* (Also local paths. Disallowed by Fort needs.) */
+	TEST_NORMALIZE_FAIL("rsync:a");
+	TEST_NORMALIZE_FAIL("rsync:aa");
+	TEST_NORMALIZE_FAIL("rsync:aa/");
+	TEST_NORMALIZE_FAIL("rsync:aa/a");
+	TEST_NORMALIZE_FAIL("rsync:aa/aa");
+	TEST_NORMALIZE_FAIL("rsync:aa///aa");
+
+	/* hier-part     = path-empty */
+	TEST_NORMALIZE_FAIL("rsync:");
+}
+END_TEST
+
+START_TEST(rsync_default_port)
+{
+	char *normal;
+
+	printf("5781#2: Default rsync port is 873\n");
+	TEST_NORMALIZE("rsync://a.b.c/", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c:/", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c:873/", "rsync://a.b.c/");
+	TEST_NORMALIZE("rsync://a.b.c:443/", "rsync://a.b.c:443/");
+}
+END_TEST
+
 static Suite *create_suite(void)
 {
 	Suite *suite;
-	TCase *misc;
+	TCase *misc, *generic, *https, *rsync;
 
-	misc = tcase_create("misc");
-	tcase_add_test(misc, test_normalize);
+	misc = tcase_create("Miscellaneous");
+	tcase_add_test(misc, test_rewind);
+	tcase_add_test(misc, test_unknown_protocols);
+	tcase_add_test(misc, awkward_dot_dotting);
 	tcase_add_test(misc, test_same_origin);
+
+	generic = tcase_create("RFC 3986 (generic URI)");
+	tcase_add_test(generic, reserved_unchanged);
+	tcase_add_test(generic, lowercase_scheme_and_host);
+	tcase_add_test(generic, decode_unreserved_characters);
+	tcase_add_test(generic, path_segment_normalization);
+	tcase_add_test(generic, all_the_above_combined);
+	tcase_add_test(generic, scheme_based_normalization);
+
+	https = tcase_create("RFC 9110 (https)");
+	tcase_add_test(https, https_grammar);
+	tcase_add_test(https, https_default_port);
+	tcase_add_test(https, disallow_http_empty_host);
+	tcase_add_test(https, provide_default_path);
+	tcase_add_test(https, scheme_and_host_lowercase);
+	tcase_add_test(https, not_reserved_not_pct_encoded);
+	tcase_add_test(https, aggregated_423);
+	tcase_add_test(https, disallow_https_userinfo);
+
+	rsync = tcase_create("RFC 5781 (rsync)");
+	tcase_add_test(rsync, rsync_grammar);
+	tcase_add_test(rsync, rsync_default_port);
 
 	suite = suite_create("url");
 	suite_add_tcase(suite, misc);
+	suite_add_tcase(suite, generic);
+	suite_add_tcase(suite, https);
+	suite_add_tcase(suite, rsync);
 
 	return suite;
 }

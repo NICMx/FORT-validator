@@ -20,7 +20,7 @@ void uri_copy(struct uri *, struct uri const *);
 void uri_cleanup(struct uri *);
 
 #define uri_str(u) ((char const *)((u)->_str))
-#define uri_len(u) ((u)->_len)
+#define uri_len(u) ((size_t const)((u)->_len))
 
 bool uri_is_rsync(struct uri const *);
 bool uri_is_https(struct uri const *);

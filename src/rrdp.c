@@ -554,7 +554,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 
 	/* Parsing done */
 
-	pr_clutter("Publish %s", logv_filename(tag.meta.uri));
+	pr_clutter("Publish %s", logv_filename(uri_str(&tag.meta.uri)));
 
 	file = state_find_file(args->state, &tag.meta.uri);
 
@@ -629,7 +629,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 		goto end;
 	}
 
-	pr_clutter("Withdraw %s", logv_filename(tag.meta.uri));
+	pr_clutter("Withdraw %s", logv_filename(uri_str(&tag.meta.uri)));
 
 	file = state_find_file(args->state, &tag.meta.uri);
 
