@@ -31,23 +31,27 @@ START_TEST(test_rewind)
 END_TEST
 
 #define TEST_NORMALIZE(dirty, clean)					\
-	ck_assert_pstr_eq(NULL, url_normalize(dirty, 0, &normal));	\
+	ck_assert_pstr_eq(NULL, url_normalize(				\
+		(unsigned char *)dirty, 0, &normal			\
+	));								\
 	ck_assert_str_eq(clean, normal);				\
 	free(normal)
 
 #define TEST_NORMALIZE_AUS(dirty, clean)				\
 	ck_assert_ptr_eq(NULL, url_normalize(				\
-		dirty, URI_ALLOW_UNKNOWN_SCHEME, &normal		\
+		(unsigned char *)dirty, URI_ALLOW_UNKNOWN_SCHEME, &normal \
 	));								\
 	ck_assert_str_eq(clean, normal);				\
 	free(normal)
 
 #define TEST_NORMALIZE_FAIL(dirty, error)				\
-	ck_assert_str_eq(error, url_normalize(dirty, 0, &normal));
+	ck_assert_str_eq(error, url_normalize(				\
+		(unsigned char *)dirty, 0, &normal			\
+	));
 
 #define TEST_NORMALIZE_FAIL_AUS(dirty, error)				\
 	ck_assert_str_eq(error, url_normalize(				\
-		dirty, URI_ALLOW_UNKNOWN_SCHEME, &normal		\
+		(unsigned char *)dirty, URI_ALLOW_UNKNOWN_SCHEME, &normal \
 	));
 
 START_TEST(awkward_dot_dotting)
@@ -91,6 +95,9 @@ START_TEST(pct_encoding)
 	TEST_NORMALIZE("https://%6F/", "https://o/");
 	TEST_NORMALIZE("https://%7C/", "https://%7C/");
 	TEST_NORMALIZE("https://%7c/", "https://%7C/");
+
+	TEST_NORMALIZE("https://a%6fa/", "https://aoa/");
+	TEST_NORMALIZE("https://a%7ca/", "https://a%7Ca/");
 
 	TEST_NORMALIZE_FAIL("https://%6G", EM_PCT_NOTHEX);
 	TEST_NORMALIZE_FAIL("https://%G6", EM_PCT_NOTHEX);
@@ -170,6 +177,71 @@ START_TEST(test_same_origin)
 	ck_assert_origin(false,	"https:/",		"https:/");
 	ck_assert_origin(false,	"https:/a",		"https:/a");
 	ck_assert_origin(true,	"https:/a/",		"https:/a/");
+}
+END_TEST
+
+static unsigned char const ASCI = 'a';	/* 0_______ */
+static unsigned char const CONT = 0x80;	/* 10______ */
+static unsigned char const DUO = 0xC0;	/* 110_____ */
+static unsigned char const TRIO = 0xE0;	/* 1110____ */
+static unsigned char const QUAD = 0xF0;	/* 11110___ */
+static unsigned char const CHRS[] = { ASCI, CONT, DUO, TRIO, QUAD, 0 };
+
+static void
+test_utf8_fail(unsigned char chr1, unsigned char chr2,
+    unsigned char chr3, unsigned char chr4)
+{
+	char *normal;
+	char messy[32];
+
+	if (chr1 == ASCI && chr2 == ASCI && chr3 == ASCI && chr4 == ASCI)
+		return;
+	if (chr1 == ASCI && chr2 == ASCI && chr3 == DUO && chr4 == CONT)
+		return;
+	if (chr1 == ASCI && chr2 == DUO && chr3 == CONT && chr4 == ASCI)
+		return;
+	if (chr1 == DUO && chr2 == CONT && chr3 == ASCI && chr4 == ASCI)
+		return;
+	if (chr1 == DUO && chr2 == CONT && chr3 == DUO && chr4 == CONT)
+		return;
+	if (chr1 == ASCI && chr2 == TRIO && chr3 == CONT && chr4 == CONT)
+		return;
+	if (chr1 == TRIO && chr2 == CONT && chr3 == CONT && chr4 == ASCI)
+		return;
+	if (chr1 == QUAD && chr2 == CONT && chr3 == CONT && chr4 == CONT)
+		return;
+
+	strcpy(messy, "https://----/");
+	messy[8] = chr1;
+	messy[9] = chr2;
+	messy[10] = chr3;
+	messy[11] = chr4;
+	TEST_NORMALIZE_FAIL(messy, EM_UTF8);
+}
+
+START_TEST(test_utf8)
+{
+	char *normal;
+	array_index c1, c2, c3, c4;
+
+	TEST_NORMALIZE("https://a.β.c/", "https://a.%CE%B2.c/");
+	TEST_NORMALIZE("https://a.砦.c/", "https://a.%E7%A0%A6.c/");
+	TEST_NORMALIZE("https://a.𝆑.c/", "https://a.%F0%9D%86%91.c/");
+
+	TEST_NORMALIZE_FAIL_AUS("βsync://a.b.c/", EM_SCHEME_1ST);
+	TEST_NORMALIZE_FAIL_AUS("rsβnc://a.b.c/", EM_SCHEME_NTH);
+	TEST_NORMALIZE("rsync://β@a.b.c/", "rsync://%CE%B2@a.b.c/");
+	TEST_NORMALIZE_FAIL("rsync://a.b.c:β/", EM_PORT_BADCHR);
+	TEST_NORMALIZE("https://a.b.c/β", "https://a.b.c/%CE%B2");
+	TEST_NORMALIZE("https://a.b.c/?β", "https://a.b.c/?%CE%B2");
+	TEST_NORMALIZE("https://a.b.c/#β", "https://a.b.c/#%CE%B2");
+
+	for (c1 = 0; CHRS[c1]; c1++)
+		for (c2 = 0; CHRS[c2]; c2++)
+			for (c3 = 0; CHRS[c3]; c3++)
+				for (c4 = 0; CHRS[c4]; c4++)
+					test_utf8_fail(CHRS[c1], CHRS[c2],
+					    CHRS[c3], CHRS[c4]);
 }
 END_TEST
 
@@ -381,10 +453,8 @@ START_TEST(https_grammar)
 	TEST_NORMALIZE_FAIL("https:", EM_SCHEME_NOTREMOTE);
 	TEST_NORMALIZE_FAIL("https:/", EM_SCHEME_NOTREMOTE);
 	TEST_NORMALIZE_FAIL("https://", EM_HOST_EMPTY);
-	TEST_NORMALIZE_FAIL("https://a.β.c/", EM_HOST_BADCHR);
-	TEST_NORMALIZE_FAIL("https://a.b.c/β", EM_PATH_BADCHR);
 
-	/* I think everything else is already tested below. */
+	/* I think everything else is already tested elsewhere. */
 }
 END_TEST
 
@@ -540,8 +610,6 @@ START_TEST(rsync_grammar)
 	TEST_NORMALIZE_FAIL("rsync:", EM_SCHEME_NOTREMOTE);
 	TEST_NORMALIZE_FAIL("rsync:/", EM_SCHEME_NOTREMOTE);
 	TEST_NORMALIZE_FAIL("rsync://", EM_HOST_EMPTY);
-	TEST_NORMALIZE_FAIL("rsync://a.β.c/", EM_HOST_BADCHR);
-	TEST_NORMALIZE_FAIL("rsync://a.b.c/β", EM_PATH_BADCHR);
 
 	TEST_NORMALIZE("rsync://a.b.c/m", "rsync://a.b.c/m");
 	TEST_NORMALIZE("rsync://a.b.c/m/r", "rsync://a.b.c/m/r");
@@ -603,6 +671,7 @@ static Suite *create_suite(void)
 	tcase_add_test(misc, test_unknown_protocols);
 	tcase_add_test(misc, awkward_dot_dotting);
 	tcase_add_test(misc, test_same_origin);
+	tcase_add_test(misc, test_utf8);
 
 	generic = tcase_create("RFC 3986 (generic URI)");
 	tcase_add_test(generic, pct_encoding);

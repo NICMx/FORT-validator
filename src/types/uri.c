@@ -9,10 +9,9 @@
 
 /*
  * XXX IPv6 addresses
- * XXX UTF-8
  */
 
-#define URI_ALLOW_UNKNOWN_SCHEME (1 << 1)
+#define URI_ALLOW_UNKNOWN_SCHEME (1 << 0)
 
 static error_msg EM_SCHEME_EMPTY = "Scheme seems empty";
 static error_msg EM_SCHEME_1ST = "First scheme character is not a letter";
@@ -22,6 +21,7 @@ static error_msg EM_SCHEME_UNKNOWN = "Unknown scheme";
 static error_msg EM_SCHEME_NOTREMOTE = "Missing \"://\"";
 static error_msg EM_PCT_NOTHEX = "Invalid hexadecimal digit in percent encoding";
 static error_msg EM_PCT_NOT3 = "Unterminated percent-encoding";
+static error_msg EM_UTF8 = "Invalid UTF-8";
 static error_msg EM_USERINFO_BADCHR = "Illegal character in userinfo component";
 static error_msg EM_USERINFO_DISALLOWED = "Protocol disallows userinfo";
 static error_msg EM_HOST_BADCHR = "Illegal character in host component";
@@ -33,8 +33,8 @@ static error_msg EM_QUERY_DISALLOWED = "Protocol disallows query";
 static error_msg EM_QF_BADCHR = "Illegal character in query or fragment";
 static error_msg EM_FRAGMENT_DISALLOWED = "Protocol disallows fragment";
 
-struct sized_string {
-	char const *str;
+struct sized_ustring {
+	unsigned char const *str;
 	size_t len;
 };
 
@@ -70,13 +70,13 @@ struct schema_metadata const RSYNC = {
 };
 
 static bool
-is_proto(struct sized_string *scheme, char const *proto)
+is_proto(struct sized_ustring *scheme, char const *proto)
 {
-	return strncasecmp(scheme->str, proto, scheme->len) == 0;
+	return strncasecmp((char const *)scheme->str, proto, scheme->len) == 0;
 }
 
 static struct schema_metadata const *
-get_metadata(struct sized_string *scheme)
+get_metadata(struct sized_ustring *scheme)
 {
 	if (scheme->len != 5)
 		return NULL;
@@ -90,37 +90,37 @@ get_metadata(struct sized_string *scheme)
 }
 
 static bool
-is_lowercase(char chr)
+is_lowercase(unsigned char chr)
 {
 	return 'a' <= chr && chr <= 'z';
 }
 
 static bool
-is_uppercase(char chr)
+is_uppercase(unsigned char chr)
 {
 	return 'A' <= chr && chr <= 'Z';
 }
 
 static bool
-is_lowercase_hex(char chr)
+is_lowercase_hex(unsigned char chr)
 {
 	return 'a' <= chr && chr <= 'f';
 }
 
 static bool
-is_uppercase_hex(char chr)
+is_uppercase_hex(unsigned char chr)
 {
 	return 'A' <= chr && chr <= 'F';
 }
 
 static bool
-is_digit(char chr)
+is_digit(unsigned char chr)
 {
 	return '0' <= chr && chr <= '9';
 }
 
 static bool
-is_symbol(char chr, char const *symbols)
+is_symbol(unsigned char chr, char const *symbols)
 {
 	for (; symbols[0] != '\0'; symbols++)
 		if (chr == symbols[0])
@@ -129,13 +129,13 @@ is_symbol(char chr, char const *symbols)
 }
 
 static char
-to_lowercase(char uppercase)
+to_lowercase(unsigned char uppercase)
 {
 	return uppercase - ('A' - 'a');
 }
 
 static char
-to_uppercase(char chr)
+to_uppercase(unsigned char chr)
 {
 	return is_lowercase(chr) ? (chr + ('A' - 'a')) : chr;
 }
@@ -144,8 +144,8 @@ static void
 approve_chara(struct uri_buffer *buf, char chr)
 {
 	if (buf->d >= buf->capacity) {
-		/* It seems this is dead code. */
-		buf->capacity += 16;
+		/* Needed when we convert UTF-8 to percent-encoding */
+		buf->capacity += 32;
 		buf->dst = prealloc(buf->dst, buf->capacity);
 	}
 
@@ -153,8 +153,8 @@ approve_chara(struct uri_buffer *buf, char chr)
 }
 
 static void
-collect_authority(char const *auth, char const **at, char const **colon,
-    char const **end)
+collect_authority(unsigned char const *auth, unsigned char const **at,
+    unsigned char const **colon, unsigned char const **end)
 {
 	*at = NULL;
 	*colon = NULL;
@@ -181,7 +181,7 @@ collect_authority(char const *auth, char const **at, char const **colon,
 }
 
 static void
-collect_path(char const *path, char const **end)
+collect_path(unsigned char const *path, unsigned char const **end)
 {
 	for (; true; path++)
 		if (path[0] == '\0' || path[0] == '?' || path[0] == '#') {
@@ -191,7 +191,7 @@ collect_path(char const *path, char const **end)
 }
 
 static void
-collect_query(char const *query, char const **end)
+collect_query(unsigned char const *query, unsigned char const **end)
 {
 	for (; true; query++)
 		if (query[0] == '\0' || query[0] == '#') {
@@ -201,7 +201,7 @@ collect_query(char const *query, char const **end)
 }
 
 static void
-collect_fragment(char const *fragment, char const **end)
+collect_fragment(unsigned char const *fragment, unsigned char const **end)
 {
 	for (; true; fragment++)
 		if (fragment[0] == '\0') {
@@ -211,9 +211,9 @@ collect_fragment(char const *fragment, char const **end)
 }
 
 static error_msg
-normalize_scheme(struct uri_buffer *buf, struct sized_string *scheme)
+normalize_scheme(struct uri_buffer *buf, struct sized_ustring *scheme)
 {
-	char chr;
+	unsigned char chr;
 	array_index c;
 
 	chr = scheme->str[0];
@@ -241,7 +241,7 @@ normalize_scheme(struct uri_buffer *buf, struct sized_string *scheme)
 }
 
 static bool
-is_unreserved(char chr)
+is_unreserved(unsigned char chr)
 {
 	return is_lowercase(chr)
 	    || is_uppercase(chr)
@@ -250,13 +250,13 @@ is_unreserved(char chr)
 }
 
 static bool
-is_subdelim(char chr)
+is_subdelim(unsigned char chr)
 {
 	return is_symbol(chr, "!$&'()*+,;=");
 }
 
 static error_msg
-char2hex(char chr, unsigned int *hex)
+uchar2hex(unsigned char chr, unsigned int *hex)
 {
 	if (is_digit(chr)) {
 		*hex = chr - '0';
@@ -275,7 +275,7 @@ char2hex(char chr, unsigned int *hex)
 }
 
 static error_msg
-approve_pct_encoded(struct uri_buffer *buf, struct sized_string *sstr,
+approve_pct_encoded(struct uri_buffer *buf, struct sized_ustring *sstr,
     array_index *offset)
 {
 	array_index off;
@@ -289,10 +289,10 @@ approve_pct_encoded(struct uri_buffer *buf, struct sized_string *sstr,
 	if (sstr->len - off < 3)
 		return EM_PCT_NOT3;
 
-	error = char2hex(sstr->str[off + 1], &hex1);
+	error = uchar2hex(sstr->str[off + 1], &hex1);
 	if (error)
 		return error;
-	error = char2hex(sstr->str[off + 2], &hex2);
+	error = uchar2hex(sstr->str[off + 2], &hex2);
 	if (error)
 		return error;
 
@@ -311,11 +311,84 @@ approve_pct_encoded(struct uri_buffer *buf, struct sized_string *sstr,
 	return NULL;
 }
 
+static bool
+is_utf8(unsigned char chr)
+{
+	return chr & 0x80;
+}
+
+static char
+bin2hex(unsigned char bin)
+{
+	return bin + ((bin < 10) ? '0' : ('A' - 10));
+}
+
+static void
+approve_bin(struct uri_buffer *buf, unsigned char chr)
+{
+	approve_chara(buf, '%');
+	approve_chara(buf, bin2hex(chr >> 4));
+	approve_chara(buf, bin2hex(chr & 0xF));
+}
+
 static error_msg
-normalize_userinfo(struct uri_buffer *buf, struct sized_string *userinfo)
+approve_utf8(struct uri_buffer *buf, struct sized_ustring *sstr,
+    array_index *offset)
+{
+	array_index off;
+	unsigned char chr1;
+	unsigned char chr2;
+	unsigned char chr3;
+	unsigned char chr4;
+
+	off = *offset;
+	if (sstr->len - off < 2)
+		return EM_UTF8;
+	chr1 = sstr->str[off];
+	chr2 = sstr->str[off + 1];
+	if ((chr1 & 0xE0) == 0xC0 && (chr2 & 0xC0) == 0x80) {
+		approve_bin(buf, chr1);
+		approve_bin(buf, chr2);
+		*offset += 1;
+		return NULL;
+	}
+
+	if (sstr->len - off < 3)
+		return EM_UTF8;
+	chr3 = sstr->str[off + 2];
+	if ((chr1 & 0xF0) == 0xE0 &&
+	    (chr2 & 0xC0) == 0x80 &&
+	    (chr3 & 0xC0) == 0x80) {
+		approve_bin(buf, chr1);
+		approve_bin(buf, chr2);
+		approve_bin(buf, chr3);
+		*offset += 2;
+		return NULL;
+	}
+
+	if (sstr->len - off < 4)
+		return EM_UTF8;
+	chr4 = sstr->str[off + 3];
+	if ((chr1 & 0xF8) == 0xF0 &&
+	    (chr2 & 0xC0) == 0x80 &&
+	    (chr3 & 0xC0) == 0x80 &&
+	    (chr4 & 0xC0) == 0x80) {
+		approve_bin(buf, chr1);
+		approve_bin(buf, chr2);
+		approve_bin(buf, chr3);
+		approve_bin(buf, chr4);
+		*offset += 3;
+		return NULL;
+	}
+
+	return EM_UTF8;
+}
+
+static error_msg
+normalize_userinfo(struct uri_buffer *buf, struct sized_ustring *userinfo)
 {
 	array_index c;
-	char chr;
+	unsigned char chr;
 	error_msg error;
 
 	if (userinfo->len == 0)
@@ -333,7 +406,11 @@ normalize_userinfo(struct uri_buffer *buf, struct sized_string *userinfo)
 			approve_chara(buf, chr);
 		else if (chr == ':')
 			approve_chara(buf, chr);
-		else
+		else if (is_utf8(chr)) {
+			error = approve_utf8(buf, userinfo, &c);
+			if (error)
+				return error;
+		} else
 			return EM_USERINFO_BADCHR;
 	}
 
@@ -342,10 +419,10 @@ normalize_userinfo(struct uri_buffer *buf, struct sized_string *userinfo)
 }
 
 static error_msg
-normalize_host(struct uri_buffer *buf, struct sized_string *host)
+normalize_host(struct uri_buffer *buf, struct sized_ustring *host)
 {
 	array_index c;
-	char chr;
+	unsigned char chr;
 	error_msg error;
 
 	for (c = 0; c < host->len; c++) {
@@ -360,7 +437,11 @@ normalize_host(struct uri_buffer *buf, struct sized_string *host)
 				return error;
 		} else if (is_subdelim(chr))
 			approve_chara(buf, chr);
-		else
+		else if (is_utf8(chr)) {
+			error = approve_utf8(buf, host, &c);
+			if (error)
+				return error;
+		} else
 			return EM_HOST_BADCHR;
 	}
 
@@ -368,11 +449,11 @@ normalize_host(struct uri_buffer *buf, struct sized_string *host)
 }
 
 static error_msg
-normalize_port(struct uri_buffer *buf, struct sized_string *port,
+normalize_port(struct uri_buffer *buf, struct sized_ustring *port,
     struct schema_metadata const *schema)
 {
 	array_index c;
-	char chr;
+	unsigned char chr;
 	unsigned int portnum;
 
 	if (port->len == 0)
@@ -397,8 +478,8 @@ normalize_port(struct uri_buffer *buf, struct sized_string *port,
 	return NULL;
 }
 
-static char const *
-strnchr(char const *str, size_t n, char chr)
+static unsigned char const *
+strnchr(unsigned char const *str, size_t n, unsigned char chr)
 {
 	array_index s;
 	for (s = 0; s < n; s++)
@@ -408,7 +489,7 @@ strnchr(char const *str, size_t n, char chr)
 }
 
 static bool
-next_segment(struct sized_string *path, struct sized_string *segment)
+next_segment(struct sized_ustring *path, struct sized_ustring *segment)
 {
 	segment->str += segment->len + 1;
 	if (segment->str > (path->str + path->len))
@@ -427,11 +508,11 @@ rewind_buffer(struct uri_buffer *buf, size_t limit)
 }
 
 static error_msg
-normalize_path(struct uri_buffer *buf, struct sized_string *path)
+normalize_path(struct uri_buffer *buf, struct sized_ustring *path)
 {
-	struct sized_string segment;
+	struct sized_ustring segment;
 	array_index i;
-	char chr;
+	unsigned char chr;
 	size_t limit;
 	error_msg error;
 
@@ -456,7 +537,11 @@ normalize_path(struct uri_buffer *buf, struct sized_string *path)
 					return error;
 			} else if (is_subdelim(chr) || is_symbol(chr, ":@"))
 				approve_chara(buf, chr);
-			else
+			else if (is_utf8(chr)) {
+				error = approve_utf8(buf, &segment, &i);
+				if (error)
+					return error;
+			} else
 				return EM_PATH_BADCHR;
 		}
 
@@ -477,11 +562,11 @@ normalize_path(struct uri_buffer *buf, struct sized_string *path)
 }
 
 static error_msg
-normalize_post_path(struct uri_buffer *buf, struct sized_string *post,
+normalize_post_path(struct uri_buffer *buf, struct sized_ustring *post,
     char prefix)
 {
 	array_index c;
-	char chr;
+	unsigned char chr;
 	error_msg error;
 
 	if (post->len == 0)
@@ -500,7 +585,11 @@ normalize_post_path(struct uri_buffer *buf, struct sized_string *post,
 			approve_chara(buf, chr);
 		else if (is_symbol(chr, ":@/?"))
 			approve_chara(buf, chr);
-		else
+		else if (is_utf8(chr)) {
+			error = approve_utf8(buf, post, &c);
+			if (error)
+				return error;
+		} else
 			return EM_QF_BADCHR;
 	}
 
@@ -508,7 +597,7 @@ normalize_post_path(struct uri_buffer *buf, struct sized_string *post,
 }
 
 static void
-print_component(char const *name, struct sized_string *component)
+print_component(char const *name, struct sized_ustring *component)
 {
 	pr_clutter("  %s: %.*s (len:%zu)", name, (int)component->len,
 	    component->str, component->len);
@@ -521,20 +610,20 @@ print_component(char const *name, struct sized_string *component)
  * and needs to be released.
  */
 static error_msg
-url_normalize(char const *url, int flags, char **result)
+url_normalize(unsigned char const *url, int flags, char **result)
 {
-	struct sized_string scheme;
-	struct sized_string authority;
-	struct sized_string userinfo;
-	struct sized_string host;
-	struct sized_string port;
-	struct sized_string path;
-	struct sized_string query;
-	struct sized_string fragment;
+	struct sized_ustring scheme;
+	struct sized_ustring authority;
+	struct sized_ustring userinfo;
+	struct sized_ustring host;
+	struct sized_ustring port;
+	struct sized_ustring path;
+	struct sized_ustring query;
+	struct sized_ustring fragment;
 
-	char const *cursor;
-	char const *at;
-	char const *colon;
+	unsigned char const *cursor;
+	unsigned char const *at;
+	unsigned char const *colon;
 
 	struct schema_metadata const *meta;
 	struct uri_buffer buf;
@@ -543,7 +632,7 @@ url_normalize(char const *url, int flags, char **result)
 	pr_clutter("-----------------------");
 	pr_clutter("input: %s", url);
 
-	cursor = strchr(url, ':');
+	cursor = (unsigned char const *)strchr((char const *)url, ':');
 	if (!cursor)
 		return EM_SCHEME_NOCOLON;
 	if (cursor == url)
@@ -698,7 +787,7 @@ uri_init(struct uri *url, char const *str)
 	char *normal;
 	error_msg error;
 
-	error = url_normalize(str, 0, &normal);
+	error = url_normalize((unsigned char const *)str, 0, &normal);
 	if (error)
 		return error;
 
