@@ -54,7 +54,7 @@ END_TEST
 		(unsigned char *)dirty, URI_ALLOW_UNKNOWN_SCHEME, &normal \
 	));
 
-START_TEST(awkward_dot_dotting)
+START_TEST(test_awkward_dot_dotting)
 {
 	char *normal;
 
@@ -70,7 +70,46 @@ START_TEST(awkward_dot_dotting)
 }
 END_TEST
 
-START_TEST(test_port)
+START_TEST(test_3986_host)
+{
+	char *normal;
+
+	printf("rfc3986#3.2.2: Host\n");
+
+	TEST_NORMALIZE("https://[2001:db8::1]/", "https://[2001:db8::1]/");
+	TEST_NORMALIZE("https://[2001:0db8::1]/", "https://[2001:db8::1]/");
+	TEST_NORMALIZE("https://[2001:db8::0001]:1234/", "https://[2001:db8::1]:1234/");
+	TEST_NORMALIZE("https://[::]/", "https://[::]/");
+	TEST_NORMALIZE("https://[0::]/", "https://[::]/");
+	TEST_NORMALIZE("https://[2001:db8:0:0:0:0:0:1]/", "https://[2001:db8::1]/");
+
+	TEST_NORMALIZE_FAIL("https://[]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[2001:db8::/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[2001:db8::]a/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1g]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v.]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1.]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE("https://[v1.1]/", "https://[v1.1]/");
+	TEST_NORMALIZE("https://[v19.a-z.A_Z~0:9!$&'()*+,;=]/", "https://[v19.a-z.A_Z~0:9!$&'()*+,;=]/");
+	TEST_NORMALIZE_FAIL("https://[v1.%]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1.%31]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1./]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1.?]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1.#]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1.[]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1.]]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[v1.@]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE("https://[FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:255.255.255.255]/", "https://[ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff]/");
+	TEST_NORMALIZE_FAIL("https://[FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:255.255.255.2555]/", EM_HOST_LITERAL);
+	TEST_NORMALIZE_FAIL("https://[potato]/", EM_HOST_LITERAL);
+
+	TEST_NORMALIZE_FAIL("https://[2001:db8::1][2001:db8::1]/", EM_HOST_LITERAL);
+}
+END_TEST
+
+START_TEST(test_3986_port)
 {
 	char *normal;
 
@@ -84,7 +123,7 @@ START_TEST(test_port)
 }
 END_TEST
 
-START_TEST(pct_encoding)
+START_TEST(test_3986_pct_encoding)
 {
 	char *normal;
 
@@ -285,7 +324,7 @@ START_TEST(test_unknown_protocols)
 }
 END_TEST
 
-START_TEST(reserved_unchanged)
+START_TEST(test_3986_reserved)
 {
 	char *normal;
 
@@ -307,7 +346,7 @@ START_TEST(reserved_unchanged)
 }
 END_TEST
 
-START_TEST(test_query)
+START_TEST(test_3986_query)
 {
 	char *normal;
 
@@ -331,7 +370,7 @@ START_TEST(test_query)
 }
 END_TEST
 
-START_TEST(test_fragment)
+START_TEST(test_3986_fragment)
 {
 	char *normal;
 
@@ -356,7 +395,7 @@ START_TEST(test_fragment)
 }
 END_TEST
 
-START_TEST(lowercase_scheme_and_host)
+START_TEST(test_3986_lowercase_scheme_and_host)
 {
 	char *normal;
 
@@ -372,7 +411,7 @@ START_TEST(lowercase_scheme_and_host)
 }
 END_TEST
 
-START_TEST(decode_unreserved_characters)
+START_TEST(test_3986_unreserved_characters)
 {
 	char *normal;
 
@@ -383,7 +422,7 @@ START_TEST(decode_unreserved_characters)
 }
 END_TEST
 
-START_TEST(path_segment_normalization)
+START_TEST(test_3986_path_segment_normalization)
 {
 	char *normal;
 
@@ -415,7 +454,7 @@ START_TEST(path_segment_normalization)
 }
 END_TEST
 
-START_TEST(all_the_above_combined)
+START_TEST(test_3986_aggregated)
 {
 	char *normal;
 
@@ -426,7 +465,7 @@ START_TEST(all_the_above_combined)
 }
 END_TEST
 
-START_TEST(scheme_based_normalization)
+START_TEST(test_3986_scheme_based_normalization)
 {
 	char *normal;
 
@@ -437,7 +476,7 @@ START_TEST(scheme_based_normalization)
 }
 END_TEST
 
-START_TEST(https_grammar)
+START_TEST(test_https_grammar)
 {
 	char *normal;
 
@@ -458,7 +497,7 @@ START_TEST(https_grammar)
 }
 END_TEST
 
-START_TEST(https_default_port)
+START_TEST(test_https_default_port)
 {
 	char *normal;
 
@@ -477,7 +516,7 @@ START_TEST(https_default_port)
 }
 END_TEST
 
-START_TEST(disallow_http_empty_host)
+START_TEST(test_https_disallow_empty_host)
 {
 	char *normal;
 
@@ -497,7 +536,7 @@ START_TEST(disallow_http_empty_host)
 }
 END_TEST
 
-START_TEST(provide_default_path)
+START_TEST(test_https_provide_default_path)
 {
 	char *normal;
 
@@ -508,7 +547,7 @@ START_TEST(provide_default_path)
 }
 END_TEST
 
-START_TEST(scheme_and_host_lowercase)
+START_TEST(test_https_scheme_and_host_lowercase)
 {
 	char *normal;
 
@@ -520,7 +559,7 @@ START_TEST(scheme_and_host_lowercase)
 }
 END_TEST
 
-START_TEST(not_reserved_not_pct_encoded)
+START_TEST(test_https_not_reserved_not_pct_encoded)
 {
 	char *normal;
 
@@ -572,7 +611,7 @@ START_TEST(not_reserved_not_pct_encoded)
 }
 END_TEST
 
-START_TEST(aggregated_423)
+START_TEST(test_https_aggregated)
 {
 	char *normal;
 
@@ -584,7 +623,7 @@ START_TEST(aggregated_423)
 }
 END_TEST
 
-START_TEST(disallow_https_userinfo)
+START_TEST(test_https_disallow_userinfo)
 {
 	char *normal;
 
@@ -596,7 +635,7 @@ START_TEST(disallow_https_userinfo)
 }
 END_TEST
 
-START_TEST(rsync_grammar)
+START_TEST(test_rsync_grammar)
 {
 	char *normal;
 
@@ -621,7 +660,7 @@ START_TEST(rsync_grammar)
 	TEST_NORMALIZE("rsync://a.b.c/m/r", "rsync://a.b.c/m/r");
 	TEST_NORMALIZE("rsync://user@a.b.c:1234", "rsync://user@a.b.c:1234/");
 	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c/");
-	TEST_NORMALIZE_FAIL("rsync://[@a.b.c", EM_USERINFO_BADCHR);
+	TEST_NORMALIZE_FAIL("rsync://]@a.b.c", EM_USERINFO_BADCHR);
 
 	/* hier-part     = path-absolute */
 	/* ie. "rsync:/" [ pchar+ ( "/" pchar* )* ] */
@@ -649,7 +688,7 @@ START_TEST(rsync_grammar)
 }
 END_TEST
 
-START_TEST(rsync_default_port)
+START_TEST(test_rsync_default_port)
 {
 	char *normal;
 
@@ -669,35 +708,36 @@ static Suite *create_suite(void)
 	misc = tcase_create("Miscellaneous");
 	tcase_add_test(misc, test_rewind);
 	tcase_add_test(misc, test_unknown_protocols);
-	tcase_add_test(misc, awkward_dot_dotting);
+	tcase_add_test(misc, test_awkward_dot_dotting);
 	tcase_add_test(misc, test_same_origin);
 	tcase_add_test(misc, test_utf8);
 
 	generic = tcase_create("RFC 3986 (generic URI)");
-	tcase_add_test(generic, pct_encoding);
-	tcase_add_test(generic, reserved_unchanged);
-	tcase_add_test(generic, test_port);
-	tcase_add_test(generic, test_query);
-	tcase_add_test(generic, test_fragment);
-	tcase_add_test(generic, lowercase_scheme_and_host);
-	tcase_add_test(generic, decode_unreserved_characters);
-	tcase_add_test(generic, path_segment_normalization);
-	tcase_add_test(generic, all_the_above_combined);
-	tcase_add_test(generic, scheme_based_normalization);
+	tcase_add_test(generic, test_3986_pct_encoding);
+	tcase_add_test(generic, test_3986_reserved);
+	tcase_add_test(generic, test_3986_host);
+	tcase_add_test(generic, test_3986_port);
+	tcase_add_test(generic, test_3986_query);
+	tcase_add_test(generic, test_3986_fragment);
+	tcase_add_test(generic, test_3986_lowercase_scheme_and_host);
+	tcase_add_test(generic, test_3986_unreserved_characters);
+	tcase_add_test(generic, test_3986_path_segment_normalization);
+	tcase_add_test(generic, test_3986_aggregated);
+	tcase_add_test(generic, test_3986_scheme_based_normalization);
 
 	https = tcase_create("RFC 9110 (https)");
-	tcase_add_test(https, https_grammar);
-	tcase_add_test(https, https_default_port);
-	tcase_add_test(https, disallow_http_empty_host);
-	tcase_add_test(https, provide_default_path);
-	tcase_add_test(https, scheme_and_host_lowercase);
-	tcase_add_test(https, not_reserved_not_pct_encoded);
-	tcase_add_test(https, aggregated_423);
-	tcase_add_test(https, disallow_https_userinfo);
+	tcase_add_test(https, test_https_grammar);
+	tcase_add_test(https, test_https_default_port);
+	tcase_add_test(https, test_https_disallow_empty_host);
+	tcase_add_test(https, test_https_provide_default_path);
+	tcase_add_test(https, test_https_scheme_and_host_lowercase);
+	tcase_add_test(https, test_https_not_reserved_not_pct_encoded);
+	tcase_add_test(https, test_https_aggregated);
+	tcase_add_test(https, test_https_disallow_userinfo);
 
 	rsync = tcase_create("RFC 5781 (rsync)");
-	tcase_add_test(rsync, rsync_grammar);
-	tcase_add_test(rsync, rsync_default_port);
+	tcase_add_test(rsync, test_rsync_grammar);
+	tcase_add_test(rsync, test_rsync_default_port);
 
 	suite = suite_create("url");
 	suite_add_tcase(suite, misc);

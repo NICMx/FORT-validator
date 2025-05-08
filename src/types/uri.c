@@ -7,10 +7,6 @@
 #include "log.h"
 #include "types/path.h"
 
-/*
- * XXX IPv6 addresses
- */
-
 #define URI_ALLOW_UNKNOWN_SCHEME (1 << 0)
 
 static error_msg EM_SCHEME_EMPTY = "Scheme seems empty";
@@ -26,6 +22,7 @@ static error_msg EM_USERINFO_BADCHR = "Illegal character in userinfo component";
 static error_msg EM_USERINFO_DISALLOWED = "Protocol disallows userinfo";
 static error_msg EM_HOST_BADCHR = "Illegal character in host component";
 static error_msg EM_HOST_EMPTY = "Protocol disallows empty host";
+static error_msg EM_HOST_LITERAL = "Unparseable IP literal in the host";
 static error_msg EM_PORT_BADCHR = "Illegal non-digit character in port component";
 static error_msg EM_PORT_RANGE = "Port value is out of range";
 static error_msg EM_PATH_BADCHR = "Illegal character in path component";
@@ -120,6 +117,12 @@ is_digit(unsigned char chr)
 }
 
 static bool
+is_hexdigit(unsigned char chr)
+{
+	return is_digit(chr) || is_lowercase_hex(chr) || is_uppercase_hex(chr);
+}
+
+static bool
 is_symbol(unsigned char chr, char const *symbols)
 {
 	for (; symbols[0] != '\0'; symbols++)
@@ -156,26 +159,44 @@ static void
 collect_authority(unsigned char const *auth, unsigned char const **at,
     unsigned char const **colon, unsigned char const **end)
 {
+	bool v6skip;
+
 	*at = NULL;
 	*colon = NULL;
+	v6skip = false;
 
 	for (; true; auth++) {
-		switch (auth[0]) {
-		case '/':
-		case '?':
-		case '#':
-		case '\0':
-			*end = auth;
-			return;
-		case '@':
-			if ((*at) == NULL) {
-				*colon = NULL; /* Was a password if not null */
-				*at = auth;
+		if (v6skip) {
+			switch (auth[0]) {
+			case ']':
+				v6skip = false;
+				continue;
+			case '\0':
+				*end = auth;
+				return;
 			}
-			break;
-		case ':':
-			*colon = auth;
-			break;
+		} else {
+			switch (auth[0]) {
+			case '/':
+			case '?':
+			case '#':
+			case '\0':
+				*end = auth;
+				return;
+			case '@':
+				if ((*at) == NULL) {
+					/* Was a password if not null */
+					*colon = NULL;
+					*at = auth;
+				}
+				break;
+			case ':':
+				*colon = auth;
+				break;
+			case '[':
+				v6skip = true;
+				break;
+			}
 		}
 	}
 }
@@ -211,7 +232,7 @@ collect_fragment(unsigned char const *fragment, unsigned char const **end)
 }
 
 static error_msg
-normalize_scheme(struct uri_buffer *buf, struct sized_ustring *scheme)
+normalize_scheme(struct uri_buffer *buf, struct sized_ustring const *scheme)
 {
 	unsigned char chr;
 	array_index c;
@@ -275,7 +296,7 @@ uchar2hex(unsigned char chr, unsigned int *hex)
 }
 
 static error_msg
-approve_pct_encoded(struct uri_buffer *buf, struct sized_ustring *sstr,
+approve_pct_encoded(struct uri_buffer *buf, struct sized_ustring const *sstr,
     array_index *offset)
 {
 	array_index off;
@@ -332,7 +353,7 @@ approve_bin(struct uri_buffer *buf, unsigned char chr)
 }
 
 static error_msg
-approve_utf8(struct uri_buffer *buf, struct sized_ustring *sstr,
+approve_utf8(struct uri_buffer *buf, struct sized_ustring const *sstr,
     array_index *offset)
 {
 	array_index off;
@@ -385,7 +406,7 @@ approve_utf8(struct uri_buffer *buf, struct sized_ustring *sstr,
 }
 
 static error_msg
-normalize_userinfo(struct uri_buffer *buf, struct sized_ustring *userinfo)
+normalize_userinfo(struct uri_buffer *buf, struct sized_ustring const *userinfo)
 {
 	array_index c;
 	unsigned char chr;
@@ -419,11 +440,105 @@ normalize_userinfo(struct uri_buffer *buf, struct sized_ustring *userinfo)
 }
 
 static error_msg
+normalize_ipvfuture(struct uri_buffer *buf, struct sized_ustring const *ipf)
+{
+	array_index i;
+	unsigned char chr;
+	bool found_hex;
+
+	approve_chara(buf, 'v');
+
+	found_hex = false;
+	for (i = 1; i < ipf->len; i++) {
+		chr = ipf->str[i];
+		if (is_hexdigit(chr)) {
+			approve_chara(buf, chr);
+			found_hex = true;
+		} else if (chr == '.')
+			goto value;
+		else
+			return EM_HOST_LITERAL;
+	}
+
+	return EM_HOST_LITERAL;
+
+value:	if (!found_hex)
+		return EM_HOST_LITERAL;
+	approve_chara(buf, '.');
+	i++;
+	if (i == ipf->len)
+		return EM_HOST_LITERAL;
+	for (; i < ipf->len; i++) {
+		chr = ipf->str[i];
+		if (is_unreserved(chr) || is_subdelim(chr) || chr == ':')
+			approve_chara(buf, chr);
+		else
+			return EM_HOST_LITERAL;
+	}
+
+	return NULL;
+}
+
+static error_msg
+normalize_ipv6(struct uri_buffer *buf, struct sized_ustring const *v6)
+{
+	char dirty[INET6_ADDRSTRLEN];
+	struct in6_addr addr;
+	char clean[INET6_ADDRSTRLEN];
+	array_index i;
+
+	if (v6->len > (INET6_ADDRSTRLEN - 1))
+		return EM_HOST_LITERAL;
+
+	memcpy(dirty, v6->str, v6->len);
+	dirty[v6->len] = '\0';
+	if (inet_pton(AF_INET6, dirty, &addr) != 1)
+		return EM_HOST_LITERAL;
+
+	if (inet_ntop(AF_INET6, &addr, clean, INET6_ADDRSTRLEN) == NULL)
+		return EM_HOST_LITERAL;
+
+	for (i = 0; clean[i] != '\0'; i++)
+		approve_chara(buf, clean[i]);
+
+	return NULL;
+}
+
+static error_msg
+normalize_ip_literal(struct uri_buffer *buf, struct sized_ustring const *lit)
+{
+	struct sized_ustring content;
+	error_msg error;
+
+	if (lit->len < 3)
+		return EM_HOST_LITERAL;
+	if (lit->str[lit->len - 1] != ']')
+		return EM_HOST_LITERAL;
+
+	content.str = lit->str + 1;
+	content.len = lit->len - 2;
+
+	approve_chara(buf, '[');
+	error = (content.str[0] == 'v')
+	    ? normalize_ipvfuture(buf, &content)
+	    : normalize_ipv6(buf, &content);
+	approve_chara(buf, ']');
+
+	return error;
+}
+
+static error_msg
 normalize_host(struct uri_buffer *buf, struct sized_ustring *host)
 {
 	array_index c;
 	unsigned char chr;
 	error_msg error;
+
+	if (host->len == 0)
+		return NULL;
+
+	if (host->str[0] == '[')
+		return normalize_ip_literal(buf, host);
 
 	for (c = 0; c < host->len; c++) {
 		chr = host->str[c];
@@ -449,7 +564,7 @@ normalize_host(struct uri_buffer *buf, struct sized_ustring *host)
 }
 
 static error_msg
-normalize_port(struct uri_buffer *buf, struct sized_ustring *port,
+normalize_port(struct uri_buffer *buf, struct sized_ustring const *port,
     struct schema_metadata const *schema)
 {
 	array_index c;
@@ -489,7 +604,7 @@ strnchr(unsigned char const *str, size_t n, unsigned char chr)
 }
 
 static bool
-next_segment(struct sized_ustring *path, struct sized_ustring *segment)
+next_segment(struct sized_ustring const *path, struct sized_ustring *segment)
 {
 	segment->str += segment->len + 1;
 	if (segment->str > (path->str + path->len))
@@ -508,7 +623,7 @@ rewind_buffer(struct uri_buffer *buf, size_t limit)
 }
 
 static error_msg
-normalize_path(struct uri_buffer *buf, struct sized_ustring *path)
+normalize_path(struct uri_buffer *buf, struct sized_ustring const *path)
 {
 	struct sized_ustring segment;
 	array_index i;
@@ -562,7 +677,7 @@ normalize_path(struct uri_buffer *buf, struct sized_ustring *path)
 }
 
 static error_msg
-normalize_post_path(struct uri_buffer *buf, struct sized_ustring *post,
+normalize_post_path(struct uri_buffer *buf, struct sized_ustring const *post,
     char prefix)
 {
 	array_index c;
