@@ -28,10 +28,14 @@ static BIO *
 __rsync2bio(char const *src, char const *dst)
 {
 	struct uri url;
+	error_msg errmsg;
 	int error;
 
-	if (uri_init(&url, src) != 0)
+	errmsg = uri_init(&url, src);
+	if (errmsg) {
+		pr_op_err("Invalid URI: %s", errmsg);
 		return NULL;
+	}
 
 	// XXX use the cache
 

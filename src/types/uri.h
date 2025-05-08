@@ -13,7 +13,9 @@ struct uri {
 	size_t _len;
 };
 
-int uri_init(struct uri *, char const *);
+typedef char const *error_msg;
+
+error_msg uri_init(struct uri *, char const *);
 void __uri_init(struct uri *, char const *, size_t);
 #define __URI_INIT(uri, str) __uri_init(uri, str, strlen(str))
 void uri_copy(struct uri *, struct uri const *);

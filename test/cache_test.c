@@ -111,7 +111,7 @@ run_dl_rsync(char *caRepository, int expected_err, unsigned int expected_calls)
 	struct sia_uris sias = { 0 };
 	struct cache_cage *cage;
 
-	ck_assert_int_eq(0, uri_init(&sias.caRepository, caRepository));
+	ck_assert_ptr_eq(NULL, uri_init(&sias.caRepository, caRepository));
 	cage = NULL;
 
 	rsync_counter = 0;
@@ -149,7 +149,7 @@ run_dl_https(char const *url, unsigned int expected_calls,
 	struct uri uri;
 	char const *result;
 
-	ck_assert_int_eq(0, uri_init(&uri, url));
+	ck_assert_ptr_eq(NULL, uri_init(&uri, url));
 
 	rsync_counter = 0;
 	https_counter = 0;
@@ -173,7 +173,7 @@ ck_cage(struct cache_cage *cage, char const *url,
 	struct uri uri;
 	struct cache_node const *bkp;
 
-	ck_assert_int_eq(0, uri_init(&uri, url));
+	ck_assert_ptr_eq(NULL, uri_init(&uri, url));
 
 	ck_assert_str(refresh, cage_map_file(cage, &uri));
 
@@ -213,11 +213,11 @@ queue_commit(char const *rpkiNotify, char const *caRepository,
 	struct uri rn, cr;
 
 	if (rpkiNotify)
-		ck_assert_int_eq(0, uri_init(&rn, rpkiNotify));
+		ck_assert_ptr_eq(NULL, uri_init(&rn, rpkiNotify));
 	else
 		memset(&rn, 0, sizeof(rn));
 	if (caRepository)
-		ck_assert_int_eq(0, uri_init(&cr, caRepository));
+		ck_assert_ptr_eq(NULL, uri_init(&cr, caRepository));
 	else
 		memset(&cr, 0, sizeof(cr));
 
@@ -302,7 +302,7 @@ init_node_rsync(struct cache_node *node, char *url, char *path,
 {
 	node->key.id = url;
 	node->key.idlen = strlen(url);
-	ck_assert_int_eq(0, uri_init(&node->key.rsync, url));
+	ck_assert_ptr_eq(NULL, uri_init(&node->key.rsync, url));
 	node->path = path;
 	node->state = fresh ? DLS_FRESH : DLS_OUTDATED; /* XXX (test) */
 	node->dlerr = dlerr;
@@ -315,7 +315,7 @@ init_node_https(struct cache_node *node, char *url, char *path,
 {
 	node->key.id = url;
 	node->key.idlen = strlen(url);
-	ck_assert_int_eq(0, uri_init(&node->key.http, url));
+	ck_assert_ptr_eq(NULL, uri_init(&node->key.http, url));
 	node->path = path;
 	node->state = fresh ? DLS_FRESH : DLS_OUTDATED;
 	node->dlerr = dlerr;
@@ -682,12 +682,12 @@ START_TEST(test_https_cleanup)
 	}
 
 	/* 3 */
-	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta50.cer"));
+	ck_assert_ptr_eq(NULL, uri_init(&map.url, "https://domain/rpki/ta50.cer"));
 	map.path = pstrdup("https/50");
 	cache_commit_file(&map);
 	map_cleanup(&map);
 
-	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta52.cer"));
+	ck_assert_ptr_eq(NULL, uri_init(&map.url, "https://domain/rpki/ta52.cer"));
 	map.path = pstrdup("https/52");
 	cache_commit_file(&map);
 	map_cleanup(&map);
@@ -701,12 +701,12 @@ START_TEST(test_https_cleanup)
 	new_iteration(false);
 
 	/* 4 */
-	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta50.cer"));
+	ck_assert_ptr_eq(NULL, uri_init(&map.url, "https://domain/rpki/ta50.cer"));
 	map.path = pstrdup("fallback/0");
 	cache_commit_file(&map);
 	map_cleanup(&map);
 
-	ck_assert_int_eq(0, uri_init(&map.url, "https://domain/rpki/ta51.cer"));
+	ck_assert_ptr_eq(NULL, uri_init(&map.url, "https://domain/rpki/ta51.cer"));
 	map.path = pstrdup("https/51");
 	cache_commit_file(&map);
 	map_cleanup(&map);
@@ -816,12 +816,12 @@ START_TEST(test_context)
 	dls[1] = SHDR("3") PBLSH("rsync://x.y.z/mod5/rpp3/a.cer", "Rm9ydAo=") STAIL;
 	dls[2] = NULL;
 
-	ck_assert_int_eq(0, uri_init(&file_url, FILE_URL));
+	ck_assert_ptr_eq(NULL, uri_init(&file_url, FILE_URL));
 
 	printf("1. 1st CA succeeds on RRDP\n");
 	print_tree();
-	ck_assert_int_eq(0, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
-	ck_assert_int_eq(0, uri_init(&sias.caRepository, CA_REPOSITORY));
+	ck_assert_ptr_eq(NULL, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
+	ck_assert_ptr_eq(NULL, uri_init(&sias.caRepository, CA_REPOSITORY));
 	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
@@ -849,7 +849,7 @@ START_TEST(test_context)
 	rpp.files = pzalloc(sizeof(struct cache_mapping));
 	uri_copy(&rpp.files->url, &file_url);
 	rpp.files->path = pstrdup(FILE_RRDP_PATH);
-	ck_assert_int_eq(0, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
+	ck_assert_ptr_eq(NULL, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
 	cache_commit_rpp(&sias.rpkiNotify, &sias.caRepository, &rpp);
 
 	rpp.nfiles = 1;
@@ -869,7 +869,7 @@ START_TEST(test_context)
 	ck_assert_int_eq(true, cage_disable_refresh(cage));
 	ck_assert_str_eq("fallback/1/0", cage_map_file(cage, &file_url));
 
-	ck_assert_int_eq(0, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
+	ck_assert_ptr_eq(NULL, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
 	ck_assert_int_eq(0, cache_refresh_by_sias(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
@@ -965,7 +965,7 @@ CACHE_FILE_ADD(struct rrdp_state *state, char const *url, char *path)
 {
 	struct uri uri;
 
-	ck_assert_int_eq(0, uri_init(&uri, url));
+	ck_assert_ptr_eq(NULL, uri_init(&uri, url));
 	ck_assert_ptr_ne(NULL, cache_file_add(state, &uri, pstrdup(path)));
 	uri_cleanup(&uri);
 }

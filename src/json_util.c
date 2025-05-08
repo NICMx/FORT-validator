@@ -26,23 +26,23 @@ json_get_str(json_t *parent, char const *name, char const **result)
 	return 0;
 }
 
-/* Result needs to be cleant up. */
+/* @result needs cleanup. */
 int
 json_get_uri(json_t *parent, char const *name, struct uri *result)
 {
 	char const *str;
 	int error;
+	error_msg errmsg;
 
 	memset(result, 0, sizeof(*result));
 
 	error = json_get_str(parent, name, &str);
 	if (error)
 		return error;
-	error = uri_init(result, str);
-	if (error) {
-		pr_op_err("Malformed URL: %s", str);
-		return -error;
-	}
+	errmsg = uri_init(result, str);
+	if (errmsg)
+		return pr_op_err("'%s' does not seem to be a URI: %s",
+		    str, errmsg);
 
 	return 0;
 }

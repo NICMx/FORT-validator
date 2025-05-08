@@ -1391,6 +1391,7 @@ gn2uri(GENERAL_NAME *ad, struct uri *uri)
 	int ptype;
 	char *str;
 	int error;
+	error_msg errmsg;
 
 	asn1str = GENERAL_NAME_get0_value(ad, &ptype);
 	if (ptype != GEN_URI) {
@@ -1409,10 +1410,14 @@ gn2uri(GENERAL_NAME *ad, struct uri *uri)
 	error = ia5s2string(asn1str, &str);
 	if (error)
 		return error;
-	error = uri_init(uri, str);
-	free(str);
 
-	return error;
+	errmsg = uri_init(uri, str);
+	if (errmsg)
+		pr_val_warn("Cannot parse GENERAL_NAME '%s' as a URI: %s",
+		    str, errmsg);
+
+	free(str);
+	return errmsg ? EINVAL : 0;
 }
 
 static int

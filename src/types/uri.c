@@ -7,7 +7,31 @@
 #include "log.h"
 #include "types/path.h"
 
+/*
+ * XXX IPv6 addresses
+ * XXX UTF-8
+ */
+
 #define URI_ALLOW_UNKNOWN_SCHEME (1 << 1)
+
+static error_msg EM_SCHEME_EMPTY = "Scheme seems empty";
+static error_msg EM_SCHEME_1ST = "First scheme character is not a letter";
+static error_msg EM_SCHEME_NTH = "Scheme character is not letter, digit, plus, period or hyphen";
+static error_msg EM_SCHEME_NOCOLON = "Scheme not terminated";
+static error_msg EM_SCHEME_UNKNOWN = "Unknown scheme";
+static error_msg EM_SCHEME_NOTREMOTE = "Missing \"://\"";
+static error_msg EM_PCT_NOTHEX = "Invalid hexadecimal digit in percent encoding";
+static error_msg EM_PCT_NOT3 = "Unterminated percent-encoding";
+static error_msg EM_USERINFO_BADCHR = "Illegal character in userinfo component";
+static error_msg EM_USERINFO_DISALLOWED = "Protocol disallows userinfo";
+static error_msg EM_HOST_BADCHR = "Illegal character in host component";
+static error_msg EM_HOST_EMPTY = "Protocol disallows empty host";
+static error_msg EM_PORT_BADCHR = "Illegal non-digit character in port component";
+static error_msg EM_PORT_RANGE = "Port value is out of range";
+static error_msg EM_PATH_BADCHR = "Illegal character in path component";
+static error_msg EM_QUERY_DISALLOWED = "Protocol disallows query";
+static error_msg EM_QF_BADCHR = "Illegal character in query or fragment";
+static error_msg EM_FRAGMENT_DISALLOWED = "Protocol disallows fragment";
 
 struct sized_string {
 	char const *str;
@@ -39,7 +63,8 @@ struct schema_metadata const HTTPS = {
 struct schema_metadata const RSYNC = {
 	.default_port = 873,
 	.allow_userinfo = true,
-	.allow_empty_host = true,
+	/* Seems actually allowed, but RPKI doesn't like it. */
+	.allow_empty_host = false,
 	.allow_query = false,
 	.allow_fragment = false,
 };
@@ -77,6 +102,18 @@ is_uppercase(char chr)
 }
 
 static bool
+is_lowercase_hex(char chr)
+{
+	return 'a' <= chr && chr <= 'f';
+}
+
+static bool
+is_uppercase_hex(char chr)
+{
+	return 'A' <= chr && chr <= 'F';
+}
+
+static bool
 is_digit(char chr)
 {
 	return '0' <= chr && chr <= '9';
@@ -103,13 +140,6 @@ to_uppercase(char chr)
 	return is_lowercase(chr) ? (chr + ('A' - 'a')) : chr;
 }
 
-static bool
-invalid(char const *errmsg)
-{
-	printf("%s\n", errmsg);
-	return false;
-}
-
 static void
 approve_chara(struct uri_buffer *buf, char chr)
 {
@@ -122,7 +152,7 @@ approve_chara(struct uri_buffer *buf, char chr)
 	buf->dst[buf->d++] = chr;
 }
 
-static bool
+static void
 collect_authority(char const *auth, char const **at, char const **colon,
     char const **end)
 {
@@ -136,7 +166,7 @@ collect_authority(char const *auth, char const **at, char const **colon,
 		case '#':
 		case '\0':
 			*end = auth;
-			return true;
+			return;
 		case '@':
 			if ((*at) == NULL) {
 				*colon = NULL; /* Was a password if not null */
@@ -180,14 +210,11 @@ collect_fragment(char const *fragment, char const **end)
 		}
 }
 
-static bool
+static error_msg
 normalize_scheme(struct uri_buffer *buf, struct sized_string *scheme)
 {
 	char chr;
 	array_index c;
-
-	if (scheme->len == 0)
-		return invalid("Scheme seems empty.");
 
 	chr = scheme->str[0];
 	if (is_lowercase(chr))
@@ -195,7 +222,7 @@ normalize_scheme(struct uri_buffer *buf, struct sized_string *scheme)
 	else if (is_uppercase(chr))
 		approve_chara(buf, to_lowercase(chr));
 	else
-		return invalid("First character is not a letter.");
+		return EM_SCHEME_1ST;
 
 	for (c = 1; c < scheme->len; c++) {
 		chr = scheme->str[c];
@@ -204,13 +231,13 @@ normalize_scheme(struct uri_buffer *buf, struct sized_string *scheme)
 		else if (is_uppercase(chr))
 			approve_chara(buf, to_lowercase(chr));
 		else
-			return invalid("Schema character is not letter, digit, plus, period or hyphen.");
+			return EM_SCHEME_NTH;
 	}
 
 	approve_chara(buf, ':');
 	approve_chara(buf, '/');
 	approve_chara(buf, '/');
-	return true;
+	return NULL;
 }
 
 static bool
@@ -228,27 +255,26 @@ is_subdelim(char chr)
 	return is_symbol(chr, "!$&'()*+,;=");
 }
 
-static bool
+static error_msg
 char2hex(char chr, unsigned int *hex)
 {
 	if (is_digit(chr)) {
 		*hex = chr - '0';
-		return true;
+		return NULL;
 	}
-	if (is_uppercase(chr)) {
+	if (is_uppercase_hex(chr)) {
 		*hex = chr - 'A' + 10;
-		return true;
+		return NULL;
 	}
-	if (is_lowercase(chr)) {
+	if (is_lowercase_hex(chr)) {
 		*hex = chr - 'a' + 10;
-		return true;
+		return NULL;
 	}
 
-	printf("Invalid hex digit: %c\n", chr);
-	return invalid("Invalid hexadecimal digit.");
+	return EM_PCT_NOTHEX;
 }
 
-static bool
+static error_msg
 approve_pct_encoded(struct uri_buffer *buf, struct sized_string *sstr,
     array_index *offset)
 {
@@ -256,84 +282,71 @@ approve_pct_encoded(struct uri_buffer *buf, struct sized_string *sstr,
 	unsigned int hex1;
 	unsigned int hex2;
 	unsigned int val;
+	error_msg error;
 
 	off = *offset;
 
 	if (sstr->len - off < 3)
-		return invalid("Unterminated %-encoding.");
+		return EM_PCT_NOT3;
 
-	if (!char2hex(sstr->str[off + 1], &hex1))
-		return false;
-	if (!char2hex(sstr->str[off + 2], &hex2))
-		return false;
+	error = char2hex(sstr->str[off + 1], &hex1);
+	if (error)
+		return error;
+	error = char2hex(sstr->str[off + 2], &hex2);
+	if (error)
+		return error;
 
 	val = (hex1 << 4) | hex2;
 
 	if (is_unreserved(val)) {
 		approve_chara(buf, val);
 		*offset += 2;
-		return true;
+		return NULL;
 	}
 
 	approve_chara(buf, '%');
 	approve_chara(buf, to_uppercase(sstr->str[off + 1]));
 	approve_chara(buf, to_uppercase(sstr->str[off + 2]));
 	*offset += 2;
-	return true;
+	return NULL;
 }
 
-static bool
-handle_pchar(struct uri_buffer *buf, struct sized_string *sstr,
-    array_index *offset)
-{
-	char chr = sstr->str[*offset];
-
-	if (is_unreserved(chr))
-		approve_chara(buf, chr);
-	else if (chr == '%')
-		approve_pct_encoded(buf, sstr, offset);
-	else if (is_subdelim(chr))
-		approve_chara(buf, chr);
-	else if (chr == ':' || chr == '@')
-		approve_chara(buf, chr);
-	else
-		return false;
-	return true;
-}
-
-static bool
+static error_msg
 normalize_userinfo(struct uri_buffer *buf, struct sized_string *userinfo)
 {
 	array_index c;
 	char chr;
+	error_msg error;
 
 	if (userinfo->len == 0)
-		return true;
+		return NULL;
 
 	for (c = 0; c < userinfo->len; c++) {
 		chr = userinfo->str[c];
 		if (is_unreserved(chr))
 			approve_chara(buf, chr);
 		else if (chr == '%') {
-			if (!approve_pct_encoded(buf, userinfo, &c))
-				return false;
+			error = approve_pct_encoded(buf, userinfo, &c);
+			if (error)
+				return error;
 		} else if (is_subdelim(chr))
 			approve_chara(buf, chr);
 		else if (chr == ':')
 			approve_chara(buf, chr);
 		else
-			return invalid("Illegal character in userinfo section.");
+			return EM_USERINFO_BADCHR;
 	}
 
 	approve_chara(buf, '@');
-	return true;
+	return NULL;
 }
 
-static bool
+static error_msg
 normalize_host(struct uri_buffer *buf, struct sized_string *host)
 {
 	array_index c;
 	char chr;
+	error_msg error;
 
 	for (c = 0; c < host->len; c++) {
 		chr = host->str[c];
@@ -342,18 +355,19 @@ normalize_host(struct uri_buffer *buf, struct sized_string *host)
 		else if (is_unreserved(chr))
 			approve_chara(buf, chr);
 		else if (chr == '%') {
-			if (!approve_pct_encoded(buf, host, &c))
-				return false;
+			error = approve_pct_encoded(buf, host, &c);
+			if (error)
+				return error;
 		} else if (is_subdelim(chr))
 			approve_chara(buf, chr);
 		else
-			return invalid("Illegal character in host section.");
+			return EM_HOST_BADCHR;
 	}
 
-	return true;
+	return NULL;
 }
 
-static bool
+static error_msg
 normalize_port(struct uri_buffer *buf, struct sized_string *port,
     struct schema_metadata const *schema)
 {
@@ -362,25 +376,25 @@ normalize_port(struct uri_buffer *buf, struct sized_string *port,
 	unsigned int portnum;
 
 	if (port->len == 0)
-		return true;
+		return NULL;
 
 	portnum = 0;
 	for (c = 0; c < port->len; c++) {
 		chr = port->str[c];
 		if (!is_digit(chr))
-			return invalid("Illegal non-digit character in port section.");
+			return EM_PORT_BADCHR;
 		portnum = 10 * portnum + (chr - '0');
-		if (portnum > 0xFFFF)
-			return invalid("Port value is too large.");
+		if (portnum == 0 || portnum > 0xFFFF)
+			return EM_PORT_RANGE;
 	}
 
 	if (schema && (portnum == schema->default_port))
-		return true;
+		return NULL;
 
 	approve_chara(buf, ':');
 	for (c = 0; c < port->len; c++)
 		approve_chara(buf, port->str[c]);
-	return true;
+	return NULL;
 }
 
 static char const *
@@ -412,17 +426,18 @@ rewind_buffer(struct uri_buffer *buf, size_t limit)
 		;
 }
 
-static bool
+static error_msg
 normalize_path(struct uri_buffer *buf, struct sized_string *path)
 {
 	struct sized_string segment;
 	array_index i;
 	char chr;
 	size_t limit;
+	error_msg error;
 
 	if (path->len == 0) {
 		approve_chara(buf, '/');
-		return true;
+		return NULL;
 	}
 
 	segment.str = path->str;
@@ -436,12 +451,13 @@ normalize_path(struct uri_buffer *buf, struct sized_string *path)
 			if (is_unreserved(chr))
 				approve_chara(buf, chr);
 			else if (chr == '%') {
-				if (!approve_pct_encoded(buf, &segment, &i))
-					return false;
+				error = approve_pct_encoded(buf, &segment, &i);
+				if (error)
+					return error;
 			} else if (is_subdelim(chr) || is_symbol(chr, ":@"))
 				approve_chara(buf, chr);
 			else
-				return invalid("Illegal character in path section.");
+				return EM_PATH_BADCHR;
 		}
 
 		if (buf->dst[buf->d - 2] == '/' &&
@@ -457,38 +473,55 @@ normalize_path(struct uri_buffer *buf, struct sized_string *path)
 
 	if (limit == buf->d)
 		approve_chara(buf, '/');
-	return true;
+	return NULL;
 }
 
-static bool
+static error_msg
 normalize_post_path(struct uri_buffer *buf, struct sized_string *post,
     char prefix)
 {
 	array_index c;
 	char chr;
+	error_msg error;
 
 	if (post->len == 0)
-		return true;
+		return NULL;
 
 	approve_chara(buf, prefix);
 	for (c = 1; c < post->len; c++) {
-		if (handle_pchar(buf, post, &c))
-			continue;
 		chr = post->str[c];
-		if (chr == ':' || chr == '@')
+		if (is_unreserved(chr))
+			approve_chara(buf, chr);
+		else if (chr == '%') {
+			error = approve_pct_encoded(buf, post, &c);
+			if (error)
+				return error;
+		} else if (is_subdelim(chr))
+			approve_chara(buf, chr);
+		else if (is_symbol(chr, ":@/?"))
 			approve_chara(buf, chr);
 		else
-			return invalid("Illegal character in query section.");
+			return EM_QF_BADCHR;
 	}
 
-	return true;
+	return NULL;
+}
+
+static void
+print_component(char const *name, struct sized_string *component)
+{
+	pr_clutter("  %s: %.*s (len:%zu)", name, (int)component->len,
+	    component->str, component->len);
 }
 
 /*
  * See RFC 3986. Basically, "rsync://%61.b/./c/.././%64/." -> "rsync://a.b/d"
+ *
+ * The return value is an error message. If NULL, the URL was stored in @result
+ * and needs to be released.
  */
-static char *
-url_normalize(char const *url, int flags)
+static error_msg
+url_normalize(char const *url, int flags, char **result)
 {
 	struct sized_string scheme;
 	struct sized_string authority;
@@ -505,43 +538,36 @@ url_normalize(char const *url, int flags)
 
 	struct schema_metadata const *meta;
 	struct uri_buffer buf;
+	char const *error;
 
 	pr_clutter("-----------------------");
 	pr_clutter("input: %s", url);
 
 	cursor = strchr(url, ':');
-	if (!cursor) {
-		printf("Schema not terminated\n");
-		return NULL;
-	}
+	if (!cursor)
+		return EM_SCHEME_NOCOLON;
+	if (cursor == url)
+		return EM_SCHEME_EMPTY;
 
 	scheme.str = url;
 	scheme.len = cursor - url;
-	pr_clutter("  scheme: %.*s (len:%zu)", (int)scheme.len, scheme.str, scheme.len);
-	meta = get_metadata(&scheme);
-	if (!(flags & URI_ALLOW_UNKNOWN_SCHEME) && !meta) {
-		printf("Unknown scheme\n");
-		return NULL;
-	}
+	print_component("scheme", &scheme);
 
-	if (cursor[1] != '/' || cursor[2] != '/') {
-		printf("Missing \"://\"\n");
-		return NULL;
-	}
+	meta = get_metadata(&scheme);
+	if (!(flags & URI_ALLOW_UNKNOWN_SCHEME) && !meta)
+		return EM_SCHEME_UNKNOWN;
+
+	if (cursor[1] != '/' || cursor[2] != '/')
+		return EM_SCHEME_NOTREMOTE;
 
 	authority.str = cursor + 3;
-	if (!collect_authority(authority.str, &at, &colon, &cursor))
-		return NULL;
+	collect_authority(authority.str, &at, &colon, &cursor);
 	authority.len = cursor - authority.str;
-	pr_clutter("  authority: %.*s (len:%zu)", (int)authority.len, authority.str, authority.len);
-	if (authority.len == 0)
-		return NULL;
+	print_component("authority", &authority);
 
 	if (at != NULL) {
-		if (meta && !meta->allow_userinfo) {
-			printf("Protocol disallows userinfo.\n");
-			return NULL;
-		}
+		if (meta && !meta->allow_userinfo)
+			return EM_USERINFO_DISALLOWED;
 
 		userinfo.str = authority.str;
 		userinfo.len = at - authority.str;
@@ -562,14 +588,12 @@ url_normalize(char const *url, int flags)
 		port.len = 0;
 	}
 
-	if (host.len == 0 && meta && !meta->allow_empty_host) {
-		printf("Protocol disallows empty host.\n");
-		return NULL;
-	}
+	if (host.len == 0 && meta && !meta->allow_empty_host)
+		return EM_HOST_EMPTY;
 
-	pr_clutter("  userinfo: %.*s (len:%zu)", (int)userinfo.len, userinfo.str, userinfo.len);
-	pr_clutter("  host: %.*s (len:%zu)", (int)host.len, host.str, host.len);
-	pr_clutter("  port: %.*s (len:%zu)", (int)port.len, port.str, port.len);
+	print_component("userinfo", &userinfo);
+	print_component("host", &host);
+	print_component("port", &port);
 
 	if (cursor[0] == '\0') {
 		memset(&path, 0, sizeof(path));
@@ -588,10 +612,8 @@ url_normalize(char const *url, int flags)
 			break;
 
 		case '?':
-			if (meta && !meta->allow_query) {
-				printf("Protocol disallows query.\n");
-				return NULL;
-			}
+			if (meta && !meta->allow_query)
+				return EM_QUERY_DISALLOWED;
 
 			query.str = cursor;
 			collect_query(query.str + 1, &cursor);
@@ -611,10 +633,8 @@ url_normalize(char const *url, int flags)
 		case '#':
 			memset(&query, 0, sizeof(query));
 
-frag:			if (meta && !meta->allow_fragment) {
-				printf("Protocol disallows fragment.\n");
-				return NULL;
-			}
+frag:			if (meta && !meta->allow_fragment)
+				return EM_FRAGMENT_DISALLOWED;
 			fragment.str = cursor;
 			collect_fragment(fragment.str + 1, &cursor);
 			fragment.len = cursor - fragment.str;
@@ -626,9 +646,9 @@ frag:			if (meta && !meta->allow_fragment) {
 		}
 	}
 
-	pr_clutter("  path: %.*s (len:%zu)", (int)path.len, path.str, path.len);
-	pr_clutter("  query: %.*s (len:%zu)", (int)query.len, query.str, query.len);
-	pr_clutter("  fragment: %.*s (len:%zu)", (int)fragment.len, fragment.str, fragment.len);
+	print_component("path", &path);
+	print_component("query", &query);
+	print_component("fragment", &fragment);
 
 	buf.capacity = scheme.len + authority.len + path.len
 	    + query.len + fragment.len + 5; /* "://" + maybe '/' + '\0' */
@@ -636,51 +656,54 @@ frag:			if (meta && !meta->allow_fragment) {
 	buf.d = 0;
 
 	pr_clutter("-> Normalizing scheme.");
-	if (!normalize_scheme(&buf, &scheme))
+	error = normalize_scheme(&buf, &scheme);
+	if (error)
 		goto cancel;
 	pr_clutter("-> Normalizing userinfo.");
-	if (!normalize_userinfo(&buf, &userinfo))
+	error = normalize_userinfo(&buf, &userinfo);
+	if (error)
 		goto cancel;
 	pr_clutter("-> Normalizing host.");
-	if (!normalize_host(&buf, &host))
+	error = normalize_host(&buf, &host);
+	if (error)
 		goto cancel;
 	pr_clutter("-> Normalizing port.");
-	if (!normalize_port(&buf, &port, meta))
+	error = normalize_port(&buf, &port, meta);
+	if (error)
 		goto cancel;
 	pr_clutter("-> Normalizing path.");
-	if (!normalize_path(&buf, &path))
+	error = normalize_path(&buf, &path);
+	if (error)
 		goto cancel;
 	pr_clutter("-> Normalizing query.");
-	if (!normalize_post_path(&buf, &query, '?'))
+	error = normalize_post_path(&buf, &query, '?');
+	if (error)
 		goto cancel;
 	pr_clutter("-> Normalizing fragment.");
-	if (!normalize_post_path(&buf, &fragment, '#'))
+	error = normalize_post_path(&buf, &fragment, '#');
+	if (error)
 		goto cancel;
 
 	approve_chara(&buf, '\0');
-	return buf.dst;
+	*result = buf.dst;
+	return NULL;
 
 cancel:	free(buf.dst);
-	return NULL;
+	return error;
 }
 
-int
+error_msg
 uri_init(struct uri *url, char const *str)
 {
 	char *normal;
+	error_msg error;
 
-	normal = url_normalize(str, 0);
-	if (!normal)
-		return EINVAL;
+	error = url_normalize(str, 0, &normal);
+	if (error)
+		return error;
 
 	__URI_INIT(url, normal);
-
-	if (!uri_is_https(url) && !uri_is_rsync(url)) {
-		free(normal);
-		return ENOTSUP;
-	}
-
-	return 0;
+	return NULL;
 }
 
 /* @str must already be normalized. */

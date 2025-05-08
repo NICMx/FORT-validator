@@ -1,5 +1,6 @@
 #include "init.h"
 
+#include <errno.h>
 #include "config.h"
 #include "http.h"
 #include "types/path.h"
@@ -9,23 +10,25 @@ fetch_url(char const *url, char const *filename)
 {
 	struct uri uri;
 	char *path;
+	error_msg errmsg;
 	int error;
 
-	error = uri_init(&uri, url);
-	if (error)
-		return error;
+	errmsg = uri_init(&uri, url);
+	if (errmsg) {
+		fprintf(stderr, "Invalid URI '%s': %s", url, errmsg);
+		return EINVAL;
+	}
 
 	path = path_join(config_get_tal(), filename);
 
 	error = http_download(&uri, path, 0, NULL);
-	if (error) {
+	if (error)
 		fprintf(stderr, "Couldn't fetch '%s': %s\n",
 		    path, strerror(abs(error)));
-		goto end;
-	}
+	else
+		fprintf(stdout, "Successfully fetched '%s'!\n\n", path);
 
-	fprintf(stdout, "Successfully fetched '%s'!\n\n", path);
-end:	free(path);
+	free(path);
 	uri_cleanup(&uri);
 	return error;
 }

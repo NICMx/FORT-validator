@@ -31,17 +31,24 @@ START_TEST(test_rewind)
 END_TEST
 
 #define TEST_NORMALIZE(dirty, clean)					\
-	normal = url_normalize(dirty, 0);				\
+	ck_assert_pstr_eq(NULL, url_normalize(dirty, 0, &normal));	\
 	ck_assert_str_eq(clean, normal);				\
 	free(normal)
 
 #define TEST_NORMALIZE_AUS(dirty, clean)				\
-	normal = url_normalize(dirty, URI_ALLOW_UNKNOWN_SCHEME);	\
+	ck_assert_ptr_eq(NULL, url_normalize(				\
+		dirty, URI_ALLOW_UNKNOWN_SCHEME, &normal		\
+	));								\
 	ck_assert_str_eq(clean, normal);				\
 	free(normal)
 
-#define TEST_NORMALIZE_FAIL(dirty)					\
-	ck_assert_ptr_eq(NULL, url_normalize(dirty, 0));
+#define TEST_NORMALIZE_FAIL(dirty, error)				\
+	ck_assert_str_eq(error, url_normalize(dirty, 0, &normal));
+
+#define TEST_NORMALIZE_FAIL_AUS(dirty, error)				\
+	ck_assert_str_eq(error, url_normalize(				\
+		dirty, URI_ALLOW_UNKNOWN_SCHEME, &normal		\
+	));
 
 START_TEST(awkward_dot_dotting)
 {
@@ -56,6 +63,82 @@ START_TEST(awkward_dot_dotting)
 
 	TEST_NORMALIZE("rsync://a.b.c//////", "rsync://a.b.c//////");
 	TEST_NORMALIZE_AUS("http://a.b.c/d//..", "http://a.b.c/d");
+}
+END_TEST
+
+START_TEST(test_port)
+{
+	char *normal;
+
+	printf("rfc3986#3.2.3: Port\n");
+
+	TEST_NORMALIZE_FAIL("https://a:-1/", EM_PORT_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a:0/", EM_PORT_RANGE);
+	TEST_NORMALIZE("https://a:1/", "https://a:1/");
+	TEST_NORMALIZE("https://a:65535/", "https://a:65535/");
+	TEST_NORMALIZE_FAIL("https://a:65536/", EM_PORT_RANGE);
+}
+END_TEST
+
+START_TEST(pct_encoding)
+{
+	char *normal;
+
+	printf("3986#2.1: Percent encoding\n");
+
+	TEST_NORMALIZE("https://%61/", "https://a/");
+	TEST_NORMALIZE("https://%6f/", "https://o/");
+	TEST_NORMALIZE("https://%6F/", "https://o/");
+	TEST_NORMALIZE("https://%7C/", "https://%7C/");
+	TEST_NORMALIZE("https://%7c/", "https://%7C/");
+
+	TEST_NORMALIZE_FAIL("https://%6G", EM_PCT_NOTHEX);
+	TEST_NORMALIZE_FAIL("https://%G6", EM_PCT_NOTHEX);
+
+	/* Host */
+	TEST_NORMALIZE_FAIL("https://%6", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%6:", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%:", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%6/", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%/", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%6?", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%?", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%6#", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://%#", EM_PCT_NOT3);
+
+	/* Userinfo */
+	TEST_NORMALIZE("rsync://%61@a/", "rsync://a@a/");
+	TEST_NORMALIZE_FAIL("rsync://%6@a", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("rsync://%@a", EM_PCT_NOT3);
+
+	/* Port */
+	TEST_NORMALIZE_FAIL("rsync://a:%31/", EM_PORT_BADCHR);
+	TEST_NORMALIZE_FAIL("rsync://a:%3", EM_PORT_BADCHR);
+	TEST_NORMALIZE_FAIL("rsync://a:%", EM_PORT_BADCHR);
+
+	/* Path */
+	TEST_NORMALIZE("https://a/%41", "https://a/A");
+	TEST_NORMALIZE_FAIL("https://a/%4", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/%", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/%4/", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/%/", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/%4?", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/%?", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/%4#", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/%#", EM_PCT_NOT3);
+
+	/* Query */
+	TEST_NORMALIZE("https://a/?%30", "https://a/?0");
+	TEST_NORMALIZE_FAIL("https://a/?%3", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/?%", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/?%3#", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/?%#", EM_PCT_NOT3);
+
+	/* Fragment */
+	TEST_NORMALIZE("https://a/#%30", "https://a/#0");
+	TEST_NORMALIZE_FAIL("https://a/#%3", EM_PCT_NOT3);
+	TEST_NORMALIZE_FAIL("https://a/#%", EM_PCT_NOT3);
 }
 END_TEST
 
@@ -96,10 +179,37 @@ START_TEST(test_unknown_protocols)
 
 	printf("Unknown protocols\n");
 
-	TEST_NORMALIZE_FAIL("httpz://a.b.c/d");
-	TEST_NORMALIZE_FAIL("abcde://a.b.c/d");
+	TEST_NORMALIZE_AUS("https://a.b.c/d", "https://a.b.c/d");
+	TEST_NORMALIZE("https://a.b.c/d", "https://a.b.c/d");
+	TEST_NORMALIZE_AUS("http://a.b.c/d", "http://a.b.c/d");
+	TEST_NORMALIZE_FAIL("http://a.b.c/d", EM_SCHEME_UNKNOWN);
+
+	TEST_NORMALIZE_FAIL("httpz://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL("abcde://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL("://a.b.c/d", EM_SCHEME_EMPTY);
+	TEST_NORMALIZE_FAIL("0abc://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL("9abc://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL("+abc://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL(".abc://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL("-abc://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL("a_b://a.b.c/d", EM_SCHEME_UNKNOWN);
+	TEST_NORMALIZE_FAIL("a~b://a.b.c/d", EM_SCHEME_UNKNOWN);
+
 	TEST_NORMALIZE_AUS("httpz://a.b.c/d", "httpz://a.b.c/d");
 	TEST_NORMALIZE_AUS("abcde://a.b.c/d", "abcde://a.b.c/d");
+	TEST_NORMALIZE_FAIL_AUS("://a.b.c/d", EM_SCHEME_EMPTY);
+	TEST_NORMALIZE_FAIL_AUS("0abc://a.b.c/d", EM_SCHEME_1ST);
+	TEST_NORMALIZE_FAIL_AUS("9abc://a.b.c/d", EM_SCHEME_1ST);
+	TEST_NORMALIZE_FAIL_AUS("+abc://a.b.c/d", EM_SCHEME_1ST);
+	TEST_NORMALIZE_FAIL_AUS(".abc://a.b.c/d", EM_SCHEME_1ST);
+	TEST_NORMALIZE_FAIL_AUS("-abc://a.b.c/d", EM_SCHEME_1ST);
+	TEST_NORMALIZE_AUS("a0b://a.b.c/d", "a0b://a.b.c/d");
+	TEST_NORMALIZE_AUS("a9b://a.b.c/d", "a9b://a.b.c/d");
+	TEST_NORMALIZE_AUS("a+b://a.b.c/d", "a+b://a.b.c/d");
+	TEST_NORMALIZE_AUS("a.b://a.b.c/d", "a.b://a.b.c/d");
+	TEST_NORMALIZE_AUS("a-b://a.b.c/d", "a-b://a.b.c/d");
+	TEST_NORMALIZE_FAIL_AUS("a_b://a.b.c/d", EM_SCHEME_NTH);
+	TEST_NORMALIZE_FAIL_AUS("a~b://a.b.c/d", EM_SCHEME_NTH);
 }
 END_TEST
 
@@ -122,6 +232,55 @@ START_TEST(reserved_unchanged)
 			"rsync://" RESERVED_PCT "@" RESERVED_PCT ":1234/" RESERVED_PCT);
 	TEST_NORMALIZE("rsync://" SUBDELIMS "@" SUBDELIMS ":1234/" SUBDELIMS,
 			"rsync://" SUBDELIMS "@" SUBDELIMS ":1234/" SUBDELIMS);
+}
+END_TEST
+
+START_TEST(test_query)
+{
+	char *normal;
+
+	printf("3986#3.4: Query\n");
+
+	TEST_NORMALIZE("https://a/?azAZ09-._~%31!$&'()*+,;=:@/?", "https://a/?azAZ09-._~1!$&'()*+,;=:@/?");
+	TEST_NORMALIZE("https://a/?azAZ09-._~%31!$&'()*+,;=:@/?#", "https://a/?azAZ09-._~1!$&'()*+,;=:@/?#");
+
+	TEST_NORMALIZE_FAIL("https://a/?[", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?]", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/? ", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?\"", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?<", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?>", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?\\", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?^", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?`", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?{", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?}", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/?|", EM_QF_BADCHR);
+}
+END_TEST
+
+START_TEST(test_fragment)
+{
+	char *normal;
+
+	printf("3986#3.6: Fragment\n");
+
+	TEST_NORMALIZE("https://a/#azAZ09-._~%31!$&'()*+,;=:@/?", "https://a/#azAZ09-._~1!$&'()*+,;=:@/?");
+	TEST_NORMALIZE("https://a/#azAZ09-._~%31!$&'()*+,;=:@/?", "https://a/#azAZ09-._~1!$&'()*+,;=:@/?");
+
+	TEST_NORMALIZE_FAIL("https://a/##", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#[", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#]", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/# ", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#\"", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#<", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#>", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#\\", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#^", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#`", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#{", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#}", EM_QF_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a/#|", EM_QF_BADCHR);
 }
 END_TEST
 
@@ -208,20 +367,22 @@ END_TEST
 
 START_TEST(https_grammar)
 {
+	char *normal;
+
 	printf("9110#4.2.2: https-URI     = \"https\" \"://\" authority path-abempty [ \"?\" query ]\n");
 	printf("            authority     = host [ \":\" port ]\n");
 	printf("            path-abempty  = *( \"/\" segment )\n");
 	printf("            segment       = *pchar\n");
 
-	TEST_NORMALIZE_FAIL("");
-	TEST_NORMALIZE_FAIL("h");
-	TEST_NORMALIZE_FAIL("http");
-	TEST_NORMALIZE_FAIL("https");
-	TEST_NORMALIZE_FAIL("https:");
-	TEST_NORMALIZE_FAIL("https:/");
-	TEST_NORMALIZE_FAIL("https://");
-	TEST_NORMALIZE_FAIL("https://a.β.c/");
-	TEST_NORMALIZE_FAIL("https://a.b.c/β");
+	TEST_NORMALIZE_FAIL("", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("h", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("http", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("https", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("https:", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("https:/", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("https://", EM_HOST_EMPTY);
+	TEST_NORMALIZE_FAIL("https://a.β.c/", EM_HOST_BADCHR);
+	TEST_NORMALIZE_FAIL("https://a.b.c/β", EM_PATH_BADCHR);
 
 	/* I think everything else is already tested below. */
 }
@@ -254,15 +415,15 @@ START_TEST(disallow_http_empty_host)
 	printf("(Also 9110#4.2.3: Empty path normalizes to '/')\n");
 
 	TEST_NORMALIZE("https://a", "https://a/");
-	TEST_NORMALIZE_FAIL("https://");
+	TEST_NORMALIZE_FAIL("https://", EM_HOST_EMPTY);
 	TEST_NORMALIZE("https://a/f/g", "https://a/f/g");
-	TEST_NORMALIZE_FAIL("https:///f/g");
+	TEST_NORMALIZE_FAIL("https:///f/g", EM_HOST_EMPTY);
 	TEST_NORMALIZE("https://a:1234/f/g", "https://a:1234/f/g");
-	TEST_NORMALIZE_FAIL("https://:1234/f/g");
+	TEST_NORMALIZE_FAIL("https://:1234/f/g", EM_HOST_EMPTY);
 	TEST_NORMALIZE("https://a?123", "https://a/?123");
-	TEST_NORMALIZE_FAIL("https://?123");
+	TEST_NORMALIZE_FAIL("https://?123", EM_HOST_EMPTY);
 	TEST_NORMALIZE("https://a#123", "https://a/#123");
-	TEST_NORMALIZE_FAIL("https://#123");
+	TEST_NORMALIZE_FAIL("https://#123", EM_HOST_EMPTY);
 }
 END_TEST
 
@@ -360,8 +521,8 @@ START_TEST(disallow_https_userinfo)
 	printf("9110#4.2.4: Disallow https userinfo\n");
 
 	TEST_NORMALIZE("https://c.d.e/f/g", "https://c.d.e/f/g");
-	TEST_NORMALIZE_FAIL("https://a@c.d.e/f/g");
-	TEST_NORMALIZE_FAIL("https://a:b@c.d.e/f/g");
+	TEST_NORMALIZE_FAIL("https://a@c.d.e/f/g", EM_USERINFO_DISALLOWED);
+	TEST_NORMALIZE_FAIL("https://a:b@c.d.e/f/g", EM_USERINFO_DISALLOWED);
 }
 END_TEST
 
@@ -372,50 +533,51 @@ START_TEST(rsync_grammar)
 	printf("5781#2: rsync://[user@]host[:PORT]/Source\n");
 	printf("rsyncuri        = \"rsync:\" hier-part\n");
 
-	TEST_NORMALIZE_FAIL("");
-	TEST_NORMALIZE_FAIL("r");
-	TEST_NORMALIZE_FAIL("rsyn");
-	TEST_NORMALIZE_FAIL("rsync");
-	TEST_NORMALIZE_FAIL("rsync:");
-	TEST_NORMALIZE_FAIL("rsync:/");
-	TEST_NORMALIZE_FAIL("rsync://");
-	TEST_NORMALIZE_FAIL("rsync://a.β.c/");
-	TEST_NORMALIZE_FAIL("rsync://a.b.c/β");
+	TEST_NORMALIZE_FAIL("", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("r", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("rsyn", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("rsync", EM_SCHEME_NOCOLON);
+	TEST_NORMALIZE_FAIL("rsync:", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:/", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync://", EM_HOST_EMPTY);
+	TEST_NORMALIZE_FAIL("rsync://a.β.c/", EM_HOST_BADCHR);
+	TEST_NORMALIZE_FAIL("rsync://a.b.c/β", EM_PATH_BADCHR);
 
 	TEST_NORMALIZE("rsync://a.b.c/m", "rsync://a.b.c/m");
 	TEST_NORMALIZE("rsync://a.b.c/m/r", "rsync://a.b.c/m/r");
-	TEST_NORMALIZE_FAIL("rsync://a.b.c/m/r?query");
-	TEST_NORMALIZE_FAIL("rsync://a.b.c/m/r#fragment");
+	TEST_NORMALIZE_FAIL("rsync://a.b.c/m/r?query", EM_QUERY_DISALLOWED);
+	TEST_NORMALIZE_FAIL("rsync://a.b.c/m/r#fragment", EM_FRAGMENT_DISALLOWED);
 
 	/* hier-part     = "//" authority path-abempty */
 	TEST_NORMALIZE("rsync://user@a.b.c:1234/m/r", "rsync://user@a.b.c:1234/m/r");
 	TEST_NORMALIZE("rsync://a.b.c/m/r", "rsync://a.b.c/m/r");
 	TEST_NORMALIZE("rsync://user@a.b.c:1234", "rsync://user@a.b.c:1234/");
 	TEST_NORMALIZE("rsync://a.b.c", "rsync://a.b.c/");
+	TEST_NORMALIZE_FAIL("rsync://[@a.b.c", EM_USERINFO_BADCHR);
 
 	/* hier-part     = path-absolute */
 	/* ie. "rsync:/" [ pchar+ ( "/" pchar* )* ] */
 	/* (These refer to local files. The RFC allows them, but Fort shouldn't.) */
-	TEST_NORMALIZE_FAIL("rsync:/");
-	TEST_NORMALIZE_FAIL("rsync:/a");
-	TEST_NORMALIZE_FAIL("rsync:/a/");
-	TEST_NORMALIZE_FAIL("rsync:/a/a");
-	TEST_NORMALIZE_FAIL("rsync:/a/a/a");
-	TEST_NORMALIZE_FAIL("rsync:/abc/def/xyz");
-	TEST_NORMALIZE_FAIL("rsync:/abc////def//xyz");
+	TEST_NORMALIZE_FAIL("rsync:/", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:/a", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:/a/", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:/a/a", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:/a/a/a", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:/abc/def/xyz", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:/abc////def//xyz", EM_SCHEME_NOTREMOTE);
 
 	/* hier-part     = path-rootless */
 	/* ie. "rsync:" pchar+ ( "/" pchar* )* */
 	/* (Also local paths. Disallowed by Fort needs.) */
-	TEST_NORMALIZE_FAIL("rsync:a");
-	TEST_NORMALIZE_FAIL("rsync:aa");
-	TEST_NORMALIZE_FAIL("rsync:aa/");
-	TEST_NORMALIZE_FAIL("rsync:aa/a");
-	TEST_NORMALIZE_FAIL("rsync:aa/aa");
-	TEST_NORMALIZE_FAIL("rsync:aa///aa");
+	TEST_NORMALIZE_FAIL("rsync:a", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:aa", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:aa/", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:aa/a", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:aa/aa", EM_SCHEME_NOTREMOTE);
+	TEST_NORMALIZE_FAIL("rsync:aa///aa", EM_SCHEME_NOTREMOTE);
 
 	/* hier-part     = path-empty */
-	TEST_NORMALIZE_FAIL("rsync:");
+	TEST_NORMALIZE_FAIL("rsync:", EM_SCHEME_NOTREMOTE);
 }
 END_TEST
 
@@ -443,7 +605,11 @@ static Suite *create_suite(void)
 	tcase_add_test(misc, test_same_origin);
 
 	generic = tcase_create("RFC 3986 (generic URI)");
+	tcase_add_test(generic, pct_encoding);
 	tcase_add_test(generic, reserved_unchanged);
+	tcase_add_test(generic, test_port);
+	tcase_add_test(generic, test_query);
+	tcase_add_test(generic, test_fragment);
 	tcase_add_test(generic, lowercase_scheme_and_host);
 	tcase_add_test(generic, decode_unreserved_characters);
 	tcase_add_test(generic, path_segment_normalization);

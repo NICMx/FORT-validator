@@ -403,7 +403,7 @@ START_TEST(test_parse_notification_ok)
 	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_ptr_eq(NULL, uri_init(&nurl, "https://host/notification.xml"));
 	ck_assert_int_eq(0, parse_notification(&nurl,
 	    "resources/rrdp/notif-ok.xml", &notif));
 	uri_cleanup(&nurl);
@@ -441,7 +441,7 @@ START_TEST(test_parse_notification_0deltas)
 	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_ptr_eq(NULL, uri_init(&nurl, "https://host/notification.xml"));
 	ck_assert_int_eq(0, parse_notification(&nurl,
 	    "resources/rrdp/notif-0deltas.xml", &notif));
 	uri_cleanup(&nurl);
@@ -467,7 +467,7 @@ START_TEST(test_parse_notification_large_serial)
 	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_ptr_eq(NULL, uri_init(&nurl, "https://host/notification.xml"));
 	ck_assert_int_eq(0, parse_notification(&nurl,
 	    "resources/rrdp/notif-large-serial.xml", &notif));
 	uri_cleanup(&nurl);
@@ -501,7 +501,7 @@ test_parse_notification_error(char *file)
 	struct uri nurl;
 
 	ck_assert_int_eq(0, relax_ng_init());
-	ck_assert_int_eq(0, uri_init(&nurl, "https://host/notification.xml"));
+	ck_assert_ptr_eq(NULL, uri_init(&nurl, "https://host/notification.xml"));
 	ck_assert_int_eq(-EINVAL, parse_notification(&nurl, file, &notif));
 	uri_cleanup(&nurl);
 

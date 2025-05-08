@@ -52,6 +52,7 @@ read_content(char *fc /* File Content */, struct tal *tal)
 	char *nl; /* New Line */
 	bool cr; /* Carriage return */
 	struct uri url;
+	error_msg error;
 
 	/* Comment section */
 	while (fc[0] == '#') {
@@ -72,13 +73,14 @@ read_content(char *fc /* File Content */, struct tal *tal)
 		if (is_blank(fc))
 			break;
 
-		if (uri_init(&url, fc) == 0) {
+		error = uri_init(&url, fc);
+		if (!error) {
 			if (uri_is_https(&url) || uri_is_rsync(&url))
 				uris_add(&tal->urls, &url);
 			else
 				uri_cleanup(&url);
 		} else {
-			pr_op_debug("Cannot parse '%s' as a URI; ignoring.", fc);
+			pr_op_debug("Ignoring URI '%s': %s", fc, error);
 		}
 
 		fc = nl + cr + 1;

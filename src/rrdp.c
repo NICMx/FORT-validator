@@ -477,6 +477,7 @@ static int
 parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 {
 	xmlChar *xmlattr;
+	error_msg errmsg;
 	int error;
 
 	memset(meta, 0, sizeof(*meta));
@@ -484,10 +485,11 @@ parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 	xmlattr = parse_string(reader, RRDP_ATTR_URI);
 	if (xmlattr == NULL)
 		return -EINVAL;
-	error = uri_init(&meta->uri, (char const *)xmlattr);
+	errmsg = uri_init(&meta->uri, (char const *)xmlattr);
 	xmlFree(xmlattr);
-	if (error)
-		return -EINVAL;
+	if (errmsg)
+		return pr_val_err("Cannot parse '%s' as a URI: %s",
+		    xmlattr, errmsg);
 
 	error = parse_hash(reader, &meta->hash, &meta->hash_len);
 	if (error) {
@@ -1473,6 +1475,7 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 	char const *path;
 	unsigned long id, max_id;
 	int error;
+	error_msg errmsg;
 
 	error = json_get_object(jparent, "files", &jfiles);
 	if (error < 0) {
@@ -1490,9 +1493,9 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 			pr_op_warn("RRDP file URL '%s' is not a string.", jkey);
 			continue;
 		}
-		error = uri_init(&url, jkey);
-		if (error) {
-			pr_op_warn("Cannot parse '%s' as a URI.", jkey);
+		errmsg = uri_init(&url, jkey);
+		if (errmsg) {
+			pr_op_warn("Cannot parse '%s' as a URI: %s", jkey, errmsg);
 			continue;
 		}
 
@@ -1506,8 +1509,7 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 			continue;
 		}
 
-		error = hex2ulong(path + parent_len + 1, &id);
-		if (error) {
+		if (hex2ulong(path + parent_len + 1, &id) != 0) {
 			pr_op_warn("RRDP file '%s' is not a hexadecimal number.", path);
 			uri_cleanup(&url);
 			continue;

@@ -249,15 +249,18 @@ static int
 check_same_origin(struct uri const *src, char const *redirect)
 {
 	struct uri redirect_url;
+	error_msg errmsg;
 	int error;
 
-	error = uri_init(&redirect_url, redirect);
-	if (error)
-		return error;
+	errmsg = uri_init(&redirect_url, redirect);
+	if (errmsg)
+		return pr_val_err("Cannot parse redirect '%s' as a URI: %s",
+		    redirect, errmsg);
 
-	if (!uri_same_origin(src, &redirect_url))
-		error = pr_val_err("%s is redirecting to %s; disallowing because of different origin.",
-		    uri_str(src), uri_str(&redirect_url));
+	error = uri_same_origin(src, &redirect_url)
+	    ? 0
+	    : pr_val_err("%s is redirecting to %s; disallowing because of different origin.",
+	          uri_str(src), uri_str(&redirect_url));
 
 	uri_cleanup(&redirect_url);
 	return error;

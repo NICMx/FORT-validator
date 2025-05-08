@@ -91,7 +91,7 @@ START_TEST(startup)
 	seq.pathlen = strlen(seq.prefix);
 	seq.free_prefix = false;
 
-	ck_assert_int_eq(0, uri_init(&url, URL));
+	ck_assert_ptr_eq(NULL, uri_init(&url, URL));
 
 	dls[0] = NHDR("3")
 		NSS("https://host/9d-8/3/snapshot.xml",
@@ -106,7 +106,7 @@ START_TEST(startup)
 	ck_assert_uint_eq(true, changed);
 	ck_file("rrdp/0/0"); /* "rrdp/<first-cage>/<c.cer>" */
 
-	ck_assert_int_eq(0, uri_init(&maps[0].url, "rsync://a/b/c.cer"));
+	ck_assert_ptr_eq(NULL, uri_init(&maps[0].url, "rsync://a/b/c.cer"));
 	maps[0].path = "rrdp/0/0";
 	memset(&maps[1], 0, sizeof(maps[1]));
 	ck_state(TEST_SESSION, "3", 1, maps, state);
