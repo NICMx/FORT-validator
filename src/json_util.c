@@ -20,7 +20,7 @@ json_get_str(json_t *parent, char const *name, char const **result)
 		return ENOENT;
 
 	if (!json_is_string(child))
-		return pr_op_err("Tag '%s' is not a JSON string.", name);
+		return -pr_op_err("Tag '%s' is not a JSON string.", name);
 
 	*result = json_string_value(child);
 	return 0;
@@ -40,9 +40,10 @@ json_get_uri(json_t *parent, char const *name, struct uri *result)
 	if (error)
 		return error;
 	errmsg = uri_init(result, str);
-	if (errmsg)
-		return pr_op_err("'%s' does not seem to be a URI: %s",
-		    str, errmsg);
+	if (errmsg) {
+		pr_op_err("'%s' does not seem to be a URI: %s", str, errmsg);
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -59,7 +60,7 @@ json_get_int_t(json_t *parent, char const *name, json_int_t *result)
 		return ENOENT;
 
 	if (!json_is_integer(child))
-		return pr_op_err("Tag '%s' is not a JSON integer.", name);
+		return -pr_op_err("Tag '%s' is not a JSON integer.", name);
 
 	*result = json_integer_value(child);
 	return 0;
@@ -77,7 +78,7 @@ json_get_int(json_t *parent, char const *name, int *result)
 	if (error)
 		return error;
 	if (json_int < INT_MIN || INT_MAX < json_int)
-		return pr_op_err("Tag '%s' (%" JSON_INTEGER_FORMAT
+		return -pr_op_err("Tag '%s' (%" JSON_INTEGER_FORMAT
 		    ") is out of range [%d, %d].",
 		    name, json_int, INT_MIN, INT_MAX);
 
@@ -97,7 +98,7 @@ json_get_u32(json_t *parent, char const *name, uint32_t *result)
 	if (error)
 		return error;
 	if (json_int < 0 || UINT32_MAX < json_int)
-		return pr_op_err("Tag '%s' (%" JSON_INTEGER_FORMAT
+		return -pr_op_err("Tag '%s' (%" JSON_INTEGER_FORMAT
 		    ") is out of range [0, %u].",
 		    name, json_int, UINT32_MAX);
 
@@ -117,7 +118,7 @@ json_get_ulong(json_t *parent, char const *name, unsigned long *result)
 	if (error)
 		return error;
 	if (json_int < 0 || ULONG_MAX < json_int)
-		return pr_op_err("Tag '%s' (%" JSON_INTEGER_FORMAT
+		return -pr_op_err("Tag '%s' (%" JSON_INTEGER_FORMAT
 		    ") is out of range [0, %lu].",
 		    name, json_int, ULONG_MAX);
 
@@ -136,11 +137,13 @@ json_get_bigint(json_t *parent, char const *name, INTEGER_t *result)
 		return error;
 
 	error = asn_str2INTEGER(str, result);
-	if (error)
+	if (error) {
 		pr_op_err("Tag '%s' (%s) cannot be parsed into an integer: %s",
 		    name, str, strerror(error));
+		return -error;
+	}
 
-	return error;
+	return 0;
 }
 
 int
@@ -153,7 +156,7 @@ json_get_ts(json_t *parent, char const *name, time_t *result)
 	if (error)
 		return error;
 
-	return str2time(str, result);
+	return -str2time(str, result);
 }
 
 int
@@ -168,7 +171,7 @@ json_get_array(json_t *parent, char const *name, json_t **array)
 		return ENOENT;
 
 	if (!json_is_array(child))
-		return pr_op_err("Tag '%s' is not a JSON array.", name);
+		return -pr_op_err("Tag '%s' is not a JSON array.", name);
 
 	*array = child;
 	return 0;
@@ -187,7 +190,7 @@ json_get_object(json_t *parent, char const *name, json_t **obj)
 
 	if (!json_is_object(child)) {
 		*obj = NULL;
-		return pr_op_err("Tag '%s' is not a JSON object.", name);
+		return -pr_op_err("Tag '%s' is not a JSON object.", name);
 	}
 
 	*obj = child;

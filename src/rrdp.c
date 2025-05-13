@@ -471,7 +471,7 @@ end:
  * Extracts the following two attributes from @reader's current tag:
  *
  * 1. "uri"
- * 2. "hash" (optional, depending on @hr)
+ * 2. "hash" (optional)
  */
 static int
 parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
@@ -484,7 +484,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 
 	xmlattr = parse_string(reader, RRDP_ATTR_URI);
 	if (xmlattr == NULL)
-		return -EINVAL;
+		return EINVAL;
 	errmsg = uri_init(&meta->uri, (char const *)xmlattr);
 	xmlFree(xmlattr);
 	if (errmsg)
@@ -544,7 +544,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 	/* Parse tag content */
 	base64_str = parse_string(reader, NULL);
 	if (base64_str == NULL) {
-		error = -EINVAL;
+		error = EINVAL;
 		goto end;
 	}
 	if (!base64_decode((char *)base64_str, 0, &tag.content, &tag.content_len)) {
@@ -600,7 +600,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 
 		path = cseq_next(&args->state->seq);
 		if (!path) {
-			error = -EINVAL;
+			error = EINVAL;
 			goto end;
 		}
 		file = cache_file_add(args->state, &tag.meta.uri, path);
@@ -730,7 +730,7 @@ swap_until_sorted(struct notification_delta *deltas, array_index i,
 			    "Deltas: Serial '%s' is out of bounds. (min:%s)",
 			    deltas[i].serial.str, str);
 			OPENSSL_free(str);
-			return -EINVAL;
+			return EINVAL;
 		}
 		if (BN_cmp(max->num, deltas[i].serial.num) < 0)
 			return pr_val_err(
@@ -1034,7 +1034,7 @@ handle_deltas(struct update_notification *notif, struct rrdp_state *state)
 
 	if (notif->deltas.len == 0) {
 		pr_val_warn("There's no delta list to process.");
-		return -ENOENT;
+		return ENOENT;
 	}
 
 	old = &state->session.serial;
@@ -1455,10 +1455,10 @@ json2serial(json_t *parent, struct rrdp_serial *serial)
 	serial->num = BN_create();
 	serial->str = pstrdup(str);
 	if (!BN_dec2bn(&serial->num, serial->str)) {
-		error = pr_op_err("Not a serial number: %s", serial->str);
+		pr_op_err("Not a serial number: %s", serial->str);
 		BN_free(serial->num);
 		free(serial->str);
-		return error;
+		return -EINVAL;
 	}
 
 	return 0;

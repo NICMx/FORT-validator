@@ -61,6 +61,7 @@ handle_serial_query_pdu(struct rtr_request *request)
 {
 	struct send_delta_args args;
 	serial_t final_serial;
+	enum vrps_foreach_delta_since_result result;
 	int error;
 
 	pr_op_debug("Serial Query. Request version/session/serial: %u/%u/%u",
@@ -92,10 +93,10 @@ handle_serial_query_pdu(struct rtr_request *request)
 	 *    PDUs, to minimize writer stagnation.
 	 */
 
-	error = vrps_foreach_delta_since(request->pdu.obj.sq.serial_number,
+	result = vrps_foreach_delta_since(request->pdu.obj.sq.serial_number,
 	    &final_serial, send_delta_vrp, send_delta_rk, &args);
-	switch (error) {
-	case 0:
+	switch (result) {
+	case VFDSR_OK:
 		/*
 		 * https://tools.ietf.org/html/rfc6810#section-6.2
 		 *
@@ -103,29 +104,32 @@ handle_serial_query_pdu(struct rtr_request *request)
 		 * and programming errors. Best avoid error PDUs.
 		 */
 		if (!args.cache_response_sent) {
-			error = send_cache_response_pdu(args.fd,
-			    args.rtr_version);
+			error = send_cache_response_pdu(args.fd, args.rtr_version);
 			if (error)
 				return error;
 		}
-		return send_end_of_data_pdu(args.fd, args.rtr_version,
-		    final_serial);
-	case -EAGAIN: /* Database still under construction */
+		return send_end_of_data_pdu(args.fd, args.rtr_version, final_serial);
+
+	case VFDSR_UNDER_CONSTRUCTION:
 		return err_pdu_send_no_data_available(args.fd, args.rtr_version);
-	case -ESRCH: /* Invalid serial */
+
+	case VFDSR_INVALID_SERIAL:
 		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
 		return send_cache_reset_pdu(args.fd, args.rtr_version);
-	case -ENOMEM: /* Memory allocation failure */
-		enomem_panic();
-	case EAGAIN: /* Too many threads */
+
+	case VFDSR_CANT_LOCK:
 		/*
 		 * I think this should be more of a "try again" thing, but
-		 * RTR does not provide a code for that. Just fall through.
+		 * RTR does not provide a code for that.
 		 */
+		return err_pdu_send_internal_error(args.fd, args.rtr_version);
+
+	case VFDSR_INTR:
+		/* Callback errors must halt PDUs */
 		break;
 	}
 
-	return err_pdu_send_internal_error(args.fd, args.rtr_version);
+	return EINVAL;
 }
 
 struct base_roa_args {
@@ -167,26 +171,25 @@ send_base_router_key(struct router_key const *key, void *arg)
 	    FLAG_ANNOUNCEMENT);
 }
 
-int
+void
 handle_reset_query_pdu(struct rtr_request *request)
 {
 	struct base_roa_args args;
 	serial_t current_serial;
-	int error;
 
 	args.started = false;
 	args.fd = request->fd;
 	args.version = request->pdu.rtr_version;
 
-	error = get_last_serial_number(&current_serial);
-	switch (error) {
-	case 0:
+	switch (get_last_serial_number(&current_serial)) {
+	case GLSNR_OK:
 		break;
-	case -EAGAIN:
-		return err_pdu_send_no_data_available(args.fd, args.version);
-	default:
+	case GLSNR_UNDER_CONSTRUCTION:
+		err_pdu_send_no_data_available(args.fd, args.version);
+		return;
+	case GLSNR_CANT_LOCK:
 		err_pdu_send_internal_error(args.fd, args.version);
-		return error;
+		return;
 	}
 
 	/*
@@ -196,27 +199,26 @@ handle_reset_query_pdu(struct rtr_request *request)
 	 * queries than reset queries.
 	 */
 
-	error = vrps_foreach_base(send_base_roa, send_base_router_key, &args);
-
 	/* See handle_serial_query_pdu() for some comments. */
-	switch (error) {
-	case 0:
-		/* Assure that cache response is (or was) sent */
-		if (args.started)
-			break;
-		error = send_cache_response_pdu(args.fd, args.version);
-		if (error)
-			return error;
+	switch (vrps_foreach_base(send_base_roa, send_base_router_key, &args)) {
+	case VFBR_OK:
+		/* Ensure the cache response is (or was) sent */
+		if (!args.started)
+			if (send_cache_response_pdu(args.fd, args.version) != 0)
+				return;
+		send_end_of_data_pdu(args.fd, args.version, current_serial);
 		break;
-	case -EAGAIN:
-		return err_pdu_send_no_data_available(args.fd, args.version);
-	case EAGAIN:
-		err_pdu_send_internal_error(args.fd, args.version);
-		return error;
-	default:
-		/* Any other error must stop sending more PDUs */
-		return error;
-	}
 
-	return send_end_of_data_pdu(args.fd, args.version, current_serial);
+	case VFBR_UNDER_CONSTRUCTION:
+		err_pdu_send_no_data_available(args.fd, args.version);
+		break;
+
+	case VFBR_CANT_LOCK:
+		err_pdu_send_internal_error(args.fd, args.version);
+		break;
+
+	case VFBR_CB_INTR:
+		/* Callback errors must halt PDUs */
+		break;
+	}
 }

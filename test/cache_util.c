@@ -11,7 +11,7 @@ ck_assert_cachent_eq(struct cache_node *expected, struct cache_node *actual)
 {
 	struct cache_node *echild, *achild, *tmp;
 
-	PR_DEBUG_MSG("Comparing %s vs %s", expected->url, actual->url);
+	pr_clutter("Comparing %s vs %s", expected->url, actual->url);
 
 	ck_assert_str_eq(expected->url, actual->url);
 	ck_assert_str_eq(expected->path, actual->path);

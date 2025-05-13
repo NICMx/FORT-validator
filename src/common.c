@@ -12,6 +12,10 @@
 #include "config.h"
 #include "log.h"
 
+validation_verdict const VV_CONTINUE = "Continue";
+validation_verdict const VV_FAIL = "Failure";
+validation_verdict const VV_BUSY = "Busy";
+
 bool
 str_starts_with(char const *str, char const *prefix)
 {
@@ -36,10 +40,9 @@ void
 panic_on_fail(int error, char const *function_name)
 {
 	if (error)
-		pr_crit("%s() returned error code %d. "
-		    "This is too critical for a graceful recovery; "
-		    "I must die now.",
-		    function_name, error);
+		pr_crit("%s() returned '%s'. "
+		    "This is too critical for a recovery; I must die now.",
+		    function_name, strerror(error));
 }
 
 void
@@ -68,15 +71,9 @@ rwlock_read_lock(pthread_rwlock_t *lock)
 		return error;
 	}
 
-	/*
-	 * EINVAL, EDEADLK and unknown nonstandard error codes.
-	 * EINVAL, EDEADLK indicate serious programming errors. And it's
-	 * probably safest to handle the rest the same.
-	 * pthread_rwlock_rdlock() failing like this is akin to `if` failing;
-	 * we're screwed badly, so let's just pull the trigger.
-	 */
-	pr_crit("pthread_rwlock_rdlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
-	    error);
+	pr_crit("pthread_rwlock_rdlock() returned '%s'. "
+	    "This is too critical for a recovery; I must die now.",
+	    strerror(error));
 	return EINVAL; /* Warning shutupper */
 }
 
@@ -91,8 +88,9 @@ rwlock_write_lock(pthread_rwlock_t *lock)
 	 */
 	error = pthread_rwlock_wrlock(lock);
 	if (error)
-		pr_crit("pthread_rwlock_wrlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
-		    error);
+		pr_crit("pthread_rwlock_wrlock() returned '%s'. "
+		    "This is too critical for a recovery; I must die now.",
+		    strerror(error));
 }
 
 void
@@ -106,8 +104,9 @@ rwlock_unlock(pthread_rwlock_t *lock)
 	 */
 	error = pthread_rwlock_unlock(lock);
 	if (error)
-		pr_crit("pthread_rwlock_unlock() returned error code %d. This is too critical for a graceful recovery; I must die now.",
-		    error);
+		pr_crit("pthread_rwlock_unlock() returned '%s'. "
+		    "This is too critical for a recovery; I must die now.",
+		    strerror(error));
 }
 
 static int
@@ -140,7 +139,7 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 		pr_op_err("Error getting real path for file '%s' at directory '%s': %s",
 		    dir_name, file_name, strerror(error));
 		free(tmp);
-		return -error;
+		return error;
 	}
 
 	error = cb(fullpath, arg);
@@ -159,9 +158,9 @@ process_dir_files(char const *location, char const *file_ext, bool empty_err,
 
 	dir_loc = opendir(location);
 	if (dir_loc == NULL) {
-		error = -errno;
-		pr_op_err_st("Couldn't open directory '%s': %s", location,
-		    strerror(-error));
+		error = errno;
+		pr_op_err_st("Couldn't open directory '%s': %s",
+		    location, strerror(error));
 		goto end;
 	}
 
@@ -178,7 +177,7 @@ process_dir_files(char const *location, char const *file_ext, bool empty_err,
 	}
 	if (errno) {
 		pr_op_err_st("Error reading dir %s", location);
-		error = -errno;
+		error = errno;
 	}
 	if (!error && found == 0)
 		error = (empty_err ?

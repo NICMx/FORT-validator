@@ -2,6 +2,7 @@
 #define SRC_CACHE_LOCAL_CACHE_H_
 
 #include <stdbool.h>
+#include "common.h"
 #include "types/map.h"
 #include "types/rpp.h"
 #include "types/uri.h"
@@ -42,7 +43,8 @@ char *cache_refresh_by_url(struct uri const *);
 char *cache_get_fallback(struct uri const *);
 
 struct cache_cage;
-int cache_refresh_by_sias(struct sia_uris *, struct cache_cage **);
+validation_verdict cache_refresh_by_sias(struct sia_uris *,
+    struct cache_cage **);
 char const *cage_map_file(struct cache_cage *, struct uri const *);
 bool cage_disable_refresh(struct cache_cage *);
 struct mft_meta const *cage_mft_fallback(struct cache_cage *);

@@ -243,8 +243,8 @@ update_slurm(struct db_slurm **slurm)
 
 	if (error) {
 		/* Fall back to previous iteration's SLURM */
-		pr_op_info("Error %d loading SLURM. The validation will continue regardless.",
-		    error);
+		pr_op_info("Error '%s' loading SLURM. The validation will continue regardless.",
+		    strerror(error));
 		if (*slurm != NULL) {
 			pr_op_info("A previous valid version of the SLURM exists and will be applied.");
 			db_slurm_log(*slurm);

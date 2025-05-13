@@ -24,7 +24,7 @@ fetch_url(char const *url, char const *filename)
 	error = http_download(&uri, path, 0, NULL);
 	if (error)
 		fprintf(stderr, "Couldn't fetch '%s': %s\n",
-		    path, strerror(abs(error)));
+		    path, strerror(error));
 	else
 		fprintf(stdout, "Successfully fetched '%s'!\n\n", path);
 

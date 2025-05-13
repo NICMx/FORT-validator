@@ -50,11 +50,9 @@ slurm_parse(char const *location, void *arg)
 		    json_error.line, json_error.column, json_error.text);
 
 	error = handle_json(json_root, arg);
-	json_decref(json_root);
-	if (error)
-		return error; /* File exists, but has a syntax error */
 
-	return 0;
+	json_decref(json_root);
+	return error;
 }
 
 static int
@@ -392,11 +390,7 @@ load_single_prefix(json_t *object, struct db_slurm *db, bool is_assertion)
 		if (!json_valid_members_count(object, member_count))
 			return pr_op_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
 
-		error = db_slurm_add_prefix_filter(db, &result);
-		if (error)
-			return error;
-
-		return 0;
+		return db_slurm_add_prefix_filter(db, &result);
 	}
 
 	/*
@@ -412,11 +406,7 @@ load_single_prefix(json_t *object, struct db_slurm *db, bool is_assertion)
 	if (!json_valid_members_count(object, member_count))
 		return pr_op_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
 
-	error = db_slurm_add_prefix_assertion(db, &result);
-	if (error)
-		return error;
-
-	return 0;
+	return db_slurm_add_prefix_assertion(db, &result);
 }
 
 static int
@@ -429,7 +419,7 @@ load_prefix_array(json_t *array, struct db_slurm *db, bool is_assertion)
 		error = load_single_prefix(element, db, is_assertion);
 		if (!error)
 			continue;
-		if (error == -EEXIST)
+		if (error == EEXIST)
 			pr_op_err(
 			    "The prefix %s element \"%s\", covers or is covered by another assertion/filter; SLURM loading will be stopped. %s",
 			    (is_assertion ? "assertion" : "filter"),
@@ -489,8 +479,7 @@ load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 
 	/* A single comment isn't valid */
 	if (result.data_flag == SLURM_COM_FLAG_COMMENT) {
-		pr_op_err("Single comments aren't valid");
-		error = -EINVAL;
+		error = pr_op_err("Single comments aren't valid");
 		goto release_router_key;
 	}
 
@@ -498,15 +487,13 @@ load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 	if (!is_assertion) {
 		if ((result.data_flag &
 		    (SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI)) == 0) {
-			pr_op_err("BGPsec filter must have an asn and/or SKI");
-			error = -EINVAL;
+			error = pr_op_err("BGPsec filter must have an asn and/or SKI");
 			goto release_router_key;
 		}
 
 		/* Validate expected members */
 		if (!json_valid_members_count(object, member_count)) {
-			pr_op_err("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
-			error = -EINVAL;
+			error = pr_op_err("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
 			goto release_router_key;
 		}
 
@@ -519,8 +506,7 @@ load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 
 	/* Validate expected members */
 	if (!json_valid_members_count(object, member_count)) {
-		pr_op_err("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
-		error = -EINVAL;
+		error = pr_op_err("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
 		goto release_router_key;
 	}
 
@@ -547,7 +533,7 @@ load_bgpsec_array(json_t *array, struct db_slurm *db, bool is_assertion)
 		error = load_single_bgpsec(element, db, is_assertion);
 		if (!error)
 			continue;
-		if (error == -EEXIST)
+		if (error == EEXIST)
 			pr_op_err(
 			    "The ASN at bgpsec %s element \"%s\", is duplicated in another assertion/filter; SLURM loading will be stopped. %s",
 			    (is_assertion ? "assertion" : "filter"),
@@ -621,11 +607,7 @@ load_filters(json_t *root, struct db_slurm *db)
 	if (error)
 		return error;
 
-	error = load_bgpsec_array(bgpsec, db, false);
-	if (error)
-		return error;
-
-	return 0;
+	return load_bgpsec_array(bgpsec, db, false);
 }
 
 static int
@@ -664,11 +646,7 @@ load_assertions(json_t *root, struct db_slurm *db)
 	if (error)
 		return error;
 
-	error = load_bgpsec_array(bgpsec, db, true);
-	if (error)
-		return error;
-
-	return 0;
+	return load_bgpsec_array(bgpsec, db, true);
 }
 
 static int

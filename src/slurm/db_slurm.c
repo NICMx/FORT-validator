@@ -281,7 +281,7 @@ db_slurm_add_prefix_filter(struct db_slurm *db, struct slurm_prefix *elem)
 	struct slurm_prefix_wrap new;
 
 	if (prefix_exists(db, elem))
-		return -EEXIST;
+		return EEXIST;
 
 	new.element = *elem;
 	new.references = 1;
@@ -296,7 +296,7 @@ db_slurm_add_prefix_assertion(struct db_slurm *db, struct slurm_prefix *elem)
 	struct slurm_prefix_wrap new;
 
 	if (prefix_exists(db, elem))
-		return -EEXIST;
+		return EEXIST;
 
 	new.element = *elem;
 	new.references = 1;
@@ -344,7 +344,7 @@ db_slurm_add_bgpsec_filter(struct db_slurm *db, struct slurm_bgpsec *elem)
 	struct slurm_bgpsec_wrap new;
 
 	if (bgpsec_exists(db, elem))
-		return -EEXIST;
+		return EEXIST;
 
 	new.element = *elem;
 	new.references = 1;
@@ -359,7 +359,7 @@ db_slurm_add_bgpsec_assertion(struct db_slurm *db, struct slurm_bgpsec *elem)
 	struct slurm_bgpsec_wrap new;
 
 	if (bgpsec_exists(db, elem))
-		return -EEXIST;
+		return EEXIST;
 
 	new.element = *elem;
 	new.references = 1;

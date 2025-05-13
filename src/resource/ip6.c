@@ -102,7 +102,7 @@ res6_put(struct resources_ipv6 *ips)
 	sarray_put((struct sorted_array *) ips);
 }
 
-int
+enum resource_cmp_result
 res6_add_prefix(struct resources_ipv6 *ips, struct ipv6_prefix const *prefix)
 {
 	struct ipv6_range r;
@@ -110,7 +110,7 @@ res6_add_prefix(struct resources_ipv6 *ips, struct ipv6_prefix const *prefix)
 	return sarray_add((struct sorted_array *) ips, &r);
 }
 
-int
+enum resource_cmp_result
 res6_add_range(struct resources_ipv6 *ips, struct ipv6_range const *range)
 {
 	return sarray_add((struct sorted_array *) ips, range);

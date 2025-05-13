@@ -85,11 +85,8 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
 	if (now_tt == 0)
 		now_tt = time_fatal();
 
-	if (gmtime_r(&now_tt, &now) == NULL) {
-		error = errno;
-		return pr_val_err("gmtime_r(now) error %d: %s", error,
-		    strerror(error));
-	}
+	if (gmtime_r(&now_tt, &now) == NULL)
+		return pr_val_err("gmtime_r(now) error: %s", strerror(errno));
 
 	if (tm_cmp(&now, &thisUpdate) < 0) {
 		return pr_val_err(
@@ -103,11 +100,9 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
 	}
 
 	meta->update = timegm(&thisUpdate);
-	if (meta->update == (time_t)-1) {
-		error = errno;
+	if (meta->update == (time_t)-1)
 		return pr_val_err("Cannot convert '" TM_FMT "' to time_t: %s",
-		    TM_ARGS(thisUpdate), strerror(error));
-	}
+		    TM_ARGS(thisUpdate), strerror(errno));
 
 	return 0;
 
@@ -169,7 +164,7 @@ validate_manifest(struct Manifest *mft, struct cache_cage *cage,
 			return pr_val_err("The manifest version isn't a valid unsigned long");
 		}
 		if (version != 0)
-			return -EINVAL;
+			return EINVAL;
 	}
 
 	/*

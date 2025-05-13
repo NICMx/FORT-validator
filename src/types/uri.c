@@ -1,5 +1,6 @@
 #include "types/uri.h"
 
+#include <arpa/inet.h>
 #include <errno.h>
 
 #include "alloc.h"

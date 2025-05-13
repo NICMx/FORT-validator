@@ -54,21 +54,21 @@ print_monotime(void)
 MOCK_VOID_PRINT(pr_op_debug, PR_COLOR_DBG)
 MOCK_VOID_PRINT(pr_op_info, PR_COLOR_INF)
 MOCK_INT_PRINT(pr_op_warn, PR_COLOR_WRN, 0)
-MOCK_INT_PRINT(pr_op_err, PR_COLOR_ERR, -EINVAL)
-MOCK_INT_PRINT(pr_op_err_st, PR_COLOR_ERR, -EINVAL)
-MOCK_INT_PRINT(op_crypto_err, PR_COLOR_ERR, -EINVAL)
+MOCK_INT_PRINT(pr_op_err, PR_COLOR_ERR, EINVAL)
+MOCK_INT_PRINT(pr_op_err_st, PR_COLOR_ERR, EINVAL)
+MOCK_INT_PRINT(op_crypto_err, PR_COLOR_ERR, EINVAL)
 
 MOCK_VOID_PRINT(pr_val_debug, PR_COLOR_DBG)
 MOCK_VOID_PRINT(pr_val_info, PR_COLOR_INF)
 MOCK_INT_PRINT(pr_val_warn, PR_COLOR_WRN, 0)
-MOCK_INT_PRINT(pr_val_err, PR_COLOR_ERR, -EINVAL)
-MOCK_INT_PRINT(val_crypto_err, PR_COLOR_ERR, -EINVAL)
+MOCK_INT_PRINT(pr_val_err, PR_COLOR_ERR, EINVAL)
+MOCK_INT_PRINT(val_crypto_err, PR_COLOR_ERR, EINVAL)
 
 int
 incidence(enum incidence_id id, const char *format, ...)
 {
 	MOCK_PRINT(PR_COLOR_ERR);
-	return -EINVAL;
+	return EINVAL;
 }
 
 void

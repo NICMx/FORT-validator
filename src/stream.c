@@ -43,12 +43,12 @@ rstream_full_read(struct read_stream *stream, size_t len)
 	ssize_t rd;
 
 	if (stream->buffer == NULL || stream->capacity < len)
-		return -ENOSPC;
+		return ENOSPC;
 
 	for (offset = 0; offset < len; offset += rd) {
 		rd = read(stream->fd, stream->buffer + offset, len - offset);
 		if (rd < 0)
-			return -errno;
+			return errno;
 		if (rd == 0)
 			break;
 	}

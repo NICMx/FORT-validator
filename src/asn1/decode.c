@@ -3,8 +3,6 @@
 #include "asn1/asn1c/ber_decoder.h"
 #include "log.h"
 
-#define COND_LOG(log, pr) (log ? pr : -EINVAL)
-
 /* Decoded BER data */
 struct ber_data {
 	const unsigned char *src;
@@ -15,17 +13,16 @@ struct ber_data {
 static int
 validate(asn_TYPE_descriptor_t const *descriptor, void *result, bool log)
 {
-	char error_msg[256];
-	size_t error_msg_size;
-	int error;
+	char errmsg[256];
+	size_t errlen;
 
 	/* The lib's inbuilt validations. (Probably not much.) */
-	error_msg_size = sizeof(error_msg);
-	error = asn_check_constraints(descriptor, result, error_msg,
-	    &error_msg_size);
-	if (error == -1)
-		return COND_LOG(log,
-		    pr_val_err("Error validating ASN.1 object: %s", error_msg));
+	errlen = sizeof(errmsg);
+	if (asn_check_constraints(descriptor, result, errmsg, &errlen) < 0) {
+		if (log)
+			pr_val_err("Error validating ASN.1 object: %s", errmsg);
+		return EINVAL;
+	}
 
 	return 0;
 }
@@ -44,9 +41,10 @@ asn1_decode(const void *buffer, size_t buffer_size,
 		/* Must free partial object according to API contracts. */
 		ASN_STRUCT_FREE(*descriptor, *result);
 		/* We expect the data to be complete; RC_WMORE is an error. */
-		return COND_LOG(log,
-		    pr_val_err("Error '%u' decoding ASN.1 object around byte %zu",
-		        rval.code, rval.consumed));
+		if (log)
+			pr_val_err("Error '%u' decoding ASN.1 object around byte %zu",
+			    rval.code, rval.consumed);
+		return EINVAL;
 	}
 
 	error = validate(descriptor, *result, log);
@@ -85,5 +83,5 @@ int
 asn1_decode_fc(struct file_contents *fc,
     asn_TYPE_descriptor_t const *descriptor, void **result, bool log)
 {
-	return asn1_decode(fc->buffer, fc->buffer_size, descriptor, result, log);
+	return asn1_decode(fc->buf, fc->buflen, descriptor, result, log);
 }

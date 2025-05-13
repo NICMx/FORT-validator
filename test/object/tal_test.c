@@ -104,10 +104,10 @@ START_TEST(test_tal_load_error)
 {
 	struct tal tal;
 
-	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-1.tal"));
-	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-2.tal"));
-	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-3.tal"));
-	ck_assert_int_eq(-EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-4.tal"));
+	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-1.tal"));
+	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-2.tal"));
+	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-3.tal"));
+	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-4.tal"));
 }
 END_TEST
 

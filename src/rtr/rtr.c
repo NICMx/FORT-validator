@@ -593,7 +593,7 @@ fddb_poll(void)
 			goto retry;
 		case EFAULT:
 		case EINVAL:
-			pr_crit("poll() returned %d.", error);
+			pr_crit("poll() error: %s", strerror(error));
 		}
 	}
 
@@ -710,10 +710,8 @@ void rtr_stop(void)
 
 	stop_server_thread = true;
 	error = pthread_join(server_thread, NULL);
-	if (error) {
-		pr_op_err("pthread_join() returned error %d: %s", error,
-		    strerror(error));
-	}
+	if (error)
+		pr_op_err("pthread_join() failed: %s", strerror(error));
 
 	thread_pool_destroy(request_handlers);
 
@@ -726,12 +724,15 @@ rtr_notify(void)
 	serial_t serial;
 	struct pdu_stream **client;
 	int fd;
-	int error;
 
-	error = get_last_serial_number(&serial);
-	if (error) {
-		pr_op_info("Can't notify RTR clients: %d (%s)", error,
-		    strerror(abs(error)));
+	switch (get_last_serial_number(&serial)) {
+	case GLSNR_OK:
+		break;
+	case GLSNR_UNDER_CONSTRUCTION:
+		pr_op_info("Can't notify RTR clients: Database under construction");
+		return;
+	case GLSNR_CANT_LOCK:
+		pr_op_info("Can't notify RTR clients: Too many simultaneous read locks");
 		return;
 	}
 

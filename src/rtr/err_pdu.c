@@ -30,7 +30,7 @@ err_pdu_send(int fd, uint8_t version, rtr_error_code_t code,
 		free(msg);
 	}
 
-	return -EINVAL; /* For propagation */
+	return EINVAL; /* For propagation */
 }
 
 int

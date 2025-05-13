@@ -83,6 +83,6 @@ int certificate_validate_extensions_bgpsec(void);
  */
 int certificate_validate_aia(struct rpki_certificate *);
 
-int certificate_traverse(struct rpki_certificate *);
+validation_verdict certificate_traverse(struct rpki_certificate *);
 
 #endif /* SRC_OBJECT_CERTIFICATE_H_ */

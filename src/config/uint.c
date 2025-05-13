@@ -30,9 +30,9 @@ parse_argv_uint(struct option_field const *field, char const *str,
 	error = errno;
 	if (error || *tmp != '\0') {
 		if (!error)
-			error = -EINVAL;
+			error = EINVAL;
 		pr_op_err("Value '%s' at '%s' is not an unsigned integer: %s",
-		    str, field->name, strerror(abs(error)));
+		    str, field->name, strerror(error));
 		return error;
 	}
 

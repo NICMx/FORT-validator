@@ -19,8 +19,8 @@
  * Instances of this struct are expected to live on the stack.
  */
 struct file_contents {
-	unsigned char *buffer;
-	size_t buffer_size;
+	unsigned char *buf;
+	size_t buflen;
 };
 
 int file_open(char const *, FILE **, struct stat *);

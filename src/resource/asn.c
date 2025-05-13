@@ -52,7 +52,7 @@ rasn_put(struct resources_asn *asns)
 	sarray_put((struct sorted_array *) asns);
 }
 
-int
+enum resource_cmp_result
 rasn_add(struct resources_asn *asns, struct asn_range const *range)
 {
 	return sarray_add((struct sorted_array *) asns, range);

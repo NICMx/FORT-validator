@@ -228,7 +228,7 @@ hash_validate(struct hash_algorithm const *algorithm, unsigned char const *data,
 
 	error = hash_buffer(algorithm, data, data_len, actual);
 	if (error)
-		return error;
+		return -error;
 
 	if (expected_len != algorithm->size)
 		return EINVAL;

@@ -34,12 +34,8 @@ hex2ulong(char const *hex, unsigned long *ulong)
 
 	errno = 0;
 	*ulong = strtoul(hex, &endptr, 16);
-	if (errno)
-		return errno;
-	if (endptr[0] != 0)
-		return -1;
 
-	return 0;
+	return (errno || endptr[0] != 0) ? -1 : 0;
 }
 
 /**

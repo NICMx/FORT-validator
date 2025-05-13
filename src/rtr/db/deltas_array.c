@@ -79,7 +79,7 @@ darray_foreach_since(struct deltas_array *darray, unsigned int from,
 	if (from == 0)
 		return 0;
 	if (from > darray->len)
-		return -EINVAL;
+		return EINVAL;
 
 	i = darray->last - from + 1;
 	if (i > darray->len)

@@ -134,11 +134,11 @@ log_setup(void)
 	error = pthread_mutex_init(&logck, NULL);
 	if (error) {
 		fprintf(ERR.stream,
-		    "pthread_mutex_init() returned %d: %s\n",
-		    error, strerror(error));
+		    "pthread_mutex_init() failure: %s\n",
+		    strerror(error));
 		syslog(LOG_ERR | op_config.facility,
-		    "pthread_mutex_init() returned %d: %s",
-		    error, strerror(error));
+		    "pthread_mutex_init() failure: %s",
+		    strerror(error));
 		return error;
 	}
 
@@ -410,7 +410,7 @@ int
 pr_op_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
-	return -EINVAL;
+	return EINVAL;
 }
 
 int
@@ -420,7 +420,7 @@ pr_op_err_st(const char *format, ...)
 	lock_mutex();
 	print_stack_trace(NULL);
 	unlock_mutex();
-	return -EINVAL;
+	return EINVAL;
 }
 
 void
@@ -450,7 +450,7 @@ int
 pr_val_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, val_config);
-	return -EINVAL;
+	return EINVAL;
 }
 
 struct crypto_cb_arg {
@@ -482,7 +482,7 @@ crypto_err(struct log_config *cfg, int (*error_fn)(const char *, ...))
 	else
 		error_fn("End of libcrypto stack.");
 
-	return -EINVAL;
+	return EINVAL;
 }
 
 /**
@@ -491,7 +491,7 @@ crypto_err(struct log_config *cfg, int (*error_fn)(const char *, ...))
  *
  * This differs from usual printf-like functions:
  *
- * - It returns -EINVAL, not bytes written.
+ * - It returns EINVAL, not bytes written.
  * - It prints a newline.
  * - Also prints the cryptolib's error message stack.
  *
@@ -510,7 +510,7 @@ op_crypto_err(const char *format, ...)
  *
  * This differs from usual printf-like functions:
  *
- * - It returns -EINVAL, not bytes written.
+ * - It returns EINVAL, not bytes written.
  * - It prints a newline.
  * - Also prints the cryptolib's error message stack.
  *
@@ -588,7 +588,7 @@ incidence(enum incidence_id id, const char *format, ...)
 		return 0;
 	case INAC_ERROR:
 		PR_SIMPLE(LOG_ERR, val_config);
-		return -EINVAL;
+		return EINVAL;
 	}
 
 	pr_crit("Unknown incidence action: %u", action);

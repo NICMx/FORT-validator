@@ -123,7 +123,7 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 		pr_val_err("The content's hash does not match the Message-Digest Attribute.");
 
 	ASN_STRUCT_FREE(asn_DEF_MessageDigest, digest);
-	return error;
+	return abs(error);
 }
 
 static int
@@ -209,7 +209,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 
 illegal_attrType:
 	free_arcs(&attrType);
-	return -EINVAL;
+	return EINVAL;
 }
 
 int
@@ -453,5 +453,5 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 		}
 	}
 
-	return -EINVAL;
+	return EINVAL;
 }

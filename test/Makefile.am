@@ -12,7 +12,7 @@ if USE_TESTS
 # <mumble>_CFLAGS is not defined.
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
-AM_CFLAGS =  -Wall -Wpedantic
+AM_CFLAGS =  -Wall -Wpedantic -Wno-unused
 # The extra info provided by this flag allows the linker to strip unused
 # symbols, which reduces required superfluous #includes and mocks.
 # It's supported by gcc and clang, not sure about others.

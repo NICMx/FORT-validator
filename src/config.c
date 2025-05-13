@@ -1101,7 +1101,7 @@ handle_opt(int opt)
 	}
 
 	pr_op_err("Unrecognized option: %d", opt);
-	return -ESRCH;
+	return ESRCH;
 }
 
 static int

@@ -94,7 +94,7 @@ struct cache_node {
 
 	enum node_state state;
 	/* Result code of recent dl attempt (DLS_FRESH only) */
-	int dlerr;
+	validation_verdict verdict;
 	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Unused */
 	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
@@ -104,7 +104,7 @@ struct cache_node {
 	UT_hash_handle hh;	/* Hash table hook */
 };
 
-typedef int (*dl_cb)(struct cache_node *rpp);
+typedef validation_verdict (*dl_cb)(struct cache_node *rpp);
 
 /*
  * When concurrency is at play, you need @lock to access @nodes and @seq.
@@ -272,7 +272,7 @@ node2json(struct cache_node *node)
 		goto fail;
 	if (json_add_str(json, "path", node->path))
 		goto fail;
-	if (node->dlerr && json_add_int(json, "error", node->dlerr))
+	if (node->verdict && json_add_str(json, "error", node->verdict))
 		goto fail;
 	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
 		goto fail;
@@ -292,9 +292,9 @@ fail:	json_decref(json);
 	return NULL;
 }
 
-static int dl_rsync(struct cache_node *);
-static int dl_http(struct cache_node *);
-static int dl_rrdp(struct cache_node *);
+static validation_verdict dl_rsync(struct cache_node *);
+static validation_verdict dl_http(struct cache_node *);
+static validation_verdict dl_rrdp(struct cache_node *);
 
 static void
 init_table(struct cache_table *tbl, char *name, bool enabled, dl_cb dl)
@@ -569,7 +569,7 @@ json2node(json_t *json)
 	}
 
 	error = json_get_ts(json, "mftUpdate", &node->mft.update);
-	if (error < 0) {
+	if (error != 0 && error != ENOENT) {
 		pr_op_debug("mftUpdate: %s", strerror(error));
 		goto mft;
 	}
@@ -776,44 +776,38 @@ fail:	flush_nodes();
 	return error;
 }
 
-static int
+static validation_verdict
 dl_rsync(struct cache_node *module)
 {
 	int error;
 	error = rsync_queue(&module->key.rsync, module->path);
-	return error ? error : EBUSY;
+	return error ? VV_FAIL : VV_BUSY;
 }
 
-static int
+static validation_verdict
 dl_rrdp(struct cache_node *notif)
 {
 	bool changed;
-	int error;
 
-	error = rrdp_update(&notif->key.http, notif->path, notif->success_ts,
-	    &changed, &notif->rrdp);
-	if (error)
-		return error;
-
+	if (rrdp_update(&notif->key.http, notif->path, notif->success_ts,
+			&changed, &notif->rrdp))
+		return VV_FAIL;
 	if (changed)
 		notif->success_ts = notif->attempt_ts;
-	return 0;
+	return VV_CONTINUE;
 }
 
-static int
+static validation_verdict
 dl_http(struct cache_node *file)
 {
 	bool changed;
-	int error;
 
-	error = http_download(&file->key.http, file->path,
-	    file->success_ts, &changed);
-	if (error)
-		return error;
-
+	if (http_download(&file->key.http, file->path, file->success_ts,
+			  &changed))
+		return VV_FAIL;
 	if (changed)
 		file->success_ts = file->attempt_ts;
-	return 0;
+	return VV_CONTINUE;
 }
 
 /* Caller must lock @tbl->lock */
@@ -900,7 +894,7 @@ write_metadata(struct cache_node *node)
  * By contract, only sets @result on return 0.
  * By contract, @result->state will be DLS_FRESH on return 0.
  */
-static int
+static validation_verdict
 do_refresh(struct cache_table *tbl, struct uri const *uri,
     struct cache_node **result)
 {
@@ -912,12 +906,12 @@ do_refresh(struct cache_table *tbl, struct uri const *uri,
 
 	if (!tbl->enabled) {
 		pr_val_debug("Protocol disabled.");
-		return ESRCH;
+		return VV_FAIL;
 	}
 
 	if (tbl == &cache.rsync) {
 		if (!get_rsync_module(uri, &module))
-			return EINVAL;
+			return VV_FAIL;
 		mutex_lock(&tbl->lock);
 		node = provide_node(tbl, NULL, &module);
 	} else {
@@ -926,7 +920,7 @@ do_refresh(struct cache_table *tbl, struct uri const *uri,
 	}
 	if (!node) {
 		mutex_unlock(&tbl->lock);
-		return EINVAL;
+		return VV_FAIL;
 	}
 
 	/*
@@ -941,8 +935,8 @@ do_refresh(struct cache_table *tbl, struct uri const *uri,
 
 		node->attempt_ts = time_fatal();
 		rm_metadata(node);
-		node->dlerr = tbl->download(node);
-		if (node->dlerr == EBUSY)
+		node->verdict = tbl->download(node);
+		if (node->verdict == VV_BUSY)
 			goto ongoing;
 		write_metadata(node);
 		downloaded = true;
@@ -953,7 +947,7 @@ do_refresh(struct cache_table *tbl, struct uri const *uri,
 	case DLS_ONGOING:
 ongoing:	mutex_unlock(&tbl->lock);
 		pr_val_debug("Refresh ongoing.");
-		return EBUSY;
+		return VV_BUSY;
 	case DLS_FRESH:
 		break;
 	default:
@@ -966,14 +960,14 @@ ongoing:	mutex_unlock(&tbl->lock);
 	if (downloaded) /* Kickstart tasks that fell into DLS_ONGOING */
 		task_wakeup_dormants();
 
-	if (node->dlerr != 0) {
+	if (node->verdict == VV_FAIL) {
 		pr_val_debug("Refresh failed.");
-		return node->dlerr;
+		return VV_FAIL;
 	}
 
 	pr_val_debug("Refresh succeeded.");
 	*result = node;
-	return 0;
+	return VV_CONTINUE;
 }
 
 static struct cache_node *
@@ -1054,54 +1048,54 @@ cache_get_fallback(struct uri const *url)
  * Attempts to refresh the RPP described by @sias, returns the resulting
  * repository's mapper.
  *
- * XXX Need to normalize the sias.
  * XXX Fallback only if parent is fallback
  */
-int
+validation_verdict
 cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 {
 	struct cache_node *node;
 	struct cache_cage *cage;
 	struct uri rpkiNotify;
+	validation_verdict vv;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
 	// XXX review result signs
 
 	/* Try RRDP + optional fallback */
 	if (uri_str(&sias->rpkiNotify) != NULL) {
-		switch (do_refresh(&cache.rrdp, &sias->rpkiNotify, &node)) {
-		case 0:
+		vv = do_refresh(&cache.rrdp, &sias->rpkiNotify, &node);
+		if (vv == VV_CONTINUE) {
 			rpkiNotify = sias->rpkiNotify;
 			goto refresh_success;
-		case EBUSY:
-			return EBUSY;
 		}
+		if (vv == VV_BUSY)
+			return VV_BUSY;
 	}
 
 	/* Try rsync + optional fallback */
-	switch (do_refresh(&cache.rsync, &sias->caRepository, &node)) {
-	case 0:
+	vv = do_refresh(&cache.rsync, &sias->caRepository, &node);
+	if (vv == VV_CONTINUE) {
 		memset(&rpkiNotify, 0, sizeof(rpkiNotify));
 		goto refresh_success;
-	case EBUSY:
-		return EBUSY;
 	}
+	if (vv == VV_BUSY)
+		return VV_BUSY;
 
 	/* Try fallback only */
 	node = get_fallback(sias);
 	if (!node)
-		return EINVAL; /* Nothing to work with */
+		return VV_FAIL; /* Nothing to work with */
 
 	*result = cage = pzalloc(sizeof(struct cache_cage));
 	cage->fallback = node;
-	return 0;
+	return VV_CONTINUE;
 
 refresh_success:
 	*result = cage = pzalloc(sizeof(struct cache_cage));
 	cage->rpkiNotify = rpkiNotify;
 	cage->refresh = node;
 	cage->fallback = get_fallback(sias);
-	return 0;
+	return VV_CONTINUE;
 }
 
 static char const *
@@ -1229,7 +1223,7 @@ rsync_finished(struct uri const *url, char const *path)
 		    uri_str(url), path);
 
 	node->state = DLS_FRESH;
-	node->dlerr = 0;
+	node->verdict = VV_CONTINUE;
 	node->success_ts = node->attempt_ts;
 	mutex_unlock(&cache.rsync.lock);
 
@@ -1258,7 +1252,7 @@ cachent_print(struct cache_node *node)
 		printf("downloading ");
 		break;
 	case DLS_FRESH:
-		printf("fresh (errcode %d) ", node->dlerr);
+		printf("fresh (%s) ", node->verdict);
 		break;
 	}
 

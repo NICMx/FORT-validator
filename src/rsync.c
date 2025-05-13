@@ -536,8 +536,7 @@ again:	status = 0;
 	}
 
 	/* Dead code */
-	pr_op_err("Unknown waitpid() status; giving up %s.", name);
-	return EINVAL;
+	return pr_op_err("Unknown waitpid() status; giving up %s.", name);
 }
 
 static void

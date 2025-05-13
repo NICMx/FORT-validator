@@ -30,27 +30,27 @@ __test_validate(char const *src, size_t len)
 
 START_TEST(check_validate_current_directory)
 {
-	ck_assert_int_eq(-EINVAL, test_validate(""));
-	ck_assert_int_eq(-EINVAL, test_validate("."));
-	ck_assert_int_eq(-EINVAL, test_validate(".."));
+	ck_assert_int_eq(EINVAL, test_validate(""));
+	ck_assert_int_eq(EINVAL, test_validate("."));
+	ck_assert_int_eq(EINVAL, test_validate(".."));
 
-	ck_assert_int_eq(-EINVAL, test_validate("filename"));
-	ck_assert_int_eq(-EINVAL, test_validate("filename."));
-	ck_assert_int_eq(-EINVAL, test_validate("filename.a"));
-	ck_assert_int_eq(-EINVAL, test_validate("filename.ab"));
+	ck_assert_int_eq(EINVAL, test_validate("filename"));
+	ck_assert_int_eq(EINVAL, test_validate("filename."));
+	ck_assert_int_eq(EINVAL, test_validate("filename.a"));
+	ck_assert_int_eq(EINVAL, test_validate("filename.ab"));
 	ck_assert_int_eq(0, test_validate("filename.abc"));
-	ck_assert_int_eq(-EINVAL, test_validate("file.abcd"));
+	ck_assert_int_eq(EINVAL, test_validate("file.abcd"));
 
 	ck_assert_int_eq(0, test_validate("file-name.ABC"));
 	ck_assert_int_eq(0, test_validate("file_name.123"));
 	ck_assert_int_eq(0, test_validate("file0name.aB2"));
 	ck_assert_int_eq(0, test_validate("file9name.---"));
 	ck_assert_int_eq(0, test_validate("FileName.A3_"));
-	ck_assert_int_eq(-EINVAL, test_validate("file.name.abc"));
-	ck_assert_int_eq(-EINVAL, test_validate("file/name.abc"));
-	ck_assert_int_eq(-EINVAL, test_validate("file\0name.abc"));
-	ck_assert_int_eq(-EINVAL, test_validate("filename.abc\0filename.abc"));
-	ck_assert_int_eq(-EINVAL, test_validate("filenameabc\0filename.abc"));
+	ck_assert_int_eq(EINVAL, test_validate("file.name.abc"));
+	ck_assert_int_eq(EINVAL, test_validate("file/name.abc"));
+	ck_assert_int_eq(EINVAL, test_validate("file\0name.abc"));
+	ck_assert_int_eq(EINVAL, test_validate("filename.abc\0filename.abc"));
+	ck_assert_int_eq(EINVAL, test_validate("filenameabc\0filename.abc"));
 	ck_assert_int_eq(0, test_validate("-.---"));
 
 	ck_assert_int_eq(0, test_validate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890-_.-_-"));

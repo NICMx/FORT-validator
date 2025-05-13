@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "types/asn.h"
+#include "types/sorted_array.h"
 
 /*
  * Implementation note: This is just a casted struct sorted_array.
@@ -21,7 +22,8 @@ struct resources_asn *rasn_create(void);
 void rasn_get(struct resources_asn *);
 void rasn_put(struct resources_asn *);
 
-int rasn_add(struct resources_asn *, struct asn_range const *);
+enum resource_cmp_result rasn_add(struct resources_asn *,
+    struct asn_range const *);
 bool rasn_empty(struct resources_asn *);
 bool rasn_contains(struct resources_asn *, struct asn_range const *);
 

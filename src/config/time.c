@@ -20,7 +20,7 @@ print_time(struct option_field const *field, void *value)
 
 	error = time2str(tt, str);
 	if (error)
-		pr_crit("time2str: %d", error);
+		pr_crit("time2str: %s", strerror(error));
 
 	pr_op_info("%s: %s", field->name, str);
 }

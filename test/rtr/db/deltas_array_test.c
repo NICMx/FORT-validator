@@ -36,7 +36,7 @@ test_foreach(struct deltas_array *darray, unsigned int total,
 		ck_assert_uint_eq(total + offset, next_index);
 	}
 
-	ck_assert_int_eq(-EINVAL, darray_foreach_since(darray, total + 1,
+	ck_assert_int_eq(EINVAL, darray_foreach_since(darray, total + 1,
 	    foreach_cb, &next_index));
 }
 

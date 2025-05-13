@@ -246,32 +246,26 @@ vrps_update(bool *changed)
 	return error;
 }
 
-/**
- * Please keep in mind that there is at least one errcode-aware caller. The most
- * important ones are
- * 1. 0: No errors.
- * 2. -EAGAIN: No data available; database still under construction.
- */
-int
+enum vrps_foreach_base_result
 vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk, void *arg)
 {
-	int error;
+	enum vrps_foreach_base_result result;
 
-	error = rwlock_read_lock(&state_lock);
-	if (error)
-		return error;
+	if (rwlock_read_lock(&state_lock) != 0)
+		return VFBR_CANT_LOCK;
 
 	if (state.base != NULL) {
-		error = db_table_foreach_roa(state.base, cb_roa, arg);
-		if (error)
-			goto end;
-		error = db_table_foreach_router_key(state.base, cb_rk, arg);
-	} else
-		error = -EAGAIN;
+		if (db_table_foreach_roa(state.base, cb_roa, arg) ||
+		    db_table_foreach_router_key(state.base, cb_rk, arg))
+			result = VFBR_CB_INTR;
+		else
+			result = VFBR_OK;
+	} else {
+		result = VFBR_UNDER_CONSTRUCTION;
+	}
 
-end:
 	rwlock_unlock(&state_lock);
-	return error;
+	return result;
 }
 
 /*
@@ -342,14 +336,8 @@ __deltas_foreach(struct deltas *deltas, void *arg)
 /**
  * Runs @vrp_cb and @rk_cb on all the deltas from the database whose
  * serial > @from, excluding those that cancel each other.
- *
- * Please keep in mind that there is at least one errcode-aware caller. The most
- * important ones are
- * 1. 0: No errors.
- * 2. -EAGAIN: No data available; database still under construction.
- * 3. -ESRCH: @from was not found.
  */
-int
+enum vrps_foreach_delta_since_result
 vrps_foreach_delta_since(serial_t from, serial_t *to,
     delta_vrp_foreach_cb vrp_cb, delta_router_key_foreach_cb rk_cb,
     void *arg)
@@ -359,21 +347,19 @@ vrps_foreach_delta_since(serial_t from, serial_t *to,
 	struct rk_node *rnode;
 	int error;
 
-	error = rwlock_read_lock(&state_lock);
-	if (error)
-		return error;
+	if (rwlock_read_lock(&state_lock) != 0)
+		return VFDSR_CANT_LOCK;
 
 	if (state.base == NULL) {
-		/* Database still under construction. */
 		rwlock_unlock(&state_lock);
-		return -EAGAIN;
+		return VFDSR_UNDER_CONSTRUCTION;
 	}
 
 	if (from == state.serial) {
 		/* Client already has the latest serial. */
 		rwlock_unlock(&state_lock);
 		*to = from;
-		return 0;
+		return VFDSR_OK;
 	}
 
 	/* if from < first serial */
@@ -401,6 +387,10 @@ vrps_foreach_delta_since(serial_t from, serial_t *to,
 
 	error = darray_foreach_since(state.deltas, state.serial - from,
 	    __deltas_foreach, &filtered_lists);
+
+	*to = state.serial;
+	rwlock_unlock(&state_lock);
+
 	if (error)
 		goto release_list;
 
@@ -408,12 +398,12 @@ vrps_foreach_delta_since(serial_t from, serial_t *to,
 	SLIST_FOREACH(vnode, &filtered_lists.prefixes, next) {
 		error = vrp_cb(&vnode->delta, arg);
 		if (error)
-			break;
+			goto release_list;
 	}
 	SLIST_FOREACH(rnode, &filtered_lists.router_keys, next) {
 		error = rk_cb(&rnode->delta, arg);
 		if (error)
-			break;
+			goto release_list;
 	}
 
 release_list:
@@ -428,32 +418,27 @@ release_list:
 		free(rnode);
 	}
 
-	*to = state.serial;
-	rwlock_unlock(&state_lock);
-	return 0;
+	return error ? VFDSR_INTR : VFDSR_OK;
 
 cache_reset:
 	rwlock_unlock(&state_lock);
-	return -ESRCH;
+	return VFDSR_INVALID_SERIAL;
 }
 
-int
+enum get_last_serial_number_result
 get_last_serial_number(serial_t *result)
 {
-	int error;
+	if (rwlock_read_lock(&state_lock) != 0)
+		return GLSNR_CANT_LOCK;
 
-	error = rwlock_read_lock(&state_lock);
-	if (error)
-		return error;
+	if (state.base == NULL) {
+		rwlock_unlock(&state_lock);
+		return GLSNR_UNDER_CONSTRUCTION;
+	}
 
-	if (state.base != NULL)
-		*result = state.serial;
-	else
-		error = -EAGAIN;
-
+	*result = state.serial;
 	rwlock_unlock(&state_lock);
-
-	return error;
+	return GLSNR_OK;
 }
 
 uint16_t

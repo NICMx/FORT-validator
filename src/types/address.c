@@ -399,17 +399,13 @@ range6_decode(IPAddressRange_t const *input, struct ipv6_range *result)
 static int
 str2addr4(const char *addr, struct in_addr *dst)
 {
-	if (!inet_pton(AF_INET, addr, dst))
-		return -EINVAL;
-	return 0;
+	return (inet_pton(AF_INET, addr, dst) != 1) ? EINVAL : 0;
 }
 
 static int
 str2addr6(const char *addr, struct in6_addr *dst)
 {
-	if (!inet_pton(AF_INET6, addr, dst))
-		return -EINVAL;
-	return 0;
+	return (inet_pton(AF_INET6, addr, dst) != 1) ? EINVAL : 0;
 }
 
 int

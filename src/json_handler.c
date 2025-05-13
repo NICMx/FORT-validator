@@ -63,7 +63,7 @@ set_config_from_file(char *file)
 	if (root == NULL) {
 		pr_op_err("JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
-		return -ENOENT;
+		return ENOENT;
 	}
 
 	error = json_to_config(root);

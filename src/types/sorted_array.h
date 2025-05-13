@@ -36,21 +36,24 @@ struct sorted_array *sarray_create(size_t, sarray_cmp);
 void sarray_get(struct sorted_array *);
 void sarray_put(struct sorted_array *);
 
-#define EEQUAL		7894
-#define ECHILD2		7895
-#define EPARENT		7896
-#define ELEFT		7897
-#define EADJLEFT	7898
-#define EADJRIGHT	7899
-#define EINTERSECTION	7900
+enum resource_cmp_result {
+	RCR_OK,
+	RCR_EEQUAL,
+	RCR_ECHILD2,
+	RCR_EPARENT,
+	RCR_ELEFT,
+	RCR_EADJLEFT,
+	RCR_EADJRIGHT,
+	RCR_EINTERSECTION,
+};
 
-int sarray_add(struct sorted_array *, void const *);
+enum resource_cmp_result sarray_add(struct sorted_array *, void const *);
 bool sarray_empty(struct sorted_array const *);
 bool sarray_contains(struct sorted_array const *, void const *);
 
 typedef int (*sarray_foreach_cb)(void *, void *);
 int sarray_foreach(struct sorted_array *, sarray_foreach_cb, void *);
 
-char const *sarray_err2str(int);
+char const *sarray_err2str(enum resource_cmp_result);
 
 #endif /* SRC_TYPES_SORTED_ARRAY_H_ */

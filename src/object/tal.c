@@ -116,7 +116,7 @@ tal_init(struct tal *tal, char const *file_path)
 	tal->file_name = path_filename(file_path);
 
 	uris_init(&tal->urls);
-	error = read_content((char *)file.buffer, tal);
+	error = read_content((char *)file.buf, tal);
 	if (error)
 		uris_cleanup(&tal->urls, uri_cleanup);
 
@@ -150,36 +150,36 @@ queue_tal(char const *tal_path, void *arg)
 	if (task_enqueue_tal(tal_path) < 1) {
 		pr_op_err("Could not enqueue task '%s'; abandoning validation.",
 		    tal_path);
-		return -1;
+		return EINVAL;
 	}
 
 	return 0;
 }
 
-static int
+static validation_verdict
 validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 {
 	struct rpki_certificate *ta;
-	int error;
+	validation_verdict vv;
 
 	ta = pzalloc(sizeof(struct rpki_certificate));
 	map_copy(&ta->map, ta_map);
 	ta->tal = tal;
 	atomic_init(&ta->refcount, 1);
 
-	error = certificate_traverse(ta);
+	vv = certificate_traverse(ta);
 
 	rpki_certificate_free(ta);
-	return error;
+	return vv;
 }
 
-static int
+static validation_verdict
 try_urls(struct tal *tal, bool (*url_is_protocol)(struct uri const *),
     char *(*get_path)(struct uri const *))
 {
 	struct uri *url;
 	struct cache_mapping map;
-	int error;
+	validation_verdict vv;
 
 	ARRAYLIST_FOREACH(&tal->urls, url) {
 		map.url = *url;
@@ -188,75 +188,74 @@ try_urls(struct tal *tal, bool (*url_is_protocol)(struct uri const *),
 		map.path = get_path(url);
 		if (!map.path)
 			continue;
-		error = validate_ta(tal, &map);
-		if (error == EBUSY)
-			return EBUSY;
-		if (error)
+		vv = validate_ta(tal, &map);
+		if (vv == VV_BUSY)
+			return VV_BUSY;
+		if (vv == VV_FAIL)
 			continue;
 		cache_commit_file(&map);
-		return 0;
+		return VV_CONTINUE;
 	}
 
-	return ESRCH;
+	return VV_FAIL;
 }
 
-static int
+static validation_verdict
 traverse_tal(char const *tal_path)
 {
 	struct tal tal;
-	int error;
+	validation_verdict vv;
 
 	fnstack_push(tal_path);
 
-	error = tal_init(&tal, tal_path);
-	if (error)
+	if (tal_init(&tal, tal_path) != 0) {
+		vv = VV_FAIL;
 		goto end1;
+	}
 
 	/* Online attempts */
-	error = try_urls(&tal, uri_is_https, cache_refresh_by_url);
-	if (!error || error == EBUSY)
+	vv = try_urls(&tal, uri_is_https, cache_refresh_by_url);
+	if (vv != VV_FAIL)
 		goto end2;
-	error = try_urls(&tal, uri_is_rsync, cache_refresh_by_url);
-	if (!error || error == EBUSY)
+	vv = try_urls(&tal, uri_is_rsync, cache_refresh_by_url);
+	if (vv != VV_FAIL)
 		goto end2;
 	/* Offline fallback attempts */
-	error = try_urls(&tal, uri_is_https, cache_get_fallback);
-	if (!error || error == EBUSY)
+	vv = try_urls(&tal, uri_is_https, cache_get_fallback);
+	if (vv != VV_FAIL)
 		goto end2;
-	error = try_urls(&tal, uri_is_rsync, cache_get_fallback);
-	if (!error || error == EBUSY)
+	vv = try_urls(&tal, uri_is_rsync, cache_get_fallback);
+	if (vv != VV_FAIL)
 		goto end2;
 
 	pr_op_err("None of the TAL URIs yielded a successful traversal.");
-	error = EINVAL;
+	vv = VV_FAIL;
 
 end2:	tal_cleanup(&tal);
 end1:	fnstack_pop();
-	return error;
+	return vv;
 }
 
 static void *
 pick_up_work(void *arg)
 {
 	struct validation_task *task = NULL;
+	validation_verdict vv;
 
 	while ((task = task_dequeue(task)) != NULL) {
 		switch (task->type) {
 		case VTT_RPP:
-			if (certificate_traverse(task->u.ca) == EBUSY) {
+			if (certificate_traverse(task->u.ca) == VV_BUSY) {
 				task_requeue_dormant(task);
 				task = NULL;
 			}
 			break;
 		case VTT_TAL:
-			switch (traverse_tal(task->u.tal)) {
-			case 0:
-				break;
-			case EBUSY:
+			vv = traverse_tal(task->u.tal);
+			if (vv == VV_BUSY) {
 				task_requeue_dormant(task);
 				task = NULL;
-				break;
-			default:
+			} else if (vv == VV_FAIL) {
 				task_stop();
 			}
 			break;

@@ -38,7 +38,7 @@ START_TEST(test_hash)
 	char const *input = "Fort";
 	char const *file = "resources/lorem-ipsum.txt";
 
-	hash_setup();
+	ck_assert_int_eq(0, hash_setup());
 
 	ha = hash_get_sha1();
 	ck_assert_uint_eq(20, hash_get_size(ha));
@@ -51,9 +51,9 @@ START_TEST(test_hash)
 	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA1, sizeof(FORT_SHA1)));
 
 	ck_assert_int_eq(0, hash_validate_file(ha, file, FILE_SHA1, sizeof(FILE_SHA1)));
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, file, FILE_SHA1, sizeof(FILE_SHA1) - 10));
+	ck_assert_int_eq(EINVAL, hash_validate_file(ha, file, FILE_SHA1, sizeof(FILE_SHA1) - 10));
 	FILE_SHA1[19] = 0;
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, file, FILE_SHA1, sizeof(FILE_SHA1)));
+	ck_assert_int_eq(EINVAL, hash_validate_file(ha, file, FILE_SHA1, sizeof(FILE_SHA1)));
 
 	ha = hash_get_sha256();
 	ck_assert_uint_eq(32, hash_get_size(ha));
@@ -66,9 +66,9 @@ START_TEST(test_hash)
 	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA256, sizeof(FORT_SHA256)));
 
 	ck_assert_int_eq(0, hash_validate_file(ha, file, FILE_SHA256, sizeof(FILE_SHA256)));
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, file, FILE_SHA256, sizeof(FILE_SHA256) - 1));
+	ck_assert_int_eq(EINVAL, hash_validate_file(ha, file, FILE_SHA256, sizeof(FILE_SHA256) - 1));
 	FILE_SHA256[31] = 10;
-	ck_assert_int_eq(-EINVAL, hash_validate_file(ha, file, FILE_SHA256, sizeof(FILE_SHA256)));
+	ck_assert_int_eq(EINVAL, hash_validate_file(ha, file, FILE_SHA256, sizeof(FILE_SHA256)));
 
 	hash_teardown();
 }

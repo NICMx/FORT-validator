@@ -10,13 +10,10 @@
 /* "I haven't implemented this yet." */
 #define ENOTIMPLEMENTED 3173
 
-/*
- * If you're wondering why I'm not using -abs(error), it's because abs(INT_MIN)
- * overflows, so gcc complains sometimes.
- *
- * BE CAREFUL ABOUT DOUBLE EVALUATION.
- */
-#define ENSURE_NEGATIVE(error) (((error) < 0) ? (error) : -(error))
+typedef char const *validation_verdict;
+extern validation_verdict const VV_CONTINUE;
+extern validation_verdict const VV_FAIL;
+extern validation_verdict const VV_BUSY;
 
 bool str_starts_with(char const *, char const *);
 bool str_ends_with(char const *, char const *);

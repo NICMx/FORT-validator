@@ -79,7 +79,7 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 	if (error) {
 		pr_val_err("ROA couldn't be added to hash table: %s",
 		    strerror(error));
-		return -error;
+		return error;
 	}
 	if (old != NULL)
 		free(old);
@@ -104,7 +104,7 @@ add_router_key(struct db_table *table, struct hashable_key *new)
 	if (error) {
 		pr_val_err("Router Key couldn't be added to hash table: %s",
 		    strerror(error));
-		return -error;
+		return error;
 	}
 	if (old != NULL)
 		free(old);

@@ -118,14 +118,14 @@ file_load(char const *file_name, struct file_contents *fc, bool is_binary)
 	if (error)
 		return error;
 
-	fc->buffer_size = stat.st_size;
-	fc->buffer = pmalloc(fc->buffer_size + !is_binary);
+	fc->buflen = stat.st_size;
+	fc->buf = pmalloc(fc->buflen + !is_binary);
 
 	if (!is_binary)
-		fc->buffer[stat.st_size] = '\0';
+		fc->buf[stat.st_size] = '\0';
 
-	fread_result = fread(fc->buffer, 1, fc->buffer_size, file);
-	if (fread_result < fc->buffer_size) {
+	fread_result = fread(fc->buf, 1, fc->buflen, file);
+	if (fread_result < fc->buflen) {
 		error = ferror(file);
 		if (error) {
 			/*
@@ -135,7 +135,7 @@ file_load(char const *file_name, struct file_contents *fc, bool is_binary)
 			 */
 			pr_val_err("File reading error. The error message is (possibly) '%s'",
 			    strerror(error));
-			free(fc->buffer);
+			free(fc->buf);
 			goto end;
 		}
 
@@ -145,9 +145,9 @@ file_load(char const *file_name, struct file_contents *fc, bool is_binary)
 		 * "consumed everything", "EOF reached" or error.
 		 */
 		pr_op_err_st("Likely programming error: fread() < file size (fr:%zu bs:%zu EOF:%d)",
-		    fread_result, fc->buffer_size, feof(file));
-		free(fc->buffer);
-		error = -EINVAL;
+		    fread_result, fc->buflen, feof(file));
+		free(fc->buf);
+		error = EINVAL;
 		goto end;
 	}
 
@@ -161,7 +161,7 @@ end:
 void
 file_free(struct file_contents *fc)
 {
-	free(fc->buffer);
+	free(fc->buf);
 }
 
 /* Wrapper for stat(), mostly for the sake of unit test mocking. */

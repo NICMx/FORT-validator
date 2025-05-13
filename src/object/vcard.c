@@ -147,7 +147,7 @@ line_next(struct vcard_line *line, OCTET_STRING_t *string8)
 			break;
 
 		case SA_ERROR:
-			return -EINVAL;
+			return EINVAL;
 		}
 	}
 

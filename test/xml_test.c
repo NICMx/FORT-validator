@@ -33,11 +33,11 @@ reader_cb(xmlTextReaderPtr reader, void *arg)
 			tmp_char = xmlTextReaderGetAttribute(reader,
 			    BAD_CAST "serial");
 			if (tmp_char == NULL)
-				return -EINVAL;
+				return EINVAL;
 			tmp = malloc(xmlStrlen(tmp_char) + 1);
 			if (tmp == NULL) {
 				xmlFree(tmp_char);
-				return -ENOMEM;
+				return ENOMEM;
 			}
 
 			memcpy(tmp, tmp_char, xmlStrlen(tmp_char));
@@ -45,7 +45,7 @@ reader_cb(xmlTextReaderPtr reader, void *arg)
 			xmlFree(tmp_char);
 			ctx->serial = tmp;
 		} else {
-			return -EINVAL;
+			return EINVAL;
 		}
 		break;
 	default:

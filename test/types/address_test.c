@@ -16,7 +16,7 @@ test_range4(uint32_t min, uint32_t max, bool valid)
 	    .min.s_addr = htonl(min),
 	    .max.s_addr = htonl(max),
 	};
-	ck_assert_int_eq(valid ? 0 : -EINVAL, check_encoding4(&range));
+	ck_assert_int_eq(valid ? 0 : EINVAL, check_encoding4(&range));
 }
 
 START_TEST(check_encoding4_test)
@@ -49,7 +49,7 @@ test_range6(uint32_t a1a, uint32_t a1b, uint32_t a1c, uint32_t a1d,
 	addr6_set_quadrant(&range.max, 2, a2c);
 	addr6_set_quadrant(&range.max, 3, a2d);
 
-	ck_assert_int_eq(valid ? 0 : -EINVAL, check_encoding6(&range));
+	ck_assert_int_eq(valid ? 0 : EINVAL, check_encoding6(&range));
 }
 
 START_TEST(check_encoding6_test)

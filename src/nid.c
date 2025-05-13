@@ -28,8 +28,10 @@ register_oid(const char *oid, const char *sn, const char *ln)
 	if (nid == NID_undef) {
 		/* Note: Implicit object registration happens in OBJ_create. */
 		nid = OBJ_create(oid, sn, ln);
-		if (nid == 0)
-			return op_crypto_err("Unable to register the %s NID.", sn);
+		if (nid == 0) {
+			op_crypto_err("Unable to register the %s NID.", sn);
+			return 0;
+		}
 		pr_op_debug("%s registered. Its nid is %d.", sn, nid);
 
 	} else {
@@ -51,67 +53,67 @@ nid_init(void)
 	    "id-ct-routeOriginAuthz",
 	    "RPKI ROA (Content type)");
 	if (ct_roa_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	ct_mft_nid = register_oid("1.2.840.113549.1.9.16.1.26",
 	    "id-ct-rpkiManifest",
 	    "RPKI Manifest (Content type)");
 	if (ct_mft_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	ct_gbr_nid = register_oid("1.2.840.113549.1.9.16.1.35",
 	    "id-ct-rpkiGhostbusters",
 	    "RPKI Ghostbusters (Content type)");
 	if (ct_gbr_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	rpki_manifest_nid = register_oid("1.3.6.1.5.5.7.48.10",
 	    "rpkiManifest",
 	    "RPKI Manifest (RFC 6487)");
 	if (rpki_manifest_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	signed_object_nid = register_oid("1.3.6.1.5.5.7.48.11",
 	    "signedObject",
 	    "RPKI Signed Object (RFC 6487)");
 	if (signed_object_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	rpki_notify_nid = register_oid("1.3.6.1.5.5.7.48.13",
 	    "rpkiNotify",
 	    "RPKI Update Notification File (RFC 8182)");
 	if (rpki_notify_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	cert_policy_rpki_nid = register_oid("1.3.6.1.5.5.7.14.2",
 	    "id-cp-ipAddr-asNumber (RFC 6484)",
 	    "Certificate Policy (CP) for the Resource PKI (RPKI)");
 	if (cert_policy_rpki_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	cert_policy_rpki_v2_nid = register_oid("1.3.6.1.5.5.7.14.3",
 	    "id-cp-ipAddr-asNumber-v2 (RFC 8360)",
 	    "Certificate Policy for Use with Validation Reconsidered in the RPKI");
 	if (cert_policy_rpki_v2_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	ip_addr_blocks_v2_nid = register_oid("1.3.6.1.5.5.7.1.28",
 	    "id-pe-ipAddrBlocks-v2",
 	    "Amended IP Resources (RFC 8360)");
 	if (ip_addr_blocks_v2_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	autonomous_sys_ids_v2_nid = register_oid("1.3.6.1.5.5.7.1.29",
 	    "id-pe-autonomousSysIds-v2",
 	    "Amended AS Resources (RFC 8360)");
 	if (autonomous_sys_ids_v2_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	bgpsec_router_nid = register_oid("1.3.6.1.5.5.7.3.30",
 	    "id-kp-bgpsec-router",
 	    "BGPsec Extended Key Usage (RFC 8209)");
 	if (bgpsec_router_nid == 0)
-		return -EINVAL;
+		return EINVAL;
 
 	return 0;
 }

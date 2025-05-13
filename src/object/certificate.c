@@ -245,7 +245,7 @@ validate_spki(struct tal *tal, X509_PUBKEY *cert_spki)
 
 	tal_spki = decode_spki(tal);
 	if (tal_spki == NULL)
-		return -EINVAL;
+		return EINVAL;
 
 	error = spki_cmp(tal_spki, cert_spki);
 
@@ -439,7 +439,7 @@ validate_public_key(struct rpki_certificate *cert)
 		if ((evppkey = X509_get0_pubkey(cert->x509)) == NULL)
 			return val_crypto_err("X509_get0_pubkey() returned NULL");
 		if (X509_verify(cert->x509, evppkey) != 1)
-			return -EINVAL;
+			return EINVAL;
 	}
 
 	return 0;
@@ -528,7 +528,7 @@ skip_tl(ANY_t *content, struct progress *p, unsigned int tag)
 	ber_tlv_len_t value_len; /* Length of the value */
 
 	if (skip_t(content, p, tag) != 0)
-		return -EINVAL;
+		return EINVAL;
 
 	len_len = ber_fetch_length(true, &content->buf[p->offset], p->remaining,
 	    &value_len);
@@ -551,7 +551,7 @@ skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 	is_constructed = BER_TLV_CONSTRUCTED(&content->buf[p->offset]);
 
 	if (skip_t(content, p, tag) != 0)
-		return -EINVAL;
+		return EINVAL;
 
 	skip = ber_skip_length(NULL, is_constructed, &content->buf[p->offset],
 	    p->remaining);
@@ -588,44 +588,44 @@ find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 
 	/* SignedData: SEQUENCE */
 	if (skip_tl(signedData, &p, SEQUENCE_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 
 	/* SignedData.version: CMSVersion -> INTEGER */
 	if (skip_tlv(signedData, &p, INTEGER_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 	/* SignedData.digestAlgorithms: DigestAlgorithmIdentifiers -> SET */
 	if (skip_tlv(signedData, &p, SET_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 	/* SignedData.encapContentInfo: EncapsulatedContentInfo -> SEQUENCE */
 	if (skip_tlv(signedData, &p, SEQUENCE_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 	/* SignedData.certificates: CertificateSet -> SET */
 	if (skip_tlv(signedData, &p, 0xA0) != 0)
-		return -EINVAL;
+		return EINVAL;
 	/* SignedData.signerInfos: SignerInfos -> SET OF SEQUENCE */
 	if (skip_tl(signedData, &p, SET_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 	if (skip_tl(signedData, &p, SEQUENCE_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 
 	/* SignedData.signerInfos.version: CMSVersion -> INTEGER */
 	if (skip_tlv(signedData, &p, INTEGER_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 	/*
 	 * SignedData.signerInfos.sid: SignerIdentifier -> CHOICE -> always
 	 * subjectKeyIdentifier, which is a [0].
 	 */
 	if (skip_tlv(signedData, &p, 0x80) != 0)
-		return -EINVAL;
+		return EINVAL;
 	/* SignedData.signerInfos.digestAlgorithm: DigestAlgorithmIdentifier
 	 * -> AlgorithmIdentifier -> SEQUENCE */
 	if (skip_tlv(signedData, &p, SEQUENCE_TAG) != 0)
-		return -EINVAL;
+		return EINVAL;
 
 	/* SignedData.signerInfos.signedAttrs: SignedAttributes -> SET */
 	/* We will need to replace the tag 0xA0 with 0x31, so skip it as well */
 	if (skip_t(signedData, &p, 0xA0) != 0)
-		return -EINVAL;
+		return EINVAL;
 
 	result->buffer = &signedData->buf[p.offset];
 	len_len = ber_fetch_length(true, result->buffer,
@@ -1061,7 +1061,7 @@ handle_ip_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 		}
 		break;
 	default:
-		error = pr_val_err("Got %d IP address blocks Expected; 1 or 2 expected.",
+		error = pr_val_err("Got %d IP address blocks; 1 or 2 expected.",
 		    blocks->list.count);
 		goto end;
 	}
@@ -1329,7 +1329,7 @@ handle_aki_ta(void *ext, void *arg)
 	if (ski == NULL) {
 		pr_val_err("Certificate lacks the '%s' extension.",
 		    ext_ski()->name);
-		return -ESRCH;
+		return ESRCH;
 	}
 
 	error = (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0)
@@ -1550,7 +1550,7 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	if (meta->required && !found) {
 		pr_val_err("Extension '%s' lacks a '%s' valid %s URI.",
 		    meta->ia_name, meta->name, meta->type);
-		return -ESRCH;
+		return ESRCH;
 	}
 
 	return 0;
@@ -1857,7 +1857,7 @@ certificate_validate(struct rpki_certificate *cert)
 
 	cert->x509 = certificate_load(cert->map.path);
 	if (!cert->x509) {
-		error = -EINVAL;
+		error = EINVAL;
 		goto end;
 	}
 	cert->type = get_certificate_type(cert);
@@ -1899,7 +1899,7 @@ end:	fnstack_pop();
 	return error;
 }
 
-int
+validation_verdict
 certificate_traverse(struct rpki_certificate *ca)
 {
 	struct cache_cage *cage;
@@ -1907,27 +1907,24 @@ certificate_traverse(struct rpki_certificate *ca)
 	array_index i;
 	struct cache_mapping *map;
 	unsigned int queued;
-	int error;
+	validation_verdict vv;
 
 	if (!ca->x509) {
-		error = certificate_validate(ca);
-		if (error)
-			return error;
-
+		if (certificate_validate(ca) != 0)
+			return VV_FAIL;
 		if (ca->type != CERTYPE_TA && ca->type != CERTYPE_CA)
-			return 0;
-	} /* else "we already did this, and returned EBUSY" */
+			return VV_CONTINUE;
+	} /* else "we already did this, and returned VV_BUSY" */
 
-	switch (cache_refresh_by_sias(&ca->sias, &cage)) {
-	case 0:
-		break;
-	case EBUSY:
-		return EBUSY;
-	default:
-		return pr_val_err("caRepository '%s' could not be refreshed, "
+	vv = cache_refresh_by_sias(&ca->sias, &cage);
+	if (vv == VV_BUSY)
+		return VV_BUSY;
+	if (vv == VV_FAIL) {
+		pr_val_err("caRepository '%s' could not be refreshed, "
 		    "and there is no fallback in the cache. "
 		    "I'm going to have to skip it.",
 		    uri_str(&ca->sias.caRepository));
+		return VV_FAIL;
 	}
 
 	mft.url = ca->sias.rpkiManifest;
@@ -1935,15 +1932,16 @@ retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
 	if (!mft.path) {
 		if (cage_disable_refresh(cage))
 			goto retry;
-		error = pr_val_err("caRepository '%s' is missing a manifest.",
+		pr_val_err("caRepository '%s' is missing a manifest.",
 		    uri_str(&ca->sias.caRepository));
+		vv = VV_FAIL;
 		goto end;
 	}
 
-	error = manifest_traverse(&mft, cage, ca);
-	if (error) {
+	if (manifest_traverse(&mft, cage, ca) != 0) {
 		if (cage_disable_refresh(cage))
 			goto retry;
+		vv = VV_FAIL;
 		goto end;
 	}
 
@@ -1964,5 +1962,5 @@ retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
 	    &ca->rpp);
 
 end:	free(cage);
-	return error;
+	return vv;
 }

@@ -990,7 +990,7 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash, char const *hash_n
 		    hash_name);
 	}
 
-	return error;
+	return abs(error);
 }
 
 int

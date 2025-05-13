@@ -40,8 +40,8 @@ setopt_str(CURL *curl, CURLoption opt, char const *value)
 
 	result = curl_easy_setopt(curl, opt, value);
 	if (result != CURLE_OK) {
-		fprintf(stderr, "curl_easy_setopt(%d, %s) returned %d: %s\n",
-		    opt, value, result, curl_easy_strerror(result));
+		fprintf(stderr, "curl_easy_setopt(%d, %s) failure: %s\n",
+		    opt, value, curl_easy_strerror(result));
 	}
 }
 
@@ -52,8 +52,8 @@ setopt_long(CURL *curl, CURLoption opt, long value)
 
 	result = curl_easy_setopt(curl, opt, value);
 	if (result != CURLE_OK) {
-		fprintf(stderr, "curl_easy_setopt(%d, %ld) returned %d: %s\n",
-		    opt, value, result, curl_easy_strerror(result));
+		fprintf(stderr, "curl_easy_setopt(%d, %ld) failure: %s\n",
+		    opt, value, curl_easy_strerror(result));
 	}
 }
 
@@ -80,7 +80,7 @@ write_callback(void *data, size_t size, size_t nmemb, void *userp)
 		 * approach. We already reached the size limit, but we're going
 		 * to reject the file anyway.
 		 */
-		arg->error = -EFBIG;
+		arg->error = EFBIG;
 		return 0; /* Ugh. See fwrite(3) */
 	}
 
@@ -100,8 +100,8 @@ setopt_writefunction(CURL *curl)
 
 	result = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
 	if (result != CURLE_OK) {
-		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
-		    CURLOPT_WRITEFUNCTION, result, curl_easy_strerror(result));
+		fprintf(stderr, "curl_easy_setopt(%d) failure: %s\n",
+		    CURLOPT_WRITEFUNCTION, curl_easy_strerror(result));
 	}
 }
 
@@ -112,8 +112,8 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 
 	result = curl_easy_setopt(curl, CURLOPT_WRITEDATA, arg);
 	if (result != CURLE_OK) {
-		fprintf(stderr, "curl_easy_setopt(%d) returned %d: %s\n",
-		    CURLOPT_WRITEDATA, result, curl_easy_strerror(result));
+		fprintf(stderr, "curl_easy_setopt(%d) failure: %s\n",
+		    CURLOPT_WRITEDATA, curl_easy_strerror(result));
 	}
 }
 
@@ -202,10 +202,10 @@ validate_file_size(struct write_callback_arg *args)
 {
 	float ratio;
 
-	if (args->error == -EFBIG) {
+	if (args->error == EFBIG) {
 		pr_val_err("File too big (read: %zu bytes). Rejecting.",
 		    args->total_bytes);
-		return -EFBIG;
+		return EFBIG;
 	}
 
 	ratio = args->total_bytes / (float) config_get_http_max_file_size();
@@ -226,14 +226,15 @@ get_http_response_code(struct http_handler *handler, long *http_code,
 	res = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
 	    http_code);
 	if (res != CURLE_OK) {
-		return pr_op_err_st("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned %d (%s). "
+		return pr_op_err_st("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned '%s'. "
 		    "I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
-		    res, curl_err_string(handler, res), uri_str(uri));
+		    curl_err_string(handler, res), uri_str(uri));
 	}
 
 	return 0;
 }
 
+/* XXX Retries removed. Ditch this? */
 static int
 handle_http_response_code(long http_code)
 {
@@ -242,7 +243,7 @@ handle_http_response_code(long http_code)
 		return EAGAIN; /* Retry */
 	if (500 <= http_code && http_code < 600)
 		return EAGAIN; /* Retry */
-	return -EINVAL; /* Do not retry */
+	return EINVAL; /* Do not retry */
 }
 
 static int
@@ -332,7 +333,7 @@ http_download(struct uri const *src, char const *dst,
 
 			switch (res) {
 			case CURLE_FILESIZE_EXCEEDED:
-				error = -EFBIG; /* Do not retry */
+				error = EFBIG; /* Do not retry */
 				goto end;
 			case CURLE_OPERATION_TIMEDOUT:
 			case CURLE_COULDNT_RESOLVE_HOST:

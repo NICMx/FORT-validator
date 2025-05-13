@@ -32,7 +32,7 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 	if (count < 0) {
 		pr_val_err("OBJECT_IDENTIFIER_get_arcs() returned %zd.", count);
 		free(result->arcs);
-		return count;
+		return EINVAL;
 	}
 
 	result->count = count;
@@ -47,7 +47,7 @@ oid2arcs(OBJECT_IDENTIFIER_t *oid, struct oid_arcs *result)
 			pr_val_err("OBJECT_IDENTIFIER_get_arcs() returned %zd. (expected %zd)",
 			    count2, count);
 			free(result->arcs);
-			return -EINVAL;
+			return EINVAL;
 		}
 	}
 

@@ -62,45 +62,45 @@ get_nth_element(struct sorted_array const *sarray, unsigned int index)
  * (Meaning, returns success if @new is larger than all of the elements in
  * @array.)
  */
-static int
+static enum resource_cmp_result
 compare(struct sorted_array *sarray, void const *new)
 {
 	enum sarray_comparison cmp;
 
 	if (sarray->count == 0)
-		return 0;
+		return RCR_OK;
 
 	cmp = sarray->cmp(get_nth_element(sarray, sarray->count - 1), new);
 	switch (cmp) {
 	case SACMP_EQUAL:
-		return -EEQUAL;
+		return RCR_EEQUAL;
 	case SACMP_CHILD:
-		return -ECHILD2;
+		return RCR_ECHILD2;
 	case SACMP_PARENT:
-		return -EPARENT;
+		return RCR_EPARENT;
 	case SACMP_LEFT:
-		return -ELEFT;
+		return RCR_ELEFT;
 	case SACMP_RIGHT:
-		return 0;
+		return RCR_OK;
 	case SACMP_ADJACENT_LEFT:
-		return -EADJLEFT;
+		return RCR_EADJLEFT;
 	case SACMP_ADJACENT_RIGHT:
-		return -EADJRIGHT;
+		return RCR_EADJRIGHT;
 	case SACMP_INTERSECTION:
-		return -EINTERSECTION;
+		return RCR_EINTERSECTION;
 	}
 
 	pr_crit("Unknown comparison value: %u", cmp);
 }
 
-int
+enum resource_cmp_result
 sarray_add(struct sorted_array *sarray, void const *element)
 {
-	int error;
+	enum resource_cmp_result result;
 
-	error = compare(sarray, element);
-	if (error)
-		return error;
+	result = compare(sarray, element);
+	if (result != RCR_OK)
+		return result;
 
 	if (sarray->count >= sarray->len) {
 		sarray->array = realloc(sarray->array,
@@ -110,7 +110,7 @@ sarray_add(struct sorted_array *sarray, void const *element)
 
 	memcpy(get_nth_element(sarray, sarray->count), element, sarray->size);
 	sarray->count++;
-	return 0;
+	return RCR_OK;
 }
 
 bool
@@ -176,23 +176,26 @@ sarray_foreach(struct sorted_array *sarray, sarray_foreach_cb cb, void *arg)
 	return 0;
 }
 
-char const *sarray_err2str(int error)
+char const *
+sarray_err2str(enum resource_cmp_result result)
 {
-	switch (abs(error)) {
-	case EEQUAL:
+	switch (result) {
+	case RCR_EEQUAL:
 		return "Resource equals an already existing resource";
-	case ECHILD2:
+	case RCR_ECHILD2:
 		return "Resource is a subset of an already existing resource";
-	case EPARENT:
+	case RCR_EPARENT:
 		return "Resource is a superset of an already existing resource";
-	case ELEFT:
+	case RCR_ELEFT:
 		return "Resource sequence is not properly sorted";
-	case EADJLEFT:
-	case EADJRIGHT:
+	case RCR_EADJLEFT:
+	case RCR_EADJRIGHT:
 		return "Resource is adjacent to an existing resource (they are supposed to be aggregated)";
-	case EINTERSECTION:
+	case RCR_EINTERSECTION:
 		return "Resource intersects with an already existing resource";
+	case RCR_OK:
+		return "Success";
 	}
 
-	return strerror(error);
+	return "Unknown error";
 }

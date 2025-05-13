@@ -37,8 +37,8 @@ thvar_init(void)
 	error = pthread_key_create(&filenames_key, fnstack_discard);
 	if (error) {
 		pr_op_err(
-		    "Fatal: Errcode %d while initializing the file name stack thread variable.",
-		    error);
+		    "Cannot initialize the file name stack thread variable: %s",
+		    strerror(error));
 		return error;
 	}
 
@@ -60,7 +60,7 @@ fnstack_init(void)
 
 	error = pthread_setspecific(filenames_key, files);
 	if (error)
-		pr_op_err("pthread_setspecific() returned %d.", error);
+		pr_op_err("pthread_setspecific() failed: %s", strerror(error));
 }
 
 void
@@ -77,7 +77,7 @@ fnstack_cleanup(void)
 
 	error = pthread_setspecific(filenames_key, NULL);
 	if (error)
-		pr_op_err("pthread_setspecific() returned %d.", error);
+		pr_op_err("pthread_setspecific() failed: %s", strerror(error));
 }
 
 /*

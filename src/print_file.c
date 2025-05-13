@@ -44,7 +44,7 @@ __rsync2bio(char const *src, char const *dst)
 	uri_cleanup(&url);
 
 	if (error) {
-		pr_op_err("rsync download failed: %s", strerror(abs(error)));
+		pr_op_err("rsync download failed: %s", strerror(error));
 		return NULL;
 	}
 
@@ -142,7 +142,7 @@ skip_integer(unsigned char *buf, unsigned char *cursor)
 	return (cursor <= (buf + HDRSIZE)) ? cursor : NULL;
 }
 
-static int
+static enum file_type
 guess_file_type(BIO **bio, unsigned char *hdrbuf)
 {
 	unsigned char *ptr;
@@ -152,12 +152,16 @@ guess_file_type(BIO **bio, unsigned char *hdrbuf)
 		return config_get_file_type();
 
 	res = BIO_read(*bio, hdrbuf, HDRSIZE);
-	if (res <= 0)
-		return op_crypto_err("Cannot guess file type; IO error.");
+	if (res <= 0) {
+		op_crypto_err("Cannot guess file type; IO error.");
+		return FT_UNK;
+	}
 
 	*bio = BIO_new_seq(BIO_new_mem_buf(hdrbuf, res), *bio);
-	if ((*bio) == NULL)
-		return op_crypto_err("BIO_new_seq() returned NULL.");
+	if ((*bio) == NULL) {
+		op_crypto_err("BIO_new_seq() returned NULL.");
+		return FT_UNK;
+	}
 
 	if (hdrbuf[0] != 0x30) {
 		pr_op_debug("File doesn't start with a SEQUENCE.");

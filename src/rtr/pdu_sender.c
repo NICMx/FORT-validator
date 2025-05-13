@@ -45,7 +45,7 @@ print_poll_failure(struct pollfd *pfd)
 	}
 
 	/* Interrupt handler thread, but no need to raise alarms. */
-	return -EINVAL;
+	return EINVAL;
 }
 
 static int
@@ -65,7 +65,7 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 		pfd.revents = 0;
 		error = poll(&pfd, 1, -1);
 		if (error < 0)
-			return pr_op_err_st("poll() error: %d", error);
+			return pr_op_err_st("poll() error: %s", strerror(errno));
 		if (error == 0)
 			return pr_op_err_st("poll() returned 0, even though there's no timeout.");
 		if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
@@ -171,7 +171,7 @@ send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 		return send_ipv6_prefix_pdu(fd, version, vrp, flags);
 	}
 
-	return -EINVAL;
+	return EINVAL;
 }
 
 int

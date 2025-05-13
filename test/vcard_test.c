@@ -39,43 +39,43 @@ START_TEST(vcard_normal)
 	    "Missing locator",
 	    VC_BEGIN VC_VERSION VC_FN VC_END
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "Missing name",
 	    VC_BEGIN VC_VERSION VC_ORG VC_END
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "Unknown property",
 	    VC_BEGIN VC_VERSION VC_FN VC_ORG "POTATO:potato\r\n" VC_END
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "No newline",
 	    VC_BEGIN VC_VERSION "FN:name" VC_ORG VC_END
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "\\r newline",
 	    VC_BEGIN VC_VERSION "FN:name\r" VC_ORG VC_END
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "\\n newline",
 	    VC_BEGIN VC_VERSION "FN:name\n" VC_ORG VC_END
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "Last line has no valid newline",
 	    VC_BEGIN VC_VERSION VC_FN VC_ORG "END:VCARD"
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "Stray null character (in non-constant)",
@@ -89,13 +89,13 @@ START_TEST(vcard_normal)
 	    VC_BEGIN "VERSION:4.\00\r\n" VC_FN VC_ORG VC_END
 	);
 	str8.size += strlen(" 0\r\n" VC_FN VC_ORG VC_END);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 
 	INIT_STR8(
 	    "Garbage after END",
 	    VC_BEGIN VC_VERSION VC_FN VC_ORG VC_END VC_EMAIL
 	);
-	ck_assert_int_eq(-EINVAL, handle_ghostbusters_vcard(&str8));
+	ck_assert_int_eq(EINVAL, handle_ghostbusters_vcard(&str8));
 }
 END_TEST
 

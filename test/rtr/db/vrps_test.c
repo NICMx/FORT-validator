@@ -87,14 +87,14 @@ vrp_fail(struct vrp const *vrp, void *arg)
 	ck_abort_msg("Expected no callbacks, got VRP %u/%s/%u/%u.",
 	    vrp->asn, vrpaddr2str(vrp), vrp->prefix_length,
 	    vrp->max_prefix_length);
-	return -EINVAL;
+	return EINVAL;
 }
 
 static int
 rk_fail(struct router_key const *key, void *arg)
 {
 	ck_abort_msg("Expected no callbacks, got RK %u.", key->as);
-	return -EINVAL;
+	return EINVAL;
 }
 
 static int
@@ -103,7 +103,7 @@ dvrp_fail(struct delta_vrp const *delta, void *arg)
 	ck_abort_msg("Expected no callbacks, got Delta VRP %u/%s/%u/%u/%u.",
 	    delta->vrp.asn, vrpaddr2str(&delta->vrp), delta->vrp.prefix_length,
 	    delta->vrp.max_prefix_length, delta->flags);
-	return -EINVAL;
+	return EINVAL;
 }
 
 static int
@@ -111,7 +111,7 @@ drk_fail(struct delta_router_key const *delta, void *arg)
 {
 	ck_abort_msg("Expected no callbacks, got Delta RK %u/%u.",
 	    delta->router_key.as, delta->flags);
-	return -EINVAL;
+	return EINVAL;
 }
 
 static array_index
@@ -241,7 +241,7 @@ static void
 check_serial(serial_t expected_serial)
 {
 	serial_t actual_serial;
-	ck_assert_int_eq(0, get_last_serial_number(&actual_serial));
+	ck_assert_uint_eq(GLSNR_OK, get_last_serial_number(&actual_serial));
 	ck_assert_uint_eq(expected_serial, actual_serial);
 }
 
@@ -253,9 +253,9 @@ check_base(serial_t expected_serial, bool const *expected_base)
 	array_index i;
 
 	memset(actual_base, 0, sizeof(actual_base));
-	ck_assert_int_eq(0, get_last_serial_number(&actual_serial));
-	ck_assert_int_eq(0, vrps_foreach_base(vrp_check, rk_check,
-	    actual_base));
+	ck_assert_uint_eq(GLSNR_OK, get_last_serial_number(&actual_serial));
+	ck_assert_uint_eq(VFBR_OK,
+	    vrps_foreach_base(vrp_check, rk_check, actual_base));
 	ck_assert_uint_eq(expected_serial, actual_serial);
 	for (i = 0; i < ARRAY_LEN(actual_base); i++)
 		ck_assert_uint_eq(expected_base[i], actual_base[i]);
@@ -286,8 +286,8 @@ check_deltas(serial_t from, serial_t to, bool const *expected_deltas)
 	deltas = deltas_create();
 	ck_assert_ptr_ne(NULL, deltas);
 
-	ck_assert_int_eq(0, vrps_foreach_delta_since(from, &actual_serial,
-	    vrp_add, rk_add, deltas));
+	ck_assert_uint_eq(VFDSR_OK, vrps_foreach_delta_since(from,
+	    &actual_serial, vrp_add, rk_add, deltas));
 	ck_assert_uint_eq(to, actual_serial);
 
 	memset(actual_deltas, 0, sizeof(actual_deltas));
@@ -301,8 +301,8 @@ static void
 check_no_deltas(serial_t from)
 {
 	serial_t actual_to;
-	ck_assert_int_eq(-ESRCH, vrps_foreach_delta_since(from, &actual_to,
-	    dvrp_fail, drk_fail, NULL));
+	ck_assert_uint_eq(VFDSR_INVALID_SERIAL, vrps_foreach_delta_since(from,
+	    &actual_to, dvrp_fail, drk_fail, NULL));
 }
 
 static void
@@ -315,11 +315,12 @@ create_deltas_1to2(void)
 	ck_assert_int_eq(0, vrps_init());
 
 	/* First validation not yet performed: Tell routers to wait */
-	ck_assert_int_eq(-EAGAIN, get_last_serial_number(&serial));
-	ck_assert_int_eq(-EAGAIN, vrps_foreach_base(vrp_fail, rk_fail,
-	    iterated_entries));
-	ck_assert_int_eq(-EAGAIN, vrps_foreach_delta_since(0, &serial,
-	    dvrp_fail, drk_fail, NULL));
+	ck_assert_uint_eq(GLSNR_UNDER_CONSTRUCTION,
+	    get_last_serial_number(&serial));
+	ck_assert_uint_eq(VFBR_UNDER_CONSTRUCTION,
+	    vrps_foreach_base(vrp_fail, rk_fail, iterated_entries));
+	ck_assert_uint_eq(VFDSR_UNDER_CONSTRUCTION,
+	    vrps_foreach_delta_since(0, &serial, dvrp_fail, drk_fail, NULL));
 
 	/* First validation: One tree, no deltas */
 	ck_assert_int_eq(0, vrps_update(&changed));

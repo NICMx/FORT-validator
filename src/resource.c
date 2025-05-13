@@ -118,6 +118,7 @@ add_prefix4(struct resources *resources, struct resources *parent,
 	struct ipv4_prefix prefix;
 	char buf[INET_ADDRSTRLEN];
 	int error;
+	enum resource_cmp_result result;
 
 	if (parent && (resources->ip4s == parent->ip4s))
 		return pr_val_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
@@ -140,12 +141,12 @@ add_prefix4(struct resources *resources, struct resources *parent,
 	if (resources->ip4s == NULL)
 		resources->ip4s = res4_create();
 
-	error = res4_add_prefix(resources->ip4s, &prefix);
-	if (error) {
-		pr_val_err("Error adding IPv4 prefix '%s/%u' to certificate resources: %s",
+	result = res4_add_prefix(resources->ip4s, &prefix);
+	if (result != RCR_OK) {
+		pr_val_err("Cannot add IPv4 prefix '%s/%u' to certificate resources: %s",
 		    addr2str4(&prefix.addr, buf), prefix.len,
-		    sarray_err2str(error));
-		return error;
+		    sarray_err2str(result));
+		return EINVAL;
 	}
 
 	pr_clutter("Prefix: %s/%u", addr2str4(&prefix.addr, buf), prefix.len);
@@ -159,6 +160,7 @@ add_prefix6(struct resources *resources, struct resources *parent,
 	struct ipv6_prefix prefix;
 	char buf[INET6_ADDRSTRLEN];
 	int error;
+	enum resource_cmp_result result;
 
 	if (parent && (resources->ip6s == parent->ip6s))
 		return pr_val_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
@@ -181,12 +183,12 @@ add_prefix6(struct resources *resources, struct resources *parent,
 	if (resources->ip6s == NULL)
 		resources->ip6s = res6_create();
 
-	error = res6_add_prefix(resources->ip6s, &prefix);
-	if (error) {
-		pr_val_err("Error adding IPv6 prefix '%s/%u' to certificate resources: %s",
+	result = res6_add_prefix(resources->ip6s, &prefix);
+	if (result != RCR_OK) {
+		pr_val_err("Cannot add IPv6 prefix '%s/%u' to certificate resources: %s",
 		    addr2str6(&prefix.addr, buf), prefix.len,
-		    sarray_err2str(error));
-		return error;
+		    sarray_err2str(result));
+		return EINVAL;
 	}
 
 	pr_clutter("Prefix: %s/%u", addr2str6(&prefix.addr, buf), prefix.len);
@@ -216,6 +218,7 @@ add_range4(struct resources *resources, struct resources *parent,
 	char buf1[INET_ADDRSTRLEN];
 	char buf2[INET_ADDRSTRLEN];
 	int error;
+	enum resource_cmp_result result;
 
 	if (parent && (resources->ip4s == parent->ip4s))
 		return pr_val_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
@@ -240,13 +243,13 @@ add_range4(struct resources *resources, struct resources *parent,
 	if (resources->ip4s == NULL)
 		resources->ip4s = res4_create();
 
-	error = res4_add_range(resources->ip4s, &range);
-	if (error) {
-		pr_val_err("Error adding IPv4 range '%s-%s' to certificate resources: %s",
+	result = res4_add_range(resources->ip4s, &range);
+	if (result != RCR_OK) {
+		pr_val_err("Cannot add IPv4 range '%s-%s' to certificate resources: %s",
 		    addr2str4(&range.min, buf1),
 		    addr2str4(&range.max, buf2),
-		    sarray_err2str(error));
-		return error;
+		    sarray_err2str(result));
+		return EINVAL;
 	}
 
 	pr_clutter("Range: %s-%s",
@@ -263,6 +266,7 @@ add_range6(struct resources *resources, struct resources *parent,
 	char buf1[INET6_ADDRSTRLEN];
 	char buf2[INET6_ADDRSTRLEN];
 	int error;
+	enum resource_cmp_result result;
 
 	if (parent && (resources->ip6s == parent->ip6s))
 		return pr_val_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
@@ -287,13 +291,13 @@ add_range6(struct resources *resources, struct resources *parent,
 	if (resources->ip6s == NULL)
 		resources->ip6s = res6_create();
 
-	error = res6_add_range(resources->ip6s, &range);
-	if (error) {
-		pr_val_err("Error adding IPv6 range '%s-%s' to certificate resources: %s",
+	result = res6_add_range(resources->ip6s, &range);
+	if (result != RCR_OK) {
+		pr_val_err("Cannot add IPv6 range '%s-%s' to certificate resources: %s",
 		    addr2str6(&range.min, buf1),
 		    addr2str6(&range.max, buf2),
-		    sarray_err2str(error));
-		return error;
+		    sarray_err2str(result));
+		return EINVAL;
 	}
 
 	pr_clutter("Range: %s-%s",
@@ -363,7 +367,7 @@ resources_add_ip(struct resources *resources, struct resources *parent,
 
 	family = get_addr_family(&obj->addressFamily);
 	if (family == -1)
-		return -EINVAL;
+		return EINVAL;
 
 	switch (obj->ipAddressChoice.present) {
 	case IPAddressChoice_PR_NOTHING:
@@ -425,7 +429,7 @@ static int
 add_asn(struct resources *resources, struct asn_range const *asns,
     struct resources *parent)
 {
-	int error;
+	enum resource_cmp_result result;
 
 	if (asns->min > asns->max) {
 		return pr_val_err("The ASN range %u-%u is inverted.",
@@ -446,11 +450,11 @@ add_asn(struct resources *resources, struct asn_range const *asns,
 	if (resources->asns == NULL)
 		resources->asns = rasn_create();
 
-	error = rasn_add(resources->asns, asns);
-	if (error){
-		pr_val_err("Error adding ASN range '%u-%u' to certificate resources: %s",
-		    asns->min, asns->max, sarray_err2str(error));
-		return error;
+	result = rasn_add(resources->asns, asns);
+	if (result != RCR_OK) {
+		pr_val_err("Cannot add ASN range '%u-%u' to certificate resources: %s",
+		    asns->min, asns->max, sarray_err2str(result));
+		return EINVAL;
 	}
 
 	if (asns->min == asns->max)

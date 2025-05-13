@@ -66,7 +66,7 @@ res4_put(struct resources_ipv4 *ips)
 	sarray_put((struct sorted_array *) ips);
 }
 
-int
+enum resource_cmp_result
 res4_add_prefix(struct resources_ipv4 *ips, struct ipv4_prefix const *prefix)
 {
 	struct r4_node n;
@@ -74,7 +74,7 @@ res4_add_prefix(struct resources_ipv4 *ips, struct ipv4_prefix const *prefix)
 	return sarray_add((struct sorted_array *) ips, &n);
 }
 
-int
+enum resource_cmp_result
 res4_add_range(struct resources_ipv4 *ips, struct ipv4_range const *range)
 {
 	struct r4_node n;

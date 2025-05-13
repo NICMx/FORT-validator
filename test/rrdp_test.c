@@ -191,10 +191,10 @@ START_TEST(test_sort_deltas)
 	validate_serials(&deltas, 2, END);
 
 	/* Delta serial doesn't match session serial */
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 4, "4"));
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 3, "3"));
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 1, "1"));
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 0, "0"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 4, "4"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 3, "3"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 1, "1"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 0, "0"));
 
 	/* More than 1 delta, already sorted */
 	add_serials(&deltas, 3, 4, 5, END);
@@ -202,8 +202,8 @@ START_TEST(test_sort_deltas)
 	validate_serials(&deltas, 2, 3, 4, 5, END);
 
 	/* More than 1 delta, they don't match session serial */
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 6, "6"));
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 4, "4"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 6, "6"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 4, "4"));
 
 	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
 	notification_deltas_init(&deltas);
@@ -222,15 +222,15 @@ START_TEST(test_sort_deltas)
 	validate_serials(&deltas, 0, 1, 2, 3, 4, END);
 
 	/* Same, but deltas don't match session serial */
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 5, "5"));
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 3, "3"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 5, "5"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 3, "3"));
 
 	notification_deltas_cleanup(&deltas, notification_delta_cleanup);
 	notification_deltas_init(&deltas);
 
 	/* More than 1 delta, 1 serial missing */
 	add_serials(&deltas, 1, 2, 4, END);
-	ck_assert_int_eq(-EINVAL, __sort_deltas(&deltas, 4, "4"));
+	ck_assert_int_eq(EINVAL, __sort_deltas(&deltas, 4, "4"));
 }
 END_TEST
 
@@ -502,7 +502,7 @@ test_parse_notification_error(char *file)
 
 	ck_assert_int_eq(0, relax_ng_init());
 	ck_assert_ptr_eq(NULL, uri_init(&nurl, "https://host/notification.xml"));
-	ck_assert_int_eq(-EINVAL, parse_notification(&nurl, file, &notif));
+	ck_assert_int_eq(EINVAL, parse_notification(&nurl, file, &notif));
 	uri_cleanup(&nurl);
 
 	relax_ng_cleanup();
@@ -569,7 +569,7 @@ START_TEST(test_parse_snapshot_bad_publish)
 	session.serial.str = "2";
 	session.serial.num = BN_two();
 
-	ck_assert_int_eq(-EINVAL, parse_snapshot(&session,
+	ck_assert_int_eq(EINVAL, parse_snapshot(&session,
 	    "resources/rrdp/snapshot-bad-publish.xml", &rpp));
 
 	BN_free(session.serial.num);
