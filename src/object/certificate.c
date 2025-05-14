@@ -154,11 +154,42 @@ validate_signature_algorithm(X509 *cert)
 	return validate_certificate_signature_algorithm(nid, "Certificate");
 }
 
+static bool
+is_valid_printable_string_char(char c)
+{
+	if ('A' <= c && c <= 'Z')
+		return true;
+	if ('a' <= c && c <= 'z')
+		return true;
+	if ('0' <= c && c <= '9')
+		return true;
+	if (c == ' ')
+		return true;
+	if ('\'' <= c && c <= ')')
+		return true;
+	if ('+' <= c && c <= '/')
+		return true;
+	if (c == ':' || c == '=' || c == '?')
+		return true;
+	return false;
+}
+
+static int
+validate_printable_string(char const *str, char const *what)
+{
+	for (; *str != '\0'; str++)
+		if (!is_valid_printable_string_char(*str))
+			return pr_val_err("Invalid character in '%s' PrintableString: 0x%X",
+			    what, *str);
+	return 0;
+}
+
 static int
 validate_issuer(X509 *cert, bool is_ta)
 {
 	X509_NAME *issuer;
 	struct rfc5280_name *name;
+	char const *commonName;
 	int error;
 
 	issuer = X509_get_issuer_name(cert);
@@ -171,10 +202,13 @@ validate_issuer(X509 *cert, bool is_ta)
 	error = x509_name_decode(issuer, "issuer", &name);
 	if (error)
 		return error;
-	pr_val_debug("Issuer: %s", x509_name_commonName(name));
+
+	commonName = x509_name_commonName(name);
+	pr_val_debug("Issuer: %s", commonName);
+	error = validate_printable_string(commonName, "Issuer");
 
 	x509_name_put(name);
-	return 0;
+	return error;
 }
 
 /*
@@ -221,12 +255,16 @@ static int
 validate_subject(X509 *cert)
 {
 	struct rfc5280_name *name;
+	char const *commonName;
 	int error;
 
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
 		return error;
-	pr_val_debug("Subject: %s", x509_name_commonName(name));
+
+	commonName = x509_name_commonName(name);
+	pr_val_debug("Subject: %s", commonName);
+	error = validate_printable_string(commonName, "Subject");
 
 	x509_name_put(name);
 	return error;
