@@ -5,6 +5,11 @@
 #include <openssl/bn.h>
 #include <stdbool.h>
 
+struct sized_string {
+	char const *str;
+	size_t len;
+};
+
 char *str_concat(char const *, char const *);
 
 int hex2ulong(char const *, unsigned long *);

@@ -68,6 +68,10 @@ check_PROGRAMS +=		mft.test
 mft_test_SOURCES =		object/manifest_test.c
 mft_test_LDADD =		${CHECK_LIBS}
 
+check_PROGRAMS +=		path.test
+path_test_SOURCES =		types/path_test.c
+path_test_LDADD =		${CHECK_LIBS}
+
 check_PROGRAMS +=		pdu_handler.test
 pdu_handler_test_SOURCES =	rtr/pdu_handler_test.c
 pdu_handler_test_LDADD =	${CHECK_LIBS}

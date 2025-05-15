@@ -15,6 +15,5 @@ bool token_next(struct tokenizer *tkn);
 
 char const *path_filename(char const *);
 char *path_join(char const *, char const *);
-char *path_njoin(char const *, char const *, size_t);
 
 #endif /* SRC_TYPES_PATH_H_ */
