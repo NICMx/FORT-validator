@@ -1,44 +1,8 @@
 #include "types/path.h"
 
-#include <errno.h>
-
 #include "alloc.h"
-#include "config.h"
 #include "log.h"
 #include "types/str.h"
-
-/* These are arbitrary; feel free to change them. */
-#ifndef INITIAL_CAPACITY /* Unit tests want to override this */
-#define INITIAL_CAPACITY 128u
-#endif
-#define MAX_CAPACITY 4096u
-
-static bool
-is_delimiter(char chara)
-{
-	return chara == '/' || chara == '\0';
-}
-
-void
-token_init(struct tokenizer *tkn, char const *str)
-{
-	tkn->str = str;
-	tkn->len = 0;
-}
-
-/* Like strtok_r(), but doesn't corrupt the string. */
-bool
-token_next(struct tokenizer *tkn)
-{
-	tkn->str += tkn->len;
-	while (tkn->str[0] == '/')
-		tkn->str++;
-	if (tkn->str[0] == '\0')
-		return false;
-	for (tkn->len = 1; !is_delimiter(tkn->str[tkn->len]); tkn->len++)
-		;
-	return true;
-}
 
 char const *
 path_filename(char const *path)
