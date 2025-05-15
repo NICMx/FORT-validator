@@ -44,7 +44,7 @@ struct cache_sequence {
 	char *prefix;
 	unsigned long next_id;
 	size_t pathlen;
-	bool free_prefix; // XXX seems to be always false
+	bool free_prefix;
 };
 
 void cseq_init(struct cache_sequence *, char *, unsigned long, bool);

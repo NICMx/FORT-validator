@@ -31,7 +31,6 @@ fort_SOURCES += ext.h ext.c
 fort_SOURCES += file.h file.c
 fort_SOURCES += hash.h hash.c
 fort_SOURCES += http.h http.c
-fort_SOURCES += incidence.h incidence.c
 fort_SOURCES += init.h init.c
 fort_SOURCES += json_handler.h json_handler.c
 fort_SOURCES += json_util.c json_util.h

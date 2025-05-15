@@ -4,8 +4,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "incidence.h"
-
 #define PR_COLOR_DBG	"\x1B[36m"	/* Cyan */
 #define PR_COLOR_INF	"\x1B[37m"	/* White */
 #define PR_COLOR_WRN	"\x1B[33m"	/* Yellow */
@@ -104,8 +102,6 @@ int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 __dead void enomem_panic(void);
 /* Programming errors */
 __dead void pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
-
-int incidence(enum incidence_id, const char *, ...) CHECK_FORMAT(2, 3);
 
 /*
  * Quick and dirty debugging messages.

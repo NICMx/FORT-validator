@@ -134,9 +134,6 @@ main(int argc, char **argv)
 	error = thvar_init();
 	if (error)
 		goto revert_rsync;
-	error = incidence_init();
-	if (error)
-		goto revert_rsync;
 	error = nid_init();
 	if (error)
 		goto revert_rsync;

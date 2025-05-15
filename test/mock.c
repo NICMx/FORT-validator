@@ -4,7 +4,6 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include "config.h"
-#include "incidence.h"
 #include "log.h"
 #include "thread_var.h"
 
@@ -63,13 +62,6 @@ MOCK_VOID_PRINT(pr_val_info, PR_COLOR_INF)
 MOCK_INT_PRINT(pr_val_warn, PR_COLOR_WRN, 0)
 MOCK_INT_PRINT(pr_val_err, PR_COLOR_ERR, EINVAL)
 MOCK_INT_PRINT(val_crypto_err, PR_COLOR_ERR, EINVAL)
-
-int
-incidence(enum incidence_id id, const char *format, ...)
-{
-	MOCK_PRINT(PR_COLOR_ERR);
-	return EINVAL;
-}
 
 void
 enomem_panic(void)

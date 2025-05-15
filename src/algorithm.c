@@ -109,18 +109,11 @@ validate_cms_hash_algorithm(AlgorithmIdentifier_t *id, char const *what)
 	 * some implementations encode parameters as a NULL element
 	 * while others omit them entirely.  The correct encoding is to omit the
 	 * parameters field;
-	 *
-	 * We will treat NULL object parameters as one type of error, and any
-	 * other type of present parameters as a different error. The former
-	 * will be silenceable, because many people are breaking the rule.
 	 */
 	if (id->parameters != NULL) {
 		error = is_asn1_null_object(id->parameters)
-		    ? incidence(INID_HASHALG_HAS_PARAMS,
-		        "The hash algorithm of the '%s' has a NULL object as parameters",
-		        what)
-		    : pr_val_err("The hash algorithm of the '%s' has parameters",
-		        what);
+		    ? pr_val_err("The hash algorithm of the '%s' has a NULL object as parameters", what)
+		    : pr_val_err("The hash algorithm of the '%s' has parameters", what);
 	}
 
 	return error;
