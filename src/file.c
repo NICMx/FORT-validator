@@ -192,15 +192,24 @@ file_rm_f(char const *path)
 	return 0;
 }
 
+static int rm_error;
+
 static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
-	if (remove(fpath) < 0)
-		pr_op_warn("Cannot delete %s: %s", fpath, strerror(errno));
-	return 0;
+	if (remove(fpath) < 0) {
+		rm_error = errno;
+		pr_op_warn("Cannot remove '%s': %s", fpath, strerror(rm_error));
+	}
+
+	return 0; /* Remove as much as possible, regardless of error */
 }
 
-/* Same as `system("rm -rf <path>")`, but more portable and maaaaybe faster. */
+/*
+ * rm -rf $path
+ *
+ * NOT THREAD-SAFE!
+ */
 int
 file_rm_rf(char const *path)
 {
@@ -209,15 +218,20 @@ file_rm_rf(char const *path)
 	pr_op_debug("rm -rf %s", path);
 
 	/* TODO (performance) optimize that 32 */
-	// XXX In MacOS, this breaks if path is a file.
-	if (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS) < 0) {
+	rm_error = 0;
+	if (nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS) >= 0)
+		return rm_error; /* Happy path */
+
+	error = errno;
+	if (error == ENOTDIR) {
+		/* This can happen in MacOS; try file removal. */
+		if (unlink(path) == 0)
+			return 0; /* Rare happy path */
 		error = errno;
-		// XXX This msg is sometimes annoying; maybe defer it
-		pr_op_warn("Cannot remove %s: %s", path, strerror(error));
-		return error ? error : -1;
 	}
 
-	return 0;
+	pr_op_warn("Cannot remove '%s': %s", path, strerror(error));
+	return error;
 }
 
 /* If @force, don't treat EEXIST as an error. */

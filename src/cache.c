@@ -322,34 +322,35 @@ reset_cache_dir(void)
 {
 	DIR *dir;
 	struct dirent *file;
-	int error;
+	int tmperr, abserr;
 	unsigned int deleted;
 
 	pr_op_debug("Resetting cache...");
 
+	abserr = 0;
+	deleted = 0;
+
 	dir = opendir(".");
 	if (dir == NULL)
-		goto fail;
+		goto end;
 
-	deleted = 0;
 	FOREACH_DIR_FILE(dir, file)
 		if (!S_ISDOTS(file) && strcmp(file->d_name, LOCKFILE) != 0) {
-			error = file_rm_rf(file->d_name);
-			if (error)
-				goto end;
+			tmperr = file_rm_rf(file->d_name);
+			if (tmperr)
+				abserr = tmperr;
 			deleted++;
 		}
-	if (errno)
-		goto fail;
 
-	pr_op_debug(deleted > 0 ? "Cache cleared." : "Cache was empty.");
-	error = 0;
-	goto end;
-
-fail:	error = errno;
-	pr_op_err("Cannot traverse the cache: %s", strerror(error));
-end:	closedir(dir);
-	return error;
+end:	tmperr = errno;
+	if (tmperr)
+		abserr = tmperr;
+	if (abserr)
+		pr_op_warn("Cannot reset cache: %s", strerror(abserr));
+	else
+		pr_op_debug(deleted > 0 ? "Cache reset." : "Cache was empty.");
+	closedir(dir);
+	return abserr;
 }
 
 static void

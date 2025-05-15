@@ -93,16 +93,17 @@ MOCK_ABORT_INT(asn_generic_no_constraint,
 static void
 setup_test(void)
 {
+	char const *dirs[] = { "rsync", "https", "rrdp", "fallback", "tmp", NULL };
+	char const **d;
+
 	dl_error = 0;
 	init_tables();
 
-	// XXX consider changing this function to `rm -rf <path>/*`
-	ck_assert_int_eq(0, file_rm_rf("."));
-	ck_assert_int_eq(0, mkdir("rsync", CACHE_FILEMODE));
-	ck_assert_int_eq(0, mkdir("https", CACHE_FILEMODE));
-	ck_assert_int_eq(0, mkdir("rrdp", CACHE_FILEMODE));
-	ck_assert_int_eq(0, mkdir("fallback", CACHE_FILEMODE));
-	ck_assert_int_eq(0, mkdir("tmp", CACHE_FILEMODE));
+	for (d = dirs; *d; d++) {
+		if (file_exists(*d) == 0)
+			ck_assert_int_eq(0, file_rm_rf(*d));
+		ck_assert_int_eq(0, mkdir(*d, CACHE_FILEMODE));
+	}
 }
 
 static struct cache_cage *
