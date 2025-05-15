@@ -10,6 +10,7 @@
 #include "hash.h"
 #include "log.h"
 #include "object/certificate.h"
+#include "object/signed_object.h"
 #include "types/name.h"
 
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
@@ -17,7 +18,7 @@ static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 
 static int
-get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
+get_sid(struct SignerInfo *sinfo, OCTET_STRING_t const **result)
 {
 	switch (sinfo->sid.present) {
 	case SignerIdentifier_PR_subjectKeyIdentifier:
@@ -29,15 +30,15 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t **result)
 		break;
 	}
 
+	*result = NULL;
 	return pr_val_err("Signer Info's sid is not a SubjectKeyIdentifier.");
 }
 
 static int
-handle_sdata_certificate(ANY_t *cert_encoded, struct rpki_certificate *ee,
-    OCTET_STRING_t *sid, ANY_t *signedData, SignatureValue_t *signature)
+handle_sdata_ee(struct signed_object *so, struct rpki_certificate *ee,
+    ANY_t *cer_encoded)
 {
 	const unsigned char *otmp, *tmp;
-	int error;
 
 	/*
 	 * No need to validate certificate chain length, since we just arrived
@@ -51,33 +52,15 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct rpki_certificate *ee,
 	 * We definitely don't want @any->buf to be modified, so use a dummy
 	 * pointer.
 	 */
-	tmp = (const unsigned char *) cert_encoded->buf;
+	tmp = (const unsigned char *)cer_encoded->buf;
 	otmp = tmp;
-	ee->x509 = d2i_X509(NULL, &tmp, cert_encoded->size);
+	ee->x509 = d2i_X509(NULL, &tmp, cer_encoded->size);
 	if (ee->x509 == NULL)
 		return val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
-	if (tmp != otmp + cert_encoded->size)
+	if (tmp != otmp + cer_encoded->size)
 		return val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
 
-	x509_name_pr_clutter("Issuer", X509_get_issuer_name(ee->x509));
-
-	error = certificate_validate_chain(ee);
-	if (error)
-		return error;
-	error = certificate_validate_rfc6487(ee);
-	if (error)
-		return error;
-	error = certificate_validate_extensions_ee(ee, sid);
-	if (error)
-		return error;
-	error = certificate_validate_aia(ee);
-	if (error)
-		return error;
-	error = certificate_validate_signature(ee->x509, signedData, signature);
-	if (error)
-		return error;
-	resources_set_policy(ee->resources, ee->policy);
-	return certificate_get_resources(ee);
+	return cer_validate_ee(ee, so);
 }
 
 /* rfc6488#section-2.1.6.4.1 */
@@ -213,15 +196,15 @@ illegal_attrType:
 }
 
 int
-signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
-     struct rpki_certificate *ee)
+signed_data_validate(struct signed_object *so, struct rpki_certificate *ee)
 {
+	struct SignedData *sdata;
 	struct SignerInfo *sinfo;
-	OCTET_STRING_t *sid = NULL;
 	unsigned long version;
 	int error;
 
 	/* rfc6488#section-2.1 */
+	sdata = so->sdata;
 	if (sdata->signerInfos.list.count != 1) {
 		return pr_val_err("The SignedData's SignerInfo set is supposed to have only one element. (%d given.)",
 		    sdata->signerInfos.list.count);
@@ -255,7 +238,7 @@ signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
 	 * AlgorithmIdentifier instead. There's no API.
 	 * This seems to work fine.
 	 */
-	error = validate_cms_hashing_algorithm(
+	error = validate_cms_hash_algorithm(
 	    (AlgorithmIdentifier_t *) sdata->digestAlgorithms.list.array[0],
 	    "SignedData");
 	if (error)
@@ -280,6 +263,7 @@ signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
 	sinfo = sdata->signerInfos.list.array[0];
 	if (sinfo == NULL)
 		return pr_val_err("The SignerInfo object is NULL.");
+	so->signature = &sinfo->signature;
 
 	error = asn_INTEGER2ulong(&sinfo->version, &version);
 	if (error) {
@@ -297,13 +281,13 @@ signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
 	/* rfc6488#section-2.1.6.2 */
 	/* rfc6488#section-3.1.c 2/2 */
 	/* (Most of this requirement is in handle_ski_ee().) */
-	error = get_sid(sinfo, &sid);
+	error = get_sid(sinfo, &so->sid);
 	if (error)
 		return error;
 
 	/* rfc6488#section-2.1.6.3 */
 	/* rfc6488#section-3.1.j 2/2 */
-	error = validate_cms_hashing_algorithm(&sinfo->digestAlgorithm,
+	error = validate_cms_hash_algorithm(&sinfo->digestAlgorithm,
 	    "SignerInfo");
 	if (error)
 		return error;
@@ -339,8 +323,7 @@ signed_data_validate(ANY_t *encoded, struct SignedData *sdata,
 		    sdata->certificates->list.count);
 	}
 
-	return handle_sdata_certificate(sdata->certificates->list.array[0],
-	    ee, sid, encoded, &sinfo->signature);
+	return handle_sdata_ee(so, ee, sdata->certificates->list.array[0]);
 }
 
 /*

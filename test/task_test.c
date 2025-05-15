@@ -10,7 +10,7 @@
 #include "types/uri.c"
 
 void
-rpki_certificate_free(struct rpki_certificate *cert)
+cer_free(struct rpki_certificate *cert)
 {
 	if (atomic_fetch_sub(&cert->refcount, 1) == 1) {
 		map_cleanup(&cert->map);

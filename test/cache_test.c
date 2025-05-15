@@ -109,7 +109,7 @@ static struct cache_cage *
 run_dl_rsync(char *caRepository, validation_verdict vv,
     unsigned int expected_calls)
 {
-	struct sia_uris sias = { 0 };
+	struct extension_uris sias = { 0 };
 	struct cache_cage *cage;
 
 	ck_assert_ptr_eq(NULL, uri_init(&sias.caRepository, caRepository));
@@ -118,7 +118,7 @@ run_dl_rsync(char *caRepository, validation_verdict vv,
 	rsync_counter = 0;
 	https_counter = 0;
 	printf("---- Downloading... ----\n");
-	ck_assert_str_eq(vv, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(vv, cache_refresh_by_uris(&sias, &cage));
 	printf("---- Downloaded. ----\n");
 	ck_assert_uint_eq(expected_calls, rsync_counter);
 	ck_assert_uint_eq(0, https_counter);
@@ -801,7 +801,7 @@ START_TEST(test_context)
 	char *FILE_RRDP_PATH =	"rrdp/0/0";
 	char *FILE_RSYNC_PATH =	"rsync/0/rpp3/a.cer";
 
-	struct sia_uris sias = { 0 };
+	struct extension_uris sias = { 0 };
 	struct uri file_url;
 	struct cache_cage *cage;
 	struct rpp rpp = { 0 };
@@ -823,7 +823,7 @@ START_TEST(test_context)
 	print_tree();
 	ck_assert_ptr_eq(NULL, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
 	ck_assert_ptr_eq(NULL, uri_init(&sias.caRepository, CA_REPOSITORY));
-	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(false, cage_disable_refresh(cage));
@@ -834,9 +834,9 @@ START_TEST(test_context)
 	print_tree();
 	uri_cleanup(&sias.rpkiNotify);
 
-	ck_assert_str_eq(VV_BUSY, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(VV_BUSY, cache_refresh_by_uris(&sias, &cage));
 	finish_rsync();
-	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 
 	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
@@ -864,14 +864,14 @@ START_TEST(test_context)
 
 	printf("4. Redo both CAs, check the fallbacks too\n");
 	print_tree();
-	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(true, cage_disable_refresh(cage));
 	ck_assert_str_eq("fallback/1/0", cage_map_file(cage, &file_url));
 
 	ck_assert_ptr_eq(NULL, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
-	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_sias(&sias, &cage));
+	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(true, cage_disable_refresh(cage));

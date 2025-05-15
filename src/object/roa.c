@@ -8,10 +8,10 @@
 #include "validation_handler.h"
 
 static int
-decode_roa(struct signed_object *sobj, struct RouteOriginAttestation **result)
+decode_roa(struct signed_object *so, struct RouteOriginAttestation **result)
 {
 	return asn1_decode_octet_string(
-		sobj->sdata->encapContentInfo.eContent,
+		so->sdata->encapContentInfo.eContent,
 		&asn_DEF_RouteOriginAttestation,
 		(void **) result,
 		true
@@ -207,7 +207,7 @@ roa_traverse(struct cache_mapping *map, struct rpki_certificate *parent)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
-	struct signed_object sobj;
+	struct signed_object so;
 	struct rpki_certificate ee;
 	struct RouteOriginAttestation *roa;
 	int error;
@@ -216,28 +216,25 @@ roa_traverse(struct cache_mapping *map, struct rpki_certificate *parent)
 	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map->path);
+	error = signed_object_decode(&so, map);
 	if (error)
 		goto end1;
-	error = decode_roa(&sobj, &roa);
+	error = decode_roa(&so, &roa);
 	if (error)
 		goto end2;
 
 	/* Prepare validation arguments */
-	rpki_certificate_init_ee(&ee, parent, false);
+	cer_init_ee(&ee, parent, false);
 
 	/* Validate and handle everything */
-	error = signed_object_validate(&sobj, &arcs, &ee);
+	error = signed_object_validate(&so, &ee, &arcs);
 	if (error)
 		goto end4;
 	error = __handle_roa(roa, ee.resources);
-	if (error)
-		goto end4;
-	error = refs_validate_ee(&ee.sias, &parent->rpp.crl.map->url, &map->url);
 
-end4:	rpki_certificate_cleanup(&ee);
+end4:	cer_cleanup(&ee);
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
-end2:	signed_object_cleanup(&sobj);
+end2:	signed_object_cleanup(&so);
 end1:	fnstack_pop();
 	return error;
 }

@@ -24,6 +24,7 @@
 #include "object/ghostbusters.h"
 #include "object/manifest.h"
 #include "object/roa.h"
+#include "object/signed_object.h"
 #include "object/tal.h"
 #include "task.h"
 #include "thread_var.h"
@@ -44,7 +45,7 @@ SLIST_HEAD(cert_stack, rpki_certificate);
 
 struct ski_arguments {
 	X509 *cert;
-	OCTET_STRING_t *sid;
+	OCTET_STRING_t const *sid;
 };
 
 struct bgpsec_ski {
@@ -53,7 +54,7 @@ struct bgpsec_ski {
 };
 
 /* Callback method to fetch repository objects */
-typedef int (access_method_exec)(struct sia_uris *);
+typedef int (access_method_exec)(struct extension_uris *);
 
 struct ad_metadata {
 	char const *name;
@@ -445,8 +446,9 @@ validate_public_key(struct rpki_certificate *cert)
 	return 0;
 }
 
-int
-certificate_validate_rfc6487(struct rpki_certificate *cert)
+/* Validates RFC 6487 compliance (except extensions) */
+static int
+validate_rfc6487(struct rpki_certificate *cert)
 {
 	int error;
 
@@ -643,9 +645,9 @@ find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
  * skips unnecessary validations when using the PKCS7 API. Maybe the methods
  * we're using have something similar.
  */
-int
-certificate_validate_signature(X509 *cert, ANY_t *signedData,
-    SignatureValue_t *signature)
+static int
+validate_signature(X509 *cert, ANY_t *signedData,
+    SignatureValue_t const *signature)
 {
 	static const uint8_t EXPLICIT_SET_OF_TAG = 0x31;
 
@@ -748,7 +750,7 @@ end:
 }
 
 static X509 *
-certificate_load(char const *path)
+load_certificate(char const *path)
 {
 	X509 *cert = NULL;
 	BIO *bio;
@@ -774,8 +776,8 @@ end:	BIO_free(bio);
 }
 
 void
-rpki_certificate_init_ee(struct rpki_certificate *ee,
-    struct rpki_certificate *parent, bool force_inherit)
+cer_init_ee(struct rpki_certificate *ee, struct rpki_certificate *parent,
+    bool force_inherit)
 {
 	memset(ee, 0, sizeof(*ee));
 	ee->type = CERTYPE_EE;
@@ -788,24 +790,24 @@ rpki_certificate_init_ee(struct rpki_certificate *ee,
 }
 
 void
-rpki_certificate_cleanup(struct rpki_certificate *cert)
+cer_cleanup(struct rpki_certificate *cert)
 {
 	map_cleanup(&cert->map);
 	if (cert->x509 != NULL)
 		X509_free(cert->x509);
 	resources_destroy(cert->resources);
-	sias_cleanup(&cert->sias);
+	exturis_cleanup(&cert->uris);
 	// XXX Recursive. Try refcounting the resources.
 	if (cert->parent)
-		rpki_certificate_free(cert->parent);
+		cer_free(cert->parent);
 	rpp_cleanup(&cert->rpp);
 }
 
 void
-rpki_certificate_free(struct rpki_certificate *cert)
+cer_free(struct rpki_certificate *cert)
 {
 	if (atomic_fetch_sub(&cert->refcount, 1) == 1) {
-		rpki_certificate_cleanup(cert);
+		cer_cleanup(cert);
 		free(cert);
 	}
 }
@@ -919,8 +921,12 @@ complain_crl_stale(X509_CRL *crl)
 	free(nu);
 }
 
-int
-certificate_validate_chain(struct rpki_certificate *cert)
+/*
+ * Performs the basic (RFC 5280, presumably) chain validation.
+ * (Ignores the IP and AS extensions.)
+ */
+static int
+validate_chain(struct rpki_certificate *cert)
 {
 	/* Reference: openbsd/src/usr.bin/openssl/verify.c */
 
@@ -1098,7 +1104,7 @@ handle_asn_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 }
 
 static int
-__certificate_get_resources(struct rpki_certificate *cert,
+__convert_resources(struct rpki_certificate *cert,
     int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
     char const *policy_rfc, char const *bad_ext_rfc)
 {
@@ -1155,30 +1161,39 @@ __certificate_get_resources(struct rpki_certificate *cert,
 	return 0;
 }
 
-/* Copies the resources from @cert to @resources. */
-int
-certificate_get_resources(struct rpki_certificate *cert)
+/**
+ * Copies the resources from cert->x509 into cert->resources.
+ *
+ * Note: One reason why this is separate from the validate_extensions functions
+ * is because it needs to be handled after the policy has been extracted from
+ * the certificate policies extension, and handle_extensions() currently does
+ * not care about order. I don't know if you'll find other reasons if you choose
+ * to migrate it.
+ */
+static int
+convert_resources(struct rpki_certificate *cert)
 {
 	switch (cert->policy) {
 	case RPKI_POLICY_RFC6484:
-		return __certificate_get_resources(cert,
+		return __convert_resources(cert,
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
 		    "6484", "8360");
 	case RPKI_POLICY_RFC8360:
-		return __certificate_get_resources(cert,
+		return __convert_resources(cert,
 		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
 		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
 		    "8360", "6484");
 	}
 
 	pr_crit("Unknown policy: %u", cert->policy);
+	return EINVAL;
 }
 
 static int
 handle_rpkiManifest(struct uri const *uri, void *arg)
 {
-	struct sia_uris *uris = arg;
+	struct extension_uris *uris = arg;
 	char const *rm;
 
 	rm = uri_str(uri);
@@ -1201,7 +1216,7 @@ handle_rpkiManifest(struct uri const *uri, void *arg)
 static int
 handle_caRepository(struct uri const *uri, void *arg)
 {
-	struct sia_uris *uris = arg;
+	struct extension_uris *uris = arg;
 	char const *cr;
 
 	cr = uri_str(uri);
@@ -1224,7 +1239,7 @@ handle_caRepository(struct uri const *uri, void *arg)
 static int
 handle_rpkiNotify(struct uri const *uri, void *arg)
 {
-	struct sia_uris *uris = arg;
+	struct extension_uris *uris = arg;
 	char const *rn;
 
 	rn = uri_str(uri);
@@ -1247,7 +1262,7 @@ handle_rpkiNotify(struct uri const *uri, void *arg)
 static int
 handle_signedObject(struct uri const *uri, void *arg)
 {
-	struct sia_uris *sias = arg;
+	struct extension_uris *sias = arg;
 	char const *so;
 
 	so = uri_str(uri);
@@ -1295,7 +1310,7 @@ handle_ski_ee(void *ext, void *arg)
 {
 	ASN1_OCTET_STRING *ski = ext;
 	struct ski_arguments *args = arg;
-	OCTET_STRING_t *sid;
+	OCTET_STRING_t const *sid;
 	int error;
 
 	error = validate_public_key_hash(args->cert, ski, "SKI");
@@ -1424,7 +1439,7 @@ static int
 handle_cdp(void *ext, void *arg)
 {
 	STACK_OF(DIST_POINT) *crldp = ext;
-	struct sia_uris *sias = arg;
+	struct extension_uris *sias = arg;
 	DIST_POINT *dp;
 	GENERAL_NAMES *names;
 	int i;
@@ -1559,7 +1574,7 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 static int
 handle_caIssuers(struct uri const *uri, void *arg)
 {
-	struct sia_uris *sias = arg;
+	struct extension_uris *sias = arg;
 
 	if (!uri_is_rsync(uri)) {
 		pr_val_debug("Ignoring non-rsync caIssuers '%s'.", uri_str(uri));
@@ -1586,7 +1601,7 @@ static int
 handle_sia_ca(void *ext, void *arg)
 {
 	SIGNATURE_INFO_ACCESS *sia = ext;
-	struct sia_uris *uris = arg;
+	struct extension_uris *uris = arg;
 	int error;
 
 	/* rsync */
@@ -1661,6 +1676,36 @@ handle_cp(void *ext, void *arg)
 	return 0;
 }
 
+/* rfc6487#section-4.8.7 */
+static int
+validate_aia(struct rpki_certificate *cert)
+{
+	if (!uri_equals(&cert->parent->map.url, &cert->uris.caIssuers))
+		return pr_val_err("Certificate's caIssuers (%s) does not match parent certificate's URL (%s).",
+		    uri_str(&cert->parent->map.url),
+		    uri_str(&cert->uris.caIssuers));
+
+	return 0;
+}
+
+static int
+validate_cdp(struct rpki_certificate *cer)
+{
+	struct uri *crl_url = &cer->parent->rpp.crl.map->url;
+
+	if (uri_str(&cer->uris.crldp) == NULL)
+		pr_crit("Certificate's CRL Distribution Point was not recorded.");
+	if (uri_str(crl_url) == NULL)
+		pr_crit("Manifest's CRL was not recorded.");
+
+	if (!uri_equals(&cer->uris.crldp, crl_url)) {
+		return pr_val_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
+		    uri_str(&cer->uris.crldp), uri_str(crl_url));
+	}
+
+	return 0;
+}
+
 /* Validates the certificate extensions, Trust Anchor style. */
 static int
 validate_ta_extensions(struct rpki_certificate *cert)
@@ -1671,9 +1716,9 @@ validate_ta_extensions(struct rpki_certificate *cert)
 	    { ext_ski(), true,  handle_ski_ca, cert->x509     },
 	    { ext_aki(), false, handle_aki_ta, cert->x509     },
 	    { ext_ku(),  true,  handle_ku_ca,                 },
-	    { ext_sia(), true,  handle_sia_ca, &cert->sias    },
+	    { ext_sia(), true,  handle_sia_ca, &cert->uris    },
 	    { ext_cp(),  true,  handle_cp,     &cert->policy  },
-	    /* These are handled by certificate_get_resources(). */
+	    /* These are handled by convert_resources(). */
 	    { ext_ir(),  false,                               },
 	    { ext_ar(),  false,                               },
 	    { ext_ir2(), false,                               },
@@ -1700,11 +1745,11 @@ validate_ca_extensions(struct rpki_certificate *cert)
 	    { ext_ski(), true,  handle_ski_ca, cert->x509          },
 	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
 	    { ext_ku(),  true,  handle_ku_ca,                      },
-	    { ext_cdp(), true,  handle_cdp,    &cert->sias         },
-	    { ext_aia(), true,  handle_aia,    &cert->sias         },
-	    { ext_sia(), true,  handle_sia_ca, &cert->sias         },
+	    { ext_cdp(), true,  handle_cdp,    &cert->uris         },
+	    { ext_aia(), true,  handle_aia,    &cert->uris         },
+	    { ext_sia(), true,  handle_sia_ca, &cert->uris         },
 	    { ext_cp(),  true,  handle_cp,     &cert->policy       },
-	    /* These are handled by certificate_get_resources(). */
+	    /* These are handled by convert_resources(). */
 	    { ext_ir(),  false,                                    },
 	    { ext_ar(),  false,                                    },
 	    { ext_ir2(), false,                                    },
@@ -1716,15 +1761,20 @@ validate_ca_extensions(struct rpki_certificate *cert)
 	error = handle_extensions(handlers, X509_get0_extensions(cert->x509));
 	if (error)
 		return error;
-	error = certificate_validate_aia(cert);
+	error = validate_aia(cert);
 	if (error)
 		return error;
-	return validate_cdp(&cert->sias, &cert->parent->rpp.crl.map->url);
+	return validate_cdp(cert);
 }
 
-int
-certificate_validate_extensions_ee(struct rpki_certificate *cert,
-    OCTET_STRING_t *sid)
+/*
+ * Validates the certificate extensions, End-Entity style.
+ *
+ * Also initializes the second argument with the references found in the
+ * extensions.
+ */
+static int
+validate_extensions_ee(struct rpki_certificate *cert, OCTET_STRING_t const *sid)
 {
 	struct ski_arguments ski_args;
 	struct extension_handler handlers[] = {
@@ -1732,9 +1782,9 @@ certificate_validate_extensions_ee(struct rpki_certificate *cert,
 	    { ext_ski(), true,  handle_ski_ee, &ski_args           },
 	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
 	    { ext_ku(),  true,  handle_ku_ee,                      },
-	    { ext_cdp(), true,  handle_cdp,    &cert->sias         },
-	    { ext_aia(), true,  handle_aia,    &cert->sias         },
-	    { ext_sia(), true,  handle_sia_ee, &cert->sias         },
+	    { ext_cdp(), true,  handle_cdp,    &cert->uris         },
+	    { ext_aia(), true,  handle_aia,    &cert->uris         },
+	    { ext_sia(), true,  handle_sia_ee, &cert->uris         },
 	    { ext_cp(),  true,  handle_cp,     &cert->policy       },
 	    { ext_ir(),  false,                                    },
 	    { ext_ar(),  false,                                    },
@@ -1747,12 +1797,6 @@ certificate_validate_extensions_ee(struct rpki_certificate *cert,
 	ski_args.sid = sid;
 
 	return handle_extensions(handlers, X509_get0_extensions(cert->x509));
-}
-
-int
-certificate_validate_extensions_bgpsec(void)
-{
-	return 0; /* TODO (#58) */
 }
 
 static bool
@@ -1784,7 +1828,7 @@ has_bgpsec_router_eku(X509 *cert)
  * certificate.
  */
 static enum cert_type
-get_certificate_type(struct rpki_certificate *cert)
+get_cert_type(struct rpki_certificate *cert)
 {
 	if (cert->parent == NULL)
 		return CERTYPE_TA;
@@ -1799,17 +1843,6 @@ get_certificate_type(struct rpki_certificate *cert)
 		return CERTYPE_BGPSEC;
 
 	return CERTYPE_UNKNOWN;
-}
-
-int
-certificate_validate_aia(struct rpki_certificate *cert)
-{
-	if (!uri_equals(&cert->parent->map.url, &cert->sias.caIssuers))
-		return pr_val_err("Certificate's caIssuers (%s) does not match parent certificate's URL (%s).",
-		    uri_str(&cert->parent->map.url),
-		    uri_str(&cert->sias.caIssuers));
-
-	return 0;
 }
 
 static unsigned int
@@ -1828,7 +1861,7 @@ init_resources(struct rpki_certificate *cert)
 
 	cert->resources = resources_create(cert->policy, false);
 
-	error = certificate_get_resources(cert);
+	error = convert_resources(cert);
 	if (error)
 		return error;
 
@@ -1837,7 +1870,7 @@ init_resources(struct rpki_certificate *cert)
 	 * "The INR extension(s) of this TA MUST contain a non-empty set of
 	 * number resources."
 	 * The "It MUST NOT use the "inherit" form of the INR extension(s)"
-	 * part is already handled in certificate_get_resources().
+	 * part is already handled in convert_resources().
 	 */
 	if (cert->type == CERTYPE_TA && resources_empty(cert->resources))
 		return pr_val_err("Trust Anchor certificate does not define any number resources.");
@@ -1846,7 +1879,7 @@ init_resources(struct rpki_certificate *cert)
 }
 
 static int
-certificate_validate(struct rpki_certificate *cert)
+validate_certificate(struct rpki_certificate *cert)
 {
 	int error;
 
@@ -1855,14 +1888,14 @@ certificate_validate(struct rpki_certificate *cert)
 
 	fnstack_push_map(&cert->map);
 
-	cert->x509 = certificate_load(cert->map.path);
+	cert->x509 = load_certificate(cert->map.path);
 	if (!cert->x509) {
 		error = EINVAL;
 		goto end;
 	}
-	cert->type = get_certificate_type(cert);
+	cert->type = get_cert_type(cert);
 
-	error = certificate_validate_chain(cert);
+	error = validate_chain(cert);
 	if (error)
 		goto end;
 
@@ -1883,7 +1916,7 @@ certificate_validate(struct rpki_certificate *cert)
 		goto end;
 	}
 
-	error = certificate_validate_rfc6487(cert);
+	error = validate_rfc6487(cert);
 	if (error)
 		goto end;
 
@@ -1900,7 +1933,7 @@ end:	fnstack_pop();
 }
 
 validation_verdict
-certificate_traverse(struct rpki_certificate *ca)
+cer_traverse(struct rpki_certificate *ca)
 {
 	struct cache_cage *cage;
 	struct cache_mapping mft;
@@ -1910,30 +1943,30 @@ certificate_traverse(struct rpki_certificate *ca)
 	validation_verdict vv;
 
 	if (!ca->x509) {
-		if (certificate_validate(ca) != 0)
+		if (validate_certificate(ca) != 0)
 			return VV_FAIL;
 		if (ca->type != CERTYPE_TA && ca->type != CERTYPE_CA)
 			return VV_CONTINUE;
 	} /* else "we already did this, and returned VV_BUSY" */
 
-	vv = cache_refresh_by_sias(&ca->sias, &cage);
+	vv = cache_refresh_by_uris(&ca->uris, &cage);
 	if (vv == VV_BUSY)
 		return VV_BUSY;
 	if (vv == VV_FAIL) {
 		pr_val_err("caRepository '%s' could not be refreshed, "
 		    "and there is no fallback in the cache. "
 		    "I'm going to have to skip it.",
-		    uri_str(&ca->sias.caRepository));
+		    uri_str(&ca->uris.caRepository));
 		return VV_FAIL;
 	}
 
-	mft.url = ca->sias.rpkiManifest;
+	mft.url = ca->uris.rpkiManifest;
 retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
 	if (!mft.path) {
 		if (cage_disable_refresh(cage))
 			goto retry;
 		pr_val_err("caRepository '%s' is missing a manifest.",
-		    uri_str(&ca->sias.caRepository));
+		    uri_str(&ca->uris.caRepository));
 		vv = VV_FAIL;
 		goto end;
 	}
@@ -1958,9 +1991,70 @@ retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
 
 	if (queued > 0)
 		task_wakeup();
-	cache_commit_rpp(cage_rpkiNotify(cage), &ca->sias.caRepository,
+	cache_commit_rpp(cage_rpkiNotify(cage), &ca->uris.caRepository,
 	    &ca->rpp);
 
 end:	free(cage);
 	return vv;
+}
+
+static int
+validate_signedObject(struct extension_uris const *exts, struct uri const *url)
+{
+	if (uri_str(&exts->signedObject) == NULL)
+		pr_crit("Certificate's signedObject was not recorded.");
+
+	if (!uri_equals(&exts->signedObject, url))
+		return pr_val_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
+		    uri_str(&exts->signedObject), uri_str(url));
+
+	return 0;
+}
+
+/**
+ * Ensures the extension URIs of @ee match the actual URIs.
+ *
+ * @so_url: URL of the signed object that contains the EE certificate.
+ */
+static int
+validate_ee_refs(struct rpki_certificate *ee, struct signed_object *so)
+{
+	int error;
+
+	error = validate_cdp(ee);
+	if (error)
+		return error;
+
+	return validate_signedObject(&ee->uris, &so->map->url);
+}
+
+int
+cer_validate_ee(struct rpki_certificate *ee, struct signed_object *so)
+{
+	int error;
+
+	x509_name_pr_clutter("Issuer", X509_get_issuer_name(ee->x509));
+
+	error = validate_chain(ee);
+	if (error)
+		return error;
+	error = validate_rfc6487(ee);
+	if (error)
+		return error;
+	error = validate_extensions_ee(ee, so->sid);
+	if (error)
+		return error;
+	error = validate_aia(ee);
+	if (error)
+		return error;
+	error = validate_signature(ee->x509, &so->cinfo->content, so->signature);
+	if (error)
+		return error;
+
+	resources_set_policy(ee->resources, ee->policy);
+	error = convert_resources(ee);
+	if (error)
+		return error;
+
+	return validate_ee_refs(ee, so);
 }

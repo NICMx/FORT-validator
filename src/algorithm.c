@@ -90,14 +90,14 @@ validate_certificate_public_key_algorithm_bgpsec(X509_ALGOR *pa)
 }
 
 int
-validate_cms_hashing_algorithm(AlgorithmIdentifier_t *id, char const *what)
+validate_cms_hash_algorithm(AlgorithmIdentifier_t *id, char const *what)
 {
 	int error;
 
 	if (id == NULL)
 		return pr_val_err("The hash algorithm of the '%s' is absent", what);
 
-	error = validate_cms_hashing_algorithm_oid(&id->algorithm, what);
+	error = validate_cms_hash_algorithm_oid(&id->algorithm, what);
 	if (error)
 		return error;
 
@@ -127,7 +127,7 @@ validate_cms_hashing_algorithm(AlgorithmIdentifier_t *id, char const *what)
 }
 
 int
-validate_cms_hashing_algorithm_oid(OBJECT_IDENTIFIER_t *oid, char const *what)
+validate_cms_hash_algorithm_oid(OBJECT_IDENTIFIER_t *oid, char const *what)
 {
 	/*
 	 * RFC 7935:

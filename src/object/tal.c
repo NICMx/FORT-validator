@@ -167,9 +167,9 @@ validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 	ta->tal = tal;
 	atomic_init(&ta->refcount, 1);
 
-	vv = certificate_traverse(ta);
+	vv = cer_traverse(ta);
 
-	rpki_certificate_free(ta);
+	cer_free(ta);
 	return vv;
 }
 
@@ -245,7 +245,7 @@ pick_up_work(void *arg)
 	while ((task = task_dequeue(task)) != NULL) {
 		switch (task->type) {
 		case VTT_RPP:
-			if (certificate_traverse(task->u.ca) == VV_BUSY) {
+			if (cer_traverse(task->u.ca) == VV_BUSY) {
 				task_requeue_dormant(task);
 				task = NULL;
 			}

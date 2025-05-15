@@ -11,9 +11,9 @@
 #define ENOTIMPLEMENTED 3173
 
 typedef char const *validation_verdict;
-extern validation_verdict const VV_CONTINUE;
-extern validation_verdict const VV_FAIL;
-extern validation_verdict const VV_BUSY;
+extern validation_verdict const VV_CONTINUE;	/* "No issues yet" */
+extern validation_verdict const VV_FAIL;	/* "Validation failed" */
+extern validation_verdict const VV_BUSY;	/* "Try again later" */
 
 bool str_starts_with(char const *, char const *);
 bool str_ends_with(char const *, char const *);

@@ -3,10 +3,11 @@
 
 #include "types/uri.h"
 
-// XXX document this better
 struct cache_mapping {
-	struct uri url;		/* Normalized */
-	char *path;		/* Normalized */
+	/* Global identifier of a file */
+	struct uri url;
+	/* Cache location where the file was (or will be) downloaded */
+	char *path;
 };
 
 char const *map_val_get_printable(struct cache_mapping const *);

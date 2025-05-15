@@ -1,20 +1,23 @@
 #include "object/signed_object.h"
 
 #include "asn1/content_info.h"
+#include "asn1/signed_data.h"
 #include "log.h"
 
 int
-signed_object_decode(struct signed_object *sobj, char const *path)
+signed_object_decode(struct signed_object *so, struct cache_mapping const *map)
 {
 	int error;
 
-	error = content_info_load(path, &sobj->cinfo);
+	so->map = map;
+
+	error = content_info_load(map->path, &so->cinfo);
 	if (error)
 		return error;
 
-	error = signed_data_decode(&sobj->cinfo->content, &sobj->sdata);
+	error = signed_data_decode(&so->cinfo->content, &so->sdata);
 	if (error) {
-		content_info_free(sobj->cinfo);
+		content_info_free(so->cinfo);
 		return error;
 	}
 
@@ -67,30 +70,30 @@ validate_content_type(struct SignedData *sdata, struct oid_arcs const *oid)
 }
 
 int
-signed_object_validate(struct signed_object *sobj, struct oid_arcs const *oid,
-    struct rpki_certificate *ee)
+signed_object_validate(struct signed_object *so, struct rpki_certificate *ee,
+    struct oid_arcs const *oid)
 {
 	int error;
 
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.1 */
 	/* rfc6486#section-4.4.1 */
-	error = validate_eContentType(sobj->sdata, oid);
+	error = validate_eContentType(so->sdata, oid);
 	if (error)
 		return error;
 
 	/* rfc6482#section-2 */
 	/* rfc6486#section-4.3 */
-	error = validate_content_type(sobj->sdata, oid);
+	error = validate_content_type(so->sdata, oid);
 	if (error)
 		return error;
 
-	return signed_data_validate(&sobj->cinfo->content, sobj->sdata, ee);
+	return signed_data_validate(so, ee);
 }
 
 void
-signed_object_cleanup(struct signed_object *sobj)
+signed_object_cleanup(struct signed_object *so)
 {
-	content_info_free(sobj->cinfo);
-	ASN_STRUCT_FREE(asn_DEF_SignedData, sobj->sdata);
+	content_info_free(so->cinfo);
+	ASN_STRUCT_FREE(asn_DEF_SignedData, so->sdata);
 }

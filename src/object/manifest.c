@@ -18,10 +18,10 @@
 #include "types/uri.h"
 
 static int
-decode_manifest(struct signed_object *sobj, struct Manifest **result)
+decode_manifest(struct signed_object *so, struct Manifest **result)
 {
 	return asn1_decode_octet_string(
-		sobj->sdata->encapContentInfo.eContent,
+		so->sdata->encapContentInfo.eContent,
 		&asn_DEF_Manifest,
 		(void **) result,
 		true
@@ -192,7 +192,7 @@ validate_manifest(struct Manifest *mft, struct cache_cage *cage,
 	 * I'm going with the signed object hash function, since it appears to
 	 * be the closest match.
 	 */
-	error = validate_cms_hashing_algorithm_oid(&mft->fileHashAlg,
+	error = validate_cms_hash_algorithm_oid(&mft->fileHashAlg,
 	    "manifest file");
 	if (error)
 		return error;
@@ -411,7 +411,7 @@ manifest_traverse(struct cache_mapping const *map, struct cache_cage *cage,
 {
 	static OID oid = OID_MANIFEST;
 	struct oid_arcs arcs = OID2ARCS("manifest", oid);
-	struct signed_object sobj;
+	struct signed_object so;
 	struct rpki_certificate ee;
 	struct Manifest *mft;
 	int error;
@@ -420,10 +420,10 @@ manifest_traverse(struct cache_mapping const *map, struct cache_cage *cage,
 	fnstack_push_map(map);
 
 	/* Decode */
-	error = signed_object_decode(&sobj, map->path);
+	error = signed_object_decode(&so, map);
 	if (error)
 		goto end1;
-	error = decode_manifest(&sobj, &mft);
+	error = decode_manifest(&so, &mft);
 	if (error)
 		goto end2;
 
@@ -433,22 +433,19 @@ manifest_traverse(struct cache_mapping const *map, struct cache_cage *cage,
 		goto end3;
 
 	/* Prepare validation arguments */
-	rpki_certificate_init_ee(&ee, parent, false);
+	cer_init_ee(&ee, parent, false);
 
 	/* Validate everything */
-	error = signed_object_validate(&sobj, &arcs, &ee);
+	error = signed_object_validate(&so, &ee, &arcs);
 	if (error)
 		goto end5;
 	error = validate_manifest(mft, cage, &parent->rpp.mft);
-	if (error)
-		goto end5;
-	error = refs_validate_ee(&ee.sias, &parent->rpp.crl.map->url, &map->url);
 
-end5:	rpki_certificate_cleanup(&ee);
+end5:	cer_cleanup(&ee);
 	if (error)
 		rpp_cleanup(&parent->rpp);
 end3:	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
-end2:	signed_object_cleanup(&sobj);
+end2:	signed_object_cleanup(&so);
 end1:	fnstack_pop();
 	return error;
 }

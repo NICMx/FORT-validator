@@ -28,7 +28,7 @@ task_free(struct validation_task *task)
 {
 	switch (task->type) {
 	case VTT_RPP:
-		rpki_certificate_free(task->u.ca);
+		cer_free(task->u.ca);
 		break;
 	case VTT_TAL:
 		free(task->u.tal);

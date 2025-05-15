@@ -44,7 +44,7 @@ handle_bgpsec(X509 *cert, struct resources *parent_resources, struct rpp *pp)
 	resources = resources_create(policy, false);
 	if (resources == NULL)
 		goto revert_ski;
-	error = certificate_get_resources(cert, resources, CERTYPE_BGPSEC);
+	error = cer_get_resources(cert, resources, CERTYPE_BGPSEC);
 	if (error)
 		goto revert_resources;
 

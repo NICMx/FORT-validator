@@ -85,7 +85,7 @@ struct rpki_config {
 	struct {
 		/* Enables the protocol */
 		bool enabled;
-		/* Protocol preference; compared to http.priority */
+		/* Deprecated; does nothing. */
 		unsigned int priority;
 		/* Maximum simultaneous rsyncs */
 		unsigned int max;
@@ -99,7 +99,7 @@ struct rpki_config {
 	struct {
 		/* Enables the protocol */
 		bool enabled;
-		/* Protocol preference; compared to rsync.priority */
+		/* Deprecated; does nothing. */
 		unsigned int priority;
 		/* HTTP User-Agent request header */
 		char *user_agent;
@@ -464,7 +464,7 @@ static const struct option_field options[] = {
 		.doc = "rsync's priority for repository file fetching. Higher value means higher priority.",
 		.min = 0,
 		.max = 100,
-		/* XXX deprecated? */
+		.deprecated = true,
 	}, {
 		.id = 3002,
 		.name = "rsync.strategy",
@@ -523,7 +523,7 @@ static const struct option_field options[] = {
 		.doc = "HTTP's priority for repository file fetching. Higher value means higher priority.",
 		.min = 0,
 		.max = 100,
-		/* XXX deprecated? */
+		.deprecated = true,
 	}, {
 		.id = 9004,
 		.name = "http.user-agent",
@@ -968,7 +968,6 @@ set_default_values(void)
 	string_array_init(&rpki_config.rsync.args, trash, ARRAY_LEN(trash));
 
 	rpki_config.http.enabled = true;
-	/* Higher priority than rsync by default */
 	rpki_config.http.priority = 60;
 	rpki_config.http.user_agent = pstrdup(PACKAGE_NAME "/" PACKAGE_VERSION);
 	rpki_config.http.max_redirs = 10;
@@ -1387,12 +1386,6 @@ config_get_rsync_enabled(void)
 }
 
 unsigned int
-config_get_rsync_priority(void)
-{
-	return rpki_config.rsync.priority;
-}
-
-unsigned int
 config_rsync_max(void)
 {
 	return rpki_config.rsync.max;
@@ -1414,12 +1407,6 @@ bool
 config_get_http_enabled(void)
 {
 	return !rpki_config.work_offline && rpki_config.http.enabled;
-}
-
-unsigned int
-config_get_http_priority(void)
-{
-	return rpki_config.http.priority;
 }
 
 char const *

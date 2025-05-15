@@ -971,15 +971,15 @@ ongoing:	mutex_unlock(&tbl->lock);
 }
 
 static struct cache_node *
-find_rrdp_fallback_node(struct sia_uris *sias)
+find_rrdp_fallback_node(struct extension_uris *uris)
 {
 	struct node_key key;
 	struct cache_node *result;
 
-	if (!uri_str(&sias->rpkiNotify) || !uri_str(&sias->caRepository))
+	if (!uri_str(&uris->rpkiNotify) || !uri_str(&uris->caRepository))
 		return NULL;
 
-	init_rrdp_fallback_key(&key, &sias->rpkiNotify, &sias->caRepository);
+	init_rrdp_fallback_key(&key, &uris->rpkiNotify, &uris->caRepository);
 	result = find_node(&cache.fallback, key.id, key.idlen);
 	free(key.id);
 
@@ -987,14 +987,14 @@ find_rrdp_fallback_node(struct sia_uris *sias)
 }
 
 static struct cache_node *
-get_fallback(struct sia_uris *sias)
+get_fallback(struct extension_uris *uris)
 {
 	struct cache_node *rrdp;
 	struct cache_node *rsync;
 
-	rrdp = find_rrdp_fallback_node(sias);
-	rsync = find_node(&cache.fallback, uri_str(&sias->caRepository),
-	    uri_len(&sias->caRepository));
+	rrdp = find_rrdp_fallback_node(uris);
+	rsync = find_node(&cache.fallback, uri_str(&uris->caRepository),
+	    uri_len(&uris->caRepository));
 
 	if (rrdp == NULL)
 		return rsync;
@@ -1051,7 +1051,7 @@ cache_get_fallback(struct uri const *url)
  * XXX Fallback only if parent is fallback
  */
 validation_verdict
-cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
+cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
 {
 	struct cache_node *node;
 	struct cache_cage *cage;
@@ -1059,13 +1059,12 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 	validation_verdict vv;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
-	// XXX review result signs
 
 	/* Try RRDP + optional fallback */
-	if (uri_str(&sias->rpkiNotify) != NULL) {
-		vv = do_refresh(&cache.rrdp, &sias->rpkiNotify, &node);
+	if (uri_str(&uris->rpkiNotify) != NULL) {
+		vv = do_refresh(&cache.rrdp, &uris->rpkiNotify, &node);
 		if (vv == VV_CONTINUE) {
-			rpkiNotify = sias->rpkiNotify;
+			rpkiNotify = uris->rpkiNotify;
 			goto refresh_success;
 		}
 		if (vv == VV_BUSY)
@@ -1073,7 +1072,7 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 	}
 
 	/* Try rsync + optional fallback */
-	vv = do_refresh(&cache.rsync, &sias->caRepository, &node);
+	vv = do_refresh(&cache.rsync, &uris->caRepository, &node);
 	if (vv == VV_CONTINUE) {
 		memset(&rpkiNotify, 0, sizeof(rpkiNotify));
 		goto refresh_success;
@@ -1082,7 +1081,7 @@ cache_refresh_by_sias(struct sia_uris *sias, struct cache_cage **result)
 		return VV_BUSY;
 
 	/* Try fallback only */
-	node = get_fallback(sias);
+	node = get_fallback(uris);
 	if (!node)
 		return VV_FAIL; /* Nothing to work with */
 
@@ -1094,7 +1093,7 @@ refresh_success:
 	*result = cage = pzalloc(sizeof(struct cache_cage));
 	cage->rpkiNotify = rpkiNotify;
 	cage->refresh = node;
-	cage->fallback = get_fallback(sias);
+	cage->fallback = get_fallback(uris);
 	return VV_CONTINUE;
 }
 
@@ -1517,18 +1516,18 @@ cache_commit(void)
 }
 
 void
-sias_init(struct sia_uris *sias)
+exturis_init(struct extension_uris *uris)
 {
-	memset(sias, 0, sizeof(*sias));
+	memset(uris, 0, sizeof(*uris));
 }
 
 void
-sias_cleanup(struct sia_uris *sias)
+exturis_cleanup(struct extension_uris *uris)
 {
-	uri_cleanup(&sias->caRepository);
-	uri_cleanup(&sias->rpkiNotify);
-	uri_cleanup(&sias->rpkiManifest);
-	uri_cleanup(&sias->crldp);
-	uri_cleanup(&sias->caIssuers);
-	uri_cleanup(&sias->signedObject);
+	uri_cleanup(&uris->caRepository);
+	uri_cleanup(&uris->rpkiNotify);
+	uri_cleanup(&uris->rpkiManifest);
+	uri_cleanup(&uris->crldp);
+	uri_cleanup(&uris->caIssuers);
+	uri_cleanup(&uris->signedObject);
 }
