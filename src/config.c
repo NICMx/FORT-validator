@@ -125,6 +125,8 @@ struct rpki_config {
 		curl_off_t max_file_size;
 		/* Directory where CA certs to verify peers are found */
 		char *ca_path;
+		/* See CURLOPT_PROXY */
+		char *proxy;
 	} http;
 
 	struct {
@@ -591,6 +593,14 @@ static const struct option_field options[] = {
 		.doc = "Directory where CA certificates are found, used to verify the peer",
 		.arg_doc = "<directory>",
 		.json_null_allowed = false,
+	}, {
+		.id = 9013,
+		.name = "http.proxy",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, http.proxy),
+		.doc = "Name of proxy to use",
+		.arg_doc = "<URI>",
+		.json_null_allowed = true,
 	},
 
 	/* Logging fields */
@@ -980,6 +990,7 @@ set_default_values(void)
 	rpki_config.http.low_speed_time = 10;
 	rpki_config.http.max_file_size = 2000000000;
 	rpki_config.http.ca_path = NULL; /* Use system default */
+	rpki_config.http.proxy = NULL;
 
 	rpki_config.log.enabled = true;
 	rpki_config.log.tag = NULL;
@@ -1013,6 +1024,8 @@ set_default_values(void)
 static int
 validate_config(void)
 {
+	char const *proxy;
+
 	if (rpki_config.mode == PRINT_FILE)
 		return 0;
 
@@ -1039,6 +1052,14 @@ validate_config(void)
 
 	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm, true))
 		return pr_op_err("Invalid slurm location.");
+
+	if (rpki_config.http.proxy == NULL) {
+		proxy = curl_getenv("https_proxy");
+		if (proxy == NULL)
+			proxy = curl_getenv("HTTPS_PROXY");
+		if (proxy != NULL && proxy[0] != '\0')
+			rpki_config.http.proxy = pstrdup(proxy);
+	}
 
 	return 0;
 }
@@ -1400,6 +1421,12 @@ unsigned int
 config_get_http_retry_interval(void)
 {
 	return rpki_config.http.retry.interval;
+}
+
+char const *
+config_get_http_proxy(void)
+{
+	return rpki_config.http.proxy;
 }
 
 char const *
