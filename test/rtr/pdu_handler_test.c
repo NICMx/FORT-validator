@@ -386,19 +386,20 @@ START_TEST(test_bad_session_id)
 }
 END_TEST
 
-static Suite *create_suite(void)
+static Suite *
+create_suite(void)
 {
 	Suite *suite;
 	TCase *core, *error;
 
 	core = tcase_create("RFC8210-Defined Protocol Sequences");
 	tcase_add_test(core, test_start_or_restart);
-//	tcase_add_test(core, test_typical_exchange);
-//	tcase_add_test(core, test_no_incremental_update_available);
-//	tcase_add_test(core, test_cache_has_no_data_available);
+	tcase_add_test(core, test_typical_exchange);
+	tcase_add_test(core, test_no_incremental_update_available);
+	tcase_add_test(core, test_cache_has_no_data_available);
 
 	error = tcase_create("Unhappy path cases");
-//	tcase_add_test(error, test_bad_session_id);
+	tcase_add_test(error, test_bad_session_id);
 
 	suite = suite_create("PDU Handler");
 	suite_add_tcase(suite, core);
@@ -406,15 +407,13 @@ static Suite *create_suite(void)
 	return suite;
 }
 
-int main(void)
+int
+main(void)
 {
-	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
 
-	suite = create_suite();
-
-	runner = srunner_create(suite);
+	runner = srunner_create(create_suite());
 	srunner_run_all(runner, CK_NORMAL);
 	tests_failed = srunner_ntests_failed(runner);
 	srunner_free(runner);

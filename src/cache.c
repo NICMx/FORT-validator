@@ -1005,27 +1005,29 @@ get_fallback(struct extension_uris *uris)
 }
 
 /* Do not free nor modify the result. */
-char *
-cache_refresh_by_url(struct uri const *url)
+validation_verdict
+cache_refresh_by_url(struct uri const *url, char const **result)
 {
 	struct cache_node *node = NULL;
-
-	// XXX review result signs
+	validation_verdict vv;
 
 	if (uri_is_https(url))
-		do_refresh(&cache.https, url, &node);
+		vv = do_refresh(&cache.https, url, &node);
 	else if (uri_is_rsync(url))
-		do_refresh(&cache.rsync, url, &node);
+		vv = do_refresh(&cache.rsync, url, &node);
+	else
+		vv = VV_FAIL;
 
-	return node ? node->path : NULL;
+	*result = node ? node->path : NULL;
+	return vv;
 }
 
 /*
  * HTTPS (TAs) and rsync only; don't use this for RRDP.
  * Do not free nor modify the result.
  */
-char *
-cache_get_fallback(struct uri const *url)
+validation_verdict
+cache_get_fallback(struct uri const *url, char const **result)
 {
 	struct cache_node *node;
 
@@ -1039,10 +1041,12 @@ cache_get_fallback(struct uri const *url)
 	node = find_node(&cache.fallback, uri_str(url), uri_len(url));
 	if (!node) {
 		pr_val_debug("Cache data unavailable.");
-		return NULL;
+		*result = NULL;
+		return VV_CONTINUE;
 	}
 
-	return node->path;
+	*result = node->path;
+	return VV_CONTINUE;
 }
 
 /*
@@ -1127,9 +1131,17 @@ cage_map_file(struct cache_cage *cage, struct uri const *url)
 	return file;
 }
 
-/* Returns true if fallback should be attempted */
+/*
+ * If refresh enabled,
+ * 	Switches to fallback.
+ * 	If fallback unavailable, disables the cage.
+ * Else, if fallback enabled, disables the cage.
+ * Else (if cage disabled) does nothing.
+ *
+ * Returns true if the next option should be attempted.
+ */
 bool
-cage_disable_refresh(struct cache_cage *cage)
+cage_downgrade(struct cache_cage *cage)
 {
 	/*
 	 * Remember: In addition to honoring the consts of cache->refresh and
@@ -1137,20 +1149,13 @@ cage_disable_refresh(struct cache_cage *cage)
 	 * modified either.
 	 */
 
-	bool enabled = (cage->refresh != NULL);
-	cage->refresh = NULL;
-
-	if (cage->fallback == NULL) {
-		pr_val_debug("There is no fallback.");
-		return false;
+	if (cage->refresh) {
+		cage->refresh = NULL;
+		return cage->fallback != NULL;
 	}
-	if (!enabled) {
-		pr_val_debug("Fallback exhausted.");
-		return false;
-	}
-
-	pr_val_debug("Attempting fallback.");
-	return true;
+	if (cage->fallback)
+		cage->fallback = NULL;
+	return false;
 }
 
 struct mft_meta const *
@@ -1186,7 +1191,7 @@ cache_commit_rpp(struct uri const *rpkiNotify, struct uri const *caRepository,
 }
 
 void
-cache_commit_file(struct cache_mapping *map)
+cache_commit_file(struct cache_mapping const *map)
 {
 	struct cache_commit *commit;
 
@@ -1194,8 +1199,7 @@ cache_commit_file(struct cache_mapping *map)
 	memset(&commit->rpkiNotify, 0, sizeof(commit->rpkiNotify));
 	memset(&commit->caRepository, 0, sizeof(commit->caRepository));
 	commit->files = pmalloc(sizeof(*map));
-	uri_copy(&commit->files[0].url, &map->url);
-	commit->files[0].path = pstrdup(map->path);
+	map_copy(commit->files, map);
 	commit->nfiles = 1;
 	memset(&commit->mft, 0, sizeof(commit->mft));
 

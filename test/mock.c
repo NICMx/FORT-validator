@@ -133,17 +133,33 @@ MOCK_VOID(fnstack_pop, void)
 MOCK_VOID(fnstack_cleanup, void)
 
 void
-ck_assert_str(char const *expected, char const *actual)
-{
-	if (expected)
-		ck_assert_str_eq(expected, actual);
-	else
-		ck_assert_ptr_eq(NULL, actual);
-}
-
-void
 ck_assert_uri(char const *expected, struct uri const *actual)
 {
 	ck_assert_str_eq(expected, uri_str(actual));
 	ck_assert_uint_eq(strlen(expected), uri_len(actual));
+}
+
+void
+touch_dir(char const *dir)
+{
+	ck_assert_int_eq(0, file_mkdir(dir, true));
+}
+
+void
+touch_file(char const *file)
+{
+	int fd;
+	int error;
+
+	pr_op_debug("touch %s", file);
+
+	fd = open(file, O_WRONLY | O_CREAT, CACHE_FILEMODE);
+	if (fd < 0) {
+		error = errno;
+		if (error == EEXIST)
+			return;
+		ck_abort_msg("open(%s): %s", file, strerror(error));
+	}
+
+	close(fd);
 }

@@ -534,17 +534,8 @@ END_TEST
 
 START_TEST(test_parse_notification_bad_uri)
 {
-	/* XXX not rejected. */
-	/* test_parse_notification_error("resources/rrdp/notif-bad-uri-1.xml"); */
-	/* test_parse_notification_error("resources/rrdp/notif-bad-uri-2.xml"); */
-	/*
-	 * FIXME not rejected.
-	 * Although this might be intended. If curl and rsync can make sense out
-	 * of the space (perhaps by automatically converting it), there would
-	 * perhaps be no real reason to complain here.
-	 * Needs more research.
-	 */
-	/* test_parse_notification_error("resources/rrdp/notif-bad-uri-3.xml"); */
+	test_parse_notification_error("resources/rrdp/notif-bad-uri-1.xml");
+	test_parse_notification_error("resources/rrdp/notif-bad-uri-3.xml");
 	test_parse_notification_error("resources/rrdp/notif-bad-uri-4.xml");
 }
 END_TEST

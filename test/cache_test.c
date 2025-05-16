@@ -40,20 +40,13 @@
 
 static unsigned int rsync_counter; /* Times the rsync function was called */
 
-static void
-touch_file(char const *dir)
-{
-	char cmd[64];
-	ck_assert(snprintf(cmd, sizeof(cmd), "touch %s/file", dir) < sizeof(cmd));
-	ck_assert_int_eq(0, system(cmd));
-}
-
 static struct uri queued_url;
 static char *queued_path;
 
 int
 rsync_queue(struct uri const *url, char const *path)
 {
+	char file[64];
 	rsync_counter++;
 
 	if (dl_error) {
@@ -62,8 +55,11 @@ rsync_queue(struct uri const *url, char const *path)
 	}
 
 	printf("Simulating rsync: %s -> %s\n", uri_str(url), path);
-	ck_assert_int_eq(0, mkdir(path, CACHE_FILEMODE));
-	touch_file(path);
+	touch_dir(path);
+	ck_assert_int_eq(strlen(path) + 2, snprintf(file, 64, "%s/%s", path, "0"));
+	touch_file(file);
+	ck_assert_int_eq(strlen(path) + 2, snprintf(file, 64, "%s/%s", path, "1"));
+	touch_file(file);
 
 	uri_copy(&queued_url, url);
 	queued_path = pstrdup(path);
@@ -139,14 +135,17 @@ finish_rsync(void)
 static struct cache_cage *
 rsync_dance(char *url)
 {
+	/* Queue the rsync (includes rsync simulation) */
 	ck_assert_ptr_eq(NULL, run_dl_rsync(url, VV_BUSY, 1));
+	/* Signal rsync completion; no need to wait */
 	finish_rsync();
+	/* Return cached results */
 	return run_dl_rsync(url, VV_CONTINUE, 0);
 }
 
 static void
 run_dl_https(char const *url, unsigned int expected_calls,
-    char const *expected_result)
+    validation_verdict expected_vv, char const *expected_result)
 {
 	struct uri uri;
 	char const *result;
@@ -156,34 +155,49 @@ run_dl_https(char const *url, unsigned int expected_calls,
 	rsync_counter = 0;
 	https_counter = 0;
 	printf("---- Downloading... ----\n");
-	result = cache_refresh_by_url(&uri);
+	ck_assert_str_eq(expected_vv, cache_refresh_by_url(&uri, &result));
 	printf("---- Downloaded. ----\n");
 	ck_assert_uint_eq(0, rsync_counter);
 	ck_assert_uint_eq(expected_calls, https_counter);
 
-	ck_assert_str(expected_result, result);
-	ck_assert_str(NULL, cache_get_fallback(&uri));
+	ck_assert_pstr_eq(expected_result, result);
+	ck_assert_str_eq(VV_CONTINUE, cache_get_fallback(&uri, &result));
+	ck_assert_ptr_eq(NULL, result);
 
 	uri_cleanup(&uri);
 }
 
+static void
+ck_cage(struct cache_cage *cage, bool has_refresh, bool has_fallback)
+{
+	ck_assert_ptr_ne(NULL, cage);
+	if (has_refresh)
+		ck_assert_ptr_ne(NULL, cage->refresh);
+	else
+		ck_assert_ptr_eq(NULL, cage->refresh);
+	if (has_fallback)
+		ck_assert_ptr_ne(NULL, cage->fallback);
+	else
+		ck_assert_ptr_eq(NULL, cage->fallback);
+}
 
 static void
-ck_cage(struct cache_cage *cage, char const *url,
-    char const *refresh, char const *fallback)
+ck_cage_map(struct cache_cage *cage, char const *url,
+    char const *opt1, char const *opt2)
 {
 	struct uri uri;
-	struct cache_node const *bkp;
+	struct cache_node const *refresh, *fallback;
 
 	ck_assert_ptr_eq(NULL, uri_init(&uri, url));
+	refresh = cage->refresh;
+	fallback = cage->fallback;
 
-	ck_assert_str(refresh, cage_map_file(cage, &uri));
+	ck_assert_pstr_eq(opt1, cage_map_file(cage, &uri));
+	ck_assert_uint_eq(!!opt2, cage_downgrade(cage));
+	ck_assert_pstr_eq(opt2, cage_map_file(cage, &uri));
 
-	bkp = cage->refresh;
-	cage_disable_refresh(cage);
-	ck_assert_str(fallback, cage_map_file(cage, &uri));
-	cage->refresh = bkp;
-
+	cage->refresh = refresh;
+	cage->fallback = fallback;
 	uri_cleanup(&uri);
 }
 
@@ -401,8 +415,9 @@ static void
 unfreshen(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
 	node->state = DLS_OUTDATED;
-	node->attempt_ts -= 4;
-	node->attempt_ts -= 4;
+	if (node->attempt_ts)
+		node->attempt_ts -= 4;
+	node->success_ts -= 4;
 }
 
 static int
@@ -453,17 +468,18 @@ START_TEST(test_cache_download_rsync)
 	printf("==== Startup ====\n");
 	cage = rsync_dance("rsync://a.b.c/d");
 	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
-	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
+	ck_cage(cage, true, false);
+	ck_cage_map(cage, "rsync://a.b.c/d", "rsync/0", NULL);
+	ck_cage_map(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
 	init_node_rsync(&nodes[0], "rsync://a.b.c/d", "rsync/0", 1, VV_CONTINUE);
 	ck_cache_rsync(nodes);
 	free(cage);
 
-	printf("==== Redownload same file, nothing should happen ====\n");
+	printf("==== Redownload same file, nothing should change ====\n");
 	cage = run_dl_rsync("rsync://a.b.c/d", VV_CONTINUE, 0);
-	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
-	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
+	ck_cage(cage, true, false);
+	ck_cage_map(cage, "rsync://a.b.c/d", "rsync/0", NULL);
+	ck_cage_map(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
 	ck_cache_rsync(nodes);
 	free(cage);
 
@@ -473,9 +489,9 @@ START_TEST(test_cache_download_rsync)
 	 */
 	printf("==== Don't redownload child ====\n");
 	cage = run_dl_rsync("rsync://a.b.c/d/e", VV_CONTINUE, 0);
-	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/d", "rsync/0", NULL);
-	ck_cage(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
+	ck_cage(cage, true, false);
+	ck_cage_map(cage, "rsync://a.b.c/d", "rsync/0", NULL);
+	ck_cage_map(cage, "rsync://a.b.c/d/e/f.cer", "rsync/0/e/f.cer", NULL);
 	ck_cache_rsync(nodes);
 	free(cage);
 
@@ -487,18 +503,18 @@ START_TEST(test_cache_download_rsync)
 	 */
 	printf("==== rsync truncated ====\n");
 	cage = rsync_dance("rsync://x.y.z/m/n/o");
-	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://x.y.z/m", "rsync/1", NULL);
-	ck_cage(cage, "rsync://x.y.z/m/n/o", "rsync/1/n/o", NULL);
+	ck_cage(cage, true, false);
+	ck_cage_map(cage, "rsync://x.y.z/m", "rsync/1", NULL);
+	ck_cage_map(cage, "rsync://x.y.z/m/n/o", "rsync/1/n/o", NULL);
 	init_node_rsync(&nodes[1], "rsync://x.y.z/m", "rsync/1", 1, VV_CONTINUE);
 	ck_cache_rsync(nodes);
 	free(cage);
 
 	printf("==== Sibling ====\n");
 	cage = rsync_dance("rsync://a.b.c/e/f");
-	ck_assert_ptr_ne(NULL, cage);
-	ck_cage(cage, "rsync://a.b.c/e", "rsync/2", NULL);
-	ck_cage(cage, "rsync://a.b.c/e/f/x/y/z", "rsync/2/f/x/y/z", NULL);
+	ck_cage(cage, true, false);
+	ck_cage_map(cage, "rsync://a.b.c/e", "rsync/2", NULL);
+	ck_cage_map(cage, "rsync://a.b.c/e/f/x/y/z", "rsync/2/f/x/y/z", NULL);
 	init_node_rsync(&nodes[2], "rsync://a.b.c/e", "rsync/2", 1, VV_CONTINUE);
 	ck_cache_rsync(nodes);
 	free(cage);
@@ -510,15 +526,20 @@ END_TEST
 START_TEST(test_cache_download_rsync_error)
 {
 	struct cache_node nodes[3] = { 0 };
+	struct cache_cage *cage;
 
 	setup_test();
+
+	ck_assert_int_eq(0, mkdir("rsync/0", CACHE_FILEMODE));
+	ck_assert_int_eq(0, file_write_txt("rsync/0/0", "A"));
+	ck_assert_int_eq(0, file_write_txt("rsync/0/1", "B"));
 
 	init_node_rsync(&nodes[0], "rsync://a.b.c/d", "rsync/0", 1, VV_CONTINUE);
 	init_node_rsync(&nodes[1], "rsync://a.b.c/e", "rsync/1", 1, VV_FAIL);
 
 	printf("==== Startup ====\n");
 	dl_error = 0;
-	free(rsync_dance("rsync://a.b.c/d"));
+	free(rsync_dance("rsync://a.b.c/d")); /* Cage already tested above */
 	dl_error = EINVAL;
 	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", VV_FAIL, 1));
 	ck_cache_rsync(nodes);
@@ -529,6 +550,25 @@ START_TEST(test_cache_download_rsync_error)
 	ck_cache_rsync(nodes);
 	dl_error = 0;
 	ck_assert_ptr_eq(NULL, run_dl_rsync("rsync://a.b.c/e", VV_FAIL, 0));
+	ck_cache_rsync(nodes);
+
+	printf("==== New iteration ====\n");
+	queue_commit(NULL, "rsync://a.b.c/d", "rsync/0/0", "rsync/0/1");
+	cleanup_cache();
+	new_iteration(false);
+
+	printf("==== Successful download becomes failure, fallback kicks in without refresh ====\n");
+	// XXX it seems cages are only being tested in rsync
+	dl_error = EINVAL;
+	cage = run_dl_rsync("rsync://a.b.c/d", VV_CONTINUE, 1);
+	// XXX Test combination [true, true]
+	ck_cage(cage, false, true);
+	ck_cage_map(cage, "rsync://a.b.c/d/manifest.mft", "fallback/0/0", NULL);
+	ck_cage_map(cage, "rsync://a.b.c/d/cert.cer", "fallback/0/1", NULL);
+	free(cage);
+
+	nodes[0].verdict = VV_FAIL;
+	nodes[1].key.id = NULL;
 	ck_cache_rsync(nodes);
 
 	cleanup_test();
@@ -612,21 +652,21 @@ START_TEST(test_cache_download_https)
 	setup_test();
 
 	printf("==== Download file ====\n");
-	run_dl_https("https://a.b.c/d/e", 1, "https/0");
+	run_dl_https("https://a.b.c/d/e", 1, VV_CONTINUE, "https/0");
 	init_node_https(&nodes[0], "https://a.b.c/d/e", "https/0", 1, VV_CONTINUE);
 	ck_cache_https(nodes);
 
 	printf("==== Download same file ====\n");
-	run_dl_https("https://a.b.c/d/e", 0, "https/0");
+	run_dl_https("https://a.b.c/d/e", 0, VV_CONTINUE, "https/0");
 	ck_cache_https(nodes);
 
 	printf("==== Download something else 1 ====\n");
-	run_dl_https("https://a.b.c/e", 1, "https/1");
+	run_dl_https("https://a.b.c/e", 1, VV_CONTINUE, "https/1");
 	init_node_https(&nodes[1], "https://a.b.c/e", "https/1", 1, VV_CONTINUE);
 	ck_cache_https(nodes);
 
 	printf("==== Download something else 2 ====\n");
-	run_dl_https("https://x.y.z/e", 1, "https/2");
+	run_dl_https("https://x.y.z/e", 1, VV_CONTINUE, "https/2");
 	init_node_https(&nodes[2], "https://x.y.z/e", "https/2", 1, VV_CONTINUE);
 	ck_cache_https(nodes);
 
@@ -645,18 +685,18 @@ START_TEST(test_cache_download_https_error)
 
 	printf("==== Startup ====\n");
 	dl_error = 0;
-	run_dl_https("https://a.b.c/d", 1, "https/0");
+	run_dl_https("https://a.b.c/d", 1, VV_CONTINUE, "https/0");
 	dl_error = EINVAL;
-	run_dl_https("https://a.b.c/e", 1, NULL);
+	run_dl_https("https://a.b.c/e", 1, VV_FAIL, NULL);
 	ck_cache_https(nodes);
 
 	printf("==== Regardless of error, not reattempted because same iteration ====\n");
 	dl_error = EINVAL;
-	run_dl_https("https://a.b.c/d", 0, "https/0");
-	run_dl_https("https://a.b.c/e", 0, NULL);
+	run_dl_https("https://a.b.c/d", 0, VV_CONTINUE, "https/0");
+	run_dl_https("https://a.b.c/e", 0, VV_FAIL, NULL);
 	dl_error = 0;
-	run_dl_https("https://a.b.c/d", 0, "https/0");
-	run_dl_https("https://a.b.c/e", 0, NULL);
+	run_dl_https("https://a.b.c/d", 0, VV_CONTINUE, "https/0");
+	run_dl_https("https://a.b.c/e", 0, VV_FAIL, NULL);
 	ck_cache_https(nodes);
 
 	cleanup_test();
@@ -827,7 +867,7 @@ START_TEST(test_context)
 	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
-	ck_assert_int_eq(false, cage_disable_refresh(cage));
+	ck_assert_int_eq(false, cage_downgrade(cage));
 	ck_assert_ptr_eq(NULL, cage_map_file(cage, &file_url));
 
 	printf("2. 2nd CA points to the same caRepository,\n");
@@ -841,7 +881,7 @@ START_TEST(test_context)
 
 	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
-	ck_assert_int_eq(false, cage_disable_refresh(cage));
+	ck_assert_int_eq(false, cage_downgrade(cage));
 	ck_assert_ptr_eq(NULL, cage_map_file(cage, &file_url));
 
 	printf("3. Commit\n");
@@ -868,14 +908,14 @@ START_TEST(test_context)
 	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
-	ck_assert_int_eq(true, cage_disable_refresh(cage));
+	ck_assert_int_eq(true, cage_downgrade(cage));
 	ck_assert_str_eq("fallback/1/0", cage_map_file(cage, &file_url));
 
 	ck_assert_ptr_eq(NULL, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
 	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
 	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
-	ck_assert_int_eq(true, cage_disable_refresh(cage));
+	ck_assert_int_eq(true, cage_downgrade(cage));
 	ck_assert_str_eq("fallback/0/0", cage_map_file(cage, &file_url));
 
 	uri_cleanup(&sias.rpkiNotify);
@@ -921,6 +961,7 @@ ck_rrdp(struct rrdp_state *expected, struct rrdp_state *actual)
 	ck_assert_ptr_eq(NULL, acth);
 }
 
+/* Converts @src into JSON forth and back. Checks the result equals @src. */
 static void
 ck_json(struct cache_node *src)
 {
@@ -937,7 +978,7 @@ ck_json(struct cache_node *src)
 	ck_node_key(&src->key, &dst->key);
 	ck_assert_str_eq(src->path, dst->path);
 	ck_assert_int_eq(DLS_OUTDATED, dst->state);	/* Must be reset */
-	ck_assert_ptr_eq(NULL, dst->verdict);		/* Must be reset */
+	ck_assert_pstr_eq(NULL, dst->verdict);		/* Must be reset */
 	ck_assert_int_eq(src->attempt_ts, dst->attempt_ts);
 	ck_assert_int_eq(src->success_ts, dst->success_ts);
 	ck_assert(INTEGER_cmp(&src->mft.num, &dst->mft.num) == 0);
@@ -1032,6 +1073,7 @@ START_TEST(test_json_max)
 	ck_json(node);
 }
 
+/* "Weird URL" refers to the "`rpkiNotify\0caRepository`" indexer hack. */
 START_TEST(test_json_weirdurl)
 {
 	static char const *NOTIF = "https://a.b.c/notif.xml";
@@ -1063,7 +1105,8 @@ START_TEST(test_json_weirdurl)
 
 /* Boilerplate */
 
-static Suite *create_suite(void)
+static Suite *
+create_suite(void)
 {
 	Suite *suite;
 	TCase *rsync, *https, *rrdp, *multi, *json;
@@ -1100,11 +1143,11 @@ static Suite *create_suite(void)
 	return suite;
 }
 
-int main(void)
+int
+main(void)
 {
-	Suite *suite;
 	SRunner *runner;
-	int tests_failed;
+	int failures;
 
 	dls[0] = "Fort\n";
 
@@ -1121,12 +1164,10 @@ int main(void)
 		return 1;
 	}
 
-	suite = create_suite();
-
-	runner = srunner_create(suite);
+	runner = srunner_create(create_suite());
 	srunner_run_all(runner, CK_NORMAL);
-	tests_failed = srunner_ntests_failed(runner);
+	failures = srunner_ntests_failed(runner);
 	srunner_free(runner);
 
-	return (tests_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+	return (failures == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

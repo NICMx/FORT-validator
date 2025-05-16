@@ -1963,7 +1963,7 @@ cer_traverse(struct rpki_certificate *ca)
 	mft.url = ca->uris.rpkiManifest;
 retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
 	if (!mft.path) {
-		if (cage_disable_refresh(cage))
+		if (cage_downgrade(cage))
 			goto retry;
 		pr_val_err("caRepository '%s' is missing a manifest.",
 		    uri_str(&ca->uris.caRepository));
@@ -1972,7 +1972,7 @@ retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
 	}
 
 	if (manifest_traverse(&mft, cage, ca) != 0) {
-		if (cage_disable_refresh(cage))
+		if (cage_downgrade(cage))
 			goto retry;
 		vv = VV_FAIL;
 		goto end;

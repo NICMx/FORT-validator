@@ -5,31 +5,6 @@
 #include "mock.c"
 
 static void
-touch_dir(char const *dir)
-{
-	ck_assert_int_eq(0, file_mkdir(dir, true));
-}
-
-static void
-touch_file(char const *file)
-{
-	int fd;
-	int error;
-
-	pr_op_debug("touch %s", file);
-
-	fd = open(file, O_WRONLY | O_CREAT, CACHE_FILEMODE);
-	if (fd < 0) {
-		error = errno;
-		if (error == EEXIST)
-			return;
-		ck_abort_msg("open(%s): %s", file, strerror(error));
-	}
-
-	close(fd);
-}
-
-static void
 create_test_sandbox(void)
 {
 	touch_dir ("tmp");

@@ -251,7 +251,7 @@ test_read_string_success(unsigned char *input, size_t length, char *expected)
 
 	stream = create_stream(input, length);
 	actual = read_string(stream, length);
-	ck_assert_str(expected, actual);
+	ck_assert_pstr_eq(expected, actual);
 
 	free(actual);
 	free(stream);

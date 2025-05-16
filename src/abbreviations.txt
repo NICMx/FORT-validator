@@ -5,6 +5,7 @@ addr: address
 addr4: IPv4 address
 addr6: IPv6 address
 be: Big Endian
+cer: certificate
 cert: certificate
 certstack: certificate stack
 ck: check (test assertion, inherited from the unit test framework)
@@ -33,6 +34,7 @@ refget: reference get (+1 to reference counter)
 refput: reference put (-1 to reference counter)
 rk: Router Key
 rpp: Repository Publication Point (RFC 6481)
+so: Signed Object
 str: string
 tmp: temporal
 ts: timestamp

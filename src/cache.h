@@ -38,17 +38,17 @@ struct extension_uris {
 void exturis_init(struct extension_uris *);
 void exturis_cleanup(struct extension_uris *);
 
-char *cache_refresh_by_url(struct uri const *);
-char *cache_get_fallback(struct uri const *);
+validation_verdict cache_refresh_by_url(struct uri const *, char const **);
+validation_verdict cache_get_fallback(struct uri const *, char const **);
 
 struct cache_cage;
 validation_verdict cache_refresh_by_uris(struct extension_uris *,
     struct cache_cage **);
 char const *cage_map_file(struct cache_cage *, struct uri const *);
-bool cage_disable_refresh(struct cache_cage *);
+bool cage_downgrade(struct cache_cage *);
 struct mft_meta const *cage_mft_fallback(struct cache_cage *);
 void cache_commit_rpp(struct uri const *, struct uri const *, struct rpp *);
-void cache_commit_file(struct cache_mapping *);
+void cache_commit_file(struct cache_mapping const *);
 
 struct uri const *cage_rpkiNotify(struct cache_cage *);
 

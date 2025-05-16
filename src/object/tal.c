@@ -175,24 +175,32 @@ validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 
 static validation_verdict
 try_urls(struct tal *tal, bool (*url_is_protocol)(struct uri const *),
-    char *(*get_path)(struct uri const *))
+    validation_verdict (*get_path)(struct uri const *, char const **))
 {
 	struct uri *url;
+	char const *path;
 	struct cache_mapping map;
 	validation_verdict vv;
 
 	ARRAYLIST_FOREACH(&tal->urls, url) {
+		if (!url_is_protocol(url))
+			continue;
+
+		vv = get_path(url, &path);
+		if (vv == VV_BUSY)
+			return VV_BUSY;
+		if (vv == VV_FAIL || !path)
+			continue;
+
 		map.url = *url;
-		if (!url_is_protocol(&map.url))
-			continue;
-		map.path = get_path(url);
-		if (!map.path)
-			continue;
+		map.path = (char *)path;
+
 		vv = validate_ta(tal, &map);
 		if (vv == VV_BUSY)
 			return VV_BUSY;
 		if (vv == VV_FAIL)
 			continue;
+
 		cache_commit_file(&map);
 		return VV_CONTINUE;
 	}
