@@ -292,7 +292,6 @@ collect_files(struct cache_mapping const *map,
 	struct FileAndHash *src;
 	struct cache_mapping *dst;
 	char const *ext;
-	char const *path;
 	int error;
 
 	if (mft->fileList.list.count == 0)
@@ -338,14 +337,13 @@ collect_files(struct cache_mapping const *map,
 		uri_child(&rpp_url, (char const *)src->file.buf, src->file.size,
 		    &dst->url);
 
-		path = cage_map_file(cage, &dst->url);
-		if (!path) {
+		dst->path = cage_map_file(cage, &dst->url);
+		if (!dst->path) {
 			error = pr_val_err(
 			    "Manifest file '%s' is absent from the cache.",
 			    uri_str(&dst->url));
 			goto revert;
 		}
-		dst->path = pstrdup(path);
 
 		error = check_file_and_hash(src, dst->path);
 		if (error)

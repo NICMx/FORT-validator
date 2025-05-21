@@ -273,12 +273,27 @@ unlock_mutex(void)
 }
 
 static void
+print_time(struct level const *lvl)
+{
+	time_t now;
+	struct tm components;
+	char str[16];
+
+	now = time(NULL);
+	if (now == ((time_t) -1))
+		return;
+	if (localtime_r(&now, &components) == NULL)
+		return;
+	if (strftime(str, sizeof(str), "%m-%d %H:%M:%S", &components) == 0)
+		return;
+
+	fprintf(lvl->stream, "%s ", str);
+}
+
+static void
 __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 {
-	char time_buff[20];
 	struct level const *lvl;
-	time_t now;
-	struct tm stm_buff;
 	char const *file_name;
 
 	lvl = level2struct(level);
@@ -288,13 +303,7 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 	if (cfg->color)
 		fprintf(lvl->stream, "%s", lvl->color);
 
-	now = time(NULL);
-	if (now != ((time_t) -1)) {
-		// XXX not catching any errors
-		localtime_r(&now, &stm_buff);
-		strftime(time_buff, sizeof(time_buff), "%b %e %T", &stm_buff);
-		fprintf(lvl->stream, "%s ", time_buff);
-	}
+	print_time(lvl);
 
 	fprintf(lvl->stream, "%s", lvl->label);
 	if (cfg->tag)

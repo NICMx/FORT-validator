@@ -95,7 +95,7 @@ struct cache_node {
 	enum node_state state;
 	/* Result code of recent dl attempt (DLS_FRESH only) */
 	validation_verdict verdict;
-	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Unused */
+	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Commit */
 	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
 	struct mft_meta mft;	/* RPP fallbacks only */
@@ -357,7 +357,7 @@ static void
 init_cachedir_tag(void)
 {
 	static char const *filename = "CACHEDIR.TAG";
-	if (file_exists(filename) == ENOENT)
+	if (file_stat_errno(filename) == ENOENT)
 		file_write_txt(filename,
 		   "Signature: 8a477f597d28d172789f06886806bc55\n"
 		   "# This file is a cache directory tag created by Fort.\n"
@@ -1102,18 +1102,19 @@ refresh_success:
 	return VV_CONTINUE;
 }
 
-static char const *
+/* Result needs free() */
+static char *
 node2file(struct cache_node const *node, struct uri const *url)
 {
 	if (node == NULL)
 		return NULL;
-	// XXX RRDP is const, rsync needs to be freed
 	return (node->rrdp)
-	    ? /* RRDP  */ rrdp_file(node->rrdp, url)
+	    ? /* RRDP  */ pstrdup(rrdp_file(node->rrdp, url))
 	    : /* rsync */ path_join(node->path, strip_rsync_module(uri_str(url)));
 }
 
-char const *
+/* Result needs free() */
+char *
 cage_map_file(struct cache_cage *cage, struct uri const *url)
 {
 	/*
@@ -1122,7 +1123,7 @@ cage_map_file(struct cache_cage *cage, struct uri const *url)
 	 * modified either.
 	 */
 
-	char const *file;
+	char *file;
 
 	file = node2file(cage->refresh, url);
 	if (!file)
@@ -1400,6 +1401,7 @@ commit_fallbacks(time_t now)
 			fb = provide_node(&cache.fallback,
 			    &commit->rpkiNotify,
 			    &commit->caRepository);
+			fb->attempt_ts = now;
 			fb->success_ts = now;
 
 			pr_op_debug("mkdir -f %s", fb->path);
@@ -1424,6 +1426,7 @@ commit_fallbacks(time_t now)
 			    uri_str(&map->url));
 
 			fb = provide_node(&cache.fallback, &map->url, NULL);
+			fb->attempt_ts = now;
 			fb->success_ts = now;
 			if (is_fallback(map->path))
 				goto freshen;
@@ -1466,7 +1469,7 @@ static void
 remove_orphaned_nodes(struct cache_table *table, struct cache_node *node,
     void *arg)
 {
-	if (file_exists(node->path) == ENOENT) {
+	if (file_stat_errno(node->path) == ENOENT) {
 		pr_op_debug("Missing file; deleting node: %s", node->path);
 		delete_node(table, node, NULL);
 	}

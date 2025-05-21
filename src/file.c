@@ -165,12 +165,34 @@ file_free(struct file_contents *fc)
 }
 
 /* Wrapper for stat(), mostly for the sake of unit test mocking. */
-/* XXX needs a rename, because it returns errno. */
 int
-file_exists(char const *path)
+file_stat_errno(char const *path)
 {
 	struct stat meta;
 	return (stat(path, &meta) == 0) ? 0 : errno;
+}
+
+bool
+file_is_valid(char const *location, bool allow_file)
+{
+	struct stat attr;
+	bool is_file, is_dir;
+	bool result;
+
+	if (stat(location, &attr) == -1) {
+		pr_op_err("stat(%s) failed: %s", location, strerror(errno));
+		return false;
+	}
+
+	is_file = allow_file && S_ISREG(attr.st_mode);
+	is_dir = S_ISDIR(attr.st_mode);
+
+	result = is_file || is_dir;
+	if (!result)
+		pr_op_err("'%s' does not seem to be a %s", location,
+		    allow_file ? "file or directory" : "directory");
+
+	return result;
 }
 
 /*

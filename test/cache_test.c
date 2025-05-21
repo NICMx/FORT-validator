@@ -96,7 +96,7 @@ setup_test(void)
 	init_tables();
 
 	for (d = dirs; *d; d++) {
-		if (file_exists(*d) == 0)
+		if (file_stat_errno(*d) == 0)
 			ck_assert_int_eq(0, file_rm_rf(*d));
 		ck_assert_int_eq(0, mkdir(*d, CACHE_FILEMODE));
 	}
@@ -192,9 +192,9 @@ ck_cage_map(struct cache_cage *cage, char const *url,
 	refresh = cage->refresh;
 	fallback = cage->fallback;
 
-	ck_assert_pstr_eq(opt1, cage_map_file(cage, &uri));
+	ck_assert_pstr_eq_free(opt1, cage_map_file(cage, &uri));
 	ck_assert_uint_eq(!!opt2, cage_downgrade(cage));
-	ck_assert_pstr_eq(opt2, cage_map_file(cage, &uri));
+	ck_assert_pstr_eq_free(opt2, cage_map_file(cage, &uri));
 
 	cage->refresh = refresh;
 	cage->fallback = fallback;
@@ -866,9 +866,9 @@ START_TEST(test_context)
 	ck_assert_ptr_eq(NULL, uri_init(&sias.caRepository, CA_REPOSITORY));
 	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
-	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(false, cage_downgrade(cage));
-	ck_assert_ptr_eq(NULL, cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free(NULL, cage_map_file(cage, &file_url));
 
 	printf("2. 2nd CA points to the same caRepository,\n");
 	printf("   but does not provide RRDP as an option.\n");
@@ -880,9 +880,9 @@ START_TEST(test_context)
 	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 
 	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
-	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(false, cage_downgrade(cage));
-	ck_assert_ptr_eq(NULL, cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free(NULL, cage_map_file(cage, &file_url));
 
 	printf("3. Commit\n");
 
@@ -907,16 +907,16 @@ START_TEST(test_context)
 	print_tree();
 	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_ptr_eq(NULL, uri_str(&cage->rpkiNotify));
-	ck_assert_str_eq(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free(FILE_RSYNC_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(true, cage_downgrade(cage));
-	ck_assert_str_eq("fallback/1/0", cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free("fallback/1/0", cage_map_file(cage, &file_url));
 
 	ck_assert_ptr_eq(NULL, uri_init(&sias.rpkiNotify, RPKI_NOTIFY));
 	ck_assert_str_eq(VV_CONTINUE, cache_refresh_by_uris(&sias, &cage));
 	ck_assert_str_eq(RPKI_NOTIFY, uri_str(&cage->rpkiNotify));
-	ck_assert_str_eq(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free(FILE_RRDP_PATH, cage_map_file(cage, &file_url));
 	ck_assert_int_eq(true, cage_downgrade(cage));
-	ck_assert_str_eq("fallback/0/0", cage_map_file(cage, &file_url));
+	ck_assert_pstr_eq_free("fallback/0/0", cage_map_file(cage, &file_url));
 
 	uri_cleanup(&sias.rpkiNotify);
 	uri_cleanup(&sias.caRepository);

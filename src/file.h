@@ -32,7 +32,8 @@ void file_close(FILE *);
 int file_load(char const *, struct file_contents *, bool);
 void file_free(struct file_contents *);
 
-int file_exists(char const *);
+int file_stat_errno(char const *);
+bool file_is_valid(char const *, bool);
 
 int file_rm_f(char const *);
 int file_rm_rf(char const *);

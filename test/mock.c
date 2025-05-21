@@ -2,10 +2,15 @@
 
 #include <errno.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <stdarg.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <time.h>
-#include "config.h"
+
+#include "common.h"
 #include "log.h"
-#include "thread_var.h"
+#include "types/map.h"
 
 /* Some core functions, as linked from unit tests. */
 
@@ -113,7 +118,6 @@ v6addr2str2(struct in6_addr const *addr)
 MOCK_NULL(config_get_slurm, char const *, void)
 MOCK(config_get_tal, char const *, "tal/", void)
 MOCK(cfg_cache_threshold, time_t, 2, void)
-MOCK(config_get_mode, enum mode, STANDALONE, void)
 MOCK_UINT(config_get_rrdp_delta_threshold, 5, void)
 MOCK_TRUE(config_get_rsync_enabled, void)
 MOCK_UINT(config_get_rsync_priority, 50, void)
@@ -121,8 +125,6 @@ MOCK_TRUE(config_get_http_enabled, void)
 MOCK_UINT(config_get_http_priority, 60, void)
 MOCK_NULL(config_get_output_roa, char const *, void)
 MOCK_NULL(config_get_output_bgpsec, char const *, void)
-MOCK(config_get_op_log_file_format, enum filename_format, FNF_NAME, void)
-MOCK(config_get_val_log_file_format, enum filename_format, FNF_NAME, void)
 MOCK(logv_filename, char const *, path, char const *path)
 MOCK_VOID(free_rpki_config, void)
 
@@ -131,6 +133,13 @@ MOCK_VOID(fnstack_push, char const *file)
 MOCK_VOID(fnstack_push_map, struct cache_mapping const *map)
 MOCK_VOID(fnstack_pop, void)
 MOCK_VOID(fnstack_cleanup, void)
+
+void
+ck_assert_pstr_eq_free(char const *expected, char *actual)
+{
+	ck_assert_pstr_eq(expected, actual);
+	free(actual);
+}
 
 void
 ck_assert_uri(char const *expected, struct uri const *actual)
@@ -142,7 +151,7 @@ ck_assert_uri(char const *expected, struct uri const *actual)
 void
 touch_dir(char const *dir)
 {
-	ck_assert_int_eq(0, file_mkdir(dir, true));
+	ck_assert(mkdir(dir, CACHE_FILEMODE) == 0 || errno == EEXIST);
 }
 
 void

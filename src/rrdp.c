@@ -944,7 +944,7 @@ handle_snapshot(struct update_notification *new, struct rrdp_state *state)
 	if (error)
 		goto end;
 	error = parse_snapshot(&new->session, tmppath, state);
-//	delete_file(tmppath); XXX
+	file_rm_f(tmppath);
 
 end:	fnstack_pop();
 	return error;
@@ -1016,7 +1016,7 @@ handle_delta(struct update_notification *notif,
 	if (error)
 		goto end;
 	error = parse_delta(notif, delta, tmppath, state);
-//	delete_file(tmppath); XXX
+	file_rm_f(tmppath);
 
 end:	fnstack_pop();
 	return error;

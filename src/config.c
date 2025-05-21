@@ -10,7 +10,6 @@
 #include <syslog.h>
 
 #include "alloc.h"
-#include "common.h"
 #include "config/boolean.h"
 #include "config/incidences.h"
 #include "config/str.h"
@@ -19,6 +18,7 @@
 #include "config/work_offline.h"
 #include "configure_ac.h"
 #include "daemon.h"
+#include "file.h"
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
@@ -30,7 +30,7 @@
  * To add a member to this structure,
  *
  * 1. Add it.
- * 2. Add its metadata somewhere in @groups.
+ * 2. Add its metadata somewhere in @options.
  * 3. Add default value to set_default_values().
  * 4. Create the getter.
  *
@@ -39,8 +39,14 @@
 struct rpki_config {
 	/** TAL file name or directory. */
 	char *tal;
-	/** Path of our local clone of the repository */
-	char *local_repository;
+
+	struct {
+		/* Path of our local clone of the repository */
+		char *path;
+		/* Cache content expiration seconds (after last refresh) */
+		unsigned int threshold;
+	} cache;
+
 	/* Deprecated; does nothing. */
 	bool shuffle_tal_uris;
 	/**
@@ -288,10 +294,16 @@ static const struct option_field options[] = {
 		.id = 'r',
 		.name = "local-repository",
 		.type = &gt_string,
-		.offset = offsetof(struct rpki_config, local_repository),
+		.offset = offsetof(struct rpki_config, cache.path),
 		.doc = "Directory where the repository local cache will be stored/read",
 		.arg_doc = "<directory>",
 		.json_null_allowed = false,
+	}, {
+		.id = 1001,
+		.name = "cache.threshold",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, cache.threshold),
+		.doc = "Cache content expiration seconds (after last refresh)",
 	}, {
 		.id = 2001,
 		.name = "shuffle-uris",
@@ -942,7 +954,8 @@ set_default_values(void)
 	 */
 
 	rpki_config.tal = NULL;
-	rpki_config.local_repository = pstrdup("/tmp/fort/repository");
+	rpki_config.cache.path = pstrdup("/tmp/fort/repository");
+	rpki_config.cache.threshold = 86400;
 	rpki_config.shuffle_tal_uris = false;
 	rpki_config.maximum_certificate_depth = 32;
 	rpki_config.slurm = NULL;
@@ -1024,7 +1037,7 @@ validate_config(void)
 		return pr_op_err("The TAL(s) location (--tal) is mandatory.");
 
 	/* A file location at --tal isn't valid when --init-tals is set */
-	if (!valid_file_or_dir(rpki_config.tal, !rpki_config.init_tals))
+	if (!file_is_valid(rpki_config.tal, !rpki_config.init_tals))
 		return pr_op_err("Invalid TAL(s) location.");
 
 	/* Ignore the other checks */
@@ -1037,7 +1050,7 @@ validate_config(void)
 	    rpki_config.server.interval.retry)
 		return pr_op_err("Expire interval must be greater than refresh and retry intervals");
 
-	if (rpki_config.slurm != NULL && !valid_file_or_dir(rpki_config.slurm, true))
+	if (rpki_config.slurm != NULL && !file_is_valid(rpki_config.slurm, true))
 		return pr_op_err("Invalid slurm location.");
 
 	return 0;
@@ -1272,13 +1285,13 @@ config_get_tal(void)
 char const *
 config_get_local_repository(void)
 {
-	return rpki_config.local_repository;
+	return rpki_config.cache.path;
 }
 
 time_t
 cfg_cache_threshold(void)
 {
-	return 86400; // XXX
+	return rpki_config.cache.threshold;
 }
 
 unsigned int

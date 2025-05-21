@@ -24,9 +24,9 @@ START_TEST(test_rm)
 {
 	create_test_sandbox();
 
-	ck_assert_int_eq(0, file_exists("tmp/file/abc"));
+	ck_assert_int_eq(0, file_stat_errno("tmp/file/abc"));
 	ck_assert_int_eq(0, file_rm_rf("tmp/file/abc"));
-	ck_assert_int_eq(ENOENT, file_exists("tmp/file/abc"));
+	ck_assert_int_eq(ENOENT, file_stat_errno("tmp/file/abc"));
 }
 END_TEST
 

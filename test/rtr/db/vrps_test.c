@@ -62,6 +62,7 @@ static const bool deltas_4to4[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
 
 static unsigned int deltas_lifetime = 5;
 
+MOCK(config_get_mode, enum mode, STANDALONE, void)
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
 MOCK_ABORT_ENUM(config_get_output_format, output_format, void)
 MOCK_ABORT_VOID(db_slurm_destroy, struct db_slurm *db)

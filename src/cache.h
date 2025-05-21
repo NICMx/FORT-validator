@@ -44,7 +44,7 @@ validation_verdict cache_get_fallback(struct uri const *, char const **);
 struct cache_cage;
 validation_verdict cache_refresh_by_uris(struct extension_uris *,
     struct cache_cage **);
-char const *cage_map_file(struct cache_cage *, struct uri const *);
+char *cage_map_file(struct cache_cage *, struct uri const *);
 bool cage_downgrade(struct cache_cage *);
 struct mft_meta const *cage_mft_fallback(struct cache_cage *);
 void cache_commit_rpp(struct uri const *, struct uri const *, struct rpp *);

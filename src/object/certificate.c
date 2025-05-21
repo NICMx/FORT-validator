@@ -789,27 +789,39 @@ cer_init_ee(struct rpki_certificate *ee, struct rpki_certificate *parent,
 	atomic_fetch_add(&parent->refcount, 1);
 }
 
-void
-cer_cleanup(struct rpki_certificate *cert)
+static void
+__cer_cleanup(struct rpki_certificate *cer)
 {
-	map_cleanup(&cert->map);
-	if (cert->x509 != NULL)
-		X509_free(cert->x509);
-	resources_destroy(cert->resources);
-	exturis_cleanup(&cert->uris);
-	// XXX Recursive. Try refcounting the resources.
-	if (cert->parent)
-		cer_free(cert->parent);
-	rpp_cleanup(&cert->rpp);
+	map_cleanup(&cer->map);
+	if (cer->x509 != NULL)
+		X509_free(cer->x509);
+	resources_destroy(cer->resources);
+	exturis_cleanup(&cer->uris);
+	rpp_cleanup(&cer->rpp);
 }
 
 void
-cer_free(struct rpki_certificate *cert)
+cer_cleanup(struct rpki_certificate *cer)
 {
-	if (atomic_fetch_sub(&cert->refcount, 1) == 1) {
-		cer_cleanup(cert);
-		free(cert);
-	}
+	__cer_cleanup(cer);
+	if (cer->parent)
+		cer_free(cer->parent);
+}
+
+void
+cer_free(struct rpki_certificate *cer)
+{
+	struct rpki_certificate *parent;
+
+	do {
+		if (atomic_fetch_sub(&cer->refcount, 1) != 1)
+			return;
+
+		__cer_cleanup(cer);
+		parent = cer->parent;
+		free(cer);
+		cer = parent;
+	} while (cer != NULL);
 }
 
 /*
@@ -1941,6 +1953,7 @@ cer_traverse(struct rpki_certificate *ca)
 	struct cache_mapping *map;
 	unsigned int queued;
 	validation_verdict vv;
+	int error;
 
 	if (!ca->x509) {
 		if (validate_certificate(ca) != 0)
@@ -1961,7 +1974,7 @@ cer_traverse(struct rpki_certificate *ca)
 	}
 
 	mft.url = ca->uris.rpkiManifest;
-retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
+retry:	mft.path = cage_map_file(cage, &mft.url);
 	if (!mft.path) {
 		if (cage_downgrade(cage))
 			goto retry;
@@ -1971,7 +1984,9 @@ retry:	mft.path = (char *)cage_map_file(cage, &mft.url); /* Will not edit */
 		goto end;
 	}
 
-	if (manifest_traverse(&mft, cage, ca) != 0) {
+	error = manifest_traverse(&mft, cage, ca);
+	free(mft.path);
+	if (error) {
 		if (cage_downgrade(cage))
 			goto retry;
 		vv = VV_FAIL;
