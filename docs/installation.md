@@ -23,6 +23,7 @@ description: Guide to compile and install FORT Validator.
 	7. [Slackware version](#slackware-version)
 	8. [Gentoo version](#gentoo-version)
 	9. [Alpine version](#alpine-version)
+	10. [Rocky Linux 9](#rocky-linux-9)
 4. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
 5. [Option 4: Running from a Docker container](#option-4-running-from-a-docker-container)
 6. [Fetching the TALs](#fetching-the-tals)
@@ -409,6 +410,20 @@ su
 make install
 exit
 {% endhighlight %}
+
+### Rocky Linux 9
+
+```bash
+sudo dnf -y install wget tar gcc openssl-devel
+sudo dnf -y --enablerepo=devel install jansson-devel libcurl-devel libxml2-devel
+
+wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
+tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+cd fort-{{ site.fort-latest-version }}/
+./configure
+make
+sudo make install
+```
 
 ## Option 3: Compiling and installing the git repository
 
