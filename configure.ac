@@ -45,6 +45,7 @@ AM_CONDITIONAL([BACKTRACE_ENABLED], [test "x$have_backtrace" != "xno"])
 PKG_CHECK_MODULES([JANSSON], [jansson])
 PKG_CHECK_MODULES([CURL], [libcurl])
 PKG_CHECK_MODULES([XML2], [libxml-2.0])
+PKG_CHECK_MODULES([MICROHTTPD], [libmicrohttpd])
 PKG_CHECK_MODULES([CHECK], [check], [usetests=yes], [usetests=no])
 AM_CONDITIONAL([USE_TESTS], [test "x$usetests" = "xyes"])
 

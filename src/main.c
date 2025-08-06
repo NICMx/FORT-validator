@@ -6,6 +6,8 @@
 #include "log.h"
 #include "nid.h"
 #include "print_file.h"
+#include "prometheus.h"
+#include "stats.h"
 #include "rtr/rtr.h"
 #include "thread_var.h"
 #include "xml/relax_ng.h"
@@ -127,9 +129,15 @@ main(int argc, char **argv)
 	error = handle_flags_config(argc, argv);
 	if (error)
 		goto revert_log;
-	error = nid_init();
+	error = stats_setup();
 	if (error)
 		goto revert_config;
+	error = prometheus_setup();
+	if (error)
+		goto revert_stats;
+	error = nid_init();
+	if (error)
+		goto revert_prometheus;
 	error = extension_init();
 	if (error)
 		goto revert_nid;
@@ -167,6 +175,10 @@ revert_http:
 	http_cleanup();
 revert_nid:
 	nid_destroy();
+revert_prometheus:
+	prometheus_teardown();
+revert_stats:
+	stats_teardown();
 revert_config:
 	free_rpki_config();
 revert_log:

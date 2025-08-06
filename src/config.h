@@ -27,6 +27,7 @@ unsigned int config_get_interval_refresh(void);
 unsigned int config_get_interval_retry(void);
 unsigned int config_get_interval_expire(void);
 unsigned int config_get_deltas_lifetime(void);
+unsigned int config_get_prometheus_port(void);
 char const *config_get_slurm(void);
 
 char const *config_get_tal(void);

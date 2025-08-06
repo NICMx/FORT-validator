@@ -8,6 +8,7 @@
 #include "config.h"
 #include "data_structure/array_list.h"
 #include "log.h"
+#include "stats.h"
 #include "rtr/db/vrps.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
@@ -644,6 +645,8 @@ fddb_poll(void)
 	mutex_lock(&lock);
 	apply_pollfds(pollfds, nclients);
 	mutex_unlock(&lock);
+
+	stats_gauge_set(stat_rtr_connections, clients.len);
 	/* Fall through */
 
 success:

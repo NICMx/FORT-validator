@@ -76,6 +76,10 @@ struct rpki_config {
 	} server;
 
 	struct {
+		unsigned int port;
+	} prometheus;
+
+	struct {
 		/* Enables the protocol */
 		bool enabled;
 		/* Protocol preference; compared to http.priority */
@@ -418,6 +422,19 @@ static const struct option_field options[] = {
 		.doc = "Number of iterations the deltas will be stored.",
 		.min = 0,
 		.max = UINT_MAX,
+	},
+
+	/* Prometheus fields */
+	{
+		.id = 14000,
+		.name = "prometheus.port",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, prometheus.port),
+		.doc = "Port to bind the Prometheus server to. "
+		    "Prometheus requires this value and 'server' mode to start. "
+		    "Unlike server.port, prometheus.port will not be resolved.",
+		.min = 1,
+		.max = 0xFFFF,
 	},
 
 	/* RSYNC fields */
@@ -955,6 +972,8 @@ set_default_values(void)
 	rpki_config.server.interval.expire = 7200;
 	rpki_config.server.deltas_lifetime = 2;
 
+	rpki_config.prometheus.port = 0;
+
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
 	rpki_config.rsync.strategy = pstrdup("<deprecated>");
@@ -1226,6 +1245,12 @@ unsigned int
 config_get_deltas_lifetime(void)
 {
 	return rpki_config.server.deltas_lifetime;
+}
+
+unsigned int
+config_get_prometheus_port(void)
+{
+	return rpki_config.prometheus.port;
 }
 
 char const *
