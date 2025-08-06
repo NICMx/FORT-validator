@@ -7,15 +7,21 @@
 #include "log.h"
 #include "stats.h"
 
+#if MHD_VERSION > 0x00097000
+#define MHD_RESULT enum MHD_Result
+#else
+#define MHD_RESULT int
+#endif
+
 #define CONTENT_TYPE "application/openmetrics-text; version=1.0.0; charset=utf-8"
 
 static struct MHD_Daemon *prometheus_daemon;
 
-static enum MHD_Result
+static MHD_RESULT
 respond(struct MHD_Connection *conn, char *msg, unsigned int status)
 {
 	struct MHD_Response *response;
-	enum MHD_Result result;
+	MHD_RESULT result;
 
 	response = MHD_create_response_from_buffer(strlen(msg), msg,
 	    MHD_RESPMEM_PERSISTENT);
@@ -25,12 +31,12 @@ respond(struct MHD_Connection *conn, char *msg, unsigned int status)
 	return result;
 }
 
-static enum MHD_Result
+static MHD_RESULT
 send_metrics(struct MHD_Connection *conn)
 {
 	char *stats;
 	struct MHD_Response *res;
-	enum MHD_Result ret;
+	MHD_RESULT ret;
 
 	pr_op_debug("Handling Prometheus request...");
 
@@ -51,7 +57,7 @@ send_metrics(struct MHD_Connection *conn)
 	return MHD_YES;
 }
 
-static enum MHD_Result
+static MHD_RESULT
 handle_prometheus_req(void *cls, struct MHD_Connection *conn,
 		const char *url, const char *method, const char *version,
 		const char *upload, size_t *uplen, void **state)
