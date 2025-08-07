@@ -41,8 +41,13 @@ send_metrics(struct MHD_Connection *conn)
 	pr_op_debug("Handling Prometheus request...");
 
 	stats = stats_export();
+#if MHD_VERSION > 0x00096000
 	res = MHD_create_response_from_buffer_with_free_callback(strlen(stats),
 	    stats, free);
+#else
+	res = MHD_create_response_from_buffer(strlen(stats), stats,
+	    MHD_RESPMEM_MUST_FREE);
+#endif
 
 	ret = MHD_add_response_header(res, "Content-Type", CONTENT_TYPE);
 	if (ret != MHD_YES) {
