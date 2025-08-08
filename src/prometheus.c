@@ -1,5 +1,6 @@
 #include "prometheus.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <microhttpd.h>
 
@@ -13,7 +14,10 @@
 #define MHD_RESULT int
 #endif
 
-#define CONTENT_TYPE "application/openmetrics-text; version=1.0.0; charset=utf-8"
+#define OPENMETRICS_CT \
+	"application/openmetrics-text; version=1.0.0; charset=utf-8"
+#define PLAINTEXT_CT \
+	"text/plain; version=0.0.4; charset=utf-8"
 
 static struct MHD_Daemon *prometheus_daemon;
 
@@ -31,6 +35,58 @@ respond(struct MHD_Connection *conn, char *msg, unsigned int status)
 	return result;
 }
 
+static float
+find_q(char const *accept, char const *ct)
+{
+	char const *value;
+	char const *limit;
+	char const *qstr;
+	float q;
+
+	value = strstr(accept, ct);
+	if (!value)
+		return 0;
+
+	limit = strchr(value, ',');
+	if (!limit)
+		limit = value + strlen(value);
+
+	qstr = strstr(value, ";q=");
+	if (!qstr || qstr > limit)
+		return 1;
+	return (sscanf(qstr, ";q=%f", &q) == EOF) ? 0.5 /* Shrug */ : q;
+}
+
+static void
+set_content_type(struct MHD_Connection *conn, struct MHD_Response *res)
+{
+	char const *accept;
+	float om_q, txt_q;
+	char const *ct;
+	MHD_RESULT ret;
+
+	accept = MHD_lookup_connection_value (conn, MHD_HEADER_KIND,
+	    MHD_HTTP_HEADER_ACCEPT);
+	if (accept != NULL) {
+		om_q = find_q(accept, "application/openmetrics-text");
+		txt_q = find_q(accept, "text/plain");
+
+		if (om_q < 0.001f && txt_q < 0.001f)
+			/* Likely a browser; these tend to prefer plaintext. */
+			ct = PLAINTEXT_CT;
+		else
+			ct = (om_q >= txt_q) ? OPENMETRICS_CT : PLAINTEXT_CT;
+	} else {
+		ct = OPENMETRICS_CT;
+	}
+
+	ret = MHD_add_response_header(res, "Content-Type", ct);
+	if (ret != MHD_YES) {
+		pr_op_debug("Could not set Content-Type HTTP header.");
+		/* Keep going; maybe the client won't care. */
+	}
+}
+
 static MHD_RESULT
 send_metrics(struct MHD_Connection *conn)
 {
@@ -41,6 +97,7 @@ send_metrics(struct MHD_Connection *conn)
 	pr_op_debug("Handling Prometheus request...");
 
 	stats = stats_export();
+
 #if MHD_VERSION > 0x00096000
 	res = MHD_create_response_from_buffer_with_free_callback(strlen(stats),
 	    stats, free);
@@ -49,17 +106,13 @@ send_metrics(struct MHD_Connection *conn)
 	    MHD_RESPMEM_MUST_FREE);
 #endif
 
-	ret = MHD_add_response_header(res, "Content-Type", CONTENT_TYPE);
-	if (ret != MHD_YES) {
-		pr_op_debug("Could not set Content-Type HTTP header.");
-		/* Keep going; maybe the client won't care. */
-	}
+	set_content_type(conn, res);
 
 	ret = MHD_queue_response(conn, MHD_HTTP_OK, res);
 	MHD_destroy_response(res);
 
 	pr_op_debug("Prometheus request handled.");
-	return MHD_YES;
+	return ret;
 }
 
 static MHD_RESULT
