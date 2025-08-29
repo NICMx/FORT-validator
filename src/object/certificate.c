@@ -544,7 +544,7 @@ validate_public_key(X509 *cert, enum cert_type type)
 		if ((evppkey = X509_get0_pubkey(cert)) == NULL)
 			return val_crypto_err("X509_get0_pubkey() returned NULL");
 		if (X509_verify(cert, evppkey) != 1)
-			return -EINVAL;
+			return val_crypto_err("TA validation failed.");
 	}
 
 	return 0;

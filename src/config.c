@@ -336,7 +336,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 5001,
 		.name = "server.port",
-		.type = &gt_string,
+		.type = &gt_service,
 		.offset = offsetof(struct rpki_config, server.port),
 		.doc = "Default port to which RTR server addresses will bind itself to. Can be a string, in which case a number will be resolved. If all of the addresses have a port, this value isn't utilized.",
 		.json_null_allowed = false,

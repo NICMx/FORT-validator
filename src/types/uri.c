@@ -136,7 +136,7 @@ is_valid_mft_file_chara(uint8_t chara)
 	    || (chara == '_');
 }
 
-/* RFC 6486bis, section 4.2.2 */
+/* RFC 9286, section 4.2.2 */
 static int
 validate_mft_file(IA5String_t *ia5)
 {

@@ -93,7 +93,7 @@ description: Guide to use arguments of FORT Validator.
 	[--work-offline=true|false]
 	[--daemon=true|false]
 	[--server.address=<sequence of strings>]
-	[--server.port=<string>]
+	[--server.port=<unsigned integer or service string>]
 	[--server.backlog=<unsigned integer>]
 	[--server.interval.validation=<unsigned integer>]
 	[--server.interval.refresh=<unsigned integer>]
@@ -373,13 +373,13 @@ Use wildcards to bind to all available addresses. Note that, for historical reas
 
 ### `--server.port`
 
-- **Type:** String
+- **Type:** String or integer
 - **Availability:** `argv` and JSON
-- **Default:** `"323"`
+- **Default:** `323`
 
 TCP port or service the server address(es) will be bound to, if [`--server.address`](#--serveraddress) doesn't override it.
 
-This is a string because a service alias can be used as a valid value. The available aliases are commonly located at `/etc/services`. (See '`$ man 5 services`'.)
+This can be a string because it's not necessarily a port; it's technically a service alias. (For example, if you enter "`http`," it will be resolved to 80). The available aliases are commonly located at `/etc/services`. (See '`$ man 5 services`'.)
 
 > ![img/warn.svg](img/warn.svg) The default port is privileged. To improve security, either change or jail it. See [Non root port binding](run.html#non-root-port-binding).
 
@@ -974,7 +974,7 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"192.0.2.1",
 			"2001:db8::1"
 		],
-		"<a href="#--serverport">port</a>": "8323",
+		"<a href="#--serverport">port</a>": 8323,
 		"<a href="#--serverbacklog">backlog</a>": 4096,
 		"interval": {
 			"<a href="#--serverintervalvalidation">validation</a>": 3600,
