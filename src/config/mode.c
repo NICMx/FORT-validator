@@ -1,6 +1,7 @@
 #include "config/mode.h"
 
 #include <getopt.h>
+#include <string.h>
 
 #include "config/str.h"
 #include "log.h"

@@ -1,6 +1,7 @@
 #include "slurm/db_slurm.h"
 
 #include <errno.h>
+#include <string.h>
 #include <time.h>
 
 #include "common.h"

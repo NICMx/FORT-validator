@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "asn1/asn1c/BIT_STRING.h"

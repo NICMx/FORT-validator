@@ -1,5 +1,9 @@
 #include "sorted_array.h"
 
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+
 #include "alloc.h"
 #include "log.h"
 

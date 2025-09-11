@@ -4,6 +4,8 @@
  */
 #include "asn1/asn1c/xer_encoder.h"
 
+#include <string.h>
+
 #include "asn1/asn1c/asn_internal.h"
 
 /*

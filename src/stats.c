@@ -1,11 +1,12 @@
 #include "stats.h"
 
-#include <pthread.h>
+#include <stdarg.h>
+#include <time.h>
 
 #include "alloc.h"
 #include "common.h"
-#include "log.h"
 #include "data_structure/uthash.h"
+#include "log.h"
 
 struct stats_gauge {
 	char *name;

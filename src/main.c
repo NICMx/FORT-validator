@@ -7,8 +7,8 @@
 #include "nid.h"
 #include "print_file.h"
 #include "prometheus.h"
-#include "stats.h"
 #include "rtr/rtr.h"
+#include "stats.h"
 #include "thread_var.h"
 #include "xml/relax_ng.h"
 

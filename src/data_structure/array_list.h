@@ -1,6 +1,9 @@
 #ifndef SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 #define SRC_DATA_STRUCTURE_ARRAY_LIST_H_
 
+#include <stdlib.h>
+#include <strings.h>
+
 #include "alloc.h"
 #include "data_structure/common.h"
 

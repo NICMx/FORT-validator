@@ -1,6 +1,9 @@
 #include "object/vcard.h"
 
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 
 #include "alloc.h"
 #include "log.h"

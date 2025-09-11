@@ -1,6 +1,7 @@
 #include "rtr/err_pdu.h"
 
 #include <errno.h>
+#include <stdlib.h>
 
 #include "alloc.h"
 #include "rtr/pdu_sender.h"

@@ -5,6 +5,7 @@
 #include "asn1/asn1c/asn_codecs_prim.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_decoder.h"

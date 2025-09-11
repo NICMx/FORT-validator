@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "config.h"

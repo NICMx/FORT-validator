@@ -2,8 +2,8 @@
 
 #include <errno.h>
 #include <getopt.h>
-#include <microhttpd.h>
 #include <libxml/xmlreader.h>
+#include <microhttpd.h>
 #include <openssl/opensslv.h>
 #include <syslog.h>
 

@@ -3,6 +3,7 @@
 #include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
+#include <string.h>
 
 #include "log.h"
 

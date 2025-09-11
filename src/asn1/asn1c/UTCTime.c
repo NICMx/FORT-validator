@@ -7,6 +7,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 
 #include "asn1/asn1c/GeneralizedTime.h"
 #include "asn1/asn1c/asn_internal.h"

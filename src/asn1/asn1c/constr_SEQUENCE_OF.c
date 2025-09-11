@@ -5,6 +5,8 @@
  */
 #include "asn1/asn1c/constr_SEQUENCE_OF.h"
 
+#include <string.h>
+
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/der_encoder.h"

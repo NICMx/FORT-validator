@@ -1,6 +1,7 @@
 #include "config/string_array.h"
 
 #include <getopt.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "config/str.h"

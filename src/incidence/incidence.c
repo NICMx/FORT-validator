@@ -1,6 +1,7 @@
 #include "incidence/incidence.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "common.h"
 #include "data_structure/common.h"

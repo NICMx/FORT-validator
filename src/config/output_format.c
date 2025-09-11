@@ -1,6 +1,7 @@
 #include "config/output_format.h"
 
 #include <getopt.h>
+#include <string.h>
 
 #include "config/str.h"
 #include "log.h"

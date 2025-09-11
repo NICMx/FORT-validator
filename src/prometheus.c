@@ -1,8 +1,9 @@
 #include "prometheus.h"
 
-#include <stdio.h>
-#include <string.h>
 #include <microhttpd.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #include "config.h"
 #include "log.h"
@@ -65,7 +66,7 @@ set_content_type(struct MHD_Connection *conn, struct MHD_Response *res)
 	char const *ct;
 	MHD_RESULT ret;
 
-	accept = MHD_lookup_connection_value (conn, MHD_HEADER_KIND,
+	accept = MHD_lookup_connection_value(conn, MHD_HEADER_KIND,
 	    MHD_HTTP_HEADER_ACCEPT);
 	if (accept != NULL) {
 		om_q = find_q(accept, "application/openmetrics-text");

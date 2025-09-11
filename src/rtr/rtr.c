@@ -3,15 +3,16 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <string.h>
 
 #include "common.h"
 #include "config.h"
 #include "data_structure/array_list.h"
 #include "log.h"
-#include "stats.h"
 #include "rtr/db/vrps.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
+#include "stats.h"
 #include "thread/thread_pool.h"
 
 struct rtr_server {
