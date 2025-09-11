@@ -53,6 +53,7 @@ bool config_get_http_enabled(void);
 unsigned int config_get_http_priority(void);
 unsigned int config_get_http_retry_count(void);
 unsigned int config_get_http_retry_interval(void);
+char const *config_get_http_proxy(void);
 char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
 enum output_format config_get_output_format(void);
