@@ -19,6 +19,7 @@ struct stats_gauge {
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static struct stats_gauge *gauges;
 
+struct stats_gauge *stat_rtr_ready;
 struct stats_gauge *stat_rtr_connections;
 
 /* Steals ownership of @name */
@@ -65,6 +66,7 @@ add_gauge(char *name, size_t namelen, unsigned int value)
 int
 stats_setup(void)
 {
+	stat_rtr_ready = ADD_GAUGE("fort_rtr_ready");
 	stat_rtr_connections = ADD_GAUGE("fort_rtr_current_connections");
 	return 0;
 }

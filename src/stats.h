@@ -2,6 +2,7 @@
 #define SRC_STATS_H_
 
 struct stats_gauge;
+extern struct stats_gauge *stat_rtr_ready;
 extern struct stats_gauge *stat_rtr_connections;
 
 int stats_setup(void);

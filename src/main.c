@@ -49,11 +49,9 @@ fort_server(void)
 
 	rtr_notify();
 
-	/*
-	 * See issue #133.
-	 * TODO (#50) Remove this message once the stats server is implemented.
-	 */
+	/* TODO (#133) Stats ready; remove this message in a couple versions. */
 	pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
+	stats_gauge_set(stat_rtr_ready, 1);
 
 	do {
 		pr_op_info("Main loop: Sleeping.");
