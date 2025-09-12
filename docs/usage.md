@@ -29,6 +29,7 @@ description: Guide to use arguments of FORT Validator.
 	17. [`--server.interval.retry`](#--serverintervalretry)
 	18. [`--server.interval.expire`](#--serverintervalexpire)
 	18. [`--server.deltas.lifetime`](#--serverdeltaslifetime)
+	18. [`--prometheus.port`](#--prometheusport)
 	19. [`--slurm`](#--slurm)
 	20. [`--log.enabled`](#--logenabled)
 	21. [`--log.level`](#--loglevel)
@@ -56,6 +57,7 @@ description: Guide to use arguments of FORT Validator.
 	41. [`--http.low-speed-time`](#--httplow-speed-time)
 	41. [`--http.max-file-size`](#--httpmax-file-size)
 	42. [`--http.ca-path`](#--httpca-path)
+	42. [`--http.proxy`](#--httpproxy)
 	43. [`--output.roa`](#--outputroa)
 	44. [`--output.bgpsec`](#--outputbgpsec)
 	45. [`--output.format`](#--outputformat)
@@ -100,6 +102,7 @@ description: Guide to use arguments of FORT Validator.
 	[--server.interval.retry=<unsigned integer>]
 	[--server.interval.expire=<unsigned integer>]
 	[--server.deltas.lifetime=<unsigned integer>]
+	[--prometheus.port=<unsigned integer>]
 	[--rsync.enabled=true|false]
 	[--rsync.priority=<unsigned integer>]
 	[--rsync.retry.count=<unsigned integer>]
@@ -117,6 +120,7 @@ description: Guide to use arguments of FORT Validator.
 	[--http.low-speed-time=<unsigned integer>]
 	[--http.max-file-size=<unsigned integer>]
 	[--http.ca-path=<directory>]
+	[--http.proxy=<HTTPS URL>]
 	[--log.enabled=true|false]
 	[--log.output=syslog|console]
 	[--log.level=error|warning|info|debug]
@@ -461,6 +465,21 @@ During each validation cycle, Fort generates a new snapshot, as well as the delt
 
 If a router lags behind, to the point Fort has already deleted the deltas it needs to update the router's snapshot, Fort will have to fall back to fetch the entire latest snapshot instead.
 
+### `--prometheus.port`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** `NULL`
+- **Range:** [1, 65535]
+
+TCP port the Prometheus server will be bound to.
+
+The Prometheus server requires `--prometheus.port` to be defined, and [`--mode`](#--mode) to be `server`. Otherwise it will not start.
+
+Stats are served in openmetrics format. See [stats](stats.html).
+
+Unlike [`--server.port`](#--serverport), `--prometheus.port` is strictly a number. (It will not be resolved.)
+
 ### `--slurm`
 
 - **Type:** String (path to file or directory)
@@ -791,6 +810,26 @@ Useful when the CA from the peer isn't located at the default OS certificate bun
 - LibreSSL command (with help): `$ openssl certhash -h`
 
 The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://curl.haxx.se/libcurl/c/CURLOPT_CAPATH.html).
+
+### `--http.proxy`
+
+- **Type:** String (HTTPS URL)
+- **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
+
+Set a proxy to use for HTTP transfers.
+
+It can be a hostname, a dotted numerical IPv4 address or a numerical IPv6 address enclosed in brackets. The port defaults to 1080; append `:<port>` to override.
+
+Alternatively, invoke the usual environment variable (EV):
+
+```
+https_proxy=https://example.com:1234 fort --tal=/path/to/tal
+```
+
+`--http.proxy` takes precedence over the `https_proxy` EV, which in turn takes precedence over the `HTTPS_PROXY` EV.
+
+> There's no `--rsync.proxy` counterpart. For rsync connections, use the `RSYNC_PROXY` EV as usual.
 
 ### `--output.roa`
 

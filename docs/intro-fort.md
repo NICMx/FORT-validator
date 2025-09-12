@@ -24,9 +24,9 @@ Fort is a command-line application intended for UNIX operating systems, written 
 | [issue149](https://github.com/NICMx/FORT-validator/issues/149) | Lock the cache during updates | <span class="urgency-high">High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">2.0.0</a> |
 | [issue113](https://github.com/NICMx/FORT-validator/issues/113) | Detect and properly respond to subtler RRDP session desynchronization | <span class="urgency-medium">Medium</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">2.0.0</a> |
 | [issue124](https://github.com/NICMx/FORT-validator/issues/124) | Atomize output files (`--output.roa` and `--output.bgpsec`) | <span class="urgency-medium">Medium</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">2.0.0</a> |
+| [issue129](https://github.com/NICMx/FORT-validator/issues/129) | Rethink the thread pools | <span class="urgency-medium">Medium</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/12">2.0.0</a> |
 | [issue114](https://github.com/NICMx/FORT-validator/issues/114) | Support automatic TA key rollover | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/13">2.0.1</a> |
-| [issue50](https://github.com/NICMx/FORT-validator/issues/50) | Provide prometheus endpoint | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/14">2.0.2</a> |
-| [issue58](https://github.com/NICMx/FORT-validator/issues/58) | Fort's validation produces no router keys | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/15">2.0.3</a> |
+| [issue58](https://github.com/NICMx/FORT-validator/issues/58) | Fort's validation produces no router keys | <span class="urgency-very-high">Very High</span> | <a href="https://github.com/NICMx/FORT-validator/milestone/14">2.0.2</a> |
 | [issue116](https://github.com/NICMx/FORT-validator/issues/116) | SLURM review | <span class="urgency-high">High</span> | - |
 | [issue118](https://github.com/NICMx/FORT-validator/issues/118) | Implement validation re-reconsidered | <span class="urgency-high">High</span> | - |
 | [issue119](https://github.com/NICMx/FORT-validator/issues/119) | Review IRIs to file names transition | <span class="urgency-high">High</span> | - |
@@ -42,7 +42,6 @@ Fort is a command-line application intended for UNIX operating systems, written 
 | [issue126](https://github.com/NICMx/FORT-validator/issues/126) | Exhaustive URL validation | <span class="urgency-medium">Medium</span> | - |
 | [issue127](https://github.com/NICMx/FORT-validator/issues/127) | Stream RRDP files | <span class="urgency-medium">Medium</span> | - |
 | [issue128](https://github.com/NICMx/FORT-validator/issues/128) | Reuse TCP connections for HTTP requests to same server | <span class="urgency-medium">Medium</span> | - |
-| [issue129](https://github.com/NICMx/FORT-validator/issues/129) | Rethink the thread pools | <span class="urgency-medium">Medium</span> | - |
 | [issue130](https://github.com/NICMx/FORT-validator/issues/130) | Improve documentation | <span class="urgency-medium">Medium</span> | - |
 | [issue151](https://github.com/NICMx/FORT-validator/issues/151) | [Enhancement]: Add ability to set ACLs for router connections | <span class="urgency-medium">Medium</span> | - |
 | [issue152](https://github.com/NICMx/FORT-validator/issues/152) | compliance issue: Fort accepts GeneralizedTime with fractional seconds | <span class="urgency-medium">Medium</span> | - |

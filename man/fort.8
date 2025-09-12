@@ -452,6 +452,16 @@ If a router lags behind, to the point Fort has already deleted the deltas it nee
 .RE
 .P
 
+.B \-\-prometheus.port=\fIUNSIGNED_INTEGER\fR
+.RS 4
+TCP port the Prometheus server will be bound to.
+.P
+The Prometheus server requires \fI--prometheus.port\fR to be defined, and \fI--mode\fR to be \fIserver\fR. Otherwise it will not start.
+.P
+Stats are served in openmetrics format.
+.RE
+.P
+
 .B \-\-log.enabled=\fItrue\fR|\fIfalse\fR
 .RS 4
 Enables the operation logs.
@@ -851,6 +861,15 @@ the SSL library:
 The value specified is utilized in libcurl’s option \fICURLOPT_CAPATH\fR.
 .P
 By default, the path has a NULL value.
+.RE
+.P
+
+.B \-\-http.proxy=\fIURL\fR
+.RS 4
+.P
+Set a proxy to use for HTTP transfers.
+.P
+It can be a hostname, a dotted numerical IPv4 address or a numerical IPv6 address enclosed in brackets. The port defaults to 1080; append \fI:<port>\fR to override.
 .RE
 .P
 
