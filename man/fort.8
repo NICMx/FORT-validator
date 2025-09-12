@@ -1,4 +1,4 @@
-.TH fort 8 "2025-02-05" "v1.6.6" "FORT validator"
+.TH fort 8 "2025-09-12" "v1.6.7" "FORT validator"
 
 .SH NAME
 fort \- RPKI validator and RTR server
@@ -1126,7 +1126,7 @@ to a specific value:
       "192.0.2.1",
       "2001:db8::1"
     ],
-    "port": "8323",
+    "port": 8323,
     "backlog": 4096,
     "interval": {
       "validation": 3600,
@@ -1137,6 +1137,10 @@ to a specific value:
     "deltas": {
       "lifetime": 2
     }
+  },
+
+  "prometheus": {
+    "port": 0
   },
 
   "rsync": {
@@ -1174,14 +1178,15 @@ to a specific value:
       "count": 1,
       "interval": 4
     },
-    "user-agent": "fort/1.6.4",
+    "user-agent": "fort/1.6.7",
     "max-redirs": 10,
     "connect-timeout": 30,
     "transfer-timeout": 900,
     "low-speed-limit": 100000,
     "low-speed-time": 10,
     "max-file-size": 2000000000,
-    "ca-path": "/usr/local/ssl/certs"
+    "ca-path": "/usr/local/ssl/certs",
+    "proxy": "https://example.com:1234"
   },
 
   "log": {

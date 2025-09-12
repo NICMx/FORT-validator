@@ -96,7 +96,7 @@ service_parse_json(struct option_field const *opt, json_t *json, void *result)
 		}
 
 		strval = pmalloc(6);
-		written = snprintf(strval, 6, JSON_INTEGER_FORMAT, intval);
+		written = snprintf(strval, 6, "%" JSON_INTEGER_FORMAT, intval);
 		if (written < 0 || 6 <= written)
 			return pr_op_err("Cannot convert '%s' to string: snprintf returned %d",
 			    opt->name, written);

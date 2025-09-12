@@ -436,7 +436,7 @@ static const struct option_field options[] = {
 		.doc = "Port to bind the Prometheus server to. "
 		    "Prometheus requires this value and 'server' mode to start. "
 		    "Unlike server.port, prometheus.port will not be resolved.",
-		.min = 1,
+		.min = 0,
 		.max = 0xFFFF,
 	},
 
@@ -610,7 +610,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, http.ca_path),
 		.doc = "Directory where CA certificates are found, used to verify the peer",
 		.arg_doc = "<directory>",
-		.json_null_allowed = false,
+		.json_null_allowed = true,
 	}, {
 		.id = 9013,
 		.name = "http.proxy",

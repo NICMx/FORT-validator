@@ -1003,17 +1003,14 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
 	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository",
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
-	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
+	"<a href="#--slurm">slurm</a>": null,
 	"<a href="#--mode">mode</a>": "server",
 	"<a href="#--work-offline">work-offline</a>": false,
 	"<a href="#--daemon">daemon</a>": false,
 
 	"server": {
-		"<a href="#--serveraddress">address</a>": [
-			"192.0.2.1",
-			"2001:db8::1"
-		],
-		"<a href="#--serverport">port</a>": 8323,
+		"<a href="#--serveraddress">address</a>": [ "::" ],
+		"<a href="#--serverport">port</a>": 323,
 		"<a href="#--serverbacklog">backlog</a>": 4096,
 		"interval": {
 			"<a href="#--serverintervalvalidation">validation</a>": 3600,
@@ -1024,6 +1021,10 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"deltas": {
 			"<a href="#--serverdeltaslifetime">lifetime</a>": 2
 		}
+	},
+
+	"prometheus": {
+		"port": 0
 	},
 
 	"rsync": {
@@ -1068,14 +1069,15 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
 		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
 		"<a href="#--httpmax-file-size">max-file-size</a>": 2000000000,
-		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
+		"<a href="#--httpca-path">ca-path</a>": null,
+		"<a href="#--httpproxy">proxy</a>": null
 	},
 
 	"log": {
 		"<a href="#--logenabled">enabled</a>": true,
 		"<a href="#--logoutput">output</a>": "console",
 		"<a href="#--loglevel">level</a>": "warning",
-		"<a href="#--logtag">tag</a>": "Op",
+		"<a href="#--logtag">tag</a>": null,
 		"<a href="#--logfacility">facility</a>": "daemon",
 		"<a href="#--logfile-name-format">file-name-format</a>": "global-url",
 		"<a href="#--logcolor-output">color-output</a>": false
@@ -1114,8 +1116,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	],
 
 	"output": {
-		"<a href="#--outputroa">roa</a>": "/tmp/fort/roas.csv",
-		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv",
+		"<a href="#--outputroa">roa</a>": null,
+		"<a href="#--outputbgpsec">bgpsec</a>": null,
 		"<a href="#--outputformat">format</a>": "csv"
 	},
 
