@@ -2,12 +2,6 @@
 #define SRC_ALLOC_H_
 
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 /* malloc(), but panic on allocation failure. */
 void *pmalloc(size_t size);

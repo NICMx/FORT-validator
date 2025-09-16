@@ -1,5 +1,7 @@
 #include "types/bio_seq.h"
 
+#include <stdlib.h>
+
 #include "alloc.h"
 #include "log.h"
 

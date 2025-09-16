@@ -2,6 +2,7 @@
 
 #include <openssl/bio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "log.h"

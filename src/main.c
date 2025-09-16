@@ -6,7 +6,9 @@
 #include "log.h"
 #include "nid.h"
 #include "print_file.h"
+#include "prometheus.h"
 #include "rtr/rtr.h"
+#include "stats.h"
 #include "thread_var.h"
 #include "xml/relax_ng.h"
 
@@ -47,11 +49,9 @@ fort_server(void)
 
 	rtr_notify();
 
-	/*
-	 * See issue #133.
-	 * TODO (#50) Remove this message once the stats server is implemented.
-	 */
+	/* TODO (#133) Stats ready; remove this message in a couple versions. */
 	pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
+	stats_gauge_set(stat_rtr_ready, 1);
 
 	do {
 		pr_op_info("Main loop: Sleeping.");
@@ -127,9 +127,15 @@ main(int argc, char **argv)
 	error = handle_flags_config(argc, argv);
 	if (error)
 		goto revert_log;
-	error = nid_init();
+	error = stats_setup();
 	if (error)
 		goto revert_config;
+	error = prometheus_setup();
+	if (error)
+		goto revert_stats;
+	error = nid_init();
+	if (error)
+		goto revert_prometheus;
 	error = extension_init();
 	if (error)
 		goto revert_nid;
@@ -167,6 +173,10 @@ revert_http:
 	http_cleanup();
 revert_nid:
 	nid_destroy();
+revert_prometheus:
+	prometheus_teardown();
+revert_stats:
+	stats_teardown();
 revert_config:
 	free_rpki_config();
 revert_log:

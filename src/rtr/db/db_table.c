@@ -19,18 +19,15 @@ struct hashable_key {
 struct db_table {
 	struct hashable_roa *roas;
 	struct hashable_key *router_keys;
+
+	unsigned int total_roas_v4;
+	unsigned int total_roas_v6;
 };
 
 struct db_table *
 db_table_create(void)
 {
-	struct db_table *table;
-
-	table = pmalloc(sizeof(struct db_table));
-	table->roas = NULL;
-	table->router_keys = NULL;
-
-	return table;
+	return pzalloc(sizeof(struct db_table));
 }
 
 void
@@ -64,13 +61,21 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 	errno = 0;
 	HASH_REPLACE(hh, table->roas, data, sizeof(new->data), new, old);
 	error = errno;
+
 	if (error) {
 		pr_val_err("ROA couldn't be added to hash table: %s",
 		    strerror(error));
 		return -error;
 	}
-	if (old != NULL)
+
+	if (old == NULL) {
+		switch (new->data.addr_fam) {
+		case AF_INET:	table->total_roas_v4++; break;
+		case AF_INET6:	table->total_roas_v6++; break;
+		}
+	} else {
 		free(old);
+	}
 
 	return 0;
 }
@@ -155,6 +160,18 @@ unsigned int
 db_table_roa_count(struct db_table *table)
 {
 	return HASH_COUNT(table->roas);
+}
+
+unsigned int
+db_table_roa_count_v4(struct db_table *table)
+{
+	return table->total_roas_v4;
+}
+
+unsigned int
+db_table_roa_count_v6(struct db_table *table)
+{
+	return table->total_roas_v6;
 }
 
 unsigned int

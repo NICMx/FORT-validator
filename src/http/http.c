@@ -213,6 +213,9 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 		    CURL_TIMECOND_IFMODSINCE);
 	}
 
+	if (config_get_http_proxy())
+		setopt_str(result, CURLOPT_PROXY, config_get_http_proxy());
+
 	handler->curl = result;
 	return 0;
 }

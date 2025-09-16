@@ -5,12 +5,6 @@
 #include <openssl/bn.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 int ia5s2string(ASN1_IA5STRING *, char **);
 int BN2string(BIGNUM *, char **);

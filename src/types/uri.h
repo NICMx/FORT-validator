@@ -2,6 +2,7 @@
 #define SRC_TYPES_URI_H_
 
 #include <stdbool.h>
+#include <string.h>
 
 #include "asn1/asn1c/IA5String.h"
 #include "data_structure/array_list.h"

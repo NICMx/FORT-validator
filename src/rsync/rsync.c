@@ -4,8 +4,10 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <syslog.h>
+#include <unistd.h>
 
 #include "alloc.h"
 #include "common.h"

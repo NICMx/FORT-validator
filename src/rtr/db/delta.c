@@ -1,6 +1,7 @@
 #include "rtr/db/delta.h"
 
 #include <stdatomic.h>
+#include <string.h>
 
 #include "data_structure/array_list.h"
 #include "log.h"

@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([fort],[1.6.6],[validadorfort@fortproject.net])
+AC_INIT([fort],[1.6.7],[validadorfort@fortproject.net])
 AC_CONFIG_SRCDIR([src/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
 
@@ -45,6 +45,7 @@ AM_CONDITIONAL([BACKTRACE_ENABLED], [test "x$have_backtrace" != "xno"])
 PKG_CHECK_MODULES([JANSSON], [jansson])
 PKG_CHECK_MODULES([CURL], [libcurl])
 PKG_CHECK_MODULES([XML2], [libxml-2.0])
+PKG_CHECK_MODULES([MICROHTTPD], [libmicrohttpd])
 PKG_CHECK_MODULES([CHECK], [check], [usetests=yes], [usetests=no])
 AM_CONDITIONAL([USE_TESTS], [test "x$usetests" = "xyes"])
 

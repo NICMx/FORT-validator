@@ -10,6 +10,7 @@
 #include "crypto/base64.h"
 #include "line_file.h"
 #include "log.h"
+#include "stats.h"
 #include "thread_var.h"
 
 typedef int (*foreach_uri_cb)(struct tal *, struct rpki_uri *, void *);
@@ -528,6 +529,11 @@ perform_standalone_validation(void)
 		}
 
 		if (!error) {
+			stats_set_tal_vrps(thread->tal_file, "ipv4",
+			    db_table_roa_count_v4(thread->db));
+			stats_set_tal_vrps(thread->tal_file, "ipv6",
+			    db_table_roa_count_v6(thread->db));
+
 			if (db == NULL) {
 				db = thread->db;
 				thread->db = NULL;

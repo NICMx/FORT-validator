@@ -3,7 +3,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <limits.h>
+#include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "alloc.h"
 #include "config.h"

@@ -1,6 +1,7 @@
 #include "json_handler.h"
 
 #include <errno.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "config.h"

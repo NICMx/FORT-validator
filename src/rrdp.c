@@ -1,6 +1,7 @@
 #include "rrdp.h"
 
 #include <ctype.h>
+#include <libxml/globals.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 

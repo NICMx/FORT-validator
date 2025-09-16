@@ -7,6 +7,7 @@
 #include "asn1/asn1c/constr_SEQUENCE.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "asn1/asn1c/OPEN_TYPE.h"
 #include "asn1/asn1c/asn_internal.h"

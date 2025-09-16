@@ -24,11 +24,13 @@ fort_SOURCES += log.h log.c
 fort_SOURCES += nid.h nid.c
 fort_SOURCES += output_printer.h output_printer.c
 fort_SOURCES += print_file.h print_file.c
+fort_SOURCES += prometheus.h prometheus.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += rpp.h rpp.c
 fort_SOURCES += rrdp.h rrdp.c
 fort_SOURCES += sorted_array.h sorted_array.c
 fort_SOURCES += state.h state.c
+fort_SOURCES += stats.h stats.c
 fort_SOURCES += str_token.h str_token.c
 fort_SOURCES += thread_var.h thread_var.c
 fort_SOURCES += json_handler.h json_handler.c
@@ -124,7 +126,7 @@ if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED
 endif
 fort_LDFLAGS = $(LDFLAGS_DEBUG)
-fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS}
+fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS} ${MICROHTTPD_LIBS}
 
 # I'm tired of scrolling up, but feel free to comment this out.
 GCC_WARNS  = -fmax-errors=1

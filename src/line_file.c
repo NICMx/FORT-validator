@@ -1,5 +1,7 @@
 #include "line_file.h"
 
+#include <stdlib.h>
+
 #include "alloc.h"
 #include "file.h"
 #include "log.h"

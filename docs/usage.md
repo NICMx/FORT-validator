@@ -29,6 +29,7 @@ description: Guide to use arguments of FORT Validator.
 	17. [`--server.interval.retry`](#--serverintervalretry)
 	18. [`--server.interval.expire`](#--serverintervalexpire)
 	18. [`--server.deltas.lifetime`](#--serverdeltaslifetime)
+	18. [`--prometheus.port`](#--prometheusport)
 	19. [`--slurm`](#--slurm)
 	20. [`--log.enabled`](#--logenabled)
 	21. [`--log.level`](#--loglevel)
@@ -56,6 +57,7 @@ description: Guide to use arguments of FORT Validator.
 	41. [`--http.low-speed-time`](#--httplow-speed-time)
 	41. [`--http.max-file-size`](#--httpmax-file-size)
 	42. [`--http.ca-path`](#--httpca-path)
+	42. [`--http.proxy`](#--httpproxy)
 	43. [`--output.roa`](#--outputroa)
 	44. [`--output.bgpsec`](#--outputbgpsec)
 	45. [`--output.format`](#--outputformat)
@@ -93,13 +95,14 @@ description: Guide to use arguments of FORT Validator.
 	[--work-offline=true|false]
 	[--daemon=true|false]
 	[--server.address=<sequence of strings>]
-	[--server.port=<string>]
+	[--server.port=<unsigned integer or service string>]
 	[--server.backlog=<unsigned integer>]
 	[--server.interval.validation=<unsigned integer>]
 	[--server.interval.refresh=<unsigned integer>]
 	[--server.interval.retry=<unsigned integer>]
 	[--server.interval.expire=<unsigned integer>]
 	[--server.deltas.lifetime=<unsigned integer>]
+	[--prometheus.port=<unsigned integer>]
 	[--rsync.enabled=true|false]
 	[--rsync.priority=<unsigned integer>]
 	[--rsync.retry.count=<unsigned integer>]
@@ -117,6 +120,7 @@ description: Guide to use arguments of FORT Validator.
 	[--http.low-speed-time=<unsigned integer>]
 	[--http.max-file-size=<unsigned integer>]
 	[--http.ca-path=<directory>]
+	[--http.proxy=<HTTPS URL>]
 	[--log.enabled=true|false]
 	[--log.output=syslog|console]
 	[--log.level=error|warning|info|debug]
@@ -373,13 +377,13 @@ Use wildcards to bind to all available addresses. Note that, for historical reas
 
 ### `--server.port`
 
-- **Type:** String
+- **Type:** String or integer
 - **Availability:** `argv` and JSON
-- **Default:** `"323"`
+- **Default:** `323`
 
 TCP port or service the server address(es) will be bound to, if [`--server.address`](#--serveraddress) doesn't override it.
 
-This is a string because a service alias can be used as a valid value. The available aliases are commonly located at `/etc/services`. (See '`$ man 5 services`'.)
+This can be a string because it's not necessarily a port; it's technically a service alias. (For example, if you enter "`http`," it will be resolved to 80). The available aliases are commonly located at `/etc/services`. (See '`$ man 5 services`'.)
 
 > ![img/warn.svg](img/warn.svg) The default port is privileged. To improve security, either change or jail it. See [Non root port binding](run.html#non-root-port-binding).
 
@@ -460,6 +464,21 @@ When routers first connect to Fort, they request a _snapshot_ of the validation 
 During each validation cycle, Fort generates a new snapshot, as well as the deltas needed to build the new snapshot from the previous one. These are all stored in RAM. `--server.deltas.lifetime` is the number of iterations a set of deltas will be kept before being deallocated. (Recall that every iteration lasts [`--server.interval.validation`](#--serverintervalvalidation) seconds, plus however long the validation takes.)
 
 If a router lags behind, to the point Fort has already deleted the deltas it needs to update the router's snapshot, Fort will have to fall back to fetch the entire latest snapshot instead.
+
+### `--prometheus.port`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** `NULL`
+- **Range:** [1, 65535]
+
+TCP port the Prometheus server will be bound to.
+
+The Prometheus server requires `--prometheus.port` to be defined, and [`--mode`](#--mode) to be `server`. Otherwise it will not start.
+
+Stats are served in openmetrics format. See [stats](stats.html).
+
+Unlike [`--server.port`](#--serverport), `--prometheus.port` is strictly a number. (It will not be resolved.)
 
 ### `--slurm`
 
@@ -792,6 +811,26 @@ Useful when the CA from the peer isn't located at the default OS certificate bun
 
 The value specified is utilized in libcurl's option [CURLOPT_CAPATH](https://curl.haxx.se/libcurl/c/CURLOPT_CAPATH.html).
 
+### `--http.proxy`
+
+- **Type:** String (HTTPS URL)
+- **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
+
+Set a proxy to use for HTTP transfers.
+
+It can be a hostname, a dotted numerical IPv4 address or a numerical IPv6 address enclosed in brackets. The port defaults to 1080; append `:<port>` to override.
+
+Alternatively, invoke the usual environment variable (EV):
+
+```
+https_proxy=https://example.com:1234 fort --tal=/path/to/tal
+```
+
+`--http.proxy` takes precedence over the `https_proxy` EV, which in turn takes precedence over the `HTTPS_PROXY` EV.
+
+> There's no `--rsync.proxy` counterpart. For rsync connections, use the `RSYNC_PROXY` EV as usual.
+
 ### `--output.roa`
 
 - **Type:** String (Path to file)
@@ -964,17 +1003,14 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	"<a href="#--tal">tal</a>": "/tmp/fort/tal/",
 	"<a href="#--local-repository">local-repository</a>": "/tmp/fort/repository",
 	"<a href="#--maximum-certificate-depth">maximum-certificate-depth</a>": 32,
-	"<a href="#--slurm">slurm</a>": "/tmp/fort/test.slurm",
+	"<a href="#--slurm">slurm</a>": null,
 	"<a href="#--mode">mode</a>": "server",
 	"<a href="#--work-offline">work-offline</a>": false,
 	"<a href="#--daemon">daemon</a>": false,
 
 	"server": {
-		"<a href="#--serveraddress">address</a>": [
-			"192.0.2.1",
-			"2001:db8::1"
-		],
-		"<a href="#--serverport">port</a>": "8323",
+		"<a href="#--serveraddress">address</a>": [ "::" ],
+		"<a href="#--serverport">port</a>": 323,
 		"<a href="#--serverbacklog">backlog</a>": 4096,
 		"interval": {
 			"<a href="#--serverintervalvalidation">validation</a>": 3600,
@@ -985,6 +1021,10 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"deltas": {
 			"<a href="#--serverdeltaslifetime">lifetime</a>": 2
 		}
+	},
+
+	"prometheus": {
+		"port": 0
 	},
 
 	"rsync": {
@@ -1029,14 +1069,15 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--httplow-speed-limit">low-speed-limit</a>": 100000,
 		"<a href="#--httplow-speed-time">low-speed-time</a>": 10,
 		"<a href="#--httpmax-file-size">max-file-size</a>": 2000000000,
-		"<a href="#--httpca-path">ca-path</a>": "/usr/local/ssl/certs"
+		"<a href="#--httpca-path">ca-path</a>": null,
+		"<a href="#--httpproxy">proxy</a>": null
 	},
 
 	"log": {
 		"<a href="#--logenabled">enabled</a>": true,
 		"<a href="#--logoutput">output</a>": "console",
 		"<a href="#--loglevel">level</a>": "warning",
-		"<a href="#--logtag">tag</a>": "Op",
+		"<a href="#--logtag">tag</a>": null,
 		"<a href="#--logfacility">facility</a>": "daemon",
 		"<a href="#--logfile-name-format">file-name-format</a>": "global-url",
 		"<a href="#--logcolor-output">color-output</a>": false
@@ -1075,8 +1116,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	],
 
 	"output": {
-		"<a href="#--outputroa">roa</a>": "/tmp/fort/roas.csv",
-		"<a href="#--outputbgpsec">bgpsec</a>": "/tmp/fort/bgpsec.csv",
+		"<a href="#--outputroa">roa</a>": null,
+		"<a href="#--outputbgpsec">bgpsec</a>": null,
 		"<a href="#--outputformat">format</a>": "csv"
 	},
 

@@ -3,6 +3,7 @@
 #include <curl/curl.h>
 #include <errno.h>
 #include <getopt.h>
+#include <string.h>
 
 #include "log.h"
 

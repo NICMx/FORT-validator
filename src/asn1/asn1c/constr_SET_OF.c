@@ -7,6 +7,7 @@
 #include "asn1/asn1c/constr_SET_OF.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "asn1/asn1c/asn_SET_OF.h"
 #include "asn1/asn1c/asn_internal.h"
