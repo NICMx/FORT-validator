@@ -4,12 +4,13 @@ Section: net
 Priority: optional
 Build-Depends: debhelper-compat (= 11),
  debhelper (>= 11),
- pkg-config,
+ pkgconf,
  libcurl4-openssl-dev,
  libjansson-dev,
+ libmicrohttpd-dev,
  libssl-dev,
  libxml2-dev,
-Standards-Version: 4.6.2
+Standards-Version: 4.7.2
 Rules-Requires-Root: no
 Homepage: https://nicmx.github.io/FORT-validator
 Vcs-Git: https://github.com/NICMx/FORT-validator.git -b debian
@@ -19,7 +20,7 @@ Package: fort
 Architecture: any
 Multi-Arch: foreign
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, rsync,
- libcurl4, libxml2,
+ libcurl4, libxml2, libmicrohttpd12,
 Description: RPKI Relying Party and RTR server
  Regularly downloads and validates RPKI repositories. Serves resulting
  Route Origin Attestations (ROAs) and BGPsec Router Keys to routers.

@@ -3,7 +3,7 @@ Description: Changes two configuration defaults to better match the
 Origin: https://salsa.debian.org/md/fort-validator/-/tree/master/debian/patches
 Forwarded: not-needed
 diff --git a/man/fort.8 b/man/fort.8
-index 08ee75b..6c234c5 100644
+index 40b5af8..c7783d1 100644
 --- a/man/fort.8
 +++ b/man/fort.8
 @@ -211,6 +211,8 @@ The TAL ("Trust Anchor Locator") is a text file that lists a few URLs which can
@@ -25,10 +25,10 @@ index 08ee75b..6c234c5 100644
  .P
  
 diff --git a/src/config.c b/src/config.c
-index e3e807c..f3268d0 100644
+index 25a5c76..38e4ae2 100644
 --- a/src/config.c
 +++ b/src/config.c
-@@ -937,8 +937,8 @@ set_default_values(void)
+@@ -968,8 +968,8 @@ set_default_values(void)
  	 * duplicates.
  	 */
  
