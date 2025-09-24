@@ -147,6 +147,7 @@ struct rpki_config {
 	struct {
 		/** Enables operation logs **/
 		bool enabled;
+		bool print_times;
 		/** String tag to identify operation logs **/
 		char *tag;
 		/** Print ANSI color codes? */
@@ -164,6 +165,7 @@ struct rpki_config {
 	struct {
 		/** Enables validation Logs **/
 		bool enabled;
+		bool print_times;
 		/** String tag to identify validation logs **/
 		char *tag;
 		/** Print ANSI color codes? */
@@ -633,6 +635,12 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, log.level),
 		.doc = "Log level to print message of equal or higher importance",
 	}, {
+		.id = 4006,
+		.name = "log.print-times",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, log.print_times),
+		.doc = "(Console output only)",
+	}, {
 		.id = 4003,
 		.name = "log.tag",
 		.type = &gt_string,
@@ -678,6 +686,12 @@ static const struct option_field options[] = {
 		.type = &gt_log_level,
 		.offset = offsetof(struct rpki_config, validation_log.level),
 		.doc = "Log level to print message of equal or higher importance",
+	}, {
+		.id = 4017,
+		.name = "validation-log.print-times",
+		.type = &gt_bool,
+		.offset = offsetof(struct rpki_config, validation_log.print_times),
+		.doc = "(Console output only)",
 	}, {
 		.id = 4013,
 		.name = "validation-log.tag",
@@ -1306,6 +1320,12 @@ config_get_op_log_enabled(void)
 	return rpki_config.log.enabled;
 }
 
+bool
+config_get_op_print_times(void)
+{
+	return rpki_config.log.print_times;
+}
+
 char const *
 config_get_op_log_tag(void)
 {
@@ -1346,6 +1366,12 @@ bool
 config_get_val_log_enabled(void)
 {
 	return rpki_config.validation_log.enabled;
+}
+
+bool
+config_get_val_print_times(void)
+{
+	return rpki_config.validation_log.print_times;
 }
 
 char const *

@@ -32,6 +32,7 @@ struct log_config {
 	bool syslog_enabled; /* Print on syslog? */
 
 	uint8_t level;
+	bool print_times;
 	char const *tag;
 	bool color;
 	int facility;
@@ -106,6 +107,7 @@ static void init_config(struct log_config *cfg)
 	cfg->fprintf_enabled = true;
 	cfg->syslog_enabled = true;
 	cfg->level = LOG_DEBUG;
+	cfg->print_times = true;
 	cfg->tag = NULL;
 	cfg->color = false;
 	cfg->facility = LOG_DAEMON;
@@ -193,11 +195,13 @@ log_start(void)
 	}
 
 	op_config.level = config_get_op_log_level();
+	op_config.print_times = config_get_op_print_times();
 	op_config.tag = config_get_op_log_tag();
 	op_config.color = config_get_op_log_color_output();
 	op_config.facility = config_get_op_log_facility();
 	op_config.rm_filepath = config_get_op_log_file_format() == FNF_NAME;
 	val_config.level = config_get_val_log_level();
+	val_config.print_times = config_get_val_print_times();
 	val_config.tag = config_get_val_log_tag();
 	val_config.color = config_get_val_log_color_output();
 	val_config.facility = config_get_val_log_facility();
@@ -303,7 +307,8 @@ __vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
 	if (cfg->color)
 		fprintf(lvl->stream, "%s", lvl->color);
 
-	print_time(lvl);
+	if (cfg->print_times)
+		print_time(lvl);
 
 	fprintf(lvl->stream, "%s", lvl->label);
 	if (cfg->tag)

@@ -59,6 +59,7 @@ time_t config_get_validation_time(void);
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);
+bool config_get_op_print_times(void);
 char const * config_get_op_log_tag(void);
 bool config_get_op_log_color_output(void);
 enum filename_format config_get_op_log_file_format(void);
@@ -67,6 +68,7 @@ enum log_output config_get_op_log_output(void);
 uint32_t config_get_op_log_facility(void);
 
 bool config_get_val_log_enabled(void);
+bool config_get_val_print_times(void);
 char const * config_get_val_log_tag(void);
 bool config_get_val_log_color_output(void);
 enum filename_format config_get_val_log_file_format(void);
