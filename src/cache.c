@@ -1,17 +1,9 @@
 #include "cache.h"
 
 #include <fcntl.h>
-#include <ftw.h>
 #include <signal.h>
-#include <stdbool.h>
-#include <sys/queue.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
-#include "alloc.h"
 #include "cachetmp.h"
-#include "common.h"
 #include "config.h"
 #include "configure_ac.h"
 #include "file.h"
@@ -21,10 +13,8 @@
 #include "rrdp.h"
 #include "rsync.h"
 #include "task.h"
-#include "types/array.h"
 #include "types/path.h"
 #include "types/str.h"
-#include "types/uri.h"
 #include "types/uthash.h"
 
 enum node_state {

@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "thread_var.h"

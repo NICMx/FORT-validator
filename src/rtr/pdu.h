@@ -6,12 +6,6 @@
 #include <netinet/in.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 enum rtr_version {
 	RTR_V0			= 0,

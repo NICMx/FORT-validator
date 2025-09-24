@@ -3,7 +3,10 @@
 #include <openssl/asn1t.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
+#include <sys/socket.h>
 
+#include "asn1/asn1c/ASIdentifiers.h"
+#include "asn1/asn1c/IPAddressFamily.h"
 #include "hash.h"
 #include "json_util.h"
 #include "libcrypto_util.h"

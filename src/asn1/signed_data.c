@@ -1,7 +1,6 @@
 #include "asn1/signed_data.h"
 
 #include "algorithm.h"
-#include "alloc.h"
 #include "asn1/asn1c/ContentTypePKCS7.h"
 #include "asn1/asn1c/MessageDigest.h"
 #include "asn1/asn1c/SignedDataPKCS7.h"
@@ -11,7 +10,6 @@
 #include "log.h"
 #include "object/certificate.h"
 #include "object/signed_object.h"
-#include "types/name.h"
 
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;

@@ -1,7 +1,6 @@
 #include "object/signed_object.h"
 
 #include "asn1/content_info.h"
-#include "asn1/signed_data.h"
 #include "log.h"
 
 int

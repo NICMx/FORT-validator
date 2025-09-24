@@ -2,7 +2,7 @@
 #define SRC_TYPES_URI_H_
 
 #include <stdbool.h>
-#include <stddef.h>
+#include <string.h>
 
 #include "types/arraylist.h"
 
@@ -38,6 +38,8 @@ void uri_child(struct uri const *, char const *, size_t, struct uri *);
 /* Plural */
 
 DEFINE_ARRAY_LIST_STRUCT(uris, struct uri);
-DECLARE_ARRAY_LIST_FUNCTIONS(uris, struct uri)
+void uris_init(struct uris *);
+void uris_cleanup(struct uris *, void (*cb)(struct uri *));
+void uris_add(struct uris *list, struct uri *elem);
 
 #endif /* SRC_TYPES_URI_H_ */

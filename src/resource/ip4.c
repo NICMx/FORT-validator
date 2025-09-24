@@ -1,7 +1,5 @@
 #include "resource/ip4.h"
 
-#include "types/sorted_array.h"
-
 struct r4_node {
 	uint32_t min; /* This is an IPv4 address in host byte order */
 	uint32_t max; /* This is an IPv4 address in host byte order */

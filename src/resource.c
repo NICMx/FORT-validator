@@ -1,13 +1,12 @@
 #include "resource.h"
 
 #include <errno.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "log.h"
 #include "resource/ip4.h"
 #include "resource/ip6.h"
-#include "thread_var.h"
-#include "types/sorted_array.h"
 
 /* The resources we extracted from one certificate. */
 struct resources {

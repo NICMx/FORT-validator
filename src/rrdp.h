@@ -2,10 +2,9 @@
 #define SRC_RRDP_H_
 
 #include <jansson.h>
-#include <stdbool.h>
-#include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-#include "file.h"
 #include "types/uri.h"
 
 struct rrdp_state;

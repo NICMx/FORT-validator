@@ -3,6 +3,7 @@
 #include "asn1/asn1c/RouteOriginAttestation.h"
 #include "asn1/decode.h"
 #include "log.h"
+#include "object/certificate.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
 #include "validation_handler.h"

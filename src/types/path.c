@@ -1,7 +1,8 @@
 #include "types/path.h"
 
+#include <string.h>
+
 #include "alloc.h"
-#include "log.h"
 #include "types/str.h"
 
 char const *

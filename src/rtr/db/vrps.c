@@ -1,6 +1,6 @@
 #include "rtr/db/vrps.h"
 
-#include <errno.h>
+#include <string.h>
 #include <time.h>
 
 #include "alloc.h"

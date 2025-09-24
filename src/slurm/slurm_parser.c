@@ -4,7 +4,6 @@
 #include <openssl/asn1.h>
 
 #include "algorithm.h"
-#include "alloc.h"
 #include "base64.h"
 #include "json_util.h"
 #include "log.h"

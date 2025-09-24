@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <openssl/sha.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "common.h"

@@ -1,7 +1,7 @@
 #ifndef SRC_OBJECT_TAL_H_
 #define SRC_OBJECT_TAL_H_
 
-#include "stddef.h"
+#include <stddef.h>
 
 /* This is RFC 8630. */
 

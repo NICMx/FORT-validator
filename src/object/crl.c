@@ -2,7 +2,6 @@
 
 #include <openssl/bio.h>
 #include <openssl/bn.h>
-#include <syslog.h>
 
 #include "algorithm.h"
 #include "ext.h"

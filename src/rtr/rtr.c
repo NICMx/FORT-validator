@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <string.h>
 
 #include "common.h"
 #include "config.h"
@@ -10,7 +11,9 @@
 #include "rtr/db/vrps.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
+#include "stats.h"
 #include "thread_pool.h"
+#include "types/address.h"
 #include "types/arraylist.h"
 
 struct rtr_server {
@@ -644,6 +647,8 @@ fddb_poll(void)
 	mutex_lock(&lock);
 	apply_pollfds(pollfds, nclients);
 	mutex_unlock(&lock);
+
+	stats_gauge_set(stat_rtr_connections, clients.len);
 	/* Fall through */
 
 success:

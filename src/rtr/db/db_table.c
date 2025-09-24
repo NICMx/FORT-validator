@@ -1,7 +1,6 @@
 #include "rtr/db/db_table.h"
 
 #include <errno.h>
-#include <pthread.h>
 
 #include "alloc.h"
 #include "common.h"
@@ -21,6 +20,10 @@ struct hashable_key {
 struct db_table {
 	struct hashable_roa *roas;
 	struct hashable_key *router_keys;
+
+	unsigned int total_roas_v4;
+	unsigned int total_roas_v6;
+
 	pthread_mutex_t lock;
 };
 
@@ -29,9 +32,7 @@ db_table_create(void)
 {
 	struct db_table *table;
 
-	table = pmalloc(sizeof(struct db_table));
-	table->roas = NULL;
-	table->router_keys = NULL;
+	table = pzalloc(sizeof(struct db_table));
 	panic_on_fail(pthread_mutex_init(&table->lock, NULL),
 	    "pthread_mutex_init");
 
@@ -81,8 +82,15 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 		    strerror(error));
 		return error;
 	}
-	if (old != NULL)
+
+	if (old == NULL) {
+		switch (new->data.addr_fam) {
+		case AF_INET:	table->total_roas_v4++; break;
+		case AF_INET6:	table->total_roas_v6++; break;
+		}
+	} else {
 		free(old);
+	}
 
 	return 0;
 }
@@ -172,6 +180,18 @@ unsigned int
 db_table_roa_count(struct db_table *table)
 {
 	return HASH_COUNT(table->roas);
+}
+
+unsigned int
+db_table_roa_count_v4(struct db_table *table)
+{
+	return table->total_roas_v4;
+}
+
+unsigned int
+db_table_roa_count_v6(struct db_table *table)
+{
+	return table->total_roas_v6;
 }
 
 unsigned int

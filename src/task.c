@@ -2,9 +2,8 @@
 
 #include <errno.h>
 
-#include "alloc.h"
-#include "common.h"
 #include "log.h"
+#include "object/certificate.h"
 
 STAILQ_HEAD(validation_tasks, validation_task);
 

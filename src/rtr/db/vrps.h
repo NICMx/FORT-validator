@@ -7,8 +7,6 @@
  * This module stores VRPs and their serials.
  */
 
-#include "types/address.h"
-#include "types/asn.h"
 #include "types/delta.h"
 #include "types/serial.h"
 

@@ -8,14 +8,10 @@
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
-#include <syslog.h>
-#include <time.h>
 
 #include "algorithm.h"
 #include "asn1/asn1c/IPAddrBlocks.h"
 #include "asn1/decode.h"
-#include "cache.h"
-#include "common.h"
 #include "config.h"
 #include "ext.h"
 #include "libcrypto_util.h"
@@ -25,13 +21,10 @@
 #include "object/manifest.h"
 #include "object/roa.h"
 #include "object/signed_object.h"
-#include "object/tal.h"
 #include "task.h"
 #include "thread_var.h"
 #include "types/name.h"
-#include "types/path.h"
 #include "types/str.h"
-#include "types/uri.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -108,11 +101,42 @@ validate_signature_algorithm(X509 *cert)
 	return validate_certificate_signature_algorithm(nid, "Certificate");
 }
 
+static bool
+is_valid_printable_string_char(char c)
+{
+	if ('A' <= c && c <= 'Z')
+		return true;
+	if ('a' <= c && c <= 'z')
+		return true;
+	if ('0' <= c && c <= '9')
+		return true;
+	if (c == ' ')
+		return true;
+	if ('\'' <= c && c <= ')')
+		return true;
+	if ('+' <= c && c <= '/')
+		return true;
+	if (c == ':' || c == '=' || c == '?')
+		return true;
+	return false;
+}
+
+static int
+validate_printable_string(char const *str, char const *what)
+{
+	for (; *str != '\0'; str++)
+		if (!is_valid_printable_string_char(*str))
+			return pr_val_err("Invalid character in '%s' PrintableString: 0x%X",
+			    what, *str);
+	return 0;
+}
+
 static int
 validate_issuer(struct rpki_certificate *cert)
 {
 	X509_NAME *issuer;
 	struct rfc5280_name *name;
+	char const *commonName;
 	int error;
 
 	issuer = X509_get_issuer_name(cert->x509);
@@ -123,10 +147,13 @@ validate_issuer(struct rpki_certificate *cert)
 	error = x509_name_decode(issuer, "issuer", &name);
 	if (error)
 		return error;
-	pr_clutter("Issuer: %s", x509_name_commonName(name));
-	x509_name_put(name);
 
-	return 0;
+	commonName = x509_name_commonName(name);
+	pr_clutter("Issuer: %s", commonName);
+	error = validate_printable_string(commonName, "Issuer");
+
+	x509_name_put(name);
+	return error;
 }
 
 static int
@@ -173,12 +200,16 @@ static int
 validate_subject(X509 *cert)
 {
 	struct rfc5280_name *name;
+	char const *commonName;
 	int error;
 
 	error = x509_name_decode(X509_get_subject_name(cert), "subject", &name);
 	if (error)
 		return error;
-	pr_clutter("Subject: %s", x509_name_commonName(name));
+
+	commonName = x509_name_commonName(name);
+	pr_clutter("Subject: %s", commonName);
+	error = validate_printable_string(commonName, "Subject");
 
 	x509_name_put(name);
 	return error;

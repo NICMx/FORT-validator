@@ -1,13 +1,14 @@
 #include "types/str.h"
 
 #include <errno.h>
-#include <string.h>
 #include <openssl/bio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "alloc.h"
-#include "array.h"
 #include "log.h"
-#include "types/path.h"
+#include "types/array.h"
 
 /* Allocates the result; will need free(). Never returns NULL. */
 char *

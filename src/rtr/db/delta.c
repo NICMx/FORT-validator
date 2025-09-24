@@ -1,6 +1,7 @@
 #include "rtr/db/delta.h"
 
 #include <stdatomic.h>
+#include <string.h>
 
 #include "log.h"
 #include "types/address.h"

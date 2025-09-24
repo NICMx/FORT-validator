@@ -3,8 +3,9 @@
 
 #include <sys/queue.h>
 
+#include "asn1/signed_data.h"
+#include "object/tal.h"
 #include "types/map.h"
-#include "object/certificate.h"
 
 enum validation_task_type {
 	VTT_RPP,

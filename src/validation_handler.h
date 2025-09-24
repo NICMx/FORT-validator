@@ -1,7 +1,8 @@
 #ifndef SRC_VALIDATION_HANDLER_H_
 #define SRC_VALIDATION_HANDLER_H_
 
-#include "rtr/db/vrps.h"
+#include "rtr/db/db_table.h"
+#include "types/asn.h"
 
 void vhandle_init(void);
 struct db_table *vhandle_claim(void);

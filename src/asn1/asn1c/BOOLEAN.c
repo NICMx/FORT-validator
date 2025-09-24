@@ -4,6 +4,8 @@
  */
 #include "asn1/asn1c/BOOLEAN.h"
 
+#include <string.h>
+
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_decoder.h"
 #include "asn1/asn1c/der_encoder.h"

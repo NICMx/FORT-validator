@@ -2,7 +2,7 @@
 #define SRC_RPP_H_
 
 #include <openssl/x509.h>
-#include <time.h>
+#include <sys/stat.h>
 
 #include "asn1/asn1c/INTEGER.h"
 #include "types/map.h"

@@ -5,6 +5,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <string.h>
 #include <syslog.h>
 
 #include "config/str.h"

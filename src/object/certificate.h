@@ -1,15 +1,13 @@
 #ifndef SRC_OBJECT_CERTIFICATE_H_
 #define SRC_OBJECT_CERTIFICATE_H_
 
-#include <openssl/x509.h>
 #include <stdatomic.h>
 #include <sys/queue.h>
 
-#include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/SignatureValue.h"
+#include "asn1/signed_data.h"
 #include "cache.h"
+#include "object/tal.h"
 #include "resource.h"
-#include "types/rpp.h"
 
 /* Certificate types in the RPKI */
 enum cert_type {

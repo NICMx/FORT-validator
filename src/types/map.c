@@ -1,6 +1,5 @@
 #include "types/map.h"
 
-#include "alloc.h"
 #include "config.h"
 #include "log.h"
 #include "types/path.h"

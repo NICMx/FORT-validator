@@ -1,8 +1,7 @@
 #include "config/time.h"
 
-#include <errno.h>
 #include <getopt.h>
-#include <time.h>
+#include <string.h>
 
 #include "common.h"
 #include "log.h"

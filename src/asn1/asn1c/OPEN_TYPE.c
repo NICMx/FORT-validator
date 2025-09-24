@@ -4,6 +4,8 @@
  */
 #include "asn1/asn1c/OPEN_TYPE.h"
 
+#include <string.h>
+
 #include "asn1/asn1c/asn_internal.h"
 
 asn_TYPE_operation_t asn_OP_OPEN_TYPE = {

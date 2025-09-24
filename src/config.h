@@ -2,10 +2,12 @@
 #define SRC_CONFIG_H_
 
 #include <arpa/inet.h>
+#include <curl/curl.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include "config/file_type.h"
 #include "config/filename_format.h"
@@ -27,6 +29,7 @@ unsigned int config_get_interval_refresh(void);
 unsigned int config_get_interval_retry(void);
 unsigned int config_get_interval_expire(void);
 unsigned int config_get_deltas_lifetime(void);
+unsigned int config_get_prometheus_port(void);
 char const *config_get_slurm(void);
 
 char const *config_get_tal(void);
@@ -40,7 +43,7 @@ long config_get_http_connect_timeout(void);
 long config_get_http_transfer_timeout(void);
 long config_get_http_low_speed_limit(void);
 long config_get_http_low_speed_time(void);
-long config_get_http_max_file_size(void);
+curl_off_t config_get_http_max_file_size(void);
 char const *config_get_http_ca_path(void);
 unsigned int config_get_rrdp_delta_threshold(void);
 bool config_get_rsync_enabled(void);
@@ -48,6 +51,7 @@ unsigned int config_rsync_max(void);
 long config_rsync_timeout(void);
 char const *config_get_rsync_program(void);
 bool config_get_http_enabled(void);
+char const *config_get_http_proxy(void);
 char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
 enum output_format config_get_output_format(void);

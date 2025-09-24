@@ -6,10 +6,12 @@
 #include <dirent.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "alloc.h"
-#include "config.h"
 #include "log.h"
 
 validation_verdict const VV_CONTINUE = "Continue";

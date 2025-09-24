@@ -13,6 +13,7 @@ fort_SOURCES += cache.c cache.h
 fort_SOURCES += cachetmp.c cachetmp.h
 fort_SOURCES += common.c common.h
 fort_SOURCES += config/boolean.c config/boolean.h
+fort_SOURCES += config/curl_offset.c config/curl_offset.h
 fort_SOURCES += config/filename_format.h config/filename_format.c
 fort_SOURCES += config/file_type.h config/file_type.c
 fort_SOURCES += config.h config.c
@@ -48,6 +49,7 @@ fort_SOURCES += object/tal.h object/tal.c
 fort_SOURCES += object/vcard.h object/vcard.c
 fort_SOURCES += output_printer.h output_printer.c
 fort_SOURCES += print_file.h print_file.c
+fort_SOURCES += prometheus.h prometheus.c
 fort_SOURCES += relax_ng.c relax_ng.h
 fort_SOURCES += resource/asn.h resource/asn.c
 fort_SOURCES += resource.h resource.c
@@ -70,6 +72,7 @@ fort_SOURCES += sig.h sig.c
 fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
+fort_SOURCES += stats.h stats.c
 fort_SOURCES += stream.h stream.c
 fort_SOURCES += task.h task.c
 fort_SOURCES += thread_pool.c thread_pool.h
@@ -103,7 +106,7 @@ if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED
 fort_LDFLAGS = -rdynamic
 endif
-fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS}
+fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS} ${MICROHTTPD_LIBS}
 
 GCC_WARNS  = -fmax-errors=1 -fanalyzer
 GCC_WARNS += -pedantic-errors -Waddress -Walloc-zero -Walloca

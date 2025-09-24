@@ -12,6 +12,8 @@ void db_table_destroy(struct db_table *);
 int db_table_join(struct db_table *, struct db_table *);
 
 unsigned int db_table_roa_count(struct db_table *);
+unsigned int db_table_roa_count_v4(struct db_table *);
+unsigned int db_table_roa_count_v6(struct db_table *);
 unsigned int db_table_router_key_count(struct db_table *);
 
 int db_table_foreach_roa(struct db_table const *, vrp_foreach_cb, void *);

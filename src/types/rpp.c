@@ -1,7 +1,5 @@
 #include "types/rpp.h"
 
-#include "types/array.h"
-
 void
 rpp_cleanup(struct rpp *rpp)
 {

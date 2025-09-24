@@ -8,7 +8,6 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "alloc.h"
 #include "asn1/asn1c/BIT_STRING.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/ber_decoder.h"

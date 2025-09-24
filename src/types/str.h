@@ -4,6 +4,7 @@
 #include <openssl/asn1.h>
 #include <openssl/bn.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 struct sized_string {
 	char const *str;

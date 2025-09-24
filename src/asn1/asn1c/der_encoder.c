@@ -5,6 +5,7 @@
 #include "asn1/asn1c/der_encoder.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "asn1/asn1c/asn_internal.h"
 

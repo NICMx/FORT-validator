@@ -9,11 +9,13 @@
 #include "nid.h"
 #include "output_printer.h"
 #include "print_file.h"
+#include "prometheus.h"
 #include "relax_ng.h"
+#include "rsync.h"
 #include "rtr/db/vrps.h"
 #include "rtr/rtr.h"
-#include "rsync.h"
 #include "sig.h"
+#include "stats.h"
 #include "task.h"
 #include "thread_var.h"
 
@@ -54,11 +56,9 @@ fort_server(void)
 
 	rtr_notify();
 
-	/*
-	 * See issue #133.
-	 * TODO (#50) Remove this message once the stats server is implemented.
-	 */
+	/* TODO (#133) Stats ready; remove this message in a couple versions. */
 	pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
+	stats_gauge_set(stat_rtr_ready, 1);
 
 	do {
 		pr_op_info("Main loop: Sleeping.");
@@ -69,7 +69,7 @@ fort_server(void)
 		if (error == EINTR)
 			break;
 		if (error) {
-			pr_op_debug("Main loop: %s", strerror(error));
+			pr_op_debug("Main loop: %s", strerror(abs(error)));
 			continue;
 		}
 		if (changed)
@@ -138,9 +138,15 @@ main(int argc, char **argv)
 	error = thvar_init();
 	if (error)
 		goto revert_rsync;
-	error = nid_init();
+	error = stats_setup();
 	if (error)
 		goto revert_rsync;
+	error = prometheus_setup();
+	if (error)
+		goto revert_stats;
+	error = nid_init();
+	if (error)
+		goto revert_prometheus;
 	error = extension_init();
 	if (error)
 		goto revert_nid;
@@ -190,6 +196,10 @@ revert_hash:
 	hash_teardown();
 revert_nid:
 	nid_destroy();
+revert_prometheus:
+	prometheus_teardown();
+revert_stats:
+	stats_teardown();
 revert_rsync:
 	rsync_teardown();
 revert_config:

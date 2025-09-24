@@ -1,6 +1,7 @@
 #include "config/file_type.h"
 
 #include <getopt.h>
+#include <string.h>
 
 #include "config/str.h"
 #include "log.h"

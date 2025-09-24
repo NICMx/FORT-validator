@@ -1,16 +1,16 @@
 #include "config.h"
 
-#include <curl/curl.h>
-#include <errno.h>
 #include <getopt.h>
 #include <libxml/xmlreader.h>
 #include <limits.h>
+#include <microhttpd.h>
 #include <openssl/opensslv.h>
-#include <stdlib.h>
+#include <sys/socket.h>
 #include <syslog.h>
 
 #include "alloc.h"
 #include "config/boolean.h"
+#include "config/curl_offset.h"
 #include "config/incidences.h"
 #include "config/str.h"
 #include "config/time.h"
@@ -22,6 +22,7 @@
 #include "init.h"
 #include "json_handler.h"
 #include "log.h"
+#include "object/tal.h"
 #include "thread_pool.h"
 #include "types/array.h"
 #include "types/path.h"
@@ -89,6 +90,10 @@ struct rpki_config {
 	} server;
 
 	struct {
+		unsigned int port;
+	} prometheus;
+
+	struct {
 		/* Enables the protocol */
 		bool enabled;
 		/* Deprecated; does nothing. */
@@ -119,13 +124,12 @@ struct rpki_config {
 		unsigned int low_speed_limit;
 		/* CURLOPT_LOW_SPEED_TIME for our HTTP transfers. */
 		unsigned int low_speed_time;
-		/*
-		 * CURLOPT_MAXFILESIZE, except it also works for unknown size
-		 * files. (Though this is reactive, not preventive.)
-		 */
-		unsigned int max_file_size;
+		/* CURLOPT_MAXFILESIZE_LARGE for our HTTP transfers. */
+		curl_off_t max_file_size;
 		/* Directory where CA certs to verify peers are found */
 		char *ca_path;
+		/* See CURLOPT_PROXY */
+		char *proxy;
 	} http;
 
 	struct {
@@ -366,7 +370,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 5001,
 		.name = "server.port",
-		.type = &gt_string,
+		.type = &gt_service,
 		.offset = offsetof(struct rpki_config, server.port),
 		.doc = "Default port to which RTR server addresses will bind itself to. Can be a string, in which case a number will be resolved. If all of the addresses have a port, this value isn't utilized.",
 		.json_null_allowed = false,
@@ -453,6 +457,19 @@ static const struct option_field options[] = {
 		.doc = "Number of iterations the deltas will be stored.",
 		.min = 0,
 		.max = UINT_MAX,
+	},
+
+	/* Prometheus fields */
+	{
+		.id = 14000,
+		.name = "prometheus.port",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, prometheus.port),
+		.doc = "Port to bind the Prometheus server to. "
+		    "Prometheus requires this value and 'server' mode to start. "
+		    "Unlike server.port, prometheus.port will not be resolved.",
+		.min = 0,
+		.max = 0xFFFF,
 	},
 
 	/* RSYNC fields */
@@ -588,7 +605,7 @@ static const struct option_field options[] = {
 	}, {
 		.id = 9011,
 		.name = "http.max-file-size",
-		.type = &gt_uint,
+		.type = &gt_curl_offset,
 		.offset = offsetof(struct rpki_config, http.max_file_size),
 		.doc = "Fort will refuse to download files larger than this number of bytes.",
 		.min = 0,
@@ -600,7 +617,15 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, http.ca_path),
 		.doc = "Directory where CA certificates are found, used to verify the peer",
 		.arg_doc = "<directory>",
-		.json_null_allowed = false,
+		.json_null_allowed = true,
+	}, {
+		.id = 9013,
+		.name = "http.proxy",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, http.proxy),
+		.doc = "Name of proxy to use",
+		.arg_doc = "<URI>",
+		.json_null_allowed = true,
 	},
 
 	/* RRDP */
@@ -936,10 +961,13 @@ print_config(void)
 	struct option_field const *opt;
 
 	pr_op_info(PACKAGE_STRING);
-	pr_op_info("  libcrypto: " OPENSSL_VERSION_TEXT);
-	pr_op_info("  jansson:   " JANSSON_VERSION);
-	pr_op_info("  libcurl:   " LIBCURL_VERSION);
-	pr_op_info("  libxml:    " LIBXML_DOTTED_VERSION);
+	pr_op_info("  libcrypto:     " OPENSSL_VERSION_TEXT);
+	pr_op_info("  jansson:       " JANSSON_VERSION);
+	pr_op_info("  libcurl:       " LIBCURL_VERSION);
+	pr_op_info("  libxml:        " LIBXML_DOTTED_VERSION);
+	pr_op_info("  libmicrohttpd: %x.%x.%x-%x",
+	    MHD_VERSION >> 24, (MHD_VERSION >> 16) & 0xFF,
+	    (MHD_VERSION >> 8) & 0xFF, MHD_VERSION & 0xFF);
 
 	pr_op_info("Configuration {");
 
@@ -986,6 +1014,8 @@ set_default_values(void)
 	rpki_config.server.interval.expire = 7200;
 	rpki_config.server.deltas_lifetime = 2;
 
+	rpki_config.prometheus.port = 0;
+
 	rpki_config.rsync.enabled = true;
 	rpki_config.rsync.priority = 50;
 	rpki_config.rsync.max = 1;
@@ -1002,8 +1032,9 @@ set_default_values(void)
 	rpki_config.http.transfer_timeout = 900;
 	rpki_config.http.low_speed_limit = 100000;
 	rpki_config.http.low_speed_time = 10;
-	rpki_config.http.max_file_size = 1000000000;
+	rpki_config.http.max_file_size = 2000000000;
 	rpki_config.http.ca_path = NULL; /* Use system default */
+	rpki_config.http.proxy = NULL;
 
 	/* TODO (fine) 64 may be too much; optimize it. */
 	rpki_config.rrdp.delta_threshold = 64;
@@ -1040,6 +1071,8 @@ set_default_values(void)
 static int
 validate_config(void)
 {
+	char const *proxy;
+
 	if (rpki_config.mode == PRINT_FILE)
 		return 0;
 
@@ -1066,6 +1099,14 @@ validate_config(void)
 
 	if (rpki_config.slurm != NULL && !file_is_valid(rpki_config.slurm, true))
 		return pr_op_err("Invalid slurm location.");
+
+	if (rpki_config.http.proxy == NULL) {
+		proxy = curl_getenv("https_proxy");
+		if (proxy == NULL)
+			proxy = curl_getenv("HTTPS_PROXY");
+		if (proxy != NULL && proxy[0] != '\0')
+			rpki_config.http.proxy = pstrdup(proxy);
+	}
 
 	return 0;
 }
@@ -1284,6 +1325,12 @@ config_get_deltas_lifetime(void)
 	return rpki_config.server.deltas_lifetime;
 }
 
+unsigned int
+config_get_prometheus_port(void)
+{
+	return rpki_config.prometheus.port;
+}
+
 char const *
 config_get_slurm(void)
 {
@@ -1449,6 +1496,12 @@ config_get_http_enabled(void)
 }
 
 char const *
+config_get_http_proxy(void)
+{
+	return rpki_config.http.proxy;
+}
+
+char const *
 config_get_http_user_agent(void)
 {
 	return rpki_config.http.user_agent;
@@ -1484,7 +1537,7 @@ config_get_http_low_speed_time(void)
 	return rpki_config.http.low_speed_time;
 }
 
-long
+curl_off_t
 config_get_http_max_file_size(void)
 {
 	return rpki_config.http.max_file_size;

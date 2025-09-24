@@ -1,11 +1,10 @@
 #include "rrdp.h"
 
-#include <openssl/bn.h>
+#include <libxml/globals.h>
 #include <openssl/sha.h>
 #include <sys/queue.h>
 
 #include "base64.h"
-#include "cache.h"
 #include "cachetmp.h"
 #include "common.h"
 #include "config.h"
@@ -15,11 +14,9 @@
 #include "json_util.h"
 #include "log.h"
 #include "relax_ng.h"
+#include "rtr/db/delta.h"
 #include "thread_var.h"
-#include "types/arraylist.h"
-#include "types/path.h"
 #include "types/str.h"
-#include "types/uri.h"
 #include "types/uthash.h"
 
 /* RRDP's XML namespace */

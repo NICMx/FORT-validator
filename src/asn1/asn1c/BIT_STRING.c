@@ -6,6 +6,7 @@
 #include "asn1/asn1c/BIT_STRING.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "asn1/asn1c/asn_internal.h"
 #include "asn1/asn1c/xer_encoder.h"

@@ -11,7 +11,6 @@
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
-#include "asn1/asn1c/INTEGER.h"
 #include "asn1/asn1c/asn_internal.h"
 #include "json_util.h"
 

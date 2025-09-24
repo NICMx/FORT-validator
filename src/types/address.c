@@ -1,9 +1,10 @@
 #include "types/address.h"
 
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "log.h"
-#include "thread_var.h"
 
 static void
 init_quadrant(struct in6_addr *addr, unsigned int slot, uint32_t value)

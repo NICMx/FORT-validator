@@ -1,4 +1,4 @@
-.TH fort 8 "2024-08-19" "v1.6.3" "FORT validator"
+.TH fort 8 "2025-09-12" "v1.6.7" "FORT validator"
 
 .SH NAME
 fort \- RPKI validator and RTR server
@@ -452,6 +452,16 @@ If a router lags behind, to the point Fort has already deleted the deltas it nee
 .RE
 .P
 
+.B \-\-prometheus.port=\fIUNSIGNED_INTEGER\fR
+.RS 4
+TCP port the Prometheus server will be bound to.
+.P
+The Prometheus server requires \fI--prometheus.port\fR to be defined, and \fI--mode\fR to be \fIserver\fR. Otherwise it will not start.
+.P
+Stats are served in openmetrics format.
+.RE
+.P
+
 .B \-\-log.enabled=\fItrue\fR|\fIfalse\fR
 .RS 4
 Enables the operation logs.
@@ -803,7 +813,7 @@ Default: \fI10\fR
 .RS 4
 Maximum amount of bytes files are allowed to length during HTTP transfers.
 .P
-Default: \fI1000000000\fR (1 GB)
+Default: \fI2000000000\fR (2 GB)
 .RE
 .P
 
@@ -827,6 +837,15 @@ the SSL library:
 The value specified is utilized in libcurl’s option \fICURLOPT_CAPATH\fR.
 .P
 By default, the path has a NULL value.
+.RE
+.P
+
+.B \-\-http.proxy=\fIURL\fR
+.RS 4
+.P
+Set a proxy to use for HTTP transfers.
+.P
+It can be a hostname, a dotted numerical IPv4 address or a numerical IPv6 address enclosed in brackets. The port defaults to 1080; append \fI:<port>\fR to override.
 .RE
 .P
 
@@ -1073,7 +1092,7 @@ to a specific value:
       "192.0.2.1",
       "2001:db8::1"
     ],
-    "port": "8323",
+    "port": 8323,
     "backlog": 4096,
     "interval": {
       "validation": 3600,
@@ -1084,6 +1103,10 @@ to a specific value:
     "deltas": {
       "lifetime": 2
     }
+  },
+
+  "prometheus": {
+    "port": 0
   },
 
   "rsync": {
@@ -1121,20 +1144,21 @@ to a specific value:
       "count": 1,
       "interval": 4
     },
-    "user-agent": "fort/1.6.2",
+    "user-agent": "fort/1.6.7",
     "max-redirs": 10,
     "connect-timeout": 30,
     "transfer-timeout": 900,
     "low-speed-limit": 100000,
     "low-speed-time": 10,
-    "max-file-size": 1000000000,
-    "ca-path": "/usr/local/ssl/certs"
+    "max-file-size": 2000000000,
+    "ca-path": "/usr/local/ssl/certs",
+    "proxy": "https://example.com:1234"
   },
 
   "log": {
     "enabled": true,
     "output": "console",
-    "level": "info",
+    "level": "warning",
     "tag": "Op",
     "facility": "daemon",
     "file-name-format": "global-url",
@@ -1260,7 +1284,7 @@ well as some dummy Router Keys (BGPsec) info:
 .P
 
 .\".SH COPYRIGHT
-.\" FORT-validator 2024
+.\" FORT-validator 2025
 .\" MIT License
 
 .SH SEE ALSO

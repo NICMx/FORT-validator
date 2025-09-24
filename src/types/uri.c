@@ -2,11 +2,10 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <sys/socket.h>
 
-#include "alloc.h"
 #include "common.h"
 #include "log.h"
-#include "types/path.h"
 
 #define URI_ALLOW_UNKNOWN_SCHEME (1 << 0)
 
@@ -99,6 +98,7 @@ is_uppercase(unsigned char chr)
 	return 'A' <= chr && chr <= 'Z';
 }
 
+/* RFC 9286, section 4.2.2 */
 static bool
 is_lowercase_hex(unsigned char chr)
 {

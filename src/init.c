@@ -1,6 +1,8 @@
 #include "init.h"
 
 #include <errno.h>
+#include <stdio.h>
+
 #include "config.h"
 #include "http.h"
 #include "types/path.h"

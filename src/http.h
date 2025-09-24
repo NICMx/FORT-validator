@@ -2,7 +2,6 @@
 #define SRC_HTTP_H_
 
 #include <curl/curl.h>
-#include <stdbool.h>
 
 #include "types/uri.h"
 

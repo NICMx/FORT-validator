@@ -8,10 +8,8 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "alloc.h"
-#include "common.h"
-#include "asn1/asn1c/asn_codecs_prim.h"
 #include "asn1/asn1c/asn_internal.h"
+#include "common.h"
 #include "json_util.h"
 
 /*

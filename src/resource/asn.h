@@ -1,8 +1,6 @@
 #ifndef SRC_RESOURCE_ASN_H_
 #define SRC_RESOURCE_ASN_H_
 
-#include <stdbool.h>
-
 #include "types/asn.h"
 #include "types/sorted_array.h"
 

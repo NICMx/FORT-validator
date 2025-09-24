@@ -4,18 +4,15 @@
 #include "object/manifest.h"
 
 #include "algorithm.h"
-#include "alloc.h"
 #include "asn1/asn1c/Manifest.h"
 #include "asn1/decode.h"
-#include "common.h"
 #include "config.h"
 #include "hash.h"
 #include "log.h"
+#include "object/certificate.h"
 #include "object/crl.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
-#include "types/path.h"
-#include "types/uri.h"
 
 static int
 decode_manifest(struct signed_object *so, struct Manifest **result)

@@ -1,11 +1,8 @@
 #ifndef SRC_CACHE_LOCAL_CACHE_H_
 #define SRC_CACHE_LOCAL_CACHE_H_
 
-#include <stdbool.h>
 #include "common.h"
-#include "types/map.h"
 #include "types/rpp.h"
-#include "types/uri.h"
 
 int cache_setup1(void);
 int cache_setup2(void);

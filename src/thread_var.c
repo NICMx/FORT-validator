@@ -2,7 +2,6 @@
 
 #include <pthread.h>
 
-#include "alloc.h"
 #include "log.h"
 
 static pthread_key_t filenames_key;

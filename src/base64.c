@@ -4,6 +4,8 @@
 #include <openssl/buffer.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "alloc.h"
 #include "log.h"

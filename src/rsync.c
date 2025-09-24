@@ -4,21 +4,18 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
-#include <stream.h>
+#include <stdarg.h>
 #include <sys/queue.h>
 #include <sys/wait.h>
-#include <syslog.h>
 
-#include "alloc.h"
+#include "asn1/asn1c/RsyncRequest.h"
+#include "asn1/asn1c/ber_decoder.h"
+#include "asn1/asn1c/der_encoder.h"
 #include "common.h"
 #include "config.h"
 #include "log.h"
-#include "types/array.h"
+#include "stream.h"
 #include "types/map.h"
-
-#include "asn1/asn1c/ber_decoder.h"
-#include "asn1/asn1c/der_encoder.h"
-#include "asn1/asn1c/RsyncRequest.h"
 
 #define RSP /* rsync spawner prefix */ "[rsync spawner] "
 #define SRTP "[spawner response thread] "

@@ -1,8 +1,9 @@
 #include "stream.h"
 
 #include <errno.h>
-#include <stdbool.h>
-#include <stddef.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "alloc.h"
 #include "log.h"

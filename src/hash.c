@@ -1,6 +1,7 @@
 #include "hash.h"
 
 #include <openssl/evp.h>
+#include <stdlib.h>
 
 #include "alloc.h"
 #include "file.h"

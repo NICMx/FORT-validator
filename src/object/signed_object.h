@@ -2,8 +2,8 @@
 #define SRC_OBJECT_SIGNED_OBJECT_H_
 
 #include "asn1/asn1c/ContentInfo.h"
-#include "asn1/asn1c/SignedData.h"
 #include "asn1/oid.h"
+#include "asn1/signed_data.h"
 #include "types/map.h"
 
 struct signed_object {

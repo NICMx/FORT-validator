@@ -1,7 +1,5 @@
 #include "validation_handler.h"
 
-#include "rtr/db/db_table.h"
-
 static struct db_table *table;
 
 void

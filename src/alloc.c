@@ -1,5 +1,8 @@
 #include "alloc.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "log.h"
 
 void *

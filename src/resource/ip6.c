@@ -1,6 +1,6 @@
 #include "resource/ip6.h"
 
-#include "types/sorted_array.h"
+#include <string.h>
 
 static int
 addr_cmp(struct in6_addr const *a, struct in6_addr const *b)

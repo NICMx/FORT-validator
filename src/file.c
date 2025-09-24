@@ -1,13 +1,11 @@
 #include "file.h"
 
-#include <fcntl.h>
 #include <ftw.h>
 
 #include "alloc.h"
 #include "common.h"
 #include "config/mode.h"
 #include "log.h"
-#include "types/path.h"
 
 int
 file_open(char const *file_name, FILE **result, struct stat *stat)

@@ -1,23 +1,10 @@
 #ifndef SRC_JSON_UTIL_H_
 #define SRC_JSON_UTIL_H_
 
-#include <arpa/inet.h>
-#include <jansson.h>
 #include <netdb.h>
-#include <netinet/in.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #include "asn1/asn1c/INTEGER.h"
-#include "file.h"
 #include "types/uri.h"
 
 /*

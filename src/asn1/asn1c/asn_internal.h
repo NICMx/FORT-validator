@@ -10,6 +10,8 @@
 #ifndef __EXTENSIONS__
 #define __EXTENSIONS__          /* for Sun */
 #endif
+#include <stdlib.h>
+
 #include "asn1/asn1c/asn_codecs.h"
 #include "asn1/asn1c/asn_system.h"
 

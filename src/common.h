@@ -1,8 +1,10 @@
 #ifndef SRC_RTR_COMMON_H_
 #define SRC_RTR_COMMON_H_
 
+#include <netinet/in.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>

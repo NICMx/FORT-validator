@@ -1,12 +1,8 @@
 #include "object/tal.h"
 
 #include <ctype.h>
-#include <sys/queue.h>
-#include <time.h>
 
 #include "base64.h"
-#include "cache.h"
-#include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
@@ -14,8 +10,6 @@
 #include "task.h"
 #include "thread_var.h"
 #include "types/path.h"
-#include "types/str.h"
-#include "types/uri.h"
 
 struct tal {
 	char const *file_name;
@@ -315,6 +309,12 @@ perform_standalone_validation(void)
 			pr_crit("pthread_join(%zu) failed: %s",
 			    t, strerror(error));
 	}
+
+//	// FIXME
+//	stats_set_tal_vrps(thread->tal_file, "ipv4",
+//	    db_table_roa_count_v4(thread->db));
+//	stats_set_tal_vrps(thread->tal_file, "ipv6",
+//	    db_table_roa_count_v6(thread->db));
 
 end:	if (task_stop())
 		error = EINVAL; /* pick_up_work(), VTT_TAL */

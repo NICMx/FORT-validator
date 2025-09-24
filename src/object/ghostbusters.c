@@ -1,8 +1,6 @@
 #include "object/ghostbusters.h"
 
-#include <errno.h>
-
-#include "log.h"
+#include "object/certificate.h"
 #include "object/signed_object.h"
 #include "object/vcard.h"
 #include "thread_var.h"

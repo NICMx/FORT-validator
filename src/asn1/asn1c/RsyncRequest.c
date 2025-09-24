@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/RsyncRequest.h"
 
+#include "asn1/asn1c/constr_SEQUENCE.h"
+
 static asn_TYPE_member_t asn_MBR_RsyncRequest_1[] = {
 	{ ATF_NOFLAGS, 0, offsetof(struct RsyncRequest, url),
 		(ASN_TAG_CLASS_UNIVERSAL | (4 << 2)),

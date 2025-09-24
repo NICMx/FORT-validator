@@ -1,6 +1,10 @@
 #include "rtr/pdu_stream.h"
 
 #include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "alloc.h"
 #include "log.h"

@@ -1,11 +1,8 @@
 #include "http.h"
 
-#include "alloc.h"
-#include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
-#include "types/uri.h"
 
 struct http_handler {
 	CURL *curl;
@@ -54,6 +51,20 @@ setopt_long(CURL *curl, CURLoption opt, long value)
 	if (result != CURLE_OK) {
 		fprintf(stderr, "curl_easy_setopt(%d, %ld) failure: %s\n",
 		    opt, value, curl_easy_strerror(result));
+	}
+}
+
+static void
+setopt_curlofft(CURL *curl, CURLoption opt, curl_off_t value)
+{
+	CURLcode result;
+
+	result = curl_easy_setopt(curl, opt, value);
+	if (result != CURLE_OK) {
+		fprintf(stderr,
+		    "curl_easy_setopt(%d, %" CURL_FORMAT_CURL_OFF_T
+		    ") returned %d: %s\n",
+		    opt, value, result, curl_easy_strerror(result));
 	}
 }
 
@@ -143,7 +154,7 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 	    config_get_http_low_speed_limit());
 	setopt_long(result, CURLOPT_LOW_SPEED_TIME,
 	    config_get_http_low_speed_time());
-	setopt_long(result, CURLOPT_MAXFILESIZE,
+	setopt_curlofft(result, CURLOPT_MAXFILESIZE_LARGE,
 	    config_get_http_max_file_size());
 	setopt_writefunction(result);
 
@@ -180,6 +191,9 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 		    CURL_TIMECOND_IFMODSINCE);
 	}
 
+	if (config_get_http_proxy())
+		setopt_str(result, CURLOPT_PROXY, config_get_http_proxy());
+
 	handler->curl = result;
 	return 0;
 }
@@ -209,8 +223,8 @@ validate_file_size(struct write_callback_arg *args)
 	}
 
 	ratio = args->total_bytes / (float) config_get_http_max_file_size();
-	if (ratio > 0.5f) {
-		pr_op_warn("File size exceeds 50%% of the configured limit (%zu/%ld bytes).",
+	if (ratio > 0.4f) {
+		pr_op_warn("File size exceeds 40%% of the configured limit (%zu/%ld bytes).",
 		    args->total_bytes, config_get_http_max_file_size());
 	}
 

@@ -1,6 +1,9 @@
 #ifndef SRC_TYPES_ARRAYLIST_H_
 #define SRC_TYPES_ARRAYLIST_H_
 
+#include <stdlib.h>
+#include <strings.h>
+
 #include "alloc.h"
 #include "types/array.h"
 
@@ -13,11 +16,6 @@
 		/** Actual allocated slots in @array. */		\
 		size_t capacity;					\
 	}
-
-#define DECLARE_ARRAY_LIST_FUNCTIONS(name, elem_type)			\
-	void name##_init(struct name *);				\
-	void name##_cleanup(struct name *, void (*cb)(elem_type *));	\
-	void name##_add(struct name *list, elem_type *elem);
 
 #define DEFINE_ARRAY_LIST_FUNCTIONS(name, elem_type, modifiers)		\
 	modifiers void							\

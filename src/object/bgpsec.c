@@ -2,7 +2,7 @@
 
 #include "log.h"
 #include "object/certificate.h"
-#include "validation_handler.h"
+#include "types/router_key.h"
 
 struct resource_params {
 	unsigned char const *ski;

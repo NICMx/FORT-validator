@@ -9,13 +9,8 @@
 #define	_RsyncRequest_H_
 
 /* Including external dependencies */
-#include "types/uri.h"
 #include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "types/uri.h"
 
 /* RsyncRequest */
 typedef struct RsyncRequest {
@@ -31,9 +26,4 @@ extern asn_TYPE_descriptor_t asn_DEF_RsyncRequest;
 
 int RsyncRequest_init(struct RsyncRequest *, struct uri const *, char const *);
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _RsyncRequest_H_ */
-#include "asn1/asn1c/asn_internal.h"
