@@ -7,7 +7,8 @@
 #include "types/rpp.h"
 #include "types/uri.h"
 
-int cache_setup(void);		/* Init this module */
+int cache_setup1(void);
+int cache_setup2(void);
 void cache_atexit(void);
 
 int cache_prepare(void);	/* Prepare cache for new validation cycle */
@@ -38,8 +39,8 @@ struct extension_uris {
 void exturis_init(struct extension_uris *);
 void exturis_cleanup(struct extension_uris *);
 
-validation_verdict cache_refresh_by_url(struct uri const *, char const **);
-validation_verdict cache_get_fallback(struct uri const *, char const **);
+validation_verdict cache_refresh_by_url(struct uri const *, char **);
+validation_verdict cache_get_fallback(struct uri const *, char **);
 
 struct cache_cage;
 validation_verdict cache_refresh_by_uris(struct extension_uris *,

@@ -7,7 +7,6 @@
 
 #include "alloc.h"
 #include "log.h"
-#include "thread_var.h"
 
 /**
  * It's an RFC5280 name, but from RFC 6487's perspective.
@@ -186,10 +185,10 @@ end:	x509_name_put(parent_subject);
 void
 x509_name_pr_clutter(const char *prefix, X509_NAME *name)
 {
+	struct rfc5280_name *printable;
+
 	if (!pr_clutter_enabled())
 		return;
-
-	struct rfc5280_name *printable;
 
 	if (name == NULL) {
 		pr_clutter("%s: (null)", prefix);

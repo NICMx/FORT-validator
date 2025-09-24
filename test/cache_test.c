@@ -136,6 +136,7 @@ static struct cache_cage *
 rsync_dance(char *url)
 {
 	/* Queue the rsync (includes rsync simulation) */
+	dl_error = 0;
 	ck_assert_ptr_eq(NULL, run_dl_rsync(url, VV_BUSY, 1));
 	/* Signal rsync completion; no need to wait */
 	finish_rsync();
@@ -148,7 +149,7 @@ run_dl_https(char const *url, unsigned int expected_calls,
     validation_verdict expected_vv, char const *expected_result)
 {
 	struct uri uri;
-	char const *result;
+	char *result = NULL;
 
 	ck_assert_ptr_eq(NULL, uri_init(&uri, url));
 
@@ -161,6 +162,7 @@ run_dl_https(char const *url, unsigned int expected_calls,
 	ck_assert_uint_eq(expected_calls, https_counter);
 
 	ck_assert_pstr_eq(expected_result, result);
+	free(result);
 	ck_assert_str_eq(VV_CONTINUE, cache_get_fallback(&uri, &result));
 	ck_assert_ptr_eq(NULL, result);
 

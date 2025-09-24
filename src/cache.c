@@ -272,8 +272,6 @@ node2json(struct cache_node *node)
 		goto fail;
 	if (json_add_str(json, "path", node->path))
 		goto fail;
-	if (node->verdict && json_add_str(json, "error", node->verdict))
-		goto fail;
 	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
 		goto fail;
 	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
@@ -427,7 +425,7 @@ cache_atexit(void)
 }
 
 int
-cache_setup(void)
+cache_setup1(void)
 {
 	char const *cachedir;
 	int error;
@@ -444,6 +442,14 @@ cache_setup(void)
 		pr_op_err("Cannot cd to %s: %s", cachedir, strerror(error));
 		return error;
 	}
+
+	return 0;
+}
+
+int
+cache_setup2(void)
+{
+	int error;
 
 	init_tables();
 
@@ -1004,30 +1010,36 @@ get_fallback(struct extension_uris *uris)
 	return (difftime(rsync->success_ts, rrdp->success_ts) > 0) ? rsync : rrdp;
 }
 
-/* Do not free nor modify the result. */
 validation_verdict
-cache_refresh_by_url(struct uri const *url, char const **result)
+cache_refresh_by_url(struct uri const *url, char **result)
 {
 	struct cache_node *node = NULL;
 	validation_verdict vv;
 
-	if (uri_is_https(url))
+	if (uri_is_https(url)) {
 		vv = do_refresh(&cache.https, url, &node);
-	else if (uri_is_rsync(url))
-		vv = do_refresh(&cache.rsync, url, &node);
-	else
-		vv = VV_FAIL;
+		if (vv != VV_CONTINUE)
+			goto oops;
+		*result = node ? pstrdup(node->path) : NULL;
+		return VV_CONTINUE;
+	}
 
-	*result = node ? node->path : NULL;
+	if (uri_is_rsync(url)) {
+		vv = do_refresh(&cache.rsync, url, &node);
+		if (vv != VV_CONTINUE)
+			goto oops;
+		*result = path_join(node->path, strip_rsync_module(uri_str(url)));
+		return VV_CONTINUE;
+	}
+
+	vv = VV_FAIL;
+oops:	*result = NULL;
 	return vv;
 }
 
-/*
- * HTTPS (TAs) and rsync only; don't use this for RRDP.
- * Do not free nor modify the result.
- */
+/* HTTPS (TAs) and rsync only; don't use this for RRDP. */
 validation_verdict
-cache_get_fallback(struct uri const *url, char const **result)
+cache_get_fallback(struct uri const *url, char **result)
 {
 	struct cache_node *node;
 
@@ -1045,7 +1057,7 @@ cache_get_fallback(struct uri const *url, char const **result)
 		return VV_CONTINUE;
 	}
 
-	*result = node->path;
+	*result = pstrdup(node->path);
 	return VV_CONTINUE;
 }
 

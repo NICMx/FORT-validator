@@ -9,7 +9,6 @@
 #include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"
-#include "thread_var.h"
 
 static json_t *
 unimplemented(void const *arg)

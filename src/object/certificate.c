@@ -129,10 +129,6 @@ validate_issuer(struct rpki_certificate *cert)
 	return 0;
 }
 
-/*
- * Compare public keys, call @diff_alg_cb when the algorithm is different, call
- * @diff_pk_cb when the public key is different; return 0 if both are equal.
- */
 static int
 spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
 {
@@ -201,12 +197,12 @@ decode_spki(struct tal *tal)
 	spki = d2i_X509_PUBKEY(NULL, &cursor, len);
 
 	if (spki == NULL) {
-		op_crypto_err("The public key cannot be decoded.");
+		op_crypto_err("The TAL's public key cannot be decoded.");
 		goto fail;
 	}
 	if (cursor != origin + len) {
 		X509_PUBKEY_free(spki);
-		op_crypto_err("The public key contains trailing garbage.");
+		op_crypto_err("The TAL's public key contains trailing garbage.");
 		goto fail;
 	}
 
@@ -440,7 +436,7 @@ validate_public_key(struct rpki_certificate *cert)
 		if ((evppkey = X509_get0_pubkey(cert->x509)) == NULL)
 			return val_crypto_err("X509_get0_pubkey() returned NULL");
 		if (X509_verify(cert->x509, evppkey) != 1)
-			return EINVAL;
+			return val_crypto_err("Invalid signature.");
 	}
 
 	return 0;
@@ -1232,7 +1228,7 @@ handle_caRepository(struct uri const *uri, void *arg)
 	char const *cr;
 
 	cr = uri_str(uri);
-	pr_clutter("caRepository: %s", caRepo);
+	pr_clutter("caRepository: %s", cr);
 
 	if (!uri_is_rsync(uri)) {
 		pr_val_debug("Ignoring non-rsync caRepository '%s'.", cr);

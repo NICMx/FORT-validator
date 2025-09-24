@@ -23,6 +23,20 @@ static bool enabled = true;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t awakener = PTHREAD_COND_INITIALIZER;
 
+static char const *
+task_name(struct validation_task *task)
+{
+	switch (task->type) {
+	case VTT_RPP:
+		return uri_str(&task->u.ca->map.url);
+	case VTT_TAL:
+		return task->u.tal;
+	}
+
+	pr_crit("Unknown task type: %u", task->type);
+	return NULL;
+}
+
 static void
 task_free(struct validation_task *task)
 {
@@ -231,7 +245,7 @@ task_dequeue(struct validation_task *prev)
 			STAILQ_REMOVE_HEAD(&waiting, lh);
 			mutex_unlock(&lock);
 			pr_op_debug("task_dequeue(): Claimed task '%s'.",
-			    uri_str(&task->u.ca->map.url));
+			    task_name(task));
 			return task;
 		}
 

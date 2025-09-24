@@ -335,10 +335,12 @@ post_task(struct cache_mapping *map, struct rsync_tasks *tasks,
 
 	if (tasks->a >= config_rsync_max()) {
 		LIST_INSERT_HEAD(&tasks->queued, task, lh);
-		pr_op_debug(RSP "Queued new task.");
+		pr_op_debug(RSP "Queued task %d: %s -> %s",
+		    task->pid, uri_str(&task->url), task->path);
 	} else {
 		activate_task(tasks, task, now);
-		pr_op_debug(RSP "Got new task: %d", task->pid);
+		pr_op_debug(RSP "Got new task %d: %s -> %s",
+		    task->pid, uri_str(&task->url), task->path);
 	}
 }
 
@@ -743,6 +745,9 @@ rsync_setup(char const *program, ...)
 	char const *arg;
 	int error;
 
+	if (!config_get_rsync_enabled())
+		return;
+
 	if (program != NULL) {
 		rsync_args[0] = arg = program;
 		va_start(args, program);
@@ -858,6 +863,9 @@ end:	mutex_unlock(&pssk.wrlock);
 void
 rsync_teardown(void)
 {
+	if (!config_get_rsync_enabled())
+		return;
+
 	spsk_cleanup();
 	wait_subprocess("rsync spawner", spawner);
 }

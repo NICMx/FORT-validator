@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <openssl/err.h>
 #include <stdarg.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -66,7 +67,45 @@ MOCK_VOID_PRINT(pr_val_debug, PR_COLOR_DBG)
 MOCK_VOID_PRINT(pr_val_info, PR_COLOR_INF)
 MOCK_INT_PRINT(pr_val_warn, PR_COLOR_WRN, 0)
 MOCK_INT_PRINT(pr_val_err, PR_COLOR_ERR, EINVAL)
-MOCK_INT_PRINT(val_crypto_err, PR_COLOR_ERR, EINVAL)
+
+struct crypto_cb_arg {
+	unsigned int stack_size;
+	int (*error_fn)(const char *, ...);
+};
+
+static int
+log_crypto_error(const char *str, size_t len, void *_arg)
+{
+	struct crypto_cb_arg *arg = _arg;
+	arg->error_fn("-> %s", str);
+	arg->stack_size++;
+	return 1;
+}
+
+static int
+crypto_err(int (*error_fn)(const char *, ...))
+{
+	struct crypto_cb_arg arg;
+
+	error_fn("libcrypto error stack:");
+
+	arg.stack_size = 0;
+	arg.error_fn = error_fn;
+	ERR_print_errors_cb(log_crypto_error, &arg);
+	if (arg.stack_size == 0)
+		error_fn("   <Empty>");
+	else
+		error_fn("End of libcrypto stack.");
+
+	return EINVAL;
+}
+
+int
+val_crypto_err(const char *format, ...)
+{
+	MOCK_PRINT(PR_COLOR_ERR);
+	return crypto_err(pr_val_err);
+}
 
 void
 enomem_panic(void)

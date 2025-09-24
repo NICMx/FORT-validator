@@ -128,6 +128,10 @@ main(int argc, char **argv)
 	if (error)
 		goto revert_log;
 
+	error = cache_setup1();
+	if (error)
+		goto revert_config;
+
 	rsync_setup(NULL, NULL); /* Fork rsync spawner ASAP */
 	register_signal_handlers();
 
@@ -152,7 +156,7 @@ main(int argc, char **argv)
 	error = vrps_init();
 	if (error)
 		goto revert_relax_ng;
-	error = cache_setup();
+	error = cache_setup2();
 	if (error)
 		goto revert_vrps;
 	error = output_setup();
@@ -188,6 +192,7 @@ revert_nid:
 	nid_destroy();
 revert_rsync:
 	rsync_teardown();
+revert_config:
 	free_rpki_config();
 revert_log:
 	log_teardown();

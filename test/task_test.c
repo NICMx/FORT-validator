@@ -206,12 +206,11 @@ user_thread(void *arg)
 	printf("th%d: Started.\n", thid);
 
 	while ((task = task_dequeue(task)) != NULL) {
-		printf("- th%d: Dequeued '%s'\n", thid, uri_str(&task->u.ca->map.url));
+		printf("- th%d: Dequeued '%s'\n", thid, task_name(task));
 		total_dequeued++;
 
 		if (certificate_traverse_mock(task->u.ca, thid) == EBUSY) {
-			printf("+ th%d: Requeuing '%s'\n",
-			    thid, uri_str(&task->u.ca->map.url));
+			printf("+ th%d: Requeuing '%s'\n", thid, task_name(task));
 			task_requeue_dormant(task);
 			task = NULL;
 		}
