@@ -78,7 +78,7 @@ add_roa(struct db_table *table, struct hashable_roa *new)
 	mutex_unlock(&table->lock);
 
 	if (error) {
-		pr_val_err("ROA couldn't be added to hash table: %s",
+		pr_err("ROA couldn't be added to hash table: %s",
 		    strerror(error));
 		return error;
 	}
@@ -110,7 +110,7 @@ add_router_key(struct db_table *table, struct hashable_key *new)
 	mutex_unlock(&table->lock);
 
 	if (error) {
-		pr_val_err("Router Key couldn't be added to hash table: %s",
+		pr_err("Router Key couldn't be added to hash table: %s",
 		    strerror(error));
 		return error;
 	}

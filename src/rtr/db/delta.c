@@ -98,7 +98,7 @@ get_deltas_array4(struct deltas *deltas, int op)
 		return &deltas->v4.removes;
 	}
 
-	pr_crit("Unknown delta operation: %d", op);
+	pr_panic("Unknown delta operation: %d", op);
 	return NULL; /* Warning shutupper */
 }
 
@@ -112,7 +112,7 @@ get_deltas_array6(struct deltas *deltas, int op)
 		return &deltas->v6.removes;
 	}
 
-	pr_crit("Unknown delta operation: %d", op);
+	pr_panic("Unknown delta operation: %d", op);
 	return NULL; /* Warning shutupper */
 }
 
@@ -143,7 +143,7 @@ deltas_add_roa(struct deltas *deltas, struct vrp const *vrp, int op,
 		return;
 	}
 
-	pr_crit("Unknown protocol: [%u %s/%u-%u %u] %c %u/%u "
+	pr_panic("Unknown protocol: [%u %s/%u-%u %u] %c %u/%u "
 	    "(Please report this output to https://github.com/NICMx/FORT-validator/issues/89)",
 	    vrp->asn,
 	    addr2str6(&vrp->prefix.v6, buffer),
@@ -174,7 +174,7 @@ deltas_add_router_key(struct deltas *deltas, struct router_key const *key,
 		return;
 	}
 
-	pr_crit("Unknown delta operation: %d", op);
+	pr_panic("Unknown delta operation: %d", op);
 }
 
 bool

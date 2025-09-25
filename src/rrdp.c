@@ -234,14 +234,14 @@ parse_ulong(xmlTextReaderPtr reader, char const *attr, unsigned long *result)
 
 	str = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 	if (str == NULL)
-		return pr_val_err("Couldn't find xml attribute '%s'", attr);
+		return pr_err("Couldn't find xml attribute '%s'", attr);
 
 	errno = 0;
 	*result = strtoul((char const *) str, NULL, 10);
 	error = errno;
 	xmlFree(str);
 	if (error) {
-		pr_val_err("Invalid long value '%s': %s", str, strerror(error));
+		pr_err("Invalid long value '%s': %s", str, strerror(error));
 		return error;
 	}
 
@@ -283,12 +283,12 @@ parse_string(xmlTextReaderPtr reader, char const *attr)
 	if (attr == NULL) {
 		result = xmlTextReaderValue(reader);
 		if (result == NULL)
-			pr_val_err("Tag '%s' seems to be empty.",
+			pr_err("Tag '%s' seems to be empty.",
 			    xmlTextReaderConstLocalName(reader));
 	} else {
 		result = xmlTextReaderGetAttribute(reader, BAD_CAST attr);
 		if (result == NULL)
-			pr_val_err("Tag '%s' is missing attribute '%s'.",
+			pr_err("Tag '%s' is missing attribute '%s'.",
 			    xmlTextReaderConstLocalName(reader), attr);
 	}
 
@@ -354,7 +354,7 @@ parse_hash(xmlTextReaderPtr reader, unsigned char **result, size_t *result_len)
 
 	xmlFree(xmlattr);
 	if (error)
-		return pr_val_err("The '" RRDP_ATTR_HASH "' xml attribute does not appear to be a SHA-256 hash.");
+		return pr_err("The '" RRDP_ATTR_HASH "' xml attribute does not appear to be a SHA-256 hash.");
 	return 0;
 }
 
@@ -369,7 +369,7 @@ validate_version(xmlTextReaderPtr reader, unsigned long expected)
 		return error;
 
 	if (version != expected)
-		return pr_val_err("Invalid version, must be '%lu' and is '%lu'.",
+		return pr_err("Invalid version, must be '%lu' and is '%lu'.",
 		    expected, version);
 
 	return 0;
@@ -390,7 +390,7 @@ parse_serial(xmlTextReaderPtr reader, struct rrdp_serial *serial)
 	if (BN_dec2bn(&serial->num, serial->str) == 0)
 		goto fail;
 	if (BN_is_negative(serial->num)) {
-		pr_val_err("Serial '%s' is negative.", serial->str);
+		pr_err("Serial '%s' is negative.", serial->str);
 		goto fail;
 	}
 
@@ -414,7 +414,7 @@ parse_session(xmlTextReaderPtr reader, struct rrdp_session *meta)
 	 */
 	if (!xmlStrEqual(xmlTextReaderConstNamespaceUri(reader),
 	    BAD_CAST RRDP_NAMESPACE))
-		return pr_val_err("Namespace isn't '%s', current value is '%s'",
+		return pr_err("Namespace isn't '%s', current value is '%s'",
 		    RRDP_NAMESPACE, xmlTextReaderConstNamespaceUri(reader));
 
 	error = validate_version(reader, 1);
@@ -448,13 +448,13 @@ validate_session(xmlTextReaderPtr reader, struct parser_args *args)
 		return error;
 
 	if (strcmp(args->session->session_id, actual.session_id) != 0) {
-		error = pr_val_err("File session id [%s] doesn't match notification's session id [%s]",
+		error = pr_err("File session id [%s] doesn't match notification's session id [%s]",
 		    args->session->session_id, actual.session_id);
 		goto end;
 	}
 
 	if (BN_cmp(actual.serial.num, args->session->serial.num) != 0) {
-		error = pr_val_err("File serial [%s] doesn't match notification's serial [%s]",
+		error = pr_err("File serial [%s] doesn't match notification's serial [%s]",
 		    actual.serial.str, args->session->serial.str);
 		goto end;
 	}
@@ -485,7 +485,7 @@ parse_file_metadata(xmlTextReaderPtr reader, struct file_metadata *meta)
 	errmsg = uri_init(&meta->uri, (char const *)xmlattr);
 	xmlFree(xmlattr);
 	if (errmsg)
-		return pr_val_err("Cannot parse '%s' as a URI: %s",
+		return pr_err("Cannot parse '%s' as a URI: %s",
 		    xmlattr, errmsg);
 
 	error = parse_hash(reader, &meta->hash, &meta->hash_len);
@@ -529,7 +529,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 	if (error)
 		return error;
 	if (xmlTextReaderRead(reader) != 1) {
-		error = pr_val_err(
+		error = pr_err(
 		    "Couldn't read publish content of element '%s'",
 		    uri_str(&tag.meta.uri)
 		);
@@ -546,7 +546,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 	}
 	if (!base64_decode((char *)base64_str, 0, &tag.content, &tag.content_len)) {
 		xmlFree(base64_str);
-		error = pr_val_err("Cannot decode publish tag's base64.");
+		error = pr_err("Cannot decode publish tag's base64.");
 		goto end;
 	}
 	xmlFree(base64_str);
@@ -561,7 +561,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 	if (file) {
 		if (tag.meta.hash == NULL) {
 			// XXX watch out for this in the log before release
-			error = pr_val_err("RRDP desync: "
+			error = pr_err("RRDP desync: "
 			    "<publish> is attempting to create '%s', "
 			    "but the file is already cached.",
 			    uri_str(&tag.meta.uri));
@@ -579,7 +579,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 		 */
 		if (remove(file->map.path) < 0) {
 			error = errno;
-			pr_val_err("Cannot delete %s: %s",
+			pr_err("Cannot delete %s: %s",
 			    file->map.path, strerror(error));
 			if (error != ENOENT)
 				goto end;
@@ -588,7 +588,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 	} else {
 		if (tag.meta.hash != NULL) {
 			// XXX watch out for this in the log before release
-			error = pr_val_err("RRDP desync: "
+			error = pr_err("RRDP desync: "
 			    "<publish> is attempting to overwrite '%s', "
 			    "but the file is absent in the cache.",
 			    uri_str(&tag.meta.uri));
@@ -623,7 +623,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 	if (!is_known_extension(&tag.meta.uri))
 		goto end; /* Mirror rsync filters */
 	if (!tag.meta.hash) {
-		error = pr_val_err("Withdraw '%s' is missing a hash.",
+		error = pr_err("Withdraw '%s' is missing a hash.",
 		    uri_str(&tag.meta.uri));
 		goto end;
 	}
@@ -633,7 +633,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 	file = state_find_file(args->state, &tag.meta.uri);
 
 	if (!file) {
-		error = pr_val_err("Broken RRDP: "
+		error = pr_err("Broken RRDP: "
 		    "<withdraw> is attempting to delete unknown file '%s'.",
 		    uri_str(&tag.meta.uri));
 		goto end;
@@ -644,7 +644,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 		goto end;
 
 	if (remove(file->map.path) < 0) {
-		pr_val_warn("Cannot delete %s: %s", file->map.path,
+		pr_wrn("Cannot delete %s: %s", file->map.path,
 		    strerror(errno));
 		/* It's fine; keep going. */
 	}
@@ -668,11 +668,11 @@ parse_notification_snapshot(xmlTextReaderPtr reader,
 		return error;
 
 	if (!notif->snapshot.hash)
-		return pr_val_err("Snapshot '%s' is missing a hash.",
+		return pr_err("Snapshot '%s' is missing a hash.",
 		    uri_str(&notif->snapshot.uri));
 
 	if (!uri_same_origin(notif->url, &notif->snapshot.uri))
-		return pr_val_err("Notification '%s' and Snapshot '%s' are not hosted by the same origin.",
+		return pr_err("Notification '%s' and Snapshot '%s' are not hosted by the same origin.",
 		    uri_str(notif->url), uri_str(&notif->snapshot.uri));
 
 	return 0;
@@ -694,13 +694,13 @@ parse_notification_delta(xmlTextReaderPtr reader,
 		goto srl;
 
 	if (!delta.meta.hash) {
-		error = pr_val_err("Delta '%s' is missing a hash.",
+		error = pr_err("Delta '%s' is missing a hash.",
 		    uri_str(&delta.meta.uri));
 		goto mta;
 	}
 
 	if (!uri_same_origin(notif->url, &delta.meta.uri)) {
-		error = pr_val_err("Notification %s and Delta %s are not hosted by the same origin.",
+		error = pr_err("Notification %s and Delta %s are not hosted by the same origin.",
 		    uri_str(notif->url), uri_str(&delta.meta.uri));
 		goto mta;
 	}
@@ -723,24 +723,24 @@ swap_until_sorted(struct notification_delta *deltas, array_index i,
 	while (true) {
 		if (BN_cmp(deltas[i].serial.num, min) < 0) {
 			char *str = BN_bn2dec(min);
-			pr_val_err(
+			pr_err(
 			    "Deltas: Serial '%s' is out of bounds. (min:%s)",
 			    deltas[i].serial.str, str);
 			OPENSSL_free(str);
 			return EINVAL;
 		}
 		if (BN_cmp(max->num, deltas[i].serial.num) < 0)
-			return pr_val_err(
+			return pr_err(
 			    "Deltas: Serial '%s' is out of bounds. (max:%s)",
 			    deltas[i].serial.str, max->str);
 
 		if (!BN_sub(target_slot, deltas[i].serial.num, min))
-			return val_crypto_err("BN_sub() returned error.");
+			return pr_crypto_err("BN_sub() returned error.");
 		_target_slot = BN_get_word(target_slot);
 		if (i == _target_slot)
 			return 0;
 		if (BN_cmp(deltas[_target_slot].serial.num, deltas[i].serial.num) == 0) {
-			return pr_val_err("Deltas: Serial '%s' is not unique.",
+			return pr_err("Deltas: Serial '%s' is not unique.",
 			    deltas[i].serial.str);
 		}
 
@@ -774,14 +774,14 @@ sort_deltas(struct update_notification *notif)
 	max_serial = &notif->session.serial;
 	min_serial = BN_dup(max_serial->num);
 	if (min_serial == NULL)
-		return val_crypto_err("BN_dup() returned NULL.");
+		return pr_crypto_err("BN_dup() returned NULL.");
 	if (!BN_sub_word(min_serial, deltas->len - 1)) {
-		error = pr_val_err("Could not subtract %s - %zu; unknown cause.",
+		error = pr_err("Could not subtract %s - %zu; unknown cause.",
 		    notif->session.serial.str, deltas->len - 1);
 		goto end;
 	}
 	if (BN_is_negative(min_serial)) {
-		error = pr_val_err("Too many deltas (%zu) for serial %s. (Negative serials not implemented.)",
+		error = pr_err("Too many deltas (%zu) for serial %s. (Negative serials not implemented.)",
 		    deltas->len, max_serial->str);
 		goto end;
 	}
@@ -819,7 +819,7 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 			return parse_session(reader, &notif->session);
 		}
 
-		return pr_val_err("Unexpected '%s' element", name);
+		return pr_err("Unexpected '%s' element", name);
 
 	case XML_READER_TYPE_END_ELEMENT:
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION))
@@ -861,7 +861,7 @@ xml_read_snapshot(xmlTextReaderPtr reader, void *arg)
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT))
 			error = validate_session(reader, arg);
 		else
-			return pr_val_err("Unexpected '%s' element", name);
+			return pr_err("Unexpected '%s' element", name);
 		if (error)
 			return error;
 		break;
@@ -890,7 +890,7 @@ validate_session_desync(struct rrdp_state *old_notif,
 	size_t delta_threshold;
 
 	if (strcmp(old_notif->session.session_id, new_notif->session.session_id) != 0) {
-		pr_val_debug("The Notification's session ID changed.");
+		pr_trc("The Notification's session ID changed.");
 		return EINVAL;
 	}
 
@@ -905,7 +905,7 @@ validate_session_desync(struct rrdp_state *old_notif,
 
 		new_delta = &new_notif->deltas.array[i].meta;
 		if (memcmp(old_delta->bytes, new_delta->hash, RRDP_HASH_LEN) != 0) {
-			pr_val_debug("Notification delta hash does not match cached delta hash; RRDP session desynchronization detected.");
+			pr_trc("Notification delta hash does not match cached delta hash; RRDP session desynchronization detected.");
 			return EINVAL;
 		}
 
@@ -931,7 +931,7 @@ handle_snapshot(struct update_notification *new, struct rrdp_state *state)
 	int error;
 
 	url = &new->snapshot.uri;
-	pr_val_debug("Processing snapshot '%s'.", uri_str(url));
+	pr_trc("Processing snapshot '%s'.", uri_str(url));
 	fnstack_push(uri_str(url));
 
 	error = dl_tmp(url, tmppath);
@@ -965,7 +965,7 @@ xml_read_delta(xmlTextReaderPtr reader, void *arg)
 		else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA))
 			error = validate_session(reader, arg);
 		else
-			return pr_val_err("Unexpected '%s' element", name);
+			return pr_err("Unexpected '%s' element", name);
 		if (error)
 			return error;
 		break;
@@ -1006,7 +1006,7 @@ handle_delta(struct update_notification *notif,
 
 	url = &delta->meta.uri;
 
-	pr_val_debug("Processing delta '%s'.", uri_str(url));
+	pr_trc("Processing delta '%s'.", uri_str(url));
 	fnstack_push(uri_str(url));
 
 	error = dl_tmp(url, tmppath);
@@ -1030,30 +1030,30 @@ handle_deltas(struct update_notification *notif, struct rrdp_state *state)
 	int error;
 
 	if (notif->deltas.len == 0) {
-		pr_val_warn("There's no delta list to process.");
+		pr_wrn("There's no delta list to process.");
 		return ENOENT;
 	}
 
 	old = &state->session.serial;
 	new = &notif->session.serial;
 
-	pr_val_debug("Handling RRDP delta serials %s-%s.", old->str, new->str);
+	pr_trc("Handling RRDP delta serials %s-%s.", old->str, new->str);
 
 	diff_bn = BN_create();
 	if (!BN_sub(diff_bn, new->num, old->num)) {
 		BN_free(diff_bn);
-		return pr_val_err("Could not subtract %s - %s; unknown cause.",
+		return pr_err("Could not subtract %s - %s; unknown cause.",
 		    new->str, old->str);
 	}
 	if (BN_is_negative(diff_bn)) {
 		BN_free(diff_bn);
-		return pr_val_err("Cached delta's serial [%s] is larger than Notification's current serial [%s].",
+		return pr_err("Cached delta's serial [%s] is larger than Notification's current serial [%s].",
 		   old->str, new->str);
 	}
 	diff = BN_get_word(diff_bn);
 	BN_free(diff_bn);
 	if (diff > config_get_rrdp_delta_threshold() || diff > notif->deltas.len)
-		return pr_val_err("Cached RPP is too old. (Cached serial: %s; current serial: %s)",
+		return pr_err("Cached RPP is too old. (Cached serial: %s; current serial: %s)",
 		    old->str, new->str);
 
 	for (d = notif->deltas.len - diff; d < notif->deltas.len; d++) {
@@ -1119,17 +1119,17 @@ update_notif(struct rrdp_state *old, struct update_notification *new)
 
 	diff_bn = BN_create();
 	if (!BN_sub(diff_bn, new->session.serial.num, old->session.serial.num))
-		return val_crypto_err("OUCH! libcrypto cannot subtract %s - %s",
+		return pr_crypto_err("OUCH! libcrypto cannot subtract %s - %s",
 		    new->session.serial.str, old->session.serial.str);
 	if (BN_is_negative(diff_bn))
 		/* The validation was the BN_cmp() in the caller. */
-		pr_crit("%s - %s < 0 despite validations.",
+		pr_panic("%s - %s < 0 despite validations.",
 		    new->session.serial.str, old->session.serial.str);
 
 	diff = BN_get_word(diff_bn);
 	if (diff > new->deltas.len)
 		/* Should be <= because it was already compared to the delta threshold. */
-		pr_crit("%lu > %zu despite validations.",
+		pr_panic("%lu > %zu despite validations.",
 		    diff, new->deltas.len);
 
 	BN_free(old->session.serial.num);
@@ -1172,7 +1172,7 @@ dl_notif(struct uri const *url, time_t mtim, bool *changed,
 	if (error)
 		return error;
 	if (!(*changed)) {
-		pr_val_debug("The Notification has not changed.");
+		pr_trc("The Notification has not changed.");
 		return 0;
 	}
 
@@ -1181,7 +1181,7 @@ dl_notif(struct uri const *url, time_t mtim, bool *changed,
 		return error;
 
 	if (remove(tmppath) < 0) {
-		pr_val_warn("Can't remove notification's temporal file: %s",
+		pr_wrn("Can't remove notification's temporal file: %s",
 		   strerror(errno));
 		update_notification_cleanup(new);
 		/* Nonfatal; fall through */
@@ -1207,7 +1207,7 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 	int error;
 
 	fnstack_push(uri_str(notif));
-	pr_val_debug("Processing notification.");
+	pr_trc("Processing notification.");
 
 	error = dl_notif(notif, mtim, changed, &new);
 	if (error)
@@ -1215,12 +1215,12 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 	if (!(*changed))
 		goto end;
 
-	pr_val_debug("New session/serial: %s/%s",
+	pr_trc("New session/serial: %s/%s",
 	    new.session.session_id,
 	    new.session.serial.str);
 
 	if ((*state) == NULL) {
-		pr_val_debug("This is a new Notification.");
+		pr_trc("This is a new Notification.");
 
 		old = pzalloc(sizeof(struct rrdp_state));
 		/* session postponed! */
@@ -1247,7 +1247,7 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 	old = *state;
 	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
 	if (serial_cmp < 0) {
-		pr_val_debug("The Notification's serial changed.");
+		pr_trc("The Notification's serial changed.");
 
 		error = validate_session_desync(old, &new);
 		if (error)
@@ -1269,17 +1269,17 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 		goto reset_notif;
 
 	} else if (serial_cmp > 0) {
-		pr_val_debug("Cached serial is higher than notification serial.");
+		pr_trc("Cached serial is higher than notification serial.");
 		goto end;
 
 	} else {
-		pr_val_debug("The Notification changed, but the session ID and serial didn't, and no session desync was detected.");
+		pr_trc("The Notification changed, but the session ID and serial didn't, and no session desync was detected.");
 		*changed = false;
 		goto end;
 	}
 
 snapshot_fallback:
-	pr_val_debug("Falling back to snapshot.");
+	pr_trc("Falling back to snapshot.");
 	error = handle_snapshot(&new, old);
 	if (error)
 		goto clean_notif;
@@ -1452,7 +1452,7 @@ json2serial(json_t *parent, struct rrdp_serial *serial)
 	serial->num = BN_create();
 	serial->str = pstrdup(str);
 	if (!BN_dec2bn(&serial->num, serial->str)) {
-		pr_op_err("Not a serial number: %s", serial->str);
+		pr_err("Not a serial number: %s", serial->str);
 		BN_free(serial->num);
 		free(serial->str);
 		return -EINVAL;
@@ -1476,7 +1476,7 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 
 	error = json_get_object(jparent, "files", &jfiles);
 	if (error < 0) {
-		pr_op_debug("files: %s", strerror(error));
+		pr_trc("files: %s", strerror(error));
 		return error;
 	}
 	if (error > 0)
@@ -1487,12 +1487,12 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 
 	json_object_foreach(jfiles, jkey, jvalue) {
 		if (!json_is_string(jvalue)) {
-			pr_op_warn("RRDP file URL '%s' is not a string.", jkey);
+			pr_wrn("RRDP file URL '%s' is not a string.", jkey);
 			continue;
 		}
 		errmsg = uri_init(&url, jkey);
 		if (errmsg) {
-			pr_op_warn("Cannot parse '%s' as a URI: %s", jkey, errmsg);
+			pr_wrn("Cannot parse '%s' as a URI: %s", jkey, errmsg);
 			continue;
 		}
 
@@ -1500,14 +1500,14 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 
 		path = json_string_value(jvalue);
 		if (strncmp(path, parent, parent_len) != 0 || path[parent_len] != '/') {
-			pr_op_warn("RRDP path '%s' is not child of '%s'.",
+			pr_wrn("RRDP path '%s' is not child of '%s'.",
 			    path, parent);
 			uri_cleanup(&url);
 			continue;
 		}
 
 		if (hex2ulong(path + parent_len + 1, &id) != 0) {
-			pr_op_warn("RRDP file '%s' is not a hexadecimal number.", path);
+			pr_wrn("RRDP file '%s' is not a hexadecimal number.", path);
 			uri_cleanup(&url);
 			continue;
 		}
@@ -1519,7 +1519,7 @@ json2files(json_t *jparent, char *parent, struct rrdp_state *state)
 	}
 
 	if (HASH_COUNT(state->files) == 0) {
-		pr_op_warn("RRDP cage does not index any files.");
+		pr_wrn("RRDP cage does not index any files.");
 		return EINVAL;
 	}
 
@@ -1535,16 +1535,16 @@ json2dh(json_t *json, struct rrdp_hash **dh)
 
 	str = json_string_value(json);
 	if (str == NULL)
-		return pr_op_err("Hash is not a string.");
+		return pr_err("Hash is not a string.");
 
 	if (strlen(str) != 2 * RRDP_HASH_LEN)
-		return pr_op_err("Hash is not %d characters long.",
+		return pr_err("Hash is not %d characters long.",
 		    2 * RRDP_HASH_LEN);
 
 	hash = pmalloc(sizeof(struct rrdp_hash));
 	if (str2hex(str, hash->bytes) != 0) {
 		free(hash);
-		return pr_op_err("Malformed hash: %s", str);
+		return pr_err("Malformed hash: %s", str);
 	}
 
 	*dh = hash;
@@ -1606,22 +1606,22 @@ rrdp_json2state(json_t *json, char *path, struct rrdp_state **result)
 
 	error = json2session(json, &state->session.session_id);
 	if (error < 0) {
-		pr_op_debug("session: %s", strerror(error));
+		pr_trc("session: %s", strerror(error));
 		goto fail;
 	}
 	error = json2serial(json, &state->session.serial);
 	if (error < 0) {
-		pr_op_debug("serial: %s", strerror(error));
+		pr_trc("serial: %s", strerror(error));
 		goto fail;
 	}
 	error = json2files(json, path, state);
 	if (error) {
-		pr_op_debug("files: %s", strerror(error));
+		pr_trc("files: %s", strerror(error));
 		goto fail;
 	}
 	error = json2dhs(json, state);
 	if (error) {
-		pr_op_debug("delta hashes: %s", strerror(error));
+		pr_trc("delta hashes: %s", strerror(error));
 		goto fail;
 	}
 

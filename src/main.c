@@ -24,15 +24,15 @@ fort_standalone(void)
 {
 	int error;
 
-	pr_op_info("Updating cache...");
+	pr_inf("Updating cache...");
 
 	error = vrps_update(NULL);
 	if (error) {
-		pr_op_err("Validation unsuccessful; results unusable.");
+		pr_err("Validation unsuccessful; results unusable.");
 		return error;
 	}
 
-	pr_op_info("Done.");
+	pr_inf("Done.");
 	return 0;
 }
 
@@ -42,7 +42,7 @@ fort_server(void)
 	int error;
 	bool changed;
 
-	pr_op_info("Main loop: Starting...");
+	pr_inf("Main loop: Starting...");
 
 	error = rtr_start();
 	if (error)
@@ -50,26 +50,26 @@ fort_server(void)
 
 	error = vrps_update(NULL);
 	if (error) {
-		pr_op_err("Main loop: Validation unsuccessful; results unusable.");
+		pr_err("Main loop: Validation unsuccessful; results unusable.");
 		return error;
 	}
 
 	rtr_notify();
 
 	/* TODO (#133) Stats ready; remove this message in a couple versions. */
-	pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
+	pr_wrn("First validation cycle successfully ended, now you can connect your router(s)");
 	stats_gauge_set(stat_rtr_ready, 1);
 
 	do {
-		pr_op_info("Main loop: Sleeping.");
+		pr_inf("Main loop: Sleeping.");
 		sleep(config_get_validation_interval());
-		pr_op_info("Main loop: Time to work!");
+		pr_inf("Main loop: Time to work!");
 
 		error = vrps_update(&changed);
 		if (error == EINTR)
 			break;
 		if (error) {
-			pr_op_debug("Main loop: %s", strerror(abs(error)));
+			pr_trc("Main loop: %s", strerror(abs(error)));
 			continue;
 		}
 		if (changed)

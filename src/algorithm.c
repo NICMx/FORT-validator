@@ -28,7 +28,7 @@ validate_certificate_signature_algorithm(int nid, char const *what)
 	if (nid == NID_sha256WithRSAEncryption)
 		return 0;
 
-	return pr_val_err("%s's signature algorithm is NID '%d', not RSA+SHA256.",
+	return pr_err("%s's signature algorithm is NID '%d', not RSA+SHA256.",
 	    what, nid);
 }
 
@@ -52,7 +52,7 @@ validate_certificate_public_key_algorithm(X509_ALGOR *pa)
 	if (nid == NID_rsaEncryption)
 		return 0;
 
-	return pr_val_err("Certificate's public key format is NID '%s', not rsaEncryption.",
+	return pr_err("Certificate's public key format is NID '%s', not rsaEncryption.",
 	    OBJ_nid2sn(nid));
 }
 
@@ -73,18 +73,18 @@ validate_certificate_public_key_algorithm_bgpsec(X509_ALGOR *pa)
 
 	/* Validate algorithm and parameters (RFC 8608#section-3.1.1) */
 	if (nid != NID_X9_62_id_ecPublicKey)
-		return pr_val_err("Certificate's public key format is NID '%s', not id-ecPublicKey.",
+		return pr_err("Certificate's public key format is NID '%s', not id-ecPublicKey.",
 		    OBJ_nid2sn(nid));
 
 	if (parameter == NULL)
-		return pr_val_err("Certificate's public key algorithm MUST have parameters");
+		return pr_err("Certificate's public key algorithm MUST have parameters");
 
 	if (parameter_type != V_ASN1_OBJECT)
-		return pr_val_err("Certificate's public key parameter type isn't valid");
+		return pr_err("Certificate's public key parameter type isn't valid");
 
 	nid = OBJ_obj2nid(parameter);
 	if (nid != NID_X9_62_prime256v1)
-		return pr_val_err("Certificate's public key format is NID '%s', not secp256r1 (a.k.a prime256v1).",
+		return pr_err("Certificate's public key format is NID '%s', not secp256r1 (a.k.a prime256v1).",
 		    OBJ_nid2sn(nid));
 
 	return 0;
@@ -96,7 +96,7 @@ validate_cms_hash_algorithm(AlgorithmIdentifier_t *id, char const *what)
 	int error;
 
 	if (id == NULL)
-		return pr_val_err("The hash algorithm of the '%s' is absent", what);
+		return pr_err("The hash algorithm of the '%s' is absent", what);
 
 	error = validate_cms_hash_algorithm_oid(&id->algorithm, what);
 	if (error)
@@ -113,8 +113,8 @@ validate_cms_hash_algorithm(AlgorithmIdentifier_t *id, char const *what)
 	 */
 	if (id->parameters != NULL) {
 		error = is_asn1_null_object(id->parameters)
-		    ? pr_val_err("The hash algorithm of the '%s' has a NULL object as parameters", what)
-		    : pr_val_err("The hash algorithm of the '%s' has parameters", what);
+		    ? pr_err("The hash algorithm of the '%s' has a NULL object as parameters", what)
+		    : pr_err("The hash algorithm of the '%s' has parameters", what);
 	}
 
 	return error;
@@ -136,7 +136,7 @@ validate_cms_hash_algorithm_oid(OBJECT_IDENTIFIER_t *oid, char const *what)
 	};
 
 	if (oid == NULL)
-		return pr_val_err("The hash algorithm of the '%s' is absent", what);
+		return pr_err("The hash algorithm of the '%s' is absent", what);
 
 	if (oid->size != sizeof(sha256))
 		goto incorrect_oid;
@@ -146,7 +146,7 @@ validate_cms_hash_algorithm_oid(OBJECT_IDENTIFIER_t *oid, char const *what)
 	return 0;
 
 incorrect_oid:
-	return pr_val_err("The hash algorithm of the '%s' is not SHA256.", what);
+	return pr_err("The hash algorithm of the '%s' is not SHA256.", what);
 }
 
 int
@@ -166,7 +166,7 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 	uint8_t last;
 
 	if (id == NULL)
-		return pr_val_err("The signature algorithm is absent.");
+		return pr_err("The signature algorithm is absent.");
 
 	/*
 	 * rsaEncryption is { pkcs-1 1 }, and sha256WithRSAEncryption is
@@ -224,10 +224,10 @@ validate_cms_signature_algorithm(AlgorithmIdentifier_t *id)
 	 * accept both.
 	 */
 	if (id->parameters != NULL && !is_asn1_null(id->parameters))
-		return pr_val_err("The signature algorithm has parameters.");
+		return pr_err("The signature algorithm has parameters.");
 
 	return 0;
 
 incorrect_oid:
-	return pr_val_err("The Signature algorithm is not RSA nor RSA+SHA256.");
+	return pr_err("The Signature algorithm is not RSA nor RSA+SHA256.");
 }

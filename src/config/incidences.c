@@ -12,7 +12,7 @@ static int
 incidences_parse_json(struct option_field const *opt, json_t *json,
     void *_result)
 {
-	pr_op_warn("Incidences are deprecated; please delete them from your configuration.");
+	pr_wrn("Incidences are deprecated; please delete them from your configuration.");
 	return 0;
 }
 

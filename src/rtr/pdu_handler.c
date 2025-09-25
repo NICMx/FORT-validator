@@ -64,7 +64,7 @@ handle_serial_query_pdu(struct rtr_request *request)
 	enum vrps_foreach_delta_since_result result;
 	int error;
 
-	pr_op_debug("Serial Query. Request version/session/serial: %u/%u/%u",
+	pr_trc("Serial Query. Request version/session/serial: %u/%u/%u",
 	    request->pdu.rtr_version,
 	    request->pdu.obj.sq.session_id,
 	    request->pdu.obj.sq.serial_number);

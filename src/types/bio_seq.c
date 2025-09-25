@@ -57,17 +57,17 @@ bioseq_setup(void)
 
 	type = BIO_get_new_index();
 	if (type == -1)
-		return op_crypto_err("BIO_get_new_index() returned -1.");
+		return pr_crypto_err("BIO_get_new_index() returned -1.");
 
 	method = BIO_meth_new(type | BIO_TYPE_FILTER, "seq");
 	if (method == NULL)
-		return op_crypto_err("BIO_meth_new() returned NULL.");
+		return pr_crypto_err("BIO_meth_new() returned NULL.");
 
 	if (!BIO_meth_set_read(method, bioseq_read) ||
 	    !BIO_meth_set_destroy(method, bioseq_destroy)) {
 		BIO_meth_free(method);
 		method = NULL;
-		return op_crypto_err("BIO_meth_set_*() returned 0.");
+		return pr_crypto_err("BIO_meth_set_*() returned 0.");
 	}
 
 	return 0;

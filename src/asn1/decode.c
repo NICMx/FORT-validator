@@ -20,7 +20,7 @@ validate(asn_TYPE_descriptor_t const *descriptor, void *result, bool log)
 	errlen = sizeof(errmsg);
 	if (asn_check_constraints(descriptor, result, errmsg, &errlen) < 0) {
 		if (log)
-			pr_val_err("Error validating ASN.1 object: %s", errmsg);
+			pr_err("Error validating ASN.1 object: %s", errmsg);
 		return EINVAL;
 	}
 
@@ -42,7 +42,7 @@ asn1_decode(const void *buffer, size_t buffer_size,
 		ASN_STRUCT_FREE(*descriptor, *result);
 		/* We expect the data to be complete; RC_WMORE is an error. */
 		if (log)
-			pr_val_err("Error '%u' decoding ASN.1 object around byte %zu",
+			pr_err("Error '%u' decoding ASN.1 object around byte %zu",
 			    rval.code, rval.consumed);
 		return EINVAL;
 	}
@@ -62,7 +62,7 @@ asn1_decode_any(ANY_t *any, asn_TYPE_descriptor_t const *descriptor,
 {
 	return (any != NULL)
 	    ? asn1_decode(any->buf, any->size, descriptor, result, log)
-	    : pr_val_err("ANY '%s' is NULL.", descriptor->name);
+	    : pr_err("ANY '%s' is NULL.", descriptor->name);
 }
 
 int
@@ -71,7 +71,7 @@ asn1_decode_octet_string(OCTET_STRING_t *string,
 {
 	return (string != NULL)
 	    ? asn1_decode(string->buf, string->size, descriptor, result, log)
-	    : pr_val_err("Octet String '%s' is NULL.", descriptor->name);
+	    : pr_err("Octet String '%s' is NULL.", descriptor->name);
 }
 
 /*

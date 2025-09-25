@@ -25,7 +25,7 @@ print_output_format(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_op_info("%s: %s", field->name, str);
+	pr_inf("%s: %s", field->name, str);
 }
 
 static int
@@ -37,7 +37,7 @@ parse_argv_output_format(struct option_field const *field, char const *str,
 	else if (strcmp(str, OFM_VALUE_JSON) == 0)
 		DEREFERENCE(result) = OFM_JSON;
 	else
-		return pr_op_err("Unknown output format %s: '%s'",
+		return pr_err("Unknown output format %s: '%s'",
 		    field->name, str);
 
 	return 0;

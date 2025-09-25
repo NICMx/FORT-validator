@@ -16,7 +16,7 @@ map_get_printable(struct cache_mapping const *map, enum filename_format format)
 		return path_filename(uri_str(&map->url));
 	}
 
-	pr_crit("Unknown file name format: %u", format);
+	pr_panic("Unknown file name format: %u", format);
 	return NULL;
 }
 

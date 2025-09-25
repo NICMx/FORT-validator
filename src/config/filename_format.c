@@ -29,7 +29,7 @@ print_filename_format(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_op_info("%s: %s", field->name, str);
+	pr_inf("%s: %s", field->name, str);
 }
 
 static int
@@ -43,7 +43,7 @@ parse_argv_filename_format(struct option_field const *field, char const *str,
 	else if (strcmp(str, FNF_VALUE_NAME) == 0)
 		DEREFERENCE(result) = FNF_NAME;
 	else
-		return pr_op_err("Unknown file name format %s: '%s'",
+		return pr_err("Unknown file name format %s: '%s'",
 		    field->name, str);
 
 	return 0;

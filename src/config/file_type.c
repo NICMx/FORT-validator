@@ -39,7 +39,7 @@ print_file_type(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_op_info("%s: %s", field->name, str);
+	pr_inf("%s: %s", field->name, str);
 }
 
 static int
@@ -57,7 +57,7 @@ parse_argv_mode(struct option_field const *field, char const *str,
 	else if (strcmp(str, VALUE_CRL) == 0)
 		DEREFERENCE(result) = FT_CRL;
 	else
-		return pr_op_err("Unknown file type: '%s'", str);
+		return pr_err("Unknown file type: '%s'", str);
 
 	return 0;
 }

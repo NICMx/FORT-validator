@@ -19,9 +19,9 @@ print_time(struct option_field const *field, void *value)
 
 	error = time2str(tt, str);
 	if (error)
-		pr_crit("time2str: %s", strerror(error));
+		pr_panic("time2str: %s", strerror(error));
 
-	pr_op_info("%s: %s", field->name, str);
+	pr_inf("%s: %s", field->name, str);
 }
 
 static int
@@ -29,7 +29,7 @@ parse_argv_time(struct option_field const *field, char const *str,
     void *result)
 {
 	if (str == NULL || strlen(str) == 0)
-		return pr_op_err("--%s needs an argument.", field->name);
+		return pr_err("--%s needs an argument.", field->name);
 
 	return str2time(str, result);
 }
@@ -38,7 +38,7 @@ static int
 parse_json_time(struct option_field const *opt, json_t *json, void *result)
 {
 	if (!json_is_string(json))
-		return pr_op_err("The '%s' element is not a JSON string.",
+		return pr_err("The '%s' element is not a JSON string.",
 		    opt->name);
 
 	return str2time(json_string_value(json), result);

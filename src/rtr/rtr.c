@@ -92,7 +92,7 @@ parse_address(char const *full_address, char **address, char **service)
 	}
 
 	if (*(ptr + 1) == '\0')
-		return pr_op_err("Invalid server address '%s', can't end with '#'",
+		return pr_err("Invalid server address '%s', can't end with '#'",
 		    full_address);
 
 	tmp_addr_len = strlen(full_address) - strlen(ptr);
@@ -126,7 +126,7 @@ init_addrinfo(char const *hostname, char const *service,
 
 	error = getaddrinfo(hostname, service, &hints, result);
 	if (error) {
-		pr_op_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
+		pr_err("Could not infer a bindable address out of address '%s' and port '%s': %s",
 		    (hostname != NULL) ? hostname : "any", service,
 		    gai_strerror(error));
 		return error;
@@ -193,7 +193,7 @@ set_nonblock(int fd)
 	flags = fcntl(fd, F_GETFL);
 	if (flags == -1) {
 		error = errno;
-		pr_op_err_st("fcntl() to get flags failed: %s", strerror(error));
+		pr_crit("fcntl() to get flags failed: %s", strerror(error));
 		return error;
 	}
 
@@ -201,7 +201,7 @@ set_nonblock(int fd)
 
 	if (fcntl(fd, F_SETFL, flags) == -1) {
 		error = errno;
-		pr_op_err_st("fcntl() to set flags failed: %s", strerror(error));
+		pr_crit("fcntl() to set flags failed: %s", strerror(error));
 		return error;
 	}
 
@@ -229,7 +229,7 @@ create_server_socket(struct server_init_ctx *ctx, char const *hostname, char con
 #ifdef __linux__
 		if (is_wildcard(ai->ai_addr)) {
 			if (ctx->wildcard_found)
-				pr_op_warn("You have more than one wildcard address in server.address, and you're on Linux.\n"
+				pr_wrn("You have more than one wildcard address in server.address, and you're on Linux.\n"
 				    "On Linux, :: implies 0.0.0.0 by default, and you can't bind to 0.0.0.0 twice.\n"
 				    "The socket bind is probably going to fail.\n"
 				    "If you meant to bind to any address on both IPv4 and IPv6, you only need '::'.");
@@ -239,7 +239,7 @@ create_server_socket(struct server_init_ctx *ctx, char const *hostname, char con
 
 		server.fd = -1;
 		server.addr = get_best_printable(ai, ctx->input_addr);
-		pr_op_info("[%s]:%s: Setting up socket...", server.addr, port);
+		pr_inf("[%s]:%s: Setting up socket...", server.addr, port);
 
 		server.fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 		if (server.fd < 0) {
@@ -271,7 +271,7 @@ create_server_socket(struct server_init_ctx *ctx, char const *hostname, char con
 			goto fail;
 		}
 
-		pr_op_info("[%s]:%s: Success.", server.addr, port);
+		pr_inf("[%s]:%s: Success.", server.addr, port);
 		server_arraylist_add(&servers, &server);
 	}
 
@@ -279,7 +279,7 @@ create_server_socket(struct server_init_ctx *ctx, char const *hostname, char con
 	return 0;
 
 fail:
-	pr_op_err("[%s]:%s: %s: %s", server.addr, port, errmsg, strerror(err));
+	pr_err("[%s]:%s: %s: %s", server.addr, port, errmsg, strerror(err));
 	if (server.fd != -1)
 		close(server.fd);
 	free(server.addr);
@@ -346,7 +346,7 @@ handle_client_request(void *arg)
 		break;
 	default:
 		/* Should have been catched during constructor */
-		pr_crit("Unexpected PDU type: %u", request->pdu.type);
+		pr_panic("Unexpected PDU type: %u", request->pdu.type);
 	}
 
 	if (request->eos)
@@ -407,12 +407,12 @@ handle_accept_result(int client_fd, int err)
 	if (err == EWOULDBLOCK)
 		goto retry;
 
-	pr_op_info("Client connection attempt not accepted: %s. Quitting...",
+	pr_inf("Client connection attempt not accepted: %s. Quitting...",
 	    strerror(err));
 	return AV_SERVER_ERROR;
 
 retry:
-	pr_op_info("Client connection attempt not accepted: %s. Retrying...",
+	pr_inf("Client connection attempt not accepted: %s. Retrying...",
 	    strerror(err));
 	return AV_CLIENT_ERROR;
 }
@@ -446,7 +446,7 @@ accept_new_client(struct pollfd const *server_fd)
 
 	client_arraylist_add(&clients, &client);
 
-	pr_op_info("Client accepted [FD: %d]: %s", fd, addr);
+	pr_inf("Client accepted [FD: %d]: %s", fd, addr);
 	return AV_SUCCESS;
 }
 
@@ -476,7 +476,7 @@ print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 
 	if (pfd->revents & POLLHUP) {
 		/* Normal; we don't have control over the client. */
-		pr_op_info("%s '%s' down: Peer hung up. (Revents 0x%02x)",
+		pr_inf("%s '%s' down: Peer hung up. (Revents 0x%02x)",
 		    what, addr, pfd->revents);
 	}
 	if (pfd->revents & POLLERR) {
@@ -493,7 +493,7 @@ print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 		 *
 		 * Warning it is.
 		 */
-		pr_op_warn("%s '%s' down: Generic error. (Revents 0x%02x)",
+		pr_wrn("%s '%s' down: Generic error. (Revents 0x%02x)",
 		    what, addr, pfd->revents);
 	}
 	if (pfd->revents & POLLNVAL) {
@@ -502,7 +502,7 @@ print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 		 * We're the main polling thread, so nobody else should be
 		 * closing sockets on us.
 		 */
-		pr_op_err("%s '%s' down: File Descriptor closed. (Revents 0x%02x)",
+		pr_err("%s '%s' down: File Descriptor closed. (Revents 0x%02x)",
 		    what, addr, pfd->revents);
 	}
 }
@@ -588,7 +588,7 @@ fddb_poll(void)
 		error = errno;
 		switch (error) {
 		case EINTR:
-			pr_op_info("poll() was interrupted by some signal.");
+			pr_inf("poll() was interrupted by some signal.");
 			goto stop;
 		case ENOMEM:
 			enomem_panic();
@@ -596,7 +596,7 @@ fddb_poll(void)
 			goto retry;
 		case EFAULT:
 		case EINVAL:
-			pr_crit("poll() error: %s", strerror(error));
+			pr_panic("poll() error: %s", strerror(error));
 		}
 	}
 
@@ -716,7 +716,7 @@ void rtr_stop(void)
 	stop_server_thread = true;
 	error = pthread_join(server_thread, NULL);
 	if (error)
-		pr_op_err("pthread_join() failed: %s", strerror(error));
+		pr_err("pthread_join() failed: %s", strerror(error));
 
 	thread_pool_destroy(request_handlers);
 
@@ -734,10 +734,10 @@ rtr_notify(void)
 	case GLSNR_OK:
 		break;
 	case GLSNR_UNDER_CONSTRUCTION:
-		pr_op_info("Can't notify RTR clients: Database under construction");
+		pr_inf("Can't notify RTR clients: Database under construction");
 		return;
 	case GLSNR_CANT_LOCK:
-		pr_op_info("Can't notify RTR clients: Too many simultaneous read locks");
+		pr_inf("Can't notify RTR clients: Too many simultaneous read locks");
 		return;
 	}
 

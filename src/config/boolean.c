@@ -10,7 +10,7 @@
 void
 print_bool(struct option_field const *field, void *value)
 {
-	pr_op_info("%s: %s", field->name, DEREFERENCE(value) ? "true" : "false");
+	pr_inf("%s: %s", field->name, DEREFERENCE(value) ? "true" : "false");
 }
 
 int
@@ -31,7 +31,7 @@ parse_argv_bool(struct option_field const *field, char const *str, void *result)
 		return 0;
 	}
 
-	return pr_op_err("Invalid %s: '%s', must be boolean (true|false)",
+	return pr_err("Invalid %s: '%s', must be boolean (true|false)",
 	    field->name, str);
 }
 
@@ -40,7 +40,7 @@ parse_json_bool(struct option_field const *opt, struct json_t *json,
     void *result)
 {
 	if (!json_is_boolean(json)) {
-		return pr_op_err("The '%s' element is not a JSON boolean.",
+		return pr_err("The '%s' element is not a JSON boolean.",
 		    opt->name);
 	}
 

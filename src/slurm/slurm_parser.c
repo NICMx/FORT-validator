@@ -27,7 +27,7 @@
 #define ROUTER_PUBLIC_KEY		"routerPublicKey"
 #define COMMENT				"comment"
 
-#define COMPLAIN_REQUIRED(name) pr_op_err("SLURM member '" name "' is required")
+#define COMPLAIN_REQUIRED(name) pr_err("SLURM member '" name "' is required")
 
 static int handle_json(json_t *, struct db_slurm *);
 
@@ -45,7 +45,7 @@ slurm_parse(char const *location, void *arg)
 	    &json_error);
 	if (json_root == NULL)
 		/* File wasn't read or has a content error */
-		return pr_op_err("SLURM JSON error on line %d, column %d: %s",
+		return pr_err("SLURM JSON error on line %d, column %d: %s",
 		    json_error.line, json_error.column, json_error.text);
 
 	error = handle_json(json_root, arg);
@@ -65,7 +65,7 @@ set_asn(json_t *object, bool is_assertion, uint32_t *result, uint8_t *flag,
 		return error;
 	if (error > 0)
 		/* Optional for filters */
-		return is_assertion ? pr_op_err("ASN is required") : 0;
+		return is_assertion ? pr_err("ASN is required") : 0;
 
 	*flag = *flag | SLURM_COM_FLAG_ASN;
 	(*members_loaded)++;
@@ -108,7 +108,7 @@ set_prefix(json_t *object, bool is_assertion, struct slurm_prefix *result,
 		return error;
 	if (str_prefix == NULL) {
 		return is_assertion
-		    ? pr_op_err("SLURM assertion prefix is required")
+		    ? pr_err("SLURM assertion prefix is required")
 		    : 0; /* Optional for filters */
 	}
 
@@ -170,7 +170,7 @@ set_max_prefix_length(json_t *object, bool is_assertion, uint8_t addr_fam,
 	/* Filters */
 	if (!is_assertion)
 		return (error == 0)
-		    ? pr_op_err("Prefix filter can't have a max prefix length")
+		    ? pr_err("Prefix filter can't have a max prefix length")
 		    : 0;
 
 	/* Assertions */
@@ -179,7 +179,7 @@ set_max_prefix_length(json_t *object, bool is_assertion, uint8_t addr_fam,
 
 	max = (addr_fam == AF_INET) ? 32 : 128;
 	if (max < u32)
-		return pr_op_err("Max prefix length (%u) is out of range [0, %u].",
+		return pr_err("Max prefix length (%u) is out of range [0, %u].",
 		    u32, max);
 
 	*flag = *flag | SLURM_PFX_FLAG_MAX_LENGTH;
@@ -198,7 +198,7 @@ validate_base64url_encoded(const char *encoded)
 	 * without trailing '=' (Section 5 of [RFC4648])"
 	 */
 	if (strrchr(encoded, '=') != NULL)
-		return pr_op_err_st("The base64 encoded value has trailing '='");
+		return pr_crit("The base64 encoded value has trailing '='");
 
 	/*
 	 * IMHO there's an error at RFC 8416 regarding the use of base64
@@ -230,7 +230,7 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 		return error;
 	if (str_encoded == NULL)
 		return is_assertion
-		    ? pr_op_err("SLURM assertion " SKI " is required")
+		    ? pr_err("SLURM assertion " SKI " is required")
 		    : 0; /* Optional for filters */
 
 	error = validate_base64url_encoded(str_encoded);
@@ -238,12 +238,12 @@ set_ski(json_t *object, bool is_assertion, struct slurm_bgpsec *result,
 		return error;
 
 	if (!base64url_decode(str_encoded, &result->ski, &ski_len))
-		return pr_op_err("The " SKI " could not be decoded.");
+		return pr_err("The " SKI " could not be decoded.");
 
 	/* Validate that's at least 20 octects long */
 	if (ski_len != RK_SKI_LEN) {
 		free(result->ski);
-		return pr_op_err("The decoded SKI must be 20 octets long");
+		return pr_err("The decoded SKI must be 20 octets long");
 	}
 
 	result->data_flag = result->data_flag | SLURM_BGPS_FLAG_SKI;
@@ -270,16 +270,16 @@ validate_router_spki(unsigned char *data, size_t len)
 
 	spki = d2i_X509_PUBKEY(NULL, &cursor, len);
 	if (spki == NULL)
-		return op_crypto_err("Not a valid router public key");
+		return pr_crypto_err("Not a valid router public key");
 	if (cursor != origin + len) {
 		X509_PUBKEY_free(spki);
-		return op_crypto_err("Router public key contains trailing garbage.");
+		return pr_crypto_err("Router public key contains trailing garbage.");
 	}
 
 	ok = X509_PUBKEY_get0_param(&alg, NULL, NULL, &pa, spki);
 	if (!ok) {
 		X509_PUBKEY_free(spki);
-		return op_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+		return pr_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 	}
 
 	error = validate_certificate_public_key_algorithm_bgpsec(pa);
@@ -302,19 +302,19 @@ set_router_pub_key(json_t *object, bool is_assertion,
 	/* Filters */
 	if (!is_assertion)
 		return (error == 0)
-		    ? pr_op_err("BGPsec filter can't have a router public key")
+		    ? pr_err("BGPsec filter can't have a router public key")
 		    : 0;
 
 	/* Assertions */
 	if (encoded == NULL)
-		return pr_op_err("SLURM assertion " ROUTER_PUBLIC_KEY " is required.");
+		return pr_err("SLURM assertion " ROUTER_PUBLIC_KEY " is required.");
 
 	error = validate_base64url_encoded(encoded);
 	if (error)
 		return error;
 
 	if (!base64url_decode(encoded, &result->router_public_key, &spk_len))
-		return pr_op_err("The " ROUTER_PUBLIC_KEY " could not be decoded.");
+		return pr_err("The " ROUTER_PUBLIC_KEY " could not be decoded.");
 
 	/*
 	 * Validate that "is the full ASN.1 DER encoding of the
@@ -351,7 +351,7 @@ load_single_prefix(json_t *object, struct db_slurm *db, bool is_assertion)
 	int error;
 
 	if (!json_is_object(object))
-		return pr_op_err("Not a valid JSON object");
+		return pr_err("Not a valid JSON object");
 
 	init_slurm_prefix(&result);
 	member_count = 0;
@@ -377,17 +377,17 @@ load_single_prefix(json_t *object, struct db_slurm *db, bool is_assertion)
 
 	/* A single comment isn't valid */
 	if (result.data_flag == SLURM_COM_FLAG_COMMENT)
-		return pr_op_err("Single comments aren't valid");
+		return pr_err("Single comments aren't valid");
 
 	/* A filter must have ASN and/or prefix */
 	if (!is_assertion) {
 		if ((result.data_flag &
 		    (SLURM_COM_FLAG_ASN | SLURM_PFX_FLAG_PREFIX)) == 0)
-			return pr_op_err("Prefix filter must have an asn and/or prefix");
+			return pr_err("Prefix filter must have an asn and/or prefix");
 
 		/* Validate expected members */
 		if (!json_valid_members_count(object, member_count))
-			return pr_op_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
+			return pr_err("Prefix filter has unknown members (see RFC 8416 section 3.3.1)");
 
 		return db_slurm_add_prefix_filter(db, &result);
 	}
@@ -399,11 +399,11 @@ load_single_prefix(json_t *object, struct db_slurm *db, bool is_assertion)
 
 	if ((result.data_flag & SLURM_PFX_FLAG_MAX_LENGTH) > 0 &&
 	    result.vrp.prefix_length > result.vrp.max_prefix_length)
-		return pr_op_err("Prefix length is greater than max prefix length");
+		return pr_err("Prefix length is greater than max prefix length");
 
 	/* Validate expected members */
 	if (!json_valid_members_count(object, member_count))
-		return pr_op_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
+		return pr_err("Prefix assertion has unknown members (see RFC 8416 section 3.4.1)");
 
 	return db_slurm_add_prefix_assertion(db, &result);
 }
@@ -419,13 +419,13 @@ load_prefix_array(json_t *array, struct db_slurm *db, bool is_assertion)
 		if (!error)
 			continue;
 		if (error == EEXIST)
-			pr_op_err(
+			pr_err(
 			    "The prefix %s element \"%s\", covers or is covered by another assertion/filter; SLURM loading will be stopped. %s",
 			    (is_assertion ? "assertion" : "filter"),
 			    json_dumps(element, 0),
 			    "TIP: More than 1 SLURM files were found, check if the prefix is contained in multiple files (see RFC 8416 section 4.2).");
 		else
-			pr_op_err(
+			pr_err(
 			    "Error at prefix %s, element \"%s\", SLURM loading will be stopped",
 			    (is_assertion ? "assertions" : "filters"),
 			    json_dumps(element, 0));
@@ -453,7 +453,7 @@ load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 	int error;
 
 	if (!json_is_object(object))
-		return pr_op_err("Not a valid JSON object");
+		return pr_err("Not a valid JSON object");
 
 	init_slurm_bgpsec(&result);
 	member_count = 0;
@@ -478,7 +478,7 @@ load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 
 	/* A single comment isn't valid */
 	if (result.data_flag == SLURM_COM_FLAG_COMMENT) {
-		error = pr_op_err("Single comments aren't valid");
+		error = pr_err("Single comments aren't valid");
 		goto release_router_key;
 	}
 
@@ -486,13 +486,13 @@ load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 	if (!is_assertion) {
 		if ((result.data_flag &
 		    (SLURM_COM_FLAG_ASN | SLURM_BGPS_FLAG_SKI)) == 0) {
-			error = pr_op_err("BGPsec filter must have an asn and/or SKI");
+			error = pr_err("BGPsec filter must have an asn and/or SKI");
 			goto release_router_key;
 		}
 
 		/* Validate expected members */
 		if (!json_valid_members_count(object, member_count)) {
-			error = pr_op_err("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
+			error = pr_err("BGPsec filter has unknown members (see RFC 8416 section 3.3.2)");
 			goto release_router_key;
 		}
 
@@ -505,7 +505,7 @@ load_single_bgpsec(json_t *object, struct db_slurm *db, bool is_assertion)
 
 	/* Validate expected members */
 	if (!json_valid_members_count(object, member_count)) {
-		error = pr_op_err("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
+		error = pr_err("BGPsec assertion has unknown members (see RFC 8416 section 3.4.2)");
 		goto release_router_key;
 	}
 
@@ -533,13 +533,13 @@ load_bgpsec_array(json_t *array, struct db_slurm *db, bool is_assertion)
 		if (!error)
 			continue;
 		if (error == EEXIST)
-			pr_op_err(
+			pr_err(
 			    "The ASN at bgpsec %s element \"%s\", is duplicated in another assertion/filter; SLURM loading will be stopped. %s",
 			    (is_assertion ? "assertion" : "filter"),
 			    json_dumps(element, 0),
 			    "TIP: More than 1 SLURM files were found, check if the ASN is contained in multiple files (see RFC 8416 section 4.2).");
 		else
-			pr_op_err(
+			pr_err(
 			    "Error at bgpsec %s, element \"%s\", SLURM loading will be stopped",
 			    (is_assertion ? "assertions" : "filters"),
 			    json_dumps(element, 0));
@@ -564,7 +564,7 @@ load_version(json_t *root)
 
 	/* Validate data */
 	if (version != 1)
-		return pr_op_err("'" SLURM_VERSION "' must be 1");
+		return pr_err("'" SLURM_VERSION "' must be 1");
 
 	return 0;
 }
@@ -596,7 +596,7 @@ load_filters(json_t *root, struct db_slurm *db)
 
 	expected_members = 2;
 	if (!json_valid_members_count(filters, expected_members))
-		return pr_op_err(
+		return pr_err(
 		    "SLURM '%s' must contain only %lu members (RFC 8416 section 3.2)",
 		    VALIDATION_OUTPUT_FILTERS,
 		    expected_members);
@@ -636,7 +636,7 @@ load_assertions(json_t *root, struct db_slurm *db)
 
 	expected_members = 2;
 	if (!json_valid_members_count(assertions, expected_members))
-		return pr_op_err(
+		return pr_err(
 		    "SLURM '%s' must contain only %lu members (RFC 8416 section 3.2)",
 		    LOCALLY_ADDED_ASSERTIONS,
 		    expected_members);
@@ -655,7 +655,7 @@ handle_json(json_t *root, struct db_slurm *db)
 	int error;
 
 	if (!json_is_object(root))
-		return pr_op_err("The root of the SLURM is not a JSON object.");
+		return pr_err("The root of the SLURM is not a JSON object.");
 
 	error = load_version(root);
 	if (error)
@@ -674,7 +674,7 @@ handle_json(json_t *root, struct db_slurm *db)
 
 	expected_members = 3;
 	if (!json_valid_members_count(root, expected_members))
-		return pr_op_err(
+		return pr_err(
 		    "SLURM root must have only %lu members (RFC 8416 section 3.2)",
 		    expected_members);
 

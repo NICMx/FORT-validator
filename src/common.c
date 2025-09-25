@@ -42,7 +42,7 @@ void
 panic_on_fail(int error, char const *function_name)
 {
 	if (error)
-		pr_crit("%s() returned '%s'. "
+		pr_panic("%s() returned '%s'. "
 		    "This is too critical for a recovery; I must die now.",
 		    function_name, strerror(error));
 }
@@ -69,11 +69,11 @@ rwlock_read_lock(pthread_rwlock_t *lock)
 	case 0:
 		return error;
 	case EAGAIN:
-		pr_op_err_st("There are too many threads; I can't modify the database.");
+		pr_crit("There are too many threads; I can't modify the database.");
 		return error;
 	}
 
-	pr_crit("pthread_rwlock_rdlock() returned '%s'. "
+	pr_panic("pthread_rwlock_rdlock() returned '%s'. "
 	    "This is too critical for a recovery; I must die now.",
 	    strerror(error));
 	return EINVAL; /* Warning shutupper */
@@ -90,7 +90,7 @@ rwlock_write_lock(pthread_rwlock_t *lock)
 	 */
 	error = pthread_rwlock_wrlock(lock);
 	if (error)
-		pr_crit("pthread_rwlock_wrlock() returned '%s'. "
+		pr_panic("pthread_rwlock_wrlock() returned '%s'. "
 		    "This is too critical for a recovery; I must die now.",
 		    strerror(error));
 }
@@ -106,7 +106,7 @@ rwlock_unlock(pthread_rwlock_t *lock)
 	 */
 	error = pthread_rwlock_unlock(lock);
 	if (error)
-		pr_crit("pthread_rwlock_unlock() returned '%s'. "
+		pr_panic("pthread_rwlock_unlock() returned '%s'. "
 		    "This is too critical for a recovery; I must die now.",
 		    strerror(error));
 }
@@ -138,7 +138,7 @@ process_file(char const *dir_name, char const *file_name, char const *file_ext,
 	fullpath = realpath(tmp, NULL);
 	if (fullpath == NULL) {
 		error = errno;
-		pr_op_err("Error getting real path for file '%s' at directory '%s': %s",
+		pr_err("Error getting real path for file '%s' at directory '%s': %s",
 		    dir_name, file_name, strerror(error));
 		free(tmp);
 		return error;
@@ -161,7 +161,7 @@ process_dir_files(char const *location, char const *file_ext, bool empty_err,
 	dir_loc = opendir(location);
 	if (dir_loc == NULL) {
 		error = errno;
-		pr_op_err_st("Couldn't open directory '%s': %s",
+		pr_crit("Couldn't open directory '%s': %s",
 		    location, strerror(error));
 		goto end;
 	}
@@ -172,20 +172,20 @@ process_dir_files(char const *location, char const *file_ext, bool empty_err,
 		error = process_file(location, dir_ent->d_name, file_ext,
 		    &found, cb, arg);
 		if (error) {
-			pr_op_err("The error was at file %s", dir_ent->d_name);
+			pr_err("The error was at file %s", dir_ent->d_name);
 			goto close_dir;
 		}
 		errno = 0;
 	}
 	if (errno) {
-		pr_op_err_st("Error reading dir %s", location);
+		pr_crit("Error reading dir %s", location);
 		error = errno;
 	}
 	if (!error && found == 0)
 		error = (empty_err ?
-		    pr_op_err("Location '%s' doesn't have files with extension '%s'",
+		    pr_err("Location '%s' doesn't have files with extension '%s'",
 		    location, file_ext) :
-		    pr_op_warn("Location '%s' doesn't have files with extension '%s'",
+		    pr_wrn("Location '%s' doesn't have files with extension '%s'",
 		    location, file_ext));
 
 close_dir:
@@ -211,7 +211,7 @@ foreach_file(char const *location, char const *file_ext, bool empty_err,
 	error = stat(location, &attr);
 	if (error) {
 		error = errno;
-		pr_op_err_st("Error reading path '%s': %s", location,
+		pr_crit("Error reading path '%s': %s", location,
 		    strerror(error));
 		return error;
 	}
@@ -229,7 +229,7 @@ time_nonfatal(void)
 
 	result = time(NULL);
 	if (result == ((time_t)-1)) {
-		pr_val_warn("time(NULL) returned -1: %s", strerror(errno));
+		pr_wrn("time(NULL) returned -1: %s", strerror(errno));
 		result = 0;
 	}
 
@@ -243,7 +243,7 @@ time_fatal(void)
 
 	result = time(NULL);
 	if (result == ((time_t)-1))
-		pr_crit("time(NULL) returned -1: %s", strerror(errno));
+		pr_panic("time(NULL) returned -1: %s", strerror(errno));
 
 	return result;
 }
@@ -274,12 +274,12 @@ str2time(char const *str, time_t *tt)
 	memset(&tm, 0, sizeof(tm));
 	consumed = strptime(str, FORT_TS_FORMAT, &tm);
 	if (consumed == NULL || (*consumed) != 0)
-		return pr_op_err("String '%s' does not appear to be a timestamp.",
+		return pr_err("String '%s' does not appear to be a timestamp.",
 		    str);
 	time = timegm(&tm);
 	if (time == ((time_t) -1)) {
 		error = errno;
-		return pr_op_err("String '%s' does not appear to be a timestamp: %s",
+		return pr_err("String '%s' does not appear to be a timestamp: %s",
 		    str, strerror(error));
 	}
 
@@ -304,7 +304,7 @@ void
 ts_now(struct timespec *now)
 {
 	if (clock_gettime(CLOCK_MONOTONIC, now) < 0)
-		pr_crit("clock_gettime() returned '%s'", strerror(errno));
+		pr_panic("clock_gettime() returned '%s'", strerror(errno));
 	ts_normalize(now); /* Probably not needed, but I can't find contracts */
 }
 

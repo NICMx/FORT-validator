@@ -400,13 +400,13 @@ get_days_ago(int days)
 	tt_now = time_fatal();
 	if (localtime_r(&tt_now, &tm) == NULL) {
 		error = errno;
-		pr_crit("localtime_r(tt, &tm) returned error: %s",
+		pr_panic("localtime_r(tt, &tm) returned error: %s",
 		    strerror(error));
 	}
 	tm.tm_mday -= days;
 	last_week = mktime(&tm);
 	if (last_week == (time_t) -1)
-		pr_crit("mktime(tm) returned (time_t) -1.");
+		pr_panic("mktime(tm) returned (time_t) -1.");
 
 	return last_week;
 }
@@ -443,11 +443,11 @@ new_iteration(bool outdate)
 {
 	epoch = outdate ? get_days_ago(30) : get_days_ago(1);
 
-	pr_op_debug("--- Unfreshening... ---");
+	pr_trc("--- Unfreshening... ---");
 	foreach_node(unfreshen, NULL);
 	ck_assert_int_eq(0, nftw(".", nftw_unfreshen, 32, FTW_PHYS));
 
-	pr_op_debug("---- Tree now stale. ----");
+	pr_trc("---- Tree now stale. ----");
 	cache_print();
 }
 

@@ -45,12 +45,12 @@ string_array_print(struct option_field const *field, void *_value)
 	struct string_array *value = _value;
 	size_t i;
 
-	pr_op_info("%s:", field->name);
+	pr_inf("%s:", field->name);
 
 	if (value->length == 0)
-		pr_op_info("  <Nothing>");
+		pr_inf("  <Nothing>");
 	else for (i = 0; i < value->length; i++)
-		pr_op_info("  %s", value->array[i]);
+		pr_inf("  %s", value->array[i]);
 }
 
 static int
@@ -64,7 +64,7 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 	int error;
 
 	if (!json_is_array(json)) {
-		return pr_op_err("The '%s' element is not a JSON array.",
+		return pr_err("The '%s' element is not a JSON array.",
 		    opt->name);
 	}
 
@@ -75,13 +75,13 @@ string_array_parse_json(struct option_field const *opt, json_t *json,
 	}
 
 	if (opt->max > 0 && len > opt->max)
-		return pr_op_err("'%s' can have %u elements max; currently it has %lu elements.",
+		return pr_err("'%s' can have %u elements max; currently it has %lu elements.",
 		    opt->name, opt->max, len);
 
 	for (i = 0; i < len; i++) {
 		child = json_array_get(json, i);
 		if (!json_is_string(child)) {
-			return pr_op_err("'%s' array element #%zu is not a string.",
+			return pr_err("'%s' array element #%zu is not a string.",
 			    opt->name, i);
 		}
 	}
@@ -127,7 +127,7 @@ string_array_parse_argv(struct option_field const *opt, char const *str,
 	len = token_count(&tokenizer);
 
 	if (opt->max > 0 && len > opt->max)
-		return pr_op_err("'%s' can have %u elements max; currently it has %lu elements.",
+		return pr_err("'%s' can have %u elements max; currently it has %lu elements.",
 		    opt->name, opt->max, len);
 
 	result->array = pcalloc(len, sizeof(char *));

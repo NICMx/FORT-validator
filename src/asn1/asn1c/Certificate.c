@@ -189,7 +189,7 @@ Certificate_any2json(ANY_t *ber)
 	if (cert == NULL)
 		return NULL;
 	if (cursor != origin + ber->size)
-		pr_op_warn("There's trailing garbage after one of the certificates.");
+		pr_wrn("There's trailing garbage after one of the certificates.");
 
 	json = x509_to_json(cert);
 

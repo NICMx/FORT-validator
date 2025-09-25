@@ -23,7 +23,7 @@ str_concat(char const *s1, char const *s2)
 
 	written = snprintf(result, n, "%s%s", s1, s2);
 	if (written != n - 1)
-		pr_crit("str_concat: %zu %d %s %s", n, written, s1, s2);
+		pr_panic("str_concat: %zu %d %s %s", n, written, s1, s2);
 
 	return result;
 }
@@ -64,7 +64,7 @@ ia5s2string(ASN1_IA5STRING *ia5, char **result)
 
 	/* Implementation-aware */
 	if (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT) {
-		pr_val_warn("CRL URI IA5String has unused bits.");
+		pr_wrn("CRL URI IA5String has unused bits.");
 		return EINVAL;
 	}
 
@@ -73,7 +73,7 @@ ia5s2string(ASN1_IA5STRING *ia5, char **result)
 	len = ASN1_STRING_length(ia5);
 	for (i = 0; i < len; i++)
 		if (data[i] == 0) {
-			pr_val_warn("Null character found in IA5String index %zu. (Length: %zu)",
+			pr_wrn("Null character found in IA5String index %zu. (Length: %zu)",
 			    i, len);
 			return EINVAL;
 		}
@@ -95,11 +95,11 @@ BN2string(BIGNUM *bn, char **_result)
 
 	bio = BIO_new(BIO_s_mem());
 	if (bio == NULL)
-		return val_crypto_err("Cannot create a BIO.");
+		return pr_crypto_err("Cannot create a BIO.");
 
 	if (BN_print(bio, bn) == 0) {
 		BIO_free(bio);
-		return val_crypto_err("Unable to print the BIGNUM into a BIO");
+		return pr_crypto_err("Unable to print the BIGNUM into a BIO");
 	}
 
 	written = BIO_number_written(bio);

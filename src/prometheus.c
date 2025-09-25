@@ -82,7 +82,7 @@ set_content_type(struct MHD_Connection *conn, struct MHD_Response *res)
 
 	ret = MHD_add_response_header(res, "Content-Type", ct);
 	if (ret != MHD_YES) {
-		pr_op_debug("Could not set Content-Type HTTP header.");
+		pr_trc("Could not set Content-Type HTTP header.");
 		/* Keep going; maybe the client won't care. */
 	}
 }
@@ -94,7 +94,7 @@ send_metrics(struct MHD_Connection *conn)
 	struct MHD_Response *res;
 	MHD_RESULT ret;
 
-	pr_op_debug("Handling Prometheus request...");
+	pr_trc("Handling Prometheus request...");
 
 	stats = stats_export();
 
@@ -111,7 +111,7 @@ send_metrics(struct MHD_Connection *conn)
 	ret = MHD_queue_response(conn, MHD_HTTP_OK, res);
 	MHD_destroy_response(res);
 
-	pr_op_debug("Prometheus request handled.");
+	pr_trc("Prometheus request handled.");
 	return ret;
 }
 
@@ -140,7 +140,7 @@ prometheus_setup(void)
 	if (config_get_mode() != SERVER || port == 0)
 		return 0;
 
-	pr_op_debug("Starting Prometheus server...");
+	pr_trc("Starting Prometheus server...");
 
 	prometheus_daemon = MHD_start_daemon(
 	    MHD_USE_THREAD_PER_CONNECTION,	/* flags */
@@ -151,9 +151,9 @@ prometheus_setup(void)
 	);
 
 	if (prometheus_daemon == NULL)
-		return pr_op_err("Could not start Prometheus server; Unknown error");
+		return pr_err("Could not start Prometheus server; Unknown error");
 
-	pr_op_debug("Prometheus server started.");
+	pr_trc("Prometheus server started.");
 	return 0;
 }
 

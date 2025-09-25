@@ -18,15 +18,15 @@ __crl_load(char const *path, X509_CRL **result)
 
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
-		return val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
+		return pr_crypto_err("BIO_new(BIO_s_file()) returned NULL");
 	if (BIO_read_filename(bio, path) <= 0) {
-		error = val_crypto_err("Error reading CRL");
+		error = pr_crypto_err("Error reading CRL");
 		goto end;
 	}
 
 	crl = d2i_X509_CRL_bio(bio, NULL);
 	if (crl == NULL) {
-		error = val_crypto_err("Error parsing CRL");
+		error = pr_crypto_err("Error parsing CRL");
 		goto end;
 	}
 
@@ -46,13 +46,13 @@ pr_clutter_revoked(ASN1_INTEGER const *serial_int)
 
 	serial_bn = ASN1_INTEGER_to_BN(serial_int, NULL);
 	if (serial_bn == NULL) {
-		val_crypto_err("Could not parse revoked serial number");
+		pr_crypto_err("Could not parse revoked serial number");
 		return;
 	}
 
 	serial_str = BN_bn2dec(serial_bn);
 	if (serial_str == NULL) {
-		val_crypto_err("Could not convert BN to string");
+		pr_crypto_err("Could not convert BN to string");
 		goto end;
 	}
 
@@ -79,7 +79,7 @@ validate_revoked(X509_CRL *crl)
 
 		serial_int = X509_REVOKED_get0_serialNumber(revoked);
 		if (serial_int == NULL) {
-			return pr_val_err("CRL's revoked entry #%d lacks a serial number.",
+			return pr_err("CRL's revoked entry #%d lacks a serial number.",
 			    i + 1);
 		}
 
@@ -87,11 +87,11 @@ validate_revoked(X509_CRL *crl)
 			pr_clutter_revoked(serial_int);
 
 		if (X509_REVOKED_get0_revocationDate(revoked) == NULL) {
-			return pr_val_err("CRL's revoked entry #%d lacks a revocation date.",
+			return pr_err("CRL's revoked entry #%d lacks a revocation date.",
 			    i + 1);
 		}
 		if (X509_REVOKED_get0_extensions(revoked) != NULL) {
-			return pr_val_err("CRL's revoked entry #%d has extensions.",
+			return pr_err("CRL's revoked entry #%d has extensions.",
 			    i + 1);
 		}
 	}
@@ -145,7 +145,7 @@ crl_validate(X509_CRL *crl, X509 *parent)
 
 	version = X509_CRL_get_version(crl);
 	if (version != 1)
-		return pr_val_err("CRL version (%ld) is not v2 (%d).", version, 1);
+		return pr_err("CRL version (%ld) is not v2 (%d).", version, 1);
 
 	error = validate_certificate_signature_algorithm(
 	    X509_CRL_get_signature_nid(crl), "CRL");

@@ -23,7 +23,7 @@ print_monotime(void)
 {
 	struct timespec now;
 	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
-		pr_crit("clock_gettime() returned '%s'", strerror(errno));
+		pr_panic("clock_gettime() returned '%s'", strerror(errno));
 	printf("%ld.%.3ld ", now.tv_sec, now.tv_nsec / 1000000);
 }
 
@@ -57,17 +57,11 @@ print_monotime(void)
 		return result;						\
 	}
 
-MOCK_VOID_PRINT(pr_op_debug, PR_COLOR_DBG)
-MOCK_VOID_PRINT(pr_op_info, PR_COLOR_INF)
-MOCK_INT_PRINT(pr_op_warn, PR_COLOR_WRN, 0)
-MOCK_INT_PRINT(pr_op_err, PR_COLOR_ERR, EINVAL)
-MOCK_INT_PRINT(pr_op_err_st, PR_COLOR_ERR, EINVAL)
-MOCK_INT_PRINT(op_crypto_err, PR_COLOR_ERR, EINVAL)
-
-MOCK_VOID_PRINT(pr_val_debug, PR_COLOR_DBG)
-MOCK_VOID_PRINT(pr_val_info, PR_COLOR_INF)
-MOCK_INT_PRINT(pr_val_warn, PR_COLOR_WRN, 0)
-MOCK_INT_PRINT(pr_val_err, PR_COLOR_ERR, EINVAL)
+MOCK_VOID_PRINT(pr_trc, PR_COLOR_DBG)
+MOCK_VOID_PRINT(pr_inf, PR_COLOR_INF)
+MOCK_INT_PRINT(pr_wrn, PR_COLOR_WRN, 0)
+MOCK_INT_PRINT(pr_err, PR_COLOR_ERR, EINVAL)
+MOCK_INT_PRINT(pr_crit, PR_COLOR_ERR, EINVAL)
 
 struct crypto_cb_arg {
 	unsigned int stack_size;
@@ -102,10 +96,10 @@ crypto_err(int (*error_fn)(const char *, ...))
 }
 
 int
-val_crypto_err(const char *format, ...)
+pr_crypto_err(const char *format, ...)
 {
 	MOCK_PRINT(PR_COLOR_ERR);
-	return crypto_err(pr_val_err);
+	return crypto_err(pr_err);
 }
 
 void
@@ -115,10 +109,10 @@ enomem_panic(void)
 }
 
 void
-pr_crit(const char *format, ...)
+pr_panic(const char *format, ...)
 {
 	va_list args;
-	fprintf(stderr, "pr_crit() called! ");
+	fprintf(stderr, "pr_panic() called! ");
 	va_start(args, format);
 	vfprintf(stderr, format, args);
 	va_end(args);
@@ -200,7 +194,7 @@ touch_file(char const *file)
 	int fd;
 	int error;
 
-	pr_op_debug("touch %s", file);
+	pr_trc("touch %s", file);
 
 	fd = open(file, O_WRONLY | O_CREAT, CACHE_FILEMODE);
 	if (fd < 0) {

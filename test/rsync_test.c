@@ -428,7 +428,7 @@ disable_sigpipe(void)
 {
 	struct sigaction action = { .sa_handler = SIG_IGN };
 	if (sigaction(SIGPIPE, &action, NULL) == -1)
-		pr_crit("Cannot disable SIGPIPE: %s", strerror(errno));
+		pr_panic("Cannot disable SIGPIPE: %s", strerror(errno));
 }
 
 static void
@@ -437,7 +437,7 @@ init_content(void)
 	size_t i;
 
 	if (sizeof(content) % STR64LEN != 0)
-		pr_crit("content's length isn't divisible by str64's length");
+		pr_panic("content's length isn't divisible by str64's length");
 	for (i = 0; i < (sizeof(content) / STR64LEN); i++)
 		memcpy(content + 64 * i, STR64, STR64LEN);
 }

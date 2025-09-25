@@ -20,9 +20,9 @@ output_setup(void)
 	err1 = atexit(output_atexit);
 	if (err1) {
 		err2 = errno;
-		pr_op_err("Cannot register output's exit function.");
-		pr_op_err("Error message attempt 1: %s", strerror(err1));
-		pr_op_err("Error message attempt 2: %s", strerror(err2));
+		pr_err("Cannot register output's exit function.");
+		pr_err("Error message attempt 1: %s", strerror(err1));
+		pr_err("Error message attempt 2: %s", strerror(err2));
 		return err1;
 	}
 
@@ -49,7 +49,7 @@ print_roa_csv(struct vrp const *vrp, void *arg)
 	char addr_buf[INET6_ADDRSTRLEN];
 
 	if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6)
-		pr_crit("Unknown family type");
+		pr_panic("Unknown family type");
 
 	fprintf(arg, "AS%u,%s/%u,%u\n", vrp->asn,
 	    inet_ntop(vrp->addr_fam, &vrp->prefix, addr_buf, INET6_ADDRSTRLEN),
@@ -70,7 +70,7 @@ print_roa_json(struct vrp const *vrp, void *arg)
 		fprintf(out, ",");
 
 	if (vrp->addr_fam != AF_INET && vrp->addr_fam != AF_INET6)
-		pr_crit("Unknown family type");
+		pr_panic("Unknown family type");
 
 	fprintf(out,
 	    "\n  { \"asn\": \"AS%u\", \"prefix\": \"%s/%u\", \"maxLength\": %u }",
@@ -90,12 +90,12 @@ print_router_key_csv(struct router_key const *key, void *arg)
 	char *buf1, *buf2;
 
 	if (!base64url_encode(key->ski, RK_SKI_LEN, &buf1)) {
-		op_crypto_err("Cannot encode SKI.");
+		pr_crypto_err("Cannot encode SKI.");
 		return 0; /* Skip it, I guess */
 	}
 
 	if (!base64url_encode(key->spk, RK_SPKI_LEN, &buf2)) {
-		op_crypto_err("Cannot encode SPK.");
+		pr_crypto_err("Cannot encode SPK.");
 		free(buf1);
 		return 0; /* Skip it, I guess */
 	}
@@ -116,12 +116,12 @@ print_router_key_json(struct router_key const *key, void *arg)
 	char *buf1, *buf2;
 
 	if (!base64url_encode(key->ski, RK_SKI_LEN, &buf1)) {
-		op_crypto_err("Cannot encode SKI.");
+		pr_crypto_err("Cannot encode SKI.");
 		return 0; /* Skip it, I guess */
 	}
 
 	if (!base64url_encode(key->spk, RK_SPKI_LEN, &buf2)) {
-		op_crypto_err("Cannot encode SPK.");
+		pr_crypto_err("Cannot encode SPK.");
 		free(buf1);
 		return 0; /* Skip it, I guess */
 	}
@@ -167,11 +167,11 @@ print_roas(struct db_table const *db)
 	}
 
 	if (error)
-		pr_op_err("Error printing ROAs: %s", strerror(error));
+		pr_err("Error printing ROAs: %s", strerror(error));
 	if (out != stdout) {
 		file_close(out);
 		if (!error && rename(".roa", config_get_output_roa()) < 0)
-			pr_op_err("Cannot move '.roa' to '%s': %s",
+			pr_err("Cannot move '.roa' to '%s': %s",
 			    config_get_output_roa(), strerror(errno));
 	}
 }
@@ -201,11 +201,11 @@ print_router_keys(struct db_table const *db)
 	}
 
 	if (error)
-		pr_op_err("Error printing Router Keys: %s", strerror(error));
+		pr_err("Error printing Router Keys: %s", strerror(error));
 	if (out != stdout) {
 		file_close(out);
 		if (!error && rename(".rk", config_get_output_bgpsec()) < 0)
-			pr_op_err("Cannot move '.rk' to '%s': %s",
+			pr_err("Cannot move '.rk' to '%s': %s",
 			    config_get_output_bgpsec(), strerror(errno));
 	}
 }

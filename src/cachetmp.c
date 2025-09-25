@@ -25,5 +25,5 @@ cache_tmpfile(char *buf)
 
 	written = snprintf(buf, CACHE_TMPFILE_BUFLEN, CACHE_TMPDIR "/%X", next);
 	if (written >= CACHE_TMPFILE_BUFLEN)
-		pr_crit("I ran out of temporal directories: %u", next);
+		pr_panic("I ran out of temporal directories: %u", next);
 }

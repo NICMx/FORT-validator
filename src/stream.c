@@ -70,7 +70,7 @@ stream_full_write(int fd, unsigned char const *buf, size_t len)
 		if (wr < 0)
 			return errno;
 		if (wr > len)
-			pr_crit("wr > len: %zd > %zu", wr, len);
+			pr_panic("wr > len: %zd > %zu", wr, len);
 		len -= wr;
 		offset += wr;
 	} while (len > 0);

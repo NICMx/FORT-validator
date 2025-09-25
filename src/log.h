@@ -5,6 +5,8 @@
 #include <stdio.h>
 
 #define PR_COLOR_DBG	"\x1B[36m"	/* Cyan */
+#define PR_COLOR_CLT	"\x1B[34m"	/* Blue */
+#define PR_COLOR_TRC	"\x1B[32m"	/* Green */
 #define PR_COLOR_INF	"\x1B[37m"	/* White */
 #define PR_COLOR_WRN	"\x1B[33m"	/* Yellow */
 #define PR_COLOR_ERR	"\x1B[31m"	/* Red */
@@ -23,24 +25,9 @@
 #endif
 #endif
 
-/*
- * I know that the OpenBSD style guide says that we shouldn't declare our own
- * error printing functions, but we kind of need to do it:
- *
- * - It's convoluted to use err() and warn() on libcrypto errors.
- * - I was tasked with using syslog anyway, but the API is kind of limited
- *   (especially since vsyslog() is not portable.)
- * - We want to transparently always print offending file name.
- */
-
 #if __GNUC__
 #define CHECK_FORMAT(str, args) __attribute__((format(printf, str, args)))
 #else
-/*
- * No idea how this looks in other compilers.
- * It's safe to obviate since we're bound to see the warnings every time we use
- * GCC anyway.
- */
 #define CHECK_FORMAT(str, args) /* Nothing */
 #endif
 
@@ -57,65 +44,24 @@ int log_setup(void);
 void log_start(void);
 void log_teardown(void);
 
-/*
- * Check if corresponding logging is enabled. You can use these to short-circuit
- * out of heavy logging code.
- */
-bool pr_val_enabled(unsigned int level);
-bool pr_op_enabled(unsigned int level);
-
 #define pr_clutter_enabled() false
-#define pr_clutter(...) /* pr_op_debug(__VA_ARGS__) */
+#define pr_clutter(...)
 
-/* == Operation logs == */
+void pr_trc(const char *, ...) CHECK_FORMAT(1, 2);
+void pr_inf(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_wrn(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_err(const char *, ...) CHECK_FORMAT(1, 2);
+/* Like pr_err(), but also prints libcrypto's error stack */
+int pr_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
+int pr_crit(const char *format, ...) CHECK_FORMAT(1, 2);
+__dead void pr_panic(const char *, ...) CHECK_FORMAT(1, 2);
+__dead void enomem_panic(void); /* Out of memory */
 
-/* Status reports of no interest to the user. */
-void pr_op_debug(const char *, ...) CHECK_FORMAT(1, 2);
-/* Status reports likely useful to the user. */
-void pr_op_info(const char *, ...) CHECK_FORMAT(1, 2);
-/* Non-errors that suggest a problem. */
-int pr_op_warn(const char *, ...) CHECK_FORMAT(1, 2);
-/* Problematic situations that prevent Fort from doing its job. */
-int pr_op_err(const char *, ...) CHECK_FORMAT(1, 2);
-/* Like pr_op_err(), but it also prints a stack trace */
-int pr_op_err_st(const char *format, ...) CHECK_FORMAT(1, 2);
-/* Like pr_op_err(), except it prints libcrypto's error stack as well. */
-int op_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
-
-/* == Validation logs == */
-
-/* Status reports of no interest to the user. */
-void pr_val_debug(const char *, ...) CHECK_FORMAT(1, 2);
-/* Status reports likely useful to the user. */
-void pr_val_info(const char *, ...) CHECK_FORMAT(1, 2);
-/* Issues that did not trigger RPKI object rejection. */
-int pr_val_warn(const char *, ...) CHECK_FORMAT(1, 2);
-/* Problems that trigger RPKI object rejection. */
-int pr_val_err(const char *, ...) CHECK_FORMAT(1, 2);
-/* Like pr_val_err(), except it prints libcrypto's error stack as well. */
-int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
-
-/*
- * Like pr_*_err(), specific to out-of-memory situations.
- * Also terminates the program.
- */
-__dead void enomem_panic(void);
-/* Programming errors */
-__dead void pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
-
-/*
- * Quick and dirty debugging messages.
- *
- * These are not meant to be uploaded; remember to delete them once the bug has
- * been found.
- */
-#define DBG_COLOR "\x1B[32m" /* Green */
-#define DBG_COLOR_RESET "\x1B[0m"
-#define PR_DEBUG \
-    printf(DBG_COLOR "%s:%d (%s())" DBG_COLOR_RESET "\n", \
-        __FILE__, __LINE__, __func__)
-#define PR_DEBUG_MSG(msg, ...) \
-    printf(DBG_COLOR "%s:%d (%s()): " msg DBG_COLOR_RESET "\n", \
+#define PR_DBG(msg, ...) \
+    printf(PR_COLOR_DBG "%s:%d (%s()): " msg PR_COLOR_RST "\n", \
         __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+#define PR_HELLO \
+    printf(PR_COLOR_DBG "%s:%d (%s())" PR_COLOR_RST "\n", \
+        __FILE__, __LINE__, __func__)
 
 #endif /* SRC_LOG_H_ */

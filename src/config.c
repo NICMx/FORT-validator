@@ -960,22 +960,22 @@ print_config(void)
 {
 	struct option_field const *opt;
 
-	pr_op_info(PACKAGE_STRING);
-	pr_op_info("  libcrypto:     " OPENSSL_VERSION_TEXT);
-	pr_op_info("  jansson:       " JANSSON_VERSION);
-	pr_op_info("  libcurl:       " LIBCURL_VERSION);
-	pr_op_info("  libxml:        " LIBXML_DOTTED_VERSION);
-	pr_op_info("  libmicrohttpd: %x.%x.%x-%x",
+	pr_inf(PACKAGE_STRING);
+	pr_inf("  libcrypto:     " OPENSSL_VERSION_TEXT);
+	pr_inf("  jansson:       " JANSSON_VERSION);
+	pr_inf("  libcurl:       " LIBCURL_VERSION);
+	pr_inf("  libxml:        " LIBXML_DOTTED_VERSION);
+	pr_inf("  libmicrohttpd: %x.%x.%x-%x",
 	    MHD_VERSION >> 24, (MHD_VERSION >> 16) & 0xFF,
 	    (MHD_VERSION >> 8) & 0xFF, MHD_VERSION & 0xFF);
 
-	pr_op_info("Configuration {");
+	pr_inf("Configuration {");
 
 	FOREACH_OPTION(options, opt, 0xFFFF)
 		if (is_rpki_config_field(opt) && opt->type->print != NULL)
 			opt->type->print(opt, get_rpki_config_field(opt));
 
-	pr_op_info("}");
+	pr_inf("}");
 }
 
 static void
@@ -1077,15 +1077,15 @@ validate_config(void)
 		return 0;
 
 	if (rpki_config.payload != NULL)
-		return pr_op_err("I don't know what '%s' is.",
+		return pr_err("I don't know what '%s' is.",
 		    rpki_config.payload);
 
 	if (rpki_config.tal == NULL)
-		return pr_op_err("The TAL(s) location (--tal) is mandatory.");
+		return pr_err("The TAL(s) location (--tal) is mandatory.");
 
 	/* A file location at --tal isn't valid when --init-tals is set */
 	if (!file_is_valid(rpki_config.tal, !rpki_config.init_tals))
-		return pr_op_err("Invalid TAL(s) location.");
+		return pr_err("Invalid TAL(s) location.");
 
 	/* Ignore the other checks */
 	if (rpki_config.init_tals)
@@ -1095,10 +1095,10 @@ validate_config(void)
 	    rpki_config.server.interval.refresh ||
 	    rpki_config.server.interval.expire <
 	    rpki_config.server.interval.retry)
-		return pr_op_err("Expire interval must be greater than refresh and retry intervals");
+		return pr_err("Expire interval must be greater than refresh and retry intervals");
 
 	if (rpki_config.slurm != NULL && !file_is_valid(rpki_config.slurm, true))
-		return pr_op_err("Invalid slurm location.");
+		return pr_err("Invalid slurm location.");
 
 	if (rpki_config.http.proxy == NULL) {
 		proxy = curl_getenv("https_proxy");
@@ -1157,7 +1157,7 @@ handle_opt(int opt)
 	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
 		if (option->id == opt) {
 			if (option->deprecated)
-				pr_op_warn("Warning: '%s' is deprecated.",
+				pr_wrn("Warning: '%s' is deprecated.",
 				    option->name);
 
 			return is_rpki_config_field(option)
@@ -1167,7 +1167,7 @@ handle_opt(int opt)
 		}
 	}
 
-	pr_op_err("Unrecognized option: %d", opt);
+	pr_err("Unrecognized option: %d", opt);
 	return ESRCH;
 }
 
@@ -1182,7 +1182,7 @@ become_absolute_path(char **_path)
 
 	absolute = realpath(relative, NULL);
 	if (!absolute)
-		return pr_op_err("Cannot resolve the absolute path of %s: %s",
+		return pr_err("Cannot resolve the absolute path of %s: %s",
 		    relative, strerror(errno));
 
 	free(relative);
@@ -1241,7 +1241,7 @@ handle_flags_config(int argc, char **argv)
 	}
 
 	if (rpki_config.daemon) {
-		pr_op_info("Executing as daemon, all logs will be sent to syslog.");
+		pr_inf("Executing as daemon, all logs will be sent to syslog.");
 		/* Send all logs to syslog */
 		rpki_config.log.output = SYSLOG;
 		rpki_config.validation_log.output = SYSLOG;
@@ -1253,7 +1253,7 @@ handle_flags_config(int argc, char **argv)
 end:
 	if (error) {
 		free_rpki_config();
-		pr_op_err("Try '%s --usage' or '%s --help' for more information.",
+		pr_err("Try '%s --usage' or '%s --help' for more information.",
 		    program_name, program_name);
 	} else
 		print_config();

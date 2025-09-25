@@ -29,13 +29,13 @@ register_oid(const char *oid, const char *sn, const char *ln)
 		/* Note: Implicit object registration happens in OBJ_create. */
 		nid = OBJ_create(oid, sn, ln);
 		if (nid == 0) {
-			op_crypto_err("Unable to register the %s NID.", sn);
+			pr_crypto_err("Unable to register the %s NID.", sn);
 			return 0;
 		}
-		pr_op_debug("%s registered. Its nid is %d.", sn, nid);
+		pr_trc("%s registered. Its nid is %d.", sn, nid);
 
 	} else {
-		pr_op_debug("%s retrieved. Its nid is %d.", sn, nid);
+		pr_trc("%s retrieved. Its nid is %d.", sn, nid);
 	}
 
 	return nid;

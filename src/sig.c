@@ -83,7 +83,7 @@ register_signal_handlers(void)
 
 	for (i = 0; cleanups[i]; i++)
 		if (sigaction(cleanups[i], &action, NULL) < 0)
-			pr_op_err("'%s' signal action registration failure: %s",
+			pr_err("'%s' signal action registration failure: %s",
 			    strsignal(cleanups[i]), strerror(errno));
 
 	/*
@@ -106,6 +106,6 @@ register_signal_handlers(void)
 	 */
 	action.sa_handler = SIG_IGN;
 	if (sigaction(SIGPIPE, &action, NULL) < 0)
-		pr_op_err("SIGPIPE action registration failure: %s",
+		pr_err("SIGPIPE action registration failure: %s",
 		    strerror(errno));
 }

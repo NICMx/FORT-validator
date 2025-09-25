@@ -121,7 +121,7 @@ MOCK_UINT(config_get_deltas_lifetime, 5, void)
 int
 send_cache_reset_pdu(int fd, uint8_t version)
 {
-	pr_op_info("    Server sent Cache Reset.");
+	pr_inf("    Server sent Cache Reset.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESET);
 	return 0;
 }
@@ -129,7 +129,7 @@ send_cache_reset_pdu(int fd, uint8_t version)
 int
 send_cache_response_pdu(int fd, uint8_t version)
 {
-	pr_op_info("    Server sent Cache Response.");
+	pr_inf("    Server sent Cache Response.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESPONSE);
 	return 0;
 }
@@ -155,7 +155,7 @@ send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 	 * we'll just check `M + N` contiguous Prefix PDUs.
 	 */
 	uint8_t pdu_type = pop_expected_pdu();
-	pr_op_info("    Server sent Prefix PDU.");
+	pr_inf("    Server sent Prefix PDU.");
 
 	switch (vrp->addr_fam) {
 	case AF_INET:
@@ -185,7 +185,7 @@ send_router_key_pdu(int fd, uint8_t version,
 	 * we'll just check `M + N` contiguous Prefix PDUs.
 	 */
 	uint8_t pdu_type = pop_expected_pdu();
-	pr_op_info("    Server sent Router Key PDU.");
+	pr_inf("    Server sent Router Key PDU.");
 	printf("%s asn%u RK\n", flags2str(flags), router_key->as);
 	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
 	    "Server sent a Router Key. Expected PDU type was %d.", pdu_type);
@@ -195,7 +195,7 @@ send_router_key_pdu(int fd, uint8_t version,
 int
 send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 {
-	pr_op_info("    Server sent End of Data.");
+	pr_inf("    Server sent End of Data.");
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_END_OF_DATA);
 	return 0;
 }
@@ -204,7 +204,7 @@ int
 send_error_report_pdu(int fd, uint8_t version, uint16_t code,
     struct rtr_buffer const *request, char *message)
 {
-	pr_op_info("    Server sent Error Report %u: '%s'", code, message);
+	pr_inf("    Server sent Error Report %u: '%s'", code, message);
 	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_ERROR_REPORT);
 	return 0;
 }
@@ -216,7 +216,7 @@ START_TEST(test_start_or_restart)
 {
 	struct rtr_request request;
 
-	pr_op_info("-- Start or Restart --");
+	pr_inf("-- Start or Restart --");
 
 	/* Init */
 	init_db_full();
@@ -243,7 +243,7 @@ START_TEST(test_typical_exchange)
 {
 	struct rtr_request request;
 
-	pr_op_info("-- Typical Exchange --");
+	pr_inf("-- Typical Exchange --");
 
 	/* Init */
 	init_db_full();
@@ -309,7 +309,7 @@ START_TEST(test_no_incremental_update_available)
 {
 	struct rtr_request request;
 
-	pr_op_info("-- No Incremental Update Available --");
+	pr_inf("-- No Incremental Update Available --");
 
 	/* Init */
 	init_db_full();
@@ -334,7 +334,7 @@ START_TEST(test_cache_has_no_data_available)
 {
 	struct rtr_request request;
 
-	pr_op_info("-- Cache Has No Data Available --");
+	pr_inf("-- Cache Has No Data Available --");
 
 	/* Init */
 	ck_assert_int_eq(0, vrps_init());
@@ -368,7 +368,7 @@ START_TEST(test_bad_session_id)
 {
 	struct rtr_request request;
 
-	pr_op_info("-- Bad Session ID --");
+	pr_inf("-- Bad Session ID --");
 
 	/* Init */
 	init_db_full();

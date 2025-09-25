@@ -89,7 +89,7 @@ slurm_pfx_assertions_add(struct slurm_prefix *prefix, void *arg)
 		    vrp.max_prefix_length);
 	}
 
-	pr_crit("Unknown addr family type: %u", vrp.addr_fam);
+	pr_panic("Unknown addr family type: %u", vrp.addr_fam);
 	return EINVAL; /* Warning shutupper */
 }
 
@@ -137,7 +137,7 @@ __slurm_load_checksums(char const *location, void *arg)
 
 	if (hash_file(hash_get_sha256(), location, csum->csum, &csum->csum_len) != 0) {
 		free(csum);
-		return pr_op_err("Calculating slurm hash");
+		return pr_err("Calculating slurm hash");
 	}
 
 	list = arg;
@@ -212,7 +212,7 @@ update_slurm(struct db_slurm **slurm)
 	struct db_slurm *new_slurm = NULL;
 	int error;
 
-	pr_op_info("Checking if there are new or modified SLURM files");
+	pr_inf("Checking if there are new or modified SLURM files");
 
 	error = slurm_load_checksums(&new_csums);
 	if (error)
@@ -225,13 +225,13 @@ update_slurm(struct db_slurm **slurm)
 	if (*slurm != NULL) {
 		db_slurm_get_csum_list(*slurm, &old_csums);
 		if (are_csum_lists_equals(&new_csums, &old_csums)) {
-			pr_op_info("Applying same old SLURM, no changes found.");
+			pr_inf("Applying same old SLURM, no changes found.");
 			destroy_local_csum_list(&new_csums);
 			return 0;
 		}
 	}
 
-	pr_op_info("Applying configured SLURM");
+	pr_inf("Applying configured SLURM");
 
 	error = load_slurm_files(&new_csums, &new_slurm);
 
@@ -244,10 +244,10 @@ update_slurm(struct db_slurm **slurm)
 
 	if (error) {
 		/* Fall back to previous iteration's SLURM */
-		pr_op_info("Error '%s' loading SLURM. The validation will continue regardless.",
+		pr_inf("Error '%s' loading SLURM. The validation will continue regardless.",
 		    strerror(error));
 		if (*slurm != NULL) {
-			pr_op_info("A previous valid version of the SLURM exists and will be applied.");
+			pr_inf("A previous valid version of the SLURM exists and will be applied.");
 			db_slurm_log(*slurm);
 		}
 

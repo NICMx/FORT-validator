@@ -126,7 +126,7 @@ validate_printable_string(char const *str, char const *what)
 {
 	for (; *str != '\0'; str++)
 		if (!is_valid_printable_string_char(*str))
-			return pr_val_err("Invalid character in '%s' PrintableString: 0x%X",
+			return pr_err("Invalid character in '%s' PrintableString: 0x%X",
 			    what, *str);
 	return 0;
 }
@@ -170,11 +170,11 @@ spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
 	ok = X509_PUBKEY_get0_param(&tal_alg, &tal_spk, &tal_spk_len, NULL,
 	    tal_spki);
 	if (!ok)
-		return val_crypto_err("X509_PUBKEY_get0_param() 1 returned %d", ok);
+		return pr_crypto_err("X509_PUBKEY_get0_param() 1 returned %d", ok);
 	ok = X509_PUBKEY_get0_param(&cert_alg, &cert_spk, &cert_spk_len, NULL,
 	    cert_spki);
 	if (!ok)
-		return val_crypto_err("X509_PUBKEY_get0_param() 2 returned %d", ok);
+		return pr_crypto_err("X509_PUBKEY_get0_param() 2 returned %d", ok);
 
 	if (OBJ_cmp(tal_alg, cert_alg) != 0)
 		goto root_different_alg_err;
@@ -186,9 +186,9 @@ spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
 	return 0;
 
 root_different_alg_err:
-	return pr_val_err("TAL's public key algorithm is different than the root certificate's public key algorithm.");
+	return pr_err("TAL's public key algorithm is different than the root certificate's public key algorithm.");
 root_different_pk_err:
-	return pr_val_err("TAL's public key is different than the root certificate's public key.");
+	return pr_err("TAL's public key is different than the root certificate's public key.");
 }
 
 /*
@@ -228,12 +228,12 @@ decode_spki(struct tal *tal)
 	spki = d2i_X509_PUBKEY(NULL, &cursor, len);
 
 	if (spki == NULL) {
-		op_crypto_err("The TAL's public key cannot be decoded.");
+		pr_crypto_err("The TAL's public key cannot be decoded.");
 		goto fail;
 	}
 	if (cursor != origin + len) {
 		X509_PUBKEY_free(spki);
-		op_crypto_err("The TAL's public key contains trailing garbage.");
+		pr_crypto_err("The TAL's public key contains trailing garbage.");
 		goto fail;
 	}
 
@@ -251,7 +251,7 @@ validate_spki(struct tal *tal, X509_PUBKEY *cert_spki)
 	int error;
 
 	if (tal == NULL)
-		pr_crit("TAL is NULL.");
+		pr_panic("TAL is NULL.");
 
 	/*
 	 * We have a problem at this point:
@@ -301,11 +301,11 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 
 	key = X509_PUBKEY_get0(pubkey);
 	if (key == NULL)
-		return val_crypto_err("X509_PUBKEY_get0() returned NULL");
+		return pr_crypto_err("X509_PUBKEY_get0() returned NULL");
 
 	key_type = EVP_PKEY_get_base_id(key);
 	if (key_type != EVP_PKEY_RSA && key_type != EVP_PKEY_RSA2)
-		return val_crypto_err("The public key type is not RSA: %u",
+		return pr_crypto_err("The public key type is not RSA: %u",
 		    key_type);
 
 	/*
@@ -341,9 +341,9 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 	 * *Shrug*. I'm sorry; it's the best I got.
 	 */
 	if (!EVP_PKEY_get_size_t_param(key, OSSL_PKEY_PARAM_RSA_BITS, &bits))
-		return val_crypto_err("Cannot extract the modulus length from the public key");
+		return pr_crypto_err("Cannot extract the modulus length from the public key");
 	if (bits < EXPECTED_BITS)
-		return pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %zu bits, not %zu bits",
+		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %zu bits, not %zu bits",
 		    bits, EXPECTED_BITS);
 	/*
 	 * I'm going to be a bit lenient with this, because a small amount of
@@ -351,7 +351,7 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 	 * (Notice this one's a warning.)
 	 */
 	if (bits > EXPECTED_BITS)
-		pr_val_warn("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %zu bits, not %zu bits",
+		pr_wrn("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %zu bits, not %zu bits",
 		    bits, EXPECTED_BITS);
 
 	/*
@@ -361,9 +361,9 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 	 * equal to 65537. The default value is 65537.
 	 */
 	if (!EVP_PKEY_get_size_t_param(key, OSSL_PKEY_PARAM_RSA_E, &exponent))
-		return val_crypto_err("Cannot extract the exponent from the public key");
+		return pr_crypto_err("Cannot extract the exponent from the public key");
 	if (exponent != EXPECTED_EXPONENT)
-		return pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) exponent is %zu, not %zu",
+		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) exponent is %zu, not %zu",
 		    exponent, EXPECTED_EXPONENT);
 
 	return 0;
@@ -381,31 +381,31 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 
 	pkey = X509_PUBKEY_get0(pubkey);
 	if (pkey == NULL)
-		return val_crypto_err("The certificate's Subject Public Key is missing or malformed.");
+		return pr_crypto_err("The certificate's Subject Public Key is missing or malformed.");
 
 	rsa = EVP_PKEY_get0_RSA(pkey);
 	if (rsa == NULL)
-		return val_crypto_err("EVP_PKEY_get0_RSA() returned NULL");
+		return pr_crypto_err("EVP_PKEY_get0_RSA() returned NULL");
 
 	modulus = RSA_bits(rsa);
 	if (modulus < MODULUS)
-		return pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) modulus is %d bits, not %d bits.",
+		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) modulus is %d bits, not %d bits.",
 		    modulus, MODULUS);
 	if (modulus > MODULUS)
-		pr_val_warn("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %d bits, not %d bits",
+		pr_wrn("Certificate's subjectPublicKey (RSAPublicKey) modulus lengths %d bits, not %d bits",
 		    modulus, MODULUS);
 
 	RSA_get0_key(rsa, NULL, &exp, NULL);
 	if (exp == NULL)
-		return pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) exponent isn't set, must be "
+		return pr_err("Certificate's subjectPublicKey (RSAPublicKey) exponent isn't set, must be "
 		    EXPONENT " bits.");
 
 	exp_str = BN_bn2dec(exp);
 	if (exp_str == NULL)
-		return val_crypto_err("Couldn't get subjectPublicKey exponent string");
+		return pr_crypto_err("Couldn't get subjectPublicKey exponent string");
 
 	if (strcmp(EXPONENT, exp_str) != 0) {
-		error = pr_val_err("Certificate's subjectPublicKey (RSAPublicKey) exponent is %s, must be "
+		error = pr_err("Certificate's subjectPublicKey (RSAPublicKey) exponent is %s, must be "
 		    EXPONENT " bits.", exp_str);
 		free(exp_str);
 		return error;
@@ -431,11 +431,11 @@ validate_public_key(struct rpki_certificate *cert)
 	/* Reminder: X509_PUBKEY is the same as SubjectPublicKeyInfo. */
 	pubkey = X509_get_X509_PUBKEY(cert->x509);
 	if (pubkey == NULL)
-		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL");
+		return pr_crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
 	ok = X509_PUBKEY_get0_param(NULL, NULL, NULL, &pa, pubkey);
 	if (!ok)
-		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+		return pr_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
 	if (cert->type == CERTYPE_BGPSEC)
 		return validate_certificate_public_key_algorithm_bgpsec(pa);
@@ -465,9 +465,9 @@ validate_public_key(struct rpki_certificate *cert)
 		if (error)
 			return error;
 		if ((evppkey = X509_get0_pubkey(cert->x509)) == NULL)
-			return val_crypto_err("X509_get0_pubkey() returned NULL");
+			return pr_crypto_err("X509_get0_pubkey() returned NULL");
 		if (X509_verify(cert->x509, evppkey) != 1)
-			return val_crypto_err("Invalid signature.");
+			return pr_crypto_err("Invalid signature.");
 	}
 
 	return 0;
@@ -489,7 +489,7 @@ validate_rfc6487(struct rpki_certificate *cert)
 
 	/* rfc6487#section-4.1 */
 	if (X509_get_version(cert->x509) != 2)
-		return pr_val_err("Certificate version is not v3.");
+		return pr_err("Certificate version is not v3.");
 
 	/* rfc6487#section-4.2 */
 	/* <Redacted> */
@@ -539,10 +539,10 @@ skip_t(ANY_t *content, struct progress *p, unsigned int tag)
 	/* These errors happen when the object is not DER-encoded */
 
 	if (content->buf[p->offset] != tag)
-		return pr_val_err("Expected tag 0x%x, got 0x%x.",
+		return pr_err("Expected tag 0x%x, got 0x%x.",
 		    tag, content->buf[p->offset]);
 	if (p->remaining == 0)
-		return pr_val_err("Buffer seems truncated.");
+		return pr_err("Buffer seems truncated.");
 
 	p->offset++;
 	p->remaining--;
@@ -562,9 +562,9 @@ skip_tl(ANY_t *content, struct progress *p, unsigned int tag)
 	len_len = ber_fetch_length(true, &content->buf[p->offset], p->remaining,
 	    &value_len);
 	if (len_len == -1)
-		return pr_val_err("Could not decipher length (Unknown cause).");
+		return pr_err("Could not decipher length (Unknown cause).");
 	if (len_len == 0)
-		return pr_val_err("Buffer seems truncated.");
+		return pr_err("Buffer seems truncated.");
 
 	p->offset += len_len;
 	p->remaining -= len_len;
@@ -585,9 +585,9 @@ skip_tlv(ANY_t *content, struct progress *p, unsigned int tag)
 	skip = ber_skip_length(NULL, is_constructed, &content->buf[p->offset],
 	    p->remaining);
 	if (skip == -1)
-		return pr_val_err("Could not skip length (Unknown cause).");
+		return pr_err("Could not skip length (Unknown cause).");
 	if (skip == 0)
-		return pr_val_err("Buffer seems truncated.");
+		return pr_err("Buffer seems truncated.");
 
 	p->offset += skip;
 	p->remaining -= skip;
@@ -660,9 +660,9 @@ find_signedAttrs(ANY_t *signedData, struct encoded_signedAttrs *result)
 	len_len = ber_fetch_length(true, result->buffer,
 	    p.remaining, &result->size);
 	if (len_len == -1)
-		return pr_val_err("Could not decipher length (Unknown cause.)");
+		return pr_err("Could not decipher length (Unknown cause.)");
 	if (len_len == 0)
-		return pr_val_err("Buffer seems truncated.");
+		return pr_err("Buffer seems truncated.");
 	result->size += len_len;
 	return 0;
 }
@@ -685,16 +685,16 @@ validate_signature(X509 *cert, ANY_t *signedData,
 
 	public_key = X509_get_X509_PUBKEY(cert);
 	if (public_key == NULL)
-		return val_crypto_err("Certificate seems to lack a public key");
+		return pr_crypto_err("Certificate seems to lack a public key");
 
 	/* Create the Message Digest Context */
 	ctx = EVP_MD_CTX_create();
 	if (ctx == NULL)
-		return val_crypto_err("EVP_MD_CTX_create() error");
+		return pr_crypto_err("EVP_MD_CTX_create() error");
 
 	if (1 != EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL,
 	    X509_PUBKEY_get0(public_key))) {
-		error = val_crypto_err("EVP_DigestVerifyInit() error");
+		error = pr_crypto_err("EVP_DigestVerifyInit() error");
 		goto end;
 	}
 
@@ -753,19 +753,19 @@ validate_signature(X509 *cert, ANY_t *signedData,
 	error = EVP_DigestVerifyUpdate(ctx, &EXPLICIT_SET_OF_TAG,
 	    sizeof(EXPLICIT_SET_OF_TAG));
 	if (1 != error) {
-		error = val_crypto_err("EVP_DigestVerifyInit() error");
+		error = pr_crypto_err("EVP_DigestVerifyInit() error");
 		goto end;
 	}
 
 	error = EVP_DigestVerifyUpdate(ctx, signedAttrs.buffer,
 	    signedAttrs.size);
 	if (1 != error) {
-		error = val_crypto_err("EVP_DigestVerifyInit() error");
+		error = pr_crypto_err("EVP_DigestVerifyInit() error");
 		goto end;
 	}
 
 	if (1 != EVP_DigestVerifyFinal(ctx, signature->buf, signature->size)) {
-		error = val_crypto_err("Signed Object's signature is invalid");
+		error = pr_crypto_err("Signed Object's signature is invalid");
 		goto end;
 	}
 
@@ -784,17 +784,17 @@ load_certificate(char const *path)
 
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL) {
-		val_crypto_err("BIO_new(BIO_s_file()) returned NULL");
+		pr_crypto_err("BIO_new(BIO_s_file()) returned NULL");
 		return NULL;
 	}
 	if (BIO_read_filename(bio, path) <= 0) {
-		val_crypto_err("Error reading certificate");
+		pr_crypto_err("Error reading certificate");
 		goto end;
 	}
 
 	cert = d2i_X509_bio(bio, NULL);
 	if (cert == NULL) {
-		val_crypto_err("Error parsing certificate");
+		pr_crypto_err("Error parsing certificate");
 		goto end;
 	}
 
@@ -894,14 +894,14 @@ build_trusted_stack(struct rpki_certificate *cert)
 
 	stack = sk_X509_new_null();
 	if (!stack) {
-		val_crypto_err("sk_X509_new_null() returned NULL.");
+		pr_crypto_err("sk_X509_new_null() returned NULL.");
 		return NULL;
 	}
 
 	for (cert = cert->parent; cert != NULL; cert = cert->parent) {
 		ret = sk_X509_push(stack, cert->x509);
 		if (ret <= 0) {
-			val_crypto_err("sk_X509_push returned %d.", ret);
+			pr_crypto_err("sk_X509_push returned %d.", ret);
 			sk_X509_pop_free(stack, X509_free);
 			return NULL;
 		}
@@ -918,12 +918,12 @@ build_crl_stack(struct rpki_certificate *cert)
 
 	stack = sk_X509_CRL_new_null();
 	if (!stack) {
-		val_crypto_err("sk_X509_CRL_new_null() returned NULL.");
+		pr_crypto_err("sk_X509_CRL_new_null() returned NULL.");
 		return NULL;
 	}
 	ok = sk_X509_CRL_push(stack, cert->parent->rpp.crl.obj);
 	if (ok != 1) {
-		val_crypto_err("sk_X509_CRL_push() returned %d.", ok);
+		pr_crypto_err("sk_X509_CRL_push() returned %d.", ok);
 		return NULL;
 	}
 
@@ -953,7 +953,7 @@ complain_crl_stale(X509_CRL *crl)
 	lu = asn1time2str(X509_CRL_get0_lastUpdate(crl));
 	nu = asn1time2str(X509_CRL_get0_nextUpdate(crl));
 
-	pr_val_err("CRL is stale/expired. (lastUpdate:%s, nextUpdate:%s)",
+	pr_err("CRL is stale/expired. (lastUpdate:%s, nextUpdate:%s)",
 	    lu, nu);
 
 	free(lu);
@@ -982,17 +982,17 @@ validate_chain(struct rpki_certificate *cert)
 
 	ctx = X509_STORE_CTX_new();
 	if (ctx == NULL)
-		return val_crypto_err("X509_STORE_CTX_new() returned NULL");
+		return pr_crypto_err("X509_STORE_CTX_new() returned NULL");
 
 	store = X509_STORE_new();
 	if (!store) {
-		error = val_crypto_err("X509_STORE_new() returned NULL");
+		error = pr_crypto_err("X509_STORE_new() returned NULL");
 		goto end1;
 	}
 
 	params = X509_VERIFY_PARAM_new();
 	if (params == NULL) {
-		error = val_crypto_err("X509_VERIFY_PARAM_new() returned NULL");
+		error = pr_crypto_err("X509_VERIFY_PARAM_new() returned NULL");
 		goto end2;
 	}
 
@@ -1005,7 +1005,7 @@ validate_chain(struct rpki_certificate *cert)
 	/* Returns 0 or 1 , all callers test ! only. */
 	ok = X509_STORE_CTX_init(ctx, store, cert->x509, NULL);
 	if (!ok) {
-		error = val_crypto_err("X509_STORE_CTX_init() returned %d", ok);
+		error = pr_crypto_err("X509_STORE_CTX_init() returned %d", ok);
 		goto end3;
 	}
 
@@ -1038,7 +1038,7 @@ validate_chain(struct rpki_certificate *cert)
 	if (ok <= 0) {
 		/*
 		 * ARRRRGGGGGGGGGGGGG
-		 * Do not use val_crypto_err() here; for some reason the proper
+		 * Do not use pr_crypto_err() here; for some reason the proper
 		 * error code is stored in the context.
 		 */
 		error = X509_STORE_CTX_get_error(ctx);
@@ -1046,7 +1046,7 @@ validate_chain(struct rpki_certificate *cert)
 			complain_crl_stale(cert->parent->rpp.crl.obj);
 			error = EINVAL;
 		} else if (error)
-			pr_val_err("Certificate validation failed: %s",
+			pr_err("Certificate validation failed: %s",
 			    X509_verify_cert_error_string(error));
 		else {
 			/*
@@ -1054,7 +1054,7 @@ validate_chain(struct rpki_certificate *cert)
 			 * That said, there's not much to do about !error,
 			 * so hope for the best.
 			 */
-			val_crypto_err("Certificate validation failed: %d", ok);
+			pr_crypto_err("Certificate validation failed: %d", ok);
 			error = EINVAL;
 		}
 		goto end5;
@@ -1096,17 +1096,17 @@ handle_ip_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 	case 2:
 		family = &blocks->list.array[0]->addressFamily;
 		if (get_addr_family(family) != AF_INET) {
-			error = pr_val_err("First IP address block listed is not v4.");
+			error = pr_err("First IP address block listed is not v4.");
 			goto end;
 		}
 		family = &blocks->list.array[1]->addressFamily;
 		if (get_addr_family(family) != AF_INET6) {
-			error = pr_val_err("Second IP address block listed is not v6.");
+			error = pr_err("Second IP address block listed is not v6.");
 			goto end;
 		}
 		break;
 	default:
-		error = pr_val_err("Got %d IP address blocks; 1 or 2 expected.",
+		error = pr_err("Got %d IP address blocks; 1 or 2 expected.",
 		    blocks->list.count);
 		goto end;
 	}
@@ -1163,9 +1163,9 @@ __convert_resources(struct rpki_certificate *cert,
 
 		if (nid == addr_nid) {
 			if (ip_ext_found)
-				return pr_val_err("Multiple IP extensions found.");
+				return pr_err("Multiple IP extensions found.");
 			if (!X509_EXTENSION_get_critical(ext))
-				return pr_val_err("The IP extension is not marked as critical.");
+				return pr_err("The IP extension is not marked as critical.");
 
 			ip_ext_found = true;
 
@@ -1175,9 +1175,9 @@ __convert_resources(struct rpki_certificate *cert,
 
 		} else if (nid == asn_nid) {
 			if (asn_ext_found)
-				return pr_val_err("Multiple AS extensions found.");
+				return pr_err("Multiple AS extensions found.");
 			if (!X509_EXTENSION_get_critical(ext))
-				return pr_val_err("The AS extension is not marked as critical.");
+				return pr_err("The AS extension is not marked as critical.");
 
 			asn_ext_found = true;
 
@@ -1186,16 +1186,16 @@ __convert_resources(struct rpki_certificate *cert,
 				return error;
 
 		} else if (nid == bad_addr_nid) {
-			return pr_val_err("Certificate has an RFC%s policy, but contains an RFC%s IP extension.",
+			return pr_err("Certificate has an RFC%s policy, but contains an RFC%s IP extension.",
 			    policy_rfc, bad_ext_rfc);
 		} else if (nid == bad_asn_nid) {
-			return pr_val_err("Certificate has an RFC%s policy, but contains an RFC%s ASN extension.",
+			return pr_err("Certificate has an RFC%s policy, but contains an RFC%s ASN extension.",
 			    policy_rfc, bad_ext_rfc);
 		}
 	}
 
 	if (!ip_ext_found && !asn_ext_found)
-		return pr_val_err("Certificate lacks both IP and AS extension.");
+		return pr_err("Certificate lacks both IP and AS extension.");
 
 	return 0;
 }
@@ -1225,7 +1225,7 @@ convert_resources(struct rpki_certificate *cert)
 		    "8360", "6484");
 	}
 
-	pr_crit("Unknown policy: %u", cert->policy);
+	pr_panic("Unknown policy: %u", cert->policy);
 	return EINVAL;
 }
 
@@ -1239,12 +1239,12 @@ handle_rpkiManifest(struct uri const *uri, void *arg)
 	pr_clutter("rpkiManifest: %s", rm);
 
 	if (!uri_is_rsync(uri)) {
-		pr_val_debug("Ignoring non-rsync rpkiManifest '%s'.", rm);
+		pr_trc("Ignoring non-rsync rpkiManifest '%s'.", rm);
 		return ENOTSUP;
 	}
 
 	if (uri_str(&uris->rpkiManifest) != NULL) {
-		pr_val_warn("Ignoring additional rpkiManifest: %s", rm);
+		pr_wrn("Ignoring additional rpkiManifest: %s", rm);
 		return 0;
 	}
 
@@ -1262,12 +1262,12 @@ handle_caRepository(struct uri const *uri, void *arg)
 	pr_clutter("caRepository: %s", cr);
 
 	if (!uri_is_rsync(uri)) {
-		pr_val_debug("Ignoring non-rsync caRepository '%s'.", cr);
+		pr_trc("Ignoring non-rsync caRepository '%s'.", cr);
 		return ENOTSUP;
 	}
 
 	if (uri_str(&uris->caRepository) != NULL) {
-		pr_val_warn("Ignoring additional caRepository: %s", cr);
+		pr_wrn("Ignoring additional caRepository: %s", cr);
 		return 0;
 	}
 
@@ -1285,12 +1285,12 @@ handle_rpkiNotify(struct uri const *uri, void *arg)
 	pr_clutter("rpkiNotify: %s", rn);
 
 	if (!uri_is_https(uri)) {
-		pr_val_debug("Ignoring non-https rpkiNotify '%s'.", rn);
+		pr_trc("Ignoring non-https rpkiNotify '%s'.", rn);
 		return ENOTSUP;
 	}
 
 	if (uri_str(&uris->rpkiNotify) != NULL) {
-		pr_val_warn("Ignoring additional rpkiNotify: %s", rn);
+		pr_wrn("Ignoring additional rpkiNotify: %s", rn);
 		return 0;
 	}
 
@@ -1308,12 +1308,12 @@ handle_signedObject(struct uri const *uri, void *arg)
 	pr_clutter("signedObject: %s", so);
 
 	if (!uri_is_rsync(uri)) {
-		pr_val_debug("Ignoring non-rsync signedObject '%s'.", so);
+		pr_trc("Ignoring non-rsync signedObject '%s'.", so);
 		return ENOTSUP;
 	}
 
 	if (uri_str(&sias->signedObject) != NULL) {
-		pr_val_warn("Ignoring additional signedObject: %s", so);
+		pr_wrn("Ignoring additional signedObject: %s", so);
 		return 0;
 	}
 
@@ -1334,7 +1334,7 @@ handle_bc(void *ext, void *arg)
 
 	return (bc->pathlen == NULL)
 	    ? 0
-	    : pr_val_err("%s extension contains a Path Length Constraint.",
+	    : pr_err("%s extension contains a Path Length Constraint.",
 	          ext_bc()->name);
 }
 
@@ -1361,7 +1361,7 @@ handle_ski_ee(void *ext, void *arg)
 	sid = args->sid;
 	if (ski->length != sid->size
 	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
-		return pr_val_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
+		return pr_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
 	}
 
 	return 0;
@@ -1375,19 +1375,19 @@ handle_aki_ta(void *ext, void *arg)
 	int error;
 
 	if (aki->keyid == NULL) {
-		return pr_val_err("The '%s' extension lacks a keyIdentifier.",
+		return pr_err("The '%s' extension lacks a keyIdentifier.",
 		    ext_aki()->name);
 	}
 
 	ski = X509_get_ext_d2i(arg, NID_subject_key_identifier, NULL, NULL);
 	if (ski == NULL) {
-		pr_val_err("Certificate lacks the '%s' extension.",
+		pr_err("Certificate lacks the '%s' extension.",
 		    ext_ski()->name);
 		return ESRCH;
 	}
 
 	error = (ASN1_OCTET_STRING_cmp(aki->keyid, ski) != 0)
-	      ? pr_val_err("The '%s' does not equal the '%s'.",
+	      ? pr_err("The '%s' does not equal the '%s'.",
 	                   ext_aki()->name, ext_ski()->name)
 	      : 0;
 
@@ -1407,7 +1407,7 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 	unsigned char data[2];
 
 	if (ku->length != 2 && ku->length != 1) {
-		return pr_val_err("Bogus %s length: %d",
+		return pr_err("Bogus %s length: %d",
 		    ext_ku()->name, ku->length);
 	}
 
@@ -1415,7 +1415,7 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 	memcpy(data, ku->data, ku->length);
 
 	if (data[0] != byte1 || data[1] != 0) {
-		return pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
+		return pr_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
 		    !!(data[0] & 0x80u), !!(data[0] & 0x40u),
 		    !!(data[0] & 0x20u), !!(data[0] & 0x10u),
 		    !!(data[0] & 0x08u), !!(data[0] & 0x04u),
@@ -1449,7 +1449,7 @@ gn2uri(GENERAL_NAME *ad, struct uri *uri)
 
 	asn1str = GENERAL_NAME_get0_value(ad, &ptype);
 	if (ptype != GEN_URI) {
-		pr_val_debug("Ignoring unknown GENERAL_NAME type: %d", ptype);
+		pr_trc("Ignoring unknown GENERAL_NAME type: %d", ptype);
 		return ENOTSUP;
 	}
 
@@ -1467,7 +1467,7 @@ gn2uri(GENERAL_NAME *ad, struct uri *uri)
 
 	errmsg = uri_init(uri, str);
 	if (errmsg)
-		pr_val_warn("Cannot parse GENERAL_NAME '%s' as a URI: %s",
+		pr_wrn("Cannot parse GENERAL_NAME '%s' as a URI: %s",
 		    str, errmsg);
 
 	free(str);
@@ -1485,7 +1485,7 @@ handle_cdp(void *ext, void *arg)
 	char const *error_msg;
 
 	if (sk_DIST_POINT_num(crldp) != 1) {
-		return pr_val_err("The %s extension has %d distribution points. (1 expected)",
+		return pr_err("The %s extension has %d distribution points. (1 expected)",
 		    ext_cdp()->name, sk_DIST_POINT_num(crldp));
 	}
 
@@ -1543,7 +1543,7 @@ handle_cdp(void *ext, void *arg)
 	error_msg = "lacks an RSYNC URI";
 
 dist_point_error:
-	return pr_val_err("The %s extension's distribution point %s.",
+	return pr_err("The %s extension's distribution point %s.",
 	    ext_cdp()->name, error_msg);
 }
 
@@ -1586,7 +1586,7 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 
 			if (found) {
 				uri_cleanup(&uri);
-				return pr_val_err("Extension '%s' has multiple '%s' %s URIs.",
+				return pr_err("Extension '%s' has multiple '%s' %s URIs.",
 				    meta->ia_name, meta->name, meta->type);
 			}
 
@@ -1602,7 +1602,7 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	}
 
 	if (meta->required && !found) {
-		pr_val_err("Extension '%s' lacks a '%s' valid %s URI.",
+		pr_err("Extension '%s' lacks a '%s' valid %s URI.",
 		    meta->ia_name, meta->name, meta->type);
 		return ESRCH;
 	}
@@ -1616,7 +1616,7 @@ handle_caIssuers(struct uri const *uri, void *arg)
 	struct extension_uris *sias = arg;
 
 	if (!uri_is_rsync(uri)) {
-		pr_val_debug("Ignoring non-rsync caIssuers '%s'.", uri_str(uri));
+		pr_trc("Ignoring non-rsync caIssuers '%s'.", uri_str(uri));
 		return ENOTSUP;
 	}
 
@@ -1677,7 +1677,7 @@ handle_cp(void *ext, void *arg)
 	int nid_cp, nid_qt_cps, pqi_num;
 
 	if (sk_POLICYINFO_num(cp) != 1) {
-		return pr_val_err("The %s extension has %d policy information's. (1 expected)",
+		return pr_err("The %s extension has %d policy information's. (1 expected)",
 		    ext_cp()->name, sk_POLICYINFO_num(cp));
 	}
 
@@ -1688,11 +1688,11 @@ handle_cp(void *ext, void *arg)
 		if (policy != NULL)
 			*policy = RPKI_POLICY_RFC6484;
 	} else if (nid_cp == nid_certPolicyRpkiV2()) {
-		pr_val_debug("Found RFC8360 policy!");
+		pr_trc("Found RFC8360 policy!");
 		if (policy != NULL)
 			*policy = RPKI_POLICY_RFC8360;
 	} else {
-		return pr_val_err("Invalid certificate policy OID, isn't 'id-cp-ipAddr-asNumber' nor 'id-cp-ipAddr-asNumber-v2'");
+		return pr_err("Invalid certificate policy OID, isn't 'id-cp-ipAddr-asNumber' nor 'id-cp-ipAddr-asNumber-v2'");
 	}
 
 	/* Exactly one policy qualifier MAY be included (so none is also valid) */
@@ -1703,14 +1703,14 @@ handle_cp(void *ext, void *arg)
 	if (pqi_num == 0)
 		return 0;
 	if (pqi_num != 1) {
-		return pr_val_err("The %s extension has %d policy qualifiers. (none or only 1 expected)",
+		return pr_err("The %s extension has %d policy qualifiers. (none or only 1 expected)",
 		    ext_cp()->name, pqi_num);
 	}
 
 	pqi = sk_POLICYQUALINFO_value(pi->qualifiers, 0);
 	nid_qt_cps = OBJ_obj2nid(pqi->pqualid);
 	if (nid_qt_cps != NID_id_qt_cps)
-		return pr_val_err("Policy qualifier ID isn't Certification Practice Statement (CPS)");
+		return pr_err("Policy qualifier ID isn't Certification Practice Statement (CPS)");
 
 	return 0;
 }
@@ -1720,7 +1720,7 @@ static int
 validate_aia(struct rpki_certificate *cert)
 {
 	if (!uri_equals(&cert->parent->map.url, &cert->uris.caIssuers))
-		return pr_val_err("Certificate's caIssuers (%s) does not match parent certificate's URL (%s).",
+		return pr_err("Certificate's caIssuers (%s) does not match parent certificate's URL (%s).",
 		    uri_str(&cert->parent->map.url),
 		    uri_str(&cert->uris.caIssuers));
 
@@ -1733,12 +1733,12 @@ validate_cdp(struct rpki_certificate *cer)
 	struct uri *crl_url = &cer->parent->rpp.crl.map->url;
 
 	if (uri_str(&cer->uris.crldp) == NULL)
-		pr_crit("Certificate's CRL Distribution Point was not recorded.");
+		pr_panic("Certificate's CRL Distribution Point was not recorded.");
 	if (uri_str(crl_url) == NULL)
-		pr_crit("Manifest's CRL was not recorded.");
+		pr_panic("Manifest's CRL was not recorded.");
 
 	if (!uri_equals(&cer->uris.crldp, crl_url)) {
-		return pr_val_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
+		return pr_err("Certificate's CRL Distribution Point ('%s') does not match manifest's CRL ('%s').",
 		    uri_str(&cer->uris.crldp), uri_str(crl_url));
 	}
 
@@ -1912,7 +1912,7 @@ init_resources(struct rpki_certificate *cert)
 	 * part is already handled in convert_resources().
 	 */
 	if (cert->type == CERTYPE_TA && resources_empty(cert->resources))
-		return pr_val_err("Trust Anchor certificate does not define any number resources.");
+		return pr_err("Trust Anchor certificate does not define any number resources.");
 
 	return 0;
 }
@@ -1923,7 +1923,7 @@ validate_certificate(struct rpki_certificate *cert)
 	int error;
 
 	if (chain_length(cert) >= config_get_max_cert_depth())
-		return pr_val_err("Certificate chain maximum depth exceeded.");
+		return pr_err("Certificate chain maximum depth exceeded.");
 
 	fnstack_push_map(&cert->map);
 
@@ -1951,7 +1951,7 @@ validate_certificate(struct rpki_certificate *cert)
 //		    validation_certstack(state)), rpp_parent);
 		goto end;
 	default:
-		pr_val_debug("Type: Unknown. Ignoring...");
+		pr_trc("Type: Unknown. Ignoring...");
 		goto end;
 	}
 
@@ -1993,7 +1993,7 @@ cer_traverse(struct rpki_certificate *ca)
 	if (vv == VV_BUSY)
 		return VV_BUSY;
 	if (vv == VV_FAIL) {
-		pr_val_err("caRepository '%s' could not be refreshed, "
+		pr_err("caRepository '%s' could not be refreshed, "
 		    "and there is no fallback in the cache. "
 		    "I'm going to have to skip it.",
 		    uri_str(&ca->uris.caRepository));
@@ -2005,7 +2005,7 @@ retry:	mft.path = cage_map_file(cage, &mft.url);
 	if (!mft.path) {
 		if (cage_downgrade(cage))
 			goto retry;
-		pr_val_err("caRepository '%s' is missing a manifest.",
+		pr_err("caRepository '%s' is missing a manifest.",
 		    uri_str(&ca->uris.caRepository));
 		vv = VV_FAIL;
 		goto end;
@@ -2044,10 +2044,10 @@ static int
 validate_signedObject(struct extension_uris const *exts, struct uri const *url)
 {
 	if (uri_str(&exts->signedObject) == NULL)
-		pr_crit("Certificate's signedObject was not recorded.");
+		pr_panic("Certificate's signedObject was not recorded.");
 
 	if (!uri_equals(&exts->signedObject, url))
-		return pr_val_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
+		return pr_err("Certificate's signedObject ('%s') does not match the URI of its own signed object (%s).",
 		    uri_str(&exts->signedObject), uri_str(url));
 
 	return 0;

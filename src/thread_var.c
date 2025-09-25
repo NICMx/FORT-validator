@@ -35,7 +35,7 @@ thvar_init(void)
 	 */
 	error = pthread_key_create(&filenames_key, fnstack_discard);
 	if (error) {
-		pr_op_err(
+		pr_err(
 		    "Cannot initialize the file name stack thread variable: %s",
 		    strerror(error));
 		return error;
@@ -59,7 +59,7 @@ fnstack_init(void)
 
 	error = pthread_setspecific(filenames_key, files);
 	if (error)
-		pr_op_err("pthread_setspecific() failed: %s", strerror(error));
+		pr_err("pthread_setspecific() failed: %s", strerror(error));
 }
 
 void
@@ -76,12 +76,12 @@ fnstack_cleanup(void)
 
 	error = pthread_setspecific(filenames_key, NULL);
 	if (error)
-		pr_op_err("pthread_setspecific() failed: %s", strerror(error));
+		pr_err("pthread_setspecific() failed: %s", strerror(error));
 }
 
 /*
  * Call this function every time you're about to start processing a new file.
- * Any pr_op_err()s and friends will now include the new file name.
+ * Any pr_err()s and friends will now include the new file name.
  * Use fnstack_pop() to revert back to the previously stacked file name.
  * @file is not cloned; it's expected to outlive the push/pop operation.
  *
@@ -91,11 +91,11 @@ fnstack_cleanup(void)
  * 	test_fnstack(void)
  * 	{
  * 		fnstack_push("text.txt");
- * 		pr_val_info("Message 1");
+ * 		pr_inf("Message 1");
  * 		fnstack_push("image.png");
- * 		pr_val_info("Message 2");
+ * 		pr_inf("Message 2");
  * 		fnstack_pop();
- * 		pr_val_info("Message 3");
+ * 		pr_inf("Message 3");
  * 		fnstack_pop();
  * 	}
  *

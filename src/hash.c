@@ -40,14 +40,14 @@ hash_setup(void)
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 	sha1.md = EVP_MD_fetch(NULL, "SHA1", NULL);
 	if (sha1.md == NULL)
-		return pr_op_err("This version of libcrypto does not seem to support SHA1.");
+		return pr_err("This version of libcrypto does not seem to support SHA1.");
 	sha1.size = EVP_MD_get_size(sha1.md);
 	sha1.name = EVP_MD_get0_name(sha1.md);
 
 	sha256.md = EVP_MD_fetch(NULL, "SHA256", NULL);
 	if (sha256.md == NULL) {
 		EVP_MD_free(sha1.md);
-		return pr_op_err("This version of libcrypto does not seem to support SHA256.");
+		return pr_err("This version of libcrypto does not seem to support SHA256.");
 	}
 	sha256.size = EVP_MD_get_size(sha256.md);
 	sha256.name = EVP_MD_get0_name(sha256.md);
@@ -55,13 +55,13 @@ hash_setup(void)
 #else
 	sha1.md = EVP_get_digestbyname("sha1");
 	if (sha1.md == NULL)
-		return pr_op_err("This version of libcrypto does not seem to support SHA1.");
+		return pr_err("This version of libcrypto does not seem to support SHA1.");
 	sha1.size = EVP_MD_size(sha1.md);
 	sha1.name = EVP_MD_name(sha1.md);
 
 	sha256.md = EVP_get_digestbyname("sha256");
 	if (sha256.md == NULL)
-		return pr_op_err("This version of libcrypto does not seem to support SHA256.");
+		return pr_err("This version of libcrypto does not seem to support SHA256.");
 	sha256.size = EVP_MD_size(sha256.md);
 	sha256.name = EVP_MD_name(sha256.md);
 
@@ -114,7 +114,7 @@ hash_file(struct hash_algorithm const *algorithm, char const *filename,
 		enomem_panic();
 
 	if (!EVP_DigestInit_ex(ctx, algorithm->md, NULL)) {
-		error = val_crypto_err("EVP_DigestInit_ex() failed");
+		error = pr_crypto_err("EVP_DigestInit_ex() failed");
 		goto end;
 	}
 
@@ -122,24 +122,24 @@ hash_file(struct hash_algorithm const *algorithm, char const *filename,
 		consumed = fread(buffer, 1, stat.st_blksize, file);
 		error = ferror(file);
 		if (error) {
-			pr_val_err("File reading error. Error message (apparently): %s",
+			pr_err("File reading error. Error message (apparently): %s",
 			   strerror(error));
 			goto end;
 		}
 
 		if (!EVP_DigestUpdate(ctx, buffer, consumed)) {
-			error = val_crypto_err("EVP_DigestUpdate() failed");
+			error = pr_crypto_err("EVP_DigestUpdate() failed");
 			goto end;
 		}
 
 	} while (!feof(file));
 
 	if (!EVP_DigestFinal_ex(ctx, result, &hash_size)) {
-		error = val_crypto_err("EVP_DigestFinal_ex() failed");
+		error = pr_crypto_err("EVP_DigestFinal_ex() failed");
 		goto end;
 	}
 	if (hash_size != algorithm->size) {
-		error = pr_op_err("libcrypto returned a %s hash sized %u bytes.",
+		error = pr_err("libcrypto returned a %s hash sized %u bytes.",
 		    algorithm->name, hash_size);
 	}
 
@@ -164,7 +164,7 @@ hash_validate_file(struct hash_algorithm const *algorithm, char const *path,
 	pr_clutter("Validating file hash: %s", path);
 
 	if (expected_len != hash_get_size(algorithm))
-		return pr_val_err("%s string has bogus size: %zu",
+		return pr_err("%s string has bogus size: %zu",
 		    hash_get_name(algorithm), expected_len);
 
 	error = hash_file(algorithm, path, actual, &actual_len);
@@ -179,7 +179,7 @@ hash_validate_file(struct hash_algorithm const *algorithm, char const *path,
 	return 0;
 
 fail:
-	error = pr_val_err("File '%s' does not match its expected hash.", path);
+	error = pr_err("File '%s' does not match its expected hash.", path);
 #ifdef UNIT_TESTING
 	size_t i;
 	printf("Expected: ");
@@ -208,13 +208,13 @@ hash_buffer(struct hash_algorithm const *algorithm,
 	    !EVP_DigestUpdate(ctx, content, content_len) ||
 	    !EVP_DigestFinal_ex(ctx, hash, &actual_len)) {
 		EVP_MD_CTX_free(ctx);
-		return val_crypto_err("Buffer hashing failed");
+		return pr_crypto_err("Buffer hashing failed");
 	}
 
 	EVP_MD_CTX_free(ctx);
 
 	if (actual_len != algorithm->size)
-		pr_crit("libcrypto returned a %s hash sized %u bytes.",
+		pr_panic("libcrypto returned a %s hash sized %u bytes.",
 		    algorithm->name, actual_len);
 
 	return 0;

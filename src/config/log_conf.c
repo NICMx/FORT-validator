@@ -64,7 +64,7 @@ print_log_level(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_op_info("%s: %s", field->name, str);
+	pr_inf("%s: %s", field->name, str);
 }
 
 static void
@@ -81,7 +81,7 @@ print_log_output(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_op_info("%s: %s", field->name, str);
+	pr_inf("%s: %s", field->name, str);
 }
 
 static void
@@ -146,7 +146,7 @@ print_log_facility(struct option_field const *field, void *value)
 		break;
 	}
 
-	pr_op_info("%s: %s", field->name, str);
+	pr_inf("%s: %s", field->name, str);
 }
 
 static int
@@ -162,7 +162,7 @@ parse_argv_log_level(struct option_field const *field, char const *str,
 	else if (strcmp(str, LOG_LEVEL_VALUE_DEBUG) == 0)
 		DEREFERENCE_UINT(result) = LOG_DEBUG;
 	else
-		return pr_op_err("Unknown %s: '%s'", field->name, str);
+		return pr_err("Unknown %s: '%s'", field->name, str);
 
 	return 0;
 }
@@ -176,7 +176,7 @@ parse_argv_log_output(struct option_field const *field, char const *str,
 	else if (strcmp(str, LOG_OUTPUT_VALUE_CONSOLE) == 0)
 		DEREFERENCE_ENUM(result) = CONSOLE;
 	else
-		return pr_op_err("Unknown %s: '%s'", field->name, str);
+		return pr_err("Unknown %s: '%s'", field->name, str);
 
 	return 0;
 }
@@ -223,10 +223,10 @@ parse_argv_log_facility(struct option_field const *field, char const *str,
 		DEREFERENCE_UINT32(result) = LOG_LOCAL7;
 	else if (strcmp(str, LOG_FACILITY_VALUE_KERN) == 0 ||
 	    strcmp(str, LOG_FACILITY_VALUE_SYSLOG) == 0)
-		return pr_op_err("Unsupported %s: '%s', use another value",
+		return pr_err("Unsupported %s: '%s', use another value",
 		    field->name, str);
 	else
-		return pr_op_err("Unknown %s: '%s'", field->name, str);
+		return pr_err("Unknown %s: '%s'", field->name, str);
 
 	return 0;
 }

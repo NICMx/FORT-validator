@@ -18,7 +18,7 @@ __string_free(char **string)
 static void
 string_print(struct option_field const *field, void *value)
 {
-	pr_op_info("%s: %s", field->name, DEREFERENCE(value));
+	pr_inf("%s: %s", field->name, DEREFERENCE(value));
 }
 
 static int
@@ -27,7 +27,7 @@ string_parse_argv(struct option_field const *field, char const *str,
 {
 	if (field->type->has_arg != required_argument || str == NULL ||
 	    strlen(str) == 0) {
-		return pr_op_err("String options ('%s' in this case) require an argument.",
+		return pr_err("String options ('%s' in this case) require an argument.",
 		    field->name);
 	}
 
@@ -55,7 +55,7 @@ string_parse_json(struct option_field const *opt, json_t *json, void *result)
 			return 0;
 		} else {
 			if (string == NULL) {
-				return pr_op_err(
+				return pr_err(
 				    "The '%s' field is not allowed to be null.",
 				    opt->name);
 			}
@@ -91,14 +91,14 @@ service_parse_json(struct option_field const *opt, json_t *json, void *result)
 	if (json_is_integer(json)) {
 		intval = json_integer_value(json);
 		if (intval < 1 || 65535 < intval) {
-			return pr_op_err("'%s' is out of range (1-65535).",
+			return pr_err("'%s' is out of range (1-65535).",
 			    opt->name);
 		}
 
 		strval = pmalloc(6);
 		written = snprintf(strval, 6, "%" JSON_INTEGER_FORMAT, intval);
 		if (written < 0 || 6 <= written)
-			return pr_op_err("Cannot convert '%s' to string: snprintf returned %d",
+			return pr_err("Cannot convert '%s' to string: snprintf returned %d",
 			    opt->name, written);
 
 		DEREFERENCE(result) = strval;
@@ -130,7 +130,7 @@ parse_json_string(json_t *json, char const *name, char const **result)
 	}
 
 	if (!json_is_string(json))
-		return pr_op_err("The '%s' element is not a JSON string.", name);
+		return pr_err("The '%s' element is not a JSON string.", name);
 
 	*result = json_string_value(json);
 	return 0;

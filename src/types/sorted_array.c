@@ -94,7 +94,7 @@ compare(struct sorted_array *sarray, void const *new)
 		return RCR_EINTERSECTION;
 	}
 
-	pr_crit("Unknown comparison value: %u", cmp);
+	pr_panic("Unknown comparison value: %u", cmp);
 }
 
 enum resource_cmp_result
@@ -159,7 +159,7 @@ sarray_contains(struct sorted_array const *sarray, void const *elem)
 			return false;
 		}
 
-		pr_crit("Unknown comparison value: %u", cmp);
+		pr_panic("Unknown comparison value: %u", cmp);
 	}
 
 	return false;

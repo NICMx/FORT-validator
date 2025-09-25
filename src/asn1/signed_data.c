@@ -23,13 +23,13 @@ get_sid(struct SignerInfo *sinfo, OCTET_STRING_t const **result)
 		*result = &sinfo->sid.choice.subjectKeyIdentifier;
 		return 0;
 	case SignerIdentifier_PR_issuerAndSerialNumber:
-		return pr_val_err("Signer Info's sid is an IssuerAndSerialNumber, not a SubjectKeyIdentifier.");
+		return pr_err("Signer Info's sid is an IssuerAndSerialNumber, not a SubjectKeyIdentifier.");
 	case SignerIdentifier_PR_NOTHING:
 		break;
 	}
 
 	*result = NULL;
-	return pr_val_err("Signer Info's sid is not a SubjectKeyIdentifier.");
+	return pr_err("Signer Info's sid is not a SubjectKeyIdentifier.");
 }
 
 static int
@@ -54,9 +54,9 @@ handle_sdata_ee(struct signed_object *so, struct rpki_certificate *ee,
 	otmp = tmp;
 	ee->x509 = d2i_X509(NULL, &tmp, cer_encoded->size);
 	if (ee->x509 == NULL)
-		return val_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
+		return pr_crypto_err("Signed object's 'certificate' element does not decode into a Certificate");
 	if (tmp != otmp + cer_encoded->size)
-		return val_crypto_err("Signed object's 'certificate' element contains trailing garbage");
+		return pr_crypto_err("Signed object's 'certificate' element contains trailing garbage");
 
 	return cer_validate_ee(ee, so);
 }
@@ -77,7 +77,7 @@ validate_content_type_attribute(CMSAttributeValue_t *value,
 	eContentType = &eci->eContentType;
 
 	if (!oid_equal(attrValues, eContentType))
-		error = pr_val_err("The attrValues for the content-type attribute does not match the eContentType in the EncapsulatedContentInfo.");
+		error = pr_err("The attrValues for the content-type attribute does not match the eContentType in the EncapsulatedContentInfo.");
 
 	ASN_STRUCT_FREE(asn_DEF_OBJECT_IDENTIFIER, attrValues);
 	return error;
@@ -91,7 +91,7 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 	int error;
 
 	if (eci->eContent == NULL)
-		return pr_val_err("There's no content being signed.");
+		return pr_err("There's no content being signed.");
 
 	error = asn1_decode_any(value, &asn_DEF_MessageDigest,
 	    (void **) &digest, true);
@@ -101,7 +101,7 @@ validate_message_digest_attribute(CMSAttributeValue_t *value,
 	error = hash_validate(hash_get_sha256(), eci->eContent->buf,
 	    eci->eContent->size, digest->buf, digest->size);
 	if (error > 0)
-		pr_val_err("The content's hash does not match the Message-Digest Attribute.");
+		pr_err("The content's hash does not match the Message-Digest Attribute.");
 
 	ASN_STRUCT_FREE(asn_DEF_MessageDigest, digest);
 	return abs(error);
@@ -120,22 +120,22 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 	int error;
 
 	if (sinfo->signedAttrs == NULL)
-		return pr_val_err("The SignerInfo's signedAttrs field is NULL.");
+		return pr_err("The SignerInfo's signedAttrs field is NULL.");
 
 	for (i = 0; i < sinfo->signedAttrs->list.count; i++) {
 		attr = sinfo->signedAttrs->list.array[i];
 		if (attr == NULL) {
-			pr_val_err("SignedAttrs array element %u is NULL.", i);
+			pr_err("SignedAttrs array element %u is NULL.", i);
 			continue;
 		}
 		attrs = &attr->attrValues;
 
 		if (attrs->list.count != 1) {
-			return pr_val_err("signedAttrs's attribute set size (%d) is different than 1",
+			return pr_err("signedAttrs's attribute set size (%d) is different than 1",
 			    attr->attrValues.list.count);
 		}
 		if (attrs->list.array == NULL || attrs->list.array[0] == NULL)
-			pr_crit("Array size is 1 but array is NULL.");
+			pr_panic("Array size is 1 but array is NULL.");
 
 		error = oid2arcs(&attr->attrType, &attrType);
 		if (error)
@@ -143,7 +143,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 
 		if (ARCS_EQUAL_OIDS(&attrType, oid_cta)) {
 			if (content_type_found) {
-				pr_val_err("Multiple ContentTypes found.");
+				pr_err("Multiple ContentTypes found.");
 				goto illegal_attrType;
 			}
 			error = validate_content_type_attribute(
@@ -152,7 +152,7 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 
 		} else if (ARCS_EQUAL_OIDS(&attrType, oid_mda)) {
 			if (message_digest_found) {
-				pr_val_err("Multiple MessageDigests found.");
+				pr_err("Multiple MessageDigests found.");
 				goto illegal_attrType;
 			}
 			error = validate_message_digest_attribute(
@@ -161,14 +161,14 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 
 		} else if (ARCS_EQUAL_OIDS(&attrType, oid_sta)) {
 			if (signing_time_found) {
-				pr_val_err("Multiple SigningTimes found.");
+				pr_err("Multiple SigningTimes found.");
 				goto illegal_attrType;
 			}
 			error = 0; /* No validations needed for now. */
 			signing_time_found = true;
 		} else {
 			/* rfc6488#section-3.1.g */
-			pr_val_err("Illegal attrType OID in SignerInfo.");
+			pr_err("Illegal attrType OID in SignerInfo.");
 			goto illegal_attrType;
 		}
 
@@ -180,11 +180,11 @@ validate_signed_attrs(struct SignerInfo *sinfo, EncapsulatedContentInfo_t *eci)
 
 	/* rfc6488#section-3.1.f */
 	if (!content_type_found)
-		return pr_val_err("SignerInfo lacks a ContentType attribute.");
+		return pr_err("SignerInfo lacks a ContentType attribute.");
 	if (!message_digest_found)
-		return pr_val_err("SignerInfo lacks a MessageDigest attribute.");
+		return pr_err("SignerInfo lacks a MessageDigest attribute.");
 	if (!signing_time_found)
-		return pr_val_err("SignerInfo lacks a SigningTime attribute.");
+		return pr_err("SignerInfo lacks a SigningTime attribute.");
 
 	return 0;
 
@@ -204,7 +204,7 @@ signed_data_validate(struct signed_object *so, struct rpki_certificate *ee)
 	/* rfc6488#section-2.1 */
 	sdata = so->sdata;
 	if (sdata->signerInfos.list.count != 1) {
-		return pr_val_err("The SignedData's SignerInfo set is supposed to have only one element. (%d given.)",
+		return pr_err("The SignedData's SignerInfo set is supposed to have only one element. (%d given.)",
 		    sdata->signerInfos.list.count);
 	}
 
@@ -213,20 +213,20 @@ signed_data_validate(struct signed_object *so, struct rpki_certificate *ee)
 	error = asn_INTEGER2ulong(&sdata->version, &version);
 	if (error) {
 		if (errno) {
-			pr_val_err("Error converting SignedData version: %s",
+			pr_err("Error converting SignedData version: %s",
 			    strerror(errno));
 		}
-		return pr_val_err("The SignedData version isn't a valid unsigned long");
+		return pr_err("The SignedData version isn't a valid unsigned long");
 	}
 	if (version != 3) {
-		return pr_val_err("The SignedData version is only allowed to be 3. (Was %lu.)",
+		return pr_err("The SignedData version is only allowed to be 3. (Was %lu.)",
 		    version);
 	}
 
 	/* rfc6488#section-2.1.2 */
 	/* rfc6488#section-3.1.j 1/2 */
 	if (sdata->digestAlgorithms.list.count != 1) {
-		return pr_val_err("The SignedData's digestAlgorithms set is supposed to have only one element. (%d given.)",
+		return pr_err("The SignedData's digestAlgorithms set is supposed to have only one element. (%d given.)",
 		    sdata->digestAlgorithms.list.count);
 	}
 
@@ -254,25 +254,25 @@ signed_data_validate(struct signed_object *so, struct rpki_certificate *ee)
 	/* rfc6488#section-2.1.5 */
 	/* rfc6488#section-3.1.d */
 	if (sdata->crls != NULL && sdata->crls->list.count > 0)
-		return pr_val_err("The SignedData contains at least one CRL.");
+		return pr_err("The SignedData contains at least one CRL.");
 
 	/* rfc6488#section-2.1.6.1 */
 	/* rfc6488#section-3.1.e */
 	sinfo = sdata->signerInfos.list.array[0];
 	if (sinfo == NULL)
-		return pr_val_err("The SignerInfo object is NULL.");
+		return pr_err("The SignerInfo object is NULL.");
 	so->signature = &sinfo->signature;
 
 	error = asn_INTEGER2ulong(&sinfo->version, &version);
 	if (error) {
 		if (errno) {
-			pr_val_err("Error converting SignerInfo version: %s",
+			pr_err("Error converting SignerInfo version: %s",
 			    strerror(errno));
 		}
-		return pr_val_err("The SignerInfo version isn't a valid unsigned long");
+		return pr_err("The SignerInfo version isn't a valid unsigned long");
 	}
 	if (version != 3) {
-		return pr_val_err("The SignerInfo version is only allowed to be 3. (Was %lu.)",
+		return pr_err("The SignerInfo version is only allowed to be 3. (Was %lu.)",
 		    version);
 	}
 
@@ -307,17 +307,17 @@ signed_data_validate(struct signed_object *so, struct rpki_certificate *ee)
 	/* rfc6488#section-2.1.6.7 */
 	/* rfc6488#section-3.1.i */
 	if (sinfo->unsignedAttrs != NULL && sinfo->unsignedAttrs->list.count > 0)
-		return pr_val_err("SignerInfo has at least one unsignedAttr.");
+		return pr_err("SignerInfo has at least one unsignedAttr.");
 
 	/* rfc6488#section-2.1.4 */
 	/* rfc6488#section-3.1.c 1/2 */
 	/* rfc6488#section-3.2 */
 	/* rfc6488#section-3.3 */
 	if (sdata->certificates == NULL)
-		return pr_val_err("The SignedData does not contain certificates.");
+		return pr_err("The SignedData does not contain certificates.");
 
 	if (sdata->certificates->list.count != 1) {
-		return pr_val_err("The SignedData contains %d certificates, one expected.",
+		return pr_err("The SignedData contains %d certificates, one expected.",
 		    sdata->certificates->list.count);
 	}
 
@@ -402,22 +402,22 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 	bool equal;
 
 	if (sdata == NULL)
-		return pr_val_err("SignedData is NULL.");
+		return pr_err("SignedData is NULL.");
 	if (sdata->signerInfos.list.array == NULL)
-		return pr_val_err("SignerInfos array is NULL.");
+		return pr_err("SignerInfos array is NULL.");
 	if (sdata->signerInfos.list.array[0] == NULL)
-		return pr_val_err("SignerInfos array first element is NULL.");
+		return pr_err("SignerInfos array first element is NULL.");
 
 	signedAttrs = sdata->signerInfos.list.array[0]->signedAttrs;
 	if (signedAttrs == NULL)
-		return pr_val_err("signedAttrs is NULL.");
+		return pr_err("signedAttrs is NULL.");
 	if (signedAttrs->list.array == NULL)
-		return pr_val_err("signedAttrs array is NULL.");
+		return pr_err("signedAttrs array is NULL.");
 
 	for (i = 0; i < signedAttrs->list.count; i++) {
 		attr = signedAttrs->list.array[i];
 		if (!attr)
-			return pr_val_err("signedAttrs array element %d is NULL.", i);
+			return pr_err("signedAttrs array element %d is NULL.", i);
 		error = oid2arcs(&attr->attrType, &arcs);
 		if (error)
 			return error;
@@ -425,9 +425,9 @@ get_content_type_attr(struct SignedData *sdata, OBJECT_IDENTIFIER_t **result)
 		free_arcs(&arcs);
 		if (equal) {
 			if (attr->attrValues.list.array == NULL)
-				return pr_val_err("signedAttrs attrValue array is NULL.");
+				return pr_err("signedAttrs attrValue array is NULL.");
 			if (attr->attrValues.list.array[0] == NULL)
-				return pr_val_err("signedAttrs attrValue array first element is NULL.");
+				return pr_err("signedAttrs attrValue array first element is NULL.");
 			return asn1_decode_any(attr->attrValues.list.array[0],
 			    &asn_DEF_OBJECT_IDENTIFIER,
 			    (void **) result, true);

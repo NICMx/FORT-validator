@@ -19,7 +19,7 @@ vrp_equals(struct vrp const *a, struct vrp const *b)
 		return addr6_equals(&a->prefix.v6, &b->prefix.v6);
 	}
 
-	pr_crit("Unknown address family: %u", a->addr_fam);
+	pr_panic("Unknown address family: %u", a->addr_fam);
 	return false; /* Warning shutupper */
 }
 
@@ -39,7 +39,7 @@ vrp_prefix_cov(struct vrp const *a, struct vrp const *b)
 		    && (a->prefix_length <= b->prefix_length);
 	}
 
-	pr_crit("Unknown address family: %u", a->addr_fam);
+	pr_panic("Unknown address family: %u", a->addr_fam);
 	return false; /* Warning shutupper */
 }
 

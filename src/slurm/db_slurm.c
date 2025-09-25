@@ -438,21 +438,21 @@ print_prefix_data(struct slurm_prefix *prefix, void *arg)
 {
 	char addr_buf[INET6_ADDRSTRLEN];
 
-	pr_op_info("    {");
+	pr_inf("    {");
 	if (prefix->data_flag & SLURM_COM_FLAG_ASN)
-		pr_op_info("      ASN: %u", prefix->vrp.asn);
+		pr_inf("      ASN: %u", prefix->vrp.asn);
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_PREFIX) {
-		pr_op_info("      Prefix: %s/%u",
+		pr_inf("      Prefix: %s/%u",
 		    inet_ntop(prefix->vrp.addr_fam, &prefix->vrp.prefix,
 		        addr_buf, INET6_ADDRSTRLEN),
 		    prefix->vrp.prefix_length);
 	}
 
 	if (prefix->data_flag & SLURM_PFX_FLAG_MAX_LENGTH)
-		pr_op_info("      Max prefix length: %u",
+		pr_inf("      Max prefix length: %u",
 		    prefix->vrp.max_prefix_length);
-	pr_op_info("    }");
+	pr_inf("    }");
 
 	return 0;
 }
@@ -463,19 +463,19 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 	char *pad = "     ";
 	char *buf;
 
-	pr_op_info("    {");
+	pr_inf("    {");
 	if (bgpsec->data_flag & SLURM_COM_FLAG_ASN)
-		pr_op_info("%s ASN: %u", pad, bgpsec->asn);
+		pr_inf("%s ASN: %u", pad, bgpsec->asn);
 
 	if (bgpsec->data_flag & SLURM_BGPS_FLAG_SKI) {
 		do {
 			if (!base64url_encode(bgpsec->ski, RK_SKI_LEN, &buf)) {
-				op_crypto_err("Cannot encode SKI.");
-				pr_op_info("%s SKI: <error encoding value>",
+				pr_crypto_err("Cannot encode SKI.");
+				pr_inf("%s SKI: <error encoding value>",
 				    pad);
 				break;
 			}
-			pr_op_info("%s SKI: %s", pad, buf);
+			pr_inf("%s SKI: %s", pad, buf);
 			free(buf);
 		} while (0);
 	}
@@ -484,16 +484,16 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 		do {
 			if (!base64url_encode(bgpsec->router_public_key,
 			    RK_SPKI_LEN, &buf)) {
-				op_crypto_err("Cannot encode routerPublicKey.");
-				pr_op_info("%s Router public key: <error encoding value>",
+				pr_crypto_err("Cannot encode routerPublicKey.");
+				pr_inf("%s Router public key: <error encoding value>",
 				    pad);
 				break;
 			}
-			pr_op_info("%s Router public key: %s", pad, buf);
+			pr_inf("%s Router public key: %s", pad, buf);
 			free(buf);
 		} while (0);
 	}
-	pr_op_info("    }");
+	pr_inf("    }");
 
 	return 0;
 }
@@ -501,24 +501,24 @@ print_bgpsec_data(struct slurm_bgpsec *bgpsec, void *arg)
 void
 db_slurm_log(struct db_slurm *db)
 {
-	pr_op_info("SLURM loaded at %s", asctime(localtime(&db->loaded_date)));
-	pr_op_info("Validation output filters {");
-	pr_op_info("  Prefix filters {");
+	pr_inf("SLURM loaded at %s", asctime(localtime(&db->loaded_date)));
+	pr_inf("Validation output filters {");
+	pr_inf("  Prefix filters {");
 	foreach_filter_prefix(&db->lists, print_prefix_data, NULL);
-	pr_op_info("  }");
-	pr_op_info("  BGPsec filters {");
+	pr_inf("  }");
+	pr_inf("  BGPsec filters {");
 	foreach_filter_bgpsec(&db->lists, print_bgpsec_data, NULL);
-	pr_op_info("  }");
-	pr_op_info("}");
+	pr_inf("  }");
+	pr_inf("}");
 
-	pr_op_info("Locally added assertions {");
-	pr_op_info("  Prefix assertions {");
+	pr_inf("Locally added assertions {");
+	pr_inf("  Prefix assertions {");
 	foreach_assertion_prefix(&db->lists, print_prefix_data, NULL);
-	pr_op_info("  }");
-	pr_op_info("  BGPsec assertions {");
+	pr_inf("  }");
+	pr_inf("  BGPsec assertions {");
 	foreach_assertion_bgpsec(&db->lists, print_bgpsec_data, NULL);
-	pr_op_info("  }");
-	pr_op_info("}");
+	pr_inf("  }");
+	pr_inf("}");
 }
 
 void

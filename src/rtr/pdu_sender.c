@@ -31,12 +31,12 @@ print_poll_failure(struct pollfd *pfd)
 	 * levels (see apply_pollfds()), so we'll just whine on debug.
 	 */
 
-	pr_op_debug("poll() returned revents '0x%02x'. This means", pfd->revents);
+	pr_trc("poll() returned revents '0x%02x'. This means", pfd->revents);
 	if (pfd->revents & POLLHUP) {
-		pr_op_debug("- 0x%02x: Peer hung up.", POLLHUP);
+		pr_trc("- 0x%02x: Peer hung up.", POLLHUP);
 	}
 	if (pfd->revents & POLLERR) {
-		pr_op_debug("- 0x%02x: Read end was closed, or generic error.",
+		pr_trc("- 0x%02x: Read end was closed, or generic error.",
 		    POLLERR);
 	}
 	if (pfd->revents & POLLNVAL) {
@@ -44,7 +44,7 @@ print_poll_failure(struct pollfd *pfd)
 		 * In our case, this is perfectly normal. The main polling
 		 * thread closed it while we were trying to write. Whatever.
 		 */
-		pr_op_debug("- 0x%02x: File Descriptor not open.", POLLNVAL);
+		pr_trc("- 0x%02x: File Descriptor not open.", POLLNVAL);
 	}
 
 	/* Interrupt handler thread, but no need to raise alarms. */
@@ -68,16 +68,16 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 		pfd.revents = 0;
 		error = poll(&pfd, 1, -1);
 		if (error < 0)
-			return pr_op_err_st("poll() error: %s", strerror(errno));
+			return pr_crit("poll() error: %s", strerror(errno));
 		if (error == 0)
-			return pr_op_err_st("poll() returned 0, even though there's no timeout.");
+			return pr_crit("poll() returned 0, even though there's no timeout.");
 		if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))
 			return print_poll_failure(&pfd);
 	} while (!(pfd.revents & POLLOUT));
 
 	if (write(fd, data, data_len) < 0) {
 		error = errno;
-		pr_op_debug("Error sending %s to client: %s",
+		pr_trc("Error sending %s to client: %s",
 		    pdutype2str(pdu_type), strerror(error));
 		return error;
 	}

@@ -29,7 +29,7 @@ name2string(X509_NAME_ENTRY *name, char **_result)
 
 	data = X509_NAME_ENTRY_get_data(name);
 	if (data == NULL)
-		return val_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
+		return pr_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
 	result = pmalloc(data->length + 1);
 	memcpy(result, data->data, data->length);
@@ -66,7 +66,7 @@ x509_name_decode(X509_NAME *name, char const *what,
 			error = name2string(entry, &result->serialNumber);
 			break;
 		default:
-			error = pr_val_err("The '%s' name has an unknown attribute. (NID: %d)",
+			error = pr_err("The '%s' name has an unknown attribute. (NID: %d)",
 			    what, nid);
 			break;
 		}
@@ -76,7 +76,7 @@ x509_name_decode(X509_NAME *name, char const *what,
 	}
 
 	if (result->commonName == NULL) {
-		error = pr_val_err("The '%s' name lacks a commonName attribute.",
+		error = pr_err("The '%s' name lacks a commonName attribute.",
 		    what);
 		goto fail;
 	}
@@ -169,7 +169,7 @@ validate_issuer_name(X509_NAME *issuer, X509 *parent)
 		parent_serial = x509_name_serialNumber(parent_subject);
 		child_serial = x509_name_serialNumber(child_issuer);
 
-		error = pr_val_err("Issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
+		error = pr_err("Issuer name ('%s%s%s') does not equal issuer certificate's name ('%s%s%s').",
 		    x509_name_commonName(child_issuer),
 		    (child_serial != NULL) ? "/" : "",
 		    (child_serial != NULL) ? child_serial : "",

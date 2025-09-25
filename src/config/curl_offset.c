@@ -10,7 +10,7 @@
 static void
 print_curloff(struct option_field const *field, void *value)
 {
-	pr_op_info("%s: %" CURL_FORMAT_CURL_OFF_T,
+	pr_inf("%s: %" CURL_FORMAT_CURL_OFF_T,
 	    field->name, *((curl_off_t *) value));
 }
 
@@ -24,7 +24,7 @@ parse_argv_curloff(struct option_field const *field, char const *str,
 
 	if (field->type->has_arg != required_argument || str == NULL ||
 		    strlen(str) == 0) {
-		return pr_op_err("Integer options ('%s' in this case) require an argument.",
+		return pr_err("Integer options ('%s' in this case) require an argument.",
 		    field->name);
 	}
 
@@ -34,13 +34,13 @@ parse_argv_curloff(struct option_field const *field, char const *str,
 	if (error || *tmp != '\0') {
 		if (!error)
 			error = -EINVAL;
-		pr_op_err("Value '%s' at '%s' is not an integer: %s",
+		pr_err("Value '%s' at '%s' is not an integer: %s",
 		    str, field->name, strerror(abs(error)));
 		return error;
 	}
 
 	if (parsed < 0)
-		return pr_op_err("Value of '%s' is negative.", field->name);
+		return pr_err("Value of '%s' is negative.", field->name);
 
 	*((curl_off_t *) result) = parsed;
 	return 0;
@@ -52,13 +52,13 @@ parse_json_curloff(struct option_field const *opt, json_t *json, void *result)
 	json_int_t value;
 
 	if (!json_is_integer(json))
-		return pr_op_err("The '%s' element is not a JSON integer.",
+		return pr_err("The '%s' element is not a JSON integer.",
 		    opt->name);
 
 	value = json_integer_value(json);
 
 	if (value < 0)
-		return pr_op_err("Value of '%s' is negative.", opt->name);
+		return pr_err("Value of '%s' is negative.", opt->name);
 
 	*((curl_off_t *) result) = value;
 	return 0;

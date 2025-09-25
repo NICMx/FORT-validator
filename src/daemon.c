@@ -40,14 +40,14 @@ daemonize(daemon_log_cb log_cb)
 		error = errno;
 		if (error == ENOMEM)
 			enomem_panic();
-		pr_op_err("Cannot get current directory: %s", strerror(error));
+		pr_err("Cannot get current directory: %s", strerror(error));
 		return error;
 	}
 
 	pid = fork();
 	if (pid < 0) {
 		error = errno;
-		pr_op_err("Couldn't fork to daemonize: %s", strerror(error));
+		pr_err("Couldn't fork to daemonize: %s", strerror(error));
 		return error;
 	}
 
@@ -61,7 +61,7 @@ daemonize(daemon_log_cb log_cb)
 	/* Child goes on from here */
 	if (setsid() < 0) {
 		error = errno;
-		pr_op_err("Couldn't create new session, ending execution: %s",
+		pr_err("Couldn't create new session, ending execution: %s",
 		    strerror(error));
 		exit(error);
 	}
@@ -78,7 +78,7 @@ daemonize(daemon_log_cb log_cb)
 	pid = fork();
 	if (pid < 0) {
 		error = errno;
-		pr_op_err("Couldn't fork again to daemonize, ending execution: %s",
+		pr_err("Couldn't fork again to daemonize, ending execution: %s",
 		    strerror(error));
 		exit(error);
 	}
@@ -99,7 +99,7 @@ daemonize(daemon_log_cb log_cb)
 
 	if (chdir(pwd) < 0) {
 		error = errno;
-		pr_op_err("Couldn't chdir() of daemon, ending execution: %s",
+		pr_err("Couldn't chdir() of daemon, ending execution: %s",
 		    strerror(error));
 		exit(error);
 	}

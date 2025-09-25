@@ -119,7 +119,7 @@ stats_set_tal_vrps(char const *tal_path, char const *proto, unsigned int value)
 	    (int)talen, ta, proto);
 	if (chars < 0 || keylen <= chars) {
 		free(key);
-		pr_op_warn("Cannot create valid_vrps_total stat: %d", chars);
+		pr_wrn("Cannot create valid_vrps_total stat: %d", chars);
 		return;
 	}
 
@@ -182,6 +182,6 @@ stats_export(void)
 
 cancel:
 	free(buf.str);
-	pr_op_err("Cannot create Prometheus response: Too many stats");
+	pr_err("Cannot create Prometheus response: Too many stats");
 	return NULL;
 }

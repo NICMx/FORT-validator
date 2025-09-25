@@ -38,20 +38,20 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 		error = asn_INTEGER2ulong(roa_addr->maxLength, &maxlen);
 		if (error) {
 			if (errno) {
-				pr_val_err("Error casting ROA's IPv4 maxLength: %s",
+				pr_err("Error casting ROA's IPv4 maxLength: %s",
 				    strerror(errno));
 			}
-			return pr_val_err("The ROA's IPv4 maxLength isn't a valid unsigned long");
+			return pr_err("The ROA's IPv4 maxLength isn't a valid unsigned long");
 		}
 		pr_clutter("maxLength: %lu", maxlen);
 
 		if (maxlen > 32) {
-			return pr_val_err("maxLength (%lu) is out of bounds (0-32).",
+			return pr_err("maxLength (%lu) is out of bounds (0-32).",
 			    maxlen);
 		}
 
 		if (pfx.len > maxlen) {
-			return pr_val_err("Prefix length (%u) > maxLength (%lu)",
+			return pr_err("Prefix length (%u) > maxLength (%lu)",
 			    pfx.len, maxlen);
 		}
 
@@ -60,7 +60,7 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 	}
 
 	if (!resources_contains_ipv4(parent, &pfx)) {
-		return pr_val_err("ROA is not allowed to advertise %s/%u.",
+		return pr_err("ROA is not allowed to advertise %s/%u.",
 		    addr2str4(&pfx.addr, buf), pfx.len);
 	}
 
@@ -86,20 +86,20 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 		error = asn_INTEGER2ulong(roa_addr->maxLength, &maxlen);
 		if (error) {
 			if (errno) {
-				pr_val_err("Error casting ROA's IPv6 maxLength: %s",
+				pr_err("Error casting ROA's IPv6 maxLength: %s",
 				    strerror(errno));
 			}
-			return pr_val_err("The ROA's IPv6 maxLength isn't a valid unsigned long");
+			return pr_err("The ROA's IPv6 maxLength isn't a valid unsigned long");
 		}
 		pr_clutter("maxLength: %lu", maxlen);
 
 		if (maxlen > 128) {
-			return pr_val_err("maxLength (%lu) is out of bounds (0-128).",
+			return pr_err("maxLength (%lu) is out of bounds (0-128).",
 			    maxlen);
 		}
 
 		if (pfx.len > maxlen) {
-			return pr_val_err("Prefix length (%u) > maxLength (%lu)",
+			return pr_err("Prefix length (%u) > maxLength (%lu)",
 			    pfx.len, maxlen);
 		}
 
@@ -108,7 +108,7 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 	}
 
 	if (!resources_contains_ipv6(parent, &pfx)) {
-		return pr_val_err("ROA is not allowed to advertise %s/%u.",
+		return pr_err("ROA is not allowed to advertise %s/%u.",
 		    addr2str6(&pfx.addr, buf), pfx.len);
 	}
 
@@ -126,7 +126,7 @@ ____handle_roa(struct resources *parent, unsigned long asn, uint8_t family,
 		return ____handle_roa_v6(parent, asn, roa_addr);
 	}
 
-	return pr_val_err("Unknown family value: %u", family);
+	return pr_err("Unknown family value: %u", family);
 }
 
 static int
@@ -143,14 +143,14 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 		error = asn_INTEGER2ulong(roa->version, &version);
 		if (error) {
 			if (errno) {
-				pr_val_err("Error casting ROA's version: %s",
+				pr_err("Error casting ROA's version: %s",
 				    strerror(errno));
 			}
-			return pr_val_err("The ROA's version isn't a valid long");
+			return pr_err("The ROA's version isn't a valid long");
 		}
 		/* rfc6482#section-3.1 */
 		if (version != 0) {
-			return pr_val_err("ROA's version (%lu) is nonzero.",
+			return pr_err("ROA's version (%lu) is nonzero.",
 			    version);
 		}
 	}
@@ -158,24 +158,24 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	/* rfc6482#section-3.2 */
 	if (asn_INTEGER2ulong(&roa->asId, &asn) != 0) {
 		if (errno) {
-			pr_val_err("Error casting ROA's AS ID value: %s",
+			pr_err("Error casting ROA's AS ID value: %s",
 			    strerror(errno));
 		}
-		return pr_val_err("ROA's AS ID couldn't be parsed as unsigned long");
+		return pr_err("ROA's AS ID couldn't be parsed as unsigned long");
 	}
 
 	if (asn > UINT32_MAX)
-		return pr_val_err("AS value (%lu) is out of range.", asn);
+		return pr_err("AS value (%lu) is out of range.", asn);
 
 	/* rfc6482#section-3.3 */
 
 	if (roa->ipAddrBlocks.list.array == NULL)
-		return pr_val_err("ipAddrBlocks array is NULL.");
+		return pr_err("ipAddrBlocks array is NULL.");
 
 	for (b = 0; b < roa->ipAddrBlocks.list.count; b++) {
 		block = roa->ipAddrBlocks.list.array[b];
 		if (block == NULL)
-			return pr_val_err("Address block array element is NULL.");
+			return pr_err("Address block array element is NULL.");
 
 		if (block->addressFamily.size != 2)
 			goto family_error;
@@ -186,7 +186,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 			goto family_error;
 
 		if (block->addresses.list.array == NULL)
-			return pr_val_err("ROA's address list array is NULL.");
+			return pr_err("ROA's address list array is NULL.");
 
 		for (a = 0; a < block->addresses.list.count; a++) {
 			error = ____handle_roa(parent, asn,
@@ -200,7 +200,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 	return 0;
 
 family_error:
-	return pr_val_err("ROA's IP family is not v4 or v6.");
+	return pr_err("ROA's IP family is not v4 or v6.");
 }
 
 int

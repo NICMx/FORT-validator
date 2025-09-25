@@ -216,18 +216,6 @@ log_teardown(void)
 	pthread_mutex_destroy(&logck);
 }
 
-bool
-pr_val_enabled(unsigned int level)
-{
-	return val_config.level >= level;
-}
-
-bool
-pr_op_enabled(unsigned int level)
-{
-	return op_config.level >= level;
-}
-
 static struct level const *
 level2struct(int level)
 {
@@ -399,13 +387,13 @@ end:	unlock_mutex();
 	} while (0)
 
 void
-pr_op_debug(const char *format, ...)
+pr_trc(const char *format, ...)
 {
 	PR_SIMPLE(LOG_DEBUG, op_config);
 }
 
 void
-pr_op_info(const char *format, ...)
+pr_inf(const char *format, ...)
 {
 	PR_SIMPLE(LOG_INFO, op_config);
 }
@@ -415,56 +403,26 @@ pr_op_info(const char *format, ...)
  * validation.)
  */
 int
-pr_op_warn(const char *format, ...)
+pr_wrn(const char *format, ...)
 {
 	PR_SIMPLE(LOG_WARNING, op_config);
 	return 0;
 }
 
 int
-pr_op_err(const char *format, ...)
+pr_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
 	return EINVAL;
 }
 
 int
-pr_op_err_st(const char *format, ...)
+pr_crit(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
 	lock_mutex();
 	print_stack_trace(NULL);
 	unlock_mutex();
-	return EINVAL;
-}
-
-void
-pr_val_debug(const char *format, ...)
-{
-	PR_SIMPLE(LOG_DEBUG, val_config);
-}
-
-void
-pr_val_info(const char *format, ...)
-{
-	PR_SIMPLE(LOG_INFO, val_config);
-}
-
-/**
- * Always returs 0. (So you can interrupt whatever you're doing without failing
- * validation.)
- */
-int
-pr_val_warn(const char *format, ...)
-{
-	PR_SIMPLE(LOG_WARNING, val_config);
-	return 0;
-}
-
-int
-pr_val_err(const char *format, ...)
-{
-	PR_SIMPLE(LOG_ERR, val_config);
 	return EINVAL;
 }
 
@@ -513,29 +471,10 @@ crypto_err(struct log_config *cfg, int (*error_fn)(const char *, ...))
  * Always appends a newline at the end.
  */
 int
-op_crypto_err(const char *format, ...)
+pr_crypto_err(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
-	return crypto_err(&op_config, pr_op_err);
-}
-
-/**
- * This is like pr_err() and pr_errno(), except meant to log an error made
- * during a libcrypto routine.
- *
- * This differs from usual printf-like functions:
- *
- * - It returns EINVAL, not bytes written.
- * - It prints a newline.
- * - Also prints the cryptolib's error message stack.
- *
- * Always appends a newline at the end.
- */
-int
-val_crypto_err(const char *format, ...)
-{
-	PR_SIMPLE(LOG_ERR, val_config);
-	return crypto_err(&val_config, pr_val_err);
+	return crypto_err(&op_config, pr_err);
 }
 
 __dead void
@@ -578,7 +517,7 @@ done:	exit(ENOMEM);
 }
 
 __dead void
-pr_crit(const char *format, ...)
+pr_panic(const char *format, ...)
 {
 	PR_SIMPLE(LOG_ERR, op_config);
 	print_stack_trace(NULL);

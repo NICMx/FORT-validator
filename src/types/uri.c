@@ -830,7 +830,7 @@ url_normalize(unsigned char const *url, int flags, char **result)
 			case '#':
 				goto frag;
 			default:
-				pr_crit("Unhandled character after query: %c",
+				pr_panic("Unhandled character after query: %c",
 				    cursor[0]);
 			}
 			break;
@@ -846,7 +846,7 @@ frag:			if (meta && !meta->allow_fragment)
 			break;
 
 		default:
-			pr_crit("Unhandled character after path: %c",
+			pr_panic("Unhandled character after path: %c",
 			    cursor[0]);
 		}
 	}

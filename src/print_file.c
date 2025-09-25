@@ -32,7 +32,7 @@ __rsync2bio(char const *src, char const *dst)
 
 	errmsg = uri_init(&url, src);
 	if (errmsg) {
-		pr_op_err("Invalid URI: %s", errmsg);
+		pr_err("Invalid URI: %s", errmsg);
 		return NULL;
 	}
 
@@ -43,7 +43,7 @@ __rsync2bio(char const *src, char const *dst)
 	uri_cleanup(&url);
 
 	if (error) {
-		pr_op_err("rsync download failed: %s", strerror(error));
+		pr_err("rsync download failed: %s", strerror(error));
 		return NULL;
 	}
 
@@ -63,7 +63,7 @@ rsync2bio_tmpdir(char const *src)
 	strcpy(buf, TMPDIR);
 	tmpdir = mkdtemp(buf);
 	if (tmpdir == NULL) {
-		pr_op_err("Unable to create " TMPDIR ": %s", strerror(errno));
+		pr_err("Unable to create " TMPDIR ": %s", strerror(errno));
 		return NULL;
 	}
 
@@ -77,7 +77,7 @@ rsync2bio_tmpdir(char const *src)
 static BIO *
 rsync2bio_cache(char const *src)
 {
-	pr_op_err("Disabled for now."); // XXX
+	pr_err("Disabled for now."); // XXX
 	return NULL;
 
 //	char *dst;
@@ -85,7 +85,7 @@ rsync2bio_cache(char const *src)
 //
 //	dst = url2path(src);
 //	if (!dst) {
-//		pr_op_err("Unparseable rsync URI.");
+//		pr_err("Unparseable rsync URI.");
 //		return NULL;
 //	}
 //
@@ -152,56 +152,56 @@ guess_file_type(BIO **bio, unsigned char *hdrbuf)
 
 	res = BIO_read(*bio, hdrbuf, HDRSIZE);
 	if (res <= 0) {
-		op_crypto_err("Cannot guess file type; IO error.");
+		pr_crypto_err("Cannot guess file type; IO error.");
 		return FT_UNK;
 	}
 
 	*bio = BIO_new_seq(BIO_new_mem_buf(hdrbuf, res), *bio);
 	if ((*bio) == NULL) {
-		op_crypto_err("BIO_new_seq() returned NULL.");
+		pr_crypto_err("BIO_new_seq() returned NULL.");
 		return FT_UNK;
 	}
 
 	if (hdrbuf[0] != 0x30) {
-		pr_op_debug("File doesn't start with a SEQUENCE.");
+		pr_trc("File doesn't start with a SEQUENCE.");
 		return FT_UNK;
 	}
 	ptr = skip_sequence(hdrbuf, hdrbuf + 1);
 	if (ptr == NULL) {
-		pr_op_debug("Cannot skip first sequence length.");
+		pr_trc("Cannot skip first sequence length.");
 		return FT_UNK;
 	}
 
 	if (*ptr == 0x06) {
-		pr_op_debug("SEQ containing OID.");
+		pr_trc("SEQ containing OID.");
 		return FT_ROA; /* Same parser for mfts and gbrs */
 	}
 	if (*ptr != 0x30) {
-		pr_op_debug("SEQ containing unexpected: 0x%x", *ptr);
+		pr_trc("SEQ containing unexpected: 0x%x", *ptr);
 		return FT_UNK;
 	}
 
 	ptr = skip_sequence(hdrbuf, ptr + 1);
 	if (ptr == NULL) {
-		pr_op_debug("Cannot skip second sequence length.");
+		pr_trc("Cannot skip second sequence length.");
 		return FT_UNK;
 	}
 	ptr = skip_integer(hdrbuf, ptr + 1);
 	if (ptr == NULL) {
-		pr_op_debug("Cannot skip version number.");
+		pr_trc("Cannot skip version number.");
 		return FT_UNK;
 	}
 
 	if (*ptr == 0x02) {
-		pr_op_debug("SEQ containing SEQ containing (INT, INT).");
+		pr_trc("SEQ containing SEQ containing (INT, INT).");
 		return FT_CER;
 	}
 	if (*ptr == 0x30) {
-		pr_op_debug("SEQ containing SEQ containing (INT, SEQ).");
+		pr_trc("SEQ containing SEQ containing (INT, SEQ).");
 		return FT_CRL;
 	}
 
-	pr_op_debug("SEQ containing SEQ containing unexpected: 0x%x", *ptr);
+	pr_trc("SEQ containing SEQ containing unexpected: 0x%x", *ptr);
 	return FT_UNK;
 }
 
@@ -217,13 +217,13 @@ bio2ci(BIO *bio)
 	do {
 		res1 = BIO_read(bio, buffer, BUFFER_SIZE);
 		if (res1 <= 0) {
-			op_crypto_err("IO error.");
+			pr_crypto_err("IO error.");
 			goto fail;
 		}
 
 		res2 = ber_decode(&asn_DEF_ContentInfo, (void **)&ci,
 				  buffer, res1);
-		pr_op_debug("Consumed: %zu", res2.consumed);
+		pr_trc("Consumed: %zu", res2.consumed);
 
 		switch (res2.code) {
 		case RC_OK:
@@ -233,7 +233,7 @@ bio2ci(BIO *bio)
 			break;
 
 		case RC_FAIL:
-			pr_op_err("Unsuccessful parse.");
+			pr_err("Unsuccessful parse.");
 			goto fail;
 		}
 	} while (true);
@@ -268,12 +268,12 @@ __print_file(void)
 
 	bio = filename2bio(config_get_payload());
 	if (bio == NULL)
-		return pr_op_err("BIO_new_*() returned NULL.");
+		return pr_err("BIO_new_*() returned NULL.");
 
 	switch (guess_file_type(&bio, hdrbuf)) {
 	case FT_UNK:
 		BIO_free_all(bio);
-		return pr_op_err("Unrecognized file type.");
+		return pr_err("Unrecognized file type.");
 
 	case FT_ROA:
 	case FT_MFT:
@@ -290,15 +290,15 @@ __print_file(void)
 
 	BIO_free_all(bio);
 	if (json == NULL)
-		return pr_op_err("Unable to parse.");
+		return pr_err("Unable to parse.");
 
 	errno = 0;
 	if (json_dumpf(json, stdout, JSON_INDENT(4)) < 0) {
 		error = errno;
 		if (error)
-			pr_op_err("Error writing JSON to file: %s", strerror(error));
+			pr_err("Error writing JSON to file: %s", strerror(error));
 		else
-			pr_op_err("Unknown error writing JSON to file.");
+			pr_err("Unknown error writing JSON to file.");
 
 	} else {
 		error = 0;

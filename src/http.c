@@ -15,7 +15,7 @@ http_init(void)
 	CURLcode res;
 	res = curl_global_init(CURL_GLOBAL_SSL);
 	if (res != CURLE_OK)
-		return pr_op_err("Error initializing global curl (%s)",
+		return pr_err("Error initializing global curl (%s)",
 		    curl_easy_strerror(res));
 
 	return 0;
@@ -135,7 +135,7 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 
 	result = curl_easy_init();
 	if (result == NULL)
-		return pr_val_err(
+		return pr_err(
 		    "curl_easy_init() returned NULL; no error message given."
 		);
 
@@ -217,14 +217,14 @@ validate_file_size(struct write_callback_arg *args)
 	float ratio;
 
 	if (args->error == EFBIG) {
-		pr_val_err("File too big (read: %zu bytes). Rejecting.",
+		pr_err("File too big (read: %zu bytes). Rejecting.",
 		    args->total_bytes);
 		return EFBIG;
 	}
 
 	ratio = args->total_bytes / (float) config_get_http_max_file_size();
 	if (ratio > 0.4f) {
-		pr_op_warn("File size exceeds 40%% of the configured limit (%zu/%ld bytes).",
+		pr_wrn("File size exceeds 40%% of the configured limit (%zu/%ld bytes).",
 		    args->total_bytes, config_get_http_max_file_size());
 	}
 
@@ -240,7 +240,7 @@ get_http_response_code(struct http_handler *handler, long *http_code,
 	res = curl_easy_getinfo(handler->curl, CURLINFO_RESPONSE_CODE,
 	    http_code);
 	if (res != CURLE_OK) {
-		return pr_op_err_st("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned '%s'. "
+		return pr_crit("curl_easy_getinfo(CURLINFO_RESPONSE_CODE) returned '%s'. "
 		    "I think this is supposed to be illegal, so I'll have to drop URI '%s'.",
 		    curl_err_string(handler, res), uri_str(uri));
 	}
@@ -269,12 +269,12 @@ check_same_origin(struct uri const *src, char const *redirect)
 
 	errmsg = uri_init(&redirect_url, redirect);
 	if (errmsg)
-		return pr_val_err("Cannot parse redirect '%s' as a URI: %s",
+		return pr_err("Cannot parse redirect '%s' as a URI: %s",
 		    redirect, errmsg);
 
 	error = uri_same_origin(src, &redirect_url)
 	    ? 0
-	    : pr_val_err("%s is redirecting to %s; disallowing because of different origin.",
+	    : pr_err("%s is redirecting to %s; disallowing because of different origin.",
 	          uri_str(src), uri_str(&redirect_url));
 
 	uri_cleanup(&redirect_url);
@@ -303,7 +303,7 @@ http_download(struct uri const *src, char const *dst,
 	unsigned int r;
 	int error;
 
-	pr_val_info("HTTP GET: %s -> %s", uri_str(src), dst);
+	pr_inf("HTTP GET: %s -> %s", uri_str(src), dst);
 
 	error = http_easy_init(&handler, ims);
 	if (error)
@@ -326,7 +326,7 @@ http_download(struct uri const *src, char const *dst,
 		res = curl_easy_perform(handler.curl); /* write_callback() */
 		if (args.file != NULL)
 			file_close(args.file);
-		pr_val_debug("Done. Total bytes transferred: %zu",
+		pr_trc("Done. Total bytes transferred: %zu",
 		    args.total_bytes);
 
 		args.error = validate_file_size(&args);
@@ -342,7 +342,7 @@ http_download(struct uri const *src, char const *dst,
 		}
 
 		if (res != CURLE_OK) {
-			pr_val_err("Error requesting URL: %s. (HTTP code: %ld)",
+			pr_err("Error requesting URL: %s. (HTTP code: %ld)",
 			    curl_err_string(&handler, res), http_code);
 
 			switch (res) {
@@ -362,13 +362,13 @@ http_download(struct uri const *src, char const *dst,
 		}
 
 		if (http_code >= 400 || http_code == 204) {
-			pr_val_err("HTTP result code: %ld", http_code);
+			pr_err("HTTP result code: %ld", http_code);
 			error = handle_http_response_code(http_code);
 			goto end;
 		}
 		if (http_code == 304) {
 			/* Write callback not called, no file to remove. */
-			pr_val_debug("Not modified.");
+			pr_trc("Not modified.");
 			error = 0;
 			goto end;
 		}
@@ -381,7 +381,7 @@ http_download(struct uri const *src, char const *dst,
 		res = curl_easy_getinfo(handler.curl, CURLINFO_REDIRECT_URL,
 		    &redirect);
 		if (res != CURLE_OK) {
-			error = pr_op_err("curl_easy_getinfo(CURLINFO_REDIRECT_URL) returned %u.", res);
+			error = pr_err("curl_easy_getinfo(CURLINFO_REDIRECT_URL) returned %u.", res);
 			redirect = NULL;
 			goto end;
 		}
@@ -390,7 +390,7 @@ http_download(struct uri const *src, char const *dst,
 			break;
 		r++;
 		if (r > config_get_max_redirs()) {
-			error = pr_val_err("Too many redirects.");
+			error = pr_err("Too many redirects.");
 			redirect = NULL;
 			goto end;
 		}
@@ -402,7 +402,7 @@ http_download(struct uri const *src, char const *dst,
 		redirect = pstrdup(redirect);
 	} while (true);
 
-	pr_val_debug("HTTP result code: %ld", http_code);
+	pr_trc("HTTP result code: %ld", http_code);
 	error = 0;
 	if (changed != NULL)
 		*changed = true;

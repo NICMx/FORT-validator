@@ -65,13 +65,13 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
 
 	error = asn_GT2time(this, &thisUpdate);
 	if (error)
-		return pr_val_err("Manifest's thisUpdate date is unparseable.");
+		return pr_err("Manifest's thisUpdate date is unparseable.");
 	error = asn_GT2time(next, &nextUpdate);
 	if (error)
-		return pr_val_err("Manifest's nextUpdate date is unparseable.");
+		return pr_err("Manifest's nextUpdate date is unparseable.");
 
 	if (tm_cmp(&thisUpdate, &nextUpdate) > 0) {
-		return pr_val_err(
+		return pr_err(
 		    "Manifest's thisUpdate (" TM_FMT ") > nextUpdate ("
 		        TM_FMT ").",
 		    TM_ARGS(thisUpdate),
@@ -83,21 +83,21 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
 		now_tt = time_fatal();
 
 	if (gmtime_r(&now_tt, &now) == NULL)
-		return pr_val_err("gmtime_r(now) error: %s", strerror(errno));
+		return pr_err("gmtime_r(now) error: %s", strerror(errno));
 
 	if (tm_cmp(&now, &thisUpdate) < 0) {
-		return pr_val_err(
+		return pr_err(
 		    "Manifest is not valid yet. (thisUpdate: " TM_FMT ")",
 		    TM_ARGS(thisUpdate));
 	}
 	if (tm_cmp(&now, &nextUpdate) > 0) {
-		return pr_val_err("Manifest is stale. (nextUpdate: " TM_FMT ")",
+		return pr_err("Manifest is stale. (nextUpdate: " TM_FMT ")",
 		    TM_ARGS(nextUpdate));
 	}
 
 	meta->update = timegm(&thisUpdate);
 	if (meta->update == (time_t)-1)
-		return pr_val_err("Cannot convert '" TM_FMT "' to time_t: %s",
+		return pr_err("Cannot convert '" TM_FMT "' to time_t: %s",
 		    TM_ARGS(thisUpdate), strerror(errno));
 
 	return 0;
@@ -116,9 +116,9 @@ check_more_recent(struct cache_cage *cage, struct mft_meta *current)
 		return 0;
 
 	if (prev->num.size && INTEGER_cmp(&prev->num, &current->num) > 0)
-		return pr_val_err("The fallback manifest has a higher manifestNumber than the downloaded one.");
+		return pr_err("The fallback manifest has a higher manifestNumber than the downloaded one.");
 	if (prev->update && difftime(prev->update, current->update) > 0)
-		return pr_val_err("The fallback manifest is newer than the downloaded one.");
+		return pr_err("The fallback manifest is newer than the downloaded one.");
 
 	return 0;
 }
@@ -154,10 +154,10 @@ validate_manifest(struct Manifest *mft, struct cache_cage *cage,
 		error = asn_INTEGER2ulong(mft->version, &version);
 		if (error) {
 			if (errno) {
-				pr_val_err("Error casting manifest version: %s",
+				pr_err("Error casting manifest version: %s",
 				    strerror(errno));
 			}
-			return pr_val_err("The manifest version isn't a valid unsigned long");
+			return pr_err("The manifest version isn't a valid unsigned long");
 		}
 		if (version != 0)
 			return EINVAL;
@@ -168,7 +168,7 @@ validate_manifest(struct Manifest *mft, struct cache_cage *cage,
 	 * 20 octets."
 	 */
 	if (mft->manifestNumber.size > 20)
-		return pr_val_err("Manifest number is larger than 20 octets");
+		return pr_err("Manifest number is larger than 20 octets");
 	INTEGER_move(&meta->num, &mft->manifestNumber);
 
 	/* rfc6486#section-4.4.3 */
@@ -238,14 +238,14 @@ validate_mft_filename(IA5String_t *ia5)
 	size_t i;
 
 	if (ia5->size < 5)
-		return pr_val_err("File name is too short (%zu < 5).", ia5->size);
+		return pr_err("File name is too short (%zu < 5).", ia5->size);
 	dot = ia5->size - 4;
 	if (ia5->buf[dot] != '.')
-		return pr_val_err("File name is missing three-letter extension.");
+		return pr_err("File name is missing three-letter extension.");
 
 	for (i = 0; i < ia5->size; i++)
 		if (i != dot && !is_valid_mft_file_chara(ia5->buf[i]))
-			return pr_val_err("File name contains illegal character #%u",
+			return pr_err("File name contains illegal character #%u",
 			    ia5->buf[i]);
 
 	return 0;
@@ -255,7 +255,7 @@ static int
 check_file_and_hash(struct FileAndHash *fah, char const *path)
 {
 	if (fah->hash.bits_unused != 0)
-		return pr_val_err("Hash string has unused bits.");
+		return pr_err("Hash string has unused bits.");
 
 	/* Includes file exists validation, obv. */
 	return hash_validate_file(hash_get_sha256(), path,
@@ -292,7 +292,7 @@ collect_files(struct cache_mapping const *map,
 	int error;
 
 	if (mft->fileList.list.count == 0)
-		return pr_val_err("Manifest's file list is empty.");
+		return pr_err("Manifest's file list is empty.");
 
 	rpp = &parent->rpp;
 	error = uri_parent(&map->url, &rpp_url);
@@ -336,7 +336,7 @@ collect_files(struct cache_mapping const *map,
 
 		dst->path = cage_map_file(cage, &dst->url);
 		if (!dst->path) {
-			error = pr_val_err(
+			error = pr_err(
 			    "Manifest file '%s' is absent from the cache.",
 			    uri_str(&dst->url));
 			goto revert;
@@ -369,13 +369,13 @@ load_crl(struct rpki_certificate *parent)
 	for (f = 0; f < rpp->nfiles; f++)
 		if (uri_has_extension(&rpp->files[f].url, ".crl")) {
 			if (rpp->crl.map != NULL)
-				return pr_val_err("Manifest has more than one CRL.");
+				return pr_err("Manifest has more than one CRL.");
 			rpp->crl.map = &rpp->files[f];
 		}
 
 	/* rfc6486#section-7 */
 	if (rpp->crl.map == NULL)
-		return pr_val_err("Manifest lacks a CRL.");
+		return pr_err("Manifest lacks a CRL.");
 
 	return crl_load(rpp->crl.map, parent->x509, &rpp->crl.obj);
 }

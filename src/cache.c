@@ -223,7 +223,7 @@ get_rsync_module(struct uri const *url, struct uri *module)
 		return true;
 	}
 
-	pr_val_err("Url '%s' does not appear to have an rsync module.", str);
+	pr_err("Url '%s' does not appear to have an rsync module.", str);
 	return false;
 }
 
@@ -313,7 +313,7 @@ reset_cache_dir(void)
 	int tmperr, abserr;
 	unsigned int deleted;
 
-	pr_op_debug("Resetting cache...");
+	pr_trc("Resetting cache...");
 
 	abserr = 0;
 	deleted = 0;
@@ -334,9 +334,9 @@ end:	tmperr = errno;
 	if (tmperr)
 		abserr = tmperr;
 	if (abserr)
-		pr_op_warn("Cannot reset cache: %s", strerror(abserr));
+		pr_wrn("Cannot reset cache: %s", strerror(abserr));
 	else
-		pr_op_debug(deleted > 0 ? "Cache reset." : "Cache was empty.");
+		pr_trc(deleted > 0 ? "Cache reset." : "Cache was empty.");
 	closedir(dir);
 	return abserr;
 }
@@ -359,7 +359,7 @@ lock_cache(void)
 	int fd;
 	int error;
 
-	pr_op_debug("touch " LOCKFILE);
+	pr_trc("touch " LOCKFILE);
 
 	/*
 	 * Suppose we get SIGTERM in the middle of this function.
@@ -376,7 +376,7 @@ lock_cache(void)
 	fd = open(LOCKFILE, O_CREAT | O_EXCL, 0644);
 	if (fd < 0) {
 		error = errno;
-		pr_op_err("Cannot create lockfile '%s/" LOCKFILE "': %s",
+		pr_err("Cannot create lockfile '%s/" LOCKFILE "': %s",
 		    config_get_local_repository(), strerror(error));
 		return error;
 	}
@@ -389,16 +389,16 @@ lock_cache(void)
 static void
 unlock_cache(void)
 {
-	pr_op_debug("rm " LOCKFILE);
+	pr_trc("rm " LOCKFILE);
 
 	if (!lockfile_owned) {
-		pr_op_debug("The cache wasn't locked.");
+		pr_trc("The cache wasn't locked.");
 		return;
 	}
 
 	if (unlink(LOCKFILE) < 0) {
 		int error = errno;
-		pr_op_err("Cannot remove lockfile: %s", strerror(error));
+		pr_err("Cannot remove lockfile: %s", strerror(error));
 		if (error != ENOENT)
 			return;
 	}
@@ -426,10 +426,10 @@ cache_setup1(void)
 	if (error)
 		return error;
 
-	pr_op_debug("cd %s", cachedir);
+	pr_trc("cd %s", cachedir);
 	if (chdir(cachedir) < 0) {
 		error = errno;
-		pr_op_err("Cannot cd to %s: %s", cachedir, strerror(error));
+		pr_err("Cannot cd to %s: %s", cachedir, strerror(error));
 		return error;
 	}
 
@@ -447,9 +447,9 @@ cache_setup2(void)
 	error = atexit(cache_atexit);
 	if (error) {
 		int err2 = errno;
-		pr_op_err("Cannot register cache's exit function.");
-		pr_op_err("Error message attempt 1: %s", strerror(error));
-		pr_op_err("Error message attempt 2: %s", strerror(err2));
+		pr_err("Cannot register cache's exit function.");
+		pr_err("Error message attempt 1: %s", strerror(error));
+		pr_err("Error message attempt 2: %s", strerror(err2));
 		return error;
 	}
 
@@ -517,13 +517,13 @@ json2node(json_t *json)
 
 	error = json_get_uri(json, "http", &http);
 	if (error && (error != ENOENT)) {
-		pr_op_debug("http: %s", strerror(error));
+		pr_trc("http: %s", strerror(error));
 		return NULL;
 	}
 
 	error = json_get_uri(json, "rsync", &rsync);
 	if (error && (error != ENOENT)) {
-		pr_op_debug("rsync: %s", strerror(error));
+		pr_trc("rsync: %s", strerror(error));
 		uri_cleanup(&http);
 		return NULL;
 	}
@@ -531,7 +531,7 @@ json2node(json_t *json)
 	node = pzalloc(sizeof(struct cache_node));
 
 	if (!init_node_key(&node->key, &http, &rsync)) {
-		pr_op_debug("JSON node is missing both http and rsync tags.");
+		pr_trc("JSON node is missing both http and rsync tags.");
 		uri_cleanup(&rsync);
 		uri_cleanup(&http);
 		goto nde;
@@ -542,38 +542,38 @@ json2node(json_t *json)
 
 	error = json_get_str(json, "path", &path);
 	if (error) {
-		pr_op_debug("path: %s", strerror(error));
+		pr_trc("path: %s", strerror(error));
 		goto key;
 	}
 	node->path = pstrdup(path);
 
 	error = json_get_ts(json, "attempt", &node->attempt_ts);
 	if (error != 0 && error != ENOENT) {
-		pr_op_debug("attempt: %s", strerror(error));
+		pr_trc("attempt: %s", strerror(error));
 		goto pth;
 	}
 
 	error = json_get_ts(json, "success", &node->success_ts);
 	if (error != 0 && error != ENOENT) {
-		pr_op_debug("success: %s", strerror(error));
+		pr_trc("success: %s", strerror(error));
 		goto pth;
 	}
 
 	error = json_get_bigint(json, "mftNum", &node->mft.num);
 	if (error < 0) {
-		pr_op_debug("mftNum: %s", strerror(error));
+		pr_trc("mftNum: %s", strerror(error));
 		goto pth;
 	}
 
 	error = json_get_ts(json, "mftUpdate", &node->mft.update);
 	if (error != 0 && error != ENOENT) {
-		pr_op_debug("mftUpdate: %s", strerror(error));
+		pr_trc("mftUpdate: %s", strerror(error));
 		goto mft;
 	}
 
 	error = json_get_object(json, "rrdp", &rrdp);
 	if (error < 0) {
-		pr_op_debug("rrdp: %s", strerror(error));
+		pr_trc("rrdp: %s", strerror(error));
 		goto mft;
 	}
 	if (error == 0 && rrdp_json2state(rrdp, node->path, &node->rrdp))
@@ -596,40 +596,40 @@ check_root_metafile(void)
 	char const *file_version;
 	int error;
 
-	pr_op_debug("Loading " METAFILE "...");
+	pr_trc("Loading " METAFILE "...");
 
 	root = json_load_file(METAFILE, 0, &jerr);
 	if (root == NULL) {
 		if (json_error_code(&jerr) == json_error_cannot_open_file) {
-			pr_op_debug(METAFILE " does not exist.");
+			pr_trc(METAFILE " does not exist.");
 			return ENOENT;
 		} else {
-			pr_op_err("Json parsing failure at %s (%d:%d): %s",
+			pr_err("Json parsing failure at %s (%d:%d): %s",
 			    METAFILE, jerr.line, jerr.column, jerr.text);
 			return EINVAL;
 		}
 	}
 
 	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_err("The root tag of " METAFILE " is not an object.");
+		pr_err("The root tag of " METAFILE " is not an object.");
 		goto fail;
 	}
 
 	error = json_get_str(root, TAGNAME_VERSION, &file_version);
 	if (error) {
 		if (error > 0)
-			pr_op_err(METAFILE " is missing the '"
+			pr_err(METAFILE " is missing the '"
 			    TAGNAME_VERSION "' tag.");
 		goto fail;
 	}
 	if (strcmp(file_version, PACKAGE_VERSION) != 0) {
-		pr_op_err("The cache was written by Fort %s; "
+		pr_err("The cache was written by Fort %s; "
 		    "I need to clear it.", file_version);
 		goto fail;
 	}
 
 	json_decref(root);
-	pr_op_debug(METAFILE " loaded.");
+	pr_trc(METAFILE " loaded.");
 	return 0;
 
 fail:	json_decref(root);
@@ -650,22 +650,22 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 
 	wrt = snprintf(filename, 64, "%s/%s.json", tbl->name, dir->d_name);
 	if (wrt >= 64)
-		pr_crit("collect_meta: %d %s %s", wrt, tbl->name, dir->d_name);
+		pr_panic("collect_meta: %d %s %s", wrt, tbl->name, dir->d_name);
 
 	pr_clutter("%s: Loading...", filename);
 
 	root = json_load_file(filename, 0, &jerr);
 	if (root == NULL) {
 		if (json_error_code(&jerr) == json_error_cannot_open_file)
-			pr_op_warn("%s: File does not exist.", filename);
+			pr_wrn("%s: File does not exist.", filename);
 		else
-			pr_op_warn("%s: Json parsing failure at (%d:%d): %s",
+			pr_wrn("%s: Json parsing failure at (%d:%d): %s",
 			    filename, jerr.line, jerr.column, jerr.text);
 		return;
 	}
 
 	if (json_typeof(root) != JSON_OBJECT) {
-		pr_op_warn("%s: Root tag is not an object.", filename);
+		pr_wrn("%s: Root tag is not an object.", filename);
 		goto end;
 	}
 
@@ -692,7 +692,7 @@ collect_metas(struct cache_table *tbl)
 	if (dir == NULL) {
 		error = errno;
 		if (error != ENOENT)
-			pr_op_warn("Cannot open %s: %s",
+			pr_wrn("Cannot open %s: %s",
 			    tbl->name, strerror(error));
 		return;
 	}
@@ -707,7 +707,7 @@ collect_metas(struct cache_table *tbl)
 	}
 	error = errno;
 	if (error)
-		pr_op_warn("Could not finish traversing %s: %s",
+		pr_wrn("Could not finish traversing %s: %s",
 		    tbl->name, strerror(error));
 
 	closedir(dir);
@@ -824,7 +824,7 @@ provide_node(struct cache_table *tbl, struct uri const *http,
 	struct cache_node *node;
 
 	if (!init_node_key(&key, http, rsync)) {
-		pr_val_debug("Can't build node identifier: Both HTTP and rsync URLs are NULL.");
+		pr_trc("Can't build node identifier: Both HTTP and rsync URLs are NULL.");
 		return NULL;
 	}
 
@@ -855,13 +855,13 @@ rm_metadata(struct cache_node *node)
 	int error;
 
 	filename = str_concat(node->path, ".json");
-	pr_op_debug("rm %s", filename);
+	pr_trc("rm %s", filename);
 	if (unlink(filename) < 0) {
 		error = errno;
 		if (error == ENOENT)
-			pr_op_debug("%s already doesn't exist.", filename);
+			pr_trc("%s already doesn't exist.", filename);
 		else
-			pr_op_warn("Cannot rm %s: %s", filename, strerror(errno));
+			pr_wrn("Cannot rm %s: %s", filename, strerror(errno));
 	}
 
 	free(filename);
@@ -878,9 +878,9 @@ write_metadata(struct cache_node *node)
 		return;
 	filename = str_concat(node->path, ".json");
 
-	pr_op_debug("echo \"$json\" > %s", filename);
+	pr_trc("echo \"$json\" > %s", filename);
 	if (json_dump_file(json, filename, JSON_INDENT(2)))
-		pr_op_err("Unable to write %s; unknown cause.", filename);
+		pr_err("Unable to write %s; unknown cause.", filename);
 
 	free(filename);
 	json_decref(json);
@@ -899,10 +899,10 @@ do_refresh(struct cache_table *tbl, struct uri const *uri,
 	struct cache_node *node;
 	bool downloaded = false;
 
-	pr_val_debug("Trying %s (online)...", uri_str(uri));
+	pr_trc("Trying %s (online)...", uri_str(uri));
 
 	if (!tbl->enabled) {
-		pr_val_debug("Protocol disabled.");
+		pr_trc("Protocol disabled.");
 		return VV_FAIL;
 	}
 
@@ -943,12 +943,12 @@ do_refresh(struct cache_table *tbl, struct uri const *uri,
 		break;
 	case DLS_ONGOING:
 ongoing:	mutex_unlock(&tbl->lock);
-		pr_val_debug("Refresh ongoing.");
+		pr_trc("Refresh ongoing.");
 		return VV_BUSY;
 	case DLS_FRESH:
 		break;
 	default:
-		pr_crit("Unknown node state: %d", node->state);
+		pr_panic("Unknown node state: %d", node->state);
 	}
 
 	mutex_unlock(&tbl->lock);
@@ -958,11 +958,11 @@ ongoing:	mutex_unlock(&tbl->lock);
 		task_wakeup_dormants();
 
 	if (node->verdict == VV_FAIL) {
-		pr_val_debug("Refresh failed.");
+		pr_trc("Refresh failed.");
 		return VV_FAIL;
 	}
 
-	pr_val_debug("Refresh succeeded.");
+	pr_trc("Refresh succeeded.");
 	*result = node;
 	return VV_CONTINUE;
 }
@@ -1038,11 +1038,11 @@ cache_get_fallback(struct uri const *url, char **result)
 	 * Mutex not needed here.
 	 */
 
-	pr_val_debug("Trying %s (offline)...", uri_str(url));
+	pr_trc("Trying %s (offline)...", uri_str(url));
 
 	node = find_node(&cache.fallback, uri_str(url), uri_len(url));
 	if (!node) {
-		pr_val_debug("Cache data unavailable.");
+		pr_trc("Cache data unavailable.");
 		*result = NULL;
 		return VV_CONTINUE;
 	}
@@ -1221,12 +1221,12 @@ rsync_finished(struct uri const *url, char const *path)
 	node = find_node(&cache.rsync, uri_str(url), uri_len(url));
 	if (node == NULL) {
 		mutex_unlock(&cache.rsync.lock);
-		pr_op_err("rsync '%s -> %s' finished, but cache node does not exist.",
+		pr_err("rsync '%s -> %s' finished, but cache node does not exist.",
 		    uri_str(url), path);
 		return;
 	}
 	if (node->state != DLS_ONGOING)
-		pr_op_warn("rsync '%s -> %s' finished, but existing node was not in ONGOING state.",
+		pr_wrn("rsync '%s -> %s' finished, but existing node was not in ONGOING state.",
 		    uri_str(url), path);
 
 	node->state = DLS_FRESH;
@@ -1340,7 +1340,7 @@ discard_trash(struct cache_commit *commit, struct cache_node *fallback)
 
 	dir = opendir(fallback->path);
 	if (dir == NULL) {
-		pr_op_err("opendir() error: %s", strerror(errno));
+		pr_err("opendir() error: %s", strerror(errno));
 		return;
 	}
 
@@ -1369,16 +1369,16 @@ discard_trash(struct cache_commit *commit, struct cache_node *fallback)
 		 * "forget" a file, then legitimately relist it without actually
 		 * providing it.
 		 */
-		pr_op_debug("Removing hard link: %s", file_path);
+		pr_trc("Removing hard link: %s", file_path);
 		if (unlink(file_path) < 0)
-			pr_op_warn("Could not unlink %s: %s",
+			pr_wrn("Could not unlink %s: %s",
 			    file_path, strerror(errno));
 
 next:		free(file_path);
 	}
 
 	if (errno)
-		pr_op_err("Fallback directory traversal errored: %s",
+		pr_err("Fallback directory traversal errored: %s",
 		    strerror(errno));
 	closedir(dir);
 }
@@ -1396,7 +1396,7 @@ commit_fallbacks(time_t now)
 		STAILQ_REMOVE_HEAD(&commits, lh);
 
 		if (uri_str(&commit->caRepository) != NULL) {
-			pr_op_debug("Creating fallback for %s (%s)",
+			pr_trc("Creating fallback for %s (%s)",
 			    uri_str(&commit->caRepository),
 			    uri_str(&commit->rpkiNotify));
 
@@ -1406,11 +1406,11 @@ commit_fallbacks(time_t now)
 			fb->attempt_ts = now;
 			fb->success_ts = now;
 
-			pr_op_debug("mkdir -f %s", fb->path);
+			pr_trc("mkdir -f %s", fb->path);
 			if (mkdir(fb->path, CACHE_FILEMODE) < 0) {
 				error = errno;
 				if (error != EEXIST) {
-					pr_op_err("Cannot create '%s': %s",
+					pr_err("Cannot create '%s': %s",
 					    fb->path, strerror(error));
 					goto skip;
 				}
@@ -1424,7 +1424,7 @@ commit_fallbacks(time_t now)
 		} else { /* TA */
 			struct cache_mapping *map = &commit->files[0];
 
-			pr_op_debug("Creating fallback for %s",
+			pr_trc("Creating fallback for %s",
 			    uri_str(&map->url));
 
 			fb = provide_node(&cache.fallback, &map->url, NULL);
@@ -1472,7 +1472,7 @@ remove_orphaned_nodes(struct cache_table *table, struct cache_node *node,
     void *arg)
 {
 	if (file_stat_errno(node->path) == ENOENT) {
-		pr_op_debug("Missing file; deleting node: %s", node->path);
+		pr_trc("Missing file; deleting node: %s", node->path);
 		delete_node(table, node, NULL);
 	}
 }
@@ -1490,29 +1490,29 @@ cleanup_cache(void)
 	time_t now = time_fatal();
 
 	/* Delete the entirety of cache/tmp/. */
-	pr_op_debug("Cleaning up temporal files.");
+	pr_trc("Cleaning up temporal files.");
 	file_rm_rf(CACHE_TMPDIR);
 
 	/*
 	 * Ensure valid RPPs and TAs are linked in fallback,
 	 * by hard-linking the new files.
 	 */
-	pr_op_debug("Committing fallbacks.");
+	pr_trc("Committing fallbacks.");
 	commit_fallbacks(now);
 
 	/*
 	 * Delete refresh nodes that haven't been downloaded in a while,
 	 * and fallback nodes that haven't been valid in a while.
 	 */
-	pr_op_debug("Cleaning up abandoned cache files.");
+	pr_trc("Cleaning up abandoned cache files.");
 	foreach_node(remove_abandoned, &now);
 
 	/* (Paranoid) Delete nodes that are no longer mapped to files. */
-	pr_op_debug("Cleaning up orphaned nodes.");
+	pr_trc("Cleaning up orphaned nodes.");
 	foreach_node(remove_orphaned_nodes, NULL);
 
 	/* (Paranoid) Delete files that are no longer mapped to nodes. */
-	pr_op_debug("Cleaning up orphaned files.");
+	pr_trc("Cleaning up orphaned files.");
 	remove_orphaned_files();
 }
 

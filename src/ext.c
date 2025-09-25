@@ -883,16 +883,16 @@ handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 	 * Also "unknown" is misleading. I think it's only "unknown" if the NID
 	 * is -1 or something like that.
 	 */
-	return pr_val_err("Certificate has unknown extension. (Extension NID: %d)",
+	return pr_err("Certificate has unknown extension. (Extension NID: %d)",
 	    nid);
 dupe:
-	return pr_val_err("Certificate has more than one '%s' extension.",
+	return pr_err("Certificate has more than one '%s' extension.",
 	    handler->meta->name);
 not_critical:
-	return pr_val_err("Extension '%s' is supposed to be marked critical.",
+	return pr_err("Extension '%s' is supposed to be marked critical.",
 	    handler->meta->name);
 critical:
-	return pr_val_err("Extension '%s' is not supposed to be marked critical.",
+	return pr_err("Extension '%s' is not supposed to be marked critical.",
 	    handler->meta->name);
 }
 
@@ -913,7 +913,7 @@ handle_extensions(struct extension_handler *handlers,
 
 	for (handler = handlers; handler->meta != NULL; handler++) {
 		if (handler->mandatory && !handler->found)
-			return pr_val_err("Certificate is missing the '%s' extension.",
+			return pr_err("Certificate is missing the '%s' extension.",
 			    handler->meta->name);
 	}
 
@@ -923,7 +923,7 @@ handle_extensions(struct extension_handler *handlers,
 int
 cannot_decode(struct extension_metadata const *meta)
 {
-	return pr_val_err("Extension '%s' seems to be malformed. Cannot decode.",
+	return pr_err("Extension '%s' seems to be malformed. Cannot decode.",
 	    meta->name);
 }
 
@@ -974,21 +974,21 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash, char const *hash_n
 	/* Get the SPK (ask libcrypto) */
 	pubkey = X509_get_X509_PUBKEY(cert);
 	if (pubkey == NULL)
-		return val_crypto_err("X509_get_X509_PUBKEY() returned NULL");
+		return pr_crypto_err("X509_get_X509_PUBKEY() returned NULL");
 
 	ok = X509_PUBKEY_get0_param(NULL, &spk, &spk_len, NULL, pubkey);
 	if (!ok)
-		return val_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
+		return pr_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
 	/* FIXME the max limit needs to be a lot less than SIZE_MAX. */
 	if (spk_len < 0 || SIZE_MAX < spk_len) {
-		return pr_val_err("The Subject Public Key length (%d) is out of bounds. (0-%zu)",
+		return pr_err("The Subject Public Key length (%d) is out of bounds. (0-%zu)",
 		    spk_len, SIZE_MAX);
 	}
 
 	error = hash_validate(hash_get_sha1(), spk, spk_len, hash->data, hash->length);
 	if (error > 0) {
-		pr_val_err("The Subject Public Key's hash does not match the %s.",
+		pr_err("The Subject Public Key's hash does not match the %s.",
 		    hash_name);
 	}
 
@@ -1002,15 +1002,15 @@ handle_aki(void *ext, void *arg)
 	X509 *parent = arg;
 
 	if (aki->keyid == NULL) {
-		return pr_val_err("The %s lacks a keyIdentifier.",
+		return pr_err("The %s lacks a keyIdentifier.",
 		    ext_aki()->name);
 	}
 	if (aki->issuer != NULL) {
-		return pr_val_err("The %s contains an authorityCertIssuer.",
+		return pr_err("The %s contains an authorityCertIssuer.",
 		    ext_aki()->name);
 	}
 	if (aki->serial != NULL) {
-		return pr_val_err("The %s contains an authorityCertSerialNumber.",
+		return pr_err("The %s contains an authorityCertSerialNumber.",
 		    ext_aki()->name);
 	}
 

@@ -105,7 +105,7 @@ vrps_init(void)
 
 	error = pthread_rwlock_init(&state_lock, NULL);
 	if (error) {
-		pr_op_err("state pthread_rwlock_init() errored: %s",
+		pr_err("state pthread_rwlock_init() errored: %s",
 		    strerror(error));
 		darray_destroy(state.deltas);
 		return error;
@@ -235,13 +235,13 @@ vrps_update(bool *changed)
 	}
 	rwlock_unlock(&state_lock);
 
-	pr_op_info("Validation finished:");
-	pr_op_info("- Valid ROAs: %u", roas);
-	pr_op_info("- Valid Router Keys: %u", rks);
+	pr_inf("Validation finished:");
+	pr_inf("- Valid ROAs: %u", roas);
+	pr_inf("- Valid Router Keys: %u", rks);
 	if (config_get_mode() == SERVER)
-		pr_op_info("- Serial: %u", serial);
+		pr_inf("- Serial: %u", serial);
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
-		pr_op_info("- Real execution time: %.0lfs", difftime(finish, start));
+		pr_inf("- Real execution time: %.0lfs", difftime(finish, start));
 
 	return error;
 }

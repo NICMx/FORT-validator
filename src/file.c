@@ -16,18 +16,18 @@ file_open(char const *file_name, FILE **result, struct stat *stat)
 	file = fopen(file_name, "rb");
 	if (file == NULL) {
 		error = errno;
-		pr_val_err("Could not open file '%s': %s", file_name,
+		pr_err("Could not open file '%s': %s", file_name,
 		    strerror(error));
 		return error;
 	}
 
 	if (fstat(fileno(file), stat) == -1) {
 		error = errno;
-		pr_val_err("fstat(%s) failed: %s", file_name, strerror(error));
+		pr_err("fstat(%s) failed: %s", file_name, strerror(error));
 		goto fail;
 	}
 	if (!S_ISREG(stat->st_mode)) {
-		error = pr_val_err("'%s' does not seem to be a file.", file_name);
+		error = pr_err("'%s' does not seem to be a file.", file_name);
 		goto fail;
 	}
 
@@ -48,7 +48,7 @@ file_write(char const *file_name, char const *mode, FILE **result)
 	file = fopen(file_name, mode);
 	if (file == NULL) {
 		error = errno;
-		pr_val_err("Could not open file '%s' for writing: %s",
+		pr_err("Could not open file '%s' for writing: %s",
 		    file_name, strerror(error));
 		*result = NULL;
 		return error;
@@ -73,7 +73,7 @@ write_file(char const *path, void const *bytes, size_t n)
 		error = errno;
 		if (!error) /* Linux's man page does not mention errno */
 			error = -1;
-		pr_val_err("Cannot write %s: %s", path, strerror(error));
+		pr_err("Cannot write %s: %s", path, strerror(error));
 	}
 
 	file_close(out);
@@ -83,14 +83,14 @@ write_file(char const *path, void const *bytes, size_t n)
 int
 file_write_txt(char const *path, char const *txt)
 {
-	pr_val_debug("echo 'blah blah' > %s", path);
+	pr_trc("echo 'blah blah' > %s", path);
 	return write_file(path, txt, strlen(txt));
 }
 
 int
 file_write_bin(char const *path, unsigned char const *bytes, size_t n)
 {
-	pr_val_debug("echo 'beep boop' > %s", path);
+	pr_trc("echo 'beep boop' > %s", path);
 	return write_file(path, bytes, n);
 }
 
@@ -98,7 +98,7 @@ void
 file_close(FILE *file)
 {
 	if (fclose(file) == -1)
-		pr_val_err("fclose() failed: %s", strerror(errno));
+		pr_err("fclose() failed: %s", strerror(errno));
 }
 
 /*
@@ -131,7 +131,7 @@ file_load(char const *file_name, struct file_contents *fc, bool is_binary)
 			 * code. It literally doesn't say how to get an error
 			 * code.
 			 */
-			pr_val_err("File reading error. The error message is (possibly) '%s'",
+			pr_err("File reading error. The error message is (possibly) '%s'",
 			    strerror(error));
 			free(fc->buf);
 			goto end;
@@ -142,7 +142,7 @@ file_load(char const *file_name, struct file_contents *fc, bool is_binary)
 		 * less bytes than requested like read() does. It's either
 		 * "consumed everything", "EOF reached" or error.
 		 */
-		pr_op_err_st("Likely programming error: fread() < file size (fr:%zu bs:%zu EOF:%d)",
+		pr_crit("Likely programming error: fread() < file size (fr:%zu bs:%zu EOF:%d)",
 		    fread_result, fc->buflen, feof(file));
 		free(fc->buf);
 		error = EINVAL;
@@ -178,7 +178,7 @@ file_is_valid(char const *location, bool allow_file)
 	bool result;
 
 	if (stat(location, &attr) == -1) {
-		pr_op_err("stat(%s) failed: %s", location, strerror(errno));
+		pr_err("stat(%s) failed: %s", location, strerror(errno));
 		return false;
 	}
 
@@ -187,7 +187,7 @@ file_is_valid(char const *location, bool allow_file)
 
 	result = is_file || is_dir;
 	if (!result)
-		pr_op_err("'%s' does not seem to be a %s", location,
+		pr_err("'%s' does not seem to be a %s", location,
 		    allow_file ? "file or directory" : "directory");
 
 	return result;
@@ -201,7 +201,7 @@ file_rm_f(char const *path)
 {
 	int error;
 
-	pr_op_debug("rm -f %s", path);
+	pr_trc("rm -f %s", path);
 
 	if (remove(path) < 0) {
 		error = errno;
@@ -219,7 +219,7 @@ rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
 	if (remove(fpath) < 0) {
 		rm_error = errno;
-		pr_op_warn("Cannot remove '%s': %s", fpath, strerror(rm_error));
+		pr_wrn("Cannot remove '%s': %s", fpath, strerror(rm_error));
 	}
 
 	return 0; /* Remove as much as possible, regardless of error */
@@ -235,7 +235,7 @@ file_rm_rf(char const *path)
 {
 	int error;
 
-	pr_op_debug("rm -rf %s", path);
+	pr_trc("rm -rf %s", path);
 
 	/* TODO (performance) optimize that 32 */
 	rm_error = 0;
@@ -250,7 +250,7 @@ file_rm_rf(char const *path)
 		error = errno;
 	}
 
-	pr_op_warn("Cannot remove '%s': %s", path, strerror(error));
+	pr_wrn("Cannot remove '%s': %s", path, strerror(error));
 	return error;
 }
 
@@ -260,11 +260,11 @@ file_mkdir(char const *path, bool force)
 {
 	int error;
 
-	pr_op_debug("mkdir %s%s", force ? "-f " : "", path);
+	pr_trc("mkdir %s%s", force ? "-f " : "", path);
 	if (mkdir(path, CACHE_FILEMODE) < 0) {
 		error = errno;
 		if (!force || error != EEXIST) {
-			pr_op_err("Cannot create '%s': %s",
+			pr_err("Cannot create '%s': %s",
 			    path, strerror(error));
 			return error;
 		}
@@ -276,9 +276,9 @@ file_mkdir(char const *path, bool force)
 void
 file_ln(char const *oldpath, char const *newpath)
 {
-	pr_op_debug("ln %s %s", oldpath, newpath);
+	pr_trc("ln %s %s", oldpath, newpath);
 	if (link(oldpath, newpath) < 0)
-		pr_op_warn("Could not hard-link %s to %s: %s",
+		pr_wrn("Could not hard-link %s to %s: %s",
 		    newpath, oldpath, strerror(errno));
 }
 
@@ -312,7 +312,7 @@ cseq_next(struct cache_sequence *seq)
 		len = snprintf(path, seq->pathlen, "%s/%lX",
 		    seq->prefix, seq->next_id);
 		if (len < 0) {
-			pr_val_err("Cannot compute new cache path: Unknown cause.");
+			pr_err("Cannot compute new cache path: Unknown cause.");
 			return NULL;
 		}
 		if (len < seq->pathlen) {

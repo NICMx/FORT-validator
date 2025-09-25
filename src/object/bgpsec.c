@@ -16,7 +16,7 @@ asn_cb(struct asn_range const *range, void *arg)
 	struct resource_params *params = arg;
 
 	if (!resources_contains_asns(params->parent_resources, range))
-		return pr_val_err("BGPsec certificate is not allowed to contain ASN range %u-%u.",
+		return pr_err("BGPsec certificate is not allowed to contain ASN range %u-%u.",
 		    range->min, range->max);
 
 	return vhandle_router_key(params->ski, range, params->spk);
@@ -50,7 +50,7 @@ handle_bgpsec(X509 *cert, struct resources *parent_resources, struct rpp *pp)
 
 	pub_key = X509_get_X509_PUBKEY(cert);
 	if (pub_key == NULL) {
-		error = val_crypto_err("X509_get_X509_PUBKEY() returned NULL at BGPsec");
+		error = pr_crypto_err("X509_get_X509_PUBKEY() returned NULL at BGPsec");
 		goto revert_resources;
 	}
 
@@ -60,7 +60,7 @@ handle_bgpsec(X509 *cert, struct resources *parent_resources, struct rpp *pp)
 	tmp = cert_spk;
 	cert_spk_len = i2d_X509_PUBKEY(pub_key, &tmp);
 	if (cert_spk_len != RK_SPKI_LEN) {
-		error = val_crypto_err("i2d_X509_PUBKEY() returned %d",
+		error = pr_crypto_err("i2d_X509_PUBKEY() returned %d",
 		    cert_spk_len);
 		goto revert_spk;
 	}

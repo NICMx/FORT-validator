@@ -85,7 +85,7 @@ struct thread_pool {
 static void
 wait_for_parent_signal(struct thread_pool *pool, unsigned int thread_id)
 {
-	pr_op_debug("Thread %s.%u: Waiting for work...", pool->name, thread_id);
+	pr_trc("Thread %s.%u: Waiting for work...", pool->name, thread_id);
 	panic_on_fail(pthread_cond_wait(&pool->parent2worker, &pool->lock),
 	    "pthread_cond_wait");
 }
@@ -145,10 +145,10 @@ task_queue_pull(struct thread_pool *pool, unsigned int thread_id)
 	task = TAILQ_LAST(&pool->queue, task_queue);
 	if (task != NULL) {
 		TAILQ_REMOVE(&pool->queue, task, next);
-		pr_op_debug("Thread %s.%u: Claimed task '%s'", pool->name,
+		pr_trc("Thread %s.%u: Claimed task '%s'", pool->name,
 		    thread_id, task->name);
 	} else {
-		pr_op_debug("Thread %s.%u: Claimed nothing", pool->name,
+		pr_trc("Thread %s.%u: Claimed nothing", pool->name,
 		    thread_id);
 	}
 
@@ -160,7 +160,7 @@ static void
 task_queue_push(struct thread_pool *pool, struct thread_pool_task *task)
 {
 	TAILQ_INSERT_HEAD(&pool->queue, task, next);
-	pr_op_debug("Pool '%s': Pushed task '%s'", pool->name, task->name);
+	pr_trc("Pool '%s': Pushed task '%s'", pool->name, task->name);
 }
 
 /*
@@ -200,7 +200,7 @@ tasks_poll(void *arg)
 
 		if (task != NULL) {
 			task->cb(task->arg);
-			pr_op_debug("Thread %s.%u: Task '%s' ended", pool->name,
+			pr_trc("Thread %s.%u: Task '%s' ended", pool->name,
 			    thread_id, task->name);
 			task_destroy(task);
 		}
@@ -216,7 +216,7 @@ tasks_poll(void *arg)
 	}
 
 	mutex_unlock(&pool->lock);
-	pr_op_debug("Thread %s.%u: Returning.", pool->name, thread_id);
+	pr_trc("Thread %s.%u: Returning.", pool->name, thread_id);
 	return NULL;
 }
 
@@ -227,7 +227,7 @@ thread_pool_attr_create(pthread_attr_t *attr)
 
 	error = pthread_attr_init(attr);
 	if (error) {
-		pr_op_err_st("pthread_attr_init() failed: %s", strerror(error));
+		pr_crit("pthread_attr_init() failed: %s", strerror(error));
 		return error;
 	}
 
@@ -235,7 +235,7 @@ thread_pool_attr_create(pthread_attr_t *attr)
 	error = pthread_attr_setstacksize(attr, 1024 * 1024 * 2);
 	if (error) {
 		pthread_attr_destroy(attr);
-		pr_op_err_st("pthread_attr_setstacksize() failed: %s",
+		pr_crit("pthread_attr_setstacksize() failed: %s",
 		    strerror(error));
 		return error;
 	}
@@ -274,12 +274,12 @@ spawn_threads(struct thread_pool *pool)
 		error = pthread_create(&pool->thread_ids[i], &attr, tasks_poll,
 		    pool);
 		if (error) {
-			pr_op_err_st("pthread_create() failed: %s",
+			pr_crit("pthread_create() failed: %s",
 			    strerror(error));
 			goto end;
 		}
 
-		pr_op_debug("Pool '%s': Thread #%u spawned", pool->name, i + 1);
+		pr_trc("Pool '%s': Thread #%u spawned", pool->name, i + 1);
 	}
 
 end:
@@ -299,7 +299,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	/* Init locking */
 	error = pthread_mutex_init(&result->lock, NULL);
 	if (error) {
-		pr_op_err_st("pthread_mutex_init() failed: %s",
+		pr_crit("pthread_mutex_init() failed: %s",
 		    strerror(error));
 		goto free_tmp;
 	}
@@ -307,7 +307,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	/* Init conditional to signal pending work */
 	error = pthread_cond_init(&result->parent2worker, NULL);
 	if (error) {
-		pr_op_err_st("pthread_cond_init(p2w) failed: %s",
+		pr_crit("pthread_cond_init(p2w) failed: %s",
 		    strerror(error));
 		goto free_mutex;
 	}
@@ -315,7 +315,7 @@ thread_pool_create(char const *name, unsigned int threads,
 	/* Init conditional to signal no pending work */
 	error = pthread_cond_init(&result->worker2parent, NULL);
 	if (error) {
-		pr_op_err_st("pthread_cond_init(w2p) failed: %s",
+		pr_crit("pthread_cond_init(w2p) failed: %s",
 		    strerror(error));
 		goto free_working_cond;
 	}
@@ -354,7 +354,7 @@ thread_pool_destroy(struct thread_pool *pool)
 	struct thread_pool_task *tmp;
 	unsigned int t;
 
-	pr_op_debug("Destroying thread pool '%s'.", pool->name);
+	pr_trc("Destroying thread pool '%s'.", pool->name);
 
 	/* Remove all pending work and send the signal to stop it */
 	mutex_lock(&pool->lock);
@@ -377,7 +377,7 @@ thread_pool_destroy(struct thread_pool *pool)
 	pthread_mutex_destroy(&pool->lock);
 	free(pool);
 
-	pr_op_debug("Destroyed.");
+	pr_trc("Destroyed.");
 }
 
 /*
@@ -424,17 +424,17 @@ thread_pool_wait(struct thread_pool *pool)
 
 	/* If the pool has to stop, the wait will happen during the joins. */
 	while (!pool->stop) {
-		pr_op_debug("- Active workers: %u", pool->working_count);
-		pr_op_debug("- Task queue: %s",
+		pr_trc("- Active workers: %u", pool->working_count);
+		pr_trc("- Task queue: %s",
 		    TAILQ_EMPTY(&pool->queue) ? "Empty" : "Not Empty");
 
 		if (pool->working_count == 0 && TAILQ_EMPTY(&pool->queue)) {
-			pr_op_debug("Pool '%s': All work has been completed.",
+			pr_trc("Pool '%s': All work has been completed.",
 			    pool->name);
 			break;
 		}
 
-		pr_op_debug("Pool '%s': Waiting for tasks to be completed",
+		pr_trc("Pool '%s': Waiting for tasks to be completed",
 		    pool->name);
 		wait_for_worker_signal(pool);
 	}

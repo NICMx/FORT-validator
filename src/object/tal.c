@@ -74,26 +74,26 @@ read_content(char *fc /* File Content */, struct tal *tal)
 			else
 				uri_cleanup(&url);
 		} else {
-			pr_op_debug("Ignoring URI '%s': %s", fc, error);
+			pr_trc("Ignoring URI '%s': %s", fc, error);
 		}
 
 		fc = nl + cr + 1;
 		if (*fc == '\0')
-			return pr_op_err("The TAL seems to be missing the public key.");
+			return pr_err("The TAL seems to be missing the public key.");
 	} while (true);
 
 	if (tal->urls.len == 0)
-		return pr_op_err("There seems to be an empty/blank line before the end of the URI section.");
+		return pr_err("There seems to be an empty/blank line before the end of the URI section.");
 
 	/* subjectPublicKeyInfo section */
 	if (!base64_decode(nl + cr + 1, 0, &tal->spki, &tal->spki_len))
-		return pr_op_err("Cannot decode the public key.");
+		return pr_err("Cannot decode the public key.");
 
 	return 0;
 
 /* This label requires fc to make sense */
 premature:
-	return pr_op_err("The TAL seems to end prematurely at line '%s'.", fc);
+	return pr_err("The TAL seems to end prematurely at line '%s'.", fc);
 }
 
 /* @file_path is expected to outlive @tal. */
@@ -142,7 +142,7 @@ static int
 queue_tal(char const *tal_path, void *arg)
 {
 	if (task_enqueue_tal(tal_path) < 1) {
-		pr_op_err("Could not enqueue task '%s'; abandoning validation.",
+		pr_err("Could not enqueue task '%s'; abandoning validation.",
 		    tal_path);
 		return EINVAL;
 	}
@@ -235,7 +235,7 @@ traverse_tal(char const *tal_path)
 	if (vv != VV_FAIL)
 		goto end2;
 
-	pr_op_err("None of the TAL URIs yielded a successful traversal.");
+	pr_err("None of the TAL URIs yielded a successful traversal.");
 	vv = VV_FAIL;
 
 end2:	tal_cleanup(&tal);
@@ -299,14 +299,14 @@ perform_standalone_validation(void)
 	for (t = 0; t < 5; t++) {
 		error = pthread_create(&threads[t], NULL, pick_up_work, NULL);
 		if (error)
-			pr_crit("pthread_create(%zu) failed: %s",
+			pr_panic("pthread_create(%zu) failed: %s",
 			    t, strerror(error));
 	}
 
 	for (t = 0; t < 5; t++) {
 		error = pthread_join(threads[t], NULL);
 		if (error)
-			pr_crit("pthread_join(%zu) failed: %s",
+			pr_panic("pthread_join(%zu) failed: %s",
 			    t, strerror(error));
 	}
 
