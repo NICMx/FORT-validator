@@ -1,3 +1,5 @@
+#define _DEFAULT_SOURCE 1
+
 #include "log.h"
 
 #include <errno.h>
@@ -12,514 +14,484 @@
 #include <unistd.h>
 
 #include "config.h"
+#include "report.h"
 #include "thread_var.h"
 #include "types/path.h"
 
 struct level {
-	char const *label;
-	char const *color;
-	FILE *stream;
-};
-
-static struct level DBG = { "DBG", PR_COLOR_DBG };
-static struct level INF = { "INF", PR_COLOR_INF };
-static struct level WRN = { "WRN", PR_COLOR_WRN };
-static struct level ERR = { "ERR", PR_COLOR_ERR };
-static struct level CRT = { "CRT", PR_COLOR_CRT };
-static struct level UNK = { "UNK", "" };
-
-struct log_config {
-	bool fprintf_enabled; /* Print on the standard streams? */
-	bool syslog_enabled; /* Print on syslog? */
-
-	uint8_t level;
-	bool print_times;
+	int id;
 	char const *tag;
-	bool color;
-	int facility;
-	bool rm_filepath;
+	char const *name;
+	char const *color;
+	char const *rst;
 };
 
-/* Configuration for the operation logs. */
-static struct log_config op_config;
-/* Configuration for the validation logs. */
-static struct log_config val_config;
+#ifdef PR_CLUTTER_ENABLED
+static struct level CLT = { LOG_DEBUG, "CLT", "clutter", CLR_CLT, CLR_RST };
+#endif
+static struct level TRC = { LOG_DEBUG, "TRC", "trace", CLR_TRC, CLR_RST };
+static struct level INF = { LOG_INFO, "INF", "info", "", "" };
+static struct level WRN = { LOG_WARNING, "WRN", "warning", CLR_WRN, CLR_RST };
+static struct level ERR = { LOG_ERR, "ERR", "error", CLR_ERR, CLR_RST };
+static struct level CRT = { LOG_CRIT, "CRT", "critical", CLR_CRT, CLR_RST };
+static struct level PNC = { LOG_EMERG, "PNC", "panic", CLR_PNC, CLR_RST };
 
-/*
- * fprintf and syslog are rarely enabled at the same time, so I reused the
- * mutex.
- *
- * "log" + "lock" = "logck"
- */
-static pthread_mutex_t logck;
+struct logger {
+	void (*cb)(struct logger *, struct level *, char const *, va_list);
 
-/**
- * Important: -rdynamic needs to be enabled, otherwise this does not print
- * function names. See LDFLAGS_DEBUG in Makefile.am.
- * Also: Only non-static functions will be labeled.
- *
- * The first printed entry is probably not meaningful. (But I'm printing
- * everything anyway due to paranoia.)
- *
- * @title is allowed to be NULL. If you need locking, do it outside. (And be
- * aware that pthread_mutex_lock() can return error codes, which shouldn't
- * prevent critical stack traces from printing.)
- */
+	struct level *lvl;
+	FILE *stream;		/* file only */
+	bool print_times;	/* console and file only */
+	bool color;		/* console and file only */
+	int facility;		/* syslog only */
+	bool free;
+
+	pthread_mutex_t *lock;	/* console (except init) and file only */
+	SLIST_ENTRY(logger) lh;
+};
+
+SLIST_HEAD(loggers, logger);
+
+/* Constant after init */
+static struct loggers listeners = SLIST_HEAD_INITIALIZER(listeners);
+
 static void
-print_stack_trace(char const *title)
+vcb(struct logger *lgr, struct level *lvl, char const *fmt, ...)
 {
+	va_list vl;
+
+	va_start(vl, fmt);
+	lgr->cb(lgr, lvl, fmt, vl);
+	va_end(vl);
+}
+
 #ifdef BACKTRACE_ENABLED
+
 #define STACK_SIZE 64
 
-	void *array[STACK_SIZE];
-	size_t size;
-	char **strings;
+/*
+ * Needs -rdynamic, otherwise function names don't show up.
+ * Only non-static functions can be labeled.
+ */
+static void
+__pr_stack_trace(struct logger *lgr, struct level *lvl,
+    char const *title, size_t size, char **strings)
+{
 	size_t i;
-	int fp;
 
-	size = backtrace(array, STACK_SIZE);
-	strings = backtrace_symbols(array, size);
+	if (title != NULL)
+		vcb(lgr, lvl, "%s", title);
+	vcb(lgr, lvl, "Stack trace:");
+	for (i = 0; i < size; i++)
+		vcb(lgr, lvl, "  %s", strings[i]);
+	vcb(lgr, lvl, "(End of stack trace)");
+}
 
-	if (op_config.fprintf_enabled) {
-		if (title != NULL)
-			fprintf(ERR.stream, "%s\n", title);
-		fprintf(ERR.stream, "Stack trace:\n");
-		for (i = 0; i < size; i++)
-			fprintf(ERR.stream, "  %s\n", strings[i]);
-		fprintf(ERR.stream, "(End of stack trace)\n");
-	}
-
-	if (op_config.syslog_enabled) {
-		fp = LOG_ERR | op_config.facility;
-		if (title != NULL)
-			syslog(fp, "%s", title);
-		syslog(fp, "Stack trace:");
-		for (i = 0; i < size; i++)
-			syslog(fp, "  %s", strings[i]);
-		syslog(fp, "(End of stack trace)");
-	}
-
-	free(strings);
 #endif /* BACKTRACE_ENABLED */
-}
 
-static void init_config(struct log_config *cfg)
+static void
+init_mutex(struct logger *lgr)
 {
-	cfg->fprintf_enabled = true;
-	cfg->syslog_enabled = true;
-	cfg->level = LOG_DEBUG;
-	cfg->print_times = true;
-	cfg->tag = NULL;
-	cfg->color = false;
-	cfg->facility = LOG_DAEMON;
-}
-
-int
-log_setup(void)
-{
-	/*
-	 * Remember not to use any actual logging functions until logging has
-	 * been properly initialized.
-	 */
-
 	int error;
 
-	DBG.stream = stdout;
-	INF.stream = stdout;
-	WRN.stream = stderr;
-	ERR.stream = stderr;
-	CRT.stream = stderr;
-	UNK.stream = stdout;
+	lgr->lock = pmalloc(sizeof(pthread_mutex_t));
 
-	init_config(&op_config);
-	init_config(&val_config);
-
-	error = pthread_mutex_init(&logck, NULL);
+	error = pthread_mutex_init(lgr->lock, NULL);
 	if (error) {
-		fprintf(ERR.stream,
-		    "pthread_mutex_init() failure: %s\n",
-		    strerror(error));
-		syslog(LOG_ERR | op_config.facility,
-		    "pthread_mutex_init() failure: %s",
-		    strerror(error));
-		return error;
-	}
-
-	return 0;
-}
-
-static void
-log_disable_syslog(void)
-{
-	if (op_config.syslog_enabled || val_config.syslog_enabled) {
-		closelog();
-		op_config.syslog_enabled = false;
-		val_config.syslog_enabled = false;
-	}
-}
-
-void
-log_start(void)
-{
-	if (config_get_val_log_enabled()) {
-		switch (config_get_val_log_output()) {
-		case SYSLOG:
-			val_config.fprintf_enabled = false;
-			break;
-		case CONSOLE:
-			val_config.syslog_enabled = false;
-			break;
-		}
-	} else {
-		val_config.fprintf_enabled = false;
-		val_config.syslog_enabled = false;
-	}
-
-	if (config_get_op_log_enabled()) {
-		switch (config_get_op_log_output()) {
-		case SYSLOG:
-			op_config.fprintf_enabled = false;
-			break;
-		case CONSOLE:
-			if (val_config.syslog_enabled)
-				op_config.syslog_enabled = false;
-			else
-				log_disable_syslog();
-			break;
-		}
-	} else {
-		op_config.fprintf_enabled = false;
-		if (val_config.syslog_enabled)
-			op_config.syslog_enabled = false;
-		else
-			log_disable_syslog();
-	}
-
-	op_config.level = config_get_op_log_level();
-	op_config.print_times = config_get_op_print_times();
-	op_config.tag = config_get_op_log_tag();
-	op_config.color = config_get_op_log_color_output();
-	op_config.facility = config_get_op_log_facility();
-	op_config.rm_filepath = config_get_op_log_file_format() == FNF_NAME;
-	val_config.level = config_get_val_log_level();
-	val_config.print_times = config_get_val_print_times();
-	val_config.tag = config_get_val_log_tag();
-	val_config.color = config_get_val_log_color_output();
-	val_config.facility = config_get_val_log_facility();
-	val_config.rm_filepath = config_get_val_log_file_format() == FNF_NAME;
-}
-
-void
-log_teardown(void)
-{
-	log_disable_syslog();
-	pthread_mutex_destroy(&logck);
-}
-
-static struct level const *
-level2struct(int level)
-{
-	switch (level) {
-	case LOG_CRIT:
-		return &CRT;
-	case LOG_ERR:
-		return &ERR;
-	case LOG_WARNING:
-		return &WRN;
-	case LOG_INFO:
-		return &INF;
-	case LOG_DEBUG:
-		return &DBG;
-	}
-
-	return &UNK;
-}
-
-static void
-lock_mutex(void)
-{
-	int error;
-
-	error = pthread_mutex_lock(&logck);
-	if (error) {
-		/*
-		 * Despite being supposed to be impossible, failing to lock the
-		 * mutex is not fatal; it just means we might log some mixed
-		 * messages, which is better than dying.
-		 *
-		 * Furthermore, this might have been called while logging
-		 * another critical. We must absolutely not get in the way of
-		 * that critical's print.
-		 */
-		print_stack_trace(strerror(error));
+		pr_wrn("Cannot initialize logging mutex: %s. "
+		    "Logs might overlap sometimes.", strerror(error));
+		free(lgr->lock);
+		lgr->lock = NULL;
 	}
 }
 
 static void
-unlock_mutex(void)
-{
-	int error;
-
-	error = pthread_mutex_unlock(&logck);
-	if (error)
-		print_stack_trace(strerror(error)); /* Same as above. */
-}
-
-static void
-print_time(struct level const *lvl)
+get_time(char *buf /* Must length 16 */)
 {
 	time_t now;
 	struct tm components;
-	char str[16];
 
 	now = time(NULL);
 	if (now == ((time_t) -1))
 		return;
 	if (localtime_r(&now, &components) == NULL)
 		return;
-	if (strftime(str, sizeof(str), "%m-%d %H:%M:%S", &components) == 0)
-		return;
-
-	fprintf(lvl->stream, "%s ", str);
+	if (strftime(buf, sizeof(buf), "%m-%d %H:%M:%S ", &components) == 0)
+		buf[0] = 0;
 }
 
 static void
-__vfprintf(int level, struct log_config *cfg, char const *format, va_list args)
+stream_print(FILE *out, struct logger *lgr, struct level *lvl,
+    char const *fmt, va_list vl)
 {
-	struct level const *lvl;
-	char const *file_name;
+	char time[16];
 
-	lvl = level2struct(level);
+	time[0] = 0;
+	if (lgr->print_times)
+		get_time(time);
 
-	lock_mutex();
+	if (lgr->lock)
+		pthread_mutex_lock(lgr->lock);
 
-	if (cfg->color)
-		fprintf(lvl->stream, "%s", lvl->color);
+	fprintf(out, "%s%s%s: ", lgr->color ? lvl->color : "", time, lvl->tag);
+	vfprintf(out, fmt, vl);
+	fprintf(out, "%s\n", lgr->color ? lvl->rst : "");
 
-	if (cfg->print_times)
-		print_time(lvl);
+	if (lgr->lock)
+		pthread_mutex_unlock(lgr->lock);
+}
 
-	fprintf(lvl->stream, "%s", lvl->label);
-	if (cfg->tag)
-		fprintf(lvl->stream, " [%s]", cfg->tag);
-	fprintf(lvl->stream, ": ");
+static void
+console_cb(struct logger *lgr, struct level *lvl, char const *fmt, va_list vl)
+{
+	FILE *stream;
 
-	file_name = fnstack_peek();
-	if (file_name != NULL) {
-		if (cfg->rm_filepath)
-			file_name = path_filename(file_name);
-		fprintf(lvl->stream, "%s: ", file_name);
+	stream = (lvl->id <= LOG_ERR) ? stderr : stdout;
+	stream_print(stream, lgr, lvl, fmt, vl);
+	fflush(stream);
+}
+
+static void
+file_cb(struct logger *lgr, struct level *lvl, char const *fmt, va_list vl)
+{
+	stream_print(lgr->stream, lgr, lvl, fmt, vl);
+}
+
+static void
+syslog_cb(struct logger *lgr, struct level *lvl, char const *fmt, va_list vl)
+{
+	vsyslog(lvl->id | lgr->facility, fmt, vl);
+}
+
+void
+log_setup(void)
+{
+	static struct logger init_node = { 0 };
+
+	init_node.cb = console_cb;
+	init_node.lvl = &INF;
+
+	SLIST_INSERT_HEAD(&listeners, &init_node, lh);
+}
+
+static int
+add_listener(struct loggers *list, struct log_listener *new)
+{
+	struct logger *node;
+
+	node = pzalloc(sizeof(struct logger));
+	node->free = true;
+
+	if (strcmp(new->level, ERR.name) == 0)
+		node->lvl = &ERR;
+	else if (strcmp(new->level, WRN.name) == 0)
+		node->lvl = &WRN;
+	else if (strcmp(new->level, INF.name) == 0)
+		node->lvl = &INF;
+	else if (strcmp(new->level, TRC.name) == 0)
+		node->lvl = &TRC;
+	else {
+		free(node);
+		return pr_err("Unknown log level: %s", new->level);
 	}
 
-	vfprintf(lvl->stream, format, args);
-
-	if (cfg->color)
-		fprintf(lvl->stream, PR_COLOR_RST);
-	fprintf(lvl->stream, "\n");
-
-	/* Force flush */
-	if (lvl->stream == stdout)
-		fflush(lvl->stream);
-
-	unlock_mutex();
-}
-
-/*
- * TODO (fine) Optimize. Notice the buffer is static, which seems to be the
- * reason why it's (probably ill-advisedly) mutexing.
- */
-#define MSG_LEN 512
-
-static void
-__syslog(int level, struct log_config *cfg, const char *format, va_list args)
-{
-	static char msg[MSG_LEN];
-	char const *file;
-	int res;
-
-	level |= cfg->facility;
-	file = fnstack_peek();
-	if (file && cfg->rm_filepath)
-		file = path_filename(file);
-
-	lock_mutex();
-
-	/* Can't use vsyslog(); it's not portable. */
-	res = vsnprintf(msg, MSG_LEN, format, args);
-	if (res < 0)
-		goto end;
-	if (res >= MSG_LEN)
-		msg[MSG_LEN - 1] = '\0';
-
-	if (file != NULL) {
-		if (cfg->tag != NULL)
-			syslog(level, "[%s] %s: %s", cfg->tag, file, msg);
-		else
-			syslog(level, "%s: %s", file, msg);
+	if (strcmp(new->type, "console") == 0) {
+		node->cb = console_cb;
+		node->print_times = new->print_times;
+		node->color = new->color;
+		init_mutex(node);
+	} else if (strcmp(new->type, "file") == 0) {
+		node->cb = file_cb;
+		node->stream = fopen(new->filename, "a");
+		node->print_times = new->print_times;
+		node->color = new->color;
+		init_mutex(node);
+	} else if (strcmp(new->type, "syslog") == 0) {
+		node->cb = syslog_cb;
+		node->facility = new->facility;
 	} else {
-		if (cfg->tag != NULL)
-			syslog(level, "[%s] %s", cfg->tag, msg);
-		else
-			syslog(level, "%s", msg);
+		free(node);
+		return pr_err("Unknown log type: %s", new->type);
 	}
 
-end:	unlock_mutex();
+	SLIST_INSERT_HEAD(list, node, lh);
+	return 0;
 }
 
-#define PR_SIMPLE(lvl, config)						\
-	do {								\
-		va_list args;						\
-									\
-		if (lvl > config.level)					\
-			break;						\
-									\
-		if (config.syslog_enabled) {				\
-			va_start(args, format);				\
-			__syslog(lvl, &config, format, args);		\
-			va_end(args);					\
-		}							\
-									\
-		if (config.fprintf_enabled) {				\
-			va_start(args, format);				\
-			__vfprintf(lvl, &config, format, args);		\
-			va_end(args);					\
-		}							\
-	} while (0)
-
-void
-pr_trc(const char *format, ...)
+static void
+clear_loggers(struct loggers *list)
 {
-	PR_SIMPLE(LOG_DEBUG, op_config);
+	struct logger *lgr;
+
+	while ((lgr = SLIST_FIRST(list)) != NULL) {
+		if (lgr->stream)
+			fclose(lgr->stream);
+		if (lgr->lock) {
+			pthread_mutex_destroy(lgr->lock);
+			free(lgr->lock);
+		}
+
+		SLIST_REMOVE_HEAD(list, lh);
+		if (lgr->free)
+			free(lgr);
+	}
 }
 
-void
-pr_inf(const char *format, ...)
-{
-	PR_SIMPLE(LOG_INFO, op_config);
-}
-
-/**
- * Always returs 0. (So you can interrupt whatever you're doing without failing
- * validation.)
- */
 int
-pr_wrn(const char *format, ...)
+log_init(struct log_listeners *descriptors)
 {
-	PR_SIMPLE(LOG_WARNING, op_config);
+	struct loggers newlist;
+	struct log_listener *descriptor;
+	int error;
+
+	SLIST_INIT(&newlist);
+	TAILQ_FOREACH(descriptor, descriptors, lh) {
+		error = add_listener(&newlist, descriptor);
+		if (error) {
+			clear_loggers(&newlist);
+			return error;
+		}
+	}
+
+	clear_loggers(&listeners);
+	listeners = newlist;
+	return 0;
+}
+
+void
+log_teardown(void)
+{
+	clear_loggers(&listeners);
+}
+
+#ifdef PR_CLUTTER_ENABLED
+
+void
+pr_clutter(const char *fmt, ...)
+{
+	struct logger *lgr;
+	va_list args;
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (LOG_DEBUG <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, &CLT, fmt, args);
+			va_end(args);
+		}
+	}
+}
+
+#endif
+
+void
+pr_trc(const char *fmt, ...)
+{
+	struct logger *lgr;
+	va_list args;
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (LOG_DEBUG <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, &TRC, fmt, args);
+			va_end(args);
+		}
+	}
+}
+
+void
+pr_inf(const char *fmt, ...)
+{
+	struct logger *lgr;
+	va_list args;
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (LOG_INFO <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, &INF, fmt, args);
+			va_end(args);
+		}
+	}
+}
+
+int
+pr_wrn(const char *fmt, ...)
+{
+	struct level *lvl = &WRN;
+	struct logger *lgr;
+	va_list args;
+
+	if (report_enabled()) {
+		va_start(args, fmt);
+		report(lvl->tag, fmt, args);
+		va_end(args);
+		lvl = &TRC;
+	}
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (lvl->id <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, lvl, fmt, args);
+			va_end(args);
+		}
+	}
+
 	return 0;
 }
 
 int
-pr_err(const char *format, ...)
+pr_err(const char *fmt, ...)
 {
-	PR_SIMPLE(LOG_ERR, op_config);
+	struct level *lvl = &ERR;
+	struct logger *lgr;
+	va_list args;
+
+	if (report_enabled()) {
+		va_start(args, fmt);
+		report(lvl->tag, fmt, args);
+		va_end(args);
+		lvl = &TRC;
+	}
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (lvl->id <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, lvl, fmt, args);
+			va_end(args);
+		}
+	}
+
 	return EINVAL;
 }
-
-int
-pr_crit(const char *format, ...)
-{
-	PR_SIMPLE(LOG_ERR, op_config);
-	lock_mutex();
-	print_stack_trace(NULL);
-	unlock_mutex();
-	return EINVAL;
-}
-
-struct crypto_cb_arg {
-	unsigned int stack_size;
-	int (*error_fn)(const char *, ...);
-};
 
 static int
-log_crypto_error(const char *str, size_t len, void *_arg)
+log_crypto_error(const char *str, size_t len, void *_stack_size)
 {
-	struct crypto_cb_arg *arg = _arg;
-	arg->error_fn("-> %s", str);
-	arg->stack_size++;
+	unsigned int *stack_size = _stack_size;
+	pr_err("-> %s", str);
+	(*stack_size)++;
 	return 1;
 }
 
-static int
-crypto_err(struct log_config *cfg, int (*error_fn)(const char *, ...))
-{
-	struct crypto_cb_arg arg;
-
-	error_fn("libcrypto error stack:");
-
-	arg.stack_size = 0;
-	arg.error_fn = error_fn;
-	ERR_print_errors_cb(log_crypto_error, &arg);
-	if (arg.stack_size == 0)
-		error_fn("   <Empty>");
-	else
-		error_fn("End of libcrypto stack.");
-
-	return EINVAL;
-}
-
 /**
- * This is like pr_err() and pr_errno(), except meant to log an error made
- * during a libcrypto routine.
+ * This is like pr_err(), except meant to log an error made during a libcrypto
+ * routine.
  *
  * This differs from usual printf-like functions:
  *
  * - It returns EINVAL, not bytes written.
  * - It prints a newline.
  * - Also prints the cryptolib's error message stack.
- *
- * Always appends a newline at the end.
  */
 int
-pr_crypto_err(const char *format, ...)
+pr_crypto_err(const char *fmt, ...)
 {
-	PR_SIMPLE(LOG_ERR, op_config);
-	return crypto_err(&op_config, pr_err);
+	struct level *lvl = &ERR;
+	struct logger *lgr;
+	va_list args;
+	unsigned int stack_size;
+
+	if (report_enabled()) {
+		va_start(args, fmt);
+		report(lvl->tag, fmt, args);
+		va_end(args);
+		lvl = &TRC;
+	}
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (lvl->id <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, lvl, fmt, args);
+			va_end(args);
+		}
+	}
+
+	pr_err("libcrypto error stack:");
+	stack_size = 0;
+	ERR_print_errors_cb(log_crypto_error, &stack_size);
+	if (stack_size == 0)
+		pr_err("   <Empty>");
+	else
+		pr_err("End of libcrypto stack.");
+
+	return EINVAL;
+}
+
+int
+pr_crit(const char *fmt, ...)
+{
+	struct logger *lgr;
+	va_list args;
+
+#ifdef BACKTRACE_ENABLED
+	void *array[STACK_SIZE];
+	size_t size;
+	char **strings;
+
+	size = backtrace(array, STACK_SIZE);
+	strings = backtrace_symbols(array, size);
+#endif
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (CRT.id <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, &CRT, fmt, args);
+			va_end(args);
+
+#ifdef BACKTRACE_ENABLED
+			__pr_stack_trace(lgr, &CRT, NULL, size, strings);
+#endif
+		}
+	}
+
+#ifdef BACKTRACE_ENABLED
+	free(strings);
+#endif
+
+	return EINVAL;
+}
+
+__dead void
+pr_panic(const char *fmt, ...)
+{
+	struct logger *lgr;
+	va_list args;
+
+#ifdef BACKTRACE_ENABLED
+	void *array[STACK_SIZE];
+	size_t size;
+	char **strings;
+
+	size = backtrace(array, STACK_SIZE);
+	strings = backtrace_symbols(array, size);
+#endif
+
+	SLIST_FOREACH(lgr, &listeners, lh) {
+		if (LOG_CRIT <= lgr->lvl->id) {
+			va_start(args, fmt);
+			lgr->cb(lgr, &PNC, fmt, args);
+			va_end(args);
+
+#ifdef BACKTRACE_ENABLED
+			__pr_stack_trace(lgr, &PNC, NULL, size, strings);
+#endif
+		}
+	}
+
+#ifdef BACKTRACE_ENABLED
+	free(strings);
+#endif
+
+	exit(-1);
 }
 
 __dead void
 enomem_panic(void)
 {
-	static char const *ENOMEM_MSG = "Out of memory.\n";
-	ssize_t garbage;
+	struct logger *lgr;
 
-	/*
-	 * I'm not using PR_SIMPLE and friends, because those allocate.
-	 * We want to minimize allocations after a memory allocation failure.
-	 */
+	SLIST_FOREACH(lgr, &listeners, lh)
+		if (LOG_CRIT <= lgr->lvl->id)
+			vcb(lgr, &CRT, "Out of memory");
 
-	if (LOG_ERR > op_config.level)
-		goto done;
-
-	if (op_config.fprintf_enabled) {
-		lock_mutex();
-		/*
-		 * write() is AS-Safe, which implies it doesn't allocate,
-		 * unlike printf().
-		 *
-		 * "garbage" prevents write()'s warn_unused_result (compiler
-		 * warning).
-		 */
-		garbage = write(STDERR_FILENO, ENOMEM_MSG, strlen(ENOMEM_MSG));
-		unlock_mutex();
-		/* Prevents "set but not used" warning. */
-		garbage += garbage;
-	}
-
-	if (op_config.syslog_enabled) {
-		lock_mutex();
-		/* This allocates, but I don't think I have more options. */
-		syslog(LOG_ERR | op_config.facility, "Out of memory.");
-		unlock_mutex();
-	}
-
-done:	exit(ENOMEM);
-}
-
-__dead void
-pr_panic(const char *format, ...)
-{
-	PR_SIMPLE(LOG_ERR, op_config);
-	print_stack_trace(NULL);
-	exit(-1);
+	exit(ENOMEM);
 }

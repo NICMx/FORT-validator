@@ -10,7 +10,6 @@
 #include <sys/types.h>
 
 #include "config/file_type.h"
-#include "config/filename_format.h"
 #include "config/log_conf.h"
 #include "config/mode.h"
 #include "config/output_format.h"
@@ -66,20 +65,11 @@ bool config_get_op_log_enabled(void);
 bool config_get_op_print_times(void);
 char const * config_get_op_log_tag(void);
 bool config_get_op_log_color_output(void);
-enum filename_format config_get_op_log_file_format(void);
 uint8_t config_get_op_log_level(void);
 enum log_output config_get_op_log_output(void);
 uint32_t config_get_op_log_facility(void);
 
-bool config_get_val_log_enabled(void);
-bool config_get_val_print_times(void);
-char const * config_get_val_log_tag(void);
-bool config_get_val_log_color_output(void);
-enum filename_format config_get_val_log_file_format(void);
-char const *logv_filename(char const *);
-uint8_t config_get_val_log_level(void);
-enum log_output config_get_val_log_output(void);
-uint32_t config_get_val_log_facility(void);
+char *config_get_report(void);
 
 /* Public, so --work-offline can override them. */
 void config_set_rsync_enabled(bool);

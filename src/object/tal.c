@@ -7,6 +7,7 @@
 #include "file.h"
 #include "log.h"
 #include "object/certificate.h"
+#include "report.h"
 #include "task.h"
 #include "thread_var.h"
 #include "types/path.h"
@@ -283,10 +284,13 @@ perform_standalone_validation(void)
 	error = cache_prepare();
 	if (error)
 		return error;
-	fnstack_init();
-	task_start();
 
+	task_start();
 	error = foreach_file(config_get_tal(), ".tal", true, queue_tal, NULL);
+	if (error)
+		goto end;
+
+	error = report_enable();
 	if (error)
 		goto end;
 
@@ -309,6 +313,8 @@ perform_standalone_validation(void)
 			pr_panic("pthread_join(%zu) failed: %s",
 			    t, strerror(error));
 	}
+
+	report_disable();
 
 //	// FIXME
 //	stats_set_tal_vrps(thread->tal_file, "ipv4",

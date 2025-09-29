@@ -127,7 +127,7 @@ fnstack_push(char const *file)
 void
 fnstack_push_map(struct cache_mapping const *map)
 {
-	fnstack_push(map_val_get_printable(map));
+	fnstack_push(uri_str(&map->url));
 }
 
 /* Returns the file name on the top of the file name stack. */

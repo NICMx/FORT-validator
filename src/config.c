@@ -156,8 +156,6 @@ struct rpki_config {
 		char *tag;
 		/** Print ANSI color codes? */
 		bool color;
-		/** Format in which file names will be printed. */
-		enum filename_format filename_format;
 		/* Log level */
 		uint8_t level;
 		/* Log output */
@@ -167,22 +165,8 @@ struct rpki_config {
 	} log;
 
 	struct {
-		/** Enables validation Logs **/
-		bool enabled;
-		bool print_times;
-		/** String tag to identify validation logs **/
-		char *tag;
-		/** Print ANSI color codes? */
-		bool color;
-		/** Format in which file names will be printed. */
-		enum filename_format filename_format;
-		/* Log level */
-		uint8_t level;
-		/* Log output */
-		enum log_output output;
-		/** facilities for syslog if output is syslog **/
-		uint32_t facility;
-	} validation_log;
+		char *path;
+	} report;
 
 	struct {
 		/** File where the validated ROAs will be stored */
@@ -680,12 +664,6 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, log.facility),
 		.doc = "Facility for syslog if output is syslog",
 	}, {
-		.id = 4005,
-		.name = "log.file-name-format",
-		.type = &gt_filename_format,
-		.offset = offsetof(struct rpki_config, log.filename_format),
-		.doc = "File name variant to print during debug/error messages",
-	}, {
 		.id = 'c',
 		.name = "log.color-output",
 		.type = &gt_bool,
@@ -695,55 +673,9 @@ static const struct option_field options[] = {
 
 	{
 		.id = 4010,
-		.name = "validation-log.enabled",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, validation_log.enabled),
-		.doc = "Enables validation logs",
-	}, {
-		.id = 4011,
-		.name = "validation-log.output",
-		.type = &gt_log_output,
-		.offset = offsetof(struct rpki_config, validation_log.output),
-		.doc = "Output where validation log messages will be printed",
-	}, {
-		.id = 4012,
-		.name = "validation-log.level",
-		.type = &gt_log_level,
-		.offset = offsetof(struct rpki_config, validation_log.level),
-		.doc = "Log level to print message of equal or higher importance",
-	}, {
-		.id = 4017,
-		.name = "validation-log.print-times",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, validation_log.print_times),
-		.doc = "(Console output only)",
-	}, {
-		.id = 4013,
-		.name = "validation-log.tag",
+		.name = "report.path",
 		.type = &gt_string,
-		.offset = offsetof(struct rpki_config, validation_log.tag),
-		.doc = "Text tag to identify validation logs",
-		.arg_doc = "<string>",
-		.json_null_allowed = true,
-	}, {
-		.id = 4014,
-		.name = "validation-log.facility",
-		.type = &gt_log_facility,
-		.offset = offsetof(struct rpki_config, validation_log.facility),
-		.doc = "Facility for syslog if output is syslog",
-	}, {
-		.id = 4015,
-		.name = "validation-log.file-name-format",
-		.type = &gt_filename_format,
-		.offset = offsetof(struct rpki_config,
-		    validation_log.filename_format),
-		.doc = "File name variant to print during debug/error messages",
-	}, {
-		.id = 4016,
-		.name = "validation-log.color-output",
-		.type = &gt_bool,
-		.offset = offsetof(struct rpki_config, validation_log.color),
-		.doc = "Print ANSI color codes",
+		.offset = offsetof(struct rpki_config, report.path),
 	},
 
 	/* Incidences */
@@ -852,10 +784,9 @@ static const struct option_field options[] = {
 	{ 0 },
 };
 
-/**
+/*
  * Returns true if @field is the descriptor of one of the members of the
  * struct rpki_config structure, false otherwise.
- * (Alternatively: Returns true if @field->offset is valid, false otherwise.)
  */
 static bool
 is_rpki_config_field(struct option_field const *field)
@@ -1042,18 +973,11 @@ set_default_values(void)
 	rpki_config.log.enabled = true;
 	rpki_config.log.tag = NULL;
 	rpki_config.log.color = false;
-	rpki_config.log.filename_format = FNF_GLOBAL;
 	rpki_config.log.level = LOG_WARNING;
 	rpki_config.log.output = CONSOLE;
 	rpki_config.log.facility = LOG_DAEMON;
 
-	rpki_config.validation_log.enabled = false;
-	rpki_config.validation_log.tag = pstrdup("Validation");
-	rpki_config.validation_log.color = false;
-	rpki_config.validation_log.filename_format = FNF_GLOBAL;
-	rpki_config.validation_log.level = LOG_WARNING;
-	rpki_config.validation_log.output = CONSOLE;
-	rpki_config.validation_log.facility = LOG_DAEMON;
+	rpki_config.report.path = NULL;
 
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
@@ -1171,23 +1095,70 @@ handle_opt(int opt)
 	return ESRCH;
 }
 
-static int
-become_absolute_path(char **_path)
+static void
+become_absolute_path(char *cwd, char **_path)
 {
-	char *relative = *_path;
-	char *absolute;
+	char *relative, *absolute;
 
-	if (relative == NULL)
-		return 0;
+	relative = *_path;
+	if (relative != NULL) {
+		absolute = path_join(cwd, relative);
+		free(relative);
+		*_path = absolute;
+	}
+}
 
-	absolute = realpath(relative, NULL);
-	if (!absolute)
-		return pr_err("Cannot resolve the absolute path of %s: %s",
-		    relative, strerror(errno));
+static int
+become_absolute_paths(void)
+{
+	char *buf, *cwd;
+	int error;
 
-	free(relative);
-	*_path = absolute;
+	buf = pmalloc(1024);
+
+	cwd = getcwd(buf, 1024);
+	if (!cwd) {
+		error = errno;
+		pr_err("Cannot get the current directory: %s", strerror(error));
+		free(buf);
+		return error;
+	}
+
+	become_absolute_path(cwd, &rpki_config.tal);
+	become_absolute_path(cwd, &rpki_config.report.path);
+	become_absolute_path(cwd, &rpki_config.slurm);
+	become_absolute_path(cwd, &rpki_config.http.ca_path);
+
+	free(buf);
 	return 0;
+}
+
+static void
+set_logger_syslog(void)
+{
+	struct log_listeners list = TAILQ_HEAD_INITIALIZER(list);
+	struct log_listener node = { 0 };
+
+	node.type = "syslog";
+	node.level = "info";
+	node.facility = LOG_DAEMON;
+
+	TAILQ_INSERT_TAIL(&list, &node, lh);
+	log_init(&list);
+}
+
+static void
+set_logger_console(void)
+{
+	struct log_listeners list = TAILQ_HEAD_INITIALIZER(list);
+	struct log_listener node = { 0 };
+
+	node.type = "console";
+	node.level = "info";
+	node.color = true;
+
+	TAILQ_INSERT_TAIL(&list, &node, lh);
+	log_init(&list);
 }
 
 int
@@ -1219,13 +1190,7 @@ handle_flags_config(int argc, char **argv)
 	if (error)
 		goto end;
 
-	error = become_absolute_path(&rpki_config.tal);
-	if (error)
-		goto end;
-	error = become_absolute_path(&rpki_config.slurm);
-	if (error)
-		goto end;
-	error = become_absolute_path(&rpki_config.http.ca_path);
+	error = become_absolute_paths();
 	if (error)
 		goto end;
 
@@ -1242,14 +1207,12 @@ handle_flags_config(int argc, char **argv)
 
 	if (rpki_config.daemon) {
 		pr_inf("Executing as daemon, all logs will be sent to syslog.");
-		/* Send all logs to syslog */
-		rpki_config.log.output = SYSLOG;
-		rpki_config.validation_log.output = SYSLOG;
-		error = daemonize(log_start);
-		goto end;
+		set_logger_syslog(); /* XXX hardcoded */
+		error = daemonize();
+	} else {
+		set_logger_console(); /* XXX hardcoded */
 	}
 
-	log_start();
 end:
 	if (error) {
 		free_rpki_config();
@@ -1261,7 +1224,6 @@ end:
 	free(long_opts);
 	free(short_opts);
 	return error;
-
 }
 
 struct option_field const *
@@ -1385,12 +1347,6 @@ config_get_op_log_color_output(void)
 	return rpki_config.log.color;
 }
 
-enum filename_format
-config_get_op_log_file_format(void)
-{
-	return rpki_config.log.filename_format;
-}
-
 uint8_t
 config_get_op_log_level(void)
 {
@@ -1409,60 +1365,10 @@ config_get_op_log_facility(void)
 	return rpki_config.log.facility;
 }
 
-bool
-config_get_val_log_enabled(void)
+char *
+config_get_report(void)
 {
-	return rpki_config.validation_log.enabled;
-}
-
-bool
-config_get_val_print_times(void)
-{
-	return rpki_config.validation_log.print_times;
-}
-
-char const *
-config_get_val_log_tag(void)
-{
-	return rpki_config.validation_log.tag;
-}
-
-bool
-config_get_val_log_color_output(void)
-{
-	return rpki_config.validation_log.color;
-}
-
-enum filename_format
-config_get_val_log_file_format(void)
-{
-	return rpki_config.validation_log.filename_format;
-}
-
-char const *
-logv_filename(char const *path)
-{
-	return (rpki_config.validation_log.filename_format == FNF_NAME)
-	     ? path_filename(path)
-	     : path;
-}
-
-uint8_t
-config_get_val_log_level(void)
-{
-	return rpki_config.validation_log.level;
-}
-
-enum log_output
-config_get_val_log_output(void)
-{
-	return rpki_config.validation_log.output;
-}
-
-uint32_t
-config_get_val_log_facility(void)
-{
-	return rpki_config.validation_log.facility;
+	return rpki_config.report.path;
 }
 
 bool

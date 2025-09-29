@@ -121,9 +121,7 @@ main(int argc, char **argv)
 	/* Initializations */
 	/* (Do not start any threads until after rsync_setup() has forked.) */
 
-	error = log_setup();
-	if (error)
-		goto just_quit;
+	log_setup();
 	error = handle_flags_config(argc, argv);
 	if (error)
 		goto revert_log;
@@ -206,6 +204,5 @@ revert_config:
 	free_rpki_config();
 revert_log:
 	log_teardown();
-just_quit:
 	return convert_to_result(error);
 }

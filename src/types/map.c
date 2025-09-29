@@ -1,37 +1,5 @@
 #include "types/map.h"
 
-#include "config.h"
-#include "log.h"
-#include "types/path.h"
-
-static char const *
-map_get_printable(struct cache_mapping const *map, enum filename_format format)
-{
-	switch (format) {
-	case FNF_GLOBAL:
-		return uri_str(&map->url);
-	case FNF_LOCAL:
-		return map->path;
-	case FNF_NAME:
-		return path_filename(uri_str(&map->url));
-	}
-
-	pr_panic("Unknown file name format: %u", format);
-	return NULL;
-}
-
-char const *
-map_val_get_printable(struct cache_mapping const *map)
-{
-	return map_get_printable(map, config_get_val_log_file_format());
-}
-
-char const *
-map_op_get_printable(struct cache_mapping const *map)
-{
-	return map_get_printable(map, config_get_op_log_file_format());
-}
-
 void
 map_copy(struct cache_mapping *dst, struct cache_mapping const *src)
 {

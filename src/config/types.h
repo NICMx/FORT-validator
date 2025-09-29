@@ -92,7 +92,7 @@ struct global_type {
 	int has_arg;
 	/**
 	 * Number of bytes this data type uses in the rpki_config structure.
-	 * Optional. Defaults to zero, obviously.
+	 * Optional; Defaults to zero.
 	 */
 	size_t size;
 

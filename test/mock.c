@@ -77,29 +77,23 @@ log_crypto_error(const char *str, size_t len, void *_arg)
 	return 1;
 }
 
-static int
-crypto_err(int (*error_fn)(const char *, ...))
-{
-	struct crypto_cb_arg arg;
-
-	error_fn("libcrypto error stack:");
-
-	arg.stack_size = 0;
-	arg.error_fn = error_fn;
-	ERR_print_errors_cb(log_crypto_error, &arg);
-	if (arg.stack_size == 0)
-		error_fn("   <Empty>");
-	else
-		error_fn("End of libcrypto stack.");
-
-	return EINVAL;
-}
-
 int
 pr_crypto_err(const char *format, ...)
 {
+	struct crypto_cb_arg arg;
+
 	MOCK_PRINT(PR_COLOR_ERR);
-	return crypto_err(pr_err);
+
+	pr_err("libcrypto error stack:");
+	arg.stack_size = 0;
+	arg.error_fn = pr_err;
+	ERR_print_errors_cb(log_crypto_error, &arg);
+	if (arg.stack_size == 0)
+		pr_err("   <Empty>");
+	else
+		pr_err("End of libcrypto stack.");
+
+	return EINVAL;
 }
 
 void
@@ -164,7 +158,6 @@ MOCK_VOID(free_rpki_config, void)
 
 MOCK_VOID(fnstack_init, void)
 MOCK_VOID(fnstack_push, char const *file)
-MOCK_VOID(fnstack_push_map, struct cache_mapping const *map)
 MOCK_VOID(fnstack_pop, void)
 MOCK_VOID(fnstack_cleanup, void)
 

@@ -14,16 +14,13 @@
 #include "log.h"
 
 /*
- * Daemonize fort execution. The function "daemon()" from unistd header isn't
- * utilized since isn't standardized (too bad).
- *
- * The logs must be sent to syslog before this call, the @log_cb is called to
- * initialize logging after the first fork() call.
+ * Daemonize fort execution. "daemon()" from unistd.h isn't used since it's not
+ * portable.
  *
  * This function exits on any error once the first fork is successfully done.
  */
 int
-daemonize(daemon_log_cb log_cb)
+daemonize(void)
 {
 	char *pwd;
 	pid_t pid;
@@ -55,9 +52,6 @@ daemonize(daemon_log_cb log_cb)
 	if (pid > 0)
 		exit(0);
 
-	/* Activate logs */
-	log_cb();
-
 	/* Child goes on from here */
 	if (setsid() < 0) {
 		error = errno;
@@ -74,7 +68,7 @@ daemonize(daemon_log_cb log_cb)
 	 */
 	signal(SIGHUP, SIG_IGN);
 
-	/* Assure this is not a session leader */
+	/* Ensure this is not a session leader */
 	pid = fork();
 	if (pid < 0) {
 		error = errno;
@@ -99,7 +93,7 @@ daemonize(daemon_log_cb log_cb)
 
 	if (chdir(pwd) < 0) {
 		error = errno;
-		pr_err("Couldn't chdir() of daemon, ending execution: %s",
+		pr_err("Couldn't chdir() daemon, ending execution: %s",
 		    strerror(error));
 		exit(error);
 	}

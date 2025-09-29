@@ -10,9 +10,6 @@ struct cache_mapping {
 	char *path;
 };
 
-char const *map_val_get_printable(struct cache_mapping const *);
-char const *map_op_get_printable(struct cache_mapping const *);
-
 void map_copy(struct cache_mapping *, struct cache_mapping const *);
 void map_cleanup(struct cache_mapping *);
 

@@ -935,6 +935,9 @@ pr_clutter_x509_dates(X509 *x509)
 {
 	char *nb, *na;
 
+	if (!pr_clutter_enabled())
+		return;
+
 	nb = asn1time2str(X509_get0_notBefore(x509));
 	na = asn1time2str(X509_get0_notAfter(x509));
 
@@ -1023,8 +1026,7 @@ validate_chain(struct rpki_certificate *cert)
 	}
 	X509_STORE_CTX_set0_crls(ctx, crls);
 
-	if (pr_clutter_enabled())
-		pr_clutter_x509_dates(cert->x509);
+	pr_clutter_x509_dates(cert->x509);
 
 	/*
 	 * HERE'S THE MEAT OF LIBCRYPTO'S VALIDATION.
