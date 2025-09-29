@@ -90,6 +90,13 @@ task_start(void)
 	enabled = true;
 }
 
+static void
+__wakeup(void)
+{
+	panic_on_fail(pthread_cond_broadcast(&awakener),
+	    "pthread_cond_broadcast");
+}
+
 /* Returns true if the module had already been stopped. */
 bool
 task_stop(void)
@@ -99,6 +106,7 @@ task_stop(void)
 	mutex_lock(&lock);
 	result = !enabled;
 	cleanup();
+	__wakeup();
 	mutex_unlock(&lock);
 
 	return result;
@@ -188,8 +196,7 @@ void
 task_wakeup(void)
 {
 	mutex_lock(&lock);
-	panic_on_fail(pthread_cond_broadcast(&awakener),
-	    "pthread_cond_broadcast");
+	__wakeup();
 	mutex_unlock(&lock);
 }
 
@@ -199,8 +206,7 @@ task_wakeup_dormants(void)
 {
 	mutex_lock(&lock);
 	STAILQ_CONCAT(&waiting, &dormant);
-	panic_on_fail(pthread_cond_broadcast(&awakener),
-	    "pthread_cond_broadcast");
+	__wakeup();
 	mutex_unlock(&lock);
 }
 

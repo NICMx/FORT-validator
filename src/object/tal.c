@@ -265,6 +265,7 @@ pick_up_work(void *arg)
 				task = NULL;
 			} else if (vv == VV_FAIL) {
 				task_stop();
+				task_wakeup();
 			}
 			break;
 		}
