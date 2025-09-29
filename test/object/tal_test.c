@@ -54,15 +54,15 @@ check_spki(struct tal *tal)
 static void
 test_1url(char const *file)
 {
-	struct tal tal;
+	struct tal *tal = tal_create(file);
 
-	ck_assert_int_eq(0, tal_init(&tal, file));
+	ck_assert_ptr_ne(NULL, tal);
 
-	ck_assert_uint_eq(1, tal.urls.len);
-	ck_assert_uri("rsync://example.com/rpki/ta.cer", &tal.urls.array[0]);
-	check_spki(&tal);
+	ck_assert_uint_eq(1, tal->urls.len);
+	ck_assert_uri("rsync://example.com/rpki/ta.cer", &tal->urls.array[0]);
+	check_spki(tal);
 
-	tal_cleanup(&tal);
+	tal_cleanup(tal);
 }
 
 START_TEST(test_tal_load_1url)
@@ -75,19 +75,19 @@ END_TEST
 static void
 test_4urls(char const *file)
 {
-	struct tal tal;
+	struct tal *tal = tal_create(file);
 
-	ck_assert_int_eq(0, tal_init(&tal, file));
+	ck_assert_ptr_ne(NULL, tal);
 
-	ck_assert_uint_eq(4, tal.urls.len);
-	ck_assert_uri("rsync://example.com/rpki/ta.cer", &tal.urls.array[0]);
-	ck_assert_uri("https://example.com/rpki/ta.cer", &tal.urls.array[1]);
-	ck_assert_uri("rsync://www.example.com/potato/ta.cer", &tal.urls.array[2]);
-	ck_assert_uri("https://wx3.example.com/tomato/ta.cer", &tal.urls.array[3]);
+	ck_assert_uint_eq(4, tal->urls.len);
+	ck_assert_uri("rsync://example.com/rpki/ta.cer", &tal->urls.array[0]);
+	ck_assert_uri("https://example.com/rpki/ta.cer", &tal->urls.array[1]);
+	ck_assert_uri("rsync://www.example.com/potato/ta.cer", &tal->urls.array[2]);
+	ck_assert_uri("https://wx3.example.com/tomato/ta.cer", &tal->urls.array[3]);
 
-	check_spki(&tal);
+	check_spki(tal);
 
-	tal_cleanup(&tal);
+	tal_cleanup(tal);
 }
 
 START_TEST(test_tal_load_4urls)
@@ -102,12 +102,10 @@ END_TEST
 
 START_TEST(test_tal_load_error)
 {
-	struct tal tal;
-
-	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-1.tal"));
-	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-2.tal"));
-	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-3.tal"));
-	ck_assert_int_eq(EINVAL, tal_init(&tal, "resources/tal/4urls-lf-comment-space-4.tal"));
+	ck_assert_ptr_eq(NULL, tal_create("resources/tal/4urls-lf-comment-space-1.tal"));
+	ck_assert_ptr_eq(NULL, tal_create("resources/tal/4urls-lf-comment-space-2.tal"));
+	ck_assert_ptr_eq(NULL, tal_create("resources/tal/4urls-lf-comment-space-3.tal"));
+	ck_assert_ptr_eq(NULL, tal_create("resources/tal/4urls-lf-comment-space-4.tal"));
 }
 END_TEST
 

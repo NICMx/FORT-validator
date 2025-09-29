@@ -1,14 +1,20 @@
 #ifndef SRC_OBJECT_TAL_H_
 #define SRC_OBJECT_TAL_H_
 
+#include <stdatomic.h>
 #include <stddef.h>
+#include "types/uri.h"
 
 /* This is RFC 8630. */
 
-struct tal;
+struct tal {
+	char *path;
+	struct uris urls;
+	unsigned char *spki; /* Decoded; not base64. */
+	size_t spki_len;
 
-char const *tal_get_file_name(struct tal *);
-void tal_get_spki(struct tal *, unsigned char const **, size_t *);
+	atomic_uint refcount;
+};
 
 int perform_standalone_validation(void);
 

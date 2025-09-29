@@ -12,13 +12,6 @@
 #include "thread_var.h"
 #include "types/path.h"
 
-struct tal {
-	char const *file_name;
-	struct uris urls;
-	unsigned char *spki; /* Decoded; not base64. */
-	size_t spki_len;
-};
-
 static char *
 find_newline(char *str)
 {
@@ -42,7 +35,7 @@ is_blank(char const *str)
 }
 
 static int
-read_content(char *fc /* File Content */, struct tal *tal)
+parse_tal(struct tal *tal, char *fc /* File Content */)
 {
 	char *nl; /* New Line */
 	bool cr; /* Carriage return */
@@ -97,46 +90,39 @@ premature:
 	return pr_err("The TAL seems to end prematurely at line '%s'.", fc);
 }
 
-/* @file_path is expected to outlive @tal. */
-static int
-tal_init(struct tal *tal, char const *file_path)
+static struct tal *
+tal_create(char const *path)
 {
+	struct tal *tal;
 	struct file_contents file;
-	int error;
 
-	error = file_load(file_path, &file, false);
-	if (error)
-		return error;
+	if (file_load(path, &file, false) != 0)
+		return NULL;
 
-	tal->file_name = path_filename(file_path);
-
+	tal = pzalloc(sizeof(struct tal));
+	tal->path = pstrdup(path);
 	uris_init(&tal->urls);
-	error = read_content((char *)file.buf, tal);
-	if (error)
+	atomic_init(&tal->refcount, 1);
+
+	if (parse_tal(tal, (char *)file.buf) != 0) {
 		uris_cleanup(&tal->urls, uri_cleanup);
+		free(tal->path);
+		free(tal);
+		tal = NULL;
+	}
 
 	file_free(&file);
-	return error;
+	return tal;
 }
 
 static void
 tal_cleanup(struct tal *tal)
 {
-	free(tal->spki);
-	uris_cleanup(&tal->urls, uri_cleanup);
-}
-
-char const *
-tal_get_file_name(struct tal *tal)
-{
-	return (tal != NULL) ? tal->file_name : NULL;
-}
-
-void
-tal_get_spki(struct tal *tal, unsigned char const **buffer, size_t *len)
-{
-	*buffer = tal->spki;
-	*len = tal->spki_len;
+	if (atomic_fetch_sub(&tal->refcount, 1) == 1) {
+		free(tal->spki);
+		uris_cleanup(&tal->urls, uri_cleanup);
+		free(tal);
+	}
 }
 
 static int
@@ -160,6 +146,7 @@ validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 	ta = pzalloc(sizeof(struct rpki_certificate));
 	map_copy(&ta->map, ta_map);
 	ta->tal = tal;
+	atomic_fetch_add(&tal->refcount, 1);
 	atomic_init(&ta->refcount, 1);
 
 	vv = cer_traverse(ta);
@@ -209,37 +196,38 @@ try_urls(struct tal *tal, bool (*url_is_protocol)(struct uri const *),
 }
 
 static validation_verdict
-traverse_tal(char const *tal_path)
+traverse_tal(char const *path)
 {
-	struct tal tal;
+	struct tal *tal;
 	validation_verdict vv;
 
-	fnstack_push(tal_path);
+	fnstack_push(path);
 
-	if (tal_init(&tal, tal_path) != 0) {
+	tal = tal_create(path);
+	if (!tal) {
 		vv = VV_FAIL;
 		goto end1;
 	}
 
 	/* Online attempts */
-	vv = try_urls(&tal, uri_is_https, cache_refresh_by_url);
+	vv = try_urls(tal, uri_is_https, cache_refresh_by_url);
 	if (vv != VV_FAIL)
 		goto end2;
-	vv = try_urls(&tal, uri_is_rsync, cache_refresh_by_url);
+	vv = try_urls(tal, uri_is_rsync, cache_refresh_by_url);
 	if (vv != VV_FAIL)
 		goto end2;
 	/* Offline fallback attempts */
-	vv = try_urls(&tal, uri_is_https, cache_get_fallback);
+	vv = try_urls(tal, uri_is_https, cache_get_fallback);
 	if (vv != VV_FAIL)
 		goto end2;
-	vv = try_urls(&tal, uri_is_rsync, cache_get_fallback);
+	vv = try_urls(tal, uri_is_rsync, cache_get_fallback);
 	if (vv != VV_FAIL)
 		goto end2;
 
 	pr_err("None of the TAL URIs yielded a successful traversal.");
 	vv = VV_FAIL;
 
-end2:	tal_cleanup(&tal);
+end2:	tal_cleanup(tal);
 end1:	fnstack_pop();
 	return vv;
 }

@@ -216,22 +216,24 @@ validate_subject(X509 *cert)
 }
 
 static X509_PUBKEY *
-decode_spki(struct tal *tal)
+decode_spki(struct tal const *tal)
 {
 	X509_PUBKEY *spki;
 	unsigned char const *origin, *cursor;
-	size_t len;
 
-	fnstack_push(tal_get_file_name(tal));
-	tal_get_spki(tal, &origin, &len);
+	if (tal == NULL)
+		pr_panic("TAL is NULL.");
+
+	fnstack_push(tal->path);
+	origin = tal->spki;
 	cursor = origin;
-	spki = d2i_X509_PUBKEY(NULL, &cursor, len);
+	spki = d2i_X509_PUBKEY(NULL, &cursor, tal->spki_len);
 
 	if (spki == NULL) {
 		pr_crypto_err("The TAL's public key cannot be decoded.");
 		goto fail;
 	}
-	if (cursor != origin + len) {
+	if (cursor != origin + tal->spki_len) {
 		X509_PUBKEY_free(spki);
 		pr_crypto_err("The TAL's public key contains trailing garbage.");
 		goto fail;
@@ -245,13 +247,10 @@ fail:	fnstack_pop();
 }
 
 static int
-validate_spki(struct tal *tal, X509_PUBKEY *cert_spki)
+validate_spki(struct tal const *tal, X509_PUBKEY *cert_spki)
 {
 	X509_PUBKEY *tal_spki;
 	int error;
-
-	if (tal == NULL)
-		pr_panic("TAL is NULL.");
 
 	/*
 	 * We have a problem at this point:
