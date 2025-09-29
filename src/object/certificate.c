@@ -1720,12 +1720,21 @@ handle_cp(void *ext, void *arg)
 static int
 validate_aia(struct rpki_certificate *cert)
 {
-	if (!uri_equals(&cert->parent->map.url, &cert->uris.caIssuers))
-		return pr_err("Certificate's caIssuers (%s) does not match parent certificate's URL (%s).",
-		    uri_str(&cert->parent->map.url),
-		    uri_str(&cert->uris.caIssuers));
+	struct uri *uri;
 
-	return 0;
+	if (cert->parent->type == CERTYPE_TA) {
+		ARRAYLIST_FOREACH(&cert->parent->tal->urls, uri)
+			if (uri_equals(&cert->uris.caIssuers, uri))
+				return 0;
+		return pr_err("Certificate's caIssuers (%s) does not match any of the TAL's rsync URIs.",
+		    uri_str(&cert->uris.caIssuers));
+	} else {
+		if (uri_equals(&cert->uris.caIssuers, &cert->parent->map.url))
+			return 0;
+		return pr_err("Certificate's caIssuers (%s) does not match parent certificate's URI (%s).",
+		    uri_str(&cert->uris.caIssuers),
+		    uri_str(&cert->parent->uris.caRepository));
+	}
 }
 
 static int
