@@ -18,4 +18,6 @@ struct tal {
 
 int perform_standalone_validation(void);
 
+void tal_cleanup(struct tal *);
+
 #endif /* SRC_OBJECT_TAL_H_ */

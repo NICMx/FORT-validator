@@ -115,12 +115,13 @@ tal_create(char const *path)
 	return tal;
 }
 
-static void
+void
 tal_cleanup(struct tal *tal)
 {
 	if (atomic_fetch_sub(&tal->refcount, 1) == 1) {
 		free(tal->spki);
 		uris_cleanup(&tal->urls, uri_cleanup);
+		free(tal->path);
 		free(tal);
 	}
 }

@@ -170,6 +170,7 @@ delete_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 
 	free(node->key.id);
 	free(node->path);
+	mftm_cleanup(&node->mft);
 	rrdp_state_free(node->rrdp);
 	free(node);
 }

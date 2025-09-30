@@ -823,6 +823,8 @@ __cer_cleanup(struct rpki_certificate *cer)
 		X509_free(cer->x509);
 	resources_destroy(cer->resources);
 	exturis_cleanup(&cer->uris);
+	if (cer->tal)
+		tal_cleanup(cer->tal);
 	rpp_cleanup(&cer->rpp);
 }
 

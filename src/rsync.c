@@ -865,4 +865,5 @@ rsync_teardown(void)
 
 	spsk_cleanup();
 	wait_subprocess("rsync spawner", spawner);
+	pthread_join(srt, NULL);
 }
