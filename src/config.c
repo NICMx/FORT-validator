@@ -1127,6 +1127,8 @@ become_absolute_paths(void)
 	become_absolute_path(cwd, &rpki_config.report.path);
 	become_absolute_path(cwd, &rpki_config.slurm);
 	become_absolute_path(cwd, &rpki_config.http.ca_path);
+	become_absolute_path(cwd, &rpki_config.output.roa);
+	become_absolute_path(cwd, &rpki_config.output.bgpsec);
 
 	free(buf);
 	return 0;
