@@ -495,7 +495,6 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, rsync.program),
 		.doc = "Name of the program needed to execute an RSYNC",
 		.arg_doc = "<path to program>",
-		.availability = AVAILABILITY_JSON,
 		.json_null_allowed = false,
 	}, {
 		.id = 3006,
