@@ -36,6 +36,11 @@ static struct level ERR = { LOG_ERR, "ERR", "error", CLR_ERR, CLR_RST };
 static struct level CRT = { LOG_CRIT, "CRT", "critical", CLR_CRT, CLR_RST };
 static struct level PNC = { LOG_EMERG, "PNC", "panic", CLR_PNC, CLR_RST };
 
+/* Validation warning (reported, so logged on trace level, except yellow) */
+static struct level TRC_WRN = { LOG_DEBUG, "TRW", NULL, CLR_WRN, CLR_RST };
+/* Validation error (reported, so logged on trace level, except red) */
+static struct level TRC_ERR = { LOG_DEBUG, "TRE", NULL, CLR_ERR, CLR_RST };
+
 struct logger {
 	void (*cb)(struct logger *, struct level *, char const *, va_list);
 
@@ -324,7 +329,7 @@ pr_wrn(const char *fmt, ...)
 		va_start(args, fmt);
 		report(lvl->tag, fmt, args);
 		va_end(args);
-		lvl = &TRC;
+		lvl = &TRC_WRN;
 	}
 
 	SLIST_FOREACH(lgr, &listeners, lh) {
@@ -349,7 +354,7 @@ pr_err(const char *fmt, ...)
 		va_start(args, fmt);
 		report(lvl->tag, fmt, args);
 		va_end(args);
-		lvl = &TRC;
+		lvl = &TRC_ERR;
 	}
 
 	SLIST_FOREACH(lgr, &listeners, lh) {
@@ -394,7 +399,7 @@ pr_crypto_err(const char *fmt, ...)
 		va_start(args, fmt);
 		report(lvl->tag, fmt, args);
 		va_end(args);
-		lvl = &TRC;
+		lvl = &TRC_ERR;
 	}
 
 	SLIST_FOREACH(lgr, &listeners, lh) {
