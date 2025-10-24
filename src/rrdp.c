@@ -167,6 +167,36 @@ state_add_file(struct rrdp_state *state, struct cache_file *file)
 	HASH_ADD_KEYPTR(hh, state->files, url, urlen, file);
 }
 
+static void
+clear_delta_hashes(struct rrdp_state *state)
+{
+	struct rrdp_hash *hash;
+
+	while (!STAILQ_EMPTY(&state->delta_hashes)) {
+		hash = STAILQ_FIRST(&state->delta_hashes);
+		STAILQ_REMOVE_HEAD(&state->delta_hashes, hook);
+		free(hash);
+	}
+}
+
+static void
+rrdp_state_reset(struct rrdp_state *state)
+{
+	struct cache_file *file, *tmp;
+
+	HASH_ITER(hh, state->files, file, tmp) {
+		file_rm_f(file->map.path);
+
+		HASH_DEL(state->files, file);
+		map_cleanup(&file->map);
+		free(file);
+	}
+
+	session_cleanup(&state->session);
+	clear_delta_hashes(state);
+	/* Leave the seq alive */
+}
+
 static struct cache_file *
 cache_file_add(struct rrdp_state *state, struct uri const *url, char *path)
 {
@@ -553,7 +583,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 
 	/* Parsing done */
 
-	pr_clutter("Publish %s", logv_filename(uri_str(&tag.meta.uri)));
+	pr_clutter("Publish %s", uri_str(&tag.meta.uri));
 
 	file = state_find_file(args->state, &tag.meta.uri);
 
@@ -628,7 +658,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 		goto end;
 	}
 
-	pr_clutter("Withdraw %s", logv_filename(uri_str(&tag.meta.uri)));
+	pr_clutter("Withdraw %s", uri_str(&tag.meta.uri));
 
 	file = state_find_file(args->state, &tag.meta.uri);
 
@@ -1222,16 +1252,14 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 	if ((*state) == NULL) {
 		pr_trc("This is a new Notification.");
 
+		error = file_mkdir(path, false);
+		if (error)
+			goto clean_notif;
+
 		old = pzalloc(sizeof(struct rrdp_state));
 		/* session postponed! */
 		cseq_init(&old->seq, pstrdup(path), 0, true);
 		STAILQ_INIT(&old->delta_hashes);
-
-		error = file_mkdir(path, false);
-		if (error) {
-			rrdp_state_free(old);
-			goto clean_notif;
-		}
 
 		error = handle_snapshot(&new, old);
 		if (error) {
@@ -1245,6 +1273,29 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 	}
 
 	old = *state;
+
+	if (strcmp(old->session.session_id, new.session.session_id) != 0) {
+		pr_trc("The session changed. (Was %s)", old->session.session_id);
+
+		/*
+		 * The problem with keeping both sessions is that session_id
+		 * does not exist outside of RRDP, which means callers don't
+		 * know which to ask for, which means I'd have to manage
+		 * different tiers of fallbacks, and it's too late for that now.
+		 */
+		rrdp_state_reset(old);
+
+		error = handle_snapshot(&new, old);
+		if (error) {
+			rrdp_state_free(old);
+			*state = NULL;
+			goto clean_notif;
+		}
+
+		init_notif(old, &new);
+		goto end;
+	}
+
 	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
 	if (serial_cmp < 0) {
 		pr_trc("The Notification's serial changed.");
@@ -1549,18 +1600,6 @@ json2dh(json_t *json, struct rrdp_hash **dh)
 
 	*dh = hash;
 	return 0;
-}
-
-static void
-clear_delta_hashes(struct rrdp_state *state)
-{
-	struct rrdp_hash *hash;
-
-	while (!STAILQ_EMPTY(&state->delta_hashes)) {
-		hash = STAILQ_FIRST(&state->delta_hashes);
-		STAILQ_REMOVE_HEAD(&state->delta_hashes, hook);
-		free(hash);
-	}
 }
 
 static int
