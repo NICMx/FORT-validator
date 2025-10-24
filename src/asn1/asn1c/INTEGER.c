@@ -791,6 +791,30 @@ INTEGER_move(INTEGER_t *to, INTEGER_t *from)
 }
 
 void
+INTEGER_copy(INTEGER_t *to, INTEGER_t *from)
+{
+	to->size = from->size;
+	to->buf = pmalloc(to->size);
+	memcpy(to->buf, from->buf, to->size);
+}
+
+static int
+just_print(const void *buffer, size_t size, void *pfx)
+{
+	pr_trc("%s: %.*s", (char const *)pfx, (int)size, buffer);
+	return 0;
+}
+
+void
+INTEGER_trc(char const *pfx, INTEGER_t *st)
+{
+	if (st != NULL)
+		INTEGER_print(&asn_DEF_INTEGER, st, 2, just_print, (void *)pfx);
+	else
+		pr_trc("%s: NULL", pfx);
+}
+
+void
 INTEGER_cleanup(INTEGER_t *st)
 {
 	INTEGER_free(&asn_DEF_INTEGER, st, ASFM_FREE_UNDERLYING);

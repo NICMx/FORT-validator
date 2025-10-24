@@ -93,6 +93,8 @@ const asn_INTEGER_enum_map_t *INTEGER_map_value2enum(
 
 int INTEGER_cmp(INTEGER_t const *, INTEGER_t const *);
 void INTEGER_move(INTEGER_t *, INTEGER_t *);
+void INTEGER_copy(INTEGER_t *, INTEGER_t *);
+void INTEGER_trc(char const *, INTEGER_t *);
 void INTEGER_cleanup(INTEGER_t *);
 
 #endif	/* _INTEGER_H_ */

@@ -1148,9 +1148,11 @@ update_notif(struct rrdp_state *old, struct update_notification *new)
 	struct rrdp_hash *hash;
 
 	diff_bn = BN_create();
-	if (!BN_sub(diff_bn, new->session.serial.num, old->session.serial.num))
+	if (!BN_sub(diff_bn, new->session.serial.num, old->session.serial.num)) {
+		BN_free(diff_bn);
 		return pr_crypto_err("OUCH! libcrypto cannot subtract %s - %s",
 		    new->session.serial.str, old->session.serial.str);
+	}
 	if (BN_is_negative(diff_bn))
 		/* The validation was the BN_cmp() in the caller. */
 		pr_panic("%s - %s < 0 despite validations.",
@@ -1161,6 +1163,7 @@ update_notif(struct rrdp_state *old, struct update_notification *new)
 		/* Should be <= because it was already compared to the delta threshold. */
 		pr_panic("%lu > %zu despite validations.",
 		    diff, new->deltas.len);
+	BN_free(diff_bn);
 
 	BN_free(old->session.serial.num);
 	free(old->session.serial.str);

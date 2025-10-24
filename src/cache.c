@@ -1305,6 +1305,7 @@ commit_rpp(struct cache_commit *commit, struct cache_node *fb)
 	char const *dst;
 	array_index i;
 
+	INTEGER_cleanup(&fb->mft.num);
 	INTEGER_move(&fb->mft.num, &commit->mft.num);
 	fb->mft.update = commit->mft.update;
 
