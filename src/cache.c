@@ -134,8 +134,7 @@ static volatile sig_atomic_t lockfile_owned;
 struct cache_cage {
 	struct cache_node const *refresh;
 	struct cache_node const *fallback;
-	struct uri rpkiNotify;
-	struct mft_meta *mft;		/* Fallback */
+	struct mft_meta *mft;		/* Fallback XXX not set */
 };
 
 struct cache_commit {
@@ -1063,7 +1062,6 @@ cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
 {
 	struct cache_node *node;
 	struct cache_cage *cage;
-	struct uri rpkiNotify;
 	validation_verdict vv;
 
 	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
@@ -1071,20 +1069,16 @@ cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
 	/* Try RRDP + optional fallback */
 	if (uri_str(&uris->rpkiNotify) != NULL) {
 		vv = do_refresh(&cache.rrdp, &uris->rpkiNotify, &node);
-		if (vv == VV_CONTINUE) {
-			rpkiNotify = uris->rpkiNotify;
+		if (vv == VV_CONTINUE)
 			goto refresh_success;
-		}
 		if (vv == VV_BUSY)
 			return VV_BUSY;
 	}
 
 	/* Try rsync + optional fallback */
 	vv = do_refresh(&cache.rsync, &uris->caRepository, &node);
-	if (vv == VV_CONTINUE) {
-		memset(&rpkiNotify, 0, sizeof(rpkiNotify));
+	if (vv == VV_CONTINUE)
 		goto refresh_success;
-	}
 	if (vv == VV_BUSY)
 		return VV_BUSY;
 
@@ -1099,7 +1093,6 @@ cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
 
 refresh_success:
 	*result = cage = pzalloc(sizeof(struct cache_cage));
-	cage->rpkiNotify = rpkiNotify;
 	cage->refresh = node;
 	cage->fallback = get_fallback(uris);
 	return VV_CONTINUE;
@@ -1178,8 +1171,13 @@ cache_commit_rpp(struct uri const *rpkiNotify, struct uri const *caRepository,
 {
 	struct cache_commit *commit;
 
-	commit = pmalloc(sizeof(struct cache_commit));
-	uri_copy(&commit->rpkiNotify, rpkiNotify);
+	pr_trc("Listing for commit: [%s, %s]",
+	    rpkiNotify ? uri_str(rpkiNotify) : "NULL",
+	    uri_str(caRepository));
+
+	commit = pzalloc(sizeof(struct cache_commit));
+	if (rpkiNotify)
+		uri_copy(&commit->rpkiNotify, rpkiNotify);
 	uri_copy(&commit->caRepository, caRepository);
 	commit->files = rpp->files;
 	commit->nfiles = rpp->nfiles;
@@ -1241,7 +1239,17 @@ rsync_finished(struct uri const *url, char const *path)
 struct uri const *
 cage_rpkiNotify(struct cache_cage *cage)
 {
-	return &cage->rpkiNotify;
+	struct cache_node const *node;
+
+	node = cage->refresh;
+	if (node)
+		goto yes;
+	node = cage->fallback;
+	if (node)
+		goto yes;
+	return NULL;
+
+yes:	return node->rrdp ? &node->key.http : NULL;
 }
 
 static void
@@ -1426,8 +1434,7 @@ commit_fallbacks(time_t now)
 		} else { /* TA */
 			struct cache_mapping *map = &commit->files[0];
 
-			pr_trc("Creating fallback for %s",
-			    uri_str(&map->url));
+			pr_trc("Creating fallback for %s", uri_str(&map->url));
 
 			fb = provide_node(&cache.fallback, &map->url, NULL);
 			fb->attempt_ts = now;
