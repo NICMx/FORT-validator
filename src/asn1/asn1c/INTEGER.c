@@ -11,6 +11,7 @@
 #include "asn1/asn1c/asn_internal.h"
 #include "common.h"
 #include "json_util.h"
+#include "log.h"
 
 /*
  * INTEGER basic type description.
@@ -801,7 +802,7 @@ INTEGER_copy(INTEGER_t *to, INTEGER_t *from)
 static int
 just_print(const void *buffer, size_t size, void *pfx)
 {
-	pr_trc("%s: %.*s", (char const *)pfx, (int)size, buffer);
+	pr_trc("%s: %.*s", (char const *)pfx, (int)size, (char *)buffer);
 	return 0;
 }
 
