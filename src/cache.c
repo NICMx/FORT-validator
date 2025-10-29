@@ -1098,15 +1098,26 @@ refresh_success:
 	return VV_CONTINUE;
 }
 
-/* Result needs free() */
+/*
+ * Note, RRDP can return NULL, because it hard-tracks its files.
+ * rsync doesn't. As long as the node exists, it will return a path,
+ * even if it doesn't point anywhere.
+ * Result needs free().
+ */
 static char *
 node2file(struct cache_node const *node, struct uri const *url)
 {
+	char const *file;
+
 	if (node == NULL)
 		return NULL;
-	return (node->rrdp)
-	    ? /* RRDP  */ pstrdup(rrdp_file(node->rrdp, url))
-	    : /* rsync */ path_join(node->path, strip_rsync_module(uri_str(url)));
+
+	if (node->rrdp) {
+		file = rrdp_file(node->rrdp, url);
+		return file ? pstrdup(file) : NULL;
+	} else { /* rsync */
+		return path_join(node->path, strip_rsync_module(uri_str(url)));
+	}
 }
 
 /* Result needs free() */
