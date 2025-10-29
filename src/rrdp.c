@@ -633,6 +633,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 		file = cache_file_add(args->state, &tag.meta.uri, path);
 	}
 
+	pr_clutter("echo '$%s' > %s", file->map.url, file->map.path);
 	error = file_write_bin(file->map.path, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
@@ -907,7 +908,14 @@ parse_snapshot(struct rrdp_session *session, char const *path,
     struct rrdp_state *state)
 {
 	struct parser_args args = { .session = session, .state = state };
-	return relax_ng_parse(path, xml_read_snapshot, &args);
+	int error;
+
+	pr_trc("Exploding snapshot into %s...", state->seq.prefix);
+
+	error = relax_ng_parse(path, xml_read_snapshot, &args);
+
+	pr_trc("Snapshot exploded.");
+	return error;
 }
 
 static int
@@ -961,7 +969,6 @@ handle_snapshot(struct update_notification *new, struct rrdp_state *state)
 	int error;
 
 	url = &new->snapshot.uri;
-	pr_trc("Processing snapshot '%s'.", uri_str(url));
 	fnstack_push(uri_str(url));
 
 	error = dl_tmp(url, tmppath);
@@ -1018,12 +1025,16 @@ parse_delta(struct update_notification *notif, struct notification_delta *delta,
 	if (error)
 		return error;
 
+	pr_trc("Exploding delta into %s...", state->seq.prefix);
 	session.session_id = notif->session.session_id;
 	session.serial = delta->serial;
 	args.session = &session;
 	args.state = state;
 
-	return relax_ng_parse(path, xml_read_delta, &args);
+	error = relax_ng_parse(path, xml_read_delta, &args);
+
+	pr_trc("Delta exploded.");
+	return error;
 }
 
 static int
@@ -1240,7 +1251,6 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 	int error;
 
 	fnstack_push(uri_str(notif));
-	pr_trc("Processing notification.");
 
 	error = dl_notif(notif, mtim, changed, &new);
 	if (error)

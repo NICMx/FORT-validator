@@ -855,11 +855,11 @@ rm_metadata(struct cache_node *node)
 	int error;
 
 	filename = str_concat(node->path, ".json");
-	pr_trc("rm %s", filename);
+	pr_trc("rm -f %s", filename);
 	if (unlink(filename) < 0) {
 		error = errno;
 		if (error == ENOENT)
-			pr_trc("%s already doesn't exist.", filename);
+			pr_clutter("%s already doesn't exist.", filename);
 		else
 			pr_wrn("Cannot rm %s: %s", filename, strerror(errno));
 	}
@@ -946,6 +946,7 @@ ongoing:	mutex_unlock(&tbl->lock);
 		pr_trc("Refresh ongoing.");
 		return VV_BUSY;
 	case DLS_FRESH:
+		pr_trc("Already downloaded.");
 		break;
 	default:
 		pr_panic("Unknown node state: %d", node->state);
@@ -1122,7 +1123,7 @@ node2file(struct cache_node const *node, struct uri const *url)
 
 /* Result needs free() */
 char *
-cage_map_file(struct cache_cage *cage, struct uri const *url)
+cage_map_file(struct cache_cage *cage, struct uri const *url, char const **type)
 {
 	/*
 	 * Remember: In addition to honoring the consts of cache->refresh and
@@ -1133,10 +1134,18 @@ cage_map_file(struct cache_cage *cage, struct uri const *url)
 	char *file;
 
 	file = node2file(cage->refresh, url);
-	if (!file)
-		file = node2file(cage->fallback, url);
+	if (file) {
+		*type = cage->refresh->rrdp ? "RRDP refresh" : "rsync refresh";
+		return file;
+	}
 
-	return file;
+	file = node2file(cage->fallback, url);
+	if (file) {
+		*type = cage->fallback->rrdp ? "RRDP fallback" : "rsync fallback";
+		return file;
+	}
+
+	return NULL;
 }
 
 /*
@@ -1182,7 +1191,7 @@ cache_commit_rpp(struct uri const *rpkiNotify, struct uri const *caRepository,
 {
 	struct cache_commit *commit;
 
-	pr_trc("Listing for commit: [%s, %s]",
+	pr_trc("Queuing RPP for commit: [%s, %s]",
 	    rpkiNotify ? uri_str(rpkiNotify) : "NULL",
 	    uri_str(caRepository));
 
@@ -1417,9 +1426,9 @@ commit_fallbacks(time_t now)
 		STAILQ_REMOVE_HEAD(&commits, lh);
 
 		if (uri_str(&commit->caRepository) != NULL) {
-			pr_trc("Creating fallback for %s (%s)",
-			    uri_str(&commit->caRepository),
-			    uri_str(&commit->rpkiNotify));
+			pr_trc("Creating fallback for [%s, %s]",
+			    uri_str(&commit->rpkiNotify),
+			    uri_str(&commit->caRepository));
 
 			fb = provide_node(&cache.fallback,
 			    &commit->rpkiNotify,
@@ -1445,7 +1454,8 @@ commit_fallbacks(time_t now)
 		} else { /* TA */
 			struct cache_mapping *map = &commit->files[0];
 
-			pr_trc("Creating fallback for %s", uri_str(&map->url));
+			pr_trc("Creating fallback for [NULL, %s]",
+			    uri_str(&map->url));
 
 			fb = provide_node(&cache.fallback, &map->url, NULL);
 			fb->attempt_ts = now;
@@ -1510,35 +1520,36 @@ cleanup_cache(void)
 	time_t now = time_fatal();
 
 	/* Delete the entirety of cache/tmp/. */
-	pr_trc("Cleaning up temporal files.");
+	pr_trc("- Cleaning up temporal files.");
 	file_rm_rf(CACHE_TMPDIR);
 
 	/*
 	 * Ensure valid RPPs and TAs are linked in fallback,
 	 * by hard-linking the new files.
 	 */
-	pr_trc("Committing fallbacks.");
+	pr_trc("- Committing fallbacks.");
 	commit_fallbacks(now);
 
 	/*
 	 * Delete refresh nodes that haven't been downloaded in a while,
 	 * and fallback nodes that haven't been valid in a while.
 	 */
-	pr_trc("Cleaning up abandoned cache files.");
+	pr_trc("- Cleaning up abandoned cache files.");
 	foreach_node(remove_abandoned, &now);
 
 	/* (Paranoid) Delete nodes that are no longer mapped to files. */
-	pr_trc("Cleaning up orphaned nodes.");
+	pr_trc("- Cleaning up orphaned nodes.");
 	foreach_node(remove_orphaned_nodes, NULL);
 
 	/* (Paranoid) Delete files that are no longer mapped to nodes. */
-	pr_trc("Cleaning up orphaned files.");
+	pr_trc("- Cleaning up orphaned files.");
 	remove_orphaned_files();
 }
 
 void
 cache_commit(void)
 {
+	pr_trc("============ Committing cache ============");
 	cleanup_cache();
 	file_write_txt(METAFILE, "{ \"fort-version\": \"" PACKAGE_VERSION "\" }");
 	unlock_cache();

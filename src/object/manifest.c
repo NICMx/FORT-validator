@@ -334,7 +334,7 @@ collect_files(struct cache_mapping const *map,
 		uri_child(&rpp_url, (char const *)src->file.buf, src->file.size,
 		    &dst->url);
 
-		dst->path = cage_map_file(cage, &dst->url);
+		dst->path = cage_map_file(cage, &dst->url, &ext);
 		if (!dst->path) {
 			error = pr_err(
 			    "Manifest file '%s' is absent from the cache.",

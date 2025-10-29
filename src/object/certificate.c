@@ -1988,11 +1988,14 @@ cer_traverse(struct rpki_certificate *ca)
 {
 	struct cache_cage *cage;
 	struct cache_mapping mft;
+	char const *rpp_type;
 	array_index i;
 	struct cache_mapping *map;
 	unsigned int queued;
 	validation_verdict vv;
 	int error;
+
+	pr_trc("Checking certificate %s...", uri_str(&ca->map.url));
 
 	if (!ca->x509) {
 		if (validate_certificate(ca) != 0)
@@ -2000,6 +2003,8 @@ cer_traverse(struct rpki_certificate *ca)
 		if (ca->type != CERTYPE_TA && ca->type != CERTYPE_CA)
 			return VV_CONTINUE;
 	} /* else "we already did this, and returned VV_BUSY" */
+
+	pr_trc("Certificate seems correct; downloading RPP.");
 
 	vv = cache_refresh_by_uris(&ca->uris, &cage);
 	if (vv == VV_BUSY)
@@ -2013,7 +2018,7 @@ cer_traverse(struct rpki_certificate *ca)
 	}
 
 	mft.url = ca->uris.rpkiManifest;
-retry:	mft.path = cage_map_file(cage, &mft.url);
+retry:	mft.path = cage_map_file(cage, &mft.url, &rpp_type);
 	if (!mft.path) {
 		if (cage_downgrade(cage))
 			goto retry;
@@ -2022,6 +2027,8 @@ retry:	mft.path = cage_map_file(cage, &mft.url);
 		vv = VV_FAIL;
 		goto end;
 	}
+
+	pr_trc("Checking %s RPP...", rpp_type);
 
 	error = manifest_traverse(&mft, cage, ca);
 	free(mft.path);
@@ -2042,6 +2049,8 @@ retry:	mft.path = cage_map_file(cage, &mft.url);
 		else if (uri_has_extension(&map->url, ".gbr"))
 			ghostbusters_traverse(map, ca);
 	}
+
+	pr_trc("RPP seems sufficiently correct.");
 
 	if (queued > 0)
 		task_wakeup();

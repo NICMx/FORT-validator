@@ -14,7 +14,7 @@
 #include "alloc.h"
 #include "log.h"
 
-validation_verdict const VV_CONTINUE = "Continue";
+validation_verdict const VV_CONTINUE = "Success";
 validation_verdict const VV_FAIL = "Failure";
 validation_verdict const VV_BUSY = "Busy";
 

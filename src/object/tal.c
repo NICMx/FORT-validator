@@ -211,16 +211,20 @@ traverse_tal(char const *path)
 	}
 
 	/* Online attempts */
+	pr_trc("Trying HTTP refresh.");
 	vv = try_urls(tal, uri_is_https, cache_refresh_by_url);
 	if (vv != VV_FAIL)
 		goto end2;
+	pr_trc("Trying rsync refresh.");
 	vv = try_urls(tal, uri_is_rsync, cache_refresh_by_url);
 	if (vv != VV_FAIL)
 		goto end2;
 	/* Offline fallback attempts */
+	pr_trc("Trying HTTP fallback.");
 	vv = try_urls(tal, uri_is_https, cache_get_fallback);
 	if (vv != VV_FAIL)
 		goto end2;
+	pr_trc("Trying rsync fallback.");
 	vv = try_urls(tal, uri_is_rsync, cache_get_fallback);
 	if (vv != VV_FAIL)
 		goto end2;
@@ -240,9 +244,12 @@ pick_up_work(void *arg)
 	validation_verdict vv;
 
 	while ((task = task_dequeue(task)) != NULL) {
+		pr_trc("Dequeued task: %s", task_name(task));
+
 		switch (task->type) {
 		case VTT_RPP:
-			if (cer_traverse(task->u.ca) == VV_BUSY) {
+			vv = cer_traverse(task->u.ca);
+			if (vv == VV_BUSY) {
 				task_requeue_dormant(task);
 				task = NULL;
 			}
@@ -257,8 +264,11 @@ pick_up_work(void *arg)
 				task_wakeup();
 			}
 			break;
+		default:
+			vv = VV_FAIL;
 		}
 
+		pr_trc("Task ended. Status: %s", vv);
 	}
 
 	return NULL;

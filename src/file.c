@@ -90,7 +90,6 @@ file_write_txt(char const *path, char const *txt)
 int
 file_write_bin(char const *path, unsigned char const *bytes, size_t n)
 {
-	pr_trc("echo 'beep boop' > %s", path);
 	return write_file(path, bytes, n);
 }
 

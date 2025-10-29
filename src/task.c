@@ -22,7 +22,7 @@ static bool enabled = true;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t awakener = PTHREAD_COND_INITIALIZER;
 
-static char const *
+char const *
 task_name(struct validation_task *task)
 {
 	switch (task->type) {
@@ -243,36 +243,36 @@ task_dequeue(struct validation_task *prev)
 	}
 
 	while (ntasks > 0) {
-		pr_trc("task_dequeue(): %u existing tasks.", ntasks);
+		pr_clutter("task_dequeue(): %u existing tasks.", ntasks);
 
 		task = STAILQ_FIRST(&waiting);
 		if (task != NULL) {
 			STAILQ_REMOVE_HEAD(&waiting, lh);
 			mutex_unlock(&lock);
-			pr_trc("task_dequeue(): Claimed task '%s'.",
+			pr_clutter("task_dequeue(): Claimed task '%s'.",
 			    task_name(task));
 			return task;
 		}
 
-		pr_trc("task_dequeue(): Sleeping...");
+		pr_clutter("task_dequeue(): Sleeping...");
 		timeout.tv_sec = time_fatal() + 10;
 		error = pthread_cond_timedwait(&awakener, &lock, &timeout);
 		switch (error) {
 		case 0:
-			pr_trc("task_dequeue(): Woke up by cond.");
+			pr_clutter("task_dequeue(): Woke up by cond.");
 			break;
 		case ETIMEDOUT:
-			pr_trc("task_dequeue(): Woke up by timeout.");
+			pr_clutter("task_dequeue(): Woke up by timeout.");
 			break;
 		case EINTR:
-			pr_trc("task_dequeue(): Interrupted by signal.");
+			pr_clutter("task_dequeue(): Interrupted by signal.");
 			goto end;
 		default:
 			panic_on_fail(error, "pthread_cond_wait");
 		}
 	}
 
-	pr_trc("task_dequeue(): No more tasks; done.");
+	pr_clutter("task_dequeue(): No more tasks; done.");
 	panic_on_fail(pthread_cond_broadcast(&awakener),
 	    "pthread_cond_broadcast");
 end:	mutex_unlock(&lock);

@@ -32,10 +32,10 @@ register_oid(const char *oid, const char *sn, const char *ln)
 			pr_crypto_err("Unable to register the %s NID.", sn);
 			return 0;
 		}
-		pr_trc("%s registered. Its nid is %d.", sn, nid);
+		pr_clutter("%s registered. Its nid is %d.", sn, nid);
 
 	} else {
-		pr_trc("%s retrieved. Its nid is %d.", sn, nid);
+		pr_clutter("%s retrieved. Its nid is %d.", sn, nid);
 	}
 
 	return nid;
