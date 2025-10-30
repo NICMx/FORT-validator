@@ -184,6 +184,9 @@ rrdp_state_reset(struct rrdp_state *state)
 {
 	struct cache_file *file, *tmp;
 
+	session_cleanup(&state->session);
+	memset(&state->session, 0, sizeof(state->session));
+
 	HASH_ITER(hh, state->files, file, tmp) {
 		file_rm_f(file->map.path);
 
@@ -192,9 +195,9 @@ rrdp_state_reset(struct rrdp_state *state)
 		free(file);
 	}
 
-	session_cleanup(&state->session);
-	clear_delta_hashes(state);
 	/* Leave the seq alive */
+
+	clear_delta_hashes(state);
 }
 
 static struct cache_file *
@@ -633,7 +636,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 		file = cache_file_add(args->state, &tag.meta.uri, path);
 	}
 
-	pr_clutter("echo '$%s' > %s", file->map.url, file->map.path);
+	pr_clutter("echo '$%s' > %s", uri_str(&file->map.url), file->map.path);
 	error = file_write_bin(file->map.path, tag.content, tag.content_len);
 
 end:	metadata_cleanup(&tag.meta);
@@ -1290,14 +1293,7 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 	if (strcmp(old->session.session_id, new.session.session_id) != 0) {
 		pr_trc("The session changed. (Was %s)", old->session.session_id);
 
-		/*
-		 * The problem with keeping both sessions is that session_id
-		 * does not exist outside of RRDP, which means callers don't
-		 * know which to ask for, which means I'd have to manage
-		 * different tiers of fallbacks, and it's too late for that now.
-		 */
 		rrdp_state_reset(old);
-
 		error = handle_snapshot(&new, old);
 		if (error) {
 			rrdp_state_free(old);
@@ -1344,6 +1340,7 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 
 snapshot_fallback:
 	pr_trc("Falling back to snapshot.");
+	rrdp_state_reset(old);
 	error = handle_snapshot(&new, old);
 	if (error)
 		goto clean_notif;
