@@ -922,35 +922,35 @@ parse_snapshot(struct rrdp_session *session, char const *path,
 }
 
 static int
-validate_session_desync(struct rrdp_state *old_notif,
-    struct update_notification *new_notif)
+validate_session_desync(struct rrdp_state *state,
+    struct update_notification *notif)
 {
-	struct rrdp_hash *old_delta;
-	struct file_metadata *new_delta;
+	struct rrdp_hash *old;
+	struct file_metadata *new;
 	size_t i;
 	size_t delta_threshold;
 
-	if (strcmp(old_notif->session.session_id, new_notif->session.session_id) != 0) {
+	if (strcmp(state->session.session_id, notif->session.session_id) != 0) {
 		pr_trc("The Notification's session ID changed.");
 		return EINVAL;
 	}
 
-	old_delta = STAILQ_FIRST(&old_notif->delta_hashes);
+	old = STAILQ_FIRST(&state->delta_hashes);
 	delta_threshold = config_get_rrdp_delta_threshold();
 
 	for (i = 0; i < delta_threshold; i++) {
-		if (old_delta == NULL)
+		if (old == NULL)
 			return 0; /* Cache has few deltas */
-		if (i >= new_notif->deltas.len)
+		if (i >= notif->deltas.len - 1)
 			return 0; /* Notification has few deltas */
 
-		new_delta = &new_notif->deltas.array[i].meta;
-		if (memcmp(old_delta->bytes, new_delta->hash, RRDP_HASH_LEN) != 0) {
+		new = &notif->deltas.array[notif->deltas.len - i - 2].meta;
+		if (memcmp(old->bytes, new->hash, RRDP_HASH_LEN) != 0) {
 			pr_trc("Notification delta hash does not match cached delta hash; RRDP session desynchronization detected.");
 			return EINVAL;
 		}
 
-		old_delta = STAILQ_NEXT(old_delta, hook);
+		old = STAILQ_NEXT(old, hook);
 	}
 
 	return 0; /* First $delta_threshold delta hashes match */
@@ -1307,7 +1307,8 @@ rrdp_update(struct uri const *notif, char const *path, time_t mtim,
 
 	serial_cmp = BN_cmp(old->session.serial.num, new.session.serial.num);
 	if (serial_cmp < 0) {
-		pr_trc("The Notification's serial changed.");
+		pr_trc("The Notification's serial changed: %s -> %s",
+		    old->session.serial.str, new.session.serial.str);
 
 		error = validate_session_desync(old, &new);
 		if (error)
