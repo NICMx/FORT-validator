@@ -59,6 +59,7 @@ SLIST_HEAD(loggers, logger);
 
 /* Constant after init */
 static struct loggers listeners = SLIST_HEAD_INITIALIZER(listeners);
+static bool trc_enabled;
 
 static void
 vcb(struct logger *lgr, struct level *lvl, char const *fmt, ...)
@@ -219,6 +220,8 @@ add_listener(struct loggers *list, struct log_listener *new)
 		return pr_err("Unknown log type: %s", new->type);
 	}
 
+	if (node->lvl == &TRC)
+		trc_enabled = true;
 	SLIST_INSERT_HEAD(list, node, lh);
 	return 0;
 }
@@ -287,6 +290,12 @@ pr_clutter(const char *fmt, ...)
 }
 
 #endif
+
+bool
+pr_trc_enabled(void)
+{
+	return trc_enabled;
+}
 
 void
 pr_trc(const char *fmt, ...)

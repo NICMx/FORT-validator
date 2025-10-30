@@ -2050,7 +2050,7 @@ retry:	mft.path = cage_map_file(cage, &mft.url, &rpp_type);
 			ghostbusters_traverse(map, ca);
 	}
 
-	pr_trc("RPP seems sufficiently correct.");
+	pr_trc("RPP seems salvageable.");
 
 	if (queued > 0)
 		task_wakeup();

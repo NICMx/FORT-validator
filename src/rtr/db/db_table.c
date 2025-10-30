@@ -225,6 +225,15 @@ db_table_remove_router_key(struct db_table *table,
 	}
 }
 
+static void
+trc_vrp(struct vrp *vrp)
+{
+	char buf[INET6_ADDRSTRLEN];
+	pr_trc("Adding VRP: %s/%u-%u => %u",
+	    inet_ntop(vrp->addr_fam, &vrp->prefix, buf, INET6_ADDRSTRLEN),
+	    vrp->prefix_length, vrp->max_prefix_length, vrp->asn);
+}
+
 int
 rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
     struct ipv4_prefix const *prefix4, uint8_t max_length)
@@ -236,6 +245,9 @@ rtrhandler_handle_roa_v4(struct db_table *table, uint32_t asn,
 	roa->data.prefix_length = prefix4->len;
 	roa->data.max_prefix_length = max_length;
 	roa->data.addr_fam = AF_INET;
+
+	if (pr_trc_enabled())
+		trc_vrp(&roa->data);
 
 	return add_roa(table, roa);
 }
@@ -251,6 +263,9 @@ rtrhandler_handle_roa_v6(struct db_table *table, uint32_t asn,
 	roa->data.prefix_length = prefix6->len;
 	roa->data.max_prefix_length = max_length;
 	roa->data.addr_fam = AF_INET6;
+
+	if (pr_trc_enabled())
+		trc_vrp(&roa->data);
 
 	return add_roa(table, roa);
 }

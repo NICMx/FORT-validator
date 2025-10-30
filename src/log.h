@@ -91,6 +91,8 @@ void pr_clutter(const char *, ...) CHECK_FORMAT(1, 2);
 #define pr_clutter(...)
 #endif
 
+bool pr_trc_enabled(void);
+
 void pr_trc(const char *, ...) CHECK_FORMAT(1, 2);
 void pr_inf(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_wrn(const char *, ...) CHECK_FORMAT(1, 2);
