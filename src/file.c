@@ -272,6 +272,21 @@ file_mkdir(char const *path, bool force)
 	return 0;
 }
 
+int
+file_mv(char const *from, char const *to)
+{
+	int error;
+
+	pr_trc("mv %s %s", from, to);
+	if (rename(from, to) < 0) {
+		error = errno;
+		pr_err("Cannot move %s to %s: %s", from, to, strerror(errno));
+		return error;
+	}
+
+	return 0;
+}
+
 void
 file_ln(char const *oldpath, char const *newpath)
 {

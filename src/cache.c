@@ -797,13 +797,20 @@ dl_rrdp(struct cache_node *notif)
 static validation_verdict
 dl_http(struct cache_node *file)
 {
+	char tmppath[CACHE_TMPFILE_BUFLEN];
 	bool changed;
 
-	if (http_download(&file->key.http, file->path, file->success_ts,
-			  &changed))
+	cache_tmpfile(tmppath);
+
+	if (http_download(&file->key.http, tmppath, file->success_ts, &changed))
 		return VV_FAIL;
-	if (changed)
+
+	if (changed) {
+		if (file_mv(tmppath, file->path) != 0)
+			return VV_FAIL;
 		file->success_ts = file->attempt_ts;
+	}
+
 	return VV_CONTINUE;
 }
 
