@@ -132,6 +132,7 @@ static struct rpki_cache {
 static volatile sig_atomic_t lockfile_owned;
 
 struct cache_cage {
+	struct extension_uris *uris;
 	struct cache_node const *refresh;
 	struct cache_node const *fallback;
 	struct mft_meta *mft;		/* Fallback XXX not set */
@@ -1104,8 +1105,8 @@ cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
 
 refresh_success:
 	*result = cage = pzalloc(sizeof(struct cache_cage));
+	cage->uris = uris;
 	cage->refresh = node;
-	cage->fallback = get_fallback(uris);
 	return VV_CONTINUE;
 }
 
@@ -1178,6 +1179,7 @@ cage_downgrade(struct cache_cage *cage)
 
 	if (cage->refresh) {
 		cage->refresh = NULL;
+		cage->fallback = get_fallback(cage->uris);
 		return cage->fallback != NULL;
 	}
 	if (cage->fallback)
