@@ -934,15 +934,21 @@ uri_cleanup(struct uri *url)
 }
 
 bool
+uri_is_proto(struct uri const *url, char const *proto)
+{
+	return str_starts_with(url->_str, proto);
+}
+
+bool
 uri_is_rsync(struct uri const *url)
 {
-	return str_starts_with(url->_str, "rsync:");
+	return uri_is_proto(url, "rsync:");
 }
 
 bool
 uri_is_https(struct uri const *url)
 {
-	return str_starts_with(url->_str, "https:");
+	return uri_is_proto(url, "https:");
 }
 
 bool

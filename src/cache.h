@@ -36,8 +36,9 @@ struct extension_uris {
 void exturis_init(struct extension_uris *);
 void exturis_cleanup(struct extension_uris *);
 
-validation_verdict cache_refresh_by_url(struct uri const *, char **);
-validation_verdict cache_get_fallback(struct uri const *, char **);
+validation_verdict cache_refresh_url_https(struct uri const *, char const **);
+validation_verdict cache_refresh_url_rsync(struct uri const *, char const **);
+validation_verdict cache_get_fallback(struct uri const *, char const **);
 
 struct cache_cage;
 validation_verdict cache_refresh_by_uris(struct extension_uris *,

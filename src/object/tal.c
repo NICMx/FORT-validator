@@ -157,16 +157,16 @@ validate_ta(struct tal *tal, struct cache_mapping const *ta_map)
 }
 
 static validation_verdict
-try_urls(struct tal *tal, bool (*url_is_protocol)(struct uri const *),
-    validation_verdict (*get_path)(struct uri const *, char **))
+try_urls(struct tal *tal, char const *proto,
+    validation_verdict (*get_path)(struct uri const *, char const **))
 {
 	struct uri *url;
-	char *path;
+	char const *path;
 	struct cache_mapping map;
 	validation_verdict vv;
 
 	ARRAYLIST_FOREACH(&tal->urls, url) {
-		if (!url_is_protocol(url))
+		if (!uri_is_proto(url, proto))
 			continue;
 
 		vv = get_path(url, &path);
@@ -176,23 +176,19 @@ try_urls(struct tal *tal, bool (*url_is_protocol)(struct uri const *),
 			continue;
 
 		map.url = *url;
-		map.path = path;
+		map.path = (char *)path;
 
 		vv = validate_ta(tal, &map);
-		if (vv == VV_BUSY) {
-			free(path);
+		if (vv == VV_BUSY)
 			return VV_BUSY;
-		}
-		if (vv == VV_FAIL) {
-			free(path);
+		if (vv == VV_FAIL)
 			continue;
-		}
 
 		cache_commit_file(&map);
-		free(path);
 		return VV_CONTINUE;
 	}
 
+	pr_trc("No URIs match the protocol.");
 	return VV_FAIL;
 }
 
@@ -212,20 +208,20 @@ traverse_tal(char const *path)
 
 	/* Online attempts */
 	pr_trc("Trying HTTP refresh.");
-	vv = try_urls(tal, uri_is_https, cache_refresh_by_url);
+	vv = try_urls(tal, "https:", cache_refresh_url_https);
 	if (vv != VV_FAIL)
 		goto end2;
 	pr_trc("Trying rsync refresh.");
-	vv = try_urls(tal, uri_is_rsync, cache_refresh_by_url);
+	vv = try_urls(tal, "rsync:", cache_refresh_url_rsync);
 	if (vv != VV_FAIL)
 		goto end2;
 	/* Offline fallback attempts */
 	pr_trc("Trying HTTP fallback.");
-	vv = try_urls(tal, uri_is_https, cache_get_fallback);
+	vv = try_urls(tal, "https:", cache_get_fallback);
 	if (vv != VV_FAIL)
 		goto end2;
 	pr_trc("Trying rsync fallback.");
-	vv = try_urls(tal, uri_is_rsync, cache_get_fallback);
+	vv = try_urls(tal, "rsync:", cache_get_fallback);
 	if (vv != VV_FAIL)
 		goto end2;
 

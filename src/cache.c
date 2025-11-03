@@ -894,12 +894,11 @@ write_metadata(struct cache_node *node)
 }
 
 /*
- * @uri is either a caRepository or a rpkiNotify
- * By contract, only sets @result on return 0.
- * By contract, @result->state will be DLS_FRESH on return 0.
+ * By contract, only sets @result on return VV_CONTINUE.
+ * By contract, @result->state will be DLS_FRESH on return VV_CONTINUE.
  */
 static validation_verdict
-do_refresh(struct cache_table *tbl, struct uri const *uri,
+do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
     struct cache_node **result)
 {
 	struct uri module;
@@ -914,7 +913,9 @@ do_refresh(struct cache_table *tbl, struct uri const *uri,
 	}
 
 	if (tbl == &cache.rsync) {
-		if (!get_rsync_module(uri, &module))
+		if (single)
+			module = *uri;
+		else if (!get_rsync_module(uri, &module))
 			return VV_FAIL;
 		mutex_lock(&tbl->lock);
 		node = provide_node(tbl, NULL, &module);
@@ -1008,36 +1009,38 @@ get_fallback(struct extension_uris *uris)
 	return (difftime(rsync->success_ts, rrdp->success_ts) > 0) ? rsync : rrdp;
 }
 
-validation_verdict
-cache_refresh_by_url(struct uri const *url, char **result)
+static validation_verdict
+cache_refresh_url(struct cache_table *table, struct uri const *url,
+    char const **result)
 {
-	struct cache_node *node = NULL;
+	struct cache_node *node;
 	validation_verdict vv;
 
-	if (uri_is_https(url)) {
-		vv = do_refresh(&cache.https, url, &node);
-		if (vv != VV_CONTINUE)
-			goto oops;
-		*result = node ? pstrdup(node->path) : NULL;
-		return VV_CONTINUE;
+	vv = do_refresh(table, url, true, &node);
+	if (vv != VV_CONTINUE) {
+		*result = NULL;
+		return vv;
 	}
 
-	if (uri_is_rsync(url)) {
-		vv = do_refresh(&cache.rsync, url, &node);
-		if (vv != VV_CONTINUE)
-			goto oops;
-		*result = path_join(node->path, strip_rsync_module(uri_str(url)));
-		return VV_CONTINUE;
-	}
+	*result = node->path;
+	return VV_CONTINUE;
+}
 
-	vv = VV_FAIL;
-oops:	*result = NULL;
-	return vv;
+validation_verdict
+cache_refresh_url_https(struct uri const *url, char const **result)
+{
+	return cache_refresh_url(&cache.https, url, result);
+}
+
+validation_verdict
+cache_refresh_url_rsync(struct uri const *url, char const **result)
+{
+	return cache_refresh_url(&cache.rsync, url, result);
 }
 
 /* HTTPS (TAs) and rsync only; don't use this for RRDP. */
 validation_verdict
-cache_get_fallback(struct uri const *url, char **result)
+cache_get_fallback(struct uri const *url, char const **result)
 {
 	struct cache_node *node;
 
@@ -1055,7 +1058,7 @@ cache_get_fallback(struct uri const *url, char **result)
 		return VV_CONTINUE;
 	}
 
-	*result = pstrdup(node->path);
+	*result = node->path;
 	return VV_CONTINUE;
 }
 
@@ -1076,7 +1079,7 @@ cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
 
 	/* Try RRDP + optional fallback */
 	if (uri_str(&uris->rpkiNotify) != NULL) {
-		vv = do_refresh(&cache.rrdp, &uris->rpkiNotify, &node);
+		vv = do_refresh(&cache.rrdp, &uris->rpkiNotify, false, &node);
 		if (vv == VV_CONTINUE)
 			goto refresh_success;
 		if (vv == VV_BUSY)
@@ -1084,7 +1087,7 @@ cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
 	}
 
 	/* Try rsync + optional fallback */
-	vv = do_refresh(&cache.rsync, &uris->caRepository, &node);
+	vv = do_refresh(&cache.rsync, &uris->caRepository, false, &node);
 	if (vv == VV_CONTINUE)
 		goto refresh_success;
 	if (vv == VV_BUSY)
