@@ -164,7 +164,7 @@ crl_validate(X509_CRL *crl, X509 *parent)
 }
 
 int
-crl_load(struct cache_mapping *map, X509 *parent, X509_CRL **result)
+crl_load(struct cache_mapping const *map, X509 *parent, X509_CRL **result)
 {
 	int error;
 

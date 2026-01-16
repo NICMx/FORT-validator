@@ -193,12 +193,17 @@ fail:
 	return error;
 }
 
-static int
+int
 hash_buffer(struct hash_algorithm const *algorithm,
-    unsigned char const *content, size_t content_len, unsigned char *hash)
+    unsigned char const *content, size_t content_len,
+    unsigned char *hash, size_t expected_hash_len)
 {
 	EVP_MD_CTX *ctx;
 	unsigned int actual_len;
+
+	if (algorithm->size != expected_hash_len)
+		return pr_err("libcrypto %s length (%zu) is not %zu",
+		    algorithm->name, algorithm->size, expected_hash_len);
 
 	ctx = EVP_MD_CTX_new();
 	if (ctx == NULL)
@@ -227,12 +232,10 @@ hash_validate(struct hash_algorithm const *algorithm, unsigned char const *data,
 	unsigned char actual[EVP_MAX_MD_SIZE];
 	int error;
 
-	error = hash_buffer(algorithm, data, data_len, actual);
+	error = hash_buffer(algorithm, data, data_len, actual, expected_len);
 	if (error)
 		return -error;
 
-	if (expected_len != algorithm->size)
-		return EINVAL;
 	if (memcmp(expected, actual, expected_len) != 0)
 		return EINVAL;
 
@@ -249,4 +252,41 @@ size_t
 hash_get_size(struct hash_algorithm const *algorithm)
 {
 	return algorithm->size;
+}
+
+static unsigned int
+hexchar2uint(char chr)
+{
+	if ('0' <= chr && chr <= '9')
+		return chr - '0';
+	if ('a' <= chr && chr <= 'f')
+		return chr - 'a' + 10;
+	if ('A' <= chr && chr <= 'F')
+		return chr - 'A' + 10;
+	return 32;
+}
+
+int
+str2hash(char const *hexstr, struct rrdp_hash *hash)
+{
+	unsigned int digit;
+	size_t i;
+
+	if (strlen(hexstr) != 2 * RRDP_HASH_LEN)
+		return EINVAL;
+
+	for (i = 0; i < RRDP_HASH_LEN; i++) {
+		digit = hexchar2uint(hexstr[2 * i]);
+		if (digit > 15)
+			return EINVAL;
+		hash->bytes[i] = digit << 4;
+
+		digit = hexchar2uint(hexstr[2 * i + 1]);
+		if (digit > 15)
+			return EINVAL;
+		hash->bytes[i] |= digit;
+	}
+
+	hash->set = true;
+	return 0;
 }

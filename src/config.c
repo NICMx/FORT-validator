@@ -619,7 +619,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, rrdp.delta_threshold),
 		.doc = "Maximum deltas to explode per RRDP session, per iteration. "
 		       "(Fall back to snapshot if threshold exceeded.)",
-		.min = 1,
+		.min = 1,	/* Must be > 0! */
 		.max = 128,
 	},
 
@@ -836,7 +836,7 @@ is_alphanumeric(int chara)
 
 /**
  * "struct option" is the array that getopt expects.
- * "struct args_flag" is our option metadata.
+ * "struct option_field" is our option metadata.
  */
 static void
 construct_getopt_options(struct option **_long_opts, char **_short_opts)
@@ -1080,8 +1080,7 @@ handle_opt(int opt)
 	FOREACH_OPTION(options, option, AVAILABILITY_GETOPT) {
 		if (option->id == opt) {
 			if (option->deprecated)
-				pr_wrn("Warning: '%s' is deprecated.",
-				    option->name);
+				pr_wrn("'%s' is deprecated.", option->name);
 
 			return is_rpki_config_field(option)
 			    ? option->type->parse.argv(option, optarg,
@@ -1155,7 +1154,7 @@ set_logger_console(void)
 	struct log_listener node = { 0 };
 
 	node.type = "console";
-	node.level = "info";
+	node.level = "trace";
 	node.color = true;
 
 	TAILQ_INSERT_TAIL(&list, &node, lh);

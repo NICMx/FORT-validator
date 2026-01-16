@@ -31,6 +31,8 @@ struct rpki_certificate {
 	struct rpki_certificate *parent;
 	struct rpp rpp;				/* Nonexistent on EEs */
 
+	struct rpp_querier *querier;
+
 	SLIST_ENTRY(rpki_certificate) lh;	/* List Hook */
 	atomic_uint refcount;
 };

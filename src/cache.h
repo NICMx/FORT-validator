@@ -36,20 +36,33 @@ struct extension_uris {
 void exturis_init(struct extension_uris *);
 void exturis_cleanup(struct extension_uris *);
 
-validation_verdict cache_refresh_url_https(struct uri const *, char const **);
-validation_verdict cache_refresh_url_rsync(struct uri const *, char const **);
-validation_verdict cache_get_fallback(struct uri const *, char const **);
-
 struct cache_cage;
-validation_verdict cache_refresh_by_uris(struct extension_uris *,
-    struct cache_cage **);
-char *cage_map_file(struct cache_cage *, struct uri const *, char const **);
-bool cage_downgrade(struct cache_cage *);
-struct mft_meta const *cage_mft_fallback(struct cache_cage *);
-void cache_commit_rpp(struct uri const *, struct uri const *, struct rpp *);
-void cache_commit_file(struct cache_mapping const *);
+struct rpp_querier;
+struct file_querier;
 
-struct uri const *cage_rpkiNotify(struct cache_cage *);
+struct cache_ta {
+	struct cache_mapping map;	/* Fallback */
+	char *tmppath;			/* Refresh */
+};
+
+validation_verdict cache_get_fallback(struct uri const *, struct rpp_querier *);
+
+struct rpp_querier *querier_create(struct extension_uris *);
+struct cache_file *querier_map(struct rpp_querier *, struct uri const *);
+void querier_get_fallback_mftnums(struct rpp_querier *,
+    struct mft_meta const **, struct mft_meta const **);
+validation_verdict querier_downgrade(struct rpp_querier *);
+void querier_free(struct rpp_querier *);
+
+void cache_commit_rpp(struct rpp_querier *, struct rpp *);
+
+validation_verdict fquery_refresh_https(struct uri const *, struct file_querier **);
+validation_verdict fquery_refresh_rsync(struct uri const *, struct file_querier **);
+validation_verdict fquery_fallback_https(struct uri const *, struct file_querier **);
+validation_verdict fquery_fallback_rsync(struct uri const *, struct file_querier **);
+char const *fquerier_map(struct file_querier *);
+void fquerier_commit(struct file_querier *);
+#define fquerier_free free
 
 void cache_print(void);		/* Dump cache in stdout */
 

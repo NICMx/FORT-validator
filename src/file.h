@@ -11,6 +11,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "types/str.h"
+
 /*
  * The entire contents of the file, loaded into a buffer.
  *
@@ -31,6 +33,7 @@ int file_load(char const *, struct file_contents *, bool);
 void file_free(struct file_contents *);
 
 int file_stat_errno(char const *);
+bool file_isreg(char const *);
 bool file_is_valid(char const *, bool);
 
 int file_rm_f(char const *);
@@ -40,15 +43,15 @@ int file_mv(char const *, char const *);
 void file_ln(char const *, char const *);
 
 struct cache_sequence {
-	char *prefix;
+	struct sized_string pfx;
 	unsigned long next_id;
-	size_t pathlen;
+	size_t pathlen;			/* Size to allocate */
 	bool free_prefix;
 };
 
 void cseq_init(struct cache_sequence *, char *, unsigned long, bool);
 void cseq_cleanup(struct cache_sequence *);
-char *cseq_next(struct cache_sequence *);
+char *cseq_next(struct cache_sequence *, char const **);
 
 /*
  * Remember that this API is awkward:

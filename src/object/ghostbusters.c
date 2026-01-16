@@ -14,7 +14,7 @@ handle_vcard(struct signed_object *so)
 }
 
 int
-ghostbusters_traverse(struct cache_mapping *map,
+ghostbusters_traverse(struct cache_mapping const *map,
     struct rpki_certificate *parent)
 {
 	static OID oid = OID_GHOSTBUSTERS;

@@ -43,10 +43,10 @@ START_TEST(test_hash)
 	ha = hash_get_sha1();
 	ck_assert_uint_eq(20, hash_get_size(ha));
 	name = hash_get_name(ha);
-	ck_assert(strcasecmp("sha1", name) || strcasecmp("sha-1", name));
+	ck_assert(strcasecmp("sha1", name) == 0 || strcasecmp("sha-1", name) == 0);
 
 	ck_assert_int_eq(0, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA1, sizeof(FORT_SHA1)));
-	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA1, sizeof(FORT_SHA1) - 1));
+	ck_assert_int_eq(-EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA1, sizeof(FORT_SHA1) - 1));
 	FORT_SHA1[1] = 1;
 	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA1, sizeof(FORT_SHA1)));
 
@@ -57,11 +57,12 @@ START_TEST(test_hash)
 
 	ha = hash_get_sha256();
 	ck_assert_uint_eq(32, hash_get_size(ha));
+	ck_assert_uint_eq(RRDP_HASH_LEN, hash_get_size(ha));
 	name = hash_get_name(ha);
 	ck_assert(strcasecmp("sha256", name) || strcasecmp("sha-256", name));
 
 	ck_assert_int_eq(0, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA256, sizeof(FORT_SHA256)));
-	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA256, sizeof(FORT_SHA256) - 6));
+	ck_assert_int_eq(-EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA256, sizeof(FORT_SHA256) - 6));
 	FORT_SHA256[10] = 0;
 	ck_assert_int_eq(EINVAL, hash_validate(ha, (unsigned char *)input, strlen(input), FORT_SHA256, sizeof(FORT_SHA256)));
 
@@ -74,14 +75,57 @@ START_TEST(test_hash)
 }
 END_TEST
 
+START_TEST(test_str2hash)
+{
+	char *hex;
+	struct rrdp_hash hash = { 0 };
+	unsigned int i;
+
+	hex = "01";
+	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(false, hash.set);
+
+	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(0, str2hash(hex, &hash));
+	for (i = 0; i < 32; i++)
+		ck_assert_uint_eq(i, hash.bytes[i]);
+	ck_assert_int_eq(true, hash.set);
+
+	/* Unwanted prefix */
+	hex = "0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+
+	/* Padding left */
+	hex = " 00102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+
+	/* Padding right */
+	hex = "00102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f ";
+	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+
+	/* Illegal hex character 'g' */
+	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+
+	/* Slightly too short */
+	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1";
+	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+
+	/* Slightly too long */
+	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2";
+	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+}
+END_TEST
+
 static Suite *
 create_suite(void)
 {
 	Suite *suite;
 	TCase *core;
 
-	core = tcase_create("hash");
+	core = tcase_create("core");
 	tcase_add_test(core, test_hash);
+	tcase_add_test(core, test_str2hash);
 
 	suite = suite_create("hash");
 	suite_add_tcase(suite, core);

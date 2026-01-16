@@ -80,19 +80,19 @@ rsync2bio_cache(char const *src)
 	pr_err("Disabled for now."); // XXX
 	return NULL;
 
-//	char *dst;
-//	BIO *bio;
-//
-//	dst = url2path(src);
-//	if (!dst) {
-//		pr_err("Unparseable rsync URI.");
-//		return NULL;
-//	}
-//
-//	bio = __rsync2bio(src, dst);
-//
-//	free(dst);
-//	return bio;
+	char *dst;
+	BIO *bio;
+
+	dst = url2path(src);
+	if (!dst) {
+		pr_err("Unparseable rsync URI.");
+		return NULL;
+	}
+
+	bio = __rsync2bio(src, dst);
+
+	free(dst);
+	return bio;
 }
 
 static BIO *

@@ -6,6 +6,8 @@
 #include "cachetmp.h"
 #include "config.h"
 #include "configure_ac.h"
+#include "dao/rsync.h"
+#include "dao/ta.h"
 #include "file.h"
 #include "http.h"
 #include "json_util.h"
@@ -29,34 +31,10 @@ enum node_state {
 	DLS_FRESH,
 };
 
-struct node_key {
-	/*
-	 * Hash table indexer.
-	 *
-	 * If this is an rsync node, @id is the caRepository.
-	 * If this is an HTTP node, @id is the simple URL.
-	 * If this is an RRDP refresh node, @id is the rpkiNotify.
-	 * If this is an RRDP fallback node, @id is `rpkiNotify\0caRepository`.
-	 */
-	char *id;
-	size_t idlen;
-
-	/*
-	 * If node is rsync, @http is NULL.
-	 * If node is HTTP, @http is the simple URL.
-	 * If node is RRDP, @http is the rpkiNotify.
-	 *
-	 * Points to @id; do not clean.
-	 */
-	struct uri http;
-	/*
-	 * If node is rsync, @rsync is the simple URL.
-	 * If node is HTTP, @rsync is NULL.
-	 * If node is RRDP, @rsync is the caRepository.
-	 *
-	 * Points to @id; do not clean.
-	 */
-	struct uri rsync;
+enum context_type {
+	CT_RRDP = 1,
+	CT_RSYNC = 2,
+	CT_TA = 3,
 };
 
 /*
@@ -67,20 +45,19 @@ struct node_key {
  * for the given node. Other threads are only allowed to lock, and with the
  * lock, read @state (to find out they shouldn't touch anything else).
  *
- * The entire cache_node (except @hh) becomes (effectively) constant when the
- * writer thread upgrades @state to DLS_FRESH.
+ * Most of the cache_node (except @hh and @commits) becomes (effectively)
+ * constant when the writer thread upgrades @state to DLS_FRESH.
  *
  * This is intended to allow the cache (ie. this module) to pass the node to the
- * validation code (through cache_cage) without having to allocate a deep copy
+ * validation code (through rpp_querier) without having to allocate a deep copy
  * (@rrdp can be somewhat large), and to allow the validation code to read-only
- * the node (except @hh) without having to hold the table mutex.
+ * the node (except @hh and @commits) without having to hold the table mutex.
  *
  * C cannot entirely ensure the node remains constant after it's handed outside;
  * this must be done through careful coding and review.
  */
 struct cache_node {
-	struct node_key key;
-	char *path;
+	struct cache_mapping map;
 
 	enum node_state state;
 	/* Result code of recent dl attempt (DLS_FRESH only) */
@@ -88,8 +65,18 @@ struct cache_node {
 	time_t attempt_ts;	/* Refresh: Dl attempt. Fallback: Commit */
 	time_t success_ts;	/* Refresh: Dl success. Fallback: Commit */
 
-	struct mft_meta mft;	/* RPP fallbacks only */
-	struct rrdp_state *rrdp;
+	struct {
+		enum context_type type;
+		/*
+		 * Worry about these pointers being NULL, even if type is set.
+		 * It happens when the node is new and the download fails.
+		 */
+		union {
+			struct rrdp_ctx *rrdp;
+			struct rsync_ctx *rsync;
+			struct ta_context *ta;
+		} v;
+	} ctx;
 
 	UT_hash_handle hh;	/* Hash table hook */
 };
@@ -108,70 +95,74 @@ struct cache_table {
 	bool enabled;
 	struct cache_sequence seq;
 	struct cache_node *nodes;	/* Hash Table */
-	dl_cb download;
 	pthread_mutex_t lock;
 };
 
 static struct rpki_cache {
-	/* Latest view of the remote rsync modules */
-	/* rsync modules (repositories); indexed by plain rsync URL */
 	struct cache_table rsync;
-	/* Latest view of the remote HTTPS TAs */
-	/* HTTPS files; indexed by plain HTTPS URL */
 	struct cache_table https;
-	/* Latest view of the remote RRDP cages */
-	/* RRDP modules (repositories); indexed by rpkiNotify */
-	struct cache_table rrdp;
-
-	/* Committed (offline fallback hard links) RPPs and TAs */
-	/* RPPs indexed by [rpkiNotif] + caRepo; TAs indexed by plain URL. */
-	struct cache_table fallback;
 } cache;
 
 /* "Is the lockfile ours?" */
 static volatile sig_atomic_t lockfile_owned;
 
-struct cache_cage {
+struct file_querier {
+	struct cache_node *node;
+	bool is_refresh;
+};
+
+/* Statuses for n-file queriers */
+enum rpp_querier_status {
+	/* No work made so far */
+	CS_START,
+	/* Currently checking the most recent RRDP refresh delta */
+	CS_RRDP_REFRESH,
+	/* Currently checking the rsync refresh */
+	CS_RSYNC_REFRESH,
+	/*
+	 * Currently checking older RRDP deltas, in descending order,
+	 * until (and including) Fallback's manifest number
+	 */
+	CS_RRDP_DELTAS,
+	/* Checking the RRDP cage that succeeded in the previous cycle */
+	CS_RRDP_FALLBACK,
+	/* Checking the rsync cage that succeeded in the previous cycle */
+	CS_RSYNC_FALLBACK,
+	/* Nothing worked */
+	CS_FAIL,
+};
+
+struct rpp_querier {
+	enum rpp_querier_status status;
+
+	struct rrdp_dao *rrdp;
+	struct rsync_dao *rsync;
+
 	struct extension_uris *uris;
-	struct cache_node const *refresh;
-	struct cache_node const *fallback;
-	struct mft_meta *mft;		/* Fallback XXX not set */
 };
-
-struct cache_commit {
-	struct uri rpkiNotify;
-	struct uri caRepository;
-	struct cache_mapping *files;
-	size_t nfiles;
-	struct mft_meta mft;		/* RPPs commits only */
-	STAILQ_ENTRY(cache_commit) lh;
-};
-
-static STAILQ_HEAD(cache_commits, cache_commit) commits = STAILQ_HEAD_INITIALIZER(commits);
-static pthread_mutex_t commits_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #define LOCKFILE ".lock"
 #define METAFILE "meta.json"
 #define TAGNAME_VERSION "fort-version"
 
-#ifdef UNIT_TESTING
-static void __delete_node_cb(struct cache_node const *);
-#endif
-
 static void
 delete_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
-#ifdef UNIT_TESTING
-	__delete_node_cb(node);
-#endif
-
 	if (tbl)
 		HASH_DEL(tbl->nodes, node);
 
-	free(node->key.id);
-	free(node->path);
-	mftm_cleanup(&node->mft);
-	rrdp_state_free(node->rrdp);
+	map_cleanup(&node->map);
+	switch (node->ctx.type) {
+	case CT_RRDP:
+		rrdpctx_free(node->ctx.v.rrdp);
+		break;
+	case CT_RSYNC:
+		/* XXX (rsync) */
+		break;
+	case CT_TA:
+		tactx_free(node->ctx.v.ta);
+		break;
+	}
 	free(node);
 }
 
@@ -185,10 +176,6 @@ foreach_node(void (*cb)(struct cache_table *, struct cache_node *, void *),
 		cb(&cache.rsync, node, arg);
 	HASH_ITER(hh, cache.https.nodes, node, tmp)
 		cb(&cache.https, node, arg);
-	HASH_ITER(hh, cache.rrdp.nodes, node, tmp)
-		cb(&cache.rrdp, node, arg);
-	HASH_ITER(hh, cache.fallback.nodes, node, tmp)
-		cb(&cache.fallback, node, arg);
 }
 
 static void
@@ -246,34 +233,37 @@ strip_rsync_module(char const *url)
 }
 
 static json_t *
-node2json(struct cache_node *node)
+node2json(struct cache_node const *node)
 {
-	char const *str;
 	json_t *json;
+
+	if (node->ctx.type == CT_RRDP && node->ctx.v.rrdp == NULL)
+		/* Dl failed and there was no state; normal so silent. */
+		return NULL;
 
 	json = json_obj_new();
 	if (json == NULL)
 		return NULL;
 
-	str = uri_str(&node->key.http);
-	if (str && json_add_str(json, "http", str))
+	if (json_add_str(json, "uri", uri_str(&node->map.url)))
 		goto fail;
-	str = uri_str(&node->key.rsync);
-	if (str && json_add_str(json, "rsync", str))
-		goto fail;
-	if (json_add_str(json, "path", node->path))
+	if (json_add_str(json, "path", node->map.path))
 		goto fail;
 	if (node->attempt_ts && json_add_ts(json, "attempt", node->attempt_ts))
 		goto fail;
 	if (node->success_ts && json_add_ts(json, "success", node->success_ts))
 		goto fail;
-	if (node->mft.num.size && json_add_bigint(json, "mftNum", &node->mft.num))
-		goto fail;
-	if (node->mft.update && json_add_ts(json, "mftUpdate", node->mft.update))
-		goto fail;
-	if (node->rrdp)
-		if (json_object_add(json, "rrdp", rrdp_state2json(node->rrdp)))
+	switch (node->ctx.type) {
+	case CT_RRDP:
+		if (json_object_add(json, "rrdp", rrdp_ctx2json(node->ctx.v.rrdp)))
 			goto fail;
+		break;
+	case CT_RSYNC: /* XXX (rsync) */
+	case CT_TA:
+		break;
+	default:
+		pr_panic("Unknown context type: %d", node->ctx.type);
+	}
 
 	return json;
 
@@ -286,13 +276,12 @@ static validation_verdict dl_http(struct cache_node *);
 static validation_verdict dl_rrdp(struct cache_node *);
 
 static void
-init_table(struct cache_table *tbl, char *name, bool enabled, dl_cb dl)
+init_table(struct cache_table *tbl, char *name, bool enabled)
 {
 	memset(tbl, 0, sizeof(*tbl));
 	tbl->name = name;
 	tbl->enabled = enabled;
 	cseq_init(&tbl->seq, name, 0, false);
-	tbl->download = dl;
 	panic_on_fail(pthread_mutex_init(&tbl->lock, NULL),
 	    "pthread_mutex_init");
 }
@@ -300,10 +289,8 @@ init_table(struct cache_table *tbl, char *name, bool enabled, dl_cb dl)
 static void
 init_tables(void)
 {
-	init_table(&cache.rsync, "rsync", config_get_rsync_enabled(), dl_rsync);
-	init_table(&cache.https, "https", config_get_http_enabled(), dl_http);
-	init_table(&cache.rrdp, "rrdp", config_get_http_enabled(), dl_rrdp);
-	init_table(&cache.fallback, "fallback", true, NULL);
+	init_table(&cache.rsync, "rsync", config_get_rsync_enabled());
+	init_table(&cache.https, "https", config_get_http_enabled());
 }
 
 static int
@@ -457,135 +444,62 @@ cache_setup2(void)
 	return 0;
 }
 
-static void
-init_rrdp_fallback_key(struct node_key *key, struct uri const *http,
-    struct uri const *rsync)
-{
-	size_t hlen, rlen;
-
-	hlen = uri_len(http);
-	rlen = uri_len(rsync);
-
-	key->idlen = hlen + rlen + 1;
-	key->id = pmalloc(key->idlen + 1);
-	__uri_init(&key->http, key->id, hlen);
-	__uri_init(&key->rsync, key->id + hlen + 1, rlen);
-
-	memcpy(key->id, uri_str(http), hlen + 1);
-	memcpy(key->id + hlen + 1, uri_str(rsync), rlen + 1);
-}
-
-static int
-init_node_key(struct node_key *key, struct uri const *http,
-    struct uri const *rsync)
-{
-	if (http && (uri_str(http) == NULL))
-		http = NULL;
-	if (rsync && (uri_str(rsync) == NULL))
-		rsync = NULL;
-
-	if (http != NULL && rsync != NULL) {
-		init_rrdp_fallback_key(key, http, rsync);
-
-	} else if (rsync != NULL) {
-		key->idlen = uri_len(rsync);
-		key->id = pstrndup(uri_str(rsync), key->idlen);
-		memset(&key->http, 0, sizeof(key->http));
-		__uri_init(&key->rsync, key->id, key->idlen);
-
-	} else if (http != NULL) {
-		key->idlen = uri_len(http);
-		key->id = pstrndup(uri_str(http), key->idlen);
-		__uri_init(&key->http, key->id, key->idlen);
-		memset(&key->rsync, 0, sizeof(key->rsync));
-
-	} else {
-		return false;
-	}
-
-	return true;
-}
-
 static struct cache_node *
 json2node(json_t *json)
 {
 	struct cache_node *node;
-	struct uri http;
-	struct uri rsync;
 	char const *path;
 	json_t *rrdp;
 	int error;
 
-	error = json_get_uri(json, "http", &http);
-	if (error && (error != ENOENT)) {
-		pr_trc("http: %s", strerror(error));
-		return NULL;
-	}
-
-	error = json_get_uri(json, "rsync", &rsync);
-	if (error && (error != ENOENT)) {
-		pr_trc("rsync: %s", strerror(error));
-		uri_cleanup(&http);
-		return NULL;
-	}
-
 	node = pzalloc(sizeof(struct cache_node));
 
-	if (!init_node_key(&node->key, &http, &rsync)) {
-		pr_trc("JSON node is missing both http and rsync tags.");
-		uri_cleanup(&rsync);
-		uri_cleanup(&http);
-		goto nde;
+	error = json_get_uri(json, "uri", &node->map.url);
+	if (error) {
+		pr_trc("uri: %s", strerror(abs(error)));
+		goto node;
 	}
-
-	uri_cleanup(&http);
-	uri_cleanup(&rsync);
 
 	error = json_get_str(json, "path", &path);
 	if (error) {
-		pr_trc("path: %s", strerror(error));
-		goto key;
+		pr_trc("path: %s", strerror(abs(error)));
+		goto url;
 	}
-	node->path = pstrdup(path);
+	node->map.path = pstrdup(path);
 
 	error = json_get_ts(json, "attempt", &node->attempt_ts);
 	if (error != 0 && error != ENOENT) {
 		pr_trc("attempt: %s", strerror(error));
-		goto pth;
+		goto path;
 	}
 
 	error = json_get_ts(json, "success", &node->success_ts);
 	if (error != 0 && error != ENOENT) {
 		pr_trc("success: %s", strerror(error));
-		goto pth;
-	}
-
-	error = json_get_bigint(json, "mftNum", &node->mft.num);
-	if (error < 0) {
-		pr_trc("mftNum: %s", strerror(error));
-		goto pth;
-	}
-
-	error = json_get_ts(json, "mftUpdate", &node->mft.update);
-	if (error != 0 && error != ENOENT) {
-		pr_trc("mftUpdate: %s", strerror(error));
-		goto mft;
+		goto path;
 	}
 
 	error = json_get_object(json, "rrdp", &rrdp);
 	if (error < 0) {
 		pr_trc("rrdp: %s", strerror(error));
-		goto mft;
+		goto path;
 	}
-	if (error == 0 && rrdp_json2state(rrdp, node->path, &node->rrdp))
-		goto mft;
+	if (error == 0) {
+		node->ctx.type = CT_RRDP;
+		if (rrdp_json2ctx(rrdp, node->map.path, &node->ctx.v.rrdp))
+			goto path;
+	}
+
+	if (node->ctx.type == 0) {
+		node->ctx.type = CT_TA;
+		node->ctx.v.ta = tactx_create(path);
+	}
 
 	return node;
 
-mft:	INTEGER_cleanup(&node->mft.num);
-pth:	free(node->path);
-key:	free(node->key.id);
-nde:	free(node);
+path:	free(node->map.path);
+url:	uri_cleanup(&node->map.url);
+node:	free(node);
 	return NULL;
 }
 
@@ -673,7 +587,8 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 	node = json2node(root);
 	if (node != NULL) {
 		// XXX worry about dupes
-		HASH_ADD_KEYPTR(hh, tbl->nodes, node->key.id, node->key.idlen,
+		HASH_ADD_KEYPTR(hh, tbl->nodes,
+		    uri_str(&node->map.url), uri_len(&node->map.url),
 		    node);
 	}
 
@@ -713,9 +628,10 @@ collect_metas(struct cache_table *tbl)
 
 	closedir(dir);
 
-	tbl->seq.prefix = tbl->name;
+	tbl->seq.pfx.str = tbl->name;
+	tbl->seq.pfx.len = strlen(tbl->name);
 	tbl->seq.next_id = max_id + 1;
-	tbl->seq.pathlen = strlen(tbl->name);
+	tbl->seq.pathlen = tbl->seq.pfx.len;
 	tbl->seq.free_prefix = false;
 }
 
@@ -730,8 +646,6 @@ load_index(void)
 
 	collect_metas(&cache.rsync);
 	collect_metas(&cache.https);
-	collect_metas(&cache.rrdp);
-	collect_metas(&cache.fallback);
 	return 0;
 }
 
@@ -756,12 +670,6 @@ cache_prepare(void)
 	error = file_mkdir("https", true);
 	if (error)
 		goto fail;
-	error = file_mkdir("rrdp", true);
-	if (error)
-		goto fail;
-	error = file_mkdir("fallback", true);
-	if (error)
-		goto fail;
 	error = file_mkdir(CACHE_TMPDIR, true);
 	if (error)
 		goto fail;
@@ -777,9 +685,13 @@ fail:	flush_nodes();
 static validation_verdict
 dl_rsync(struct cache_node *module)
 {
+	/*
 	int error;
-	error = rsync_queue(&module->key.rsync, module->path);
+	error = rsync_queue(&module->map.url, module->map.path);
 	return error ? VV_FAIL : VV_BUSY;
+	*/
+	pr_err("rsync commented for now.");
+	return VV_FAIL;
 }
 
 static validation_verdict
@@ -787,8 +699,8 @@ dl_rrdp(struct cache_node *notif)
 {
 	bool changed;
 
-	if (rrdp_update(&notif->key.http, notif->path, notif->success_ts,
-			&changed, &notif->rrdp))
+	if (rrdp_update(&notif->map.url, notif->map.path, notif->success_ts,
+			&changed, &notif->ctx.v.rrdp))
 		return VV_FAIL;
 	if (changed)
 		notif->success_ts = notif->attempt_ts;
@@ -803,13 +715,17 @@ dl_http(struct cache_node *file)
 
 	cache_tmpfile(tmppath);
 
-	if (http_download(&file->key.http, tmppath, file->success_ts, &changed))
+	if (http_download(&file->map.url, tmppath, file->success_ts, &changed))
 		return VV_FAIL;
 
+	if (!file->ctx.v.ta)
+		file->ctx.v.ta = tactx_create(NULL);
+
 	if (changed) {
-		if (file_mv(tmppath, file->path) != 0)
-			return VV_FAIL;
 		file->success_ts = file->attempt_ts;
+		tactx_set_refresh(file->ctx.v.ta, tmppath);
+	} else {
+		tactx_set_unchanged(file->ctx.v.ta);
 	}
 
 	return VV_CONTINUE;
@@ -817,43 +733,36 @@ dl_http(struct cache_node *file)
 
 /* Caller must lock @tbl->lock */
 static struct cache_node *
-find_node(struct cache_table *tbl, char const *url, size_t urlen)
+find_node(struct cache_table *tbl, struct uri const *url)
 {
 	struct cache_node *node;
-	HASH_FIND(hh, tbl->nodes, url, urlen, node);
+	HASH_FIND(hh, tbl->nodes, uri_str(url), uri_len(url), node);
 	return node;
 }
 
 static struct cache_node *
-provide_node(struct cache_table *tbl, struct uri const *http,
-   struct uri const *rsync)
+provide_node(struct cache_table *tbl, struct uri const *url,
+    enum context_type ctx_type)
 {
-	struct node_key key;
 	struct cache_node *node;
 
-	if (!init_node_key(&key, http, rsync)) {
-		pr_trc("Can't build node identifier: Both HTTP and rsync URLs are NULL.");
-		return NULL;
-	}
-
-	node = find_node(tbl, key.id, key.idlen);
-	if (node) {
-		free(key.id);
-		return node;
-	}
+	node = find_node(tbl, url);
+	if (node)
+		return (node->ctx.type == ctx_type) ? node : NULL;
 
 	node = pzalloc(sizeof(struct cache_node));
-	node->key = key;
-	node->path = cseq_next(&tbl->seq);
-	if (!node->path) {
+	uri_copy(&node->map.url, url);
+	node->map.path = cseq_next(&tbl->seq, NULL);
+	if (!node->map.path) {
+		uri_cleanup(&node->map.url);
 		free(node);
-		free(key.id);
 		return NULL;
 	}
+	node->ctx.type = ctx_type;
 
-	HASH_ADD_KEYPTR(hh, tbl->nodes, node->key.id, node->key.idlen, node);
+	url = &node->map.url;
+	HASH_ADD_KEYPTR(hh, tbl->nodes, uri_str(url), uri_len(url), node);
 	return node;
-
 }
 
 static void
@@ -862,7 +771,7 @@ rm_metadata(struct cache_node *node)
 	char *filename;
 	int error;
 
-	filename = str_concat(node->path, ".json");
+	filename = str_concat(node->map.path, ".json");
 	pr_trc("rm -f %s", filename);
 	if (unlink(filename) < 0) {
 		error = errno;
@@ -884,7 +793,7 @@ write_metadata(struct cache_node *node)
 	json = node2json(node);
 	if (!json)
 		return;
-	filename = str_concat(node->path, ".json");
+	filename = str_concat(node->map.path, ".json");
 
 	pr_trc("echo \"$json\" > %s", filename);
 	if (json_dump_file(json, filename, JSON_INDENT(2)))
@@ -895,18 +804,22 @@ write_metadata(struct cache_node *node)
 }
 
 /*
- * By contract, only sets @result on return VV_CONTINUE.
+ * Check @result even on VV_FAIL; even if refresh failed, you might still get a
+ * fallback.
  * By contract, @result->state will be DLS_FRESH on return VV_CONTINUE.
+ *
+ * @result belongs to the database; don't free it.
  */
 static validation_verdict
 do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
-    struct cache_node **result)
+    dl_cb dl, struct cache_node **result)
 {
 	struct uri module;
 	struct cache_node *node;
 	bool downloaded = false;
 
 	pr_trc("Trying %s (online)...", uri_str(uri));
+	*result = NULL;
 
 	if (!tbl->enabled) {
 		pr_trc("Protocol disabled.");
@@ -919,10 +832,10 @@ do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
 		else if (!get_rsync_module(uri, &module))
 			return VV_FAIL;
 		mutex_lock(&tbl->lock);
-		node = provide_node(tbl, NULL, &module);
+		node = provide_node(tbl, &module, single ? CT_TA : CT_RSYNC);
 	} else {
 		mutex_lock(&tbl->lock);
-		node = provide_node(tbl, uri, NULL);
+		node = provide_node(tbl, uri, single ? CT_TA : CT_RRDP);
 	}
 	if (!node) {
 		mutex_unlock(&tbl->lock);
@@ -941,7 +854,7 @@ do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
 
 		node->attempt_ts = time_fatal();
 		rm_metadata(node);
-		node->verdict = tbl->download(node);
+		node->verdict = dl(node);
 		if (node->verdict == VV_BUSY)
 			goto ongoing;
 		write_metadata(node);
@@ -964,6 +877,8 @@ ongoing:	mutex_unlock(&tbl->lock);
 	mutex_unlock(&tbl->lock);
 	/* node->state is guaranteed to be DLS_FRESH at this point. */
 
+	*result = node;
+
 	if (downloaded) /* Kickstart tasks that fell into DLS_ONGOING */
 		task_wakeup_dormants();
 
@@ -973,273 +888,154 @@ ongoing:	mutex_unlock(&tbl->lock);
 	}
 
 	pr_trc("Refresh succeeded.");
-	*result = node;
 	return VV_CONTINUE;
 }
 
-static struct cache_node *
-find_rrdp_fallback_node(struct extension_uris *uris)
-{
-	struct node_key key;
-	struct cache_node *result;
+/* XXX Fallback only if parent is fallback */
+/* XXX Make sure somewhere validates rpkiManifest matches caRepository */
 
-	if (!uri_str(&uris->rpkiNotify) || !uri_str(&uris->caRepository))
-		return NULL;
-
-	init_rrdp_fallback_key(&key, &uris->rpkiNotify, &uris->caRepository);
-	result = find_node(&cache.fallback, key.id, key.idlen);
-	free(key.id);
-
-	return result;
-}
-
-static struct cache_node *
-get_fallback(struct extension_uris *uris)
-{
-	struct cache_node *rrdp;
-	struct cache_node *rsync;
-
-	rrdp = find_rrdp_fallback_node(uris);
-	rsync = find_node(&cache.fallback, uri_str(&uris->caRepository),
-	    uri_len(&uris->caRepository));
-
-	if (rrdp == NULL)
-		return rsync;
-	if (rsync == NULL)
-		return rrdp;
-	return (difftime(rsync->success_ts, rrdp->success_ts) > 0) ? rsync : rrdp;
-}
-
-static validation_verdict
-cache_refresh_url(struct cache_table *table, struct uri const *url,
-    char const **result)
+validation_verdict
+querier_downgrade(struct rpp_querier *dao)
 {
 	struct cache_node *node;
 	validation_verdict vv;
 
-	vv = do_refresh(table, url, true, &node);
-	if (vv != VV_CONTINUE) {
-		*result = NULL;
-		return vv;
-	}
+	switch (dao->status) {
+	case CS_START:
+		if (uri_str(&dao->uris->rpkiNotify) != NULL) {
+			vv = do_refresh(&cache.https, &dao->uris->rpkiNotify,
+			    false, dl_rrdp, &node);
+			if (node != NULL) {
+				dao->status = CS_RRDP_REFRESH;
+				dao->rrdp = rrdpdao_create(node->ctx.v.rrdp,
+				   &dao->uris->caRepository);
+			}
+			if (vv == VV_CONTINUE) {
+				pr_trc("Validating RRDP Refresh.");
+				return VV_CONTINUE;
+			}
+			if (vv == VV_BUSY)
+				return VV_BUSY;
+		}
+		/* No break */
 
-	*result = node->path;
-	return VV_CONTINUE;
-}
-
-validation_verdict
-cache_refresh_url_https(struct uri const *url, char const **result)
-{
-	return cache_refresh_url(&cache.https, url, result);
-}
-
-validation_verdict
-cache_refresh_url_rsync(struct uri const *url, char const **result)
-{
-	return cache_refresh_url(&cache.rsync, url, result);
-}
-
-/* HTTPS (TAs) and rsync only; don't use this for RRDP. */
-validation_verdict
-cache_get_fallback(struct uri const *url, char const **result)
-{
-	struct cache_node *node;
-
-	/*
-	 * The fallback table is read-only until the cleanup.
-	 * Mutex not needed here.
-	 */
-
-	pr_trc("Trying %s (offline)...", uri_str(url));
-
-	node = find_node(&cache.fallback, uri_str(url), uri_len(url));
-	if (!node) {
-		pr_trc("Cache data unavailable.");
-		*result = NULL;
-		return VV_CONTINUE;
-	}
-
-	*result = node->path;
-	return VV_CONTINUE;
-}
-
-/*
- * Attempts to refresh the RPP described by @sias, returns the resulting
- * repository's mapper.
- *
- * XXX Fallback only if parent is fallback
- */
-validation_verdict
-cache_refresh_by_uris(struct extension_uris *uris, struct cache_cage **result)
-{
-	struct cache_node *node;
-	struct cache_cage *cage;
-	validation_verdict vv;
-
-	// XXX Make sure somewhere validates rpkiManifest matches caRepository.
-
-	/* Try RRDP + optional fallback */
-	if (uri_str(&uris->rpkiNotify) != NULL) {
-		vv = do_refresh(&cache.rrdp, &uris->rpkiNotify, false, &node);
-		if (vv == VV_CONTINUE)
-			goto refresh_success;
+	case CS_RRDP_REFRESH:
+		vv = do_refresh(&cache.rsync, &dao->uris->caRepository,
+		    false, dl_rsync, &node);
+		if (vv == VV_CONTINUE) {
+			pr_trc("Validating rsync refresh.");
+			dao->status = CS_RSYNC_REFRESH;
+			dao->rsync = rsyncdao_create(node->ctx.v.rsync);
+			return VV_CONTINUE;
+		}
 		if (vv == VV_BUSY)
 			return VV_BUSY;
+		/* No break */
+
+	case CS_RSYNC_REFRESH:
+	case CS_RRDP_DELTAS:
+		if (rrdpdao_downgrade_delta(dao->rrdp)) {
+			pr_trc("Validating RRDP deltas.");
+			dao->status = CS_RRDP_DELTAS;
+			return VV_CONTINUE;
+		}
+		/* No break */
+
+	case CS_RRDP_FALLBACK:
+		if (rrdpdao_downgrade_fb(dao->rrdp)) {
+			pr_trc("Validating RRDP fallback.");
+			dao->status = CS_RRDP_FALLBACK;
+			return VV_CONTINUE;
+		}
+		/* No break */
+
+	case CS_RSYNC_FALLBACK:
+		if (rsyncdao_downgrade(dao->rsync)) {
+			pr_trc("Validating rsync fallback.");
+			dao->status = CS_RSYNC_FALLBACK;
+			return VV_CONTINUE;
+		}
+		/* No break */
+
+	case CS_FAIL:
+		dao->status = CS_FAIL;
+		break;
 	}
 
-	/* Try rsync + optional fallback */
-	vv = do_refresh(&cache.rsync, &uris->caRepository, false, &node);
-	if (vv == VV_CONTINUE)
-		goto refresh_success;
-	if (vv == VV_BUSY)
-		return VV_BUSY;
-
-	/* Try fallback only */
-	node = get_fallback(uris);
-	if (!node)
-		return VV_FAIL; /* Nothing to work with */
-
-	*result = cage = pzalloc(sizeof(struct cache_cage));
-	cage->fallback = node;
-	return VV_CONTINUE;
-
-refresh_success:
-	*result = cage = pzalloc(sizeof(struct cache_cage));
-	cage->uris = uris;
-	cage->refresh = node;
-	return VV_CONTINUE;
+	return VV_FAIL;
 }
 
-/*
- * Note, RRDP can return NULL, because it hard-tracks its files.
- * rsync doesn't. As long as the node exists, it will return a path,
- * even if it doesn't point anywhere.
- * Result needs free().
- */
-static char *
-node2file(struct cache_node const *node, struct uri const *url)
+struct rpp_querier *
+querier_create(struct extension_uris *uris)
 {
-	char const *file;
+	struct rpp_querier *querier;
 
-	if (node == NULL)
-		return NULL;
+	querier = pmalloc(sizeof(struct rpp_querier));
+	querier->status = CS_START;
+	querier->uris = uris;
 
-	if (node->rrdp) {
-		file = rrdp_file(node->rrdp, url);
-		return file ? pstrdup(file) : NULL;
-	} else { /* rsync */
-		return path_join(node->path, strip_rsync_module(uri_str(url)));
+	return querier;
+}
+
+void
+querier_free(struct rpp_querier *querier)
+{
+	if (querier) {
+		rrdpdao_free(querier->rrdp);
+		rsyncdao_free(querier->rsync);
+		free(querier);
 	}
 }
 
 /* Result needs free() */
-char *
-cage_map_file(struct cache_cage *cage, struct uri const *url, char const **type)
+struct cache_file *
+querier_map(struct rpp_querier *querier, struct uri const *url)
 {
-	/*
-	 * Remember: In addition to honoring the consts of cache->refresh and
-	 * cache->fallback, anything these structures point to MUST NOT be
-	 * modified either.
-	 */
+	switch (querier->status) {
+	case CS_RRDP_REFRESH:
+	case CS_RRDP_DELTAS:
+	case CS_RRDP_FALLBACK:
+		return rrdpdao_map(querier->rrdp, url);
 
-	char *file;
+	case CS_RSYNC_REFRESH:
+	case CS_RSYNC_FALLBACK:
+		return rsyncdao_map(querier->rsync, url);
 
-	file = node2file(cage->refresh, url);
-	if (file) {
-		*type = cage->refresh->rrdp ? "RRDP refresh" : "rsync refresh";
-		return file;
-	}
-
-	file = node2file(cage->fallback, url);
-	if (file) {
-		*type = cage->fallback->rrdp ? "RRDP fallback" : "rsync fallback";
-		return file;
+	case CS_START:
+	case CS_FAIL:
+		break;
 	}
 
 	return NULL;
 }
 
-/*
- * If refresh enabled,
- * 	Switches to fallback.
- * 	If fallback unavailable, disables the cage.
- * Else, if fallback enabled, disables the cage.
- * Else (if cage disabled) does nothing.
- *
- * Returns true if the next option should be attempted.
- */
-bool
-cage_downgrade(struct cache_cage *cage)
+void
+querier_get_fallback_mftnums(struct rpp_querier *querier,
+    struct mft_meta const **rrdp, struct mft_meta const **rsync)
 {
-	/*
-	 * Remember: In addition to honoring the consts of cache->refresh and
-	 * cache->fallback, anything these structures point to MUST NOT be
-	 * modified either.
-	 */
+	*rrdp = rrdpdao_fallback_mftnum(querier->rrdp);
+	*rsync = rsyncdao_fallback_mftnum(querier->rsync);
+}
 
-	if (cage->refresh) {
-		cage->refresh = NULL;
-		cage->fallback = get_fallback(cage->uris);
-		return cage->fallback != NULL;
+void
+cache_commit_rpp(struct rpp_querier *querier, struct rpp *rpp)
+{
+	switch (querier->status) {
+	case CS_RRDP_REFRESH:
+	case CS_RRDP_DELTAS:
+	case CS_RRDP_FALLBACK:
+		rrdpdao_commit(querier->rrdp, rpp);
+		break;
+
+	case CS_RSYNC_REFRESH:
+	case CS_RSYNC_FALLBACK:
+		rsyncdao_commit(querier->rsync, rpp);
+		break;
+
+	case CS_START:
+	case CS_FAIL:
+		break;
 	}
-	if (cage->fallback)
-		cage->fallback = NULL;
-	return false;
-}
-
-struct mft_meta const *
-cage_mft_fallback(struct cache_cage *cage)
-{
-	return cage->mft;
-}
-
-/*
- * Steals ownership of @rpp->files, @rpp->nfiles and @rpp->mft.num, but they're
- * not going to be modified nor deleted until the cache cleanup.
- */
-void
-cache_commit_rpp(struct uri const *rpkiNotify, struct uri const *caRepository,
-    struct rpp *rpp)
-{
-	struct cache_commit *commit;
-
-	pr_trc("Queuing RPP for commit: [%s, %s]",
-	    rpkiNotify ? uri_str(rpkiNotify) : "NULL",
-	    uri_str(caRepository));
-
-	commit = pzalloc(sizeof(struct cache_commit));
-	if (rpkiNotify)
-		uri_copy(&commit->rpkiNotify, rpkiNotify);
-	uri_copy(&commit->caRepository, caRepository);
-	commit->files = rpp->files;
-	commit->nfiles = rpp->nfiles;
-	INTEGER_move(&commit->mft.num, &rpp->mft.num);
-	commit->mft.update = rpp->mft.update;
-
-	mutex_lock(&commits_lock);
-	STAILQ_INSERT_TAIL(&commits, commit, lh);
-	mutex_unlock(&commits_lock);
-
-	rpp->files = NULL;
-	rpp->nfiles = 0;
-}
-
-void
-cache_commit_file(struct cache_mapping const *map)
-{
-	struct cache_commit *commit;
-
-	commit = pzalloc(sizeof(struct cache_commit));
-	memset(&commit->rpkiNotify, 0, sizeof(commit->rpkiNotify));
-	memset(&commit->caRepository, 0, sizeof(commit->caRepository));
-	commit->files = pmalloc(sizeof(*map));
-	map_copy(commit->files, map);
-	commit->nfiles = 1;
-	memset(&commit->mft, 0, sizeof(commit->mft));
-
-	mutex_lock(&commits_lock);
-	STAILQ_INSERT_TAIL(&commits, commit, lh);
-	mutex_unlock(&commits_lock);
 }
 
 void
@@ -1249,7 +1045,7 @@ rsync_finished(struct uri const *url, char const *path)
 
 	mutex_lock(&cache.rsync.lock);
 
-	node = find_node(&cache.rsync, uri_str(url), uri_len(url));
+	node = find_node(&cache.rsync, url);
 	if (node == NULL) {
 		mutex_unlock(&cache.rsync.lock);
 		pr_err("rsync '%s -> %s' finished, but cache node does not exist.",
@@ -1268,30 +1064,13 @@ rsync_finished(struct uri const *url, char const *path)
 	task_wakeup_dormants();
 }
 
-struct uri const *
-cage_rpkiNotify(struct cache_cage *cage)
-{
-	struct cache_node const *node;
-
-	node = cage->refresh;
-	if (node)
-		goto yes;
-	node = cage->fallback;
-	if (node)
-		goto yes;
-	return NULL;
-
-yes:	return node->rrdp ? &node->key.http : NULL;
-}
-
 static void
 cachent_print(struct cache_node *node)
 {
 	if (!node)
 		return;
 
-	printf("\thttp:%s rsync:%s (%s): ", uri_str(&node->key.http),
-	    uri_str(&node->key.rsync), node->path);
+	printf("\turi:%s path:%s: ", uri_str(&node->map.url), node->map.path);
 	switch (node->state) {
 	case DLS_OUTDATED:
 		printf("stale ");
@@ -1305,8 +1084,16 @@ cachent_print(struct cache_node *node)
 	}
 
 	printf("attempt:%lx success:%lx ", node->attempt_ts, node->success_ts);
-	printf("mftUpdate:%lx ", node->mft.update);
-	rrdp_print(node->rrdp);
+	switch (node->ctx.type) {
+	case CT_RRDP:
+		rrdpctx_print("RRDP", node->ctx.v.rrdp);
+		break;
+	case CT_RSYNC: /* XXX (rsync) */
+		break;
+	case CT_TA:
+		tactx_print("TA", node->ctx.v.ta);
+		break;
+	}
 	printf("\n");
 }
 
@@ -1317,7 +1104,7 @@ table_print(struct cache_table *tbl)
 
 	printf("%s enabled:%d seq:%s/%lx\n",
 	    tbl->name, tbl->enabled,
-	    tbl->seq.prefix, tbl->seq.next_id);
+	    tbl->seq.pfx.str, tbl->seq.next_id);
 	HASH_ITER(hh, tbl->nodes, node, tmp)
 		cachent_print(node);
 }
@@ -1327,235 +1114,52 @@ cache_print(void)
 {
 	table_print(&cache.rsync);
 	table_print(&cache.https);
-	table_print(&cache.rrdp);
-	table_print(&cache.fallback);
-}
-
-static bool
-is_fallback(char const *path)
-{
-	return str_starts_with(path, "fallback/");
-}
-
-/* Hard-links @rpp's approved files into the fallback directory. */
-static void
-commit_rpp(struct cache_commit *commit, struct cache_node *fb)
-{
-	struct cache_mapping *src;
-	char const *dst;
-	array_index i;
-
-	INTEGER_cleanup(&fb->mft.num);
-	INTEGER_move(&fb->mft.num, &commit->mft.num);
-	fb->mft.update = commit->mft.update;
-
-	for (i = 0; i < commit->nfiles; i++) {
-		src = commit->files + i;
-
-		if (is_fallback(src->path))
-			continue;
-
-		/*
-		 * (fine)
-		 * Note, this is accidentally working perfectly for rsync too.
-		 * Might want to rename some of this.
-		 */
-		dst = rrdp_create_fallback(fb->path, &fb->rrdp, &src->url);
-		if (!dst)
-			goto skip;
-
-		file_ln(src->path, dst);
-
-skip:		free(src->path);
-		src->path = pstrdup(dst);
-	}
-}
-
-/* Deletes abandoned (ie. no longer ref'd by manifests) fallback hard links. */
-static void
-discard_trash(struct cache_commit *commit, struct cache_node *fallback)
-{
-	DIR *dir;
-	struct dirent *file;
-	char *file_path;
-	array_index i;
-
-	dir = opendir(fallback->path);
-	if (dir == NULL) {
-		pr_err("opendir() error: %s", strerror(errno));
-		return;
-	}
-
-	FOREACH_DIR_FILE(dir, file) {
-		if (S_ISDOTS(file))
-			continue;
-
-		/*
-		 * TODO (fine) Bit slow; wants a hash table,
-		 * and maybe skip @file_path's reallocation.
-		 */
-
-		file_path = path_join(fallback->path, file->d_name);
-
-		for (i = 0; i < commit->nfiles; i++) {
-			if (commit->files[i].path == NULL)
-				continue;
-			if (strcmp(file_path, commit->files[i].path) == 0)
-				goto next;
-		}
-
-		/*
-		 * Uh... maybe keep the file until an expiration threshold?
-		 * None of the current requirements seem to mandate it.
-		 * It sounds pretty unreasonable for a signed valid manifest to
-		 * "forget" a file, then legitimately relist it without actually
-		 * providing it.
-		 */
-		pr_trc("Removing hard link: %s", file_path);
-		if (unlink(file_path) < 0)
-			pr_wrn("Could not unlink %s: %s",
-			    file_path, strerror(errno));
-
-next:		free(file_path);
-	}
-
-	if (errno)
-		pr_err("Fallback directory traversal errored: %s",
-		    strerror(errno));
-	closedir(dir);
 }
 
 static void
-commit_fallbacks(time_t now)
+cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
-	struct cache_commit *commit;
-	struct cache_node *fb;
-	array_index i;
-	int error;
+	bool salvage;
 
-	while (!STAILQ_EMPTY(&commits)) {
-		commit = STAILQ_FIRST(&commits);
-		STAILQ_REMOVE_HEAD(&commits, lh);
+	rm_metadata(node);
 
-		if (uri_str(&commit->caRepository) != NULL) {
-			pr_trc("Creating fallback for [%s, %s]",
-			    uri_str(&commit->rpkiNotify),
-			    uri_str(&commit->caRepository));
-
-			fb = provide_node(&cache.fallback,
-			    &commit->rpkiNotify,
-			    &commit->caRepository);
-			fb->attempt_ts = now;
-			fb->success_ts = now;
-
-			pr_trc("mkdir -f %s", fb->path);
-			if (mkdir(fb->path, CACHE_FILEMODE) < 0) {
-				error = errno;
-				if (error != EEXIST) {
-					pr_err("Cannot create '%s': %s",
-					    fb->path, strerror(error));
-					goto skip;
-				}
-
-				rm_metadata(fb); /* error == EEXIST */
-			}
-
-			commit_rpp(commit, fb);
-			discard_trash(commit, fb);
-
-		} else { /* TA */
-			struct cache_mapping *map = &commit->files[0];
-
-			pr_trc("Creating fallback for [NULL, %s]",
-			    uri_str(&map->url));
-
-			fb = provide_node(&cache.fallback, &map->url, NULL);
-			fb->attempt_ts = now;
-			fb->success_ts = now;
-			if (is_fallback(map->path))
-				goto freshen;
-
-			file_ln(map->path, fb->path);
-		}
-
-		write_metadata(fb);
-
-freshen:	fb->state = DLS_FRESH;
-skip:		uri_cleanup(&commit->rpkiNotify);
-		uri_cleanup(&commit->caRepository);
-		for (i = 0; i < commit->nfiles; i++) {
-			uri_cleanup(&commit->files[i].url);
-			free(commit->files[i].path);
-		}
-		free(commit->files);
-		mftm_cleanup(&commit->mft);
-		free(commit);
+	salvage = false;
+	switch (node->ctx.type) {
+	case CT_RRDP:
+		salvage = rrdpctx_cleanup(node->ctx.v.rrdp);
+		break;
+	case CT_RSYNC:
+		salvage = rsync_cleanup(node->ctx.v.rsync);
+		break;
+	case CT_TA:
+		salvage = tactx_cleanup(node->ctx.v.ta, node->map.path);
+		break;
 	}
-}
 
-static void
-remove_abandoned(struct cache_table *table, struct cache_node *node, void *arg)
-{
-	time_t now;
-
-	if (node->state == DLS_FRESH)
-		return;
-
-	now = *((time_t *)arg);
-	if (difftime(node->attempt_ts + cfg_cache_threshold(), now) < 0) {
-		rm_metadata(node);
-		file_rm_rf(node->path);
-		delete_node(table, node, NULL);
+	if (salvage)
+		write_metadata(node);
+	else {
+		file_rm_rf(node->map.path);
+		delete_node(tbl, node, NULL);
 	}
-}
-
-static void
-remove_orphaned_nodes(struct cache_table *table, struct cache_node *node,
-    void *arg)
-{
-	if (file_stat_errno(node->path) == ENOENT) {
-		pr_trc("Missing file; deleting node: %s", node->path);
-		delete_node(table, node, NULL);
-	}
-}
-
-static void
-remove_orphaned_files(void)
-{
-	// XXX
 }
 
 /* Deletes obsolete files and nodes from the cache. */
 static void
 cleanup_cache(void)
 {
-	time_t now = time_fatal();
+	pr_trc("Deleting abandoned files...");
+	foreach_node(cleanup_node, NULL);
+	pr_trc("Abandoned files deleted.");
 
-	/* Delete the entirety of cache/tmp/. */
-	pr_trc("- Cleaning up temporal files.");
+	pr_trc("Deleting tmp/...");
 	file_rm_rf(CACHE_TMPDIR);
+	pr_trc("tmp/ deleted.");
 
-	/*
-	 * Ensure valid RPPs and TAs are linked in fallback,
-	 * by hard-linking the new files.
-	 */
-	pr_trc("- Committing fallbacks.");
-	commit_fallbacks(now);
-
-	/*
-	 * Delete refresh nodes that haven't been downloaded in a while,
-	 * and fallback nodes that haven't been valid in a while.
-	 */
-	pr_trc("- Cleaning up abandoned cache files.");
-	foreach_node(remove_abandoned, &now);
-
-	/* (Paranoid) Delete nodes that are no longer mapped to files. */
-	pr_trc("- Cleaning up orphaned nodes.");
-	foreach_node(remove_orphaned_nodes, NULL);
-
-	/* (Paranoid) Delete files that are no longer mapped to nodes. */
-	pr_trc("- Cleaning up orphaned files.");
-	remove_orphaned_files();
+	// XXX delete nodes which lack cages
+	// XXX delete cages that lack nodes
+	// XXX delete nodes that lack indexes
+	// etc
 }
 
 void
@@ -1583,4 +1187,81 @@ exturis_cleanup(struct extension_uris *uris)
 	uri_cleanup(&uris->crldp);
 	uri_cleanup(&uris->caIssuers);
 	uri_cleanup(&uris->signedObject);
+}
+
+static validation_verdict
+fquery_create_refresh(struct cache_table *tbl, dl_cb dl, struct uri const *url,
+    struct file_querier **_result)
+{
+	struct file_querier *result;
+	struct cache_node *node;
+	validation_verdict vv;
+
+	vv = do_refresh(tbl, url, true, dl, &node);
+	if (vv != VV_CONTINUE)
+		return vv;
+	if (node->ctx.type != CT_TA)
+		return VV_FAIL;
+
+	result = pmalloc(sizeof(struct file_querier));
+	result->node = node;
+	result->is_refresh = true;
+
+	*_result = result;
+	return VV_CONTINUE;
+}
+
+validation_verdict
+fquery_refresh_https(struct uri const *url, struct file_querier **result)
+{
+	return fquery_create_refresh(&cache.https, dl_http, url, result);
+}
+
+validation_verdict
+fquery_refresh_rsync(struct uri const *url, struct file_querier **result)
+{
+	return fquery_create_refresh(&cache.rsync, dl_rsync, url, result);
+}
+
+static validation_verdict
+fquery_create_fallback(struct cache_table *tbl, struct uri const *url,
+    struct file_querier **_result)
+{
+	struct file_querier *result;
+	struct cache_node *node;
+
+	node = provide_node(tbl, url, CT_TA);
+	if (!node || !node->ctx.v.ta)
+		return VV_FAIL;
+
+	result = pmalloc(sizeof(struct file_querier));
+	result->node = node;
+	result->is_refresh = false;
+
+	*_result = result;
+	return VV_CONTINUE;
+}
+
+validation_verdict
+fquery_fallback_https(struct uri const *url, struct file_querier **result)
+{
+	return fquery_create_fallback(&cache.https, url, result);
+}
+
+validation_verdict
+fquery_fallback_rsync(struct uri const *url, struct file_querier **result)
+{
+	return fquery_create_fallback(&cache.rsync, url, result);
+}
+
+char const *
+fquerier_map(struct file_querier *querier)
+{
+	return tactx_map(querier->node->ctx.v.ta, querier->is_refresh);
+}
+
+void
+fquerier_commit(struct file_querier *querier)
+{
+	tactx_preserve(querier->node->ctx.v.ta, querier->is_refresh);
 }

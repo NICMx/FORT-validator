@@ -106,13 +106,26 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
 #undef TM_ARGS
 }
 
-static int
-check_more_recent(struct cache_cage *cage, struct mft_meta *current)
+static struct mft_meta const *
+max_mftnum(struct mft_meta const *m1, struct mft_meta const *m2)
 {
+	return INTEGER_cmp(&m1->num, &m2->num) < 0 ? m2 : m1;
+}
+
+static int
+check_more_recent(struct rpp_querier *querier, struct mft_meta *current)
+{
+	struct mft_meta const *rrdp;
+	struct mft_meta const *rsync;
 	struct mft_meta const *prev;
 
-	prev = cage_mft_fallback(cage);
-	if (!prev)
+	querier_get_fallback_mftnums(querier, &rrdp, &rsync);
+
+	if (rrdp)
+		prev = rsync ? max_mftnum(rrdp, rsync) : rrdp;
+	else if (rsync)
+		prev = rsync;
+	else
 		return 0;
 
 	if (prev->num.size && INTEGER_cmp(&prev->num, &current->num) > 0)
@@ -124,7 +137,7 @@ check_more_recent(struct cache_cage *cage, struct mft_meta *current)
 }
 
 static int
-validate_manifest(struct Manifest *mft, struct cache_cage *cage,
+validate_manifest(struct Manifest *mft, struct rpp_querier *querier,
     struct mft_meta *meta)
 {
 	unsigned long version;
@@ -176,7 +189,7 @@ validate_manifest(struct Manifest *mft, struct cache_cage *cage,
 	if (error)
 		return error;
 
-	error = check_more_recent(cage, meta);
+	error = check_more_recent(querier, meta);
 	if (error)
 		return error;
 
@@ -203,7 +216,7 @@ shuffle_mft_files(struct rpp *rpp)
 {
 	size_t i, j;
 	unsigned int seed, rnd;
-	struct cache_mapping tmp;
+	struct cache_file *tmp;
 
 	if (rpp->nfiles < 2)
 		return;
@@ -252,14 +265,43 @@ validate_mft_filename(IA5String_t *ia5)
 }
 
 static int
-check_file_and_hash(struct FileAndHash *fah, char const *path)
+check_file_and_hash(struct FileAndHash *fah, struct cache_file *file)
 {
+	struct rrdp_hash const *hash;
+
 	if (fah->hash.bits_unused != 0)
 		return pr_err("Hash string has unused bits.");
+	if (fah->hash.size != RRDP_HASH_LEN)
+		return pr_err("The hash of file '%.*s' has %zu bytes (%d expected).",
+		    (int)fah->file.size, fah->file.buf,
+		    fah->hash.size, RRDP_HASH_LEN);
 
-	/* Includes file exists validation, obv. */
-	return hash_validate_file(hash_get_sha256(), path,
-	    fah->hash.buf, fah->hash.size);
+	hash = cachefile_hash(file);
+	if (!hash->set)
+		return pr_wrn("Cache file '%s' lacks a hash.",
+		    uri_str(cachefile_uri(file)));
+	if (memcmp(fah->hash.buf, hash->bytes, RRDP_HASH_LEN) != 0)
+		return pr_err("File '%.*s' does not match its expected hash.",
+		    (int)fah->file.size, fah->file.buf);
+
+	return 0;
+}
+
+static enum file_type
+ext2ft(IA5String_t *file)
+{
+	char const *ext = ((char const *)file->buf) + file->size - 3;
+
+	if (ext[0] == 'c' && ext[1] == 'e' && ext[2] == 'r')
+		return FT_CER;
+	if (ext[0] == 'r' && ext[1] == 'o' && ext[2] == 'a')
+		return FT_ROA;
+	if (ext[0] == 'c' && ext[1] == 'r' && ext[2] == 'l')
+		return FT_CRL;
+	if (ext[0] == 'g' && ext[1] == 'b' && ext[2] == 'r')
+		return FT_GBR;
+
+	return FT_UNK;
 }
 
 /*
@@ -280,15 +322,16 @@ check_file_and_hash(struct FileAndHash *fah, char const *path)
 
 static int
 collect_files(struct cache_mapping const *map,
-    struct Manifest *mft, struct cache_cage *cage,
+    struct Manifest *mft, struct rpp_querier *querier,
     struct rpki_certificate *parent)
 {
 	struct rpp *rpp;
 	struct uri rpp_url;
 	unsigned int m;
 	struct FileAndHash *src;
-	struct cache_mapping *dst;
-	char const *ext;
+	struct uri url;
+	struct cache_file *file;
+	enum file_type ft;
 	int error;
 
 	if (mft->fileList.list.count == 0)
@@ -298,7 +341,7 @@ collect_files(struct cache_mapping const *map,
 	error = uri_parent(&map->url, &rpp_url);
 	if (error)
 		return error;
-	rpp->files = pzalloc((mft->fileList.list.count + 1) * sizeof(*rpp->files));
+	rpp->files = pcalloc(mft->fileList.list.count + 1, sizeof(struct cache_file *));
 	rpp->nfiles = 0;
 
 	for (m = 0; m < mft->fileList.list.count; m++) {
@@ -313,6 +356,7 @@ collect_files(struct cache_mapping const *map,
 		if (error)
 			goto revert;
 
+		ft = ext2ft(&src->file);
 		/*
 		 * rsync and RRDP filter unknown files. We don't want absent
 		 * unknown files to induce RPP rejection, so we'll skip them.
@@ -323,84 +367,76 @@ collect_files(struct cache_mapping const *map,
 		 * This includes .mft; They're presently not supposed to be
 		 * listed.
 		 */
-		ext = ((char const *)src->file.buf) + src->file.size - 3;
-		if ((strncmp(ext, "cer", 3) != 0) &&
-		    (strncmp(ext, "roa", 3) != 0) &&
-		    (strncmp(ext, "crl", 3) != 0) &&
-		    (strncmp(ext, "gbr", 3) != 0))
+		if (ft == FT_UNK)
 			continue;
 
-		dst = &rpp->files[rpp->nfiles++];
 		uri_child(&rpp_url, (char const *)src->file.buf, src->file.size,
-		    &dst->url);
+		    &url);
 
-		dst->path = cage_map_file(cage, &dst->url, &ext);
-		if (!dst->path) {
+		file = querier_map(querier, &url);
+		if (!file) {
 			error = pr_err(
 			    "Manifest file '%s' is absent from the cache.",
-			    uri_str(&dst->url));
+			    uri_str(&url));
+			uri_cleanup(&url);
 			goto revert;
 		}
 
-		error = check_file_and_hash(src, dst->path);
+		uri_cleanup(&url);
+		rpp->files[rpp->nfiles++] = file;
+
+		error = check_file_and_hash(src, file);
 		if (error)
 			goto revert;
+
+		if (ft == FT_CRL) {
+			if (rpp->crl.file != NULL) {
+				error = pr_err("Manifest has more than one CRL.");
+				goto revert;
+			}
+			rpp->crl.file = file;
+		}
+	}
+
+	/* rfc6486#section-7 */
+	if (rpp->crl.file == NULL) {
+		error = pr_err("Manifest lacks a CRL.");
+		goto revert;
 	}
 
 	/* Manifest */
-	dst = &rpp->files[rpp->nfiles++];
-	uri_copy(&dst->url, &map->url);
-	dst->path = pstrdup(map->path);
+	file = querier_map(querier, &map->url);
+	if (!file) {
+		error = pr_err("Manifest file '%s' is absent from the cache.",
+		    uri_str(&map->url));
+		goto revert;
+	}
+	rpp->files[rpp->nfiles++] = file;
+	rpp->mft.file = file;
 
-	return 0;
+	return crl_load(cachefile_map(parent->rpp.crl.file), parent->x509,
+	    &parent->rpp.crl.obj);
 
 revert:	rpp_cleanup(rpp);
 	return error;
 }
 
 static int
-load_crl(struct rpki_certificate *parent)
-{
-	struct rpp *rpp;
-	array_index f;
-
-	rpp = &parent->rpp;
-
-	for (f = 0; f < rpp->nfiles; f++)
-		if (uri_has_extension(&rpp->files[f].url, ".crl")) {
-			if (rpp->crl.map != NULL)
-				return pr_err("Manifest has more than one CRL.");
-			rpp->crl.map = &rpp->files[f];
-		}
-
-	/* rfc6486#section-7 */
-	if (rpp->crl.map == NULL)
-		return pr_err("Manifest lacks a CRL.");
-
-	return crl_load(rpp->crl.map, parent->x509, &rpp->crl.obj);
-}
-
-static int
 build_rpp(struct cache_mapping const *map, struct Manifest *mft,
-    struct cache_cage *cage, struct rpki_certificate *parent)
+    struct rpp_querier *querier, struct rpki_certificate *parent)
 {
 	int error;
 
-	error = collect_files(map, mft, cage, parent);
+	error = collect_files(map, mft, querier, parent);
 	if (error)
 		return error;
 
 	shuffle_mft_files(&parent->rpp);
-
-	error = load_crl(parent);
-	if (error)
-		rpp_cleanup(&parent->rpp);
-
-	return error;
+	return 0;
 }
 
 int
-manifest_traverse(struct cache_mapping const *map, struct cache_cage *cage,
+manifest_traverse(struct cache_mapping const *map, struct rpp_querier *querier,
     struct rpki_certificate *parent)
 {
 	static OID oid = OID_MANIFEST;
@@ -422,7 +458,7 @@ manifest_traverse(struct cache_mapping const *map, struct cache_cage *cage,
 		goto end2;
 
 	/* Initialize @summary */
-	error = build_rpp(map, mft, cage, parent);
+	error = build_rpp(map, mft, querier, parent);
 	if (error)
 		goto end3;
 
@@ -433,7 +469,7 @@ manifest_traverse(struct cache_mapping const *map, struct cache_cage *cage,
 	error = signed_object_validate(&so, &ee, &arcs);
 	if (error)
 		goto end5;
-	error = validate_manifest(mft, cage, &parent->rpp.mft);
+	error = validate_manifest(mft, querier, &parent->rpp.mft.meta);
 
 end5:	cer_cleanup(&ee);
 	if (error)

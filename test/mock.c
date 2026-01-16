@@ -16,6 +16,12 @@
 
 /* Some core functions, as linked from unit tests. */
 
+bool
+pr_trc_enabled(void)
+{
+	return true;
+}
+
 #if 0
 
 static void
@@ -35,7 +41,7 @@ print_monotime(void)
 		va_start(args, format);					\
 		vfprintf(stdout, format, args);				\
 		va_end(args);						\
-		printf(PR_COLOR_RST "\n");				\
+		printf(CLR_RST "\n");				\
 	} while (0)
 
 #else
@@ -57,11 +63,11 @@ print_monotime(void)
 		return result;						\
 	}
 
-MOCK_VOID_PRINT(pr_trc, PR_COLOR_DBG)
-MOCK_VOID_PRINT(pr_inf, PR_COLOR_INF)
-MOCK_INT_PRINT(pr_wrn, PR_COLOR_WRN, 0)
-MOCK_INT_PRINT(pr_err, PR_COLOR_ERR, EINVAL)
-MOCK_INT_PRINT(pr_crit, PR_COLOR_ERR, EINVAL)
+MOCK_VOID_PRINT(pr_trc, CLR_DBG)
+MOCK_VOID_PRINT(pr_inf, CRL_INF)
+MOCK_INT_PRINT(pr_wrn, CLR_WRN, 0)
+MOCK_INT_PRINT(pr_err, CLR_ERR, EINVAL)
+MOCK_INT_PRINT(pr_crit, CLR_ERR, EINVAL)
 
 struct crypto_cb_arg {
 	unsigned int stack_size;
@@ -82,7 +88,7 @@ pr_crypto_err(const char *format, ...)
 {
 	struct crypto_cb_arg arg;
 
-	MOCK_PRINT(PR_COLOR_ERR);
+	MOCK_PRINT(CLR_ERR);
 
 	pr_err("libcrypto error stack:");
 	arg.stack_size = 0;

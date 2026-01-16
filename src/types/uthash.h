@@ -408,6 +408,56 @@ do {                                                                            
   HASH_ADD_KEYPTR_BYHASHVALUE(hh, head, keyptr, keylen_in, _ha_hashv, add);      \
 } while (0)
 
+/*
+ * Does not insert on collision.
+ * You can detect collision by @old != NULL.
+ */
+#define HASH_ADD_KEYPTR_SAFE(head, keyptr, keylen, add, old)		\
+	do {								\
+		unsigned int _hr_hashv;					\
+									\
+		HASH_VALUE(keyptr, keylen, _hr_hashv);			\
+									\
+		/* HASH_FIND, minus HASH_VALUE */			\
+		old = NULL;						\
+		if (head)						\
+			HASH_FIND_BYHASHVALUE(hh, head,			\
+			    keyptr, keylen, _hr_hashv, old);		\
+									\
+		if (!old)						\
+			/* HASH_ADD_KEYPTR, minus HASH_VALUE */		\
+			HASH_ADD_KEYPTR_BYHASHVALUE(hh, head,		\
+			    keyptr, keylen, _hr_hashv, add);		\
+	} while (0)
+
+#define HASH_ADD_KEYSTR_SAFE(head, key, add, old)			\
+	do {								\
+		size_t _keylen = strlen(key);				\
+		HASH_ADD_KEYPTR_SAFE(head, key, _keylen, add, old);	\
+	} while (0)							\
+
+/* Also safe. */
+#define HASH_OVERRIDE_KEYPTR(head, keyptr, keylen, add, old)		\
+	do {								\
+		unsigned int _hr_hashv;					\
+									\
+		HASH_VALUE(keyptr, keylen, _hr_hashv);			\
+									\
+		HASH_FIND_BYHASHVALUE(hh, head, keyptr, keylen,		\
+		    _hr_hashv, old);					\
+		if (old)						\
+			HASH_DEL(head, old);				\
+									\
+		HASH_ADD_KEYPTR_BYHASHVALUE(hh, head, keyptr, keylen,	\
+		    _hr_hashv, add);					\
+	} while (0);
+
+#define HASH_OVERRIDE_KEYSTR(head, key, add, old)			\
+	do {								\
+		size_t _keylen = strlen(key);				\
+		HASH_OVERRIDE_KEYPTR(head, key, _keylen, add, old);	\
+	} while (0)
+
 #define HASH_ADD_BYHASHVALUE(hh,head,fieldname,keylen_in,hashval,add)            \
   HASH_ADD_KEYPTR_BYHASHVALUE(hh, head, &((add)->fieldname), keylen_in, hashval, add)
 

@@ -28,7 +28,7 @@ void task_teardown(void);
 
 char const *task_name(struct validation_task *);
 unsigned int task_enqueue_tal(char const *);
-unsigned int task_enqueue_rpp(struct cache_mapping *, struct rpki_certificate *);
+unsigned int task_enqueue_rpp(struct cache_mapping const *, struct rpki_certificate *);
 void task_requeue_dormant(struct validation_task *);
 void task_wakeup(void);
 void task_wakeup_dormants(void);

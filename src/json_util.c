@@ -207,6 +207,19 @@ json_valid_members_count(json_t *object, size_t expected_size)
 }
 
 int
+json_add_bool(json_t *parent, char const *name, bool value)
+{
+	if (json_object_set_new(parent, name, json_boolean(value)))
+		return pr_err(
+		    "Cannot convert %s '%s' to json; unknown cause.",
+		    name, value ? "true" : "false"
+		);
+
+
+	return 0;
+}
+
+int
 json_add_int(json_t *parent, char const *name, int value)
 {
 	if (json_object_set_new(parent, name, json_integer(value)))

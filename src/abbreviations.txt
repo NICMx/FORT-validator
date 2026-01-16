@@ -9,6 +9,8 @@ cer: certificate
 cert: certificate
 certstack: certificate stack
 ck: check (test assertion, inherited from the unit test framework)
+ctx: context
+dao: Data Access Object
 db: database
 dl: download
 eof: end of file
@@ -20,7 +22,8 @@ hh: hash (table) hook
 ht: hash table
 id: identifier
 len: length
-map: mapping (between a URL and a local path in the cache)
+map (noun): mapping (between a URL and a local path in the cache)
+map (verb): obtain the local path that corresponds to a URL
 max: maximum
 min: minimum
 msg: message

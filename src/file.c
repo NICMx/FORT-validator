@@ -170,6 +170,13 @@ file_stat_errno(char const *path)
 }
 
 bool
+file_isreg(char const *path)
+{
+	struct stat meta;
+	return (stat(path, &meta) == 0) ? S_ISREG(meta.st_mode) : false;
+}
+
+bool
 file_is_valid(char const *location, bool allow_file)
 {
 	struct stat attr;
@@ -200,12 +207,17 @@ file_rm_f(char const *path)
 {
 	int error;
 
+	if (!path)
+		return 0;
+
 	pr_trc("rm -f %s", path);
 
 	if (remove(path) < 0) {
 		error = errno;
-		if (error != ENOENT)
+		if (error != ENOENT) {
+			pr_wrn("Cannot remove '%s': %s", path, strerror(error));
 			return error;
+		}
 	}
 
 	return 0;
@@ -300,9 +312,10 @@ void
 cseq_init(struct cache_sequence *seq, char *prefix, unsigned long id,
     bool free_prefix)
 {
-	seq->prefix = prefix;
+	seq->pfx.str = prefix;
+	seq->pfx.len = strlen(prefix);
 	seq->next_id = id;
-	seq->pathlen = strlen(prefix) + 4;
+	seq->pathlen = seq->pfx.len + 4;
 	seq->free_prefix = free_prefix;
 }
 
@@ -310,11 +323,11 @@ void
 cseq_cleanup(struct cache_sequence *seq)
 {
 	if (seq->free_prefix)
-		free(seq->prefix);
+		free(seq->pfx.str);
 }
 
 char *
-cseq_next(struct cache_sequence *seq)
+cseq_next(struct cache_sequence *seq, char const **id)
 {
 	char *path;
 	int len;
@@ -324,13 +337,15 @@ cseq_next(struct cache_sequence *seq)
 
 		// XXX not generic enough
 		len = snprintf(path, seq->pathlen, "%s/%lX",
-		    seq->prefix, seq->next_id);
+		    seq->pfx.str, seq->next_id);
 		if (len < 0) {
 			pr_err("Cannot compute new cache path: Unknown cause.");
 			return NULL;
 		}
 		if (len < seq->pathlen) {
 			seq->next_id++;
+			if (id)
+				*id = path + seq->pfx.len + 1;
 			return path; /* Happy path */
 		}
 

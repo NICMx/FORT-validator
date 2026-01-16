@@ -369,6 +369,7 @@ http_download(struct uri const *src, char const *dst,
 		if (http_code == 304) {
 			/* Write callback not called, no file to remove. */
 			pr_trc("Not modified.");
+			*changed = false;
 			error = 0;
 			goto end;
 		}

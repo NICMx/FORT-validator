@@ -13,7 +13,7 @@ path_filename(char const *path)
 }
 
 static void
-trim_leading_slashes(struct sized_string *str)
+trim_leading_slashes(struct sized_const_string *str)
 {
 	while (str->str[0] == '/') {
 		str->str++;
@@ -22,7 +22,7 @@ trim_leading_slashes(struct sized_string *str)
 }
 
 static void
-trim_trailing_slashes(struct sized_string *str)
+trim_trailing_slashes(struct sized_const_string *str)
 {
 	while (str->len > 1 && str->str[str->len - 1] == '/')
 		str->len--;
@@ -32,8 +32,8 @@ trim_trailing_slashes(struct sized_string *str)
 char *
 path_join(char const *path1, char const *path2)
 {
-	struct sized_string p1;
-	struct sized_string p2;
+	struct sized_const_string p1;
+	struct sized_const_string p2;
 	size_t n;
 	char *result;
 

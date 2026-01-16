@@ -922,7 +922,7 @@ __uri_init(struct uri *url, char const *str, size_t len)
 void
 uri_copy(struct uri *dst, struct uri const *src)
 {
-	dst->_str = src->_str ? pstrdup(src->_str) : NULL;
+	dst->_str = src->_str ? pstrndup(src->_str, src->_len) : NULL;
 	dst->_len = src->_len;
 }
 

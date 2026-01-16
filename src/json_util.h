@@ -1,6 +1,7 @@
 #ifndef SRC_JSON_UTIL_H_
 #define SRC_JSON_UTIL_H_
 
+#include <jansson.h>
 #include <netdb.h>
 #include <sys/stat.h>
 
@@ -27,6 +28,7 @@ int json_get_object(json_t *, char const *, json_t **);
 
 bool json_valid_members_count(json_t *, size_t);
 
+int json_add_bool(json_t *, char const *, bool);
 int json_add_int(json_t *, char const *, int);
 int json_add_ulong(json_t *, char const *, unsigned long);
 int json_add_bigint(json_t *, char const *, INTEGER_t *);

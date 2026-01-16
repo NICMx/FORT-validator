@@ -6,8 +6,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-struct sized_string {
+struct sized_const_string {
 	char const *str;
+	size_t len;
+};
+
+struct sized_string {
+	char *str;
 	size_t len;
 };
 

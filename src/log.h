@@ -8,6 +8,7 @@
 #define CLR_DBG	"\x1B[36m"	/* Cyan */
 #define CLR_CLT	"\x1B[34m"	/* Blue */
 #define CLR_TRC	"\x1B[32m"	/* Green */
+#define CRL_INF "\x1b[37m"	/* White */
 #define CLR_WRN	"\x1B[33m"	/* Yellow */
 #define CLR_ERR	"\x1B[31m"	/* Red */
 #define CLR_CRT	"\x1B[35m"	/* Magenta */
@@ -99,7 +100,7 @@ int pr_wrn(const char *, ...) CHECK_FORMAT(1, 2);
 int pr_err(const char *, ...) CHECK_FORMAT(1, 2);
 /* Like pr_err(), but also prints libcrypto's error stack */
 int pr_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
-int pr_crit(const char *format, ...) CHECK_FORMAT(1, 2);
+int pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
 __dead void pr_panic(const char *, ...) CHECK_FORMAT(1, 2);
 __dead void enomem_panic(void); /* Out of memory */
 

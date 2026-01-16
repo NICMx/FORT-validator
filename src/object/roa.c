@@ -204,7 +204,7 @@ family_error:
 }
 
 int
-roa_traverse(struct cache_mapping *map, struct rpki_certificate *parent)
+roa_traverse(struct cache_mapping const *map, struct rpki_certificate *parent)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);

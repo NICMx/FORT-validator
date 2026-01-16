@@ -156,7 +156,8 @@ task_enqueue_tal(char const *tal_path)
  * Returns number of deferred tasks.
  */
 unsigned int
-task_enqueue_rpp(struct cache_mapping *map, struct rpki_certificate *parent)
+task_enqueue_rpp(struct cache_mapping const *map,
+    struct rpki_certificate *parent)
 {
 	struct validation_task *task;
 	struct rpki_certificate *ca;

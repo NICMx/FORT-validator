@@ -122,7 +122,7 @@ const struct global_type gt_service = {
  * *result must not be freed nor long-term stored.
  */
 int
-parse_json_string(json_t *json, char const *name, char const **result)
+parse_json_string(json_t *json, char const *what, char const **result)
 {
 	if (json_is_null(json)) {
 		*result = NULL;
@@ -130,7 +130,7 @@ parse_json_string(json_t *json, char const *name, char const **result)
 	}
 
 	if (!json_is_string(json))
-		return pr_err("The '%s' element is not a JSON string.", name);
+		return pr_err("The '%s' element is not a JSON string.", what);
 
 	*result = json_string_value(json);
 	return 0;

@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 
 #include "asn1/asn1c/INTEGER.h"
+#include "cachefile.h"
 #include "types/map.h"
 
 struct mft_meta {
@@ -14,15 +15,18 @@ struct mft_meta {
 
 /* Repository Publication Point */
 struct rpp {
-	struct cache_mapping *files;
-	size_t nfiles;				/* Number of maps in @files */
+	struct cache_file **files;
+	size_t nfiles;				/* @files array length */
 
 	struct {
-		struct cache_mapping *map;	/* Points to @files entry */
+		struct cache_file *file;	/* Points to @files entry */
 		X509_CRL *obj;
 	} crl;
 
-	struct mft_meta mft;
+	struct {
+		struct cache_file *file;
+		struct mft_meta meta;
+	} mft;
 };
 
 #define mftm_cleanup(m) INTEGER_cleanup(&(m)->num);

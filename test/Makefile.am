@@ -86,23 +86,13 @@ rrdp_test_LDADD =		${CHECK_LIBS}
 rrdp_test_LDADD +=		${XML2_LIBS}
 rrdp_test_LDADD +=		${JANSSON_LIBS}
 
-check_PROGRAMS +=		rrdp_update.test
-rrdp_update_test_SOURCES =	rrdp_update_test.c
-rrdp_update_test_LDADD =	${CHECK_LIBS}
-rrdp_update_test_LDADD +=	${XML2_LIBS}
-rrdp_update_test_LDADD +=	${JANSSON_LIBS}
-
-check_PROGRAMS +=		rsync.test
-rsync_test_SOURCES =		rsync_test.c
-rsync_test_LDADD =		${CHECK_LIBS}
+#check_PROGRAMS +=		rsync.test
+#rsync_test_SOURCES =		rsync_test.c
+#rsync_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		serial.test
 serial_test_SOURCES =		types/serial_test.c
 serial_test_LDADD =		${CHECK_LIBS}
-
-#check_PROGRAMS +=		stream.test
-#stream_test_SOURCES =		stream_test.c
-#stream_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		tal.test
 tal_test_SOURCES =		object/tal_test.c

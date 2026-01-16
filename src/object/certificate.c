@@ -826,6 +826,7 @@ __cer_cleanup(struct rpki_certificate *cer)
 	if (cer->tal)
 		tal_cleanup(cer->tal);
 	rpp_cleanup(&cer->rpp);
+	querier_free(cer->querier);
 }
 
 void
@@ -1742,7 +1743,7 @@ validate_aia(struct rpki_certificate *cert)
 static int
 validate_cdp(struct rpki_certificate *cer)
 {
-	struct uri *crl_url = &cer->parent->rpp.crl.map->url;
+	struct uri const *crl_url = cachefile_uri(cer->parent->rpp.crl.file);
 
 	if (uri_str(&cer->uris.crldp) == NULL)
 		pr_panic("Certificate's CRL Distribution Point was not recorded.");
@@ -1986,13 +1987,11 @@ end:	fnstack_pop();
 validation_verdict
 cer_traverse(struct rpki_certificate *ca)
 {
-	struct cache_cage *cage;
-	struct cache_mapping mft;
-	char const *rpp_type;
-	array_index i;
-	struct cache_mapping *map;
-	unsigned int queued;
 	validation_verdict vv;
+	struct cache_file *mft;
+	array_index i;
+	struct cache_mapping const *map;
+	unsigned int queued;
 	int error;
 
 	pr_trc("Checking certificate %s...", uri_str(&ca->map.url));
@@ -2006,42 +2005,28 @@ cer_traverse(struct rpki_certificate *ca)
 
 	pr_trc("Certificate seems correct; downloading RPP.");
 
-	vv = cache_refresh_by_uris(&ca->uris, &cage);
-	if (vv == VV_BUSY)
-		return VV_BUSY;
-	if (vv == VV_FAIL) {
-		pr_err("caRepository '%s' could not be refreshed, "
-		    "and there is no fallback in the cache. "
-		    "I'm going to have to skip it.",
-		    uri_str(&ca->uris.caRepository));
-		return VV_FAIL;
+	if (!ca->querier)
+		ca->querier = querier_create(&ca->uris);
+
+retry:	vv = querier_downgrade(ca->querier);
+	if (vv != VV_CONTINUE)
+		return vv;
+
+	mft = querier_map(ca->querier, &ca->uris.rpkiManifest);
+	if (!mft) {
+		pr_err("Manifest missing.");
+		goto retry;
 	}
 
-	mft.url = ca->uris.rpkiManifest;
-retry:	mft.path = cage_map_file(cage, &mft.url, &rpp_type);
-	if (!mft.path) {
-		if (cage_downgrade(cage))
-			goto retry;
-		pr_err("caRepository '%s' is missing a manifest.",
-		    uri_str(&ca->uris.caRepository));
-		vv = VV_FAIL;
-		goto end;
-	}
-
-	pr_trc("Checking %s RPP...", rpp_type);
-
-	error = manifest_traverse(&mft, cage, ca);
-	free(mft.path);
+	error = manifest_traverse(cachefile_map(mft), ca->querier, ca);
 	if (error) {
-		if (cage_downgrade(cage))
-			goto retry;
-		vv = VV_FAIL;
-		goto end;
+		pr_err("Bad manifest.");
+		goto retry;
 	}
 
 	queued = 0;
 	for (i = 0; i < ca->rpp.nfiles; i++) {
-		map = ca->rpp.files + i;
+		map = cachefile_map(ca->rpp.files[i]);
 		if (uri_has_extension(&map->url, ".cer"))
 			queued += task_enqueue_rpp(map, ca);
 		else if (uri_has_extension(&map->url, ".roa"))
@@ -2054,11 +2039,9 @@ retry:	mft.path = cage_map_file(cage, &mft.url, &rpp_type);
 
 	if (queued > 0)
 		task_wakeup();
-	cache_commit_rpp(cage_rpkiNotify(cage), &ca->uris.caRepository,
-	    &ca->rpp);
 
-end:	free(cage);
-	return vv;
+	cache_commit_rpp(ca->querier, &ca->rpp);
+	return VV_CONTINUE;
 }
 
 static int

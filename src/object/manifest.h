@@ -4,7 +4,7 @@
 #include "asn1/signed_data.h"
 #include "cache.h"
 
-int manifest_traverse(struct cache_mapping const *, struct cache_cage *,
+int manifest_traverse(struct cache_mapping const *, struct rpp_querier *,
     struct rpki_certificate *);
 
 #endif /* SRC_OBJECT_MANIFEST_H_ */
