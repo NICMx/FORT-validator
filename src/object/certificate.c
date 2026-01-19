@@ -139,6 +139,11 @@ validate_serial_number(X509 *cert)
 	if (log_val_enabled(LOG_DEBUG))
 		debug_serial_number(number);
 
+	if (BN_is_negative(number)) {
+		BN_free(number);
+		return pr_val_err("Serial number is negative.");
+	}
+
 	state = state_retrieve();
 	x509stack_store_serial(validation_certstack(state), number);
 	return 0;
