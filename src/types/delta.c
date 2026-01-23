@@ -31,3 +31,10 @@ delta_rk_print(struct delta_router_key const *delta, void *arg)
 	print_flag(delta->flags);
 	return router_key_print(&delta->router_key, arg);
 }
+
+int
+delta_aspa_print(struct delta_aspa const *delta, void *arg)
+{
+	print_flag(delta->flags);
+	return aspa_print(delta->aspa, arg);
+}

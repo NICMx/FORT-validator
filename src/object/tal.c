@@ -351,6 +351,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
+	validation_handler.handle_aspa = handle_aspa;
 	validation_handler.arg = db;
 
 	error = validation_prepare(&state, tal, &validation_handler);

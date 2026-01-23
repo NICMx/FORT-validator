@@ -1139,6 +1139,9 @@ handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
 	int i;
 	int error;
 
+	if (!X509_EXTENSION_get_critical(ext))
+		return pr_val_err("IP extension is not marked critical.");
+
 	string = X509_EXTENSION_get_data(ext);
 	error = asn1_decode(string->data, string->length, &asn_DEF_IPAddrBlocks,
 	    (void **) &blocks, true);
@@ -1199,93 +1202,100 @@ handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
 	return error;
 }
 
-static int
-__certificate_get_resources(X509 *cert, struct resources *resources,
-    int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
-    char const *policy_rfc, char const *bad_ext_rfc, bool allow_asn_inherit)
-{
-	X509_EXTENSION *ext;
-	int nid;
-	int i;
-	int error;
-	bool ip_ext_found = false;
-	bool asn_ext_found = false;
-
-	/* Reference: X509_get_ext_d2i */
-	/* rfc6487#section-2 */
-
-	for (i = 0; i < X509_get_ext_count(cert); i++) {
-		ext = X509_get_ext(cert, i);
-		nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
-
-		if (nid == addr_nid) {
-			if (ip_ext_found)
-				return pr_val_err("Multiple IP extensions found.");
-			if (!X509_EXTENSION_get_critical(ext))
-				return pr_val_err("The IP extension is not marked as critical.");
-
-			pr_val_debug("IP {");
-			error = handle_ip_extension(ext, resources);
-			pr_val_debug("}");
-			ip_ext_found = true;
-
-			if (error)
-				return error;
-
-		} else if (nid == asn_nid) {
-			if (asn_ext_found)
-				return pr_val_err("Multiple AS extensions found.");
-			if (!X509_EXTENSION_get_critical(ext))
-				return pr_val_err("The AS extension is not marked as critical.");
-
-			pr_val_debug("ASN {");
-			error = handle_asn_extension(ext, resources,
-			    allow_asn_inherit);
-			pr_val_debug("}");
-			asn_ext_found = true;
-
-			if (error)
-				return error;
-
-		} else if (nid == bad_addr_nid) {
-			return pr_val_err("Certificate has an RFC%s policy, but contains an RFC%s IP extension.",
-			    policy_rfc, bad_ext_rfc);
-		} else if (nid == bad_asn_nid) {
-			return pr_val_err("Certificate has an RFC%s policy, but contains an RFC%s ASN extension.",
-			    policy_rfc, bad_ext_rfc);
-		}
-	}
-
-	if (!ip_ext_found && !asn_ext_found)
-		return pr_val_err("Certificate lacks both IP and AS extension.");
-
-	return 0;
-}
-
 /**
  * Copies the resources from @cert to @resources.
  */
 int
 certificate_get_resources(X509 *cert, struct resources *resources,
-    enum cert_type type)
+    enum cert_type type, enum ee_type eet)
 {
-	enum rpki_policy policy;
+	int allowed_ip_nid = NID_undef;
+	int allowed_as_nid = NID_undef;
 
-	policy = resources_get_policy(resources);
-	switch (policy) {
-	case RPKI_POLICY_RFC6484:
-		return __certificate_get_resources(cert, resources,
-		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
-		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
-		    "6484", "8360", type != CERTYPE_BGPSEC);
-	case RPKI_POLICY_RFC8360:
-		return __certificate_get_resources(cert, resources,
-		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
-		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
-		    "8360", "6484", type != CERTYPE_BGPSEC);
+	int nid_ip1 = NID_sbgp_ipAddrBlock;
+	int nid_ip2 = nid_ipAddrBlocksv2();
+	int nid_as1 = NID_sbgp_autonomousSysNum;
+	int nid_as2 = nid_autonomousSysIdsv2();
+
+	X509_EXTENSION *ext;
+	int extnid;
+	int e;
+	int error;
+
+	switch (type) {
+	case CERTYPE_TA:
+	case CERTYPE_CA:
+	case CERTYPE_BGPSEC:
+		switch (resources_get_policy(resources)) {
+		case RPKI_POLICY_RFC6484:
+			allowed_ip_nid = nid_ip1;
+			allowed_as_nid = nid_as1;
+			break;
+		case RPKI_POLICY_RFC8360:
+			allowed_ip_nid = nid_ip2;
+			allowed_as_nid = nid_as2;
+		}
+		break;
+	case CERTYPE_EE:
+		switch (eet) {
+		case EET_ROA:
+			switch (resources_get_policy(resources)) {
+			case RPKI_POLICY_RFC6484:
+				allowed_ip_nid = nid_ip1; break;
+			case RPKI_POLICY_RFC8360:
+				allowed_ip_nid = nid_ip2;
+			}
+			break;
+		case EET_ASPA:
+			switch (resources_get_policy(resources)) {
+			case RPKI_POLICY_RFC6484:
+				allowed_as_nid = nid_as1; break;
+			case RPKI_POLICY_RFC8360:
+				allowed_as_nid = nid_as2;
+			}
+			break;
+		case EET_MFT:
+		case EET_GBR:
+			/* TODO disallow these? */
+			switch (resources_get_policy(resources)) {
+			case RPKI_POLICY_RFC6484:
+				allowed_ip_nid = nid_ip1;
+				allowed_as_nid = nid_as1;
+				break;
+			case RPKI_POLICY_RFC8360:
+				allowed_ip_nid = nid_ip2;
+				allowed_as_nid = nid_as2;
+			}
+			break;
+		}
+		break;
 	}
 
-	pr_crit("Unknown policy: %u", policy);
+	for (e = 0; e < X509_get_ext_count(cert); e++) {
+		ext = X509_get_ext(cert, e);
+		extnid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
+
+		if (extnid == nid_ip1 || extnid == nid_ip2) {
+			if (extnid != allowed_ip_nid)
+				return pr_val_err("Found an unexpected IP Resources extension.");
+
+			error = handle_ip_extension(ext, resources);
+			if (error)
+				return error;
+			allowed_ip_nid = NID_undef;
+
+		} else if (extnid == nid_as1 || extnid == nid_as2) {
+			if (extnid != allowed_as_nid)
+				return pr_val_err("Found an unexpected AS Resources extension.");
+
+			error = handle_asn_extension(ext, resources, false);
+			if (error)
+				return error;
+			allowed_as_nid = NID_undef;
+		}
+	}
+
+	return 0;
 }
 
 static bool

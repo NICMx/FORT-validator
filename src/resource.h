@@ -31,6 +31,7 @@ int resources_add_asn(struct resources *, struct ASIdentifiers *, bool);
 
 bool resources_empty(struct resources *);
 bool resources_contains_asns(struct resources *, struct asn_range const *);
+bool resources_matches_asn(struct resources *, uint32_t);
 bool resources_contains_ipv4(struct resources *, struct ipv4_prefix const *);
 bool resources_contains_ipv6(struct resources *, struct ipv6_prefix const *);
 

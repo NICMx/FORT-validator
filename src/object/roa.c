@@ -271,7 +271,7 @@ roa_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_roa;
-	eecert_init(&ee, crl, false);
+	eecert_init(&ee, EET_ROA, crl, false);
 
 	/* Validate and handle everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);

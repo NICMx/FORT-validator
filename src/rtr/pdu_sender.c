@@ -6,6 +6,7 @@
 
 #include "alloc.h"
 #include "config.h"
+#include "data_structure/common.h"
 #include "log.h"
 #include "rtr/db/vrps.h"
 #include "rtr/primitive_writer.h"
@@ -184,7 +185,7 @@ send_router_key_pdu(int fd, uint8_t version,
 	unsigned char data[RTRPDU_ROUTER_KEY_LEN];
 	unsigned char *buf;
 
-	if (version == RTR_V0)
+	if (version < RTR_V1)
 		return 0;
 
 	buf = serialize_hdr(data, version, type, flags << 8, len);
@@ -195,6 +196,52 @@ send_router_key_pdu(int fd, uint8_t version,
 	buf += sizeof(router_key->spk);
 
 	return send_response(fd, type, data, len);
+}
+
+int
+send_aspa_pdu(int fd, uint8_t version, struct aspa const *aspa, uint8_t flags)
+{
+	static const uint8_t type = PDU_TYPE_ASPA;
+	unsigned char data[1024];
+	array_index i;
+	unsigned char *buf;
+	int error;
+
+	if (version < RTR_V2)
+		return 0;
+
+	if (flags & FLAG_ANNOUNCEMENT) {
+		buf = serialize_hdr(data, version, type, FLAG_ANNOUNCEMENT << 8,
+		    12 + 4 * aspa->providers.count);
+		buf = write_uint32(buf, aspa->customer);
+
+		for (i = 0; i < aspa->providers.count; i++) {
+			buf = write_uint32(buf, aspa->providers.asids[i]);
+
+			if (buf >= data + 1024) {
+				error = send_response(fd, type, data, buf - data);
+				if (error)
+					return error;
+				buf = data;
+			}
+		}
+
+		if (buf > data) {
+			error = send_response(fd, type, data, buf - data);
+			if (error)
+				return error;
+		}
+
+	} else {
+		buf = serialize_hdr(data, version, type, FLAG_WITHDRAWAL << 8, 12);
+		write_uint32(buf, aspa->customer);
+		error = send_response(fd, type, data, 12);
+		if (error)
+			return error;
+	}
+
+
+	return 0;
 }
 
 #define MAX(a, b) ((a > b) ? a : b)
@@ -209,17 +256,25 @@ send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 	unsigned char *buf;
 	uint32_t len;
 
-	len = (version == RTR_V1)
-	    ? RTRPDU_END_OF_DATA_V1_LEN
-	    : RTRPDU_END_OF_DATA_V0_LEN;
-	buf = serialize_hdr(data, version, type,
-	    get_current_session_id(version), len);
-
-	buf = write_uint32(buf, end_serial);
-	if (version == RTR_V1) {
+	switch (version) {
+	case RTR_V0:
+		len = RTRPDU_END_OF_DATA_V0_LEN;
+		buf = serialize_hdr(data, version, type,
+		    get_current_session_id(version), len);
+		buf = write_uint32(buf, end_serial);
+		break;
+	case RTR_V1:
+	case RTR_V2:
+		len = RTRPDU_END_OF_DATA_V1_LEN;
+		buf = serialize_hdr(data, version, type,
+		    get_current_session_id(version), len);
+		buf = write_uint32(buf, end_serial);
 		buf = write_uint32(buf, config_get_interval_refresh());
 		buf = write_uint32(buf, config_get_interval_retry());
 		buf = write_uint32(buf, config_get_interval_expire());
+		break;
+	default:
+		return pr_op_err("Unknown RTR version: %u", version);
 	}
 
 	return send_response(fd, type, data, len);

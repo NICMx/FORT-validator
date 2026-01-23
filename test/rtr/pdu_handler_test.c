@@ -25,6 +25,7 @@ MOCK_INT(slurm_apply, 0, struct db_table *base, struct db_slurm **slurm)
 MOCK_ABORT_VOID(db_slurm_destroy, struct db_slurm *db)
 MOCK_VOID(output_print_data, struct db_table const *db)
 __MOCK_ABORT(config_get_local_repository, char const *, "tmp/pdu", void)
+MOCK_UINT(config_get_max_aspa_providers, 10, void)
 
 /* Mocks end */
 

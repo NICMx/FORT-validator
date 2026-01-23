@@ -3,8 +3,10 @@
 #include <errno.h>
 
 #include "alloc.h"
+#include "config.h"
 #include "data_structure/uthash.h"
 #include "log.h"
+#include "types/aspa.h"
 
 struct hashable_roa {
 	struct vrp data;
@@ -16,9 +18,15 @@ struct hashable_key {
 	UT_hash_handle hh;
 };
 
+struct hashable_aspa {
+	struct aspa *v;
+	UT_hash_handle hh;
+};
+
 struct db_table {
 	struct hashable_roa *roas;
 	struct hashable_key *router_keys;
+	struct hashable_aspa *aspas;
 
 	unsigned int total_roas_v4;
 	unsigned int total_roas_v6;
@@ -100,12 +108,84 @@ add_router_key(struct db_table *table, struct hashable_key *new)
 	return 0;
 }
 
+/* Assumes the lists are already sorted. Places the result in @new. */
+static struct aspa_providers
+merge_providers(struct aspa_providers *old, struct aspa_providers *new)
+{
+	struct aspa_providers result;
+	uint32_t *merge;
+	size_t o, n, m;
+
+	m = old->count + new->count;
+	if (!old->asids || m > config_get_max_aspa_providers()) {
+		result.asids = NULL;
+		result.count = 0;
+		return result;
+	}
+
+	merge = pcalloc(m, sizeof(uint32_t));
+
+	for (o = 0, n = 0, m = 0; o < old->count && n < new->count;) {
+		if (old->asids[o] < new->asids[n]) {
+			merge[m] = old->asids[o];
+			o++;
+			m++;
+		} else if (old->asids[o] > new->asids[n]) {
+			merge[m] = new->asids[n];
+			n++;
+			m++;
+		} else
+			o++;
+	}
+
+	for (; o < old->count; o++, m++)
+		merge[m] = old->asids[o];
+	for (; n < new->count; n++, m++)
+		merge[m] = new->asids[n];
+
+	result.asids = merge;
+	result.count = m;
+	return result;
+}
+
+static int
+add_aspa(struct db_table *table, struct hashable_aspa *new)
+{
+	struct hashable_aspa *old;
+	struct aspa_providers merge;
+	int error;
+
+	pr_val_debug("Adding ASPA for customer %u", new->v->customer);
+
+	errno = 0;
+	HASH_REPLACE(hh, table->aspas, v->customer, sizeof(new->v->customer),
+	    new, old);
+	error = errno;
+	if (error) {
+		pr_val_err("Cannot store ASPA: %s", strerror(error));
+		return -error;
+	}
+
+	if (old != NULL) {
+		merge = merge_providers(&old->v->providers, &new->v->providers);
+
+		free(new->v->providers.asids);
+		new->v->providers = merge;
+
+		free(old->v->providers.asids);
+		free(old);
+	}
+
+	return 0;
+}
+
 /* Moves the content from @src into @dst. */
 int
 db_table_join(struct db_table *dst, struct db_table *src)
 {
 	struct hashable_roa *roa, *tmpr;
 	struct hashable_key *rk, *tmpk;
+	struct hashable_aspa *aspa, *tmpa;
 	int error;
 
 	HASH_ITER(hh, src->roas, roa, tmpr) {
@@ -118,6 +198,13 @@ db_table_join(struct db_table *dst, struct db_table *src)
 	HASH_ITER(hh, src->router_keys, rk, tmpk) {
 		HASH_DEL(src->router_keys, rk);
 		error = add_router_key(dst, rk);
+		if (error)
+			return error;
+	}
+
+	HASH_ITER(hh, src->aspas, aspa, tmpa) {
+		HASH_DEL(src->aspas, aspa);
+		error = add_aspa(dst, aspa);
 		if (error)
 			return error;
 	}
@@ -156,6 +243,22 @@ db_table_foreach_router_key(struct db_table const *table,
 	return 0;
 }
 
+int
+db_table_foreach_aspa(struct db_table const *table, aspa_foreach_cb cb,
+    void *arg)
+{
+	struct hashable_aspa *node, *tmp;
+	int error;
+
+	HASH_ITER(hh, table->aspas, node, tmp) {
+		error = cb(node->v, arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
 unsigned int
 db_table_roa_count(struct db_table *table)
 {
@@ -178,6 +281,12 @@ unsigned int
 db_table_router_key_count(struct db_table *table)
 {
 	return HASH_COUNT(table->router_keys);
+}
+
+unsigned int
+db_table_aspa_count(struct db_table *table)
+{
+	return HASH_COUNT(table->aspas);
 }
 
 void
@@ -253,6 +362,24 @@ rtrhandler_handle_router_key(struct db_table *table, unsigned char const *ski,
 	return error;
 }
 
+int
+rtrhandler_handle_aspa(struct db_table *table, struct aspa *v)
+{
+	struct hashable_aspa *aspa;
+	int error;
+
+	aspa = pzalloc(sizeof(struct hashable_aspa));
+	aspa->v = v;
+
+	error = add_aspa(table, aspa);
+	if (error)
+		free(aspa);
+	else
+		aspa_refget(v);
+
+	return error;
+}
+
 /*
  * Copies `@roas1 - roas2` into @deltas.
  *
@@ -282,12 +409,6 @@ add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
 	return 0;
 }
 
-static void
-add_router_key_delta(struct deltas *deltas, struct hashable_key *key, int op)
-{
-	deltas_add_router_key(deltas, &key->data, op);
-}
-
 /*
  * Copies `@keys1 - keys2` into @deltas.
  *
@@ -303,7 +424,33 @@ add_router_key_deltas(struct hashable_key *keys1, struct hashable_key *keys2,
 	for (n1 = keys1; n1 != NULL; n1 = n1->hh.next) {
 		HASH_FIND(hh, keys2, &n1->data, sizeof(n1->data), n2);
 		if (n2 == NULL)
-			add_router_key_delta(deltas, n1, op);
+			deltas_add_router_key(deltas, &n1->data, op);
+	}
+}
+
+static void
+add_aspa_announcements(struct hashable_aspa *old, struct hashable_aspa *new,
+    struct deltas *deltas)
+{
+	struct hashable_aspa *o, *n, *tmp;
+
+	HASH_ITER(hh, new, n, tmp) {
+		HASH_FIND(hh, old, &n->v->customer, sizeof(n->v->customer), o);
+		if (o == NULL || !providers_equal(&o->v->providers, &n->v->providers))
+			deltas_add_aspa(deltas, o->v, FLAG_ANNOUNCEMENT);
+	}
+}
+
+static void
+add_aspa_withdraws(struct hashable_aspa *old, struct hashable_aspa *new,
+    struct deltas *deltas)
+{
+	struct hashable_aspa *o, *n, *tmp;
+
+	HASH_ITER(hh, old, o, tmp) {
+		HASH_FIND(hh, new, &o->v->customer, sizeof(o->v->customer), n);
+		if (n == NULL)
+			deltas_add_aspa(deltas, o->v, FLAG_WITHDRAWAL);
 	}
 }
 
@@ -318,6 +465,8 @@ compute_deltas(struct db_table *old, struct db_table *new)
 	    FLAG_ANNOUNCEMENT);
 	add_router_key_deltas(old->router_keys, new->router_keys, deltas,
 	    FLAG_WITHDRAWAL);
+	add_aspa_announcements(old->aspas, new->aspas, deltas);
+	add_aspa_withdraws(old->aspas, new->aspas, deltas);
 
 	if (deltas_is_empty(deltas)) {
 		deltas_refput(deltas);

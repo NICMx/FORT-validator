@@ -56,6 +56,20 @@ send_delta_rk(struct delta_router_key const *delta, void *arg)
 	    &delta->router_key, delta->flags);
 }
 
+static int
+send_delta_aspa(struct delta_aspa const *delta, void *arg)
+{
+	struct send_delta_args *args = arg;
+	int error;
+
+	error = send_cache_response_maybe(args);
+	if (error)
+		return error;
+
+	return send_aspa_pdu(args->fd, args->rtr_version,
+	    delta->aspa, delta->flags);
+}
+
 int
 handle_serial_query_pdu(struct rtr_request *request)
 {
@@ -93,7 +107,8 @@ handle_serial_query_pdu(struct rtr_request *request)
 	 */
 
 	error = vrps_foreach_delta_since(request->pdu.obj.sq.serial_number,
-	    &final_serial, send_delta_vrp, send_delta_rk, &args);
+	    &final_serial, send_delta_vrp, send_delta_rk, send_delta_aspa,
+	    &args);
 	switch (error) {
 	case 0:
 		/*
@@ -167,6 +182,22 @@ send_base_router_key(struct router_key const *key, void *arg)
 	    FLAG_ANNOUNCEMENT);
 }
 
+static int
+send_base_aspa(struct aspa const *aspa, void *arg)
+{
+	struct base_roa_args *args = arg;
+	int error;
+
+	if (!args->started) {
+		error = send_cache_response_pdu(args->fd, args->version);
+		if (error)
+			return error;
+		args->started = true;
+	}
+
+	return send_aspa_pdu(args->fd, args->version, aspa, FLAG_ANNOUNCEMENT);
+}
+
 int
 handle_reset_query_pdu(struct rtr_request *request)
 {
@@ -196,7 +227,8 @@ handle_reset_query_pdu(struct rtr_request *request)
 	 * queries than reset queries.
 	 */
 
-	error = vrps_foreach_base(send_base_roa, send_base_router_key, &args);
+	error = vrps_foreach_base(send_base_roa, send_base_router_key,
+	    send_base_aspa, &args);
 
 	/* See handle_serial_query_pdu() for some comments. */
 	switch (error) {

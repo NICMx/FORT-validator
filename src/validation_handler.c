@@ -56,3 +56,15 @@ vhandler_handle_router_key(unsigned char const *ski,
 	    ? handler->handle_router_key(ski, asns, spk, handler->arg)
 	    : 0;
 }
+
+int
+vhandler_handle_aspa(struct aspa *aspa)
+{
+	struct validation_handler const *handler;
+
+	handler = get_current_threads_handler();
+
+	return (handler->handle_aspa != NULL)
+	    ? handler->handle_aspa(aspa, handler->arg)
+	    : 0;
+}

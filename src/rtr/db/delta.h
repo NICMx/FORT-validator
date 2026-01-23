@@ -1,6 +1,7 @@
 #ifndef SRC_DELTA_H_
 #define SRC_DELTA_H_
 
+#include "types/aspa.h"
 #include "types/delta.h"
 
 struct deltas;
@@ -12,10 +13,11 @@ void deltas_refput(struct deltas *);
 void deltas_add_roa(struct deltas *, struct vrp const *, int,
     char, unsigned int, unsigned int);
 void deltas_add_router_key(struct deltas *, struct router_key const *, int);
+void deltas_add_aspa(struct deltas *, struct aspa *, int);
 
 bool deltas_is_empty(struct deltas *);
 int deltas_foreach(struct deltas *, delta_vrp_foreach_cb,
-    delta_router_key_foreach_cb, void *);
+    delta_router_key_foreach_cb, delta_aspa_foreach_cb, void *);
 void deltas_print(struct deltas *);
 
 #endif /* SRC_DELTA_H_ */

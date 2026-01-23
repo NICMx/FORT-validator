@@ -56,11 +56,13 @@ unsigned int config_get_http_retry_interval(void);
 char const *config_get_http_proxy(void);
 char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
+char const *config_get_output_aspa(void);
 enum output_format config_get_output_format(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_thread_pool_server_max(void);
 enum file_type config_get_file_type(void);
 char const *config_get_payload(void);
+unsigned int config_get_max_aspa_providers(void);
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);

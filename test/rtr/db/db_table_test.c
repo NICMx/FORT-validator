@@ -19,6 +19,7 @@ static bool roas_found[TOTAL_ROAS];
 static unsigned int total_found;
 
 __MOCK_ABORT(config_get_local_repository, char const *, "tmp/dbt", void)
+MOCK_UINT(config_get_max_aspa_providers, 10, void)
 
 static bool
 vrp_equals_v4(struct vrp const *vrp, uint8_t as, uint32_t addr,
@@ -166,6 +167,83 @@ START_TEST(test_basic)
 }
 END_TEST
 
+static void
+init_providers(struct aspa_providers *provs, ...)
+{
+	int asn;
+	size_t a;
+	va_list ap;
+
+	va_start(ap, provs);
+	for (a = 0; (asn = va_arg(ap, int)) != 0; a++)
+		;
+	va_end(ap);
+
+	provs->asids = pcalloc(a, sizeof(uint32_t));
+	provs->count = a;
+
+	va_start(ap, provs);
+	for (a = 0; (asn = va_arg(ap, int)) != 0; a++)
+		provs->asids[a] = asn;
+	va_end(ap);
+}
+
+static void
+ck_merge(struct aspa_providers *a1, struct aspa_providers *a2, ...)
+{
+	struct aspa_providers res;
+	va_list ap;
+	size_t a;
+	int asn;
+
+	res = merge_providers(a1, a2);
+
+	va_start(ap, a2);
+	for (a = 0; (asn = va_arg(ap, int)) != 0; a++)
+		ck_assert_uint_eq(asn, res.asids[a]);
+	va_end(ap);
+	ck_assert_uint_eq(a, res.count);
+	free(res.asids);
+
+	res = merge_providers(a2, a1);
+	va_start(ap, a2);
+	for (a = 0; (asn = va_arg(ap, int)) != 0; a++)
+		ck_assert_uint_eq(asn, res.asids[a]);
+	va_end(ap);
+	ck_assert_uint_eq(a, res.count);
+	free(res.asids);
+}
+
+START_TEST(test_aspa_merge)
+{
+	struct aspa_providers a, b;
+
+	init_providers(&a, 1, 2, 3, 0);
+	init_providers(&b, 5, 6, 7, 0);
+	ck_merge(&a, &b, 1, 2, 3, 5, 6, 7, 0);
+
+	init_providers(&a, 1, 3, 5, 0);
+	init_providers(&b, 2, 4, 6, 0);
+	ck_merge(&a, &b, 1, 2, 3, 4, 5, 6, 0);
+
+	init_providers(&a, 2, 4, 10, 0);
+	init_providers(&b, 6, 8, 12, 0);
+	ck_merge(&a, &b, 2, 4, 6, 8, 10, 12, 0);
+
+	init_providers(&a, 1, 2, 3, 4, 0);
+	init_providers(&b, 1, 2, 3, 4, 0);
+	ck_merge(&a, &b, 1, 2, 3, 4, 0);
+
+	init_providers(&a, 1, 2, 3, 0);
+	init_providers(&b, 1, 2, 4, 6, 0);
+	ck_merge(&a, &b, 1, 2, 3, 4, 6, 0);
+
+	init_providers(&a, 1, 2, 3, 0);
+	init_providers(&b, 1, 2, 3, 4, 5, 0);
+	ck_merge(&a, &b, 1, 2, 3, 4, 5, 0);
+}
+END_TEST
+
 static Suite *pdu_suite(void)
 {
 	Suite *suite;
@@ -173,6 +251,7 @@ static Suite *pdu_suite(void)
 
 	core = tcase_create("Core");
 	tcase_add_test(core, test_basic);
+	tcase_add_test(core, test_aspa_merge);
 
 	suite = suite_create("DB Table");
 	suite_add_tcase(suite, core);

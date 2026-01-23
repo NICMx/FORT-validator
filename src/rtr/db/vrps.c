@@ -22,13 +22,20 @@ struct rk_node {
 	SLIST_ENTRY(rk_node) next;
 };
 
+struct aspa_node {
+	struct delta_aspa delta;
+	SLIST_ENTRY(aspa_node) next;
+};
+
 /** Sorted list to filter deltas */
 SLIST_HEAD(vrp_slist, vrp_node);
 SLIST_HEAD(rk_slist, rk_node);
+SLIST_HEAD(aspa_slist, aspa_node);
 
 struct sorted_lists {
 	struct vrp_slist prefixes;
 	struct rk_slist router_keys;
+	struct aspa_slist aspas;
 };
 
 struct state {
@@ -168,6 +175,12 @@ handle_router_key(unsigned char const *ski, struct asn_range const *asns,
 	return 0;
 }
 
+int
+handle_aspa(struct aspa *aspa, void *arg)
+{
+	return rtrhandler_handle_aspa(arg, aspa);
+}
+
 /*
  * High level validator function.
  *
@@ -251,7 +264,7 @@ int
 vrps_update(bool *changed)
 {
 	time_t start, finish;
-	unsigned int roas, rks;
+	unsigned int roas, rks, aspas;
 	serial_t serial;
 	int error;
 
@@ -263,10 +276,12 @@ vrps_update(bool *changed)
 	if (state.base == NULL) {
 		roas = 0;
 		rks = 0;
+		aspas = 0;
 		serial = 0;
 	} else {
 		roas = db_table_roa_count(state.base);
 		rks = db_table_router_key_count(state.base);
+		aspas = db_table_aspa_count(state.base);
 		serial = state.serial;
 	}
 	rwlock_unlock(&state_lock);
@@ -274,6 +289,7 @@ vrps_update(bool *changed)
 	pr_op_info("Validation finished:");
 	pr_op_info("- Valid ROAs: %u", roas);
 	pr_op_info("- Valid Router Keys: %u", rks);
+	pr_op_info("- Valid ASPAs: %u", aspas);
 	if (config_get_mode() == SERVER)
 		pr_op_info("- Serial: %u", serial);
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
@@ -289,7 +305,8 @@ vrps_update(bool *changed)
  * 2. -EAGAIN: No data available; database still under construction.
  */
 int
-vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk, void *arg)
+vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk,
+    aspa_foreach_cb cb_aspa, void *arg)
 {
 	int error;
 
@@ -302,6 +319,9 @@ vrps_foreach_base(vrp_foreach_cb cb_roa, router_key_foreach_cb cb_rk, void *arg)
 		if (error)
 			goto end;
 		error = db_table_foreach_router_key(state.base, cb_rk, arg);
+		if (error)
+			goto end;
+		error = db_table_foreach_aspa(state.base, cb_aspa, arg);
 	} else
 		error = -EAGAIN;
 
@@ -355,6 +375,7 @@ router_key_ovrd_remove(struct delta_router_key const *delta, void *arg)
 		    && memcmp(key->spk, ptr->delta.router_key.spk,
 		    RK_SPKI_LEN) == 0 &&
 		    delta->flags != ptr->delta.flags) {
+			/* TODO (rk) Shouldn't it be replaced? */
 			SLIST_REMOVE(filtered_keys, ptr, rk_node, next);
 			free(ptr);
 			return 0;
@@ -369,10 +390,33 @@ router_key_ovrd_remove(struct delta_router_key const *delta, void *arg)
 }
 
 static int
+aspa_ovrd_remove(struct delta_aspa const *delta, void *arg)
+{
+	struct sorted_lists *lists = arg;
+	struct aspa_node *ptr;
+	struct aspa_slist *filtered_aspas;
+
+	filtered_aspas = &lists->aspas;
+	SLIST_FOREACH(ptr, filtered_aspas, next) {
+		if (delta->aspa->customer == ptr->delta.aspa->customer) {
+			SLIST_REMOVE(filtered_aspas, ptr, aspa_node, next);
+			ptr->delta = *delta;
+			SLIST_INSERT_HEAD(filtered_aspas, ptr, next);
+			return 0;
+		}
+	}
+
+	ptr = pmalloc(sizeof(struct aspa_node));
+	ptr->delta = *delta;
+	SLIST_INSERT_HEAD(filtered_aspas, ptr, next);
+	return 0;
+}
+
+static int
 __deltas_foreach(struct deltas *deltas, void *arg)
 {
 	return deltas_foreach(deltas, vrp_ovrd_remove, router_key_ovrd_remove,
-	    arg);
+	    aspa_ovrd_remove, arg);
 }
 
 /**
@@ -388,11 +432,12 @@ __deltas_foreach(struct deltas *deltas, void *arg)
 int
 vrps_foreach_delta_since(serial_t from, serial_t *to,
     delta_vrp_foreach_cb vrp_cb, delta_router_key_foreach_cb rk_cb,
-    void *arg)
+    delta_aspa_foreach_cb aspa_cb, void *arg)
 {
 	struct sorted_lists filtered_lists;
 	struct vrp_node *vnode;
 	struct rk_node *rnode;
+	struct aspa_node *anode;
 	int error;
 
 	error = rwlock_read_lock(&state_lock);
@@ -434,6 +479,7 @@ vrps_foreach_delta_since(serial_t from, serial_t *to,
 	 */
 	SLIST_INIT(&filtered_lists.prefixes);
 	SLIST_INIT(&filtered_lists.router_keys);
+	SLIST_INIT(&filtered_lists.aspas);
 
 	error = darray_foreach_since(state.deltas, state.serial - from,
 	    __deltas_foreach, &filtered_lists);
@@ -451,6 +497,11 @@ vrps_foreach_delta_since(serial_t from, serial_t *to,
 		if (error)
 			break;
 	}
+	SLIST_FOREACH(anode, &filtered_lists.aspas, next) {
+		error = aspa_cb(&anode->delta, arg);
+		if (error)
+			break;
+	}
 
 release_list:
 	while (!SLIST_EMPTY(&filtered_lists.prefixes)) {
@@ -462,6 +513,11 @@ release_list:
 		rnode = filtered_lists.router_keys.slh_first;
 		SLIST_REMOVE_HEAD(&filtered_lists.router_keys, next);
 		free(rnode);
+	}
+	while (!SLIST_EMPTY(&filtered_lists.aspas)) {
+		anode = filtered_lists.aspas.slh_first;
+		SLIST_REMOVE_HEAD(&filtered_lists.aspas, next);
+		free(anode);
 	}
 
 	*to = state.serial;
@@ -507,5 +563,5 @@ get_current_session_id(uint8_t rtr_version)
 void
 vrps_print_base(void)
 {
-	vrps_foreach_base(vrp_print, router_key_print, NULL);
+	vrps_foreach_base(vrp_print, router_key_print, aspa_print, NULL);
 }

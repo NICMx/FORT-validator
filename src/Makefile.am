@@ -42,6 +42,7 @@ fort_SOURCES += asn1/oid.h asn1/oid.c
 fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
 
 fort_SOURCES += types/address.h types/address.c
+fort_SOURCES += types/aspa.h types/aspa.c
 fort_SOURCES += types/bio_seq.c types/bio_seq.h
 fort_SOURCES += types/delta.c types/delta.h
 fort_SOURCES += types/router_key.c types/router_key.h
@@ -77,6 +78,7 @@ fort_SOURCES += http/http.h http/http.c
 
 fort_SOURCES += incidence/incidence.h incidence/incidence.c
 
+fort_SOURCES += object/aspa.h object/aspa.c
 fort_SOURCES += object/bgpsec.h object/bgpsec.c
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c

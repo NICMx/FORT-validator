@@ -165,6 +165,12 @@ sarray_contains(struct sorted_array const *sarray, void const *elem)
 	return false;
 }
 
+unsigned int
+sarray_count(struct sorted_array const *sarray)
+{
+	return sarray ? sarray->count : 0;
+}
+
 int
 sarray_foreach(struct sorted_array *sarray, sarray_foreach_cb cb, void *arg)
 {

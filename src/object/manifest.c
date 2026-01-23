@@ -253,6 +253,8 @@ build_rpp(struct Manifest *mft, struct rpki_uri *notif,
 			rpp_add = rpp_add_cer;
 		else if (strncmp(ext, ".roa", 4) == 0)
 			rpp_add = rpp_add_roa;
+		else if (strncmp(ext, ".asa", 4) == 0)
+			rpp_add = rpp_add_asa;
 		else if (strncmp(ext, ".crl", 4) == 0)
 			rpp_add = rpp_add_crl;
 		else if (strncmp(ext, ".gbr", 4) == 0)
@@ -348,7 +350,7 @@ handle_manifest(struct rpki_uri *uri, struct rpki_uri *notif, struct rpp **pp)
 	error = rpp_crl(*pp, &crl);
 	if (error)
 		goto revert_rpp;
-	eecert_init(&ee, crl, false);
+	eecert_init(&ee, EET_MFT, crl, false);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);

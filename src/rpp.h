@@ -15,6 +15,7 @@ void rpp_refput(struct rpp *pp);
 int rpp_add_cer(struct rpp *, struct rpki_uri *);
 int rpp_add_crl(struct rpp *, struct rpki_uri *);
 int rpp_add_roa(struct rpp *, struct rpki_uri *);
+int rpp_add_asa(struct rpp *pp, struct rpki_uri *);
 int rpp_add_gbr(struct rpp *, struct rpki_uri *);
 
 struct rpki_uri *rpp_get_crl(struct rpp const *);

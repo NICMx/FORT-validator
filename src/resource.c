@@ -557,6 +557,12 @@ resources_contains_asns(struct resources *res, struct asn_range const *range)
 }
 
 bool
+resources_matches_asn(struct resources *res, uint32_t asid)
+{
+	return rasn_matches(res->asns, asid);
+}
+
+bool
 resources_contains_ipv4(struct resources *res, struct ipv4_prefix const *prefix)
 {
 	return res4_contains_prefix(res->ip4s, prefix);

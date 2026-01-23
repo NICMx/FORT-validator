@@ -25,9 +25,14 @@ struct delta_rk {
 	unsigned char	spk[RK_SPKI_LEN];
 };
 
+struct _delta_aspa {
+	struct aspa *aspa;
+};
+
 STATIC_ARRAY_LIST(deltas_v6, struct delta_v6)
 STATIC_ARRAY_LIST(deltas_v4, struct delta_v4)
 STATIC_ARRAY_LIST(deltas_rk, struct delta_rk)
+STATIC_ARRAY_LIST(deltas_aspa, struct _delta_aspa)
 
 struct deltas {
 	struct {
@@ -42,6 +47,10 @@ struct deltas {
 		struct deltas_rk adds;
 		struct deltas_rk removes;
 	} rk;
+	struct {
+		struct deltas_aspa adds;
+		struct deltas_aspa removes;
+	} aspa;
 
 	atomic_uint references;
 };
@@ -59,6 +68,8 @@ deltas_create(void)
 	deltas_v6_init(&result->v6.removes);
 	deltas_rk_init(&result->rk.adds);
 	deltas_rk_init(&result->rk.removes);
+	deltas_aspa_init(&result->aspa.adds);
+	deltas_aspa_init(&result->aspa.removes);
 	atomic_init(&result->references, 1);
 
 	return result;
@@ -84,6 +95,8 @@ deltas_refput(struct deltas *deltas)
 		deltas_v6_cleanup(&deltas->v6.removes, NULL);
 		deltas_rk_cleanup(&deltas->rk.adds, NULL);
 		deltas_rk_cleanup(&deltas->rk.removes, NULL);
+		deltas_aspa_cleanup(&deltas->aspa.adds, NULL);
+		deltas_aspa_cleanup(&deltas->aspa.removes, NULL);
 		free(deltas);
 	}
 }
@@ -177,6 +190,26 @@ deltas_add_router_key(struct deltas *deltas, struct router_key const *key,
 	pr_crit("Unknown delta operation: %d", op);
 }
 
+void
+deltas_add_aspa(struct deltas *deltas, struct aspa *aspa, int op)
+{
+	struct _delta_aspa delta;
+
+	delta.aspa = aspa;
+	aspa_refget(aspa);
+
+	switch (op) {
+	case FLAG_ANNOUNCEMENT:
+		deltas_aspa_add(&deltas->aspa.adds, &delta);
+		return;
+	case FLAG_WITHDRAWAL:
+		deltas_aspa_add(&deltas->aspa.removes, &delta);
+		return;
+	}
+
+	pr_crit("Unknown delta operation: %d", op);
+}
+
 bool
 deltas_is_empty(struct deltas *deltas)
 {
@@ -185,7 +218,9 @@ deltas_is_empty(struct deltas *deltas)
 	    && (deltas->v6.adds.len == 0)
 	    && (deltas->v6.removes.len == 0)
 	    && (deltas->rk.adds.len == 0)
-	    && (deltas->rk.removes.len == 0);
+	    && (deltas->rk.removes.len == 0)
+	    && (deltas->aspa.adds.len == 0)
+	    && (deltas->aspa.removes.len == 0);
 }
 
 static int
@@ -258,37 +293,59 @@ __foreach_rk(struct deltas_rk *array,  delta_router_key_foreach_cb cb,
 	return 0;
 }
 
+static int
+__foreach_aspa(struct deltas_aspa *array, delta_aspa_foreach_cb cb, void *arg,
+    uint8_t flags)
+{
+	struct delta_aspa delta;
+	struct _delta_aspa *d;
+	int error;
+
+	delta.flags = flags;
+
+	ARRAYLIST_FOREACH(array, d) {
+		delta.aspa = d->aspa;
+		error = cb(&delta, arg);
+		if (error)
+			return error;
+	}
+
+	return 0;
+}
+
 int
 deltas_foreach(struct deltas *deltas, delta_vrp_foreach_cb cb_vrp,
-    delta_router_key_foreach_cb cb_rk, void *arg)
+    delta_router_key_foreach_cb cb_rk, delta_aspa_foreach_cb cb_aspa,
+    void *arg)
 {
 	int error;
 
 	error = __foreach_v4(&deltas->v4.adds, cb_vrp, arg, FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
-
 	error = __foreach_v4(&deltas->v4.removes, cb_vrp, arg, FLAG_WITHDRAWAL);
 	if (error)
 		return error;
-
 	error = __foreach_v6(&deltas->v6.adds, cb_vrp, arg, FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
-
 	error = __foreach_v6(&deltas->v6.removes, cb_vrp, arg, FLAG_WITHDRAWAL);
 	if (error)
 		return error;
-
 	error = __foreach_rk(&deltas->rk.adds, cb_rk, arg, FLAG_ANNOUNCEMENT);
 	if (error)
 		return error;
-
-	return __foreach_rk(&deltas->rk.removes, cb_rk, arg, FLAG_WITHDRAWAL);
+	error = __foreach_rk(&deltas->rk.removes, cb_rk, arg, FLAG_WITHDRAWAL);
+	if (error)
+		return error;
+	error = __foreach_aspa(&deltas->aspa.adds, cb_aspa, arg, FLAG_ANNOUNCEMENT);
+	if (error)
+		return error;
+	return __foreach_aspa(&deltas->aspa.removes, cb_aspa, arg, FLAG_WITHDRAWAL);
 }
 
 void
 deltas_print(struct deltas *deltas)
 {
-	deltas_foreach(deltas, delta_vrp_print, delta_rk_print, NULL);
+	deltas_foreach(deltas, delta_vrp_print, delta_rk_print, delta_aspa_print, NULL);
 }

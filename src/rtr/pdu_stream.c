@@ -242,12 +242,24 @@ validate_rtr_version(struct pdu_stream *stream, struct pdu_header *header,
     struct rtr_buffer *request)
 {
 	switch (stream->rtr_version) {
-	case RTR_V1:
+	case RTR_V2:
 		switch (header->version) {
+		case RTR_V2:
+			return 0;
+		case RTR_V1:
 		case RTR_V0:
 			goto unexpected;
+		default:
+			goto unsupported;
+		}
+
+	case RTR_V1:
+		switch (header->version) {
 		case RTR_V1:
 			return 0;
+		case RTR_V0:
+		case RTR_V2:
+			goto unexpected;
 		default:
 			goto unsupported;
 		}
@@ -257,6 +269,7 @@ validate_rtr_version(struct pdu_stream *stream, struct pdu_header *header,
 		case RTR_V0:
 			return 0;
 		case RTR_V1:
+		case RTR_V2:
 			goto unexpected;
 		default:
 			goto unsupported;
@@ -266,6 +279,7 @@ validate_rtr_version(struct pdu_stream *stream, struct pdu_header *header,
 		switch (header->version) {
 		case RTR_V0:
 		case RTR_V1:
+		case RTR_V2:
 			stream->rtr_version = header->version;
 			return 0;
 		default:
@@ -278,9 +292,9 @@ validate_rtr_version(struct pdu_stream *stream, struct pdu_header *header,
 unsupported:
 	return err_pdu_send_unsupported_proto_version(
 		stream->fd,
-		(stream->rtr_version != -1) ? stream->rtr_version : RTR_V1,
+		(stream->rtr_version != -1) ? stream->rtr_version : RTR_V0,
 		request,
-		"The maximum supported RTR version is 1."
+		"The maximum supported RTR version is 2."
 	);
 
 unexpected:

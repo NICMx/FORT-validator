@@ -16,8 +16,10 @@ static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;
 static const OID oid_sta = OID_SIGNING_TIME_ATTR;
 
 void
-eecert_init(struct ee_cert *ee, STACK_OF(X509_CRL) *crls, bool force_inherit)
+eecert_init(struct ee_cert *ee, enum ee_type type, STACK_OF(X509_CRL) *crls,
+    bool force_inherit)
 {
+	ee->type = type;
 	ee->res = resources_create(RPKI_POLICY_RFC6484, force_inherit);
 	ee->crls = crls;
 	memset(&ee->refs, 0, sizeof(ee->refs));
@@ -101,7 +103,7 @@ handle_sdata_certificate(ANY_t *cert_encoded, struct ee_cert *ee,
 		goto end2;
 
 	resources_set_policy(ee->res, policy);
-	error = certificate_get_resources(cert, ee->res, CERTYPE_EE);
+	error = certificate_get_resources(cert, ee->res, CERTYPE_EE, ee->type);
 	if (error)
 		goto end2;
 
