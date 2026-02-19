@@ -353,7 +353,8 @@ add_aors(struct resources *resources, int family,
 }
 
 int
-resources_add_ip(struct resources *resources, struct IPAddressFamily *obj)
+resources_add_ip(struct resources *resources, struct IPAddressFamily *obj,
+    bool allow_inherit)
 {
 	int family;
 
@@ -365,7 +366,9 @@ resources_add_ip(struct resources *resources, struct IPAddressFamily *obj)
 	case IPAddressChoice_PR_NOTHING:
 		break;
 	case IPAddressChoice_PR_inherit:
-		return inherit_aors(resources, family);
+		return allow_inherit
+		    ? inherit_aors(resources, family)
+		    : pr_val_err("IP extension is not allowed to contain 'inherit' elements.");
 	case IPAddressChoice_PR_addressesOrRanges:
 		return add_aors(resources, family,
 		    &obj->ipAddressChoice.choice.addressesOrRanges);
@@ -530,8 +533,7 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
 		if (!allow_inherit)
-			return pr_val_err("ASIdentifierChoice %u isn't allowed",
-			    ids->asnum->present);
+			return pr_val_err("ASN extension is not allowed to contain 'inherit' elements.");
 		return inherit_asiors(resources);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
 		return add_asiors(resources, ids);

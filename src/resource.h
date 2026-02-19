@@ -26,7 +26,7 @@ struct resources;
 struct resources *resources_create(enum rpki_policy, bool);
 void resources_destroy(struct resources *);
 
-int resources_add_ip(struct resources *, struct IPAddressFamily *);
+int resources_add_ip(struct resources *, struct IPAddressFamily *, bool);
 int resources_add_asn(struct resources *, struct ASIdentifiers *, bool);
 
 bool resources_empty(struct resources *);

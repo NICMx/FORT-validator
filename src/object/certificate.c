@@ -1131,7 +1131,8 @@ abort:
 }
 
 static int
-handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
+handle_ip_extension(X509_EXTENSION *ext, struct resources *resources,
+    bool allow_inherit)
 {
 	ASN1_OCTET_STRING *string;
 	struct IPAddrBlocks *blocks;
@@ -1175,7 +1176,8 @@ handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
 	}
 
 	for (i = 0; i < blocks->list.count && !error; i++)
-		error = resources_add_ip(resources, blocks->list.array[i]);
+		error = resources_add_ip(resources, blocks->list.array[i],
+		    allow_inherit);
 
 end:
 	ASN_STRUCT_FREE(asn_DEF_IPAddrBlocks, blocks);
@@ -1211,6 +1213,7 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 {
 	int allowed_ip_nid = NID_undef;
 	int allowed_as_nid = NID_undef;
+	bool allow_inherit = true;
 
 	int nid_ip1 = NID_sbgp_ipAddrBlock;
 	int nid_ip2 = nid_ipAddrBlocksv2();
@@ -1245,6 +1248,7 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 			case RPKI_POLICY_RFC8360:
 				allowed_ip_nid = nid_ip2;
 			}
+			allow_inherit = false;
 			break;
 		case EET_ASPA:
 			switch (resources_get_policy(resources)) {
@@ -1253,10 +1257,20 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 			case RPKI_POLICY_RFC8360:
 				allowed_as_nid = nid_as2;
 			}
+			allow_inherit = false;
 			break;
 		case EET_MFT:
 		case EET_GBR:
-			/* TODO disallow these? */
+			/*
+			 * RFC6487:
+			 *
+			 * > Either the IP Resources extension, or the AS
+			 * > Resources extension, or both, MUST be present in
+			 * > all RPKI certificates
+			 *
+			 * This requirement seems counterproductive,
+			 * but I guess it's too late to fix it.
+			 */
 			switch (resources_get_policy(resources)) {
 			case RPKI_POLICY_RFC6484:
 				allowed_ip_nid = nid_ip1;
@@ -1279,7 +1293,7 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 			if (extnid != allowed_ip_nid)
 				return pr_val_err("Found an unexpected IP Resources extension.");
 
-			error = handle_ip_extension(ext, resources);
+			error = handle_ip_extension(ext, resources, allow_inherit);
 			if (error)
 				return error;
 			allowed_ip_nid = NID_undef;
@@ -1288,7 +1302,7 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 			if (extnid != allowed_as_nid)
 				return pr_val_err("Found an unexpected AS Resources extension.");
 
-			error = handle_asn_extension(ext, resources, false);
+			error = handle_asn_extension(ext, resources, allow_inherit);
 			if (error)
 				return error;
 			allowed_as_nid = NID_undef;
