@@ -481,7 +481,7 @@ START_TEST(test_json)
 	add_step(&se1, "1", 0x01, f1, f2, f3, NULL);
 	se1.fresh = false;
 	ck_assert_int_eq(0, pthread_mutex_init(&se1.lock, NULL));
-	se1.fallbacks = NULL;
+	se1.fbs.ht = NULL;
 
 	TAILQ_INSERT_TAIL(&ctx.sessions, &se2, lh);
 	se2.id = "session2";
@@ -491,7 +491,7 @@ START_TEST(test_json)
 	add_step(&se2, "4", 0x04, f1, f2, f3, NULL);
 	se2.fresh = true;
 	ck_assert_int_eq(0, pthread_mutex_init(&se2.lock, NULL));
-	se2.fallbacks = NULL;
+	se2.fbs.ht = NULL;
 
 	cseq_init(&ctx.seq, "http/22", 4, false);
 

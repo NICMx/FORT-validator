@@ -57,6 +57,10 @@ struct rrdp_step {
 
 TAILQ_HEAD(rrdp_steps, rrdp_step);
 
+struct fallback_ht {
+	struct fallback *ht;
+};
+
 struct rrdp_session {
 	char *id;			/* Known in files as "session_id" */
 
@@ -70,23 +74,23 @@ struct rrdp_session {
 
 	bool fresh;			/* Refreshed during this cycle? */
 
-	pthread_mutex_t lock;		/* For fallbacks */
-	struct rrdp_fallback *fallbacks;/* Hash table, indexed by caRepo */
+	pthread_mutex_t lock;		/* For fbs */
+	struct fallback_ht fbs;		/* Hash table, indexed by caRepo */
 
 	TAILQ_ENTRY(rrdp_session) lh;
 };
 
 TAILQ_HEAD(rrdp_sessions, rrdp_session);
 
-struct rrdp_fallback {
+struct fallback {
 	struct uri caRepository;
 	files_ht *files;
 	struct mft_meta mft;
 
-	bool committed;			/* Freshly committed */
+	bool committed;			/* Freshly committed? */
 
 	UT_hash_handle hh;
-	struct rrdp_fallback *next;
+	struct fallback *next;		/* Fallbacks that share caRepository */
 };
 
 /* Subset of the notification that is relevant to the TAL's cachefile */
@@ -102,8 +106,8 @@ struct rrdp_dao {
 	struct rrdp_session *session;
 	struct rrdp_step *step;
 
-	struct rrdp_fallback *fallback;	/* Lazy init; can be NULL even then */
-	bool fallback_searched;
+	struct fallback *fb;		/* Lazy init; can be NULL even then */
+	bool fb_searched;
 };
 
 struct file_metadata {
@@ -226,9 +230,9 @@ step_free(struct rrdp_step *step, bool rm_files)
 }
 
 static void
-delete_fallbacks(struct rrdp_fallback *fb, bool rm_files)
+fallbacks_free(struct fallback *fb, bool rm_files)
 {
-	struct rrdp_fallback *next;
+	struct fallback *next;
 
 	while (fb) {
 		next = fb->next;
@@ -264,13 +268,13 @@ session_cleanup(struct rrdp_session *session)
 static void
 session_free(struct rrdp_session *session)
 {
-	struct rrdp_fallback *fb, *tmp;
+	struct fallback *fb, *tmp;
 
 	session_reset(session, false);
 
-	HASH_ITER(hh, session->fallbacks, fb, tmp) {
-		HASH_DEL(session->fallbacks, fb);
-		delete_fallbacks(fb, false);
+	HASH_ITER(hh, session->fbs.ht, fb, tmp) {
+		HASH_DEL(session->fbs.ht, fb);
+		fallbacks_free(fb, false);
 	}
 
 	free(session->id);
@@ -1501,15 +1505,15 @@ rrdpdao_downgrade_fb(struct rrdp_dao *dao)
 	if (!dao)
 		return false;
 
-	if (!dao->fallback_searched) {
+	if (!dao->fb_searched) {
 		dao->session = NULL;
 		dao->step = NULL;
-		dao->fallback_searched = true;
+		dao->fb_searched = true;
 	}
 
-	if (dao->fallback) {
-		dao->fallback = dao->fallback->next;
-		if (dao->fallback)
+	if (dao->fb) {
+		dao->fb = dao->fb->next;
+		if (dao->fb)
 			return true;
 	}
 
@@ -1522,8 +1526,8 @@ rrdpdao_downgrade_fb(struct rrdp_dao *dao)
 		    : TAILQ_FIRST(&dao->ctx->sessions);
 		if (dao->session == NULL)
 			return false;
-		HASH_FIND(hh, dao->session->fallbacks, key, kl, dao->fallback);
-	} while (!dao->fallback);
+		HASH_FIND(hh, dao->session->fbs.ht, key, kl, dao->fb);
+	} while (!dao->fb);
 
 	return true;
 }
@@ -1534,8 +1538,8 @@ rrdpdao_map(struct rrdp_dao const *querier, struct uri const *url)
 	files_ht *ht;
 	struct cache_file_ref *ref;
 
-	if (querier->fallback)
-		ht = querier->fallback->files;
+	if (querier->fb)
+		ht = querier->fb->files;
 	else if (querier->step)
 		ht = querier->step->files;
 	else
@@ -1548,13 +1552,13 @@ rrdpdao_map(struct rrdp_dao const *querier, struct uri const *url)
 struct mft_meta const *
 rrdpdao_fallback_mftnum(struct rrdp_dao *dao)
 {
-	return (dao && dao->fallback) ? &dao->fallback->mft : NULL;
+	return (dao && dao->fb) ? &dao->fb->mft : NULL;
 }
 
 void
 rrdpdao_commit(struct rrdp_dao *querier, struct rpp *rpp)
 {
-	struct rrdp_fallback *fb, *old;
+	struct fallback *fb, *old;
 	size_t i;
 	struct rrdp_session *session;
 	char const *key;
@@ -1563,15 +1567,15 @@ rrdpdao_commit(struct rrdp_dao *querier, struct rpp *rpp)
 	pr_trc("Queuing RPP for commit: %s", uri_str(&querier->caRepository));
 	session = querier->session;
 
-	if (querier->fallback) {
+	if (querier->fb) {
 		pr_trc("It's already a fallback.");
 		mutex_lock(&session->lock);
-		querier->fallback->committed = true;
+		querier->fb->committed = true;
 		mutex_unlock(&session->lock);
 		return;
 	}
 
-	fb = pzalloc(sizeof(struct rrdp_fallback));
+	fb = pzalloc(sizeof(struct fallback));
 	uri_copy(&fb->caRepository, &querier->caRepository);
 	for (i = 0; i < rpp->nfiles; i++)
 		filerefs_add_uri(&fb->files, rpp->files[i], 1);
@@ -1583,7 +1587,7 @@ rrdpdao_commit(struct rrdp_dao *querier, struct rpp *rpp)
 	keylen = uri_len(&fb->caRepository);
 
 	mutex_lock(&session->lock);
-	HASH_ADD_KEYPTR_SAFE(session->fallbacks, key, keylen, fb, old);
+	HASH_ADD_KEYPTR_SAFE(session->fbs.ht, key, keylen, fb, old);
 	if (old) {
 		fb->next = old->next;
 		old->next = fb;
@@ -1604,10 +1608,10 @@ rrdpdao_free(struct rrdp_dao *dao)
 	}
 }
 
-static struct rrdp_fallback *
-find_best_commit(struct rrdp_fallback *first)
+static struct fallback *
+find_best_commit(struct fallback *first)
 {
-	struct rrdp_fallback *fb, *committed;
+	struct fallback *fb, *committed;
 	INTEGER_t *max;
 
 	committed = NULL;
@@ -1625,15 +1629,15 @@ static void
 cleanup_fallbacks(struct rrdp_ctx *ctx)
 {
 	struct rrdp_session *session;
-	struct rrdp_fallback *first, *committed, *tmp;
+	struct fallback *first, *committed, *tmp;
 
 	TAILQ_FOREACH(session, &ctx->sessions, lh) {
-		HASH_ITER(hh, session->fallbacks, first, tmp) {
+		HASH_ITER(hh, session->fbs.ht, first, tmp) {
 			committed = find_best_commit(first);
 
 			if (committed == NULL) {
-				HASH_DEL(session->fallbacks, first);
-				delete_fallbacks(first, true);
+				HASH_DEL(session->fbs.ht, first);
+				fallbacks_free(first, true);
 
 			} else {
 				if (first != committed) {
@@ -1649,7 +1653,7 @@ cleanup_fallbacks(struct rrdp_ctx *ctx)
 					    sizeof(committed->mft));
 				}
 
-				delete_fallbacks(first->next, true);
+				fallbacks_free(first->next, true);
 				first->next = NULL;
 			}
 		}
@@ -1668,7 +1672,7 @@ cleanup_sessions(struct rrdp_ctx *ctx)
 	for (session = TAILQ_FIRST(&ctx->sessions); session; session = tmps) {
 		tmps = TAILQ_NEXT(session, lh);
 
-		if (!session->fresh && HASH_COUNT(session->fallbacks) == 0) {
+		if (!session->fresh && HASH_COUNT(session->fbs.ht) == 0) {
 			TAILQ_REMOVE(&ctx->sessions, session, lh);
 			session_cleanup(session);
 			continue;
@@ -1733,7 +1737,7 @@ files2json(json_t *json, struct rrdp_ctx const *ctx)
 {
 	struct rrdp_session *session;
 	struct rrdp_step *step;
-	struct rrdp_fallback *fb, *fb2;
+	struct fallback *fb, *fb2;
 	struct cache_file_ref *file, *file2;
 	int error;
 
@@ -1741,7 +1745,7 @@ files2json(json_t *json, struct rrdp_ctx const *ctx)
 		TAILQ_FOREACH(step, &session->steps, lh)
 			HASH_ITER(hh, step->files, file, file2)
 				cachefile_set_written(file->file, false);
-		HASH_ITER(hh, session->fallbacks, fb, fb2)
+		HASH_ITER(hh, session->fbs.ht, fb, fb2)
 			HASH_ITER(hh, fb->files, file, file2)
 				cachefile_set_written(file->file, false);
 	}
@@ -1752,7 +1756,7 @@ files2json(json_t *json, struct rrdp_ctx const *ctx)
 			if (error)
 				return error;
 		}
-		HASH_ITER(hh, session->fallbacks, fb, fb2) {
+		HASH_ITER(hh, session->fbs.ht, fb, fb2) {
 			error = add_files_json(json, fb->files);
 			if (error)
 				return error;
@@ -1801,15 +1805,15 @@ fail:	json_decref(jmft);
 }
 
 static json_t *
-fallback2json(struct rrdp_fallback *fallback)
+fallback2json(struct fallback *fb)
 {
 	json_t *json;
 
 	json = json_obj_new();
 
-	if (json_object_add(json, "files", filerefs2json(fallback->files)))
+	if (json_object_add(json, "files", filerefs2json(fb->files)))
 		goto fail;
-	if (json_object_add(json, "manifest", mft2json(&fallback->mft)))
+	if (json_object_add(json, "manifest", mft2json(&fb->mft)))
 		goto fail;
 
 	return json;
@@ -1821,9 +1825,9 @@ fail:	json_decref(json);
 static json_t *
 session2json(struct rrdp_session *session)
 {
-	json_t *jsession, *jsteps, *jfallbacks, *jstep;
+	json_t *jsession, *jsteps, *jfbs, *jstep;
 	struct rrdp_step *step;
-	struct rrdp_fallback *fallback, *tmp;
+	struct fallback *fb, *tmp;
 	array_index s;
 
 	jsession = json_obj_new();
@@ -1841,13 +1845,13 @@ session2json(struct rrdp_session *session)
 			break;
 	}
 
-	jfallbacks = json_obj_new();
-	if (json_object_add(jsession, "fallbacks", jfallbacks))
+	jfbs = json_obj_new();
+	if (json_object_add(jsession, "fallbacks", jfbs))
 		goto fail;
-	HASH_ITER(hh, session->fallbacks, fallback, tmp)
-		if (json_object_add(jfallbacks,
-		    uri_str(&fallback->caRepository),
-		    fallback2json(fallback)))
+	HASH_ITER(hh, session->fbs.ht, fb, tmp)
+		if (json_object_add(jfbs,
+		    uri_str(&fb->caRepository),
+		    fallback2json(fb)))
 			goto fail;
 
 	return jsession;
@@ -1961,15 +1965,15 @@ json2steps(json_t *jsteps, struct rrdp_session *session, files_ht *files)
 
 static int
 json2fallback(json_t *json, char const *key, files_ht *files,
-    struct rrdp_fallback **result)
+    struct fallback **result)
 {
 	json_t *jmft;
-	struct rrdp_fallback *fb;
+	struct fallback *fb;
 	error_msg errmsg;
 	int error;
 
 	*result = NULL;
-	fb = pzalloc(sizeof(struct rrdp_fallback));
+	fb = pzalloc(sizeof(struct fallback));
 
 	errmsg = uri_init(&fb->caRepository, key);
 	if (errmsg) {
@@ -2002,22 +2006,22 @@ fb:	free(fb);
 }
 
 static int
-json2fallbacks(json_t *jfallbacks, struct rrdp_session *session, files_ht *files)
+json2fallbacks(json_t *jfbs, struct rrdp_session *session, files_ht *files)
 {
 	char const *jkey;
 	json_t *child;
-	struct rrdp_fallback *fb, *old;
+	struct fallback *fb, *old;
 	char const *key;
 	size_t keylen;
 	int error;
 
-	json_object_foreach(jfallbacks, jkey, child) {
+	json_object_foreach(jfbs, jkey, child) {
 		error = json2fallback(child, jkey, files, &fb);
 		if (error)
 			return error;
 		key = uri_str(&fb->caRepository);
 		keylen = uri_len(&fb->caRepository);
-		HASH_ADD_KEYPTR_SAFE(session->fallbacks, key, keylen, fb, old);
+		HASH_ADD_KEYPTR_SAFE(session->fbs.ht, key, keylen, fb, old);
 		if (old)
 			return pr_err("Session '%s' has multiple fallbacks named '%s'.",
 			    session->id, key);
@@ -2139,7 +2143,7 @@ rrdpctx_print(char const *pfx, struct rrdp_ctx *ctx)
 {
 	struct rrdp_session *session;
 	struct rrdp_step *step;
-	struct rrdp_fallback *fb, *fb2, *tmp2;
+	struct fallback *fb, *fb2, *tmp2;
 	struct cache_file_ref *ref, *tmp;
 	unsigned int i;
 
@@ -2169,7 +2173,7 @@ rrdpctx_print(char const *pfx, struct rrdp_ctx *ctx)
 			}
 		}
 
-		HASH_ITER(hh, session->fallbacks, fb, tmp2)
+		HASH_ITER(hh, session->fbs.ht, fb, tmp2)
 			for (fb2 = fb; fb2; fb2 = fb2->next) {
 				printf("\t\tFallback: %s\n",
 				    uri_str(&fb2->caRepository));
