@@ -345,3 +345,122 @@ fileref_print(struct cache_file_ref *ref)
 	    uri_str(&ref->file->map.url),
 	    ref->file->map.path);
 }
+
+/* Steals @rpp's files. */
+/* TODO (fine) why does rpp not contain caRepo? */
+void
+fallback_add(struct fallback_ht *fbs, struct uri *caRepo, struct rpp *rpp)
+{
+	struct fallback *fb, *old;
+	array_index i;
+	char const *key;
+	size_t keylen;
+
+	fb = pzalloc(sizeof(struct fallback));
+	uri_copy(&fb->caRepository, caRepo);
+	for (i = 0; i < rpp->nfiles; i++)
+		filerefs_add_uri(&fb->files, rpp->files[i], 0);
+	INTEGER_move(&fb->mft.num, &rpp->mft.meta.num);
+	fb->mft.update = rpp->mft.meta.update;
+	fb->committed = true;
+
+	key = uri_str(&fb->caRepository);
+	keylen = uri_len(&fb->caRepository);
+
+	mutex_lock(&fbs->lock);
+	HASH_ADD_KEYPTR_SAFE(fbs->ht, key, keylen, fb, old);
+	if (old) {
+		fb->next = old->next;
+		old->next = fb;
+	}
+	mutex_unlock(&fbs->lock);
+
+	free(rpp->files);
+	rpp->files = NULL;
+	rpp->nfiles = 0;
+}
+
+void
+fallback_commit(struct fallback_ht *ht, struct fallback *fb)
+{
+	mutex_lock(&ht->lock);
+	fb->committed = true;
+	mutex_unlock(&ht->lock);
+}
+
+void
+fallbacks_free(struct fallback *fb, bool rm_files)
+{
+	struct fallback *next;
+
+	while (fb) {
+		next = fb->next;
+
+		uri_cleanup(&fb->caRepository);
+		filerefs_clear(fb->files, rm_files);
+		mftm_cleanup(&fb->mft);
+		free(fb);
+
+		fb = next;
+	}
+}
+
+json_t *
+fallback2json(struct fallback *fb)
+{
+	json_t *json;
+
+	json = json_obj_new();
+
+	if (json_object_add(json, "files", filerefs2json(fb->files)))
+		goto fail;
+	if (json_object_add(json, "manifest", mft2json(&fb->mft)))
+		goto fail;
+
+	return json;
+
+fail:	json_decref(json);
+	return NULL;
+}
+
+int
+json2fallback(json_t *json, char const *key, files_ht *files,
+    struct fallback **result)
+{
+	json_t *jmft;
+	struct fallback *fb;
+	error_msg errmsg;
+	int error;
+
+	*result = NULL;
+	fb = pzalloc(sizeof(struct fallback));
+
+	errmsg = uri_init(&fb->caRepository, key);
+	if (errmsg) {
+		error = pr_err("Bad URL: %s", errmsg);
+		goto fb;
+	}
+
+	error = json2filerefs(json, "files", files, &fb->files);
+	if (error)
+		goto uri;
+
+	error = json_get_object(json, "manifest", &jmft);
+	if (error)
+		goto files;
+	error = json_get_bigint(jmft, "number", &fb->mft.num);
+	if (error)
+		goto files;
+	error = json_get_ts(jmft, "update", &fb->mft.update);
+	if (error)
+		goto mft;
+
+	*result = fb;
+	return 0;
+
+mft:	INTEGER_cleanup(&fb->mft.num);
+files:	fileref_free(fb->files, true);
+uri:	uri_cleanup(&fb->caRepository);
+fb:	free(fb);
+	return error;
+}

@@ -57,10 +57,6 @@ struct rrdp_step {
 
 TAILQ_HEAD(rrdp_steps, rrdp_step);
 
-struct fallback_ht {
-	struct fallback *ht;
-};
-
 struct rrdp_session {
 	char *id;			/* Known in files as "session_id" */
 
@@ -74,24 +70,12 @@ struct rrdp_session {
 
 	bool fresh;			/* Refreshed during this cycle? */
 
-	pthread_mutex_t lock;		/* For fbs */
 	struct fallback_ht fbs;		/* Hash table, indexed by caRepo */
 
 	TAILQ_ENTRY(rrdp_session) lh;
 };
 
 TAILQ_HEAD(rrdp_sessions, rrdp_session);
-
-struct fallback {
-	struct uri caRepository;
-	files_ht *files;
-	struct mft_meta mft;
-
-	bool committed;			/* Freshly committed? */
-
-	UT_hash_handle hh;
-	struct fallback *next;		/* Fallbacks that share caRepository */
-};
 
 /* Subset of the notification that is relevant to the TAL's cachefile */
 struct rrdp_ctx {
@@ -227,23 +211,6 @@ step_free(struct rrdp_step *step, bool rm_files)
 	filerefs_clear(step->files, rm_files);
 	serial_cleanup(&step->serial);
 	free(step);
-}
-
-static void
-fallbacks_free(struct fallback *fb, bool rm_files)
-{
-	struct fallback *next;
-
-	while (fb) {
-		next = fb->next;
-
-		uri_cleanup(&fb->caRepository);
-		filerefs_clear(fb->files, rm_files);
-		mftm_cleanup(&fb->mft);
-		free(fb);
-
-		fb = next;
-	}
 }
 
 static void
@@ -1556,47 +1523,16 @@ rrdpdao_fallback_mftnum(struct rrdp_dao *dao)
 }
 
 void
-rrdpdao_commit(struct rrdp_dao *querier, struct rpp *rpp)
+rrdpdao_commit(struct rrdp_dao *dao, struct rpp *rpp)
 {
-	struct fallback *fb, *old;
-	size_t i;
-	struct rrdp_session *session;
-	char const *key;
-	size_t keylen;
+	pr_trc("Queuing RPP for commit: %s", uri_str(&dao->caRepository));
 
-	pr_trc("Queuing RPP for commit: %s", uri_str(&querier->caRepository));
-	session = querier->session;
-
-	if (querier->fb) {
+	if (dao->fb) {
 		pr_trc("It's already a fallback.");
-		mutex_lock(&session->lock);
-		querier->fb->committed = true;
-		mutex_unlock(&session->lock);
-		return;
+		fallback_commit(&dao->session->fbs, dao->fb);
+	} else {
+		fallback_add(&dao->session->fbs, &dao->caRepository, rpp);
 	}
-
-	fb = pzalloc(sizeof(struct fallback));
-	uri_copy(&fb->caRepository, &querier->caRepository);
-	for (i = 0; i < rpp->nfiles; i++)
-		filerefs_add_uri(&fb->files, rpp->files[i], 1);
-	INTEGER_move(&fb->mft.num, &rpp->mft.meta.num);
-	fb->mft.update = rpp->mft.meta.update;
-	fb->committed = true;
-
-	key = uri_str(&fb->caRepository);
-	keylen = uri_len(&fb->caRepository);
-
-	mutex_lock(&session->lock);
-	HASH_ADD_KEYPTR_SAFE(session->fbs.ht, key, keylen, fb, old);
-	if (old) {
-		fb->next = old->next;
-		old->next = fb;
-	}
-	mutex_unlock(&session->lock);
-
-	free(rpp->files);
-	rpp->files = NULL;
-	rpp->nfiles = 0;
 }
 
 void
@@ -1805,24 +1741,6 @@ fail:	json_decref(jmft);
 }
 
 static json_t *
-fallback2json(struct fallback *fb)
-{
-	json_t *json;
-
-	json = json_obj_new();
-
-	if (json_object_add(json, "files", filerefs2json(fb->files)))
-		goto fail;
-	if (json_object_add(json, "manifest", mft2json(&fb->mft)))
-		goto fail;
-
-	return json;
-
-fail:	json_decref(json);
-	return NULL;
-}
-
-static json_t *
 session2json(struct rrdp_session *session)
 {
 	json_t *jsession, *jsteps, *jfbs, *jstep;
@@ -1960,48 +1878,6 @@ json2steps(json_t *jsteps, struct rrdp_session *session, files_ht *files)
 	}
 
 	BN_free(diff);
-	return error;
-}
-
-static int
-json2fallback(json_t *json, char const *key, files_ht *files,
-    struct fallback **result)
-{
-	json_t *jmft;
-	struct fallback *fb;
-	error_msg errmsg;
-	int error;
-
-	*result = NULL;
-	fb = pzalloc(sizeof(struct fallback));
-
-	errmsg = uri_init(&fb->caRepository, key);
-	if (errmsg) {
-		error = pr_err("Bad URL: %s", errmsg);
-		goto fb;
-	}
-
-	error = json2filerefs(json, "files", files, &fb->files);
-	if (error)
-		goto uri;
-
-	error = json_get_object(json, "manifest", &jmft);
-	if (error)
-		goto files;
-	error = json_get_bigint(jmft, "number", &fb->mft.num);
-	if (error)
-		goto files;
-	error = json_get_ts(jmft, "update", &fb->mft.update);
-	if (error)
-		goto mft;
-
-	*result = fb;
-	return 0;
-
-mft:	INTEGER_cleanup(&fb->mft.num);
-files:	fileref_free(fb->files, true);
-uri:	uri_cleanup(&fb->caRepository);
-fb:	free(fb);
 	return error;
 }
 

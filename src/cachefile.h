@@ -51,4 +51,27 @@ int json2filerefs(json_t *, char const *, files_ht *, files_ht **);
 
 void fileref_print(struct cache_file_ref *);
 
+struct fallback {
+	struct uri caRepository;
+	files_ht *files;
+	struct mft_meta mft;
+
+	bool committed;			/* Freshly committed? */
+
+	UT_hash_handle hh;
+	struct fallback *next;		/* Fallbacks that share caRepository */
+};
+
+struct fallback_ht {
+	struct fallback *ht;
+	pthread_mutex_t lock;
+};
+
+void fallback_add(struct fallback_ht *, struct uri *, struct rpp *);
+void fallback_commit(struct fallback_ht *, struct fallback *);
+void fallbacks_free(struct fallback *, bool);
+
+json_t *fallback2json(struct fallback *);
+int json2fallback(json_t *, char const *, files_ht *, struct fallback **);
+
 #endif /* SRC_CACHEFILE_H_ */
