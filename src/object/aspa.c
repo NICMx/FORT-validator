@@ -100,9 +100,15 @@ parse_providers(ProviderASSet_t *set, struct aspa *aspa)
 			    aspa->customer);
 			goto cancel;
 		}
-		if (i != 0 && providers[i - 1] >= providers[i]) {
-			error = pr_val_err("The Provider ASIDs are not listed in ascending order.");
-			goto cancel;
+		if (i != 0) {
+			if (providers[i - 1] == providers[i]) {
+				error = pr_val_err("Provider ASID '%u' is listed more than once.", providers[i]);
+				goto cancel;
+			}
+			if (providers[i - 1] > providers[i]) {
+				error = pr_val_err("The Provider ASIDs are not listed in ascending order.");
+				goto cancel;
+			}
 		}
 	}
 
