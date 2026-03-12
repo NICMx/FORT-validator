@@ -101,7 +101,7 @@ parse_providers(ProviderASSet_t *set, struct aspa *aspa)
 			goto cancel;
 		}
 		if (providers[i] == 0 && set->list.count != 1) {
-			error = pr_val_err("Provider ASID '%u' is not in a single item list.");
+			error = pr_val_err("Provider ASID '0' is not in a single item list.");
 			goto cancel;
 		}
 		if (i != 0) {
