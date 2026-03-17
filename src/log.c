@@ -144,6 +144,18 @@ sigsegv_handler(int signum)
 
 #endif
 
+static void
+sigusr1_handler(int signum)
+{
+	/*
+	 * Nothing.
+	 * We want to wake up the main thread's sleep(), but according to its
+	 * documentation, that happens automatically.
+	 * All we had to do was set up SIGUSR1 so it's neither ignored nor
+	 * results in program termination.
+	 */
+}
+
 /*
  * Register better handlers for some signals.
  *
@@ -152,8 +164,9 @@ sigsegv_handler(int signum)
 static void
 register_signal_handlers(void)
 {
-#ifdef BACKTRACE_ENABLED
 	struct sigaction action;
+
+#ifdef BACKTRACE_ENABLED
 	void* dummy;
 
 	/*
@@ -167,7 +180,6 @@ register_signal_handlers(void)
 	memset(&action, 0, sizeof(action));
 	action.sa_handler = sigsegv_handler;
 	sigemptyset(&action.sa_mask);
-	action.sa_flags = 0;
 	if (sigaction(SIGSEGV, &action, NULL) == -1) {
 		/*
 		 * Not fatal; it just means we will not print stack traces on
@@ -177,6 +189,14 @@ register_signal_handlers(void)
 		    strerror(errno));
 	}
 #endif
+
+	/* SIGUSR1 handler */
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = sigusr1_handler;
+	sigemptyset(&action.sa_mask);
+	if (sigaction(SIGUSR1, &action, NULL) == -1)
+		pr_op_err("SIGUSR1 handler registration failure: %s",
+		    strerror(errno));
 
 	/*
 	 * SIGPIPE can be triggered by any I/O function. libcurl is particularly
@@ -196,7 +216,10 @@ register_signal_handlers(void)
 	 *
 	 * https://github.com/NICMx/FORT-validator/issues/49
 	 */
-	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = SIG_IGN;
+	sigemptyset(&action.sa_mask);
+	if (sigaction(SIGPIPE, &action, NULL) == -1)
 		/*
 		 * Not fatal. It just means that, if a broken pipe happens, we
 		 * will die silently.
@@ -204,7 +227,6 @@ register_signal_handlers(void)
 		 */
 		pr_op_err("SIGPIPE handler registration failure: %s",
 		    strerror(errno));
-	}
 }
 
 int
