@@ -354,7 +354,7 @@ add_aors(struct resources *resources, int family,
 
 int
 resources_add_ip(struct resources *resources, struct IPAddressFamily *obj,
-    bool allow_inherit)
+    int flags)
 {
 	int family;
 
@@ -366,7 +366,7 @@ resources_add_ip(struct resources *resources, struct IPAddressFamily *obj,
 	case IPAddressChoice_PR_NOTHING:
 		break;
 	case IPAddressChoice_PR_inherit:
-		return allow_inherit
+		return (flags & RF_ALLOW_INHERIT)
 		    ? inherit_aors(resources, family)
 		    : pr_val_err("IP extension is not allowed to contain 'inherit' elements.");
 	case IPAddressChoice_PR_addressesOrRanges:
@@ -463,7 +463,7 @@ add_asn(struct resources *resources, struct asn_range const *asns,
 }
 
 static int
-add_asior(struct resources *resources, struct ASIdOrRange *obj)
+add_asior(struct resources *resources, struct ASIdOrRange *obj, int flags)
 {
 	struct resources *parent;
 	struct asn_range asns;
@@ -486,6 +486,8 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 		return add_asn(resources, &asns, parent);
 
 	case ASIdOrRange_PR_range:
+		if ((flags & RF_ALLOW_RANGES) == 0)
+			return pr_val_err("ASN extension is not allowed to contain 'range' elements.");
 		error = ASId2u32(&obj->choice.range.min, &asns.min);
 		if (error)
 			return error;
@@ -499,7 +501,7 @@ add_asior(struct resources *resources, struct ASIdOrRange *obj)
 }
 
 static int
-add_asiors(struct resources *resources, struct ASIdentifiers *ids)
+add_asiors(struct resources *resources, struct ASIdentifiers *ids, int flags)
 {
 	struct ASIdentifierChoice__asIdsOrRanges *iors;
 	int i;
@@ -512,8 +514,11 @@ add_asiors(struct resources *resources, struct ASIdentifiers *ids)
 	if (iors->list.count == 0)
 		return pr_val_err("AS extension's set of AS number records is empty.");
 
+	if ((flags & RF_ALLOW_MULTIPLE) == 0 && iors->list.count != 1)
+		return pr_val_err("AS resources list more than one ASIdOrRange.");
+
 	for (i = 0; i < iors->list.count; i++) {
-		error = add_asior(resources, iors->list.array[i]);
+		error = add_asior(resources, iors->list.array[i], flags);
 		if (error)
 			return error;
 	}
@@ -523,7 +528,7 @@ add_asiors(struct resources *resources, struct ASIdentifiers *ids)
 
 int
 resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
-    bool allow_inherit)
+    int flags)
 {
 	if (ids->asnum == NULL)
 		return pr_val_err("ASN extension lacks 'asnum' element.");
@@ -532,11 +537,11 @@ resources_add_asn(struct resources *resources, struct ASIdentifiers *ids,
 
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
-		if (!allow_inherit)
+		if ((flags & RF_ALLOW_INHERIT) == 0)
 			return pr_val_err("ASN extension is not allowed to contain 'inherit' elements.");
 		return inherit_asiors(resources);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
-		return add_asiors(resources, ids);
+		return add_asiors(resources, ids, flags);
 	case ASIdentifierChoice_PR_NOTHING:
 		break;
 	}

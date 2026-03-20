@@ -26,8 +26,13 @@ struct resources;
 struct resources *resources_create(enum rpki_policy, bool);
 void resources_destroy(struct resources *);
 
-int resources_add_ip(struct resources *, struct IPAddressFamily *, bool);
-int resources_add_asn(struct resources *, struct ASIdentifiers *, bool);
+#define RF_ALLOW_INHERIT  (1 << 0)
+#define RF_ALLOW_MULTIPLE (1 << 1)
+#define RF_ALLOW_RANGES   (1 << 2)
+#define RF_ALLOW_ALL (RF_ALLOW_INHERIT | RF_ALLOW_MULTIPLE | RF_ALLOW_RANGES)
+
+int resources_add_ip(struct resources *, struct IPAddressFamily *, int);
+int resources_add_asn(struct resources *, struct ASIdentifiers *, int);
 
 bool resources_empty(struct resources *);
 bool resources_contains_asns(struct resources *, struct asn_range const *);
