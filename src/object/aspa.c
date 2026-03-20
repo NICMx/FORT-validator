@@ -62,6 +62,9 @@ parse_customer(ASId_t *asid, struct resources *parent, uint32_t *result)
 	if (error)
 		return error;
 
+	if (*result == 0)
+		return pr_val_err("Customer 0 is not allowed...");
+
 	if (!resources_matches_asn(parent, *result))
 		return pr_val_err(
 		    "EE certificate's ASN extension does not exactly match customerASID %u.",
