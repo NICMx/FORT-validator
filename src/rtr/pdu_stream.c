@@ -238,70 +238,27 @@ read_hdr(struct pdu_stream *stream, struct pdu_header *header)
 }
 
 static int
-validate_rtr_version(struct pdu_stream *stream, struct pdu_header *header,
+validate_rtr_version(struct pdu_stream *stream, struct pdu_header *hdr,
     struct rtr_buffer *request)
 {
-	switch (stream->rtr_version) {
-	case RTR_V2:
-		switch (header->version) {
-		case RTR_V2:
+	if (stream->rtr_version == -1) {
+		if (RTR_V0 <= hdr->version && hdr->version <= RTR_V2) {
+			stream->rtr_version = hdr->version;
 			return 0;
-		case RTR_V1:
-		case RTR_V0:
-			goto unexpected;
-		default:
-			goto unsupported;
 		}
-
-	case RTR_V1:
-		switch (header->version) {
-		case RTR_V1:
-			return 0;
-		case RTR_V0:
-		case RTR_V2:
-			goto unexpected;
-		default:
-			goto unsupported;
-		}
-
-	case RTR_V0:
-		switch (header->version) {
-		case RTR_V0:
-			return 0;
-		case RTR_V1:
-		case RTR_V2:
-			goto unexpected;
-		default:
-			goto unsupported;
-		}
-
-	case -1:
-		switch (header->version) {
-		case RTR_V0:
-		case RTR_V1:
-		case RTR_V2:
-			stream->rtr_version = header->version;
-			return 0;
-		default:
-			goto unsupported;
-		}
+		return err_pdu_send_unsupported_proto_version(
+			stream->fd, RTR_V2, request,
+			"The maximum supported RTR version is 2."
+		);
 	}
 
-	pr_crit("Unknown RTR version %u", stream->rtr_version);
+	if (stream->rtr_version != hdr->version)
+		return err_pdu_send_unexpected_proto_version(
+			stream->fd, stream->rtr_version, request,
+			"The RTR version does not match the one we negotiated during the handshake."
+		);
 
-unsupported:
-	return err_pdu_send_unsupported_proto_version(
-		stream->fd,
-		(stream->rtr_version != -1) ? stream->rtr_version : RTR_V0,
-		request,
-		"The maximum supported RTR version is 2."
-	);
-
-unexpected:
-	return err_pdu_send_unexpected_proto_version(
-		stream->fd, stream->rtr_version, request,
-		"The RTR version does not match the one we negotiated during the handshake."
-	);
+	return 0;
 }
 
 static int
