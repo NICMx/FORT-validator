@@ -437,7 +437,7 @@ add_aspa_announcements(struct hashable_aspa *old, struct hashable_aspa *new,
 	HASH_ITER(hh, new, n, tmp) {
 		HASH_FIND(hh, old, &n->v->customer, sizeof(n->v->customer), o);
 		if (o == NULL || !providers_equal(&o->v->providers, &n->v->providers))
-			deltas_add_aspa(deltas, o->v, FLAG_ANNOUNCEMENT);
+			deltas_add_aspa(deltas, n->v, FLAG_ANNOUNCEMENT);
 	}
 }
 
