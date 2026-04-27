@@ -871,28 +871,27 @@ handle_snapshot(struct update_notification *notif)
 {
 	struct validation *state;
 	struct rpki_uri *uri;
+	bool changed;
 	int error;
 
 	state = state_retrieve();
-
-	delete_rpp(tal_get_file_name(validation_tal(state)), notif->uri);
-
 	uri = notif->snapshot.uri;
 
 	pr_val_debug("Processing snapshot '%s'.", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
 	/*
-	 * TODO (performance) Is there a point in caching the snapshot?
-	 * Especially considering we delete it 4 lines afterwards.
-	 * Maybe stream it instead.
-	 * Same for deltas.
+	 * TODO (performance) There's no point in caching the snapshot.
+	 * Stream it instead. Same for deltas.
 	 */
-	error = cache_download(validation_cache(state), uri, NULL);
+	error = cache_download(validation_cache(state), uri, &changed);
 	if (error)
 		goto end;
-	error = parse_snapshot(notif);
-	delete_file(uri);
+	if (changed) {
+		delete_rpp(tal_get_file_name(validation_tal(state)), notif->uri);
+		error = parse_snapshot(notif);
+		delete_file(uri);
+	}
 
 end:
 	fnstack_pop();
