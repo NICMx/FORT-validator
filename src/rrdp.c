@@ -660,6 +660,23 @@ end:	metadata_cleanup(&tag.meta);
 }
 
 static int
+parse_notification_snapshot(xmlTextReaderPtr reader,
+    struct update_notification *notif)
+{
+	int error;
+
+	error = parse_file_metadata(reader, NULL, HR_MANDATORY, &notif->snapshot);
+	if (error)
+		return error;
+
+	if (!uri_same_origin(notif->uri, notif->snapshot.uri))
+		return pr_val_err("Notification '%s' and Snapshot '%s' are not hosted by the same origin.",
+		    uri_get_global(notif->uri), uri_get_global(notif->snapshot.uri));
+
+	return 0;
+}
+
+static int
 parse_notification_delta(xmlTextReaderPtr reader,
     struct update_notification *notif)
 {
@@ -671,13 +688,21 @@ parse_notification_delta(xmlTextReaderPtr reader,
 		return error;
 
 	error = parse_file_metadata(reader, NULL, HR_MANDATORY, &delta.meta);
-	if (error) {
-		serial_cleanup(&delta.serial);
-		return error;
+	if (error)
+		goto srl;
+
+	if (!uri_same_origin(notif->uri, delta.meta.uri)) {
+		error = pr_val_err("Notification %s and Delta %s are not hosted by the same origin.",
+		    uri_get_global(notif->uri), uri_get_global(delta.meta.uri));
+		goto mta;
 	}
 
 	notification_deltas_add(&notif->deltas, &delta);
 	return 0;
+
+mta:	metadata_cleanup(&delta.meta);
+srl:	serial_cleanup(&delta.serial);
+	return error;
 }
 
 static int
@@ -780,8 +805,7 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA)) {
 			return parse_notification_delta(reader, notif);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT)) {
-			return parse_file_metadata(reader, NULL, HR_MANDATORY,
-			    &notif->snapshot);
+			return parse_notification_snapshot(reader, notif);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
 			/* No need to validate session ID and serial */
 			return parse_session(reader, &notif->session);
