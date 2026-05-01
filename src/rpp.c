@@ -82,6 +82,7 @@ rpp_refput(struct rpp *pp)
 		if (pp->crl.stack != NULL)
 			sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
 		uris_cleanup(&pp->roas);
+		uris_cleanup(&pp->aspas);
 		uris_cleanup(&pp->ghostbusters);
 		free(pp);
 	}

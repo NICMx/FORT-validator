@@ -43,6 +43,7 @@ db_table_destroy(struct db_table *table)
 {
 	struct hashable_roa *roa, *tmpr;
 	struct hashable_key *rk, *tmpk;
+	struct hashable_aspa *aspa, *tmpa;
 
 	if (table == NULL)
 		return;
@@ -55,6 +56,12 @@ db_table_destroy(struct db_table *table)
 	HASH_ITER(hh, table->router_keys, rk, tmpk) {
 		HASH_DEL(table->router_keys, rk);
 		free(rk);
+	}
+
+	HASH_ITER(hh, table->aspas, aspa, tmpa) {
+		HASH_DEL(table->aspas, aspa);
+		aspa_refput(aspa->v);
+		free(aspa);
 	}
 
 	free(table);
@@ -161,6 +168,7 @@ add_aspa(struct db_table *table, struct hashable_aspa *new)
 	HASH_REPLACE(hh, table->aspas, v->customer, sizeof(new->v->customer),
 	    new, old);
 	error = errno;
+
 	if (error) {
 		pr_val_err("Cannot store ASPA: %s", strerror(error));
 		return -error;
@@ -173,6 +181,7 @@ add_aspa(struct db_table *table, struct hashable_aspa *new)
 		new->v->providers = merge;
 
 		free(old->v->providers.asids);
+		free(old->v);
 		free(old);
 	}
 
@@ -191,22 +200,29 @@ db_table_join(struct db_table *dst, struct db_table *src)
 	HASH_ITER(hh, src->roas, roa, tmpr) {
 		HASH_DEL(src->roas, roa);
 		error = add_roa(dst, roa);
-		if (error)
+		if (error) {
+			free(roa);
 			return error;
+		}
 	}
 
 	HASH_ITER(hh, src->router_keys, rk, tmpk) {
 		HASH_DEL(src->router_keys, rk);
 		error = add_router_key(dst, rk);
-		if (error)
+		if (error) {
+			free(rk);
 			return error;
+		}
 	}
 
 	HASH_ITER(hh, src->aspas, aspa, tmpa) {
 		HASH_DEL(src->aspas, aspa);
 		error = add_aspa(dst, aspa);
-		if (error)
+		if (error) {
+			aspa_refput(aspa->v);
+			free(aspa);
 			return error;
+		}
 	}
 
 	return 0;
