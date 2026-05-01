@@ -31,7 +31,6 @@ struct server_init_ctx {
 };
 
 static pthread_t server_thread;
-static volatile bool stop_server_thread;
 
 STATIC_ARRAY_LIST(server_arraylist, struct rtr_server)
 STATIC_ARRAY_LIST(client_arraylist, struct pdu_stream *)
@@ -577,7 +576,7 @@ fddb_poll(void)
 
 	error = poll(pollfds, servers.len + clients.len, 1000);
 
-	if (stop_server_thread)
+	if (fort_end)
 		goto stop;
 
 	if (error == 0)
@@ -712,7 +711,7 @@ void rtr_stop(void)
 {
 	int error;
 
-	stop_server_thread = true;
+	fort_end = true;
 	error = pthread_join(server_thread, NULL);
 	if (error) {
 		pr_op_err("pthread_join() returned error %d: %s", error,
