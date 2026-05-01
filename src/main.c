@@ -42,9 +42,11 @@ fort_server(void)
 		return error;
 
 	error = vrps_update(NULL);
+	if (fort_end)
+		goto end;
 	if (error) {
 		pr_op_err("Main loop: Validation unsuccessful; results unusable.");
-		return error;
+		goto end;
 	}
 
 	rtr_notify();
@@ -56,10 +58,12 @@ fort_server(void)
 	do {
 		pr_op_info("Main loop: Sleeping.");
 		sleep(config_get_validation_interval());
+		if (fort_end)
+			goto end;
 		pr_op_info("Main loop: Time to work!");
 
 		error = vrps_update(&changed);
-		if (error == -EINTR)
+		if (fort_end || error == -EINTR)
 			break;
 		if (error) {
 			pr_op_debug("Main loop: Error %d (%s)", error,
@@ -70,7 +74,7 @@ fort_server(void)
 			rtr_notify();
 	} while (true);
 
-	rtr_stop();
+end:	rtr_stop();
 	return error;
 }
 

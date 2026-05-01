@@ -39,6 +39,8 @@
 #define CHECK_FORMAT(str, args) /* Nothing */
 #endif
 
+extern volatile bool fort_end;
+
 /*
  * Only call this group of functions when you know there's only one thread.
  *

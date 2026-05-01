@@ -156,6 +156,18 @@ sigusr1_handler(int signum)
 	 */
 }
 
+volatile bool fort_end = false;
+
+#ifdef OVERRIDE_SIGTERM
+
+static void
+sigterm_handler(int signum)
+{
+	fort_end = true;
+}
+
+#endif
+
 /*
  * Register better handlers for some signals.
  *
@@ -188,6 +200,16 @@ register_signal_handlers(void)
 		pr_op_err("SIGSEGV handler registration failure: %s",
 		    strerror(errno));
 	}
+#endif
+
+#ifdef OVERRIDE_SIGTERM
+	/* SIGTERM handler */
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = sigterm_handler;
+	sigemptyset(&action.sa_mask);
+	if (sigaction(SIGTERM, &action, NULL) == -1)
+		pr_op_err("SIGTERM handler registration failure: %s",
+		    strerror(errno));
 #endif
 
 	/* SIGUSR1 handler */
