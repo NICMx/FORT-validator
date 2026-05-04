@@ -81,6 +81,12 @@ deltas_refget(struct deltas *deltas)
 	atomic_fetch_add(&deltas->references, 1);
 }
 
+static void
+clean_aspa(struct _delta_aspa *da)
+{
+	aspa_refput(da->aspa);
+}
+
 void
 deltas_refput(struct deltas *deltas)
 {
@@ -95,8 +101,8 @@ deltas_refput(struct deltas *deltas)
 		deltas_v6_cleanup(&deltas->v6.removes, NULL);
 		deltas_rk_cleanup(&deltas->rk.adds, NULL);
 		deltas_rk_cleanup(&deltas->rk.removes, NULL);
-		deltas_aspa_cleanup(&deltas->aspa.adds, NULL);
-		deltas_aspa_cleanup(&deltas->aspa.removes, NULL);
+		deltas_aspa_cleanup(&deltas->aspa.adds, clean_aspa);
+		deltas_aspa_cleanup(&deltas->aspa.removes, clean_aspa);
 		free(deltas);
 	}
 }

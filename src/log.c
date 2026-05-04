@@ -66,7 +66,7 @@ static pthread_mutex_t logck;
  * aware that pthread_mutex_lock() can return error codes, which shouldn't
  * prevent critical stack traces from printing.)
  */
-static void
+void
 print_stack_trace(char const *title)
 {
 #ifdef BACKTRACE_ENABLED
