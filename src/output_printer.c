@@ -1,6 +1,7 @@
 #include "output_printer.h"
 
 #include "base64.h"
+#include "common.h"
 #include "config.h"
 #include "file.h"
 #include "log.h"
@@ -33,9 +34,6 @@ static FILE *
 load_output_file(char const *filename, char const *tmpname)
 {
 	FILE *out;
-
-	if (filename == NULL)
-		return NULL;
 
 	if (strcmp(filename, "-") == 0)
 		return stdout;
@@ -142,14 +140,38 @@ print_router_key_json(struct router_key const *key, void *arg)
 	return 0;
 }
 
+static char *
+get_file_name(char const *pattern, char const *what, char *result)
+{
+	time_t nowt;
+	struct tm nowtm;
+
+	if (!pattern || pattern[0] == 0)
+		return NULL;
+
+	nowt = time_nonfatal();
+	localtime_r(&nowt, &nowtm);
+
+	if (strftime(result, 256, pattern, &nowtm) == 0) {
+		pr_wrn("Cannot translate '%s' pattern to file name. "
+		    "Result is either empty or too long.", what);
+		return NULL;
+	}
+
+	return result;
+}
+
 static void
-print_roas(struct db_table const *db)
+print_roas(struct db_table const *db, char *filename)
 {
 	FILE *out;
 	JSON_OUT json_out;
 	int error;
 
-	out = load_output_file(config_get_output_roa(), ".roa");
+	if (!get_file_name(config_get_output_roa(), "output.roa", filename))
+		return;
+
+	out = load_output_file(filename, ".roa");
 	if (out == NULL)
 		return;
 
@@ -170,20 +192,23 @@ print_roas(struct db_table const *db)
 		pr_err("Error printing ROAs: %s", strerror(error));
 	if (out != stdout) {
 		file_close(out);
-		if (!error && rename(".roa", config_get_output_roa()) < 0)
+		if (!error && rename(".roa", filename) < 0)
 			pr_err("Cannot move '.roa' to '%s': %s",
-			    config_get_output_roa(), strerror(errno));
+			    filename, strerror(errno));
 	}
 }
 
 static void
-print_router_keys(struct db_table const *db)
+print_router_keys(struct db_table const *db, char *filename)
 {
 	FILE *out;
 	JSON_OUT json_out;
 	int error;
 
-	out = load_output_file(config_get_output_bgpsec(), ".rk");
+	if (!get_file_name(config_get_output_bgpsec(), "output.bgpsec", filename))
+		return;
+
+	out = load_output_file(filename, ".rk");
 	if (out == NULL)
 		return;
 
@@ -204,17 +229,18 @@ print_router_keys(struct db_table const *db)
 		pr_err("Error printing Router Keys: %s", strerror(error));
 	if (out != stdout) {
 		file_close(out);
-		if (!error && rename(".rk", config_get_output_bgpsec()) < 0)
+		if (!error && rename(".rk", filename) < 0)
 			pr_err("Cannot move '.rk' to '%s': %s",
-			    config_get_output_bgpsec(), strerror(errno));
+			    filename, strerror(errno));
 	}
 }
 
 void
 output_print_data(struct db_table const *db)
 {
-	print_roas(db);
-	print_router_keys(db);
+	char buf[256];
+	print_roas(db, buf);
+	print_router_keys(db, buf);
 }
 
 /* THIS FUNCTION CAN BE CALLED FROM A SIGNAL HANDLER. */

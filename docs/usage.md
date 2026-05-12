@@ -813,6 +813,8 @@ File where the ROAs (found during each validation run) will be stored. See [`--o
 
 If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
 
+You can format the file's creation time into the file name. See your system's manual page for strftime(3) ([Example](https://linux.die.net/man/3/strftime)) for the available character sequences and their meanings.
+
 When `--output.format` equals `csv`, each line of the result is printed in the following order: _AS, Prefix, Max prefix length_. The first line contains the column names.
 
 When `--output.format` equals `json`, each element is printed in an object array of `roas`:
@@ -849,6 +851,8 @@ File where the BGPsec Router Keys (found during each validation run) will be sto
 Since most of the data (Subject Key Identifier and Subject Public Key Info) is binary, it is base64url-encoded, without trailing pads.
 
 If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), the BGPsec Router Keys will be printed every [`--server.interval.validation`](#--serverintervalvalidation) seconds.
+
+You can format the file's creation time into the file name. See your system's manual page for strftime(3) ([Example](https://linux.die.net/man/3/strftime)) for the available character sequences and their meanings.
 
 When `--output.format` equals `csv`, each line of the result is printed in the following order: _AS, Subject Key Identifier, Subject Public Key Info_. The first line contains the column names.
 

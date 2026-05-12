@@ -80,6 +80,7 @@ rsync2bio_cache(char const *src)
 	pr_err("Disabled for now."); // XXX
 	return NULL;
 
+/*
 	char *dst;
 	BIO *bio;
 
@@ -93,6 +94,7 @@ rsync2bio_cache(char const *src)
 
 	free(dst);
 	return bio;
+*/
 }
 
 static BIO *
