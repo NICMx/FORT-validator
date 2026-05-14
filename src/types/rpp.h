@@ -8,11 +8,6 @@
 #include "cachefile.h"
 #include "types/map.h"
 
-struct mft_meta {
-	INTEGER_t num;				/* Manifest's manifestNumber */
-	time_t update;				/* Manifest's thisUpdate */
-};
-
 /* Repository Publication Point */
 struct rpp {
 	struct cache_file **files;

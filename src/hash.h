@@ -33,5 +33,6 @@ struct rrdp_hash {
 };
 
 int str2hash(char const *, struct rrdp_hash *);
+void hash_print(struct rrdp_hash *);
 
 #endif /* SRC_HASH_H_ */

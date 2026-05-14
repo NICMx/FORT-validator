@@ -6,6 +6,7 @@
 #include "alloc.h"
 #include "file.h"
 #include "log.h"
+#include "types/array.h"
 
 /*
  * TODO (fine) Delete this structure (use md directly) once OpenSSL < 3 support
@@ -289,4 +290,28 @@ str2hash(char const *hexstr, struct rrdp_hash *hash)
 
 	hash->set = true;
 	return 0;
+}
+
+/* binary to char */
+static char
+hash_b2c(unsigned char bin)
+{
+	bin &= 0xF;
+	return (bin < 10) ? (bin + '0') : (bin + 'a' - 10);
+}
+
+void
+hash_print(struct rrdp_hash *hash)
+{
+	array_index i;
+
+	if (!hash->set) {
+		printf("(unset)");
+		return;
+	}
+
+	for (i = 0; i < RRDP_HASH_LEN; i++)
+		printf("%c%c",
+		    hash_b2c(hash->bytes[i] >> 4),
+		    hash_b2c(hash->bytes[i]));
 }

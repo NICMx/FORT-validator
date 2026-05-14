@@ -13,17 +13,17 @@
 #include "asn1/asn1c/der_encoder.h"
 #include "common.h"
 #include "config.h"
+#include "file.h"
 #include "log.h"
 #include "stream.h"
 #include "types/map.h"
+#include "types/path.h"
 
 #define RSP /* rsync spawner prefix */ "[rsync spawner] "
 #define SRTP "[spawner response thread] "
 
-static char const *rsync_args[20]; /* Last must be NULL */
-
-static const int RDFD = 0;
-static const int WRFD = 1;
+#define RDFD 0
+#define WRFD 1
 
 #define STDERR_WRITE(fds) fds[0][1]
 #define STDOUT_WRITE(fds) fds[1][1]
@@ -48,6 +48,7 @@ struct rsync_task {
 	int pid;
 	struct uri url;
 	char *path;
+	bool single;
 	int stdoutfd;	/* Child rsync's standard output */
 	int stderrfd;	/* Child rsync's standard error */
 	struct timespec expiration;
@@ -77,20 +78,15 @@ struct rsync_tasks {
 static pthread_t srt;
 
 static void
-__spsk_init(int rdfd, int wrfd)
-{
-	rstream_init(&pssk.rd, rdfd, 512);
-	pssk.wr = wrfd;
-	pssk.rr = NULL;
-	pthread_mutex_init(&pssk.wrlock, NULL);
-}
-
-static void
 spsk_init(int rdpipes[2], int wrpipes[2])
 {
 	close(wrpipes[RDFD]);
 	close(rdpipes[WRFD]);
-	__spsk_init(rdpipes[RDFD], wrpipes[WRFD]);
+
+	rstream_init(&pssk.rd, rdpipes[RDFD], 512);
+	pssk.wr = wrpipes[WRFD];
+	pssk.rr = NULL;
+	pthread_mutex_init(&pssk.wrlock, NULL);
 }
 
 static void
@@ -128,7 +124,7 @@ notify_parent(struct rsync_task *task)
 	 * The asn1 code needs better error reporting.
 	 */
 
-	if (RsyncRequest_init(&req, &task->url, task->path) < 0) {
+	if (RsyncRequest_init(&req, &task->url, task->path, task->single) < 0) {
 		pr_err(RSP "Cannot message parent process: "
 		    "The request object cannot be created");
 		return;
@@ -216,23 +212,6 @@ create_pipes(int fds[2][2])
 	return 0;
 }
 
-static void
-prepare_rsync_args(char **args, struct uri const *url, char const *path)
-{
-	size_t i;
-
-	/*
-	 * execvp() is not going to tweak these strings;
-	 * stop angsting over the const-to-raw conversion.
-	 */
-
-	for (i = 0; rsync_args[i] != NULL; i++)
-		args[i] = (char *)rsync_args[i];
-	args[i++] = (char *)uri_str(url);
-	args[i++] = (char *)path;
-	args[i++] = NULL;
-}
-
 /*
  * Duplicate parent FDs, to pipe rsync output:
  * - fds[0] = stderr
@@ -254,11 +233,80 @@ duplicate_fds(int fds[2][2])
 }
 
 static int
-execvp_rsync(struct uri const *url, char const *path, int fds[2][2])
+execvp_rsync(struct rsync_task *task, int fds[2][2])
 {
-	char *args[20];
+	char *dest;
+	char *compare_dest;
 
-	prepare_rsync_args(args, url, path);
+	char *args[20];
+	array_index i;
+	int error;
+
+	if (task->single) {
+		i = 0;
+		args[i++] = (char *)config_get_rsync_program();
+		args[i++] = "-tz";
+		args[i++] = "--contimeout=20";
+		args[i++] = "--max-size=5MB";
+		args[i++] = "--timeout=15";
+		args[i++] = (char *)uri_str(&task->url);
+		args[i++] = task->path;
+		args[i++] = NULL;
+	} else {
+		error = file_mkdir(task->path, true);
+		if (error)
+			return error;
+
+		dest = path_join(task->path, "remote");
+		compare_dest = NULL;
+
+		pr_trc("mkdir %s", dest);
+		if (mkdir(dest, CACHE_FILEMODE) < 0) {
+			error = errno;
+			if (error != EEXIST) {
+				pr_err("Cannot create '%s': %s",
+				    dest, strerror(error));
+				return error;
+			}
+			compare_dest = "../remote";
+			free(dest);
+			dest = path_join(task->path, "new");
+		}
+
+		/*
+		 * execvp() is not going to tweak these strings;
+		 * stop angsting over the const-to-raw conversions.
+		 */
+
+		i = 0;
+		args[i++] = (char *)config_get_rsync_program();
+		args[i++] = "-rtz";
+		args[i++] = "--omit-dir-times";
+		args[i++] = "--contimeout=20";
+		args[i++] = "--max-size=20MB";
+		args[i++] = "--timeout=15";
+		args[i++] = "--include=*/";
+		args[i++] = "--include=*.cer";
+		args[i++] = "--include=*.crl";
+		args[i++] = "--include=*.gbr";
+		args[i++] = "--include=*.mft";
+		args[i++] = "--include=*.roa";
+		args[i++] = "--exclude=*";
+		if (compare_dest) {
+			args[i++] = "--compare-dest";
+			args[i++] = compare_dest;
+		}
+		args[i++] = (char *)uri_str(&task->url);
+		args[i++] = dest;
+		args[i++] = NULL;
+	}
+
+	if (pr_trc_enabled()) {
+		pr_trc("Running rsync:");
+		for (i = 0; args[i]; i++)
+			pr_trc("    %s", args[i]);
+	}
+
 	duplicate_fds(fds);
 
 	if (execvp(args[0], args) < 0)
@@ -293,7 +341,7 @@ fork_rsync(struct rsync_task *task)
 	}
 
 	if (task->pid == 0) /* Child code */
-		exit(execvp_rsync(&task->url, task->path, fork_fds));
+		exit(execvp_rsync(task, fork_fds));
 
 	/* Parent code */
 
@@ -321,7 +369,7 @@ activate_task(struct rsync_tasks *tasks, struct rsync_task *task,
 
 /* Steals ownership of @map. */
 static void
-post_task(struct cache_mapping *map, struct rsync_tasks *tasks,
+post_task(struct cache_mapping *map, bool single, struct rsync_tasks *tasks,
     struct timespec *now)
 {
 	struct rsync_task *task;
@@ -329,6 +377,7 @@ post_task(struct cache_mapping *map, struct rsync_tasks *tasks,
 	task = pzalloc(sizeof(struct rsync_task));
 	task->url = map->url;
 	task->path = map->path;
+	task->single = single;
 
 	if (tasks->a >= config_rsync_max()) {
 		LIST_INSERT_HEAD(&tasks->queued, task, lh);
@@ -342,7 +391,7 @@ post_task(struct cache_mapping *map, struct rsync_tasks *tasks,
 }
 
 static int
-next_task(struct cache_mapping *result)
+next_task(struct cache_mapping *result, bool *single)
 {
 	asn_dec_rval_t decres;
 	ssize_t consumed;
@@ -362,6 +411,7 @@ again:	if (pssk.rd.len > 0) {
 			    OCTET_STRING_toString(&pssk.rr->url),
 			    pssk.rr->url.size);
 			result->path = OCTET_STRING_toString(&pssk.rr->path);
+			*single = pssk.rr->single;
 			ASN_STRUCT_RESET(asn_DEF_RsyncRequest, pssk.rr);
 			return 0;
 		case RC_WMORE:
@@ -396,6 +446,7 @@ handle_parent_fd(struct pollfd *pfd, struct rsync_tasks *tasks,
     struct timespec *now)
 {
 	struct cache_mapping map;
+	bool single;
 
 	if (pssk.rd.fd == -1)
 		return;
@@ -409,8 +460,8 @@ handle_parent_fd(struct pollfd *pfd, struct rsync_tasks *tasks,
 		rstream_close(&pssk.rd, true);
 
 	} else if (pfd->revents & (POLLIN | POLLHUP)) {
-		while (next_task(&map) == 0)
-			post_task(&map, tasks, now);
+		while (next_task(&map, &single) == 0)
+			post_task(&map, single, tasks, now);
 	}
 }
 
@@ -657,7 +708,7 @@ spawner_run(void)
 			}
 			p++;
 			if (task->stdoutfd == -1 && task->stderrfd == -1) {
-				pr_trc(RSP "Both stdout & stderr are closed; ending task %d.",
+				pr_trc(RSP "stdout & stderr closed; ending task %d.",
 				    task->pid);
 				wait_subprocess("rsync", task->pid);
 				finish_task(&tasks, task);
@@ -722,8 +773,9 @@ static void *
 rcv_spawner_responses(void *arg)
 {
 	struct cache_mapping map = { 0 };
+	bool single;
 
-	while (next_task(&map) == 0) {
+	while (next_task(&map, &single) == 0) {
 		rsync_finished(&map.url, map.path);
 		map_cleanup(&map);
 	}
@@ -732,49 +784,14 @@ rcv_spawner_responses(void *arg)
 }
 
 void
-rsync_setup(char const *program, ...)
+rsync_setup(void)
 {
 	int parent2spawner[2];	/* Pipe: Parent writes, spawner reads */
 	int spawner2parent[2];	/* Pipe: Spawner writes, parent reads */
-
-	va_list args;
-	array_index i;
-	char const *arg;
 	int error;
 
 	if (!config_get_rsync_enabled())
 		return;
-
-	if (program != NULL) {
-		rsync_args[0] = arg = program;
-		va_start(args, program);
-		for (i = 1; arg != NULL; i++) {
-			arg = va_arg(args, char const *);
-			rsync_args[i] = arg;
-		}
-		va_end(args);
-	} else {
-		/* XXX review */
-		/* XXX Where is --delete? */
-		i = 0;
-		rsync_args[i++] = config_get_rsync_program();
-		rsync_args[i++] = "-rtz";
-		rsync_args[i++] = "--omit-dir-times";
-		rsync_args[i++] = "--contimeout";
-		rsync_args[i++] = "20";
-		rsync_args[i++] = "--max-size";
-		rsync_args[i++] = "20MB";
-		rsync_args[i++] = "--timeout";
-		rsync_args[i++] = "15";
-		rsync_args[i++] = "--include=*/";
-		rsync_args[i++] = "--include=*.cer";
-		rsync_args[i++] = "--include=*.crl";
-		rsync_args[i++] = "--include=*.gbr";
-		rsync_args[i++] = "--include=*.mft";
-		rsync_args[i++] = "--include=*.roa";
-		rsync_args[i++] = "--exclude=*";
-		rsync_args[i++] = NULL;
-	}
 
 	if (nonblock_pipe(parent2spawner) != 0)
 		goto fail1;
@@ -792,7 +809,7 @@ rsync_setup(char const *program, ...)
 		goto fail3;
 	}
 
-	if (spawner == 0) { /* Client code */
+	if (spawner == 0) { /* Spawner code */
 		spsk_init(parent2spawner, spawner2parent);
 		exit(spawner_run());
 	}
@@ -821,19 +838,19 @@ fail1:	pr_wrn("rsync will not be available.");
 }
 
 /*
- * Queues rsync; doesn't wait.
+ * Queues rsync for an async download.
  *
  * Whenever at least one rsync is finished, the function rsync_finished()
  * will be automatically called.
  */
 int
-rsync_queue(struct uri const *url, char const *path)
+rsync_queue(struct uri const *url, char const *path, bool single_file)
 {
 	struct RsyncRequest req;
 	asn_enc_rval_t result;
 	int error;
 
-	if (RsyncRequest_init(&req, url, path) < 0)
+	if (RsyncRequest_init(&req, url, path, single_file) < 0)
 		return EINVAL;
 
 	mutex_lock(&pssk.wrlock);

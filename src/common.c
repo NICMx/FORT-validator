@@ -38,6 +38,19 @@ str_ends_with(char const *str, char const *suffix)
 	return strncmp(str + str_len - suffix_len, suffix, suffix_len) == 0;
 }
 
+char const *
+str_skip(char const *src, char const *pfx)
+{
+	while (pfx[0] != 0) {
+		if (src[0] != pfx[0])
+			return NULL;
+		src++;
+		pfx++;
+	}
+
+	return src;
+}
+
 void
 panic_on_fail(int error, char const *function_name)
 {

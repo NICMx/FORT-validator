@@ -1743,7 +1743,7 @@ validate_aia(struct rpki_certificate *cert)
 static int
 validate_cdp(struct rpki_certificate *cer)
 {
-	struct uri const *crl_url = cachefile_uri(cer->parent->rpp.crl.file);
+	struct uri const *crl_url = &cer->parent->rpp.crl.file->map.url;
 
 	if (uri_str(&cer->uris.crldp) == NULL)
 		pr_panic("Certificate's CRL Distribution Point was not recorded.");
@@ -2018,7 +2018,7 @@ retry:	vv = querier_downgrade(ca->querier);
 		goto retry;
 	}
 
-	error = manifest_traverse(cachefile_map(mft), ca->querier, ca);
+	error = manifest_traverse(&mft->map, ca->querier, ca);
 	if (error) {
 		pr_err("Bad manifest.");
 		goto retry;
@@ -2026,7 +2026,7 @@ retry:	vv = querier_downgrade(ca->querier);
 
 	queued = 0;
 	for (i = 0; i < ca->rpp.nfiles; i++) {
-		map = cachefile_map(ca->rpp.files[i]);
+		map = &ca->rpp.files[i]->map;
 		if (uri_has_extension(&map->url, ".cer"))
 			queued += task_enqueue_rpp(map, ca);
 		else if (uri_has_extension(&map->url, ".roa"))

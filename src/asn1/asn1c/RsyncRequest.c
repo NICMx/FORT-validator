@@ -28,11 +28,21 @@ static asn_TYPE_member_t asn_MBR_RsyncRequest_1[] = {
 		0, 0, /* No default value */
 		"path"
 		},
+	{ ATF_NOFLAGS, 0, offsetof(struct RsyncRequest, single),
+		(ASN_TAG_CLASS_UNIVERSAL | (1 << 2)),
+		0,
+		&asn_DEF_BOOLEAN,
+		0,
+		{ 0, 0, 0 },
+		0, 0, /* No default value */
+		"single"
+		},
 };
 static const ber_tlv_tag_t asn_DEF_RsyncRequest_tags_1[] = {
 	(ASN_TAG_CLASS_UNIVERSAL | (16 << 2))
 };
 static const asn_TYPE_tag2member_t asn_MAP_RsyncRequest_tag2el_1[] = {
+    { (ASN_TAG_CLASS_UNIVERSAL | (1 << 2)), 2, 0, 0 }, /* single */
     { (ASN_TAG_CLASS_UNIVERSAL | (4 << 2)), 0, 0, 1 }, /* url */
     { (ASN_TAG_CLASS_UNIVERSAL | (4 << 2)), 1, -1, 0 } /* path */
 };
@@ -40,7 +50,7 @@ static asn_SEQUENCE_specifics_t asn_SPC_RsyncRequest_specs_1 = {
 	sizeof(struct RsyncRequest),
 	offsetof(struct RsyncRequest, _asn_ctx),
 	asn_MAP_RsyncRequest_tag2el_1,
-	2,	/* Count of tags in the map */
+	3,	/* Count of tags in the map */
 	-1,	/* First extension addition */
 };
 asn_TYPE_descriptor_t asn_DEF_RsyncRequest = {
@@ -55,18 +65,19 @@ asn_TYPE_descriptor_t asn_DEF_RsyncRequest = {
 		/sizeof(asn_DEF_RsyncRequest_tags_1[0]), /* 1 */
 	{ 0, 0, SEQUENCE_constraint },
 	asn_MBR_RsyncRequest_1,
-	2,	/* Elements count */
+	3,	/* Elements count */
 	&asn_SPC_RsyncRequest_specs_1	/* Additional specs */
 };
 
 int
 RsyncRequest_init(struct RsyncRequest *req, struct uri const *url,
-    char const *path)
+    char const *path, bool single)
 {
 	memset(req, 0, sizeof(*req));
 	if (OCTET_STRING_fromBuf(&req->url, uri_str(url), uri_len(url)) < 0)
 		return -1;
 	if (OCTET_STRING_fromString(&req->path, path) < 0)
 		return -1;
+	req->single = single ? 0xFF : 0;
 	return 0;
 }

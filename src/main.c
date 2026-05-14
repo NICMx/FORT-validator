@@ -130,7 +130,7 @@ main(int argc, char **argv)
 	if (error)
 		goto revert_config;
 
-	rsync_setup(NULL, NULL); /* Fork rsync spawner ASAP */
+	rsync_setup(); /* Fork rsync spawner ASAP */
 	register_signal_handlers();
 
 	error = thvar_init();

@@ -38,7 +38,7 @@ __rsync2bio(char const *src, char const *dst)
 
 	// XXX use the cache
 
-	error = rsync_queue(&url, dst);
+	error = rsync_queue(&url, dst, true); /* true = bad */
 
 	uri_cleanup(&url);
 
@@ -80,6 +80,7 @@ rsync2bio_cache(char const *src)
 	pr_err("Disabled for now."); // XXX
 	return NULL;
 
+/*
 	char *dst;
 	BIO *bio;
 
@@ -93,6 +94,7 @@ rsync2bio_cache(char const *src)
 
 	free(dst);
 	return bio;
+*/
 }
 
 static BIO *

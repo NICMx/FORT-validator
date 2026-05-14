@@ -114,6 +114,35 @@ BN2string(BIGNUM *bn, char **_result)
 }
 
 void
+stral_init(struct string_arraylist *list, size_t capacity)
+{
+	list->arr = pcalloc(capacity, sizeof(char *));
+	list->len = 0;
+	list->size = capacity;
+}
+
+void
+stral_add(struct string_arraylist *list, char *str)
+{
+	list->len++;
+	while (list->len >= list->size) {
+		list->size *= 2;
+		list->arr = prealloc(list->arr, list->size * sizeof(char *));
+	}
+
+	list->arr[list->len - 1] = str;
+}
+
+void
+stral_cleanup(struct string_arraylist *list)
+{
+	array_index i;
+	for (i = 0; i < list->len; i++)
+		free(list->arr[i]);
+	free(list->arr);
+}
+
+void
 string_tokenizer_init(struct string_tokenizer *tokenizer, char const *str,
     size_t str_len, unsigned char separator)
 {

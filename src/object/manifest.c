@@ -267,7 +267,7 @@ validate_mft_filename(IA5String_t *ia5)
 static int
 check_file_and_hash(struct FileAndHash *fah, struct cache_file *file)
 {
-	struct rrdp_hash const *hash;
+	array_index i;
 
 	if (fah->hash.bits_unused != 0)
 		return pr_err("Hash string has unused bits.");
@@ -276,12 +276,11 @@ check_file_and_hash(struct FileAndHash *fah, struct cache_file *file)
 		    (int)fah->file.size, fah->file.buf,
 		    fah->hash.size, RRDP_HASH_LEN);
 
-	hash = cachefile_hash(file);
-	if (!hash->set)
+	if (!file->hash.set)
 		return pr_wrn("Cache file '%s' lacks a hash.",
-		    uri_str(cachefile_uri(file)));
-	if (memcmp(fah->hash.buf, hash->bytes, RRDP_HASH_LEN) != 0)
-		return pr_err("File '%.*s' does not match its expected hash.",
+		    uri_str(&file->map.url));
+	if (memcmp(fah->hash.buf, file->hash.bytes, RRDP_HASH_LEN) != 0)
+		pr_panic("File '%.*s' does not match its expected hash.",
 		    (int)fah->file.size, fah->file.buf);
 
 	return 0;
@@ -414,7 +413,7 @@ collect_files(struct cache_mapping const *map,
 	rpp->files[rpp->nfiles++] = file;
 	rpp->mft.file = file;
 
-	return crl_load(cachefile_map(parent->rpp.crl.file), parent->x509,
+	return crl_load(&parent->rpp.crl.file->map, parent->x509,
 	    &parent->rpp.crl.obj);
 
 revert:	rpp_cleanup(rpp);
