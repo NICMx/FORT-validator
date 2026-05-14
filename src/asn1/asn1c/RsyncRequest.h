@@ -10,12 +10,14 @@
 
 /* Including external dependencies */
 #include "asn1/asn1c/OCTET_STRING.h"
+#include "asn1/asn1c/BOOLEAN.h"
 #include "types/uri.h"
 
 /* RsyncRequest */
 typedef struct RsyncRequest {
 	OCTET_STRING_t	 url;
 	OCTET_STRING_t	 path;
+	BOOLEAN_t	 single;
 	
 	/* Context for parsing across buffer boundaries */
 	asn_struct_ctx_t _asn_ctx;
@@ -24,6 +26,7 @@ typedef struct RsyncRequest {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_RsyncRequest;
 
-int RsyncRequest_init(struct RsyncRequest *, struct uri const *, char const *);
+int RsyncRequest_init(struct RsyncRequest *, struct uri const *, char const *,
+    bool);
 
 #endif	/* _RsyncRequest_H_ */

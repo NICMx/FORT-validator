@@ -434,7 +434,7 @@ step_add_fileref(struct rrdp_step *step, struct cache_file *file)
 	fileref = fileref_create(file);
 	urlstr = uri_str(&fileref->file->map.url);
 	urlen = uri_len(&fileref->file->map.url);
-	HASH_ADD_KEYPTR(hh, step->files, urlstr, urlen, fileref);
+	HASH_ADD_KEYPTR(hh, step->files.ht, urlstr, urlen, fileref);
 }
 
 static void
@@ -480,8 +480,8 @@ START_TEST(test_json)
 	add_step(&se1, "2", 0x02, f2, f3, f4, NULL);
 	add_step(&se1, "1", 0x01, f1, f2, f3, NULL);
 	se1.fresh = false;
-	ck_assert_int_eq(0, pthread_mutex_init(&se1.lock, NULL));
-	se1.fallbacks = NULL;
+	se1.fbs.ht = NULL;
+	ck_assert_int_eq(0, pthread_mutex_init(&se1.fbs.lock, NULL));
 
 	TAILQ_INSERT_TAIL(&ctx.sessions, &se2, lh);
 	se2.id = "session2";
@@ -490,8 +490,8 @@ START_TEST(test_json)
 	add_step(&se2, "5", 0x05, f2, f3, f4, NULL);
 	add_step(&se2, "4", 0x04, f1, f2, f3, NULL);
 	se2.fresh = true;
-	ck_assert_int_eq(0, pthread_mutex_init(&se2.lock, NULL));
-	se2.fallbacks = NULL;
+	se2.fbs.ht = NULL;
+	ck_assert_int_eq(0, pthread_mutex_init(&se2.fbs.lock, NULL));
 
 	cseq_init(&ctx.seq, "http/22", 4, false);
 

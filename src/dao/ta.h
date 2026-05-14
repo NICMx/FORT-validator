@@ -15,7 +15,7 @@ char const *tactx_map(struct ta_context *, bool);
 
 void tactx_preserve(struct ta_context *, bool);
 
-void tactx_print(char const *, struct ta_context *);
+void tactx_print(struct ta_context *, int);
 
 bool tactx_cleanup(struct ta_context *, char const *);
 

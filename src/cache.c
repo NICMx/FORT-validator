@@ -26,6 +26,9 @@ enum node_state {
 	/* Refresh nodes: Download in progress */
 	/* Fallback nodes: N/A */
 	DLS_ONGOING,
+	/* Refresh nodes: rsync post-processing in progress */
+	/* Fallback nodes: N/A */
+	DLS_ONGOING2,
 	/* Refresh nodes: Download complete */
 	/* Fallback nodes: Committed */
 	DLS_FRESH,
@@ -148,6 +151,8 @@ struct rpp_querier {
 static void
 delete_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
+	pr_trc("Deleting node: %s", uri_str(&node->map.url));
+
 	if (tbl)
 		HASH_DEL(tbl->nodes, node);
 
@@ -157,7 +162,7 @@ delete_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 		rrdpctx_free(node->ctx.v.rrdp);
 		break;
 	case CT_RSYNC:
-		/* XXX (rsync) */
+		rsync_free(node->ctx.v.rsync);
 		break;
 	case CT_TA:
 		tactx_free(node->ctx.v.ta);
@@ -258,7 +263,10 @@ node2json(struct cache_node const *node)
 		if (json_object_add(json, "rrdp", rrdp_ctx2json(node->ctx.v.rrdp)))
 			goto fail;
 		break;
-	case CT_RSYNC: /* XXX (rsync) */
+	case CT_RSYNC:
+		if (json_object_add(json, "rsync", rsync_ctx2json(node->ctx.v.rsync)))
+			goto fail;
+		break;
 	case CT_TA:
 		break;
 	default:
@@ -272,7 +280,7 @@ fail:	json_decref(json);
 }
 
 static validation_verdict dl_rsync(struct cache_node *);
-static validation_verdict dl_http(struct cache_node *);
+static validation_verdict dl_ta_http(struct cache_node *);
 static validation_verdict dl_rrdp(struct cache_node *);
 
 static void
@@ -449,7 +457,7 @@ json2node(json_t *json)
 {
 	struct cache_node *node;
 	char const *path;
-	json_t *rrdp;
+	json_t *rrdp, *rsync;
 	int error;
 
 	node = pzalloc(sizeof(struct cache_node));
@@ -487,6 +495,17 @@ json2node(json_t *json)
 	if (error == 0) {
 		node->ctx.type = CT_RRDP;
 		if (rrdp_json2ctx(rrdp, node->map.path, &node->ctx.v.rrdp))
+			goto path;
+	}
+
+	error = json_get_object(json, "rsync", &rsync);
+	if (error < 0) {
+		pr_trc("rsync: %s", strerror(error));
+		goto path;
+	}
+	if (error == 0) {
+		node->ctx.type = CT_RSYNC;
+		if (rsync_json2ctx(rsync, &node->map, &node->ctx.v.rsync))
 			goto path;
 	}
 
@@ -563,6 +582,8 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 	if (S_ISDOTS(dir))
 		return;
 
+	pr_trc("Collecting metadata: %s/%s.json", tbl->name, dir->d_name);
+
 	wrt = snprintf(filename, 64, "%s/%s.json", tbl->name, dir->d_name);
 	if (wrt >= 64)
 		pr_panic("collect_meta: %d %s %s", wrt, tbl->name, dir->d_name);
@@ -590,6 +611,8 @@ collect_meta(struct cache_table *tbl, struct dirent *dir)
 		HASH_ADD_KEYPTR(hh, tbl->nodes,
 		    uri_str(&node->map.url), uri_len(&node->map.url),
 		    node);
+	} else {
+		pr_wrn("Malformed JSON!");
 	}
 
 	pr_clutter("%s: Loaded.", filename);
@@ -685,13 +708,23 @@ fail:	flush_nodes();
 static validation_verdict
 dl_rsync(struct cache_node *module)
 {
-	/*
 	int error;
-	error = rsync_queue(&module->map.url, module->map.path);
+	error = rsync_queue(&module->map.url, module->map.path, false);
 	return error ? VV_FAIL : VV_BUSY;
-	*/
-	pr_err("rsync commented for now.");
-	return VV_FAIL;
+}
+
+static validation_verdict
+dl_ta_rsync(struct cache_node *file)
+{
+	char tmppath[CACHE_TMPFILE_BUFLEN];
+
+	cache_tmpfile(tmppath);
+
+	if (!file->ctx.v.ta)
+		file->ctx.v.ta = tactx_create(NULL);
+	tactx_set_refresh(file->ctx.v.ta, tmppath);
+
+	return rsync_queue(&file->map.url, tmppath, true) ? VV_FAIL : VV_BUSY;
 }
 
 static validation_verdict
@@ -708,7 +741,7 @@ dl_rrdp(struct cache_node *notif)
 }
 
 static validation_verdict
-dl_http(struct cache_node *file)
+dl_ta_http(struct cache_node *file)
 {
 	char tmppath[CACHE_TMPFILE_BUFLEN];
 	bool changed;
@@ -804,6 +837,35 @@ write_metadata(struct cache_node *node)
 }
 
 /*
+ * During DLS_ONGOING, the rsync subprocess downloaded the files.
+ * However, because it had to do an execvp(), the subprocess was unable to
+ * update the cache metadata.
+ * So that work had to be deferred to the first thread that grabs the task as a
+ * DLS_ONGOING2.
+ * This is that function.
+ */
+static validation_verdict
+rsync_post_process(struct cache_node *node)
+{
+	switch (node->ctx.type) {
+	case CT_RSYNC:
+		if (rsync_reindex(&node->ctx.v.rsync, &node->map) != 0)
+			return VV_FAIL;
+		rsync_print(node->ctx.v.rsync, 0);
+		return VV_CONTINUE;
+	case CT_TA:
+		tactx_print(node->ctx.v.ta, 0);
+		return VV_CONTINUE;
+
+	case CT_RRDP:
+		break;
+	}
+
+
+	return VV_FAIL;
+}
+
+/*
  * Check @result even on VV_FAIL; even if refresh failed, you might still get a
  * fallback.
  * By contract, @result->state will be DLS_FRESH on return VV_CONTINUE.
@@ -867,6 +929,16 @@ do_refresh(struct cache_table *tbl, struct uri const *uri, bool single,
 ongoing:	mutex_unlock(&tbl->lock);
 		pr_trc("Refresh ongoing.");
 		return VV_BUSY;
+	case DLS_ONGOING2:
+		node->state = DLS_ONGOING; /* Shoo other threads for now */
+		mutex_unlock(&tbl->lock);
+
+		node->verdict = rsync_post_process(node);
+		downloaded = true;
+
+		mutex_lock(&tbl->lock);
+		node->state = DLS_FRESH;
+		break;
 	case DLS_FRESH:
 		pr_trc("Already downloaded.");
 		break;
@@ -925,7 +997,8 @@ querier_downgrade(struct rpp_querier *dao)
 		if (vv == VV_CONTINUE) {
 			pr_trc("Validating rsync refresh.");
 			dao->status = CS_RSYNC_REFRESH;
-			dao->rsync = rsyncdao_create(node->ctx.v.rsync);
+			dao->rsync = rsyncdao_create(node->ctx.v.rsync,
+			    &dao->uris->caRepository);
 			return VV_CONTINUE;
 		}
 		if (vv == VV_BUSY)
@@ -970,7 +1043,7 @@ querier_create(struct extension_uris *uris)
 {
 	struct rpp_querier *querier;
 
-	querier = pmalloc(sizeof(struct rpp_querier));
+	querier = pzalloc(sizeof(struct rpp_querier));
 	querier->status = CS_START;
 	querier->uris = uris;
 
@@ -1056,7 +1129,7 @@ rsync_finished(struct uri const *url, char const *path)
 		pr_wrn("rsync '%s -> %s' finished, but existing node was not in ONGOING state.",
 		    uri_str(url), path);
 
-	node->state = DLS_FRESH;
+	node->state = DLS_ONGOING2;
 	node->verdict = VV_CONTINUE;
 	node->success_ts = node->attempt_ts;
 	mutex_unlock(&cache.rsync.lock);
@@ -1065,36 +1138,52 @@ rsync_finished(struct uri const *url, char const *path)
 }
 
 static void
-cachent_print(struct cache_node *node)
+cachent_print(struct cache_node *node, int indent)
 {
 	if (!node)
 		return;
 
-	printf("\turi:%s path:%s: ", uri_str(&node->map.url), node->map.path);
-	switch (node->state) {
-	case DLS_OUTDATED:
-		printf("stale ");
+	printf("%*s", indent, "");
+	switch (node->ctx.type) {
+	case CT_RRDP:
+		printf("[RRDP Node] ");
 		break;
-	case DLS_ONGOING:
-		printf("downloading ");
+	case CT_RSYNC:
+		printf("[rsync Node] ");
 		break;
-	case DLS_FRESH:
-		printf("fresh (%s) ", node->verdict);
+	case CT_TA:
+		printf("[TA Node] ");
 		break;
 	}
 
-	printf("attempt:%lx success:%lx ", node->attempt_ts, node->success_ts);
-	switch (node->ctx.type) {
-	case CT_RRDP:
-		rrdpctx_print("RRDP", node->ctx.v.rrdp);
+	printf("uri:%s path:%s ", uri_str(&node->map.url), node->map.path);
+	switch (node->state) {
+	case DLS_OUTDATED:
+		printf("state:stale ");
 		break;
-	case CT_RSYNC: /* XXX (rsync) */
+	case DLS_ONGOING:
+		printf("state:downloading ");
 		break;
-	case CT_TA:
-		tactx_print("TA", node->ctx.v.ta);
+	case DLS_ONGOING2:
+		printf("state:post-processing ");
+		break;
+	case DLS_FRESH:
+		printf("state:fresh(%s) ", node->verdict);
 		break;
 	}
-	printf("\n");
+
+	printf("attempt:%lx success:%lx\n", node->attempt_ts, node->success_ts);
+	switch (node->ctx.type) {
+	case CT_RRDP:
+		rrdpctx_print(node->ctx.v.rrdp, indent + 2);
+		break;
+	case CT_RSYNC:
+		rsync_print(node->ctx.v.rsync, indent + 2);
+		break;
+	case CT_TA:
+		tactx_print(node->ctx.v.ta, indent + 2);
+		break;
+	}
 }
 
 static void
@@ -1102,11 +1191,11 @@ table_print(struct cache_table *tbl)
 {
 	struct cache_node *node, *tmp;
 
-	printf("%s enabled:%d seq:%s/%lx\n",
+	printf("[%s Table] enabled:%d seq:%s/%lx\n",
 	    tbl->name, tbl->enabled,
 	    tbl->seq.pfx.str, tbl->seq.next_id);
 	HASH_ITER(hh, tbl->nodes, node, tmp)
-		cachent_print(node);
+		cachent_print(node, 2);
 }
 
 void
@@ -1120,6 +1209,8 @@ static void
 cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 {
 	bool salvage;
+
+	pr_trc("Cleaning up node: %s", node->map.path);
 
 	rm_metadata(node);
 
@@ -1136,9 +1227,11 @@ cleanup_node(struct cache_table *tbl, struct cache_node *node, void *arg)
 		break;
 	}
 
-	if (salvage)
+	if (salvage) {
+		pr_trc("Preserving node.");
 		write_metadata(node);
-	else {
+	} else {
+		pr_trc("Deleting node.");
 		file_rm_rf(node->map.path);
 		delete_node(tbl, node, NULL);
 	}
@@ -1166,6 +1259,7 @@ void
 cache_commit(void)
 {
 	pr_trc("============ Committing cache ============");
+	cache_print();
 	cleanup_cache();
 	file_write_txt(METAFILE, "{ \"fort-version\": \"" PACKAGE_VERSION "\" }");
 	unlock_cache();
@@ -1214,13 +1308,13 @@ fquery_create_refresh(struct cache_table *tbl, dl_cb dl, struct uri const *url,
 validation_verdict
 fquery_refresh_https(struct uri const *url, struct file_querier **result)
 {
-	return fquery_create_refresh(&cache.https, dl_http, url, result);
+	return fquery_create_refresh(&cache.https, dl_ta_http, url, result);
 }
 
 validation_verdict
 fquery_refresh_rsync(struct uri const *url, struct file_querier **result)
 {
-	return fquery_create_refresh(&cache.rsync, dl_rsync, url, result);
+	return fquery_create_refresh(&cache.rsync, dl_ta_rsync, url, result);
 }
 
 static validation_verdict

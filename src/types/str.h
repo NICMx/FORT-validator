@@ -23,6 +23,16 @@ int hex2ulong(char const *, unsigned long *);
 int ia5s2string(ASN1_IA5STRING *, char **);
 int BN2string(BIGNUM *, char **);
 
+struct string_arraylist {
+	char **arr;
+	size_t len;
+	size_t size;
+};
+
+void stral_init(struct string_arraylist *, size_t capacity);
+void stral_add(struct string_arraylist *, char *);
+void stral_cleanup(struct string_arraylist *);
+
 /**
  * Do not modify fields directly; this should be private.
  *

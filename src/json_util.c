@@ -364,8 +364,7 @@ json_object_add(json_t *parent, char const *name, json_t *value)
 
 	res = json_object_set_new(parent, name, value);
 	if (res == -1)
-		pr_crit("Cannot add JSON '%s' to parent; unknown error.",
-			     name);
+		pr_crit("Cannot add JSON '%s' to parent; unknown error.", name);
 	return res;
 }
 

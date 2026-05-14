@@ -7,6 +7,7 @@
 
 #include "alloc.h"
 #include "file.h"
+#include "log.h"
 
 struct ta_context {
 	char *refresh_path;
@@ -44,6 +45,8 @@ tactx_free(struct ta_context *ctx)
 void
 tactx_set_refresh(struct ta_context *ctx, char const *refresh)
 {
+	if (ctx->refresh_path)
+		free(ctx->refresh_path);
 	ctx->refresh_path = pstrdup(refresh);
 }
 
@@ -69,19 +72,16 @@ tactx_preserve(struct ta_context *ctx, bool refresh)
 }
 
 void
-tactx_print(char const *pfx, struct ta_context *ctx)
+tactx_print(struct ta_context *ctx, int indent)
 {
-	printf("%s:\n", pfx);
-
-	if (ctx == NULL) {
-		printf("\tNULL\n");
+	if (ctx == NULL)
 		return;
-	}
 
-	printf("\tRefresh: %s (commits: %u)\n", ctx->refresh_path,
-	    atomic_fetch_add(&ctx->refresh_commits, 0));
-	printf("\tFallback: %s (commits: %u)\n", ctx->fallback_path,
-	    atomic_fetch_add(&ctx->fallback_commits, 0));
+	printf("%*s[TA Context]\n", indent, "");
+	printf("%*s[Refresh] path:%s commits:%u\n", indent + 2, "",
+	    ctx->refresh_path, atomic_fetch_add(&ctx->refresh_commits, 0));
+	printf("%*s[Fallback] path:%s commits:%u\n", indent + 2, "",
+	    ctx->fallback_path, atomic_fetch_add(&ctx->fallback_commits, 0));
 }
 
 bool

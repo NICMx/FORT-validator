@@ -3,6 +3,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <jansson.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -49,7 +50,8 @@ struct cache_sequence {
 	bool free_prefix;
 };
 
-void cseq_init(struct cache_sequence *, char *, unsigned long, bool);
+void cseq_init(struct cache_sequence *, char const *, unsigned long, bool);
+int json2cseq(struct cache_sequence *, json_t *, char const *, bool);
 void cseq_cleanup(struct cache_sequence *);
 char *cseq_next(struct cache_sequence *, char const **);
 

@@ -19,6 +19,7 @@ extern validation_verdict const VV_BUSY;	/* "Try again later" */
 
 bool str_starts_with(char const *, char const *);
 bool str_ends_with(char const *, char const *);
+char const *str_skip(char const *, char const *);
 
 void panic_on_fail(int, char const *);
 

@@ -309,14 +309,48 @@ file_ln(char const *oldpath, char const *newpath)
 }
 
 void
-cseq_init(struct cache_sequence *seq, char *prefix, unsigned long id,
+cseq_init(struct cache_sequence *seq, char const *prefix, unsigned long id,
     bool free_prefix)
 {
-	seq->pfx.str = prefix;
+	seq->pfx.str = (char *)prefix;
 	seq->pfx.len = strlen(prefix);
 	seq->next_id = id;
 	seq->pathlen = seq->pfx.len + 4;
 	seq->free_prefix = free_prefix;
+}
+
+int
+json2cseq(struct cache_sequence *cseq, json_t *jfiles, char const *pfx,
+    bool is_rsync /* XXX hack */)
+{
+	unsigned long max_id, id;
+	char const *key, *idstr;
+	json_t *value;
+
+	max_id = 0;
+
+	json_object_foreach(jfiles, key, value) {
+		if (is_rsync) {
+			idstr = str_skip(key, pfx);
+			if (!idstr)
+				continue;
+			while (idstr[0] == '/')
+				idstr++;
+		} else {
+			idstr = key;
+		}
+
+		if (hex2ulong(idstr, &id) != 0)
+			return pr_err(
+			    "The basename of '%s' is not a hex number.",
+			    key
+			);
+		if (id > max_id)
+			max_id = id;
+	}
+
+	cseq_init(cseq, pfx, max_id + 1, false);
+	return 0;
 }
 
 void

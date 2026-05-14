@@ -38,7 +38,7 @@ __rsync2bio(char const *src, char const *dst)
 
 	// XXX use the cache
 
-	error = rsync_queue(&url, dst);
+	error = rsync_queue(&url, dst, true); /* true = bad */
 
 	uri_cleanup(&url);
 
