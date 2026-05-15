@@ -5,6 +5,7 @@
 #include "common.c"
 #include "mock.c"
 #include "types/address.c"
+#include "types/aspa.c"
 #include "types/delta.c"
 #include "types/router_key.c"
 #include "types/vrp.c"
@@ -15,6 +16,7 @@
 #define ADDR2 htonl(0xC0000202) /* 192.0.2.2 */
 
 #define TOTAL_ROAS 10
+#define TOTAL_ASPAS 4
 static bool roas_found[TOTAL_ROAS];
 static unsigned int total_found;
 
@@ -56,7 +58,7 @@ update_found(array_index index)
 }
 
 static int
-foreach_cb(struct vrp const *vrp, void *arg)
+foreach_vrp_cb(struct vrp const *vrp, void *arg)
 {
 	char const *str;
 
@@ -97,7 +99,7 @@ foreach_cb(struct vrp const *vrp, void *arg)
 	    vrp->asn, str, vrp->prefix_length, vrp->max_prefix_length);
 }
 
-START_TEST(test_basic)
+START_TEST(test_basic_vrp)
 {
 	struct ipv4_prefix prefix4;
 	struct ipv6_prefix prefix6;
@@ -158,9 +160,118 @@ START_TEST(test_basic)
 	/* Check table contents */
 	memset(roas_found, 0, sizeof(roas_found));
 	total_found = 0;
-	ck_assert_int_eq(0, db_table_foreach_roa(table, foreach_cb, NULL));
+	ck_assert_int_eq(0, db_table_foreach_roa(table, foreach_vrp_cb, NULL));
 	ck_assert_int_eq(TOTAL_ROAS, total_found);
 	for (i = 0; i < TOTAL_ROAS; i++)
+		ck_assert_int_eq(true, roas_found[i]);
+
+	db_table_destroy(table);
+}
+END_TEST
+
+static struct aspa *
+create_aspa(uint32_t customer, ...)
+{
+	struct aspa *aspa;
+	va_list ap;
+	int provider;
+	array_index n;
+
+	n = 0;
+	va_start(ap, customer);
+	while (va_arg(ap, int) != -1)
+		n++;
+	va_end(ap);
+
+	aspa = pmalloc(sizeof(struct aspa));
+	aspa->customer = customer;
+	aspa->providers.asids = pcalloc(n, sizeof(uint32_t));
+	aspa->providers.count = n;
+	aspa->refs = 0;
+
+	n = 0;
+	va_start(ap, customer);
+	while ((provider = va_arg(ap, int)) != -1)
+		aspa->providers.asids[n++] = provider;
+	va_end(ap);
+
+	return aspa;
+}
+
+static bool
+ck_provider(struct aspa const *aspa, uint32_t customer, ...)
+{
+	va_list ap;
+	int provider;
+	array_index n;
+
+	if (aspa->customer != customer)
+		return false;
+
+	n = 0;
+	va_start(ap, customer);
+	while (va_arg(ap, int) != -1)
+		n++;
+	va_end(ap);
+
+	if (aspa->providers.count != n)
+		return false;
+
+	n = 0;
+	va_start(ap, customer);
+	while ((provider = va_arg(ap, int)) != -1)
+		if (aspa->providers.asids[n++] != provider)
+			return false;
+	va_end(ap);
+
+	return true;
+}
+
+static int
+foreach_aspa_cb(struct aspa const *v, void *arg)
+{
+	if (ck_provider(v, 1, 100, 200, 300, -1))
+		return update_found(0);
+	if (ck_provider(v, 2, 100, 200, 300, -1))
+		return update_found(1);
+	if (ck_provider(v, 3, 500, 600, 700, 800, 900, -1))
+		return update_found(2);
+	if (ck_provider(v, 4, 500, 600, 700, 800, -1))
+		return update_found(3);
+
+	ck_abort_msg("Foreach is looping over unknown ASPA %u/%zu.",
+	    v->customer, v->providers.count);
+}
+
+START_TEST(test_basic_aspa)
+{
+	struct db_table *table;
+	array_index i;
+
+	table = db_table_create();
+	ck_assert_ptr_ne(NULL, table);
+
+	/* Duplicates should be transparently not re-added. */
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(1, 100, 200, 300, -1)));
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(1, 100, 200, 300, -1)));
+
+	/* Change the customer slightly */
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(2, 100, 200, 300, -1)));
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(2, 100, 200, 300, -1)));
+
+	/* Provider merges */
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(3, 500, 600, 700, -1)));
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(3, 800, 900, -1)));
+
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(4, 500, 600, 700, -1)));
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(table, create_aspa(4, 600, 800, -1)));
+
+	/* Check table contents */
+	memset(roas_found, 0, sizeof(roas_found));
+	total_found = 0;
+	ck_assert_int_eq(0, db_table_foreach_aspa(table, foreach_aspa_cb, NULL));
+	ck_assert_int_eq(TOTAL_ASPAS, total_found);
+	for (i = 0; i < TOTAL_ASPAS; i++)
 		ck_assert_int_eq(true, roas_found[i]);
 
 	db_table_destroy(table);
@@ -250,7 +361,8 @@ static Suite *pdu_suite(void)
 	TCase *core;
 
 	core = tcase_create("Core");
-	tcase_add_test(core, test_basic);
+	tcase_add_test(core, test_basic_vrp);
+	tcase_add_test(core, test_basic_aspa);
 	tcase_add_test(core, test_aspa_merge);
 
 	suite = suite_create("DB Table");

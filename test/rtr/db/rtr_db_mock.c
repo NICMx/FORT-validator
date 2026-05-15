@@ -49,6 +49,23 @@ add_rk(struct validation_handler *handler, uint32_t as)
 	    db_imp_spk, handler->arg));
 }
 
+static void
+__add_aspa(struct validation_handler *handler, uint32_t customer)
+{
+	struct aspa *aspa;
+
+	aspa = pmalloc(sizeof(struct aspa));
+	aspa->customer = customer;
+	aspa->providers.asids = pcalloc(3, sizeof(uint32_t));
+	aspa->providers.asids[0] = 100;
+	aspa->providers.asids[1] = 200;
+	aspa->providers.asids[2] = 300;
+	aspa->providers.count = 3;
+	aspa->refs = 0;
+
+	ck_assert_int_eq(0, handler->handle_aspa(aspa, handler->arg));
+}
+
 static int
 __handle_roa_v4(uint32_t as, struct ipv4_prefix const *prefix,
     uint8_t max_length, void *arg)
@@ -79,6 +96,12 @@ __handle_router_key(unsigned char const *ski, struct asn_range const *range,
 	return 0;
 }
 
+static int
+__handle_aspa(struct aspa *aspa, void *arg)
+{
+	return rtrhandler_handle_aspa(arg, aspa);
+}
+
 struct db_table *
 perform_standalone_validation(void)
 {
@@ -87,6 +110,7 @@ perform_standalone_validation(void)
 	handler.handle_roa_v4 = __handle_roa_v4;
 	handler.handle_roa_v6 = __handle_roa_v6;
 	handler.handle_router_key = __handle_router_key;
+	handler.handle_aspa = __handle_aspa;
 	handler.arg = db_table_create();
 
 	switch (serial) {
@@ -94,24 +118,29 @@ perform_standalone_validation(void)
 		add_v4(&handler, 0);
 		add_v6(&handler, 0);
 		add_rk(&handler, 0);
+		__add_aspa(&handler, 0);
 		break;
 	case 2:
 		add_v4(&handler, 0);
 		add_v6(&handler, 0);
 		add_rk(&handler, 0);
+		__add_aspa(&handler, 0);
 		add_v4(&handler, 1);
 		add_v6(&handler, 1);
 		add_rk(&handler, 1);
+		__add_aspa(&handler, 1);
 		break;
 	case 3:
 		add_v4(&handler, 1);
 		add_v6(&handler, 1);
 		add_rk(&handler, 1);
+		__add_aspa(&handler, 1);
 		break;
 	case 4:
 		add_v4(&handler, 0);
 		add_v6(&handler, 0);
 		add_rk(&handler, 0);
+		__add_aspa(&handler, 0);
 		break;
 	default:
 		ck_abort_msg("perform_standalone_validation() was called too many times (%d).",

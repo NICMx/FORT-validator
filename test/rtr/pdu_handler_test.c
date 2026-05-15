@@ -6,6 +6,7 @@
 #include "alloc.c"
 #include "common.c"
 #include "mock.c"
+#include "types/aspa.c"
 #include "types/delta.c"
 #include "types/router_key.c"
 #include "types/serial.c"
@@ -181,16 +182,22 @@ int
 send_router_key_pdu(int fd, uint8_t version,
     struct router_key const *router_key, uint8_t flags)
 {
-	/*
-	 * We don't care about order.
-	 * If the server is expected to return `M` IPv4 PDUs and `N` IPv6 PDUs,
-	 * we'll just check `M + N` contiguous Prefix PDUs.
-	 */
 	uint8_t pdu_type = pop_expected_pdu();
 	pr_op_info("    Server sent Router Key PDU.");
 	printf("%s asn%u RK\n", flags2str(flags), router_key->as);
 	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
 	    "Server sent a Router Key. Expected PDU type was %d.", pdu_type);
+	return 0;
+}
+
+int
+send_aspa_pdu(int fd, uint8_t version, struct aspa const *aspa, uint8_t flags)
+{
+	uint8_t pdu_type = pop_expected_pdu();
+	pr_op_info("    Server sent ASPA PDU.");
+	printf("%s asn%u ASPA\n", flags2str(flags), aspa->customer);
+	ck_assert_msg(pdu_type == PDU_TYPE_ASPA,
+	    "Server sent an ASPA PDU. Expected PDU type was %d.", pdu_type);
 	return 0;
 }
 
@@ -229,6 +236,7 @@ START_TEST(test_start_or_restart)
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
+	expected_pdu_add(PDU_TYPE_ASPA);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* Run and validate */
@@ -262,14 +270,17 @@ START_TEST(test_typical_exchange)
 	/* From serial 1: Init client request */
 	init_serial_query(&request, 1);
 
-	/* From serial 1: Define expected server response */
+	/* From serial 1 to 3: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
+	/* Remove all zeroes, add all ones */
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
+	expected_pdu_add(PDU_TYPE_ASPA);
+	expected_pdu_add(PDU_TYPE_ASPA);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 1: Run and validate */
@@ -279,11 +290,13 @@ START_TEST(test_typical_exchange)
 	/* From serial 2: Init client request */
 	init_serial_query(&request, 2);
 
-	/* From serial 2: Define expected server response */
+	/* From serial 2 to 3: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
+	/* Remove all zeroes */
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
+	expected_pdu_add(PDU_TYPE_ASPA);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 
 	/* From serial 2: Run and validate */
@@ -293,7 +306,7 @@ START_TEST(test_typical_exchange)
 	/* From serial 3: Init client request */
 	init_serial_query(&request, 3);
 
-	/* From serial 3: Define expected server response */
+	/* From serial 3 to 3: Define expected server response */
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA);
 

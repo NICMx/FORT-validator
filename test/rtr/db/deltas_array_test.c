@@ -4,6 +4,7 @@
 #include "alloc.c"
 #include "mock.c"
 #include "types/address.c"
+#include "types/aspa.c"
 #include "types/delta.c"
 #include "types/router_key.c"
 #include "types/vrp.c"
