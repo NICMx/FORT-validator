@@ -285,6 +285,7 @@ execvp_rsync(struct rsync_task *task, int fds[2][2])
 		args[i++] = "--contimeout=20";
 		args[i++] = "--max-size=20MB";
 		args[i++] = "--timeout=15";
+		args[i++] = "--exclude=.*";
 		args[i++] = "--include=*/";
 		args[i++] = "--include=*.cer";
 		args[i++] = "--include=*.crl";
