@@ -18,12 +18,8 @@ MOCK(config_get_local_repository, char const *, "tmp/tal", void)
 MOCK_ABORT_VOID(cache_setup, void)
 MOCK(cache_create, struct rpki_cache *, NULL, char const *tal)
 MOCK_VOID(cache_destroy, struct rpki_cache *cache)
-MOCK_ABORT_INT(cache_download, struct rpki_cache *cache, struct rpki_uri *uri,
-    bool *changed)
 MOCK_ABORT_INT(cache_download_alt, struct rpki_cache *cache,
     struct uri_list *uris, bool use_rrdp, uris_dl_cb cb, void *arg)
-MOCK_ABORT_PTR(cache_recover, rpki_uri, struct rpki_cache *cache,
-    struct uri_list *uris, bool use_rrdp)
 MOCK_ABORT_VOID(cache_teardown, void)
 MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
     struct rpki_uri *cert_uri)
@@ -41,15 +37,20 @@ MOCK_ABORT_INT(handle_roa_v6, uint32_t as, struct ipv6_prefix const *prefix,
     uint8_t max_length, void *arg)
 MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
     struct asn_range const *asns, unsigned char const *spk, void *arg)
+MOCK_ABORT_INT(handle_aspa, struct aspa *aspa, void *arg)
 MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
-MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
-MOCK(state_retrieve, struct validation *, NULL, void)
 MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
 MOCK_ABORT_VOID(validation_destroy, struct validation *state)
 MOCK_ABORT_INT(validation_prepare, struct validation **out, struct tal *tal,
     struct validation_handler *validation_handler)
 MOCK_ABORT_ENUM(validation_pubkey_state, pubkey_state, struct validation *state)
-MOCK(validation_tal, struct tal *, NULL, struct validation *state)
+__MOCK_ABORT(validation_tal, struct tal *, NULL, struct validation *state)
+__MOCK_ABORT(db_table_roa_count_v4, unsigned int, 0, struct db_table *table)
+__MOCK_ABORT(db_table_roa_count_v6, unsigned int, 0, struct db_table *table)
+MOCK_ABORT_VOID(stats_set_tal_vrps, char const *tal_path, char const *proto,
+    unsigned int value)
+
+
 
 /* Tests */
 

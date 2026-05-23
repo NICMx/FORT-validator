@@ -5,428 +5,686 @@
 
 #include "alloc.c"
 #include "common.c"
+#include "file.c"
 #include "mock.c"
+#include "rtr/db/db_table.c"
+#include "rtr/err_pdu.c"
+#include "rtr/meta.c"
+#include "rtr/pdu.c"
+#include "rtr/pdu_handler.c"
+#include "rtr/pdu_stream.c"
 #include "types/aspa.c"
-#include "types/delta.c"
 #include "types/router_key.c"
 #include "types/serial.c"
-#include "types/vrp.c"
-#include "rtr/pdu_handler.c"
-#include "rtr/err_pdu.c"
-#include "rtr/db/delta.c"
-#include "rtr/db/deltas_array.c"
-#include "rtr/db/db_table.c"
-#include "rtr/db/rtr_db_mock.c"
-#include "rtr/db/vrps.c"
-#include "thread/thread_pool.c"
 
-/* Mocks */
+unsigned int deltas_lifetime = 5;
 
-MOCK_INT(slurm_apply, 0, struct db_table *base, struct db_slurm **slurm)
-MOCK_ABORT_VOID(db_slurm_destroy, struct db_slurm *db)
-MOCK_VOID(output_print_data, struct db_table const *db)
-__MOCK_ABORT(config_get_local_repository, char const *, "tmp/pdu", void)
+MOCK(config_get_local_repository, char const *, "tmp", void)
+MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
 MOCK_UINT(config_get_max_aspa_providers, 10, void)
 
-/* Mocks end */
-
-struct expected_pdu {
-	uint8_t pdu_type;
-	STAILQ_ENTRY(expected_pdu) list_hook;
+struct sent_pdu {
+	enum pdu_type type;
+	uint32_t as;
+	uint8_t flags;
 };
 
-static STAILQ_HEAD(, expected_pdu) expected_pdus = STAILQ_HEAD_INITIALIZER(expected_pdus);
+static struct sent_pdu expected[24];
+static struct sent_pdu actual[24];
+static array_index e, a;
+
+static const unsigned char db_imp_ski[] = {
+    0x0e, 0xe9, 0x6a, 0x8e, 0x2f, 0xac, 0x50, 0xce, 0x6c, 0x5f,
+    0x93, 0x3e, 0xde, 0x6a, 0xa7, 0x80, 0xa6, 0x85, 0x0e, 0x31
+};
+
+static const unsigned char db_imp_spk[] = {
+    0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce,
+    0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d,
+    0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04, 0xfa, 0xb9, 0x12,
+    0x2d, 0x79, 0x4f, 0xa4, 0xbf, 0xe6, 0xf8, 0xbe, 0xc2, 0x7c,
+    0x27, 0xca, 0xae, 0xfd, 0x45, 0x1e, 0xb3, 0x39, 0xe4, 0x5b,
+    0x08, 0x73, 0xc7, 0xcc, 0x96, 0x78, 0xc7, 0x13, 0xa6, 0x39,
+    0x9d, 0x3b, 0x82, 0x9f, 0x75, 0x20, 0x59, 0xf0, 0x95, 0xea,
+    0xc6, 0x2e, 0x19, 0x46, 0x73, 0x3d, 0x9d, 0x04, 0xcb, 0xa0,
+    0x2f, 0x7b, 0x39, 0x9f, 0x70, 0x42, 0xd4, 0x07, 0xce, 0xde,
+    0x04
+};
 
 static void
-expected_pdu_add(uint8_t pdu_type)
+add_v4(struct db_table *tbl, char const *ip, uint8_t plen, uint8_t mlen, uint32_t as)
 {
-	struct expected_pdu *pdu;
-
-	pdu = malloc(sizeof(struct expected_pdu));
-	ck_assert_ptr_ne(NULL, pdu);
-
-	pdu->pdu_type = pdu_type;
-	STAILQ_INSERT_TAIL(&expected_pdus, pdu, list_hook);
-}
-
-static uint8_t
-pop_expected_pdu(void)
-{
-	struct expected_pdu *pdu;
-	uint8_t result;
-
-	pdu = STAILQ_FIRST(&expected_pdus);
-	ck_assert_ptr_ne(NULL, pdu);
-	result = pdu->pdu_type;
-	STAILQ_REMOVE(&expected_pdus, pdu, expected_pdu, list_hook);
-	free(pdu);
-
-	return result;
-}
-
-static bool
-has_expected_pdus(void)
-{
-	return !STAILQ_EMPTY(&expected_pdus);
-}
-
-/*
- * This initializes the database using the test values from
- * db/rtr_db_mock.c.
- */
-static void
-init_db_full(void)
-{
-	bool changed;
-	ck_assert_int_eq(0, vrps_init());
-	ck_assert_int_eq(0, vrps_update(&changed));
-	ck_assert_uint_eq(true, changed);
-	ck_assert_int_eq(0, vrps_update(&changed));
-	ck_assert_uint_eq(true, changed);
-	ck_assert_int_eq(0, vrps_update(&changed));
-	ck_assert_uint_eq(true, changed);
+	struct ipv4_prefix pfx = { 0 };
+	ck_assert_int_eq(1, inet_pton(AF_INET, ip, &pfx.addr));
+	pfx.len = plen;
+	ck_assert_int_eq(0, rtrhandler_handle_roa_v4(tbl, as, &pfx, mlen));
 }
 
 static void
-init_reset_query(struct rtr_request *request)
+add_v6(struct db_table *tbl, char const *ip, uint8_t plen, uint8_t mlen, uint32_t as)
 {
-	static unsigned char raw[] = { 1, 2, 0, 0, 0, 0, 0, 8 };
-
-	request->fd = 0;
-	strcpy(request->client_addr, "192.0.2.1");
-	request->pdu.rtr_version = RTR_V1;
-	request->pdu.type = PDU_TYPE_RESET_QUERY;
-	request->pdu.raw.bytes = raw;
-	request->pdu.raw.bytes_len = sizeof(raw);
-	request->eos = true;
+	struct ipv6_prefix pfx = { 0 };
+	ck_assert_int_eq(1, inet_pton(AF_INET6, ip, &pfx.addr));
+	pfx.len = plen;
+	ck_assert_int_eq(0, rtrhandler_handle_roa_v6(tbl, as, &pfx, mlen));
 }
 
 static void
-init_serial_query(struct rtr_request *request, uint32_t serial)
+add_rk(struct db_table *tbl, uint32_t as)
 {
-	static unsigned char raw[] = { 1, 1, 0, 0, 0, 0, 0, 12, 0, 0, 0, 0 };
-
-	request->fd = 0;
-	strcpy(request->client_addr, "192.0.2.1");
-	request->pdu.rtr_version = RTR_V1;
-	request->pdu.type = PDU_TYPE_SERIAL_QUERY;
-	request->pdu.obj.sq.session_id = get_current_session_id(RTR_V1);
-	request->pdu.obj.sq.serial_number = serial;
-	request->pdu.raw.bytes = raw;
-	request->pdu.raw.bytes_len = sizeof(raw);
-	request->eos = true;
+	ck_assert_int_eq(0, rtrhandler_handle_router_key(tbl, db_imp_ski, as, db_imp_spk));
 }
 
-/* Mocks */
-
-MOCK_UINT(config_get_deltas_lifetime, 5, void)
-
-int
-send_cache_reset_pdu(int fd, uint8_t version)
+static void
+_add_aspa(struct db_table *tbl, uint32_t customer)
 {
-	pr_op_info("    Server sent Cache Reset.");
-	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESET);
+	struct aspa *aspa;
+
+	aspa = pmalloc(sizeof(struct aspa));
+	aspa->customer = customer;
+	aspa->providers.asids = pcalloc(3, sizeof(uint32_t));
+	aspa->providers.asids[0] = 100;
+	aspa->providers.asids[1] = 200;
+	aspa->providers.asids[2] = 300;
+	aspa->providers.count = 3;
+	aspa->refs = 0;
+
+	ck_assert_int_eq(0, rtrhandler_handle_aspa(tbl, aspa));
+}
+
+static struct db_table *
+mock_table(serial_t serial)
+{
+	struct db_table *tbl;
+
+	tbl = db_table_create();
+	tbl->rtr.session = 0x1234;
+	tbl->rtr.serial = serial;
+
+	return tbl;
+}
+
+static void
+mock_resources(struct db_table *tbl, uint32_t as)
+{
+	add_v4(tbl, "192.0.2.0", 24, 32, as);
+	add_v6(tbl, "200:db8::", 96, 120, as);
+	add_rk(tbl, as);
+	_add_aspa(tbl, as);
+}
+
+static uint16_t
+mock_commit(struct db_table *tbl)
+{
+	uint16_t session;
+
+	db_table_sort(tbl);
+	ck_assert_int_eq(0, db_table_cache(tbl));
+	session = tbl->rtr.session;
+	db_table_destroy(tbl);
+
+	return session;
+}
+
+uint16_t
+mock_serial1(void)
+{
+	struct db_table *tbl = mock_table(1);
+	mock_resources(tbl, 1);
+	return mock_commit(tbl);
+}
+
+void
+mock_serial2(void)
+{
+	struct db_table *tbl = mock_table(2);
+	mock_resources(tbl, 1);
+	mock_resources(tbl, 2);
+	mock_commit(tbl);
+}
+
+void
+mock_serial3(void)
+{
+	struct db_table *tbl = mock_table(3);
+	mock_resources(tbl, 2);
+	mock_commit(tbl);
+}
+
+void
+mock_serial4(void)
+{
+	struct db_table *tbl = mock_table(4);
+	mock_resources(tbl, 1);
+	mock_commit(tbl);
+}
+
+static int
+send_pdu(enum pdu_type type, uint32_t as, uint8_t flags)
+{
+	ck_assert_uint_lt(a, ARRAY_LEN(actual));
+
+	actual[a].type = type;
+	actual[a].as = as;
+	actual[a].flags = flags;
+
+	a++;
 	return 0;
 }
 
 int
-send_cache_response_pdu(int fd, uint8_t version)
+send_serial_notify_pdu(int fd, uint8_t ver, struct rtr_metadata *meta)
 {
-	pr_op_info("    Server sent Cache Response.");
-	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_CACHE_RESPONSE);
-	return 0;
-}
-
-static char const *
-flags2str(uint8_t flags)
-{
-	switch (flags) {
-	case FLAG_ANNOUNCEMENT:
-		return "add";
-	case FLAG_WITHDRAWAL:
-		return "rm";
-	}
-	return "unk";
+	return send_pdu(PDU_TYPE_SERIAL_NOTIFY, 0, 0);
 }
 
 int
-send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
+send_cache_reset_pdu(int fd, uint8_t ver)
 {
-	/*
-	 * We don't care about order.
-	 * If the server is expected to return `M` IPv4 PDUs and `N` IPv6 PDUs,
-	 * we'll just check `M + N` contiguous Prefix PDUs.
-	 */
-	uint8_t pdu_type = pop_expected_pdu();
-	pr_op_info("    Server sent Prefix PDU.");
+	return send_pdu(PDU_TYPE_CACHE_RESET, 0, 0);
+}
 
+int
+send_cache_response_pdu(int fd, uint8_t ver, uint16_t session)
+{
+	return send_pdu(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+}
+
+int
+send_prefix_pdu(int fd, uint8_t ver, struct vrp const *vrp, uint8_t flags)
+{
 	switch (vrp->addr_fam) {
 	case AF_INET:
-		printf("%s asn%u IPv4\n", flags2str(flags), vrp->asn);
-		break;
+		return send_pdu(PDU_TYPE_IPV4_PREFIX, vrp->asn, flags);
 	case AF_INET6:
-		printf("%s asn%u IPv6\n", flags2str(flags), vrp->asn);
-		break;
-	default:
-		printf("%s asn%u Unknown\n", flags2str(flags), vrp->asn);
-		break;
+		return send_pdu(PDU_TYPE_IPV6_PREFIX, vrp->asn, flags);
 	}
-
-	ck_assert_msg(pdu_type == PDU_TYPE_IPV4_PREFIX
-	    || pdu_type == PDU_TYPE_IPV6_PREFIX,
-	    "Server sent a prefix. Expected PDU type was %d.", pdu_type);
-	return 0;
+	ck_abort();
 }
 
 int
-send_router_key_pdu(int fd, uint8_t version,
-    struct router_key const *router_key, uint8_t flags)
+send_router_key_pdu(int fd, uint8_t ver, struct router_key const *rk,
+    uint8_t flags)
 {
-	uint8_t pdu_type = pop_expected_pdu();
-	pr_op_info("    Server sent Router Key PDU.");
-	printf("%s asn%u RK\n", flags2str(flags), router_key->as);
-	ck_assert_msg(pdu_type == PDU_TYPE_ROUTER_KEY,
-	    "Server sent a Router Key. Expected PDU type was %d.", pdu_type);
-	return 0;
+	return send_pdu(PDU_TYPE_ROUTER_KEY, rk->as, flags);
 }
 
 int
-send_aspa_pdu(int fd, uint8_t version, struct aspa const *aspa, uint8_t flags)
+send_aspa_announce_pdu(int fd, uint8_t ver, struct aspa const *aspa)
 {
-	uint8_t pdu_type = pop_expected_pdu();
-	pr_op_info("    Server sent ASPA PDU.");
-	printf("%s asn%u ASPA\n", flags2str(flags), aspa->customer);
-	ck_assert_msg(pdu_type == PDU_TYPE_ASPA,
-	    "Server sent an ASPA PDU. Expected PDU type was %d.", pdu_type);
-	return 0;
+	return send_pdu(PDU_TYPE_ASPA, aspa->customer, FLAG_ANNOUNCEMENT);
 }
 
 int
-send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
+send_aspa_withdraw_pdu(int fd, uint8_t ver, uint32_t customer)
 {
-	pr_op_info("    Server sent End of Data.");
-	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_END_OF_DATA);
-	return 0;
+	return send_pdu(PDU_TYPE_ASPA, customer, FLAG_WITHDRAWAL);
+}
+
+int
+send_end_of_data_pdu(int fd, uint8_t ver, uint16_t session, serial_t serial)
+{
+	return send_pdu(PDU_TYPE_END_OF_DATA, 0, 0);
 }
 
 int
 send_error_report_pdu(int fd, uint8_t version, uint16_t code,
     struct rtr_buffer const *request, char *message)
 {
-	pr_op_info("    Server sent Error Report %u: '%s'", code, message);
-	ck_assert_int_eq(pop_expected_pdu(), PDU_TYPE_ERROR_REPORT);
-	return 0;
+	return send_pdu(PDU_TYPE_ERROR_REPORT, 0, 0);
 }
 
-/* Tests */
-
-/* https://tools.ietf.org/html/rfc8210#section-8.1 */
-START_TEST(test_start_or_restart)
+static void
+check_response(void)
 {
-	struct rtr_request request;
+	array_index i;
 
-	pr_op_info("-- Start or Restart --");
+	pr_op_debug("Expected:");
+	for (i = 0; i < e; i++)
+		pr_op_debug("- %s %u %u", pdutype2str(expected[i].type),
+		    expected[i].as, expected[i].flags);
+	pr_op_debug("Actual:");
+	for (i = 0; i < a; i++)
+		pr_op_debug("- %s %u %u", pdutype2str(actual[i].type),
+		    actual[i].as, actual[i].flags);
 
-	/* Init */
-	init_db_full();
-	init_reset_query(&request);
+	ck_assert_uint_eq(e, a);
+	for (i = 0; i < e; i++) {
+		ck_assert_int_eq(expected[i].type, actual[i].type);
+		ck_assert_int_eq(expected[i].as, actual[i].as);
+		ck_assert_int_eq(expected[i].flags, actual[i].flags);
+	}
+}
 
-	/* Define expected server response */
-	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
-	expected_pdu_add(PDU_TYPE_ASPA);
-	expected_pdu_add(PDU_TYPE_END_OF_DATA);
+static void
+rcv_reset_query(void)
+{
+	struct pdu_stream stream = { 0 };
+	struct rtr_request req = { 0 };
+	unsigned char raw[8] = { 0 };
 
-	/* Run and validate */
-	ck_assert_int_eq(0, handle_reset_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
+	ck_assert_int_eq(0, pthread_mutex_init(&stream.session_lock, NULL));
+	stream.session_set = false;
 
-	/* Clean up */
-	vrps_destroy();
+	req.fd = -1;
+	req.stream = &stream;
+	req.pdu.rtr_version = RTR_V2;
+	req.pdu.type = PDU_TYPE_RESET_QUERY;
+
+	req.pdu.raw.bytes = raw;
+	req.pdu.raw.bytes_len = 8;
+	raw[0] = RTR_V2;
+	raw[1] = PDU_TYPE_RESET_QUERY;
+	raw[7] = 8;
+
+	a = 0;
+	ck_assert_int_eq(0, handle_reset_query_pdu(&req));
+	check_response();
+}
+
+static void
+rcv_serial_query(uint16_t session, serial_t serial)
+{
+	struct pdu_stream stream = { 0 };
+	struct rtr_request req = { 0 };
+	unsigned char raw[12] = { 0 };
+
+	ck_assert_int_eq(0, pthread_mutex_init(&stream.session_lock, NULL));
+	stream.session_set = true;
+	stream.session = session;
+
+	req.fd = -1;
+	req.pdu.rtr_version = RTR_V2;
+	req.stream = &stream;
+	req.pdu.type = PDU_TYPE_SERIAL_QUERY;
+	req.pdu.obj.sq.session_id = session;
+	req.pdu.obj.sq.serial_number = serial;
+
+	req.pdu.raw.bytes = raw;
+	req.pdu.raw.bytes_len = 12;
+	raw[0] = RTR_V2;
+	raw[1] = PDU_TYPE_SERIAL_QUERY;
+	raw[2] = session >> 8;
+	raw[3] = session;
+	raw[7] = 12;
+	raw[8] = serial >> 24;
+	raw[9] = serial >> 16;
+	raw[10] = serial >> 8;
+	raw[11] = serial;
+
+	a = 0;
+	ck_assert_int_eq(0, handle_serial_query_pdu(&req));
+	check_response();
+
+	pthread_mutex_destroy(&stream.session_lock);
+}
+
+static void
+expected_pdu_add(enum pdu_type type, uint32_t as, uint8_t flags)
+{
+	expected[e].type = type;
+	expected[e].as = as;
+	expected[e].flags = flags;
+	e++;
+}
+
+/* https://datatracker.ietf.org/doc/html/rfc8210#section-8.1 */
+/* https://datatracker.ietf.org/doc/html/rfc8210#section-8.2 */
+START_TEST(test_natural_flows)
+{
+	uint16_t session;
+
+	pr_op_info("-- Natural Flows --");
+
+	deltas_lifetime = 5;
+	if (file_exists("tmp/rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
+
+	/* First cycle not yet performed: Tell routers to wait */
+	e = 0;
+	expected_pdu_add(PDU_TYPE_ERROR_REPORT, 0, 0);
+	rcv_reset_query();
+	rcv_serial_query(0x1234, 0);
+
+	/* First cycle: One tree, no deltas */
+	session = mock_serial1();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
+
+	/* Second cycle: One tree, added deltas */
+	mock_serial2();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 2);
+
+	/* Third cycle: One tree, removed deltas */
+	mock_serial3();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 2);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 3);
+
+	/* Fourth cycle: Back to serial 1 data */
+	mock_serial4();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 2);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 3);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 4);
 }
 END_TEST
 
-/* https://tools.ietf.org/html/rfc8210#section-8.2 */
-START_TEST(test_typical_exchange)
+START_TEST(test_delta_forget)
 {
-	struct rtr_request request;
+	uint16_t session;
 
-	pr_op_info("-- Typical Exchange --");
+	pr_op_info("-- Delta Forgetting -- ");
 
-	/* Init */
-	init_db_full();
-	init_serial_query(&request, 0);
+	deltas_lifetime = 1;
+	if (file_exists("tmp/rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
 
-	/* From serial 0: Define expected server response */
-	/* Server doesn't have serial 0. */
-	expected_pdu_add(PDU_TYPE_CACHE_RESET);
+	/* First cycle not yet performed: Tell routers to wait */
+	e = 0;
+	expected_pdu_add(PDU_TYPE_ERROR_REPORT, 0, 0);
+	rcv_reset_query();
+	rcv_serial_query(0x1234, 0);
 
-	/* From serial 0: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
+	/* First cycle: One tree, no deltas */
+	session = mock_serial1();
 
-	/* From serial 1: Init client request */
-	init_serial_query(&request, 1);
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
 
-	/* From serial 1 to 3: Define expected server response */
-	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
-	/* Remove all zeroes, add all ones */
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
-	expected_pdu_add(PDU_TYPE_ASPA);
-	expected_pdu_add(PDU_TYPE_ASPA);
-	expected_pdu_add(PDU_TYPE_END_OF_DATA);
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
 
-	/* From serial 1: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
+	/* Second cycle: One tree, added deltas */
+	mock_serial2();
 
-	/* From serial 2: Init client request */
-	init_serial_query(&request, 2);
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
 
-	/* From serial 2 to 3: Define expected server response */
-	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
-	/* Remove all zeroes */
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY);
-	expected_pdu_add(PDU_TYPE_ASPA);
-	expected_pdu_add(PDU_TYPE_END_OF_DATA);
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 1);
 
-	/* From serial 2: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 2);
 
-	/* From serial 3: Init client request */
-	init_serial_query(&request, 3);
+	/* Third cycle: One tree, removed deltas */
+	mock_serial3();
 
-	/* From serial 3 to 3: Define expected server response */
-	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE);
-	expected_pdu_add(PDU_TYPE_END_OF_DATA);
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
 
-	/* From serial 3: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESET, 0, 0);
+	rcv_serial_query(session, 1);
 
-	/* Clean up */
-	vrps_destroy();
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 2);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 3);
+
+	/* Fourth cycle: Back to serial 1 data */
+	mock_serial4();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESET, 0, 0);
+	rcv_serial_query(session, 1);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESET, 0, 0);
+	rcv_serial_query(session, 2);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 3);
+
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_serial_query(session, 4);
 }
 END_TEST
 
 /* https://tools.ietf.org/html/rfc8210#section-8.3 */
 START_TEST(test_no_incremental_update_available)
 {
-	struct rtr_request request;
+	uint16_t session;
 
 	pr_op_info("-- No Incremental Update Available --");
 
-	/* Init */
-	init_db_full();
-	init_serial_query(&request, 10000);
+	deltas_lifetime = 5;
+	if (file_exists("tmp/rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
+	session = mock_serial1();
+	mock_serial2();
+	mock_serial3();
+	mock_serial4();
 
-	/* Define expected server response */
-	expected_pdu_add(PDU_TYPE_CACHE_RESET);
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESET, 0, 0);
+	rcv_serial_query(session, 10000);
 
-	/* Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
-
-	/* The Reset Query is already tested in start_or_restart. */
-
-	/* Clean up */
-	vrps_destroy();
+	e = 0;
+	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
+	rcv_reset_query();
 }
 END_TEST
 
 /* https://tools.ietf.org/html/rfc8210#section-8.4 */
 START_TEST(test_cache_has_no_data_available)
 {
-	struct rtr_request request;
-
 	pr_op_info("-- Cache Has No Data Available --");
 
-	/* Init */
-	ck_assert_int_eq(0, vrps_init());
+	deltas_lifetime = 5;
+	if (file_exists("tmp/rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
 
-	/* Serial Query: Init client request */
-	init_serial_query(&request, 0);
-
-	/* Serial Query: Define expected server response */
-	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
-
-	/* Serial Query: Run and validate */
-	ck_assert_int_eq(0, handle_serial_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
-
-	/* Reset Query: Init client request */
-	init_reset_query(&request);
-
-	/* Reset Query: Define expected server response */
-	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
-
-	/* Reset Query: Run and validate */
-	ck_assert_int_eq(0, handle_reset_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
-
-	/* Clean up */
-	vrps_destroy();
+	e = 0;
+	expected_pdu_add(PDU_TYPE_ERROR_REPORT, 0, 0);
+	rcv_serial_query(0x1234, 0);
+	rcv_reset_query();
 }
 END_TEST
 
-START_TEST(test_bad_session_id)
-{
-	struct rtr_request request;
-
-	pr_op_info("-- Bad Session ID --");
-
-	/* Init */
-	init_db_full();
-	init_serial_query(&request, 0);
-	request.pdu.obj.sq.session_id++;
-
-	/* From serial 0: Define expected server response */
-	expected_pdu_add(PDU_TYPE_ERROR_REPORT);
-
-	/* From serial 0: Run and validate */
-	ck_assert_int_eq(-EINVAL, handle_serial_query_pdu(&request));
-	ck_assert_uint_eq(false, has_expected_pdus());
-
-	/* Clean up */
-	vrps_destroy();
-}
-END_TEST
-
-static Suite *pdu_suite(void)
+static Suite *
+pdu_suite(void)
 {
 	Suite *suite;
-	TCase *core, *error;
+	TCase *core;
 
-	core = tcase_create("RFC8210-Defined Protocol Sequences");
-	tcase_add_test(core, test_start_or_restart);
-	tcase_add_test(core, test_typical_exchange);
+	core = tcase_create("RTR flows");
+	tcase_add_test(core, test_natural_flows);
+	tcase_add_test(core, test_delta_forget);
 	tcase_add_test(core, test_no_incremental_update_available);
 	tcase_add_test(core, test_cache_has_no_data_available);
 
-	error = tcase_create("Unhappy path cases");
-	tcase_add_test(error, test_bad_session_id);
-
 	suite = suite_create("PDU Handler");
 	suite_add_tcase(suite, core);
-	suite_add_tcase(suite, error);
 	return suite;
 }
 
-int main(void)
+int
+main(void)
 {
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+	int error;
+
+	error = mkdir_f("tmp");
+	if (error)
+		return error;
 
 	suite = pdu_suite();
 

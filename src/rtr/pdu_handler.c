@@ -1,80 +1,488 @@
 #include "rtr/pdu_handler.h"
 
+#include <stdio.h>
 #include <errno.h>
+#include <string.h>
 
+#include "alloc.h"
 #include "log.h"
-#include "rtr/db/vrps.h"
+#include "data_structure/common.h"
 #include "rtr/err_pdu.h"
 #include "rtr/pdu_sender.h"
 
-struct send_delta_args {
+struct rtr_stream {
 	int fd;
-	uint8_t rtr_version;
-	bool cache_response_sent;
+	uint8_t ver; /* RTR version */
+
+	char const *type;
+	size_t rawlen;
+	int (*send)(struct rtr_stream *, unsigned char const *, int);
 };
 
-static int
-send_cache_response_maybe(struct send_delta_args *args)
+static uint32_t
+read_u32(unsigned char const *raw)
 {
+	return (((unsigned int)(raw[0])) << 24)
+	     | (((unsigned int)(raw[1])) << 16)
+	     | (((unsigned int)(raw[2])) <<  8)
+	     | (((unsigned int)(raw[3])) <<  0);
+}
+
+static int
+send_vrp4(struct rtr_stream *rs, unsigned char const *raw, int flag)
+{
+	struct vrp vrp;
+
+	vrp.addr_fam = AF_INET;
+	vrp.asn = read_u32(raw);
+	memcpy(&vrp.prefix.v4, raw + 4, 4);
+	vrp.prefix_length = raw[8];
+	vrp.max_prefix_length = raw[9];
+
+	return send_prefix_pdu(rs->fd, rs->ver, &vrp, flag);
+}
+
+static int
+send_vrp6(struct rtr_stream *rs, unsigned char const *raw, int flag)
+{
+	struct vrp vrp;
+
+	vrp.addr_fam = AF_INET6;
+	vrp.asn = read_u32(raw);
+	memcpy(&vrp.prefix.v6, raw + 4, 16);
+	vrp.prefix_length = raw[20];
+	vrp.max_prefix_length = raw[21];
+
+	return send_prefix_pdu(rs->fd, rs->ver, &vrp, flag);
+}
+
+static int
+send_rk(struct rtr_stream *rs, unsigned char const *raw, int flag)
+{
+	struct router_key rk;
+
+	rk.as = read_u32(raw);
+	memcpy(rk.ski, raw + 4, RK_SKI_LEN);
+	memcpy(rk.spk, raw + 4 + RK_SKI_LEN, RK_SPKI_LEN);
+
+	return send_router_key_pdu(rs->fd, rs->ver, &rk, flag);
+}
+
+static int
+parse_providers(unsigned char const *hdr, FILE *file,
+    struct aspa_providers *providers)
+{
+	array_index i;
+	unsigned char buf[4];
 	int error;
 
-	if (!args->cache_response_sent) {
-		error = send_cache_response_pdu(args->fd, args->rtr_version);
-		if (error)
-			return error;
-		args->cache_response_sent = true;
+	providers->count = read_u32(hdr + 4);
+	providers->asids = pcalloc(sizeof(uint32_t), providers->count);
+
+	for (i = 0; i < providers->count; i++) {
+		if (fread(buf, 4, 1, file) == 1) {
+			providers->asids[i] = read_u32(buf);
+		} else if (feof(file)) {
+			error = pr_op_err("File ended prematurely");
+			goto end;
+		} else if (ferror(file)) {
+			error = errno;
+			if (!error)
+				error = EINVAL;
+			pr_op_err("File read failure: %s", strerror(error));
+			goto end;
+		}
+	}
+
+	return 0;
+
+end:	free(providers->asids);
+	return error;
+}
+
+static int
+send_aspa_announce(int fd, uint8_t ver, unsigned char const *hdr, FILE *file)
+{
+	struct aspa aspa = { 0 };
+	int error;
+
+	aspa.customer = read_u32(hdr);
+	error = parse_providers(hdr, file, &aspa.providers);
+	if (error)
+		return error;
+
+	error = send_aspa_announce_pdu(fd, ver, &aspa);
+
+	free(aspa.providers.asids);
+	return error;
+}
+
+/* Throw away the providers list */
+static int
+skip_providers(unsigned char const *hdr, FILE *file)
+{
+	unsigned char buf[256];
+	unsigned int total; /* Total providers */
+	unsigned int want; /* Providers we want to read */
+	unsigned int red; /* Actual read providers */
+	int error;
+
+	for (total = read_u32(hdr + 4); total > 0; total -= red) {
+		want = (total < 64) ? total : 64;
+		red = fread(buf, 4, want, file);
+		if (want != red) {
+			if (feof(file))
+				return pr_op_err("File ended prematurely");
+			if (ferror(file)) {
+				error = errno;
+				if (!error)
+					error = EINVAL;
+				pr_op_err("File read failure: %s", strerror(error));
+				return error;
+			}
+		}
 	}
 
 	return 0;
 }
 
 static int
-send_delta_vrp(struct delta_vrp const *delta, void *arg)
+send_aspa_withdraw(int fd, uint8_t ver, unsigned char const *hdr, FILE *file)
 {
-	struct send_delta_args *args = arg;
 	int error;
 
-	error = send_cache_response_maybe(args);
+	error = skip_providers(hdr, file);
 	if (error)
 		return error;
 
-	return send_prefix_pdu(args->fd, args->rtr_version, &delta->vrp,
-	    delta->flags);
+	return send_aspa_withdraw_pdu(fd, ver, read_u32(hdr));
+}
+
+static unsigned char const *
+next_chunk(FILE *file, unsigned char *buf, size_t size, int *error)
+{
+	int n;
+
+again:	n = fread(buf, size, 1, file);
+	if (n < 1) {
+		if (ferror(file)) {
+			*error = errno;
+			if (!*error)
+				*error = EINVAL;
+			pr_op_err("File read failure: %s", strerror(*error));
+			return NULL;
+		}
+		if (feof(file))
+			return NULL;
+		goto again; /* Dead code, unless fread() is borked */
+	}
+
+	return buf;
 }
 
 static int
-send_delta_rk(struct delta_router_key const *delta, void *arg)
+send_serial(struct rtr_stream *stream, serial_t serial)
 {
-	struct send_delta_args *args = arg;
+	FILE *file = 0;
+	unsigned char *buf;
+	unsigned char const *chunk;
 	int error;
 
-	error = send_cache_response_maybe(args);
-	if (error)
-		return error;
+	buf = pmalloc(stream->rawlen);
 
-	return send_router_key_pdu(args->fd, args->rtr_version,
-	    &delta->router_key, delta->flags);
+	error = rtr_open_file(serial, stream->type, "r", &file);
+	if (error)
+		goto end;
+
+	do {
+		chunk = next_chunk(file, buf, stream->rawlen, &error);
+		if (!chunk || error)
+			break;
+		error = stream->send(stream, chunk, FLAG_ANNOUNCEMENT);
+	} while (!error);
+
+	fclose(file);
+end:	free(buf);
+	return error;
 }
 
 static int
-send_delta_aspa(struct delta_aspa const *delta, void *arg)
+send_aspas(int fd, uint8_t ver, serial_t serial)
 {
-	struct send_delta_args *args = arg;
+	FILE *file = 0;
+	unsigned char buf[8];
+	unsigned char const *chunk;
 	int error;
 
-	error = send_cache_response_maybe(args);
+	error = rtr_open_file(serial, "aspa", "r", &file);
 	if (error)
 		return error;
 
-	return send_aspa_pdu(args->fd, args->rtr_version,
-	    delta->aspa, delta->flags);
+	do {
+		chunk = next_chunk(file, buf, 8, &error);
+		if (!chunk || error)
+			break;
+		error = send_aspa_announce(fd, ver, chunk, file);
+	} while (!error);
+
+	fclose(file);
+	return error;
+}
+
+int
+handle_reset_query_pdu(struct rtr_request *request)
+{
+	struct rtr_metadata rtr;
+	struct rtr_stream stream;
+	int error;
+
+	pr_op_debug("Reset Query. Request version: %u",
+	    request->pdu.rtr_version);
+
+	stream.fd = request->fd;
+	stream.ver = request->pdu.rtr_version;
+
+	error = rtr_load_metadata(&rtr);
+	switch (error) {
+	case 0:
+		break;
+	case ENOENT:
+		return err_pdu_send_no_data_available(stream.fd, stream.ver);
+	default:
+		goto internal_error;
+	}
+
+	pdustream_set_session(request->stream, rtr.session);
+
+	error = send_cache_response_pdu(stream.fd, stream.ver, rtr.session);
+	if (error)
+		return error;
+
+	stream.type = "vrp4";
+	stream.rawlen = 10;
+	stream.send = send_vrp4;
+	error = send_serial(&stream, rtr.serial);
+	if (error)
+		goto internal_error;
+
+	stream.type = "vrp6";
+	stream.rawlen = 22;
+	stream.send = send_vrp6;
+	error = send_serial(&stream, rtr.serial);
+	if (error)
+		goto internal_error;
+
+	if (stream.ver >= RTR_V1) {
+		stream.type = "rk";
+		stream.rawlen = 4 + RK_SKI_LEN + RK_SPKI_LEN;
+		stream.send = send_rk;
+		error = send_serial(&stream, rtr.serial);
+		if (error)
+			goto internal_error;
+	}
+
+	if (stream.ver >= RTR_V2) {
+		error = send_aspas(stream.fd, stream.ver, rtr.serial);
+		if (error)
+			goto internal_error;
+	}
+
+	return send_end_of_data_pdu(stream.fd, stream.ver, rtr.session, rtr.serial);
+
+internal_error:
+	return err_pdu_send_internal_error(stream.fd, stream.ver);
+}
+
+static int
+send_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
+{
+	FILE *ofile = NULL;
+	FILE *nfile = NULL;
+	unsigned char *buf1;
+	unsigned char *buf2;
+	unsigned char const *ochunk;
+	unsigned char const *nchunk;
+	int cmp;
+	int error;
+
+	buf1 = pmalloc(rs->rawlen);
+	buf2 = pmalloc(rs->rawlen);
+
+	error = rtr_open_file(oserial, rs->type, "r", &ofile);
+	if (error)
+		goto end;
+	error = rtr_open_file(nserial, rs->type, "r", &nfile);
+	if (error)
+		goto end;
+
+	ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
+	if (error)
+		goto end;
+	nchunk = next_chunk(nfile, buf2, rs->rawlen, &error);
+	if (error)
+		goto end;
+
+	while (ochunk && nchunk) {
+		cmp = memcmp(ochunk, nchunk, rs->rawlen);
+		if (cmp < 0) {
+			error = rs->send(rs, ochunk, FLAG_WITHDRAWAL);
+			if (error)
+				goto end;
+			ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
+			if (error)
+				goto end;
+
+		} else if (cmp > 0) {
+			error = rs->send(rs, nchunk, FLAG_ANNOUNCEMENT);
+			if (error)
+				goto end;
+			nchunk = next_chunk(nfile, buf2, rs->rawlen, &error);
+			if (error)
+				goto end;
+
+		} else {
+			ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
+			if (error)
+				goto end;
+			nchunk = next_chunk(nfile, buf2, rs->rawlen, &error);
+			if (error)
+				goto end;
+		}
+	}
+
+	while (ochunk) {
+		error = rs->send(rs, ochunk, FLAG_WITHDRAWAL);
+		if (error)
+			goto end;
+		ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
+		if (error)
+			goto end;
+	}
+
+	while (nchunk) {
+		error = rs->send(rs, nchunk, FLAG_ANNOUNCEMENT);
+		if (error)
+			goto end;
+		nchunk = next_chunk(nfile, buf2, rs->rawlen, &error);
+		if (error)
+			goto end;
+	}
+
+end:	if (nfile) fclose(nfile);
+	if (ofile) fclose(ofile);
+	free(buf2);
+	free(buf1);
+	return error;
+}
+
+static int
+send_aspa_delta(int fd, uint8_t ver, serial_t oserial, serial_t nserial)
+{
+	FILE *ofile = NULL;
+	FILE *nfile = NULL;
+	unsigned char buf1[8];
+	unsigned char buf2[8];
+	unsigned char const *ochunk;
+	unsigned char const *nchunk;
+	struct aspa_providers oprovs;
+	struct aspa_providers nprovs;
+	int cmp;
+	struct aspa aspa;
+	int error;
+
+	error = rtr_open_file(oserial, "aspa", "r", &ofile);
+	if (error)
+		return error;
+	error = rtr_open_file(nserial, "aspa", "r", &nfile);
+	if (error)
+		goto end;
+
+	ochunk = next_chunk(ofile, buf1, 8, &error);
+	if (error)
+		goto end;
+	nchunk = next_chunk(nfile, buf2, 8, &error);
+	if (error)
+		goto end;
+
+	while (ochunk && nchunk) {
+		cmp = memcmp(ochunk, nchunk, 4); /* AS only */
+		if (cmp < 0) {
+			error = send_aspa_withdraw(fd, ver, ochunk, ofile);
+			if (error)
+				goto end;
+			ochunk = next_chunk(ofile, buf1, 8, &error);
+			if (error)
+				goto end;
+		} else if (cmp > 0) {
+			error = send_aspa_announce(fd, ver, nchunk, nfile);
+			if (error)
+				goto end;
+			nchunk = next_chunk(nfile, buf2, 8, &error);
+			if (error)
+				goto end;
+		} else {
+			error = parse_providers(ochunk, ofile, &oprovs);
+			if (error)
+				goto end;
+			error = parse_providers(nchunk, nfile, &nprovs);
+			if (error) {
+				free(oprovs.asids);
+				goto end;
+			}
+
+			if (!providers_equal(&oprovs, &nprovs)) {
+				aspa.customer = read_u32(nchunk);
+				aspa.providers = nprovs;
+				error = send_aspa_announce_pdu(fd, ver, &aspa);
+				if (error) {
+					free(oprovs.asids);
+					free(nprovs.asids);
+					goto end;
+				}
+			}
+
+			free(oprovs.asids);
+			free(nprovs.asids);
+
+			ochunk = next_chunk(ofile, buf1, 8, &error);
+			if (error)
+				goto end;
+			nchunk = next_chunk(nfile, buf2, 8, &error);
+			if (error)
+				goto end;
+		}
+	}
+
+	while (ochunk) {
+		error = send_aspa_withdraw(fd, ver, ochunk, ofile);
+		if (error)
+			goto end;
+		ochunk = next_chunk(ofile, buf1, 8, &error);
+		if (error)
+			goto end;
+	}
+
+	while (nchunk) {
+		error = send_aspa_announce(fd, ver, nchunk, nfile);
+		if (error)
+			goto end;
+		nchunk = next_chunk(nfile, buf2, 8, &error);
+		if (error)
+			goto end;
+	}
+
+end:	if (ofile) fclose(ofile);
+	if (nfile) fclose(nfile);
+	return error;
 }
 
 int
 handle_serial_query_pdu(struct rtr_request *request)
 {
-	struct send_delta_args args;
-	serial_t final_serial;
+	struct rtr_metadata rtr;
+	uint16_t stream_session;
+	serial_t oserial, nserial;
+	struct rtr_stream stream;
 	int error;
 
 	pr_op_debug("Serial Query. Request version/session/serial: %u/%u/%u",
@@ -82,173 +490,72 @@ handle_serial_query_pdu(struct rtr_request *request)
 	    request->pdu.obj.sq.session_id,
 	    request->pdu.obj.sq.serial_number);
 
-	args.fd = request->fd;
-	args.rtr_version = request->pdu.rtr_version;
-	args.cache_response_sent = false;
+	stream.fd = request->fd;
+	stream.ver = request->pdu.rtr_version;
 
-	/*
-	 * RFC 6810 and 8210:
-	 * "If [...] either the router or the cache finds that the value of the
-	 * Session ID is not the same as the other's, the party which detects
-	 * the mismatch MUST immediately terminate the session with an Error
-	 * Report PDU with code 0 ("Corrupt Data")"
-	 */
-	if (request->pdu.obj.sq.session_id != get_current_session_id(args.rtr_version))
-		return err_pdu_send_corrupt_data(args.fd, args.rtr_version,
-			&request->pdu.raw, "Session ID doesn't match.");
-
-	/*
-	 * For the record, there are two reasons why we want to work on a
-	 * (shallow) copy of the deltas (as opposed to eg. a foreach):
-	 * 1. We need to remove deltas that cancel each other.
-	 *    (Which can't be done directly on the DB.)
-	 * 2. It's probably best not to hold the VRPS read lock while writing
-	 *    PDUs, to minimize writer stagnation.
-	 */
-
-	error = vrps_foreach_delta_since(request->pdu.obj.sq.serial_number,
-	    &final_serial, send_delta_vrp, send_delta_rk, send_delta_aspa,
-	    &args);
+	error = rtr_load_metadata(&rtr);
 	switch (error) {
-	case 0:
-		/*
-		 * https://tools.ietf.org/html/rfc6810#section-6.2
-		 *
-		 * These functions presently only fail on writes, allocations
-		 * and programming errors. Best avoid error PDUs.
-		 */
-		if (!args.cache_response_sent) {
-			error = send_cache_response_pdu(args.fd,
-			    args.rtr_version);
-			if (error)
-				return error;
-		}
-		return send_end_of_data_pdu(args.fd, args.rtr_version,
-		    final_serial);
-	case -EAGAIN: /* Database still under construction */
-		return err_pdu_send_no_data_available(args.fd, args.rtr_version);
-	case -ESRCH: /* Invalid serial */
-		/* https://tools.ietf.org/html/rfc6810#section-6.3 */
-		return send_cache_reset_pdu(args.fd, args.rtr_version);
-	case -ENOMEM: /* Memory allocation failure */
-		enomem_panic();
-	case EAGAIN: /* Too many threads */
-		/*
-		 * I think this should be more of a "try again" thing, but
-		 * RTR does not provide a code for that. Just fall through.
-		 */
-		break;
+	case 0:      break;
+	case ENOENT: return err_pdu_send_no_data_available(stream.fd, stream.ver);
+	default:     goto internal_error;
 	}
 
-	return err_pdu_send_internal_error(args.fd, args.rtr_version);
-}
+	/* Request session vs negotiated session */
+	if (pdustream_get_session(request->stream, &stream_session, rtr.session))
+		if (request->pdu.obj.sq.session_id != stream_session)
+			return err_pdu_send_corrupt_data(stream.fd, stream.ver,
+			    &request->pdu.raw, "Session ID doesn't match.");
 
-struct base_roa_args {
-	bool started;
-	int fd;
-	uint8_t version;
-};
+	/* Request session vs existing cache session */
+	if (request->pdu.obj.sq.session_id != rtr.session)
+		return send_cache_reset_pdu(stream.fd, stream.ver);
 
-static int
-send_base_roa(struct vrp const *vrp, void *arg)
-{
-	struct base_roa_args *args = arg;
-	int error;
+	oserial = request->pdu.obj.sq.serial_number;
+	nserial = rtr.serial;
 
-	if (!args->started) {
-		error = send_cache_response_pdu(args->fd, args->version);
-		if (error)
-			return error;
-		args->started = true;
-	}
-
-	return send_prefix_pdu(args->fd, args->version, vrp, FLAG_ANNOUNCEMENT);
-}
-
-static int
-send_base_router_key(struct router_key const *key, void *arg)
-{
-	struct base_roa_args *args = arg;
-	int error;
-
-	if (!args->started) {
-		error = send_cache_response_pdu(args->fd, args->version);
-		if (error)
-			return error;
-		args->started = true;
-	}
-
-	return send_router_key_pdu(args->fd, args->version, key,
-	    FLAG_ANNOUNCEMENT);
-}
-
-static int
-send_base_aspa(struct aspa const *aspa, void *arg)
-{
-	struct base_roa_args *args = arg;
-	int error;
-
-	if (!args->started) {
-		error = send_cache_response_pdu(args->fd, args->version);
-		if (error)
-			return error;
-		args->started = true;
-	}
-
-	return send_aspa_pdu(args->fd, args->version, aspa, FLAG_ANNOUNCEMENT);
-}
-
-int
-handle_reset_query_pdu(struct rtr_request *request)
-{
-	struct base_roa_args args;
-	serial_t current_serial;
-	int error;
-
-	args.started = false;
-	args.fd = request->fd;
-	args.version = request->pdu.rtr_version;
-
-	error = get_last_serial_number(&current_serial);
+	error = rtr_serial_stat(oserial);
 	switch (error) {
-	case 0:
-		break;
-	case -EAGAIN:
-		return err_pdu_send_no_data_available(args.fd, args.version);
-	default:
-		err_pdu_send_internal_error(args.fd, args.version);
-		return error;
+	case 0:      break;
+	case ENOENT: return send_cache_reset_pdu(stream.fd, stream.ver);
+	default:     goto internal_error;
 	}
 
-	/*
-	 * It's probably best not to work on a copy, because the tree is large.
-	 * Unfortunately, this means we'll have to encourage writer stagnation,
-	 * but thankfully, most clients are supposed to request far more serial
-	 * queries than reset queries.
-	 */
+	error = send_cache_response_pdu(stream.fd, stream.ver, rtr.session);
+	if (error)
+		return error;
 
-	error = vrps_foreach_base(send_base_roa, send_base_router_key,
-	    send_base_aspa, &args);
+	stream.type = "vrp4";
+	stream.rawlen = 10;
+	stream.send = send_vrp4;
+	error = send_delta(&stream, oserial, nserial);
+	if (error)
+		goto internal_error;
 
-	/* See handle_serial_query_pdu() for some comments. */
-	switch (error) {
-	case 0:
-		/* Assure that cache response is (or was) sent */
-		if (args.started)
-			break;
-		error = send_cache_response_pdu(args.fd, args.version);
+	stream.type = "vrp6";
+	stream.rawlen = 22;
+	stream.send = send_vrp6;
+	error = send_delta(&stream, oserial, nserial);
+	if (error)
+		goto internal_error;
+
+	if (stream.ver >= RTR_V1) {
+		stream.type = "rk";
+		stream.rawlen = 4 + RK_SKI_LEN + RK_SPKI_LEN;
+		stream.send = send_rk;
+		error = send_delta(&stream, oserial, nserial);
 		if (error)
-			return error;
-		break;
-	case -EAGAIN:
-		return err_pdu_send_no_data_available(args.fd, args.version);
-	case EAGAIN:
-		err_pdu_send_internal_error(args.fd, args.version);
-		return error;
-	default:
-		/* Any other error must stop sending more PDUs */
-		return error;
+			goto internal_error;
 	}
 
-	return send_end_of_data_pdu(args.fd, args.version, current_serial);
+	if (stream.ver >= RTR_V2) {
+		error = send_aspa_delta(stream.fd, stream.ver, oserial, nserial);
+		if (error)
+			goto internal_error;
+	}
+
+	return send_end_of_data_pdu(stream.fd, stream.ver, rtr.session, nserial);
+
+internal_error:
+	err_pdu_send_internal_error(stream.fd, stream.ver);
+	return error;
 }

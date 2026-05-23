@@ -2,6 +2,7 @@
 
 #include "log.h"
 #include "object/certificate.h"
+#include "types/router_key.h"
 #include "validation_handler.h"
 
 struct resource_params {

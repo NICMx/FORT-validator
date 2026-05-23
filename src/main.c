@@ -32,8 +32,8 @@ fort_standalone(void)
 static int
 fort_server(void)
 {
+	struct rtr_metadata rtr;
 	int error;
-	bool changed;
 
 	pr_op_info("Main loop: Starting...");
 
@@ -41,7 +41,7 @@ fort_server(void)
 	if (error)
 		return error;
 
-	error = vrps_update(NULL);
+	error = vrps_update(&rtr);
 	if (fort_end)
 		goto end;
 	if (error) {
@@ -49,7 +49,7 @@ fort_server(void)
 		goto end;
 	}
 
-	rtr_notify();
+	rtr_notify(&rtr);
 
 	/* TODO (#133) Stats ready; remove this message in a couple versions. */
 	pr_op_warn("First validation cycle successfully ended, now you can connect your router(s)");
@@ -62,16 +62,15 @@ fort_server(void)
 			goto end;
 		pr_op_info("Main loop: Time to work!");
 
-		error = vrps_update(&changed);
-		if (fort_end || error == -EINTR)
+		error = vrps_update(&rtr);
+		if (fort_end)
 			break;
 		if (error) {
 			pr_op_debug("Main loop: Error %d (%s)", error,
 			    strerror(abs(error)));
 			continue;
 		}
-		if (changed)
-			rtr_notify();
+		rtr_notify(&rtr);
 	} while (true);
 
 end:	rtr_stop();
@@ -150,9 +149,6 @@ main(int argc, char **argv)
 	error = relax_ng_init();
 	if (error)
 		goto revert_http;
-	error = vrps_init();
-	if (error)
-		goto revert_relax_ng;
 
 	/* Meat */
 
@@ -170,8 +166,6 @@ main(int argc, char **argv)
 
 	/* End */
 
-	vrps_destroy();
-revert_relax_ng:
 	relax_ng_cleanup();
 revert_http:
 	http_cleanup();

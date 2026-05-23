@@ -11,6 +11,8 @@ struct rtr_request {
 	int fd;
 	char client_addr[INET6_ADDRSTRLEN];
 
+	struct pdu_stream *stream;
+
 	struct {
 		enum rtr_version rtr_version;
 		enum pdu_type type;
@@ -40,6 +42,9 @@ bool pdustream_next(struct pdu_stream *, struct rtr_request **);
 int pdustream_fd(struct pdu_stream *);
 char const *pdustream_addr(struct pdu_stream *);
 int pdustream_version(struct pdu_stream *);
+
+bool pdustream_get_session(struct pdu_stream *, uint16_t *, uint16_t);
+void pdustream_set_session(struct pdu_stream *, uint16_t);
 
 void rtreq_destroy(struct rtr_request *);
 

@@ -3,11 +3,13 @@
 #include <fcntl.h>
 
 #include "alloc.c"
+#include "common.c"
 #include "mock.c"
 #include "rtr/pdu_stream.c"
 
 /* Mocks */
 
+MOCK(config_get_local_repository, char const *, "tmp", void)
 MOCK_ABORT_INT(err_pdu_send_invalid_request, int fd, uint8_t version,
     struct rtr_buffer const *request, char const *msg)
 MOCK_ABORT_INT(err_pdu_send_unsupported_proto_version, int fd, uint8_t version,

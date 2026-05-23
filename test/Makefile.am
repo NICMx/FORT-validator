@@ -25,7 +25,6 @@ MY_LDADD = ${CHECK_LIBS} ${JANSSON_LIBS}
 check_PROGRAMS  = address.test
 check_PROGRAMS += cache.test
 check_PROGRAMS += db_table.test
-check_PROGRAMS += deltas_array.test
 check_PROGRAMS += json.test
 check_PROGRAMS += line_file.test
 check_PROGRAMS += pb.test
@@ -39,7 +38,6 @@ check_PROGRAMS += thread_pool.test
 check_PROGRAMS += uri.test
 check_PROGRAMS += uthash.test
 check_PROGRAMS += vcard.test
-check_PROGRAMS += vrps.test
 check_PROGRAMS += xml.test
 TESTS = ${check_PROGRAMS}
 
@@ -51,9 +49,6 @@ cache_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
 
 db_table_test_SOURCES = rtr/db/db_table_test.c
 db_table_test_LDADD = ${MY_LDADD}
-
-deltas_array_test_SOURCES = rtr/db/deltas_array_test.c
-deltas_array_test_LDADD = ${MY_LDADD}
 
 json_test_SOURCES = json_util_test.c
 json_test_LDADD = ${MY_LDADD}
@@ -94,9 +89,6 @@ uthash_test_LDADD = ${MY_LDADD}
 vcard_test_SOURCES = vcard_test.c
 vcard_test_LDADD = ${MY_LDADD}
 
-vrps_test_SOURCES = rtr/db/vrps_test.c
-vrps_test_LDADD = ${MY_LDADD} ${JANSSON_LIBS}
-
 xml_test_SOURCES = xml_test.c
 xml_test_LDADD = ${MY_LDADD} ${XML2_LIBS}
 
@@ -104,7 +96,6 @@ EXTRA_DIST  = mock.c mock.h
 EXTRA_DIST += line_file/core.txt
 EXTRA_DIST += line_file/empty.txt
 EXTRA_DIST += line_file/error.txt
-EXTRA_DIST += rtr/db/rtr_db_mock.c
 EXTRA_DIST += tal/lacnic.tal
 EXTRA_DIST += xml/notification.xml
 

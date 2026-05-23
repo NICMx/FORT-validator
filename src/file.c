@@ -81,15 +81,12 @@ file_load(char const *file_name, struct file_contents *fc)
 
 	fread_result = fread(fc->buffer, 1, fc->buffer_size, file);
 	if (fread_result < fc->buffer_size) {
-		error = ferror(file);
-		if (error) {
-			/*
-			 * The manpage doesn't say that the result is an error
-			 * code. It literally doesn't say how to get an error
-			 * code.
-			 */
-			pr_val_err("File reading error. The error message is (possibly) '%s'",
-			    strerror(error));
+		if (ferror(file)) {
+			error = errno;
+			/* errno on fread() is POSIX, not ISO C. */
+			if (!error)
+				error = EINVAL;
+			pr_val_err("File read failure: %s", strerror(error));
 			free(fc->buffer);
 			goto end;
 		}

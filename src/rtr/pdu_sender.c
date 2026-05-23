@@ -3,12 +3,12 @@
 #include <errno.h>
 #include <poll.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "alloc.h"
 #include "config.h"
 #include "data_structure/common.h"
 #include "log.h"
-#include "rtr/db/vrps.h"
 #include "rtr/primitive_writer.h"
 
 static unsigned char *
@@ -85,16 +85,15 @@ send_response(int fd, uint8_t pdu_type, unsigned char *data, size_t data_len)
 }
 
 int
-send_serial_notify_pdu(int fd, uint8_t version, serial_t start_serial)
+send_serial_notify_pdu(int fd, uint8_t version, struct rtr_metadata *meta)
 {
 	static const uint8_t type = PDU_TYPE_SERIAL_NOTIFY;
 	static const uint32_t len = RTRPDU_SERIAL_NOTIFY_LEN;
 	unsigned char data[RTRPDU_SERIAL_NOTIFY_LEN];
 	unsigned char *buf;
 
-	buf = serialize_hdr(data, version, type,
-	    get_current_session_id(version), len);
-	buf = write_uint32(buf, start_serial);
+	buf = serialize_hdr(data, version, type, meta->session, len);
+	buf = write_uint32(buf, meta->serial);
 
 	return send_response(fd, type, data, len);
 }
@@ -112,13 +111,13 @@ send_cache_reset_pdu(int fd, uint8_t version)
 }
 
 int
-send_cache_response_pdu(int fd, uint8_t version)
+send_cache_response_pdu(int fd, uint8_t version, uint16_t session)
 {
 	static const uint8_t type = PDU_TYPE_CACHE_RESPONSE;
 	static const uint32_t len = RTRPDU_CACHE_RESPONSE_LEN;
 	unsigned char data[RTRPDU_CACHE_RESPONSE_LEN];
 
-	serialize_hdr(data, version, type, get_current_session_id(version), len);
+	serialize_hdr(data, version, type, session, len);
 
 	return send_response(fd, type, data, len);
 }
@@ -199,55 +198,64 @@ send_router_key_pdu(int fd, uint8_t version,
 }
 
 int
-send_aspa_pdu(int fd, uint8_t version, struct aspa const *aspa, uint8_t flags)
+send_aspa_announce_pdu(int fd, uint8_t version, struct aspa const *aspa)
 {
 	static const uint8_t type = PDU_TYPE_ASPA;
-	unsigned char data[1024];
+	unsigned char *buf, *loc;
+	size_t bufsize;
 	array_index i;
-	unsigned char *buf;
-	int error;
+	int error = 0;
 
 	if (version < RTR_V2)
 		return 0;
 
-	if (flags & FLAG_ANNOUNCEMENT) {
-		buf = serialize_hdr(data, version, type, FLAG_ANNOUNCEMENT << 8,
-		    12 + 4 * aspa->providers.count);
-		buf = write_uint32(buf, aspa->customer);
+	bufsize = 12 + 4 * aspa->providers.count;
+	if (bufsize > 1024)
+		bufsize = 1024;
+	buf = pmalloc(bufsize);
 
-		for (i = 0; i < aspa->providers.count; i++) {
-			buf = write_uint32(buf, aspa->providers.asids[i]);
+	loc = serialize_hdr(buf, version, type, FLAG_ANNOUNCEMENT << 8,
+	    12 + 4 * aspa->providers.count);
+	loc = write_uint32(loc, aspa->customer);
 
-			if (buf >= data + 1024) {
-				error = send_response(fd, type, data, buf - data);
-				if (error)
-					return error;
-				buf = data;
-			}
-		}
+	for (i = 0; i < aspa->providers.count; i++) {
+		loc = write_uint32(loc, aspa->providers.asids[i]);
 
-		if (buf > data) {
-			error = send_response(fd, type, data, buf - data);
+		if (loc >= buf + bufsize) {
+			error = send_response(fd, type, buf, loc - buf);
 			if (error)
-				return error;
+				goto end;
+			loc = buf;
 		}
-
-	} else {
-		buf = serialize_hdr(data, version, type, FLAG_WITHDRAWAL << 8, 12);
-		write_uint32(buf, aspa->customer);
-		error = send_response(fd, type, data, 12);
-		if (error)
-			return error;
 	}
 
+	if (loc > buf) {
+		error = send_response(fd, type, buf, loc - buf);
+		if (error)
+			goto end;
+	}
 
-	return 0;
+end:	free(buf);
+	return error;
+}
+
+int
+send_aspa_withdraw_pdu(int fd, uint8_t version, uint32_t customer)
+{
+	static const uint8_t type = PDU_TYPE_ASPA;
+	unsigned char data[12];
+	unsigned char *buf;
+
+	buf = serialize_hdr(data, version, type, FLAG_WITHDRAWAL << 8, 12);
+	write_uint32(buf, customer);
+
+	return send_response(fd, type, data, 12);
 }
 
 #define MAX(a, b) ((a > b) ? a : b)
 
 int
-send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
+send_end_of_data_pdu(int fd, uint8_t version, uint16_t session, serial_t serial)
 {
 	static const uint8_t type = PDU_TYPE_END_OF_DATA;
 	unsigned char data[
@@ -259,16 +267,14 @@ send_end_of_data_pdu(int fd, uint8_t version, serial_t end_serial)
 	switch (version) {
 	case RTR_V0:
 		len = RTRPDU_END_OF_DATA_V0_LEN;
-		buf = serialize_hdr(data, version, type,
-		    get_current_session_id(version), len);
-		buf = write_uint32(buf, end_serial);
+		buf = serialize_hdr(data, version, type, session, len);
+		buf = write_uint32(buf, serial);
 		break;
 	case RTR_V1:
 	case RTR_V2:
 		len = RTRPDU_END_OF_DATA_V1_LEN;
-		buf = serialize_hdr(data, version, type,
-		    get_current_session_id(version), len);
-		buf = write_uint32(buf, end_serial);
+		buf = serialize_hdr(data, version, type, session, len);
+		buf = write_uint32(buf, serial);
 		buf = write_uint32(buf, config_get_interval_refresh());
 		buf = write_uint32(buf, config_get_interval_retry());
 		buf = write_uint32(buf, config_get_interval_expire());

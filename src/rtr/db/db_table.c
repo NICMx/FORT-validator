@@ -1,11 +1,16 @@
 #include "rtr/db/db_table.h"
 
 #include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "alloc.h"
 #include "config.h"
+#include "data_structure/common.h"
 #include "data_structure/uthash.h"
+#include "file.h"
 #include "log.h"
+#include "rtr/meta.h"
 #include "types/aspa.h"
 
 struct hashable_roa {
@@ -30,6 +35,8 @@ struct db_table {
 
 	unsigned int total_roas_v4;
 	unsigned int total_roas_v6;
+
+	struct rtr_metadata rtr;
 };
 
 struct db_table *
@@ -228,6 +235,355 @@ db_table_join(struct db_table *dst, struct db_table *src)
 	return 0;
 }
 
+static int
+cmp_u8(uint8_t a, uint8_t b)
+{
+	/* JIC the platform typedefs uintXX_ts into unsigned ints */
+	a &= 0xFFu;
+	b &= 0xFFu;
+
+	if (a > b) return 1;
+	if (a < b) return -1;
+	return 0;
+}
+
+static int
+cmp_u32(uint32_t a, uint32_t b)
+{
+	a = htonl(a);
+	b = htonl(b);
+	return memcmp(&a, &b, 4);
+}
+
+static int
+cmp_vrp(struct hashable_roa *_a, struct hashable_roa *_b)
+{
+	struct vrp *a = &_a->data;
+	struct vrp *b = &_b->data;
+	int cmp;
+
+	cmp = cmp_u8(a->addr_fam, b->addr_fam);
+	if (cmp) return cmp;
+	cmp = cmp_u32(a->asn, b->asn);
+	if (cmp) return cmp;
+
+	switch (a->addr_fam) {
+	case AF_INET:  cmp = memcmp(&a->prefix.v4, &b->prefix.v4, 4);  break;
+	case AF_INET6: cmp = memcmp(&a->prefix.v6, &b->prefix.v6, 16); break;
+	}
+	if (cmp) return cmp;
+
+	cmp = cmp_u8(a->prefix_length, b->prefix_length);
+	if (cmp) return cmp;
+	return cmp_u8(a->max_prefix_length, b->max_prefix_length);
+}
+
+static int
+cmp_rk(struct hashable_key *_a, struct hashable_key *_b)
+{
+	struct router_key *a = &_a->data;
+	struct router_key *b = &_b->data;
+	int cmp;
+
+	cmp = cmp_u32(a->as, b->as);
+	if (cmp) return cmp;
+	cmp = memcmp(a->ski, b->ski, RK_SKI_LEN);
+	if (cmp) return cmp;
+	return memcmp(a->spk, b->spk, RK_SPKI_LEN);
+}
+
+static int
+cmp_aspa(struct hashable_aspa *a, struct hashable_aspa *b)
+{
+	return cmp_u32(a->v->customer, b->v->customer);
+}
+
+void
+db_table_sort(struct db_table *table)
+{
+	HASH_SORT(table->roas, cmp_vrp);
+	HASH_SORT(table->router_keys, cmp_rk);
+	HASH_SORT(table->aspas, cmp_aspa);
+}
+
+static int
+mkdir_f(char const *path)
+{
+	int error;
+
+	pr_op_debug("mkdir -f %s", path);
+
+	if (mkdir(path, 0777) < 0) {
+		error = errno;
+		if (error != EEXIST) {
+			pr_op_err("Cannot create directory '%s': %s",
+			    path, strerror(error));
+			return error;
+		}
+	}
+
+	return 0;
+}
+
+static int
+write_u8(FILE *file, uint8_t v)
+{
+	return (fwrite(&v, 1, 1, file) != 1)
+	    ? pr_op_err("fwrite() could not write 1 byte.")
+	    : 0;
+}
+
+static int
+write_u32(FILE *file, uint32_t v)
+{
+	v = htonl(v);
+	return (fwrite(&v, 4, 1, file) != 1)
+	    ? pr_op_err("fwrite() could not write 4 bytes.")
+	    : 0;
+}
+
+static int
+write_buf(FILE *file, unsigned char *buf, size_t len)
+{
+	return (fwrite(buf, len, 1, file) != 1)
+	    ? pr_op_err("fwrite() could not write %zu bytes.", len)
+	    : 0;
+}
+
+static int
+write_addr(FILE *file, struct vrp *vrp)
+{
+	switch (vrp->addr_fam) {
+	case AF_INET:  return write_buf(file, (unsigned char *)&vrp->prefix, 4);
+	case AF_INET6: return write_buf(file, (unsigned char *)&vrp->prefix, 16);
+	}
+	return EINVAL;
+}
+
+static int
+cache_vrps(struct db_table *table)
+{
+	FILE *f4 = NULL;
+	FILE *f6 = NULL;
+	FILE *file;
+	struct hashable_roa *hvrp, *tmpv;
+	struct vrp *vrp;
+	int err;
+
+	err = rtr_open_file(table->rtr.serial, "vrp4", "w", &f4);
+	if (err)
+		return err;
+	err = rtr_open_file(table->rtr.serial, "vrp6", "w", &f6);
+	if (err)
+		goto end;
+
+	HASH_ITER(hh, table->roas, hvrp, tmpv) {
+		vrp = &hvrp->data;
+
+		switch (vrp->addr_fam) {
+		case AF_INET:  file = f4; break;
+		case AF_INET6: file = f6; break;
+		default:       continue;
+		}
+
+		if ((err = write_u32(file, vrp->asn)) != 0)
+			goto end;
+		if ((err = write_addr(file, vrp)) != 0)
+			goto end;
+		if ((err = write_u8(file, vrp->prefix_length)) != 0)
+			goto end;
+		if ((err = write_u8(file, vrp->max_prefix_length)) != 0)
+			goto end;
+	}
+
+end:	if (f4) fclose(f4);
+	if (f6) fclose(f6);
+	return err;
+}
+
+static int
+cache_rks(struct db_table *table)
+{
+	FILE *file = NULL;
+	struct hashable_key *rk, *tmpr;
+	int err;
+
+	err = rtr_open_file(table->rtr.serial, "rk", "w", &file);
+	if (err)
+		return err;
+
+	HASH_ITER(hh, table->router_keys, rk, tmpr) {
+		if ((err = write_u32(file, rk->data.as)) != 0)
+			break;
+		if ((err = write_buf(file, rk->data.ski, RK_SKI_LEN)) != 0)
+			break;
+		if ((err = write_buf(file, rk->data.spk, RK_SPKI_LEN)) != 0)
+			break;
+	}
+
+	fclose(file);
+	return err;
+}
+
+static int
+cache_aspas(struct db_table *table)
+{
+	FILE *file = NULL;
+	struct hashable_aspa *aspa, *tmpa;
+	array_index i;
+	int err;
+
+	err = rtr_open_file(table->rtr.serial, "aspa", "w", &file);
+	if (err)
+		return err;
+
+	HASH_ITER(hh, table->aspas, aspa, tmpa) {
+		if ((err = write_u32(file, aspa->v->customer)) != 0)
+			break;
+		if ((err = write_u32(file, aspa->v->providers.count)) != 0)
+			break;
+		for (i = 0; i < aspa->v->providers.count; i++)
+			if ((err = write_u32(file, aspa->v->providers.asids[i])) != 0)
+				break;
+	}
+
+	fclose(file);
+	return err;
+}
+
+static int
+cache_metadata(struct db_table *table)
+{
+	char *dir;
+	int error;
+
+	error = rtr_save_metadata(&table->rtr);
+	if (error) {
+		pr_op_err("Could not save RTR metadata; RTR can no longer be served.");
+		dir = rtr_filename(NULL, NULL);
+		file_rm_rf(dir);
+		free(dir);
+	}
+
+	return error;
+}
+
+static bool
+is_number(char const *str)
+{
+	if (*str == 0)
+		return false;
+
+	for (; *str != 0; str++)
+		if (*str < '0' || '9' < *str)
+			return false;
+
+	return true;
+}
+
+static void
+delete_old_serials(serial_t current)
+{
+	char *path;
+	serial_t lowest;
+	DIR *dir;
+	struct dirent *file;
+	unsigned long serial;
+	int ret;
+
+	lowest = current - ((serial_t)config_get_deltas_lifetime());
+
+	path = rtr_filename(NULL, NULL);
+	dir = opendir(path);
+	free(path);
+	if (!dir) {
+		if (errno != ENOENT)
+			pr_op_warn("Cannot clean rtr directory: %s",
+			    strerror(errno));
+		return;
+	}
+
+	FOREACH_DIR_FILE(dir, file) {
+		if (!is_number(file->d_name))
+			continue;
+
+		errno = 0;
+		serial = strtoul(file->d_name, NULL, 10);
+		if (errno) {
+			pr_op_warn("Cannot delete rtr/%s: %s",
+			    file->d_name, strerror(errno));
+			continue;
+		}
+		if (serial > UINT32_MAX) {
+			pr_op_warn("Cannot delete rtr/%s: Serial too big",
+			    file->d_name);
+			continue;
+		}
+
+		if (!serial_lt(serial, lowest))
+			continue;
+
+		path = rtr_filename2(serial, NULL);
+		ret = file_rm_rf(path);
+		free(path);
+		if (ret < 0)
+			pr_op_warn("Cannot delete rtr/%s: nftw returned %d",
+			    file->d_name, ret);
+		else if (ret)
+			pr_op_warn("Cannot delete rtr/%s: %s",
+			    file->d_name, strerror(ret));
+	}
+	if (errno)
+		pr_op_warn("Cleanup rtr directory traversal interrupted: %s",
+		    strerror(errno));
+
+	closedir(dir);
+}
+
+int
+db_table_cache(struct db_table *table)
+{
+	char *path;
+	int ret;
+
+	if (rtr_load_metadata(&table->rtr) != 0)
+		rtr_new_metadata(&table->rtr);
+	table->rtr.serial++;
+
+	path = rtr_filename(NULL, NULL);
+	ret = mkdir_f(path);
+	free(path);
+	if (ret)
+		return ret;
+
+	path = rtr_filename2(table->rtr.serial, NULL);
+	ret = mkdir_f(path);
+	free(path);
+	if (ret)
+		return ret;
+
+	ret = cache_vrps(table);
+	if (ret)
+		goto fail;
+	ret = cache_rks(table);
+	if (ret)
+		goto fail;
+	ret = cache_aspas(table);
+	if (ret)
+		goto fail;
+	ret = cache_metadata(table);
+	if (ret)
+		goto fail;
+	delete_old_serials(table->rtr.serial);
+
+	return 0;
+
+fail:	path = rtr_filename2(table->rtr.serial, NULL);
+	file_rm_rf(path);
+	free(path);
+	return ret;
+}
+
 int
 db_table_foreach_roa(struct db_table const *table, vrp_foreach_cb cb, void *arg)
 {
@@ -278,31 +634,43 @@ db_table_foreach_aspa(struct db_table const *table, aspa_foreach_cb cb,
 unsigned int
 db_table_roa_count(struct db_table *table)
 {
-	return HASH_COUNT(table->roas);
+	return table ? HASH_COUNT(table->roas) : 0;
 }
 
 unsigned int
 db_table_roa_count_v4(struct db_table *table)
 {
-	return table->total_roas_v4;
+	return table ? table->total_roas_v4 : 0;
 }
 
 unsigned int
 db_table_roa_count_v6(struct db_table *table)
 {
-	return table->total_roas_v6;
+	return table ? table->total_roas_v6 : 0;
 }
 
 unsigned int
 db_table_router_key_count(struct db_table *table)
 {
-	return HASH_COUNT(table->router_keys);
+	return table ? HASH_COUNT(table->router_keys) : 0;
 }
 
 unsigned int
 db_table_aspa_count(struct db_table *table)
 {
-	return HASH_COUNT(table->aspas);
+	return table ? HASH_COUNT(table->aspas) : 0;
+}
+
+uint16_t
+db_table_session(struct db_table *table)
+{
+	return table ? table->rtr.session : 0;
+}
+
+serial_t
+db_table_serial(struct db_table *table)
+{
+	return table ? table->rtr.serial : 0;
 }
 
 void
@@ -394,100 +762,4 @@ rtrhandler_handle_aspa(struct db_table *table, struct aspa *v)
 		aspa_refget(v);
 
 	return error;
-}
-
-/*
- * Copies `@roas1 - roas2` into @deltas.
- *
- * (Places the ROAs that exist in @roas1 but not in @roas2 in @deltas.)
- */
-static int
-add_roa_deltas(struct hashable_roa *roas1, struct hashable_roa *roas2,
-    struct deltas *deltas, int op, char r1type)
-{
-	struct hashable_roa *n1; /* A node from @roas1 */
-	struct hashable_roa *n2; /* A node from @roas2 */
-	struct hashable_roa *tmp;
-	unsigned int r;
-	unsigned int roa1_count;
-
-	r = 0;
-	roa1_count = HASH_COUNT(roas1);
-
-	HASH_ITER(hh, roas1, n1, tmp) {
-		HASH_FIND(hh, roas2, &n1->data, sizeof(n1->data), n2);
-		if (n2 == NULL)
-			deltas_add_roa(deltas, &n1->data, op, r1type, r,
-			    roa1_count);
-		r++;
-	}
-
-	return 0;
-}
-
-/*
- * Copies `@keys1 - keys2` into @deltas.
- *
- * (Places the Router Keys that exist in @keys1 but not in @key2 in @deltas.)
- */
-static void
-add_router_key_deltas(struct hashable_key *keys1, struct hashable_key *keys2,
-    struct deltas *deltas, int op)
-{
-	struct hashable_key *n1; /* A node from @keys1 */
-	struct hashable_key *n2; /* A node from @keys2 */
-
-	for (n1 = keys1; n1 != NULL; n1 = n1->hh.next) {
-		HASH_FIND(hh, keys2, &n1->data, sizeof(n1->data), n2);
-		if (n2 == NULL)
-			deltas_add_router_key(deltas, &n1->data, op);
-	}
-}
-
-static void
-add_aspa_announcements(struct hashable_aspa *old, struct hashable_aspa *new,
-    struct deltas *deltas)
-{
-	struct hashable_aspa *o, *n, *tmp;
-
-	HASH_ITER(hh, new, n, tmp) {
-		HASH_FIND(hh, old, &n->v->customer, sizeof(n->v->customer), o);
-		if (o == NULL || !providers_equal(&o->v->providers, &n->v->providers))
-			deltas_add_aspa(deltas, n->v, FLAG_ANNOUNCEMENT);
-	}
-}
-
-static void
-add_aspa_withdraws(struct hashable_aspa *old, struct hashable_aspa *new,
-    struct deltas *deltas)
-{
-	struct hashable_aspa *o, *n, *tmp;
-
-	HASH_ITER(hh, old, o, tmp) {
-		HASH_FIND(hh, new, &o->v->customer, sizeof(o->v->customer), n);
-		if (n == NULL)
-			deltas_add_aspa(deltas, o->v, FLAG_WITHDRAWAL);
-	}
-}
-
-struct deltas *
-compute_deltas(struct db_table *old, struct db_table *new)
-{
-	struct deltas *deltas = deltas_create();
-
-	add_roa_deltas(new->roas, old->roas, deltas, FLAG_ANNOUNCEMENT, 'n');
-	add_roa_deltas(old->roas, new->roas, deltas, FLAG_WITHDRAWAL, 'o');
-	add_router_key_deltas(new->router_keys, old->router_keys, deltas,
-	    FLAG_ANNOUNCEMENT);
-	add_router_key_deltas(old->router_keys, new->router_keys, deltas,
-	    FLAG_WITHDRAWAL);
-	add_aspa_announcements(old->aspas, new->aspas, deltas);
-	add_aspa_withdraws(old->aspas, new->aspas, deltas);
-
-	if (deltas_is_empty(deltas)) {
-		deltas_refput(deltas);
-		return NULL;
-	}
-
-	return deltas;
 }

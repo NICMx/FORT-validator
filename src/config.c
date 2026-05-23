@@ -428,8 +428,12 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, server.deltas_lifetime),
 		.doc = "Number of iterations the deltas will be stored.",
-		.min = 0,
-		.max = UINT_MAX,
+		.min = 1,
+		/*
+		 * It's a serial, which means the technical maximum is about
+		 * 2^31 - 1. But that's too much.
+		 */
+		.max = 1000,
 	},
 
 	/* Prometheus fields */
