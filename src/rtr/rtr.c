@@ -682,6 +682,8 @@ rtr_start(void)
 {
 	int error;
 
+	rtridx_expire();
+
 	server_arraylist_init(&servers);
 	client_arraylist_init(&clients);
 

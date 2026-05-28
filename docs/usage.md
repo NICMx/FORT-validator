@@ -456,12 +456,14 @@ See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 2
-- **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
+- **Default:** 21600 (6 hours)
+- **Range:** [1, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
-When routers first connect to Fort, they request a _snapshot_ of the validation results. (ROAs and Router Keys.) Because they need to keep their validated objects updated, and snapshots tend to be relatively large amounts of information, they request _deltas_ afterwards over configurable intervals. ("Deltas" being the differences between snapshots.)
+RTR delta lifetime, measured in validation cycles.
 
-During each validation cycle, Fort generates a new snapshot, as well as the deltas needed to build the new snapshot from the previous one. These are all stored in RAM. `--server.deltas.lifetime` is the number of iterations a set of deltas will be kept before being deallocated. (Recall that every iteration lasts [`--server.interval.validation`](#--serverintervalvalidation) seconds, plus however long the validation takes.)
+When routers first connect to Fort, they request a _snapshot_ of the validation results. (ROAs, Router Keys and ASPAs.) Because they need to keep their validated objects updated, and snapshots tend to be relatively large amounts of information, they request _deltas_ afterwards over configurable intervals. ("Deltas" being the differences between snapshots.)
+
+Fort stores the information necessary to serve these deltas in the cache. `--server.deltas.lifetime` is the number of validation cycles a delta will be preserved before being expired.
 
 If a router lags behind, to the point Fort has already deleted the deltas it needs to update the router's snapshot, Fort will have to fall back to fetch the entire latest snapshot instead.
 

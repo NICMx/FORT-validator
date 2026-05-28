@@ -370,7 +370,11 @@ static const struct option_field options[] = {
 		 * minute.
 		 */
 		.min = 60,
-		.max = UINT_MAX,
+		/*
+		 * 7 days.
+		 * Must not overflow when multiplied by deltas.lifetime.
+		 */
+		.max = 604800,
 	}, {
 		.id = 5004,
 		.name = "server.interval.refresh",
@@ -432,6 +436,7 @@ static const struct option_field options[] = {
 		/*
 		 * It's a serial, which means the technical maximum is about
 		 * 2^31 - 1. But that's too much.
+		 * Must not overflow when multiplied by interval.validation.
 		 */
 		.max = 1000,
 	},
@@ -1012,7 +1017,7 @@ set_default_values(void)
 	rpki_config.server.interval.refresh = 3600;
 	rpki_config.server.interval.retry = 600;
 	rpki_config.server.interval.expire = 7200;
-	rpki_config.server.deltas_lifetime = 2;
+	rpki_config.server.deltas_lifetime = 6;
 
 	rpki_config.prometheus.port = 0;
 

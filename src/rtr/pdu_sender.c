@@ -92,6 +92,8 @@ send_serial_notify_pdu(int fd, uint8_t version, struct rtr_metadata *meta)
 	unsigned char data[RTRPDU_SERIAL_NOTIFY_LEN];
 	unsigned char *buf;
 
+	pr_op_debug("Sending Serial Notify PDU.");
+
 	buf = serialize_hdr(data, version, type, meta->session, len);
 	buf = write_uint32(buf, meta->serial);
 
@@ -105,8 +107,8 @@ send_cache_reset_pdu(int fd, uint8_t version)
 	static const uint32_t len = RTRPDU_CACHE_RESET_LEN;
 	unsigned char data[RTRPDU_CACHE_RESET_LEN];
 
+	pr_op_debug("Sending Cache Reset PDU.");
 	serialize_hdr(data, version, type, 0, len);
-
 	return send_response(fd, type, data, len);
 }
 
@@ -117,8 +119,8 @@ send_cache_response_pdu(int fd, uint8_t version, uint16_t session)
 	static const uint32_t len = RTRPDU_CACHE_RESPONSE_LEN;
 	unsigned char data[RTRPDU_CACHE_RESPONSE_LEN];
 
+	pr_op_debug("Sending Cache Response PDU.");
 	serialize_hdr(data, version, type, session, len);
-
 	return send_response(fd, type, data, len);
 }
 
@@ -165,6 +167,8 @@ send_ipv6_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp,
 int
 send_prefix_pdu(int fd, uint8_t version, struct vrp const *vrp, uint8_t flags)
 {
+	pr_op_debug("Sending Prefix PDU.");
+
 	switch (vrp->addr_fam) {
 	case AF_INET:
 		return send_ipv4_prefix_pdu(fd, version, vrp, flags);
@@ -187,6 +191,8 @@ send_router_key_pdu(int fd, uint8_t version,
 	if (version < RTR_V1)
 		return 0;
 
+	pr_op_debug("Sending RK PDU.");
+
 	buf = serialize_hdr(data, version, type, flags << 8, len);
 	memcpy(buf, router_key->ski, sizeof(router_key->ski));
 	buf += sizeof(router_key->ski);
@@ -208,6 +214,8 @@ send_aspa_announce_pdu(int fd, uint8_t version, struct aspa const *aspa)
 
 	if (version < RTR_V2)
 		return 0;
+
+	pr_op_debug("Sending ASPA announcement PDU.");
 
 	bufsize = 12 + 4 * aspa->providers.count;
 	if (bufsize > 1024)
@@ -246,6 +254,8 @@ send_aspa_withdraw_pdu(int fd, uint8_t version, uint32_t customer)
 	unsigned char data[12];
 	unsigned char *buf;
 
+	pr_op_debug("Sending ASPA withdraw PDU.");
+
 	buf = serialize_hdr(data, version, type, FLAG_WITHDRAWAL << 8, 12);
 	write_uint32(buf, customer);
 
@@ -263,6 +273,8 @@ send_end_of_data_pdu(int fd, uint8_t version, uint16_t session, serial_t serial)
 	];
 	unsigned char *buf;
 	uint32_t len;
+
+	pr_op_debug("Sending End of Data PDU.");
 
 	switch (version) {
 	case RTR_V0:
@@ -313,6 +325,8 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 	size_t error_msg_len;
 	size_t len;
 	int error;
+
+	pr_op_debug("Sending error PDU: %s", message);
 
 	error_pdu_len = compute_error_pdu_len(request);
 	error_msg_len = (message != NULL) ? strlen(message) : 0;

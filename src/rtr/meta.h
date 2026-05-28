@@ -2,6 +2,8 @@
 #define SRC_RTR_META_H_
 
 #include <stdio.h>
+#include <time.h>
+#include <sys/queue.h>
 #include "types/serial.h"
 
 struct rtr_metadata {
@@ -21,12 +23,35 @@ struct rtr_metadata {
 	serial_t serial;
 };
 
+struct rtr_serial {
+	serial_t serial;
+	struct tm date;
+	struct rtr_serial *next;
+};
+
+struct rtr_index {
+	uint16_t session;
+	/*
+	 * Linked list; sorted from newest to oldest.
+	 *
+	 * Can't use SLIST because clean() and expire() want safe traversal
+	 * with cursor removals.
+	 */
+	struct rtr_serial *serials;
+};
+
 char *rtr_filename(char const *, char const *);
 char *rtr_filename2(serial_t, char const *);
 
-void rtr_new_metadata(struct rtr_metadata *);
-int rtr_save_metadata(struct rtr_metadata *);
-int rtr_load_metadata(struct rtr_metadata *);
+void rtridx_init(struct rtr_index *);
+int rtridx_save(struct rtr_index *);
+int rtridx_load(struct rtr_index *, bool);
+serial_t rtridx_add_serial(struct rtr_index *);
+void rtridx_cleanup(struct rtr_index *);
+void rtridx_print(struct rtr_index *);
+
+void rtridx_clean(struct rtr_index *);
+void rtridx_expire(void);
 
 int rtr_serial_stat(serial_t serial);
 

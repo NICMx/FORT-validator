@@ -127,7 +127,7 @@ file_exists(char const *path)
 static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
-	pr_op_debug("Deleting %s.", fpath);
+	pr_op_debug("Deleting %s", fpath);
 	return (remove(fpath) != 0) ? errno : 0;
 }
 
@@ -135,6 +135,7 @@ rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 int
 file_rm_rf(char const *path)
 {
+	pr_op_debug("rm -rf %s", path);
 	/* TODO (performance) optimize that 32 */
 	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
 }

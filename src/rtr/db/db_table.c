@@ -36,7 +36,7 @@ struct db_table {
 	unsigned int total_roas_v4;
 	unsigned int total_roas_v6;
 
-	struct rtr_metadata rtr;
+	struct rtr_index rtr;
 };
 
 struct db_table *
@@ -70,6 +70,8 @@ db_table_destroy(struct db_table *table)
 		aspa_refput(aspa->v);
 		free(aspa);
 	}
+
+	rtridx_cleanup(&table->rtr);
 
 	free(table);
 }
@@ -361,7 +363,7 @@ write_addr(FILE *file, struct vrp *vrp)
 }
 
 static int
-cache_vrps(struct db_table *table)
+cache_vrps(struct db_table *table, serial_t serial)
 {
 	FILE *f4 = NULL;
 	FILE *f6 = NULL;
@@ -370,10 +372,10 @@ cache_vrps(struct db_table *table)
 	struct vrp *vrp;
 	int err;
 
-	err = rtr_open_file(table->rtr.serial, "vrp4", "w", &f4);
+	err = rtr_open_file(serial, "vrp4", "w", &f4);
 	if (err)
 		return err;
-	err = rtr_open_file(table->rtr.serial, "vrp6", "w", &f6);
+	err = rtr_open_file(serial, "vrp6", "w", &f6);
 	if (err)
 		goto end;
 
@@ -402,13 +404,13 @@ end:	if (f4) fclose(f4);
 }
 
 static int
-cache_rks(struct db_table *table)
+cache_rks(struct db_table *table, serial_t serial)
 {
 	FILE *file = NULL;
 	struct hashable_key *rk, *tmpr;
 	int err;
 
-	err = rtr_open_file(table->rtr.serial, "rk", "w", &file);
+	err = rtr_open_file(serial, "rk", "w", &file);
 	if (err)
 		return err;
 
@@ -426,14 +428,14 @@ cache_rks(struct db_table *table)
 }
 
 static int
-cache_aspas(struct db_table *table)
+cache_aspas(struct db_table *table, serial_t serial)
 {
 	FILE *file = NULL;
 	struct hashable_aspa *aspa, *tmpa;
 	array_index i;
 	int err;
 
-	err = rtr_open_file(table->rtr.serial, "aspa", "w", &file);
+	err = rtr_open_file(serial, "aspa", "w", &file);
 	if (err)
 		return err;
 
@@ -457,7 +459,7 @@ cache_metadata(struct db_table *table)
 	char *dir;
 	int error;
 
-	error = rtr_save_metadata(&table->rtr);
+	error = rtridx_save(&table->rtr);
 	if (error) {
 		pr_op_err("Could not save RTR metadata; RTR can no longer be served.");
 		dir = rtr_filename(NULL, NULL);
@@ -468,117 +470,52 @@ cache_metadata(struct db_table *table)
 	return error;
 }
 
-static bool
-is_number(char const *str)
-{
-	if (*str == 0)
-		return false;
-
-	for (; *str != 0; str++)
-		if (*str < '0' || '9' < *str)
-			return false;
-
-	return true;
-}
-
-static void
-delete_old_serials(serial_t current)
-{
-	char *path;
-	serial_t lowest;
-	DIR *dir;
-	struct dirent *file;
-	unsigned long serial;
-	int ret;
-
-	lowest = current - ((serial_t)config_get_deltas_lifetime());
-
-	path = rtr_filename(NULL, NULL);
-	dir = opendir(path);
-	free(path);
-	if (!dir) {
-		if (errno != ENOENT)
-			pr_op_warn("Cannot clean rtr directory: %s",
-			    strerror(errno));
-		return;
-	}
-
-	FOREACH_DIR_FILE(dir, file) {
-		if (!is_number(file->d_name))
-			continue;
-
-		errno = 0;
-		serial = strtoul(file->d_name, NULL, 10);
-		if (errno) {
-			pr_op_warn("Cannot delete rtr/%s: %s",
-			    file->d_name, strerror(errno));
-			continue;
-		}
-		if (serial > UINT32_MAX) {
-			pr_op_warn("Cannot delete rtr/%s: Serial too big",
-			    file->d_name);
-			continue;
-		}
-
-		if (!serial_lt(serial, lowest))
-			continue;
-
-		path = rtr_filename2(serial, NULL);
-		ret = file_rm_rf(path);
-		free(path);
-		if (ret < 0)
-			pr_op_warn("Cannot delete rtr/%s: nftw returned %d",
-			    file->d_name, ret);
-		else if (ret)
-			pr_op_warn("Cannot delete rtr/%s: %s",
-			    file->d_name, strerror(ret));
-	}
-	if (errno)
-		pr_op_warn("Cleanup rtr directory traversal interrupted: %s",
-		    strerror(errno));
-
-	closedir(dir);
-}
-
 int
 db_table_cache(struct db_table *table)
 {
 	char *path;
+	serial_t serial;
 	int ret;
 
-	if (rtr_load_metadata(&table->rtr) != 0)
-		rtr_new_metadata(&table->rtr);
-	table->rtr.serial++;
+	ret = rtridx_load(&table->rtr, true);
+	if (ret == ENOENT)
+		rtridx_init(&table->rtr);
+	else if (ret) {
+		pr_op_err("Cannot access RTR index file: %s", strerror(ret));
+		return ret;
+	}
 
-	path = rtr_filename(NULL, NULL);
+	serial = rtridx_add_serial(&table->rtr);
+
+	path = rtr_filename(NULL, NULL); /* cache/rtr */
 	ret = mkdir_f(path);
 	free(path);
 	if (ret)
 		return ret;
 
-	path = rtr_filename2(table->rtr.serial, NULL);
+	path = rtr_filename2(serial, NULL); /* cache/rtr/1234 */
 	ret = mkdir_f(path);
 	free(path);
 	if (ret)
 		return ret;
 
-	ret = cache_vrps(table);
+	ret = cache_vrps(table, serial);
 	if (ret)
 		goto fail;
-	ret = cache_rks(table);
+	ret = cache_rks(table, serial);
 	if (ret)
 		goto fail;
-	ret = cache_aspas(table);
+	ret = cache_aspas(table, serial);
 	if (ret)
 		goto fail;
 	ret = cache_metadata(table);
 	if (ret)
 		goto fail;
-	delete_old_serials(table->rtr.serial);
+	rtridx_clean(&table->rtr);
 
 	return 0;
 
-fail:	path = rtr_filename2(table->rtr.serial, NULL);
+fail:	path = rtr_filename2(serial, NULL);
 	file_rm_rf(path);
 	free(path);
 	return ret;
@@ -670,7 +607,7 @@ db_table_session(struct db_table *table)
 serial_t
 db_table_serial(struct db_table *table)
 {
-	return table ? table->rtr.serial : 0;
+	return (table && table->rtr.serials) ? table->rtr.serials->serial : 0;
 }
 
 void

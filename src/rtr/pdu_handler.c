@@ -229,6 +229,27 @@ send_aspas(int fd, uint8_t ver, serial_t serial)
 	return error;
 }
 
+static int
+load_rtr_metadata(struct rtr_metadata *rtr)
+{
+	struct rtr_index idx;
+	int error;
+
+	error = rtridx_load(&idx, false);
+	if (error)
+		return error;
+	if (idx.serials == NULL) {
+		error = ENOENT;
+		goto end;
+	}
+
+	rtr->session = idx.session;
+	rtr->serial = idx.serials->serial;
+
+end:	rtridx_cleanup(&idx);
+	return error;
+}
+
 int
 handle_reset_query_pdu(struct rtr_request *request)
 {
@@ -242,7 +263,7 @@ handle_reset_query_pdu(struct rtr_request *request)
 	stream.fd = request->fd;
 	stream.ver = request->pdu.rtr_version;
 
-	error = rtr_load_metadata(&rtr);
+	error = load_rtr_metadata(&rtr);
 	switch (error) {
 	case 0:
 		break;
@@ -493,7 +514,7 @@ handle_serial_query_pdu(struct rtr_request *request)
 	stream.fd = request->fd;
 	stream.ver = request->pdu.rtr_version;
 
-	error = rtr_load_metadata(&rtr);
+	error = load_rtr_metadata(&rtr);
 	switch (error) {
 	case 0:      break;
 	case ENOENT: return err_pdu_send_no_data_available(stream.fd, stream.ver);
@@ -519,6 +540,8 @@ handle_serial_query_pdu(struct rtr_request *request)
 	case ENOENT: return send_cache_reset_pdu(stream.fd, stream.ver);
 	default:     goto internal_error;
 	}
+
+	pr_op_debug("Sending RTR delta: %u-%u", oserial, nserial);
 
 	error = send_cache_response_pdu(stream.fd, stream.ver, rtr.session);
 	if (error)
