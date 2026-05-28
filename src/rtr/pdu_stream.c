@@ -32,20 +32,6 @@ struct pdu_stream {
 	/* buffer's active bytes */
 	unsigned char *start;
 	unsigned char *end;
-
-	/*
-	 * Negotiated session.
-	 * We need this mess because the RTR RFCs specify that, if the client
-	 * changes the session out of nowhere, we have to respond a Corrupt Data
-	 * Error PDU instead of the usual Cache Reset.
-	 * The routine that decides the session is the Reset Query handler, but
-	 * the PDU stream is the only structure that can remember it, and it
-	 * lives in a separate thread.
-	 * FML.
-	 */
-	pthread_mutex_t session_lock;
-	bool session_set;
-	uint16_t session;
 };
 
 struct pdu_header {
@@ -62,18 +48,11 @@ struct pdu_header {
 struct pdu_stream *pdustream_create(int fd, char const *addr)
 {
 	struct pdu_stream *result;
-	int error;
 
 	result = pmalloc(sizeof(struct pdu_stream));
 	result->fd = fd;
 	strcpy(result->addr, addr);
 	result->rtr_version = -1;
-
-	error = pthread_mutex_init(&result->session_lock, NULL);
-	if (error)
-		pr_crit("pthread_mutex_init() failed: %s", strerror(error));
-	result->session_set = false;
-	result->session = 0;
 
 	result->start = result->buffer;
 	result->end = result->buffer;
@@ -85,7 +64,6 @@ void
 pdustream_destroy(struct pdu_stream **_stream)
 {
 	struct pdu_stream *stream = *_stream;
-	pthread_mutex_destroy(&stream->session_lock);
 	close(stream->fd);
 	free(stream);
 }
@@ -630,34 +608,6 @@ int
 pdustream_version(struct pdu_stream *stream)
 {
 	return stream->rtr_version;
-}
-
-bool
-pdustream_get_session(struct pdu_stream *stream, uint16_t *session, uint16_t proposal)
-{
-	bool set;
-
-	mutex_lock(&stream->session_lock);
-	if (stream->session_set) {
-		set = true;
-		*session = stream->session;
-	} else {
-		set = false;
-		stream->session_set = true;
-		stream->session = proposal;
-	}
-	mutex_unlock(&stream->session_lock);
-
-	return set;
-}
-
-void
-pdustream_set_session(struct pdu_stream *stream, uint16_t session)
-{
-	mutex_lock(&stream->session_lock);
-	stream->session_set = true;
-	stream->session = session;
-	mutex_unlock(&stream->session_lock);
 }
 
 void

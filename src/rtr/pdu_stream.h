@@ -43,9 +43,6 @@ int pdustream_fd(struct pdu_stream *);
 char const *pdustream_addr(struct pdu_stream *);
 int pdustream_version(struct pdu_stream *);
 
-bool pdustream_get_session(struct pdu_stream *, uint16_t *, uint16_t);
-void pdustream_set_session(struct pdu_stream *, uint16_t);
-
 void rtreq_destroy(struct rtr_request *);
 
 #endif /* SRC_RTR_PDU_STREAM_H_ */
