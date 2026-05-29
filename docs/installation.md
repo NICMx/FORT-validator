@@ -11,34 +11,24 @@ description: Guide to compile and install FORT Validator.
 2. [Option 1: Installing the package](#option-1-installing-the-package)
 	1. [Debian package](#debian-package)
 	2. [FreeBSD package](#freebsd-package)
-	3. [Gentoo package](#gentoo-package)
-	4. [RHEL/CentOS package](#rhelcentos-package)
+	3. [RHEL package](#rhel-package)
 3. [Option 2: Compiling and installing the release tarball](#option-2-compiling-and-installing-the-release-tarball)
-	1. [Debian version](#debian-version)
-	2. [OpenBSD version](#openbsd-version)
-	3. [RHEL/CentOS version](#rhelcentos-version)
-	4. [Fedora version](#fedora-version)
-	5. [openSUSE Leap version](#opensuse-leap-version)
-	6. [FreeBSD version](#freebsd-version)
-	7. [Slackware version](#slackware-version)
-	8. [Gentoo version](#gentoo-version)
-	9. [Alpine version](#alpine-version)
-	10. [Rocky Linux 9](#rocky-linux-9)
+	1. [Debian](#debian)
+	2. [OpenBSD](#openbsd)
+	3. [RHEL](#rhel)
+	4. [FreeBSD](#freebsd)
 4. [Option 3: Compiling and installing the git repository](#option-3-compiling-and-installing-the-git-repository)
-5. [Option 4: Running from a Docker container](#option-4-running-from-a-docker-container)
+5. [Option 4: Docker container](#option-4-docker-container)
 6. [Fetching the TALs](#fetching-the-tals)
 
 ## Dependencies
-
-> Note: This section is included in case you intend to install Fort in an unlisted OS (and therefore need a little research). For Debians, OpenBSD, RHEL/CentOS, Fedora, openSUSE Leap, FreeBSD, and Slackware just follow the steps in the sections below.
-
-The dependencies are
 
 1. [jansson](http://www.digip.org/jansson/)
 2. libcrypto (Either [LibreSSL](http://www.libressl.org/) or [OpenSSL](https://www.openssl.org/) >= 1.1)
 3. [rsync](http://rsync.samba.org/)
 4. [libcurl](https://curl.haxx.se/libcurl/)
 5. [libxml2](http://www.xmlsoft.org/)
+6. [libmicrohttpd](https://www.gnu.org/software/libmicrohttpd/)
 
 Fort currently supports *64-bit* Operating Systems. A 32-bit OS may face the [Year 2038 problem](https://en.wikipedia.org/wiki/Year_2038_problem) when handling certificate dates, and there's no workaround for this at the moment.
 
@@ -46,189 +36,98 @@ Fort currently supports *64-bit* Operating Systems. A 32-bit OS may face the [Ye
 
 ### Debian package
 
-Currently, there are 2 alternatives to install a debian package:
-- [Latest version](#latest-version): this package is created as part of the latest release (currently {{ site.fort-latest-version }}) and is manually installed.
-- [Debian repository version](#debian-repository-version): this package is at Debian repositories, so it can be fetched from there.
+Last tested in Debian 12:
 
-#### Latest version
-
-Just download the .deb package and install it. The fort service is automatically started once the installation is done.
-
-{% highlight bash %}
+```bash
 wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort_{{ site.fort-latest-version }}-1_amd64.deb
 sudo apt install ./fort_{{ site.fort-latest-version }}-1_amd64.deb
-{% endhighlight %}
+```
 
-> If a dependency can't be found at the repositories (i.e. libcurl4), try using a newer repository, such as Debian Buster.
-> 
-> Add the following line to `/etc/apt/sources.list`, replacing the mirror (_http://ftp.mx.debian.org/debian_) with your [preferred one](https://www.debian.org/mirror/list):
-> 
-> `deb http://ftp.mx.debian.org/debian buster main`
+The Debian package includes a systemd service that kicks off automatically after installation:
 
-This version ships with 4 of the 5 TALs, so in order to get the missing one, the [`--init-tals` argument](#--init-tals-argument) can be utilized using also the argument `--tal=/etc/fort/tal`:
+```bash
+$ service fort status
+● fort.service - FORT RPKI validator
+     Loaded: loaded (/lib/systemd/system/fort.service; enabled; preset: enabled)
+     Active: active (running) since Wed 2025-09-17 10:12:26 CDT; 1min 39s ago
+       Docs: man:fort(8)
+             https://nicmx.github.io/FORT-validator/
+   Main PID: 690 (fort)
+      Tasks: 29 (limit: 1093)
+     Memory: 608.6M
+        CPU: 22.960s
+     CGroup: /system.slice/fort.service
+             ├─690 /usr/bin/fort --configuration-file /etc/fort/config.json
+             ├─741 rsync -rtz --delete --omit-dir-times --contimeout=20 --max-size=20MB --timeout=15 "--include=*/" "--include=*.cer" "--include=>
+             └─743 rsync -rtz --delete --omit-dir-times --contimeout=20 --max-size=20MB --timeout=15 "--include=*/" "--include=*.cer" "--include=>
 
-{% highlight bash %}
-sudo fort --init-tals --tal=/etc/fort/tal
-# Don't forget to restart fort service
-sudo service fort restart
-{% endhighlight %}
+Sep 17 10:12:26 debian12 systemd[1]: Started fort.service - FORT RPKI validator.
+```
 
-Aside from the `fort` binary documented elsewhere in this documentation, the Debian package also ships with a systemd service, which is just the binary ran as a daemon. You can [configure](usage.html#--configuration-file) it at `/etc/fort/config.json`.
+You can [configure](usage.html#--configuration-file) it at `/etc/fort/config.json`.
 
-{% highlight bash %}
-sudo service fort start
-service fort status
-tail /var/log/syslog
-sudo service fort stop
-{% endhighlight %}
+There's also a version [available in the official Debian repositories](https://tracker.debian.org/pkg/fort-validator), though it's not maintained by the Fort team. Fetch it like a normal package:
 
-Or, using systemctl:
-
-{% highlight bash %}
-sudo systemctl start fort
-systemctl status fort
-sudo systemctl stop fort
-
-# In case you don't need to run fort on start
-sudo systemctl disable fort
-sudo systemctl enable fort
-{% endhighlight %}
-
-#### Debian repository version
-
-Special thanks to [Marco d'Itri](https://github.com/rfc1036) for this collaboration.
-
-To know the current status of this package, visit [`fort-validator` debian package tracker](https://tracker.debian.org/pkg/fort-validator).
-
-The main differences between this version (fort-validator package) and the [Latest version](#latest-version) package are:
-- [`rpki-trust-anchors`](https://tracker.debian.org/pkg/rpki-trust-anchors) dependency: this package has such dependency, while [Latest version](#latest-version) doesn't.
-- Since this package isn't maintained by FORT validator's team, it could be at least one version behind than [Latest version](#latest-version).
-- This version reads the TALs from `/etc/tals`, while [Latest version](#latest-version) reads them from `/etc/fort/tal`.
-
-Assuming that the package is still at the `testing` repository, such repository can be added to the APT sources list in order to do a simple `apt install`.
-
-First, check if the file `/etc/apt/apt.conf` exists, otherwise create it. The file should have the following line to keep using the stable repository as the default:
-
-{% highlight bash %}
-APT::Default-Release "stable";
-{% endhighlight %}
-
-Now add the Debian `testing` repositories, add the following lines to `/etc/apt/sources.list`:
-
-{% highlight bash %}
-deb http://deb.debian.org/debian/ testing main
-deb-src http://deb.debian.org/debian/ testing main
-{% endhighlight %}
-
-Finally, just run:
-
-{% highlight bash %}
-sudo apt update
-sudo apt -t testing install fort-validator
-{% endhighlight %}
-
-FORT validator is now installed as a service, check the status with `sudo service fort start`.
+```bash
+sudo apt install fort-validator
+```
 
 ### FreeBSD package
 
 FORT Validator is available in the FreeBSD ports tree since October 2021.  The port maintainer closely follows the development of FORT.  Updates to the FreeBSD port appear shortly after FORT releases.  Binary packages can be installed in the usual way:
 
-{% highlight bash %}
+```bash
 pkg install fort
-{% endhighlight %}
+```
 
 If you prefer to build software from ports, this works too:
 
-{% highlight bash %}
+```bash
 cd /usr/ports/net/fort
 make install clean
-{% endhighlight %}
+```
 
 A default configuration will be installed in `/usr/local/etc/fort/fort-config.json`.  The package is careful not to overwrite an existing configuration.
 
 To use FORT on FreeBSD, you will need the Trust Anchor Locator (TAL) files.  You can download these by running `fort --init-tals` as follows:
 
-{% highlight bash %}
+```bash
 fort --init-tals --tal /usr/local/etc/fort/tal
-{% endhighlight %}
+```
 
 When you have downloaded the TAL files, you can start the RTR server and validator with the included service script:
 
-{% highlight bash %}
+```bash
 sysrc fort_enable=YES # or edit /etc/rc.conf manually
 service fort start
-{% endhighlight %}
+```
 
 The default configuration will bind the RTR server to localhost on port 8323.
 
-### Gentoo package
+### RHEL package
 
-Thanks to [@alarig](https://github.com/alarig) for [his collaboration](https://github.com/NICMx/FORT-validator/issues/23) creating this package.
-
-> ![img/warn.svg](img/warn.svg) The package is currently at the [GURU repository](https://wiki.gentoo.org/wiki/Project:GURU), it could be at least one version behind the latest version, so please check first which version is the latest at the repository '[net-misc/FORT-validator](https://gitweb.gentoo.org/repo/proj/guru.git/tree/net-misc/FORT-validator)'.
-
-Layman will be utilized, so it must be installed in order to add the GURU repository:
+Last tested in Rocky 8.9 and 9.3:
 
 ```bash
-root# emerge --ask app-portage/layman
-root# layman -a guru
+curl -O https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
+sudo dnf install fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
 ```
 
-Now, allow to install the unstable FORT validator package (use according to your architecture). The following lines can be used for **amd64** arch:
+The FORT validator service is not started by default:
 
 ```bash
-root# nano /etc/portage/package.accept_keywords
-## Add the following line and save
-net-misc/FORT-validator ~amd64
-```
-
-FORT validator can now be installed. Don't forget to update the TALs and restart the validator:
-
-```bash
-root# emerge --ask net-misc/FORT-validator
-root# su -s /bin/sh -c '/usr/bin/fort --init-tals --tal /usr/share/fort/tal/' fort"
-root# rc-service fort restart
-```
-
-The configuration file utilized by the service can be found at `/etc/fort/config.json` (see more about [configuration file](usage.html#--configuration-file)).
-
-### RHEL/CentOS package
-
-> **RHEL/CentOS 7** users: the EPEL repository must be enabled to successfully install FORT validator.
->
-> The following command will do: `sudo yum install epel-release`
-
-Download the .rpm and install it (currently tested at CentOS 7 and 8):
-
-{% highlight bash %}
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
-sudo yum install fort-{{ site.fort-latest-version }}-1.el8.x86_64.rpm
-{% endhighlight %}
-
-This version ships with 4 of the 5 TALs, so in order to get the missing one, the [`--init-tals` argument](#--init-tals-argument) can be utilized using also the argument `--tal=/etc/fort/tal`:
-
-{% highlight bash %}
-sudo fort --init-tals --tal=/etc/fort/tal
-{% endhighlight %}
-
-By default, FORT validator service isn't initialized once it's installed; so, initialize the service:
-
-{% highlight bash %}
 sudo systemctl start fort
-systemctl status fort
+```
 
-# In case you want to stop it
-sudo systemctl stop fort
-{% endhighlight %}
-
-The configuration file utilized by the service can be found at `/etc/fort/config.json` (see more about [configuration file](usage.html#--configuration-file)).
+Configuration at [`/etc/fort/config.json`](usage.html#--configuration-file).
 
 ## Option 2: Compiling and installing the release tarball
 
-### Debian version
+### Debian
 
-{% highlight bash %}
-sudo apt install autoconf automake build-essential libjansson-dev libssl-dev pkg-config rsync libcurl4-openssl-dev libxml2-dev
+```bash
+sudo apt install -y build-essential pkg-config rsync libjansson-dev \
+	libssl-dev libcurl4-openssl-dev libxml2-dev libmicrohttpd-dev
 
 wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
@@ -236,114 +135,55 @@ cd fort-{{ site.fort-latest-version }}/
 ./configure
 make
 sudo make install
-{% endhighlight %}
+```
 
-### OpenBSD version
+Last tested in Debian 12.12.
 
-{% highlight bash %}
+### OpenBSD
+
+```bash
 su
-pkg_add curl jansson libexecinfo rsync libxml # OpenBSD already ships with LibreSSL
+pkg_add curl jansson rsync libmicrohttpd libxml
 exit
 
 ftp https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
-# clang is needed because of gnu11.
-env CC=clang CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ./configure
+./configure
 make
 su
 make install
 exit
-{% endhighlight %}
+```
 
-Last tested on OpenBSD 7.2.
+Last tested in OpenBSD 7.7.
 
-### RHEL/CentOS version
+### RHEL
 
-#### RHEL/CentOS 8
+```bash
+# Needed by crb enable.
+sudo dnf install -y epel-release
+# Needed by libmicrohttpd-devel.
+# In rockylinux9, it's also needed by jansson-devel.
+sudo crb enable
 
-The following steps are for RHEL/CentOS 8.
-
-{% highlight bash %}
-sudo dnf install autoconf automake gcc jansson-devel libcurl-devel libxml2-devel make openssl-devel pkgconfig rsync tar wget
+sudo dnf install -y gcc make pkgconfig rsync jansson-devel \
+	openssl-devel libcurl-devel libxml2-devel libmicrohttpd-devel
 
 wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
+tar xzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
 ./configure
 make
 sudo make install
-{% endhighlight %}
+```
 
-#### RHEL/CentOS 7
+Last tested in rockylinux 8.9 and 9.3.
 
-The following steps are for RHEL/CentOS 7.
+### FreeBSD
 
-This OS requires additional steps due to its default GCC version (currently 4.8.5, fort needs >= 4.9) and its default OpenSSL version (currently 1.0.2k, fort needs >= 1.1.0).
-
-**Upgrade OpenSSL from 1.0.2k to 1.1.1c**
-
-There are two options to upgrade OpenSSL:
-1. Compile and install a newer version >= 1.1.0 (manual process).
-2. Use the [EPEL](https://fedoraproject.org/wiki/EPEL) repository (indicated at the following steps).
-
-**Upgrade GCC**
-
-There are two options to upgrade GCC:
-1. Compile and install a newer version >= 4.9 (slow process).
-2. Use [Software Collections](https://www.softwarecollections.org) (indicated at the following steps).
-
-{% highlight bash %}
-sudo yum install centos-release-scl epel-release
-sudo yum install autoconf automake devtoolset-8-gcc jansson-devel libcurl-devel libxml2-devel make openssl11-devel pkgconfig rsync tar wget
-# Start a session using the upgraded GCC
-scl enable devtoolset-8 bash
-cd ~
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}/
-# Insert paths from newer OpenSSL version
-export CFLAGS+=" $(pkg-config --cflags openssl11)" LDFLAGS+=" $(pkg-config --libs openssl11)"
-./configure
-make
-sudo make install
-# Close the 'devtoolset' session
-exit
-{% endhighlight %}
-
-### Fedora version
-
-The following steps are for Fedora 30 (and later).
-
-{% highlight bash %}
-sudo dnf install autoconf automake gcc jansson-devel libcurl-devel libxml2-devel make openssl-devel pkgconfig rsync tar wget
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}/
-./configure
-make
-sudo make install
-{% endhighlight %}
-
-### openSUSE Leap version
-
-The following steps are for openSUSE Leap 15.1.
-
-{% highlight bash %}
-sudo zypper install autoconf automake gcc libopenssl-devel libjansson-devel libcurl-devel libxml2-devel
-
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}/
-./configure
-make
-sudo make install
-{% endhighlight %}
-
-### FreeBSD version
-
-{% highlight bash %}
-sudo pkg install autotools curl jansson pkgconf rsync libxml2
+```bash
+sudo pkg install autotools curl jansson pkgconf rsync libxml2 libmicrohttpd
 fetch https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
 tar xzf fort-{{ site.fort-latest-version }}.tar.gz
 cd fort-{{ site.fort-latest-version }}/
@@ -352,119 +192,46 @@ export CFLAGS=-I/usr/local/include
 ./configure
 make
 sudo make install
-{% endhighlight %}
-
-Last tested on FreeBSD 13.1.
-
-### Slackware version
-
-The following steps are for Slackware "current" release (as of 2020-07-13).
-
-All dependencies are included in the current release, so there's no need to install any dependency.
-
-{% highlight bash %}
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}/
-./configure
-make
-sudo make install
-{% endhighlight %}
-
-### Gentoo version
-
-The following steps are for Gentoo "current" release (as of 2020-07-13).
-
-It's very likely that most of the dependencies are already installed (except `dev-libs/jansson`), still you can execute the following commands.
-
-{% highlight bash %}
-su
-emerge sys-devel/autoconf sys-devel/automake net-misc/rsync net-misc/curl dev-libs/jansson 
-exit
-
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}/
-./configure
-make
-su
-make install
-exit
-{% endhighlight %}
-
-### Alpine version
-
-The following steps are for Alpine Linux 3.12.0
-
-{% highlight bash %}
-su
-apk add build-base autoconf automake pkgconfig openssl-dev jansson-dev curl-dev libxml2-dev bsd-compat-headers rsync
-exit
-
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}/
-./configure
-make
-su
-make install
-exit
-{% endhighlight %}
-
-### Rocky Linux 9
-
-```bash
-sudo dnf -y install wget tar gcc openssl-devel
-sudo dnf -y --enablerepo=devel install jansson-devel libcurl-devel libxml2-devel
-
-wget https://github.com/NICMx/FORT-validator/releases/download/{{ site.fort-latest-version }}/fort-{{ site.fort-latest-version }}.tar.gz
-tar xvzf fort-{{ site.fort-latest-version }}.tar.gz
-cd fort-{{ site.fort-latest-version }}/
-./configure
-make
-sudo make install
 ```
+
+Last tested in FreeBSD 14.3.
 
 ## Option 3: Compiling and installing the git repository
 
-In case you wan't a fresh version of Fort validator, there's this third option. The steps are mostly the same as in [Option 2](#option-2-compiling-and-installing-the-release-tarball), just another dependency (as minimum) must be installed: "git"; and a few steps are included in order to get the source code and generate configuration scripts.
+First, get the dependencies, and also `git` and the autotools. For Debian, this would be
 
-The following example is the process to clone, compile and install in Debian OS.
+```bash
+# Git, autotools
+sudo apt install -y autoconf automake build-essential git 
+# Fort dependencies
+sudo apt install -y pkg-config rsync libjansson-dev libssl-dev \
+	libcurl4-openssl-dev libxml2-dev libmicrohttpd-dev
+```
 
-{% highlight bash %}
-sudo apt install autoconf automake build-essential git libjansson-dev libssl-dev pkg-config rsync libcurl4-openssl-dev libxml2-dev
+Then download, compile and install:
 
+```bash
 git clone https://github.com/NICMx/FORT-validator.git
 cd FORT-validator/
 ./autogen.sh
 ./configure
 make
 sudo make install
-{% endhighlight %}
+```
 
-## Option 4: Running from a Docker container
+## Option 4: Docker container
 
-There's also the option to run FORT validator from a Docker container. The image can be pulled from [Docker Hub](https://hub.docker.com/r/nicmx/fort-validator) or built from the official Github repository: [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/main/docker).
+It's in [Docker Hub](https://hub.docker.com/r/nicmx/fort-validator). Pull with
 
-To pull the image from the official repository, run:
-
-{% highlight bash %}
+```bash
 docker pull nicmx/fort-validator:latest
-{% endhighlight %}
-
-Or to build from the source Dockerfile, just run (from the same directory where the Dockerfile is):
-
-{% highlight bash %}
-docker build -t fort-validator:latest .
-{% endhighlight %}
+```
 
 A basic example to run the container using the default values, reading from a local TAL directory (i.e. `host/path/to/tals`), and binding to the local port `8323`:
 
-{% highlight bash %}
+```bash
 docker run --name fort-validator -v host/path/to/tals:/etc/fort/tal:ro -p 8323:323 -d fort-validator
-{% endhighlight %}
-
-Read more about the Docker container at the Github repository [FORT-validator/docker](https://github.com/NICMx/FORT-validator/tree/main/docker).
+```
 
 ## Fetching the TALs
 

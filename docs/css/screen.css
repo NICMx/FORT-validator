@@ -378,17 +378,21 @@ blockquote p, blockquote p em {
 	font-size: 90%;
 	margin: 0; }
 
-.language-bash > .c {
-	color: #3CB371; }
+.language-bash .c {
+	color: #3CB371;
+}
 
-.language-bash > .nt {
-	color: #DDA0DD; }
+.language-bash .nt {
+	color: #DDA0DD;
+}
 
-.language-bash > .s2 {
-	color: #00bfFF; }
+.language-bash .s2 {
+	color: #00bfFF;
+}
 
-.language-bash > .nb {
-	color: white; }
+.language-bash .nb {
+	color: white;
+}
 
 .highlighter-rouge {
 	border: solid 1px rgba(51, 137, 255, 0.2);

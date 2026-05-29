@@ -1,9 +1,6 @@
 #ifndef RTR_PDU_H_
 #define RTR_PDU_H_
 
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stddef.h>
 #include <stdint.h>
 

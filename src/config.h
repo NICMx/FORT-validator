@@ -1,10 +1,7 @@
 #ifndef SRC_CONFIG_H_
 #define SRC_CONFIG_H_
 
-#include <arpa/inet.h>
 #include <curl/curl.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stdint.h>
 
 #include "config/file_type.h"

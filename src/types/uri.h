@@ -59,6 +59,8 @@ char const *uri_op_get_printable(struct rpki_uri *);
 
 char *uri_get_rrdp_workspace(char const *, struct rpki_uri *);
 
+bool uri_same_origin(struct rpki_uri const *, struct rpki_uri  const *);
+
 /* Plural */
 
 DEFINE_ARRAY_LIST_STRUCT(uri_list, struct rpki_uri *);
