@@ -324,10 +324,10 @@ START_TEST(test_natural_flows)
 	e = 0;
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT, 0, 0);
 	rcv_reset_query();
-	rcv_serial_query(0x1234, 0);
+	rcv_serial_query(0x1236, 0);
 
 	/* First cycle: One tree, no deltas */
-	session = mock_serial1();
+	session = mock_serial1() + RTR_V2;
 
 	e = 0;
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
@@ -475,7 +475,7 @@ START_TEST(test_delta_forget)
 	rcv_serial_query(0x1234, 0);
 
 	/* First cycle: One tree, no deltas */
-	session = mock_serial1();
+	session = mock_serial1() + RTR_V2;
 
 	e = 0;
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
@@ -601,7 +601,7 @@ START_TEST(test_no_incremental_update_available)
 	deltas_lifetime = 5;
 	if (file_exists("tmp/rtr") == 0)
 		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
-	session = mock_serial1();
+	session = mock_serial1() + RTR_V2;
 	mock_serial2();
 	mock_serial3();
 	mock_serial4();

@@ -94,7 +94,7 @@ send_serial_notify_pdu(int fd, uint8_t version, struct rtr_metadata *meta)
 
 	pr_op_debug("Sending Serial Notify PDU.");
 
-	buf = serialize_hdr(data, version, type, meta->session, len);
+	buf = serialize_hdr(data, version, type, meta->session + version, len);
 	buf = write_uint32(buf, meta->serial);
 
 	return send_response(fd, type, data, len);

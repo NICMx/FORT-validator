@@ -230,7 +230,7 @@ send_aspas(int fd, uint8_t ver, serial_t serial)
 }
 
 static int
-load_rtr_metadata(struct rtr_metadata *rtr)
+load_rtr_metadata(struct rtr_metadata *rtr, uint8_t version)
 {
 	struct rtr_index idx;
 	int error;
@@ -243,7 +243,7 @@ load_rtr_metadata(struct rtr_metadata *rtr)
 		goto end;
 	}
 
-	rtr->session = idx.session;
+	rtr->session = idx.session + version;
 	rtr->serial = idx.serials->serial;
 
 end:	rtridx_cleanup(&idx);
@@ -263,7 +263,7 @@ handle_reset_query_pdu(struct rtr_request *request)
 	stream.fd = request->fd;
 	stream.ver = request->pdu.rtr_version;
 
-	error = load_rtr_metadata(&rtr);
+	error = load_rtr_metadata(&rtr, stream.ver);
 	switch (error) {
 	case 0:
 		break;
@@ -511,7 +511,7 @@ handle_serial_query_pdu(struct rtr_request *request)
 	stream.fd = request->fd;
 	stream.ver = request->pdu.rtr_version;
 
-	error = load_rtr_metadata(&rtr);
+	error = load_rtr_metadata(&rtr, stream.ver);
 	switch (error) {
 	case 0:      break;
 	case ENOENT: return err_pdu_send_no_data_available(stream.fd, stream.ver);
