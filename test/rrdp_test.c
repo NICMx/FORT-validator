@@ -36,6 +36,8 @@ __MOCK_ABORT(uri_get_rrdp_workspace, char *, NULL, char const *tal,
 MOCK_ABORT_PTR(uri_refget, rpki_uri, struct rpki_uri *uri)
 MOCK_VOID(uri_refput, struct rpki_uri *uri)
 MOCK(uri_val_get_printable, char const *, "uri", struct rpki_uri *uri)
+__MOCK_ABORT(uri_same_origin, bool, false, struct rpki_uri const *u,
+    struct rpki_uri  const *v)
 MOCK_ABORT_PTR(validation_cache, rpki_cache, struct validation *state)
 MOCK_ABORT_PTR(validation_tal, tal, struct validation *state)
 

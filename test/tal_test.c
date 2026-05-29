@@ -30,6 +30,8 @@ MOCK_ABORT_INT(certificate_traverse, struct rpp *rpp_parent,
 MOCK_ABORT_PTR(db_table_create, db_table, void)
 MOCK_VOID(db_table_destroy, struct db_table *table)
 MOCK_ABORT_INT(db_table_join, struct db_table *dst, struct db_table *src)
+__MOCK_ABORT(db_table_roa_count_v4, unsigned int, 0, struct db_table *t)
+__MOCK_ABORT(db_table_roa_count_v6, unsigned int, 0, struct db_table *t)
 MOCK_ABORT_INT(deferstack_pop, struct cert_stack *stack,
     struct deferred_cert *result)
 MOCK_ABORT_VOID(fnstack_cleanup, void)
@@ -44,6 +46,7 @@ MOCK_ABORT_INT(handle_router_key, unsigned char const *ski,
 MOCK_ABORT_VOID(rpp_refput, struct rpp *pp)
 MOCK_ABORT_INT(rrdp_update, struct rpki_uri *uri)
 MOCK(state_retrieve, struct validation *, NULL, void)
+MOCK_ABORT_VOID(stats_set_tal_vrps, char const *t, char const *p, unsigned int v)
 MOCK_ABORT_PTR(validation_certstack, cert_stack, struct validation *state)
 MOCK_ABORT_VOID(validation_destroy, struct validation *state)
 MOCK_ABORT_INT(validation_prepare, struct validation **out, struct tal *tal,
