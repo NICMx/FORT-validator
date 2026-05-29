@@ -5,7 +5,6 @@
 #ifndef	_BER_TLV_TAG_H_
 #define	_BER_TLV_TAG_H_
 
-#include <netinet/in.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>

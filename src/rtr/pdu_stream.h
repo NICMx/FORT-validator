@@ -1,6 +1,8 @@
 #ifndef SRC_RTR_PDU_STREAM_H_
 #define SRC_RTR_PDU_STREAM_H_
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdbool.h>
 
 #include "rtr/pdu.h"

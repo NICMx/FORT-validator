@@ -1,10 +1,7 @@
 #ifndef SRC_JSON_UTIL_H_
 #define SRC_JSON_UTIL_H_
 
-#include <arpa/inet.h>
 #include <jansson.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

@@ -1,9 +1,6 @@
 #ifndef SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 #define SRC_DATA_STRUCTURE_PATH_BUILDER_H_
 
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
