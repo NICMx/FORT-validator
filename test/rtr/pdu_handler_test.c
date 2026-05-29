@@ -21,6 +21,7 @@ unsigned int deltas_lifetime = 5;
 
 MOCK(config_get_local_repository, char const *, "tmp", void)
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
+MOCK_UINT(config_get_validation_interval, 3600, void)
 MOCK_UINT(config_get_max_aspa_providers, 10, void)
 
 struct sent_pdu {
@@ -92,18 +93,6 @@ _add_aspa(struct db_table *tbl, uint32_t customer)
 	ck_assert_int_eq(0, rtrhandler_handle_aspa(tbl, aspa));
 }
 
-static struct db_table *
-mock_table(serial_t serial)
-{
-	struct db_table *tbl;
-
-	tbl = db_table_create();
-	tbl->rtr.session = 0x1234;
-	tbl->rtr.serial = serial;
-
-	return tbl;
-}
-
 static void
 mock_resources(struct db_table *tbl, uint32_t as)
 {
@@ -129,7 +118,7 @@ mock_commit(struct db_table *tbl)
 uint16_t
 mock_serial1(void)
 {
-	struct db_table *tbl = mock_table(1);
+	struct db_table *tbl = db_table_create();
 	mock_resources(tbl, 1);
 	return mock_commit(tbl);
 }
@@ -137,7 +126,7 @@ mock_serial1(void)
 void
 mock_serial2(void)
 {
-	struct db_table *tbl = mock_table(2);
+	struct db_table *tbl = db_table_create();
 	mock_resources(tbl, 1);
 	mock_resources(tbl, 2);
 	mock_commit(tbl);
@@ -146,7 +135,7 @@ mock_serial2(void)
 void
 mock_serial3(void)
 {
-	struct db_table *tbl = mock_table(3);
+	struct db_table *tbl = db_table_create();
 	mock_resources(tbl, 2);
 	mock_commit(tbl);
 }
@@ -154,7 +143,7 @@ mock_serial3(void)
 void
 mock_serial4(void)
 {
-	struct db_table *tbl = mock_table(4);
+	struct db_table *tbl = db_table_create();
 	mock_resources(tbl, 1);
 	mock_commit(tbl);
 }
@@ -263,9 +252,6 @@ rcv_reset_query(void)
 	struct rtr_request req = { 0 };
 	unsigned char raw[8] = { 0 };
 
-	ck_assert_int_eq(0, pthread_mutex_init(&stream.session_lock, NULL));
-	stream.session_set = false;
-
 	req.fd = -1;
 	req.stream = &stream;
 	req.pdu.rtr_version = RTR_V2;
@@ -289,10 +275,6 @@ rcv_serial_query(uint16_t session, serial_t serial)
 	struct rtr_request req = { 0 };
 	unsigned char raw[12] = { 0 };
 
-	ck_assert_int_eq(0, pthread_mutex_init(&stream.session_lock, NULL));
-	stream.session_set = true;
-	stream.session = session;
-
 	req.fd = -1;
 	req.pdu.rtr_version = RTR_V2;
 	req.stream = &stream;
@@ -315,8 +297,6 @@ rcv_serial_query(uint16_t session, serial_t serial)
 	a = 0;
 	ck_assert_int_eq(0, handle_serial_query_pdu(&req));
 	check_response();
-
-	pthread_mutex_destroy(&stream.session_lock);
 }
 
 static void
