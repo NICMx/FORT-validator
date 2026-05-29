@@ -594,6 +594,36 @@ uri_get_rrdp_workspace(char const *tal, struct rpki_uri *notif)
 	return (get_rrdp_workspace(&pb, tal, notif) == 0) ? pb.string : NULL;
 }
 
+bool
+uri_same_origin(struct rpki_uri  const *uri1, struct rpki_uri  const *uri2)
+{
+	char const *str1, *str2;
+	size_t c, slashes;
+
+	str1 = uri1->global;
+	str2 = uri2->global;
+	slashes = 0;
+
+	for (c = 0; str1[c] == str2[c]; c++) {
+		switch (str1[c]) {
+		case '/':
+			slashes++;
+			if (slashes == 3)
+				return true;
+			break;
+		case '\0':
+			return slashes == 2;
+		}
+	}
+
+	if (str1[c] == '\0')
+		return (slashes == 2) && str2[c] == '/';
+	if (str2[c] == '\0')
+		return (slashes == 2) && str1[c] == '/';
+
+	return false;
+}
+
 DEFINE_ARRAY_LIST_FUNCTIONS(uri_list, struct rpki_uri *, static)
 
 void
