@@ -266,18 +266,20 @@ cmp_vrp(struct hashable_roa *_a, struct hashable_roa *_b)
 
 	cmp = cmp_u8(a->addr_fam, b->addr_fam);
 	if (cmp) return cmp;
-	cmp = cmp_u32(a->asn, b->asn);
-	if (cmp) return cmp;
 
 	switch (a->addr_fam) {
-	case AF_INET:  cmp = memcmp(&a->prefix.v4, &b->prefix.v4, 4);  break;
-	case AF_INET6: cmp = memcmp(&a->prefix.v6, &b->prefix.v6, 16); break;
+	case AF_INET:  cmp = memcmp(&b->prefix.v4, &a->prefix.v4, 4);  break;
+	case AF_INET6: cmp = memcmp(&b->prefix.v6, &a->prefix.v6, 16); break;
 	}
 	if (cmp) return cmp;
 
-	cmp = cmp_u8(a->prefix_length, b->prefix_length);
+	cmp = cmp_u8(b->max_prefix_length, a->max_prefix_length);
 	if (cmp) return cmp;
-	return cmp_u8(a->max_prefix_length, b->max_prefix_length);
+
+	cmp = cmp_u8(b->prefix_length, a->prefix_length);
+	if (cmp) return cmp;
+
+	return cmp_u32(b->asn, a->asn);
 }
 
 static int
@@ -287,11 +289,11 @@ cmp_rk(struct hashable_key *_a, struct hashable_key *_b)
 	struct router_key *b = &_b->data;
 	int cmp;
 
-	cmp = cmp_u32(a->as, b->as);
-	if (cmp) return cmp;
 	cmp = memcmp(a->ski, b->ski, RK_SKI_LEN);
 	if (cmp) return cmp;
-	return memcmp(a->spk, b->spk, RK_SPKI_LEN);
+	cmp = memcmp(a->spk, b->spk, RK_SPKI_LEN);
+	if (cmp) return cmp;
+	return cmp_u32(a->as, b->as);
 }
 
 static int

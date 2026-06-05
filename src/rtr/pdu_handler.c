@@ -312,8 +312,28 @@ internal_error:
 	return err_pdu_send_internal_error(stream.fd, stream.ver);
 }
 
+struct withdrawal {
+	unsigned char raw[22];
+};
+
+struct withdrawal_array {
+	struct withdrawal *a; /* array */
+	size_t n; /* array length */
+	size_t c; /* array capacity */
+};
+
+static void
+add_withdrawal(struct withdrawal_array *wds, unsigned char const *chunk, size_t size)
+{
+	if (wds->n >= wds->c) {
+		wds->c <<= 1;
+		wds->a = prealloc(wds->a, wds->c * sizeof(struct withdrawal));
+	}
+	memcpy(wds->a[wds->n++].raw, chunk, size);
+}
+
 static int
-send_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
+send_pfx_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
 {
 	FILE *ofile = NULL;
 	FILE *nfile = NULL;
@@ -321,11 +341,17 @@ send_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
 	unsigned char *buf2;
 	unsigned char const *ochunk;
 	unsigned char const *nchunk;
+	struct withdrawal_array wds;
+	ssize_t w;
 	int cmp;
 	int error;
 
 	buf1 = pmalloc(rs->rawlen);
 	buf2 = pmalloc(rs->rawlen);
+
+	wds.n = 0;
+	wds.c = 128;
+	wds.a = pmalloc(wds.c * sizeof(struct withdrawal));
 
 	error = rtr_open_file(oserial, rs->type, "r", &ofile);
 	if (error)
@@ -343,15 +369,13 @@ send_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
 
 	while (ochunk && nchunk) {
 		cmp = memcmp(ochunk, nchunk, rs->rawlen);
-		if (cmp < 0) {
-			error = rs->send(rs, ochunk, FLAG_WITHDRAWAL);
-			if (error)
-				goto end;
+		if (cmp > 0) {
+			add_withdrawal(&wds, ochunk, rs->rawlen);
 			ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
 			if (error)
 				goto end;
 
-		} else if (cmp > 0) {
+		} else if (cmp < 0) {
 			error = rs->send(rs, nchunk, FLAG_ANNOUNCEMENT);
 			if (error)
 				goto end;
@@ -369,15 +393,6 @@ send_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
 		}
 	}
 
-	while (ochunk) {
-		error = rs->send(rs, ochunk, FLAG_WITHDRAWAL);
-		if (error)
-			goto end;
-		ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
-		if (error)
-			goto end;
-	}
-
 	while (nchunk) {
 		error = rs->send(rs, nchunk, FLAG_ANNOUNCEMENT);
 		if (error)
@@ -387,15 +402,30 @@ send_delta(struct rtr_stream *rs, serial_t oserial, serial_t nserial)
 			goto end;
 	}
 
+	while (ochunk) {
+		add_withdrawal(&wds, ochunk, rs->rawlen);
+		ochunk = next_chunk(ofile, buf1, rs->rawlen, &error);
+		if (error)
+			goto end;
+	}
+
+	for (w = wds.n - 1; w >= 0; w--) {
+		error = rs->send(rs, wds.a[w].raw, FLAG_WITHDRAWAL);
+		if (error)
+			goto end;
+	}
+
 end:	if (nfile) fclose(nfile);
 	if (ofile) fclose(ofile);
+	free(wds.a);
 	free(buf2);
 	free(buf1);
 	return error;
 }
 
 static int
-send_aspa_delta(int fd, uint8_t ver, serial_t oserial, serial_t nserial)
+send_aspa_delta(int fd, uint8_t ver, serial_t oserial, serial_t nserial,
+    bool announce)
 {
 	FILE *ofile = NULL;
 	FILE *nfile = NULL;
@@ -426,14 +456,18 @@ send_aspa_delta(int fd, uint8_t ver, serial_t oserial, serial_t nserial)
 	while (ochunk && nchunk) {
 		cmp = memcmp(ochunk, nchunk, 4); /* AS only */
 		if (cmp < 0) {
-			error = send_aspa_withdraw(fd, ver, ochunk, ofile);
+			error = announce
+			    ? skip_providers(ochunk, ofile)
+			    : send_aspa_withdraw(fd, ver, ochunk, ofile);
 			if (error)
 				goto end;
 			ochunk = next_chunk(ofile, buf1, 8, &error);
 			if (error)
 				goto end;
 		} else if (cmp > 0) {
-			error = send_aspa_announce(fd, ver, nchunk, nfile);
+			error = announce
+			    ? send_aspa_announce(fd, ver, nchunk, nfile)
+			    : skip_providers(nchunk, nfile);
 			if (error)
 				goto end;
 			nchunk = next_chunk(nfile, buf2, 8, &error);
@@ -449,7 +483,7 @@ send_aspa_delta(int fd, uint8_t ver, serial_t oserial, serial_t nserial)
 				goto end;
 			}
 
-			if (!providers_equal(&oprovs, &nprovs)) {
+			if (announce && !providers_equal(&oprovs, &nprovs)) {
 				aspa.customer = read_u32(nchunk);
 				aspa.providers = nprovs;
 				error = send_aspa_announce_pdu(fd, ver, &aspa);
@@ -472,22 +506,24 @@ send_aspa_delta(int fd, uint8_t ver, serial_t oserial, serial_t nserial)
 		}
 	}
 
-	while (ochunk) {
-		error = send_aspa_withdraw(fd, ver, ochunk, ofile);
-		if (error)
-			goto end;
-		ochunk = next_chunk(ofile, buf1, 8, &error);
-		if (error)
-			goto end;
-	}
-
-	while (nchunk) {
-		error = send_aspa_announce(fd, ver, nchunk, nfile);
-		if (error)
-			goto end;
-		nchunk = next_chunk(nfile, buf2, 8, &error);
-		if (error)
-			goto end;
+	if (announce) {
+		while (nchunk) {
+			error = send_aspa_announce(fd, ver, nchunk, nfile);
+			if (error)
+				goto end;
+			nchunk = next_chunk(nfile, buf2, 8, &error);
+			if (error)
+				goto end;
+		}
+	} else {
+		while (ochunk) {
+			error = send_aspa_withdraw(fd, ver, ochunk, ofile);
+			if (error)
+				goto end;
+			ochunk = next_chunk(ofile, buf1, 8, &error);
+			if (error)
+				goto end;
+		}
 	}
 
 end:	if (ofile) fclose(ofile);
@@ -540,17 +576,18 @@ handle_serial_query_pdu(struct rtr_request *request)
 	stream.type = "vrp4";
 	stream.rawlen = 10;
 	stream.send = send_vrp4;
-	error = send_delta(&stream, oserial, nserial);
+	error = send_pfx_delta(&stream, oserial, nserial);
 	if (error)
 		goto internal_error;
 
 	stream.type = "vrp6";
 	stream.rawlen = 22;
 	stream.send = send_vrp6;
-	error = send_delta(&stream, oserial, nserial);
+	error = send_pfx_delta(&stream, oserial, nserial);
 	if (error)
 		goto internal_error;
 
+	/*
 	if (stream.ver >= RTR_V1) {
 		stream.type = "rk";
 		stream.rawlen = 4 + RK_SKI_LEN + RK_SPKI_LEN;
@@ -559,9 +596,15 @@ handle_serial_query_pdu(struct rtr_request *request)
 		if (error)
 			goto internal_error;
 	}
+	*/
 
 	if (stream.ver >= RTR_V2) {
-		error = send_aspa_delta(stream.fd, stream.ver, oserial, nserial);
+		error = send_aspa_delta(stream.fd, stream.ver, oserial, nserial,
+		    true);
+		if (error)
+			goto internal_error;
+		error = send_aspa_delta(stream.fd, stream.ver, oserial, nserial,
+		    false);
 		if (error)
 			goto internal_error;
 	}

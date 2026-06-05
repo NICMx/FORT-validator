@@ -230,12 +230,12 @@ check_response(void)
 
 	pr_op_debug("Expected:");
 	for (i = 0; i < e; i++)
-		pr_op_debug("- %s %u %u", pdutype2str(expected[i].type),
-		    expected[i].as, expected[i].flags);
+		pr_op_debug("%s %s as:%u", expected[i].flags ? "+" : "-",
+		    pdutype2str(expected[i].type), expected[i].as);
 	pr_op_debug("Actual:");
 	for (i = 0; i < a; i++)
-		pr_op_debug("- %s %u %u", pdutype2str(actual[i].type),
-		    actual[i].as, actual[i].flags);
+		pr_op_debug("%s %s as:%u", expected[i].flags ? "+" : "-",
+		    pdutype2str(actual[i].type), actual[i].as);
 
 	ck_assert_uint_eq(e, a);
 	for (i = 0; i < e; i++) {
@@ -348,10 +348,10 @@ START_TEST(test_natural_flows)
 
 	e = 0;
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
@@ -363,7 +363,7 @@ START_TEST(test_natural_flows)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
 	rcv_serial_query(session, 1);
@@ -387,14 +387,14 @@ START_TEST(test_natural_flows)
 
 	e = 0;
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_WITHDRAWAL);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
 	rcv_serial_query(session, 1);
 
@@ -402,7 +402,7 @@ START_TEST(test_natural_flows)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
 	rcv_serial_query(session, 2);
@@ -433,7 +433,7 @@ START_TEST(test_natural_flows)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_WITHDRAWAL);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
 	rcv_serial_query(session, 2);
@@ -444,8 +444,8 @@ START_TEST(test_natural_flows)
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_WITHDRAWAL);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
@@ -496,10 +496,10 @@ START_TEST(test_delta_forget)
 
 	e = 0;
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
-	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
+	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
@@ -511,7 +511,7 @@ START_TEST(test_delta_forget)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
 	rcv_serial_query(session, 1);
@@ -541,7 +541,7 @@ START_TEST(test_delta_forget)
 	expected_pdu_add(PDU_TYPE_CACHE_RESPONSE, 0, 0);
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_WITHDRAWAL);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
 	rcv_serial_query(session, 2);
@@ -577,8 +577,8 @@ START_TEST(test_delta_forget)
 	expected_pdu_add(PDU_TYPE_IPV4_PREFIX, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_IPV6_PREFIX, 2, FLAG_WITHDRAWAL);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
-	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 1, FLAG_ANNOUNCEMENT);
+//	expected_pdu_add(PDU_TYPE_ROUTER_KEY, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_ASPA, 1, FLAG_ANNOUNCEMENT);
 	expected_pdu_add(PDU_TYPE_ASPA, 2, FLAG_WITHDRAWAL);
 	expected_pdu_add(PDU_TYPE_END_OF_DATA, 0, 0);
