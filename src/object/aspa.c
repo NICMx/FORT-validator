@@ -89,8 +89,8 @@ parse_providers(ProviderASSet_t *set, struct aspa *aspa)
 
 	limit = config_get_max_aspa_providers();
 	if (set->list.count > limit)
-		return pr_val_err("Too many providers: %d > %u",
-		    set->list.count, limit);
+		return pr_val_err("customerASID %u has too many providers: %d > %u",
+		    aspa->customer, set->list.count, limit);
 
 	providers = pcalloc(set->list.count, sizeof(uint32_t));
 	for (i = 0; i < set->list.count; i++) {
