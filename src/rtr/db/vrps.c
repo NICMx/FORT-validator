@@ -418,6 +418,8 @@ vrps_foreach_delta_since(serial_t from, serial_t *to,
 	/* if from > last serial */
 	if (serial_lt(state.serial, from))
 		goto cache_reset; /* Serial is invalid. */
+	if (from == (state.serial ^ 0x80000000u))
+		goto cache_reset; /* Also invalid */
 
 	/*
 	 * TODO (performance) this implementation is naive.
