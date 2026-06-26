@@ -807,12 +807,60 @@ just_print(const void *buffer, size_t size, void *pfx)
 }
 
 void
-INTEGER_trc(char const *pfx, INTEGER_t *st)
+INTEGER_trc(char const *pfx, INTEGER_t const *st)
 {
 	if (st != NULL)
 		INTEGER_print(&asn_DEF_INTEGER, st, 2, just_print, (void *)pfx);
 	else
 		pr_trc("%s: NULL", pfx);
+}
+
+struct achoo {
+	char *buf;
+	size_t size;
+	size_t capacity;
+};
+
+static int
+collect_str(const void *buffer, size_t size, void *_str)
+{
+	struct achoo *str = _str;
+	size_t capacity;
+
+	if (str->size + size > 256)
+		return -1;
+
+	capacity = str->capacity;
+	while (str->size + size + 1 > capacity)
+		capacity <<= 1;
+	if (str->capacity != capacity) {
+		str->capacity = capacity;
+		str->buf = prealloc(str->buf, capacity);
+	}
+
+	memcpy(str->buf + str->size, buffer, size);
+	str->size += size;
+	return 0;
+}
+
+char *
+INTEGER_to_str(INTEGER_t const *st)
+{
+	struct achoo str;
+
+	if (!st)
+		return NULL;
+
+	str.capacity = 64;
+	str.size = 0;
+	str.buf = pzalloc(str.capacity);
+
+	if (INTEGER_print(&asn_DEF_INTEGER, st, 0, collect_str, &str) < 0) {
+		free(str.buf);
+		return NULL;
+	}
+
+	return str.buf;
 }
 
 void

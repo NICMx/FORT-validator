@@ -76,6 +76,7 @@ void filerefs_print(struct files_ht *, int);
 void fileref_print(struct cache_file_ref *, int);
 
 struct mft_meta {
+	struct cache_file *file;
 	INTEGER_t num;				/* Manifest's manifestNumber */
 	time_t update;				/* Manifest's thisUpdate */
 };
@@ -85,7 +86,7 @@ json_t *mft2json(struct mft_meta *);
 struct fallback {
 	struct uri caRepository;
 	struct files_ht files;
-	struct mft_meta mft;
+	struct mft_meta mft;		/* file points to @files, no refcount */
 
 	bool committed;			/* Freshly committed? */
 
@@ -98,7 +99,7 @@ struct fallback_ht {
 	pthread_mutex_t lock;
 };
 
-struct fallback *fallback_find(struct fallback_ht *, struct uri *);
+struct fallback *fallback_find(struct fallback_ht *, struct uri const *);
 
 struct rpp;
 void fallback_add(struct fallback_ht *, struct uri *, struct rpp *);

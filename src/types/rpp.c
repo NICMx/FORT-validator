@@ -14,5 +14,6 @@ rpp_cleanup(struct rpp *rpp)
 	}
 
 	rpp->mft.file = NULL;
-	mftm_cleanup(&rpp->mft.meta);
+	mftm_cleanup(&rpp->mft);
+	memset(&rpp->mft, 0, sizeof(rpp->mft));
 }

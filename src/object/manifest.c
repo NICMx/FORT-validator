@@ -118,6 +118,8 @@ check_more_recent(struct rpp_querier *querier, struct mft_meta *current)
 	struct mft_meta const *rrdp;
 	struct mft_meta const *rsync;
 	struct mft_meta const *prev;
+	char *nstr, *ostr;
+	int error;
 
 	querier_get_fallback_mftnums(querier, &rrdp, &rsync);
 
@@ -128,10 +130,26 @@ check_more_recent(struct rpp_querier *querier, struct mft_meta *current)
 	else
 		return 0;
 
-	if (prev->num.size && INTEGER_cmp(&prev->num, &current->num) > 0)
-		return pr_err("The fallback manifest has a higher manifestNumber than the downloaded one.");
-	if (prev->update && difftime(prev->update, current->update) > 0)
-		return pr_err("The fallback manifest is newer than the downloaded one.");
+	/* XXX cachefile hashes should never be unset */
+	if (!prev->file->hash.set)
+		return pr_err("Previous manifest's hash is unset. Can't validate manifestNumber.");
+	if (!current->file->hash.set)
+		return pr_err("New manifest's hash is unset. Can't validate manifestNumber.");
+
+	if (memcmp(prev->file->hash.bytes, current->file->hash.bytes, RRDP_HASH_LEN) == 0)
+		return 0;
+
+	if (prev->num.size && INTEGER_cmp(&prev->num, &current->num) >= 0) {
+		nstr = INTEGER_to_str(&current->num);
+		ostr = INTEGER_to_str(&prev->num);
+		error = pr_err("New manifestNumber (%s) is not higher than fallback manifestNumber (%s).",
+		    nstr, ostr);
+		free(nstr);
+		free(ostr);
+		return error;
+	}
+	if (prev->update && difftime(prev->update, current->update) >= 0)
+		return pr_err("New manifest thisUpdate is not newer than the fallback manifest thisUpdate.");
 
 	return 0;
 }
@@ -446,6 +464,7 @@ manifest_traverse(struct cache_mapping const *map, struct rpp_querier *querier,
 	int error;
 
 	/* Prepare */
+	pr_trc("Checking MFT: %s", uri_str(&map->url));
 	fnstack_push_map(map);
 
 	/* Decode */
@@ -468,7 +487,7 @@ manifest_traverse(struct cache_mapping const *map, struct rpp_querier *querier,
 	error = signed_object_validate(&so, &ee, &arcs);
 	if (error)
 		goto end5;
-	error = validate_manifest(mft, querier, &parent->rpp.mft.meta);
+	error = validate_manifest(mft, querier, &parent->rpp.mft);
 
 end5:	cer_cleanup(&ee);
 	if (error)
@@ -476,5 +495,6 @@ end5:	cer_cleanup(&ee);
 end3:	ASN_STRUCT_FREE(asn_DEF_Manifest, mft);
 end2:	signed_object_cleanup(&so);
 end1:	fnstack_pop();
+	pr_trc("MFT done.");
 	return error;
 }

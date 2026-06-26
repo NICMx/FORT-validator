@@ -380,6 +380,18 @@ filerefs2json(struct files_ht *refs, enum files_key_type kt)
 	return jfiles;
 }
 
+static struct cache_file_ref *
+find_file(struct files_ht *ht, char const *key)
+{
+	size_t keylen;
+	struct cache_file_ref *file;
+
+	keylen = strlen(key);
+	HASH_FIND(hh, ht->ht, key, keylen, file);
+
+	return file;
+}
+
 int
 json2filerefs(json_t *parent, char const *name, struct files_ht *src_ht,
     struct files_ht *result)
@@ -404,8 +416,7 @@ json2filerefs(json_t *parent, char const *name, struct files_ht *src_ht,
 		}
 
 		key = json_string_value(jfr);
-		keylen = strlen(key);
-		HASH_FIND(hh, src_ht->ht, key, keylen, src);
+		src = find_file(src_ht, key);
 		if (!src) {
 			error = -pr_err("'%s' is not a defined file.", key);
 			goto oops;
@@ -454,6 +465,8 @@ mft2json(struct mft_meta *mft)
 {
 	json_t *jmft = json_obj_new();
 
+	if (json_add_str(jmft, "file", mft->file->id))
+		goto fail;
 	if (json_add_bigint(jmft, "number", &mft->num))
 		goto fail;
 	if (json_add_ts(jmft, "update", mft->update))
@@ -466,7 +479,7 @@ fail:	json_decref(jmft);
 }
 
 struct fallback *
-fallback_find(struct fallback_ht *fbs, struct uri *caRepo)
+fallback_find(struct fallback_ht *fbs, struct uri const *caRepo)
 {
 	char const *key;
 	size_t kl;
@@ -493,8 +506,8 @@ fallback_add(struct fallback_ht *fbs, struct uri *caRepo, struct rpp *rpp)
 	uri_copy(&fb->caRepository, caRepo);
 	for (i = 0; i < rpp->nfiles; i++)
 		filerefs_add_uri(&fb->files, rpp->files[i], 1);
-	INTEGER_move(&fb->mft.num, &rpp->mft.meta.num);
-	fb->mft.update = rpp->mft.meta.update;
+	fb->mft = rpp->mft;
+	memset(&rpp->mft, 0, sizeof(rpp->mft));
 	fb->committed = true;
 
 	key = uri_str(&fb->caRepository);
@@ -634,6 +647,25 @@ fail:	json_decref(json);
 	return NULL;
 }
 
+static int
+load_mft_file(json_t *jmft, struct files_ht *refs, struct cache_file **result)
+{
+	char const *str;
+	struct cache_file_ref *ref;
+	int error;
+
+	error = json_get_str(jmft, "file", &str);
+	if (error)
+		return error;
+
+	ref = find_file(refs, str);
+	if (!ref)
+		return -pr_err("Manifest file is not declared: %s", str);
+
+	*result = ref->file;
+	return 0;
+}
+
 int
 json2fallback(json_t *json, char const *key, struct files_ht *refs,
     struct fallback **result)
@@ -657,6 +689,9 @@ json2fallback(json_t *json, char const *key, struct files_ht *refs,
 		goto uri;
 
 	error = json_get_object(json, "manifest", &jmft);
+	if (error)
+		goto refs;
+	error = load_mft_file(jmft, refs, &fb->mft.file);
 	if (error)
 		goto refs;
 	error = json_get_bigint(jmft, "number", &fb->mft.num);

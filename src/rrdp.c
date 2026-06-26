@@ -83,15 +83,26 @@ struct rrdp_ctx {
 	struct cache_sequence seq;	/* For file names */
 };
 
+enum rrdp_dao_state {
+	RDS_STEP,
+	RDS_FB,
+	RDS_DONE,
+};
+
 struct rrdp_dao {
 	struct uri caRepository;
-
 	struct rrdp_ctx *ctx;
-	struct rrdp_session *session;
-	struct rrdp_step *step;
+	enum rrdp_dao_state state;
 
-	struct fallback *fb;		/* Lazy init; can be NULL even then */
-	bool fb_searched;
+	struct {
+		struct rrdp_session *session;
+		struct rrdp_step *obj;
+	} step;
+
+	struct {
+		struct rrdp_session *session;
+		struct fallback *obj;
+	} fb;
 };
 
 struct file_metadata {
@@ -1411,6 +1422,39 @@ pop:	fnstack_pop();
 	return error;
 }
 
+static void
+init_step(struct rrdp_dao *dao)
+{
+	struct rrdp_session *ss;
+	struct rrdp_step *step;
+
+	TAILQ_FOREACH(ss, &dao->ctx->sessions, lh)
+		TAILQ_FOREACH(step, &ss->steps, lh)
+			/* TODO (fine) when is the hash table empty? */
+			/* See twice below at rrdpdao_downgrade_delta(). */
+			if (step->files.ht != NULL) {
+				dao->step.session = ss;
+				dao->step.obj = step;
+				return;
+			}
+}
+
+static void
+init_fallback(struct rrdp_dao *dao)
+{
+	struct rrdp_session *ss;
+	struct fallback *fb;
+
+	TAILQ_FOREACH(ss, &dao->ctx->sessions, lh) {
+		fb = fallback_find(&ss->fbs, &dao->caRepository);
+		if (!dao->fb.obj ||
+		    INTEGER_cmp(&dao->fb.obj->mft.num, &fb->mft.num) < 0) {
+			dao->fb.session = ss;
+			dao->fb.obj = fb;
+		}
+	}
+}
+
 struct rrdp_dao *
 rrdpdao_create(struct rrdp_ctx *ctx, struct uri const *caRepository)
 {
@@ -1419,41 +1463,47 @@ rrdpdao_create(struct rrdp_ctx *ctx, struct uri const *caRepository)
 	result = pzalloc(sizeof(struct rrdp_dao));
 	uri_copy(&result->caRepository, caRepository);
 	result->ctx = ctx;
-	result->session = TAILQ_FIRST(&ctx->sessions);
-	if (result->session != NULL)
-		result->step = TAILQ_FIRST(&result->session->steps);
+	result->state = RDS_STEP;
+	init_step(result);
+	init_fallback(result);
 
 	return result;
 }
 
 /* This function assumes querier's sessions are sorted by date, fresh first */
 bool
-rrdpdao_downgrade_delta(struct rrdp_dao *querier)
+rrdpdao_downgrade_delta(struct rrdp_dao *dao)
 {
-	if (!querier)
+	struct rrdp_session *ss;
+	struct rrdp_step *step;
+
+	if (!dao)
 		return false;
 
-	if (!querier->step)
+	ss = dao->step.session;
+	step = dao->step.obj;
+	if (!step)
 		goto no;
 
-	querier->step = TAILQ_NEXT(querier->step, lh);
-	if (querier->step != NULL && querier->step->files.ht != NULL)
-		return true;
+	step = TAILQ_NEXT(step, lh);
+	if (step && step->files.ht != NULL)
+		goto yes;
 
 	pr_trc("There are no more RRDP steps.");
 
-	querier->session = TAILQ_NEXT(querier->session, lh);
-	if (querier->session == NULL)
-		goto no;
-
-	querier->step = TAILQ_FIRST(&querier->session->steps);
-	if (querier->step == NULL)
-		goto no;
-
-	return true;
+	while ((ss = TAILQ_NEXT(ss, lh)) != NULL) {
+		step = TAILQ_FIRST(&ss->steps);
+		if (step && step->files.ht != NULL)
+			goto yes;
+	}
 
 no:	pr_trc("There are no more RRDP sessions/steps.");
 	return false;
+
+yes:	dao->state = RDS_STEP;
+	dao->step.session = ss;
+	dao->step.obj = step;
+	return true;
 }
 
 bool
@@ -1462,42 +1512,34 @@ rrdpdao_downgrade_fb(struct rrdp_dao *dao)
 	if (!dao)
 		return false;
 
-	if (!dao->fb_searched) {
-		dao->session = NULL;
-		dao->step = NULL;
-		dao->fb_searched = true;
+	if (dao->state == RDS_STEP && dao->fb.obj != NULL) {
+		dao->state = RDS_FB;
+		return true;
 	}
 
-	if (dao->fb) {
-		dao->fb = dao->fb->next;
-		if (dao->fb)
-			return true;
-	}
-
-	do {
-		dao->session = dao->session
-		    ? TAILQ_NEXT(dao->session, lh)
-		    : TAILQ_FIRST(&dao->ctx->sessions);
-		if (dao->session == NULL)
-			return false;
-		dao->fb = fallback_find(&dao->session->fbs, &dao->caRepository);
-	} while (!dao->fb);
-
-	return true;
+	return false;
 }
 
 struct cache_file *
 rrdpdao_map(struct rrdp_dao const *querier, struct uri const *url)
 {
-	struct files_ht *ht;
+	struct files_ht *ht = NULL;
 	struct cache_file_ref *ref;
 
-	if (querier->fb)
-		ht = &querier->fb->files;
-	else if (querier->step)
-		ht = &querier->step->files;
-	else
+	switch (querier->state) {
+	case RDS_STEP:
+		if (!querier->step.obj)
+			return NULL;
+		ht = &querier->step.obj->files;
+		break;
+	case RDS_FB:
+		if (!querier->fb.obj)
+			return NULL;
+		ht = &querier->fb.obj->files;
+		break;
+	case RDS_DONE:
 		return NULL;
+	}
 
 	ref = filerefs_find_uri(ht, url);
 	return ref ? ref->file : NULL;
@@ -1506,7 +1548,7 @@ rrdpdao_map(struct rrdp_dao const *querier, struct uri const *url)
 struct mft_meta const *
 rrdpdao_fallback_mftnum(struct rrdp_dao *dao)
 {
-	return (dao && dao->fb) ? &dao->fb->mft : NULL;
+	return (dao && dao->fb.obj) ? &dao->fb.obj->mft : NULL;
 }
 
 void
@@ -1514,11 +1556,16 @@ rrdpdao_commit(struct rrdp_dao *dao, struct rpp *rpp)
 {
 	pr_trc("Queuing RPP for commit: %s", uri_str(&dao->caRepository));
 
-	if (dao->fb) {
+	switch (dao->state) {
+	case RDS_STEP:
+		fallback_add(&dao->step.session->fbs, &dao->caRepository, rpp);
+		break;
+	case RDS_FB:
 		pr_trc("It's already a fallback.");
-		fallback_commit(&dao->session->fbs, dao->fb);
-	} else {
-		fallback_add(&dao->session->fbs, &dao->caRepository, rpp);
+		fallback_commit(&dao->fb.session->fbs, dao->fb.obj);
+		break;
+	case RDS_DONE:
+		break;
 	}
 }
 

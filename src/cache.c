@@ -851,7 +851,6 @@ rsync_post_process(struct cache_node *node)
 	case CT_RSYNC:
 		if (rsync_reindex(&node->ctx.v.rsync, &node->map) != 0)
 			return VV_FAIL;
-		rsync_print(node->ctx.v.rsync, 0);
 		return VV_CONTINUE;
 	case CT_TA:
 		tactx_print(node->ctx.v.ta, 0);

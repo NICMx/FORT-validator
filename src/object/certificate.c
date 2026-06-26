@@ -1994,7 +1994,7 @@ cer_traverse(struct rpki_certificate *ca)
 	unsigned int queued;
 	int error;
 
-	pr_trc("Checking certificate %s...", uri_str(&ca->map.url));
+	pr_trc("Checking CER: %s", uri_str(&ca->map.url));
 
 	if (!ca->x509) {
 		if (validate_certificate(ca) != 0)

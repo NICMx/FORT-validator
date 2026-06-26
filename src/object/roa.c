@@ -214,6 +214,7 @@ roa_traverse(struct cache_mapping const *map, struct rpki_certificate *parent)
 	int error;
 
 	/* Prepare */
+	pr_trc("Checking ROA: %s", uri_str(&map->url));
 	fnstack_push_map(map);
 
 	/* Decode */
@@ -237,5 +238,6 @@ end4:	cer_cleanup(&ee);
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);
 end2:	signed_object_cleanup(&so);
 end1:	fnstack_pop();
+	pr_trc("ROA done.");
 	return error;
 }

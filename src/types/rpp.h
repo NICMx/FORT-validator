@@ -11,17 +11,17 @@
 /* Repository Publication Point */
 struct rpp {
 	struct cache_file **files;
-	size_t nfiles;				/* @files array length */
+	/* @files array length */
+	size_t nfiles;
 
 	struct {
-		struct cache_file *file;	/* Points to @files entry */
+		/* Points to @files file, no refcount */
+		struct cache_file *file;
 		X509_CRL *obj;
 	} crl;
 
-	struct {
-		struct cache_file *file;
-		struct mft_meta meta;
-	} mft;
+	/* file points to @files file, no refcount */
+	struct mft_meta mft;
 };
 
 #define mftm_cleanup(m) INTEGER_cleanup(&(m)->num);
