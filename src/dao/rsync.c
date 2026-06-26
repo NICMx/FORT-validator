@@ -106,14 +106,10 @@ add_file(struct files_ht *table, struct cache_mapping *root, char *path,
 		return 0;
 	}
 
-	if (hash_file(hash_get_sha256(), path, csum, &csumlen) != 0) {
-		pr_wrn("Cannot checksum %s.", path);
-		csumlen = 0;
-	}
-	if (csumlen != SHA256_DIGEST_LENGTH) {
-		pr_wrn("Bad checksum size: %zu", csumlen);
-		csumlen = 0;
-	}
+	if (hash_file(hash_get_sha256(), path, csum, &csumlen) != 0)
+		return pr_err("Cannot checksum %s.", path);
+	if (csumlen != SHA256_DIGEST_LENGTH)
+		return pr_err("Bad checksum size: %zu", csumlen);
 
 	uri_path = str_skip(path, root->path);
 	if (!uri_path)
@@ -127,7 +123,7 @@ add_file(struct files_ht *table, struct cache_mapping *root, char *path,
 
 	uri_str = path_join(uri_str(&root->url), uri_path);
 	__uri_init(&uri, uri_str, strlen(uri_str));
-	file = cachefile_create(&uri, path, uri_path + 1, csumlen ? csum : NULL);
+	file = cachefile_create(&uri, path, uri_path + 1, csum);
 	uri_cleanup(&uri);
 
 	filerefs_add_uri(table, file, 0);
@@ -435,24 +431,6 @@ rsync_print(struct rsync_ctx *ctx, int indent)
 }
 
 json_t *
-file2json(struct cache_file *file)
-{
-	json_t *root;
-
-	root = json_obj_new();
-
-	if (json_add_str(root, "uri", uri_str(&file->map.url)))
-		goto fail;
-	if (json_add_hash(root, "hash", &file->hash))
-		goto fail;
-
-	return root;
-
-fail:	json_decref(root);
-	return NULL;
-}
-
-json_t *
 rsync_ctx2json(struct rsync_ctx *ctx)
 {
 	json_t *root, *files, *fbs;
@@ -477,7 +455,7 @@ rsync_ctx2json(struct rsync_ctx *ctx)
 			file = ref->file;
 			if (!(file->flags & CFF_WRITTEN)) {
 				if (json_object_add(files, file->map.path,
-						    file2json(file)))
+						    cachefile2json(file)))
 					goto fail;
 				ref->file->flags |= CFF_WRITTEN;
 			}

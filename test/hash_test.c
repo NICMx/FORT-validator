@@ -57,7 +57,7 @@ START_TEST(test_hash)
 
 	ha = hash_get_sha256();
 	ck_assert_uint_eq(32, hash_get_size(ha));
-	ck_assert_uint_eq(RRDP_HASH_LEN, hash_get_size(ha));
+	ck_assert_uint_eq(SHA256_DIGEST_LENGTH, hash_get_size(ha));
 	name = hash_get_name(ha);
 	ck_assert(strcasecmp("sha256", name) || strcasecmp("sha-256", name));
 

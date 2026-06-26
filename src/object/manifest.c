@@ -130,13 +130,7 @@ check_more_recent(struct rpp_querier *querier, struct mft_meta *current)
 	else
 		return 0;
 
-	/* XXX cachefile hashes should never be unset */
-	if (!prev->file->hash.set)
-		return pr_err("Previous manifest's hash is unset. Can't validate manifestNumber.");
-	if (!current->file->hash.set)
-		return pr_err("New manifest's hash is unset. Can't validate manifestNumber.");
-
-	if (memcmp(prev->file->hash.bytes, current->file->hash.bytes, RRDP_HASH_LEN) == 0)
+	if (memcmp(prev->file->hash, current->file->hash, SHA256_DIGEST_LENGTH) == 0)
 		return 0;
 
 	if (prev->num.size && INTEGER_cmp(&prev->num, &current->num) >= 0) {
@@ -289,15 +283,12 @@ check_file_and_hash(struct FileAndHash *fah, struct cache_file *file)
 
 	if (fah->hash.bits_unused != 0)
 		return pr_err("Hash string has unused bits.");
-	if (fah->hash.size != RRDP_HASH_LEN)
+	if (fah->hash.size != SHA256_DIGEST_LENGTH)
 		return pr_err("The hash of file '%.*s' has %zu bytes (%d expected).",
 		    (int)fah->file.size, fah->file.buf,
-		    fah->hash.size, RRDP_HASH_LEN);
+		    fah->hash.size, SHA256_DIGEST_LENGTH);
 
-	if (!file->hash.set)
-		return pr_wrn("Cache file '%s' lacks a hash.",
-		    uri_str(&file->map.url));
-	if (memcmp(fah->hash.buf, file->hash.bytes, RRDP_HASH_LEN) != 0)
+	if (memcmp(fah->hash.buf, file->hash, SHA256_DIGEST_LENGTH) != 0)
 		pr_panic("File '%.*s' does not match its expected hash.",
 		    (int)fah->file.size, fah->file.buf);
 

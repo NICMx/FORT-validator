@@ -416,10 +416,10 @@ struct cache_file *
 _cachefile_create(char const *uri, char *path, int hashchr)
 {
 	struct uri _uri;
-	unsigned char hash[RRDP_HASH_LEN];
+	unsigned char hash[SHA256_DIGEST_LENGTH];
 
 	__URI_INIT(&_uri, uri);
-	memset(hash, hashchr, RRDP_HASH_LEN);
+	memset(hash, hashchr, SHA256_DIGEST_LENGTH);
 
 	return cachefile_create(&_uri, path, strrchr(path, '/') + 1, hash);
 }

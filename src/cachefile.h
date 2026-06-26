@@ -1,6 +1,7 @@
 #ifndef SRC_CACHEFILE_H_
 #define SRC_CACHEFILE_H_
 
+#include <openssl/sha.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <jansson.h>
@@ -10,8 +11,8 @@
 #include "types/map.h"
 #include "types/uthash.h"
 
-int json_add_hash(json_t *, char const *, struct rrdp_hash const *);
-int json2hash(json_t *, char const *, struct rrdp_hash *);
+int json_add_hash(json_t *, char const *, unsigned char const *);
+int json2hash(json_t *, char const *, unsigned char const *);
 
 #define CFF_WRITTEN	(1 << 0)
 #define CFF_COMMITTED	(1 << 1)
@@ -23,8 +24,7 @@ struct cache_file {
 	 * id always points to map.path's substring.
 	 */
 	char const *id;
-	/* XXX not RRDP only anymore */
-	struct rrdp_hash hash;
+	unsigned char hash[SHA256_DIGEST_LENGTH];
 	int flags;
 	atomic_uint refcount;
 };
@@ -38,6 +38,8 @@ bool cachefile_is_committed(struct cache_file *);
 void cachefile_commit(struct cache_file *);
 
 int cachefile_move(struct cache_file *, char *);
+
+json_t *cachefile2json(struct cache_file *);
 
 struct cache_file_ref {
 	struct cache_file *file;

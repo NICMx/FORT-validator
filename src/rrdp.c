@@ -356,11 +356,9 @@ validate_hash(struct file_metadata *meta, char const *path)
 }
 
 static int
-validate_hash2(struct file_metadata *meta, struct rrdp_hash const *hash)
+validate_hash2(struct file_metadata *meta, unsigned char const *hash)
 {
-	if (!hash->set)
-		return 0;
-	if (memcmp(meta->hash.bytes, hash->bytes, RRDP_HASH_LEN) != 0)
+	if (memcmp(meta->hash.bytes, hash, SHA256_DIGEST_LENGTH) != 0)
 		goto bad;
 	return 0;
 
@@ -612,7 +610,8 @@ is_known_extension(struct uri const *uri)
 	     || (strcmp(ext, ".gbr") == 0));
 }
 
-static void
+/* Steals @path. */
+static int
 register_fileref(struct rrdp_step *step, struct publish *tag, char *path,
     char const *id)
 {
@@ -622,10 +621,15 @@ register_fileref(struct rrdp_step *step, struct publish *tag, char *path,
 
 	error = hash_buffer(hash_get_sha256(),
 	    tag->content, tag->content_len,
-	    hash, RRDP_HASH_LEN);
+	    hash, SHA256_DIGEST_LENGTH);
+	if (error) {
+		free(path);
+		return error;
+	}
 
-	file = cachefile_create(&tag->meta.uri, path, id, error ? NULL : hash);
+	file = cachefile_create(&tag->meta.uri, path, id, hash);
 	filerefs_add_uri(&step->files, file, 0);
+	return 0;
 }
 
 static int
@@ -682,7 +686,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 			goto end;
 		}
 
-		error = validate_hash2(&tag.meta, &fileref->file->hash);
+		error = validate_hash2(&tag.meta, fileref->file->hash);
 		if (error)
 			goto end;
 
@@ -711,7 +715,7 @@ handle_publish(xmlTextReaderPtr reader, struct parser_args *args)
 	if (error)
 		free(path);
 	else
-		register_fileref(args->step, &tag, path, pathid);
+		error = register_fileref(args->step, &tag, path, pathid);
 
 end:	metadata_cleanup(&tag.meta);
 	free(tag.content);
@@ -747,7 +751,7 @@ handle_withdraw(xmlTextReaderPtr reader, struct parser_args *args)
 		goto end;
 	}
 
-	error = validate_hash2(&tag.meta, &fileref->file->hash);
+	error = validate_hash2(&tag.meta, fileref->file->hash);
 	if (error)
 		goto end;
 
@@ -1692,8 +1696,9 @@ step2json(struct rrdp_step *step, bool write_files)
 
 	jstep = json_obj_new();
 
-	if (json_add_hash(jstep, "hash", &step->delta_hash))
-		goto fail;
+	if (step->delta_hash.set)
+		if (json_add_hash(jstep, "hash", step->delta_hash.bytes))
+			goto fail;
 	if (write_files)
 		if (json_object_add(jstep, "files", filerefs2json(&step->files, FHKT_ID)))
 			goto fail;
@@ -1784,9 +1789,13 @@ json2step(json_t *json, char const *serial, struct files_ht *files,
 	error = json2filerefs(json, "files", files, &step->files);
 	if (error < 0)
 		goto serial;
-	error = json2hash(json, "hash", &step->delta_hash);
-	if (error)
+	error = json2hash(json, "hash", step->delta_hash.bytes);
+	if (error == ENOENT)
+		step->delta_hash.set = false;
+	else if (error)
 		goto files;
+	else
+		step->delta_hash.set = true;
 
 	*result = step;
 	return 0;

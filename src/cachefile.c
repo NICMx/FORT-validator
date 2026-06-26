@@ -9,15 +9,12 @@
 #include "types/rpp.h"
 
 int
-json_add_hash(json_t *parent, char const *name, struct rrdp_hash const *hash)
+json_add_hash(json_t *parent, char const *name, unsigned char const *hash)
 {
 	char *str;
 	int res;
 
-	if (!hash->set)
-		return 0;
-
-	str = hex2str(hash->bytes, RRDP_HASH_LEN);
+	str = hex2str(hash, SHA256_DIGEST_LENGTH);
 	res = json_object_set_new(parent, name, json_string(str));
 	free(str);
 
@@ -27,25 +24,21 @@ json_add_hash(json_t *parent, char const *name, struct rrdp_hash const *hash)
 }
 
 int
-json2hash(json_t *parent, char const *name, struct rrdp_hash *hash)
+json2hash(json_t *parent, char const *name, unsigned char const *hash)
 {
 	char const *str;
 	int error;
 
 	error = json_get_str(parent, name, &str);
-	if (error == ENOENT) {
-		hash->set = false;
-		return 0;
-	}
 	if (error)
 		return error;
 
-	if (strlen(str) != 2 * RRDP_HASH_LEN)
-		return -pr_err("Hash is not %d characters long.", 2 * RRDP_HASH_LEN);
-	if (str2hex(str, hash->bytes) != 0)
+	if (strlen(str) != 2 * SHA256_DIGEST_LENGTH)
+		return -pr_err("Hash is not %d characters long.",
+		    2 * SHA256_DIGEST_LENGTH);
+	if (str2hex(str, (uint8_t *)hash) != 0)
 		return -pr_err("Malformed hash: %s", str);
 
-	hash->set = true;
 	return 0;
 }
 
@@ -59,12 +52,7 @@ cachefile_create(struct uri *url, char *path, char const *id,
 	uri_copy(&result->map.url, url);
 	result->map.path = path;
 	result->id = id;
-	if (hash) {
-		memcpy(result->hash.bytes, hash, SHA256_DIGEST_LENGTH);
-		result->hash.set = true;
-	} else {
-		result->hash.set = false;
-	}
+	memcpy(result->hash, hash, SHA256_DIGEST_LENGTH);
 	atomic_init(&result->refcount, 1);
 
 	return result;
@@ -105,10 +93,10 @@ cachefile_id(struct cache_file *file)
 	return file->id;
 }
 
-struct rrdp_hash const *
+unsigned char const *
 cachefile_hash(struct cache_file *file)
 {
-	return &file->hash;
+	return file->hash;
 }
 
 bool
@@ -140,7 +128,7 @@ cachefile_move(struct cache_file *file, char *newpath)
 	return 0;
 }
 
-static json_t *
+json_t *
 cachefile2json(struct cache_file *file)
 {
 	json_t *jfile;
@@ -167,7 +155,7 @@ json2cachefile(char const *key, char const *pfx, json_t *json)
 
 	if (json_get_uri(json, "uri", &file->map.url))
 		goto file;
-	if (json2hash(json, "hash", &file->hash) < 0)
+	if (json2hash(json, "hash", file->hash))
 		goto url;
 	file->map.path = path_join(pfx, key);
 	file->id = file->map.path + (strlen(file->map.path) - strlen(key));
