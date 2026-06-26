@@ -37,6 +37,7 @@ asn1_int_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		asn1_stream.test
 asn1_stream_test_SOURCES =	asn1/asn1c/asn1stream_test.c
 asn1_stream_test_LDADD =	${CHECK_LIBS}
+asn1_stream_test_LDADD +=	${JANSSON_LIBS}
 
 check_PROGRAMS +=		base64.test
 base64_test_SOURCES =		base64_test.c

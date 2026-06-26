@@ -1582,23 +1582,6 @@ rrdpdao_free(struct rrdp_dao *dao)
 	}
 }
 
-static struct fallback *
-find_best_commit(struct fallback *first)
-{
-	struct fallback *fb, *committed;
-	INTEGER_t *max;
-
-	committed = NULL;
-	max = NULL;
-	for (fb = first; fb; fb = fb->next)
-		if (fb->committed && INTEGER_cmp(max, &fb->mft.num) < 0) {
-			committed = fb;
-			max = &fb->mft.num;
-		}
-
-	return committed;
-}
-
 static void
 cleanup_sessions(struct rrdp_ctx *ctx)
 {
@@ -1660,7 +1643,6 @@ files2json(json_t *json, struct rrdp_ctx const *ctx)
 	struct rrdp_session *session;
 	struct rrdp_step *step;
 	struct fallback *fb, *fb2;
-	struct cache_file_ref *file, *file2;
 	int error;
 
 	TAILQ_FOREACH(session, &ctx->sessions, lh) {

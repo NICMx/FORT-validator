@@ -279,8 +279,6 @@ validate_mft_filename(IA5String_t *ia5)
 static int
 check_file_and_hash(struct FileAndHash *fah, struct cache_file *file)
 {
-	array_index i;
-
 	if (fah->hash.bits_unused != 0)
 		return pr_err("Hash string has unused bits.");
 	if (fah->hash.size != SHA256_DIGEST_LENGTH)

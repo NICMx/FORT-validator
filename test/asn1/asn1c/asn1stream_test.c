@@ -10,6 +10,7 @@
 #include "asn1/asn1c/constr_TYPE.c"
 #include "asn1/asn1c/constraints.c"
 #include "asn1/asn1c/der_encoder.c"
+#include "asn1/asn1c/BOOLEAN.c"
 #include "asn1/asn1c/OCTET_STRING.c"
 #include "asn1/asn1c/OPEN_TYPE.c"
 #include "asn1/asn1c/RsyncRequest.c"
@@ -23,43 +24,47 @@ START_TEST(test_multiple)
 {
 	struct RsyncRequest src = { 0 };
 	struct RsyncRequest *dst = NULL;
-	unsigned char buf[64] = { 0 };
+	unsigned char buf[96] = { 0 };
 	asn_enc_rval_t encres;
 	asn_dec_rval_t decres;
 
 	ck_assert_int_eq(0, OCTET_STRING_fromString(&src.url, "url"));
 	ck_assert_int_eq(0, OCTET_STRING_fromString(&src.path, "path"));
+	src.single = 0;
 	encres = der_encode_to_buffer(&asn_DEF_RsyncRequest, &src, buf, sizeof(buf));
-	ck_assert_int_eq(13, encres.encoded);
+	ck_assert_int_eq(16, encres.encoded);
 
 	ck_assert_int_eq(0, OCTET_STRING_fromString(&src.url, "https://a.b.c/d/e.cer"));
 	ck_assert_int_eq(0, OCTET_STRING_fromString(&src.path, "tmp/http/a.b.c/d/e.cer"));
-	encres = der_encode_to_buffer(&asn_DEF_RsyncRequest, &src, buf + 13, sizeof(buf) - 13);
-	ck_assert_int_eq(49, encres.encoded);
+	src.single = 0xFF;
+	encres = der_encode_to_buffer(&asn_DEF_RsyncRequest, &src, buf + 16, sizeof(buf) - 16);
+	ck_assert_int_eq(52, encres.encoded);
 
 	decres = ber_decode(&asn_DEF_RsyncRequest, (void **)&dst, buf, sizeof(buf));
 	ck_assert_int_eq(RC_OK, decres.code);
-	ck_assert_int_eq(13, decres.consumed);
+	ck_assert_int_eq(16, decres.consumed);
 	ck_assert_uint_eq(3, dst->url.size);
 	ck_assert_mem_eq("url", dst->url.buf, 3);
 	ck_assert_uint_eq(4, dst->path.size);
 	ck_assert_mem_eq("path", dst->path.buf, 4);
+	ck_assert_int_eq(0, dst->single);
 
 	dst = NULL;
 
 	/* Fragment */
-	decres = ber_decode(&asn_DEF_RsyncRequest, (void **)&dst, buf + 13, 13);
+	decres = ber_decode(&asn_DEF_RsyncRequest, (void **)&dst, buf + 16, 16);
 	ck_assert_int_eq(RC_WMORE, decres.code);
-	ck_assert_int_eq(13, decres.consumed);
+	ck_assert_int_eq(16, decres.consumed);
 	ck_assert_ptr_ne(NULL, dst);
 
-	decres = ber_decode(&asn_DEF_RsyncRequest, (void **)&dst, buf + 26, sizeof(buf) - 26);
+	decres = ber_decode(&asn_DEF_RsyncRequest, (void **)&dst, buf + 32, sizeof(buf) - 32);
 	ck_assert_int_eq(RC_OK, decres.code);
 	ck_assert_int_eq(36, decres.consumed);
 	ck_assert_uint_eq(21, dst->url.size);
 	ck_assert_mem_eq("https://a.b.c/d/e.cer", dst->url.buf, 21);
 	ck_assert_uint_eq(22, dst->path.size);
 	ck_assert_mem_eq("tmp/http/a.b.c/d/e.cer", dst->path.buf, 22);
+	ck_assert_int_eq(0xFF, dst->single);
 }
 END_TEST
 

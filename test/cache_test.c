@@ -12,6 +12,10 @@
 MOCK(rrdp_ctx2json, json_t *, json_object(), struct rrdp_ctx const *ctx)
 MOCK_INT(rrdp_json2ctx, 0, json_t *json, char *path, struct rrdp_ctx **ctx)
 MOCK_VOID(rrdpctx_free, struct rrdp_ctx *ctx)
+MOCK_ABORT_VOID(rsync_free, struct rsync_ctx *ctx)
+__MOCK_ABORT(rsync_ctx2json, json_t *, NULL, struct rsync_ctx *ctx)
+MOCK_ABORT_INT(rsync_json2ctx, json_t *json, struct cache_mapping *root,
+    struct rsync_ctx **result)
 MOCK_ABORT_PTR(tactx_create, ta_context, char const *fallback)
 MOCK_ABORT_VOID(tactx_free, struct ta_context *ctx)
 
