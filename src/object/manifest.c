@@ -287,7 +287,7 @@ check_file_and_hash(struct FileAndHash *fah, struct cache_file *file)
 		    fah->hash.size, SHA256_DIGEST_LENGTH);
 
 	if (memcmp(fah->hash.buf, file->hash, SHA256_DIGEST_LENGTH) != 0)
-		pr_panic("File '%.*s' does not match its expected hash.",
+		return pr_err("File '%.*s' does not match its expected hash.",
 		    (int)fah->file.size, fah->file.buf);
 
 	return 0;
