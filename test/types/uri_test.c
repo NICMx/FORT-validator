@@ -190,6 +190,29 @@ START_TEST(test_3986_pct_encoding)
 }
 END_TEST
 
+#define ck_is_child(p, c, e)						\
+	do {								\
+		__URI_INIT(&parent, p);					\
+		__URI_INIT(&child, c);					\
+		ck_assert_int_eq(e, uri_is_child(&parent, &child));	\
+	} while (0)
+
+START_TEST(test_is_child)
+{
+	struct uri parent;
+	struct uri child;
+
+	ck_is_child("https://a", "https://a/b", 1);
+	ck_is_child("https://a/b", "https://a/b/c", 1);
+	ck_is_child("https://a", "https://a/b/c", 0);
+	ck_is_child("https://ab", "https://a", 0);
+	ck_is_child("https://a", "https://a", 0);
+	ck_is_child("https://a/b/c", "https://a/d/c/e", 0);
+	ck_is_child("https://a", "https://ab", 0);
+	ck_is_child("https://a/b", "https://a", 0);
+}
+END_TEST
+
 #define ck_assert_origin(expected, s1, s2)				\
 	do {								\
 		__URI_INIT(&u1, s1);					\
@@ -711,6 +734,7 @@ static Suite *create_suite(void)
 	tcase_add_test(misc, test_rewind);
 	tcase_add_test(misc, test_unknown_protocols);
 	tcase_add_test(misc, test_awkward_dot_dotting);
+	tcase_add_test(misc, test_is_child);
 	tcase_add_test(misc, test_same_origin);
 	tcase_add_test(misc, test_utf8);
 

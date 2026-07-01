@@ -1660,8 +1660,16 @@ handle_sia_ca(void *ext, void *arg)
 		return error;
 
 	/* Manifest */
-	return handle_ad(nid_ad_mft(), &RPKI_MANIFEST, sia,
+	error = handle_ad(nid_ad_mft(), &RPKI_MANIFEST, sia,
 	    handle_rpkiManifest, uris);
+	if (error)
+		return error;
+
+	if (!uri_is_child(&uris->caRepository, &uris->rpkiManifest))
+		return pr_err("RPP %s does not directly contain manifest %s.",
+		    uri_str(&uris->caRepository), uri_str(&uris->rpkiManifest));
+
+	return 0;
 }
 
 static int

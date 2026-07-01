@@ -960,6 +960,23 @@ uri_equals(struct uri const *u1, struct uri const *u2)
 }
 
 bool
+uri_is_child(struct uri const *parent, struct uri const *child)
+{
+	array_index i;
+
+	if (parent->_len >= child->_len)
+		return false;
+	if (memcmp(parent->_str, child->_str, parent->_len) != 0)
+		return false;
+	if (child->_str[parent->_len] != '/')
+		return false;
+	for (i = parent->_len + 1; i < child->_len; i++)
+		if (child->_str[i] == '/')
+			return false;
+	return true;
+}
+
+bool
 uri_has_extension(struct uri const *url, char const *ext)
 {
 	return strcmp(url->_str + url->_len - strlen(ext), ext) == 0;

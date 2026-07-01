@@ -29,6 +29,7 @@ bool uri_is_rsync(struct uri const *);
 bool uri_is_https(struct uri const *);
 
 bool uri_equals(struct uri const *, struct uri const *);
+bool uri_is_child(struct uri const *, struct uri const *);
 bool uri_has_extension(struct uri const *, char const *);
 bool uri_same_origin(struct uri const *, struct uri const *);
 

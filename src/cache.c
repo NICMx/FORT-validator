@@ -963,7 +963,6 @@ ongoing:	mutex_unlock(&tbl->lock);
 }
 
 /* XXX Fallback only if parent is fallback */
-/* XXX Make sure somewhere validates rpkiManifest matches caRepository */
 
 validation_verdict
 querier_downgrade(struct rpp_querier *dao)
