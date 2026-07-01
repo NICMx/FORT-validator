@@ -123,7 +123,7 @@ add_file(struct files_ht *table, struct cache_mapping *root, char *path,
 
 	uri_str = path_join(uri_str(&root->url), uri_path);
 	__uri_init(&uri, uri_str, strlen(uri_str));
-	file = cachefile_create(&uri, path, uri_path + 1, csum);
+	file = cachefile_create(&uri, path, path, csum);
 	uri_cleanup(&uri);
 
 	filerefs_add_uri(table, file, 0);
@@ -229,9 +229,9 @@ rsync_reindex(struct rsync_ctx **_ctx, struct cache_mapping *root)
 
 	if (!ctx) {
 		*_ctx = ctx = pzalloc(sizeof(struct rsync_ctx));
-		ctx->remote_path = path_join(root->path, "remote");
+		ctx->remote_path = path_join(root->path, "rmt");
 		ctx->new_path = path_join(root->path, "new");
-		ctx->fb_path = path_join(root->path, "fallback");
+		ctx->fb_path = path_join(root->path, "fbk");
 		cseq_init(&ctx->fbseq, ctx->fb_path, 0, false);
 	}
 
@@ -313,6 +313,29 @@ cachefile_set_path(struct cache_file *file, char *path, size_t id_offset)
 	file->id = path + id_offset;
 }
 
+static char *
+sed_state(char const *path, char const *old, char const *new)
+{
+	char *result;
+	char *slash;
+
+	result = pstrdup(path);
+
+	slash = strchr(path, '/');
+	if (!slash)
+		pr_panic("Path lacks a first slash: %s", path);
+	slash = strchr(slash + 1, '/');
+	if (!slash)
+		pr_panic("Path lacks a second slash: %s", path);
+	if (strncmp(slash + 1, old, 3) != 0)
+		pr_panic("Old path lacks '%s' component: %s", old, path);
+
+	slash[1] = new[0];
+	slash[2] = new[1];
+	slash[3] = new[2];
+	return result;
+}
+
 static int
 commit(struct rsync_ctx *ctx, struct cache_file_ref *new)
 {
@@ -325,7 +348,7 @@ commit(struct rsync_ctx *ctx, struct cache_file_ref *new)
 	int error;
 
 	src_path = new->file->map.path;
-	dst_path = path_join(ctx->remote_path, new->file->id);
+	dst_path = sed_state(src_path, "new", "rmt");
 
 	if (file_isreg(dst_path)) {
 		fbs = find_fallbacks(ctx, dst_path);
@@ -344,11 +367,11 @@ commit(struct rsync_ctx *ctx, struct cache_file_ref *new)
 				goto cancel;
 			}
 
-			cachefile_set_path(fbs.files[0], newpath, id - newpath);
+			cachefile_set_path(fbs.files[0], newpath, 0);
 			for (f = 1; f < fbs.count; f++)
 				if (fbs.files[f]->map.path != newpath)
 					cachefile_set_path(fbs.files[f],
-					    pstrdup(newpath), id - newpath);
+					    pstrdup(newpath), 0);
 		}
 		free(fbs.files);
 
@@ -364,13 +387,10 @@ commit(struct rsync_ctx *ctx, struct cache_file_ref *new)
 		goto cancel;
 
 	filerefs_rm(&ctx->new, new);
-	id = str_skip(dst_path, ctx->remote_path);
-	if (!id)
-		pr_crit("Missing '%s' prefix: %s", ctx->remote_path, dst_path);
 
 	free(new->file->map.path);
 	new->file->map.path = dst_path;
-	new->file->id = id;
+	new->file->id = dst_path;
 
 	filerefs_replace_uri(&ctx->remote, new, 0, false);
 
@@ -461,7 +481,7 @@ rsync_ctx2json(struct rsync_ctx *ctx)
 			}
 		}
 		if (json_object_add(fbs, uri_str(&fb->caRepository),
-				    fallback2json(fb, FHKT_PATH)))
+				    fallback2json(fb)))
 			goto fail;
 	}
 
@@ -481,9 +501,9 @@ rsync_json2ctx(json_t *json, struct cache_mapping *root,
 	int error;
 
 	ctx = pzalloc(sizeof(struct rsync_ctx));
-	ctx->remote_path = path_join(root->path, "remote");
+	ctx->remote_path = path_join(root->path, "rmt");
 	ctx->new_path = path_join(root->path, "new");
-	ctx->fb_path = path_join(root->path, "fallback");
+	ctx->fb_path = path_join(root->path, "fbk");
 
 	error = json_get_object(json, "files", &child);
 	if (error)

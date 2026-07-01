@@ -157,8 +157,11 @@ json2cachefile(char const *key, char const *pfx, json_t *json)
 		goto file;
 	if (json2hash(json, "hash", file->hash))
 		goto url;
+
 	file->map.path = path_join(pfx, key);
-	file->id = file->map.path + (strlen(file->map.path) - strlen(key));
+	file->id = pfx
+	    ? (file->map.path + (strlen(file->map.path) - strlen(key)))
+	    : file->map.path;
 	file->refcount = 1;
 
 	return file;
@@ -344,22 +347,15 @@ json2files(json_t *jfiles, char const *path, struct files_ht *files)
 }
 
 json_t *
-filerefs2json(struct files_ht *refs, enum files_key_type kt)
+filerefs2json(struct files_ht *refs)
 {
 	json_t *jfiles;
 	struct cache_file_ref *fileref, *tmp;
-	char const *key;
 
 	jfiles = json_array_new();
 
 	HASH_ITER(hh, refs->ht, fileref, tmp) {
-		switch (kt) {
-		case FHKT_ID:	key = fileref->file->id;	break;
-		case FHKT_PATH: key = fileref->file->map.path;	break;
-		default:	pr_panic("Unknown key type: %u", kt);
-		}
-
-		if (json_array_add(jfiles, json_str_new(key))) {
+		if (json_array_add(jfiles, json_str_new(fileref->file->id))) {
 			json_decref(jfiles);
 			return NULL;
 		}
@@ -618,13 +614,13 @@ fallbacks_print(struct fallback_ht *fbs, int indent)
 }
 
 json_t *
-fallback2json(struct fallback *fb, enum files_key_type kt)
+fallback2json(struct fallback *fb)
 {
 	json_t *json;
 
 	json = json_obj_new();
 
-	if (json_object_add(json, "files", filerefs2json(&fb->files, kt)))
+	if (json_object_add(json, "files", filerefs2json(&fb->files)))
 		goto fail;
 	if (json_object_add(json, "manifest", mft2json(&fb->mft)))
 		goto fail;

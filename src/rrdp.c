@@ -1682,7 +1682,7 @@ step2json(struct rrdp_step *step, bool write_files)
 		if (json_add_hash(jstep, "hash", step->delta_hash.bytes))
 			goto fail;
 	if (write_files)
-		if (json_object_add(jstep, "files", filerefs2json(&step->files, FHKT_ID)))
+		if (json_object_add(jstep, "files", filerefs2json(&step->files)))
 			goto fail;
 
 	return jstep;
@@ -1720,7 +1720,7 @@ session2json(struct rrdp_session *session)
 	HASH_ITER(hh, session->fbs.ht, fb, tmp)
 		if (json_object_add(jfbs,
 		    uri_str(&fb->caRepository),
-		    fallback2json(fb, FHKT_ID)))
+		    fallback2json(fb)))
 			goto fail;
 
 	return jsession;

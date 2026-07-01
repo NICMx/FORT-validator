@@ -64,14 +64,9 @@ struct cache_file_ref *filerefs_find_uri(struct files_ht *, struct uri const *);
 void filerefs_clear_written(struct files_ht *);
 int filerefs_write(json_t *, struct files_ht *);
 
-enum files_key_type {
-	FHKT_ID,
-	FHKT_PATH,
-};
-
 int json2files(json_t *, char const *, struct files_ht *);
 
-json_t *filerefs2json(struct files_ht *, enum files_key_type);
+json_t *filerefs2json(struct files_ht *);
 int json2filerefs(json_t *, char const *, struct files_ht *, struct files_ht *);
 
 void filerefs_print(struct files_ht *, int);
@@ -111,7 +106,7 @@ void fallbacks_clear(struct fallback_ht *, bool);
 void fallbacks_cleanup(struct fallback_ht *);
 void fallbacks_print(struct fallback_ht *, int);
 
-json_t *fallback2json(struct fallback *, enum files_key_type);
+json_t *fallback2json(struct fallback *);
 int json2fallback(json_t *, char const *, struct files_ht *, struct fallback **);
 int json2fallbacks(json_t *, struct fallback_ht *, struct files_ht *);
 

@@ -257,7 +257,7 @@ execvp_rsync(struct rsync_task *task, int fds[2][2])
 		if (error)
 			return error;
 
-		dest = path_join(task->path, "remote");
+		dest = path_join(task->path, "rmt");
 		compare_dest = NULL;
 
 		pr_trc("mkdir %s", dest);
