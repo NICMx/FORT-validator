@@ -2014,7 +2014,7 @@ retry:	vv = querier_downgrade(ca->querier);
 
 	mft = querier_map(ca->querier, &ca->uris.rpkiManifest);
 	if (!mft) {
-		pr_err("Manifest missing.");
+		pr_err("Manifest missing: %s", uri_str(&ca->uris.rpkiManifest));
 		goto retry;
 	}
 
