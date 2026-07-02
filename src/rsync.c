@@ -268,7 +268,7 @@ execvp_rsync(struct rsync_task *task, int fds[2][2])
 				    dest, strerror(error));
 				return error;
 			}
-			compare_dest = "../remote";
+			compare_dest = "../rmt";
 			free(dest);
 			dest = path_join(task->path, "new");
 		}

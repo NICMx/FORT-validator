@@ -408,7 +408,7 @@ rsync_cleanup(struct rsync_ctx *ctx)
 	/* 1. Delete noncommitted fallbacks */
 	fallbacks_cleanup(&ctx->fbs);
 
-	/* 2. Move all the new/ files to remote/ */
+	/* 2. Move all the new/ files to rmt/ */
 	if (HASH_COUNT(ctx->new.ht) != 0) {
 		HASH_ITER(hh, ctx->new.ht, new, tmpn)
 			if (commit(ctx, new) != 0)
@@ -416,7 +416,7 @@ rsync_cleanup(struct rsync_ctx *ctx)
 		file_rm_rf(ctx->new_path);
 	}
 
-	/* 3. Delete old unused remote/ files */
+	/* 3. Delete old unused rmt/ files */
 	/* XXX */
 
 	return true;
