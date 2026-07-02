@@ -143,9 +143,6 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 
 	setopt_str(result, CURLOPT_ACCEPT_ENCODING, "");
 
-	setopt_long(result, CURLOPT_FOLLOWLOCATION, 1);
-	setopt_long(result, CURLOPT_MAXREDIRS, config_get_max_redirs());
-
 	setopt_long(result, CURLOPT_CONNECTTIMEOUT,
 	    config_get_http_connect_timeout());
 	setopt_long(result, CURLOPT_TIMEOUT,
@@ -300,6 +297,7 @@ http_download(struct uri const *src, char const *dst,
 	CURLcode res;
 	long http_code;
 	char *redirect;
+	char const *redirect_const;
 	unsigned int r;
 	int error;
 
@@ -374,33 +372,27 @@ http_download(struct uri const *src, char const *dst,
 			goto end;
 		}
 
-		if (redirect != NULL) {
-			free(redirect);
-			redirect = NULL;
-		}
-
 		res = curl_easy_getinfo(handler.curl, CURLINFO_REDIRECT_URL,
-		    &redirect);
+		    &redirect_const);
 		if (res != CURLE_OK) {
 			error = pr_err("curl_easy_getinfo(CURLINFO_REDIRECT_URL) returned %u.", res);
-			redirect = NULL;
 			goto end;
 		}
 
-		if (redirect == NULL)
+		if (redirect_const == NULL)
 			break;
 		r++;
 		if (r > config_get_max_redirs()) {
 			error = pr_err("Too many redirects.");
-			redirect = NULL;
 			goto end;
 		}
-		error = check_same_origin(src, redirect);
+		error = check_same_origin(src, redirect_const);
 		if (error)
 			goto end;
 
-		/* The original redirect is destroyed during the next curl_easy_perform(). */
-		redirect = pstrdup(redirect);
+		/* redirect_const is freed by the next curl_easy_perform(). */
+		free(redirect);
+		redirect = pstrdup(redirect_const);
 	} while (true);
 
 	pr_trc("HTTP result code: %ld", http_code);
@@ -411,7 +403,6 @@ http_download(struct uri const *src, char const *dst,
 end:	http_easy_cleanup(&handler);
 	if (error)
 		file_rm_f(dst);
-	if (redirect != NULL)
-		free(redirect);
+	free(redirect);
 	return error;
 }
