@@ -971,7 +971,7 @@ querier_downgrade(struct rpp_querier *dao)
 		if (uri_str(&dao->uris->rpkiNotify) != NULL) {
 			vv = do_refresh(&cache.https, &dao->uris->rpkiNotify,
 			    false, dl_rrdp, &node);
-			if (node != NULL) {
+			if (node != NULL && node->ctx.v.rrdp != NULL) {
 				dao->status = CS_RRDP_REFRESH;
 				dao->rrdp = rrdpdao_create(node->ctx.v.rrdp,
 				   &dao->uris->caRepository);
