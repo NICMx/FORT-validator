@@ -1,5 +1,8 @@
 #include "str_token.h"
 
+#if OPENSSL_VERSION_MAJOR >= 4
+#include <crypto/asn1.h>
+#endif
 #include <openssl/bio.h>
 #include <stdint.h>
 #include <string.h>

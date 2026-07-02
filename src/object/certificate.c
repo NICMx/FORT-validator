@@ -1,5 +1,8 @@
 #include "object/certificate.h"
 
+#if OPENSSL_VERSION_MAJOR >= 4
+#include <crypto/asn1.h>
+#endif
 #include <openssl/asn1t.h>
 #include <openssl/bio.h>
 #if OPENSSL_VERSION_MAJOR >= 3
@@ -192,7 +195,7 @@ validate_printable_string(char const *str, char const *what)
 static int
 validate_issuer(X509 *cert, bool is_ta)
 {
-	X509_NAME *issuer;
+	X509_NAME const *issuer;
 	struct rfc5280_name *name;
 	char const *commonName;
 	int error;
@@ -221,7 +224,7 @@ validate_issuer(X509 *cert, bool is_ta)
  * @diff_pk_cb when the public key is different; return 0 if both are equal.
  */
 static int
-spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki,
+spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY const *cert_spki,
     int (*diff_alg_cb)(void), int (*diff_pk_cb)(void))
 {
 	ASN1_OBJECT *tal_alg;
@@ -317,7 +320,7 @@ root_different_pk_err(void)
 }
 
 static int
-validate_spki(X509_PUBKEY *cert_spki)
+validate_spki(X509_PUBKEY const *cert_spki)
 {
 	struct validation *state;
 	struct tal *tal;
@@ -369,7 +372,7 @@ validate_spki(X509_PUBKEY *cert_spki)
  * 2048-bit modulus and a public exponent (e) of 65,537."
  */
 static int
-validate_subject_public_key(X509_PUBKEY *pubkey)
+validate_subject_public_key(X509_PUBKEY const *pubkey)
 {
 #if OPENSSL_VERSION_MAJOR >= 3
 
@@ -504,7 +507,7 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 static int
 validate_public_key(X509 *cert, enum cert_type type)
 {
-	X509_PUBKEY *pubkey;
+	X509_PUBKEY const *pubkey;
 	EVP_PKEY *evppkey;
 	X509_ALGOR *pa;
 	int ok;
@@ -767,7 +770,7 @@ certificate_validate_signature(X509 *cert, ANY_t *signedData,
 {
 	static const uint8_t EXPLICIT_SET_OF_TAG = 0x31;
 
-	X509_PUBKEY *public_key;
+	X509_PUBKEY const *public_key;
 	EVP_MD_CTX *ctx;
 	struct encoded_signedAttrs signedAttrs;
 	int error;
@@ -1131,9 +1134,9 @@ abort:
 }
 
 static int
-handle_ip_extension(X509_EXTENSION *ext, struct resources *resources)
+handle_ip_extension(X509_EXTENSION const *ext, struct resources *resources)
 {
-	ASN1_OCTET_STRING *string;
+	ASN1_OCTET_STRING const *string;
 	struct IPAddrBlocks *blocks;
 	OCTET_STRING_t *family;
 	int i;
@@ -1180,10 +1183,10 @@ end:
 }
 
 static int
-handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
+handle_asn_extension(X509_EXTENSION const *ext, struct resources *resources,
     bool allow_inherit)
 {
-	ASN1_OCTET_STRING *string;
+	ASN1_OCTET_STRING const *string;
 	struct ASIdentifiers *ids;
 	int error;
 
@@ -1204,7 +1207,7 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
     int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
     char const *policy_rfc, char const *bad_ext_rfc, bool allow_asn_inherit)
 {
-	X509_EXTENSION *ext;
+	X509_EXTENSION const *ext;
 	int nid;
 	int i;
 	int error;

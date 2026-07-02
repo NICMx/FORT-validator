@@ -1,5 +1,8 @@
 #include "extension.h"
 
+#if OPENSSL_VERSION_MAJOR >= 4
+#include <crypto/asn1.h>
+#endif
 #include <openssl/asn1t.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
@@ -932,7 +935,7 @@ cannot_decode(struct extension_metadata const *meta)
 int
 validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 {
-	X509_PUBKEY *pubkey;
+	X509_PUBKEY const *pubkey;
 	const unsigned char *spk;
 	int spk_len;
 	int ok;

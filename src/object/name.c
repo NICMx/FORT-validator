@@ -1,5 +1,8 @@
 #include "object/name.h"
 
+#if OPENSSL_VERSION_MAJOR >= 4
+#include <crypto/asn1.h>
+#endif
 #include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
@@ -21,7 +24,7 @@ struct rfc5280_name {
 };
 
 static int
-name2string(X509_NAME_ENTRY *name, char **_result)
+name2string(X509_NAME_ENTRY const *name, char **_result)
 {
 	const ASN1_STRING *data;
 	char *result;
@@ -39,12 +42,12 @@ name2string(X509_NAME_ENTRY *name, char **_result)
 }
 
 int
-x509_name_decode(X509_NAME *name, char const *what,
+x509_name_decode(X509_NAME const *name, char const *what,
     struct rfc5280_name **_result)
 {
 	struct rfc5280_name *result;
 	int i;
-	X509_NAME_ENTRY *entry;
+	X509_NAME_ENTRY const *entry;
 	int nid;
 	int error;
 
@@ -139,7 +142,7 @@ x509_name_equals(struct rfc5280_name *a, struct rfc5280_name *b)
 }
 
 int
-validate_issuer_name(char const *container, X509_NAME *issuer)
+validate_issuer_name(char const *container, X509_NAME const *issuer)
 {
 	struct validation *state;
 	X509 *parent;
@@ -193,7 +196,7 @@ end:	x509_name_put(parent_subject);
 }
 
 void
-x509_name_pr_debug(const char *prefix, X509_NAME *name)
+x509_name_pr_debug(const char *prefix, X509_NAME const *name)
 {
 	if (!log_val_enabled(LOG_DEBUG))
 		return;

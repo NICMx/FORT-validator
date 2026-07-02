@@ -1,5 +1,8 @@
 #include "libcrypto_util.h"
 
+#if OPENSSL_VERSION_MAJOR >= 4
+#include <crypto/asn1.h>
+#endif
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/buffer.h>
@@ -30,14 +33,16 @@ asn1time2str(ASN1_TIME const *tm)
 	if (bio == NULL)
 		enomem_panic();
 
+	res = NULL;
 	if (BIO_PR_TIME(bio, tm) <= 0)
-		return NULL;
+		goto end;
+	if (BIO_flush(bio) <= 0)
+		goto end;
 
-	BIO_flush(bio);
 	BIO_get_mem_ptr(bio, &buf);
 	res = pstrndup(buf->data, buf->length);
 
-	BIO_free_all(bio);
+end:	BIO_free_all(bio);
 	return res;
 }
 
@@ -134,7 +139,7 @@ name2json(X509_NAME const *name)
 {
 	json_t *root, *rdnSeq;
 	json_t *typeval, *child;
-	X509_NAME_ENTRY *entry;
+	X509_NAME_ENTRY const *entry;
 	int nid;
 	const ASN1_STRING *data;
 	int i;

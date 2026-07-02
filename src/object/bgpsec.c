@@ -28,7 +28,7 @@ handle_bgpsec(X509 *cert, struct resources *parent_resources, struct rpp *pp)
 	unsigned char *ski;
 	enum rpki_policy policy;
 	struct resources *resources;
-	X509_PUBKEY *pub_key;
+	X509_PUBKEY const *pub_key;
 	unsigned char *cert_spk, *tmp;
 	int cert_spk_len;
 	struct resource_params res_params;
