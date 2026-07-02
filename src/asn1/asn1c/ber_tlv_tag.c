@@ -13,6 +13,8 @@ ber_fetch_tag(const void *ptr, size_t size, ber_tlv_tag_t *tag_r) {
 	ber_tlv_tag_t tclass;
 	size_t skipped;
 
+	*tag_r = 0;
+
 	if(size == 0)
 		return 0;
 
