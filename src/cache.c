@@ -418,10 +418,6 @@ cache_setup1(void)
 
 	cachedir = config_get_local_repository();
 
-	error = file_mkdir(cachedir, true);
-	if (error)
-		return error;
-
 	pr_trc("cd %s", cachedir);
 	if (chdir(cachedir) < 0) {
 		error = errno;
