@@ -210,6 +210,7 @@ START_TEST(test_is_child)
 	ck_is_child("https://a/b/c", "https://a/d/c/e", 0);
 	ck_is_child("https://a", "https://ab", 0);
 	ck_is_child("https://a/b", "https://a", 0);
+	ck_is_child("rsync://a/b/c/", "rsync://a/b/c/d", 1);
 }
 END_TEST
 

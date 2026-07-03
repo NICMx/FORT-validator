@@ -968,8 +968,9 @@ uri_is_child(struct uri const *parent, struct uri const *child)
 		return false;
 	if (memcmp(parent->_str, child->_str, parent->_len) != 0)
 		return false;
-	if (child->_str[parent->_len] != '/')
-		return false;
+	if (parent->_str[parent->_len - 1] != '/')
+		if (child->_str[parent->_len] != '/')
+			return false;
 	for (i = parent->_len + 1; i < child->_len; i++)
 		if (child->_str[i] == '/')
 			return false;
