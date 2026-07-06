@@ -81,6 +81,18 @@ START_TEST(test_pdu_header_from_stream)
 }
 END_TEST
 
+static struct rtr_request *
+pop_request(struct pdu_stream *stream)
+{
+	struct rtr_request *request;
+
+	request = TAILQ_FIRST(&stream->requests);
+	ck_assert_ptr_ne(NULL, request);
+	TAILQ_REMOVE(&stream->requests, request, lh);
+
+	return request;
+}
+
 START_TEST(test_serial_query_from_stream)
 {
 	unsigned char input[] = {
@@ -91,10 +103,14 @@ START_TEST(test_serial_query_from_stream)
 	};
 	struct pdu_stream *stream;
 	struct rtr_request *request;
+	bool wakeup;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
-	ck_assert_uint_eq(true, pdustream_next(stream, &request));
+	wakeup = false;
+	ck_assert_uint_eq(false, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(true, wakeup);
 
+	request = pop_request(stream);
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
 	ck_assert_uint_eq(RTR_V1, request->pdu.rtr_version);
@@ -103,10 +119,10 @@ START_TEST(test_serial_query_from_stream)
 	ck_assert_uint_eq(0x0708, request->pdu.obj.sq.session_id);
 	ck_assert_uint_eq(12, request->pdu.raw.bytes_len);
 	ck_assert(memcmp(input, request->pdu.raw.bytes, 12) == 0);
-	ck_assert_uint_eq(1, request->eos);
+	ck_assert_ptr_eq(NULL, TAILQ_NEXT(request, lh));
 
 	rtreq_destroy(request);
-	pdustream_destroy(&stream);
+	pdustream_destroy(stream);
 }
 END_TEST
 
@@ -118,19 +134,24 @@ START_TEST(test_reset_query_from_stream)
 	};
 	struct pdu_stream *stream;
 	struct rtr_request *request;
+	bool wakeup;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V0);
-	ck_assert_uint_eq(true, pdustream_next(stream, &request));
+	wakeup = false;
+	ck_assert_uint_eq(false, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(true, wakeup);
+
+	request = pop_request(stream);
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
 	ck_assert_uint_eq(RTR_V0, request->pdu.rtr_version);
 	ck_assert_uint_eq(PDU_TYPE_RESET_QUERY, request->pdu.type);
 	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
 	ck_assert(memcmp(input, request->pdu.raw.bytes, 8) == 0);
-	ck_assert_uint_eq(1, request->eos);
-
+	ck_assert_ptr_eq(NULL, TAILQ_NEXT(request, lh));
 	rtreq_destroy(request);
-	pdustream_destroy(&stream);
+
+	pdustream_destroy(stream);
 }
 END_TEST
 
@@ -151,12 +172,16 @@ START_TEST(test_error_report_from_stream)
 		1, 2, 3, 4,
 	};
 	struct pdu_stream *stream;
-	struct rtr_request *request;
+	bool wakeup;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
-	ck_assert_uint_eq(false, pdustream_next(stream, &request));
-	ck_assert_ptr_eq(NULL, request);
-	pdustream_destroy(&stream);
+	wakeup = false;
+	ck_assert_uint_eq(false, pdustream_parse(stream, &wakeup));
+
+	ck_assert_int_eq(false, wakeup);
+	ck_assert_ptr_eq(NULL, TAILQ_FIRST(&stream->requests));
+
+	pdustream_destroy(stream);
 }
 END_TEST
 
@@ -164,7 +189,7 @@ END_TEST
 	ck_assert_uint_eq(_req->pdu.rtr_version, _version);		\
 	ck_assert_uint_eq(_req->pdu.type, PDU_TYPE_RESET_QUERY);
 
-#define ASSERT_SQ(_req, _version, _type, _session, _serial)		\
+#define ASSERT_SQ(_req, _version, _session, _serial)		\
 	ck_assert_uint_eq(_req->pdu.rtr_version, _version);		\
 	ck_assert_uint_eq(_req->pdu.type, PDU_TYPE_SERIAL_QUERY);	\
 	ck_assert_uint_eq(_req->pdu.obj.sq.session_id, _session);	\
@@ -174,7 +199,7 @@ START_TEST(test_multiple_pdus)
 {
 	unsigned char input1[] = {
 		/* reset query */	1, 2, 0, 0, 0, 0, 0, 8,
-		/* serial query */	1, 1, 0, 0, 0, 0, 0, 12, 1, 2, 3, 4,
+		/* serial query */	1, 1, 6, 7, 0, 0, 0, 12, 1, 2, 3, 4,
 		/* reset query */	1, 2, 3, 4, 0, 0, 0, 8,
 		/* reset query start */	1, 2, 3, 4,
 	};
@@ -184,6 +209,7 @@ START_TEST(test_multiple_pdus)
 	};
 	struct pdu_stream *stream;
 	struct rtr_request *request;
+	bool wakeup;
 	int pipes[2];
 
 	setup_pipes(pipes);
@@ -193,40 +219,128 @@ START_TEST(test_multiple_pdus)
 	/* Input 1 */
 
 	ck_assert_int_eq(32, write(pipes[1], input1, sizeof(input1)));
-	ck_assert_uint_eq(true, pdustream_next(stream, &request));
+	wakeup = false;
+	ck_assert_uint_eq(true, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(true, wakeup);
 
+	request = pop_request(stream);
+	ck_assert_int_eq(stream->fd, request->fd);
+	ck_assert_str_eq(stream->addr, request->client_addr);
+	ASSERT_RQ(request, RTR_V1);
+	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(input1, request->pdu.raw.bytes, 8) == 0);
+	rtreq_destroy(request);
+
+	request = pop_request(stream);
+	ck_assert_int_eq(stream->fd, request->fd);
+	ck_assert_str_eq(stream->addr, request->client_addr);
+	ASSERT_SQ(request, RTR_V1, 0x0607, 0x01020304);
+	ck_assert_uint_eq(12, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(input1 + 8, request->pdu.raw.bytes, 12) == 0);
+	rtreq_destroy(request);
+
+	request = pop_request(stream);
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
 	ASSERT_RQ(request, RTR_V1);
 	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
 	ck_assert(memcmp(input1 + 20, request->pdu.raw.bytes, 8) == 0);
-	ck_assert_uint_eq(0, request->eos);
-
+	ck_assert_ptr_eq(NULL, TAILQ_NEXT(request, lh));
 	rtreq_destroy(request);
 
 	/* Input 2 */
 
 	ck_assert_int_eq(12, write(pipes[1], input2, sizeof(input2)));
-	ck_assert_uint_eq(true, pdustream_next(stream, &request));
+	wakeup = false;
+	ck_assert_uint_eq(true, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(true, wakeup);
 
+	request = pop_request(stream);
 	ck_assert_int_eq(stream->fd, request->fd);
 	ck_assert_str_eq(stream->addr, request->client_addr);
 	ASSERT_RQ(request, RTR_V1);
 	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
-	ck_assert(memcmp(input2 + 4,  request->pdu.raw.bytes, 8) == 0);
-	ck_assert_uint_eq(0, request->eos);
+	ck_assert(memcmp(input1 + 20,  request->pdu.raw.bytes, 8) == 0);
+	rtreq_destroy(request);
 
+	request = pop_request(stream);
+	ck_assert_int_eq(stream->fd, request->fd);
+	ck_assert_str_eq(stream->addr, request->client_addr);
+	ASSERT_RQ(request, RTR_V1);
+	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(input2 + 4, request->pdu.raw.bytes, 8) == 0);
+	ck_assert_ptr_eq(NULL, TAILQ_NEXT(request, lh));
 	rtreq_destroy(request);
 
 	/* Input 3 */
 
 	close(pipes[1]);
-	ck_assert_uint_eq(false, pdustream_next(stream, &request));
-	ck_assert_ptr_eq(NULL, request);
+	wakeup = false;
+	ck_assert_uint_eq(false, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(false, wakeup);
+	ck_assert_ptr_eq(NULL, TAILQ_FIRST(&stream->requests));
 
 	/* Clean up */
 
-	pdustream_destroy(&stream);
+	pdustream_destroy(stream);
+}
+END_TEST
+
+static unsigned char reset_query[] = { 1, 2, 0, 0, 0, 0, 0, 8, };
+
+static void
+ck_one_reset_query(struct pdu_stream *stream)
+{
+	struct rtr_request *request;
+
+	request = pop_request(stream);
+	ck_assert_int_eq(stream->fd, request->fd);
+	ck_assert_str_eq(stream->addr, request->client_addr);
+	ASSERT_RQ(request, RTR_V1);
+	ck_assert_uint_eq(8, request->pdu.raw.bytes_len);
+	ck_assert(memcmp(reset_query, request->pdu.raw.bytes, 8) == 0);
+	rtreq_destroy(request);
+}
+
+START_TEST(test_too_many_pdus)
+{
+	struct pdu_stream *stream;
+	struct rtr_request *request;
+	bool wakeup;
+	int pipes[2];
+
+	setup_pipes(pipes);
+
+	stream = pdustream_create(pipes[0], "192.0.2.1");
+
+	ck_assert_int_eq(8, write(pipes[1], reset_query, sizeof(reset_query)));
+	ck_assert_int_eq(8, write(pipes[1], reset_query, sizeof(reset_query)));
+	ck_assert_int_eq(8, write(pipes[1], reset_query, sizeof(reset_query)));
+	ck_assert_int_eq(8, write(pipes[1], reset_query, sizeof(reset_query)));
+	wakeup = false;
+	ck_assert_uint_eq(true, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(true, wakeup);
+
+	ck_one_reset_query(stream);
+
+	ck_assert_int_eq(8, write(pipes[1], reset_query, sizeof(reset_query)));
+	wakeup = false;
+	ck_assert_uint_eq(true, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(true, wakeup);
+
+	ck_assert_int_eq(8, write(pipes[1], reset_query, sizeof(reset_query)));
+	wakeup = false;
+	ck_assert_uint_eq(false, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(false, wakeup);
+
+	ck_one_reset_query(stream);
+	ck_one_reset_query(stream);
+	ck_one_reset_query(stream);
+	ck_one_reset_query(stream);
+	ck_assert_ptr_eq(NULL, TAILQ_FIRST(&stream->requests));
+
+	close(pipes[1]);
+	pdustream_destroy(stream);
 }
 END_TEST
 
@@ -234,14 +348,17 @@ START_TEST(test_interrupted)
 {
 	unsigned char input[] = { 0, 1 };
 	struct pdu_stream *stream;
-	struct rtr_request *request;
+	bool wakeup;
 
 	stream = create_stream_fd(input, sizeof(input), RTR_V1);
+	wakeup = false;
 
-	ck_assert_uint_eq(false, pdustream_next(stream, &request));
-	ck_assert_ptr_eq(NULL, request);
+	/* XXX WTF? */
+	ck_assert_uint_eq(false, pdustream_parse(stream, &wakeup));
+	ck_assert_int_eq(false, wakeup);
+	ck_assert_ptr_eq(NULL, TAILQ_FIRST(&stream->requests));
 
-	pdustream_destroy(&stream);
+	pdustream_destroy(stream);
 }
 END_TEST
 
@@ -397,6 +514,7 @@ static Suite *pdu_suite(void)
 	tcase_add_test(core, test_reset_query_from_stream);
 	tcase_add_test(core, test_error_report_from_stream);
 	tcase_add_test(core, test_multiple_pdus);
+	tcase_add_test(core, test_too_many_pdus);
 
 	errors = tcase_create("Errors");
 	tcase_add_test(errors, test_interrupted);

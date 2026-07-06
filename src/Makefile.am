@@ -111,8 +111,6 @@ fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
 
-fort_SOURCES += thread/thread_pool.c thread/thread_pool.h
-
 fort_SOURCES += xml/relax_ng.c xml/relax_ng.h
 
 include asn1/asn1c/Makefile.include

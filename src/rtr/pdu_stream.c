@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/queue.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -22,18 +23,6 @@ enum buffer_state {
 	BS_ERROR,
 };
 
-struct pdu_stream {
-	int fd;
-	char addr[INET6_ADDRSTRLEN]; /* Printable address of the client. */
-	int rtr_version; /* -1: unset; > 0: version number */
-
-	unsigned char buffer[RTRPDU_MAX_LEN2];
-
-	/* buffer's active bytes */
-	unsigned char *start;
-	unsigned char *end;
-};
-
 struct pdu_header {
 	enum rtr_version version;
 	enum pdu_type type;
@@ -47,9 +36,8 @@ struct pdu_header {
 
 struct pdu_stream *pdustream_create(int fd, char const *addr)
 {
-	struct pdu_stream *result;
+	struct pdu_stream *result = pmalloc(sizeof(struct pdu_stream));
 
-	result = pmalloc(sizeof(struct pdu_stream));
 	result->fd = fd;
 	strcpy(result->addr, addr);
 	result->rtr_version = -1;
@@ -57,13 +45,17 @@ struct pdu_stream *pdustream_create(int fd, char const *addr)
 	result->start = result->buffer;
 	result->end = result->buffer;
 
+	result->claimed = false;
+	TAILQ_INIT(&result->requests);
+
+	result->eos = false;
+
 	return result;
 }
 
 void
-pdustream_destroy(struct pdu_stream **_stream)
+pdustream_destroy(struct pdu_stream *stream)
 {
-	struct pdu_stream *stream = *_stream;
 	close(stream->fd);
 	free(stream);
 }
@@ -80,10 +72,6 @@ get_length(struct pdu_stream *stream)
  *
  * It might read more than one PDU into the buffer, and extremely unlikely,
  * the last PDU might be incomplete (even if it's the only one).
- *
- * Returns
- * - true: success.
- * - false: oh noes; close socket.
  */
 static enum buffer_state
 update_buffer(struct pdu_stream *in /* "in"put stream */)
@@ -107,17 +95,18 @@ update_buffer(struct pdu_stream *in /* "in"put stream */)
 				pr_op_debug("Reached stream limit for now.");
 				return BS_WOULD_BLOCK;
 			} else {
-				pr_op_err("Client socket read interrupted: %s",
+				pr_op_err("Client socket read errored: %s",
 				    strerror(error));
 				return BS_ERROR;
 			}
 		}
 
 		if (consumed == 0) {
-			pr_op_debug("Client '%s' closed the socket.",
-			    in->addr);
+			pr_op_debug("Client '%s' closed the socket.", in->addr);
 			return BS_EOS;
 		}
+
+		pr_op_debug("Received %zd bytes from %s.", consumed, in->addr);
 	}
 
 	/*
@@ -446,50 +435,59 @@ create_request(struct pdu_stream *stream, struct pdu_header *hdr,
 	result->pdu.rtr_version = hdr->version;
 	result->pdu.type = hdr->type;
 	result->pdu.raw = *raw;
-	result->eos = false;
 
 	return result;
 }
 
+static int
+queue_request(struct pdu_stream *stream, struct rtr_request *req)
+{
+	struct rtr_request *node;
+	unsigned int i;
+
+	if (TAILQ_EMPTY(&stream->requests)) {
+		TAILQ_INSERT_HEAD(&stream->requests, req, lh);
+		pr_op_debug("Queued first request: %s", stream->addr);
+		return 0;
+	}
+
+	i = 0;
+	TAILQ_FOREACH(node, &stream->requests, lh) {
+		if ((++i) >= 4)
+			break;
+
+		if (TAILQ_NEXT(node, lh) == NULL) {
+			TAILQ_INSERT_AFTER(&stream->requests, node, req, lh);
+			pr_op_debug("Queued request: %s", stream->addr);
+			return 0;
+		}
+	}
+
+	pr_op_err("%s: Too many simultaneous requests; Dropping RTR connection.",
+	    stream->addr);
+	return ENOSPC;
+}
+
 /*
- * Returns the next "usable" PDU in the stream. Does not block.
- *
- * I call it "usable" because there can technically be multiple PDUs in the
- * stream, and if that happens, it doesn't make sense to handle all of them
- * sequentially. So there's no queuing.
+ * Parses request stream PDUs into stream's PDU list. Does not block.
  *
  * If there is at least one Error Report, it'll induce end of stream. This is
  * because all the currently defined client-sourced Error Reports are fatal.
  * The caller does not need to concern itself with handling Error Reports.
  *
- * Otherwise, if there are multiple PDUs in the stream, the last one will be
- * returned, and the rest will be ignored.
- * This is because Serial Queries and Reset Queries are the only non-error PDUs
- * the server is supposed to receive, and they serve the same purpose. If the
- * client sent two of them (maybe because we took too long to respond for some
- * reason), it's most likely given up on the old one.
- *
- * Just to be clear, most of this is probably just paranoid error handling; a
- * well-behaving client will never send us multiple PDUs in quick succession.
- * But we don't know for sure how much buffering the underlying socket does,
- * so we want to do something sensible if it happens.
- *
  * Returns:
- * true: Success. @result might or might not point to a PDU; check NULL.
- * false: Communication ended or broken; close the connection, ignore @result.
+ * true: Success. The list might or might not be populated; check empty.
+ * false: Input stream ended or broken; handle PDUs and end connection.
  */
 bool
-pdustream_next(struct pdu_stream *stream, struct rtr_request **result)
+pdustream_parse(struct pdu_stream *stream, bool *wakeup)
 {
 	enum buffer_state state;
 	struct pdu_header hdr;
 	struct rtr_buffer raw = { 0 };
-	struct rtr_request *request = NULL;
-	struct rtr_request *request_tmp;
+	struct rtr_request *request;
 	size_t remainder;
 	int error;
-
-	*result = NULL;
 
 again:
 	state = update_buffer(stream);
@@ -497,7 +495,7 @@ again:
 		return false;
 
 	while (stream->start < stream->end) {
-		request_tmp = NULL;
+		request = NULL;
 		remainder = get_length(stream);
 
 		/* Read header. */
@@ -534,15 +532,15 @@ again:
 			goto fail;
 		}
 
-		request_tmp = create_request(stream, &hdr, &raw);
+		request = create_request(stream, &hdr, &raw);
 		raw.bytes = NULL; /* Ownership transferred */
 
 		switch (hdr.type) {
 		case PDU_TYPE_SERIAL_QUERY:
-			error = load_serial_query(stream, &hdr, request_tmp);
+			error = load_serial_query(stream, &hdr, request);
 			break;
 		case PDU_TYPE_RESET_QUERY:
-			error = load_reset_query(stream, &hdr, request_tmp);
+			error = load_reset_query(stream, &hdr, request);
 			break;
 		case PDU_TYPE_ERROR_REPORT:
 			error = load_error_report(stream, &hdr);
@@ -551,63 +549,39 @@ again:
 			pr_op_err("%s: Unknown PDU type: %u",
 			    stream->addr, hdr.version);
 			err_pdu_send_unsupported_pdu_type(stream->fd,
-			    stream->rtr_version, &request_tmp->pdu.raw);
+			    stream->rtr_version, &request->pdu.raw);
 			goto fail;
 		}
 
 		if (error == EAGAIN) {
-			rtreq_destroy(request_tmp);
+			rtreq_destroy(request);
 			break;
 		} else if (error) {
 			goto fail;
 		}
 
-		if (request != NULL)
-			rtreq_destroy(request);
-		request = request_tmp;
+		error = queue_request(stream, request);
+		if (error)
+			goto fail;
+		*wakeup = true;
 	}
 
 	switch (state) {
-	case BS_EOS:
-		if (request == NULL)
-			return false;
-		request->eos = true;
-		/* Fall through */
 	case BS_WOULD_BLOCK:
-		*result = request;
 		return true;
 	case BS_KEEP_READING:
 		goto again;
+	case BS_EOS:
+		return false;
 	case BS_ERROR:
 		pr_crit("This should have been catched earlier.");
 	}
 
-fail:
-	if (request != NULL)
+fail:	if (request != NULL)
 		rtreq_destroy(request);
-	if (request_tmp != NULL)
-		rtreq_destroy(request_tmp);
 	if (raw.bytes != NULL)
 		free(raw.bytes);
 	return false;
-}
-
-int
-pdustream_fd(struct pdu_stream *stream)
-{
-	return stream->fd;
-}
-
-char const *
-pdustream_addr(struct pdu_stream *stream)
-{
-	return stream->addr;
-}
-
-int
-pdustream_version(struct pdu_stream *stream)
-{
-	return stream->rtr_version;
 }
 
 void

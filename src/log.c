@@ -133,7 +133,9 @@ sigsegv_handler(int signum)
 #define STACK_SIZE 64
 	void *array[STACK_SIZE];
 	size_t size;
+	char const *pfx = "Segmentation fault...\n";
 
+	(void)!write(STDERR_FILENO, pfx, strlen(pfx));
 	size = backtrace(array, STACK_SIZE);
 	backtrace_symbols_fd(array, size, STDERR_FILENO);
 

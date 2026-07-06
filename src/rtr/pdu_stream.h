@@ -1,17 +1,35 @@
 #ifndef SRC_RTR_PDU_STREAM_H_
 #define SRC_RTR_PDU_STREAM_H_
 
+#include <sys/queue.h>
 #include <stdbool.h>
 
 #include "rtr/pdu.h"
 
-struct pdu_stream; /* It's an *input* stream. */
+struct rtr_request;
+
+struct pdu_stream { /* It's an *input* stream. */
+	int fd;
+	char addr[INET6_ADDRSTRLEN]; /* Printable address of the client. */
+	int rtr_version; /* -1: unset; > 0: version number */
+
+	unsigned char buffer[RTRPDU_MAX_LEN2];
+	/* buffer's active bytes */
+	unsigned char *start;
+	unsigned char *end;
+
+	bool claimed;
+	TAILQ_HEAD(, rtr_request) requests; /* No more than 4 nodes */
+
+	bool eos; /* end of (input) stream */
+};
 
 struct rtr_request {
 	int fd;
 	char client_addr[INET6_ADDRSTRLEN];
 
 	struct pdu_stream *stream;
+	TAILQ_ENTRY(rtr_request) lh;
 
 	struct {
 		enum rtr_version rtr_version;
@@ -31,17 +49,12 @@ struct rtr_request {
 		 */
 		struct rtr_buffer raw;
 	} pdu;
-
-	bool eos; /* end of stream */
 };
 
 struct pdu_stream *pdustream_create(int, char const *);
-void pdustream_destroy(struct pdu_stream **);
+void pdustream_destroy(struct pdu_stream *);
 
-bool pdustream_next(struct pdu_stream *, struct rtr_request **);
-int pdustream_fd(struct pdu_stream *);
-char const *pdustream_addr(struct pdu_stream *);
-int pdustream_version(struct pdu_stream *);
+bool pdustream_parse(struct pdu_stream *, bool *);
 
 void rtreq_destroy(struct rtr_request *);
 

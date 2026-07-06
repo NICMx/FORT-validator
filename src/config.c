@@ -20,7 +20,6 @@
 #include "json_handler.h"
 #include "log.h"
 #include "state.h"
-#include "thread/thread_pool.h"
 
 /**
  * To add a member to this structure,

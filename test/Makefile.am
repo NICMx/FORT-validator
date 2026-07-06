@@ -12,7 +12,7 @@ if USE_TESTS
 # <mumble>_CFLAGS is not defined.
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
-AM_CFLAGS =  -pedantic -Wall
+AM_CFLAGS =  -pedantic -Wall -Wno-unused
 #AM_CFLAGS += -Wno-unused
 AM_CFLAGS += -std=c99 -D_DEFAULT_SOURCE=1 -D_XOPEN_SOURCE=700 -D_BSD_SOURCE=1
 AM_CFLAGS += -I../src -DUNIT_TESTING ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}
@@ -34,7 +34,6 @@ check_PROGRAMS += rrdp.test
 check_PROGRAMS += rsync.test
 check_PROGRAMS += serial.test
 check_PROGRAMS += tal.test
-check_PROGRAMS += thread_pool.test
 check_PROGRAMS += uri.test
 check_PROGRAMS += uthash.test
 check_PROGRAMS += vcard.test
@@ -76,9 +75,6 @@ serial_test_LDADD = ${MY_LDADD}
 
 tal_test_SOURCES = tal_test.c
 tal_test_LDADD = ${MY_LDADD}
-
-thread_pool_test_SOURCES = thread_pool_test.c
-thread_pool_test_LDADD = ${MY_LDADD}
 
 uri_test_SOURCES = types/uri_test.c
 uri_test_LDADD = ${MY_LDADD}
