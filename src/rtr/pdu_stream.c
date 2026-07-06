@@ -41,6 +41,7 @@ struct pdu_stream *pdustream_create(int fd, char const *addr)
 	result->fd = fd;
 	strcpy(result->addr, addr);
 	result->rtr_version = -1;
+	result->session = -1;
 
 	result->start = result->buffer;
 	result->end = result->buffer;

@@ -273,6 +273,8 @@ handle_reset_query_pdu(struct rtr_request *request)
 		goto internal_error;
 	}
 
+	request->stream->session = rtr.session;
+
 	error = send_cache_response_pdu(stream.fd, stream.ver, rtr.session);
 	if (error)
 		return error;
@@ -554,6 +556,14 @@ handle_serial_query_pdu(struct rtr_request *request)
 	default:     goto internal_error;
 	}
 
+	/* Negotiated session vs request session */
+	if (request->stream->session == -1)
+		request->stream->session = request->pdu.obj.sq.session_id;
+	else if (request->stream->session != request->pdu.obj.sq.session_id)
+		return err_pdu_send_corrupt_data(stream.fd, stream.ver,
+		    &request->pdu.raw, "Session ID doesn't match.");
+
+	/* Request session vs existing cache session */
 	if (request->pdu.obj.sq.session_id != rtr.session)
 		return send_cache_reset_pdu(stream.fd, stream.ver);
 

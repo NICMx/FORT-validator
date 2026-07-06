@@ -10,8 +10,9 @@ struct rtr_request;
 
 struct pdu_stream { /* It's an *input* stream. */
 	int fd;
-	char addr[INET6_ADDRSTRLEN]; /* Printable address of the client. */
-	int rtr_version; /* -1: unset; > 0: version number */
+	char addr[INET6_ADDRSTRLEN];	/* Printable address of the client. */
+	int rtr_version;		/* -1: unset; > 0: version number */
+	int session;			/* -1: unset; > 0: session */
 
 	unsigned char buffer[RTRPDU_MAX_LEN2];
 	/* buffer's active bytes */
