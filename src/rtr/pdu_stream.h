@@ -21,6 +21,7 @@ struct pdu_stream { /* It's an *input* stream. */
 
 	bool claimed;
 	TAILQ_HEAD(, rtr_request) requests; /* No more than 4 nodes */
+	unsigned int reqcount;
 
 	bool eos; /* end of (input) stream */
 };

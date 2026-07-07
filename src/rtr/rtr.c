@@ -360,8 +360,10 @@ next_request(struct pdu_stream *client)
 	struct rtr_request *req;
 
 	req = TAILQ_FIRST(&client->requests);
-	if (req)
+	if (req) {
 		TAILQ_REMOVE(&client->requests, req, lh);
+		client->reqcount--;
+	}
 
 	return req;
 }

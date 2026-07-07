@@ -89,6 +89,7 @@ pop_request(struct pdu_stream *stream)
 	request = TAILQ_FIRST(&stream->requests);
 	ck_assert_ptr_ne(NULL, request);
 	TAILQ_REMOVE(&stream->requests, request, lh);
+	stream->reqcount--;
 
 	return request;
 }

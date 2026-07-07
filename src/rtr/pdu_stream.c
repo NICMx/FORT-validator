@@ -48,6 +48,7 @@ struct pdu_stream *pdustream_create(int fd, char const *addr)
 
 	result->claimed = false;
 	TAILQ_INIT(&result->requests);
+	result->reqcount = 0;
 
 	result->eos = false;
 
@@ -443,30 +444,21 @@ create_request(struct pdu_stream *stream, struct pdu_header *hdr,
 static int
 queue_request(struct pdu_stream *stream, struct rtr_request *req)
 {
-	struct rtr_request *node;
-	unsigned int i;
-
 	if (TAILQ_EMPTY(&stream->requests)) {
 		TAILQ_INSERT_HEAD(&stream->requests, req, lh);
-		pr_op_debug("Queued first request: %s", stream->addr);
+		stream->reqcount++;
 		return 0;
 	}
 
-	i = 0;
-	TAILQ_FOREACH(node, &stream->requests, lh) {
-		if ((++i) >= 4)
-			break;
-
-		if (TAILQ_NEXT(node, lh) == NULL) {
-			TAILQ_INSERT_AFTER(&stream->requests, node, req, lh);
-			pr_op_debug("Queued request: %s", stream->addr);
-			return 0;
-		}
+	if (stream->reqcount >= 4) {
+		pr_op_err("%s: Too many simultaneous requests; Dropping RTR connection.",
+		    stream->addr);
+		return ENOSPC;
 	}
 
-	pr_op_err("%s: Too many simultaneous requests; Dropping RTR connection.",
-	    stream->addr);
-	return ENOSPC;
+	TAILQ_INSERT_TAIL(&stream->requests, req, lh);
+	stream->reqcount++;
+	return 0;
 }
 
 /*
