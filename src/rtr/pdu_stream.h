@@ -54,6 +54,7 @@ struct rtr_request {
 };
 
 struct pdu_stream *pdustream_create(int, char const *);
+void pdustream_clear_requests(struct pdu_stream *);
 void pdustream_destroy(struct pdu_stream *);
 
 bool pdustream_parse(struct pdu_stream *, bool *);

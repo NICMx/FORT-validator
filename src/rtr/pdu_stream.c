@@ -56,9 +56,23 @@ struct pdu_stream *pdustream_create(int fd, char const *addr)
 }
 
 void
+pdustream_clear_requests(struct pdu_stream *stream)
+{
+	struct rtr_request *req;
+
+	while ((req = TAILQ_FIRST(&stream->requests)) != NULL) {
+		TAILQ_REMOVE(&stream->requests, req, lh);
+		rtreq_destroy(req);
+	}
+
+	stream->reqcount = 0;
+}
+
+void
 pdustream_destroy(struct pdu_stream *stream)
 {
 	close(stream->fd);
+	pdustream_clear_requests(stream);
 	free(stream);
 }
 

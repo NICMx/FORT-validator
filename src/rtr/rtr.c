@@ -590,7 +590,7 @@ apply_pollfds(struct pollfd *pollfds, size_t nclients)
 
 		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
 
-		if (client->eos && TAILQ_EMPTY(&client->requests)) {
+		if (!client->claimed && client->eos) {
 			pdustream_destroy(client);
 			clients.array[i] = NULL;
 		}
@@ -606,6 +606,7 @@ disable_read(struct pdu_stream *stream)
 	if (shutdown(stream->fd, SHUT_RD) < 0)
 		pr_op_warn("Can't shut down read end of client socket: %s",
 		    strerror(errno));
+	pdustream_clear_requests(stream);
 	stream->eos = true;
 }
 
