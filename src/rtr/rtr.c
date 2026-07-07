@@ -570,32 +570,27 @@ delete_dead_clients(void)
 static void
 apply_pollfds(struct pollfd *pollfds, size_t nclients)
 {
-	struct pollfd *pfd;
 	struct rtr_server *server;
 	struct pdu_stream *client;
 	size_t i;
 
 	for (i = 0; i < servers.len; i++) {
-		pfd = &pollfds[i];
 		server = &servers.array[i];
 
 		/* PR_DEBUG_MSG("pfd:%d server:%d", pfd->fd, server->fd); */
 
-		if ((pfd->fd == -1) && (server->fd != -1)) {
-			print_poll_failure(pfd, "Server", server->addr);
+		if ((pollfds[i].fd == -1) && (server->fd != -1)) {
 			close(server->fd);
 			server->fd = -1;
 		}
 	}
 
 	for (i = 0; i < nclients; i++) {
-		pfd = &pollfds[servers.len + i];
 		client = clients.array[i];
 
 		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
 
 		if (client->eos && TAILQ_EMPTY(&client->requests)) {
-			print_poll_failure(pfd, "Client", client->addr);
 			pdustream_destroy(client);
 			clients.array[i] = NULL;
 		}
@@ -619,6 +614,7 @@ fddb_poll(void)
 {
 	struct pollfd *pollfds; /* array */
 	struct pollfd *fd;
+	struct pdu_stream *client;
 	size_t nclients;
 	size_t i;
 	bool wakeup;
@@ -673,6 +669,7 @@ fddb_poll(void)
 			continue;
 
 		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
+			print_poll_failure(fd, "Server", servers.array[i].addr);
 			fd->fd = -1;
 
 		} else if (fd->revents & POLLIN) {
@@ -693,6 +690,7 @@ fddb_poll(void)
 	for (i = 0; i < nclients; i++) {
 		/* This fd is a client handler socket. */
 		fd = &pollfds[servers.len + i];
+		client = clients.array[i];
 
 		/* PR_DEBUG_MSG("Client %u: fd:%d revents:%x", i, fd->fd,
 		    fd->revents); */
@@ -701,11 +699,12 @@ fddb_poll(void)
 			continue;
 
 		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
-			disable_read(clients.array[i]);
+			print_poll_failure(fd, "Client", client->addr);
+			disable_read(client);
 
 		} else if (fd->revents & POLLIN) {
-			if (!pdustream_parse(clients.array[i], &wakeup))
-				disable_read(clients.array[i]);
+			if (!pdustream_parse(client, &wakeup))
+				disable_read(client);
 		}
 	}
 
