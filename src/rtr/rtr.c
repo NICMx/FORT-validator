@@ -345,8 +345,8 @@ claim_client(void)
 
 	ARRAYLIST_FOREACH(&clients, _client) {
 		client = *_client;
-		if (!TAILQ_EMPTY(&client->requests) && !client->claimed) {
-			client->claimed = true;
+		if (!TAILQ_EMPTY(&client->requests) && !PS_CLAIMED(client)) {
+			PS_ENABLE(client, CLAIMED);
 			return client;
 		}
 	}
@@ -409,7 +409,7 @@ handle_clients(void *arg)
 			mutex_lock(&lock);
 		}
 
-		client->claimed = false;
+		PS_DISABLE(client, CLAIMED);
 	}
 
 	mutex_unlock(&lock);
@@ -590,7 +590,7 @@ apply_pollfds(struct pollfd *pollfds, size_t nclients)
 
 		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
 
-		if (!client->claimed && client->eos) {
+		if (!PS_CLAIMED(client) && PS_EOS(client)) {
 			pdustream_destroy(client);
 			clients.array[i] = NULL;
 		}
@@ -607,7 +607,7 @@ disable_read(struct pdu_stream *stream)
 		pr_op_warn("Can't shut down read end of client socket: %s",
 		    strerror(errno));
 	pdustream_clear_requests(stream);
-	stream->eos = true;
+	PS_ENABLE(stream, EOS);
 }
 
 static enum poll_verdict
@@ -628,7 +628,7 @@ fddb_poll(void)
 	ARRAYLIST_FOREACH_IDX(&clients, i)
 		init_pollfd(
 		    &pollfds[servers.len + i],
-		    clients.array[i]->eos ? -1 : clients.array[i]->fd
+		    PS_EOS(clients.array[i]) ? -1 : clients.array[i]->fd
 		);
 
 	error = poll(pollfds, servers.len + clients.len, 1000);

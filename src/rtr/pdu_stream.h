@@ -8,9 +8,21 @@
 
 struct rtr_request;
 
+#define PSF_POLLIN  (1 << 0) /* needs to be claimed? */
+#define PSF_CLAIMED (1 << 1) /* thread currently handling requests? */
+#define PSF_EOS     (1 << 2) /* end of (input) stream? */
+
+#define PS_POLLIN(s) ((s)->flags & PSF_POLLIN)
+#define PS_CLAIMED(s) ((s)->flags & PSF_CLAIMED)
+#define PS_EOS(s) ((s)->flags & PSF_EOS)
+
+#define PS_ENABLE(s, f) (s)->flags |= PSF_##f
+#define PS_DISABLE(s, f) (s)->flags &= ~PSF_##f
+
 struct pdu_stream { /* It's an *input* stream. */
 	int fd;
 	char addr[INET6_ADDRSTRLEN];	/* Printable address of the client. */
+	int flags;
 	int rtr_version;		/* -1: unset; > 0: version number */
 	int session;			/* -1: unset; > 0: session */
 
@@ -19,11 +31,8 @@ struct pdu_stream { /* It's an *input* stream. */
 	unsigned char *start;
 	unsigned char *end;
 
-	bool claimed;
 	TAILQ_HEAD(, rtr_request) requests; /* No more than 4 nodes */
 	unsigned int reqcount;
-
-	bool eos; /* end of (input) stream */
 };
 
 struct rtr_request {

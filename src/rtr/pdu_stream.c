@@ -40,17 +40,15 @@ struct pdu_stream *pdustream_create(int fd, char const *addr)
 
 	result->fd = fd;
 	strcpy(result->addr, addr);
+	result->flags = 0;
 	result->rtr_version = -1;
 	result->session = -1;
 
 	result->start = result->buffer;
 	result->end = result->buffer;
 
-	result->claimed = false;
 	TAILQ_INIT(&result->requests);
 	result->reqcount = 0;
-
-	result->eos = false;
 
 	return result;
 }
