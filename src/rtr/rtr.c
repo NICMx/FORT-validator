@@ -40,7 +40,8 @@ static struct server_arraylist servers;
 static struct client_arraylist clients;
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t parent2worker;
+static pthread_cond_t poller2worker;
+static int worker2poller[2];
 
 enum poll_verdict {
 	PV_CONTINUE,
@@ -345,27 +346,14 @@ claim_client(void)
 
 	ARRAYLIST_FOREACH(&clients, _client) {
 		client = *_client;
-		if (!TAILQ_EMPTY(&client->requests) && !PS_CLAIMED(client)) {
+		if (PS_POLLIN(client) && !PS_CLAIMED(client)) {
+			PS_DISABLE(client, POLLIN);
 			PS_ENABLE(client, CLAIMED);
 			return client;
 		}
 	}
 
 	return NULL;
-}
-
-static struct rtr_request *
-next_request(struct pdu_stream *client)
-{
-	struct rtr_request *req;
-
-	req = TAILQ_FIRST(&client->requests);
-	if (req) {
-		TAILQ_REMOVE(&client->requests, req, lh);
-		client->reqcount--;
-	}
-
-	return req;
 }
 
 static void
@@ -390,26 +378,49 @@ handle_request(struct rtr_request *req)
 static void *
 handle_clients(void *arg)
 {
+	static const unsigned char one = 1;
+
 	struct pdu_stream *client;
+	struct rtr_request_list reqs;
 	struct rtr_request *req;
+
+	TAILQ_INIT(&reqs.nodes);
+	reqs.count = 0;
 
 	mutex_lock(&lock);
 
 	while (!fort_end) {
 		client = claim_client();
 		if (!client) {
-			panic_on_fail(pthread_cond_wait(&parent2worker, &lock),
+			panic_on_fail(pthread_cond_wait(&poller2worker, &lock),
 			    "pthread_cond_wait");
 			continue;
 		}
 
-		while ((req = next_request(client)) != NULL) {
-			mutex_unlock(&lock);
-			handle_request(req);
-			mutex_lock(&lock);
-		}
+		mutex_unlock(&lock);
 
-		PS_DISABLE(client, CLAIMED);
+		do {
+			if (!pdustream_parse(client, &reqs)) {
+				rtreqlist_clear(&reqs);
+				mutex_lock(&lock);
+				PS_DISABLE(client, CLAIMED);
+				pdustream_disable_read(client);
+				break;
+			}
+
+			if (TAILQ_EMPTY(&reqs.nodes)) {
+				mutex_lock(&lock);
+				PS_DISABLE(client, CLAIMED);
+				break;
+			}
+
+			while ((req = rtreqlist_pop(&reqs)) != NULL)
+				handle_request(req);
+		} while (true);
+
+		if (write(worker2poller[1], &one, 1) < 0)
+			pr_op_warn("Cannot wake up RTR server thread: %s",
+			    strerror(errno));
 	}
 
 	mutex_unlock(&lock);
@@ -599,17 +610,6 @@ apply_pollfds(struct pollfd *pollfds, size_t nclients)
 	delete_dead_clients();
 }
 
-static void
-disable_read(struct pdu_stream *stream)
-{
-	pr_op_debug("Shutting down input stream of client %s.", stream->addr);
-	if (shutdown(stream->fd, SHUT_RD) < 0)
-		pr_op_warn("Can't shut down read end of client socket: %s",
-		    strerror(errno));
-	pdustream_clear_requests(stream);
-	PS_ENABLE(stream, EOS);
-}
-
 static enum poll_verdict
 fddb_poll(void)
 {
@@ -618,20 +618,26 @@ fddb_poll(void)
 	struct pdu_stream *client;
 	size_t nclients;
 	size_t i;
-	bool wakeup;
+	bool wakeup_threads;
+	unsigned char trash[16];
 	int error;
 
-	pollfds = pcalloc(servers.len + clients.len, sizeof(struct pollfd));
+	pollfds = pcalloc(servers.len + clients.len + 1, sizeof(struct pollfd));
 
 	ARRAYLIST_FOREACH_IDX(&servers, i)
 		init_pollfd(&pollfds[i], servers.array[i].fd);
-	ARRAYLIST_FOREACH_IDX(&clients, i)
+	mutex_lock(&lock);
+	ARRAYLIST_FOREACH_IDX(&clients, i) {
+		client = clients.array[i];
 		init_pollfd(
 		    &pollfds[servers.len + i],
-		    PS_EOS(clients.array[i]) ? -1 : clients.array[i]->fd
+		    PS_NEED_POLL(client) ? client->fd : -1
 		);
+	}
+	mutex_unlock(&lock);
+	init_pollfd(&pollfds[servers.len + clients.len], worker2poller[0]);
 
-	error = poll(pollfds, servers.len + clients.len, 1000);
+	error = poll(pollfds, servers.len + clients.len + 1, 1000);
 
 	if (fort_end)
 		goto stop;
@@ -657,6 +663,19 @@ fddb_poll(void)
 
 	/* accept_new_client() might change this number, so store a backup. */
 	nclients = clients.len;
+
+	/* Client thread to poller wakeupper */
+	fd = &pollfds[servers.len + clients.len];
+	if (fd->revents & POLLIN) {
+		if (read(fd->fd, trash, sizeof(trash)) < 0)
+			pr_op_warn("Cannot read RTR server wakeupper: %s",
+			    strerror(errno));
+	}
+	if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
+		print_poll_failure(fd, "Wakeupper", "local");
+		close(worker2poller[0]);
+		worker2poller[0] = -1;
+	}
 
 	/* New connections */
 	for (i = 0; i < servers.len; i++) {
@@ -685,7 +704,7 @@ fddb_poll(void)
 	}
 
 	/* Client requests */
-	wakeup = false;
+	wakeup_threads = false;
 	mutex_lock(&lock);
 
 	for (i = 0; i < nclients; i++) {
@@ -701,19 +720,19 @@ fddb_poll(void)
 
 		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
 			print_poll_failure(fd, "Client", client->addr);
-			disable_read(client);
+			pdustream_disable_read(client);
 
 		} else if (fd->revents & POLLIN) {
-			if (!pdustream_parse(client, &wakeup))
-				disable_read(client);
+			PS_ENABLE(client, POLLIN);
+			wakeup_threads = true;
 		}
 	}
 
 	apply_pollfds(pollfds, nclients);
 	nclients = clients.len;
 
-	if (wakeup)
-		panic_on_fail(pthread_cond_broadcast(&parent2worker),
+	if (wakeup_threads)
+		panic_on_fail(pthread_cond_broadcast(&poller2worker),
 		    "pthread_cond_broadcast");
 
 	mutex_unlock(&lock);
@@ -755,13 +774,16 @@ end_server_threads(size_t count)
 	int error;
 
 	fort_end = true;
-	pthread_cond_broadcast(&parent2worker);
+	pthread_cond_broadcast(&poller2worker);
 	for (i = 0; i < count; i++) {
 		error = pthread_join(server_threads[i], NULL);
 		if (error)
 			pr_op_warn("pthread_join: %s", strerror(error));
 		pr_op_debug("Ended RTR server thread #%zu.", i + 1);
 	}
+
+	free(server_threads);
+	server_threads = NULL;
 }
 
 int
@@ -777,13 +799,20 @@ rtr_start(void)
 
 	error = init_server_fds();
 	if (error)
-		goto revert_fds;
+		goto fds;
 
-	error = pthread_cond_init(&parent2worker, NULL);
+	error = pthread_cond_init(&poller2worker, NULL);
 	if (error) {
 		pr_op_err_st("pthread_cond_init(p2w) returned error %d: %s",
 		    error, strerror(error));
-		goto revert_fds;
+		goto fds;
+	}
+
+	if (pipe(worker2poller) < 0) {
+		error = errno;
+		pr_op_err_st("Cannot create RTR worker-poller pipe: %s",
+		    strerror(error));
+		goto cond;
 	}
 
 	server_threads = pcalloc(config_get_thread_pool_server_max(),
@@ -794,7 +823,7 @@ rtr_start(void)
 		if (error) {
 			pr_op_err_st("pthread_create() returned error %d: %s",
 			    error, strerror(error));
-			goto revert_threads;
+			goto threads;
 		}
 
 		pr_op_debug("Spawned RTR server thread #%zu.", i + 1);
@@ -802,13 +831,17 @@ rtr_start(void)
 
 	error = pthread_create(&control_thread, NULL, control_cb, NULL);
 	if (error)
-		goto revert_threads;
+		goto threads;
 
 	return 0;
 
-revert_threads:
+threads:
 	end_server_threads(i);
-revert_fds:
+	close(worker2poller[0]);
+	close(worker2poller[1]);
+cond:
+	pthread_cond_destroy(&poller2worker);
+fds:
 	destroy_db();
 	return error;
 }
@@ -825,8 +858,11 @@ void rtr_stop(void)
 		    strerror(error));
 	}
 
-	free(server_threads);
-	pthread_cond_destroy(&parent2worker);
+	if (worker2poller[0] != -1)
+		close(worker2poller[0]);
+	close(worker2poller[1]);
+
+	pthread_cond_destroy(&poller2worker);
 	destroy_db();
 }
 

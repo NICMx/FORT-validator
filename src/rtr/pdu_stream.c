@@ -47,30 +47,13 @@ struct pdu_stream *pdustream_create(int fd, char const *addr)
 	result->start = result->buffer;
 	result->end = result->buffer;
 
-	TAILQ_INIT(&result->requests);
-	result->reqcount = 0;
-
 	return result;
-}
-
-void
-pdustream_clear_requests(struct pdu_stream *stream)
-{
-	struct rtr_request *req;
-
-	while ((req = TAILQ_FIRST(&stream->requests)) != NULL) {
-		TAILQ_REMOVE(&stream->requests, req, lh);
-		rtreq_destroy(req);
-	}
-
-	stream->reqcount = 0;
 }
 
 void
 pdustream_destroy(struct pdu_stream *stream)
 {
 	close(stream->fd);
-	pdustream_clear_requests(stream);
 	free(stream);
 }
 
@@ -454,22 +437,22 @@ create_request(struct pdu_stream *stream, struct pdu_header *hdr,
 }
 
 static int
-queue_request(struct pdu_stream *stream, struct rtr_request *req)
+queue_request(struct rtr_request_list *list, struct rtr_request *req)
 {
-	if (TAILQ_EMPTY(&stream->requests)) {
-		TAILQ_INSERT_HEAD(&stream->requests, req, lh);
-		stream->reqcount++;
+	if (TAILQ_EMPTY(&list->nodes)) {
+		TAILQ_INSERT_HEAD(&list->nodes, req, lh);
+		list->count++;
 		return 0;
 	}
 
-	if (stream->reqcount >= 4) {
+	if (list->count >= 4) {
 		pr_op_err("%s: Too many simultaneous requests; Dropping RTR connection.",
-		    stream->addr);
+		    req->client_addr);
 		return ENOSPC;
 	}
 
-	TAILQ_INSERT_TAIL(&stream->requests, req, lh);
-	stream->reqcount++;
+	TAILQ_INSERT_TAIL(&list->nodes, req, lh);
+	list->count++;
 	return 0;
 }
 
@@ -485,7 +468,7 @@ queue_request(struct pdu_stream *stream, struct rtr_request *req)
  * false: Input stream ended or broken; handle PDUs and end connection.
  */
 bool
-pdustream_parse(struct pdu_stream *stream, bool *wakeup)
+pdustream_parse(struct pdu_stream *stream, struct rtr_request_list *reqs)
 {
 	enum buffer_state state;
 	struct pdu_header hdr;
@@ -565,10 +548,9 @@ again:
 			goto fail;
 		}
 
-		error = queue_request(stream, request);
+		error = queue_request(reqs, request);
 		if (error)
 			goto fail;
-		*wakeup = true;
 	}
 
 	switch (state) {
@@ -590,8 +572,45 @@ fail:	if (request != NULL)
 }
 
 void
+pdustream_disable_read(struct pdu_stream *stream)
+{
+	pr_op_debug("Shutting down input stream of client %s.", stream->addr);
+	PS_ENABLE(stream, EOS);
+	if (shutdown(stream->fd, SHUT_RD) < 0)
+		pr_op_warn("Can't shut down read end of client socket: %s",
+		    strerror(errno));
+}
+
+void
 rtreq_destroy(struct rtr_request *request)
 {
 	free(request->pdu.raw.bytes);
 	free(request);
+}
+
+struct rtr_request *
+rtreqlist_pop(struct rtr_request_list *reqs)
+{
+	struct rtr_request *req;
+
+	req = TAILQ_FIRST(&reqs->nodes);
+	if (req) {
+		TAILQ_REMOVE(&reqs->nodes, req, lh);
+		reqs->count--;
+	}
+
+	return req;
+}
+
+void
+rtreqlist_clear(struct rtr_request_list *list)
+{
+	struct rtr_request *req;
+
+	while ((req = TAILQ_FIRST(&list->nodes)) != NULL) {
+		TAILQ_REMOVE(&list->nodes, req, lh);
+		rtreq_destroy(req);
+	}
+
+	list->count = 0;
 }

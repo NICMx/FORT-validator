@@ -15,6 +15,7 @@ struct rtr_request;
 #define PS_POLLIN(s) ((s)->flags & PSF_POLLIN)
 #define PS_CLAIMED(s) ((s)->flags & PSF_CLAIMED)
 #define PS_EOS(s) ((s)->flags & PSF_EOS)
+#define PS_NEED_POLL(s) (((s)->flags & (PSF_POLLIN | PSF_CLAIMED | PSF_EOS)) == 0)
 
 #define PS_ENABLE(s, f) (s)->flags |= PSF_##f
 #define PS_DISABLE(s, f) (s)->flags &= ~PSF_##f
@@ -22,7 +23,7 @@ struct rtr_request;
 struct pdu_stream { /* It's an *input* stream. */
 	int fd;
 	char addr[INET6_ADDRSTRLEN];	/* Printable address of the client. */
-	int flags;
+	int flags;			/* Requires lock */
 	int rtr_version;		/* -1: unset; > 0: version number */
 	int session;			/* -1: unset; > 0: session */
 
@@ -30,9 +31,6 @@ struct pdu_stream { /* It's an *input* stream. */
 	/* buffer's active bytes */
 	unsigned char *start;
 	unsigned char *end;
-
-	TAILQ_HEAD(, rtr_request) requests; /* No more than 4 nodes */
-	unsigned int reqcount;
 };
 
 struct rtr_request {
@@ -62,12 +60,20 @@ struct rtr_request {
 	} pdu;
 };
 
+struct rtr_request_list {
+	TAILQ_HEAD(rtr_requests, rtr_request) nodes;
+	unsigned int count;
+};
+
 struct pdu_stream *pdustream_create(int, char const *);
-void pdustream_clear_requests(struct pdu_stream *);
 void pdustream_destroy(struct pdu_stream *);
 
-bool pdustream_parse(struct pdu_stream *, bool *);
+bool pdustream_parse(struct pdu_stream *, struct rtr_request_list *);
+void pdustream_disable_read(struct pdu_stream *);
 
 void rtreq_destroy(struct rtr_request *);
+
+struct rtr_request *rtreqlist_pop(struct rtr_request_list *);
+void rtreqlist_clear(struct rtr_request_list *);
 
 #endif /* SRC_RTR_PDU_STREAM_H_ */
