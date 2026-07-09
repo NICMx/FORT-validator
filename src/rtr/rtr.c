@@ -399,8 +399,13 @@ handle_clients(void *arg)
 
 		mutex_unlock(&lock);
 
+		pr_op_debug("RTR worker thread: Claimed client %s",
+		    client->addr);
+
 		do {
 			if (!pdustream_parse(client, &reqs)) {
+				pr_op_debug("RTR worker thread: %s errored.",
+				    client->addr);
 				rtreqlist_clear(&reqs);
 				mutex_lock(&lock);
 				PS_DISABLE(client, CLAIMED);
@@ -409,6 +414,8 @@ handle_clients(void *arg)
 			}
 
 			if (TAILQ_EMPTY(&reqs.nodes)) {
+				pr_op_debug("RTR worker thread: %s done.",
+				    client->addr);
 				mutex_lock(&lock);
 				PS_DISABLE(client, CLAIMED);
 				break;

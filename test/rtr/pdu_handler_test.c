@@ -252,6 +252,12 @@ rcv_reset_query(void)
 	struct rtr_request req = { 0 };
 	unsigned char raw[8] = { 0 };
 
+	stream.fd = -1;
+	stream.flags = PSF_CLAIMED;
+	stream.rtr_version = -1;
+	stream.session = -1;
+	stream.start = stream.end = stream.buffer;
+
 	req.fd = -1;
 	req.stream = &stream;
 	req.pdu.rtr_version = RTR_V2;
@@ -274,6 +280,12 @@ rcv_serial_query(uint16_t session, serial_t serial)
 	struct pdu_stream stream = { 0 };
 	struct rtr_request req = { 0 };
 	unsigned char raw[12] = { 0 };
+
+	stream.fd = -1;
+	stream.flags = PSF_CLAIMED;
+	stream.rtr_version = -1;
+	stream.session = -1;
+	stream.start = stream.end = stream.buffer;
 
 	req.fd = -1;
 	req.pdu.rtr_version = RTR_V2;
