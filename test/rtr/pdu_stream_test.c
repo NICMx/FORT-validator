@@ -10,6 +10,7 @@
 /* Mocks */
 
 MOCK(config_get_local_repository, char const *, "tmp", void)
+MOCK_UINT(max_rtr_version, 2, void)
 MOCK_ABORT_INT(err_pdu_send_invalid_request, int fd, uint8_t version,
     struct rtr_buffer const *request, char const *msg)
 MOCK_ABORT_INT(err_pdu_send_unsupported_proto_version, int fd, uint8_t version,

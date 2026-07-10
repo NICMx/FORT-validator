@@ -21,6 +21,7 @@ unsigned int deltas_lifetime = 5;
 
 MOCK(config_get_local_repository, char const *, "tmp", void)
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
+MOCK_UINT(max_rtr_version, 2, void)
 MOCK_UINT(config_get_validation_interval, 3600, void)
 MOCK_UINT(config_get_max_aspa_providers, 10, void)
 

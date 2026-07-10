@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "alloc.h"
+#include "config.h"
 #include "log.h"
 #include "data_structure/common.h"
 #include "rtr/err_pdu.h"
@@ -18,6 +19,42 @@ struct rtr_stream {
 	size_t rawlen;
 	int (*send)(struct rtr_stream *, unsigned char const *, int);
 };
+
+static int
+validate_rtr_version(struct rtr_request *request)
+{
+	struct pdu_stream *stream = request->stream;
+	enum rtr_version reqver = request->pdu.rtr_version;
+
+	if (stream->rtr_version == -1) {
+		if (RTR_V0 <= reqver && reqver <= max_rtr_version()) {
+			pr_op_debug("Establishing RTR version: %d", reqver);
+			stream->rtr_version = reqver;
+			return 0;
+		}
+		pr_op_err("%s: Unsupported RTR version: %u",
+		    stream->addr, reqver);
+		return -err_pdu_send_unsupported_proto_version(
+			stream->fd,
+			max_rtr_version(),
+			&request->pdu.raw,
+			"RTR version number is too high."
+		);
+	}
+
+	if (stream->rtr_version != reqver) {
+		pr_op_err("%s: Client changed RTR version: %u -> %u",
+		    stream->addr, stream->rtr_version, reqver);
+		return err_pdu_send_unexpected_proto_version(
+			stream->fd,
+			stream->rtr_version,
+			&request->pdu.raw,
+			"The RTR version does not match the one we negotiated during the handshake."
+		);
+	}
+
+	return 0;
+}
 
 static uint32_t
 read_u32(unsigned char const *raw)
@@ -259,6 +296,12 @@ handle_reset_query_pdu(struct rtr_request *request)
 
 	pr_op_debug("Reset Query. Request version: %u",
 	    request->pdu.rtr_version);
+
+	error = validate_rtr_version(request);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return 0;
 
 	stream.fd = request->fd;
 	stream.ver = request->pdu.rtr_version;
@@ -545,6 +588,12 @@ handle_serial_query_pdu(struct rtr_request *request)
 	    request->pdu.rtr_version,
 	    request->pdu.obj.sq.session_id,
 	    request->pdu.obj.sq.serial_number);
+
+	error = validate_rtr_version(request);
+	if (error < 0)
+		return error;
+	if (error > 0)
+		return 0;
 
 	stream.fd = request->fd;
 	stream.ver = request->pdu.rtr_version;

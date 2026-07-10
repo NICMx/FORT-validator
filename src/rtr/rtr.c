@@ -356,23 +356,25 @@ claim_client(void)
 	return NULL;
 }
 
-static void
+static int
 handle_request(struct rtr_request *req)
 {
+	int error;
+
 	switch (req->pdu.type) {
 	case PDU_TYPE_SERIAL_QUERY:
-		handle_serial_query_pdu(req);
+		error = handle_serial_query_pdu(req);
 		break;
 	case PDU_TYPE_RESET_QUERY:
-		handle_reset_query_pdu(req);
+		error = handle_reset_query_pdu(req);
 		break;
 	default:
 		/* Should have been catched during constructor */
-		pr_crit("Unexpected PDU type: %u",
-		    req->pdu.type);
+		pr_crit("Unexpected PDU type: %u", req->pdu.type);
 	}
 
 	rtreq_destroy(req);
+	return error;
 }
 
 static void *
@@ -404,7 +406,7 @@ handle_clients(void *arg)
 
 		do {
 			if (!pdustream_parse(client, &reqs)) {
-				pr_op_debug("RTR worker thread: %s errored.",
+kick_client:			pr_op_debug("RTR worker thread: %s errored.",
 				    client->addr);
 				rtreqlist_clear(&reqs);
 				mutex_lock(&lock);
@@ -422,7 +424,8 @@ handle_clients(void *arg)
 			}
 
 			while ((req = rtreqlist_pop(&reqs)) != NULL)
-				handle_request(req);
+				if (handle_request(req) != 0)
+					goto kick_client;
 		} while (true);
 
 		if (write(worker2poller[1], &one, 1) < 0)

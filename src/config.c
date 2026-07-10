@@ -73,6 +73,8 @@ struct rpki_config {
 		} interval;
 		/** Number of iterations the deltas will be stored. */
 		unsigned int deltas_lifetime;
+
+		unsigned int max_rtr_version;
 	} server;
 
 	struct {
@@ -438,6 +440,14 @@ static const struct option_field options[] = {
 		 * Must not overflow when multiplied by interval.validation.
 		 */
 		.max = 1000,
+	}, {
+		.id = 5008,
+		.name = "server.max-rtr-version",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, server.max_rtr_version),
+		.doc = "Maximum RTR version to serve (0-2).",
+		.min = 0,
+		.max = 2,
 	},
 
 	/* Prometheus fields */
@@ -1017,6 +1027,7 @@ set_default_values(void)
 	rpki_config.server.interval.retry = 600;
 	rpki_config.server.interval.expire = 7200;
 	rpki_config.server.deltas_lifetime = 6;
+	rpki_config.server.max_rtr_version = 0;
 
 	rpki_config.prometheus.port = 0;
 
@@ -1305,6 +1316,12 @@ unsigned int
 config_get_deltas_lifetime(void)
 {
 	return rpki_config.server.deltas_lifetime;
+}
+
+unsigned int
+max_rtr_version(void)
+{
+	return rpki_config.server.max_rtr_version;
 }
 
 unsigned int

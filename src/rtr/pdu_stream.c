@@ -30,7 +30,7 @@ struct pdu_header {
 		uint16_t session_id;
 		uint16_t reserved;
 		uint16_t error_code;
-	} m; /* Note: "m" stands for "meh." I have no idea what to call this. */
+	} m; /* stands for "meh" */
 	uint32_t len;
 };
 
@@ -55,6 +55,19 @@ pdustream_destroy(struct pdu_stream *stream)
 {
 	close(stream->fd);
 	free(stream);
+}
+
+/* For when you need to send an error PDU before the version validation */
+static uint8_t
+guess_version(struct pdu_stream *stream, struct pdu_header *hdr)
+{
+	if (stream->rtr_version != -1)
+		return stream->rtr_version;
+
+	if (RTR_V0 <= hdr->version && hdr->version <= RTR_V2)
+		return hdr->version;
+
+	return RTR_V2;
 }
 
 static size_t
@@ -226,30 +239,6 @@ read_hdr(struct pdu_stream *stream, struct pdu_header *header)
 }
 
 static int
-validate_rtr_version(struct pdu_stream *stream, struct pdu_header *hdr,
-    struct rtr_buffer *request)
-{
-	if (stream->rtr_version == -1) {
-		if (RTR_V0 <= hdr->version && hdr->version <= RTR_V2) {
-			stream->rtr_version = hdr->version;
-			return 0;
-		}
-		return err_pdu_send_unsupported_proto_version(
-			stream->fd, RTR_V2, request,
-			"The maximum supported RTR version is 2."
-		);
-	}
-
-	if (stream->rtr_version != hdr->version)
-		return err_pdu_send_unexpected_proto_version(
-			stream->fd, stream->rtr_version, request,
-			"The RTR version does not match the one we negotiated during the handshake."
-		);
-
-	return 0;
-}
-
-static int
 load_serial_query(struct pdu_stream *stream, struct pdu_header *hdr,
     struct rtr_request *result)
 {
@@ -259,7 +248,9 @@ load_serial_query(struct pdu_stream *stream, struct pdu_header *hdr,
 		pr_op_err("%s: Header length is not %u: %u",
 		    stream->addr, RTRPDU_SERIAL_QUERY_LEN, hdr->len);
 		return err_pdu_send_invalid_request(
-			stream->fd, stream->rtr_version, &result->pdu.raw,
+			stream->fd,
+			guess_version(stream, hdr),
+			&result->pdu.raw,
 			"Expected length 12 for Serial Query PDUs."
 		);
 	}
@@ -289,7 +280,9 @@ load_reset_query(struct pdu_stream *stream, struct pdu_header *hdr,
 		pr_op_err("%s: Header length is not %u: %u",
 		    stream->addr, RTRPDU_RESET_QUERY_LEN, hdr->len);
 		return err_pdu_send_invalid_request(
-			stream->fd, stream->rtr_version, &result->pdu.raw,
+			stream->fd,
+			guess_version(stream, hdr),
+			&result->pdu.raw,
 			"Expected length 8 for Reset Query PDUs."
 		);
 	}
@@ -504,19 +497,10 @@ again:
 			     stream->addr, hdr.len, RTRPDU_MAX_LEN2);
 			err_pdu_send_invalid_request(
 				stream->fd,
-				(stream->rtr_version != -1)
-				    ? stream->rtr_version
-				    : hdr.version,
+				guess_version(stream, &hdr),
 				&raw,
 				"PDU is too large."
 			);
-			goto fail;
-		}
-
-		/* Validate version; Needs raw. */
-		if (validate_rtr_version(stream, &hdr, &raw) != 0) {
-			pr_op_err("%s: Bad RTR version: %u",
-			    stream->addr, hdr.version);
 			goto fail;
 		}
 
@@ -535,9 +519,12 @@ again:
 			break;
 		default:
 			pr_op_err("%s: Unknown PDU type: %u",
-			    stream->addr, hdr.version);
-			err_pdu_send_unsupported_pdu_type(stream->fd,
-			    stream->rtr_version, &request->pdu.raw);
+			    stream->addr, hdr.type);
+			err_pdu_send_unsupported_pdu_type(
+				stream->fd,
+				guess_version(stream, &hdr),
+				&request->pdu.raw
+			);
 			goto fail;
 		}
 
