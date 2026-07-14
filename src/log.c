@@ -8,9 +8,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <sys/stat.h>
 #include <syslog.h>
-#include <time.h>
 
 #include "config.h"
 #include "thread_var.h"

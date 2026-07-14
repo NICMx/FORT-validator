@@ -1,13 +1,12 @@
 #include "rtr/db/vrps.h"
 
 #include <errno.h>
-#include <time.h>
+#include <sys/stat.h>
 
 #include "config.h"
 #include "log.h"
 #include "object/tal.h"
 #include "output_printer.h"
-#include "rtr/db/db_table.h"
 #include "slurm/slurm_loader.h"
 
 int

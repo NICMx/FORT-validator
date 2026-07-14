@@ -3,6 +3,7 @@
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/buffer.h>
+#include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/pem.h>
 #include <time.h>

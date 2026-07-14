@@ -3,12 +3,11 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/queue.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "alloc.h"
-#include "common.h"
 #include "log.h"
 #include "rtr/err_pdu.h"
 

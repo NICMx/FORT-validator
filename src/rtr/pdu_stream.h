@@ -3,8 +3,8 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/queue.h>
 #include <stdbool.h>
+#include <sys/queue.h>
 
 #include "rtr/pdu.h"
 

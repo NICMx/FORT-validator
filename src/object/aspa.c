@@ -2,8 +2,6 @@
 
 #include "asn1/asn1c/ASProviderAttestation.h"
 #include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "asn1/signed_data.h"
 #include "config.h"
 #include "log.h"
 #include "object/signed_object.h"

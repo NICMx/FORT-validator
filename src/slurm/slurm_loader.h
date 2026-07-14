@@ -2,7 +2,6 @@
 #define SRC_SLURM_SLURM_LOADER_H_
 
 #include "rtr/db/db_table.h"
-#include "slurm/db_slurm.h"
 
 /*
  * Load the SLURM file/dir and try to apply it on @db_table.

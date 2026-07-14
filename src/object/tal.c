@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <openssl/evp.h>
 #include <sys/queue.h>
-#include <time.h>
 
 #include "common.h"
 #include "config.h"

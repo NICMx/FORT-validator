@@ -5,9 +5,6 @@
 #include <netdb.h>
 #include <poll.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include "common.h"
 #include "config.h"

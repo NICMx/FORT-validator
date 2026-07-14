@@ -7,6 +7,9 @@
 
 #include "asn1/asn1c/ASProviderAttestation.h"
 
+#include "asn1/asn1c/asn_internal.h"
+#include "asn1/asn1c/constr_SEQUENCE.h"
+
 static int asn_DFL_2_cmp_0(const void *sptr) {
 	const INTEGER_t *st = sptr;
 	
@@ -91,4 +94,3 @@ asn_TYPE_descriptor_t asn_DEF_ASProviderAttestation = {
 	3,	/* Elements count */
 	&asn_SPC_ASProviderAttestation_specs_1	/* Additional specs */
 };
-

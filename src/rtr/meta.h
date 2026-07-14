@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <time.h>
-#include <sys/queue.h>
+
 #include "types/serial.h"
 
 struct rtr_metadata {

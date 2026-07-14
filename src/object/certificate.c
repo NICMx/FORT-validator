@@ -9,7 +9,6 @@
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
 #include <syslog.h>
-#include <time.h>
 
 #include "algorithm.h"
 #include "asn1/asn1c/IPAddrBlocks.h"

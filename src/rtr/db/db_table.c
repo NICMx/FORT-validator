@@ -1,9 +1,5 @@
 #include "rtr/db/db_table.h"
 
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include "alloc.h"
 #include "config.h"
 #include "data_structure/common.h"
@@ -11,7 +7,6 @@
 #include "file.h"
 #include "log.h"
 #include "rtr/meta.h"
-#include "types/aspa.h"
 
 struct hashable_roa {
 	struct vrp data;

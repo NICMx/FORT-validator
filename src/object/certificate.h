@@ -1,11 +1,7 @@
 #ifndef SRC_OBJECT_CERTIFICATE_H_
 #define SRC_OBJECT_CERTIFICATE_H_
 
-#include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/SignatureValue.h"
 #include "asn1/signed_data.h"
-#include "certificate_refs.h"
-#include "resource.h"
 
 /* Certificate types in the RPKI */
 enum cert_type {

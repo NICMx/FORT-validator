@@ -9,14 +9,7 @@
 #define	_ASProviderAttestation_H_
 
 /* Including external dependencies */
-#include "asn1/asn1c/INTEGER.h"
-#include "asn1/asn1c/ASId.h"
 #include "asn1/asn1c/ProviderASSet.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* ASProviderAttestation */
 typedef struct ASProviderAttestation {
@@ -31,9 +24,4 @@ typedef struct ASProviderAttestation {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_ASProviderAttestation;
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _ASProviderAttestation_H_ */
-#include "asn1/asn1c/asn_internal.h"

@@ -1,16 +1,9 @@
 #include "rtr/meta.h"
 
-#include <errno.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include "alloc.h"
-#include "common.h"
 #include "config.h"
-#include "data_structure/common.h"
-#include "log.h"
 #include "file.h"
+#include "log.h"
 
 /* TODO delete in Fort2 */
 char *

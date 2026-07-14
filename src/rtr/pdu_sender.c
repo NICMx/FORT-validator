@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "alloc.h"

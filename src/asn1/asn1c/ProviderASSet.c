@@ -7,6 +7,8 @@
 
 #include "asn1/asn1c/ProviderASSet.h"
 
+#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+
 asn_TYPE_member_t asn_MBR_ProviderASSet_1[] = {
 	{ ATF_POINTER, 0, 0,
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
@@ -41,4 +43,3 @@ asn_TYPE_descriptor_t asn_DEF_ProviderASSet = {
 	1,	/* Single element */
 	&asn_SPC_ProviderASSet_specs_1	/* Additional specs */
 };
-

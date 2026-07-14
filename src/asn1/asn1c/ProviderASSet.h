@@ -11,11 +11,7 @@
 /* Including external dependencies */
 #include "asn1/asn1c/ASId.h"
 #include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "asn1/asn1c/constr_SET_OF.h"
 
 /* ProviderASSet */
 typedef struct ProviderASSet {
@@ -30,9 +26,4 @@ extern asn_TYPE_descriptor_t asn_DEF_ProviderASSet;
 extern asn_SET_OF_specifics_t asn_SPC_ProviderASSet_specs_1;
 extern asn_TYPE_member_t asn_MBR_ProviderASSet_1[1];
 
-#ifdef __cplusplus
-}
-#endif
-
 #endif	/* _ProviderASSet_H_ */
-#include "asn1/asn1c/asn_internal.h"

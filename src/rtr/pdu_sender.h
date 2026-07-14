@@ -1,11 +1,10 @@
 #ifndef SRC_RTR_PDU_SENDER_H_
 #define SRC_RTR_PDU_SENDER_H_
 
-#include "rtr/pdu.h"
 #include "rtr/meta.h"
+#include "rtr/pdu.h"
 #include "types/aspa.h"
 #include "types/router_key.h"
-#include "types/serial.h"
 #include "types/vrp.h"
 
 #define FLAG_WITHDRAWAL		0
