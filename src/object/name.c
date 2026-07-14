@@ -1,8 +1,5 @@
 #include "object/name.h"
 
-#if OPENSSL_VERSION_MAJOR >= 4
-#include <crypto/asn1.h>
-#endif
 #include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
@@ -27,15 +24,20 @@ static int
 name2string(X509_NAME_ENTRY const *name, char **_result)
 {
 	const ASN1_STRING *data;
+	unsigned char const *str;
+	int len;
 	char *result;
 
 	data = X509_NAME_ENTRY_get_data(name);
 	if (data == NULL)
 		return val_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
-	result = pmalloc(data->length + 1);
-	memcpy(result, data->data, data->length);
-	result[data->length] = '\0';
+	str = ASN1_STRING_get0_data(data);
+	len = ASN1_STRING_length(data);
+
+	result = pmalloc(len + 1);
+	memcpy(result, str, len);
+	result[len] = '\0';
 
 	*_result = result;
 	return 0;

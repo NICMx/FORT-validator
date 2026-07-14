@@ -1,8 +1,5 @@
 #include "object/certificate.h"
 
-#if OPENSSL_VERSION_MAJOR >= 4
-#include <crypto/asn1.h>
-#endif
 #include <openssl/asn1t.h>
 #include <openssl/bio.h>
 #if OPENSSL_VERSION_MAJOR >= 3
@@ -1134,7 +1131,13 @@ abort:
 }
 
 static int
-handle_ip_extension(X509_EXTENSION const *ext, struct resources *resources)
+handle_ip_extension(
+#if OPENSSL_VERSION_MAJOR >= 4
+    X509_EXTENSION const *ext,
+#else
+    X509_EXTENSION *ext,
+#endif
+    struct resources *resources)
 {
 	ASN1_OCTET_STRING const *string;
 	struct IPAddrBlocks *blocks;
@@ -1143,7 +1146,8 @@ handle_ip_extension(X509_EXTENSION const *ext, struct resources *resources)
 	int error;
 
 	string = X509_EXTENSION_get_data(ext);
-	error = asn1_decode(string->data, string->length, &asn_DEF_IPAddrBlocks,
+	error = asn1_decode(ASN1_STRING_get0_data(string),
+	    ASN1_STRING_length(string), &asn_DEF_IPAddrBlocks,
 	    (void **) &blocks, true);
 	if (error)
 		return error;
@@ -1183,16 +1187,22 @@ end:
 }
 
 static int
-handle_asn_extension(X509_EXTENSION const *ext, struct resources *resources,
-    bool allow_inherit)
+handle_asn_extension(
+#if OPENSSL_VERSION_MAJOR >= 4
+    X509_EXTENSION const *ext,
+#else
+    X509_EXTENSION *ext,
+#endif
+    struct resources *resources, bool allow_inherit)
 {
 	ASN1_OCTET_STRING const *string;
 	struct ASIdentifiers *ids;
 	int error;
 
 	string = X509_EXTENSION_get_data(ext);
-	error = asn1_decode(string->data, string->length,
-	    &asn_DEF_ASIdentifiers, (void **) &ids, true);
+	error = asn1_decode(ASN1_STRING_get0_data(string),
+	    ASN1_STRING_length(string), &asn_DEF_ASIdentifiers,
+	    (void **) &ids, true);
 	if (error)
 		return error;
 
@@ -1207,7 +1217,11 @@ __certificate_get_resources(X509 *cert, struct resources *resources,
     int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
     char const *policy_rfc, char const *bad_ext_rfc, bool allow_asn_inherit)
 {
+#if OPENSSL_VERSION_MAJOR >= 4
 	X509_EXTENSION const *ext;
+#else
+	X509_EXTENSION *ext;
+#endif
 	int nid;
 	int i;
 	int error;
@@ -1296,9 +1310,14 @@ is_rsync(ASN1_IA5STRING *uri)
 {
 	static char const *const PREFIX = "rsync://";
 	size_t prefix_len = strlen(PREFIX);
+	unsigned char const *uri_data;
+	int uri_len;
 
-	return (uri->length >= prefix_len)
-	    ? (strncmp((char *) uri->data, PREFIX, strlen(PREFIX)) == 0)
+	uri_data = ASN1_STRING_get0_data(uri);
+	uri_len = ASN1_STRING_length(uri);
+
+	return (uri_len >= prefix_len)
+	    ? (strncmp((char *) uri_data, PREFIX, prefix_len) == 0)
 	    : false;
 }
 
@@ -1367,6 +1386,8 @@ handle_ski_ee(void *ext, void *arg)
 {
 	ASN1_OCTET_STRING *ski = ext;
 	struct ski_arguments *args = arg;
+	unsigned char const *ski_data;
+	int ski_len;
 	OCTET_STRING_t *sid;
 	int error;
 
@@ -1376,11 +1397,11 @@ handle_ski_ee(void *ext, void *arg)
 
 	/* rfc6488#section-2.1.6.2 */
 	/* rfc6488#section-3.1.c 2/2 */
+	ski_data = ASN1_STRING_get0_data(ski);
+	ski_len = ASN1_STRING_length(ski);
 	sid = args->sid;
-	if (ski->length != sid->size
-	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
+	if (ski_len != sid->size || memcmp(ski_data, sid->buf, sid->size) != 0)
 		return pr_val_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
-	}
 
 	return 0;
 }
@@ -1421,16 +1442,26 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 	 * But zeroized rightmost bits can be omitted.
 	 * This implementation assumes that the ninth bit should always be zero.
 	 */
-
+	size_t ku_len;
+#if OPENSSL_VERSION_MAJOR >= 4
+	int ku_unused_bits;
+#endif
 	unsigned char data[2];
 
-	if (ku->length != 2 && ku->length != 1) {
-		return pr_val_err("Bogus %s length: %d",
-		    ext_ku()->name, ku->length);
+#if OPENSSL_VERSION_MAJOR >= 4
+	if (ASN1_BIT_STRING_get_length(ku, &ku_len, &ku_unused_bits) != 1)
+		return pr_val_err("Cannot read Key Usage string.");
+#else
+	ku_len = ku->length;
+#endif
+
+	if (ku_len != 2 && ku_len != 1) {
+		return pr_val_err("Bogus %s length: %zu",
+		    ext_ku()->name, ku_len);
 	}
 
 	memset(data, 0, sizeof(data));
-	memcpy(data, ku->data, ku->length);
+	memcpy(data, ASN1_STRING_get0_data(ku), ku_len);
 
 	if (data[0] != byte1 || data[1] != 0) {
 		return pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
