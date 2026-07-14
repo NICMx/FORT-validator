@@ -990,6 +990,7 @@ set_default_values(void)
 
 		"--contimeout=20", "--max-size=20MB", "--timeout=15",
 
+		"--exclude=.*",
 		"--include=*/", "--include=*.cer", "--include=*.roa",
 		"--include=*.asa", "--include=*.mft", "--include=*.crl",
 		"--include=*.gbr", "--exclude=*",

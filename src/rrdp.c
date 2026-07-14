@@ -661,6 +661,23 @@ end:	metadata_cleanup(&tag.meta);
 }
 
 static int
+parse_notification_snapshot(xmlTextReaderPtr reader,
+    struct update_notification *notif)
+{
+	int error;
+
+	error = parse_file_metadata(reader, NULL, HR_MANDATORY, &notif->snapshot);
+	if (error)
+		return error;
+
+	if (!uri_same_origin(notif->uri, notif->snapshot.uri))
+		return pr_val_err("Notification '%s' and Snapshot '%s' are not hosted by the same origin.",
+		    uri_get_global(notif->uri), uri_get_global(notif->snapshot.uri));
+
+	return 0;
+}
+
+static int
 parse_notification_delta(xmlTextReaderPtr reader,
     struct update_notification *notif)
 {
@@ -672,13 +689,21 @@ parse_notification_delta(xmlTextReaderPtr reader,
 		return error;
 
 	error = parse_file_metadata(reader, NULL, HR_MANDATORY, &delta.meta);
-	if (error) {
-		serial_cleanup(&delta.serial);
-		return error;
+	if (error)
+		goto srl;
+
+	if (!uri_same_origin(notif->uri, delta.meta.uri)) {
+		error = pr_val_err("Notification %s and Delta %s are not hosted by the same origin.",
+		    uri_get_global(notif->uri), uri_get_global(delta.meta.uri));
+		goto mta;
 	}
 
 	notification_deltas_add(&notif->deltas, &delta);
 	return 0;
+
+mta:	metadata_cleanup(&delta.meta);
+srl:	serial_cleanup(&delta.serial);
+	return error;
 }
 
 static int
@@ -781,8 +806,7 @@ xml_read_notif(xmlTextReaderPtr reader, void *arg)
 		if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_DELTA)) {
 			return parse_notification_delta(reader, notif);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_SNAPSHOT)) {
-			return parse_file_metadata(reader, NULL, HR_MANDATORY,
-			    &notif->snapshot);
+			return parse_notification_snapshot(reader, notif);
 		} else if (xmlStrEqual(name, BAD_CAST RRDP_ELEM_NOTIFICATION)) {
 			/* No need to validate session ID and serial */
 			return parse_session(reader, &notif->session);
@@ -872,28 +896,27 @@ handle_snapshot(struct update_notification *notif)
 {
 	struct validation *state;
 	struct rpki_uri *uri;
+	bool changed;
 	int error;
 
 	state = state_retrieve();
-
-	delete_rpp(tal_get_file_name(validation_tal(state)), notif->uri);
-
 	uri = notif->snapshot.uri;
 
 	pr_val_debug("Processing snapshot '%s'.", uri_val_get_printable(uri));
 	fnstack_push_uri(uri);
 
 	/*
-	 * TODO (performance) Is there a point in caching the snapshot?
-	 * Especially considering we delete it 4 lines afterwards.
-	 * Maybe stream it instead.
-	 * Same for deltas.
+	 * TODO (performance) There's no point in caching the snapshot.
+	 * Stream it instead. Same for deltas.
 	 */
-	error = cache_download(validation_cache(state), uri, NULL);
+	error = cache_download(validation_cache(state), uri, &changed);
 	if (error)
 		goto end;
-	error = parse_snapshot(notif);
-	delete_file(uri);
+	if (changed) {
+		delete_rpp(tal_get_file_name(validation_tal(state)), notif->uri);
+		error = parse_snapshot(notif);
+		delete_file(uri);
+	}
 
 end:
 	fnstack_pop();

@@ -192,7 +192,7 @@ validate_printable_string(char const *str, char const *what)
 static int
 validate_issuer(X509 *cert, bool is_ta)
 {
-	X509_NAME *issuer;
+	X509_NAME const *issuer;
 	struct rfc5280_name *name;
 	char const *commonName;
 	int error;
@@ -221,7 +221,7 @@ validate_issuer(X509 *cert, bool is_ta)
  * @diff_pk_cb when the public key is different; return 0 if both are equal.
  */
 static int
-spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki,
+spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY const *cert_spki,
     int (*diff_alg_cb)(void), int (*diff_pk_cb)(void))
 {
 	ASN1_OBJECT *tal_alg;
@@ -317,7 +317,7 @@ root_different_pk_err(void)
 }
 
 static int
-validate_spki(X509_PUBKEY *cert_spki)
+validate_spki(X509_PUBKEY const *cert_spki)
 {
 	struct validation *state;
 	struct tal *tal;
@@ -369,7 +369,7 @@ validate_spki(X509_PUBKEY *cert_spki)
  * 2048-bit modulus and a public exponent (e) of 65,537."
  */
 static int
-validate_subject_public_key(X509_PUBKEY *pubkey)
+validate_subject_public_key(X509_PUBKEY const *pubkey)
 {
 #if OPENSSL_VERSION_MAJOR >= 3
 
@@ -504,7 +504,7 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 static int
 validate_public_key(X509 *cert, enum cert_type type)
 {
-	X509_PUBKEY *pubkey;
+	X509_PUBKEY const *pubkey;
 	EVP_PKEY *evppkey;
 	X509_ALGOR *pa;
 	int ok;
@@ -767,7 +767,7 @@ certificate_validate_signature(X509 *cert, ANY_t *signedData,
 {
 	static const uint8_t EXPLICIT_SET_OF_TAG = 0x31;
 
-	X509_PUBKEY *public_key;
+	X509_PUBKEY const *public_key;
 	EVP_MD_CTX *ctx;
 	struct encoded_signedAttrs signedAttrs;
 	int error;
@@ -1131,9 +1131,15 @@ abort:
 }
 
 static int
-handle_ip_extension(X509_EXTENSION *ext, struct resources *resources, int flags)
+handle_ip_extension(
+#if OPENSSL_VERSION_MAJOR >= 4
+    X509_EXTENSION const *ext,
+#else
+    X509_EXTENSION *ext,
+#endif
+    struct resources *resources, int flags)
 {
-	ASN1_OCTET_STRING *string;
+	ASN1_OCTET_STRING const *string;
 	struct IPAddrBlocks *blocks;
 	OCTET_STRING_t *family;
 	int i;
@@ -1143,7 +1149,8 @@ handle_ip_extension(X509_EXTENSION *ext, struct resources *resources, int flags)
 		return pr_val_err("IP extension is not marked critical.");
 
 	string = X509_EXTENSION_get_data(ext);
-	error = asn1_decode(string->data, string->length, &asn_DEF_IPAddrBlocks,
+	error = asn1_decode(ASN1_STRING_get0_data(string),
+	    ASN1_STRING_length(string), &asn_DEF_IPAddrBlocks,
 	    (void **) &blocks, true);
 	if (error)
 		return error;
@@ -1183,16 +1190,22 @@ end:
 }
 
 static int
-handle_asn_extension(X509_EXTENSION *ext, struct resources *resources,
-    int flags)
+handle_asn_extension(
+#if OPENSSL_VERSION_MAJOR >= 4
+    X509_EXTENSION const *ext,
+#else
+    X509_EXTENSION *ext,
+#endif
+    struct resources *resources, int flags)
 {
-	ASN1_OCTET_STRING *string;
+	ASN1_OCTET_STRING const *string;
 	struct ASIdentifiers *ids;
 	int error;
 
 	string = X509_EXTENSION_get_data(ext);
-	error = asn1_decode(string->data, string->length,
-	    &asn_DEF_ASIdentifiers, (void **) &ids, true);
+	error = asn1_decode(ASN1_STRING_get0_data(string),
+	    ASN1_STRING_length(string), &asn_DEF_ASIdentifiers,
+	    (void **) &ids, true);
 	if (error)
 		return error;
 
@@ -1218,7 +1231,11 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 	int nid_as1 = NID_sbgp_autonomousSysNum;
 	int nid_as2 = nid_autonomousSysIdsv2();
 
+#if OPENSSL_VERSION_MAJOR >= 4
+	X509_EXTENSION const *ext;
+#else
 	X509_EXTENSION *ext;
+#endif
 	int extnid;
 	int e;
 	int error;
@@ -1315,9 +1332,14 @@ is_rsync(ASN1_IA5STRING *uri)
 {
 	static char const *const PREFIX = "rsync://";
 	size_t prefix_len = strlen(PREFIX);
+	unsigned char const *uri_data;
+	int uri_len;
 
-	return (uri->length >= prefix_len)
-	    ? (strncmp((char *) uri->data, PREFIX, strlen(PREFIX)) == 0)
+	uri_data = ASN1_STRING_get0_data(uri);
+	uri_len = ASN1_STRING_length(uri);
+
+	return (uri_len >= prefix_len)
+	    ? (strncmp((char *) uri_data, PREFIX, prefix_len) == 0)
 	    : false;
 }
 
@@ -1386,6 +1408,8 @@ handle_ski_ee(void *ext, void *arg)
 {
 	ASN1_OCTET_STRING *ski = ext;
 	struct ski_arguments *args = arg;
+	unsigned char const *ski_data;
+	int ski_len;
 	OCTET_STRING_t *sid;
 	int error;
 
@@ -1395,11 +1419,11 @@ handle_ski_ee(void *ext, void *arg)
 
 	/* rfc6488#section-2.1.6.2 */
 	/* rfc6488#section-3.1.c 2/2 */
+	ski_data = ASN1_STRING_get0_data(ski);
+	ski_len = ASN1_STRING_length(ski);
 	sid = args->sid;
-	if (ski->length != sid->size
-	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
+	if (ski_len != sid->size || memcmp(ski_data, sid->buf, sid->size) != 0)
 		return pr_val_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
-	}
 
 	return 0;
 }
@@ -1440,16 +1464,26 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 	 * But zeroized rightmost bits can be omitted.
 	 * This implementation assumes that the ninth bit should always be zero.
 	 */
-
+	size_t ku_len;
+#if OPENSSL_VERSION_MAJOR >= 4
+	int ku_unused_bits;
+#endif
 	unsigned char data[2];
 
-	if (ku->length != 2 && ku->length != 1) {
-		return pr_val_err("Bogus %s length: %d",
-		    ext_ku()->name, ku->length);
+#if OPENSSL_VERSION_MAJOR >= 4
+	if (ASN1_BIT_STRING_get_length(ku, &ku_len, &ku_unused_bits) != 1)
+		return pr_val_err("Cannot read Key Usage string.");
+#else
+	ku_len = ku->length;
+#endif
+
+	if (ku_len != 2 && ku_len != 1) {
+		return pr_val_err("Bogus %s length: %zu",
+		    ext_ku()->name, ku_len);
 	}
 
 	memset(data, 0, sizeof(data));
-	memcpy(data, ku->data, ku->length);
+	memcpy(data, ASN1_STRING_get0_data(ku), ku_len);
 
 	if (data[0] != byte1 || data[1] != 0) {
 		return pr_val_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",

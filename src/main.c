@@ -63,7 +63,7 @@ fort_server(void)
 		pr_op_info("Main loop: Time to work!");
 
 		error = vrps_update(&rtr);
-		if (fort_end)
+		if (fort_end || error == -EINTR)
 			break;
 		if (error) {
 			pr_op_debug("Main loop: Error %d (%s)", error,
