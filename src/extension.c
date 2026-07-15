@@ -953,7 +953,7 @@ cannot_decode(struct extension_metadata const *meta)
 int
 validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash)
 {
-	X509_PUBKEY const *pubkey;
+	X509_PUBKEY OPENSSL4_CONST *pubkey;
 	const unsigned char *spk;
 	int spk_len;
 	unsigned char const *hash_data;

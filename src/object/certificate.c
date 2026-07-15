@@ -220,7 +220,7 @@ validate_issuer(X509 *cert, bool is_ta)
  * @diff_pk_cb when the public key is different; return 0 if both are equal.
  */
 static int
-spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY const *cert_spki,
+spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY OPENSSL4_CONST *cert_spki,
     int (*diff_alg_cb)(void), int (*diff_pk_cb)(void))
 {
 	ASN1_OBJECT *tal_alg;
@@ -316,7 +316,7 @@ root_different_pk_err(void)
 }
 
 static int
-validate_spki(X509_PUBKEY const *cert_spki)
+validate_spki(X509_PUBKEY OPENSSL4_CONST *cert_spki)
 {
 	struct validation *state;
 	struct tal *tal;
@@ -368,7 +368,7 @@ validate_spki(X509_PUBKEY const *cert_spki)
  * 2048-bit modulus and a public exponent (e) of 65,537."
  */
 static int
-validate_subject_public_key(X509_PUBKEY const *pubkey)
+validate_subject_public_key(X509_PUBKEY OPENSSL4_CONST *pubkey)
 {
 #if OPENSSL_VERSION_MAJOR >= 3
 
@@ -503,7 +503,7 @@ validate_subject_public_key(X509_PUBKEY const *pubkey)
 static int
 validate_public_key(X509 *cert, enum cert_type type)
 {
-	X509_PUBKEY const *pubkey;
+	X509_PUBKEY OPENSSL4_CONST *pubkey;
 	EVP_PKEY *evppkey;
 	X509_ALGOR *pa;
 	int ok;
@@ -766,7 +766,7 @@ certificate_validate_signature(X509 *cert, ANY_t *signedData,
 {
 	static const uint8_t EXPLICIT_SET_OF_TAG = 0x31;
 
-	X509_PUBKEY const *public_key;
+	X509_PUBKEY OPENSSL4_CONST *public_key;
 	EVP_MD_CTX *ctx;
 	struct encoded_signedAttrs signedAttrs;
 	int error;
@@ -1130,12 +1130,7 @@ abort:
 }
 
 static int
-handle_ip_extension(
-#if OPENSSL_VERSION_MAJOR >= 4
-    X509_EXTENSION const *ext,
-#else
-    X509_EXTENSION *ext,
-#endif
+handle_ip_extension(X509_EXTENSION OPENSSL4_CONST *ext,
     struct resources *resources, int flags)
 {
 	ASN1_OCTET_STRING const *string;
@@ -1189,12 +1184,7 @@ end:
 }
 
 static int
-handle_asn_extension(
-#if OPENSSL_VERSION_MAJOR >= 4
-    X509_EXTENSION const *ext,
-#else
-    X509_EXTENSION *ext,
-#endif
+handle_asn_extension(X509_EXTENSION OPENSSL4_CONST *ext,
     struct resources *resources, int flags)
 {
 	ASN1_OCTET_STRING const *string;
@@ -1230,11 +1220,7 @@ certificate_get_resources(X509 *cert, struct resources *resources,
 	int nid_as1 = NID_sbgp_autonomousSysNum;
 	int nid_as2 = nid_autonomousSysIdsv2();
 
-#if OPENSSL_VERSION_MAJOR >= 4
-	X509_EXTENSION const *ext;
-#else
-	X509_EXTENSION *ext;
-#endif
+	X509_EXTENSION OPENSSL4_CONST *ext;
 	int extnid;
 	int e;
 	int error;
