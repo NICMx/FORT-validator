@@ -39,8 +39,8 @@ static asn_TYPE_member_t asn_MBR_ASProviderAttestation_1[] = {
 		(ASN_TAG_CLASS_CONTEXT | (0 << 2)),
 		+1,	/* EXPLICIT tag at current level */
 		&asn_DEF_INTEGER,
-		0,
-		{ 0, 0, 0 },
+		NULL,
+		{ NULL, NULL, NULL },
 		&asn_DFL_2_cmp_0,	/* Compare DEFAULT 0 */
 		&asn_DFL_2_set_0,	/* Set DEFAULT 0 */
 		"version"
@@ -49,18 +49,18 @@ static asn_TYPE_member_t asn_MBR_ASProviderAttestation_1[] = {
 		(ASN_TAG_CLASS_UNIVERSAL | (2 << 2)),
 		0,
 		&asn_DEF_ASId,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"customerASID"
 		},
 	{ ATF_NOFLAGS, 0, offsetof(struct ASProviderAttestation, providers),
 		(ASN_TAG_CLASS_UNIVERSAL | (16 << 2)),
 		0,
 		&asn_DEF_ProviderASSet,
-		0,
-		{ 0, 0, 0 },
-		0, 0, /* No default value */
+		NULL,
+		{ NULL, NULL, NULL },
+		NULL, NULL, /* No default value */
 		"providers"
 		},
 };
@@ -89,7 +89,7 @@ asn_TYPE_descriptor_t asn_DEF_ASProviderAttestation = {
 	asn_DEF_ASProviderAttestation_tags_1,	/* Same as above */
 	sizeof(asn_DEF_ASProviderAttestation_tags_1)
 		/sizeof(asn_DEF_ASProviderAttestation_tags_1[0]), /* 1 */
-	{ 0, 0, SEQUENCE_constraint },
+	{ NULL, NULL, SEQUENCE_constraint },
 	asn_MBR_ASProviderAttestation_1,
 	3,	/* Elements count */
 	&asn_SPC_ASProviderAttestation_specs_1	/* Additional specs */

@@ -1,4 +1,4 @@
-.TH fort 8 "2026-05-29" "v1.6.8" "FORT validator"
+.TH fort 8 "2026-07-14" "v1.7.0.experimental" "FORT validator"
 
 .SH NAME
 fort \- RPKI validator and RTR server
@@ -115,9 +115,9 @@ Arguments needed by
 to perform a recursive rsync. The arguments are specified as a JSON string
 array; its default value is:
 [ "-rtz", "--delete", "--omit-dir-times", "--contimeout=20", "--max-size=20MB",
-"--timeout=15", "--include=*/", "--include=*.cer", "--include=*.crl",
-"--include=*.gbr", "--include=*.mft", "--include=*.roa", "--exclude=*",
-"$REMOTE", "$LOCAL" ]
+"--timeout=15", "--exclude=.*", "--include=*/", "--include=*.cer",
+"--include=*.roa", "--include=*.asa", "--include=*.mft", "--include=*.crl",
+"--include=*.gbr", "--exclude=*", "$REMOTE", "$LOCAL" ]
 .P
 FORT will replace "$REMOTE" with the remote URL it needs to download, and
 "$LOCAL" with the target local directory where the file is supposed to be
@@ -449,6 +449,20 @@ When routers first connect to Fort, they request a snapshot of the validation re
 During each validation cycle, Fort generates a new snapshot, as well as the deltas needed to build the new snapshot from the previous one. These are all stored in RAM. \fI--server.deltas.lifetime\fR is the number of iterations a set of deltas will be kept before being deallocated. (Recall that every iteration lasts \fI--server.interval.validation\fR seconds, plus however long the validation takes.)
 .P
 If a router lags behind, to the point Fort has already deleted the deltas it needs to update the router’s snapshot, Fort will have to fall back to fetch the entire latest snapshot instead.
+.RE
+.P
+
+.B \-\-server.max\-rtr\-version=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum RTR version the server will be willing to negotiate with RTR clients.
+.P
+RTRv0 is RFC6810, RTRv1 is RFC8210, and at time of writing, RTRv2 is draft-ietf-sidrops-8210bis-26.
+.P
+RTRv0 servers Prefix VRPs. RTRv1 adds Router Keys, and RTRv2 adds ASPAs.
+.P
+At present, this value defaults to v0 because Fort's validation currently yields no router keys (issue #58), and the ASPA specification is still receiving updates. Fort 1.7.0.experimental's RTRv2 implementation is draft-ietf-sidrops-8210bis-25, not 26.
+.P
+The default value is expected to grow as the implementation matures.
 .RE
 .P
 
@@ -950,41 +964,50 @@ By default, it has a value of \fI900\fR.
 .RE
 .P
 
+.B \-\-aspa.max\-providers=\fIUNSIGNED_INTEGER\fR
+.RS 4
+Maximum number of providers each customerASID is allowed to declare across all RPKI trees during each validation cycle.
+.P
+Customers that exceed this provider count will be invalidated.
+.RE
+.P
+
 .B \-\-output.roa=\fIFILE\fR
 .RS 4
-File where the ROAs will be printed in the configured format (see
-\fI--output.format\fR).
+Assigns a file where Fort will print the valid VRPs found after each validation run.
 .P
-When the \fIFILE\fR is specified, its content will be overwritten by the
-resulting ROAs of the validation (if FILE doesn't exists, it'll be created).
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, assign a hyphen.
 .P
-When \fI--output.format=csv\fR (which is the default value), then each line of
-the result is printed in the following order: AS, Prefix, Max prefix length; the
-first line contains those column descriptors.
+Sample output when \fI--output.format=csv\fR:
 .P
-When \fI--output.format=json\fR, then each element is printed inside an object
-array of "roas"; ie:
 .nf
-{
-  "roas": [
-    {
-      "asn": "AS64496",
-      "prefix": "198.51.100.0/24",
-      "maxLength": 24
-    },
-    {
-      "asn": "AS64496",
-      "prefix": "2001:DB8::/32",
-      "maxLength": 48
-    }
-  ]
-}
+	ASN,Prefix,Max prefix length
+	AS1000,192.0.2.0/24,24
+	AS10001,203.0.113.0/28,30
+	AS24047,2001:db8::/64,96
 .fi
 .P
-In order to print the ROAs at console, use a hyphen as the \fIFILE\fR value, eg.
-.B \-\-output.roa=-
+Sample output when \fI--output.format=json\fR:
 .P
-By default, it has no value set.
+.nf
+	{ "roas": [
+		{
+			"asn": "AS1000",
+			"prefix": "192.0.2.0/24",
+			"maxLength": 30
+		}, {
+			"asn": "AS10001",
+			"prefix": "203.0.113.0/28",
+			"maxLength": 30
+		}, {
+			"asn": "AS24047",
+			"prefix": "2001:db8::/64",
+			"maxLength": 96
+		}
+	] }
+.fi
+.P
+If absent, VRPs are not printed.
 .RE
 .P
 
@@ -1006,6 +1029,7 @@ Subject Public Key Info; the first line contains those column descriptors.
 .P
 When \fI--output.format=json\fR, then each element is printed inside an object
 array of "router-keys"; ie:
+.P
 .nf
 {
   "router-keys": [
@@ -1028,6 +1052,29 @@ value, eg.
 .B \-\-output.bgpsec=-
 .P
 By default, it has no value set.
+.RE
+.P
+
+.B \-\-output.aspa=\fIFILE\fR
+.RS 4
+Assigns a file where Fort will print the valid ASPAs found after each validation run. ASPAs are always printed in JSON format.
+.P
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, assign a hyphen.
+.P
+Each element is identifier by its customerASID, and its value is an array of provider ASIDs:
+.P
+.nf
+{
+	"aspa" : {
+		"2": [ 10000, 10001, 10002 ],
+		"1513": [ 10000 ],
+		"65500": [ 4221, 61971, 87645 ],
+		"16777217": [ 39, 410, 503, 8018622 ]
+	}
+}
+.fi
+.P
+If absent, ASPAs are not printed.
 .RE
 .P
 
@@ -1111,6 +1158,7 @@ validating every 30 minutes, and printing the ROAs CSV in a file.
 .RS 4
 This is an example of a valid JSON configuration file with all its members set
 to a specific value:
+.P
 .nf
 {
   "tal": "/tmp/fort/tal/",
@@ -1253,6 +1301,7 @@ to a specific value:
 .RS 4
 This is an example of a SLURM file with some prefix filters and assertions, as
 well as some dummy Router Keys (BGPsec) info:
+.P
 .nf
 
 {

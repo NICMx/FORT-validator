@@ -17,7 +17,7 @@
 #include "types/router_key.c"
 #include "types/serial.c"
 
-unsigned int deltas_lifetime = 5;
+static unsigned int deltas_lifetime = 5;
 
 MOCK(config_get_local_repository, char const *, "tmp", void)
 MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
@@ -116,7 +116,7 @@ mock_commit(struct db_table *tbl)
 	return session;
 }
 
-uint16_t
+static uint16_t
 mock_serial1(void)
 {
 	struct db_table *tbl = db_table_create();
@@ -124,7 +124,7 @@ mock_serial1(void)
 	return mock_commit(tbl);
 }
 
-void
+static void
 mock_serial2(void)
 {
 	struct db_table *tbl = db_table_create();
@@ -133,7 +133,7 @@ mock_serial2(void)
 	mock_commit(tbl);
 }
 
-void
+static void
 mock_serial3(void)
 {
 	struct db_table *tbl = db_table_create();
@@ -141,7 +141,7 @@ mock_serial3(void)
 	mock_commit(tbl);
 }
 
-void
+static void
 mock_serial4(void)
 {
 	struct db_table *tbl = db_table_create();

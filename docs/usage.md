@@ -29,6 +29,7 @@ description: Guide to use arguments of FORT Validator.
 	17. [`--server.interval.retry`](#--serverintervalretry)
 	18. [`--server.interval.expire`](#--serverintervalexpire)
 	18. [`--server.deltas.lifetime`](#--serverdeltaslifetime)
+	18. [`--server.max-rtr-version`](#--servermax-rtr-version)
 	18. [`--prometheus.port`](#--prometheusport)
 	19. [`--slurm`](#--slurm)
 	20. [`--log.enabled`](#--logenabled)
@@ -42,6 +43,7 @@ description: Guide to use arguments of FORT Validator.
 	28. [`--validation-log.level`](#--validation-loglevel)
 	29. [`--validation-log.output`](#--validation-logoutput)
 	30. [`--validation-log.color-output`](#--validation-logcolor-output)
+	30. [`--aspa.max-providers`](#--aspamax-providers)
 	31. [`--validation-log.file-name-format`](#--validation-logfile-name-format)
 	32. [`--validation-log.facility`](#--validation-logfacility)
 	33. [`--validation-log.tag`](#--validation-logtag)
@@ -60,6 +62,7 @@ description: Guide to use arguments of FORT Validator.
 	42. [`--http.proxy`](#--httpproxy)
 	43. [`--output.roa`](#--outputroa)
 	44. [`--output.bgpsec`](#--outputbgpsec)
+	44. [`--output.aspa`](#--outputaspa)
 	45. [`--output.format`](#--outputformat)
 	46. [`--asn1-decode-max-stack`](#--asn1-decode-max-stack)
 	48. [`--thread-pool.server.max`](#--thread-poolservermax)
@@ -95,13 +98,14 @@ description: Guide to use arguments of FORT Validator.
 	[--work-offline=true|false]
 	[--daemon=true|false]
 	[--server.address=<sequence of strings>]
-	[--server.port=<unsigned integer or service string>]
+	[--server.port=<port>]
 	[--server.backlog=<unsigned integer>]
 	[--server.interval.validation=<unsigned integer>]
 	[--server.interval.refresh=<unsigned integer>]
 	[--server.interval.retry=<unsigned integer>]
 	[--server.interval.expire=<unsigned integer>]
 	[--server.deltas.lifetime=<unsigned integer>]
+	[--server.max-rtr-version=<unsigned integer>]
 	[--prometheus.port=<unsigned integer>]
 	[--rsync.enabled=true|false]
 	[--rsync.priority=<unsigned integer>]
@@ -120,7 +124,7 @@ description: Guide to use arguments of FORT Validator.
 	[--http.low-speed-time=<unsigned integer>]
 	[--http.max-file-size=<unsigned integer>]
 	[--http.ca-path=<directory>]
-	[--http.proxy=<HTTPS URL>]
+	[--http.proxy=<URI>]
 	[--log.enabled=true|false]
 	[--log.output=syslog|console]
 	[--log.level=error|warning|info|debug]
@@ -135,13 +139,16 @@ description: Guide to use arguments of FORT Validator.
 	[--validation-log.facility=auth|authpriv|cron|daemon|ftp|lpr|mail|news|user|uucp|local0|local1|local2|local3|local4|local5|local6|local7]
 	[--validation-log.file-name-format=global-url|local-path|file-name]
 	[--validation-log.color-output=true|false]
+	[--aspa.max-providers=<unsigned integer>]
 	[--output.roa=<file>]
 	[--output.bgpsec=<file>]
+	[--output.aspa=<file>]
 	[--output.format=csv|json]
 	[--asn1-decode-max-stack=<unsigned integer>]
 	[--init-tals=true|false]
 	[--init-as0-tals=true|false]
 	[--thread-pool.server.max=<unsigned integer>]
+	[--file-type=roa|mft|gbr|cer|crl]
 ```
 
 If an argument is specified more than once, the last one takes precedence:
@@ -174,9 +181,9 @@ Usage: {{ page.command }}
 	[--init-as0-tals=true|false]
 		(Fetch the currently-known AS0 TAL files into --tal)
 	[--thread-pool.server.max=<unsigned integer>]
-		(Maximum number of active threads (one thread per RTR client) that can live at the thread pool)
-	[--thread-pool.validation.max=<unsigned integer>]
-		(Maximum number of active threads (one thread per TAL) that can live at the thread pool)
+		(Number of threads in the RTR client request thread pool. Also known as the maximum number of client requests the RTR server will be able to handle at the same time.)
+	[--file-type=roa|mft|gbr|cer|crl]
+		(Parser for --mode=print)
 {% endhighlight %}
 
 The slightly larger usage message is `man {{ page.command }}` and the large usage message is this documentation.
@@ -195,9 +202,9 @@ Usage: {{ page.command }}
         [--usage]
         [--version]
 	...
-        [--log.file-name-format=global-url|local-path|file-name]
-        [--output.roa=<file>]
-        [--output.bgpsec=<file>]
+	[--init-as0-tals=true|false]
+	[--thread-pool.server.max=<unsigned integer>]
+	[--file-type=roa|mft|gbr|cer|crl]
 {% endhighlight %}
 
 ### `--version`
@@ -405,7 +412,7 @@ See the corresponding manual page from your operating system (likely `man 2 list
 - **Type:** Integer
 - **Availability:** `argv` and JSON
 - **Default:** 3600
-- **Range:** [60, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
+- **Range:** [60, 7 days]
 
 Number of seconds Fort will sleep between validation cycles, when in [`server`](#--mode) mode.
 
@@ -456,8 +463,8 @@ See [RFC 8210, section 6](https://tools.ietf.org/html/rfc8210#section-6).
 
 - **Type:** Integer
 - **Availability:** `argv` and JSON
-- **Default:** 21600 (6 hours)
-- **Range:** [1, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
+- **Default:** 6
+- **Range:** [1, 1000]
 
 RTR delta lifetime, measured in validation cycles.
 
@@ -466,6 +473,23 @@ When routers first connect to Fort, they request a _snapshot_ of the validation 
 Fort stores the information necessary to serve these deltas in the cache. `--server.deltas.lifetime` is the number of validation cycles a delta will be preserved before being expired.
 
 If a router lags behind, to the point Fort has already deleted the deltas it needs to update the router's snapshot, Fort will have to fall back to fetch the entire latest snapshot instead.
+
+### `--server.max-rtr-version`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 0
+- **Range:** [0, 2]
+
+Maximum RTR version the server will be willing to negotiate with RTR clients.
+
+RTRv0 is [RFC6810](https://datatracker.ietf.org/doc/html/rfc6810), RTRv1 is [RFC8210](https://datatracker.ietf.org/doc/html/rfc8210), and at time of writing, RTRv2 is [draft-ietf-sidrops-8210bis-26](https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-8210bis-26).
+
+RTRv0 servers Prefix VRPs. RTRv1 adds Router Keys, and RTRv2 adds ASPAs.
+
+At present, this value defaults to v0 because Fort's validation [currently yields no router keys](https://github.com/NICMx/FORT-validator/issues/58), and the ASPA specification is still receiving updates. Fort 1.7.0.experimental's RTRv2 implementation is draft-ietf-sidrops-8210bis-25, not 26.
+
+The default value is expected to grow as the implementation matures.
 
 ### `--prometheus.port`
 
@@ -533,6 +557,17 @@ See [Logging > Configuration > Output](logging.html#output).
 Include ANSI color codes in the logging? Meant to ease human consumption. Only applies when [`--log.output`](#--logoutput) is `console`.
 
 See [Logging > Configuration > Color output](logging.html#color-output).
+
+### `--aspa.max-providers`
+
+- **Type:** Integer
+- **Availability:** `argv` and JSON
+- **Default:** 4000
+- **Range:** [0, 16380]
+
+Maximum number of providers each customerASID is allowed to declare across all RPKI trees during each validation cycle.
+
+Customers that exceed this provider count will be invalidated.
 
 ### `--log.file-name-format`
 
@@ -839,32 +874,42 @@ https_proxy=https://example.com:1234 fort --tal=/path/to/tal
 - **Availability:** `argv` and JSON
 - **Default:** `NULL` (disabled)
 
-File where the ROAs (found during each validation run) will be stored. See [`--output.format`](#--outputformat).
+Assigns a file where Fort will print the valid VRPs found after each validation run.
 
-If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, use a hyphen (`-`). If the RTR server is [enabled](#--mode), then the ROAs will be printed every [`--server.interval.validation`](#--serverintervalvalidation) secs.
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, assign a hyphen (`-`).
 
-When `--output.format` equals `csv`, each line of the result is printed in the following order: _AS, Prefix, Max prefix length_. The first line contains the column names.
+Sample output when [`--output.format`](#--outputformat) equals `csv`:
 
-When `--output.format` equals `json`, each element is printed in an object array of `roas`:
+```csv
+ASN,Prefix,Max prefix length
+AS1000,192.0.2.0/24,24
+AS10001,203.0.113.0/28,30
+AS24047,2001:db8::/64,96
+```
 
-{% highlight json %}
+Sample output when `--output.format` equals `json`:
+
+```json
 {
 	"roas": [
 		{
-			"asn": "AS64496",
-			"prefix": "198.51.100.0/24",
-			"maxLength": 24
-		},
-		{
-			"asn": "AS64496",
-			"prefix": "2001:DB8::/32",
-			"maxLength": 48
+			"asn": "AS1000",
+			"prefix": "192.0.2.0/24",
+			"maxLength": 30
+		}, {
+			"asn": "AS10001",
+			"prefix": "203.0.113.0/28",
+			"maxLength": 30
+		}, {
+			"asn": "AS24047",
+			"prefix": "2001:db8::/64",
+			"maxLength": 96
 		}
 	]
 }
-{% endhighlight %}
+```
 
-If `--output.roa` is omitted, the ROAs are not printed.
+If absent, VRPs are not printed.
 
 ### `--output.bgpsec`
 
@@ -902,6 +947,31 @@ When `--output.format` equals `json`, each element is printed in an object array
 {% endhighlight %}
 
 If `--output.bgpsec` is ommited, then the BGPsec Router Keys are not printed.
+
+### `--output.aspa`
+
+- **Type:** String (Path to file)
+- **Availability:** `argv` and JSON
+- **Default:** `NULL` (disabled)
+
+Assigns a file where Fort will print the valid ASPAs found after each validation run. ASPAs are always printed in JSON format.
+
+If the file already exists, it will be overwritten. If it doesn't exist, it will be created. To print to standard output, assign a hyphen (`-`).
+
+Each element is identifier by its customerASID, and its value is an array of provider ASIDs:
+
+```json
+{
+	"aspa" : {
+		"2": [ 10000, 10001, 10002 ],
+		"1513": [ 10000 ],
+		"65500": [ 4221, 61971, 87645 ],
+		"16777217": [ 39, 410, 503, 8018622 ]
+	}
+}
+```
+
+If absent, ASPAs are not printed.
 
 ### `--output.format`
 
@@ -1022,7 +1092,8 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		},
 		"deltas": {
 			"<a href="#--serverdeltaslifetime">lifetime</a>": 2
-		}
+		},
+		"<a href="#--servermax-rtr-version">max-rtr-version</a>": 0
 	},
 
 	"prometheus": {
@@ -1036,7 +1107,6 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"<a href="#--rsyncretrycount">count</a>": 1,
 			"<a href="#--rsyncretryinterval">interval</a>": 4
 		},
-		"<a href="#--rsynctransfer-timeout">transfer-timeout</a>": 900,
 		"<a href="#rsyncprogram">program</a>": "rsync",
 		"<a href="#rsyncarguments-recursive">arguments-recursive</a>": [
 			"-rtz",
@@ -1045,16 +1115,19 @@ The configuration options are mostly the same as the ones from the `argv` interf
 			"--contimeout=20",
 			"--max-size=20MB",
 			"--timeout=15",
+			"--exclude=.*",
 			"--include=*/",
 			"--include=*.cer",
+			"--include=*.roa",
+			"--include=*.asa",
+			"--include=*.mft",
 			"--include=*.crl",
 			"--include=*.gbr",
-			"--include=*.mft",
-			"--include=*.roa",
 			"--exclude=*",
 			"$REMOTE",
 			"$LOCAL"
-		]
+		],
+		"<a href="#--rsynctransfer-timeout">transfer-timeout</a>": 900
 	},
 
 	"http": {
@@ -1094,6 +1167,10 @@ The configuration options are mostly the same as the ones from the `argv` interf
 		"<a href="#--validation-logfile-name-format">file-name-format</a>": "global-url",
 		"<a href="#--validation-logcolor-output">color-output</a>": false
 	},
+	
+	"aspa": {
+		"<a href="#--aspamax-providers">max-providers</a>": 4000
+	},
 
 	"<a href="#incidences">incidences</a>": [
 		{
@@ -1118,8 +1195,9 @@ The configuration options are mostly the same as the ones from the `argv` interf
 	],
 
 	"output": {
-		"<a href="#--outputroa">roa</a>": null,
-		"<a href="#--outputbgpsec">bgpsec</a>": null,
+		"<a href="#--outputroa">roa</a>": "vrps.csv",
+		"<a href="#--outputbgpsec">bgpsec</a>": "rks.csv",
+		"<a href="#--outputbgpsec">aspa</a>": "aspas.json",
 		"<a href="#--outputformat">format</a>": "csv"
 	},
 
@@ -1182,7 +1260,7 @@ Name of the program needed to invoke an rsync file transfer.
 
 - **Type:** String array
 - **Availability:** JSON only
-- **Default:** `[ "-rtz", "--delete", "--omit-dir-times", "--contimeout=20", "--max-size=20MB", "--timeout=15", "--include=*/", "--include=*.cer", "--include=*.crl", "--include=*.gbr", "--include=*.mft", "--include=*.roa", "--exclude=*", "$REMOTE", "$LOCAL" ]`
+- **Default:** `[ "-rtz", "--delete", "--omit-dir-times", "--contimeout=20", "--max-size=20MB", "--timeout=15", "--exclude=.*", "--include=*/", "--include=*.cer", "--include=*.roa", "--include=*.asa", "--include=*.mft", "--include=*.crl", "--include=*.gbr", "--exclude=*", "$REMOTE", "$LOCAL" ]`
 
 Arguments needed by [`rsync.program`](#rsyncprogram) to perform a recursive rsync.
 
@@ -1202,7 +1280,7 @@ A listing of actions to be performed by validation upon encountering certain err
 - **Type:** Boolean (`true`, `false`)
 - **Availability:** `argv` and JSON
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
+> ![img/warn.svg](img/warn.svg) This argument is deprecated.
 
 Does nothing as of Fort 1.6.0.
 
@@ -1212,7 +1290,7 @@ Does nothing as of Fort 1.6.0.
 - **Availability:** `argv` and JSON
 - **Range:** [0, [`UINT_MAX`](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/limits.h.html)]
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
+> ![img/warn.svg](img/warn.svg) This argument is deprecated.
 
 Does nothing as of Fort 1.6.0.
 
@@ -1221,7 +1299,7 @@ Does nothing as of Fort 1.6.0.
 - **Type:** Enumeration (`strict`, `root`, `root-except-ta`)
 - **Availability:** `argv` and JSON
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
+> ![img/warn.svg](img/warn.svg) This argument is deprecated.
 
 Does nothing as of Fort 1.6.0.
 
@@ -1230,7 +1308,7 @@ Does nothing as of Fort 1.6.0.
 - **Type:** String array
 - **Availability:** JSON only
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
+> ![img/warn.svg](img/warn.svg) This argument is deprecated.
 
 Does nothing as of Fort 1.6.0.
 
@@ -1240,6 +1318,6 @@ Does nothing as of Fort 1.6.0.
 - **Availability:** `argv` and JSON
 - **Range:** [1, 100]
 
-> ![img/warn.svg](img/warn.svg) This argument **is DEPRECATED**.
+> ![img/warn.svg](img/warn.svg) This argument is deprecated.
 
 Does nothing as of Fort 1.6.0.

@@ -222,7 +222,7 @@ again:	n = fread(buf, size, 1, file);
 static int
 send_serial(struct rtr_stream *stream, serial_t serial)
 {
-	FILE *file = 0;
+	FILE *file = NULL;
 	unsigned char *buf;
 	unsigned char const *chunk;
 	int error;
@@ -248,7 +248,7 @@ end:	free(buf);
 static int
 send_aspas(int fd, uint8_t ver, serial_t serial)
 {
-	FILE *file = 0;
+	FILE *file = NULL;
 	unsigned char buf[8];
 	unsigned char const *chunk;
 	int error;

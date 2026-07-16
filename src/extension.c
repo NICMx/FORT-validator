@@ -125,7 +125,7 @@ ku2json(void const *ext)
 	json_t *child;
 
 	ku_len = ASN1_STRING_length(ku);
-	if (ku_len != 1 || ku_len != 2)
+	if (ku_len != 1 && ku_len != 2)
 		return NULL;
 
 	parent = json_obj_new();
