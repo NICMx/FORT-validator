@@ -1,6 +1,7 @@
 #include "rpp.h"
 
 #include "log.h"
+#include "object/aspa.h"
 #include "object/crl.h"
 #include "object/ghostbusters.h"
 #include "object/roa.h"
@@ -34,6 +35,8 @@ struct rpp {
 
 	struct uri_list roas; /* Route Origin Attestations */
 
+	struct uri_list aspas;
+
 	struct uri_list ghostbusters;
 
 	/*
@@ -55,6 +58,7 @@ rpp_create(void)
 	result->crl.stack = NULL;
 	result->crl.error = 0;
 	uris_init(&result->roas);
+	uris_init(&result->aspas);
 	uris_init(&result->ghostbusters);
 	result->references = 1;
 
@@ -78,6 +82,7 @@ rpp_refput(struct rpp *pp)
 		if (pp->crl.stack != NULL)
 			sk_X509_CRL_pop_free(pp->crl.stack, X509_CRL_free);
 		uris_cleanup(&pp->roas);
+		uris_cleanup(&pp->aspas);
 		uris_cleanup(&pp->ghostbusters);
 		free(pp);
 	}
@@ -96,6 +101,13 @@ int
 rpp_add_roa(struct rpp *pp, struct rpki_uri *uri)
 {
 	uris_add(&pp->roas, uri);
+	return 0;
+}
+
+int
+rpp_add_asa(struct rpp *pp, struct rpki_uri *uri)
+{
+	uris_add(&pp->aspas, uri);
 	return 0;
 }
 
@@ -249,6 +261,9 @@ rpp_traverse(struct rpp *pp)
 	/* Validate ROAs, apply validation_handler on them. */
 	ARRAYLIST_FOREACH(&pp->roas, uri)
 		roa_traverse(*uri, pp);
+
+	ARRAYLIST_FOREACH(&pp->aspas, uri)
+		aspa_traverse(*uri, pp);
 
 	/*
 	 * We don't do much with the ghostbusters right now.

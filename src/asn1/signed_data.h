@@ -7,7 +7,16 @@
 #include "certificate_refs.h"
 #include "resource.h"
 
+enum ee_type {
+	EET_ROA = 1,
+	EET_ASPA,
+	EET_MFT,
+	EET_GBR,
+};
+
 struct ee_cert {
+	enum ee_type type;
+
 	/** CRL that might or might not revoke the EE certificate. */
 	STACK_OF(X509_CRL) *crls;
 	/** A copy of the resources carried by the EE certificate. */
@@ -19,7 +28,7 @@ struct ee_cert {
 	struct certificate_refs refs;
 };
 
-void eecert_init(struct ee_cert *, STACK_OF(X509_CRL) *, bool);
+void eecert_init(struct ee_cert *, enum ee_type, STACK_OF(X509_CRL) *, bool);
 void eecert_cleanup(struct ee_cert *);
 
 int signed_data_decode(ANY_t *, struct SignedData **);

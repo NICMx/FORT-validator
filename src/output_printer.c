@@ -123,6 +123,30 @@ print_router_key_json(struct router_key const *key, void *arg)
 	return 0;
 }
 
+static int
+print_aspa_json(struct aspa const *aspa, void *arg)
+{
+	JSON_OUT *json_out = arg;
+	FILE *out;
+	size_t i;
+
+	out = json_out->file;
+	if (!json_out->first)
+		fprintf(out, ",\n");
+
+	fprintf(out, "  \"%u\": [ ", aspa->customer);
+	if (aspa->providers.count == 0)
+		goto end;
+
+	for (i = 0; i < (aspa->providers.count - 1); i++)
+		fprintf(out, "%u, ", aspa->providers.asids[i]);
+	fprintf(out, "%u", aspa->providers.asids[i]);
+
+end:	fprintf(out, " ]");
+	json_out->first = false;
+	return 0;
+}
+
 static void
 print_roas(struct db_table const *db)
 {
@@ -183,9 +207,34 @@ print_router_keys(struct db_table const *db)
 		file_close(out);
 }
 
+static void
+print_aspas(struct db_table const *db)
+{
+	FILE *out;
+	JSON_OUT json_out;
+	int error;
+
+	out = load_output_file(config_get_output_aspa());
+	if (out == NULL)
+		return;
+
+	json_out.file = out;
+	json_out.first = true;
+
+	fprintf(out, "{ \"aspa\" : {\n");
+	error = db_table_foreach_aspa(db, print_aspa_json, &json_out);
+	fprintf(out, "\n}}\n");
+
+	if (error)
+		pr_op_err("Error printing ASPAs: %s", strerror(error));
+	if (out != stdout)
+		file_close(out);
+}
+
 void
 output_print_data(struct db_table const *db)
 {
 	print_roas(db);
 	print_router_keys(db);
+	print_aspas(db);
 }

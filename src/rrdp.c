@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <libxml/globals.h>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
@@ -538,6 +539,7 @@ is_known_extension(struct rpki_uri *uri)
 	ext = uri_get_global(uri) + uri_get_global_len(uri) - 4;
 	return ((strcmp(ext, ".cer") == 0)
 	     || (strcmp(ext, ".roa") == 0)
+	     || (strcmp(ext, ".asa") == 0)
 	     || (strcmp(ext, ".mft") == 0)
 	     || (strcmp(ext, ".crl") == 0)
 	     || (strcmp(ext, ".gbr") == 0));

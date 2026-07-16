@@ -81,15 +81,12 @@ file_load(char const *file_name, struct file_contents *fc)
 
 	fread_result = fread(fc->buffer, 1, fc->buffer_size, file);
 	if (fread_result < fc->buffer_size) {
-		error = ferror(file);
-		if (error) {
-			/*
-			 * The manpage doesn't say that the result is an error
-			 * code. It literally doesn't say how to get an error
-			 * code.
-			 */
-			pr_val_err("File reading error. The error message is (possibly) '%s'",
-			    strerror(error));
+		if (ferror(file)) {
+			error = errno;
+			/* errno on fread() is POSIX, not ISO C. */
+			if (!error)
+				error = EINVAL;
+			pr_val_err("File read failure: %s", strerror(error));
 			free(fc->buffer);
 			goto end;
 		}
@@ -130,7 +127,7 @@ file_exists(char const *path)
 static int
 rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
-	pr_op_debug("Deleting %s.", fpath);
+	pr_op_debug("Deleting %s", fpath);
 	return (remove(fpath) != 0) ? errno : 0;
 }
 
@@ -138,6 +135,7 @@ rm(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 int
 file_rm_rf(char const *path)
 {
+	pr_op_debug("rm -rf %s", path);
 	/* TODO (performance) optimize that 32 */
 	return nftw(path, rm, 32, FTW_DEPTH | FTW_PHYS);
 }

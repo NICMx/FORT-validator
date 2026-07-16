@@ -21,30 +21,35 @@ struct rfc5280_name {
 };
 
 static int
-name2string(X509_NAME_ENTRY *name, char **_result)
+name2string(X509_NAME_ENTRY const *name, char **_result)
 {
 	const ASN1_STRING *data;
+	unsigned char const *str;
+	int len;
 	char *result;
 
 	data = X509_NAME_ENTRY_get_data(name);
 	if (data == NULL)
 		return val_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
-	result = pmalloc(data->length + 1);
-	memcpy(result, data->data, data->length);
-	result[data->length] = '\0';
+	str = ASN1_STRING_get0_data(data);
+	len = ASN1_STRING_length(data);
+
+	result = pmalloc(len + 1);
+	memcpy(result, str, len);
+	result[len] = '\0';
 
 	*_result = result;
 	return 0;
 }
 
 int
-x509_name_decode(X509_NAME *name, char const *what,
+x509_name_decode(X509_NAME const *name, char const *what,
     struct rfc5280_name **_result)
 {
 	struct rfc5280_name *result;
 	int i;
-	X509_NAME_ENTRY *entry;
+	X509_NAME_ENTRY const *entry;
 	int nid;
 	int error;
 
@@ -139,7 +144,7 @@ x509_name_equals(struct rfc5280_name *a, struct rfc5280_name *b)
 }
 
 int
-validate_issuer_name(char const *container, X509_NAME *issuer)
+validate_issuer_name(char const *container, X509_NAME const *issuer)
 {
 	struct validation *state;
 	X509 *parent;
@@ -193,7 +198,7 @@ end:	x509_name_put(parent_subject);
 }
 
 void
-x509_name_pr_debug(const char *prefix, X509_NAME *name)
+x509_name_pr_debug(const char *prefix, X509_NAME const *name)
 {
 	if (!log_val_enabled(LOG_DEBUG))
 		return;

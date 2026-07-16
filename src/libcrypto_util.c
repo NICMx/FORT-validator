@@ -3,6 +3,7 @@
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/buffer.h>
+#include <openssl/crypto.h>
 #include <openssl/objects.h>
 #include <openssl/pem.h>
 #include <time.h>
@@ -30,14 +31,16 @@ asn1time2str(ASN1_TIME const *tm)
 	if (bio == NULL)
 		enomem_panic();
 
+	res = NULL;
 	if (BIO_PR_TIME(bio, tm) <= 0)
-		return NULL;
+		goto end;
+	if (BIO_flush(bio) <= 0)
+		goto end;
 
-	BIO_flush(bio);
 	BIO_get_mem_ptr(bio, &buf);
 	res = pstrndup(buf->data, buf->length);
 
-	BIO_free_all(bio);
+end:	BIO_free_all(bio);
 	return res;
 }
 
@@ -90,6 +93,8 @@ json_t *
 asn1str2json(ASN1_STRING const *str)
 {
 	BIO *bio;
+	unsigned char const *str_data;
+	int str_len;
 	int i;
 
 	if (str == NULL)
@@ -99,8 +104,11 @@ asn1str2json(ASN1_STRING const *str)
 	if (bio == NULL)
 		return NULL;
 
-	for (i = 0; i < str->length; i++) {
-		if (BIO_printf(bio, "%02x", str->data[i]) <= 0) {
+	str_data = ASN1_STRING_get0_data(str);
+	str_len = ASN1_STRING_length(str);
+
+	for (i = 0; i < str_len; i++) {
+		if (BIO_printf(bio, "%02x", str_data[i]) <= 0) {
 			BIO_free_all(bio);
 			return NULL;
 		}
@@ -134,7 +142,7 @@ name2json(X509_NAME const *name)
 {
 	json_t *root, *rdnSeq;
 	json_t *typeval, *child;
-	X509_NAME_ENTRY *entry;
+	X509_NAME_ENTRY const *entry;
 	int nid;
 	const ASN1_STRING *data;
 	int i;
@@ -160,7 +168,8 @@ name2json(X509_NAME const *name)
 		if (json_object_add(typeval, "type", child))
 			goto fail;
 
-		child = json_strn_new((char *)data->data, data->length);
+		child = json_strn_new((char *)ASN1_STRING_get0_data(data),
+		    ASN1_STRING_length(data));
 		if (json_object_add(typeval, "value", child))
 			goto fail;
 	}
@@ -176,13 +185,18 @@ gn2json(GENERAL_NAME *gn)
 {
 	ASN1_IA5STRING *str;
 	int type;
+	unsigned char const *data;
+	int len;
 
 	if (gn == NULL)
 		return json_null();
 
 	str = GENERAL_NAME_get0_value(gn, &type);
+	data = ASN1_STRING_get0_data(str);
+	len = ASN1_STRING_length(str);
+
 	return (type == GEN_URI)
-	    ? json_strn_new((char const *)str->data, str->length)
+	    ? json_strn_new((char const *)data, len)
 	    : json_str_new("<Not implemented for now>");
 }
 

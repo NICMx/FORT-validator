@@ -8,6 +8,12 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
+#if OPENSSL_VERSION_MAJOR >= 4
+#define OPENSSL4_CONST const
+#else
+#define OPENSSL4_CONST
+#endif
+
 char *asn1time2str(ASN1_TIME const *);
 
 json_t *oid2json(ASN1_OBJECT const *);

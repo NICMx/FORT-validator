@@ -239,18 +239,20 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 		return false;
 	}
 
-	/*
-	 * TODO (SLURM, RK) WHY IS THERE NO ERROR HANDLING HERE
-	 * ARGGGGGGGGGGGGGGGGGGGGHHHHHHHHHHHHHHHHHHHHH
-	 */
 	mem = BIO_push(b64, mem);
 	BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-	BIO_write(b64, in, in_len);
-	BIO_flush(b64);
+
+	if (BIO_write(b64, in, in_len) < 0)
+		goto fail;
+	if (BIO_flush(b64) <= 0)
+		goto fail;
 	BIO_get_mem_ptr(mem, &mem_buf);
 
 	*result = to_base64url(mem_buf->data, mem_buf->length);
 
 	BIO_free_all(b64);
 	return true;
+
+fail:	BIO_free_all(b64);
+	return false;
 }

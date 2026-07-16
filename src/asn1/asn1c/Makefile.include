@@ -8,6 +8,8 @@ ASN_MODULE_SRCS=	\
 	asn1/asn1c/ASIdentifiers.c	\
 	asn1/asn1c/ASIdentifierChoice.c	\
 	asn1/asn1c/ASIdOrRange.c	\
+	asn1/asn1c/ASProviderAttestation.c	\
+	asn1/asn1c/ProviderASSet.c	\
 	asn1/asn1c/ASRange.c	\
 	asn1/asn1c/ASId.c	\
 	asn1/asn1c/AttributeType.c	\
@@ -73,6 +75,8 @@ ASN_MODULE_HDRS=	\
 	asn1/asn1c/ASIdentifiers.h	\
 	asn1/asn1c/ASIdentifierChoice.h	\
 	asn1/asn1c/ASIdOrRange.h	\
+	asn1/asn1c/ASProviderAttestation.h	\
+	asn1/asn1c/ProviderASSet.h	\
 	asn1/asn1c/ASRange.h	\
 	asn1/asn1c/ASId.h	\
 	asn1/asn1c/AttributeType.h	\

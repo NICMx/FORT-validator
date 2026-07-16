@@ -34,7 +34,7 @@ pk2json(X509 const *x)
 {
 	json_t *root;
 	json_t *child;
-	X509_PUBKEY *pubkey;
+	X509_PUBKEY OPENSSL4_CONST *pubkey;
 	ASN1_OBJECT *oid;
 
 	root = json_obj_new();

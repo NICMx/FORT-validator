@@ -36,7 +36,7 @@ ghostbusters_traverse(struct rpki_uri *uri, struct rpp *pp)
 	error = rpp_crl(pp, &crl);
 	if (error)
 		goto revert_sobj;
-	eecert_init(&ee, crl, true);
+	eecert_init(&ee, EET_GBR, crl, true);
 
 	/* Validate everything */
 	error = signed_object_validate(&sobj, &arcs, &ee);

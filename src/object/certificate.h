@@ -1,10 +1,7 @@
 #ifndef SRC_OBJECT_CERTIFICATE_H_
 #define SRC_OBJECT_CERTIFICATE_H_
 
-#include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/SignatureValue.h"
-#include "certificate_refs.h"
-#include "resource.h"
+#include "asn1/signed_data.h"
 
 /* Certificate types in the RPKI */
 enum cert_type {
@@ -36,7 +33,8 @@ int certificate_validate_signature(X509 *, ANY_t *coded, SignatureValue_t *);
  * not care about order. I don't know if you'll find other reasons if you choose
  * to migrate it.
  */
-int certificate_get_resources(X509 *, struct resources *, enum cert_type);
+int certificate_get_resources(X509 *, struct resources *,
+    enum cert_type, enum ee_type);
 
 /**
  * Validates the certificate extensions, End-Entity style.

@@ -20,7 +20,6 @@
 #include "json_handler.h"
 #include "log.h"
 #include "state.h"
-#include "thread/thread_pool.h"
 
 /**
  * To add a member to this structure,
@@ -74,6 +73,8 @@ struct rpki_config {
 		} interval;
 		/** Number of iterations the deltas will be stored. */
 		unsigned int deltas_lifetime;
+
+		unsigned int max_rtr_version;
 	} server;
 
 	struct {
@@ -169,10 +170,15 @@ struct rpki_config {
 	} validation_log;
 
 	struct {
+		unsigned int max_providers; /* per customer */
+	} aspa;
+
+	struct {
 		/** File where the validated ROAs will be stored */
 		char *roa;
 		/** File where the validated BGPsec certs will be stored */
 		char *bgpsec;
+		char *aspa;	/* ASPA file path */
 		/** Format for the output */
 		enum output_format format;
 	} output;
@@ -365,7 +371,11 @@ static const struct option_field options[] = {
 		 * minute.
 		 */
 		.min = 60,
-		.max = UINT_MAX,
+		/*
+		 * 7 days.
+		 * Must not overflow when multiplied by deltas.lifetime.
+		 */
+		.max = 604800,
 	}, {
 		.id = 5004,
 		.name = "server.interval.refresh",
@@ -423,8 +433,21 @@ static const struct option_field options[] = {
 		.type = &gt_uint,
 		.offset = offsetof(struct rpki_config, server.deltas_lifetime),
 		.doc = "Number of iterations the deltas will be stored.",
+		.min = 1,
+		/*
+		 * It's a serial, which means the technical maximum is about
+		 * 2^31 - 1. But that's too much.
+		 * Must not overflow when multiplied by interval.validation.
+		 */
+		.max = 1000,
+	}, {
+		.id = 5008,
+		.name = "server.max-rtr-version",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, server.max_rtr_version),
+		.doc = "Maximum RTR version the server will be willing to negotiate with RTR clients",
 		.min = 0,
-		.max = UINT_MAX,
+		.max = 2,
 	},
 
 	/* Prometheus fields */
@@ -715,6 +738,17 @@ static const struct option_field options[] = {
 		.doc = "Print ANSI color codes",
 	},
 
+	/* ASPA */
+	{
+		.id = 15000,
+		.name = "aspa.max-providers",
+		.type = &gt_uint,
+		.offset = offsetof(struct rpki_config, aspa.max_providers),
+		.doc = "Maximum number of providers each customerASID is allowed to declare across all RPKI trees during each validation cycle",
+		.min = 0,
+		.max = 16380u,
+	},
+
 	/* Incidences */
 	{
 		.id = 7001,
@@ -730,7 +764,7 @@ static const struct option_field options[] = {
 		.name = "output.roa",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, output.roa),
-		.doc = "File where ROAs will be stored, use '-' to print at console",
+		.doc = "File where VRPs will be stored. ('-' for stdout)",
 		.arg_doc = "<file>",
 		.json_null_allowed = true,
 	}, {
@@ -738,7 +772,15 @@ static const struct option_field options[] = {
 		.name = "output.bgpsec",
 		.type = &gt_string,
 		.offset = offsetof(struct rpki_config, output.bgpsec),
-		.doc = "File where BGPsec Router Keys will be stored, use '-' to print at console",
+		.doc = "File where BGPsec Router Keys will be stored. ('-' for stdout)",
+		.arg_doc = "<file>",
+		.json_null_allowed = true,
+	}, {
+		.id = 6003,
+		.name = "output.aspa",
+		.type = &gt_string,
+		.offset = offsetof(struct rpki_config, output.aspa),
+		.doc = "File where ASPAs will be stored. ('-' for stdout)",
 		.arg_doc = "<file>",
 		.json_null_allowed = true,
 	}, {
@@ -949,9 +991,9 @@ set_default_values(void)
 		"--contimeout=20", "--max-size=20MB", "--timeout=15",
 
 		"--exclude=.*",
-		"--include=*/", "--include=*.cer", "--include=*.crl",
-		"--include=*.gbr", "--include=*.mft", "--include=*.roa",
-		"--exclude=*",
+		"--include=*/", "--include=*.cer", "--include=*.roa",
+		"--include=*.asa", "--include=*.mft", "--include=*.crl",
+		"--include=*.gbr", "--exclude=*",
 
 		"$REMOTE", "$LOCAL",
 	};
@@ -985,7 +1027,8 @@ set_default_values(void)
 	rpki_config.server.interval.refresh = 3600;
 	rpki_config.server.interval.retry = 600;
 	rpki_config.server.interval.expire = 7200;
-	rpki_config.server.deltas_lifetime = 2;
+	rpki_config.server.deltas_lifetime = 6;
+	rpki_config.server.max_rtr_version = 0;
 
 	rpki_config.prometheus.port = 0;
 
@@ -1032,8 +1075,11 @@ set_default_values(void)
 	rpki_config.validation_log.output = CONSOLE;
 	rpki_config.validation_log.facility = LOG_DAEMON;
 
+	rpki_config.aspa.max_providers = 4000;
+
 	rpki_config.output.roa = NULL;
 	rpki_config.output.bgpsec = NULL;
+	rpki_config.output.aspa = NULL;
 	rpki_config.output.format = OFM_CSV;
 
 	rpki_config.asn1_decode_max_stack = 4096; /* 4kB */
@@ -1271,6 +1317,12 @@ unsigned int
 config_get_deltas_lifetime(void)
 {
 	return rpki_config.server.deltas_lifetime;
+}
+
+unsigned int
+max_rtr_version(void)
+{
+	return rpki_config.server.max_rtr_version;
 }
 
 unsigned int
@@ -1519,6 +1571,12 @@ config_get_output_bgpsec(void)
 	return rpki_config.output.bgpsec;
 }
 
+char const *
+config_get_output_aspa(void)
+{
+	return rpki_config.output.aspa;
+}
+
 enum output_format
 config_get_output_format(void)
 {
@@ -1570,4 +1628,10 @@ free_rpki_config(void)
 		if (is_rpki_config_field(option) && option->type->free != NULL)
 			option->type->free(get_rpki_config_field(option));
 	free(rpki_config.payload);
+}
+
+unsigned int
+config_get_max_aspa_providers(void)
+{
+	return rpki_config.aspa.max_providers;
 }

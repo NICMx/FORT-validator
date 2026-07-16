@@ -10,11 +10,10 @@
 #include "config.h"
 #include "data_structure/array_list.h"
 #include "log.h"
-#include "rtr/db/vrps.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
 #include "stats.h"
-#include "thread/thread_pool.h"
+#include "types/address.h"
 
 struct rtr_server {
 	int fd;
@@ -31,17 +30,18 @@ struct server_init_ctx {
 #endif
 };
 
-static pthread_t server_thread;
-static volatile bool stop_server_thread;
+static pthread_t control_thread;
+static pthread_t *server_threads;
 
 STATIC_ARRAY_LIST(server_arraylist, struct rtr_server)
 STATIC_ARRAY_LIST(client_arraylist, struct pdu_stream *)
 
 static struct server_arraylist servers;
 static struct client_arraylist clients;
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-static struct thread_pool *request_handlers;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t poller2worker;
+static int worker2poller[2];
 
 enum poll_verdict {
 	PV_CONTINUE,
@@ -58,10 +58,17 @@ cleanup_server(struct rtr_server *server)
 }
 
 static void
+_pdustream_destroy(struct pdu_stream **stream)
+{
+	if (stream)
+		pdustream_destroy(*stream);
+}
+
+static void
 destroy_db(void)
 {
 	server_arraylist_cleanup(&servers, cleanup_server);
-	client_arraylist_cleanup(&clients, pdustream_destroy);
+	client_arraylist_cleanup(&clients, _pdustream_destroy);
 }
 
 /*
@@ -332,28 +339,102 @@ init_server_fds(void)
 	return 0;
 }
 
-static void
-handle_client_request(void *arg)
+static struct pdu_stream *
+claim_client(void)
 {
-	struct rtr_request *request = arg;
+	struct pdu_stream **_client, *client;
 
-	switch (request->pdu.type) {
+	ARRAYLIST_FOREACH(&clients, _client) {
+		client = *_client;
+		if (PS_POLLIN(client) && !PS_CLAIMED(client)) {
+			PS_DISABLE(client, POLLIN);
+			PS_ENABLE(client, CLAIMED);
+			return client;
+		}
+	}
+
+	return NULL;
+}
+
+static int
+handle_request(struct rtr_request *req)
+{
+	int error;
+
+	switch (req->pdu.type) {
 	case PDU_TYPE_SERIAL_QUERY:
-		handle_serial_query_pdu(request);
+		error = handle_serial_query_pdu(req);
 		break;
 	case PDU_TYPE_RESET_QUERY:
-		handle_reset_query_pdu(request);
+		error = handle_reset_query_pdu(req);
 		break;
 	default:
 		/* Should have been catched during constructor */
-		pr_crit("Unexpected PDU type: %u", request->pdu.type);
+		pr_crit("Unexpected PDU type: %u", req->pdu.type);
 	}
 
-	if (request->eos)
-		/* Wake poller to close the socket */
-		shutdown(request->fd, SHUT_WR);
+	rtreq_destroy(req);
+	return error;
+}
 
-	rtreq_destroy(request);
+static void *
+handle_clients(void *arg)
+{
+	static const unsigned char one = 1;
+
+	struct pdu_stream *client;
+	struct rtr_request_list reqs;
+	struct rtr_request *req;
+
+	TAILQ_INIT(&reqs.nodes);
+	reqs.count = 0;
+
+	mutex_lock(&lock);
+
+	while (!fort_end) {
+		client = claim_client();
+		if (!client) {
+			panic_on_fail(pthread_cond_wait(&poller2worker, &lock),
+			    "pthread_cond_wait");
+			continue;
+		}
+
+		mutex_unlock(&lock);
+
+		pr_op_debug("RTR worker thread: Claimed client %s",
+		    client->addr);
+
+		do {
+			if (!pdustream_parse(client, &reqs)) {
+kick_client:			pr_op_debug("RTR worker thread: %s errored.",
+				    client->addr);
+				rtreqlist_clear(&reqs);
+				mutex_lock(&lock);
+				PS_DISABLE(client, CLAIMED);
+				pdustream_disable_read(client);
+				break;
+			}
+
+			if (TAILQ_EMPTY(&reqs.nodes)) {
+				pr_op_debug("RTR worker thread: %s done.",
+				    client->addr);
+				mutex_lock(&lock);
+				PS_DISABLE(client, CLAIMED);
+				break;
+			}
+
+			while ((req = rtreqlist_pop(&reqs)) != NULL)
+				if (handle_request(req) != 0)
+					goto kick_client;
+		} while (true);
+
+		if (write(worker2poller[1], &one, 1) < 0)
+			pr_op_warn("Cannot wake up RTR server thread: %s",
+			    strerror(errno));
+	}
+
+	mutex_unlock(&lock);
+	return NULL;
 }
 
 static void
@@ -450,22 +531,6 @@ accept_new_client(struct pollfd const *server_fd)
 	return AV_SUCCESS;
 }
 
-static bool
-__handle_client_request(struct pdu_stream *stream)
-{
-	struct rtr_request *request;
-
-	if (!pdustream_next(stream, &request))
-		return false;
-
-	if (request == NULL)
-		return true;
-
-	thread_pool_push(request_handlers, "RTR request", handle_client_request,
-	    request);
-	return true;
-}
-
 static void
 print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 {
@@ -510,8 +575,8 @@ print_poll_failure(struct pollfd *pfd, char const *what, char const *addr)
 static void
 delete_dead_clients(void)
 {
-	unsigned int src;
-	unsigned int dst;
+	size_t src;
+	size_t dst;
 
 	for (src = 0, dst = 0; src < clients.len; src++) {
 		if (clients.array[src] != NULL) {
@@ -524,35 +589,30 @@ delete_dead_clients(void)
 }
 
 static void
-apply_pollfds(struct pollfd *pollfds, unsigned int nclients)
+apply_pollfds(struct pollfd *pollfds, size_t nclients)
 {
-	struct pollfd *pfd;
 	struct rtr_server *server;
 	struct pdu_stream *client;
-	unsigned int i;
+	size_t i;
 
 	for (i = 0; i < servers.len; i++) {
-		pfd = &pollfds[i];
 		server = &servers.array[i];
 
 		/* PR_DEBUG_MSG("pfd:%d server:%d", pfd->fd, server->fd); */
 
-		if ((pfd->fd == -1) && (server->fd != -1)) {
-			print_poll_failure(pfd, "Server", server->addr);
+		if ((pollfds[i].fd == -1) && (server->fd != -1)) {
 			close(server->fd);
 			server->fd = -1;
 		}
 	}
 
 	for (i = 0; i < nclients; i++) {
-		pfd = &pollfds[servers.len + i];
 		client = clients.array[i];
 
 		/* PR_DEBUG_MSG("pfd:%d client:%d", pfd->fd, client->fd); */
 
-		if ((pfd->fd == -1) && (pdustream_fd(client) != -1)) {
-			print_poll_failure(pfd, "Client", pdustream_addr(client));
-			pdustream_destroy(&client);
+		if (!PS_CLAIMED(client) && PS_EOS(client)) {
+			pdustream_destroy(client);
 			clients.array[i] = NULL;
 		}
 	}
@@ -565,20 +625,31 @@ fddb_poll(void)
 {
 	struct pollfd *pollfds; /* array */
 	struct pollfd *fd;
-	unsigned int nclients;
-	unsigned int i;
+	struct pdu_stream *client;
+	size_t nclients;
+	size_t i;
+	bool wakeup_threads;
+	unsigned char trash[16];
 	int error;
 
-	pollfds = pcalloc(servers.len + clients.len, sizeof(struct pollfd));
+	pollfds = pcalloc(servers.len + clients.len + 1, sizeof(struct pollfd));
 
 	ARRAYLIST_FOREACH_IDX(&servers, i)
 		init_pollfd(&pollfds[i], servers.array[i].fd);
-	ARRAYLIST_FOREACH_IDX(&clients, i)
-		init_pollfd(&pollfds[servers.len + i], pdustream_fd(clients.array[i]));
+	mutex_lock(&lock);
+	ARRAYLIST_FOREACH_IDX(&clients, i) {
+		client = clients.array[i];
+		init_pollfd(
+		    &pollfds[servers.len + i],
+		    PS_NEED_POLL(client) ? client->fd : -1
+		);
+	}
+	mutex_unlock(&lock);
+	init_pollfd(&pollfds[servers.len + clients.len], worker2poller[0]);
 
-	error = poll(pollfds, servers.len + clients.len, 1000);
+	error = poll(pollfds, servers.len + clients.len + 1, 1000);
 
-	if (stop_server_thread)
+	if (fort_end)
 		goto stop;
 
 	if (error == 0)
@@ -603,6 +674,19 @@ fddb_poll(void)
 	/* accept_new_client() might change this number, so store a backup. */
 	nclients = clients.len;
 
+	/* Client thread to poller wakeupper */
+	fd = &pollfds[servers.len + clients.len];
+	if (fd->revents & POLLIN) {
+		if (read(fd->fd, trash, sizeof(trash)) < 0)
+			pr_op_warn("Cannot read RTR server wakeupper: %s",
+			    strerror(errno));
+	}
+	if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
+		print_poll_failure(fd, "Wakeupper", "local");
+		close(worker2poller[0]);
+		worker2poller[0] = -1;
+	}
+
 	/* New connections */
 	for (i = 0; i < servers.len; i++) {
 		/* This fd is a listening socket. */
@@ -615,6 +699,7 @@ fddb_poll(void)
 			continue;
 
 		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
+			print_poll_failure(fd, "Server", servers.array[i].addr);
 			fd->fd = -1;
 
 		} else if (fd->revents & POLLIN) {
@@ -629,26 +714,40 @@ fddb_poll(void)
 	}
 
 	/* Client requests */
+	wakeup_threads = false;
+	mutex_lock(&lock);
+
 	for (i = 0; i < nclients; i++) {
 		/* This fd is a client handler socket. */
 		fd = &pollfds[servers.len + i];
+		client = clients.array[i];
 
 		/* PR_DEBUG_MSG("Client %u: fd:%d revents:%x", i, fd->fd,
 		    fd->revents); */
 
+		if (fd->fd == -1)
+			continue;
+
 		if (fd->revents & (POLLHUP | POLLERR | POLLNVAL)) {
-			fd->fd = -1;
+			print_poll_failure(fd, "Client", client->addr);
+			pdustream_disable_read(client);
+
 		} else if (fd->revents & POLLIN) {
-			if (!__handle_client_request(clients.array[i]))
-				fd->fd = -1;
+			PS_ENABLE(client, POLLIN);
+			wakeup_threads = true;
 		}
 	}
 
-	mutex_lock(&lock);
 	apply_pollfds(pollfds, nclients);
+	nclients = clients.len;
+
+	if (wakeup_threads)
+		panic_on_fail(pthread_cond_broadcast(&poller2worker),
+		    "pthread_cond_broadcast");
+
 	mutex_unlock(&lock);
 
-	stats_gauge_set(stat_rtr_connections, clients.len);
+	stats_gauge_set(stat_rtr_connections, nclients);
 	/* Fall through */
 
 success:
@@ -663,7 +762,7 @@ stop:
 }
 
 static void *
-server_cb(void *arg)
+control_cb(void *arg)
 {
 	do {
 		switch (fddb_poll()) {
@@ -678,33 +777,81 @@ server_cb(void *arg)
 	} while (true);
 }
 
+static void
+end_server_threads(size_t count)
+{
+	array_index i;
+	int error;
+
+	fort_end = true;
+	pthread_cond_broadcast(&poller2worker);
+	for (i = 0; i < count; i++) {
+		error = pthread_join(server_threads[i], NULL);
+		if (error)
+			pr_op_warn("pthread_join: %s", strerror(error));
+		pr_op_debug("Ended RTR server thread #%zu.", i + 1);
+	}
+
+	free(server_threads);
+	server_threads = NULL;
+}
+
 int
 rtr_start(void)
 {
+	array_index i;
 	int error;
+
+	rtridx_expire();
 
 	server_arraylist_init(&servers);
 	client_arraylist_init(&clients);
 
 	error = init_server_fds();
 	if (error)
-		goto revert_fds;
+		goto fds;
 
-	error = thread_pool_create("Server",
-	    config_get_thread_pool_server_max(),
-	    &request_handlers);
-	if (error)
-		goto revert_fds;
-
-	error = pthread_create(&server_thread, NULL, server_cb, NULL);
+	error = pthread_cond_init(&poller2worker, NULL);
 	if (error) {
-		thread_pool_destroy(request_handlers);
-		goto revert_fds;
+		pr_op_err_st("pthread_cond_init(p2w) returned error %d: %s",
+		    error, strerror(error));
+		goto fds;
 	}
+
+	if (pipe(worker2poller) < 0) {
+		error = errno;
+		pr_op_err_st("Cannot create RTR worker-poller pipe: %s",
+		    strerror(error));
+		goto cond;
+	}
+
+	server_threads = pcalloc(config_get_thread_pool_server_max(),
+	    sizeof(pthread_t));
+	for (i = 0; i < config_get_thread_pool_server_max(); i++) {
+		error = pthread_create(&server_threads[i], NULL,
+		    handle_clients, NULL);
+		if (error) {
+			pr_op_err_st("pthread_create() returned error %d: %s",
+			    error, strerror(error));
+			goto threads;
+		}
+
+		pr_op_debug("Spawned RTR server thread #%zu.", i + 1);
+	}
+
+	error = pthread_create(&control_thread, NULL, control_cb, NULL);
+	if (error)
+		goto threads;
 
 	return 0;
 
-revert_fds:
+threads:
+	end_server_threads(i);
+	close(worker2poller[0]);
+	close(worker2poller[1]);
+cond:
+	pthread_cond_destroy(&poller2worker);
+fds:
 	destroy_db();
 	return error;
 }
@@ -713,40 +860,37 @@ void rtr_stop(void)
 {
 	int error;
 
-	stop_server_thread = true;
-	error = pthread_join(server_thread, NULL);
+	end_server_threads(config_get_thread_pool_server_max());
+
+	error = pthread_join(control_thread, NULL);
 	if (error) {
 		pr_op_err("pthread_join() returned error %d: %s", error,
 		    strerror(error));
 	}
 
-	thread_pool_destroy(request_handlers);
+	if (worker2poller[0] != -1)
+		close(worker2poller[0]);
+	close(worker2poller[1]);
 
+	pthread_cond_destroy(&poller2worker);
 	destroy_db();
 }
 
 void
-rtr_notify(void)
+rtr_notify(struct rtr_metadata *rtr)
 {
-	serial_t serial;
-	struct pdu_stream **client;
-	int fd;
-	int error;
-
-	error = get_last_serial_number(&serial);
-	if (error) {
-		pr_op_info("Can't notify RTR clients: %d (%s)", error,
-		    strerror(abs(error)));
-		return;
-	}
+	struct pdu_stream **_client, *client;
 
 	mutex_lock(&lock);
 
-	ARRAYLIST_FOREACH(&clients, client) {
-		fd = pdustream_fd(*client);
-		if (fd != -1)
-			send_serial_notify_pdu(fd, pdustream_version(*client),
-			    serial);
+	ARRAYLIST_FOREACH(&clients, _client) {
+		client = *_client;
+		if (client->fd != -1)
+			send_serial_notify_pdu(
+			    client->fd,
+			    client->rtr_version,
+			    rtr
+			);
 	}
 
 	mutex_unlock(&lock);

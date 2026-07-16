@@ -16,6 +16,9 @@ typedef enum rtr_error_code {
 	ERR_PDU_WITHDRAWAL_UNKNOWN		= 6,
 	ERR_PDU_DUPLICATE_ANNOUNCE		= 7,
 	ERR_PDU_UNEXPECTED_PROTO_VERSION	= 8,
+	ERR_PDU_ASPA_PROVIDER_LIST_ERROR	= 9,
+	ERR_PDU_TRANSPORT_ERROR			= 10,
+	ERR_PDU_ORDERING_ERROR			= 11,
 } rtr_error_code_t;
 
 static int
@@ -122,6 +125,12 @@ err_pdu_to_string(uint16_t code)
 		return "Duplicate Announcement Received";
 	case ERR_PDU_UNEXPECTED_PROTO_VERSION:
 		return "Unexpected Protocol Version";
+	case ERR_PDU_ASPA_PROVIDER_LIST_ERROR:
+		return "ASPA Provider List Error";
+	case ERR_PDU_TRANSPORT_ERROR:
+		return "Transport Error";
+	case ERR_PDU_ORDERING_ERROR:
+		return "Ordering Error";
 	}
 
 	return "Unknown error code";

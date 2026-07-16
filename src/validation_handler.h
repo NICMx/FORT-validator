@@ -30,6 +30,8 @@ struct validation_handler {
 	/** Called every time Fort has successfully validated a BGPsec cert */
 	int (*handle_router_key)(unsigned char const *,
 	    struct asn_range const *, unsigned char const *, void *);
+	/* Swallows the ASPA. */
+	int (*handle_aspa)(struct aspa *, void *);
 	/** Generic user-defined argument for the functions above. */
 	void *arg;
 };
@@ -38,5 +40,6 @@ int vhandler_handle_roa_v4(uint32_t, struct ipv4_prefix const *, uint8_t);
 int vhandler_handle_roa_v6(uint32_t, struct ipv6_prefix const *, uint8_t);
 int vhandler_handle_router_key(unsigned char const *, struct asn_range const *,
     unsigned char const *);
+int vhandler_handle_aspa(struct aspa *);
 
 #endif /* SRC_VALIDATION_HANDLER_H_ */

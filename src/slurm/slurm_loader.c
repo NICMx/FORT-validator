@@ -6,6 +6,7 @@
 #include "config.h"
 #include "crypto/hash.h"
 #include "log.h"
+#include "slurm/db_slurm.h"
 #include "slurm/slurm_parser.h"
 
 #define SLURM_FILE_EXTENSION	".slurm"
@@ -266,39 +267,43 @@ success:
 }
 
 int
-slurm_apply(struct db_table *base, struct db_slurm **slurm)
+slurm_apply(struct db_table *base)
 {
+	struct db_slurm *slurm = NULL;
 	struct slurm_parser_params params;
 	int error;
 
 	if (config_get_slurm() == NULL)
 		return 0;
 
-	error = update_slurm(slurm);
+	error = update_slurm(&slurm);
 	if (error)
 		return error;
 
-	if (*slurm == NULL)
+	if (slurm == NULL)
 		return 0;
 
 	/* Ok, apply SLURM */
 
 	params.db_table = base;
-	params.db_slurm = *slurm;
+	params.db_slurm = slurm;
 
 	/* TODO invert this. SLURM rules are few, and base is massive. */
 	error = db_table_foreach_roa(base, slurm_pfx_filters_apply, &params);
 	if (error)
-		return error;
+		goto end;
 
 	error = db_table_foreach_router_key(base, slurm_bgpsec_filters_apply,
 	    &params);
 	if (error)
-		return error;
+		goto end;
 
 	error = slurm_pfx_assertions_apply(&params);
 	if (error)
-		return error;
+		goto end;
 
-	return slurm_bgpsec_assertions_apply(&params);
+	error = slurm_bgpsec_assertions_apply(&params);
+
+end:	db_slurm_destroy(slurm);
+	return error;
 }

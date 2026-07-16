@@ -1,8 +1,11 @@
 #ifndef SRC_RTR_DB_DB_TABLE_H_
 #define SRC_RTR_DB_DB_TABLE_H_
 
-#include "rtr/db/delta.h"
 #include "types/address.h"
+#include "types/aspa.h"
+#include "types/router_key.h"
+#include "types/serial.h"
+#include "types/vrp.h"
 
 struct db_table;
 
@@ -15,6 +18,12 @@ unsigned int db_table_roa_count(struct db_table *);
 unsigned int db_table_roa_count_v4(struct db_table *);
 unsigned int db_table_roa_count_v6(struct db_table *);
 unsigned int db_table_router_key_count(struct db_table *);
+unsigned int db_table_aspa_count(struct db_table *);
+uint16_t db_table_session(struct db_table *);
+serial_t db_table_serial(struct db_table *);
+
+void db_table_sort(struct db_table *);
+int db_table_cache(struct db_table *);
 
 int db_table_foreach_roa(struct db_table const *, vrp_foreach_cb, void *);
 void db_table_remove_roa(struct db_table *, struct vrp const *);
@@ -23,12 +32,14 @@ int db_table_foreach_router_key(struct db_table const *, router_key_foreach_cb,
     void *);
 void db_table_remove_router_key(struct db_table *, struct router_key const *);
 
+int db_table_foreach_aspa(struct db_table const *, aspa_foreach_cb, void *);
+
 int rtrhandler_handle_roa_v4(struct db_table *, uint32_t,
     struct ipv4_prefix const *, uint8_t);
 int rtrhandler_handle_roa_v6(struct db_table *, uint32_t,
     struct ipv6_prefix const *, uint8_t);
 int rtrhandler_handle_router_key(struct db_table *, unsigned char const *,
     uint32_t, unsigned char const *);
-struct deltas *compute_deltas(struct db_table *, struct db_table *);
+int rtrhandler_handle_aspa(struct db_table *, struct aspa *);
 
 #endif /* SRC_RTR_DB_DB_TABLE_H_ */

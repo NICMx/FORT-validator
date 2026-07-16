@@ -7,6 +7,7 @@
 enum rtr_version {
 	RTR_V0			= 0,
 	RTR_V1			= 1,
+	RTR_V2			= 2,
 };
 
 struct rtr_buffer {
@@ -25,6 +26,7 @@ enum pdu_type {
 	PDU_TYPE_CACHE_RESET	= 8,
 	PDU_TYPE_ROUTER_KEY	= 9,
 	PDU_TYPE_ERROR_REPORT	= 10,
+	PDU_TYPE_ASPA		= 11,
 };
 
 char const *pdutype2str(enum pdu_type);

@@ -248,7 +248,7 @@ init_resources(X509 *x509, enum rpki_policy policy, enum cert_type type,
 
 	result = resources_create(policy, false);
 
-	error = certificate_get_resources(x509, result, type);
+	error = certificate_get_resources(x509, result, type, 0);
 	if (error)
 		goto fail;
 

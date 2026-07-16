@@ -68,10 +68,11 @@ hash_local_file(char const *uri, unsigned char *result,
 
 	do {
 		consumed = fread(buffer, 1, stat.st_blksize, file);
-		error = ferror(file);
-		if (error) {
-			pr_val_err("File reading error. Error message (apparently): %s",
-			   strerror(error));
+		if (ferror(file)) {
+			error = errno;
+			if (!error)
+				error = EINVAL;
+			pr_val_err("File read failure: %s", strerror(error));
 			goto end;
 		}
 

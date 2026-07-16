@@ -42,8 +42,8 @@ fort_SOURCES += asn1/oid.h asn1/oid.c
 fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
 
 fort_SOURCES += types/address.h types/address.c
+fort_SOURCES += types/aspa.h types/aspa.c
 fort_SOURCES += types/bio_seq.c types/bio_seq.h
-fort_SOURCES += types/delta.c types/delta.h
 fort_SOURCES += types/router_key.c types/router_key.h
 fort_SOURCES += types/serial.h types/serial.c
 fort_SOURCES += types/uri.h types/uri.c
@@ -77,6 +77,7 @@ fort_SOURCES += http/http.h http/http.c
 
 fort_SOURCES += incidence/incidence.h incidence/incidence.c
 
+fort_SOURCES += object/aspa.h object/aspa.c
 fort_SOURCES += object/bgpsec.h object/bgpsec.c
 fort_SOURCES += object/certificate.h object/certificate.c
 fort_SOURCES += object/crl.h object/crl.c
@@ -96,6 +97,7 @@ fort_SOURCES += rsync/rsync.h rsync/rsync.c
 
 fort_SOURCES += rtr/pdu_stream.c rtr/pdu_stream.h
 fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
+fort_SOURCES += rtr/meta.c rtr/meta.h
 fort_SOURCES += rtr/pdu_handler.c rtr/pdu_handler.h
 fort_SOURCES += rtr/pdu_sender.c rtr/pdu_sender.h
 fort_SOURCES += rtr/pdu.c rtr/pdu.h
@@ -103,15 +105,11 @@ fort_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
 fort_SOURCES += rtr/rtr.c rtr/rtr.h
 
 fort_SOURCES += rtr/db/db_table.c rtr/db/db_table.h
-fort_SOURCES += rtr/db/delta.c rtr/db/delta.h
-fort_SOURCES += rtr/db/deltas_array.c rtr/db/deltas_array.h
 fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
 
 fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
 fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
 fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
-
-fort_SOURCES += thread/thread_pool.c thread/thread_pool.h
 
 fort_SOURCES += xml/relax_ng.c xml/relax_ng.h
 

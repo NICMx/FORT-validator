@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <openssl/evp.h>
 #include <sys/queue.h>
-#include <time.h>
 
 #include "common.h"
 #include "config.h"
@@ -175,16 +174,15 @@ base64_sanitize(struct line_file *lfile, char **out)
 	offset = 0;
 	while ((fread_result = fread(buf, 1,
 	    (original_size > BUF_SIZE) ? BUF_SIZE : original_size, fd)) > 0) {
-		error = ferror(lfile_fd(lfile));
-		if (error) {
-			/*
-			 * The manpage doesn't say that the result is an error
-			 * code. It literally doesn't say how to get an error
-			 * code.
-			 */
-			pr_op_err("File reading error. Presumably, the error message is '%s.'",
-			    strerror(error));
-			goto free_result;
+		if (ferror(lfile_fd(lfile))) {
+			error = errno;
+			/* errno on fread() is POSIX, not ISO C. */
+			if (!error)
+				error = EINVAL;
+			pr_op_err("File read failure: %s", strerror(error));
+			free(buf);
+			free(result);
+			return error;
 		}
 
 		original_size -= fread_result;
@@ -218,10 +216,6 @@ base64_sanitize(struct line_file *lfile, char **out)
 
 	*out = result;
 	return 0;
-free_result:
-	free(buf);
-	free(result);
-	return error;
 #undef BUF_SIZE
 }
 
@@ -351,6 +345,7 @@ handle_tal_uri(struct tal *tal, struct rpki_uri *uri, struct db_table *db)
 	validation_handler.handle_roa_v4 = handle_roa_v4;
 	validation_handler.handle_roa_v6 = handle_roa_v6;
 	validation_handler.handle_router_key = handle_router_key;
+	validation_handler.handle_aspa = handle_aspa;
 	validation_handler.arg = db;
 
 	error = validation_prepare(&state, tal, &validation_handler);

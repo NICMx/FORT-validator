@@ -70,6 +70,21 @@ rasn_contains(struct resources_asn *asns, struct asn_range const *range)
 	return sarray_contains((struct sorted_array *) asns, range);
 }
 
+bool
+rasn_matches(struct resources_asn *_asns, uint32_t asn)
+{
+	struct sorted_array *asns = (struct sorted_array *)_asns;
+	struct asn_range range;
+
+	if (asns == NULL)
+		return false;
+	if (sarray_count(asns) != 1u)
+		return false;
+
+	range.min = range.max = asn;
+	return sarray_contains(asns, &range);
+}
+
 static int
 asn_range_cb(void *node, void *arg)
 {

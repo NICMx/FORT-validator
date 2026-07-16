@@ -39,6 +39,8 @@
 #define CHECK_FORMAT(str, args) /* Nothing */
 #endif
 
+extern volatile bool fort_end;
+
 /*
  * Only call this group of functions when you know there's only one thread.
  *
@@ -98,6 +100,8 @@ int val_crypto_err(const char *, ...) CHECK_FORMAT(1, 2);
 __dead void enomem_panic(void);
 /* Programming errors */
 __dead void pr_crit(const char *, ...) CHECK_FORMAT(1, 2);
+
+void print_stack_trace(char const *);
 
 int incidence(enum incidence_id, const char *, ...) CHECK_FORMAT(2, 3);
 
