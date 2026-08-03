@@ -10,7 +10,6 @@
 #include "output_printer.h"
 #include "print_file.h"
 #include "prometheus.h"
-#include "relax_ng.h"
 #include "rsync.h"
 #include "rtr/db/vrps.h"
 #include "rtr/rtr.h"
@@ -154,12 +153,9 @@ main(int argc, char **argv)
 	error = http_init();
 	if (error)
 		goto revert_hash;
-	error = relax_ng_init();
-	if (error)
-		goto revert_http;
 	error = vrps_init();
 	if (error)
-		goto revert_relax_ng;
+		goto revert_http;
 	error = cache_setup2();
 	if (error)
 		goto revert_vrps;
@@ -186,8 +182,6 @@ main(int argc, char **argv)
 	task_teardown();
 revert_vrps:
 	vrps_destroy();
-revert_relax_ng:
-	relax_ng_cleanup();
 revert_http:
 	http_cleanup();
 revert_hash:

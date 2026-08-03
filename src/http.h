@@ -8,6 +8,7 @@
 int http_init(void);
 void http_cleanup(void);
 
-int http_download(struct uri const *, char const *, curl_off_t, bool *);
+int http_download(struct uri const *, curl_write_callback, void *,
+    curl_off_t, bool *);
 
 #endif /* SRC_HTTP_H_ */

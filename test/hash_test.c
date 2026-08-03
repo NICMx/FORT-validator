@@ -82,38 +82,38 @@ START_TEST(test_str2hash)
 	unsigned int i;
 
 	hex = "01";
-	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(EINVAL, str2hash(hex, strlen(hex), &hash));
 	ck_assert_int_eq(false, hash.set);
 
 	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(0, str2hash(hex, &hash));
+	ck_assert_int_eq(0, str2hash(hex, strlen(hex), &hash));
 	for (i = 0; i < 32; i++)
 		ck_assert_uint_eq(i, hash.bytes[i]);
 	ck_assert_int_eq(true, hash.set);
 
 	/* Unwanted prefix */
 	hex = "0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(EINVAL, str2hash(hex, strlen(hex), &hash));
 
 	/* Padding left */
 	hex = " 00102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(EINVAL, str2hash(hex, strlen(hex), &hash));
 
 	/* Padding right */
 	hex = "00102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f ";
-	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(EINVAL, str2hash(hex, strlen(hex), &hash));
 
 	/* Illegal hex character 'g' */
 	hex = "0001020g0405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(EINVAL, str2hash(hex, strlen(hex), &hash));
 
 	/* Slightly too short */
 	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1";
-	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(EINVAL, str2hash(hex, strlen(hex), &hash));
 
 	/* Slightly too long */
 	hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2";
-	ck_assert_int_eq(EINVAL, str2hash(hex, &hash));
+	ck_assert_int_eq(EINVAL, str2hash(hex, strlen(hex), &hash));
 }
 END_TEST
 

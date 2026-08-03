@@ -13,6 +13,7 @@ fetch_url(char const *url, char const *filename)
 	struct uri uri;
 	char *path;
 	error_msg errmsg;
+	FILE *file;
 	int error;
 
 	errmsg = uri_init(&uri, url);
@@ -23,14 +24,22 @@ fetch_url(char const *url, char const *filename)
 
 	path = path_join(config_get_tal(), filename);
 
-	error = http_download(&uri, path, 0, NULL);
+	file = fopen(path, "w");
+	if (!file) {
+		error = errno;
+		fprintf(stderr, "Cannot open %s for writing: %s",
+		    path, strerror(error));
+		goto end;
+	}
+	error = http_download(&uri, NULL, file, 0, NULL);
+	fclose(file);
 	if (error)
 		fprintf(stderr, "Couldn't fetch '%s': %s\n",
 		    path, strerror(error));
 	else
 		fprintf(stdout, "Successfully fetched '%s'!\n\n", path);
 
-	free(path);
+end:	free(path);
 	uri_cleanup(&uri);
 	return error;
 }

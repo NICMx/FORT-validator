@@ -3,11 +3,11 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/err.h>
-#include <openssl/evp.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "alloc.h"
+#include "hash.h"
 #include "log.h"
 
 /* Simple decode base64 string. Returns true on success, false on failure. */
@@ -35,7 +35,7 @@ base64_decode(char *in, size_t in_len, unsigned char **out, size_t *out_len)
 	EVP_DecodeInit(ctx);
 
 	status = EVP_DecodeUpdate(ctx, result, &outl, (unsigned char *)in, in_len);
-	if (status == -1)
+	if (status < 0)
 		goto cancel;
 
 	*out_len = outl;
@@ -175,4 +175,151 @@ base64url_encode(unsigned char const *in, int in_len, char **result)
 
 	BIO_free_all(b64);
 	return true;
+}
+
+static void
+prepare_buf(struct base64decode2file *b64, size_t data_len)
+{
+	size_t need_size;
+
+	need_size = EVP_DECODE_LENGTH(data_len);
+
+	if (!b64->buf) {
+		b64->bufsize = need_size;
+		b64->buf = pmalloc(need_size);
+	} else if (need_size > b64->bufsize) {
+		b64->bufsize = need_size;
+		b64->buf = prealloc(b64->buf, need_size);
+	}
+}
+
+/*
+ * Steals ownership of @filename.
+ * base64decode2file's must always be b64d2f_destroy()ed, even if this fails.
+ */
+int
+b64d2f_init(struct base64decode2file *b64, char *filename)
+{
+	int error;
+
+	if (b64->decoder == NULL) {
+		b64->decoder = EVP_ENCODE_CTX_new();
+		if (b64->decoder == NULL)
+			enomem_panic();
+	}
+	EVP_DecodeInit(b64->decoder);
+	b64->done = false;
+
+	if (b64->hasher == NULL)
+		b64->hasher = sha256_create();
+	error = sha256_init(b64->hasher);
+	if (error)
+		goto fail;
+
+	b64->file = fopen(filename, "w");
+	if (!b64->file) {
+		error = errno;
+		pr_err("Cannot open %s for writing: %s",
+		    filename, strerror(error));
+		goto fail;
+	}
+
+	b64->filename = filename;
+	return 0;
+
+fail:	free(filename);
+	return error;
+}
+
+static int
+b64_write(struct base64decode2file *b64, int len)
+{
+	size_t buflen;
+
+	if (len == 0)
+		return 0;
+	if (len < 0) {
+		pr_err("Attempting to write a negative byte count: %d", len);
+		return EINVAL;
+	}
+
+	buflen = len;
+	if (fwrite(b64->buf, 1, buflen, b64->file) != buflen) {
+		pr_err("Cannot write data to %s: Generic failure",
+		    b64->filename);
+		return EINVAL;
+	}
+
+	return sha256_update(b64->hasher, b64->buf, buflen);
+}
+
+int
+b64d2f_write(struct base64decode2file *b64,
+    unsigned char const *data, size_t len)
+{
+	int res;
+	int outl;
+
+	if (!b64->filename)
+		return 0;
+
+	if (b64->done) {
+		pr_err("There's trailing text after the end of base64: '%.*s'",
+		    (int)len, data);
+		return EINVAL;
+	}
+
+	prepare_buf(b64, len);
+
+	res = EVP_DecodeUpdate(b64->decoder, b64->buf, &outl, data, len);
+	if (res < 0) {
+		pr_err("Cannot decode base64: Generic error");
+		return EINVAL;
+	}
+	if (res == 0)
+		b64->done = true;
+
+	return b64_write(b64, outl);
+}
+
+int
+b64d2f_finish(struct base64decode2file *b64, unsigned char md[EVP_MAX_MD_SIZE])
+{
+	int outl;
+	int error;
+
+	if (!b64->filename)
+		return 0;
+
+	prepare_buf(b64, 66);
+
+	if (EVP_DecodeFinal(b64->decoder, b64->buf, &outl) != 1)
+		return pr_err("Cannot decode base64: Generic error");
+
+	error = b64_write(b64, outl);
+	if (error)
+		return error;
+
+	if (fclose(b64->file) == EOF)
+		pr_wrn("Cannot close %s: %s", b64->filename, strerror(errno));
+	b64->file = NULL;
+
+	return sha256_finish(b64->hasher, md);
+}
+
+void
+b64d2f_destroy(struct base64decode2file *b64)
+{
+	if (b64->decoder != NULL)
+		EVP_ENCODE_CTX_free(b64->decoder);
+	if (b64->buf != NULL)
+		free(b64->buf);
+	if (b64->filename != NULL)
+		free(b64->filename);
+	if (b64->file != NULL && fclose(b64->file) == EOF)
+		pr_wrn("Cannot close %s: %s", b64->filename, strerror(errno));
+	if (b64->hasher != NULL)
+		sha256_destroy(b64->hasher);
+
+	memset(b64, 0, sizeof(*b64));
 }

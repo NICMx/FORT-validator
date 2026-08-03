@@ -52,12 +52,12 @@ fort_SOURCES += object/vcard.h object/vcard.c
 fort_SOURCES += output_printer.h output_printer.c
 fort_SOURCES += print_file.h print_file.c
 fort_SOURCES += prometheus.h prometheus.c
-fort_SOURCES += relax_ng.c relax_ng.h
 fort_SOURCES += report.c report.h
 fort_SOURCES += resource/asn.h resource/asn.c
 fort_SOURCES += resource.h resource.c
 fort_SOURCES += resource/ip4.h resource/ip4.c
 fort_SOURCES += resource/ip6.h resource/ip6.c
+fort_SOURCES += rrdp_xml.h rrdp_xml.c
 fort_SOURCES += rrdp.h rrdp.c
 fort_SOURCES += rsync.h rsync.c
 fort_SOURCES += rtr/db/db_table.c rtr/db/db_table.h
@@ -104,12 +104,12 @@ fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 fort_CFLAGS  = -Wall -Wpedantic
 #fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=c99 -D_XOPEN_SOURCE=700
-fort_CFLAGS += -O2 -g $(FORT_FLAGS) ${XML2_CFLAGS}
+fort_CFLAGS += -O2 -g $(FORT_FLAGS)
 if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED
 fort_LDFLAGS = -rdynamic
 endif
-fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${XML2_LIBS} ${MICROHTTPD_LIBS}
+fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${MICROHTTPD_LIBS}
 
 GCC_WARNS  = -fmax-errors=1 -fanalyzer
 GCC_WARNS += -pedantic-errors -Waddress -Walloc-zero -Walloca

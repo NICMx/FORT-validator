@@ -2,8 +2,6 @@
 #define SRC_RRDP_H_
 
 #include <jansson.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #include "types/rpp.h"
 #include "types/uri.h"

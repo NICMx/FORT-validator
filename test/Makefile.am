@@ -13,15 +13,13 @@ if USE_TESTS
 # Otherwise it must be included manually:
 # 	mumble_mumble_CFLAGS = ${AM_CFLAGS} flag1 flag2 flag3 ...
 AM_CFLAGS =  -Wall -Wpedantic
-# The extra info provided by this flag allows the linker to strip unused
-# symbols, which reduces required superfluous #includes and mocks.
-# It's supported by gcc and clang, not sure about others.
-AM_CFLAGS += -flto
+# Strip unused symbols (Reduces the need for superfluous #includes & mocks)
+AM_CFLAGS += -Os -flto
 AM_CFLAGS += -std=c99 -D_XOPEN_SOURCE=700
 # Most (if not all) tests need common.c, which needs timegm()
 AM_CFLAGS += -D_DEFAULT_SOURCE=1 -D_DARWIN_C_SOURCE=1
 AM_CFLAGS += -I../src -DUNIT_TESTING
-AM_CFLAGS += ${CHECK_CFLAGS} ${XML2_CFLAGS} ${JANSSON_CFLAGS}
+AM_CFLAGS += ${CHECK_CFLAGS} ${JANSSON_CFLAGS}
 # AM_LDFLAGS isn't working on Linux, and "AM_LDADD" is not idiomatic
 # automake. (autotools will reprehend us if we declare it.)
 
@@ -46,7 +44,6 @@ base64_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		cache.test
 cache_test_SOURCES =		cache_test.c
 cache_test_LDADD =		${CHECK_LIBS}
-cache_test_LDADD +=		${XML2_LIBS}
 cache_test_LDADD +=		${JANSSON_LIBS}
 
 check_PROGRAMS +=		common.test
@@ -84,8 +81,12 @@ pdu_stream_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		rrdp.test
 rrdp_test_SOURCES =		rrdp_test.c
 rrdp_test_LDADD =		${CHECK_LIBS}
-rrdp_test_LDADD +=		${XML2_LIBS}
 rrdp_test_LDADD +=		${JANSSON_LIBS}
+
+check_PROGRAMS +=		rrdp_xml.test
+rrdp_xml_test_SOURCES =		rrdp_xml_test.c
+rrdp_xml_test_LDADD =		${CHECK_LIBS}
+rrdp_xml_test_LDADD +=		${JANSSON_LIBS}
 
 #check_PROGRAMS +=		rsync.test
 #rsync_test_SOURCES =		rsync_test.c
@@ -122,11 +123,6 @@ vcard_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		vrps.test
 vrps_test_SOURCES =		rtr/db/vrps_test.c
 vrps_test_LDADD =		${CHECK_LIBS}
-
-check_PROGRAMS +=		xml.test
-xml_test_SOURCES =		xml_test.c
-xml_test_LDADD =		${CHECK_LIBS}
-xml_test_LDADD +=		${XML2_LIBS}
 
 TESTS = ${check_PROGRAMS}
 

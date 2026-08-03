@@ -1,26 +1,11 @@
 #include "hash.h"
 
-#include <openssl/evp.h>
 #include <stdlib.h>
 
 #include "alloc.h"
 #include "file.h"
 #include "log.h"
 #include "types/array.h"
-
-/*
- * TODO (fine) Delete this structure (use md directly) once OpenSSL < 3 support
- * is dropped.
- */
-struct hash_algorithm {
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	EVP_MD *md;
-#else
-	EVP_MD const *md;
-#endif
-	size_t size;
-	char const *name;
-};
 
 /*
  * EVP_sha256() and EVP_sha1() are now mildly deprecated ("present for
@@ -268,12 +253,12 @@ hexchar2uint(char chr)
 }
 
 int
-str2hash(char const *hexstr, struct rrdp_hash *hash)
+str2hash(char const *hexstr, size_t hexstrlen, struct rrdp_hash *hash)
 {
 	unsigned int digit;
 	size_t i;
 
-	if (strlen(hexstr) != 2 * RRDP_HASH_LEN)
+	if (hexstrlen != 2 * RRDP_HASH_LEN)
 		return EINVAL;
 
 	for (i = 0; i < RRDP_HASH_LEN; i++) {
@@ -314,4 +299,66 @@ hash_print(struct rrdp_hash *hash)
 		printf("%c%c",
 		    hash_b2c(hash->bytes[i] >> 4),
 		    hash_b2c(hash->bytes[i]));
+}
+
+EVP_MD_CTX *
+sha256_create(void)
+{
+	EVP_MD_CTX *hasher;
+
+	hasher = EVP_MD_CTX_new();
+	if (hasher == NULL)
+		enomem_panic();
+
+	return hasher;
+}
+
+int
+sha256_init(EVP_MD_CTX *hasher)
+{
+	return EVP_DigestInit_ex(hasher, sha256.md, NULL)
+	    ? 0
+	    : pr_crypto_err("EVP_DigestInit_ex() failed");
+}
+
+int
+sha256_update(EVP_MD_CTX *hasher, void const *bytes, size_t size)
+{
+	return EVP_DigestUpdate(hasher, bytes, size)
+	    ? 0
+	    : pr_crypto_err("EVP_DigestUpdate() failed");
+}
+
+/* hash length must be EVP_MAX_MD_SIZE */
+int
+sha256_finish(EVP_MD_CTX *hasher, unsigned char *hash)
+{
+	unsigned int hash_size;
+
+	if (!EVP_DigestFinal_ex(hasher, hash, &hash_size))
+		return pr_crypto_err("EVP_DigestFinal_ex() failed");
+
+	if (hash_size != SHA256_DIGEST_LENGTH)
+		return pr_err("libcrypto returned a %s hash sized %u bytes.",
+		    sha256.name, hash_size);
+
+	return 0;
+}
+
+int
+sha256_check(EVP_MD_CTX *hasher, unsigned char const *expected,
+    char const *type, char const *name)
+{
+	unsigned char actual[EVP_MAX_MD_SIZE];
+	int error;
+
+	error = sha256_finish(hasher, actual);
+	if (error)
+		return error;
+
+	if (memcmp(expected, actual, SHA256_DIGEST_LENGTH) != 0)
+		return pr_err("%s '%s' does not match its expected hash.",
+		    type, name);
+
+	return 0;
 }

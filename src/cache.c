@@ -2,6 +2,7 @@
 
 #include <fcntl.h>
 #include <signal.h>
+#include <stdio.h>
 
 #include "cachetmp.h"
 #include "config.h"
@@ -737,24 +738,35 @@ dl_rrdp(struct cache_node *notif)
 }
 
 static validation_verdict
-dl_ta_http(struct cache_node *file)
+dl_ta_http(struct cache_node *node)
 {
 	char tmppath[CACHE_TMPFILE_BUFLEN];
+	FILE *file;
 	bool changed;
+	int error;
 
 	cache_tmpfile(tmppath);
 
-	if (http_download(&file->map.url, tmppath, file->success_ts, &changed))
+	file = fopen(tmppath, "w");
+	if (!file) {
+		pr_err("Cannot open %s for writing: %s",
+		    tmppath, strerror(errno));
+		return VV_FAIL;
+	}
+	error = http_download(&node->map.url, NULL, file,
+	    node->success_ts, &changed);
+	fclose(file);
+	if (error)
 		return VV_FAIL;
 
-	if (!file->ctx.v.ta)
-		file->ctx.v.ta = tactx_create(NULL);
+	if (!node->ctx.v.ta)
+		node->ctx.v.ta = tactx_create(NULL);
 
 	if (changed) {
-		file->success_ts = file->attempt_ts;
-		tactx_set_refresh(file->ctx.v.ta, tmppath);
+		node->success_ts = node->attempt_ts;
+		tactx_set_refresh(node->ctx.v.ta, tmppath);
 	} else {
-		tactx_set_unchanged(file->ctx.v.ta);
+		tactx_set_unchanged(node->ctx.v.ta);
 	}
 
 	return VV_CONTINUE;

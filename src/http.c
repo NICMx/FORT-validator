@@ -68,48 +68,12 @@ setopt_curlofft(CURL *curl, CURLoption opt, curl_off_t value)
 	}
 }
 
-struct write_callback_arg {
-	size_t total_bytes;
-	int error;
-
-	char const *file_name;
-	FILE *file; /* Initialized lazily */
-};
-
-static size_t
-write_callback(void *data, size_t size, size_t nmemb, void *userp)
-{
-	struct write_callback_arg *arg = userp;
-
-	arg->total_bytes += size * nmemb;
-	if (arg->total_bytes > config_get_http_max_file_size()) {
-		/*
-		 * If the server doesn't provide the file size beforehand,
-		 * CURLOPT_MAXFILESIZE doesn't prevent large file downloads.
-		 *
-		 * Therefore, we cover our asses by way of this reactive
-		 * approach. We already reached the size limit, but we're going
-		 * to reject the file anyway.
-		 */
-		arg->error = EFBIG;
-		return 0; /* Ugh. See fwrite(3) */
-	}
-
-	if (arg->file == NULL) {
-		arg->error = file_write(arg->file_name, "wb", &arg->file);
-		if (arg->error)
-			return 0;
-	}
-
-	return fwrite(data, size, nmemb, arg->file);
-}
-
 static void
-setopt_writefunction(CURL *curl)
+setopt_writefunction(CURL *curl, curl_write_callback writer)
 {
 	CURLcode result;
 
-	result = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+	result = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
 	if (result != CURLE_OK) {
 		fprintf(stderr, "curl_easy_setopt(%d) failure: %s\n",
 		    CURLOPT_WRITEFUNCTION, curl_easy_strerror(result));
@@ -117,7 +81,7 @@ setopt_writefunction(CURL *curl)
 }
 
 static void
-setopt_writedata(CURL *curl, struct write_callback_arg *arg)
+setopt_writedata(CURL *curl, void *arg)
 {
 	CURLcode result;
 
@@ -129,7 +93,8 @@ setopt_writedata(CURL *curl, struct write_callback_arg *arg)
 }
 
 static int
-http_easy_init(struct http_handler *handler, curl_off_t ims)
+http_easy_init(struct http_handler *handler, curl_write_callback writer,
+    void *writer_args, curl_off_t ims)
 {
 	CURL *result;
 
@@ -153,7 +118,8 @@ http_easy_init(struct http_handler *handler, curl_off_t ims)
 	    config_get_http_low_speed_time());
 	setopt_curlofft(result, CURLOPT_MAXFILESIZE_LARGE,
 	    config_get_http_max_file_size());
-	setopt_writefunction(result);
+	setopt_writefunction(result, writer);
+	setopt_writedata(result, writer_args);
 
 	/* Always expect HTTPS usage */
 	setopt_long(result, CURLOPT_SSL_VERIFYHOST, 2L);
@@ -206,26 +172,6 @@ curl_err_string(struct http_handler *handler, CURLcode res)
 {
 	return strlen(handler->errbuf) > 0 ?
 	    handler->errbuf : curl_easy_strerror(res);
-}
-
-static int
-validate_file_size(struct write_callback_arg *args)
-{
-	float ratio;
-
-	if (args->error == EFBIG) {
-		pr_err("File too big (read: %zu bytes). Rejecting.",
-		    args->total_bytes);
-		return EFBIG;
-	}
-
-	ratio = args->total_bytes / (float) config_get_http_max_file_size();
-	if (ratio > 0.4f) {
-		pr_wrn("File size exceeds 40%% of the configured limit (%zu/%ld bytes).",
-		    args->total_bytes, config_get_http_max_file_size());
-	}
-
-	return 0;
 }
 
 static int
@@ -287,13 +233,14 @@ check_same_origin(struct uri const *src, char const *redirect)
  * @ims can be 0, which means "no epoch."
  * @changed can be NULL, which means "I don't care."
  * If @changed is not NULL, initialize it to false.
+ *
+ * XXX where is the error handling for the result of @writer?
  */
 int
-http_download(struct uri const *src, char const *dst,
-    curl_off_t ims, bool *changed)
+http_download(struct uri const *src, curl_write_callback writer,
+    void *writer_args, curl_off_t ims, bool *changed)
 {
 	struct http_handler handler;
-	struct write_callback_arg args;
 	CURLcode res;
 	long http_code;
 	char *redirect;
@@ -301,9 +248,9 @@ http_download(struct uri const *src, char const *dst,
 	unsigned int r;
 	int error;
 
-	pr_inf("HTTP GET: %s -> %s", uri_str(src), dst);
+	pr_inf("HTTP GET: %s", uri_str(src));
 
-	error = http_easy_init(&handler, ims);
+	error = http_easy_init(&handler, writer, writer_args, ims);
 	if (error)
 		return error;
 
@@ -315,29 +262,11 @@ http_download(struct uri const *src, char const *dst,
 		setopt_str(handler.curl, CURLOPT_URL,
 		    (redirect != NULL) ? redirect : uri_str(src));
 
-		args.total_bytes = 0;
-		args.error = 0;
-		args.file_name = dst;
-		args.file = NULL;
-		setopt_writedata(handler.curl, &args);
+		res = curl_easy_perform(handler.curl); /* writer() */
 
-		res = curl_easy_perform(handler.curl); /* write_callback() */
-		if (args.file != NULL)
-			file_close(args.file);
-		pr_trc("Done. Total bytes transferred: %zu",
-		    args.total_bytes);
-
-		args.error = validate_file_size(&args);
-		if (args.error) {
-			error = args.error;
+		error = get_http_response_code(&handler, &http_code, src);
+		if (error)
 			goto end;
-		}
-
-		args.error = get_http_response_code(&handler, &http_code, src);
-		if (args.error) {
-			error = args.error;
-			goto end;
-		}
 
 		if (res != CURLE_OK) {
 			pr_err("Error requesting URL: %s. (HTTP code: %ld)",
@@ -367,7 +296,8 @@ http_download(struct uri const *src, char const *dst,
 		if (http_code == 304) {
 			/* Write callback not called, no file to remove. */
 			pr_trc("Not modified.");
-			*changed = false;
+			if (changed != NULL)
+				*changed = false;
 			error = 0;
 			goto end;
 		}
@@ -401,8 +331,6 @@ http_download(struct uri const *src, char const *dst,
 		*changed = true;
 
 end:	http_easy_cleanup(&handler);
-	if (error)
-		file_rm_f(dst);
 	free(redirect);
 	return error;
 }

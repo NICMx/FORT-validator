@@ -41,7 +41,7 @@ print_monotime(void)
 		va_start(args, format);					\
 		vfprintf(stdout, format, args);				\
 		va_end(args);						\
-		printf(CLR_RST "\n");				\
+		printf(CLR_RST "\n");					\
 	} while (0)
 
 #else
@@ -66,8 +66,28 @@ print_monotime(void)
 MOCK_VOID_PRINT(pr_trc, CLR_DBG)
 MOCK_VOID_PRINT(pr_inf, CRL_INF)
 MOCK_INT_PRINT(pr_wrn, CLR_WRN, 0)
-MOCK_INT_PRINT(pr_err, CLR_ERR, EINVAL)
 MOCK_INT_PRINT(pr_crit, CLR_ERR, EINVAL)
+
+#define ERRMSG_MAXSIZE 256
+static char last_errmsg[ERRMSG_MAXSIZE];
+
+int
+pr_err(char const *format, ...)
+{
+	va_list args2;
+
+	MOCK_PRINT(CLR_ERR);
+
+	if (last_errmsg[0] != 0)
+		pr_wrn("The test printed more than one error message: '%s'",
+		    last_errmsg);
+
+	va_start(args2, format);
+	vsnprintf(last_errmsg, ERRMSG_MAXSIZE, format, args2);
+	va_end(args2);
+
+	return EINVAL;
+}
 
 struct crypto_cb_arg {
 	unsigned int stack_size;

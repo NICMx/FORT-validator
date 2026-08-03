@@ -1,7 +1,6 @@
 #include "config.h"
 
 #include <getopt.h>
-#include <libxml/xmlreader.h>
 #include <limits.h>
 #include <microhttpd.h>
 #include <openssl/opensslv.h>
@@ -894,7 +893,6 @@ print_config(void)
 	pr_inf("  libcrypto:     " OPENSSL_VERSION_TEXT);
 	pr_inf("  jansson:       " JANSSON_VERSION);
 	pr_inf("  libcurl:       " LIBCURL_VERSION);
-	pr_inf("  libxml:        " LIBXML_DOTTED_VERSION);
 	pr_inf("  libmicrohttpd: %x.%x.%x-%x",
 	    MHD_VERSION >> 24, (MHD_VERSION >> 16) & 0xFF,
 	    (MHD_VERSION >> 8) & 0xFF, MHD_VERSION & 0xFF);
