@@ -186,6 +186,7 @@ struct xml_token_bkp {
 struct rrdp_xml_reader {
 	enum rrdp_xml_type type;
 	char const *type_str;
+	char const *type_str_camel;
 	struct uri const *notif_uri;
 
 	/* Contains string data, but it's not null-terminated. */
@@ -521,7 +522,11 @@ retry:	res = find_non_whitespace(rdr);
 	}
 
 	if (!is_NameStartChar(chr)) {
-		pr_err("Unexpected character: %c", chr);
+		if (is_printable(chr))
+			pr_err("Unexpected character: %c", chr);
+		else
+			pr_err("Unexpected character: 0x%02x",
+			    (unsigned char)chr);
 		return TRR_ERR;
 	}
 
@@ -748,7 +753,7 @@ init_uri(struct uri *uri, struct xml_token *tkn)
 
 static enum token_read_result
 init_notif_uri(struct rrdp_xml_reader *rdr, struct uri *uri,
-    struct xml_token *tkn)
+    struct xml_token *tkn, char const *what)
 {
 	enum token_read_result res;
 
@@ -757,8 +762,8 @@ init_notif_uri(struct rrdp_xml_reader *rdr, struct uri *uri,
 		return res;
 
 	if (!uri_same_origin(rdr->notif_uri, uri)) {
-		pr_err("Not hosted in the same host as %s: %s",
-		    uri_str(rdr->notif_uri), uri_str(uri));
+		pr_err("Notification '%s' does not have the same origin as its %s: %s",
+		    uri_str(rdr->notif_uri), what, uri_str(uri));
 		return TRR_ERR;
 	}
 
@@ -854,7 +859,7 @@ accept_notif_snapshot_attrs(struct rrdp_xml_reader *rdr)
 	if (tkn_equals(&key, "uri")) {
 		return uri_str(&rdr->c.notif.snapshot.uri)
 		    ? fail_multiple_attrs(TAG, "uri")
-		    : init_notif_uri(rdr, &rdr->c.notif.snapshot.uri, &val);
+		    : init_notif_uri(rdr, &rdr->c.notif.snapshot.uri, &val, "Snapshot");
 
 	} else if (tkn_equals(&key, "hash")) {
 		return rdr->c.notif.snapshot.hash.set
@@ -917,7 +922,7 @@ accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 	} else if (tkn_equals(&key, "uri")) {
 		return uri_str(&rdr->c.notif.delta.meta.uri)
 		    ? fail_multiple_attrs(TAG, "uri")
-		    : init_notif_uri(rdr, &rdr->c.notif.delta.meta.uri, &val);
+		    : init_notif_uri(rdr, &rdr->c.notif.delta.meta.uri, &val, "Delta");
 
 	} else if (tkn_equals(&key, "hash")) {
 		return rdr->c.notif.delta.meta.hash.set
@@ -1373,8 +1378,8 @@ parse_root_session_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 	if (tkn_equals(val, rdr->c.sd.notif_id->session_id))
 		return TRR_OK;
 
-	pr_err("%s session_id '%.*s' does not match notification session_id '%s'",
-	    rdr->type_str, (int)val->len, val->str,
+	pr_err("%s session_id '%.*s' does not match Notification session_id '%s'",
+	    rdr->type_str_camel, (int)val->len, val->str,
 	    rdr->c.sd.notif_id->session_id);
 	return TRR_ERR;
 }
@@ -1392,7 +1397,7 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 
 	if (val->len > MAX_SERIAL_SIZE) {
 		pr_err("%s serial is too long: %zu chars",
-		    rdr->type_str, val->len);
+		    rdr->type_str_camel, val->len);
 		return TRR_ERR;
 	}
 
@@ -1415,8 +1420,8 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 	if (cmp == 0)
 		return TRR_OK; /* Happy path */
 
-	pr_err("%s serial '%.*s' does not match notification serial '%s'",
-	    rdr->type_str, (int)val->len, val->str,
+	pr_err("%s serial '%.*s' does not match Notification serial '%s'",
+	    rdr->type_str_camel, (int)val->len, val->str,
 	    rdr->c.sd.notif_id->serial.str);
 	return TRR_ERR;
 }
@@ -1526,12 +1531,15 @@ rrdp_xml_create(enum rrdp_xml_type type)
 	switch (type) {
 	case RXT_NOTIF:
 		result->type_str = "notification";
+		result->type_str_camel = "Notification";
 		break;
 	case RXT_SNAPSHOT:
 		result->type_str = "snapshot";
+		result->type_str_camel = "Snapshot";
 		break;
 	case RXT_DELTA:
 		result->type_str = "delta";
+		result->type_str_camel = "Delta";
 		break;
 	}
 	result->notif_uri = NULL;
@@ -1556,6 +1564,9 @@ rrdp_xml_parse(struct rrdp_xml_reader *rdr, char const *in, size_t inlen)
 {
 	size_t cp;
 
+	if (rdr->flags & RXRF_DONE)
+		return 0;
+
 	while (inlen > 0) {
 		if (rdr->offset > 0) {
 			rdr->buflen -= rdr->offset;
@@ -1573,6 +1584,8 @@ rrdp_xml_parse(struct rrdp_xml_reader *rdr, char const *in, size_t inlen)
 
 again:		switch (rdr->consume(rdr)) {
 		case TRR_OK:
+			if (rdr->flags & RXRF_DONE)
+				return 0;
 			rdr->tkn1.meta.len = 0;
 			rdr->tkn2.meta.len = 0;
 			goto again;

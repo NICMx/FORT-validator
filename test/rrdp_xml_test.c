@@ -594,7 +594,7 @@ START_TEST(notif_long_serial)
 		NOTIF("123123", CHR64 "9")
 			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>"
 		"</notification>",
-		"notification serial is too long: 65 chars");
+		"Notification serial is too long: 65 chars");
 	fetch_notif_error(URL);
 }
 END_TEST
@@ -787,7 +787,7 @@ START_TEST(notif_bad_data_types)
 		"Not a valid hash: 0g23456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD",
 		"'https://h[o]st/9d8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
 		"'https://ho st/9d-8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
-		"Not hosted in the same host as https://a/n.xml: https://different-host/9d-8/3/snapshot.xml",
+		"Notification 'https://a/n.xml' does not have the same origin as its Snapshot: https://different-host/9d-8/3/snapshot.xml",
 	};
 	size_t i;
 
