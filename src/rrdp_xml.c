@@ -820,7 +820,7 @@ accept_notif_snapshot_attrs(struct rrdp_xml_reader *rdr)
 	struct xml_token key, equals, val;
 	enum token_read_result res;
 
-	pr_trc("State: notif_snapshot_attr");
+	pr_clutter("State: notif_snapshot_attr");
 
 	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
 	if (res != TRR_OK)
@@ -871,7 +871,7 @@ accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 	struct xml_token key, equals, val;
 	enum token_read_result res;
 
-	pr_trc("State: notif_delta_attrs");
+	pr_clutter("State: notif_delta_attrs");
 
 	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
 	if (res != TRR_OK)
@@ -990,7 +990,7 @@ accept_publish_content(struct rrdp_xml_reader *rdr)
 	unsigned char hash[EVP_MAX_MD_SIZE];
 	array_index i;
 
-	pr_trc("State: publish_content");
+	pr_clutter("State: publish_content");
 
 	res = find_non_whitespace(rdr);
 	if (res != TRR_OK)
@@ -1135,7 +1135,7 @@ accept_publish_attrs(struct rrdp_xml_reader *rdr)
 	struct xml_token key, equals, val;
 	enum token_read_result res;
 
-	pr_trc("State: publish_attrs");
+	pr_clutter("State: publish_attrs");
 
 	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
 	if (res != TRR_OK)
@@ -1213,7 +1213,7 @@ accept_withdraw_attrs(struct rrdp_xml_reader *rdr)
 	struct xml_token key, equals, val;
 	enum token_read_result res;
 
-	pr_trc("State: withdraw_attrs");
+	pr_clutter("State: withdraw_attrs");
 
 	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
 	if (res != TRR_OK)
@@ -1267,7 +1267,7 @@ accept_root_content(struct rrdp_xml_reader *rdr)
 	enum token_read_result res;
 	struct xml_token tkn;
 
-	pr_trc("State: root_content");
+	pr_clutter("State: root_content");
 
 	res = next_bkp_tkn(rdr, &rdr->tkn1, &tkn);
 	if (res != TRR_OK)
@@ -1437,7 +1437,7 @@ accept_root_attrs(struct rrdp_xml_reader *rdr)
 	struct xml_token key, equals, val;
 	enum token_read_result res;
 
-	pr_trc("State: root_attrs");
+	pr_clutter("State: root_attrs");
 
 	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
 	if (res != TRR_OK)
@@ -1502,7 +1502,7 @@ accept_root_tag(struct rrdp_xml_reader *rdr)
 	struct xml_token tkn;
 	enum token_read_result res;
 
-	pr_trc("State: root_tag");
+	pr_clutter("State: root_tag");
 
 	/*
 	 * Sometimes, libcurl feeds us input that's not RRDP XML.
