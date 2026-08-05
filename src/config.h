@@ -56,6 +56,7 @@ char const *config_get_output_bgpsec(void);
 enum output_format config_get_output_format(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_thread_pool_server_max(void);
+unsigned int config_get_validation_thread_count(void);
 enum file_type config_get_file_type(void);
 char const *config_get_payload(void);
 time_t config_get_validation_time(void);

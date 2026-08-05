@@ -195,7 +195,7 @@ struct rpki_config {
 		} server;
 		/* Threads related to validation cycles */
 		struct {
-			unsigned int max; /* Deprecated */
+			unsigned int max;
 		} validation;
 	} thread_pool;
 
@@ -755,13 +755,11 @@ static const struct option_field options[] = {
 		.max = UINT_MAX,
 	}, {
 		.id = 12001,
-		.name = "thread-pool.validation.max",
+		.name = "validation-threads",
 		.type = &gt_uint,
-		.offset = offsetof(struct rpki_config,
-		    thread_pool.validation.max),
-		.doc = "Deprecated; does nothing.",
-		.deprecated = true,
-		.min = 0,
+		.offset = offsetof(struct rpki_config, thread_pool.validation.max),
+		.doc = "Number of validation threads to allocate.",
+		.min = 1,
 		.max = 100,
 	},
 
@@ -1487,6 +1485,12 @@ unsigned int
 config_get_thread_pool_server_max(void)
 {
 	return rpki_config.thread_pool.server.max;
+}
+
+unsigned int
+config_get_validation_thread_count(void)
+{
+	return rpki_config.thread_pool.validation.max;
 }
 
 enum file_type

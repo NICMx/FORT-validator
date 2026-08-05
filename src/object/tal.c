@@ -277,8 +277,9 @@ pick_up_work(void *arg)
 int
 perform_standalone_validation(void)
 {
-	pthread_t threads[5]; // XXX variabilize
-	array_index t;
+	pthread_t *threads;
+	unsigned int tcount;
+	unsigned int t;
 	int error;
 
 	error = cache_prepare();
@@ -294,19 +295,24 @@ perform_standalone_validation(void)
 	if (error)
 		goto end;
 
-	for (t = 0; t < 5; t++) {
+	tcount = config_get_validation_thread_count();
+	threads = pcalloc(tcount, sizeof(pthread_t));
+
+	for (t = 0; t < tcount; t++) {
 		error = pthread_create(&threads[t], NULL, pick_up_work, NULL);
 		if (error)
-			pr_panic("pthread_create(%zu) failed: %s",
+			pr_panic("pthread_create(%u) failed: %s",
 			    t, strerror(error));
 	}
 
-	for (t = 0; t < 5; t++) {
+	for (t = 0; t < tcount; t++) {
 		error = pthread_join(threads[t], NULL);
 		if (error)
-			pr_panic("pthread_join(%zu) failed: %s",
+			pr_panic("pthread_join(%u) failed: %s",
 			    t, strerror(error));
 	}
+
+	free(threads);
 
 	report_disable();
 
