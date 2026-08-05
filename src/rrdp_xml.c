@@ -167,9 +167,11 @@ enum xml_token_type {
 	XTT_OPENING_CLOSURE,   /* </ */
 	XTT_CLOSE_TAG,         /*  > */
 	XTT_CLOSING_CLOSURE,   /* /> */
+	XTT_META,              /* <! */
 	XTT_EQUALS,
 	XTT_STR,
 	XTT_QUOTED,
+	XTT_UNKNOWN,
 };
 
 struct xml_token {
@@ -177,6 +179,16 @@ struct xml_token {
 	char const *str;
 	size_t len;
 };
+
+static enum token_read_result
+token_init(struct xml_token *tkn, enum xml_token_type type,
+    char const *str, size_t len)
+{
+	tkn->type = type;
+	tkn->str = str;
+	tkn->len = len;
+	return TRR_OK;
+}
 
 struct xml_token_bkp {
 	struct xml_token meta;
@@ -381,13 +393,6 @@ skip_comment(struct rrdp_xml_reader *rdr)
 	char chr;
 	enum token_read_result res;
 
-	res = get_char(rdr, 2u, &chr);
-	if (res != TRR_OK)
-		return res;
-	if (chr != '-') {
-		pr_err("Unexpected token: <!%c", chr);
-		return TRR_ERR;
-	}
 	res = get_char(rdr, 3u, &chr);
 	if (res != TRR_OK)
 		return res;
@@ -460,20 +465,20 @@ retry:	res = find_non_whitespace(rdr);
 			return res;
 		switch (chr) {
 		case '/':
-			tkn->type = XTT_OPENING_CLOSURE;
-			tkn->str = "</";
-			tkn->len = 2;
-			return TRR_OK;
+			return token_init(tkn, XTT_OPENING_CLOSURE, "</", 2);
 		case '!':
+			res = get_char(rdr, 2u, &chr);
+			if (res != TRR_OK)
+				return res;
+			if (chr != '-')
+				return token_init(tkn, XTT_META, "<!", 2);
+
 			res = skip_comment(rdr);
 			if (res != TRR_OK)
 				return res;
 			goto retry;
 		}
-		tkn->type = XTT_OPEN_TAG;
-		tkn->str = "<";
-		tkn->len = 1;
-		return TRR_OK;
+		return token_init(tkn, XTT_OPEN_TAG, "<", 1);
 
 	case '/':
 		res = get_char(rdr, 1, &chr);
@@ -483,42 +488,31 @@ retry:	res = find_non_whitespace(rdr);
 			pr_err("Unexpected token: '/%c'", chr);
 			return TRR_ERR;
 		}
-		tkn->type = XTT_CLOSING_CLOSURE;
-		tkn->str = "/>";
-		tkn->len = 2;
-		return TRR_OK;
+		return token_init(tkn, XTT_CLOSING_CLOSURE, "/>", 2);
 
 	case '>':
-		tkn->type = XTT_CLOSE_TAG;
-		tkn->str = ">";
-		tkn->len = 1;
-		return TRR_OK;
+		return token_init(tkn, XTT_CLOSE_TAG, ">", 1);
 
 	case '=':
-		tkn->type = XTT_EQUALS;
-		tkn->str = "=";
-		tkn->len = 1;
-		return TRR_OK;
+		return token_init(tkn, XTT_EQUALS, "=", 1);
 
 	case '"':
 		res = find_chr(rdr, '"', &tail);
 		if (res != TRR_OK)
 			return res;
 
-		tkn->type = XTT_QUOTED;
-		tkn->str = (char const *)(rdr->buf + rdr->offset);
-		tkn->len = tail + 1;
-		return TRR_OK;
+		return token_init(tkn, XTT_QUOTED,
+		    (char const *)(rdr->buf + rdr->offset),
+		    tail + 1);
 
 	case '\'':
 		res = find_chr(rdr, '\'', &tail);
 		if (res != TRR_OK)
 			return res;
 
-		tkn->type = XTT_QUOTED;
-		tkn->str = (char const *)(rdr->buf + rdr->offset);
-		tkn->len = tail + 1;
-		return TRR_OK;
+		return token_init(tkn, XTT_QUOTED,
+		    (char const *)(rdr->buf + rdr->offset),
+		    tail + 1);
 	}
 
 	if (!is_NameStartChar(chr)) {
@@ -1017,6 +1011,14 @@ accept_publish_content(struct rrdp_xml_reader *rdr)
 			rdr->consume = accept_publish_closure;
 			return TRR_OK;
 		case '!':
+			res = get_char(rdr, 2u, &chr);
+			if (res != TRR_OK)
+				return res;
+			if (chr != '-') {
+				pr_err("Unexpected token: <!%c", chr);
+				return TRR_ERR;
+			}
+
 			return skip_comment(rdr);
 		default:
 			pr_err("Unexpected token: <");
@@ -1502,21 +1504,37 @@ accept_root_tag(struct rrdp_xml_reader *rdr)
 
 	pr_trc("State: root_tag");
 
+	/*
+	 * Sometimes, libcurl feeds us input that's not RRDP XML.
+	 * For example, if the server wants to redirect us, we'll get HTTP
+	 * (containing HTTP code 30X).
+	 *
+	 * When this happens, we don't want to return parse error, because that
+	 * will result in immediate request termination. What libcurl seems to
+	 * expect us to do is ignore the input. This results in automatic
+	 * redirect handling (mostly done by libcurl).
+	 *
+	 * So I guess we're supposed to identify the root tag as a magic header,
+	 * and if it's not there, slip through all remaining input.
+	 */
+
 	res = next_bkp_tkn(rdr, &rdr->tkn1, &tkn);
 	if (res != TRR_OK)
 		return res;
-	res = expect_tkn_type(&tkn, XTT_OPEN_TAG, "open tag");
-	if (res != TRR_OK)
-		return res;
+	if (tkn.type != XTT_OPEN_TAG)
+		goto not_magic;
 
 	res = next_bkp_tkn(rdr, &rdr->tkn2, &tkn);
 	if (res != TRR_OK)
 		return res;
-	res = expect_string(&tkn, rdr->type_str);
-	if (res != TRR_OK)
-		return res;
+	if (tkn.type != XTT_STR || !tkn_equals(&tkn, rdr->type_str))
+		goto not_magic;
 
 	rdr->consume = accept_root_attrs;
+	return TRR_OK;
+
+not_magic:
+	rdr->flags |= RXRF_DONE;
 	return TRR_OK;
 }
 
@@ -1563,9 +1581,6 @@ static int
 rrdp_xml_parse(struct rrdp_xml_reader *rdr, char const *in, size_t inlen)
 {
 	size_t cp;
-
-	if (rdr->flags & RXRF_DONE)
-		return 0;
 
 	while (inlen > 0) {
 		if (rdr->offset > 0) {
@@ -1727,6 +1742,9 @@ write_callback(char *data, size_t size, size_t nmemb, void *userp)
 		arg->error = EFBIG;
 		return CURL_WRITEFUNC_ERROR;
 	}
+
+	if (arg->rdr->flags & RXRF_DONE)
+		return size;
 
 	if (arg->hasher && sha256_update(arg->hasher, data, size) != 0)
 		return CURL_WRITEFUNC_ERROR;
