@@ -583,6 +583,9 @@ rsyncdao_map(struct rsync_dao *dao, struct uri const *url)
 bool
 rsyncdao_downgrade(struct rsync_dao *dao)
 {
+	if (!dao)
+		return false;
+
 	if (dao->state == RDS_REFRESH && dao->fb) {
 		dao->state = RDS_FALLBACK;
 		return true;
