@@ -74,7 +74,7 @@ static const struct ad_metadata CA_REPOSITORY = {
 	.name = "caRepository",
 	.ia_name = "SIA",
 	.type = "rsync",
-	.required = false,
+	.required = true,
 };
 
 static const struct ad_metadata RPKI_NOTIFY = {
