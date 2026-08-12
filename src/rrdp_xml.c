@@ -518,7 +518,7 @@ find_non_whitespace(struct rrdp_xml_reader *rdr)
 }
 
 static enum token_read_result
-next_token(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
+__next_tkn(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
 {
 	char chr;
 	size_t tail;
@@ -632,13 +632,13 @@ retry:	res = find_non_whitespace(rdr);
 }
 
 static enum token_read_result
-next_bkp_tkn(struct rrdp_xml_reader *rdr, struct xml_token_bkp *bkp,
-    struct xml_token *out)
+next_tkn(struct rrdp_xml_reader *rdr, struct xml_token *out,
+    struct xml_token_bkp *bkp)
 {
 	enum token_read_result res;
 
 	if (bkp == NULL) {
-		res = next_token(rdr, out);
+		res = __next_tkn(rdr, out);
 		if (res != TRR_OK)
 			return res;
 		goto end;
@@ -649,7 +649,7 @@ next_bkp_tkn(struct rrdp_xml_reader *rdr, struct xml_token_bkp *bkp,
 		return TRR_OK;
 	}
 
-	res = next_token(rdr, out);
+	res = __next_tkn(rdr, out);
 	if (res != TRR_OK)
 		return res;
 
@@ -663,7 +663,7 @@ end:	rdr->offset += out->len;
 }
 
 static enum token_read_result
-expect_tkn_type(struct xml_token *tkn, enum xml_token_type type,
+check_tkn_type(struct xml_token *tkn, enum xml_token_type type,
     char const *what)
 {
 	if (tkn->type != type) {
@@ -676,14 +676,39 @@ expect_tkn_type(struct xml_token *tkn, enum xml_token_type type,
 }
 
 static enum token_read_result
-expect_str(struct xml_token *tkn)
+next_tkn_type(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    enum xml_token_type type, char const *what, struct xml_token_bkp *bkp)
 {
-	return expect_tkn_type(tkn, XTT_STR, "string");
+	enum token_read_result res;
+
+	res = next_tkn(rdr, tkn, bkp);
+	if (res != TRR_OK)
+		return res;
+	return check_tkn_type(tkn, type, what);
 }
 
 static enum token_read_result
-expect_name(struct xml_token *tkn, char const *str)
+next_str(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    struct xml_token_bkp *bkp)
 {
+	enum token_read_result res;
+
+	res = next_tkn(rdr, tkn, bkp);
+	if (res != TRR_OK)
+		return res;
+	return check_tkn_type(tkn, XTT_STR, "string");
+}
+
+static enum token_read_result
+next_name(struct rrdp_xml_reader *rdr, struct xml_token *tkn, char const *str,
+    struct xml_token_bkp *bkp)
+{
+	enum token_read_result res;
+
+	res = next_tkn(rdr, tkn, bkp);
+	if (res != TRR_OK)
+		return res;
+
 	if (tkn->type != XTT_STR || !tkn_equals(tkn, str)) {
 		pr_err("Expected name '%s', got '%.*s'", str,
 		    (int)tkn->len, tkn->str);
@@ -694,11 +719,11 @@ expect_name(struct xml_token *tkn, char const *str)
 }
 
 static enum token_read_result
-expect_quoted(struct rrdp_xml_reader *rdr, struct xml_token *val)
+next_quoted(struct rrdp_xml_reader *rdr, struct xml_token *val)
 {
 	enum token_read_result res;
 
-	res = next_token(rdr, val);
+	res = __next_tkn(rdr, val);
 	if (res != TRR_OK)
 		return res;
 
@@ -939,18 +964,13 @@ attr_boilerplate(struct rrdp_xml_reader *rdr, struct xml_token *key,
 	struct xml_token equals;
 	enum token_read_result res;
 
-	res = expect_str(key);
+	res = check_tkn_type(key, XTT_STR, "name");
 	if (res != TRR_OK)
 		return res;
-
-	res = next_bkp_tkn(rdr, &rdr->tkn2, &equals);
+	res = next_tkn_type(rdr, &equals, XTT_EQUALS, "equals", &rdr->tkn2);
 	if (res != TRR_OK)
 		return res;
-	res = expect_tkn_type(&equals, XTT_EQUALS, "equals");
-	if (res != TRR_OK)
-		return res;
-
-	return expect_quoted(rdr, val);
+	return next_quoted(rdr, val);
 }
 
 static enum token_read_result
@@ -962,7 +982,7 @@ accept_notif_snapshot_attrs(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: notif_snapshot_attr");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
+	res = next_tkn(rdr, &key, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
@@ -1003,7 +1023,7 @@ accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: notif_delta_attrs");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
+	res = next_tkn(rdr, &key, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
@@ -1053,17 +1073,10 @@ accept_publish_closure(struct rrdp_xml_reader *rdr)
 	struct xml_token tkn;
 	enum token_read_result res;
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &tkn);
+	res = next_name(rdr, &tkn, "publish", &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
-	res = expect_name(&tkn, "publish");
-	if (res != TRR_OK)
-		return res;
-
-	res = next_bkp_tkn(rdr, &rdr->tkn2, &tkn);
-	if (res != TRR_OK)
-		return res;
-	res = expect_tkn_type(&tkn, XTT_CLOSE_TAG, "close tag");
+	res = next_tkn_type(rdr, &tkn, XTT_CLOSE_TAG, "close tag", NULL);
 	if (res != TRR_OK)
 		return res;
 
@@ -1257,7 +1270,7 @@ accept_publish_attrs(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: publish_attrs");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
+	res = next_tkn(rdr, &key, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
@@ -1325,7 +1338,7 @@ accept_withdraw_attrs(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: withdraw_attrs");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
+	res = next_tkn(rdr, &key, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
@@ -1370,24 +1383,17 @@ accept_root_content(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: root_content");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &tkn);
+	res = next_tkn(rdr, &tkn, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
 	if (tkn.type == XTT_OPENING_CLOSURE) {
-		res = next_bkp_tkn(rdr, &rdr->tkn2, &tkn);
+		res = next_name(rdr, &tkn, rdr->type_str, &rdr->tkn2);
 		if (res != TRR_OK)
 			return res;
-		res = expect_name(&tkn, rdr->type_str);
+		res = next_tkn_type(rdr, &tkn, XTT_CLOSE_TAG, "close tag", NULL);
 		if (res != TRR_OK)
 			return res;
-		res = next_token(rdr, &tkn);
-		if (res != TRR_OK)
-			return res;
-		res = expect_tkn_type(&tkn, XTT_CLOSE_TAG, "close tag");
-		if (res != TRR_OK)
-			return res;
-		rdr->offset += tkn.len;
 
 		if (rdr->type == RXT_NOTIF &&
 		    uri_str(&rdr->c.notif.snapshot.uri) == NULL) {
@@ -1399,15 +1405,12 @@ accept_root_content(struct rrdp_xml_reader *rdr)
 		return TRR_OK;
 	}
 
-	res = expect_tkn_type(&tkn, XTT_OPEN_TAG, "<");
+	res = check_tkn_type(&tkn, XTT_OPEN_TAG, "<");
 	if (res != TRR_OK)
 		return res;
-
-	res = next_bkp_tkn(rdr, &rdr->tkn2, &tkn);
+	res = next_str(rdr, &tkn, NULL);
 	if (res != TRR_OK)
 		return res;
-	if (tkn.type != XTT_STR)
-		return fail_unexpected_token(&tkn);
 
 	switch (rdr->type) {
 	case RXT_NOTIF:
@@ -1541,7 +1544,7 @@ accept_root_attrs(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: root_attrs");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
+	res = next_tkn(rdr, &key, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
@@ -1633,7 +1636,7 @@ accept_xmldecl_attrs(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: accept_xmldecl_attrs");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &key);
+	res = next_tkn(rdr, &key, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
@@ -1666,13 +1669,9 @@ accept_xmldecl_tag(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: accept_xmldecl_tag");
 
-	res = next_token(rdr, &tkn);
+	res = next_name(rdr, &tkn, "xml", NULL);
 	if (res != TRR_OK)
 		return res;
-	res = expect_name(&tkn, "xml");
-	if (res != TRR_OK)
-		return res;
-	rdr->offset += tkn.len;
 
 	rdr->consume = accept_xmldecl_attrs;
 	return TRR_OK;
@@ -1739,32 +1738,24 @@ accept_doctype_tag(struct rrdp_xml_reader *rdr)
 
 	pr_clutter("State: accept_doctype_tag");
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &tkn);
-	if (res != TRR_OK)
-		return res;
-	res = expect_name(&tkn, "DOCTYPE");
+	res = next_name(rdr, &tkn, "DOCTYPE", &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
-	res = next_bkp_tkn(rdr, &rdr->tkn2, &tkn);
+	res = next_str(rdr, &tkn, &rdr->tkn2);
 	if (res != TRR_OK)
 		return res;
-	res = expect_str(&tkn);
-	if (res != TRR_OK)
-		return res;
-	if (!tkn_case_equals(&tkn, rdr->type_str))
+	if (tkn_case_equals(&tkn, rdr->type_str)) {
+		res = confirm_rrdp(rdr);
+		if (res != TRR_OK)
+			return res;
+	} else {
 		return confirm_not_rrdp(rdr);
-	res = confirm_rrdp(rdr);
-	if (res != TRR_OK)
-		return res;
+	}
 
-	res = next_token(rdr, &tkn);
+	res = next_tkn_type(rdr, &tkn, XTT_CLOSE_TAG, ">", NULL);
 	if (res != TRR_OK)
 		return res;
-	res = expect_tkn_type(&tkn, XTT_CLOSE_TAG, ">");
-	if (res != TRR_OK)
-		return res;
-	rdr->offset += tkn.len;
 
 	rdr->flags |= RXRF_DOCTYPE_SET;
 	rdr->consume = accept_root_tag;
@@ -1797,13 +1788,11 @@ accept_root_tag(struct rrdp_xml_reader *rdr)
 	 * that the document is RRDP.
 	 */
 
-	res = next_bkp_tkn(rdr, &rdr->tkn1, &tkn);
+	res = next_tkn(rdr, &tkn, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
 	if (tkn.type == XTT_PI_OPEN) {
-		if (rdr->flags & RXRF_XMLV_SET)
-			return fail_unexpected_token(&tkn);
 		rdr->consume = accept_xmldecl_tag;
 		return TRR_OK;
 	} else if (tkn.type == XTT_META) {
@@ -1817,21 +1806,22 @@ accept_root_tag(struct rrdp_xml_reader *rdr)
 			return fail_unexpected_token(&tkn);
 		rdr->consume = accept_doctype_tag;
 		return TRR_OK;
-	} else if (tkn.type != XTT_OPEN_TAG) {
-		return confirm_not_rrdp(rdr);
 	}
 
-	res = next_bkp_tkn(rdr, &rdr->tkn2, &tkn);
+	res = check_tkn_type(&tkn, XTT_OPEN_TAG, "root tag");
 	if (res != TRR_OK)
 		return res;
-	res = expect_str(&tkn);
+
+	res = next_str(rdr, &tkn, NULL);
 	if (res != TRR_OK)
 		return res;
-	if (!tkn_equals(&tkn, rdr->type_str))
+	if (tkn_equals(&tkn, rdr->type_str)) {
+		res = confirm_rrdp(rdr);
+		if (res != TRR_OK)
+			return res;
+	} else {
 		return confirm_not_rrdp(rdr);
-	res = confirm_rrdp(rdr);
-	if (res != TRR_OK)
-		return res;
+	}
 
 	rdr->consume = accept_root_attrs;
 	return TRR_OK;
