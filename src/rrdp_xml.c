@@ -231,6 +231,9 @@ struct rrdp_xml_reader {
 	/* Entire populated area from @buf. (Includes bytes before @offset) */
 	size_t buflen;
 
+	/* Number of line currently being parsed */
+	unsigned int line;
+
 	/*
 	 * Cached next token.
 	 * It was already consumed from @buf, but the parser performed a
@@ -376,13 +379,14 @@ find_not_string_char(struct rrdp_xml_reader const *rdr, array_index *offset)
 
 	/* The current longest RRDP tag/attr is 'notification' (12 chars) */
 	/* Note that XML has 'DOCTYPE' (7 chars) */
-	pr_err("Token has too many characters: %.*s(...)",
-	    (int)c, rdr->buf + rdr->offset);
+	pr_err("(Line %u) Token has too many characters: %.*s(...)",
+	    rdr->line, (int)c, rdr->buf + rdr->offset);
 	return TRR_ERR;
 }
 
 static enum token_read_result
-find_chr(struct rrdp_xml_reader const *rdr, char chr, array_index *offset)
+find_chr(struct rrdp_xml_reader const *rdr, char chr, array_index *offset,
+    unsigned int *newlines)
 {
 	array_index i;
 	enum token_read_result res;
@@ -396,9 +400,11 @@ find_chr(struct rrdp_xml_reader const *rdr, char chr, array_index *offset)
 			*offset = i;
 			return TRR_OK;
 		}
+		if (next == '\n')
+			(*newlines)++;
 	}
 
-	pr_err("Attribute value too long");
+	pr_err("(Line %u) Attribute value too long", rdr->line);
 	return TRR_ERR;
 }
 
@@ -439,14 +445,22 @@ skip_comment(struct rrdp_xml_reader *rdr)
 	if (res != TRR_OK)
 		return res;
 	if (chr != '-') {
-		pr_err("Unexpected token: <!-%c", chr);
+		pr_err("(Line %u) Unexpected token: <!-%c", rdr->line, chr);
 		return TRR_ERR;
 	}
 
 	if (rdr->buflen - rdr->offset < 6u)
 		return TRR_MORE;
 
+	if (rdr->buf[rdr->offset + 4u] == '\n')
+		rdr->line++;
+	if (rdr->buf[rdr->offset + 5u] == '\n')
+		rdr->line++;
+
 	for (offset = rdr->offset + 6u; offset < rdr->buflen; offset++) {
+		if (rdr->buf[offset] == '\n')
+			rdr->line++;
+
 		if (rdr->buf[offset - 2u] == '-' &&
 		    rdr->buf[offset - 1u] == '-' &&
 		    rdr->buf[offset     ] == '>') {
@@ -480,7 +494,13 @@ skip_pi(struct rrdp_xml_reader *rdr)
 	if (rdr->buflen - rdr->offset < 3u)
 		return TRR_MORE;
 
+	if (rdr->buf[rdr->offset + 2u] == '\n')
+		rdr->line++;
+
 	for (offset = rdr->offset + 3u; offset < rdr->buflen; offset++) {
+		if (rdr->buf[offset] == '\n')
+			rdr->line++;
+
 		if (rdr->buf[offset - 1u] == '?' && rdr->buf[offset] == '>') {
 			pr_clutter("Removed: '%.*s'",
 			    (int)(offset + 1u - rdr->offset),
@@ -507,14 +527,37 @@ find_non_whitespace(struct rrdp_xml_reader *rdr)
 {
 	array_index offset;
 
-	for (offset = rdr->offset; offset < rdr->buflen; offset++)
+	for (offset = rdr->offset; offset < rdr->buflen; offset++) {
+		if (rdr->buf[offset] == '\n')
+			rdr->line++;
 		if (!is_whitespace(rdr->buf[offset])) {
 			rdr->offset = offset;
 			return TRR_OK;
 		}
+	}
 
 	rdr->buflen = rdr->offset; /* Truncate trash */
 	return TRR_MORE;
+}
+
+static enum token_read_result
+init_quote(struct rrdp_xml_reader *rdr, char delimiter, struct xml_token *tkn)
+{
+	size_t tail;
+	unsigned int newlines;
+	enum token_read_result res;
+
+	newlines = 0;
+
+	res = find_chr(rdr, delimiter, &tail, &newlines);
+	if (res != TRR_OK)
+		return res;
+
+	rdr->line += newlines;
+
+	return token_init(tkn, XTT_QUOTED,
+	    (char const *)(rdr->buf + rdr->offset),
+	    tail + 1);
 }
 
 static enum token_read_result
@@ -554,7 +597,8 @@ retry:	res = find_non_whitespace(rdr);
 				return token_init(tkn, XTT_PI_OPEN, "<?", 2);
 
 			if (rdr->flags & RXRF_RRDP) {
-				pr_err("Processing Instructions disallowed in RRDP mode.");
+				pr_err("(Line %u) Processing Instructions disallowed in RRDP mode.",
+				    rdr->line);
 				return TRR_ERR;
 			}
 
@@ -572,7 +616,8 @@ retry:	res = find_non_whitespace(rdr);
 		if (res != TRR_OK)
 			return res;
 		if (chr != '>') {
-			pr_err("Unexpected token: '/%c'", chr);
+			pr_err("(Line %u) Unexpected token: '/%c'",
+			    rdr->line, chr);
 			return TRR_ERR;
 		}
 		return token_init(tkn, XTT_CLOSING_CLOSURE, "/>", 2);
@@ -588,36 +633,25 @@ retry:	res = find_non_whitespace(rdr);
 		if (res != TRR_OK)
 			return res;
 		if (chr != '>') {
-			pr_err("Unexpected token: '?%c'", chr);
+			pr_err("(Line %u) Unexpected token: '?%c'",
+			    rdr->line, chr);
 			return TRR_ERR;
 		}
 		return token_init(tkn, XTT_PI_CLOSE, "?>", 2);
 
 	case '"':
-		res = find_chr(rdr, '"', &tail);
-		if (res != TRR_OK)
-			return res;
-
-		return token_init(tkn, XTT_QUOTED,
-		    (char const *)(rdr->buf + rdr->offset),
-		    tail + 1);
-
+		return init_quote(rdr, '"', tkn);
 	case '\'':
-		res = find_chr(rdr, '\'', &tail);
-		if (res != TRR_OK)
-			return res;
-
-		return token_init(tkn, XTT_QUOTED,
-		    (char const *)(rdr->buf + rdr->offset),
-		    tail + 1);
+		return init_quote(rdr, '\'', tkn);
 	}
 
 	if (!is_NameStartChar(chr)) {
 		if (is_printable(chr))
-			pr_err("Unexpected character: %c", chr);
+			pr_err("(Line %u) Unexpected character: %c",
+			    rdr->line, chr);
 		else
-			pr_err("Unexpected character: 0x%02x",
-			    (unsigned char)chr);
+			pr_err("(Line %u) Unexpected character: 0x%02x",
+			    rdr->line, (unsigned char)chr);
 		return TRR_ERR;
 	}
 
@@ -663,12 +697,12 @@ end:	rdr->offset += out->len;
 }
 
 static enum token_read_result
-check_tkn_type(struct xml_token *tkn, enum xml_token_type type,
-    char const *what)
+check_tkn_type(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    enum xml_token_type type, char const *what)
 {
 	if (tkn->type != type) {
-		pr_err("Expected %s, got '%.*s'", what,
-		    (int)tkn->len, tkn->str);
+		pr_err("(Line %u) Expected %s, got '%.*s'",
+		    rdr->line, what, (int)tkn->len, tkn->str);
 		return TRR_ERR;
 	}
 
@@ -684,7 +718,7 @@ next_tkn_type(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
 	res = next_tkn(rdr, tkn, bkp);
 	if (res != TRR_OK)
 		return res;
-	return check_tkn_type(tkn, type, what);
+	return check_tkn_type(rdr, tkn, type, what);
 }
 
 static enum token_read_result
@@ -696,7 +730,7 @@ next_str(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
 	res = next_tkn(rdr, tkn, bkp);
 	if (res != TRR_OK)
 		return res;
-	return check_tkn_type(tkn, XTT_STR, "string");
+	return check_tkn_type(rdr, tkn, XTT_STR, "string");
 }
 
 static enum token_read_result
@@ -710,8 +744,8 @@ next_name(struct rrdp_xml_reader *rdr, struct xml_token *tkn, char const *str,
 		return res;
 
 	if (tkn->type != XTT_STR || !tkn_equals(tkn, str)) {
-		pr_err("Expected name '%s', got '%.*s'", str,
-		    (int)tkn->len, tkn->str);
+		pr_err("(Line %u) Expected name '%s', got '%.*s'",
+		    rdr->line, str, (int)tkn->len, tkn->str);
 		return TRR_ERR;
 	}
 
@@ -728,8 +762,8 @@ next_quoted(struct rrdp_xml_reader *rdr, struct xml_token *val)
 		return res;
 
 	if (val->type != XTT_QUOTED) {
-		pr_err("Expected attribute value, got '%.*s'",
-		    (int)val->len, val->str);
+		pr_err("(Line %u) Expected attribute value, got '%.*s'",
+		    rdr->line, (int)val->len, val->str);
 		return TRR_ERR;
 	}
 
@@ -741,39 +775,46 @@ next_quoted(struct rrdp_xml_reader *rdr, struct xml_token *val)
 }
 
 static enum token_read_result
-fail_unexpected_token(struct xml_token *actual)
+fail_unexpected_token(struct rrdp_xml_reader *rdr, struct xml_token *actual)
 {
-	pr_err("Unexpected token: %.*s", (int)actual->len, actual->str);
+	pr_err("(Line %u) Unexpected token: %.*s",
+	    rdr->line, (int)actual->len, actual->str);
 	return TRR_ERR;
 }
 
 static enum token_read_result
-fail_missing_attr(char const *tag, char const *attr)
+fail_missing_attr(struct rrdp_xml_reader *rdr, char const *tag,
+    char const *attr)
 {
-	pr_err("<%s> is missing the '%s' attribute.", tag, attr);
+	pr_err("(Line %u) <%s> is missing the '%s' attribute.",
+	    rdr->line, tag, attr);
 	return TRR_ERR;
 }
 
 static enum token_read_result
-fail_unknown_attr(char const *tag, struct xml_token *tkn)
+fail_unknown_attr(struct rrdp_xml_reader *rdr, char const *tag,
+    struct xml_token *tkn)
 {
-	pr_err("Unknown <%s> attribute: %.*s", tag, (int)tkn->len, tkn->str);
+	pr_err("(Line %u) Unknown <%s> attribute: %.*s",
+	    rdr->line, tag, (int)tkn->len, tkn->str);
 	return TRR_ERR;
 }
 
 static enum token_read_result
-fail_attr_value(char const *tag, char const *attr,
+fail_attr_value(struct rrdp_xml_reader *rdr, char const *tag, char const *attr,
     char const *expected, struct xml_token *actual)
 {
-	pr_err("<%s> %s is not %s: %.*s", tag, attr, expected,
-	    (int)actual->len, actual->str);
+	pr_err("(Line %u) <%s> %s is not %s: %.*s",
+	    rdr->line, tag, attr, expected, (int)actual->len, actual->str);
 	return TRR_ERR;
 }
 
 static enum token_read_result
-fail_multiple_attrs(char const *tag, char const *attr)
+fail_multiple_attrs(struct rrdp_xml_reader *rdr, char const *tag,
+    char const *attr)
 {
-	pr_err("<%s> has multiple '%s' attributes.", tag, attr);
+	pr_err("(Line %u) <%s> has multiple '%s' attributes.",
+	    rdr->line, tag, attr);
 	return TRR_ERR;
 }
 
@@ -786,7 +827,8 @@ ignore_input(struct rrdp_xml_reader *rdr)
 }
 
 static enum token_read_result
-init_serial(struct rrdp_serial *serial, struct xml_token *tkn)
+init_serial(struct rrdp_xml_reader *rdr, struct rrdp_serial *serial,
+    struct xml_token *tkn)
 {
 	char *str;
 	BIGNUM *num;
@@ -795,11 +837,11 @@ init_serial(struct rrdp_serial *serial, struct xml_token *tkn)
 	num = BN_create();
 
 	if (BN_dec2bn(&num, str) == 0) {
-		pr_err("Not a number: %s", str);
+		pr_err("(Line %u) Not a number: %s", rdr->line, str);
 		goto fail;
 	}
 	if (BN_is_negative(num)) {
-		pr_err("Negative serial: %s", str);
+		pr_err("(Line %u) Negative serial: %s", rdr->line, str);
 		goto fail;
 	}
 
@@ -819,15 +861,18 @@ init_min_serial(struct rrdp_xml_reader *rdr)
 
 	min = BN_create();
 	if (!BN_copy(min, rdr->c.notif.id.serial.num)) {
-		pr_err("Cannot copy serial: Unknown error");
+		pr_err("(Line %u) Cannot copy serial: Unknown error",
+		    rdr->line);
 		goto fail;
 	}
 	if (!BN_sub_word(min, config_get_rrdp_delta_threshold())) {
-		pr_err("Cannot subtract serial: Unknown error");
+		pr_err("(Line %u) Cannot subtract serial: Unknown error",
+		    rdr->line);
 		goto fail;
 	}
 	if (BN_is_negative(min) && !BN_set_word(min, 0)) {
-		pr_err("Cannot assign 0 to serial: Unknown error");
+		pr_err("(Line %u) Cannot assign 0 to serial: Unknown error",
+		    rdr->line);
 		goto fail;
 	}
 
@@ -845,7 +890,8 @@ init_deltas_array(struct rrdp_xml_reader *rdr)
 
 	delta = BN_create();
 	if (!BN_sub(delta, rdr->c.notif.id.serial.num, rdr->c.notif.min_serial)) {
-		pr_err("Cannot subtract BIGNUMs: Generic error");
+		pr_err("(Line %u) Cannot subtract BIGNUMs: Generic error",
+		    rdr->line);
 		return TRR_ERR;
 	}
 	if (BN_is_negative(delta))
@@ -860,7 +906,7 @@ init_deltas_array(struct rrdp_xml_reader *rdr)
 }
 
 static enum token_read_result
-init_uri(struct uri *uri, struct xml_token *tkn)
+init_uri(struct rrdp_xml_reader *rdr, struct uri *uri, struct xml_token *tkn)
 {
 	array_index u;
 	unsigned char chr;
@@ -870,7 +916,8 @@ init_uri(struct uri *uri, struct xml_token *tkn)
 	for (u = 0; u < tkn->len; u++) {
 		chr = (unsigned char)(tkn->str[u]);
 		if (!is_printable(chr)) {
-			pr_err("uri has illegal character: 0x%02x", chr);
+			pr_err("(Line %u) uri has illegal character: 0x%02x",
+			    rdr->line, chr);
 			return TRR_ERR;
 		}
 	}
@@ -881,8 +928,8 @@ init_uri(struct uri *uri, struct xml_token *tkn)
 	free(uristr);
 
 	if (errmsg) {
-		pr_err("'%.*s' is not a valid URI: %s",
-		    (int)tkn->len, tkn->str, errmsg);
+		pr_err("(Line %u) '%.*s' is not a valid URI: %s",
+		    rdr->line, (int)tkn->len, tkn->str, errmsg);
 		return TRR_ERR;
 	}
 
@@ -895,13 +942,13 @@ init_notif_uri(struct rrdp_xml_reader *rdr, struct uri *uri,
 {
 	enum token_read_result res;
 
-	res = init_uri(uri, tkn);
+	res = init_uri(rdr, uri, tkn);
 	if (res != TRR_OK)
 		return res;
 
 	if (!uri_same_origin(rdr->notif_uri, uri)) {
-		pr_err("Notification '%s' does not have the same origin as its %s: %s",
-		    uri_str(rdr->notif_uri), what, uri_str(uri));
+		pr_err("(Line %u) Notification '%s' does not have the same origin as its %s: %s",
+		    rdr->line, uri_str(rdr->notif_uri), what, uri_str(uri));
 		return TRR_ERR;
 	}
 
@@ -909,10 +956,12 @@ init_notif_uri(struct rrdp_xml_reader *rdr, struct uri *uri,
 }
 
 static enum token_read_result
-init_hash(struct file_metadata *file, struct xml_token *tkn)
+init_hash(struct rrdp_xml_reader *rdr, struct file_metadata *file,
+    struct xml_token *tkn)
 {
 	if (str2hash(tkn->str, tkn->len, &file->hash) != 0) {
-		pr_err("Not a valid hash: %.*s", (int)tkn->len, tkn->str);
+		pr_err("(Line %u) Not a valid hash: %.*s",
+		    rdr->line, (int)tkn->len, tkn->str);
 		return TRR_ERR;
 	}
 
@@ -929,8 +978,8 @@ commit_serial(struct rrdp_xml_reader *rdr)
 
 	/* if this serial > max serial */
 	if (BN_cmp(src->serial.num, rdr->c.notif.id.serial.num) > 0) {
-		pr_err("Delta serial %s is larger than Notification serial %s",
-		    src->serial.str, rdr->c.notif.id.serial.str);
+		pr_err("(Line %u) Delta serial %s is larger than Notification serial %s",
+		    rdr->line, src->serial.str, rdr->c.notif.id.serial.str);
 		return TRR_ERR;
 	}
 
@@ -964,7 +1013,7 @@ attr_boilerplate(struct rrdp_xml_reader *rdr, struct xml_token *key,
 	struct xml_token equals;
 	enum token_read_result res;
 
-	res = check_tkn_type(key, XTT_STR, "name");
+	res = check_tkn_type(rdr, key, XTT_STR, "name");
 	if (res != TRR_OK)
 		return res;
 	res = next_tkn_type(rdr, &equals, XTT_EQUALS, "equals", &rdr->tkn2);
@@ -988,9 +1037,9 @@ accept_notif_snapshot_attrs(struct rrdp_xml_reader *rdr)
 
 	if (key.type == XTT_CLOSING_CLOSURE) {
 		if (uri_str(&rdr->c.notif.snapshot.uri) == NULL)
-			return fail_missing_attr(TAG, "uri");
+			return fail_missing_attr(rdr, TAG, "uri");
 		if (!rdr->c.notif.snapshot.hash.set)
-			return fail_missing_attr(TAG, "hash");
+			return fail_missing_attr(rdr, TAG, "hash");
 
 		rdr->consume = accept_root_content;
 		return res;
@@ -1002,16 +1051,16 @@ accept_notif_snapshot_attrs(struct rrdp_xml_reader *rdr)
 
 	if (tkn_equals(&key, "uri")) {
 		return uri_str(&rdr->c.notif.snapshot.uri)
-		    ? fail_multiple_attrs(TAG, "uri")
+		    ? fail_multiple_attrs(rdr, TAG, "uri")
 		    : init_notif_uri(rdr, &rdr->c.notif.snapshot.uri, &val, "Snapshot");
 
 	} else if (tkn_equals(&key, "hash")) {
 		return rdr->c.notif.snapshot.hash.set
-		    ? fail_multiple_attrs(TAG, "hash")
-		    : init_hash(&rdr->c.notif.snapshot, &val);
+		    ? fail_multiple_attrs(rdr, TAG, "hash")
+		    : init_hash(rdr, &rdr->c.notif.snapshot, &val);
 	}
 
-	return fail_unknown_attr(TAG, &key);
+	return fail_unknown_attr(rdr, TAG, &key);
 }
 
 static enum token_read_result
@@ -1029,11 +1078,11 @@ accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 
 	if (key.type == XTT_CLOSING_CLOSURE) {
 		if (rdr->c.notif.delta.serial.str == NULL)
-			return fail_missing_attr(TAG, "serial");
+			return fail_missing_attr(rdr, TAG, "serial");
 		if (uri_str(&rdr->c.notif.delta.meta.uri) == NULL)
-			return fail_missing_attr(TAG, "uri");
+			return fail_missing_attr(rdr, TAG, "uri");
 		if (!rdr->c.notif.delta.meta.hash.set)
-			return fail_missing_attr(TAG, "hash");
+			return fail_missing_attr(rdr, TAG, "hash");
 
 		res = commit_serial(rdr);
 		if (res != TRR_OK)
@@ -1050,21 +1099,21 @@ accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 
 	if (tkn_equals(&key, "serial")) {
 		if (rdr->c.notif.delta.serial.str != NULL)
-			return fail_multiple_attrs(TAG, "serial");
-		return init_serial(&rdr->c.notif.delta.serial, &val);
+			return fail_multiple_attrs(rdr, TAG, "serial");
+		return init_serial(rdr, &rdr->c.notif.delta.serial, &val);
 
 	} else if (tkn_equals(&key, "uri")) {
 		return uri_str(&rdr->c.notif.delta.meta.uri)
-		    ? fail_multiple_attrs(TAG, "uri")
+		    ? fail_multiple_attrs(rdr, TAG, "uri")
 		    : init_notif_uri(rdr, &rdr->c.notif.delta.meta.uri, &val, "Delta");
 
 	} else if (tkn_equals(&key, "hash")) {
 		return rdr->c.notif.delta.meta.hash.set
-		    ? fail_multiple_attrs(TAG, "hash")
-		    : init_hash(&rdr->c.notif.delta.meta, &val);
+		    ? fail_multiple_attrs(rdr, TAG, "hash")
+		    : init_hash(rdr, &rdr->c.notif.delta.meta, &val);
 	}
 
-	return fail_unknown_attr(TAG, &key);
+	return fail_unknown_attr(rdr, TAG, &key);
 }
 
 static enum token_read_result
@@ -1148,19 +1197,21 @@ accept_publish_content(struct rrdp_xml_reader *rdr)
 			if (res != TRR_OK)
 				return res;
 			if (chr != '-') {
-				pr_err("Unexpected token: <!%c", chr);
+				pr_err("(Line %u) Unexpected token: <!%c",
+				    rdr->line, chr);
 				return TRR_ERR;
 			}
 
 			return skip_comment(rdr);
 		default:
-			pr_err("Unexpected token: <");
+			pr_err("(Line %u) Unexpected token: <", rdr->line);
 			return TRR_ERR;
 		}
 	}
 
 	if (!is_base64Binary(chr)) {
-		pr_err("Unrecognized base64 character: %c (0x%02x)", chr, chr);
+		pr_err("(Line %u) Unrecognized base64 character: %c (0x%02x)",
+		    rdr->line, chr, chr);
 		return TRR_ERR;
 	}
 
@@ -1192,14 +1243,15 @@ is_known_extension(struct uri const *uri)
 }
 
 static int
-validate_hash2(struct file_metadata *meta, unsigned char const *hash)
+validate_hash2(struct rrdp_xml_reader *rdr, struct file_metadata *meta,
+    unsigned char const *hash)
 {
 	if (memcmp(meta->hash.bytes, hash, SHA256_DIGEST_LENGTH) != 0)
 		goto bad;
 	return 0;
 
-bad:	return pr_err("File '%s' does not match its expected hash.",
-	    uri_str(&meta->uri));
+bad:	return pr_err("(Line %u) File '%s' does not match its expected hash.",
+	    rdr->line, uri_str(&meta->uri));
 }
 
 static enum token_read_result
@@ -1213,14 +1265,14 @@ validate_hash(struct rrdp_xml_reader *rdr)
 	if (fileref) {
 		if (!rdr->c.sd.file.hash.set) {
 			// XXX watch out for this in the log before release
-			pr_err("RRDP desync: "
+			pr_err("(Line %u) RRDP desync: "
 			    "<publish> is attempting to create '%s', "
 			    "but the file is already cached.",
-			    uri_str(&rdr->c.sd.file.uri));
+			    rdr->line, uri_str(&rdr->c.sd.file.uri));
 			return TRR_ERR;
 		}
 
-		if (validate_hash2(&rdr->c.sd.file, fileref->file->hash) != 0)
+		if (validate_hash2(rdr, &rdr->c.sd.file, fileref->file->hash) != 0)
 			return TRR_ERR;
 
 		HASH_DEL(rdr->rrdp_filerefs->ht, fileref);
@@ -1229,10 +1281,10 @@ validate_hash(struct rrdp_xml_reader *rdr)
 	} else {
 		if (rdr->c.sd.file.hash.set) {
 			// XXX watch out for this in the log before release
-			pr_err("RRDP desync: "
+			pr_err("(Line %u) RRDP desync: "
 			    "<publish> is attempting to overwrite '%s', "
 			    "but the file is absent in the cache.",
-			    uri_str(&rdr->c.sd.file.uri));
+			    rdr->line, uri_str(&rdr->c.sd.file.uri));
 			return TRR_ERR;
 		}
 	}
@@ -1276,7 +1328,7 @@ accept_publish_attrs(struct rrdp_xml_reader *rdr)
 
 	if (key.type == XTT_CLOSE_TAG) {
 		if (uri_str(&rdr->c.sd.file.uri) == NULL)
-			return fail_missing_attr(TAG, "uri");
+			return fail_missing_attr(rdr, TAG, "uri");
 
 		res = start_publish(rdr);
 		if (res != TRR_OK)
@@ -1292,16 +1344,16 @@ accept_publish_attrs(struct rrdp_xml_reader *rdr)
 
 	if (tkn_equals(&key, "uri")) {
 		return uri_str(&rdr->c.sd.file.uri)
-		    ? fail_multiple_attrs(TAG, "uri")
-		    : init_uri(&rdr->c.sd.file.uri, &val);
+		    ? fail_multiple_attrs(rdr, TAG, "uri")
+		    : init_uri(rdr, &rdr->c.sd.file.uri, &val);
 
 	} else if (rdr->type == RXT_DELTA && tkn_equals(&key, "hash")) {
 		return rdr->c.sd.file.hash.set
-		    ? fail_multiple_attrs(TAG, "hash")
-		    : init_hash(&rdr->c.sd.file, &val);
+		    ? fail_multiple_attrs(rdr, TAG, "hash")
+		    : init_hash(rdr, &rdr->c.sd.file, &val);
 	}
 
-	return fail_unknown_attr(TAG, &key);
+	return fail_unknown_attr(rdr, TAG, &key);
 }
 
 static enum token_read_result
@@ -1315,13 +1367,13 @@ run_withdraw(struct rrdp_xml_reader *rdr)
 	fileref = filerefs_find_uri(rdr->rrdp_filerefs, &rdr->c.sd.file.uri);
 
 	if (!fileref) {
-		pr_err("Broken RRDP: "
+		pr_err("(Line %u) Broken RRDP: "
 		    "<withdraw> is attempting to delete unknown file '%s'.",
-		    uri_str(&rdr->c.sd.file.uri));
+		    rdr->line, uri_str(&rdr->c.sd.file.uri));
 		return TRR_ERR;
 	}
 
-	if (validate_hash2(&rdr->c.sd.file, fileref->file->hash) != 0)
+	if (validate_hash2(rdr, &rdr->c.sd.file, fileref->file->hash) != 0)
 		return TRR_ERR;
 
 	HASH_DEL(rdr->rrdp_filerefs->ht, fileref);
@@ -1344,9 +1396,9 @@ accept_withdraw_attrs(struct rrdp_xml_reader *rdr)
 
 	if (key.type == XTT_CLOSING_CLOSURE) {
 		if (uri_str(&rdr->c.sd.file.uri) == NULL)
-			return fail_missing_attr(TAG, "uri");
+			return fail_missing_attr(rdr, TAG, "uri");
 		if (!rdr->c.sd.file.hash.set)
-			return fail_missing_attr(TAG, "hash");
+			return fail_missing_attr(rdr, TAG, "hash");
 
 		res = run_withdraw(rdr);
 		if (res != TRR_OK)
@@ -1363,16 +1415,16 @@ accept_withdraw_attrs(struct rrdp_xml_reader *rdr)
 
 	if (tkn_equals(&key, "uri")) {
 		return uri_str(&rdr->c.sd.file.uri)
-		    ? fail_multiple_attrs(TAG, "uri")
-		    : init_uri(&rdr->c.sd.file.uri, &val);
+		    ? fail_multiple_attrs(rdr, TAG, "uri")
+		    : init_uri(rdr, &rdr->c.sd.file.uri, &val);
 
 	} else if (tkn_equals(&key, "hash")) {
 		return rdr->c.sd.file.hash.set
-		    ? fail_multiple_attrs(TAG, "hash")
-		    : init_hash(&rdr->c.sd.file, &val);
+		    ? fail_multiple_attrs(rdr, TAG, "hash")
+		    : init_hash(rdr, &rdr->c.sd.file, &val);
 	}
 
-	return fail_unknown_attr(TAG, &key);
+	return fail_unknown_attr(rdr, TAG, &key);
 }
 
 static enum token_read_result
@@ -1405,7 +1457,7 @@ accept_root_content(struct rrdp_xml_reader *rdr)
 		return TRR_OK;
 	}
 
-	res = check_tkn_type(&tkn, XTT_OPEN_TAG, "<");
+	res = check_tkn_type(rdr, &tkn, XTT_OPEN_TAG, "<");
 	if (res != TRR_OK)
 		return res;
 	res = next_str(rdr, &tkn, NULL);
@@ -1443,26 +1495,27 @@ accept_root_content(struct rrdp_xml_reader *rdr)
 		break;
 	}
 
-	return fail_unexpected_token(&tkn);
+	return fail_unexpected_token(rdr, &tkn);
 }
 
 static int
-check_session_chars(struct xml_token *val)
+check_session_chars(struct rrdp_xml_reader *rdr, struct xml_token *val)
 {
 	array_index v;
 	unsigned char chr;
 
 	if (val->len == 0)
-		return pr_err("session_id is an empty string");
+		return pr_err("(Line %u) session_id is an empty string",
+		    rdr->line);
 
 	for (v = 0; v < val->len; v++) {
 		chr = (unsigned char)(val->str[v]);
 		if (!is_printable(chr))
-			return pr_err("session_id has illegal character: "
-			    "0x%02x", chr);
+			return pr_err("(Line %u) session_id has illegal character: 0x%02x",
+			    rdr->line, chr);
 		if (!is_alphanumeric(chr) && chr != '-')
-			return pr_err("session_id has illegal character: "
-			    "%c", chr);
+			return pr_err("(Line %u) session_id has illegal character: %c",
+			    rdr->line, chr);
 	}
 
 	return 0;
@@ -1472,11 +1525,11 @@ static enum token_read_result
 parse_root_session_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 {
 	if (rdr->flags & RXRF_SESSION_SET)
-		return fail_multiple_attrs(rdr->type_str, "session_id");
+		return fail_multiple_attrs(rdr, rdr->type_str, "session_id");
 	rdr->flags |= RXRF_SESSION_SET;
 
 	if (rdr->type == RXT_NOTIF) {
-		if (check_session_chars(val) != 0)
+		if (check_session_chars(rdr, val) != 0)
 			return TRR_ERR;
 		rdr->c.notif.id.session_id = pstrndup(val->str, val->len);
 		return TRR_OK;
@@ -1485,8 +1538,8 @@ parse_root_session_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 	if (tkn_equals(val, rdr->c.sd.notif_id->session_id))
 		return TRR_OK;
 
-	pr_err("%s session_id '%.*s' does not match Notification session_id '%s'",
-	    rdr->type_str_camel, (int)val->len, val->str,
+	pr_err("(Line %u) %s session_id '%.*s' does not match Notification session_id '%s'",
+	    rdr->line, rdr->type_str_camel, (int)val->len, val->str,
 	    rdr->c.sd.notif_id->session_id);
 	return TRR_ERR;
 }
@@ -1499,17 +1552,17 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 	int cmp;
 
 	if (rdr->flags & RXRF_SERIAL_SET)
-		return fail_multiple_attrs(rdr->type_str, "serial");
+		return fail_multiple_attrs(rdr, rdr->type_str, "serial");
 	rdr->flags |= RXRF_SERIAL_SET;
 
 	if (val->len > MAX_SERIAL_SIZE) {
-		pr_err("%s serial is too long: %zu chars",
-		    rdr->type_str_camel, val->len);
+		pr_err("(Line %u) %s serial is too long: %zu chars",
+		    rdr->line, rdr->type_str_camel, val->len);
 		return TRR_ERR;
 	}
 
 	if (rdr->type == RXT_NOTIF) {
-		res = init_serial(&rdr->c.notif.id.serial, val);
+		res = init_serial(rdr, &rdr->c.notif.id.serial, val);
 		if (res != TRR_OK)
 			return res;
 		res = init_min_serial(rdr);
@@ -1518,7 +1571,7 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 		return init_deltas_array(rdr); /* Happy path */
 	}
 
-	res = init_serial(&subserial, val);
+	res = init_serial(rdr, &subserial, val);
 	if (res != TRR_OK)
 		return res;
 	cmp = BN_cmp(rdr->c.sd.notif_id->serial.num, subserial.num);
@@ -1527,8 +1580,8 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 	if (cmp == 0)
 		return TRR_OK; /* Happy path */
 
-	pr_err("%s serial '%.*s' does not match Notification serial '%s'",
-	    rdr->type_str_camel, (int)val->len, val->str,
+	pr_err("(Line %u) %s serial '%.*s' does not match Notification serial '%s'",
+	    rdr->line, rdr->type_str_camel, (int)val->len, val->str,
 	    rdr->c.sd.notif_id->serial.str);
 	return TRR_ERR;
 }
@@ -1550,13 +1603,13 @@ accept_root_attrs(struct rrdp_xml_reader *rdr)
 
 	if (key.type == XTT_CLOSE_TAG) {
 		if (!(rdr->flags & RXRF_XMLNS_SET))
-			return fail_missing_attr(TAG, "xmlns");
+			return fail_missing_attr(rdr, TAG, "xmlns");
 		if (!(rdr->flags & RXRF_VERSION_SET))
-			return fail_missing_attr(TAG, "version");
+			return fail_missing_attr(rdr, TAG, "version");
 		if (!(rdr->flags & RXRF_SESSION_SET))
-			return fail_missing_attr(TAG, "session");
+			return fail_missing_attr(rdr, TAG, "session");
 		if (!(rdr->flags & RXRF_SERIAL_SET))
-			return fail_missing_attr(TAG, "serial");
+			return fail_missing_attr(rdr, TAG, "serial");
 		rdr->consume = accept_root_content;
 		return res;
 	}
@@ -1567,17 +1620,17 @@ accept_root_attrs(struct rrdp_xml_reader *rdr)
 
 	if (tkn_equals(&key, "xmlns")) {
 		if (rdr->flags & RXRF_XMLNS_SET)
-			return fail_multiple_attrs(TAG, "xmlns");
+			return fail_multiple_attrs(rdr, TAG, "xmlns");
 		if (!tkn_equals(&val, RRDP_XMLNS))
-			return fail_attr_value(TAG, "xmlns", RRDP_XMLNS, &val);
+			return fail_attr_value(rdr, TAG, "xmlns", RRDP_XMLNS, &val);
 		rdr->flags |= RXRF_XMLNS_SET;
 		return TRR_OK;
 
 	} else if (tkn_equals(&key, "version")) {
 		if (rdr->flags & RXRF_VERSION_SET)
-			return fail_multiple_attrs(TAG, "version");
+			return fail_multiple_attrs(rdr, TAG, "version");
 		if (!tkn_equals(&val, RRDP_VER))
-			return fail_attr_value(TAG, "version", RRDP_VER, &val);
+			return fail_attr_value(rdr, TAG, "version", RRDP_VER, &val);
 		rdr->flags |= RXRF_VERSION_SET;
 		return TRR_OK;
 
@@ -1588,7 +1641,7 @@ accept_root_attrs(struct rrdp_xml_reader *rdr)
 		return parse_root_serial_attr(rdr, &val);
 	}
 
-	return fail_unknown_attr(TAG, &key);
+	return fail_unknown_attr(rdr, TAG, &key);
 }
 
 static enum token_read_result
@@ -1606,7 +1659,7 @@ parse_xmldecl_version(struct rrdp_xml_reader *rdr, struct xml_token *val)
 	rdr->flags |= RXRF_XMLV_SET;
 	return TRR_OK;
 
-fail:	return fail_attr_value(XMLDECL_TAG, "version", "1.x", val);
+fail:	return fail_attr_value(rdr, XMLDECL_TAG, "version", "1.x", val);
 }
 
 static enum token_read_result
@@ -1625,7 +1678,7 @@ parse_xmldecl_standalone(struct rrdp_xml_reader *rdr, struct xml_token *val)
 {
 	return (tkn_equals(val, "yes") || tkn_equals(val, "no"))
 	    ? TRR_OK /* idc which */
-	    : fail_attr_value(XMLDECL_TAG, "standalone", "(yes|no)", val);
+	    : fail_attr_value(rdr, XMLDECL_TAG, "standalone", "(yes|no)", val);
 }
 
 static enum token_read_result
@@ -1642,7 +1695,7 @@ accept_xmldecl_attrs(struct rrdp_xml_reader *rdr)
 
 	if (key.type == XTT_PI_CLOSE) {
 		if (!(rdr->flags & RXRF_XMLV_SET))
-			return fail_missing_attr(XMLDECL_TAG, "version");
+			return fail_missing_attr(rdr, XMLDECL_TAG, "version");
 		rdr->consume = accept_root_tag;
 		return TRR_OK;
 	}
@@ -1658,7 +1711,7 @@ accept_xmldecl_attrs(struct rrdp_xml_reader *rdr)
 	if (tkn_equals(&key, "standalone"))
 		return parse_xmldecl_standalone(rdr, &val);
 
-	return fail_unknown_attr(XMLDECL_TAG, &key);
+	return fail_unknown_attr(rdr, XMLDECL_TAG, &key);
 }
 
 static enum token_read_result
@@ -1803,12 +1856,12 @@ accept_root_tag(struct rrdp_xml_reader *rdr)
 		rdr->flags |= RXRF_XMLV_SET;
 
 		if (rdr->flags & RXRF_DOCTYPE_SET)
-			return fail_unexpected_token(&tkn);
+			return fail_unexpected_token(rdr, &tkn);
 		rdr->consume = accept_doctype_tag;
 		return TRR_OK;
 	}
 
-	res = check_tkn_type(&tkn, XTT_OPEN_TAG, "root tag");
+	res = check_tkn_type(rdr, &tkn, XTT_OPEN_TAG, "root tag");
 	if (res != TRR_OK)
 		return res;
 
@@ -1853,6 +1906,7 @@ rrdp_xml_create(enum rrdp_xml_type type)
 
 	result->offset = 0;
 	result->buflen = 0;
+	result->line = 1;
 	result->tkn1.meta.str = (char *)result->tkn1.buf;
 	result->tkn1.meta.len = 0;
 	result->tkn2.meta.str = (char *)result->tkn2.buf;

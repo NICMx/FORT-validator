@@ -374,12 +374,14 @@ START_TEST(notif_not_ascii)
 {
 	char *URL = "https://a/n.xml";
 	char *XML =
-		NOTIF("123123", "3")
-			"<snapshot uri=\"https://a/b/🧀.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "3") "\n"
+			"<snapshot\n"
+				"uri=\"https://a/b/🧀.xml\"\n"
+				"hash=\"" HASH "\"/>\n"
 		"</notification>";
 
 	/* Cheese UTF-8: 0xF0 0x9F 0xA7 0x80 */
-	init_xml1(XML, "uri has illegal character: 0xf0");
+	init_xml1(XML, "(Line 3) uri has illegal character: 0xf0");
 	fetch_notif_error(URL);
 }
 END_TEST
@@ -517,18 +519,18 @@ START_TEST(notif_long_token)
 	 * because there's no expected tag named "a23456789012345"
 	 */
 	init_xml1(
-		NOTIF("123123", "3")
-			"<a23456789012345 uri=\"https://a/b/s.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "3") "\n"
+			"<a23456789012345 uri=\"https://a/b/s.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		"Unexpected token: a23456789012345");
+		"(Line 2) Unexpected token: a23456789012345");
 	fetch_notif_error(URL);
 
 	/* 16 characters: Rejected by token fetcher because too long */
 	init_xml1(
-		NOTIF("123123", "3")
-			"<a234567890123456 uri=\"https://a/b/s.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "3") "\n"
+			"<a234567890123456 uri=\"https://a/b/s.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		"Token has too many characters: a234567890123456(...)");
+		"(Line 2) Token has too many characters: a234567890123456(...)");
 	fetch_notif_error(URL);
 }
 END_TEST
@@ -558,11 +560,13 @@ START_TEST(notif_long_url)
 
 	/* 121 characters */
 	init_xml1(
-		NOTIF("123123", "3")
+		NOTIF("123123", "3") "\n"
 			/*              123456789AB (11)     123456789 A (10)  */
-			"<snapshot uri=\"https://a/" CHR100 "/aaaa.xml\" hash=\"" HASH "\"/>"
+			"<snapshot\n"
+				"uri=\"https://a/" CHR100 "/aaaa.xml\"\n"
+				"hash=\"" HASH "\"/>\n"
 		"</notification>",
-		"Attribute value too long");
+		"(Line 3) Attribute value too long");
 	fetch_notif_error(URL);
 }
 END_TEST
@@ -591,10 +595,10 @@ START_TEST(notif_long_serial)
 
 	/* 65 characters */
 	init_xml1(
-		NOTIF("123123", CHR64 "9")
-			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", CHR64 "9") "\n"
+			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		"Notification serial is too long: 65 chars");
+		"(Line 1) Notification serial is too long: 65 chars");
 	fetch_notif_error(URL);
 }
 END_TEST
@@ -675,56 +679,56 @@ START_TEST(notif_bad_deltas)
 {
 	char *URL = "https://a/n.xml";
 	char *XML1[] = {
-		NOTIF("123123", "22")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"23\" uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "22") "\n"
+			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"23\" uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		NOTIF("123123", "22")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "22") "\n"
+			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
 			/* Duplicate delta: Detected early because the array cannot be resized */
-			"<delta serial=\"20\" uri=\"https://a/d20b.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"20\" uri=\"https://a/d20a.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"18\" uri=\"https://a/d18.xml\" hash=\"" HASH "\"/>"
+			"<delta serial=\"20\" uri=\"https://a/d20b.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"20\" uri=\"https://a/d20a.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"18\" uri=\"https://a/d18.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		NOTIF("123123", "22")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "22") "\n"
+			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
 			/* Notif vs delta serial mismatch: Detected early because obvious */
-			"<delta serial=\"23\" uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>"
+			"<delta serial=\"23\" uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
 	};
 	char const *ERR1[] = {
-		"Delta serial 23 is larger than Notification serial 22",
+		"(Line 3) Delta serial 23 is larger than Notification serial 22",
 		"The Notification has duplicate delta serials",
-		"Delta serial 23 is larger than Notification serial 22",
+		"(Line 3) Delta serial 23 is larger than Notification serial 22",
 	};
 	char *XML2[] = {
-		NOTIF("123123", "22")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"20\" uri=\"https://a/d20.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "22") "\n"
+			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"20\" uri=\"https://a/d20.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>\n"
 			/* 18 missing */
-			"<delta serial=\"17\" uri=\"https://a/d17.xml\" hash=\"" HASH "\"/>"
+			"<delta serial=\"17\" uri=\"https://a/d17.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		NOTIF("123123", "22")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "22") "\n"
+			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
 			/* Duplicate delta: Detected during the sort */
-			"<delta serial=\"20\" uri=\"https://a/d20b.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"20\" uri=\"https://a/d20a.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>"
+			"<delta serial=\"20\" uri=\"https://a/d20b.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"20\" uri=\"https://a/d20a.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		NOTIF("123123", "22")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
+		NOTIF("123123", "22") "\n"
+			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
 			/* Notif vs delta serial mismatch: Detected during the sort */
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
+			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
 	};
 	char const *ERR2[] = {
@@ -754,40 +758,40 @@ START_TEST(notif_bad_data_types)
 {
 	char *URL = "https://a/n.xml";
 	char *XML[] = {
-		NOTIF("http://wx3.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3")
-			SNAPSHOT("https://a/s.xml", HASH)
+		NOTIF("http://wx3.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+			SNAPSHOT("https://a/s.xml", HASH) "\n"
 		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "2", "9df4b597-af9e-4dca-bdda", "3")
-			SNAPSHOT("https://a/s.xml", HASH)
+		NOTIF("http://www.ripe.net/rpki/rrdp", "2", "9df4b597-af9e-4dca-bdda", "3") "\n"
+			SNAPSHOT("https://a/s.xml", HASH) "\n"
 		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9*f4b597-af9e-4dca-bdda", "3")
-			SNAPSHOT("https://a/s.xml", HASH)
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9*f4b597-af9e-4dca-bdda", "3") "\n"
+			SNAPSHOT("https://a/s.xml", HASH) "\n"
 		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "-1")
-			SNAPSHOT("https://a/s.xml", HASH)
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "-1") "\n"
+			SNAPSHOT("https://a/s.xml", HASH) "\n"
 		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3")
-			SNAPSHOT("https://a/s.xml", "0g23456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD")
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+			SNAPSHOT("https://a/s.xml", "0g23456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD") "\n"
 		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3")
-			SNAPSHOT("https://h[o]st/9d8/3/snapshot.xml", HASH)
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+			SNAPSHOT("https://h[o]st/9d8/3/snapshot.xml", HASH) "\n"
 		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3")
-			SNAPSHOT("https://ho st/9d-8/3/snapshot.xml", HASH)
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+			SNAPSHOT("https://ho st/9d-8/3/snapshot.xml", HASH) "\n"
 		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3")
-			SNAPSHOT("https://different-host/9d-8/3/snapshot.xml", HASH)
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+			SNAPSHOT("https://different-host/9d-8/3/snapshot.xml", HASH) "\n"
 		"</notification>"
 	};
 	char *ERR[] = {
-		"<notification> xmlns is not http://www.ripe.net/rpki/rrdp: http://wx3.ripe.net/rpki/rrdp",
-		"<notification> version is not 1: 2",
-		"session_id has illegal character: *",
-		"Negative serial: -1",
-		"Not a valid hash: 0g23456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD",
-		"'https://h[o]st/9d8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
-		"'https://ho st/9d-8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
-		"Notification 'https://a/n.xml' does not have the same origin as its Snapshot: https://different-host/9d-8/3/snapshot.xml",
+		"(Line 1) <notification> xmlns is not http://www.ripe.net/rpki/rrdp: http://wx3.ripe.net/rpki/rrdp",
+		"(Line 1) <notification> version is not 1: 2",
+		"(Line 1) session_id has illegal character: *",
+		"(Line 1) Negative serial: -1",
+		"(Line 2) Not a valid hash: 0g23456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD",
+		"(Line 2) 'https://h[o]st/9d8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
+		"(Line 2) 'https://ho st/9d-8/3/snapshot.xml' is not a valid URI: Illegal character in host component",
+		"(Line 2) Notification 'https://a/n.xml' does not have the same origin as its Snapshot: https://different-host/9d-8/3/snapshot.xml",
 	};
 	size_t i;
 
@@ -1075,12 +1079,14 @@ END_TEST
 START_TEST(snapshot_withdraw)
 {
 	init_xml1(
-		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">"
-			"<publish uri=\"rsync://a/b/c.cer\">ZXhhbXBsZTE=</publish>"
-			"<withdraw uri=\"rsync://a/b/d.mft\" hash=\"" HASH "\"/>"
-			"<publish uri=\"rsync://a/b/e.crl\">ZXhhbXBsZTM=</publish>"
+		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
+			"<publish uri=\"rsync://a/b/c.cer\">\n"
+				"ZXhhbXBsZTE=\n"
+			"</publish>\n"
+			"<withdraw uri=\"rsync://a/b/d.mft\" hash=\"" HASH "\"/>\n"
+			"<publish uri=\"rsync://a/b/e.crl\">ZXhhbXBsZTM=</publish>\n"
 		"</snapshot>",
-		"Unexpected token: withdraw");
+		"(Line 5) Unexpected token: withdraw");
 	explode_snapshot_error("");
 }
 END_TEST
@@ -1088,10 +1094,30 @@ END_TEST
 START_TEST(snapshot_bad_data_types)
 {
 	init_xml1(
-		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">"
-			"<publish uri=\"rsync://a/b/c.cer\">ZXh^hbXBsZTE=</publish>"
+		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
+			"<publish uri=\"rsync://a/b/c.cer\">ZXh^hbXBsZTE=</publish>\n"
 		"</snapshot>",
-		"Unrecognized base64 character: ^ (0x5e)");
+		"(Line 2) Unrecognized base64 character: ^ (0x5e)");
+	explode_snapshot_error("");
+}
+END_TEST
+
+START_TEST(snapshot_base64_newline_counting)
+{
+	init_xml1(
+		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
+			"<publish uri=\"rsync://a/b/c.cer\">\n"
+				"ZXh\n"
+				"hbX\n"
+				"<!--\n"
+					"comment line 1\n"
+					"comment line 2\n"
+				"-->\n"
+				"BsZ\n"
+				"T*E=\n"
+			"</publish>\n"
+		"</snapshot>",
+		"(Line 10) Unrecognized base64 character: * (0x2a)");
 	explode_snapshot_error("");
 }
 END_TEST
@@ -1172,6 +1198,7 @@ create_suite(void)
 	tcase_add_test(xml, snapshot_base64_newlines);
 	tcase_add_test(xml, snapshot_withdraw);
 	tcase_add_test(xml, snapshot_bad_data_types);
+	tcase_add_test(xml, snapshot_base64_newline_counting);
 	tcase_add_test(xml, delta_minimal);
 
 	suite = suite_create("RRDP XML");
