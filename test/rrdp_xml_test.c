@@ -862,6 +862,134 @@ explode_snapshot_error(char const *errmsg)
 	hash_teardown();
 }
 
+START_TEST(notif_xml_hdrs)
+{
+	char *URL = "https://a/n.xml";
+	char *XML[] = {
+		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+			SNAPSHOT("https://a/s.xml", HASH)
+		"</notification>",
+		/* TODO (test) Maybe check the warning message this prints */
+		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+			SNAPSHOT("https://a/s.xml", HASH)
+		"</notification>",
+		"<!DOCTYPE notification>"
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+			SNAPSHOT("https://a/s.xml", HASH)
+		"</notification>",
+		"<?xml version=\"1.1\" encoding=\"US-ASCII\"?>"
+		"<!DOCTYPE NOTIFICATION>"
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+			SNAPSHOT("https://a/s.xml", HASH)
+		"</notification>",
+	};
+	struct update_notification notif;
+	size_t i;
+
+	for (i = 0; i < ARRAY_LEN(XML); i++) {
+		init_xml1(XML[i], NULL);
+
+		fetch_notif(URL, &notif);
+
+		ck_assert_str_eq("abcd", notif.session.session_id);
+		ck_assert_str_eq("3", notif.session.serial.str);
+		ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
+		ck_assert_uint_eq(0, notif.deltas.len);
+
+		notification_cleanup(&notif);
+	}
+}
+END_TEST
+
+START_TEST(notif_pi_boundaries)
+{
+#define PREFIX "<?xml version=\"1.0\" encoding=\"US-ASCII\"                                                                             "
+#define SUFFIX "<!DOCTYPE html><html/>"
+
+	char *URL = "https://a/n.xml";
+	char *XML[] = {
+		PREFIX "?><? ... ?>" SUFFIX,
+		PREFIX " ?><? ... ?>" SUFFIX,
+		PREFIX "  ?><? ... ?>" SUFFIX,
+		PREFIX "   ?><? ... ?>" SUFFIX,
+		PREFIX "    ?><? ... ?>" SUFFIX,
+		PREFIX "     ?><? ... ?>" SUFFIX,
+		PREFIX "      ?><? ... ?>" SUFFIX,
+		PREFIX "       ?><? ... ?>" SUFFIX,
+		PREFIX "        ?><? ... ?>" SUFFIX,
+		PREFIX "         ?><? ... ?>" SUFFIX,
+		PREFIX "          ?><? ... ?>" SUFFIX,
+		PREFIX "           ?><? ... ?>" SUFFIX,
+
+		PREFIX "     ?><?\?>" SUFFIX,
+		PREFIX "      ?><?\?>" SUFFIX,
+		PREFIX "       ?><?\?>" SUFFIX,
+		PREFIX "        ?><?\?>" SUFFIX,
+		PREFIX "         ?><?\?>" SUFFIX,
+		PREFIX "          ?><?\?>" SUFFIX,
+		PREFIX "           ?><?\?>" SUFFIX,
+
+#define PI "<? ?> "
+#define PI10 PI PI PI PI PI PI PI PI PI PI
+#define PI100 PI10 PI10 PI10 PI10 PI10 PI10 PI10 PI10 PI10 PI10
+		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>" PI100 PI100 SUFFIX,
+	};
+	array_index i;
+
+	memset(&input, 0, sizeof(input));
+
+	for (i = 0; i < ARRAY_LEN(XML); i++) {
+		init_xml1(XML[i], NULL);
+		__fetch_notif_error(URL, "The document was not an RRDP Notification.");
+	}
+}
+END_TEST
+
+START_TEST(notif_pi_rejected)
+{
+	char *URL = "https://a/n.xml";
+	char *XML[] = {
+		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+		"<? ?>"
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+			SNAPSHOT("https://a/s.xml", HASH)
+		"</notification>",
+		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+		"<? ?>"
+		"<!DOCTYPE notification>"
+		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+			SNAPSHOT("https://a/s.xml", HASH)
+		"</notification>",
+	};
+	array_index i;
+
+	memset(&input, 0, sizeof(input));
+
+	for (i = 0; i < ARRAY_LEN(XML); i++) {
+		init_xml1(XML[i], "Document has at least one Processing Instruction (<? ... ?>).");
+		fetch_notif_error(URL);
+	}
+}
+END_TEST
+
+START_TEST(notif_html)
+{
+	char *URL = "https://a/n.xml";
+	char *XML =
+		"<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n"
+		"<html><head>\n"
+		"<title>302 Found</title>\n"
+		"</head><body>\n"
+		"<h1>Found</h1>\n"
+		"<p>The document has moved <a href=\"https://a/n2.xml\">here</a>.</p>\n"
+		"</body></html>";
+
+	init_xml1(XML, NULL);
+	__fetch_notif_error(URL, "The document was not an RRDP Notification.");
+}
+
 START_TEST(snapshot_base64)
 {
 	init_xml1(
@@ -1036,6 +1164,10 @@ create_suite(void)
 	tcase_add_test(xml, notif_sort_deltas);
 	tcase_add_test(xml, notif_bad_deltas);
 	tcase_add_test(xml, notif_bad_data_types);
+	tcase_add_test(xml, notif_xml_hdrs);
+	tcase_add_test(xml, notif_pi_boundaries);
+	tcase_add_test(xml, notif_pi_rejected);
+	tcase_add_test(xml, notif_html);
 	tcase_add_test(xml, snapshot_base64);
 	tcase_add_test(xml, snapshot_base64_newlines);
 	tcase_add_test(xml, snapshot_withdraw);
