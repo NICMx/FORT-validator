@@ -828,10 +828,16 @@ ignore_input(struct rrdp_xml_reader *rdr)
 
 static enum token_read_result
 init_serial(struct rrdp_xml_reader *rdr, struct rrdp_serial *serial,
-    struct xml_token *tkn)
+    struct xml_token *tkn, char const *what)
 {
 	char *str;
 	BIGNUM *num;
+
+	if (tkn->len > MAX_SERIAL_SIZE) {
+		pr_err("(Line %u) <%s> serial is too long: %zu chars",
+		    rdr->line, what, tkn->len);
+		return TRR_ERR;
+	}
 
 	str = pstrndup(tkn->str, tkn->len);
 	num = BN_create();
@@ -1100,7 +1106,7 @@ accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 	if (tkn_equals(&key, "serial")) {
 		if (rdr->c.notif.delta.serial.str != NULL)
 			return fail_multiple_attrs(rdr, TAG, "serial");
-		return init_serial(rdr, &rdr->c.notif.delta.serial, &val);
+		return init_serial(rdr, &rdr->c.notif.delta.serial, &val, TAG);
 
 	} else if (tkn_equals(&key, "uri")) {
 		return uri_str(&rdr->c.notif.delta.meta.uri)
@@ -1555,14 +1561,9 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 		return fail_multiple_attrs(rdr, rdr->type_str, "serial");
 	rdr->flags |= RXRF_SERIAL_SET;
 
-	if (val->len > MAX_SERIAL_SIZE) {
-		pr_err("(Line %u) %s serial is too long: %zu chars",
-		    rdr->line, rdr->type_str_camel, val->len);
-		return TRR_ERR;
-	}
-
 	if (rdr->type == RXT_NOTIF) {
-		res = init_serial(rdr, &rdr->c.notif.id.serial, val);
+		res = init_serial(rdr, &rdr->c.notif.id.serial, val,
+		    rdr->type_str);
 		if (res != TRR_OK)
 			return res;
 		res = init_min_serial(rdr);
@@ -1571,7 +1572,7 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 		return init_deltas_array(rdr); /* Happy path */
 	}
 
-	res = init_serial(rdr, &subserial, val);
+	res = init_serial(rdr, &subserial, val, rdr->type_str);
 	if (res != TRR_OK)
 		return res;
 	cmp = BN_cmp(rdr->c.sd.notif_id->serial.num, subserial.num);

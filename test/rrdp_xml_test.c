@@ -598,7 +598,39 @@ START_TEST(notif_long_serial)
 		NOTIF("123123", CHR64 "9") "\n"
 			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>\n"
 		"</notification>",
-		"(Line 1) Notification serial is too long: 65 chars");
+		"(Line 1) <notification> serial is too long: 65 chars");
+	fetch_notif_error(URL);
+}
+END_TEST
+
+START_TEST(notif_long_delta_serial)
+{
+	char *URL = "https://a/n.xml";
+	struct update_notification notif;
+
+	/* 64 characters */
+	init_xml1(
+		NOTIF("123123", CHR64)
+			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>"
+			"<delta serial=\"" CHR64 "\" uri=\"https://a/b/d64.xml\" hash=\"" HASH "\"/>"
+		"</notification>",
+		NULL);
+
+	fetch_notif(URL, &notif);
+	ck_assert_str_eq("123123", notif.session.session_id);
+	ck_assert_str_eq(CHR64, notif.session.serial.str);
+	ck_snapshot(&notif.snapshot, "https://a/n.xml", HASH);
+	ck_assert_uint_eq(1, notif.deltas.len);
+	ck_delta(&notif.deltas.arr[0], CHR64, "https://a/b/d64.xml", HASH);
+	notification_cleanup(&notif);
+
+	/* 65 characters */
+	init_xml1(
+		NOTIF("123123", "6") "\n"
+			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>\n"
+			"<delta serial=\"" CHR64 "9\" uri=\"https://a/b/d65.xml\" hash=\"" HASH "\"/>"
+		"</notification>",
+		"(Line 3) <delta> serial is too long: 65 chars");
 	fetch_notif_error(URL);
 }
 END_TEST
@@ -1187,6 +1219,7 @@ create_suite(void)
 	tcase_add_test(xml, notif_long_token);
 	tcase_add_test(xml, notif_long_url);
 	tcase_add_test(xml, notif_long_serial);
+	tcase_add_test(xml, notif_long_delta_serial);
 	tcase_add_test(xml, notif_sort_deltas);
 	tcase_add_test(xml, notif_bad_deltas);
 	tcase_add_test(xml, notif_bad_data_types);
