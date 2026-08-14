@@ -68,15 +68,24 @@ ia5s2string(ASN1_IA5STRING *ia5, char **result)
 		return EINVAL;
 	}
 
-	/* TODO (asn1c) This might already be done by the asn1 code. */
 	data = ASN1_STRING_get0_data(ia5);
 	len = ASN1_STRING_length(ia5);
-	for (i = 0; i < len; i++)
+	for (i = 0; i < len; i++) {
+		if (data[i] > 0x7Fu) {
+			pr_wrn("Invalid IA5String character: 0x%02x", data[i]);
+			return EINVAL;
+		}
+		/*
+		 * Disallowed because we need our strings to be NULL-terminated
+		 * (and we know this is going to be a URI anyway), not because
+		 * of the IA5String range.
+		 */
 		if (data[i] == 0) {
 			pr_wrn("Null character found in IA5String index %zu. (Length: %zu)",
 			    i, len);
 			return EINVAL;
 		}
+	}
 
 	/* No NULL termination guarantee */
 	*result = pstrndup((char const *)data, len);

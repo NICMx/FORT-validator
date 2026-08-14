@@ -1457,14 +1457,6 @@ gn2uri(GENERAL_NAME *ad, struct uri *uri)
 		return ENOTSUP;
 	}
 
-	/*
-	 * TODO (testers) According to RFC 5280, accessLocation can be an IRI
-	 * somehow converted into URI form. I don't think that's an issue
-	 * because the RSYNC clone operation should not have performed the
-	 * conversion, so we should be looking at precisely the IA5String
-	 * directory our g2l version of @asn1_string should contain.
-	 * But ask the testers to keep an eye on it anyway.
-	 */
 	error = ia5s2string(asn1str, &str);
 	if (error)
 		return error;
