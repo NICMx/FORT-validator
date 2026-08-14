@@ -14,6 +14,7 @@ struct uri {
 };
 
 typedef char const *error_msg;
+extern error_msg const EM_SCHEME_UNKNOWN;
 
 error_msg uri_init(struct uri *, char const *);
 void __uri_init(struct uri *, char const *, size_t);

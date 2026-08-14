@@ -9,26 +9,26 @@
 
 #define URI_ALLOW_UNKNOWN_SCHEME (1 << 0)
 
-static error_msg EM_SCHEME_EMPTY = "Scheme seems empty";
-static error_msg EM_SCHEME_1ST = "First scheme character is not a letter";
-static error_msg EM_SCHEME_NTH = "Scheme character is not letter, digit, plus, period or hyphen";
-static error_msg EM_SCHEME_NOCOLON = "Scheme not terminated";
-static error_msg EM_SCHEME_UNKNOWN = "Unknown scheme";
-static error_msg EM_SCHEME_NOTREMOTE = "Missing \"://\"";
-static error_msg EM_PCT_NOTHEX = "Invalid hexadecimal digit in percent encoding";
-static error_msg EM_PCT_NOT3 = "Unterminated percent-encoding";
-static error_msg EM_UTF8 = "Invalid UTF-8";
-static error_msg EM_USERINFO_BADCHR = "Illegal character in userinfo component";
-static error_msg EM_USERINFO_DISALLOWED = "Protocol disallows userinfo";
-static error_msg EM_HOST_BADCHR = "Illegal character in host component";
-static error_msg EM_HOST_EMPTY = "Protocol disallows empty host";
-static error_msg EM_HOST_LITERAL = "Unparseable IP literal in the host";
-static error_msg EM_PORT_BADCHR = "Illegal non-digit character in port component";
-static error_msg EM_PORT_RANGE = "Port value is out of range";
-static error_msg EM_PATH_BADCHR = "Illegal character in path component";
-static error_msg EM_QUERY_DISALLOWED = "Protocol disallows query";
-static error_msg EM_QF_BADCHR = "Illegal character in query or fragment";
-static error_msg EM_FRAGMENT_DISALLOWED = "Protocol disallows fragment";
+static error_msg const EM_SCHEME_EMPTY = "Scheme seems empty";
+static error_msg const EM_SCHEME_1ST = "First scheme character is not a letter";
+static error_msg const EM_SCHEME_NTH = "Scheme character is not letter, digit, plus, period or hyphen";
+static error_msg const EM_SCHEME_NOCOLON = "Scheme not terminated";
+       error_msg const EM_SCHEME_UNKNOWN = "Unknown scheme";
+static error_msg const EM_SCHEME_NOTREMOTE = "Missing \"://\"";
+static error_msg const EM_PCT_NOTHEX = "Invalid hexadecimal digit in percent encoding";
+static error_msg const EM_PCT_NOT3 = "Unterminated percent-encoding";
+static error_msg const EM_UTF8 = "Invalid UTF-8";
+static error_msg const EM_USERINFO_BADCHR = "Illegal character in userinfo component";
+static error_msg const EM_USERINFO_DISALLOWED = "Protocol disallows userinfo";
+static error_msg const EM_HOST_BADCHR = "Illegal character in host component";
+static error_msg const EM_HOST_EMPTY = "Protocol disallows empty host";
+static error_msg const EM_HOST_LITERAL = "Unparseable IP literal in the host";
+static error_msg const EM_PORT_BADCHR = "Illegal non-digit character in port component";
+static error_msg const EM_PORT_RANGE = "Port value is out of range";
+static error_msg const EM_PATH_BADCHR = "Illegal character in path component";
+static error_msg const EM_QUERY_DISALLOWED = "Protocol disallows query";
+static error_msg const EM_QF_BADCHR = "Illegal character in query or fragment";
+static error_msg const EM_FRAGMENT_DISALLOWED = "Protocol disallows fragment";
 
 struct sized_ustring {
 	unsigned char const *str;

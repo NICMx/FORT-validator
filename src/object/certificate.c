@@ -1462,12 +1462,16 @@ gn2uri(GENERAL_NAME *ad, struct uri *uri)
 		return error;
 
 	errmsg = uri_init(uri, str);
-	if (errmsg)
-		pr_wrn("Cannot parse GENERAL_NAME '%s' as a URI: %s",
+	if (errmsg == EM_SCHEME_UNKNOWN) {
+		pr_trc("URI '%s': %s", str, errmsg);
+		error = ENOTSUP;
+	} else if (errmsg) {
+		error = pr_err("Cannot parse GENERAL_NAME '%s' as a URI: %s",
 		    str, errmsg);
+	}
 
 	free(str);
-	return errmsg ? EINVAL : 0;
+	return error;
 }
 
 static int
@@ -1479,6 +1483,7 @@ handle_cdp(void *ext, void *arg)
 	GENERAL_NAMES *names;
 	int i;
 	char const *error_msg;
+	int error;
 
 	if (sk_DIST_POINT_num(crldp) != 1) {
 		return pr_err("The %s extension has %d distribution points. (1 expected)",
@@ -1527,8 +1532,11 @@ handle_cdp(void *ext, void *arg)
 		 *
 		 * So we will store the URI in @sias, and validate it later.
 		 */
-		if (gn2uri(sk_GENERAL_NAME_value(names, i), &sias->crldp) != 0)
+		error = gn2uri(sk_GENERAL_NAME_value(names, i), &sias->crldp);
+		if (error == ENOTSUP)
 			continue;
+		if (error)
+			return error;
 		if (!uri_is_rsync(&sias->crldp)) {
 			uri_cleanup(&sias->crldp);
 			continue;
@@ -1577,8 +1585,11 @@ handle_ad(int nid, struct ad_metadata const *meta, SIGNATURE_INFO_ACCESS *ia,
 	for (i = 0; i < sk_ACCESS_DESCRIPTION_num(ia); i++) {
 		ad = sk_ACCESS_DESCRIPTION_value(ia, i);
 		if (OBJ_obj2nid(ad->method) == nid) {
-			if (gn2uri(ad->location, &uri) != 0)
+			error = gn2uri(ad->location, &uri);
+			if (error == ENOTSUP)
 				continue;
+			if (error)
+				return error;
 
 			if (found) {
 				uri_cleanup(&uri);
