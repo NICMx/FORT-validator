@@ -254,8 +254,7 @@ b64_write(struct base64decode2file *b64, int len)
 }
 
 int
-b64d2f_write(struct base64decode2file *b64,
-    unsigned char const *data, size_t len)
+b64d2f_write(struct base64decode2file *b64, char const *data, size_t len)
 {
 	int res;
 	int outl;
@@ -271,7 +270,8 @@ b64d2f_write(struct base64decode2file *b64,
 
 	prepare_buf(b64, len);
 
-	res = EVP_DecodeUpdate(b64->decoder, b64->buf, &outl, data, len);
+	res = EVP_DecodeUpdate(b64->decoder, b64->buf, &outl,
+	    (unsigned char const *)data, len);
 	if (res < 0) {
 		pr_err("Cannot decode base64: Generic error");
 		return EINVAL;

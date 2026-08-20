@@ -30,7 +30,7 @@ struct base64decode2file {
 };
 
 int b64d2f_init(struct base64decode2file *, char *);
-int b64d2f_write(struct base64decode2file *, unsigned char const *, size_t);
+int b64d2f_write(struct base64decode2file *, char const *, size_t);
 int b64d2f_finish(struct base64decode2file *, unsigned char[EVP_MAX_MD_SIZE]);
 void b64d2f_destroy(struct base64decode2file *);
 

@@ -27,23 +27,20 @@
  *   normally and considered optional.
  */
 
-#ifndef XML_BUF_SIZE
-#define XML_BUF_SIZE ((size_t)4096u)
-#endif
-
 /*
- * Maximum attribute value size. Needs to be <= XML_BUF_SIZE.
- * In RRDP, the largest potential attributes are URIs.
+ * Current longest allowed full RRDP token.
+ * "Full" means it excludes tokens that can be parsed in chunks, such as base64.
+ *
+ * In RRDP, the largest potential full tokens are attribute URIs.
  * Which can be roughly any length, but I'm guessing anything larger than this
  * is a troll.
- * Includes quotes.
  */
-#ifndef MAX_QUOTE_SIZE
-#define MAX_QUOTE_SIZE ((size_t)1024u)
+#ifndef MAX_TKN_SIZE
+#define MAX_TKN_SIZE ((size_t)1024u)
 #endif
 
-/* Current longest RRDP tag/attr; strlen("notification") + nullchar */
-#define MAX_TKN_SIZE 13
+/* Current longest RRDP tag/attr + 1; strlen("notification") + 1*/
+#define MAX_NAME_SIZE 13
 
 /* Needs to be fairly small, otherwise libcrypto BIGNUM lags */
 #define MAX_SERIAL_SIZE 64
@@ -51,17 +48,17 @@
 #define XMLDECL_TAG "?xml ?"
 
 enum token_read_result {
-	TRR_OK,
-	TRR_ERR,
-	TRR_MORE,
+	TRR_OK,   /* Token is fully parsed and so far accepted. */
+	TRR_MORE, /* Token was cut-off; need next buffer chunk. */
+	TRR_ERR,  /* Parse error. Document is illegible; abort. */
 };
 
 struct rrdp_xml_reader;
 
 typedef enum token_read_result (*consume_cb)(struct rrdp_xml_reader *);
-static enum token_read_result accept_root_tag(struct rrdp_xml_reader *);
-static enum token_read_result accept_root_content(struct rrdp_xml_reader *);
-static enum token_read_result ignore_input(struct rrdp_xml_reader *);
+static enum token_read_result state_root_tag(struct rrdp_xml_reader *);
+static enum token_read_result state_root_content(struct rrdp_xml_reader *);
+static enum token_read_result state_ignore_input(struct rrdp_xml_reader *);
 
 enum rrdp_xml_type {
 	RXT_NOTIF,
@@ -81,9 +78,9 @@ enum rrdp_xml_type {
  * (Except in comments. Comments can contain whatever they want.)
  */
 static bool
-is_printable(unsigned char chr) /* According to US-ASCII */
+is_printable(char chr) /* According to US-ASCII */
 {
-	return 0x20u <= chr && chr <= 0x7Eu;
+	return 0x20 <= chr && chr <= 0x7E;
 }
 
 static bool
@@ -188,9 +185,11 @@ enum xml_token_type {
 	XTT_OPENING_CLOSURE,   /* </ */
 	XTT_CLOSE_TAG,         /*  > */
 	XTT_CLOSING_CLOSURE,   /* /> */
-	XTT_META,              /* <! */
+	XTT_DOCTYPE,           /* <!DOCTYPE */
 	XTT_PI_OPEN,           /* <? */
 	XTT_PI_CLOSE,          /* ?> */
+	XTT_COMMENT,           /* <!-- */
+	XTT_XMLDECL,           /* <?xml */
 	XTT_EQUALS,
 	XTT_STR,
 	XTT_QUOTED,
@@ -199,23 +198,12 @@ enum xml_token_type {
 
 struct xml_token {
 	enum xml_token_type type;
+	/* Either literal or @buf. Do not assume NULL-terminated */
 	char const *str;
 	size_t len;
-};
 
-static enum token_read_result
-token_init(struct xml_token *tkn, enum xml_token_type type,
-    char const *str, size_t len)
-{
-	tkn->type = type;
-	tkn->str = str;
-	tkn->len = len;
-	return TRR_OK;
-}
-
-struct xml_token_bkp {
-	struct xml_token meta;
-	unsigned char buf[MAX_TKN_SIZE];
+	char buf[MAX_TKN_SIZE];
+	bool complete;
 };
 
 struct rrdp_xml_reader {
@@ -224,37 +212,43 @@ struct rrdp_xml_reader {
 	char const *type_str_camel;
 	struct uri const *notif_uri;
 
-	/* Contains string data, but it's not null-terminated. */
-	unsigned char buf[XML_BUF_SIZE];
-	/* Points to @buf's next not-yet-consumed token */
-	size_t offset;
-	/* Entire populated area from @buf. (Includes bytes before @offset) */
+	/* Current chunk. Contains string data, but it's not null-terminated. */
+	char const *buf;
+	/* Bytes not yet consumed in @buf. */
 	size_t buflen;
 
 	/* Number of line currently being parsed */
 	unsigned int line;
 
 	/*
-	 * Cached next token.
+	 * Cached first token from the current phrase.
 	 * It was already consumed from @buf, but the parser performed a
 	 * rollback because it reached the end of @buf before completing the
 	 * phrase. So we'll need to return it the next time the parser wants
 	 * the first token of the phrase.
-	 * Unset if meta.len == 0.
 	 */
-	struct xml_token_bkp tkn1;
+	struct xml_token tkn1;
 	/*
-	 * Cached token after next token.
+	 * Cached second token from the current phrase.
 	 * It was already consumed from @buf, but the parser performed a
 	 * rollback because it reached the end of @buf before completing the
 	 * phrase. So we'll need to return it the next time the parser wants
 	 * the second token of the phrase.
-	 * (RRDP phrases never exceed three tokens.)
-	 * Unset if meta.len == 0.
 	 */
-	struct xml_token_bkp tkn2;
+	struct xml_token tkn2;
+	/*
+	 * Cached third token from the current phrase.
+	 * It was already consumed from @buf, but the parser performed a
+	 * rollback because it reached the end of @buf before completing the
+	 * phrase. So we'll need to return it the next time the parser wants
+	 * the third token of the phrase.
+	 * (RRDP phrases never exceed three tokens.)
+	 */
+	struct xml_token tkn3;
 
-	consume_cb consume;
+	consume_cb state;
+	/* The state that comes after @state */
+	consume_cb next_state;
 
 /* Already parsed xmlns attribute from root tag? */
 #define RXRF_XMLNS_SET      (1 << 0)
@@ -265,10 +259,7 @@ struct rrdp_xml_reader {
 /* Already parsed serial attribute from root tag? */
 #define RXRF_SERIAL_SET     (1 << 3)
 /* Already parsed the XMLDecl version attribute? */
-/* (Also functions as "already parsed the XMLDecl?" outside of the XMLDecl) */
 #define RXRF_XMLV_SET       (1 << 4)
-/* Already parsed the DOCTYPE? */
-#define RXRF_DOCTYPE_SET    (1 << 5)
 /* Got UTF-8 encoding in the XMLDecl? */
 #define RXRF_UTF_8          (1 << 6)
 /* Didn't get US-ASCII encoding in the XMLDecl? */
@@ -315,6 +306,68 @@ struct rrdp_xml_reader {
 	struct cache_sequence *rrdp_seq;
 };
 
+static enum token_read_result
+advance_buffer(struct rrdp_xml_reader *rdr, size_t bytes)
+{
+	if (bytes == 0)
+		return TRR_OK;
+
+	pr_clutter("Deleted from buffer: '%.*s'", (int)bytes, rdr->buf);
+	rdr->buf += bytes;
+	rdr->buflen -= bytes;
+	return TRR_OK;
+}
+
+/* For literals */
+static enum token_read_result
+token_init(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    enum xml_token_type type, char const *str, size_t len)
+{
+	size_t diff = len - tkn->len;
+
+	tkn->type = type;
+	tkn->str = str;
+	tkn->len = len;
+	tkn->complete = true;
+
+	return advance_buffer(rdr, diff);
+}
+
+/*
+ * For fluid tokens.
+ *
+ * n is the total length of the token, not the addend.
+ *
+ * ASSUMES @n IS NOT HIGHER THAN MAX_TKN_SIZE.
+ */
+static enum token_read_result
+token_init2(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    enum xml_token_type type, size_t n)
+{
+	size_t diff = n - tkn->len;
+
+	tkn->type = type;
+	tkn->str = tkn->buf;
+	memcpy(tkn->buf + tkn->len, rdr->buf, diff);
+	tkn->len = n;
+	tkn->complete = true;
+
+	return advance_buffer(rdr, diff);
+}
+
+static void
+commit_partial_token(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
+{
+	if (tkn->complete || rdr->buflen == 0)
+		return;
+
+	tkn->str = tkn->buf;
+	memcpy(tkn->buf + tkn->len, rdr->buf, rdr->buflen);
+	tkn->len += rdr->buflen;
+
+	advance_buffer(rdr, rdr->buflen);
+}
+
 static void
 cleanup_sd(struct rrdp_xml_reader *rdr)
 {
@@ -331,15 +384,25 @@ is_whitespace(char chr)
 }
 
 static enum token_read_result
-get_char(struct rrdp_xml_reader const *rdr, array_index offset, char *chr)
+get_char(struct rrdp_xml_reader *rdr, array_index offset, char *chr)
 {
-	offset += rdr->offset;
-
 	if (offset >= rdr->buflen)
 		return TRR_MORE;
 
 	*chr = (char)rdr->buf[offset];
 	return TRR_OK;
+}
+
+static enum token_read_result
+get_char2(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    size_t offset, char *chr)
+{
+	if (offset < tkn->len) {
+		*chr = tkn->str[offset];
+		return TRR_OK;
+	}
+
+	return get_char(rdr, offset - tkn->len, chr);
 }
 
 static enum token_read_result
@@ -361,43 +424,42 @@ is_NameChar(char chr)
 }
 
 static enum token_read_result
-find_not_string_char(struct rrdp_xml_reader const *rdr, array_index *offset)
+find_not_NameChar(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    array_index *offset)
 {
 	array_index c;
 	enum token_read_result res;
 	char chr;
 
-	for (c = 0; c < 16; c++) {
+	for (c = (tkn->len > 0) ? 0 : 1; (tkn->len + c) < MAX_NAME_SIZE; c++) {
 		res = get_char(rdr, c, &chr);
 		if (res != TRR_OK)
 			return res;
 		if (!is_NameChar(chr)) {
-			*offset = rdr->offset + c;
+			*offset = tkn->len + c;
 			return TRR_OK;
 		}
 	}
 
-	/* The current longest RRDP tag/attr is 'notification' (12 chars) */
-	/* Note that XML has 'DOCTYPE' (7 chars) */
-	pr_err("(Line %u) Token has too many characters: %.*s(...)",
-	    rdr->line, (int)c, rdr->buf + rdr->offset);
+	pr_err("(Line %u) Name has too many characters: %.*s%.*s(...)",
+	    rdr->line, (int)tkn->len, tkn->str, (int)(c - tkn->len), rdr->buf);
 	return TRR_ERR;
 }
 
 static enum token_read_result
-find_chr(struct rrdp_xml_reader const *rdr, char chr, array_index *offset,
-    unsigned int *newlines)
+find_chr(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    char chr, array_index *offset, unsigned int *newlines)
 {
 	array_index i;
 	enum token_read_result res;
 	char next;
 
-	for (i = 1; i < MAX_QUOTE_SIZE; i++) {
+	for (i = (tkn->len > 0) ? 0 : 1; (tkn->len + i) < MAX_TKN_SIZE; i++) {
 		res = get_char(rdr, i, &next);
 		if (res != TRR_OK)
 			return res;
 		if (next == chr) {
-			*offset = i;
+			*offset = tkn->len + i;
 			return TRR_OK;
 		}
 		if (next == '\n')
@@ -424,124 +486,49 @@ tkn_case_equals(struct xml_token *tkn, char const *str)
 	    : false;
 }
 
-/*
- * TODO (probably fine) Extensible Markup Language (XML) 1.0 (Fifth Edition):
- *
- * > Note that the grammar does not allow a comment ending in --->.
- * > The following example is not well-formed.
- * >
- * > 	<!-- B+, B, or B--->
- *
- * This function does not reject the above.
- */
 static enum token_read_result
-skip_comment(struct rrdp_xml_reader *rdr)
+unexpected_tkn(struct rrdp_xml_reader *rdr, char const *pfx, char chr)
 {
-	array_index offset;
-	char chr;
-	enum token_read_result res;
-
-	res = get_char(rdr, 3u, &chr);
-	if (res != TRR_OK)
-		return res;
-	if (chr != '-') {
-		pr_err("(Line %u) Unexpected token: <!-%c", rdr->line, chr);
-		return TRR_ERR;
-	}
-
-	if (rdr->buflen - rdr->offset < 6u)
-		return TRR_MORE;
-
-	if (rdr->buf[rdr->offset + 4u] == '\n')
-		rdr->line++;
-	if (rdr->buf[rdr->offset + 5u] == '\n')
-		rdr->line++;
-
-	for (offset = rdr->offset + 6u; offset < rdr->buflen; offset++) {
-		if (rdr->buf[offset] == '\n')
-			rdr->line++;
-
-		if (rdr->buf[offset - 2u] == '-' &&
-		    rdr->buf[offset - 1u] == '-' &&
-		    rdr->buf[offset     ] == '>') {
-			rdr->offset = offset + 1u;
-			return TRR_OK;
-		}
-	}
-
-	if (rdr->buf[rdr->buflen - 1u] == '-') {
-		if (rdr->buf[rdr->buflen - 2u] == '-') {
-			rdr->buf[rdr->offset + 4u] = '-';
-			rdr->buf[rdr->offset + 5u] = '-';
-			offset = 6u;
-		} else {
-			rdr->buf[rdr->offset + 4u] = '-';
-			offset = 5u;
-		}
-	} else {
-		offset = 4u;
-	}
-
-	rdr->buflen = rdr->offset + offset;
-	return TRR_MORE;
+	if (is_printable(chr))
+		pr_err("(Line %u) Unexpected token: '%s%c'",
+		    rdr->line, pfx, chr);
+	else
+		pr_err("(Line %u) Unexpected character: 0x%02x",
+		    rdr->line, (unsigned char)chr);
+	return TRR_ERR;
 }
 
 static enum token_read_result
-skip_pi(struct rrdp_xml_reader *rdr)
+unexpected_chr(struct rrdp_xml_reader *rdr, char chr)
 {
-	array_index offset;
-
-	if (rdr->buflen - rdr->offset < 3u)
-		return TRR_MORE;
-
-	if (rdr->buf[rdr->offset + 2u] == '\n')
-		rdr->line++;
-
-	for (offset = rdr->offset + 3u; offset < rdr->buflen; offset++) {
-		if (rdr->buf[offset] == '\n')
-			rdr->line++;
-
-		if (rdr->buf[offset - 1u] == '?' && rdr->buf[offset] == '>') {
-			pr_clutter("Removed: '%.*s'",
-			    (int)(offset + 1u - rdr->offset),
-			    rdr->buf + rdr->offset);
-			rdr->offset = offset + 1u;
-			return TRR_OK;
-		}
-	}
-
-	if (rdr->buf[rdr->buflen - 1u] == '?') {
-		rdr->buf[rdr->offset + 2u] = '?';
-		offset = 3u;
-	} else {
-		offset = 2u;
-	}
-
-	rdr->buflen = rdr->offset + offset;
-	return TRR_MORE;
+	if (is_printable(chr))
+		pr_err("(Line %u) Unexpected character: '%c'",
+		    rdr->line, chr);
+	else
+		pr_err("(Line %u) Unexpected character: 0x%02x",
+		    rdr->line, (unsigned char)chr);
+	return TRR_ERR;
 }
 
 /* Advances rdr->offset into the next non-whitespace character */
 static enum token_read_result
 find_non_whitespace(struct rrdp_xml_reader *rdr)
 {
-	array_index offset;
+	size_t offset;
 
-	for (offset = rdr->offset; offset < rdr->buflen; offset++) {
+	for (offset = 0; offset < rdr->buflen; offset++) {
 		if (rdr->buf[offset] == '\n')
 			rdr->line++;
-		if (!is_whitespace(rdr->buf[offset])) {
-			rdr->offset = offset;
-			return TRR_OK;
-		}
+		if (!is_whitespace(rdr->buf[offset]))
+			return advance_buffer(rdr, offset);
 	}
 
-	rdr->buflen = rdr->offset; /* Truncate trash */
+	advance_buffer(rdr, offset);
 	return TRR_MORE;
 }
 
 static enum token_read_result
-init_quote(struct rrdp_xml_reader *rdr, char delimiter, struct xml_token *tkn)
+init_quote(struct rrdp_xml_reader *rdr, struct xml_token *tkn, char delimiter)
 {
 	size_t tail;
 	unsigned int newlines;
@@ -549,151 +536,167 @@ init_quote(struct rrdp_xml_reader *rdr, char delimiter, struct xml_token *tkn)
 
 	newlines = 0;
 
-	res = find_chr(rdr, delimiter, &tail, &newlines);
+	res = find_chr(rdr, tkn, delimiter, &tail, &newlines);
 	if (res != TRR_OK)
 		return res;
 
-	rdr->line += newlines;
+	rdr->line += newlines; /* Only if TRR_OK */
 
-	return token_init(tkn, XTT_QUOTED,
-	    (char const *)(rdr->buf + rdr->offset),
-	    tail + 1);
+	return token_init2(rdr, tkn, XTT_QUOTED, tail + 1);
 }
 
 static enum token_read_result
-__next_tkn(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
+expect_meta(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    enum xml_token_type type, char const *str, bool need_whitespace)
+{
+	array_index offset;
+	char chr;
+	enum token_read_result res;
+
+	for (offset = 3u; str[offset]; offset++) {
+		res = get_char2(rdr, tkn, offset, &chr);
+		if (res != TRR_OK)
+			return res;
+		if (chr != str[offset])
+			goto unexpected;
+	}
+
+	if (need_whitespace) {
+		res = get_char2(rdr, tkn, offset, &chr);
+		if (res != TRR_OK)
+			return res;
+		if (!is_whitespace(chr))
+			goto unexpected;
+	}
+
+	return token_init(rdr, tkn, type, str, offset);
+
+unexpected:
+	pr_err("(Line %u) Unexpected token: '%.*s%.*s'", rdr->line,
+	    (int)tkn->len, tkn->str, (int)(offset - tkn->len + 1u), rdr->buf);
+	return TRR_ERR;
+}
+
+static enum token_read_result
+next_metadata(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
+{
+	char chr;
+	enum token_read_result res;
+
+	res = get_char2(rdr, tkn, 2u, &chr);
+	if (res != TRR_OK)
+		return res;
+
+	switch (chr) {
+	case '-': return expect_meta(rdr, tkn, XTT_COMMENT, "<!--", false);
+	case 'D': return expect_meta(rdr, tkn, XTT_DOCTYPE, "<!DOCTYPE", true);
+	default:  return unexpected_tkn(rdr, "<!", chr);
+	}
+}
+
+static enum token_read_result
+next_pi(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
+{
+	static char const *const XMLDECL = "<?xml";
+	array_index offset;
+	char chr;
+	enum token_read_result res;
+
+	for (offset = 2u; XMLDECL[offset]; offset++) {
+		res = get_char2(rdr, tkn, offset, &chr);
+		if (res != TRR_OK)
+			return res;
+		if (chr != XMLDECL[offset])
+			goto found_pi;
+	}
+
+	res = get_char2(rdr, tkn, offset, &chr);
+	if (res != TRR_OK)
+		return res;
+	if (!is_whitespace(chr))
+		goto found_pi;
+
+	return token_init(rdr, tkn, XTT_XMLDECL, "<?xml", 5u);
+
+found_pi:
+	return token_init(rdr, tkn, XTT_PI_OPEN, "<?", 2u);
+}
+
+static enum token_read_result
+next_tkn_chunk(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
 {
 	char chr;
 	size_t tail;
 	enum token_read_result res;
 
-retry:	res = find_non_whitespace(rdr);
+	if (tkn->len == 0) {
+		res = find_non_whitespace(rdr);
+		if (res != TRR_OK)
+			return res;
+	}
+
+	res = get_char2(rdr, tkn, 0, &chr);
 	if (res != TRR_OK)
 		return res;
 
-	chr = rdr->buf[rdr->offset];
 	switch (chr) {
 	case '<':
-		res = get_char(rdr, 1, &chr);
+		res = get_char2(rdr, tkn, 1u, &chr);
 		if (res != TRR_OK)
 			return res;
 		switch (chr) {
-		case '/':
-			return token_init(tkn, XTT_OPENING_CLOSURE, "</", 2);
-		case '!':
-			res = get_char(rdr, 2u, &chr);
-			if (res != TRR_OK)
-				return res;
-			if (chr != '-')
-				return token_init(tkn, XTT_META, "<!", 2);
-
-			res = skip_comment(rdr);
-			if (res != TRR_OK)
-				return res;
-			goto retry;
-		case '?':
-			if (!(rdr->flags & RXRF_XMLV_SET))
-				/* XMLDecl */
-				return token_init(tkn, XTT_PI_OPEN, "<?", 2);
-
-			if (rdr->flags & RXRF_RRDP) {
-				pr_err("(Line %u) Processing Instructions disallowed in RRDP mode.",
-				    rdr->line);
-				return TRR_ERR;
-			}
-
-			/* PI, but may not be RRDP. Ignore it. */
-			res = skip_pi(rdr);
-			if (res != TRR_OK)
-				return res;
-			rdr->flags |= RXRF_FOUND_PI;
-			goto retry;
+		case '/': return token_init(rdr, tkn, XTT_OPENING_CLOSURE, "</", 2u);
+		case '!': return next_metadata(rdr, tkn);
+		case '?': return next_pi(rdr, tkn);
 		}
-		return token_init(tkn, XTT_OPEN_TAG, "<", 1);
+		return token_init(rdr, tkn, XTT_OPEN_TAG, "<", 1u);
 
 	case '/':
-		res = get_char(rdr, 1, &chr);
+		res = get_char2(rdr, tkn, 1u, &chr);
 		if (res != TRR_OK)
 			return res;
-		if (chr != '>') {
-			pr_err("(Line %u) Unexpected token: '/%c'",
-			    rdr->line, chr);
-			return TRR_ERR;
-		}
-		return token_init(tkn, XTT_CLOSING_CLOSURE, "/>", 2);
+		if (chr != '>')
+			return unexpected_tkn(rdr, "/", chr);
+		return token_init(rdr, tkn, XTT_CLOSING_CLOSURE, "/>", 2);
 
 	case '>':
-		return token_init(tkn, XTT_CLOSE_TAG, ">", 1);
+		return token_init(rdr, tkn, XTT_CLOSE_TAG, ">", 1);
 
 	case '=':
-		return token_init(tkn, XTT_EQUALS, "=", 1);
+		return token_init(rdr, tkn, XTT_EQUALS, "=", 1);
 
 	case '?':
-		res = get_char(rdr, 1, &chr);
+		res = get_char2(rdr, tkn, 1u, &chr);
 		if (res != TRR_OK)
 			return res;
-		if (chr != '>') {
-			pr_err("(Line %u) Unexpected token: '?%c'",
-			    rdr->line, chr);
-			return TRR_ERR;
-		}
-		return token_init(tkn, XTT_PI_CLOSE, "?>", 2);
-
-	case '"':
-		return init_quote(rdr, '"', tkn);
-	case '\'':
-		return init_quote(rdr, '\'', tkn);
+		if (chr != '>')
+			return unexpected_tkn(rdr, "?", chr);
+		return token_init(rdr, tkn, XTT_PI_CLOSE, "?>", 2);
 	}
 
-	if (!is_NameStartChar(chr)) {
-		if (is_printable(chr))
-			pr_err("(Line %u) Unexpected character: %c",
-			    rdr->line, chr);
-		else
-			pr_err("(Line %u) Unexpected character: 0x%02x",
-			    rdr->line, (unsigned char)chr);
-		return TRR_ERR;
-	}
+	if (!is_NameStartChar(chr))
+		return unexpected_chr(rdr, chr);
 
-	res = find_not_string_char(rdr, &tail);
+	res = find_not_NameChar(rdr, tkn, &tail);
 	if (res != TRR_OK)
 		return res;
 
-	tkn->type = XTT_STR;
-	tkn->str = (char const *)(rdr->buf + rdr->offset);
-	tkn->len = tail - rdr->offset;
-	return TRR_OK;
+	return token_init2(rdr, tkn, XTT_STR, tail);
 }
 
 static enum token_read_result
-next_tkn(struct rrdp_xml_reader *rdr, struct xml_token *out,
-    struct xml_token_bkp *bkp)
+next_tkn(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
 {
 	enum token_read_result res;
 
-	if (bkp == NULL) {
-		res = __next_tkn(rdr, out);
-		if (res != TRR_OK)
-			return res;
-		goto end;
-	}
-
-	if (bkp->meta.len != 0) {
-		*out = bkp->meta;
+	if (tkn->complete)
 		return TRR_OK;
-	}
 
-	res = __next_tkn(rdr, out);
-	if (res != TRR_OK)
-		return res;
+	res = next_tkn_chunk(rdr, tkn);
+	if (res == TRR_OK)
+		pr_clutter("Consumed token: '%.*s'", (int)tkn->len, tkn->str);
 
-	bkp->meta.type = out->type;
-	strncpy((char *)bkp->buf, out->str, out->len);
-	bkp->meta.len = out->len;
-
-end:	rdr->offset += out->len;
-	pr_clutter("Consumed token: %.*s", (int)out->len, out->str);
-	return TRR_OK;
+	return res;
 }
 
 static enum token_read_result
@@ -710,36 +713,43 @@ check_tkn_type(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
 }
 
 static enum token_read_result
+bad_tkn_type(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
+    char const *what)
+{
+	pr_err("(Line %u) Expected %s, got '%.*s'",
+	    rdr->line, what, (int)tkn->len, tkn->str);
+	return TRR_ERR;
+}
+
+static enum token_read_result
 next_tkn_type(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
-    enum xml_token_type type, char const *what, struct xml_token_bkp *bkp)
+    enum xml_token_type type, char const *what)
 {
 	enum token_read_result res;
 
-	res = next_tkn(rdr, tkn, bkp);
+	res = next_tkn(rdr, tkn);
 	if (res != TRR_OK)
 		return res;
 	return check_tkn_type(rdr, tkn, type, what);
 }
 
 static enum token_read_result
-next_str(struct rrdp_xml_reader *rdr, struct xml_token *tkn,
-    struct xml_token_bkp *bkp)
+next_str(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
 {
 	enum token_read_result res;
 
-	res = next_tkn(rdr, tkn, bkp);
+	res = next_tkn(rdr, tkn);
 	if (res != TRR_OK)
 		return res;
 	return check_tkn_type(rdr, tkn, XTT_STR, "string");
 }
 
 static enum token_read_result
-next_name(struct rrdp_xml_reader *rdr, struct xml_token *tkn, char const *str,
-    struct xml_token_bkp *bkp)
+next_name(struct rrdp_xml_reader *rdr, struct xml_token *tkn, char const *str)
 {
 	enum token_read_result res;
 
-	res = next_tkn(rdr, tkn, bkp);
+	res = next_tkn(rdr, tkn);
 	if (res != TRR_OK)
 		return res;
 
@@ -753,25 +763,32 @@ next_name(struct rrdp_xml_reader *rdr, struct xml_token *tkn, char const *str,
 }
 
 static enum token_read_result
-next_quoted(struct rrdp_xml_reader *rdr, struct xml_token *val)
+next_quoted(struct rrdp_xml_reader *rdr, struct xml_token *tkn)
 {
+	char chr;
 	enum token_read_result res;
 
-	res = __next_tkn(rdr, val);
+	if (tkn->len == 0) {
+		res = find_non_whitespace(rdr);
+		if (res != TRR_OK)
+			return res;
+	}
+
+	res = get_char2(rdr, tkn, 0, &chr);
 	if (res != TRR_OK)
 		return res;
 
-	if (val->type != XTT_QUOTED) {
-		pr_err("(Line %u) Expected attribute value, got '%.*s'",
-		    rdr->line, (int)val->len, val->str);
-		return TRR_ERR;
+	switch (chr) {
+	case '"':  res = init_quote(rdr, tkn, '"'); break;
+	case '\'': res = init_quote(rdr, tkn, '\''); break;
+	default:   return unexpected_chr(rdr, chr);
 	}
 
-	rdr->offset += val->len;
-
-	val->str++;
-	val->len -= 2;
-	return TRR_OK;
+	if (res == TRR_OK) {
+		tkn->str++;
+		tkn->len -= 2;
+	}
+	return res;
 }
 
 static enum token_read_result
@@ -819,10 +836,100 @@ fail_multiple_attrs(struct rrdp_xml_reader *rdr, char const *tag,
 }
 
 static enum token_read_result
-ignore_input(struct rrdp_xml_reader *rdr)
+state_ignore_input(struct rrdp_xml_reader *rdr)
 {
-	pr_clutter("State: ignore_input");
-	rdr->offset = rdr->buflen;
+	pr_clutter("== State: ignore_input == ");
+	return advance_buffer(rdr, rdr->buflen);
+}
+
+static char
+get_char3(struct rrdp_xml_reader *rdr, struct xml_token *tkn, array_index i)
+{
+	return (i < tkn->len) ? tkn->str[i] : rdr->buf[i - tkn->len];
+}
+
+/*
+ * TODO (fiiiiine) Extensible Markup Language (XML) 1.0 (Fifth Edition):
+ *
+ * > Note that the grammar does not allow a comment ending in --->.
+ * > The following example is not well-formed.
+ * >
+ * > 	<!-- B+, B, or B--->
+ *
+ * This function does not reject the above.
+ */
+static enum token_read_result
+state_throw_away_comment(struct rrdp_xml_reader *rdr)
+{
+	char chr;
+	array_index i;
+	size_t n;
+
+	pr_clutter("== State: throw_away_comment ==");
+
+	if (rdr->tkn1.len > 2u) {
+		memmove(rdr->tkn1.buf, rdr->tkn1.buf + rdr->tkn1.len - 2u, 2u);
+		rdr->tkn1.len = 2u;
+	}
+
+	n = rdr->tkn1.len + rdr->buflen;
+	if (n < 3u)
+		return TRR_MORE;
+
+	for (i = 0; i <= n - 3u; i++) {
+		chr = get_char3(rdr, &rdr->tkn1, i);
+		if (chr != '-') {
+			if (chr == '\n')
+				rdr->line++;
+			continue;
+		}
+		if (get_char3(rdr, &rdr->tkn1, i + 1u) != '-')
+			continue;
+		if (get_char3(rdr, &rdr->tkn1, i + 2u) != '>')
+			continue;
+
+		rdr->state = rdr->next_state;
+		return advance_buffer(rdr, i + 3u - rdr->tkn1.len);
+	}
+
+	advance_buffer(rdr , i - 1u);
+	return TRR_MORE;
+}
+
+static enum token_read_result
+state_throw_away_pi(struct rrdp_xml_reader *rdr)
+{
+	char chr;
+	array_index i;
+	size_t n;
+
+	pr_clutter("== State: throw_away_pi ==");
+	rdr->flags |= RXRF_FOUND_PI;
+
+	if (rdr->tkn1.len > 1u) {
+		rdr->tkn1.buf[0] = rdr->tkn1.buf[rdr->tkn1.len - 1];
+		rdr->tkn1.len = 1u;
+	}
+
+	n = rdr->tkn1.len + rdr->buflen;
+	if (n < 2u)
+		return TRR_MORE;
+
+	for (i = 0; i <= n - 2u; i++) {
+		chr = get_char3(rdr, &rdr->tkn1, i);
+		if (chr != '?') {
+			if (chr == '\n')
+				rdr->line++;
+			continue;
+		}
+		if (get_char3(rdr, &rdr->tkn1, i + 1u) != '>')
+			continue;
+
+		rdr->state = rdr->next_state;
+		return advance_buffer(rdr, i + 2u - rdr->tkn1.len);
+	}
+
+	advance_buffer(rdr , i - 1u);
 	return TRR_MORE;
 }
 
@@ -915,18 +1022,15 @@ static enum token_read_result
 init_uri(struct rrdp_xml_reader *rdr, struct uri *uri, struct xml_token *tkn)
 {
 	array_index u;
-	unsigned char chr;
 	char *uristr;
 	error_msg errmsg;
 
-	for (u = 0; u < tkn->len; u++) {
-		chr = (unsigned char)(tkn->str[u]);
-		if (!is_printable(chr)) {
+	for (u = 0; u < tkn->len; u++)
+		if (!is_printable(tkn->str[u])) {
 			pr_err("(Line %u) uri has illegal character: 0x%02x",
-			    rdr->line, chr);
+			    rdr->line, (unsigned char)(tkn->str[u]));
 			return TRR_ERR;
 		}
-	}
 
 	/* TODO (performance) this dupe shouldn't be necessary */
 	uristr = pstrndup(tkn->str, tkn->len);
@@ -1013,76 +1117,77 @@ done:	memset(src, 0, sizeof(*src));
 }
 
 static enum token_read_result
-attr_boilerplate(struct rrdp_xml_reader *rdr, struct xml_token *key,
-    struct xml_token *val)
+attr_boilerplate(struct rrdp_xml_reader *rdr)
 {
-	struct xml_token equals;
 	enum token_read_result res;
 
-	res = check_tkn_type(rdr, key, XTT_STR, "name");
+	res = check_tkn_type(rdr, &rdr->tkn1, XTT_STR, "name");
 	if (res != TRR_OK)
 		return res;
-	res = next_tkn_type(rdr, &equals, XTT_EQUALS, "equals", &rdr->tkn2);
+	res = next_tkn_type(rdr, &rdr->tkn2, XTT_EQUALS, "equals");
 	if (res != TRR_OK)
 		return res;
-	return next_quoted(rdr, val);
+	return next_quoted(rdr, &rdr->tkn3);
 }
 
 static enum token_read_result
-accept_notif_snapshot_attrs(struct rrdp_xml_reader *rdr)
+state_notif_snapshot_attrs(struct rrdp_xml_reader *rdr)
 {
-	char const *TAG = "snapshot";
-	struct xml_token key, val;
+	char const *const TAG = "snapshot";
+	struct xml_token *key, *val;
 	enum token_read_result res;
 
-	pr_clutter("State: notif_snapshot_attr");
+	pr_clutter("== State: notif_snapshot_attrs ==");
 
-	res = next_tkn(rdr, &key, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
+	key = &rdr->tkn1;
 
-	if (key.type == XTT_CLOSING_CLOSURE) {
+	if (key->type == XTT_CLOSING_CLOSURE) {
 		if (uri_str(&rdr->c.notif.snapshot.uri) == NULL)
 			return fail_missing_attr(rdr, TAG, "uri");
 		if (!rdr->c.notif.snapshot.hash.set)
 			return fail_missing_attr(rdr, TAG, "hash");
 
-		rdr->consume = accept_root_content;
+		rdr->state = state_root_content;
 		return res;
 	}
 
-	res = attr_boilerplate(rdr, &key, &val);
+	res = attr_boilerplate(rdr);
 	if (res != TRR_OK)
 		return res;
+	val = &rdr->tkn3;
 
-	if (tkn_equals(&key, "uri")) {
+	if (tkn_equals(key, "uri")) {
 		return uri_str(&rdr->c.notif.snapshot.uri)
 		    ? fail_multiple_attrs(rdr, TAG, "uri")
-		    : init_notif_uri(rdr, &rdr->c.notif.snapshot.uri, &val, "Snapshot");
+		    : init_notif_uri(rdr, &rdr->c.notif.snapshot.uri, val, "Snapshot");
 
-	} else if (tkn_equals(&key, "hash")) {
+	} else if (tkn_equals(key, "hash")) {
 		return rdr->c.notif.snapshot.hash.set
 		    ? fail_multiple_attrs(rdr, TAG, "hash")
-		    : init_hash(rdr, &rdr->c.notif.snapshot, &val);
+		    : init_hash(rdr, &rdr->c.notif.snapshot, val);
 	}
 
-	return fail_unknown_attr(rdr, TAG, &key);
+	return fail_unknown_attr(rdr, TAG, key);
 }
 
 static enum token_read_result
-accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
+state_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 {
-	char const *TAG = "delta";
-	struct xml_token key, val;
+	char const *const TAG = "delta";
+	struct xml_token *key, *val;
 	enum token_read_result res;
 
-	pr_clutter("State: notif_delta_attrs");
+	pr_clutter("== State: notif_delta_attrs ==");
 
-	res = next_tkn(rdr, &key, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
+	key = &rdr->tkn1;
 
-	if (key.type == XTT_CLOSING_CLOSURE) {
+	if (key->type == XTT_CLOSING_CLOSURE) {
 		if (rdr->c.notif.delta.serial.str == NULL)
 			return fail_missing_attr(rdr, TAG, "serial");
 		if (uri_str(&rdr->c.notif.delta.meta.uri) == NULL)
@@ -1095,47 +1200,49 @@ accept_notif_delta_attrs(struct rrdp_xml_reader *rdr)
 			return res;
 
 		rdr->c.notif.ndeltas++;
-		rdr->consume = accept_root_content;
+		rdr->state = state_root_content;
 		return res;
 	}
 
-	res = attr_boilerplate(rdr, &key, &val);
+	res = attr_boilerplate(rdr);
 	if (res != TRR_OK)
 		return res;
+	val = &rdr->tkn3;
 
-	if (tkn_equals(&key, "serial")) {
+	if (tkn_equals(key, "serial")) {
 		if (rdr->c.notif.delta.serial.str != NULL)
 			return fail_multiple_attrs(rdr, TAG, "serial");
-		return init_serial(rdr, &rdr->c.notif.delta.serial, &val, TAG);
+		return init_serial(rdr, &rdr->c.notif.delta.serial, val, TAG);
 
-	} else if (tkn_equals(&key, "uri")) {
+	} else if (tkn_equals(key, "uri")) {
 		return uri_str(&rdr->c.notif.delta.meta.uri)
 		    ? fail_multiple_attrs(rdr, TAG, "uri")
-		    : init_notif_uri(rdr, &rdr->c.notif.delta.meta.uri, &val, "Delta");
+		    : init_notif_uri(rdr, &rdr->c.notif.delta.meta.uri, val, "Delta");
 
-	} else if (tkn_equals(&key, "hash")) {
+	} else if (tkn_equals(key, "hash")) {
 		return rdr->c.notif.delta.meta.hash.set
 		    ? fail_multiple_attrs(rdr, TAG, "hash")
-		    : init_hash(rdr, &rdr->c.notif.delta.meta, &val);
+		    : init_hash(rdr, &rdr->c.notif.delta.meta, val);
 	}
 
-	return fail_unknown_attr(rdr, TAG, &key);
+	return fail_unknown_attr(rdr, TAG, key);
 }
 
 static enum token_read_result
-accept_publish_closure(struct rrdp_xml_reader *rdr)
+state_publish_closure(struct rrdp_xml_reader *rdr)
 {
-	struct xml_token tkn;
 	enum token_read_result res;
 
-	res = next_name(rdr, &tkn, "publish", &rdr->tkn1);
+	pr_clutter("== State: publish_closure ==");
+
+	res = next_name(rdr, &rdr->tkn1, "publish");
 	if (res != TRR_OK)
 		return res;
-	res = next_tkn_type(rdr, &tkn, XTT_CLOSE_TAG, "close tag", NULL);
+	res = next_tkn_type(rdr, &rdr->tkn2, XTT_CLOSE_TAG, "close tag");
 	if (res != TRR_OK)
 		return res;
 
-	rdr->consume = accept_root_content;
+	rdr->state = state_root_content;
 	return TRR_OK;
 }
 
@@ -1171,20 +1278,20 @@ is_base64Binary(char chr)
 
 /* TODO remember to set up a file size limit */
 static enum token_read_result
-accept_publish_content(struct rrdp_xml_reader *rdr)
+state_publish_content(struct rrdp_xml_reader *rdr)
 {
 	enum token_read_result res;
 	char chr;
 	unsigned char hash[EVP_MAX_MD_SIZE];
 	array_index i;
 
-	pr_clutter("State: publish_content");
+	pr_clutter("== State: publish_content ==");
 
 	res = find_non_whitespace(rdr);
 	if (res != TRR_OK)
 		return res;
 
-	chr = rdr->buf[rdr->offset];
+	chr = rdr->buf[0];
 	if (chr == '<') {
 		res = get_char(rdr, 1, &chr);
 		if (res != TRR_OK)
@@ -1195,39 +1302,41 @@ accept_publish_content(struct rrdp_xml_reader *rdr)
 				return TRR_ERR;
 			register_fileref(rdr, hash);
 			cleanup_sd(rdr);
-			rdr->offset += 2;
-			rdr->consume = accept_publish_closure;
-			return TRR_OK;
+
+			rdr->state = state_publish_closure;
+			return advance_buffer(rdr, 2u);
 		case '!':
-			res = get_char(rdr, 2u, &chr);
+			res = next_metadata(rdr, &rdr->tkn1);
 			if (res != TRR_OK)
 				return res;
-			if (chr != '-') {
-				pr_err("(Line %u) Unexpected token: <!%c",
-				    rdr->line, chr);
-				return TRR_ERR;
-			}
+			if (rdr->tkn1.type != XTT_COMMENT)
+				return fail_unexpected_token(rdr, &rdr->tkn1);
 
-			return skip_comment(rdr);
+			rdr->state = state_throw_away_comment;
+			rdr->next_state = state_publish_content;
+			return TRR_OK;
 		default:
-			pr_err("(Line %u) Unexpected token: <", rdr->line);
-			return TRR_ERR;
+			return unexpected_tkn(rdr, "", chr);
 		}
 	}
 
 	if (!is_base64Binary(chr)) {
-		pr_err("(Line %u) Unrecognized base64 character: %c (0x%02x)",
-		    rdr->line, chr, chr);
+		if (is_printable(chr))
+			pr_err("(Line %u) Unrecognized base64 char: %c",
+			    rdr->line, chr);
+		else
+			pr_err("(Line %u) Unrecognized base64 char: 0x%02x",
+			    rdr->line, (unsigned char)chr);
 		return TRR_ERR;
 	}
 
-	for (i = rdr->offset + 1; i < rdr->buflen; i++)
+	for (i = 1; i < rdr->buflen; i++)
 		if (!is_base64Binary(rdr->buf[i]))
 			break;
-	if (b64d2f_write(&rdr->c.sd.b64, rdr->buf + rdr->offset, i - rdr->offset) != 0)
+	if (b64d2f_write(&rdr->c.sd.b64, rdr->buf, i) != 0)
 		return TRR_ERR;
-	rdr->offset = i;
-	return TRR_OK;
+
+	return advance_buffer(rdr, i);
 }
 
 static bool
@@ -1320,19 +1429,20 @@ start_publish(struct rrdp_xml_reader *rdr)
 }
 
 static enum token_read_result
-accept_publish_attrs(struct rrdp_xml_reader *rdr)
+state_publish_attrs(struct rrdp_xml_reader *rdr)
 {
-	char const *TAG = "publish";
-	struct xml_token key, val;
+	char const *const TAG = "publish";
+	struct xml_token *key, *val;
 	enum token_read_result res;
 
-	pr_clutter("State: publish_attrs");
+	pr_clutter("== State: publish_attrs ==");
 
-	res = next_tkn(rdr, &key, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
+	key = &rdr->tkn1;
 
-	if (key.type == XTT_CLOSE_TAG) {
+	if (key->type == XTT_CLOSE_TAG) {
 		if (uri_str(&rdr->c.sd.file.uri) == NULL)
 			return fail_missing_attr(rdr, TAG, "uri");
 
@@ -1340,26 +1450,27 @@ accept_publish_attrs(struct rrdp_xml_reader *rdr)
 		if (res != TRR_OK)
 			return res;
 
-		rdr->consume = accept_publish_content;
+		rdr->state = state_publish_content;
 		return TRR_OK;
 	}
 
-	res = attr_boilerplate(rdr, &key, &val);
+	res = attr_boilerplate(rdr);
 	if (res != TRR_OK)
 		return res;
+	val = &rdr->tkn3;
 
-	if (tkn_equals(&key, "uri")) {
+	if (tkn_equals(key, "uri")) {
 		return uri_str(&rdr->c.sd.file.uri)
 		    ? fail_multiple_attrs(rdr, TAG, "uri")
-		    : init_uri(rdr, &rdr->c.sd.file.uri, &val);
+		    : init_uri(rdr, &rdr->c.sd.file.uri, val);
 
-	} else if (rdr->type == RXT_DELTA && tkn_equals(&key, "hash")) {
+	} else if (rdr->type == RXT_DELTA && tkn_equals(key, "hash")) {
 		return rdr->c.sd.file.hash.set
 		    ? fail_multiple_attrs(rdr, TAG, "hash")
-		    : init_hash(rdr, &rdr->c.sd.file, &val);
+		    : init_hash(rdr, &rdr->c.sd.file, val);
 	}
 
-	return fail_unknown_attr(rdr, TAG, &key);
+	return fail_unknown_attr(rdr, TAG, key);
 }
 
 static enum token_read_result
@@ -1388,19 +1499,20 @@ run_withdraw(struct rrdp_xml_reader *rdr)
 }
 
 static enum token_read_result
-accept_withdraw_attrs(struct rrdp_xml_reader *rdr)
+state_withdraw_attrs(struct rrdp_xml_reader *rdr)
 {
-	char const *TAG = "withdraw";
-	struct xml_token key, val;
+	char const *const TAG = "withdraw";
+	struct xml_token *key, *val;
 	enum token_read_result res;
 
-	pr_clutter("State: withdraw_attrs");
+	pr_clutter("== State: withdraw_attrs ==");
 
-	res = next_tkn(rdr, &key, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
+	key = &rdr->tkn1;
 
-	if (key.type == XTT_CLOSING_CLOSURE) {
+	if (key->type == XTT_CLOSING_CLOSURE) {
 		if (uri_str(&rdr->c.sd.file.uri) == NULL)
 			return fail_missing_attr(rdr, TAG, "uri");
 		if (!rdr->c.sd.file.hash.set)
@@ -1411,45 +1523,49 @@ accept_withdraw_attrs(struct rrdp_xml_reader *rdr)
 			return res;
 
 		cleanup_sd(rdr);
-		rdr->consume = accept_root_content;
+		rdr->state = state_root_content;
 		return res;
 	}
 
-	res = attr_boilerplate(rdr, &key, &val);
+	res = attr_boilerplate(rdr);
 	if (res != TRR_OK)
 		return res;
+	val = &rdr->tkn3;
 
-	if (tkn_equals(&key, "uri")) {
+	if (tkn_equals(key, "uri")) {
 		return uri_str(&rdr->c.sd.file.uri)
 		    ? fail_multiple_attrs(rdr, TAG, "uri")
-		    : init_uri(rdr, &rdr->c.sd.file.uri, &val);
+		    : init_uri(rdr, &rdr->c.sd.file.uri, val);
 
-	} else if (tkn_equals(&key, "hash")) {
+	} else if (tkn_equals(key, "hash")) {
 		return rdr->c.sd.file.hash.set
 		    ? fail_multiple_attrs(rdr, TAG, "hash")
-		    : init_hash(rdr, &rdr->c.sd.file, &val);
+		    : init_hash(rdr, &rdr->c.sd.file, val);
 	}
 
-	return fail_unknown_attr(rdr, TAG, &key);
+	return fail_unknown_attr(rdr, TAG, key);
 }
 
 static enum token_read_result
-accept_root_content(struct rrdp_xml_reader *rdr)
+state_root_content(struct rrdp_xml_reader *rdr)
 {
 	enum token_read_result res;
-	struct xml_token tkn;
 
-	pr_clutter("State: root_content");
+	pr_clutter("== State: root_content ==");
 
-	res = next_tkn(rdr, &tkn, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
-	if (tkn.type == XTT_OPENING_CLOSURE) {
-		res = next_name(rdr, &tkn, rdr->type_str, &rdr->tkn2);
+	switch (rdr->tkn1.type) {
+	case XTT_OPEN_TAG:
+		break;
+
+	case XTT_OPENING_CLOSURE:
+		res = next_name(rdr, &rdr->tkn2, rdr->type_str);
 		if (res != TRR_OK)
 			return res;
-		res = next_tkn_type(rdr, &tkn, XTT_CLOSE_TAG, "close tag", NULL);
+		res = next_tkn_type(rdr, &rdr->tkn3, XTT_CLOSE_TAG, "close tag");
 		if (res != TRR_OK)
 			return res;
 
@@ -1459,66 +1575,115 @@ accept_root_content(struct rrdp_xml_reader *rdr)
 			return TRR_ERR;
 		}
 
-		rdr->consume = ignore_input;
+		rdr->state = state_ignore_input;
 		return TRR_OK;
+
+	case XTT_COMMENT:
+		rdr->state = state_throw_away_comment;
+		rdr->next_state = state_root_content;
+		return TRR_OK;
+
+	default:
+		return bad_tkn_type(rdr, &rdr->tkn1, "<");
 	}
 
-	res = check_tkn_type(rdr, &tkn, XTT_OPEN_TAG, "<");
-	if (res != TRR_OK)
-		return res;
-	res = next_str(rdr, &tkn, NULL);
+	res = next_str(rdr, &rdr->tkn2);
 	if (res != TRR_OK)
 		return res;
 
 	switch (rdr->type) {
 	case RXT_NOTIF:
-		if (tkn_equals(&tkn, "snapshot")) {
-			rdr->consume = accept_notif_snapshot_attrs;
+		if (tkn_equals(&rdr->tkn2, "snapshot")) {
+			rdr->state = state_notif_snapshot_attrs;
 			return TRR_OK;
 		}
-		if (tkn_equals(&tkn, "delta")) {
-			rdr->consume = accept_notif_delta_attrs;
+		if (tkn_equals(&rdr->tkn2, "delta")) {
+			rdr->state = state_notif_delta_attrs;
 			return TRR_OK;
 		}
 		break;
 
 	case RXT_SNAPSHOT:
-		if (tkn_equals(&tkn, "publish")) {
-			rdr->consume = accept_publish_attrs;
+		if (tkn_equals(&rdr->tkn2, "publish")) {
+			rdr->state = state_publish_attrs;
 			return TRR_OK;
 		}
 		break;
 
 	case RXT_DELTA:
-		if (tkn_equals(&tkn, "publish")) {
-			rdr->consume = accept_publish_attrs;
+		if (tkn_equals(&rdr->tkn2, "publish")) {
+			rdr->state = state_publish_attrs;
 			return TRR_OK;
 		}
-		if (tkn_equals(&tkn, "withdraw")) {
-			rdr->consume = accept_withdraw_attrs;
+		if (tkn_equals(&rdr->tkn2, "withdraw")) {
+			rdr->state = state_withdraw_attrs;
 			return TRR_OK;
 		}
 		break;
 	}
 
-	return fail_unexpected_token(rdr, &tkn);
+	return fail_unexpected_token(rdr, &rdr->tkn2);
+}
+
+static enum token_read_result
+confirm_rrdp(struct rrdp_xml_reader *rdr)
+{
+	if (rdr->flags & RXRF_RRDP)
+		return TRR_OK;
+
+	if (rdr->flags & RXRF_FOUND_PI) {
+		pr_err("Document has at least one Processing Instruction (<? ... ?>).");
+		return TRR_ERR;
+	}
+
+	/*
+	 * This is probably going to be common (among documents that contain an
+	 * XMLDecl), but inoffensive. Warn rather than reject.
+	 */
+	if (rdr->flags & RXRF_UTF_8) {
+		/*
+		 * Note: Comments are thrown away without checking, so those
+		 * can actually contain unicodes. Whatever.
+		 */
+		pr_wrn("%s should declare US-ASCII encoding, not UTF-8. "
+		    "I'll let this slide for now, "
+		    "but will reject the document if I find non-ASCII chars.",
+		    rdr->type_str_camel);
+		goto done;
+	}
+
+	if (rdr->flags & RXRF_NOT_ASCII) {
+		pr_err("The XML encoding is not US-ASCII.");
+		return TRR_ERR;
+	}
+
+done:	rdr->flags |= RXRF_RRDP;
+	return TRR_OK;
+}
+
+static enum token_read_result
+confirm_not_rrdp(struct rrdp_xml_reader *rdr)
+{
+	pr_trc("This is not a %s.", rdr->type_str_camel);
+	rdr->state = state_ignore_input;
+	return TRR_OK;
 }
 
 static int
 check_session_chars(struct rrdp_xml_reader *rdr, struct xml_token *val)
 {
 	array_index v;
-	unsigned char chr;
+	char chr;
 
 	if (val->len == 0)
 		return pr_err("(Line %u) session_id is an empty string",
 		    rdr->line);
 
 	for (v = 0; v < val->len; v++) {
-		chr = (unsigned char)(val->str[v]);
+		chr = val->str[v];
 		if (!is_printable(chr))
 			return pr_err("(Line %u) session_id has illegal character: 0x%02x",
-			    rdr->line, chr);
+			    rdr->line, (unsigned char)chr);
 		if (!is_alphanumeric(chr) && chr != '-')
 			return pr_err("(Line %u) session_id has illegal character: %c",
 			    rdr->line, chr);
@@ -1590,19 +1755,20 @@ parse_root_serial_attr(struct rrdp_xml_reader *rdr, struct xml_token *val)
 static enum token_read_result
 accept_root_attrs(struct rrdp_xml_reader *rdr)
 {
-	char const *RRDP_XMLNS = "http://www.ripe.net/rpki/rrdp";
-	char const *RRDP_VER = "1";
-	char const *TAG = rdr->type_str;
-	struct xml_token key, val;
+	char const *const RRDP_XMLNS = "http://www.ripe.net/rpki/rrdp";
+	char const *const RRDP_VER = "1";
+	char const *const TAG = rdr->type_str;
+	struct xml_token *key, *val;
 	enum token_read_result res;
 
-	pr_clutter("State: root_attrs");
+	pr_clutter("== State: root_attrs ==");
 
-	res = next_tkn(rdr, &key, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
+	key = &rdr->tkn1;
 
-	if (key.type == XTT_CLOSE_TAG) {
+	if (key->type == XTT_CLOSE_TAG) {
 		if (!(rdr->flags & RXRF_XMLNS_SET))
 			return fail_missing_attr(rdr, TAG, "xmlns");
 		if (!(rdr->flags & RXRF_VERSION_SET))
@@ -1611,38 +1777,157 @@ accept_root_attrs(struct rrdp_xml_reader *rdr)
 			return fail_missing_attr(rdr, TAG, "session");
 		if (!(rdr->flags & RXRF_SERIAL_SET))
 			return fail_missing_attr(rdr, TAG, "serial");
-		rdr->consume = accept_root_content;
+		rdr->state = state_root_content;
 		return res;
 	}
 
-	res = attr_boilerplate(rdr, &key, &val);
+	res = attr_boilerplate(rdr);
 	if (res != TRR_OK)
 		return res;
+	val = &rdr->tkn3;
 
-	if (tkn_equals(&key, "xmlns")) {
+	if (tkn_equals(key, "xmlns")) {
 		if (rdr->flags & RXRF_XMLNS_SET)
 			return fail_multiple_attrs(rdr, TAG, "xmlns");
-		if (!tkn_equals(&val, RRDP_XMLNS))
-			return fail_attr_value(rdr, TAG, "xmlns", RRDP_XMLNS, &val);
+		if (!tkn_equals(val, RRDP_XMLNS))
+			return fail_attr_value(rdr, TAG, "xmlns", RRDP_XMLNS, val);
 		rdr->flags |= RXRF_XMLNS_SET;
 		return TRR_OK;
 
-	} else if (tkn_equals(&key, "version")) {
+	} else if (tkn_equals(key, "version")) {
 		if (rdr->flags & RXRF_VERSION_SET)
 			return fail_multiple_attrs(rdr, TAG, "version");
-		if (!tkn_equals(&val, RRDP_VER))
-			return fail_attr_value(rdr, TAG, "version", RRDP_VER, &val);
+		if (!tkn_equals(val, RRDP_VER))
+			return fail_attr_value(rdr, TAG, "version", RRDP_VER, val);
 		rdr->flags |= RXRF_VERSION_SET;
 		return TRR_OK;
 
-	} else if (tkn_equals(&key, "session_id")) {
-		return parse_root_session_attr(rdr, &val);
+	} else if (tkn_equals(key, "session_id")) {
+		return parse_root_session_attr(rdr, val);
 
-	} else if (tkn_equals(&key, "serial")) {
-		return parse_root_serial_attr(rdr, &val);
+	} else if (tkn_equals(key, "serial")) {
+		return parse_root_serial_attr(rdr, val);
 	}
 
-	return fail_unknown_attr(rdr, TAG, &key);
+	return fail_unknown_attr(rdr, TAG, key);
+}
+
+static enum token_read_result
+state_root_tag(struct rrdp_xml_reader *rdr)
+{
+	enum token_read_result res;
+
+	pr_clutter("== State: root_tag ==");
+
+	res = next_str(rdr, &rdr->tkn1);
+	if (res != TRR_OK)
+		return res;
+	if (tkn_equals(&rdr->tkn1, rdr->type_str)) {
+		res = confirm_rrdp(rdr);
+		if (res != TRR_OK)
+			return res;
+	} else {
+		return confirm_not_rrdp(rdr);
+	}
+
+	rdr->state = accept_root_attrs;
+	return TRR_OK;
+}
+
+static enum token_read_result
+state_post_doctype(struct rrdp_xml_reader *rdr)
+{
+	enum token_read_result res;
+
+	pr_clutter("== State: post_doctype ==");
+
+	res = next_tkn(rdr, &rdr->tkn1);
+	if (res != TRR_OK)
+		return res;
+
+	switch (rdr->tkn1.type) {
+	case XTT_OPEN_TAG:
+		rdr->state = state_root_tag;
+		return TRR_OK;
+	case XTT_COMMENT:
+		rdr->state = state_throw_away_comment;
+		rdr->next_state = state_post_doctype;
+		return TRR_OK;
+	case XTT_PI_OPEN:
+		if (!(rdr->flags & RXRF_RRDP)) {
+			rdr->state = state_throw_away_pi;
+			rdr->next_state = state_post_doctype;
+		}
+		/* No break */
+	default:
+		return bad_tkn_type(rdr, &rdr->tkn1, "xml start");
+	}
+}
+
+/*
+ * Not sure about this one.
+ * Wikipedia says the point of a DOCTYPE is specifying a DTD. RRDP does not
+ * have nor need one.
+ * But HTML5 has a DTD-less DOCTYPE.
+ * So we'll allow an optional DTD-less DOCTYPE, I guess.
+ *
+ * We also need to handle DOCTYPEs when the server returns a redirection.
+ */
+static enum token_read_result
+state_doctype_tag(struct rrdp_xml_reader *rdr)
+{
+	enum token_read_result res;
+
+	pr_clutter("== State: doctype_tag ==");
+
+	res = next_str(rdr, &rdr->tkn1);
+	if (res != TRR_OK)
+		return res;
+	if (tkn_case_equals(&rdr->tkn1, rdr->type_str)) {
+		res = confirm_rrdp(rdr);
+		if (res != TRR_OK)
+			return res;
+	} else {
+		return confirm_not_rrdp(rdr);
+	}
+
+	res = next_tkn_type(rdr, &rdr->tkn2, XTT_CLOSE_TAG, ">");
+	if (res != TRR_OK)
+		return res;
+
+	rdr->state = state_post_doctype;
+	return TRR_OK;
+}
+
+static enum token_read_result
+state_post_xmldecl(struct rrdp_xml_reader *rdr)
+{
+	enum token_read_result res;
+
+	pr_clutter("== State: post_xmldecl ==");
+
+	res = next_tkn(rdr, &rdr->tkn1);
+	if (res != TRR_OK)
+		return res;
+
+	switch (rdr->tkn1.type) {
+	case XTT_OPEN_TAG:
+		rdr->state = state_root_tag;
+		return TRR_OK;
+	case XTT_DOCTYPE:
+		rdr->state = state_doctype_tag;
+		return TRR_OK;
+	case XTT_COMMENT:
+		rdr->state = state_throw_away_comment;
+		rdr->next_state = state_post_xmldecl;
+		return TRR_OK;
+	case XTT_PI_OPEN:
+		rdr->state = state_throw_away_pi;
+		rdr->next_state = state_post_xmldecl;
+		return TRR_OK;
+	default:
+		return bad_tkn_type(rdr, &rdr->tkn1, "xml start");
+	}
 }
 
 static enum token_read_result
@@ -1683,146 +1968,46 @@ parse_xmldecl_standalone(struct rrdp_xml_reader *rdr, struct xml_token *val)
 }
 
 static enum token_read_result
-accept_xmldecl_attrs(struct rrdp_xml_reader *rdr)
+state_xmldecl_attrs(struct rrdp_xml_reader *rdr)
 {
-	struct xml_token key, val;
+	struct xml_token *key, *val;
 	enum token_read_result res;
 
-	pr_clutter("State: accept_xmldecl_attrs");
+	pr_clutter("== State: xmldecl_attrs ==");
 
-	res = next_tkn(rdr, &key, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
+	key = &rdr->tkn1;
 
-	if (key.type == XTT_PI_CLOSE) {
+	if (key->type == XTT_PI_CLOSE) {
 		if (!(rdr->flags & RXRF_XMLV_SET))
 			return fail_missing_attr(rdr, XMLDECL_TAG, "version");
-		rdr->consume = accept_root_tag;
+		rdr->state = state_post_xmldecl;
 		return TRR_OK;
 	}
 
-	res = attr_boilerplate(rdr, &key, &val);
+	res = attr_boilerplate(rdr);
 	if (res != TRR_OK)
 		return res;
+	val = &rdr->tkn3;
 
-	if (tkn_equals(&key, "version"))
-		return parse_xmldecl_version(rdr, &val);
-	if (tkn_equals(&key, "encoding"))
-		return parse_xmldecl_encoding(rdr, &val);
-	if (tkn_equals(&key, "standalone"))
-		return parse_xmldecl_standalone(rdr, &val);
+	if (tkn_equals(key, "version"))
+		return parse_xmldecl_version(rdr, val);
+	if (tkn_equals(key, "encoding"))
+		return parse_xmldecl_encoding(rdr, val);
+	if (tkn_equals(key, "standalone"))
+		return parse_xmldecl_standalone(rdr, val);
 
-	return fail_unknown_attr(rdr, XMLDECL_TAG, &key);
+	return fail_unknown_attr(rdr, XMLDECL_TAG, key);
 }
 
 static enum token_read_result
-accept_xmldecl_tag(struct rrdp_xml_reader *rdr)
+state_xmldecl_tag(struct rrdp_xml_reader *rdr)
 {
-	struct xml_token tkn;
 	enum token_read_result res;
 
-	pr_clutter("State: accept_xmldecl_tag");
-
-	res = next_name(rdr, &tkn, "xml", NULL);
-	if (res != TRR_OK)
-		return res;
-
-	rdr->consume = accept_xmldecl_attrs;
-	return TRR_OK;
-}
-
-static enum token_read_result
-confirm_rrdp(struct rrdp_xml_reader *rdr)
-{
-	if (rdr->flags & RXRF_RRDP)
-		return TRR_OK;
-
-	if (rdr->flags & RXRF_FOUND_PI) {
-		pr_err("Document has at least one Processing Instruction (<? ... ?>).");
-		return TRR_ERR;
-	}
-
-	/*
-	 * This is probably going to be common (among documents that contain an
-	 * XMLDecl), but inoffensive. Warn rather than reject.
-	 */
-	if (rdr->flags & RXRF_UTF_8) {
-		/*
-		 * Note: Comments are thrown away without checking, so those
-		 * can actually contain unicodes. Whatever.
-		 */
-		pr_wrn("%s should declare US-ASCII encoding, not UTF-8. "
-		    "I'll let this slide for now, "
-		    "but will reject the document if I find non-ASCII chars.",
-		    rdr->type_str_camel);
-		goto done;
-	}
-
-	if (rdr->flags & RXRF_NOT_ASCII) {
-		pr_err("The XML encoding is not US-ASCII.");
-		return TRR_ERR;
-	}
-
-done:	rdr->flags |= RXRF_RRDP | RXRF_XMLV_SET;
-	return TRR_OK;
-}
-
-static enum token_read_result
-confirm_not_rrdp(struct rrdp_xml_reader *rdr)
-{
-	pr_trc("This is not a %s.", rdr->type_str_camel);
-	rdr->consume = ignore_input;
-	return TRR_OK;
-}
-
-/*
- * Not sure about this one.
- * Wikipedia says the point of a DOCTYPE is specifying a DTD. RRDP does not
- * have nor need one.
- * But HTML5 has a DTD-less DOCTYPE.
- * So we'll allow an optional DTD-less DOCTYPE, I guess.
- *
- * We also need to handle DOCTYPEs when the server returns a redirection.
- */
-static enum token_read_result
-accept_doctype_tag(struct rrdp_xml_reader *rdr)
-{
-	struct xml_token tkn;
-	enum token_read_result res;
-
-	pr_clutter("State: accept_doctype_tag");
-
-	res = next_name(rdr, &tkn, "DOCTYPE", &rdr->tkn1);
-	if (res != TRR_OK)
-		return res;
-
-	res = next_str(rdr, &tkn, &rdr->tkn2);
-	if (res != TRR_OK)
-		return res;
-	if (tkn_case_equals(&tkn, rdr->type_str)) {
-		res = confirm_rrdp(rdr);
-		if (res != TRR_OK)
-			return res;
-	} else {
-		return confirm_not_rrdp(rdr);
-	}
-
-	res = next_tkn_type(rdr, &tkn, XTT_CLOSE_TAG, ">", NULL);
-	if (res != TRR_OK)
-		return res;
-
-	rdr->flags |= RXRF_DOCTYPE_SET;
-	rdr->consume = accept_root_tag;
-	return TRR_OK;
-}
-
-static enum token_read_result
-accept_root_tag(struct rrdp_xml_reader *rdr)
-{
-	struct xml_token tkn;
-	enum token_read_result res;
-
-	pr_clutter("State: root_tag");
+	pr_clutter("== State: xmldecl_tag ==");
 
 	/*
 	 * Sometimes, libcurl feeds us input that's not RRDP XML.
@@ -1832,53 +2017,41 @@ accept_root_tag(struct rrdp_xml_reader *rdr)
 	 * When this happens, we don't want to return parse error, because that
 	 * will result in immediate request termination. What libcurl seems to
 	 * expect us to do is ignore the input. This results in automatic
-	 * redirect handling (mostly done by libcurl).
+	 * redirect handling (partly done by libcurl).
 	 *
 	 * RFC 8182 does not define a content-type header for RRDP (not even
 	 * "application/xml"), and servers respond inconsistent content-types
 	 * through the tree...
 	 *
-	 * Until we get to the DOCTYPE or root tag, the parser must not assume
-	 * that the document is RRDP.
+	 * So, until we get to the DOCTYPE or root tag, the parser must not
+	 * assume that the document is RRDP.
 	 */
 
-	res = next_tkn(rdr, &tkn, &rdr->tkn1);
+	res = next_tkn(rdr, &rdr->tkn1);
 	if (res != TRR_OK)
 		return res;
 
-	if (tkn.type == XTT_PI_OPEN) {
-		rdr->consume = accept_xmldecl_tag;
+	switch (rdr->tkn1.type) {
+	case XTT_OPEN_TAG:
+		rdr->state = state_root_tag;
 		return TRR_OK;
-	} else if (tkn.type == XTT_META) {
-		/*
-		 * doctypedecl must appear after the optional XMLDecl,
-		 * so force-pretend XMLDecl already happened.
-		 */
-		rdr->flags |= RXRF_XMLV_SET;
-
-		if (rdr->flags & RXRF_DOCTYPE_SET)
-			return fail_unexpected_token(rdr, &tkn);
-		rdr->consume = accept_doctype_tag;
+	case XTT_XMLDECL:
+		rdr->state = state_xmldecl_attrs;
 		return TRR_OK;
+	case XTT_DOCTYPE:
+		rdr->state = state_doctype_tag;
+		return TRR_OK;
+	case XTT_COMMENT:
+		rdr->state = state_throw_away_comment;
+		rdr->next_state = state_post_xmldecl;
+		return TRR_OK;
+	case XTT_PI_OPEN:
+		rdr->state = state_throw_away_pi;
+		rdr->next_state = state_post_xmldecl;
+		return TRR_OK;
+	default:
+		return bad_tkn_type(rdr, &rdr->tkn1, "xml start");
 	}
-
-	res = check_tkn_type(rdr, &tkn, XTT_OPEN_TAG, "root tag");
-	if (res != TRR_OK)
-		return res;
-
-	res = next_str(rdr, &tkn, NULL);
-	if (res != TRR_OK)
-		return res;
-	if (tkn_equals(&tkn, rdr->type_str)) {
-		res = confirm_rrdp(rdr);
-		if (res != TRR_OK)
-			return res;
-	} else {
-		return confirm_not_rrdp(rdr);
-	}
-
-	rdr->consume = accept_root_attrs;
-	return TRR_OK;
 }
 
 static struct rrdp_xml_reader *
@@ -1886,7 +2059,7 @@ rrdp_xml_create(enum rrdp_xml_type type)
 {
 	struct rrdp_xml_reader *result;
 
-	result = pmalloc(sizeof(struct rrdp_xml_reader));
+	result = pzalloc(sizeof(struct rrdp_xml_reader));
 
 	result->type = type;
 	switch (type) {
@@ -1903,20 +2076,9 @@ rrdp_xml_create(enum rrdp_xml_type type)
 		result->type_str_camel = "Delta";
 		break;
 	}
-	result->notif_uri = NULL;
 
-	result->offset = 0;
-	result->buflen = 0;
 	result->line = 1;
-	result->tkn1.meta.str = (char *)result->tkn1.buf;
-	result->tkn1.meta.len = 0;
-	result->tkn2.meta.str = (char *)result->tkn2.buf;
-	result->tkn2.meta.len = 0;
-	result->consume = accept_root_tag;
-	result->flags = 0;
-	memset(&result->c, 0, sizeof(result->c));
-	result->rrdp_filerefs = NULL;
-	result->rrdp_seq = NULL;
+	result->state = state_xmldecl_tag;
 
 	return result;
 }
@@ -1924,36 +2086,33 @@ rrdp_xml_create(enum rrdp_xml_type type)
 static int
 rrdp_xml_parse(struct rrdp_xml_reader *rdr, char const *in, size_t inlen)
 {
-	size_t cp;
+	rdr->buf = in;
+	rdr->buflen = inlen;
 
-	while (inlen > 0) {
-		if (rdr->offset > 0) {
-			rdr->buflen -= rdr->offset;
-			memmove(rdr->buf, rdr->buf + rdr->offset, rdr->buflen);
-			rdr->offset = 0;
-		}
+	while (rdr->buflen > 0) {
+		pr_clutter("Buffer: '%.*s'", (int)rdr->buflen, rdr->buf);
 
-		cp = XML_BUF_SIZE - rdr->buflen;
-		if (cp > inlen)
-			cp = inlen;
-		memcpy(rdr->buf + rdr->buflen, in, cp);
-		rdr->buflen += cp;
-		in += cp;
-		inlen -= cp;
-
-again:		pr_clutter("Buffer for state: '%.*s'",
-		    (int)(rdr->buflen - rdr->offset),
-		    rdr->buf + rdr->offset);
-
-		switch (rdr->consume(rdr)) {
+		switch (rdr->state(rdr)) {
 		case TRR_OK:
-			rdr->tkn1.meta.len = 0;
-			rdr->tkn2.meta.len = 0;
-			goto again;
+			pr_clutter("TRR_OK. Discarding '%.*s' '%.*s' '%.*s'",
+			    (int)rdr->tkn1.len, rdr->tkn1.str,
+			    (int)rdr->tkn2.len, rdr->tkn2.str,
+			    (int)rdr->tkn3.len, rdr->tkn3.str);
+			memset(&rdr->tkn1, 0, sizeof(rdr->tkn1));
+			memset(&rdr->tkn2, 0, sizeof(rdr->tkn2));
+			memset(&rdr->tkn3, 0, sizeof(rdr->tkn3));
+			break;
+		case TRR_MORE:
+			pr_clutter("TRR_MORE. Tokens: '%.*s' '%.*s' '%.*s'",
+			    (int)rdr->tkn1.len, rdr->tkn1.str,
+			    (int)rdr->tkn2.len, rdr->tkn2.str,
+			    (int)rdr->tkn3.len, rdr->tkn3.str);
+			commit_partial_token(rdr, &rdr->tkn1);
+			commit_partial_token(rdr, &rdr->tkn2);
+			commit_partial_token(rdr, &rdr->tkn3);
+			break;
 		case TRR_ERR:
 			return EINVAL;
-		case TRR_MORE:
-			break;
 		}
 	}
 
@@ -2089,7 +2248,7 @@ write_callback(char *data, size_t size, size_t nmemb, void *userp)
 		return CURL_WRITEFUNC_ERROR;
 	}
 
-	if (arg->rdr->consume == ignore_input)
+	if (arg->rdr->state == state_ignore_input)
 		return size;
 
 	if (arg->hasher && sha256_update(arg->hasher, data, size) != 0)
@@ -2147,7 +2306,7 @@ rrdpxml_fetch_notif(struct uri const *url, time_t mtim, bool *changed,
 		pr_trc("The Notification has not changed.");
 		goto end;
 	}
-	if (wargs.rdr->consume != ignore_input) {
+	if (wargs.rdr->state != state_ignore_input) {
 		error = pr_err("XML is unterminated");
 		goto end;
 	}
@@ -2210,7 +2369,7 @@ rrdpxml_explode_snapshot(struct update_notification const *notif,
 		error = pr_err("The document was not an RRDP Snapshot.");
 		goto end;
 	}
-	if (wargs.rdr->consume != ignore_input) {
+	if (wargs.rdr->state != state_ignore_input) {
 		error = pr_err("XML is unterminated");
 		goto end;
 	}
@@ -2270,7 +2429,7 @@ rrdpxml_explode_delta(struct update_notification *notif,
 		error = pr_err("The document was not an RRDP Delta.");
 		goto end;
 	}
-	if (wargs.rdr->consume != ignore_input) {
+	if (wargs.rdr->state != state_ignore_input) {
 		error = pr_err("XML is unterminated");
 		goto end;
 	}

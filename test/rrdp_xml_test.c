@@ -1,7 +1,6 @@
 #include <check.h>
 
-#define XML_BUF_SIZE 128
-#define MAX_QUOTE_SIZE 120
+#define MAX_TKN_SIZE 120
 
 #include "alloc.c"
 #include "asn1/asn1c/INTEGER.c"
@@ -24,6 +23,26 @@
 #include "types/map.c"
 #include "types/path.c"
 #include "types/str.c"
+
+#define NOTIF_URL "https://a/n.xml"
+#define XMLDECL "<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+#define HTML_DT "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">"
+#define NOTIF_DT "<!DOCTYPE notification>"
+#define XMLNS "http://www.ripe.net/rpki/rrdp"
+#define NOTIF_FULL(x, v, ss, sr) "<notification xmlns=\"" x "\" version=\"" v "\" session_id=\"" ss "\" serial=\"" sr "\">"
+#define NOTIF_SERIAL(s) NOTIF_FULL(XMLNS, "1", "12-ab", s)
+#define NOTIF_START NOTIF_SERIAL("23")
+#define NSNAPSHOT "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
+#define NDELTA(s) "<delta serial=\"" s "\" uri=\"https://a/d" s ".xml\" hash=\"" HASH "\"/>"
+#define NOTIF_END "</notification>"
+#define SNAPSHOT(u, h) "<snapshot uri=\"" u "\" hash=\"" h "\"/> "
+#define HASH "0123456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD"
+#define WS " \t\r\n" /* Whitespace */
+#define CMT1 "<!---->" /* Comment */
+#define CMT2 "<!-- -->"
+#define CMT3 "<!-- Potato 🥔 " WS " Avocado 🥑 " WS "-->"
+#define CMT4 "<!--Comment-->"
+#define PI "<? ?>"
 
 struct xml_test {
 	char *xml;
@@ -91,33 +110,34 @@ init_xml1(char *xml, char const *errmsg)
 {
 	input[0].xml = xml;
 	input[0].errmsg = errmsg;
+	input[0].drip_feed = false;
 	memset(&input[1], 0, sizeof(input[1]));
 }
 
 static void
-fetch_notif(char const *url, struct update_notification *notif)
+fetch_notif(struct update_notification *notif)
 {
 	struct uri uri;
 	bool changed;
 
-	__URI_INIT(&uri, url);
+	__URI_INIT(&uri, NOTIF_URL);
 	last_errmsg[0] = 0;
 
 	ck_assert_int_eq(0, rrdpxml_fetch_notif(&uri, 0, &changed, notif));
 
 	ck_assert_str_eq("", last_errmsg);
 	ck_assert_int_eq(true, changed);
-	ck_assert_str_eq(url, uri_str(notif->url));
+	ck_assert_str_eq(NOTIF_URL, uri_str(notif->url));
 }
 
 static void
-__fetch_notif_error(char const *url, char const *errmsg)
+__fetch_notif_error(char const *errmsg)
 {
 	struct uri uri;
 	bool changed;
 	struct update_notification notif;
 
-	__URI_INIT(&uri, url);
+	__URI_INIT(&uri, NOTIF_URL);
 	last_errmsg[0] = 0;
 
 	ck_assert_int_eq(EINVAL, rrdpxml_fetch_notif(&uri, 0, &changed, &notif));
@@ -126,13 +146,13 @@ __fetch_notif_error(char const *url, char const *errmsg)
 }
 
 static void
-fetch_notif_error(char const *url)
+fetch_notif_error(void)
 {
 	/*
 	 * Error message must've been cleared by http_download(),
 	 * and then no more errors
 	 */
-	__fetch_notif_error(url, "");
+	__fetch_notif_error("");
 }
 
 static void
@@ -161,304 +181,364 @@ ck_delta(struct notification_delta *delta, char const *serial, char const *url,
 	ck_hash(hash, &delta->meta.hash);
 }
 
-#define NOTIF(ss, sr) "<notification xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"" ss "\" serial=\"" sr "\">"
-#define HASH "0123456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD"
-#define WS " \t\r\n" /* Whitespace */
-#define CMT1 "<!---->" /* Comment */
-#define CMT2 "<!-- -->"
-#define CMT3 "<!-- Potato 🥔 " WS " Avocado 🥑 " WS "-->"
+static void
+ck_notif(size_t deltas)
+{
+	struct update_notification notif;
 
-#define NOISY(NOISE) \
-	NOISE "<" NOISE "notification" NOISE \
-		"xmlns" NOISE "=" NOISE "\"http://www.ripe.net/rpki/rrdp\"" NOISE \
-		"version" NOISE "=" NOISE "\"1\"" NOISE \
-		"session_id" NOISE "=" NOISE "\"123123\"" NOISE \
-		"serial" NOISE "=" NOISE "\"3\"" NOISE \
-	">" NOISE \
-		"<" NOISE "snapshot" NOISE \
-			"uri" NOISE "=" NOISE "\"https://a/s.xml\"" NOISE \
-			"hash" NOISE "=" NOISE "\"" HASH "\"" NOISE "/>" NOISE \
-		"<" NOISE "delta" NOISE \
-			"serial" NOISE "=" NOISE "\"3\"" NOISE \
-			"uri" NOISE "=" NOISE "\"https://a/b/d3.xml\"" NOISE \
-			"hash" NOISE "=" NOISE "\"" HASH "\"" NOISE "/>" NOISE \
-	"</" NOISE "notification" NOISE ">" NOISE
+	fetch_notif(&notif);
 
+	ck_assert_str_eq("12-ab", notif.session.session_id);
+	ck_assert_str_eq("23", notif.session.serial.str);
+	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
+	ck_assert_uint_eq(deltas, notif.deltas.len);
+
+	switch (deltas) {
+	case 2: ck_delta(&notif.deltas.arr[1], "22", "https://a/d22.xml", HASH);
+		/* No break */
+	case 1: ck_delta(&notif.deltas.arr[0], "23", "https://a/d23.xml", HASH);
+		/* No break */
+	case 0: break;
+	default:
+		ck_abort_msg("Unimplemented delta count: %zu", deltas);
+	}
+
+	notification_cleanup(&notif);
+}
 
 START_TEST(notif_minimal)
 {
-	char *URL = "https://a/n.xml";
-	char *XML = /* Zero redundant whitespace */
-		NOTIF("123123", "3")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-		"</notification>";
-	struct update_notification notif;
-
-	init_xml1(XML, NULL);
-
-	fetch_notif(URL, &notif);
-
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-	ck_assert_uint_eq(0, notif.deltas.len);
-
-	notification_cleanup(&notif);
+	init_xml1(NOTIF_START NSNAPSHOT NOTIF_END, NULL);
+	ck_notif(0);
 }
 END_TEST
 
 START_TEST(notif_2deltas)
 {
-	char *URL = "https://a/n.xml";
-	char *XML = /* Zero redundant whitespace */
-		NOTIF("123123", "3")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"3\" uri=\"https://a/b/d3.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"2\" uri=\"https://a/b/d2.xml\" hash=\"" HASH "\"/>"
-		"</notification>";
-	struct update_notification notif;
-
-	init_xml1(XML, NULL);
-	fetch_notif(URL, &notif);
-
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-	ck_assert_uint_eq(2, notif.deltas.len);
-	ck_delta(&notif.deltas.arr[0], "3", "https://a/b/d3.xml", HASH);
-	ck_delta(&notif.deltas.arr[1], "2", "https://a/b/d2.xml", HASH);
-
-	notification_cleanup(&notif);
+	init_xml1(NOTIF_START NSNAPSHOT NDELTA("23") NDELTA("22") NOTIF_END, NULL);
+	ck_notif(2);
 }
 END_TEST
 
 START_TEST(notif_1delta)
 {
-	char *URL = "https://a/n.xml";
-	char *XML =
-		NOTIF("123123", "3")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"3\" uri=\"https://a/b/d3.xml\" hash=\"" HASH "\"/>"
-		"</notification>";
-	struct update_notification notif;
-
-	init_xml1(XML, NULL);
-	fetch_notif(URL, &notif);
-
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-	ck_assert_uint_eq(1, notif.deltas.len);
-	ck_delta(&notif.deltas.arr[0], "3", "https://a/b/d3.xml", HASH);
-
-	notification_cleanup(&notif);
+	init_xml1(NOTIF_START NSNAPSHOT NDELTA("23") NOTIF_END, NULL);
+	ck_notif(1);
 }
 END_TEST
+
+/* TODO (fine) Several noise locations not actually allowed by the grammar */
+#define NOISY(NOISE) \
+	NOISE "<" NOISE "notification" NOISE \
+		"xmlns" NOISE "=" NOISE "\"" XMLNS "\"" NOISE \
+		"version" NOISE "=" NOISE "\"1\"" NOISE \
+		"session_id" NOISE "=" NOISE "\"12-ab\"" NOISE \
+		"serial" NOISE "=" NOISE "\"23\"" NOISE \
+	">" NOISE \
+		"<" NOISE "snapshot" NOISE \
+			"uri" NOISE "=" NOISE "\"https://a/s.xml\"" NOISE \
+			"hash" NOISE "=" NOISE "\"" HASH "\"" NOISE "/>" NOISE \
+		"<" NOISE "delta" NOISE \
+			"serial" NOISE "=" NOISE "\"23\"" NOISE \
+			"uri" NOISE "=" NOISE "\"https://a/d23.xml\"" NOISE \
+			"hash" NOISE "=" NOISE "\"" HASH "\"" NOISE "/>" NOISE \
+	"</" NOISE "notification" NOISE ">" NOISE
 
 START_TEST(notif_redundant_whitespace)
 {
-	char *URL = "https://a/n.xml";
-	char *XML = NOISY(WS);
-	struct update_notification notif;
-
-	init_xml1(XML, NULL);
-	fetch_notif(URL, &notif);
-
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-	ck_assert_uint_eq(1, notif.deltas.len);
-	ck_delta(&notif.deltas.arr[0], "3", "https://a/b/d3.xml", HASH);
-
-	notification_cleanup(&notif);
+	init_xml1(NOISY(WS), NULL);
+	ck_notif(1);
 }
 END_TEST
 
+START_TEST(notif_mandatory_whitespace)
+{
+	/*
+	 * Compliance: According to the XML grammar, the whitespace between
+	 * attributes is supposed to be mandatory.
+	 */
+
+	init_xml1(
+		"<?xmlversion=\"1.0\" encoding=\"US-ASCII\"?>" NOTIF_DT
+		NOTIF_START CMT4 NSNAPSHOT NDELTA("23") NOTIF_END,
+		"Document has at least one Processing Instruction (<? ... ?>)."
+	);
+	fetch_notif_error();
+
+	init_xml1(
+		"<?xml version=\"1.0\"encoding=\"US-ASCII\"?>" NOTIF_DT
+		NOTIF_START CMT4 NSNAPSHOT NDELTA("23") NOTIF_END,
+		NULL
+	);
+	ck_notif(1); /* Not compliant, fine */
+
+	init_xml1(
+		XMLDECL "<!DOCTYPEnotification>"
+		NOTIF_START CMT4 NSNAPSHOT NDELTA("23") NOTIF_END,
+		"(Line 1) Unexpected token: '<!DOCTYPEn'"
+	);
+	fetch_notif_error();
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		"<notificationxmlns=\"" XMLNS "\" version=\"1\" session_id=\"12-ab\" serial=\"23\">"
+			CMT4 NSNAPSHOT NDELTA("23")
+		NOTIF_END,
+		"(Line 1) Name has too many characters: notificationx(...)"
+	);
+	fetch_notif_error();
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		"<notification xmlns=\"" XMLNS "\"version=\"1\" session_id=\"12-ab\" serial=\"23\">"
+			CMT4 NSNAPSHOT NDELTA("23")
+		NOTIF_END,
+		NULL
+	);
+	ck_notif(1); /* Not compliant, fine */
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		"<notification xmlns=\"" XMLNS "\" version=\"1\"session_id=\"12-ab\" serial=\"23\">"
+			CMT4 NSNAPSHOT NDELTA("23")
+		NOTIF_END,
+		NULL
+	);
+	ck_notif(1); /* Not compliant, fine */
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		"<notification xmlns=\"" XMLNS "\" version=\"1\" session_id=\"12-ab\"serial=\"23\">"
+			CMT4 NSNAPSHOT NDELTA("23")
+		NOTIF_END,
+		NULL
+	);
+	ck_notif(1); /* Not compliant, fine */
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		NOTIF_START
+			CMT4
+			"<snapshoturi=\"https://a/s.xml\" hash=\"" HASH "\"/>"
+			NDELTA("23")
+		NOTIF_END,
+		"(Line 1) Unexpected token: snapshoturi"
+	);
+	fetch_notif_error();
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		NOTIF_START
+			CMT4
+			"<snapshot uri=\"https://a/s.xml\"hash=\"" HASH "\"/>"
+			NDELTA("23")
+		NOTIF_END,
+		NULL
+	);
+	ck_notif(1); /* Not compliant, fine */
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		NOTIF_START
+			CMT4
+			NSNAPSHOT
+			"<deltaserial=\"23\" uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>"
+		NOTIF_END,
+		"(Line 1) Unexpected token: deltaserial"
+	);
+	fetch_notif_error();
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		NOTIF_START
+			CMT4
+			NSNAPSHOT
+			"<delta serial=\"23\"uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>"
+		NOTIF_END,
+		NULL
+	);
+	ck_notif(1); /* Not compliant, fine */
+
+	init_xml1(
+		XMLDECL NOTIF_DT
+		NOTIF_START
+			CMT4
+			NSNAPSHOT
+			"<delta serial=\"23\" uri=\"https://a/d23.xml\"hash=\"" HASH "\"/>"
+		NOTIF_END,
+		NULL
+	);
+	ck_notif(1); /* Not compliant, fine */
+}
+END_TEST
+
+#undef NOISY
+#define NOISY(NOISE) NOTIF_START NOISE NSNAPSHOT NOISE NDELTA("23") NOISE NOTIF_END NOISE
+
 START_TEST(notif_comments)
 {
-	char *URL = "https://a/n.xml";
-	char *XML[] = { NOISY(CMT1), NOISY(CMT2), NOISY(CMT3) };
-	struct update_notification notif;
+	char *XML[] = {
+		NOISY(CMT1),
+		NOISY(CMT2),
+		NOISY(CMT3),
+		CMT1 NOISY(CMT1),
+		CMT2 NOISY(CMT2),
+		CMT3 NOISY(CMT3),
+		XMLDECL CMT1 NOTIF_DT CMT1 NOISY(CMT1),
+		XMLDECL CMT2 NOTIF_DT CMT2 NOISY(CMT2),
+		XMLDECL CMT3 NOTIF_DT CMT3 NOISY(CMT3),
+	};
 	size_t i;
 
 	for (i = 0; i < ARRAY_LEN(XML); i++) {
 		init_xml1(XML[i], NULL);
-		fetch_notif(URL, &notif);
-
-		ck_assert_str_eq("123123", notif.session.session_id);
-		ck_assert_str_eq("3", notif.session.serial.str);
-		ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-		ck_assert_uint_eq(1, notif.deltas.len);
-		ck_delta(&notif.deltas.arr[0], "3", "https://a/b/d3.xml", HASH);
-
-		notification_cleanup(&notif);
+		ck_notif(1);
 	}
 }
 END_TEST
 
 START_TEST(notif_unterminated_comment)
 {
-	char *URL = "https://a/n.xml";
-	char *XML = NOTIF("123123", "3") "<!-- abcd";
-
-	init_xml1(XML, NULL);
-	__fetch_notif_error(URL, "XML is unterminated");
+	init_xml1(NOTIF_START "<!-- abcd", NULL);
+	__fetch_notif_error("XML is unterminated");
 }
 END_TEST
 
+#define PREFIX "<notification xmlns=\"" XMLNS "\" version=\"1\" session_id=\"12-ab\" serial=\"23\""
+#define SUFFIX "snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>" NOTIF_END
+
 START_TEST(notif_comment_boundaries)
 {
-	char *URL = "https://a/n.xml";
-	char *XML[] = {
-		NOTIF("01234567890123456", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("012345678901234567", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("0123456789012345678", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456789", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("012345678901234567890", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("0123456789012345678901", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456789012", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("012345678901234567890123", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("0123456789012345678901234", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456789012345", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("012345678901234567890123456", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("0123456789012345678901234567", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456789012345678", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("012345678901234567890123456789", "3") "<snapshot<!-- abc -->uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
+	char *XML[][2] = {
+		{ PREFIX "><!-- abc --><", "" SUFFIX },
+		{ PREFIX "><!-- abc -->", "<" SUFFIX },
+		{ PREFIX "><!-- abc --", "><" SUFFIX },
+		{ PREFIX "><!-- abc -", "-><" SUFFIX },
+		{ PREFIX "><!-- abc ", "--><" SUFFIX },
+		{ PREFIX "><!-- abc", " --><" SUFFIX },
+		{ PREFIX "><!-- ab", "c --><" SUFFIX },
+		{ PREFIX "><!-- a", "bc --><" SUFFIX },
+		{ PREFIX "><!-- ", "abc --><" SUFFIX },
+		{ PREFIX "><!--", " abc --><" SUFFIX },
+		{ PREFIX "><!-", "- abc --><" SUFFIX },
+		{ PREFIX "><!", "-- abc --><" SUFFIX },
+		{ PREFIX "><", "!-- abc --><" SUFFIX },
+		{ PREFIX ">", "<!-- abc --><" SUFFIX },
+		{ PREFIX "", "><!-- abc --><" SUFFIX },
 
-		NOTIF("01234567890123456", "3") "<snapshot uri=<!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri= <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=  <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=   <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=    <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=     <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=      <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=       <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=        <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("01234567890123456", "3") "<snapshot uri=         <!---->\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-
-#define CMT "<!-- --> "
-#define CMT10 CMT CMT CMT CMT CMT CMT CMT CMT CMT CMT
-#define CMT100 CMT10 CMT10 CMT10 CMT10 CMT10 CMT10 CMT10 CMT10 CMT10 CMT10
-		NOTIF("0123456789012345678901", "3") CMT100 CMT100 "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
+		{ PREFIX "><!----><", "" SUFFIX },
+		{ PREFIX "><!---->", "<" SUFFIX },
+		{ PREFIX "><!----", "><" SUFFIX },
+		{ PREFIX "><!---", "-><" SUFFIX },
+		{ PREFIX "><!--", "--><" SUFFIX },
+		{ PREFIX "><!-", "---><" SUFFIX },
+		{ PREFIX "><!", "----><" SUFFIX },
+		{ PREFIX "><", "!----><" SUFFIX },
+		{ PREFIX ">", "<!----><" SUFFIX },
+		{ PREFIX "", "><!----><" SUFFIX },
 	};
-	struct update_notification notif;
 	array_index i;
 
 	memset(&input, 0, sizeof(input));
 
 	for (i = 0; i < ARRAY_LEN(XML); i++) {
-		init_xml1(XML[i], NULL);
-		fetch_notif(URL, &notif);
-
-		/* ck_assert_str_eq("123123", notif.session.session_id); */
-		ck_assert_str_eq("3", notif.session.serial.str);
-		ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-		ck_assert_uint_eq(0, notif.deltas.len);
-
-		notification_cleanup(&notif);
+		input[0].xml = XML[i][0];
+		input[1].xml = XML[i][1];
+		ck_notif(0);
 	}
+
+	input[0].xml = PREFIX;
+	input[1].xml = "><!-- -->";
+	input[2].xml = "<!-- --><";
+	input[3].xml = "!-- --><!";
+	input[4].xml = "-- --><!-";
+	input[5].xml = "- --><!--";
+	input[6].xml = " --><!-- ";
+	input[7].xml = "--><!-- -";
+	input[8].xml = "-><!-- --";
+	input[9].xml = "><!-- -->";
+	input[10].xml = "<!-- --><";
+	input[11].xml = SUFFIX;
+	ck_notif(0);
+
+	input[0].xml = PREFIX "><!-- abc --><" SUFFIX;
+	input[0].drip_feed = true;
+	input[1].xml = NULL;
+	ck_notif(0);
 }
 END_TEST
 
 START_TEST(notif_lacks_snapshot)
 {
-	char *URL = "https://a/n.xml";
-	char *XML = NOTIF("123123", "3") "</notification>";
-
-	init_xml1(XML, "Notification lacks a Snapshot");
-	fetch_notif_error(URL);
+	init_xml1(NOTIF_START NOTIF_END, "Notification lacks a Snapshot");
+	fetch_notif_error();
 }
 END_TEST
 
 START_TEST(notif_not_ascii)
 {
-	char *URL = "https://a/n.xml";
-	char *XML =
-		NOTIF("123123", "3") "\n"
-			"<snapshot\n"
-				"uri=\"https://a/b/🧀.xml\"\n"
-				"hash=\"" HASH "\"/>\n"
-		"</notification>";
-
 	/* Cheese UTF-8: 0xF0 0x9F 0xA7 0x80 */
-	init_xml1(XML, "(Line 3) uri has illegal character: 0xf0");
-	fetch_notif_error(URL);
+	init_xml1(
+		NOTIF_START "\n"
+			"<snapshot\n"
+				"uri=\"https://a/🧀.xml\"\n"
+				"hash=\"" HASH "\"/>\n"
+		NOTIF_END,
+		"(Line 3) uri has illegal character: 0xf0"
+	);
+	fetch_notif_error();
+}
+END_TEST
+
+START_TEST(notif_buffer_interruptions)
+{
+	char *XML =
+		"<?xml version=\"1.0\"\tencoding=\"US-ASCII\"\n?>\n"
+		"<!DOCTYPE   notification >\n"
+		NOTIF_START "\n"
+			"<!-- Comment -->\t\n"
+			NSNAPSHOT "\t"
+			NDELTA("23") " "
+		NOTIF_END " \t ";
+	static char HALF1[512];
+	static char HALF2[512];
+	size_t i, n;
+
+	memset(&input, 0, sizeof(input));
+	memset(HALF1, 0, sizeof(HALF1));
+	strcpy(HALF2, XML);
+
+	n = strlen(XML);
+	for (i = 0; i < n; i++) {
+		HALF1[i] = HALF2[i];
+		input[0].xml = HALF1;
+		input[1].xml = HALF2 + i + 1u;
+		ck_notif(1);
+	}
 }
 END_TEST
 
 #define SPCS "                                                      "
 #define SPCS10 SPCS SPCS SPCS SPCS SPCS SPCS SPCS SPCS SPCS SPCS
 
-/*
- * A logical phrase does not fit in the buffer because there's a bunch of
- * fraudulent whitespace.
- */
-START_TEST(notif_too_much_whitespace)
-{
-	char *URL = "https://a/n.xml";
-	char *XML[] = {
-		SPCS10 NOTIF("123123", "3")    "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") SPCS10    "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<" SPCS10 "snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<snapshot"  SPCS10 "uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<snapshot uri" SPCS10 "=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<snapshot uri=" SPCS10 "\"https://a/s.xml\" hash=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\"" SPCS10  "hash=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\" hash" SPCS10 "=\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\" hash=" SPCS10 "\"" HASH "\"/></notification>",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"" SPCS10 "/></notification>",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>" SPCS10 "</notification>",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/></" SPCS10 "notification>",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification" SPCS10 ">",
-		NOTIF("123123", "3") "<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/></notification>" SPCS10,
-	};
-	struct update_notification notif;
-	size_t i;
-
-	for (i = 0; i < ARRAY_LEN(XML); i++) {
-		init_xml1(XML[i], NULL);
-		fetch_notif(URL, &notif);
-
-		ck_assert_str_eq("123123", notif.session.session_id);
-		ck_assert_str_eq("3", notif.session.serial.str);
-		ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-		ck_assert_uint_eq(0, notif.deltas.len);
-
-		notification_cleanup(&notif);
-	}
-}
-END_TEST
-
 START_TEST(notif_massive_whitespace)
 {
-	char *URL = "https://a/n.xml";
-	char *XML =
-		NOTIF("123123", "3")
+	init_xml1(
+		NOTIF_START
 			"<snapshot" SPCS10 SPCS10 SPCS10 SPCS10 SPCS10 SPCS10
 				"uri=\"https://a/s.xml\" "
 				"hash=\"" HASH "\"/>"
-		"</notification>";
-	struct update_notification notif;
-
-	init_xml1(XML, NULL);
-	fetch_notif(URL, &notif);
-
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-	ck_assert_uint_eq(0, notif.deltas.len);
-
-	notification_cleanup(&notif);
+		NOTIF_END,
+		NULL
+	);
+	ck_notif(0);
 }
 END_TEST
 
 START_TEST(notif_drip_feed_whitespace)
 {
-	char *URL = "https://a/n.xml";
-	struct update_notification notif;
-	size_t i;
-
-	input[0].xml = NOTIF("123123", "3");
+	memset(&input, 0, sizeof(input));
+	input[0].xml = NOTIF_START;
 	input[1].xml = "<snapshot";
 	input[2].xml = SPCS10;
 	input[3].xml = SPCS10;
@@ -468,76 +548,65 @@ START_TEST(notif_drip_feed_whitespace)
 	input[7].xml = SPCS10;
 	input[8].xml = "uri=\"https://a/s.xml\" ";
 	input[9].xml = "hash=\"" HASH "\"/>";
-	input[10].xml = "</notification>";
+	input[10].xml = NOTIF_END;
 	input[11].xml = NULL;
-	for (i = 0; i < 12; i++)
-		input[i].errmsg = NULL;
 
-	fetch_notif(URL, &notif);
-
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-	ck_assert_uint_eq(0, notif.deltas.len);
-
-	notification_cleanup(&notif);
+	ck_notif(0);
 }
 END_TEST
 
 START_TEST(notif_micro_drip_feed)
 {
-	char *URL = "https://a/n.xml";
-	char *XML =
-		NOTIF("123123", "3")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"3\" uri=\"https://a/b/d3.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"2\" uri=\"https://a/b/d2.xml\" hash=\"" HASH "\"/>"
-		"</notification>";
-	struct update_notification notif;
-
-	init_xml1(XML, NULL);
+	init_xml1(NOTIF_START NSNAPSHOT NDELTA("23") NDELTA("22") NOTIF_END, NULL);
 	input[0].drip_feed = true;
-	fetch_notif(URL, &notif);
-
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-	ck_assert_uint_eq(2, notif.deltas.len);
-	ck_delta(&notif.deltas.arr[0], "3", "https://a/b/d3.xml", HASH);
-	ck_delta(&notif.deltas.arr[1], "2", "https://a/b/d2.xml", HASH);
-
-	notification_cleanup(&notif);
+	ck_notif(2);
 }
 END_TEST
 
 START_TEST(notif_long_token)
 {
-	char *URL = "https://a/n.xml";
-
 	/*
-	 * 15 characters: Approved by token fetcher, then rejected by parser
-	 * because there's no expected tag named "a23456789012345"
+	 * 12 characters: Approved by token fetcher, then rejected by parser
+	 * because there's no expected tag named "a23456789012"
 	 */
 	init_xml1(
-		NOTIF("123123", "3") "\n"
-			"<a23456789012345 uri=\"https://a/b/s.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
-		"(Line 2) Unexpected token: a23456789012345");
-	fetch_notif_error(URL);
+		NOTIF_START "\n"
+			"<a23456789012 uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+		NOTIF_END,
+		"(Line 2) Unexpected token: a23456789012"
+	);
+	fetch_notif_error();
 
-	/* 16 characters: Rejected by token fetcher because too long */
+	/*
+	 * 13 characters: Rejected by token fetcher because too long.
+	 * 13th character could be printed because the parser needed to find out
+	 * whether it was a name character or not.
+	 */
 	init_xml1(
-		NOTIF("123123", "3") "\n"
-			"<a234567890123456 uri=\"https://a/b/s.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
-		"(Line 2) Token has too many characters: a234567890123456(...)");
-	fetch_notif_error(URL);
+		NOTIF_START "\n"
+			"<a234567890123 uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+		NOTIF_END,
+		"(Line 2) Name has too many characters: a234567890123(...)"
+	);
+	fetch_notif_error();
+
+	/*
+	 * 14 characters: Rejected by token fetcher because too long.
+	 * 14th character is not printed because the token fetcher only got to
+	 * the 13th one.
+	 */
+	init_xml1(
+		NOTIF_START "\n"
+			"<a2345678901234 uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+		NOTIF_END,
+		"(Line 2) Name has too many characters: a234567890123(...)"
+	);
+	fetch_notif_error();
 }
 END_TEST
 
 START_TEST(notif_long_url)
 {
-	char *URL = "https://a/n.xml";
 	struct update_notification notif;
 
 #define CHR10 "123456789/"
@@ -545,162 +614,158 @@ START_TEST(notif_long_url)
 
 	/* 120 characters */
 	init_xml1(
-		NOTIF("123123", "3")
+		NOTIF_START
 			/*              123456789AB (11)     12345678 9 (9)  */
 			"<snapshot uri=\"https://a/" CHR100 "/aaa.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
-		NULL);
-
-	fetch_notif(URL, &notif);
-	ck_assert_str_eq("123123", notif.session.session_id);
-	ck_assert_str_eq("3", notif.session.serial.str);
+		NOTIF_END,
+		NULL
+	);
+	fetch_notif(&notif);
+	ck_assert_str_eq("12-ab", notif.session.session_id);
+	ck_assert_str_eq("23", notif.session.serial.str);
 	ck_snapshot(&notif.snapshot, "https://a/" CHR100 "/aaa.xml", HASH);
 	ck_assert_uint_eq(0, notif.deltas.len);
 	notification_cleanup(&notif);
 
 	/* 121 characters */
 	init_xml1(
-		NOTIF("123123", "3") "\n"
+		NOTIF_START "\n"
 			/*              123456789AB (11)     123456789 A (10)  */
 			"<snapshot\n"
 				"uri=\"https://a/" CHR100 "/aaaa.xml\"\n"
 				"hash=\"" HASH "\"/>\n"
-		"</notification>",
-		"(Line 3) Attribute value too long");
-	fetch_notif_error(URL);
+		NOTIF_END,
+		"(Line 3) Attribute value too long"
+	);
+	fetch_notif_error();
 }
 END_TEST
 
 START_TEST(notif_long_serial)
 {
-	char *URL = "https://a/n.xml";
 	struct update_notification notif;
 
 #define CHR8 "12345678"
 #define CHR64 CHR8 CHR8 CHR8 CHR8 CHR8 CHR8 CHR8 CHR8
 
 	/* 64 characters */
-	init_xml1(
-		NOTIF("123123", CHR64)
-			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
-		NULL);
+	init_xml1(NOTIF_SERIAL(CHR64) NSNAPSHOT NOTIF_END, NULL);
 
-	fetch_notif(URL, &notif);
-	ck_assert_str_eq("123123", notif.session.session_id);
+	fetch_notif(&notif);
+	ck_assert_str_eq("12-ab", notif.session.session_id);
 	ck_assert_str_eq(CHR64, notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/n.xml", HASH);
+	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
 	ck_assert_uint_eq(0, notif.deltas.len);
 	notification_cleanup(&notif);
 
 	/* 65 characters */
 	init_xml1(
-		NOTIF("123123", CHR64 "9") "\n"
-			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
-		"(Line 1) <notification> serial is too long: 65 chars");
-	fetch_notif_error(URL);
+		NOTIF_SERIAL(CHR64 "9") "\n" NSNAPSHOT "\n" NOTIF_END,
+		"(Line 1) <notification> serial is too long: 65 chars"
+	);
+	fetch_notif_error();
 }
 END_TEST
 
 START_TEST(notif_long_delta_serial)
 {
-	char *URL = "https://a/n.xml";
+	char *XML;
 	struct update_notification notif;
 
 	/* 64 characters */
-	init_xml1(
-		NOTIF("123123", CHR64)
-			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"" CHR64 "\" uri=\"https://a/b/d64.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
-		NULL);
+	XML =	NOTIF_SERIAL(CHR64)
+			NSNAPSHOT
+			"<delta serial=\"" CHR64 "\" "
+				"uri=\"https://a/d64.xml\" "
+				"hash=\"" HASH "\"/>"
+		NOTIF_END;
+	init_xml1(XML, NULL);
 
-	fetch_notif(URL, &notif);
-	ck_assert_str_eq("123123", notif.session.session_id);
+	fetch_notif(&notif);
+	ck_assert_str_eq("12-ab", notif.session.session_id);
 	ck_assert_str_eq(CHR64, notif.session.serial.str);
-	ck_snapshot(&notif.snapshot, "https://a/n.xml", HASH);
+	ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
 	ck_assert_uint_eq(1, notif.deltas.len);
-	ck_delta(&notif.deltas.arr[0], CHR64, "https://a/b/d64.xml", HASH);
+	ck_delta(&notif.deltas.arr[0], CHR64, "https://a/d64.xml", HASH);
 	notification_cleanup(&notif);
 
 	/* 65 characters */
-	init_xml1(
-		NOTIF("123123", "6") "\n"
-			"<snapshot uri=\"https://a/n.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"" CHR64 "9\" uri=\"https://a/b/d65.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
-		"(Line 3) <delta> serial is too long: 65 chars");
-	fetch_notif_error(URL);
+	XML =	NOTIF_START "\n"
+			NSNAPSHOT "\n"
+			"<delta serial=\"" CHR64 "9\" "
+				"uri=\"https://a/d65.xml\" "
+				"hash=\"" HASH "\"/>\n"
+		NOTIF_END;
+	init_xml1(XML, "(Line 3) <delta> serial is too long: 65 chars");
+	fetch_notif_error();
 }
 END_TEST
 
 START_TEST(notif_sort_deltas)
 {
-	char *URL = "https://a/n.xml";
 	char *XML[] = {
-		NOTIF("123123", "22")
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
+		NOTIF_START
+			NSNAPSHOT
 			/* Already sorted */
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"20\" uri=\"https://a/d20.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"18\" uri=\"https://a/d18.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
-		NOTIF("123123", "22")
+			NDELTA("23")
+			NDELTA("22")
+			NDELTA("21")
+			NDELTA("20")
+			NDELTA("19")
+		NOTIF_END,
+		NOTIF_START
 			/* Perfect backwards */
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"18\" uri=\"https://a/d18.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"20\" uri=\"https://a/d20.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
-		NOTIF("123123", "22")
+			NSNAPSHOT
+			NDELTA("19")
+			NDELTA("20")
+			NDELTA("21")
+			NDELTA("22")
+			NDELTA("23")
+		NOTIF_END,
+		NOTIF_START
 			/* Shuffled */
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"18\" uri=\"https://a/d18.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"20\" uri=\"https://a/d20.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
-		NOTIF("123123", "22")
+			NSNAPSHOT
+			NDELTA("22")
+			NDELTA("20")
+			NDELTA("23")
+			NDELTA("19")
+			NDELTA("21")
+		NOTIF_END,
+		NOTIF_START
 			/*
 			 * Shuffled among discarded
 			 * (config_get_rrdp_delta_threshold() is hardcoded
 			 * in unit tests as 5)
 			 */
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"20\" uri=\"https://a/d20.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"15\" uri=\"https://a/d15.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"13\" uri=\"https://a/d13.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"18\" uri=\"https://a/d18.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"17\" uri=\"https://a/d17.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"16\" uri=\"https://a/d16.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>"
-			"<delta serial=\"14\" uri=\"https://a/d14.xml\" hash=\"" HASH "\"/>"
-		"</notification>",
+			NSNAPSHOT
+			NDELTA("23")
+			NDELTA("21")
+			NDELTA("16")
+			NDELTA("14")
+			NDELTA("19")
+			NDELTA("18")
+			NDELTA("22")
+			NDELTA("17")
+			NDELTA("20")
+			NDELTA("15")
+		NOTIF_END,
 	};
 	struct update_notification notif;
 	array_index i;
 
 	for (i = 0; i < ARRAY_LEN(XML); i++) {
 		init_xml1(XML[i], NULL);
-		fetch_notif(URL, &notif);
+		fetch_notif(&notif);
 
-		ck_assert_str_eq("123123", notif.session.session_id);
-		ck_assert_str_eq("22", notif.session.serial.str);
+		ck_assert_str_eq("12-ab", notif.session.session_id);
+		ck_assert_str_eq("23", notif.session.serial.str);
 		ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
 		ck_assert_uint_eq(5, notif.deltas.len);
-		ck_delta(&notif.deltas.arr[0], "22", "https://a/d22.xml", HASH);
-		ck_delta(&notif.deltas.arr[1], "21", "https://a/d21.xml", HASH);
-		ck_delta(&notif.deltas.arr[2], "20", "https://a/d20.xml", HASH);
-		ck_delta(&notif.deltas.arr[3], "19", "https://a/d19.xml", HASH);
-		ck_delta(&notif.deltas.arr[4], "18", "https://a/d18.xml", HASH);
+		ck_delta(&notif.deltas.arr[0], "23", "https://a/d23.xml", HASH);
+		ck_delta(&notif.deltas.arr[1], "22", "https://a/d22.xml", HASH);
+		ck_delta(&notif.deltas.arr[2], "21", "https://a/d21.xml", HASH);
+		ck_delta(&notif.deltas.arr[3], "20", "https://a/d20.xml", HASH);
+		ck_delta(&notif.deltas.arr[4], "19", "https://a/d19.xml", HASH);
 
 		notification_cleanup(&notif);
 	}
@@ -709,114 +774,108 @@ END_TEST
 
 START_TEST(notif_bad_deltas)
 {
-	char *URL = "https://a/n.xml";
 	char *XML1[] = {
-		NOTIF("123123", "22") "\n"
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"23\" uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
-		NOTIF("123123", "22") "\n"
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
+		NOTIF_START "\n"
+			NSNAPSHOT "\n"
+			NDELTA("24") "\n"
+			NDELTA("23") "\n"
+			NDELTA("22") "\n"
+		NOTIF_END,
+		NOTIF_START "\n"
+			NSNAPSHOT "\n"
+			NDELTA("23") "\n"
+			NDELTA("22") "\n"
 			/* Duplicate delta: Detected early because the array cannot be resized */
-			"<delta serial=\"20\" uri=\"https://a/d20b.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"20\" uri=\"https://a/d20a.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"18\" uri=\"https://a/d18.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
-		NOTIF("123123", "22") "\n"
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+			NDELTA("21") "\n"
+			NDELTA("21") "\n"
+			NDELTA("20") "\n"
+			NDELTA("19") "\n"
+		NOTIF_END,
+		NOTIF_START "\n"
+			NSNAPSHOT "\n"
 			/* Notif vs delta serial mismatch: Detected early because obvious */
-			"<delta serial=\"23\" uri=\"https://a/d23.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
+			NDELTA("24") "\n"
+		NOTIF_END,
 	};
 	char const *ERR1[] = {
-		"(Line 3) Delta serial 23 is larger than Notification serial 22",
+		"(Line 3) Delta serial 24 is larger than Notification serial 23",
 		"The Notification has duplicate delta serials",
-		"(Line 3) Delta serial 23 is larger than Notification serial 22",
+		"(Line 3) Delta serial 24 is larger than Notification serial 23",
 	};
 	char *XML2[] = {
-		NOTIF("123123", "22") "\n"
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"20\" uri=\"https://a/d20.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>\n"
-			/* 18 missing */
-			"<delta serial=\"17\" uri=\"https://a/d17.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
-		NOTIF("123123", "22") "\n"
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"22\" uri=\"https://a/d22.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
+		NOTIF_START "\n"
+			NSNAPSHOT "\n"
+			NDELTA("23") "\n"
+			NDELTA("22") "\n"
+			NDELTA("21") "\n"
+			NDELTA("20") "\n"
+			/* 19 missing */
+			NDELTA("18") "\n"
+		NOTIF_END,
+		NOTIF_START "\n"
+			NSNAPSHOT "\n"
+			NDELTA("23") "\n"
+			NDELTA("22") "\n"
 			/* Duplicate delta: Detected during the sort */
-			"<delta serial=\"20\" uri=\"https://a/d20b.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"20\" uri=\"https://a/d20a.xml\" hash=\"" HASH "\"/>\n"
-			"<delta serial=\"19\" uri=\"https://a/d19.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
-		NOTIF("123123", "22") "\n"
-			"<snapshot uri=\"https://a/s.xml\" hash=\"" HASH "\"/>\n"
+			NDELTA("21") "\n"
+			NDELTA("21") "\n"
+			NDELTA("20") "\n"
+		NOTIF_END,
+		NOTIF_START "\n"
+			NSNAPSHOT "\n"
 			/* Notif vs delta serial mismatch: Detected during the sort */
-			"<delta serial=\"21\" uri=\"https://a/d21.xml\" hash=\"" HASH "\"/>\n"
-		"</notification>",
+			NDELTA("22") "\n"
+		NOTIF_END,
 	};
 	char const *ERR2[] = {
 		"The serials listed in the Notification's deltas do not form a contiguous sequence",
-		"Notification delta serial '20' is not unique",
-		"Notification serial does not match highest delta serial: 22 != 21",
+		"Notification delta serial '21' is not unique",
+		"Notification serial does not match highest delta serial: 23 != 22",
 	};
 	array_index i;
 
 	for (i = 0; i < ARRAY_LEN(XML1); i++) {
 		init_xml1(XML1[i], ERR1[i]);
-		__fetch_notif_error(URL, "");
+		fetch_notif_error();
 	}
 
 	for (i = 0; i < ARRAY_LEN(XML2); i++) {
 		init_xml1(XML2[i], NULL);
-		__fetch_notif_error(URL, ERR2[i]);
+		__fetch_notif_error(ERR2[i]);
 	}
 }
 END_TEST
 
-#undef NOTIF
-#define NOTIF(x, v, ss, sr) "<notification xmlns=\"" x "\" version=\"" v "\" session_id=\"" ss "\" serial=\"" sr "\">"
-#define SNAPSHOT(u, h) "<snapshot uri=\"" u "\" hash=\"" h "\"/> "
-
 START_TEST(notif_bad_data_types)
 {
-	char *URL = "https://a/n.xml";
 	char *XML[] = {
-		NOTIF("http://wx3.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+		NOTIF_FULL("http://wx3.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
 			SNAPSHOT("https://a/s.xml", HASH) "\n"
-		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "2", "9df4b597-af9e-4dca-bdda", "3") "\n"
+		NOTIF_END,
+		NOTIF_FULL(XMLNS, "2", "9df4b597-af9e-4dca-bdda", "3") "\n"
 			SNAPSHOT("https://a/s.xml", HASH) "\n"
-		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9*f4b597-af9e-4dca-bdda", "3") "\n"
+		NOTIF_END,
+		NOTIF_FULL(XMLNS, "1", "9*f4b597-af9e-4dca-bdda", "3") "\n"
 			SNAPSHOT("https://a/s.xml", HASH) "\n"
-		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "-1") "\n"
+		NOTIF_END,
+		NOTIF_FULL(XMLNS, "1", "9df4b597-af9e-4dca-bdda", "-1") "\n"
 			SNAPSHOT("https://a/s.xml", HASH) "\n"
-		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+		NOTIF_END,
+		NOTIF_FULL(XMLNS, "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
 			SNAPSHOT("https://a/s.xml", "0g23456789abcdefABCDEF0123456789abcdefABCDEF0123456789abcdefABCD") "\n"
-		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+		NOTIF_END,
+		NOTIF_FULL(XMLNS, "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
 			SNAPSHOT("https://h[o]st/9d8/3/snapshot.xml", HASH) "\n"
-		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+		NOTIF_END,
+		NOTIF_FULL(XMLNS, "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
 			SNAPSHOT("https://ho st/9d-8/3/snapshot.xml", HASH) "\n"
-		"</notification>",
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
+		NOTIF_END,
+		NOTIF_FULL(XMLNS, "1", "9df4b597-af9e-4dca-bdda", "3") "\n"
 			SNAPSHOT("https://different-host/9d-8/3/snapshot.xml", HASH) "\n"
-		"</notification>"
+		NOTIF_END,
 	};
 	char *ERR[] = {
-		"(Line 1) <notification> xmlns is not http://www.ripe.net/rpki/rrdp: http://wx3.ripe.net/rpki/rrdp",
+		"(Line 1) <notification> xmlns is not " XMLNS ": http://wx3.ripe.net/rpki/rrdp",
 		"(Line 1) <notification> version is not 1: 2",
 		"(Line 1) session_id has illegal character: *",
 		"(Line 1) Negative serial: -1",
@@ -829,7 +888,7 @@ START_TEST(notif_bad_data_types)
 
 	for (i = 0; i < ARRAY_LEN(XML); i++) {
 		init_xml1(XML[i], ERR[i]);
-		fetch_notif_error(URL);
+		fetch_notif_error();
 	}
 }
 END_TEST
@@ -860,7 +919,7 @@ explode_snapshot(char const *ss_hash)
 	__URI_INIT(&notif.snapshot.uri, "https://a/s.xml");
 	ck_assert_int_eq(0, str2hash(ss_hash, strlen(ss_hash), &notif.snapshot.hash));
 	notif.url = &url;
-	__URI_INIT(&url, "https://a/n.xml");
+	__URI_INIT(&url, NOTIF_URL);
 	files.ht = NULL;
 	cseq_init(&seq, "tmp/rrdp", 12, false);
 
@@ -887,7 +946,7 @@ explode_snapshot_error(char const *errmsg)
 	memset(&notif.snapshot.hash, 0, sizeof(notif.snapshot.hash));
 	notif.snapshot.hash.set = true;
 	notif.url = &url;
-	__URI_INIT(&url, "https://a/n.xml");
+	__URI_INIT(&url, NOTIF_URL);
 	files.ht = NULL;
 	cseq_init(&seq, "tmp/rrdp", 12, false);
 
@@ -900,104 +959,109 @@ explode_snapshot_error(char const *errmsg)
 
 START_TEST(notif_xml_hdrs)
 {
-	char *URL = "https://a/n.xml";
 	char *XML[] = {
-		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+		XMLDECL
+		NOTIF_START
 			SNAPSHOT("https://a/s.xml", HASH)
-		"</notification>",
+		NOTIF_END,
 		/* TODO (test) Maybe check the warning message this prints */
 		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+		NOTIF_START
 			SNAPSHOT("https://a/s.xml", HASH)
-		"</notification>",
-		"<!DOCTYPE notification>"
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+		NOTIF_END,
+		NOTIF_DT
+		NOTIF_START
 			SNAPSHOT("https://a/s.xml", HASH)
-		"</notification>",
+		NOTIF_END,
 		"<?xml version=\"1.1\" encoding=\"US-ASCII\"?>"
 		"<!DOCTYPE NOTIFICATION>"
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+		NOTIF_START
 			SNAPSHOT("https://a/s.xml", HASH)
-		"</notification>",
+		NOTIF_END,
 	};
-	struct update_notification notif;
 	size_t i;
 
 	for (i = 0; i < ARRAY_LEN(XML); i++) {
 		init_xml1(XML[i], NULL);
-
-		fetch_notif(URL, &notif);
-
-		ck_assert_str_eq("abcd", notif.session.session_id);
-		ck_assert_str_eq("3", notif.session.serial.str);
-		ck_snapshot(&notif.snapshot, "https://a/s.xml", HASH);
-		ck_assert_uint_eq(0, notif.deltas.len);
-
-		notification_cleanup(&notif);
+		ck_notif(0);
 	}
 }
 END_TEST
 
 START_TEST(notif_pi_boundaries)
 {
-#define PREFIX "<?xml version=\"1.0\" encoding=\"US-ASCII\"                                                                             "
-#define SUFFIX "<!DOCTYPE html><html/>"
+#undef PREFIX
+#undef SUFFIX
+#define PREFIX "<?xml version=\"1.0\" encoding=\"US-ASCII\""
+#define SUFFIX "DOCTYPE html><html/>"
 
-	char *URL = "https://a/n.xml";
-	char *XML[] = {
-		PREFIX "?><? ... ?>" SUFFIX,
-		PREFIX " ?><? ... ?>" SUFFIX,
-		PREFIX "  ?><? ... ?>" SUFFIX,
-		PREFIX "   ?><? ... ?>" SUFFIX,
-		PREFIX "    ?><? ... ?>" SUFFIX,
-		PREFIX "     ?><? ... ?>" SUFFIX,
-		PREFIX "      ?><? ... ?>" SUFFIX,
-		PREFIX "       ?><? ... ?>" SUFFIX,
-		PREFIX "        ?><? ... ?>" SUFFIX,
-		PREFIX "         ?><? ... ?>" SUFFIX,
-		PREFIX "          ?><? ... ?>" SUFFIX,
-		PREFIX "           ?><? ... ?>" SUFFIX,
+	char *XML[][2] = {
+		{ PREFIX "", "?><? ... ?><!" SUFFIX },
+		{ PREFIX "?", "><? ... ?><!" SUFFIX },
+		{ PREFIX "?>", "<? ... ?><!" SUFFIX },
+		{ PREFIX "?><", "? ... ?><!" SUFFIX },
+		{ PREFIX "?><?", " ... ?><!" SUFFIX },
+		{ PREFIX "?><? ", "... ?><!" SUFFIX },
+		{ PREFIX "?><? .", ".. ?><!" SUFFIX },
+		{ PREFIX "?><? ..", ". ?><!" SUFFIX },
+		{ PREFIX "?><? ...", " ?><!" SUFFIX },
+		{ PREFIX "?><? ... ", "?><!" SUFFIX },
+		{ PREFIX "?><? ... ?", "><!" SUFFIX },
+		{ PREFIX "?><? ... ?>", "<!" SUFFIX },
+		{ PREFIX "?><? ... ?><", "!" SUFFIX },
+		{ PREFIX "?><? ... ?><!", "" SUFFIX },
 
-		PREFIX "     ?><?\?>" SUFFIX,
-		PREFIX "      ?><?\?>" SUFFIX,
-		PREFIX "       ?><?\?>" SUFFIX,
-		PREFIX "        ?><?\?>" SUFFIX,
-		PREFIX "         ?><?\?>" SUFFIX,
-		PREFIX "          ?><?\?>" SUFFIX,
-		PREFIX "           ?><?\?>" SUFFIX,
-
-#define PI "<? ?> "
-#define PI10 PI PI PI PI PI PI PI PI PI PI
-#define PI100 PI10 PI10 PI10 PI10 PI10 PI10 PI10 PI10 PI10 PI10
-		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>" PI100 PI100 SUFFIX,
+		{ PREFIX "", "?><?\?><!" SUFFIX },
+		{ PREFIX "?", "><?\?><!" SUFFIX },
+		{ PREFIX "?>", "<?\?><!" SUFFIX },
+		{ PREFIX "?><", "?\?><!" SUFFIX },
+		{ PREFIX "?><?", "\?><!" SUFFIX },
+		{ PREFIX "?><?\?", "><!" SUFFIX },
+		{ PREFIX "?><?\?>", "<!" SUFFIX },
+		{ PREFIX "?><?\?><", "!" SUFFIX },
+		{ PREFIX "?><?\?><!", "" SUFFIX },
 	};
 	array_index i;
 
 	memset(&input, 0, sizeof(input));
 
 	for (i = 0; i < ARRAY_LEN(XML); i++) {
-		init_xml1(XML[i], NULL);
-		__fetch_notif_error(URL, "The document was not an RRDP Notification.");
+		input[0].xml = XML[i][0];
+		input[1].xml = XML[i][1];
+		input[2].xml = NULL;
+		__fetch_notif_error("The document was not an RRDP Notification.");
 	}
+
+	input[0].xml = PREFIX "?";
+	input[1].xml = "><? ?>";
+	input[2].xml = "<? ?><";
+	input[3].xml = "? ?><?";
+	input[4].xml = " ?><? ";
+	input[5].xml = "?><? ?";
+	input[6].xml = "><!" SUFFIX;
+	__fetch_notif_error("The document was not an RRDP Notification.");
+
+	input[0].xml = PREFIX "?><? ?><!" SUFFIX;
+	input[0].drip_feed = true;
+	input[1].xml = NULL;
+	__fetch_notif_error("The document was not an RRDP Notification.");
 }
 END_TEST
 
 START_TEST(notif_pi_rejected)
 {
-	char *URL = "https://a/n.xml";
 	char *XML[] = {
-		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+		XMLDECL
 		"<? ?>"
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+		NOTIF_START
 			SNAPSHOT("https://a/s.xml", HASH)
-		"</notification>",
-		"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+		NOTIF_END,
+		XMLDECL
 		"<? ?>"
-		"<!DOCTYPE notification>"
-		NOTIF("http://www.ripe.net/rpki/rrdp", "1", "abcd", "3")
+		NOTIF_DT
+		NOTIF_START
 			SNAPSHOT("https://a/s.xml", HASH)
-		"</notification>",
+		NOTIF_END,
 	};
 	array_index i;
 
@@ -1005,36 +1069,85 @@ START_TEST(notif_pi_rejected)
 
 	for (i = 0; i < ARRAY_LEN(XML); i++) {
 		init_xml1(XML[i], "Document has at least one Processing Instruction (<? ... ?>).");
-		fetch_notif_error(URL);
+		fetch_notif_error();
 	}
 }
 END_TEST
 
-START_TEST(notif_html)
-{
-	char *URL = "https://a/n.xml";
-	char *XML =
-		"<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n"
-		"<html><head>\n"
-		"<title>302 Found</title>\n"
-		"</head><body>\n"
-		"<h1>Found</h1>\n"
-		"<p>The document has moved <a href=\"https://a/n2.xml\">here</a>.</p>\n"
-		"</body></html>";
+#define HTML_TAIL \
+	"<html><head>\n" \
+	"<title>302 Found</title>\n" \
+	"</head><body>\n" \
+	"<h1>Found</h1>\n" \
+	"<p>The doc has moved <a href=\"https://a/n2.xml\">here</a>.</p>\n" \
+	"</body></html>"
+#define NOTIF_TAIL \
+	NOTIF_START(XMLNS, "1", "abcd", "3") \
+		SNAPSHOT("https://a/s.xml", HASH) \
+	NOTIF_END
 
-	init_xml1(XML, NULL);
-	__fetch_notif_error(URL, "The document was not an RRDP Notification.");
+START_TEST(notif_not_rrdp)
+{
+	init_xml1(HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(XMLDECL HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(XMLDECL PI HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(HTML_DT HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(PI HTML_DT HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(HTML_DT PI HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(PI HTML_DT PI HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(XMLDECL HTML_DT HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+	init_xml1(XMLDECL PI PI CMT2 CMT2 PI CMT2 HTML_DT PI PI CMT2 CMT2 PI CMT2 HTML_TAIL, NULL);
+	__fetch_notif_error("The document was not an RRDP Notification.");
+
+	init_xml1(XMLDECL "\n" XMLDECL "\n" NOTIF_END, "(Line 2) Expected xml start, got '<?xml'");
+	fetch_notif_error();
+	init_xml1(NOTIF_DT "\n" NOTIF_DT "\n" NOTIF_END, "(Line 2) Expected xml start, got '<!DOCTYPE'");
+	fetch_notif_error();
 }
+END_TEST
+
+/*
+ * next_tkn() will never parse an attribute value.
+ * Attribute values are done by a separate function; next_quoted().
+ * This is handy, because attribute values only ever happen in tkn3.
+ * Attribute values are the only kind of backupable tokens that might exceed
+ * MAX_NAME_SIZE bytes.
+ * This means tkn1 and tkn2 could be micro-optimized to contain smaller backup
+ * buffers.
+ * Which is not something I'm going to bother with right now, but I'm leaving
+ * this test in case I forget why I'm keeping attribute value parsing out of
+ * next_tkn().
+ */
+START_TEST(notif_misplaced_attribute)
+{
+	init_xml1(
+		"<notification \"12345678901234567890\"=\"" XMLNS "\" version=\"1\" session_id=\"abcd\" serial=\"13\">\n"
+			SNAPSHOT("https://a/s.xml", HASH) "\n"
+		NOTIF_END,
+		"(Line 1) Unexpected character: '\"'"
+	);
+	fetch_notif_error();
+}
+END_TEST
 
 START_TEST(snapshot_base64)
 {
 	init_xml1(
-		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">"
+		"<snapshot xmlns=\"" XMLNS "\" version=\"1\" session_id=\"abcd\" serial=\"12\">"
 			"<publish uri=\"rsync://a/mod/c.cer\">ZXhhbXBsZTE=</publish>"
 			"<publish uri=\"rsync://a/mod/m.mft\">ZXhhbXBsZTI=</publish>"
 			"<publish uri=\"rsync://a/mod/c.crl\">ZXhhbXBsZTM=</publish>"
 		"</snapshot>",
-		NULL);
+		NULL
+	);
 
 	explode_snapshot("5d1915d207dc35cf2e595daa014217698d241cc877ba0558ea3d7aa2472f9d54");
 
@@ -1047,7 +1160,7 @@ END_TEST
 START_TEST(snapshot_base64_newlines)
 {
 	init_xml1(
-		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
+		"<snapshot xmlns=\"" XMLNS "\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
 		"	<publish uri=\"rsync://rpki.ripe.net/Alice/Bob.cer\">\n"
 		"		TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdC4g\n"
 		"		U3VzcGVuZGlzc2UgbWF4aW11cywgbWF1cmlzIGVnZXQgcGxhY2VyYXQgY29udmFsbGlzLCBkb2xv\n"
@@ -1111,14 +1224,15 @@ END_TEST
 START_TEST(snapshot_withdraw)
 {
 	init_xml1(
-		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
+		"<snapshot xmlns=\"" XMLNS "\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
 			"<publish uri=\"rsync://a/b/c.cer\">\n"
 				"ZXhhbXBsZTE=\n"
 			"</publish>\n"
 			"<withdraw uri=\"rsync://a/b/d.mft\" hash=\"" HASH "\"/>\n"
 			"<publish uri=\"rsync://a/b/e.crl\">ZXhhbXBsZTM=</publish>\n"
 		"</snapshot>",
-		"(Line 5) Unexpected token: withdraw");
+		"(Line 5) Unexpected token: withdraw"
+	);
 	explode_snapshot_error("");
 }
 END_TEST
@@ -1126,10 +1240,11 @@ END_TEST
 START_TEST(snapshot_bad_data_types)
 {
 	init_xml1(
-		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
+		"<snapshot xmlns=\"" XMLNS "\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
 			"<publish uri=\"rsync://a/b/c.cer\">ZXh^hbXBsZTE=</publish>\n"
 		"</snapshot>",
-		"(Line 2) Unrecognized base64 character: ^ (0x5e)");
+		"(Line 2) Unrecognized base64 char: ^"
+	);
 	explode_snapshot_error("");
 }
 END_TEST
@@ -1137,8 +1252,11 @@ END_TEST
 START_TEST(snapshot_base64_newline_counting)
 {
 	init_xml1(
-		"<snapshot xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
-			"<publish uri=\"rsync://a/b/c.cer\">\n"
+		"<snapshot xmlns=\"" XMLNS "\" version=\"1\" session_id=\"abcd\" serial=\"12\">\n"
+			"<publish\n"
+			    "uri\n"
+			    "=\n"
+			    "\"rsync://a/b/c.cer\">\n"
 				"ZXh\n"
 				"hbX\n"
 				"<!--\n"
@@ -1149,7 +1267,8 @@ START_TEST(snapshot_base64_newline_counting)
 				"T*E=\n"
 			"</publish>\n"
 		"</snapshot>",
-		"(Line 10) Unrecognized base64 character: * (0x2a)");
+		"(Line 13) Unrecognized base64 char: *"
+	);
 	explode_snapshot_error("");
 }
 END_TEST
@@ -1170,7 +1289,7 @@ explode_delta(char const *ss_hash)
 	notif.session.session_id = "abcd";
 	ck_assert_int_eq(0, str2serial("12", &notif.session.serial));
 	notif.url = &url;
-	__URI_INIT(&url, "https://a/n.xml");
+	__URI_INIT(&url, NOTIF_URL);
 	ck_assert_int_eq(0, str2serial("10", &delta.serial));
 	__URI_INIT(&delta.meta.uri, "https://a/d10.xml");
 	ck_assert_int_eq(0, str2hash(ss_hash, strlen(ss_hash), &delta.meta.hash));
@@ -1185,13 +1304,12 @@ explode_delta(char const *ss_hash)
 START_TEST(delta_minimal)
 {
 	init_xml1(
-		"<delta xmlns=\"http://www.ripe.net/rpki/rrdp\" version=\"1\" session_id=\"abcd\" serial=\"10\">"
+		"<delta xmlns=\"" XMLNS "\" version=\"1\" session_id=\"abcd\" serial=\"10\">"
 			"<publish uri=\"rsync://a/mod/c.cer\">ZXhhbXBsZTE=</publish>"
 		"</delta>",
-		NULL);
-
+		NULL
+	);
 	explode_delta("be27b8719562b47d8645c46c7bc0eb4030aaf1fcbbb5548cc390058d852c73e2");
-
 	ck_file("example1", "tmp/rrdp/C");
 }
 END_TEST
@@ -1207,12 +1325,13 @@ create_suite(void)
 	tcase_add_test(xml, notif_2deltas);
 	tcase_add_test(xml, notif_1delta);
 	tcase_add_test(xml, notif_redundant_whitespace);
+	tcase_add_test(xml, notif_mandatory_whitespace);
 	tcase_add_test(xml, notif_comments);
 	tcase_add_test(xml, notif_unterminated_comment);
 	tcase_add_test(xml, notif_comment_boundaries);
 	tcase_add_test(xml, notif_lacks_snapshot);
 	tcase_add_test(xml, notif_not_ascii);
-	tcase_add_test(xml, notif_too_much_whitespace);
+	tcase_add_test(xml, notif_buffer_interruptions);
 	tcase_add_test(xml, notif_massive_whitespace);
 	tcase_add_test(xml, notif_drip_feed_whitespace);
 	tcase_add_test(xml, notif_micro_drip_feed);
@@ -1226,7 +1345,8 @@ create_suite(void)
 	tcase_add_test(xml, notif_xml_hdrs);
 	tcase_add_test(xml, notif_pi_boundaries);
 	tcase_add_test(xml, notif_pi_rejected);
-	tcase_add_test(xml, notif_html);
+	tcase_add_test(xml, notif_not_rrdp);
+	tcase_add_test(xml, notif_misplaced_attribute);
 	tcase_add_test(xml, snapshot_base64);
 	tcase_add_test(xml, snapshot_base64_newlines);
 	tcase_add_test(xml, snapshot_withdraw);
