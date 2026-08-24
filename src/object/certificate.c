@@ -1977,10 +1977,6 @@ validate_certificate(struct rpki_certificate *cert)
 	}
 	cert->type = get_cert_type(cert);
 
-	error = validate_chain(cert);
-	if (error)
-		goto end;
-
 	switch (cert->type) {
 	case CERTYPE_TA:
 		pr_clutter("Type: TA");
@@ -1992,9 +1988,11 @@ validate_certificate(struct rpki_certificate *cert)
 		pr_clutter("Type: BGPsec EE. Ignoring...");
 //		error = handle_bgpsec(cert, x509stack_peek_resources(
 //		    validation_certstack(state)), rpp_parent);
+		error = 0;
 		goto end;
 	default:
 		pr_trc("Type: Unknown. Ignoring...");
+		error = 0;
 		goto end;
 	}
 
@@ -2009,6 +2007,14 @@ validate_certificate(struct rpki_certificate *cert)
 		goto end;
 
 	error = init_resources(cert);
+	if (error)
+		goto end;
+
+	/*
+	 * Last so libcrypto receives the certificate as clean as possible,
+	 * and doesn't run along checking things that make no sense in RPKI.
+	 */
+	error = validate_chain(cert);
 
 end:	fnstack_pop();
 	return error;
@@ -2111,9 +2117,6 @@ cer_validate_ee(struct rpki_certificate *ee, struct signed_object *so)
 
 	x509_name_pr_clutter("Issuer", X509_get_issuer_name(ee->x509));
 
-	error = validate_chain(ee);
-	if (error)
-		return error;
 	error = validate_rfc6487(ee);
 	if (error)
 		return error;
@@ -2132,5 +2135,13 @@ cer_validate_ee(struct rpki_certificate *ee, struct signed_object *so)
 	if (error)
 		return error;
 
-	return validate_ee_refs(ee, so);
+	error = validate_ee_refs(ee, so);
+	if (error)
+		return error;
+
+	/*
+	 * Last so libcrypto receives the certificate as clean as possible,
+	 * and doesn't run along checking things that make no sense in RPKI.
+	 */
+	return validate_chain(ee);
 }
