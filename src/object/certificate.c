@@ -92,6 +92,41 @@ static const struct ad_metadata RPKI_MANIFEST = {
 };
 
 static int
+validate_serial(X509 *cert)
+{
+	ASN1_INTEGER *zero; /* TODO (performance) cache this */
+	int error;
+
+	/*
+	 * Note: ASN1_INTEGER_to_BN() and BN_is_negative() exist.
+	 * But since we don't need to keep the BN, this seems slightly faster.
+	 */
+
+	zero = ASN1_INTEGER_new();
+	if (zero == NULL)
+		enomem_panic();
+	if (!ASN1_INTEGER_set(zero, 0)) {
+		error = pr_crypto_err("Cannot initialize ASN1_INTEGER.");
+		goto end;
+	}
+
+	if (ASN1_INTEGER_cmp(X509_get0_serialNumber(cert), zero) < 0) {
+		error = pr_err("Serial number is negative.");
+		goto end;
+	}
+
+	/*
+	 * I redacted the uniqueness check. It's a complex validation, and the
+	 * merits of rejecting a certificate because of it are questionable.
+	 * TODO (fine) Maybe do warning later.
+	 */
+	error = 0;
+
+end:	ASN1_INTEGER_free(zero);
+	return error;
+}
+
+static int
 validate_signature_algorithm(X509 *cert)
 {
 	const ASN1_OBJECT *obj;
@@ -478,20 +513,14 @@ validate_rfc6487(struct rpki_certificate *cert)
 {
 	int error;
 
-	/*
-	 * I'm simply assuming that libcrypto implements RFC 5280. (I mean, it's
-	 * not really stated anywhere AFAIK, but since OpenSSL is supposedly the
-	 * quintessential crypto lib implementation, and RFC 5280 is supposedly
-	 * the generic certificate RFC, it's fair to say it does a well enough
-	 * job for all practical purposes.)
-	 */
-
 	/* rfc6487#section-4.1 */
 	if (X509_get_version(cert->x509) != 2)
 		return pr_err("Certificate version is not v3.");
 
 	/* rfc6487#section-4.2 */
-	/* <Redacted> */
+	error = validate_serial(cert->x509);
+	if (error)
+		return error;
 
 	/* rfc6487#section-4.3 */
 	error = validate_signature_algorithm(cert->x509);
@@ -503,18 +532,13 @@ validate_rfc6487(struct rpki_certificate *cert)
 	if (error)
 		return error;
 
-	/*
-	 * rfc6487#section-4.5
-	 *
-	 * "An issuer SHOULD use a different subject name if the subject's
-	 * key pair has changed" (it's a SHOULD, so [for now] avoid validation)
-	 */
+	/* rfc6487#section-4.5 */
 	error = validate_subject(cert->x509);
 	if (error)
 		return error;
 
 	/* rfc6487#section-4.6 */
-	/* libcrypto already does this. */
+	/* Deferred to libcrypto */
 
 	/* rfc6487#section-4.7 */
 	/* Fragment of rfc8630#section-2.3 */
@@ -715,8 +739,7 @@ validate_signature(X509 *cert, ANY_t *signedData,
 	 *
 	 * FYI: IMPLICIT [0] is 0xA0, and EXPLICIT SET OF is 0x31.
 	 *
-	 * I can officially declare that these requirements are a gargantuan
-	 * pain in the ass. Through the validation, we need access to the
+	 * This is a pain. Through the validation, we need access to the
 	 * signedAttrs thingo in both encoded and decoded versions.
 	 * (We need the decoded version for the sake of profile validation
 	 * during validate_signed_attrs(), and the encoded version to check
@@ -965,10 +988,6 @@ complain_crl_stale(X509_CRL *crl)
 	free(nu);
 }
 
-/*
- * Performs the basic (RFC 5280, presumably) chain validation.
- * (Ignores the IP and AS extensions.)
- */
 static int
 validate_chain(struct rpki_certificate *cert)
 {
