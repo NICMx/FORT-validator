@@ -7,6 +7,7 @@
 
 #include "asn1/asn1c/ASIdentifiers.h"
 #include "asn1/asn1c/IPAddressFamily.h"
+#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
 #include "hash.h"
 #include "json_util.h"
 #include "libcrypto_util.h"
@@ -837,12 +838,20 @@ ext_metadatas(void)
 	return array;
 }
 
+static char *
+ext_oid(X509_EXTENSION *ext, char *buf)
+{
+	ASN1_OBJECT *oid = X509_EXTENSION_get_object(ext);
+	return (OBJ_obj2txt(buf, OID_STR_MAXLEN, oid, 1) > 0) ? buf : NULL;
+}
+
 static int
 handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 {
 	int nid;
 	struct extension_handler *handler;
 	void *decoded;
+	char oid[OID_STR_MAXLEN];
 	int error;
 
 	nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
@@ -875,16 +884,15 @@ handle_extension(struct extension_handler *handlers, X509_EXTENSION *ext)
 		}
 	}
 
-	if (!X509_EXTENSION_get_critical(ext))
-		return 0; /* Unknown and not critical; ignore it. */
+	if (!X509_EXTENSION_get_critical(ext)) {
+		if (pr_trc_enabled())
+			pr_trc("Ignoring unknown non-critical extension: %s",
+			    ext_oid(ext, oid));
+		return 0;
+	}
 
-	/*
-	 * TODO (next iteration?) print the NID as string.
-	 * Also "unknown" is misleading. I think it's only "unknown" if the NID
-	 * is -1 or something like that.
-	 */
-	return pr_err("Certificate has unknown extension. (Extension NID: %d)",
-	    nid);
+	return pr_err("Certificate has unknown critical extension: %s",
+	    ext_oid(ext, oid));
 dupe:
 	return pr_err("Certificate has more than one '%s' extension.",
 	    handler->meta->name);
