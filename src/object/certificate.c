@@ -1985,13 +1985,13 @@ validate_certificate(struct rpki_certificate *cert)
 		pr_clutter("Type: CA");
 		break;
 	case CERTYPE_BGPSEC:
-		pr_clutter("Type: BGPsec EE. Ignoring...");
+		pr_clutter("Type: BGPsec EE; Ignoring.");
 //		error = handle_bgpsec(cert, x509stack_peek_resources(
 //		    validation_certstack(state)), rpp_parent);
 		error = 0;
 		goto end;
 	default:
-		pr_trc("Type: Unknown. Ignoring...");
+		pr_trc("Unrecognized certificate type; Ignoring.");
 		error = 0;
 		goto end;
 	}
