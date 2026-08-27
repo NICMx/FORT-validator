@@ -20,7 +20,7 @@ int rrdp_json2ctx(json_t *, char *, struct rrdp_ctx **);
 struct rrdp_dao;
 
 struct rrdp_dao *rrdpdao_create(struct rrdp_ctx *, struct uri const *);
-bool rrdpdao_downgrade_delta(struct rrdp_dao *);
+struct rrdp_serial *rrdpdao_downgrade_delta(struct rrdp_dao *);
 bool rrdpdao_downgrade_fb(struct rrdp_dao *);
 struct cache_file *rrdpdao_map(struct rrdp_dao const *, struct uri const *);
 struct mft_meta const *rrdpdao_fallback_mftnum(struct rrdp_dao *);

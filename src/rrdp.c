@@ -551,14 +551,14 @@ rrdpdao_create(struct rrdp_ctx *ctx, struct uri const *caRepository)
 }
 
 /* This function assumes querier's sessions are sorted by date, fresh first */
-bool
+struct rrdp_serial *
 rrdpdao_downgrade_delta(struct rrdp_dao *dao)
 {
 	struct rrdp_session *ss;
 	struct rrdp_step *step;
 
 	if (!dao)
-		return false;
+		return NULL;
 
 	ss = dao->step.session;
 	step = dao->step.obj;
@@ -578,12 +578,12 @@ rrdpdao_downgrade_delta(struct rrdp_dao *dao)
 	}
 
 no:	pr_trc("There are no more RRDP sessions/steps.");
-	return false;
+	return NULL;
 
 yes:	dao->state = RDS_STEP;
 	dao->step.session = ss;
 	dao->step.obj = step;
-	return true;
+	return &step->serial;
 }
 
 bool

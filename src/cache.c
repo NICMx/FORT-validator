@@ -14,6 +14,7 @@
 #include "json_util.h"
 #include "log.h"
 #include "rrdp.h"
+#include "rrdp_xml.h"
 #include "rsync.h"
 #include "task.h"
 #include "types/path.h"
@@ -976,6 +977,7 @@ validation_verdict
 querier_downgrade(struct rpp_querier *dao)
 {
 	struct cache_node *node;
+	struct rrdp_serial *serial;
 	validation_verdict vv;
 
 	switch (dao->status) {
@@ -1013,8 +1015,9 @@ querier_downgrade(struct rpp_querier *dao)
 
 	case CS_RSYNC_REFRESH:
 	case CS_RRDP_DELTAS:
-		if (rrdpdao_downgrade_delta(dao->rrdp)) {
-			pr_trc("Validating RRDP deltas.");
+		serial = rrdpdao_downgrade_delta(dao->rrdp);
+		if (serial) {
+			pr_trc("Validating RRDP delta: %s", serial->str);
 			dao->status = CS_RRDP_DELTAS;
 			return VV_CONTINUE;
 		}
