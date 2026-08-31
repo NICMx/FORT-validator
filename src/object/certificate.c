@@ -1462,6 +1462,18 @@ handle_ku_ee(void *ext, void *arg)
 }
 
 static int
+handle_eku_ca(void *ext, void *arg)
+{
+	return pr_err("CA certificate has the 'Extended Key Usage' extension");
+}
+
+static int
+handle_eku_ee(void *ext, void *arg)
+{
+	return pr_err("EE certificate has the 'Extended Key Usage' extension");
+}
+
+static int
 gn2uri(GENERAL_NAME *ad, struct uri *uri)
 {
 	ASN1_STRING *asn1str;
@@ -1798,6 +1810,7 @@ validate_ta_extensions(struct rpki_certificate *cert)
 	    { ext_ski(), true,  handle_ski_ca, cert->x509     },
 	    { ext_aki(), false, handle_aki_ta, cert->x509     },
 	    { ext_ku(),  true,  handle_ku_ca,                 },
+	    { ext_eku(), false, handle_eku_ca,                },
 	    { ext_sia(), true,  handle_sia_ca, &cert->uris    },
 	    { ext_cp(),  true,  handle_cp,     &cert->policy  },
 	    /* These are handled by convert_resources(). */
@@ -1827,6 +1840,7 @@ validate_ca_extensions(struct rpki_certificate *cert)
 	    { ext_ski(), true,  handle_ski_ca, cert->x509          },
 	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
 	    { ext_ku(),  true,  handle_ku_ca,                      },
+	    { ext_eku(), false, handle_eku_ca,                     },
 	    { ext_cdp(), true,  handle_cdp,    &cert->uris         },
 	    { ext_aia(), true,  handle_aia,    &cert->uris         },
 	    { ext_sia(), true,  handle_sia_ca, &cert->uris         },
@@ -1864,6 +1878,7 @@ validate_extensions_ee(struct rpki_certificate *cert, OCTET_STRING_t const *sid)
 	    { ext_ski(), true,  handle_ski_ee, &ski_args           },
 	    { ext_aki(), true,  handle_aki,    cert->parent->x509  },
 	    { ext_ku(),  true,  handle_ku_ee,                      },
+	    { ext_eku(), false, handle_eku_ee,                     },
 	    { ext_cdp(), true,  handle_cdp,    &cert->uris         },
 	    { ext_aia(), true,  handle_aia,    &cert->uris         },
 	    { ext_sia(), true,  handle_sia_ee, &cert->uris         },
