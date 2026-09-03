@@ -125,12 +125,28 @@ merge_providers(struct aspa_providers *old, struct aspa_providers *new)
 {
 	struct aspa_providers result;
 	uint32_t *merge;
-	size_t o, n, m;
+	size_t o, n, m; /* old counter, new counter, merge counter */
+
+	if (AP_TOO_MANY_PROVIDERS(old))
+		return *old;
+	if (AP_TOO_MANY_PROVIDERS(new))
+		return *new;
+
+	/* If exactly ONE of them is AS0, discard it */
+	if (AP_IS_AS0(old)) {
+		result = *new;
+		new->asids = NULL; /* Ownership transferred to result */
+		return result;
+	} else if (AP_IS_AS0(new)) {
+		result = *old;
+		old->asids = NULL; /* Ownership transferred to result */
+		return result;
+	}
 
 	m = old->count + new->count;
-	if (!old->asids || m > config_get_max_aspa_providers()) {
+	if (m > config_get_max_aspa_providers()) {
 		result.asids = NULL;
-		result.count = 0;
+		result.count = SIZE_MAX;
 		return result;
 	}
 

@@ -6,9 +6,19 @@
 #include <stdint.h>
 
 struct aspa_providers {
-	/* Can be NULL and zero. If this happens, just withdraw. */
+	/*
+	 * If these are NULL and SIZE_MAX, it's because the customer ended up
+	 * with too many providers after some provider merge. We need to retain
+	 * the node and status to keep remembering that no more providers should
+	 * be appended to the customer.
+	 * When the customer has too many providers, it should be withdrawn from
+	 * RTR.
+	 */
 	uint32_t *asids;
 	size_t count;
+
+#define AP_TOO_MANY_PROVIDERS(p) ((p)->asids == NULL && (p)->count == SIZE_MAX)
+#define AP_IS_AS0(p) ((p)->count == 1 && (p)->asids[0] == 0)
 };
 
 struct aspa {
