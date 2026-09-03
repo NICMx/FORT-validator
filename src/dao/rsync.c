@@ -321,7 +321,7 @@ sed_state(char const *path, char const *old, char const *new)
 
 	result = pstrdup(path);
 
-	slash = strchr(path, '/');
+	slash = strchr(result, '/');
 	if (!slash)
 		pr_panic("Path lacks a first slash: %s", path);
 	slash = strchr(slash + 1, '/');
