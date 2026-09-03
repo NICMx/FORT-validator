@@ -116,6 +116,10 @@ parse_providers(unsigned char const *hdr, FILE *file,
 	int error;
 
 	providers->count = read_u32(hdr + 4);
+	if (providers->count > MAX_ASPA_PROVIDERS)
+		return pr_op_err("Customer has too many providers: %zu",
+		    providers->count);
+
 	providers->asids = pcalloc(sizeof(uint32_t), providers->count);
 
 	for (i = 0; i < providers->count; i++) {

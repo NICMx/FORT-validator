@@ -746,7 +746,7 @@ static const struct option_field options[] = {
 		.offset = offsetof(struct rpki_config, aspa.max_providers),
 		.doc = "Maximum number of providers each customerASID is allowed to declare across all RPKI trees during each validation cycle",
 		.min = 0,
-		.max = 16380u,
+		.max = MAX_ASPA_PROVIDERS,
 	},
 
 	/* Incidences */

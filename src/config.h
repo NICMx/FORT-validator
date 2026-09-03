@@ -60,7 +60,9 @@ unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_thread_pool_server_max(void);
 enum file_type config_get_file_type(void);
 char const *config_get_payload(void);
-unsigned int config_get_max_aspa_providers(void);
+
+#define MAX_ASPA_PROVIDERS 16380u /* Absolute maximum */
+unsigned int config_get_max_aspa_providers(void); /* Configured maximum */
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);
