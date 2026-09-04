@@ -88,6 +88,7 @@ find_path_in_fallbacks(char const *path, struct fallback_ht *fbs)
 	return NULL;
 }
 
+/* Swallows @path on success */
 static int
 add_file(struct files_ht *table, struct cache_mapping *root, char *path,
     struct fallback_ht *fbs)
@@ -103,6 +104,7 @@ add_file(struct files_ht *table, struct cache_mapping *root, char *path,
 	file = find_path_in_fallbacks(path, fbs);
 	if (file) {
 		filerefs_add_uri(table, file, 1);
+		free(path);
 		return 0;
 	}
 
@@ -154,7 +156,7 @@ index_files(struct cache_mapping *ctx_root, char const *root_path,
 		if (!dir) {
 			error = errno;
 			if (error == ENOENT)
-				continue;
+				goto next;
 			pr_err("Cannot open directory %s: %s",
 			    dirpath, strerror(error));
 			goto cancel;
@@ -170,8 +172,10 @@ index_files(struct cache_mapping *ctx_root, char const *root_path,
 			switch (file->d_type) {
 			case DT_REG:
 				error = add_file(files, ctx_root, filepath, fbs);
-				if (error)
+				if (error) {
+					free(filepath);
 					goto cancel;
+				}
 				filepath = NULL;
 				break;
 
@@ -209,7 +213,7 @@ index_files(struct cache_mapping *ctx_root, char const *root_path,
 			goto cancel;
 		}
 
-		free(dirpath);
+next:		free(dirpath);
 	} while (dirs.len != 0);
 
 	stral_cleanup(&dirs);

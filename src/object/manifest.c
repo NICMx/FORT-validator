@@ -420,8 +420,7 @@ collect_files(struct cache_mapping const *map,
 	rpp->files[rpp->nfiles++] = file;
 	rpp->mft.file = file;
 
-	return crl_load(&parent->rpp.crl.file->map, parent->x509,
-	    &parent->rpp.crl.obj);
+	return crl_load(&rpp->crl.file->map, parent->x509, &rpp->crl.obj);
 
 revert:	rpp_cleanup(rpp);
 	return error;
