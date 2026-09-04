@@ -16,6 +16,9 @@ __crl_load(char const *path, X509_CRL **result)
 	BIO *bio;
 	int error;
 
+	*result = NULL;
+	error = 0;
+
 	bio = BIO_new(BIO_s_file());
 	if (bio == NULL)
 		return pr_crypto_err("BIO_new(BIO_s_file()) returned NULL");
@@ -31,10 +34,7 @@ __crl_load(char const *path, X509_CRL **result)
 	}
 
 	*result = crl;
-	error = 0;
-
-end:
-	BIO_free(bio);
+end:	BIO_free(bio);
 	return error;
 }
 
@@ -166,18 +166,22 @@ crl_validate(X509_CRL *crl, X509 *parent)
 int
 crl_load(struct cache_mapping const *map, X509 *parent, X509_CRL **result)
 {
+	X509_CRL *crl = NULL;
 	int error;
 
 	fnstack_push_map(map);
 
-	error = __crl_load(map->path, result);
+	error = __crl_load(map->path, &crl);
 	if (error)
 		goto end;
 
-	error = crl_validate(*result, parent);
-	if (error)
-		X509_CRL_free(*result);
+	error = crl_validate(crl, parent);
+	if (error) {
+		X509_CRL_free(crl);
+		goto end;
+	}
 
+	*result = crl;
 end:	fnstack_pop();
 	return error;
 }
