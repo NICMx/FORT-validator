@@ -56,7 +56,7 @@ enum rrdp_dao_state {
 };
 
 struct rrdp_dao {
-	struct uri caRepository;
+	struct uri rpkiManifest;
 	struct rrdp_ctx *ctx;
 	enum rrdp_dao_state state;
 
@@ -526,7 +526,7 @@ init_fallback(struct rrdp_dao *dao)
 	struct fallback *fb;
 
 	TAILQ_FOREACH(ss, &dao->ctx->sessions, lh) {
-		fb = fallback_find(&ss->fbs, &dao->caRepository);
+		fb = fallback_find(&ss->fbs, &dao->rpkiManifest);
 		if (!dao->fb.obj ||
 		    INTEGER_cmp(&dao->fb.obj->mft.num, &fb->mft.num) < 0) {
 			dao->fb.session = ss;
@@ -536,12 +536,12 @@ init_fallback(struct rrdp_dao *dao)
 }
 
 struct rrdp_dao *
-rrdpdao_create(struct rrdp_ctx *ctx, struct uri const *caRepository)
+rrdpdao_create(struct rrdp_ctx *ctx, struct uri const *rpkiManifest)
 {
 	struct rrdp_dao *result;
 
 	result = pzalloc(sizeof(struct rrdp_dao));
-	uri_copy(&result->caRepository, caRepository);
+	uri_copy(&result->rpkiManifest, rpkiManifest);
 	result->ctx = ctx;
 	result->state = RDS_STEP;
 	init_step(result);
@@ -634,11 +634,11 @@ rrdpdao_fallback_mftnum(struct rrdp_dao *dao)
 void
 rrdpdao_commit(struct rrdp_dao *dao, struct rpp *rpp)
 {
-	pr_trc("Queuing RPP for commit: %s", uri_str(&dao->caRepository));
+	pr_trc("Queuing RPP for commit: %s", uri_str(&dao->rpkiManifest));
 
 	switch (dao->state) {
 	case RDS_STEP:
-		fallback_add(&dao->step.session->fbs, &dao->caRepository, rpp);
+		fallback_add(&dao->step.session->fbs, &dao->rpkiManifest, rpp);
 		break;
 	case RDS_FB:
 		pr_trc("It's already a fallback.");
@@ -653,7 +653,7 @@ void
 rrdpdao_free(struct rrdp_dao *dao)
 {
 	if (dao) {
-		uri_cleanup(&dao->caRepository);
+		uri_cleanup(&dao->rpkiManifest);
 		free(dao);
 	}
 }
@@ -795,7 +795,7 @@ session2json(struct rrdp_session *session)
 		goto fail;
 	HASH_ITER(hh, session->fbs.ht, fb, tmp)
 		if (json_object_add(jfbs,
-		    uri_str(&fb->caRepository),
+		    uri_str(&fb->rpkiManifest),
 		    fallback2json(fb)))
 			goto fail;
 

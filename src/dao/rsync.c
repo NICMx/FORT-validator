@@ -20,7 +20,7 @@ enum rsync_dao_state {
 };
 
 struct rsync_dao {
-	struct uri caRepository;
+	struct uri rpkiManifest;
 	enum rsync_dao_state state;
 
 	struct rsync_ctx *ctx;
@@ -484,7 +484,7 @@ rsync_ctx2json(struct rsync_ctx *ctx)
 				ref->file->flags |= CFF_WRITTEN;
 			}
 		}
-		if (json_object_add(fbs, uri_str(&fb->caRepository),
+		if (json_object_add(fbs, uri_str(&fb->rpkiManifest),
 				    fallback2json(fb)))
 			goto fail;
 	}
@@ -543,14 +543,14 @@ strs:	free(ctx->fb_path);
 }
 
 struct rsync_dao *
-rsyncdao_create(struct rsync_ctx *ctx, struct uri *caRepository)
+rsyncdao_create(struct rsync_ctx *ctx, struct uri *rpkiManifest)
 {
 	struct rsync_dao *result = pmalloc(sizeof(struct rsync_dao));
 
-	uri_copy(&result->caRepository, caRepository);
+	uri_copy(&result->rpkiManifest, rpkiManifest);
 	result->state = RDS_REFRESH;
 	result->ctx = ctx;
-	result->fb = fallback_find(&ctx->fbs, caRepository);
+	result->fb = fallback_find(&ctx->fbs, rpkiManifest);
 
 	return result;
 }
@@ -609,12 +609,12 @@ rsyncdao_fallback_mftnum(struct rsync_dao const *dao)
 void
 rsyncdao_commit(struct rsync_dao *dao, struct rpp *rpp)
 {
-	pr_trc("Queuing RPP for commit: %s", uri_str(&dao->caRepository));
+	pr_trc("Queuing RPP for commit: %s", uri_str(&dao->rpkiManifest));
 
 	switch (dao->state) {
 	case RDS_REFRESH:
 		/* XXX it might add it multiple times. */
-		fallback_add(&dao->ctx->fbs, &dao->caRepository, rpp);
+		fallback_add(&dao->ctx->fbs, &dao->rpkiManifest, rpp);
 		break;
 	case RDS_FALLBACK:
 		pr_trc("It's already a fallback.");
@@ -630,7 +630,7 @@ void
 rsyncdao_free(struct rsync_dao *dao)
 {
 	if (dao) {
-		uri_cleanup(&dao->caRepository);
+		uri_cleanup(&dao->rpkiManifest);
 		free(dao);
 	}
 }

@@ -81,14 +81,14 @@ struct mft_meta {
 json_t *mft2json(struct mft_meta *);
 
 struct fallback {
-	struct uri caRepository;
+	struct uri rpkiManifest;	/* TODO (fine) Redundant? See @mft */
 	struct files_ht files;
 	struct mft_meta mft;		/* file points to @files, no refcount */
 
 	bool committed;			/* Freshly committed? */
 
 	UT_hash_handle hh;
-	struct fallback *next;		/* Fallbacks that share caRepository */
+	struct fallback *next;		/* Fallbacks that share rpkiManifest */
 };
 
 struct fallback_ht {

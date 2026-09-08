@@ -479,7 +479,7 @@ fallback_find(struct fallback_ht *fbs, struct uri const *caRepo)
 /* Steals @rpp's files. */
 /* TODO (fine) why does rpp not contain caRepo? */
 void
-fallback_add(struct fallback_ht *fbs, struct uri *caRepo, struct rpp *rpp)
+fallback_add(struct fallback_ht *fbs, struct uri *rpkiManifest, struct rpp *rpp)
 {
 	struct fallback *fb, *old;
 	array_index i;
@@ -487,15 +487,15 @@ fallback_add(struct fallback_ht *fbs, struct uri *caRepo, struct rpp *rpp)
 	size_t keylen;
 
 	fb = pzalloc(sizeof(struct fallback));
-	uri_copy(&fb->caRepository, caRepo);
+	uri_copy(&fb->rpkiManifest, rpkiManifest);
 	for (i = 0; i < rpp->nfiles; i++)
 		filerefs_add_uri(&fb->files, rpp->files[i], 1);
 	fb->mft = rpp->mft;
 	memset(&rpp->mft, 0, sizeof(rpp->mft));
 	fb->committed = true;
 
-	key = uri_str(&fb->caRepository);
-	keylen = uri_len(&fb->caRepository);
+	key = uri_str(&fb->rpkiManifest);
+	keylen = uri_len(&fb->rpkiManifest);
 
 	mutex_lock(&fbs->lock);
 	HASH_ADD_KEYPTR_SAFE(fbs->ht, key, keylen, fb, old);
@@ -524,7 +524,7 @@ fallback_free(struct fallback *fb, bool rm_files)
 {
 	struct fallback *next = fb->next;
 
-	uri_cleanup(&fb->caRepository);
+	uri_cleanup(&fb->rpkiManifest);
 	filerefs_clear(&fb->files, rm_files);
 	mftm_cleanup(&fb->mft);
 	free(fb);
@@ -592,8 +592,8 @@ fallback_print(struct fallback *fb, int indent)
 	struct cache_file_ref *ref, *tmp;
 	char *mftnum;
 
-	printf("%*s[Fallback] caRepository:%s ", indent, "",
-	    uri_str(&fb->caRepository));
+	printf("%*s[Fallback] rpkiManifest:%s ", indent, "",
+	    uri_str(&fb->rpkiManifest));
 	mftnum = asn_INTEGER2str(&fb->mft.num);
 	printf("mftnum:%s ", mftnum);
 	free(mftnum);
@@ -662,7 +662,7 @@ json2fallback(json_t *json, char const *key, struct files_ht *refs,
 	*result = NULL;
 	fb = pzalloc(sizeof(struct fallback));
 
-	errmsg = uri_init(&fb->caRepository, key);
+	errmsg = uri_init(&fb->rpkiManifest, key);
 	if (errmsg) {
 		error = pr_err("Bad URL: %s", errmsg);
 		goto fb;
@@ -690,7 +690,7 @@ json2fallback(json_t *json, char const *key, struct files_ht *refs,
 
 mft:	INTEGER_cleanup(&fb->mft.num);
 refs:	filerefs_clear(&fb->files, true);
-uri:	uri_cleanup(&fb->caRepository);
+uri:	uri_cleanup(&fb->rpkiManifest);
 fb:	free(fb);
 	return error;
 }
@@ -709,8 +709,8 @@ json2fallbacks(json_t *jfbs, struct fallback_ht *fbs, struct files_ht *files)
 		error = json2fallback(child, jkey, files, &fb);
 		if (error)
 			return error;
-		key = uri_str(&fb->caRepository);
-		keylen = uri_len(&fb->caRepository);
+		key = uri_str(&fb->rpkiManifest);
+		keylen = uri_len(&fb->rpkiManifest);
 		HASH_ADD_KEYPTR_SAFE(fbs->ht, key, keylen, fb, old);
 		if (old)
 			return pr_err("Table has multiple fallbacks named '%s'.",

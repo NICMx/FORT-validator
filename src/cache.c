@@ -988,7 +988,7 @@ querier_downgrade(struct rpp_querier *dao)
 			if (node != NULL && node->ctx.v.rrdp != NULL) {
 				dao->status = CS_RRDP_REFRESH;
 				dao->rrdp = rrdpdao_create(node->ctx.v.rrdp,
-				   &dao->uris->caRepository);
+				   &dao->uris->rpkiManifest);
 			}
 			if (vv == VV_CONTINUE) {
 				pr_trc("Validating RRDP Refresh.");
@@ -1006,7 +1006,7 @@ querier_downgrade(struct rpp_querier *dao)
 			pr_trc("Validating rsync refresh.");
 			dao->status = CS_RSYNC_REFRESH;
 			dao->rsync = rsyncdao_create(node->ctx.v.rsync,
-			    &dao->uris->caRepository);
+			    &dao->uris->rpkiManifest);
 			return VV_CONTINUE;
 		}
 		if (vv == VV_BUSY)
