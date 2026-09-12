@@ -123,44 +123,43 @@ static json_t *
 ku2json(void const *ext)
 {
 	ASN1_BIT_STRING const *ku = ext;
-	unsigned char data[2];
+	int ku_len;
 	json_t *parent;
 	json_t *child;
 
-	if (ku->length < 1 || 2 < ku->length)
+	ku_len = ASN1_STRING_length(ku);
+	if (ku_len != 1 && ku_len != 2)
 		return NULL;
-	memset(data, 0, sizeof(data));
-	memcpy(data, ku->data, ku->length);
 
 	parent = json_obj_new();
 	if (parent == NULL)
 		return NULL;
 
-	child = json_boolean(data[0] & 0x80u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 0));
 	if (json_object_add(parent, "digitalSignature", child))
 		goto fail;
-	child = json_boolean(data[0] & 0x40u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 1));
 	if (json_object_add(parent, "contentCommitment", child))
 		goto fail;
-	child = json_boolean(data[0] & 0x20u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 2));
 	if (json_object_add(parent, "keyEncipherment", child))
 		goto fail;
-	child = json_boolean(data[0] & 0x10u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 3));
 	if (json_object_add(parent, "dataEncipherment", child))
 		goto fail;
-	child = json_boolean(data[0] & 0x08u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 4));
 	if (json_object_add(parent, "keyAgreement", child))
 		goto fail;
-	child = json_boolean(data[0] & 0x04u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 5));
 	if (json_object_add(parent, "keyCertSign", child))
 		goto fail;
-	child = json_boolean(data[0] & 0x02u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 6));
 	if (json_object_add(parent, "cRLSign", child))
 		goto fail;
-	child = json_boolean(data[0] & 0x01u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 7));
 	if (json_object_add(parent, "encipherOnly", child))
 		goto fail;
-	child = json_boolean(data[1] & 0x80u);
+	child = json_boolean(ASN1_BIT_STRING_get_bit(ku, 8));
 	if (json_object_add(parent, "decipherOnly", child))
 		goto fail;
 
@@ -453,6 +452,8 @@ static const struct extension_metadata CP = {
 static json_t *
 p2json(ASN1_BIT_STRING const *ap, int af)
 {
+	size_t ap_len;
+	int ap_unused_bits;
 	unsigned char bin[16];
 	char str[INET6_ADDRSTRLEN];
 	unsigned int length;
@@ -462,16 +463,33 @@ p2json(ASN1_BIT_STRING const *ap, int af)
 	if (ap == NULL)
 		return json_null();
 
+	/* ASN1_BIT_STRING_get_length() thinks length zero is an error... */
+	if (ASN1_STRING_length(ap) == 0) {
+		str[0] = 0;
+		length = 0;
+		goto end;
+	}
+
+#if OPENSSL_VERSION_MAJOR >= 4
+	if (ASN1_BIT_STRING_get_length(ap, &ap_len, &ap_unused_bits) != 1)
+		return json_null();
+#else
+	ap_len = ap->length;
+	ap_unused_bits = (ap->flags & ASN1_STRING_FLAG_BITS_LEFT)
+	    ? (ap->flags & 0x07)
+	    : 0;
+#endif
+	if (ap_len > 16)
+		return json_null();
+
 	memset(bin, 0, sizeof(bin));
-	memcpy(bin, ap->data, ap->length);
+	memcpy(bin, ASN1_STRING_get0_data(ap), ap_len);
 	if (inet_ntop(af, bin, str, INET6_ADDRSTRLEN) == NULL)
 		return NULL;
 
-	length = 8 * ap->length;
-	if (ap->flags & ASN1_STRING_FLAG_BITS_LEFT)
-		length -= ap->flags & 7;
+	length = 8 * ap_len - ap_unused_bits;
 
-	written = snprintf(full, INET6_ADDRSTRLEN + 4, "%s/%u", str, length);
+end:	written = snprintf(full, INET6_ADDRSTRLEN + 4, "%s/%u", str, length);
 	return json_strn_new(full, written);
 }
 
@@ -538,7 +556,8 @@ iaf2json(IPAddressFamily const *iaf)
 {
 	json_t *parent;
 	json_t *child;
-	ASN1_OCTET_STRING *af;
+	unsigned char const *af_data;
+	int af_len;
 	char const *family;
 	int afid;
 
@@ -549,14 +568,16 @@ iaf2json(IPAddressFamily const *iaf)
 	if (parent == NULL)
 		return NULL;
 
-	af = iaf->addressFamily;
-	if (af->length != 2)
+	af_data = ASN1_STRING_get0_data(iaf->addressFamily);
+	af_len = ASN1_STRING_length(iaf->addressFamily);
+
+	if (af_len != 2)
 		goto fail;
 
-	if (af->data[0] == 0 && af->data[1] == 1) {
+	if (af_data[0] == 0 && af_data[1] == 1) {
 		family = "IPv4";
 		afid = AF_INET;
-	} else if (af->data[0] == 0 && af->data[1] == 2) {
+	} else if (af_data[0] == 0 && af_data[1] == 2) {
 		family = "IPv6";
 		afid = AF_INET6;
 	} else {
@@ -942,9 +963,11 @@ cannot_decode(struct extension_metadata const *meta)
 int
 validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash, char const *hash_name)
 {
-	X509_PUBKEY *pubkey;
+	X509_PUBKEY OPENSSL4_CONST *pubkey;
 	const unsigned char *spk;
 	int spk_len;
+	unsigned char const *hash_data;
+	int hash_len;
 	int ok;
 	int error;
 
@@ -988,13 +1011,21 @@ validate_public_key_hash(X509 *cert, ASN1_OCTET_STRING *hash, char const *hash_n
 	if (!ok)
 		return pr_crypto_err("X509_PUBKEY_get0_param() returned %d", ok);
 
+	hash_data = ASN1_STRING_get0_data(hash);
+	hash_len = ASN1_STRING_length(hash);
+
+	/* Hash the SPK, compare SPK hash with the SKI */
+	if (hash_len < 0 || SIZE_MAX < hash_len) {
+		return pr_err("%s length (%d) is out of bounds. (0-%zu)",
+		    ext_ski()->name, hash_len, SIZE_MAX);
+	}
 	/* FIXME the max limit needs to be a lot less than SIZE_MAX. */
 	if (spk_len < 0 || SIZE_MAX < spk_len) {
 		return pr_err("The Subject Public Key length (%d) is out of bounds. (0-%zu)",
 		    spk_len, SIZE_MAX);
 	}
 
-	error = hash_validate(hash_get_sha1(), spk, spk_len, hash->data, hash->length);
+	error = hash_validate(hash_get_sha1(), spk, spk_len, hash_data, hash_len);
 	if (error > 0) {
 		pr_err("The Subject Public Key's hash does not match the %s.",
 		    hash_name);

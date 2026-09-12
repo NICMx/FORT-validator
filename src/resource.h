@@ -26,16 +26,23 @@ struct resources;
 struct resources *resources_create(enum rpki_policy, bool);
 void resources_destroy(struct resources *);
 
+#define RF_ALLOW_INHERIT  (1 << 0)
+#define RF_ALLOW_MULTIPLE (1 << 1)
+#define RF_ALLOW_RANGES   (1 << 2)
+#define RF_ALLOW_ALL (RF_ALLOW_INHERIT | RF_ALLOW_MULTIPLE | RF_ALLOW_RANGES)
+
 int resources_add_ip(struct resources *, struct resources *,
-    struct IPAddressFamily *);
+    struct IPAddressFamily *, int);
 int resources_add_asn(struct resources *, struct resources *,
-    struct ASIdentifiers *, bool);
+    struct ASIdentifiers *, int);
 
 bool resources_empty(struct resources *);
 bool resources_contains_asns(struct resources *, struct asn_range const *);
+bool resources_matches_asn(struct resources *, uint32_t);
 bool resources_contains_ipv4(struct resources *, struct ipv4_prefix const *);
 bool resources_contains_ipv6(struct resources *, struct ipv6_prefix const *);
 
+enum rpki_policy resources_get_policy(struct resources *);
 void resources_set_policy(struct resources *, enum rpki_policy);
 
 int resources_foreach_asn(struct resources *, foreach_asn_cb, void *);

@@ -34,8 +34,7 @@ asn1_int_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		asn1_stream.test
 asn1_stream_test_SOURCES =	asn1/asn1c/asn1stream_test.c
-asn1_stream_test_LDADD =	${CHECK_LIBS}
-asn1_stream_test_LDADD +=	${JANSSON_LIBS}
+asn1_stream_test_LDADD =	${CHECK_LIBS} ${JANSSON_LIBS}
 
 check_PROGRAMS +=		base64.test
 base64_test_SOURCES =		base64_test.c
@@ -43,8 +42,7 @@ base64_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		cache.test
 cache_test_SOURCES =		cache_test.c
-cache_test_LDADD =		${CHECK_LIBS}
-cache_test_LDADD +=		${JANSSON_LIBS}
+cache_test_LDADD =		${CHECK_LIBS} ${JANSSON_LIBS}
 
 check_PROGRAMS +=		common.test
 common_test_SOURCES =		common_test.c
@@ -53,10 +51,6 @@ common_test_LDADD =		${CHECK_LIBS}
 check_PROGRAMS +=		db_table.test
 db_table_test_SOURCES =		rtr/db/db_table_test.c
 db_table_test_LDADD =		${CHECK_LIBS}
-
-check_PROGRAMS +=		deltas_array.test
-deltas_array_test_SOURCES =	rtr/db/deltas_array_test.c
-deltas_array_test_LDADD =	${CHECK_LIBS}
 
 check_PROGRAMS +=		hash.test
 hash_test_SOURCES =		hash_test.c
@@ -72,21 +66,19 @@ path_test_LDADD =		${CHECK_LIBS}
 
 check_PROGRAMS +=		pdu_handler.test
 pdu_handler_test_SOURCES =	rtr/pdu_handler_test.c
-pdu_handler_test_LDADD =	${CHECK_LIBS}
+pdu_handler_test_LDADD =	${CHECK_LIBS} ${JANSSON_LIBS}
 
 check_PROGRAMS +=		pdu_stream.test
 pdu_stream_test_SOURCES =	rtr/pdu_stream_test.c
-pdu_stream_test_LDADD =		${CHECK_LIBS}
+pdu_stream_test_LDADD =		${CHECK_LIBS} ${JANSSON_LIBS}
 
 check_PROGRAMS +=		rrdp.test
 rrdp_test_SOURCES =		rrdp_test.c
-rrdp_test_LDADD =		${CHECK_LIBS}
-rrdp_test_LDADD +=		${JANSSON_LIBS}
+rrdp_test_LDADD =		${CHECK_LIBS} ${JANSSON_LIBS}
 
 check_PROGRAMS +=		rrdp_xml.test
 rrdp_xml_test_SOURCES =		rrdp_xml_test.c
-rrdp_xml_test_LDADD =		${CHECK_LIBS}
-rrdp_xml_test_LDADD +=		${JANSSON_LIBS}
+rrdp_xml_test_LDADD =		${CHECK_LIBS} ${JANSSON_LIBS}
 
 #check_PROGRAMS +=		rsync.test
 #rsync_test_SOURCES =		rsync_test.c
@@ -96,17 +88,9 @@ check_PROGRAMS +=		serial.test
 serial_test_SOURCES =		types/serial_test.c
 serial_test_LDADD =		${CHECK_LIBS}
 
-check_PROGRAMS +=		tal.test
-tal_test_SOURCES =		object/tal_test.c
-tal_test_LDADD =		${CHECK_LIBS}
-
 check_PROGRAMS +=		task.test
 task_test_SOURCES =		task_test.c
 task_test_LDADD =		${CHECK_LIBS}
-
-check_PROGRAMS +=		thread_pool.test
-thread_pool_test_SOURCES =	thread_pool_test.c
-thread_pool_test_LDADD =	${CHECK_LIBS}
 
 check_PROGRAMS +=		uri.test
 uri_test_SOURCES =		types/uri_test.c
@@ -120,15 +104,14 @@ check_PROGRAMS +=		vcard.test
 vcard_test_SOURCES =		vcard_test.c
 vcard_test_LDADD =		${CHECK_LIBS}
 
-check_PROGRAMS +=		vrps.test
-vrps_test_SOURCES =		rtr/db/vrps_test.c
-vrps_test_LDADD =		${CHECK_LIBS}
 
 TESTS = ${check_PROGRAMS}
 
 
 EXTRA_DIST  = mock.c mock.h
-EXTRA_DIST += resources/lorem-ipsum.txt
+EXTRA_DIST += line_file/core.txt
+EXTRA_DIST += line_file/empty.txt
+EXTRA_DIST += line_file/error.txt
 EXTRA_DIST += rtr/db/rtr_db_mock.c
 EXTRA_DIST += tal/lacnic.tal
 EXTRA_DIST += xml/notification.xml

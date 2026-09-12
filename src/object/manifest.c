@@ -460,6 +460,7 @@ manifest_traverse(struct cache_mapping const *map, struct rpp_querier *querier,
 	fnstack_push_map(map);
 
 	/* Decode */
+	so.type = SOT_MFT;
 	error = signed_object_decode(&so, map);
 	if (error)
 		goto end1;

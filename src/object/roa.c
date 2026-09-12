@@ -6,7 +6,6 @@
 #include "object/certificate.h"
 #include "object/signed_object.h"
 #include "thread_var.h"
-#include "validation_handler.h"
 
 static int
 decode_roa(struct signed_object *so, struct RouteOriginAttestation **result)
@@ -20,8 +19,8 @@ decode_roa(struct signed_object *so, struct RouteOriginAttestation **result)
 }
 
 static int
-____handle_roa_v4(struct resources *parent, unsigned long asn,
-    struct ROAIPAddress *roa_addr)
+____handle_roa_v4(struct validation_thread *vt, struct resources *parent,
+    unsigned long asn, struct ROAIPAddress *roa_addr)
 {
 	struct ipv4_prefix pfx;
 	unsigned long maxlen;
@@ -64,12 +63,12 @@ ____handle_roa_v4(struct resources *parent, unsigned long asn,
 		    addr2str4(&pfx.addr, buf), pfx.len);
 	}
 
-	return vhandle_roa_v4(asn, &pfx, maxlen);
+	return rtrhandler_handle_roa_v4(vt->tbl, asn, &pfx, maxlen);
 }
 
 static int
-____handle_roa_v6(struct resources *parent, unsigned long asn,
-    struct ROAIPAddress *roa_addr)
+____handle_roa_v6(struct validation_thread *vt, struct resources *parent,
+    unsigned long asn, struct ROAIPAddress *roa_addr)
 {
 	struct ipv6_prefix pfx;
 	unsigned long maxlen;
@@ -112,25 +111,26 @@ ____handle_roa_v6(struct resources *parent, unsigned long asn,
 		    addr2str6(&pfx.addr, buf), pfx.len);
 	}
 
-	return vhandle_roa_v6(asn, &pfx, maxlen);
+	return rtrhandler_handle_roa_v6(vt->tbl, asn, &pfx, maxlen);
 }
 
 static int
-____handle_roa(struct resources *parent, unsigned long asn, uint8_t family,
-    struct ROAIPAddress *roa_addr)
+____handle_roa(struct validation_thread *vt, struct resources *parent,
+    unsigned long asn, uint8_t family, struct ROAIPAddress *roa_addr)
 {
 	switch (family) {
 	case 1: /* IPv4 */
-		return ____handle_roa_v4(parent, asn, roa_addr);
+		return ____handle_roa_v4(vt, parent, asn, roa_addr);
 	case 2: /* IPv6 */
-		return ____handle_roa_v6(parent, asn, roa_addr);
+		return ____handle_roa_v6(vt, parent, asn, roa_addr);
 	}
 
 	return pr_err("Unknown family value: %u", family);
 }
 
 static int
-__handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
+__handle_roa(struct validation_thread *vt, struct RouteOriginAttestation *roa,
+    struct resources *parent)
 {
 	struct ROAIPAddressFamily *block;
 	unsigned long version;
@@ -189,7 +189,7 @@ __handle_roa(struct RouteOriginAttestation *roa, struct resources *parent)
 			return pr_err("ROA's address list array is NULL.");
 
 		for (a = 0; a < block->addresses.list.count; a++) {
-			error = ____handle_roa(parent, asn,
+			error = ____handle_roa(vt, parent, asn,
 			    block->addressFamily.buf[1],
 			    block->addresses.list.array[a]);
 			if (error)
@@ -204,7 +204,8 @@ family_error:
 }
 
 int
-roa_traverse(struct cache_mapping const *map, struct rpki_certificate *parent)
+roa_traverse(struct validation_thread *vt, struct cache_mapping const *map,
+    struct rpki_certificate *parent)
 {
 	static OID oid = OID_ROA;
 	struct oid_arcs arcs = OID2ARCS("roa", oid);
@@ -218,6 +219,7 @@ roa_traverse(struct cache_mapping const *map, struct rpki_certificate *parent)
 	fnstack_push_map(map);
 
 	/* Decode */
+	so.type = SOT_ROA;
 	error = signed_object_decode(&so, map);
 	if (error)
 		goto end1;
@@ -232,7 +234,7 @@ roa_traverse(struct cache_mapping const *map, struct rpki_certificate *parent)
 	error = signed_object_validate(&so, &ee, &arcs);
 	if (error)
 		goto end4;
-	error = __handle_roa(roa, ee.resources);
+	error = __handle_roa(vt, roa, ee.resources);
 
 end4:	cer_cleanup(&ee);
 	ASN_STRUCT_FREE(asn_DEF_RouteOriginAttestation, roa);

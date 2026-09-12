@@ -5,8 +5,6 @@
 #ifndef	_OBJECT_IDENTIFIER_H_
 #define	_OBJECT_IDENTIFIER_H_
 
-#include <netdb.h>
-
 #include "asn1/asn1c/OCTET_STRING.h"
 #include "asn1/asn1c/asn_codecs_prim.h"
 

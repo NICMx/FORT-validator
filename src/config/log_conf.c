@@ -1,9 +1,6 @@
 #include "config/log_conf.h"
 
-#include <arpa/inet.h>
 #include <getopt.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stdint.h>
 #include <string.h>
 #include <syslog.h>

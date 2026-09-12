@@ -3,6 +3,8 @@
 
 #include <stdatomic.h>
 #include <stddef.h>
+
+#include "rtr/db/db_table.h"
 #include "types/uri.h"
 
 /* This is RFC 8630. */
@@ -16,7 +18,7 @@ struct tal {
 	atomic_uint refcount;
 };
 
-int perform_standalone_validation(void);
+struct db_table *perform_standalone_validation(void);
 
 void tal_cleanup(struct tal *);
 

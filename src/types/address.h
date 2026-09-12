@@ -1,7 +1,6 @@
 #ifndef SRC_TYPES_ADDRESS_H_
 #define SRC_TYPES_ADDRESS_H_
 
-#include <netdb.h>
 #include <stdbool.h>
 #include <sys/socket.h>
 

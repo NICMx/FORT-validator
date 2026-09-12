@@ -27,6 +27,7 @@ ghostbusters_traverse(struct cache_mapping const *map,
 	fnstack_push_map(map);
 
 	/* Decode */
+	so.type = SOT_GBR;
 	error = signed_object_decode(&so, map);
 	if (error)
 		goto end1;

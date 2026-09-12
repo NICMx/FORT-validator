@@ -6,7 +6,15 @@
 #include "asn1/signed_data.h"
 #include "types/map.h"
 
+enum so_type {
+	SOT_ROA = 1,
+	SOT_ASPA,
+	SOT_MFT,
+	SOT_GBR,
+};
+
 struct signed_object {
+	enum so_type type;
 	struct cache_mapping const *map;
 	struct ContentInfo *cinfo;
 	struct SignedData *sdata;

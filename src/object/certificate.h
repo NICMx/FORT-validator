@@ -8,6 +8,8 @@
 #include "cache.h"
 #include "object/tal.h"
 #include "resource.h"
+#include "types/rpp.h"
+#include "types/vthread.h"
 
 /* Certificate types in the RPKI */
 enum cert_type {
@@ -41,7 +43,8 @@ void cer_init_ee(struct rpki_certificate *, struct rpki_certificate *, bool);
 void cer_cleanup(struct rpki_certificate *);
 void cer_free(struct rpki_certificate *);
 
-validation_verdict cer_traverse(struct rpki_certificate *);
+validation_verdict cer_traverse(struct validation_thread *,
+    struct rpki_certificate *);
 
 struct signed_object;
 int cer_validate_ee(struct rpki_certificate *, struct signed_object *);

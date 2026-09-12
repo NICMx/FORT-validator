@@ -24,6 +24,8 @@ pdutype2str(enum pdu_type type)
 		return "Router Key PDU";
 	case PDU_TYPE_ERROR_REPORT:
 		return "Error Report PDU";
+	case PDU_TYPE_ASPA:
+		return "ASPA PDU";
 	}
 
 	return "unknown PDU";

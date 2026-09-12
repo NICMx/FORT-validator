@@ -62,10 +62,6 @@ ia5s2string(ASN1_IA5STRING *ia5, char **result)
 	size_t len;
 	array_index i;
 
-	/* Implementation-aware */
-	if (ia5->flags & ASN1_STRING_FLAG_BITS_LEFT)
-		return pr_err("CRL URI IA5String has unused bits.");
-
 	data = ASN1_STRING_get0_data(ia5);
 	len = ASN1_STRING_length(ia5);
 	for (i = 0; i < len; i++) {

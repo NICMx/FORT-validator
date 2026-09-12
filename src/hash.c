@@ -106,10 +106,11 @@ hash_file(struct hash_algorithm const *algorithm, char const *filename,
 
 	do {
 		consumed = fread(buffer, 1, stat.st_blksize, file);
-		error = ferror(file);
-		if (error) {
-			pr_err("File reading error. Error message (apparently): %s",
-			   strerror(error));
+		if (ferror(file)) {
+			error = errno;
+			if (!error)
+				error = EINVAL;
+			pr_err("File read failure: %s", strerror(error));
 			goto end;
 		}
 
@@ -211,6 +212,7 @@ hash_buffer(struct hash_algorithm const *algorithm,
 	return 0;
 }
 
+/* Positive if hash mismatch, negative if some other error. */
 int
 hash_validate(struct hash_algorithm const *algorithm, unsigned char const *data,
     size_t data_len, unsigned char const *expected, size_t expected_len)

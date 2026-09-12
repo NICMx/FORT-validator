@@ -1,5 +1,6 @@
 #include "object/bgpsec.h"
 
+#include "libcrypto_util.h"
 #include "log.h"
 #include "object/certificate.h"
 #include "types/router_key.h"
@@ -28,7 +29,7 @@ handle_bgpsec(X509 *cert, struct resources *parent_resources, struct rpp *pp)
 	unsigned char *ski;
 	enum rpki_policy policy;
 	struct resources *resources;
-	X509_PUBKEY *pub_key;
+	X509_PUBKEY OPENSSL4_CONST *pub_key;
 	unsigned char *cert_spk, *tmp;
 	int cert_spk_len;
 	struct resource_params res_params;
@@ -44,7 +45,7 @@ handle_bgpsec(X509 *cert, struct resources *parent_resources, struct rpp *pp)
 	resources = resources_create(policy, false);
 	if (resources == NULL)
 		goto revert_ski;
-	error = cer_get_resources(cert, resources, CERTYPE_BGPSEC);
+	error = cer_get_resources(cert, resources, CERTYPE_BGPSEC, 0);
 	if (error)
 		goto revert_resources;
 

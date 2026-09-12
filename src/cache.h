@@ -1,6 +1,7 @@
 #ifndef SRC_CACHE_LOCAL_CACHE_H_
 #define SRC_CACHE_LOCAL_CACHE_H_
 
+#include "cachefile.h"
 #include "common.h"
 #include "types/rpp.h"
 

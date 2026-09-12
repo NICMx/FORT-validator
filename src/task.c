@@ -74,8 +74,9 @@ cleanup_tasks(struct validation_tasks *tasks)
 	}
 }
 
-static void
-cleanup(void)
+/* Not thread-safe */
+void
+task_stop(void)
 {
 	enabled = false;
 	ntasks = 0;
@@ -83,10 +84,11 @@ cleanup(void)
 	cleanup_tasks(&dormant);
 }
 
+/* Not thread-safe */
 void
 task_start(void)
 {
-	cleanup();
+	task_stop();
 	enabled = true;
 }
 
@@ -97,24 +99,28 @@ __wakeup(void)
 	    "pthread_cond_broadcast");
 }
 
-/* Returns true if the module had already been stopped. */
+/* Not thread-safe */
 bool
-task_stop(void)
+task_stopped(void)
 {
-	bool result;
-
-	mutex_lock(&lock);
-	result = !enabled;
-	cleanup();
-	__wakeup();
-	mutex_unlock(&lock);
-
-	return result;
+	return !enabled;
 }
 
+/* Thread-safe */
+void
+task_cancel(void)
+{
+	mutex_lock(&lock);
+	task_stop();
+	__wakeup();
+	mutex_unlock(&lock);
+}
+
+/* Not thread-safe */
 void
 task_teardown(void)
 {
+	task_stop();
 	pthread_mutex_destroy(&lock);
 	pthread_cond_destroy(&awakener);
 }

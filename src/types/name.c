@@ -3,11 +3,10 @@
 #include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
-#include <stdlib.h>
-#include <string.h>
+#include <syslog.h>
 
-#include "alloc.h"
 #include "log.h"
+#include "thread_var.h"
 
 /**
  * It's an RFC5280 name, but from RFC 6487's perspective.
@@ -22,30 +21,35 @@ struct rfc5280_name {
 };
 
 static int
-name2string(X509_NAME_ENTRY *name, char **_result)
+name2string(X509_NAME_ENTRY const *name, char **_result)
 {
 	const ASN1_STRING *data;
+	unsigned char const *str;
+	int len;
 	char *result;
 
 	data = X509_NAME_ENTRY_get_data(name);
 	if (data == NULL)
 		return pr_crypto_err("X509_NAME_ENTRY_get_data() returned NULL");
 
-	result = pmalloc(data->length + 1);
-	memcpy(result, data->data, data->length);
-	result[data->length] = '\0';
+	str = ASN1_STRING_get0_data(data);
+	len = ASN1_STRING_length(data);
+
+	result = pmalloc(len + 1);
+	memcpy(result, str, len);
+	result[len] = '\0';
 
 	*_result = result;
 	return 0;
 }
 
 int
-x509_name_decode(X509_NAME *name, char const *what,
+x509_name_decode(X509_NAME const *name, char const *what,
     struct rfc5280_name **_result)
 {
 	struct rfc5280_name *result;
 	int i;
-	X509_NAME_ENTRY *entry;
+	X509_NAME_ENTRY const *entry;
 	int nid;
 	int error;
 
@@ -140,7 +144,7 @@ x509_name_equals(struct rfc5280_name *a, struct rfc5280_name *b)
 }
 
 int
-validate_issuer_name(X509_NAME *issuer, X509 *parent)
+validate_issuer_name(X509_NAME const *issuer, X509 const *parent)
 {
 	struct rfc5280_name *parent_subject;
 	struct rfc5280_name *child_issuer;
@@ -184,7 +188,7 @@ end:	x509_name_put(parent_subject);
 }
 
 void
-x509_name_pr_clutter(const char *prefix, X509_NAME *name)
+x509_name_pr_clutter(const char *prefix, X509_NAME const *name)
 {
 	struct rfc5280_name *printable;
 

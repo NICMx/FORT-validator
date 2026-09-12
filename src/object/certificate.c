@@ -17,6 +17,7 @@
 #include "libcrypto_util.h"
 #include "log.h"
 #include "nid.h"
+#include "object/aspa.h"
 #include "object/ghostbusters.h"
 #include "object/manifest.h"
 #include "object/roa.h"
@@ -169,7 +170,7 @@ validate_printable_string(char const *str, char const *what)
 static int
 validate_issuer(struct rpki_certificate *cert)
 {
-	X509_NAME *issuer;
+	X509_NAME const *issuer;
 	struct rfc5280_name *name;
 	char const *commonName;
 	int error;
@@ -192,7 +193,7 @@ validate_issuer(struct rpki_certificate *cert)
 }
 
 static int
-spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY *cert_spki)
+spki_cmp(X509_PUBKEY *tal_spki, X509_PUBKEY OPENSSL4_CONST *cert_spki)
 {
 	ASN1_OBJECT *tal_alg;
 	ASN1_OBJECT *cert_alg;
@@ -282,7 +283,7 @@ fail:	fnstack_pop();
 }
 
 static int
-validate_spki(struct tal const *tal, X509_PUBKEY *cert_spki)
+validate_spki(struct tal const *tal, X509_PUBKEY OPENSSL4_CONST *cert_spki)
 {
 	X509_PUBKEY *tal_spki;
 	int error;
@@ -321,7 +322,7 @@ validate_spki(struct tal const *tal, X509_PUBKEY *cert_spki)
  * 2048-bit modulus and a public exponent (e) of 65,537."
  */
 static int
-validate_subject_public_key(X509_PUBKEY *pubkey)
+validate_subject_public_key(X509_PUBKEY OPENSSL4_CONST *pubkey)
 {
 #if OPENSSL_VERSION_MAJOR >= 3
 
@@ -456,7 +457,7 @@ validate_subject_public_key(X509_PUBKEY *pubkey)
 static int
 validate_public_key(struct rpki_certificate *cert)
 {
-	X509_PUBKEY *pubkey;
+	X509_PUBKEY OPENSSL4_CONST *pubkey;
 	EVP_PKEY *evppkey;
 	X509_ALGOR *pa;
 	int ok;
@@ -701,7 +702,7 @@ validate_signature(X509 *cert, ANY_t *signedData,
 {
 	static const uint8_t EXPLICIT_SET_OF_TAG = 0x31;
 
-	X509_PUBKEY *public_key;
+	X509_PUBKEY OPENSSL4_CONST *public_key;
 	EVP_MD_CTX *ctx;
 	struct encoded_signedAttrs signedAttrs;
 	int error;
@@ -1094,16 +1095,22 @@ end1:	X509_STORE_CTX_free(ctx);
 }
 
 static int
-handle_ip_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
+handle_ip_extension(struct rpki_certificate *cert,
+    X509_EXTENSION OPENSSL4_CONST *ext,
+    int flags)
 {
-	ASN1_OCTET_STRING *string;
+	ASN1_OCTET_STRING const *string;
 	struct IPAddrBlocks *blocks;
 	OCTET_STRING_t *family;
 	int i;
 	int error;
 
+	if (!X509_EXTENSION_get_critical(ext))
+		return pr_err("IP extension is not marked critical.");
+
 	string = X509_EXTENSION_get_data(ext);
-	error = asn1_decode(string->data, string->length, &asn_DEF_IPAddrBlocks,
+	error = asn1_decode(ASN1_STRING_get0_data(string),
+	    ASN1_STRING_length(string), &asn_DEF_IPAddrBlocks,
 	    (void **) &blocks, true);
 	if (error)
 		return error;
@@ -1137,7 +1144,7 @@ handle_ip_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
 	for (i = 0; i < blocks->list.count && !error; i++)
 		error = resources_add_ip(cert->resources,
 		    cert->parent ? cert->parent->resources : NULL,
-		    blocks->list.array[i]);
+		    blocks->list.array[i], flags);
 
 end:
 	ASN_STRUCT_FREE(asn_DEF_IPAddrBlocks, blocks);
@@ -1145,86 +1152,32 @@ end:
 }
 
 static int
-handle_asn_extension(struct rpki_certificate *cert, X509_EXTENSION *ext)
-{
-	ASN1_OCTET_STRING *string;
+handle_asn_extension(
+    struct rpki_certificate *cert,
+    X509_EXTENSION OPENSSL4_CONST *ext,
+    int flags
+) {
+	ASN1_OCTET_STRING const *string;
 	struct ASIdentifiers *ids;
 	int error;
 
 	string = X509_EXTENSION_get_data(ext);
-	error = asn1_decode(string->data, string->length,
-	    &asn_DEF_ASIdentifiers, (void **) &ids, true);
+	error = asn1_decode(ASN1_STRING_get0_data(string),
+	    ASN1_STRING_length(string), &asn_DEF_ASIdentifiers,
+	    (void **) &ids, true);
 	if (error)
 		return error;
 
 	error = resources_add_asn(cert->resources,
 	    cert->parent ? cert->parent->resources : NULL,
-	    ids, cert->type != CERTYPE_BGPSEC);
+	    ids, flags);
 
 	ASN_STRUCT_FREE(asn_DEF_ASIdentifiers, ids);
 	return error;
 }
 
-static int
-__convert_resources(struct rpki_certificate *cert,
-    int addr_nid, int asn_nid, int bad_addr_nid, int bad_asn_nid,
-    char const *policy_rfc, char const *bad_ext_rfc)
-{
-	X509_EXTENSION *ext;
-	int nid;
-	int i;
-	int error;
-	bool ip_ext_found = false;
-	bool asn_ext_found = false;
-
-	/* Reference: X509_get_ext_d2i */
-	/* rfc6487#section-2 */
-
-	for (i = 0; i < X509_get_ext_count(cert->x509); i++) {
-		ext = X509_get_ext(cert->x509, i);
-		nid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
-
-		if (nid == addr_nid) {
-			if (ip_ext_found)
-				return pr_err("Multiple IP extensions found.");
-			if (!X509_EXTENSION_get_critical(ext))
-				return pr_err("The IP extension is not marked as critical.");
-
-			ip_ext_found = true;
-
-			error = handle_ip_extension(cert, ext);
-			if (error)
-				return error;
-
-		} else if (nid == asn_nid) {
-			if (asn_ext_found)
-				return pr_err("Multiple AS extensions found.");
-			if (!X509_EXTENSION_get_critical(ext))
-				return pr_err("The AS extension is not marked as critical.");
-
-			asn_ext_found = true;
-
-			error = handle_asn_extension(cert, ext);
-			if (error)
-				return error;
-
-		} else if (nid == bad_addr_nid) {
-			return pr_err("Certificate has an RFC%s policy, but contains an RFC%s IP extension.",
-			    policy_rfc, bad_ext_rfc);
-		} else if (nid == bad_asn_nid) {
-			return pr_err("Certificate has an RFC%s policy, but contains an RFC%s ASN extension.",
-			    policy_rfc, bad_ext_rfc);
-		}
-	}
-
-	if (!ip_ext_found && !asn_ext_found)
-		return pr_err("Certificate lacks both IP and AS extension.");
-
-	return 0;
-}
-
 /**
- * Copies the resources from cert->x509 into cert->resources.
+ * Copies the resources from cer->x509 to cer->resources.
  *
  * Note: One reason why this is separate from the validate_extensions functions
  * is because it needs to be handled after the policy has been extracted from
@@ -1233,23 +1186,115 @@ __convert_resources(struct rpki_certificate *cert,
  * to migrate it.
  */
 static int
-convert_resources(struct rpki_certificate *cert)
+certificate_get_resources(struct rpki_certificate *cer, enum so_type sot)
 {
-	switch (cert->policy) {
-	case RPKI_POLICY_RFC6484:
-		return __convert_resources(cert,
-		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
-		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
-		    "6484", "8360");
-	case RPKI_POLICY_RFC8360:
-		return __convert_resources(cert,
-		    nid_ipAddrBlocksv2(), nid_autonomousSysIdsv2(),
-		    NID_sbgp_ipAddrBlock, NID_sbgp_autonomousSysNum,
-		    "8360", "6484");
+	int allowed_ip_nid = NID_undef;
+	int allowed_as_nid = NID_undef;
+	int flags = RF_ALLOW_ALL;
+
+	int nid_ip1 = NID_sbgp_ipAddrBlock;
+	int nid_ip2 = nid_ipAddrBlocksv2();
+	int nid_as1 = NID_sbgp_autonomousSysNum;
+	int nid_as2 = nid_autonomousSysIdsv2();
+
+	X509_EXTENSION OPENSSL4_CONST *ext;
+	int extnid;
+	int e;
+	bool ext_found = false;
+	int error;
+
+	switch (cer->type) {
+	case CERTYPE_TA:
+	case CERTYPE_CA:
+	case CERTYPE_BGPSEC:
+		switch (resources_get_policy(cer->resources)) {
+		case RPKI_POLICY_RFC6484:
+			allowed_ip_nid = nid_ip1;
+			allowed_as_nid = nid_as1;
+			break;
+		case RPKI_POLICY_RFC8360:
+			allowed_ip_nid = nid_ip2;
+			allowed_as_nid = nid_as2;
+		}
+		break;
+	case CERTYPE_EE:
+		switch (sot) {
+		case SOT_ROA:
+			switch (resources_get_policy(cer->resources)) {
+			case RPKI_POLICY_RFC6484:
+				allowed_ip_nid = nid_ip1; break;
+			case RPKI_POLICY_RFC8360:
+				allowed_ip_nid = nid_ip2;
+			}
+			flags &= ~RF_ALLOW_INHERIT;
+			break;
+		case SOT_ASPA:
+			switch (resources_get_policy(cer->resources)) {
+			case RPKI_POLICY_RFC6484:
+				allowed_as_nid = nid_as1; break;
+			case RPKI_POLICY_RFC8360:
+				allowed_as_nid = nid_as2;
+			}
+			flags = 0;
+			break;
+		case SOT_MFT:
+		case SOT_GBR:
+			/*
+			 * RFC6487:
+			 *
+			 * > Either the IP Resources extension, or the AS
+			 * > Resources extension, or both, MUST be present in
+			 * > all RPKI certificates
+			 *
+			 * This requirement seems counterproductive,
+			 * but I guess it's too late to fix it.
+			 */
+			switch (resources_get_policy(cer->resources)) {
+			case RPKI_POLICY_RFC6484:
+				allowed_ip_nid = nid_ip1;
+				allowed_as_nid = nid_as1;
+				break;
+			case RPKI_POLICY_RFC8360:
+				allowed_ip_nid = nid_ip2;
+				allowed_as_nid = nid_as2;
+			}
+			break;
+		}
+		break;
+	case CERTYPE_UNKNOWN:
+		return pr_err("Unknown certificate type: %d", cer->type);
 	}
 
-	pr_panic("Unknown policy: %u", cert->policy);
-	return EINVAL;
+	for (e = 0; e < X509_get_ext_count(cer->x509); e++) {
+		ext = X509_get_ext(cer->x509, e);
+		extnid = OBJ_obj2nid(X509_EXTENSION_get_object(ext));
+
+		if (extnid == nid_ip1 || extnid == nid_ip2) {
+			if (extnid != allowed_ip_nid)
+				return pr_err("Found an unexpected IP Resources extension.");
+
+			error = handle_ip_extension(cer, ext, flags);
+			if (error)
+				return error;
+			allowed_ip_nid = NID_undef;
+			ext_found = true;
+
+		} else if (extnid == nid_as1 || extnid == nid_as2) {
+			if (extnid != allowed_as_nid)
+				return pr_err("Found an unexpected AS Resources extension.");
+
+			error = handle_asn_extension(cer, ext, flags);
+			if (error)
+				return error;
+			allowed_as_nid = NID_undef;
+			ext_found = true;
+		}
+	}
+
+	if (!ext_found)
+		return pr_err("Certificate lacks both IP and AS extension.");
+
+	return 0;
 }
 
 static int
@@ -1372,6 +1417,8 @@ handle_ski_ee(void *ext, void *arg)
 {
 	ASN1_OCTET_STRING *ski = ext;
 	struct ski_arguments *args = arg;
+	unsigned char const *ski_data;
+	int ski_len;
 	OCTET_STRING_t const *sid;
 	int error;
 
@@ -1381,9 +1428,10 @@ handle_ski_ee(void *ext, void *arg)
 
 	/* rfc6488#section-2.1.6.2 */
 	/* rfc6488#section-3.1.c 2/2 */
+	ski_data = ASN1_STRING_get0_data(ski);
+	ski_len = ASN1_STRING_length(ski);
 	sid = args->sid;
-	if (ski->length != sid->size
-	    || memcmp(ski->data, sid->buf, sid->size) != 0) {
+	if (ski_len != sid->size || memcmp(ski_data, sid->buf, sid->size) != 0) {
 		return pr_err("The EE certificate's subjectKeyIdentifier does not equal the Signed Object's sid.");
 	}
 
@@ -1426,16 +1474,26 @@ handle_ku(ASN1_BIT_STRING *ku, unsigned char byte1)
 	 * But zeroized rightmost bits can be omitted.
 	 * This implementation assumes that the ninth bit should always be zero.
 	 */
-
+	size_t ku_len;
+#if OPENSSL_VERSION_MAJOR >= 4
+	int ku_unused_bits;
+#endif
 	unsigned char data[2];
 
-	if (ku->length != 2 && ku->length != 1) {
-		return pr_err("Bogus %s length: %d",
-		    ext_ku()->name, ku->length);
+#if OPENSSL_VERSION_MAJOR >= 4
+	if (ASN1_BIT_STRING_get_length(ku, &ku_len, &ku_unused_bits) != 1)
+		return pr_val_err("Cannot read Key Usage string.");
+#else
+	ku_len = ku->length;
+#endif
+
+	if (ku_len != 2 && ku_len != 1) {
+		return pr_err("Bogus %s length: %zu",
+		    ext_ku()->name, ku_len);
 	}
 
 	memset(data, 0, sizeof(data));
-	memcpy(data, ku->data, ku->length);
+	memcpy(data, ASN1_STRING_get0_data(ku), ku_len);
 
 	if (data[0] != byte1 || data[1] != 0) {
 		return pr_err("Illegal key usage flag string: %d%d%d%d%d%d%d%d%d",
@@ -1958,7 +2016,7 @@ init_resources(struct rpki_certificate *cert)
 
 	cert->resources = resources_create(cert->policy, false);
 
-	error = convert_resources(cert);
+	error = certificate_get_resources(cert, 0);
 	if (error)
 		return error;
 
@@ -2036,7 +2094,7 @@ end:	fnstack_pop();
 }
 
 validation_verdict
-cer_traverse(struct rpki_certificate *ca)
+cer_traverse(struct validation_thread *vt, struct rpki_certificate *ca)
 {
 	validation_verdict vv;
 	struct cache_file *mft;
@@ -2081,7 +2139,9 @@ retry:	vv = querier_downgrade(ca->querier);
 		if (uri_has_extension(&map->url, ".cer"))
 			queued += task_enqueue_rpp(map, ca);
 		else if (uri_has_extension(&map->url, ".roa"))
-			roa_traverse(map, ca);
+			roa_traverse(vt, map, ca);
+		else if (uri_has_extension(&map->url, ".asa"))
+			aspa_traverse(vt, map, ca);
 		else if (uri_has_extension(&map->url, ".gbr"))
 			ghostbusters_traverse(map, ca);
 	}
@@ -2146,7 +2206,7 @@ cer_validate_ee(struct rpki_certificate *ee, struct signed_object *so)
 		return error;
 
 	resources_set_policy(ee->resources, ee->policy);
-	error = convert_resources(ee);
+	error = certificate_get_resources(ee, so->type);
 	if (error)
 		return error;
 

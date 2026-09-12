@@ -38,8 +38,8 @@ fort_standalone(void)
 static int
 fort_server(void)
 {
+	struct rtr_metadata rtr;
 	int error;
-	bool changed;
 
 	pr_inf("Main loop: Starting...");
 
@@ -47,13 +47,13 @@ fort_server(void)
 	if (error)
 		return error;
 
-	error = vrps_update(NULL);
+	error = vrps_update(&rtr);
 	if (error) {
 		pr_err("Main loop: Validation unsuccessful; results unusable.");
-		return error;
+		goto end;
 	}
 
-	rtr_notify();
+	rtr_notify(&rtr);
 
 	/* TODO (#133) Stats ready; remove this message in a couple versions. */
 	pr_wrn("First validation cycle successfully ended, now you can connect your router(s)");
@@ -64,18 +64,17 @@ fort_server(void)
 		sleep(config_get_validation_interval());
 		pr_inf("Main loop: Time to work!");
 
-		error = vrps_update(&changed);
+		error = vrps_update(&rtr);
 		if (error == EINTR)
 			break;
 		if (error) {
 			pr_trc("Main loop: %s", strerror(abs(error)));
 			continue;
 		}
-		if (changed)
-			rtr_notify();
+		rtr_notify(&rtr);
 	} while (true);
 
-	rtr_stop();
+end:	rtr_stop();
 	return error;
 }
 
@@ -153,15 +152,12 @@ main(int argc, char **argv)
 	error = http_init();
 	if (error)
 		goto revert_hash;
-	error = vrps_init();
-	if (error)
-		goto revert_http;
 	error = cache_setup2();
 	if (error)
-		goto revert_vrps;
+		goto revert_http;
 	error = output_setup();
 	if (error)
-		goto revert_vrps;
+		goto revert_http;
 	task_setup();
 
 	/* Meat */
@@ -180,8 +176,6 @@ main(int argc, char **argv)
 
 	/* End */
 	task_teardown();
-revert_vrps:
-	vrps_destroy();
 revert_http:
 	http_cleanup();
 revert_hash:

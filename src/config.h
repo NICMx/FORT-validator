@@ -1,10 +1,7 @@
 #ifndef SRC_CONFIG_H_
 #define SRC_CONFIG_H_
 
-#include <arpa/inet.h>
 #include <curl/curl.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -28,6 +25,7 @@ unsigned int config_get_interval_refresh(void);
 unsigned int config_get_interval_retry(void);
 unsigned int config_get_interval_expire(void);
 unsigned int config_get_deltas_lifetime(void);
+unsigned int max_rtr_version(void);
 unsigned int config_get_prometheus_port(void);
 char const *config_get_slurm(void);
 
@@ -53,6 +51,7 @@ bool config_get_http_enabled(void);
 char const *config_get_http_proxy(void);
 char const *config_get_output_roa(void);
 char const *config_get_output_bgpsec(void);
+char const *config_get_output_aspa(void);
 enum output_format config_get_output_format(void);
 unsigned int config_get_asn1_decode_max_stack(void);
 unsigned int config_get_thread_pool_server_max(void);
@@ -60,6 +59,9 @@ unsigned int config_get_validation_thread_count(void);
 enum file_type config_get_file_type(void);
 char const *config_get_payload(void);
 time_t config_get_validation_time(void);
+
+#define MAX_ASPA_PROVIDERS 16380u /* Absolute maximum */
+unsigned int config_get_max_aspa_providers(void); /* Configured maximum */
 
 /* Logging getters */
 bool config_get_op_log_enabled(void);

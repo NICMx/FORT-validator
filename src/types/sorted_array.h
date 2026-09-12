@@ -44,6 +44,7 @@ enum resource_cmp_result {
 enum resource_cmp_result sarray_add(struct sorted_array *, void const *);
 bool sarray_empty(struct sorted_array const *);
 bool sarray_contains(struct sorted_array const *, void const *);
+unsigned int sarray_count(struct sorted_array const *);
 
 typedef int (*sarray_foreach_cb)(void *, void *);
 int sarray_foreach(struct sorted_array *, sarray_foreach_cb, void *);

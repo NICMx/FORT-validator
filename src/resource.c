@@ -120,7 +120,7 @@ add_prefix4(struct resources *resources, struct resources *parent,
 	enum resource_cmp_result result;
 
 	if (parent && (resources->ip4s == parent->ip4s))
-		return pr_err("Certificate defines IPv4 prefixes while also inheriting his parent's.");
+		return pr_err("Certificate defines IPv4 prefixes while also inheriting its parent's.");
 
 	error = prefix4_decode(addr, &prefix);
 	if (error)
@@ -162,7 +162,7 @@ add_prefix6(struct resources *resources, struct resources *parent,
 	enum resource_cmp_result result;
 
 	if (parent && (resources->ip6s == parent->ip6s))
-		return pr_err("Certificate defines IPv6 prefixes while also inheriting his parent's.");
+		return pr_err("Certificate defines IPv6 prefixes while also inheriting its parent's.");
 
 	error = prefix6_decode(addr, &prefix);
 	if (error)
@@ -220,7 +220,7 @@ add_range4(struct resources *resources, struct resources *parent,
 	enum resource_cmp_result result;
 
 	if (parent && (resources->ip4s == parent->ip4s))
-		return pr_err("Certificate defines IPv4 ranges while also inheriting his parent's.");
+		return pr_err("Certificate defines IPv4 ranges while also inheriting its parent's.");
 
 	error = range4_decode(input, &range);
 	if (error)
@@ -268,7 +268,7 @@ add_range6(struct resources *resources, struct resources *parent,
 	enum resource_cmp_result result;
 
 	if (parent && (resources->ip6s == parent->ip6s))
-		return pr_err("Certificate defines IPv6 ranges while also inheriting his parent's.");
+		return pr_err("Certificate defines IPv6 ranges while also inheriting its parent's.");
 
 	error = range6_decode(input, &range);
 	if (error)
@@ -360,7 +360,7 @@ add_aors(struct resources *resources, struct resources *parent, int family,
 
 int
 resources_add_ip(struct resources *resources, struct resources *parent,
-    struct IPAddressFamily *obj)
+    struct IPAddressFamily *obj, int flags)
 {
 	int family;
 
@@ -372,7 +372,9 @@ resources_add_ip(struct resources *resources, struct resources *parent,
 	case IPAddressChoice_PR_NOTHING:
 		break;
 	case IPAddressChoice_PR_inherit:
-		return inherit_aors(resources, parent, family);
+		return (flags & RF_ALLOW_INHERIT)
+		    ? inherit_aors(resources, parent, family)
+		    : pr_err("IP extension is not allowed to contain 'inherit' elements.");
 	case IPAddressChoice_PR_addressesOrRanges:
 		return add_aors(resources, parent, family,
 		    &obj->ipAddressChoice.choice.addressesOrRanges);
@@ -465,13 +467,13 @@ add_asn(struct resources *resources, struct asn_range const *asns,
 
 static int
 add_asior(struct resources *resources, struct resources *parent,
-    struct ASIdOrRange *obj)
+    struct ASIdOrRange *obj, int flags)
 {
 	struct asn_range asns;
 	int error;
 
 	if (parent && (resources->asns == parent->asns))
-		return pr_err("Certificate defines ASN resources while also inheriting his parent's.");
+		return pr_err("Certificate defines ASN resources while also inheriting its parent's.");
 
 	switch (obj->present) {
 	case ASIdOrRange_PR_NOTHING:
@@ -485,6 +487,8 @@ add_asior(struct resources *resources, struct resources *parent,
 		return add_asn(resources, &asns, parent);
 
 	case ASIdOrRange_PR_range:
+		if ((flags & RF_ALLOW_RANGES) == 0)
+			return pr_err("ASN extension is not allowed to contain 'range' elements.");
 		error = ASId2u32(&obj->choice.range.min, &asns.min);
 		if (error)
 			return error;
@@ -499,7 +503,7 @@ add_asior(struct resources *resources, struct resources *parent,
 
 static int
 add_asiors(struct resources *resources, struct resources *parent,
-    struct ASIdentifiers *ids)
+    struct ASIdentifiers *ids, int flags)
 {
 	struct ASIdentifierChoice__asIdsOrRanges *iors;
 	int i;
@@ -512,8 +516,11 @@ add_asiors(struct resources *resources, struct resources *parent,
 	if (iors->list.count == 0)
 		return pr_err("AS extension's set of AS number records is empty.");
 
+	if ((flags & RF_ALLOW_MULTIPLE) == 0 && iors->list.count != 1)
+		return pr_err("AS resources list more than one ASIdOrRange.");
+
 	for (i = 0; i < iors->list.count; i++) {
-		error = add_asior(resources, parent, iors->list.array[i]);
+		error = add_asior(resources, parent, iors->list.array[i], flags);
 		if (error)
 			return error;
 	}
@@ -523,7 +530,7 @@ add_asiors(struct resources *resources, struct resources *parent,
 
 int
 resources_add_asn(struct resources *resources, struct resources *parent,
-    struct ASIdentifiers *ids, bool allow_inherit)
+    struct ASIdentifiers *ids, int flags)
 {
 	if (ids->asnum == NULL)
 		return pr_err("ASN extension lacks 'asnum' element.");
@@ -532,12 +539,11 @@ resources_add_asn(struct resources *resources, struct resources *parent,
 
 	switch (ids->asnum->present) {
 	case ASIdentifierChoice_PR_inherit:
-		if (!allow_inherit)
-			return pr_err("ASIdentifierChoice %u isn't allowed",
-			    ids->asnum->present);
+		if ((flags & RF_ALLOW_INHERIT) == 0)
+			return pr_err("ASN extension is not allowed to contain 'inherit' elements.");
 		return inherit_asiors(resources, parent);
 	case ASIdentifierChoice_PR_asIdsOrRanges:
-		return add_asiors(resources, parent, ids);
+		return add_asiors(resources, parent, ids, flags);
 	case ASIdentifierChoice_PR_NOTHING:
 		break;
 	}
@@ -560,6 +566,12 @@ resources_contains_asns(struct resources *res, struct asn_range const *range)
 }
 
 bool
+resources_matches_asn(struct resources *res, uint32_t asid)
+{
+	return rasn_matches(res->asns, asid);
+}
+
+bool
 resources_contains_ipv4(struct resources *res, struct ipv4_prefix const *prefix)
 {
 	return res4_contains_prefix(res->ip4s, prefix);
@@ -569,6 +581,12 @@ bool
 resources_contains_ipv6(struct resources *res, struct ipv6_prefix const *prefix)
 {
 	return res6_contains_prefix(res->ip6s, prefix);
+}
+
+enum rpki_policy
+resources_get_policy(struct resources *res)
+{
+	return res->policy;
 }
 
 void
