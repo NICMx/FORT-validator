@@ -1,5 +1,7 @@
 #include "daemon.h"
 
+/* XXX this code looks very outdated */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>

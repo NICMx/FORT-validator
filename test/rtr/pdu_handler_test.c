@@ -330,8 +330,8 @@ START_TEST(test_natural_flows)
 	pr_inf("-- Natural Flows --");
 
 	deltas_lifetime = 5;
-	if (file_stat_errno("tmp/rtr") == 0)
-		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
+	if (file_stat_errno("rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("rtr"));
 
 	/* First cycle not yet performed: Tell routers to wait */
 	e = 0;
@@ -478,8 +478,8 @@ START_TEST(test_delta_forget)
 	pr_inf("-- Delta Forgetting -- ");
 
 	deltas_lifetime = 1;
-	if (file_stat_errno("tmp/rtr") == 0)
-		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
+	if (file_stat_errno("rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("rtr"));
 
 	/* First cycle not yet performed: Tell routers to wait */
 	e = 0;
@@ -612,8 +612,8 @@ START_TEST(test_no_incremental_update_available)
 	pr_inf("-- No Incremental Update Available --");
 
 	deltas_lifetime = 5;
-	if (file_stat_errno("tmp/rtr") == 0)
-		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
+	if (file_stat_errno("rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("rtr"));
 	session = mock_serial1() + RTR_V2;
 	mock_serial2();
 	mock_serial3();
@@ -640,8 +640,8 @@ START_TEST(test_cache_has_no_data_available)
 	pr_inf("-- Cache Has No Data Available --");
 
 	deltas_lifetime = 5;
-	if (file_stat_errno("tmp/rtr") == 0)
-		ck_assert_int_eq(0, file_rm_rf("tmp/rtr"));
+	if (file_stat_errno("rtr") == 0)
+		ck_assert_int_eq(0, file_rm_rf("rtr"));
 
 	e = 0;
 	expected_pdu_add(PDU_TYPE_ERROR_REPORT, 0, 0);
@@ -677,6 +677,11 @@ main(void)
 	error = file_mkdir("tmp", true);
 	if (error)
 		return error;
+	if (chdir("tmp") < 0) {
+		error = errno;
+		fprintf(stderr, "chdir(tmp): %s", strerror(error));
+		return error;
+	}
 
 	runner = srunner_create(create_suite());
 	srunner_run_all(runner, CK_NORMAL);
