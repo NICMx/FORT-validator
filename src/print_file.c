@@ -176,7 +176,7 @@ guess_file_type(BIO **bio, unsigned char *hdrbuf)
 
 	if (*ptr == 0x06) {
 		pr_trc("SEQ containing OID.");
-		return FT_ROA; /* Same parser for mfts and gbrs */
+		return FT_ROA; /* Same parser for mfts and aspas */
 	}
 	if (*ptr != 0x30) {
 		pr_trc("SEQ containing unexpected: 0x%x", *ptr);
@@ -278,6 +278,7 @@ __print_file(void)
 		return pr_err("Unrecognized file type.");
 
 	case FT_ROA:
+	case FT_ASA:
 	case FT_MFT:
 	case FT_GBR:
 		json = asn1c2json(bio);

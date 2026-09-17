@@ -55,24 +55,24 @@ fort_server(void)
 
 	rtr_notify(&rtr);
 
-	/* TODO (#133) Stats ready; remove this message in a couple versions. */
-	pr_wrn("First validation cycle successfully ended, now you can connect your router(s)");
 	stats_gauge_set(stat_rtr_ready, 1);
 
-	do {
+	while (!fort_end) {
 		pr_inf("Main loop: Sleeping.");
 		sleep(config_get_validation_interval());
+		if (fort_end)
+			break;
 		pr_inf("Main loop: Time to work!");
 
 		error = vrps_update(&rtr);
-		if (error == EINTR)
+		if (fort_end || error == EINTR)
 			break;
 		if (error) {
 			pr_trc("Main loop: %s", strerror(abs(error)));
 			continue;
 		}
 		rtr_notify(&rtr);
-	} while (true);
+	}
 
 end:	rtr_stop();
 	return error;

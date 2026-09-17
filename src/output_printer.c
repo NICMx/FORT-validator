@@ -216,9 +216,8 @@ print_roas(struct db_table const *db, char *filename)
 		pr_err("Error printing ROAs: %s", strerror(error));
 	if (out != stdout) {
 		file_close(out);
-		if (!error && rename(".roa", filename) < 0)
-			pr_err("Cannot move '.roa' to '%s': %s",
-			    filename, strerror(errno));
+		if (!error)
+			file_mv(".roa", filename);
 	}
 }
 
@@ -253,9 +252,8 @@ print_router_keys(struct db_table const *db, char *filename)
 		pr_err("Error printing Router Keys: %s", strerror(error));
 	if (out != stdout) {
 		file_close(out);
-		if (!error && rename(".rk", filename) < 0)
-			pr_err("Cannot move '.rk' to '%s': %s",
-			    filename, strerror(errno));
+		if (!error)
+			file_mv(".rk", filename);
 	}
 }
 
@@ -282,8 +280,11 @@ print_aspas(struct db_table const *db, char *filename)
 
 	if (error)
 		pr_err("Error printing ASPAs: %s", strerror(error));
-	if (out != stdout)
+	if (out != stdout) {
 		file_close(out);
+		if (!error)
+			file_mv(".aspa", filename);
+	}
 }
 
 void
@@ -300,5 +301,6 @@ void
 output_atexit(void)
 {
 	unlink(".roa");
+	unlink(".aspa");
 	unlink(".rk");
 }

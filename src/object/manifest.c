@@ -302,6 +302,8 @@ ext2ft(IA5String_t *file)
 		return FT_CER;
 	if (ext[0] == 'r' && ext[1] == 'o' && ext[2] == 'a')
 		return FT_ROA;
+	if (ext[0] == 'a' && ext[1] == 's' && ext[2] == 'a')
+		return FT_ASA;
 	if (ext[0] == 'c' && ext[1] == 'r' && ext[2] == 'l')
 		return FT_CRL;
 	if (ext[0] == 'g' && ext[1] == 'b' && ext[2] == 'r')

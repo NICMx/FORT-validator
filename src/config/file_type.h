@@ -6,6 +6,7 @@
 enum file_type {
 	FT_UNK,
 	FT_ROA,
+	FT_ASA,
 	FT_MFT,
 	FT_GBR,
 	FT_CER,

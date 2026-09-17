@@ -104,7 +104,7 @@ fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
 fort_CFLAGS  = -Wall -Wpedantic
 #fort_CFLAGS += $(GCC_WARNS)
 fort_CFLAGS += -std=c99 -D_XOPEN_SOURCE=700
-fort_CFLAGS += -O2 -g $(FORT_FLAGS)
+fort_CFLAGS += -O0 -g $(FORT_FLAGS)
 if BACKTRACE_ENABLED
 fort_CFLAGS += -DBACKTRACE_ENABLED
 fort_LDFLAGS = -rdynamic

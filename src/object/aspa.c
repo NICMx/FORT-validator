@@ -166,7 +166,7 @@ aspa_traverse(struct validation_thread *vt, struct cache_mapping const *map,
 	int error;
 
 	/* Prepare */
-	pr_trc("ASPA '%s' {", uri_str(&map->url));
+	pr_trc("Checking ASPA: %s", uri_str(&map->url));
 	fnstack_push_map(map);
 
 	/* Decode */

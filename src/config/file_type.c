@@ -7,6 +7,7 @@
 #include "log.h"
 
 #define VALUE_ROA	"roa"
+#define VALUE_ASA	"asa"
 #define VALUE_MFT	"mft"
 #define VALUE_GBR	"gbr"
 #define VALUE_CER	"cer"
@@ -24,6 +25,9 @@ print_file_type(struct option_field const *field, void *value)
 		break;
 	case FT_ROA:
 		str = VALUE_ROA;
+		break;
+	case FT_ASA:
+		str = VALUE_ASA;
 		break;
 	case FT_MFT:
 		str = VALUE_MFT;
@@ -48,6 +52,8 @@ parse_argv_mode(struct option_field const *field, char const *str,
 {
 	if (strcmp(str, VALUE_ROA) == 0)
 		DEREFERENCE(result) = FT_ROA;
+	else if (strcmp(str, VALUE_ASA) == 0)
+		DEREFERENCE(result) = FT_ASA;
 	else if (strcmp(str, VALUE_MFT) == 0)
 		DEREFERENCE(result) = FT_MFT;
 	else if (strcmp(str, VALUE_GBR) == 0)

@@ -1352,6 +1352,7 @@ is_known_extension(struct uri const *uri)
 	ext = uri_str(uri) + len - 4;
 	return ((strcmp(ext, ".cer") == 0)
 	     || (strcmp(ext, ".roa") == 0)
+	     || (strcmp(ext, ".asa") == 0)
 	     || (strcmp(ext, ".mft") == 0)
 	     || (strcmp(ext, ".crl") == 0)
 	     || (strcmp(ext, ".gbr") == 0));

@@ -11,6 +11,7 @@
 #include "log.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
+#include "sig.h"
 #include "stats.h"
 #include "types/address.h"
 #include "types/arraylist.h"
@@ -391,7 +392,7 @@ handle_clients(void *arg)
 
 	mutex_lock(&lock);
 
-	while (true) {
+	while (!fort_end) {
 		client = claim_client();
 		if (!client) {
 			panic_on_fail(pthread_cond_wait(&poller2worker, &lock),
@@ -647,6 +648,13 @@ fddb_poll(void)
 	init_pollfd(&pollfds[servers.len + clients.len], worker2poller[0]);
 
 	error = poll(pollfds, servers.len + clients.len + 1, 1000);
+	/*
+	 * On Linux, SIGTERM is producing poll success, not EINTR.
+	 * XXX I don't know why this is. It contradicts documentation.
+	 * So check fort_end before error...
+	 */
+	if (fort_end)
+		goto stop;
 	if (error == 0)
 		goto success;
 	if (error < 0) {
@@ -659,8 +667,7 @@ fddb_poll(void)
 			enomem_panic();
 		case EAGAIN:
 			goto retry;
-		case EFAULT:
-		case EINVAL:
+		default:
 			pr_panic("poll() error: %s", strerror(error));
 		}
 	}
@@ -764,6 +771,8 @@ control_cb(void *arg)
 			break;
 		case PV_RETRY:
 			sleep(1);
+			if (fort_end)
+				return NULL;
 			break;
 		case PV_STOP:
 			return NULL;
@@ -777,7 +786,10 @@ end_server_threads(size_t count)
 	array_index i;
 	int error;
 
+	mutex_lock(&lock);
 	pthread_cond_broadcast(&poller2worker);
+	mutex_unlock(&lock);
+
 	for (i = 0; i < count; i++) {
 		error = pthread_join(server_threads[i], NULL);
 		if (error)
