@@ -784,6 +784,7 @@ rcv_spawner_responses(void *arg)
 	return NULL;
 }
 
+/* DO NOT SPAWN THREADS BEFORE CALLING THIS FUNCTION. */
 void
 rsync_setup(void)
 {
@@ -816,7 +817,7 @@ rsync_setup(void)
 	}
 
 	/* Parent code */
-	/* (Threads can now be spawned.) */
+	/* (Threads can now be spawned) */
 
 	spsk_init(spawner2parent, parent2spawner);
 

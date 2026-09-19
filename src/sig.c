@@ -14,7 +14,7 @@ volatile bool fort_end = false;
 
 /*
  * Ensures libgcc is loaded; otherwise backtrace() might allocate
- * during a signal handler (which is illegal).
+ * during a signal handler (which is async-signal-unsafe).
  */
 static void
 setup_backtrace(void)
@@ -44,9 +44,35 @@ print_stack_trace(void)
 }
 
 static void
-pr_err_signal_handler(char const *msg)
+pr_inf_safe(char const *msg)
 {
-	write(STDERR_FILENO, msg, strlen(msg));
+	(void)!write(STDOUT_FILENO, msg, strlen(msg));
+}
+
+static void
+pr_err_safe(char const *msg)
+{
+	(void)!write(STDERR_FILENO, msg, strlen(msg));
+}
+
+static void
+reraise(int signum, int errcode)
+{
+	struct sigaction action;
+	int error;
+
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = SIG_DFL;
+	sigemptyset(&action.sa_mask);
+	if (sigaction(signum, &action, NULL) < 0) {
+		error = errno;
+		pr_err_safe("Cannot restore default signal action! ");
+		pr_err_safe(strerror(error));
+		pr_err_safe("\n");
+		_exit(errcode);
+	} else {
+		kill(getpid(), signum);
+	}
 }
 
 /*
@@ -54,40 +80,45 @@ pr_err_signal_handler(char const *msg)
  * https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
  */
 static void
-do_cleanup(int signum)
+handle_program_error_signal(int signum)
 {
-	char const *msg = "Terminating signal received.\n";
-	struct sigaction action;
-	int prev_errno;
-
-	prev_errno = errno;
-
-	write(STDOUT_FILENO, msg, strlen(msg));
-
-	if (signum == SIGSEGV || signum == SIGBUS)
-		print_stack_trace();
+	pr_inf_safe("Program error signal received.\n");
+	print_stack_trace();
 
 	cache_atexit();
 	output_atexit();
 
-	/*
-	 * I still feel like I haven't nailed this code.
-	 * The remote possibility that this sigaction() might fail means we're
-	 * still required to handle EINTR gracefully after system calls.
-	 * So maybe there's no point in even attempting to roll back to the
-	 * default handler.
-	 */
-	memset(&action, 0, sizeof(action));
-	action.sa_handler = SIG_DFL;
-	sigemptyset(&action.sa_mask);
-	if (sigaction(signum, &action, NULL) < 0) {
-		int error = errno;
-		pr_err_signal_handler("Cannot restore default signal action! ");
-		pr_err_signal_handler(strerror(error));
-		pr_err_signal_handler("\n");
-	} else {
-		kill(getpid(), signum);
-	}
+	reraise(signum, 1);
+}
+
+/*
+ * THIS IS A SIGNAL HANDLER. Legal functions:
+ * https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
+ */
+static void
+handle_termination_signal(int signum)
+{
+	pr_inf_safe("Termination signal received.\n");
+
+	cache_atexit();
+	output_atexit();
+
+	reraise(signum, 0);
+}
+
+/*
+ * THIS IS A SIGNAL HANDLER. Legal functions:
+ * https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
+ */
+static void
+handle_sigterm(int signum)
+{
+	int prev_errno;
+
+	prev_errno = errno;
+
+	pr_inf_safe("SIGTERM received.\n");
+	fort_end = true;
 
 	errno = prev_errno;
 }
@@ -97,7 +128,7 @@ do_cleanup(int signum)
  * https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
  */
 static void
-sigusr1_handler(int signum)
+handle_sigusr1(int signum)
 {
 	/*
 	 * Nothing.
@@ -108,59 +139,49 @@ sigusr1_handler(int signum)
 	 */
 }
 
-/*
- * THIS IS A SIGNAL HANDLER. Legal functions:
- * https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
- */
-static void
-sigterm_handler(int signum)
-{
-	char const *msg = "Received SIGTERM.\n";
-	write(STDOUT_FILENO, msg, strlen(msg));
-
-	fort_end = true;
-}
-
-/* Remember to enable -rdynamic (See print_stack_trace()). */
 void
 register_signal_handlers(void)
 {
-	/* Important: All of these need to terminate by default */
-	int const cleanups[] = {
-	    SIGFPE, SIGSEGV, SIGBUS, SIGABRT, SIGSYS,	/* 24.2.1 */
-	    SIGINT, SIGQUIT, SIGHUP,			/* 24.2.2 */
-	    SIGUSR2,					/* 24.2.7 */
-	    0
+	int const pes[] = { /* Program error signals */
+	    SIGFPE, SIGILL, SIGSEGV, SIGBUS, SIGABRT,
+	    SIGIOT, SIGTRAP, SIGSYS, SIGSTKFLT, 0
 	};
+	int const ts[] = { /* (Regular) termination signals (plus SIGUSR2) */
+	    SIGINT, SIGQUIT, SIGHUP, SIGUSR2, 0
+	};
+
 	struct sigaction action;
 	unsigned int i;
 
 	setup_backtrace();
 
 	memset(&action, 0, sizeof(action));
-	action.sa_handler = do_cleanup;
 	sigfillset(&action.sa_mask);
-	action.sa_flags = 0;
 
-	for (i = 0; cleanups[i]; i++)
-		if (sigaction(cleanups[i], &action, NULL) < 0)
+	action.sa_handler = handle_program_error_signal;
+	for (i = 0; pes[i]; i++)
+		if (sigaction(pes[i], &action, NULL) < 0)
 			pr_err("'%s' signal action registration failure: %s",
-			    strsignal(cleanups[i]), strerror(errno));
+			    strsignal(pes[i]), strerror(errno));
 
-	/* SIGUSR1 handler */
-	memset(&action, 0, sizeof(action));
-	action.sa_handler = sigusr1_handler;
-	sigemptyset(&action.sa_mask);
-	if (sigaction(SIGUSR1, &action, NULL) < 0)
-		pr_err("SIGUSR1 handler registration failure: %s",
-		    strerror(errno));
+	action.sa_handler = handle_termination_signal;
+	for (i = 0; ts[i]; i++)
+		if (sigaction(ts[i], &action, NULL) < 0)
+			pr_err("'%s' signal action registration failure: %s",
+			    strsignal(ts[i]), strerror(errno));
 
 	/* SIGTERM handler */
 	memset(&action, 0, sizeof(action));
-	action.sa_handler = sigterm_handler;
-	sigemptyset(&action.sa_mask);
+	action.sa_handler = handle_sigterm;
 	if (sigaction(SIGTERM, &action, NULL) < 0)
 		pr_err("SIGTERM handler registration failure: %s",
+		    strerror(errno));
+
+	/* SIGUSR1 handler */
+	action.sa_handler = handle_sigusr1;
+	sigemptyset(&action.sa_mask);
+	if (sigaction(SIGUSR1, &action, NULL) < 0)
+		pr_err("SIGUSR1 handler registration failure: %s",
 		    strerror(errno));
 
 	/*
@@ -183,7 +204,6 @@ register_signal_handlers(void)
 	 */
 	memset(&action, 0, sizeof(action));
 	action.sa_handler = SIG_IGN;
-	sigemptyset(&action.sa_mask);
 	if (sigaction(SIGPIPE, &action, NULL) < 0)
 		pr_err("SIGPIPE action registration failure: %s",
 		    strerror(errno));
