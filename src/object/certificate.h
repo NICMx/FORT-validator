@@ -11,6 +11,14 @@
 #include "types/rpp.h"
 #include "types/vthread.h"
 
+/*
+ * rfc6487#section-7.2, last paragraph.
+ * Prevents arbitrarily long paths and loops.
+ * XXX X509_VERIFY_MAX_CHAIN_CERTS
+ * XXX optimize
+ */
+#define CER_MAX_DEPTH 32
+
 /* Certificate types in the RPKI */
 enum cert_type {
 	CERTYPE_TA,		/* Trust Anchor */

@@ -199,7 +199,7 @@ print_roas(struct db_table const *db, char *filename)
 	if (out == NULL)
 		return;
 
-	if (config_get_output_format() == OFM_CSV) {
+	if (config_get_vrp_output_format() == OFM_CSV) {
 		fprintf(out, "ASN,Prefix,Max prefix length\n");
 		error = db_table_foreach_roa(db, print_roa_csv, out);
 
@@ -235,7 +235,7 @@ print_router_keys(struct db_table const *db, char *filename)
 	if (out == NULL)
 		return;
 
-	if (config_get_output_format() == OFM_CSV) {
+	if (config_get_bgpsec_output_format() == OFM_CSV) {
 		fprintf(out, "ASN,Subject Key Identifier,Subject Public Key Info\n");
 		error = db_table_foreach_router_key(db, print_router_key_csv, out);
 

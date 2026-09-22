@@ -18,6 +18,10 @@ validation_verdict const VV_CONTINUE = "Success";
 validation_verdict const VV_FAIL = "Failure";
 validation_verdict const VV_BUSY = "Busy";
 
+init_verdict const IV_CONTINUE = "Continue";
+init_verdict const IV_FAIL = "Fail";
+init_verdict const IV_DONE = "Done";
+
 bool
 str_starts_with(char const *str, char const *prefix)
 {

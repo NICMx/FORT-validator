@@ -270,6 +270,7 @@ void
 log_teardown(void)
 {
 	clear_loggers(&listeners);
+//	closelog(); XXX
 }
 
 #ifdef PR_CLUTTER_ENABLED

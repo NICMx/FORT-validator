@@ -288,8 +288,8 @@ send_end_of_data_pdu(int fd, uint8_t version, uint16_t session, serial_t serial)
 		len = RTRPDU_END_OF_DATA_V1_LEN;
 		buf = serialize_hdr(data, version, type, session, len);
 		buf = write_uint32(buf, serial);
-		buf = write_uint32(buf, config_get_interval_refresh());
-		buf = write_uint32(buf, config_get_interval_retry());
+		buf = write_uint32(buf, 3600); /* XXX */
+		buf = write_uint32(buf, 600); /* XXX */
 		buf = write_uint32(buf, config_get_interval_expire());
 		break;
 	default:

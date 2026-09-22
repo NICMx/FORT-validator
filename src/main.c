@@ -1,6 +1,7 @@
 #include <errno.h>
 
 #include "cache.h"
+#include "common.h"
 #include "config.h"
 #include "ext.h"
 #include "hash.h"
@@ -17,6 +18,8 @@
 #include "stats.h"
 #include "task.h"
 #include "thread_var.h"
+
+#include <syslog.h>
 
 static int
 fort_standalone(void)
@@ -78,51 +81,19 @@ end:	rtr_stop();
 	return error;
 }
 
-/*
- * Shells don't like it when we return values other than 0-255.
- * In fact, bash also has its own meanings for 126-255.
- * (See man 1 bash > EXIT STATUS)
- *
- * This function shifts @error to our exclusive range.
- */
 static int
-convert_to_result(int error)
+fort_cycle(int argc, char **argv, bool serve)
 {
-	if (error == 0)
-		return 0; /* Happy path */
-
-	/* -INT_MIN overflows, So handle weird case. */
-	if (error == INT_MIN)
-		return 125;
-
-	/* Force range 0-127 */
-	if (error < 0)
-		error = -error;
-	error &= 0x7F;
-
-	switch (error) {
-	case 126:
-		return 122;
-	case 127:
-		return 123;
-	case 0:
-		return 124; /* was divisible by 128; force error. */
-	}
-	return error;
-}
-
-int
-main(int argc, char **argv)
-{
+	init_verdict verdict;
 	int error;
 
-	/* Initializations */
-	/* (Do not start any threads until after rsync_setup() has forked.) */
+	/* DO NOT START ANY THREADS UNTIL WE'RE DONE fork()ING. */
 
-	log_setup();
-	error = handle_flags_config(argc, argv);
-	if (error)
-		goto revert_log;
+	verdict = handle_flags_config(argc - 1, argv + 1);
+	if (verdict == IV_FAIL)
+		return EINVAL;
+	if (verdict == IV_DONE)
+		return 0;
 
 	error = cache_setup1();
 	if (error)
@@ -190,7 +161,59 @@ revert_rsync:
 	rsync_teardown();
 revert_config:
 	free_rpki_config();
-revert_log:
+	return error;
+}
+
+/*
+ * Shells don't like it when we return values other than 0-255.
+ * In fact, bash also has its own meanings for 126-255.
+ * (See man 1 bash > EXIT STATUS)
+ *
+ * This function shifts @error to our exclusive range.
+ */
+static int
+convert_to_result(int error)
+{
+	if (error == 0)
+		return 0; /* Happy path */
+
+	/* -INT_MIN overflows, So handle weird case. */
+	if (error == INT_MIN)
+		return 125;
+
+	/* Force range 0-127 */
+	if (error < 0)
+		error = -error;
+	error &= 0x7F;
+
+	switch (error) {
+	case 126:
+		return 122;
+	case 127:
+		return 123;
+	case 0:
+		return 124; /* was divisible by 128; force error. */
+	}
+	return error;
+}
+
+int
+main(int argc, char **argv)
+{
+	char const *mode;
+	int error;
+
+	log_setup();
+
+	mode = (argc <= 1) ? "serve" : argv[1];
+
+	if (strcmp(mode, "serve") == 0)
+		error = fort_cycle(argc, argv, true);
+	else if (strcmp(mode, "step") == 0)
+		error = fort_cycle(argc, argv, false);
+	else
+		error = pr_err("Unknown mode: %s", mode);
+
 	log_teardown();
 	return convert_to_result(error);
 }

@@ -2038,7 +2038,7 @@ validate_certificate(struct rpki_certificate *cert)
 {
 	int error;
 
-	if (chain_length(cert) >= config_get_max_cert_depth())
+	if (chain_length(cert) >= CER_MAX_DEPTH)
 		return pr_err("Certificate chain maximum depth exceeded.");
 
 	fnstack_push_map(&cert->map);

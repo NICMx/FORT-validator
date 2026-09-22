@@ -17,6 +17,11 @@ extern validation_verdict const VV_CONTINUE;	/* "No issues yet" */
 extern validation_verdict const VV_FAIL;	/* "Validation failed" */
 extern validation_verdict const VV_BUSY;	/* "Try again later" */
 
+typedef char const *init_verdict;
+extern init_verdict const IV_CONTINUE;		/* "No issues yet" */
+extern init_verdict const IV_FAIL;		/* "Cannot start" */
+extern init_verdict const IV_DONE;		/* "End program successfully" */
+
 bool str_starts_with(char const *, char const *);
 bool str_ends_with(char const *, char const *);
 char const *str_skip(char const *, char const *);

@@ -38,7 +38,7 @@ ber_decode(const asn_TYPE_descriptor_t *type_descriptor, void **struct_ptr,
 	/* Needs to be allocated on the stack! */
 	asn_codec_ctx_t s_codec_ctx = { 0 };
 
-	s_codec_ctx.max_stack_size = config_get_asn1_decode_max_stack();
+	s_codec_ctx.max_stack_size = 4096;
 
 	/* Invoke type-specific decoder. */
 	return type_descriptor->op->ber_decoder(&s_codec_ctx, type_descriptor,

@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "common.h"
 #include "config/file_type.h"
 #include "config/log_conf.h"
 #include "config/mode.h"
@@ -13,7 +14,7 @@
 #include "config/string_array.h"
 
 /* Init/destroy */
-int handle_flags_config(int , char **);
+init_verdict handle_flags_config(int , char **);
 void free_rpki_config(void);
 
 /* Getters */
@@ -21,8 +22,6 @@ struct string_array const *config_get_server_address(void);
 char const *config_get_server_port(void);
 int config_get_server_queue(void);
 unsigned int config_get_validation_interval(void);
-unsigned int config_get_interval_refresh(void);
-unsigned int config_get_interval_retry(void);
 unsigned int config_get_interval_expire(void);
 unsigned int config_get_deltas_lifetime(void);
 unsigned int max_rtr_version(void);
@@ -32,7 +31,6 @@ char const *config_get_slurm(void);
 char const *config_get_tal(void);
 char const *config_get_local_repository(void);
 time_t cfg_cache_threshold(void);
-unsigned int config_get_max_cert_depth(void);
 enum mode config_get_mode(void);
 char const *config_get_http_user_agent(void);
 unsigned int config_get_max_redirs(void);
@@ -49,11 +47,13 @@ long config_rsync_timeout(void);
 char const *config_get_rsync_program(void);
 bool config_get_http_enabled(void);
 char const *config_get_http_proxy(void);
+
 char const *config_get_output_roa(void);
+enum output_format config_get_vrp_output_format(void);
 char const *config_get_output_bgpsec(void);
+enum output_format config_get_bgpsec_output_format(void);
 char const *config_get_output_aspa(void);
-enum output_format config_get_output_format(void);
-unsigned int config_get_asn1_decode_max_stack(void);
+
 unsigned int config_get_thread_pool_server_max(void);
 unsigned int config_get_validation_thread_count(void);
 enum file_type config_get_file_type(void);
@@ -73,10 +73,6 @@ enum log_output config_get_op_log_output(void);
 uint32_t config_get_op_log_facility(void);
 
 char *config_get_report(void);
-
-/* Public, so --work-offline can override them. */
-void config_set_rsync_enabled(bool);
-void config_set_http_enabled(bool);
 
 /* Needed public by the JSON module */
 void *get_rpki_config_field(struct option_field const *);

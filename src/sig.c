@@ -147,6 +147,7 @@ register_signal_handlers(void)
 	    SIGIOT, SIGTRAP, SIGSYS, SIGSTKFLT, 0
 	};
 	int const ts[] = { /* (Regular) termination signals (plus SIGUSR2) */
+	    /* XXX SIGHUP should induce config reload on --daemon */
 	    SIGINT, SIGQUIT, SIGHUP, SIGUSR2, 0
 	};
 
