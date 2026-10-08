@@ -1,9 +1,11 @@
-#ifndef SRC_TYPES_ASPA_H_
-#define SRC_TYPES_ASPA_H_
+#ifndef COMMON_TYPES_ASPA_H_
+#define COMMON_TYPES_ASPA_H_
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#define MAX_ASPA_PROVIDERS 16380u /* Absolute maximum */
 
 struct aspa_providers {
 	/*
@@ -36,4 +38,4 @@ int aspa_print(struct aspa const *, void *);
 
 bool providers_equal(struct aspa_providers *, struct aspa_providers *);
 
-#endif /* SRC_TYPES_ASPA_H_ */
+#endif /* COMMON_TYPES_ASPA_H_ */

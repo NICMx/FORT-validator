@@ -1,13 +1,12 @@
-#include "rtr/db/vrps.h"
+#include "validator/db/vrps.h"
 
 #include <errno.h>
-#include <sys/stat.h>
+#include <time.h>
 
-#include "config.h"
-#include "log.h"
-#include "object/tal.h"
-#include "output_printer.h"
-#include "slurm/slurm_loader.h"
+#include "common/log.h"
+#include "validator/config.h"
+#include "validator/output_printer.h"
+#include "validator/slurm/slurm_loader.h"
 
 /*
  * High level validator function.
@@ -52,7 +51,7 @@ fail:	db_table_destroy(db);
  * TODO (#50) remove this wrapper once Prometheus is implemented
  */
 int
-vrps_update(struct rtr_metadata *rtr)
+vrps_update(void)
 {
 	struct db_table *db;
 	time_t start, finish;
@@ -65,15 +64,10 @@ vrps_update(struct rtr_metadata *rtr)
 	pr_inf("- Valid ROAs: %u", db_table_roa_count(db));
 	pr_inf("- Valid Router Keys: %u", db_table_router_key_count(db));
 	pr_inf("- Valid ASPAs: %u", db_table_aspa_count(db));
-	if (config_get_mode() == SERVER)
+	if (fortcfg.validation_interval != 0)
 		pr_inf("- Serial: %u", db_table_serial(db));
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
 		pr_inf("- Real execution time: %.0lfs", difftime(finish, start));
-
-	if (rtr) {
-		rtr->session = db_table_session(db);
-		rtr->serial = db_table_serial(db);
-	}
 
 	db_table_destroy(db);
 	return db ? 0 : EINVAL;

@@ -3,10 +3,10 @@
  * Copyright (c) 2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	ASN_IOC_H
-#define	ASN_IOC_H
+#ifndef VALIDATOR_ASN1_ASN1C_ASN_IOC_H_
+#define VALIDATOR_ASN1_ASN1C_ASN_IOC_H_
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "validator/asn1/asn1c/constr_TYPE.h"
 
 struct asn_ioc_cell_s;
 
@@ -37,4 +37,4 @@ typedef struct asn_ioc_cell_s {
     } open_type;
 } asn_ioc_cell_t;
 
-#endif	/* ASN_IOC_H */
+#endif /* VALIDATOR_ASN1_ASN1C_ASN_IOC_H_ */

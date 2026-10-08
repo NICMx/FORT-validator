@@ -1,13 +1,7 @@
-#include "ta.h"
+#include "validator/dao/ta.h"
 
-#include <pthread.h>
-#include <stdatomic.h>
-#include <stdbool.h>
-#include <stdlib.h>
-
-#include "alloc.h"
-#include "file.h"
-#include "log.h"
+#include "common/file.h"
+#include "validator/cachefile.h"
 
 struct ta_context {
 	char *refresh_path;

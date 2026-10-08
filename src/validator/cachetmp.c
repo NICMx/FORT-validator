@@ -1,8 +1,8 @@
-#include "cachetmp.h"
+#include "validator/cachetmp.h"
 
 #include <stdatomic.h>
 
-#include "log.h"
+#include "common/log.h"
 
 static atomic_uint file_counter;
 

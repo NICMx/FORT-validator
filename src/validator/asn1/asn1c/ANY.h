@@ -2,10 +2,10 @@
  * Copyright (c) 2004-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef ASN_TYPE_ANY_H
-#define ASN_TYPE_ANY_H
+#ifndef VALIDATOR_ASN1_ASN1C_ANY_H_
+#define VALIDATOR_ASN1_ASN1C_ANY_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
 
 typedef struct ANY {
 	uint8_t *buf;	/* BER-encoded ANY contents */
@@ -48,4 +48,4 @@ int ANY_to_type(ANY_t *, asn_TYPE_descriptor_t *td, void **struct_ptr);
 
 json_t *ANY_to_json(const asn_TYPE_descriptor_t *, ANY_t const *);
 
-#endif	/* ASN_TYPE_ANY_H */
+#endif /* VALIDATOR_ASN1_ASN1C_ANY_H_ */

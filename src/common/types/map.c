@@ -1,4 +1,4 @@
-#include "types/map.h"
+#include "common/types/map.h"
 
 void
 map_copy(struct cache_mapping *dst, struct cache_mapping const *src)

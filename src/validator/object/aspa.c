@@ -1,12 +1,11 @@
-#include "object/aspa.h"
+#include "validator/object/aspa.h"
 
-#include "asn1/asn1c/ASProviderAttestation.h"
-#include "asn1/decode.h"
-#include "config.h"
-#include "log.h"
-#include "object/signed_object.h"
-#include "thread_var.h"
-#include "types/aspa.h"
+#include "common/log.h"
+#include "validator/asn1/asn1c/ASProviderAttestation.h"
+#include "validator/asn1/decode.h"
+#include "validator/config.h"
+#include "validator/object/signed_object.h"
+#include "validator/thread_var.h"
 
 #define ASID_MAX UINT32_MAX
 
@@ -86,7 +85,7 @@ parse_providers(ProviderASSet_t *set, struct aspa *aspa)
 	if (set == NULL)
 		return pr_err("Providers set is NULL.");
 
-	limit = config_get_max_aspa_providers();
+	limit = fortcfg.aspa.max_providers;
 	if (set->list.count > limit)
 		return pr_err("customerASID %u has too many providers: %d > %u",
 		    aspa->customer, set->list.count, limit);

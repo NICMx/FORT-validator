@@ -2,12 +2,12 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/der_encoder.h"
+#include "validator/asn1/asn1c/der_encoder.h"
 
 #include <assert.h>
 #include <string.h>
 
-#include "asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/asn_internal.h"
 
 static ssize_t der_write_TL(ber_tlv_tag_t tag, ber_tlv_len_t len,
 	asn_app_consume_bytes_f *cb, void *app_key, int constructed);

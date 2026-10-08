@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ASRange_H_
-#define	_ASRange_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ASRANGE_H_
+#define VALIDATOR_ASN1_ASN1C_ASRANGE_H_
 
-#include "asn1/asn1c/ASId.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
+#include "validator/asn1/asn1c/ASId.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE.h"
 
 /* ASRange */
 typedef struct ASRange {
@@ -25,4 +25,4 @@ extern asn_TYPE_descriptor_t asn_DEF_ASRange;
 extern asn_SEQUENCE_specifics_t asn_SPC_ASRange_specs_1;
 extern asn_TYPE_member_t asn_MBR_ASRange_1[2];
 
-#endif	/* _ASRange_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ASRANGE_H_ */

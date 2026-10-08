@@ -1,10 +1,10 @@
-#include "asn1/asn1c/Certificate.h"
+#include "validator/asn1/asn1c/Certificate.h"
 
 #include <openssl/objects.h>
 
-#include "json_util.h"
-#include "libcrypto_util.h"
-#include "log.h"
+#include "common/log.h"
+#include "validator/json_util.h"
+#include "validator/libcrypto_util.h"
 
 static json_t *
 validity2json(X509 *x)

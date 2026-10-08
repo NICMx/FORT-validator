@@ -1,9 +1,9 @@
-#include "types/path.h"
+#include "common/types/path.h"
 
 #include <string.h>
 
-#include "alloc.h"
-#include "types/str.h"
+#include "common/alloc.h"
+#include "common/types/str.h"
 
 char const *
 path_filename(char const *path)

@@ -1,8 +1,8 @@
-#ifndef SRC_RESOURCE_IP4_H_
-#define SRC_RESOURCE_IP4_H_
+#ifndef VALIDATOR_RESOURCE_IP4_H_
+#define VALIDATOR_RESOURCE_IP4_H_
 
-#include "types/address.h"
-#include "types/sorted_array.h"
+#include "common/types/address.h"
+#include "common/types/sorted_array.h"
 
 struct resources_ipv4;
 
@@ -18,4 +18,4 @@ bool res4_empty(struct resources_ipv4 const *);
 bool res4_contains_prefix(struct resources_ipv4 *, struct ipv4_prefix const *);
 bool res4_contains_range(struct resources_ipv4 *, struct ipv4_range const *);
 
-#endif /* SRC_RESOURCE_IP4_H_ */
+#endif /* VALIDATOR_RESOURCE_IP4_H_ */

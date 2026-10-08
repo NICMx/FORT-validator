@@ -1,5 +1,5 @@
-#ifndef SRC_CONFIG_TYPES_H_
-#define SRC_CONFIG_TYPES_H_
+#ifndef COMMON_CONFIG_TYPES_H_
+#define COMMON_CONFIG_TYPES_H_
 
 #include <jansson.h>
 #include <stdbool.h>
@@ -136,4 +136,4 @@ struct global_type {
 	char const *arg_doc;
 };
 
-#endif /* SRC_CONFIG_TYPES_H_ */
+#endif /* COMMON_CONFIG_TYPES_H_ */

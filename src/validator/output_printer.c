@@ -1,10 +1,11 @@
-#include "output_printer.h"
+#include "validator/output_printer.h"
 
-#include "base64.h"
-#include "common.h"
-#include "config.h"
-#include "file.h"
-#include "log.h"
+#include <time.h>
+
+#include "common/file.h"
+#include "common/log.h"
+#include "validator/base64.h"
+#include "validator/config.h"
 
 typedef struct json_out {
 	FILE *file;
@@ -192,14 +193,14 @@ print_roas(struct db_table const *db, char *filename)
 	JSON_OUT json_out;
 	int error;
 
-	if (!get_file_name(config_get_output_roa(), "output.roa", filename))
+	if (!get_file_name(fortcfg.output.vrp_filepath, "output.roa", filename))
 		return;
 
 	out = load_output_file(filename, ".roa");
 	if (out == NULL)
 		return;
 
-	if (config_get_vrp_output_format() == OFM_CSV) {
+	if (fortcfg.output.vrp_format == OFM_CSV) {
 		fprintf(out, "ASN,Prefix,Max prefix length\n");
 		error = db_table_foreach_roa(db, print_roa_csv, out);
 
@@ -228,14 +229,14 @@ print_router_keys(struct db_table const *db, char *filename)
 	JSON_OUT json_out;
 	int error;
 
-	if (!get_file_name(config_get_output_bgpsec(), "output.bgpsec", filename))
+	if (!get_file_name(fortcfg.output.bgpsec_filepath, "output.bgpsec", filename))
 		return;
 
 	out = load_output_file(filename, ".rk");
 	if (out == NULL)
 		return;
 
-	if (config_get_bgpsec_output_format() == OFM_CSV) {
+	if (fortcfg.output.bgpsec_format == OFM_CSV) {
 		fprintf(out, "ASN,Subject Key Identifier,Subject Public Key Info\n");
 		error = db_table_foreach_router_key(db, print_router_key_csv, out);
 
@@ -264,7 +265,7 @@ print_aspas(struct db_table const *db, char *filename)
 	JSON_OUT json_out;
 	int error;
 
-	if (!get_file_name(config_get_output_aspa(), "output.aspa", filename))
+	if (!get_file_name(fortcfg.output.aspa_filepath, "output.aspa", filename))
 		return;
 
 	out = load_output_file(filename, ".aspa");

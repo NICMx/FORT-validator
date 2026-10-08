@@ -3,15 +3,15 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/INTEGER.h"
+#include "validator/asn1/asn1c/INTEGER.h"
 
 #include <assert.h>
 #include <errno.h>
 
-#include "asn1/asn1c/asn_internal.h"
-#include "common.h"
-#include "json_util.h"
-#include "log.h"
+#include "common/common.h"
+#include "common/log.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/json_util.h"
 
 /*
  * INTEGER basic type description.

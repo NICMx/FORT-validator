@@ -1,11 +1,11 @@
-#include "types/sorted_array.h"
+#include "common/types/sorted_array.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-#include "alloc.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
 
 struct sorted_array {
 	void *array;

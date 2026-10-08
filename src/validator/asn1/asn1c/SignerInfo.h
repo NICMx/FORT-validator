@@ -5,16 +5,16 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_SignerInfo_H_
-#define	_SignerInfo_H_
+#ifndef VALIDATOR_ASN1_ASN1C_SIGNERINFO_H_
+#define VALIDATOR_ASN1_ASN1C_SIGNERINFO_H_
 
-#include "asn1/asn1c/CMSVersion.h"
-#include "asn1/asn1c/DigestAlgorithmIdentifier.h"
-#include "asn1/asn1c/SignatureAlgorithmIdentifier.h"
-#include "asn1/asn1c/SignatureValue.h"
-#include "asn1/asn1c/SignedAttributes.h"
-#include "asn1/asn1c/SignerIdentifier.h"
-#include "asn1/asn1c/UnsignedAttributes.h"
+#include "validator/asn1/asn1c/CMSVersion.h"
+#include "validator/asn1/asn1c/DigestAlgorithmIdentifier.h"
+#include "validator/asn1/asn1c/SignatureAlgorithmIdentifier.h"
+#include "validator/asn1/asn1c/SignatureValue.h"
+#include "validator/asn1/asn1c/SignedAttributes.h"
+#include "validator/asn1/asn1c/SignerIdentifier.h"
+#include "validator/asn1/asn1c/UnsignedAttributes.h"
 
 /* SignerInfo */
 typedef struct SignerInfo {
@@ -35,4 +35,4 @@ extern asn_TYPE_descriptor_t asn_DEF_SignerInfo;
 extern asn_SEQUENCE_specifics_t asn_SPC_SignerInfo_specs_1;
 extern asn_TYPE_member_t asn_MBR_SignerInfo_1[7];
 
-#endif	/* _SignerInfo_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_SIGNERINFO_H_ */

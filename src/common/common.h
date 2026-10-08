@@ -1,7 +1,6 @@
-#ifndef SRC_RTR_COMMON_H_
-#define SRC_RTR_COMMON_H_
+#ifndef COMMON_COMMON_H_
+#define COMMON_COMMON_H_
 
-#include <netinet/in.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -22,6 +21,8 @@ extern init_verdict const IV_CONTINUE;		/* "No issues yet" */
 extern init_verdict const IV_FAIL;		/* "Cannot start" */
 extern init_verdict const IV_DONE;		/* "End program successfully" */
 
+extern volatile bool fort_end;
+
 bool str_starts_with(char const *, char const *);
 bool str_ends_with(char const *, char const *);
 char const *str_skip(char const *, char const *);
@@ -34,14 +35,6 @@ void panic_on_fail(int, char const *);
  */
 void mutex_lock(pthread_mutex_t *);
 void mutex_unlock(pthread_mutex_t *);
-
-/*
- * rwlock wrappers. They are just a bunch of boilerplate, and removal of
- * unrecoverable resulting error codes.
- */
-int rwlock_read_lock(pthread_rwlock_t *);
-void rwlock_write_lock(pthread_rwlock_t *);
-void rwlock_unlock(pthread_rwlock_t *);
 
 #define CACHE_FILEMODE 0755
 
@@ -68,4 +61,4 @@ void ts_add(struct timespec *, struct timespec *, long);
 char *hex2str(uint8_t const *, size_t);
 int str2hex(char const *, uint8_t *);
 
-#endif /* SRC_RTR_COMMON_H_ */
+#endif /* COMMON_COMMON_H_ */

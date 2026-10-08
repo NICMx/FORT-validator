@@ -1,9 +1,8 @@
-#include "object/ghostbusters.h"
+#include "validator/object/ghostbusters.h"
 
-#include "object/certificate.h"
-#include "object/signed_object.h"
-#include "object/vcard.h"
-#include "thread_var.h"
+#include "validator/object/signed_object.h"
+#include "validator/object/vcard.h"
+#include "validator/thread_var.h"
 
 static int
 handle_vcard(struct signed_object *so)

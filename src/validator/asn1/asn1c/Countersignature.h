@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_Countersignature_H_
-#define	_Countersignature_H_
+#ifndef VALIDATOR_ASN1_ASN1C_COUNTERSIGNATURE_H_
+#define VALIDATOR_ASN1_ASN1C_COUNTERSIGNATURE_H_
 
-#include "asn1/asn1c/SignerInfo.h"
+#include "validator/asn1/asn1c/SignerInfo.h"
 
 /* Countersignature */
 typedef SignerInfo_t	 Countersignature_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f Countersignature_decode_ber;
 der_type_encoder_f Countersignature_encode_der;
 xer_type_encoder_f Countersignature_encode_xer;
 
-#endif	/* _Countersignature_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_COUNTERSIGNATURE_H_ */

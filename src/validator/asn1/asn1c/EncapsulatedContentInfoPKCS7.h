@@ -5,12 +5,12 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_EncapsulatedContentInfoPKCS7_H_
-#define	_EncapsulatedContentInfoPKCS7_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ENCAPSULATEDCONTENTINFOPKCS7_H_
+#define VALIDATOR_ASN1_ASN1C_ENCAPSULATEDCONTENTINFOPKCS7_H_
 
-#include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/ContentType.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
+#include "validator/asn1/asn1c/ANY.h"
+#include "validator/asn1/asn1c/ContentType.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE.h"
 
 /* EncapsulatedContentInfoPKCS7 */
 typedef struct EncapsulatedContentInfoPKCS7 {
@@ -26,4 +26,4 @@ extern asn_TYPE_descriptor_t asn_DEF_EncapsulatedContentInfoPKCS7;
 extern asn_SEQUENCE_specifics_t asn_SPC_EncapsulatedContentInfoPKCS7_specs_1;
 extern asn_TYPE_member_t asn_MBR_EncapsulatedContentInfoPKCS7_1[2];
 
-#endif	/* _EncapsulatedContentInfoPKCS7_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ENCAPSULATEDCONTENTINFOPKCS7_H_ */

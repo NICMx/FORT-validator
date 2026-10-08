@@ -1,10 +1,10 @@
-#ifndef SRC_HASH_H_
-#define SRC_HASH_H_
+#ifndef VALIDATOR_HASH_H_
+#define VALIDATOR_HASH_H_
 
-#include <stdbool.h>
-#include <stddef.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 /*
  * TODO (fine) Delete this structure (use md directly) once OpenSSL < 3 support
@@ -57,4 +57,4 @@ int sha256_finish(EVP_MD_CTX *, unsigned char *);
 int sha256_check(EVP_MD_CTX *, unsigned char const *, char const *, char const *);
 #define sha256_destroy(h) EVP_MD_CTX_free(h)
 
-#endif /* SRC_HASH_H_ */
+#endif /* VALIDATOR_HASH_H_ */

@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_BinaryTime_H_
-#define	_BinaryTime_H_
+#ifndef VALIDATOR_ASN1_ASN1C_BINARYTIME_H_
+#define VALIDATOR_ASN1_ASN1C_BINARYTIME_H_
 
-#include "asn1/asn1c/INTEGER.h"
+#include "validator/asn1/asn1c/INTEGER.h"
 
 /* BinaryTime */
 typedef INTEGER_t	 BinaryTime_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f BinaryTime_decode_ber;
 der_type_encoder_f BinaryTime_encode_der;
 xer_type_encoder_f BinaryTime_encode_xer;
 
-#endif	/* _BinaryTime_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_BINARYTIME_H_ */

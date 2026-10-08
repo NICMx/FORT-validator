@@ -1,12 +1,10 @@
-#include "prometheus.h"
+#include "validator/prometheus.h"
 
 #include <microhttpd.h>
-#include <string.h>
-#include <sys/socket.h>
 
-#include "config.h"
-#include "log.h"
-#include "stats.h"
+#include "common/log.h"
+#include "validator/config.h"
+#include "validator/stats.h"
 
 #if MHD_VERSION > 0x00097000
 #define MHD_RESULT enum MHD_Result
@@ -134,17 +132,14 @@ handle_prometheus_req(void *cls, struct MHD_Connection *conn,
 int
 prometheus_setup(void)
 {
-	unsigned int port;
-
-	port = config_get_prometheus_port();
-	if (config_get_mode() != SERVER || port == 0)
+	if (fortcfg.validation_interval != 0 || fortcfg.prometheus_port == 0)
 		return 0;
 
 	pr_trc("Starting Prometheus server...");
 
 	prometheus_daemon = MHD_start_daemon(
 	    MHD_USE_THREAD_PER_CONNECTION,	/* flags */
-	    port,				/* port */
+	    fortcfg.prometheus_port,		/* port */
 	    NULL, NULL,				/* accept policy */
 	    &handle_prometheus_req, NULL,	/* handler */
 	    MHD_OPTION_END			/* options */

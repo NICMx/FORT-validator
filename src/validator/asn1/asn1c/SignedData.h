@@ -5,14 +5,14 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_SignedData_H_
-#define	_SignedData_H_
+#ifndef VALIDATOR_ASN1_ASN1C_SIGNEDDATA_H_
+#define VALIDATOR_ASN1_ASN1C_SIGNEDDATA_H_
 
-#include "asn1/asn1c/CertificateSet.h"
-#include "asn1/asn1c/DigestAlgorithmIdentifiers.h"
-#include "asn1/asn1c/EncapsulatedContentInfo.h"
-#include "asn1/asn1c/RevocationInfoChoices.h"
-#include "asn1/asn1c/SignerInfos.h"
+#include "validator/asn1/asn1c/CertificateSet.h"
+#include "validator/asn1/asn1c/DigestAlgorithmIdentifiers.h"
+#include "validator/asn1/asn1c/EncapsulatedContentInfo.h"
+#include "validator/asn1/asn1c/RevocationInfoChoices.h"
+#include "validator/asn1/asn1c/SignerInfos.h"
 
 /* SignedData */
 typedef struct SignedData {
@@ -30,4 +30,4 @@ typedef struct SignedData {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_SignedData;
 
-#endif	/* _SignedData_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_SIGNEDDATA_H_ */

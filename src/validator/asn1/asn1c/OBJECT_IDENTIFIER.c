@@ -3,7 +3,7 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -11,8 +11,8 @@
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
-#include "asn1/asn1c/asn_internal.h"
-#include "json_util.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/json_util.h"
 
 /*
  * OBJECT IDENTIFIER basic type description.

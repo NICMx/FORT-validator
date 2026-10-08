@@ -2,13 +2,13 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_UTCTime_H_
-#define	_UTCTime_H_
+#ifndef VALIDATOR_ASN1_ASN1C_UTCTIME_H_
+#define VALIDATOR_ASN1_ASN1C_UTCTIME_H_
 
 #include <sys/stat.h>
 #include <time.h>
 
-#include "asn1/asn1c/OCTET_STRING.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
 
 typedef OCTET_STRING_t UTCTime_t;  /* Implemented via OCTET STRING */
 
@@ -37,4 +37,4 @@ time_t asn_UT2time(const UTCTime_t *, struct tm *_optional_tm4fill);
 /* See asn_time2GT() in GeneralizedTime.h */
 UTCTime_t *asn_time2UT(UTCTime_t *__opt_ut, const struct tm *);
 
-#endif	/* _UTCTime_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_UTCTIME_H_ */

@@ -1,4 +1,4 @@
-#include "resource/asn.h"
+#include "validator/resource/asn.h"
 
 struct asn_cb {
 	foreach_asn_cb cb;

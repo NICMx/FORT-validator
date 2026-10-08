@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ASId_H_
-#define	_ASId_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ASID_H_
+#define VALIDATOR_ASN1_ASN1C_ASID_H_
 
-#include "asn1/asn1c/INTEGER.h"
+#include "validator/asn1/asn1c/INTEGER.h"
 
 /* ASId */
 typedef INTEGER_t	 ASId_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f ASId_decode_ber;
 der_type_encoder_f ASId_encode_der;
 xer_type_encoder_f ASId_encode_xer;
 
-#endif	/* _ASId_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ASID_H_ */

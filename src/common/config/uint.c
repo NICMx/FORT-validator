@@ -1,10 +1,10 @@
-#include "config/uint.h"
+#include "common/config/uint.h"
 
 #include <errno.h>
 #include <getopt.h>
 #include <string.h>
 
-#include "log.h"
+#include "common/log.h"
 
 static void
 print_uint(struct option_field const *field, void *value)

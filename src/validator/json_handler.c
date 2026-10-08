@@ -1,11 +1,10 @@
-#include "json_handler.h"
+#include "validator/json_handler.h"
 
 #include <errno.h>
-#include <string.h>
 
-#include "alloc.h"
-#include "config.h"
-#include "log.h"
+#include "common/config.h"
+#include "common/log.h"
+#include "validator/config.h"
 
 static json_t *
 find_json(struct json_t *root, char const *full_name)
@@ -45,7 +44,7 @@ json_to_config(struct json_t *root)
 			continue;
 
 		error = opt->type->parse.json(opt, child,
-		    get_rpki_config_field(opt));
+		    get_rpki_config_field(opt, &fortcfg));
 		if (error)
 			return error;
 	}

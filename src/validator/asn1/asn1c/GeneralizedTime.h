@@ -2,13 +2,13 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_GeneralizedTime_H_
-#define	_GeneralizedTime_H_
+#ifndef VALIDATOR_ASN1_ASN1C_GENERALIZEDTIME_H_
+#define VALIDATOR_ASN1_ASN1C_GENERALIZEDTIME_H_
 
 #include <sys/stat.h>
 #include <time.h>
 
-#include "asn1/asn1c/OCTET_STRING.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
 
 typedef OCTET_STRING_t GeneralizedTime_t;  /* Implemented via OCTET STRING */
 
@@ -68,4 +68,4 @@ GeneralizedTime_t *asn_time2GT(GeneralizedTime_t *_optional_gt,
 GeneralizedTime_t *asn_time2GT_frac(GeneralizedTime_t *_optional_gt,
 	const struct tm *, int frac_value, int frac_digits);
 
-#endif	/* _GeneralizedTime_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_GENERALIZEDTIME_H_ */

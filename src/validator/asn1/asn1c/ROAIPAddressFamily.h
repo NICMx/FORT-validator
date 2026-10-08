@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ROAIPAddressFamily_H_
-#define	_ROAIPAddressFamily_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ROAIPADDRESSFAMILY_H_
+#define VALIDATOR_ASN1_ASN1C_ROAIPADDRESSFAMILY_H_
 
-#include "asn1/asn1c/ROAIPAddress.h"
-#include "asn1/asn1c/asn_SEQUENCE_OF.h"
+#include "validator/asn1/asn1c/ROAIPAddress.h"
+#include "validator/asn1/asn1c/asn_SEQUENCE_OF.h"
 
 /* ROAIPAddressFamily */
 typedef struct ROAIPAddressFamily {
@@ -30,4 +30,4 @@ extern asn_TYPE_descriptor_t asn_DEF_ROAIPAddressFamily;
 extern asn_SEQUENCE_specifics_t asn_SPC_ROAIPAddressFamily_specs_1;
 extern asn_TYPE_member_t asn_MBR_ROAIPAddressFamily_1[2];
 
-#endif	/* _ROAIPAddressFamily_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ROAIPADDRESSFAMILY_H_ */

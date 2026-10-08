@@ -1,18 +1,11 @@
-#include "rrdp.h"
+#include "validator/rrdp.h"
 
-#include <errno.h>
 #include <openssl/err.h>
-#include <sys/queue.h>
 
-#include "base64.h"
-#include "common.h"
-#include "config.h"
-#include "file.h"
-#include "http.h"
-#include "json_util.h"
-#include "log.h"
-#include "rrdp_xml.h"
-#include "thread_var.h"
+#include "common/log.h"
+#include "validator/config.h"
+#include "validator/json_util.h"
+#include "validator/thread_var.h"
 
 struct rrdp_step {
 	struct rrdp_serial serial;
@@ -156,7 +149,7 @@ init_steps(struct rrdp_session *session, struct update_notification *notif)
 	for (d = 0; d < notif->deltas.len; d++) {
 		delta = &notif->deltas.arr[d];
 
-		if (d++ > config_get_rrdp_delta_threshold())
+		if (d++ > fortcfg.rrdp.delta_threshold)
 			break;
 
 		step = pmalloc(sizeof(struct rrdp_step));
@@ -219,9 +212,9 @@ _serial_diff(struct rrdp_serial *large, struct rrdp_serial *small, int *result)
 
 	/* TODO (fine) maybe cache max in the config module */
 	max = BN_create();
-	if (!BN_set_word(max, config_get_rrdp_delta_threshold())) {
+	if (!BN_set_word(max, fortcfg.rrdp.delta_threshold)) {
 		pr_err("BIGNUM assignment (%u) Error:",
-		    config_get_rrdp_delta_threshold());
+		    fortcfg.rrdp.delta_threshold);
 		while ((error = ERR_get_error()) != 0)
 			pr_err("  %s", ERR_error_string(error, errmsg));
 		goto max;
@@ -287,11 +280,8 @@ validate_session_desync(struct rrdp_step *step,
 {
 	struct notification_delta *delta;
 	int i;
-	size_t delta_threshold;
 
-	delta_threshold = config_get_rrdp_delta_threshold();
-
-	for (i = 0; i < delta_threshold; i++) {
+	for (i = 0; i < fortcfg.rrdp.delta_threshold; i++) {
 		if (step == NULL)
 			return 0; /* Cache has few deltas */
 		/* First step always lacks a hash; there's no delta */
@@ -380,7 +370,7 @@ handle_deltas(struct update_notification *notif, struct rrdp_session *session,
 
 	pr_trc("Handling RRDP delta serials %s-%s.", old->str, new->str);
 
-	if (serial_diff > config_get_rrdp_delta_threshold())
+	if (serial_diff > fortcfg.rrdp.delta_threshold)
 		return pr_err("Cached RPP is too old. (Cached serial: %s; current serial: %s)",
 		    old->str, new->str);
 	if (serial_diff > notif->deltas.len)
@@ -665,7 +655,7 @@ cleanup_sessions(struct rrdp_ctx *ctx)
 	struct rrdp_step *step, *next;
 	unsigned int s, threshold;
 
-	threshold = config_get_rrdp_delta_threshold() - 1;
+	threshold = fortcfg.rrdp.delta_threshold - 1;
 
 	for (session = TAILQ_FIRST(&ctx->sessions); session; session = tmps) {
 		tmps = TAILQ_NEXT(session, lh);
@@ -786,7 +776,7 @@ session2json(struct rrdp_session *session)
 		if (jstep && json_object_add(jsteps, step->serial.str, jstep))
 			goto fail;
 		s++;
-		if (s >= config_get_rrdp_delta_threshold())
+		if (s >= fortcfg.rrdp.delta_threshold)
 			break;
 	}
 
@@ -879,8 +869,8 @@ json2steps(json_t *jsteps, struct rrdp_session *session, struct files_ht *files)
 	error = 0;
 
 	sn = json_object_size(jsteps);
-	if (sn > config_get_rrdp_delta_threshold())
-		sn = config_get_rrdp_delta_threshold();
+	if (sn > fortcfg.rrdp.delta_threshold)
+		sn = fortcfg.rrdp.delta_threshold;
 
 	s = 0;
 	json_object_foreach(jsteps, jkey, child) {

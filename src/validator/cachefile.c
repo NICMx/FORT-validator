@@ -1,12 +1,11 @@
-#include "cachefile.h"
+#include "validator/cachefile.h"
 
-#include "common.h"
-#include "file.h"
-#include "json_util.h"
-#include "log.h"
-#include "types/map.h"
-#include "types/path.h"
-#include "types/rpp.h"
+#include "common/common.h"
+#include "common/file.h"
+#include "common/log.h"
+#include "common/types/path.h"
+#include "validator/json_util.h"
+#include "validator/types/rpp.h"
 
 int
 json_add_hash(json_t *parent, char const *name, unsigned char const *hash)

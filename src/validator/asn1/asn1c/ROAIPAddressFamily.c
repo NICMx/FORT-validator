@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "asn1/asn1c/ROAIPAddressFamily.h"
+#include "validator/asn1/asn1c/ROAIPAddressFamily.h"
 
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
-#include "json_util.h"
-#include "types/address.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE_OF.h"
+#include "validator/asn1/decode.h"
+#include "validator/json_util.h"
 
 static json_t *
 prefix2json(char const *prefix, uint8_t length)

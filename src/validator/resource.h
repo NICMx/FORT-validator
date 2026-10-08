@@ -1,10 +1,10 @@
-#ifndef SRC_RESOURCE_H_
-#define SRC_RESOURCE_H_
+#ifndef VALIDATOR_RESOURCE_H_
+#define VALIDATOR_RESOURCE_H_
 
-#include "asn1/asn1c/ASIdentifiers.h"
-#include "asn1/asn1c/IPAddressFamily.h"
-#include "resource/asn.h"
-#include "types/address.h"
+#include "common/types/address.h"
+#include "validator/asn1/asn1c/ASIdentifiers.h"
+#include "validator/asn1/asn1c/IPAddressFamily.h"
+#include "validator/resource/asn.h"
 
 enum rpki_policy {
 	/**
@@ -47,4 +47,4 @@ void resources_set_policy(struct resources *, enum rpki_policy);
 
 int resources_foreach_asn(struct resources *, foreach_asn_cb, void *);
 
-#endif /* SRC_RESOURCE_H_ */
+#endif /* VALIDATOR_RESOURCE_H_ */

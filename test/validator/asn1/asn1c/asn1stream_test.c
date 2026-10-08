@@ -1,24 +1,22 @@
 #include <check.h>
 
-#include "alloc.c"
+#include "common/alloc.c"
 #include "mock.c"
-#include "asn1/asn1c/ber_decoder.c"
-#include "asn1/asn1c/ber_tlv_length.c"
-#include "asn1/asn1c/ber_tlv_tag.c"
-#include "asn1/asn1c/constr_CHOICE.c"
-#include "asn1/asn1c/constr_SEQUENCE.c"
-#include "asn1/asn1c/constr_TYPE.c"
-#include "asn1/asn1c/constraints.c"
-#include "asn1/asn1c/der_encoder.c"
-#include "asn1/asn1c/BOOLEAN.c"
-#include "asn1/asn1c/OCTET_STRING.c"
-#include "asn1/asn1c/OPEN_TYPE.c"
-#include "asn1/asn1c/RsyncRequest.c"
+#include "validator/asn1/asn1c/ber_decoder.c"
+#include "validator/asn1/asn1c/ber_tlv_length.c"
+#include "validator/asn1/asn1c/ber_tlv_tag.c"
+#include "validator/asn1/asn1c/constr_CHOICE.c"
+#include "validator/asn1/asn1c/constr_SEQUENCE.c"
+#include "validator/asn1/asn1c/constr_TYPE.c"
+#include "validator/asn1/asn1c/constraints.c"
+#include "validator/asn1/asn1c/der_encoder.c"
+#include "validator/asn1/asn1c/BOOLEAN.c"
+#include "validator/asn1/asn1c/OCTET_STRING.c"
+#include "validator/asn1/asn1c/OPEN_TYPE.c"
+#include "validator/asn1/asn1c/RsyncRequest.c"
 
 MOCK_ABORT_PTR(json_strn_new, json_t, const char *value, size_t len)
 MOCK_ABORT_PTR(json_obj_new, json_t, void)
-MOCK_ABORT_PTR(json_null, json_t, void)
-MOCK_UINT(config_get_asn1_decode_max_stack, 16 * 1024, void)
 
 START_TEST(test_multiple)
 {

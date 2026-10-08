@@ -1,6 +1,6 @@
-#ifndef SRC_PRINT_FILE_H_
-#define SRC_PRINT_FILE_H_
+#ifndef VALIDATOR_PRINT_FILE_H_
+#define VALIDATOR_PRINT_FILE_H_
 
 int print_file(void);
 
-#endif /* SRC_PRINT_FILE_H_ */
+#endif /* VALIDATOR_PRINT_FILE_H_ */

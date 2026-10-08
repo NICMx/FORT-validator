@@ -1,11 +1,7 @@
-#ifndef SRC_TASK_H_
-#define SRC_TASK_H_
+#ifndef VALIDATOR_TASK_H_
+#define VALIDATOR_TASK_H_
 
-#include <sys/queue.h>
-
-#include "asn1/signed_data.h"
-#include "object/tal.h"
-#include "types/map.h"
+#include "validator/object/certificate.h"
 
 enum validation_task_type {
 	VTT_RPP,
@@ -36,4 +32,4 @@ void task_wakeup(void);
 void task_wakeup_dormants(void);
 struct validation_task *task_dequeue(struct validation_task *);
 
-#endif /* SRC_TASK_H_ */
+#endif /* VALIDATOR_TASK_H_ */

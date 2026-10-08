@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_AttributeType_H_
-#define	_AttributeType_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ATTRIBUTETYPE_H_
+#define VALIDATOR_ASN1_ASN1C_ATTRIBUTETYPE_H_
 
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 /* AttributeType */
 typedef OBJECT_IDENTIFIER_t	 AttributeType_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f AttributeType_decode_ber;
 der_type_encoder_f AttributeType_encode_der;
 xer_type_encoder_f AttributeType_encode_xer;
 
-#endif	/* _AttributeType_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ATTRIBUTETYPE_H_ */

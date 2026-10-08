@@ -1,4 +1,4 @@
-#include "types/rpp.h"
+#include "validator/types/rpp.h"
 
 void
 rpp_cleanup(struct rpp *rpp)

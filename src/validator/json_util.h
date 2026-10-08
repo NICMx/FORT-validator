@@ -1,12 +1,10 @@
-#ifndef SRC_JSON_UTIL_H_
-#define SRC_JSON_UTIL_H_
+#ifndef VALIDATOR_JSON_UTIL_H_
+#define VALIDATOR_JSON_UTIL_H_
 
-#include <jansson.h>
-#include <netdb.h>
 #include <sys/stat.h>
 
-#include "asn1/asn1c/INTEGER.h"
-#include "types/uri.h"
+#include "common/types/uri.h"
+#include "validator/asn1/asn1c/INTEGER.h"
 
 /*
  * Contract of get functions:
@@ -44,4 +42,4 @@ json_t *json_strn_new(const char *, size_t);
 int json_object_add(json_t *, char const *, json_t *);
 int json_array_add(json_t *, json_t *);
 
-#endif /* SRC_JSON_UTIL_H_ */
+#endif /* VALIDATOR_JSON_UTIL_H_ */

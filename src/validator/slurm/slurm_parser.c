@@ -1,14 +1,14 @@
-#include "slurm/slurm_parser.h"
+#include "validator/slurm/slurm_parser.h"
 
 #include <errno.h>
 #include <openssl/asn1.h>
 
-#include "algorithm.h"
-#include "base64.h"
-#include "json_util.h"
-#include "log.h"
-#include "slurm/db_slurm.h"
-#include "types/address.h"
+#include "common/log.h"
+#include "common/types/address.h"
+#include "validator/algorithm.h"
+#include "validator/base64.h"
+#include "validator/json_util.h"
+#include "validator/slurm/db_slurm.h"
 
 /* JSON members */
 #define SLURM_VERSION			"slurmVersion"

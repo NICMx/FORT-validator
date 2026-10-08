@@ -1,9 +1,8 @@
 #include <check.h>
-#include <pthread.h>
 
-#include "alloc.c"
+#include "common/alloc.c"
 #include "mock.c"
-#include "stream.c"
+#include "validator/stream.c"
 
 #define DO_WRITE(fd, str) ck_assert_int_eq(0, stream_wr_str(fd, str))
 #define CK_READ(stm, str) do {						\

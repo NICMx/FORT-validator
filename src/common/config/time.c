@@ -1,10 +1,10 @@
-#include "config/time.h"
+#include "common/config/time.h"
 
 #include <getopt.h>
 #include <string.h>
 
-#include "common.h"
-#include "log.h"
+#include "common/common.h"
+#include "common/log.h"
 
 static void
 print_time(struct option_field const *field, void *value)

@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_DigestAlgorithmIdentifier_H_
-#define	_DigestAlgorithmIdentifier_H_
+#ifndef VALIDATOR_ASN1_ASN1C_DIGESTALGORITHMIDENTIFIER_H_
+#define VALIDATOR_ASN1_ASN1C_DIGESTALGORITHMIDENTIFIER_H_
 
-#include "asn1/asn1c/AlgorithmIdentifier.h"
+#include "validator/asn1/asn1c/AlgorithmIdentifier.h"
 
 /* DigestAlgorithmIdentifier */
 typedef AlgorithmIdentifier_t	 DigestAlgorithmIdentifier_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f DigestAlgorithmIdentifier_decode_ber;
 der_type_encoder_f DigestAlgorithmIdentifier_encode_der;
 xer_type_encoder_f DigestAlgorithmIdentifier_encode_xer;
 
-#endif	/* _DigestAlgorithmIdentifier_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_DIGESTALGORITHMIDENTIFIER_H_ */

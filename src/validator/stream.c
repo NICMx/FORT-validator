@@ -1,12 +1,12 @@
-#include "stream.h"
+#include "validator/stream.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "alloc.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
 
 void
 rstream_init(struct read_stream *stream, int fd, size_t initial_capacity)

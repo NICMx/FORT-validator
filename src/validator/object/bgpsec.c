@@ -1,9 +1,8 @@
-#include "object/bgpsec.h"
+#include "validator/object/bgpsec.h"
 
-#include "libcrypto_util.h"
-#include "log.h"
-#include "object/certificate.h"
-#include "types/router_key.h"
+#include "common/log.h"
+#include "validator/libcrypto_util.h"
+#include "validator/object/certificate.h"
 
 struct resource_params {
 	unsigned char const *ski;

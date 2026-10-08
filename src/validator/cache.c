@@ -1,25 +1,19 @@
-#include "cache.h"
+#include "validator/cache.h"
 
 #include <fcntl.h>
 #include <signal.h>
-#include <stdio.h>
 
-#include "cachetmp.h"
-#include "config.h"
+#include "common/log.h"
 #include "configure_ac.h"
-#include "dao/rsync.h"
-#include "dao/ta.h"
-#include "file.h"
-#include "http.h"
-#include "json_util.h"
-#include "log.h"
-#include "rrdp.h"
-#include "rrdp_xml.h"
-#include "rsync.h"
-#include "task.h"
-#include "types/path.h"
-#include "types/str.h"
-#include "types/uthash.h"
+#include "validator/cachetmp.h"
+#include "validator/config.h"
+#include "validator/dao/rsync.h"
+#include "validator/dao/ta.h"
+#include "validator/http.h"
+#include "validator/json_util.h"
+#include "validator/rrdp.h"
+#include "validator/rsync.h"
+#include "validator/task.h"
 
 enum node_state {
 	/* Refresh nodes: Not downloaded yet (stale) */
@@ -299,8 +293,8 @@ init_table(struct cache_table *tbl, char *name, bool enabled)
 static void
 init_tables(void)
 {
-	init_table(&cache.rsync, "rsync", config_get_rsync_enabled());
-	init_table(&cache.https, "https", config_get_http_enabled());
+	init_table(&cache.rsync, "rsync", fortcfg.rsync.enabled);
+	init_table(&cache.https, "https", fortcfg.http.enabled);
 }
 
 static int
@@ -375,7 +369,7 @@ lock_cache(void)
 	if (fd < 0) {
 		error = errno;
 		pr_err("Cannot create lockfile '%s/" LOCKFILE "': %s",
-		    config_get_local_repository(), strerror(error));
+		    fortcfg.cache, strerror(error));
 		return error;
 	}
 	close(fd);
@@ -415,19 +409,7 @@ cache_atexit(void)
 int
 cache_setup1(void)
 {
-	char const *cachedir;
-	int error;
-
-	cachedir = config_get_local_repository();
-
-	pr_trc("cd %s", cachedir);
-	if (chdir(cachedir) < 0) {
-		error = errno;
-		pr_err("Cannot cd to %s: %s", cachedir, strerror(error));
-		return error;
-	}
-
-	return 0;
+	return file_chdir(fortcfg.cache);
 }
 
 int

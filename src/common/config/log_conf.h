@@ -1,7 +1,7 @@
-#ifndef SRC_CONFIG_LOG_CONF_H_
-#define SRC_CONFIG_LOG_CONF_H_
+#ifndef COMMON_CONFIG_LOG_CONF_H_
+#define COMMON_CONFIG_LOG_CONF_H_
 
-#include "config/types.h"
+#include "common/config/types.h"
 
 enum log_output {
 	SYSLOG,
@@ -12,4 +12,4 @@ extern const struct global_type gt_log_level;
 extern const struct global_type gt_log_output;
 extern const struct global_type gt_log_facility;
 
-#endif /* SRC_CONFIG_LOG_CONF_H_ */
+#endif /* COMMON_CONFIG_LOG_CONF_H_ */

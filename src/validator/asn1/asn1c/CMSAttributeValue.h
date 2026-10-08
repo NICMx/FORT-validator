@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_CMSAttributeValue_H_
-#define	_CMSAttributeValue_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CMSATTRIBUTEVALUE_H_
+#define VALIDATOR_ASN1_ASN1C_CMSATTRIBUTEVALUE_H_
 
-#include "asn1/asn1c/ANY.h"
+#include "validator/asn1/asn1c/ANY.h"
 
 /* CMSAttributeValue */
 typedef ANY_t	 CMSAttributeValue_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f CMSAttributeValue_decode_ber;
 der_type_encoder_f CMSAttributeValue_encode_der;
 xer_type_encoder_f CMSAttributeValue_encode_xer;
 
-#endif	/* _CMSAttributeValue_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CMSATTRIBUTEVALUE_H_ */

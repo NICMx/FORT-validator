@@ -1,7 +1,7 @@
-#ifndef SRC_THREAD_VAR_H_
-#define SRC_THREAD_VAR_H_
+#ifndef VALIDATOR_THREAD_VAR_H_
+#define VALIDATOR_THREAD_VAR_H_
 
-#include "types/map.h"
+#include "common/types/map.h"
 
 int thvar_init(void); /* This function does not need cleanup. */
 
@@ -13,4 +13,4 @@ void fnstack_push_map(struct cache_mapping const *);
 char const *fnstack_peek(void);
 void fnstack_pop(void);
 
-#endif /* SRC_THREAD_VAR_H_ */
+#endif /* VALIDATOR_THREAD_VAR_H_ */

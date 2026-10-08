@@ -1,10 +1,8 @@
 #include <check.h>
-#include <stdlib.h>
 
-#include "alloc.c"
-#include "common.c"
-#include "file.c"
-#include "hash.c"
+#include "common/alloc.c"
+#include "common/file.c"
+#include "validator/hash.c"
 #include "mock.c"
 
 /* Actually mostly tests libcrypto's sanity, not Fort's. */

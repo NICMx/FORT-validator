@@ -1,13 +1,10 @@
-#include "rtr/db/db_table.h"
+#include "validator/db/db_table.h"
 
-#include "alloc.h"
-#include "common.h"
-#include "config.h"
-#include "file.h"
-#include "log.h"
-#include "rtr/meta.h"
-#include "types/array.h"
-#include "types/uthash.h"
+#include "common/cache_rtr.h"
+#include "common/file.h"
+#include "common/log.h"
+#include "common/types/uthash.h"
+#include "validator/config.h"
 
 struct hashable_roa {
 	struct vrp data;
@@ -169,7 +166,7 @@ merge_providers(struct aspa_providers *old, struct aspa_providers *new)
 	}
 
 	m = old->count + new->count;
-	if (m > config_get_max_aspa_providers()) {
+	if (m > fortcfg.aspa.max_providers) {
 		result.asids = NULL;
 		result.count = SIZE_MAX;
 		return result;
@@ -523,7 +520,7 @@ db_table_cache(struct db_table *table)
 	ret = cache_metadata(table);
 	if (ret)
 		goto fail;
-	rtridx_clean(&table->rtr);
+	rtridx_clean(&table->rtr, fortcfg.deltas_lifetime);
 
 	return 0;
 
@@ -608,6 +605,7 @@ db_table_aspa_count(struct db_table *table)
 	return table ? HASH_COUNT(table->aspas) : 0;
 }
 
+/* XXX obsolete? */
 uint16_t
 db_table_session(struct db_table *table)
 {

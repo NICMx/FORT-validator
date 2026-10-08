@@ -1,10 +1,10 @@
-#ifndef SRC_RTR_META_H_
-#define SRC_RTR_META_H_
+#ifndef COMMON_CACHE_RTR_H_
+#define COMMON_CACHE_RTR_H_
 
 #include <stdio.h>
 #include <time.h>
 
-#include "types/serial.h"
+#include "common/types/serial.h"
 
 struct rtr_metadata {
 	uint16_t session;
@@ -51,11 +51,11 @@ serial_t rtridx_add_serial(struct rtr_index *);
 void rtridx_cleanup(struct rtr_index *);
 void rtridx_print(struct rtr_index *);
 
-void rtridx_clean(struct rtr_index *);
-void rtridx_expire(void);
+void rtridx_clean(struct rtr_index *, unsigned int);
+void rtridx_expire(unsigned int);
 
 int rtr_serial_stat(serial_t serial);
 
 int rtr_open_file(serial_t, char const *, char const *, FILE **);
 
-#endif /* SRC_RTR_META_H_ */
+#endif /* COMMON_CACHE_RTR_H_ */

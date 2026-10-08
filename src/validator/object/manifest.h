@@ -1,10 +1,9 @@
-#ifndef SRC_OBJECT_MANIFEST_H_
-#define SRC_OBJECT_MANIFEST_H_
+#ifndef VALIDATOR_OBJECT_MANIFEST_H_
+#define VALIDATOR_OBJECT_MANIFEST_H_
 
-#include "asn1/signed_data.h"
-#include "cache.h"
+#include "validator/object/certificate.h"
 
 int manifest_traverse(struct cache_mapping const *, struct rpp_querier *,
     struct rpki_certificate *);
 
-#endif /* SRC_OBJECT_MANIFEST_H_ */
+#endif /* VALIDATOR_OBJECT_MANIFEST_H_ */

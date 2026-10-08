@@ -1,11 +1,11 @@
-#include "algorithm.h"
+#include "validator/algorithm.h"
 
 #include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <string.h>
 
-#include "log.h"
+#include "common/log.h"
 
 static bool
 is_asn1_null_object(ANY_t *any)

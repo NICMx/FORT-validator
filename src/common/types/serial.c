@@ -1,4 +1,4 @@
-#include "types/serial.h"
+#include "common/types/serial.h"
 
 /*
  * Returns s1 < s2 , according to RFC 1982 serial arithmetic.

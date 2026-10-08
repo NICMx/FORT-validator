@@ -5,15 +5,15 @@
 /*
  * Declarations internally useful for the ASN.1 support code.
  */
-#ifndef	ASN_INTERNAL_H
-#define	ASN_INTERNAL_H
+#ifndef VALIDATOR_ASN1_ASN1C_ASN_INTERNAL_H_
+#define VALIDATOR_ASN1_ASN1C_ASN_INTERNAL_H_
 #ifndef __EXTENSIONS__
 #define __EXTENSIONS__          /* for Sun */
 #endif
 #include <stdlib.h>
 
-#include "asn1/asn1c/asn_codecs.h"
-#include "asn1/asn1c/asn_system.h"
+#include "validator/asn1/asn1c/asn_codecs.h"
+#include "validator/asn1/asn1c/asn_system.h"
 
 /* Environment version might be used to avoid running with the old library */
 #define	ASN1C_ENVIRONMENT_VERSION	923	/* Compile-time version */
@@ -110,4 +110,4 @@ ASN__STACK_OVERFLOW_CHECK(const asn_codec_ctx_t *ctx) {
 	return 0;
 }
 
-#endif	/* ASN_INTERNAL_H */
+#endif /* VALIDATOR_ASN1_ASN1C_ASN_INTERNAL_H_ */

@@ -1,13 +1,13 @@
-#include "object/crl.h"
+#include "validator/object/crl.h"
 
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 
-#include "algorithm.h"
-#include "ext.h"
-#include "log.h"
-#include "thread_var.h"
-#include "types/name.h"
+#include "common/log.h"
+#include "common/types/name.h"
+#include "validator/algorithm.h"
+#include "validator/ext.h"
+#include "validator/thread_var.h"
 
 static int
 __crl_load(char const *path, X509_CRL **result)

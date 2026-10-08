@@ -5,12 +5,12 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "asn1/asn1c/EncapsulatedContentInfo.h"
+#include "validator/asn1/asn1c/EncapsulatedContentInfo.h"
 
-#include "asn1/asn1c/Manifest.h"
-#include "asn1/asn1c/RouteOriginAttestation.h"
-#include "json_util.h"
-#include "nid.h"
+#include "validator/asn1/asn1c/Manifest.h"
+#include "validator/asn1/asn1c/RouteOriginAttestation.h"
+#include "validator/json_util.h"
+#include "validator/nid.h"
 
 static json_t *
 EncapsulatedContentInfo_encode_json(const asn_TYPE_descriptor_t *td,

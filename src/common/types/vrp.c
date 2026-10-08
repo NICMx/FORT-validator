@@ -1,7 +1,7 @@
-#include "types/vrp.h"
+#include "common/types/vrp.h"
 
-#include "log.h"
-#include "types/address.h"
+#include "common/log.h"
+#include "common/types/address.h"
 
 bool
 vrp_equals(struct vrp const *a, struct vrp const *b)

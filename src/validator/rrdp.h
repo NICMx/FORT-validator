@@ -1,10 +1,8 @@
-#ifndef SRC_RRDP_H_
-#define SRC_RRDP_H_
+#ifndef VALIDATOR_RRDP_H_
+#define VALIDATOR_RRDP_H_
 
-#include <jansson.h>
-
-#include "types/rpp.h"
-#include "types/uri.h"
+#include "validator/rrdp_xml.h"
+#include "validator/types/rpp.h"
 
 struct rrdp_ctx;
 
@@ -27,4 +25,4 @@ struct mft_meta const *rrdpdao_fallback_mftnum(struct rrdp_dao *);
 void rrdpdao_commit(struct rrdp_dao *, struct rpp *);
 void rrdpdao_free(struct rrdp_dao *);
 
-#endif /* SRC_RRDP_H_ */
+#endif /* VALIDATOR_RRDP_H_ */

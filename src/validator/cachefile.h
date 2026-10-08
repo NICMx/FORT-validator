@@ -1,15 +1,14 @@
-#ifndef SRC_CACHEFILE_H_
-#define SRC_CACHEFILE_H_
+#ifndef VALIDATOR_CACHEFILE_H_
+#define VALIDATOR_CACHEFILE_H_
 
 #include <openssl/sha.h>
+#include <pthread.h>
 #include <stdatomic.h>
-#include <stdbool.h>
-#include <jansson.h>
+#include <sys/stat.h>
 
-#include "asn1/asn1c/INTEGER.h"
-#include "hash.h"
-#include "types/map.h"
-#include "types/uthash.h"
+#include "common/types/map.h"
+#include "common/types/uthash.h"
+#include "validator/asn1/asn1c/INTEGER.h"
 
 int json_add_hash(json_t *, char const *, unsigned char const *);
 int json2hash(json_t *, char const *, unsigned char const *);
@@ -110,4 +109,4 @@ json_t *fallback2json(struct fallback *);
 int json2fallback(json_t *, char const *, struct files_ht *, struct fallback **);
 int json2fallbacks(json_t *, struct fallback_ht *, struct files_ht *);
 
-#endif /* SRC_CACHEFILE_H_ */
+#endif /* VALIDATOR_CACHEFILE_H_ */

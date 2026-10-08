@@ -1,20 +1,120 @@
-#include "rtr/rtr.h"
-
-#include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
-#include <string.h>
+#include <signal.h>
 
-#include "common.h"
-#include "config.h"
-#include "log.h"
+#include "common/config.h"
+#include "common/config/boolean.h"
+#include "common/config/str.h"
+#include "common/config/string_array.h"
+#include "common/config/uint.h"
+#include "common/daemon.h"
+#include "common/file.h"
+#include "common/log.h"
+#include "common/types/address.h"
+#include "common/types/arraylist.h"
 #include "rtr/pdu_handler.h"
 #include "rtr/pdu_sender.h"
-#include "sig.h"
-#include "stats.h"
-#include "types/address.h"
-#include "types/arraylist.h"
+
+#define RTR_DEFAULT_PORT "323"
+
+struct rtr_config {
+	char *file;
+
+	/* The bound listening address of the RTR server. */
+	struct string_array address;
+
+	bool daemonize;
+
+	char *cache; /* XXX default */
+
+	unsigned int threads;
+
+	/* Outstanding connections in the socket's listen queue */
+	unsigned int backlog;
+	/*
+	 * Seconds the clients should retain data.
+	 * Advertised through RTR End of Data.
+	 */
+	unsigned int expire;
+};
+
+struct option_field const options[] = {
+	{
+		.id = 'h',
+		.name = "help",
+		.type = &gt_callback,
+		.handler = handle_help,
+		.doc = "Give this help list",
+		.availability = AVAILABILITY_GETOPT,
+	}, {
+		.id = 2000,
+		.name = "usage",
+		.type = &gt_callback,
+		.handler = handle_usage,
+		.doc = "Give a short usage message",
+		.availability = AVAILABILITY_GETOPT,
+	}, {
+		.id = 'V',
+		.name = "version",
+		.type = &gt_callback,
+		.handler = handle_version,
+		.doc = "Print program version",
+		.availability = AVAILABILITY_GETOPT,
+
+	}, {
+		.id = 1000,
+		.name = "address",
+		.type = &gt_string_array,
+		.offset = offsetof(struct rtr_config, address),
+		.doc = "Comma-separated address list, for RTR server binding. "
+		    "Can be a name, in which case an address will be resolved. "
+		    "The format for each address is '<address>[#<port>]'.",
+		.availability = AVAILABILITY_JSON,
+	}, {
+//		.id = 'f',
+//		.name = "configuration",
+//		.type = &gt_string,
+//		.handler = handle_json,
+//		.offset = offsetof(struct rtr_config, file),
+//		.doc = "Path to configuration file",
+//		.availability = AVAILABILITY_GETOPT,
+//	}, {
+		.id = 'c',
+		.name = "cache",
+		.type = &gt_string,
+		.offset = offsetof(struct rtr_config, cache),
+		.doc = "Local cache directory",
+		.arg_doc = "<directory>",
+		.json_null_allowed = false,
+	}, {
+		.id = 'd',
+		.name = "daemonize",
+		.type = &gt_bool,
+		.offset = offsetof(struct rtr_config, daemonize),
+		.doc = "Maximum connections in the socket's listen queue",
+		.availability = AVAILABILITY_GETOPT,
+	}, {
+		.id = 'b',
+		.name = "backlog",
+		.type = &gt_uint,
+		.offset = offsetof(struct rtr_config, backlog),
+		.doc = "Maximum connections in the socket's listen queue",
+		.min = 1,
+		.max = SOMAXCONN,
+	}, {
+		.id = 'e',
+		.name = "expire",
+		.type = &gt_uint,
+		.offset = offsetof(struct rtr_config, expire),
+		.doc = "RTR Expire Interval",
+		/* rfc8210#section-6 */
+		.min = 600,
+		.max = 172800,
+	},
+
+	{ 0 },
+};
 
 struct rtr_server {
 	int fd;
@@ -23,6 +123,7 @@ struct rtr_server {
 };
 
 struct server_init_ctx {
+	struct rtr_config *cfg;
 	/* Server binding address string, exactly as received from the user. */
 	char const *input_addr;
 #ifdef __linux__
@@ -30,6 +131,8 @@ struct server_init_ctx {
 	bool wildcard_found;
 #endif
 };
+
+volatile bool fort_end = false;
 
 static pthread_t control_thread;
 static pthread_t *server_threads;
@@ -75,28 +178,26 @@ destroy_db(void)
 /*
  * Extracts from @full_address ("IP#[port]") the address and port, and returns
  * them in @address and @service, respectively.
- *
- * The default port is config_get_server_port().
  */
 static int
 parse_address(char const *full_address, char **address, char **service)
 {
 	char const *ptr;
 	char *tmp_addr;
-	char *tmp_serv;
 	size_t tmp_addr_len;
 
 	if (full_address == NULL) {
-		tmp_addr = NULL;
-		tmp_serv = pstrdup(config_get_server_port());
-		goto done;
+		*address = NULL;
+		*service = pstrdup(RTR_DEFAULT_PORT);
+		return 0;
 	}
 
+	/* XXX why # */
 	ptr = strrchr(full_address, '#');
 	if (ptr == NULL) {
-		tmp_addr = pstrdup(full_address);
-		tmp_serv = pstrdup(config_get_server_port());
-		goto done;
+		*address = pstrdup(full_address);
+		*service = pstrdup(RTR_DEFAULT_PORT);
+		return 0;
 	}
 
 	if (*(ptr + 1) == '\0')
@@ -109,11 +210,8 @@ parse_address(char const *full_address, char **address, char **service)
 	memcpy(tmp_addr, full_address, tmp_addr_len);
 	tmp_addr[tmp_addr_len] = '\0';
 
-	tmp_serv = pstrdup(ptr + 1);
-	/* Fall through */
-done:
 	*address = tmp_addr;
-	*service = tmp_serv;
+	*service = pstrdup(ptr + 1);
 	return 0;
 }
 
@@ -273,7 +371,7 @@ create_server_socket(struct server_init_ctx *ctx, char const *hostname, char con
 			goto fail;
 		}
 
-		if (listen(server.fd, config_get_server_queue()) < 0) {
+		if (listen(server.fd, ctx->cfg->backlog) < 0) {
 			err = errno;
 			errmsg = "Unable to start listening on socket";
 			goto fail;
@@ -318,20 +416,17 @@ init_server_fd(struct server_init_ctx *ctx)
 }
 
 static int
-init_server_fds(void)
+init_server_fds(struct rtr_config *cfg)
 {
-	struct server_init_ctx ctx = { 0 };
-	struct string_array const *conf_addrs;
+	struct server_init_ctx ctx = { .cfg = cfg };
 	unsigned int i;
 	int error;
 
-	conf_addrs = config_get_server_address();
-
-	if (conf_addrs->length == 0)
+	if (cfg->address.length == 0)
 		return init_server_fd(&ctx);
 
-	for (i = 0; i < conf_addrs->length; i++) {
-		ctx.input_addr = conf_addrs->array[i];
+	for (i = 0; i < cfg->address.length; i++) {
+		ctx.input_addr = cfg->address.array[i];
 		error = init_server_fd(&ctx);
 		if (error)
 			return error; /* Cleanup happens outside */
@@ -748,7 +843,7 @@ fddb_poll(void)
 
 	mutex_unlock(&lock);
 
-	stats_gauge_set(stat_rtr_connections, nclients);
+//	stats_gauge_set(stat_rtr_connections, nclients); XXX
 	/* Fall through */
 
 success:
@@ -802,17 +897,15 @@ end_server_threads(size_t count)
 }
 
 int
-rtr_start(void)
+rtr_start(struct rtr_config *cfg)
 {
 	array_index i;
 	int error;
 
-	rtridx_expire();
-
 	server_arraylist_init(&servers);
 	client_arraylist_init(&clients);
 
-	error = init_server_fds();
+	error = init_server_fds(cfg);
 	if (error)
 		goto fds;
 
@@ -830,9 +923,8 @@ rtr_start(void)
 		goto cond;
 	}
 
-	server_threads = pcalloc(config_get_thread_pool_server_max(),
-	    sizeof(pthread_t));
-	for (i = 0; i < config_get_thread_pool_server_max(); i++) {
+	server_threads = pcalloc(cfg->threads, sizeof(pthread_t));
+	for (i = 0; i < cfg->threads; i++) {
 		error = pthread_create(&server_threads[i], NULL,
 		    handle_clients, NULL);
 		if (error) {
@@ -861,11 +953,11 @@ fds:
 	return error;
 }
 
-void rtr_stop(void)
+void rtr_stop(struct rtr_config *cfg)
 {
 	int error;
 
-	end_server_threads(config_get_thread_pool_server_max());
+	end_server_threads(cfg->threads);
 
 	error = pthread_join(control_thread, NULL);
 	if (error)
@@ -897,4 +989,132 @@ rtr_notify(struct rtr_metadata *rtr)
 	}
 
 	mutex_unlock(&lock);
+}
+
+static void
+cleanup_config(struct rtr_config *cfg)
+{
+	free(cfg->file);
+	string_array_cleanup(&cfg->address);
+	free(cfg->cache);
+}
+
+static int
+load_rtr_config(int argc, char **argv, struct rtr_config *cfg)
+{
+	static char const *addrs[] = {
+#ifdef __linux__
+		"::"
+#else
+		"0.0.0.0", "::"
+#endif
+	};
+	int error;
+
+	cfg->file = NULL;
+	string_array_init(&cfg->address, addrs, ARRAY_LEN(addrs));
+	cfg->daemonize = false;
+	cfg->cache = NULL;
+	cfg->threads = 16;
+	cfg->backlog = SOMAXCONN;
+	cfg->expire = 7200;
+
+	error = parse_args(argc, argv, cfg);
+	if (error)
+		goto fail;
+
+	if (optind < argc) {
+		string_array_cleanup(&cfg->address);
+		string_array_init(&cfg->address,
+		    (char const *const *)(argv + optind),
+		    argc - optind);
+	}
+
+	if (cfg->cache == NULL)
+		cfg->cache = pstrdup("/tmp/fort");
+	error = file_chdir(cfg->cache);
+	if (error)
+		goto fail;
+
+	return 0;
+
+fail:	cleanup_config(cfg);
+	return error;
+}
+
+/*
+ * THIS IS A SIGNAL HANDLER. Legal functions:
+ * https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html
+ */
+static void
+handle_sigterm(int signum)
+{
+	fort_end = true;
+}
+
+static int
+setup_sigterm(sigset_t *sigwaitset)
+{
+	struct sigaction action;
+
+	sigemptyset(sigwaitset);
+	if (sigaddset(sigwaitset, SIGTERM) < 0)
+		return pr_err("sigaddset(SIGTERM) failed: %s", strerror(errno));
+
+	memset(&action, 0, sizeof(action));
+	action.sa_handler = handle_sigterm;
+	if (sigaction(SIGTERM, &action, NULL) < 0)
+		pr_err("SIGTERM handler registration failure: %s",
+		    strerror(errno));
+
+	return 0;
+}
+
+int
+main(int argc, char **argv)
+{
+	struct rtr_config config = { 0 };
+	sigset_t sigwaitset;
+	int sig;
+	int error;
+	init_verdict verdict;
+
+	log_setup();
+
+	error = setup_sigterm(&sigwaitset);
+	if (error)
+		return error;
+
+	error = load_rtr_config(argc, argv, &config);
+	if (error)
+		goto log;
+
+	if (config.daemonize) {
+		verdict = daemonize();
+		if (verdict == IV_FAIL) {
+			error = EINVAL;
+			goto cfg;
+		}
+		if (verdict == IV_DONE)
+			goto cfg;
+	}
+
+	error = rtr_start(&config);
+	if (error)
+		goto cfg;
+
+	pr_inf("Ready.");
+	error = sigwait(&sigwaitset, &sig);
+	fort_end = true;
+	if (error) {
+		pr_err("sigwait() failed: %s", strerror(error));
+		goto rtr;
+	}
+
+	pr_inf("Received signal: %s", strsignal(sig));
+
+rtr:	rtr_stop(&config);
+cfg:	cleanup_config(&config);
+log:	log_teardown();
+	return error;
 }

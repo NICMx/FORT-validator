@@ -1,17 +1,17 @@
 #include "rtr/pdu_handler.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "alloc.h"
-#include "config.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
+#include "common/types/array.h"
 #include "rtr/err_pdu.h"
 #include "rtr/pdu_sender.h"
-#include "types/array.h"
 
 struct rtr_stream {
 	int fd;
@@ -29,7 +29,7 @@ validate_rtr_version(struct rtr_request *request)
 	enum rtr_version reqver = request->pdu.rtr_version;
 
 	if (stream->rtr_version == -1) {
-		if (RTR_V0 <= reqver && reqver <= max_rtr_version()) {
+		if (RTR_V0 <= reqver && reqver <= MAX_RTR_VERSION) {
 			pr_trc("Establishing RTR version: %d", reqver);
 			stream->rtr_version = reqver;
 			return 0;
@@ -38,7 +38,7 @@ validate_rtr_version(struct rtr_request *request)
 		    stream->addr, reqver);
 		return -err_pdu_send_unsupported_proto_version(
 			stream->fd,
-			max_rtr_version(),
+			MAX_RTR_VERSION,
 			&request->pdu.raw,
 			"RTR version number is too high."
 		);

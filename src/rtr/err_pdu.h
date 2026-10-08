@@ -1,5 +1,5 @@
-#ifndef SRC_RTR_ERR_PDU_H_
-#define SRC_RTR_ERR_PDU_H_
+#ifndef RTR_ERR_PDU_H_
+#define RTR_ERR_PDU_H_
 
 #include "rtr/pdu.h"
 
@@ -27,4 +27,4 @@ int err_pdu_send_unexpected_proto_version(
 
 char const *err_pdu_to_string(uint16_t);
 
-#endif /* SRC_RTR_ERR_PDU_H_ */
+#endif /* RTR_ERR_PDU_H_ */

@@ -1,4 +1,4 @@
-#include "types/str.h"
+#include "common/types/str.h"
 
 #include <errno.h>
 #include <openssl/bio.h>
@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "alloc.h"
-#include "log.h"
-#include "types/array.h"
+#include "common/alloc.h"
+#include "common/log.h"
+#include "common/types/array.h"
 
 /* Allocates the result; will need free(). Never returns NULL. */
 char *

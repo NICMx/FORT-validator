@@ -1,5 +1,5 @@
-#ifndef SRC_EXTENSION_H_
-#define SRC_EXTENSION_H_
+#ifndef VALIDATOR_EXT_H_
+#define VALIDATOR_EXT_H_
 
 #include <jansson.h>
 #include <openssl/asn1.h>
@@ -52,4 +52,4 @@ int cannot_decode(struct extension_metadata const *);
 int validate_public_key_hash(X509 *, ASN1_OCTET_STRING *, char const *);
 int handle_aki(void *, void *);
 
-#endif /* SRC_EXTENSION_H_ */
+#endif /* VALIDATOR_EXT_H_ */

@@ -36,6 +36,7 @@
 *.x86_64
 *.hex
 src/fort
+src/fort-rtr
 
 # Debug files
 *.dSYM/
@@ -78,6 +79,8 @@ src/configure_ac.h
 src/stamp-h1
 config.guess
 config.sub
+ltmain.sh
+libtool
 
 # Packaging
 *.7z

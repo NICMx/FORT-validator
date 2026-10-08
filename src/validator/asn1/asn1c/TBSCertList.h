@@ -5,15 +5,15 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_TBSCertList_H_
-#define	_TBSCertList_H_
+#ifndef VALIDATOR_ASN1_ASN1C_TBSCERTLIST_H_
+#define VALIDATOR_ASN1_ASN1C_TBSCERTLIST_H_
 
-#include "asn1/asn1c/AlgorithmIdentifier.h"
-#include "asn1/asn1c/CertificateSerialNumber.h"
-#include "asn1/asn1c/Extensions.h"
-#include "asn1/asn1c/Name.h"
-#include "asn1/asn1c/Time.h"
-#include "asn1/asn1c/Version.h"
+#include "validator/asn1/asn1c/AlgorithmIdentifier.h"
+#include "validator/asn1/asn1c/CertificateSerialNumber.h"
+#include "validator/asn1/asn1c/Extensions.h"
+#include "validator/asn1/asn1c/Name.h"
+#include "validator/asn1/asn1c/Time.h"
+#include "validator/asn1/asn1c/Version.h"
 
 /* Forward definitions */
 typedef struct TBSCertList__revokedCertificates__Member {
@@ -49,4 +49,4 @@ extern asn_TYPE_descriptor_t asn_DEF_TBSCertList;
 extern asn_SEQUENCE_specifics_t asn_SPC_TBSCertList_specs_1;
 extern asn_TYPE_member_t asn_MBR_TBSCertList_1[7];
 
-#endif	/* _TBSCertList_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_TBSCERTLIST_H_ */

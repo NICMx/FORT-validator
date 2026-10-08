@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_IssuerAndSerialNumber_H_
-#define	_IssuerAndSerialNumber_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ISSUERANDSERIALNUMBER_H_
+#define VALIDATOR_ASN1_ASN1C_ISSUERANDSERIALNUMBER_H_
 
-#include "asn1/asn1c/CertificateSerialNumber.h"
-#include "asn1/asn1c/Name.h"
+#include "validator/asn1/asn1c/CertificateSerialNumber.h"
+#include "validator/asn1/asn1c/Name.h"
 
 /* IssuerAndSerialNumber */
 typedef struct IssuerAndSerialNumber {
@@ -25,4 +25,4 @@ extern asn_TYPE_descriptor_t asn_DEF_IssuerAndSerialNumber;
 extern asn_SEQUENCE_specifics_t asn_SPC_IssuerAndSerialNumber_specs_1;
 extern asn_TYPE_member_t asn_MBR_IssuerAndSerialNumber_1[2];
 
-#endif	/* _IssuerAndSerialNumber_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ISSUERANDSERIALNUMBER_H_ */

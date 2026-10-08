@@ -1,9 +1,9 @@
-#include "alloc.h"
+#include "common/alloc.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-#include "log.h"
+#include "common/log.h"
 
 void *
 pmalloc(size_t size)

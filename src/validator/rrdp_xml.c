@@ -1,14 +1,10 @@
-#include "rrdp_xml.h"
+#include "validator/rrdp_xml.h"
 
-#include <errno.h>
-#include <openssl/evp.h>
-#include <openssl/sha.h>
-
-#include "base64.h"
-#include "config.h"
-#include "http.h"
-#include "log.h"
-#include "thread_var.h"
+#include "common/log.h"
+#include "validator/base64.h"
+#include "validator/config.h"
+#include "validator/http.h"
+#include "validator/thread_var.h"
 
 /*
  * Implementation notes:
@@ -978,7 +974,7 @@ init_min_serial(struct rrdp_xml_reader *rdr)
 		    rdr->line);
 		goto fail;
 	}
-	if (!BN_sub_word(min, config_get_rrdp_delta_threshold())) {
+	if (!BN_sub_word(min, fortcfg.rrdp.delta_threshold)) {
 		pr_err("(Line %u) Cannot subtract serial: Unknown error",
 		    rdr->line);
 		goto fail;
@@ -2236,7 +2232,7 @@ write_callback(char *data, size_t size, size_t nmemb, void *userp)
 	size *= nmemb;
 
 	arg->total_bytes += size;
-	if (arg->total_bytes > config_get_http_max_file_size()) {
+	if (arg->total_bytes > fortcfg.http.max_file_size) {
 		/*
 		 * If the server doesn't provide the file size beforehand,
 		 * CURLOPT_MAXFILESIZE doesn't prevent large file downloads.
@@ -2271,10 +2267,10 @@ validate_file_size(struct write_callback_arg *args)
 		return EFBIG;
 	}
 
-	ratio = args->total_bytes / (float) config_get_http_max_file_size();
+	ratio = args->total_bytes / (float) fortcfg.http.max_file_size;
 	if (ratio > 0.4f) {
 		pr_wrn("File size exceeds 40%% of the configured limit (%zu/%ld bytes).",
-		    args->total_bytes, config_get_http_max_file_size());
+		    args->total_bytes, fortcfg.http.max_file_size);
 	}
 
 	pr_trc("Done. Total bytes transferred: %zu", args->total_bytes);

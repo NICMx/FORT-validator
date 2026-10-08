@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "asn1/asn1c/RouteOriginAttestation.h"
+#include "validator/asn1/asn1c/RouteOriginAttestation.h"
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE_OF.h"
 
 static int
 memb_ipAddrBlocks_constraint_1(const asn_TYPE_descriptor_t *td, const void *sptr,

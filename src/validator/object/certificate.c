@@ -1,4 +1,4 @@
-#include "object/certificate.h"
+#include "validator/object/certificate.h"
 
 #include <openssl/asn1t.h>
 #include <openssl/bio.h>
@@ -9,23 +9,22 @@
 #include <openssl/objects.h>
 #include <openssl/rsa.h>
 
-#include "algorithm.h"
-#include "asn1/asn1c/IPAddrBlocks.h"
-#include "asn1/decode.h"
-#include "config.h"
-#include "ext.h"
-#include "libcrypto_util.h"
-#include "log.h"
-#include "nid.h"
-#include "object/aspa.h"
-#include "object/ghostbusters.h"
-#include "object/manifest.h"
-#include "object/roa.h"
-#include "object/signed_object.h"
-#include "task.h"
-#include "thread_var.h"
-#include "types/name.h"
-#include "types/str.h"
+#include "common/log.h"
+#include "common/types/name.h"
+#include "validator/algorithm.h"
+#include "validator/asn1/asn1c/IPAddrBlocks.h"
+#include "validator/asn1/decode.h"
+#include "validator/config.h"
+#include "validator/ext.h"
+#include "validator/libcrypto_util.h"
+#include "validator/nid.h"
+#include "validator/object/aspa.h"
+#include "validator/object/ghostbusters.h"
+#include "validator/object/manifest.h"
+#include "validator/object/roa.h"
+#include "validator/object/signed_object.h"
+#include "validator/task.h"
+#include "validator/thread_var.h"
 
 /*
  * The X509V3_EXT_METHOD that references NID_sinfo_access uses the AIA item.
@@ -1022,8 +1021,8 @@ validate_chain(struct rpki_certificate *cert)
 	}
 
 	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
-	if (config_get_validation_time() != 0)
-		X509_VERIFY_PARAM_set_time(params, config_get_validation_time());
+	if (fortcfg.debug.validation_time != 0)
+		X509_VERIFY_PARAM_set_time(params, fortcfg.debug.validation_time);
 	X509_STORE_set1_param(store, params);
 	X509_STORE_set_verify_cb(store, cb);
 

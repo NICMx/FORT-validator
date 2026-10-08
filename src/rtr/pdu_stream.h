@@ -1,5 +1,5 @@
-#ifndef SRC_RTR_PDU_STREAM_H_
-#define SRC_RTR_PDU_STREAM_H_
+#ifndef RTR_PDU_STREAM_H_
+#define RTR_PDU_STREAM_H_
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -78,4 +78,4 @@ void rtreq_destroy(struct rtr_request *);
 struct rtr_request *rtreqlist_pop(struct rtr_request_list *);
 void rtreqlist_clear(struct rtr_request_list *);
 
-#endif /* SRC_RTR_PDU_STREAM_H_ */
+#endif /* RTR_PDU_STREAM_H_ */

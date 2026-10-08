@@ -1,24 +1,20 @@
-#include "report.h"
+#include "common/report.h"
 
 #include <errno.h>
-#include <stdio.h>
 #include <string.h>
 
-#include "common.h"
-#include "config.h"
-#include "log.h"
+#include "common/common.h"
+#include "common/log.h"
 
 static FILE *stream;	/* Constant during multithreaded */
 static bool enabled;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 int
-report_enable(void)
+report_enable(char const *path)
 {
-	char const *path;
 	int error;
 
-	path = config_get_report();
 	if (!path)
 		/* Will not write report, but pr_wrn & pr_err still need to
 		 * be sent to TRC */

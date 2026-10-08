@@ -1,8 +1,9 @@
-#include "http.h"
+#include "validator/http.h"
 
-#include "config.h"
-#include "file.h"
-#include "log.h"
+#include <errno.h>
+
+#include "common/log.h"
+#include "validator/config.h"
 
 struct http_handler {
 	CURL *curl;
@@ -104,27 +105,27 @@ http_easy_init(struct http_handler *handler, curl_write_callback writer,
 		    "curl_easy_init() returned NULL; no error message given."
 		);
 
-	setopt_str(result, CURLOPT_USERAGENT, config_get_http_user_agent());
+	setopt_str(result, CURLOPT_USERAGENT, fortcfg.http.user_agent);
 
 	setopt_str(result, CURLOPT_ACCEPT_ENCODING, "");
 
 	setopt_long(result, CURLOPT_CONNECTTIMEOUT,
-	    config_get_http_connect_timeout());
+	    fortcfg.http.connect_timeout);
 	setopt_long(result, CURLOPT_TIMEOUT,
-	    config_get_http_transfer_timeout());
+	    fortcfg.http.transfer_timeout);
 	setopt_long(result, CURLOPT_LOW_SPEED_LIMIT,
-	    config_get_http_low_speed_limit());
+	    fortcfg.http.low_speed_limit);
 	setopt_long(result, CURLOPT_LOW_SPEED_TIME,
-	    config_get_http_low_speed_time());
+	    fortcfg.http.low_speed_time);
 	setopt_curlofft(result, CURLOPT_MAXFILESIZE_LARGE,
-	    config_get_http_max_file_size());
+	    fortcfg.http.max_file_size);
 	setopt_writefunction(result, writer);
 	setopt_writedata(result, writer_args);
 
 	/* Always expect HTTPS usage */
 	setopt_long(result, CURLOPT_SSL_VERIFYHOST, 2L);
 	setopt_long(result, CURLOPT_SSL_VERIFYPEER, 1L);
-	setopt_str(result, CURLOPT_CAPATH, config_get_http_ca_path());
+	setopt_str(result, CURLOPT_CAPATH, fortcfg.http.ca_path);
 
 	/* Currently all requests use GET */
 	setopt_long(result, CURLOPT_HTTPGET, 1L);
@@ -154,8 +155,8 @@ http_easy_init(struct http_handler *handler, curl_write_callback writer,
 		    CURL_TIMECOND_IFMODSINCE);
 	}
 
-	if (config_get_http_proxy())
-		setopt_str(result, CURLOPT_PROXY, config_get_http_proxy());
+	if (fortcfg.http.proxy)
+		setopt_str(result, CURLOPT_PROXY, fortcfg.http.proxy);
 
 	handler->curl = result;
 	return 0;
@@ -312,7 +313,7 @@ http_download(struct uri const *src, curl_write_callback writer,
 		if (redirect_const == NULL)
 			break;
 		r++;
-		if (r > config_get_max_redirs()) {
+		if (r > fortcfg.http.max_redirs) {
 			error = pr_err("Too many redirects.");
 			goto end;
 		}

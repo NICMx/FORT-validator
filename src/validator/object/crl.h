@@ -1,10 +1,10 @@
-#ifndef SRC_OBJECT_CRL_H_
-#define SRC_OBJECT_CRL_H_
+#ifndef VALIDATOR_OBJECT_CRL_H_
+#define VALIDATOR_OBJECT_CRL_H_
 
 #include <openssl/x509.h>
 
-#include "types/map.h"
+#include "common/types/map.h"
 
 int crl_load(struct cache_mapping const *, X509 *, X509_CRL **);
 
-#endif /* SRC_OBJECT_CRL_H_ */
+#endif /* VALIDATOR_OBJECT_CRL_H_ */

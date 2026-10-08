@@ -1,9 +1,9 @@
-#include "json_util.h"
+#include "validator/json_util.h"
 
 #include <errno.h>
 
-#include "common.h"
-#include "log.h"
+#include "common/common.h"
+#include "common/log.h"
 
 int
 json_get_str(json_t *parent, char const *name, char const **result)

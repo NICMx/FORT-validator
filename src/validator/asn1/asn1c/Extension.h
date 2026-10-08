@@ -5,12 +5,12 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_Extension_H_
-#define	_Extension_H_
+#ifndef VALIDATOR_ASN1_ASN1C_EXTENSION_H_
+#define VALIDATOR_ASN1_ASN1C_EXTENSION_H_
 
-#include "asn1/asn1c/BOOLEAN.h"
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
+#include "validator/asn1/asn1c/BOOLEAN.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE.h"
 
 /* Extension */
 typedef struct Extension {
@@ -27,4 +27,4 @@ extern asn_TYPE_descriptor_t asn_DEF_Extension;
 extern asn_SEQUENCE_specifics_t asn_SPC_Extension_specs_1;
 extern asn_TYPE_member_t asn_MBR_Extension_1[3];
 
-#endif	/* _Extension_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_EXTENSION_H_ */

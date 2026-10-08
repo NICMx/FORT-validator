@@ -5,12 +5,12 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "asn1/asn1c/ContentInfo.h"
+#include "validator/asn1/asn1c/ContentInfo.h"
 
 #include <openssl/obj_mac.h>
 
-#include "asn1/asn1c/SignedData.h"
-#include "json_util.h"
+#include "validator/asn1/asn1c/SignedData.h"
+#include "validator/json_util.h"
 
 static json_t *
 ContentInfo_encode_json(const asn_TYPE_descriptor_t *td, const void *sptr)

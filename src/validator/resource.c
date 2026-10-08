@@ -1,12 +1,10 @@
-#include "resource.h"
+#include "validator/resource.h"
 
-#include <errno.h>
-#include <string.h>
-
-#include "alloc.h"
-#include "log.h"
-#include "resource/ip4.h"
-#include "resource/ip6.h"
+#include "common/alloc.h"
+#include "common/log.h"
+#include "validator/asn1/decode.h"
+#include "validator/resource/ip4.h"
+#include "validator/resource/ip6.h"
 
 /* The resources we extracted from one certificate. */
 struct resources {

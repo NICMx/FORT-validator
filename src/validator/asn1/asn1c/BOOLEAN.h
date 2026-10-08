@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_BOOLEAN_H_
-#define	_BOOLEAN_H_
+#ifndef VALIDATOR_ASN1_ASN1C_BOOLEAN_H_
+#define VALIDATOR_ASN1_ASN1C_BOOLEAN_H_
 
-#include "asn1/asn1c/constraints.h"
+#include "validator/asn1/asn1c/constraints.h"
 
 /*
  * The underlying integer may contain various values, but everything
@@ -27,4 +27,4 @@ xer_type_encoder_f BOOLEAN_encode_xer;
 
 #define BOOLEAN_constraint     asn_generic_no_constraint
 
-#endif	/* _BOOLEAN_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_BOOLEAN_H_ */

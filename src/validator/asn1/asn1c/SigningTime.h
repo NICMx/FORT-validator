@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_SigningTime_H_
-#define	_SigningTime_H_
+#ifndef VALIDATOR_ASN1_ASN1C_SIGNINGTIME_H_
+#define VALIDATOR_ASN1_ASN1C_SIGNINGTIME_H_
 
-#include "asn1/asn1c/Time.h"
+#include "validator/asn1/asn1c/Time.h"
 
 /* SigningTime */
 typedef Time_t	 SigningTime_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f SigningTime_decode_ber;
 der_type_encoder_f SigningTime_encode_der;
 xer_type_encoder_f SigningTime_encode_xer;
 
-#endif	/* _SigningTime_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_SIGNINGTIME_H_ */

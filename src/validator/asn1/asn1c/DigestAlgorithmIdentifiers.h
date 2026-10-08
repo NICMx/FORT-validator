@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_DigestAlgorithmIdentifiers_H_
-#define	_DigestAlgorithmIdentifiers_H_
+#ifndef VALIDATOR_ASN1_ASN1C_DIGESTALGORITHMIDENTIFIERS_H_
+#define VALIDATOR_ASN1_ASN1C_DIGESTALGORITHMIDENTIFIERS_H_
 
-#include "asn1/asn1c/asn_SET_OF.h"
-#include "asn1/asn1c/constr_SET_OF.h"
+#include "validator/asn1/asn1c/asn_SET_OF.h"
+#include "validator/asn1/asn1c/constr_SET_OF.h"
 
 /* Forward declarations */
 struct DigestAlgorithmIdentifier;
@@ -27,4 +27,4 @@ extern asn_TYPE_descriptor_t asn_DEF_DigestAlgorithmIdentifiers;
 extern asn_SET_OF_specifics_t asn_SPC_DigestAlgorithmIdentifiers_specs_1;
 extern asn_TYPE_member_t asn_MBR_DigestAlgorithmIdentifiers_1[1];
 
-#endif	/* _DigestAlgorithmIdentifiers_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_DIGESTALGORITHMIDENTIFIERS_H_ */

@@ -1,16 +1,13 @@
 #include <check.h>
 
-#include "alloc.c"
-#include "common.c"
-#include "asn1/asn1c/asn_codecs_prim.c"
-#include "asn1/asn1c/INTEGER.c"
+#include "common/alloc.c"
+#include "common/common.c"
 #include "mock.c"
+#include "validator/asn1/asn1c/asn_codecs_prim.c"
+#include "validator/asn1/asn1c/INTEGER.c"
 
 __MOCK_ABORT(asn__format_to_callback, ssize_t, 0,
     int (*cb)(const void *, size_t, void *key), void *key, const char *fmt, ...)
-MOCK_ABORT_INT(asn_generic_no_constraint,
-    const asn_TYPE_descriptor_t *td, const void *ptr,
-    asn_app_constraint_failed_f *cb, void *key)
 static asn_dec_rval_t dummy;
 __MOCK_ABORT(ber_check_tags, asn_dec_rval_t, dummy,
     const asn_codec_ctx_t *opt_codec_ctx, const asn_TYPE_descriptor_t *td,

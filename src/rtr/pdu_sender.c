@@ -2,15 +2,15 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "alloc.h"
-#include "config.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
+#include "common/types/array.h"
 #include "rtr/primitive_writer.h"
-#include "types/array.h"
 
 static unsigned char *
 serialize_hdr(unsigned char *buf, uint8_t version, uint8_t type,
@@ -288,9 +288,10 @@ send_end_of_data_pdu(int fd, uint8_t version, uint16_t session, serial_t serial)
 		len = RTRPDU_END_OF_DATA_V1_LEN;
 		buf = serialize_hdr(data, version, type, session, len);
 		buf = write_uint32(buf, serial);
-		buf = write_uint32(buf, 3600); /* XXX */
-		buf = write_uint32(buf, 600); /* XXX */
-		buf = write_uint32(buf, config_get_interval_expire());
+		/* TODO Variabilize? I don't really care, TBH */
+		buf = write_uint32(buf, 3600);
+		buf = write_uint32(buf, 600);
+		buf = write_uint32(buf, 7200);
 		break;
 	default:
 		return pr_err("Unknown RTR version: %u", version);
@@ -327,7 +328,7 @@ send_error_report_pdu(int fd, uint8_t version, uint16_t code,
 	size_t len;
 	int error;
 
-	pr_trc("Sending error PDU: %s", message);
+	pr_trc("Sending error PDU %u: %s", code, message);
 
 	error_pdu_len = compute_error_pdu_len(request);
 	error_msg_len = (message != NULL) ? strlen(message) : 0;

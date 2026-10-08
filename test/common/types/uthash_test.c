@@ -2,10 +2,8 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdio.h>
-#include <unistd.h>
 
-#include "types/uthash.h"
+#include "common/types/uthash.h"
 
 struct uthash_node {
 	int key;

@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ASIdOrRange_H_
-#define	_ASIdOrRange_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ASIDORRANGE_H_
+#define VALIDATOR_ASN1_ASN1C_ASIDORRANGE_H_
 
-#include "asn1/asn1c/ASRange.h"
-#include "asn1/asn1c/constr_CHOICE.h"
+#include "validator/asn1/asn1c/ASRange.h"
+#include "validator/asn1/asn1c/constr_CHOICE.h"
 
 /* Dependencies */
 typedef enum ASIdOrRange_PR {
@@ -35,4 +35,4 @@ extern asn_TYPE_descriptor_t asn_DEF_ASIdOrRange;
 extern asn_CHOICE_specifics_t asn_SPC_ASIdOrRange_specs_1;
 extern asn_TYPE_member_t asn_MBR_ASIdOrRange_1[2];
 
-#endif	/* _ASIdOrRange_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ASIDORRANGE_H_ */

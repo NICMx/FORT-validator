@@ -1,5 +1,5 @@
-#ifndef SRC_TYPES_VRP_H_
-#define SRC_TYPES_VRP_H_
+#ifndef COMMON_TYPES_VRP_H_
+#define COMMON_TYPES_VRP_H_
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -30,4 +30,4 @@ bool vrp_equals(struct vrp const *, struct vrp const *);
 bool vrp_prefix_cov(struct vrp const *, struct vrp const *);
 int vrp_print(struct vrp const *, void *);
 
-#endif /* SRC_TYPES_VRP_H_ */
+#endif /* COMMON_TYPES_VRP_H_ */

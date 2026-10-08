@@ -1,5 +1,5 @@
-#ifndef SRC_NID_H_
-#define SRC_NID_H_
+#ifndef VALIDATOR_NID_H_
+#define VALIDATOR_NID_H_
 
 int nid_init(void);
 void nid_destroy(void);
@@ -16,4 +16,4 @@ int nid_ipAddrBlocksv2(void);
 int nid_autonomousSysIdsv2(void);
 int nid_bgpsecRouter(void);
 
-#endif /* SRC_NID_H_ */
+#endif /* VALIDATOR_NID_H_ */

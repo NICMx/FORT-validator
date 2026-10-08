@@ -1,11 +1,10 @@
-#ifndef SRC_OBJECT_TAL_H_
-#define SRC_OBJECT_TAL_H_
+#ifndef VALIDATOR_OBJECT_TAL_H_
+#define VALIDATOR_OBJECT_TAL_H_
 
 #include <stdatomic.h>
-#include <stddef.h>
 
-#include "rtr/db/db_table.h"
-#include "types/uri.h"
+#include "common/types/uri.h"
+#include "validator/db/db_table.h"
 
 /* This is RFC 8630. */
 
@@ -22,4 +21,4 @@ struct db_table *perform_standalone_validation(void);
 
 void tal_cleanup(struct tal *);
 
-#endif /* SRC_OBJECT_TAL_H_ */
+#endif /* VALIDATOR_OBJECT_TAL_H_ */

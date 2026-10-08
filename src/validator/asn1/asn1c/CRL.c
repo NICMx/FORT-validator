@@ -1,9 +1,9 @@
-#include "asn1/asn1c/CRL.h"
+#include "validator/asn1/asn1c/CRL.h"
 
 #include <openssl/objects.h>
 
-#include "json_util.h"
-#include "libcrypto_util.h"
+#include "validator/json_util.h"
+#include "validator/libcrypto_util.h"
 
 static json_t *
 revokedCerts2json(X509_CRL *crl)

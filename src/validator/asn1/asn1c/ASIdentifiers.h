@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ASIdentifiers_H_
-#define	_ASIdentifiers_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ASIDENTIFIERS_H_
+#define VALIDATOR_ASN1_ASN1C_ASIDENTIFIERS_H_
 
-#include "asn1/asn1c/ASIdentifierChoice.h"
+#include "validator/asn1/asn1c/ASIdentifierChoice.h"
 
 /* ASIdentifiers */
 typedef struct ASIdentifiers {
@@ -22,4 +22,4 @@ typedef struct ASIdentifiers {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_ASIdentifiers;
 
-#endif	/* _ASIdentifiers_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ASIDENTIFIERS_H_ */

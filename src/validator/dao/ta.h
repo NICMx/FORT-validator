@@ -1,5 +1,5 @@
-#ifndef SRC_DAO_TA_H_
-#define SRC_DAO_TA_H_
+#ifndef VALIDATOR_DAO_TA_H_
+#define VALIDATOR_DAO_TA_H_
 
 #include <stdbool.h>
 
@@ -19,4 +19,4 @@ void tactx_print(struct ta_context *, int);
 
 bool tactx_cleanup(struct ta_context *, char const *);
 
-#endif /* SRC_DAO_TA_H_ */
+#endif /* VALIDATOR_DAO_TA_H_ */

@@ -1,9 +1,9 @@
-#ifndef SRC_OBJECT_BGPSEC_H_
-#define SRC_OBJECT_BGPSEC_H_
+#ifndef VALIDATOR_OBJECT_BGPSEC_H_
+#define VALIDATOR_OBJECT_BGPSEC_H_
 
-#include "resource.h"
-#include "types/rpp.h"
+#include "validator/resource.h"
+#include "validator/types/rpp.h"
 
 int handle_bgpsec(X509 *, struct resources *, struct rpp *);
 
-#endif /* SRC_OBJECT_BGPSEC_H_ */
+#endif /* VALIDATOR_OBJECT_BGPSEC_H_ */

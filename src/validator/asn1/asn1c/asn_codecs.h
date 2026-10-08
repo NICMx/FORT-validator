@@ -2,8 +2,8 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	ASN_CODECS_H
-#define	ASN_CODECS_H
+#ifndef VALIDATOR_ASN1_ASN1C_ASN_CODECS_H_
+#define VALIDATOR_ASN1_ASN1C_ASN_CODECS_H_
 
 #include <stddef.h>
 #include <sys/types.h>
@@ -119,4 +119,4 @@ typedef struct asn_dec_rval_s {
 	return tmp_error;					\
 } while(0)
 
-#endif	/* ASN_CODECS_H */
+#endif /* VALIDATOR_ASN1_ASN1C_ASN_CODECS_H_ */

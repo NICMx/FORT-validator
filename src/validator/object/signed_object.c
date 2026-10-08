@@ -1,7 +1,9 @@
-#include "object/signed_object.h"
+#include "validator/object/signed_object.h"
 
-#include "asn1/content_info.h"
-#include "log.h"
+#include "common/log.h"
+#include "validator/asn1/content_info.h"
+#include "validator/asn1/signed_data.h"
+#include "validator/object/certificate.h"
 
 int
 signed_object_decode(struct signed_object *so, struct cache_mapping const *map)

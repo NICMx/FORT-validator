@@ -1,8 +1,8 @@
-#ifndef SRC_RESOURCE_ASN_H_
-#define SRC_RESOURCE_ASN_H_
+#ifndef VALIDATOR_RESOURCE_ASN_H_
+#define VALIDATOR_RESOURCE_ASN_H_
 
-#include "types/asn.h"
-#include "types/sorted_array.h"
+#include "common/types/asn.h"
+#include "common/types/sorted_array.h"
 
 /*
  * Implementation note: This is just a casted struct sorted_array.
@@ -29,4 +29,4 @@ bool rasn_matches(struct resources_asn *, uint32_t);
 typedef int (*foreach_asn_cb)(struct asn_range const *, void *);
 int rasn_foreach(struct resources_asn *, foreach_asn_cb, void *);
 
-#endif /* SRC_RESOURCE_ASN_H_ */
+#endif /* VALIDATOR_RESOURCE_ASN_H_ */

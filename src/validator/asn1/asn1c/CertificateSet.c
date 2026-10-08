@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "asn1/asn1c/CertificateSet.h"
+#include "validator/asn1/asn1c/CertificateSet.h"
 
-#include "asn1/asn1c/Certificate.h"
-#include "json_util.h"
+#include "validator/asn1/asn1c/Certificate.h"
+#include "validator/json_util.h"
 
 static json_t *
 CertificateSet_encode_json(const struct asn_TYPE_descriptor_s *td,

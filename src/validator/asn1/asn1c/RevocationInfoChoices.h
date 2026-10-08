@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_RevocationInfoChoices_H_
-#define	_RevocationInfoChoices_H_
+#ifndef VALIDATOR_ASN1_ASN1C_REVOCATIONINFOCHOICES_H_
+#define VALIDATOR_ASN1_ASN1C_REVOCATIONINFOCHOICES_H_
 
-#include "asn1/asn1c/RevocationInfoChoice.h"
+#include "validator/asn1/asn1c/RevocationInfoChoice.h"
 
 /* RevocationInfoChoices */
 typedef struct RevocationInfoChoices {
@@ -23,4 +23,4 @@ extern asn_TYPE_descriptor_t asn_DEF_RevocationInfoChoices;
 extern asn_SET_OF_specifics_t asn_SPC_RevocationInfoChoices_specs_1;
 extern asn_TYPE_member_t asn_MBR_RevocationInfoChoices_1[1];
 
-#endif	/* _RevocationInfoChoices_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_REVOCATIONINFOCHOICES_H_ */

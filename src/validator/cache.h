@@ -1,9 +1,8 @@
-#ifndef SRC_CACHE_LOCAL_CACHE_H_
-#define SRC_CACHE_LOCAL_CACHE_H_
+#ifndef VALIDATOR_CACHE_H_
+#define VALIDATOR_CACHE_H_
 
-#include "cachefile.h"
-#include "common.h"
-#include "types/rpp.h"
+#include "common/common.h"
+#include "validator/types/rpp.h"
 
 int cache_setup1(void);
 int cache_setup2(void);
@@ -67,4 +66,4 @@ void fquerier_commit(struct file_querier *);
 
 void cache_print(void);		/* Dump cache in stdout */
 
-#endif /* SRC_CACHE_LOCAL_CACHE_H_ */
+#endif /* VALIDATOR_CACHE_H_ */

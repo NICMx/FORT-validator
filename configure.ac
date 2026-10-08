@@ -3,8 +3,11 @@
 
 AC_PREREQ([2.69])
 AC_INIT([fort],[1.255.0],[validadorfort@fortproject.net])
-AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_SRCDIR([src/validator/main.c])
 AM_INIT_AUTOMAKE([subdir-objects])
+
+LT_INIT
+AC_CONFIG_MACRO_DIRS([m4])
 
 # Checks for programs.
 AC_PROG_CC

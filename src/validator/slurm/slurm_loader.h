@@ -1,7 +1,7 @@
-#ifndef SRC_SLURM_SLURM_LOADER_H_
-#define SRC_SLURM_SLURM_LOADER_H_
+#ifndef VALIDATOR_SLURM_SLURM_LOADER_H_
+#define VALIDATOR_SLURM_SLURM_LOADER_H_
 
-#include "rtr/db/db_table.h"
+#include "validator/db/db_table.h"
 
 /*
  * Load the SLURM file/dir and try to apply it on @db_table.
@@ -16,4 +16,4 @@
  */
 int slurm_apply(struct db_table *);
 
-#endif /* SRC_SLURM_SLURM_LOADER_H_ */
+#endif /* VALIDATOR_SLURM_SLURM_LOADER_H_ */

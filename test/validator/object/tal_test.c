@@ -1,15 +1,12 @@
-#include "object/tal.c"
-
 #include <check.h>
 
-#include "alloc.c"
-#include "base64.c"
-#include "common.c"
-#include "file.c"
+#include "common/alloc.c"
+#include "common/common.c"
+#include "common/file.c"
+#include "common/types/uri.c"
 #include "mock.c"
-#include "types/path.c"
-#include "types/str.c"
-#include "types/uri.c"
+#include "validator/base64.c"
+#include "validator/object/tal.c"
 
 static void
 check_spki(struct tal *tal)

@@ -3,14 +3,14 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE_OF.h"
 
 #include <string.h>
 
-#include "asn1/asn1c/asn_SEQUENCE_OF.h"
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/der_encoder.h"
-#include "asn1/asn1c/xer_encoder.h"
+#include "validator/asn1/asn1c/asn_SEQUENCE_OF.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/der_encoder.h"
+#include "validator/asn1/asn1c/xer_encoder.h"
 
 /*
  * The DER encoder of the SEQUENCE OF type.

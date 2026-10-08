@@ -1,11 +1,8 @@
 #include <check.h>
-#include <stdlib.h>
 
-#include "alloc.c"
-#include "common.c"
+#include "common/alloc.c"
+#include "common/types/uri.c"
 #include "mock.c"
-#include "types/path.c"
-#include "types/uri.c"
 
 #define TEST_REWIND(expected, test, limit)				\
 	parser.dst = test;						\

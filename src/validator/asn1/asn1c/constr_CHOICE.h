@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_CONSTR_CHOICE_H_
-#define	_CONSTR_CHOICE_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CONSTR_CHOICE_H_
+#define VALIDATOR_ASN1_ASN1C_CONSTR_CHOICE_H_
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "validator/asn1/asn1c/constr_TYPE.h"
 
 typedef struct asn_CHOICE_specifics_s {
 	/*
@@ -58,4 +58,4 @@ unsigned int CHOICE_variant_get_presence(const asn_TYPE_descriptor_t *td,
 int CHOICE_variant_set_presence(const asn_TYPE_descriptor_t *td,
                                 void *structure_ptr, unsigned present);
 
-#endif	/* _CONSTR_CHOICE_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CONSTR_CHOICE_H_ */

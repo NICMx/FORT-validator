@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_CONSTR_SEQUENCE_OF_H_
-#define	_CONSTR_SEQUENCE_OF_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CONSTR_SEQUENCE_OF_H_
+#define VALIDATOR_ASN1_ASN1C_CONSTR_SEQUENCE_OF_H_
 
-#include "asn1/asn1c/constr_SET_OF.h"
+#include "validator/asn1/asn1c/constr_SET_OF.h"
 
 /*
  * A set specialized functions dealing with the SEQUENCE OF type.
@@ -22,4 +22,4 @@ extern asn_TYPE_operation_t asn_OP_SEQUENCE_OF;
 #define	SEQUENCE_OF_decode_ber	SET_OF_decode_ber
 #define	SEQUENCE_OF_encode_json	SET_OF_encode_json
 
-#endif	/* _CONSTR_SET_OF_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CONSTR_SEQUENCE_OF_H_ */

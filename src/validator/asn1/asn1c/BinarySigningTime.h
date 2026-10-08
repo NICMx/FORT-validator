@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_BinarySigningTime_H_
-#define	_BinarySigningTime_H_
+#ifndef VALIDATOR_ASN1_ASN1C_BINARYSIGNINGTIME_H_
+#define VALIDATOR_ASN1_ASN1C_BINARYSIGNINGTIME_H_
 
-#include "asn1/asn1c/BinaryTime.h"
+#include "validator/asn1/asn1c/BinaryTime.h"
 
 /* BinarySigningTime */
 typedef BinaryTime_t	 BinarySigningTime_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f BinarySigningTime_decode_ber;
 der_type_encoder_f BinarySigningTime_encode_der;
 xer_type_encoder_f BinarySigningTime_encode_xer;
 
-#endif	/* _BinarySigningTime_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_BINARYSIGNINGTIME_H_ */

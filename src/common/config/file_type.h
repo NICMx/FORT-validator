@@ -1,7 +1,7 @@
-#ifndef SRC_CONFIG_FILE_TYPE_H_
-#define SRC_CONFIG_FILE_TYPE_H_
+#ifndef COMMON_CONFIG_FILE_TYPE_H_
+#define COMMON_CONFIG_FILE_TYPE_H_
 
-#include "config/types.h"
+#include "common/config/types.h"
 
 enum file_type {
 	FT_UNK,
@@ -15,4 +15,4 @@ enum file_type {
 
 extern const struct global_type gt_file_type;
 
-#endif /* SRC_CONFIG_FILE_TYPE_H_ */
+#endif /* COMMON_CONFIG_FILE_TYPE_H_ */

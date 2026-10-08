@@ -3,18 +3,18 @@
  * All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/OCTET_STRING.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
 
 #include <assert.h>
 #include <errno.h>
 
-#include "asn1/asn1c/BIT_STRING.h"
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/ber_decoder.h"
-#include "asn1/asn1c/der_encoder.h"
-#include "asn1/asn1c/json_encoder.h"
-#include "asn1/asn1c/xer_encoder.h"
-#include "json_util.h"
+#include "validator/asn1/asn1c/BIT_STRING.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/ber_decoder.h"
+#include "validator/asn1/asn1c/der_encoder.h"
+#include "validator/asn1/asn1c/json_encoder.h"
+#include "validator/asn1/asn1c/xer_encoder.h"
+#include "validator/json_util.h"
 
 /*
  * OCTET STRING basic type description.

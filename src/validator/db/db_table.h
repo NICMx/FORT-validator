@@ -1,11 +1,11 @@
-#ifndef SRC_RTR_DB_DB_TABLE_H_
-#define SRC_RTR_DB_DB_TABLE_H_
+#ifndef VALIDATOR_DB_DB_TABLE_H_
+#define VALIDATOR_DB_DB_TABLE_H_
 
-#include "types/address.h"
-#include "types/aspa.h"
-#include "types/router_key.h"
-#include "types/serial.h"
-#include "types/vrp.h"
+#include "common/types/address.h"
+#include "common/types/aspa.h"
+#include "common/types/router_key.h"
+#include "common/types/serial.h"
+#include "common/types/vrp.h"
 
 struct db_table;
 
@@ -42,4 +42,4 @@ int rtrhandler_handle_router_key(struct db_table *, unsigned char const *,
     uint32_t, unsigned char const *);
 int rtrhandler_handle_aspa(struct db_table *, struct aspa *);
 
-#endif /* SRC_RTR_DB_DB_TABLE_H_ */
+#endif /* VALIDATOR_DB_DB_TABLE_H_ */

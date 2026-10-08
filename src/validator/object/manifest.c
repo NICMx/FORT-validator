@@ -1,18 +1,16 @@
 #define _DEFAULT_SOURCE  1	/* timegm() on Linux */
 #define _DARWIN_C_SOURCE 1	/* timegm() on MacOS */
 
-#include "object/manifest.h"
+#include "validator/object/manifest.h"
 
-#include "algorithm.h"
-#include "asn1/asn1c/Manifest.h"
-#include "asn1/decode.h"
-#include "config.h"
-#include "hash.h"
-#include "log.h"
-#include "object/certificate.h"
-#include "object/crl.h"
-#include "object/signed_object.h"
-#include "thread_var.h"
+#include "common/log.h"
+#include "validator/algorithm.h"
+#include "validator/asn1/asn1c/Manifest.h"
+#include "validator/asn1/decode.h"
+#include "validator/config.h"
+#include "validator/object/crl.h"
+#include "validator/object/signed_object.h"
+#include "validator/thread_var.h"
 
 static int
 decode_manifest(struct signed_object *so, struct Manifest **result)
@@ -78,7 +76,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
 		    TM_ARGS(nextUpdate));
 	}
 
-	now_tt = config_get_validation_time();
+	now_tt = fortcfg.debug.validation_time;
 	if (now_tt == 0)
 		now_tt = time_fatal();
 

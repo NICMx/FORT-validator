@@ -1,19 +1,11 @@
-#include "daemon.h"
+#include "common/daemon.h"
 
-#include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
-#include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
 
-#include <syslog.h>
-
-#include "log.h"
+#include "common/file.h"
+#include "common/log.h"
 
 /*
  * Daemonize fort execution. "daemon()" from unistd.h isn't used since it's not
@@ -95,11 +87,8 @@ daemonize(void)
 	/* XXX WTF? 0 & 0777? */
 	umask(0);
 
-	if (chdir(pwd) < 0) {
-		pr_err("Couldn't chdir() daemon, ending execution: %s",
-		    strerror(errno));
+	if (file_chdir(pwd) != 0)
 		goto fail;
-	}
 
 	free(pwd);
 	pr_trc("Daemonized.");

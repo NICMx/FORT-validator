@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ContentType_H_
-#define	_ContentType_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CONTENTTYPE_H_
+#define VALIDATOR_ASN1_ASN1C_CONTENTTYPE_H_
 
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
 
 /* ContentType */
 typedef OBJECT_IDENTIFIER_t	 ContentType_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f ContentType_decode_ber;
 der_type_encoder_f ContentType_encode_der;
 xer_type_encoder_f ContentType_encode_xer;
 
-#endif	/* _ContentType_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CONTENTTYPE_H_ */

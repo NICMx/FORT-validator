@@ -1,5 +1,5 @@
-#ifndef SRC_TYPES_STR_H_
-#define SRC_TYPES_STR_H_
+#ifndef COMMON_TYPES_STR_H_
+#define COMMON_TYPES_STR_H_
 
 #include <openssl/asn1.h>
 #include <openssl/bn.h>
@@ -58,4 +58,4 @@ bool token_equals(struct string_tokenizer *, struct string_tokenizer *);
 char *token_read(struct string_tokenizer *);
 size_t token_count(struct string_tokenizer *);
 
-#endif /* SRC_TYPES_STR_H_ */
+#endif /* COMMON_TYPES_STR_H_ */

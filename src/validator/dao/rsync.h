@@ -1,9 +1,7 @@
-#ifndef SRC_DAO_RSYNC_H_
-#define SRC_DAO_RSYNC_H_
+#ifndef VALIDATOR_DAO_RSYNC_H_
+#define VALIDATOR_DAO_RSYNC_H_
 
-#include <stdbool.h>
-#include <jansson.h>
-#include "types/rpp.h"
+#include "validator/types/rpp.h"
 
 /*
  * TODO maybe rename "ctx" into "repo," and "dao" into "rpp".
@@ -57,4 +55,4 @@ void rsyncdao_commit(struct rsync_dao *, struct rpp *);
 /* Delete object from RAM (not cache directory) */
 void rsyncdao_free(struct rsync_dao *);
 
-#endif /* SRC_DAO_RSYNC_H_ */
+#endif /* VALIDATOR_DAO_RSYNC_H_ */

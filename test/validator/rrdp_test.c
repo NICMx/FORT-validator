@@ -1,32 +1,24 @@
 #include <check.h>
 
-#include "alloc.c"
-#include "asn1/asn1c/INTEGER.c"
-#include "asn1/asn1c/asn_codecs_prim.c"
-#include "asn1/asn1c/asn_internal.c"
-#include "asn1/asn1c/ber_decoder.c"
-#include "asn1/asn1c/ber_tlv_length.c"
-#include "asn1/asn1c/ber_tlv_tag.c"
-#include "asn1/asn1c/constraints.c"
-#include "asn1/asn1c/der_encoder.c"
-#include "base64.c"
-#include "cachefile.c"
-#include "common.c"
-#include "file.c"
-#include "json_util.c"
-#include "hash.c"
+#include "common/alloc.c"
+#include "common/common.c"
+#include "common/file.c"
+#include "common/types/map.c"
+#include "common/types/path.c"
+#include "common/types/str.c"
+#include "common/types/uri.c"
 #include "mock.c"
-#include "rrdp.c"
-#include "rrdp_xml.c"
-#include "types/uri.c"
-#include "types/map.c"
-#include "types/path.c"
-#include "types/str.c"
-
-__MOCK_ABORT(config_get_http_max_file_size, curl_off_t, 10000, void)
-__MOCK_ABORT(config_get_asn1_decode_max_stack, unsigned int, 32, void)
-__MOCK_ABORT(http_download, int, 0, struct uri const *u, curl_write_callback cb,
-    void *a, curl_off_t i, bool *ch)
+#include "validator/asn1/asn1c/INTEGER.c"
+#include "validator/asn1/asn1c/asn_codecs_prim.c"
+#include "validator/asn1/asn1c/asn_internal.c"
+#include "validator/asn1/asn1c/ber_decoder.c"
+#include "validator/asn1/asn1c/ber_tlv_length.c"
+#include "validator/asn1/asn1c/ber_tlv_tag.c"
+#include "validator/asn1/asn1c/der_encoder.c"
+#include "validator/cachefile.c"
+#include "validator/json_util.c"
+#include "validator/rrdp.c"
+#include "validator/rrdp_xml.c"
 
 /* Converts @src into JSON forth and back. Checks the result equals @src. */
 static void
@@ -159,6 +151,8 @@ main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.http.max_file_size = 10000;
 
 	suite = create_suite();
 

@@ -1,5 +1,5 @@
-#ifndef SRC_TYPES_ASN_H_
-#define SRC_TYPES_ASN_H_
+#ifndef COMMON_TYPES_ASN_H_
+#define COMMON_TYPES_ASN_H_
 
 #include <stdint.h>
 
@@ -8,4 +8,4 @@ struct asn_range {
 	uint32_t max;
 };
 
-#endif /* SRC_TYPES_ASN_H_ */
+#endif /* COMMON_TYPES_ASN_H_ */

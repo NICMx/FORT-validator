@@ -1,18 +1,16 @@
-#ifndef SRC_FILE_H_
-#define SRC_FILE_H_
+#ifndef COMMON_FILE_H_
+#define COMMON_FILE_H_
 
 #include <dirent.h>
 #include <errno.h>
 #include <jansson.h>
-#include <stdbool.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "types/str.h"
+#include "common/types/str.h"
 
 /*
  * The entire contents of the file, loaded into a buffer.
@@ -37,6 +35,7 @@ int file_stat_errno(char const *);
 bool file_isreg(char const *);
 bool file_is_valid(char const *, bool);
 
+int file_chdir(char const *);
 int file_rm_f(char const *);
 int file_rm_rf(char const *);
 int file_mkdir(char const *, bool);
@@ -71,4 +70,4 @@ char *cseq_next(struct cache_sequence *, char const **);
 #define S_ISDOTS(file) \
 	(strcmp((file)->d_name, ".") == 0 || strcmp((file)->d_name, "..") == 0)
 
-#endif /* SRC_FILE_H_ */
+#endif /* COMMON_FILE_H_ */

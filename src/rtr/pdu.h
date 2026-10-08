@@ -1,5 +1,5 @@
-#ifndef SRC_RTR_PDU_H_
-#define SRC_RTR_PDU_H_
+#ifndef RTR_PDU_H_
+#define RTR_PDU_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -9,6 +9,8 @@ enum rtr_version {
 	RTR_V1			= 1,
 	RTR_V2			= 2,
 };
+
+#define MAX_RTR_VERSION RTR_V2
 
 struct rtr_buffer {
 	unsigned char *bytes; /* Raw bytes */
@@ -73,4 +75,4 @@ rtrpdu_error_report_len(uint32_t errpdu_len, uint32_t errmsg_len)
 	    + errmsg_len;
 }
 
-#endif /* SRC_RTR_PDU_H_ */
+#endif /* RTR_PDU_H_ */

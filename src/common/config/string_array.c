@@ -1,12 +1,12 @@
-#include "config/string_array.h"
+#include "common/config/string_array.h"
 
 #include <getopt.h>
 #include <string.h>
 
-#include "alloc.h"
-#include "config/str.h"
-#include "log.h"
-#include "types/str.h"
+#include "common/alloc.h"
+#include "common/config/str.h"
+#include "common/log.h"
+#include "common/types/str.h"
 
 void
 string_array_init(struct string_array *array, char const *const *values,
@@ -24,6 +24,16 @@ string_array_init(struct string_array *array, char const *const *values,
 	array->array = pcalloc(len, sizeof(char *));
 	for (i = 0; i < len; i++)
 		array->array[i] = pstrdup(values[i]);
+}
+
+void
+string_array_cleanup(struct string_array *array)
+{
+	size_t i;
+
+	for (i = 0; i < array->length; i++)
+		free(array->array[i]);
+	free(array->array);
 }
 
 static void
@@ -110,6 +120,7 @@ fail:
 	return error;
 }
 
+/* Drop string_tokenizer if you're going to delete this. */
 static int
 string_array_parse_argv(struct option_field const *opt, char const *str,
     void *_result)

@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_IA5String_H_
-#define	_IA5String_H_
+#ifndef VALIDATOR_ASN1_ASN1C_IA5STRING_H_
+#define VALIDATOR_ASN1_ASN1C_IA5STRING_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
 
 typedef OCTET_STRING_t IA5String_t;  /* Implemented via OCTET STRING */
 
@@ -24,4 +24,4 @@ asn_constr_check_f IA5String_constraint;
 #define IA5String_encode_der    OCTET_STRING_encode_der
 #define IA5String_encode_xer    OCTET_STRING_encode_xer_utf8
 
-#endif	/* _IA5String_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_IA5STRING_H_ */

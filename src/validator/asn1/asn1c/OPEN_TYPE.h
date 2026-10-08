@@ -2,10 +2,10 @@
  * Copyright (c) 2017-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef ASN_OPEN_TYPE_H
-#define ASN_OPEN_TYPE_H
+#ifndef VALIDATOR_ASN1_ASN1C_OPEN_TYPE_H_
+#define VALIDATOR_ASN1_ASN1C_OPEN_TYPE_H_
 
-#include "asn1/asn1c/constr_CHOICE.h"
+#include "validator/asn1/asn1c/constr_CHOICE.h"
 
 #define OPEN_TYPE_free CHOICE_free
 #define OPEN_TYPE_print CHOICE_print
@@ -28,4 +28,4 @@ asn_dec_rval_t OPEN_TYPE_ber_get(const asn_codec_ctx_t *opt_codec_ctx,
                                  const asn_TYPE_member_t *element,
                                  const void *ptr, size_t size);
 
-#endif	/* ASN_OPEN_TYPE_H */
+#endif /* VALIDATOR_ASN1_ASN1C_OPEN_TYPE_H_ */

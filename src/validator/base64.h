@@ -1,8 +1,7 @@
-#ifndef SRC_BASE64_H_
-#define SRC_BASE64_H_
+#ifndef VALIDATOR_BASE64_H_
+#define VALIDATOR_BASE64_H_
 
 #include <openssl/evp.h>
-#include <openssl/sha.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -34,4 +33,4 @@ int b64d2f_write(struct base64decode2file *, char const *, size_t);
 int b64d2f_finish(struct base64decode2file *, unsigned char[EVP_MAX_MD_SIZE]);
 void b64d2f_destroy(struct base64decode2file *);
 
-#endif /* SRC_BASE64_H_ */
+#endif /* VALIDATOR_BASE64_H_ */

@@ -5,14 +5,15 @@
 /*
  * Miscellaneous system-dependent types.
  */
-#ifndef	ASN_SYSTEM_H
-#define	ASN_SYSTEM_H
+#ifndef VALIDATOR_ASN1_ASN1C_ASN_SYSTEM_H_
+#define VALIDATOR_ASN1_ASN1C_ASN_SYSTEM_H_
 
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <netinet/in.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -85,4 +86,4 @@
 #endif
 #endif
 
-#endif	/* ASN_SYSTEM_H */
+#endif /* VALIDATOR_ASN1_ASN1C_ASN_SYSTEM_H_ */

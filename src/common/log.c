@@ -1,6 +1,6 @@
 #define _DEFAULT_SOURCE 1
 
-#include "log.h"
+#include "common/log.h"
 
 #include <errno.h>
 #ifdef BACKTRACE_ENABLED
@@ -8,15 +8,15 @@
 #endif
 #include <openssl/err.h>
 #include <pthread.h>
-#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <syslog.h>
 #include <time.h>
-#include <unistd.h>
 
-#include "config.h"
-#include "report.h"
-#include "thread_var.h"
-#include "types/path.h"
+#include "common/alloc.h"
+#include "common/report.h"
 
 struct level {
 	int id;
@@ -175,7 +175,7 @@ log_setup(void)
 	static struct logger init_node = { 0 };
 
 	init_node.cb = console_cb;
-	init_node.lvl = &INF;
+	init_node.lvl = &TRC;
 
 	SLIST_INSERT_HEAD(&listeners, &init_node, lh);
 }

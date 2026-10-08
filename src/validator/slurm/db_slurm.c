@@ -1,13 +1,13 @@
-#include "slurm/db_slurm.h"
+#include "validator/slurm/db_slurm.h"
 
 #include <errno.h>
 #include <string.h>
 #include <time.h>
 
-#include "base64.h"
-#include "common.h"
-#include "log.h"
-#include "types/arraylist.h"
+#include "common/common.h"
+#include "common/log.h"
+#include "common/types/arraylist.h"
+#include "validator/base64.h"
 
 struct slurm_prefix_wrap {
 	struct slurm_prefix element;

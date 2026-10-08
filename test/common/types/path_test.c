@@ -1,9 +1,8 @@
 #include <check.h>
-#include <stdlib.h>
 
-#include "alloc.c"
+#include "common/alloc.c"
+#include "common/types/path.c"
 #include "mock.c"
-#include "types/path.c"
 
 #define TEST_JOIN(expected, a, b)				\
 	do {							\

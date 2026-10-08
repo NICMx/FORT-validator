@@ -1,12 +1,12 @@
-#ifndef SRC_SLURM_DB_SLURM_H_
-#define SRC_SLURM_DB_SLURM_H_
+#ifndef VALIDATOR_SLURM_DB_SLURM_H_
+#define VALIDATOR_SLURM_DB_SLURM_H_
 
 #include <openssl/evp.h>
 #include <stddef.h>
 #include <sys/queue.h>
 
-#include "types/router_key.h"
-#include "types/vrp.h"
+#include "common/types/router_key.h"
+#include "common/types/vrp.h"
 
 /* Flags to get data from structs */
 #define SLURM_COM_FLAG_NONE		0x00
@@ -83,4 +83,4 @@ void db_slurm_destroy(struct db_slurm *);
 
 void db_slurm_get_csum_list(struct db_slurm *, struct slurm_csum_list *);
 
-#endif /* SRC_SLURM_DB_SLURM_H_ */
+#endif /* VALIDATOR_SLURM_DB_SLURM_H_ */

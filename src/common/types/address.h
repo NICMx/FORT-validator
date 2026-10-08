@@ -1,10 +1,11 @@
-#ifndef SRC_TYPES_ADDRESS_H_
-#define SRC_TYPES_ADDRESS_H_
+#ifndef COMMON_TYPES_ADDRESS_H_
+#define COMMON_TYPES_ADDRESS_H_
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/socket.h>
-
-#include "asn1/asn1c/IPAddressRange.h"
 
 struct ipv4_prefix {
 	struct in_addr addr;
@@ -29,17 +30,13 @@ struct ipv6_range {
 void in6_addr_init(struct in6_addr *, uint32_t, uint32_t, uint32_t, uint32_t);
 
 uint32_t u32_suffix_mask(unsigned int);
+uint32_t be32_suffix_mask(unsigned int);
 void ipv6_suffix_mask(unsigned int, struct in6_addr *);
 
 bool addr6_equals(struct in6_addr const *, struct in6_addr const *);
 
 bool prefix4_equals(struct ipv4_prefix const *, struct ipv4_prefix const *);
 bool prefix6_equals(struct ipv6_prefix const *, struct ipv6_prefix const *);
-
-int prefix4_decode(IPAddress_t const *, struct ipv4_prefix *);
-int prefix6_decode(IPAddress_t const *, struct ipv6_prefix *);
-int range4_decode(IPAddressRange_t const *, struct ipv4_range *);
-int range6_decode(IPAddressRange_t const *, struct ipv6_range *);
 
 int prefix4_parse(const char *, struct ipv4_prefix *);
 int prefix6_parse(const char *, struct ipv6_prefix *);
@@ -55,4 +52,4 @@ char const *addr2str4(struct in_addr const *, char *);
 char const *addr2str6(struct in6_addr const *, char *);
 bool sockaddr2str(struct sockaddr_storage *, char *buffer);
 
-#endif /* SRC_TYPES_ADDRESS_H_ */
+#endif /* COMMON_TYPES_ADDRESS_H_ */

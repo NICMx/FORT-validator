@@ -1,10 +1,9 @@
-#ifndef SRC_OBJECT_GHOSTBUSTERS_H_
-#define SRC_OBJECT_GHOSTBUSTERS_H_
+#ifndef VALIDATOR_OBJECT_GHOSTBUSTERS_H_
+#define VALIDATOR_OBJECT_GHOSTBUSTERS_H_
 
-#include "asn1/signed_data.h"
-#include "types/map.h"
+#include "validator/object/certificate.h"
 
 int ghostbusters_traverse(struct cache_mapping const *,
     struct rpki_certificate *);
 
-#endif /* SRC_OBJECT_GHOSTBUSTERS_H_ */
+#endif /* VALIDATOR_OBJECT_GHOSTBUSTERS_H_ */

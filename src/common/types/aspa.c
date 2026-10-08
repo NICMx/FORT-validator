@@ -1,9 +1,9 @@
-#include "types/aspa.h"
+#include "common/types/aspa.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "types/array.h"
+#include "common/types/array.h"
 
 void
 aspa_refget(struct aspa *aspa)

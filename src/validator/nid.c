@@ -1,10 +1,10 @@
-#include "nid.h"
+#include "validator/nid.h"
 
 #include <errno.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 
-#include "log.h"
+#include "common/log.h"
 
 static int ct_roa_nid;
 static int ct_mft_nid;

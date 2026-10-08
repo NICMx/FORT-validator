@@ -1,5 +1,5 @@
-#ifndef SRC_STREAM_H_
-#define SRC_STREAM_H_
+#ifndef VALIDATOR_STREAM_H_
+#define VALIDATOR_STREAM_H_
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -17,4 +17,4 @@ void rstream_close(struct read_stream *, bool);
 
 int stream_full_write(int, unsigned char const *, size_t);
 
-#endif /* SRC_STREAM_H_ */
+#endif /* VALIDATOR_STREAM_H_ */

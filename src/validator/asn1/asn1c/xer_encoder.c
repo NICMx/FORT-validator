@@ -2,11 +2,11 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/xer_encoder.h"
+#include "validator/asn1/asn1c/xer_encoder.h"
 
 #include <string.h>
 
-#include "asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/asn_internal.h"
 
 /*
  * The XER encoder of any type. May be invoked by the application.

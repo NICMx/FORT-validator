@@ -3,7 +3,7 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "asn1/asn1c/ber_tlv_tag.h"
+#include "validator/asn1/asn1c/ber_tlv_tag.h"
 
 #include <errno.h>
 

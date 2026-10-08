@@ -5,13 +5,13 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_RsyncRequest_H_
-#define	_RsyncRequest_H_
+#ifndef VALIDATOR_ASN1_ASN1C_RSYNCREQUEST_H_
+#define VALIDATOR_ASN1_ASN1C_RSYNCREQUEST_H_
 
 /* Including external dependencies */
-#include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/BOOLEAN.h"
-#include "types/uri.h"
+#include "common/types/uri.h"
+#include "validator/asn1/asn1c/BOOLEAN.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
 
 /* RsyncRequest */
 typedef struct RsyncRequest {
@@ -29,4 +29,4 @@ extern asn_TYPE_descriptor_t asn_DEF_RsyncRequest;
 int RsyncRequest_init(struct RsyncRequest *, struct uri const *, char const *,
     bool);
 
-#endif	/* _RsyncRequest_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_RSYNCREQUEST_H_ */

@@ -1,13 +1,11 @@
-#include "task.c"
-
 #include <check.h>
 
-#include "alloc.c"
-#include "common.c"
+#include "common/alloc.c"
+#include "common/common.c"
+#include "common/types/map.c"
+#include "common/types/uri.c"
 #include "mock.c"
-#include "types/array.h"
-#include "types/map.c"
-#include "types/uri.c"
+#include "validator/task.c"
 
 void
 cer_free(struct rpki_certificate *cert)

@@ -1,11 +1,11 @@
-#ifndef SRC_RTR_PDU_SENDER_H_
-#define SRC_RTR_PDU_SENDER_H_
+#ifndef RTR_PDU_SENDER_H_
+#define RTR_PDU_SENDER_H_
 
-#include "rtr/meta.h"
+#include "common/cache_rtr.h"
+#include "common/types/aspa.h"
+#include "common/types/router_key.h"
+#include "common/types/vrp.h"
 #include "rtr/pdu.h"
-#include "types/aspa.h"
-#include "types/router_key.h"
-#include "types/vrp.h"
 
 #define FLAG_WITHDRAWAL		0
 #define FLAG_ANNOUNCEMENT	1
@@ -21,4 +21,4 @@ int send_end_of_data_pdu(int, uint8_t, uint16_t, serial_t);
 int send_error_report_pdu(int, uint8_t, uint16_t, struct rtr_buffer const *,
     char *);
 
-#endif /* SRC_RTR_PDU_SENDER_H_ */
+#endif /* RTR_PDU_SENDER_H_ */

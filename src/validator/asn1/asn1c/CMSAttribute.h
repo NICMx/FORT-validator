@@ -5,13 +5,13 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_CMSAttribute_H_
-#define	_CMSAttribute_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CMSATTRIBUTE_H_
+#define VALIDATOR_ASN1_ASN1C_CMSATTRIBUTE_H_
 
-#include "asn1/asn1c/CMSAttributeValue.h"
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "asn1/asn1c/asn_SET_OF.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
+#include "validator/asn1/asn1c/CMSAttributeValue.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/asn1/asn1c/asn_SET_OF.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE.h"
 
 /* CMSAttribute */
 typedef struct CMSAttribute {
@@ -32,4 +32,4 @@ extern asn_TYPE_descriptor_t asn_DEF_CMSAttribute;
 extern asn_SEQUENCE_specifics_t asn_SPC_CMSAttribute_specs_1;
 extern asn_TYPE_member_t asn_MBR_CMSAttribute_1[2];
 
-#endif	/* _CMSAttribute_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CMSATTRIBUTE_H_ */

@@ -2,8 +2,8 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_BER_TLV_TAG_H_
-#define	_BER_TLV_TAG_H_
+#ifndef VALIDATOR_ASN1_ASN1C_BER_TLV_TAG_H_
+#define VALIDATOR_ASN1_ASN1C_BER_TLV_TAG_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -55,4 +55,4 @@ ssize_t ber_fetch_tag(const void *bufptr, size_t size, ber_tlv_tag_t *tag_r);
  */
 size_t ber_tlv_tag_serialize(ber_tlv_tag_t tag, void *bufptr, size_t size);
 
-#endif	/* _BER_TLV_TAG_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_BER_TLV_TAG_H_ */

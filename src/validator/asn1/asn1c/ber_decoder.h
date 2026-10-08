@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_BER_DECODER_H_
-#define	_BER_DECODER_H_
+#ifndef VALIDATOR_ASN1_ASN1C_BER_DECODER_H_
+#define VALIDATOR_ASN1_ASN1C_BER_DECODER_H_
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "validator/asn1/asn1c/constr_TYPE.h"
 
 /*
  * The BER decoder of any type.
@@ -43,4 +43,4 @@ asn_dec_rval_t ber_check_tags(
     ber_tlv_len_t *last_length, int *opt_tlv_form /* optional tag form */
 );
 
-#endif	/* _BER_DECODER_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_BER_DECODER_H_ */

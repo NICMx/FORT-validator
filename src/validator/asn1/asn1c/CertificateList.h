@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_CertificateList_H_
-#define	_CertificateList_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CERTIFICATELIST_H_
+#define VALIDATOR_ASN1_ASN1C_CERTIFICATELIST_H_
 
-#include "asn1/asn1c/BIT_STRING.h"
-#include "asn1/asn1c/TBSCertList.h"
+#include "validator/asn1/asn1c/BIT_STRING.h"
+#include "validator/asn1/asn1c/TBSCertList.h"
 
 /* CertificateList */
 typedef struct CertificateList {
@@ -26,4 +26,4 @@ extern asn_TYPE_descriptor_t asn_DEF_CertificateList;
 extern asn_SEQUENCE_specifics_t asn_SPC_CertificateList_specs_1;
 extern asn_TYPE_member_t asn_MBR_CertificateList_1[3];
 
-#endif	/* _CertificateList_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CERTIFICATELIST_H_ */

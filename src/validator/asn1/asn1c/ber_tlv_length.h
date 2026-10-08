@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_BER_TLV_LENGTH_H_
-#define	_BER_TLV_LENGTH_H_
+#ifndef VALIDATOR_ASN1_ASN1C_BER_TLV_LENGTH_H_
+#define VALIDATOR_ASN1_ASN1C_BER_TLV_LENGTH_H_
 
-#include "asn1/asn1c/asn_codecs.h"
+#include "validator/asn1/asn1c/asn_codecs.h"
 
 typedef ssize_t ber_tlv_len_t;
 
@@ -41,4 +41,4 @@ ssize_t ber_skip_length(
  */
 size_t der_tlv_length_serialize(ber_tlv_len_t len, void *bufptr, size_t size);
 
-#endif	/* _BER_TLV_LENGTH_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_BER_TLV_LENGTH_H_ */

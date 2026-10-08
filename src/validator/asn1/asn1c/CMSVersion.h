@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_CMSVersion_H_
-#define	_CMSVersion_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CMSVERSION_H_
+#define VALIDATOR_ASN1_ASN1C_CMSVERSION_H_
 
-#include "asn1/asn1c/INTEGER.h"
+#include "validator/asn1/asn1c/INTEGER.h"
 
 /* Dependencies */
 typedef enum CMSVersion {
@@ -32,4 +32,4 @@ ber_type_decoder_f CMSVersion_decode_ber;
 der_type_encoder_f CMSVersion_encode_der;
 xer_type_encoder_f CMSVersion_encode_xer;
 
-#endif	/* _CMSVersion_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CMSVERSION_H_ */

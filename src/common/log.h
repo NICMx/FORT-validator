@@ -1,5 +1,5 @@
-#ifndef SRC_LOG_H_
-#define SRC_LOG_H_
+#ifndef COMMON_LOG_H_
+#define COMMON_LOG_H_
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -115,4 +115,4 @@ __dead void enomem_panic(void); /* Out of memory */
 		fflush(stdout);						\
 	} while (0)
 
-#endif /* SRC_LOG_H_ */
+#endif /* COMMON_LOG_H_ */

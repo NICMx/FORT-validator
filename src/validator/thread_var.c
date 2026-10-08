@@ -1,8 +1,8 @@
-#include "thread_var.h"
+#include "validator/thread_var.h"
 
 #include <pthread.h>
 
-#include "log.h"
+#include "common/log.h"
 
 static pthread_key_t filenames_key;
 

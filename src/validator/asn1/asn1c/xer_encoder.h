@@ -2,10 +2,10 @@
  * Copyright (c) 2004-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_XER_ENCODER_H_
-#define	_XER_ENCODER_H_
+#ifndef VALIDATOR_ASN1_ASN1C_XER_ENCODER_H_
+#define VALIDATOR_ASN1_ASN1C_XER_ENCODER_H_
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "validator/asn1/asn1c/constr_TYPE.h"
 
 /* Flags used by the xer_encode() and (*xer_type_encoder_f), defined below */
 enum xer_encoder_flags_e {
@@ -36,4 +36,4 @@ asn_enc_rval_t xer_encode(const struct asn_TYPE_descriptor_s *type_descriptor,
 int xer_fprint(FILE *stream, const struct asn_TYPE_descriptor_s *td,
                const void *struct_ptr);
 
-#endif	/* _XER_ENCODER_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_XER_ENCODER_H_ */

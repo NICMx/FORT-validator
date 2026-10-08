@@ -1,18 +1,18 @@
-#include "ext.h"
+#include "validator/ext.h"
 
 #include <openssl/asn1t.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
 #include <sys/socket.h>
 
-#include "asn1/asn1c/ASIdentifiers.h"
-#include "asn1/asn1c/IPAddressFamily.h"
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "hash.h"
-#include "json_util.h"
-#include "libcrypto_util.h"
-#include "log.h"
-#include "nid.h"
+#include "common/log.h"
+#include "validator/asn1/asn1c/ASIdentifiers.h"
+#include "validator/asn1/asn1c/IPAddressFamily.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/hash.h"
+#include "validator/json_util.h"
+#include "validator/libcrypto_util.h"
+#include "validator/nid.h"
 
 static json_t *
 unimplemented(void const *arg)

@@ -1,4 +1,4 @@
-#include "sig.h"
+#include "validator/sig.h"
 
 #include <errno.h>
 #ifdef BACKTRACE_ENABLED
@@ -6,11 +6,9 @@
 #endif
 #include <signal.h>
 
-#include "cache.h"
-#include "log.h"
-#include "output_printer.h"
-
-volatile bool fort_end = false;
+#include "common/log.h"
+#include "validator/cache.h"
+#include "validator/output_printer.h"
 
 /*
  * Ensures libgcc is loaded; otherwise backtrace() might allocate

@@ -1,113 +1,121 @@
-bin_PROGRAMS = fort
+bin_PROGRAMS = fort fort-rtr
+noinst_LTLIBRARIES = libfort.la
 
-fort_SOURCES  = main.c
-
-fort_SOURCES += algorithm.h algorithm.c
-fort_SOURCES += alloc.h alloc.c
-fort_SOURCES += asn1/content_info.h asn1/content_info.c
-fort_SOURCES += asn1/decode.h asn1/decode.c
-fort_SOURCES += asn1/oid.h asn1/oid.c
-fort_SOURCES += asn1/signed_data.h asn1/signed_data.c
-fort_SOURCES += base64.h base64.c
-fort_SOURCES += cache.c cache.h
-fort_SOURCES += cachefile.c cachefile.h
-fort_SOURCES += cachetmp.c cachetmp.h
-fort_SOURCES += common.c common.h
-fort_SOURCES += config/boolean.c config/boolean.h
-fort_SOURCES += config/curl_offset.c config/curl_offset.h
-fort_SOURCES += config/file_type.h config/file_type.c
-fort_SOURCES += config.h config.c
-fort_SOURCES += config/incidences.h config/incidences.c
-fort_SOURCES += config/log_conf.h config/log_conf.c
-fort_SOURCES += config/mode.c config/mode.h
-fort_SOURCES += config/output_format.h config/output_format.c
-fort_SOURCES += config/str.c config/str.h
-fort_SOURCES += config/string_array.h config/string_array.c
-fort_SOURCES += config/time.h config/time.c
-fort_SOURCES += config/types.h
-fort_SOURCES += config/uint.c config/uint.h
-fort_SOURCES += daemon.h daemon.c
-fort_SOURCES += dao/rsync.c dao/rsync.h
-fort_SOURCES += dao/ta.c dao/ta.h
-fort_SOURCES += ext.h ext.c
-fort_SOURCES += file.h file.c
-fort_SOURCES += hash.h hash.c
-fort_SOURCES += http.h http.c
-fort_SOURCES += json_handler.h json_handler.c
-fort_SOURCES += json_util.c json_util.h
-fort_SOURCES += libcrypto_util.h libcrypto_util.c
-fort_SOURCES += log.h log.c
-fort_SOURCES += nid.h nid.c
-fort_SOURCES += object/aspa.h object/aspa.c
-#fort_SOURCES += object/bgpsec.h object/bgpsec.c
-fort_SOURCES += object/certificate.h object/certificate.c
-fort_SOURCES += object/crl.h object/crl.c
-fort_SOURCES += object/ghostbusters.h object/ghostbusters.c
-fort_SOURCES += object/manifest.h object/manifest.c
-fort_SOURCES += object/roa.h object/roa.c
-fort_SOURCES += object/signed_object.h object/signed_object.c
-fort_SOURCES += object/tal.h object/tal.c
-fort_SOURCES += object/vcard.h object/vcard.c
-fort_SOURCES += output_printer.h output_printer.c
-fort_SOURCES += print_file.h print_file.c
-fort_SOURCES += prometheus.h prometheus.c
-fort_SOURCES += report.c report.h
-fort_SOURCES += resource/asn.h resource/asn.c
-fort_SOURCES += resource.h resource.c
-fort_SOURCES += resource/ip4.h resource/ip4.c
-fort_SOURCES += resource/ip6.h resource/ip6.c
-fort_SOURCES += rrdp.h rrdp.c
-fort_SOURCES += rrdp_xml.h rrdp_xml.c
-fort_SOURCES += rsync.h rsync.c
-fort_SOURCES += rtr/db/db_table.c rtr/db/db_table.h
-fort_SOURCES += rtr/db/vrps.c rtr/db/vrps.h
-fort_SOURCES += rtr/err_pdu.c rtr/err_pdu.h
-fort_SOURCES += rtr/meta.c rtr/meta.h
-fort_SOURCES += rtr/pdu.c rtr/pdu.h
-fort_SOURCES += rtr/pdu_handler.c rtr/pdu_handler.h
-fort_SOURCES += rtr/pdu_sender.c rtr/pdu_sender.h
-fort_SOURCES += rtr/pdu_stream.c rtr/pdu_stream.h
-fort_SOURCES += rtr/primitive_writer.c rtr/primitive_writer.h
-fort_SOURCES += rtr/rtr.c rtr/rtr.h
-fort_SOURCES += sig.h sig.c
-fort_SOURCES += slurm/db_slurm.c slurm/db_slurm.h
-fort_SOURCES += slurm/slurm_loader.c slurm/slurm_loader.h
-fort_SOURCES += slurm/slurm_parser.c slurm/slurm_parser.h
-fort_SOURCES += stats.h stats.c
-fort_SOURCES += stream.h stream.c
-fort_SOURCES += task.h task.c
-fort_SOURCES += thread_var.h thread_var.c
-fort_SOURCES += types/address.h types/address.c
-fort_SOURCES += types/array.h
-fort_SOURCES += types/arraylist.h
-fort_SOURCES += types/asn.h
-fort_SOURCES += types/aspa.h types/aspa.c
-fort_SOURCES += types/bio_seq.c types/bio_seq.h
-fort_SOURCES += types/map.h types/map.c
-fort_SOURCES += types/name.h types/name.c
-fort_SOURCES += types/path.h types/path.c
-fort_SOURCES += types/router_key.c types/router_key.h
-fort_SOURCES += types/rpp.h types/rpp.c
-fort_SOURCES += types/serial.h types/serial.c
-fort_SOURCES += types/sorted_array.h types/sorted_array.c
-fort_SOURCES += types/str.h types/str.c
-fort_SOURCES += types/uri.c types/uri.h
-fort_SOURCES += types/uthash.h
-fort_SOURCES += types/vrp.c types/vrp.h
-fort_SOURCES += types/vthread.c types/vthread.h
-
-include asn1/asn1c/Makefile.include
-fort_SOURCES += $(ASN_MODULE_SRCS) $(ASN_MODULE_HDRS)
-
-fort_CFLAGS  = -Wall -Wpedantic
-#fort_CFLAGS += $(GCC_WARNS)
-fort_CFLAGS += -std=c99 -D_XOPEN_SOURCE=700
-fort_CFLAGS += -O0 -g $(FORT_FLAGS)
 if BACKTRACE_ENABLED
-fort_CFLAGS += -DBACKTRACE_ENABLED
-fort_LDFLAGS = -rdynamic
+CFLAGS_BT = -DBACKTRACE_ENABLED
+LDFLAGS_BT = -rdynamic
 endif
-fort_LDADD   = ${JANSSON_LIBS} ${CURL_LIBS} ${MICROHTTPD_LIBS}
+
+libfort_la_SOURCES = \
+	common/alloc.c common/alloc.h \
+	common/cache_rtr.c common/cache_rtr.h \
+	common/common.c common/common.h \
+	common/config.c common/config.h \
+	common/config/boolean.c common/config/boolean.h \
+	common/config/curl_offset.c common/config/curl_offset.h \
+	common/config/file_type.c common/config/file_type.h \
+	common/config/incidences.c common/config/incidences.h \
+	common/config/log_conf.c common/config/log_conf.h \
+	common/config/output_format.c common/config/output_format.h \
+	common/config/str.c common/config/str.h \
+	common/config/string_array.c common/config/string_array.h \
+	common/config/time.c common/config/time.h \
+	common/config/types.h \
+	common/config/uint.c common/config/uint.h \
+	common/daemon.c common/daemon.h \
+	common/file.c common/file.h \
+	common/log.c common/log.h \
+	common/report.c common/report.h \
+	common/types/address.c common/types/address.h \
+	common/types/array.h \
+	common/types/arraylist.h \
+	common/types/asn.h \
+	common/types/aspa.c common/types/aspa.h \
+	common/types/bio_seq.c common/types/bio_seq.h \
+	common/types/map.c common/types/map.h \
+	common/types/name.c common/types/name.h \
+	common/types/path.c common/types/path.h \
+	common/types/router_key.c common/types/router_key.h \
+	common/types/serial.c common/types/serial.h \
+	common/types/sorted_array.c common/types/sorted_array.h \
+	common/types/str.c common/types/str.h \
+	common/types/uri.c common/types/uri.h \
+	common/types/uthash.h \
+	common/types/vrp.c common/types/vrp.h
+libfort_la_CFLAGS = -Wall -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 -O0 -g ${CFLAGS_BT}
+libfort_la_LDFLAGS = ${LDFLAGS_BT}
+libfort_la_LIBADD = ${JANSSON_LIBS}
+
+include validator/asn1/asn1c/Makefile.include
+
+fort_SOURCES = \
+	validator/algorithm.c validator/algorithm.h \
+	validator/asn1/content_info.c validator/asn1/content_info.h \
+	validator/asn1/decode.c validator/asn1/decode.h \
+	validator/asn1/oid.c validator/asn1/oid.h \
+	validator/asn1/signed_data.c validator/asn1/signed_data.h \
+	validator/base64.c validator/base64.h \
+	validator/cache.c validator/cache.h \
+	validator/cachefile.c validator/cachefile.h \
+	validator/cachetmp.c validator/cachetmp.h \
+	validator/config.c validator/config.h \
+	validator/dao/rsync.c validator/dao/rsync.h \
+	validator/dao/ta.c validator/dao/ta.h \
+	validator/db/db_table.c validator/db/db_table.h \
+	validator/db/vrps.c validator/db/vrps.h \
+	validator/ext.c validator/ext.h \
+	validator/hash.c validator/hash.h \
+	validator/http.c validator/http.h \
+	validator/json_handler.c validator/json_handler.h \
+	validator/json_util.c validator/json_util.h \
+	validator/libcrypto_util.c validator/libcrypto_util.h \
+	validator/main.c \
+	validator/nid.c validator/nid.h \
+	validator/object/aspa.c validator/object/aspa.h \
+	validator/object/certificate.c validator/object/certificate.h \
+	validator/object/crl.c validator/object/crl.h \
+	validator/object/ghostbusters.c validator/object/ghostbusters.h \
+	validator/object/manifest.c validator/object/manifest.h \
+	validator/object/roa.c validator/object/roa.h \
+	validator/object/signed_object.c validator/object/signed_object.h \
+	validator/object/tal.c validator/object/tal.h \
+	validator/object/vcard.c validator/object/vcard.h \
+	validator/output_printer.c validator/output_printer.h \
+	validator/print_file.c validator/print_file.h \
+	validator/prometheus.c validator/prometheus.h \
+	validator/resource/asn.c validator/resource/asn.h \
+	validator/resource.c validator/resource.h \
+	validator/resource/ip4.c validator/resource/ip4.h \
+	validator/resource/ip6.c validator/resource/ip6.h \
+	validator/rrdp.c validator/rrdp.h \
+	validator/rrdp_xml.c validator/rrdp_xml.h \
+	validator/rsync.c validator/rsync.h \
+	validator/sig.c validator/sig.h \
+	validator/slurm/db_slurm.c validator/slurm/db_slurm.h \
+	validator/slurm/slurm_loader.c validator/slurm/slurm_loader.h \
+	validator/slurm/slurm_parser.c validator/slurm/slurm_parser.h \
+	validator/stats.c validator/stats.h \
+	validator/stream.c validator/stream.h \
+	validator/task.c validator/task.h \
+	validator/thread_var.c validator/thread_var.h \
+	validator/types/rpp.c validator/types/rpp.h \
+	validator/types/vthread.c validator/types/vthread.h \
+	${ASN_MODULE_SRCS} ${ASN_MODULE_HDRS}
+fort_CFLAGS = -Wall -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 -O0 -g ${CFLAGS_BT}
+fort_LDFLAGS = ${LDFLAGS_BT}
+fort_LDADD = libfort.la ${JANSSON_LIBS} ${CURL_LIBS} ${MICROHTTPD_LIBS}
+
+fort_rtr_SOURCES = \
+	rtr/err_pdu.c rtr/err_pdu.h \
+	rtr/main.c \
+	rtr/pdu.c rtr/pdu.h \
+	rtr/pdu_handler.c rtr/pdu_handler.h \
+	rtr/pdu_sender.c rtr/pdu_sender.h \
+	rtr/pdu_stream.c rtr/pdu_stream.h \
+	rtr/primitive_writer.c rtr/primitive_writer.h
+fort_rtr_CFLAGS = -Wall -Wpedantic -std=c99 -D_XOPEN_SOURCE=700 -O0 -g ${CFLAGS_BT}
+fort_rtr_LDFLAGS = ${LDFLAGS_BT}
+fort_rtr_LDADD = libfort.la ${JANSSON_LIBS}
 
 GCC_WARNS  = -fmax-errors=1 -fanalyzer
 GCC_WARNS += -pedantic-errors -Waddress -Walloc-zero -Walloca

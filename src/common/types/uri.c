@@ -1,11 +1,12 @@
-#include "types/uri.h"
+#include "common/types/uri.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 
-#include "common.h"
-#include "log.h"
+#include "common/common.h"
+#include "common/log.h"
 
 #define URI_ALLOW_UNKNOWN_SCHEME (1 << 0)
 

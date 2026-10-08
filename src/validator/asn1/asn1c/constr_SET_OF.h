@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	CONSTR_SET_OF_H
-#define	CONSTR_SET_OF_H
+#ifndef VALIDATOR_ASN1_ASN1C_CONSTR_SET_OF_H_
+#define VALIDATOR_ASN1_ASN1C_CONSTR_SET_OF_H_
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "validator/asn1/asn1c/constr_TYPE.h"
 
 typedef struct asn_SET_OF_specifics_s {
     /*
@@ -31,4 +31,4 @@ json_type_encoder_f SET_OF_encode_json;
 xer_type_encoder_f SET_OF_encode_xer;
 extern asn_TYPE_operation_t asn_OP_SET_OF;
 
-#endif	/* CONSTR_SET_OF_H */
+#endif /* VALIDATOR_ASN1_ASN1C_CONSTR_SET_OF_H_ */

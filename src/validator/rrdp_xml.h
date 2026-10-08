@@ -1,13 +1,9 @@
-#ifndef SRC_RRDP_XML_H_
-#define SRC_RRDP_XML_H_
+#ifndef VALIDATOR_RRDP_XML_H_
+#define VALIDATOR_RRDP_XML_H_
 
-#include <openssl/bn.h>
-#include <time.h>
-
-#include "cachefile.h"
-#include "file.h"
-#include "hash.h"
-#include "types/uri.h"
+#include "common/file.h"
+#include "validator/cachefile.h"
+#include "validator/hash.h"
 
 BIGNUM *BN_create(void);
 
@@ -62,4 +58,4 @@ int rrdpxml_explode_delta(struct update_notification *,
     struct notification_delta *,
     struct files_ht *, struct cache_sequence *);
 
-#endif /* SRC_RRDP_XML_H_ */
+#endif /* VALIDATOR_RRDP_XML_H_ */

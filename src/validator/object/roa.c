@@ -1,11 +1,10 @@
-#include "object/roa.h"
+#include "validator/object/roa.h"
 
-#include "asn1/asn1c/RouteOriginAttestation.h"
-#include "asn1/decode.h"
-#include "log.h"
-#include "object/certificate.h"
-#include "object/signed_object.h"
-#include "thread_var.h"
+#include "common/log.h"
+#include "validator/asn1/asn1c/RouteOriginAttestation.h"
+#include "validator/asn1/decode.h"
+#include "validator/object/signed_object.h"
+#include "validator/thread_var.h"
 
 static int
 decode_roa(struct signed_object *so, struct RouteOriginAttestation **result)

@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_IPAddress_H_
-#define	_IPAddress_H_
+#ifndef VALIDATOR_ASN1_ASN1C_IPADDRESS_H_
+#define VALIDATOR_ASN1_ASN1C_IPADDRESS_H_
 
-#include "asn1/asn1c/BIT_STRING.h"
+#include "validator/asn1/asn1c/BIT_STRING.h"
 
 /* IPAddress */
 typedef BIT_STRING_t	 IPAddress_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f IPAddress_decode_ber;
 der_type_encoder_f IPAddress_encode_der;
 xer_type_encoder_f IPAddress_encode_xer;
 
-#endif	/* _IPAddress_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_IPADDRESS_H_ */

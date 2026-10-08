@@ -1,11 +1,11 @@
-#ifndef SRC_TYPES_ARRAYLIST_H_
-#define SRC_TYPES_ARRAYLIST_H_
+#ifndef COMMON_TYPES_ARRAYLIST_H_
+#define COMMON_TYPES_ARRAYLIST_H_
 
 #include <stdlib.h>
 #include <strings.h>
 
-#include "alloc.h"
-#include "types/array.h"
+#include "common/alloc.h"
+#include "common/types/array.h"
 
 #define DEFINE_ARRAY_LIST_STRUCT(name, elem_type)			\
 	struct name {							\
@@ -73,4 +73,4 @@
 	(index)++							\
 )
 
-#endif /* SRC_TYPES_ARRAYLIST_H_ */
+#endif /* COMMON_TYPES_ARRAYLIST_H_ */

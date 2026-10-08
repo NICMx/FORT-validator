@@ -2,11 +2,11 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_INTEGER_H_
-#define	_INTEGER_H_
+#ifndef VALIDATOR_ASN1_ASN1C_INTEGER_H_
+#define VALIDATOR_ASN1_ASN1C_INTEGER_H_
 
-#include "asn1/asn1c/asn_codecs_prim.h"
-#include "asn1/asn1c/constraints.h"
+#include "validator/asn1/asn1c/asn_codecs_prim.h"
+#include "validator/asn1/asn1c/constraints.h"
 
 typedef ASN__PRIMITIVE_TYPE_t INTEGER_t;
 
@@ -98,4 +98,4 @@ void INTEGER_trc(char const *, INTEGER_t const *);
 char *INTEGER_to_str(INTEGER_t const *);
 void INTEGER_cleanup(INTEGER_t *);
 
-#endif	/* _INTEGER_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_INTEGER_H_ */

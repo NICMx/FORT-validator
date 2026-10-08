@@ -2,10 +2,10 @@
  * Copyright (c) 2003, 2004 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/ber_tlv_length.h"
+#include "validator/asn1/asn1c/ber_tlv_length.h"
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/ber_tlv_tag.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/ber_tlv_tag.h"
 
 ssize_t
 ber_fetch_length(int _is_constructed, const void *bufptr, size_t size,

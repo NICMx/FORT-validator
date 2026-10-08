@@ -1,16 +1,11 @@
 #include <check.h>
-#include <stdlib.h>
 
-#include "alloc.c"
-#include "common.c"
-#include "file.c"
+#include "common/alloc.c"
+#include "common/common.c"
+#include "common/types/address.c"
+#include "common/types/aspa.c"
 #include "mock.c"
-#include "types/address.c"
-#include "types/aspa.c"
-#include "types/router_key.c"
-#include "types/serial.c"
-#include "types/vrp.c"
-#include "rtr/db/db_table.c"
+#include "validator/db/db_table.c"
 
 #define ADDR1 htonl(0xC0000201) /* 192.0.2.1 */
 #define ADDR2 htonl(0xC0000202) /* 192.0.2.2 */
@@ -20,19 +15,7 @@
 static bool roas_found[TOTAL_ROAS];
 static unsigned int total_found;
 
-__MOCK_ABORT(config_get_deltas_lifetime, unsigned int, 0, void)
-__MOCK_ABORT(config_get_local_repository, char const *, "tmp/dbt", void)
-MOCK_UINT(config_get_max_aspa_providers, 10, void)
-MOCK_ABORT_VOID(rtridx_init, struct rtr_index *i)
-MOCK_ABORT_INT(rtridx_save, struct rtr_index *i)
-MOCK_ABORT_INT(rtridx_load, struct rtr_index *i, bool b)
-__MOCK_ABORT(rtridx_add_serial, serial_t, 0, struct rtr_index *i)
 MOCK_VOID(rtridx_cleanup, struct rtr_index *i)
-MOCK_ABORT_VOID(rtridx_clean, struct rtr_index *i)
-MOCK_ABORT_INT(rtr_open_file, serial_t serial, char const *basename,
-    char const *mode, FILE **result)
-__MOCK_ABORT(rtr_filename, char *, NULL, char const *a, char const *b)
-__MOCK_ABORT(rtr_filename2, char *, NULL, serial_t serial, char const *b)
 
 static bool
 vrp_equals_v4(struct vrp const *vrp, uint8_t as, uint32_t addr,
@@ -386,6 +369,10 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.deltas_lifetime = 0;
+	fortcfg.cache = "tmp/dbt";
+	fortcfg.aspa.max_providers = 10;
 
 	suite = create_suite();
 

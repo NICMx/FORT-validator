@@ -5,9 +5,9 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "asn1/asn1c/Extensions.h"
+#include "validator/asn1/asn1c/Extensions.h"
 
-#include "asn1/asn1c/constr_SEQUENCE_OF.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE_OF.h"
 
 asn_TYPE_member_t asn_MBR_Extensions_1[] = {
 	{ ATF_POINTER, 0, 0,

@@ -1,81 +1,153 @@
-#ifndef SRC_CONFIG_H_
-#define SRC_CONFIG_H_
+#ifndef VALIDATOR_CONFIG_H_
+#define VALIDATOR_CONFIG_H_
 
 #include <curl/curl.h>
-#include <stdint.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
-#include "common.h"
-#include "config/file_type.h"
-#include "config/log_conf.h"
-#include "config/mode.h"
-#include "config/output_format.h"
-#include "config/string_array.h"
+#include "common/common.h"
+#include "common/config/file_type.h"
+#include "common/config/log_conf.h"
+#include "common/config/output_format.h"
+#include "common/report.h"
+#include "validator/object/tal.h"
 
-/* Init/destroy */
-init_verdict handle_flags_config(int , char **);
-void free_rpki_config(void);
+/*
+ * To add a member to this structure,
+ *
+ * 1. Add it.
+ * 2. Add its metadata somewhere in @options.
+ * 3. Add default value to set_default_values().
+ * 4. Create the getter.
+ *
+ * Assuming you don't need to create a data type, that should be all.
+ */
+struct fort_config {
+	/* TAL file name or directory. */
+	char *tal;
+	/* Local cache path */
+	char *cache;
+	/* File or directory where the .slurm file(s) is(are) located */
+	char *slurm;
 
-/* Getters */
-struct string_array const *config_get_server_address(void);
-char const *config_get_server_port(void);
-int config_get_server_queue(void);
-unsigned int config_get_validation_interval(void);
-unsigned int config_get_interval_expire(void);
-unsigned int config_get_deltas_lifetime(void);
-unsigned int max_rtr_version(void);
-unsigned int config_get_prometheus_port(void);
-char const *config_get_slurm(void);
+	/* Run as a daemon? */
+	bool daemon;
 
-char const *config_get_tal(void);
-char const *config_get_local_repository(void);
-time_t cfg_cache_threshold(void);
-enum mode config_get_mode(void);
-char const *config_get_http_user_agent(void);
-unsigned int config_get_max_redirs(void);
-long config_get_http_connect_timeout(void);
-long config_get_http_transfer_timeout(void);
-long config_get_http_low_speed_limit(void);
-long config_get_http_low_speed_time(void);
-curl_off_t config_get_http_max_file_size(void);
-char const *config_get_http_ca_path(void);
-unsigned int config_get_rrdp_delta_threshold(void);
-bool config_get_rsync_enabled(void);
-unsigned int config_rsync_max(void);
-long config_rsync_timeout(void);
-char const *config_get_rsync_program(void);
-bool config_get_http_enabled(void);
-char const *config_get_http_proxy(void);
+	/* Number of iterations the deltas will be stored. */
+	unsigned int deltas_lifetime;
 
-char const *config_get_output_roa(void);
-enum output_format config_get_vrp_output_format(void);
-char const *config_get_output_bgpsec(void);
-enum output_format config_get_bgpsec_output_format(void);
-char const *config_get_output_aspa(void);
+	/*
+	 * Number of seconds to wait between validation cycles
+	 * 0 = disabled
+	 */
+	unsigned int validation_interval;
 
-unsigned int config_get_thread_pool_server_max(void);
-unsigned int config_get_validation_thread_count(void);
-enum file_type config_get_file_type(void);
-char const *config_get_payload(void);
-time_t config_get_validation_time(void);
+	unsigned int prometheus_port;
 
-#define MAX_ASPA_PROVIDERS 16380u /* Absolute maximum */
-unsigned int config_get_max_aspa_providers(void); /* Configured maximum */
+	struct {
+		/* Enables the protocol */
+		bool enabled;
+		/* Maximum simultaneous rsyncs */
+		unsigned int max;
+		unsigned int timeout;
+		char *program;
+	} rsync;
 
-/* Logging getters */
-bool config_get_op_log_enabled(void);
-bool config_get_op_print_times(void);
-char const * config_get_op_log_tag(void);
-bool config_get_op_log_color_output(void);
-uint8_t config_get_op_log_level(void);
-enum log_output config_get_op_log_output(void);
-uint32_t config_get_op_log_facility(void);
+	struct {
+		/* Enables the protocol */
+		bool enabled;
+		/* HTTP User-Agent request header */
+		char *user_agent;
+		/* Allowed redirects per request XXX hardcode? */
+		unsigned int max_redirs;
+		/* CURLOPT_CONNECTTIMEOUT */
+		unsigned int connect_timeout;
+		/* CURLOPT_TIMEOUT */
+		unsigned int transfer_timeout;
+		/* CURLOPT_LOW_SPEED_LIMIT */
+		unsigned int low_speed_limit;
+		/* CURLOPT_LOW_SPEED_TIME */
+		unsigned int low_speed_time;
+		/* CURLOPT_MAXFILESIZE_LARGE */
+		curl_off_t max_file_size;
+		/* CURLOPT_CAPATH */
+		char *ca_path;
+		/* CURLOPT_PROXY */
+		char *proxy;
+	} http;
 
-char *config_get_report(void);
+	struct {
+		/*
+		 * Maximum deltas to explode per RRDP session, per iteration.
+		 *
+		 * (If the RRDP notification lists more than this amount of
+		 * unprocessed deltas, Fort will reset the session, exploding
+		 * the snapshot instead.)
+		 *
+		 * Per draft-spaghetti-sidrops-rrdp-desynchronization's
+		 * recommendation, this is also the maximum number of delta
+		 * hashes Fort will remember per RRDP session, to detect session
+		 * desynchronization.
+		 *
+		 * XXX hardcode?
+		 */
+		unsigned int delta_threshold;
+	} rrdp;
+
+	struct {
+		/* Enables operation logs **/
+		bool enabled;
+		bool print_times;
+		/* String tag to identify operation logs **/
+		char *tag;
+		/* Print ANSI color codes? */
+		bool color;
+		/* Log level */
+		uint8_t level;
+		/* Log output */
+		enum log_output output;
+		/* facility for syslog if output is syslog **/
+		uint32_t facility;
+	} log;
+
+	struct {
+		char *path;
+	} report;
+
+	struct {
+		unsigned int max_providers; /* per customer */
+	} aspa;
+
+	struct {
+		char *vrp_filepath;
+		enum output_format vrp_format;
+
+		char *bgpsec_filepath;
+		enum output_format bgpsec_format;
+
+		char *aspa_filepath;
+	} output;
+
+	/* Thread pools for specific tasks */
+	unsigned int validation_threads;
+
+	enum file_type ft;
+	char const *payload;
+
+	struct {
+		/*
+		 * If nonzero, all RPKI object expiration dates are compared to
+		 * this number instead of the current time.
+		 * Meant for testing of repositories we don't want to have to
+		 * keep regenerating.
+		 */
+		time_t validation_time;
+	} debug;
+};
+
+extern struct fort_config fortcfg;
+
+init_verdict handle_flags_config(int, char **);
 
 /* Needed public by the JSON module */
-void *get_rpki_config_field(struct option_field const *);
 struct option_field const *get_option_metadatas(void);
 
-#endif /* SRC_CONFIG_H_ */
+#endif /* VALIDATOR_CONFIG_H_ */

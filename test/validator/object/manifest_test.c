@@ -1,10 +1,7 @@
-#include <errno.h>
 #include <check.h>
 
-#include "alloc.c"
-#include "common.c"
 #include "mock.c"
-#include "object/manifest.c"
+#include "validator/object/manifest.c"
 
 #define BUFFER_LEN 128
 static uint8_t buffer[BUFFER_LEN];

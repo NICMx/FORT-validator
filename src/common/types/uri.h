@@ -1,10 +1,10 @@
-#ifndef SRC_TYPES_URI_H_
-#define SRC_TYPES_URI_H_
+#ifndef COMMON_TYPES_URI_H_
+#define COMMON_TYPES_URI_H_
 
 #include <stdbool.h>
 #include <string.h>
 
-#include "types/arraylist.h"
+#include "common/types/arraylist.h"
 
 #define RPKI_SCHEMA_LEN 8 /* strlen("rsync://"), strlen("https://") */
 
@@ -45,4 +45,4 @@ void uris_init(struct uris *);
 void uris_cleanup(struct uris *, void (*cb)(struct uri *));
 void uris_add(struct uris *list, struct uri *elem);
 
-#endif /* SRC_TYPES_URI_H_ */
+#endif /* COMMON_TYPES_URI_H_ */

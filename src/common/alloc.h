@@ -1,5 +1,5 @@
-#ifndef SRC_ALLOC_H_
-#define SRC_ALLOC_H_
+#ifndef COMMON_ALLOC_H_
+#define COMMON_ALLOC_H_
 
 #include <stddef.h>
 
@@ -17,4 +17,4 @@ char *pstrdup(char const *s);
 /* strndup(), but panic on allocation failure. */
 char *pstrndup(char const *s, size_t n);
 
-#endif /* SRC_ALLOC_H_ */
+#endif /* COMMON_ALLOC_H_ */

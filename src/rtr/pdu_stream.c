@@ -7,8 +7,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "alloc.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
 #include "rtr/err_pdu.h"
 
 enum buffer_state {

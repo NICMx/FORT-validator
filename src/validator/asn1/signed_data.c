@@ -1,15 +1,14 @@
-#include "asn1/signed_data.h"
+#include "validator/asn1/signed_data.h"
 
-#include "algorithm.h"
-#include "asn1/asn1c/ContentTypePKCS7.h"
-#include "asn1/asn1c/MessageDigest.h"
-#include "asn1/asn1c/SignedDataPKCS7.h"
-#include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "hash.h"
-#include "log.h"
-#include "object/certificate.h"
-#include "object/signed_object.h"
+#include "common/log.h"
+#include "validator/algorithm.h"
+#include "validator/asn1/asn1c/ContentTypePKCS7.h"
+#include "validator/asn1/asn1c/MessageDigest.h"
+#include "validator/asn1/asn1c/SignedDataPKCS7.h"
+#include "validator/asn1/decode.h"
+#include "validator/hash.h"
+#include "validator/object/certificate.h"
+#include "validator/object/signed_object.h"
 
 static const OID oid_cta = OID_CONTENT_TYPE_ATTR;
 static const OID oid_mda = OID_MESSAGE_DIGEST_ATTR;

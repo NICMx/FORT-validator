@@ -1,12 +1,12 @@
-#include "object/vcard.h"
+#include "validator/object/vcard.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-#include "alloc.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
 
 /*
  * TODO (next iteration) Implement RFC 6350.

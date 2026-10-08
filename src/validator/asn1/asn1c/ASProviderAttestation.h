@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ASProviderAttestation_H_
-#define	_ASProviderAttestation_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ASPROVIDERATTESTATION_H_
+#define VALIDATOR_ASN1_ASN1C_ASPROVIDERATTESTATION_H_
 
 /* Including external dependencies */
-#include "asn1/asn1c/ProviderASSet.h"
+#include "validator/asn1/asn1c/ProviderASSet.h"
 
 /* ASProviderAttestation */
 typedef struct ASProviderAttestation {
@@ -24,4 +24,4 @@ typedef struct ASProviderAttestation {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_ASProviderAttestation;
 
-#endif	/* _ASProviderAttestation_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ASPROVIDERATTESTATION_H_ */

@@ -1,8 +1,8 @@
 #include <check.h>
 
-#include "alloc.c"
+#include "common/alloc.c"
 #include "mock.c"
-#include "object/vcard.c"
+#include "validator/object/vcard.c"
 
 #define VC_BEGIN	"BEGIN:VCARD\r\n"
 #define VC_VERSION	"VERSION:4.0\r\n"

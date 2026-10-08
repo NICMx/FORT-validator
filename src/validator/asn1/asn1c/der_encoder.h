@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_DER_ENCODER_H_
-#define	_DER_ENCODER_H_
+#ifndef VALIDATOR_ASN1_ASN1C_DER_ENCODER_H_
+#define VALIDATOR_ASN1_ASN1C_DER_ENCODER_H_
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "validator/asn1/asn1c/constr_TYPE.h"
 
 /*
  * The DER encoder of any type. May be invoked by the application.
@@ -43,4 +43,4 @@ ssize_t der_write_tags(const struct asn_TYPE_descriptor_s *type_descriptor,
                        asn_app_consume_bytes_f *consume_bytes_cb,
                        void *app_key);
 
-#endif	/* _DER_ENCODER_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_DER_ENCODER_H_ */

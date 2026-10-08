@@ -2,11 +2,11 @@
  * Copyright (c) 2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/OPEN_TYPE.h"
+#include "validator/asn1/asn1c/OPEN_TYPE.h"
 
 #include <string.h>
 
-#include "asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/asn_internal.h"
 
 asn_TYPE_operation_t asn_OP_OPEN_TYPE = {
 	OPEN_TYPE_free,

@@ -1,11 +1,11 @@
-#include "file.h"
+#include "common/file.h"
 
 #include <ftw.h>
+#include <stdlib.h>
 
-#include "alloc.h"
-#include "common.h"
-#include "config/mode.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/common.h"
+#include "common/log.h"
 
 int
 file_open(char const *file_name, FILE **result, struct stat *stat)
@@ -194,6 +194,21 @@ file_is_valid(char const *location, bool allow_file)
 		    allow_file ? "file or directory" : "directory");
 
 	return result;
+}
+
+int
+file_chdir(char const *path)
+{
+	int error;
+
+	pr_trc("cd %s", path);
+	if (chdir(path) < 0) {
+		error = errno;
+		pr_err("Cannot cd to %s: %s", path, strerror(error));
+		return error;
+	}
+
+	return 0;
 }
 
 /*

@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_RouteOriginAttestation_H_
-#define	_RouteOriginAttestation_H_
+#ifndef VALIDATOR_ASN1_ASN1C_ROUTEORIGINATTESTATION_H_
+#define VALIDATOR_ASN1_ASN1C_ROUTEORIGINATTESTATION_H_
 
-#include "asn1/asn1c/ASId.h"
-#include "asn1/asn1c/ROAIPAddressFamily.h"
+#include "validator/asn1/asn1c/ASId.h"
+#include "validator/asn1/asn1c/ROAIPAddressFamily.h"
 
 /* RouteOriginAttestation */
 typedef struct RouteOriginAttestation {
@@ -29,4 +29,4 @@ typedef struct RouteOriginAttestation {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_RouteOriginAttestation;
 
-#endif	/* _RouteOriginAttestation_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_ROUTEORIGINATTESTATION_H_ */

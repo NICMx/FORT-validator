@@ -5,14 +5,14 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_SignedDataPKCS7_H_
-#define	_SignedDataPKCS7_H_
+#ifndef VALIDATOR_ASN1_ASN1C_SIGNEDDATAPKCS7_H_
+#define VALIDATOR_ASN1_ASN1C_SIGNEDDATAPKCS7_H_
 
-#include "asn1/asn1c/CertificateSet.h"
-#include "asn1/asn1c/DigestAlgorithmIdentifiers.h"
-#include "asn1/asn1c/EncapsulatedContentInfoPKCS7.h"
-#include "asn1/asn1c/RevocationInfoChoices.h"
-#include "asn1/asn1c/SignerInfos.h"
+#include "validator/asn1/asn1c/CertificateSet.h"
+#include "validator/asn1/asn1c/DigestAlgorithmIdentifiers.h"
+#include "validator/asn1/asn1c/EncapsulatedContentInfoPKCS7.h"
+#include "validator/asn1/asn1c/RevocationInfoChoices.h"
+#include "validator/asn1/asn1c/SignerInfos.h"
 
 /* SignedDataPKCS7 */
 typedef struct SignedDataPKCS7 {
@@ -30,4 +30,4 @@ typedef struct SignedDataPKCS7 {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_SignedDataPKCS7;
 
-#endif	/* _SignedDataPKCS7_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_SIGNEDDATAPKCS7_H_ */

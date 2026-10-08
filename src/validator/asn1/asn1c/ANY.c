@@ -2,17 +2,17 @@
  * Copyright (c) 2004-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/ANY.h"
+#include "validator/asn1/asn1c/ANY.h"
 
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/ber_decoder.h"
-#include "asn1/asn1c/der_encoder.h"
-#include "asn1/asn1c/json_encoder.h"
-#include "asn1/asn1c/xer_encoder.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/ber_decoder.h"
+#include "validator/asn1/asn1c/der_encoder.h"
+#include "validator/asn1/asn1c/json_encoder.h"
+#include "validator/asn1/asn1c/xer_encoder.h"
 
 asn_OCTET_STRING_specifics_t asn_SPC_ANY_specs = {
 	sizeof(ANY_t),

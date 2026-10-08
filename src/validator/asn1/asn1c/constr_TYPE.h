@@ -8,14 +8,14 @@
  * This structure even contains pointer to these encoding and decoding routines
  * for each defined ASN.1 type.
  */
-#ifndef	_CONSTR_TYPE_H_
-#define	_CONSTR_TYPE_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CONSTR_TYPE_H_
+#define VALIDATOR_ASN1_ASN1C_CONSTR_TYPE_H_
 
 #include <jansson.h>
 
-#include "asn1/asn1c/asn_system.h"
-#include "asn1/asn1c/ber_tlv_length.h"
-#include "asn1/asn1c/ber_tlv_tag.h"
+#include "validator/asn1/asn1c/asn_system.h"
+#include "validator/asn1/asn1c/ber_tlv_length.h"
+#include "validator/asn1/asn1c/ber_tlv_tag.h"
 
 struct asn_TYPE_member_s;	/* Forward declaration */
 
@@ -291,4 +291,4 @@ int asn_fprint(FILE *stream, /* Destination stream descriptor */
 
 void const *get_member(const void *sptr, asn_TYPE_member_t const *elm);
 
-#endif	/* _CONSTR_TYPE_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CONSTR_TYPE_H_ */

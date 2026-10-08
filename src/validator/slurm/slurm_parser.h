@@ -1,6 +1,6 @@
-#ifndef SRC_SLURM_SLURM_PARSER_H_
-#define SRC_SLURM_SLURM_PARSER_H_
+#ifndef VALIDATOR_SLURM_SLURM_PARSER_H_
+#define VALIDATOR_SLURM_SLURM_PARSER_H_
 
 int slurm_parse(char const *, void *);
 
-#endif /* SRC_SLURM_SLURM_PARSER_H_ */
+#endif /* VALIDATOR_SLURM_SLURM_PARSER_H_ */

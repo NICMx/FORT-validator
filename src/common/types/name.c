@@ -1,12 +1,13 @@
-#include "types/name.h"
+#include "common/types/name.h"
 
 #include <openssl/asn1.h>
 #include <openssl/obj_mac.h>
 #include <openssl/objects.h>
-#include <syslog.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "log.h"
-#include "thread_var.h"
+#include "common/alloc.h"
+#include "common/log.h"
 
 /**
  * It's an RFC5280 name, but from RFC 6487's perspective.

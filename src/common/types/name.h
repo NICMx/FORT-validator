@@ -1,5 +1,5 @@
-#ifndef SRC_TYPES_NAME_H_
-#define SRC_TYPES_NAME_H_
+#ifndef COMMON_TYPES_NAME_H_
+#define COMMON_TYPES_NAME_H_
 
 #include <openssl/x509.h>
 #include <stdbool.h>
@@ -24,4 +24,4 @@ int validate_issuer_name(X509_NAME const *, X509 const *);
 
 void x509_name_pr_clutter(char const *, X509_NAME const *);
 
-#endif /* SRC_TYPES_NAME_H_ */
+#endif /* COMMON_TYPES_NAME_H_ */

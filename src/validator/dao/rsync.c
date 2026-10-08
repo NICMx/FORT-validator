@@ -1,17 +1,13 @@
 #define _DEFAULT_SOURCE 1 /* DT_REG et al */
 
-#include "dao/rsync.h"
+#include "validator/dao/rsync.h"
 
-#include <sys/types.h>
-#include <dirent.h>
-
-#include "cachefile.h"
-#include "common.h"
-#include "file.h"
-#include "json_util.h"
-#include "log.h"
-#include "types/path.h"
-#include "types/str.h"
+#include "common/common.h"
+#include "common/file.h"
+#include "common/log.h"
+#include "common/types/path.h"
+#include "validator/hash.h"
+#include "validator/json_util.h"
 
 enum rsync_dao_state {
 	RDS_REFRESH,

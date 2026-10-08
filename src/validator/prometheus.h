@@ -1,7 +1,7 @@
-#ifndef SRC_PROMETHEUS_H_
-#define SRC_PROMETHEUS_H_
+#ifndef VALIDATOR_PROMETHEUS_H_
+#define VALIDATOR_PROMETHEUS_H_
 
 int prometheus_setup(void);
 void prometheus_teardown(void);
 
-#endif /* SRC_PROMETHEUS_H_ */
+#endif /* VALIDATOR_PROMETHEUS_H_ */

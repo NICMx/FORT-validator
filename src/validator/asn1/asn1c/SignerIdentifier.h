@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_SignerIdentifier_H_
-#define	_SignerIdentifier_H_
+#ifndef VALIDATOR_ASN1_ASN1C_SIGNERIDENTIFIER_H_
+#define VALIDATOR_ASN1_ASN1C_SIGNERIDENTIFIER_H_
 
-#include "asn1/asn1c/CMSSubjectKeyIdentifier.h"
-#include "asn1/asn1c/IssuerAndSerialNumber.h"
+#include "validator/asn1/asn1c/CMSSubjectKeyIdentifier.h"
+#include "validator/asn1/asn1c/IssuerAndSerialNumber.h"
 
 /* Dependencies */
 typedef enum SignerIdentifier_PR {
@@ -35,4 +35,4 @@ extern asn_TYPE_descriptor_t asn_DEF_SignerIdentifier;
 extern asn_CHOICE_specifics_t asn_SPC_SignerIdentifier_specs_1;
 extern asn_TYPE_member_t asn_MBR_SignerIdentifier_1[2];
 
-#endif	/* _SignerIdentifier_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_SIGNERIDENTIFIER_H_ */

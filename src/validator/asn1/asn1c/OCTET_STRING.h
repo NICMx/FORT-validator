@@ -2,10 +2,10 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_OCTET_STRING_H_
-#define	_OCTET_STRING_H_
+#ifndef VALIDATOR_ASN1_ASN1C_OCTET_STRING_H_
+#define VALIDATOR_ASN1_ASN1C_OCTET_STRING_H_
 
-#include "asn1/asn1c/constraints.h"
+#include "validator/asn1/asn1c/constraints.h"
 
 /*
  * Note: Though this sometimes represents an actual string, I don't see any
@@ -91,4 +91,4 @@ typedef struct asn_OCTET_STRING_specifics_s {
 
 extern asn_OCTET_STRING_specifics_t asn_SPC_OCTET_STRING_specs;
 
-#endif	/* _OCTET_STRING_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_OCTET_STRING_H_ */

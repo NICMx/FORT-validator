@@ -1,8 +1,8 @@
-#ifndef SRC_RESOURCE_IP6_H_
-#define SRC_RESOURCE_IP6_H_
+#ifndef VALIDATOR_RESOURCE_IP6_H_
+#define VALIDATOR_RESOURCE_IP6_H_
 
-#include "types/address.h"
-#include "types/sorted_array.h"
+#include "common/types/address.h"
+#include "common/types/sorted_array.h"
 
 struct resources_ipv6;
 
@@ -16,4 +16,4 @@ bool res6_empty(struct resources_ipv6 const *ips);
 bool res6_contains_prefix(struct resources_ipv6 *, struct ipv6_prefix const *);
 bool res6_contains_range(struct resources_ipv6 *, struct ipv6_range const *);
 
-#endif /* SRC_RESOURCE_IP6_H_ */
+#endif /* VALIDATOR_RESOURCE_IP6_H_ */

@@ -1,11 +1,11 @@
-#include "hash.h"
+#include "validator/hash.h"
 
 #include <stdlib.h>
 
-#include "alloc.h"
-#include "file.h"
-#include "log.h"
-#include "types/array.h"
+#include "common/alloc.h"
+#include "common/file.h"
+#include "common/log.h"
+#include "common/types/array.h"
 
 /*
  * EVP_sha256() and EVP_sha1() are now mildly deprecated ("present for

@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_IPAddressRange_H_
-#define	_IPAddressRange_H_
+#ifndef VALIDATOR_ASN1_ASN1C_IPADDRESSRANGE_H_
+#define VALIDATOR_ASN1_ASN1C_IPADDRESSRANGE_H_
 
-#include "asn1/asn1c/IPAddress.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
+#include "validator/asn1/asn1c/IPAddress.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE.h"
 
 /* IPAddressRange */
 typedef struct IPAddressRange {
@@ -25,4 +25,4 @@ extern asn_TYPE_descriptor_t asn_DEF_IPAddressRange;
 extern asn_SEQUENCE_specifics_t asn_SPC_IPAddressRange_specs_1;
 extern asn_TYPE_member_t asn_MBR_IPAddressRange_1[2];
 
-#endif	/* _IPAddressRange_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_IPADDRESSRANGE_H_ */

@@ -1,11 +1,11 @@
-#include "config/curl_offset.h"
+#include "common/config/curl_offset.h"
 
 #include <curl/curl.h>
 #include <errno.h>
 #include <getopt.h>
 #include <string.h>
 
-#include "log.h"
+#include "common/log.h"
 
 static void
 print_curloff(struct option_field const *field, void *value)

@@ -27,11 +27,6 @@ static char content[1024];
 
 /* Mocks */
 
-MOCK(config_get_rsync_program, char const *, "rsync", void)
-MOCK_UINT(config_rsync_max, 3, void)
-MOCK(config_rsync_timeout, long, 4, void)
-MOCK_UINT(config_get_asn1_decode_max_stack, 16 * 1024, void)
-
 MOCK_ABORT_PTR(json_obj_new, json_t, void)
 MOCK_ABORT_VOID(json_delete, json_t *json)
 MOCK_ABORT_PTR(json_strn_new, json_t, const char *value, size_t len)
@@ -447,6 +442,10 @@ main(void)
 {
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.rsync.program = "rsync";
+	fortcfg.rsync.max = 3;
+	fortcfg.rsync.timeout = 4;
 
 	printf("This test needs to exhaust some timeouts. Please be patient.\n");
 	disable_sigpipe();

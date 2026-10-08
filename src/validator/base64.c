@@ -1,14 +1,15 @@
-#include "base64.h"
+#include "validator/base64.h"
 
+#include <errno.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <openssl/err.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "alloc.h"
-#include "hash.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
+#include "validator/hash.h"
 
 /* Simple decode base64 string. Returns true on success, false on failure. */
 bool

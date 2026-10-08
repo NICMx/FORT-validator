@@ -2,8 +2,8 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	ASN_SET_OF_H
-#define	ASN_SET_OF_H
+#ifndef VALIDATOR_ASN1_ASN1C_ASN_SET_OF_H_
+#define VALIDATOR_ASN1_ASN1C_ASN_SET_OF_H_
 #include <stdlib.h>
 
 #define A_SET_OF(type)                   \
@@ -52,4 +52,4 @@ typedef A_SET_OF(void) asn_anonymous_set_;
 #define _A_SET_FROM_VOID(ptr)		((asn_anonymous_set_ *)(ptr))
 #define _A_CSET_FROM_VOID(ptr)		((const asn_anonymous_set_ *)(ptr))
 
-#endif	/* ASN_SET_OF_H */
+#endif /* VALIDATOR_ASN1_ASN1C_ASN_SET_OF_H_ */

@@ -21,8 +21,8 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef SRC_TYPES_UTHASH_H
-#define SRC_TYPES_UTHASH_H
+#ifndef COMMON_TYPES_UTHASH_H_
+#define COMMON_TYPES_UTHASH_H_
 
 #define UTHASH_VERSION 2.1.0
 
@@ -1252,4 +1252,4 @@ typedef struct UT_hash_handle {
    unsigned hashv;                   /* result of hash-fcn(key)        */
 } UT_hash_handle;
 
-#endif /* SRC_TYPES_UTHASH_H */
+#endif /* COMMON_TYPES_UTHASH_H_ */

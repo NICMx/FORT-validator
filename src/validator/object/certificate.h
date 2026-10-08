@@ -1,15 +1,12 @@
-#ifndef SRC_OBJECT_CERTIFICATE_H_
-#define SRC_OBJECT_CERTIFICATE_H_
+#ifndef VALIDATOR_OBJECT_CERTIFICATE_H_
+#define VALIDATOR_OBJECT_CERTIFICATE_H_
 
-#include <stdatomic.h>
 #include <sys/queue.h>
 
-#include "asn1/signed_data.h"
-#include "cache.h"
-#include "object/tal.h"
-#include "resource.h"
-#include "types/rpp.h"
-#include "types/vthread.h"
+#include "validator/cache.h"
+#include "validator/object/tal.h"
+#include "validator/resource.h"
+#include "validator/types/vthread.h"
 
 /*
  * rfc6487#section-7.2, last paragraph.
@@ -57,4 +54,4 @@ validation_verdict cer_traverse(struct validation_thread *,
 struct signed_object;
 int cer_validate_ee(struct rpki_certificate *, struct signed_object *);
 
-#endif /* SRC_OBJECT_CERTIFICATE_H_ */
+#endif /* VALIDATOR_OBJECT_CERTIFICATE_H_ */

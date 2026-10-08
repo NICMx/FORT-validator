@@ -1,13 +1,12 @@
 #include <check.h>
-#include <sys/queue.h>
 
-#include "alloc.c"
-#include "common.c"
-#include "cache.c"
-#include "json_util.c"
+#include "common/alloc.c"
+#include "common/common.c"
+#include "common/types/map.c"
+#include "common/types/uri.c"
 #include "mock.c"
-#include "types/map.c"
-#include "types/uri.c"
+#include "validator/cache.c"
+#include "validator/json_util.c"
 
 MOCK(rrdp_ctx2json, json_t *, json_object(), struct rrdp_ctx const *ctx)
 MOCK_INT(rrdp_json2ctx, 0, json_t *json, char *path, struct rrdp_ctx **ctx)

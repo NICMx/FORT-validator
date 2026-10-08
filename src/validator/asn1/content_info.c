@@ -1,8 +1,8 @@
-#include "asn1/content_info.h"
+#include "validator/asn1/content_info.h"
 
-#include "asn1/decode.h"
-#include "asn1/oid.h"
-#include "log.h"
+#include "common/log.h"
+#include "validator/asn1/decode.h"
+#include "validator/asn1/oid.h"
 
 static int
 validate(struct ContentInfo *info)

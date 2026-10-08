@@ -1,5 +1,5 @@
-#ifndef SRC_LIBCRYPTO_UTIL_H_
-#define SRC_LIBCRYPTO_UTIL_H_
+#ifndef VALIDATOR_LIBCRYPTO_UTIL_H_
+#define VALIDATOR_LIBCRYPTO_UTIL_H_
 
 #include <jansson.h>
 #include <openssl/asn1.h>
@@ -26,4 +26,4 @@ json_t *gns2json(GENERAL_NAMES const *);
 json_t *pubkey2json(EVP_PKEY *); /* LibreSSL needs not const */
 json_t *exts2json(const STACK_OF(X509_EXTENSION) *);
 
-#endif /* SRC_LIBCRYPTO_UTIL_H_ */
+#endif /* VALIDATOR_LIBCRYPTO_UTIL_H_ */

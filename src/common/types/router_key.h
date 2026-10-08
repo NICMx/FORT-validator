@@ -1,5 +1,5 @@
-#ifndef SRC_TYPES_ROUTER_KEY_H_
-#define SRC_TYPES_ROUTER_KEY_H_
+#ifndef COMMON_TYPES_ROUTER_KEY_H_
+#define COMMON_TYPES_ROUTER_KEY_H_
 
 #include <stdint.h>
 
@@ -35,4 +35,4 @@ void router_key_init(struct router_key *, unsigned char const *, uint32_t,
     unsigned char const *);
 int router_key_print(struct router_key const *, void *);
 
-#endif /* SRC_TYPES_ROUTER_KEY_H_ */
+#endif /* COMMON_TYPES_ROUTER_KEY_H_ */

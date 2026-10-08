@@ -1,11 +1,12 @@
 #define _DEFAULT_SOURCE 1
 
-#include "rtr/meta.h"
+#include "common/cache_rtr.h"
 
-#include "alloc.h"
-#include "config.h"
-#include "file.h"
-#include "log.h"
+#include <stdlib.h>
+
+#include "common/alloc.h"
+#include "common/file.h"
+#include "common/log.h"
 
 /* TODO (fine) overkill? */
 static char *
@@ -323,19 +324,18 @@ rm:		pr_wrn("Deleting stray filesystem entry rtr/%s", file->d_name);
 
 /*
  * Cleans cache/rtr.
- * This means dropping serials that exceed the threshold
- * (config_get_deltas_lifetime()) and unknown files or directories
- * directly in cache/rtr.
+ * This means dropping serials that exceed the @deltas_lifetime threshold
+ * and unknown files or directories directly in cache/rtr.
  */
 void
-rtridx_clean(struct rtr_index *idx)
+rtridx_clean(struct rtr_index *idx, unsigned int deltas_lifetime)
 {
 	char path[SERIAL_DIR_MAXSIZE];
 	struct rtr_serial *srl, **prev;
 	serial_t min, max;
 
 	max = idx->serials[0].serial;
-	min = max - config_get_deltas_lifetime();
+	min = max - deltas_lifetime;
 
 	for (srl = idx->serials, prev = &idx->serials; srl; srl = *prev) {
 		if (serial_lt(srl->serial, min) || serial_lt(max, srl->serial)) {
@@ -362,11 +362,10 @@ rtridx_clean(struct rtr_index *idx)
 }
 
 static bool
-too_old(struct rtr_serial *srl, time_t now)
+too_old(struct rtr_serial *srl, unsigned int lifetime, time_t now)
 {
 	time_t serial_date;
 	double diff;
-	unsigned int lifetime;
 
 	serial_date = timegm(&srl->date);
 	if (serial_date == (time_t)-1)
@@ -380,15 +379,16 @@ too_old(struct rtr_serial *srl, time_t now)
 	 * This is an estimate. In reality, I'd like deltas_lifetime to be the
 	 * timestamp, but I can't because of historical reasons, and also
 	 * because it's a lot easier to test as a cycle count.
+	 * XXX rtridx_expire() is no longer being called
 	 */
-	lifetime = config_get_deltas_lifetime() * config_get_validation_interval();
+//	lifetime = config_get_deltas_lifetime() * config_get_validation_interval();
 
 	return (-diff) > lifetime;
 }
 
 /* Deletes serials that are too old, based on time. */
 void
-rtridx_expire(void)
+rtridx_expire(unsigned int lifetime)
 {
 	time_t now;
 	struct rtr_index idx;
@@ -411,7 +411,7 @@ rtridx_expire(void)
 	}
 
 	for (srl = idx.serials, prev = &idx.serials; srl; srl = *prev) {
-		if (too_old(srl, now)) {
+		if (too_old(srl, lifetime, now)) {
 			pr_trc("Dropping expired serial: %u", srl->serial);
 			__rm_rf(rtr_filename3(path, srl->serial));
 			*prev = srl->next;

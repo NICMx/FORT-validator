@@ -1,12 +1,12 @@
-#include "config/log_conf.h"
+#include "common/config/log_conf.h"
 
 #include <getopt.h>
 #include <stdint.h>
 #include <string.h>
 #include <syslog.h>
 
-#include "config/str.h"
-#include "log.h"
+#include "common/config/str.h"
+#include "common/log.h"
 
 #define LOG_LEVEL_VALUE_ERROR "error"
 #define LOG_LEVEL_VALUE_WARNING "warning"

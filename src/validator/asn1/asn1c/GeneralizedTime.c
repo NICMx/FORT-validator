@@ -6,14 +6,14 @@
 #define	_REENTRANT			/* for Sun */
 #define __EXTENSIONS__                  /* for Sun */
 
-#include "asn1/asn1c/GeneralizedTime.h"
+#include "validator/asn1/asn1c/GeneralizedTime.h"
 
 #include <assert.h>
 #include <errno.h>
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/xer_encoder.h"
-#include "json_util.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/xer_encoder.h"
+#include "validator/json_util.h"
 
 #define	ATZVARS do {							\
 	char tzoldbuf[64];						\

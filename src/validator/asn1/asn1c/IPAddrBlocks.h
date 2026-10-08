@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_IPAddrBlocks_H_
-#define	_IPAddrBlocks_H_
+#ifndef VALIDATOR_ASN1_ASN1C_IPADDRBLOCKS_H_
+#define VALIDATOR_ASN1_ASN1C_IPADDRBLOCKS_H_
 
-#include "asn1/asn1c/IPAddressFamily.h"
+#include "validator/asn1/asn1c/IPAddressFamily.h"
 
 /* IPAddrBlocks */
 typedef struct IPAddrBlocks {
@@ -21,4 +21,4 @@ typedef struct IPAddrBlocks {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_IPAddrBlocks;
 
-#endif	/* _IPAddrBlocks_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_IPADDRBLOCKS_H_ */

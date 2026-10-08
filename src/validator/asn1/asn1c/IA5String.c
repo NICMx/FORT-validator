@@ -2,7 +2,7 @@
  * Copyright (c) 2003 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/IA5String.h"
+#include "validator/asn1/asn1c/IA5String.h"
 
 /*
  * IA5String basic type description.

@@ -1,8 +1,8 @@
-#ifndef SRC_CONFIG_UINT_H_
-#define SRC_CONFIG_UINT_H_
+#ifndef COMMON_CONFIG_UINT_H_
+#define COMMON_CONFIG_UINT_H_
 
-#include "config/types.h"
+#include "common/config/types.h"
 
 extern const struct global_type gt_uint;
 
-#endif /* SRC_CONFIG_UINT_H_ */
+#endif /* COMMON_CONFIG_UINT_H_ */

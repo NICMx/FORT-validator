@@ -1,5 +1,5 @@
-#ifndef SRC_TYPES_SORTED_ARRAY_H_
-#define SRC_TYPES_SORTED_ARRAY_H_
+#ifndef COMMON_TYPES_SORTED_ARRAY_H_
+#define COMMON_TYPES_SORTED_ARRAY_H_
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -51,4 +51,4 @@ int sarray_foreach(struct sorted_array *, sarray_foreach_cb, void *);
 
 char const *sarray_err2str(enum resource_cmp_result);
 
-#endif /* SRC_TYPES_SORTED_ARRAY_H_ */
+#endif /* COMMON_TYPES_SORTED_ARRAY_H_ */

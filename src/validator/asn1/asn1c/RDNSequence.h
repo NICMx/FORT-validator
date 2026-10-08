@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_RDNSequence_H_
-#define	_RDNSequence_H_
+#ifndef VALIDATOR_ASN1_ASN1C_RDNSEQUENCE_H_
+#define VALIDATOR_ASN1_ASN1C_RDNSEQUENCE_H_
 
-#include "asn1/asn1c/RelativeDistinguishedName.h"
-#include "asn1/asn1c/asn_SEQUENCE_OF.h"
+#include "validator/asn1/asn1c/RelativeDistinguishedName.h"
+#include "validator/asn1/asn1c/asn_SEQUENCE_OF.h"
 
 /* RDNSequence */
 typedef struct RDNSequence {
@@ -24,4 +24,4 @@ extern asn_TYPE_descriptor_t asn_DEF_RDNSequence;
 extern asn_SET_OF_specifics_t asn_SPC_RDNSequence_specs_1;
 extern asn_TYPE_member_t asn_MBR_RDNSequence_1[1];
 
-#endif	/* _RDNSequence_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_RDNSEQUENCE_H_ */

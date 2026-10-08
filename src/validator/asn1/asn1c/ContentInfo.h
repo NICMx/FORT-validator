@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_ContentInfo_H_
-#define	_ContentInfo_H_
+#ifndef VALIDATOR_ASN1_ASN1C_CONTENTINFO_H_
+#define VALIDATOR_ASN1_ASN1C_CONTENTINFO_H_
 
-#include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/ContentType.h"
+#include "validator/asn1/asn1c/ANY.h"
+#include "validator/asn1/asn1c/ContentType.h"
 
 /* ContentInfo */
 typedef struct ContentInfo {
@@ -23,4 +23,4 @@ typedef struct ContentInfo {
 /* Implementation */
 extern asn_TYPE_descriptor_t asn_DEF_ContentInfo;
 
-#endif	/* _ContentInfo_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_CONTENTINFO_H_ */

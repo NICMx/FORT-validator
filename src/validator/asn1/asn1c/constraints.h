@@ -2,10 +2,10 @@
  * Copyright (c) 2004-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	ASN1_CONSTRAINTS_VALIDATOR_H
-#define	ASN1_CONSTRAINTS_VALIDATOR_H
+#ifndef VALIDATOR_ASN1_ASN1C_CONSTRAINTS_H_
+#define VALIDATOR_ASN1_ASN1C_CONSTRAINTS_H_
 
-#include "asn1/asn1c/constr_TYPE.h"
+#include "validator/asn1/asn1c/constr_TYPE.h"
 
 /*
  * Validate the structure according to the ASN.1 constraints.
@@ -38,4 +38,4 @@ asn_constr_check_f asn_generic_unknown_constraint; /* Not fully supported */
  */
 #define	ASN__CTFAIL	if(ctfailcb) ctfailcb
 
-#endif	/* ASN1_CONSTRAINTS_VALIDATOR_H */
+#endif /* VALIDATOR_ASN1_ASN1C_CONSTRAINTS_H_ */

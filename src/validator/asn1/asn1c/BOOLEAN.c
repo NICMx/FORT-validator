@@ -2,13 +2,13 @@
  * Copyright (c) 2003, 2005 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/BOOLEAN.h"
+#include "validator/asn1/asn1c/BOOLEAN.h"
 
 #include <string.h>
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/ber_decoder.h"
-#include "asn1/asn1c/der_encoder.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/ber_decoder.h"
+#include "validator/asn1/asn1c/der_encoder.h"
 
 /*
  * BOOLEAN basic type description.

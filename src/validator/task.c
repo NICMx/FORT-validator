@@ -1,9 +1,8 @@
-#include "task.h"
+#include "validator/task.h"
 
 #include <errno.h>
 
-#include "log.h"
-#include "object/certificate.h"
+#include "common/log.h"
 
 STAILQ_HEAD(validation_tasks, validation_task);
 

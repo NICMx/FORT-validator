@@ -5,12 +5,12 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_OtherRevocationInfoFormat_H_
-#define	_OtherRevocationInfoFormat_H_
+#ifndef VALIDATOR_ASN1_ASN1C_OTHERREVOCATIONINFOFORMAT_H_
+#define VALIDATOR_ASN1_ASN1C_OTHERREVOCATIONINFOFORMAT_H_
 
-#include "asn1/asn1c/ANY.h"
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
+#include "validator/asn1/asn1c/ANY.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE.h"
 
 /* OtherRevocationInfoFormat */
 typedef struct OtherRevocationInfoFormat {
@@ -26,4 +26,4 @@ extern asn_TYPE_descriptor_t asn_DEF_OtherRevocationInfoFormat;
 extern asn_SEQUENCE_specifics_t asn_SPC_OtherRevocationInfoFormat_specs_1;
 extern asn_TYPE_member_t asn_MBR_OtherRevocationInfoFormat_1[2];
 
-#endif	/* _OtherRevocationInfoFormat_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_OTHERREVOCATIONINFOFORMAT_H_ */

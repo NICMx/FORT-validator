@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#include "asn1/asn1c/ASProviderAttestation.h"
+#include "validator/asn1/asn1c/ASProviderAttestation.h"
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/constr_SEQUENCE.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/constr_SEQUENCE.h"
 
 static int asn_DFL_2_cmp_0(const void *sptr) {
 	const INTEGER_t *st = sptr;

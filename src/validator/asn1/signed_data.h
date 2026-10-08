@@ -1,10 +1,9 @@
-#ifndef SRC_SIGNED_DATA_H_
-#define SRC_SIGNED_DATA_H_
+#ifndef VALIDATOR_ASN1_SIGNED_DATA_H_
+#define VALIDATOR_ASN1_SIGNED_DATA_H_
 
 /* Some wrappers for asn1/asn1c/SignedData.h. */
 
-#include "asn1/asn1c/SignedData.h"
-#include "object/certificate.h"
+#include "validator/asn1/asn1c/SignedData.h"
 
 struct signed_object;
 struct rpki_certificate;
@@ -14,4 +13,4 @@ int signed_data_validate(struct signed_object *, struct rpki_certificate *);
 
 int get_content_type_attr(struct SignedData *, OBJECT_IDENTIFIER_t **);
 
-#endif /* SRC_SIGNED_DATA_H_ */
+#endif /* VALIDATOR_ASN1_SIGNED_DATA_H_ */

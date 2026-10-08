@@ -1,10 +1,8 @@
 #include <check.h>
 
-#include "alloc.c"
-#include "base64.c"
-#include "common.h"
+#include "common/alloc.c"
 #include "mock.c"
-#include "types/array.h"
+#include "validator/base64.c"
 
 static void
 ck_uchar_array(unsigned char *expected, size_t expected_len,

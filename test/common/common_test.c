@@ -1,8 +1,8 @@
-#include "common.c"
+#include "common/common.c"
 
 #include <check.h>
 
-#include "alloc.c"
+#include "common/alloc.c"
 #include "mock.c"
 
 static const long MS2NS = 1000000L;

@@ -1,4 +1,4 @@
-#include "resource/ip6.h"
+#include "validator/resource/ip6.h"
 
 #include <string.h>
 

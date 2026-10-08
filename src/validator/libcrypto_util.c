@@ -1,4 +1,4 @@
-#include "libcrypto_util.h"
+#include "validator/libcrypto_util.h"
 
 #include <openssl/bio.h>
 #include <openssl/bn.h>
@@ -8,10 +8,10 @@
 #include <openssl/pem.h>
 #include <time.h>
 
-#include "asn1/asn1c/OBJECT_IDENTIFIER.h"
-#include "ext.h"
-#include "json_util.h"
-#include "log.h"
+#include "common/log.h"
+#include "validator/asn1/asn1c/OBJECT_IDENTIFIER.h"
+#include "validator/ext.h"
+#include "validator/json_util.h"
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 #define BIO_PR_TIME(bio, tm) ASN1_TIME_print_ex(bio, tm, ASN1_DTFLGS_ISO8601)

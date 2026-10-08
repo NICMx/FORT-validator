@@ -5,10 +5,10 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_MessageDigest_H_
-#define	_MessageDigest_H_
+#ifndef VALIDATOR_ASN1_ASN1C_MESSAGEDIGEST_H_
+#define VALIDATOR_ASN1_ASN1C_MESSAGEDIGEST_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
 
 /* MessageDigest */
 typedef OCTET_STRING_t	 MessageDigest_t;
@@ -22,4 +22,4 @@ ber_type_decoder_f MessageDigest_decode_ber;
 der_type_encoder_f MessageDigest_encode_der;
 xer_type_encoder_f MessageDigest_encode_xer;
 
-#endif	/* _MessageDigest_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_MESSAGEDIGEST_H_ */

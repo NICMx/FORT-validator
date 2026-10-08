@@ -2,11 +2,11 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#ifndef	_OBJECT_IDENTIFIER_H_
-#define	_OBJECT_IDENTIFIER_H_
+#ifndef VALIDATOR_ASN1_ASN1C_OBJECT_IDENTIFIER_H_
+#define VALIDATOR_ASN1_ASN1C_OBJECT_IDENTIFIER_H_
 
-#include "asn1/asn1c/OCTET_STRING.h"
-#include "asn1/asn1c/asn_codecs_prim.h"
+#include "validator/asn1/asn1c/OCTET_STRING.h"
+#include "validator/asn1/asn1c/asn_codecs_prim.h"
 
 typedef uint32_t asn_oid_arc_t;
 #define ASN_OID_ARC_MAX (~((asn_oid_arc_t)0))
@@ -142,4 +142,4 @@ ssize_t OBJECT_IDENTIFIER_get_single_arc(const uint8_t *arcbuf,
 ssize_t OBJECT_IDENTIFIER_set_single_arc(uint8_t *arcbuf, size_t arcbuf_len,
                                          asn_oid_arc_t arc_value);
 
-#endif	/* _OBJECT_IDENTIFIER_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_OBJECT_IDENTIFIER_H_ */

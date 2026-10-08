@@ -2,27 +2,15 @@
 
 #define MAX_TKN_SIZE 120
 
-#include "alloc.c"
-#include "asn1/asn1c/INTEGER.c"
-#include "asn1/asn1c/asn_codecs_prim.c"
-#include "asn1/asn1c/asn_internal.c"
-#include "asn1/asn1c/ber_decoder.c"
-#include "asn1/asn1c/ber_tlv_length.c"
-#include "asn1/asn1c/ber_tlv_tag.c"
-#include "asn1/asn1c/constraints.c"
-#include "asn1/asn1c/der_encoder.c"
-#include "base64.c"
-#include "cachefile.c"
-#include "common.c"
-#include "file.c"
-#include "json_util.c"
-#include "hash.c"
+#include "common/alloc.c"
+#include "common/file.c"
+#include "common/types/map.c"
+#include "common/types/uri.c"
 #include "mock.c"
-#include "rrdp_xml.c"
-#include "types/uri.c"
-#include "types/map.c"
-#include "types/path.c"
-#include "types/str.c"
+#include "validator/base64.c"
+#include "validator/cachefile.c"
+#include "validator/hash.c"
+#include "validator/rrdp_xml.c"
 
 #define NOTIF_URL "https://a/n.xml"
 #define XMLDECL "<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
@@ -51,9 +39,6 @@ struct xml_test {
 };
 
 static struct xml_test input[32];
-
-MOCK(config_get_http_max_file_size, curl_off_t, 10000, void)
-__MOCK_ABORT(config_get_asn1_decode_max_stack, unsigned int, 32, void)
 
 int
 http_download(struct uri const *src, curl_write_callback writer,
@@ -734,8 +719,7 @@ START_TEST(notif_sort_deltas)
 		NOTIF_START
 			/*
 			 * Shuffled among discarded
-			 * (config_get_rrdp_delta_threshold() is hardcoded
-			 * in unit tests as 5)
+			 * (fortcfg.rrdp.delta_threshold is 5)
 			 */
 			NSNAPSHOT
 			NDELTA("23")
@@ -1366,6 +1350,9 @@ main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.http.max_file_size = 10000;
+	fortcfg.rrdp.delta_threshold = 5;
 
 	suite = create_suite();
 

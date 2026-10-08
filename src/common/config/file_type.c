@@ -1,10 +1,10 @@
-#include "config/file_type.h"
+#include "common/config/file_type.h"
 
 #include <getopt.h>
 #include <string.h>
 
-#include "config/str.h"
-#include "log.h"
+#include "common/config/str.h"
+#include "common/log.h"
 
 #define VALUE_ROA	"roa"
 #define VALUE_ASA	"asa"

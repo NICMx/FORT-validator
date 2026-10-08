@@ -1,10 +1,10 @@
-#include "config/output_format.h"
+#include "common/config/output_format.h"
 
 #include <getopt.h>
 #include <string.h>
 
-#include "config/str.h"
-#include "log.h"
+#include "common/config/str.h"
+#include "common/log.h"
 
 #define OFM_VALUE_CSV  "csv"
 #define OFM_VALUE_JSON "json"

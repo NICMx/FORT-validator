@@ -1,9 +1,9 @@
-#include "types/bio_seq.h"
+#include "common/types/bio_seq.h"
 
 #include <stdlib.h>
 
-#include "alloc.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
 
 static BIO_METHOD *method;
 

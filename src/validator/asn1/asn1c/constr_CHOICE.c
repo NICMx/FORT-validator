@@ -2,16 +2,16 @@
  * Copyright (c) 2003-2017 Lev Walkin <vlm@lionet.info>. All rights reserved.
  * Redistribution and modifications are permitted subject to BSD license.
  */
-#include "asn1/asn1c/constr_CHOICE.h"
+#include "validator/asn1/asn1c/constr_CHOICE.h"
 
 #include <assert.h>
 #include <string.h>
 
-#include "asn1/asn1c/asn_internal.h"
-#include "asn1/asn1c/ber_decoder.h"
-#include "asn1/asn1c/constraints.h"
-#include "asn1/asn1c/der_encoder.h"
-#include "asn1/asn1c/xer_encoder.h"
+#include "validator/asn1/asn1c/asn_internal.h"
+#include "validator/asn1/asn1c/ber_decoder.h"
+#include "validator/asn1/asn1c/constraints.h"
+#include "validator/asn1/asn1c/der_encoder.h"
+#include "validator/asn1/asn1c/xer_encoder.h"
 
 /*
  * Number of bytes left for this structure.

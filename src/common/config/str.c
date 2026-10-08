@@ -1,10 +1,10 @@
-#include "config/str.h"
+#include "common/config/str.h"
 
 #include <getopt.h>
 #include <string.h>
 
-#include "alloc.h"
-#include "log.h"
+#include "common/alloc.h"
+#include "common/log.h"
 
 #define DEREFERENCE(void_value) (*((char **) void_value))
 

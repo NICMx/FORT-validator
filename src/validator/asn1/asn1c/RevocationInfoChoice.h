@@ -5,11 +5,11 @@
  * 	`asn1c -Werror -fcompound-names -fwide-types -D asn1/asn1c -no-gen-PER -no-gen-example`
  */
 
-#ifndef	_RevocationInfoChoice_H_
-#define	_RevocationInfoChoice_H_
+#ifndef VALIDATOR_ASN1_ASN1C_REVOCATIONINFOCHOICE_H_
+#define VALIDATOR_ASN1_ASN1C_REVOCATIONINFOCHOICE_H_
 
-#include "asn1/asn1c/CertificateList.h"
-#include "asn1/asn1c/OtherRevocationInfoFormat.h"
+#include "validator/asn1/asn1c/CertificateList.h"
+#include "validator/asn1/asn1c/OtherRevocationInfoFormat.h"
 
 /* Dependencies */
 typedef enum RevocationInfoChoice_PR {
@@ -35,4 +35,4 @@ extern asn_TYPE_descriptor_t asn_DEF_RevocationInfoChoice;
 extern asn_CHOICE_specifics_t asn_SPC_RevocationInfoChoice_specs_1;
 extern asn_TYPE_member_t asn_MBR_RevocationInfoChoice_1[2];
 
-#endif	/* _RevocationInfoChoice_H_ */
+#endif /* VALIDATOR_ASN1_ASN1C_REVOCATIONINFOCHOICE_H_ */
