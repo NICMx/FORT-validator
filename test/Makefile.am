@@ -109,12 +109,6 @@ TESTS = ${check_PROGRAMS}
 
 
 EXTRA_DIST  = mock.c mock.h
-EXTRA_DIST += line_file/core.txt
-EXTRA_DIST += line_file/empty.txt
-EXTRA_DIST += line_file/error.txt
-EXTRA_DIST += rtr/db/rtr_db_mock.c
-EXTRA_DIST += tal/lacnic.tal
-EXTRA_DIST += xml/notification.xml
 
 clean-local:
 	rm -rf tmp/ # test sandboxes

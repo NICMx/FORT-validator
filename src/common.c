@@ -76,58 +76,6 @@ mutex_unlock(pthread_mutex_t *lock)
 	panic_on_fail(pthread_mutex_unlock(lock), "pthread_mutex_unlock");
 }
 
-int
-rwlock_read_lock(pthread_rwlock_t *lock)
-{
-	int error;
-
-	error = pthread_rwlock_rdlock(lock);
-	switch (error) {
-	case 0:
-		return error;
-	case EAGAIN:
-		pr_crit("There are too many threads; I can't modify the database.");
-		return error;
-	}
-
-	pr_panic("pthread_rwlock_rdlock() returned '%s'. "
-	    "This is too critical for a recovery; I must die now.",
-	    strerror(error));
-	return EINVAL; /* Warning shutupper */
-}
-
-void
-rwlock_write_lock(pthread_rwlock_t *lock)
-{
-	int error;
-
-	/*
-	 * POSIX says that the only available errors are EINVAL and EDEADLK.
-	 * Both of them indicate serious programming errors.
-	 */
-	error = pthread_rwlock_wrlock(lock);
-	if (error)
-		pr_panic("pthread_rwlock_wrlock() returned '%s'. "
-		    "This is too critical for a recovery; I must die now.",
-		    strerror(error));
-}
-
-void
-rwlock_unlock(pthread_rwlock_t *lock)
-{
-	int error;
-
-	/*
-	 * POSIX says that the only available errors are EINVAL and EPERM.
-	 * Both of them indicate serious programming errors.
-	 */
-	error = pthread_rwlock_unlock(lock);
-	if (error)
-		pr_panic("pthread_rwlock_unlock() returned '%s'. "
-		    "This is too critical for a recovery; I must die now.",
-		    strerror(error));
-}
-
 static int
 process_file(char const *dir_name, char const *file_name, char const *file_ext,
     int *fcount, foreach_file_cb cb, void *arg)

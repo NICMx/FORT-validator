@@ -9,9 +9,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-/* "I haven't implemented this yet." */
-#define ENOTIMPLEMENTED 3173
-
 typedef char const *validation_verdict;
 extern validation_verdict const VV_CONTINUE;	/* "No issues yet" */
 extern validation_verdict const VV_FAIL;	/* "Validation failed" */
@@ -34,14 +31,6 @@ void panic_on_fail(int, char const *);
  */
 void mutex_lock(pthread_mutex_t *);
 void mutex_unlock(pthread_mutex_t *);
-
-/*
- * rwlock wrappers. They are just a bunch of boilerplate, and removal of
- * unrecoverable resulting error codes.
- */
-int rwlock_read_lock(pthread_rwlock_t *);
-void rwlock_write_lock(pthread_rwlock_t *);
-void rwlock_unlock(pthread_rwlock_t *);
 
 #define CACHE_FILEMODE 0755
 
