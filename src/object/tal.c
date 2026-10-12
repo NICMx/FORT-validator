@@ -280,7 +280,6 @@ struct db_table *
 perform_standalone_validation(void)
 {
 	struct validation_thread *vts; /* array */
-	unsigned int tcount;
 	unsigned int t;
 	struct db_table *result;
 	int error;
@@ -291,23 +290,22 @@ perform_standalone_validation(void)
 	result = NULL;
 	task_start();
 
-	if (foreach_file(config_get_tal(), ".tal", true, queue_tal, NULL) != 0)
+	if (foreach_file(fortcfg.tal, ".tal", true, queue_tal, NULL) != 0)
 		goto end;
 
 	if (report_enable() != 0)
 		goto end;
 
 	vts = vthreads_create();
-	tcount = config_get_validation_thread_count();
 
-	for (t = 0; t < tcount; t++) {
+	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
 		error = pthread_create(&vts[t].id, NULL, pick_up_work, &vts[t]);
 		if (error)
 			pr_panic("pthread_create(%u) failed: %s",
 			    t, strerror(error));
 	}
 
-	for (t = 0; t < tcount; t++) {
+	for (t = 0; t < fortcfg.thread_pool.validation.max; t++) {
 		error = pthread_join(vts[t].id, NULL);
 		if (error)
 			pr_panic("pthread_join(%u) failed: %s",

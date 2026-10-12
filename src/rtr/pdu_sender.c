@@ -290,7 +290,7 @@ send_end_of_data_pdu(int fd, uint8_t version, uint16_t session, serial_t serial)
 		buf = write_uint32(buf, serial);
 		buf = write_uint32(buf, 3600); /* XXX */
 		buf = write_uint32(buf, 600); /* XXX */
-		buf = write_uint32(buf, config_get_interval_expire());
+		buf = write_uint32(buf, fortcfg.rtr.expire);
 		break;
 	default:
 		return pr_err("Unknown RTR version: %u", version);

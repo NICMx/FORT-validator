@@ -100,7 +100,7 @@ rsync2bio_cache(char const *src)
 static BIO *
 rsync2bio(char const *src)
 {
-	return (config_get_tal() && config_get_local_repository())
+	return (fortcfg.tal && fortcfg.cache)
 	     ? rsync2bio_cache(src)
 	     : rsync2bio_tmpdir(src);
 }
@@ -149,8 +149,8 @@ guess_file_type(BIO **bio, unsigned char *hdrbuf)
 	unsigned char *ptr;
 	int res;
 
-	if (config_get_file_type() != FT_UNK)
-		return config_get_file_type();
+	if (fortcfg.ft != FT_UNK)
+		return fortcfg.ft;
 
 	res = BIO_read(*bio, hdrbuf, HDRSIZE);
 	if (res <= 0) {
@@ -268,7 +268,7 @@ __print_file(void)
 	json_t *json = NULL;
 	int error;
 
-	bio = filename2bio(config_get_payload());
+	bio = filename2bio(fortcfg.payload);
 	if (bio == NULL)
 		return pr_err("BIO_new_*() returned NULL.");
 

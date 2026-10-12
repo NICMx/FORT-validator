@@ -18,7 +18,6 @@
 MOCK_ABORT_PTR(json_strn_new, json_t, const char *value, size_t len)
 MOCK_ABORT_PTR(json_obj_new, json_t, void)
 MOCK_ABORT_PTR(json_null, json_t, void)
-MOCK_UINT(config_get_asn1_decode_max_stack, 16 * 1024, void)
 
 START_TEST(test_multiple)
 {

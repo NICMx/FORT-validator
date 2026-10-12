@@ -65,7 +65,7 @@ vrps_update(struct rtr_metadata *rtr)
 	pr_inf("- Valid ROAs: %u", db_table_roa_count(db));
 	pr_inf("- Valid Router Keys: %u", db_table_router_key_count(db));
 	pr_inf("- Valid ASPAs: %u", db_table_aspa_count(db));
-	if (config_get_mode() == SERVER)
+	if (fortcfg.mode == SERVER)
 		pr_inf("- Serial: %u", db_table_serial(db));
 	if (start != ((time_t) -1) && finish != ((time_t) -1))
 		pr_inf("- Real execution time: %.0lfs", difftime(finish, start));

@@ -324,7 +324,7 @@ rm:		pr_wrn("Deleting stray filesystem entry rtr/%s", file->d_name);
 /*
  * Cleans cache/rtr.
  * This means dropping serials that exceed the threshold
- * (config_get_deltas_lifetime()) and unknown files or directories
+ * (fortcfg.rtr.deltas_lifetime) and unknown files or directories
  * directly in cache/rtr.
  */
 void
@@ -335,7 +335,7 @@ rtridx_clean(struct rtr_index *idx)
 	serial_t min, max;
 
 	max = idx->serials[0].serial;
-	min = max - config_get_deltas_lifetime();
+	min = max - fortcfg.rtr.deltas_lifetime;
 
 	for (srl = idx->serials, prev = &idx->serials; srl; srl = *prev) {
 		if (serial_lt(srl->serial, min) || serial_lt(max, srl->serial)) {
@@ -381,7 +381,7 @@ too_old(struct rtr_serial *srl, time_t now)
 	 * timestamp, but I can't because of historical reasons, and also
 	 * because it's a lot easier to test as a cycle count.
 	 */
-	lifetime = config_get_deltas_lifetime() * config_get_validation_interval();
+	lifetime = fortcfg.rtr.deltas_lifetime * fortcfg.interval;
 
 	return (-diff) > lifetime;
 }

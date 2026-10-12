@@ -7,8 +7,6 @@
 #include "mock.c"
 #include "types/address.c"
 
-__MOCK_ABORT(config_get_local_repository, char const *, "tmp/address", void)
-
 static void
 test_range4(uint32_t min, uint32_t max, bool valid)
 {
@@ -180,6 +178,8 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.cache = "tmp/address";
 
 	suite = create_suite();
 

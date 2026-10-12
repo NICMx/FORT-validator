@@ -23,8 +23,6 @@
 #include "types/path.c"
 #include "types/str.c"
 
-__MOCK_ABORT(config_get_http_max_file_size, curl_off_t, 10000, void)
-__MOCK_ABORT(config_get_asn1_decode_max_stack, unsigned int, 32, void)
 __MOCK_ABORT(http_download, int, 0, struct uri const *u, curl_write_callback cb,
     void *a, curl_off_t i, bool *ch)
 
@@ -159,6 +157,8 @@ main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.http.max_file_size = 10000;
 
 	suite = create_suite();
 

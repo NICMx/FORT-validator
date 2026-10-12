@@ -76,7 +76,7 @@ destroy_db(void)
  * Extracts from @full_address ("IP#[port]") the address and port, and returns
  * them in @address and @service, respectively.
  *
- * The default port is config_get_server_port().
+ * The default port is fortcfg.rtr.port.
  */
 static int
 parse_address(char const *full_address, char **address, char **service)
@@ -88,14 +88,15 @@ parse_address(char const *full_address, char **address, char **service)
 
 	if (full_address == NULL) {
 		tmp_addr = NULL;
-		tmp_serv = pstrdup(config_get_server_port());
+		tmp_serv = pstrdup(fortcfg.rtr.port);
 		goto done;
 	}
 
+	/* XXX why # */
 	ptr = strrchr(full_address, '#');
 	if (ptr == NULL) {
 		tmp_addr = pstrdup(full_address);
-		tmp_serv = pstrdup(config_get_server_port());
+		tmp_serv = pstrdup(fortcfg.rtr.port);
 		goto done;
 	}
 
@@ -227,6 +228,7 @@ create_server_socket(struct server_init_ctx *ctx, char const *hostname, char con
 	struct rtr_server server;
 	char const *errmsg;
 	static const int yes = 1;
+	int backlog;
 	int err;
 
 	err = init_addrinfo(hostname, port, &ais);
@@ -273,7 +275,9 @@ create_server_socket(struct server_init_ctx *ctx, char const *hostname, char con
 			goto fail;
 		}
 
-		if (listen(server.fd, config_get_server_queue()) < 0) {
+		/* The range of backlog is 1-<small number>, so adding sign is safe */
+		backlog = fortcfg.rtr.backlog;
+		if (listen(server.fd, backlog) < 0) {
 			err = errno;
 			errmsg = "Unable to start listening on socket";
 			goto fail;
@@ -325,7 +329,7 @@ init_server_fds(void)
 	unsigned int i;
 	int error;
 
-	conf_addrs = config_get_server_address();
+	conf_addrs = &fortcfg.rtr.address;
 
 	if (conf_addrs->length == 0)
 		return init_server_fd(&ctx);
@@ -830,9 +834,9 @@ rtr_start(void)
 		goto cond;
 	}
 
-	server_threads = pcalloc(config_get_thread_pool_server_max(),
+	server_threads = pcalloc(fortcfg.thread_pool.server.max,
 	    sizeof(pthread_t));
-	for (i = 0; i < config_get_thread_pool_server_max(); i++) {
+	for (i = 0; i < fortcfg.thread_pool.server.max; i++) {
 		error = pthread_create(&server_threads[i], NULL,
 		    handle_clients, NULL);
 		if (error) {
@@ -865,7 +869,7 @@ void rtr_stop(void)
 {
 	int error;
 
-	end_server_threads(config_get_thread_pool_server_max());
+	end_server_threads(fortcfg.thread_pool.server.max);
 
 	error = pthread_join(control_thread, NULL);
 	if (error)

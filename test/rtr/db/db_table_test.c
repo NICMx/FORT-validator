@@ -20,9 +20,6 @@
 static bool roas_found[TOTAL_ROAS];
 static unsigned int total_found;
 
-__MOCK_ABORT(config_get_deltas_lifetime, unsigned int, 0, void)
-__MOCK_ABORT(config_get_local_repository, char const *, "tmp/dbt", void)
-MOCK_UINT(config_get_max_aspa_providers, 10, void)
 MOCK_ABORT_VOID(rtridx_init, struct rtr_index *i)
 MOCK_ABORT_INT(rtridx_save, struct rtr_index *i)
 MOCK_ABORT_INT(rtridx_load, struct rtr_index *i, bool b)
@@ -386,6 +383,10 @@ int main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.rtr.deltas_lifetime = 0;
+	fortcfg.cache = "tmp/dbt";
+	fortcfg.aspa.max_providers = 10;
 
 	suite = create_suite();
 

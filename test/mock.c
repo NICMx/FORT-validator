@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "common.h"
+#include "config.h"
 #include "log.h"
 #include "types/map.h"
 
@@ -169,17 +170,13 @@ v6addr2str2(struct in6_addr const *addr)
 	return inet_ntop(AF_INET6, addr, addr_buffer2, sizeof(addr_buffer2));
 }
 
-MOCK_NULL(config_get_slurm, char const *, void)
-MOCK(config_get_tal, char const *, "tal/", void)
-MOCK(cfg_cache_threshold, time_t, 2, void)
-MOCK_UINT(config_get_rrdp_delta_threshold, 5, void)
-MOCK_TRUE(config_get_rsync_enabled, void)
-MOCK_UINT(config_get_rsync_priority, 50, void)
-MOCK_TRUE(config_get_http_enabled, void)
-MOCK_UINT(config_get_http_priority, 60, void)
-MOCK_NULL(config_get_output_roa, char const *, void)
-MOCK_NULL(config_get_output_bgpsec, char const *, void)
-MOCK(logv_filename, char const *, path, char const *path)
+struct fort_config fortcfg = {
+	.tal = "tal/",
+	.rrdp.delta_threshold = 5,
+	.rsync.enabled = true,
+	.http.enabled = true,
+};
+
 MOCK_VOID(free_rpki_config, void)
 
 MOCK_VOID(fnstack_init, void)

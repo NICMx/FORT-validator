@@ -1022,8 +1022,8 @@ validate_chain(struct rpki_certificate *cert)
 	}
 
 	X509_VERIFY_PARAM_set_flags(params, X509_V_FLAG_CRL_CHECK);
-	if (config_get_validation_time() != 0)
-		X509_VERIFY_PARAM_set_time(params, config_get_validation_time());
+	if (fortcfg.debug.validation_time != 0)
+		X509_VERIFY_PARAM_set_time(params, fortcfg.debug.validation_time);
 	X509_STORE_set1_param(store, params);
 	X509_STORE_set_verify_cb(store, cb);
 

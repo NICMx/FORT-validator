@@ -12,18 +12,9 @@
 #include "rtr/meta.c"
 #include "rtr/pdu.c"
 #include "rtr/pdu_handler.c"
-#include "rtr/pdu_stream.c"
 #include "types/aspa.c"
 #include "types/router_key.c"
 #include "types/serial.c"
-
-static unsigned int deltas_lifetime = 5;
-
-MOCK(config_get_local_repository, char const *, "tmp", void)
-MOCK_UINT(config_get_deltas_lifetime, deltas_lifetime, void)
-MOCK_UINT(max_rtr_version, 2, void)
-MOCK_UINT(config_get_validation_interval, 3600, void)
-MOCK_UINT(config_get_max_aspa_providers, 10, void)
 
 struct sent_pdu {
 	enum pdu_type type;
@@ -329,7 +320,7 @@ START_TEST(test_natural_flows)
 
 	pr_inf("-- Natural Flows --");
 
-	deltas_lifetime = 5;
+	fortcfg.rtr.deltas_lifetime = 5;
 	if (file_stat_errno("rtr") == 0)
 		ck_assert_int_eq(0, file_rm_rf("rtr"));
 
@@ -477,7 +468,7 @@ START_TEST(test_delta_forget)
 
 	pr_inf("-- Delta Forgetting -- ");
 
-	deltas_lifetime = 1;
+	fortcfg.rtr.deltas_lifetime = 1;
 	if (file_stat_errno("rtr") == 0)
 		ck_assert_int_eq(0, file_rm_rf("rtr"));
 
@@ -611,7 +602,7 @@ START_TEST(test_no_incremental_update_available)
 
 	pr_inf("-- No Incremental Update Available --");
 
-	deltas_lifetime = 5;
+	fortcfg.rtr.deltas_lifetime = 5;
 	if (file_stat_errno("rtr") == 0)
 		ck_assert_int_eq(0, file_rm_rf("rtr"));
 	session = mock_serial1() + RTR_V2;
@@ -639,7 +630,7 @@ START_TEST(test_cache_has_no_data_available)
 {
 	pr_inf("-- Cache Has No Data Available --");
 
-	deltas_lifetime = 5;
+	fortcfg.rtr.deltas_lifetime = 5;
 	if (file_stat_errno("rtr") == 0)
 		ck_assert_int_eq(0, file_rm_rf("rtr"));
 
@@ -673,6 +664,11 @@ main(void)
 	SRunner *runner;
 	int tests_failed;
 	int error;
+
+	fortcfg.cache = "tmp";
+	fortcfg.rtr.max_rtr_version = 2;
+	fortcfg.interval = 3600;
+	fortcfg.aspa.max_providers = 10;
 
 	error = file_mkdir("tmp", true);
 	if (error)

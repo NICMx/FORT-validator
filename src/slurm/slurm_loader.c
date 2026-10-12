@@ -35,7 +35,7 @@ load_slurm_files(struct slurm_csum_list *csums, struct db_slurm **result)
 	if (error)
 		return error;
 
-	error = foreach_file(config_get_slurm(), SLURM_FILE_EXTENSION,
+	error = foreach_file(fortcfg.slurm, SLURM_FILE_EXTENSION,
 	    false, slurm_parse, db);
 	if (error)
 		goto cancel;
@@ -168,7 +168,7 @@ slurm_load_checksums(struct slurm_csum_list *csums)
 	SLIST_INIT(csums);
 	csums->list_size = 0;
 
-	error = foreach_file(config_get_slurm(), SLURM_FILE_EXTENSION,
+	error = foreach_file(fortcfg.slurm, SLURM_FILE_EXTENSION,
 	    false, __slurm_load_checksums, csums);
 	if (error)
 		destroy_local_csum_list(csums);
@@ -271,7 +271,7 @@ slurm_apply(struct db_table *base)
 	struct slurm_parser_params params;
 	int error;
 
-	if (config_get_slurm() == NULL)
+	if (fortcfg.slurm == NULL)
 		return 0;
 
 	error = update_slurm(&slurm);

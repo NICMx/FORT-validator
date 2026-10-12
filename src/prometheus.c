@@ -134,23 +134,21 @@ handle_prometheus_req(void *cls, struct MHD_Connection *conn,
 int
 prometheus_setup(void)
 {
-	unsigned int port;
-
-	port = config_get_prometheus_port();
-	if (config_get_mode() != SERVER || port == 0)
+	if (fortcfg.mode != SERVER || fortcfg.prometheus.port == 0)
 		return 0;
 
 	pr_trc("Starting Prometheus server...");
 
 	prometheus_daemon = MHD_start_daemon(
 	    MHD_USE_THREAD_PER_CONNECTION,	/* flags */
-	    port,				/* port */
+	    fortcfg.prometheus.port,		/* port */
 	    NULL, NULL,				/* accept policy */
 	    &handle_prometheus_req, NULL,	/* handler */
 	    MHD_OPTION_END			/* options */
 	);
 
 	if (prometheus_daemon == NULL)
+		/* XXX is there really no way to get a f*****g error message */
 		return pr_err("Could not start Prometheus server; Unknown error");
 
 	pr_trc("Prometheus server started.");

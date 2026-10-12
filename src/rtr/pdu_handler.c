@@ -29,7 +29,7 @@ validate_rtr_version(struct rtr_request *request)
 	enum rtr_version reqver = request->pdu.rtr_version;
 
 	if (stream->rtr_version == -1) {
-		if (RTR_V0 <= reqver && reqver <= max_rtr_version()) {
+		if (RTR_V0 <= reqver && reqver <= fortcfg.rtr.max_rtr_version) {
 			pr_trc("Establishing RTR version: %d", reqver);
 			stream->rtr_version = reqver;
 			return 0;
@@ -38,7 +38,7 @@ validate_rtr_version(struct rtr_request *request)
 		    stream->addr, reqver);
 		return -err_pdu_send_unsupported_proto_version(
 			stream->fd,
-			max_rtr_version(),
+			fortcfg.rtr.max_rtr_version,
 			&request->pdu.raw,
 			"RTR version number is too high."
 		);

@@ -299,8 +299,8 @@ init_table(struct cache_table *tbl, char *name, bool enabled)
 static void
 init_tables(void)
 {
-	init_table(&cache.rsync, "rsync", config_get_rsync_enabled());
-	init_table(&cache.https, "https", config_get_http_enabled());
+	init_table(&cache.rsync, "rsync", fortcfg.rsync.enabled);
+	init_table(&cache.https, "https", fortcfg.http.enabled);
 }
 
 static int
@@ -375,7 +375,7 @@ lock_cache(void)
 	if (fd < 0) {
 		error = errno;
 		pr_err("Cannot create lockfile '%s/" LOCKFILE "': %s",
-		    config_get_local_repository(), strerror(error));
+		    fortcfg.cache, strerror(error));
 		return error;
 	}
 	close(fd);
@@ -415,15 +415,12 @@ cache_atexit(void)
 int
 cache_setup1(void)
 {
-	char const *cachedir;
 	int error;
 
-	cachedir = config_get_local_repository();
-
-	pr_trc("cd %s", cachedir);
-	if (chdir(cachedir) < 0) {
+	pr_trc("cd %s", fortcfg.cache);
+	if (chdir(fortcfg.cache) < 0) {
 		error = errno;
-		pr_err("Cannot cd to %s: %s", cachedir, strerror(error));
+		pr_err("Cannot cd to %s: %s", fortcfg.cache, strerror(error));
 		return error;
 	}
 

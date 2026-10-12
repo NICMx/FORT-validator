@@ -169,7 +169,7 @@ merge_providers(struct aspa_providers *old, struct aspa_providers *new)
 	}
 
 	m = old->count + new->count;
-	if (m > config_get_max_aspa_providers()) {
+	if (m > fortcfg.aspa.max_providers) {
 		result.asids = NULL;
 		result.count = SIZE_MAX;
 		return result;

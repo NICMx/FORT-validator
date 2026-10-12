@@ -76,7 +76,6 @@ static int
 parse_providers(ProviderASSet_t *set, struct aspa *aspa)
 {
 	uint32_t *providers;
-	unsigned int limit;
 	int i;
 	int error;
 
@@ -86,10 +85,9 @@ parse_providers(ProviderASSet_t *set, struct aspa *aspa)
 	if (set == NULL)
 		return pr_err("Providers set is NULL.");
 
-	limit = config_get_max_aspa_providers();
-	if (set->list.count > limit)
+	if (set->list.count > fortcfg.aspa.max_providers)
 		return pr_err("customerASID %u has too many providers: %d > %u",
-		    aspa->customer, set->list.count, limit);
+		    aspa->customer, set->list.count, fortcfg.aspa.max_providers);
 
 	providers = pcalloc(set->list.count, sizeof(uint32_t));
 	for (i = 0; i < set->list.count; i++) {

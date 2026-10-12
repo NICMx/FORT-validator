@@ -62,7 +62,7 @@ fort_server(void)
 
 	while (!fort_end) {
 		pr_inf("Main loop: Sleeping.");
-		sleep(config_get_validation_interval());
+		sleep(fortcfg.interval);
 		if (fort_end)
 			break;
 		pr_inf("Main loop: Time to work!");
@@ -133,7 +133,7 @@ fort_cycle(int argc, char **argv, bool serve)
 
 	/* Meat */
 
-	switch (config_get_mode()) {
+	switch (fortcfg.mode) {
 	case STANDALONE:
 		error = fort_standalone();
 		break;

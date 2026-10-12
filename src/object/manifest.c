@@ -78,7 +78,7 @@ validate_dates(GeneralizedTime_t *this, GeneralizedTime_t *next,
 		    TM_ARGS(nextUpdate));
 	}
 
-	now_tt = config_get_validation_time();
+	now_tt = fortcfg.debug.validation_time;
 	if (now_tt == 0)
 		now_tt = time_fatal();
 

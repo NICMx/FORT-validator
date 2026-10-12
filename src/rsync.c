@@ -244,7 +244,7 @@ execvp_rsync(struct rsync_task *task, int fds[2][2])
 
 	if (task->single) {
 		i = 0;
-		args[i++] = (char *)config_get_rsync_program();
+		args[i++] = fortcfg.rsync.program;
 		args[i++] = "-tz";
 		args[i++] = "--contimeout=20";
 		args[i++] = "--max-size=5MB";
@@ -279,7 +279,7 @@ execvp_rsync(struct rsync_task *task, int fds[2][2])
 		 */
 
 		i = 0;
-		args[i++] = (char *)config_get_rsync_program();
+		args[i++] = fortcfg.rsync.program;
 		args[i++] = "-rtz";
 		args[i++] = "--omit-dir-times";
 		args[i++] = "--contimeout=20";
@@ -357,7 +357,7 @@ static void
 activate_task(struct rsync_tasks *tasks, struct rsync_task *task,
     struct timespec *now)
 {
-	ts_add(&task->expiration, now, 1000 * config_rsync_timeout());
+	ts_add(&task->expiration, now, 1000 * fortcfg.rsync.timeout);
 
 	if (fork_rsync(task) != 0) {
 		void_task(task);
@@ -380,7 +380,7 @@ post_task(struct cache_mapping *map, bool single, struct rsync_tasks *tasks,
 	task->path = map->path;
 	task->single = single;
 
-	if (tasks->a >= config_rsync_max()) {
+	if (tasks->a >= fortcfg.rsync.max) {
 		LIST_INSERT_HEAD(&tasks->queued, task, lh);
 		pr_trc(RSP "Queued task %d: %s -> %s",
 		    task->pid, uri_str(&task->url), task->path);
@@ -792,7 +792,7 @@ rsync_setup(void)
 	int spawner2parent[2];	/* Pipe: Spawner writes, parent reads */
 	int error;
 
-	if (!config_get_rsync_enabled())
+	if (!fortcfg.rsync.enabled)
 		return;
 
 	if (nonblock_pipe(parent2spawner) != 0)
@@ -879,7 +879,7 @@ end:	mutex_unlock(&pssk.wrlock);
 void
 rsync_teardown(void)
 {
-	if (!config_get_rsync_enabled())
+	if (!fortcfg.rsync.enabled)
 		return;
 
 	spsk_cleanup();

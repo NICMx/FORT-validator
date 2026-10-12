@@ -15,20 +15,19 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 int
 report_enable(void)
 {
-	char const *path;
 	int error;
 
-	path = config_get_report();
-	if (!path)
+	if (!fortcfg.report.path)
 		/* Will not write report, but pr_wrn & pr_err still need to
 		 * be sent to TRC */
 		goto done;
 
-	stream = fopen(path, "wb");
+	stream = fopen(fortcfg.report.path, "wb");
 	if (!stream) {
 		error = errno;
 		if (error != EEXIST)
-			return pr_err("fopen(%s): %s", path, strerror(error));
+			return pr_err("fopen(%s): %s", fortcfg.report.path,
+			    strerror(error));
 	}
 
 done:	enabled = true;

@@ -52,9 +52,6 @@ struct xml_test {
 
 static struct xml_test input[32];
 
-MOCK(config_get_http_max_file_size, curl_off_t, 10000, void)
-__MOCK_ABORT(config_get_asn1_decode_max_stack, unsigned int, 32, void)
-
 int
 http_download(struct uri const *src, curl_write_callback writer,
     void *writer_args, curl_off_t ims, bool *changed)
@@ -734,8 +731,7 @@ START_TEST(notif_sort_deltas)
 		NOTIF_START
 			/*
 			 * Shuffled among discarded
-			 * (config_get_rrdp_delta_threshold() is hardcoded
-			 * in unit tests as 5)
+			 * (rrdp.delta_threshold = 5)
 			 */
 			NSNAPSHOT
 			NDELTA("23")
@@ -1366,6 +1362,9 @@ main(void)
 	Suite *suite;
 	SRunner *runner;
 	int tests_failed;
+
+	fortcfg.rrdp.delta_threshold = 5;
+	fortcfg.http.max_file_size = 10000;
 
 	suite = create_suite();
 
