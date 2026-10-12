@@ -810,7 +810,7 @@ become_absolute_path(char *cwd, char **_path)
 	char *relative, *absolute;
 
 	relative = *_path;
-	if (relative != NULL) {
+	if (relative != NULL && relative[0] != '/') {
 		absolute = path_join(cwd, relative);
 		free(relative);
 		*_path = absolute;
