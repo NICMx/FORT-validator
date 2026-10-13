@@ -82,14 +82,14 @@ end:	rtr_stop();
 }
 
 static int
-fort_cycle(int argc, char **argv, bool serve)
+fort_cycle(int argc, char **argv)
 {
 	init_verdict verdict;
 	int error;
 
 	/* DO NOT START ANY THREADS UNTIL WE'RE DONE fork()ING. */
 
-	verdict = handle_flags_config(argc - 1, argv + 1);
+	verdict = handle_flags_config(argc, argv);
 	if (verdict == IV_FAIL)
 		return EINVAL;
 	if (verdict == IV_DONE)
@@ -200,19 +200,11 @@ convert_to_result(int error)
 int
 main(int argc, char **argv)
 {
-	char const *mode;
 	int error;
 
 	log_setup();
 
-	mode = (argc <= 1) ? "serve" : argv[1];
-
-	if (strcmp(mode, "serve") == 0)
-		error = fort_cycle(argc, argv, true);
-	else if (strcmp(mode, "step") == 0)
-		error = fort_cycle(argc, argv, false);
-	else
-		error = pr_err("Unknown mode: %s", mode);
+	error = fort_cycle(argc, argv);
 
 	log_teardown();
 	return convert_to_result(error);
